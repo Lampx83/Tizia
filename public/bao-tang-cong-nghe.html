@@ -4,17 +4,15 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>🖥️ Bảo tàng Công nghệ · Tizia</title>
-<meta name="description" content="Bảo tàng Công nghệ: trục tiến trình phát triển (paradigm lập trình, hạ tầng từ máy chủ vật lý tới serverless, mạng 1G→6G), phòng thành tựu đột phá (Transformer, mật mã & blockchain, ưu thế lượng tử), từ điển thuật ngữ mới (AGI, RAG, Edge, DePIN…), và case study thực tế." />
+<meta name="description" content="Bảo tàng Công nghệ tương tác: hành lang tiến hóa (paradigm lập trình, hạ tầng máy chủ→serverless, mạng 1G→6G), tủ kính thành tựu (Transformer, mật mã & blockchain, ưu thế lượng tử), bản đồ khái niệm thuật ngữ mới (AGI, RAG, Edge, DePIN…), và thẻ chuyện kể case study." />
 <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
 <meta name="theme-color" content="#6366f1" />
 <style>
   :root { --bg:#0a1326; --card:rgba(255,255,255,.05); --card2:#141f38; --accent:#22d3ee; --accent2:#6366f1;
-    --green:#10b981; --red:#ef4444; --amber:#fbbf24; --pink:#f472b6; --text:#e6eefb; --muted:#93a4c0; --border:rgba(255,255,255,.12); }
+    --green:#10b981; --red:#ef4444; --amber:#fbbf24; --pink:#f472b6; --purple:#a78bfa; --orange:#fb923c;
+    --text:#e6eefb; --muted:#93a4c0; --border:rgba(255,255,255,.12); }
   * { box-sizing:border-box; }
   html { background:var(--bg); }
-  /* background-color TỐI làm nền chắc: các layer trên là gradient (background-image),
-     mà shorthand để background-color trong suốt → nếu gradient không phủ hết vùng cuộn,
-     nền trắng mặc định lộ ra và card (nền trắng-mờ) biến mất. Nền tối cố định chặn việc đó. */
   body { margin:0; min-height:100vh; font-family:'Inter',system-ui,sans-serif; color:var(--text);
     background-color:var(--bg);
     background-image: radial-gradient(ellipse 70% 50% at 50% -5%, rgba(99,102,241,.16), transparent),
@@ -29,7 +27,8 @@
   header.hero { text-align:center; margin-bottom:6px; }
   header.hero h1 { font-size:28px; margin:0 0 6px;
     background:linear-gradient(120deg,#22d3ee,#818cf8,#f472b6); -webkit-background-clip:text; background-clip:text; color:transparent; }
-  header.hero p { color:var(--muted); font-size:14px; max-width:640px; margin:0 auto; line-height:1.6; }
+  header.hero p { color:var(--muted); font-size:14px; max-width:660px; margin:0 auto; line-height:1.6; }
+  header.hero .guide { margin-top:10px; font-size:12px; color:var(--accent); }
 
   /* Thanh mục lục dính */
   nav.toc { position:sticky; top:0; z-index:20; display:flex; flex-wrap:wrap; gap:8px; justify-content:center;
@@ -38,137 +37,221 @@
     border:1px solid var(--border); border-radius:20px; background:var(--card); transition:.15s; }
   nav.toc a:hover, nav.toc a.on { color:var(--text); border-color:var(--accent2); background:rgba(99,102,241,.16); }
 
-  section { margin:38px 0; scroll-margin-top:64px; }
-  .sec-head { margin-bottom:6px; }
+  section { margin:40px 0; scroll-margin-top:64px; }
+  .sec-head { margin-bottom:10px; }
   .sec-head .lbl { font-size:11px; letter-spacing:1.6px; text-transform:uppercase; color:var(--accent); font-weight:800; }
   .sec-head h2 { font-size:21px; margin:4px 0 4px; }
   .sec-head p { color:var(--muted); font-size:13px; margin:0; line-height:1.6; max-width:720px; }
+  .hall-title { font-weight:800; font-size:14.5px; margin:22px 0 12px; display:flex; align-items:center; gap:8px; color:#dbe6ff; }
 
-  /* Timeline dạng bước ngang, bấm để mở chi tiết */
-  .tl { margin:16px 0 6px; }
-  .tl-title { font-weight:800; font-size:14.5px; margin:18px 0 10px; display:flex; align-items:center; gap:8px; }
-  .tl-steps { display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; }
-  .tl-step { flex:1 1 150px; min-width:130px; background:var(--card); border:1px solid var(--border); border-radius:12px;
-    padding:12px 13px; cursor:pointer; transition:.15s; position:relative; }
-  .tl-step:hover { border-color:var(--accent); transform:translateY(-3px); }
-  .tl-step .era { font-size:11px; color:var(--accent); font-weight:800; letter-spacing:.5px; }
-  .tl-step .nm { font-weight:700; font-size:14px; margin:3px 0 5px; }
-  .tl-step .dz { font-size:12px; color:var(--muted); line-height:1.5; }
-  .tl-step .more { font-size:11.5px; color:var(--muted); margin-top:8px; line-height:1.55; display:none; border-top:1px dashed var(--border); padding-top:7px; }
-  .tl-step.open .more { display:block; }
-  .tl-step .arrow { position:absolute; right:-11px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:16px; z-index:1; }
-  .tl-step:last-child .arrow { display:none; }
-  @media (max-width:640px){ .tl-step .arrow{ display:none; } }
+  /* ── Hành lang tiến hóa: bệ trưng bày liên tiếp ── */
+  .corridor { display:flex; flex-wrap:wrap; align-items:stretch; gap:10px; }
+  .exhibit { flex:1 1 160px; min-width:150px; background:linear-gradient(180deg,var(--card2),rgba(20,31,56,.5));
+    border:1px solid var(--border); border-radius:14px; padding:14px 14px 12px; position:relative; cursor:pointer;
+    transition:.18s; display:flex; flex-direction:column; }
+  .exhibit:hover { border-color:var(--accent); transform:translateY(-4px); box-shadow:0 10px 26px rgba(34,211,238,.12); }
+  .exhibit .pedestal { position:absolute; left:0; right:0; bottom:0; height:4px; border-radius:0 0 13px 13px;
+    background:linear-gradient(90deg,transparent,var(--accent),transparent); opacity:.5; }
+  .exhibit .glyph { font-size:34px; line-height:1; filter:drop-shadow(0 4px 12px rgba(34,211,238,.35)); }
+  .exhibit .era { font-size:10.5px; color:var(--accent); font-weight:800; letter-spacing:.6px; margin-top:8px; }
+  .exhibit .nm { font-weight:800; font-size:14px; margin:2px 0 6px; }
+  .exhibit .oneLine { font-size:12px; color:var(--muted); line-height:1.5; flex:1; }
+  /* Thanh so sánh trực quan (chi phí / co giãn / tốc độ) */
+  .metric { margin-top:9px; }
+  .metric .ml { display:flex; justify-content:space-between; font-size:10px; color:var(--muted); margin-bottom:3px; }
+  .bar { height:6px; border-radius:4px; background:rgba(255,255,255,.08); overflow:hidden; }
+  .bar > i { display:block; height:100%; border-radius:4px; }
+  .metric.cost .bar > i { background:linear-gradient(90deg,#f87171,#fca5a5); }
+  .metric.scale .bar > i { background:linear-gradient(90deg,#34d399,#6ee7b7); }
+  .metric.speed .bar > i { background:linear-gradient(90deg,#22d3ee,#818cf8); }
+  .deep { font-size:11.5px; color:#cbd5e1; margin-top:9px; line-height:1.55; border-top:1px dashed var(--border);
+    padding-top:8px; display:none; }
+  .exhibit.open .deep, .glass.open .deep { display:block; }
+  .deepBtn { margin-top:9px; font-size:11px; font-weight:700; color:var(--accent); background:rgba(34,211,238,.1);
+    border:1px solid rgba(34,211,238,.3); border-radius:7px; padding:5px 9px; cursor:pointer; align-self:flex-start; }
+  .exhibit.open .deepBtn { color:var(--muted); background:transparent; border-color:var(--border); }
+  .flow { text-align:center; color:var(--muted); font-size:11px; margin-top:8px; letter-spacing:.4px; }
 
-  /* Thẻ thành tựu */
-  .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(290px,1fr)); gap:16px; margin-top:14px; }
-  .acard { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:20px; position:relative; overflow:hidden; }
-  .acard::before { content:''; position:absolute; inset:0 0 auto 0; height:3px; background:linear-gradient(90deg,var(--accent),var(--pink)); opacity:.85; }
-  .acard .ic { font-size:26px; }
-  .acard h3 { font-size:16px; margin:8px 0 4px; }
-  .acard .yr { font-size:11.5px; color:var(--amber); font-weight:800; letter-spacing:.5px; }
-  .acard p { font-size:13px; color:var(--muted); line-height:1.6; margin:8px 0 0; }
-  .acard .kb { margin-top:10px; font-size:12px; background:rgba(99,102,241,.12); border:1px solid rgba(99,102,241,.3);
-    border-radius:9px; padding:8px 11px; color:#c7d2fe; line-height:1.55; }
+  /* ── Tủ kính thành tựu ── */
+  .cases { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:18px; margin-top:12px; }
+  .glass { background:radial-gradient(ellipse 90% 55% at 50% 0%, rgba(99,102,241,.14), transparent), var(--card2);
+    border:1px solid var(--border); border-radius:18px; padding:18px; position:relative; overflow:hidden;
+    display:flex; flex-direction:column; }
+  .glass::before { content:''; position:absolute; inset:0; border-radius:18px; pointer-events:none;
+    box-shadow:inset 0 0 40px rgba(34,211,238,.06); }
+  .stage { height:120px; display:flex; align-items:center; justify-content:center; margin-bottom:10px; position:relative; }
+  .glass .yr { font-size:11px; color:var(--amber); font-weight:800; letter-spacing:.5px; }
+  .glass h3 { font-size:15.5px; margin:3px 0 5px; }
+  .glass .cap { font-size:12.5px; color:var(--muted); line-height:1.55; flex:1; }
+  .glass .deep { margin-top:10px; }
+  /* hiện vật SVG */
+  .nn-node { fill:#22d3ee; }
+  .nn-edge { stroke:rgba(129,140,248,.6); stroke-width:1.4; fill:none; }
+  .nn-pulse { stroke:#a5f3fc; stroke-width:2.2; fill:none; stroke-dasharray:5 90; }
+  @keyframes dash { to { stroke-dashoffset:-95; } }
+  .nn-pulse { animation:dash 2.2s linear infinite; }
+  .blk { fill:rgba(52,211,153,.14); stroke:#34d399; stroke-width:1.6; }
+  .blk-lock { font-size:13px; }
+  @keyframes floaty { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
+  .qbadge { text-align:center; }
+  .qrow { display:flex; align-items:center; justify-content:center; gap:6px; font-size:11px; margin:3px 0; }
+  .qrow .lab { color:var(--muted); width:118px; text-align:right; }
+  .qrow .qbar { height:8px; border-radius:5px; background:rgba(255,255,255,.08); width:96px; overflow:hidden; }
+  .qrow .qbar > i { display:block; height:100%; }
+  .qrow.slow .qbar > i { background:#f87171; width:100%; animation:crawl 3.4s linear infinite; }
+  .qrow.fast .qbar > i { background:#34d399; width:100%; }
+  @keyframes crawl { 0%{width:4%} 100%{width:100%} }
+  .qrow .val { font-weight:800; font-size:11px; width:74px; text-align:left; }
+  .qrow.slow .val { color:#fca5a5; } .qrow.fast .val { color:#6ee7b7; }
 
-  /* Từ điển thuật ngữ — nút bấm mở bảng */
-  .glossGroups { margin-top:12px; }
-  .gGroup { margin:14px 0; }
-  .gGroup h4 { font-size:13px; color:var(--muted); font-weight:800; letter-spacing:.5px; margin:0 0 8px; text-transform:uppercase; }
-  .terms { display:flex; flex-wrap:wrap; gap:8px; }
-  .term { font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; color:var(--text);
-    background:var(--card); border:1px solid var(--border); border-radius:20px; padding:8px 15px; transition:.15s; }
-  .term:hover, .term.on { border-color:var(--accent); background:rgba(34,211,238,.13); color:#a5f3fc; }
-  #termPanel { margin-top:14px; background:var(--card2); border:1px solid var(--border); border-radius:14px; padding:0; overflow:hidden;
-    max-height:0; opacity:0; transition:max-height .25s ease, opacity .2s; }
-  #termPanel.show { max-height:400px; opacity:1; padding:18px 20px; }
-  #termPanel .tp-name { font-size:16px; font-weight:800; }
-  #termPanel .tp-full { font-size:12.5px; color:var(--accent); font-weight:700; margin:2px 0 8px; }
-  #termPanel .tp-desc { font-size:13.5px; color:var(--text); line-height:1.7; }
-  #termPanel .tp-ex { margin-top:10px; font-size:12.5px; color:var(--muted); background:rgba(0,0,0,.2); border-left:3px solid var(--accent2);
-    border-radius:0 8px 8px 0; padding:9px 12px; line-height:1.6; }
+  /* ── Bản đồ khái niệm (concept map) ── */
+  .cmapWrap { margin-top:14px; position:relative; }
+  .cmap { width:100%; height:340px; border:1px solid var(--border); border-radius:16px;
+    background:radial-gradient(circle at 50% 40%, rgba(99,102,241,.08), transparent); display:block; }
+  .cnode { cursor:pointer; }
+  .cnode circle { transition:.18s; }
+  .cnode:hover circle { filter:brightness(1.25); }
+  .cnode text { font-size:11px; font-weight:800; fill:#fff; pointer-events:none; }
+  .cedge { stroke:rgba(255,255,255,.16); stroke-width:1.4; }
+  .cedge.rel { stroke-dasharray:4 4; }
+  .legend { display:flex; flex-wrap:wrap; gap:14px; justify-content:center; margin-top:10px; font-size:11.5px; color:var(--muted); }
+  .legend span { display:inline-flex; align-items:center; gap:6px; }
+  .legend i { width:11px; height:11px; border-radius:50%; display:inline-block; }
+  /* Flashcard lật */
+  .flipWrap { margin-top:14px; perspective:1200px; max-width:460px; margin-left:auto; margin-right:auto; min-height:170px; }
+  .flip { position:relative; width:100%; min-height:170px; transform-style:preserve-3d; transition:transform .5s;
+    text-align:center; }
+  .flip.flipped { transform:rotateY(180deg); }
+  .face { position:absolute; inset:0; backface-visibility:hidden; border-radius:16px; border:1px solid var(--border);
+    padding:20px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .face.front { background:var(--card2); }
+  .face.back { background:linear-gradient(180deg,#182647,#111c34); transform:rotateY(180deg); }
+  .face .fic { font-size:30px; }
+  .face .ft { font-size:18px; font-weight:800; margin:6px 0 2px; }
+  .face .ffull { font-size:11.5px; color:var(--accent); font-weight:700; }
+  .face .fdesc { font-size:13px; color:var(--text); line-height:1.6; }
+  .face .fex { margin-top:9px; font-size:11.5px; color:var(--muted); line-height:1.55;
+    background:rgba(0,0,0,.22); border-left:3px solid var(--accent2); border-radius:0 8px 8px 0; padding:8px 11px; }
+  .face .hint { position:absolute; bottom:9px; right:13px; font-size:10px; color:var(--muted); }
+  .cmapHint { text-align:center; font-size:12px; color:var(--muted); margin-top:8px; }
 
-  /* Bạn có biết + case study */
-  .dyk { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; margin-top:14px; }
-  .dcard { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px 18px; }
-  .dcard .tag { font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; }
-  .dcard.know .tag { color:var(--amber); }
-  .dcard.study .tag { color:var(--green); }
-  .dcard h3 { font-size:15px; margin:6px 0 5px; }
-  .dcard p { font-size:13px; color:var(--muted); line-height:1.65; margin:0; }
-  .dcard code { background:rgba(255,255,255,.08); border-radius:5px; padding:1px 5px; font-size:12px; color:#a5f3fc; }
+  /* ── Thẻ chuyện kể ── */
+  .drawZone { display:grid; grid-template-columns:1fr; gap:16px; margin-top:14px; }
+  @media (min-width:720px){ .drawZone { grid-template-columns:1fr 1fr; } }
+  .drawBox { background:var(--card2); border:1px solid var(--border); border-radius:16px; padding:18px; text-align:center; }
+  .drawBox .dh { font-size:12px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--amber); }
+  .storyCard { margin-top:12px; min-height:150px; background:var(--card); border:1px solid var(--border);
+    border-radius:13px; padding:16px; display:flex; flex-direction:column; justify-content:center; animation:pop .3s ease; }
+  @keyframes pop { from{opacity:0; transform:scale(.96)} to{opacity:1; transform:scale(1)} }
+  .storyCard h3 { font-size:14.5px; margin:0 0 7px; }
+  .storyCard p { font-size:12.5px; color:var(--muted); line-height:1.65; margin:0; }
+  .storyCard code { background:rgba(255,255,255,.08); border-radius:5px; padding:1px 5px; font-size:11.5px; color:#a5f3fc; }
+  .drawBtn { margin-top:12px; font-family:inherit; font-size:12.5px; font-weight:800; cursor:pointer; color:#0a1326;
+    background:linear-gradient(90deg,var(--amber),#fcd34d); border:0; border-radius:10px; padding:9px 16px; }
+  .drawBtn:hover { filter:brightness(1.06); }
+  .caseZone { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; margin-top:16px; }
+  .caseCard { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px 18px; }
+  .caseCard .tag { font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--green); }
+  .caseCard h3 { font-size:14px; margin:6px 0 6px; }
+  .caseCard .stat { font-size:26px; font-weight:900; color:#6ee7b7; line-height:1; }
+  .caseCard .statlbl { font-size:11px; color:var(--muted); margin:2px 0 8px; }
+  .caseCard p { font-size:12.5px; color:var(--muted); line-height:1.6; margin:0; }
+
   footer.ft { text-align:center; color:var(--muted); font-size:12px; margin-top:44px; line-height:1.7; }
 </style>
 </head>
 <body>
-<a class="back" href="/school.html?domain=it">← Về Trường CNTT</a>
+<a class="back" href="/space?b=museum&domain=it">← Về Trường CNTT</a>
 
 <div class="wrap">
   <header class="hero">
     <h1>🖥️ Bảo tàng Công nghệ</h1>
-    <p>Hành trình của ngành công nghệ thông tin — từ những cột mốc đặt nền móng, các phát minh đổi thay thế giới, tới những thuật ngữ mới nhất mà sách giáo khoa chưa kịp cập nhật.</p>
+    <p>Bước vào bảo tàng — mỗi khái niệm là một <b>hiện vật</b>. Nhìn để nhận ra, chạm để hiểu nhanh, và mở «Tìm hiểu sâu» khi muốn đào kỹ.</p>
+    <div class="guide">👆 Bấm vào hiện vật để mở lớp thông tin · kéo thẻ · lật flashcard</div>
   </header>
 
   <nav class="toc">
-    <a href="#timeline">⏳ Trục tiến trình</a>
-    <a href="#gallery">🏆 Thành tựu đột phá</a>
-    <a href="#glossary">🧭 Thuật ngữ mới</a>
-    <a href="#insights">💡 Bạn có biết & Case study</a>
+    <a href="#timeline">⏳ Hành lang tiến hóa</a>
+    <a href="#gallery">🏆 Tủ kính thành tựu</a>
+    <a href="#glossary">🧭 Bản đồ khái niệm</a>
+    <a href="#insights">💡 Thẻ chuyện kể</a>
   </nav>
 
   <!-- PHẦN 1 -->
   <section id="timeline">
     <div class="sec-head">
-      <div class="lbl">Phần 1 · The Tech Evolution Timeline</div>
-      <h2>⏳ Trục tiến trình phát triển</h2>
-      <p>Hiểu vì sao các giải pháp hiện đại ra đời — bằng cách nhìn lại con đường công nghệ đã đi qua. Bấm vào mỗi mốc để xem giải thích.</p>
+      <div class="lbl">Phần 1 · Hành lang tiến hóa công nghệ</div>
+      <h2>⏳ Hành lang tiến hóa</h2>
+      <p>Mỗi giai đoạn là một bệ trưng bày đặt liên tiếp trên lối đi. Chạm để đọc một câu; mở «Tìm hiểu sâu» nếu muốn biết thêm.</p>
     </div>
 
-    <div class="tl">
-      <div class="tl-title">💻 Sự tiến hóa của các mô hình lập trình (Programming Paradigms)</div>
-      <div class="tl-steps" id="tlParadigm"></div>
-    </div>
+    <div class="hall-title">💻 Mô hình lập trình — sinh vật tiến hóa dần</div>
+    <div class="corridor" id="tlParadigm"></div>
+    <div class="flow">→ tư duy giải quyết vấn đề thay đổi theo mỗi bước →</div>
 
-    <div class="tl">
-      <div class="tl-title">🖧 Từ máy chủ vật lý đến điện toán phi máy chủ (Serverless)</div>
-      <div class="tl-steps" id="tlInfra"></div>
-    </div>
+    <div class="hall-title">🖧 Hạ tầng: máy chủ vật lý → serverless (chi phí ↓, co giãn ↑)</div>
+    <div class="corridor" id="tlInfra"></div>
 
-    <div class="tl">
-      <div class="tl-title">📡 Lịch sử các thế hệ mạng viễn thông (1G → 6G)</div>
-      <div class="tl-steps" id="tlTelecom"></div>
-    </div>
+    <div class="hall-title">📡 Mạng viễn thông: đồng hồ tốc độ tăng dần 1G → 6G</div>
+    <div class="corridor" id="tlTelecom"></div>
   </section>
 
   <!-- PHẦN 2 -->
   <section id="gallery">
     <div class="sec-head">
-      <div class="lbl">Phần 2 · Breakthrough Achievements Gallery</div>
-      <h2>🏆 Phòng trưng bày thành tựu đột phá</h2>
-      <p>Những phát minh vĩ đại thay đổi thế giới CNTT — và bản chất kỹ thuật đằng sau chúng.</p>
+      <div class="lbl">Phần 2 · Phòng trưng bày thành tựu</div>
+      <h2>🏆 Tủ kính thành tựu đột phá</h2>
+      <p>Mỗi phát minh là một hiện vật đặt trong tủ kính có ánh sáng riêng. Chạm «Tìm hiểu sâu» để đọc bản chất kỹ thuật.</p>
     </div>
-    <div class="cards" id="gallery-cards"></div>
+    <div class="cases" id="gallery-cases"></div>
   </section>
 
   <!-- PHẦN 3 -->
   <section id="glossary">
     <div class="sec-head">
-      <div class="lbl">Phần 3 · Emerging Tech Glossary</div>
-      <h2>🧭 Không gian thuật ngữ mới & xu hướng tương lai</h2>
-      <p>Bản đồ khái niệm tương tác — chạm vào một thuật ngữ để xem giải thích ngắn gọn kèm ví dụ thực tế.</p>
+      <div class="lbl">Phần 3 · Bản đồ khái niệm</div>
+      <h2>🧭 Bản đồ thuật ngữ mới</h2>
+      <p>Các thuật ngữ là những nút trôi nổi, nối với nhau theo quan hệ. Màu = nhóm. Chạm một nút để lật thẻ khái niệm.</p>
     </div>
-    <div class="glossGroups" id="glossGroups"></div>
-    <div id="termPanel"></div>
+    <div class="cmapWrap">
+      <svg class="cmap" id="cmap" viewBox="0 0 640 340" role="img" aria-label="Bản đồ khái niệm thuật ngữ"></svg>
+    </div>
+    <div class="legend">
+      <span><i style="background:#22d3ee"></i> AI &amp; Dữ liệu</span>
+      <span><i style="background:#a78bfa"></i> Hạ tầng &amp; Mạng</span>
+      <span><i style="background:#fb923c"></i> Quy trình &amp; Vận hành</span>
+    </div>
+    <div class="flipWrap">
+      <div class="flip" id="flip">
+        <div class="face front">
+          <div class="fic">🧭</div>
+          <div class="ft">Chạm một nút</div>
+          <div class="fdesc" style="color:var(--muted)">Bản đồ phía trên — bấm vào một thuật ngữ để lật xem định nghĩa &amp; ví dụ.</div>
+        </div>
+        <div class="face back" id="flipBack"></div>
+      </div>
+    </div>
+    <div class="cmapHint">Kích thước nút thể hiện độ “hot” của thuật ngữ · đường nét đứt = quan hệ liên quan/đối lập</div>
   </section>
 
   <!-- PHẦN 4 -->
   <section id="insights">
     <div class="sec-head">
-      <div class="lbl">Phần 4 · Deep-Dive & Real-world Insights</div>
-      <h2>💡 Thông tin mở rộng & case study thực tế</h2>
-      <p>Kết nối lý thuyết với thực tế ngành công nghiệp.</p>
+      <div class="lbl">Phần 4 · Góc chuyện kể &amp; case study</div>
+      <h2>💡 Thẻ chuyện kể</h2>
+      <p>Kéo một tấm thẻ “Bạn có biết?” ngẫu nhiên, hoặc xem nhanh case study từ các “gã khổng lồ”.</p>
     </div>
-    <div class="dyk" id="dyk"></div>
+    <div class="drawZone">
+      <div class="drawBox">
+        <div class="dh">🎴 Bạn có biết?</div>
+        <div class="storyCard" id="storyCard"></div>
+        <button class="drawBtn" id="drawBtn">🔀 Rút thẻ khác</button>
+      </div>
+      <div class="drawBox">
+        <div class="dh">🏛️ Case study từ gã khổng lồ</div>
+        <div class="caseZone" id="caseZone" style="grid-template-columns:1fr; margin-top:12px"></div>
+      </div>
+    </div>
   </section>
 
   <footer class="ft">
@@ -178,117 +261,194 @@
 </div>
 
 <script>
-  // ===== Dữ liệu (biên soạn theo spec góp ý SV — req #92/#93) =====
+  // ===== Dữ liệu (biên soạn theo spec góp ý SV — req #92/#93/#95) =====
+  // Mỗi hiện vật: glyph (biểu tượng), era, nm (tên), one (1 câu — tầng 2),
+  // deep (đoạn sâu — tầng 3, ẩn mặc định). metric = thanh so sánh trực quan (tuỳ chọn).
   const PARADIGM = [
-    { era:'~1950s', nm:'Tuyến tính (Linear)', dz:'Chạy tuần tự từng lệnh, dùng GOTO nhảy dòng.', more:'Chương trình là một danh sách lệnh chạy từ trên xuống. Khó tái sử dụng và bảo trì khi lớn dần — "mì spaghetti".' },
-    { era:'~1960s', nm:'Thủ tục (Procedural)', dz:'Gom lệnh thành hàm/thủ tục tái sử dụng.', more:'C, Pascal… Chia bài toán thành các hàm. Tư duy: "làm theo trình tự các bước".' },
-    { era:'~1980s', nm:'Hướng đối tượng (OOP)', dz:'Gói dữ liệu + hành vi vào đối tượng.', more:'Java, C++, C#… Đóng gói, kế thừa, đa hình. Tư duy: mô hình hoá thế giới thành các đối tượng — hợp cho dự án lớn nhiều người.' },
-    { era:'~1990s→', nm:'Hàm (Functional)', dz:'Hàm thuần, dữ liệu bất biến, ít tác dụng phụ.', more:'Haskell, Scala, và các nét hàm trong JS/Python. Dễ song song hoá, dễ kiểm thử vì kết quả chỉ phụ thuộc đầu vào.' },
-    { era:'2020s', nm:'Dựa trên AI (AI-Assisted)', dz:'Lập trình viên mô tả ý định, AI sinh mã.', more:'Copilot, Claude Code… Con người chuyển vai từ "gõ từng dòng" sang "định hướng + kiểm chứng" mã do AI tạo. Thay đổi cả cách quản lý mã nguồn.' },
+    { glyph:'🟫', era:'~1950s', nm:'Tuyến tính', one:'Chạy tuần tự từng lệnh, dùng GOTO nhảy dòng.', deep:'Chương trình là danh sách lệnh chạy từ trên xuống. Khó tái sử dụng, khó bảo trì khi lớn dần — kiểu "mì spaghetti".' },
+    { glyph:'🧱', era:'~1960s', nm:'Thủ tục', one:'Gom lệnh thành hàm/thủ tục tái sử dụng.', deep:'C, Pascal… Chia bài toán thành các hàm. Tư duy: "làm theo trình tự các bước".' },
+    { glyph:'🤖', era:'~1980s', nm:'Hướng đối tượng', one:'Gói dữ liệu + hành vi vào đối tượng.', deep:'Java, C++, C#… Đóng gói, kế thừa, đa hình. Tư duy: mô hình hoá thế giới thành đối tượng — hợp cho dự án lớn nhiều người.' },
+    { glyph:'🧮', era:'~1990s→', nm:'Hàm (Functional)', one:'Hàm thuần, dữ liệu bất biến, ít tác dụng phụ.', deep:'Haskell, Scala và nét hàm trong JS/Python. Dễ song song hoá, dễ kiểm thử vì kết quả chỉ phụ thuộc đầu vào.' },
+    { glyph:'✨', era:'2020s', nm:'Dựa trên AI', one:'Lập trình viên mô tả ý định, AI sinh mã.', deep:'Copilot, Claude Code… Con người chuyển từ "gõ từng dòng" sang "định hướng + kiểm chứng" mã AI tạo — đổi cả cách quản lý mã nguồn.' },
   ];
+  // Hạ tầng: kèm 2 thanh so sánh — chi phí đầu tư (cost) & khả năng co giãn (scale), thang 0–100.
   const INFRA = [
-    { era:'Truyền thống', nm:'Máy chủ vật lý (On-premise)', dz:'Doanh nghiệp tự mua và vận hành máy chủ.', more:'Toàn quyền kiểm soát nhưng tốn chi phí đầu tư ban đầu, tự lo điện – làm mát – bảo trì, khó co giãn khi tải tăng.' },
-    { era:'~2000s', nm:'Ảo hóa (Virtualization)', dz:'Nhiều máy ảo (VM) chạy trên một máy vật lý.', more:'VMware, Hyper-V… Tận dụng phần cứng tốt hơn, mỗi VM có HĐH riêng. Nền tảng cho điện toán đám mây.' },
-    { era:'~2010s', nm:'Điện toán đám mây (Cloud)', dz:'Thuê tài nguyên theo nhu cầu (AWS, Azure, GCP).', more:'Trả tiền theo lượng dùng, co giãn nhanh, giảm chi phí đầu tư. Trách nhiệm quản trị hạ tầng chuyển dần sang nhà cung cấp.' },
-    { era:'~2015s', nm:'Container hóa (Docker/K8s)', dz:'Đóng gói ứng dụng + phụ thuộc, chạy nhất quán mọi nơi.', more:'Nhẹ hơn VM (chia sẻ nhân HĐH). Kubernetes điều phối hàng nghìn container tự động — chuẩn triển khai microservices.' },
-    { era:'Hiện nay', nm:'Phi máy chủ (Serverless)', dz:'Chỉ viết hàm, nhà cung cấp lo toàn bộ hạ tầng.', more:'AWS Lambda… Trả tiền theo từng lần gọi, tự co giãn về 0 khi không dùng. Lập trình viên hết bận tâm máy chủ — đây là lý do doanh nghiệp dịch chuyển lên Cloud.' },
+    { glyph:'🖥️', era:'Truyền thống', nm:'Máy chủ vật lý', one:'Doanh nghiệp tự mua và vận hành máy chủ.', cost:95, scale:15, deep:'Toàn quyền kiểm soát nhưng tốn đầu tư ban đầu, tự lo điện–làm mát–bảo trì, khó co giãn khi tải tăng.' },
+    { glyph:'🗄️', era:'~2000s', nm:'Ảo hóa', one:'Nhiều máy ảo (VM) chạy trên một máy vật lý.', cost:70, scale:40, deep:'VMware, Hyper-V… Tận dụng phần cứng tốt hơn, mỗi VM có HĐH riêng. Nền tảng cho điện toán đám mây.' },
+    { glyph:'☁️', era:'~2010s', nm:'Điện toán đám mây', one:'Thuê tài nguyên theo nhu cầu (AWS, Azure, GCP).', cost:45, scale:75, deep:'Trả tiền theo lượng dùng, co giãn nhanh, giảm chi phí đầu tư. Trách nhiệm quản trị hạ tầng chuyển dần sang nhà cung cấp.' },
+    { glyph:'📦', era:'~2015s', nm:'Container hóa', one:'Đóng gói ứng dụng + phụ thuộc, chạy nhất quán mọi nơi.', cost:35, scale:88, deep:'Nhẹ hơn VM (chia sẻ nhân HĐH). Kubernetes điều phối hàng nghìn container tự động — chuẩn triển khai microservices.' },
+    { glyph:'⚡', era:'Hiện nay', nm:'Phi máy chủ (Serverless)', one:'Chỉ viết hàm, nhà cung cấp lo toàn bộ hạ tầng.', cost:20, scale:98, deep:'AWS Lambda… Trả tiền theo từng lần gọi, tự co giãn về 0 khi không dùng. Đây là lý do doanh nghiệp dịch chuyển lên Cloud.' },
   ];
+  // Mạng: thanh tốc độ tương đối (speed 0–100) + ứng dụng tiêu biểu.
   const TELECOM = [
-    { era:'1980s', nm:'1G', dz:'Thoại analog.', more:'Cuộc gọi di động đầu tiên, tín hiệu tương tự, chất lượng thấp, dễ nghe lén.' },
-    { era:'1990s', nm:'2G', dz:'Thoại số + SMS.', more:'GSM — số hoá thoại, thêm tin nhắn văn bản. Bảo mật và dung lượng tốt hơn hẳn 1G.' },
-    { era:'2000s', nm:'3G', dz:'Internet di động.', more:'Duyệt web, video call, email trên điện thoại. Mở đường cho smartphone.' },
-    { era:'2010s', nm:'4G/LTE', dz:'Băng thông rộng, video HD.', more:'Tốc độ cao đủ cho streaming, mạng xã hội, ứng dụng thời gian thực — bùng nổ kinh tế di động.' },
-    { era:'2020s→', nm:'5G / 6G', dz:'Độ trễ siêu thấp, kết nối vạn vật.', more:'Băng thông rộng, độ trễ mili-giây, mật độ thiết bị cực cao — nền tảng cho IoT, xe tự hành, phẫu thuật từ xa, truyền dữ liệu thời gian thực.' },
+    { glyph:'📞', era:'1980s', nm:'1G', one:'Thoại analog — cuộc gọi di động đầu tiên.', speed:6, deep:'Tín hiệu tương tự, chất lượng thấp, dễ nghe lén.' },
+    { glyph:'💬', era:'1990s', nm:'2G', one:'Thoại số + SMS (GSM).', speed:16, deep:'Số hoá thoại, thêm tin nhắn văn bản. Bảo mật và dung lượng tốt hơn hẳn 1G.' },
+    { glyph:'🌐', era:'2000s', nm:'3G', one:'Internet di động — duyệt web, video call.', speed:40, deep:'Email và web trên điện thoại. Mở đường cho smartphone.' },
+    { glyph:'📺', era:'2010s', nm:'4G/LTE', one:'Băng thông rộng, video HD, mạng xã hội.', speed:70, deep:'Tốc độ cao đủ cho streaming và ứng dụng thời gian thực — bùng nổ kinh tế di động.' },
+    { glyph:'🚗', era:'2020s→', nm:'5G / 6G', one:'Độ trễ siêu thấp, kết nối vạn vật, xe tự hành.', speed:100, deep:'Độ trễ mili-giây, mật độ thiết bị cực cao — nền tảng cho IoT, xe tự hành, phẫu thuật từ xa.' },
   ];
 
+  // Thành tựu: art = loại hiện vật SVG ('nn' | 'blk' | 'quantum'); cap = 1 câu; deep = bản chất kỹ thuật.
   const GALLERY = [
-    { ic:'🧠', yr:'2017', h:'Kiến trúc Transformer — cội nguồn của GenAI',
-      p:'Bài báo lịch sử "Attention Is All You Need" giới thiệu cơ chế Tự chú ý (Self-Attention) — nền móng tạo nên các mô hình ngôn ngữ lớn (LLM) ngày nay.',
-      kb:'Vì sao vượt RNN/LSTM? Transformer xử lý SONG SONG cả câu cùng lúc (thay vì đọc tuần tự từng từ), nên huấn luyện nhanh hơn nhiều và nắm được quan hệ giữa các từ ở xa nhau trong câu.' },
-    { ic:'🔐', yr:'1977 · 2008→', h:'Mật mã học & Blockchain',
-      p:'Thuật toán mã hóa khóa công khai RSA (Rivest–Shamir–Adleman) cho phép trao đổi an toàn không cần chia sẻ khóa bí mật trước. Blockchain kế thừa mật mã học để tạo sổ cái phi tập trung.',
-      kb:'Cơ chế đồng thuận: Proof of Work (PoW) — đua giải toán tốn điện (Bitcoin); Proof of Stake (PoS) — chọn người xác thực theo lượng token đặt cọc, tiết kiệm năng lượng hơn nhiều. Nền tảng của tài chính phi tập trung (DeFi).' },
-    { ic:'⚛️', yr:'2019→', h:'Cột mốc "Ưu thế lượng tử" (Quantum Supremacy)',
-      p:'Lần đầu một máy tính lượng tử giải xong một phép toán chuyên biệt trong ít phút — điều mà siêu máy tính cổ điển được ước tính phải mất hàng nghìn năm.',
-      kb:'Máy tính lượng tử dùng qubit ở trạng thái chồng chập (vừa 0 vừa 1), khai thác song song lượng tử. Chưa thay thế máy tính thường, nhưng hứa hẹn đột phá ở mô phỏng phân tử, tối ưu hoá và mật mã.' },
+    { art:'nn', yr:'2017', h:'Transformer — cội nguồn của GenAI',
+      cap:'Cơ chế giúp AI đọc cả câu cùng lúc thay vì từng từ (bài báo "Attention Is All You Need").',
+      deep:'Vì sao vượt RNN/LSTM? Transformer xử lý SONG SONG cả câu (thay vì tuần tự từng từ) nên huấn luyện nhanh hơn nhiều và nắm được quan hệ giữa các từ ở xa nhau — nền móng của mọi mô hình ngôn ngữ lớn (LLM) ngày nay.' },
+    { art:'blk', yr:'1977 · 2008→', h:'Mật mã học & Blockchain',
+      cap:'Chuỗi khối liên kết bằng mật mã — mỗi khối "khóa" vào khối trước.',
+      deep:'RSA (mã hóa khóa công khai) cho trao đổi an toàn không cần chia sẻ khóa trước. Blockchain kế thừa mật mã để tạo sổ cái phi tập trung; đồng thuận bằng PoW (đua giải toán, tốn điện) hoặc PoS (đặt cọc token, tiết kiệm hơn). Nền tảng của DeFi.' },
+    { art:'quantum', yr:'2019→', h:'Ưu thế lượng tử',
+      cap:'Việc siêu máy tính cần ~10.000 năm, máy lượng tử làm xong trong ~200 giây.',
+      deep:'Qubit ở trạng thái chồng chập (vừa 0 vừa 1), khai thác song song lượng tử. Chưa thay thế máy tính thường, nhưng hứa hẹn đột phá ở mô phỏng phân tử, tối ưu hoá và mật mã.' },
   ];
 
-  const GLOSSARY = [
-    { grp:'AI & Dữ liệu', items:[
-      { t:'AGI', full:'Artificial General Intelligence — Trí tuệ nhân tạo tổng quát', d:'AI có khả năng tự học và làm bất kỳ nhiệm vụ trí tuệ nào như con người.', ex:'Phân biệt với ANI (AI hẹp) hiện tại — thứ chỉ giỏi một việc như dịch, nhận diện ảnh hay chơi cờ.' },
-      { t:'RAG', full:'Retrieval-Augmented Generation', d:'Cho LLM truy vấn nguồn dữ liệu đáng tin bên ngoài TRƯỚC khi trả lời.', ex:'Giảm "ảo tưởng" (hallucination): thay vì bịa, AI tra tài liệu công ty rồi mới trả lời khách hàng.' },
-      { t:'Synthetic Data', full:'Dữ liệu tổng hợp', d:'Dữ liệu do thuật toán tạo ra để huấn luyện AI.', ex:'Dùng khi dữ liệu thật khan hiếm hoặc vướng bảo mật — ví dụ tạo ảnh khuôn mặt ảo để huấn luyện mà không lộ ảnh người thật.' },
-    ]},
-    { grp:'Hạ tầng & Mạng', items:[
-      { t:'Edge Computing', full:'Điện toán biên', d:'Xử lý dữ liệu ngay tại rìa mạng, gần nơi phát sinh (IoT, camera).', ex:'Camera an ninh tự phân tích tại chỗ thay vì gửi hết video về trung tâm — giảm độ trễ tối đa.' },
-      { t:'DePIN', full:'Decentralized Physical Infrastructure Networks', d:'Xây hạ tầng vật lý (mạng, lưu trữ, năng lượng) bằng cách thưởng token cho cộng đồng góp phần cứng.', ex:'Người dân cắm thiết bị phát sóng ở nhà, nhận token — hạ tầng mạng hình thành phi tập trung.' },
-      { t:'Spatial Computing', full:'Điện toán không gian', d:'Kết hợp VR/AR/XR với AI để hoà dữ liệu số vào không gian vật lý quanh ta.', ex:'Đeo kính thấy chỉ dẫn sửa máy nổi ngay trên thiết bị thật trước mắt.' },
-    ]},
-    { grp:'Quy trình & Vận hành', items:[
-      { t:'DevSecOps', full:'Development + Security + Operations', d:'Cài yếu tố bảo mật vào MỌI giai đoạn vòng đời phần mềm, không để tới bước cuối.', ex:'Quét lỗ hổng tự động ngay khi lập trình viên commit mã, thay vì kiểm tra một lần trước khi phát hành.' },
-      { t:'FinOps', full:'Cloud Financial Management', d:'Kết hợp tài chính + công nghệ để quản lý và tối ưu chi phí đám mây.', ex:'Đội kỹ thuật và tài chính cùng theo dõi hoá đơn Cloud theo thời gian thực, tắt tài nguyên rảnh để đỡ tốn.' },
-    ]},
+  // Concept map: node có x,y (%), r (bán kính theo độ hot), grp (màu), full/d/ex cho flashcard.
+  // edges: cặp id + rel (true = quan hệ liên quan/đối lập, nét đứt).
+  const NODES = [
+    { id:'agi',  t:'AGI',    grp:0, x:16, y:26, r:26, full:'Artificial General Intelligence — Trí tuệ nhân tạo tổng quát', d:'AI tự học và làm bất kỳ nhiệm vụ trí tuệ nào như con người.', ex:'Phân biệt với ANI (AI hẹp) hiện tại — thứ chỉ giỏi một việc như dịch hay chơi cờ.' },
+    { id:'ani',  t:'ANI',    grp:0, x:40, y:14, r:20, full:'Artificial Narrow Intelligence — AI hẹp', d:'AI chỉ giỏi một nhiệm vụ cụ thể — chính là AI ta dùng hôm nay.', ex:'Nhận diện khuôn mặt, gợi ý phim, dịch máy… mỗi thứ một mô hình riêng.' },
+    { id:'rag',  t:'RAG',    grp:0, x:30, y:52, r:27, full:'Retrieval-Augmented Generation', d:'Cho LLM tra nguồn dữ liệu đáng tin TRƯỚC khi trả lời.', ex:'Giảm "ảo tưởng": AI tra tài liệu công ty rồi mới trả lời khách, thay vì bịa.' },
+    { id:'llm',  t:'LLM',    grp:0, x:52, y:40, r:24, full:'Large Language Model — Mô hình ngôn ngữ lớn', d:'Mô hình học từ khối văn bản khổng lồ để hiểu và sinh ngôn ngữ.', ex:'ChatGPT, Claude… đều là LLM, xây trên kiến trúc Transformer.' },
+    { id:'syn',  t:'Synthetic', grp:0, x:14, y:74, r:20, full:'Synthetic Data — Dữ liệu tổng hợp', d:'Dữ liệu do thuật toán tạo ra để huấn luyện AI.', ex:'Dùng khi dữ liệu thật khan hiếm hoặc vướng bảo mật — vd ảnh khuôn mặt ảo.' },
+    { id:'edge', t:'Edge',   grp:1, x:74, y:22, r:23, full:'Edge Computing — Điện toán biên', d:'Xử lý dữ liệu ngay tại rìa mạng, gần nơi phát sinh.', ex:'Camera an ninh tự phân tích tại chỗ thay vì gửi hết video về trung tâm — giảm độ trễ.' },
+    { id:'depin',t:'DePIN',  grp:1, x:88, y:48, r:20, full:'Decentralized Physical Infrastructure Networks', d:'Xây hạ tầng vật lý bằng cách thưởng token cho cộng đồng góp phần cứng.', ex:'Người dân cắm thiết bị phát sóng ở nhà, nhận token — hạ tầng mạng phi tập trung.' },
+    { id:'spat', t:'Spatial', grp:1, x:70, y:60, r:21, full:'Spatial Computing — Điện toán không gian', d:'Kết hợp VR/AR/XR với AI để hoà dữ liệu số vào không gian thật.', ex:'Đeo kính thấy chỉ dẫn sửa máy nổi ngay trên thiết bị trước mắt.' },
+    { id:'devsec',t:'DevSecOps', grp:2, x:52, y:78, r:22, full:'Development + Security + Operations', d:'Cài bảo mật vào MỌI giai đoạn vòng đời phần mềm, không để tới bước cuối.', ex:'Quét lỗ hổng tự động ngay khi lập trình viên commit mã.' },
+    { id:'finops',t:'FinOps', grp:2, x:82, y:76, r:20, full:'Cloud Financial Management', d:'Kết hợp tài chính + công nghệ để tối ưu chi phí đám mây.', ex:'Kỹ thuật và tài chính cùng theo dõi hoá đơn Cloud, tắt tài nguyên rảnh.' },
   ];
+  const EDGES = [
+    { a:'agi', b:'ani', rel:true },   // đối lập
+    { a:'rag', b:'llm', rel:true },   // RAG bổ trợ LLM
+    { a:'agi', b:'rag' }, { a:'rag', b:'syn' }, { a:'llm', b:'edge' },
+    { a:'edge', b:'depin' }, { a:'edge', b:'spat' }, { a:'devsec', b:'spat' }, { a:'devsec', b:'finops' },
+  ];
+  const GRP_COLOR = ['#22d3ee', '#a78bfa', '#fb923c'];
 
   const DYK = [
-    { cls:'know', tag:'Bạn có biết?', h:'🐛 Vì sao lỗi phần mềm gọi là "bug"?', p:'Năm 1947, nhóm vận hành máy <code>Harvard Mark II</code> tìm ra nguyên nhân trục trặc là một con bướm đêm thật bị kẹt trong rơ-le. Họ dán con côn trùng vào nhật ký kèm dòng "first actual case of bug being found". Từ "bug" (con bọ) thành tên gọi cho lỗi từ đó.' },
-    { cls:'know', tag:'Bạn có biết?', h:'📶 Bluetooth lấy tên từ một vị vua?', p:'Bluetooth đặt theo vua <code>Harald "Bluetooth" Gormsson</code> của Đan Mạch thế kỷ 10 — người thống nhất các bộ tộc. Ý nghĩa: công nghệ này "thống nhất" nhiều thiết bị. Logo là chữ rune ghép tên ông (H + B).' },
-    { cls:'study', tag:'Case study', h:'🎬 Netflix giữ chân người xem thế nào?', p:'Hệ thống gợi ý (Recommendation System) phân tích lịch sử xem để đề xuất nội dung phù hợp từng người. Ước tính phần lớn lượt xem đến từ gợi ý — giữ chân người dùng chính là giữ doanh thu thuê bao.' },
-    { cls:'study', tag:'Case study', h:'⚡ Phố Wall đua từng mili-giây', p:'Giao dịch tần suất cao (High-Frequency Trading) tối ưu từng mili-giây độ trễ mạng — đặt máy chủ sát sàn giao dịch, dùng đường truyền ngắn nhất — để ra lệnh trước đối thủ và tạo lợi thế cạnh tranh.' },
+    { h:'🐛 Vì sao lỗi phần mềm gọi là "bug"?', p:'Năm 1947, nhóm vận hành máy <code>Harvard Mark II</code> tìm ra nguyên nhân trục trặc là một con bướm đêm thật kẹt trong rơ-le. Họ dán con côn trùng vào nhật ký kèm dòng "first actual case of bug being found". Từ "bug" thành tên gọi cho lỗi từ đó.' },
+    { h:'📶 Bluetooth lấy tên từ một vị vua?', p:'Bluetooth đặt theo vua <code>Harald "Bluetooth" Gormsson</code> của Đan Mạch thế kỷ 10 — người thống nhất các bộ tộc. Ý: công nghệ này "thống nhất" nhiều thiết bị. Logo là chữ rune ghép tên ông (H + B).' },
+    { h:'🖱️ Con chuột máy tính đầu tiên làm bằng gỗ', p:'Nguyên mẫu chuột của <code>Douglas Engelbart</code> (1964) là một khối gỗ với hai bánh xe kim loại. Tên "mouse" đến từ sợi dây trông như đuôi chuột.' },
+    { h:'💾 Biểu tượng "Lưu" là một vật đã tuyệt chủng', p:'Icon lưu file là hình <code>đĩa mềm (floppy disk)</code> — thứ hầu như không ai còn dùng. Nhiều bạn trẻ chưa từng thấy đĩa mềm thật ngoài đời.' },
+  ];
+  const CASES = [
+    { tag:'Netflix', stat:'~80%', statlbl:'lượt xem đến từ gợi ý (ước tính)', h:'🎬 Giữ chân người xem', p:'Hệ thống gợi ý phân tích lịch sử xem để đề xuất nội dung hợp từng người. Giữ chân người dùng chính là giữ doanh thu thuê bao.' },
+    { tag:'Phố Wall', stat:'mili-giây', statlbl:'khoảng độ trễ quyết định lợi thế', h:'⚡ Đua từng mili-giây', p:'Giao dịch tần suất cao đặt máy chủ sát sàn, dùng đường truyền ngắn nhất để ra lệnh trước đối thủ — từng mili-giây là tiền.' },
   ];
 
   const $ = s => document.querySelector(s);
   const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 
-  function renderTimeline(id, data) {
+  // ── Phần 1: hành lang, 3 tầng thông tin + thanh so sánh ──
+  function metricHtml(it) {
+    let h = '';
+    if (it.cost != null) h += '<div class="metric cost"><div class="ml"><span>Chi phí đầu tư</span><span>'+it.cost+'</span></div><div class="bar"><i style="width:'+it.cost+'%"></i></div></div>';
+    if (it.scale != null) h += '<div class="metric scale"><div class="ml"><span>Khả năng co giãn</span><span>'+it.scale+'</span></div><div class="bar"><i style="width:'+it.scale+'%"></i></div></div>';
+    if (it.speed != null) h += '<div class="metric speed"><div class="ml"><span>Tốc độ tương đối</span><span>'+it.speed+'</span></div><div class="bar"><i style="width:'+it.speed+'%"></i></div></div>';
+    return h;
+  }
+  function renderCorridor(id, data) {
     $(id).innerHTML = data.map(s =>
-      '<div class="tl-step" tabindex="0">' +
+      '<div class="exhibit" tabindex="0">' +
+        '<div class="glyph">' + s.glyph + '</div>' +
         '<div class="era">' + esc(s.era) + '</div>' +
         '<div class="nm">' + esc(s.nm) + '</div>' +
-        '<div class="dz">' + esc(s.dz) + '</div>' +
-        '<div class="more">' + esc(s.more) + '</div>' +
-        '<span class="arrow">→</span>' +
+        '<div class="oneLine">' + esc(s.one) + '</div>' +
+        metricHtml(s) +
+        '<button class="deepBtn" type="button">🔎 Tìm hiểu sâu</button>' +
+        '<div class="deep">' + esc(s.deep) + '</div>' +
+        '<span class="pedestal"></span>' +
       '</div>').join('');
-    $(id).querySelectorAll('.tl-step').forEach(st => {
-      const toggle = () => st.classList.toggle('open');
-      st.addEventListener('click', toggle);
-      st.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+    $(id).querySelectorAll('.exhibit').forEach(ex => {
+      const btn = ex.querySelector('.deepBtn');
+      const toggle = () => { const o = ex.classList.toggle('open'); btn.textContent = o ? '▲ Thu gọn' : '🔎 Tìm hiểu sâu'; };
+      btn.addEventListener('click', e => { e.stopPropagation(); toggle(); });
+      ex.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
     });
   }
-  renderTimeline('#tlParadigm', PARADIGM);
-  renderTimeline('#tlInfra', INFRA);
-  renderTimeline('#tlTelecom', TELECOM);
+  renderCorridor('#tlParadigm', PARADIGM);
+  renderCorridor('#tlInfra', INFRA);
+  renderCorridor('#tlTelecom', TELECOM);
 
-  $('#gallery-cards').innerHTML = GALLERY.map(g =>
-    '<div class="acard"><div class="ic">' + g.ic + '</div>' +
-    '<div class="yr">' + esc(g.yr) + '</div>' +
-    '<h3>' + esc(g.h) + '</h3>' +
-    '<p>' + esc(g.p) + '</p>' +
-    '<div class="kb">🔎 ' + esc(g.kb) + '</div></div>').join('');
+  // ── Phần 2: tủ kính + hiện vật SVG ──
+  function artSvg(kind) {
+    if (kind === 'nn') return '<svg viewBox="0 0 200 110" width="180" height="100" style="animation:floaty 4s ease-in-out infinite">' +
+      '<path class="nn-edge" d="M30,20 L100,20 M30,20 L100,55 M30,55 L100,20 M30,55 L100,90 M30,90 L100,55 M100,20 L170,55 M100,55 L170,55 M100,90 L170,55"/>' +
+      '<path class="nn-pulse" d="M30,20 L100,55 L170,55"/>' +
+      '<path class="nn-pulse" d="M30,90 L100,55 L170,55" style="animation-delay:1.1s"/>' +
+      ['30,20','30,55','30,90','100,20','100,55','100,90','170,55'].map(p=>{const[x,y]=p.split(',');return '<circle class="nn-node" cx="'+x+'" cy="'+y+'" r="6"/>';}).join('') +
+      '</svg>';
+    if (kind === 'blk') return '<svg viewBox="0 0 210 90" width="190" height="86" style="animation:floaty 4.5s ease-in-out infinite">' +
+      [0,1,2].map(i=>'<g><rect class="blk" x="'+(12+i*68)+'" y="26" width="52" height="42" rx="7"/>' +
+        '<text class="blk-lock" x="'+(38+i*68)+'" y="52" text-anchor="middle">🔒</text></g>' +
+        (i<2?'<line x1="'+(64+i*68)+'" y1="47" x2="'+(80+i*68)+'" y2="47" stroke="#34d399" stroke-width="2"/>':'')).join('') +
+      '</svg>';
+    // quantum: A/B đếm ngược so sánh
+    return '<div class="qbadge">' +
+      '<div class="qrow slow"><span class="lab">Siêu máy tính</span><span class="qbar"><i></i></span><span class="val">~10.000 năm</span></div>' +
+      '<div class="qrow fast"><span class="lab">Máy lượng tử</span><span class="qbar"><i></i></span><span class="val">~200 giây</span></div>' +
+      '</div>';
+  }
+  $('#gallery-cases').innerHTML = GALLERY.map((g, i) =>
+    '<div class="glass">' +
+      '<div class="stage">' + artSvg(g.art) + '</div>' +
+      '<div class="yr">' + esc(g.yr) + '</div>' +
+      '<h3>' + esc(g.h) + '</h3>' +
+      '<div class="cap">' + esc(g.cap) + '</div>' +
+      '<button class="deepBtn" type="button" data-gi="' + i + '">🔎 Tìm hiểu sâu</button>' +
+      '<div class="deep">' + esc(g.deep) + '</div>' +
+    '</div>').join('');
+  $('#gallery-cases').querySelectorAll('.glass').forEach(card => {
+    const btn = card.querySelector('.deepBtn'), deep = card.querySelector('.deep');
+    btn.addEventListener('click', () => { const o = card.classList.toggle('open'); btn.textContent = o ? '▲ Thu gọn' : '🔎 Tìm hiểu sâu'; });
+  });
 
-  // Glossary: nút thuật ngữ + panel chi tiết
-  $('#glossGroups').innerHTML = GLOSSARY.map((g, gi) =>
-    '<div class="gGroup"><h4>' + esc(g.grp) + '</h4><div class="terms">' +
-    g.items.map((it, ii) => '<button class="term" data-g="' + gi + '" data-i="' + ii + '">' + esc(it.t) + '</button>').join('') +
-    '</div></div>').join('');
-  const panel = $('#termPanel');
-  document.querySelectorAll('.term').forEach(btn => btn.addEventListener('click', () => {
-    const it = GLOSSARY[+btn.dataset.g].items[+btn.dataset.i];
-    document.querySelectorAll('.term').forEach(b => b.classList.remove('on'));
-    btn.classList.add('on');
-    panel.innerHTML = '<div class="tp-name">' + esc(it.t) + '</div>' +
-      '<div class="tp-full">' + esc(it.full) + '</div>' +
-      '<div class="tp-desc">' + esc(it.d) + '</div>' +
-      '<div class="tp-ex">💡 Ví dụ: ' + esc(it.ex) + '</div>';
-    panel.classList.add('show');
-    panel.scrollIntoView({ behavior:'smooth', block:'nearest' });
-  }));
+  // ── Phần 3: bản đồ khái niệm SVG + flashcard lật ──
+  const cmap = $('#cmap'), VW = 640, VH = 340;
+  const pos = id => { const n = NODES.find(x => x.id === id); return { x: n.x/100*VW, y: n.y/100*VH }; };
+  let svg = '';
+  EDGES.forEach(e => { const p = pos(e.a), q = pos(e.b);
+    svg += '<line class="cedge' + (e.rel ? ' rel' : '') + '" x1="'+p.x+'" y1="'+p.y+'" x2="'+q.x+'" y2="'+q.y+'"/>'; });
+  NODES.forEach(n => { const x = n.x/100*VW, y = n.y/100*VH, c = GRP_COLOR[n.grp];
+    svg += '<g class="cnode" data-id="'+n.id+'" tabindex="0">' +
+      '<circle cx="'+x+'" cy="'+y+'" r="'+n.r+'" fill="'+c+'22" stroke="'+c+'" stroke-width="1.8"/>' +
+      '<circle cx="'+x+'" cy="'+y+'" r="'+(n.r*0.42)+'" fill="'+c+'"/>' +
+      '<text x="'+x+'" y="'+(y+n.r+13)+'" text-anchor="middle">'+esc(n.t)+'</text></g>'; });
+  cmap.innerHTML = svg;
+  const flip = $('#flip'), flipBack = $('#flipBack');
+  function showTerm(id) {
+    const n = NODES.find(x => x.id === id); if (!n) return;
+    const c = GRP_COLOR[n.grp];
+    flipBack.innerHTML = '<div class="ffull" style="color:'+c+'">' + esc(n.full) + '</div>' +
+      '<div class="ft">' + esc(n.t) + '</div>' +
+      '<div class="fdesc">' + esc(n.d) + '</div>' +
+      '<div class="fex">💡 ' + esc(n.ex) + '</div>' +
+      '<div class="hint">bấm nút khác để xem tiếp</div>';
+    flip.classList.add('flipped');
+  }
+  cmap.querySelectorAll('.cnode').forEach(g => {
+    const go = () => showTerm(g.dataset.id);
+    g.addEventListener('click', go);
+    g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  });
+  // bấm mặt sau để lật lại
+  flip.addEventListener('click', e => { if (flip.classList.contains('flipped') && e.target.closest('.face.back')) flip.classList.remove('flipped'); });
 
-  $('#dyk').innerHTML = DYK.map(d =>
-    '<div class="dcard ' + d.cls + '"><div class="tag">' + esc(d.tag) + '</div>' +
-    '<h3>' + d.h + '</h3><p>' + d.p + '</p></div>').join('');
+  // ── Phần 4: thẻ rút ngẫu nhiên + case study ──
+  let lastIdx = -1;
+  function drawStory() {
+    let i; do { i = Math.floor(Math.random() * DYK.length); } while (DYK.length > 1 && i === lastIdx);
+    lastIdx = i; const d = DYK[i];
+    $('#storyCard').innerHTML = '<h3>' + d.h + '</h3><p>' + d.p + '</p>';
+    // ép chạy lại animation pop
+    const el = $('#storyCard'); el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+  }
+  $('#drawBtn').addEventListener('click', drawStory);
+  drawStory();
+  $('#caseZone').innerHTML = CASES.map(c =>
+    '<div class="caseCard"><div class="tag">' + esc(c.tag) + '</div>' +
+    '<div class="stat">' + esc(c.stat) + '</div><div class="statlbl">' + esc(c.statlbl) + '</div>' +
+    '<h3>' + c.h + '</h3><p>' + c.p + '</p></div>').join('');
 
-  // TOC: highlight mục đang xem
+  // ── TOC spy ──
   const toc = document.querySelectorAll('nav.toc a');
   const secs = [...document.querySelectorAll('section')];
   const spy = () => {
