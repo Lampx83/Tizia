@@ -507,37 +507,45 @@
 
   // ───────────────── 7. ROADMAP & SKILL TREE (req #37) ─────────────────
   const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  // Link tới 1 module CNTT của trường (35 module sẵn có).
-  const modHref = id => '/module.html?domain=it&module=' + encodeURIComponent(id);
+  // Link tới một KHÔNG GIAN kiến thức có sẵn trên campus Trường CNTT (req #41 Chu Thi Hue:
+  // "kiến thức mỗi vị trí phải link ngay tới trang kiến thức có sẵn trên campus"). Trước đây
+  // skill trỏ /module.html?module=Ix.x — nhưng các module đó là placeholder RỖNG (chưa có nội
+  // dung) nên bấm vào trống trơn. Nay mỗi skill trỏ THẲNG tới trang thực hành thật (href) hoặc
+  // không gian có bài kiến thức tương tác (space → /space?b=<key>&domain=it).
+  const spaceHref = key => '/space?b=' + encodeURIComponent(key) + '&domain=it';
 
-  // Từ điển kỹ năng dùng chung cho mọi lộ trình. `mod` = id module trường;
-  // `href` = trang thực hành; nếu không có cả hai → hiện lý thuyết nhanh + nguồn tự học (`res`).
+  // Từ điển kỹ năng dùng chung cho mọi lộ trình. Ưu tiên đích khi mở:
+  //   `href` = trang thực hành trực tiếp · `space` = không gian kiến thức trên campus ·
+  //   `res`  = kỹ năng chưa có sẵn trên campus → lý thuyết nhanh + nguồn tự học uy tín.
   const SKILLS = {
-    py:    { ic:'🐍', label:'Nhập môn Python',     mod:'I1.1', d:'Ngôn ngữ lập trình phổ biến, dễ học — nền tảng cho mọi nhánh CNTT. Học biến, vòng lặp, hàm, cấu trúc dữ liệu cơ bản.' },
-    math:  { ic:'➗', label:'Toán & Logic',        mod:'I1.2', d:'Toán rời rạc, logic, xác suất–thống kê: nền tảng tư duy cho giải thuật, AI và phân tích dữ liệu.' },
-    arch:  { ic:'🖥️', label:'Kiến trúc máy tính',  mod:'I1.3', d:'Cách máy tính hoạt động: CPU, bộ nhớ, biểu diễn nhị phân — hiểu để viết code hiệu quả.' },
-    linux: { ic:'🐧', label:'Hệ điều hành Linux',  mod:'I1.4', d:'Dòng lệnh, quản lý tiến trình, file, quyền. Kỹ năng bắt buộc cho DevOps, bảo mật và server.' },
-    ctdl:  { ic:'🧮', label:'CTDL & Giải thuật',   mod:'I2.1', d:'Mảng, danh sách, cây, đồ thị + thuật toán sắp xếp, tìm kiếm. "Xương sống" của lập trình viên giỏi.' },
-    oop:   { ic:'🧩', label:'Lập trình HĐT (OOP)', mod:'I2.2', d:'Tư duy hướng đối tượng: lớp, kế thừa, đa hình — cách tổ chức code lớn, dễ bảo trì.' },
-    sql:   { ic:'🗃️', label:'Cơ sở dữ liệu SQL',   mod:'I2.3', d:'Thiết kế bảng, truy vấn SELECT/JOIN, tối ưu. Mọi ứng dụng đều cần lưu và truy xuất dữ liệu.' },
-    net:   { ic:'🌐', label:'Mạng máy tính',       mod:'I2.4', d:'TCP/IP, HTTP, DNS, mô hình OSI. Hiểu mạng để làm web, cloud, và đặc biệt là an toàn thông tin.' },
-    web:   { ic:'🎨', label:'Thiết kế Web',        mod:'I2.5', d:'HTML, CSS, JavaScript — dựng giao diện chạy trên trình duyệt, bước đầu của web & mobile.' },
-    ktpm:  { ic:'🏗️', label:'Kỹ thuật phần mềm',   mod:'I3.1', d:'Quy trình phát triển phần mềm: phân tích yêu cầu, thiết kế, kiểm thử, làm việc nhóm theo Agile.' },
-    ai:    { ic:'🧠', label:'Trí tuệ nhân tạo',    mod:'I3.3', d:'Tìm kiếm, suy luận, học máy cơ bản — nền tảng để xây dựng hệ thống thông minh.' },
-    ml:    { ic:'🤖', label:'Machine Learning',    mod:'I3.4', d:'Mô hình học từ dữ liệu: hồi quy, phân loại, mạng nơ-ron. Kỹ năng lõi của AI/ML Engineer.' },
-    full:  { ic:'🧱', label:'Web Full-stack',      mod:'I3.5', d:'Node.js + React: làm cả backend lẫn frontend, dựng ứng dụng web hoàn chỉnh đầu–cuối.' },
-    mob:   { ic:'📱', label:'Mobile Dev',          mod:'I3.6', d:'Xây ứng dụng Android/iOS: vòng đời màn hình, gọi API, lưu dữ liệu, đưa app lên store.' },
-    devops:{ ic:'☁️', label:'DevOps & Cloud',      mod:'I3.7', d:'Tự động hoá build–deploy, container, giám sát hệ thống trên cloud (AWS/GCP).' },
-    sec:   { ic:'🛡️', label:'An toàn thông tin',   mod:'I3.8', d:'Lỗ hổng web, mã hoá, phòng thủ & tấn công có đạo đức. Nghề đang rất khát nhân lực.' },
-    patt:  { ic:'📐', label:'Design Patterns',     mod:'I4.1', d:'Mẫu thiết kế tái sử dụng (Singleton, Factory, Observer…) giúp code sạch, mở rộng dễ.' },
-    cloud: { ic:'⛅', label:'Điện toán đám mây',    mod:'I4.2', d:'Triển khai và vận hành dịch vụ trên AWS/GCP/Azure: máy ảo, lưu trữ, mở rộng tự động.' },
-    ds:    { ic:'📈', label:'Khoa học dữ liệu',     mod:'I4.3', d:'Toàn trình xử lý dữ liệu: thu thập, làm sạch, mô hình hoá, kể chuyện bằng dữ liệu.' },
-    // Kỹ năng chưa có module riêng → lý thuyết nhanh + nguồn tự học uy tín.
-    git:   { ic:'🔧', label:'Git & GitHub', d:'Quản lý phiên bản code, làm việc nhóm qua branch/commit/pull request. Kỹ năng dùng hằng ngày của mọi lập trình viên.',
+    py:    { ic:'🐍', label:'Nhập môn Python',     href:'/it-code-lab.html?domain=it&contest=325049', d:'Ngôn ngữ lập trình phổ biến, dễ học — nền tảng cho mọi nhánh CNTT. Học biến, vòng lặp, hàm, cấu trúc dữ liệu cơ bản.' },
+    math:  { ic:'➗', label:'Toán & Logic',        d:'Toán rời rạc, logic, xác suất–thống kê: nền tảng tư duy cho giải thuật, AI và phân tích dữ liệu.',
+             res:[['Khan Academy — Toán rời rạc','https://vi.khanacademy.org/math'],['roadmap.sh — Computer Science','https://roadmap.sh/computer-science']] },
+    arch:  { ic:'🖥️', label:'Kiến trúc máy tính',  d:'Cách máy tính hoạt động: CPU, bộ nhớ, biểu diễn nhị phân — hiểu để viết code hiệu quả.',
+             res:[['roadmap.sh — Computer Science','https://roadmap.sh/computer-science'],['CS50 — Harvard (miễn phí)','https://cs50.harvard.edu/x/']] },
+    linux: { ic:'🐧', label:'Hệ điều hành Linux',  space:'netlab', d:'Dòng lệnh, quản lý tiến trình, file, quyền. Kỹ năng bắt buộc cho DevOps, bảo mật và server.',
+             res:[['Linux Journey (căn bản)','https://linuxjourney.com/'],['roadmap.sh — Linux','https://roadmap.sh/linux']] },
+    ctdl:  { ic:'🧮', label:'CTDL & Giải thuật',   href:'/it-algo-viz.html?domain=it', d:'Mảng, danh sách, cây, đồ thị + thuật toán sắp xếp, tìm kiếm. "Xương sống" của lập trình viên giỏi.' },
+    oop:   { ic:'🧩', label:'Lập trình HĐT (OOP)', space:'codelab', d:'Tư duy hướng đối tượng: lớp, kế thừa, đa hình — cách tổ chức code lớn, dễ bảo trì.' },
+    sql:   { ic:'🗃️', label:'Cơ sở dữ liệu SQL',   href:'/it-sql-playground.html?domain=it', d:'Thiết kế bảng, truy vấn SELECT/JOIN, tối ưu. Mọi ứng dụng đều cần lưu và truy xuất dữ liệu.' },
+    net:   { ic:'🌐', label:'Mạng máy tính',       space:'netlab', d:'TCP/IP, HTTP, DNS, mô hình OSI. Hiểu mạng để làm web, cloud, và đặc biệt là an toàn thông tin.' },
+    web:   { ic:'🎨', label:'Thiết kế Web',        href:'/it-web-playground.html?domain=it', d:'HTML, CSS, JavaScript — dựng giao diện chạy trên trình duyệt, bước đầu của web & mobile.' },
+    ktpm:  { ic:'🏗️', label:'Kỹ thuật phần mềm',   space:'library', d:'Quy trình phát triển phần mềm: phân tích yêu cầu, thiết kế, kiểm thử, làm việc nhóm theo Agile.' },
+    ai:    { ic:'🧠', label:'Trí tuệ nhân tạo',    space:'ailab', d:'Tìm kiếm, suy luận, học máy cơ bản — nền tảng để xây dựng hệ thống thông minh.' },
+    ml:    { ic:'🤖', label:'Machine Learning',    space:'ailab', d:'Mô hình học từ dữ liệu: hồi quy, phân loại, mạng nơ-ron. Kỹ năng lõi của AI/ML Engineer.' },
+    full:  { ic:'🧱', label:'Web Full-stack',      href:'/it-web-playground.html?domain=it', d:'Node.js + React: làm cả backend lẫn frontend, dựng ứng dụng web hoàn chỉnh đầu–cuối.' },
+    mob:   { ic:'📱', label:'Mobile Dev',          space:'webstudio', d:'Xây ứng dụng Android/iOS: vòng đời màn hình, gọi API, lưu dữ liệu, đưa app lên store.' },
+    devops:{ ic:'☁️', label:'DevOps & Cloud',      space:'cloudcenter', d:'Tự động hoá build–deploy, container, giám sát hệ thống trên cloud (AWS/GCP).' },
+    sec:   { ic:'🛡️', label:'An toàn thông tin',   href:'/it-cipher-ctf.html?domain=it', d:'Lỗ hổng web, mã hoá, phòng thủ & tấn công có đạo đức. Nghề đang rất khát nhân lực.' },
+    patt:  { ic:'📐', label:'Design Patterns',     d:'Mẫu thiết kế tái sử dụng (Singleton, Factory, Observer…) giúp code sạch, mở rộng dễ.',
+             res:[['refactoring.guru — Design Patterns','https://refactoring.guru/design-patterns'],['roadmap.sh — Software Design','https://roadmap.sh/software-design-architecture']] },
+    cloud: { ic:'⛅', label:'Điện toán đám mây',    space:'cloudcenter', d:'Triển khai và vận hành dịch vụ trên AWS/GCP/Azure: máy ảo, lưu trữ, mở rộng tự động.' },
+    ds:    { ic:'📈', label:'Khoa học dữ liệu',     space:'ailab', d:'Toàn trình xử lý dữ liệu: thu thập, làm sạch, mô hình hoá, kể chuyện bằng dữ liệu.' },
+    git:   { ic:'🔧', label:'Git & GitHub',        space:'codelab', d:'Quản lý phiên bản code, làm việc nhóm qua branch/commit/pull request. Kỹ năng dùng hằng ngày của mọi lập trình viên.',
              res:[['roadmap.sh — Git & GitHub','https://roadmap.sh/git-github'],['Tài liệu Git chính thức (tiếng Việt)','https://git-scm.com/book/vi/v2']] },
     viz:   { ic:'📊', label:'Trực quan hoá dữ liệu', d:'Biến số liệu thành biểu đồ dễ hiểu để ra quyết định: bar, line, scatter, dashboard.',
              res:[['Power BI — Microsoft Learn','https://learn.microsoft.com/training/powerbi/'],['Data Visualization — freeCodeCamp','https://www.freecodecamp.org/learn/data-visualization/']] },
-    docker:{ ic:'🐳', label:'Docker & Container', mod:'I3.7', d:'Đóng gói ứng dụng vào container để chạy giống nhau ở mọi nơi — kỹ năng cốt lõi của DevOps.' },
+    docker:{ ic:'🐳', label:'Docker & Container',  space:'cloudcenter', d:'Đóng gói ứng dụng vào container để chạy giống nhau ở mọi nơi — kỹ năng cốt lõi của DevOps.' },
     cicd:  { ic:'🔁', label:'CI/CD', d:'Tự động build, test, triển khai mỗi khi code thay đổi — giúp ra mắt nhanh và an toàn.',
              res:[['roadmap.sh — DevOps','https://roadmap.sh/devops'],['GitHub Actions — tài liệu','https://docs.github.com/actions']] },
     ctf:   { ic:'🚩', label:'Pentest & CTF', href:'/it-ctf-web.html', d:'Thực hành tìm và khai thác lỗ hổng có đạo đức qua các thử thách Capture-The-Flag.' },
@@ -607,7 +615,7 @@
     let nodes = '';
     tree.forEach(lvl => lvl.forEach(key => {
       const s = SKILLS[key] || { label:key }, p = pos[key];
-      const has = !!(s.mod || s.href || s.res);
+      const has = !!(s.href || s.space || s.res);
       nodes += `<g class="tnode${has?' has':''}" data-key="${key}" transform="translate(${p.x - p.w/2},${p.y})">
         <rect width="${p.w}" height="${nodeH}" rx="11"/>
         <text x="${p.w/2}" y="${nodeH/2+5}" text-anchor="middle">${esc((s.ic?s.ic+' ':'') + s.label)}</text></g>`;
@@ -621,11 +629,14 @@
     el('skTitle').textContent = s.label;
     el('skDesc').textContent = s.d || '';
     const learn = el('skLearn');
-    if (s.mod) { learn.href = modHref(s.mod); learn.style.display = ''; learn.textContent = '🚀 Học ngay tại trường'; el('skRes').innerHTML = ''; }
-    else if (s.href) { learn.href = s.href; learn.style.display = ''; learn.textContent = '🚀 Vào thực hành'; el('skRes').innerHTML = ''; }
-    else { learn.style.display = 'none';
-      el('skRes').innerHTML = s.res ? '<div class="reslbl">📚 Nguồn tự học uy tín</div><div class="reslist">' +
-        s.res.map(([n,u]) => `<a href="${u}" target="_blank" rel="noopener">${esc(n)} ↗</a>`).join('') + '</div>' : ''; }
+    // Ưu tiên đích trên CAMPUS: trang thực hành trực tiếp (href) → không gian kiến thức (space).
+    // Kỹ năng chưa có sẵn trên campus mới rơi xuống nguồn tự học (res). Nếu vừa có space vừa có
+    // res (vd Linux, Git) thì hiện cả nút "Học ngay" lẫn danh sách nguồn tham khảo thêm.
+    const resHtml = s.res ? '<div class="reslbl">📚 Nguồn tự học uy tín</div><div class="reslist">' +
+      s.res.map(([n,u]) => `<a href="${u}" target="_blank" rel="noopener">${esc(n)} ↗</a>`).join('') + '</div>' : '';
+    if (s.href) { learn.href = s.href; learn.style.display = ''; learn.textContent = '🚀 Vào thực hành ngay'; el('skRes').innerHTML = resHtml; }
+    else if (s.space) { learn.href = spaceHref(s.space); learn.style.display = ''; learn.textContent = '🚀 Học ngay trên campus'; el('skRes').innerHTML = resHtml; }
+    else { learn.style.display = 'none'; el('skRes').innerHTML = resHtml; }
     el('skillOvl').classList.add('show');
     if (!rmSkillOpened) { rmSkillOpened = true; award('roadmap', 20); }
   }
