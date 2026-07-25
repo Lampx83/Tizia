@@ -139,11 +139,6 @@ function autoMount() {
         </div>
 
         <form id="sgf-form" class="sgf-form">
-          <label class="sgf-lab">Loại đề nghị
-            <select id="sgf-type" class="sgf-in">
-              ${TYPES.map(t => `<option value="${t.v}">${t.icon} ${t.label}</option>`).join('')}
-            </select>
-          </label>
           <label class="sgf-lab">Tiêu đề <span class="sgf-req">*</span>
             <input id="sgf-title-in" class="sgf-in" maxlength="200"
                    placeholder="VD: Thêm dạng bài Toán có nhiều cách giải" />
@@ -459,7 +454,9 @@ function bind(root) {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const type = root.querySelector('#sgf-type').value;
+    // Dropdown "Loại đề nghị" đã bỏ (yêu cầu user) — mọi đề nghị gửi với type mặc định
+    // 'other'; server/inbox vẫn nhận field type như cũ, chỉ là không cho HS chọn nữa.
+    const type = 'other';
     const title = root.querySelector('#sgf-title-in').value.trim();
     const userDetail = root.querySelector('#sgf-detail').value.trim();
     if (title.length < 4) { msg.textContent = '⚠️ Tiêu đề quá ngắn (≥ 4 ký tự)'; return; }

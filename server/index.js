@@ -240,6 +240,19 @@ app.set('trust proxy', 1);
 app.use(requestContext);
 if (process.env.LOG_REQUESTS === '1') app.use(requestLogger());
 
+// Canonical host: gộp "www.<domain>" về apex "<domain>" duy nhất. Session cookie là
+// host-only (không set Domain=.tizia.vn) → đăng nhập ở tizia.vn thì www.tizia.vn KHÔNG
+// nhận cookie → mọi /api/* (vd upload file đính kèm) trả 401 dù trang vẫn xem được. Ép
+// một host chuẩn để phiên đăng nhập + CSRF chạy nhất quán. Cắt tiền tố "www." tổng quát
+// nên không cần cấu hình domain; localhost/dev không bao giờ có "www." nên vô hại.
+app.use((req, res, next) => {
+  const host = String(req.headers.host || '').toLowerCase();
+  if (host.startsWith('www.')) {
+    return res.redirect(301, 'https://' + host.slice(4) + req.originalUrl);
+  }
+  next();
+});
+
 // gzip/deflate cho mọi response text-based. SEO bonus: trang nhẹ → Lighthouse cao
 // → Core Web Vitals tốt. Skip nếu client gửi x-no-compression hoặc đã có CE.
 app.use(compression({ threshold: 1024 }));
