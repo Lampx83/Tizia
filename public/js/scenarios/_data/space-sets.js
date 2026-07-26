@@ -770,12 +770,6 @@ const SPACES_IT = {
   admin:{emoji:'⚙️',name:'Hành chính – Hiệu bộ',accent:'#94a3b8',intro:'Trung tâm điều hành Trường CNTT: theo dõi tiến độ, chương trình đào tạo 4 năm, hướng nghiệp và tiếp nhận yêu cầu cải tiến.',
     rooms:[{ic:'📊',name:'Bảng điều khiển',rd:'Tiến độ, điểm, huy hiệu.',href:'/dashboard.html'},
       {ic:'🏛️',name:'Ban điều hành AI',rd:'Gửi đề xuất cải tiến môn học/lab & bình chọn.',board:true},
-      {ic:'🎓',name:'Chương trình đào tạo',rd:'Lộ trình Cử nhân CNTT 4 năm.',panel:[
-        {h:'Cử nhân Công nghệ thông tin — 4 năm'},
-        {timeline:[{t:'Năm 1 — Đại cương',d:'Python, Toán rời rạc, Kiến trúc máy tính, Hệ điều hành, Tiếng Anh CNTT.'},
-          {t:'Năm 2 — Cơ sở ngành',d:'Cấu trúc dữ liệu & giải thuật, OOP, CSDL, Mạng, Web.'},
-          {t:'Năm 3 — Chuyên ngành',d:'Kỹ thuật phần mềm, AI/ML, Mobile, DevOps, An toàn thông tin.'},
-          {t:'Năm 4 — Tích hợp',d:'Kiến trúc phần mềm, Cloud, Khoa học dữ liệu, Khoá luận.'}]}]},
       {ic:'🧭',name:'Hướng nghiệp CNTT',rd:'Các vị trí nghề nghiệp.',panel:[
         {h:'Một tấm bằng CNTT — nhiều hướng đi'},
         {cards:[{ic:'👨‍💻',t:'Software Engineer',d:'Phát triển phần mềm, web, hệ thống.'},
@@ -794,7 +788,11 @@ const SPACES_IT = {
       {q:'Khoá luận tốt nghiệp thường nằm ở năm nào?',o:['Năm 1','Năm 2','Năm 4','Không có'],a:2}]},
 
   lecture:{emoji:'🏛️',name:'Giảng đường',accent:'#c2703d',intro:'Học lý thuyết nền tảng ngành CNTT: bài giảng, thuật ngữ tiếng Anh và kiểm tra nhanh.',
-    rooms:[{ic:'🐍',name:'Thực hành Python',rd:'Đọc code & đoán kết quả.',panel:[{h:'Đọc hiểu code Python'},{p:'Chọn kết quả đúng cho từng đoạn code.'},{mcq:[{q:'print(2 ** 3) in ra gì?',o:['8','6','9','23'],a:0,fb:'** là phép luỹ thừa: 2^3 = 8.'},{q:'len("Tizia") trả về?',o:['8','7','9','Báo lỗi'],a:0,fb:'Chuỗi "Tizia" có 8 ký tự.'},{q:'[1,2,3][-1] trả về?',o:['3','1','-1','Báo lỗi'],a:0,fb:'Chỉ số âm đếm từ cuối: [-1] là phần tử cuối = 3.'}]}]},
+    rooms:[
+      // Chương trình đào tạo Cử nhân CNTT 4 năm (req #107) — chuyển từ Hành chính về
+      // Giảng Đường theo đề xuất SV; trang riêng dạng bậc thang tiến trình.
+      {ic:'🎓',name:'Chương trình đào tạo Cử nhân CNTT',rd:'Lộ trình 4 năm dạng bậc thang: mỗi môn có lý thuyết + ví dụ code + nguồn tự học.',href:'/it-curriculum.html?domain=it'},
+      {ic:'🐍',name:'Thực hành Python',rd:'Đọc code & đoán kết quả.',panel:[{h:'Đọc hiểu code Python'},{p:'Chọn kết quả đúng cho từng đoạn code.'},{mcq:[{q:'print(2 ** 3) in ra gì?',o:['8','6','9','23'],a:0,fb:'** là phép luỹ thừa: 2^3 = 8.'},{q:'len("Tizia") trả về?',o:['8','7','9','Báo lỗi'],a:0,fb:'Chuỗi "Tizia" có 8 ký tự.'},{q:'[1,2,3][-1] trả về?',o:['3','1','-1','Báo lỗi'],a:0,fb:'Chỉ số âm đếm từ cuối: [-1] là phần tử cuối = 3.'}]}]},
       {ic:'📽️',name:'Bài giảng nền tảng',rd:'Các môn cốt lõi năm 1–2.',panel:[
         {h:'Các môn nền tảng'},
         {cards:[{ic:'🐍',t:'Lập trình (Python)',d:'Biến, vòng lặp, hàm, cấu trúc cơ bản.'},

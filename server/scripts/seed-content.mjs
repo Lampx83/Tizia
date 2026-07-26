@@ -59,6 +59,8 @@ const REGISTRY = [
   // 2026-07-16: từ vựng trường Ngoại ngữ — trước kẹt trong inline script của
   // trang HTML cũ, trang Next scrape lại nên vỡ khi .html bị 308 → nay vào DB.
   { collection: 'vocab-en',           file: 'vocab-en.js',            export: 'VOCAB_EN_TOPICS', key: 'topic' },
+  // Chương trình đào tạo Cử nhân CNTT 4 năm (req #107) — trang /it-curriculum.html.
+  { collection: 'it-program',         file: 'it-program.js',          export: 'IT_PROGRAM',     key: 'key' },
   // Đọc hiểu tiếng Anh chuyên ngành (req #82 SV Duc anh) — trang doc-hieu-tieng-anh.html.
   { collection: 'reading-en',         file: 'reading-en.js',          export: 'READING_EN', key: 'id' },
 ];
