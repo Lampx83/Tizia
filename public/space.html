@@ -82,6 +82,7 @@
   .modal-body ul, .modal-body ol { margin:0 0 12px; padding-left:20px; }
   .modal-body li { margin:5px 0; font-size:14px; opacity:.92; }
   .mb-note { background:rgba(251,191,36,.12); border-left:3px solid var(--accent); padding:10px 14px; border-radius:8px; margin:4px 0 14px; font-size:13.5px; }
+  .mb-code { background:#0b1220; border:1px solid var(--border); border-left:3px solid #38bdf8; border-radius:8px; padding:11px 14px; margin:4px 0 14px; font-family:'SF Mono',ui-monospace,Menlo,Consolas,monospace; font-size:12.5px; line-height:1.55; color:#d6e4ff; white-space:pre; overflow-x:auto; tab-size:2; }
   .mb-cards { display:grid; gap:10px; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); margin:4px 0 14px; }
   .mb-card { background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:12px; padding:12px;
     cursor:pointer; transition: background .15s, transform .12s, border-color .15s; position:relative; overflow:hidden; }
@@ -264,6 +265,7 @@ function renderBlocks(blocks){
     if(b.h) return `<h4>${esc(b.h)}</h4>`;
     if(b.p) return `<p>${esc(b.p)}</p>`;
     if(b.note) return `<div class="mb-note">${esc(b.note)}</div>`;
+    if(b.code) return `<pre class="mb-code">${esc(b.code)}</pre>`;   // ví dụ code kiểu w3schools (req #106)
     // Mầm non + list (ul/ol) trông giống "Tập tô" → thay bằng Trace Canvas.
     // Phải check TRƯỚC handler ul/ol mặc định, không thì handler cũ trả luôn <ol>.
     if((b.ul || b.ol) && dom==='preschool'){

@@ -33,6 +33,14 @@ const SPACES=SPACE_SETS[dom]||SPACE_SETS.pharmacy||{};
 const S=SPACES[id]||SPACES[Object.keys(SPACES)[0]];
 document.title=`${S.emoji} ${S.name} · ${DOMAIN_TITLES[dom]||'Tizia'}`;
 
+// CSS cho block code {code} (req #106) — chèn runtime để chạy trên CẢ trang Express
+// (space.html) lẫn Next (SpaceMount) mà KHÔNG cần rebuild Next.
+if(!document.getElementById('mb-code-style')){
+  const _st=document.createElement('style'); _st.id='mb-code-style';
+  _st.textContent='.mb-code{background:#0b1220;border:1px solid rgba(255,255,255,.12);border-left:3px solid #38bdf8;border-radius:8px;padding:11px 14px;margin:4px 0 14px;font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.55;color:#d6e4ff;white-space:pre;overflow-x:auto;tab-size:2}';
+  document.head.appendChild(_st);
+}
+
 const wrap=document.getElementById('wrap');
 const roomCard=(r,idx)=> r.href
   ? `<a class="room" href="${r.href}"><div class="ri">${r.ic}</div><h3>${r.name}</h3><div class="rd">${r.rd}</div><span class="tag">Vào trải nghiệm →</span></a>`
@@ -73,6 +81,7 @@ function renderBlocks(blocks){
     if(b.h) return `<h4>${esc(b.h)}</h4>`;
     if(b.p) return `<p>${esc(b.p)}</p>`;
     if(b.note) return `<div class="mb-note">${esc(b.note)}</div>`;
+    if(b.code) return `<pre class="mb-code">${esc(b.code)}</pre>`;   // ví dụ code kiểu w3schools (req #106)
     // Mầm non + list (ul/ol) trông giống "Tập tô" → thay bằng Trace Canvas.
     // Phải check TRƯỚC handler ul/ol mặc định, không thì handler cũ trả luôn <ol>.
     if((b.ul || b.ol) && dom==='preschool'){
