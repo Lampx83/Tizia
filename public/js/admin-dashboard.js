@@ -426,6 +426,8 @@ function renderSystem(sys) {
 // ─────────── Tabs (legacy: Góp ý / Users / Schools / AI / Content / Billing) ───────────
 let reqCache = [];
 let reqFilter = 'all';
+let reqPage = 1;                 // phân trang bảng góp ý (10 dòng/trang)
+const REQ_PAGE_SIZE = 10;
 let userCache = [];
 let currentTab = 'dashboard';
 
@@ -447,6 +449,12 @@ async function loadRequests() {
 function renderRequests() {
   const filtered = reqFilter === 'all' ? reqCache : reqCache.filter(r => r.status === reqFilter);
   const counts = reqCache.reduce((m,r) => (m[r.status] = (m[r.status]||0)+1, m), {});
+  // Phân trang 10 dòng/trang. Kẹp reqPage vào [1..totalPages] để đổi bộ lọc không văng trang trắng.
+  const totalPages = Math.max(1, Math.ceil(filtered.length / REQ_PAGE_SIZE));
+  if (reqPage > totalPages) reqPage = totalPages;
+  if (reqPage < 1) reqPage = 1;
+  const pageStart = (reqPage - 1) * REQ_PAGE_SIZE;
+  const pageRows = filtered.slice(pageStart, pageStart + REQ_PAGE_SIZE);
   const host = $('#tabbody');
   host.innerHTML = `
     <div class="toolbar">
@@ -468,7 +476,7 @@ function renderRequests() {
         <th>HS</th><th>Trạng thái</th><th>Vote</th><th>Tạo lúc</th><th></th>
       </tr></thead>
       <tbody>
-      ${filtered.map(r => `
+      ${pageRows.map(r => `
         <tr data-rid="${r.id}">
           <td>${r.id}</td>
           <td><span class="pill">${esc(r.domain)}</span></td>
@@ -487,11 +495,18 @@ function renderRequests() {
       `).join('')}
       </tbody>
     </table>
-    ${filtered.length === 0 ? '<div class="empty">Không có yêu cầu nào trong bộ lọc.</div>' : ''}
+    ${filtered.length === 0 ? '<div class="empty">Không có yêu cầu nào trong bộ lọc.</div>' : `
+      <div class="reqPager" style="display:flex;align-items:center;justify-content:center;gap:10px;margin-top:12px;font-size:13px">
+        <button class="btn" id="reqPrev" ${reqPage <= 1 ? 'disabled' : ''}>← Trước</button>
+        <span style="opacity:.75">Trang <b>${reqPage}</b>/${totalPages} · ${filtered.length} yêu cầu</span>
+        <button class="btn" id="reqNext" ${reqPage >= totalPages ? 'disabled' : ''}>Sau →</button>
+      </div>`}
   `;
   $('#reqFilter').value = reqFilter;
-  $('#reqFilter').addEventListener('change', e => { reqFilter = e.target.value; renderRequests(); });
+  $('#reqFilter').addEventListener('change', e => { reqFilter = e.target.value; reqPage = 1; renderRequests(); });
   $('#reqRefresh').addEventListener('click', loadRequests);
+  const prev = $('#reqPrev'); if (prev) prev.addEventListener('click', () => { reqPage--; renderRequests(); });
+  const next = $('#reqNext'); if (next) next.addEventListener('click', () => { reqPage++; renderRequests(); });
   host.querySelectorAll('[data-act]').forEach(b => {
     b.addEventListener('click', () => {
       const id = Number(b.dataset.rid);
@@ -535,17 +550,32 @@ async function toggleDetail(id) {
   ]);
   const decisions = dr.data?.decisions || [];
   const msgs = tr2.data?.messages || [];
+  // Render file đính kèm (req: admin không xem được ảnh HS gửi). Ảnh raster → hiện
+  // thumbnail bấm mở to; file khác → link tải. Tên có thể bị URL-encode → giải mã hiển thị.
+  const attsHtml = (atts) => {
+    if (!Array.isArray(atts) || !atts.length) return '';
+    const dec = (s) => { try { return decodeURIComponent(String(s || '')); } catch { return String(s || ''); } };
+    const items = atts.map(a => {
+      const url = esc(a.url || ''); const nm = esc(dec(a.name) || 'file');
+      const isImg = a.kind === 'screenshot' || /^image\//.test(a.mime || '') || /\.(png|jpe?g|gif|webp)$/i.test(a.url || '');
+      if (isImg) return `<a href="${url}" target="_blank" rel="noopener" title="${nm}" style="display:inline-block;margin:4px 6px 0 0">
+        <img src="${url}" alt="${nm}" style="max-width:260px;max-height:220px;border-radius:8px;border:1px solid rgba(255,255,255,.15);vertical-align:top" /></a>`;
+      return `<a href="${url}" target="_blank" rel="noopener" download style="display:inline-flex;align-items:center;gap:5px;margin:4px 8px 0 0;padding:5px 10px;border-radius:7px;background:rgba(99,102,241,.14);border:1px solid rgba(99,102,241,.35);color:#c7d2fe;text-decoration:none;font-size:12px">📎 ${nm}</a>`;
+    }).join('');
+    return `<div style="margin-top:7px">${items}</div>`;
+  };
   const threadHtml = msgs.map(m => {
     const board = m.role === 'ai' || m.role === 'admin';
     const who = board ? `🏛️ ${esc(m.author_name || 'Ban điều hành AI')}` : `👤 ${esc(m.author_name || 'HS')}`;
     return `<div class="blk" style="border-left:3px solid ${board ? '#10b981' : '#6366f1'};margin-bottom:6px">
       <div style="font-size:11px;opacity:.6;margin-bottom:3px">${who} · ${fmt(m.created_at)}</div>
       <div style="white-space:pre-wrap">${esc(m.body)}</div>
+      ${attsHtml(m.attachments)}
     </div>`;
   }).join('');
   detail.querySelector('.detail-box').innerHTML = `
     <h4>Nội dung yêu cầu</h4>
-    <div class="blk">${esc(r.title)}${r.detail ? `<div style="opacity:.7;margin-top:5px">${esc(r.detail)}</div>` : ''}</div>
+    <div class="blk">${esc(r.title)}${r.detail ? `<div style="opacity:.7;margin-top:5px">${esc(r.detail)}</div>` : ''}${attsHtml(r.attachments)}</div>
     <h4>Phiên trao đổi (${msgs.length})</h4>
     ${threadHtml || '<div class="blk" style="opacity:.6">Chưa có trao đổi nào.</div>'}
     <h4>Lịch sử quyết định AI (${decisions.length})</h4>

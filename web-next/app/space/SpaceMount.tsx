@@ -97,7 +97,7 @@ export default function SpaceMount() {
   .space-root #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
   .space-root .modal { position:fixed; inset:0; background:rgba(8,11,22,.66); backdrop-filter:blur(3px); display:none; align-items:center; justify-content:center; z-index:50; padding:20px; }
   .space-root .modal.show { display:flex; }
-  .space-root .modal-card { background:hsl(var(--card)); border:1px solid var(--border); border-radius:18px; width:100%; max-width:640px; max-height:86vh; display:flex; flex-direction:column; box-shadow:0 24px 60px rgba(0,0,0,.5); animation:space-pop .18s ease; }
+  .space-root .modal-card { background:linear-gradient(180deg,#1b2438,#141c2e); border:1px solid var(--border); border-radius:18px; width:100%; max-width:640px; max-height:86vh; display:flex; flex-direction:column; box-shadow:0 24px 60px rgba(0,0,0,.5); animation:space-pop .18s ease; }
   @keyframes space-pop { from{transform:scale(.96);opacity:0} to{transform:scale(1);opacity:1} }
   .space-root .modal-head { display:flex; align-items:center; gap:12px; padding:18px 20px 14px; border-bottom:1px solid var(--border); }
   .space-root .modal-head .mh-ic { font-size:30px; }

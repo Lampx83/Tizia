@@ -37,7 +37,11 @@ document.title=`${S.emoji} ${S.name} · ${DOMAIN_TITLES[dom]||'Tizia'}`;
 // (space.html) lẫn Next (SpaceMount) mà KHÔNG cần rebuild Next.
 if(!document.getElementById('mb-code-style')){
   const _st=document.createElement('style'); _st.id='mb-code-style';
-  _st.textContent='.mb-code{background:#0b1220;border:1px solid rgba(255,255,255,.12);border-left:3px solid #38bdf8;border-radius:8px;padding:11px 14px;margin:4px 0 14px;font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.55;color:#d6e4ff;white-space:pre;overflow-x:auto;tab-size:2}';
+  // Kèm luôn fix nền modal phòng (req #111 Enderboy): bản Next để modal-card nền
+  // hsl(var(--card)) ~ trong suốt → chữ lẫn nền trang phía sau, khó đọc. Ép nền tối
+  // đặc bằng !important (thắng .space-root .modal-card), không cần rebuild Next.
+  _st.textContent='.mb-code{background:#0b1220;border:1px solid rgba(255,255,255,.12);border-left:3px solid #38bdf8;border-radius:8px;padding:11px 14px;margin:4px 0 14px;font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.55;color:#d6e4ff;white-space:pre;overflow-x:auto;tab-size:2}'
+    +'.modal-card{background:linear-gradient(180deg,#1b2438,#141c2e)!important}';
   document.head.appendChild(_st);
 }
 
