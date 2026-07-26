@@ -9,6 +9,7 @@ import { attachRoom } from './room.js';
 import { attachAi } from './ai.js';
 import { attachTts } from './tts.js';
 import { attachPharmacy } from './pharmacy.js';
+import { attachGpp } from './gpp.js';
 import { acknowledgeNewRequest, getDecisionsForRequest, getRecentDecisions } from './contexts/ai-agent/decisions.js';
 import { attachAppProxies } from './app-proxy.js';
 import { attachScoreUpWebhook } from './contexts/integration/scoreup-webhook.js';
@@ -1030,6 +1031,12 @@ r.get('/api/badges', (req, res) => {
 attachAi(r);
 
 // ============================================================
+// GPP 2D — thực hành nghiệp vụ nhà thuốc (đề tài ThS Phạm Thị Hương Lý).
+// Độc lập với Nhà thuốc 3D — route /api/gpp/*, bảng gpp_*.
+// ============================================================
+attachGpp(r);
+
+// ============================================================
 // TTS NEURAL — /api/tts qua FPT.AI (cache /data/tts-cache). Public cho guest
 // (whitelist trong makeAuthGate); không có FPT_TTS_API_KEY → 503, client
 // fallback Web Speech. Xem server/tts.js.
@@ -1277,8 +1284,15 @@ r.post('/api/requests', requireAuth, requireEnrolled, async (req, res) => {
   const title = String(b.title || '').trim();
   if (!domain) return res.status(400).json({ error: 'domain required' });
   if (title.length < 4) return res.status(400).json({ error: 'title quá ngắn (≥4 ký tự)' });
+  // Tên người gửi lấy từ SESSION (req.user.display_name — authoritative), KHÔNG tin
+  // body.student: client getPlayerName() đôi khi chưa tải kịp → gửi 'Ẩn danh' làm HS
+  // mất quyền xem lại yêu cầu của mình (GET /api/requests lọc theo display_name) và
+  // không nhận được chuông phản hồi (createNotification bỏ qua 'Ẩn danh'). Xảy ra ở
+  // req #108 (tài khoản Enderboy bị ghi Ẩn danh). Chỉ fallback body khi session thiếu tên.
+  const me = String(req.user?.display_name || '').trim();
+  const student = me || String(b.student || '').trim() || 'Ẩn danh';
   const row = await createRequest({
-    domain, type: b.type, title, detail: b.detail, student: b.student,
+    domain, type: b.type, title, detail: b.detail, student,
     attachments: Array.isArray(b.attachments) ? b.attachments : null,
   });
   res.json({ ok: true, ...row });
@@ -1290,7 +1304,7 @@ r.post('/api/requests', requireAuth, requireEnrolled, async (req, res) => {
   try {
     await acknowledgeNewRequest({
       requestId: row.id, domain, title,
-      student: String(b.student || '').trim() || null,
+      student: student === 'Ẩn danh' ? null : student,
     });
   } catch (err) { console.warn('[requests] acknowledge failed:', err?.message || err); }
 });
