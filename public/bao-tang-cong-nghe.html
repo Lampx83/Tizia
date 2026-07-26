@@ -53,6 +53,13 @@
   .exhibit .pedestal { position:absolute; left:0; right:0; bottom:0; height:4px; border-radius:0 0 13px 13px;
     background:linear-gradient(90deg,transparent,var(--accent),transparent); opacity:.5; }
   .exhibit .glyph { font-size:34px; line-height:1; filter:drop-shadow(0 4px 12px rgba(34,211,238,.35)); }
+  /* Sinh vật tiến hóa (req #95b): SVG isometric cube cộng dồn đặc điểm qua từng thời kỳ.
+     "Thở" nhẹ (breathing) + lệch pha theo --d để 5 con không nhấp nháy đồng loạt. */
+  .crt { width:60px; height:60px; display:block; overflow:visible;
+    filter:drop-shadow(0 5px 12px rgba(34,211,238,.28)); animation:breathe 4.2s ease-in-out infinite; animation-delay:var(--d,0s); }
+  .crt .shadow { fill:rgba(0,0,0,.32); }
+  @keyframes breathe { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-3px) } }
+  @media (prefers-reduced-motion:reduce){ .crt{ animation:none } }
   .exhibit .era { font-size:10.5px; color:var(--accent); font-weight:800; letter-spacing:.6px; margin-top:8px; }
   .exhibit .nm { font-weight:800; font-size:14px; margin:2px 0 6px; }
   .exhibit .oneLine { font-size:12px; color:var(--muted); line-height:1.5; flex:1; }
@@ -163,6 +170,19 @@
 <body>
 <a class="back" href="/space?b=museum&domain=it">← Về Trường CNTT</a>
 
+<!-- Defs dùng chung cho 5 "sinh vật tiến hóa" (req #95b): gradient tím-xanh neon +
+     bộ muted cho khối "phôi thai" + filter glow. Đặt 1 lần, mọi SVG tham chiếu theo id. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <linearGradient id="cTop" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7dd3fc"/><stop offset="1" stop-color="#818cf8"/></linearGradient>
+  <linearGradient id="cLeft" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#4338ca"/></linearGradient>
+  <linearGradient id="cRight" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4f46e5"/><stop offset="1" stop-color="#312e81"/></linearGradient>
+  <linearGradient id="mTop" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a3adc2"/><stop offset="1" stop-color="#6b7280"/></linearGradient>
+  <linearGradient id="mLeft" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6b7280"/><stop offset="1" stop-color="#4b5163"/></linearGradient>
+  <linearGradient id="mRight" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#565c6e" /><stop offset="1" stop-color="#3a3f4d"/></linearGradient>
+  <radialGradient id="eyeG" cx="0.5" cy="0.4" r="0.6"><stop offset="0" stop-color="#e0fbff"/><stop offset="0.5" stop-color="#67e8f9"/><stop offset="1" stop-color="#0891b2"/></radialGradient>
+  <filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="1.7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs></svg>
+
 <div class="wrap">
   <header class="hero">
     <h1>🖥️ Bảo tàng Công nghệ</h1>
@@ -264,12 +284,50 @@
   // ===== Dữ liệu (biên soạn theo spec góp ý SV — req #92/#93/#95) =====
   // Mỗi hiện vật: glyph (biểu tượng), era, nm (tên), one (1 câu — tầng 2),
   // deep (đoạn sâu — tầng 3, ẩn mặc định). metric = thanh so sánh trực quan (tuỳ chọn).
+  // ── 5 "sinh vật tiến hóa" (req #95b) ── khối isometric CỘNG DỒN đặc điểm:
+  //   khối lập phương (bcube) là thân chung; mỗi giai đoạn thêm 1 lớp mới nhìn thấy rõ.
+  // Toạ độ iso cố định: đỉnh (60,26) phải (94,45) đáy (60,64) trái (26,45); cạnh đứng 34px.
+  const bcube = (t, l, r) =>
+    `<ellipse class="shadow" cx="60" cy="106" rx="30" ry="6.5"/>` +
+    `<polygon points="60,26 94,45 60,64 26,45" fill="url(#${t})"/>` +
+    `<polygon points="26,45 60,64 60,98 26,79" fill="url(#${l})"/>` +
+    `<polygon points="94,45 60,64 60,98 94,79" fill="url(#${r})"/>` +
+    `<polyline points="26,45 60,26 94,45" fill="none" stroke="#dbe6ff" stroke-width="1.2" opacity=".5"/>` +
+    `<line x1="60" y1="64" x2="60" y2="98" stroke="#1e1b4b" stroke-width="1" opacity=".4"/>`;
+  const HEX = `<polygon points="60,13 100,37 100,85 60,109 20,85 20,37" fill="none" stroke="#a5b4fc" stroke-width="1.6" stroke-linejoin="round"/>`;
+  const PIPES = (op) => `<g fill="none" stroke="#22d3ee" stroke-width="2.3" stroke-linecap="round" filter="url(#glow)" opacity="${op}">` +
+    `<path d="M40,45 L60,35 L80,45"/><path d="M43,58 L43,76"/><path d="M77,58 L77,76"/><path d="M43,58 L60,50 L77,58"/></g>`;
+  const ARMS = (c) => `<g fill="none" stroke="${c}" stroke-width="2.6" stroke-linecap="round" filter="url(#glow)">` +
+    `<path d="M28,66 Q10,62 13,82"/><path d="M92,66 Q110,62 107,82"/></g>` +
+    `<circle cx="13" cy="82" r="2.6" fill="${c}"/><circle cx="107" cy="82" r="2.6" fill="${c}"/>`;
+  const COMPART = `<g stroke="#312e81" stroke-width="1.1" opacity=".55"><line x1="43" y1="52" x2="43" y2="86"/><line x1="77" y1="52" x2="77" y2="86"/></g>`;
+  const wrap = (i, inner) => `<svg class="crt" viewBox="0 0 120 120" style="--d:${(i * 0.5).toFixed(1)}s" role="img" aria-label="sinh vật tiến hóa">${inner}</svg>`;
+  const CREATURES = [
+    // 1 — Tuyến tính: khối "mộc" thô (muted), có đốm sạn, không mắt/tay.
+    wrap(0, bcube('mTop', 'mLeft', 'mRight') +
+      `<g fill="#e2e8f0" opacity=".38"><circle cx="42" cy="56" r="1"/><circle cx="50" cy="72" r="1"/><circle cx="38" cy="66" r="1"/><circle cx="74" cy="58" r="1"/><circle cx="82" cy="72" r="1"/><circle cx="70" cy="84" r="1"/></g>`),
+    // 2 — Thủ tục: khối "sống dậy" + đường ống nối các mặt (luồng lệnh).
+    wrap(1, bcube('cTop', 'cLeft', 'cRight') + PIPES('0.92')),
+    // 3 — OOP: thêm vỏ bọc lục giác (đóng gói) + vách ngăn trên mặt; ống mờ đi.
+    wrap(2, bcube('cTop', 'cLeft', 'cRight') + PIPES('0.4') + COMPART + HEX),
+    // 4 — Hàm: giữ vỏ + thêm cặp cánh tay ĐỐI XỨNG mint, tinh gọn (bất biến, thuần khiết).
+    wrap(3, bcube('cTop', 'cLeft', 'cRight') + `<g opacity=".4">${HEX}</g>` + COMPART + ARMS('#5eead4')),
+    // 5 — AI: hoàn chỉnh + MẮT phát sáng + HẠT ánh sáng bay quanh (AI đồng hành, tự sinh mã).
+    wrap(4, bcube('cTop', 'cLeft', 'cRight') + `<g opacity=".45">${HEX}</g>` + ARMS('#22d3ee') +
+      `<g><ellipse cx="45" cy="64" rx="4.6" ry="5.4" fill="#0b1220"/><ellipse cx="45" cy="63" rx="2.5" ry="3.1" fill="url(#eyeG)" filter="url(#glow)"/>` +
+      `<ellipse cx="75" cy="64" rx="4.6" ry="5.4" fill="#0b1220"/><ellipse cx="75" cy="63" rx="2.5" ry="3.1" fill="url(#eyeG)" filter="url(#glow)"/></g>` +
+      `<g filter="url(#glow)">` +
+      `<g><circle cx="60" cy="16" r="2" fill="#67e8f9"/><animateTransform attributeName="transform" type="rotate" from="0 60 58" to="360 60 58" dur="6s" repeatCount="indefinite"/></g>` +
+      `<g><circle cx="60" cy="18" r="1.4" fill="#a5f3fc"/><animateTransform attributeName="transform" type="rotate" from="130 60 58" to="490 60 58" dur="8s" repeatCount="indefinite"/></g>` +
+      `<g><circle cx="60" cy="20" r="1.7" fill="#818cf8"/><animateTransform attributeName="transform" type="rotate" from="250 60 58" to="610 60 58" dur="7s" repeatCount="indefinite"/></g></g>`),
+  ];
+
   const PARADIGM = [
-    { glyph:'🟫', era:'~1950s', nm:'Tuyến tính', one:'Chạy tuần tự từng lệnh, dùng GOTO nhảy dòng.', deep:'Chương trình là danh sách lệnh chạy từ trên xuống. Khó tái sử dụng, khó bảo trì khi lớn dần — kiểu "mì spaghetti".' },
-    { glyph:'🧱', era:'~1960s', nm:'Thủ tục', one:'Gom lệnh thành hàm/thủ tục tái sử dụng.', deep:'C, Pascal… Chia bài toán thành các hàm. Tư duy: "làm theo trình tự các bước".' },
-    { glyph:'🤖', era:'~1980s', nm:'Hướng đối tượng', one:'Gói dữ liệu + hành vi vào đối tượng.', deep:'Java, C++, C#… Đóng gói, kế thừa, đa hình. Tư duy: mô hình hoá thế giới thành đối tượng — hợp cho dự án lớn nhiều người.' },
-    { glyph:'🧮', era:'~1990s→', nm:'Hàm (Functional)', one:'Hàm thuần, dữ liệu bất biến, ít tác dụng phụ.', deep:'Haskell, Scala và nét hàm trong JS/Python. Dễ song song hoá, dễ kiểm thử vì kết quả chỉ phụ thuộc đầu vào.' },
-    { glyph:'✨', era:'2020s', nm:'Dựa trên AI', one:'Lập trình viên mô tả ý định, AI sinh mã.', deep:'Copilot, Claude Code… Con người chuyển từ "gõ từng dòng" sang "định hướng + kiểm chứng" mã AI tạo — đổi cả cách quản lý mã nguồn.' },
+    { svg:CREATURES[0], era:'~1950s', nm:'Tuyến tính', one:'Chạy tuần tự từng lệnh, dùng GOTO nhảy dòng.', deep:'Chương trình là danh sách lệnh chạy từ trên xuống. Khó tái sử dụng, khó bảo trì khi lớn dần — kiểu "mì spaghetti".' },
+    { svg:CREATURES[1], era:'~1960s', nm:'Thủ tục', one:'Gom lệnh thành hàm/thủ tục tái sử dụng.', deep:'C, Pascal… Chia bài toán thành các hàm. Tư duy: "làm theo trình tự các bước".' },
+    { svg:CREATURES[2], era:'~1980s', nm:'Hướng đối tượng', one:'Gói dữ liệu + hành vi vào đối tượng.', deep:'Java, C++, C#… Đóng gói, kế thừa, đa hình. Tư duy: mô hình hoá thế giới thành đối tượng — hợp cho dự án lớn nhiều người.' },
+    { svg:CREATURES[3], era:'~1990s→', nm:'Hàm (Functional)', one:'Hàm thuần, dữ liệu bất biến, ít tác dụng phụ.', deep:'Haskell, Scala và nét hàm trong JS/Python. Dễ song song hoá, dễ kiểm thử vì kết quả chỉ phụ thuộc đầu vào.' },
+    { svg:CREATURES[4], era:'2020s', nm:'Dựa trên AI', one:'Lập trình viên mô tả ý định, AI sinh mã.', deep:'Copilot, Claude Code… Con người chuyển từ "gõ từng dòng" sang "định hướng + kiểm chứng" mã AI tạo — đổi cả cách quản lý mã nguồn.' },
   ];
   // Hạ tầng: kèm 2 thanh so sánh — chi phí đầu tư (cost) & khả năng co giãn (scale), thang 0–100.
   const INFRA = [
@@ -348,7 +406,7 @@
   function renderCorridor(id, data) {
     $(id).innerHTML = data.map(s =>
       '<div class="exhibit" tabindex="0">' +
-        '<div class="glyph">' + s.glyph + '</div>' +
+        (s.svg ? s.svg : '<div class="glyph">' + s.glyph + '</div>') +
         '<div class="era">' + esc(s.era) + '</div>' +
         '<div class="nm">' + esc(s.nm) + '</div>' +
         '<div class="oneLine">' + esc(s.one) + '</div>' +
