@@ -456,6 +456,9 @@ const SPACES_SECONDARY = {
 
   grade7:{emoji:'7️⃣',name:'Khối lớp 7',accent:'#34d399',intro:'Lớp 7 — nâng cao tư duy. Học Toán, Ngữ văn cùng các môn và luyện đề có phản hồi tức thì.',
     rooms:[{ic:'📐',name:'Toán 7 — Luyện tập',rd:'Số hữu tỉ, tỉ lệ thức, tam giác, thống kê.',href:'/module.html?domain=secondary&module=S7'},
+      // KHTN 7 — 35 tuần bài học đã có trong DB (module S7KHTN) nhưng trước đây
+      // không phòng nào trỏ tới nên SV không tìm thấy (req #111 Enderboy).
+      {ic:'🔬',name:'Khoa học tự nhiên 7',rd:'35 tuần tích hợp Lí – Hoá – Sinh: nguyên tử, bảng tuần hoàn, phân tử, tốc độ, âm thanh, ánh sáng, từ, trao đổi chất, cảm ứng, sinh sản.',href:'/module.html?domain=secondary&module=S7KHTN'},
       {ic:'📖',name:'Ngữ văn 7 — Luyện tập',rd:'Ca dao, tục ngữ, từ Hán Việt, điệp ngữ.',href:'/module.html?domain=secondary&module=SV7'},
       {ic:'🇬🇧',name:'Tiếng Anh 7',rd:'Ngữ pháp các thì cơ bản.',panel:[
         {h:'Các thì thường gặp lớp 7'},
@@ -513,21 +516,103 @@ const SPACES_SECONDARY = {
       {q:'Tác giả "Truyện Kiều"?',o:['Nguyễn Du','Nguyễn Trãi','Hồ Xuân Hương','Tố Hữu'],a:0},
       {q:'Phương trình bậc hai có dạng tổng quát?',o:['ax² + bx + c = 0 (a ≠ 0)','ax + b = 0','ax³ + b = 0','a/x = b'],a:0}]},
 
-  lab:{emoji:'🔬',name:'Phòng thí nghiệm KHTN',accent:'#14b8a6',intro:'Phòng học bộ môn Khoa học tự nhiên (Lí – Hoá – Sinh): thí nghiệm an toàn và khám phá hiện tượng.',
-    rooms:[{ic:'🥽',name:'An toàn phòng thí nghiệm',rd:'Tự kiểm trước khi làm thí nghiệm.',panel:[
+  lab:{emoji:'🔬',name:'Phòng thí nghiệm KHTN',accent:'#14b8a6',intro:'Phòng học bộ môn Khoa học tự nhiên (Lí – Hoá – Sinh). Đọc lý thuyết ở nhóm phòng 📖 trước, rồi mới vào thí nghiệm và luyện tập.',
+    rooms:[
+      // ── Lý thuyết đọc-trước KHTN 7 (req #111 Enderboy) ────────────────────
+      // SV xin "sách giáo khoa điện tử để có kiến thức trước khi làm bài".
+      // Bài học đầy đủ 35 tuần đã có sẵn trong DB (module S7KHTN) nhưng trước
+      // đây không phòng nào trỏ tới → thêm lối vào + 4 phòng tóm tắt theo 4 mạch
+      // nội dung CT GDPT 2018 để đọc ngay tại lab: lý thuyết → nhầm lẫn thường
+      // gặp → tự kiểm bằng câu hỏi.
+      {ic:'📚',name:'Sách giáo khoa điện tử KHTN 7 — 35 tuần',rd:'Toàn bộ bài học KHTN lớp 7 theo tuần: lý thuyết → ví dụ giải mẫu → quiz có phản hồi. Học sâu từng chủ đề.',href:'/module.html?domain=secondary&module=S7KHTN'},
+
+      {ic:'🧭',name:'📖 KHTN 7 — Mở đầu: học KHTN thế nào?',rd:'Tuần 1 · Phương pháp tìm hiểu tự nhiên 5 bước, kĩ năng tiến trình và dụng cụ hay dùng.',panel:[
+        {h:'Phương pháp tìm hiểu tự nhiên — 5 bước'},
+        {p:'Học Khoa học tự nhiên không phải là học thuộc kết luận, mà là tập làm như nhà khoa học: thấy một hiện tượng thì đặt câu hỏi, dự đoán, rồi kiểm tra dự đoán bằng thực nghiệm trước khi kết luận.'},
+        {ol:['Đề xuất vấn đề cần tìm hiểu: quan sát hiện tượng và đặt câu hỏi.','Đưa ra dự đoán khoa học (giả thuyết) để trả lời câu hỏi đó.','Lập kế hoạch kiểm tra dự đoán: chọn dụng cụ, mẫu vật và cách làm.','Thực hiện kế hoạch: làm thí nghiệm, quan sát và ghi lại số liệu.','Viết báo cáo, thảo luận và trình bày kết quả.']},
+        {h:'Kĩ năng tiến trình cần rèn'},
+        {ul:['Quan sát: dùng giác quan và dụng cụ để thu thập thông tin.','Phân loại: nhóm các đối tượng theo dấu hiệu chung.','Liên kết: nối thông tin mới với điều đã biết để giải thích.','Dự báo: từ quy luật đã thấy, đoán trước điều sẽ xảy ra.','Viết báo cáo & thuyết trình sao cho người khác hiểu được kết quả của em.']},
+        {h:'Dụng cụ hay dùng ở lớp 7'},
+        {cards:[{ic:'⏱️',t:'Cổng quang điện + đồng hồ đo thời gian hiện số',d:'Chính xác tới 0,001 s — dùng khi tính tốc độ, thay cho bấm giây bằng tay.'},
+          {ic:'📈',t:'Dao động kí',d:'Biến âm thanh thành đồ thị: nhìn thấy được biên độ (to – nhỏ) và tần số (cao – thấp).'},
+          {ic:'🔍',t:'Kính lúp & kính hiển vi quang học',d:'Quan sát vật nhỏ và tiêu bản tế bào thực vật – động vật.'}]},
+        {note:'Mẹo học: trước mỗi buổi thực hành, đọc phần lý thuyết tương ứng ở đây rồi mới vào lab — em sẽ biết mình đang đi tìm điều gì thay vì làm theo quán tính.'},
+        {mcq:[{q:'Bước ĐẦU TIÊN của phương pháp tìm hiểu tự nhiên là gì?',o:['Đề xuất vấn đề cần tìm hiểu','Viết báo cáo kết quả','Làm thí nghiệm ngay cho nhanh','Rút ra kết luận'],a:0,fb:'Phải có câu hỏi/vấn đề trước, sau đó mới dự đoán và kiểm tra dự đoán.'},
+          {q:'Muốn "nhìn thấy" độ to và độ cao của một âm thanh, em dùng dụng cụ nào?',o:['Dao động kí','Nhiệt kế','Lực kế','Kính hiển vi'],a:0,fb:'Dao động kí hiển thị đồ thị dao động: biên độ ứng với độ to, tần số ứng với độ cao.'}]}]},
+
+      {ic:'⚛️',name:'📖 KHTN 7 — Chất và sự biến đổi chất',rd:'Tuần 2–9 · Nguyên tử · Nguyên tố hoá học · Bảng tuần hoàn · Phân tử, liên kết & hoá trị.',panel:[
+        {h:'1. Nguyên tử (Tuần 2–3)'},
+        {p:'Nguyên tử là hạt vô cùng nhỏ, trung hoà về điện, tạo nên mọi chất. Theo mô hình Rutherford – Bohr, nguyên tử gồm hạt nhân ở giữa (chứa proton mang điện tích dương và neutron không mang điện) và lớp vỏ gồm các electron mang điện tích âm chuyển động xung quanh theo từng lớp.'},
+        {ul:['Nguyên tử trung hoà về điện vì số proton bằng số electron.','Lớp electron thứ nhất chứa tối đa 2 electron; lớp thứ hai và thứ ba chứa tối đa 8 electron.','Electron ở lớp ngoài cùng quyết định tính chất hoá học của nguyên tử.','Khối lượng nguyên tử tính bằng amu; electron rất nhẹ nên khối lượng tập trung gần như hoàn toàn ở hạt nhân.']},
+        {note:'Nhầm lẫn thường gặp: coi số hiệu nguyên tử là khối lượng. Số hiệu nguyên tử = số proton (cũng bằng số electron); còn khối lượng nguyên tử ≈ số proton + số neutron.'},
+        {h:'2. Nguyên tố hoá học & bảng tuần hoàn (Tuần 4–5)'},
+        {p:'Nguyên tố hoá học là tập hợp những nguyên tử có cùng số proton trong hạt nhân. Mỗi nguyên tố có một kí hiệu hoá học gồm một hoặc hai chữ cái, chữ cái đầu luôn viết hoa: H, O, Na, Ca, Fe.'},
+        {ul:['Bảng tuần hoàn sắp xếp các nguyên tố theo chiều tăng dần điện tích hạt nhân, tức là tăng dần số proton.','Số thứ tự chu kì (hàng ngang) bằng số lớp electron của nguyên tử.','Số thứ tự nhóm A (cột dọc) bằng số electron ở lớp ngoài cùng.','Kim loại nằm ở phía bên trái và giữa bảng, phi kim ở phía trên bên phải, khí hiếm ở nhóm VIIIA ngoài cùng bên phải.']},
+        {note:'SGK Chương trình GDPT 2018 dùng tên nguyên tố theo IUPAC: sodium (Na) thay cho natri, potassium (K) thay cho kali, iron (Fe) thay cho sắt.'},
+        {h:'3. Phân tử — đơn chất và hợp chất (Tuần 6)'},
+        {p:'Phân tử là hạt đại diện cho chất, gồm một số nguyên tử liên kết với nhau và thể hiện đầy đủ tính chất hoá học của chất. Đơn chất do một nguyên tố tạo nên (O₂, Fe); hợp chất do từ hai nguyên tố trở lên tạo nên (H₂O, NaCl, CO₂).'},
+        {p:'Khối lượng phân tử bằng tổng khối lượng các nguyên tử có trong phân tử. Ví dụ H₂O = 2 × 1 + 16 = 18 amu; CO₂ = 12 + 2 × 16 = 44 amu.'},
+        {h:'4. Liên kết hoá học & hoá trị (Tuần 7–8)'},
+        {ul:['Quy tắc octet: nguyên tử có xu hướng đạt 8 electron ở lớp ngoài cùng (riêng helium là 2) giống khí hiếm để trở nên bền vững.','Liên kết ion: kim loại nhường electron thành ion dương, phi kim nhận electron thành ion âm, hai ion trái dấu hút nhau — ví dụ NaCl.','Liên kết cộng hoá trị: hai nguyên tử phi kim góp chung electron — ví dụ H₂, O₂, H₂O, CO₂.','Quy tắc hoá trị: trong công thức AxBy thì x × hoá trị của A = y × hoá trị của B.']},
+        {note:'Nhầm lẫn kinh điển: lẫn chỉ số với hệ số. Trong 2H₂O, số 2 phía trước là hệ số (có 2 phân tử nước), còn số 2 nhỏ bên dưới là chỉ số (mỗi phân tử có 2 nguyên tử H).'},
+        {match:{title:'Nối công thức hoá học với khối lượng phân tử (amu)',pairs:[['H₂O','18'],['CO₂','44'],['O₂','32'],['NaCl','58,5'],['H₂','2']]}},
+        {mcq:[{q:'Số hiệu nguyên tử của một nguyên tố cho biết điều gì?',o:['Số proton trong hạt nhân (cũng bằng số electron)','Số neutron trong hạt nhân','Khối lượng của nguyên tử','Số lớp electron'],a:0,fb:'Số hiệu nguyên tử = số proton, là dấu hiệu đặc trưng của nguyên tố; nguyên tử trung hoà nên cũng bằng số electron.'},
+          {q:'Nguyên tử X có 2 lớp electron, lớp ngoài cùng có 6 electron. X nằm ở đâu trong bảng tuần hoàn?',o:['Chu kì 2, nhóm VIA','Chu kì 6, nhóm IIA','Chu kì 2, nhóm IIA','Chu kì 8, nhóm VIA'],a:0,fb:'Số lớp electron cho số thứ tự chu kì (2); số electron lớp ngoài cùng cho số thứ tự nhóm A (VI).'},
+          {q:'Liên kết trong phân tử NaCl thuộc loại nào?',o:['Liên kết ion','Liên kết cộng hoá trị','Không có liên kết','Liên kết kim loại'],a:0,fb:'Na nhường 1 electron thành Na⁺, Cl nhận 1 electron thành Cl⁻; hai ion trái dấu hút nhau nên là liên kết ion.'}]}]},
+
+      {ic:'⚡',name:'📖 KHTN 7 — Năng lượng và sự biến đổi',rd:'Tuần 10–17 · Tốc độ · Âm thanh · Ánh sáng · Từ và nam châm điện.',panel:[
+        {h:'1. Tốc độ (Tuần 10–11)'},
+        {p:'Tốc độ cho biết vật chuyển động nhanh hay chậm, tính bằng quãng đường chia cho thời gian: v = s / t. Đơn vị thường dùng là m/s và km/h.'},
+        {ul:['Đổi đơn vị: nhân 3,6 để chuyển từ m/s sang km/h; chia 3,6 để chuyển ngược lại từ km/h sang m/s.','Trên đồ thị quãng đường – thời gian, chuyển động thẳng đều là một đường thẳng xiên; đường càng dốc thì vật càng nhanh.','Đoạn đồ thị nằm ngang nghĩa là quãng đường không đổi — vật đang đứng yên.','Tốc độ càng lớn thì quãng đường phanh dừng càng dài, vì vậy khi tham gia giao thông phải giữ khoảng cách an toàn.']},
+        {note:'Ví dụ: xe khách đi 90 km hết 1,5 giờ → v = 90 : 1,5 = 60 km/h, tức khoảng 16,7 m/s.'},
+        {h:'2. Âm thanh (Tuần 12–13)'},
+        {p:'Nguồn âm là vật đang dao động. Sóng âm truyền được trong chất rắn, chất lỏng và chất khí, nhưng không truyền được trong chân không. Trong không khí, âm truyền với tốc độ khoảng 340 m/s.'},
+        {ul:['Biên độ dao động càng lớn thì âm càng TO; độ to của âm có đơn vị decibel (dB).','Tần số là số dao động trong một giây, đơn vị hertz (Hz); tần số càng lớn thì âm càng CAO (bổng).','Âm gặp vật cản sẽ dội lại — đó là phản xạ âm; ta nghe thấy tiếng vang khi âm phản xạ tới tai chậm hơn âm trực tiếp ít nhất 1/15 giây.','Vật cứng, bề mặt nhẵn phản xạ âm tốt; vật mềm, xốp, gồ ghề như rèm vải, thảm, tấm xốp hấp thụ âm tốt nên được dùng để chống ồn.']},
+        {note:'Nhầm lẫn kinh điển: "âm to" không phải "âm cao". To – nhỏ do biên độ, còn cao – thấp do tần số. Một tiếng trống trầm vẫn có thể rất to.'},
+        {h:'3. Ánh sáng (Tuần 14–15)'},
+        {p:'Ánh sáng là một dạng năng lượng: nó làm pin mặt trời phát điện và làm nóng vật được chiếu vào. Trong môi trường trong suốt và đồng tính, ánh sáng truyền theo đường thẳng — vì thế mới có bóng tối và bóng nửa tối.'},
+        {ul:['Định luật phản xạ ánh sáng: tia phản xạ nằm trong mặt phẳng chứa tia tới và pháp tuyến tại điểm tới; góc phản xạ bằng góc tới.','Góc tới là góc giữa tia tới và pháp tuyến (đường vuông góc với mặt gương), không phải góc giữa tia tới và mặt gương.','Ảnh của một vật qua gương phẳng là ảnh ảo, không hứng được trên màn chắn.','Ảnh qua gương phẳng lớn bằng vật, và cách gương một khoảng đúng bằng khoảng cách từ vật tới gương.']},
+        {h:'4. Từ (Tuần 16–17)'},
+        {ul:['Nam châm hút được sắt, thép, nickel, cobalt; không hút nhôm, đồng, thuỷ tinh hay nhựa.','Mỗi nam châm có hai cực: cực Bắc (N) và cực Nam (S); hai cực cùng tên đẩy nhau, khác tên hút nhau.','Xung quanh nam châm và xung quanh dây dẫn có dòng điện đều tồn tại từ trường; có thể phát hiện từ trường bằng kim nam châm nhỏ hoặc mạt sắt.','Đường sức từ đi ra ở cực Bắc và đi vào ở cực Nam của nam châm; chỗ nào đường sức mau thì từ trường ở đó mạnh.','Kim la bàn luôn nằm theo hướng Bắc – Nam vì Trái Đất cũng là một nam châm khổng lồ.','Nam châm điện là ống dây có dòng điện chạy qua, thường có lõi sắt non; ngắt dòng điện thì mất từ tính, nên được dùng làm cần cẩu điện, chuông điện, rơ le.']},
+        {mcq:[{q:'Một xe máy đi được 15 km trong 30 phút. Tốc độ của xe là?',o:['30 km/h','15 km/h','45 km/h','7,5 km/h'],a:0,fb:'30 phút = 0,5 giờ → v = 15 : 0,5 = 30 km/h.'},
+          {q:'Vì sao trên Mặt Trăng, các nhà du hành phải nói chuyện với nhau qua bộ đàm?',o:['Vì quanh Mặt Trăng gần như là chân không, âm không truyền được','Vì trên Mặt Trăng quá lạnh','Vì tai họ bị mũ bảo hộ bịt kín','Vì âm truyền quá nhanh nên nghe không kịp'],a:0,fb:'Sóng âm cần môi trường vật chất (rắn, lỏng, khí) để truyền; trong chân không thì không truyền được âm.'},
+          {q:'Chiếu một tia sáng tới gương phẳng với góc tới bằng 30°. Góc phản xạ bằng bao nhiêu?',o:['30°','60°','15°','90°'],a:0,fb:'Theo định luật phản xạ ánh sáng, góc phản xạ luôn bằng góc tới.'},
+          {q:'Vật nào sau đây KHÔNG bị nam châm hút?',o:['Thanh nhôm','Đinh sắt','Kẹp giấy bằng thép','Đồng xu bằng nickel'],a:0,fb:'Nam châm chỉ hút vật liệu từ như sắt, thép, nickel, cobalt — nhôm không bị hút.'}]}]},
+
+      {ic:'🌱',name:'📖 KHTN 7 — Vật sống',rd:'Tuần 21–33 · Trao đổi chất & chuyển hoá năng lượng · Cảm ứng · Sinh trưởng – phát triển · Sinh sản.',panel:[
+        {h:'1. Trao đổi chất và chuyển hoá năng lượng (Tuần 21–27)'},
+        {p:'Trao đổi chất là tập hợp các biến đổi hoá học trong tế bào cùng với sự trao đổi chất giữa cơ thể và môi trường; đi kèm với nó là sự chuyển hoá năng lượng từ dạng này sang dạng khác. Đây là điều kiện để cơ thể sống tồn tại và lớn lên.'},
+        {ul:['Quang hợp diễn ra ở lục lạp, chủ yếu trong lá: nước và carbon dioxide, nhờ ánh sáng cùng diệp lục, tạo ra glucose và oxygen — năng lượng ánh sáng chuyển thành hoá năng trong chất hữu cơ.','Hô hấp tế bào diễn ra ở ti thể, cả ngày lẫn đêm: glucose và oxygen tạo ra carbon dioxide, nước và giải phóng năng lượng cho mọi hoạt động sống.','Ở thực vật, khí được trao đổi qua khí khổng ở biểu bì lá; ở người, khí được trao đổi tại phế nang của phổi.','Mạch gỗ vận chuyển nước và muối khoáng từ rễ lên lá; mạch rây vận chuyển chất hữu cơ từ lá tới các cơ quan khác.','Thoát hơi nước qua khí khổng tạo lực kéo giúp nước đi lên, đồng thời làm mát cây và mở đường cho carbon dioxide vào lá.']},
+        {note:'Nhầm lẫn thường gặp: nghĩ rằng ban ngày cây chỉ quang hợp còn ban đêm chỉ hô hấp. Thực ra cây hô hấp suốt ngày đêm; ban ngày có thêm quang hợp và quang hợp mạnh hơn hô hấp.'},
+        {h:'2. Cảm ứng ở sinh vật (Tuần 28–29)'},
+        {p:'Cảm ứng là khả năng tiếp nhận kích thích và phản ứng lại kích thích từ môi trường, giúp sinh vật thích nghi và tồn tại.'},
+        {ul:['Ở thực vật, cảm ứng biểu hiện thành tính hướng: hướng sáng của ngọn cây, hướng nước và hướng chất dinh dưỡng của rễ, hướng tiếp xúc của tua cuốn cây mướp.','Phản ứng của thực vật diễn ra chậm, trong khi phản ứng của động vật nhanh hơn nhiều nhờ có hệ thần kinh.','Động vật có tập tính bẩm sinh (nhện giăng tơ, chim di cư) và tập tính học được (chó nghe hiệu lệnh, trâu tự về chuồng đúng giờ).','Ứng dụng trong đời sống: làm giàn cho cây leo, chiếu sáng bổ sung trong nhà kính, huấn luyện vật nuôi.']},
+        {h:'3. Sinh trưởng và phát triển (Tuần 30)'},
+        {ul:['Sinh trưởng là sự tăng lên về kích thước và khối lượng cơ thể; phát triển là những biến đổi về cấu tạo, hình thái và chức năng như nảy mầm, ra hoa, phát dục.','Thực vật lớn lên nhờ mô phân sinh: mô phân sinh đỉnh giúp thân và rễ dài ra, mô phân sinh bên giúp thân to ra.','Động vật có thể phát triển qua biến thái hoàn toàn (bướm: trứng → sâu → nhộng → bướm trưởng thành) hoặc biến thái không hoàn toàn (châu chấu: trứng → ấu trùng → con trưởng thành).','Nhiệt độ, ánh sáng, nước và chất dinh dưỡng đều ảnh hưởng tới sinh trưởng và phát triển.']},
+        {h:'4. Sinh sản ở sinh vật (Tuần 31–32)'},
+        {ul:['Sinh sản vô tính không có sự kết hợp giao tử đực và giao tử cái, cơ thể con giống hệt cơ thể mẹ — thuỷ tức nảy chồi, giâm cành, chiết cành, ghép cây, nuôi cấy mô.','Sinh sản hữu tính có sự kết hợp giao tử đực với giao tử cái tạo thành hợp tử, cơ thể con mang đặc điểm của cả bố và mẹ nên đa dạng hơn.','Ở thực vật có hoa: hạt phấn rơi lên đầu nhuỵ gọi là thụ phấn, sau đó thụ tinh tạo thành hợp tử; bầu nhuỵ phát triển thành quả, noãn phát triển thành hạt.','Nhiệt độ, độ ẩm, thức ăn và hormone điều hoà sinh sản — con người dựa vào đó để điều khiển cây ra hoa trái vụ hay tăng số con ở vật nuôi.']},
+        {h:'5. Cơ thể sinh vật là một thể thống nhất (Tuần 33)'},
+        {p:'Bốn hoạt động sống — trao đổi chất và chuyển hoá năng lượng, sinh trưởng và phát triển, cảm ứng, sinh sản — không tách rời nhau mà tác động qua lại. Tế bào là đơn vị cơ sở; tế bào hợp thành mô, mô thành cơ quan, cơ quan thành hệ cơ quan rồi thành cơ thể, tất cả phối hợp trong một thể thống nhất.'},
+        {match:{title:'Nối quá trình với nơi diễn ra',pairs:[['Quang hợp','Lục lạp trong tế bào lá'],['Hô hấp tế bào','Ti thể'],['Trao đổi khí ở lá','Khí khổng'],['Vận chuyển nước và muối khoáng','Mạch gỗ'],['Vận chuyển chất hữu cơ từ lá','Mạch rây']]}},
+        {mcq:[{q:'Nguyên liệu của quá trình quang hợp là gì?',o:['Nước và carbon dioxide','Glucose và oxygen','Nước và oxygen','Chỉ cần ánh sáng'],a:0,fb:'Quang hợp: nước + carbon dioxide, nhờ ánh sáng và diệp lục, tạo ra glucose + oxygen.'},
+          {q:'Ngọn cây trồng trong phòng nghiêng dần về phía cửa sổ. Đó là hiện tượng gì?',o:['Tính hướng sáng','Tính hướng nước','Tập tính học được','Sinh sản vô tính'],a:0,fb:'Hướng sáng: thực vật phản ứng với kích thích ánh sáng bằng cách sinh trưởng hướng về nguồn sáng.'},
+          {q:'Giâm cành là hình thức sinh sản nào?',o:['Sinh sản vô tính','Sinh sản hữu tính','Thụ phấn','Biến thái hoàn toàn'],a:0,fb:'Giâm cành không có sự kết hợp giao tử nên là sinh sản vô tính; cây con giống hệt cây mẹ.'}]}]},
+
+      // ── Thực hành & ôn tập ────────────────────────────────────────────────
+      {ic:'🥽',name:'An toàn phòng thí nghiệm',rd:'Tự kiểm trước khi làm thí nghiệm.',panel:[
         {h:'Quy tắc an toàn trong phòng thực hành'},
         {check:['Đeo kính bảo hộ khi làm với hoá chất/đun nóng','Không tự ý nếm, ngửi trực tiếp hoá chất','Đun ống nghiệm: hơ đều, miệng ống hướng ra chỗ không có người','Dùng xong tắt đèn cồn bằng nắp, không thổi','Rửa tay sau khi thực hành']},
         {note:'Hoá chất bắn vào mắt → rửa ngay bằng nhiều nước sạch và báo giáo viên.'}]},
-      {ic:'🧲',name:'Vật lí',rd:'Lực, năng lượng, điện cơ bản.',panel:[
+      {ic:'🧲',name:'Vật lí — ôn nhanh',rd:'Lực, năng lượng, điện cơ bản. Đọc phòng 📖 Năng lượng và sự biến đổi trước cho chắc.',panel:[
         {h:'Hiện tượng vật lí quen thuộc'},
         {ul:['Lực làm thay đổi tốc độ hoặc hình dạng vật','Trọng lực kéo mọi vật về phía Trái Đất','Mạch điện kín mới có dòng điện chạy qua','Năng lượng không tự sinh ra hay mất đi, chỉ chuyển hoá']},
         {mcq:[{q:'Bóng đèn sáng được là nhờ dòng điện chuyển hoá điện năng thành?',o:['Quang năng và nhiệt năng','Chỉ âm thanh','Hoá năng','Cơ năng'],a:0,fb:'Đèn sợi đốt: điện năng → quang năng (ánh sáng) + nhiệt năng (toả nhiệt).'}]}]},
-      {ic:'⚗️',name:'Hoá học',rd:'Chất, phản ứng, quỳ tím.',panel:[
+      {ic:'⚗️',name:'Hoá học — ôn nhanh',rd:'Chất, phản ứng, quỳ tím. Đọc phòng 📖 Chất và sự biến đổi chất trước cho chắc.',panel:[
         {p:'Lật thẻ ôn dấu hiệu nhận biết trong Hoá học THCS.'},
         {flash:[{e:'🔴',f:'Acid + quỳ tím',b:'Quỳ tím hoá đỏ'},{e:'🔵',f:'Base + quỳ tím',b:'Quỳ tím hoá xanh'},
           {e:'💨',f:'Dấu hiệu phản ứng',b:'Sủi bọt khí, đổi màu, kết tủa, toả/thu nhiệt'},
           {e:'⚖️',f:'Bảo toàn khối lượng',b:'Khối lượng được bảo toàn trong phản ứng hoá học'}]}]},
-      {ic:'🌿',name:'Sinh học',rd:'Tế bào, cơ thể sống.',panel:[
+      {ic:'🌿',name:'Sinh học — ôn nhanh',rd:'Tế bào, cơ thể sống. Đọc phòng 📖 Vật sống trước cho chắc.',panel:[
         {h:'Cơ sở của sự sống'},
         {ul:['Tế bào là đơn vị cấu tạo & chức năng cơ bản của cơ thể sống','Thực vật quang hợp tạo chất hữu cơ + nhả khí O₂','Cơ thể người gồm nhiều hệ cơ quan phối hợp hoạt động']},
         {note:'Quang hợp cần ánh sáng, nước, khí carbonic — tạo glucose và oxygen.'}]}],
