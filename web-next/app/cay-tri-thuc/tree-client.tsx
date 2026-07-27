@@ -173,7 +173,29 @@ export default function TreeClient({ runs, wallet }: { runs: ScenarioRuns; walle
 
     const legend = BRANCHES.map((b) => ({ ...b, count: (byBranch.get(b.key) || []).length }));
 
-    return { totalLeaves, totalFruits, trunkPaths, trunkDark, grains, branchPaths, branchBlobs, nodes, overflow, legend };
+    // Tán lá xanh rậm (req #116): khối lá lớn phía sau nhánh → cây giống cây thật.
+    const crownCx = cx, crownCy = (baseY - 350) - 55;
+    const canopyRaw = [
+      { x: 0, y: 24, r: 158, c: '#3d8a41', o: 0.95 }, { x: -176, y: 64, r: 116, c: '#3d8a41', o: 0.95 }, { x: 176, y: 64, r: 116, c: '#3d8a41', o: 0.95 },
+      { x: -96, y: -74, r: 110, c: '#43944a', o: 0.95 }, { x: 96, y: -74, r: 110, c: '#43944a', o: 0.95 }, { x: 0, y: -116, r: 100, c: '#43944a', o: 0.95 },
+      { x: -238, y: -4, r: 84, c: '#3d8a41', o: 0.92 }, { x: 238, y: -4, r: 84, c: '#3d8a41', o: 0.92 },
+      { x: -64, y: 12, r: 98, c: '#5fb85a', o: 0.96 }, { x: 74, y: 2, r: 104, c: '#5fb85a', o: 0.96 }, { x: 0, y: -44, r: 94, c: '#6cc665', o: 0.96 },
+      { x: -156, y: 22, r: 74, c: '#5fb85a', o: 0.94 }, { x: 156, y: 22, r: 74, c: '#5fb85a', o: 0.94 }, { x: -34, y: -96, r: 68, c: '#6cc665', o: 0.92 },
+      { x: 120, y: -56, r: 66, c: '#6cc665', o: 0.9 }, { x: -120, y: -52, r: 62, c: '#6cc665', o: 0.9 },
+    ];
+    const canopy = canopyRaw.map((b) => ({ cx: crownCx + b.x, cy: crownCy + b.y, r: b.r, c: b.c, o: b.o }));
+    const canopyHi = [{ cx: crownCx - 50, cy: crownCy - 30, r: 30 }, { cx: crownCx + 90, cy: crownCy + 30, r: 26 }];
+    // Bụi cây + hoa quanh gốc (req #116: xung quanh đỡ trống vắng)
+    const bushes = [
+      { bx: cx - 250, s: 1.15, c1: '#4e9048', c2: '#6cc665' }, { bx: cx + 265, s: 1.3, c1: '#478a42', c2: '#63bd5c' },
+      { bx: cx - 95, s: 0.8, c1: '#4e9048', c2: '#6cc665' }, { bx: cx + 120, s: 0.9, c1: '#478a42', c2: '#63bd5c' },
+    ].map((b) => ({ ...b, y: baseY - 6 }));
+    const flowerCols = ['#ff6b9d', '#ffd54a', '#c77dff', '#ff8f5a', '#6ec6ff'];
+    const flowers = Array.from({ length: 9 }, (_, i) => ({
+      fx: 70 + i * 105 + (i % 2 ? 30 : 0), fy: baseY + 6 + (i % 3) * 8, col: flowerCols[i % flowerCols.length],
+    }));
+
+    return { totalLeaves, totalFruits, trunkPaths, trunkDark, grains, branchPaths, branchBlobs, nodes, overflow, legend, canopy, canopyHi, bushes, flowers };
   }, [runs, activeGrade]);
 
   const showTip = (e: React.MouseEvent, node: SvgNode) => {
@@ -254,6 +276,12 @@ export default function TreeClient({ runs, wallet }: { runs: ScenarioRuns; walle
       </div>
 
       <div className="ctt-stage">
+        {/* Mặt trời (req #116: lấp khoảng trời trống) */}
+        <svg style={{ position: 'absolute', top: '5%', right: '6vw', pointerEvents: 'none' }} width="110" height="110" viewBox="0 0 110 110">
+          <circle cx="55" cy="55" r="42" fill="#ffe08a" opacity="0.35" />
+          <circle cx="55" cy="55" r="30" fill="#ffd24a" />
+          <circle cx="55" cy="55" r="24" fill="#ffe37a" />
+        </svg>
         {/* Mây */}
         <svg className="ctt-cloud c1" style={{ top: '8%', left: '5vw' }} width="120" height="50" viewBox="0 0 120 50">
           <ellipse cx="30" cy="30" rx="22" ry="16" fill="#fff" />
@@ -279,6 +307,13 @@ export default function TreeClient({ runs, wallet }: { runs: ScenarioRuns; walle
           <path className="ctt-trunk-dark" d={model.trunkDark} opacity={0.45} />
           {model.grains.map((d, i) => (
             <path key={'g' + i} d={d} stroke="#4a2710" strokeWidth={1.5} fill="none" opacity={0.35} />
+          ))}
+          {/* Tán lá xanh rậm phía sau nhánh (req #116) */}
+          {model.canopy.map((b, i) => (
+            <circle key={'cp' + i} cx={b.cx} cy={b.cy} r={b.r} fill={b.c} opacity={b.o} />
+          ))}
+          {model.canopyHi.map((b, i) => (
+            <circle key={'ch' + i} cx={b.cx} cy={b.cy} r={b.r} fill="#7fd177" opacity={0.48} />
           ))}
           {model.branchPaths.map((b, i) => (
             <path key={'b' + i} className="ctt-branch" strokeWidth={b.w} d={b.d} />
@@ -318,6 +353,22 @@ export default function TreeClient({ runs, wallet }: { runs: ScenarioRuns; walle
               <text x={0} y={3} textAnchor="middle" fontSize={11} fontWeight={800} fill="#fff">
                 +{o.extra}
               </text>
+            </g>
+          ))}
+          {/* Bụi cây + hoa tiền cảnh quanh gốc (req #116) */}
+          {model.bushes.map((b, i) => (
+            <g key={'bu' + i} transform={`translate(${b.bx},${b.y}) scale(${b.s})`}>
+              <ellipse cx={0} cy={0} rx={70} ry={34} fill={b.c1} />
+              <circle cx={-40} cy={-14} r={30} fill={b.c1} /><circle cx={40} cy={-14} r={30} fill={b.c1} />
+              <circle cx={0} cy={-30} r={34} fill={b.c2} /><circle cx={-18} cy={-16} r={24} fill={b.c2} /><circle cx={22} cy={-14} r={22} fill={b.c2} />
+            </g>
+          ))}
+          {model.flowers.map((f, i) => (
+            <g key={'fl' + i} transform={`translate(${f.fx},${f.fy})`}>
+              {[0, 72, 144, 216, 288].map((a) => (
+                <ellipse key={a} cx={Math.cos((a * Math.PI) / 180) * 7} cy={Math.sin((a * Math.PI) / 180) * 7} rx={5} ry={3.4} fill={f.col} transform={`rotate(${a})`} />
+              ))}
+              <circle cx={0} cy={0} r={4} fill="#ffd54a" />
             </g>
           ))}
         </svg>
