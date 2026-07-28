@@ -471,18 +471,18 @@ const SPACES_SECONDARY = {
       {ic:'🎨',name:'Nghệ thuật 7',rd:'35 tuần: gam Đô trưởng, hát chủ điểm, cảm thụ tác phẩm; màu nóng – lạnh, tranh Đông Hồ, sản phẩm thủ công.',href:'/module.html?domain=secondary&module=S7NT'},
       {ic:'🧭',name:'HĐ trải nghiệm – hướng nghiệp 7',rd:'35 tuần: đặt mục tiêu cá nhân, kỹ năng giao tiếp, văn hoá nhà trường, quản lý cảm xúc, tiết kiệm năng lượng, bình đẳng giới.',href:'/module.html?domain=secondary&module=S7HDTN'},
       {ic:'🏯',name:'GD địa phương Hà Nội 7',rd:'35 tuần: Văn Miếu – Quốc Tử Giám, danh nhân Chu Văn An, Hội Gióng, đền Cổ Loa, làng nghề, Hà Nội đô thị hoá.',href:'/module.html?domain=secondary&module=S7GDDP'},
-      {ic:'🇬🇧',name:'Tiếng Anh 7',rd:'Ngữ pháp các thì cơ bản.',panel:[
+      {ic:'🇬🇧',name:'Tiếng Anh 7 — ôn nhanh',rd:'Lật nhanh 4 thì cơ bản trước khi vào bài tuần.',panel:[
         {h:'Các thì thường gặp lớp 7'},
         {cards:[{ic:'⏱️',t:'Present simple',d:'Thói quen, sự thật: I go / She goes.'},
           {ic:'🔄',t:'Present continuous',d:'Đang xảy ra: I am going.'},
           {ic:'⏮️',t:'Past simple',d:'Đã xảy ra & kết thúc: I went.'},
           {ic:'⏭️',t:'Future (will)',d:'Dự định/tương lai: I will go.'}]},
         {note:'Ngôi thứ 3 số ít ở thì hiện tại đơn thêm -s/-es cho động từ.'}]},
-      {ic:'🗺️',name:'Lịch sử & Địa lí 7',rd:'Trung đại & các châu lục.',panel:[
+      {ic:'🗺️',name:'Lịch sử & Địa lí 7 — ôn nhanh',rd:'Điểm lại trung đại & các châu lục.',panel:[
         {h:'Kiến thức trọng tâm'},
         {ul:['Xã hội phong kiến phương Đông & phương Tây','Đại Việt thời Lý – Trần – Lê sơ: dựng nước & giữ nước','Đặc điểm tự nhiên các châu lục: châu Âu, châu Á, châu Phi']},
         {note:'Chiến thắng tiêu biểu: ba lần kháng chiến chống quân Mông – Nguyên thời Trần.'}]},
-      {ic:'⚖️',name:'GDCD 7',rd:'Quản lí cảm xúc & ứng phó căng thẳng.',panel:[
+      {ic:'⚖️',name:'GDCD 7 — tình huống nhanh',rd:'Quản lí cảm xúc & ứng phó căng thẳng.',panel:[
         {mcq:[{q:'Khi căng thẳng trước kì kiểm tra, cách ứng phó tích cực là?',o:['Lập kế hoạch ôn tập, nghỉ ngơi, hít thở sâu','Thức trắng đêm lo lắng','Bỏ thi','Giấu cảm xúc và chịu đựng một mình'],a:0,fb:'Ứng phó tích cực: chia nhỏ việc học, ngủ đủ, vận động, chia sẻ với người tin cậy.'}]}]}],
     skills:['Tư duy logic','Tự luyện đề có phản hồi'],
     quiz:[{q:'Số nào sau đây là số hữu tỉ?',o:['Mọi đáp án trên (3, -0,5 và 2/7 đều là số hữu tỉ)','Chỉ 3','Chỉ 2/7','Không số nào'],a:0},
@@ -504,13 +504,13 @@ const SPACES_SECONDARY = {
       {ic:'🎨',name:'Nghệ thuật 8',rd:'35 tuần: hợp âm 7, dân ca quốc tế, nhạc lãng mạn (Chopin, Schubert); ký hoạ chân dung.',href:'/module.html?domain=secondary&module=S8NT'},
       {ic:'🧭',name:'HĐ trải nghiệm – hướng nghiệp 8',rd:'35 tuần: quản lý thời gian, an toàn mạng & quyền riêng tư, định hướng học tập THPT, tài chính cá nhân.',href:'/module.html?domain=secondary&module=S8HDTN'},
       {ic:'🏯',name:'GD địa phương Hà Nội 8',rd:'35 tuần: Pháp đánh Hà Nội 1882 – Hoàng Diệu, vụ Hà thành đầu độc 1908, Cách mạng tháng Tám, môi trường đô thị.',href:'/module.html?domain=secondary&module=S8GDDP'},
-      {ic:'🔬',name:'KHTN 8 — Ghi nhớ nhanh',rd:'Lật thẻ Lí – Hoá – Sinh.',panel:[
+      {ic:'🔬',name:'KHTN 8 — ghi nhớ nhanh',rd:'Lật thẻ Lí – Hoá – Sinh (bài học đầy đủ ở thẻ Khoa học tự nhiên 8).',panel:[
         {p:'Lật thẻ ôn nhanh kiến thức Khoa học tự nhiên lớp 8.'},
         {flash:[{e:'⚖️',f:'Định luật bảo toàn khối lượng',b:'Tổng khối lượng chất phản ứng = tổng khối lượng sản phẩm'},
           {e:'💪',f:'Áp suất',b:'p = F/S (lực ép trên một đơn vị diện tích)'},
           {e:'🫁',f:'Hệ hô hấp',b:'Trao đổi khí O₂ và CO₂ giữa cơ thể & môi trường'},
           {e:'⚗️',f:'Acid',b:'Dung dịch làm quỳ tím hoá đỏ'}]}]},
-      {ic:'🇬🇧',name:'Tiếng Anh 8',rd:'So sánh hơn – so sánh nhất.',panel:[
+      {ic:'🇬🇧',name:'Tiếng Anh 8 — ôn nhanh',rd:'Lật nhanh so sánh hơn – so sánh nhất.',panel:[
         {h:'So sánh tính từ'},
         {ul:['So sánh hơn: tall → taller than; good → better than','So sánh nhất: tall → the tallest; good → the best','Tính từ dài dùng more / the most: more beautiful, the most beautiful']},
         {mcq:[{q:'Câu nào đúng?',o:['She is taller than me.','She is more tall than me.','She is tallest than me.','She is the taller.'],a:0,fb:'Tính từ ngắn "tall" → "taller than" trong so sánh hơn.'}]}]}],
