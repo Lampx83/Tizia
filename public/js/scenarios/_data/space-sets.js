@@ -454,12 +454,23 @@ const SPACES_SECONDARY = {
       {q:'Thơ lục bát có cặp câu gồm?',o:['Một câu 6 chữ & một câu 8 chữ','Hai câu 7 chữ','Câu 5 chữ','Câu tự do'],a:0},
       {q:'1 thế kỉ bằng bao nhiêu năm?',o:['100 năm','10 năm','1000 năm','50 năm'],a:0}]},
 
-  grade7:{emoji:'7️⃣',name:'Khối lớp 7',accent:'#34d399',intro:'Lớp 7 — nâng cao tư duy. Học Toán, Ngữ văn cùng các môn và luyện đề có phản hồi tức thì.',
-    rooms:[{ic:'📐',name:'Toán 7 — Luyện tập',rd:'Số hữu tỉ, tỉ lệ thức, tam giác, thống kê.',href:'/module.html?domain=secondary&module=S7'},
-      // KHTN 7 — 35 tuần bài học đã có trong DB (module S7KHTN) nhưng trước đây
-      // không phòng nào trỏ tới nên SV không tìm thấy (req #111 Enderboy).
+  grade7:{emoji:'7️⃣',name:'Khối lớp 7',accent:'#34d399',intro:'Lớp 7 — 12 môn × 35 tuần theo Chương trình GDPT 2018. Mỗi tuần: lý thuyết + ví dụ + quiz có phản hồi tức thì.',
+    // 12 môn × 35 tuần đã có sẵn trong DB (module S7*) nhưng trước đây khối 7 chỉ
+    // trỏ tới 2 module cũ nên SV không tìm thấy — req #108 + #111 (Enderboy):
+    // "thêm kiến thức lớp 7,8,9" / "bổ sung nhiều môn và bài giống lớp 6 cho lớp 7".
+    rooms:[
+      {ic:'📐',name:'Toán 7',rd:'35 tuần: số hữu tỉ, làm tròn & sai số, tỉ lệ thức, thống kê – biểu đồ, tam giác bằng nhau, quan hệ các yếu tố trong tam giác, đa thức một biến.',href:'/module.html?domain=secondary&module=S7TOAN'},
+      {ic:'📖',name:'Ngữ văn 7',rd:'35 tuần: thơ trữ tình hiện đại, truyện ngụ ngôn, tục ngữ, nghị luận, văn biểu cảm; từ ghép – từ láy, dấu chấm phẩy – chấm lửng.',href:'/module.html?domain=secondary&module=S7NV'},
+      {ic:'🇬🇧',name:'Tiếng Anh 7',rd:'35 tuần theo Global Success Unit 1–12: hiện tại đơn – tiếp diễn, trạng từ chỉ cách thức, giao thông, âm nhạc – nghệ thuật, dân số.',href:'/module.html?domain=secondary&module=S7TA'},
       {ic:'🔬',name:'Khoa học tự nhiên 7',rd:'35 tuần tích hợp Lí – Hoá – Sinh: nguyên tử, bảng tuần hoàn, phân tử, tốc độ, âm thanh, ánh sáng, từ, trao đổi chất, cảm ứng, sinh sản.',href:'/module.html?domain=secondary&module=S7KHTN'},
-      {ic:'📖',name:'Ngữ văn 7 — Luyện tập',rd:'Ca dao, tục ngữ, từ Hán Việt, điệp ngữ.',href:'/module.html?domain=secondary&module=SV7'},
+      {ic:'🗺️',name:'Lịch sử & Địa lí 7',rd:'35 tuần: phong kiến châu Âu – Trung Quốc, Đại Việt thời Lý – Trần – Lê, kháng chiến chống Tống; châu Á, châu Mỹ, khí hậu – sông ngòi.',href:'/module.html?domain=secondary&module=S7LSDL'},
+      {ic:'⚖️',name:'GD công dân 7',rd:'35 tuần: tự hào truyền thống quê hương, quan tâm chia sẻ, giữ chữ tín, bạo lực học đường, tệ nạn xã hội, quyền trẻ em.',href:'/module.html?domain=secondary&module=S7GDCD'},
+      {ic:'⚙️',name:'Công nghệ 7',rd:'35 tuần: trồng trọt & lâm nghiệp (nhóm cây trồng, phân bón, trồng – bảo vệ rừng), chăn nuôi và thuỷ sản.',href:'/module.html?domain=secondary&module=S7CN'},
+      {ic:'💻',name:'Tin học 7',rd:'35 tuần: mạng máy tính, tổ chức lưu trữ dữ liệu, soạn thảo nâng cao, bảng tính & biểu đồ, cấu trúc lặp.',href:'/module.html?domain=secondary&module=S7TIN'},
+      {ic:'⚽',name:'GD thể chất 7',rd:'35 tuần: chạy ngắn – xuất phát thấp, nhảy xa, bóng đá, đá cầu, tinh thần fair-play.',href:'/module.html?domain=secondary&module=S7GDTC'},
+      {ic:'🎨',name:'Nghệ thuật 7',rd:'35 tuần: gam Đô trưởng, hát chủ điểm, cảm thụ tác phẩm; màu nóng – lạnh, tranh Đông Hồ, sản phẩm thủ công.',href:'/module.html?domain=secondary&module=S7NT'},
+      {ic:'🧭',name:'HĐ trải nghiệm – hướng nghiệp 7',rd:'35 tuần: đặt mục tiêu cá nhân, kỹ năng giao tiếp, văn hoá nhà trường, quản lý cảm xúc, tiết kiệm năng lượng, bình đẳng giới.',href:'/module.html?domain=secondary&module=S7HDTN'},
+      {ic:'🏯',name:'GD địa phương Hà Nội 7',rd:'35 tuần: Văn Miếu – Quốc Tử Giám, danh nhân Chu Văn An, Hội Gióng, đền Cổ Loa, làng nghề, Hà Nội đô thị hoá.',href:'/module.html?domain=secondary&module=S7GDDP'},
       {ic:'🇬🇧',name:'Tiếng Anh 7',rd:'Ngữ pháp các thì cơ bản.',panel:[
         {h:'Các thì thường gặp lớp 7'},
         {cards:[{ic:'⏱️',t:'Present simple',d:'Thói quen, sự thật: I go / She goes.'},
@@ -478,9 +489,21 @@ const SPACES_SECONDARY = {
       {q:'Tổng ba góc trong một tam giác bằng?',o:['180°','90°','360°','100°'],a:0},
       {q:'"Ăn quả nhớ kẻ trồng cây" là?',o:['Tục ngữ','Truyện cổ tích','Thơ Đường','Tiểu thuyết'],a:0}]},
 
-  grade8:{emoji:'8️⃣',name:'Khối lớp 8',accent:'#a78bfa',intro:'Lớp 8 — củng cố nền tảng vững trước năm cuối cấp. Toán, Ngữ văn và các môn bộ môn.',
-    rooms:[{ic:'📐',name:'Toán 8 — Luyện tập',rd:'Hằng đẳng thức, phương trình, Pythagore.',href:'/module.html?domain=secondary&module=S8'},
-      {ic:'📖',name:'Ngữ văn 8 — Luyện tập',rd:'Truyện hiện thực, thơ Đường luật, câu ghép.',href:'/module.html?domain=secondary&module=SV8'},
+  grade8:{emoji:'8️⃣',name:'Khối lớp 8',accent:'#a78bfa',intro:'Lớp 8 — 12 môn × 35 tuần theo Chương trình GDPT 2018, củng cố nền tảng vững trước năm cuối cấp.',
+    // 12 môn × 35 tuần từ DB (module S8*) — mở lối vào giống lớp 6, req #108.
+    rooms:[
+      {ic:'📐',name:'Toán 8',rd:'35 tuần: nhân đa thức, phân thức đại số, định lí Talet, tam giác đồng dạng, xác suất của biến cố.',href:'/module.html?domain=secondary&module=S8TOAN'},
+      {ic:'📖',name:'Ngữ văn 8',rd:'35 tuần: Tức nước vỡ bờ, Hai cây phong, thơ Hồ Chí Minh; trợ từ – thán từ, hội thoại và lượt lời.',href:'/module.html?domain=secondary&module=S8NV'},
+      {ic:'🇬🇧',name:'Tiếng Anh 8',rd:'35 tuần Unit 1–12: quá khứ đơn & used to, câu tường thuật, giới thiệu địa danh, luyện nói nêu quan điểm.',href:'/module.html?domain=secondary&module=S8TA'},
+      {ic:'🔬',name:'Khoa học tự nhiên 8',rd:'35 tuần: mol & khối lượng mol, kim loại, cơ thể người (tiêu hoá, bệnh và cách phòng bệnh).',href:'/module.html?domain=secondary&module=S8KHTN'},
+      {ic:'🗺️',name:'Lịch sử & Địa lí 8',rd:'35 tuần: cách mạng tư sản Pháp, Việt Nam thời Pháp thuộc (Hiệp ước Nhâm Tuất, khai thác thuộc địa); địa lí sông ngòi Việt Nam.',href:'/module.html?domain=secondary&module=S8LSDL'},
+      {ic:'⚖️',name:'GD công dân 8',rd:'35 tuần: tôn trọng người khác, quyền khiếu nại – tố cáo, quyền và nghĩa vụ học tập, phòng chống bạo lực học đường.',href:'/module.html?domain=secondary&module=S8GDCD'},
+      {ic:'⚙️',name:'Công nghệ 8',rd:'35 tuần: hình chiếu & bản vẽ kĩ thuật, truyền chuyển động, đồ dùng điện gia đình, sơ đồ điện.',href:'/module.html?domain=secondary&module=S8CN'},
+      {ic:'💻',name:'Tin học 8',rd:'35 tuần: toán tử, kiểu danh sách, bảng tính & biểu đồ, tìm kiếm nhị phân, quyền tác giả trong môi trường số.',href:'/module.html?domain=secondary&module=S8TIN'},
+      {ic:'⚽',name:'GD thể chất 8',rd:'35 tuần: chạy bền theo phương pháp Cooper, chiến thuật bóng đá, bóng chuyền, đi bộ thể thao.',href:'/module.html?domain=secondary&module=S8GDTC'},
+      {ic:'🎨',name:'Nghệ thuật 8',rd:'35 tuần: hợp âm 7, dân ca quốc tế, nhạc lãng mạn (Chopin, Schubert); ký hoạ chân dung.',href:'/module.html?domain=secondary&module=S8NT'},
+      {ic:'🧭',name:'HĐ trải nghiệm – hướng nghiệp 8',rd:'35 tuần: quản lý thời gian, an toàn mạng & quyền riêng tư, định hướng học tập THPT, tài chính cá nhân.',href:'/module.html?domain=secondary&module=S8HDTN'},
+      {ic:'🏯',name:'GD địa phương Hà Nội 8',rd:'35 tuần: Pháp đánh Hà Nội 1882 – Hoàng Diệu, vụ Hà thành đầu độc 1908, Cách mạng tháng Tám, môi trường đô thị.',href:'/module.html?domain=secondary&module=S8GDDP'},
       {ic:'🔬',name:'KHTN 8 — Ghi nhớ nhanh',rd:'Lật thẻ Lí – Hoá – Sinh.',panel:[
         {p:'Lật thẻ ôn nhanh kiến thức Khoa học tự nhiên lớp 8.'},
         {flash:[{e:'⚖️',f:'Định luật bảo toàn khối lượng',b:'Tổng khối lượng chất phản ứng = tổng khối lượng sản phẩm'},
@@ -496,10 +519,22 @@ const SPACES_SECONDARY = {
       {q:'Định lí Pythagore áp dụng cho tam giác?',o:['Tam giác vuông','Mọi tam giác','Tam giác đều','Tam giác tù'],a:0},
       {q:'Định luật bảo toàn khối lượng do ai phát biểu?',o:['Lavoisier','Newton','Darwin','Mendel'],a:0}]},
 
-  grade9:{emoji:'9️⃣',name:'Khối lớp 9',accent:'#fb7185',intro:'Lớp 9 — năm cuối cấp, tăng tốc ôn thi vào lớp 10. Học chắc Toán, Ngữ văn & lập kế hoạch ôn tập.',
-    rooms:[{ic:'📐',name:'Toán 9 — Luyện tập',rd:'Căn bậc hai, hệ phương trình, đường tròn.',href:'/module.html?domain=secondary&module=S9'},
+  grade9:{emoji:'9️⃣',name:'Khối lớp 9',accent:'#fb7185',intro:'Lớp 9 — 12 môn × 35 tuần theo Chương trình GDPT 2018, năm cuối cấp: học chắc từng môn và lập kế hoạch ôn thi vào lớp 10.',
+    // 12 môn × 35 tuần từ DB (module S9*) — mở lối vào giống lớp 6, req #108.
+    rooms:[
+      {ic:'📐',name:'Toán 9',rd:'35 tuần: căn bậc hai, hệ phương trình, phương trình bậc hai, hệ thức lượng – đường tròn, hình nón.',href:'/module.html?domain=secondary&module=S9TOAN'},
+      {ic:'📖',name:'Ngữ văn 9',rd:'35 tuần: Truyện Kiều (Kiều ở lầu Ngưng Bích), thơ hiện đại (Đoàn thuyền đánh cá, Nói với con), cách dẫn trực tiếp – gián tiếp.',href:'/module.html?domain=secondary&module=S9NV'},
+      {ic:'🇬🇧',name:'Tiếng Anh 9',rd:'35 tuần: City Life, Wonders of Viet Nam, câu điều kiện loại 3, mệnh đề quan hệ xác định, ẩm thực – sức khoẻ.',href:'/module.html?domain=secondary&module=S9TA'},
+      {ic:'🔬',name:'Khoa học tự nhiên 9',rd:'35 tuần: kim loại (nhôm), mạch nối tiếp – song song, thấu kính hội tụ, hoá hữu cơ, gen và protein.',href:'/module.html?domain=secondary&module=S9KHTN'},
+      {ic:'🗺️',name:'Lịch sử & Địa lí 9',rd:'35 tuần: thế giới sau 1945, Cách mạng tháng Tám 1945; nông nghiệp Việt Nam và các vùng kinh tế.',href:'/module.html?domain=secondary&module=S9LSDL'},
+      {ic:'⚖️',name:'GD công dân 9',rd:'35 tuần: dân chủ và kỉ luật, lý tưởng sống của thanh niên, vi phạm pháp luật & trách nhiệm pháp lý, quyền – nghĩa vụ lao động, bảo vệ Tổ quốc.',href:'/module.html?domain=secondary&module=S9GDCD'},
+      {ic:'⚙️',name:'Công nghệ 9',rd:'35 tuần: lắp đặt mạng điện trong nhà, kỹ thuật ghép cây, nấu ăn, khởi nghiệp và tinh thần doanh nhân.',href:'/module.html?domain=secondary&module=S9CN'},
+      {ic:'💻',name:'Tin học 9',rd:'35 tuần: Python (list, slicing), làm trang web đơn giản, bảo vệ thông tin cá nhân, nghề nghiệp ngành CNTT.',href:'/module.html?domain=secondary&module=S9TIN'},
+      {ic:'⚽',name:'GD thể chất 9',rd:'35 tuần: chạy bền 1500 m, bóng rổ, karatedo, phối hợp đội trong bóng chuyền.',href:'/module.html?domain=secondary&module=S9GDTC'},
+      {ic:'🎨',name:'Nghệ thuật 9',rd:'35 tuần: hợp âm 7, hip-hop – rap, mỹ thuật Baroque – Rococo, mỹ thuật Việt Nam thời Đổi mới.',href:'/module.html?domain=secondary&module=S9NT'},
+      {ic:'🧭',name:'HĐ trải nghiệm – hướng nghiệp 9',rd:'35 tuần: quản lý thời gian time-block, định hướng nghề, quản lý tiền, tự lập và trách nhiệm với gia đình.',href:'/module.html?domain=secondary&module=S9HDTN'},
+      {ic:'🏯',name:'GD địa phương Hà Nội 9',rd:'35 tuần: Trung đoàn Thủ đô, Hà Nội thời bao cấp, làng nghề truyền thống, du lịch và quảng bá Thủ đô.',href:'/module.html?domain=secondary&module=S9GDDP'},
       {ic:'📈',name:'Đồ thị hàm số bậc nhất (tương tác)',rd:'Vẽ y=ax+b: kéo hệ số góc, xem đồng biến/nghịch biến & giao trục.',href:'/grapher.html?domain=secondary&type=linear'},
-      {ic:'📖',name:'Ngữ văn 9 — Luyện tập',rd:'Truyện Kiều, thơ hiện đại, nghĩa hàm ý.',href:'/module.html?domain=secondary&module=SV9'},
       {ic:'🎯',name:'Kế hoạch ôn thi vào 10',rd:'Tự lập lộ trình ôn tập.',panel:[
         {h:'Lộ trình ôn thi tuyển sinh lớp 10'},
         {check:['Lập thời khoá biểu ôn theo 3 môn thi (Toán, Văn, Anh)','Hệ thống lại kiến thức trọng tâm từng môn','Luyện đề theo cấu trúc đề thi của tỉnh/thành','Bấm giờ làm đề & soát lỗi sai','Giữ sức khoẻ: ngủ đủ, ăn uống điều độ']},
