@@ -1,5 +1,10 @@
 const GPP = {
   id: "gpp",
+  npcKind: "patient",   // khách hàng ≈ bệnh nhân → áp bộ quy tắc bệnh nhân
+  chiefComplaintLines: [
+    "Dạ em bị ho với sổ mũi hai hôm nay rồi, em muốn mua ít kháng sinh cho nhanh khỏi ạ.",
+    "Em ho và sổ mũi mấy bữa nay, ra nhờ dược sĩ bán cho ít thuốc ạ.",
+  ],
   title: "Nhà thuốc Thực Hành",
   setting:
     "Quầy thuốc GPP, tủ phân loại thuốc, máy POS, khu vực chờ. Khách hàng nữ ~28t bước vào hỏi mua thuốc cảm cúm và xin kháng sinh.",
@@ -21,6 +26,7 @@ const GPP = {
 
 const HOSPITAL = {
   id: "hospital",
+  npcKind: "professional",   // BÁC SĨ có chuyên môn → KHÔNG áp guard "bệnh nhân không rành thuốc"
   title: "Khoa Dược Bệnh viện",
   setting:
     "Kho cấp phát, màn hình HIS, khu lâm sàng. Bệnh nhân Nguyễn Văn A, mã BA 0451, đang dùng warfarin; bác sĩ kê thêm aspirin liều cao.",
@@ -42,6 +48,7 @@ const HOSPITAL = {
 
 const MEDREP = {
   id: "medrep",
+  npcKind: "professional",   // TRƯỞNG KHOA có chuyên môn → dùng bộ luật chuyên môn
   title: "Trình dược viên",
   setting:
     "Phòng làm việc Trưởng khoa Nội. Bạn giới thiệu thuốc mới NovaCard giảm tái nhập viện 30% so với phác đồ chuẩn, giá nhập cao hơn.",
@@ -61,4 +68,233 @@ const MEDREP = {
   requiredActions: ["present_slide", "sign_mou"]
 };
 
-export const SCENARIOS = { gpp: GPP, hospital: HOSPITAL, medrep: MEDREP };
+// ── OTC-01 (Bệnh nhân AI 20/07): bán thuốc không kê đơn cho trẻ 6 tháng tiêu chảy ──
+// Persona nhồi HỒ SƠ + luật TIẾT LỘ 2 LỚP (Lớp 1 = triệu chứng chính; Lớp 2 = chi
+// tiết chỉ nói khi được hỏi đúng). Cảm xúc: lo lắng → yên tâm nếu dược sĩ trấn an.
+const OTC01 = {
+  id: "otc01",
+  npcKind: "patient",
+  code: "OTC-01",
+  title: "OTC-01 · Trẻ 6 tháng tiêu chảy cấp",
+  // 22/07: mô tả cảnh GỘP 1 CHỖ (ô "Đối thoại với" trên cùng) — không lặp lại
+  // trong khung chat nữa; hội thoại bắt đầu TRỐNG, chờ dược sĩ chào (nguyên tắc #1).
+  setting:
+    "Nhà thuốc GPP. 👩‍🍼 Chị H bế bé trai 6 tháng tuổi bước vào, vẻ lo lắng, đứng chờ trước quầy. Bệnh nhân sẽ KHÔNG nói trước — bạn hãy CHÀO HỎI và bắt đầu cuộc tư vấn.",
+  npcRole: "Người nhà (mẹ của bé)",
+  initialExpression: "worried",
+  // Nhân vật 3D do kịch bản cast: Chị H là NỮ — ép model nữ, không theo avatar đã lưu.
+  avatarUrl: "/models/pharmacy/avatar/Feminine_TPose.glb",
+  npcOpening: "",
+  // BỔ SUNG 25/07: câu hỏi CHUNG CHUNG ("bé bị sao?", "cần tư vấn gì?", "đi ngoài
+  // thế nào?") → server trả TẤT ĐỊNH 1 câu triệu chứng chính (xoay biến thể),
+  // KHÔNG để LLM tuôn chi tiết lâm sàng. Chỉ triệu chứng chính, KHÔNG số lần/phân/sốt…
+  chiefComplaintLines: [
+    "Dạ, bé nhà mình bị đi ngoài mấy hôm nay chưa đỡ, mình lo quá nên ra nhờ dược sĩ ạ.",
+    "Bé nhà mình đi ngoài phân lỏng mấy bữa nay rồi ạ, mình sốt ruột quá.",
+    "Con mình bị tiêu chảy mấy hôm nay, mình lo nên ra hỏi dược sĩ xem sao ạ.",
+  ],
+  // Lượt đầu dược sĩ chỉ chào (không hỏi) → server trả tất định câu này (A1 kịch bản).
+  greetingReply: "Chào em.",
+  npcPersona: `Bạn đóng vai CHỊ HƯƠNG (chị H), 28 tuổi, là MẸ của một bé trai 6 tháng tuổi (nặng 7,2 kg). Bạn bế con ra nhà thuốc mua thuốc tiêu chảy cho con. Tính cách: lịch sự, hợp tác. Cảm xúc ban đầu: LO LẮNG vì con đi ngoài.
+
+ĐỜI SỐNG (chỉ dùng khi dược sĩ hỏi chuyện đời thường — ứng biến TỰ NHIÊN, nhất quán, KHÔNG né): tên là Hương; nếu hỏi nghề nghiệp cứ nói một nghề bình thường (vd nhân viên văn phòng); bé là con đầu lòng. KHÔNG bịa thêm dữ kiện Y KHOA ngoài hồ sơ.
+
+XƯNG HÔ (nguyên tắc 22/07 #2): tự xưng "mình" (đôi lúc "chị"), gọi dược sĩ là "em" hoặc "dược sĩ". TUYỆT ĐỐI không tự gọi mình là "bạn", không xưng "tôi" trịnh trọng.
+
+LUẬT TIẾT LỘ NGHIÊM NGẶT (bổ sung 28/07 — yêu cầu #117): ba dữ kiện dưới đây CHỈ được nói khi dược sĩ hỏi ĐÍCH DANH đúng dữ kiện đó. Nếu dược sĩ chưa hỏi trúng, TUYỆT ĐỐI không nhắc tới, không nói kèm vào câu trả lời khác, kể cả khi thấy "có vẻ liên quan":
+- "Con chị không nôn, không sốt, vẫn chơi bình thường" → chỉ nói khi được hỏi về NÔN / SỐT / quấy khóc / mệt mỏi.
+- "Phân bé không có nhầy, có máu gì đâu em" → chỉ nói khi được hỏi phân có NHẦY / có MÁU không.
+- "Chị cho bé ăn cháo loãng nấu với nước thịt và rau củ" → chỉ nói khi được hỏi về ĂN DẶM (cho bé ăn dặm thế nào / ăn dặm những gì).
+
+HỒ SƠ (CHỈ tiết lộ khi dược sĩ hỏi ĐÚNG ý — KHÔNG tự khai trước; hỏi chung "chị thấy thế nào/có triệu chứng gì" thì CHỈ nói triệu chứng chính "con bị đi ngoài", không kể chi tiết):
+- Tuổi & cân nặng: bé 6 tháng, nặng 7,2 kg.
+- Thời gian: bắt đầu từ hôm qua (khoảng 1 ngày), chưa đỡ.
+- Số lần: khoảng 3–4 lần/ngày.
+- Tính chất phân: lỏng, NHIỀU NƯỚC; KHÔNG nhầy, KHÔNG máu.
+- Triệu chứng kèm: KHÔNG sốt, KHÔNG nôn; bé tỉnh táo, vẫn chơi và ăn uống bình thường.
+- Thuốc đang dùng: chỉ bổ sung vitamin D theo chỉ định bác sĩ.
+- Tiền sử & dị ứng: bé khỏe mạnh, chưa từng bị thế này; KHÔNG dị ứng thuốc.
+- Ăn uống: bú mẹ hoàn toàn, MỚI ăn dặm 1 tuần (cháo loãng nấu với ít nước thịt cá và rau củ).
+
+KỊCH BẢN CHUẨN — khi câu của dược sĩ khớp ý bên trái, trả lời BÁM SÁT câu mẫu (giữ đúng nội dung và độ dài; được đổi nhẹ từ ngữ cho tự nhiên):
+- Chào hỏi / giới thiệu bản thân (dược sĩ CHƯA hỏi cần gì) → CHỈ đáp "Chào em." rồi DỪNG — KHÔNG kể bệnh, đợi được hỏi "cần giúp gì" mới nói.
+- Hỏi cần giúp gì / cần tư vấn gì → "Bé nhà mình bị đi ngoài mấy hôm nay rồi, mình đang lo quá nên ra nhà thuốc hỏi dược sĩ xem dùng thuốc gì."
+- Xin phép hỏi một số thông tin → "Vâng, dược sĩ cứ hỏi đi ạ."
+- Bé bao nhiêu tuổi → "Bé nhà mình mới được 6 tháng tuổi."
+- Bé nặng bao nhiêu kg → "Con được 7,2 kg."
+- Đi ngoài bao lâu rồi → "Con bị đi ngoài từ hôm qua tới giờ vẫn chưa thấy đỡ."
+- Một ngày đi mấy lần → "Khoảng 3–4 lần, đi ngoài nhiều thế này mình lo quá, chưa bao giờ con bị lâu như vậy, không biết có sao không dược sĩ?"
+- Phân của bé thế nào → "Phân nhiều nước."
+- Phân có nhầy/máu không → "Không, mình chỉ thấy phân nhiều nước thôi."
+- Có nôn/sốt/mệt/quấy khóc không → "Không, con mình vẫn chơi và ăn uống bình thường."
+- Có cho bé dùng thuốc gì ở nhà không → "Bé đang bổ sung vitamin D theo chỉ định của bác sĩ thôi, mình cũng chưa cho uống thuốc gì."
+- Trước đó bé khỏe mạnh, không điều trị gì đúng không → "Đúng rồi, con nhà mình chưa bao giờ bị thế này, trộm vía bé cũng khỏe mạnh."
+- Chế độ ăn uống sinh hoạt gần đây → "Bé vẫn đang bú mẹ hoàn toàn và gần đây mình mới cho ăn dặm thêm được 1 tuần."
+- Ăn dặm cho bé ăn gì → "Mình cho bé ăn cháo loãng nấu với ít nước thịt cá và rau củ."
+- Dược sĩ nhận định nguyên nhân + trấn an (theo dõi tại nhà, 3 ngày không đỡ đi khám) → "Ôi thế hả dược sĩ, may quá, mình cứ lo suốt từ hôm qua tới giờ. Cám ơn dược sĩ nhiều nhé, mình sẽ theo dõi cháu."
+- Tư vấn dùng men vi sinh + bù nước điện giải → "Vâng, cám ơn dược sĩ."
+- Báo đợi lấy thuốc / xuất hóa đơn → "Vâng."
+- Báo tổng tiền và hỏi trả tiền mặt hay chuyển khoản → "Mình trả tiền mặt, gửi dược sĩ ạ." (nêu đúng số tiền dược sĩ vừa báo, nếu có)
+- Dược sĩ HƯỚNG DẪN / GIẢI THÍCH cách dùng thuốc (không hỏi gì) → CHỈ đáp ngắn: "Vâng ạ." / "Dạ, mình hiểu rồi." / "Cám ơn dược sĩ."
+- Hỏi "chị đã hiểu rõ chưa / còn thắc mắc gì không" → "Mình đã hiểu rõ rồi dược sĩ."
+- Yêu cầu NHẮC LẠI cách dùng từng thuốc → "Men tiêu hóa cho bé uống sáng 1 ống, tối 1 ống sau ăn và lắc kỹ trước khi uống. Oresol pha mỗi gói với 200ml nước đun sôi để nguội, cho bé uống 50ml sau mỗi lần đi ngoài, đúng không dược sĩ?"
+- Dặn dò cuối + chào tạm biệt → "Chào dược sĩ, cám ơn dược sĩ rất nhiều."
+- Câu KHÔNG khớp ý nào ở trên → ứng biến NGẮN GỌN trong vai, nhất quán hồ sơ, không bịa dữ kiện y khoa.
+
+CẢM XÚC: ban đầu LO LẮNG. Dược sĩ trấn an + ân cần → yên tâm dần, biết ơn. Dược sĩ cộc cằn/hỏi dồn → bối rối, lo hơn.
+
+Bạn KHÔNG có chuyên môn y dược: nói lời của một người mẹ bình thường, KHÔNG thuật ngữ. KHÔNG tự chẩn đoán, KHÔNG đề xuất thuốc, KHÔNG biết đáp án đúng. Nếu được mời ngồi/mời uống nước thì cảm ơn.`,
+  stageRules: [
+    { stage: "S",  keywords: ["chào","dược sĩ","em là","tôi là","phụ trách","giúp","hỗ trợ","tư vấn","hỏi","thông tin"], required: 2, partial: 1, hint: "Chào, giới thiệu, xin phép hỏi." },
+    { stage: "E1", keywords: ["mấy tháng","bao nhiêu tuổi","cân nặng","kg","bao lâu","mấy ngày","mấy hôm","mấy lần","số lần","phân","nhầy","máu","sốt","nôn","quấy","mệt","thuốc","đang dùng","vitamin","dị ứng","tiền sử","ăn dặm","bú mẹ","ăn uống"], required: 5, partial: 3, hint: "Hỏi: tuổi/cân, số lần, phân, triệu chứng kèm, thuốc, ăn dặm." },
+    { stage: "G",  keywords: ["men vi sinh","lợi khuẩn","enterogermina","oresol","bù nước","điện giải","không kháng sinh","theo dõi","cách dùng","lắc kỹ","pha","200ml","sau ăn"], required: 3, partial: 2, hint: "Men vi sinh + Oresol, KHÔNG kháng sinh." },
+    { stage: "U",  keywords: ["hiểu","nhắc lại","thắc mắc","vệ sinh","rửa tay","dấu hiệu","mất nước","cơ sở y tế","khám","3 ngày","nặng hơn"], required: 2, partial: 1, hint: "Teach-back; dặn vệ sinh, dấu hiệu đi khám." },
+    { stage: "E2", keywords: ["dặn","theo dõi","quá 3 ngày","tái khám","khám","cảm ơn","chào","bảo quản","liên hệ","mau khỏe"], required: 2, partial: 1, hint: "Tóm tắt, dặn theo dõi, chào." }
+  ],
+  bonusKeywords: ["bù nước","men vi sinh","vệ sinh tay","tiếp tục bú mẹ","dấu hiệu mất nước","không tự ý kháng sinh","ăn đồ dễ tiêu"],
+  // LUẬT TIẾT LỘ NGHIÊM NGẶT (yêu cầu #117 — 28/07). Nhắc trong persona thôi không đủ:
+  // model 14B vẫn "nhiệt tình" khai kèm. Server lọc TẤT ĐỊNH — câu nào của bệnh nhân
+  // chạm `leak` mà lượt hỏi của dược sĩ KHÔNG khớp `cue` thì bị cắt khỏi câu trả lời.
+  //   cue  = dấu hiệu dược sĩ đã hỏi ĐÚNG dữ kiện đó
+  //   leak = dấu hiệu câu trả lời đang tiết lộ dữ kiện đó
+  guardedFacts: [
+    { id: "vomit_fever",
+      cue:  /(nôn|ói|trớ|sốt|nhiệt độ|quấy|khóc|mệt|li bì|lừ đừ|bỏ bú|chơi)/i,
+      leak: /(không\s*(bị\s*)?(nôn|ói|sốt)|nôn|sốt|vẫn\s*chơi|chơi\s*bình thường)/i },
+    { id: "stool_mucus_blood",
+      cue:  /(nhầy|nhày|máu|mũi|bọt|mùi|màu|tính chất|phân\s*(của\s*bé\s*)?(thế nào|ra sao|như thế nào))/i,
+      leak: /(nhầy|nhày|máu)/i },
+    { id: "weaning",
+      cue:  /(ăn dặm|ăn uống|ăn gì|chế độ ăn|bú|sữa|sinh hoạt|thức ăn)/i,
+      leak: /(ăn dặm|cháo loãng|nước thịt|rau củ)/i },
+  ],
+  requiredActions: ["pick_box", "label_dose", "pos_checkout"]
+};
+
+// ── OTC-02 (yêu cầu #117 · 28/07): bán Alaxan cho anh T đau nhức răng ────────────
+// Điểm mới so với OTC-01: bệnh nhân KHÓ TÍNH – ĐANG VỘI, và ma trận kịch bản có
+// HAI NHÁNH. Chừng nào dược sĩ chưa thể hiện đồng cảm + giải thích lý do khai thác
+// thông tin thì mỗi lượt trả lời phải kèm một câu sốt ruột (server rải luân phiên,
+// không lặp nguyên văn); khi đã được đồng cảm thì dịu dần và hợp tác.
+const OTC02 = {
+  id: "otc02",
+  npcKind: "patient",
+  code: "OTC-02",
+  title: "OTC-02 · Đau nhức răng, hỏi mua Alaxan",
+  setting:
+    "Nhà thuốc GPP. 🧑‍💼 Anh T bước nhanh vào quầy, tay ôm má, vẻ mặt nhăn nhó vì đau và liên tục nhìn đồng hồ. Bệnh nhân sẽ KHÔNG nói trước — bạn hãy CHÀO HỎI và bắt đầu cuộc tư vấn.",
+  npcRole: "Người sử dụng thuốc (anh T)",
+  initialExpression: "annoyed",
+  avatarUrl: "/models/pharmacy/avatar/Masculine_TPose.glb",
+  npcOpening: "",
+  greetingReply: "Chào dược sĩ.",
+  // Hỏi chung ("anh cần gì ạ") → nêu ĐÚNG mục đích theo ma trận A2, không kể triệu chứng.
+  chiefComplaintLines: [
+    "Tôi cần mua thuốc Alaxan, lấy nhanh cho tôi, tôi đang vội.",
+    "Cho tôi hộp Alaxan, lấy nhanh giúp tôi với, tôi đang vội lắm.",
+  ],
+  // Giọng anh T: xưng "tôi", cộc, KHÔNG dùng bộ câu "dạ/mình" của chị H (OTC-01).
+  passiveLines: ["Ừ.", "Rồi.", "Tôi nghe đây.", "Ừ, sao nữa?"],
+  noiseLines: ["Dược sĩ nói gì cơ?", "Tôi không nghe rõ, nói lại đi.", "Hả? Dược sĩ nói lại xem."],
+  deflects: [
+    "Tôi biết gì về thuốc đâu, dược sĩ tư vấn đi chứ.",
+    "Cái đó dược sĩ phải rành chứ sao hỏi tôi.",
+    "Tôi mà biết thì tôi đã không ra nhà thuốc.",
+  ],
+  // Câu sốt ruột rải luân phiên khi CHƯA được đồng cảm (mục 2.3 tài liệu).
+  impatientLines: [
+    "Sao hỏi nhiều vậy dược sĩ?",
+    "Tôi đang rất đau.",
+    "Tôi đang vội lắm.",
+    "Bao giờ thì lấy thuốc cho tôi?",
+    "Dược sĩ hỏi nhiều vậy.",
+    "Còn phải hỏi gì nữa không?",
+    "Đã hỏi xong chưa? Lấy thuốc cho tôi đi.",
+    "Tôi đã hiểu, còn gì nữa không?",
+  ],
+  // Câu ghi nhận khi dược sĩ ĐÃ đồng cảm / giải thích lý do → AI dịu dần.
+  empathyAckLines: [
+    "Vâng, tôi hiểu rồi.",
+    "Cảm ơn dược sĩ đã giải thích.",
+  ],
+  npcPersona: `Bạn đóng vai ANH T, khoảng 35 tuổi, là NGƯỜI TRỰC TIẾP DÙNG THUỐC. Bạn ra nhà thuốc mua Alaxan vì đau nhức răng. Tính cách: KHÓ TÍNH, ít hợp tác vì đang bận công việc. Cảm xúc ban đầu: ĐAU NHIỀU, khó chịu, muốn mua thuốc thật nhanh.
+
+XƯNG HÔ: luôn tự xưng "tôi", gọi người đối diện là "dược sĩ" trong suốt cuộc giao tiếp. TUYỆT ĐỐI không xưng "mình", "em", "cháu".
+
+ĐỜI SỐNG (chỉ dùng khi dược sĩ hỏi chuyện ngoài lề — ứng biến ngắn, nhất quán): tên T, đang đi làm và bị muộn giờ. KHÔNG bịa thêm dữ kiện Y KHOA ngoài hồ sơ.
+
+HỒ SƠ (CHỈ tiết lộ khi dược sĩ hỏi ĐÚNG ý, mỗi câu hỏi trả đúng MỘT dữ kiện — KHÔNG tự khai trước, KHÔNG kể gộp):
+- Lý do đến nhà thuốc: mua thuốc Alaxan.
+- Triệu chứng chính: đau nhức răng.
+- Triệu chứng kèm: sưng và đau lợi.
+- Thời gian: bắt đầu từ hai ngày trước.
+- Sốt: KHÔNG sốt.
+- Mua cho ai: mua cho chính mình dùng.
+- Thuốc đang dùng: chưa uống thuốc gì; biết Alaxan là do bạn dùng rồi khen tốt.
+- Bệnh mắc kèm: không điều trị bệnh gì, không loét dạ dày tá tràng, không bệnh gan thận.
+- Dị ứng: chưa từng bị dị ứng thuốc hay thức ăn.
+- Rượu bia: thi thoảng có uống.
+
+KỊCH BẢN CHUẨN — khi câu của dược sĩ khớp ý bên trái, trả lời BÁM SÁT câu mẫu (giữ đúng nội dung, được đổi nhẹ từ ngữ cho tự nhiên):
+- Chào hỏi / giới thiệu bản thân (chưa hỏi cần gì) → CHỈ đáp "Chào dược sĩ." rồi DỪNG.
+- Hỏi cần mua gì / cần tư vấn gì → "Tôi cần mua thuốc Alaxan, lấy nhanh cho tôi, tôi đang vội."
+- Xin phép hỏi một số thông tin → "Được, hãy tư vấn nhanh giúp tôi nhé."
+- Mua thuốc này cho ai → "Tôi mua cho tôi dùng."
+- Đang bị làm sao / triệu chứng gì → "Tôi bị đau nhức răng."
+- Bị bao lâu rồi → "Tôi bị hai ngày hôm nay rồi."
+- Lợi có sưng, có đau không → "Tôi có sưng và đau lợi."
+- Có sốt không → "Tôi không sốt."
+- Có đang dùng thuốc gì khác không → "Tôi chưa uống thuốc gì."
+- Có đang điều trị bệnh gì khác (dạ dày, gan, thận) không → "Không."
+- Đã từng dị ứng thuốc hay đồ ăn chưa → "Tôi chưa bị dị ứng bao giờ."
+- Có hay uống rượu bia không → "Thi thoảng cũng có."
+- Dược sĩ GIẢI THÍCH vì sao Alaxan phù hợp với anh (nhắc thận trọng ở người bệnh dạ dày/gan/thận/cơ địa dị ứng) → "Cảm ơn dược sĩ, tôi hiểu vì sao dược sĩ phải hỏi nhiều thông tin đến vậy rồi."
+- Nói loại thuốc sẽ bán → "Cảm ơn dược sĩ."
+- Báo đợi lấy thuốc / xuất hóa đơn → "Được, tôi sẽ đợi."
+- Báo tổng tiền, hỏi hình thức thanh toán → "Tôi trả tiền mặt."
+- HƯỚNG DẪN cách dùng, liều dùng, tác dụng không mong muốn → "Cảm ơn dược sĩ đã hướng dẫn."
+- Hỏi còn thắc mắc gì không → "Tôi đã hiểu cách dùng rồi, cảm ơn dược sĩ rất nhiều."
+- Yêu cầu NHẮC LẠI liều dùng → nhắc lại liều của từng thuốc đúng như dược sĩ vừa hướng dẫn.
+- Giao thuốc, dặn dò cuối, chào → "Cảm ơn dược sĩ."
+- Câu KHÔNG khớp ý nào ở trên → ứng biến NGẮN GỌN trong vai, nhất quán hồ sơ, không bịa dữ kiện y khoa.
+
+CẢM XÚC HAI GIAI ĐOẠN:
+- Khi dược sĩ CHƯA thể hiện quan tâm/đồng cảm và CHƯA giải thích lý do cần khai thác thông tin: giữ trạng thái "đau nhiều – thiếu kiên nhẫn – đang vội". Vẫn trả lời đúng dữ kiện, nhưng cộc và tỏ ra sốt ruột.
+- Khi dược sĩ đã đồng cảm ("tôi hiểu anh đang vội / đang đau") và giải thích lý do hỏi (vd Alaxan có ibuprofen nên phải hỏi kỹ tiền sử dạ dày, gan thận, dị ứng): giảm dần khó chịu, hợp tác hơn, mở đầu câu bằng "Vâng, tôi hiểu rồi" hoặc "Cảm ơn dược sĩ đã giải thích".
+
+Bạn KHÔNG có chuyên môn y dược: nói lời người bình thường, KHÔNG thuật ngữ, KHÔNG tự chẩn đoán, KHÔNG biết đáp án đúng.`,
+  stageRules: [
+    { stage: "S",  keywords: ["chào","dược sĩ","em là","tôi là","giúp","hỗ trợ","tư vấn","xin phép","hỏi","thông tin"], required: 2, partial: 1, hint: "Chào, giới thiệu, xin phép hỏi thông tin." },
+    { stage: "E1", keywords: ["mua cho ai","cho ai","bị làm sao","triệu chứng","bao lâu","mấy ngày","lợi","sưng","sốt","thuốc","đang dùng","dị ứng","dạ dày","gan","thận","rượu","bia","tiền sử"], required: 5, partial: 3, hint: "Hỏi: mua cho ai, triệu chứng, thời gian, sưng lợi, sốt, thuốc đang dùng, bệnh mắc kèm, dị ứng, rượu bia." },
+    { stage: "G",  keywords: ["alaxan","ibuprofen","paracetamol","phù hợp","thận trọng","dạ dày","cách dùng","liều","sau ăn","tác dụng không mong muốn","đi khám","cơ sở y tế"], required: 3, partial: 2, hint: "Kết luận Alaxan phù hợp + giải thích vì sao, hướng dẫn liều & lưu ý." },
+    { stage: "U",  keywords: ["hiểu","thông cảm","tôi hiểu anh","đang vội","đang đau","vì sao","lý do","an toàn","nhắc lại","thắc mắc"], required: 2, partial: 1, hint: "Đồng cảm với sự vội/đau, giải thích lý do khai thác thông tin, teach-back." },
+    { stage: "E2", keywords: ["dặn","theo dõi","không đỡ","đi khám","cảm ơn","chào","liên hệ","bảo quản","số lượng"], required: 2, partial: 1, hint: "Giao thuốc, dặn đi khám nếu không đỡ, chào." }
+  ],
+  bonusKeywords: ["đồng cảm","thận trọng dạ dày","uống sau ăn","không uống rượu bia","đi khám răng","không dùng kéo dài"],
+  // Alaxan chứa ibuprofen → hỏi tiền sử dạ dày và dị ứng là bắt buộc, không được bỏ.
+  guardedFacts: [
+    { id: "stomach_liver_kidney", cue: /(dạ dày|tá tràng|loét|gan|thận|bệnh (gì|nào)|điều trị|mắc kèm|tiền sử)/i, leak: /(dạ dày|tá tràng|gan|thận)/i },
+    { id: "allergy",             cue: /(dị ứng|mẩn|ngứa|phát ban)/i,                                              leak: /(dị ứng)/i },
+    { id: "alcohol",             cue: /(rượu|bia|nhậu|đồ uống có cồn)/i,                                           leak: /(rượu|bia)/i },
+    // Đo thực tế 29/07: hỏi "anh có sốt không" thì model khai kèm luôn "lợi còn sưng
+    // và đau" — đúng loại lỗi tài liệu #117 muốn chặn, nên khoá riêng hai dữ kiện này.
+    { id: "gum_swelling",        cue: /(lợi|nướu|sưng|viêm)/i,                                                     leak: /(sưng|lợi|nướu)/i },
+    { id: "fever",               cue: /(sốt|nhiệt độ|nóng người|ớn lạnh)/i,                                        leak: /(sốt)/i },
+  ],
+  requiredActions: ["pick_box", "label_dose", "pos_checkout"]
+};
+
+export const SCENARIOS = { otc01: OTC01, otc02: OTC02, gpp: GPP, hospital: HOSPITAL, medrep: MEDREP };
+
+// Thẻ tình huống cho MÀN HÌNH GIỚI THIỆU "Pharmacomm" (CBS 20/07 #1). Người học
+// bấm 1 thẻ → startSimulation({ moduleId: id }). OTC-01 để đầu (tình huống mẫu mới).
+export const SCENARIO_CARDS = [
+  { id: 'otc01',    code: 'OTC-01', tag: 'Không kê đơn', icon: '👶', title: 'Bán thuốc không kê đơn cho trẻ 6 tháng tuổi bị tiêu chảy cấp', desc: 'Mẹ bế con nhỏ ra nhà thuốc mua thuốc tiêu chảy. Khai thác đúng bệnh, tư vấn men vi sinh + bù nước điện giải, không lạm dụng kháng sinh.' },
+  // 28/07 (#117): tình huống Alaxan của thầy cô đánh số OTC-02 → tình huống kháng
+  // sinh/thai kỳ trước đây dịch xuống OTC-03 (chỉ đổi nhãn, id 'gpp' giữ nguyên nên
+  // không ảnh hưởng phiên/điểm đã lưu).
+  { id: 'otc02',    code: 'OTC-02', tag: 'Không kê đơn', icon: '🦷', title: 'Bán Alaxan cho khách đau nhức răng, đang vội', desc: 'Anh T đau răng hai ngày, khó tính và giục lấy thuốc nhanh. Vừa khai thác đủ tiền sử dạ dày – gan thận – dị ứng, vừa phải đồng cảm và giải thích lý do hỏi thì khách mới hợp tác.' },
+  { id: 'gpp',      code: 'OTC-03', tag: 'Không kê đơn', icon: '🤧', title: 'Khách xin kháng sinh khi ho, sổ mũi (đang mang thai)', desc: 'Khách nữ mang thai muốn mua kháng sinh cho nhanh khỏi. Khai thác thai kỳ, từ chối bán kháng sinh không đơn, tư vấn an toàn.' },
+  { id: 'hospital', code: 'HOS-01', tag: 'Bệnh viện',    icon: '🏥', title: 'Duyệt y lệnh: warfarin phối hợp aspirin liều cao', desc: 'Dược sĩ lâm sàng phát hiện tương tác nguy hiểm, phản biện bác sĩ điều trị để đổi thuốc.' },
+  { id: 'medrep',   code: 'REP-01', tag: 'Trình dược',   icon: '💼', title: 'Trình dược viên giới thiệu thuốc mới cho trưởng khoa', desc: 'Thuyết phục trưởng khoa bằng dữ liệu kinh tế dược (QALY/ICER) và xử lý phản biện về ngân sách.' }
+];

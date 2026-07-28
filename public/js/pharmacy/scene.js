@@ -7,9 +7,9 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { CABINETS, ALL_DRUGS, PHARMACY_INFO } from './catalog.js?v=ph0720';
-import { DRUG_PLACEMENT } from './drug-placement.js?v=ph0720';
-import { createCharacter } from './character.js?v=ph0720';
+import { CABINETS, ALL_DRUGS, PHARMACY_INFO } from './catalog.js?v=ph0729b';
+import { DRUG_PLACEMENT } from './drug-placement.js?v=ph0729b';
+import { createCharacter } from './character.js?v=ph0729b';
 
 const MODELS_BASE = './models/pharmacy/';
 
@@ -1140,7 +1140,11 @@ function autoScaleGLB(obj, targetSize) {
 
 // ── Camera presets — label match upstream Pharmacy-AI ───────────────────────
 const CAMERA_PRESETS = {
-  default:        { label: 'Toàn cảnh',                pos: [3.4, 4.0, 5.5],     target: [0, 0.9, -0.4],         minDist: 2.5, maxDist: 14 },
+  // CBS 20/07 #2: góc MẶC ĐỊNH = dược sĩ đứng SAU quầy, nhìn TRỰC DIỆN bệnh nhân —
+  // thấy mặt bệnh nhân (avatar đứng quá quầy quay mặt về mình) + quầy + khay + POS.
+  // Góc toàn cảnh cũ chuyển sang key `overview`.
+  default:        { label: 'Dược sĩ (sau quầy)',       pos: [ 0.3, 1.66, 0.10],  target: [ 0.3, 1.30, 2.00],     minDist: 0.8, maxDist: 6  },
+  overview:       { label: 'Toàn cảnh',                pos: [3.4, 4.0, 5.5],     target: [0, 0.9, -0.4],         minDist: 2.5, maxDist: 14 },
   fridge:         { label: 'Tủ lạnh 2-8°C',            pos: [-1.6, 1.6, 1.5],    target: [-3.6, 1.0, 1.45],      minDist: 0.8, maxDist: 5  },
   counter:        { label: 'Quầy giao dịch',           pos: [0.0, 1.62, 4.7],    target: [0.0, 1.42, 1.4],       minDist: 1.5, maxDist: 9  },
   consult:        { label: 'Khu tư vấn',               pos: [-1.9, 1.7, 1.4],    target: [-3.85, 0.75, -0.25],   minDist: 1.0, maxDist: 7  },
@@ -1154,11 +1158,8 @@ const CAMERA_PRESETS = {
   cab_special:    { label: 'Kiểm soát đặc biệt',       pos: [ 1.20, 1.6, -1.18], target: [ 4.10, 0.90, -1.18],   minDist: 0.55, maxDist: 6 },
   cab_supp_1:     { label: 'Không phải thuốc 1',       pos: [ 1.20, 2.0,  0.45], target: [ 4.10, 1.20,  0.45],   minDist: 0.55, maxDist: 6 },
   cab_supp_2:     { label: 'Không phải thuốc 2',       pos: [ 1.20, 2.0,  2.23], target: [ 4.10, 1.20,  2.23],   minDist: 0.55, maxDist: 6 },
-  front_drawers:  { label: 'Tủ quầy trước',            pos: [ 0.0,  2.2,  4.8],  target: [ 0.0, 0.6,  1.2],      minDist: 1.5, maxDist: 8 },
-  // Dược sĩ POV — đứng SÁT mép sau quầy (Z ≈ 0.4, lùi ra sau counter back-edge
-  // 0.95 khoảng 55cm), mắt 1.7m, target NẰM TRÊN mặt quầy (z=1.45, y=1.06) để
-  // ưu tiên thấy POS + 2 khay + dải trưng bày — công cụ thao tác chính của dược sĩ.
-  pharmacist:     { label: 'Dược sĩ (sau quầy)',       pos: [ 0.3,  1.66, 0.05], target: [ 0.3, 1.45, 2.0],      minDist: 0.8, maxDist: 6 }
+  front_drawers:  { label: 'Tủ quầy trước',            pos: [ 0.0,  2.2,  4.8],  target: [ 0.0, 0.6,  1.2],      minDist: 1.5, maxDist: 8 }
+  // (Preset 'pharmacist' cũ đã hợp nhất vào 'default' — CBS 20/07 #2.)
 };
 
 // ── Fridge stock (13 items, port 1-1) ───────────────────────────────────────
@@ -3108,7 +3109,7 @@ export function buildScene(canvas, opts = {}) {
       colliders: _charColliders,
       bounds: _charBounds,
       interactables: _charInteractables,
-      spawn: { x: 1.15, z: 3.25, heading: Math.PI }, // CBS 12/07 #4: dịch phải về POS, không che khay
+      spawn: { x: 0.35, z: 2.45, heading: Math.PI }, // CBS 20/07 #2: đứng quá quầy, quay mặt về dược sĩ (thấy mặt) — không che khay vì khay nằm trên quầy phía trước bệnh nhân
       avatarUrl: url || opts.avatarUrl || null,
       heightScale: _avatarHeight,
       skinTone: _skinTone,
@@ -3865,7 +3866,9 @@ export function buildScene(canvas, opts = {}) {
 
   // getDrugFace3D — render CHÍNH hình 3D của thuốc (hộp HOẶC chai, đúng quy cách)
   // ra ảnh canvas để cửa sổ dán nhãn hiện đúng hình (thay vì mặt phẳng hộp).
-  // Render 1 LẦN bằng renderer tạm rồi dispose ngay (không giữ WebGL context).
+  // PERF 22/07: renderer offscreen TÁI DÙNG (trước tạo–huỷ context mỗi lần gọi —
+  // vừa tốn ~100-300ms vừa góp phần evict context scene chính → giật).
+  let _faceRenderer = null;
   function getDrugFace3D(drugId, pxW = 460, pxH = 560) {
     const sub = (labelTargetSub && labelTargetSub.userData.drugId === drugId)
       ? labelTargetSub : frontDrugBox(drugId);
@@ -3886,13 +3889,22 @@ export function buildScene(canvas, opts = {}) {
     cam.position.set(0, 0, dist); cam.lookAt(0, 0, 0);
     let out = null;
     try {
-      const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
-      r.setPixelRatio(1); r.setSize(pxW, pxH); r.outputColorSpace = THREE.SRGBColorSpace;
+      if (!_faceRenderer) {
+        _faceRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+        _faceRenderer.setPixelRatio(1);
+        _faceRenderer.outputColorSpace = THREE.SRGBColorSpace;
+      }
+      const r = _faceRenderer;
+      r.setSize(pxW, pxH);
       r.render(rs, cam);
       out = document.createElement('canvas'); out.width = pxW; out.height = pxH;
       out.getContext('2d').drawImage(r.domElement, 0, 0);
-      r.forceContextLoss?.(); r.dispose();
-    } catch (e) { return null; }
+      // KHÔNG dispose — giữ context để lần dán nhãn sau dùng lại ngay.
+    } catch (e) {
+      try { _faceRenderer?.forceContextLoss?.(); _faceRenderer?.dispose?.(); } catch {}
+      _faceRenderer = null;
+      return null;
+    }
     return {
       canvas: out, brand: drug.brand || drug.name || '', isBottle,
       style: { w: style.w, h: style.h, d: style.d }, already: labelsByDrug.has(drugId)
@@ -3923,14 +3935,21 @@ export function buildScene(canvas, opts = {}) {
     ctx.fillStyle = '#fef3c7'; rr(4, 4, HDSD_W - 8, HDSD_H - 8, 18); ctx.fill();
     ctx.strokeStyle = '#d97706'; ctx.lineWidth = 4; ctx.stroke();
     ctx.textBaseline = 'middle';
-    let y = 28;
-    // Header nhà thuốc — căn giữa, gạch dưới cam
-    ctx.fillStyle = '#7c2d12'; ctx.font = `bold 14px ${FONT}`; ctx.textAlign = 'center';
-    ctx.fillText(`${PHARMACY_INFO.name} · ĐT ${PHARMACY_INFO.phone}`, HDSD_W / 2, y);
-    y += 15;
+    let y = 24;
+    // Header nhà thuốc — 2 dòng: TÊN (đậm) + ĐỊA CHỈ · ĐT. CBS 20/07 #4: giữ đủ
+    // "Nhà thuốc Thực hành" + "35 Đoàn Thị Điểm" + "ĐT:0972560xxx" trên nhãn.
+    ctx.fillStyle = '#7c2d12'; ctx.textAlign = 'center';
+    ctx.font = `bold 15px ${FONT}`;
+    ctx.fillText(PHARMACY_INFO.name, HDSD_W / 2, y);
+    y += 17;
+    let addrFs = 11; const addrLine = `${PHARMACY_INFO.address} · ĐT ${PHARMACY_INFO.phone}`;
+    ctx.font = `${addrFs}px ${FONT}`;
+    while (ctx.measureText(addrLine).width > HDSD_W - 30 && addrFs > 8) { addrFs -= 1; ctx.font = `${addrFs}px ${FONT}`; }
+    ctx.fillText(addrLine, HDSD_W / 2, y);
+    y += 13;
     ctx.strokeStyle = '#d97706'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(22, y); ctx.lineTo(HDSD_W - 22, y); ctx.stroke();
-    y += 26;
+    y += 22;
     // Tên thuốc + hàm lượng GỘP 1 HÀNG (đậm, lớn) — tự co nếu quá rộng, không lặp.
     const nameLine = joinNameStrength(label.brand, label.strength || label.generic);
     ctx.fillStyle = '#422006'; ctx.textAlign = 'left';
@@ -3938,27 +3957,35 @@ export function buildScene(canvas, opts = {}) {
     ctx.font = `800 ${nameFs}px ${FONT}`;
     while (ctx.measureText(nameLine).width > HDSD_W - 48 && nameFs > 14) { nameFs -= 1; ctx.font = `800 ${nameFs}px ${FONT}`; }
     ctx.fillText(nameLine || '—', 24, y);
-    y += 30;
-    // Lưới liều S/T/C/T — ô vàng, số nâu đậm
-    const cells = [['Sáng', label.morning], ['Trưa', label.noon], ['Chiều', label.afternoon], ['Tối', label.evening]];
-    const gx0 = 24, gap = 8, cw = (HDSD_W - 48 - 3 * gap) / 4, ch = 58;
-    cells.forEach(([t, n], i) => {
-      const x = gx0 + i * (cw + gap);
-      ctx.fillStyle = '#fde68a'; rr(x, y, cw, ch, 8); ctx.fill();
-      ctx.fillStyle = '#78350f'; ctx.font = `12px ${FONT}`; ctx.textAlign = 'center';
-      ctx.fillText(t, x + cw / 2, y + 16);
-      ctx.fillStyle = '#422006'; ctx.font = `800 26px ${FONT}`;
-      ctx.fillText(String(n ?? 0), x + cw / 2, y + 38);
-    });
-    y += ch + 22;
-    // Thời điểm + tổng liều/ngày
-    const total = (label.morning || 0) + (label.noon || 0) + (label.afternoon || 0) + (label.evening || 0);
-    ctx.textAlign = 'left'; ctx.fillStyle = '#78350f'; ctx.font = `bold 15px ${FONT}`;
-    ctx.fillText(`🕒 ${_timingTextScene(label)} · ${total} viên/ngày`, 24, y);
-    if (label.notes) {
-      y += 22;
-      ctx.fillStyle = '#7c2d12'; ctx.font = `13px ${FONT}`;
-      ctx.fillText(('📝 ' + label.notes).slice(0, 40), 24, y);
+    y += 28;
+    // CBS 20/07 #4: 2 dòng tự do "Cách dùng, liều dùng" + "Thời điểm dùng"
+    // (thay lưới liều S/T/C/T + thời điểm cố định). Tự xuống dòng khi dài.
+    const maxW = HDSD_W - 48;
+    const wrapText = (text, yy, lh, font, color, maxLines) => {
+      ctx.font = font; ctx.fillStyle = color; ctx.textAlign = 'left';
+      const words = String(text || '').split(/\s+/).filter(Boolean);
+      let line = '', cy = yy, used = 0;
+      const flush = (last) => { ctx.fillText(line + (last ? '…' : ''), 24, cy); cy += lh; used++; };
+      for (const w of words) {
+        const test = line ? line + ' ' + w : w;
+        if (ctx.measureText(test).width > maxW && line) {
+          if (used >= maxLines - 1) { flush(true); line = ''; break; }
+          flush(false); line = w;
+        } else line = test;
+      }
+      if (line) flush(false);
+      return cy;
+    };
+    ctx.textAlign = 'left'; ctx.fillStyle = '#78350f'; ctx.font = `bold 13px ${FONT}`;
+    ctx.fillText('Cách dùng, liều dùng:', 24, y); y += 18;
+    y = wrapText(label.usage || '—', y, 17, `14px ${FONT}`, '#422006', 4);
+    y += 6;
+    ctx.fillStyle = '#78350f'; ctx.font = `bold 13px ${FONT}`;
+    ctx.fillText('Thời điểm dùng:', 24, y); y += 18;
+    y = wrapText(label.timePoint || '—', y, 17, `14px ${FONT}`, '#422006', 2);
+    if (label.notes && y < HDSD_H - 18) {
+      y += 4;
+      y = wrapText('📝 ' + label.notes, y, 16, `13px ${FONT}`, '#7c2d12', 1);
     }
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -4234,6 +4261,11 @@ export function buildScene(canvas, opts = {}) {
     getAvatarCondition: () => _condition,
     setAvatarExpression: (e) => { _expression = e || 'none'; character?.setExpression(_expression); },
     getAvatarExpression: () => _expression,
+    // Bệnh nhân AI rule #11: dược sĩ mời ngồi → nhân vật NGỒI XUỐNG tại chỗ (ghế đẩu
+    // hiện dưới mông). Không bật đi dạo nên không đổi điều khiển/camera.
+    patientSit: () => { if (character && !character.isSitting?.()) character.toggleSit?.(); },
+    patientStand: () => { if (character && character.isSitting?.()) character.toggleSit?.(); },
+    isPatientSitting: () => !!character?.isSitting?.(),
     setAvatarHair: (h) => { _hairColor = h || null; character?.setHairColor(_hairColor); },
     getAvatarHair: () => _hairColor,
     getAvatarShirt: () => _shirtColor,

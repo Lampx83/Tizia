@@ -1,8 +1,8 @@
 // SimulationClient — port từ Pharmacy-AI/src/components/SimulationClient.tsx.
 // Wire chat panel + actions → /api/pharmacy/* + scoring panel.
-import { buildScene, makeDrugLabelTex, makeDrugBackLabelTex, makeDrugSideLabelTex, getBoxStyle, deviceModelFor } from './scene.js?v=ph0720';
-import { loadDrugs } from './catalog.js?v=ph0720';
-import { initMobileUI } from './mobile-ui.js?v=ph0720';
+import { buildScene, makeDrugLabelTex, makeDrugBackLabelTex, makeDrugSideLabelTex, getBoxStyle, deviceModelFor } from './scene.js?v=ph0729b';
+import { loadDrugs } from './catalog.js?v=ph0729b';
+import { initMobileUI } from './mobile-ui.js?v=ph0729b';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -30,8 +30,8 @@ function swapUnitToGlb(group, file, sizeRef) {
     group.add(m);
   }).catch(() => { /* giữ procedural làm fallback */ });
 }
-import { openPosTerminal } from './pos.js?v=ph0720';
-import { openHdsdEditor, openPackageEditor, PACKAGE_TYPES, RETAIL_FORMS } from './label-editor.js?v=ph0720';
+import { openPosTerminal } from './pos.js?v=ph0729b';
+import { openHdsdEditor, openPackageEditor, PACKAGE_TYPES, RETAIL_FORMS } from './label-editor.js?v=ph0729b';
 import { STAGE_LABEL } from './rubric.js';
 
 const $ = (id) => document.getElementById(id);
@@ -97,6 +97,23 @@ function scheduleHideSceneLoading() {
   setTimeout(go, 800);
 }
 
+// Renderer DÙNG CHUNG cho cửa sổ soi thuốc (inspector). Tạo WebGL context là thao
+// tác ĐẮT (100–500ms, máy yếu còn lâu hơn) và trình duyệt giới hạn ~16 context/tab —
+// tạo–huỷ mỗi lần mở khiến context của SCENE CHÍNH bị evict → "bấm thuốc load mãi",
+// càng mở nhiều càng ì. Tạo 1 lần, tái dùng cả canvas lẫn context cho mọi lần mở.
+let _insShared = null;
+function acquireInspectorRenderer() {
+  if (!_insShared) {
+    const canvas = document.createElement('canvas');
+    canvas.className = 'ins-canvas';
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    _insShared = { canvas, renderer };
+  }
+  return _insShared;
+}
+
 export async function startSimulation({ moduleId = 'gpp' } = {}) {
   // 0. Nạp danh mục thuốc từ DB (content_datasets) TRƯỚC khi buildScene — scene.js
   //    đọc ALL_DRUGS/CABINETS lúc dựng kệ. loadDrugs() fill ALL_DRUGS bằng push.
@@ -120,8 +137,10 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
     return;
   }
 
-  // 2. Render NPC opening
-  appendBubble('npc', scenario.npcOpening);
+  // 2. Render NPC opening — nguyên tắc 22/07 #1: BỆNH NHÂN KHÔNG NÓI TRƯỚC, dược
+  // sĩ phải chào trước. Mô tả cảnh đã GỘP vào `setting` (ô "Đối thoại với" trên
+  // cùng) → npcOpening rỗng thì hội thoại bắt đầu TRỐNG, chờ sinh viên mở lời.
+  if (scenario.npcOpening) appendBubble('npc', scenario.npcOpening);
   $('npc-role').textContent = scenario.npcRole;
   $('scenario-title').textContent = scenario.title;
   $('scenario-setting').textContent = scenario.setting;
@@ -143,9 +162,14 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
   const AVATAR_HAIR_KEY = 'tizia_pharmacy_avatar_hair';
   const SHIRT_COLORS = ['#2563eb', '#0d9488', '#16a34a', '#e11d48', '#f59e0b', '#6b7280', '#f5f5f5', '#7c3aed'];
   const CONDITIONS = [['none', 'Bình thường'], ['rash', 'Phát ban'], ['hives', 'Mề đay'], ['jaundice', 'Vàng da'], ['pallor', 'Xanh xao'], ['flush', 'Đỏ (sốt)'], ['bruise', 'Bầm tím'], ['cyanosis', 'Tím tái']];
-  const EXPRESSIONS = [['none', 'Bình thường'], ['pain', '😣 Đau bụng'], ['worried', '😟 Lo lắng']];
+  const EXPRESSIONS = [['none', 'Bình thường'], ['pain', '😣 Đau bụng'], ['worried', '😟 Lo lắng'], ['annoyed', '😖 Đau răng, sốt ruột']];
   const HAIR_SW = [['none', '#3a3330'], ['black', '#1c1816'], ['brown', '#5c3822'], ['gray', '#c8c5c1'], ['blonde', '#c9a460']];
+  // Avatar do KỊCH BẢN cast (scenario.avatarUrl — vd OTC-01 = Chị H, NỮ) được ưu
+  // tiên hơn lựa chọn đã lưu trong máy: bệnh nhân là NHÂN VẬT của tình huống, không
+  // phải avatar cá nhân. ?avatar= vẫn cao nhất (để test). Nút "Khách hàng" vẫn cho
+  // đổi tay sau khi vào scene nếu muốn.
   const _avatarUrl = new URLSearchParams(location.search).get('avatar')
+    || scenario.avatarUrl
     || (() => { try { return localStorage.getItem(AVATAR_KEY); } catch { return null; } })()
     || null;
   const _avatarHeight = (() => { try { return +localStorage.getItem(AVATAR_HEIGHT_KEY) || 1; } catch { return 1; } })();
@@ -194,6 +218,11 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
     onXRChange: (inVR) => { const b = document.getElementById('pharm-xr-btn'); if (b) b.hidden = inVR; }
   });
   window.__sim = sim;
+  // Cảm xúc ban đầu theo kịch bản (vd OTC-01: mẹ đang lo lắng) — chờ nhân vật sẵn sàng.
+  if (scenario.initialExpression) {
+    const applyExpr = () => { sim.isCharacterReady?.() ? sim.setAvatarExpression(scenario.initialExpression) : setTimeout(applyExpr, 200); };
+    applyExpr();
+  }
   // buildScene đã set animation loop → đợi khung hình đầu rồi mới ẩn overlay (ẩn
   // ngay sẽ loé mảng trắng 1 nhịp). Không chờ avatar (.glb) vì model lỗi là treo mãi.
   scheduleHideSceneLoading();
@@ -248,12 +277,29 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
   }
 
   // 5. Helpers
+  // Session server lưu IN-MEMORY → server restart/rebuild là mất ("session not
+  // found"). Client giữ BẢN SAO transcript + hành động; gặp 404 thì tự tạo phiên
+  // mới kèm `restore` rồi làm tiếp — người học không nhận ra gián đoạn, AI vẫn
+  // nhớ hội thoại, chấm điểm vẫn đủ hành động.
+  const localMsgs = [];
+  const localActions = [];
+  async function recreateSession() {
+    const r = await fetch('/api/pharmacy/session', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ moduleId, restore: { messages: localMsgs, actions: localActions } })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'không tạo lại được phiên');
+    session = d.session;
+  }
   async function postAction(type, payload) {
+    localActions.push({ type, payload: payload || {}, ts: Date.now() });
     try {
       const r = await fetch('/api/pharmacy/action', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.id, type, payload })
       });
+      if (r.status === 404) { await recreateSession(); return; }  // restore đã mang theo action này
       const d = await r.json();
       if (d.session) session = d.session;
     } catch {}
@@ -272,20 +318,81 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
     const text = ta.value.trim();
     if (!text) return;
     appendBubble('user', text);
+    // Bệnh nhân AI rule #11: mời ngồi / mời uống nước → nhân vật 3D ngồi xuống ("cảm ơn"
+    // do AI tự trả lời theo persona). Chỉ nhận diện phía dược sĩ (câu vừa gửi).
+    if (/(mời[^.?!]{0,14}(ngồi|ghế|uống nước|nước|trà)|\bngồi (ghế|đây|xuống|chờ|nghỉ)|xin mời[^.?!]{0,20}ngồi)/i.test(text)) {
+      sim.patientSit?.();
+    }
     ta.value = '';
     ta.disabled = true;
     $('send').disabled = true;
     appendBubble('npc', '…');
     const thinking = $('chat').lastChild;
+    const scrollBottom = () => { $('chat').scrollTop = $('chat').scrollHeight; };
+
+    // 1 lượt chat: ưu tiên STREAM (SSE — token sinh đến đâu hiện đến đó), lỗi giao
+    // thức → fallback endpoint thường. 404 (server restart mất session) → ném
+    // sessionLost để vòng ngoài tạo lại phiên (kèm restore) rồi GỬI LẠI câu này.
+    const sessionLostErr = () => Object.assign(new Error('session lost'), { sessionLost: true });
+    async function chatAttempt() {
+      try {
+        const r = await fetch('/api/pharmacy/chat-stream', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: session.id, message: text })
+        });
+        if (r.status === 404) throw sessionLostErr();
+        if (!r.ok || !r.body || !(r.headers.get('content-type') || '').includes('text/event-stream')) {
+          throw new Error('no-stream');
+        }
+        const reader = r.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '', shown = '', finalReply = null;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let idx;
+          while ((idx = buf.indexOf('\n\n')) >= 0) {
+            const chunk = buf.slice(0, idx); buf = buf.slice(idx + 2);
+            const line = chunk.split('\n').find(l => l.startsWith('data: '));
+            if (!line) continue;
+            let j; try { j = JSON.parse(line.slice(6)); } catch { continue; }
+            if (j.delta) { shown += j.delta; if (shown.trim()) { thinking.textContent = shown.trimStart(); scrollBottom(); } }
+            if (j.done) { finalReply = j.reply || shown; thinking.textContent = finalReply; scrollBottom(); }
+          }
+        }
+        if (finalReply === null && !shown.trim()) throw new Error('empty-stream');
+        return finalReply != null ? finalReply : shown.trimStart();
+      } catch (e) {
+        if (e.sessionLost) throw e;
+        // Fallback: endpoint không-stream cũ (server cũ / proxy chặn SSE).
+        const r = await fetch('/api/pharmacy/chat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: session.id, message: text })
+        });
+        if (r.status === 404) throw sessionLostErr();
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'chat failed');
+        session = d.session;
+        const reply = d.session.messages[d.session.messages.length - 1].content;
+        thinking.textContent = reply;
+        return reply;
+      }
+    }
+
     try {
-      const r = await fetch('/api/pharmacy/chat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: session.id, message: text })
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'chat failed');
-      session = d.session;
-      thinking.textContent = d.session.messages[d.session.messages.length - 1].content;
+      let reply;
+      try {
+        reply = await chatAttempt();
+      } catch (e) {
+        if (!e.sessionLost) throw e;
+        await recreateSession();       // phiên mới + khôi phục transcript/hành động
+        reply = await chatAttempt();   // gửi lại đúng câu vừa rồi
+      }
+      // Ghi bản sao SAU khi thành công: nếu phải khôi phục thì restore chưa chứa câu
+      // hiện tại → gửi lại không bị trùng tin nhắn trong phiên mới.
+      localMsgs.push({ role: 'user', content: text, ts: Date.now() });
+      localMsgs.push({ role: 'npc', content: reply, ts: Date.now() });
     } catch (e) {
       thinking.textContent = '[Lỗi: ' + e.message + ']';
     } finally {
@@ -296,10 +403,13 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
   async function finish() {
     if (!confirm('Kết thúc phiên & chấm điểm?')) return;
     try {
-      const r = await fetch('/api/pharmacy/score', {
+      const postScore = () => fetch('/api/pharmacy/score', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.id })
       });
+      let r = await postScore();
+      // Server restart mất session → khôi phục từ bản sao rồi chấm lại.
+      if (r.status === 404) { await recreateSession(); r = await postScore(); }
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'score failed');
       renderScore(d.score);
@@ -959,7 +1069,7 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
     overlay.innerHTML = `
       <div class="inspector-modal">
         <button class="ins-close" type="button" aria-label="Đóng">✕</button>
-        <div class="inspector-3d"><canvas class="ins-canvas"></canvas></div>
+        <div class="inspector-3d"></div>
         <div class="inspector-info">
           <!-- Phần cuộn (thông tin + nhãn). 3 nút nằm NGOÀI vùng cuộn → ghim sát
                đáy dialog, không bị nội dung che/đẩy (thầy yêu cầu sát đáy). -->
@@ -990,11 +1100,10 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
       </div>`;
     document.body.appendChild(overlay);
 
-    const canvas = overlay.querySelector('.ins-canvas');
-    // Mini-scene Three.js
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // Canvas + WebGL context DÙNG CHUNG (acquireInspectorRenderer) — không tạo
+    // context mới mỗi lần mở (nguyên nhân "bấm thuốc load mãi" trên máy yếu).
+    const { canvas, renderer } = acquireInspectorRenderer();
+    overlay.querySelector('.inspector-3d').appendChild(canvas);
     const fit = () => {
       const w = canvas.clientWidth, h = canvas.clientHeight;
       renderer.setSize(w, h, false);
@@ -1436,7 +1545,12 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
       stopped = true;
       window.removeEventListener('resize', onResize);
       document.removeEventListener('keydown', insEsc);
-      renderer.dispose();
+      // KHÔNG dispose renderer — context dùng chung, giữ cho lần mở sau (mở lại
+      // tức thì). Chỉ dọn tài nguyên của RIÊNG lần mở này: listener OrbitControls
+      // gắn trên canvas chung, geometry (VRAM) + 3 texture tự tạo.
+      ctrl.dispose();
+      scene2.traverse((o) => { o.geometry?.dispose?.(); });
+      renderer.renderLists?.dispose?.();
       tex.dispose(); tex2.dispose(); sideTex.dispose();
       overlay.remove();
     }

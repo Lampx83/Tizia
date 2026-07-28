@@ -2,7 +2,7 @@
 //   • openHdsdEditor   — Nhãn HƯỚNG DẪN SỬ DỤNG dán lên HỘP thuốc (liều + thời điểm + số phút trước/sau ăn)
 //   • openPackageEditor — Nhãn BAO BÌ RA LẺ (trắng/vàng/hồng) theo mẫu phong bì; túi zip chỉ đựng kín khí
 // Giữ semantic field cũ để backend chấm điểm + render in/dán nhãn vẫn work.
-import { ALL_DRUGS, getDrug, PHARMACY_INFO } from './catalog.js?v=ph0720';
+import { ALL_DRUGS, getDrug, PHARMACY_INFO } from './catalog.js?v=ph0729b';
 import { TIMING_LABEL, totalPerDay } from './labels.js';
 
 const QUICK_NOTES = [
@@ -61,36 +61,14 @@ export function openHdsdEditor({ pickedIds = [], onCreate, onClose }) {
             <input class="le2-drug-search" type="search" placeholder="🔎 Gõ tên thuốc để tìm nhanh…" autocomplete="off"/>
             <select class="le2-drug" size="1"></select>
           </label>
-          <fieldset class="le2-doses-box">
-            <legend>Số viên mỗi cữ</legend>
-            <div class="le2-doses-grid">
-              ${['morning','noon','afternoon','evening'].map((k, i) => `
-                <div class="le2-dose">
-                  <div class="le2-dose-lbl">${['Sáng','Trưa','Chiều','Tối'][i]}</div>
-                  <div class="le2-stepper">
-                    <button class="le2-minus" data-k="${k}" type="button">−</button>
-                    <span class="le2-val" data-k="${k}">${i % 2 === 0 ? 1 : 0}</span>
-                    <button class="le2-plus" data-k="${k}" type="button">+</button>
-                  </div>
-                </div>`).join('')}
-            </div>
-            <div class="le2-total">Tổng liều/ngày: <b class="le2-total-val">2 viên</b></div>
-          </fieldset>
-          <fieldset class="le2-timing-box">
-            <legend>Thời điểm uống</legend>
-            <div class="le2-chips">
-              ${TIMING_OPTIONS.map(o => `<button class="le2-chip le2-time" data-v="${o.value}" type="button">${o.label}</button>`).join('')}
-            </div>
-            <div class="le2-offset-row" hidden>
-              <span class="le2-lbl">Số phút <b class="le2-offset-dir">trước</b> ăn</span>
-              <div class="le2-stepper">
-                <button class="le2-off-minus" type="button">−</button>
-                <span class="le2-offset-val">30</span>
-                <button class="le2-off-plus" type="button">+</button>
-              </div>
-              <span class="le2-lbl">phút</span>
-            </div>
-          </fieldset>
+          <label class="le2-field">
+            <span class="le2-lbl">Cách dùng, Liều dùng</span>
+            <textarea class="le2-usage" rows="3" placeholder="VD: Uống 1 ống/lần, ngày 2 lần (sáng – tối). Lắc kỹ trước khi dùng."></textarea>
+          </label>
+          <label class="le2-field">
+            <span class="le2-lbl">Thời điểm dùng</span>
+            <textarea class="le2-timepoint" rows="2" placeholder="VD: Sau ăn 30 phút; hoặc uống ngay sau mỗi lần đi ngoài."></textarea>
+          </label>
           <label class="le2-field">
             <span class="le2-lbl">Ghi chú thêm (chú ý đặc biệt)</span>
             <textarea class="le2-notes" rows="2" placeholder="Ví dụ: uống nhiều nước, tránh ánh nắng..."></textarea>
@@ -104,17 +82,8 @@ export function openHdsdEditor({ pickedIds = [], onCreate, onClose }) {
           <div class="le2-sticker">
             <div class="le2-sk-pharm">${PHARMACY_INFO.name} · ${PHARMACY_INFO.address} · ĐT ${PHARMACY_INFO.phone}</div>
             <div class="le2-sk-drug"><b class="le2-sk-brand">—</b> <span class="le2-sk-strength"></span></div>
-            <div class="le2-sk-doses-grid">
-              ${['Sáng','Trưa','Chiều','Tối'].map((t, i) => `
-                <div class="le2-sk-cell">
-                  <div class="le2-sk-time">${t}</div>
-                  <div class="le2-sk-num" data-cell="${i}">${i % 2 === 0 ? 1 : 0}</div>
-                </div>`).join('')}
-            </div>
-            <div class="le2-sk-foot">
-              <span class="le2-sk-timing">🕒 Sau ăn</span>
-              <span class="le2-sk-total">· 2 viên/ngày</span>
-            </div>
+            <div class="le2-sk-usage"><b>Cách dùng, liều dùng:</b> <span class="le2-sk-usage-v">…</span></div>
+            <div class="le2-sk-timepoint"><b>Thời điểm dùng:</b> <span class="le2-sk-timepoint-v">…</span></div>
             <div class="le2-sk-notes"></div>
           </div>
           <p class="le2-hint">Sau khi bấm <b>Tạo nhãn</b>, con trỏ sẽ mang theo nhãn → <b>click vào hộp thuốc</b> trên kệ. Hộp được phóng to để bạn <b>kéo nhãn vào chỗ trống</b>, không che thông tin thuốc.</p>
@@ -154,34 +123,9 @@ export function openHdsdEditor({ pickedIds = [], onCreate, onClose }) {
   renderDrugOptions();
   $('.le2-drug-search').addEventListener('input', (e) => { renderDrugOptions(e.target.value); renderPreview(); });
 
-  // Stepper handlers
-  function getDose(k) { return +$(`.le2-val[data-k="${k}"]`).textContent || 0; }
-  function setDose(k, v) {
-    v = Math.max(0, Math.min(4, v));
-    $(`.le2-val[data-k="${k}"]`).textContent = v;
-  }
-  $$('.le2-minus').forEach(b => b.addEventListener('click', () => { setDose(b.dataset.k, getDose(b.dataset.k) - 1); renderPreview(); }));
-  $$('.le2-plus' ).forEach(b => b.addEventListener('click', () => { setDose(b.dataset.k, getDose(b.dataset.k) + 1); renderPreview(); }));
-
-  // State khai báo TRƯỚC mọi callback để tránh TDZ.
-  let timing = 'after_meal';
-  let mealOffsetMin = 30;
-
-  // Timing chips — hiện ô số phút khi chọn trước/sau ăn
-  function setTiming(v) {
-    timing = v;
-    $$('.le2-time').forEach(c => c.classList.toggle('le2-chip-active', c.dataset.v === v));
-    const offRow = $('.le2-offset-row');
-    const showOff = (v === 'before_meal' || v === 'after_meal');
-    offRow.hidden = !showOff;
-    if (showOff) $('.le2-offset-dir').textContent = (v === 'before_meal') ? 'trước' : 'sau';
-    renderPreview();
-  }
-  $$('.le2-time').forEach(c => c.addEventListener('click', () => setTiming(c.dataset.v)));
-
-  // Số phút trước/sau ăn (bước 5 phút)
-  $('.le2-off-minus').addEventListener('click', () => { mealOffsetMin = Math.max(0, mealOffsetMin - 5); $('.le2-offset-val').textContent = mealOffsetMin; renderPreview(); });
-  $('.le2-off-plus' ).addEventListener('click', () => { mealOffsetMin = Math.min(120, mealOffsetMin + 5); $('.le2-offset-val').textContent = mealOffsetMin; renderPreview(); });
+  // CBS 20/07 #4: 2 ô nhập tự do thay cho liều S/T/C/T + thời điểm cố định.
+  $('.le2-usage').addEventListener('input', renderPreview);
+  $('.le2-timepoint').addEventListener('input', renderPreview);
 
   // Quick notes
   $$('.le2-quick').forEach(b => b.addEventListener('click', () => {
@@ -204,12 +148,8 @@ export function openHdsdEditor({ pickedIds = [], onCreate, onClose }) {
       generic: d?.generic || '',
       strength: d?.strength || '',
       exp: d?.expDate || '',
-      morning: getDose('morning'),
-      noon: getDose('noon'),
-      afternoon: getDose('afternoon'),
-      evening: getDose('evening'),
-      timing,
-      mealOffsetMin,
+      usage: $('.le2-usage').value.trim(),
+      timePoint: $('.le2-timepoint').value.trim(),
       notes: $('.le2-notes').value,
       issuedAt: Date.now()
     };
@@ -223,13 +163,9 @@ export function openHdsdEditor({ pickedIds = [], onCreate, onClose }) {
     const _str = String(l.strength || l.generic || '').trim();
     const _hasStr = _str && String(l.brand || '').toLowerCase().includes(_str.toLowerCase());
     $('.le2-sk-strength').textContent = _hasStr ? '' : _str;
-    ['morning','noon','afternoon','evening'].forEach((k, i) => {
-      $(`.le2-sk-num[data-cell="${i}"]`).textContent = l[k];
-    });
-    $('.le2-sk-timing').textContent = '🕒 ' + timingText(l);
-    $('.le2-sk-total').textContent = ` · ${totalPerDay(l)} viên/ngày`;
+    $('.le2-sk-usage-v').textContent = l.usage || '…';
+    $('.le2-sk-timepoint-v').textContent = l.timePoint || '…';
     $('.le2-sk-notes').textContent = l.notes ? '📝 ' + l.notes : '';
-    $('.le2-total-val').textContent = `${totalPerDay(l)} viên`;
   }
 
   // Close handlers
@@ -243,13 +179,12 @@ export function openHdsdEditor({ pickedIds = [], onCreate, onClose }) {
   const _origClose = () => { document.removeEventListener('keydown', escHandler); overlay.remove(); onClose?.(); };
   $('.le2-create').addEventListener('click', () => {
     const l = readLabel();
-    if (!l.drugId)            { alert('Chọn thuốc.'); return; }
-    if (totalPerDay(l) === 0) { alert('Liều phải > 0.'); return; }
+    if (!l.drugId) { alert('Chọn thuốc.'); return; }
+    if (!l.usage)  { alert('Nhập "Cách dùng, Liều dùng".'); return; }
     onCreate?.(l);
     close();
   });
 
-  setTiming('after_meal');
   renderPreview();
   function close() { _origClose(); }
 }
