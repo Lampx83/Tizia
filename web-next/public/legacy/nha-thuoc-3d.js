@@ -14,9 +14,9 @@
 // ?v= phải BUMP mỗi lần sửa js/pharmacy/* — trình duyệt cache module theo URL này;
 // để nguyên version cũ thì máy đã ghé sẽ chạy JS cũ mãi. Giữ khớp với
 // public/nha-thuoc-3d.html (bản Express).
-import { startSimulation } from '/js/pharmacy/simulation.js?v=ph0729c';
-import { showIntro } from '/js/pharmacy/intro.js?v=ph0729c';
-import { SCENARIOS } from '/js/pharmacy/scenarios.js?v=ph0729c';
+import { startSimulation } from '/js/pharmacy/simulation.js?v=ph0729e';
+import { showIntro } from '/js/pharmacy/intro.js?v=ph0729e';
+import { SCENARIOS } from '/js/pharmacy/scenarios.js?v=ph0729e';
 const params = new URLSearchParams(location.search);
 const moduleId = params.get('module') || 'otc01';
 // CBS 20/07 #1: màn giới thiệu Pharmacomm + chọn tình huống TRƯỚC khi vào scene.
@@ -75,8 +75,14 @@ const ensureProxiesInHeader = () => {
   if (!slot) {
     slot = document.createElement('span');
     slot.className = 'ev-pharm-fabs';
+    // Express có mốc #ev-eng-slot/#ev-user-wrap. Header Next thì không — append thẳng
+    // vào <header> làm nút rơi xuống HÀNG THỨ HAI, đội cả app xuống; nên chèn vào đầu
+    // cụm nút bên phải (.ml-auto) cho nằm cùng hàng với nút đăng nhập.
     const anchor = header.querySelector('#ev-eng-slot') || header.querySelector('#ev-user-wrap');
-    header.insertBefore(slot, anchor);
+    const right = header.querySelector('.ml-auto');
+    if (anchor) header.insertBefore(slot, anchor);
+    else if (right) right.insertBefore(slot, right.firstChild);
+    else header.appendChild(slot);
   }
   if (!slot.querySelector('.pf-sgf')) {
     const b = document.createElement('button');

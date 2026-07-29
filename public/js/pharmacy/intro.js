@@ -5,7 +5,7 @@
 // Self-contained: tự chèn <style> (dùng biến theme --card/--text… có sẵn ở cả trang
 // Express lẫn Next, kèm màu dự phòng) nên KHÔNG phải sửa CSS ở 2 nơi. Dùng chung cho
 // public/nha-thuoc-3d.html (Express) và web-next (Next) — 1 nguồn duy nhất.
-import { SCENARIO_CARDS, SCENARIOS } from './scenarios.js?v=ph0729c';
+import { SCENARIO_CARDS, SCENARIOS } from './scenarios.js?v=ph0729e';
 
 const LEARNING_GOALS = [
   ['💬', 'Giao tiếp', 'Chào hỏi, tạo kết nối, giao tiếp trực diện với người bệnh'],
@@ -81,6 +81,9 @@ export function showIntro({ moduleId, onPick }) {
   if (valid && explicit) { onPick(moduleId); return; }
 
   injectStyle();
+  // Tiêu đề trang: bản Next đặt title chung "Tizia — Vũ trụ giáo dục ảo" nên yêu cầu
+  // gửi từ đây không nói được là trang nào. Đặt tên thật để ngữ cảnh kèm theo rõ ràng.
+  document.title = 'Pharmacomm — Nhà thuốc GPP 3D · Tizia';
   const cards = (SCENARIO_CARDS && SCENARIO_CARDS.length)
     ? SCENARIO_CARDS
     : Object.values(SCENARIOS || {}).map(s => ({ id: s.id, code: s.code || s.id, tag: s.npcRole || '', icon: '🧪', title: s.title, desc: s.setting }));

@@ -1202,9 +1202,9 @@
 }
 </script>
 <script type="module">
-  import { startSimulation } from './js/pharmacy/simulation.js?v=ph0729c';
-  import { showIntro } from './js/pharmacy/intro.js?v=ph0729c';
-  import { SCENARIOS } from './js/pharmacy/scenarios.js?v=ph0729c';
+  import { startSimulation } from './js/pharmacy/simulation.js?v=ph0729e';
+  import { showIntro } from './js/pharmacy/intro.js?v=ph0729e';
+  import { SCENARIOS } from './js/pharmacy/scenarios.js?v=ph0729e';
   const params = new URLSearchParams(location.search);
   const moduleId = params.get('module') || 'otc01';
   // CBS 20/07 #1: hiện màn giới thiệu Pharmacomm + chọn tình huống TRƯỚC khi vào scene.
@@ -1263,8 +1263,13 @@
     if (!slot) {
       slot = document.createElement('span');
       slot.className = 'ev-pharm-fabs';
+      // Header Next không có mốc cũ — append thẳng vào <header> thì nút rơi xuống hàng
+      // thứ hai, nên chèn vào đầu cụm nút bên phải (.ml-auto).
       const anchor = header.querySelector('#ev-eng-slot') || header.querySelector('#ev-user-wrap');
-      header.insertBefore(slot, anchor);
+      const right = header.querySelector('.ml-auto');
+      if (anchor) header.insertBefore(slot, anchor);
+      else if (right) right.insertBefore(slot, right.firstChild);
+      else header.appendChild(slot);
     }
     if (!slot.querySelector('.pf-sgf')) {
       const b = document.createElement('button');

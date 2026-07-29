@@ -1,8 +1,8 @@
 // SimulationClient — port từ Pharmacy-AI/src/components/SimulationClient.tsx.
 // Wire chat panel + actions → /api/pharmacy/* + scoring panel.
-import { buildScene, makeDrugLabelTex, makeDrugBackLabelTex, makeDrugSideLabelTex, getBoxStyle, deviceModelFor } from './scene.js?v=ph0729c';
-import { loadDrugs } from './catalog.js?v=ph0729c';
-import { initMobileUI } from './mobile-ui.js?v=ph0729c';
+import { buildScene, makeDrugLabelTex, makeDrugBackLabelTex, makeDrugSideLabelTex, getBoxStyle, deviceModelFor } from './scene.js?v=ph0729e';
+import { loadDrugs } from './catalog.js?v=ph0729e';
+import { initMobileUI } from './mobile-ui.js?v=ph0729e';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -30,8 +30,8 @@ function swapUnitToGlb(group, file, sizeRef) {
     group.add(m);
   }).catch(() => { /* giữ procedural làm fallback */ });
 }
-import { openPosTerminal } from './pos.js?v=ph0729c';
-import { openHdsdEditor, openPackageEditor, PACKAGE_TYPES, RETAIL_FORMS } from './label-editor.js?v=ph0729c';
+import { openPosTerminal } from './pos.js?v=ph0729e';
+import { openHdsdEditor, openPackageEditor, PACKAGE_TYPES, RETAIL_FORMS } from './label-editor.js?v=ph0729e';
 import { STAGE_LABEL } from './rubric.js';
 
 const $ = (id) => document.getElementById(id);
@@ -143,6 +143,8 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
   if (scenario.npcOpening) appendBubble('npc', scenario.npcOpening);
   $('npc-role').textContent = scenario.npcRole;
   $('scenario-title').textContent = scenario.title;
+  // Yêu cầu gửi từ trang này kèm document.title → để tên tình huống cho AI biết đúng chỗ.
+  document.title = `${scenario.title} — Pharmacomm · Tizia`;
   $('scenario-setting').textContent = scenario.setting;
 
   // 3. Render hints per stage
