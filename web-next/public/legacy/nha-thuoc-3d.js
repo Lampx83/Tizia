@@ -14,9 +14,9 @@
 // ?v= phải BUMP mỗi lần sửa js/pharmacy/* — trình duyệt cache module theo URL này;
 // để nguyên version cũ thì máy đã ghé sẽ chạy JS cũ mãi. Giữ khớp với
 // public/nha-thuoc-3d.html (bản Express).
-import { startSimulation } from '/js/pharmacy/simulation.js?v=ph0729b';
-import { showIntro } from '/js/pharmacy/intro.js?v=ph0729b';
-import { SCENARIOS } from '/js/pharmacy/scenarios.js?v=ph0729b';
+import { startSimulation } from '/js/pharmacy/simulation.js?v=ph0729c';
+import { showIntro } from '/js/pharmacy/intro.js?v=ph0729c';
+import { SCENARIOS } from '/js/pharmacy/scenarios.js?v=ph0729c';
 const params = new URLSearchParams(location.search);
 const moduleId = params.get('module') || 'otc01';
 // CBS 20/07 #1: màn giới thiệu Pharmacomm + chọn tình huống TRƯỚC khi vào scene.
@@ -66,7 +66,10 @@ syncSideToggle();
 // FAB gốc bị ẩn bằng CSS; proxy click → click FAB gốc để mở modal/toggle.
 // Header auth có thể re-render → MO không disconnect, luôn re-inject proxies.
 const ensureProxiesInHeader = () => {
-  const header = document.querySelector('header.ev-header');
+  // 29/07: bản Next dùng header React (header.sticky…) chứ không phải header.ev-header
+  // của Express → trước đây selector trượt, proxy không được tạo, mà FAB gốc thì đã bị
+  // CSS ẩn ⇒ trang KHÔNG còn lối gửi yêu cầu nào. Nhận cả hai loại header.
+  const header = document.querySelector('header.ev-header') || document.querySelector('header');
   if (!header) return;
   let slot = header.querySelector('.ev-pharm-fabs');
   if (!slot) {

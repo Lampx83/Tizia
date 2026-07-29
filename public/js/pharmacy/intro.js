@@ -5,7 +5,7 @@
 // Self-contained: tự chèn <style> (dùng biến theme --card/--text… có sẵn ở cả trang
 // Express lẫn Next, kèm màu dự phòng) nên KHÔNG phải sửa CSS ở 2 nơi. Dùng chung cho
 // public/nha-thuoc-3d.html (Express) và web-next (Next) — 1 nguồn duy nhất.
-import { SCENARIO_CARDS, SCENARIOS } from './scenarios.js?v=ph0729b';
+import { SCENARIO_CARDS, SCENARIOS } from './scenarios.js?v=ph0729c';
 
 const LEARNING_GOALS = [
   ['💬', 'Giao tiếp', 'Chào hỏi, tạo kết nối, giao tiếp trực diện với người bệnh'],
@@ -53,6 +53,21 @@ function injectStyle() {
   .pc-card-go { margin-top: auto; align-self: flex-start; font-size: 12.5px; font-weight: 700; color: var(--accent, #38bdf8); }
   .pc-card:hover .pc-card-go { text-decoration: underline; }
   .pc-foot { margin: 22px 0 8px; color: var(--muted, #94a3b8); font-size: 12px; }
+  /* Ô gửi yêu cầu cho Ban điều hành AI (29/07): trang này trước đây KHÔNG có lối
+     gửi yêu cầu — FAB gốc bị CSS ẩn, nút thay thế lại chèn vào header cũ nên bản
+     Next không có. Đặt hẳn một ô ngay màn giới thiệu cho thầy cô/SV dễ thấy. */
+  .pc-ask { margin-top: 26px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    background: linear-gradient(135deg, rgba(124,58,237,0.14), rgba(79,70,229,0.10));
+    border: 1px solid rgba(124,58,237,0.45); border-radius: 16px; padding: 16px 18px; }
+  .pc-ask-ic { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-size: 24px;
+    background: linear-gradient(135deg, #7c3aed, #4f46e5); color: #fff; flex: none; }
+  .pc-ask-txt { flex: 1 1 260px; }
+  .pc-ask-h { font-weight: 700; font-size: 14.5px; }
+  .pc-ask-d { color: var(--muted, #94a3b8); font-size: 12.5px; line-height: 1.55; margin-top: 4px; }
+  .pc-ask-btn { cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; color: #fff; white-space: nowrap;
+    background: linear-gradient(135deg, #7c3aed, #4f46e5); border: 0; border-radius: 10px; padding: 10px 16px;
+    transition: transform .12s ease, filter .12s ease; }
+  .pc-ask-btn:hover { transform: translateY(-1px); filter: brightness(1.08); }
   @media (max-width: 560px) { .pc-title { font-size: 24px; } .pc-intro { padding: 20px 14px; } }
   `;
   document.head.appendChild(st);
@@ -107,11 +122,29 @@ export function showIntro({ moduleId, onPick }) {
           </button>`).join('')}
       </div>
 
+      <div class="pc-ask">
+        <div class="pc-ask-ic">🏛️</div>
+        <div class="pc-ask-txt">
+          <div class="pc-ask-h">Góp ý cho phần mềm này?</div>
+          <div class="pc-ask-d">Gửi yêu cầu tới Ban điều hành AI: sửa lời thoại bệnh nhân, thêm tình huống mới, chỉnh thuốc hay báo lỗi. Yêu cầu tự kèm tên trang này để AI biết sửa đúng chỗ; kèm được cả ảnh chụp và file Word.</div>
+        </div>
+        <button class="pc-ask-btn" type="button" data-ask>✍️ Gửi yêu cầu</button>
+      </div>
+
       <p class="pc-foot">Mẹo: có thể vào thẳng một tình huống bằng địa chỉ <code>?module=&lt;mã&gt;</code>.</p>
     </div>
   `;
 
   overlay.addEventListener('click', (e) => {
+    // Nút gửi yêu cầu: bấm hộ vào FAB gốc (#sgf-fab) — nút đó bị CSS trang này ẩn
+    // nhưng vẫn nằm trong DOM và click bằng script vẫn mở đúng modal Ban điều hành AI.
+    // KHÔNG đóng màn giới thiệu để người dùng gửi xong còn chọn tình huống tiếp.
+    if (e.target.closest('[data-ask]')) {
+      const fab = document.getElementById('sgf-fab');
+      if (fab) fab.click();
+      else alert('Chưa mở được ô gửi yêu cầu. Bạn thử tải lại trang giúp nhé.');
+      return;
+    }
     const btn = e.target.closest('.pc-card');
     if (!btn) return;
     const id = btn.dataset.id;
