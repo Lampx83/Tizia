@@ -2,7 +2,7 @@
 //   • openHdsdEditor   — Nhãn HƯỚNG DẪN SỬ DỤNG dán lên HỘP thuốc (liều + thời điểm + số phút trước/sau ăn)
 //   • openPackageEditor — Nhãn BAO BÌ RA LẺ (trắng/vàng/hồng) theo mẫu phong bì; túi zip chỉ đựng kín khí
 // Giữ semantic field cũ để backend chấm điểm + render in/dán nhãn vẫn work.
-import { ALL_DRUGS, getDrug, PHARMACY_INFO } from './catalog.js?v=ph0801';
+import { ALL_DRUGS, getDrug, PHARMACY_INFO } from './catalog.js?v=ph0801c';
 import { TIMING_LABEL, totalPerDay } from './labels.js';
 
 const QUICK_NOTES = [

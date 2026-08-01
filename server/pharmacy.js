@@ -212,7 +212,9 @@ function isGibberish(text) {
 // đứng ĐẦU câu (mệnh lệnh "nên hỏi gì tiếp"). Không dùng "cần" trần trụi (dính "chị cần").
 const COACH_RE = /((tôi|em|mình)\s+(nên|phải|cần|sẽ)\s+[^?!.\n]{0,30}(gì|những gì|thế nào|như thế nào|ra sao|nào)|^\s*(nên|phải)\s+(hỏi|tư vấn|làm|kê|bán|khám)\b[^?!.\n]{0,20}(gì|thế nào|nào)|gợi ý\s+(cho\s+)?(tôi|em|mình)|các bước\s+(tư vấn|thực hiện|xử lý|khai thác)|(theo (bạn|chị)|bạn (thấy|nghĩ)|chị (thấy|nghĩ))[^?!.\n]{0,30}(nên|tư vấn|hỏi|kê)[^?!.\n]{0,20}(gì|thế nào|nào|không)|đáp án\s+(là gì|đúng|của|cho)|checklist)/i;
 // Model lỡ "nhắc bài" (đầu ra dạng khuyên dược sĩ) → thay bằng câu né trong vai.
-const LEAK_RE = /(dược sĩ|bạn)\s+(nên|cần|phải|hãy)\s+(hỏi|tư vấn|kiểm tra|khám|bán|kê|giải thích|trấn an|khuyên)/i;
+// 🪤 01/08: loại trừ câu bệnh nhân NHỜ được phục vụ ("Dược sĩ hãy tư vấn giúp tôi
+// nhé") — đó là lời nhờ, không phải nhắc bài; trước đây bị thay bằng câu né sai vai.
+const LEAK_RE = /(dược sĩ|bạn)\s+(nên|cần|phải|hãy)\s+(hỏi|tư vấn|kiểm tra|khám|bán|kê|giải thích|trấn an|khuyên)(?!\s*(giúp|hộ|giùm|cho)\s*(tôi|mình|em|anh|chị))/i;
 // Rút thăm câu theo SỐ LƯỢT NPC → guard kích hoạt nhiều lần vẫn KHÁC nhau, đỡ máy móc.
 const rot = (arr, s) => arr[(s.messages.filter(m => m.role === 'npc').length) % arr.length];
 // Né khi bị hỏi ngược xin đáp án/nhắc bài (bệnh nhân KHÔNG có chuyên môn) — nhiều biến thể.
@@ -287,7 +289,13 @@ export function applyMood(scenario, s, reply, userText) {
     if (!out) out = rot(acks, s) || 'Vâng, tôi hiểu rồi.';
     if (EMPATHY_RE.test(userText) || REASON_RE.test(userText)) {
       const ack = rot(acks, s);
-      if (ack && !out.includes(ack)) out = `${ack} ${out}`.trim();
+      // So khớp BỎ dấu câu cuối: model hay nói "…đã giải thích, tôi hiểu rồi" nên so
+      // nguyên văn sẽ trượt và ghép thành hai lần cảm ơn liền nhau.
+      const core = (ack || '').replace(/[.!?…]+$/, '');
+      // Nếu câu trả lời ĐÃ tự mở đầu bằng lời đồng thuận ("Được…", "Vâng…", "Cảm ơn
+      // dược sĩ…") thì thôi, không ghép nữa — kẻo thành hai lời cảm ơn liền nhau.
+      const alreadyAck = /^\s*(vâng|được|dạ|ừ|cảm ơn|cám ơn|tôi hiểu)/i.test(out);
+      if (core && !alreadyAck && !out.toLowerCase().includes(core.toLowerCase())) out = `${ack} ${out}`.trim();
     }
     return out;
   }
@@ -475,7 +483,7 @@ export function attachPharmacy(r) {
     // Lưới CUỐI 2: bệnh nhân TỰ DẪN DẮT/giục dược sĩ → thay câu chờ trong vai.
     if (isPatient && LEAD_RE.test(reply)) {
       s.context.violations = (s.context.violations || 0) + 1;
-      reply = rot(PASSIVE_WORRIED, s);
+      reply = rot(scenario.passiveWaitLines || PASSIVE_WORRIED, s);
     }
     // Lưới CUỐI 3 (#117): cắt dữ kiện tiết lộ khi CHƯA được hỏi đúng.
     if (isPatient) {
@@ -599,7 +607,7 @@ export function attachPharmacy(r) {
         finalReply = rot(scenario.deflects || DEFLECTS, s);
       } else if (isPatient && LEAD_RE.test(finalReply)) {
         s.context.violations = (s.context.violations || 0) + 1;
-        finalReply = rot(PASSIVE_WORRIED, s);
+        finalReply = rot(scenario.passiveWaitLines || PASSIVE_WORRIED, s);
       }
       // Lưới CUỐI 3 (#117): cắt dữ kiện chưa được hỏi. Stream đã cắt sớm ở onToken
       // nên phần lỡ hiện trên màn hình rất ngắn; client thay bubble bằng bản này.

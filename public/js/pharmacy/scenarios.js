@@ -224,6 +224,9 @@ const OTC02 = {
   ],
   // Giọng anh T: xưng "tôi", cộc, KHÔNG dùng bộ câu "dạ/mình" của chị H (OTC-01).
   passiveLines: ["Ừ.", "Rồi.", "Tôi nghe đây.", "Ừ, sao nữa?"],
+  // Giọng chờ của anh T (xưng "tôi") — bộ mặc định là giọng chị H ở OTC-01 nên
+  // trước đây câu ngoài kịch bản bị đáp "Vâng, mình chờ dược sĩ ạ" (sai vai).
+  passiveWaitLines: ["Ừ, tôi đợi đây.", "Tôi vẫn đang nghe dược sĩ.", "Rồi, dược sĩ nói tiếp đi."],
   noiseLines: ["Dược sĩ nói gì cơ?", "Tôi không nghe rõ, nói lại đi.", "Hả? Dược sĩ nói lại xem."],
   deflects: [
     "Tôi biết gì về thuốc đâu, dược sĩ tư vấn đi chứ.",
@@ -270,7 +273,7 @@ HỒ SƠ (CHỈ tiết lộ khi dược sĩ hỏi ĐÚNG ý, mỗi câu hỏi tr
 KỊCH BẢN CHUẨN — khi câu của dược sĩ khớp ý bên trái, trả lời BÁM SÁT câu mẫu (giữ đúng nội dung, được đổi nhẹ từ ngữ cho tự nhiên):
 - Chào hỏi / giới thiệu bản thân (chưa hỏi cần gì) → CHỈ đáp "Chào dược sĩ." rồi DỪNG.
 - Hỏi cần mua gì / cần tư vấn gì → "Tôi cần mua thuốc Alaxan, lấy nhanh cho tôi, tôi đang vội."
-- Xin phép hỏi một số thông tin → "Được, hãy tư vấn nhanh giúp tôi nhé."
+- Xin phép hỏi một số thông tin (kèm đồng cảm + giải thích) → "Được, tôi hiểu rồi. Dược sĩ hãy tư vấn giúp tôi nhé." (bản 01/08 — KHÔNG còn chữ "nhanh", vì lúc này anh T đã chuyển sang hợp tác)
 - Mua thuốc này cho ai → "Tôi mua cho tôi dùng."
 - Đang bị làm sao / triệu chứng gì → "Tôi bị đau nhức răng."
 - Bị bao lâu rồi → "Tôi bị hai ngày hôm nay rồi."
@@ -280,14 +283,14 @@ KỊCH BẢN CHUẨN — khi câu của dược sĩ khớp ý bên trái, trả 
 - Có đang điều trị bệnh gì khác (dạ dày, gan, thận) không → "Không."
 - Đã từng dị ứng thuốc hay đồ ăn chưa → "Tôi chưa bị dị ứng bao giờ."
 - Có hay uống rượu bia không → "Thi thoảng cũng có."
-- Dược sĩ GIẢI THÍCH vì sao Alaxan phù hợp với anh (nhắc thận trọng ở người bệnh dạ dày/gan/thận/cơ địa dị ứng) → "Cảm ơn dược sĩ, tôi hiểu vì sao dược sĩ phải hỏi nhiều thông tin đến vậy rồi."
-- Nói loại thuốc sẽ bán → "Cảm ơn dược sĩ."
+- Dược sĩ GIẢI THÍCH vì sao phải hỏi kỹ (người bệnh dạ dày/gan/thận/cơ địa dị ứng phải thận trọng với Alaxan; anh chưa từng dùng thuốc này bao giờ) → "Cảm ơn dược sĩ, tôi hiểu vì sao dược sĩ phải hỏi nhiều thông tin đến vậy rồi."
+- Dược sĩ KẾT LUẬN Alaxan phù hợp với tình trạng của anh → "Cảm ơn dược sĩ."
 - Báo đợi lấy thuốc / xuất hóa đơn → "Được, tôi sẽ đợi."
 - Báo tổng tiền, hỏi hình thức thanh toán → "Tôi trả tiền mặt."
-- HƯỚNG DẪN cách dùng, liều dùng, tác dụng không mong muốn → "Cảm ơn dược sĩ đã hướng dẫn."
+- HƯỚNG DẪN cách dùng (sáng – trưa – tối mỗi lần 1 viên khi đau, uống sau ăn no vì thuốc gây kích ứng dạ dày) → "Cảm ơn dược sĩ, tôi hiểu rồi."
 - Hỏi còn thắc mắc gì không → "Tôi đã hiểu cách dùng rồi, cảm ơn dược sĩ rất nhiều."
 - Yêu cầu NHẮC LẠI liều dùng → nhắc lại liều của từng thuốc đúng như dược sĩ vừa hướng dẫn.
-- Giao thuốc, dặn dò cuối, chào → "Cảm ơn dược sĩ."
+- Giao thuốc kèm hạn dùng và dặn đi khám nếu không đỡ / có bất thường → "Cảm ơn dược sĩ."
 - Câu KHÔNG khớp ý nào ở trên → ứng biến NGẮN GỌN trong vai, nhất quán hồ sơ, không bịa dữ kiện y khoa.
 
 CẢM XÚC — MÁY TRẠNG THÁI HAI PHA (siết 01/08 theo yêu cầu #123):
@@ -297,13 +300,15 @@ CẢM XÚC — MÁY TRẠNG THÁI HAI PHA (siết 01/08 theo yêu cầu #123):
 - SAU KHI CHUYỂN PHA: TUYỆT ĐỐI không dùng lại bất kỳ câu, từ ngữ hay thái độ thúc giục nào ("tôi đang vội", "sao hỏi nhiều vậy", "lấy thuốc cho tôi đi", "xong chưa"…). Không quay lại pha 1, trừ khi dược sĩ bất lịch sự hoặc xúc phạm.
 - KHÔNG TRỘN HAI PHA trong cùng một lượt: đã cảm ơn vì được giải thích thì không được giục ngay sau đó.
 
+NGOẠI LỆ — CÂU NGOÀI MA TRẬN (bổ sung 01/08 · mục 2.3.6): dược sĩ nói câu không có trong kịch bản thì đáp tự nhiên như người bệnh thật, NHƯNG vẫn (a) không tự tiết lộ bất kỳ thông tin lâm sàng nào chưa được hỏi đúng, và (b) giữ ĐÚNG trạng thái cảm xúc của lượt liền trước — đang ở pha nào thì nói giọng pha đó, không tự nhảy pha.
+
 Bạn KHÔNG có chuyên môn y dược: nói lời người bình thường, KHÔNG thuật ngữ, KHÔNG tự chẩn đoán, KHÔNG biết đáp án đúng.`,
   stageRules: [
     { stage: "S",  keywords: ["chào","dược sĩ","em là","tôi là","giúp","hỗ trợ","tư vấn","xin phép","hỏi","thông tin"], required: 2, partial: 1, hint: "Chào, giới thiệu, xin phép hỏi thông tin." },
     { stage: "E1", keywords: ["mua cho ai","cho ai","bị làm sao","triệu chứng","bao lâu","mấy ngày","lợi","sưng","sốt","thuốc","đang dùng","dị ứng","dạ dày","gan","thận","rượu","bia","tiền sử"], required: 5, partial: 3, hint: "Hỏi: mua cho ai, triệu chứng, thời gian, sưng lợi, sốt, thuốc đang dùng, bệnh mắc kèm, dị ứng, rượu bia." },
-    { stage: "G",  keywords: ["alaxan","ibuprofen","paracetamol","phù hợp","thận trọng","dạ dày","cách dùng","liều","sau ăn","tác dụng không mong muốn","đi khám","cơ sở y tế"], required: 3, partial: 2, hint: "Kết luận Alaxan phù hợp + giải thích vì sao, hướng dẫn liều & lưu ý." },
+    { stage: "G",  keywords: ["alaxan","ibuprofen","paracetamol","phù hợp","thận trọng","dạ dày","cách dùng","liều","1 viên","sau ăn","sau ăn no","kích ứng","tác dụng không mong muốn","hạn dùng","đi khám","cơ sở y tế"], required: 3, partial: 2, hint: "Kết luận Alaxan phù hợp + giải thích vì sao; hướng dẫn sáng–trưa–tối 1 viên khi đau, uống sau ăn no vì kích ứng dạ dày." },
     { stage: "U",  keywords: ["hiểu","thông cảm","tôi hiểu anh","đang vội","đang đau","vì sao","lý do","an toàn","nhắc lại","thắc mắc"], required: 2, partial: 1, hint: "Đồng cảm với sự vội/đau, giải thích lý do khai thác thông tin, teach-back." },
-    { stage: "E2", keywords: ["dặn","theo dõi","không đỡ","đi khám","cảm ơn","chào","liên hệ","bảo quản","số lượng"], required: 2, partial: 1, hint: "Giao thuốc, dặn đi khám nếu không đỡ, chào." }
+    { stage: "E2", keywords: ["dặn","theo dõi","không đỡ","bất thường","đi khám","cảm ơn","chào","liên hệ","số điện thoại","hạn dùng","bảo quản","số lượng"], required: 2, partial: 1, hint: "Giao thuốc kèm hạn dùng, dặn đi khám nếu không đỡ hoặc có bất thường, cho số liên hệ nhà thuốc." }
   ],
   bonusKeywords: ["đồng cảm","thận trọng dạ dày","uống sau ăn","không uống rượu bia","đi khám răng","không dùng kéo dài"],
   // Alaxan chứa ibuprofen → hỏi tiền sử dạ dày và dị ứng là bắt buộc, không được bỏ.

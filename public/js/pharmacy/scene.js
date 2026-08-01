@@ -7,9 +7,9 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { CABINETS, ALL_DRUGS, PHARMACY_INFO } from './catalog.js?v=ph0801';
-import { DRUG_PLACEMENT } from './drug-placement.js?v=ph0801';
-import { createCharacter } from './character.js?v=ph0801';
+import { CABINETS, ALL_DRUGS, PHARMACY_INFO } from './catalog.js?v=ph0801c';
+import { DRUG_PLACEMENT } from './drug-placement.js?v=ph0801c';
+import { createCharacter } from './character.js?v=ph0801c';
 
 const MODELS_BASE = './models/pharmacy/';
 
