@@ -589,6 +589,118 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/kræʃ/",
         "v": "treo, sập (chương trình)",
         "ex": "The app crashes when the file is empty."
+      },
+      {
+        "w": "load balancing",
+        "pos": "noun",
+        "ph": "/ləʊd ˈbæl.ən.sɪŋ/",
+        "v": "cân bằng tải",
+        "ex": "Load balancing spreads requests across three servers."
+      },
+      {
+        "w": "failover",
+        "pos": "noun",
+        "ph": "/ˈfeɪl.əʊ.vər/",
+        "v": "chuyển dự phòng khi hỏng",
+        "ex": "Failover moves traffic to the backup site automatically."
+      },
+      {
+        "w": "uptime monitoring",
+        "pos": "noun",
+        "ph": "/ˈʌp.taɪm ˈmɒn.ɪ.tər.ɪŋ/",
+        "v": "giám sát thời gian hoạt động",
+        "ex": "Uptime monitoring alerts us within a minute of an outage."
+      },
+      {
+        "w": "log",
+        "pos": "noun",
+        "ph": "/lɒɡ/",
+        "v": "nhật ký hệ thống",
+        "ex": "Check the server log to see what failed."
+      },
+      {
+        "w": "timestamp",
+        "pos": "noun",
+        "ph": "/ˈtaɪm.stæmp/",
+        "v": "dấu thời gian",
+        "ex": "Every log line begins with a timestamp."
+      },
+      {
+        "w": "job queue",
+        "pos": "noun",
+        "ph": "/dʒɒb kjuː/",
+        "v": "hàng đợi tác vụ",
+        "ex": "Long tasks go into a job queue instead of blocking the request."
+      },
+      {
+        "w": "data centre",
+        "pos": "noun",
+        "ph": "/ˈdeɪ.tə ˈsen.tər/",
+        "v": "trung tâm dữ liệu",
+        "ex": "Our servers sit in a data centre in Singapore."
+      },
+      {
+        "w": "bare metal",
+        "pos": "noun",
+        "ph": "/beər ˈmet.əl/",
+        "v": "máy chủ vật lý thuần",
+        "ex": "Some workloads still run faster on bare metal."
+      },
+      {
+        "w": "serverless",
+        "pos": "adjective",
+        "ph": "/ˈsɜː.və.ləs/",
+        "v": "không máy chủ (điện toán)",
+        "ex": "A serverless function only costs money while it runs."
+      },
+      {
+        "w": "edge computing",
+        "pos": "noun",
+        "ph": "/edʒ kəmˈpjuː.tɪŋ/",
+        "v": "điện toán biên",
+        "ex": "Edge computing processes data close to the user."
+      },
+      {
+        "w": "digital twin",
+        "pos": "noun",
+        "ph": "/ˈdɪdʒ.ɪ.təl twɪn/",
+        "v": "bản sao số",
+        "ex": "A digital twin simulates the real factory in software."
+      },
+      {
+        "w": "interoperability",
+        "pos": "noun",
+        "ph": "/ˌɪn.tər.ɒp.ər.əˈbɪl.ə.ti/",
+        "v": "khả năng liên thông",
+        "ex": "Interoperability lets the two hospital systems share records."
+      },
+      {
+        "w": "accessibility",
+        "pos": "noun",
+        "ph": "/əkˌses.əˈbɪl.ə.ti/",
+        "v": "khả năng tiếp cận (cho người khuyết tật)",
+        "ex": "Accessibility means the site works with a screen reader."
+      },
+      {
+        "w": "responsive design",
+        "pos": "noun",
+        "ph": "/rɪˈspɒn.sɪv dɪˈzaɪn/",
+        "v": "thiết kế đáp ứng",
+        "ex": "Responsive design fits the layout to any screen size."
+      },
+      {
+        "w": "dark mode",
+        "pos": "noun",
+        "ph": "/dɑːk məʊd/",
+        "v": "chế độ nền tối",
+        "ex": "Dark mode is easier on the eyes at night."
+      },
+      {
+        "w": "offline mode",
+        "pos": "noun",
+        "ph": "/ˌɒfˈlaɪn məʊd/",
+        "v": "chế độ ngoại tuyến",
+        "ex": "Offline mode keeps the app usable without a network."
       }
     ]
   },
@@ -1085,6 +1197,118 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˈsnɪp.ət/",
         "v": "đoạn mã mẫu",
         "ex": "Save this snippet; you will need it again."
+      },
+      {
+        "w": "type safety",
+        "pos": "noun",
+        "ph": "/taɪp ˈseɪf.ti/",
+        "v": "an toàn kiểu dữ liệu",
+        "ex": "Type safety catches many bugs before the code runs."
+      },
+      {
+        "w": "linting",
+        "pos": "noun",
+        "ph": "/ˈlɪn.tɪŋ/",
+        "v": "việc soi lỗi phong cách mã",
+        "ex": "Linting keeps the whole team writing in one style."
+      },
+      {
+        "w": "formatter",
+        "pos": "noun",
+        "ph": "/ˈfɔː.mæt.ər/",
+        "v": "công cụ định dạng mã",
+        "ex": "A formatter ends every argument about spacing."
+      },
+      {
+        "w": "code generation",
+        "pos": "noun",
+        "ph": "/kəʊd ˌdʒen.əˈreɪ.ʃən/",
+        "v": "sinh mã tự động",
+        "ex": "Code generation builds the client from the API schema."
+      },
+      {
+        "w": "parser",
+        "pos": "noun",
+        "ph": "/ˈpɑː.zər/",
+        "v": "bộ phân tích cú pháp",
+        "ex": "The parser turns text into a syntax tree."
+      },
+      {
+        "w": "compiler error",
+        "pos": "noun",
+        "ph": "/kəmˈpaɪ.lər ˈer.ər/",
+        "v": "lỗi biên dịch",
+        "ex": "Fix the compiler error before you run the tests."
+      },
+      {
+        "w": "race condition",
+        "pos": "noun",
+        "ph": "/reɪs kənˈdɪʃ.ən/",
+        "v": "tình trạng tranh chấp luồng",
+        "ex": "A race condition makes the bug appear only sometimes."
+      },
+      {
+        "w": "deadlock",
+        "pos": "noun",
+        "ph": "/ˈded.lɒk/",
+        "v": "bế tắc khoá",
+        "ex": "Two threads waiting for each other cause a deadlock."
+      },
+      {
+        "w": "thread pool",
+        "pos": "noun",
+        "ph": "/θred puːl/",
+        "v": "nhóm luồng dùng lại",
+        "ex": "A thread pool avoids creating a thread per request."
+      },
+      {
+        "w": "caching strategy",
+        "pos": "noun",
+        "ph": "/ˈkæʃ.ɪŋ ˈstræt.ə.dʒi/",
+        "v": "chiến lược lưu đệm",
+        "ex": "A good caching strategy cut the load time in half."
+      },
+      {
+        "w": "rate limit",
+        "pos": "noun",
+        "ph": "/reɪt ˈlɪm.ɪt/",
+        "v": "giới hạn số lần gọi",
+        "ex": "The API has a rate limit of 60 calls per minute."
+      },
+      {
+        "w": "retry",
+        "pos": "verb",
+        "ph": "/rɪˈtraɪ/",
+        "v": "thử lại",
+        "ex": "The client retries three times before giving up."
+      },
+      {
+        "w": "stub",
+        "pos": "noun",
+        "ph": "/stʌb/",
+        "v": "hàm giả tối giản khi kiểm thử",
+        "ex": "Replace the payment service with a stub during tests."
+      },
+      {
+        "w": "migration",
+        "pos": "noun",
+        "ph": "/maɪˈɡreɪ.ʃən/",
+        "v": "di trú dữ liệu, chuyển đổi",
+        "ex": "Run the database migration before you deploy."
+      },
+      {
+        "w": "schema",
+        "pos": "noun",
+        "ph": "/ˈskiː.mə/",
+        "v": "lược đồ dữ liệu",
+        "ex": "Every table change starts with a schema update."
+      },
+      {
+        "w": "endpointing",
+        "pos": "noun",
+        "ph": "/ˈend.pɔɪn.tɪŋ/",
+        "v": "việc chốt điểm kết thúc",
+        "ex": "Endpointing decides when the user has stopped speaking."
       }
     ]
   },
@@ -1455,6 +1679,104 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˈwaɪə.ləs/",
         "v": "không dây",
         "ex": "The whole office runs on a wireless network."
+      },
+      {
+        "w": "packet filter",
+        "pos": "noun",
+        "ph": "/ˈpæk.ɪt ˈfɪl.tər/",
+        "v": "bộ lọc gói tin",
+        "ex": "A packet filter drops traffic from unknown addresses."
+      },
+      {
+        "w": "duplex",
+        "pos": "noun",
+        "ph": "/ˈdjuː.pleks/",
+        "v": "chế độ truyền hai chiều",
+        "ex": "Full duplex lets both sides send at the same time."
+      },
+      {
+        "w": "latency spike",
+        "pos": "noun",
+        "ph": "/ˈleɪ.tən.si spaɪk/",
+        "v": "đợt tăng vọt độ trễ",
+        "ex": "A latency spike at noon slowed every request."
+      },
+      {
+        "w": "traceroute",
+        "pos": "noun",
+        "ph": "/ˈtreɪs.ruːt/",
+        "v": "lệnh dò đường đi gói tin",
+        "ex": "Traceroute shows every hop between you and the server."
+      },
+      {
+        "w": "mesh network",
+        "pos": "noun",
+        "ph": "/meʃ ˈnet.wɜːk/",
+        "v": "mạng lưới mắt lưới",
+        "ex": "A mesh network covers a large house without dead spots."
+      },
+      {
+        "w": "backbone",
+        "pos": "noun",
+        "ph": "/ˈbæk.bəʊn/",
+        "v": "đường trục mạng",
+        "ex": "Fibre forms the backbone of the campus network."
+      },
+      {
+        "w": "bandwidth throttling",
+        "pos": "noun",
+        "ph": "/ˈbænd.wɪdθ ˈθrɒt.əl.ɪŋ/",
+        "v": "việc bóp băng thông",
+        "ex": "Bandwidth throttling starts after the monthly quota."
+      },
+      {
+        "w": "network segmentation",
+        "pos": "noun",
+        "ph": "/ˈnet.wɜːk ˌseɡ.menˈteɪ.ʃən/",
+        "v": "phân đoạn mạng",
+        "ex": "Network segmentation stops an attack from spreading."
+      },
+      {
+        "w": "IoT device",
+        "pos": "noun",
+        "ph": "/ˌaɪ.əʊˈtiː dɪˈvaɪs/",
+        "v": "thiết bị IoT",
+        "ex": "Every IoT device needs its own password."
+      },
+      {
+        "w": "bandwidth test",
+        "pos": "noun",
+        "ph": "/ˈbænd.wɪdθ test/",
+        "v": "đo tốc độ đường truyền",
+        "ex": "Run a bandwidth test before the online exam."
+      },
+      {
+        "w": "roaming",
+        "pos": "noun",
+        "ph": "/ˈrəʊ.mɪŋ/",
+        "v": "chuyển vùng",
+        "ex": "Roaming keeps the call alive as you walk between floors."
+      },
+      {
+        "w": "firewall bypass",
+        "pos": "noun",
+        "ph": "/ˈfaɪə.wɔːl ˈbaɪ.pɑːs/",
+        "v": "vượt tường lửa",
+        "ex": "Blocking VPNs prevents firewall bypass."
+      },
+      {
+        "w": "network outage",
+        "pos": "noun",
+        "ph": "/ˈnet.wɜːk ˈaʊ.tɪdʒ/",
+        "v": "sự cố mất mạng",
+        "ex": "The network outage lasted forty minutes."
+      },
+      {
+        "w": "redundant link",
+        "pos": "noun",
+        "ph": "/rɪˈdʌn.dənt lɪŋk/",
+        "v": "đường truyền dự phòng",
+        "ex": "A redundant link keeps the office online if one line fails."
       }
     ]
   },
@@ -1860,6 +2182,111 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˈdeɪ.tə drɪft/",
         "v": "sự trôi dữ liệu theo thời gian",
         "ex": "Data drift slowly makes an old model less accurate."
+      },
+      {
+        "w": "overfit",
+        "pos": "verb",
+        "ph": "/ˌəʊ.vəˈfɪt/",
+        "v": "học vẹt dữ liệu huấn luyện",
+        "ex": "The model overfits when the dataset is too small."
+      },
+      {
+        "w": "hyperparameter",
+        "pos": "noun",
+        "ph": "/ˌhaɪ.pəpəˈræm.ɪ.tər/",
+        "v": "siêu tham số",
+        "ex": "Batch size is a hyperparameter you tune by hand."
+      },
+      {
+        "w": "cross-validation",
+        "pos": "noun",
+        "ph": "/krɒs ˌvæl.ɪˈdeɪ.ʃən/",
+        "v": "kiểm định chéo",
+        "ex": "Cross-validation gives a more honest accuracy estimate."
+      },
+      {
+        "w": "labelled data",
+        "pos": "noun",
+        "ph": "/ˈleɪ.bəld ˈdeɪ.tə/",
+        "v": "dữ liệu đã gán nhãn",
+        "ex": "Labelled data is the expensive part of any project."
+      },
+      {
+        "w": "synthetic data",
+        "pos": "noun",
+        "ph": "/sɪnˈθet.ɪk ˈdeɪ.tə/",
+        "v": "dữ liệu tổng hợp",
+        "ex": "Synthetic data helps when real samples are rare."
+      },
+      {
+        "w": "data pipeline",
+        "pos": "noun",
+        "ph": "/ˈdeɪ.tə ˈpaɪp.laɪn/",
+        "v": "luồng xử lý dữ liệu",
+        "ex": "The data pipeline cleans and stores records every night."
+      },
+      {
+        "w": "feature store",
+        "pos": "noun",
+        "ph": "/ˈfiː.tʃər stɔːr/",
+        "v": "kho đặc trưng",
+        "ex": "A feature store shares features between teams."
+      },
+      {
+        "w": "model registry",
+        "pos": "noun",
+        "ph": "/ˈmɒd.əl ˈredʒ.ɪ.stri/",
+        "v": "kho quản lý mô hình",
+        "ex": "Every trained model is versioned in the model registry."
+      },
+      {
+        "w": "explainability",
+        "pos": "noun",
+        "ph": "/ɪkˌspleɪ.nəˈbɪl.ə.ti/",
+        "v": "khả năng giải thích của mô hình",
+        "ex": "Explainability matters when the model refuses a loan."
+      },
+      {
+        "w": "fairness",
+        "pos": "noun",
+        "ph": "/ˈfeə.nəs/",
+        "v": "tính công bằng của mô hình",
+        "ex": "Fairness testing checks the model across age groups."
+      },
+      {
+        "w": "anomaly detection",
+        "pos": "noun",
+        "ph": "/əˈnɒm.ə.li dɪˈtek.ʃən/",
+        "v": "phát hiện bất thường",
+        "ex": "Anomaly detection flags unusual bank transfers."
+      },
+      {
+        "w": "time series",
+        "pos": "noun",
+        "ph": "/taɪm ˈsɪə.riːz/",
+        "v": "chuỗi thời gian",
+        "ex": "Sales figures are a classic time series."
+      },
+      {
+        "w": "vector database",
+        "pos": "noun",
+        "ph": "/ˈvek.tər ˈdeɪ.tə.beɪs/",
+        "v": "cơ sở dữ liệu vectơ",
+        "ex": "A vector database finds the most similar documents fast."
+      },
+      {
+        "w": "retrieval",
+        "pos": "noun",
+        "ph": "/rɪˈtriː.vəl/",
+        "v": "việc truy hồi tài liệu",
+        "ex": "Retrieval feeds the model real documents before it answers."
+      },
+      {
+        "w": "context window",
+        "pos": "noun",
+        "ph": "/ˈkɒn.tekst ˈwɪn.dəʊ/",
+        "v": "cửa sổ ngữ cảnh",
+        "ex": "A longer context window lets the model read the whole file."
       }
     ]
   },
@@ -2286,6 +2713,104 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˈhʌn.i.pɒt/",
         "v": "bẫy nhử tin tặc",
         "ex": "A honeypot attracts attackers so you can study them."
+      },
+      {
+        "w": "multi-factor authentication",
+        "pos": "noun",
+        "ph": "/ˌmʌl.tiˈfæk.tər ɔːˌθen.tɪˈkeɪ.ʃən/",
+        "v": "xác thực nhiều yếu tố",
+        "ex": "Multi-factor authentication blocks most stolen-password attacks."
+      },
+      {
+        "w": "single sign-on",
+        "pos": "noun",
+        "ph": "/ˌsɪŋ.ɡəl saɪnˈɒn/",
+        "v": "đăng nhập một lần",
+        "ex": "Single sign-on lets staff use one account for every tool."
+      },
+      {
+        "w": "security policy",
+        "pos": "noun",
+        "ph": "/sɪˈkjʊə.rə.ti ˈpɒl.ə.si/",
+        "v": "chính sách an toàn thông tin",
+        "ex": "The security policy bans shared accounts."
+      },
+      {
+        "w": "data retention",
+        "pos": "noun",
+        "ph": "/ˈdeɪ.tə rɪˈten.ʃən/",
+        "v": "thời hạn lưu giữ dữ liệu",
+        "ex": "Our data retention rule deletes logs after 90 days."
+      },
+      {
+        "w": "anonymization",
+        "pos": "noun",
+        "ph": "/əˌnɒn.ɪ.maɪˈzeɪ.ʃən/",
+        "v": "ẩn danh hoá dữ liệu",
+        "ex": "Anonymization removes names before the data is shared."
+      },
+      {
+        "w": "security awareness",
+        "pos": "noun",
+        "ph": "/sɪˈkjʊə.rə.ti əˈweə.nəs/",
+        "v": "nhận thức an toàn thông tin",
+        "ex": "Security awareness training reduced phishing clicks by half."
+      },
+      {
+        "w": "incident response",
+        "pos": "noun",
+        "ph": "/ˈɪn.sɪ.dənt rɪˈspɒns/",
+        "v": "ứng phó sự cố",
+        "ex": "The incident response plan says who to call first."
+      },
+      {
+        "w": "patch cycle",
+        "pos": "noun",
+        "ph": "/pætʃ ˈsaɪ.kəl/",
+        "v": "chu kỳ vá lỗi",
+        "ex": "A monthly patch cycle keeps the servers current."
+      },
+      {
+        "w": "endpoint protection",
+        "pos": "noun",
+        "ph": "/ˈend.pɔɪnt prəˈtek.ʃən/",
+        "v": "bảo vệ máy trạm",
+        "ex": "Endpoint protection scans every laptop in the company."
+      },
+      {
+        "w": "insider threat",
+        "pos": "noun",
+        "ph": "/ɪnˈsaɪ.dər θret/",
+        "v": "nguy cơ từ nội bộ",
+        "ex": "An insider threat is harder to spot than an outside attack."
+      },
+      {
+        "w": "supply chain attack",
+        "pos": "noun",
+        "ph": "/səˈplaɪ tʃeɪn əˈtæk/",
+        "v": "tấn công chuỗi cung ứng",
+        "ex": "A supply chain attack hides malware in a trusted update."
+      },
+      {
+        "w": "security by design",
+        "pos": "noun",
+        "ph": "/sɪˈkjʊə.rə.ti baɪ dɪˈzaɪn/",
+        "v": "an toàn ngay từ thiết kế",
+        "ex": "Security by design is cheaper than fixing holes later."
+      },
+      {
+        "w": "vulnerability scan",
+        "pos": "noun",
+        "ph": "/ˌvʌl.nər.əˈbɪl.ə.ti skæn/",
+        "v": "quét lỗ hổng",
+        "ex": "Run a vulnerability scan before every release."
+      },
+      {
+        "w": "access log",
+        "pos": "noun",
+        "ph": "/ˈæk.ses lɒɡ/",
+        "v": "nhật ký truy cập",
+        "ex": "The access log shows who opened the file and when."
       }
     ]
   },
@@ -2712,6 +3237,104 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/kənˈsent fɔːm/",
         "v": "giấy đồng ý (trước thủ thuật)",
         "ex": "Sign the consent form before the operation."
+      },
+      {
+        "w": "medical record",
+        "pos": "noun",
+        "ph": "/ˈmed.ɪ.kəl ˈrek.ɔːd/",
+        "v": "hồ sơ bệnh án",
+        "ex": "The doctor checked her medical record first."
+      },
+      {
+        "w": "appointment",
+        "pos": "noun",
+        "ph": "/əˈpɔɪnt.mənt/",
+        "v": "lịch hẹn khám",
+        "ex": "I have an appointment at nine tomorrow."
+      },
+      {
+        "w": "outpatient",
+        "pos": "noun",
+        "ph": "/ˈaʊtˌpeɪ.ʃənt/",
+        "v": "bệnh nhân ngoại trú",
+        "ex": "Most minor surgery is done on an outpatient basis."
+      },
+      {
+        "w": "inpatient",
+        "pos": "noun",
+        "ph": "/ˈɪnˌpeɪ.ʃənt/",
+        "v": "bệnh nhân nội trú",
+        "ex": "Inpatient care costs far more than a clinic visit."
+      },
+      {
+        "w": "discharge",
+        "pos": "verb",
+        "ph": "/dɪsˈtʃɑːdʒ/",
+        "v": "cho xuất viện",
+        "ex": "The hospital discharged him after three days."
+      },
+      {
+        "w": "health insurance",
+        "pos": "noun",
+        "ph": "/helθ ɪnˈʃɔː.rəns/",
+        "v": "bảo hiểm y tế",
+        "ex": "Health insurance covered most of the bill."
+      },
+      {
+        "w": "side-effect monitoring",
+        "pos": "noun",
+        "ph": "/ˈsaɪd ɪˌfekt ˈmɒn.ɪ.tər.ɪŋ/",
+        "v": "theo dõi tác dụng phụ",
+        "ex": "Side-effect monitoring continues for a month after the trial."
+      },
+      {
+        "w": "drug interaction",
+        "pos": "noun",
+        "ph": "/drʌɡ ˌɪn.təˈræk.ʃən/",
+        "v": "tương tác thuốc",
+        "ex": "Warfarin has a dangerous drug interaction with aspirin."
+      },
+      {
+        "w": "contraindication",
+        "pos": "noun",
+        "ph": "/ˌkɒn.trə.ɪn.dɪˈkeɪ.ʃən/",
+        "v": "chống chỉ định",
+        "ex": "Pregnancy is a contraindication for this medicine."
+      },
+      {
+        "w": "over-the-counter",
+        "pos": "adjective",
+        "ph": "/ˌəʊ.və.ðəˈkaʊn.tər/",
+        "v": "không kê đơn",
+        "ex": "Paracetamol is an over-the-counter medicine."
+      },
+      {
+        "w": "expiry date",
+        "pos": "noun",
+        "ph": "/ɪkˈspaɪə.ri deɪt/",
+        "v": "hạn dùng",
+        "ex": "Always check the expiry date before you dispense."
+      },
+      {
+        "w": "sterilization",
+        "pos": "noun",
+        "ph": "/ˌster.ɪ.laɪˈzeɪ.ʃən/",
+        "v": "tiệt khuẩn",
+        "ex": "Sterilization kills every microorganism on the instrument."
+      },
+      {
+        "w": "rehydration",
+        "pos": "noun",
+        "ph": "/ˌriː.haɪˈdreɪ.ʃən/",
+        "v": "bù nước",
+        "ex": "Oral rehydration salts treat mild dehydration at home."
+      },
+      {
+        "w": "immunity",
+        "pos": "noun",
+        "ph": "/ɪˈmjuː.nə.ti/",
+        "v": "miễn dịch",
+        "ex": "The vaccine builds immunity in about two weeks."
       }
     ]
   },
@@ -3117,6 +3740,104 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˈdɪs.təns ˈlɜː.nɪŋ/",
         "v": "học từ xa",
         "ex": "Distance learning kept the school open during the pandemic."
+      },
+      {
+        "w": "learning outcome",
+        "pos": "noun",
+        "ph": "/ˈlɜː.nɪŋ ˈaʊt.kʌm/",
+        "v": "chuẩn đầu ra",
+        "ex": "Each unit lists three learning outcomes."
+      },
+      {
+        "w": "formative assessment",
+        "pos": "noun",
+        "ph": "/ˈfɔː.mə.tɪv əˈses.mənt/",
+        "v": "đánh giá quá trình",
+        "ex": "Formative assessment guides teaching while the course runs."
+      },
+      {
+        "w": "summative assessment",
+        "pos": "noun",
+        "ph": "/ˈsʌm.ə.tɪv əˈses.mənt/",
+        "v": "đánh giá tổng kết",
+        "ex": "The final exam is a summative assessment."
+      },
+      {
+        "w": "differentiated instruction",
+        "pos": "noun",
+        "ph": "/ˌdɪf.əˈren.ʃi.eɪ.tɪd ɪnˈstrʌk.ʃən/",
+        "v": "dạy học phân hoá",
+        "ex": "Differentiated instruction gives each level a suitable task."
+      },
+      {
+        "w": "scaffolding",
+        "pos": "noun",
+        "ph": "/ˈskæf.əl.dɪŋ/",
+        "v": "giàn giáo hỗ trợ học tập",
+        "ex": "Scaffolding supports learners until they can work alone."
+      },
+      {
+        "w": "flipped classroom",
+        "pos": "noun",
+        "ph": "/flɪpt ˈklɑːs.ruːm/",
+        "v": "lớp học đảo ngược",
+        "ex": "In a flipped classroom students watch the lecture at home."
+      },
+      {
+        "w": "project-based learning",
+        "pos": "noun",
+        "ph": "/ˈprɒdʒ.ekt beɪst ˈlɜː.nɪŋ/",
+        "v": "học qua dự án",
+        "ex": "Project-based learning ends with a real product."
+      },
+      {
+        "w": "learning management system",
+        "pos": "noun",
+        "ph": "/ˈlɜː.nɪŋ ˈmæn.ɪdʒ.mənt ˈsɪs.təm/",
+        "v": "hệ thống quản lý học tập",
+        "ex": "Assignments are submitted through the learning management system."
+      },
+      {
+        "w": "gamification",
+        "pos": "noun",
+        "ph": "/ˌɡeɪm.ɪ.fɪˈkeɪ.ʃən/",
+        "v": "trò chơi hoá",
+        "ex": "Gamification keeps young learners coming back."
+      },
+      {
+        "w": "inclusive education",
+        "pos": "noun",
+        "ph": "/ɪnˈkluː.sɪv ˌedʒ.uˈkeɪ.ʃən/",
+        "v": "giáo dục hoà nhập",
+        "ex": "Inclusive education welcomes learners with disabilities."
+      },
+      {
+        "w": "teacher training",
+        "pos": "noun",
+        "ph": "/ˈtiː.tʃər ˈtreɪ.nɪŋ/",
+        "v": "bồi dưỡng giáo viên",
+        "ex": "Teacher training runs every summer."
+      },
+      {
+        "w": "curriculum reform",
+        "pos": "noun",
+        "ph": "/kəˈrɪk.jə.ləm rɪˈfɔːm/",
+        "v": "cải cách chương trình",
+        "ex": "The curriculum reform started in 2018."
+      },
+      {
+        "w": "school year",
+        "pos": "noun",
+        "ph": "/skuːl jɪər/",
+        "v": "năm học",
+        "ex": "The school year begins in September."
+      },
+      {
+        "w": "exam board",
+        "pos": "noun",
+        "ph": "/ɪɡˈzæm bɔːd/",
+        "v": "hội đồng thi",
+        "ex": "The exam board sets the papers for the whole province."
       }
     ]
   },
@@ -3501,6 +4222,104 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˈfriːˌlɑːn.sər/",
         "v": "người làm việc tự do",
         "ex": "We hired a freelancer to design the logo."
+      },
+      {
+        "w": "cash reserve",
+        "pos": "noun",
+        "ph": "/kæʃ rɪˈzɜːv/",
+        "v": "quỹ tiền mặt dự phòng",
+        "ex": "Keep a cash reserve for three months of costs."
+      },
+      {
+        "w": "due diligence",
+        "pos": "noun",
+        "ph": "/djuː ˈdɪl.ɪ.dʒəns/",
+        "v": "thẩm định trước giao dịch",
+        "ex": "Due diligence found problems in the accounts."
+      },
+      {
+        "w": "term sheet",
+        "pos": "noun",
+        "ph": "/tɜːm ʃiːt/",
+        "v": "bản điều khoản đầu tư",
+        "ex": "The investor sent a term sheet last week."
+      },
+      {
+        "w": "runway",
+        "pos": "noun",
+        "ph": "/ˈrʌn.weɪ/",
+        "v": "thời gian sống bằng vốn còn lại",
+        "ex": "The startup has nine months of runway left."
+      },
+      {
+        "w": "burn rate",
+        "pos": "noun",
+        "ph": "/bɜːn reɪt/",
+        "v": "tốc độ đốt tiền",
+        "ex": "A high burn rate scares investors."
+      },
+      {
+        "w": "churn rate",
+        "pos": "noun",
+        "ph": "/tʃɜːn reɪt/",
+        "v": "tỉ lệ khách rời bỏ",
+        "ex": "Churn rate fell after we improved support."
+      },
+      {
+        "w": "lead",
+        "pos": "noun",
+        "ph": "/liːd/",
+        "v": "khách hàng tiềm năng",
+        "ex": "The campaign generated two hundred leads."
+      },
+      {
+        "w": "conversion rate",
+        "pos": "noun",
+        "ph": "/kənˈvɜː.ʃən reɪt/",
+        "v": "tỉ lệ chuyển đổi",
+        "ex": "A clearer button raised the conversion rate."
+      },
+      {
+        "w": "supply chain",
+        "pos": "noun",
+        "ph": "/səˈplaɪ tʃeɪn/",
+        "v": "chuỗi cung ứng",
+        "ex": "The war disrupted the whole supply chain."
+      },
+      {
+        "w": "cost of goods sold",
+        "pos": "noun",
+        "ph": "/kɒst əv ɡʊdz səʊld/",
+        "v": "giá vốn hàng bán",
+        "ex": "Subtract the cost of goods sold to get gross profit."
+      },
+      {
+        "w": "break clause",
+        "pos": "noun",
+        "ph": "/breɪk klɔːz/",
+        "v": "điều khoản chấm dứt sớm",
+        "ex": "The break clause lets us leave after one year."
+      },
+      {
+        "w": "non-disclosure agreement",
+        "pos": "noun",
+        "ph": "/ˌnɒn.dɪsˈkləʊ.ʒər əˈɡriː.mənt/",
+        "v": "thoả thuận bảo mật",
+        "ex": "Sign the non-disclosure agreement before the demo."
+      },
+      {
+        "w": "unit economics",
+        "pos": "noun",
+        "ph": "/ˈjuː.nɪt ˌiː.kəˈnɒm.ɪks/",
+        "v": "hiệu quả kinh tế trên mỗi đơn vị",
+        "ex": "Unit economics show whether each sale actually makes money."
+      },
+      {
+        "w": "remote work",
+        "pos": "noun",
+        "ph": "/rɪˈməʊt wɜːk/",
+        "v": "làm việc từ xa",
+        "ex": "Remote work widened our hiring pool."
       }
     ]
   },
@@ -3892,6 +4711,111 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/lend/",
         "v": "cho mượn",
         "ex": "Can you lend me your pen?"
+      },
+      {
+        "w": "umbrella",
+        "pos": "noun",
+        "ph": "/ʌmˈbrel.ə/",
+        "v": "cái ô",
+        "ex": "Take an umbrella; it looks like rain."
+      },
+      {
+        "w": "crowded",
+        "pos": "adjective",
+        "ph": "/ˈkraʊ.dɪd/",
+        "v": "đông đúc",
+        "ex": "The bus is crowded in the morning."
+      },
+      {
+        "w": "quiet",
+        "pos": "adjective",
+        "ph": "/ˈkwaɪ.ət/",
+        "v": "yên tĩnh",
+        "ex": "The library is quiet in the afternoon."
+      },
+      {
+        "w": "noisy",
+        "pos": "adjective",
+        "ph": "/ˈnɔɪ.zi/",
+        "v": "ồn ào",
+        "ex": "The street is very noisy at night."
+      },
+      {
+        "w": "borrow money",
+        "pos": "verb",
+        "ph": "/ˈbɒr.əʊ ˈmʌn.i/",
+        "v": "vay tiền",
+        "ex": "He had to borrow money to fix the roof."
+      },
+      {
+        "w": "save",
+        "pos": "verb",
+        "ph": "/seɪv/",
+        "v": "tiết kiệm",
+        "ex": "I save a little money every month."
+      },
+      {
+        "w": "repair",
+        "pos": "verb",
+        "ph": "/rɪˈpeər/",
+        "v": "sửa chữa",
+        "ex": "Can you repair my bicycle?"
+      },
+      {
+        "w": "invite",
+        "pos": "verb",
+        "ph": "/ɪnˈvaɪt/",
+        "v": "mời",
+        "ex": "They invited us to dinner."
+      },
+      {
+        "w": "arrive",
+        "pos": "verb",
+        "ph": "/əˈraɪv/",
+        "v": "đến nơi",
+        "ex": "We arrived at the station just in time."
+      },
+      {
+        "w": "leave",
+        "pos": "verb",
+        "ph": "/liːv/",
+        "v": "rời đi",
+        "ex": "The train leaves at seven."
+      },
+      {
+        "w": "afraid",
+        "pos": "adjective",
+        "ph": "/əˈfreɪd/",
+        "v": "sợ",
+        "ex": "She is afraid of dogs."
+      },
+      {
+        "w": "proud",
+        "pos": "adjective",
+        "ph": "/praʊd/",
+        "v": "tự hào",
+        "ex": "My parents are proud of me."
+      },
+      {
+        "w": "polite",
+        "pos": "adjective",
+        "ph": "/pəˈlaɪt/",
+        "v": "lịch sự",
+        "ex": "He is always polite to older people."
+      },
+      {
+        "w": "careless",
+        "pos": "adjective",
+        "ph": "/ˈkeə.ləs/",
+        "v": "bất cẩn",
+        "ex": "A careless mistake cost him the game."
+      },
+      {
+        "w": "weekend plan",
+        "pos": "noun",
+        "ph": "/ˌwiːkˈend plæn/",
+        "v": "kế hoạch cuối tuần",
+        "ex": "What is your weekend plan?"
       }
     ]
   },
@@ -4227,6 +5151,97 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˈʃʌt.əl bʌs/",
         "v": "xe đưa đón",
         "ex": "A free shuttle bus runs to the terminal."
+      },
+      {
+        "w": "travel document",
+        "pos": "noun",
+        "ph": "/ˈtræv.əl ˈdɒk.jə.mənt/",
+        "v": "giấy tờ đi lại",
+        "ex": "Keep your travel documents in one folder."
+      },
+      {
+        "w": "boarding announcement",
+        "pos": "noun",
+        "ph": "/ˈbɔː.dɪŋ əˈnaʊns.mənt/",
+        "v": "thông báo lên máy bay",
+        "ex": "Listen for the boarding announcement."
+      },
+      {
+        "w": "window seat",
+        "pos": "noun",
+        "ph": "/ˈwɪn.dəʊ siːt/",
+        "v": "ghế cạnh cửa sổ",
+        "ex": "I always ask for a window seat."
+      },
+      {
+        "w": "excess baggage",
+        "pos": "noun",
+        "ph": "/ˈek.ses ˈbæɡ.ɪdʒ/",
+        "v": "hành lý quá cước",
+        "ex": "Excess baggage costs ten dollars a kilo."
+      },
+      {
+        "w": "duty-free",
+        "pos": "adjective",
+        "ph": "/ˌdjuː.tiˈfriː/",
+        "v": "miễn thuế",
+        "ex": "She bought perfume at the duty-free shop."
+      },
+      {
+        "w": "local cuisine",
+        "pos": "noun",
+        "ph": "/ˈləʊ.kəl kwɪˈziːn/",
+        "v": "ẩm thực địa phương",
+        "ex": "Try the local cuisine before you leave."
+      },
+      {
+        "w": "travel budget",
+        "pos": "noun",
+        "ph": "/ˈtræv.əl ˈbʌdʒ.ɪt/",
+        "v": "ngân sách chuyến đi",
+        "ex": "Our travel budget is tight this year."
+      },
+      {
+        "w": "off-peak",
+        "pos": "adjective",
+        "ph": "/ˌɒfˈpiːk/",
+        "v": "ngoài mùa cao điểm",
+        "ex": "Off-peak flights are much cheaper."
+      },
+      {
+        "w": "road trip",
+        "pos": "noun",
+        "ph": "/rəʊd trɪp/",
+        "v": "chuyến đi bằng ô tô",
+        "ex": "We took a road trip along the coast."
+      },
+      {
+        "w": "travel advisory",
+        "pos": "noun",
+        "ph": "/ˈtræv.əl ədˈvaɪ.zər.i/",
+        "v": "khuyến cáo đi lại",
+        "ex": "Check the travel advisory before you book."
+      },
+      {
+        "w": "accommodation fee",
+        "pos": "noun",
+        "ph": "/əˌkɒm.əˈdeɪ.ʃən fiː/",
+        "v": "phí lưu trú",
+        "ex": "The accommodation fee includes breakfast."
+      },
+      {
+        "w": "boarding queue",
+        "pos": "noun",
+        "ph": "/ˈbɔː.dɪŋ kjuː/",
+        "v": "hàng chờ lên máy bay",
+        "ex": "The boarding queue moved slowly."
+      },
+      {
+        "w": "travel companion",
+        "pos": "noun",
+        "ph": "/ˈtræv.əl kəmˈpæn.jən/",
+        "v": "bạn đồng hành",
+        "ex": "A good travel companion makes any trip better."
       }
     ]
   },
@@ -4569,6 +5584,97 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˈdɪs.kɔːs/",
         "v": "diễn ngôn",
         "ex": "The paper analyses classroom discourse in detail."
+      },
+      {
+        "w": "research question",
+        "pos": "noun",
+        "ph": "/rɪˈsɜːtʃ ˈkwes.tʃən/",
+        "v": "câu hỏi nghiên cứu",
+        "ex": "A sharp research question shapes the whole paper."
+      },
+      {
+        "w": "conceptual framework",
+        "pos": "noun",
+        "ph": "/kənˈsep.tʃu.əl ˈfreɪm.wɜːk/",
+        "v": "khung khái niệm",
+        "ex": "The conceptual framework links the three variables."
+      },
+      {
+        "w": "operationalize",
+        "pos": "verb",
+        "ph": "/ˌɒp.ərˈeɪ.ʃən.əl.aɪz/",
+        "v": "thao tác hoá khái niệm",
+        "ex": "We operationalize motivation as time spent studying."
+      },
+      {
+        "w": "reliability",
+        "pos": "noun",
+        "ph": "/rɪˌlaɪ.əˈbɪl.ə.ti/",
+        "v": "độ tin cậy của thang đo",
+        "ex": "The scale showed high reliability across both groups."
+      },
+      {
+        "w": "triangulation",
+        "pos": "noun",
+        "ph": "/traɪˌæŋ.ɡjəˈleɪ.ʃən/",
+        "v": "tam giác hoá dữ liệu",
+        "ex": "Triangulation combines interviews, tests and observation."
+      },
+      {
+        "w": "grounded theory",
+        "pos": "noun",
+        "ph": "/ˈɡraʊn.dɪd ˈθɪə.ri/",
+        "v": "lý thuyết nền",
+        "ex": "Grounded theory builds concepts from the data itself."
+      },
+      {
+        "w": "case study",
+        "pos": "noun",
+        "ph": "/keɪs ˈstʌd.i/",
+        "v": "nghiên cứu trường hợp",
+        "ex": "The case study follows one school for a year."
+      },
+      {
+        "w": "meta-analysis",
+        "pos": "noun",
+        "ph": "/ˌmet.ə.əˈnæl.ə.sɪs/",
+        "v": "phân tích tổng hợp",
+        "ex": "A meta-analysis pools results from forty studies."
+      },
+      {
+        "w": "confounding variable",
+        "pos": "noun",
+        "ph": "/kənˈfaʊn.dɪŋ ˈveə.ri.ə.bəl/",
+        "v": "biến gây nhiễu",
+        "ex": "Family income is a confounding variable here."
+      },
+      {
+        "w": "ethical approval",
+        "pos": "noun",
+        "ph": "/ˈeθ.ɪ.kəl əˈpruː.vəl/",
+        "v": "phê duyệt đạo đức nghiên cứu",
+        "ex": "No data was collected before ethical approval."
+      },
+      {
+        "w": "informed consent",
+        "pos": "noun",
+        "ph": "/ɪnˌfɔːmd kənˈsent/",
+        "v": "đồng ý sau khi được giải thích",
+        "ex": "Every participant gave informed consent."
+      },
+      {
+        "w": "pilot study",
+        "pos": "noun",
+        "ph": "/ˈpaɪ.lət ˈstʌd.i/",
+        "v": "nghiên cứu thử nghiệm",
+        "ex": "A pilot study tested the questionnaire on ten people."
+      },
+      {
+        "w": "scholarly",
+        "pos": "adjective",
+        "ph": "/ˈskɒl.əl.i/",
+        "v": "thuộc học thuật",
+        "ex": "Use scholarly sources, not blog posts."
       }
     ]
   },
@@ -4918,6 +6024,104 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/kɜːb/",
         "v": "kiềm chế, hạn chế",
         "ex": "The new rules aim to curb air pollution."
+      },
+      {
+        "w": "mitigation",
+        "pos": "noun",
+        "ph": "/ˌmɪt.ɪˈɡeɪ.ʃən/",
+        "v": "sự giảm nhẹ",
+        "ex": "Flood mitigation requires long-term planning."
+      },
+      {
+        "w": "accelerate",
+        "pos": "verb",
+        "ph": "/əkˈsel.ə.reɪt/",
+        "v": "đẩy nhanh",
+        "ex": "Technology has accelerated the pace of change."
+      },
+      {
+        "w": "advocate for",
+        "pos": "verb",
+        "ph": "/ˈæd.və.keɪt fɔːr/",
+        "v": "vận động ủng hộ",
+        "ex": "Many scientists advocate for stricter emission limits."
+      },
+      {
+        "w": "counterargument",
+        "pos": "noun",
+        "ph": "/ˈkaʊn.tərˌɑː.ɡjə.mənt/",
+        "v": "luận điểm phản bác",
+        "ex": "A strong essay answers the main counterargument."
+      },
+      {
+        "w": "drawback",
+        "pos": "noun",
+        "ph": "/ˈdrɔː.bæk/",
+        "v": "nhược điểm",
+        "ex": "The main drawback is the cost."
+      },
+      {
+        "w": "incentivize",
+        "pos": "verb",
+        "ph": "/ɪnˈsen.tɪ.vaɪz/",
+        "v": "tạo động lực bằng lợi ích",
+        "ex": "Tax breaks incentivize companies to hire graduates."
+      },
+      {
+        "w": "marginalized",
+        "pos": "adjective",
+        "ph": "/ˈmɑː.dʒɪ.nə.laɪzd/",
+        "v": "bị gạt ra bên lề",
+        "ex": "Marginalized groups often lack access to health care."
+      },
+      {
+        "w": "offset",
+        "pos": "verb",
+        "ph": "/ˌɒfˈset/",
+        "v": "bù đắp",
+        "ex": "Planting trees can offset some emissions."
+      },
+      {
+        "w": "predominantly",
+        "pos": "adverb",
+        "ph": "/prɪˈdɒm.ɪ.nənt.li/",
+        "v": "chủ yếu là",
+        "ex": "The workforce is predominantly young."
+      },
+      {
+        "w": "sustainable",
+        "pos": "adjective",
+        "ph": "/səˈsteɪ.nə.bəl/",
+        "v": "bền vững",
+        "ex": "We need a sustainable transport system."
+      },
+      {
+        "w": "threshold",
+        "pos": "noun",
+        "ph": "/ˈθreʃ.həʊld/",
+        "v": "ngưỡng",
+        "ex": "Pollution passed the safe threshold in June."
+      },
+      {
+        "w": "trigger",
+        "pos": "verb",
+        "ph": "/ˈtrɪɡ.ər/",
+        "v": "châm ngòi, gây ra",
+        "ex": "The price rise triggered widespread protests."
+      },
+      {
+        "w": "underpin",
+        "pos": "verb",
+        "ph": "/ˌʌn.dəˈpɪn/",
+        "v": "làm nền tảng cho",
+        "ex": "Trust underpins every successful partnership."
+      },
+      {
+        "w": "vulnerable",
+        "pos": "adjective",
+        "ph": "/ˈvʌl.nər.ə.bəl/",
+        "v": "dễ bị tổn thương",
+        "ex": "Elderly people are the most vulnerable in a heatwave."
       }
     ]
   },
@@ -5204,6 +6408,104 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˌtreɪ.səˈbɪl.ə.ti/",
         "v": "khả năng truy vết yêu cầu",
         "ex": "Traceability links every requirement to a test case."
+      },
+      {
+        "w": "sprint planning",
+        "pos": "noun",
+        "ph": "/sprɪnt ˈplæn.ɪŋ/",
+        "v": "họp lập kế hoạch sprint",
+        "ex": "Sprint planning turns the backlog into this week’s work."
+      },
+      {
+        "w": "story point",
+        "pos": "noun",
+        "ph": "/ˈstɔː.ri pɔɪnt/",
+        "v": "điểm ước lượng công việc",
+        "ex": "This task is five story points."
+      },
+      {
+        "w": "epic",
+        "pos": "noun",
+        "ph": "/ˈep.ɪk/",
+        "v": "nhóm việc lớn",
+        "ex": "An epic breaks down into many user stories."
+      },
+      {
+        "w": "impediment",
+        "pos": "noun",
+        "ph": "/ɪmˈped.ɪ.mənt/",
+        "v": "trở ngại cần gỡ",
+        "ex": "The scrum master removes impediments for the team."
+      },
+      {
+        "w": "handover",
+        "pos": "noun",
+        "ph": "/ˈhæn.dəʊ.vər/",
+        "v": "bàn giao",
+        "ex": "Write a handover note before you go on leave."
+      },
+      {
+        "w": "runbook",
+        "pos": "noun",
+        "ph": "/ˈrʌn.bʊk/",
+        "v": "sổ tay vận hành",
+        "ex": "The runbook lists what to do when the queue backs up."
+      },
+      {
+        "w": "postmortem",
+        "pos": "noun",
+        "ph": "/ˌpəʊstˈmɔː.təm/",
+        "v": "họp rút kinh nghiệm sau sự cố",
+        "ex": "The postmortem blamed the process, not the person."
+      },
+      {
+        "w": "service level agreement",
+        "pos": "noun",
+        "ph": "/ˈsɜː.vɪs ˈlev.əl əˈɡriː.mənt/",
+        "v": "cam kết mức dịch vụ",
+        "ex": "Our service level agreement promises 99.9% uptime."
+      },
+      {
+        "w": "backward compatibility",
+        "pos": "noun",
+        "ph": "/ˈbæk.wəd kəmˌpæt.əˈbɪl.ə.ti/",
+        "v": "tương thích ngược",
+        "ex": "Backward compatibility lets old clients keep working."
+      },
+      {
+        "w": "breaking change",
+        "pos": "noun",
+        "ph": "/ˈbreɪ.kɪŋ tʃeɪndʒ/",
+        "v": "thay đổi phá vỡ tương thích",
+        "ex": "Renaming that field is a breaking change."
+      },
+      {
+        "w": "canary release",
+        "pos": "noun",
+        "ph": "/kəˈneə.ri rɪˈliːs/",
+        "v": "phát hành thăm dò",
+        "ex": "A canary release ships to 1% of users first."
+      },
+      {
+        "w": "blue-green deployment",
+        "pos": "noun",
+        "ph": "/ˌbluːˈɡriːn dɪˈplɔɪ.mənt/",
+        "v": "triển khai hai môi trường song song",
+        "ex": "Blue-green deployment switches traffic with no downtime."
+      },
+      {
+        "w": "observability",
+        "pos": "noun",
+        "ph": "/əbˌzɜː.vəˈbɪl.ə.ti/",
+        "v": "khả năng quan sát hệ thống",
+        "ex": "Good observability tells you why, not just that it broke."
+      },
+      {
+        "w": "on-call",
+        "pos": "adjective",
+        "ph": "/ˌɒnˈkɔːl/",
+        "v": "trực hệ thống",
+        "ex": "She is on-call this weekend."
       }
     ]
   }
