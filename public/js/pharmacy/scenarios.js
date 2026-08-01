@@ -106,6 +106,15 @@ LUẬT TIẾT LỘ NGHIÊM NGẶT (bổ sung 28/07 — yêu cầu #117): ba dữ
 - "Phân bé không có nhầy, có máu gì đâu em" → chỉ nói khi được hỏi phân có NHẦY / có MÁU không.
 - "Chị cho bé ăn cháo loãng nấu với nước thịt và rau củ" → chỉ nói khi được hỏi về ĂN DẶM (cho bé ăn dặm thế nào / ăn dặm những gì).
 
+PHÂN BIỆT CÂU CHUNG VÀ CÂU ĐÍCH DANH (bổ sung 01/08 — yêu cầu #122):
+- Hỏi CHUNG "phân của bé thế nào?" → CHỈ đáp "Phân bé nhiều nước ạ." TUYỆT ĐỐI không nhắc nhầy hay máu.
+- Hỏi ĐÍCH DANH "phân bé có nhầy, có máu không?" → mới được đáp "Phân bé không có nhầy, có máu gì đâu em."
+- Hỏi CHUNG "chế độ ăn uống / dinh dưỡng của bé thế nào?" → CHỈ đáp "Bé vẫn bú mẹ hoàn toàn, mình mới cho ăn dặm được khoảng 1 tuần thôi ạ."
+- Hỏi ĐÍCH DANH "chị cho bé ăn dặm những gì / như thế nào?" → mới được kể "cháo loãng nấu với nước thịt và rau củ".
+- Câu hỏi hay câu nói KHÔNG có trong kịch bản: đáp cho hợp ngữ cảnh, ngắn gọn, trong vai người mẹ — nhưng TUYỆT ĐỐI không tự khai thêm bất kỳ thông tin lâm sàng nào chưa được hỏi.
+
+KHI DƯỢC SĨ TRẤN AN / ĐỘNG VIÊN (vd "chị đừng lo quá", "chị cứ yên tâm, em sẽ tư vấn cho bé"): bớt lo hẳn và đáp lại bằng sự yên tâm, biết ơn, tin tưởng — ví dụ "Cám ơn em, em nói thế chị cũng yên tâm rồi." hoặc "May quá, có dược sĩ tư vấn thì mình cũng bớt lo hơn."
+
 HỒ SƠ (CHỈ tiết lộ khi dược sĩ hỏi ĐÚNG ý — KHÔNG tự khai trước; hỏi chung "chị thấy thế nào/có triệu chứng gì" thì CHỈ nói triệu chứng chính "con bị đi ngoài", không kể chi tiết):
 - Tuổi & cân nặng: bé 6 tháng, nặng 7,2 kg.
 - Thời gian: bắt đầu từ hôm qua (khoảng 1 ngày), chưa đỡ.
@@ -161,12 +170,32 @@ Bạn KHÔNG có chuyên môn y dược: nói lời của một người mẹ b�
     { id: "vomit_fever",
       cue:  /(nôn|ói|trớ|sốt|nhiệt độ|quấy|khóc|mệt|li bì|lừ đừ|bỏ bú|chơi)/i,
       leak: /(không\s*(bị\s*)?(nôn|ói|sốt)|nôn|sốt|vẫn\s*chơi|chơi\s*bình thường)/i },
+    // SIẾT 01/08 (req #122): trước đây cue nhận cả "phân thế nào" nên hỏi CHUNG cũng
+    // mở khoá được nhầy/máu — sai nguyên tắc. Nay chỉ hỏi ĐÍCH DANH nhầy/máu mới mở.
     { id: "stool_mucus_blood",
-      cue:  /(nhầy|nhày|máu|mũi|bọt|mùi|màu|tính chất|phân\s*(của\s*bé\s*)?(thế nào|ra sao|như thế nào))/i,
+      cue:  /(nhầy|nhày|máu|lẫn máu|có bọt)/i,
       leak: /(nhầy|nhày|máu)/i },
+    // Tương tự: "chế độ ăn uống/dinh dưỡng thế nào" là câu CHUNG → chỉ được đáp lớp 1
+    // (bú mẹ + mới ăn dặm 1 tuần). Chi tiết món ăn dặm chỉ mở khi hỏi thẳng "ăn dặm".
     { id: "weaning",
-      cue:  /(ăn dặm|ăn uống|ăn gì|chế độ ăn|bú|sữa|sinh hoạt|thức ăn)/i,
-      leak: /(ăn dặm|cháo loãng|nước thịt|rau củ)/i },
+      cue:  /(ăn dặm|ăn thêm gì|cho bé ăn (gì|những gì|thế nào)|bột|cháo)/i,
+      leak: /(cháo loãng|nước thịt|rau củ|thịt cá)/i },
+  ],
+  // Câu hỏi CHUNG có sẵn đáp án lớp 1 (req #122) — trả tất định, không để LLM tự do
+  // rồi mới lọc. Đặt TRƯỚC guardedFacts nên chi tiết lớp 2 không bao giờ lọt ra.
+  generalAnswers: [
+    { id: "stool",
+      re: /phân[^?]{0,25}(thế nào|ra sao|như thế nào|làm sao)|tính chất[^?]{0,15}phân|phân[^?]{0,10}kiểu gì/i,
+      lines: ["Phân bé nhiều nước ạ.", "Dạ, phân bé toàn nước thôi ạ."] },
+    { id: "diet",
+      re: /(chế độ (ăn|ăn uống|dinh dưỡng)|ăn uống[^?]{0,20}(thế nào|ra sao)|dinh dưỡng[^?]{0,20}(thế nào|ra sao))/i,
+      lines: ["Bé vẫn bú mẹ hoàn toàn, mình mới cho ăn dặm được khoảng 1 tuần thôi ạ."] },
+  ],
+  // Dược sĩ trấn an / động viên → mẹ bé đáp lại bằng sự yên tâm và biết ơn (req #122).
+  empathyReplies: [
+    "Cám ơn em, em nói thế chị cũng yên tâm rồi.",
+    "May quá, có dược sĩ tư vấn thì mình cũng bớt lo hơn.",
+    "Vâng, mình cám ơn dược sĩ nhiều nhé, mình yên tâm hơn rồi.",
   ],
   requiredActions: ["pick_box", "label_dose", "pos_checkout"]
 };
@@ -213,9 +242,12 @@ const OTC02 = {
     "Tôi đã hiểu, còn gì nữa không?",
   ],
   // Câu ghi nhận khi dược sĩ ĐÃ đồng cảm / giải thích lý do → AI dịu dần.
+  // Bổ sung 01/08 (req #123 §3): luân phiên 4 cách nói, KHÔNG lặp một câu ở mọi lượt.
   empathyAckLines: [
     "Vâng, tôi hiểu rồi.",
     "Cảm ơn dược sĩ đã giải thích.",
+    "Vâng, dược sĩ cứ hỏi.",
+    "Được, tôi sẽ trả lời để dược sĩ tư vấn giúp.",
   ],
   npcPersona: `Bạn đóng vai ANH T, khoảng 35 tuổi, là NGƯỜI TRỰC TIẾP DÙNG THUỐC. Bạn ra nhà thuốc mua Alaxan vì đau nhức răng. Tính cách: KHÓ TÍNH, ít hợp tác vì đang bận công việc. Cảm xúc ban đầu: ĐAU NHIỀU, khó chịu, muốn mua thuốc thật nhanh.
 
@@ -258,9 +290,12 @@ KỊCH BẢN CHUẨN — khi câu của dược sĩ khớp ý bên trái, trả 
 - Giao thuốc, dặn dò cuối, chào → "Cảm ơn dược sĩ."
 - Câu KHÔNG khớp ý nào ở trên → ứng biến NGẮN GỌN trong vai, nhất quán hồ sơ, không bịa dữ kiện y khoa.
 
-CẢM XÚC HAI GIAI ĐOẠN:
-- Khi dược sĩ CHƯA thể hiện quan tâm/đồng cảm và CHƯA giải thích lý do cần khai thác thông tin: giữ trạng thái "đau nhiều – thiếu kiên nhẫn – đang vội". Vẫn trả lời đúng dữ kiện, nhưng cộc và tỏ ra sốt ruột.
-- Khi dược sĩ đã đồng cảm ("tôi hiểu anh đang vội / đang đau") và giải thích lý do hỏi (vd Alaxan có ibuprofen nên phải hỏi kỹ tiền sử dạ dày, gan thận, dị ứng): giảm dần khó chịu, hợp tác hơn, mở đầu câu bằng "Vâng, tôi hiểu rồi" hoặc "Cảm ơn dược sĩ đã giải thích".
+CẢM XÚC — MÁY TRẠNG THÁI HAI PHA (siết 01/08 theo yêu cầu #123):
+- PHA 1 "đau – khó chịu – thiếu kiên nhẫn – đang vội": khi dược sĩ CHƯA đồng cảm HOẶC CHƯA giải thích lý do cần hỏi. Vẫn trả lời đúng dữ kiện, giọng sốt ruột nhưng LỊCH SỰ — không cáu gắt, không xúc phạm. Không tự dịu đi khi chưa đủ điều kiện.
+- ĐIỀU KIỆN CHUYỂN PHA: dược sĩ vừa thể hiện quan tâm/đồng cảm, vừa giải thích lý do hỏi thêm gắn với dùng thuốc an toàn – hiệu quả – phù hợp. CHỈ CẦN ĐÁP ỨNG MỘT LẦN trong cả cuộc hội thoại là phải chuyển.
+- PHA 2 "hợp tác": ngay từ câu trả lời KẾ TIẾP và cho tới hết tình huống. Trả lời đầy đủ, chủ động hợp tác; luân phiên các câu "Vâng, tôi hiểu rồi." / "Cảm ơn dược sĩ đã giải thích." / "Vâng, dược sĩ cứ hỏi." / "Được, tôi sẽ trả lời để dược sĩ tư vấn giúp." — KHÔNG lặp mãi một câu.
+- SAU KHI CHUYỂN PHA: TUYỆT ĐỐI không dùng lại bất kỳ câu, từ ngữ hay thái độ thúc giục nào ("tôi đang vội", "sao hỏi nhiều vậy", "lấy thuốc cho tôi đi", "xong chưa"…). Không quay lại pha 1, trừ khi dược sĩ bất lịch sự hoặc xúc phạm.
+- KHÔNG TRỘN HAI PHA trong cùng một lượt: đã cảm ơn vì được giải thích thì không được giục ngay sau đó.
 
 Bạn KHÔNG có chuyên môn y dược: nói lời người bình thường, KHÔNG thuật ngữ, KHÔNG tự chẩn đoán, KHÔNG biết đáp án đúng.`,
   stageRules: [
@@ -276,6 +311,8 @@ Bạn KHÔNG có chuyên môn y dược: nói lời người bình thường, KH
     { id: "stomach_liver_kidney", cue: /(dạ dày|tá tràng|loét|gan|thận|bệnh (gì|nào)|điều trị|mắc kèm|tiền sử)/i, leak: /(dạ dày|tá tràng|gan|thận)/i },
     { id: "allergy",             cue: /(dị ứng|mẩn|ngứa|phát ban)/i,                                              leak: /(dị ứng)/i },
     { id: "alcohol",             cue: /(rượu|bia|nhậu|đồ uống có cồn)/i,                                           leak: /(rượu|bia)/i },
+    // Đo 01/08: hỏi dạ dày thì model khai kèm "tôi mua cho chính mình dùng" (chưa hỏi).
+    { id: "buyer",               cue: /(mua (thuốc )?(này )?cho ai|dùng cho ai|ai (dùng|uống)|cho bản thân)/i,     leak: /(mua cho (tôi|chính|mình)|cho (tôi|chính mình) dùng)/i },
     // Đo thực tế 29/07: hỏi "anh có sốt không" thì model khai kèm luôn "lợi còn sưng
     // và đau" — đúng loại lỗi tài liệu #117 muốn chặn, nên khoá riêng hai dữ kiện này.
     { id: "gum_swelling",        cue: /(lợi|nướu|sưng|viêm)/i,                                                     leak: /(sưng|lợi|nướu)/i },

@@ -265,20 +265,57 @@ export function updateMoodState(scenario, s, text) {
   if (EMPATHY_RE.test(text)) s.context.empathyShown = true;
   if (REASON_RE.test(text))  s.context.reasonGiven  = true;
 }
-// Gắn sắc thái vào câu trả lời: chưa được đồng cảm → chêm câu sốt ruột (rải luân
-// phiên nên không lặp nguyên văn); đã được đồng cảm → mở đầu bằng câu ghi nhận.
+// Giọng thúc giục ở PHA 1 — dùng để DỌN khỏi câu trả lời sau khi đã chuyển pha hợp
+// tác (#123 §3 & §5: không được dùng lại, không được trộn hai pha trong một lượt).
+// Đo trên prod 01/08: model còn lách bằng "hãy tư vấn nhanh giúp tôi" và "bây giờ
+// lấy thuốc được chưa" — mở rộng để bắt MỌI kiểu giục, không chỉ các câu mẫu.
+const NAG_OUT_RE = /(sao\s*(mà\s*)?hỏi\s*nhiều|hỏi\s*nhiều\s*(vậy|thế)|đang\s*(rất\s*)?vội|vội\s*lắm|đang\s*rất\s*đau|bao\s*giờ\s*(thì\s*)?lấy|lấy\s*(nhanh\s*)?thuốc[^.?!]{0,25}(đi|đây|chưa)|(tư\s*vấn|làm|lấy|hỏi)\s*nhanh|nhanh\s*(lên|giúp|hộ|giùm)|mau\s*lên|gấp\s*(lắm|quá)|còn\s*(phải\s*)?hỏi\s*gì|(đã\s*)?hỏi\s*xong\s*chưa|xong\s*chưa|muộn\s*giờ|còn\s*gì\s*nữa\s*không)/i;
+
+// Gắn sắc thái vào câu trả lời.
+//  - PHA 1 (chưa đủ đồng cảm + giải thích): chêm câu sốt ruột, rải luân phiên.
+//  - PHA 2 (đã chuyển): DỌN SẠCH mọi giọng thúc giục model lỡ sinh ra, và mở đầu
+//    bằng câu hợp tác luân phiên ở lượt dược sĩ vừa đồng cảm/giải thích.
 export function applyMood(scenario, s, reply, userText) {
   const nags = scenario?.impatientLines;
   if (!Array.isArray(nags) || !nags.length || !reply) return reply;
+  const acks = scenario.empathyAckLines || [];
+
   if (s.context.empathyShown && s.context.reasonGiven) {
+    // Cắt từng câu mang giọng pha 1 — kể cả khi model tự nghĩ ra câu giục mới.
+    let out = reply.split(/(?<=[.!?…])\s+/).filter(Boolean)
+      .filter(sen => !NAG_OUT_RE.test(sen)).join(' ').trim();
+    if (!out) out = rot(acks, s) || 'Vâng, tôi hiểu rồi.';
     if (EMPATHY_RE.test(userText) || REASON_RE.test(userText)) {
-      const ack = rot(scenario.empathyAckLines || [], s);
-      if (ack && !reply.includes(ack)) return `${ack} ${reply}`.trim();
+      const ack = rot(acks, s);
+      if (ack && !out.includes(ack)) out = `${ack} ${out}`.trim();
     }
-    return reply;
+    return out;
   }
   const nag = rot(nags, s);
   return (!nag || reply.includes(nag)) ? reply : `${reply} ${nag}`.trim();
+}
+
+// #122 — câu hỏi CHUNG đã có sẵn đáp án lớp 1 → trả TẤT ĐỊNH, không để LLM tự do.
+// Nếu trong cùng câu dược sĩ có hỏi ĐÍCH DANH dữ kiện lớp 2 (vd "phân thế nào, có
+// nhầy máu không?") thì KHÔNG chặn — để trả lời chi tiết như kịch bản cho phép.
+export function generalAnswer(scenario, s, text) {
+  const gs = scenario?.generalAnswers;
+  if (!Array.isArray(gs) || !gs.length) return null;
+  const hit = gs.find(g => g.re.test(text));
+  if (!hit) return null;
+  if ((scenario.guardedFacts || []).some(f => f.cue.test(text))) return null;
+  return rot(hit.lines, s);
+}
+
+// #122 — dược sĩ trấn an/động viên: bệnh nhân đáp lại bằng sự yên tâm & biết ơn.
+// Câu KHÔNG kèm câu hỏi → trả tất định luôn; có kèm câu hỏi → chỉ ghép làm câu mở đầu.
+const REASSURE_RE = /(đừng\s*lo|không\s*(cần\s*)?lo|yên\s*tâm|bình\s*tĩnh|không\s*sao|(em|tôi|mình)\s*hiểu|thông\s*cảm|chia\s*sẻ|sẽ\s*(tư vấn|giúp|hướng dẫn|lo)|không\s*đáng\s*ngại|bé\s*sẽ\s*(ổn|khỏi))/i;
+const QUESTION_RE = /\?|\bthế nào\b|\bra sao\b|\bmấy\b|\bbao nhiêu\b|\bbao lâu\b|\bgì\b|\bnào\b|\bkhông\b|\bchưa\b/i;
+export function reassureReply(scenario, s, text) {
+  const lines = scenario?.empathyReplies;
+  if (!Array.isArray(lines) || !lines.length) return null;
+  if (!REASSURE_RE.test(text)) return null;
+  return { line: rot(lines, s), standalone: !QUESTION_RE.test(text) };
 }
 
 // NPC CHUYÊN MÔN (bác sĩ, trưởng khoa…): KHÔNG áp bộ quy tắc bệnh nhân — họ CÓ chuyên
@@ -396,6 +433,26 @@ export function attachPharmacy(r) {
       return res.json({ session: s });
     }
 
+    // GUARD 2c-bis (#122) — dược sĩ TRẤN AN/ĐỘNG VIÊN mà không hỏi gì → đáp lại
+    // bằng sự yên tâm, biết ơn (tất định). Có kèm câu hỏi thì để xuống dưới ghép.
+    const reassure = isPatient ? reassureReply(scenario, s, text) : null;
+    if (reassure && reassure.standalone) {
+      s.messages.push({ role: 'npc', content: reassure.line, ts: Date.now() });
+      saveSession(s);
+      return res.json({ session: s });
+    }
+
+    // GUARD 2d-bis (#122) — câu hỏi CHUNG có đáp án lớp 1 sẵn (phân thế nào / chế độ
+    // ăn uống thế nào) → trả tất định, chi tiết lớp 2 không có đường lọt ra.
+    {
+      const ga = isPatient && generalAnswer(scenario, s, text);
+      if (ga) {
+        s.messages.push({ role: 'npc', content: reassure ? `${reassure.line} ${ga}` : ga, ts: Date.now() });
+        saveSession(s);
+        return res.json({ session: s });
+      }
+    }
+
     // GUARD 2d — BỔ SUNG 25/07: câu hỏi CHUNG CHUNG → chỉ nêu TRIỆU CHỨNG CHÍNH
     // (tất định), không để LLM liệt kê chi tiết lâm sàng.
     if (isPatient && GENERAL_RE.test(text) && Array.isArray(scenario.chiefComplaintLines) && scenario.chiefComplaintLines.length) {
@@ -426,6 +483,7 @@ export function attachPharmacy(r) {
       reply = filtered || rot(scenario.passiveLines || PASSIVE_LINES, s);
     }
     reply = applyMood(scenario, s, reply, text);
+    if (reassure && !reply.includes(reassure.line)) reply = `${reassure.line} ${reply}`.trim();
     s.messages.push({ role: 'npc', content: reply, ts: Date.now() });
     saveSession(s);
     res.json({ session: s });
@@ -483,6 +541,14 @@ export function attachPharmacy(r) {
       return finish(passive[nNpc % passive.length]);
     }
     // GUARD 2d — câu hỏi CHUNG CHUNG → chỉ triệu chứng chính (25/07).
+    // #122 — trấn an/động viên không kèm câu hỏi → đáp yên tâm, biết ơn (tất định).
+    const reassure = isPatient ? reassureReply(scenario, s, text) : null;
+    if (reassure && reassure.standalone) return finish(reassure.line);
+    // #122 — câu hỏi CHUNG có đáp án lớp 1 sẵn → trả tất định, không lộ lớp 2.
+    {
+      const ga = isPatient && generalAnswer(scenario, s, text);
+      if (ga) return finish(reassure ? `${reassure.line} ${ga}` : ga);
+    }
     if (isPatient && GENERAL_RE.test(text) && Array.isArray(scenario.chiefComplaintLines) && scenario.chiefComplaintLines.length) {
       return finish(rot(scenario.chiefComplaintLines, s));
     }
@@ -541,7 +607,9 @@ export function attachPharmacy(r) {
         const filtered = stripGuardedFacts(scenario, finalReply, text);
         finalReply = filtered || rot(scenario.passiveLines || PASSIVE_LINES, s);
       }
-      finish(applyMood(scenario, s, finalReply, text));
+      let moody = applyMood(scenario, s, finalReply, text);
+      if (reassure && !moody.includes(reassure.line)) moody = `${reassure.line} ${moody}`.trim();
+      finish(moody);
     } catch (err) {
       console.error('[pharmacy] ollama stream failed, using stub:', err.message);
       finish(stubReply(scenario.id));
