@@ -260,8 +260,16 @@ export function stripGuardedFacts(scenario, reply, userText) {
 // Anh T (OTC-02) chỉ dịu khi dược sĩ VỪA đồng cảm VỪA giải thích lý do khai thác
 // thông tin. Hai vế có thể đến ở hai lượt khác nhau → cộng dồn cờ trong session.
 // Chỉ áp cho tình huống CÓ khai báo impatientLines; OTC-01 không bị ảnh hưởng.
-const EMPATHY_RE = /((tôi|em|mình)\s+(rất\s+|cũng\s+)?(hiểu|thông cảm)|thông cảm|chia sẻ với|hiểu (là|rằng)?\s*(anh|chị)|(anh|chị)\s+(đang\s+)?(vội|đau|khó chịu|mệt|bận)|xin lỗi vì|làm phiền|mất thời gian)/i;
-const REASON_RE  = /(\bvì\b|\bbởi\b|\bsở dĩ\b|để (đảm bảo|chắc chắn|an toàn|việc dùng|dùng thuốc)|lý do|nguy cơ|thận trọng|tránh (tác dụng|tương tác|rủi ro)|nên (em|tôi) (phải|xin phép) hỏi)/i;
+// #131 (02/08): tài liệu nhấn mạnh AI phải nhận diện MỌI cách diễn đạt cùng ý nghĩa,
+// không chỉ đúng nguyên văn ví dụ. Đo thử bản cũ: 4/8 câu diễn đạt khác bị trượt (kể
+// cả 2 ví dụ trong chính tài liệu). Viết lại theo DẤU HIỆU ngữ nghĩa:
+//  · đồng cảm  = động từ thấu hiểu gắn với người bệnh, hoặc nhận xét về trạng thái
+//    của họ ở thể KHẲNG ĐỊNH ("anh đang rất khó chịu", "có vẻ đau nhiều") — cố ý
+//    KHÔNG bắt câu hỏi triệu chứng ("anh có đau không ạ?") để khỏi chuyển pha nhầm.
+//  · giải thích = mệnh đề mục đích gắn với dùng thuốc an toàn/phù hợp/hiệu quả, hoặc
+//    lý do gắn với hoạt chất và tiền sử bệnh.
+const EMPATHY_RE = /((em|tôi|mình)\s*(cũng\s*|rất\s*)?(hiểu|biết|thấy|thông cảm|chia sẻ|đồng cảm)|thông cảm|đồng cảm|có vẻ\s*(rất\s*|khá\s*)?(đau|mệt|khó chịu|vội)|chắc\s*(là\s*)?(anh|chị)|(anh|chị)\s*(đang\s*)?(rất|khá|quá|hơi)\s*(đau|khó chịu|mệt|vội|bận|sốt ruột)|xin lỗi vì|làm phiền|mất thời gian|đừng lo|yên tâm)/i;
+const REASON_RE  = /(để[^.?!]{0,40}(an toàn|phù hợp|hiệu quả|đúng thuốc|chọn\s*(đúng\s*)?thuốc|tư vấn|dùng thuốc|đảm bảo|chắc chắn)|(vì|bởi|do)[^.?!]{0,40}(ibuprofen|alaxan|thuốc|dạ dày|gan|thận|dị ứng|tác dụng|tương tác|thận trọng|nguy cơ)|\blý do\b|\bsở dĩ\b|thận trọng|nguy cơ|nên\s*(em|tôi)\s*(phải|cần|xin phép)\s*(hỏi|kiểm tra))/i;
 export function updateMoodState(scenario, s, text) {
   if (!Array.isArray(scenario?.impatientLines)) return;
   if (EMPATHY_RE.test(text)) s.context.empathyShown = true;
@@ -299,6 +307,9 @@ export function applyMood(scenario, s, reply, userText) {
     }
     return out;
   }
+  // Pha 1: chỉ chêm khi model CHƯA tự nói giọng giục — tránh "…tôi đang rất vội.
+  // Tôi đang vội lắm." (đo trên prod 02/08).
+  if (NAG_OUT_RE.test(reply)) return reply;
   const nag = rot(nags, s);
   return (!nag || reply.includes(nag)) ? reply : `${reply} ${nag}`.trim();
 }
