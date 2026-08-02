@@ -701,6 +701,111 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˌɒfˈlaɪn məʊd/",
         "v": "chế độ ngoại tuyến",
         "ex": "Offline mode keeps the app usable without a network."
+      },
+      {
+        "w": "firmware update",
+        "pos": "noun",
+        "ph": "/ˈfɜːm.weər ˈʌp.deɪt/",
+        "v": "cập nhật phần mềm nhúng",
+        "ex": "A firmware update fixed the printer’s paper-feed bug."
+      },
+      {
+        "w": "boot",
+        "pos": "verb",
+        "ph": "/buːt/",
+        "v": "khởi động máy",
+        "ex": "The laptop boots in under ten seconds."
+      },
+      {
+        "w": "partition",
+        "pos": "noun",
+        "ph": "/pɑːˈtɪʃ.ən/",
+        "v": "phân vùng ổ đĩa",
+        "ex": "Create a separate partition for your data."
+      },
+      {
+        "w": "file system",
+        "pos": "noun",
+        "ph": "/faɪl ˈsɪs.təm/",
+        "v": "hệ thống tệp",
+        "ex": "NTFS and ext4 are common file systems."
+      },
+      {
+        "w": "file permission",
+        "pos": "noun",
+        "ph": "/faɪl pəˈmɪʃ.ən/",
+        "v": "quyền truy cập tệp",
+        "ex": "Change the file permission so the server can read it."
+      },
+      {
+        "w": "environment variable",
+        "pos": "noun",
+        "ph": "/ɪnˈvaɪə.rən.mənt ˈveə.ri.ə.bəl/",
+        "v": "biến môi trường",
+        "ex": "Store the API key in an environment variable, never in code."
+      },
+      {
+        "w": "dependency injection",
+        "pos": "noun",
+        "ph": "/dɪˈpen.dən.si ɪnˈdʒek.ʃən/",
+        "v": "tiêm phụ thuộc",
+        "ex": "Dependency injection makes classes easier to test."
+      },
+      {
+        "w": "reverse proxy",
+        "pos": "noun",
+        "ph": "/rɪˈvɜːs ˈprɒk.si/",
+        "v": "máy chủ proxy ngược",
+        "ex": "A reverse proxy sits in front of the app servers."
+      },
+      {
+        "w": "containerization",
+        "pos": "noun",
+        "ph": "/kənˌteɪ.nə.raɪˈzeɪ.ʃən/",
+        "v": "đóng gói theo container",
+        "ex": "Containerization made our deployments repeatable."
+      },
+      {
+        "w": "orchestration",
+        "pos": "noun",
+        "ph": "/ˌɔː.kɪˈstreɪ.ʃən/",
+        "v": "điều phối cụm dịch vụ",
+        "ex": "Kubernetes handles orchestration of the containers."
+      },
+      {
+        "w": "provisioning",
+        "pos": "noun",
+        "ph": "/prəˈvɪʒ.ən.ɪŋ/",
+        "v": "cấp phát hạ tầng",
+        "ex": "Provisioning a new server now takes two minutes."
+      },
+      {
+        "w": "idle",
+        "pos": "adjective",
+        "ph": "/ˈaɪ.dəl/",
+        "v": "nhàn rỗi, không tải",
+        "ex": "The server is idle at night, so we run backups then."
+      },
+      {
+        "w": "deprecate",
+        "pos": "verb",
+        "ph": "/ˈdep.rə.keɪt/",
+        "v": "ngừng khuyến nghị dùng",
+        "ex": "The old endpoint was deprecated in version 3."
+      },
+      {
+        "w": "backward-compatible",
+        "pos": "adjective",
+        "ph": "/ˈbæk.wəd kəmˈpæt.ə.bəl/",
+        "v": "tương thích với bản cũ",
+        "ex": "Keep the API backward-compatible for one more year."
+      },
+      {
+        "w": "single point of failure",
+        "pos": "noun",
+        "ph": "/ˌsɪŋ.ɡəl pɔɪnt əv ˈfeɪ.ljər/",
+        "v": "điểm hỏng đơn lẻ gây sập cả hệ thống",
+        "ex": "One database server is a single point of failure."
       }
     ]
   },
@@ -1309,6 +1414,111 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˈend.pɔɪn.tɪŋ/",
         "v": "việc chốt điểm kết thúc",
         "ex": "Endpointing decides when the user has stopped speaking."
+      },
+      {
+        "w": "refactoring",
+        "pos": "noun",
+        "ph": "/ˌriːˈfæk.tər.ɪŋ/",
+        "v": "tái cấu trúc mã",
+        "ex": "Refactoring changes the structure, not the behaviour."
+      },
+      {
+        "w": "boilerplate code",
+        "pos": "noun",
+        "ph": "/ˈbɔɪ.lə.pleɪt kəʊd/",
+        "v": "mã khuôn mẫu lặp lại",
+        "ex": "A generator writes the boilerplate code for you."
+      },
+      {
+        "w": "syntactic sugar",
+        "pos": "noun",
+        "ph": "/sɪnˈtæk.tɪk ˈʃʊɡ.ər/",
+        "v": "cú pháp cho gọn",
+        "ex": "Arrow functions are syntactic sugar for shorter code."
+      },
+      {
+        "w": "pure function",
+        "pos": "noun",
+        "ph": "/pjʊə ˈfʌŋk.ʃən/",
+        "v": "hàm thuần khiết (không đổi trạng thái ngoài)",
+        "ex": "A pure function always returns the same result for the same input."
+      },
+      {
+        "w": "idempotency",
+        "pos": "noun",
+        "ph": "/ˌaɪ.demˈpəʊ.tən.si/",
+        "v": "tính bất biến khi gọi lại",
+        "ex": "Idempotency means calling the endpoint twice is safe."
+      },
+      {
+        "w": "middleman",
+        "pos": "noun",
+        "ph": "/ˈmɪd.əl.mæn/",
+        "v": "lớp trung gian",
+        "ex": "Avoid adding a middleman layer that does nothing."
+      },
+      {
+        "w": "polling",
+        "pos": "noun",
+        "ph": "/ˈpəʊ.lɪŋ/",
+        "v": "hỏi vòng liên tục",
+        "ex": "Polling every second wastes bandwidth; use webhooks."
+      },
+      {
+        "w": "webhook",
+        "pos": "noun",
+        "ph": "/ˈweb.hʊk/",
+        "v": "móc gọi ngược",
+        "ex": "A webhook notifies us the moment payment succeeds."
+      },
+      {
+        "w": "long polling",
+        "pos": "noun",
+        "ph": "/lɒŋ ˈpəʊ.lɪŋ/",
+        "v": "giữ kết nối chờ dữ liệu",
+        "ex": "Long polling keeps the request open until data arrives."
+      },
+      {
+        "w": "graceful shutdown",
+        "pos": "noun",
+        "ph": "/ˈɡreɪs.fəl ˈʃʌt.daʊn/",
+        "v": "tắt êm, xử nốt việc dở",
+        "ex": "Graceful shutdown finishes running jobs before exiting."
+      },
+      {
+        "w": "backpressure",
+        "pos": "noun",
+        "ph": "/ˈbæk.preʃ.ər/",
+        "v": "áp lực ngược khi quá tải",
+        "ex": "Backpressure tells the producer to slow down."
+      },
+      {
+        "w": "queue worker",
+        "pos": "noun",
+        "ph": "/kjuː ˈwɜː.kər/",
+        "v": "tiến trình xử lý hàng đợi",
+        "ex": "Three queue workers handle the email jobs."
+      },
+      {
+        "w": "cron job",
+        "pos": "noun",
+        "ph": "/krɒn dʒɒb/",
+        "v": "tác vụ chạy theo lịch",
+        "ex": "A cron job cleans old files every midnight."
+      },
+      {
+        "w": "feature branch",
+        "pos": "noun",
+        "ph": "/ˈfiː.tʃər brɑːntʃ/",
+        "v": "nhánh phát triển tính năng",
+        "ex": "Open a feature branch for every ticket."
+      },
+      {
+        "w": "cherry-pick",
+        "pos": "verb",
+        "ph": "/ˈtʃer.i pɪk/",
+        "v": "bốc riêng một commit",
+        "ex": "Cherry-pick that fix onto the release branch."
       }
     ]
   },
@@ -1777,6 +1987,90 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/rɪˈdʌn.dənt lɪŋk/",
         "v": "đường truyền dự phòng",
         "ex": "A redundant link keeps the office online if one line fails."
+      },
+      {
+        "w": "OSI model",
+        "pos": "noun",
+        "ph": "/ˌəʊ.esˈaɪ ˈmɒd.əl/",
+        "v": "mô hình OSI",
+        "ex": "The OSI model splits networking into seven layers."
+      },
+      {
+        "w": "handshake protocol",
+        "pos": "noun",
+        "ph": "/ˈhænd.ʃeɪk ˈprəʊ.tə.kɒl/",
+        "v": "giao thức bắt tay",
+        "ex": "TLS starts with a handshake protocol to agree on keys."
+      },
+      {
+        "w": "bandwidth allocation",
+        "pos": "noun",
+        "ph": "/ˈbænd.wɪdθ ˌæl.əˈkeɪ.ʃən/",
+        "v": "phân bổ băng thông",
+        "ex": "Bandwidth allocation gives video calls priority."
+      },
+      {
+        "w": "quality of service",
+        "pos": "noun",
+        "ph": "/ˈkwɒl.ə.ti əv ˈsɜː.vɪs/",
+        "v": "chất lượng dịch vụ mạng",
+        "ex": "Quality of service settings keep voice calls clear."
+      },
+      {
+        "w": "network topology",
+        "pos": "noun",
+        "ph": "/ˈnet.wɜːk təˈpɒl.ə.dʒi/",
+        "v": "sơ đồ đấu nối mạng",
+        "ex": "Draw the network topology before you buy switches."
+      },
+      {
+        "w": "default gateway",
+        "pos": "noun",
+        "ph": "/dɪˈfɔːlt ˈɡeɪt.weɪ/",
+        "v": "cổng mặc định",
+        "ex": "Traffic to other networks goes through the default gateway."
+      },
+      {
+        "w": "CIDR notation",
+        "pos": "noun",
+        "ph": "/ˈsaɪ.dər nəʊˈteɪ.ʃən/",
+        "v": "ký hiệu CIDR",
+        "ex": "CIDR notation writes the mask as /24 instead of 255.255.255.0."
+      },
+      {
+        "w": "broadcast address",
+        "pos": "noun",
+        "ph": "/ˈbrɔːd.kɑːst əˈdres/",
+        "v": "địa chỉ quảng bá",
+        "ex": "The last address in a subnet is the broadcast address."
+      },
+      {
+        "w": "network interface",
+        "pos": "noun",
+        "ph": "/ˈnet.wɜːk ˈɪn.tə.feɪs/",
+        "v": "giao diện mạng",
+        "ex": "List every network interface with the ip command."
+      },
+      {
+        "w": "firewall policy",
+        "pos": "noun",
+        "ph": "/ˈfaɪə.wɔːl ˈpɒl.ə.si/",
+        "v": "chính sách tường lửa",
+        "ex": "The firewall policy blocks everything not explicitly allowed."
+      },
+      {
+        "w": "bandwidth-intensive",
+        "pos": "adjective",
+        "ph": "/ˈbænd.wɪdθ ɪnˈten.sɪv/",
+        "v": "ngốn băng thông",
+        "ex": "Video streaming is bandwidth-intensive."
+      },
+      {
+        "w": "network latency",
+        "pos": "noun",
+        "ph": "/ˈnet.wɜːk ˈleɪ.tən.si/",
+        "v": "độ trễ mạng",
+        "ex": "Network latency to Europe is about 250 milliseconds."
       }
     ]
   },
@@ -2287,6 +2581,90 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˈkɒn.tekst ˈwɪn.dəʊ/",
         "v": "cửa sổ ngữ cảnh",
         "ex": "A longer context window lets the model read the whole file."
+      },
+      {
+        "w": "training loop",
+        "pos": "noun",
+        "ph": "/ˈtreɪ.nɪŋ luːp/",
+        "v": "vòng lặp huấn luyện",
+        "ex": "The training loop runs for fifty epochs."
+      },
+      {
+        "w": "batch size",
+        "pos": "noun",
+        "ph": "/bætʃ saɪz/",
+        "v": "kích thước lô",
+        "ex": "A smaller batch size uses less memory but trains slower."
+      },
+      {
+        "w": "checkpoint",
+        "pos": "noun",
+        "ph": "/ˈtʃek.pɔɪnt/",
+        "v": "điểm lưu mô hình",
+        "ex": "Save a checkpoint after every epoch."
+      },
+      {
+        "w": "inference latency",
+        "pos": "noun",
+        "ph": "/ˈɪn.fər.əns ˈleɪ.tən.si/",
+        "v": "độ trễ khi dự đoán",
+        "ex": "Inference latency must stay under 200 milliseconds."
+      },
+      {
+        "w": "prompt engineering",
+        "pos": "noun",
+        "ph": "/prɒmpt ˌen.dʒɪˈnɪə.rɪŋ/",
+        "v": "kỹ thuật viết câu lệnh cho AI",
+        "ex": "Prompt engineering can double the quality of the answer."
+      },
+      {
+        "w": "few-shot learning",
+        "pos": "noun",
+        "ph": "/ˌfjuːˈʃɒt ˈlɜː.nɪŋ/",
+        "v": "học từ vài ví dụ",
+        "ex": "Few-shot learning gives the model three examples in the prompt."
+      },
+      {
+        "w": "zero-shot",
+        "pos": "adjective",
+        "ph": "/ˌzɪə.rəʊˈʃɒt/",
+        "v": "không cần ví dụ mẫu",
+        "ex": "The model handles the task zero-shot, with no examples."
+      },
+      {
+        "w": "guardrail",
+        "pos": "noun",
+        "ph": "/ˈɡɑːd.reɪl/",
+        "v": "rào chắn an toàn cho AI",
+        "ex": "Guardrails stop the assistant from giving medical advice."
+      },
+      {
+        "w": "bias mitigation",
+        "pos": "noun",
+        "ph": "/ˈbaɪ.əs ˌmɪt.ɪˈɡeɪ.ʃən/",
+        "v": "giảm thiên lệch",
+        "ex": "Bias mitigation starts with a balanced dataset."
+      },
+      {
+        "w": "model card",
+        "pos": "noun",
+        "ph": "/ˈmɒd.əl kɑːd/",
+        "v": "hồ sơ mô tả mô hình",
+        "ex": "The model card lists intended uses and known limits."
+      },
+      {
+        "w": "quantization",
+        "pos": "noun",
+        "ph": "/ˌkwɒn.taɪˈzeɪ.ʃən/",
+        "v": "lượng tử hoá mô hình",
+        "ex": "Quantization shrinks the model so it runs on a laptop."
+      },
+      {
+        "w": "semantic search",
+        "pos": "noun",
+        "ph": "/sɪˈmæn.tɪk sɜːtʃ/",
+        "v": "tìm kiếm theo ngữ nghĩa",
+        "ex": "Semantic search finds related ideas, not just matching words."
       }
     ]
   },
@@ -2811,6 +3189,83 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˈæk.ses lɒɡ/",
         "v": "nhật ký truy cập",
         "ex": "The access log shows who opened the file and when."
+      },
+      {
+        "w": "threat model",
+        "pos": "noun",
+        "ph": "/θret ˈmɒd.əl/",
+        "v": "mô hình mối đe doạ",
+        "ex": "Start the design with a simple threat model."
+      },
+      {
+        "w": "attack surface",
+        "pos": "noun",
+        "ph": "/əˈtæk ˈsɜː.fɪs/",
+        "v": "bề mặt tấn công",
+        "ex": "Closing unused ports reduces the attack surface."
+      },
+      {
+        "w": "privilege escalation",
+        "pos": "noun",
+        "ph": "/ˈprɪv.əl.ɪdʒ ˌes.kəˈleɪ.ʃən/",
+        "v": "leo thang đặc quyền",
+        "ex": "A bug allowed privilege escalation to administrator."
+      },
+      {
+        "w": "input sanitization",
+        "pos": "noun",
+        "ph": "/ˈɪn.pʊt ˌsæn.ɪ.taɪˈzeɪ.ʃən/",
+        "v": "làm sạch dữ liệu nhập",
+        "ex": "Input sanitization strips dangerous characters."
+      },
+      {
+        "w": "parameterized query",
+        "pos": "noun",
+        "ph": "/pəˈræm.ɪ.tə.raɪzd ˈkwɪə.ri/",
+        "v": "truy vấn tham số hoá",
+        "ex": "Parameterized queries are the main defence against injection."
+      },
+      {
+        "w": "cross-site scripting",
+        "pos": "noun",
+        "ph": "/ˌkrɒs.saɪt ˈskrɪp.tɪŋ/",
+        "v": "tấn công chèn mã kịch bản",
+        "ex": "Cross-site scripting steals cookies from other users."
+      },
+      {
+        "w": "token expiry",
+        "pos": "noun",
+        "ph": "/ˈtəʊ.kən ɪkˈspaɪə.ri/",
+        "v": "hạn của mã phiên",
+        "ex": "Short token expiry limits the damage of a leak."
+      },
+      {
+        "w": "security header",
+        "pos": "noun",
+        "ph": "/sɪˈkjʊə.rə.ti ˈhed.ər/",
+        "v": "tiêu đề bảo mật HTTP",
+        "ex": "Security headers tell the browser what to block."
+      },
+      {
+        "w": "penetration tester",
+        "pos": "noun",
+        "ph": "/ˌpen.ɪˈtreɪ.ʃən ˈtes.tər/",
+        "v": "người kiểm thử xâm nhập",
+        "ex": "A penetration tester attacks the system with permission."
+      },
+      {
+        "w": "security audit",
+        "pos": "noun",
+        "ph": "/sɪˈkjʊə.rə.ti ˈɔː.dɪt/",
+        "v": "kiểm toán an toàn thông tin",
+        "ex": "The security audit found three critical issues."
+      },
+      {
+        "w": "data minimization",
+        "pos": "noun",
+        "ph": "/ˈdeɪ.tə ˌmɪn.ɪ.maɪˈzeɪ.ʃən/",
+        "v": "thu thập dữ liệu tối thiểu",
+        "ex": "Data minimization means collecting only what you need."
       }
     ]
   },
@@ -6506,6 +6961,83 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˌɒnˈkɔːl/",
         "v": "trực hệ thống",
         "ex": "She is on-call this weekend."
+      },
+      {
+        "w": "technical documentation",
+        "pos": "noun",
+        "ph": "/ˈtek.nɪ.kəl ˌdɒk.jə.menˈteɪ.ʃən/",
+        "v": "tài liệu kỹ thuật",
+        "ex": "Good technical documentation saves hours of questions."
+      },
+      {
+        "w": "acceptance test",
+        "pos": "noun",
+        "ph": "/əkˈsep.təns test/",
+        "v": "kiểm thử nghiệm thu",
+        "ex": "The customer signs off after the acceptance test passes."
+      },
+      {
+        "w": "code owner",
+        "pos": "noun",
+        "ph": "/kəʊd ˈəʊ.nər/",
+        "v": "người chịu trách nhiệm mã",
+        "ex": "Every folder has a code owner who reviews changes."
+      },
+      {
+        "w": "pull request template",
+        "pos": "noun",
+        "ph": "/pʊl rɪˈkwest ˈtem.pleɪt/",
+        "v": "mẫu mô tả pull request",
+        "ex": "The pull request template asks how you tested the change."
+      },
+      {
+        "w": "dependency update",
+        "pos": "noun",
+        "ph": "/dɪˈpen.dən.si ˈʌp.deɪt/",
+        "v": "cập nhật thư viện phụ thuộc",
+        "ex": "Weekly dependency updates keep security patches current."
+      },
+      {
+        "w": "build artifact",
+        "pos": "noun",
+        "ph": "/bɪld ˈɑː.tɪ.fækt/",
+        "v": "sản phẩm dựng ra",
+        "ex": "The build artifact is a single container image."
+      },
+      {
+        "w": "environment parity",
+        "pos": "noun",
+        "ph": "/ɪnˈvaɪə.rən.mənt ˈpær.ə.ti/",
+        "v": "đồng nhất môi trường",
+        "ex": "Environment parity means staging matches production."
+      },
+      {
+        "w": "rollback plan",
+        "pos": "noun",
+        "ph": "/ˈrəʊl.bæk plæn/",
+        "v": "phương án quay lui",
+        "ex": "Never deploy on Friday without a rollback plan."
+      },
+      {
+        "w": "incident report",
+        "pos": "noun",
+        "ph": "/ˈɪn.sɪ.dənt rɪˈpɔːt/",
+        "v": "báo cáo sự cố",
+        "ex": "The incident report explains the timeline and the fix."
+      },
+      {
+        "w": "estimation bias",
+        "pos": "noun",
+        "ph": "/ˌes.tɪˈmeɪ.ʃən ˈbaɪ.əs/",
+        "v": "thiên lệch khi ước lượng",
+        "ex": "Estimation bias makes developers promise dates too early."
+      },
+      {
+        "w": "refinement session",
+        "pos": "noun",
+        "ph": "/rɪˈfaɪn.mənt ˈseʃ.ən/",
+        "v": "buổi làm mịn backlog",
+        "ex": "The refinement session clarifies stories before planning."
       }
     ]
   }
