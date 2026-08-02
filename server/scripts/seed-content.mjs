@@ -6,7 +6,7 @@
 //
 // Idempotent — không đè bản source='admin'.
 //
-// Dùng:  node server/scripts/seed-content.mjs [--dry] [--only=a,b]
+// Dùng:  node server/scripts/seed-content.mjs [--dry] [--only=a,b] [--force]
 // Prod:  docker exec tizia node server/scripts/seed-content.mjs --only=vocab-en
 //
 // --only: chỉ seed các collection nêu tên. Chạy KHÔNG --only là seed lại TẤT CẢ,
@@ -20,6 +20,11 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DRY = process.argv.includes('--dry');
+// 🪤 02/08: upsert bản seed CÓ ĐIỀU KIỆN `source <> 'admin'` — item nào đã sửa qua
+// trang admin sẽ bị seed BỎ QUA IM LẶNG (script vẫn in "✓ N item" như thường, rất dễ
+// tưởng đã cập nhật). Muốn đẩy nội dung mới đè lên bản admin thì chạy kèm --force:
+// ghi bằng đường admin nên vẫn giữ quyền sở hữu 'admin' cho các lần seed sau.
+const FORCE = process.argv.includes('--force');
 const ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7)
   .split(',').map((s) => s.trim()).filter(Boolean);
 const dataUrl = (p) => pathToFileURL(resolve(__dirname, '../../public/js/scenarios/_data', p)).href;
@@ -65,7 +70,23 @@ const REGISTRY = [
   { collection: 'reading-en',         file: 'reading-en.js',          export: 'READING_EN', key: 'id' },
 ];
 
-const { seedCollection, collectionCount } = DRY ? {} : await import('../contexts/content/index.js');
+const { seedCollection, collectionCount, upsertItem } = DRY ? {} : await import('../contexts/content/index.js');
+
+// Ghi đè cả bản source='admin'. GIỮ NGUYÊN source cũ của từng item: hàng nào vốn là
+// 'seed' thì vẫn là 'seed' (để seed thường sau này tiếp tục cập nhật được), hàng nào
+// đang là 'admin' thì giữ 'admin' (trang admin vẫn là chủ sở hữu).
+async function forceSeed(collection, items, keyFn) {
+  const { db } = await import('../db.js');
+  const rows = await db.prepare(
+    `SELECT item_key, source FROM content_datasets WHERE collection = ?`
+  ).all(collection);
+  const srcOf = new Map(rows.map((r) => [String(r.item_key), r.source]));
+  for (let i = 0; i < items.length; i++) {
+    const key = String(keyFn ? keyFn(items[i], i) : (items[i]?.id ?? String(i)));
+    await upsertItem(collection, key, items[i], { source: srcOf.get(key) || 'seed', ord: i });
+  }
+  return items.length;
+}
 
 let grand = 0;
 for (const r of REGISTRY) {
@@ -88,8 +109,11 @@ for (const r of REGISTRY) {
     grand += arr.length;
     continue;
   }
-  const n = await seedCollection(r.collection, arr, r.key ? ((it, i) => it[r.key] ?? i) : undefined);
-  console.log(`[seed-content] ✓ ${r.collection}: ${n} item (DB có ${await collectionCount(r.collection)})`);
+  const keyFn = r.key ? ((it, i) => it[r.key] ?? i) : undefined;
+  const n = FORCE
+    ? await forceSeed(r.collection, arr, keyFn)
+    : await seedCollection(r.collection, arr, keyFn);
+  console.log(`[seed-content] ✓ ${r.collection}: ${n} item${FORCE ? ' (--force: ĐÈ cả bản admin)' : ''} (DB có ${await collectionCount(r.collection)})`);
   grand += n;
 }
 console.log(`[seed-content] tổng ${grand} item.`);

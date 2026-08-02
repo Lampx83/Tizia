@@ -311,6 +311,7 @@ const SPACES_PHARMACY = {
   gpp:{emoji:'💊',name:'Nhà thuốc GPP',accent:'#16a34a',intro:'Quầy thuốc đạt chuẩn GPP — sắp xếp, cấp phát đúng, tư vấn OTC và sàng lọc cờ đỏ.',
     rooms:[{ic:'🏪',name:'Nhà thuốc 3D đầy đủ (Pharmacy-AI port)',rd:'Vào quầy ảo: 180 thuốc, 4 tủ Rx/OTC + tủ kiểm soát đặc biệt, POS, dán nhãn HDSD, tư vấn AI theo SEGUE.',href:'/nha-thuoc-3d.html'},
       {ic:'🧪',name:'Thực hành nghiệp vụ GPP (2D)',rd:'Mô phỏng 2D 4 nghiệp vụ chuẩn GPP: nhận biết & phân loại, kiểm nhập, bảo quản – sắp xếp, kiểm kê & thu hồi. Chấm theo bảng kiểm, trò chơi ôn dược lý, tình huống AI. Đề tài NCKH CĐ Y tế HN.',href:'/gpp.html'},
+      {ic:'🏥',name:'Nhà thuốc 2D An Tâm Pharma',rd:'Tham quan trực quan full màn hình: mặt tiền tân cổ điển + nội thất quầy chữ L, hệ tủ Rx/OTC/sản phẩm không phải thuốc. Bấm vào từng tủ để xem danh mục theo chuẩn GPP.',href:'/nha-thuoc-2d.html'},
       {ic:'🗂️',name:'Sắp xếp thuốc ATC',rd:'Phân loại & xếp kệ.',href:'/sap-xep-hub.html'},
       {ic:'🕹️',name:'Arcade 2D',rd:'Luyện tốc độ phân loại.',href:'/2d-arcade.html'},
       {ic:'🧊',name:'Kệ thuốc 3D',rd:'Sắp xếp trong không gian 3D.',href:'/3d-shelf.html'},
@@ -1096,18 +1097,90 @@ const SPACES_IT = {
 
   dblab:{emoji:'🗄️',name:'Trung tâm CSDL',accent:'#60a5fa',intro:'Cơ sở dữ liệu quan hệ: thiết kế bảng, viết SQL, chuẩn hoá và phòng tránh SQL injection.',
     rooms:[{ic:'⌨️',name:'SQL Playground — viết & chạy truy vấn',rd:'Bảng thật trong bộ nhớ: viết SELECT/WHERE/JOIN/GROUP BY, 5 thử thách chấm tự động.',href:'/it-sql-playground.html?domain=it'},
-      {ic:'🔎',name:'SQL căn bản',rd:'Các câu lệnh truy vấn cốt lõi.',panel:[
+      // Nội dung chi tiết 3 phòng CSDL do cô Chu Thi Hue soạn (req #126, #127, #128 · 02/08).
+      {ic:'🔎',name:'SQL căn bản',rd:'6 câu lệnh cốt lõi: cú pháp, ví dụ, lỗi thường gặp.',panel:[
         {h:'Bộ lệnh SQL thường dùng'},
         {cards:[{ic:'📤',t:'SELECT',d:'Lấy dữ liệu từ bảng.'},{ic:'🔗',t:'JOIN',d:'Nối nhiều bảng theo khoá.'},
           {ic:'🧮',t:'GROUP BY',d:'Gom nhóm & tổng hợp (COUNT, SUM).'},{ic:'🎯',t:'WHERE',d:'Lọc theo điều kiện.'},
           {ic:'➕',t:'INSERT',d:'Thêm bản ghi mới.'},{ic:'♻️',t:'UPDATE',d:'Cập nhật bản ghi.'}]},
-        {note:'Khoá chính (primary key) định danh duy nhất; khoá ngoại (foreign key) liên kết bảng.'}]},
-      {ic:'📐',name:'Thiết kế & chuẩn hoá',rd:'ER & dạng chuẩn (1NF–3NF).',panel:[
+
+        {h:'1. SELECT — lấy dữ liệu từ bảng'},
+        {code:'SELECT cột1, cột2 FROM tên_bảng;\nSELECT * FROM tên_bảng;   -- lấy tất cả các cột'},
+        {p:'SELECT là lệnh nền tảng nhất trong SQL, dùng để đọc dữ liệu ra từ một hoặc nhiều bảng. Dấu * nghĩa là lấy toàn bộ cột, nhưng trong thực tế nên chỉ định rõ tên cột cần lấy: lấy dư cột không cần thiết làm chậm truy vấn và khó đọc code.'},
+        {code:'SELECT name, gpa FROM students;            -- tên và điểm trung bình\nSELECT name AS ten_sinh_vien FROM students;  -- AS: đổi tên cột hiển thị\nSELECT DISTINCT class_id FROM students;      -- DISTINCT: bỏ dòng trùng lặp'},
+        {note:'Lỗi thường gặp: quên dấu ; cuối câu lệnh; nhầm tên cột với tên bảng khi nhiều bảng có cột trùng tên.'},
+
+        {h:'2. JOIN — nối nhiều bảng theo khoá'},
+        {code:'SELECT a.cột, b.cột\nFROM bảng_a a\nJOIN bảng_b b ON a.khoá = b.khoá;'},
+        {p:'JOIN kết hợp dữ liệu từ hai bảng trở lên qua khoá ngoại. Đây là thao tác cốt lõi vì dữ liệu trong CSDL quan hệ luôn được tách ra nhiều bảng để tránh trùng lặp, nên gần như mọi truy vấn thực tế đều cần JOIN.'},
+        {ul:['INNER JOIN (mặc định khi chỉ viết JOIN): chỉ lấy những dòng khớp ở CẢ HAI bảng.','LEFT JOIN: lấy toàn bộ bảng bên trái, dòng không khớp ở bảng phải sẽ là NULL — dùng để tìm dữ liệu thiếu liên kết.','RIGHT JOIN: ngược lại LEFT JOIN, ít dùng vì viết lại được bằng LEFT JOIN.']},
+        {code:'SELECT s.name, c.subject_name\nFROM students s\nJOIN classes c ON s.class_id = c.id;'},
+        {note:'Lỗi thường gặp: quên mệnh đề ON khiến hai bảng nhân chéo (Cartesian product) — số dòng tăng vọt bất thường và dữ liệu vô nghĩa.'},
+
+        {h:'3. GROUP BY — gom nhóm & tổng hợp'},
+        {code:'SELECT class_id, COUNT(*) AS so_sinh_vien\nFROM students\nGROUP BY class_id;'},
+        {p:'GROUP BY gom các dòng có cùng giá trị ở một cột thành một nhóm, rồi áp dụng hàm tổng hợp (COUNT, SUM, AVG, MIN, MAX) lên từng nhóm. Đây là công cụ chính để làm thống kê, báo cáo.'},
+        {p:'Muốn lọc SAU khi đã nhóm thì dùng HAVING, không dùng WHERE:'},
+        {code:'SELECT class_id, COUNT(*) AS so_sv\nFROM students\nGROUP BY class_id\nHAVING COUNT(*) > 10;'},
+        {note:'Quy tắc bắt buộc: mọi cột trong SELECT mà không nằm trong hàm tổng hợp đều phải có mặt ở GROUP BY. Lỗi thường gặp: dùng WHERE thay HAVING để lọc theo kết quả tổng hợp — WHERE chạy TRƯỚC khi nhóm nên không lọc được theo COUNT().'},
+
+        {h:'4. WHERE — lọc theo điều kiện'},
+        {code:'SELECT name FROM students WHERE gpa >= 8.0 AND class_id = 3;'},
+        {p:'WHERE lọc ra những dòng thoả điều kiện, chạy trước khi dữ liệu được nhóm hay sắp xếp.'},
+        {ul:['So sánh: = != > < >= <=','BETWEEN x AND y — nằm trong khoảng','IN (a, b, c) — nằm trong danh sách giá trị','LIKE \'Nguyen%\' — tìm theo mẫu văn bản, % là ký tự đại diện','AND, OR — kết hợp nhiều điều kiện; nên đặt dấu ngoặc khi trộn cả hai']},
+        {note:'Lỗi thường gặp: quên ngoặc khi trộn AND/OR khiến điều kiện bị hiểu sai; dùng = để so sánh với NULL (phải viết IS NULL).'},
+
+        {h:'5. INSERT — thêm bản ghi mới'},
+        {code:'INSERT INTO students (name, class_id, gpa) VALUES (\'Nguyễn Văn A\', 3, 8.5);\n\n-- thêm nhiều dòng cùng lúc\nINSERT INTO students (name, class_id, gpa)\nVALUES (\'A\', 1, 7.5), (\'B\', 2, 9.0);'},
+        {p:'Nên luôn chỉ định rõ tên cột thay vì chỉ liệt kê giá trị, để tránh nhầm thứ tự khi cấu trúc bảng thay đổi sau này.'},
+        {note:'Lỗi thường gặp: số giá trị không khớp số cột đã liệt kê; vi phạm khoá chính (thêm trùng ID) hoặc khoá ngoại (class_id không tồn tại trong bảng classes).'},
+
+        {h:'6. UPDATE — cập nhật bản ghi'},
+        {code:'UPDATE students SET gpa = 9.2 WHERE id = 5;\n\n-- cập nhật nhiều cột cùng lúc\nUPDATE students SET gpa = 9.2, class_id = 4 WHERE id = 5;'},
+        {p:'Mệnh đề WHERE ở đây cực kỳ quan trọng: quên WHERE là cập nhật TOÀN BỘ bảng — một trong những lỗi gây hậu quả nặng nhất khi thao tác với CSDL thật.'},
+        {note:'Thói quen an toàn: chạy thử SELECT * FROM bảng WHERE điều_kiện; với đúng điều kiện đó trước, xem có lọc đúng những dòng mình muốn sửa không, rồi mới chạy UPDATE.'},
+
+        {note:'Khoá chính (primary key) định danh duy nhất mỗi dòng; khoá ngoại (foreign key) tham chiếu tới khoá chính của bảng khác — đây chính là cơ sở để JOIN hoạt động.'}]},
+
+      {ic:'📐',name:'Thiết kế & chuẩn hoá',rd:'1NF–3NF: định nghĩa, ví dụ vi phạm và cách sửa.',panel:[
         {h:'Chuẩn hoá dữ liệu'},
         {ol:['1NF — mỗi ô một giá trị nguyên tử','2NF — bỏ phụ thuộc một phần vào khoá','3NF — bỏ phụ thuộc bắc cầu']},
-        {note:'Chuẩn hoá giảm trùng lặp & bất nhất; đôi khi denormalize có chủ đích để tăng tốc đọc.'}]},
-      {ic:'🛡️',name:'Phòng SQL injection',rd:'Bảo mật truy vấn.',panel:[
+
+        {h:'1NF — mỗi ô một giá trị nguyên tử'},
+        {p:'Một bảng đạt 1NF khi mỗi ô dữ liệu chỉ chứa đúng một giá trị đơn, không gộp nhiều giá trị vào chung một cột.'},
+        {code:'-- ❌ VI PHẠM: một ô chứa 2 số điện thoại\nstudents(id, name, phone)\n1, "Nguyễn A", "0901111, 0902222"\n\n-- ✅ SỬA: tách thành bảng riêng, mỗi dòng 1 số\nstudents(id, name)\nstudent_phones(student_id, phone)'},
+
+        {h:'2NF — bỏ phụ thuộc một phần vào khoá'},
+        {p:'Chỉ áp dụng khi khoá chính gồm từ hai cột trở lên (khoá phức hợp). Bảng đạt 2NF khi mọi cột không phải khoá đều phụ thuộc vào TOÀN BỘ khoá chính, không phụ thuộc vào chỉ một phần của nó.'},
+        {code:'-- ❌ VI PHẠM: khoá chính là (student_id, class_id)\n-- nhưng student_name chỉ phụ thuộc student_id\nenrollments(student_id, class_id, student_name, semester)\n\n-- ✅ SỬA\nstudents(id, name)\nenrollments(student_id, class_id, semester)'},
+
+        {h:'3NF — bỏ phụ thuộc bắc cầu'},
+        {p:'Bảng đạt 3NF khi không có cột không-khoá nào phụ thuộc vào một cột không-khoá khác, thay vì phụ thuộc trực tiếp vào khoá chính.'},
+        {code:'-- ❌ VI PHẠM: class_teacher phụ thuộc class_id,\n-- không phụ thuộc trực tiếp vào id sinh viên\nstudents(id, class_id, class_teacher)\n\n-- ✅ SỬA\nstudents(id, class_id)\nclasses(id, teacher_name)'},
+
+        {note:'Chuẩn hoá giảm trùng lặp và tránh bất nhất dữ liệu (sửa tên giáo viên ở một dòng nhưng quên các dòng khác). Tuy nhiên với hệ thống cần đọc rất nhanh (dashboard thống kê truy vấn liên tục), người thiết kế đôi khi CỐ Ý denormalize — chấp nhận lưu trùng vài cột để giảm số JOIN, đánh đổi lấy tốc độ đọc. Đó là quyết định kỹ thuật có chủ đích, không phải lỗi thiết kế, và chỉ nên làm sau khi đã nắm chắc nguyên tắc chuẩn hoá.'}]},
+
+      {ic:'🛡️',name:'Phòng SQL injection',rd:'Vì sao nguy hiểm, cách chống, và lưu trữ mật khẩu đúng.',panel:[
         {h:'Chống SQL injection'},
+
+        {h:'Vì sao SQL injection nguy hiểm'},
+        {p:'SQL injection xảy ra khi ứng dụng ghép trực tiếp dữ liệu người dùng nhập vào chung với câu lệnh SQL dưới dạng chuỗi văn bản, thay vì tách biệt phần "câu lệnh" và phần "dữ liệu". Khi đó kẻ tấn công có thể chèn thêm cú pháp SQL vào ô nhập liệu để đổi hoàn toàn ý nghĩa câu lệnh — ví dụ khiến điều kiện đăng nhập luôn đúng bất kể mật khẩu, hoặc khiến câu lệnh trả về toàn bộ dữ liệu nhạy cảm thay vì một bản ghi. Đây là một trong những lỗ hổng phổ biến và nặng nhất với ứng dụng có kết nối CSDL, vì CSDL thường là nơi lưu thông tin nhạy cảm nhất của cả hệ thống.'},
+
+        {h:'Giải pháp chính: tách dữ liệu khỏi câu lệnh'},
+        {p:'Cách được cộng đồng bảo mật khuyến nghị là dùng câu lệnh tham số hoá (parameterized query, còn gọi là prepared statement): câu lệnh SQL viết với dấu giữ chỗ, dữ liệu người dùng truyền riêng cho driver CSDL xử lý. Nhờ vậy, dù đầu vào có chứa ký tự đặc biệt của SQL thì nó vẫn chỉ được hiểu là giá trị dữ liệu thuần tuý, không thể đổi cấu trúc câu lệnh gốc. Đây là lớp phòng thủ chính và mang tính bắt buộc, không phải tuỳ chọn.'},
+        {p:'Hầu hết công cụ ORM hiện đại (SQLAlchemy của Python, Prisma của Node.js…) đã tự dùng parameterized query ở tầng dưới, nên ưu tiên dùng ORM cũng là cách gián tiếp phòng injection — miễn là không tự ghép chuỗi SQL thô bên trong các phương thức của ORM.'},
+
+        {h:'Vì sao validate ở trình duyệt là không đủ'},
+        {p:'Nhiều người mới học lầm tưởng kiểm tra định dạng ở phía trình duyệt bằng JavaScript là đã an toàn. Thực ra validate ở client chỉ cải thiện trải nghiệm người dùng, không có giá trị bảo mật: kẻ tấn công hoàn toàn có thể gửi request thẳng tới server bằng Postman hay curl, bỏ qua toàn bộ giao diện. Mọi kiểm tra có ý nghĩa bảo mật đều BẮT BUỘC phải làm lại ở phía server, coi mọi dữ liệu gửi lên là không đáng tin cho tới khi được kiểm tra.'},
+
+        {h:'Nguyên tắc quyền tối thiểu (least privilege)'},
+        {p:'Ngay cả khi đã dùng parameterized query và validate đầy đủ, vẫn nên giới hạn quyền của tài khoản CSDL mà ứng dụng dùng để kết nối — chỉ cấp đúng quyền cần thiết (ví dụ đọc/ghi trên vài bảng nhất định) thay vì dùng tài khoản toàn quyền quản trị. Nguyên tắc này không ngăn được lỗ hổng, nhưng nếu lỗ hổng vẫn tồn tại thì nó giới hạn thiệt hại: kẻ tấn công không xoá được toàn bộ dữ liệu hay đọc được các bảng không liên quan.'},
+
+        {h:'Vì sao mật khẩu không được lưu dạng văn bản thường'},
+        {p:'Mật khẩu không bao giờ được lưu plaintext: nếu CSDL bị rò rỉ (dù qua injection hay cách khác) thì toàn bộ mật khẩu lộ ngay. Phải băm bằng thuật toán chuyên dụng như bcrypt hoặc argon2, kèm một giá trị ngẫu nhiên gọi là salt riêng cho mỗi người dùng để chống tấn công bằng bảng tra sẵn (rainbow table). Base64 KHÔNG phải mã hoá — nó giải ngược được dễ dàng nên không bảo vệ gì cả. Tương tự, không lưu mật khẩu hay thông tin nhạy cảm trong cookie, vì cookie có thể bị đánh cắp qua XSS.'},
+        {note:'Tìm hiểu thêm — OWASP Cheat Sheet: SQL Injection Prevention và Password Storage (cheatsheetseries.owasp.org), OWASP: SQL Injection (owasp.org/www-community/attacks/SQL_Injection).'},
+
+        {h:'Tự kiểm tra'},
         {mcq:[{q:'Cách hiệu quả nhất để chống SQL injection?',o:['Dùng prepared statement / tham số hoá truy vấn','Nối chuỗi trực tiếp dữ liệu người dùng','Tin tưởng mọi input','Ẩn thông báo lỗi'],a:0,fb:'Prepared statement tách dữ liệu khỏi câu lệnh — input không thể đổi cấu trúc truy vấn.'},
           {q:'Có nên lưu mật khẩu dạng văn bản thường (plaintext)?',o:['Không — phải băm bằng bcrypt/argon2 + salt','Có, cho tiện','Mã hoá base64 là đủ','Lưu trong cookie'],a:0,fb:'Mật khẩu phải được băm (hash) có salt; base64 KHÔNG phải mã hoá.'}]}]}],
     skills:['Viết SQL truy vấn','Thiết kế & chuẩn hoá CSDL','Bảo mật dữ liệu'],
@@ -1116,19 +1189,52 @@ const SPACES_IT = {
       {q:'Phòng SQL injection tốt nhất bằng?',o:['Truy vấn tham số hoá (prepared statement)','Nối chuỗi input','Tắt log','Dùng tài khoản admin'],a:0}]},
 
   netlab:{emoji:'🌐',name:'Lab Mạng máy tính',accent:'#22d3ee',intro:'Mạng máy tính: mô hình OSI/TCP-IP, giao thức, địa chỉ IP và nền tảng bảo mật mạng.',
-    rooms:[{ic:'🧅',name:'Mô hình OSI',rd:'7 tầng & vai trò.',panel:[
+    // Nội dung chi tiết 3 phòng Lab Mạng do cô Chu Thi Hue soạn (req #130 · 02/08).
+    rooms:[{ic:'🧅',name:'Mô hình OSI',rd:'7 tầng, vai trò từng tầng và so sánh với TCP/IP.',panel:[
         {h:'7 tầng OSI (trên → dưới)'},
-        {ul:['7 Application — HTTP, DNS, SMTP','6 Presentation — mã hoá, nén','5 Session — phiên làm việc','4 Transport — TCP/UDP, cổng','3 Network — IP, định tuyến','2 Data Link — MAC, switch','1 Physical — tín hiệu, cáp']},
-        {note:'TCP đảm bảo thứ tự & tin cậy; UDP nhanh nhưng không đảm bảo (dùng cho streaming, game).'}]},
-      {ic:'🔌',name:'Giao thức & cổng',rd:'Lật thẻ giao thức ↔ cổng.',panel:[
-        {p:'Lật thẻ ôn giao thức và số cổng mặc định.'},
+        {p:'Mô hình OSI là khung lý thuyết chia quá trình truyền dữ liệu qua mạng thành 7 tầng độc lập, giúp hiểu và gỡ lỗi mạng một cách có hệ thống thay vì coi mạng là "hộp đen". Mẹo nhớ theo tiếng Anh: All People Seem To Need Data Processing.'},
+        {ul:['Tầng 7 Application — giao tiếp trực tiếp với người dùng/ứng dụng: HTTP, FTP, SMTP.','Tầng 6 Presentation — mã hoá, nén, định dạng dữ liệu: SSL/TLS, JPEG, ASCII.','Tầng 5 Session — thiết lập, duy trì, kết thúc phiên kết nối: login session, API session.','Tầng 4 Transport — đảm bảo dữ liệu đến đúng, đủ, đúng thứ tự: TCP, UDP.','Tầng 3 Network — định tuyến gói tin giữa các mạng: IP, router.','Tầng 2 Data Link — truyền dữ liệu giữa 2 thiết bị trong cùng mạng cục bộ: Ethernet, địa chỉ MAC, switch.','Tầng 1 Physical — truyền tín hiệu điện/quang/sóng: cáp, sóng Wi-Fi, cổng RJ45.']},
+        {h:'Hiểu theo luồng, đừng học vẹt tên tầng'},
+        {p:'Khi bạn gõ một địa chỉ web, dữ liệu đi từ Application (trình duyệt tạo yêu cầu HTTP), được đóng gói dần qua các tầng dưới, tới Physical thì biến thành tín hiệu điện gửi đi trên dây. Bên nhận làm ngược lại: từ tín hiệu điện tái tạo thành yêu cầu HTTP đọc được.'},
+        {h:'Hai tầng dân CNTT chạm vào nhiều nhất'},
+        {ul:['Tầng 3 (Network) và tầng 4 (Transport) — nơi IP, TCP, UDP và cổng hoạt động, liên quan trực tiếp tới lập trình mạng và bảo mật.','Tầng 1–2 thường do phần cứng và hệ điều hành lo; tầng 5–7 gần với logic ứng dụng lập trình viên viết hằng ngày.']},
+        {h:'OSI và TCP/IP khác nhau thế nào?'},
+        {p:'TCP/IP gộp 7 tầng OSI thành 4 tầng: Application, Transport, Internet, Network Access. OSI mang tính lý thuyết và giáo dục để hiểu khái niệm, còn TCP/IP mới là mô hình được triển khai thực tế trên Internet ngày nay.'},
+        {mcq:[{q:'Router chuyển gói tin giữa hai mạng khác nhau — hoạt động này chủ yếu ở tầng nào?',o:['Tầng 3 — Network','Tầng 2 — Data Link','Tầng 4 — Transport','Tầng 7 — Application'],a:0,fb:'Định tuyến gói tin giữa các mạng là nhiệm vụ của tầng Network (tầng 3), nơi giao thức IP làm việc.'}]},
+        {note:'TCP đảm bảo thứ tự & tin cậy; UDP nhanh nhưng không đảm bảo (dùng cho streaming, game). Tìm hiểu thêm: OSI Model Explained (Cloudflare Learning) và Internet 101 trên Khan Academy.'}]},
+
+      {ic:'🔌',name:'Giao thức & cổng',rd:'Vì sao cần cổng, 9 cổng phổ biến, dải cổng và TCP vs UDP.',panel:[
+        {p:'Giao thức là bộ quy tắc quy định cách hai thiết bị giao tiếp; cổng (port) là "địa chỉ phụ" giúp phân biệt nhiều dịch vụ mạng chạy trên cùng một địa chỉ IP.'},
+        {h:'Vì sao cần cổng, không chỉ địa chỉ IP?'},
+        {p:'Một máy chủ có thể chạy cùng lúc web server, mail server và nhiều dịch vụ khác trên cùng một IP. Cổng giúp hệ điều hành biết dữ liệu đến/đi thuộc dịch vụ nào — giống địa chỉ nhà (IP) và số phòng (port) trong một toà chung cư.'},
         {flash:[{e:'🌍',f:'HTTP',b:'Cổng 80 — web'},{e:'🔒',f:'HTTPS',b:'Cổng 443 — web mã hoá TLS'},
           {e:'📛',f:'DNS',b:'Cổng 53 — phân giải tên miền'},{e:'📁',f:'SSH',b:'Cổng 22 — truy cập từ xa an toàn'},
-          {e:'📧',f:'SMTP',b:'Cổng 25 — gửi email'},{e:'🖧',f:'DHCP',b:'Cấp IP động cho thiết bị'}]}]},
-      {ic:'🧮',name:'Địa chỉ IP & subnet',rd:'IPv4, mặt nạ mạng.',panel:[
+          {e:'📧',f:'SMTP',b:'Cổng 25 — gửi email'},{e:'🖧',f:'DHCP',b:'Cổng 67/68 — cấp IP động cho thiết bị'},
+          {e:'📤',f:'FTP',b:'Cổng 21 — truyền file'},{e:'🐬',f:'MySQL',b:'Cổng 3306 — kết nối CSDL MySQL'},
+          {e:'🐘',f:'PostgreSQL',b:'Cổng 5432 — kết nối CSDL PostgreSQL'}]},
+        {h:'Ba dải cổng'},
+        {ul:['0–1023: cổng nổi tiếng (well-known), dành cho dịch vụ chuẩn như HTTP, SSH.','1024–49151: cổng đã đăng ký (registered), dùng cho ứng dụng cụ thể.','49152–65535: cổng động/riêng tư, hệ điều hành tự cấp tạm cho kết nối phía client.']},
+        {h:'TCP và UDP — hai giao thức tầng Transport quan trọng nhất'},
+        {ul:['Đến đủ, đúng thứ tự — TCP: có · UDP: không.','Tốc độ — TCP chậm hơn vì phải xác nhận · UDP nhanh hơn.','Dùng cho — TCP: web, email, tải file (cần chính xác) · UDP: gọi video, game online (cần tốc độ, chấp nhận mất gói).']},
+        {note:'Tìm hiểu thêm: danh sách cổng chính thức của IANA và bài TCP vs UDP của Cloudflare Learning.'}]},
+
+      {ic:'🧮',name:'Địa chỉ IP & subnet',rd:'Cấu trúc IPv4, IP riêng/công cộng, subnet mask và cách tính số thiết bị.',panel:[
         {h:'Cơ bản về IP'},
+        {p:'Địa chỉ IP là định danh của một thiết bị trên mạng; subnet mask quy định phần nào của địa chỉ là "mạng" và phần nào là "thiết bị" trong mạng đó.'},
+        {h:'Cấu trúc địa chỉ IPv4'},
+        {p:'Gồm 4 nhóm số, mỗi nhóm 0–255, cách nhau bởi dấu chấm — ví dụ 192.168.1.10. Về bản chất đó là 32 bit nhị phân, viết dưới dạng thập phân cho dễ đọc.'},
+        {h:'Ba loại địa chỉ hay gặp'},
+        {ul:['Private (mạng nội bộ): 192.168.0.0–192.168.255.255 và 10.0.0.0–10.255.255.255 — dùng trong LAN, không định tuyến thẳng ra Internet.','Public: các dải còn lại do tổ chức quản lý IP toàn cầu cấp phát — định danh duy nhất trên Internet.','Loopback: 127.0.0.1 — máy tự gọi chính mình (localhost).']},
+        {h:'Subnet mask — vì sao phải chia mạng con?'},
+        {p:'Một tổ chức lớn không muốn mọi thiết bị nằm chung một mạng phẳng vì dễ nghẽn và khó quản lý bảo mật. Subnet mask chia một dải IP lớn thành nhiều mạng con nhỏ, mỗi mạng con quản lý độc lập.'},
+        {code:'IP        : 192.168.1.10\nSubnet    : 255.255.255.0   (viết gọn /24)\n            └─ 24 bit đầu (192.168.1) = phần MẠNG\n            └─ 8 bit cuối            = phần THIẾT BỊ\n→ tối đa 2^8 − 2 = 254 thiết bị'},
+        {h:'Công thức tính nhanh'},
+        {ul:['Số thiết bị tối đa = 2^(số bit phần thiết bị) − 2.','/24 → 8 bit thiết bị → 2^8 − 2 = 254 thiết bị.','/28 → 4 bit thiết bị → 2^4 − 2 = 14 thiết bị.','Trừ 2 vì phải dành riêng 1 địa chỉ mạng và 1 địa chỉ broadcast, không gán cho thiết bị thật.']},
+        {check:['Phân biệt được địa chỉ mạng, địa chỉ broadcast và địa chỉ gán được cho thiết bị','Tính được số thiết bị tối đa từ ký hiệu CIDR (/24, /28…)','Biết hai địa chỉ nào trong một dải không bao giờ gán cho thiết bị thật']},
         {mcq:[{q:'Địa chỉ IPv4 192.168.1.10 thuộc loại?',o:['IP riêng (private) — dùng trong mạng nội bộ','IP công cộng toàn cầu','Địa chỉ MAC','Tên miền'],a:0,fb:'Dải 192.168.x.x là IP riêng (RFC 1918), không định tuyến trực tiếp ra Internet.'},
-          {q:'Giao thức nào đảm bảo truyền tin cậy, đúng thứ tự?',o:['TCP','UDP','ICMP','ARP'],a:0,fb:'TCP có bắt tay 3 bước, đánh số & truyền lại gói mất — đảm bảo tin cậy.'}]}]}],
+          {q:'Giao thức nào đảm bảo truyền tin cậy, đúng thứ tự?',o:['TCP','UDP','ICMP','ARP'],a:0,fb:'TCP có bắt tay 3 bước, đánh số & truyền lại gói mất — đảm bảo tin cậy.'},
+          {q:'Mạng 10.0.0.5/28 có tối đa bao nhiêu thiết bị?',o:['14','16','30','254'],a:0,fb:'/28 để lại 4 bit cho phần thiết bị: 2^4 − 2 = 14 (trừ địa chỉ mạng 10.0.0.0 và broadcast 10.0.0.15).'}]},
+        {note:'Tìm hiểu thêm: subnet-calculator.com để luyện chia mạng con, và khoá IP Addressing & Subnetting của Cisco Networking Academy.'}]}],
     skills:['Hiểu mô hình OSI/TCP-IP','Giao thức & cổng','Cơ bản địa chỉ IP'],
     quiz:[{q:'HTTPS dùng cổng mặc định nào?',o:['443','80','21','25'],a:0},
       {q:'Giao thức nào phân giải tên miền thành IP?',o:['DNS','FTP','SMTP','SSH'],a:0},
@@ -1162,29 +1268,76 @@ const SPACES_IT = {
       {q:'Chỉ được kiểm thử xâm nhập (pentest) khi?',o:['Có sự cho phép/hợp đồng rõ ràng','Bất cứ lúc nào','Khi tò mò','Khi không ai biết'],a:0}]},
 
   ailab:{emoji:'🤖',name:'Lab AI & Machine Learning',accent:'#a78bfa',intro:'Trí tuệ nhân tạo và học máy: quy trình ML, học có giám sát/không giám sát, overfitting và mạng nơ-ron.',
-    rooms:[{ic:'🔁',name:'Quy trình ML',rd:'Các bước xây dựng mô hình.',panel:[
+    // Nội dung chi tiết 4 phòng Lab AI do cô Chu Thi Hue soạn (req #129 · 02/08).
+    rooms:[{ic:'🔁',name:'Quy trình ML',rd:'6 bước xây dựng mô hình, vì sao phải chia 3 tập dữ liệu.',panel:[
         {h:'Pipeline học máy điển hình'},
-        {timeline:[{t:'Thu thập & làm sạch dữ liệu',d:'Xử lý thiếu/nhiễu, chuẩn hoá đặc trưng.'},
-          {t:'Chia tập',d:'Train / validation / test.'},
-          {t:'Huấn luyện',d:'Chọn mô hình & tối ưu tham số.'},
-          {t:'Đánh giá',d:'Accuracy, precision/recall, F1, AUC.'},
-          {t:'Triển khai & theo dõi',d:'Đưa vào sản phẩm, giám sát trôi dữ liệu.'}]}]},
-      {ic:'🧩',name:'Các kiểu học',rd:'Giám sát vs không giám sát.',panel:[
+        {p:'Quy trình Machine Learning là chuỗi các bước có thứ tự để biến dữ liệu thô thành một mô hình biết dự đoán hoặc phân loại — không phải chỉ đơn thuần "chạy thuật toán".'},
+        {timeline:[{t:'1. Thu thập dữ liệu',d:'Lấy dữ liệu từ nguồn thực tế: CSDL, cảm biến, khảo sát…'},
+          {t:'2. Tiền xử lý dữ liệu',d:'Làm sạch dữ liệu thiếu/lỗi, chuẩn hoá định dạng, mã hoá dữ liệu dạng chữ thành số.'},
+          {t:'3. Chia tập dữ liệu',d:'Tách thành tập huấn luyện (train), kiểm định (validation) và kiểm tra (test).'},
+          {t:'4. Huấn luyện mô hình',d:'Cho mô hình học từ tập train bằng thuật toán đã chọn.'},
+          {t:'5. Đánh giá mô hình',d:'Đo hiệu quả trên tập test bằng accuracy, precision, recall…'},
+          {t:'6. Triển khai & giám sát',d:'Đưa vào dùng thực tế, theo dõi hiệu suất theo thời gian.'}]},
+        {h:'Vì sao phải chia 3 tập, không chỉ 1?'},
+        {ul:['Train set: mô hình học trực tiếp từ đây.','Validation set: dùng để tinh chỉnh mô hình (chọn siêu tham số) mà không "nhìn trộm" đáp án của tập test.','Test set: chỉ dùng MỘT LẦN cuối cùng để đánh giá khách quan. Nếu mô hình đã "nhìn thấy" tập test lúc huấn luyện thì kết quả đánh giá không còn đáng tin.']},
+        {note:'Tỷ lệ chia phổ biến: 70% train – 15% validation – 15% test, hoặc 80/10/10 tuỳ quy mô dữ liệu.'},
+        {h:'Hai lỗi người mới hay mắc'},
+        {ul:['Bỏ qua bước tiền xử lý, đưa thẳng dữ liệu thô vào mô hình → kết quả kém mà không hiểu vì sao.','Đánh giá mô hình trên chính tập đã dùng để huấn luyện → cho kết quả ảo, không phản ánh thực tế.']},
+        {order:{title:'Sắp xếp đúng thứ tự 6 bước xây dựng mô hình',items:['Thu thập dữ liệu','Tiền xử lý dữ liệu','Chia tập train / validation / test','Huấn luyện mô hình','Đánh giá mô hình trên tập test','Triển khai & giám sát']}},
+        {note:'Tìm hiểu thêm: Machine Learning Crash Course của Google (developers.google.com/machine-learning/crash-course) và tài liệu cross-validation của scikit-learn.'}]},
+
+      {ic:'🧩',name:'Các kiểu học',rd:'Có giám sát, không giám sát, tăng cường — khác nhau ở đâu.',panel:[
         {h:'Phân loại bài toán ML'},
+        {p:'Cách phân loại bài toán Machine Learning dựa trên việc dữ liệu huấn luyện có kèm "đáp án đúng" hay không.'},
         {cards:[{ic:'🏷️',t:'Có giám sát',d:'Dữ liệu có nhãn — phân loại, hồi quy.'},
           {ic:'🔍',t:'Không giám sát',d:'Không nhãn — phân cụm, giảm chiều.'},
           {ic:'🎮',t:'Tăng cường',d:'Học qua thưởng/phạt (agent).'},
           {ic:'🧠',t:'Học sâu',d:'Mạng nơ-ron nhiều lớp (ảnh, NLP).'}]},
-        {mcq:[{q:'Dự đoán giá nhà (số liên tục) là bài toán?',o:['Hồi quy (regression)','Phân loại','Phân cụm','Giảm chiều'],a:0,fb:'Đầu ra liên tục → hồi quy; đầu ra nhãn rời rạc → phân loại.'}]}]},
-      {ic:'⚠️',name:'Overfitting',rd:'Khi mô hình học vẹt.',panel:[
+        {h:'A. Học có giám sát (Supervised Learning)'},
+        {p:'Dữ liệu huấn luyện đi kèm nhãn — tức đáp án đúng đã biết trước. Mô hình học cách ánh xạ từ đầu vào đến đầu ra dựa trên các ví dụ đã có nhãn.'},
+        {ul:['Phân loại (classification): đầu ra là nhãn rời rạc — ví dụ email là "spam" hay "không spam".','Hồi quy (regression): đầu ra là giá trị số liên tục — ví dụ dự đoán giá nhà theo diện tích.']},
+        {h:'B. Học không giám sát (Unsupervised Learning)'},
+        {p:'Dữ liệu KHÔNG có nhãn — mô hình tự tìm cấu trúc, quy luật ẩn mà không được cho biết trước đáp án.'},
+        {ul:['Phân cụm (clustering): gom các điểm dữ liệu giống nhau — ví dụ phân nhóm khách hàng theo hành vi mua sắm mà không biết trước có bao nhiêu nhóm.','Giảm chiều (dimensionality reduction): rút gọn số đặc trưng mà vẫn giữ được thông tin quan trọng nhất.']},
+        {h:'So sánh nhanh'},
+        {ul:['Dữ liệu cần — có giám sát: có nhãn · không giám sát: không cần nhãn.','Mục tiêu — có giám sát: dự đoán đầu ra chính xác · không giám sát: tìm cấu trúc ẩn.','Thuật toán tiêu biểu — có giám sát: Linear Regression, Decision Tree · không giám sát: K-Means, PCA.','Ứng dụng — có giám sát: nhận diện ảnh, dự đoán giá · không giám sát: phân khúc khách hàng.']},
+        {h:'C. Học tăng cường (Reinforcement Learning)'},
+        {p:'Kiểu học thứ ba: mô hình (agent) học bằng cách tương tác với môi trường, nhận thưởng hoặc phạt theo hành động, thay vì học từ dữ liệu có sẵn — ví dụ AI chơi cờ vây, xe tự lái.'},
+        {match:{title:'Xếp mỗi tình huống vào đúng kiểu học',pairs:[['Dự đoán thời tiết ngày mai','Có giám sát — hồi quy'],['Gom nhóm bài báo theo chủ đề','Không giám sát — phân cụm'],['Nhận diện chữ viết tay','Có giám sát — phân loại'],['Gợi ý sản phẩm từ hành vi chưa gắn nhãn','Không giám sát'],['AI học chơi cờ qua thắng thua','Học tăng cường']]}},
+        {mcq:[{q:'Dự đoán giá nhà (số liên tục) là bài toán?',o:['Hồi quy (regression)','Phân loại','Phân cụm','Giảm chiều'],a:0,fb:'Đầu ra liên tục → hồi quy; đầu ra nhãn rời rạc → phân loại.'}]},
+        {note:'Tìm hiểu thêm: Supervised vs Unsupervised Learning (ibm.com/topics/supervised-learning) và Google ML Glossary.'}]},
+
+      {ic:'⚠️',name:'Overfitting',rd:'Dấu hiệu, nguyên nhân, 5 cách khắc phục và phân biệt với underfitting.',panel:[
         {h:'Quá khớp (overfitting)'},
-        {ul:['Dấu hiệu: rất tốt trên train nhưng kém trên test','Khắc phục: thêm dữ liệu, regularization (L1/L2), dropout','Dùng cross-validation để đánh giá khách quan','Đơn giản hoá mô hình nếu cần']},
-        {note:'Mục tiêu là TỔNG QUÁT HOÁ — đoán tốt trên dữ liệu CHƯA TỪNG thấy.'}]},
-      {ic:'🧠',name:'Mạng nơ-ron',rd:'Lật thẻ khái niệm.',panel:[
-        {p:'Lật thẻ ôn khái niệm mạng nơ-ron.'},
+        {p:'Overfitting là khi mô hình học quá chi tiết, thuộc cả nhiễu và đặc điểm ngẫu nhiên của tập huấn luyện, nên chạy tốt trên dữ liệu đã học nhưng kém trên dữ liệu mới.'},
+        {p:'Giống một học sinh học vẹt để làm đúng y hệt 10 bài tập mẫu trong sách, nhưng gặp bài mới cùng dạng với số liệu khác thì không giải được — vì không thực sự hiểu bản chất, chỉ nhớ đáp án cụ thể.'},
+        {h:'Dấu hiệu nhận biết'},
+        {ul:['Độ chính xác trên tập train rất cao, gần 100%.','Độ chính xác trên tập test/validation thấp hơn đáng kể.','Khoảng cách giữa hai chỉ số càng lớn thì mô hình càng "học vẹt".']},
+        {h:'Nguyên nhân phổ biến'},
+        {ul:['Mô hình quá phức tạp so với lượng dữ liệu có (quá nhiều tham số).','Huấn luyện quá nhiều vòng lặp (epoch) trên cùng một tập dữ liệu nhỏ.','Dữ liệu huấn luyện có nhiễu nhưng không được xử lý.']},
+        {h:'Năm kỹ thuật khắc phục'},
+        {cards:[{ic:'📚',t:'Thêm dữ liệu huấn luyện',d:'Dữ liệu đa dạng hơn thì mô hình khó học thuộc.'},
+          {ic:'⚖️',t:'Regularization (L1/L2)',d:'Phạt trọng số quá lớn, ép mô hình đơn giản hơn.'},
+          {ic:'🎲',t:'Dropout',d:'Ngẫu nhiên tắt một số nơ-ron khi huấn luyện, tránh phụ thuộc vào một đường dẫn.'},
+          {ic:'⏹️',t:'Early stopping',d:'Dừng khi hiệu suất trên validation bắt đầu giảm, dù train vẫn đang cải thiện.'},
+          {ic:'🔄',t:'Cross-validation',d:'Đánh giá trên nhiều cách chia dữ liệu để có kết quả đáng tin hơn.'}]},
+        {note:'Ngược lại là UNDERFITTING: mô hình quá đơn giản, không học nổi cả quy luật trong tập train — biểu hiện là độ chính xác thấp ở CẢ train lẫn test. Overfitting: train cao, test thấp. Underfitting: cả hai đều thấp.'},
+        {mcq:[{q:'Learning curve cho thấy train 99% nhưng validation chỉ 62%. Đây là hiện tượng gì?',o:['Overfitting','Underfitting','Mô hình vừa khớp','Thiếu dữ liệu test'],a:0,fb:'Khoảng cách lớn giữa train và validation là dấu hiệu kinh điển của overfitting.'},
+          {q:'Cả train lẫn test đều chỉ đạt 55%. Đây là?',o:['Underfitting','Overfitting','Mô hình tốt','Lỗi chia tập'],a:0,fb:'Kém ở cả hai tập nghĩa là mô hình chưa học đủ — underfitting.'}]},
+        {note:'Mục tiêu cuối cùng là TỔNG QUÁT HOÁ — đoán tốt trên dữ liệu CHƯA TỪNG thấy. Tìm hiểu thêm: Overfitting and Underfitting trong Google ML Crash Course.'}]},
+
+      {ic:'🧠',name:'Mạng nơ-ron',rd:'12 thuật ngữ lõi + luồng hoạt động và vì sao gọi là học sâu.',panel:[
+        {p:'Mạng nơ-ron nhân tạo là mô hình học máy mô phỏng cách các nơ-ron sinh học kết nối và truyền tín hiệu, gồm nhiều lớp xử lý dữ liệu tuần tự.'},
         {flash:[{e:'⚖️',f:'Trọng số (weight)',b:'Tham số mô hình học được'},{e:'📈',f:'Hàm kích hoạt',b:'ReLU, sigmoid — thêm phi tuyến'},
           {e:'📉',f:'Hàm mất mát',b:'Đo sai số dự đoán so với thực tế'},{e:'🔙',f:'Backpropagation',b:'Lan truyền ngược để cập nhật trọng số'},
-          {e:'🎚️',f:'Learning rate',b:'Tốc độ cập nhật trọng số'},{e:'🧱',f:'Epoch',b:'Một lượt duyệt toàn bộ dữ liệu train'}]}]}],
+          {e:'🎚️',f:'Learning rate',b:'Tốc độ cập nhật trọng số'},{e:'🧱',f:'Epoch',b:'Một lượt duyệt toàn bộ dữ liệu train'}]},
+        {h:'12 thuật ngữ lõi'},
+        {ul:['Neuron (nơ-ron): đơn vị tính toán cơ bản — nhận nhiều đầu vào, tính tổng có trọng số rồi đưa qua hàm kích hoạt.','Layer (lớp): tập hợp các nơ-ron xử lý song song ở cùng một tầng.','Input layer: lớp đầu tiên, nhận dữ liệu thô.','Hidden layer: các lớp trung gian, nơi mạng học các đặc trưng trừu tượng dần.','Output layer: lớp cuối, cho ra kết quả dự đoán.','Weight (trọng số): hệ số nhân với mỗi đầu vào, được điều chỉnh trong quá trình học.','Bias: hệ số cộng thêm, giúp mô hình linh hoạt hơn khi khớp dữ liệu.','Activation function: hàm phi tuyến áp lên tổng có trọng số, giúp mạng học được quan hệ phức tạp (ReLU, Sigmoid).','Forward propagation: dữ liệu đi từ input qua các lớp để tạo ra output.','Backpropagation: lan truyền ngược sai số để cập nhật trọng số — chính là lúc mạng "học".','Loss function: đo mức sai lệch giữa dự đoán và đáp án đúng.','Epoch: một lượt mô hình học qua toàn bộ tập huấn luyện.']},
+        {h:'Luồng hoạt động tổng quát'},
+        {p:'Dữ liệu vào từ input layer, qua các hidden layer để trích xuất đặc trưng ngày càng trừu tượng, tới output layer cho ra kết quả. Sau đó loss function tính độ sai lệch, backpropagation lan truyền sai số ngược lại để chỉnh trọng số — lặp lại nhiều epoch cho tới khi đạt độ chính xác mong muốn.'},
+        {h:'Vì sao gọi là "học sâu"?'},
+        {p:'Khi mạng có nhiều hidden layer thì gọi là mạng nơ-ron sâu, mỗi lớp học một mức trừu tượng cao hơn lớp trước. Ví dụ trong nhận diện ảnh: lớp đầu học cạnh và đường viền, lớp giữa học hình dạng, lớp sau học khái niệm như "mắt", "khuôn mặt".'},
+        {note:'Tìm hiểu thêm: loạt bài Neural Networks trực quan của 3Blue1Brown và khoá Neural Networks and Deep Learning (deeplearning.ai).'}]}],
     skills:['Hiểu quy trình ML','Phân biệt kiểu học','Tránh overfitting'],
     quiz:[{q:'Học có giám sát (supervised) cần?',o:['Dữ liệu có nhãn','Không cần dữ liệu','Chỉ phần thưởng','Không nhãn'],a:0},
       {q:'Overfitting là khi mô hình?',o:['Tốt trên train nhưng kém trên dữ liệu mới','Kém trên cả train lẫn test','Luôn hoàn hảo','Không học được gì'],a:0},
