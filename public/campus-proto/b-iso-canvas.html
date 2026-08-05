@@ -489,6 +489,13 @@ const CAMPUSES = {
       B('canteen','Căng tin','🍜',11.5,17.0,'com:low-detail-building-wide-b',1.0,0),
       B('dorm','Ký túc xá','🛏️',18.5,17.0,'com:building-j',1.0,0),
       B('museum','Bảo tàng Công nghệ','🖥️',23.5,17.0,'com:building-k',1.0,270),
+      // Toà riêng cho Từ vựng Tiếng Anh chuyên ngành (req #134, SV Duc anh — đã
+      // xin thêm từ vựng 4 lần, lần này xin hẳn một toà). Đặt ở lề tây (gx2.9),
+      // cùng cột với 'career' (gy3) nhưng lùi xuống hàng gy9 — khoảng trống duy
+      // nhất còn lại không đụng đường nội bộ (gx8.35-9.65 & gy5.4-6.6) hay sân
+      // thể thao (gx2.8,gy14). Kiểm tra qua console.log(window.CAMPUSES.it) +
+      // chụp màn hình canvas thật trước khi chốt toạ độ.
+      B('vocab','Từ vựng Tiếng Anh chuyên ngành','🔤',2.9,9.0,'com:building-m',1.0,90,{pin:'#ec4899'}),
     ],
     facilities:[
       {id:'gate',     name:'Cổng chính (Bắc)',emoji:'🚪',gx:15,gy:0.7},
@@ -1652,7 +1659,10 @@ const SPACE_KEYS_BY_DOMAIN = {
   language:   ['main-hall','library-lang','test-center','listening-lab','speaking-room','pronunciation','film-room','drama','intl-cafe'],
   driving:    ['theory-center','signs-room','exam-theory','sim-room','first-aid','admin-drive','canteen-drive'],
   secondary:  ['grade6','grade7','grade8','grade9','lab','computer','english','artmusic','admin','library','tradition','youthunion','gym','tech','medical','canteen'],
-  it:         ['admin','lecture','library','hall','codelab','algolab','dblab','netlab','seclab','ailab','webstudio','startuphub'],
+  // 🪤 03/08: 'cloudcenter' có 4 phòng nội dung trong SPACES_IT nhưng thiếu ở đây
+  // nên toà "TT Dữ liệu & Cloud" hiện trên bản đồ mà bấm vào không có gì xảy ra
+  // (không lọt vào TARGETS/legend) — phát hiện khi rà lại cả danh sách cho #134.
+  it:         ['admin','lecture','library','hall','codelab','algolab','dblab','netlab','seclab','ailab','webstudio','startuphub','cloudcenter'],
   primary:    ['g1','g2','g3','g4','g5','library','english','computer','admin','doi','health','art','music','science','canteen','gym'],
   preschool:  ['mam','choi','la','canteen'],
   highschool: ['admin','grade10','grade11','grade12','lab_phys','lab_chem','lab_bio','computer','library','hall','youth','arts','canteen','medical','gym','bike'],
@@ -1675,6 +1685,9 @@ const CUSTOM_TARGETS = {
   it: {
     career: '/tech-career-center.html?domain=it',
     museum: '/bao-tang-cong-nghe.html?domain=it',
+    // Toà "Từ vựng Tiếng Anh chuyên ngành" (req #134) — trang riêng, không phải
+    // /space.html, giữ nguyên 13 chủ đề để SV tự chọn (không khoá cứng 1 topic).
+    vocab: '/tu-vung-tieng-anh?domain=it',
   },
 };
 Object.entries(CUSTOM_TARGETS[_dom] || {}).forEach(([id,url])=>{ TARGETS[id]=url; });
