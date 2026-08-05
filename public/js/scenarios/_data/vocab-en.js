@@ -806,6 +806,76 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˌsɪŋ.ɡəl pɔɪnt əv ˈfeɪ.ljər/",
         "v": "điểm hỏng đơn lẻ gây sập cả hệ thống",
         "ex": "One database server is a single point of failure."
+      },
+      {
+        "w": "CPU spike",
+        "pos": "noun",
+        "ph": "/ˌsiː.piːˈjuː spaɪk/",
+        "v": "đợt tăng vọt tải CPU",
+        "ex": "A CPU spike slowed down every request for a minute."
+      },
+      {
+        "w": "device driver",
+        "pos": "noun",
+        "ph": "/dɪˈvaɪs ˈdraɪ.vər/",
+        "v": "trình điều khiển thiết bị",
+        "ex": "Windows could not find a device driver for the scanner."
+      },
+      {
+        "w": "sandbox mode",
+        "pos": "noun",
+        "ph": "/ˈsænd.bɒks məʊd/",
+        "v": "chế độ chạy thử an toàn",
+        "ex": "Test the payment flow in sandbox mode first."
+      },
+      {
+        "w": "read-only",
+        "pos": "adjective",
+        "ph": "/ˌriːdˈəʊn.li/",
+        "v": "chỉ đọc",
+        "ex": "The shared folder is read-only for guests."
+      },
+      {
+        "w": "offline first",
+        "pos": "adjective",
+        "ph": "/ˌɒfˈlaɪn fɜːst/",
+        "v": "ưu tiên hoạt động ngoại tuyến",
+        "ex": "An offline-first app still works without internet."
+      },
+      {
+        "w": "digital footprint",
+        "pos": "noun",
+        "ph": "/ˈdɪdʒ.ɪ.təl ˈfʊt.prɪnt/",
+        "v": "dấu vết số",
+        "ex": "Think before you post — your digital footprint stays online."
+      },
+      {
+        "w": "smart device",
+        "pos": "noun",
+        "ph": "/smɑːt dɪˈvaɪs/",
+        "v": "thiết bị thông minh",
+        "ex": "The smart device connects to the app over Wi-Fi."
+      },
+      {
+        "w": "data usage",
+        "pos": "noun",
+        "ph": "/ˈdeɪ.tə ˈjuː.sɪdʒ/",
+        "v": "lượng dữ liệu sử dụng",
+        "ex": "Check your data usage before travelling abroad."
+      },
+      {
+        "w": "sync",
+        "pos": "verb",
+        "ph": "/sɪŋk/",
+        "v": "đồng bộ hoá",
+        "ex": "Photos sync automatically to the cloud."
+      },
+      {
+        "w": "compatibility",
+        "pos": "noun",
+        "ph": "/kəmˌpæt.əˈbɪl.ə.ti/",
+        "v": "tính tương thích",
+        "ex": "Check device compatibility before buying the accessory."
       }
     ]
   },
@@ -1519,6 +1589,76 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˈtʃer.i pɪk/",
         "v": "bốc riêng một commit",
         "ex": "Cherry-pick that fix onto the release branch."
+      },
+      {
+        "w": "sample code",
+        "pos": "noun",
+        "ph": "/ˈsɑːm.pəl kəʊd/",
+        "v": "mã ví dụ mẫu",
+        "ex": "The docs include sample code for every endpoint."
+      },
+      {
+        "w": "helper function",
+        "pos": "noun",
+        "ph": "/ˈhel.pər ˈfʌŋk.ʃən/",
+        "v": "hàm hỗ trợ",
+        "ex": "Move that logic into a helper function."
+      },
+      {
+        "w": "naming convention",
+        "pos": "noun",
+        "ph": "/ˈneɪ.mɪŋ kənˈven.ʃən/",
+        "v": "quy ước đặt tên",
+        "ex": "Follow the naming convention used elsewhere in the file."
+      },
+      {
+        "w": "hard-code",
+        "pos": "verb",
+        "ph": "/ˈhɑːd.kəʊd/",
+        "v": "viết cứng giá trị vào mã",
+        "ex": "Don’t hard-code the API URL; use a config file."
+      },
+      {
+        "w": "trace",
+        "pos": "verb",
+        "ph": "/treɪs/",
+        "v": "dò theo luồng chạy",
+        "ex": "Trace the function calls to find where it fails."
+      },
+      {
+        "w": "input validation",
+        "pos": "noun",
+        "ph": "/ˈɪn.pʊt ˌvæl.ɪˈdeɪ.ʃən/",
+        "v": "kiểm tra dữ liệu đầu vào",
+        "ex": "Input validation stops empty forms from being submitted."
+      },
+      {
+        "w": "nested loop",
+        "pos": "noun",
+        "ph": "/ˈnes.tɪd luːp/",
+        "v": "vòng lặp lồng nhau",
+        "ex": "A nested loop checks every pair of items."
+      },
+      {
+        "w": "sort algorithm",
+        "pos": "noun",
+        "ph": "/sɔːt ˈæl.ɡə.rɪð.əm/",
+        "v": "thuật toán sắp xếp",
+        "ex": "Bubble sort is a simple but slow sort algorithm."
+      },
+      {
+        "w": "base case",
+        "pos": "noun",
+        "ph": "/beɪs keɪs/",
+        "v": "trường hợp dừng đệ quy",
+        "ex": "Every recursive function needs a base case."
+      },
+      {
+        "w": "shadow variable",
+        "pos": "noun",
+        "ph": "/ˈʃæd.əʊ ˈveə.ri.ə.bəl/",
+        "v": "biến che khuất biến ngoài",
+        "ex": "A shadow variable with the same name causes confusing bugs."
       }
     ]
   },
@@ -2071,6 +2211,62 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˈnet.wɜːk ˈleɪ.tən.si/",
         "v": "độ trễ mạng",
         "ex": "Network latency to Europe is about 250 milliseconds."
+      },
+      {
+        "w": "ping time",
+        "pos": "noun",
+        "ph": "/pɪŋ taɪm/",
+        "v": "thời gian phản hồi ping",
+        "ex": "A ping time under 50ms feels instant."
+      },
+      {
+        "w": "network card",
+        "pos": "noun",
+        "ph": "/ˈnet.wɜːk kɑːd/",
+        "v": "card mạng",
+        "ex": "Replace the network card if the connection keeps dropping."
+      },
+      {
+        "w": "cable modem",
+        "pos": "noun",
+        "ph": "/ˈkeɪ.bəl ˈməʊ.dem/",
+        "v": "modem cáp",
+        "ex": "A cable modem connects your home to the ISP."
+      },
+      {
+        "w": "mesh Wi-Fi",
+        "pos": "noun",
+        "ph": "/meʃ ˈwaɪ.faɪ/",
+        "v": "hệ thống Wi-Fi mắt lưới",
+        "ex": "Mesh Wi-Fi removed every dead spot in the house."
+      },
+      {
+        "w": "data cap",
+        "pos": "noun",
+        "ph": "/ˈdeɪ.tə kæp/",
+        "v": "hạn mức dữ liệu",
+        "ex": "The plan has a 200 GB data cap."
+      },
+      {
+        "w": "offline network",
+        "pos": "noun",
+        "ph": "/ˌɒfˈlaɪn ˈnet.wɜːk/",
+        "v": "mạng ngoại tuyến",
+        "ex": "An offline network still lets local devices talk to each other."
+      },
+      {
+        "w": "signal strength",
+        "pos": "noun",
+        "ph": "/ˈsɪɡ.nəl streŋθ/",
+        "v": "cường độ tín hiệu",
+        "ex": "Move closer to the router to improve signal strength."
+      },
+      {
+        "w": "network diagram",
+        "pos": "noun",
+        "ph": "/ˈnet.wɜːk ˈdaɪ.ə.ɡræm/",
+        "v": "sơ đồ mạng",
+        "ex": "Draw a network diagram before wiring the office."
       }
     ]
   },
@@ -2665,6 +2861,62 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/sɪˈmæn.tɪk sɜːtʃ/",
         "v": "tìm kiếm theo ngữ nghĩa",
         "ex": "Semantic search finds related ideas, not just matching words."
+      },
+      {
+        "w": "data label",
+        "pos": "noun",
+        "ph": "/ˈdeɪ.tə ˈleɪ.bəl/",
+        "v": "nhãn dữ liệu",
+        "ex": "Each image needs a correct data label."
+      },
+      {
+        "w": "training set",
+        "pos": "noun",
+        "ph": "/ˈtreɪ.nɪŋ set/",
+        "v": "tập dữ liệu huấn luyện",
+        "ex": "The training set has ten thousand examples."
+      },
+      {
+        "w": "output layer",
+        "pos": "noun",
+        "ph": "/ˈaʊt.pʊt ˈleɪ.ər/",
+        "v": "lớp đầu ra",
+        "ex": "The output layer has one neuron for each class."
+      },
+      {
+        "w": "AI assistant",
+        "pos": "noun",
+        "ph": "/ˌeɪˈaɪ əˈsɪs.tənt/",
+        "v": "trợ lý AI",
+        "ex": "An AI assistant can draft the email for you."
+      },
+      {
+        "w": "smart recommendation",
+        "pos": "noun",
+        "ph": "/smɑːt ˌrek.ə.menˈdeɪ.ʃən/",
+        "v": "gợi ý thông minh",
+        "ex": "The app gives a smart recommendation based on your history."
+      },
+      {
+        "w": "speech recognition",
+        "pos": "noun",
+        "ph": "/spiːtʃ ˌrek.əɡˈnɪʃ.ən/",
+        "v": "nhận dạng giọng nói",
+        "ex": "Speech recognition turns your voice into text."
+      },
+      {
+        "w": "image classification",
+        "pos": "noun",
+        "ph": "/ˈɪm.ɪdʒ ˌklæs.ɪ.fɪˈkeɪ.ʃən/",
+        "v": "phân loại ảnh",
+        "ex": "Image classification tags each photo with a label."
+      },
+      {
+        "w": "data labeling",
+        "pos": "noun",
+        "ph": "/ˈdeɪ.tə ˈleɪ.bəl.ɪŋ/",
+        "v": "công việc gán nhãn dữ liệu",
+        "ex": "Data labeling takes longer than training the model."
       }
     ]
   },
@@ -3266,6 +3518,62 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˈdeɪ.tə ˌmɪn.ɪ.maɪˈzeɪ.ʃən/",
         "v": "thu thập dữ liệu tối thiểu",
         "ex": "Data minimization means collecting only what you need."
+      },
+      {
+        "w": "strong password",
+        "pos": "noun",
+        "ph": "/strɒŋ ˈpɑːs.wɜːd/",
+        "v": "mật khẩu mạnh",
+        "ex": "Use a strong password for every account."
+      },
+      {
+        "w": "data leak",
+        "pos": "noun",
+        "ph": "/ˈdeɪ.tə liːk/",
+        "v": "rò rỉ dữ liệu",
+        "ex": "The data leak exposed thousands of emails."
+      },
+      {
+        "w": "safe browsing",
+        "pos": "noun",
+        "ph": "/seɪf ˈbraʊ.zɪŋ/",
+        "v": "duyệt web an toàn",
+        "ex": "Safe browsing warns you before a dangerous site loads."
+      },
+      {
+        "w": "account recovery",
+        "pos": "noun",
+        "ph": "/əˈkaʊnt rɪˈkʌv.ər.i/",
+        "v": "khôi phục tài khoản",
+        "ex": "Set up account recovery in case you lose your phone."
+      },
+      {
+        "w": "identity theft",
+        "pos": "noun",
+        "ph": "/aɪˈden.tə.ti θeft/",
+        "v": "đánh cắp danh tính",
+        "ex": "Identity theft can ruin your credit history."
+      },
+      {
+        "w": "security breach",
+        "pos": "noun",
+        "ph": "/sɪˈkjʊə.rə.ti briːtʃ/",
+        "v": "vi phạm an ninh",
+        "ex": "The company reported a security breach last week."
+      },
+      {
+        "w": "trusted device",
+        "pos": "noun",
+        "ph": "/ˈtrʌs.tɪd dɪˈvaɪs/",
+        "v": "thiết bị tin cậy",
+        "ex": "Add your phone as a trusted device."
+      },
+      {
+        "w": "unauthorized access",
+        "pos": "noun",
+        "ph": "/ʌnˈɔː.θər.aɪzd ˈæk.ses/",
+        "v": "truy cập trái phép",
+        "ex": "The log shows an unauthorized access attempt."
       }
     ]
   },
@@ -3790,6 +4098,55 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ɪˈmjuː.nə.ti/",
         "v": "miễn dịch",
         "ex": "The vaccine builds immunity in about two weeks."
+      },
+      {
+        "w": "sick leave",
+        "pos": "noun",
+        "ph": "/sɪk liːv/",
+        "v": "nghỉ ốm",
+        "ex": "He took two days of sick leave."
+      },
+      {
+        "w": "home remedy",
+        "pos": "noun",
+        "ph": "/həʊm ˈrem.ə.di/",
+        "v": "bài thuốc dân gian",
+        "ex": "Ginger tea is a common home remedy for a cold."
+      },
+      {
+        "w": "immune system",
+        "pos": "noun",
+        "ph": "/ɪˈmjuːn ˈsɪs.təm/",
+        "v": "hệ miễn dịch",
+        "ex": "Vitamin C is said to support the immune system."
+      },
+      {
+        "w": "mental health",
+        "pos": "noun",
+        "ph": "/ˈmen.təl helθ/",
+        "v": "sức khoẻ tinh thần",
+        "ex": "Mental health matters as much as physical health."
+      },
+      {
+        "w": "follow-up visit",
+        "pos": "noun",
+        "ph": "/ˈfɒl.əʊ.ʌp ˈvɪz.ɪt/",
+        "v": "tái khám",
+        "ex": "Book a follow-up visit in two weeks."
+      },
+      {
+        "w": "medical history",
+        "pos": "noun",
+        "ph": "/ˈmed.ɪ.kəl ˈhɪs.tər.i/",
+        "v": "tiền sử bệnh",
+        "ex": "The doctor asked about her medical history."
+      },
+      {
+        "w": "symptom checker",
+        "pos": "noun",
+        "ph": "/ˈsɪmp.təm ˈtʃek.ər/",
+        "v": "công cụ tự kiểm triệu chứng",
+        "ex": "A symptom checker is not a substitute for a doctor."
       }
     ]
   },
@@ -4293,6 +4650,55 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ɪɡˈzæm bɔːd/",
         "v": "hội đồng thi",
         "ex": "The exam board sets the papers for the whole province."
+      },
+      {
+        "w": "report card",
+        "pos": "noun",
+        "ph": "/rɪˈpɔːt kɑːd/",
+        "v": "học bạ, phiếu điểm",
+        "ex": "Report cards go home at the end of term."
+      },
+      {
+        "w": "study group",
+        "pos": "noun",
+        "ph": "/ˈstʌd.i ɡruːp/",
+        "v": "nhóm học tập",
+        "ex": "We formed a study group before the exam."
+      },
+      {
+        "w": "office hours",
+        "pos": "noun",
+        "ph": "/ˈɒf.ɪs aʊəz/",
+        "v": "giờ tiếp sinh viên",
+        "ex": "Visit the lecturer during office hours if you’re stuck."
+      },
+      {
+        "w": "academic probation",
+        "pos": "noun",
+        "ph": "/ˌæk.əˈdem.ɪk prəˈbeɪ.ʃən/",
+        "v": "cảnh báo học vụ",
+        "ex": "His low GPA put him on academic probation."
+      },
+      {
+        "w": "extension",
+        "pos": "noun",
+        "ph": "/ɪkˈsten.ʃən/",
+        "v": "gia hạn nộp bài",
+        "ex": "She asked for a two-day extension on the essay."
+      },
+      {
+        "w": "honor code",
+        "pos": "noun",
+        "ph": "/ˈɒn.ər kəʊd/",
+        "v": "quy tắc liêm chính học thuật",
+        "ex": "The honor code bans copying answers in exams."
+      },
+      {
+        "w": "mentor programme",
+        "pos": "noun",
+        "ph": "/ˈmen.tɔː ˈprəʊ.ɡræm/",
+        "v": "chương trình cố vấn",
+        "ex": "New students join the mentor programme in week one."
       }
     ]
   },
@@ -4775,6 +5181,55 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/rɪˈməʊt wɜːk/",
         "v": "làm việc từ xa",
         "ex": "Remote work widened our hiring pool."
+      },
+      {
+        "w": "elevator pitch",
+        "pos": "noun",
+        "ph": "/ˈel.ɪ.veɪ.tər pɪtʃ/",
+        "v": "bài giới thiệu ngắn gọn",
+        "ex": "Practise your elevator pitch before the investor meeting."
+      },
+      {
+        "w": "cold call",
+        "pos": "noun",
+        "ph": "/ˈkəʊld kɔːl/",
+        "v": "gọi điện chào hàng bất ngờ",
+        "ex": "Cold calls rarely convert into real customers."
+      },
+      {
+        "w": "client retention",
+        "pos": "noun",
+        "ph": "/ˈklaɪ.ənt rɪˈten.ʃən/",
+        "v": "giữ chân khách hàng",
+        "ex": "Client retention is cheaper than acquiring new customers."
+      },
+      {
+        "w": "exit strategy",
+        "pos": "noun",
+        "ph": "/ˈeɡ.zɪt ˈstræt.ə.dʒi/",
+        "v": "chiến lược thoái vốn",
+        "ex": "Every investor asks about the founder’s exit strategy."
+      },
+      {
+        "w": "bottom line",
+        "pos": "noun",
+        "ph": "/ˈbɒt.əm laɪn/",
+        "v": "lợi nhuận ròng, kết quả cuối",
+        "ex": "Cutting costs improved the bottom line this quarter."
+      },
+      {
+        "w": "red tape",
+        "pos": "noun",
+        "ph": "/red teɪp/",
+        "v": "thủ tục hành chính rườm rà",
+        "ex": "Red tape delayed the licence for six months."
+      },
+      {
+        "w": "win-win",
+        "pos": "adjective",
+        "ph": "/ˌwɪnˈwɪn/",
+        "v": "đôi bên cùng có lợi",
+        "ex": "The new contract is a win-win for both sides."
       }
     ]
   },
@@ -5271,6 +5726,48 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˌwiːkˈend plæn/",
         "v": "kế hoạch cuối tuần",
         "ex": "What is your weekend plan?"
+      },
+      {
+        "w": "grocery",
+        "pos": "noun",
+        "ph": "/ˈɡrəʊ.sər.i/",
+        "v": "tạp hoá, thực phẩm",
+        "ex": "I need to buy groceries after work."
+      },
+      {
+        "w": "neighbourhood",
+        "pos": "noun",
+        "ph": "/ˈneɪ.bə.hʊd/",
+        "v": "khu phố",
+        "ex": "It’s a quiet neighbourhood with friendly people."
+      },
+      {
+        "w": "waiting room",
+        "pos": "noun",
+        "ph": "/ˈweɪ.tɪŋ ruːm/",
+        "v": "phòng chờ",
+        "ex": "She read a magazine in the waiting room."
+      },
+      {
+        "w": "recipe",
+        "pos": "noun",
+        "ph": "/ˈres.ɪ.pi/",
+        "v": "công thức nấu ăn",
+        "ex": "She shared her grandmother’s recipe for soup."
+      },
+      {
+        "w": "umbrella term",
+        "pos": "noun",
+        "ph": "/ʌmˈbrel.ə tɜːm/",
+        "v": "thuật ngữ bao trùm",
+        "ex": "“Vehicle” is an umbrella term for cars, bikes and buses."
+      },
+      {
+        "w": "routine",
+        "pos": "noun",
+        "ph": "/ruːˈtiːn/",
+        "v": "thói quen hằng ngày",
+        "ex": "A morning routine helps you start the day well."
       }
     ]
   },
@@ -5697,6 +6194,41 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˈtræv.əl kəmˈpæn.jən/",
         "v": "bạn đồng hành",
         "ex": "A good travel companion makes any trip better."
+      },
+      {
+        "w": "scenic route",
+        "pos": "noun",
+        "ph": "/ˈsiː.nɪk ruːt/",
+        "v": "tuyến đường ngắm cảnh",
+        "ex": "We took the scenic route along the coast."
+      },
+      {
+        "w": "local guide",
+        "pos": "noun",
+        "ph": "/ˈləʊ.kəl ɡaɪd/",
+        "v": "hướng dẫn viên địa phương",
+        "ex": "A local guide knows the hidden spots."
+      },
+      {
+        "w": "budget travel",
+        "pos": "noun",
+        "ph": "/ˈbʌdʒ.ɪt ˈtræv.əl/",
+        "v": "du lịch tiết kiệm",
+        "ex": "Budget travel means hostels and street food."
+      },
+      {
+        "w": "travel itinerary",
+        "pos": "noun",
+        "ph": "/ˈtræv.əl aɪˈtɪn.ər.ər.i/",
+        "v": "lịch trình du lịch",
+        "ex": "Send me the travel itinerary before we leave."
+      },
+      {
+        "w": "must-see",
+        "pos": "adjective",
+        "ph": "/ˈmʌst.siː/",
+        "v": "đáng xem, không thể bỏ lỡ",
+        "ex": "The old town is a must-see attraction."
       }
     ]
   },
@@ -6130,6 +6662,41 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˈskɒl.əl.i/",
         "v": "thuộc học thuật",
         "ex": "Use scholarly sources, not blog posts."
+      },
+      {
+        "w": "critical thinking",
+        "pos": "noun",
+        "ph": "/ˈkrɪt.ɪ.kəl ˈθɪŋ.kɪŋ/",
+        "v": "tư duy phản biện",
+        "ex": "Critical thinking is taught throughout the course."
+      },
+      {
+        "w": "primary source",
+        "pos": "noun",
+        "ph": "/ˈpraɪ.mər.i sɔːs/",
+        "v": "nguồn sơ cấp",
+        "ex": "A primary source is firsthand evidence, like a diary."
+      },
+      {
+        "w": "secondary source",
+        "pos": "noun",
+        "ph": "/ˈsek.ən.dər.i sɔːs/",
+        "v": "nguồn thứ cấp",
+        "ex": "Textbooks are usually secondary sources."
+      },
+      {
+        "w": "academic integrity",
+        "pos": "noun",
+        "ph": "/ˌæk.əˈdem.ɪk ɪnˈteɡ.rə.ti/",
+        "v": "liêm chính học thuật",
+        "ex": "Academic integrity means no plagiarism."
+      },
+      {
+        "w": "research proposal",
+        "pos": "noun",
+        "ph": "/rɪˈsɜːtʃ prəˈpəʊ.zəl/",
+        "v": "đề cương nghiên cứu",
+        "ex": "Submit your research proposal by Friday."
       }
     ]
   },
@@ -6577,6 +7144,41 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/ˈvʌl.nər.ə.bəl/",
         "v": "dễ bị tổn thương",
         "ex": "Elderly people are the most vulnerable in a heatwave."
+      },
+      {
+        "w": "elaborate",
+        "pos": "verb",
+        "ph": "/ɪˈlæb.ə.reɪt/",
+        "v": "trình bày chi tiết hơn",
+        "ex": "Could you elaborate on that point?"
+      },
+      {
+        "w": "consequently",
+        "pos": "adverb",
+        "ph": "/ˈkɒn.sɪ.kwənt.li/",
+        "v": "do đó, vì vậy",
+        "ex": "It rained heavily; consequently, the match was cancelled."
+      },
+      {
+        "w": "nevertheless",
+        "pos": "adverb",
+        "ph": "/ˌnev.ə.ðəˈles/",
+        "v": "tuy nhiên, dù vậy",
+        "ex": "The plan was risky; nevertheless, they went ahead."
+      },
+      {
+        "w": "significantly",
+        "pos": "adverb",
+        "ph": "/sɪɡˈnɪf.ɪ.kənt.li/",
+        "v": "đáng kể",
+        "ex": "Sales increased significantly last year."
+      },
+      {
+        "w": "in light of",
+        "pos": "preposition",
+        "ph": "/ɪn laɪt əv/",
+        "v": "xét đến, trong bối cảnh",
+        "ex": "In light of the results, the policy was revised."
       }
     ]
   },
@@ -7038,6 +7640,41 @@ export const VOCAB_EN_TOPICS = [
         "ph": "/rɪˈfaɪn.mənt ˈseʃ.ən/",
         "v": "buổi làm mịn backlog",
         "ex": "The refinement session clarifies stories before planning."
+      },
+      {
+        "w": "sprint goal",
+        "pos": "noun",
+        "ph": "/sprɪnt ɡəʊl/",
+        "v": "mục tiêu sprint",
+        "ex": "The sprint goal is to ship the login page."
+      },
+      {
+        "w": "story point estimation",
+        "pos": "noun",
+        "ph": "/ˈstɔː.ri pɔɪnt ˌes.tɪˈmeɪ.ʃən/",
+        "v": "ước lượng điểm câu chuyện",
+        "ex": "Story point estimation happens during refinement."
+      },
+      {
+        "w": "code standard",
+        "pos": "noun",
+        "ph": "/kəʊd ˈstæn.dəd/",
+        "v": "chuẩn viết mã",
+        "ex": "Follow the team’s code standard for consistency."
+      },
+      {
+        "w": "release note",
+        "pos": "noun",
+        "ph": "/rɪˈliːs nəʊt/",
+        "v": "ghi chú phát hành",
+        "ex": "Read the release notes before you update."
+      },
+      {
+        "w": "spike",
+        "pos": "noun",
+        "ph": "/spaɪk/",
+        "v": "vòng khảo sát kỹ thuật ngắn",
+        "ex": "The team ran a spike to test the new library."
       }
     ]
   }
