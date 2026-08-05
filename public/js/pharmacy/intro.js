@@ -5,7 +5,7 @@
 // Self-contained: tự chèn <style> (dùng biến theme --card/--text… có sẵn ở cả trang
 // Express lẫn Next, kèm màu dự phòng) nên KHÔNG phải sửa CSS ở 2 nơi. Dùng chung cho
 // public/nha-thuoc-3d.html (Express) và web-next (Next) — 1 nguồn duy nhất.
-import { SCENARIO_CARDS, SCENARIOS } from './scenarios.js?v=ph0801c';
+import { SCENARIO_CARDS, SCENARIOS } from './scenarios.js?v=ph0803';
 
 const LEARNING_GOALS = [
   ['💬', 'Giao tiếp', 'Chào hỏi, tạo kết nối, giao tiếp trực diện với người bệnh'],

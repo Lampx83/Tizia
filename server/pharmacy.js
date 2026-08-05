@@ -214,7 +214,10 @@ const COACH_RE = /((tôi|em|mình)\s+(nên|phải|cần|sẽ)\s+[^?!.\n]{0,30}(g
 // Model lỡ "nhắc bài" (đầu ra dạng khuyên dược sĩ) → thay bằng câu né trong vai.
 // 🪤 01/08: loại trừ câu bệnh nhân NHỜ được phục vụ ("Dược sĩ hãy tư vấn giúp tôi
 // nhé") — đó là lời nhờ, không phải nhắc bài; trước đây bị thay bằng câu né sai vai.
-const LEAK_RE = /(dược sĩ|bạn)\s+(nên|cần|phải|hãy)\s+(hỏi|tư vấn|kiểm tra|khám|bán|kê|giải thích|trấn an|khuyên)(?!\s*(giúp|hộ|giùm|cho)\s*(tôi|mình|em|anh|chị))/i;
+// 🪤 03/08: mệnh đề ĐIỀU KIỆN/nhượng bộ của bệnh nhân đang hợp tác ("nếu dược sĩ cần
+// hỏi thêm thì cứ hỏi") tình cờ khớp cụm "dược sĩ cần hỏi" y hệt câu nhắc bài thật —
+// loại trừ khi đứng ngay sau "nếu "/"khi ".
+const LEAK_RE = /(?<!nếu\s)(?<!khi\s)(dược sĩ|bạn)\s+(nên|cần|phải|hãy)\s+(hỏi|tư vấn|kiểm tra|khám|bán|kê|giải thích|trấn an|khuyên)(?!\s*(giúp|hộ|giùm|cho)\s*(tôi|mình|em|anh|chị))/i;
 // Rút thăm câu theo SỐ LƯỢT NPC → guard kích hoạt nhiều lần vẫn KHÁC nhau, đỡ máy móc.
 const rot = (arr, s) => arr[(s.messages.filter(m => m.role === 'npc').length) % arr.length];
 // Né khi bị hỏi ngược xin đáp án/nhắc bài (bệnh nhân KHÔNG có chuyên môn) — nhiều biến thể.
@@ -354,6 +357,14 @@ QUY TẮC NHẬP VAI (nhân vật CHUYÊN MÔN):
 // (mấy lần/bao lâu/nhầy máu/thế nào-của-phân) — những câu đó có mẫu riêng, để LLM đáp
 // 1-fact theo kịch bản. "phân thế nào" KHÔNG tính chung chung (là chi tiết cụ thể).
 const GENERAL_RE = /(bị\s+(làm\s+)?sao\b|bị\s+gì|\blàm\s+sao\b|đang\s+bị\s+(sao|gì|làm\s+sao)|cần\s+(em|mình|chị|anh|gì)?\s*(tư vấn|giúp|hỗ trợ)\s*(gì|thế nào)?|cảm\s+thấy[^?]{0,8}(thế nào|ra sao|sao)\b|thấy[^?]{0,8}(trong\s+người|trong\s+mình)[^?]{0,8}(thế nào|ra sao)\b|(trong\s+người|trong\s+mình)[^?]{0,8}(thế nào|ra sao)\b|có\s+(vấn đề|chuyện|việc)\s+gì|(tình trạng|sức kh[oỏ]e|đi ngoài|ho|đau bụng|bệnh)[^?]{0,15}(thế nào|ra sao)\b)/i;
+// #132 (03/08): OTC-02 có A2 "cần gì" (→ mua Alaxan) và B2 "bị làm sao/triệu chứng
+// gì" (→ triệu chứng chính) là HAI câu trả lời KHÁC NHAU — GENERAL_RE cũ gộp chung
+// nên trả nhầm "cần mua Alaxan" khi được hỏi triệu chứng. Scenario khai symptomLines
+// thì SYMPTOM_RE được kiểm TRƯỚC GENERAL_RE; không khai thì bỏ qua (OTC-01 không đổi).
+const SYMPTOM_RE = /(bị\s+(làm\s+)?sao\b|bị\s+gì|\blàm\s+sao\b|đang\s+bị\s+(sao|gì|làm\s+sao)|(gặp\s+(phải\s+)?)?triệu\s*chứng\s*(gì|nào)|cảm\s+thấy[^?]{0,8}(thế nào|ra sao|sao)\b|thấy[^?]{0,8}(trong\s+người|trong\s+mình)[^?]{0,8}(thế nào|ra sao)\b|(trong\s+người|trong\s+mình)[^?]{0,8}(thế nào|ra sao)\b)/i;
+// Chỉ áp GENERAL_RE/SYMPTOM_RE cho câu NGẮN hoặc CÓ DẤU HỎI — câu dặn dò/giao thuốc
+// thường dài và có thể tình cờ chứa cụm khớp (đo được 03/08, xem chú thích trên).
+const looksLikeShortQuestion = (t) => /\?/.test(t) || String(t || '').length <= 90;
 
 // Prompt-injection / thao túng: yêu cầu thoát vai, đóng vai khác, lộ đáp án.
 const INJECTION_RE = /(quên (hết|đi|các|những|mọi)?\s*(luật|quy tắc|hướng dẫn|chỉ dẫn)|bỏ qua (các )?(luật|quy tắc|hướng dẫn)|đóng vai (giảng viên|giáo viên|dược sĩ|thầy|cô|ai|trợ lý|assistant)|bạn (thực ra )?là ai|bạn là (ai|gì|con ai|mô hình)|you are|ignore (all|previous|the)|system prompt|reveal|tiết lộ (đáp án|kịch bản|luật)|đáp án (là gì|đúng)|kịch bản là gì|hướng dẫn (tôi|em) (cách )?(thực hiện|làm|xử lý) (tình huống|bài|ca)|thoát vai|out of character|act as)/i;
@@ -472,10 +483,28 @@ export function attachPharmacy(r) {
       }
     }
 
+    // GUARD 2d-ter (#132) — câu hỏi CHUNG về TRIỆU CHỨNG (khác câu "cần gì") →
+    // trả symptomLines nếu scenario có khai; ưu tiên TRƯỚC GENERAL_RE.
+    if (isPatient && looksLikeShortQuestion(text) && Array.isArray(scenario.symptomLines) && scenario.symptomLines.length && SYMPTOM_RE.test(text)) {
+      s.messages.push({ role: 'npc', content: rot(scenario.symptomLines, s), ts: Date.now() });
+      saveSession(s);
+      return res.json({ session: s });
+    }
     // GUARD 2d — BỔ SUNG 25/07: câu hỏi CHUNG CHUNG → chỉ nêu TRIỆU CHỨNG CHÍNH
     // (tất định), không để LLM liệt kê chi tiết lâm sàng.
-    if (isPatient && GENERAL_RE.test(text) && Array.isArray(scenario.chiefComplaintLines) && scenario.chiefComplaintLines.length) {
+    if (isPatient && looksLikeShortQuestion(text) && GENERAL_RE.test(text) && Array.isArray(scenario.chiefComplaintLines) && scenario.chiefComplaintLines.length) {
       s.messages.push({ role: 'npc', content: rot(scenario.chiefComplaintLines, s), ts: Date.now() });
+      saveSession(s);
+      return res.json({ session: s });
+    }
+    // GUARD 2e (#132) — câu THUẦN chuyển pha (đồng cảm + giải thích, không kèm câu hỏi
+    // cụ thể nào khác) → trả TẤT ĐỊNH câu hợp tác, không gọi LLM. Bản trước để lọt cho
+    // LLM tự sinh câu rồi bị LEAK_RE/DEFLECTS thay bằng câu né sai vai (đo được 03/08).
+    if (isPatient && Array.isArray(scenario.empathyAckLines) && scenario.empathyAckLines.length
+        && s.context.empathyShown && s.context.reasonGiven
+        && EMPATHY_RE.test(text) && REASON_RE.test(text) && !/\?/.test(text)
+        && !(scenario.guardedFacts || []).some(f => f.cue.test(text))) {
+      s.messages.push({ role: 'npc', content: rot(scenario.empathyAckLines, s), ts: Date.now() });
       saveSession(s);
       return res.json({ session: s });
     }
@@ -522,6 +551,8 @@ export function attachPharmacy(r) {
     const text = String(message || '').trim();
     if (!text) return res.status(400).json({ error: 'empty message' });
     s.messages.push({ role: 'user', content: text, ts: Date.now() });
+    updateMoodState(scenario, s, text);   // 🪤 03/08: thiếu dòng này — máy trạng thái
+                                            // không bao giờ chuyển pha trên endpoint stream.
 
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
@@ -568,8 +599,18 @@ export function attachPharmacy(r) {
       const ga = isPatient && generalAnswer(scenario, s, text);
       if (ga) return finish(reassure ? `${reassure.line} ${ga}` : ga);
     }
-    if (isPatient && GENERAL_RE.test(text) && Array.isArray(scenario.chiefComplaintLines) && scenario.chiefComplaintLines.length) {
+    if (isPatient && looksLikeShortQuestion(text) && Array.isArray(scenario.symptomLines) && scenario.symptomLines.length && SYMPTOM_RE.test(text)) {
+      return finish(rot(scenario.symptomLines, s));
+    }
+    if (isPatient && looksLikeShortQuestion(text) && GENERAL_RE.test(text) && Array.isArray(scenario.chiefComplaintLines) && scenario.chiefComplaintLines.length) {
       return finish(rot(scenario.chiefComplaintLines, s));
+    }
+    // GUARD 2e (#132) — câu THUẦN chuyển pha → trả tất định câu hợp tác, không gọi LLM.
+    if (isPatient && Array.isArray(scenario.empathyAckLines) && scenario.empathyAckLines.length
+        && s.context.empathyShown && s.context.reasonGiven
+        && EMPATHY_RE.test(text) && REASON_RE.test(text) && !/\?/.test(text)
+        && !(scenario.guardedFacts || []).some(f => f.cue.test(text))) {
+      return finish(rot(scenario.empathyAckLines, s));
     }
     if (/(có thai|mang thai)/i.test(s.messages.map(m => m.content).join(' '))) s.context.pregnant = true;
 

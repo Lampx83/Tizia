@@ -222,6 +222,12 @@ const OTC02 = {
     "Tôi cần mua thuốc Alaxan, lấy nhanh cho tôi, tôi đang vội.",
     "Cho tôi hộp Alaxan, lấy nhanh giúp tôi với, tôi đang vội lắm.",
   ],
+  // B2 trong ma trận — TRẢ LỜI KHÁC A2: "cần gì" → mua Alaxan (chiefComplaintLines ở
+  // trên); "bị làm sao / triệu chứng gì / cảm thấy thế nào" → triệu chứng chính (#132).
+  symptomLines: [
+    "Tôi bị đau nhức răng.",
+    "Tôi bị đau nhức răng, khó chịu lắm.",
+  ],
   // Giọng anh T: xưng "tôi", cộc, KHÔNG dùng bộ câu "dạ/mình" của chị H (OTC-01).
   passiveLines: ["Ừ.", "Rồi.", "Tôi nghe đây.", "Ừ, sao nữa?"],
   // Giọng chờ của anh T (xưng "tôi") — bộ mặc định là giọng chị H ở OTC-01 nên
