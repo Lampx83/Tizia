@@ -397,6 +397,16 @@ export function attachPharmacy(r) {
         }))
         .filter(a => a.type);
     }
+    // 🪤 06/08 (req #135): session mất là chuyện BÌNH THƯỜNG (in-memory, mất mỗi lần
+    // redeploy) — restore dựng lại được s.messages nhưng s.context luôn bắt đầu RỖNG.
+    // Với OTC-02, context.empathyShown/reasonGiven quyết định cả pha cảm xúc; mất
+    // context giữa cuộc là bệnh nhân AI "quên" đã được đồng cảm, tụt lại pha khó chịu
+    // dù dược sĩ đã nói đúng câu rồi — đúng triệu chứng SV mô tả ("chuyển trạng thái
+    // nhưng không duy trì đến cuối"). Replay updateMoodState qua toàn bộ lượt dược sĩ
+    // đã lưu để dựng lại đúng trạng thái trước khi phiên mới nhận tin nhắn tiếp theo.
+    if (SCENARIOS[moduleId]) {
+      for (const m of s.messages) if (m.role === 'user') updateMoodState(SCENARIOS[moduleId], s, m.content);
+    }
     saveSession(s);
     res.json({ session: s, scenario: SCENARIOS[moduleId] });
   });
