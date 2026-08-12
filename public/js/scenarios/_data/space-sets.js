@@ -434,6 +434,15 @@ const SPACES_PHARMACY = {
 const SPACES_SECONDARY = {
   grade6:{emoji:'6️⃣',name:'Khối lớp 6',accent:'#38bdf8',intro:'Năm đầu cấp THCS — 12 môn × 36 tuần theo Chương trình GDPT 2018. Mỗi tuần: lý thuyết + ví dụ + quiz có thưởng.',
     rooms:[
+      // Ô hướng dẫn (req #139 Enderboy): SV không tìm thấy "sách giáo khoa điện tử"
+      // dù lý thuyết ĐÃ có sẵn trong từng Tuần của mọi môn (mục 📖 Bài học hiện
+      // trước quiz) — vì trang này chỉ có thẻ đi thẳng vào môn, không có gợi ý.
+      // Thêm panel chỉ đường, KHÔNG tạo nội dung/trang mới để tránh trùng lặp.
+      {ic:'📚',name:'📖 Xem lý thuyết (sách giáo khoa điện tử)',rd:'Lý thuyết + ví dụ mẫu đã có sẵn trong từng Tuần của 12 môn bên dưới — bấm vào đây để xem cách mở.',panel:[
+        {h:'Lý thuyết đã có sẵn trong từng môn — không cần trang riêng'},
+        {p:'Mỗi môn bên dưới (Toán, Ngữ văn, Tiếng Anh, KHTN…) đều có phần Bài học — lý thuyết + ví dụ giải mẫu — hiện ra TRƯỚC khi làm quiz của tuần đó, đúng kiểu một cuốn sách giáo khoa điện tử.'},
+        {ol:['Bấm vào một môn bất kỳ, ví dụ Toán 6.','Chọn một Tuần trong danh sách 36 tuần.','Đọc phần 📖 Bài học rồi mới làm quiz bên dưới nó.']},
+        {note:'Áp dụng cho cả 12 môn của khối lớp 6, không riêng môn nào.'}]},
       {ic:'📐',name:'Toán 6',rd:'36 tuần: số tự nhiên, lũy thừa, ƯCLN-BCNN, số nguyên, phân số, tỉ số %, hình học cơ bản.',href:'/module.html?domain=secondary&module=S6TOAN'},
       {ic:'📖',name:'Ngữ văn 6',rd:'36 tuần: truyện đồng thoại, cổ tích, truyền thuyết, thơ lục bát, biện pháp tu từ, từ Hán Việt.',href:'/module.html?domain=secondary&module=S6NV'},
       {ic:'🇬🇧',name:'Tiếng Anh 6',rd:'36 tuần CEFR A1-A2: school, family, neighbourhood, modal verbs, past simple, future, sports, cities.',href:'/module.html?domain=secondary&module=S6TA'},
