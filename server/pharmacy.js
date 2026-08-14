@@ -329,6 +329,20 @@ export function generalAnswer(scenario, s, text) {
   return rot(hit.lines, s);
 }
 
+// #141 (13/08) — các mốc cuối kịch bản (đợi lấy thuốc, hướng dẫn dùng, hỏi còn thắc
+// mắc, giao thuốc + dặn dò) có câu trả lời CHUẨN khác nhau theo pha cảm xúc, nhưng để
+// LLM tự sinh thì hay TRỘN cả hai giọng trong một câu (đo trên prod 14/08: "Được, tôi
+// sẽ đợi. Cảm ơn dược sĩ đã giải thích. Tôi đang vội lắm." — vừa cảm ơn vừa giục).
+// Trả TẤT ĐỊNH đúng câu của pha hiện tại cho các mốc này, không để LLM tự do.
+export function scriptedPhaseReply(scenario, s, text) {
+  const items = scenario?.scriptedReplies;
+  if (!Array.isArray(items) || !items.length) return null;
+  const hit = items.find(it => it.cue.test(text));
+  if (!hit) return null;
+  const cooperative = !!(s.context.empathyShown && s.context.reasonGiven);
+  return (cooperative ? hit.phase2 : hit.phase1) || null;
+}
+
 // #122 — dược sĩ trấn an/động viên: bệnh nhân đáp lại bằng sự yên tâm & biết ơn.
 // Câu KHÔNG kèm câu hỏi → trả tất định luôn; có kèm câu hỏi → chỉ ghép làm câu mở đầu.
 const REASSURE_RE = /(đừng\s*lo|không\s*(cần\s*)?lo|yên\s*tâm|bình\s*tĩnh|không\s*sao|(em|tôi|mình)\s*hiểu|thông\s*cảm|chia\s*sẻ|sẽ\s*(tư vấn|giúp|hướng dẫn|lo)|không\s*đáng\s*ngại|bé\s*sẽ\s*(ổn|khỏi))/i;
@@ -518,6 +532,16 @@ export function attachPharmacy(r) {
       saveSession(s);
       return res.json({ session: s });
     }
+    // GUARD 2f (#141) — mốc kịch bản có câu chuẩn theo pha (đợi lấy thuốc, hướng dẫn
+    // dùng, hỏi thắc mắc, giao thuốc dặn dò) → trả tất định, không để LLM trộn giọng.
+    if (isPatient) {
+      const scripted = scriptedPhaseReply(scenario, s, text);
+      if (scripted) {
+        s.messages.push({ role: 'npc', content: scripted, ts: Date.now() });
+        saveSession(s);
+        return res.json({ session: s });
+      }
+    }
 
     // Detect pregnancy disclosure for fatal-error context.
     if (/(có thai|mang thai)/i.test(s.messages.map(m => m.content).join(' '))) {
@@ -621,6 +645,11 @@ export function attachPharmacy(r) {
         && EMPATHY_RE.test(text) && REASON_RE.test(text) && !/\?/.test(text)
         && !(scenario.guardedFacts || []).some(f => f.cue.test(text))) {
       return finish(rot(scenario.empathyAckLines, s));
+    }
+    // GUARD 2f (#141) — như /chat: mốc kịch bản có câu chuẩn theo pha → trả tất định.
+    if (isPatient) {
+      const scripted = scriptedPhaseReply(scenario, s, text);
+      if (scripted) return finish(scripted);
     }
     if (/(có thai|mang thai)/i.test(s.messages.map(m => m.content).join(' '))) s.context.pregnant = true;
 

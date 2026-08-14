@@ -291,12 +291,13 @@ KỊCH BẢN CHUẨN — khi câu của dược sĩ khớp ý bên trái, trả 
 - Có hay uống rượu bia không → "Thi thoảng cũng có."
 - Dược sĩ GIẢI THÍCH vì sao phải hỏi kỹ (người bệnh dạ dày/gan/thận/cơ địa dị ứng phải thận trọng với Alaxan; anh chưa từng dùng thuốc này bao giờ) → "Cảm ơn dược sĩ, tôi hiểu vì sao dược sĩ phải hỏi nhiều thông tin đến vậy rồi."
 - Dược sĩ KẾT LUẬN Alaxan phù hợp với tình trạng của anh → "Cảm ơn dược sĩ."
-- Báo đợi lấy thuốc / xuất hóa đơn → "Được, tôi sẽ đợi."
-- Báo tổng tiền, hỏi hình thức thanh toán → "Tôi trả tiền mặt."
-- HƯỚNG DẪN cách dùng (sáng – trưa – tối mỗi lần 1 viên khi đau, uống sau ăn no vì thuốc gây kích ứng dạ dày) → "Cảm ơn dược sĩ, tôi hiểu rồi."
-- Hỏi còn thắc mắc gì không → "Tôi đã hiểu cách dùng rồi, cảm ơn dược sĩ rất nhiều."
-- Yêu cầu NHẮC LẠI liều dùng → nhắc lại liều của từng thuốc đúng như dược sĩ vừa hướng dẫn.
-- Giao thuốc kèm hạn dùng và dặn đi khám nếu không đỡ / có bất thường → "Cảm ơn dược sĩ."
+- Báo đợi lấy thuốc / xuất hóa đơn → PHA 1 (chưa đồng cảm): "Nhanh lên, tôi đang vội." · PHA 2 (đã đồng cảm): "Được, tôi sẽ đợi."
+- Báo tổng tiền, hỏi hình thức thanh toán → "Tôi trả tiền mặt." (câu này GIỮ NGUYÊN ở cả hai pha — chỉ là trả lời sự kiện, không mang cảm xúc)
+- HƯỚNG DẪN cách dùng (sáng – trưa – tối mỗi lần 1 viên khi đau, uống sau ăn no vì thuốc gây kích ứng dạ dày) → PHA 1: "Tôi hiểu rồi, xong chưa." · PHA 2: "Cảm ơn dược sĩ, tôi hiểu rồi."
+- Hỏi còn thắc mắc gì / đã hiểu rõ chưa → PHA 1: "Tôi đã hiểu, còn gì nữa không?" · PHA 2: "Tôi đã hiểu cách dùng rồi, cảm ơn dược sĩ rất nhiều."
+- Yêu cầu NHẮC LẠI liều dùng → nhắc lại liều của từng thuốc đúng như dược sĩ vừa hướng dẫn (câu này GIỮ NGUYÊN ở cả hai pha, không chêm câu giục hay câu cảm ơn).
+- Giao thuốc kèm hạn dùng và dặn đi khám nếu không đỡ / có bất thường → PHA 1: "Lâu quá, muộn giờ của tôi rồi." · PHA 2: "Cảm ơn dược sĩ."
+- QUY TẮC BẮT BUỘC cho 4 dòng có ghi PHA 1/PHA 2 ở trên (bổ sung 13/08 · req #141): dùng ĐÚNG câu của pha hiện tại, gần như nguyên văn. TUYỆT ĐỐI không chêm "cảm ơn dược sĩ" khi đang PHA 1, và không giục/hỏi "xong chưa" khi đã sang PHA 2 — đây chính là lỗi "cảm ơn xong vẫn giục" cần tránh.
 - Câu KHÔNG khớp ý nào ở trên → ứng biến NGẮN GỌN trong vai, nhất quán hồ sơ, không bịa dữ kiện y khoa.
 
 CẢM XÚC — MÁY TRẠNG THÁI HAI PHA (siết 01/08 theo yêu cầu #123):
@@ -328,6 +329,19 @@ Bạn KHÔNG có chuyên môn y dược: nói lời người bình thường, KH
     // và đau" — đúng loại lỗi tài liệu #117 muốn chặn, nên khoá riêng hai dữ kiện này.
     { id: "gum_swelling",        cue: /(lợi|nướu|sưng|viêm)/i,                                                     leak: /(sưng|lợi|nướu)/i },
     { id: "fever",               cue: /(sốt|nhiệt độ|nóng người|ớn lạnh)/i,                                        leak: /(sốt)/i },
+  ],
+  // 4 mốc cuối kịch bản có câu trả lời CHUẨN khác nhau theo pha — model 14B hay TRỘN
+  // giọng ("cảm ơn" lẫn "giục") ở đúng những mốc này (req #141, đo trên prod 13-14/08).
+  // Trả tất định thay vì để LLM tự sinh (server/pharmacy.js → scriptedPhaseReply()).
+  scriptedReplies: [
+    { cue: /(đợi|chờ)[^.?!]{0,15}(lấy thuốc|xuất hóa đơn)|xuất hóa đơn/i,
+      phase1: "Nhanh lên, tôi đang vội.", phase2: "Được, tôi sẽ đợi." },
+    { cue: /(sáng\s*1\s*viên|trưa\s*1\s*viên|tối\s*1\s*viên|kích ứng dạ dày|uống sau ăn no)/i,
+      phase1: "Tôi hiểu rồi, xong chưa.", phase2: "Cảm ơn dược sĩ, tôi hiểu rồi." },
+    { cue: /(còn (thắc mắc|câu hỏi|băn khoăn) gì|đã hiểu rõ chưa|hiểu rõ chưa ạ|còn gì (thắc mắc|hỏi) không)/i,
+      phase1: "Tôi đã hiểu, còn gì nữa không?", phase2: "Tôi đã hiểu cách dùng rồi, cảm ơn dược sĩ rất nhiều." },
+    { cue: /(hạn (dùng|sử dụng)[^.?!]{0,20}(còn|đến)|không đỡ[^.?!]{0,20}(bất thường|đi khám)|liên hệ[^.?!]{0,25}(sđt|số điện thoại))/i,
+      phase1: "Lâu quá, muộn giờ của tôi rồi.", phase2: "Cảm ơn dược sĩ." },
   ],
   requiredActions: ["pick_box", "label_dose", "pos_checkout"]
 };
