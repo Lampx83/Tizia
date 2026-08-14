@@ -328,11 +328,15 @@ function renderBlocks(blocks){
       const isLab = (dom==='highschool' || dom==='secondary');
       if(isLab){
         const txt = b.check.join(' ').toLowerCase();
-        if(/an toàn|nguy|cẩn|kiểm tra|ngắt|dây|phích|điện|hoá chất|ppe/i.test(txt)){
+        // "điện" khớp cả "điện thoại" (dùng sai giờ học/khi lái xe...) khiến checklist
+        // nội quy thường bị nhầm sang trò chơi Lab Simulator — loại trừ cụm đó (req #140).
+        if(/an toàn|nguy|cẩn|kiểm tra|ngắt|dây|phích|điện(?!\s*thoại)|hoá chất|ppe/i.test(txt)){
           const i=_pr.push({t:'hazard', items:b.check})-1;
           return `<div class="pr-sec" data-sec="${i}"></div>`;
         }
-        if(/thời gian biểu|ôn|tự học|ngay sau|đặt câu hỏi|ngủ|kế hoạch/i.test(txt)){
+        // "ôn" khớp cả bên trong "không", "luôn", "khuôn"… (chuỗi con) — chỉ nhận
+        // cụm ôn tập cụ thể để tránh checklist thường bị nhầm sang Kế hoạch ngày.
+        if(/thời gian biểu|ôn tập|ôn lại|ôn thi|tự học|ngay sau|đặt câu hỏi|ngủ|kế hoạch/i.test(txt)){
           const i=_pr.push({t:'planner', items:b.check})-1;
           return `<div class="pr-sec" data-sec="${i}"></div>`;
         }
