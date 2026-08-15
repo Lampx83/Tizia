@@ -109,6 +109,7 @@
     <code>manifest.json</code> + <code>public/index.html</code> rồi kéo thả vào đây.
     App của bạn được serve dưới <code>/portal-apps/u/&lt;id&gt;/&lt;alias&gt;/</code>
     và xuất hiện trong trang <a href="apps.html">Ứng dụng</a>.
+    Lần đầu làm app? <a href="/dev"><b>Đọc hướng dẫn phát triển →</b></a>
   </p>
 
   <div class="card">
@@ -125,7 +126,9 @@
       <summary>📋 Quy chuẩn manifest.json</summary>
       <p style="margin-top:10px; font-size:13px; color:var(--muted);">
         Bắt buộc <code>alias</code> (lowercase kebab, ví dụ <code>my-app</code>) +
-        <code>name</code>. <code>hasBackend: true</code> KHÔNG được hỗ trợ — chỉ frontend-only.
+        <code>name</code>. App cần backend riêng thì khai thêm <code>hasBackend: true</code> +
+        <code>apiProxyTarget</code> (URL tuyệt đối tới dịch vụ của bạn) — xem
+        <a href="/dev#backend">mục 5 của hướng dẫn</a>. Code backend nằm trong zip thì KHÔNG được chạy.
       </p>
 <pre>{
   "id": "my-app",

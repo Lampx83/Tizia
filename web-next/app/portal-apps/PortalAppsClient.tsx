@@ -209,7 +209,10 @@ export default function PortalAppsClient({
           <a href="/apps.html" className="text-primary hover:underline">
             Ứng dụng
           </a>
-          .
+          . Lần đầu làm app?{' '}
+          <a href="/dev" className="font-semibold text-primary hover:underline">
+            Đọc hướng dẫn phát triển →
+          </a>
         </p>
       </div>
 
@@ -274,9 +277,15 @@ export default function PortalAppsClient({
           <p className="mt-2.5 text-[13px] text-muted-foreground">
             Bắt buộc <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">alias</code> (lowercase
             kebab, ví dụ <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">my-app</code>) +{' '}
-            <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">name</code>.{' '}
-            <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">hasBackend: true</code> KHÔNG được
-            hỗ trợ — chỉ frontend-only.
+            <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">name</code>. App cần backend
+            riêng thì khai thêm{' '}
+            <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">hasBackend: true</code> +{' '}
+            <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">apiProxyTarget</code> (URL tuyệt
+            đối tới dịch vụ của bạn) — xem{' '}
+            <a href="/dev#backend" className="text-primary hover:underline">
+              mục 5 của hướng dẫn
+            </a>
+            . Code backend nằm trong zip thì KHÔNG được chạy.
           </p>
           <pre className="mt-2 overflow-auto rounded-lg bg-black/40 px-3.5 py-3 text-[11.5px] leading-relaxed">
 {`{
