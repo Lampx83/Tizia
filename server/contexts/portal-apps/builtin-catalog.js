@@ -43,7 +43,9 @@ export const BUILTIN_APPS = [
     target_url: '/2d-arcade.html', category: 'game', domain: 'primary' },
   { alias: 'lop2-curriculum', name: 'Giáo trình Lớp 2', icon: '🎒',
     description: '9 môn × 36 tuần theo CT GDPT 2018 (KNTT/CTST/CD). Lý thuyết + quiz hằng tuần.',
-    target_url: '/lop2.html', category: 'curriculum', domain: 'primary' },
+    // /lop2.html KHÔNG tồn tại (chỉ có lop2-<mini-game>.html) → app này 404 từ lâu.
+    // Giáo trình Lớp 2 nằm ở toà "Lớp 2" của trường Tiểu học, nơi liệt kê đủ 9 môn.
+    target_url: '/space?domain=primary&b=g2', category: 'curriculum', domain: 'primary' },
   // Lớp 2 — mini-game theo môn (GDPT 2018)
   { alias: 'lop2-the-thao', name: 'Phản Xạ Cầu Thủ (GDTC)', icon: '⚽',
     description: 'Trò phản xạ nhanh — luyện Giáo dục Thể chất Lớp 2 vui nhộn.',

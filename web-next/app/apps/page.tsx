@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { tiziaFetch } from '@/lib/tizia';
 import { appIcon } from '@/lib/app-icon';
+import { groupByDomain } from '@/lib/app-groups';
 
 export const metadata: Metadata = {
   title: 'Ứng dụng — công cụ & trò chơi học tập trong Tizia',
@@ -19,6 +20,7 @@ type PortalApp = {
   version: string | null;
   kind: 'embedded' | 'builtin';
   category: string | null;
+  domain?: string | null;
   url: string;
 };
 type PortalRes = { own?: PortalApp[]; public?: PortalApp[]; builtin?: PortalApp[] };
@@ -30,6 +32,7 @@ export default async function AppsPage() {
     res.status === 401 || !res.data
       ? []
       : [...(res.data.own || []), ...(res.data.public || []), ...(res.data.builtin || [])];
+  const groups = groupByDomain(portalApps);
 
   return (
     <div className="w-full py-8">
@@ -46,36 +49,60 @@ export default async function AppsPage() {
         trang. Bạn cũng có thể tự viết app rồi cài vào đây.
       </p>
 
-      {portalApps.length ? (
-        // Thẻ gọn: icon + tên + ĐÚNG một dòng mô tả. Chi tiết đầy đủ để dành cho lúc
-        // mở app, ở đây người học chỉ cần quét mắt tìm đúng thứ mình định dùng.
-        <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3.5">
-          {portalApps.map((a) => (
-            <Link
-              key={String(a.id)}
-              href={`/app/${a.alias}`}
-              title={a.description || a.name}
-              className="group flex items-center gap-3 rounded-xl border border-border bg-card/60 px-4 py-3.5 no-underline transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/70 hover:bg-white/[.07] hover:shadow-lg hover:shadow-black/20"
-            >
-              <span className="grid h-11 w-11 flex-none place-items-center rounded-xl border border-white/10 bg-white/[.05] text-[24px] leading-none transition-colors group-hover:border-primary/40">
-                {appIcon(a.icon, a.alias)}
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-[14.5px] font-semibold text-foreground">
-                  {a.name}
+      {groups.length ? (
+        <>
+          {/* Nhảy nhanh tới nhóm — 9 nhóm thì cuộn tay khá mệt. */}
+          <nav className="mt-5 flex flex-wrap gap-2">
+            {groups.map((g) => (
+              <a
+                key={g.key}
+                href={`#nhom-${g.key}`}
+                className="rounded-full border border-border bg-card/60 px-3 py-1.5 text-[12.5px] text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+              >
+                {g.label}{' '}
+                <span className="text-[11.5px] opacity-60">{g.apps.length}</span>
+              </a>
+            ))}
+          </nav>
+
+          {groups.map((g) => (
+            <section key={g.key} id={`nhom-${g.key}`} className="mt-7 scroll-mt-20">
+              <h2 className="mb-3 flex items-baseline gap-2 text-[15px] font-bold">
+                {g.label}
+                <span className="text-[12.5px] font-normal text-muted-foreground">
+                  {g.apps.length} ứng dụng
                 </span>
-                <span className="block truncate text-[12.5px] text-muted-foreground">
-                  {a.description || 'Ứng dụng trong Tizia'}
-                </span>
-              </span>
-            </Link>
+              </h2>
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3.5">
+                {g.apps.map((a) => (
+                  <Link
+                    key={String(a.id)}
+                    href={`/app/${a.alias}`}
+                    title={a.description || a.name}
+                    className="group flex items-center gap-3 rounded-xl border border-border bg-card/60 px-4 py-3.5 no-underline transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/70 hover:bg-white/[.07] hover:shadow-lg hover:shadow-black/20"
+                  >
+                    <span className="grid h-11 w-11 flex-none place-items-center rounded-xl border border-white/10 bg-white/[.05] text-[24px] leading-none transition-colors group-hover:border-primary/40">
+                      {appIcon(a.icon, a.alias)}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-[14.5px] font-semibold text-foreground">
+                        {a.name}
+                      </span>
+                      <span className="block truncate text-[12.5px] text-muted-foreground">
+                        {a.description || 'Ứng dụng trong Tizia'}
+                      </span>
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </section>
           ))}
-        </div>
+        </>
       ) : (
-        <p className="text-sm leading-relaxed text-muted-foreground opacity-70">
-          Chưa có Portal app nào.{' '}
-          <Link href="/portal-apps.html" style={{ color: '#fbbf24' }}>
-            Cài app đầu tiên
+        <p className="mt-6 text-sm leading-relaxed text-muted-foreground opacity-70">
+          Chưa có ứng dụng nào.{' '}
+          <Link href="/dev" style={{ color: '#fbbf24' }}>
+            Tự làm app đầu tiên
           </Link>{' '}
           theo chuẩn manifest + zip.
         </p>
