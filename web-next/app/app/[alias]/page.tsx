@@ -12,6 +12,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { tiziaFetch } from '@/lib/tizia';
+import { appIcon } from '@/lib/app-icon';
 
 type PortalApp = {
   id: number | string;
@@ -24,14 +25,6 @@ type PortalApp = {
   url: string;
 };
 type Res = { own?: PortalApp[]; public?: PortalApp[]; builtin?: PortalApp[] };
-
-// Manifest chuẩn AI Portal đặt icon là TÊN icon Lucide ("FileText") — render như
-// text sẽ phình chữ. Chỉ nhận ký hiệu/emoji, gặp tên chữ-số thì dùng 🧩.
-function appIcon(raw?: string | null): string {
-  const s = (raw || '').trim();
-  if (!s || /[A-Za-z0-9]/.test(s)) return '🧩';
-  return s;
-}
 
 async function findApp(alias: string): Promise<PortalApp | null> {
   const res = await tiziaFetch<Res>('/api/portal-apps');
@@ -93,7 +86,7 @@ export default async function AppFramePage({ params }: { params: Promise<{ alias
     );
   }
 
-  const ico = appIcon(app.icon);
+  const ico = appIcon(app.icon, app.alias);
 
   return (
     // Trừ chiều cao header + padding của <main> để khung app vừa đúng một màn hình,

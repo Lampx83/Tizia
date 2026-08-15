@@ -1,20 +1,13 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { tiziaFetch } from '@/lib/tizia';
+import { appIcon } from '@/lib/app-icon';
 
 export const metadata: Metadata = {
   title: 'Ứng dụng — công cụ & trò chơi học tập trong Tizia',
   description:
     'Danh sách ứng dụng chạy trong Tizia: công cụ học tập, trò chơi, phòng thí nghiệm ảo và app do cộng đồng tự viết rồi cài vào.',
 };
-
-// Manifest chuẩn AI Portal đặt icon là TÊN icon Lucide ("FileText") — render như text
-// sẽ phình chữ 34px đè lên tên app. Chỉ nhận ký hiệu/emoji, gặp tên chữ-số thì dùng 🧩.
-function appIcon(raw?: string | null): string {
-  const s = (raw || '').trim();
-  if (!s || /[A-Za-z0-9]/.test(s)) return '🧩';
-  return s;
-}
 
 // Portal app (cài qua /portal-apps.html) — trả từ GET /api/portal-apps.
 type PortalApp = {
@@ -54,27 +47,28 @@ export default async function AppsPage() {
       </p>
 
       {portalApps.length ? (
-        <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-[18px]">
+        // Thẻ gọn: icon + tên + ĐÚNG một dòng mô tả. Chi tiết đầy đủ để dành cho lúc
+        // mở app, ở đây người học chỉ cần quét mắt tìm đúng thứ mình định dùng.
+        <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3.5">
           {portalApps.map((a) => (
-            <a
+            <Link
               key={String(a.id)}
               href={`/app/${a.alias}`}
-              className="flex flex-col rounded-2xl border bg-card p-5 no-underline transition-transform hover:-translate-y-[3px] hover:bg-accent"
-              style={{ borderTop: '3px solid #fbbf24' }}
+              title={a.description || a.name}
+              className="group flex items-center gap-3 rounded-xl border border-border bg-card/60 px-4 py-3.5 no-underline transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/70 hover:bg-white/[.07] hover:shadow-lg hover:shadow-black/20"
             >
-              <div className="mb-3 text-[34px] leading-none">{appIcon(a.icon)}</div>
-              <h3 className="mb-1 text-lg font-semibold text-foreground">{a.name}</h3>
-              <div className="mb-[10px] text-[12.5px] font-bold" style={{ color: '#fbbf24' }}>
-                {a.alias}
-                {a.version ? ` · v${a.version}` : ''}
-              </div>
-              <p className="mb-[14px] flex-1 text-[13px] leading-relaxed text-muted-foreground">
-                {a.description || 'Portal app cài qua manifest + zip.'}
-              </p>
-              <div className="text-[13px] font-bold" style={{ color: '#fbbf24' }}>
-                Mở ứng dụng →
-              </div>
-            </a>
+              <span className="grid h-11 w-11 flex-none place-items-center rounded-xl border border-white/10 bg-white/[.05] text-[24px] leading-none transition-colors group-hover:border-primary/40">
+                {appIcon(a.icon, a.alias)}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-[14.5px] font-semibold text-foreground">
+                  {a.name}
+                </span>
+                <span className="block truncate text-[12.5px] text-muted-foreground">
+                  {a.description || 'Ứng dụng trong Tizia'}
+                </span>
+              </span>
+            </Link>
           ))}
         </div>
       ) : (

@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { appIcon } from '@/lib/app-icon';
 
 export type PortalApp = {
   id: number;
@@ -43,15 +44,6 @@ async function getCsrfToken(): Promise<string | null> {
 
 type Progress = { msg: string; kind: 'ok' | 'err' } | null;
 
-/* Manifest chuẩn AI Portal đặt icon là TÊN icon Lucide ("FileText", "Sigma"…), còn Tizia
- * render icon như text → cả chữ đó phình 32px đè lên tên app. Chỉ nhận ký hiệu/emoji;
- * gặp tên bằng chữ-số thì rơi về 🧩. */
-export function appIcon(raw?: string | null): string {
-  const s = (raw || '').trim();
-  if (!s || /[A-Za-z0-9]/.test(s)) return '🧩';
-  return s;
-}
-
 function AppCard({
   app,
   isBuiltin,
@@ -63,7 +55,7 @@ function AppCard({
   canDelete: boolean;
   onUninstall?: (id: number) => void;
 }) {
-  const ico = appIcon(app.icon);
+  const ico = appIcon(app.icon, app.alias);
   const v = app.version ? ` · v${app.version}` : '';
   const owner = app.ownerName ? ` · ${app.ownerName}` : '';
   const meta = isBuiltin
