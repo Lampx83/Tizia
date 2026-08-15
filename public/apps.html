@@ -3,21 +3,21 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Ứng dụng tích hợp — ScoreUp · Codelab · Smartdoc · FeedBackMe | Tizia</title>
-<meta name="description" content="4 ứng dụng tích hợp Tizia một cổng đăng nhập: ScoreUp (chấm điểm), Codelab NEU OJ (luyện code), Smartdoc (tài liệu thông minh), FeedBackMe (góp ý đa chiều)." />
-<meta name="keywords" content="Tizia apps, ScoreUp, Codelab, NEU OJ, Smartdoc, FeedBackMe, tích hợp, single sign-on, edtech" />
+<title>Ứng dụng — công cụ & trò chơi học tập trong Tizia</title>
+<meta name="description" content="Ứng dụng chạy trong Tizia: công cụ học tập, trò chơi, phòng thí nghiệm ảo và app do cộng đồng tự viết rồi cài vào." />
+<meta name="keywords" content="Tizia apps, ứng dụng học tập, portal app, công cụ học tập, edtech" />
 <link rel="canonical" href="https://tizia.vn/apps.html" />
 <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
 <link rel="apple-touch-icon" href="./favicon.svg" />
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Tizia" />
 <meta property="og:locale" content="vi_VN" />
-<meta property="og:title" content="Ứng dụng tích hợp Tizia — ScoreUp · Codelab · Smartdoc · FeedBackMe" />
-<meta property="og:description" content="Single sign-on tới ScoreUp (chấm điểm), Codelab (luyện code), Smartdoc và FeedBackMe trong vũ trụ Tizia." />
+<meta property="og:title" content="Ứng dụng — công cụ & trò chơi học tập trong Tizia" />
+<meta property="og:description" content="Công cụ và trò chơi học tập chạy ngay trong Tizia; ai cũng có thể tự viết app rồi cài vào." />
 <meta property="og:url" content="https://tizia.vn/apps.html" />
 <meta property="og:image" content="https://tizia.vn/og-default.svg" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Ứng dụng tích hợp Tizia — ScoreUp · Codelab · Smartdoc · FeedBackMe" />
+<meta name="twitter:title" content="Ứng dụng — công cụ & trò chơi học tập trong Tizia" />
 <meta name="twitter:image" content="https://tizia.vn/og-default.svg" />
 <script type="application/ld+json">
 {
@@ -25,20 +25,7 @@
   "@type": "BreadcrumbList",
   "itemListElement": [
     { "@type": "ListItem", "position": 1, "name": "Tizia", "item": "https://tizia.vn/" },
-    { "@type": "ListItem", "position": 2, "name": "Ứng dụng tích hợp", "item": "https://tizia.vn/apps.html" }
-  ]
-}
-</script>
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "ItemList",
-  "name": "Ứng dụng tích hợp Tizia",
-  "itemListElement": [
-    { "@type": "SoftwareApplication", "position": 1, "name": "ScoreUp",          "applicationCategory": "EducationalApplication", "operatingSystem": "Web", "url": "https://tizia.vn/scoreup" },
-    { "@type": "SoftwareApplication", "position": 2, "name": "Codelab (NEU OJ)", "applicationCategory": "EducationalApplication", "operatingSystem": "Web", "url": "https://tizia.vn/codelab" },
-    { "@type": "SoftwareApplication", "position": 3, "name": "Smartdoc",         "applicationCategory": "EducationalApplication", "operatingSystem": "Web", "url": "https://tizia.vn/smartdoc" },
-    { "@type": "SoftwareApplication", "position": 4, "name": "FeedBackMe",       "applicationCategory": "EducationalApplication", "operatingSystem": "Web", "url": "https://tizia.vn/feedback" }
+    { "@type": "ListItem", "position": 2, "name": "Ứng dụng", "item": "https://tizia.vn/apps.html" }
   ]
 }
 </script>
@@ -92,10 +79,10 @@
 </head>
 <body>
 <noscript>
-  <h1>🔌 Ứng dụng tích hợp Tizia</h1>
-  <p>ScoreUp · Codelab · Smartdoc · FeedBackMe — single sign-on tới các hệ thống đồng hành. Bật JavaScript để xem danh sách đầy đủ.</p>
+  <h1>🧩 Ứng dụng Tizia</h1>
+  <p>Công cụ và trò chơi học tập chạy trong Tizia. Bật JavaScript để xem danh sách đầy đủ.</p>
 </noscript>
-<h1 style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden">Ứng dụng tích hợp Tizia — ScoreUp, Codelab, Smartdoc, FeedBackMe</h1>
+<h1 style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden">Ứng dụng Tizia — công cụ và trò chơi học tập</h1>
 <div id="root"></div>
 
 <script type="module">
@@ -145,7 +132,7 @@
       renderGrid([]);
     }
   } else {
-    try { window.tiziaTrack?.('app_grid_view', { count: APPS.length }); } catch {}
+    try { window.tiziaTrack?.('app_grid_view'); } catch {}
     fetchPortalApps().then(({ own, public: pub, builtin }) =>
       renderGrid([...(own || []), ...(pub || []), ...(builtin || [])]));
   }
@@ -153,12 +140,6 @@
   function renderGrid(portalApps = []) {
     document.body.style.display = 'block';
     const portalCards = portalApps.length ? `
-        <h2 style="margin:32px 0 14px; font-size:18px;">
-          🧩 Apps cộng đồng
-          <a href="portal-apps.html" style="float:right; font-size:13px; font-weight:600; color:#fbbf24; text-decoration:none;">
-            + Cài app mới (dev) →
-          </a>
-        </h2>
         <div class="grid">
           ${portalApps.map(a => `
             <a class="app" style="--c:#fbbf24" href="?app=portal:${a.id}">
@@ -180,22 +161,12 @@
     root.innerHTML = `
       <div class="top">
         <a class="home" href="index.html">← Tizia</a>
-        <h1>🔌 Ứng dụng tích hợp <span class="dim">· Tizia</span></h1>
+        <h1>🧩 Ứng dụng <span class="dim">· Tizia</span></h1>
       </div>
       <div class="wrap">
-        <p class="lead">Các hệ thống đồng hành được nhúng thẳng vào Tizia qua cùng một origin.
-          Mỗi ứng dụng mở trong khung nhúng có thanh điều hướng quay lại. Nếu một ứng dụng chưa chạy,
-          bạn sẽ thấy hướng dẫn khởi động ngay trong khung.</p>
-        <div class="grid">
-          ${APPS.map(a => `
-            <a class="app" style="--c:${a.color}" href="?app=${a.id}">
-              <div class="ico">${a.icon}</div>
-              <h3>${a.name}</h3>
-              <div class="tag">${a.tag}</div>
-              <p>${a.desc}</p>
-              <div class="go">Mở ứng dụng →</div>
-            </a>`).join('')}
-        </div>
+        <p class="lead">Công cụ và trò chơi học tập chạy ngay trong Tizia — bấm để mở trong khung,
+          không rời khỏi trang. Bạn cũng có thể <a href="/dev" style="color:#fbbf24;">tự viết app</a>
+          rồi cài vào đây.</p>
         ${portalCards}
       </div>`;
   }
