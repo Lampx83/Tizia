@@ -263,12 +263,20 @@ const PUBLIC_PATH_PREFIXES = [
   // trải nghiệm như SV Dược (alert "kiểm tra đăng nhập" nếu chặn 401 →
   // UX tệ). Login user vẫn dùng được, không có dữ liệu nhạy cảm bị lộ.
   '/api/pharmacy/',
+  // GPP 2D — thực hành nghiệp vụ nhà thuốc (đề tài NCKH). Guest luyện tập được;
+  // định danh nghiên cứu bằng mã SV do người học nhập, không dữ liệu nhạy cảm.
+  // (export.csv nên hạn chế qua admin khi cần — hiện chỉ tổng hợp điểm luyện tập.)
+  '/api/gpp/',
   '/manifest.webmanifest', '/sw.js', '/favicon',
   '/vendor/', '/models/',
   // Đính kèm yêu cầu (ảnh chụp màn hình / file HS gửi cho "Ban điều hành AI").
   // GET công khai vì inbox /api/requests cũng công khai; POST upload đã có
   // requireAuth + requireEnrolled gate riêng ở route /api/requests/attachments.
   '/uploads/requests/',
+  // App mẫu (.zip) cho lập trình viên tải về từ trang /dev — trang hướng dẫn đó
+  // khách chưa đăng nhập đọc được, nên link tải cũng phải mở. Nội dung là mã mẫu
+  // do Tizia phát hành, không có dữ liệu người dùng.
+  '/downloads/apps/',
 ];
 const PUBLIC_PATH_EXACT = new Set([
   '/login.html', '/register.html', '/login', '/register',
@@ -324,6 +332,10 @@ const PUBLIC_PATH_EXACT = new Set([
   // thuốc + xoay camera được; /api/pharmacy/* (session/chat/score) vẫn
   // yêu cầu login, FE degrade graceful nếu chưa đăng nhập.
   '/nha-thuoc-3d.html',
+  // GPP 2D — thực hành nghiệp vụ nhà thuốc GPP (đề tài ThS Phạm Thị Hương Lý).
+  '/gpp.html',
+  // Nhà thuốc 2D An Tâm Pharma — cảnh mặt tiền + nội thất trực quan (khách xem).
+  '/nha-thuoc-2d.html',
 ]);
 
 function isPublicPath(p) {

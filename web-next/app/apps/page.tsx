@@ -60,6 +60,14 @@ const INTEGRATIONS: Integration[] = [
   },
 ];
 
+// Manifest chuẩn AI Portal đặt icon là TÊN icon Lucide ("FileText") — render như text
+// sẽ phình chữ 34px đè lên tên app. Chỉ nhận ký hiệu/emoji, gặp tên chữ-số thì dùng 🧩.
+function appIcon(raw?: string | null): string {
+  const s = (raw || '').trim();
+  if (!s || /[A-Za-z0-9]/.test(s)) return '🧩';
+  return s;
+}
+
 // Portal app (cài qua /portal-apps.html) — trả từ GET /api/portal-apps.
 type PortalApp = {
   id: number | string;
@@ -136,7 +144,7 @@ export default async function AppsPage() {
               className="flex flex-col rounded-2xl border bg-card p-5 no-underline transition-transform hover:-translate-y-[3px] hover:bg-accent"
               style={{ borderTop: '3px solid #fbbf24' }}
             >
-              <div className="mb-3 text-[34px] leading-none">{a.icon || '🧩'}</div>
+              <div className="mb-3 text-[34px] leading-none">{appIcon(a.icon)}</div>
               <h3 className="mb-1 text-lg font-semibold text-foreground">{a.name}</h3>
               <div className="mb-[10px] text-[12.5px] font-bold" style={{ color: '#fbbf24' }}>
                 {a.alias}

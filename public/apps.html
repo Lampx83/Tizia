@@ -107,6 +107,13 @@
   const appParam = params.get('app');
   const root = document.getElementById('root');
 
+  // Manifest chuẩn AI Portal đặt icon là TÊN icon Lucide ("FileText") — render như text
+  // sẽ phình chữ đè lên tên app. Chỉ nhận ký hiệu/emoji, gặp tên chữ-số thì dùng 🧩.
+  function appIcon(raw) {
+    const s = String(raw || '').trim();
+    return (!s || /[A-Za-z0-9]/.test(s)) ? '🧩' : s;
+  }
+
   // Portal apps (cài qua /portal-apps.html) — alias hoá thành "portal:<id>"
   async function fetchPortalApps() {
     try {
@@ -123,7 +130,7 @@
       const all = [...(own || []), ...(pub || []), ...(builtin || [])];
       const pa = all.find(a => String(a.id) === String(id));
       if (pa) renderEmbed({
-        id: 'portal:' + pa.id, name: pa.name, icon: pa.icon || '🧩',
+        id: 'portal:' + pa.id, name: pa.name, icon: appIcon(pa.icon),
         tag: pa.kind === 'builtin' ? (pa.category || 'Built-in') : 'Portal app',
         color: '#fbbf24', path: pa.url, url: pa.url,
       });
@@ -155,7 +162,7 @@
         <div class="grid">
           ${portalApps.map(a => `
             <a class="app" style="--c:#fbbf24" href="?app=portal:${a.id}">
-              <div class="ico">${a.icon || '🧩'}</div>
+              <div class="ico">${appIcon(a.icon)}</div>
               <h3>${escapeHtml(a.name)}</h3>
               <div class="tag">${escapeHtml(a.alias)}${a.version ? ' · v' + a.version : ''}</div>
               <p>${escapeHtml(a.description || 'Portal app cài qua manifest + zip.')}</p>
