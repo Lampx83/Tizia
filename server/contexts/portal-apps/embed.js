@@ -4,8 +4,12 @@
  */
 
 export const ALIAS_RE = /^[a-z][a-z0-9-]{1,40}$/; // lowercase, kebab, 2-41 ký tự
-// Bắt request tới index của app: "…/<alias>/" hoặc "…/<alias>/index.html".
-export const INDEX_INJECT_RE = /^\/portal-apps\/u\/(\d+)\/([a-z][a-z0-9-]{1,40})\/(?:index\.html)?$/;
+// Bắt request tới index của app: "…/<alias>", "…/<alias>/" hoặc "…/<alias>/index.html".
+// Dạng KHÔNG dấu / cuối là bắt buộc: Next (cửa trước) mặc định trailingSlash=false nên
+// "…/<alias>/" bị 308 về "…/<alias>", rồi express.static lại 301 thêm "/" vào → vòng lặp
+// redirect vô tận, app không mở được qua tizia.vn. Trả thẳng index (kèm <base href> tuyệt
+// đối nên asset tương đối vẫn resolve đúng) là chỗ cắt vòng lặp.
+export const INDEX_INJECT_RE = /^\/portal-apps\/u\/(\d+)\/([a-z][a-z0-9-]{1,40})(?:\/(?:index\.html)?)?$/;
 
 export function validateManifest(json) {
   if (!json || typeof json !== 'object') return { ok: false, error: 'manifest không phải JSON object' };
