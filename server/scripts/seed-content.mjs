@@ -57,6 +57,10 @@ const REGISTRY = [
   { collection: 'space-sets',        file: 'space-sets.js',        export: 'SPACE_SETS_ITEMS' },
   { collection: 'driving-600',        file: 'driving-bank.js',        export: 'ITEMS' },
   { collection: 'exam-sets',          file: 'exam-sets.js',          export: 'EXAM_SETS' },
+  // 2026-08-15: danh mục tra cứu biển báo GPLX (235 biển: cấm/hiệu lệnh/chỉ dẫn/phụ,
+  // nhóm cấm có mức phạt NĐ 168/2024) — bổ sung cho /luat-giao-thong-600, KHÔNG trùng
+  // collection 'traffic-signs' (21 biển SVG minh hoạ cho khối tiểu học).
+  { collection: 'gplx-bien-bao',      file: 'gplx-bien-bao-catalog.js', export: 'GPLX_BIEN_BAO_CATALOG' },
   // 2026-07-05: content còn hardcode khi migrate Next → đưa vào DB.
   { collection: 'traffic-signs',      file: 'bien-bao-giao-thong.js', export: 'TRAFFIC_SIGNS' },
   { collection: 'code-quest-levels',  file: 'code-quest.js',          export: 'CODE_QUEST_LEVELS' },

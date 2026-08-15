@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 
 // Shape 1 câu — giống item collection 'driving-600' backend trả về.
 export type DrivingQuestion = {
@@ -280,6 +281,12 @@ export default function DrivingQuiz({ items }: { items: DrivingQuestion[] }) {
       <style>{scopedCss}</style>
 
       <h1 style={S.h1}>🚦 Lý thuyết Lái xe ô tô — Luật giao thông đường bộ</h1>
+      <p style={{ margin: '-8px 0 8px', fontSize: 14 }}>
+        Cần tra cứu chi tiết từng biển?{' '}
+        <Link href="/tra-cuu-bien-bao-gplx" style={{ color: '#2563eb', textDecoration: 'underline' }}>
+          📚 Danh mục 235 biển báo (kèm mức phạt) →
+        </Link>
+      </p>
 
       {/* Toolbar chế độ */}
       <div style={S.toolbar}>
