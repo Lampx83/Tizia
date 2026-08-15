@@ -95,20 +95,22 @@ function AppCard({
         {app.description || 'Portal app cài qua manifest + zip.'}
       </div>
       <div className="mt-1 flex gap-1.5">
+        {/* Mặc định mở TRONG khung Tizia (header + thanh chân), đúng cách người học
+            gặp app khi đi từ toà nhà. Nút bên cạnh mới là bản toàn màn hình. */}
         <a
           className="inline-flex flex-1 items-center justify-center gap-1 rounded-md border border-primary bg-primary px-2.5 py-1.5 text-xs font-bold text-primary-foreground hover:brightness-110"
-          href={app.url}
-          target="_blank"
-          rel="noopener"
+          href={`/app/${app.alias}`}
         >
-          ↗ Mở
+          ▶ Mở
         </a>
         <a
           className="inline-flex items-center gap-1 rounded-md border border-border bg-white/[.06] px-2.5 py-1.5 text-xs font-semibold hover:bg-white/[.12]"
-          href={`/apps.html?app=portal:${app.id}`}
-          title="Nhúng trong Tizia"
+          href={app.url}
+          target="_blank"
+          rel="noopener"
+          title="Mở toàn màn hình ở tab mới"
         >
-          📺
+          ↗
         </a>
         {canDelete && onUninstall && (
           <button

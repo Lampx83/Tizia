@@ -62,7 +62,12 @@ const SPACES_PHARMACY = {
       {q:'Sinh khả dụng (bioavailability) là?',o:['Tỉ lệ thuốc vào tuần hoàn chung ở dạng còn hoạt tính','Giá thuốc','Màu viên','Hạn dùng'],a:0}]},
 
   library:{emoji:'📖',name:'Thư viện',accent:'#b59b6a',intro:'Tra cứu thông tin thuốc và ôn tập củng cố kiến thức.',
-    rooms:[{ic:'🔎',name:'Tra cứu thuốc',rd:'Nguồn tin cậy & kỹ năng tra cứu.',panel:[
+    // Bộ công cụ nghiên cứu — mở trong khung Tizia qua /app/<alias> (xem web-next/app/app/[alias]).
+    rooms:[{ic:'📚',name:'Tra cứu tài liệu thư viện',rd:'Tìm sách, tạp chí, ebook trong kho thư viện điện tử của trường.',href:'/app/library-search'},
+      {ic:'📊',name:'Phân tích định lượng',rd:'Xử lý số liệu khảo sát/thực nghiệm khoá luận: thống kê mô tả, kiểm định, biểu đồ.',href:'/app/quantis'},
+      {ic:'🗂️',name:'Phân tích định tính',rd:'Mã hoá phỏng vấn, phiếu khảo sát mở theo lối NVivo.',href:'/app/annota'},
+      {ic:'🗺️',name:'Trắc lượng thư mục',rd:'Bản đồ từ khoá, mạng đồng tác giả, phân tích trích dẫn cho tổng quan tài liệu.',href:'/app/bibliomap'},
+      {ic:'🔎',name:'Tra cứu thuốc',rd:'Nguồn tin cậy & kỹ năng tra cứu.',panel:[
         {h:'Nguồn tra cứu đáng tin'},
         {ul:['Dược thư Quốc gia Việt Nam','Dược điển Việt Nam (tiêu chuẩn chất lượng)','Tờ Hướng dẫn sử dụng (HDSD) trong hộp thuốc','CSDL tương tác: Micromedex, Drugs.com']},
         {h:'Quy trình tra cứu'},
@@ -948,7 +953,13 @@ const SPACES_IT = {
       {q:'Trình biên dịch (compiler) làm gì?',o:['Dịch mã nguồn sang mã máy/bytecode','Vẽ giao diện','Quản lý cơ sở dữ liệu','Gửi email'],a:0}]},
 
   library:{emoji:'📚',name:'Thư viện số',accent:'#93c5fd',intro:'Tra cứu tài liệu, đọc paper khoa học, học mã nguồn mở và rèn kỹ năng viết khoá luận CNTT.',
-    rooms:[{ic:'🧭',name:'Lộ trình tự học',rd:'Roadmap kỹ năng CNTT.',panel:[{h:'Tự học CNTT hiệu quả'},{ul:['Chọn một hướng (web / AI / mobile / security) và bám lộ trình (vd roadmap.sh)','Học theo dự án: làm sản phẩm nhỏ thay vì chỉ xem video','Ghi chú & dạy lại (Feynman) để nhớ lâu','Tham gia cộng đồng: GitHub, diễn đàn, nhóm học']},{note:'Kiên trì đều đặn quan trọng hơn học dồn — mỗi ngày một chút.'}]},
+    // Bộ công cụ nghiên cứu — mở trong khung Tizia qua /app/<alias> (xem web-next/app/app/[alias]).
+    rooms:[{ic:'📚',name:'Tra cứu tài liệu thư viện',rd:'Tìm sách, tạp chí, ebook trong kho thư viện điện tử của trường.',href:'/app/library-search'},
+      {ic:'🗺️',name:'Trắc lượng thư mục',rd:'Bản đồ từ khoá, mạng đồng tác giả, phân tích trích dẫn — làm tổng quan tài liệu cho khoá luận.',href:'/app/bibliomap'},
+      {ic:'📊',name:'Phân tích định lượng',rd:'Xử lý số liệu thực nghiệm: thống kê mô tả, kiểm định, biểu đồ.',href:'/app/quantis'},
+      {ic:'🗂️',name:'Phân tích định tính',rd:'Mã hoá phỏng vấn người dùng, khảo sát mở khi làm nghiên cứu UX/HCI.',href:'/app/annota'},
+      {ic:'🔳',name:'Tạo mã QR',rd:'Sinh mã QR cho link demo, poster đồ án, danh thiếp.',href:'/app/qrcode'},
+      {ic:'🧭',name:'Lộ trình tự học',rd:'Roadmap kỹ năng CNTT.',panel:[{h:'Tự học CNTT hiệu quả'},{ul:['Chọn một hướng (web / AI / mobile / security) và bám lộ trình (vd roadmap.sh)','Học theo dự án: làm sản phẩm nhỏ thay vì chỉ xem video','Ghi chú & dạy lại (Feynman) để nhớ lâu','Tham gia cộng đồng: GitHub, diễn đàn, nhóm học']},{note:'Kiên trì đều đặn quan trọng hơn học dồn — mỗi ngày một chút.'}]},
       {ic:'🔎',name:'Kỹ năng tra cứu',rd:'Nguồn tin cậy cho dân lập trình.',panel:[
         {h:'Nguồn tra cứu đáng tin'},
         {ul:['Tài liệu chính thức (docs) của ngôn ngữ/framework','MDN Web Docs cho web; man pages cho Linux','Stack Overflow — đọc kỹ, kiểm chứng lại','Paper: Google Scholar, arXiv, IEEE Xplore, ACM DL']},

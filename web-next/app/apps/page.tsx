@@ -140,7 +140,7 @@ export default async function AppsPage() {
           {portalApps.map((a) => (
             <a
               key={String(a.id)}
-              href={`/apps.html?app=portal:${a.id}`}
+              href={`/app/${a.alias}`}
               className="flex flex-col rounded-2xl border bg-card p-5 no-underline transition-transform hover:-translate-y-[3px] hover:bg-accent"
               style={{ borderTop: '3px solid #fbbf24' }}
             >

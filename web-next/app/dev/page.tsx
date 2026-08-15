@@ -825,6 +825,26 @@ export async function getSources() {
           height={893}
           caption="Mỗi app là một thẻ: icon, tên, alias, mô tả trong manifest. Viết mô tả cho tử tế — người học đọc đúng dòng đó để quyết định có mở hay không."
         />
+        <Sub>Hai đường dẫn tới app — dùng đúng cái</Sub>
+        <Table
+          head={['Đường dẫn', 'Dùng khi nào']}
+          rows={[
+            [
+              '/app/<alias>',
+              'ĐƯỜNG CHÍNH. App chạy trong khung Tizia: header ở trên, thanh chân ở dưới, người học không rơi ra ngoài. Đây là link nên đặt vào toà nhà, gửi cho người khác, ghim vào bài giảng.',
+            ],
+            [
+              '/portal-apps/u/<id>/<alias>/',
+              'App chiếm trọn màn hình, không có gì của Tizia bao quanh. Hợp khi bạn tự test, hoặc khi app cần toàn bộ chiều cao (bản đồ, 3D).',
+            ],
+          ]}
+        />
+        <Note kind="info" title="Muốn app xuất hiện trong một toà nhà?">
+          Mỗi trường có các toà nhà, trong toà nhà là các chức năng bấm được. Chức năng chỉ là một
+          mục có <Code>href</Code> — trỏ vào <Code>/app/&lt;alias&gt;</Code> là app của bạn nằm ngay
+          trong đó. Nhắn cho quản trị biết app nên nằm ở trường nào, toà nào.
+        </Note>
+
         <Sub>Tự động hoá bằng API</Sub>
         <Pre label="Terminal">{`curl -X POST https://tizia.vn/api/portal-apps/install \\
   -b "tizia_sid=<cookie phiên của bạn>" \\
