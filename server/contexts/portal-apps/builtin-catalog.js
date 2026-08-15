@@ -14,7 +14,7 @@
  * Nếu thêm/sửa entry, bump CATALOG_VERSION để force re-seed.
  */
 
-export const CATALOG_VERSION = '2026-07-04-v3-lop2-apps';
+export const CATALOG_VERSION = '2026-08-15-v4-gplx-bien-bao';
 
 export const BUILTIN_APPS = [
   // ─────── Mầm non / Lớp 2 ───────
@@ -183,6 +183,12 @@ export const BUILTIN_APPS = [
   { alias: 'ai-quiz-driving', name: 'AI Quiz luật giao thông', icon: '🧠',
     description: 'AI sinh quiz tình huống lái xe theo cấp B1/B2/C/D. Đa dạng tình huống, có giải thích lý do.',
     target_url: '/ai-quiz-gen.html?topic=driving', category: 'tool', domain: 'driving' },
+  { alias: 'tra-cuu-bien-bao-gplx', name: 'Tra cứu biển báo GPLX', icon: '📚',
+    description: 'Danh mục đầy đủ 257 biển báo (cấm/nguy hiểm/hiệu lệnh/chỉ dẫn/phụ) theo QCVN 41:2019. Biển cấm kèm mức phạt NĐ 168/2024. Có chế độ đố vui nhận diện.',
+    target_url: '/tra-cuu-bien-bao-gplx', category: 'tool', domain: 'driving' },
+  { alias: 'nhan-dien-bien-bao', name: 'Nhận diện biển báo bằng AI', icon: '📷',
+    description: 'Chụp ảnh hoặc tải ảnh biển báo lên, AI (YOLOv8) nhận diện ngay trên trình duyệt — ảnh không gửi lên máy chủ.',
+    target_url: '/nhan-dien-bien-bao', category: 'tool', domain: 'driving' },
 
   // ─────── Công cụ chung (general) ───────
   { alias: 'ai-quiz-gen', name: 'AI sinh Quiz', icon: '🧠',
