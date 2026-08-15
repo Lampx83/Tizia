@@ -29,7 +29,7 @@ type PenaltyInfo = {
 export type BienBaoItem = {
   id: string;
   code: string;
-  group: 'cam' | 'hieu-lenh' | 'chi-dan' | 'phu';
+  group: 'cam' | 'hieu-lenh' | 'chi-dan' | 'phu' | 'nguy-hiem';
   groupLabel: string;
   name: string;
   image: string | null;
@@ -41,6 +41,7 @@ export type BienBaoItem = {
 const GROUPS: { value: 'all' | BienBaoItem['group']; label: string }[] = [
   { value: 'all', label: '📚 Tất cả' },
   { value: 'cam', label: '⛔ Biển cấm' },
+  { value: 'nguy-hiem', label: '⚠️ Biển báo nguy hiểm' },
   { value: 'hieu-lenh', label: '🔵 Biển hiệu lệnh' },
   { value: 'chi-dan', label: '🟦 Biển chỉ dẫn' },
   { value: 'phu', label: '➖ Biển phụ' },
@@ -344,6 +345,10 @@ export default function BienBaoCatalog({ items }: { items: BienBaoItem[] }) {
         Tìm bài luyện theo câu hỏi trắc nghiệm? Xem{' '}
         <Link href="/luat-giao-thong-600" className="text-primary hover:underline">
           600 câu lý thuyết lái xe →
+        </Link>
+        {' '}· Muốn thử nhận diện biển báo từ ảnh chụp?{' '}
+        <Link href="/nhan-dien-bien-bao" className="text-primary hover:underline">
+          📷 Nhận diện bằng AI →
         </Link>
       </p>
 

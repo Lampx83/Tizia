@@ -79,7 +79,8 @@ const SUBJ_LANDINGS: Record<string, Landing> = {
     apps: [
       { ic: '📖', name: '600 câu lý thuyết B1/B2', rd: 'Luyện theo chương + thi thử 25 câu/22 phút. Có CÂU LIỆT.', href: '/luat-giao-thong-600.html' },
       { ic: '🚸', name: 'Biển báo Giao thông', rd: 'Học 4 nhóm QCVN 41:2019 + chế độ đố vui có streak.', href: '/bien-bao-giao-thong.html' },
-      { ic: '📚', name: 'Tra cứu biển báo GPLX', rd: 'Danh mục đầy đủ 235 biển (cấm/hiệu lệnh/chỉ dẫn/phụ) — biển cấm có kèm mức phạt theo NĐ 168/2024.', href: '/tra-cuu-bien-bao-gplx' },
+      { ic: '📚', name: 'Tra cứu biển báo GPLX', rd: 'Danh mục đầy đủ 257 biển (cấm/nguy hiểm/hiệu lệnh/chỉ dẫn/phụ) — biển cấm có kèm mức phạt theo NĐ 168/2024.', href: '/tra-cuu-bien-bao-gplx' },
+      { ic: '📷', name: 'Nhận diện biển báo bằng AI', rd: 'Chụp ảnh hoặc tải ảnh lên, AI nhận diện ngay trên trình duyệt — không gửi ảnh lên máy chủ.', href: '/nhan-dien-bien-bao' },
       { ic: '🧠', name: 'AI Quiz tình huống', rd: 'AI sinh tình huống lái xe thực tế theo cấp B1/B2/C/D.', href: '/ai-quiz-gen.html?topic=driving' },
     ],
   },

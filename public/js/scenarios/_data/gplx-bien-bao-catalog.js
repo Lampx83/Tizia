@@ -1,7 +1,10 @@
 // DATA seed — Danh mục biển báo giao thông VN cho khối thi GPLX (collection 'gplx-bien-bao').
 // Nguồn: catalog biển báo QCVN 41:2019/BGTVT (nhóm P./DP. cấm — R. hiệu lệnh —
-// I. chỉ dẫn — S. phụ), phần mức phạt nhóm cấm trích Nghị định 168/2024/NĐ-CP
-// (đối chiếu 26/07/2026). Chỉ seed-content.mjs import.
+// I. chỉ dẫn — S. phụ — W. nguy hiểm), phần mức phạt nhóm cấm trích Nghị định
+// 168/2024/NĐ-CP (đối chiếu 26/07/2026). Nhóm nguy hiểm (W.*) chỉ gồm 22 mã mà
+// model nhận diện vtsr-yolov8n-int8.onnx được huấn luyện — KHÔNG thêm mã W.*
+// nào khác chưa có tên xác thực (tránh bịa nội dung an toàn giao thông).
+// Chỉ seed-content.mjs import.
 export const GPLX_BIEN_BAO_CATALOG = [
   {
     "id": "cam-p101",
@@ -4762,5 +4765,181 @@ export const GPLX_BIEN_BAO_CATALOG = [
     "groupLabel": "Biển phụ",
     "name": "Ngoại lệ",
     "image": "/img/gplx-bien-bao/phu/sh6.jpeg"
+  },
+  {
+    "id": "nguyhiem-w201a",
+    "code": "W.201a",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Chỗ ngoặt nguy hiểm vòng bên trái",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.201a.png"
+  },
+  {
+    "id": "nguyhiem-w201b",
+    "code": "W.201b",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Chỗ ngoặt nguy hiểm vòng bên phải",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.201b.png"
+  },
+  {
+    "id": "nguyhiem-w202a",
+    "code": "W.202a",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Nhiều chỗ ngoặt nguy hiểm liên tiếp vòng bên trái",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.202a.png"
+  },
+  {
+    "id": "nguyhiem-w202b",
+    "code": "W.202b",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Nhiều chỗ ngoặt nguy hiểm liên tiếp vòng bên phải",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.202b.png"
+  },
+  {
+    "id": "nguyhiem-w203b",
+    "code": "W.203b",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Đường bị thu hẹp về phía trái",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.203b.png"
+  },
+  {
+    "id": "nguyhiem-w203c",
+    "code": "W.203c",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Đường bị thu hẹp về phía phải",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.203c.png"
+  },
+  {
+    "id": "nguyhiem-w205a",
+    "code": "W.205a",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Đường giao nhau cùng cấp phía bên trái",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.205a.png"
+  },
+  {
+    "id": "nguyhiem-w205b",
+    "code": "W.205b",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Đường giao nhau cùng cấp phía bên phải",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.205b.png"
+  },
+  {
+    "id": "nguyhiem-w205d",
+    "code": "W.205d",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Đường giao nhau cùng cấp có dải trung tâm",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.205d.png"
+  },
+  {
+    "id": "nguyhiem-w207a",
+    "code": "W.207a",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Giao nhau với đường không ưu tiên (phía trước)",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.207a.png"
+  },
+  {
+    "id": "nguyhiem-w207b",
+    "code": "W.207b",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Giao nhau với đường không ưu tiên (phía bên phải)",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.207b.png"
+  },
+  {
+    "id": "nguyhiem-w207c",
+    "code": "W.207c",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Giao nhau với đường không ưu tiên (phía bên trái)",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.207c.png"
+  },
+  {
+    "id": "nguyhiem-w208",
+    "code": "W.208",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Giao nhau với đường ưu tiên",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.208.png"
+  },
+  {
+    "id": "nguyhiem-w209",
+    "code": "W.209",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Giao nhau có tín hiệu đèn",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.209.png"
+  },
+  {
+    "id": "nguyhiem-w210",
+    "code": "W.210",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Giao nhau với đường sắt có rào chắn",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.210.png"
+  },
+  {
+    "id": "nguyhiem-w219",
+    "code": "W.219",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Dốc xuống nguy hiểm",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.219.png"
+  },
+  {
+    "id": "nguyhiem-w224",
+    "code": "W.224",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Đường người đi bộ cắt ngang",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.224.png"
+  },
+  {
+    "id": "nguyhiem-w225",
+    "code": "W.225",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Trẻ em",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.225.png"
+  },
+  {
+    "id": "nguyhiem-w227",
+    "code": "W.227",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Công trường",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.227.png"
+  },
+  {
+    "id": "nguyhiem-w233",
+    "code": "W.233",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Nguy hiểm khác",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.233.png"
+  },
+  {
+    "id": "nguyhiem-w235",
+    "code": "W.235",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Đường đôi",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.235.png"
+  },
+  {
+    "id": "nguyhiem-w245a",
+    "code": "W.245a",
+    "group": "nguy-hiem",
+    "groupLabel": "Biển báo nguy hiểm",
+    "name": "Đi chậm",
+    "image": "/img/gplx-bien-bao/nguy-hiem/W.245a.png"
   }
 ];
