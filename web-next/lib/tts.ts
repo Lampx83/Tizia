@@ -10,8 +10,8 @@
 //   2. "Google Tiếng Việt" (Chrome)
 //   3. Enhanced/Premium cài máy (macOS)  4. thường; trừ điểm compact/eSpeak
 // Kèm: chia câu khi text dài (né bug Chrome cắt ~15s), pitch mặc định 1.0.
-// Bản vanilla tương ứng: public/js/engine/preschool-ui.js + tts-reader.js —
-// đổi thuật toán thì đổi CẢ BA nơi. Server: server/tts.js (FPT_TTS_API_KEY).
+// Bản vanilla tương ứng: public/js/engine/preschool-ui.js —
+// đổi thuật toán thì đổi CẢ HAI nơi. Server: server/tts.js (FPT_TTS_API_KEY).
 // ─────────────────────────────────────────────────────────────────────────
 
 const cache: Record<string, SpeechSynthesisVoice | null> = {};

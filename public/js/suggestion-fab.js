@@ -69,7 +69,7 @@ function isGlobalPage() {
 function domainByPath() {
   const p = (location.pathname || '').toLowerCase();
   if (/(^|\/)(it-|playground|cipher|sql|algo|code-lab|web-playground)/.test(p)) return 'it';
-  if (/(pharmacy|pharma|nha-thuoc|compounding|sac-ky|dispense|antibiogram|ps\d|bao-che|herb-garden|titration|pediatric|iv-infusion|gmp|patient-sim|gc\d|calibration-curve|pk-curve|bp-measure|dilution|3d-shelf|2d-arcade|grapher|l[12]-)/.test(p)) return 'pharmacy';
+  if (/(pharmacy|pharma|nha-thuoc|tu-thuoc|compounding|sac-ky|dispense|antibiogram|ps\d|bao-che|herb-garden|titration|pediatric|iv-infusion|gmp|patient-sim|gc\d|calibration-curve|pk-curve|bp-measure|dilution|3d-shelf|2d-arcade|grapher|l[12]-)/.test(p)) return 'pharmacy';
   if (/(luat-giao-thong|bien-bao-giao-thong|driving)/.test(p)) return 'driving';
   return null;
 }
@@ -649,6 +649,10 @@ function injectStyles() {
     @media (max-width: 540px) {
       #sgf-fab { left: 12px; bottom: 12px; width: 54px; height: 54px; }
       .sgf-fab-ico { font-size: 24px; }
+    }
+    /* Chỉ hiện trên desktop — trên mobile nút nổi hay đè lên nội dung game/board. */
+    @media (max-width: 767px) {
+      #sgf-fab { display: none !important; }
     }
 
     .sgf-modal { position: fixed; inset: 0; z-index: 2147483001; display: grid; place-items: center; }

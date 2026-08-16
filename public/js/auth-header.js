@@ -15,8 +15,6 @@ import './pet-widget.js';
 import './daily-login.js';
 // i18n — auto-load bundle theo locale (vi/en/id).
 import './i18n.js';
-// TTS Reader — toggle 🔊 đọc to bài cho tiểu học.
-import './tts-reader.js';
 // Feature Gate — Progressive disclosure (locked → 🔒, mở dần theo journey)
 import './feature-gate.js';
 
