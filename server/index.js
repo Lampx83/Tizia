@@ -1463,7 +1463,7 @@ r.get('/api/export.csv', async (_req, res) => {
 // Đường dẫn TUYỆT ĐỐI (kèm BASE_PATH) — KHÔNG dùng relative "js/...": trang nằm
 // trong thư mục con (vd /campus-proto/b-iso-canvas.html) sẽ phân giải relative
 // thành /campus-proto/js/... → 404. Absolute /js/... đúng cho mọi độ sâu.
-const HEADER_TAG = `<script type="module" src="${BASE_PATH}/js/auth-header.js"></script>`;
+const HEADER_TAG = `<script type="module" src="${BASE_PATH}/js/auth-header.js?v=notts1"></script>`;
 // suggestion-fab.js (?v=data-files cache-bust) + notifications-bell.js được
 // dựng inline trong middleware để áp opt-out per-page (xem bên dưới).
 // Analytics: chỉ gtag loader (analytics.js). Consent banner đã được bỏ theo
@@ -1501,7 +1501,7 @@ r.get(/.*/, async (req, res, next) => {
     const noBell   = embed || /\bdata-no-notifications-bell\b/i.test(bodyOpen);
     const noAnalytics = embed || /\bdata-no-analytics\b/i.test(bodyOpen);
     const sgfTag =
-      (noSgf ? '' : `<script type="module" src="${BASE_PATH}/js/suggestion-fab.js?v=fabauth1"></script>\n`)
+      (noSgf ? '' : `<script type="module" src="${BASE_PATH}/js/suggestion-fab.js?v=fabmobile1"></script>\n`)
       + (noBell ? '' : `<script type="module" src="${BASE_PATH}/js/notifications-bell.js"></script>`);
     const tags =
       ((hasAnalytics || noAnalytics) ? '' : ANALYTICS_TAG + '\n')
