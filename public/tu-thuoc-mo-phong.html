@@ -1,0 +1,2774 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Tủ thuốc mô phỏng – Môn Dược lý</title>
+<style>
+  :root{
+    --wood:#123a2f;
+    --wood-light:#1f5346;
+    --wood-dark:#0b241d;
+    --trim:#f3efe2;
+    --gold:#e8c873;
+    --paper:#f7f4ea;
+    --ink:#1c3c33;
+    --muted:#7a7a6a;
+    --box-w:122px;
+    --box-h:90px;
+    --tu-w:560px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    font-family:"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    background:radial-gradient(ellipse at 50% -10%, #e9ede4 0%, #cfd8ce 55%, #b9c4b7 100%);
+    color:var(--ink);
+    height:100vh;height:100dvh;overflow:hidden;
+  }
+  /* two top-level screens: the walkable overview map is the main screen; the
+     pharmacy practice (cabinets + carton) is entered through the door */
+  #mapScreen{
+    height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+    gap:8px;padding:10px 12px;overflow:auto;
+  }
+  #pharmacyScreen{
+    height:100%;display:flex;flex-direction:row;align-items:stretch;gap:10px;padding:8px 10px;
+  }
+  body.view-map    #pharmacyScreen{display:none;}
+  body.view-pharmacy #mapScreen{display:none;}
+
+  /* left-hand control column (title, search, delivery carton). The cabinet
+     lives in .cabinet-col on the RIGHT (easier to reach with the mouse). */
+  .side-panel{
+    flex:0 1 300px;max-width:300px;min-width:0;height:100%;
+    display:flex;flex-direction:column;gap:9px;overflow:hidden;
+  }
+  .panel-label{
+    flex:none;font-size:.72rem;font-weight:800;color:var(--wood-dark);
+    letter-spacing:.02em;margin-top:2px;
+  }
+  /* sections fill the panel width; the delivery carton grows to fill the
+     leftover height so the box dispenser is big and central */
+  .side-panel > .page-head,
+  .side-panel > .toolbar,
+  .side-panel > .search-results{ margin-left:0;margin-right:0;width:100%;max-width:100%;flex:none; }
+  .side-panel > .delivery-cart{ margin-left:0;margin-right:0;width:100%;max-width:100%;flex:1 1 auto;min-height:0; }
+  .side-panel > .page-head h1{font-size:1.15rem;}
+
+  /* right-hand cabinet column: navigation tabs sit ON TOP of the cabinet */
+  .cabinet-col{
+    flex:1 0 auto;height:100%;min-width:0;
+    display:flex;flex-direction:column;gap:8px;
+  }
+
+  /* ---------- Header / toolbar ---------- */
+  .page-head{max-width:100%;margin:0 auto 8px;text-align:center;flex:none;}
+  .page-head h1{
+    font-size:1.4rem;letter-spacing:.03em;color:var(--wood-dark);margin:0 0 4px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;gap:10px;
+  }
+  .page-head p{margin:0;color:var(--muted);font-size:.88rem;}
+  .mascot{
+    display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;
+    background:linear-gradient(160deg,var(--wood-light),var(--wood));border-radius:50%;
+    box-shadow:0 3px 6px rgba(0,0,0,.3), inset 0 0 0 2px rgba(255,255,255,.25);
+    animation:mascot-bounce 2.4s ease-in-out infinite;flex:none;
+  }
+  .mascot::before{
+    content:"";width:16px;height:16px;background:
+      linear-gradient(var(--gold),var(--gold)) center/100% 34% no-repeat,
+      linear-gradient(var(--gold),var(--gold)) center/34% 100% no-repeat;
+  }
+  @keyframes mascot-bounce{0%,100%{transform:translateY(0) rotate(0);}50%{transform:translateY(-4px) rotate(-6deg);}}
+
+  .toolbar{
+    max-width:100%;margin:0 auto 10px;display:flex;flex-wrap:wrap;gap:10px;
+    align-items:center;justify-content:space-between;
+    background:var(--paper);border-radius:10px;padding:10px 14px;
+    box-shadow:0 2px 10px rgba(0,0,0,.12);
+    flex:none;
+  }
+  .toolbar input[type=search]{
+    flex:1;min-width:200px;padding:9px 12px;border-radius:20px;border:1px solid #d8d3c2;
+    font-size:.9rem;outline:none;
+  }
+  .toolbar input[type=search]:focus{border-color:var(--wood-light);box-shadow:0 0 0 2px rgba(31,83,70,.15);}
+  .cabinet-jump{
+    padding:9px 12px;border-radius:20px;border:1px solid #d8d3c2;background:#fff;
+    font-size:.85rem;color:var(--ink);outline:none;max-width:220px;cursor:pointer;
+  }
+  .cabinet-jump:focus{border-color:var(--wood-light);box-shadow:0 0 0 2px rgba(31,83,70,.15);}
+  .stats{display:flex;gap:8px;flex-wrap:wrap;}
+  .chip{background:var(--wood);color:#fff;font-size:.72rem;padding:5px 10px;border-radius:14px;white-space:nowrap;}
+  .chip b{color:var(--gold);}
+
+  .search-results{
+    max-width:100%;margin:0 auto 10px;display:none;flex-wrap:wrap;gap:6px;
+    background:var(--paper);border-radius:10px;padding:10px 14px;box-shadow:0 2px 10px rgba(0,0,0,.12);
+    flex:none;max-height:22vh;overflow-y:auto;
+  }
+  .search-results.show{display:flex;}
+  .search-results .sr-count{width:100%;font-size:.72rem;color:var(--muted);margin-bottom:2px;}
+  .search-results button{
+    border:1px solid var(--wood-light);background:#fff;color:var(--wood-dark);
+    border-radius:14px;padding:5px 12px;font-size:.74rem;cursor:pointer;text-align:left;
+  }
+  .search-results button:hover{background:var(--wood-light);color:#fff;}
+  .search-results button b{font-weight:700;}
+  .search-results button .sr-buoi{opacity:.75;font-size:.68rem;margin-left:4px;}
+  .search-results .sr-empty{font-size:.78rem;color:var(--muted);}
+
+  /* ---------- Cabinet tabs (sit on top of the cabinet) ---------- */
+  .cabinet-tabs{
+    width:100%;max-width:100%;margin:0;flex:none;display:flex;gap:6px;overflow-x:auto;
+    padding:2px 2px 5px;align-items:stretch;
+  }
+  .cabinet-tabs::-webkit-scrollbar{height:7px;}
+  .cabinet-tabs::-webkit-scrollbar-thumb{background:#00000030;border-radius:4px;}
+  .cab-tab{
+    --wood:#3a2a12;--wood-dark:#20160a;
+    flex:none;display:flex;flex-direction:column;align-items:center;gap:3px;justify-content:flex-start;
+    min-width:64px;max-width:132px;padding:6px 10px 7px;border:1px solid #d8d3c2;
+    border-radius:12px 12px 5px 5px;background:var(--paper);color:var(--wood-dark);cursor:pointer;
+    box-shadow:0 2px 5px rgba(0,0,0,.15);transition:transform .1s, background .15s, box-shadow .15s;
+    position:relative;
+  }
+  .cab-tab:hover{transform:translateY(-2px);}
+  .cab-tab .ct-num{
+    font-weight:800;font-size:.92rem;line-height:1;flex:none;
+    width:23px;height:23px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    background:var(--wood);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.2);
+  }
+  .cab-tab .ct-topic{
+    font-size:.57rem;font-weight:700;line-height:1.12;text-align:center;color:#5c3f1c;
+    overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  }
+  .cab-tab .ct-dot{
+    position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;padding:0 4px;border-radius:9px;
+    background:#a3271f;color:#fff;font-size:.6rem;font-weight:800;line-height:16px;text-align:center;
+    box-shadow:0 0 0 2px var(--paper);display:none;
+  }
+  .cab-tab.has-pending .ct-dot{display:block;}
+  .cab-tab.active{
+    background:linear-gradient(160deg,var(--wood),var(--wood-dark));color:#fff;border-color:var(--wood-dark);
+    box-shadow:0 5px 14px rgba(0,0,0,.35);transform:translateY(-2px);
+  }
+  .cab-tab.active .ct-num{background:var(--gold);color:var(--wood-dark);}
+  .cab-tab.active .ct-topic{color:rgba(255,255,255,.92);}
+
+  /* ---------- Delivery cart (new-stock putaway exercise) ---------- */
+  .delivery-cart{
+    position:relative;max-width:100%;margin:0;
+    background:linear-gradient(180deg,#d9b98a,#c8a06f);
+    border:2px dashed #8a6335;border-radius:12px;
+    padding:12px 16px;display:flex;flex-direction:column;align-items:stretch;gap:10px;
+    box-shadow:0 2px 10px rgba(0,0,0,.15);
+  }
+  /* mobile-only way back to the map: the toolbar (with its own "Ra bản đồ"
+     button) is hidden on phones, so this corner icon is the only path back
+     — see #toMapBtn for the desktop equivalent. */
+  .mobile-map-btn{display:none;}
+  .delivery-cart .cart-head{display:flex;flex-direction:column;gap:4px;flex:none;}
+  .delivery-cart .cart-title{
+    font-weight:800;font-size:1.05rem;color:#a3271f;letter-spacing:.02em;
+    text-shadow:0 1px 0 rgba(255,255,255,.4);display:flex;align-items:center;gap:6px;
+  }
+  .delivery-cart .cart-icon{font-size:1.9rem;line-height:1;filter:drop-shadow(0 2px 2px rgba(0,0,0,.25));}
+  .delivery-cart .cart-sub{font-size:.7rem;color:#5c3f1c;font-weight:700;}
+  .delivery-cart .cart-progress{font-size:.68rem;font-weight:700;color:#fff;background:#8a6335;padding:2px 8px;border-radius:10px;align-self:flex-start;}
+  .cart-refresh{border:none;background:#4a2f10;color:#fff;font-size:.68rem;padding:6px 10px;border-radius:12px;cursor:pointer;flex:none;}
+  .cart-refresh:hover{background:#6b481c;}
+  .hand-btn{border:none;background:#4a2f10;color:#fff;font-size:.68rem;padding:6px 10px;border-radius:12px;cursor:pointer;flex:none;}
+  .hand-btn:hover{background:#6b481c;}
+  .hand-btn.active{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#3e2723;}
+  .hand-btn:disabled{opacity:.6;cursor:progress;}
+  /* mirrored webcam preview (like a selfie view) so hand movement feels
+     natural — CSS flip only, landmarks are drawn in the RAW (unflipped)
+     frame so the flip carries them along correctly */
+  #handCamPreview{
+    position:fixed;bottom:14px;right:14px;z-index:500;width:180px;height:135px;
+    border-radius:10px;background:#000;box-shadow:0 4px 16px rgba(0,0,0,.4);
+    transform:scaleX(-1);display:none;
+  }
+  #handCamPreview.shown{display:block;}
+  /* the point the game will treat as a click — follows the pinch midpoint,
+     turns red while pinched so it reads like a real cursor state */
+  #handCursor{
+    position:fixed;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;
+    border:3px solid #38bdf8;background:rgba(56,189,248,.22);
+    z-index:600;pointer-events:none;display:none;
+    transition:background .1s,border-color .1s;
+  }
+  #handCursor.shown{display:block;}
+  #handCursor.pinching{border-color:#ef4444;background:rgba(239,68,68,.3);}
+  .cart-level{
+    font-size:.66rem;font-weight:700;color:#4a2f10;background:#fff8ea;border:1px solid #8a6335;
+    border-radius:10px;padding:3px 6px;cursor:pointer;max-width:170px;
+  }
+  .cart-mastery{font-size:.62rem;color:#5c3f1c;font-weight:600;}
+
+  /* ---------- gamified progression panel ---------- */
+  .game-panel{
+    display:flex;flex-direction:column;gap:6px;margin-top:2px;
+    background:rgba(255,255,255,.4);border:1px solid rgba(138,99,53,.35);
+    border-radius:10px;padding:8px 10px;
+  }
+  .gp-row{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  .gp-tier{
+    font-size:.74rem;font-weight:800;color:#4a2f10;background:#ffe1a6;
+    border:1px solid #caa25a;border-radius:10px;padding:2px 10px;white-space:nowrap;
+  }
+  .gp-title{font-size:.72rem;font-weight:800;color:#8a4b12;white-space:nowrap;}
+  .gp-barwrap{
+    position:relative;height:17px;background:#e6d1a6;border-radius:9px;overflow:hidden;
+    box-shadow:inset 0 1px 3px rgba(0,0,0,.28);
+  }
+  .gp-bar{
+    position:absolute;left:0;top:0;bottom:0;width:0%;border-radius:9px;
+    background:linear-gradient(90deg,#6fdc98,#2e9d5b);
+    transition:width .5s cubic-bezier(.34,1.4,.5,1);
+  }
+  .gp-barwrap.gain .gp-bar{background:linear-gradient(90deg,#8bf0af,#2e9d5b);box-shadow:0 0 10px rgba(95,211,141,.8);}
+  .gp-barwrap.loss .gp-bar{background:linear-gradient(90deg,#e6b34a,#c0392b);}
+  .gp-barwrap.loss{animation:gp-shake .4s;}
+  .gp-barwrap.shield .gp-bar{background:linear-gradient(90deg,#7cc0f0,#2b6bb0);}
+  @keyframes gp-shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-4px);}75%{transform:translateX(4px);}}
+  .gp-barlabel{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-size:.64rem;font-weight:800;color:#1f331d;text-shadow:0 1px 0 rgba(255,255,255,.5);
+  }
+  .gp-rewards{font-size:.74rem;font-weight:800;}
+  .gp-stars{color:#c47f0a;}
+  .gp-shields{color:#2b6bb0;}
+  .gp-lot{color:#fff;background:#8a6335;padding:1px 9px;border-radius:10px;font-size:.66rem;}
+  .gp-pop{display:inline-block;animation:gp-pop .45s;}
+  @keyframes gp-pop{0%{transform:scale(1);}40%{transform:scale(1.4);}100%{transform:scale(1);}}
+  /* wrapper around the tier badge + progress bar so mobile can collapse
+     just this part to an icon-only summary; display:contents on desktop
+     keeps them direct flex children of .game-panel, i.e. no visual change */
+  .gp-detail{display:contents;}
+  .gp-toggle{display:none;}   /* only meaningful once .gp-detail can be collapsed — see mobile rules */
+
+  /* carton dispenser: click the box to pop out ONE drug at a time */
+  .carton-stage{
+    flex:1 1 auto;min-height:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:16px;padding:6px 0;
+  }
+  .carton{
+    position:relative;border:none;background:none;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;gap:8px;flex:none;
+    transition:transform .15s;
+  }
+  .carton:hover{transform:translateY(-3px);}
+  .carton .carton-face{font-size:66px;line-height:1;filter:drop-shadow(0 6px 8px rgba(0,0,0,.32));}
+  /* redundant with .cart-title above the carton on desktop — only shown on
+     mobile, where that title row is dropped and this label moves onto the
+     carton itself instead (see mobile rules) */
+  .carton .carton-label{display:none;}
+  .carton .carton-hint{
+    font-size:.74rem;font-weight:800;color:#4a2f10;background:#ffe6b0;border:1px solid #caa25a;
+    border-radius:12px;padding:4px 12px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.15);
+  }
+  .carton.ready .carton-face{animation:carton-bob 1.7s ease-in-out infinite;}
+  .carton.ready .carton-hint{background:#ffd27a;border-color:#b9862f;}
+  @keyframes carton-bob{0%,100%{transform:translateY(0) rotate(-2.5deg);}50%{transform:translateY(-6px) rotate(2.5deg);}}
+  .carton.waiting{opacity:.6;}
+  .carton-slot{flex:none;display:flex;align-items:center;justify-content:center;min-height:0;}
+  .carton-slot:empty{display:none;}
+  .carton-slot .cart-box{width:128px;padding:8px;border-radius:12px;box-shadow:0 6px 16px rgba(0,0,0,.3);}
+  .carton-slot .cart-box img{height:84px;}
+  .carton-slot .cart-box span{font-size:.74rem;margin-top:5px;max-height:none;}
+  .cart-box{
+    position:relative;flex:none;width:60px;text-align:center;cursor:grab;user-select:none;-webkit-user-drag:none;
+    background:#fff8ea;border-radius:8px;padding:4px;box-shadow:0 2px 6px rgba(0,0,0,.25);
+    transition:transform .15s;touch-action:none;
+  }
+  /* content never receives its own pointer events — hit-testing always
+     resolves straight to .cart-box, both so pointerdown/elementFromPoint
+     targets it reliably and so the <img> can never trigger the browser's
+     native "drag the image out" gesture, which otherwise hijacks the
+     mouse gesture and makes the box seem stuck/unresponsive to drag */
+  .cart-box img{width:100%;height:40px;object-fit:contain;display:block;background:#fff;border-radius:4px;pointer-events:none;-webkit-user-drag:none;}
+  .cart-box span{display:block;font-size:.56rem;line-height:1.15;margin-top:3px;color:#3a2a12;max-height:2.3em;overflow:hidden;pointer-events:none;}
+  .cart-box:active{cursor:grabbing;}
+  /* while a pointer-drag is in progress the box itself IS the dragged
+     visual (there's no separate ghost image), so it stays opaque and
+     lifts up rather than fading out */
+  .cart-box.dragging{opacity:1;transform:scale(1.07);cursor:grabbing;box-shadow:0 10px 22px rgba(0,0,0,.4);}
+  .cart-box.placed{opacity:.4;pointer-events:none;}
+  .cart-box.placed span{color:#1f6b3a;font-weight:700;}
+  .cart-box.shake{animation:cart-shake .35s;}
+  @keyframes cart-shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-5px);}75%{transform:translateX(5px);}}
+  .cart-msg{
+    font-size:.68rem;font-weight:700;border-radius:10px;flex:none;opacity:0;
+    max-width:0;padding:0;overflow:hidden;white-space:nowrap;
+    transition:opacity .2s, max-width .2s, padding .2s;
+  }
+  .cart-msg.show{max-width:280px;padding:4px 10px;white-space:normal;}
+  .cart-msg.show.ok{opacity:1;background:#dff5e4;color:#1f6b3a;}
+  .cart-msg.show.bad{opacity:1;background:#fde3e3;color:#a3271f;}
+  .med-item.delivery-hit .icon{animation:delivery-pulse 1.3s ease;}
+  @keyframes delivery-pulse{
+    0%{box-shadow:0 0 0 0 rgba(95,211,141,.9);}
+    60%{box-shadow:0 0 0 12px rgba(95,211,141,0);}
+    100%{box-shadow:0 0 0 0 rgba(95,211,141,0);}
+  }
+  .med-item.fefo-warning .icon{box-shadow:0 0 0 2px #e0a83a, 0 0 9px 2px rgba(224,168,58,.75);}
+  .med-item.fefo-warning::before{
+    content:"⚠";position:absolute;top:-4px;left:-4px;z-index:4;width:15px;height:15px;border-radius:50%;
+    background:#e0a83a;color:#3a2a12;font-size:.62rem;font-weight:800;line-height:15px;text-align:center;
+    box-shadow:0 0 0 1px rgba(0,0,0,.4);animation:fefo-warning-blink 1.1s infinite;
+  }
+  @keyframes fefo-warning-blink{0%,100%{opacity:1;}50%{opacity:.3;}}
+  .med-item.fefo-alert-pulse .icon{animation:fefo-alert-flash .6s;}
+  @keyframes fefo-alert-flash{0%,100%{box-shadow:0 0 0 0 rgba(224,60,60,0);}40%{box-shadow:0 0 0 10px rgba(224,60,60,.65);}}
+
+  /* ---------- Pharmacy scene ---------- */
+  .pharmacy-scene{
+    flex:1 1 auto;width:100%;margin:0;position:relative;border-radius:14px;overflow:hidden;
+    background:
+      radial-gradient(ellipse 60px 60px at 0 0, rgba(255,255,255,.35) 0 2px, transparent 3px) 0 0/60px 60px,
+      radial-gradient(ellipse 60px 60px at 30px 30px, rgba(255,255,255,.35) 0 2px, transparent 3px) 0 0/60px 60px,
+      linear-gradient(180deg,#e4e9df 0%, #e4e9df 72%, #cdbd93 72%, #b9a878 100%);
+    box-shadow:0 12px 32px rgba(0,0,0,.18);
+    padding:16px 16px 0;
+    min-height:0;display:flex;flex-direction:column;
+  }
+  .pharmacy-scene::before{ /* ceiling spotlights */
+    content:"";position:absolute;top:0;left:0;right:0;height:60px;pointer-events:none;z-index:1;
+    background:
+      radial-gradient(ellipse 90px 40px at 12% 0%, rgba(255,255,255,.55), transparent 70%),
+      radial-gradient(ellipse 90px 40px at 38% 0%, rgba(255,255,255,.5), transparent 70%),
+      radial-gradient(ellipse 90px 40px at 64% 0%, rgba(255,255,255,.5), transparent 70%),
+      radial-gradient(ellipse 90px 40px at 90% 0%, rgba(255,255,255,.55), transparent 70%);
+  }
+  .pharmacy-scene::after{ /* wood-plank floor seams */
+    content:"";position:absolute;left:0;right:0;bottom:0;height:28%;pointer-events:none;z-index:0;
+    background:repeating-linear-gradient(90deg, rgba(0,0,0,.06) 0 2px, transparent 2px 84px);
+  }
+
+  .cabinets-row{
+    display:flex;gap:12px;overflow:hidden;padding:0 4px 14px;
+    align-items:stretch;justify-content:center;
+    position:relative; z-index:1;
+    flex:1;min-height:0;
+  }
+  .cabinets-row::-webkit-scrollbar{height:8px;}
+  .cabinets-row::-webkit-scrollbar-thumb{background:#00000030;border-radius:4px;}
+
+  .tu-thuoc{
+    scroll-snap-align:start;flex:0 0 var(--tu-w);display:flex;flex-direction:column;
+    filter:drop-shadow(0 10px 8px rgba(0,0,0,.28));
+  }
+  .tu-plaque{
+    align-self:center;max-width:88%;background:linear-gradient(160deg,var(--wood-dark),#081b15);color:var(--gold);font-size:.68rem;
+    letter-spacing:.03em;padding:4px 12px;border-radius:8px;font-weight:700;
+    box-shadow:0 3px 4px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.15);
+    text-align:center;line-height:1.25;
+    overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  }
+  .tu-cornice{
+    height:12px;background:repeating-linear-gradient(90deg,var(--wood-dark) 0 14px,var(--wood) 14px 28px);
+    box-shadow:0 2px 3px rgba(0,0,0,.35) inset, 0 2px 3px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.2);
+  }
+  .tu-frame{
+    background:
+      repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0 2px, rgba(0,0,0,.06) 2px 4px),
+      linear-gradient(165deg,var(--wood-light),var(--wood) 50%,var(--wood-dark));
+    padding:7px;box-shadow:0 2px 4px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.12);
+    flex:1;min-height:0;display:flex;flex-direction:column;
+  }
+  .tu-glass{
+    position:relative;
+    background:linear-gradient(160deg, rgba(214,232,227,.28), rgba(146,178,168,.16) 55%, rgba(20,32,29,.55));
+    border-radius:6px;overflow:visible;
+    padding:8px 8px 4px;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.3), inset 0 0 22px rgba(0,0,0,.35);
+    flex:1;min-height:0;display:flex;flex-direction:column;
+  }
+  .tu-glass::after{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:2;border-radius:6px;
+    background:linear-gradient(115deg,rgba(255,255,255,.22) 0%,rgba(255,255,255,0) 20%,rgba(255,255,255,0) 82%,rgba(255,255,255,.12) 100%);
+  }
+  .tu-glass.flash{box-shadow:0 0 0 3px var(--gold), inset 0 0 0 1px rgba(255,255,255,.3);}
+  .shelf-row{
+    /* boxes sit grounded on the shelf (flex-end) at their own true
+       aspect-correct height (--box-h) rather than being stretched to
+       fill whatever height the row happens to have — see syncBoxSize() */
+    display:flex;gap:5px;justify-content:flex-start;align-items:flex-end;
+    flex:1;min-height:0;box-sizing:border-box;
+    padding:6px 6px 9px;margin-bottom:8px;border-radius:9px;
+    background:linear-gradient(180deg, rgba(255,255,255,.07) 0%, rgba(255,255,255,.015) 45%, rgba(255,255,255,0) 100%);
+    border-bottom:2px solid rgba(205,255,240,.55);
+    box-shadow:0 2px 3px rgba(0,0,0,.25), 0 1px 5px rgba(180,255,230,.2);
+  }
+  .shelf-row:last-child{border-bottom:none;margin-bottom:0;box-shadow:none;}
+  .tu-base{
+    height:14px;background:repeating-linear-gradient(90deg,var(--wood-dark) 0 14px,var(--wood) 14px 28px);
+    border-radius:0 0 4px 4px;box-shadow:0 3px 8px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.2), inset 0 -2px 3px rgba(0,0,0,.35);
+  }
+
+  /* ---------- medicine boxes (real carton look, name printed on box) ---------- */
+  .med-item{
+    position:relative;background:none;border:none;padding:0;cursor:pointer;
+    display:block;height:var(--box-h);width:var(--box-w);flex:none;
+    transition:transform .12s;
+  }
+  .med-item:hover, .med-item:focus-visible{ transform:translateY(-3px); outline:none; z-index:3;}
+  .med-item::after{ /* contact shadow so every box reads as standing on the shelf, not floating */
+    content:"";position:absolute;left:12%;right:12%;top:100%;margin-top:-2px;height:6px;
+    background:radial-gradient(ellipse,rgba(0,0,0,.5) 0%,rgba(0,0,0,0) 72%);pointer-events:none;
+  }
+  .med-item .icon{display:block;position:relative;width:100%;height:100%;overflow:hidden;border-radius:7px;}
+  .med-item .photo-dot{
+    position:absolute;top:-3px;right:-3px;width:7px;height:7px;border-radius:50%;
+    background:#5fd38d;box-shadow:0 0 0 1px rgba(0,0,0,.4);z-index:2;
+  }
+  .med-item.dim{opacity:.12;pointer-events:none;}
+  .med-item.hit .icon{box-shadow:0 0 0 2px var(--gold), 0 0 8px 1px var(--gold);border-radius:7px;}
+  .med-item.drop-target .icon{box-shadow:0 0 0 3px #2e9d5b, 0 0 10px 2px rgba(46,157,91,.75);border-radius:7px;}
+  .med-item .real-photo{
+    position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
+    background:var(--paper);z-index:1;
+  }
+  .qty-badge{
+    position:absolute;bottom:-6px;right:-7px;z-index:3;
+    background:var(--wood-dark);color:var(--gold);font-size:12px;font-weight:700;
+    padding:2px 6px;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.55);
+    white-space:nowrap;
+  }
+  .qty-badge.out-of-stock-badge{
+    background:#7a2020;color:#ffd9d9;font-size:10.5px;right:auto;left:50%;transform:translateX(-50%);
+  }
+  .med-item.out-of-stock{cursor:default;}
+  .med-item.out-of-stock .icon{opacity:.45;filter:grayscale(1);}
+
+  /* single unified shape: a small pharma carton with the drug name printed on it,
+     with a bit of simulated 3D volume (gloss sheen + embossed band + grounded shadow) */
+  .shape-medbox{
+    position:absolute;inset:0;border-radius:7px;overflow:hidden;
+    background:var(--paper);
+    box-shadow: inset 0 -7px 9px -5px rgba(0,0,0,.28);
+    display:flex;flex-direction:column;
+  }
+  .shape-medbox::after{ /* glossy diagonal sheen, like light catching the carton */
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:1;
+    background:linear-gradient(115deg, rgba(255,255,255,.5) 0%, rgba(255,255,255,0) 32%, rgba(255,255,255,0) 68%, rgba(255,255,255,.1) 100%);
+  }
+  .shape-medbox .band{
+    height:32%;position:relative;flex:none;
+    display:flex;align-items:center;justify-content:center;
+    background:
+      radial-gradient(130% 190% at 32% -25%, rgba(255,255,255,.6), transparent 55%),
+      linear-gradient(160deg,var(--c),var(--c2));
+    box-shadow:inset 0 -3px 4px -2px rgba(0,0,0,.35), inset 0 2px 0 rgba(255,255,255,.3);
+  }
+  .shape-medbox .band::before{
+    content:"";width:12px;height:12px;position:relative;z-index:1;background:
+      linear-gradient(rgba(255,255,255,.9),rgba(255,255,255,.9)) center/100% 26% no-repeat,
+      linear-gradient(rgba(255,255,255,.9),rgba(255,255,255,.9)) center/26% 100% no-repeat;
+    opacity:.85;filter:drop-shadow(0 1px 1px rgba(0,0,0,.3));
+  }
+  .shape-medbox .label{
+    flex:1;display:flex;align-items:center;justify-content:center;padding:2px 4px;
+    font-size:9.5px;line-height:1.15;font-weight:700;color:var(--ink);text-align:center;
+    overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;
+    word-break:break-word;
+  }
+  .shape-medbox .barcode{
+    height:3px;flex:none;margin:0 5px 3px;
+    background:repeating-linear-gradient(90deg,#0003 0 1px,transparent 1px 2.4px);
+  }
+
+  .empty-note{padding:10px;font-size:.68rem;color:rgba(255,255,255,.6);}
+
+  .floor-strip{height:14px;position:relative;z-index:0;}
+
+  /* ---------- hover tooltip ---------- */
+  #tooltip{
+    position:fixed;z-index:80;pointer-events:none;max-width:260px;
+    background:rgba(15,30,24,.96);color:#fbf9f3;border-radius:8px;padding:8px 10px;
+    font-size:.74rem;line-height:1.4;box-shadow:0 8px 22px rgba(0,0,0,.4);
+    opacity:0;transform:translateY(4px);transition:opacity .1s,transform .1s;
+  }
+  #tooltip[data-mode="interactive"]{max-width:420px;font-size:.86rem;}
+  #tooltip[data-mode="interactive"] .t-photo{max-width:100%;max-height:220px;}
+  #tooltip[data-mode="interactive"] .t-name{font-size:1rem;}
+  #tooltip .fefo-list{margin-top:8px;display:flex;flex-direction:column;gap:5px;}
+  #tooltip .fefo-row{
+    display:grid;grid-template-columns:auto auto 1fr auto;align-items:center;gap:10px;
+    background:rgba(255,255,255,.07);border-radius:6px;padding:6px 9px;
+  }
+  #tooltip .fefo-row.fefo-row-dragging{
+    position:relative;z-index:5;background:rgba(255,255,255,.16);
+    box-shadow:0 6px 16px rgba(0,0,0,.4);
+  }
+  #tooltip .fefo-row:not(.fefo-row-dragging){transition:transform .15s;}
+  #tooltip .fefo-drag{
+    cursor:grab;touch-action:none;color:rgba(255,255,255,.45);font-size:.9rem;
+    padding:2px 4px;line-height:1;user-select:none;-webkit-user-drag:none;
+  }
+  #tooltip .fefo-drag:hover{color:var(--gold);}
+  #tooltip .fefo-row.fefo-row-dragging .fefo-drag{cursor:grabbing;color:var(--gold);}
+  #tooltip .fefo-pos{font-weight:700;color:var(--gold);font-size:.78rem;white-space:nowrap;}
+  #tooltip .fefo-meta{font-size:.78rem;color:#d8d8ce;white-space:nowrap;}
+  #tooltip .fefo-move{display:flex;gap:3px;flex:none;}
+  #tooltip .fefo-move button{
+    background:rgba(255,255,255,.15);border:none;color:#fbf9f3;width:24px;height:24px;
+    border-radius:4px;cursor:pointer;font-size:.72rem;line-height:1;
+  }
+  #tooltip .fefo-move button:hover:not(:disabled){background:var(--gold);color:var(--wood-dark);}
+  #tooltip .fefo-move button:disabled{opacity:.25;cursor:default;}
+  #tooltip .fefo-feedback{margin-top:6px;font-size:.76rem;padding:5px 8px;border-radius:5px;animation:cheer .35s ease;}
+  #tooltip .fefo-feedback.ok{background:rgba(95,211,141,.2);color:#8fe6b3;}
+  #tooltip .fefo-feedback.bad{background:rgba(230,120,120,.2);color:#f0a3a3;}
+  #tooltip .fefo-feedback.info{background:rgba(240,190,80,.16);color:#f0cf8a;}
+  @keyframes cheer{0%{transform:scale(.85);opacity:0;}60%{transform:scale(1.06);opacity:1;}100%{transform:scale(1);}}
+  #tooltip .fefo-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
+  #tooltip .fefo-actions button{
+    flex:1;background:var(--gold);color:var(--wood-dark);border:none;border-radius:14px;
+    padding:7px 10px;font-size:.76rem;font-weight:700;cursor:pointer;white-space:nowrap;
+  }
+  #tooltip .fefo-actions button:hover{background:#f3d998;}
+  #tooltip .fefo-export{
+    margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.12);
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  }
+  #tooltip .fefo-export label{font-size:.76rem;color:#d8d8ce;display:flex;align-items:center;gap:5px;}
+  #tooltip .fefo-qty{
+    width:46px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);
+    color:#fbf9f3;border-radius:4px;padding:4px 5px;font-size:.78rem;text-align:center;
+  }
+  #tooltip .fefo-export button[data-act="export"]{
+    background:#e0e6df;color:var(--wood-dark);border:none;border-radius:14px;
+    padding:7px 12px;font-size:.76rem;font-weight:700;cursor:pointer;
+  }
+  #tooltip .fefo-export button[data-act="export"]:hover{background:#fff;}
+  #tooltip .fefo-export-hint{width:100%;font-size:.68rem;color:#9fb3ab;}
+  #tooltip.show{opacity:1;transform:translateY(0);}
+  #tooltip .t-photo{
+    display:block;width:auto;height:auto;max-width:240px;max-height:150px;border-radius:6px;
+    margin:0 auto 6px;background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.45);
+  }
+  #tooltip .t-name{font-weight:700;font-size:.8rem;color:var(--gold);}
+  #tooltip .t-brand{color:#cfe0d8;font-style:italic;margin-top:1px;}
+  #tooltip .t-row{color:#d8d8ce;margin-top:3px;font-size:.68rem;}
+  #tooltip .t-hint{margin-top:5px;color:#9fb3ab;font-size:.62rem;}
+  #tooltip[data-mode="interactive"] .t-row{font-size:.8rem;}
+  #tooltip[data-mode="interactive"] .t-hint{font-size:.68rem;}
+
+  /* ---------- Modal (full detail on click) ---------- */
+  .overlay{position:fixed;inset:0;background:rgba(10,20,15,.55);display:none;align-items:center;justify-content:center;padding:20px;z-index:90;}
+  .overlay.open{display:flex;}
+  .modal{background:var(--paper);border-radius:12px;max-width:460px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4);overflow:hidden;animation:pop .15s ease-out;}
+  @keyframes pop{from{transform:scale(.92);opacity:0;}to{transform:scale(1);opacity:1;}}
+  .modal-head{background:linear-gradient(135deg,var(--wood-light),var(--wood));color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .modal-head h2{margin:0;font-size:1.05rem;}
+  .modal-head .sub{font-size:.72rem;opacity:.85;margin-top:2px;}
+  .modal-head button{background:rgba(255,255,255,.15);border:none;color:#fff;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:.9rem;line-height:1;flex:none;}
+  .modal-head button:hover{background:rgba(255,255,255,.3);}
+  .modal-body{padding:14px 16px;}
+  .modal-body dl{margin:0;display:grid;grid-template-columns:120px 1fr;gap:7px 10px;font-size:.82rem;}
+  .modal-body dt{color:var(--muted);}
+  .modal-body dd{margin:0;}
+  .modal-body dd.missing{color:#b6ac93;font-style:italic;}
+  #mFefo{margin-top:14px;padding-top:12px;border-top:1px dashed #d8d3c2;}
+  #mFefo .fefo-title{font-size:.78rem;font-weight:700;color:var(--wood-dark);margin-bottom:2px;}
+  #mFefo .fefo-note{font-size:.68rem;color:var(--muted);margin-bottom:8px;}
+  #mFefo table{width:100%;border-collapse:collapse;font-size:.76rem;}
+  #mFefo th{text-align:left;color:var(--muted);font-weight:600;padding:3px 6px;font-size:.68rem;}
+  #mFefo td{padding:5px 6px;border-top:1px solid #ece7d8;}
+  #mFefo tr.soonest td{background:#fdf2d6;font-weight:600;}
+  #mFefo .tag{font-size:.62rem;padding:1px 6px;border-radius:8px;background:var(--wood);color:#fff;}
+  .modal-foot{padding:12px 16px 16px;display:flex;gap:8px;flex-wrap:wrap;}
+  .modal-foot a{text-decoration:none;background:var(--wood);color:#fff;padding:8px 14px;border-radius:18px;font-size:.8rem;}
+  .modal-foot a:hover{background:var(--wood-light);}
+
+  /* ---------- Pharmacy floor-plan overview ---------- */
+  .map-btn{
+    flex:none;border:none;background:var(--wood);color:#fff;font-size:.8rem;font-weight:700;
+    padding:9px 14px;border-radius:20px;cursor:pointer;white-space:nowrap;
+    box-shadow:0 2px 6px rgba(0,0,0,.2);
+  }
+  .map-btn:hover{background:var(--wood-light);}
+  .fp-overlay{position:fixed;inset:0;background:rgba(10,20,15,.62);display:none;align-items:center;justify-content:center;padding:18px;z-index:95;}
+  .fp-overlay.open{display:flex;}
+  .fp-modal{
+    background:linear-gradient(180deg,#f6f1e6,#ece3cf);border-radius:16px;max-width:964px;width:100%;
+    max-height:94vh;overflow:auto;box-shadow:0 24px 70px rgba(0,0,0,.45);padding:16px 18px 20px;position:relative;
+  }
+  .fp-modal h2{margin:0 0 2px;font-size:1.15rem;color:var(--wood-dark);display:flex;align-items:center;gap:8px;}
+  .fp-modal .fp-sub{margin:0 0 14px;font-size:.76rem;color:var(--muted);}
+  .fp-close{position:absolute;top:12px;right:14px;border:none;background:var(--wood);color:#fff;width:30px;height:30px;border-radius:50%;font-size:1rem;cursor:pointer;line-height:1;}
+  .fp-close:hover{background:var(--wood-light);}
+  /* top-down walkable scene: the brown-framed .pharmacy-walls is the pharmacy
+     boundary; the Sảnh is a strip OUTSIDE (in front of) that frame */
+  .map-stage{position:relative;width:100%;display:flex;justify-content:center;overflow:hidden;flex:none;}
+  .pharmacy-map{
+    position:relative;width:900px;height:700px;margin:0 auto;overflow:hidden;flex:none;
+    transform-origin:top center;
+    border:5px solid #b7b19c;border-radius:14px;cursor:pointer;
+    background:
+      repeating-linear-gradient(45deg, rgba(120,120,110,.07) 0 9px, transparent 9px 18px),
+      linear-gradient(180deg,#e8e5d7,#dbd6c3);
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.4);
+    user-select:none;
+  }
+  .pharmacy-walls{
+    position:absolute;left:0;top:0;width:890px;height:566px;box-sizing:border-box;
+    border:9px solid #8a6335;border-radius:12px;pointer-events:none;z-index:0;
+    background:
+      repeating-linear-gradient(0deg, rgba(120,90,50,.06) 0 1px, transparent 1px 44px),
+      repeating-linear-gradient(90deg, rgba(120,90,50,.06) 0 1px, transparent 1px 44px),
+      linear-gradient(180deg,#f4ecd9,#e9dcc0);
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.45), inset 0 0 40px rgba(120,90,50,.12);
+  }
+  .pm-banner{
+    position:absolute;left:8px;top:6px;right:8px;height:22px;text-align:center;line-height:22px;
+    font-weight:800;color:#4a2f10;background:rgba(255,225,166,.85);border:1px dashed #8a6335;
+    border-radius:6px;font-size:.72rem;letter-spacing:.02em;z-index:2;
+  }
+  .pm-zone{
+    position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+    border-radius:8px;border:1px solid rgba(0,0,0,.16);box-shadow:0 3px 5px rgba(0,0,0,.18);
+    text-align:center;padding:3px;overflow:hidden;z-index:3;
+  }
+  .pm-ico{font-size:1.55rem;line-height:1;}
+  .pm-label{font-size:.64rem;font-weight:800;color:#26200f;line-height:1.08;}
+  .pm-sub2{font-size:.54rem;color:#5c4a2c;line-height:1.1;}
+  .z-special{background:#f3c9c3;} .z-rx{background:#c6dbf5;} .z-otc{background:#c6ead0;} .z-nondrug{background:#e0cef2;}
+  .z-dispense{background:#c4eae0;} .z-receive{background:#f4e2ad;} .z-fridge{background:#c3e6f3;} .z-wash{background:#cfe7f5;}
+  .z-process{background:#f5d3a6;} .z-cashier{background:#f5ead0;} .z-fire{background:#f0b0a6;}
+  .z-entrance{background:#8a6335;} .z-entrance .pm-label{color:#fff;}
+  .z-cashier{border-width:2px;border-color:#c9a45a;box-shadow:0 4px 10px rgba(0,0,0,.22);}
+  .z-cashier .pm-ico{font-size:2.1rem;}
+  .z-cashier .pm-label{font-size:.78rem;}
+  .z-cashier .pm-sub2{font-size:.95rem;line-height:1.3;margin-top:3px;}
+  .pm-zone.here{outline:3px solid #f0a92e;outline-offset:1px;box-shadow:0 0 14px rgba(240,169,46,.8);}
+
+  /* CSS-drawn pharmacist with a real 2-leg walk cycle */
+  .pm-char{position:absolute;width:34px;height:30px;z-index:15;pointer-events:none;}
+  .pm-char::after{ /* ground shadow */
+    content:"";position:absolute;left:50%;bottom:2px;transform:translateX(-50%);
+    width:24px;height:7px;background:radial-gradient(ellipse,rgba(0,0,0,.34),transparent 70%);
+  }
+  .pm-char.flip{transform:scaleX(-1);}
+  .pm-body{position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:24px;height:42px;}
+  .pm-head{position:absolute;top:0;left:50%;transform:translateX(-50%);width:14px;height:14px;border-radius:50%;
+    background:radial-gradient(circle at 40% 35%,#ffe0bd,#f0c191);box-shadow:inset -1px -1px 0 rgba(0,0,0,.08);z-index:3;}
+  .pm-cap{position:absolute;top:-3px;left:50%;transform:translateX(-50%);width:16px;height:7px;border-radius:8px 8px 3px 3px;
+    background:linear-gradient(#3a9d6a,#2e8256);}
+  .pm-torso{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:18px;height:18px;border-radius:6px 6px 4px 4px;
+    background:linear-gradient(#ffffff,#e9eef0);box-shadow:inset 0 -2px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.2);z-index:2;}
+  .pm-cross{position:absolute;top:5px;left:50%;transform:translateX(-50%);width:8px;height:8px;
+    background:linear-gradient(#e23b3b,#e23b3b) center/100% 34% no-repeat,
+               linear-gradient(#e23b3b,#e23b3b) center/34% 100% no-repeat;}
+  .pm-arm{position:absolute;top:14px;width:4px;height:13px;border-radius:3px;background:#f0f3f4;z-index:1;transform-origin:top center;}
+  .pm-arm-l{left:1px;} .pm-arm-r{right:1px;}
+  .pm-leg{position:absolute;top:28px;width:5px;height:13px;border-radius:3px;background:linear-gradient(#3b5a86,#2c4468);
+    z-index:1;transform-origin:top center;}
+  .pm-leg::after{content:"";position:absolute;bottom:-2px;left:-1px;width:7px;height:4px;border-radius:3px;background:#4a2f1c;}
+  .pm-leg-l{left:5px;} .pm-leg-r{right:5px;}
+  /* walk cycle: legs & arms swing in opposite phase, body bobs */
+  .pm-char.walk .pm-body{animation:pm-bob .42s infinite;}
+  .pm-char.walk .pm-leg-l{animation:pm-step-a .42s infinite;}
+  .pm-char.walk .pm-leg-r{animation:pm-step-b .42s infinite;}
+  .pm-char.walk .pm-arm-l{animation:pm-step-b .42s infinite;}
+  .pm-char.walk .pm-arm-r{animation:pm-step-a .42s infinite;}
+  @keyframes pm-bob{0%,100%{transform:translateX(-50%) translateY(0);}50%{transform:translateX(-50%) translateY(-2px);}}
+  @keyframes pm-step-a{0%,100%{transform:rotate(24deg);}50%{transform:rotate(-24deg);}}
+  @keyframes pm-step-b{0%,100%{transform:rotate(-24deg);}50%{transform:rotate(24deg);}}
+
+  /* ---------- map screen chrome + Sảnh + key gate ---------- */
+  .map-topbar{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;flex:none;}
+  .map-title{font-size:1.15rem;font-weight:800;color:var(--wood-dark);letter-spacing:.02em;text-align:center;}
+  .map-key{font-size:.78rem;font-weight:800;padding:4px 12px;border-radius:14px;white-space:nowrap;}
+  .map-key.locked{background:#e7d7bf;color:#7a5b2c;border:1px solid #b99a63;}
+  .map-key.has{background:#fff2c2;color:#8a5a10;border:1px solid #e0a83a;box-shadow:0 0 12px rgba(224,168,58,.6);}
+  .map-hint{margin:0;font-size:.74rem;color:#4a3a1c;text-align:center;max-width:900px;flex:none;}
+  .map-hint b{color:var(--wood-dark);}
+  .map-action{flex:none;min-height:34px;display:flex;align-items:center;}
+  .act-btn{border:none;background:#2e8256;color:#fff;font-weight:800;font-size:.86rem;padding:8px 18px;border-radius:20px;
+    cursor:pointer;box-shadow:0 3px 8px rgba(0,0,0,.25);animation:act-pulse 1.2s infinite;}
+  .act-btn.locked{background:#a3271f;animation:none;cursor:not-allowed;}
+  @keyframes act-pulse{0%,100%{transform:translateY(0);}50%{transform:translateY(-3px);}}
+
+  .z-sanh{
+    background:linear-gradient(180deg,#fff0bf,#ffd873);border:2px solid #e0a412 !important;
+    box-shadow:0 0 0 2px rgba(255,255,255,.5), 0 4px 12px rgba(224,164,18,.5) !important;
+  }
+  .z-sanh .pm-label{color:#6b4a05;font-size:.72rem;}
+  .z-sanh .pm-ico{font-size:2rem;}
+  .z-sanh::after{content:"";position:absolute;inset:0;border-radius:8px;box-shadow:0 0 18px rgba(240,180,40,.7) inset;animation:sanh-glow 1.8s infinite;pointer-events:none;}
+  @keyframes sanh-glow{0%,100%{opacity:.35;}50%{opacity:.9;}}
+  .pm-cta{color:#8a3d00 !important;font-weight:800;font-size:.62rem !important;
+    animation:cta-pulse 1s ease-in-out infinite;transform-origin:center;}
+  @keyframes cta-pulse{0%,100%{transform:scale(1);opacity:.82;}50%{transform:scale(1.05);opacity:1;}}
+
+  .pm-zone.lockable.locked{filter:grayscale(.7) brightness(.82);opacity:.85;}
+  .pm-zone.lockable.locked::before{content:"🔒";position:absolute;top:3px;right:5px;font-size:.9rem;z-index:4;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4));}
+
+  /* ---------- Mobile layout (phones / small tablets) ----------
+     Below this width the side-by-side control-column + cabinet layout
+     (built around a fixed --tu-w:560px cabinet) can't fit, so the two
+     columns stack instead: cabinet on top (primary play area, gets the
+     remaining height), delivery cart below it, both visible at once
+     without scrolling so a drag from the cart into the cabinet is a
+     single uninterrupted touch gesture. */
+  @media (max-width:860px){
+    .page-head{display:none;}
+    /* search / "ra bản đồ" / tổng số thuốc-số tủ chip bar: not needed for
+       the focused putaway drill on a phone — dropped entirely so the
+       cabinet and the delivery cart get all the vertical space. */
+    .toolbar{display:none;}
+    .search-results{display:none !important;}
+
+    /* no side gutter either — cabinet and delivery cart both run edge to
+       edge on a phone screen instead of sitting in a narrower centred card. */
+    #pharmacyScreen{flex-direction:column;padding:6px 0;gap:6px;}
+    .side-panel{
+      order:2;flex:none;height:auto;max-height:30vh;max-height:30dvh;
+      overflow-y:auto;width:100%;max-width:100%;gap:6px;
+    }
+    .cabinet-col{order:1;flex:1 1 auto;min-height:0;width:100% !important;}
+    .cabinet-tabs{gap:4px;}
+    .cab-tab{min-width:50px;padding:5px 8px 6px;}
+    .cab-tab .ct-topic{font-size:.53rem;}
+    /* the cabinet must show all 5 rows with no scrollbar of its own, so
+       leave shelf-row on its normal flex:1 (divides .tu-glass's real
+       height evenly) — syncBoxSize() already picks a box size that fits
+       both that height AND the (now full) width, no override needed.
+       What IS worth tightening here is all the chrome padding around the
+       boxes — every px trimmed from scene/frame/glass/row padding goes
+       straight into --box-w and --box-h (syncBoxSize measures this
+       padding live, so there's nothing else to keep in sync). */
+    .pharmacy-scene{padding:8px 6px 0;}
+    .cabinets-row{padding:0 3px 6px;}
+    .tu-plaque{padding:3px 8px;font-size:.62rem;}
+    .tu-cornice{height:8px;}
+    .tu-frame{padding:4px;}
+    .tu-glass{padding:5px 5px 3px;}
+    .shelf-row{padding:4px 4px 6px;gap:4px;margin-bottom:5px;}
+    .tu-base{height:9px;}
+
+    /* delivery cart: only the carton itself ("Hàng mới về" — tap it, the
+       drug to place pops out right beside it) needs to be front and
+       centre. Everything else — title row, tier/progress, stars/shields/
+       lot — is dropped entirely on mobile so this whole section is just
+       the carton widget, freeing maximum height back to the cabinet. */
+    .delivery-cart{padding:6px 10px;gap:4px;border-radius:0;}
+    .delivery-cart .cart-sub{display:none;}
+    /* the "📦 Hàng mới về" heading moves onto the carton itself (.carton-label,
+       always shown there on mobile) instead of sitting in its own row above. */
+    .delivery-cart .cart-title{display:none;}
+    /* tier/progress bar + ⭐/🛡️/lô streak strip: still tracked under the
+       hood (stars, shields, tier all still progress normally), just not
+       shown on mobile — one less row for the cabinet to compete with. */
+    .game-panel{display:none;}
+    /* the dispensed box pops out BESIDE the carton (not below it), so both
+       stay visible together in the shallow strip this section now has */
+    .carton-stage{flex-direction:row;gap:10px;padding:2px 0;}
+    .carton{gap:3px;}
+    .carton .carton-face{font-size:36px;}
+    .carton .carton-label{display:block;font-size:.64rem;font-weight:800;color:#4a2f10;}
+    .carton .carton-hint{font-size:.62rem;padding:2px 8px;}
+    .carton-slot .cart-box{width:88px;padding:6px;}
+    .carton-slot .cart-box img{height:52px;}
+    .carton-slot .cart-box span{font-size:.62rem;}
+    /* "🔄 Đổi lô khác" dropped on mobile — one carton is enough; the section
+       should read as a single compact widget, not a mini toolbar. */
+    .cart-refresh{display:none;}
+    /* only way back to the map now that the toolbar is gone — a small
+       corner icon rather than a full labelled button, to match how
+       minimal the rest of this section has become. */
+    .mobile-map-btn{
+      display:flex;align-items:center;justify-content:center;
+      position:absolute;top:8px;right:8px;z-index:2;
+      width:30px;height:30px;border-radius:50%;border:none;
+      background:rgba(74,47,16,.82);color:#fff;font-size:1rem;
+      box-shadow:0 2px 6px rgba(0,0,0,.3);cursor:pointer;
+    }
+
+    #tooltip{max-width:min(260px,88vw);}
+    #tooltip[data-mode="interactive"]{max-width:min(400px,92vw);}
+    .modal{max-width:94vw;}
+    .modal-body dl{grid-template-columns:100px 1fr;font-size:.78rem;}
+    .fp-modal{padding:14px 12px 16px;}
+    .fp-modal h2{font-size:1rem;}
+
+    /* bigger tap targets for small icon buttons */
+    .modal-head button{width:34px;height:34px;font-size:1rem;}
+    #tooltip .fefo-move button{width:32px;height:32px;font-size:.8rem;}
+    .fp-close{width:36px;height:36px;}
+  }
+  @media (max-width:420px){
+    .toolbar{flex-direction:column;align-items:stretch;}
+    .toolbar .stats{justify-content:center;}
+  }
+
+</style>
+</head>
+<body class="view-map">
+
+<div id="mapScreen">
+  <div class="map-topbar">
+    <span class="map-title">🏥 NHÀ THUỐC THỰC HÀNH GPP — TOÀN CẢNH</span>
+    <span class="map-key locked" id="mapKey">🔒 Chưa có Chìa khóa</span>
+  </div>
+  <p class="map-hint">Dùng <b>phím mũi tên / WASD</b> để đi (hoặc bấm vào sàn). Đứng ở <b>🎓 Sảnh Tiền Thực Hành GPP</b> (trước cửa) bấm để <b>sắp xếp thuốc vào tủ theo bài</b>. Đạt danh hiệu <b>Dược sĩ thực tập (25⭐)</b> sẽ nhận 🔑 mở <b>🚪 Cửa ra vào</b>. 📍 <span id="pmZone">Đang ở Sảnh Tiền Thực Hành GPP</span></p>
+  <div class="map-stage" id="mapStage">
+  <div class="pharmacy-map" id="pharmacyMap">
+    <div class="pharmacy-walls"></div>
+    <div class="pm-banner">🏬 KHU VỰC TRƯNG BÀY</div>
+
+    <div class="pm-zone z-special"  data-name="Tủ thuốc kiểm soát đặc biệt (gây nghiện, hướng thần)" style="left:8px;top:34px;width:205px;height:74px;">
+      <span class="pm-ico">🔒</span><span class="pm-label">Kiểm soát đặc biệt</span></div>
+    <div class="pm-zone z-rx"       data-name="Tủ thuốc kê đơn (Rx)" style="left:223px;top:34px;width:205px;height:74px;">
+      <span class="pm-ico">℞</span><span class="pm-label">Thuốc kê đơn</span></div>
+    <div class="pm-zone z-otc"      data-name="Tủ thuốc không kê đơn (OTC)" style="left:438px;top:34px;width:205px;height:74px;">
+      <span class="pm-ico">💊</span><span class="pm-label">Không kê đơn</span></div>
+    <div class="pm-zone z-nondrug"  data-name="Tủ sản phẩm không phải thuốc (TPCN, mỹ phẩm, vật tư y tế)" style="left:653px;top:34px;width:219px;height:74px;">
+      <span class="pm-ico">🧴</span><span class="pm-label">SP không phải thuốc</span></div>
+
+    <div class="pm-zone z-dispense" data-name="Khu vực ra lẻ thuốc (cắt liều, tư vấn)" style="left:8px;top:150px;width:150px;height:120px;">
+      <span class="pm-ico">⚖️</span><span class="pm-label">Ra lẻ thuốc</span></div>
+    <div class="pm-zone z-fridge"   data-name="Tủ lạnh (bảo quản 2–8°C: vắc xin, insulin)" style="left:8px;top:288px;width:150px;height:96px;">
+      <span class="pm-ico">❄️</span><span class="pm-label">Tủ lạnh</span></div>
+    <div class="pm-zone z-wash"     data-name="Khu vực rửa tay" style="left:8px;top:402px;width:150px;height:96px;">
+      <span class="pm-ico">🚰</span><span class="pm-label">Rửa tay</span></div>
+
+    <div class="pm-zone z-receive"  data-name="Khu hàng chờ kiểm nhập (hàng mới về, chờ kiểm tra)" style="left:714px;top:150px;width:158px;height:120px;">
+      <span class="pm-ico">📦</span><span class="pm-label">Hàng chờ kiểm nhập</span></div>
+    <div class="pm-zone z-process"  data-name="Khu hàng chờ xử lý (thuốc hết hạn, hư hỏng, thu hồi)" style="left:714px;top:288px;width:158px;height:120px;">
+      <span class="pm-ico">⚠️</span><span class="pm-label">Hàng chờ xử lý</span></div>
+    <div class="pm-zone z-fire"     data-name="Bình chữa cháy" style="left:832px;top:430px;width:40px;height:70px;">
+      <span class="pm-ico">🧯</span></div>
+
+    <div class="pm-zone z-cashier"  data-name="Quầy thu ngân: máy tính, máy quét mã vạch, máy in hóa đơn" style="left:305px;top:250px;width:280px;height:120px;">
+      <span class="pm-ico">💵</span><span class="pm-label">Quầy thu ngân</span>
+      <span class="pm-sub2">🖥️ Máy tính · 📷 Quét mã · 🖨️ In</span></div>
+
+    <div class="pm-zone z-entrance" data-zone="door" data-name="Cửa ra vào nhà thuốc (trên tường, dẫn vào trong)" style="left:330px;top:512px;width:230px;height:62px;">
+      <span class="pm-ico">🚪</span><span class="pm-label">Cửa ra vào</span>
+      <span class="pm-sub2" id="doorSub">🔒 Cần Chìa khóa</span></div>
+
+    <div class="pm-zone z-sanh" data-zone="sanh" data-name="Sảnh Tiền Thực Hành GPP — sắp xếp thuốc vào tủ theo bài dược lý (rất dễ → rất khó)" style="left:30px;top:588px;width:830px;height:92px;">
+      <span class="pm-ico">🎓</span><span class="pm-label">SẢNH TIỀN THỰC HÀNH GPP</span>
+      <span class="pm-sub2 pm-cta">👉 Bấm vào luyện tập sắp xếp thuốc vào tủ theo bài để nhận 🔑 chìa khóa vào nhà thuốc ✨</span></div>
+
+    <div class="pm-char" id="pmChar">
+      <div class="pm-body">
+        <span class="pm-arm pm-arm-l"></span>
+        <span class="pm-arm pm-arm-r"></span>
+        <span class="pm-leg pm-leg-l"></span>
+        <span class="pm-leg pm-leg-r"></span>
+        <span class="pm-torso"><span class="pm-cross"></span></span>
+        <span class="pm-head"><span class="pm-cap"></span></span>
+      </div>
+    </div>
+  </div>
+  </div><!-- /#mapStage -->
+  <div class="map-action" id="mapAction"></div>
+</div>
+
+<div id="pharmacyScreen">
+<div class="side-panel">
+  <div class="page-head">
+    <h1><span class="mascot" aria-hidden="true"></span>SẢNH TIỀN THỰC HÀNH GPP</h1>
+  </div>
+
+  <div class="toolbar">
+    <input type="search" id="searchInput" placeholder="🔍 Tìm tên hoạt chất, tên biệt dược, tên tủ...">
+    <button type="button" class="map-btn" id="toMapBtn" title="Ra sơ đồ toàn cảnh nhà thuốc">🗺️ Ra bản đồ</button>
+    <div class="stats" id="statsBar"></div>
+  </div>
+
+  <div class="search-results" id="searchResults"></div>
+
+  <div class="delivery-cart" id="deliveryCart">
+    <button class="mobile-map-btn" id="mobileMapBtn" type="button" title="Ra sơ đồ toàn cảnh nhà thuốc">🗺️</button>
+    <div class="cart-head">
+      <span class="cart-title"><span class="cart-icon">📦</span> Hàng mới về</span>
+      <span class="cart-sub">Bấm thùng để lấy 1 hộp → kéo vào đúng vị trí trên tủ. Xếp <b>đúng &amp; nhanh</b> để lên hạng!</span>
+      <div class="game-panel" id="gamePanel">
+        <div class="gp-detail">
+          <div class="gp-row">
+            <span class="gp-tier" id="gpTier">Siêu dễ · 2 tủ</span>
+            <span class="gp-title" id="gpTitle">🎖️ Học viên</span>
+          </div>
+          <div class="gp-barwrap" id="gpBarWrap" title="Chơi đúng &amp; nhanh → tiến độ tăng; chậm/nhầm → lùi. Đủ 100% lên mức khó hơn.">
+            <div class="gp-bar" id="gpBar"></div>
+            <span class="gp-barlabel" id="gpBarLabel">0%</span>
+          </div>
+        </div>
+        <div class="gp-row gp-rewards">
+          <span class="gp-stars" id="gpStars" title="Sao — xếp nhanh &amp; đúng lần đầu">⭐ 0</span>
+          <span class="gp-shields" id="gpShields" title="Thẻ Khiên — tự dùng để chặn tụt tiến độ">🛡️ 0</span>
+          <span class="gp-lot" id="cartProgress" title="Số hộp đã xếp trong lô này">Lô 0/5</span>
+          <span class="gp-toggle" id="gpToggle" title="Xem hạng & tiến độ chi tiết">ℹ️</span>
+        </div>
+      </div>
+    </div>
+    <div class="carton-stage">
+      <button class="carton" id="cartonBtn" type="button">
+        <span class="carton-face">📦</span>
+        <span class="carton-label">Hàng mới về</span>
+        <span class="carton-hint" id="cartonHint">Bấm để lấy hộp</span>
+      </button>
+      <div class="carton-slot" id="cartItems"></div>
+    </div>
+    <div class="cart-msg" id="cartMsg"></div>
+    <button class="cart-refresh" id="cartRefresh" title="Lấy lô 5 mặt hàng mới khác">🔄 Đổi lô khác</button>
+    <button class="hand-btn" id="handBtn" type="button" title="Bật camera, dùng cử chỉ chụm ngón cái + ngón trỏ để kéo hộp thuốc vào tủ">🖐️ Xếp bằng tay (camera)</button>
+  </div>
+</div>
+
+<canvas id="handCamPreview" width="180" height="135"></canvas>
+<div id="handCursor"></div>
+
+<div class="cabinet-col">
+  <div class="cabinet-tabs" id="cabinetTabs"></div>
+  <div class="pharmacy-scene">
+    <div class="cabinets-row" id="cabinetsRow"></div>
+    <div class="floor-strip"></div>
+  </div>
+</div>
+</div><!-- /#pharmacyScreen -->
+
+<div id="tooltip"></div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2 id="mName">—</h2>
+        <div class="sub" id="mBrand"></div>
+      </div>
+      <button id="mClose">✕</button>
+    </div>
+    <div class="modal-body"><dl id="mFields"></dl><div id="mFefo"></div></div>
+    <div class="modal-foot" id="mFoot"></div>
+  </div>
+</div>
+
+<script>
+const CSV_DATA = `STT Buổi,Tên Bài,Tên hoạt chất,Nhóm dược lý,"Hoạt chất, hàm lượng/nồng độ",Tên biệt dược,Dạng bào chế,Đường dùng,Nơi sản xuất,Nước sản xuất,Số kiểm soát,Số đăng ký,Hạn sử dụng,Điều kiện bảo quản,Cấp độ ,Link google drive,Ghi chú
+Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Metoprolol vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,Metoprolol 50mg,Betaloc 50mg,,,,,,,,,1,,
+Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Adrenalin ống tiêm,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
+Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Atropin sulfas ống tiêm,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
+Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Dopegyt vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
+Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Xylomethazolin nhỏ mắt,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
+Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Atenolol vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
+Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Heptamyl vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
+Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Salbutamol vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
+Buổi 3,THUỐC TÁC DỤNG TRÊN TKTW,Lidocain ống tiêm,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
+Buổi 3,THUỐC TÁC DỤNG TRÊN TKTW,Novocain ống tiêm,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
+Buổi 3,THUỐC TÁC DỤNG TRÊN TKTW,Buvivacain ống tiêm,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
+Buổi 3,THUỐC TÁC DỤNG TRÊN TKTW,Carbamazepin vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
+Buổi 3,THUỐC TÁC DỤNG TRÊN TKTW,Haloperidol vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Paracetamol vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,Paracetamol,Biragan 500,Viên nén bao phim,Uống,BIDIPHAR,Việt Nam ,26002,VD-23137-15,06/05/2029,"Kín, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1y3bfMqc3Xr5c3zM6mloxudxPfutxj1gq?usp=sharing,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Pallas ống,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Hapacol gói,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,Paracetamol,Hapacol 80,Bột sủi bọt,Uống,DHG ,Việt Nam ,010625,VD-20561-14,15/06/2028,"Nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1JEwup_wvUJ6wzs4NZs1hziidFaiI6366, em dùng điện thoại chưa đẩy được lên drive ạ
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Decolgen vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,Decolgen ND,Viên nén ,Uống,UNITED INTERNATIONAL PHARMA,Việt Nam ,516811,VD-22382-15,06/10/2028,"Bảo quản ở nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1iKzGdDyrmqT3Lp5yfAkdxS5qcvswP9wi, em dùng điện thoại chưa đẩy được lên drive ạ
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Efferalgan viên đặt,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Voltaren tuyp,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,Voltaren ,Gel,Bôi ngoài da,HALEON ,Thụy sĩ,MJ6Y,760100073723,10/2028,"không bảo quản trên 30°C, tránh nhiệt ",1,https://drive.google.com/drive/folders/13YfVfNBjHRLVuFtITkLesjPubhKoBfYI, em dùng điện thoại chưa đẩy được lên drive ạ
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Diclofenac ống tiêm,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Diclofenac vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,Diclofenac ,Diclofenac DHG,Viên nén,Uống ,DHG,Việt Nam ,041125,VD-20551-14,14/11/2027,"Nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1QTt2uzEB4BAVdu8553CUH7kXlQqYcfGb, em dùng điện thoại chưa đẩy được lên drive ạ
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Meloxicam (hoặc Mebilax hoặc Mobic) vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Mofen hoặc Ibudor vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Nurofen siro,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Celecoxib vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Alphachymochipsin,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,Alphachoay ,Viên nén,Uống ,SANOFI,Việt Nam ,GVH0244,893110342224,01/08/2028,"Nhiệt độ không quá 30°C, tránh ẩm và ánh sáng",1,https://drive.google.com/drive/folders/18cnAiQfhJJCYwuUCrtsMrUSdlbDOuTxC?usp=sharing,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Piroxicam vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Aspirin vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Indomethacin vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Alaxan vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Pharmaton vỉ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Uniferon B9 vỉ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Folacid vỉ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin B6 ống tiêm,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin B6 vỉ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin K ống tiêm,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin PP vỉ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin B2 lọ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin E vỉ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin B12 ống tiêm,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin A vỉ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin B1-B6-B12 vỉ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin C ống tiêm,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin C vỉ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin C lọ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin B1 vỉ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Dịch truyền Alvensin,DỊCH TRUYỀN,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Dịch truyền Glucose,DỊCH TRUYỀN,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,"Dịch truyền NaCl 0,9%",DỊCH TRUYỀN,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Dịch truyền Moriheparin,DỊCH TRUYỀN,,,,,,,,,,,1,,
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Dịch truyền Ringer lactat,DỊCH TRUYỀN,,,,,,,,,,,1,,
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Loratadin vỉ,THUỐC KHÁNG HISTAMIN H1,,,,,,,,,,,1,,
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Cetirizine vỉ,THUỐC KHÁNG HISTAMIN H1,,,,,,,,,,,1,,
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Clorpheniramin vỉ,THUỐC KHÁNG HISTAMIN H1,Clorpheniramin 4mg,Clorpheniramin 4,Viên nén,Uống,DHG,Việt Nam ,050326,VD-21132-14,04/03/2029,"Nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1ga_teWz7yZ1UdYbNaPauXzHuw7-7MlDN, em dùng điện thoại chưa đẩy được lên drive ạ
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Theralene vỉ,THUỐC KHÁNG HISTAMIN H1,,,,,,,,,,,1,,
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Theralene lọ siro,THUỐC KHÁNG HISTAMIN H1,,,,,,,,,,,1,,
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Promethazin vỉ,THUỐC KHÁNG HISTAMIN H1,,,,,,,,,,,1,,
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Promethazin tuyp,THUỐC KHÁNG HISTAMIN H1,,,,,,,,,,,1,,
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Dimedrol ống,THUỐC KHÁNG HISTAMIN H1,,,,,,,,,,,1,,
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Halodimenal vỉ,THUỐC KHÁNG HISTAMIN H1,,,,,,,,,,,1,,
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Erolin lọ siro,THUỐC KHÁNG HISTAMIN H1,,,,,,,,,,,1,,
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Xyral vỉ,THUỐC KHÁNG HISTAMIN H1,,,,,,,,,,,1,,
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Acyclovir vỉ,THUỐC KHÁNG VIRUS,,,,,,,,,,,1,,
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Acyclovir tuyp,THUỐC KHÁNG VIRUS,,,,,,,,,,,1,,
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Aspirin vỉ,THUỐC TIM MẠCH,,,,,,,,,,,1,,
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Enalapril vỉ,THUỐC TIM MẠCH,Enalapril maleate 5mg,Enalapril Stella 5mg,Viên nén tròn,Đường uống,Công ty TNHH Liên doanh Stellapharm,Việt Nam,,893110914624,27/08/2024,"Bảo quản trong bao bì kín, nơi khô. Nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/1l7B26gHxogRzD8AZRiBDlnkXS3l7r03R?usp=drive_link,
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Atenolon vỉ,THUỐC TIM MẠCH,Atenolol 50mg,Atenolol Stada 50mg,Viên nén ,Đường uống,Công ty liên doanh TNHH Stada Việt Nam,Việt Nam,,VD-23232-15,02/10/2024,"Bảo quản trong bao bì kín, nơi khô. Nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/1VUPeb4XOyuu1eipMY7t6rCEwokcSVC_i?usp=sharing,
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Digoxin vỉ,THUỐC TIM MẠCH,,,,,,,,,,,1,,
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Natrilix SR vỉ,THUỐC TIM MẠCH,,,,,,,,,,,1,,
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Captopril vỉ,THUỐC TIM MẠCH,,,,,,,,,,,1,,
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Propranolon vỉ,THUỐC TIM MẠCH,,,,,,,,,,,1,,
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Nitromint xịt,THUỐC TIM MẠCH,,,,,,,,,,,1,,
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Felodipin vỉ,THUỐC TIM MẠCH,,,,,,,,,,,1,,
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Furosemid vỉ,THUỐC TIM MẠCH,,,,,,,,,,,1,,
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Telmisartan vỉ,THUỐC TIM MẠCH,,,,,,,,,,,1,,
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Amlodipin (hoặc Apitim 5),THUỐC TIM MẠCH,,,,,,,,,,,1,,
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Nifedipin vỉ,THUỐC TIM MẠCH,Nifedipin 20mg,Nifedipin T20 retard ,viên nén,Uống ,LD Stellapharm,Việt Nam ,361225,893110462724,17/12/2029,"Bao bì kín, nơi khô, tránh ánh sáng, nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/1TevTfICOqXLVLe2DdqWb5DGxpwwUIl46, em dùng điện thoại chưa đẩy được lên drive ạ
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Methyldopa vỉ,THUỐC TIM MẠCH,,,,,,,,,,,1,,
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Diltiazem vỉ,THUỐC TIM MẠCH,,,,,,,,,,,1,,
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Metoprolol,THUỐC TIM MẠCH,,,,,,,,,,,1,,
+Buổi 7,HORMON VÀ KHÁNG HORMON,Hydrocortison lọ,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
+Buổi 7,HORMON VÀ KHÁNG HORMON,Dexamethason ống,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
+Buổi 7,HORMON VÀ KHÁNG HORMON,Betamethason tuyp,HORMON VÀ KHÁNG HORMON,Betamethason ,Betamethason ,Gel,Bôi ngoài da,MEDIPHARCO,Việt Nam ,1131225,893110654524,30/11/2030,"Để nơi khô thoáng, nhiệt độ dưới 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1TflCKK2h86SMA0Cg-x2dSuVtuy__o60O,
+Buổi 7,HORMON VÀ KHÁNG HORMON,Collydexa nhỏ mắt,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
+Buổi 7,HORMON VÀ KHÁNG HORMON,Methyl prednisolon vỉ,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
+Buổi 7,HORMON VÀ KHÁNG HORMON,Prednisolon vỉ,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
+Buổi 7,HORMON VÀ KHÁNG HORMON,Dehitacil vỉ,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
+Buổi 7,HORMON VÀ KHÁNG HORMON,Newchoice vỉ,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
+Buổi 7,HORMON VÀ KHÁNG HORMON,Postinor vỉ,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
+Buổi 7,HORMON VÀ KHÁNG HORMON,Mifestad vỉ,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
+Buổi 7,HORMON VÀ KHÁNG HORMON,Misoprolol vỉ,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
+Buổi 7,HORMON VÀ KHÁNG HORMON,Oxytoxin ống,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
+Buổi 7,HORMON VÀ KHÁNG HORMON,Progestogel tuyp 1%,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
+Buổi 7,HORMON VÀ KHÁNG HORMON,Progesterol ống tiêm,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
+Buổi 7,HORMON VÀ KHÁNG HORMON,Testosterol ống tiêm,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
+Buổi 7,HORMON VÀ KHÁNG HORMON,Levothyrox,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
+Buổi 7,HORMON VÀ KHÁNG HORMON,Thyrozol (thiamazol) vỉ,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Fenofibrat (Fenbrat) vỉ,THUỐC ĐIỀU TRỊ LIPID MÁU,,,,,,,,,,,1,,
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Simvastatin vỉ,THUỐC ĐIỀU TRỊ LIPID MÁU,,,,,,,,,,,1,,
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Rovuvastatin 20mg vỉ,THUỐC ĐIỀU TRỊ LIPID MÁU,,,,,,,,,,,1,,
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Rovuvastatin 10mg vỉ,THUỐC ĐIỀU TRỊ LIPID MÁU,,,,,,,,,,,1,,
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Atorvastatin 10mg vỉ,THUỐC ĐIỀU TRỊ LIPID MÁU,,,,,,,,,,,1,,
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Atoris 20mg vỉ,THUỐC ĐIỀU TRỊ LIPID MÁU,,,,,,,,,,,1,,
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Bút tiêm insulin vỉ,THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,,,,,,,,,,,1,,
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Glucovance vỉ,THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,,,,,,,,,,,1,,
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Diamicron vỉ,THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,,,,,,,,,,,1,,
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Insulin lọ tiêm,THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,,,,,,,,,,,1,,
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Metformin vỉ,THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,,,,,,,,,,,1,,
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Glimmepiride,THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Ampicillin lọ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Ampicillin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Amoxicillin vỉ,THUỐC KHÁNG SINH,,Bidimoxy 500,viên nang cứng,Uống,BIDIPHAR ,Việt Nam ,26001,893110092523,09/01/2029,"Nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng ",1,https://drive.google.com/drive/folders/1QwFHrYGJcZpcLUDr_JE60chOXcgFJ2Fi, em dùng điện thoại chưa đẩy được lên drive ạ
+Buổi 9,THUỐC KHÁNG SINH,Klamentin gói bột,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Penicillin lọ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Cefuroxime lọ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Cefalexin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Cefotaxime lọ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Cefuroxime vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Cefixime vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Gentamicin ống đỏ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Gentamicin nhỏ mắt,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Tobramicin nhỏ mắt,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Erythromycin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Clairithromycin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Zaromax vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Ery child gói bột,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Tetracyclin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Tetracyclin tuyp,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Doxycicllin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Clorocid hoặc cloramphnicol vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Cloramphenicol nhỏ mắt,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Lincomycin ống xanh,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Lincomycin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Metronidazol vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Zidocin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Levofloxacin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Ciprofloxacin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Acid nalidixic vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Trimeseptol vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,Sulfaguanidin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
+Buổi 9,THUỐC KHÁNG SINH,"Amoxicillin (875mg), Clavulanic acid (125mg)",THUỐC KHÁNG SINH,"Amoxicillin (875mg), Clavulanic acid (125mg)",Augmentin 1g,Viên nén,Uống,Smith Kline Beecham,Anh,B75C,VN-20517-17,05/2024,"Bảo quản nơi khô ráo, không quá 30oC",1,https://drive.google.com/drive/folders/10PojxnLJPfWIlBSaNDiefutMWun99ZsF?usp=drive_link,
+Buổi 10,THUỐC TIÊU HÓA,Nước uống Hye lyte lọ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Berberin lọ,THUỐC TIÊU HÓA,,Beberbusan ,Viên nén,Uống,168 Busal Hàn Quốc ,Việt Nam ,010126,03/9199293414949-FSMS,02/01/2029,"Nơi khô ráo thoáng mát, tránh ánh nắng",1,https://drive.google.com/drive/folders/1o6iUf_TeicTQ1Zr-PV3Tu87ZBGH0sg0E?usp=sharing,
+Buổi 10,THUỐC TIÊU HÓA,Omeprazol vỉ,THUỐC TIÊU HÓA,,Omsergy,Viên nang cứng,Uống ,SAGA LIFESCIENCES LIMITED ,Ấn Độ ,0S8012517,890110786224,09/03/2028,"Bảo quản dưới 30°C, tránh ánh sáng, nhiệt và ẩm",1,https://drive.google.com/drive/folders/1sfc8qLiwXOWf9EKZBTccPHlLs418b8cE, em dùng điện thoại chưa đẩy được lên drive ạ
+Buổi 10,THUỐC TIÊU HÓA,Pantoprazol vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Lansoprazol vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Cimetidin vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Famotidin vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Vinfadin lọ bột pha tiêm,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Oresol gói cam,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,"Oresol gói 27,9g",THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Edoper vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Spamaverin vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Papaverin vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Nospa vỉ,THUỐC TIÊU HÓA,,No-spa,Viên nén,Uống ,SANOFI ,Việt Nam ,GVH0743,893110049200,07/04/2028,"Nơi khô, tránh ánh sáng, nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/14kb-gFqOK0ObNGVWRISOd30DSC-b2SeP, em dùng điện thoại chưa đẩy được lên drive ạ
+Buổi 10,THUỐC TIÊU HÓA,Maloox vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Yumangel gói,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Meritintab vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Phosphaslugel gói,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Noigel gói,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Hydrasec gói,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Gastrolpulgit gói,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Bisacodyl vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Mecolzine vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Biosubtyl gói,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Sorbitol gói,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Vintex ống tiêm,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 10,THUỐC TIÊU HÓA,Atropin sulfas ống tiêm,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Babycanyl siro lọ,THUỐC HÔ HẤP,,,,,,,,,,,1,,
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Mekocitrin viêm ngậm,THUỐC HÔ HẤP,,,,,,,,,,,1,,
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Methophan vỉ,THUỐC HÔ HẤP,,,,,,,,,,,1,,
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Dexamethason vỉ,THUỐC HÔ HẤP,,,,,,,,,,,1,,
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Acemuc gói,THUỐC HÔ HẤP,,Acemuc ,Thuốc cốm,Uống,SANOFI ,Việt Nam ,FVH1064,893100495724,05/05/2027,"Nơi khô, tránh ánh sáng, nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/18mvg1kCMl7tZSwnF9ZxwDKa5GN3xZcP5?usp=sharing,
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Acetyl stein vỉ,THUỐC HÔ HẤP,,,,,,,,,,,1,,
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Bromhexin vỉ,THUỐC HÔ HẤP,,,,,,,,,,,1,,
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Terpin – codein vỉ,THUỐC HÔ HẤP,,,,,,,,,,,1,,
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Salbutamol vỉ,THUỐC HÔ HẤP,,,,,,,,,,,1,,
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Pirazinamyd vỉ,THUỐC ĐIỀU TRỊ LAO,,,,,,,,,,,1,,
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Arifamcin vỉ,THUỐC ĐIỀU TRỊ LAO,,,,,,,,,,,1,,
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Ethabutol vỉ,THUỐC ĐIỀU TRỊ LAO,,,,,,,,,,,1,,
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Streptomycin vỉ,THUỐC ĐIỀU TRỊ LAO,,,,,,,,,,,1,,
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Ventolin inhaler (dùng chung cả lớp),THUỐC HÔ HẤP,,,,,,,,,,,1,,
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Symbicort tubuhaler (dùng chung cả lớp),THUỐC HÔ HẤP,,,,,,,,,,,1,,
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Seretide Accuhaler (dùng chung cả lớp),THUỐC HÔ HẤP,,,,,,,,,,,1,,
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Berodual (dùng chung cả lớp),THUỐC HÔ HẤP,,,,,,,,,,,1,,
+Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Kedefar (Ketoconazol) vỉ,THUỐC CHỐNG NẤM,,,,,,,,,,,1,,
+Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Fluconazol vỉ,THUỐC CHỐNG NẤM,,,,,,,,,,,1,,
+Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Calcrem tuyp,THUỐC CHỐNG NẤM,,,,,,,,,,,1,,
+Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Nystatin tuyp,THUỐC CHỐNG NẤM,,,,,,,,,,,1,,
+Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Astersunat vỉ,THUỐC ĐIỀU TRỊ BỆNH DO ĐỘNG VẬT NGUYÊN SINH,,,,,,,,,,,1,,
+Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Fansidar vỉ,THUỐC ĐIỀU TRỊ BỆNH DO ĐỘNG VẬT NGUYÊN SINH,,,,,,,,,,,1,,
+Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Metronidazol vỉ,THUỐC ĐIỀU TRỊ BỆNH DO ĐỘNG VẬT NGUYÊN SINH,,,,,,,,,,,1,,
+Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Griseofulvin tuyp,THUỐC CHỐNG NẤM,,,,,,,,,,,1,,
+Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Griseofulvin vỉ,THUỐC CHỐNG NẤM,,,,,,,,,,,1,,`;
+
+/* ---------- parse CSV (quote-aware) ---------- */
+function parseCSV(text){
+  const rows=[]; let row=[], field='', inQ=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(inQ){
+      if(c==='"'){ if(text[i+1]==='"'){field+='"';i++;} else inQ=false; }
+      else field+=c;
+    }else{
+      if(c==='"') inQ=true;
+      else if(c===','){ row.push(field); field=''; }
+      else if(c==='\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+      else if(c==='\r'){}
+      else field+=c;
+    }
+  }
+  if(field.length||row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+
+const rows = parseCSV(CSV_DATA.trim());
+const header = rows[0].map(h=>h.trim());
+const records = rows.slice(1).filter(r=>r[0]).map(r=>{
+  const o={}; header.forEach((h,i)=> o[h]=(r[i]||'').trim()); return o;
+});
+
+/* group by "Nhóm dược lý" (pharmacology class, column D of the sheet)
+   rather than by teaching session, preserving first-seen order */
+/* golden-angle hue stepping (~137.5°) guarantees each new group's hue lands
+   far around the color wheel from the ones before it, so neighbouring
+   cabinets never end up as near-identical shades of blue/gray */
+function hueForIndex(i){ return Math.round((i*137.508) % 360); }
+function buoiSortKey(b){ return parseInt((b||'').replace(/\D/g,''),10) || 0; }
+const sessions = [];
+const byGroup = {};
+records.forEach(rec=>{
+  const key = (rec['Nhóm dược lý']||'').trim() || rec['Tên Bài'];
+  if(!byGroup[key]){
+    byGroup[key] = { topic:key, items:[], buoiSet:new Set(), hue: hueForIndex(sessions.length) };
+    sessions.push(byGroup[key]);
+  }
+  byGroup[key].items.push(rec);
+  if(rec['STT Buổi']) byGroup[key].buoiSet.add(rec['STT Buổi']);
+});
+sessions.forEach(s=>{ s.buoi = Array.from(s.buoiSet).sort((a,b)=>buoiSortKey(a)-buoiSortKey(b)).join(', '); });
+let uid=0;
+
+/* every item renders as the same "hộp thuốc" carton, 4 per shelf row.
+   Every cabinet always has exactly 5 shelf rows (20 slots) so cabinets
+   stay the same height; sessions with more than 20 drugs are split into
+   several numbered cabinets filled in order (first 20, then the rest),
+   and a cabinet's unused trailing shelf rows are simply left empty
+   rather than padded with repeated stock. */
+const COLS = 4;
+const CAPACITY = 20; // 5 shelf rows x 4 columns
+function cssId(s){ return s.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-zA-Z0-9]+/g,'-').replace(/^-+|-+$/g,''); }
+const cabinets = [];
+let groupIdx = 0;
+sessions.forEach(s=>{
+  groupIdx++;
+  const chunks = [];
+  for(let idx=0; idx<s.items.length; idx+=CAPACITY){
+    chunks.push(s.items.slice(idx, idx+CAPACITY));
+  }
+  if(chunks.length===0) chunks.push([]);
+  chunks.forEach((chunk,ci)=>{
+    const id = 'tu-g'+groupIdx+'-'+cssId(s.topic)+(chunks.length>1?('-'+(ci+1)):'');
+    const label = chunks.length>1 ? `${s.buoi} · Tủ ${ci+1}/${chunks.length}` : s.buoi;
+    const part = chunks.length>1 ? `(Tủ ${ci+1}/${chunks.length})` : '';
+    cabinets.push({ id, label, part, buoi:s.buoi, topic:s.topic, hue:s.hue, items:chunk, realCount:chunk.length });
+    chunk.forEach(it=>{ it._cabinetId = id; it._cabinetLabel = label; });
+  });
+});
+
+/* ---------- real photos: drop a file named "<slug>.jpg" (or .png) into
+   the hop-thuoc/ folder, matching the drug's "Tên hoạt chất" ---------- */
+const PHOTO_DIR = 'hop-thuoc/';
+const PHOTO_EXTS = ['jpg','png','jpeg'];
+/* slugs that actually have a real photo file in hop-thuoc/ — used to pick
+   realistic "new delivery" items for the putaway drag-and-drop exercise */
+const PHOTO_SLUGS = new Set([
+  'metoprolol-vi','adrenalin-ong-tiem','atropin-sulfas-ong-tiem','dopegyt-vi',
+  'amoxicillin-vi','paracetamol-vi','amoxicillin-875mg-clavulanic-acid-125mg',
+  'berberin-lo','omeprazol-vi','nospa-vi','hapacol-goi','hydrasec-goi',
+  'decolgen-vi','acemuc-goi','voltaren-tuyp','diclofenac-vi','alphachymochipsin',
+  'dich-truyen-nacl-0-9','clorpheniramin-vi','enalapril-vi','atenolon-vi',
+  'furosemid-vi','nifedipin-vi','betamethason-tuyp',
+  // bổ sung đợt 2
+  'penicillin-lo','cefuroxime-lo','cefalexin-vi','cefotaxime-lo','cefuroxime-vi',
+  'cefixime-vi','tetracyclin-vi','tetracyclin-tuyp','doxycicllin-vi','haloperidol-vi',
+  'lincomycin-vi','metronidazol-vi','levofloxacin-vi','ciprofloxacin-vi','trimeseptol-vi',
+  'sulfaguanidin-vi','pantoprazol-vi','methophan-vi','meloxicam-hoac-mebilax-hoac-mobic-vi',
+  'indomethacin-vi','alaxan-vi','folacid-vi','vitamin-pp-vi','vitamin-e-vi',
+  'xylomethazolin-nho-mat','loratadin-vi','acyclovir-tuyp','telmisartan-vi','salbutamol-vi',
+  'digoxin-vi','ery-child-goi-bot','phosphaslugel-goi','uniferon-b9-vi','vitamin-b6-vi'
+]);
+function slugify(name){
+  return (name||'')
+    .toLowerCase()
+    .replace(/đ/g,'d')
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^a-z0-9]+/g,'-')
+    .replace(/^-+|-+$/g,'');
+}
+/* product photos are usually shot on a plain white/pale studio backdrop,
+   which reads as ugly excess whitespace once boxed into a small shelf
+   slot. Trim the near-white margin from the edges (in-browser, via
+   canvas) so the box itself fills its slot — works for any future photo
+   without needing it pre-cropped. */
+function autoCropWhite(imgEl){
+  const w = imgEl.naturalWidth, h = imgEl.naturalHeight;
+  if(!w || !h) return;
+  const src = document.createElement('canvas');
+  src.width = w; src.height = h;
+  const sctx = src.getContext('2d');
+  sctx.drawImage(imgEl,0,0);
+  let data;
+  try{ data = sctx.getImageData(0,0,w,h).data; }
+  catch(e){ return; } // local file:// canvases can be tainted — just skip cropping then
+  const THRESH = 243;
+  function rowIsWhite(y){
+    for(let x=0;x<w;x+=2){ const i=(y*w+x)*4; if(data[i]<THRESH||data[i+1]<THRESH||data[i+2]<THRESH) return false; }
+    return true;
+  }
+  function colIsWhite(x){
+    for(let y=0;y<h;y+=2){ const i=(y*w+x)*4; if(data[i]<THRESH||data[i+1]<THRESH||data[i+2]<THRESH) return false; }
+    return true;
+  }
+  let top=0, bottom=h-1, left=0, right=w-1;
+  while(top<bottom && rowIsWhite(top)) top++;
+  while(bottom>top && rowIsWhite(bottom)) bottom--;
+  while(left<right && colIsWhite(left)) left++;
+  while(right>left && colIsWhite(right)) right--;
+  const pad = Math.round(Math.min(w,h)*0.015);
+  top=Math.max(0,top-pad); left=Math.max(0,left-pad);
+  bottom=Math.min(h-1,bottom+pad); right=Math.min(w-1,right+pad);
+  const cw = right-left+1, ch = bottom-top+1;
+  if(cw<=0 || ch<=0 || (cw===w && ch===h)) return; // nothing worth cropping
+  const out = document.createElement('canvas');
+  out.width = cw; out.height = ch;
+  out.getContext('2d').drawImage(src,left,top,cw,ch,0,0,cw,ch);
+  imgEl.src = out.toDataURL('image/jpeg',0.92);
+}
+function attachPhoto(imgEl, slug){
+  let i=0;
+  imgEl.addEventListener('load', ()=>{
+    const btn = imgEl.closest('.med-item');
+    btn.classList.add('has-photo');
+    if(!imgEl.dataset.cropped){
+      imgEl.dataset.cropped = '1';
+      autoCropWhite(imgEl); // may reset src, which re-fires this same load handler once cropped
+    }
+  });
+  imgEl.addEventListener('error', ()=>{
+    i++;
+    if(i<PHOTO_EXTS.length) imgEl.src = PHOTO_DIR+slug+'.'+PHOTO_EXTS[i];
+    else imgEl.remove(); // no photo yet: drawn box underneath stays visible
+  });
+  imgEl.src = PHOTO_DIR+slug+'.'+PHOTO_EXTS[0];
+}
+
+/* the sheet has no real stock-on-hand count, so each drug gets a plausible
+   illustrative quantity (most have just 1 box; some have a few) — that's
+   what drives the qty badge and the interactive FEFO hover panel below */
+function illustrativeQty(){
+  // giữ tồn kho luôn DƯỚI 3 hộp để việc kiểm soát FEFO nhanh gọn
+  const r = Math.random();
+  if(r < 0.12) return 0; // hết hàng
+  if(r < 0.60) return 1;
+  return 2;              // tối đa 2 hộp
+}
+function applyStock(btn, qty){
+  btn.dataset.qty = String(qty);
+  if(qty===0){
+    btn.classList.add('out-of-stock');
+    btn._units = [];
+    const badge = document.createElement('span');
+    badge.className = 'qty-badge out-of-stock-badge';
+    badge.textContent = 'Hết hàng';
+    btn.appendChild(badge);
+    return;
+  }
+  const badge = document.createElement('span');
+  badge.className = 'qty-badge';
+  badge.textContent = 'x'+qty;
+  btn.appendChild(badge);
+  btn._units = makeIllustrativeUnits(qty);
+}
+
+/* the sheet only records ONE expiry date per drug (often blank) — real
+   per-box lot/expiry data doesn't exist. To let learners practice FEFO
+   (First-Expired-First-Out: the soonest-to-expire box goes in front and
+   gets dispensed first) we generate clearly-labelled illustrative
+   lot numbers/expiry dates, one per physical box, sorted soonest-first. */
+function makeIllustrativeUnits(count){
+  const units = [];
+  let monthsAhead = 5 + Math.floor(Math.random()*4);
+  for(let i=0;i<count;i++){
+    monthsAhead += 4 + Math.floor(Math.random()*4);
+    const d = new Date();
+    d.setMonth(d.getMonth()+monthsAhead);
+    const lot = 'L' + String(20000+Math.floor(Math.random()*79999));
+    units.push({ lot, expiry: d });
+  }
+  // shuffle: the shelf isn't guaranteed to already be in FEFO order —
+  // that's exactly what the learner practices fixing
+  for(let i=units.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [units[i],units[j]] = [units[j],units[i]];
+  }
+  return units;
+}
+function unitsInFefoOrder(units){
+  return units.every((u,i)=> i===0 || units[i-1].expiry <= u.expiry);
+}
+function fmtDate(d){
+  return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+}
+
+/* ---------- render ---------- */
+const cabinetsRow = document.getElementById('cabinetsRow');
+const sceneEl = document.querySelector('.pharmacy-scene');
+const cabinetColEl = document.querySelector('.cabinet-col');
+const pharmacyScreenEl = document.getElementById('pharmacyScreen');
+const statsBar = document.getElementById('statsBar');
+
+const totalDrugs = records.length;
+statsBar.innerHTML = `
+  <span class="chip">Tổng số thuốc: <b>${totalDrugs}</b></span>
+  <span class="chip">Số tủ: <b>${cabinets.length}</b></span>
+`;
+
+/* dropdown = fastest way to reach a specific cabinet: one click, zero
+   typing/scanning — faster than searching a drug name and picking it
+   out of a result list just to jump to the cabinet that holds it */
+const cabinetTabs = document.getElementById('cabinetTabs');
+
+/* navigate to a cabinet by id (used by search results) — activates its
+   tab so it becomes the single visible cabinet, even if it sits outside
+   the current practice window */
+function scrollToCabinet(id){
+  const idx = cabinets.findIndex(c=>c.id===id);
+  if(idx<0) return;
+  showCabinet(idx);
+  const glass = cabinets[idx]._tu && cabinets[idx]._tu.querySelector('.tu-glass');
+  if(glass){ glass.classList.add('flash'); setTimeout(()=>glass.classList.remove('flash'), 900); }
+}
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+/* each cabinet is tinted by its group's hue (same hue for every sub-cabinet
+   of a split group) so a session broken into several cabinets still reads
+   as one visual group, distinct from neighbouring groups on the shelf */
+function cabinetPalette(hue){
+  return {
+    wood: `hsl(${hue},55%,20%)`,
+    woodLight: `hsl(${hue},50%,31%)`,
+    woodDark: `hsl(${hue},65%,11%)`,
+    trim: `hsl(${hue},45%,91%)`,
+  };
+}
+
+cabinets.forEach((cab,cabIdx)=>{
+  const tu = document.createElement('div');
+  tu.className = 'tu-thuoc';
+  tu.id = cab.id;
+  const pal = cabinetPalette(cab.hue);
+  tu.style.setProperty('--wood', pal.wood);
+  tu.style.setProperty('--wood-light', pal.woodLight);
+  tu.style.setProperty('--wood-dark', pal.woodDark);
+  tu.style.setProperty('--trim', pal.trim);
+
+  tu.innerHTML = `
+    <div class="tu-plaque" title="${esc(cab.topic)}">${esc(cab.topic)}</div>
+    <div class="tu-cornice"></div>
+    <div class="tu-frame">
+      <div class="tu-glass"></div>
+    </div>
+    <div class="tu-base"></div>
+  `;
+
+  const glass = tu.querySelector('.tu-glass');
+
+  /* always build all 5 shelf rows so every cabinet is the same height;
+     rows/cells beyond this group's actual stock are simply left empty */
+  const totalRows = CAPACITY / COLS;
+  const rows = [];
+  for(let r=0;r<totalRows;r++){
+    const row = document.createElement('div');
+    row.className = 'shelf-row';
+    glass.appendChild(row);
+    rows.push(row);
+  }
+
+  cab.items.forEach((it,i)=>{
+    const row = rows[Math.floor(i/COLS)];
+    const light = 90 - (i%3)*8;
+    const dark = light-20;
+    const btn = document.createElement('button');
+    btn.className = 'med-item';
+    btn.id = 'box'+(uid++);
+    btn.style.setProperty('--c', `hsl(${cab.hue},55%,${light}%)`);
+    btn.style.setProperty('--c2', `hsl(${cab.hue},55%,${dark}%)`);
+    btn.innerHTML = `<span class="icon"><span class="shape-medbox">
+        <span class="band"></span>
+        <span class="label">${esc(it['Tên hoạt chất']||'')}</span>
+        <span class="barcode"></span>
+      </span></span>${it['Link google drive']?'<span class="photo-dot"></span>':''}`;
+    btn.dataset.search = (it['Tên hoạt chất']+' '+it['Tên biệt dược']+' '+it['STT Buổi']+' '+it['Tên Bài']+' '+cab.label).toLowerCase();
+    btn.dataset.drug = it['Tên hoạt chất'];
+    const img = document.createElement('img');
+    img.className = 'real-photo';
+    img.alt = '';
+    img.loading = 'lazy';
+    attachPhoto(img, slugify(it['Tên hoạt chất']));
+    btn.querySelector('.icon').appendChild(img);
+    applyStock(btn, illustrativeQty());
+    it._btn = btn;
+    it._cabIdx = cabIdx;
+    btn.addEventListener('click', e=> {
+      e.stopPropagation();
+      cancelHideTooltip();
+      if(tooltip.classList.contains('show') && tooltip._btn === btn){ hideTooltip(); return; }
+      showTooltip(e, it, cab, btn);
+    });
+    row.appendChild(btn);
+  });
+
+  cab._tu = tu;
+  cabinetsRow.appendChild(tu);
+});
+
+/* ---------- delivery cart: putaway drag-and-drop exercise ----------
+   picks 5 random items that have a real photo, shows them as a "new
+   delivery", and asks the user to drag each one onto its own actual box
+   on the shelf. correctness = dropped exactly on that same drug's
+   existing .med-item (not just "somewhere in the right tủ"). */
+const photoItems = cabinets.flatMap(cab=>cab.items).filter(it=>PHOTO_SLUGS.has(slugify(it['Tên hoạt chất'])));
+const cartItemsEl = document.getElementById('cartItems');   // the carton's single-box slot
+const cartProgressEl = document.getElementById('cartProgress');
+const cartMsgEl = document.getElementById('cartMsg');
+const cartonBtn = document.getElementById('cartonBtn');
+const cartonHint = document.getElementById('cartonHint');
+let cartPlacedCount = 0, cartTotal = 0, cartFastClean = 0;
+let cartMsgTimer = null;
+/* the current "lô" (batch) dispenses one drug at a time: click the carton
+   to pop the next drug out; only after it's correctly shelved does the next
+   one come out. */
+let deliveryQueue = [];      // items still inside the carton, waiting to pop out
+let currentCartBox = null;   // the drug currently out of the carton (or null)
+let pendingDispense = false;  // a FEFO fix is owed before the next drug pops
+/* while set, a just-delivered box broke FEFO order on the shelf — no
+   further deliveries may be placed until the learner fixes that box's
+   order (via the ▲▼ controls in its hover panel) and it re-checks OK */
+let fefoBlockedBtn = null;
+
+/* ---------- gamified auto-progression ----------
+   The learner no longer picks a level. They always start at the easiest
+   tier and climb automatically by MASTERY, measured with a progress bar:
+   placing a box in the right spot quickly pushes the bar UP; placing it
+   slowly, or dropping it on the wrong box, pushes the bar DOWN. Fill the
+   bar to 100% to unlock the next (harder) tier — more cabinets in play.
+
+   Rewards:
+   - ⭐ Sao: earned for a fast, first-try correct placement. 5-in-a-row = combo bonus.
+   - 🛡️ Thẻ Khiên: 1 free shield for every 8 stars (and on each promotion / new title).
+     A shield is spent automatically to CANCEL a would-be drop in the bar
+     ("đổi thẻ để không bị lùi tiến độ").
+   - 🎖️ Danh hiệu: honorary rank by total stars (Học viên → Bậc thầy Dược lý). */
+const TIERS = [
+  { name:'Siêu dễ',    cabinets:2  },
+  { name:'Dễ',         cabinets:4  },
+  { name:'Trung bình', cabinets:8  },
+  { name:'Khó',        cabinets:12 },
+  { name:'Rất khó',    cabinets:18 },
+];
+const TITLES = [
+  { min:0,  name:'Học viên' },
+  { min:5,  name:'Học viên khá' },
+  { min:12, name:'Học viên xuất sắc' },
+  { min:25, name:'Dược sĩ thực tập' },   // đạt mốc này được cấp 🔑 mở cửa nhà thuốc
+  { min:45, name:'Chuyên gia dược lý' },
+  { min:70, name:'Bậc thầy Dược lý' },
+];
+const KEY_TITLE = 'Dược sĩ thực tập';
+const STARS_PER_SHIELD = 8;
+// Namespaced để tránh đụng localStorage của app khác khi chạy chung origin (host AI Portal/Tizia).
+const LS_GAME = 'tu-thuoc-mo-phong:game_v2';
+const LS_MASTERY = 'tu-thuoc-mo-phong:drug_mastery';
+function loadGame(){
+  try{ const g=JSON.parse(localStorage.getItem(LS_GAME)); if(g && typeof g.tier==='number') return g; }catch(e){}
+  return { tier:0, progress:0, stars:0, shields:0, combo:0, shieldsFromStars:0 };
+}
+function saveGame(){ localStorage.setItem(LS_GAME, JSON.stringify(game)); }
+function loadMastery(){ try{ return JSON.parse(localStorage.getItem(LS_MASTERY)) || {}; }catch(e){ return {}; } }
+function saveMastery(m){ localStorage.setItem(LS_MASTERY, JSON.stringify(m)); }
+let game = loadGame();
+let mastery = loadMastery();
+function tierCabinets(){ return Math.min(TIERS[game.tier].cabinets, cabinets.length); }
+let cartWindow = tierCabinets();
+function drugSlugOf(it){ return slugify(it['Tên hoạt chất']); }
+function currentTitle(){ let t=TITLES[0]; for(const x of TITLES){ if(game.stars>=x.min) t=x; } return t; }
+
+const gpTier = document.getElementById('gpTier');
+const gpTitle = document.getElementById('gpTitle');
+const gpBar = document.getElementById('gpBar');
+const gpBarWrap = document.getElementById('gpBarWrap');
+const gpBarLabel = document.getElementById('gpBarLabel');
+const gpStars = document.getElementById('gpStars');
+const gpShields = document.getElementById('gpShields');
+/* on the mobile layout the tier/progress detail starts collapsed to an
+   icon-only strip (stars/shields/lot) — tapping the panel (or its ℹ️
+   toggle) reveals the full detail. No-op on desktop, where .gp-detail
+   is always shown via CSS regardless of this class. */
+const gamePanelEl = document.getElementById('gamePanel');
+gamePanelEl.addEventListener('click', ()=> gamePanelEl.classList.toggle('gp-open'));
+function renderGameUI(){
+  const T = TIERS[game.tier];
+  gpTier.textContent = `${T.name} · ${tierCabinets()} tủ`;
+  gpTitle.textContent = '🎖️ ' + currentTitle().name;
+  gpBar.style.width = Math.max(0, Math.min(100, game.progress)) + '%';
+  gpBarLabel.textContent = Math.round(game.progress) + '%';
+  gpStars.textContent = '⭐ ' + game.stars;
+  gpShields.textContent = '🛡️ ' + game.shields;
+}
+function flashBar(kind){ gpBarWrap.classList.remove('gain','loss','shield'); void gpBarWrap.offsetWidth; gpBarWrap.classList.add(kind); setTimeout(()=>gpBarWrap.classList.remove(kind), 650); }
+function popEl(el){ el.classList.remove('gp-pop'); void el.offsetWidth; el.classList.add('gp-pop'); setTimeout(()=>el.classList.remove('gp-pop'), 460); }
+/* keep updateMasteryUI name working (called from pickDelivery) */
+function updateMasteryUI(){ renderGameUI(); }
+
+/* award stars, rolling out shields (every STARS_PER_SHIELD) and titles.
+   returns a message fragment describing any bonus earned. */
+function addStars(k){
+  if(k<=0) return '';
+  const beforeTitle = currentTitle().name;
+  game.stars += k;
+  popEl(gpStars);
+  let extra = '';
+  const earnedShields = Math.floor(game.stars / STARS_PER_SHIELD);
+  if(earnedShields > (game.shieldsFromStars||0)){
+    const gained = earnedShields - (game.shieldsFromStars||0);
+    game.shields += gained; game.shieldsFromStars = earnedShields;
+    extra += ` 🛡️ +${gained} thẻ Khiên`;
+  }
+  const afterTitle = currentTitle().name;
+  if(afterTitle !== beforeTitle){
+    game.shields += 2;
+    extra += ` 🎖️ Phong danh hiệu: ${afterTitle}! (+2 🛡️)`;
+    /* reaching "Dược sĩ thực tập" (25⭐) grants the key that unlocks the
+       pharmacy door on the overview map */
+    if(afterTitle === KEY_TITLE && typeof earnKey === 'function' && !hasKey){
+      earnKey();
+      extra += ` 🔑 Đủ trình Dược sĩ thực tập — nhận CHÌA KHÓA mở cửa nhà thuốc!`;
+    }
+  }
+  return extra;
+}
+
+/* move the progress bar by delta%. Negative deltas are absorbed by a shield
+   if one is available (bar stays put). Filling to 100% promotes a tier. */
+function applyProgress(delta){
+  if(delta < 0 && game.shields > 0){
+    game.shields--; popEl(gpShields); flashBar('shield');
+    renderGameUI();
+    return { shielded:true, promoted:false };
+  }
+  game.progress += delta;
+  flashBar(delta >= 0 ? 'gain' : 'loss');
+  let promoted = false;
+  while(game.progress >= 100 && game.tier < TIERS.length-1){
+    game.progress -= 100;
+    game.tier++;
+    game.shields += 1;      // promotion bonus shield
+    promoted = true;
+  }
+  if(game.tier === TIERS.length-1) game.progress = Math.min(game.progress, 100);
+  if(game.progress < 0) game.progress = 0;
+  cartWindow = tierCabinets();
+  renderGameUI();
+  return { shielded:false, promoted };
+}
+/* weighted random sample without replacement — rarely-mastered drugs are
+   far more likely to be picked than ones already nailed several times */
+function weightedPick(items, n){
+  const pool = items.map(it=>({ it, w: 1/(1+(mastery[drugSlugOf(it)]||0)) }));
+  const picks = [];
+  for(let k=0; k<n && pool.length; k++){
+    const total = pool.reduce((s,p)=>s+p.w, 0);
+    let r = Math.random()*total, idx = 0;
+    for(; idx<pool.length-1; idx++){ r -= pool[idx].w; if(r<=0) break; }
+    picks.push(pool[idx].it);
+    pool.splice(idx,1);
+  }
+  return picks;
+}
+
+function showCartMsg(text, ok){
+  cartMsgEl.textContent = text;
+  cartMsgEl.className = 'cart-msg show ' + (ok?'ok':'bad');
+  clearTimeout(cartMsgTimer);
+  cartMsgTimer = setTimeout(()=>{ cartMsgEl.classList.remove('show'); }, 2400);
+}
+
+/* a new physical box just arrived on the shelf for this drug: bump stock
+   by one unit. Placed at the FRONT (naive default) — since fresh stock
+   usually expires later than what's already there, this is exactly the
+   kind of naive putaway that breaks FEFO and gives the learner something
+   real to fix, rather than silently landing in the right spot. */
+function receiveNewStock(btn){
+  if(btn.classList.contains('out-of-stock')){
+    btn.classList.remove('out-of-stock');
+    const oldBadge = btn.querySelector('.qty-badge');
+    if(oldBadge) oldBadge.remove();
+  }
+  let monthsAhead = 8 + Math.floor(Math.random()*8);
+  const d = new Date();
+  d.setMonth(d.getMonth()+monthsAhead);
+  const lot = 'L' + String(20000+Math.floor(Math.random()*79999));
+  if(!btn._units) btn._units = [];
+  // giữ tồn < 3 hộp: chỉ để lại tối đa 1 hộp cũ trước khi nhập hộp mới
+  // (không sắp xếp lại — để người học vẫn tự kiểm soát FEFO giữa 2 hộp)
+  while(btn._units.length >= 2) btn._units.pop();
+  btn._units.unshift({ lot, expiry: d });
+  btn.dataset.qty = String(btn._units.length);
+  let badge = btn.querySelector('.qty-badge');
+  if(!badge){
+    badge = document.createElement('span');
+    btn.appendChild(badge);
+  }
+  badge.className = 'qty-badge';
+  badge.textContent = 'x'+btn._units.length;
+}
+
+/* ---------- single-cabinet view + tab navigation ----------
+   only ONE cabinet is on screen at a time (as large as it can be); the
+   rest are display:none. A tab bar lists exactly the cabinets in the
+   current practice window; clicking a tab swaps in that cabinet. */
+let activeCabIdx = 0;
+
+function buildTabs(){
+  const html = [];
+  cabinets.forEach((cab,idx)=>{
+    if(idx>=cartWindow) return;
+    const pal = cabinetPalette(cab.hue);
+    html.push(
+      `<button type="button" class="cab-tab" data-idx="${idx}" title="${esc(cab.topic)}${cab.part?(' '+esc(cab.part)):''} · gõ số ${idx+1} để nhảy nhanh" style="--wood:${pal.wood};--wood-dark:${pal.woodDark}">`+
+        `<span class="ct-num">${idx+1}</span>`+
+        `<span class="ct-topic">${esc(cab.topic)}${cab.part?(' '+esc(cab.part)):''}</span>`+
+        `<span class="ct-dot"></span>`+
+      `</button>`);
+  });
+  cabinetTabs.innerHTML = html.join('');
+}
+
+function showCabinet(idx){
+  if(idx==null || idx<0 || idx>=cabinets.length) idx = 0;
+  activeCabIdx = idx;
+  cabinets.forEach((cab,i)=>{ if(cab._tu) cab._tu.style.display = (i===idx) ? '' : 'none'; });
+  [...cabinetTabs.children].forEach(t=> t.classList.toggle('active', parseInt(t.dataset.idx,10)===idx));
+  const at = cabinetTabs.querySelector('.cab-tab.active');
+  if(at) at.scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'});
+  syncBoxSize();
+}
+
+/* rebuild the tab bar for the current window and keep a valid cabinet on
+   screen (called on init, on level change, and when a level-up unlocks a
+   new cabinet) */
+function applyCabinetVisibility(){
+  buildTabs();
+  if(activeCabIdx >= cartWindow) activeCabIdx = 0;
+  showCabinet(activeCabIdx);
+}
+
+cabinetTabs.addEventListener('click', e=>{
+  const t = e.target.closest('.cab-tab');
+  if(t) showCabinet(parseInt(t.dataset.idx,10));
+});
+
+/* start a fresh lô of 5 drugs waiting inside the carton (nothing popped out
+   yet — the learner clicks the carton to dispense the first one) */
+function pickDelivery(){
+  applyCabinetVisibility();
+  let poolItems = photoItems.filter(it=> it._cabIdx < cartWindow);
+  if(poolItems.length===0) poolItems = photoItems; // window too narrow to have any photographed drug — fall back rather than show an empty carton
+  deliveryQueue = weightedPick(poolItems, Math.min(5, poolItems.length));
+  cartTotal = deliveryQueue.length; cartPlacedCount = 0; cartFastClean = 0;
+  currentCartBox = null; pendingDispense = false;
+  cartItemsEl.innerHTML = '';
+  updateCartProgress();
+  updateMasteryUI();
+  updateCartonHint();
+}
+
+/* pop the next drug out of the carton as a draggable box */
+function dispenseNext(){
+  if(currentCartBox && !currentCartBox.classList.contains('placed')) return; // one already out
+  if(!deliveryQueue.length){ currentCartBox = null; updateCartonHint(); return; }
+  const it = deliveryQueue.shift();
+  /* deliberately does NOT auto-switch to the target medicine's cabinet —
+     part of the exercise is for the learner to work out which tủ a drug
+     belongs to and navigate the tabs there themselves before dragging. */
+  const box = document.createElement('div');
+  box.className = 'cart-box';
+  box.dataset.targetId = it._btn.id;
+  box._it = it;
+  box.innerHTML = `<img src="${PHOTO_DIR}${drugSlugOf(it)}.jpg" alt=""><span>${esc(it['Tên hoạt chất']||'')}</span>`;
+  makeBoxDraggable(box);
+  cartItemsEl.innerHTML = '';
+  cartItemsEl.appendChild(box);
+  currentCartBox = box;
+  box._t0 = performance.now();   // start the speed clock for this box
+  updateCartonHint();
+}
+
+function updateCartonHint(){
+  const hasOut = currentCartBox && !currentCartBox.classList.contains('placed');
+  if(hasOut){
+    cartonHint.textContent = 'Kéo hộp vào tủ →';
+    cartonBtn.classList.remove('ready'); cartonBtn.classList.add('waiting');
+  } else if(pendingDispense){
+    cartonHint.textContent = '⚠️ Sửa FEFO hộp vừa xếp';
+    cartonBtn.classList.remove('ready'); cartonBtn.classList.add('waiting');
+  } else if(deliveryQueue.length){
+    cartonHint.textContent = `Bấm để lấy hộp (còn ${deliveryQueue.length})`;
+    cartonBtn.classList.add('ready'); cartonBtn.classList.remove('waiting');
+  } else {
+    cartonHint.textContent = 'Hết lô — bấm để nhận lô mới';
+    cartonBtn.classList.add('ready'); cartonBtn.classList.remove('waiting');
+  }
+}
+
+cartonBtn.addEventListener('click', ()=>{
+  if(currentCartBox && !currentCartBox.classList.contains('placed')){
+    currentCartBox.classList.add('shake');
+    setTimeout(()=>currentCartBox.classList.remove('shake'), 400);
+    showCartMsg('Kéo hộp đang lấy ra vào tủ trước đã!', false);
+    return;
+  }
+  if(pendingDispense){
+    showCartMsg('⚠️ Sửa xong thứ tự FEFO của hộp vừa xếp thì hộp kế mới ra!', false);
+    return;
+  }
+  if(!deliveryQueue.length){ pickDelivery(); }   // finished lô → start a new one
+  dispenseNext();
+});
+
+function updateCartProgress(){
+  cartProgressEl.textContent = `Lô ${cartPlacedCount}/${cartTotal}`;
+}
+
+document.getElementById('cartRefresh').addEventListener('click', pickDelivery);
+
+function attemptDrop(cartBox, droppedOn){
+  if(!cartBox || cartBox.classList.contains('placed')) return;
+  const targetId = cartBox.dataset.targetId;
+
+  if(fefoBlockedBtn){
+    cartBox.classList.add('shake');
+    setTimeout(()=>cartBox.classList.remove('shake'), 400);
+    fefoBlockedBtn.classList.add('fefo-alert-pulse');
+    setTimeout(()=>fefoBlockedBtn.classList.remove('fefo-alert-pulse'), 650);
+    showCartMsg('📦 Hãy bấm vào hộp vừa nhập để kiểm tra & sắp xếp FEFO trước khi xếp hộp khác!', false);
+    return;
+  }
+
+  if(droppedOn && droppedOn.id === targetId){
+    const elapsed = (performance.now() - (cartBox._t0 || performance.now())) / 1000;
+    const firstTry = cartBox.dataset.wrongAttempted !== '1';
+    receiveNewStock(droppedOn);
+    cartBox.classList.add('placed');
+    cartBox.querySelector('span').textContent = '✓ Đã xếp';
+    droppedOn.classList.add('delivery-hit');
+    setTimeout(()=>droppedOn.classList.remove('delivery-hit'), 1300);
+    cartPlacedCount++;
+    updateCartProgress();
+
+    /* spaced-repetition weighting: a clean first-try placement makes this
+       drug rarer in future lots so practice focuses on the shaky ones */
+    if(firstTry){ const slug = drugSlugOf(cartBox._it); mastery[slug] = (mastery[slug]||0)+1; saveMastery(mastery); }
+
+    /* score the placement: speed + first-try decide the progress delta and
+       whether a ⭐ is earned. Slow or fumbled placements push the bar down. */
+    let delta, star=false, tag;
+    if(!firstTry){ delta=-5; tag='❌ Có nhầm vị trí'; }
+    else if(elapsed<=4){ delta=15; star=true; tag='⚡ Xuất sắc'; }
+    else if(elapsed<=8){ delta=10; star=true; tag='✅ Nhanh'; }
+    else if(elapsed<=14){ delta=4; tag='🙂 Đạt'; }
+    else { delta=-7; tag='🐢 Chậm — lùi tiến độ'; }
+
+    let bonus='';
+    if(star){
+      cartFastClean++;              // fast + first-try placement in this lô
+      game.combo = (game.combo||0)+1;
+      let earn = 1;
+      if(game.combo % 5 === 0){ earn += 3; bonus += ` 🔥 Combo x${game.combo}! +3⭐`; }
+      bonus += addStars(earn);
+    } else {
+      game.combo = 0;
+    }
+
+    const res = applyProgress(delta);
+    const deltaTxt = res.shielded ? '🛡️ Dùng thẻ Khiên — giữ nguyên tiến độ'
+                                  : (delta>=0 ? `+${delta}%` : `${delta}%`);
+    let promoMsg = '';
+    if(res.promoted){ applyCabinetVisibility(); promoMsg = ` 🎉 LÊN MỨC: ${TIERS[game.tier].name} — mở ${tierCabinets()} tủ!`; }
+
+    /* xếp NHANH & ĐÚNG cả lô (mọi hộp đều đạt ⭐, không nhầm) → chắc chắn lên 1 mức */
+    if(cartPlacedCount===cartTotal && cartFastClean===cartTotal && game.tier < TIERS.length-1){
+      const resLo = applyProgress(100 - game.progress);   // đẩy đủ 100% để lên đúng 1 mức
+      if(resLo.promoted){ applyCabinetVisibility(); promoMsg += ` 🏆 XẾP NHANH & ĐÚNG CẢ LÔ — LÊN MỨC: ${TIERS[game.tier].name} (mở ${tierCabinets()} tủ)!`; }
+    }
+    saveGame();
+
+    const good = delta>=0 || res.shielded;
+    if(!unitsInFefoOrder(droppedOn._units)){
+      fefoBlockedBtn = droppedOn;
+      pendingDispense = true;   // next drug won't pop out until FEFO is fixed
+      droppedOn.classList.add('fefo-warning');
+      updateCartonHint();
+      showCartMsg(`${tag} ${deltaTxt}${bonus}${promoMsg} · 📦 Bấm vào hộp vừa xếp để kiểm tra & sắp xếp FEFO!`, good);
+    } else if(cartPlacedCount<cartTotal){
+      showCartMsg(`${tag} ${deltaTxt}${bonus}${promoMsg}`, good);
+      setTimeout(dispenseNext, 600);
+    } else {
+      showCartMsg(`${tag} ${deltaTxt}${bonus}${promoMsg} · 🎉 Xong lô! Bấm thùng nhận lô mới.`, true);
+      updateCartonHint();
+    }
+  } else if(droppedOn){
+    cartBox.dataset.wrongAttempted = '1';
+    cartBox.classList.add('shake');
+    setTimeout(()=>cartBox.classList.remove('shake'), 400);
+    showCartMsg('❌ Sai vị trí rồi, thử lại! (xếp sai sẽ bị lùi tiến độ)', false);
+  }
+  // dropped on empty space (no box underneath) → just let it settle back, no penalty
+}
+
+/* one pointerdown → pointermove → pointerup gesture drags the box. Pointer
+   Events unify mouse, touch and pen, so this also works on phones/tablets —
+   the old HTML5 drag-and-drop API this replaced never fires from a touch
+   gesture on iOS/Android, which made the whole putaway exercise unusable
+   on mobile. */
+let dragOverTarget = null;
+function makeBoxDraggable(box){
+  box.addEventListener('pointerdown', e=>{
+    if(box.classList.contains('placed')) return;
+    if(e.pointerType==='mouse' && e.button!==0) return;
+    e.preventDefault();
+    hideTooltip();   // don't let an open detail panel cover the drop target
+    const rect = box.getBoundingClientRect();
+    const offX = e.clientX - rect.left, offY = e.clientY - rect.top;
+    const startX = e.clientX, startY = e.clientY;
+    const homeParent = box.parentNode, homeNext = box.nextSibling;
+    let moved = false;
+    box.classList.add('dragging');
+    box.style.position = 'fixed';
+    box.style.left = rect.left+'px';
+    box.style.top = rect.top+'px';
+    box.style.width = rect.width+'px';
+    box.style.zIndex = 200;
+    box.style.pointerEvents = 'none';   // so elementFromPoint sees what's underneath, not the box itself
+    document.body.appendChild(box);
+
+    function setHover(el){
+      const over = el && el.closest ? el.closest('.med-item') : null;
+      if(over === dragOverTarget) return;
+      if(dragOverTarget) dragOverTarget.classList.remove('drop-target');
+      dragOverTarget = over || null;
+      if(dragOverTarget) dragOverTarget.classList.add('drop-target');
+    }
+    function onMove(ev){
+      if(!moved && Math.abs(ev.clientX-startX)+Math.abs(ev.clientY-startY) > 6) moved = true;
+      box.style.left = (ev.clientX - offX)+'px';
+      box.style.top = (ev.clientY - offY)+'px';
+      setHover(document.elementFromPoint(ev.clientX, ev.clientY));
+    }
+    function finish(ev, commit){
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onCancel);
+      setHover(null);
+      const hitEl = commit ? document.elementFromPoint(ev.clientX, ev.clientY) : null;
+      const target = hitEl && hitEl.closest ? hitEl.closest('.med-item') : null;
+      box.style.pointerEvents = '';
+      box.classList.remove('dragging');
+
+      /* correct slot → leave the box exactly where the mouse released it
+         (it stays "landed" on the shelf) instead of snapping back to the
+         carton; remove it shortly after, once the shelf's own stock badge
+         has taken over showing the new box. Any other outcome (miss /
+         wrong shelf / cancelled) keeps the old behaviour: snap back to
+         the carton slot first, then react there (shake, message). */
+      const willLand = commit && moved && target && !fefoBlockedBtn && target.id === box.dataset.targetId;
+      if(willLand){
+        box.style.pointerEvents = 'none';
+        attemptDrop(box, target);
+        setTimeout(()=>box.remove(), 450);
+      } else {
+        box.style.position = ''; box.style.left = ''; box.style.top = ''; box.style.width = ''; box.style.zIndex = '';
+        if(homeNext) homeParent.insertBefore(box, homeNext); else homeParent.appendChild(box);
+        if(commit && moved) attemptDrop(box, target);
+      }
+    }
+    function onUp(ev){ finish(ev, true); }
+    function onCancel(ev){ finish(ev, false); }
+    /* listen on document, not on box itself: box goes pointer-events:none
+       right after this (so elementFromPoint can see what's underneath it),
+       and relying on setPointerCapture to keep routing events to box
+       regardless turned out to not hold up reliably under real mouse
+       input once the box is reparented + made pointer-events:none —
+       the drag would silently freeze mid-gesture. Document-level
+       listeners have no such dependency. */
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onCancel);
+  });
+}
+
+if(photoItems.length){ pickDelivery(); }
+else { document.getElementById('deliveryCart').style.display = 'none'; applyCabinetVisibility(); }
+
+/* size the single visible cabinet as large as it fits. The cabinet fills
+   the scene height via flex (align-items:stretch), so we read the height
+   the shelf rows settled on and derive the box width from it (box aspect
+   is fixed 122:90). On a wide screen height is the binding dimension and
+   the cabinet is centred horizontally in the scene. If the derived width
+   would overflow a narrow scene, we fall back to a width-fit instead. */
+function syncBoxSize(){
+  const tu = cabinets[activeCabIdx] && cabinets[activeCabIdx]._tu;
+  if(!tu || tu.style.display==='none') return;
+  const row = tu.querySelector('.shelf-row');
+  if(!row) return;
+  /* measure the cabinet's own chrome live (frame/glass/row padding + the
+     gaps between the 4 box columns) instead of a hardcoded constant, so
+     tightening any of that padding for mobile is picked up automatically —
+     no second constant to keep in sync with the CSS. */
+  const frameCS = getComputedStyle(tu.querySelector('.tu-frame'));
+  const glassCS = getComputedStyle(tu.querySelector('.tu-glass'));
+  const rowCS = getComputedStyle(row);
+  const chromeW = parseFloat(frameCS.paddingLeft) + parseFloat(frameCS.paddingRight)
+                + parseFloat(glassCS.paddingLeft) + parseFloat(glassCS.paddingRight)
+                + parseFloat(rowCS.paddingLeft) + parseFloat(rowCS.paddingRight)
+                + parseFloat(rowCS.columnGap || rowCS.gap || '0') * (COLS - 1);
+  const rowVPad = parseFloat(rowCS.paddingTop) + parseFloat(rowCS.paddingBottom);
+
+  /* below the mobile breakpoint #pharmacyScreen switches to a stacked
+     column layout (see CSS) where .cabinet-col is full-width instead of
+     sharing a row with .side-panel — read that straight from the computed
+     style so this stays in sync with the CSS breakpoint automatically. The
+     cabinet must show all 5 rows without its own scrollbar, so the box size
+     always has to satisfy BOTH the available height (rows still divide
+     .tu-glass's real height via flex, read below) and the available width
+     — only that width cap differs between the two layouts. */
+  const stacked = getComputedStyle(pharmacyScreenEl).flexDirection === 'column';
+  let availW;
+  if(stacked){
+    cabinetColEl.style.width = '';   // CSS gives it 100% width here — no circularity to guard against
+    /* .cabinets-row already stretches to .pharmacy-scene's content width
+       (flex column, default align-items:stretch), so its own clientWidth
+       minus its own side padding is exactly the space .tu-thuoc gets —
+       measured, not guessed, so shrinking either element's padding on
+       mobile grows the boxes automatically with no risk of overflow. */
+    const rowContainerCS = getComputedStyle(cabinetsRow);
+    availW = cabinetsRow.clientWidth - parseFloat(rowContainerCS.paddingLeft) - parseFloat(rowContainerCS.paddingRight);
+  } else {
+    /* cap the cabinet width so it never eats more than ~58% of the viewport
+       (the control panel keeps the rest); use the viewport for the cap, NOT
+       the column's own width (which is JS-driven and would be circular). */
+    availW = window.innerWidth * 0.68 - 34;
+  }
+  const rowH = row.getBoundingClientRect().height; // flex has already filled the height
+  let boxH = rowH - rowVPad;
+  if(boxH <= 0) return;
+  let boxW = boxH * 122/90;
+  let tuW = boxW*4 + chromeW;
+  if(tuW > availW){                 // too tall/narrow a viewport: cap by width
+    boxW = (availW - chromeW) / 4;
+    tuW = availW;
+  }
+  if(boxW <= 0) return;
+  /* whichever dimension ended up binding, re-derive the OTHER one from the
+     fixed 122:90 carton aspect ratio — otherwise the width-capped branch
+     above would leave boxH at its original (taller) value and every box
+     would render squished toward square instead of its real carton shape. */
+  boxH = boxW * 90/122;
+  document.documentElement.style.setProperty('--box-w', boxW+'px');
+  document.documentElement.style.setProperty('--box-h', boxH+'px');
+  document.documentElement.style.setProperty('--tu-w', tuW+'px');
+  /* give the whole cabinet column an explicit width that fits the cabinet
+     (+ side-wall padding); the scene inside is width:100% of it. Setting an
+     explicit width avoids a circular width:auto against the JS-driven cabinet.
+     In stacked mode CSS already pins it to 100%, so leave it alone. */
+  if(!stacked) cabinetColEl.style.width = (tuW + 34) + 'px';
+}
+/* the scene needs a settled layout before the shelf-row height is
+   meaningful, so run sizing after layout — not only at parse time */
+syncBoxSize();
+requestAnimationFrame(()=>requestAnimationFrame(syncBoxSize));
+window.addEventListener('load', syncBoxSize);
+/* fonts/images can settle the row height a little late; re-sync a few times */
+[60,180,400,800].forEach(ms=> setTimeout(syncBoxSize, ms));
+/* and, most reliably, re-size whenever the cabinet column's own height
+   changes (initial layout + any viewport change). Guard on height so the
+   width changes syncBoxSize itself makes don't cause a feedback loop. */
+if(window.ResizeObserver){
+  let _lastColH = 0;
+  const ro = new ResizeObserver(()=>{
+    const h = cabinetColEl.clientHeight;
+    if(Math.abs(h - _lastColH) > 1){ _lastColH = h; syncBoxSize(); }
+  });
+  ro.observe(cabinetColEl);
+}
+window.addEventListener('resize', ()=>{
+  clearTimeout(window._boxResizeT);
+  window._boxResizeT = setTimeout(syncBoxSize, 120);
+});
+
+/* ---------- hover tooltip / interactive FEFO panel ---------- */
+const tooltip = document.getElementById('tooltip');
+let hideTimer = null;
+function cancelHideTooltip(){ if(hideTimer){ clearTimeout(hideTimer); hideTimer=null; } }
+function scheduleHideTooltip(){ cancelHideTooltip(); hideTimer = setTimeout(hideTooltip, 220); }
+// detail panel now opens on click (not hover); close it when clicking outside
+document.addEventListener('click', e=>{
+  if(!tooltip.classList.contains('show')) return;
+  if(tooltip.contains(e.target)) return;
+  if(e.target.closest && e.target.closest('.med-item')) return;
+  hideTooltip();
+});
+
+function showTooltip(e, it, s, btn){
+  tooltip._btn = btn; tooltip._it = it; tooltip._s = s;
+  if(btn._units){
+    tooltip.dataset.mode = 'interactive';
+    tooltip.style.pointerEvents = 'auto';
+    renderFefoPanel();
+    positionNearBox(btn);
+  } else {
+    tooltip.dataset.mode = 'simple';
+    tooltip.style.pointerEvents = 'none';
+    const photo = btn.querySelector('.real-photo');
+    const photoHTML = photo ? `<img class="t-photo" src="${photo.currentSrc||photo.src}" alt="">` : '';
+    tooltip.innerHTML = `
+      ${photoHTML}
+      <div class="t-name">${esc(it['Tên hoạt chất']||'(Chưa rõ tên)')}</div>
+      ${it['Tên biệt dược'] ? `<div class="t-brand">${esc(it['Tên biệt dược'])}</div>` : ''}
+      ${it['Dạng bào chế']||it['Đường dùng'] ? `<div class="t-row">${esc(it['Dạng bào chế'])}${it['Đường dùng']?(' · '+esc(it['Đường dùng'])):''}</div>` : ''}
+      <div class="t-row">${s.buoi} · ${esc(s.topic)}</div>
+      ${it['Hạn sử dụng'] ? `<div class="t-row">HSD: ${esc(it['Hạn sử dụng'])}</div>` : ''}
+      <div class="t-hint">Bấm để xem đầy đủ thông tin</div>
+    `;
+    moveTooltip(e);
+  }
+  tooltip.classList.add('show');
+}
+
+function moveTooltip(e){
+  if(tooltip.dataset.mode==='interactive') return; // pinned near the box instead
+  const pad = 16;
+  let x = e.clientX + pad;
+  let y = e.clientY + pad;
+  const rect = tooltip.getBoundingClientRect();
+  if(x + rect.width + 10 > window.innerWidth) x = e.clientX - rect.width - pad;
+  if(y + rect.height + 10 > window.innerHeight) y = e.clientY - rect.height - pad;
+  x = Math.max(8, Math.min(x, window.innerWidth - rect.width - 8));
+  tooltip.style.left = x+'px';
+  tooltip.style.top = y+'px';
+}
+function positionNearBox(btn){
+  // position:fixed content lays out even while opacity:0, so this can be
+  // measured synchronously — no off-screen flash needed before showing
+  const r = btn.getBoundingClientRect();
+  const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
+  let x = r.right + 10;
+  if(x + tw + 10 > window.innerWidth) x = r.left - tw - 10;
+  // on a narrow phone the tooltip can be wider than the space on either
+  // side of the box — fall back to clamping within the viewport instead
+  x = Math.max(8, Math.min(x, window.innerWidth - tw - 8));
+  let y = r.top - (th-r.height)/2;
+  y = Math.max(10, Math.min(y, window.innerHeight - th - 10));
+  tooltip.style.left = x+'px';
+  tooltip.style.top = y+'px';
+}
+function hideTooltip(){
+  tooltip.classList.remove('show');
+  // an invisible interactive panel keeps pointer-events:auto and would still
+  // sit over the shelf, silently swallowing drag-drops onto boxes underneath
+  tooltip.style.pointerEvents = 'none';
+}
+
+/* -- interactive FEFO panel: reorder the boxes, check FEFO order, sell -- */
+function fefoLabel(i,len){ return i===0?'Hộp ngoài':i===len-1?'Hộp trong cùng':`Hộp giữa ${i}`; }
+function renderFefoPanel(){
+  const btn = tooltip._btn, it = tooltip._it, s = tooltip._s;
+  const units = btn._units;
+  const photo = btn.querySelector('.real-photo');
+  const photoHTML = photo ? `<img class="t-photo" src="${photo.currentSrc||photo.src}" alt="">` : '';
+
+  if(!units || units.length===0){
+    tooltip.innerHTML = `${photoHTML}<div class="t-name">${esc(it['Tên hoạt chất'])}</div><div class="t-row">📦 Hết hàng trên kệ</div>`;
+    return;
+  }
+  const rows = units.map((u,i)=>`
+    <div class="fefo-row" data-i="${i}">
+      <span class="fefo-drag" title="Kéo để đổi vị trí">⠿</span>
+      <span class="fefo-pos">${fefoLabel(i,units.length)}</span>
+      <span class="fefo-meta">Lô ${u.lot} · HD ${fmtDate(u.expiry)}</span>
+      <span class="fefo-move">
+        <button type="button" data-act="up" data-i="${i}" ${i===0?'disabled':''} title="Đưa ra ngoài hơn">▲</button>
+        <button type="button" data-act="down" data-i="${i}" ${i===units.length-1?'disabled':''} title="Đưa vào trong hơn">▼</button>
+      </span>
+    </div>`).join('');
+  let feedback = tooltip.dataset.feedback || '';
+  if(!feedback && btn===fefoBlockedBtn){
+    feedback = `<div class="fefo-feedback info">📦 Hộp vừa nhập kho — hãy tự kiểm tra: đưa hộp có hạn dùng gần nhất (dòng tô vàng) ra ngoài cùng bằng ▲▼, rồi bấm "Kiểm tra thứ tự".</div>`;
+  }
+
+  tooltip.innerHTML = `
+    ${photoHTML}
+    <div class="t-name">${esc(it['Tên hoạt chất']||'(Chưa rõ tên)')}</div>
+    <div class="t-row">Tồn kho: <b>${units.length} hộp</b>${btn===fefoBlockedBtn?' · <b style="color:#c0392b">🔒 Đang khoá xếp hàng mới</b>':''}</div>
+    <div class="fefo-list">${rows}</div>
+    ${feedback}
+    <div class="fefo-actions">
+      <button type="button" data-act="check">Kiểm tra thứ tự</button>
+      <button type="button" data-act="info">ℹ️ Thông tin đầy đủ</button>
+    </div>
+    <div class="fefo-export">
+      <label>Xuất <input type="number" class="fefo-qty" min="1" max="${units.length}" value="1"> hộp</label>
+      <button type="button" data-act="export">Xuất</button>
+      <div class="fefo-export-hint">Lấy từ hộp ngoài vào trong</div>
+    </div>
+    <div class="t-hint">Nhấp ra vùng trống để đóng</div>
+  `;
+  makeFefoRowsDraggable();
+}
+
+/* drag a fefo-row's handle up/down to reorder the lots — an alternative
+   to the ▲▼ buttons. Other rows shift live to preview the drop slot;
+   the actual units array is only reordered on release, then the whole
+   panel re-renders (which re-runs this to reattach handles). Listens on
+   document rather than the row itself for the same reason the carton
+   putaway drag does: pointer-events:none + reparenting during a drag
+   can't be trusted to keep routing events back to the source element. */
+function makeFefoRowsDraggable(){
+  const rows = [...tooltip.querySelectorAll('.fefo-row')];
+  rows.forEach(row=>{
+    const handle = row.querySelector('.fefo-drag');
+    if(!handle) return;
+    handle.addEventListener('pointerdown', e=>{
+      if(e.pointerType==='mouse' && e.button!==0) return;
+      const btn = tooltip._btn;
+      const units = btn && btn._units;
+      if(!units || units.length<2) return;
+      e.preventDefault();
+      const startIndex = Number(row.dataset.i);
+      const rowH = row.getBoundingClientRect().height + 5; // + .fefo-list gap
+      const startY = e.clientY;
+      let curIndex = startIndex;
+      row.classList.add('fefo-row-dragging');
+
+      function onMove(ev){
+        const dy = ev.clientY - startY;
+        row.style.transform = `translateY(${dy}px)`;
+        let newIndex = startIndex + Math.round(dy / rowH);
+        newIndex = Math.max(0, Math.min(units.length-1, newIndex));
+        if(newIndex === curIndex) return;
+        curIndex = newIndex;
+        rows.forEach((r,ri)=>{
+          if(r===row) return;
+          let shift = 0;
+          if(startIndex < curIndex && ri>startIndex && ri<=curIndex) shift = -1;
+          else if(startIndex > curIndex && ri>=curIndex && ri<startIndex) shift = 1;
+          r.style.transform = shift ? `translateY(${shift*rowH}px)` : '';
+        });
+      }
+      function finish(){
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        document.removeEventListener('pointercancel', onUp);
+        if(curIndex !== startIndex){
+          const [moved] = units.splice(startIndex,1);
+          units.splice(curIndex,0,moved);
+          tooltip.dataset.feedback = '';
+          if(btn===fefoBlockedBtn && unitsInFefoOrder(units)){
+            fefoBlockedBtn = null;
+            btn.classList.remove('fefo-warning');
+            tooltip.dataset.feedback = `<div class="fefo-feedback ok">✅ Đúng rồi — hộp hạn dùng gần nhất đã ở ngoài cùng (FEFO). Có thể xếp tiếp hàng mới!</div>`;
+            if(pendingDispense){
+              pendingDispense = false;
+              if(deliveryQueue.length){ showCartMsg('✅ Đã sửa đúng FEFO — hộp kế đang ra!', true); setTimeout(dispenseNext, 500); }
+              else { showCartMsg('🎉 Đã sửa xong FEFO và hết lô! Bấm thùng nhận lô mới.', true); updateCartonHint(); }
+            } else {
+              showCartMsg('✅ Đã sửa đúng FEFO — tiếp tục xếp hàng nào!', true);
+            }
+          }
+        }
+        renderFefoPanel();
+        positionNearBox(btn);
+      }
+      function onUp(ev){ finish(); }
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+      document.addEventListener('pointercancel', onUp);
+    });
+  });
+}
+tooltip.addEventListener('click', e=>{
+  const btnEl = e.target.closest('[data-act]');
+  if(!btnEl) return;
+  // keep the panel open: re-rendering detaches this button, so don't let the
+  // click bubble to the document handler that closes on outside-clicks
+  e.stopPropagation();
+  const btn = tooltip._btn;
+  if(!btn || !btn._units) return;
+  const units = btn._units;
+  const act = btnEl.dataset.act;
+  if(act==='info'){ openModal(tooltip._it, tooltip._s, btn); return; }
+  if(act==='up' || act==='down'){
+    const i = Number(btnEl.dataset.i);
+    const j = act==='up' ? i-1 : i+1;
+    if(j<0 || j>=units.length) return;
+    [units[i], units[j]] = [units[j], units[i]];
+    tooltip.dataset.feedback = '';
+  } else if(act==='check'){
+    const ok = unitsInFefoOrder(units);
+    tooltip.dataset.feedback = ok
+      ? `<div class="fefo-feedback ok">✅ Đúng rồi — hộp hạn dùng gần nhất đã ở ngoài cùng (FEFO)</div>`
+      : `<div class="fefo-feedback bad">❌ Chưa đúng — hãy dùng ▲▼ để đưa hộp có hạn dùng gần nhất ra ngoài cùng</div>`;
+  } else if(act==='export'){
+    const input = tooltip.querySelector('.fefo-qty');
+    const n = Math.max(1, Math.min(units.length, parseInt(input && input.value, 10) || 1));
+    units.splice(0, n); // dispense from the front (outer) box inward
+    btn.dataset.qty = String(units.length);
+    let badge = btn.querySelector('.qty-badge');
+    if(units.length>1){ if(badge) badge.textContent = 'x'+units.length; }
+    else if(units.length===1){ if(badge) badge.remove(); }
+    else {
+      btn.classList.add('out-of-stock');
+      if(badge){ badge.className = 'qty-badge out-of-stock-badge'; badge.textContent = 'Hết hàng'; }
+      else {
+        badge = document.createElement('span');
+        badge.className = 'qty-badge out-of-stock-badge';
+        badge.textContent = 'Hết hàng';
+        btn.appendChild(badge);
+      }
+    }
+    tooltip.dataset.feedback = `<div class="fefo-feedback ok">✅ Đã xuất ${n} hộp, lấy từ ngoài vào trong</div>`;
+  }
+  if(btn===fefoBlockedBtn && (units.length===0 || unitsInFefoOrder(units))){
+    fefoBlockedBtn = null;
+    btn.classList.remove('fefo-warning');
+    if(act!=='export') tooltip.dataset.feedback = `<div class="fefo-feedback ok">✅ Đúng rồi — hộp hạn dùng gần nhất đã ở ngoài cùng (FEFO). Có thể xếp tiếp hàng mới!</div>`;
+    if(pendingDispense){
+      pendingDispense = false;
+      if(deliveryQueue.length){ showCartMsg('✅ Đã sửa đúng FEFO — hộp kế đang ra!', true); setTimeout(dispenseNext, 500); }
+      else { showCartMsg('🎉 Đã sửa xong FEFO và hết lô! Bấm thùng nhận lô mới.', true); updateCartonHint(); }
+    } else {
+      showCartMsg('✅ Đã sửa đúng FEFO — tiếp tục xếp hàng nào!', true);
+    }
+  }
+  renderFefoPanel();
+  positionNearBox(btn);
+});
+
+/* ---------- modal (full detail on click) ---------- */
+const overlay = document.getElementById('overlay');
+const mName = document.getElementById('mName');
+const mBrand = document.getElementById('mBrand');
+const mFields = document.getElementById('mFields');
+const mFoot = document.getElementById('mFoot');
+
+function field(label, value){
+  const missing = !value;
+  return `<dt>${label}</dt><dd class="${missing?'missing':''}">${missing?'Chưa cập nhật':esc(value)}</dd>`;
+}
+
+const mFefo = document.getElementById('mFefo');
+function openModal(it, s, btn){
+  hideTooltip();
+  mName.textContent = it['Tên hoạt chất'] || '(Chưa rõ tên)';
+  mBrand.textContent = `${s.buoi} · ${s.topic}`;
+  mFields.innerHTML = [
+    field('Tên biệt dược', it['Tên biệt dược']),
+    field('Dạng bào chế', it['Dạng bào chế']),
+    field('Đường dùng', it['Đường dùng']),
+    field('Nơi sản xuất', it['Nơi sản xuất']),
+    field('Nước sản xuất', it['Nước sản xuất']),
+    field('Số kiểm soát', it['Số kiểm soát']),
+    field('Số đăng ký', it['Số đăng ký']),
+    field('Hạn sử dụng', it['Hạn sử dụng']),
+    field('Điều kiện bảo quản', it['Điều kiện bảo quản']),
+    field('Tên file ảnh cần lưu', `${slugify(it['Tên hoạt chất'])}.jpg (trong thư mục hop-thuoc/)`),
+  ].join('');
+  mFoot.innerHTML = it['Link google drive']
+    ? `<a href="${esc(it['Link google drive'])}" target="_blank" rel="noopener">🔗 Xem ảnh trên Google Drive</a>`
+    : '';
+
+  const units = btn && btn._units;
+  if(units && units.length>=1){
+    const soonestExpiry = units.reduce((min,u)=> u.expiry<min?u.expiry:min, units[0].expiry);
+    const correct = unitsInFefoOrder(units);
+    const rows = units.map((u,i)=>{
+      const label = fefoLabel(i,units.length);
+      return `<tr class="${u.expiry.getTime()===soonestExpiry.getTime()?'soonest':''}"><td>${label}${i===0?' (đang ở ngoài)':''}</td><td>${u.lot}</td><td>${fmtDate(u.expiry)}</td></tr>`;
+    }).join('');
+    mFefo.innerHTML = `
+      <div class="fefo-title">📦 ${units.length} hộp trên kệ · <span class="tag">minh hoạ FEFO</span></div>
+      <div class="fefo-note">Số lô/hạn dùng dưới đây là dữ liệu minh hoạ (sheet gốc chưa có hạn dùng riêng từng hộp) để luyện nguyên tắc Hết hạn trước – Xuất trước. Hàng tô vàng là hộp có hạn dùng gần nhất — nên được xếp ra ngoài. ${units.length>1?(correct?'✅ Thứ tự hiện tại đã đúng FEFO.':'❌ Thứ tự hiện tại chưa đúng — bấm vào hộp trên kệ để sắp xếp lại.'):''}</div>
+      <table>
+        <tr><th>Vị trí</th><th>Số lô</th><th>Hạn dùng</th></tr>
+        ${rows}
+      </table>
+    `;
+  } else if(units && units.length===0){
+    mFefo.innerHTML = `<div class="fefo-title">📦 Hết hàng trên kệ</div>`;
+  } else {
+    mFefo.innerHTML = '';
+  }
+  overlay.classList.add('open');
+}
+document.getElementById('mClose').addEventListener('click', ()=> overlay.classList.remove('open'));
+overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.classList.remove('open'); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') overlay.classList.remove('open'); });
+
+/* ---------- search (also reports which tủ/buổi each match lives in) ---------- */
+const searchInput = document.getElementById('searchInput');
+const searchResults = document.getElementById('searchResults');
+const SEARCH_RESULTS_MAX = 40;
+
+searchInput.addEventListener('input', ()=>{
+  const q = searchInput.value.trim().toLowerCase();
+  document.querySelectorAll('.med-item').forEach(box=>{
+    if(!q){ box.classList.remove('dim','hit'); return; }
+    const match = box.dataset.search.includes(q);
+    box.classList.toggle('dim', !match);
+    box.classList.toggle('hit', match);
+  });
+
+  if(!q){ searchResults.classList.remove('show'); searchResults.innerHTML=''; return; }
+
+  const seen = new Set();
+  const matches = [];
+  records.forEach(it=>{
+    const key = it['Tên hoạt chất']+'|'+it._cabinetId;
+    if(seen.has(key)) return;
+    const hay = (it['Tên hoạt chất']+' '+it['Tên biệt dược']+' '+it['STT Buổi']+' '+it['Tên Bài']+' '+it._cabinetLabel).toLowerCase();
+    if(hay.includes(q)){ seen.add(key); matches.push(it); }
+  });
+
+  if(matches.length===0){
+    searchResults.innerHTML = `<div class="sr-empty">Không tìm thấy thuốc nào khớp "${esc(searchInput.value)}"</div>`;
+  } else {
+    const shown = matches.slice(0, SEARCH_RESULTS_MAX);
+    const more = matches.length - shown.length;
+    searchResults.innerHTML =
+      `<div class="sr-count">${matches.length} kết quả — bấm để đến đúng tủ</div>` +
+      shown.map(it=>
+        `<button type="button" data-cabinet="${esc(it._cabinetId)}"><b>${esc(it['Tên hoạt chất'])}</b><span class="sr-buoi">${esc(it._cabinetLabel)}</span></button>`
+      ).join('') +
+      (more>0 ? `<div class="sr-count">+ ${more} kết quả khác, gõ cụ thể hơn để thu hẹp</div>` : '');
+  }
+  searchResults.classList.add('show');
+});
+searchResults.addEventListener('click', e=>{
+  const btn = e.target.closest('button[data-cabinet]');
+  if(btn) scrollToCabinet(btn.dataset.cabinet);
+});
+
+/* ==================================================================
+   MAIN SCREEN = walkable pharmacy overview. The student walks to the
+   "Sảnh Tiền Thực Hành GPP" to practice cabinet putaway and earn stars;
+   reaching the "Dược sĩ thực tập" title (25⭐, see addStars()) grants a
+   🔑 Chìa khóa, then the student goes through the 🚪 Cửa ra vào to enter
+   (unlock) the pharmacy practice (cabinets + carton).
+   ================================================================== */
+const pMap = document.getElementById('pharmacyMap');
+const pChar = document.getElementById('pmChar');
+const pZoneEls = [...pMap.querySelectorAll('.pm-zone')];
+const pmZoneLabel = document.getElementById('pmZone');
+const mapKeyEl = document.getElementById('mapKey');
+const mapActionEl = document.getElementById('mapAction');
+const P_W = 890, P_H = 690, C_W = 34, C_H = 30, C_SPEED = 3.6, P_BORDER = 5;
+const mapStage = document.getElementById('mapStage');
+let mapScale = 1;
+let charX = 420, charY = 616, targetX = null, targetY = null;   // start in the Sảnh strip (outside/in front of the pharmacy frame)
+const pKeys = {};
+let pRects = [];
+let pRaf = null;
+let pHereZone = null;
+let hasKey = localStorage.getItem('tu-thuoc-mo-phong:key') === '1';
+
+function pComputeRects(){
+  pRects = pZoneEls.map(z=>({ el:z, x:z.offsetLeft, y:z.offsetTop, w:z.offsetWidth, h:z.offsetHeight }));
+}
+function pCollide(px, py){
+  if(px < 2 || py < 2 || px + C_W > P_W - 2 || py + C_H > P_H - 2) return true;
+  for(const r of pRects){
+    if(r.el.dataset.zone) continue;   // Sảnh & Cửa ra vào are walkable — you stand in/on them
+    if(px < r.x + r.w && px + C_W > r.x && py < r.y + r.h && py + C_H > r.y) return true;
+  }
+  return false;
+}
+function pUpdateZone(){
+  const ccx = charX + C_W/2, ccy = charY + C_H/2;
+  let best = null, bd = 1e9;
+  for(const r of pRects){
+    const dx = Math.max(r.x - ccx, 0, ccx - (r.x+r.w));
+    const dy = Math.max(r.y - ccy, 0, ccy - (r.y+r.h));
+    const d = Math.hypot(dx, dy);
+    if(d < bd){ bd = d; best = r; }
+  }
+  pZoneEls.forEach(z=> z.classList.remove('here'));
+  if(best && bd < 34){
+    best.el.classList.add('here');
+    pmZoneLabel.textContent = 'Bạn đang ở: ' + best.el.dataset.name;
+    pHereZone = best.el.dataset.zone ? best.el : null;
+  } else {
+    pmZoneLabel.textContent = 'Đang ở lối đi / khu vực khách';
+    pHereZone = null;
+  }
+  renderMapAction();
+}
+function renderMapAction(){
+  if(pHereZone && pHereZone.dataset.zone === 'sanh'){
+    mapActionEl.innerHTML = '<button class="act-btn" data-act="go">⏎ Sắp xếp thuốc vào tủ (Sảnh Tiền Thực Hành)</button>';
+  } else if(pHereZone && pHereZone.dataset.zone === 'door'){
+    mapActionEl.innerHTML = hasKey
+      ? '<button class="act-btn" data-act="go">🔓 Cửa đã mở khóa</button>'
+      : '<button class="act-btn locked" disabled>🔒 Cần Chìa khóa — đạt "Dược sĩ thực tập" (25⭐)</button>';
+  } else {
+    mapActionEl.innerHTML = '';
+  }
+}
+function pLoop(){
+  let vx = (pKeys.right?1:0) - (pKeys.left?1:0);
+  let vy = (pKeys.down?1:0) - (pKeys.up?1:0);
+  if(vx || vy){ targetX = targetY = null; }
+  else if(targetX != null){
+    const dx = targetX - charX, dy = targetY - charY, d = Math.hypot(dx, dy);
+    if(d > C_SPEED){ vx = dx/d; vy = dy/d; } else { targetX = targetY = null; }
+  }
+  if(vx || vy){
+    const len = Math.hypot(vx, vy) || 1;
+    vx = vx/len * C_SPEED; vy = vy/len * C_SPEED;
+    if(!pCollide(charX + vx, charY)) charX += vx;
+    if(!pCollide(charX, charY + vy)) charY += vy;
+    pChar.classList.add('walk');
+    if(vx > 0.15) pChar.classList.add('flip'); else if(vx < -0.15) pChar.classList.remove('flip');
+  } else {
+    pChar.classList.remove('walk');
+  }
+  pChar.style.left = charX + 'px';
+  pChar.style.top = charY + 'px';
+  pUpdateZone();
+  pRaf = requestAnimationFrame(pLoop);
+}
+function pStart(){ requestAnimationFrame(()=>{ pComputeRects(); if(!pRaf) pRaf = requestAnimationFrame(pLoop); }); }
+function pStop(){ if(pRaf){ cancelAnimationFrame(pRaf); pRaf = null; } for(const k in pKeys) pKeys[k]=false; }
+
+/* scale the whole scene so it always fits the viewport (map is 900×700) */
+function fitMap(){
+  if(!document.body.classList.contains('view-map')) return;
+  pMap.style.transform = 'none';
+  const topY = pMap.getBoundingClientRect().top;
+  const availH = window.innerHeight - topY - 52;   // leave room for the action button
+  const availW = (mapStage.clientWidth || window.innerWidth) - 6;
+  mapScale = Math.max(0.4, Math.min(1, availW/900, availH/700));
+  pMap.style.transform = 'scale(' + mapScale + ')';
+  mapStage.style.height = (700 * mapScale) + 'px';
+}
+window.addEventListener('resize', fitMap);
+
+/* lock/unlock the pharmacy-interior zones based on whether the key is held */
+function applyLocks(){
+  document.querySelectorAll('.pm-zone.lockable').forEach(z=> z.classList.toggle('locked', !hasKey));
+  mapKeyEl.textContent = hasKey ? '🔑 Đã có Chìa khóa' : '🔒 Chưa có Chìa khóa';
+  mapKeyEl.className = 'map-key ' + (hasKey ? 'has' : 'locked');
+  const ds = document.getElementById('doorSub'); if(ds) ds.textContent = hasKey ? '🔓 Đã mở khóa' : '🔒 Cần Chìa khóa';
+  renderMapAction();
+}
+
+/* ---- view switching: map <-> pharmacy ---- */
+function showMap(){ stopHandTracking(); document.body.classList.remove('view-pharmacy'); document.body.classList.add('view-map'); pStart(); fitMap(); requestAnimationFrame(fitMap); setTimeout(fitMap,60); }
+function showPharmacy(){
+  pStop();
+  document.body.classList.remove('view-map'); document.body.classList.add('view-pharmacy');
+  /* the cabinet was in a hidden screen so it never got sized — size it now,
+     directly (layout is synchronous) plus a couple of timer retries in case
+     fonts/images settle the row height a touch late */
+  if(typeof syncBoxSize==='function'){ syncBoxSize(); requestAnimationFrame(syncBoxSize); setTimeout(syncBoxSize,80); setTimeout(syncBoxSize,240); }
+}
+document.getElementById('toMapBtn').addEventListener('click', showMap);
+document.getElementById('mobileMapBtn').addEventListener('click', showMap);
+
+/* ---- zone interaction ---- */
+function doZoneAction(zone){
+  const z = zone && zone.dataset.zone;
+  if(z === 'sanh'){ showPharmacy(); }   // Sảnh = the tier-based cabinet putaway practice
+  else if(z === 'door'){
+    if(hasKey) pmZoneLabel.textContent = '🔓 Cửa đã mở khóa — chào mừng vào Nhà thuốc GPP!';
+    else pmZoneLabel.textContent = '🔒 Cửa đang khóa — luyện ở 🎓 Sảnh Tiền Thực Hành đến danh hiệu "Dược sĩ thực tập" (25⭐) để nhận 🔑 Chìa khóa mở cửa.';
+  }
+}
+mapActionEl.addEventListener('click', e=>{ const b=e.target.closest('.act-btn'); if(b && !b.disabled && pHereZone) doZoneAction(pHereZone); });
+
+/* click on the floor → walk there */
+pMap.addEventListener('click', e=>{
+  /* clicking directly on an interactive area (Sảnh / Cửa ra vào) triggers it
+     right away — walk the pharmacist there first, then open it */
+  const zoneEl = e.target.closest('.pm-zone[data-zone]');
+  if(zoneEl){
+    charX = zoneEl.offsetLeft + zoneEl.offsetWidth/2 - C_W/2;
+    charY = zoneEl.offsetTop  + zoneEl.offsetHeight/2 - C_H/2;
+    pChar.style.left = charX + 'px'; pChar.style.top = charY + 'px';
+    targetX = targetY = null;
+    doZoneAction(zoneEl);
+    return;
+  }
+  const r = pMap.getBoundingClientRect();
+  targetX = Math.max(0, Math.min(P_W - C_W, (e.clientX - r.left)/mapScale - P_BORDER - C_W/2));
+  targetY = Math.max(0, Math.min(P_H - C_H, (e.clientY - r.top )/mapScale - P_BORDER - C_H/2));
+});
+
+function earnKey(){ hasKey = true; localStorage.setItem('tu-thuoc-mo-phong:key','1'); applyLocks(); }
+
+/* ---- keyboard: steer in map view, Enter to interact ---- */
+const P_KEYMAP = { arrowup:'up', w:'up', arrowdown:'down', s:'down', arrowleft:'left', a:'left', arrowright:'right', d:'right' };
+document.addEventListener('keydown', e=>{
+  if(!document.body.classList.contains('view-map')) return;
+  if(e.key === 'Enter'){ if(pHereZone){ doZoneAction(pHereZone); e.preventDefault(); } return; }
+  const dir = P_KEYMAP[e.key.toLowerCase()];
+  if(dir){ pKeys[dir] = true; e.preventDefault(); }
+});
+document.addEventListener('keyup', e=>{
+  const dir = P_KEYMAP[e.key.toLowerCase()];
+  if(dir){ pKeys[dir] = false; }
+});
+
+/* ---- keyboard: on the pharmacy screen, type a tủ's number to jump
+   straight to it (matches the number badge on its tab). Digits typed in
+   quick succession combine — e.g. "1" then "8" within the pause window
+   jumps to tủ 18 — like typing a channel number, so multi-digit tủ are
+   reachable without hunting through the tab bar. */
+let cabJumpBuf = '', cabJumpT = null;
+document.addEventListener('keydown', e=>{
+  if(!document.body.classList.contains('view-pharmacy')) return;
+  if(e.ctrlKey || e.metaKey || e.altKey) return;
+  if(!/^[0-9]$/.test(e.key)) return;
+  const tag = document.activeElement && document.activeElement.tagName;
+  if(tag==='INPUT' || tag==='TEXTAREA' || tag==='SELECT') return;
+  e.preventDefault();
+  cabJumpBuf += e.key;
+  clearTimeout(cabJumpT);
+  cabJumpT = setTimeout(()=>{ cabJumpBuf=''; }, 600);
+  const idx = parseInt(cabJumpBuf,10) - 1;
+  if(idx>=0 && idx<cartWindow) showCabinet(idx);
+});
+
+/* ---- hand tracking: pinch (ngón cái + ngón trỏ) qua webcam để kéo hộp
+   thuốc vào tủ mà không cần chuột/chạm. Dùng chung @mediapipe/tasks-vision
+   đã có sẵn ở /vendor/mediapipe (như compounding-lab.html) nhưng ở đây
+   không có scene 3D — chụm tay được ánh xạ THẲNG sang toạ độ màn hình
+   (clientX/clientY), rồi PHÁT LẠI làm PointerEvent thật lên đúng cơ chế
+   kéo-thả pointerdown/move/up mà makeBoxDraggable() đã dùng cho chuột/chạm
+   — không phải viết lại luật kéo-thả/FEFO/chấm điểm riêng cho tay. */
+const HAND_POINTER_ID = 9001;
+const handBtnEl = document.getElementById('handBtn');
+const handCamEl = document.getElementById('handCamPreview');
+const handCamCtx = handCamEl.getContext('2d');
+const handCursorEl = document.getElementById('handCursor');
+const HAND_SECURE = window.isSecureContext && !!navigator.mediaDevices?.getUserMedia;
+const handState = { running:false, landmarker:null, video:null, lastVideoTime:-1, pinching:false, grabbing:false, sx:undefined, sy:undefined };
+
+let handPreloadPromise = null;
+function preloadHand(){
+  if(handPreloadPromise) return handPreloadPromise;
+  handPreloadPromise = (async () => {
+    const { HandLandmarker, FilesetResolver } = await import('./vendor/mediapipe/vision_bundle.mjs');
+    const fileset = await FilesetResolver.forVisionTasks('./vendor/mediapipe/wasm');
+    handState.landmarker = await HandLandmarker.createFromOptions(fileset, {
+      baseOptions: { modelAssetPath: './models/hand_landmarker.task', delegate: 'GPU' },
+      runningMode: 'VIDEO', numHands: 1,
+    });
+  })();
+  return handPreloadPromise;
+}
+
+async function startHandTracking(){
+  handBtnEl.disabled = true;
+  handBtnEl.textContent = '⏳ Đang tải...';
+  try{
+    await preloadHand();
+    handBtnEl.textContent = '📷 Đang mở camera...';
+    const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user', width:640, height:480 }, audio:false });
+    handState.video = document.createElement('video');
+    handState.video.srcObject = stream;
+    handState.video.autoplay = true; handState.video.muted = true; handState.video.playsInline = true;
+    await new Promise(r => (handState.video.onloadedmetadata = r));
+    await handState.video.play();
+    handState.running = true;
+    handBtnEl.classList.add('active');
+    handBtnEl.textContent = '✋ Tắt xếp bằng tay';
+    handBtnEl.disabled = false;
+    handCamEl.classList.add('shown');
+    handCursorEl.classList.add('shown');
+    showCartMsg('🖐️ Đưa tay vào khung camera. Chụm ngón cái + trỏ để cầm hộp, thả ra để đặt xuống.', true);
+  }catch(err){
+    handBtnEl.disabled = false;
+    handBtnEl.textContent = '🖐️ Xếp bằng tay (camera)';
+    showCartMsg('❌ Không mở được camera: ' + (err.message || err.name), false);
+  }
+}
+
+function stopHandTracking(){
+  if(!handState.running) return;
+  handState.running = false;
+  handState.video?.srcObject?.getTracks().forEach(t => t.stop());
+  handState.video = null;
+  handState.pinching = false;
+  releaseHandGrab();
+  handBtnEl.classList.remove('active');
+  handBtnEl.textContent = '🖐️ Xếp bằng tay (camera)';
+  handCamEl.classList.remove('shown');
+  handCursorEl.classList.remove('shown','pinching');
+}
+
+if(!HAND_SECURE){
+  handBtnEl.disabled = true;
+  handBtnEl.title = 'Cần HTTPS (hoặc localhost) để dùng camera';
+}else{
+  handBtnEl.addEventListener('click', () => handState.running ? stopHandTracking() : startHandTracking());
+}
+
+/* chụm xuống: nếu tay đang trỏ vào 1 nút bấm (thùng hàng, đổi lô, tab tủ…)
+   thì coi như bấm nút đó — để có thể chạy CẢ LƯỢT chơi chỉ bằng tay, không
+   riêng phần kéo-thả. Không có nút nào ở dưới thì mới cầm hộp đang chờ. */
+function handPinchDown(clientX, clientY){
+  const el = document.elementFromPoint(clientX, clientY);
+  const btn = el && el.closest ? el.closest('button:not(#handBtn)') : null;
+  if(btn && !btn.disabled){ btn.click(); return; }
+  const box = currentCartBox;
+  if(!box || box.classList.contains('placed')) return;
+  /* "cầm" hộp: pointerdown ngay tại tâm hộp (giữ nguyên vị trí ban đầu) rồi
+     pointermove thẳng tới vị trí tay thật — hộp bay tới nằm dưới tay ngay
+     lập tức thay vì lệch theo đúng điểm chụm (tay đưa vào khung hình khó mà
+     chụm trúng hộp bé xíu như dùng chuột). */
+  const rect = box.getBoundingClientRect();
+  box.dispatchEvent(new PointerEvent('pointerdown', {
+    clientX: rect.left+rect.width/2, clientY: rect.top+rect.height/2,
+    pointerId: HAND_POINTER_ID, pointerType:'touch', isPrimary:true, bubbles:true, cancelable:true, button:0,
+  }));
+  handState.grabbing = true;
+  document.dispatchEvent(new PointerEvent('pointermove', {
+    clientX, clientY, pointerId: HAND_POINTER_ID, pointerType:'touch', isPrimary:true, bubbles:true, cancelable:true,
+  }));
+}
+function handPinchMove(clientX, clientY){
+  if(!handState.grabbing) return;
+  document.dispatchEvent(new PointerEvent('pointermove', {
+    clientX, clientY, pointerId: HAND_POINTER_ID, pointerType:'touch', isPrimary:true, bubbles:true, cancelable:true,
+  }));
+}
+function releaseHandGrab(clientX, clientY){
+  if(!handState.grabbing) return;
+  handState.grabbing = false;
+  document.dispatchEvent(new PointerEvent('pointerup', {
+    clientX: clientX ?? 0, clientY: clientY ?? 0,
+    pointerId: HAND_POINTER_ID, pointerType:'touch', isPrimary:true, bubbles:true, cancelable:true,
+  }));
+}
+
+function updateHand(time){
+  if(!handState.running || !handState.landmarker || !handState.video) return;
+  if(handState.video.currentTime === handState.lastVideoTime) return;
+  handState.lastVideoTime = handState.video.currentTime;
+  const result = handState.landmarker.detectForVideo(handState.video, time);
+  handCamCtx.drawImage(handState.video, 0, 0, handCamEl.width, handCamEl.height);
+
+  if(!result.landmarks || !result.landmarks.length){
+    if(handState.pinching){ handState.pinching = false; releaseHandGrab(); }
+    handCursorEl.classList.remove('shown');
+    return;
+  }
+  handCursorEl.classList.add('shown');
+  const lm = result.landmarks[0];
+  const t = lm[4], idx = lm[8];   // đầu ngón cái, đầu ngón trỏ
+  handCamCtx.fillStyle = '#38bdf8';
+  for(const p of lm){ handCamCtx.beginPath(); handCamCtx.arc(p.x*handCamEl.width, p.y*handCamEl.height, 3, 0, Math.PI*2); handCamCtx.fill(); }
+  handCamCtx.strokeStyle = handState.pinching ? '#ef4444' : '#38bdf8';
+  handCamCtx.lineWidth = 2;
+  handCamCtx.beginPath();
+  handCamCtx.moveTo(t.x*handCamEl.width, t.y*handCamEl.height);
+  handCamCtx.lineTo(idx.x*handCamEl.width, idx.y*handCamEl.height);
+  handCamCtx.stroke();
+
+  // toạ độ màn hình: lật ngang (preview đang lật CSS để giống soi gương) rồi
+  // làm mượt (EMA) để bớt rung tay trước khi phát PointerEvent
+  const px = (t.x+idx.x)/2, py = (t.y+idx.y)/2;
+  const mx = 1-px, my = py;
+  if(handState.sx===undefined){ handState.sx=mx; handState.sy=my; }
+  handState.sx += (mx-handState.sx)*0.4;
+  handState.sy += (my-handState.sy)*0.4;
+  const clientX = handState.sx*window.innerWidth, clientY = handState.sy*window.innerHeight;
+  handCursorEl.style.left = clientX+'px';
+  handCursorEl.style.top = clientY+'px';
+
+  const pinchDist = Math.hypot(t.x-idx.x, t.y-idx.y);
+  const wasPinching = handState.pinching;
+  if(!handState.pinching && pinchDist < 0.05) handState.pinching = true;
+  else if(handState.pinching && pinchDist > 0.08) handState.pinching = false;
+  handCursorEl.classList.toggle('pinching', handState.pinching);
+
+  if(handState.pinching && !wasPinching) handPinchDown(clientX, clientY);
+  else if(handState.pinching) handPinchMove(clientX, clientY);
+  else if(!handState.pinching && wasPinching) releaseHandGrab(clientX, clientY);
+}
+(function handLoop(t){ updateHand(t); requestAnimationFrame(handLoop); })();
+
+/* ---- boot: start on the overview map ---- */
+applyLocks();
+showMap();
+</script>
+</body>
+</html>
