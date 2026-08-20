@@ -6,7 +6,7 @@
 // Express lẫn Next, kèm màu dự phòng) nên KHÔNG phải sửa CSS ở 2 nơi. Dùng chung cho
 // public/nha-thuoc-3d.html (Express) và web-next (Next) — 1 nguồn duy nhất.
 import { SCENARIO_CARDS, SCENARIOS } from './scenarios.js?v=ph0804';
-import { getStudent, setStudent, clearStudent } from './practice-client.js?v=ph0820';
+import { getStudent, setStudent, clearStudent } from './practice-client.js?v=ph0820e';
 
 const LEARNING_GOALS = [
   ['💬', 'Giao tiếp', 'Chào hỏi, tạo kết nối, giao tiếp trực diện với người bệnh'],

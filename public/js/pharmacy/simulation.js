@@ -35,7 +35,7 @@ import { openHdsdEditor, openPackageEditor, PACKAGE_TYPES, RETAIL_FORMS } from '
 import { STAGE_LABEL } from './rubric.js';
 // #142 — lưu bền vững hội thoại + thao tác 3D vào DB (trước đây chỉ nằm trong
 // bộ nhớ máy chủ nên mất sạch mỗi lần khởi động lại).
-import { startPractice, logMessage, logAction, finishPractice, getPracticeId } from './practice-client.js?v=ph0820';
+import { startPractice, logMessage, logAction, finishPractice, getPracticeId } from './practice-client.js?v=ph0820e';
 
 const $ = (id) => document.getElementById(id);
 
@@ -431,7 +431,7 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
         return;
       } catch (e) {
         alert('Chấm điểm gặp lỗi: ' + e.message + '\nDữ liệu hội thoại và thao tác đã được giữ lại để chấm lại.');
-        if (btn) { btn.disabled = false; btn.textContent = '✅ Kết thúc & chấm điểm'; }
+        if (btn) { btn.disabled = false; btn.textContent = '🏁 Kết thúc và chấm điểm'; }
         return;
       }
     }
@@ -1085,7 +1085,26 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
 
   // P3: Inspector modal — hộp thuốc zoom giữa màn hình, tự xoay, drag xoay,
   // info panel + 2 nút (Đưa vào khay / Trả về kệ). Dùng mini-scene Three.js riêng.
+  // CSS cho 2 nút kiểm tra (#142) — TỰ CHÈN từ JS thay vì sửa CSS ở cả trang
+  // Express lẫn trang Next (bản Next phải build lại mới ăn CSS). Cùng cách làm
+  // với intro.js: 1 nguồn duy nhất, không lệch giữa 2 nơi.
+  function injectCheckBtnStyle() {
+    if (document.getElementById('pharmacomm-check-style')) return;
+    const st = document.createElement('style');
+    st.id = 'pharmacomm-check-style';
+    st.textContent = `
+      .ins-actions { flex-wrap: wrap; }
+      .ins-check { flex: 1 1 45%; padding: 10px; border-radius: 10px; cursor: pointer;
+        font-weight: 700; font-size: 12.5px; color: var(--text, #e2e8f0);
+        background: rgba(56,189,248,.14); border: 1px solid rgba(56,189,248,.5); }
+      .ins-check:hover:not(:disabled) { background: rgba(56,189,248,.24); }
+      .ins-check.done { background: rgba(16,185,129,.18); border-color: rgba(16,185,129,.55); cursor: default; }
+    `;
+    document.head.appendChild(st);
+  }
+
   function openInspector({ drug, meta, confirmToTray, returnToShelf, fromTray = false }) {
+    injectCheckBtnStyle();
     // Khi mở từ khay bán hàng (hoặc thuốc đã nằm trong khay) → ẩn nút "Đưa vào
     // khay" vì đã ở trên khay rồi.
     const alreadyInTray = fromTray || (sim.getPickedIds?.() || []).includes(drug.id);
@@ -1126,6 +1145,11 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
                  ĐẦY ĐỦ lên hộp + bao bì trực tiếp. (Bỏ luôn dòng hướng dẫn xoay hộp.) -->
           </div>
           <div class="ins-actions">
+            <!-- #142: hai nút KIỂM TRA có thật trong mô phỏng. Đặc tả cấm tính điểm
+                 thao tác chỉ vì sinh viên NÓI đã làm, nên phải có hành động thật để
+                 ghi vào nhật ký thì tiêu chí C3/C4 mới được chấm. -->
+            <button class="ins-check" type="button" data-check="info">🔍 Kiểm tra tên – hàm lượng – dạng bào chế</button>
+            <button class="ins-check" type="button" data-check="expiry">📅 Kiểm tra hạn dùng</button>
             <button class="ins-return" type="button">↩ Trả về kệ</button>
             ${pkgKind === 'carton' ? `<button class="ins-retail" type="button">🔓 Tách lẻ (${drug.unit || 'đơn vị'})</button>` : ''}
             ${alreadyInTray ? '' : '<button class="ins-confirm" type="button">📥 Đưa vào khay (Quét barcode)</button>'}
@@ -1588,6 +1612,22 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
       tex.dispose(); tex2.dispose(); sideTex.dispose();
       overlay.remove();
     }
+    // #142 — hai nút kiểm tra: ghi nhật ký thao tác + xác nhận ngay trên màn hình
+    // để người học thấy mình vừa đối chiếu thông tin gì.
+    overlay.querySelectorAll('.ins-check').forEach((b) => {
+      b.addEventListener('click', () => {
+        const kind = b.dataset.check;
+        const base = { drugId: drug.id, drugName: drug.brand || drug.name };
+        if (kind === 'expiry') {
+          postAction('check_expiry', { ...base, expiry: meta?.expiry || drug.expiry || null });
+        } else {
+          postAction('check_drug_info', { ...base, strength: drug.strength || null, form: drug.form || null });
+        }
+        b.classList.add('done');
+        b.textContent = kind === 'expiry' ? '✅ Đã kiểm tra hạn dùng' : '✅ Đã kiểm tra tên – hàm lượng – dạng';
+        b.disabled = true;
+      });
+    });
     overlay.querySelector('.ins-return').addEventListener('click', () => {
       returnToShelf?.();
       close();

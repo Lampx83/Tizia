@@ -10,6 +10,8 @@
 // trang"; số thứ tự trùng bị máy chủ bỏ qua nhờ ràng buộc UNIQUE).
 // =====================================================================
 
+import { ALL_DRUGS } from './catalog.js?v=ph0804';
+
 const STUDENT_KEY = 'pharmacomm:student';   // localStorage — nhớ giữa các lượt
 const STATE_KEY = 'pharmacomm:practice';    // sessionStorage — theo tab
 
@@ -96,13 +98,30 @@ export function logMessage(speaker, content) {
   }));
 }
 
+// Bổ sung TÊN THUỐC và thông tin chuyên môn vào thao tác. Cảnh 3D chỉ gửi
+// `drugId` nên nhật ký hiện mã trần ("otck-041") — mục 7 đặc tả yêu cầu ghi rõ
+// tên đối tượng, hàm lượng, dạng bào chế, hạn dùng để giảng viên đọc hiểu ngay.
+function enrich(payload) {
+  const p = { ...(payload || {}) };
+  const id = p.drugId || p.objectId;
+  if (!id || p.drugName) return p;
+  const d = ALL_DRUGS.find((x) => x.id === id);
+  if (!d) return p;
+  p.drugName = d.name || d.brand || id;
+  if (d.strength && !p.strength) p.strength = d.strength;
+  if (d.form && !p.form) p.form = d.form;
+  if (d.expiry && !p.expiry) p.expiry = d.expiry;
+  return p;
+}
+
 // Mục 6 — chỉ thao tác CÓ Ý NGHĨA đánh giá (không lưu chuột/camera/khung hình).
 export function logAction(type, payload, result) {
   if (!state?.practiceId || state.finished) return;
   const order = state.actOrder++;
   save();
+  const p = enrich(payload);
   return enqueue(() => postRetry('/api/pharmacy/practice/action', {
-    sessionId: state.practiceId, type, payload: payload || {}, order, result: result || 'success',
+    sessionId: state.practiceId, type, payload: p, order, result: result || 'success',
   }));
 }
 
@@ -119,5 +138,7 @@ export async function finishPractice() {
   });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.error || 'Chấm điểm lỗi.');
-  return { sessionId: id, scoringFailed: !!d.scoringFailed };
+  // Máy chủ chỉ nhận việc rồi chấm ở nền (mất 60–120s) — trang kết quả sẽ tự
+  // theo dõi tiến độ, ở đây không đợi.
+  return { sessionId: id, status: d.status || 'scoring' };
 }

@@ -123,13 +123,27 @@ async function main() {
   const wrap = $('wrap');
   if (!sessionId) { wrap.innerHTML = '<p class="empty">Thiếu mã phiên thực hành.</p>'; return; }
   let d;
-  try {
-    const r = await fetch('/api/pharmacy/practice/result/' + encodeURIComponent(sessionId));
-    d = await r.json();
-    if (!r.ok) throw new Error(d.error || 'Không đọc được kết quả.');
-  } catch (e) {
-    wrap.innerHTML = `<a class="back" href="/nha-thuoc-3d.html">← Về nhà thuốc</a><p class="empty">${esc(e.message)}</p>`;
-    return;
+  // Chấm điểm chạy ở nền (60–120s cho 25 tiêu chí) → hỏi lại đến khi xong.
+  // Mục 14 đặc tả: phải hiển thị được trạng thái "đang chấm".
+  for (let i = 0; ; i++) {
+    try {
+      const r = await fetch('/api/pharmacy/practice/result/' + encodeURIComponent(sessionId));
+      d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Không đọc được kết quả.');
+    } catch (e) {
+      wrap.innerHTML = `<a class="back" href="/nha-thuoc-3d.html">← Về nhà thuốc</a><p class="empty">${esc(e.message)}</p>`;
+      return;
+    }
+    if (d.session?.status !== 'scoring') break;
+    wrap.innerHTML = `
+      <a class="back" href="/nha-thuoc-3d.html">← Về nhà thuốc</a>
+      <div class="head">
+        <h1>Đang chấm điểm lượt thực hành… <span class="badge warn">Đang chấm</span></h1>
+        <p class="note">Hệ thống đang đối chiếu hội thoại và nhật ký thao tác 3D theo 25 tiêu chí.
+        Việc này thường mất khoảng 1–2 phút, bạn để yên trang này giúp nhé.</p>
+      </div>`;
+    // 2 giây một lần trong 30 lần đầu, sau đó giãn ra 5 giây.
+    await new Promise((s) => setTimeout(s, i < 30 ? 2000 : 5000));
   }
 
   const s = d.session, sum = d.summary || { groups: [], score: 0, max: 0, percent: 0 };
@@ -214,7 +228,7 @@ async function main() {
         <div class="num">${sum.score}<small> / ${sum.max} điểm</small></div>
         <div class="groups">${groupChips}</div>
       </div>
-      ${failed ? '<p class="note">⚠️ Một phần bài chấm gặp lỗi hệ thống. Toàn bộ hội thoại và thao tác đã được giữ nguyên để chấm lại — bạn báo giảng viên giúp nhé.</p>' : ''}
+      ${failed ? '<p class="note">⚠️ Bài chấm gặp lỗi hệ thống. Toàn bộ hội thoại và thao tác đã được giữ nguyên — bấm “Chấm lại” để hệ thống chấm lại đúng lượt này (không tạo lượt mới).</p><div class="acts" style="margin-top:10px"><button class="primary" type="button" data-rescore>🔄 Chấm lại</button></div>' : ''}
     </div>
 
     <div class="tabs">
@@ -235,7 +249,21 @@ async function main() {
     <p class="note">Đây là dữ liệu của lượt thực hành này, chỉ để xem lại — không sửa hoặc xoá được.</p>
   `;
 
-  wrap.addEventListener('click', (e) => {
+  wrap.addEventListener('click', async (e) => {
+    if (e.target.closest('[data-rescore]')) {
+      const b = e.target.closest('[data-rescore]');
+      b.disabled = true; b.textContent = '⏳ Đang gửi…';
+      try {
+        await fetch('/api/pharmacy/practice/finish', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId }),
+        });
+        main();   // quay lại vòng theo dõi "đang chấm"
+      } catch {
+        b.disabled = false; b.textContent = '🔄 Chấm lại';
+      }
+      return;
+    }
     const t = e.target.closest('.tab');
     if (!t) return;
     wrap.querySelectorAll('.tab').forEach((x) => x.classList.toggle('on', x === t));

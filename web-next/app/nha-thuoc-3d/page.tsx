@@ -1269,7 +1269,7 @@ export default function NhaThuoc3DPage() {
         <h3>🎯 Gợi ý theo SEGUE</h3>
         <ul className="hints" id="hints"></ul>
 
-        <button className="btn success" id="finish" type="button">🏁 Kết phiên & chấm điểm</button>
+        <button className="btn success" id="finish" type="button">🏁 Kết thúc và chấm điểm</button>
         <div id="score-panel" hidden></div>
         <div id="stats-bar" style={{ display: 'flex', gap: '10px', fontSize: '11px', color: 'var(--muted)', paddingTop: '6px', borderTop: '1px solid var(--border)' }}>
           <span>Đã chọn: <b id="stat-picked">0</b></span>

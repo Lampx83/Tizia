@@ -132,10 +132,18 @@ const ACTION_LABELS = {
 
 function describeAction(type, payload = {}) {
   const base = ACTION_LABELS[type] || type;
-  const name = payload.drugName || payload.name || payload.drugId || payload.objectName;
+  const name = payload.drugName || payload.name || payload.objectName || payload.drugId;
   const qty = payload.qty ?? payload.quantity;
   let s = base;
   if (name) s += ` — ${name}`;
+  // Chi tiết chuyên môn cho các thao tác kiểm tra: giảng viên đọc nhật ký là
+  // biết ngay sinh viên đã đối chiếu đúng thông tin gì (mục 7 đặc tả).
+  const detail = [
+    payload.strength && `hàm lượng ${payload.strength}`,
+    payload.form && `dạng ${payload.form}`,
+    payload.expiry && `hạn dùng ${payload.expiry}`,
+  ].filter(Boolean);
+  if (detail.length && /^(check_|inspect_)/.test(type)) s += ` · ${detail.join(', ')}`;
   if (qty != null && qty !== '') s += ` (số lượng ${qty})`;
   return s.slice(0, 300);
 }
@@ -341,12 +349,34 @@ export function attachPharmacyPractice(r) {
   // POST /api/pharmacy/practice/finish — mục 9 + 10: khoá phiên, chấm điểm bằng
   // CẢ hội thoại lẫn nhật ký thao tác, lưu kết quả vào đúng phiên.
   // Chấm lại khi lỗi KHÔNG tạo phiên mới (đặc tả mục 9 & 14).
+  // 🪤 20/08: chấm cả 25 tiêu chí mất 60–120s (3 lô AI) — DÀI HƠN timeout của
+  // reverse proxy nên trình duyệt nhận 500 dù máy chủ vẫn chấm xong bình thường.
+  // Vì vậy route này trả lời NGAY (status 'scoring') rồi chấm ở nền; trang kết
+  // quả tự hỏi lại đến khi xong. Cũng khớp mục 14 đặc tả: phải hiển thị được
+  // trạng thái "đang chấm" / "chấm thành công" / "chấm điểm lỗi".
   r.post('/api/pharmacy/practice/finish', J, async (req, res) => {
+    const { sessionId } = req.body || {};
+    const row0 = await getSessionRow.get(String(sessionId || ''));
+    if (!row0) return res.status(404).json({ error: 'Không tìm thấy phiên thực hành.' });
+    if (row0.status === 'scoring') return res.json({ ok: true, sessionId: row0.session_id, status: 'scoring' });
+
+    const completedAt = row0.completed_at || now();
+    await finishSession.run({
+      session_id: row0.session_id,
+      completed_at: completedAt,
+      duration_ms: completedAt - Number(row0.started_at),
+      status: 'scoring', total_score: row0.total_score ?? null, ai_model_version: null, t: now(),
+    });
+    res.json({ ok: true, sessionId: row0.session_id, status: 'scoring' });
+    scoreSession(row0.session_id).catch((e) => console.error('[pharmacy-practice] chấm nền lỗi:', e.message));
+  });
+
+  // Chấm ở nền — tách hẳn khỏi vòng đời request để không bị proxy cắt giữa chừng.
+  async function scoreSession(sessionId) {
     let row;
     try {
-      const { sessionId } = req.body || {};
-      row = await getSessionRow.get(String(sessionId || ''));
-      if (!row) return res.status(404).json({ error: 'Không tìm thấy phiên thực hành.' });
+      row = await getSessionRow.get(sessionId);
+      if (!row) return;
 
       const messages = await listMessages.all(row.session_id);
       const actions = await listActions.all(row.session_id);
@@ -416,9 +446,8 @@ export function attachPharmacyPractice(r) {
         t,
       });
 
-      res.json({ ok: true, sessionId: row.session_id, scoringFailed: !aiOk });
     } catch (err) {
-      console.error('[pharmacy-practice] finish failed:', err.message);
+      console.error('[pharmacy-practice] chấm điểm lỗi:', err.message);
       // Giữ nguyên hội thoại + thao tác để chấm lại (mục 14).
       if (row) {
         try {
@@ -430,9 +459,8 @@ export function attachPharmacyPractice(r) {
           });
         } catch {}
       }
-      res.status(500).json({ error: 'Chấm điểm lỗi. Dữ liệu đã được giữ lại để chấm lại.' });
     }
-  });
+  }
 
   // GET /api/pharmacy/practice/result/:id — mục 12: trang kết quả 3 thẻ.
   r.get('/api/pharmacy/practice/result/:id', async (req, res) => {
