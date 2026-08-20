@@ -261,16 +261,27 @@ export function attachPharmacyPractice(r) {
 
   // POST /api/pharmacy/practice/session — mục 2 + 3: nhận định danh SV tự khai,
   // tạo phiên thực hành UUID gắn với tình huống đã chọn.
+  // Mã dành cho tài khoản khách — khớp GUEST_CODE ở public/js/pharmacy/practice-client.js
+  const GUEST_CODE = 'KHACH';
+
   r.post('/api/pharmacy/practice/session', J, async (req, res) => {
     try {
       const b = req.body || {};
-      const student_code = clean(b.studentCode, 40).toUpperCase();   // mục 2: in hoa + bỏ khoảng trắng thừa
-      const student_name = clean(b.studentName, 120);
-      const class_name = clean(b.className, 60);
+      let student_code = clean(b.studentCode, 40).toUpperCase();     // mục 2: in hoa + bỏ khoảng trắng thừa
+      let student_name = clean(b.studentName, 120);
+      let class_name = clean(b.className, 60);
       const moduleId = clean(b.moduleId, 40);
-      // mục 2: không cho tiếp tục nếu thiếu một trong ba thông tin.
-      if (!student_code || !student_name || !class_name) {
+      // TÀI KHOẢN KHÁCH: vào thử không cần thông tin sinh viên. Danh tính do máy chủ
+      // áp cứng (không lấy theo client gửi) để không ai mạo danh sinh viên thật, và
+      // để giảng viên lọc bài của khách ra khỏi danh sách lớp bằng mã KHACH.
+      if (b.guest === true) {
+        student_code = GUEST_CODE; student_name = 'Khách'; class_name = 'Khách';
+      } else if (!student_code || !student_name || !class_name) {
+        // mục 2: không cho tiếp tục nếu thiếu một trong ba thông tin.
         return res.status(400).json({ error: 'Vui lòng nhập đủ mã sinh viên, họ tên và lớp.' });
+      } else if (student_code === GUEST_CODE) {
+        // Chặn người dùng tự gõ "khach" vào ô mã SV để giả làm khách.
+        return res.status(400).json({ error: 'Mã sinh viên này không dùng được. Bạn chọn "Vào bằng tài khoản khách" ở dưới nhé.' });
       }
       const sc = SCENARIOS[moduleId];
       if (!sc) return res.status(400).json({ error: 'Tình huống không hợp lệ.' });

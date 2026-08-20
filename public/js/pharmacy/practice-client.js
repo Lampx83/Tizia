@@ -36,6 +36,18 @@ export function setStudent({ studentCode, studentName, className }) {
 }
 export function clearStudent() { try { localStorage.removeItem(STUDENT_KEY); } catch {} }
 
+// Vào bằng TÀI KHOẢN KHÁCH: không cần mã SV / họ tên / lớp — dùng cho người ghé
+// thử phần mềm. Bài của khách vẫn được lưu và chấm bình thường, nhưng mang mã
+// KHACH nên giảng viên lọc ra khỏi danh sách sinh viên thật dễ dàng. Danh tính
+// khách do MÁY CHỦ áp lại (server/pharmacy-practice.js) — client không tự đặt tên.
+export const GUEST_CODE = 'KHACH';
+export function setGuest() {
+  const g = { studentCode: GUEST_CODE, studentName: 'Khách', className: 'Khách', guest: true };
+  writeJson(localStorage, STUDENT_KEY, g);
+  return g;
+}
+export function isGuest() { return getStudent()?.guest === true; }
+
 // ---- phiên thực hành -------------------------------------------------
 let state = readJson(sessionStorage, STATE_KEY) || null;
 const save = () => writeJson(sessionStorage, STATE_KEY, state);

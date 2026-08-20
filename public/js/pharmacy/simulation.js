@@ -35,7 +35,7 @@ import { openHdsdEditor, openPackageEditor, PACKAGE_TYPES, RETAIL_FORMS } from '
 import { STAGE_LABEL } from './rubric.js';
 // #142 — lưu bền vững hội thoại + thao tác 3D vào DB (trước đây chỉ nằm trong
 // bộ nhớ máy chủ nên mất sạch mỗi lần khởi động lại).
-import { startPractice, logMessage, logAction, finishPractice, getPracticeId } from './practice-client.js?v=ph0820e';
+import { startPractice, logMessage, logAction, finishPractice, getPracticeId } from './practice-client.js?v=ph0820f';
 
 const $ = (id) => document.getElementById(id);
 

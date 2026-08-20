@@ -6,7 +6,7 @@
 // Express lẫn Next, kèm màu dự phòng) nên KHÔNG phải sửa CSS ở 2 nơi. Dùng chung cho
 // public/nha-thuoc-3d.html (Express) và web-next (Next) — 1 nguồn duy nhất.
 import { SCENARIO_CARDS, SCENARIOS } from './scenarios.js?v=ph0804';
-import { getStudent, setStudent, clearStudent } from './practice-client.js?v=ph0820e';
+import { getStudent, setStudent, clearStudent, setGuest, isGuest } from './practice-client.js?v=ph0820f';
 
 const LEARNING_GOALS = [
   ['💬', 'Giao tiếp', 'Chào hỏi, tạo kết nối, giao tiếp trực diện với người bệnh'],
@@ -69,6 +69,15 @@ function injectStyle() {
     background: linear-gradient(135deg, var(--accent, #38bdf8), var(--green, #22c55e));
     border: 0; border-radius: 12px; padding: 13px 18px; letter-spacing: .3px; text-transform: uppercase; }
   .pc-id-btn:hover { filter: brightness(1.06); }
+  /* Lối vào bằng tài khoản khách — nhẹ hơn nút chính để không lấn lối chuẩn (nhập mã SV). */
+  .pc-id-or { display: flex; align-items: center; gap: 10px; margin: 14px 0 12px;
+    color: var(--muted, #94a3b8); font-size: 12px; }
+  .pc-id-or::before, .pc-id-or::after { content: ''; flex: 1; height: 1px; background: var(--border, #334155); }
+  .pc-id-guest { width: 100%; cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 700;
+    color: inherit; background: transparent; border: 1px solid var(--border, #334155);
+    border-radius: 12px; padding: 11px 16px; transition: border-color .12s, background .12s; }
+  .pc-id-guest:hover { border-color: var(--accent, #38bdf8); background: var(--card-h, #1e293b); }
+  .pc-id-guest small { display: block; margin-top: 3px; font-weight: 500; font-size: 11.5px; color: var(--muted, #94a3b8); }
   /* Thẻ danh tính hiển thị ở màn chọn tình huống (#142 mục 3). */
   .pc-who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 20px 0 0;
     background: var(--card, #111827); border: 1px solid var(--border, #334155); border-radius: 12px; padding: 11px 15px; font-size: 13px; }
@@ -130,11 +139,20 @@ export function showStudentForm(onDone) {
         </div>
         <div class="pc-id-err" data-err></div>
         <button class="pc-id-btn" type="submit">Vào thực hành</button>
+        <div class="pc-id-or">hoặc</div>
+        <button class="pc-id-guest" type="button" data-guest>👤 Vào bằng tài khoản khách
+          <small>Dùng thử ngay, không cần nhập thông tin. Bài làm vẫn được chấm nhưng ghi tên “Khách”.</small>
+        </button>
       </form>
     </div>
   `;
   const form = overlay.querySelector('form');
   const err = overlay.querySelector('[data-err]');
+  overlay.querySelector('[data-guest]')?.addEventListener('click', () => {
+    setGuest();
+    overlay.remove();
+    onDone();
+  });
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     const code = form.code.value, name = form.name.value, cls = form.class.value;
@@ -182,10 +200,14 @@ export function showIntro({ moduleId, onPick }) {
       </div>
 
       <div class="pc-who">
-        <span>🎓 <b>${(getStudent()?.studentName) || ''}</b></span>
-        <span class="pc-who-sep">·</span><span>Mã SV: <b>${(getStudent()?.studentCode) || ''}</b></span>
-        <span class="pc-who-sep">·</span><span>Lớp: <b>${(getStudent()?.className) || ''}</b></span>
-        <button type="button" data-switch>Đổi người học</button>
+        ${isGuest()
+          ? `<span>👤 <b>Khách</b></span>
+             <span class="pc-who-sep">·</span><span>Bài làm vẫn được chấm, nhưng ghi tên “Khách”.</span>
+             <button type="button" data-switch>Nhập mã sinh viên</button>`
+          : `<span>🎓 <b>${(getStudent()?.studentName) || ''}</b></span>
+             <span class="pc-who-sep">·</span><span>Mã SV: <b>${(getStudent()?.studentCode) || ''}</b></span>
+             <span class="pc-who-sep">·</span><span>Lớp: <b>${(getStudent()?.className) || ''}</b></span>
+             <button type="button" data-switch>Đổi người học</button>`}
       </div>
 
       <div class="pc-goals">

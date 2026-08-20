@@ -214,9 +214,11 @@ async function main() {
         ${failed ? '<span class="badge warn">Chấm điểm lỗi</span>' : '<span class="badge ok">Đã chấm xong</span>'}
       </h1>
       <div class="who">
-        <span>🎓 <b>${esc(s.studentName)}</b></span>
-        <span>Mã SV: <b>${esc(s.studentCode)}</b></span>
-        <span>Lớp: <b>${esc(s.className)}</b></span>
+        ${s.studentCode === 'KHACH'
+          ? `<span>👤 <b>Khách</b></span><span>Lượt dùng thử — không gắn với sinh viên nào.</span>`
+          : `<span>🎓 <b>${esc(s.studentName)}</b></span>
+             <span>Mã SV: <b>${esc(s.studentCode)}</b></span>
+             <span>Lớp: <b>${esc(s.className)}</b></span>`}
         <span>Tình huống: <b>${esc(s.scenarioCode)}${s.scenarioName ? ' · ' + esc(s.scenarioName) : ''}</b></span>
       </div>
       <div class="who" style="margin-top:6px">
