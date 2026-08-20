@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kết quả thực hành — Pharmacomm · Tizia</title>
+<!--
+  Trang kết quả một lượt thực hành nhà thuốc 3D (yêu cầu #142, mục 12).
+  Ba thẻ: Hội thoại · Thao tác 3D · Kết quả chấm điểm.
+  CHỈ ĐỌC — sinh viên không sửa/xoá được dữ liệu (máy chủ cũng không có route sửa).
+-->
+<link rel="icon" href="/favicon.ico" />
+<style>
+  :root {
+    --bg: #0f172a; --card: #111827; --card-h: #1e293b; --border: #334155;
+    --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8; --green: #22c55e;
+    --amber: #f59e0b; --red: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 26px 18px 70px; }
+  a.back { display: inline-block; color: var(--text); text-decoration: none; opacity: .85;
+    font-size: 14px; background: rgba(255,255,255,.08); padding: 8px 13px; border-radius: 10px; }
+  a.back:hover { opacity: 1; background: rgba(255,255,255,.15); }
+
+  .head { margin: 18px 0 20px; background: var(--card); border: 1px solid var(--border);
+    border-radius: 18px; padding: 22px 24px; }
+  .head h1 { margin: 0 0 10px; font-size: 24px; font-weight: 800; }
+  .who { display: flex; gap: 10px 22px; flex-wrap: wrap; font-size: 13.5px; color: var(--muted); }
+  .who b { color: var(--text); }
+  .badge { display: inline-block; font-size: 11.5px; font-weight: 800; padding: 3px 10px;
+    border-radius: 999px; letter-spacing: .3px; }
+  .badge.ok { background: rgba(34,197,94,.18); color: #86efac; border: 1px solid rgba(34,197,94,.45); }
+  .badge.warn { background: rgba(245,158,11,.16); color: #fcd34d; border: 1px solid rgba(245,158,11,.45); }
+
+  .total { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-top: 16px;
+    padding-top: 16px; border-top: 1px solid var(--border); }
+  .total .num { font-size: 40px; font-weight: 800; line-height: 1; }
+  .total .num small { font-size: 16px; color: var(--muted); font-weight: 600; }
+  .groups { display: flex; gap: 8px; flex-wrap: wrap; flex: 1 1 320px; }
+  .g { background: var(--card-h); border: 1px solid var(--border); border-radius: 10px;
+    padding: 7px 12px; font-size: 12.5px; }
+  .g b { color: var(--accent); }
+
+  .tabs { display: flex; gap: 8px; margin: 24px 0 16px; flex-wrap: wrap; }
+  .tab { cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 700; color: var(--text);
+    background: var(--card); border: 1px solid var(--border); border-radius: 11px; padding: 10px 18px; }
+  .tab:hover { border-color: var(--accent); }
+  .tab.on { background: var(--accent); color: #04121a; border-color: var(--accent); }
+  .panel { display: none; }
+  .panel.on { display: block; }
+
+  /* Thẻ 1 — hội thoại: phân biệt SV / bệnh nhân bằng màu + vị trí (mục 12). */
+  .msg { display: flex; margin: 0 0 10px; }
+  .msg.student { justify-content: flex-end; }
+  .msg .b { max-width: 74%; padding: 10px 14px; border-radius: 14px; font-size: 14px; }
+  .msg.student .b { background: rgba(56,189,248,.16); border: 1px solid rgba(56,189,248,.4); border-bottom-right-radius: 4px; }
+  .msg.patient .b { background: var(--card); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+  .msg .who-t { display: block; font-size: 11px; color: var(--muted); margin-bottom: 3px; font-weight: 700; }
+  .msg .ts { display: block; font-size: 10.5px; color: var(--muted); margin-top: 4px; }
+
+  /* Thẻ 2 — nhật ký thao tác 3D. */
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 11px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .5px; }
+  tr.invalid td { background: rgba(248,113,113,.09); }
+  tr.corrected td { background: rgba(245,158,11,.09); }
+  .res { font-size: 11.5px; font-weight: 800; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+  .res.success { background: rgba(34,197,94,.18); color: #86efac; }
+  .res.invalid { background: rgba(248,113,113,.2); color: #fca5a5; }
+  .res.corrected { background: rgba(245,158,11,.2); color: #fcd34d; }
+  .res.cancelled { background: rgba(148,163,184,.2); color: #cbd5e1; }
+  .tbl-wrap { overflow-x: auto; }
+
+  /* Thẻ 3 — điểm từng tiêu chí. */
+  .grp-h { margin: 22px 0 10px; font-size: 15px; font-weight: 800; }
+  .grp-h:first-child { margin-top: 0; }
+  .crit { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 13px 15px; margin-bottom: 9px; }
+  .crit-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .crit-code { font-weight: 800; font-size: 13px; background: var(--card-h);
+    border: 1px solid var(--border); border-radius: 7px; padding: 2px 9px; }
+  .crit-name { font-weight: 700; font-size: 14px; flex: 1 1 auto; }
+  .crit-sc { font-weight: 800; font-size: 15px; }
+  .src { font-size: 11px; color: var(--muted); border: 1px solid var(--border);
+    border-radius: 999px; padding: 2px 9px; }
+  .crit-body { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .crit-body div { margin-top: 5px; }
+  .crit-body b { color: var(--text); font-weight: 700; }
+  .bar { height: 5px; border-radius: 3px; background: var(--card-h); margin-top: 9px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--green)); }
+
+  .acts { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 28px; }
+  .acts a, .acts button { cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 700;
+    text-decoration: none; border-radius: 11px; padding: 11px 18px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); }
+  .acts .primary { background: linear-gradient(135deg, var(--accent), var(--green)); color: #04121a; border: 0; }
+  .acts a:hover, .acts button:hover { filter: brightness(1.08); }
+  .empty { color: var(--muted); font-size: 13.5px; padding: 18px 0; }
+  .note { font-size: 12.5px; color: var(--muted); margin-top: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap">Đang tải kết quả…</div>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// Mục 14: hiển thị thời gian theo múi giờ Việt Nam (UTC+7).
+const VN = { timeZone: 'Asia/Ho_Chi_Minh', hour12: false };
+const hhmmss = (ms) => new Date(Number(ms)).toLocaleTimeString('vi-VN', { ...VN, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const full = (ms) => new Date(Number(ms)).toLocaleString('vi-VN', { ...VN, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const dur = (ms) => {
+  const s = Math.max(0, Math.round(Number(ms || 0) / 1000));
+  return `${Math.floor(s / 60)} phút ${String(s % 60).padStart(2, '0')} giây`;
+};
+const SRC_LABEL = { conversation: 'Hội thoại', action_3d: 'Thao tác 3D', combined: 'Kết hợp' };
+
+const sessionId = new URLSearchParams(location.search).get('session') || '';
+
+async function main() {
+  const wrap = $('wrap');
+  if (!sessionId) { wrap.innerHTML = '<p class="empty">Thiếu mã phiên thực hành.</p>'; return; }
+  let d;
+  try {
+    const r = await fetch('/api/pharmacy/practice/result/' + encodeURIComponent(sessionId));
+    d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Không đọc được kết quả.');
+  } catch (e) {
+    wrap.innerHTML = `<a class="back" href="/nha-thuoc-3d.html">← Về nhà thuốc</a><p class="empty">${esc(e.message)}</p>`;
+    return;
+  }
+
+  const s = d.session, sum = d.summary || { groups: [], score: 0, max: 0, percent: 0 };
+  const failed = s.status === 'scoring_failed';
+
+  const groupChips = (sum.groups || [])
+    .map((g) => `<span class="g">${esc(g.group)}. ${esc(g.name)}: <b>${g.score}</b>/${g.max}</span>`).join('');
+
+  // ── thẻ 1: hội thoại ────────────────────────────────────────────────
+  const convo = (d.messages || []).length
+    ? d.messages.map((m) => `
+      <div class="msg ${m.speaker === 'student' ? 'student' : 'patient'}">
+        <div class="b">
+          <span class="who-t">${m.speaker === 'student' ? '🎓 Sinh viên (dược sĩ)' : '🧑‍💼 Người bệnh (AI)'}</span>
+          ${esc(m.content)}
+          <span class="ts">${hhmmss(m.created_at)}</span>
+        </div>
+      </div>`).join('')
+    : '<p class="empty">Lượt thực hành này chưa có lời thoại nào.</p>';
+
+  // ── thẻ 2: nhật ký thao tác 3D ──────────────────────────────────────
+  const RES_LABEL = { success: 'Hợp lệ', invalid: 'Không hợp lệ', corrected: 'Đã sửa lại', cancelled: 'Đã huỷ' };
+  const actRows = (d.actions || []).map((a) => `
+    <tr class="${esc(a.action_result)}">
+      <td>${a.action_order + 1}</td>
+      <td>${hhmmss(a.created_at)}</td>
+      <td>${esc(a.description_vi || a.action_type)}</td>
+      <td>${esc(a.object_name || '—')}</td>
+      <td>${a.quantity ?? '—'}</td>
+      <td><span class="res ${esc(a.action_result)}">${esc(RES_LABEL[a.action_result] || a.action_result)}</span></td>
+    </tr>`).join('');
+  const actions = (d.actions || []).length
+    ? `<div class="tbl-wrap"><table>
+        <thead><tr><th>#</th><th>Thời điểm</th><th>Thao tác</th><th>Đối tượng</th><th>SL</th><th>Kết quả</th></tr></thead>
+        <tbody>${actRows}</tbody></table></div>
+       <p class="note">Thao tác không hợp lệ được tô đỏ, thao tác đã sửa lại tô vàng — cả hai đều được giữ nguyên trong nhật ký, không ghi đè.</p>`
+    : '<p class="empty">Lượt thực hành này chưa ghi nhận thao tác nào trong môi trường 3D.</p>';
+
+  // ── thẻ 3: điểm từng tiêu chí, gom theo nhóm ────────────────────────
+  const byGroup = {};
+  for (const c of d.scores || []) (byGroup[c.criterion_group] ||= []).push(c);
+  const scoreHtml = (d.scores || []).length
+    ? Object.keys(byGroup).sort().map((g) => {
+        const gs = sum.groups.find((x) => x.group === g);
+        return `<div class="grp-h">${esc(g)}. ${esc((d.groups || {})[g] || '')} — <b>${gs ? gs.score : 0}</b>/${gs ? gs.max : 0}</div>` +
+          byGroup[g].map((c) => `
+            <div class="crit">
+              <div class="crit-top">
+                <span class="crit-code">${esc(c.criterion_code)}</span>
+                <span class="crit-name">${esc(c.criterion_name)}</span>
+                <span class="src">${esc(SRC_LABEL[c.evidence_source] || c.evidence_source)}</span>
+                <span class="crit-sc">${c.score}/${c.max_score}</span>
+              </div>
+              <div class="bar"><i style="width:${Math.round((c.score / (c.max_score || 4)) * 100)}%"></i></div>
+              <div class="crit-body">
+                ${c.evidence ? `<div><b>Minh chứng:</b> ${esc(c.evidence)}</div>` : ''}
+                ${c.comment ? `<div><b>Nhận xét:</b> ${esc(c.comment)}</div>` : ''}
+                ${c.improvement_feedback ? `<div><b>Lần sau nên:</b> ${esc(c.improvement_feedback)}</div>` : ''}
+              </div>
+            </div>`).join('');
+      }).join('')
+    : '<p class="empty">Chưa có kết quả chấm điểm cho lượt này.</p>';
+
+  wrap.innerHTML = `
+    <a class="back" href="/nha-thuoc-3d.html">← Về nhà thuốc</a>
+    <div class="head">
+      <h1>Kết quả lượt thực hành
+        ${failed ? '<span class="badge warn">Chấm điểm lỗi</span>' : '<span class="badge ok">Đã chấm xong</span>'}
+      </h1>
+      <div class="who">
+        <span>🎓 <b>${esc(s.studentName)}</b></span>
+        <span>Mã SV: <b>${esc(s.studentCode)}</b></span>
+        <span>Lớp: <b>${esc(s.className)}</b></span>
+        <span>Tình huống: <b>${esc(s.scenarioCode)}${s.scenarioName ? ' · ' + esc(s.scenarioName) : ''}</b></span>
+      </div>
+      <div class="who" style="margin-top:6px">
+        <span>Bắt đầu: <b>${full(s.startedAt)}</b></span>
+        ${s.completedAt ? `<span>Kết thúc: <b>${full(s.completedAt)}</b></span>` : ''}
+        ${s.durationMs != null ? `<span>Thời gian làm bài: <b>${dur(s.durationMs)}</b></span>` : ''}
+      </div>
+      <div class="total">
+        <div class="num">${sum.score}<small> / ${sum.max} điểm</small></div>
+        <div class="groups">${groupChips}</div>
+      </div>
+      ${failed ? '<p class="note">⚠️ Một phần bài chấm gặp lỗi hệ thống. Toàn bộ hội thoại và thao tác đã được giữ nguyên để chấm lại — bạn báo giảng viên giúp nhé.</p>' : ''}
+    </div>
+
+    <div class="tabs">
+      <button class="tab on" data-tab="scores" type="button">📊 Kết quả chấm điểm</button>
+      <button class="tab" data-tab="convo" type="button">💬 Hội thoại (${(d.messages || []).length})</button>
+      <button class="tab" data-tab="actions" type="button">🧰 Thao tác 3D (${(d.actions || []).length})</button>
+    </div>
+
+    <div class="panel on" data-panel="scores">${scoreHtml}</div>
+    <div class="panel" data-panel="convo">${convo}</div>
+    <div class="panel" data-panel="actions">${actions}</div>
+
+    <div class="acts">
+      <a class="primary" href="/nha-thuoc-3d.html?module=${encodeURIComponent((s.scenarioCode || '').toLowerCase().replace('-', ''))}">🔁 Thực hành lại</a>
+      <a href="/nha-thuoc-3d.html">🎬 Chọn tình huống khác</a>
+      <a href="/space.html?b=pharmacy&domain=pharmacy">🚪 Thoát</a>
+    </div>
+    <p class="note">Đây là dữ liệu của lượt thực hành này, chỉ để xem lại — không sửa hoặc xoá được.</p>
+  `;
+
+  wrap.addEventListener('click', (e) => {
+    const t = e.target.closest('.tab');
+    if (!t) return;
+    wrap.querySelectorAll('.tab').forEach((x) => x.classList.toggle('on', x === t));
+    wrap.querySelectorAll('.panel').forEach((p) => p.classList.toggle('on', p.dataset.panel === t.dataset.tab));
+  });
+}
+main();
+</script>
+</body>
+</html>

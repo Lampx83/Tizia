@@ -5,7 +5,8 @@
 // Self-contained: tự chèn <style> (dùng biến theme --card/--text… có sẵn ở cả trang
 // Express lẫn Next, kèm màu dự phòng) nên KHÔNG phải sửa CSS ở 2 nơi. Dùng chung cho
 // public/nha-thuoc-3d.html (Express) và web-next (Next) — 1 nguồn duy nhất.
-import { SCENARIO_CARDS, SCENARIOS } from './scenarios.js?v=ph0803';
+import { SCENARIO_CARDS, SCENARIOS } from './scenarios.js?v=ph0804';
+import { getStudent, setStudent, clearStudent } from './practice-client.js?v=ph0820';
 
 const LEARNING_GOALS = [
   ['💬', 'Giao tiếp', 'Chào hỏi, tạo kết nối, giao tiếp trực diện với người bệnh'],
@@ -53,6 +54,29 @@ function injectStyle() {
   .pc-card-go { margin-top: auto; align-self: flex-start; font-size: 12.5px; font-weight: 700; color: var(--accent, #38bdf8); }
   .pc-card:hover .pc-card-go { text-decoration: underline; }
   .pc-foot { margin: 22px 0 8px; color: var(--muted, #94a3b8); font-size: 12px; }
+  /* Màn nhập thông tin sinh viên (#142 mục 2) — định danh tự khai, KHÔNG mật khẩu. */
+  .pc-id { max-width: 520px; margin: 40px auto 0; background: var(--card, #111827);
+    border: 1px solid var(--border, #334155); border-radius: 18px; padding: 26px 26px 22px; }
+  .pc-id h2 { margin: 0 0 4px; font-size: 19px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; }
+  .pc-id-sub { margin: 0 0 18px; color: var(--muted, #94a3b8); font-size: 12.5px; line-height: 1.55; }
+  .pc-f { margin-bottom: 14px; }
+  .pc-f label { display: block; font-size: 12.5px; font-weight: 700; margin-bottom: 6px; }
+  .pc-f input { width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; padding: 11px 13px;
+    border-radius: 10px; border: 1px solid var(--border, #334155); background: var(--card-h, #1e293b); color: inherit; }
+  .pc-f input:focus { outline: none; border-color: var(--accent, #38bdf8); }
+  .pc-id-err { color: #f87171; font-size: 12.5px; min-height: 1.2em; margin: 2px 0 10px; }
+  .pc-id-btn { width: 100%; cursor: pointer; font: inherit; font-size: 14.5px; font-weight: 800; color: #04121a;
+    background: linear-gradient(135deg, var(--accent, #38bdf8), var(--green, #22c55e));
+    border: 0; border-radius: 12px; padding: 13px 18px; letter-spacing: .3px; text-transform: uppercase; }
+  .pc-id-btn:hover { filter: brightness(1.06); }
+  /* Thẻ danh tính hiển thị ở màn chọn tình huống (#142 mục 3). */
+  .pc-who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 20px 0 0;
+    background: var(--card, #111827); border: 1px solid var(--border, #334155); border-radius: 12px; padding: 11px 15px; font-size: 13px; }
+  .pc-who b { font-weight: 800; }
+  .pc-who .pc-who-sep { color: var(--muted, #94a3b8); }
+  .pc-who button { margin-left: auto; cursor: pointer; font: inherit; font-size: 12.5px; color: inherit;
+    background: var(--card-h, #1e293b); border: 1px solid var(--border, #334155); border-radius: 8px; padding: 6px 12px; }
+  .pc-who button:hover { border-color: var(--accent, #38bdf8); }
   /* Ô gửi yêu cầu cho Ban điều hành AI (29/07): trang này trước đây KHÔNG có lối
      gửi yêu cầu — FAB gốc bị CSS ẩn, nút thay thế lại chèn vào header cũ nên bản
      Next không có. Đặt hẳn một ô ngay màn giới thiệu cho thầy cô/SV dễ thấy. */
@@ -73,11 +97,68 @@ function injectStyle() {
   document.head.appendChild(st);
 }
 
+// Màn "THÔNG TIN SINH VIÊN" (#142 mục 2). Ba trường bắt buộc, KHÔNG mật khẩu,
+// không đăng ký tài khoản — đây là màn định danh, không phải xác thực.
+export function showStudentForm(onDone) {
+  injectStyle();
+  document.title = 'Thông tin sinh viên — Pharmacomm · Tizia';
+  const overlay = document.createElement('div');
+  overlay.className = 'pc-intro';
+  overlay.innerHTML = `
+    <div class="pc-wrap">
+      <div class="pc-brand">
+        <div class="pc-logo">⚕️</div>
+        <div>
+          <h1 class="pc-title"><span>Pharmacomm</span></h1>
+          <p class="pc-sub">Phần mềm mô phỏng thực hành giao tiếp & bán thuốc tại nhà thuốc GPP</p>
+        </div>
+      </div>
+      <form class="pc-id" novalidate>
+        <h2>Thông tin sinh viên</h2>
+        <p class="pc-id-sub">Nhập thông tin để hệ thống ghi lại bài thực hành và chấm điểm cho đúng người. Không cần đăng ký tài khoản, không cần mật khẩu.</p>
+        <div class="pc-f">
+          <label for="pc-code">Mã sinh viên <span style="color:#f87171">*</span></label>
+          <input id="pc-code" name="code" autocomplete="off" placeholder="VD: DH2101" />
+        </div>
+        <div class="pc-f">
+          <label for="pc-name">Họ và tên <span style="color:#f87171">*</span></label>
+          <input id="pc-name" name="name" autocomplete="name" placeholder="VD: Nguyễn Văn A" />
+        </div>
+        <div class="pc-f">
+          <label for="pc-class">Lớp <span style="color:#f87171">*</span></label>
+          <input id="pc-class" name="class" autocomplete="off" placeholder="VD: D5A" />
+        </div>
+        <div class="pc-id-err" data-err></div>
+        <button class="pc-id-btn" type="submit">Vào thực hành</button>
+      </form>
+    </div>
+  `;
+  const form = overlay.querySelector('form');
+  const err = overlay.querySelector('[data-err]');
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const code = form.code.value, name = form.name.value, cls = form.class.value;
+    // Mục 2: không cho tiếp tục nếu thiếu một trong ba thông tin.
+    const missing = [!code.trim() && 'mã sinh viên', !name.trim() && 'họ và tên', !cls.trim() && 'lớp'].filter(Boolean);
+    if (missing.length) { err.textContent = `Vui lòng nhập ${missing.join(', ')}.`; return; }
+    if (!setStudent({ studentCode: code, studentName: name, className: cls })) {
+      err.textContent = 'Thông tin chưa hợp lệ, bạn kiểm tra lại giúp nhé.'; return;
+    }
+    overlay.remove();
+    onDone();
+  });
+  document.body.appendChild(overlay);
+  overlay.querySelector('#pc-code')?.focus();
+}
+
 // showIntro({ moduleId, onPick }) — nếu URL đã chỉ định ?module=<id> hợp lệ thì BỎ QUA
 // màn giới thiệu (deep-link vào thẳng tình huống). Ngược lại dựng màn chọn tình huống.
 export function showIntro({ moduleId, onPick }) {
   const valid = moduleId && SCENARIOS && SCENARIOS[moduleId];
   const explicit = new URLSearchParams(location.search).has('module');
+  // #142 mục 2: phải có định danh sinh viên TRƯỚC khi vào thực hành — kể cả khi
+  // vào thẳng bằng ?module=… (nếu không sẽ không gắn được phiên với người học).
+  if (!getStudent()) { showStudentForm(() => showIntro({ moduleId, onPick })); return; }
   if (valid && explicit) { onPick(moduleId); return; }
 
   injectStyle();
@@ -98,6 +179,13 @@ export function showIntro({ moduleId, onPick }) {
           <h1 class="pc-title"><span>Pharmacomm</span></h1>
           <p class="pc-sub">Phần mềm mô phỏng thực hành giao tiếp & bán thuốc tại nhà thuốc GPP</p>
         </div>
+      </div>
+
+      <div class="pc-who">
+        <span>🎓 <b>${(getStudent()?.studentName) || ''}</b></span>
+        <span class="pc-who-sep">·</span><span>Mã SV: <b>${(getStudent()?.studentCode) || ''}</b></span>
+        <span class="pc-who-sep">·</span><span>Lớp: <b>${(getStudent()?.className) || ''}</b></span>
+        <button type="button" data-switch>Đổi người học</button>
       </div>
 
       <div class="pc-goals">
@@ -142,6 +230,12 @@ export function showIntro({ moduleId, onPick }) {
     // Nút gửi yêu cầu: bấm hộ vào FAB gốc (#sgf-fab) — nút đó bị CSS trang này ẩn
     // nhưng vẫn nằm trong DOM và click bằng script vẫn mở đúng modal Ban điều hành AI.
     // KHÔNG đóng màn giới thiệu để người dùng gửi xong còn chọn tình huống tiếp.
+    if (e.target.closest('[data-switch]')) {
+      clearStudent();
+      overlay.remove();
+      showStudentForm(() => showIntro({ moduleId, onPick }));
+      return;
+    }
     if (e.target.closest('[data-ask]')) {
       const fab = document.getElementById('sgf-fab');
       if (fab) fab.click();

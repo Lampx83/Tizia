@@ -33,6 +33,9 @@ function swapUnitToGlb(group, file, sizeRef) {
 import { openPosTerminal } from './pos.js?v=ph0803';
 import { openHdsdEditor, openPackageEditor, PACKAGE_TYPES, RETAIL_FORMS } from './label-editor.js?v=ph0803';
 import { STAGE_LABEL } from './rubric.js';
+// #142 — lưu bền vững hội thoại + thao tác 3D vào DB (trước đây chỉ nằm trong
+// bộ nhớ máy chủ nên mất sạch mỗi lần khởi động lại).
+import { startPractice, logMessage, logAction, finishPractice, getPracticeId } from './practice-client.js?v=ph0820';
 
 const $ = (id) => document.getElementById(id);
 
@@ -135,6 +138,15 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
     hideSceneLoading();   // KHÔNG để overlay đứng mãi khi lỗi phiên
     alert('Không khởi tạo được phiên: ' + e.message + '\nKiểm tra đăng nhập?');
     return;
+  }
+
+  // 1b. Phiên THỰC HÀNH lưu vào DB (#142) — độc lập với phiên chat in-memory ở
+  // trên. Lỗi ở đây KHÔNG chặn người học vào bài; chỉ mất phần ghi nhận.
+  try {
+    await startPractice({ moduleId, chatSessionId: session.id });
+    logAction('session_start', { moduleId });
+  } catch (e) {
+    console.warn('[pharmacomm] không tạo được phiên thực hành:', e.message);
   }
 
   // 2. Render NPC opening — nguyên tắc 22/07 #1: BỆNH NHÂN KHÔNG NÓI TRƯỚC, dược
@@ -296,6 +308,7 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
   }
   async function postAction(type, payload) {
     localActions.push({ type, payload: payload || {}, ts: Date.now() });
+    logAction(type, payload);   // #142 mục 6: ghi nhật ký thao tác 3D vào DB
     try {
       const r = await fetch('/api/pharmacy/action', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -395,6 +408,9 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
       // hiện tại → gửi lại không bị trùng tin nhắn trong phiên mới.
       localMsgs.push({ role: 'user', content: text, ts: Date.now() });
       localMsgs.push({ role: 'npc', content: reply, ts: Date.now() });
+      // #142 mục 5: lưu NGAY sau mỗi lượt trao đổi, không đợi kết thúc tình huống.
+      logMessage('student', text);
+      logMessage('patient', reply);
     } catch (e) {
       thinking.textContent = '[Lỗi: ' + e.message + ']';
     } finally {
@@ -403,7 +419,23 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
   }
 
   async function finish() {
-    if (!confirm('Kết thúc phiên & chấm điểm?')) return;
+    // #142 mục 9: hộp xác nhận → khoá lượt → chấm điểm → sang trang kết quả.
+    if (!confirm('Kết thúc và chấm điểm?\n\nSau khi xác nhận, lượt thực hành sẽ được khoá lại và không ghi thêm được nữa.')) return;
+    if (getPracticeId()) {
+      const btn = $('finish');
+      if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang chấm…'; }   // chặn bấm nhiều lần
+      try {
+        logAction('session_end', {});
+        const { sessionId } = await finishPractice();
+        location.href = `/pharmacomm-ket-qua.html?session=${encodeURIComponent(sessionId)}`;
+        return;
+      } catch (e) {
+        alert('Chấm điểm gặp lỗi: ' + e.message + '\nDữ liệu hội thoại và thao tác đã được giữ lại để chấm lại.');
+        if (btn) { btn.disabled = false; btn.textContent = '✅ Kết thúc & chấm điểm'; }
+        return;
+      }
+    }
+    // Không có phiên thực hành (lỗi lúc khởi tạo) → giữ đường chấm điểm cũ.
     try {
       const postScore = () => fetch('/api/pharmacy/score', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },

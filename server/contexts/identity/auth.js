@@ -258,10 +258,14 @@ const PUBLIC_PATH_PREFIXES = [
   // Content store tổng quát (data heterogeneous) — GET public như curriculum;
   // PUT/DELETE có requireAdmin riêng trong contexts/content.
   '/api/content',
-  // Nhà thuốc 3D GPP — session/chat/action/score chỉ lưu in-memory (Map),
-  // không ghi DB hay xài AI tốn quota nhạy cảm. Cho guest để mô phỏng
-  // trải nghiệm như SV Dược (alert "kiểm tra đăng nhập" nếu chặn 401 →
-  // UX tệ). Login user vẫn dùng được, không có dữ liệu nhạy cảm bị lộ.
+  // Nhà thuốc 3D GPP — session/chat/action/score lưu in-memory (Map). Cho guest
+  // để mô phỏng trải nghiệm như SV Dược (alert "kiểm tra đăng nhập" nếu chặn
+  // 401 → UX tệ). Login user vẫn dùng được, không có dữ liệu nhạy cảm bị lộ.
+  // 🔸 Từ 20/08 (#142) prefix này còn phủ /api/pharmacy/practice/* — nhóm route
+  // CÓ ghi DB (hội thoại + thao tác 3D + điểm). Vẫn để công khai vì đặc tả yêu
+  // cầu người học vào thẳng không cần tài khoản/mật khẩu, định danh tự khai
+  // bằng mã SV giống module GPP bên dưới. Dữ liệu chỉ đọc được khi biết UUID
+  // phiên; route sửa/xoá KHÔNG tồn tại nên không sửa được bài của người khác.
   '/api/pharmacy/',
   // GPP 2D — thực hành nghiệp vụ nhà thuốc (đề tài NCKH). Guest luyện tập được;
   // định danh nghiên cứu bằng mã SV do người học nhập, không dữ liệu nhạy cảm.
@@ -332,6 +336,10 @@ const PUBLIC_PATH_EXACT = new Set([
   // thuốc + xoay camera được; /api/pharmacy/* (session/chat/score) vẫn
   // yêu cầu login, FE degrade graceful nếu chưa đăng nhập.
   '/nha-thuoc-3d.html',
+  // Trang kết quả một lượt thực hành Pharmacomm (#142). Mở như trang mô phỏng ở
+  // trên: người học vào thẳng bằng định danh tự khai, không có tài khoản Tizia
+  // để mà gate. Chỉ xem được khi biết UUID phiên, và là trang CHỈ ĐỌC.
+  '/pharmacomm-ket-qua.html',
   // GPP 2D — thực hành nghiệp vụ nhà thuốc GPP (đề tài ThS Phạm Thị Hương Lý).
   '/gpp.html',
   // Nhà thuốc 2D An Tâm Pharma — cảnh mặt tiền + nội thất trực quan (khách xem).
