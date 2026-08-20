@@ -9,6 +9,7 @@ import { attachRoom } from './room.js';
 import { attachAi } from './ai.js';
 import { attachTts } from './tts.js';
 import { attachPharmacy } from './pharmacy.js';
+import { attachPharmacyPractice } from './pharmacy-practice.js';
 import { attachGpp } from './gpp.js';
 import { acknowledgeNewRequest, getDecisionsForRequest, getRecentDecisions } from './contexts/ai-agent/decisions.js';
 import { attachAppProxies } from './app-proxy.js';
@@ -1048,6 +1049,13 @@ attachTts(r);
 // Session + chat + action + SEGUE scoring + fatal-error detection.
 // ============================================================
 attachPharmacy(r);
+
+// ============================================================
+// PHARMACOMM — lưu bền vững phiên thực hành (hội thoại + thao tác 3D) và chấm
+// điểm A1–E5. Yêu cầu #142: trước đây mọi thứ chỉ nằm trong bộ nhớ máy chủ nên
+// mất sạch mỗi lần khởi động lại.
+// ============================================================
+attachPharmacyPractice(r);
 
 // ============================================================
 // PAYMENT (Phase 1) — chỉ bật khi PAYMENT_ENABLED=1. Dynamic import để bảng
