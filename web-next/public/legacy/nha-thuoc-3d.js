@@ -14,8 +14,8 @@
 // ?v= phải BUMP mỗi lần sửa js/pharmacy/* — trình duyệt cache module theo URL này;
 // để nguyên version cũ thì máy đã ghé sẽ chạy JS cũ mãi. Giữ khớp với
 // public/nha-thuoc-3d.html (bản Express).
-import { startSimulation } from '/js/pharmacy/simulation.js?v=ph0820f';
-import { showIntro } from '/js/pharmacy/intro.js?v=ph0820f';
+import { startSimulation } from '/js/pharmacy/simulation.js?v=ph0822a';
+import { showIntro } from '/js/pharmacy/intro.js?v=ph0822a';
 import { SCENARIOS } from '/js/pharmacy/scenarios.js?v=ph0803';
 const params = new URLSearchParams(location.search);
 const moduleId = params.get('module') || 'otc01';

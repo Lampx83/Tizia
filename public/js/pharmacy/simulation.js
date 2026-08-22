@@ -35,7 +35,7 @@ import { openHdsdEditor, openPackageEditor, PACKAGE_TYPES, RETAIL_FORMS } from '
 import { STAGE_LABEL } from './rubric.js';
 // #142 — lưu bền vững hội thoại + thao tác 3D vào DB (trước đây chỉ nằm trong
 // bộ nhớ máy chủ nên mất sạch mỗi lần khởi động lại).
-import { startPractice, logMessage, logAction, finishPractice, getPracticeId } from './practice-client.js?v=ph0820f';
+import { startPractice, logMessage, logAction, finishPractice, getPracticeId } from './practice-client.js?v=ph0822a';
 
 const $ = (id) => document.getElementById(id);
 
@@ -159,10 +159,9 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
   document.title = `${scenario.title} — Pharmacomm · Tizia`;
   $('scenario-setting').textContent = scenario.setting;
 
-  // 3. Render hints per stage
-  $('hints').innerHTML = scenario.stageRules.map(r =>
-    `<li><b>${STAGE_LABEL[r.stage]}:</b> ${r.hint}</li>`
-  ).join('');
+  // 3. (req #143) Đã BỎ bảng "Gợi ý theo SEGUE" khỏi giao diện thực hành theo yêu
+  //    cầu của giảng viên: SV phải tự nhớ quy trình, không đọc gợi ý sẵn trên màn.
+  //    stageRules VẪN dùng để chấm điểm — chỉ thôi hiển thị cho người học.
 
   // 4. Build 3D scene
   // Avatar tuỳ biến: ưu tiên ?avatar=… → avatar đã tạo & nhớ trong localStorage →

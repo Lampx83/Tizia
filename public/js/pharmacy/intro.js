@@ -6,14 +6,11 @@
 // Express lẫn Next, kèm màu dự phòng) nên KHÔNG phải sửa CSS ở 2 nơi. Dùng chung cho
 // public/nha-thuoc-3d.html (Express) và web-next (Next) — 1 nguồn duy nhất.
 import { SCENARIO_CARDS, SCENARIOS } from './scenarios.js?v=ph0804';
-import { getStudent, setStudent, clearStudent, setGuest, isGuest } from './practice-client.js?v=ph0820f';
+import { getStudent, setStudent, clearStudent, setGuest, isGuest } from './practice-client.js?v=ph0822a';
 
-const LEARNING_GOALS = [
-  ['💬', 'Giao tiếp', 'Chào hỏi, tạo kết nối, giao tiếp trực diện với người bệnh'],
-  ['🔎', 'Khai thác thông tin', 'Hỏi đúng trọng tâm về triệu chứng, tiền sử, thuốc đang dùng'],
-  ['💊', 'Tư vấn dùng thuốc hợp lý', 'Chọn thuốc phù hợp, hướng dẫn cách dùng, dán nhãn HDSD'],
-  ['🧾', 'Kỹ năng bán thuốc GPP', 'Ra lẻ, đóng gói, xuất hóa đơn, dặn dò theo dõi']
-];
+// req #143: đã BỎ dải 4 ô "mục tiêu học tập" và phần mô tả dài dưới mỗi thẻ khỏi
+// màn chọn tình huống theo yêu cầu của giảng viên — màn này chỉ còn danh sách tên
+// tình huống để chọn, không hướng dẫn trước các bước bán thuốc.
 
 function injectStyle() {
   if (document.getElementById('pharmacomm-intro-style')) return;
@@ -33,10 +30,6 @@ function injectStyle() {
   .pc-title { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: .2px; }
   .pc-title span { background: linear-gradient(90deg, var(--accent, #38bdf8), var(--green, #22c55e)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
   .pc-sub { margin: 3px 0 0; color: var(--muted, #94a3b8); font-size: 14px; }
-  .pc-goals { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 22px 0 6px; }
-  .pc-goal { background: var(--card, #111827); border: 1px solid var(--border, #334155); border-radius: 12px; padding: 12px 14px; }
-  .pc-goal-h { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; }
-  .pc-goal-d { margin: 6px 0 0; color: var(--muted, #94a3b8); font-size: 12.5px; line-height: 1.5; }
   .pc-sec { margin: 26px 0 12px; font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
   .pc-sec small { color: var(--muted, #94a3b8); font-weight: 500; font-size: 12.5px; }
   .pc-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
@@ -50,7 +43,6 @@ function injectStyle() {
   .pc-card-code { font-weight: 800; font-size: 15px; }
   .pc-card-tag { font-size: 11px; color: var(--muted, #94a3b8); background: var(--card-h, #1e293b); border: 1px solid var(--border, #334155); padding: 1px 8px; border-radius: 999px; }
   .pc-card-title { font-weight: 700; font-size: 14.5px; line-height: 1.4; }
-  .pc-card-desc { color: var(--muted, #94a3b8); font-size: 12.5px; line-height: 1.55; }
   .pc-card-go { margin-top: auto; align-self: flex-start; font-size: 12.5px; font-weight: 700; color: var(--accent, #38bdf8); }
   .pc-card:hover .pc-card-go { text-decoration: underline; }
   .pc-foot { margin: 22px 0 8px; color: var(--muted, #94a3b8); font-size: 12px; }
@@ -210,14 +202,6 @@ export function showIntro({ moduleId, onPick }) {
              <button type="button" data-switch>Đổi người học</button>`}
       </div>
 
-      <div class="pc-goals">
-        ${LEARNING_GOALS.map(([ic, h, d]) => `
-          <div class="pc-goal">
-            <div class="pc-goal-h">${ic} ${h}</div>
-            <p class="pc-goal-d">${d}</p>
-          </div>`).join('')}
-      </div>
-
       <div class="pc-sec">🎬 Chọn tình huống mô phỏng <small>· bấm một thẻ để bắt đầu</small></div>
       <div class="pc-cards">
         ${cards.map(c => `
@@ -230,7 +214,6 @@ export function showIntro({ moduleId, onPick }) {
               </div>
             </div>
             <div class="pc-card-title">${c.title || ''}</div>
-            <div class="pc-card-desc">${c.desc || ''}</div>
             <span class="pc-card-go">Bắt đầu →</span>
           </button>`).join('')}
       </div>
@@ -244,7 +227,6 @@ export function showIntro({ moduleId, onPick }) {
         <button class="pc-ask-btn" type="button" data-ask>✍️ Gửi yêu cầu</button>
       </div>
 
-      <p class="pc-foot">Mẹo: có thể vào thẳng một tình huống bằng địa chỉ <code>?module=&lt;mã&gt;</code>.</p>
     </div>
   `;
 

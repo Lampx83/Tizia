@@ -351,12 +351,15 @@ export const SCENARIOS = { otc01: OTC01, otc02: OTC02, gpp: GPP, hospital: HOSPI
 // Thẻ tình huống cho MÀN HÌNH GIỚI THIỆU "Pharmacomm" (CBS 20/07 #1). Người học
 // bấm 1 thẻ → startSimulation({ moduleId: id }). OTC-01 để đầu (tình huống mẫu mới).
 export const SCENARIO_CARDS = [
-  { id: 'otc01',    code: 'OTC-01', tag: 'Không kê đơn', icon: '👶', title: 'Bán thuốc không kê đơn cho trẻ 6 tháng tuổi bị tiêu chảy cấp', desc: 'Mẹ bế con nhỏ ra nhà thuốc mua thuốc tiêu chảy. Khai thác đúng bệnh, tư vấn men vi sinh + bù nước điện giải, không lạm dụng kháng sinh.' },
-  // 28/07 (#117): tình huống Alaxan của thầy cô đánh số OTC-02 → tình huống kháng
-  // sinh/thai kỳ trước đây dịch xuống OTC-03 (chỉ đổi nhãn, id 'gpp' giữ nguyên nên
-  // không ảnh hưởng phiên/điểm đã lưu).
-  { id: 'otc02',    code: 'OTC-02', tag: 'Không kê đơn', icon: '🦷', title: 'Bán Alaxan cho khách đau nhức răng, đang vội', desc: 'Anh T đau răng hai ngày, khó tính và giục lấy thuốc nhanh. Vừa khai thác đủ tiền sử dạ dày – gan thận – dị ứng, vừa phải đồng cảm và giải thích lý do hỏi thì khách mới hợp tác.' },
-  { id: 'gpp',      code: 'OTC-03', tag: 'Không kê đơn', icon: '🤧', title: 'Khách xin kháng sinh khi ho, sổ mũi (đang mang thai)', desc: 'Khách nữ mang thai muốn mua kháng sinh cho nhanh khỏi. Khai thác thai kỳ, từ chối bán kháng sinh không đơn, tư vấn an toàn.' },
-  { id: 'hospital', code: 'HOS-01', tag: 'Bệnh viện',    icon: '🏥', title: 'Duyệt y lệnh: warfarin phối hợp aspirin liều cao', desc: 'Dược sĩ lâm sàng phát hiện tương tác nguy hiểm, phản biện bác sĩ điều trị để đổi thuốc.' },
-  { id: 'medrep',   code: 'REP-01', tag: 'Trình dược',   icon: '💼', title: 'Trình dược viên giới thiệu thuốc mới cho trưởng khoa', desc: 'Thuyết phục trưởng khoa bằng dữ liệu kinh tế dược (QALY/ICER) và xử lý phản biện về ngân sách.' }
+  // req #143 (22/08 · GV Nguyệt Phương): chỉ giữ các tình huống BÁN THUỐC TẠI NHÀ
+  // THUỐC. Đã bỏ HOS-01 (duyệt y lệnh bệnh viện) và REP-01 (trình dược viên) khỏi
+  // danh sách chọn — cô sẽ làm ở phần mềm khác. Kịch bản vẫn còn trong SCENARIOS
+  // nên phiên/điểm cũ đọc lại được, chỉ thôi hiện thẻ để chọn mới.
+  // Tên thẻ rút gọn còn nội dung chính, bỏ đoạn mô tả dài phía dưới.
+  { id: 'otc01', code: 'OTC-01', tag: 'Không kê đơn', icon: '👶',
+    title: 'Bán thuốc cho trẻ 6 tháng tuổi bị tiêu chảy' },
+  { id: 'otc02', code: 'OTC-02', tag: 'Không kê đơn', icon: '🦷',
+    title: 'Bán thuốc Alaxan cho khách hàng bị đau nhức răng' },
+  { id: 'gpp',   code: 'OTC-03', tag: 'Không kê đơn', icon: '🤧',
+    title: 'Bán thuốc cho khách hàng xin kháng sinh khi đang mang thai' },
 ];

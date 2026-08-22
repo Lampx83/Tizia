@@ -1266,9 +1266,6 @@ export default function NhaThuoc3DPage() {
         </div>
         <label className="rx-line"><input type="checkbox" id="rx-toggle" /> Khách có đơn thuốc hợp lệ</label>
 
-        <h3>🎯 Gợi ý theo SEGUE</h3>
-        <ul className="hints" id="hints"></ul>
-
         <button className="btn success" id="finish" type="button">🏁 Kết thúc và chấm điểm</button>
         <div id="score-panel" hidden></div>
         <div id="stats-bar" style={{ display: 'flex', gap: '10px', fontSize: '11px', color: 'var(--muted)', paddingTop: '6px', borderTop: '1px solid var(--border)' }}>

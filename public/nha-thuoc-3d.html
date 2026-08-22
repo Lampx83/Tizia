@@ -1156,9 +1156,6 @@
       <label class="rx-line" style="margin:0"><input type="checkbox" id="rx-toggle"/> Có đơn hợp lệ</label>
     </div>
 
-    <h3>🎯 Gợi ý theo SEGUE</h3>
-    <ul class="hints" id="hints"></ul>
-
     <button class="btn success" id="finish" type="button">🏁 Kết thúc và chấm điểm</button>
     <div id="score-panel" hidden></div>
   </aside>
@@ -1202,8 +1199,8 @@
 }
 </script>
 <script type="module">
-  import { startSimulation } from './js/pharmacy/simulation.js?v=ph0820f';
-  import { showIntro } from './js/pharmacy/intro.js?v=ph0820f';
+  import { startSimulation } from './js/pharmacy/simulation.js?v=ph0822a';
+  import { showIntro } from './js/pharmacy/intro.js?v=ph0822a';
   import { SCENARIOS } from './js/pharmacy/scenarios.js?v=ph0803';
   const params = new URLSearchParams(location.search);
   const moduleId = params.get('module') || 'otc01';
