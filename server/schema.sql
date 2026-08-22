@@ -945,3 +945,58 @@ CREATE TABLE IF NOT EXISTS pharmacy_practice_score (
   UNIQUE (session_id, criterion_code)
 );
 CREATE INDEX IF NOT EXISTS idx_ppscore_session ON pharmacy_practice_score(session_id, criterion_code);
+
+-- =====================================================================
+-- PHARMACOMM — Mô hình truy cập Sinh viên / Giảng viên (req #143, 22/08)
+-- =====================================================================
+
+-- Hồ sơ sinh viên: MÃ SV là định danh duy nhất. Thực hành nhiều lượt vẫn chỉ
+-- một hồ sơ (đặc tả: "không tạo hồ sơ trùng"). Họ tên/lớp cập nhật theo lần
+-- khai gần nhất để sửa được lỗi gõ, nhưng lịch sử vẫn gắn theo mã SV.
+CREATE TABLE IF NOT EXISTS pharmacy_student (
+  student_code  TEXT PRIMARY KEY,
+  student_name  TEXT NOT NULL,
+  class_name    TEXT NOT NULL,
+  first_seen_at BIGINT NOT NULL,
+  last_seen_at  BIGINT NOT NULL,
+  session_count BIGINT NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_pstudent_class ON pharmacy_student(class_name, student_code);
+
+-- Tài khoản giảng viên: TẠO SẴN khi triển khai, KHÔNG có route đăng ký công khai.
+-- Mật khẩu băm bằng scrypt (Node crypto, memory-hard cùng hạng argon2/bcrypt).
+CREATE TABLE IF NOT EXISTS pharmacy_teacher (
+  username       TEXT PRIMARY KEY,
+  password_hash  TEXT NOT NULL,
+  display_name   TEXT NOT NULL,
+  role           TEXT NOT NULL DEFAULT 'TEACHER',
+  must_change_pw BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at     BIGINT NOT NULL,
+  updated_at     BIGINT NOT NULL
+);
+
+-- Phiên đăng nhập giảng viên (token mờ trong cookie httpOnly riêng).
+CREATE TABLE IF NOT EXISTS pharmacy_teacher_session (
+  token      TEXT PRIMARY KEY,
+  username   TEXT NOT NULL REFERENCES pharmacy_teacher(username) ON DELETE CASCADE,
+  created_at BIGINT NOT NULL,
+  expires_at BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pteacher_sess_user ON pharmacy_teacher_session(username, expires_at DESC);
+
+-- Nhật ký: đăng nhập, xem dữ liệu, xuất dữ liệu (đặc tả mục 3).
+CREATE TABLE IF NOT EXISTS pharmacy_teacher_log (
+  id         BIGSERIAL PRIMARY KEY,
+  username   TEXT,
+  action     TEXT NOT NULL,
+  detail     TEXT,
+  ip         TEXT,
+  created_at BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pteacher_log_time ON pharmacy_teacher_log(created_at DESC);
+
+-- Phân loại lượt thực hành: STUDENT | GUEST | TEACHER_TEST.
+-- Lượt chạy thử của giảng viên KHÔNG được tính vào lịch sử/thống kê sinh viên.
+ALTER TABLE pharmacy_practice_session
+  ADD COLUMN IF NOT EXISTS session_kind TEXT NOT NULL DEFAULT 'STUDENT';
+CREATE INDEX IF NOT EXISTS idx_pps_kind ON pharmacy_practice_session(session_kind, started_at DESC);

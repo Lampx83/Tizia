@@ -340,6 +340,11 @@ const PUBLIC_PATH_EXACT = new Set([
   // trên: người học vào thẳng bằng định danh tự khai, không có tài khoản Tizia
   // để mà gate. Chỉ xem được khi biết UUID phiên, và là trang CHỈ ĐỌC.
   '/pharmacomm-ket-qua.html',
+  // Khu giảng viên Pharmacomm (#143): giảng viên KHÔNG có tài khoản Tizia nên cổng
+  // đăng nhập Tizia không được chặn trang này. Bản thân trang chỉ là form đăng
+  // nhập rỗng — mọi dữ liệu bên trong đi qua /api/pharmacy/teacher/* có
+  // requireTeacher, chưa đăng nhập thì 403, nên mở HTML không lộ gì.
+  '/pharmacomm-giang-vien.html',
   // GPP 2D — thực hành nghiệp vụ nhà thuốc GPP (đề tài ThS Phạm Thị Hương Lý).
   '/gpp.html',
   // Nhà thuốc 2D An Tâm Pharma — cảnh mặt tiền + nội thất trực quan (khách xem).

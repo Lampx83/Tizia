@@ -19,6 +19,7 @@ import { randomUUID } from 'node:crypto';
 import { db } from './db.js';
 import { ollamaGenerate } from './ai.js';
 import { SCENARIOS } from '../public/js/pharmacy/scenarios.js';
+import { currentTeacher } from './pharmacy-teacher.js';   // req #143: nhận diện lượt GV chạy thử
 import {
   RUBRIC, RUBRIC_VERSION, RUBRIC_GROUPS, MAX_PER_CRITERION, MAX_TOTAL, summarize,
 } from '../public/js/pharmacy/practice-rubric.js';
@@ -33,10 +34,10 @@ const insSession = db.prepare(`
   INSERT INTO pharmacy_practice_session
     (session_id, student_code, student_name, class_name, scenario_code, scenario_name,
      scenario_version, rubric_version, ai_model_version, started_at, status,
-     chat_session_id, user_ref, created_at, updated_at)
+     chat_session_id, user_ref, session_kind, created_at, updated_at)
   VALUES (@session_id, @student_code, @student_name, @class_name, @scenario_code, @scenario_name,
      @scenario_version, @rubric_version, @ai_model_version, @t, 'in_progress',
-     @chat_session_id, @user_ref, @t, @t)
+     @chat_session_id, @user_ref, @session_kind, @t, @t)
   RETURNING session_id
 `);
 const getSessionRow = db.prepare(`SELECT * FROM pharmacy_practice_session WHERE session_id = ?`);
@@ -48,6 +49,18 @@ const finishSession = db.prepare(`
    WHERE session_id = @session_id
 `);
 // ON CONFLICT DO NOTHING = chống gửi trùng (mục 14) mà không báo lỗi cho client.
+// req #143 — HỒ SƠ SINH VIÊN: mã SV là định danh duy nhất. Thực hành nhiều lượt
+// chỉ một hồ sơ; họ tên/lớp cập nhật theo lần khai gần nhất (sửa được lỗi gõ).
+// Lượt khách và lượt chạy thử của giảng viên KHÔNG tạo hồ sơ sinh viên.
+const upsertStudent = db.prepare(`
+  INSERT INTO pharmacy_student (student_code, student_name, class_name, first_seen_at, last_seen_at, session_count)
+  VALUES (@code, @name, @cls, @t, @t, 1)
+  ON CONFLICT (student_code) DO UPDATE
+    SET student_name = EXCLUDED.student_name,
+        class_name   = EXCLUDED.class_name,
+        last_seen_at = EXCLUDED.last_seen_at,
+        session_count = pharmacy_student.session_count + 1`);
+
 const insMessage = db.prepare(`
   INSERT INTO pharmacy_practice_message (session_id, speaker, content, message_order, created_at)
   VALUES (@session_id, @speaker, @content, @message_order, @t)
@@ -286,6 +299,21 @@ export function attachPharmacyPractice(r) {
       const sc = SCENARIOS[moduleId];
       if (!sc) return res.status(400).json({ error: 'Tình huống không hợp lệ.' });
 
+      // req #143 — PHÂN LOẠI LƯỢT. Lượt GV chạy thử phải tách hẳn khỏi dữ liệu sinh
+      // viên (không vào lịch sử, điểm trung bình, thống kê). Tư cách giảng viên đọc
+      // từ COOKIE đã đăng nhập, KHÔNG lấy theo cờ client gửi lên — client tự khai
+      // "tôi là giảng viên" thì không có tác dụng.
+      const teacher = await currentTeacher(req);
+      let session_kind = 'STUDENT';
+      if (teacher) {
+        session_kind = 'TEACHER_TEST';
+        student_code = 'GV_TEST';
+        student_name = `Chạy thử — ${teacher.display_name || teacher.username}`;
+        class_name = 'Giảng viên chạy thử';
+      } else if (b.guest === true) {
+        session_kind = 'GUEST';
+      }
+
       const session_id = randomUUID();
       await insSession.run({
         session_id,
@@ -297,9 +325,16 @@ export function attachPharmacyPractice(r) {
         ai_model_version: null,
         chat_session_id: clean(b.chatSessionId, 80) || null,
         user_ref: userRef(req),
+        session_kind,
         t: now(),
       });
-      res.json({ sessionId: session_id, scenarioCode: sc.code || moduleId, scenarioName: sc.title || null });
+      // Hồ sơ sinh viên chỉ lập cho lượt SINH VIÊN thật — khách và GV chạy thử không
+      // được tạo hồ sơ, để danh sách lớp của cô sạch.
+      if (session_kind === 'STUDENT') {
+        try { await upsertStudent.run({ code: student_code, name: student_name, cls: class_name, t: now() }); }
+        catch (e) { console.error('[pharmacy-practice] upsert hồ sơ SV lỗi:', e.message); }
+      }
+      res.json({ sessionId: session_id, scenarioCode: sc.code || moduleId, scenarioName: sc.title || null, sessionKind: session_kind });
     } catch (err) {
       console.error('[pharmacy-practice] create session failed:', err.message);
       res.status(500).json({ error: 'Không tạo được phiên thực hành.' });

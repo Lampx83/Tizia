@@ -10,6 +10,7 @@ import { attachAi } from './ai.js';
 import { attachTts } from './tts.js';
 import { attachPharmacy } from './pharmacy.js';
 import { attachPharmacyPractice } from './pharmacy-practice.js';
+import { attachPharmacyTeacher, ensureTeacherAccount } from './pharmacy-teacher.js';
 import { attachGpp } from './gpp.js';
 import { acknowledgeNewRequest, getDecisionsForRequest, getRecentDecisions } from './contexts/ai-agent/decisions.js';
 import { attachAppProxies } from './app-proxy.js';
@@ -1056,6 +1057,8 @@ attachPharmacy(r);
 // mất sạch mỗi lần khởi động lại.
 // ============================================================
 attachPharmacyPractice(r);
+attachPharmacyTeacher(r);          // req #143: đăng nhập + khu quản lý giảng viên
+ensureTeacherAccount();            // tạo sẵn tài khoản giảng viên khi khởi động
 
 // ============================================================
 // PAYMENT (Phase 1) — chỉ bật khi PAYMENT_ENABLED=1. Dynamic import để bảng

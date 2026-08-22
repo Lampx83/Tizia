@@ -6,7 +6,7 @@
 // Express lẫn Next, kèm màu dự phòng) nên KHÔNG phải sửa CSS ở 2 nơi. Dùng chung cho
 // public/nha-thuoc-3d.html (Express) và web-next (Next) — 1 nguồn duy nhất.
 import { SCENARIO_CARDS, SCENARIOS } from './scenarios.js?v=ph0804';
-import { getStudent, setStudent, clearStudent, setGuest, isGuest } from './practice-client.js?v=ph0822a';
+import { getStudent, setStudent, clearStudent, setGuest, isGuest } from './practice-client.js?v=ph0822b';
 
 // req #143: đã BỎ dải 4 ô "mục tiêu học tập" và phần mô tả dài dưới mỗi thẻ khỏi
 // màn chọn tình huống theo yêu cầu của giảng viên — màn này chỉ còn danh sách tên
@@ -93,9 +93,66 @@ function injectStyle() {
     background: linear-gradient(135deg, #7c3aed, #4f46e5); border: 0; border-radius: 10px; padding: 10px 16px;
     transition: transform .12s ease, filter .12s ease; }
   .pc-ask-btn:hover { transform: translateY(-1px); filter: brightness(1.08); }
+  /* Màn CHỌN VAI TRÒ (req #143 mục 1): hai lối vào riêng biệt. */
+  .pc-roles { max-width: 720px; margin: 40px auto 0; display: grid; gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .pc-role { text-align: left; cursor: pointer; font: inherit; color: inherit;
+    background: var(--card, #111827); border: 1px solid var(--border, #334155);
+    border-radius: 18px; padding: 24px 22px; display: flex; flex-direction: column; gap: 8px;
+    transition: transform .12s, border-color .12s, box-shadow .12s; }
+  .pc-role:hover { transform: translateY(-3px); border-color: var(--accent, #38bdf8);
+    box-shadow: 0 14px 34px rgba(0,0,0,.35); }
+  .pc-role-ic { font-size: 34px; }
+  .pc-role-h { font-size: 17px; font-weight: 800; }
+  .pc-role-d { color: var(--muted, #94a3b8); font-size: 12.5px; line-height: 1.55; }
+  .pc-role-go { margin-top: 6px; font-size: 12.5px; font-weight: 700; color: var(--accent, #38bdf8); }
   @media (max-width: 560px) { .pc-title { font-size: 24px; } .pc-intro { padding: 20px 14px; } }
   `;
   document.head.appendChild(st);
+}
+
+// Màn CHỌN VAI TRÒ (req #143 mục 1) — màn hình ĐẦU TIÊN của phần mềm.
+// Hai lối vào tách bạch: sinh viên chỉ khai thông tin (không mật khẩu), giảng viên
+// phải đăng nhập. Sinh viên KHÔNG có cách nào chọn vai trò giảng viên từ đây —
+// bấm sang bên kia vẫn phải có đúng tên đăng nhập + mật khẩu do máy chủ kiểm.
+export function showRolePicker(onDone) {
+  injectStyle();
+  document.title = 'Pharmacomm — Nhà thuốc GPP 3D · Tizia';
+  const overlay = document.createElement('div');
+  overlay.className = 'pc-intro';
+  overlay.innerHTML = `
+    <div class="pc-wrap">
+      <div class="pc-brand">
+        <div class="pc-logo">⚕️</div>
+        <div>
+          <h1 class="pc-title"><span>Pharmacomm</span></h1>
+          <p class="pc-sub">Phần mềm mô phỏng thực hành giao tiếp & bán thuốc tại nhà thuốc GPP</p>
+        </div>
+      </div>
+      <div class="pc-roles">
+        <button class="pc-role" type="button" data-role="student">
+          <div class="pc-role-ic">🎓</div>
+          <div class="pc-role-h">Sinh viên thực hành</div>
+          <div class="pc-role-d">Khai họ tên, lớp và mã sinh viên rồi vào thực hành ngay. Không cần đăng ký tài khoản, không cần mật khẩu.</div>
+          <span class="pc-role-go">Vào thực hành →</span>
+        </button>
+        <button class="pc-role" type="button" data-role="teacher">
+          <div class="pc-role-ic">🧑‍🏫</div>
+          <div class="pc-role-h">Giảng viên đăng nhập</div>
+          <div class="pc-role-d">Xem lớp, danh sách sinh viên, lịch sử thực hành, hội thoại, thao tác 3D và điểm. Cần tên đăng nhập và mật khẩu.</div>
+          <span class="pc-role-go">Đăng nhập →</span>
+        </button>
+      </div>
+    </div>
+  `;
+  overlay.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-role]');
+    if (!btn) return;
+    if (btn.dataset.role === 'teacher') { location.href = '/pharmacomm-giang-vien.html'; return; }
+    overlay.remove();
+    showStudentForm(onDone);
+  });
+  document.body.appendChild(overlay);
 }
 
 // Màn "THÔNG TIN SINH VIÊN" (#142 mục 2). Ba trường bắt buộc, KHÔNG mật khẩu,
@@ -168,7 +225,8 @@ export function showIntro({ moduleId, onPick }) {
   const explicit = new URLSearchParams(location.search).has('module');
   // #142 mục 2: phải có định danh sinh viên TRƯỚC khi vào thực hành — kể cả khi
   // vào thẳng bằng ?module=… (nếu không sẽ không gắn được phiên với người học).
-  if (!getStudent()) { showStudentForm(() => showIntro({ moduleId, onPick })); return; }
+  // req #143: màn ĐẦU TIÊN là chọn vai trò (SV thực hành / GV đăng nhập).
+  if (!getStudent()) { showRolePicker(() => showIntro({ moduleId, onPick })); return; }
   if (valid && explicit) { onPick(moduleId); return; }
 
   injectStyle();
