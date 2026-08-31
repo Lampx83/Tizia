@@ -30,3 +30,19 @@ export const SECONDARY_LOP8_SCENARIOS = {
 for (const [id, sc] of Object.entries(SECONDARY_LOP8_SCENARIOS)) {
   if (LOP8_LESSONS && LOP8_LESSONS[id]) sc.lesson = LOP8_LESSONS[id];
 }
+
+// <<EXAM-MERGE-START>>
+import { S8TOAN_EXAMS } from './toan-exam.js';
+import { S8NV_EXAMS } from './ngu-van-exam.js';
+import { S8TA_EXAMS } from './tieng-anh-exam.js';
+import { S8KHTN_EXAMS } from './khtn-exam.js';
+import { S8LSDL_EXAMS } from './lich-su-dia-exam.js';
+import { S8GDCD_EXAMS } from './gdcd-exam.js';
+import { S8CN_EXAMS } from './cong-nghe-exam.js';
+import { S8TIN_EXAMS } from './tin-hoc-exam.js';
+import { S8GDTC_EXAMS } from './gdtc-exam.js';
+import { S8NT_EXAMS } from './nghe-thuat-exam.js';
+import { S8HDTN_EXAMS } from './hdtn-exam.js';
+import { S8GDDP_EXAMS } from './gd-dia-phuong-exam.js';
+for (const EX of [S8TOAN_EXAMS, S8NV_EXAMS, S8TA_EXAMS, S8KHTN_EXAMS, S8LSDL_EXAMS, S8GDCD_EXAMS, S8CN_EXAMS, S8TIN_EXAMS, S8GDTC_EXAMS, S8NT_EXAMS, S8HDTN_EXAMS, S8GDDP_EXAMS]) Object.assign(SECONDARY_LOP8_SCENARIOS, EX);
+// <<EXAM-MERGE-END>>

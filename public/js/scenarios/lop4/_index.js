@@ -29,3 +29,19 @@ export const PRIMARY_LOP4_SCENARIOS = {
 for (const [id, sc] of Object.entries(PRIMARY_LOP4_SCENARIOS)) {
   if (LOP4_LESSONS && LOP4_LESSONS[id]) sc.lesson = LOP4_LESSONS[id];
 }
+
+// <<EXAM-MERGE-START>>
+import { P4_EXAMS } from './toan-exam.js';
+import { P4TV_EXAMS } from './tieng-viet-exam.js';
+import { P4TA_EXAMS } from './tieng-anh-exam.js';
+import { P4KH_EXAMS } from './khoa-hoc-exam.js';
+import { P4LSDL_EXAMS } from './lich-su-dia-ly-exam.js';
+import { P4DD_EXAMS } from './dao-duc-exam.js';
+import { P4AN_EXAMS } from './am-nhac-exam.js';
+import { P4MT_EXAMS } from './my-thuat-exam.js';
+import { P4GDTC_EXAMS } from './gdtc-exam.js';
+import { P4HDTN_EXAMS } from './hdtn-exam.js';
+import { P4TIN_EXAMS } from './tin-hoc-exam.js';
+import { P4CN_EXAMS } from './cong-nghe-exam.js';
+for (const EX of [P4_EXAMS, P4TV_EXAMS, P4TA_EXAMS, P4KH_EXAMS, P4LSDL_EXAMS, P4DD_EXAMS, P4AN_EXAMS, P4MT_EXAMS, P4GDTC_EXAMS, P4HDTN_EXAMS, P4TIN_EXAMS, P4CN_EXAMS]) Object.assign(PRIMARY_LOP4_SCENARIOS, EX);
+// <<EXAM-MERGE-END>>

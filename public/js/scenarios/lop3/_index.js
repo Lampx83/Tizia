@@ -29,3 +29,18 @@ export const PRIMARY_LOP3_SCENARIOS = {
 for (const [id, sc] of Object.entries(PRIMARY_LOP3_SCENARIOS)) {
   if (LOP3_LESSONS && LOP3_LESSONS[id]) sc.lesson = LOP3_LESSONS[id];
 }
+
+// <<EXAM-MERGE-START>>
+import { P3_EXAMS } from './toan-exam.js';
+import { P3TV_EXAMS } from './tieng-viet-exam.js';
+import { P3TA_EXAMS } from './tieng-anh-exam.js';
+import { P3TNXH_EXAMS } from './tnxh-exam.js';
+import { P3DD_EXAMS } from './dao-duc-exam.js';
+import { P3AN_EXAMS } from './am-nhac-exam.js';
+import { P3MT_EXAMS } from './my-thuat-exam.js';
+import { P3GDTC_EXAMS } from './gdtc-exam.js';
+import { P3HDTN_EXAMS } from './hdtn-exam.js';
+import { P3TIN_EXAMS } from './tin-hoc-exam.js';
+import { P3CN_EXAMS } from './cong-nghe-exam.js';
+for (const EX of [P3_EXAMS, P3TV_EXAMS, P3TA_EXAMS, P3TNXH_EXAMS, P3DD_EXAMS, P3AN_EXAMS, P3MT_EXAMS, P3GDTC_EXAMS, P3HDTN_EXAMS, P3TIN_EXAMS, P3CN_EXAMS]) Object.assign(PRIMARY_LOP3_SCENARIOS, EX);
+// <<EXAM-MERGE-END>>
