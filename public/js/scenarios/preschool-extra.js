@@ -108,7 +108,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Cô giáo luôn yêu thương và chăm sóc bé đó!"
   },
   {
-   "stem": "Khi làm sai, cô nhắc nhở bé nên làm gì? 💡",
+   "stem": "Khi làm sai, cô nhắc nhở bé nên làm gì? 😊",
    "choices": [
     "Giận dỗi bỏ đi",
     "Lắng nghe và sửa",
@@ -182,7 +182,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Xếp hình giúp bé khéo léo hơn đó!"
   },
   {
-   "stem": "Khi hết giờ chơi, đồ chơi nên để ở đâu? 📦",
+   "stem": "Khi hết giờ chơi, đồ chơi nên để ở đâu? 🧸",
    "choices": [
     "Vứt trên sàn",
     "Cất vào đúng chỗ",
@@ -402,7 +402,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Bé chào bố mẹ mỗi khi về nhà thật ngoan!"
   },
   {
-   "stem": "Gia đình là nơi bé cảm thấy thế nào? 🏡",
+   "stem": "Gia đình là nơi bé cảm thấy thế nào? ❤️",
    "choices": [
     "Sợ hãi",
     "Ấm áp, yêu thương",
@@ -434,7 +434,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Ông hay kể chuyện cổ tích hay lắm đó!"
   },
   {
-   "stem": "Khi ông bà mệt, bé nên làm gì? 👵",
+   "stem": "Khi ông bà mệt, bé nên làm gì? 🤗",
    "choices": [
     "Giúp đỡ, quan tâm",
     "Làm ồn ào",
@@ -570,7 +570,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Ống nghe giúp bác sĩ nghe nhịp tim đó!"
   },
   {
-   "stem": "Khi khám bệnh xong, bé nên nói gì? 🙏",
+   "stem": "Khi khám bệnh xong, bé nên nói gì? 😊",
    "choices": [
     "Cảm ơn bác sĩ",
     "Không nói gì",
@@ -624,12 +624,12 @@ export const PRESCHOOL_EXTRA = {
   {
    "stem": "Ngày 20/11 là ngày để làm gì? 🌸",
    "choices": [
-    "Tri ân thầy cô",
+    "Cảm ơn thầy cô",
     "Đi chơi xa",
     "Nghỉ học"
    ],
    "answer": 0,
-   "explanation": "Ngày 20/11 bé tri ân thầy cô giáo đó!"
+   "explanation": "Ngày 20/11 bé cảm ơn thầy cô giáo đó!"
   }
  ],
  "N1-w15": [
@@ -664,7 +664,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Đó là món salad rau tươi ngon đó!"
   },
   {
-   "stem": "Ăn món ngon, mọi người thấy sao? 😋",
+   "stem": "Đầu bếp nấu ăn ngon khiến mọi người thấy sao? 😋",
    "choices": [
     "Ngon miệng, vui vẻ",
     "Buồn chán",
@@ -728,14 +728,14 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Vịt kêu cạp cạp nghe thật vui tai!"
   },
   {
-   "stem": "🐰🐰🐰 Có mấy con thỏ?",
+   "stem": "🐔🐔🐔 Có mấy con gà?",
    "choices": [
     "Hai",
     "Ba",
     "Bốn"
    ],
    "answer": 1,
-   "explanation": "Đúng rồi, có ba chú thỏ đáng yêu!"
+   "explanation": "Đúng rồi, có ba chú gà con!"
   },
   {
    "stem": "Con chó giúp gì cho chủ nhà? 🐕",
@@ -748,11 +748,11 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Chó là người bạn trung thành giúp trông nhà đó!"
   },
   {
-   "stem": "Bé nên đối xử với vật nuôi thế nào? 🐾",
+   "stem": "Bé nên đối xử với vật nuôi thế nào? 🐶",
    "choices": [
     "Yêu thương, chăm sóc",
-    "Trêu chọc",
-    "Bỏ mặc"
+    "Đánh đập",
+    "Bỏ đói"
    ],
    "answer": 0,
    "explanation": "Yêu thương và chăm sóc vật nuôi bé nhé!"
@@ -790,7 +790,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Ngựa vằn có những sọc đen trắng đẹp mắt!"
   },
   {
-   "stem": "Động vật sống ở rừng gọi là gì? 🌳",
+   "stem": "Động vật sống ở rừng gọi là gì? 🦁",
    "choices": [
     "Động vật hoang dã",
     "Vật nuôi trong nhà",
@@ -886,7 +886,7 @@ export const PRESCHOOL_EXTRA = {
  ],
  "N1-w21": [
   {
-   "stem": "Ngày Tết, mọi người thường mặc gì? 👘",
+   "stem": "Ngày Tết, mọi người thường mặc gì? 👕",
    "choices": [
     "Quần áo mới",
     "Đồ ngủ",
@@ -906,7 +906,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Câu đối đỏ treo trước cửa nhà ngày Tết!"
   },
   {
-   "stem": "Tết đến, mọi người trong nhà thường làm gì? 🎊",
+   "stem": "Tết đến, mọi người trong nhà thường làm gì? ❤️",
    "choices": [
     "Sum họp bên nhau",
     "Đi làm xa",
@@ -916,7 +916,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Tết là dịp cả nhà sum họp bên nhau đó!"
   },
   {
-   "stem": "Mâm ngũ quả ngày Tết có mấy loại quả? 🍊",
+   "stem": "Mâm ngũ quả ngày Tết có mấy loại quả? 🍎",
    "choices": [
     "Năm loại",
     "Hai loại",
@@ -938,7 +938,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Bánh chưng có nhân đậu xanh và thịt thơm ngon!"
   },
   {
-   "stem": "Bánh tét có hình dạng gì? 🌯",
+   "stem": "Bánh tét có hình dạng gì? 🍱",
    "choices": [
     "Hình trụ dài",
     "Hình vuông",
@@ -1022,7 +1022,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Bé nên đi cùng người thân để luôn an toàn!"
   },
   {
-   "stem": "Trò chơi dân gian ngày hội thường có gì? 🪢",
+   "stem": "Trò chơi dân gian ngày hội thường có gì? 🎪",
    "choices": [
     "Kéo co, nhảy bao bố",
     "Xem ti vi",
@@ -1074,7 +1074,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Cây cần ánh nắng mặt trời để lớn lên đó!"
   },
   {
-   "stem": "Trồng cây xanh giúp môi trường thế nào? 🌱",
+   "stem": "Trồng cây xanh giúp môi trường thế nào? 🌳",
    "choices": [
     "Trong lành hơn",
     "Ô nhiễm hơn",
@@ -1084,7 +1084,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Trồng cây giúp không khí trong lành hơn đó!"
   },
   {
-   "stem": "Khi thấy cây non, bé nên làm gì? 🌿",
+   "stem": "Khi thấy cây non, bé nên làm gì? 🌱",
    "choices": [
     "Bẻ gãy cây",
     "Chăm sóc, bảo vệ",
@@ -1200,7 +1200,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Khoai tây có vỏ màu vàng nâu đó bé!"
   },
   {
-   "stem": "Rau củ nên rửa sạch trước khi làm gì? 🥦",
+   "stem": "Rau củ nên rửa sạch trước khi làm gì? 💧",
    "choices": [
     "Trước khi ăn",
     "Trước khi ngủ",
@@ -1306,7 +1306,7 @@ export const PRESCHOOL_EXTRA = {
  ],
  "N1-w31": [
   {
-   "stem": "Ngồi trên xe, bé có nên thò tay ra ngoài không? 🚗",
+   "stem": "Bé có nên thò tay ra ngoài xe không? 🚗",
    "choices": [
     "Không nên",
     "Nên làm vậy",
@@ -1358,7 +1358,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Phi công là người điều khiển máy bay đó!"
   },
   {
-   "stem": "Máy bay bay nhanh hơn gì? ✈️",
+   "stem": "Đi máy bay đường dài thì nhanh hơn đi gì? ✈️",
    "choices": [
     "Đi bộ",
     "Đi thuyền chậm",
@@ -1558,24 +1558,24 @@ export const PRESCHOOL_EXTRA = {
  ],
  "N1NN-quiz": [
   {
-   "stem": "Con chó 🐶 kêu thế nào?",
+   "stem": "🐶 kêu thế nào vậy bé?",
    "choices": [
     "Gâu gâu",
     "Meo meo",
     "Ò ó o"
    ],
    "answer": 0,
-   "explanation": "Con chó kêu 'Gâu gâu' đó, bé giỏi ghê!"
+   "explanation": "Đúng rồi, con chó kêu gâu gâu đó con."
   },
   {
-   "stem": "Chia tay bạn, bé nói gì? 👋",
+   "stem": "Lỡ làm rơi đồ của bạn, bé nói gì? 🙏",
    "choices": [
-    "Ăn cơm chưa?",
-    "Tạm biệt nhé!",
-    "Đi ngủ đi"
+    "Con giỏi quá",
+    "Con xin lỗi bạn nhé",
+    "Tạm biệt bạn"
    ],
    "answer": 1,
-   "explanation": "Chia tay bạn nhớ nói 'Tạm biệt nhé' cho lễ phép con nhé."
+   "explanation": "Bé ngoan biết xin lỗi khi làm sai nhé."
   },
   {
    "stem": "🍌 gọi là quả gì?",
@@ -1585,395 +1585,395 @@ export const PRESCHOOL_EXTRA = {
     "Quả chuối"
    ],
    "answer": 2,
-   "explanation": "Quả vàng cong cong là quả chuối đó con."
+   "explanation": "Đúng rồi, đây là quả chuối vàng thơm."
   },
   {
-   "stem": "Khát nước, bé nói với cô? 💧",
+   "stem": "Trước khi ăn cơm, bé nên nói gì? 🍚",
    "choices": [
-    "Cô ơi, cho con xin nước ạ",
-    "Cô ơi, con buồn ngủ",
-    "Cô ơi, con đau bụng"
+    "Con mời cả nhà ăn cơm",
+    "Con chào cô",
+    "Con cảm ơn cô"
    ],
    "answer": 0,
-   "explanation": "Khát nước con nhớ xin cô lịch sự nha."
+   "explanation": "Bé nhớ mời cả nhà trước khi ăn cơm nhé."
   }
  ],
  "N1NN-w01": [
   {
-   "stem": "🧢 là cái gì?",
+   "stem": "⚽ là cái gì?",
    "choices": [
-    "Cái bàn",
+    "Quả bóng",
     "Cái mũ",
-    "Cái ghế"
+    "Cái ca"
    ],
-   "answer": 1,
-   "explanation": "Cái mũ đội trên đầu để che nắng đó con."
+   "answer": 0,
+   "explanation": "Đúng rồi, đây là quả bóng để chơi."
   },
   {
-   "stem": "⚽ dùng để làm gì?",
+   "stem": "🎩 đội ở đâu?",
    "choices": [
-    "Để ngủ",
-    "Để đá bóng",
-    "Để ăn cơm"
+    "Ở chân",
+    "Ở đầu",
+    "Ở tay"
    ],
    "answer": 1,
-   "explanation": "Quả bóng tròn tròn để mình đá chơi đó."
+   "explanation": "Mũ được đội ở trên đầu con nhé."
+  },
+  {
+   "stem": "🥛 dùng để làm gì?",
+   "choices": [
+    "Để uống nước",
+    "Để đội đầu",
+    "Để đi"
+   ],
+   "answer": 0,
+   "explanation": "Cốc dùng để uống nước đó con."
   },
   {
    "stem": "📚 dùng để làm gì?",
    "choices": [
-    "Để đi giày",
-    "Để nấu ăn",
-    "Để xem sách"
+    "Để ăn",
+    "Để xem tranh và đọc",
+    "Để mặc"
    ],
-   "answer": 2,
-   "explanation": "Sách để mình xem tranh, đọc chữ đó con."
-  },
-  {
-   "stem": "🥤 dùng để làm gì?",
-   "choices": [
-    "Để uống nước",
-    "Để đội đầu",
-    "Để đi ngủ"
-   ],
-   "answer": 0,
-   "explanation": "Cái cốc để uống nước cho mát đó con."
+   "answer": 1,
+   "explanation": "Sách để bé xem tranh và nghe đọc đó."
   }
  ],
  "N1NN-w02": [
   {
-   "stem": "Nghe cô kể chuyện, bé cần? 👂",
+   "stem": "Truyện Thỏ 🐰 và Rùa 🐢: ai chạy nhanh hơn?",
    "choices": [
-    "La hét thật to",
+    "Thỏ",
+    "Rùa",
+    "Cả hai nhanh như nhau"
+   ],
+   "answer": 0,
+   "explanation": "Thỏ chạy rất nhanh, nhưng vì mải chơi nên đã thua cuộc đó con."
+  },
+  {
+   "stem": "Cuối truyện, ai về đích trước? 🏁",
+   "choices": [
+    "Thỏ",
+    "Rùa",
+    "Không ai về đích"
+   ],
+   "answer": 1,
+   "explanation": "Rùa đi chậm nhưng chăm chỉ nên về đích trước Thỏ đó con."
+  },
+  {
+   "stem": "Bà kể chuyện, bé nên làm gì? 👂",
+   "choices": [
     "Ngồi yên lắng nghe",
-    "Chạy nhảy lung tung"
-   ],
-   "answer": 1,
-   "explanation": "Nghe cô kể chuyện, bé ngồi yên lắng nghe mới hiểu chuyện nhé."
-  },
-  {
-   "stem": "\"Ba chú heo con\": ai xây nhà gạch? 🧱",
-   "choices": [
-    "Chú heo thứ ba",
-    "Chú heo thứ nhất",
-    "Con sói"
+    "Chạy nhảy lung tung",
+    "Nói chuyện thật to"
    ],
    "answer": 0,
-   "explanation": "Chú heo thứ ba xây nhà gạch chắc chắn nhất đó."
+   "explanation": "Bé ngồi yên lắng nghe sẽ hiểu chuyện hay hơn."
   },
   {
-   "stem": "Nhà gạch của heo có bị đổ không? 🏠",
+   "stem": "Rùa 🐢 đi rất thế nào?",
    "choices": [
-    "Có, đổ ngay",
-    "Không, rất chắc chắn",
-    "Bay mất tiêu"
+    "Rất nhanh",
+    "Rất chậm",
+    "Rất to"
    ],
    "answer": 1,
-   "explanation": "Nhà gạch chắc chắn nên gió thổi không đổ được đâu."
-  },
-  {
-   "stem": "Nghe xong chuyện hay, bé cảm thấy? 😊",
-   "choices": [
-    "Vui và thích thú",
-    "Buồn ngủ ngay",
-    "Tức giận"
-   ],
-   "answer": 0,
-   "explanation": "Nghe chuyện hay bé thấy vui ghê, đúng không nào?"
+   "explanation": "Rùa đi rất chậm nhưng luôn cố gắng đến cùng."
   }
  ],
  "N1TC-quiz": [
   {
-   "stem": "Trước khi ngủ trưa, bé nên làm gì? 😴",
+   "stem": "Đánh răng mỗi ngày giúp bé có? 🦷",
    "choices": [
-    "Đi vệ sinh và nằm yên",
-    "Chạy nhảy thật to",
-    "Ăn thật nhiều kẹo"
+    "Hơi thở thơm, răng chắc",
+    "Bụng no",
+    "Chân khỏe"
    ],
    "answer": 0,
-   "explanation": "Bé đi vệ sinh rồi nằm yên sẽ ngủ ngon hơn nhé."
+   "explanation": "Đánh răng mỗi ngày để răng bé luôn sạch và khỏe nhé!"
   },
   {
-   "stem": "Ra nắng lâu, bé nên đội gì? 🧢",
+   "stem": "Trời lạnh, trước khi ra sân bé nên? 🧥",
    "choices": [
-    "Đội mũ che nắng",
-    "Cởi hết quần áo",
-    "Nhắm mắt chạy nhanh"
+    "Cởi hết áo",
+    "Mặc thêm áo ấm",
+    "Đi chân trần"
+   ],
+   "answer": 1,
+   "explanation": "Trời lạnh nhớ mặc áo ấm để không bị ốm nha bé!"
+  },
+  {
+   "stem": "Buổi sáng vươn vai giúp bé? ☀️",
+   "choices": [
+    "Mệt hơn",
+    "Buồn ngủ hơn",
+    "Tỉnh táo, khỏe khoắn"
+   ],
+   "answer": 2,
+   "explanation": "Vươn vai buổi sáng giúp bé tỉnh táo cả ngày đó!"
+  },
+  {
+   "stem": "Chơi ngoài nắng xong, bé nên? 💧",
+   "choices": [
+    "Uống nước, nghỉ ngơi",
+    "Chạy tiếp không nghỉ",
+    "Nhịn khát"
    ],
    "answer": 0,
-   "explanation": "Đội mũ giúp bé không bị nắng làm mệt đâu."
-  },
-  {
-   "stem": "Sau khi chơi ngoài trời, bé cần làm gì? 🧼",
-   "choices": [
-    "Ăn luôn không cần rửa tay",
-    "Rửa tay sạch sẽ",
-    "Lấy tay dụi mắt"
-   ],
-   "answer": 1,
-   "explanation": "Rửa tay sạch giúp bé không bị vi trùng làm ốm."
-  },
-  {
-   "stem": "Bé nên vận động vào lúc nào trong ngày? 🌞",
-   "choices": [
-    "Chỉ nằm một chỗ cả ngày",
-    "Vào buổi sáng cùng cô và bạn",
-    "Không bao giờ vận động"
-   ],
-   "answer": 1,
-   "explanation": "Vận động buổi sáng giúp cơ thể bé khỏe mạnh hơn."
+   "explanation": "Chơi xong nhớ uống nước và nghỉ ngơi cho khỏe nhé!"
   }
  ],
  "N1TC-w01": [
   {
-   "stem": "Con chim 🐦 bay lên trời nhờ gì?",
+   "stem": "Chim bay được là nhờ? 🐦",
    "choices": [
     "Đôi cánh",
     "Cái đuôi",
     "Cái mỏ"
    ],
    "answer": 0,
-   "explanation": "Chim dùng đôi cánh để bay đó bé."
+   "explanation": "Chim bay được là nhờ đôi cánh xinh đó bé ơi!"
   },
   {
-   "stem": "Bé ném quả bóng 🏀 thì dùng gì?",
+   "stem": "Bé ném quả bóng thì dùng? 🏀",
    "choices": [
-    "Đôi chân",
-    "Đôi tay",
-    "Cái đầu"
+    "Chân",
+    "Tay",
+    "Đầu"
    ],
    "answer": 1,
-   "explanation": "Bé dùng đôi tay để ném bóng thật xa nhé."
+   "explanation": "Bé dùng tay để ném bóng thật giỏi nhé!"
   },
   {
-   "stem": "Con cá 🐟 bơi dưới nước nhờ gì?",
+   "stem": "Đứng một chân giữ thăng bằng, bé cần? 🧍",
    "choices": [
-    "Đôi chân dài",
-    "Cái vây và đuôi",
-    "Đôi cánh"
-   ],
-   "answer": 1,
-   "explanation": "Cá dùng vây và đuôi để bơi lượn trong nước."
-  },
-  {
-   "stem": "Khi đi bộ 🚶, bé dùng bộ phận nào?",
-   "choices": [
-    "Đôi tay",
-    "Cái miệng",
-    "Đôi chân"
+    "Nhắm mắt lại",
+    "Chạy thật nhanh",
+    "Tập trung, đứng vững"
    ],
    "answer": 2,
-   "explanation": "Đôi chân giúp bé bước đi mỗi ngày đó."
+   "explanation": "Đứng một chân cần tập trung, bé cố lên nào!"
+  },
+  {
+   "stem": "Cá bơi dưới nước bằng? 🐟",
+   "choices": [
+    "Vây và đuôi",
+    "Đôi chân",
+    "Đôi cánh"
+   ],
+   "answer": 0,
+   "explanation": "Cá bơi dưới nước nhờ vây và đuôi đó bé!"
   }
  ],
  "N1TC-w02": [
   {
-   "stem": "Cơm 🍚 và cháo giúp bé điều gì?",
+   "stem": "Rau xanh giúp bé? 🥦",
    "choices": [
-    "Có sức để chạy nhảy",
-    "Làm bé buồn ngủ mãi",
-    "Làm bé nhìn không rõ"
+    "Mau lớn, khỏe mạnh",
+    "Đau răng",
+    "Buồn ngủ"
    ],
    "answer": 0,
-   "explanation": "Cơm cháo cho bé năng lượng để vui chơi cả ngày."
+   "explanation": "Ăn rau xanh giúp bé mau lớn và khỏe mạnh đó!"
   },
   {
-   "stem": "Ăn xong bát cơm, bé cần làm gì? 🍽️",
+   "stem": "Bé xúc cơm nên dùng? 🥄",
    "choices": [
-    "Bỏ bát chạy đi chơi luôn",
-    "Lau miệng và cất bát gọn gàng",
-    "Vứt bát xuống sàn"
+    "Tay bốc",
+    "Thìa (muỗng)",
+    "Chân"
    ],
    "answer": 1,
-   "explanation": "Bé gọn gàng lau miệng, cất bát cho sạch sẽ nhé."
+   "explanation": "Dùng thìa xúc cơm gọn gàng, bé giỏi quá!"
   },
   {
-   "stem": "Rau xanh 🥦 giúp bé điều gì?",
+   "stem": "Ăn quá nhiều kẹo ngọt có tốt không? 🍬",
    "choices": [
-    "Khỏe mạnh, ít bị ốm",
-    "Làm răng bé đau",
-    "Làm bé không lớn được"
+    "Rất tốt, ăn thật nhiều",
+    "Tốt như nhau",
+    "Không tốt, dễ sâu răng"
+   ],
+   "answer": 2,
+   "explanation": "Ăn nhiều kẹo ngọt dễ bị sâu răng, bé nhớ nhé!"
+  },
+  {
+   "stem": "Ăn cơm xong, bé nên? 🧻",
+   "choices": [
+    "Lau miệng sạch sẽ",
+    "Chạy nhảy ngay",
+    "Không cần làm gì"
    ],
    "answer": 0,
-   "explanation": "Ăn rau xanh giúp bé khỏe mạnh, mau lớn đó."
-  },
-  {
-   "stem": "Bé có nên ăn thật nhiều kẹo ngọt 🍬 mỗi ngày không?",
-   "choices": [
-    "Có, ăn càng nhiều càng tốt",
-    "Không, chỉ ăn ít thôi",
-    "Ăn kẹo thay cơm cả ngày"
-   ],
-   "answer": 1,
-   "explanation": "Ăn ít kẹo thôi để răng bé chắc khỏe nhé."
+   "explanation": "Lau miệng sạch sau khi ăn cho thơm tho nào!"
   }
  ],
  "N1TC-w04": [
   {
-   "stem": "Thấy có lửa cháy 🔥, bé nên làm gì?",
+   "stem": "Dao, kéo sắc nhọn bé có nên tự cầm chơi không? 🔪",
    "choices": [
-    "Lại gần xem cho rõ",
-    "Chạy báo ngay cho người lớn",
-    "Tự lấy nước dập lửa"
-   ],
-   "answer": 1,
-   "explanation": "Bé chạy báo người lớn ngay để được giúp an toàn."
-  },
-  {
-   "stem": "Dao, kéo sắc nhọn ✂️, bé có nên tự lấy chơi không?",
-   "choices": [
-    "Có, chơi cho vui",
+    "Có, chơi thoải mái",
     "Không, rất nguy hiểm",
-    "Vừa cầm vừa chạy nhảy"
+    "Chơi lúc không ai thấy"
    ],
    "answer": 1,
-   "explanation": "Dao kéo sắc nhọn nguy hiểm, bé không tự lấy chơi nhé."
+   "explanation": "Dao kéo sắc nhọn nguy hiểm lắm, bé tránh xa nhé!"
   },
   {
-   "stem": "Khi đi cầu thang 🪜, bé nên làm gì?",
+   "stem": "Thấy lửa hoặc bật lửa, bé nên? 🔥",
    "choices": [
-    "Vịn tay và bước từ từ",
-    "Nhảy hai bậc một lúc",
-    "Vừa đi vừa nhắm mắt"
+    "Tránh xa, gọi người lớn",
+    "Nghịch thử cho vui",
+    "Cầm chơi một mình"
    ],
    "answer": 0,
-   "explanation": "Vịn tay bước từ từ giúp bé không bị ngã đâu."
+   "explanation": "Thấy lửa bé tránh xa và gọi người lớn giúp nha!"
   },
   {
-   "stem": "Có người lạ rủ đi theo, bé nên làm gì? 🙅",
+   "stem": "Lên xuống cầu thang, bé nên? 🪜",
    "choices": [
-    "Đi theo ngay vì họ cho kẹo",
-    "Không đi và nói với người lớn",
-    "Đi theo nhưng không nói ai"
+    "Chạy thật nhanh",
+    "Nhảy nhiều bậc một lúc",
+    "Vịn tay vịn, đi từ từ"
+   ],
+   "answer": 2,
+   "explanation": "Đi cầu thang từ từ, vịn tay vịn cho an toàn nhé!"
+  },
+  {
+   "stem": "Người lạ rủ đi theo, bé nên? 🙅",
+   "choices": [
+    "Đi ngay theo họ",
+    "Không đi, tìm người thân",
+    "Nhận quà rồi đi"
    ],
    "answer": 1,
-   "explanation": "Bé không đi theo người lạ, hãy nói ngay với người lớn nhé."
+   "explanation": "Người lạ rủ đi, bé không đi và tìm người thân ngay nhé!"
   }
  ],
  "N1TM-quiz": [
   {
-   "stem": "Cầm bút màu 🖍️, tay bé cầm thế nào?",
+   "stem": "Vẽ ông trăng 🌙, bé tô màu gì?",
    "choices": [
-    "Giữ chặt cả nắm tay",
-    "Cầm nhẹ bằng 3 ngón tay",
-    "Cắn bút vào miệng"
-   ],
-   "answer": 1,
-   "explanation": "Cầm bút nhẹ nhàng bằng 3 ngón tay để tô màu đẹp hơn con nhé."
-  },
-  {
-   "stem": "Trước khi hát 🎤, bé nên làm gì?",
-   "choices": [
-    "Hít thở sâu, đứng thẳng người",
-    "Nằm xuống sàn nhà",
-    "La hét thật to"
+    "Vàng nhạt",
+    "Đỏ tươi",
+    "Xanh lá"
    ],
    "answer": 0,
-   "explanation": "Đứng thẳng và hít thở sâu giúp con hát hay hơn đấy."
+   "explanation": "Ông trăng có màu vàng nhạt dịu dàng đó bé!"
   },
   {
-   "stem": "Bông hoa 🌸 bé thích tô màu gì?",
+   "stem": "Cô bảo hát to lên, bé làm sao? 🎤",
    "choices": [
-    "Màu hồng tươi xinh",
-    "Màu đen kịt",
-    "Không tô màu gì cả"
+    "Hát to hơn",
+    "Hát nhỏ hơn",
+    "Ngừng hát"
    ],
    "answer": 0,
-   "explanation": "Tô hoa màu hồng tươi trông thật đáng yêu con nhé."
+   "explanation": "Cô bảo hát to là bé hát to lên đó bé ơi!"
   },
   {
-   "stem": "Tô màu xong, bé cất bút màu ở đâu?",
+   "stem": "Bông hoa hồng 🌺 bé tô màu gì?",
    "choices": [
-    "Vứt xuống sàn nhà",
-    "Cất gọn vào hộp bút",
-    "Giấu dưới gầm bàn"
+    "Xanh dương",
+    "Hồng thắm",
+    "Màu đen"
    ],
    "answer": 1,
-   "explanation": "Cất bút màu vào hộp gọn gàng là bé ngoan đấy."
+   "explanation": "Hoa hồng có màu hồng thắm rất đẹp bé nhé!"
+  },
+  {
+   "stem": "Tô màu xong, bé cất bút vào đâu? 🖍️",
+   "choices": [
+    "Vứt xuống sàn",
+    "Cất vào hộp bút",
+    "Ném ra ngoài"
+   ],
+   "answer": 1,
+   "explanation": "Cất bút gọn gàng là bé ngoan đó!"
   }
  ],
  "N1TM-w01": [
   {
-   "stem": "Nghe nhạc buồn 😢, khuôn mặt bé thế nào?",
+   "stem": "Nghe nhạc êm dịu, bé cảm thấy? 😌",
    "choices": [
-    "Cười thật to",
-    "Hơi buồn nhẹ nhàng",
-    "Nhảy múa thật vui"
+    "Muốn hét to",
+    "Nhẹ nhàng, êm ái",
+    "Khó chịu"
    ],
    "answer": 1,
-   "explanation": "Nghe nhạc buồn thì mặt bé cũng hơi buồn một chút, đúng không nào."
+   "explanation": "Nhạc êm dịu làm lòng mình nhẹ nhàng đó bé."
   },
   {
-   "stem": "Đàn piano 🎹 kêu lên khi bé làm gì?",
+   "stem": "Đàn organ 🎹 muốn kêu, bé phải?",
    "choices": [
-    "Nhìn đàn thật lâu",
-    "Nhấn nhẹ vào phím đàn",
-    "Ngồi im không chạm"
+    "Chỉ nhìn thôi",
+    "Bấm nhẹ phím đàn",
+    "Đập thật mạnh"
    ],
    "answer": 1,
-   "explanation": "Bé nhấn nhẹ vào phím đàn thì đàn sẽ kêu lên đó con."
+   "explanation": "Bé bấm nhẹ phím đàn là có tiếng nhạc ngay!"
   },
   {
-   "stem": "Nhạc nhanh 🐇 bé thường vận động ra sao?",
+   "stem": "Nhảy múa theo nhạc giúp bé? 💃",
    "choices": [
-    "Đi thật chậm rãi",
-    "Nhảy nhanh theo nhịp",
-    "Nằm xuống ngủ"
+    "Buồn ngủ hơn",
+    "Vui và khỏe hơn",
+    "Bị đau tay"
    ],
    "answer": 1,
-   "explanation": "Nhạc nhanh thì bé nhảy nhanh theo nhịp cho vui nhé."
+   "explanation": "Nhảy múa làm bé vui và khỏe mạnh đó!"
   },
   {
-   "stem": "Hát xong một bài, bé nên làm gì?",
+   "stem": "Nghe nhạc thiếu nhi, bé nên làm gì? 🎧",
    "choices": [
-    "Vỗ tay khen bạn",
-    "Bỏ chạy đi chơi",
-    "Khóc thật to"
+    "Hét to lấn tiếng nhạc",
+    "Lắng nghe rồi hát theo",
+    "Bịt tai lại"
    ],
-   "answer": 0,
-   "explanation": "Vỗ tay khen bạn hát hay là bé rất lễ phép đó."
+   "answer": 1,
+   "explanation": "Lắng nghe rồi hát theo là bé giỏi lắm!"
   }
  ],
  "N1TM-w03": [
   {
-   "stem": "Nặn hình con vật 🐘, bé cần đất nặn thế nào?",
+   "stem": "Gấp giấy 📄 thành hình, bé cần?",
    "choices": [
-    "Đất nặn mềm dẻo",
-    "Đất nặn khô cứng",
-    "Không cần đất nặn"
+    "Gấp thẳng, đều tay",
+    "Vò nhàu giấy",
+    "Xé vụn giấy"
    ],
    "answer": 0,
-   "explanation": "Đất nặn mềm dẻo sẽ giúp bé nặn hình dễ dàng hơn."
+   "explanation": "Gấp giấy thẳng đều mới ra hình đẹp đó bé!"
   },
   {
-   "stem": "Dùng kéo ✂️ cắt giấy, bé cần ai giúp?",
+   "stem": "Nặn hình con vật 🐘, bé dùng gì?",
    "choices": [
-    "Tự cắt một mình",
-    "Nhờ cô giáo hoặc người lớn",
-    "Dùng tay xé thay kéo"
-   ],
-   "answer": 1,
-   "explanation": "Kéo sắc nên bé nhớ nhờ cô hoặc người lớn giúp nhé."
-  },
-  {
-   "stem": "Dán hình lên giấy, bé dùng gì để dán?",
-   "choices": [
-    "Keo dán hoặc hồ dán",
+    "Đất nặn",
     "Nước lã",
-    "Hạt cát"
+    "Hòn đá"
    ],
    "answer": 0,
-   "explanation": "Dùng keo dán hoặc hồ dán thì hình mới dính chắc con ạ."
+   "explanation": "Đất nặn mềm dẻo giúp bé tạo hình dễ dàng!"
   },
   {
-   "stem": "Tạo hình từ lá cây 🍂, bé nhặt lá ở đâu?",
+   "stem": "Dùng kéo cắt giấy ✂️, bé phải?",
    "choices": [
-    "Ở sân trường, công viên",
-    "Trong tủ quần áo",
-    "Dưới gầm giường"
+    "Cắt cẩn thận, có cô giúp",
+    "Chạy nhảy khi cắt",
+    "Đưa kéo cho bạn nghịch"
    ],
    "answer": 0,
-   "explanation": "Bé ra sân trường hoặc công viên nhặt lá cây thật đẹp nhé."
+   "explanation": "Cắt kéo cẩn thận để giữ an toàn cho bé nhé!"
+  },
+  {
+   "stem": "Dán hình lên giấy, bé dùng gì để dính? 📎",
+   "choices": [
+    "Hồ dán",
+    "Nước lã",
+    "Cát"
+   ],
+   "answer": 0,
+   "explanation": "Hồ dán giúp hình dính chắc vào giấy đó bé!"
   }
  ],
  "N1TX-quiz": [
@@ -1981,125 +1981,125 @@ export const PRESCHOOL_EXTRA = {
    "stem": "Muốn mượn đồ chơi của bạn, bé nói gì? 🧸",
    "choices": [
     "Giật lấy luôn",
-    "Cho mình mượn với nhé!",
-    "Im lặng lấy đi"
+    "Cho tớ mượn với",
+    "Im lặng bỏ đi"
    ],
    "answer": 1,
-   "explanation": "Bé nhớ hỏi mượn nhẹ nhàng nhé, ngoan lắm!"
+   "explanation": "Bé nói lời xin nhé, bạn sẽ vui lòng cho mượn đấy."
   },
   {
-   "stem": "Trước khi ăn cơm, bé nên nói gì? 🍚",
+   "stem": "Trước khi ăn cơm, bé cần làm gì? 🍚",
    "choices": [
-    "Con mời cả nhà ăn cơm!",
-    "Im lặng ăn luôn",
-    "Giành ăn trước"
-   ],
-   "answer": 0,
-   "explanation": "Con mời cơm là bé rất lễ phép đó!"
-  },
-  {
-   "stem": "Đi học về, gặp ông bà bé nên? 👵",
-   "choices": [
-    "Chạy vào phòng luôn",
-    "Khoanh tay chào ông bà",
-    "Không nói gì cả"
-   ],
-   "answer": 1,
-   "explanation": "Khoanh tay chào ông bà làm ông bà vui lắm đó!"
-  },
-  {
-   "stem": "😲 là khuôn mặt cảm xúc gì? 🤔",
-   "choices": [
-    "Buồn ngủ",
-    "Đói bụng",
-    "Ngạc nhiên"
+    "Chạy nhảy lung tung",
+    "Vứt đồ chơi bừa bãi",
+    "Rửa tay sạch sẽ"
    ],
    "answer": 2,
-   "explanation": "Đúng rồi, mắt tròn xoe là đang ngạc nhiên đó!"
+   "explanation": "Rửa tay sạch trước khi ăn để bé luôn khỏe mạnh nhé."
+  },
+  {
+   "stem": "😴 là khuôn mặt đang làm gì?",
+   "choices": [
+    "Đang ngủ",
+    "Đang hát",
+    "Đang chạy"
+   ],
+   "answer": 0,
+   "explanation": "Đúng rồi, đó là lúc bé đang ngủ ngoan đấy."
+  },
+  {
+   "stem": "Ra khỏi nhà, bé chào ai trước? 👋",
+   "choices": [
+    "Cái bàn",
+    "Ông bà, bố mẹ",
+    "Quyển sách"
+   ],
+   "answer": 1,
+   "explanation": "Bé nhớ chào ông bà, bố mẹ thật ngoan nhé."
   }
  ],
  "N1TX-w01": [
   {
-   "stem": "😴 là khuôn mặt cảm xúc gì? 💤",
+   "stem": "😂 là cảm xúc gì?",
    "choices": [
+    "Buồn",
+    "Vui cười",
+    "Sợ hãi"
+   ],
+   "answer": 1,
+   "explanation": "Đúng rồi, đó là khuôn mặt đang vui cười đấy."
+  },
+  {
+   "stem": "Thấy bạn ngã đau, bé nên làm gì? 🤕",
+   "choices": [
+    "Cười trêu bạn",
+    "Bỏ đi chỗ khác",
+    "Hỏi thăm bạn"
+   ],
+   "answer": 2,
+   "explanation": "Bé hỏi thăm bạn thật đáng yêu và tốt bụng."
+  },
+  {
+   "stem": "😲 là khuôn mặt đang cảm thấy gì?",
+   "choices": [
+    "Ngạc nhiên",
     "Buồn ngủ",
-    "Tức giận",
     "Vui vẻ"
    ],
    "answer": 0,
-   "explanation": "Mắt nhắm lại là bé đang buồn ngủ rồi!"
+   "explanation": "Đúng rồi, khuôn mặt này đang ngạc nhiên đấy bé."
   },
   {
-   "stem": "Được tặng quà, bé cảm thấy thế nào? 🎁",
+   "stem": "Khi sợ hãi, bé nên tìm ai? 🥺",
    "choices": [
-    "Sợ hãi",
-    "Vui sướng",
-    "Tức giận"
-   ],
-   "answer": 1,
-   "explanation": "Nhận quà ai cũng vui sướng phải không nào!"
-  },
-  {
-   "stem": "Bị lạc mẹ ở siêu thị, bé thấy? 😟",
-   "choices": [
-    "Sợ hãi",
-    "Vui vẻ",
-    "Buồn ngủ"
+    "Người thân yêu",
+    "Con vật lạ",
+    "Không ai cả"
    ],
    "answer": 0,
-   "explanation": "Lạc mẹ thì sợ lắm, bé nhớ tìm cô chú giúp nhé!"
-  },
-  {
-   "stem": "Khi buồn, bé nên làm gì? 🥺",
-   "choices": [
-    "Giấu kín một mình",
-    "Nói với mẹ hoặc cô",
-    "Đánh bạn"
-   ],
-   "answer": 1,
-   "explanation": "Kể cho mẹ hay cô nghe, bé sẽ thấy nhẹ lòng hơn!"
+   "explanation": "Người thân yêu sẽ luôn ôm bé thật ấm áp."
   }
  ],
  "N1TX-w03": [
   {
-   "stem": "Bạn lỡ làm đổ đồ chơi, bé nên? 🧩",
+   "stem": "Xếp hàng chờ đến lượt chơi, bé nên? 🎠",
    "choices": [
-    "Mách cô ngay",
-    "Giúp bạn nhặt lên",
-    "Giận dỗi bỏ đi"
-   ],
-   "answer": 1,
-   "explanation": "Giúp bạn nhặt lên, hai bạn sẽ vui vẻ chơi tiếp!"
-  },
-  {
-   "stem": "Xếp hàng chơi cầu trượt, bé nên? 🛝",
-   "choices": [
-    "Chen lên trước",
-    "Xếp hàng chờ đến lượt",
-    "Giành chỗ của bạn"
-   ],
-   "answer": 1,
-   "explanation": "Chờ đến lượt là bé rất ngoan đó!"
-  },
-  {
-   "stem": "Bạn không muốn chơi cùng, bé nên? 🙂",
-   "choices": [
-    "Ép bạn phải chơi",
-    "Khóc thật to",
-    "Đi chơi trò khác vui vẻ"
+    "Chen ngang lên trước",
+    "Xô đẩy bạn",
+    "Chờ đến lượt mình"
    ],
    "answer": 2,
-   "explanation": "Không sao đâu, bé tìm trò khác chơi vẫn vui mà!"
+   "explanation": "Chờ đến lượt là bé đang rất ngoan đấy."
   },
   {
-   "stem": "Chơi xong, bé nên làm gì với đồ chơi? 🧸",
+   "stem": "Bạn làm đổ tháp bé xếp, bé nên? 🧱",
    "choices": [
-    "Bỏ đó đi chơi tiếp",
+    "Đánh bạn",
+    "Không sao, xếp lại",
+    "Khóc thật to"
+   ],
+   "answer": 1,
+   "explanation": "Bình tĩnh xếp lại, bé và bạn sẽ vui vẻ hơn."
+  },
+  {
+   "stem": "Chơi xong đồ chơi, bé cùng bạn nên? 🧹",
+   "choices": [
+    "Bỏ đi chơi khác",
     "Cất đồ chơi gọn gàng",
     "Vứt lung tung"
    ],
    "answer": 1,
-   "explanation": "Cất đồ chơi gọn gàng, lần sau lại có đồ chơi ngay!"
+   "explanation": "Cùng nhau cất đồ chơi gọn gàng thật đáng khen."
+  },
+  {
+   "stem": "Bạn không muốn chơi cùng, bé nên? 🥲",
+   "choices": [
+    "Bắt ép bạn chơi",
+    "Vui vẻ chơi trò khác",
+    "Giận dỗi bạn"
+   ],
+   "answer": 1,
+   "explanation": "Bé vui vẻ chơi việc khác, lúc sau bạn sẽ chơi cùng."
   }
  ],
  "N2-quiz": [
@@ -2134,7 +2134,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Chính xác, có 8 quả táo thơm ngon đó bé!"
   },
   {
-   "stem": "Số nào bé hơn: 3 hay 9? 🔢",
+   "stem": "Số nào bé hơn: 3 hay 9?",
    "choices": [
     "9",
     "3",
@@ -2156,7 +2156,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con ngoan quá, chào cô là đúng rồi đó!"
   },
   {
-   "stem": "Đồ chơi ở lớp là của? 🧸",
+   "stem": "Đồ chơi ở lớp là của?",
    "choices": [
     "Chỉ của bé",
     "Của chung cả lớp",
@@ -2176,7 +2176,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Giỏi lắm, có 3 cánh cửa đó bé!"
   },
   {
-   "stem": "Muốn mượn đồ của bạn, bé nên? 🤝",
+   "stem": "Muốn mượn đồ của bạn, bé nên?",
    "choices": [
     "Giật lấy",
     "Hỏi mượn tử tế",
@@ -2198,7 +2198,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Đúng rồi, có 3 cây bút chì đó bé!"
   },
   {
-   "stem": "Muốn phát biểu, bé nên? ✋",
+   "stem": "Muốn phát biểu, bé nên?",
    "choices": [
     "Giơ tay xin phép",
     "Nói leo",
@@ -2208,7 +2208,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con ngoan quá, giơ tay xin phép là đúng đó!"
   },
   {
-   "stem": "Bàn ghế trong lớp dùng để? 🪑",
+   "stem": "Bàn ghế trong lớp dùng để?",
    "choices": [
     "Để bé ngồi học",
     "Để leo trèo",
@@ -2218,7 +2218,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Giỏi lắm, bàn ghế để bé ngồi học bài đó con!"
   },
   {
-   "stem": "Sau giờ học, bé nên xếp sách vở? 📚",
+   "stem": "Sau giờ học, bé nên xếp sách vở?",
    "choices": [
     "Vứt bừa bãi",
     "Gọn gàng ngăn nắp",
@@ -2240,7 +2240,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Đúng rồi, cô dạy bé những điều hay lẽ phải đó con!"
   },
   {
-   "stem": "Khi cô dạy, bé nên? 👂",
+   "stem": "Khi cô dạy, bé nên?",
    "choices": [
     "Chú ý lắng nghe",
     "Nói chuyện riêng",
@@ -2282,7 +2282,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Giỏi lắm, nhảy dây giúp bé khỏe mạnh đó con!"
   },
   {
-   "stem": "Xích đu 🎪 bé ngồi và?",
+   "stem": "Xích đu 🛝 bé ngồi và?",
    "choices": [
     "Đu đưa nhẹ nhàng",
     "Đứng lên nhảy",
@@ -2302,7 +2302,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, bập bênh cần 2 bạn mới chơi được đó!"
   },
   {
-   "stem": "Xếp hàng chờ đến lượt chơi, bé cần? ⏳",
+   "stem": "Xếp hàng chờ đến lượt chơi, bé cần?",
    "choices": [
     "Kiên nhẫn chờ",
     "Chen ngang",
@@ -2324,7 +2324,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Đúng rồi, bé có 2 cái tai đó!"
   },
   {
-   "stem": "Trước khi ăn, bé cần? 🧼",
+   "stem": "Trước khi ăn, bé cần?",
    "choices": [
     "Rửa tay sạch sẽ",
     "Không cần rửa",
@@ -2334,7 +2334,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, rửa tay sạch trước khi ăn nhé!"
   },
   {
-   "stem": "Ngủ đủ giấc giúp bé? 😴",
+   "stem": "Ngủ đủ giấc giúp bé?",
    "choices": [
     "Mau lớn khỏe mạnh",
     "Mệt mỏi hơn",
@@ -2366,7 +2366,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Giỏi lắm, tai dùng để nghe âm thanh đó con!"
   },
   {
-   "stem": "Da tay chạm vào lửa thấy? 🔥",
+   "stem": "Da tay chạm vào lửa thấy?",
    "choices": [
     "Mát lạnh",
     "Nóng rát",
@@ -2376,7 +2376,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Đúng rồi, chạm vào lửa rất nóng, bé nhớ tránh xa nhé!"
   },
   {
-   "stem": "Muốn biết vật cứng hay mềm, bé dùng? ✋",
+   "stem": "Muốn biết vật cứng hay mềm, bé dùng?",
    "choices": [
     "Tay sờ",
     "Mắt nhìn xa",
@@ -2386,7 +2386,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, dùng tay sờ là biết ngay đó!"
   },
   {
-   "stem": "Ra nắng, bé nên đội gì bảo vệ mắt? 🕶️",
+   "stem": "Ra nắng, bé nên đội gì bảo vệ mắt?",
    "choices": [
     "Mũ và kính râm",
     "Không cần gì",
@@ -2418,7 +2418,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Giỏi lắm, đó là cảm xúc yêu thương đó bé!"
   },
   {
-   "stem": "Thấy bạn buồn, bé nên? 🤗",
+   "stem": "Thấy bạn buồn, bé nên?",
    "choices": [
     "An ủi bạn",
     "Trêu chọc bạn",
@@ -2428,7 +2428,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con ngoan quá, an ủi bạn là điều rất tốt đó!"
   },
   {
-   "stem": "Khi không vừa ý, bé nên? 😤",
+   "stem": "Khi không vừa ý, bé nên?",
    "choices": [
     "Đánh bạn",
     "Nói ra cảm xúc",
@@ -2460,7 +2460,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, bé có thể tự đi giày được đó!"
   },
   {
-   "stem": "Cắt móng tay, bé nên? ✂️",
+   "stem": "Cắt móng tay, bé nên?",
    "choices": [
     "Tự cắt một mình",
     "Nhờ người lớn giúp",
@@ -2470,7 +2470,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Đúng rồi, nhờ người lớn giúp cắt móng tay cho an toàn nhé!"
   },
   {
-   "stem": "Chải tóc gọn gàng giúp bé? 💇",
+   "stem": "Chải tóc gọn gàng giúp bé?",
    "choices": [
     "Xinh đẹp gọn gàng",
     "Xấu đi",
@@ -2492,7 +2492,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Đúng rồi, bố đi làm để chăm lo cho gia đình đó con!"
   },
   {
-   "stem": "Ông bà tuổi thế nào so với bố mẹ? 👴",
+   "stem": "Ông bà tuổi thế nào so với bố mẹ?",
    "choices": [
     "Nhiều tuổi hơn",
     "Ít tuổi hơn",
@@ -2502,7 +2502,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Giỏi lắm, ông bà nhiều tuổi hơn bố mẹ đó bé!"
   },
   {
-   "stem": "Bé thể hiện yêu ông bà bằng cách? 💕",
+   "stem": "Bé thể hiện yêu ông bà bằng cách?",
    "choices": [
     "Lễ phép, quan tâm",
     "Cãi lời",
@@ -2554,7 +2554,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, có 3 cô giáo đó!"
   },
   {
-   "stem": "Bé nên đối xử với mọi nghề nghiệp? 🤝",
+   "stem": "Bé nên đối xử với mọi nghề nghiệp?",
    "choices": [
     "Tôn trọng như nhau",
     "Coi thường",
@@ -2596,7 +2596,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, mái nhà ở trên cùng để che mưa nắng đó!"
   },
   {
-   "stem": "Muốn vào nhà, bé đi qua đâu? 🚪",
+   "stem": "Muốn vào nhà, bé đi qua đâu?",
    "choices": [
     "Cửa ra vào",
     "Cửa sổ",
@@ -2608,7 +2608,7 @@ export const PRESCHOOL_EXTRA = {
  ],
  "N2-w12": [
   {
-   "stem": "Cái bàn 🪑 dùng để?",
+   "stem": "Cái bàn 🍽️ dùng để?",
    "choices": [
     "Để ăn, học bài",
     "Để ngủ",
@@ -2670,7 +2670,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Đúng rồi, đến bệnh viện để bác sĩ khám cho bé nhé!"
   },
   {
-   "stem": "Khi tiêm, bé nên? 💉",
+   "stem": "Khi tiêm, bé nên?",
    "choices": [
     "Khóc thật to bỏ chạy",
     "Ngồi yên can đảm",
@@ -2680,7 +2680,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, ngồi yên can đảm là bé rất dũng cảm đó!"
   },
   {
-   "stem": "Đi khám sức khỏe giúp bé? 🩺",
+   "stem": "Khám sức khỏe định kỳ giúp bé?",
    "choices": [
     "Phát hiện bệnh sớm",
     "Không ích gì",
@@ -2712,7 +2712,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Đúng rồi, nông dân trồng rau củ cho bé ăn đó!"
   },
   {
-   "stem": "Công nhân xây nhà cần dùng? 🏗️",
+   "stem": "Công nhân xây nhà cần dùng?",
    "choices": [
     "Dụng cụ xây dựng",
     "Bút vẽ",
@@ -2722,7 +2722,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, công nhân cần dụng cụ xây dựng đó!"
   },
   {
-   "stem": "Thấy chú công nhân làm việc, bé nên? 👷",
+   "stem": "Thấy chú công nhân làm việc, bé nên?",
    "choices": [
     "Tôn trọng, biết ơn",
     "Chê cười",
@@ -2754,7 +2754,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Giỏi lắm, xe cứu hỏa màu đỏ để dễ nhận ra đó!"
   },
   {
-   "stem": "Phi công làm việc chủ yếu ở đâu? ✈️",
+   "stem": "Phi công làm việc chủ yếu ở đâu?",
    "choices": [
     "Trên bầu trời",
     "Dưới biển",
@@ -2764,7 +2764,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, phi công bay trên bầu trời đó!"
   },
   {
-   "stem": "Thấy cháy, bé nên báo cho? 🔥",
+   "stem": "Thấy cháy, bé nên báo cho?",
    "choices": [
     "Người lớn ngay",
     "Tự dập lửa",
@@ -2776,7 +2776,7 @@ export const PRESCHOOL_EXTRA = {
  ],
  "N2-w16": [
   {
-   "stem": "Họa sĩ vẽ tranh bằng nhiều? 🎨",
+   "stem": "Họa sĩ vẽ tranh bằng nhiều?",
    "choices": [
     "Màu sắc",
     "Con số",
@@ -2806,7 +2806,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, đàn piano dùng để chơi nhạc đó!"
   },
   {
-   "stem": "Muốn vẽ đẹp, bé cần? 🖌️",
+   "stem": "Muốn vẽ đẹp, bé cần?",
    "choices": [
     "Chăm chỉ luyện tập",
     "Không cần học",
@@ -2848,7 +2848,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, chó sủa để báo động khi có người lạ đó!"
   },
   {
-   "stem": "Nuôi vật nuôi, bé cần? 🐾",
+   "stem": "Nuôi vật nuôi, bé cần?",
    "choices": [
     "Cho ăn, chăm sóc",
     "Bỏ đói",
@@ -2974,7 +2974,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, chim cánh cụt sống ở nơi rất lạnh đó!"
   },
   {
-   "stem": "Chim bay được nhờ có? 🐦",
+   "stem": "Chim bay được nhờ có?",
    "choices": [
     "Đôi cánh",
     "Đôi chân dài",
@@ -2996,7 +2996,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Giỏi lắm, miền Bắc trưng hoa đào ngày Tết đó con!"
   },
   {
-   "stem": "Ngày Tết, bé thường mặc? 🧧",
+   "stem": "Ngày Tết, bé thường mặc?",
    "choices": [
     "Quần áo mới",
     "Đồ ngủ",
@@ -3006,7 +3006,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Đúng rồi, ngày Tết bé mặc quần áo mới thật đẹp đó!"
   },
   {
-   "stem": "Tết là dịp để gia đình? 👨‍👩‍👧‍👦",
+   "stem": "Tết là dịp để gia đình?",
    "choices": [
     "Sum họp bên nhau",
     "Xa cách nhau",
@@ -3016,7 +3016,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, Tết là dịp gia đình sum họp đó!"
   },
   {
-   "stem": "Bé chúc Tết mọi người điều gì? 🎉",
+   "stem": "Bé chúc Tết mọi người điều gì?",
    "choices": [
     "Sức khỏe, may mắn",
     "Buồn bã",
@@ -3048,7 +3048,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Đúng rồi, mứt Tết có vị ngọt thơm đó bé!"
   },
   {
-   "stem": "Mâm cỗ Tết bé nên ăn cùng? 🍱",
+   "stem": "Mâm cỗ Tết bé nên ăn cùng?",
    "choices": [
     "Cả gia đình",
     "Một mình",
@@ -3070,17 +3070,17 @@ export const PRESCHOOL_EXTRA = {
  ],
  "N2-w23": [
   {
-   "stem": "Mùa nào đến trước mùa hè? 🌼",
+   "stem": "Mùa xuân là mùa đầu tiên trong năm phải không?",
    "choices": [
-    "Mùa xuân",
-    "Mùa thu",
-    "Mùa đông"
+    "Đúng",
+    "Sai",
+    "Không có mùa nào"
    ],
    "answer": 0,
-   "explanation": "Giỏi lắm, mùa xuân đến trước mùa hè đó con!"
+   "explanation": "Giỏi lắm, mùa xuân là mùa đầu tiên trong năm đó con!"
   },
   {
-   "stem": "Mùa xuân, cây cối thường? 🌱",
+   "stem": "Mùa xuân, cây cối thường?",
    "choices": [
     "Đâm chồi nảy lộc",
     "Rụng hết lá",
@@ -3100,7 +3100,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, có 5 con bướm xinh đó!"
   },
   {
-   "stem": "Thời tiết mùa xuân khiến bé cảm thấy? 🌤️",
+   "stem": "Thời tiết mùa xuân khiến bé cảm thấy?",
    "choices": [
     "Dễ chịu mát mẻ",
     "Rất nóng bức",
@@ -3112,7 +3112,7 @@ export const PRESCHOOL_EXTRA = {
  ],
  "N2-w24": [
   {
-   "stem": "Múa lân, múa rồng mang lại điều gì? 🦁",
+   "stem": "Múa lân, múa rồng mang lại điều gì?",
    "choices": [
     "May mắn, vui vẻ",
     "Buồn bã",
@@ -3132,7 +3132,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Đúng rồi, có 4 chiếc đèn lồng đó bé!"
   },
   {
-   "stem": "Lễ hội mùa xuân thường có rất nhiều? 🎊",
+   "stem": "Lễ hội mùa xuân thường có rất nhiều?",
    "choices": [
     "Người tham gia",
     "Không ai đến",
@@ -3142,7 +3142,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, lễ hội có rất nhiều người tham gia đó!"
   },
   {
-   "stem": "Khi xem múa lân, bé nên? 👀",
+   "stem": "Khi xem múa lân, bé nên?",
    "choices": [
     "Đứng xem an toàn",
     "Chạy lại gần đầu lân",
@@ -3164,7 +3164,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Giỏi lắm, lá cây thường có màu xanh đó con!"
   },
   {
-   "stem": "Thân cây có vai trò gì? 🌳",
+   "stem": "Thân cây có vai trò gì?",
    "choices": [
     "Đỡ cho cây đứng vững",
     "Hút nước",
@@ -3216,7 +3216,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Đúng rồi, hoa sen mọc ở dưới nước, ao hồ đó con!"
   },
   {
-   "stem": "Nhiều loài hoa có mùi thơm để? 🌸",
+   "stem": "Nhiều loài hoa có mùi thơm để?",
    "choices": [
     "Thu hút ong bướm",
     "Xua đuổi con người",
@@ -3226,7 +3226,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, hoa thơm để thu hút ong bướm đó!"
   },
   {
-   "stem": "Bé tặng hoa cho ai để thể hiện yêu thương? 💐",
+   "stem": "Bé tặng hoa cho ai để thể hiện yêu thương?",
    "choices": [
     "Mẹ, cô giáo",
     "Không ai cả",
@@ -3258,7 +3258,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Đúng rồi, nho nhỏ tròn và mọc thành chùm đó!"
   },
   {
-   "stem": "Ăn nhiều trái cây giúp bé? 🍉",
+   "stem": "Ăn nhiều trái cây giúp bé?",
    "choices": [
     "Khỏe mạnh, đẹp da",
     "Bị ốm hơn",
@@ -3310,7 +3310,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, củ hành có mùi hăng cay nhẹ đó!"
   },
   {
-   "stem": "Bé nên ăn rau củ mỗi ngày để? 🥗",
+   "stem": "Bé nên ăn rau củ mỗi ngày để?",
    "choices": [
     "Khỏe mạnh",
     "Bị bệnh",
@@ -3352,7 +3352,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, xe máy có 2 bánh đó!"
   },
   {
-   "stem": "Các loại xe di chuyển trên? 🛣️",
+   "stem": "Các loại xe di chuyển trên?",
    "choices": [
     "Mặt đường",
     "Bầu trời",
@@ -3384,7 +3384,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Đúng rồi, đèn đỏ báo hiệu phải dừng lại đó!"
   },
   {
-   "stem": "Vạch kẻ sọc trắng đen dành cho ai qua đường? 🚶",
+   "stem": "Vạch trắng đen dành cho ai qua đường?",
    "choices": [
     "Người đi bộ",
     "Chỉ xe hơi",
@@ -3394,19 +3394,19 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, vạch đó dành cho người đi bộ qua đường đó!"
   },
   {
-   "stem": "Đi đúng luật giao thông giúp bé? 🚦",
+   "stem": "Tuân thủ luật giao thông giúp bé?",
    "choices": [
     "An toàn hơn",
     "Gặp nguy hiểm",
     "Không ích gì"
    ],
    "answer": 0,
-   "explanation": "Ngoan quá, đi đúng luật giao thông giúp bé an toàn đó!"
+   "explanation": "Ngoan quá, tuân thủ luật giao thông giúp bé an toàn đó!"
   }
  ],
  "N2-w31": [
   {
-   "stem": "Qua đường, bé nên nắm tay? 🤝",
+   "stem": "Qua đường, bé nên nắm tay?",
    "choices": [
     "Người lớn",
     "Không ai cả",
@@ -3416,7 +3416,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Giỏi lắm, nắm tay người lớn khi qua đường nhé con!"
   },
   {
-   "stem": "Trước khi qua đường, bé cần nhìn? 👀",
+   "stem": "Trước khi qua đường, bé cần nhìn?",
    "choices": [
     "Hai bên trái phải",
     "Lên trời",
@@ -3426,7 +3426,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Đúng rồi, nhìn hai bên trái phải trước khi qua đường đó!"
   },
   {
-   "stem": "Ngồi trên ô tô, bé cần thắt gì? 🚗",
+   "stem": "Ngồi trên ô tô, bé cần thắt gì?",
    "choices": [
     "Dây an toàn",
     "Không cần gì",
@@ -3436,7 +3436,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, thắt dây an toàn khi ngồi ô tô nhé!"
   },
   {
-   "stem": "Bé có nên chạy chơi trên lòng đường không? ⚠️",
+   "stem": "Bé có nên chạy chơi trên lòng đường không?",
    "choices": [
     "Không, rất nguy hiểm",
     "Có, rất vui",
@@ -3500,7 +3500,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Giỏi lắm, mặt trời mang lại ánh sáng và hơi ấm đó con!"
   },
   {
-   "stem": "Bé có nên nhìn thẳng vào mặt trời không? 👀",
+   "stem": "Bé có nên nhìn thẳng vào mặt trời không?",
    "choices": [
     "Không, sẽ hại mắt",
     "Có, rất tốt",
@@ -3532,7 +3532,7 @@ export const PRESCHOOL_EXTRA = {
  ],
  "N2-w34": [
   {
-   "stem": "Mùa nào đến sau mùa hè? 🍂",
+   "stem": "Mùa nào đến sau mùa hè?",
    "choices": [
     "Mùa thu",
     "Mùa xuân",
@@ -3542,7 +3542,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Giỏi lắm, mùa thu đến sau mùa hè đó con!"
   },
   {
-   "stem": "Mùa đông, bé cần mặc gì để ấm? 🧥",
+   "stem": "Mùa đông, bé cần mặc gì để ấm?",
    "choices": [
     "Áo ấm dày",
     "Áo mỏng ngắn tay",
@@ -3552,7 +3552,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Đúng rồi, mặc áo ấm dày vào mùa đông nhé con!"
   },
   {
-   "stem": "Bốn mùa trong năm có lặp lại không? 🔄",
+   "stem": "Bốn mùa trong năm có lặp lại không?",
    "choices": [
     "Có, lặp lại mỗi năm",
     "Không, chỉ có một lần",
@@ -3562,7 +3562,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, bốn mùa lặp lại mỗi năm đó!"
   },
   {
-   "stem": "Mùa hè, bé thường mặc? ☀️",
+   "stem": "Mùa hè, bé thường mặc?",
    "choices": [
     "Áo mỏng, ngắn tay",
     "Áo len dày",
@@ -3584,7 +3584,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Giỏi lắm, nước sạch không màu và trong suốt đó con!"
   },
   {
-   "stem": "Đánh răng xong, bé nên? 🚰",
+   "stem": "Đánh răng xong, bé nên?",
    "choices": [
     "Khóa vòi nước lại",
     "Để nước chảy mãi",
@@ -3594,7 +3594,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Đúng rồi, khóa vòi nước lại để tiết kiệm nhé con!"
   },
   {
-   "stem": "Cây cối có cần nước để sống không? 🌱",
+   "stem": "Cây cối có cần nước để sống không?",
    "choices": [
     "Có, rất cần",
     "Không cần gì cả",
@@ -3604,7 +3604,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, cây cối rất cần nước để sống đó!"
   },
   {
-   "stem": "Nước sạch bé uống lấy từ đâu? 🥤",
+   "stem": "Nước sạch bé uống lấy từ đâu?",
    "choices": [
     "Vòi nước, giếng sạch",
     "Vũng bùn",
@@ -3616,7 +3616,7 @@ export const PRESCHOOL_EXTRA = {
  ],
  "N2-w36": [
   {
-   "stem": "Bản đồ Việt Nam có hình dạng giống chữ gì? 🇻🇳",
+   "stem": "Bản đồ Việt Nam có hình dạng giống chữ gì?",
    "choices": [
     "Chữ S",
     "Chữ O",
@@ -3626,7 +3626,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Giỏi lắm, bản đồ Việt Nam có hình chữ S đó con!"
   },
   {
-   "stem": "Khi chào cờ, bé cần đứng như thế nào? 🚩",
+   "stem": "Khi chào cờ, bé cần đứng như thế nào?",
    "choices": [
     "Nghiêm trang, im lặng",
     "Chạy nhảy lung tung",
@@ -3636,7 +3636,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Đúng rồi, đứng nghiêm trang khi chào cờ nhé con!"
   },
   {
-   "stem": "Quốc ca Việt Nam được hát khi nào? 🎵",
+   "stem": "Quốc ca Việt Nam được hát khi nào?",
    "choices": [
     "Lễ chào cờ",
     "Giờ ngủ trưa",
@@ -3646,7 +3646,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Con giỏi quá, quốc ca được hát trong lễ chào cờ đó!"
   },
   {
-   "stem": "Bé thể hiện yêu quê hương bằng cách? 🇻🇳",
+   "stem": "Bé thể hiện yêu quê hương bằng cách?",
    "choices": [
     "Giữ gìn sạch đẹp",
     "Xả rác bừa bãi",
@@ -3658,296 +3658,548 @@ export const PRESCHOOL_EXTRA = {
  ],
  "N2NN-quiz": [
   {
-   "stem": "Từ \"gà\" bắt đầu bằng chữ nào? 🐔",
+   "stem": "Từ \"bố\" bắt đầu bằng chữ gì? 👨",
    "choices": [
     "B",
-    "G",
+    "M",
+    "T"
+   ],
+   "answer": 0,
+   "explanation": "Đúng rồi, \"bố\" bắt đầu bằng chữ B đó con."
+  },
+  {
+   "stem": "Nghe cô kể chuyện, bé cần làm gì? 👂",
+   "choices": [
+    "Chạy nhảy ầm ĩ",
+    "Ngồi yên lắng nghe",
+    "Nói chuyện riêng"
+   ],
+   "answer": 1,
+   "explanation": "Ngồi yên lắng nghe thì bé mới hiểu hết câu chuyện nhé."
+  },
+  {
+   "stem": "Kể lại chuyện, bé nên nói theo thứ tự nào? 📖",
+   "choices": [
+    "Lộn xộn tuỳ ý",
+    "Từ đầu đến cuối",
+    "Chỉ nói đoạn cuối"
+   ],
+   "answer": 1,
+   "explanation": "Kể từ đầu đến cuối thì bạn nghe mới hiểu được câu chuyện."
+  },
+  {
+   "stem": "Từ \"chó\" bắt đầu bằng chữ gì? 🐶",
+   "choices": [
+    "T",
+    "C",
     "M"
    ],
    "answer": 1,
-   "explanation": "Đúng rồi, chữ G đứng đầu trong từ \"gà\" đó con!"
-  },
-  {
-   "stem": "Nghe cô kể chuyện xong, bé nên làm gì? 📖",
-   "choices": [
-    "Chạy đi chơi ngay",
-    "Ngủ quên",
-    "Kể lại cho bạn nghe"
-   ],
-   "answer": 2,
-   "explanation": "Giỏi quá, kể lại chuyện giúp con nhớ lâu hơn đó!"
-  },
-  {
-   "stem": "\"Chim\" bắt đầu bằng chữ gì? 🐦",
-   "choices": [
-    "H",
-    "T",
-    "C"
-   ],
-   "answer": 2,
-   "explanation": "Chính xác, chữ C đứng đầu trong từ \"chim\" đó con!"
-  },
-  {
-   "stem": "Khi không hiểu câu chuyện, bé nên? 🙋",
-   "choices": [
-    "Hỏi cô giáo",
-    "Im lặng buồn bã",
-    "Bỏ đi chỗ khác"
-   ],
-   "answer": 0,
-   "explanation": "Đúng rồi, hỏi cô giáo sẽ giúp con hiểu chuyện hơn nhé!"
+   "explanation": "Giỏi quá, \"chó\" bắt đầu bằng chữ C con nhé."
   }
  ],
  "N2NN-w01": [
   {
-   "stem": "\"Dê\" bắt đầu bằng chữ? 🐐",
+   "stem": "\"Gà\" bắt đầu bằng chữ gì? 🐔",
    "choices": [
-    "Đ",
-    "D",
-    "B"
-   ],
-   "answer": 1,
-   "explanation": "Đúng rồi, chữ D đứng đầu trong từ \"dê\" đó con!"
-  },
-  {
-   "stem": "\"Lá\" bắt đầu bằng chữ? 🍃",
-   "choices": [
-    "L",
-    "N",
-    "H"
-   ],
-   "answer": 0,
-   "explanation": "Giỏi quá, chữ L đứng đầu trong từ \"lá\" đó con!"
-  },
-  {
-   "stem": "\"Sách\" bắt đầu bằng chữ? 📚",
-   "choices": [
-    "X",
-    "T",
-    "S"
-   ],
-   "answer": 2,
-   "explanation": "Chính xác, chữ S đứng đầu trong từ \"sách\" đó con!"
-  },
-  {
-   "stem": "\"Hoa\" bắt đầu bằng chữ? 🌸",
-   "choices": [
+    "G",
     "H",
-    "C",
     "K"
    ],
    "answer": 0,
-   "explanation": "Đúng rồi, chữ H đứng đầu trong từ \"hoa\" đó con!"
+   "explanation": "Đúng rồi, \"gà\" bắt đầu bằng chữ G đó con."
+  },
+  {
+   "stem": "\"Sách\" bắt đầu bằng chữ gì? 📚",
+   "choices": [
+    "X",
+    "S",
+    "T"
+   ],
+   "answer": 1,
+   "explanation": "Giỏi lắm, \"sách\" bắt đầu bằng chữ S nhé."
+  },
+  {
+   "stem": "\"Bàn\" bắt đầu bằng chữ gì? 🪑",
+   "choices": [
+    "B",
+    "D",
+    "P"
+   ],
+   "answer": 0,
+   "explanation": "Đúng rồi, \"bàn\" bắt đầu bằng chữ B con ạ."
+  },
+  {
+   "stem": "\"Voi\" bắt đầu bằng chữ gì? 🐘",
+   "choices": [
+    "N",
+    "U",
+    "V"
+   ],
+   "answer": 2,
+   "explanation": "Giỏi quá, \"voi\" bắt đầu bằng chữ V đó con."
   }
  ],
  "N2NN-w02": [
   {
-   "stem": "Tranh có mặt trời ☀️ và bé đội mũ, trời đang?",
+   "stem": "Tranh bạn ngã và khóc 🤕, bé nên làm gì?",
    "choices": [
-    "Mưa to",
+    "Cười trêu bạn",
+    "Bỏ đi chỗ khác",
+    "Đỡ bạn dậy, hỏi thăm"
+   ],
+   "answer": 2,
+   "explanation": "Bé thật tốt bụng khi biết đỡ bạn dậy và hỏi thăm."
+  },
+  {
+   "stem": "Tranh có mặt trời to ☀️, trời đang thế nào?",
+   "choices": [
     "Nắng",
-    "Có tuyết"
-   ],
-   "answer": 1,
-   "explanation": "Đúng rồi, mặt trời sáng là trời đang nắng đó con!"
-  },
-  {
-   "stem": "Tranh bé đánh răng buổi sáng 🪥, bé đang giữ gìn?",
-   "choices": [
-    "Vệ sinh răng miệng",
-    "Đồ chơi",
-    "Quần áo"
+    "Mưa",
+    "Lạnh"
    ],
    "answer": 0,
-   "explanation": "Giỏi quá, đánh răng giúp răng miệng con sạch sẽ đó!"
+   "explanation": "Đúng rồi, mặt trời to là trời đang nắng đó con."
   },
   {
-   "stem": "Tranh bé ôm mẹ thật chặt 🤗, bé thể hiện điều gì?",
+   "stem": "Tranh bé đánh răng buổi sáng 🪥, bé đang làm gì?",
    "choices": [
-    "Sự tức giận",
-    "Tình yêu thương",
-    "Sự sợ hãi"
-   ],
-   "answer": 1,
-   "explanation": "Chính xác, ôm mẹ thật chặt là con đang yêu thương mẹ đó!"
-  },
-  {
-   "stem": "Tranh các bạn xếp hàng ngay ngắn 🚶, các bạn đang?",
-   "choices": [
-    "Giữ trật tự",
-    "Chạy lung tung",
-    "Trốn tìm"
+    "Giữ vệ sinh",
+    "Chơi trò chơi",
+    "Chuẩn bị đi ngủ"
    ],
    "answer": 0,
-   "explanation": "Đúng rồi, xếp hàng ngay ngắn là các bạn giữ trật tự đó!"
+   "explanation": "Đánh răng mỗi sáng giúp bé giữ vệ sinh sạch sẽ đó."
+  },
+  {
+   "stem": "Kể chuyện theo tranh, bé nhìn vào đâu trước? 👀",
+   "choices": [
+    "Nhắm mắt lại",
+    "Nhìn ra cửa sổ",
+    "Nhìn kỹ bức tranh"
+   ],
+   "answer": 2,
+   "explanation": "Nhìn kỹ bức tranh thì bé mới kể đúng câu chuyện nhé."
   }
  ],
  "N2TC-quiz": [
   {
-   "stem": "Nhảy lò cò 🦘 bé cần giữ?",
-   "choices": [
-    "Mắt nhắm nghiền",
-    "Đứng yên một chỗ",
-    "Thăng bằng"
-   ],
-   "answer": 2,
-   "explanation": "Giữ thăng bằng thật tốt thì nhảy lò cò mới vui và không bị ngã đó con."
-  },
-  {
-   "stem": "Bò qua vòng tròn 🎯 bé dùng?",
-   "choices": [
-    "Chỉ có mắt",
-    "Tay và chân",
-    "Chỉ có tai"
-   ],
-   "answer": 1,
-   "explanation": "Bé dùng cả tay và chân nhịp nhàng để bò qua vòng thật khéo nhé."
-  },
-  {
-   "stem": "Sau khi vận động, bé nên uống?",
+   "stem": "Chạy nhảy xong, bé nên uống gì? 💧",
    "choices": [
     "Nước ngọt có ga",
-    "Không uống gì",
-    "Nước lọc mát 💧"
-   ],
-   "answer": 2,
-   "explanation": "Uống nước lọc mát giúp cơ thể bé khỏe khoắn sau khi chơi đó con."
-  },
-  {
-   "stem": "Thịt, cá, trứng 🍳 giúp bé?",
-   "choices": [
-    "Bị ốm",
-    "Mau lớn khỏe mạnh",
-    "Ngủ không được"
+    "Nước lọc mát",
+    "Không cần uống"
    ],
    "answer": 1,
-   "explanation": "Ăn thịt cá trứng giúp bé mau lớn và khỏe mạnh mỗi ngày nhé."
+   "explanation": "Nước lọc giúp cơ thể bé khỏe mạnh nha."
+  },
+  {
+   "stem": "Trước khi vận động, bé nên làm gì? 🤸",
+   "choices": [
+    "Khởi động nhẹ nhàng",
+    "Nằm ngủ luôn",
+    "Ăn thật no"
+   ],
+   "answer": 0,
+   "explanation": "Khởi động giúp bé không bị đau nhé."
+  },
+  {
+   "stem": "Trái cây 🍎🍌 cho bé thêm gì?",
+   "choices": [
+    "Chỉ có vị ngọt thôi",
+    "Không có ích gì",
+    "Vitamin khỏe mạnh"
+   ],
+   "answer": 2,
+   "explanation": "Trái cây có nhiều vitamin tốt cho bé đó."
+  },
+  {
+   "stem": "Nhảy dây 🪢 mỗi ngày giúp bé?",
+   "choices": [
+    "Yếu đi",
+    "Khỏe và nhanh nhẹn",
+    "Buồn ngủ hơn"
+   ],
+   "answer": 1,
+   "explanation": "Vận động đều giúp bé dẻo dai hơn."
   }
  ],
  "N2TC-w01": [
   {
-   "stem": "Vẽ tranh 🎨 bé cầm bút bằng?",
+   "stem": "Vẽ tranh 🎨 bé cần cầm bút thế nào?",
    "choices": [
-    "Chân",
-    "Cả nắm tay đấm",
-    "Ngón tay khéo léo"
+    "Ném bút đi",
+    "Cắn bút",
+    "Cầm chắc, đúng cách"
    ],
    "answer": 2,
-   "explanation": "Cầm bút bằng những ngón tay khéo léo thì nét vẽ mới đẹp con nhé."
+   "explanation": "Cầm bút đúng giúp nét vẽ đẹp hơn con nhé."
   },
   {
-   "stem": "Gấp giấy 📄 thành hình bé cần?",
+   "stem": "Gấp giấy 📄 thành hình, bé cần?",
    "choices": [
-    "Vò nhàu giấy",
-    "Gấp theo đường thẳng",
-    "Xé vụn giấy"
+    "Gấp theo nếp cẩn thận",
+    "Vò giấy thật nhàu",
+    "Xé giấy vụn"
+   ],
+   "answer": 0,
+   "explanation": "Gấp cẩn thận thì hình mới đẹp và khéo con ạ."
+  },
+  {
+   "stem": "Buộc dây giày 👟 cần bàn tay bé?",
+   "choices": [
+    "Vụng về, vội vàng",
+    "Khéo léo, kiên nhẫn",
+    "Không cần dùng tay"
    ],
    "answer": 1,
-   "explanation": "Gấp theo đường thẳng cẩn thận thì hình gấp mới đẹp và ngay ngắn."
+   "explanation": "Kiên nhẫn một chút là bé buộc được ngay."
   },
   {
-   "stem": "Buộc dây giày 👟 bé làm bằng?",
+   "stem": "Cầm thìa xúc cơm 🥄, bé nên?",
    "choices": [
-    "Miệng",
-    "Hai tay khéo léo",
-    "Đầu gối"
-   ],
-   "answer": 1,
-   "explanation": "Hai bàn tay khéo léo giúp bé tự buộc được dây giày đó con."
-  },
-  {
-   "stem": "Tô màu 🖍️ không bị lem, bé cần?",
-   "choices": [
-    "Tô ra ngoài giấy",
-    "Tô thật nhanh vội",
-    "Tô cẩn thận trong khung"
+    "Hất thìa lung tung",
+    "Dùng tay bốc hết",
+    "Xúc từ từ, cẩn thận"
    ],
    "answer": 2,
-   "explanation": "Tô thật chậm và cẩn thận trong khung thì bức tranh sẽ không bị lem."
+   "explanation": "Xúc cẩn thận giúp bé ăn ngoan và sạch sẽ."
   }
  ],
  "N2TC-w02": [
   {
-   "stem": "Mỗi ngày bé nên uống sữa 🥛 để?",
+   "stem": "Uống sữa 🥛 mỗi ngày giúp bé?",
    "choices": [
-    "Bị sâu răng",
-    "Không lớn được",
-    "Xương chắc khỏe"
-   ],
-   "answer": 2,
-   "explanation": "Uống sữa mỗi ngày giúp xương của bé chắc khỏe hơn đó con."
-  },
-  {
-   "stem": "Bữa ăn đủ chất cần có cơm, rau và?",
-   "choices": [
-    "Chỉ nước ngọt",
-    "Thịt cá trứng 🍗",
-    "Kẹo bánh"
-   ],
-   "answer": 1,
-   "explanation": "Có thêm thịt cá trứng thì bữa ăn của bé mới đủ chất đó con."
-  },
-  {
-   "stem": "Trước khi ngủ, bé không nên ăn nhiều?",
-   "choices": [
-    "Bánh kẹo ngọt 🍬",
-    "Cháo loãng",
-    "Rau luộc"
+    "Xương chắc khỏe",
+    "Đau bụng",
+    "Không ích gì"
    ],
    "answer": 0,
-   "explanation": "Ăn nhiều bánh kẹo ngọt trước khi ngủ dễ khiến bé đau bụng và sâu răng."
+   "explanation": "Sữa có canxi giúp xương bé chắc khỏe đó."
   },
   {
-   "stem": "Trái cây 🍎🍌 giúp bé?",
+   "stem": "Cá 🐟 và trứng 🥚 thuộc nhóm thức ăn nào?",
    "choices": [
-    "Đau bụng",
-    "Khỏe mạnh, đẹp da",
-    "Mệt mỏi"
+    "Nhóm chất béo",
+    "Nhóm chất đạm",
+    "Nhóm đường"
    ],
    "answer": 1,
-   "explanation": "Ăn trái cây mỗi ngày giúp bé khỏe mạnh và có làn da đẹp đó con."
+   "explanation": "Cá, trứng cho bé nhiều chất đạm để lớn khỏe."
+  },
+  {
+   "stem": "Ăn mặn quá nhiều muối 🧂 thì?",
+   "choices": [
+    "Tốt cho tim",
+    "Không tốt cho cơ thể",
+    "Giúp cao lớn"
+   ],
+   "answer": 1,
+   "explanation": "Ăn mặn quá không tốt, bé nhớ ăn vừa phải nha."
+  },
+  {
+   "stem": "Trước khi ăn cơm, bé cần?",
+   "choices": [
+    "Rửa tay sạch sẽ",
+    "Chơi đất cát",
+    "Không cần làm gì"
+   ],
+   "answer": 0,
+   "explanation": "Rửa tay sạch giúp bé không bị đau bụng."
   }
  ],
  "N2TC-w04": [
   {
-   "stem": "Qua đường, bé cần đi cùng?",
+   "stem": "Qua đường 🚦, bé cần đi cùng?",
    "choices": [
-    "Một mình chạy nhanh",
-    "Nhắm mắt băng qua",
-    "Người lớn dắt tay 🧑‍🤝‍🧑"
+    "Đi một mình thật nhanh",
+    "Người lớn dắt tay",
+    "Chạy qua đường"
    ],
-   "answer": 2,
-   "explanation": "Bé nắm tay người lớn khi qua đường để luôn được an toàn nhé."
+   "answer": 1,
+   "explanation": "Đi cùng người lớn giúp bé qua đường an toàn."
   },
   {
-   "stem": "Ổ điện trên tường, bé?",
+   "stem": "Thấy ổ điện 🔌, bé nên?",
    "choices": [
-    "Lấy que chọc vào",
     "Không sờ vào",
-    "Cho tay vào"
+    "Thò tay vào chơi",
+    "Lấy que chọc vào"
    ],
-   "answer": 1,
-   "explanation": "Ổ điện rất nguy hiểm, bé nhớ không sờ vào để giữ an toàn nhé."
+   "answer": 0,
+   "explanation": "Ổ điện nguy hiểm, bé tránh xa nhé."
   },
   {
-   "stem": "Thấy lửa 🔥 đang cháy, bé nên?",
+   "stem": "Leo trèo lên bàn ghế cao 🪑, bé nên?",
    "choices": [
-    "Lại gần xem",
-    "Tránh xa gọi người lớn",
-    "Dùng tay chạm"
+    "Trèo lên chơi cho vui",
+    "Nhờ người lớn giúp",
+    "Nhảy xuống thật nhanh"
    ],
    "answer": 1,
-   "explanation": "Bé tránh xa lửa và gọi ngay người lớn đến giúp mới an toàn nhé."
+   "explanation": "Nhờ người lớn giúp để bé không bị ngã đau."
   },
   {
-   "stem": "Đi xe máy cùng người lớn, bé cần đội?",
+   "stem": "Ngồi xe máy 🛵, bé cần đội gì?",
    "choices": [
-    "Không cần gì",
-    "Mũ vải mỏng",
-    "Mũ bảo hiểm ⛑️"
+    "Mũ bảo hiểm",
+    "Không cần đội gì",
+    "Khăn quàng cổ"
+   ],
+   "answer": 0,
+   "explanation": "Đội mũ bảo hiểm giúp bảo vệ đầu bé an toàn."
+  }
+ ],
+ "N2TM-quiz": [
+  {
+   "stem": "Nghe nhạc vui 🎉, bé nên làm gì?",
+   "choices": [
+    "Ngồi im không phản ứng",
+    "Cười và lắc lư theo nhạc",
+    "Bịt tai lại"
+   ],
+   "answer": 1,
+   "explanation": "Nghe nhạc vui, bé cứ cười và đung đưa theo nhé!"
+  },
+  {
+   "stem": "Gõ trống 🥁 đúng nhịp, bé cần?",
+   "choices": [
+    "Gõ bừa thật nhanh",
+    "Bịt mắt lại",
+    "Lắng nghe rồi gõ theo"
    ],
    "answer": 2,
-   "explanation": "Đội mũ bảo hiểm giúp bảo vệ đầu bé thật an toàn khi đi xe đó con."
+   "explanation": "Bé lắng nghe thật kỹ rồi gõ theo nhịp sẽ hay lắm đó!"
+  },
+  {
+   "stem": "Vẽ ông mặt trời ☀️, bé chọn màu?",
+   "choices": [
+    "Màu vàng cam",
+    "Màu đen",
+    "Màu tím than"
+   ],
+   "answer": 0,
+   "explanation": "Ông mặt trời ấm áp hợp với màu vàng cam rực rỡ đó bé!"
+  },
+  {
+   "stem": "Múa cùng bạn 💃, bé nên?",
+   "choices": [
+    "Đứng yên một chỗ",
+    "Cử động tay chân nhịp nhàng",
+    "Xô đẩy bạn"
+   ],
+   "answer": 1,
+   "explanation": "Múa cùng bạn, bé đưa tay chân nhịp nhàng sẽ rất đẹp!"
+  }
+ ],
+ "N2TM-w01": [
+  {
+   "stem": "Trắng ⚪ + Đỏ 🔴 = màu gì?",
+   "choices": [
+    "Hồng",
+    "Đen",
+    "Nâu"
+   ],
+   "answer": 0,
+   "explanation": "Trắng hòa cùng đỏ sẽ ra màu hồng xinh xắn đó bé!"
+  },
+  {
+   "stem": "Trắng ⚪ + Đen ⚫ = màu gì?",
+   "choices": [
+    "Vàng",
+    "Xám",
+    "Xanh"
+   ],
+   "answer": 1,
+   "explanation": "Trắng và đen hòa vào nhau tạo thành màu xám nhẹ nhàng!"
+  },
+  {
+   "stem": "Muốn màu đậm hơn 🎨, bé pha thêm gì?",
+   "choices": [
+    "Không cần thêm gì",
+    "Thêm nước",
+    "Thêm màu đậm hơn"
+   ],
+   "answer": 2,
+   "explanation": "Muốn màu đậm hơn, bé chỉ cần cho thêm chút màu đậm thôi!"
+  },
+  {
+   "stem": "Vẽ xong, bé rửa cọ bằng gì? 🖌️",
+   "choices": [
+    "Không rửa",
+    "Nước sạch",
+    "Sữa tươi"
+   ],
+   "answer": 1,
+   "explanation": "Rửa cọ bằng nước sạch để lần sau vẽ màu vẫn đẹp nhé!"
+  }
+ ],
+ "N2TM-w03": [
+  {
+   "stem": "Nặn bánh xe 🚗, bé lăn đất thành hình gì?",
+   "choices": [
+    "Hình vuông nhọn",
+    "Hình que dài thẳng",
+    "Hình tròn"
+   ],
+   "answer": 2,
+   "explanation": "Bé lăn đất nặn thành hình tròn để làm bánh xe nhé!"
+  },
+  {
+   "stem": "Xé giấy dán hoa 🌸, bé xé giấy thành mảnh?",
+   "choices": [
+    "Mảnh to bằng cả tờ",
+    "Mảnh nhỏ vừa tay",
+    "Không xé gì cả"
+   ],
+   "answer": 1,
+   "explanation": "Bé xé giấy thành mảnh nhỏ vừa tay để dán hoa cho đẹp nhé!"
+  },
+  {
+   "stem": "Tay bẩn màu 🖼️, bé nên làm gì?",
+   "choices": [
+    "Lau vào áo bạn",
+    "Rửa tay sạch sẽ",
+    "Để nguyên vậy"
+   ],
+   "answer": 1,
+   "explanation": "Vẽ xong bé nhớ rửa tay thật sạch sẽ nhé!"
+  },
+  {
+   "stem": "Tạo hình con vật bằng lá cây 🍃, bé cần?",
+   "choices": [
+    "Xé lá thật nát",
+    "Khéo tay xếp lá thành hình",
+    "Vứt lá đi"
+   ],
+   "answer": 1,
+   "explanation": "Bé khéo tay xếp những chiếc lá thành hình con vật thật xinh!"
+  }
+ ],
+ "N2TX-quiz": [
+  {
+   "stem": "Bạn ngã đau, bé nên làm gì? 🤗",
+   "choices": [
+    "Đỡ bạn dậy và hỏi thăm",
+    "Cười chê bạn",
+    "Bỏ đi chỗ khác"
+   ],
+   "answer": 0,
+   "explanation": "Giúp đỡ bạn khi bạn ngã là điều rất đáng yêu đó."
+  },
+  {
+   "stem": "Hai bạn cùng thích một quả bóng, nên sao? ⚽",
+   "choices": [
+    "Giành lấy bóng trước",
+    "Thay phiên nhau chơi",
+    "Không cho bạn chơi"
+   ],
+   "answer": 1,
+   "explanation": "Thay phiên nhau chơi thì cả hai bạn đều vui."
+  },
+  {
+   "stem": "Xây tháp bằng khối gỗ cùng bạn, bé nên? 🧱",
+   "choices": [
+    "Chỉ tự xây một mình",
+    "Cùng bàn bạc và xây chung",
+    "Phá tháp của bạn"
+   ],
+   "answer": 1,
+   "explanation": "Cùng nhau bàn bạc sẽ xây được tháp thật đẹp."
+  },
+  {
+   "stem": "Bạn quên mang khăn lau tay, bé nên? 🧻",
+   "choices": [
+    "Cho bạn mượn khăn của mình",
+    "Mặc kệ bạn",
+    "Trêu chọc bạn"
+   ],
+   "answer": 0,
+   "explanation": "Chia sẻ khăn với bạn là một việc tốt bụng."
+  }
+ ],
+ "N2TX-w01": [
+  {
+   "stem": "Cả nhóm cùng hát một bài, bé nên? 🎵",
+   "choices": [
+    "Hát theo nhịp cùng cả nhóm",
+    "Hát to hơn để át bạn",
+    "Không hát, ngồi im"
+   ],
+   "answer": 0,
+   "explanation": "Hát cùng nhịp với các bạn sẽ rất vui và hay."
+  },
+  {
+   "stem": "Được giao việc trong nhóm, bé nên? 📋",
+   "choices": [
+    "Làm phần việc của mình thật tốt",
+    "Đùn đẩy cho bạn khác",
+    "Bỏ đi chơi chỗ khác"
+   ],
+   "answer": 0,
+   "explanation": "Mỗi bạn làm tốt phần của mình, nhóm sẽ hoàn thành nhanh."
+  },
+  {
+   "stem": "Bạn trong nhóm chưa biết cách làm, bé nên? 🙋",
+   "choices": [
+    "Kiên nhẫn chỉ giúp bạn",
+    "Cười chê bạn",
+    "Giành làm hết, không cho bạn làm"
+   ],
+   "answer": 0,
+   "explanation": "Giúp bạn học cách làm là rất đáng khen."
+  },
+  {
+   "stem": "Nhóm hoàn thành xong việc, bé nên? 🎉",
+   "choices": [
+    "Giành công là của riêng mình",
+    "Cùng nhau vui mừng và cảm ơn bạn",
+    "Chê bai công sức của nhóm"
+   ],
+   "answer": 1,
+   "explanation": "Cùng vui và cảm ơn nhau làm cả nhóm thêm gắn bó."
+  }
+ ],
+ "N2TX-w03": [
+  {
+   "stem": "Ông bị đau chân, bé nên làm gì? 👴",
+   "choices": [
+    "Chạy nhảy ồn ào cạnh ông",
+    "Lấy nước và ngồi cạnh ông",
+    "Không quan tâm"
+   ],
+   "answer": 1,
+   "explanation": "Chăm sóc ông khi ông đau là bé rất ngoan."
+  },
+  {
+   "stem": "Cả nhà cùng ăn cơm, bé nên? 🍚",
+   "choices": [
+    "Ăn trước không mời ai",
+    "Giành hết thức ăn ngon",
+    "Mời ông bà bố mẹ ăn cơm trước"
+   ],
+   "answer": 2,
+   "explanation": "Mời cả nhà ăn cơm là bé rất lễ phép."
+  },
+  {
+   "stem": "Anh chị đang bận học bài, bé nên? 📚",
+   "choices": [
+    "Chơi nhẹ nhàng, không làm ồn",
+    "Bật nhạc thật to",
+    "Giật sách của anh chị"
+   ],
+   "answer": 0,
+   "explanation": "Giữ yên lặng để anh chị học bài là bé biết quan tâm."
+  },
+  {
+   "stem": "Bố mẹ khen bé ngoan, bé nên? 😊",
+   "choices": [
+    "Cãi lại bố mẹ",
+    "Cảm ơn và cười tươi",
+    "Không nói gì, bỏ đi"
+   ],
+   "answer": 1,
+   "explanation": "Cảm ơn bố mẹ bằng nụ cười là con rất đáng yêu."
   }
  ],
  "N3-quiz": [
@@ -3972,14 +4224,14 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "2 quả ít hơn 4 quả đó con."
   },
   {
-   "stem": "Số 10 gồm mấy chục và đơn vị? 🔟",
+   "stem": "Số nào đứng ngay sau số 9? 🔟",
    "choices": [
-    "1 chục 0 đơn vị",
-    "0 chục 1 đơn vị",
-    "2 chục"
+    "8",
+    "10",
+    "11"
    ],
-   "answer": 0,
-   "explanation": "10 là 1 chục tròn trịa, không có đơn vị lẻ nào con nhé."
+   "answer": 1,
+   "explanation": "Sau số 9 là số 10 tròn trịa đó con."
   },
   {
    "stem": "Vào lớp 1, bé cần đếm giỏi tới đâu? 🎒",
@@ -4066,7 +4318,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "9 lớn hơn 6 con nhé."
   },
   {
-   "stem": "Đếm tiếp nào: 7, 8, 9, ...?",
+   "stem": "Đếm tiếp nào: 7, 8, 9, ...? 🔢",
    "choices": [
     "8",
     "10",
@@ -4256,7 +4508,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Xin lỗi khi làm sai là con rất dũng cảm đó."
   },
   {
-   "stem": "Bạn được điểm tốt, bé nên làm gì? 🎉",
+   "stem": "Bạn được cô khen, bé nên làm gì? 🎉",
    "choices": [
     "Ghen tị với bạn",
     "Chúc mừng bạn",
@@ -4352,12 +4604,12 @@ export const PRESCHOOL_EXTRA = {
   {
    "stem": "Chị gái của mẹ được gọi là gì? 👩",
    "choices": [
-    "Bác gái",
+    "Bác hoặc dì",
     "Cô",
     "Chú"
    ],
    "answer": 0,
-   "explanation": "Chị gái của mẹ thì con gọi là bác gái đó."
+   "explanation": "Chị của mẹ thì con gọi là bác hoặc dì đó."
   },
   {
    "stem": "Nhà có bố, mẹ và 2 bé, có mấy bé? 👨‍👩‍👧‍👦",
@@ -4486,7 +4738,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Kéo rất sắc, con cần người lớn giúp khi dùng nhé."
   },
   {
-   "stem": "Leo trèo lên lan can rất như thế nào? ⚠️",
+   "stem": "Trèo lên lan can là việc như thế nào? ⚠️",
    "choices": [
     "Rất an toàn",
     "Rất nguy hiểm",
@@ -4521,7 +4773,7 @@ export const PRESCHOOL_EXTRA = {
    "stem": "Bác sĩ khám bệnh bằng dụng cụ gì? 🩺",
    "choices": [
     "Ống nghe",
-    "Cái cưa",
+    "Cái chảo",
     "Cái búa"
    ],
    "answer": 0,
@@ -4654,7 +4906,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "Đếm lại nhé, có đúng 5 ngôi sao lấp lánh đó."
   },
   {
-   "stem": "Mọi nghề nghiệp chân chính đều như thế nào? 💛",
+   "stem": "Mọi nghề nghiệp đều như thế nào? 💛",
    "choices": [
     "Đáng được quý trọng",
     "Xấu xa cả",
@@ -4780,7 +5032,7 @@ export const PRESCHOOL_EXTRA = {
    "explanation": "San hô mọc thành rạn đẹp dưới đáy biển đó con."
   },
   {
-   "stem": "Đếm tiếp nào: 13, 14, 15, ...?",
+   "stem": "Đếm tiếp nào: 13, 14, 15, ...? 🔢",
    "choices": [
     "16",
     "17",
@@ -5506,254 +5758,254 @@ export const PRESCHOOL_EXTRA = {
  ],
  "N3NN-quiz": [
   {
-   "stem": "Ghép \"h\" + \"oa\" đọc là gì? 🌸",
+   "stem": "Ghép \"đ\" + \"a\" đọc là gì? 🍈",
    "choices": [
-    "hoa",
-    "hao",
-    "oah"
+    "đa",
+    "ba",
+    "ca"
    ],
    "answer": 0,
-   "explanation": "Đúng rồi, ghép lại con đọc là “hoa” đó."
+   "explanation": "Con giỏi lắm, ghép đúng rồi đó!"
+  },
+  {
+   "stem": "Chữ cái nào đứng ngay sau chữ B? 🔤",
+   "choices": [
+    "A",
+    "C",
+    "D"
+   ],
+   "answer": 1,
+   "explanation": "Đúng rồi, sau B là C con nhé."
   },
   {
    "stem": "Từ \"mẹ\" có mấy chữ cái? 👩",
    "choices": [
-    "3",
-    "2",
-    "4"
+    "3 chữ",
+    "2 chữ",
+    "4 chữ"
    ],
    "answer": 1,
-   "explanation": "Từ “mẹ” có 2 chữ cái, con giỏi quá."
+   "explanation": "Mẹ có 2 chữ cái m và e, con giỏi quá!"
   },
   {
-   "stem": "Chữ nào đứng ngay sau chữ \"C\"? 🔤",
+   "stem": "Ghép \"t\" + \"o\" đọc là gì? 🐘",
    "choices": [
-    "B",
-    "E",
-    "D"
-   ],
-   "answer": 2,
-   "explanation": "Sau chữ C là chữ D đó con."
-  },
-  {
-   "stem": "Ghép \"t\" + \"o\" (dấu sắc) đọc là? 🎈",
-   "choices": [
-    "tó",
-    "tò",
+    "no",
+    "do",
     "to"
    ],
-   "answer": 0,
-   "explanation": "Có dấu sắc thì đọc là “tó” đó con."
+   "answer": 2,
+   "explanation": "Con ghép đúng rồi, đọc là \"to\" đó!"
   }
  ],
  "N3NN-w01": [
   {
-   "stem": "Chữ nào là phụ âm? 🔡",
+   "stem": "Chữ nào đứng trước chữ C? 🔡",
+   "choices": [
+    "D",
+    "B",
+    "E"
+   ],
+   "answer": 1,
+   "explanation": "Đúng rồi, B đứng ngay trước C con nhé."
+  },
+  {
+   "stem": "Trong 3 chữ sau, chữ nào là phụ âm? 📖",
    "choices": [
     "A",
-    "B",
+    "M",
     "O"
    ],
    "answer": 1,
-   "explanation": "Đúng rồi, chữ B là phụ âm đó con."
+   "explanation": "Giỏi quá, M là phụ âm đó con!"
   },
   {
-   "stem": "Chữ \"O\" có hình dạng giống quả gì? 🍊",
+   "stem": "Chữ nào tròn giống quả trứng? 🥚",
    "choices": [
-    "Quả chuối",
-    "Quả dưa dài",
-    "Quả cam"
-   ],
-   "answer": 2,
-   "explanation": "Chữ O tròn giống quả cam đó con."
-  },
-  {
-   "stem": "Đếm từ chữ A đến chữ C có mấy chữ? 🔢",
-   "choices": [
-    "3",
-    "4",
-    "2"
+    "O",
+    "I",
+    "V"
    ],
    "answer": 0,
-   "explanation": "A, B, C có 3 chữ cái đó con."
+   "explanation": "Đúng rồi, chữ O tròn giống quả trứng."
   },
   {
-   "stem": "Chữ nào đứng trước chữ \"B\"? ⬅️",
+   "stem": "Bảng chữ cái có bắt đầu bằng chữ A không? 🅰️",
    "choices": [
-    "C",
-    "A",
-    "D"
+    "Đúng",
+    "Sai",
+    "Không biết"
    ],
-   "answer": 1,
-   "explanation": "Trước chữ B là chữ A, con nhớ giỏi quá."
+   "answer": 0,
+   "explanation": "Đúng vậy, chữ A luôn đứng đầu tiên con nhé."
   }
  ],
  "N3NN-w02": [
   {
-   "stem": "\"m\" + \"a\" đọc là? 🔤",
+   "stem": "\"n\" + \"a\" (dấu sắc) đọc là gì? 🍑",
    "choices": [
-    "am",
-    "mo",
-    "ma"
-   ],
-   "answer": 2,
-   "explanation": "Ghép lại con đọc là “ma” đó."
-  },
-  {
-   "stem": "\"t\" + \"a\" đọc là? 🙋",
-   "choices": [
-    "ta",
-    "at",
-    "to"
-   ],
-   "answer": 0,
-   "explanation": "Ghép lại con đọc là “ta” rồi đó."
-  },
-  {
-   "stem": "\"c\" + \"a\" (dấu sắc) đọc là? 🐟",
-   "choices": [
-    "cà",
-    "cá",
-    "ca"
-   ],
-   "answer": 1,
-   "explanation": "Có dấu sắc thì đọc là “cá” đó con."
-  },
-  {
-   "stem": "\"n\" + \"o\" đọc là? 🍽️",
-   "choices": [
-    "on",
-    "nô",
+    "nà",
+    "ná",
     "no"
    ],
+   "answer": 1,
+   "explanation": "Con ghép giỏi lắm, đọc là \"ná\" đó!"
+  },
+  {
+   "stem": "\"h\" + \"oa\" đọc là gì? 🌸",
+   "choices": [
+    "hòa",
+    "hoa",
+    "hỏa"
+   ],
+   "answer": 1,
+   "explanation": "Đúng rồi, ghép lại đọc là \"hoa\" con nhé."
+  },
+  {
+   "stem": "\"đ\" + \"i\" đọc là gì? 🚶",
+   "choices": [
+    "đo",
+    "đa",
+    "đi"
+   ],
    "answer": 2,
-   "explanation": "Ghép lại con đọc là “no” rồi đó."
+   "explanation": "Giỏi quá, con ghép đúng thành \"đi\" rồi!"
+  },
+  {
+   "stem": "\"x\" + \"e\" đọc là gì? 🚗",
+   "choices": [
+    "xe",
+    "xa",
+    "xo"
+   ],
+   "answer": 0,
+   "explanation": "Đúng rồi, ghép lại đọc là \"xe\" đó con."
   }
  ],
  "N3NN-w04": [
   {
-   "stem": "Trước khi kể chuyện, bé cần nhớ gì? 📖",
-   "choices": [
-    "Chạy thật nhanh",
-    "Tên nhân vật",
-    "Nhắm mắt ngủ"
-   ],
-   "answer": 1,
-   "explanation": "Đúng rồi, nhớ tên nhân vật giúp kể chuyện hay hơn."
-  },
-  {
-   "stem": "Khi bạn kể chuyện, bé nên làm gì? 👂",
+   "stem": "Khi nghe kể chuyện, bé cần làm gì? 👂",
    "choices": [
     "Nói chuyện riêng",
-    "Chạy ra ngoài",
-    "Lắng nghe im lặng"
-   ],
-   "answer": 2,
-   "explanation": "Con lắng nghe bạn kể là rất ngoan đó."
-  },
-  {
-   "stem": "Đọc thơ xong, bé nên làm gì? 🙋",
-   "choices": [
-    "Trả lời câu hỏi về bài thơ",
-    "Xé sách vở",
-    "Quên ngay bài thơ"
-   ],
-   "answer": 0,
-   "explanation": "Trả lời câu hỏi giúp con nhớ bài thơ lâu hơn."
-  },
-  {
-   "stem": "Giọng đọc thơ hay nên như thế nào? 🎵",
-   "choices": [
-    "Đọc thật to quát tháo",
-    "Đọc rõ ràng, có cảm xúc",
-    "Đọc lí nhí không nghe rõ"
+    "Lắng nghe chăm chú",
+    "Chạy nhảy"
    ],
    "answer": 1,
-   "explanation": "Đọc rõ ràng và có cảm xúc thì hay lắm."
+   "explanation": "Đúng rồi, lắng nghe chăm chú để hiểu chuyện con nhé."
+  },
+  {
+   "stem": "Đọc thơ xong, bé nên làm gì? 📖",
+   "choices": [
+    "Kể lại cho ông bà nghe",
+    "Xé sách",
+    "Quên ngay"
+   ],
+   "answer": 0,
+   "explanation": "Con giỏi lắm, kể lại cho ông bà nghe rất vui đó."
+  },
+  {
+   "stem": "Câu chuyện có phần nào đầu tiên? 🐰",
+   "choices": [
+    "Kết thúc",
+    "Mở đầu",
+    "Giữa truyện"
+   ],
+   "answer": 1,
+   "explanation": "Đúng rồi, mọi câu chuyện đều có phần mở đầu con nhé."
+  },
+  {
+   "stem": "Khi kể chuyện, bé nói với giọng như thế nào? 🎤",
+   "choices": [
+    "Rõ ràng, vừa đủ nghe",
+    "Thì thầm không ai nghe",
+    "Hét thật to"
+   ],
+   "answer": 0,
+   "explanation": "Giỏi quá, nói rõ ràng để mọi người cùng nghe được."
   }
  ],
  "N3TC-quiz": [
   {
    "stem": "Qua đường, bé nên đi ở đâu? 🚶",
    "choices": [
-    "Đi giữa lòng đường",
-    "Đi trên vạch kẻ trắng",
-    "Đi sát mép cỏ"
-   ],
-   "answer": 1,
-   "explanation": "Bé đi đúng vạch trắng để luôn an toàn nhé."
-  },
-  {
-   "stem": "Ngồi trên xe đạp, bé đội gì trên đầu? 🚲",
-   "choices": [
-    "Mũ bảo hiểm",
-    "Mũ len",
-    "Không đội gì"
+    "Vạch kẻ đường dành cho người đi bộ",
+    "Chạy băng qua giữa đường",
+    "Đi sát làn xe chạy"
    ],
    "answer": 0,
-   "explanation": "Mũ bảo hiểm bảo vệ cái đầu xinh của bé đó."
+   "explanation": "Đi đúng vạch kẻ đường mới an toàn nhé bé!"
   },
   {
-   "stem": "Thấy đèn giao thông nhấp nháy vàng, bé cần? 🟡",
+   "stem": "Ngồi xe máy, bé nhớ đội gì? 🪖",
    "choices": [
-    "Chạy thật nhanh qua",
-    "Nhìn kỹ rồi mới đi",
-    "Nhắm mắt băng qua"
+    "Đội mũ bảo hiểm",
+    "Đội mũ vải mỏng",
+    "Không đội gì cả"
    ],
-   "answer": 1,
-   "explanation": "Nhìn kỹ hai bên rồi mới đi cho chắc chắn con nhé."
+   "answer": 0,
+   "explanation": "Mũ bảo hiểm bảo vệ đầu bé thật chắc chắn."
   },
   {
-   "stem": "Khi đi bộ trên vỉa hè, bé đi cùng ai? 👨‍👩‍👧",
+   "stem": "Tập thể dục buổi sáng giúp bé điều gì? 🌞",
    "choices": [
-    "Đi một mình thật xa",
-    "Đi cùng người lớn",
-    "Vừa đi vừa chạy nhảy giữa đường"
+    "Ngủ nhiều hơn cả ngày",
+    "Cơ thể khỏe mạnh, dẻo dai",
+    "Không cần ăn sáng nữa"
    ],
    "answer": 1,
-   "explanation": "Đi cùng người lớn thì bé luôn được an toàn."
+   "explanation": "Tập thể dục mỗi sáng giúp bé khỏe và vui hơn đó."
+  },
+  {
+   "stem": "Nghe tiếng còi xe cứu thương, bé cần làm gì? 🚑",
+   "choices": [
+    "Đứng chắn giữa đường",
+    "Nhường đường cho xe đi qua",
+    "Chạy theo xe để xem"
+   ],
+   "answer": 1,
+   "explanation": "Nhường đường để xe cứu thương kịp giúp người bệnh nhé."
   }
  ],
  "N3TC-w01": [
   {
-   "stem": "Ném và bắt bóng 🏀, bé cần nhìn vào đâu?",
+   "stem": "Ném bóng trúng đích, bé cần điều gì? 🎯",
    "choices": [
-    "Nhìn quả bóng",
-    "Nhìn lên trời",
-    "Nhắm mắt lại"
+    "Nhắm kỹ rồi mới ném",
+    "Nhắm mắt lại rồi ném",
+    "Ném thật xa ra ngoài"
    ],
    "answer": 0,
-   "explanation": "Mắt nhìn theo bóng thì tay mới bắt trúng con ơi."
+   "explanation": "Nhắm kỹ rồi ném, bóng sẽ trúng đích hơn đó."
   },
   {
-   "stem": "Đứng giữ thăng bằng một chân 🦩, bé cần gì?",
+   "stem": "Đi thăng bằng trên ghế thể dục, bé cần? 🤹",
    "choices": [
-    "Vung tay thật mạnh",
-    "Bình tĩnh và tập trung",
-    "Nhắm mắt thật chặt"
+    "Vừa đi vừa nhìn quanh",
+    "Dang tay giữ thăng bằng",
+    "Nhắm mắt bước thật nhanh"
    ],
    "answer": 1,
-   "explanation": "Bình tĩnh, tập trung thì đứng vững hơn đó con."
+   "explanation": "Dang tay ra giúp bé đứng vững và không bị ngã."
   },
   {
-   "stem": "Leo bậc thang 🪜, bé nên vịn vào đâu?",
+   "stem": "Leo thang trèo, bé cần bám chắc bằng gì? 🧗",
    "choices": [
-    "Vịn tay vào lan can",
-    "Không vịn gì cả",
-    "Nhắm mắt bước"
+    "Chỉ bám một tay",
+    "Bám chắc cả hai tay",
+    "Không cần bám tay"
+   ],
+   "answer": 1,
+   "explanation": "Bám chắc hai tay giúp bé leo an toàn hơn."
+  },
+  {
+   "stem": "Tung và bắt bóng cùng bạn, bé cần? 🤾",
+   "choices": [
+    "Nhìn bóng và đưa tay đón",
+    "Quay lưng lại với bóng",
+    "Đứng thật xa bạn ném"
    ],
    "answer": 0,
-   "explanation": "Vịn tay vào lan can giúp bé leo thang an toàn."
-  },
-  {
-   "stem": "Nhảy qua vật cản nhỏ 🪵, bé cần làm gì trước?",
-   "choices": [
-    "Nhắm mắt nhảy đại",
-    "Quan sát rồi nhún chân nhảy",
-    "Đứng yên không nhảy"
-   ],
-   "answer": 1,
-   "explanation": "Quan sát kỹ rồi nhún chân, bé sẽ nhảy thật giỏi."
+   "explanation": "Nhìn theo bóng rồi đưa tay đón thật khéo nhé."
   }
  ],
  "N3TC-w02": [
@@ -5761,335 +6013,335 @@ export const PRESCHOOL_EXTRA = {
    "stem": "Trước khi ăn cơm, bé cần làm gì? 🧼",
    "choices": [
     "Rửa tay sạch sẽ",
-    "Chạy nhảy thật nhiều",
+    "Chơi đồ chơi trước",
     "Đi ngủ luôn"
    ],
    "answer": 0,
-   "explanation": "Rửa tay sạch trước khi ăn giúp bé khỏe mạnh."
+   "explanation": "Rửa tay sạch giúp bé không bị đau bụng đó."
   },
   {
-   "stem": "Rau củ và trái cây 🍎 giúp bé điều gì?",
+   "stem": "Ăn nhiều rau xanh giúp bé điều gì? 🥦",
    "choices": [
-    "Bị đau bụng",
-    "Thêm vitamin khỏe mạnh",
-    "Buồn ngủ suốt ngày"
+    "Mau lớn và khỏe mạnh",
+    "Bị đau răng nhiều hơn",
+    "Không cần uống nước"
    ],
-   "answer": 1,
-   "explanation": "Ăn rau củ quả cho bé nhiều vitamin và khỏe mạnh."
+   "answer": 0,
+   "explanation": "Rau xanh có nhiều vitamin giúp bé khỏe mạnh."
   },
   {
-   "stem": "Khi ăn, bé nên nhai thức ăn thế nào? 😋",
+   "stem": "Bé không nên ăn quá nhiều loại gì? 🍬",
    "choices": [
-    "Nuốt thật nhanh",
-    "Nhai kỹ rồi nuốt",
-    "Không nhai luôn"
+    "Cơm và cá",
+    "Rau và trái cây",
+    "Bánh kẹo ngọt"
    ],
-   "answer": 1,
-   "explanation": "Nhai kỹ giúp bụng bé tiêu hóa thức ăn dễ dàng hơn."
+   "answer": 2,
+   "explanation": "Ăn nhiều kẹo ngọt dễ làm bé sâu răng đó."
   },
   {
-   "stem": "Bé có nên ăn thật nhiều kẹo ngọt không? 🍬",
+   "stem": "Ăn sáng đầy đủ giúp bé điều gì? 🍳",
    "choices": [
-    "Có, ăn thật nhiều",
-    "Không, chỉ ăn một chút thôi",
-    "Ăn kẹo thay cơm"
+    "Có sức học và chơi cả buổi",
+    "Buồn ngủ suốt cả ngày",
+    "Không cần ăn trưa nữa"
    ],
-   "answer": 1,
-   "explanation": "Ăn ít kẹo ngọt thôi để răng bé luôn chắc khỏe nhé."
+   "answer": 0,
+   "explanation": "Ăn sáng no giúp bé vui học cả buổi sáng."
   }
  ],
  "N3TC-w04": [
   {
-   "stem": "Bé cầm bút bằng mấy ngón tay? ✋",
+   "stem": "Bé cầm bút bằng mấy ngón tay? ✍️",
    "choices": [
+    "Một ngón tay",
     "Ba ngón tay",
-    "Cả bàn tay nắm chặt",
-    "Một ngón tay"
+    "Cả bàn tay nắm chặt"
    ],
-   "answer": 0,
-   "explanation": "Cầm bút bằng ba ngón tay giúp bé viết chữ đẹp hơn."
+   "answer": 1,
+   "explanation": "Cầm bút bằng ba ngón tay giúp bé viết dễ hơn."
   },
   {
-   "stem": "Khi ngồi viết, mắt bé cách vở bao xa? 👀",
+   "stem": "Mắt bé nên cách vở khoảng bao xa khi viết? 👀",
    "choices": [
-    "Sát gần vở",
+    "Sát ngay mặt vở",
     "Một khoảng vừa phải",
-    "Cách thật xa vở"
+    "Nhắm mắt lại viết"
    ],
    "answer": 1,
-   "explanation": "Mắt cách vở vừa phải để bé giữ đôi mắt sáng khỏe."
+   "explanation": "Giữ khoảng cách vừa phải giúp mắt bé không bị mỏi."
   },
   {
-   "stem": "Bé nên viết bằng tay nào thường xuyên? ✏️",
+   "stem": "Trước khi ngồi viết bài, bé nên làm gì? 🪑",
    "choices": [
-    "Đổi tay liên tục",
-    "Một tay quen thuộc",
-    "Dùng cả hai tay cùng lúc"
-   ],
-   "answer": 1,
-   "explanation": "Dùng một tay quen giúp bé viết chữ đều và đẹp."
-  },
-  {
-   "stem": "Ngồi viết bài, lưng bé cần như thế nào? 🪑",
-   "choices": [
-    "Ngồi thẳng lưng",
-    "Nằm bò ra bàn",
-    "Vẹo hẳn sang một bên"
+    "Ngồi ngay ngắn, lưng thẳng",
+    "Nằm xuống bàn viết",
+    "Vừa đi vừa viết"
    ],
    "answer": 0,
-   "explanation": "Ngồi thẳng lưng giúp bé khỏe mạnh và viết đẹp hơn."
+   "explanation": "Ngồi thẳng lưng giúp bé viết đẹp và không mỏi người."
+  },
+  {
+   "stem": "Muốn tô màu không bị lem ra ngoài, bé cần? 🎨",
+   "choices": [
+    "Tô thật nhanh và mạnh tay",
+    "Tô chậm rãi theo đường viền",
+    "Không cần nhìn hình vẽ"
+   ],
+   "answer": 1,
+   "explanation": "Tô chậm rãi theo nét sẽ đẹp và không lem đâu."
   }
  ],
  "N3TM-quiz": [
   {
-   "stem": "Trước khi múa, bé cần khởi động tay chân không? 💃",
+   "stem": "Trước khi biểu diễn, bé nên mặc trang phục thế nào? 👗",
    "choices": [
-    "Có, để không bị đau",
-    "Không cần gì cả",
-    "Chỉ cần đứng im"
-   ],
-   "answer": 0,
-   "explanation": "Khởi động giúp cơ thể bé dẻo dai và múa đẹp hơn đó con."
-  },
-  {
-   "stem": "Đàn nguyệt là loại nhạc cụ gì của Việt Nam? 🎶",
-   "choices": [
-    "Nhạc cụ dân tộc",
-    "Đồ chơi trẻ em",
-    "Dụng cụ nấu ăn"
-   ],
-   "answer": 0,
-   "explanation": "Đàn nguyệt là nhạc cụ dân tộc mình đó, con giỏi quá."
-  },
-  {
-   "stem": "Hát đồng ca, bé nên hát thế nào? 🎤",
-   "choices": [
-    "Hát to hơn tất cả mọi người",
-    "Hát hoà cùng nhịp với bạn",
-    "Không hát, chỉ đứng nhìn"
+    "Lộn xộn, nhăn nhúm",
+    "Gọn gàng, sạch đẹp",
+    "Không cần mặc đẹp"
    ],
    "answer": 1,
-   "explanation": "Hát hoà cùng bạn sẽ tạo nên bài hát thật hay con nhé."
+   "explanation": "Ăn mặc gọn gàng giúp bé tự tin hơn khi lên sân khấu nhé."
   },
   {
-   "stem": "Chiếc nón lá thường xuất hiện trong điệu múa nào? 👒",
+   "stem": "Hát cùng cả nhóm, bé nên hát ra sao? 🎤",
    "choices": [
-    "Múa nón",
-    "Múa kiếm",
-    "Múa lân"
+    "Hét thật to một mình",
+    "Hòa giọng cùng các bạn",
+    "Không hát, đứng im"
+   ],
+   "answer": 1,
+   "explanation": "Hòa giọng cùng bạn thì bài hát mới hay và vui hơn con ạ."
+  },
+  {
+   "stem": "\"Con cò bé bé\" là một bài gì? 🐦",
+   "choices": [
+    "Bài toán khó",
+    "Bài học vẽ tranh",
+    "Bài hát dân ca cho bé"
+   ],
+   "answer": 2,
+   "explanation": "Đúng rồi, đó là bài hát dân ca quen thuộc dành cho các bé đấy."
+  },
+  {
+   "stem": "Sau tiết mục dân ca, cả lớp nên làm gì? 👏",
+   "choices": [
+    "Cùng nhau vỗ tay",
+    "Cười to trêu bạn",
+    "Nói chuyện ồn ào"
    ],
    "answer": 0,
-   "explanation": "Múa nón lá rất duyên dáng, con nhớ giỏi ghê."
+   "explanation": "Vỗ tay khen bạn là cách thể hiện yêu thương và động viên đó con."
   }
  ],
  "N3TM-w01": [
   {
-   "stem": "Đàn tranh phát ra âm thanh bằng cách nào? 🎻",
+   "stem": "Đàn tranh là loại gì? 🎶",
    "choices": [
-    "Gảy dây đàn",
-    "Thổi hơi vào",
-    "Đập bằng dùi to"
-   ],
-   "answer": 0,
-   "explanation": "Gảy nhẹ vào dây đàn sẽ ra tiếng nhạc du dương con ạ."
-  },
-  {
-   "stem": "Nghe hát quan họ, bé thấy giọng hát thế nào? 🎵",
-   "choices": [
-    "Ồn ào, chói tai",
-    "Mượt mà, êm dịu",
-    "Không có âm thanh"
+    "Đồ chơi nấu ăn",
+    "Nhạc cụ dân tộc",
+    "Quần áo đẹp"
    ],
    "answer": 1,
-   "explanation": "Giọng quan họ mượt mà lắm, con cảm nhận đúng rồi."
+   "explanation": "Đàn tranh là một nhạc cụ dân tộc có tiếng rất hay con ạ."
   },
   {
-   "stem": "\"Inh lả ơi\" là bài dân ca của dân tộc nào? 🏞️",
+   "stem": "Khi nghe hát ru, bé cảm thấy thế nào? 😴",
    "choices": [
-    "Dân tộc Thái",
-    "Người ngoài hành tinh",
-    "Không ai hát cả"
+    "Tức giận",
+    "Ấm áp, dễ chịu",
+    "Sợ hãi"
    ],
-   "answer": 0,
-   "explanation": "Đó là bài dân ca của người Thái đấy, con nhớ hay quá."
+   "answer": 1,
+   "explanation": "Lời ru ngọt ngào giúp bé thấy ấm áp và dễ chịu đó con."
   },
   {
-   "stem": "Khi nghe nhạc dân tộc, bé nên làm gì? 👂",
+   "stem": "\"Lý cây đa\" là một bài gì? 🌳",
    "choices": [
-    "Bịt tai lại",
-    "Chạy nhảy lung tung",
-    "Lắng nghe và cảm nhận"
+    "Bài tập thể dục",
+    "Bài toán cộng trừ",
+    "Bài dân ca Việt Nam"
    ],
    "answer": 2,
-   "explanation": "Lắng nghe thật chăm chú sẽ thấy bài hát hay hơn con nhé."
+   "explanation": "Giỏi quá, đó là một bài dân ca rất nổi tiếng của Việt Nam."
+  },
+  {
+   "stem": "Gõ trống cơm theo nhịp giúp bé điều gì? 🥁",
+   "choices": [
+    "Làm bé buồn bã",
+    "Cảm nhận nhịp điệu vui tươi",
+    "Không có tác dụng gì"
+   ],
+   "answer": 1,
+   "explanation": "Gõ trống theo nhịp giúp bé cảm nhận âm nhạc thật vui đó."
   }
  ],
  "N3TM-w03": [
   {
-   "stem": "Khi được cô khen bài múa đẹp, bé nên nói gì? 🌟",
+   "stem": "Run sợ trước khi lên sân khấu, bé nên làm gì? 😊",
    "choices": [
-    "Con cảm ơn cô ạ",
-    "Im lặng bỏ đi",
-    "Con giỏi nhất lớp"
+    "Hít thở sâu, bình tĩnh",
+    "Khóc thật to",
+    "Bỏ chạy đi"
    ],
    "answer": 0,
-   "explanation": "Nói lời cảm ơn thật lễ phép, con ngoan quá."
+   "explanation": "Hít thở sâu giúp bé bình tĩnh và tự tin hơn rất nhiều đó."
   },
   {
-   "stem": "Thấy bạn run khi lên biểu diễn, bé nên làm gì? 🤗",
+   "stem": "Bạn hát sai nhịp, bé nên làm gì? 🎵",
    "choices": [
     "Cười chê bạn",
-    "Động viên bạn tự tin",
-    "Kéo bạn xuống sân khấu"
+    "Động viên bạn cố gắng",
+    "Mách cô ngay"
    ],
    "answer": 1,
-   "explanation": "Động viên bạn sẽ giúp bạn tự tin hơn rất nhiều đó con."
+   "explanation": "Động viên bạn là điều tốt bụng, ai cũng có lúc hát sai mà con."
   },
   {
-   "stem": "Trang phục biểu diễn bị lệch, bé nên làm gì? 👗",
+   "stem": "Muốn biểu diễn tự tin, bé cần làm gì? 💪",
    "choices": [
-    "Bình tĩnh chỉnh lại rồi diễn tiếp",
-    "Khóc và bỏ chạy",
-    "Mặc kệ, đứng yên không nói gì"
-   ],
-   "answer": 0,
-   "explanation": "Bình tĩnh chỉnh lại rồi diễn tiếp là con giỏi lắm đó."
-  },
-  {
-   "stem": "Đứng trên sân khấu, bé nên nhìn về đâu? 👀",
-   "choices": [
-    "Nhìn xuống sàn nhà",
-    "Nhìn khán giả tươi cười",
-    "Nhắm mắt lại"
+    "Không cần tập",
+    "Tập đi tập lại nhiều lần",
+    "Chỉ tập một lần"
    ],
    "answer": 1,
-   "explanation": "Nhìn khán giả và cười tươi sẽ giúp con biểu diễn tự tin hơn."
+   "explanation": "Chăm tập luyện sẽ giúp bé biểu diễn thật tự tin đó con."
+  },
+  {
+   "stem": "Được khen sau khi biểu diễn, bé nên nói gì? 🙏",
+   "choices": [
+    "Con giỏi nhất",
+    "Con cảm ơn ạ",
+    "Không nói gì"
+   ],
+   "answer": 1,
+   "explanation": "Nói lời cảm ơn thật ngoan và lễ phép, đúng không con."
   }
  ],
  "N3TX-quiz": [
   {
-   "stem": "Bạn khóc vì làm rơi đồ chơi, bé sẽ làm gì? 🥺",
+   "stem": "Thấy hai bạn cãi nhau, bé nên làm gì? 🤝",
    "choices": [
-    "An ủi và giúp bạn nhặt đồ chơi",
-    "Cười trêu bạn",
+    "Đứng xem và cổ vũ",
+    "Khuyên bạn làm hòa",
     "Bỏ đi chỗ khác"
    ],
-   "answer": 0,
-   "explanation": "Bé ơi, an ủi bạn là điều rất đáng yêu đó!"
+   "answer": 1,
+   "explanation": "Bé giỏi lắm, khuyên bạn làm hòa là điều rất tốt đấy!"
   },
   {
-   "stem": "Thủ đô của nước Việt Nam mình là gì? 🏙️",
+   "stem": "Ngôi sao trên lá cờ Việt Nam màu gì? ⭐",
    "choices": [
-    "Hà Nội",
-    "Đà Nẵng",
-    "Cần Thơ"
+    "Màu xanh",
+    "Màu đen",
+    "Màu vàng"
    ],
-   "answer": 0,
-   "explanation": "Đúng rồi, Hà Nội là thủ đô yêu quý của chúng ta."
+   "answer": 2,
+   "explanation": "Đúng rồi, ngôi sao vàng rất đẹp trên nền cờ đỏ đó!"
   },
   {
-   "stem": "Ngày 2 tháng 9 là ngày gì của nước ta? 🎉",
+   "stem": "Ngày Quốc khánh nước ta là ngày nào? 🎉",
    "choices": [
-    "Ngày sinh nhật bé",
-    "Ngày Quốc khánh",
-    "Ngày Tết Trung thu"
+    "Ngày 1 tháng 1",
+    "Ngày 2 tháng 9",
+    "Ngày 8 tháng 3"
    ],
    "answer": 1,
-   "explanation": "Đó là ngày Bác Hồ đọc bản Tuyên ngôn Độc lập đấy con."
+   "explanation": "Giỏi quá, ngày 2 tháng 9 là Ngày Quốc khánh của nước mình!"
   },
   {
-   "stem": "Hai bạn tranh cãi to tiếng, bé nên làm gì? 🗣️",
+   "stem": "Bé đang giận, bé nên làm gì trước? 😤",
    "choices": [
-    "Nhờ cô giáo giúp hai bạn làm hòa",
-    "Đứng xem và cười",
-    "Hùa theo một bên"
+    "Đánh bạn cho hả giận",
+    "Hít thở sâu, bình tĩnh lại",
+    "Ném đồ chơi đi"
    ],
-   "answer": 0,
-   "explanation": "Nhờ cô giúp là cách rất khôn ngoan và tốt bụng."
+   "answer": 1,
+   "explanation": "Hít thở sâu giúp bé bình tĩnh hơn rất nhiều đó."
   }
  ],
  "N3TX-w01": [
   {
-   "stem": "Bé mượn bút chì của bạn xong, bé nên làm gì? ✏️",
+   "stem": "Bé mượn đồ bạn nhưng làm hỏng, bé nên? 🔧",
    "choices": [
-    "Trả lại và nói cảm ơn",
-    "Giữ luôn cho mình",
-    "Vứt đi chỗ khác"
-   ],
-   "answer": 0,
-   "explanation": "Trả lại và cảm ơn bạn là bé rất ngoan đó!"
-  },
-  {
-   "stem": "Bé lỡ làm sai, bé nên nói gì với bạn? 😊",
-   "choices": [
-    "Im lặng bỏ đi",
-    "Xin lỗi bạn nhẹ nhàng",
+    "Giấu đi không nói",
+    "Xin lỗi và đền bạn",
     "Đổ lỗi cho bạn khác"
    ],
    "answer": 1,
-   "explanation": "Xin lỗi thật lòng giúp bé và bạn vui vẻ trở lại."
+   "explanation": "Xin lỗi thật lòng sẽ giúp bạn hiểu và thương bé hơn."
   },
   {
-   "stem": "Bạn chia bánh cho bé, bé nên nói gì? 🍪",
+   "stem": "Bạn khóc vì buồn, bé nên làm gì? 😢",
    "choices": [
-    "Không nói gì cả",
-    "Cảm ơn bạn nhiều",
-    "Giành thêm phần của bạn"
+    "An ủi và hỏi thăm bạn",
+    "Cười trêu bạn",
+    "Bỏ đi không quan tâm"
    ],
-   "answer": 1,
-   "explanation": "Nói lời cảm ơn khiến bạn rất vui đấy con."
+   "answer": 0,
+   "explanation": "Bé thật ấm áp khi biết an ủi bạn của mình."
   },
   {
-   "stem": "Bé muốn chơi cùng, bạn đang chơi một mình, bé nên? 🤝",
+   "stem": "Bé được cô khen, bạn bên cạnh không được, bé nên? 🌟",
    "choices": [
-    "Giành đồ chơi của bạn",
-    "Hỏi xin được chơi cùng",
-    "Khóc nhè đòi chơi"
+    "Khoe khoang mãi",
+    "Chê bai bạn",
+    "Vui vẻ, động viên bạn"
+   ],
+   "answer": 2,
+   "explanation": "Động viên bạn là cách cư xử rất đáng yêu đó bé."
+  },
+  {
+   "stem": "Xếp hàng lấy đồ ăn, bé nên làm gì? 🍽️",
+   "choices": [
+    "Chen ngang lên trước",
+    "Xếp hàng chờ đến lượt",
+    "Giành lấy phần to nhất"
    ],
    "answer": 1,
-   "explanation": "Hỏi xin lịch sự sẽ giúp bé có bạn chơi cùng vui hơn."
+   "explanation": "Chờ đến lượt là bé đang giữ trật tự rất ngoan."
   }
  ],
  "N3TX-w03": [
   {
-   "stem": "Trước khi ngủ, bé nên chuẩn bị gì cho hôm sau? 🎒",
+   "stem": "Để khỏe mạnh, bé nên có thói quen gì? 💪",
    "choices": [
-    "Xếp sẵn cặp sách",
-    "Vứt đồ lung tung",
-    "Không cần chuẩn bị gì"
-   ],
-   "answer": 0,
-   "explanation": "Chuẩn bị cặp sách trước giúp sáng mai bé đỡ vội."
-  },
-  {
-   "stem": "Vào lớp 1, bé cần ngồi học như thế nào? 🪑",
-   "choices": [
-    "Ngồi thẳng lưng, chăm chú nghe cô",
-    "Nằm bò ra bàn",
-    "Chạy nhảy trong lớp"
-   ],
-   "answer": 0,
-   "explanation": "Ngồi ngay ngắn giúp bé học tốt và khỏe mạnh hơn."
-  },
-  {
-   "stem": "Bé nên làm gì khi cô giáo đang giảng bài? 👩‍🏫",
-   "choices": [
-    "Nói chuyện riêng",
-    "Lắng nghe và giơ tay phát biểu",
-    "Ngủ gật"
+    "Thức khuya xem tivi",
+    "Ngủ đúng giờ, dậy sớm",
+    "Ngủ dậy thật muộn"
    ],
    "answer": 1,
-   "explanation": "Lắng nghe cô là cách bé học được nhiều điều hay."
+   "explanation": "Ngủ đúng giờ giúp bé khỏe mạnh và học tốt hơn đấy."
   },
   {
-   "stem": "Tối trước ngày đi học, bé nên đi ngủ lúc nào? 🌙",
+   "stem": "Gặp thầy cô, bé nên chào hỏi thế nào? 🙏",
    "choices": [
-    "Sớm để có sức khỏe",
-    "Thật khuya xem tivi",
-    "Không cần ngủ"
+    "Gọi trống không",
+    "Không cần chào hỏi",
+    "Thưa thầy/cô lễ phép"
    ],
-   "answer": 0,
-   "explanation": "Ngủ sớm giúp bé khỏe mạnh và tỉnh táo học bài."
+   "answer": 2,
+   "explanation": "Lễ phép với thầy cô là bé rất ngoan đó."
+  },
+  {
+   "stem": "Bé không hiểu bài, bé nên làm gì? ❓",
+   "choices": [
+    "Im lặng không hỏi ai",
+    "Giơ tay hỏi cô giáo",
+    "Chép bài bạn bên cạnh"
+   ],
+   "answer": 1,
+   "explanation": "Giơ tay hỏi cô là cách học rất thông minh đó bé."
+  },
+  {
+   "stem": "Trước khi đi học, bé cần chuẩn bị gì? 🎒",
+   "choices": [
+    "Ngủ nướng thêm",
+    "Quên mang cặp sách",
+    "Ăn sáng và mang đủ sách vở"
+   ],
+   "answer": 2,
+   "explanation": "Chuẩn bị đầy đủ giúp bé tự tin đến trường hơn nhé."
   }
  ]
 };
