@@ -37,3 +37,9 @@ export const SECONDARY_LOP6_SCENARIOS = {
 for (const [id, sc] of Object.entries(SECONDARY_LOP6_SCENARIOS)) {
   if (LOP6_LESSONS[id]) sc.lesson = LOP6_LESSONS[id];
 }
+
+// <<EXAM-MERGE-START>>
+import { S6TA_EXAMS } from './tieng-anh-exam.js';
+import { S6TH_EXAMS } from './tin-hoc-exam.js';
+for (const EX of [S6TA_EXAMS, S6TH_EXAMS]) Object.assign(SECONDARY_LOP6_SCENARIOS, EX);
+// <<EXAM-MERGE-END>>

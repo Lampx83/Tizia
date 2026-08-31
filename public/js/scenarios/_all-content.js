@@ -75,3 +75,11 @@ export const ALL_SCENARIOS = {
   ...PRESCHOOL_WEEKS_SCENARIOS,
   ...PRESCHOOL_FIELDS_SCENARIOS,
 };
+
+// <<MN-EXTRA-MERGE-START>>
+import { PRESCHOOL_EXTRA } from './preschool-extra.js';
+for (const [id, qs] of Object.entries(PRESCHOOL_EXTRA)) {
+  const sc = ALL_SCENARIOS[id];
+  if (sc && Array.isArray(sc.questions)) sc.questions.push(...qs);
+}
+// <<MN-EXTRA-MERGE-END>>

@@ -30,3 +30,12 @@ export const PRIMARY_LOP2_SCENARIOS = {
 for (const [id, sc] of Object.entries(PRIMARY_LOP2_SCENARIOS)) {
   if (LOP2_LESSONS[id]) sc.lesson = LOP2_LESSONS[id];
 }
+
+// <<EXAM-MERGE-START>>
+import { P2GDTC_EXAMS } from './gdtc-exam.js';
+import { P2HDTN_EXAMS } from './hdtn-exam.js';
+import { P2TA_EXAMS } from './tieng-anh-exam.js';
+import { P2TNXH_EXAMS } from './tnxh-exam.js';
+import { P2_EXAMS } from './toan-exam.js';
+for (const EX of [P2GDTC_EXAMS, P2HDTN_EXAMS, P2TA_EXAMS, P2TNXH_EXAMS, P2_EXAMS]) Object.assign(PRIMARY_LOP2_SCENARIOS, EX);
+// <<EXAM-MERGE-END>>
