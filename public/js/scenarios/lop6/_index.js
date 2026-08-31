@@ -39,7 +39,15 @@ for (const [id, sc] of Object.entries(SECONDARY_LOP6_SCENARIOS)) {
 }
 
 // <<EXAM-MERGE-START>>
+import { S6CN_EXAMS } from './cong-nghe-exam.js';
+import { S6GDTC_EXAMS } from './gdtc-exam.js';
+import { S6HDTN_EXAMS } from './hdtn-exam.js';
+import { S6KHTN_EXAMS } from './khtn-exam.js';
+import { S6LSDL_EXAMS } from './lich-su-dia-exam.js';
+import { S6NT_EXAMS } from './nghe-thuat-exam.js';
+import { S6NV_EXAMS } from './ngu-van-exam.js';
 import { S6TA_EXAMS } from './tieng-anh-exam.js';
 import { S6TH_EXAMS } from './tin-hoc-exam.js';
-for (const EX of [S6TA_EXAMS, S6TH_EXAMS]) Object.assign(SECONDARY_LOP6_SCENARIOS, EX);
+import { S6TOAN_EXAMS } from './toan-exam.js';
+for (const EX of [S6CN_EXAMS, S6GDTC_EXAMS, S6HDTN_EXAMS, S6KHTN_EXAMS, S6LSDL_EXAMS, S6NT_EXAMS, S6NV_EXAMS, S6TA_EXAMS, S6TH_EXAMS, S6TOAN_EXAMS]) Object.assign(SECONDARY_LOP6_SCENARIOS, EX);
 // <<EXAM-MERGE-END>>
