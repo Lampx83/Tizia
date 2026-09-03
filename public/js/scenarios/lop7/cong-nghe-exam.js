@@ -1,5 +1,5 @@
-// S7CN — ĐỀ ÔN TẬP (GK1/CK1/GK2/CK2) bám SGK GDPT 2018. Sinh tự động + kiểm định.
-// Ráp bởi data/gen-content/assemble-exam.mjs — file này chỉ là NGUỒN SEED.
+// S7CN — ĐỀ ÔN TẬP (GK1/CK1/GK2/CK2) bám SGK GDPT 2018. Sinh tự động + kiểm định 2 lớp.
+// Ráp bởi data/gen-content/assemble-exam-all.mjs — file này chỉ là NGUỒN SEED (content phục vụ từ DB).
 export const S7CN_EXAMS = {
  "S7CN-exam-gk1": {
   "id": "S7CN-exam-gk1",

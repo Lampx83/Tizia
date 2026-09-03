@@ -1,5 +1,5 @@
-// P3HDTN — ĐỀ ÔN TẬP (GK1/CK1/GK2/CK2) bám SGK GDPT 2018. Sinh tự động + kiểm định.
-// Ráp bởi data/gen-content/assemble-exam.mjs — file này chỉ là NGUỒN SEED.
+// P3HDTN — ĐỀ ÔN TẬP (GK1/CK1/GK2/CK2) bám SGK GDPT 2018. Sinh tự động + kiểm định 2 lớp.
+// Ráp bởi data/gen-content/assemble-exam-all.mjs — file này chỉ là NGUỒN SEED (content phục vụ từ DB).
 export const P3HDTN_EXAMS = {
  "P3HDTN-exam-gk1": {
   "id": "P3HDTN-exam-gk1",

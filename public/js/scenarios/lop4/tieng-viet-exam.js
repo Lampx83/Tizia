@@ -1,5 +1,5 @@
-// P4TV — ĐỀ ÔN TẬP (GK1/CK1/GK2/CK2) bám SGK GDPT 2018. Sinh tự động + kiểm định.
-// Ráp bởi data/gen-content/assemble-exam.mjs — file này chỉ là NGUỒN SEED.
+// P4TV — ĐỀ ÔN TẬP (GK1/CK1/GK2/CK2) bám SGK GDPT 2018. Sinh tự động + kiểm định 2 lớp.
+// Ráp bởi data/gen-content/assemble-exam-all.mjs — file này chỉ là NGUỒN SEED (content phục vụ từ DB).
 export const P4TV_EXAMS = {
  "P4TV-exam-gk1": {
   "id": "P4TV-exam-gk1",

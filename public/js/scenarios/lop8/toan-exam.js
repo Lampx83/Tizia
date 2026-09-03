@@ -1,5 +1,5 @@
-// S8TOAN — ĐỀ ÔN TẬP (GK1/CK1/GK2/CK2) bám SGK GDPT 2018. Sinh tự động + kiểm định.
-// Ráp bởi data/gen-content/assemble-exam.mjs — file này chỉ là NGUỒN SEED.
+// S8TOAN — ĐỀ ÔN TẬP (GK1/CK1/GK2/CK2) bám SGK GDPT 2018. Sinh tự động + kiểm định 2 lớp.
+// Ráp bởi data/gen-content/assemble-exam-all.mjs — file này chỉ là NGUỒN SEED (content phục vụ từ DB).
 export const S8TOAN_EXAMS = {
  "S8TOAN-exam-gk1": {
   "id": "S8TOAN-exam-gk1",

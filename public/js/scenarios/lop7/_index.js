@@ -33,17 +33,17 @@ for (const [id, sc] of Object.entries(SECONDARY_LOP7_SCENARIOS)) {
 }
 
 // <<EXAM-MERGE-START>>
-import { S7TOAN_EXAMS } from './toan-exam.js';
-import { S7NV_EXAMS } from './ngu-van-exam.js';
-import { S7TA_EXAMS } from './tieng-anh-exam.js';
+import { S7CN_EXAMS } from './cong-nghe-exam.js';
+import { S7GDDP_EXAMS } from './gd-dia-phuong-exam.js';
+import { S7GDCD_EXAMS } from './gdcd-exam.js';
+import { S7GDTC_EXAMS } from './gdtc-exam.js';
+import { S7HDTN_EXAMS } from './hdtn-exam.js';
 import { S7KHTN_EXAMS } from './khtn-exam.js';
 import { S7LSDL_EXAMS } from './lich-su-dia-exam.js';
-import { S7GDCD_EXAMS } from './gdcd-exam.js';
-import { S7CN_EXAMS } from './cong-nghe-exam.js';
-import { S7TIN_EXAMS } from './tin-hoc-exam.js';
-import { S7GDTC_EXAMS } from './gdtc-exam.js';
 import { S7NT_EXAMS } from './nghe-thuat-exam.js';
-import { S7HDTN_EXAMS } from './hdtn-exam.js';
-import { S7GDDP_EXAMS } from './gd-dia-phuong-exam.js';
-for (const EX of [S7TOAN_EXAMS, S7NV_EXAMS, S7TA_EXAMS, S7KHTN_EXAMS, S7LSDL_EXAMS, S7GDCD_EXAMS, S7CN_EXAMS, S7TIN_EXAMS, S7GDTC_EXAMS, S7NT_EXAMS, S7HDTN_EXAMS, S7GDDP_EXAMS]) Object.assign(SECONDARY_LOP7_SCENARIOS, EX);
+import { S7NV_EXAMS } from './ngu-van-exam.js';
+import { S7TA_EXAMS } from './tieng-anh-exam.js';
+import { S7TIN_EXAMS } from './tin-hoc-exam.js';
+import { S7TOAN_EXAMS } from './toan-exam.js';
+for (const EX of [S7CN_EXAMS, S7GDDP_EXAMS, S7GDCD_EXAMS, S7GDTC_EXAMS, S7HDTN_EXAMS, S7KHTN_EXAMS, S7LSDL_EXAMS, S7NT_EXAMS, S7NV_EXAMS, S7TA_EXAMS, S7TIN_EXAMS, S7TOAN_EXAMS]) Object.assign(SECONDARY_LOP7_SCENARIOS, EX);
 // <<EXAM-MERGE-END>>
