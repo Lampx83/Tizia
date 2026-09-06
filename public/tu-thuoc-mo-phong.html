@@ -627,28 +627,30 @@
   /* top-down walkable scene: the brown-framed .pharmacy-walls is the pharmacy
      boundary; the Sảnh is a strip OUTSIDE (in front of) that frame */
   .map-stage{position:relative;width:100%;display:flex;justify-content:center;overflow:hidden;flex:none;}
+  /* req #156: sơ đồ đổi sang tông xanh ngọc + kem của mặt tiền nhà thuốc để hai
+     màn nối nhau liền mạch (trước đây là tông gỗ nâu xám, nhìn như hai phần mềm). */
   .pharmacy-map{
-    position:relative;width:900px;height:700px;margin:0 auto;overflow:hidden;flex:none;
+    position:relative;width:900px;height:600px;margin:0 auto;overflow:hidden;flex:none;
     transform-origin:top center;
-    border:5px solid #b7b19c;border-radius:14px;cursor:pointer;
+    border:6px solid #225C4E;border-radius:18px;cursor:pointer;
     background:
-      repeating-linear-gradient(45deg, rgba(120,120,110,.07) 0 9px, transparent 9px 18px),
-      linear-gradient(180deg,#e8e5d7,#dbd6c3);
-    box-shadow:inset 0 0 0 2px rgba(255,255,255,.4);
+      repeating-linear-gradient(45deg, rgba(34,92,78,.05) 0 9px, transparent 9px 18px),
+      linear-gradient(180deg,#eafaf6,#d3ece4);
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.55), 0 10px 26px rgba(34,92,78,.22);
     user-select:none;
   }
   .pharmacy-walls{
-    position:absolute;left:0;top:0;width:890px;height:566px;box-sizing:border-box;
-    border:9px solid #8a6335;border-radius:12px;pointer-events:none;z-index:0;
+    position:absolute;left:0;top:0;width:890px;height:590px;box-sizing:border-box;
+    border:9px solid #2F6B5F;border-radius:14px;pointer-events:none;z-index:0;
     background:
-      repeating-linear-gradient(0deg, rgba(120,90,50,.06) 0 1px, transparent 1px 44px),
-      repeating-linear-gradient(90deg, rgba(120,90,50,.06) 0 1px, transparent 1px 44px),
-      linear-gradient(180deg,#f4ecd9,#e9dcc0);
-    box-shadow:inset 0 0 0 2px rgba(255,255,255,.45), inset 0 0 40px rgba(120,90,50,.12);
+      repeating-linear-gradient(0deg, rgba(34,92,78,.05) 0 1px, transparent 1px 44px),
+      repeating-linear-gradient(90deg, rgba(34,92,78,.05) 0 1px, transparent 1px 44px),
+      linear-gradient(180deg,#fbfdfb,#eaf4f0);
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.6), inset 0 0 40px rgba(34,92,78,.10);
   }
   .pm-banner{
     position:absolute;left:8px;top:6px;right:8px;height:22px;text-align:center;line-height:22px;
-    font-weight:800;color:#4a2f10;background:rgba(255,225,166,.85);border:1px dashed #8a6335;
+    font-weight:800;color:#fff;background:linear-gradient(180deg,#357a6c,#225C4E);border:1px solid #1c4c40;
     border-radius:6px;font-size:.72rem;letter-spacing:.02em;z-index:2;
   }
   .pm-zone{
@@ -662,7 +664,7 @@
   .z-special{background:#f3c9c3;} .z-rx{background:#c6dbf5;} .z-otc{background:#c6ead0;} .z-nondrug{background:#e0cef2;}
   .z-dispense{background:#c4eae0;} .z-receive{background:#f4e2ad;} .z-fridge{background:#c3e6f3;} .z-wash{background:#cfe7f5;}
   .z-process{background:#f5d3a6;} .z-cashier{background:#f5ead0;} .z-fire{background:#f0b0a6;}
-  .z-entrance{background:#8a6335;} .z-entrance .pm-label{color:#fff;}
+  .z-entrance{background:linear-gradient(180deg,#357a6c,#225C4E);} .z-entrance .pm-label{color:#fff;}
   .z-cashier{border-width:2px;border-color:#c9a45a;box-shadow:0 4px 10px rgba(0,0,0,.22);}
   .z-cashier .pm-ico{font-size:2.1rem;}
   .z-cashier .pm-label{font-size:.78rem;}
@@ -915,17 +917,18 @@
     <rect x="150" y="70" width="1300" height="14" fill="#eef4f2"/>
     <rect x="150" y="84" width="1300" height="8" fill="#d7e5e1"/>
     <rect x="150" y="92" width="1300" height="150" fill="url(#fSign)" stroke="#1c4c40" stroke-width="2"/>
+    <!-- req #157: logo chính thức Trường Cao đẳng Y tế Hà Nội do giảng viên gửi -->
     <rect x="168" y="104" width="126" height="126" rx="6" fill="#fff"/>
-    <g transform="translate(231,150)"><circle r="52" fill="#fff" stroke="#2F6B5F" stroke-width="3"/>
-      <path d="M0 34 C0 14 -20 8 -22 -12 C-2 -12 0 8 0 20 C0 8 2 -12 22 -12 C20 8 0 14 0 34Z" fill="#2F6B5F"/>
-      <text y="46" text-anchor="middle" font-size="12" font-weight="800" fill="#2F6B5F" letter-spacing="1">GPP</text></g>
-    <text x="800" y="152" text-anchor="middle" font-size="62" font-weight="900" fill="#fff" letter-spacing="6" font-family="Arial,Helvetica,sans-serif">NHÀ THUỐC</text>
-    <text x="800" y="214" text-anchor="middle" font-size="46" font-weight="800" fill="#eafff8" letter-spacing="10" font-family="Arial,Helvetica,sans-serif">THỰC HÀNH</text>
+    <image href="/img/gpp/logo-cdyt-hanoi.jpg" x="172" y="108" width="118" height="118"
+           preserveAspectRatio="xMidYMid meet"/>
+    <text x="800" y="152" text-anchor="middle" font-size="62" font-weight="900" fill="#fff" letter-spacing="6" font-family="'Baloo 2',system-ui,sans-serif">NHÀ THUỐC</text>
+    <text x="800" y="214" text-anchor="middle" font-size="46" font-weight="800" fill="#eafff8" letter-spacing="10" font-family="'Baloo 2',system-ui,sans-serif">THỰC HÀNH</text>
     <rect x="1306" y="104" width="126" height="126" rx="6" fill="#fff" opacity=".95"/>
-    <text x="1369" y="176" text-anchor="middle" font-size="13" font-weight="700" fill="#8aa9a1" letter-spacing="1">GPP</text>
+    <image href="/img/gpp/logo-cdyt-hanoi.jpg" x="1310" y="108" width="118" height="118"
+           preserveAspectRatio="xMidYMid meet"/>
 
     <!-- cột biển dọc hai bên -->
-    <g font-family="Arial" font-weight="800" fill="#fff" letter-spacing="2">
+    <g font-family="'Nunito',system-ui,sans-serif" font-weight="800" fill="#fff" letter-spacing="2">
       <rect x="150" y="242" width="90" height="420" fill="url(#fSign)" stroke="#1c4c40" stroke-width="2"/>
       <text x="197" y="300" font-size="17" writing-mode="tb" letter-spacing="2">NHÀ THUỐC THỰC HÀNH</text>
       <rect x="1360" y="242" width="90" height="420" fill="url(#fSign)" stroke="#1c4c40" stroke-width="2"/>
@@ -973,12 +976,21 @@
       <rect x="1512" y="470" width="18" height="200" fill="#7a5a3a"/><circle cx="1521" cy="450" r="70" fill="#2f8a3a"/><circle cx="1480" cy="480" r="52" fill="#37a046"/>
     </g>
 
-    <!-- BIỂN "SẢNH TIỀN THỰC HÀNH GPP" — đặt NGOÀI CỬA, trên vỉa hè -->
-    <g id="fSanhSign">
-      <rect x="520" y="694" width="560" height="92" rx="16" fill="#fffdf6" stroke="#e08c14" stroke-width="5"/>
-      <text x="800" y="732" text-anchor="middle" font-size="30" font-weight="900" fill="#3f5170" font-family="Arial,Helvetica,sans-serif">SẢNH TIỀN THỰC HÀNH GPP</text>
-      <text x="800" y="766" text-anchor="middle" font-size="19" font-weight="700" fill="#8a6a2a" font-family="Arial,Helvetica,sans-serif">👉 Bấm vào cửa kính để bước vào nhà thuốc</text>
-      <rect x="770" y="786" width="16" height="34" fill="#b9c4b7"/><rect x="814" y="786" width="16" height="34" fill="#b9c4b7"/>
+    <!-- BIỂN "SẢNH TIỀN THỰC HÀNH GPP" — đặt NGOÀI CỬA, trên vỉa hè.
+         req #156: bấm vào biển này là vào khu luyện tập (Pharma Crush / Pharma
+         Sort); còn bấm vào cửa kính mới vào sơ đồ nhà thuốc. Hai lối tách bạch. -->
+    <g id="fSanhSign" style="cursor:pointer">
+      <rect x="470" y="690" width="660" height="128" rx="18" fill="#fffdf6" stroke="#e08c14" stroke-width="5"/>
+      <text x="800" y="728" text-anchor="middle" font-size="29" font-weight="900" fill="#3f5170" font-family="'Baloo 2',system-ui,sans-serif">SẢNH TIỀN THỰC HÀNH GPP</text>
+      <text x="800" y="757" text-anchor="middle" font-size="17" font-weight="700" fill="#8a6a2a" font-family="'Nunito',system-ui,sans-serif">Bấm vào biển này để luyện tập trước khi vào nhà thuốc</text>
+      <g id="fSanhBtns">
+        <rect x="512" y="770" width="270" height="36" rx="12" fill="#ffc93c" stroke="#b3700f" stroke-width="3"/>
+        <text x="647" y="795" text-anchor="middle" font-size="17" font-weight="800" fill="#4a3200" font-family="'Baloo 2',system-ui,sans-serif">💊 Pharma Crush</text>
+        <rect x="818" y="770" width="270" height="36" rx="12" fill="#5cc86e" stroke="#2c8341" stroke-width="3"/>
+        <text x="953" y="795" text-anchor="middle" font-size="17" font-weight="800" fill="#0b2b14" font-family="'Baloo 2',system-ui,sans-serif">🗂️ Pharma Sort</text>
+      </g>
+      <rect id="fGoCrush" x="512" y="770" width="270" height="36" fill="transparent" style="cursor:pointer"/>
+      <rect id="fGoSort"  x="818" y="770" width="270" height="36" fill="transparent" style="cursor:pointer"/>
     </g>
 
     <!-- vùng bấm mở cửa (trong suốt, phủ đúng khoang cửa) -->
@@ -1004,25 +1016,25 @@
     <div class="pharmacy-walls"></div>
     <div class="pm-banner">🏬 KHU VỰC TRƯNG BÀY</div>
 
-    <div class="pm-zone z-special"  data-name="Tủ thuốc kiểm soát đặc biệt (gây nghiện, hướng thần)" style="left:8px;top:34px;width:205px;height:74px;">
+    <div class="pm-zone z-special" data-zone="tu"  data-name="Tủ thuốc kiểm soát đặc biệt (gây nghiện, hướng thần)" style="left:8px;top:34px;width:205px;height:74px;">
       <span class="pm-ico">🔒</span><span class="pm-label">Kiểm soát đặc biệt</span></div>
-    <div class="pm-zone z-rx"       data-name="Tủ thuốc kê đơn (Rx)" style="left:223px;top:34px;width:205px;height:74px;">
+    <div class="pm-zone z-rx" data-zone="tu"       data-name="Tủ thuốc kê đơn (Rx)" style="left:223px;top:34px;width:205px;height:74px;">
       <span class="pm-ico">℞</span><span class="pm-label">Thuốc kê đơn</span></div>
-    <div class="pm-zone z-otc"      data-name="Tủ thuốc không kê đơn (OTC)" style="left:438px;top:34px;width:205px;height:74px;">
+    <div class="pm-zone z-otc" data-zone="tu"      data-name="Tủ thuốc không kê đơn (OTC)" style="left:438px;top:34px;width:205px;height:74px;">
       <span class="pm-ico">💊</span><span class="pm-label">Không kê đơn</span></div>
-    <div class="pm-zone z-nondrug"  data-name="Tủ sản phẩm không phải thuốc (TPCN, mỹ phẩm, vật tư y tế)" style="left:653px;top:34px;width:219px;height:74px;">
+    <div class="pm-zone z-nondrug" data-zone="tu"  data-name="Tủ sản phẩm không phải thuốc (TPCN, mỹ phẩm, vật tư y tế)" style="left:653px;top:34px;width:219px;height:74px;">
       <span class="pm-ico">🧴</span><span class="pm-label">SP không phải thuốc</span></div>
 
-    <div class="pm-zone z-dispense" data-name="Khu vực ra lẻ thuốc (cắt liều, tư vấn)" style="left:8px;top:150px;width:150px;height:120px;">
+    <div class="pm-zone z-dispense" data-zone="tu" data-name="Khu vực ra lẻ thuốc (cắt liều, tư vấn)" style="left:8px;top:150px;width:150px;height:120px;">
       <span class="pm-ico">⚖️</span><span class="pm-label">Ra lẻ thuốc</span></div>
-    <div class="pm-zone z-fridge"   data-name="Tủ lạnh (bảo quản 2–8°C: vắc xin, insulin)" style="left:8px;top:288px;width:150px;height:96px;">
+    <div class="pm-zone z-fridge" data-zone="tu"   data-name="Tủ lạnh (bảo quản 2–8°C: vắc xin, insulin)" style="left:8px;top:288px;width:150px;height:96px;">
       <span class="pm-ico">❄️</span><span class="pm-label">Tủ lạnh</span></div>
     <div class="pm-zone z-wash"     data-name="Khu vực rửa tay" style="left:8px;top:402px;width:150px;height:96px;">
       <span class="pm-ico">🚰</span><span class="pm-label">Rửa tay</span></div>
 
-    <div class="pm-zone z-receive"  data-name="Khu hàng chờ kiểm nhập (hàng mới về, chờ kiểm tra)" style="left:714px;top:150px;width:158px;height:120px;">
+    <div class="pm-zone z-receive" data-zone="tu"  data-name="Khu hàng chờ kiểm nhập (hàng mới về, chờ kiểm tra)" style="left:714px;top:150px;width:158px;height:120px;">
       <span class="pm-ico">📦</span><span class="pm-label">Hàng chờ kiểm nhập</span></div>
-    <div class="pm-zone z-process"  data-name="Khu hàng chờ xử lý (thuốc hết hạn, hư hỏng, thu hồi)" style="left:714px;top:288px;width:158px;height:120px;">
+    <div class="pm-zone z-process" data-zone="tu"  data-name="Khu hàng chờ xử lý (thuốc hết hạn, hư hỏng, thu hồi)" style="left:714px;top:288px;width:158px;height:120px;">
       <span class="pm-ico">⚠️</span><span class="pm-label">Hàng chờ xử lý</span></div>
     <div class="pm-zone z-fire"     data-name="Bình chữa cháy" style="left:832px;top:430px;width:40px;height:70px;">
       <span class="pm-ico">🧯</span></div>
@@ -1034,10 +1046,6 @@
     <div class="pm-zone z-entrance" data-zone="door" data-name="Cửa ra vào nhà thuốc (trên tường, dẫn vào trong)" style="left:330px;top:512px;width:230px;height:62px;">
       <span class="pm-ico">🚪</span><span class="pm-label">Cửa ra vào</span>
       <span class="pm-sub2" id="doorSub">🔒 Cần Chìa khóa</span></div>
-
-    <div class="pm-zone z-sanh" data-zone="sanh" data-name="Sảnh Tiền Thực Hành GPP — sắp xếp thuốc vào tủ theo bài dược lý (rất dễ → rất khó)" style="left:30px;top:588px;width:830px;height:92px;">
-      <span class="pm-ico">🎓</span><span class="pm-label">SẢNH TIỀN THỰC HÀNH GPP</span>
-      <span class="pm-sub2 pm-cta">👉 Bấm vào luyện tập sắp xếp thuốc vào tủ theo bài để nhận 🔑 chìa khóa vào nhà thuốc ✨</span></div>
 
     <div class="pm-char" id="pmChar">
       <div class="pm-body">
@@ -2705,9 +2713,11 @@ function fitMap(){
   const topY = pMap.getBoundingClientRect().top;
   const availH = window.innerHeight - topY - 52;   // leave room for the action button
   const availW = (mapStage.clientWidth || window.innerWidth) - 6;
-  mapScale = Math.max(0.4, Math.min(1, availW/900, availH/700));
+  // req #156: trước đây chặn ở 1 nên màn hình rộng vẫn hiện sơ đồ bé tí. Cho
+  // phóng to tới 1,7 lần để lấp khung, vẫn giữ đúng tỉ lệ (không méo).
+  mapScale = Math.max(0.4, Math.min(1.7, availW/900, availH/600));
   pMap.style.transform = 'scale(' + mapScale + ')';
-  mapStage.style.height = (700 * mapScale) + 'px';
+  mapStage.style.height = (600 * mapScale) + 'px';
 }
 window.addEventListener('resize', fitMap);
 
@@ -2741,6 +2751,8 @@ function showFacade(){
   document.body.classList.add('view-facade');
 }
 document.getElementById('fDoorHit')?.addEventListener('click', enterThroughDoors);
+document.getElementById('fGoCrush')?.addEventListener('click', (e) => { e.stopPropagation(); location.href = '/pharma-crush.html'; });
+document.getElementById('fGoSort')?.addEventListener('click',  (e) => { e.stopPropagation(); location.href = '/pharma-sort.html'; });
 
 function showMap(){ stopHandTracking(); document.body.classList.remove('view-pharmacy','view-facade'); document.body.classList.add('view-map'); pStart(); fitMap(); requestAnimationFrame(fitMap); setTimeout(fitMap,60); }
 function showPharmacy(){
@@ -2757,10 +2769,12 @@ document.getElementById('mobileMapBtn').addEventListener('click', showMap);
 /* ---- zone interaction ---- */
 function doZoneAction(zone){
   const z = zone && zone.dataset.zone;
-  if(z === 'sanh'){ showPharmacy(); }   // Sảnh = the tier-based cabinet putaway practice
+  // req #156: sảnh đã dời ra NGOÀI cửa (là khu luyện tập Crush/Sort), nên trong
+  // sơ đồ chính các TỦ là nơi vào thực hiện nghiệp vụ bảo quản – sắp xếp hàng hoá.
+  if(z === 'tu' || z === 'sanh'){ showPharmacy(); }
   else if(z === 'door'){
     if(hasKey) pmZoneLabel.textContent = '🔓 Cửa đã mở khóa — chào mừng vào Nhà thuốc GPP!';
-    else pmZoneLabel.textContent = '🔒 Cửa đang khóa — luyện ở 🎓 Sảnh Tiền Thực Hành đến danh hiệu "Dược sĩ thực tập" (25⭐) để nhận 🔑 Chìa khóa mở cửa.';
+    else pmZoneLabel.textContent = '🔒 Cửa đang khóa — xếp thuốc ở các tủ đến danh hiệu "Dược sĩ thực tập" (25⭐) để nhận 🔑 Chìa khóa mở cửa.';
   }
 }
 mapActionEl.addEventListener('click', e=>{
