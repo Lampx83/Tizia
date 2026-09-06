@@ -347,6 +347,13 @@ const PUBLIC_PATH_EXACT = new Set([
   '/pharmacomm-giang-vien.html',
   // GPP 2D — thực hành nghiệp vụ nhà thuốc GPP (đề tài ThS Phạm Thị Hương Lý).
   '/gpp.html',
+  // Pharma Crush — game ghép 3 học nhóm thuốc / cơ chế tác dụng.
+  '/pharma-crush.html',
+  // Pharma Sort — phân loại thuốc theo nhóm tác dụng.
+  '/pharma-sort.html',
+  // Tủ thuốc mô phỏng / Nhà thuốc thực hành — luyện nhận diện & sắp xếp thuốc
+  // theo tủ (cùng đề tài ThS Phạm Thị Hương Lý). Standalone, guest dùng được.
+  '/tu-thuoc-mo-phong.html',
   // Nhà thuốc 2D An Tâm Pharma — cảnh mặt tiền + nội thất trực quan (khách xem).
   '/nha-thuoc-2d.html',
 ]);

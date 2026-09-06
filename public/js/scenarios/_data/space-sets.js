@@ -315,16 +315,12 @@ const SPACES_PHARMACY = {
 
   gpp:{emoji:'💊',name:'Nhà thuốc GPP',accent:'#16a34a',intro:'Quầy thuốc đạt chuẩn GPP — sắp xếp, cấp phát đúng, tư vấn OTC và sàng lọc cờ đỏ.',
     rooms:[{ic:'🏪',name:'Nhà thuốc 3D đầy đủ (Pharmacy-AI port)',rd:'Vào quầy ảo: 180 thuốc, 4 tủ Rx/OTC + tủ kiểm soát đặc biệt, POS, dán nhãn HDSD, tư vấn AI theo SEGUE.',href:'/nha-thuoc-3d.html'},
-      {ic:'🧪',name:'Thực hành nghiệp vụ GPP (2D)',rd:'Mô phỏng 2D 4 nghiệp vụ chuẩn GPP: nhận biết & phân loại, kiểm nhập, bảo quản – sắp xếp, kiểm kê & thu hồi. Chấm theo bảng kiểm, trò chơi ôn dược lý, tình huống AI. Đề tài NCKH CĐ Y tế HN.',href:'/gpp.html'},
+      {ic:'💊',name:'Pharma Crush — ghép 3 học nhóm thuốc',rd:'Game ghép 3: ghép các thuốc CÙNG NHÓM tác dụng dược lý để ăn điểm. Có cấp độ, combo, công cụ hỗ trợ và mẹo dược sĩ sau mỗi lần ghép.',href:'/pharma-crush.html'},
       {ic:'🏥',name:'Nhà thuốc 2D An Tâm Pharma',rd:'Tham quan trực quan full màn hình: mặt tiền tân cổ điển + nội thất quầy chữ L, hệ tủ Rx/OTC/sản phẩm không phải thuốc. Bấm vào từng tủ để xem danh mục theo chuẩn GPP.',href:'/nha-thuoc-2d.html'},
+      {ic:'🗂️',name:'Pharma Sort — phân loại thuốc theo nhóm',rd:'Trò phân loại: kéo từng thuốc về đúng nhóm tác dụng dược lý, tăng dần độ khó. Cùng bộ dữ liệu thuốc với Pharma Crush.',href:'/pharma-sort.html'},
+      {ic:'🏬',name:'Nhà thuốc thực hành',rd:'Quầy thực hành tổng hợp: nhận diện & sắp xếp thuốc theo tủ Rx/OTC/kiểm soát đặc biệt, tra nhanh theo hoạt chất, kéo-thả cất hàng — kèm hai trò luyện tập Pharma Crush và Pharma Sort.',href:'/tu-thuoc-mo-phong.html'},
       {ic:'🗂️',name:'Sắp xếp thuốc ATC',rd:'Phân loại & xếp kệ.',href:'/sap-xep-hub.html'},
       {ic:'🕹️',name:'Arcade 2D',rd:'Luyện tốc độ phân loại.',href:'/2d-arcade.html'},
-      {ic:'🧊',name:'Kệ thuốc 3D',rd:'Sắp xếp trong không gian 3D.',href:'/3d-shelf.html'},
-      {ic:'💬',name:'Tư vấn OTC',rd:'Bán thuốc không kê đơn an toàn.',panel:[
-        {h:'Quầy tư vấn OTC'},{p:'Khách tới hỏi mua thuốc — bạn tư vấn:'},
-        {mcq:[{q:'Khách ho khan 2 ngày, không sốt. Tư vấn hợp lý?',o:['Thuốc giảm ho + theo dõi, khám nếu kéo dài >1 tuần/khó thở','Bán kháng sinh ngay','Corticoid liều cao','Không tư vấn gì'],a:0,fb:'Ho cấp thường tự khỏi; OTC giảm triệu chứng + dặn cờ đỏ. Kháng sinh không trị ho do virus.'},
-          {q:'Khách đòi kháng sinh trị tiêu chảy thường (không sốt, không máu)?',o:['Bù nước–điện giải (ORS), theo dõi, không cần kháng sinh','Bán kháng sinh ngay','Thuốc cầm tiêu chảy liều cao cho trẻ nhỏ','Nhịn ăn uống hoàn toàn'],a:0,fb:'Tiêu chảy cấp thường do virus → ORS là chính; kháng sinh chỉ khi có chỉ định.'},
-          {q:'Dấu hiệu CỜ ĐỎ cần chuyển khám ngay?',o:['Đau ngực, khó thở, sốt cao kéo dài, triệu chứng thần kinh','Hắt hơi nhẹ','Ngứa mũi thoáng qua','Mệt nhẹ sau thức khuya'],a:0,fb:'Cờ đỏ (red flags) → ngừng tự điều trị, chuyển khám bác sĩ.'}]}]},
       {ic:'📝',name:'Cấp phát thuốc kê đơn (Rx)',rd:'Quy trình 6 bước an toàn.',panel:[
         {h:'Checklist cấp phát đơn thuốc'},
         {check:['Kiểm tra đơn hợp lệ (tên, tuổi BN, chữ ký bác sĩ)','Đối chiếu thuốc – hàm lượng – số lượng','Rà tương tác & chống chỉ định','Dán nhãn & ghi rõ cách dùng','Tư vấn bảo quản & tác dụng phụ thường gặp','Ghi sổ thuốc kê đơn theo quy định']},
@@ -333,10 +329,6 @@ const SPACES_PHARMACY = {
         {h:'Quy trình đo huyết áp đúng'},
         {ol:['Cho khách nghỉ 5 phút, ngồi tựa lưng, chân chạm đất','Quấn băng đo ngang tim, không nói chuyện khi đo','Đo 2 lần cách 1–2 phút rồi lấy trung bình','Ghi lại kết quả & so với ngưỡng']},
         {note:'HA ≥140/90 mmHg nhiều lần → khuyên khám. Đường huyết đói ≥126 mg/dL (7.0 mmol/L) gợi ý đái tháo đường, cần xác nhận y tế.'}]},
-      {ic:'🚭',name:'Tư vấn cai thuốc lá',rd:'Mô hình 5A.',panel:[
-        {h:'Mô hình 5A cai thuốc lá'},
-        {ul:['Ask – Hỏi về thói quen hút thuốc','Advise – Khuyên bỏ thuốc rõ ràng','Assess – Đánh giá mức sẵn sàng bỏ','Assist – Hỗ trợ (NRT, tư vấn hành vi)','Arrange – Hẹn theo dõi']},
-        {note:'Liệu pháp thay thế nicotine (NRT) + tư vấn hành vi tăng rõ tỉ lệ cai thành công.'}]},
       {ic:'🩺',name:'Đo huyết áp (tương tác)',rd:'Bơm – xả – nghe Korotkoff – đọc & phân loại HA.',href:'/bp-measure.html'},
       {ic:'💊',name:'Cấp phát thuốc (tương tác)',rd:'Đếm đúng số viên + kiểm 5 Đúng, bắt lỗi nhãn.',href:'/dispense.html'}],
     skills:['Sắp xếp thuốc theo ATC','Cấp phát & tư vấn GPP','Sàng lọc cờ đỏ → chuyển khám'],

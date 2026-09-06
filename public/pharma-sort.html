@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Pharma Sort · Phân loại thuốc theo nhóm</title>
+<meta name="description" content="Mỗi lượt một nhóm dược lý sáng lên — tìm trong lưới những thuốc thuộc nhóm đó và kéo vào cột. Trò chơi phân loại thuốc cho sinh viên Dược.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%82%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --sky1:#c9e9f8; --sky2:#9ad6f0; --sky3:#79c4e8;
+    --paper:#fffdf6; --cream:#fdf1d9; --ink:#4a5b7a; --muted:#8fa3bf;
+    --gold:#ffc93c; --gold-d:#e08c14; --green:#5cc86e; --green-d:#3aa653;
+    --red:#f2606a; --blue:#4facf0; --blue-d:#1f6fd0;
+    --tile:#fbf0d8; --tile2:#f4e2ba; --tileEdge:#e3c99b;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;user-select:none;-webkit-user-select:none;
+    font-family:'Nunito',system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink)}
+  body{background:
+    radial-gradient(closest-side at 18% 12%,rgba(255,255,255,.35),transparent 70%),
+    radial-gradient(closest-side at 85% 6%,rgba(255,255,255,.25),transparent 70%),
+    linear-gradient(180deg,var(--sky1),var(--sky2) 55%,var(--sky3))}
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;gap:7px;
+       padding:calc(7px + env(safe-area-inset-top)) 9px calc(7px + env(safe-area-inset-bottom))}
+
+  /* ---------- khung chung ---------- */
+  .card{background:linear-gradient(180deg,var(--paper),var(--cream));border-radius:18px;border:3px solid #fff;
+    box-shadow:0 5px 0 rgba(90,140,190,.4),0 10px 18px rgba(40,90,150,.28);padding:8px 12px}
+  .btn{cursor:pointer;border:2.5px solid #fff;border-radius:15px;padding:10px 18px;font-family:'Baloo 2',cursive;
+    font-size:15px;font-weight:800;color:#fff;background:linear-gradient(180deg,var(--green),var(--green-d));
+    box-shadow:0 4px 0 var(--green-d),0 8px 14px rgba(40,90,150,.3);transition:.12s}
+  .btn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--green-d)}
+  .btn.blue{background:linear-gradient(180deg,var(--blue),var(--blue-d));box-shadow:0 4px 0 #14538f}
+  .btn.gray{background:linear-gradient(180deg,#a8b8cc,#7b8ca3);box-shadow:0 4px 0 #64748b}
+  .rbtn{width:46px;height:46px;flex:none;display:grid;place-items:center;font-size:20px;cursor:pointer;
+    border-radius:15px;border:2.5px solid #fff;color:#fff;background:linear-gradient(180deg,var(--blue),var(--blue-d));
+    box-shadow:0 4px 0 #14538f,0 8px 13px rgba(40,90,150,.3);transition:.12s;position:relative}
+  .rbtn:active{transform:translateY(3px);box-shadow:0 1px 0 #14538f}
+  .rbtn .bdg{position:absolute;top:-6px;right:-6px;min-width:20px;height:20px;border-radius:99px;background:#ff5f96;
+    border:2px solid #fff;color:#fff;font-size:11px;font-weight:900;display:grid;place-items:center;font-family:'Nunito'}
+  .rbtn:disabled{opacity:.45;cursor:default}
+
+  /* ---------- header ---------- */
+  .hdr{display:flex;align-items:center;gap:9px;flex:none}
+  .ribbon{flex:1;min-width:0;text-align:center;position:relative;
+    background:linear-gradient(180deg,#5bb8f0,#2b86d8);border:3px solid #fff;border-radius:16px;padding:5px 18px;
+    box-shadow:0 5px 0 #1c66ac,0 10px 18px rgba(20,70,130,.35)}
+  .ribbon h1{margin:0;font-family:'Baloo 2',cursive;font-size:23px;font-weight:800;color:#fff;letter-spacing:1px;
+    text-shadow:0 2px 0 #1a5e9e,0 3px 6px rgba(0,0,0,.3);line-height:1.05}
+  .ribbon p{margin:2px 0 0;font-size:11px;font-weight:800;color:#e8f6ff}
+  .chip{display:flex;align-items:center;gap:6px;background:linear-gradient(180deg,#fff,#eef5fc);border:3px solid #fff;
+    border-radius:15px;padding:5px 12px;font-family:'Baloo 2',cursive;font-weight:800;font-size:16px;flex:none;
+    box-shadow:0 4px 0 rgba(90,140,190,.4),0 8px 14px rgba(40,90,150,.25)}
+
+  /* ---------- hàng chỉ số ---------- */
+  .stats{display:flex;gap:7px;flex:none}
+  .stats .card{flex:1;min-width:0;text-align:center;padding:6px 10px}
+  .lbl{font-size:10px;font-weight:900;letter-spacing:.8px;color:var(--muted);text-transform:uppercase}
+  .big{font-family:'Baloo 2',cursive;font-size:24px;font-weight:800;color:#2f7fc4;line-height:1.05}
+  .mission{flex:1.5!important;text-align:left!important;display:flex;gap:8px;align-items:center}
+  .mission .st{font-size:22px;flex:none}
+  .mission .tx{font-size:11.5px;font-weight:800;line-height:1.25;color:#5a6b86}
+  .bar{height:11px;background:#e6ecf4;border-radius:99px;overflow:hidden;margin-top:4px;
+    box-shadow:inset 0 2px 3px rgba(20,50,90,.2);position:relative}
+  .bar i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#5bb8f0,#2b86d8);
+    transition:width .35s cubic-bezier(.3,1.2,.5,1)}
+  .bar b{position:absolute;inset:0;display:grid;place-items:center;font-size:9.5px;color:#3c5madeup}
+  .bar b{color:#37527a}
+  .starbar{display:flex;align-items:center;gap:3px;margin-top:3px}
+  .starbar .sline{flex:1;height:8px;background:#e6ecf4;border-radius:99px;overflow:hidden;box-shadow:inset 0 2px 3px rgba(20,50,90,.2)}
+  .starbar .sline i{display:block;height:100%;width:0;background:linear-gradient(90deg,#ffe066,#ffab1f);transition:width .35s}
+  .stmarks{display:flex;justify-content:space-between;font-size:9px;font-weight:800;color:var(--muted);margin-top:1px}
+  .stars{display:flex;gap:2px;justify-content:center}
+  .stars b{font-size:15px;filter:grayscale(1);opacity:.3;transition:.3s}
+  .stars b.on{filter:none;opacity:1;transform:scale(1.15)}
+
+  /* ---------- 5 cột nhóm ---------- */
+  .lanes{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;flex:none;
+    background:rgba(255,255,255,.55);border:3px solid #fff;border-radius:18px;padding:6px;
+    box-shadow:0 5px 0 rgba(90,140,190,.35),0 10px 18px rgba(40,90,150,.25)}
+  .lane{border-radius:13px;overflow:hidden;min-width:0;background:#fff;display:flex;flex-direction:column;
+    border:2px solid #fff;transition:.15s;position:relative}
+  .lane .lh{padding:5px 3px;text-align:center;font-family:'Baloo 2',cursive;font-weight:800;color:#fff;
+    font-size:clamp(7px,1.9vw,11px);overflow:hidden;line-height:1.1;letter-spacing:.2px;text-shadow:0 1.5px 0 rgba(0,0,0,.25);min-height:34px;
+    display:flex;align-items:center;justify-content:center}
+  .lane .lb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:5px 3px 6px}
+  .lane .hex{width:52px;height:46px;display:grid;place-items:center;
+    clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);transition:.18s}
+  .lane .cnt{font-family:'Baloo 2',cursive;font-weight:800;font-size:13px;color:#5a6b86}
+  .lane.over{transform:translateY(-4px) scale(1.04);z-index:3}
+  .lane.over .hex{transform:scale(1.15)}
+  .lane.ok{animation:laneOk .5s}
+  @keyframes laneOk{0%,100%{transform:none}30%{transform:translateY(-7px) scale(1.07)}}
+  .lane.bad{animation:laneBad .45s}
+  @keyframes laneBad{0%,100%{transform:none}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+  /* cột đang được gọi sáng lên, các cột còn lại mờ đi */
+  .lane.dim{filter:grayscale(.92) brightness(1.05);opacity:.5}
+  .lane.lit{z-index:4;transform:translateY(-3px) scale(1.05);
+    box-shadow:0 0 0 3px var(--gold),0 0 20px 4px rgba(255,201,60,.85),0 8px 16px rgba(40,90,150,.3)}
+  .lane.lit .hex{animation:beat 1.15s ease-in-out infinite}
+  @keyframes beat{0%,100%{transform:scale(1)}50%{transform:scale(1.16)}}
+  .lane.lit .lh{animation:litHead 1.15s ease-in-out infinite}
+  @keyframes litHead{0%,100%{filter:brightness(1)}50%{filter:brightness(1.22)}}
+
+  /* ---------- băng "đang gọi nhóm" ---------- */
+  .call{flex:none;display:flex;align-items:center;gap:10px;position:relative;overflow:hidden;
+    border:3px solid #fff;border-radius:16px;padding:7px 12px 11px;
+    box-shadow:0 5px 0 rgba(90,140,190,.4),0 10px 18px rgba(40,90,150,.28);transition:background .3s}
+  .call .ci{flex:none;line-height:0;display:grid;place-items:center;padding:5px;border-radius:12px;
+    background:rgba(255,255,255,.94);box-shadow:0 2px 0 rgba(0,0,0,.18)}
+  .call .ct{flex:1;min-width:0}
+  .call .cl{font-size:9.5px;font-weight:900;letter-spacing:1.2px;color:rgba(255,255,255,.85);text-transform:uppercase}
+  .call .cn{font-family:'Baloo 2',cursive;font-weight:800;font-size:clamp(13px,3.6vw,20px);color:#fff;line-height:1.1;
+    text-shadow:0 2px 0 rgba(0,0,0,.28);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .call .cg{flex:none;display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.94);border-radius:12px;
+    padding:3px 10px;font-family:'Baloo 2',cursive;font-weight:800;font-size:15px;color:#2f7fc4}
+  .call .cs{flex:none;min-width:52px;text-align:center;background:rgba(0,0,0,.22);border-radius:12px;padding:3px 8px;
+    font-family:'Baloo 2',cursive;font-weight:800;font-size:15px;color:#fff;text-shadow:0 1.5px 0 rgba(0,0,0,.3)}
+  .call.urgent .cs{background:#f2606a}
+  .call .ctime{position:absolute;left:0;right:0;bottom:0;height:6px;background:rgba(0,0,0,.22)}
+  .call .ctime i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#ffe066,#ffab1f);
+    box-shadow:0 0 8px rgba(255,201,60,.9)}
+  .call.urgent{animation:urg .55s ease-in-out infinite}
+  @keyframes urg{0%,100%{transform:none}50%{transform:translateX(-3px)}}
+  .call.urgent .ctime i{background:linear-gradient(90deg,#ff8a8a,#f2606a)}
+  .call.swap{animation:callIn .42s cubic-bezier(.2,1.5,.4,1)}
+  @keyframes callIn{0%{transform:scale(.9) rotate(-1.5deg);opacity:.4}100%{transform:none;opacity:1}}
+
+  /* ---------- lưới thẻ thuốc ---------- */
+  .gridwrap{flex:1;min-height:0;background:rgba(255,255,255,.55);border:3px solid #fff;border-radius:18px;padding:7px;
+    box-shadow:0 5px 0 rgba(90,140,190,.35),0 10px 18px rgba(40,90,150,.25);display:flex}
+  #grid{flex:1;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));grid-auto-rows:minmax(0,1fr);gap:6px;min-height:0;min-width:0;
+    --ico:24px;--nmf:11px;--nml:2}
+  .cardx{position:relative;min-width:0;overflow:hidden;border-radius:14px;cursor:grab;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:1px;padding:4px 3px;touch-action:none;
+    background:linear-gradient(180deg,#fffaef,var(--tile) 60%,var(--tile2));border:2px solid #fff;
+    box-shadow:inset 0 2px 0 #fff,0 4px 0 var(--tileEdge),0 6px 11px rgba(70,110,160,.28);
+    transition:transform .14s cubic-bezier(.34,1.5,.64,1),opacity .2s}
+  .cardx:hover{transform:translateY(-3px)}
+  .cardx .ico{line-height:0;flex:none}
+  .cardx .ico svg{width:var(--ico);height:var(--ico)}
+  .cardx .nm{flex:none;font-weight:900;font-size:var(--nmf);word-break:break-word;line-height:1.12;text-align:center;color:#42557a;
+    max-width:100%;overflow:hidden;display:-webkit-box;-webkit-line-clamp:var(--nml);-webkit-box-orient:vertical}
+  .cardx .ds{flex:none;font-weight:800;font-size:calc(var(--nmf) * .82);color:#93a4bd;white-space:nowrap}
+  #grid.tight .cardx .ds{display:none}
+  #grid.noico .cardx .ico{display:none}
+  .cardx.fresh{animation:pop .34s cubic-bezier(.25,1.5,.45,1) both}
+  @keyframes pop{0%{transform:scale(.4) translateY(-24px);opacity:0}70%{transform:scale(1.06)}100%{transform:none;opacity:1}}
+  .cardx.gone{animation:gone .3s ease-in forwards;pointer-events:none}
+  @keyframes gone{to{transform:scale(.2) rotate(12deg);opacity:0}}
+  .cardx.wrong{animation:wob .42s}
+  @keyframes wob{0%,100%{transform:none}25%{transform:translateX(-6px) rotate(-4deg)}75%{transform:translateX(6px) rotate(4deg)}}
+  .cardx.hintme{animation:hintP 1s ease-in-out infinite}
+  @keyframes hintP{0%,100%{box-shadow:0 0 0 0 rgba(255,201,60,.95),0 4px 0 var(--tileEdge)}
+                   50%{box-shadow:0 0 0 10px rgba(255,201,60,0),0 4px 0 var(--tileEdge)}}
+  .ghost{position:fixed;z-index:120;pointer-events:none;transform:translate(-50%,-50%) scale(1.12) rotate(-3deg);
+    filter:drop-shadow(0 10px 14px rgba(20,60,110,.45))}
+
+  /* ---------- footer ---------- */
+  .ftr{display:flex;align-items:center;gap:8px;flex:none}
+  .ftr .sp{flex:1}
+  /* ---------- thông báo ---------- */
+  .fly{position:fixed;z-index:130;pointer-events:none;font-family:'Baloo 2',cursive;font-weight:800;font-size:22px;
+    color:#fff;text-shadow:0 2px 0 var(--gold-d),0 0 12px rgba(255,201,60,.9);animation:flyup 1s ease-out forwards}
+  @keyframes flyup{0%{transform:translate(-50%,0) scale(.6);opacity:0}25%{transform:translate(-50%,-14px) scale(1.15);opacity:1}
+                   100%{transform:translate(-50%,-62px);opacity:0}}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:78px;z-index:125;max-width:92vw;
+    background:linear-gradient(180deg,#fff,#ffeef0);border:3px solid #fff;border-radius:16px;padding:9px 16px;
+    font-size:13px;font-weight:800;color:#8d2a30;box-shadow:0 5px 0 rgba(150,40,50,.3),0 10px 20px rgba(0,0,0,.3);
+    opacity:0;transition:.22s;text-align:center}
+  .toast.show{opacity:1}
+  .toast.good{background:linear-gradient(180deg,#fff,#e9fbef);color:#1f7a44;box-shadow:0 5px 0 rgba(30,120,70,.3),0 10px 20px rgba(0,0,0,.28)}
+  .mask{position:fixed;inset:0;background:rgba(10,40,80,.72);backdrop-filter:blur(3px);z-index:150;display:none;
+    place-items:center;padding:18px}
+  .mask.show{display:grid}
+  .modal{background:linear-gradient(180deg,var(--paper),var(--cream));border-radius:24px;border:4px solid #fff;
+    padding:22px;max-width:560px;width:100%;text-align:center;max-height:88vh;overflow:auto;
+    box-shadow:0 9px 0 rgba(20,70,130,.35),0 18px 34px rgba(10,40,80,.45);animation:pop .3s cubic-bezier(.2,1.5,.4,1)}
+  .modal h2{margin:.1em 0 .3em;font-family:'Baloo 2',cursive;font-size:25px;color:#2f7fc4}
+  .modal p{margin:6px 0;font-size:14px;font-weight:700;color:#5a6b86}
+  .glist{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;text-align:left}
+  .gitem{display:flex;align-items:center;gap:7px;background:#fff;border:2px solid #eef3f9;border-radius:12px;padding:7px 9px;
+    font-size:11.5px;font-weight:800;color:#42557a}
+
+  @media (max-width:820px){
+    .ribbon h1{font-size:18px} .ribbon p{display:none}
+    .big{font-size:19px} .lbl{font-size:9px}
+    .lane .lh{font-size:9px;min-height:30px} .lane .hex{width:40px;height:36px}
+    .cardx .nm{font-size:9.5px} .cardx .ds{font-size:8px}
+    .rbtn{width:40px;height:40px;font-size:17px}
+    .mission .tx{font-size:10px} .mission .st{font-size:18px}
+  }
+  @media (max-width:520px){
+    #app{gap:5px}
+    .chip{font-size:13px;padding:4px 9px} .ribbon h1{font-size:15px}
+    .stats{gap:5px} .stats .card{padding:4px 6px}
+    .big{font-size:17px} .lbl{font-size:8.5px;letter-spacing:.4px}
+    .mission .tx{font-size:9.5px} .mission .st{font-size:16px}
+    .bar{height:9px;margin-top:3px} .stmarks{display:none} .stars b{font-size:13px}
+    .lanes{gap:4px;padding:4px} #grid{gap:4px} .gridwrap{padding:5px}
+    .lane .lh{font-size:7.5px;padding:2px;min-height:23px}
+    .lane .hex{width:26px;height:23px} .lane .cnt{font-size:10px}
+    .call{padding:4px 9px 7px;gap:7px} .call .cl{font-size:8.5px;letter-spacing:.8px} .call .cg{font-size:13px;padding:2px 7px}
+  }
+</style>
+</head>
+<body data-no-auth-header data-no-suggestion-fab data-no-notifications-bell data-no-analytics>
+<div id="app">
+  <div class="hdr">
+    <div class="chip" title="Lượt đi còn lại">🎯 <span id="movesChip">25</span></div>
+    <div class="ribbon"><h1>PHARMA SORT</h1><p>Gom thuốc cho nhóm đang được gọi</p></div>
+    <div class="chip" title="Điểm">⭐ <span id="scoreChip">0</span></div>
+    <button class="rbtn" id="btnSound" title="Âm thanh">🔊</button>
+    <button class="rbtn" id="btnBook" title="Sổ tay">📖</button>
+  </div>
+
+  <div class="stats">
+    <div class="card mission">
+      <span class="st">⭐</span>
+      <div style="flex:1;min-width:0">
+        <div class="tx" id="mHint">Tìm thuốc thuộc nhóm đang sáng!</div>
+        <div class="bar"><i id="mBar"></i><b id="mTx">0/8</b></div>
+      </div>
+    </div>
+    <div class="card"><div class="lbl">Số lượt đi</div><div class="big" id="movesBig">25</div></div>
+    <div class="card">
+      <div class="lbl">Điểm</div><div class="big" id="scoreBig">0</div>
+      <div class="starbar"><div class="sline"><i id="sBar"></i></div></div>
+      <div class="stmarks"><span id="s1">500</span><span id="s2">1000</span><span id="s3">1500</span></div>
+      <div class="stars" id="stars"><b>★</b><b>★</b><b>★</b></div>
+    </div>
+  </div>
+
+  <div class="call" id="call">
+    <span class="ci" id="callIco"></span>
+    <div class="ct"><div class="cl">🔦 Đang gọi nhóm</div><div class="cn" id="callName">…</div></div>
+    <div class="cg">✔ <span id="callGot">0/2</span></div>
+    <div class="cs">⏱ <span id="callSec">0</span>s</div>
+    <div class="ctime"><i id="callBar"></i></div>
+  </div>
+  <div class="lanes" id="lanes"></div>
+  <div class="gridwrap"><div id="grid"></div></div>
+
+  <div class="ftr">
+    <button class="rbtn" id="btnHome" title="Về trang thực hành">🏠</button>
+    <button class="rbtn" id="bWand" title="Tự xếp đúng 1 thẻ">🪄<span class="bdg" id="nWand">3</span></button>
+    <button class="rbtn" id="bShuffle" title="Đổi bộ thẻ mới">🔀<span class="bdg" id="nShuffle">3</span></button>
+    <button class="rbtn" id="bMoves" title="Thêm 5 lượt">🍭<span class="bdg" id="nMoves">2</span></button>
+    <div class="sp"></div>
+    <button class="btn" id="bHint">💡 GỢI Ý <span id="nHint" style="opacity:.85">3</span></button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="mask" id="mask"><div class="modal" id="modal"></div></div>
+
+<script type="module">
+import { sortLevelConfig, randomCard, cardOfGroup, shortName, groupDesc } from './js/gpp/sort-data.js?v=gpp0823a';
+import { groupIcon } from './js/gpp/artwork.js?v=gpp0728c';
+import { wrongTip } from './js/gpp/crush.js?v=gpp0728b';
+import { sfx, unlock, setMuted, isMuted } from './js/gpp/sfx.js?v=gpp0728b';
+
+const $ = id => document.getElementById(id);
+let SLOTS = 25;   // 5 cột × 3–5 hàng, tuỳ chiều cao màn hình
+let level=1, score=0, total=0, cfg=null, cards=[], done=0, movesLeft=0, streak=0, busy=false;
+let tools={wand:3,shuffle:3,moves:2,hint:3};
+let spot=null, callQ=[], rafId=0, over=false;   // spot = lượt gọi nhóm đang diễn ra
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+/** Bốc thẻ mới, cố tránh trùng quá 2 thẻ cùng một thuốc cho lưới đỡ nhàm. */
+function newCard(list){
+  const count=n=>cards.reduce((k,c)=>k+(c&&c.drug&&c.drug.ten===n?1:0),0);
+  let c=null;
+  for(let k=0;k<8;k++){ c=randomCard(list||cfg.lanes); if(count(c.drug.ten)<2) return c; }
+  return c;
+}
+function freshDeck(){ cards=[]; for(let i=0;i<SLOTS;i++) cards.push(newCard()); return cards; }
+
+/* ---------------- dựng màn ---------------- */
+function startLevel(lv){
+  level=lv; cfg=sortLevelConfig(level); SLOTS=idealSlots();
+  done=0; streak=0; score=0; movesLeft=cfg.moves; busy=false; over=false;
+  freshDeck();
+  renderLanes(); renderGrid(true); hud();
+  callQ=[]; spot=null; nextCall(true);
+  toast(`Màn ${level}: chỉ cột ĐANG SÁNG nhận thuốc — gom đủ ${cfg.needPerCall} thuốc của nhóm đó trước khi hết giờ!`, true);
+}
+
+/* ============ LƯỢT GỌI NHÓM ============
+   Mỗi lúc chỉ một cột sáng. Người chơi phải tìm thuốc thuộc đúng nhóm đó
+   trong toàn bộ lưới (không thể chỉ xử lý hàng thẻ đầu tiên). Hết giờ thì
+   chuyển sang nhóm khác — KHÔNG trừ lượt đi, chỉ mất chuỗi. */
+function shuffled(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+
+function nextCall(first){
+  if(over) return;
+  if(!callQ.length) callQ=shuffled(cfg.lanes.map((_,i)=>i));
+  if(spot && callQ[0]===spot.idx && callQ.length>1) callQ.push(callQ.shift());
+  const idx=callQ.shift();
+  spot={ idx, t0:performance.now(), dur:cfg.spotMs, got:0 };
+  ensureCardOfGroup(cfg.lanes[idx].name);
+  paintCall(); paintLaneStates();
+  if(!first) sfx.drop();
+  tickCall();
+}
+function paintCall(){
+  const g=cfg.lanes[spot.idx], c=g.hex;   // băng gọi LUÔN có màu để dễ nhận ra
+  const el=$('call');
+  el.style.background=`linear-gradient(180deg,${c},${shade(c,-.22)})`;
+  el.classList.remove('urgent'); el.classList.remove('swap');
+  void el.offsetWidth; el.classList.add('swap');
+  $('callIco').innerHTML=groupIcon(g.name,c,innerWidth<520?22:28);
+  $('callName').textContent=g.name;
+  $('callGot').textContent='0/'+cfg.needPerCall;
+  $('callBar').style.width='100%';
+  $('callSec').textContent=Math.ceil(spot.dur/1000);
+}
+function tickCall(){
+  cancelAnimationFrame(rafId);
+  const loop=()=>{
+    if(!spot||over) return;
+    const left=spot.dur-(performance.now()-spot.t0);
+    const f=Math.max(0,left/spot.dur);
+    $('callBar').style.width=(f*100)+'%';
+    $('call').classList.toggle('urgent', f<.28);
+    $('callSec').textContent=Math.ceil(left/1000);
+    if(left<=0){ finishCall(false); return; }
+    rafId=requestAnimationFrame(loop);
+  };
+  rafId=requestAnimationFrame(loop);
+}
+/** Kết thúc lượt gọi: `full` = đã gom đủ chỉ tiêu (được thưởng), ngược lại là hết giờ. */
+function finishCall(full){
+  if(!spot||over) return;
+  cancelAnimationFrame(rafId);
+  const g=cfg.lanes[spot.idx];
+  if(full){
+    score+=cfg.callBonus; hud();
+    const q=$('call').getBoundingClientRect();
+    fly('+'+cfg.callBonus, q.left+q.width/2, q.top+q.height/2);
+    sfx.special();
+    toast(`Xong lượt gọi ${g.name}! +${cfg.callBonus} điểm thưởng.`, true);
+  } else if(spot.got===0){
+    streak=0; sfx.tick();
+    toast(`Hết giờ nhóm ${g.name}. Mở 📖 Sổ tay xem nhóm này gồm thuốc nào nhé.`);
+  } else {
+    toast(`Hết giờ — mới gom ${spot.got}/${cfg.needPerCall} thuốc nhóm ${g.name}.`);
+  }
+  nextCall();
+}
+/** Bảo đảm trong lưới luôn có ít nhất một thuốc thuộc nhóm đang gọi. */
+function ensureCardOfGroup(name){
+  if(cards.some(cd=>cd && cd.group===name)) return;
+  const g=cfg.lanes.find(l=>l.name===name); if(!g) return;
+  const j=Math.floor(Math.random()*SLOTS);
+  cards[j]=cardOfGroup(g);
+  const d=$('grid').children[j];
+  if(d){ d.className='cardx fresh'; paintCard(d,cards[j]); }
+}
+function paintLaneStates(){
+  [...$('lanes').children].forEach((l,i)=>{
+    l.classList.toggle('lit', !!spot && i===spot.idx);
+    l.classList.toggle('dim', !!spot && i!==spot.idx);
+  });
+}
+/* Tab ẩn thì dừng đồng hồ, quay lại chơi tiếp từ chỗ cũ */
+let hiddenAt=0;
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){ hiddenAt=performance.now(); cancelAnimationFrame(rafId); }
+  else if(spot && hiddenAt){ spot.t0+=performance.now()-hiddenAt; hiddenAt=0; tickCall(); }
+});
+function laneColor(g){ return cfg.showColor ? g.hex : '#93a3b8'; }
+
+function renderLanes(){
+  const el=$('lanes'); el.innerHTML='';
+  cfg.lanes.forEach((g,i)=>{
+    const c=laneColor(g);
+    const d=document.createElement('div');
+    d.className='lane'; d.dataset.i=i;
+    d.innerHTML=`<div class="lh" style="background:linear-gradient(180deg,${c},${shade(c,-.18)})">${g.name.toUpperCase()}</div>
+      <div class="lb" style="background:${hexA(c,.10)}">
+        <div class="hex" style="background:${hexA(c,.22)}">${groupIcon(g.name,c,Math.min(34,innerWidth<520?22:30))}</div>
+        <div class="cnt" data-cnt="${i}">0</div>
+      </div>`;
+    el.appendChild(d);
+  });
+  paintLaneStates();
+}
+/** Số hàng thẻ hợp với chiều cao còn lại: màn thấp thì bớt hàng chứ không
+ *  ép thẻ nhỏ lại đến mức cắt mất tên thuốc. */
+const MIN_ROW = 56;
+function idealSlots(){
+  const g=$('grid'), r=g.getBoundingClientRect();
+  if(!r.height) return SLOTS;
+  const gap=parseFloat(getComputedStyle(g).rowGap)||6;
+  const rows=Math.max(3, Math.min(5, Math.floor((r.height+gap)/(MIN_ROW+gap))));
+  return rows*5;
+}
+/** Đo ô thật của lưới rồi chọn cỡ icon + cỡ chữ vừa khít (thanh địa chỉ trình
+ *  duyệt di động, bàn phím… đều làm ô thấp đi). */
+const FITS=[            // ưu tiên từ đầy đủ nhất tới gọn nhất
+  {ico:24,nmf:11,  ds:1},{ico:22,nmf:10.4,ds:1},{ico:20,nmf:9.8,ds:1},
+  {ico:18,nmf:9.2, ds:1},{ico:16,nmf:8.8, ds:1},{ico:15,nmf:8.4,ds:1},
+  {ico:15,nmf:8.4, ds:0},{ico:13,nmf:8,   ds:0},{ico:0, nmf:8.4,ds:0},
+  {ico:0, nmf:7.4, ds:0},{ico:0, nmf:6.8, ds:0},
+];
+function sizeGrid(){
+  const g=$('grid'); const r=g.getBoundingClientRect();
+  if(!r.height||!r.width||!g.children.length) return;
+  const cs=getComputedStyle(g);
+  const gap=parseFloat(cs.rowGap)||6, gapX=parseFloat(cs.columnGap)||6;
+  const rows=Math.max(1,Math.ceil(g.children.length/5));
+  const row=(r.height-gap*(rows-1))/rows, col=(r.width-gapX*4)/5;
+  const apply=f=>{
+    g.style.setProperty('--ico', f.ico+'px');
+    g.style.setProperty('--nmf', Math.max(6.6, Math.min(f.nmf, col/6.2)).toFixed(1)+'px');
+    g.classList.toggle('tight', !f.ds);
+    g.classList.toggle('noico', f.ico===0);
+  };
+  // Đo trên một THẺ MẪU mang tên thuốc & hàm lượng DÀI NHẤT của màn này, nên
+  // cỡ chữ chọn ra không phụ thuộc bộ thẻ đang hiện: thẻ mới bốc lên vẫn vừa.
+  const probe=document.createElement('div');
+  probe.className='cardx';
+  probe.style.cssText=`position:absolute;left:-9999px;top:0;visibility:hidden;pointer-events:none;
+    width:${col}px;height:${row}px;animation:none;transition:none`;
+  probe.innerHTML=`<div class="ico">${groupIcon('Kháng sinh','#8899aa',24)}</div>
+    <div class="nm">${worstName()}</div><div class="ds">${worstDose()}</div>`;
+  g.appendChild(probe);
+  const catChu=()=>{
+    const n=probe.querySelector('.nm');
+    if(n.scrollHeight>n.offsetHeight+1) return true;
+    const st=getComputedStyle(probe);
+    let sum=parseFloat(st.paddingTop)+parseFloat(st.paddingBottom)+(parseFloat(st.rowGap)||0)*2;
+    for(const ch of probe.children) sum+=ch.offsetHeight;
+    return sum>probe.clientHeight+1;
+  };
+  for(let k=0;k<FITS.length;k++){ apply(FITS[k]); if(k===FITS.length-1||!catChu()) break; }
+  probe.remove();
+}
+/** Tên thuốc / hàm lượng dài nhất có thể xuất hiện ở màn đang chơi. */
+let _worst=null;
+function worstName(){ return worst().n; }
+function worstDose(){ return worst().d; }
+function worst(){
+  if(_worst && _worst.lv===level) return _worst;
+  let n='Clorpheniramin', d='1 gói/200ml';
+  for(const g of (cfg?cfg.lanes:[])) for(const dr of g.drugs){
+    const s=shortName(dr); if(s.length>n.length) n=s;
+    const h=dr.hamLuong||''; if(h.length>d.length) d=h;
+  }
+  return (_worst={lv:level,n,d});
+}
+/** Đổi số hàng khi xoay máy / hiện–ẩn thanh địa chỉ: chia lại bộ thẻ. */
+function reflow(){
+  const want=idealSlots();
+  if(cfg && !over && want!==SLOTS){
+    SLOTS=want;
+    if(cards.length>SLOTS) cards=cards.slice(0,SLOTS);
+    else while(cards.length<SLOTS) cards.push(newCard());
+    renderGrid(false);
+    if(spot) ensureCardOfGroup(cfg.lanes[spot.idx].name);
+  } else sizeGrid();
+}
+function renderGrid(fresh){
+  const el=$('grid'); el.innerHTML='';
+  cards.forEach((cd,i)=>{
+    const d=document.createElement('div');
+    d.className='cardx'+(fresh?' fresh':''); d.dataset.i=i;
+    if(fresh) d.style.animationDelay=(i*14)+'ms';
+    paintCard(d,cd);
+    el.appendChild(d);
+  });
+  sizeGrid();
+}
+function paintCard(d,cd){
+  const c = cfg.showColor ? cd.hex : '#93a3b8';
+  d.innerHTML=`<div class="ico">${groupIcon(cd.group,c,24)}</div>
+    <div class="nm">${shortName(cd.drug)}</div>
+    <div class="ds">${cd.drug.hamLuong||''}</div>`;
+  d.title=cd.drug.ten;
+}
+function replaceCard(i){
+  cards[i]=null; cards[i]=newCard();
+  const d=$('grid').children[i];
+  d.className='cardx fresh'; paintCard(d,cards[i]);
+}
+
+/* ---------------- HUD ---------------- */
+function starCount(){ return cfg.starAt.filter(v=>score>=v).length; }
+function hud(){
+  $('movesChip').textContent=movesLeft; $('movesBig').textContent=movesLeft;
+  $('scoreChip').textContent=score.toLocaleString('vi-VN'); $('scoreBig').textContent=score.toLocaleString('vi-VN');
+  $('mTx').textContent=`${done}/${cfg.target}`;
+  $('mBar').style.width=Math.min(100,done/cfg.target*100)+'%';
+  $('sBar').style.width=Math.min(100,score/cfg.starAt[2]*100)+'%';
+  cfg.starAt.forEach((v,i)=>$('s'+(i+1)).textContent=v);
+  [...$('stars').children].forEach((s,i)=>s.classList.toggle('on',i<starCount()));
+  $('nWand').textContent=tools.wand; $('nShuffle').textContent=tools.shuffle;
+  $('nMoves').textContent=tools.moves; $('nHint').textContent=tools.hint;
+  $('bWand').disabled=!tools.wand; $('bShuffle').disabled=!tools.shuffle;
+  $('bMoves').disabled=!tools.moves; $('bHint').disabled=!tools.hint;
+}
+let toastT;
+function toast(msg,good){ const t=$('toast'); t.textContent=msg;
+  t.className='toast show'+(good?' good':''); clearTimeout(toastT);
+  toastT=setTimeout(()=>t.classList.remove('show'),2600); }
+function fly(text,x,y){ const e=document.createElement('div'); e.className='fly';
+  e.textContent=text; e.style.left=x+'px'; e.style.top=y+'px';
+  document.body.appendChild(e); setTimeout(()=>e.remove(),1020); }
+const hexA=(h,a)=>{const n=parseInt(h.slice(1),16);return `rgba(${n>>16},${(n>>8)&255},${n&255},${a})`;};
+function shade(hex,p){const n=parseInt(hex.slice(1),16);
+  const f=v=>Math.max(0,Math.min(255,Math.round(v+(p>0?(255-v)*p:v*p))));
+  return '#'+[f(n>>16),f((n>>8)&255),f(n&255)].map(v=>v.toString(16).padStart(2,'0')).join('');}
+
+/* ---------------- kéo thả ---------------- */
+let drag=null;
+$('grid').addEventListener('pointerdown', e=>{
+  unlock();
+  const d=e.target.closest('.cardx'); if(!d||busy) return;
+  const i=+d.dataset.i; if(!cards[i]) return;
+  const q=d.getBoundingClientRect();
+  const g=d.cloneNode(true); g.className='cardx ghost';
+  g.style.width=q.width+'px'; g.style.height=q.height+'px';
+  g.style.left=e.clientX+'px'; g.style.top=e.clientY+'px';
+  document.body.appendChild(g);
+  d.style.opacity='.35';
+  drag={i, el:d, ghost:g};
+  sfx.tap();
+});
+addEventListener('pointermove', e=>{
+  if(!drag) return;
+  drag.ghost.style.left=e.clientX+'px'; drag.ghost.style.top=e.clientY+'px';
+  const lane=laneAt(e.clientX,e.clientY);
+  [...$('lanes').children].forEach((l,i)=>l.classList.toggle('over', lane===i && lane===spot?.idx));
+});
+addEventListener('pointerup', async e=>{
+  if(!drag) return;
+  const {i, el, ghost}=drag; drag=null;
+  ghost.remove(); el.style.opacity='';
+  [...$('lanes').children].forEach(l=>l.classList.remove('over'));
+  const lane=laneAt(e.clientX,e.clientY);
+  if(lane==null) return;
+  if(spot && lane!==spot.idx){          // thả nhầm cột không sáng: nhắc, không phạt
+    const lit=$('lanes').children[spot.idx];
+    lit.classList.add('ok'); setTimeout(()=>lit.classList.remove('ok'),500);
+    sfx.tap();
+    toast(`Đang gọi nhóm ${cfg.lanes[spot.idx].name} — hãy tìm thuốc thuộc nhóm này trong lưới.`);
+    return;
+  }
+  await drop(i, lane, e.clientX, e.clientY);
+});
+addEventListener('pointercancel',()=>{ if(drag){ drag.ghost.remove(); drag.el.style.opacity=''; drag=null; } });
+function laneAt(x,y){
+  const els=document.elementsFromPoint(x,y);
+  for(const el of els){ const l=el.closest && el.closest('.lane'); if(l) return +l.dataset.i; }
+  return null;
+}
+
+/* ---------------- xử lý thả ---------------- */
+async function drop(i, laneIdx, x, y){
+  const cd=cards[i], lane=cfg.lanes[laneIdx];
+  if(!cd) return;
+  busy=true;
+  movesLeft=Math.max(0,movesLeft-1);
+  const laneEl=$('lanes').children[laneIdx];
+  if(cd.group===lane.name){
+    streak++;
+    if(spot) spot.got++;
+    const inCall=spot?spot.got:1;
+    const left=spot?Math.max(0,1-(performance.now()-spot.t0)/spot.dur):0;
+    const speed=Math.round(80*left);                       // nhanh tay được thưởng
+    const gain=100*Math.min(streak,5)+50*(inCall-1)+speed;
+    score+=gain; done++;
+    if(spot) $('callGot').textContent=spot.got+'/'+cfg.needPerCall;
+    laneEl.classList.add('ok'); setTimeout(()=>laneEl.classList.remove('ok'),500);
+    laneEl.querySelector('[data-cnt]').textContent=+laneEl.querySelector('[data-cnt]').textContent+1;
+    $('grid').children[i].classList.add('gone');
+    fly('+'+gain, x, y);
+    sfx.match(Math.min(inCall+1,4));
+    toast(inCall>=2?`${inCall} thuốc nhóm ${cd.group} trong một lượt gọi! (${shortName(cd.drug)})`
+                   :`Đúng! ${shortName(cd.drug)} thuộc nhóm ${cd.group}.`, true);
+    await sleep(300); replaceCard(i);
+    if(spot && spot.got>=cfg.needPerCall && done<cfg.target){ hud(); finishCall(true); }
+    else if(spot) ensureCardOfGroup(cfg.lanes[spot.idx].name);
+  } else {
+    streak=0;
+    laneEl.classList.add('bad'); setTimeout(()=>laneEl.classList.remove('bad'),450);
+    $('grid').children[i].classList.add('wrong');
+    setTimeout(()=>$('grid').children[i].classList.remove('wrong'),450);
+    sfx.wrong();
+    toast(`${shortName(cd.drug)} thuộc nhóm ${cd.group}, không phải ${lane.name}.`);
+  }
+  hud();
+  busy=false;
+  if(done>=cfg.target) return endLevel(true);
+  if(movesLeft<=0) return endLevel(false);
+}
+
+/* ---------------- công cụ ---------------- */
+/** Chỉ số thẻ thuộc nhóm đang được gọi (công cụ luôn bám lượt gọi hiện tại). */
+function idxInCall(){
+  if(!spot) return -1;
+  const name=cfg.lanes[spot.idx].name;
+  return cards.findIndex(cd=>cd && cd.group===name);
+}
+$('bWand').onclick=async()=>{
+  if(!tools.wand||busy||!spot) return;
+  const i=idxInCall(); if(i<0) return;
+  tools.wand--;
+  const laneIdx=spot.idx;
+  const q=$('lanes').children[laneIdx].getBoundingClientRect();
+  movesLeft++;                       // đũa phép không tính là 1 lượt
+  await drop(i, laneIdx, q.left+q.width/2, q.top+q.height/2);
+};
+$('bShuffle').onclick=()=>{ if(!tools.shuffle||busy) return; tools.shuffle--;
+  freshDeck(); renderGrid(true);
+  if(spot) ensureCardOfGroup(cfg.lanes[spot.idx].name);
+  hud(); sfx.drop(); toast('Đã đổi bộ thẻ mới.', true); };
+$('bMoves').onclick=()=>{ if(!tools.moves||busy) return; tools.moves--; movesLeft+=5;
+  if(spot){ spot.dur+=6000; }        // tặng thêm cả thời gian cho lượt gọi đang chạy
+  hud(); toast('+5 lượt đi và +6 giây cho lượt gọi này!', true); };
+$('bHint').onclick=()=>{ if(!tools.hint||busy||!spot) return;
+  const i=idxInCall(); if(i<0) return;
+  tools.hint--; hud();
+  const c=$('grid').children[i];
+  c.classList.add('hintme');
+  c.scrollIntoView({block:'nearest'});
+  setTimeout(()=>c.classList.remove('hintme'),2600);
+  toast(`${shortName(cards[i].drug)} thuộc nhóm ${cfg.lanes[spot.idx].name} — kéo lên cột đang sáng!`, true); };
+
+/* ---------------- kết màn ---------------- */
+let pauseAt=0;
+function modal(html){ $('modal').innerHTML=html; $('mask').classList.add('show');
+  if(spot&&!over){ pauseAt=performance.now(); cancelAnimationFrame(rafId); } }
+function closeModal(){ $('mask').classList.remove('show');
+  if(spot&&!over&&pauseAt){ spot.t0+=performance.now()-pauseAt; pauseAt=0; tickCall(); } }
+$('mask').addEventListener('click',e=>{ if(e.target===$('mask')) closeModal(); });
+
+function endLevel(win){
+  busy=true; over=true; spot=null; cancelAnimationFrame(rafId);
+  total+=score;
+  $('call').classList.remove('urgent');
+  const st=starCount();
+  win?sfx.win():sfx.lose();
+  const stars=[0,1,2].map(i=>`<span style="font-size:34px;${i<st?'':'filter:grayscale(1);opacity:.3'}">★</span>`).join('');
+  modal(`<h2>${win?'🎉 Hoàn thành màn '+level:'Hết lượt đi'}</h2>
+    <div>${stars}</div>
+    <p>${win?`Đã phân loại đúng <b>${done}/${cfg.target}</b> thuốc.`
+            :`Mới phân loại đúng <b>${done}/${cfg.target}</b>. Chơi lại thoải mái, không mất gì.`}</p>
+    <p>Điểm màn này: <b style="font-size:20px;color:#2f7fc4">${score.toLocaleString('vi-VN')}</b>
+       &nbsp;·&nbsp; Tổng: <b>${total.toLocaleString('vi-VN')}</b></p>
+    <div class="glist">${cfg.lanes.map(g=>`<div class="gitem">${groupIcon(g.name,g.hex,20)}<span>${g.name}</span></div>`).join('')}</div>
+    <button class="btn" id="mNext">${win?'Màn tiếp theo →':'Thử lại màn này'}</button>
+    <button class="btn blue" id="mCrush">🍬 Chơi Pharma Crush</button>
+    <button class="btn gray" id="mHome">Về trang thực hành</button>`);
+  $('mNext').onclick=()=>{ tools={wand:3,shuffle:3,moves:2,hint:3}; closeModal(); startLevel(win?level+1:level); };
+  $('mCrush').onclick=()=>location.href='/pharma-crush.html';
+  $('mHome').onclick=()=>location.href='/gpp.html';
+}
+$('btnBook').onclick=()=>{
+  modal(`<h2>📖 Sổ tay dược sĩ</h2>
+    <p style="background:#eef6ff;border-radius:12px;padding:8px 10px">Mỗi lượt chỉ <b>một cột sáng lên</b>.
+    Hãy tìm khắp lưới những thuốc thuộc nhóm đó và kéo vào — gom đủ
+    <b>${cfg.needPerCall}</b> thuốc trước khi hết giờ để được thưởng.
+    Đồng hồ tạm dừng khi bạn mở sổ tay này.</p>
+    <p>Các nhóm trong màn này:</p>
+    <div class="glist">${cfg.lanes.map(g=>`<div class="gitem" style="display:block">
+      <div style="display:flex;align-items:center;gap:7px">${groupIcon(g.name,g.hex,20)}<b>${g.name}</b></div>
+      <div style="font-weight:700;color:#7a8ba6;margin:4px 0 3px">${groupDesc(g.name)}</div>
+      <div style="color:#5a6b86">${g.drugs.map(d=>shortName(d)).join(' · ')}</div></div>`).join('')}</div>
+    <button class="btn" id="mClose">Đóng</button>`);
+  $('mClose').onclick=closeModal;
+};
+$('btnHome').onclick=()=>location.href='/gpp.html';
+$('btnSound').onclick=()=>{ unlock(); setMuted(!isMuted()); $('btnSound').textContent=isMuted()?'🔇':'🔊'; };
+addEventListener('resize',()=>{ if(cfg){ renderLanes(); renderGrid(false); if(spot&&!over) paintCall(); reflow(); } });
+let reflowT; new ResizeObserver(()=>{ clearTimeout(reflowT); reflowT=setTimeout(reflow,120); }).observe($('grid'));
+
+startLevel(1);
+// Font web nạp xong thì chữ cao/rộng khác lúc đo lần đầu → đo lại cho chắc.
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>{ if(cfg&&!over) reflow(); });
+requestAnimationFrame(()=>{ if(cfg&&!over) reflow(); });
+</script>
+</body>
+</html>

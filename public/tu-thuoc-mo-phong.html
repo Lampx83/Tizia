@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Tủ thuốc mô phỏng – Môn Dược lý</title>
+<title>Nhà thuốc thực hành · Sắp xếp thuốc – Pharma Crush – Pharma Sort</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
 <style>
   :root{
     --wood:#123a2f;
@@ -35,8 +38,13 @@
   #pharmacyScreen{
     height:100%;display:flex;flex-direction:row;align-items:stretch;gap:10px;padding:8px 10px;
   }
-  body.view-map    #pharmacyScreen{display:none;}
-  body.view-pharmacy #mapScreen{display:none;}
+  /* req #154: giờ có BA màn — mặt tiền → sơ đồ → sảnh xếp thuốc. */
+  body.view-map      #pharmacyScreen,
+  body.view-map      #facadeScreen{display:none;}
+  body.view-pharmacy #mapScreen,
+  body.view-pharmacy #facadeScreen{display:none;}
+  body.view-facade   #mapScreen,
+  body.view-facade   #pharmacyScreen{display:none;}
 
   /* left-hand control column (title, search, delivery carton). The cabinet
      lives in .cabinet-col on the RIGHT (easier to reach with the mouse). */
@@ -821,16 +829,176 @@
     .toolbar .stats{justify-content:center;}
   }
 
+
+  /* =====================================================================
+     req #147 (ThS Hương Lý) — ĐỒNG BỘ PHONG CÁCH VỚI PHARMA CRUSH / SORT
+     Đặt ở CUỐI khối style để đè lên các quy tắc phía trên mà không phải sửa
+     rải rác — cần gỡ thì xoá nguyên khối này là trang về như cũ.
+     Ba thứ tạo nên "phong cách Crush": nền trời xanh sáng, chữ tròn (Baloo 2
+     cho tiêu đề / Nunito cho nội dung), và nút bo tròn có gờ đổ bóng 0 4px 0.
+     ===================================================================== */
+  body{
+    font-family:'Nunito',system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:
+      radial-gradient(closest-side at 18% 14%, rgba(255,255,255,.30), transparent 70%),
+      radial-gradient(closest-side at 84% 8%,  rgba(255,255,255,.22), transparent 70%),
+      linear-gradient(180deg,#bfe6f7 0%,#8fd0ef 42%,#6fbde6 76%,#59aede 100%);
+  }
+  .map-title,.page-head h1,.pm-label,.pm-banner{font-family:'Baloo 2',cursive;letter-spacing:.3px}
+  .map-topbar{background:linear-gradient(180deg,#fffdf6,#fdf3dd);border-radius:22px;
+    border:2px solid #fff;box-shadow:0 4px 0 #e8cfa2,0 8px 16px rgba(70,110,160,.22);
+    padding:8px 16px;color:#4a5b7a}
+  .map-title{color:#3f5170}
+  .map-hint{background:rgba(255,255,255,.82);border-radius:16px;padding:8px 14px;
+    border:2px solid #fff;box-shadow:0 3px 0 rgba(200,220,240,.9);color:#4a5b7a}
+  .act-btn{font-family:'Baloo 2',cursive;border-radius:16px;border:2px solid #fff;
+    box-shadow:0 4px 0 #3aa653,0 8px 14px rgba(70,110,160,.25)}
+  .act-btn.locked{box-shadow:0 4px 0 #b9c4d4}
+
+  /* Thanh hai trò luyện tập — cùng ngôn ngữ thị giác với thẻ trong Pharma Crush */
+  .mini-games{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0 2px}
+  .mini-games .mg-lead{font-family:'Baloo 2',cursive;font-size:14px;color:#3f5170;
+    background:rgba(255,255,255,.85);border:2px solid #fff;border-radius:14px;padding:5px 12px;
+    box-shadow:0 3px 0 rgba(200,220,240,.9)}
+  .mg-btn{display:flex;flex-direction:column;gap:1px;text-decoration:none;
+    font-family:'Baloo 2',cursive;font-size:14.5px;color:#fff;line-height:1.15;
+    border:2px solid #fff;border-radius:16px;padding:7px 15px;
+    transition:transform .12s ease,filter .12s ease}
+  .mg-btn small{font-family:'Nunito',sans-serif;font-size:10.5px;font-weight:700;opacity:.92}
+  .mg-btn:hover{transform:translateY(-2px);filter:brightness(1.06)}
+  .mg-crush{background:linear-gradient(180deg,#ffc93c,#e08c14);box-shadow:0 4px 0 #b3700f,0 8px 14px rgba(70,110,160,.25)}
+  .mg-sort {background:linear-gradient(180deg,#5cc86e,#3aa653);box-shadow:0 4px 0 #2c8341,0 8px 14px rgba(70,110,160,.25)}
+  @media (max-width:640px){ .mini-games .mg-lead{display:none} .mg-btn{font-size:13px;padding:6px 12px} }
+  /* req #152: nút mở khóa bằng mật khẩu, đứng cạnh nút khóa xám */
+  .act-btn.act-pw{margin-left:10px;background:linear-gradient(180deg,#ffc93c,#e08c14);color:#4a3200;
+    box-shadow:0 4px 0 #b3700f,0 8px 14px rgba(70,110,160,.25);cursor:pointer}
+  .act-btn.act-pw:hover{filter:brightness(1.06)}
+  /* req #153: thanh trò chơi trong sảnh — xếp dọc cho vừa cột bên trái */
+  .mini-games-in{margin:8px 0 2px;gap:8px}
+  .mini-games-in .mg-btn{flex:1;min-width:0;padding:8px 12px;font-size:13.5px}
+  .mini-games-in .mg-btn small{font-size:10px}
+
+  /* req #154: màn mặt tiền chiếm trọn khung, cửa trượt hai bên khi bấm */
+  #facadeScreen{position:fixed;inset:0;overflow:hidden;background:#bfe6f7}
+  #facadeSvg{width:100%;height:100%;display:block}
+  #fDoorHit:hover{fill:rgba(255,255,255,.10)}
+  #doorL,#doorR{transition:transform .95s cubic-bezier(.5,.02,.2,1)}
+  body.doors-open #doorL{transform:translateX(-565px)}
+  body.doors-open #doorR{transform:translateX(565px)}
+  #fSanhSign{transition:opacity .45s ease}
+  body.doors-open #fSanhSign{opacity:0}
 </style>
 </head>
-<body class="view-map">
+<body class="view-facade">
+
+<!-- ===================================================================
+     req #154 (ThS Hương Lý) — MẶT TIỀN NHÀ THUỐC (màn đầu tiên)
+     Dựng theo đúng phong cách mặt tiền của Nhà thuốc An Tâm 2D để hai nơi nhìn
+     ra một hệ. Biển "SẢNH TIỀN THỰC HÀNH GPP" đặt NGOÀI CỬA, trên vỉa hè.
+     Bấm vào cửa → hai cánh kính trượt ra hai bên → mới vào sơ đồ nhà thuốc.
+     =================================================================== -->
+<div id="facadeScreen">
+  <svg id="facadeSvg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="fSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bfe6f7"/><stop offset="1" stop-color="#eaf6f2"/></linearGradient>
+      <linearGradient id="fSign" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#357a6c"/><stop offset="1" stop-color="#225C4E"/></linearGradient>
+      <linearGradient id="fGlass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#bfe6e0" stop-opacity=".85"/><stop offset=".5" stop-color="#8fc9c0" stop-opacity=".5"/><stop offset="1" stop-color="#cfeee8" stop-opacity=".8"/></linearGradient>
+      <linearGradient id="fGlow" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eafaf6"/><stop offset="1" stop-color="#bfeee2"/></linearGradient>
+      <clipPath id="fDoorClip"><rect x="240" y="250" width="1120" height="412"/></clipPath>
+    </defs>
+
+    <rect x="0" y="0" width="1600" height="900" fill="url(#fSky)"/>
+    <rect x="0" y="0" width="1600" height="150" fill="#dfeef0"/>
+    <rect x="120" y="60" width="1360" height="620" fill="#f2f7f5"/>
+
+    <!-- biển hiệu ngang -->
+    <rect x="150" y="70" width="1300" height="14" fill="#eef4f2"/>
+    <rect x="150" y="84" width="1300" height="8" fill="#d7e5e1"/>
+    <rect x="150" y="92" width="1300" height="150" fill="url(#fSign)" stroke="#1c4c40" stroke-width="2"/>
+    <rect x="168" y="104" width="126" height="126" rx="6" fill="#fff"/>
+    <g transform="translate(231,150)"><circle r="52" fill="#fff" stroke="#2F6B5F" stroke-width="3"/>
+      <path d="M0 34 C0 14 -20 8 -22 -12 C-2 -12 0 8 0 20 C0 8 2 -12 22 -12 C20 8 0 14 0 34Z" fill="#2F6B5F"/>
+      <text y="46" text-anchor="middle" font-size="12" font-weight="800" fill="#2F6B5F" letter-spacing="1">GPP</text></g>
+    <text x="800" y="152" text-anchor="middle" font-size="62" font-weight="900" fill="#fff" letter-spacing="6" font-family="Arial,Helvetica,sans-serif">NHÀ THUỐC</text>
+    <text x="800" y="214" text-anchor="middle" font-size="46" font-weight="800" fill="#eafff8" letter-spacing="10" font-family="Arial,Helvetica,sans-serif">THỰC HÀNH</text>
+    <rect x="1306" y="104" width="126" height="126" rx="6" fill="#fff" opacity=".95"/>
+    <text x="1369" y="176" text-anchor="middle" font-size="13" font-weight="700" fill="#8aa9a1" letter-spacing="1">GPP</text>
+
+    <!-- cột biển dọc hai bên -->
+    <g font-family="Arial" font-weight="800" fill="#fff" letter-spacing="2">
+      <rect x="150" y="242" width="90" height="420" fill="url(#fSign)" stroke="#1c4c40" stroke-width="2"/>
+      <text x="197" y="300" font-size="17" writing-mode="tb" letter-spacing="2">NHÀ THUỐC THỰC HÀNH</text>
+      <rect x="1360" y="242" width="90" height="420" fill="url(#fSign)" stroke="#1c4c40" stroke-width="2"/>
+      <text x="1407" y="300" font-size="17" writing-mode="tb" letter-spacing="2">NHÀ THUỐC THỰC HÀNH</text>
+    </g>
+
+    <!-- khoang cửa: nhìn thấy bên trong khi hai cánh trượt ra -->
+    <g clip-path="url(#fDoorClip)">
+      <rect x="240" y="250" width="1120" height="412" fill="url(#fGlow)"/>
+      <g opacity=".6">
+        <rect x="270" y="300" width="170" height="300" fill="#357a6c"/><rect x="278" y="312" width="154" height="276" fill="#eafaf6"/>
+        <rect x="470" y="300" width="220" height="300" fill="#2F6B5F"/><rect x="480" y="312" width="200" height="276" fill="#dff5ef"/>
+        <rect x="720" y="330" width="360" height="120" rx="6" fill="#10201c"/><rect x="732" y="342" width="336" height="96" fill="#7fd6b6"/>
+        <rect x="1120" y="300" width="210" height="300" fill="#357a6c"/><rect x="1130" y="312" width="190" height="276" fill="#eafaf6"/>
+      </g>
+      <!-- CÁNH TRÁI -->
+      <g id="doorL">
+        <rect x="240" y="250" width="560" height="412" fill="url(#fGlass)" opacity=".55"/>
+        <g fill="#ffffff" opacity=".7">
+          <rect x="250" y="404" width="540" height="12"/><rect x="250" y="424" width="540" height="12"/>
+          <rect x="250" y="444" width="540" height="12"/><rect x="250" y="464" width="540" height="12"/>
+          <rect x="250" y="484" width="540" height="12"/></g>
+        <g stroke="#225C4E" stroke-width="10" fill="none"><rect x="240" y="250" width="560" height="412"/><line x1="520" y1="250" x2="520" y2="662"/></g>
+        <rect x="770" y="360" width="8" height="200" rx="4" fill="#cfd8d6"/>
+      </g>
+      <!-- CÁNH PHẢI -->
+      <g id="doorR">
+        <rect x="800" y="250" width="560" height="412" fill="url(#fGlass)" opacity=".55"/>
+        <g fill="#ffffff" opacity=".7">
+          <rect x="810" y="404" width="540" height="12"/><rect x="810" y="424" width="540" height="12"/>
+          <rect x="810" y="444" width="540" height="12"/><rect x="810" y="464" width="540" height="12"/>
+          <rect x="810" y="484" width="540" height="12"/></g>
+        <g stroke="#225C4E" stroke-width="10" fill="none"><rect x="800" y="250" width="560" height="412"/><line x1="1080" y1="250" x2="1080" y2="662"/></g>
+        <rect x="822" y="360" width="8" height="200" rx="4" fill="#cfd8d6"/>
+      </g>
+    </g>
+    <rect x="240" y="250" width="1120" height="412" fill="none" stroke="#225C4E" stroke-width="10"/>
+
+    <!-- vỉa hè + cây -->
+    <rect x="0" y="662" width="1600" height="238" fill="#c9c9c9"/>
+    <rect x="0" y="662" width="1600" height="8" fill="#a7b0ad"/>
+    <rect x="120" y="636" width="1360" height="30" fill="#2f7d3a"/>
+    <g>
+      <rect x="70" y="470" width="18" height="200" fill="#7a5a3a"/><circle cx="79" cy="450" r="70" fill="#2f8a3a"/><circle cx="120" cy="480" r="52" fill="#37a046"/>
+      <rect x="1512" y="470" width="18" height="200" fill="#7a5a3a"/><circle cx="1521" cy="450" r="70" fill="#2f8a3a"/><circle cx="1480" cy="480" r="52" fill="#37a046"/>
+    </g>
+
+    <!-- BIỂN "SẢNH TIỀN THỰC HÀNH GPP" — đặt NGOÀI CỬA, trên vỉa hè -->
+    <g id="fSanhSign">
+      <rect x="520" y="694" width="560" height="92" rx="16" fill="#fffdf6" stroke="#e08c14" stroke-width="5"/>
+      <text x="800" y="732" text-anchor="middle" font-size="30" font-weight="900" fill="#3f5170" font-family="Arial,Helvetica,sans-serif">SẢNH TIỀN THỰC HÀNH GPP</text>
+      <text x="800" y="766" text-anchor="middle" font-size="19" font-weight="700" fill="#8a6a2a" font-family="Arial,Helvetica,sans-serif">👉 Bấm vào cửa kính để bước vào nhà thuốc</text>
+      <rect x="770" y="786" width="16" height="34" fill="#b9c4b7"/><rect x="814" y="786" width="16" height="34" fill="#b9c4b7"/>
+    </g>
+
+    <!-- vùng bấm mở cửa (trong suốt, phủ đúng khoang cửa) -->
+    <rect id="fDoorHit" x="240" y="250" width="1120" height="412" fill="transparent" style="cursor:pointer"/>
+  </svg>
+</div>
 
 <div id="mapScreen">
   <div class="map-topbar">
-    <span class="map-title">🏥 NHÀ THUỐC THỰC HÀNH GPP — TOÀN CẢNH</span>
+    <span class="map-title">🏬 NHÀ THUỐC THỰC HÀNH — TOÀN CẢNH</span>
     <span class="map-key locked" id="mapKey">🔒 Chưa có Chìa khóa</span>
   </div>
   <p class="map-hint">Dùng <b>phím mũi tên / WASD</b> để đi (hoặc bấm vào sàn). Đứng ở <b>🎓 Sảnh Tiền Thực Hành GPP</b> (trước cửa) bấm để <b>sắp xếp thuốc vào tủ theo bài</b>. Đạt danh hiệu <b>Dược sĩ thực tập (25⭐)</b> sẽ nhận 🔑 mở <b>🚪 Cửa ra vào</b>. 📍 <span id="pmZone">Đang ở Sảnh Tiền Thực Hành GPP</span></p>
+  <!-- req #147: hai trò luyện tập cùng phong cách, đặt ngay ở màn toàn cảnh để
+       sinh viên thấy được lối sang mà không phải quay ra không gian trường. -->
+  <div class="mini-games">
+    <span class="mg-lead">🎮 Luyện thêm:</span>
+    <a class="mg-btn mg-crush" href="/pharma-crush.html">💊 Pharma Crush<small>Ghép 3 cùng nhóm dược lý</small></a>
+    <a class="mg-btn mg-sort" href="/pharma-sort.html">🗂️ Pharma Sort<small>Phân loại thuốc theo nhóm</small></a>
+  </div>
   <div class="map-stage" id="mapStage">
   <div class="pharmacy-map" id="pharmacyMap">
     <div class="pharmacy-walls"></div>
@@ -896,6 +1064,14 @@
     <input type="search" id="searchInput" placeholder="🔍 Tìm tên hoạt chất, tên biệt dược, tên tủ...">
     <button type="button" class="map-btn" id="toMapBtn" title="Ra sơ đồ toàn cảnh nhà thuốc">🗺️ Ra bản đồ</button>
     <div class="stats" id="statsBar"></div>
+  </div>
+
+  <!-- req #153: hai trò luyện tập đặt NGAY trong sảnh thực hành (không chỉ ở màn
+       toàn cảnh) — sinh viên đang xếp tủ, muốn ôn nhóm dược lý là bấm sang được
+       luôn rồi quay lại xếp tiếp. Các tủ giữ nguyên cho nghiệp vụ bảo quản. -->
+  <div class="mini-games mini-games-in">
+    <a class="mg-btn mg-crush" href="/pharma-crush.html">💊 Pharma Crush<small>Ghép 3 cùng nhóm dược lý</small></a>
+    <a class="mg-btn mg-sort" href="/pharma-sort.html">🗂️ Pharma Sort<small>Phân loại thuốc theo nhóm</small></a>
   </div>
 
   <div class="search-results" id="searchResults"></div>
@@ -2490,7 +2666,8 @@ function renderMapAction(){
   } else if(pHereZone && pHereZone.dataset.zone === 'door'){
     mapActionEl.innerHTML = hasKey
       ? '<button class="act-btn" data-act="go">🔓 Cửa đã mở khóa</button>'
-      : '<button class="act-btn locked" disabled>🔒 Cần Chìa khóa — đạt "Dược sĩ thực tập" (25⭐)</button>';
+      : '<button class="act-btn locked" disabled>🔒 Cần Chìa khóa — đạt "Dược sĩ thực tập" (25⭐)</button>'
+        + '<button class="act-btn act-pw" id="unlockPwBtn" type="button">🔑 Mở khóa bằng mật khẩu</button>';
   } else {
     mapActionEl.innerHTML = '';
   }
@@ -2544,7 +2721,28 @@ function applyLocks(){
 }
 
 /* ---- view switching: map <-> pharmacy ---- */
-function showMap(){ stopHandTracking(); document.body.classList.remove('view-pharmacy'); document.body.classList.add('view-map'); pStart(); fitMap(); requestAnimationFrame(fitMap); setTimeout(fitMap,60); }
+/* req #154 — bấm cửa kính: trượt hai cánh ra hai bên rồi mới vào sơ đồ nhà thuốc.
+   Đợi đúng thời gian chạy hiệu ứng (0,95s) để người xem kịp thấy cửa mở, sau đó
+   mới đổi màn; cánh cửa được đặt lại vị trí để lần sau quay ra vẫn thấy cửa đóng. */
+let facadeOpening = false;
+function enterThroughDoors(){
+  if(facadeOpening) return;
+  facadeOpening = true;
+  document.body.classList.add('doors-open');
+  setTimeout(() => {
+    showMap();
+    document.body.classList.remove('doors-open');
+    facadeOpening = false;
+  }, 1000);
+}
+function showFacade(){
+  stopHandTracking();
+  document.body.classList.remove('view-map','view-pharmacy','doors-open');
+  document.body.classList.add('view-facade');
+}
+document.getElementById('fDoorHit')?.addEventListener('click', enterThroughDoors);
+
+function showMap(){ stopHandTracking(); document.body.classList.remove('view-pharmacy','view-facade'); document.body.classList.add('view-map'); pStart(); fitMap(); requestAnimationFrame(fitMap); setTimeout(fitMap,60); }
 function showPharmacy(){
   pStop();
   document.body.classList.remove('view-map'); document.body.classList.add('view-pharmacy');
@@ -2565,7 +2763,10 @@ function doZoneAction(zone){
     else pmZoneLabel.textContent = '🔒 Cửa đang khóa — luyện ở 🎓 Sảnh Tiền Thực Hành đến danh hiệu "Dược sĩ thực tập" (25⭐) để nhận 🔑 Chìa khóa mở cửa.';
   }
 }
-mapActionEl.addEventListener('click', e=>{ const b=e.target.closest('.act-btn'); if(b && !b.disabled && pHereZone) doZoneAction(pHereZone); });
+mapActionEl.addEventListener('click', e=>{
+  if(e.target.closest('#unlockPwBtn')){ askUnlockPassword(); return; }
+  const b=e.target.closest('.act-btn'); if(b && !b.disabled && pHereZone) doZoneAction(pHereZone);
+});
 
 /* click on the floor → walk there */
 pMap.addEventListener('click', e=>{
@@ -2586,6 +2787,32 @@ pMap.addEventListener('click', e=>{
 });
 
 function earnKey(){ hasKey = true; localStorage.setItem('tu-thuoc-mo-phong:key','1'); applyLocks(); }
+
+/* req #152 (ThS Hương Lý) — mở khóa cửa nhà thuốc bằng mật khẩu giảng viên.
+   Bình thường sinh viên phải đạt danh hiệu "Dược sĩ thực tập" (25⭐) mới có chìa
+   khóa; giảng viên cần vào thẳng để dạy/demo nên có lối mở bằng mật khẩu.
+   Mật khẩu do MÁY CHỦ kiểm (/api/gpp/unlock-level) — không nằm trong mã nguồn
+   trang này, xem source cũng không thấy. Đổi mật khẩu: biến GPP_LEVEL_PASSWORD. */
+async function askUnlockPassword(){
+  const pw = window.prompt('🔑 Nhập mật khẩu của giảng viên để mở khóa cửa nhà thuốc:');
+  if(pw === null) return;
+  try{
+    const r = await fetch('/api/gpp/unlock-level', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ level: 0, password: pw })
+    });
+    if(!r.ok){
+      const d = await r.json().catch(()=>({}));
+      alert('❌ ' + (d.error || 'Mật khẩu không đúng.'));
+      return;
+    }
+    earnKey();
+    renderMapAction();
+    alert('🔓 Đã mở khóa! Cửa nhà thuốc giờ vào được.');
+  }catch(err){
+    alert('⚠️ Không kết nối được máy chủ để kiểm tra mật khẩu.');
+  }
+}
 
 /* ---- keyboard: steer in map view, Enter to interact ---- */
 const P_KEYMAP = { arrowup:'up', w:'up', arrowdown:'down', s:'down', arrowleft:'left', a:'left', arrowright:'right', d:'right' };
@@ -2780,9 +3007,10 @@ function updateHand(time){
 }
 (function handLoop(t){ updateHand(t); requestAnimationFrame(handLoop); })();
 
-/* ---- boot: start on the overview map ---- */
+/* ---- boot: req #154 — mở ở MẶT TIỀN nhà thuốc, phải bấm cửa mới vào sơ đồ ----
+   pStart()/fitMap() vẫn chạy sẵn trong showMap() khi người dùng bước qua cửa. */
 applyLocks();
-showMap();
+showFacade();
 </script>
 </body>
 </html>
