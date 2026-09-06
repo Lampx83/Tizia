@@ -130,6 +130,9 @@ export default function SuggestionFab() {
   const [sending, setSending] = useState(false);
   const [shot, setShot] = useState(false);
   const [files, setFiles] = useState<{ file: File; url: string | null }[]>([]);
+  // Đối tượng người dùng trỏ thẳng vào trên trang (thay vì tả bằng lời).
+  const [target, setTarget] = useState<{ label: string; kind: string; path: string } | null>(null);
+  const [picking, setPicking] = useState(false);
   const [drag, setDrag] = useState(false);
   const [items, setItems] = useState<RequestItem[] | null>(null);
   const [inboxErr, setInboxErr] = useState(false);
@@ -207,10 +210,30 @@ export default function SuggestionFab() {
     setShot(false);
   }
 
+  // Bật chế độ trỏ-chọn: tạm ẩn hộp thoại để người dùng thấy trang, chọn xong mở lại.
+  async function pickOnPage() {
+    setPicking(true);
+    setOpen(false);
+    try {
+      // Nạp qua BIẾN: đây là file tĩnh trong public/, không phải module TypeScript
+      // nên không được để literal (trình biên dịch sẽ đi tìm khai báo kiểu và fail).
+      const src = '/js/pick-target.js';
+      const mod: any = await import(/* webpackIgnore: true */ src);
+      const t = await mod.pickTarget();
+      if (t) setTarget({ label: t.label, kind: t.kind, path: t.path });
+    } catch (e) {
+      setMsg('⚠️ Không bật được chế độ chọn: ' + ((e as Error).message || e));
+    } finally {
+      setPicking(false);
+      setOpen(true);
+    }
+  }
+
   async function submit() {
     const t = title.trim();
     if (t.length < 4) { setMsg('⚠️ Tiêu đề quá ngắn (≥ 4 ký tự)'); return; }
-    const fullDetail = [`[Trang: ${ctx.title || '—'}] ${ctx.url}`, detail.trim()].filter(Boolean).join('\n');
+    const targetLine = target ? `[Đối tượng: ${target.kind} "${target.label}" · vị trí ${target.path}]` : '';
+    const fullDetail = [`[Trang: ${ctx.title || '—'}] ${ctx.url}`, targetLine, detail.trim()].filter(Boolean).join('\n');
 
     setSending(true);
     setMsg('Đang gửi…');
@@ -349,6 +372,26 @@ export default function SuggestionFab() {
                   ))}
                 </select>
               </label>
+              {/* Trỏ thẳng vào phần cần sửa — đỡ phải tả bằng lời rồi bị hiểu nhầm. */}
+              <div className="sgf-lab">
+                Đối tượng cần thay đổi
+                {target ? (
+                  <div className="sgf-target">
+                    <span className="sgf-target-ico">🎯</span>
+                    <span className="sgf-target-txt">
+                      <b>{target.label}</b>
+                      <i>{target.kind} · {target.path}</i>
+                    </span>
+                    <button type="button" className="sgf-target-x" onClick={() => setTarget(null)} title="Bỏ chọn">✕</button>
+                  </div>
+                ) : (
+                  <button type="button" className="sgf-pick" onClick={pickOnPage} disabled={picking}>
+                    🎯 Chọn đối tượng trên trang
+                    <small>Bấm rồi trỏ vào đúng phần cần sửa — không phải mô tả bằng lời</small>
+                  </button>
+                )}
+              </div>
+
               <label className="sgf-lab">
                 Tiêu đề <span className="sgf-req">*</span>
                 <input

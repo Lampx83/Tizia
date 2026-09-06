@@ -259,3 +259,21 @@ textarea.sgf-in { resize: vertical; min-height: 60px; }
 .nbell-item-title { font-size: 13px; font-weight: 700; }
 .nbell-item-body { font-size: 12px; opacity: 0.82; margin-top: 3px; line-height: 1.45; }
 .nbell-item-time { font-size: 10.5px; opacity: 0.55; margin-top: 4px; }
+
+/* ===== Chọn đối tượng trên trang khi gửi yêu cầu (req của anh Lâm 06/09) ===== */
+.sgf-pick{width:100%;cursor:pointer;font:inherit;text-align:left;display:flex;flex-direction:column;gap:2px;
+  background:linear-gradient(135deg,rgba(124,58,237,.16),rgba(79,70,229,.10));
+  border:1px dashed rgba(124,58,237,.55);border-radius:12px;padding:10px 13px;color:inherit;
+  font-size:13.5px;font-weight:700;transition:border-color .12s,background .12s}
+.sgf-pick:hover{border-color:rgba(124,58,237,.9);background:linear-gradient(135deg,rgba(124,58,237,.24),rgba(79,70,229,.16))}
+.sgf-pick:disabled{opacity:.6;cursor:default}
+.sgf-pick small{font-weight:500;font-size:11.5px;opacity:.75}
+.sgf-target{display:flex;align-items:center;gap:10px;background:rgba(124,58,237,.14);
+  border:1px solid rgba(124,58,237,.5);border-radius:12px;padding:9px 12px}
+.sgf-target-ico{font-size:18px;flex:none}
+.sgf-target-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;font-size:13px}
+.sgf-target-txt b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sgf-target-txt i{font-style:normal;font-size:11px;opacity:.7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sgf-target-x{cursor:pointer;border:0;background:rgba(255,255,255,.14);color:inherit;
+  border-radius:8px;width:26px;height:26px;font-size:13px;flex:none}
+.sgf-target-x:hover{background:rgba(255,255,255,.28)}

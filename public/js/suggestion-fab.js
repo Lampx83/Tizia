@@ -139,6 +139,17 @@ function autoMount() {
         </div>
 
         <form id="sgf-form" class="sgf-form">
+          <!-- Trỏ thẳng vào phần cần sửa thay vì tả bằng lời (đỡ bị hiểu nhầm). -->
+          <div class="sgf-lab">Đối tượng cần thay đổi
+            <button type="button" class="sgf-pick" id="sgf-pick">🎯 Chọn đối tượng trên trang
+              <small>Bấm rồi trỏ vào đúng phần cần sửa — không phải mô tả bằng lời</small>
+            </button>
+            <div class="sgf-target" id="sgf-target" hidden>
+              <span class="sgf-target-ico">🎯</span>
+              <span class="sgf-target-txt"><b id="sgf-target-lb"></b><i id="sgf-target-pa"></i></span>
+              <button type="button" class="sgf-target-x" id="sgf-target-x" title="Bỏ chọn">✕</button>
+            </div>
+          </div>
           <label class="sgf-lab">Tiêu đề <span class="sgf-req">*</span>
             <input id="sgf-title-in" class="sgf-in" maxlength="200"
                    placeholder="VD: Thêm dạng bài Toán có nhiều cách giải" />
@@ -222,6 +233,38 @@ function bind(root) {
   const sendBtn = root.querySelector('#sgf-send');
   const ctxBox = root.querySelector('#sgf-ctx');
   const inbox = root.querySelector('#sgf-inbox');
+
+  // ---- Chọn đối tượng trên trang ----------------------------------------
+  // Người gửi trỏ thẳng vào phần cần sửa; mô tả phần tử được ghim vào nội dung
+  // yêu cầu để Ban điều hành không phải đoán "phần này" là phần nào.
+  let pickedTarget = null;
+  const pickBtn = root.querySelector('#sgf-pick');
+  const targetBox = root.querySelector('#sgf-target');
+  const targetLb = root.querySelector('#sgf-target-lb');
+  const targetPa = root.querySelector('#sgf-target-pa');
+  function showTarget() {
+    const has = !!pickedTarget;
+    if (targetBox) targetBox.hidden = !has;
+    if (pickBtn) pickBtn.hidden = has;
+    if (has) {
+      targetLb.textContent = pickedTarget.label;
+      targetPa.textContent = pickedTarget.kind + ' · ' + pickedTarget.path;
+    }
+  }
+  root.querySelector('#sgf-target-x')?.addEventListener('click', () => { pickedTarget = null; showTarget(); });
+  pickBtn?.addEventListener('click', async () => {
+    const prevModal = modal.hidden, prevFab = fab.style.display;
+    modal.hidden = true; fab.style.display = 'none';     // ẩn widget để thấy trang
+    try {
+      const mod = await import('/js/pick-target.js');
+      const t = await mod.pickTarget();
+      if (t) { pickedTarget = t; showTarget(); }
+    } catch (err) {
+      msg.textContent = '⚠️ Không bật được chế độ chọn: ' + (err.message || err);
+    } finally {
+      modal.hidden = prevModal; fab.style.display = prevFab;
+    }
+  });
 
   // Live counter cho detail textarea (req #3 bị cụt ở 2000 chars trước đây →
   // giờ giới hạn 10000, hiển thị bộ đếm để SV biết khi nào sắp đầy).
@@ -463,6 +506,7 @@ function bind(root) {
 
     const detail = [
       `[Trang: ${ctx.title || '—'}] ${ctx.url}`,
+      pickedTarget ? `[Đối tượng: ${pickedTarget.kind} "${pickedTarget.label}" · vị trí ${pickedTarget.path}]` : '',
       userDetail,
     ].filter(Boolean).join('\n');
 
@@ -677,6 +721,20 @@ function injectStyles() {
 
     .sgf-form { display: flex; flex-direction: column; gap: 10px; padding: 8px 20px 14px; }
     .sgf-lab { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: #475569; font-weight: 600; }
+    .sgf-pick { width:100%; cursor:pointer; font:inherit; text-align:left; display:flex; flex-direction:column; gap:2px;
+      background:linear-gradient(135deg,rgba(124,58,237,.13),rgba(79,70,229,.08));
+      border:1px dashed rgba(124,58,237,.5); border-radius:12px; padding:10px 13px; color:inherit;
+      font-size:13.5px; font-weight:700; }
+    .sgf-pick:hover { border-color:rgba(124,58,237,.9); }
+    .sgf-pick small { font-weight:500; font-size:11.5px; opacity:.75; }
+    .sgf-target { display:flex; align-items:center; gap:10px; background:rgba(124,58,237,.12);
+      border:1px solid rgba(124,58,237,.45); border-radius:12px; padding:9px 12px; }
+    .sgf-target-ico { font-size:18px; flex:none; }
+    .sgf-target-txt { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; font-size:13px; }
+    .sgf-target-txt b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .sgf-target-txt i { font-style:normal; font-size:11px; opacity:.7; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .sgf-target-x { cursor:pointer; border:0; background:rgba(0,0,0,.08); color:inherit; border-radius:8px;
+      width:26px; height:26px; font-size:13px; flex:none; }
     .sgf-req { color: #ef4444; }
     .sgf-in {
       width: 100%; box-sizing: border-box; padding: 9px 11px; border-radius: 9px;
