@@ -85,6 +85,10 @@ export const ACHIEVEMENTS = [
     desc: 'Luyện tập 3 ngày liên tiếp — hình thành thói quen học ngoại ngữ hàng ngày',
     trigger: { streak: 3 } },
 
+  { id: 'streak-5',       icon: '🗣️', title: 'Nửa tuần ngoại ngữ',
+    desc: 'Học ngoại ngữ 5 ngày liên tiếp — thói quen học hàng ngày đang hình thành rõ rệt',
+    trigger: { streak: 5 } },
+
   { id: 'streak-7',       icon: '📅', title: 'Một tuần luyện tập',
     desc: 'Học ngoại ngữ đều đặn 7 ngày — đủ để cảm nhận sự tiến bộ rõ rệt',
     trigger: { streak: 7 } },
