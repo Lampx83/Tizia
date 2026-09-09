@@ -54,6 +54,8 @@ export const ACHIEVEMENTS = [
     desc: 'Đạt 3 sao cả 5 lĩnh vực phát triển ở lớp Lá', trigger: { quizzesPassed: 15 } },
 
   // ── Streak & Chuyên cần ──
+  { id: 'streak-5',  icon: '🌈', title: 'Bé học 5 ngày',
+    desc: 'Vào học 5 ngày liên tiếp — một tuần học đầy đủ của bé', trigger: { streak: 5 } },
   { id: 'streak-7',  icon: '⭐', title: 'Bé chăm chỉ',
     desc: 'Vào học 7 ngày liên tiếp', trigger: { streak: 7 } },
   { id: 'streak-14', icon: '🌟', title: 'Siêu chăm học',

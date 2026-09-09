@@ -72,6 +72,10 @@ export const ACHIEVEMENTS = [
     desc: 'Ôn lý thuyết hoặc biển báo liên tục 3 ngày — thói quen tốt cho kỳ thi',
     trigger: { streak: 3 } },
 
+  { id: 'streak-5',       icon: '📋', title: 'Nửa tuần ôn lý thuyết',
+    desc: 'Học tại Trường Lái xe 5 ngày liên tiếp — đủ để nắm vững phần biển báo cơ bản',
+    trigger: { streak: 5 } },
+
   { id: 'streak-7',       icon: '📅', title: 'Học đều cả tuần',
     desc: 'Học tại Trường Lái xe 7 ngày liên tiếp — đủ để nhớ vững phần lý thuyết',
     trigger: { streak: 7 } },

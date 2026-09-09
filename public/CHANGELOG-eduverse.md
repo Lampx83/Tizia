@@ -4,6 +4,59 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-09 — Phiên cải tiến (59) · Lái xe · Ngoại ngữ · Mầm non — streak-5 cho 3 domain còn thiếu
+
+**Chế độ:** Chủ động — hộp thư `ai-board/inbox.json` trống (`items: []`); DB production không truy cập được trong môi trường này. GitHub Issues: 0 yêu cầu mở.
+
+**Phạm vi:** 3 domain — Lái xe (`driving`), Ngoại ngữ (`language`), Mầm non (`preschool`).
+
+### Phân tích khoảng trống
+
+Phiên 57 (2026-09-07) đã thêm `streak-5` cho Tiểu học vì bước nhảy 3→7 quá lớn. Kiểm tra hôm nay phát hiện 3 domain vẫn còn gap tương tự:
+
+| Domain | Streak hiện có | Khoảng trống |
+|--------|---------------|--------------|
+| **Lái xe** | streak-3, streak-7, streak-14, streak-30 | ❌ Thiếu streak-5 |
+| **Ngoại ngữ** | streak-3, streak-7, streak-14, streak-30 | ❌ Thiếu streak-5 |
+| **Mầm non** | streak-3, streak-7, streak-14, streak-30 | ❌ Thiếu streak-5 |
+| THCS | streak-3, streak-5, streak-10, streak-14, streak-30 | ✅ Đầy đủ |
+| THPT | streak-3, streak-5, streak-7, streak-14, streak-30 | ✅ Đầy đủ |
+| Tiểu học | streak-3, streak-5, streak-7, streak-14, streak-30 | ✅ Đầy đủ (thêm phiên 57) |
+
+Streak-5 (5 ngày liên tiếp = 1 tuần học) là cột mốc quan trọng cho người mới bắt đầu — nhỏ hơn 7 nhưng có ý nghĩa hoàn thành một tuần học đầy đủ.
+
+### Thay đổi
+
+| File | Loại | Mô tả |
+|------|------|-------|
+| `public/js/domains/driving/index.js` | Mở rộng | +1 achievement: `streak-5` "Nửa tuần ôn lý thuyết" — 5 ngày ôn lái xe liên tiếp |
+| `public/js/domains/language/index.js` | Mở rộng | +1 achievement: `streak-5` "Nửa tuần ngoại ngữ" — 5 ngày học ngoại ngữ liên tiếp |
+| `public/js/domains/preschool/achievements.js` | Mở rộng | +1 achievement: `streak-5` "Bé học 5 ngày" — 5 ngày học mầm non liên tiếp |
+
+### Chi tiết 3 achievements mới
+
+| Domain | ID | Icon | Tên | Trigger |
+|--------|----|------|-----|---------|
+| Lái xe | `streak-5` | 📋 | Nửa tuần ôn lý thuyết | streak: 5 |
+| Ngoại ngữ | `streak-5` | 🗣️ | Nửa tuần ngoại ngữ | streak: 5 |
+| Mầm non | `streak-5` | 🌈 | Bé học 5 ngày | streak: 5 |
+
+### Kiểm thử
+
+```
+node --check public/js/domains/driving/index.js      ✅ OK
+node --check public/js/domains/language/index.js     ✅ OK
+node --check public/js/domains/preschool/achievements.js  ✅ OK
+```
+
+### Kết quả
+
+- **Tất cả 6 domain có người dùng thực (THCS, THPT, Tiểu học, Lái xe, Ngoại ngữ, Mầm non) đều có đủ streak-5** ✅
+- Hệ thống streak giờ nhất quán: streak-3 → streak-5 → streak-7 → ... trên mọi domain áp dụng
+- **Yêu cầu từ người dùng:** Không có (inbox trống, phiên chủ động)
+
+---
+
 ## 2026-09-07 — Phiên cải tiến (58) · TOÀN HỆ THỐNG — 🚨 Phát hiện 110 bài lí thuyết là nội dung chết + công cụ kiểm tra toàn vẹn
 
 **Chế độ:** Chủ động. Hộp thư `ai-board/inbox.json` trống. Phiên này **tự kiểm chứng** đường production thay vì tin ghi chú cũ:
