@@ -174,6 +174,10 @@ const PUBLIC_PATH_PREFIXES = [
   '/api/webhooks/',
   // Bundle JS/scenarios không phải bí mật — guest cần để render trang chủ + trường Mầm non.
   '/js/',
+  // Bundle i18n (public/i18n/*.json) — i18n.js fetch() ngay từ đầu trang, kể cả
+  // guest/login.html. Thiếu whitelist này thì fetch bị auth gate redirect sang
+  // /login.html (trả HTML thay vì JSON) — cùng dạng bug với /api/requests (#73).
+  '/i18n/',
   // Bản đồ khuôn viên (iframe nhúng vào school.html) — không có bí mật, là HTML/JS thuần.
   '/campus-proto/',
   // Layout override của bản đồ — guest cũng cần fetch để render đúng map đã chỉnh.
