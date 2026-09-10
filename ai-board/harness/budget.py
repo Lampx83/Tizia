@@ -23,6 +23,10 @@ class Budget:
     tool_calls: int = 0
     tokens: int = 0
     retries: int = 0
+    # Giây đã tiêu ở các lần chạy TRƯỚC. Wall-clock phải cộng dồn qua resume như
+    # mọi cap khác — nếu reset mỗi lần thì một skill fail rồi resume 20 lần được
+    # 20 × max_wall_clock_s GPU mà budget không bao giờ báo chạm trần.
+    elapsed_before_s: float = 0.0
     started_at: float = field(default_factory=time.monotonic)
 
     @classmethod
@@ -48,11 +52,13 @@ class Budget:
         b = cls(**{k: v for k, v in snapshot.items() if k.startswith("max_")})
         for cap in CAPS:
             setattr(b, cap, snapshot.get(cap, 0))
+        b.elapsed_before_s = float(snapshot.get("elapsed_s", 0.0))
         return b
 
     @property
     def elapsed_s(self) -> float:
-        return time.monotonic() - self.started_at
+        """Tổng giây đã tiêu, gồm cả các lần chạy trước."""
+        return self.elapsed_before_s + (time.monotonic() - self.started_at)
 
     def exhausted(self) -> str | None:
         """Tên cap đã chạm, None nếu còn chỗ."""

@@ -113,3 +113,25 @@ def test_cli_full_run_writes_one_row_per_pending_item(monkeypatch, inbox_file, d
     (row,) = rows(db_file)
     assert row["gate_reached"] == 7.0
     assert row["outcome"] == "ok"
+
+
+def test_wall_clock_accumulates_across_resume():
+    """Resume không được cấp lại đồng hồ mới — nếu không, fail rồi resume N lần là
+    N × max_wall_clock_s GPU mà budget chẳng bao giờ báo chạm trần."""
+    first = Budget(max_wall_clock_s=10)
+    snapshot = first.snapshot()
+    snapshot["elapsed_s"] = 9.5
+
+    resumed = Budget.restore(snapshot)
+
+    assert resumed.elapsed_s >= 9.5
+    assert resumed.max_wall_clock_s == 10
+    assert Budget.restore({**snapshot, "elapsed_s": 10.0}).exhausted() == "wall_clock_s"
+
+
+def test_ollama_client_takes_seckey_from_injected_env_only():
+    from models import OllamaClient
+
+    client = OllamaClient.from_env({"OLLAMA_URL": "http://fake:1", "OLLAMA_SECKEY": "tu-env-gia"})
+    assert client.seckey == "tu-env-gia"
+    assert OllamaClient.from_env({}).seckey is None

@@ -8,7 +8,7 @@ import express from 'express';
 import http from 'node:http';
 import {
   mountAppPlugins, mountRouterPlugins, mountWsPlugins,
-  disposePlugin, disposeAll, mountedPlugins,
+  disposePlugin, disposeAll, mountedPlugins, deepFreeze,
 } from '../server/contexts/registry.js';
 
 // Bật server tạm ở cổng ngẫu nhiên, trả base URL + hàm đóng.
@@ -152,4 +152,80 @@ test('WS plugin thiếu wsPriority bị từ chối', () => {
     () => mountWsPlugins(server, [{ name: 'ws-no-prio', mount: () => ({ onUpgrade: () => {} }) }], { surface: {} }),
     /wsPriority/,
   );
+});
+
+test('surface đưa cho plugin bị freeze SÂU — không ghi ngược vào state dùng chung', () => {
+  // FEATURES là object thật feature-gate đọc lại mỗi request. freeze nông chỉ
+  // khoá cái vỏ, plugin vẫn hạ tier xuống 0 và mở khoá cho toàn bộ user được.
+  const FEATURES = { 'lesson-builder': { tier: 5 } };
+  let seen = null;
+  const app = express();
+  mountRouterPlugins(app, [{
+    name: 'fixture-freeze',
+    mount(_router, ctx) { seen = ctx; return () => {}; },
+  }], { surface: { features: { FEATURES } } });
+
+  assert.throws(() => { seen.surface.features.FEATURES['lesson-builder'].tier = 0; }, TypeError);
+  assert.throws(() => { seen.surface.features.FEATURES['moi'] = { tier: 0 }; }, TypeError);
+  assert.equal(FEATURES['lesson-builder'].tier, 5);
+});
+
+test('deepFreeze chịu được tham chiếu vòng', () => {
+  const a = { name: 'a' };
+  a.self = a;
+  assert.doesNotThrow(() => deepFreeze(a));
+  assert.equal(Object.isFrozen(a), true);
+});
+
+test('trùng tên bị chặn TRƯỚC khi mount — không để lại route mồ côi', async () => {
+  const app = express();
+  mountRouterPlugins(app, [{
+    name: 'first',
+    mount(router) {
+      router.get('/api/fixture/first', (_req, res) => res.json({ ok: true }));
+      return () => {};
+    },
+  }], { surface: {} });
+
+  // Lô thứ hai có 1 plugin tên mới + 1 plugin trùng tên. Cả lô phải bị từ chối,
+  // plugin tên mới KHÔNG được mount dở dang.
+  assert.throws(() => mountRouterPlugins(app, [
+    {
+      name: 'second',
+      mount(router) {
+        router.get('/api/fixture/second', (_req, res) => res.json({ ok: true }));
+        return () => {};
+      },
+    },
+    { name: 'first', mount() { return () => {}; } },
+  ], { surface: {} }), /trùng tên/);
+
+  assert.deepEqual(mountedPlugins(), ['first']);
+
+  const { base, close } = await startApp(app);
+  try {
+    assert.equal((await fetch(`${base}/api/fixture/first`)).status, 200);
+    // Nếu 'second' lọt được vào app thì nó sống mà không ai dispose được.
+    assert.equal((await fetch(`${base}/api/fixture/second`)).status, 404);
+  } finally {
+    await close();
+  }
+});
+
+test('trùng tên ngay trong cùng một lô cũng bị chặn', () => {
+  const app = express();
+  assert.throws(() => mountRouterPlugins(app, [
+    { name: 'same', mount() { return () => {}; } },
+    { name: 'same', mount() { return () => {}; } },
+  ], { surface: {} }), /trùng tên/);
+  assert.deepEqual(mountedPlugins(), []);
+});
+
+test('WS plugin trả về undefined báo lỗi rõ ràng, không TypeError trần', () => {
+  const server = http.createServer();
+  assert.throws(
+    () => mountWsPlugins(server, [{ name: 'ws-rong', wsPriority: 'append', mount: () => undefined }], { surface: {} }),
+    /phải trả \{ onUpgrade \}/,
+  );
+  assert.equal(server.listenerCount('upgrade'), 0);
 });

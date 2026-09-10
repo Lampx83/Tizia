@@ -18,6 +18,9 @@ class OllamaClient:
     gate3_model: str = "qwen3-coder:30b"
     embed_model: str = "bge-m3"
     timeout_s: float = 300.0
+    # Đọc 1 lần lúc dựng client. KHÔNG đọc lại os.environ trong _post: test bơm
+    # env giả mà vẫn moi key thật ra rồi gửi tới base_url giả là rò credential.
+    seckey: str | None = None
 
     @classmethod
     def from_env(cls, env: dict | None = None) -> "OllamaClient":
@@ -27,6 +30,7 @@ class OllamaClient:
             gate1_model=env.get("GATE1_MODEL") or "gemma4:26b",
             gate3_model=env.get("GATE3_MODEL") or "qwen3-coder:30b",
             embed_model=env.get("EMBED_MODEL") or "bge-m3",
+            seckey=env.get("OLLAMA_SECKEY") or None,
         )
 
     def generate(self, model: str, prompt: str, **options) -> dict:
@@ -53,8 +57,7 @@ class OllamaClient:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        seckey = os.environ.get("OLLAMA_SECKEY")
-        if seckey:
-            req.add_header("Authorization", f"Bearer {seckey}")
+        if self.seckey:
+            req.add_header("Authorization", f"Bearer {self.seckey}")
         with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
             return json.loads(resp.read().decode("utf-8"))

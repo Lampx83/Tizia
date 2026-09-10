@@ -25,22 +25,28 @@ import { csrf, rateLimit, apiLimiter, sensitiveAuthLimiter } from './security/in
 import * as scoreup from '../integrations/scoreup.js';
 import * as codelab from '../integrations/codelab.js';
 import * as registry from './registry.js';
+import { deepFreeze } from './registry.js';
 
-export const surface = Object.freeze({
+// deepFreeze, không Object.freeze: freeze nông chỉ khoá cái vỏ. FEATURES là
+// object thật feature-gate đọc lại ở mỗi request — plugin chỉ cầm `surface` vẫn
+// ghi được `surface.features.FEATURES[k].tier = 0` và mở khoá vĩnh viễn một
+// tính năng cho toàn bộ user. registry.pluginCtx cũng freeze sâu lần nữa lúc
+// trao tay; khoá luôn ở đây để nguồn cấp không phụ thuộc chỗ tiêu thụ.
+export const surface = deepFreeze({
   // Feature-gate: đọc catalog, không đổi tier/unlock.
-  features: Object.freeze({ FEATURES }),
+  features: { FEATURES },
   // Nội dung: chỉ đọc. upsertItem/seedCollection nằm ngoài surface (ghi = core).
-  content: Object.freeze({ getCollection, collectionCount }),
+  content: { getCollection, collectionCount },
   // Biến thể UI / cờ tính năng theo user.
-  experiments: Object.freeze({ checkFlag, getVariant }),
+  experiments: { checkFlag, getVariant },
   // Quiz: gọi hàm ĐỌC có sẵn của ScoreUp. Không có create/update/delete ở đây.
-  quiz: Object.freeze({
+  quiz: {
     listSubjects: scoreup.listSubjects,
     listChapters: scoreup.listChapters,
     listQuestions: scoreup.listQuestions,
     getRandomQuestions: scoreup.getRandomQuestions,
     getQuestion: scoreup.getQuestion,
-  }),
+  },
 });
 
 export const core = Object.freeze({
