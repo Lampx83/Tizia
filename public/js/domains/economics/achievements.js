@@ -8,6 +8,10 @@ export const ACHIEVEMENTS = [
     desc: 'Hoàn thành quiz đầu tiên',
     trigger: { quizzesPassed: 1 } },
 
+  { id: 'double',       icon: '⚡', title: 'Cú đúp Kinh tế',
+    desc: 'Hoàn thành 2 module trong cùng 1 ngày — năng suất nhà kinh tế',
+    trigger: { modulesIn1Day: 2 } },
+
   { id: 'streak-3',     icon: '🌱', title: 'Học Kinh tế 3 ngày liên tiếp',
     desc: 'Streak 3 ngày — thói quen tích luỹ tri thức kinh tế hàng ngày',
     trigger: { streak: 3 } },

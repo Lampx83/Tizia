@@ -8,6 +8,10 @@ export const ACHIEVEMENTS = [
     desc: 'Hoàn thành quiz đầu tiên',
     trigger: { quizzesPassed: 1 } },
 
+  { id: 'bookworm',    icon: '📚', title: 'Mọt lập trình',
+    desc: 'Hoàn thành 10 quiz — thói quen học CNTT đang hình thành',
+    trigger: { quizzesPassed: 10 } },
+
   { id: 'streak-3',    icon: '🌱', title: 'Code 3 ngày liên tiếp',
     desc: 'Streak 3 ngày — thói quen lập trình hàng ngày bắt đầu từ đây',
     trigger: { streak: 3 } },

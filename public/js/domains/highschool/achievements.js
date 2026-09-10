@@ -123,6 +123,8 @@ export const ACHIEVEMENTS = [
   // ── Sao tích luỹ ──
   { id: 'star-20', icon: '✨', title: 'Sưu tầm 20 sao',
     desc: 'Tích luỹ 20 sao', trigger: { totalStars: 20 } },
+  { id: 'star-30', icon: '⭐', title: 'Ngôi sao 30',
+    desc: 'Tích luỹ 30 sao — đang trên đà chinh phục chương trình THPT', trigger: { totalStars: 30 } },
   { id: 'star-50', icon: '💫', title: 'Ngôi sao THPT',
     desc: 'Tích luỹ 50 sao', trigger: { totalStars: 50 } },
 
