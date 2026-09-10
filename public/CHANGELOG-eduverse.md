@@ -4,6 +4,41 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-10 — Phiên cải tiến (60) · THPT · THCS · CNTT · Kinh tế — 4 achievement bổ sung
+
+**Chế độ:** Chủ động — hộp thư `ai-board/inbox.json` trống (`items: []`); DB production không truy cập được trong môi trường này. GitHub Issues: 0 yêu cầu mở.
+
+**Phạm vi:** 4 domain — THPT (`highschool`), THCS (`secondary`), CNTT (`it`), Kinh tế (`economics`).
+
+### Phân tích khoảng trống
+
+| Domain | Khoảng trống | Mô tả |
+|--------|-------------|-------|
+| **THPT** | star-30 thiếu | Nhảy 20→50 quá lớn, cần cột mốc trung gian |
+| **THCS** | star-30 thiếu | Nhảy 20→50 quá lớn, cần cột mốc trung gian |
+| **CNTT** | bookworm thiếu | 10 quiz milestone — pharmacy & economics đã có, IT chưa có |
+| **Kinh tế** | double thiếu | 2 module/ngày — pharmacy đã có, Kinh tế chưa có |
+
+### Thay đổi
+
+| File | Loại | Achievement mới |
+|------|------|----------------|
+| `public/js/domains/highschool/achievements.js` | Thêm | `star-30` ⭐ "Ngôi sao 30" — 30 sao THPT |
+| `public/js/domains/secondary/achievements.js` | Thêm | `star-30` ⭐ "Ngôi sao 30" — 30 sao THCS |
+| `public/js/domains/it/achievements.js` | Thêm | `bookworm` 📚 "Mọt lập trình" — 10 quiz CNTT |
+| `public/js/domains/economics/achievements.js` | Thêm | `double` ⚡ "Cú đúp Kinh tế" — 2 module/ngày |
+
+### Kiểm thử
+
+```
+node --check public/js/domains/highschool/achievements.js   ✅ OK
+node --check public/js/domains/secondary/achievements.js    ✅ OK
+node --check public/js/domains/it/achievements.js           ✅ OK
+node --check public/js/domains/economics/achievements.js    ✅ OK
+```
+
+---
+
 ## 2026-09-09 — Phiên cải tiến (59) · Lái xe · Ngoại ngữ · Mầm non — streak-5 cho 3 domain còn thiếu
 
 **Chế độ:** Chủ động — hộp thư `ai-board/inbox.json` trống (`items: []`); DB production không truy cập được trong môi trường này. GitHub Issues: 0 yêu cầu mở.
