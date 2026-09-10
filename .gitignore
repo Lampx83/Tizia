@@ -24,3 +24,13 @@ graphify-out/
 # Postgres data export sinh bởi scripts/export-sqlite-to-pg.mjs — chứa dữ liệu
 # thật (session token, password hash). KHÔNG commit. Schema (001_*.sql) thì commit.
 migrations/postgres/data-export.sql
+
+# Python — harness AI board (ai-board/harness/, venv riêng trên host)
+__pycache__/
+*.py[cod]
+.pytest_cache/
+ai-board/harness/.venv/
+
+# Nhật ký vòng triển khai của Claude Code — local-only, KHÔNG push
+# (repo này clone thẳng ra production, xem CLAUDE.md)
+ai-board/ai-log.md

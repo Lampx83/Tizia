@@ -1,0 +1,115 @@
+"""Seam Python duy nhất: chạy nguyên ratchet loop 1 lượt trên fixture, mọi biên
+I/O (Ollama, git, Telegram) đều fake. Không test chi tiết nội bộ từng cổng."""
+import json
+import sqlite3
+from unittest.mock import MagicMock
+
+import pytest
+
+import main
+from budget import Budget
+from main import Deps, Unavailable, load_inbox, run_once
+
+
+@pytest.fixture
+def fake_deps():
+    return Deps(models=MagicMock(name="ollama"), git=MagicMock(name="git"), notify=MagicMock(name="telegram"))
+
+
+def rows(db_file):
+    con = sqlite3.connect(str(db_file))
+    try:
+        con.row_factory = sqlite3.Row
+        return [dict(r) for r in con.execute("SELECT * FROM skill_proposals ORDER BY id")]
+    finally:
+        con.close()
+
+
+def test_load_inbox_doc_snapshot(inbox_file, request_item):
+    assert load_inbox(inbox_file) == [request_item]
+
+
+def test_full_loop_reaches_gate_7_and_writes_one_row(inbox_file, db_file, fake_deps):
+    (item,) = load_inbox(inbox_file)
+
+    out = run_once(item, db_path=db_file, deps=fake_deps)
+
+    assert out["gate_reached"] == 7
+    assert out["outcome"] == "ok"
+
+    written = rows(db_file)
+    assert len(written) == 1
+    (row,) = written
+    assert row["gate_reached"] == 7.0
+    assert row["outcome"] == "ok"
+    assert row["origin"] == "domain-synthesized"
+    assert row["domain"] == "pharmacy"
+    assert json.loads(row["request_ids"]) == ["req-42"]
+    assert json.loads(row["budget_json"])["exhausted"] is None
+    assert row["pr_url"] is None
+    assert row["id"] == out["proposal_id"]
+
+
+def test_dry_run_never_calls_git_network_or_telegram(inbox_file, db_file, fake_deps):
+    (item,) = load_inbox(inbox_file)
+
+    run_once(item, db_path=db_file, deps=fake_deps)
+
+    assert fake_deps.git.mock_calls == []
+    assert fake_deps.notify.mock_calls == []
+    assert fake_deps.models.mock_calls == []
+
+
+def test_real_deps_make_git_and_telegram_explode_if_touched():
+    deps = Deps.real()
+    with pytest.raises(NotImplementedError):
+        deps.git.push("nhanh-nao-do")
+    with pytest.raises(NotImplementedError):
+        deps.notify.send("canh bao")
+    assert isinstance(deps.git, Unavailable)
+
+
+def test_budget_exhausted_stops_loop_and_is_recorded(inbox_file, db_file, fake_deps):
+    (item,) = load_inbox(inbox_file)
+
+    out = run_once(item, db_path=db_file, deps=fake_deps, budget=Budget(max_wall_clock_s=0))
+
+    assert out["outcome"] == "budget_exhausted"
+    assert out["gate_reached"] == 0.0
+
+    (row,) = rows(db_file)
+    assert row["outcome"] == "budget_exhausted"
+    assert json.loads(row["budget_json"])["exhausted"] == "wall_clock_s"
+
+
+def test_budget_model_call_cap_blocks_further_spend():
+    b = Budget(max_model_calls=2, max_wall_clock_s=999)
+    assert b.spend("model_calls") is True
+    assert b.spend("model_calls") is False
+    assert b.exhausted() == "model_calls"
+    assert Budget.restore(b.snapshot()).model_calls == 2
+
+
+def test_gate_sequence_includes_risk_triage_5_5():
+    assert main.GATES == (1, 2, 3, 4, 5, 5.5, 6, 7)
+
+
+def test_cli_refuses_to_run_without_dry_run(monkeypatch, inbox_file, db_file, capsys):
+    monkeypatch.delenv("DRY_RUN", raising=False)
+    monkeypatch.setenv("TIZIA_INBOX_PATH", str(inbox_file))
+    monkeypatch.setenv("TIZIA_DB_PATH", str(db_file))
+
+    assert main.main([]) == 2
+    assert not db_file.exists()
+
+
+def test_cli_full_run_writes_one_row_per_pending_item(monkeypatch, inbox_file, db_file):
+    monkeypatch.setenv("DRY_RUN", "1")
+    monkeypatch.setenv("TIZIA_INBOX_PATH", str(inbox_file))
+    monkeypatch.setenv("TIZIA_DB_PATH", str(db_file))
+
+    assert main.main([]) == 0
+
+    (row,) = rows(db_file)
+    assert row["gate_reached"] == 7.0
+    assert row["outcome"] == "ok"

@@ -8,6 +8,7 @@
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
     "dev:prod": "node --watch server/dev-proxy.js",
+    "test": "node --test \"test/**/*.test.js\"",
     "check:content": "node scripts/check-content-integrity.mjs",
     "graphify:update": "graphify update ."
   },
