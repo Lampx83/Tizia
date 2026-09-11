@@ -13,10 +13,15 @@ NUM_CTX = 16384
 
 @dataclass
 class OllamaClient:
-    base_url: str = "http://127.0.0.1:11434"
-    gate1_model: str = "gemma4:26b"
-    gate3_model: str = "qwen3-coder:30b"
-    embed_model: str = "bge-m3"
+    # KHÔNG hardcode default endpoint/model ở đây — trước có default cho 1 Ollama
+    # local trần, nhưng thật ra Tizia (server/ai.js) gọi qua 1 reverse-proxy nội
+    # bộ có sẵn, không phải Ollama trần. Một default sai hình dạng còn tệ hơn
+    # không có default: âm thầm gọi nhầm chỗ, không lỗi rõ để phát hiện. Nguồn sự
+    # thật duy nhất là `.env` — rỗng thì generate()/embed() raise rõ ràng.
+    base_url: str = ""
+    gate1_model: str = ""
+    gate3_model: str = ""
+    embed_model: str = ""
     timeout_s: float = 300.0
     # Đọc 1 lần lúc dựng client. KHÔNG đọc lại os.environ trong _post: test bơm
     # env giả mà vẫn moi key thật ra rồi gửi tới base_url giả là rò credential.
@@ -26,10 +31,10 @@ class OllamaClient:
     def from_env(cls, env: dict | None = None) -> "OllamaClient":
         env = os.environ if env is None else env
         return cls(
-            base_url=env.get("OLLAMA_URL") or "http://127.0.0.1:11434",
-            gate1_model=env.get("GATE1_MODEL") or "gemma4:26b",
-            gate3_model=env.get("GATE3_MODEL") or "qwen3-coder:30b",
-            embed_model=env.get("EMBED_MODEL") or "bge-m3",
+            base_url=(env.get("OLLAMA_URL") or "").rstrip("/"),
+            gate1_model=env.get("GATE1_MODEL") or "",
+            gate3_model=env.get("GATE3_MODEL") or "",
+            embed_model=env.get("EMBED_MODEL") or "",
             seckey=env.get("OLLAMA_SECKEY") or None,
         )
 
@@ -51,13 +56,17 @@ class OllamaClient:
         return self._post("/api/embeddings", {"model": self.embed_model, "prompt": text})
 
     def _post(self, path: str, payload: dict) -> dict:
+        if not self.base_url:
+            raise RuntimeError("OLLAMA_URL chưa set trong .env — xem AI Board Harness section")
         req = urllib.request.Request(
-            self.base_url.rstrip("/") + path,
+            self.base_url + path,
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
         )
         if self.seckey:
-            req.add_header("Authorization", f"Bearer {self.seckey}")
+            # Cùng tên header server/ai.js dùng để gọi cùng reverse-proxy nội bộ
+            # (KHÔNG phải "Authorization: Bearer" — gateway đó không hiểu header đó).
+            req.add_header("x-ollama-seckey", self.seckey)
         with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
             return json.loads(resp.read().decode("utf-8"))

@@ -135,3 +135,54 @@ def test_ollama_client_takes_seckey_from_injected_env_only():
     client = OllamaClient.from_env({"OLLAMA_URL": "http://fake:1", "OLLAMA_SECKEY": "tu-env-gia"})
     assert client.seckey == "tu-env-gia"
     assert OllamaClient.from_env({}).seckey is None
+
+
+def test_ollama_client_from_env_has_no_hardcoded_fallback():
+    # Bien moi truong la nguon su that duy nhat -- thieu bien thi rong, khong
+    # am tham roi ve 1 endpoint/model mac dinh nao do nam trong source.
+    from models import OllamaClient
+
+    client = OllamaClient.from_env({})
+    assert client.base_url == ""
+    assert client.gate1_model == ""
+    assert client.gate3_model == ""
+    assert client.embed_model == ""
+
+
+def test_ollama_client_post_raises_clearly_when_base_url_missing():
+    from models import OllamaClient
+
+    client = OllamaClient.from_env({})
+    with pytest.raises(RuntimeError, match="OLLAMA_URL"):
+        client.generate("some-model", "hi")
+
+
+def test_ollama_client_uses_seckey_header_not_bearer(monkeypatch):
+    # server/ai.js goi gateway noi bo bang header x-ollama-seckey -- harness
+    # phai gui DUNG header do de noi chuyen duoc voi cung gateway, khong phai
+    # Authorization: Bearer (gateway khong hieu header do).
+    import models as models_mod
+    from models import OllamaClient
+
+    captured = {}
+    client = OllamaClient.from_env({"OLLAMA_URL": "http://fake.invalid", "OLLAMA_SECKEY": "s3cr3t"})
+
+    class FakeResp:
+        def read(self):
+            return b'{"response":"ok"}'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake_urlopen(req, timeout=None):
+        captured['headers'] = dict(req.header_items())
+        return FakeResp()
+
+    monkeypatch.setattr(models_mod.urllib.request, 'urlopen', fake_urlopen)
+    client.generate("m", "hi")
+
+    assert captured['headers'].get('X-ollama-seckey') == 's3cr3t'
+    assert 'Authorization' not in captured['headers']
