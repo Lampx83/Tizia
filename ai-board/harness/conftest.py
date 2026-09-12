@@ -59,6 +59,20 @@ class FakeModels:
     def __init__(self, plan):
         self.plan = plan
         self.calls = []
+        self.embed_calls = []
+        # text → vector; text lạ nhận one-hot riêng (không giống ai). Vector
+        # ngắn được đệm 0 tới 16 chiều để cùng cỡ.
+        self.vectors = {}
+
+    def embed(self, text):
+        self.embed_calls.append(text)
+        v = self.vectors.get(text)
+        if v is None:
+            v = [0.0] * 16
+            v[3 + (sum(map(ord, text)) % 13)] = 1.0
+        else:
+            v = list(v) + [0.0] * (16 - len(v))
+        return {"embedding": v}
 
     def generate(self, model, prompt, **kw):
         self.calls.append({"model": model, "prompt": prompt, **kw})

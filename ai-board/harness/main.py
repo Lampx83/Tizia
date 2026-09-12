@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from budget import Budget          # noqa: E402
 from gates import brainstorm, scope_check  # noqa: E402
 from models import OllamaClient    # noqa: E402
+import prescreen                   # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 ENV_FILE = ROOT / ".env"
@@ -113,7 +114,7 @@ def record_proposal(db_path, *, request: dict, gate_reached: float, outcome: str
                 request.get("domain"),
                 float(gate_reached),
                 outcome,
-                json.dumps([request.get("id")]),
+                json.dumps(request.get("request_ids") or [request.get("id")]),
                 request.get("template_key"),
                 json.dumps(budget.snapshot()),
                 None,
@@ -186,6 +187,13 @@ def main(argv: list[str] | None = None, deps: Deps | None = None) -> int:
     if not items:
         print(f"[harness] hộp thư trống: {inbox_path}")
         return 0
+
+    # Ticket 17: gom trùng + chấm ưu tiên TRƯỚC cổng 1. PRESCREEN=0 → bỏ qua,
+    # loop chạy y như walking skeleton (không embed, không ghi ai_decisions).
+    if os.environ.get("PRESCREEN", "1") != "0":
+        items = prescreen.run(items, models=deps.models, db_path=db_path)
+        for c in items:
+            print(f"[prescreen] {c['id']} ← {c['request_ids']} ưu tiên {c['priority_score']}")
 
     for item in items:
         out = run_once(item, db_path=db_path, deps=deps)
