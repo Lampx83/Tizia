@@ -38,11 +38,13 @@ class OllamaClient:
             seckey=env.get("OLLAMA_SECKEY") or None,
         )
 
-    def generate(self, model: str, prompt: str, **options) -> dict:
+    def generate(self, model: str, prompt: str, *, format: str | None = None, **options) -> dict:
         """POST /api/generate. Trả nguyên body JSON.
 
-        Kèm prompt_eval_count/prompt_eval_duration trong body — người gọi log lại
-        để biết prefix-cache có trúng không (spec kỷ luật cache, quy tắc 5).
+        `format="json"` là field cấp 1 của Ollama (ép output JSON hợp lệ), không
+        nằm trong `options`. Kèm prompt_eval_count/prompt_eval_duration trong
+        body — người gọi log lại để biết prefix-cache có trúng không (spec kỷ
+        luật cache, quy tắc 5).
         """
         payload = {
             "model": model,
@@ -50,6 +52,8 @@ class OllamaClient:
             "stream": False,
             "options": {"num_ctx": NUM_CTX, **options},
         }
+        if format:
+            payload["format"] = format
         return self._post("/api/generate", payload)
 
     def embed(self, text: str) -> dict:

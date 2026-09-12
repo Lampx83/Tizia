@@ -1,8 +1,8 @@
 """Ratchet loop: đọc snapshot inbox, đi 7 cổng, ghi kết quả vào skill_proposals.
 
-Ticket 04 = walking skeleton: mọi cổng còn là stub pass-through, logic thật lần
-lượt vào ở ticket 10-13. Chỉ chạy nhánh DRY_RUN=1 — không git, không GitHub,
-không Telegram ở bất kỳ đâu trong file này.
+Cổng 1 (plan) + 2 (scope-check) thật từ ticket 10; 3-7 còn là stub, vào ở
+ticket 11-13. Chỉ chạy nhánh DRY_RUN=1 — không git, không GitHub, không
+Telegram ở bất kỳ đâu trong file này (Ollama thì gọi thật ở cổng 1).
 """
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from budget import Budget          # noqa: E402
+from gates import brainstorm, scope_check  # noqa: E402
 from models import OllamaClient    # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -83,8 +84,15 @@ def load_inbox(path: str | os.PathLike) -> list[dict]:
     return list(data.get("items") or [])
 
 
-def run_gate(number: float, request: dict, deps: Deps) -> dict:
-    """Stub pass-through. Cổng thật thay từng cái ở ticket 10-13."""
+def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: dict) -> dict:
+    """Điểm thay duy nhất khi 1 cổng có logic thật. `state` mang plan/artifact
+    giữa các cổng trong cùng 1 lượt (cổng 1 ghi plan, cổng 2 đọc)."""
+    if number == 1:
+        out = brainstorm.run(request, deps, budget)
+        state["plan"] = out.get("plan")
+        return out
+    if number == 2:
+        return scope_check.run(state)
     return {"gate": number, "blocked": False, "reason": None}
 
 
@@ -124,15 +132,18 @@ def run_once(request: dict, *, db_path, deps: Deps, budget: Budget | None = None
     budget = budget or Budget.from_env()
     reached: float = 0.0
     outcome = "ok"
+    reason = None
+    state: dict = {}
 
     for gate in GATES:
         if not budget.tick():
             outcome = "budget_exhausted"
             break
-        result = run_gate(gate, request, deps)
+        result = run_gate(gate, request, deps, budget, state)
         reached = gate
         if result.get("blocked"):
             outcome = f"blocked_gate_{gate}"
+            reason = result.get("reason")
             break
 
     proposal_id = record_proposal(
@@ -143,11 +154,13 @@ def run_once(request: dict, *, db_path, deps: Deps, budget: Budget | None = None
         "request_id": request.get("id"),
         "gate_reached": reached,
         "outcome": outcome,
+        "reason": reason,
+        "plan": state.get("plan"),
         "budget": budget.snapshot(),
     }
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, deps: Deps | None = None) -> int:
     # Console Windows mặc định cp1252 — mọi print tiếng Việt sẽ nổ
     # UnicodeEncodeError. Ép UTF-8 ngay ở entrypoint, đúng 1 chỗ cho mọi print.
     for stream in (sys.stdout, sys.stderr):
@@ -167,7 +180,7 @@ def main(argv: list[str] | None = None) -> int:
 
     inbox_path = os.environ.get("TIZIA_INBOX_PATH") or (ROOT / "ai-board" / "inbox.json")
     db_path = os.environ.get("TIZIA_DB_PATH") or (ROOT / "data" / "tizia.db")
-    deps = Deps.real()
+    deps = deps or Deps.real()
 
     items = [it for it in load_inbox(inbox_path) if it.get("status") != "done"]
     if not items:
@@ -176,7 +189,8 @@ def main(argv: list[str] | None = None) -> int:
 
     for item in items:
         out = run_once(item, db_path=db_path, deps=deps)
-        print(f"[harness] {out['request_id']} → cổng {out['gate_reached']} ({out['outcome']}) #{out['proposal_id']}")
+        why = f" — {out['reason']}" if out.get("reason") else ""
+        print(f"[harness] {out['request_id']} → cổng {out['gate_reached']} ({out['outcome']}{why}) #{out['proposal_id']}")
     return 0
 
 

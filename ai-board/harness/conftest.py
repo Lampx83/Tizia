@@ -46,3 +46,44 @@ def inbox_file(tmp_path, request_item):
 def db_file(tmp_path):
     """DB tạm — không bao giờ chạm data/tizia.db thật."""
     return tmp_path / "tizia-test.db"
+
+
+class FakeModels:
+    """Fake OllamaClient: generate() trả 1 body /api/generate cố định, ghi lại
+    prompt để soi. Không chạm mạng."""
+
+    gate1_model = "fake-gate1"
+    gate3_model = "fake-gate3"
+    embed_model = "fake-embed"
+
+    def __init__(self, plan):
+        self.plan = plan
+        self.calls = []
+
+    def generate(self, model, prompt, **kw):
+        self.calls.append({"model": model, "prompt": prompt, **kw})
+        body = self.plan if isinstance(self.plan, str) else json.dumps(self.plan, ensure_ascii=False)
+        return {"response": body, "prompt_eval_count": 120, "eval_count": 80}
+
+
+def plan_with(caps):
+    """Plan hợp lệ theo schema gates/brainstorm.py, xin đúng `caps`."""
+    return {
+        "summary_vi": "Thêm bộ thẻ ghi nhớ tên thuốc cho SV Dược.",
+        "capabilities": caps,
+        "subtasks": [
+            {"title": "Tạo plugin", "file": "server/contexts/_ai-generated/pharmacy/flashcards/index.js",
+             "verify": "curl /api/flashcards trả 200", "size": "small"},
+            {"title": "Trang HTML", "file": "public/flashcards.html",
+             "verify": "mở trang thấy 3 thẻ", "size": "large"},
+        ],
+    }
+
+
+@pytest.fixture
+def fake_deps():
+    """Deps với model fake trả plan surface-only; git/telegram là MagicMock để
+    khẳng định không bao giờ bị gọi."""
+    from unittest.mock import MagicMock
+    from main import Deps
+    return Deps(models=FakeModels(plan_with(["features"])), git=MagicMock(name="git"), notify=MagicMock(name="telegram"))

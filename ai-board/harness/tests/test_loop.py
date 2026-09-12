@@ -2,18 +2,12 @@
 I/O (Ollama, git, Telegram) đều fake. Không test chi tiết nội bộ từng cổng."""
 import json
 import sqlite3
-from unittest.mock import MagicMock
 
 import pytest
 
 import main
 from budget import Budget
 from main import Deps, Unavailable, load_inbox, run_once
-
-
-@pytest.fixture
-def fake_deps():
-    return Deps(models=MagicMock(name="ollama"), git=MagicMock(name="git"), notify=MagicMock(name="telegram"))
 
 
 def rows(db_file):
@@ -50,14 +44,15 @@ def test_full_loop_reaches_gate_7_and_writes_one_row(inbox_file, db_file, fake_d
     assert row["id"] == out["proposal_id"]
 
 
-def test_dry_run_never_calls_git_network_or_telegram(inbox_file, db_file, fake_deps):
+def test_dry_run_never_calls_git_or_telegram(inbox_file, db_file, fake_deps):
     (item,) = load_inbox(inbox_file)
 
     run_once(item, db_path=db_file, deps=fake_deps)
 
     assert fake_deps.git.mock_calls == []
     assert fake_deps.notify.mock_calls == []
-    assert fake_deps.models.mock_calls == []
+    # Cổng 1 gọi model đúng 1 lần — qua fake, không mạng.
+    assert len(fake_deps.models.calls) == 1
 
 
 def test_real_deps_make_git_and_telegram_explode_if_touched():
@@ -103,12 +98,12 @@ def test_cli_refuses_to_run_without_dry_run(monkeypatch, inbox_file, db_file, ca
     assert not db_file.exists()
 
 
-def test_cli_full_run_writes_one_row_per_pending_item(monkeypatch, inbox_file, db_file):
+def test_cli_full_run_writes_one_row_per_pending_item(monkeypatch, inbox_file, db_file, fake_deps):
     monkeypatch.setenv("DRY_RUN", "1")
     monkeypatch.setenv("TIZIA_INBOX_PATH", str(inbox_file))
     monkeypatch.setenv("TIZIA_DB_PATH", str(db_file))
 
-    assert main.main([]) == 0
+    assert main.main([], deps=fake_deps) == 0
 
     (row,) = rows(db_file)
     assert row["gate_reached"] == 7.0
