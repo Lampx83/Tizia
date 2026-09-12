@@ -5,8 +5,8 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 
 import prescreen
-from conftest import FakeModels, plan_with
-from main import Deps, record_proposal, run_once
+from conftest import FakeModels, deps_with, plan_with
+from main import record_proposal, run_once
 from budget import Budget
 
 NOW = datetime(2026, 9, 12, tzinfo=timezone.utc)
@@ -102,10 +102,8 @@ def test_merged_candidate_records_all_request_ids_in_skill_proposals(db_file):
     items = [item(1, "pharmacy", "A", votes=1), item(2, "pharmacy", "A'", votes=2)]
     models = models_with({"A": [1, 0, 0], "A'": [0.99, 0.14, 0]})
     (cand,) = prescreen.run(items, models=models, db_path=db_file, now=NOW)
-    from unittest.mock import MagicMock
-    deps = Deps(models=models, git=MagicMock(), notify=MagicMock())
 
-    run_once(cand, db_path=db_file, deps=deps)
+    run_once(cand, db_path=db_file, deps=deps_with(models))
 
     con = sqlite3.connect(str(db_file))
     (row,) = con.execute("SELECT request_ids FROM skill_proposals").fetchall()

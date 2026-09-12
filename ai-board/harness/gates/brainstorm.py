@@ -91,7 +91,7 @@ def parse_plan(text: str) -> dict:
 
 
 def run(request: dict, deps, budget) -> dict:
-    """1 lời gọi GATE1_MODEL, tính phí budget, trả {gate, blocked, reason, plan}."""
+    """1 lời gọi GATE1_MODEL, tính phí budget. Plan sai schema → blocked."""
     surface = load_capability_names()["surface"]
     body = deps.models.generate(deps.models.gate1_model, build_prompt(request, surface), format="json")
     budget.spend("model_calls")

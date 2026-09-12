@@ -8,6 +8,7 @@ thật duy nhất) — không chép tay sang Python. Chỉ cần tên key cấp 
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -21,8 +22,9 @@ _BLOCK = r"^export const {tier} = (?:deepFreeze|Object\.freeze)\(\{{\n(.*?)^\}}\
 _TOP_KEY = re.compile(r"^  (\w+)[:,]", re.M)
 
 
+@lru_cache(maxsize=None)
 def load_capability_names(path: Path = CAPABILITIES_JS) -> dict[str, frozenset[str]]:
-    """{'surface': {...}, 'core': {...}} — tên key cấp 1 của 2 object trong capabilities.js."""
+    """Tên key cấp 1 của 2 object surface/core. Cache theo path — file tĩnh trong 1 lần chạy."""
     src = path.read_text(encoding="utf-8")
     out = {}
     for tier in ("surface", "core"):
@@ -35,7 +37,11 @@ def load_capability_names(path: Path = CAPABILITIES_JS) -> dict[str, frozenset[s
 
 def check(plan: dict, names: dict[str, frozenset[str]] | None = None) -> dict:
     """{blocked, reason}. Allowlist: mọi thứ không nằm trong surface đều chặn —
-    core, raw ws/sse, hay tên lạ model bịa ra, cùng một kết cục."""
+    core, raw ws/sse, hay tên lạ model bịa ra, cùng một kết cục.
+
+    Chỉ soi `capabilities` model TỰ khai — plan bỏ trống key này thì qua. Chốt
+    thật là cổng 4 (ticket 12) lint import trong code sinh ra; cổng này là
+    lớp rẻ chặn sớm, không phải lớp duy nhất."""
     names = names or load_capability_names()
     for cap in plan.get("capabilities") or []:
         if not isinstance(cap, str):
@@ -47,9 +53,9 @@ def check(plan: dict, names: dict[str, frozenset[str]] | None = None) -> dict:
     return {"blocked": False, "reason": None}
 
 
-def run(state: dict, names: dict | None = None) -> dict:
+def run(state: dict) -> dict:
     """Điểm vào cho main.run_gate. Đọc state['plan'] do cổng 1 để lại."""
     plan = state.get("plan")
     if not plan:
         return {"gate": 2, "blocked": True, "reason": "không có plan từ cổng 1"}
-    return {"gate": 2, **check(plan, names)}
+    return {"gate": 2, **check(plan)}

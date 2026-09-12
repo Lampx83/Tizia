@@ -94,10 +94,16 @@ def plan_with(caps):
     }
 
 
-@pytest.fixture
-def fake_deps():
-    """Deps với model fake trả plan surface-only; git/telegram là MagicMock để
-    khẳng định không bao giờ bị gọi."""
+def deps_with(models):
+    """Deps với model fake (FakeModels hoặc plan cho FakeModels); git/telegram là
+    MagicMock để khẳng định không bao giờ bị gọi."""
     from unittest.mock import MagicMock
     from main import Deps
-    return Deps(models=FakeModels(plan_with(["features"])), git=MagicMock(name="git"), notify=MagicMock(name="telegram"))
+    if not isinstance(models, FakeModels):
+        models = FakeModels(models)
+    return Deps(models=models, git=MagicMock(name="git"), notify=MagicMock(name="telegram"))
+
+
+@pytest.fixture
+def fake_deps():
+    return deps_with(plan_with(["features"]))

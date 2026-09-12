@@ -111,13 +111,17 @@ def history_factor(db_path, cand: dict) -> float:
     return 0.5
 
 
-def score(cand: dict, others: list[dict], vec: list, other_vecs: list, *, db_path, now: datetime) -> tuple[int, dict]:
-    """(0..100, 4 đầu vào 0..1)."""
+def score(cands: list[dict], vecs: list, k: int, *, db_path, now: datetime) -> tuple[int, dict]:
+    """(0..100, 4 đầu vào 0..1) cho cands[k]; vecs[j] = embedding đại diện cụm j."""
+    cand = cands[k]
     cutoff = (now - timedelta(days=RECENT_DAYS)).timestamp()
     recent = sum(1 for m in cand["members"] if _ts(m.get("created_at")) >= cutoff)
+    # "dependencies" — không có field depends-on ở đâu cả; proxy = request cùng
+    # domain liên quan nhưng chưa tới mức trùng. Xem lại khi có gold set (ticket 16).
     related = sum(
-        1 for o, ov in zip(others, other_vecs)
-        if o.get("domain") == cand.get("domain") and RELATED_THRESHOLD <= cosine(vec, ov) < DUP_THRESHOLD
+        1 for j, o in enumerate(cands)
+        if j != k and o.get("domain") == cand.get("domain")
+        and RELATED_THRESHOLD <= cosine(vecs[k], vecs[j]) < DUP_THRESHOLD
     )
     inputs = {
         "urgency": min(1.0, recent / 3),
@@ -125,7 +129,7 @@ def score(cand: dict, others: list[dict], vec: list, other_vecs: list, *, db_pat
         "dependencies": min(1.0, related / 3),
         "cost_benefit": history_factor(db_path, cand),
     }
-    total = round(sum(WEIGHTS[k] * v for k, v in inputs.items()))
+    total = round(sum(WEIGHTS[name] * v for name, v in inputs.items()))
     return max(0, min(100, total)), inputs
 
 
@@ -158,13 +162,9 @@ def run(items: list[dict], *, models, db_path, now: datetime | None = None) -> l
     vectors = [models.embed(text_of(it))["embedding"] for it in items]
     clusters = cluster(items, vectors)
     cands = [merge(items, idx) for idx in clusters]
-    heads = [idx[0] for idx in clusters]
+    vecs = [vectors[idx[0]] for idx in clusters]
     for k, cand in enumerate(cands):
-        others = [c for j, c in enumerate(cands) if j != k]
-        other_vecs = [vectors[heads[j]] for j in range(len(cands)) if j != k]
-        cand["priority_score"], cand["priority_inputs"] = score(
-            cand, others, vectors[heads[k]], other_vecs, db_path=db_path, now=now
-        )
+        cand["priority_score"], cand["priority_inputs"] = score(cands, vecs, k, db_path=db_path, now=now)
         record(db_path, cand, getattr(models, "embed_model", None))
     cands.sort(key=lambda c: -c["priority_score"])
     return cands

@@ -2,14 +2,9 @@
 import pytest
 
 from budget import Budget
-from conftest import FakeModels, plan_with
+from conftest import deps_with, plan_with
 from gates import brainstorm, scope_check
-from main import Deps, run_once
-
-
-def deps_with(plan):
-    from unittest.mock import MagicMock
-    return Deps(models=FakeModels(plan), git=MagicMock(name="git"), notify=MagicMock(name="telegram"))
+from main import run_once
 
 
 # ── cổng 2 thuần: capability names đọc từ capabilities.js thật ──────────────
