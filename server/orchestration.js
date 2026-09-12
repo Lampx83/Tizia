@@ -35,6 +35,7 @@
 
 import { WebSocketServer } from 'ws';
 import { log } from './observability.js';
+import { guardedSend, onMessageJSON, logSocketLifecycle } from './ws-safety.js';
 
 const PALETTE = ['#ef4444','#f59e0b','#10b981','#3b82f6','#8b5cf6','#ec4899','#06b6d4','#84cc16','#fbbf24','#a855f7'];
 
@@ -80,17 +81,15 @@ export function attachOrchestration(httpServer, basePath = '') {
     };
   }
 
-  function send(ws, msg) {
-    if (ws.readyState === 1) ws.send(JSON.stringify(msg));
-  }
+  const send = guardedSend;
 
   function broadcastToStudents(room, msg) {
     const data = JSON.stringify(msg);
-    for (const s of room.students.values()) if (s.ws.readyState === 1) s.ws.send(data);
+    for (const s of room.students.values()) guardedSend(s.ws, data);
   }
   function broadcastToTeachers(room, msg) {
     const data = JSON.stringify(msg);
-    for (const t of room.teachers.values()) if (t.ws.readyState === 1) t.ws.send(data);
+    for (const t of room.teachers.values()) guardedSend(t.ws, data);
   }
   function broadcastAll(room, msg) {
     broadcastToStudents(room, msg);
@@ -109,10 +108,9 @@ export function attachOrchestration(httpServer, basePath = '') {
       score: 0, correct: 0, total: 0,
       joinedAt: nowSec(), lastSeen: nowSec(),
     };
-    ws.on('error', (err) => log.warn('[ws:orchestrate] connection error', { err, connId: conn.id }));
+    logSocketLifecycle(ws, 'orchestrate', () => ({ connId: conn.id, classCode: conn.classCode }));
 
-    ws.on('message', (raw) => {
-      let msg; try { msg = JSON.parse(raw); } catch { return; }
+    onMessageJSON(ws, (msg) => {
       conn.lastSeen = nowSec();
 
       switch (msg.type) {
@@ -295,7 +293,6 @@ export function attachOrchestration(httpServer, basePath = '') {
     });
 
     ws.on('close', () => {
-      log.info('[ws:orchestrate] connection closed', { connId: conn.id, classCode: conn.classCode });
       if (!conn.classCode) return;
       const room = rooms.get(conn.classCode);
       if (!room) return;
@@ -316,7 +313,7 @@ export function attachOrchestration(httpServer, basePath = '') {
         setTimeout(() => {
           const r = rooms.get(conn.classCode);
           if (r && r.students.size === 0 && r.teachers.size === 0) rooms.delete(conn.classCode);
-        }, 60 * 60 * 1000);
+        }, 60 * 60 * 1000).unref();
       }
     });
   });
@@ -337,7 +334,7 @@ export function attachOrchestration(httpServer, basePath = '') {
         }
       }
     }
-  }, 15000);
+  }, 15000).unref();
 
   function studentDto(p) {
     return {

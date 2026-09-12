@@ -11,6 +11,7 @@
 import { WebSocketServer } from 'ws';
 import { getSession, getUserById } from '../../db.js';
 import { log } from '../../observability.js';
+import { guardedSend, onMessageJSON, logSocketLifecycle } from '../../ws-safety.js';
 
 const HEARTBEAT_MS = 20 * 1000;
 const IDLE_TIMEOUT_MS = 60 * 1000;
@@ -53,12 +54,7 @@ function broadcast(roomId, payload, exceptConn = null) {
   const set = rooms.get(roomId);
   if (!set) return;
   const msg = JSON.stringify(payload);
-  for (const c of set) {
-    if (c === exceptConn) continue;
-    if (c.ws.readyState === 1) {
-      try { c.ws.send(msg); } catch {}
-    }
-  }
+  for (const c of set) if (c !== exceptConn) guardedSend(c.ws, msg);
 }
 
 function roomSnapshot(roomId) {
@@ -96,7 +92,7 @@ export function attachPresence(server) {
     if (!auth) {
       const cookieRaw = req.headers.cookie || '(no cookie)';
       console.warn('[presence] auth failed, cookies:', cookieRaw.slice(0, 200));
-      ws.send(JSON.stringify({ type: 'error', error: 'unauthorized' }));
+      guardedSend(ws, { type: 'error', error: 'unauthorized' });
       ws.close(); return;
     }
     const conn = {
@@ -106,20 +102,20 @@ export function attachPresence(server) {
       lastMoveAt: 0, moveCount: 0, moveWindowStart: Date.now(),
     };
     joinRoom(conn.roomId, conn);
-    ws.send(JSON.stringify({
+    guardedSend(ws, {
       type: 'hello',
       you: { user_id: conn.user.id, name: conn.user.display_name },
       room: conn.roomId,
       players: roomSnapshot(conn.roomId),
-    }));
+    });
     broadcast(conn.roomId, {
       type: 'join', user_id: conn.user.id, name: conn.user.display_name,
     }, conn);
 
-    ws.on('message', (data) => {
+    logSocketLifecycle(ws, 'presence', () => ({ userId: conn.user.id, roomId: conn.roomId }));
+
+    onMessageJSON(ws, (msg) => {
       conn.lastSeen = Date.now();
-      let msg;
-      try { msg = JSON.parse(data); } catch { return; }
 
       if (msg.type === 'join_room') {
         const newRoom = String(msg.room || 'lobby').slice(0, 40);
@@ -128,9 +124,7 @@ export function attachPresence(server) {
         broadcast(conn.roomId, { type: 'leave', user_id: conn.user.id });
         conn.roomId = newRoom;
         joinRoom(conn.roomId, conn);
-        ws.send(JSON.stringify({
-          type: 'room', room: conn.roomId, players: roomSnapshot(conn.roomId),
-        }));
+        guardedSend(ws, { type: 'room', room: conn.roomId, players: roomSnapshot(conn.roomId) });
         broadcast(conn.roomId, {
           type: 'join', user_id: conn.user.id, name: conn.user.display_name,
         }, conn);
@@ -168,16 +162,14 @@ export function attachPresence(server) {
       }
 
       if (msg.type === 'ping') {
-        ws.send(JSON.stringify({ type: 'pong', t: Date.now() }));
+        guardedSend(ws, { type: 'pong', t: Date.now() });
       }
     });
 
     ws.on('close', () => {
-      log.info('[ws:presence] connection closed', { userId: conn.user.id, roomId: conn.roomId });
       leaveRoom(conn.roomId, conn);
       broadcast(conn.roomId, { type: 'leave', user_id: conn.user.id });
     });
-    ws.on('error', (err) => log.warn('[ws:presence] connection error', { err, userId: conn.user.id }));
   });
 
   // Heartbeat sweep: kick idle conns

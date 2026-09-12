@@ -5,6 +5,7 @@
 import { WebSocketServer } from 'ws';
 import { attachOrchestration } from './orchestration.js';
 import { log } from './observability.js';
+import { guardedSend, onMessageJSON, logSocketLifecycle } from './ws-safety.js';
 
 const ROOM_MEDICINES = [
   { id: 'amox', name: 'AMOXICILLIN', category: 'Kháng sinh', color: '#43a047', dose: '500mg', form: 'Viên nang' },
@@ -53,15 +54,10 @@ const raceRooms = new Map();   // roomId → { players: [{ws,id,name}, ...], sta
 let raceRoomId = 1;
 let racePlayerId = 1;
 
-function raceSend(p, msg) {
-  if (p.ws.readyState === 1) p.ws.send(JSON.stringify(msg));
-}
+function raceSend(p, msg) { guardedSend(p.ws, msg); }
 function raceBroadcast(room, msg, exceptId = null) {
   const data = JSON.stringify(msg);
-  for (const p of room.players) {
-    if (p.id === exceptId) continue;
-    if (p.ws.readyState === 1) p.ws.send(data);
-  }
+  for (const p of room.players) if (p.id !== exceptId) guardedSend(p.ws, data);
 }
 
 function attachRaceWS(httpServer, basePath = '') {
@@ -72,11 +68,9 @@ function attachRaceWS(httpServer, basePath = '') {
 
   wss.on('connection', (ws) => {
     const player = { id: racePlayerId++, ws, name: 'Khách', score: 0, correct: 0, total: 0, finished: false, room: null };
-    ws.on('error', (err) => log.warn('[ws:race] connection error', { err, playerId: player.id }));
+    logSocketLifecycle(ws, 'race', { playerId: player.id });
 
-    ws.on('message', (raw) => {
-      let msg; try { msg = JSON.parse(raw); } catch { return; }
-
+    onMessageJSON(ws, (msg) => {
       if (msg.type === 'join') {
         player.name = String(msg.name || '').trim().slice(0, 32) || ('Khách ' + player.id);
         // Try to pair with someone in queue
@@ -124,7 +118,6 @@ function attachRaceWS(httpServer, basePath = '') {
     });
 
     ws.on('close', () => {
-      log.info('[ws:race] connection closed', { playerId: player.id });
       // Remove from queue
       const qi = raceQueue.indexOf(player);
       if (qi >= 0) raceQueue.splice(qi, 1);
@@ -157,13 +150,10 @@ function attachSackyMetaWS(httpServer, basePath = '') {
       })),
     };
   }
-  function send(p, msg) { if (p.ws.readyState === 1) p.ws.send(JSON.stringify(msg)); }
+  function send(p, msg) { guardedSend(p.ws, msg); }
   function broadcast(msg, exceptId = null) {
     const data = JSON.stringify(msg);
-    for (const p of players.values()) {
-      if (p.id === exceptId) continue;
-      if (p.ws.readyState === 1) p.ws.send(data);
-    }
+    for (const p of players.values()) if (p.id !== exceptId) guardedSend(p.ws, data);
   }
 
   wss.on('connection', (ws) => {
@@ -176,10 +166,9 @@ function attachSackyMetaWS(httpServer, basePath = '') {
       step: 1, score: 0,
     };
     players.set(id, player);
-    ws.on('error', (err) => log.warn('[ws:sacky] connection error', { err, playerId: id }));
+    logSocketLifecycle(ws, 'sacky', { playerId: id });
 
-    ws.on('message', (raw) => {
-      let msg; try { msg = JSON.parse(raw); } catch { return; }
+    onMessageJSON(ws, (msg) => {
       switch (msg.type) {
         case 'join': {
           if (typeof msg.name === 'string' && msg.name.trim()) {
@@ -216,7 +205,6 @@ function attachSackyMetaWS(httpServer, basePath = '') {
     });
 
     ws.on('close', () => {
-      log.info('[ws:sacky] connection closed', { playerId: id });
       players.delete(id);
       broadcast({ type: 'leave', id });
     });
@@ -229,7 +217,7 @@ function attachSackyMetaWS(httpServer, basePath = '') {
         broadcast({ type: 'leave', id: p.id });
       }
     }
-  }, 15000);
+  }, 15000).unref();
 
   return wss;
 }
@@ -252,13 +240,10 @@ function attachLabWS(httpServer, basePath = '') {
       })),
     };
   }
-  function send(p, msg) { if (p.ws.readyState === 1) p.ws.send(JSON.stringify(msg)); }
+  function send(p, msg) { guardedSend(p.ws, msg); }
   function broadcast(msg, exceptId = null) {
     const data = JSON.stringify(msg);
-    for (const p of players.values()) {
-      if (p.id === exceptId) continue;
-      if (p.ws.readyState === 1) p.ws.send(data);
-    }
+    for (const p of players.values()) if (p.id !== exceptId) guardedSend(p.ws, data);
   }
 
   wss.on('connection', (ws) => {
@@ -272,10 +257,9 @@ function attachLabWS(httpServer, basePath = '') {
       step: 1, weight: 0, beakerVol: 0,
     };
     players.set(id, player);
-    ws.on('error', (err) => log.warn('[ws:lab] connection error', { err, playerId: id }));
+    logSocketLifecycle(ws, 'lab', { playerId: id });
 
-    ws.on('message', (raw) => {
-      let msg; try { msg = JSON.parse(raw); } catch { return; }
+    onMessageJSON(ws, (msg) => {
       switch (msg.type) {
         case 'join': {
           if (typeof msg.name === 'string' && msg.name.trim()) player.name = msg.name.trim().slice(0, 32);
@@ -313,7 +297,6 @@ function attachLabWS(httpServer, basePath = '') {
     });
 
     ws.on('close', () => {
-      log.info('[ws:lab] connection closed', { playerId: id });
       players.delete(id);
       broadcast({ type: 'leave', id });
     });
@@ -326,7 +309,7 @@ function attachLabWS(httpServer, basePath = '') {
         broadcast({ type: 'leave', id: p.id });
       }
     }
-  }, 15000);
+  }, 15000).unref();
 
   return wss;
 }
@@ -352,16 +335,11 @@ export function attachRoom(httpServer, basePath = '') {
     };
   }
 
-  function send(p, msg) {
-    if (p.ws.readyState === 1) p.ws.send(JSON.stringify(msg));
-  }
+  function send(p, msg) { guardedSend(p.ws, msg); }
 
   function broadcast(msg, exceptId = null) {
     const data = JSON.stringify(msg);
-    for (const p of players.values()) {
-      if (p.id === exceptId) continue;
-      if (p.ws.readyState === 1) p.ws.send(data);
-    }
+    for (const p of players.values()) if (p.id !== exceptId) guardedSend(p.ws, data);
   }
 
   wss.on('connection', (ws) => {
@@ -373,12 +351,9 @@ export function attachRoom(httpServer, basePath = '') {
       cursor: { x: 0, y: 1, z: 1, pinching: false },
     };
     players.set(id, player);
-    ws.on('error', (err) => log.warn('[ws:room] connection error', { err, playerId: id }));
+    logSocketLifecycle(ws, 'room', { playerId: id });
 
-    ws.on('message', (raw) => {
-      let msg;
-      try { msg = JSON.parse(raw); } catch { return; }
-
+    onMessageJSON(ws, (msg) => {
       switch (msg.type) {
         case 'join': {
           if (typeof msg.name === 'string' && msg.name.trim()) {
@@ -448,7 +423,6 @@ export function attachRoom(httpServer, basePath = '') {
     });
 
     ws.on('close', () => {
-      log.info('[ws:room] connection closed', { playerId: id });
       // Drop any locks held by this player
       for (const m of state.meds) {
         if (m.ownerId === id) m.ownerId = null;
@@ -466,7 +440,7 @@ export function attachRoom(httpServer, basePath = '') {
         broadcast({ type: 'leave', id: p.id });
       }
     }
-  }, 15000);
+  }, 15000).unref();
 
   // Single upgrade listener routes to the right WS server by path.
   const ROOM_PATH = basePath + '/ws';
