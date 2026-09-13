@@ -1697,7 +1697,7 @@ const statsBar = document.getElementById('statsBar');
 
 const totalDrugs = records.length;
 document.getElementById('tuTitle').textContent = TU_NAME.toUpperCase();
-document.title = TU_NAME + ' · Nhà thuốc thực hành';
+if(new URLSearchParams(location.search).has('tu')) document.title = TU_NAME + ' · Nhà thuốc thực hành';
 { const sw = document.getElementById('tuSwitch');
   sw.href = '?tu=' + (TU_MODE === 'otc' ? 'rx' : 'otc');
   sw.textContent = 'Sang ' + (TU_MODE === 'otc' ? 'tủ thuốc kê đơn' : 'tủ thuốc không kê đơn') + ' →'; }
