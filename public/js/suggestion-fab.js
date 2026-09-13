@@ -12,7 +12,7 @@
 // ============================================================
 
 import { getPlayerName } from './api.js';
-import { renderRequestThread } from './request-thread.js?v=reqdetail1';
+import { renderRequestThread } from './request-thread.js?v=reqfile1';
 
 const TYPES = [
   { v: 'game',   icon: '🎮', label: 'Thêm trò chơi / mini-game' },

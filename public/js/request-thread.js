@@ -112,8 +112,12 @@ export async function renderRequestThread({ host, requestId, me = '', onChange, 
       <form class="rt-composer" id="rt-form-${requestId}">
         ${closed ? `<div class="rt-reopen-note">Yêu cầu đã đóng — gửi thêm sẽ <b>mở lại</b> để Ban điều hành xem tiếp.</div>` : ''}
         <textarea class="rt-input" id="rt-in-${requestId}" rows="2" maxlength="10000"
-          placeholder="Trao đổi tiếp với Ban điều hành AI… (Enter để gửi, Shift+Enter xuống dòng)"></textarea>
+          placeholder="Trao đổi tiếp với Ban điều hành AI… (Enter để gửi, Shift+Enter xuống dòng · dán ảnh trực tiếp được)"></textarea>
+        <div class="rt-files" id="rt-files-${requestId}"></div>
         <div class="rt-composer-bar">
+          <input type="file" id="rt-file-${requestId}" multiple hidden
+            accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip">
+          <button type="button" class="rt-attach" id="rt-attach-${requestId}" title="Đính kèm ảnh / file (có thể dán ảnh hoặc kéo-thả vào đây)">📎 Đính kèm</button>
           <span class="rt-cmsg" id="rt-msg-${requestId}"></span>
           <button type="submit" class="rt-send" id="rt-send-${requestId}">Gửi 📨</button>
         </div>
@@ -130,18 +134,49 @@ export async function renderRequestThread({ host, requestId, me = '', onChange, 
   const input = host.querySelector(`#rt-in-${requestId}`);
   const sendBtn = host.querySelector(`#rt-send-${requestId}`);
   const msgEl = host.querySelector(`#rt-msg-${requestId}`);
+  const fileIn = host.querySelector(`#rt-file-${requestId}`);
+  const filesEl = host.querySelector(`#rt-files-${requestId}`);
+  // File đính kèm cho tin trao đổi tiếp (trước đây chỉ gõ chữ được).
+  let files = [];
+  const paintFiles = () => {
+    filesEl.innerHTML = files.map((f, i) => `<span class="rt-file-chip">📎 ${escapeHtml(f.name)} <small>(${Math.max(1, Math.round(f.size / 1024))} KB)</small><button type="button" data-rm="${i}" aria-label="Bỏ file">✕</button></span>`).join('');
+  };
+  const addFiles = (list) => { files = [...files, ...Array.from(list || [])].slice(0, 5); paintFiles(); };
+  host.querySelector(`#rt-attach-${requestId}`).addEventListener('click', () => fileIn.click());
+  fileIn.addEventListener('change', () => { addFiles(fileIn.files); fileIn.value = ''; });
+  filesEl.addEventListener('click', (e) => { const b = e.target.closest('[data-rm]'); if (b) { files.splice(Number(b.dataset.rm), 1); paintFiles(); } });
+  form.addEventListener('dragover', (e) => e.preventDefault());
+  form.addEventListener('drop', (e) => { e.preventDefault(); addFiles(e.dataTransfer?.files); });
+  form.addEventListener('paste', (e) => {
+    const imgs = [];
+    for (const it of e.clipboardData?.items || []) {
+      if (it.kind === 'file') { const f = it.getAsFile(); if (f) imgs.push(new File([f], `dan-anh-${Date.now()}.${(f.type.split('/')[1] || 'png').replace('jpeg', 'jpg')}`, { type: f.type })); }
+    }
+    if (imgs.length) { e.preventDefault(); addFiles(imgs); }
+  });
+  async function uploadFile(f) {
+    const r = await fetch('/api/requests/attachments', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': f.type || 'application/octet-stream', 'X-Filename': encodeURIComponent(f.name || 'attachment'), 'X-Kind': 'file' },
+      body: f,
+    });
+    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.message || e.error || 'Không tải được file'); }
+    return r.json();
+  }
 
   async function submit() {
-    const body = input.value.trim();
+    const body = input.value.trim() || (files.length ? '📎 Gửi file đính kèm' : '');
     if (!body) { msgEl.textContent = '⚠️ Nhập nội dung trước khi gửi'; return; }
     sendBtn.disabled = true;
-    msgEl.textContent = 'Đang gửi…';
+    msgEl.textContent = files.length ? 'Đang tải file lên…' : 'Đang gửi…';
     try {
+      const attachments = [];
+      for (const f of files) attachments.push(await uploadFile(f));
       const r = await fetch(`/api/requests/${requestId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ body }),
+        body: JSON.stringify({ body, attachments }),
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
@@ -154,8 +189,8 @@ export async function renderRequestThread({ host, requestId, me = '', onChange, 
       msgEl.textContent = '';
       await renderRequestThread({ host, requestId, me, onChange, showTitle });
       if (typeof onChange === 'function') onChange();
-    } catch {
-      msgEl.textContent = '⚠️ Lỗi mạng — thử lại sau.';
+    } catch (err) {
+      msgEl.textContent = '⚠️ ' + (err?.message && err.message !== 'Failed to fetch' ? err.message : 'Lỗi mạng — thử lại sau.');
       sendBtn.disabled = false;
     }
   }
@@ -209,6 +244,12 @@ function injectStylesOnce() {
     .rt-input:focus { outline: 2px solid #c7d2fe; border-color: #6366f1; }
     .rt-composer-bar { display: flex; align-items: center; gap: 10px; }
     .rt-cmsg { font-size: 11.5px; opacity: .85; margin-right: auto; }
+    .rt-attach { padding: 6px 11px; border: 1px solid #c7d2fe; border-radius: 9px; background: #eef2ff; color: #3730a3; font: 700 12.5px/1 inherit; cursor: pointer; white-space: nowrap; }
+    .rt-files { display: flex; flex-wrap: wrap; gap: 6px; }
+    .rt-files:empty { display: none; }
+    .rt-file-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; background: #f1f5f9; color: #1f2937; border: 1px solid #e2e8f0; border-radius: 8px; padding: 3px 4px 3px 8px; }
+    .rt-file-chip small { opacity: .6; }
+    .rt-file-chip button { border: 0; background: rgba(0,0,0,.08); border-radius: 6px; width: 20px; height: 20px; cursor: pointer; font-size: 11px; }
     .rt-send { padding: 7px 15px; border: 0; border-radius: 9px; cursor: pointer; font: 700 13px/1 inherit;
       background: linear-gradient(135deg,#fbbf24,#f97316); color: #1f1147; }
     .rt-send:hover { filter: brightness(1.06); }

@@ -9,7 +9,7 @@
 // Page muốn ẩn: <body data-no-notifications-bell>. Guest (401) → tự ẩn.
 // ============================================================
 
-import { renderRequestThread } from './request-thread.js?v=reqdetail1';
+import { renderRequestThread } from './request-thread.js?v=reqfile1';
 import { getPlayerName } from './api.js';
 
 const POLL_MS = 60_000;

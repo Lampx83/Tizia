@@ -19,6 +19,26 @@ type ThreadData = {
   messages: ThreadMessage[];
 };
 
+// Upload 1 file qua /api/requests/attachments (cùng endpoint với hộp gửi yêu cầu).
+async function uploadFile(f: File): Promise<Attachment> {
+  const r = await fetch('/api/requests/attachments', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      'Content-Type': f.type || 'application/octet-stream',
+      'X-Filename': encodeURIComponent(f.name || 'attachment'),
+      'X-Kind': 'file',
+    },
+    body: f,
+  });
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({}));
+    throw new Error(e.message || e.error || 'Không tải được file');
+  }
+  return r.json();
+}
+const MAX_FILES = 5;
+
 function Atts({ atts }: { atts?: Attachment[] }) {
   const list = Array.isArray(atts) ? atts : [];
   if (!list.length) return null;
@@ -61,6 +81,14 @@ export default function RequestThread({
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
   const [msg, setMsg] = useState('');
+  // File đính kèm cho tin trao đổi tiếp (trước đây ô này chỉ gõ chữ được, nên
+  // người dùng "gửi lại ảnh" mà ảnh không bao giờ tới Ban điều hành).
+  const [files, setFiles] = useState<File[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const addFiles = (list: FileList | File[] | null) => {
+    if (!list) return;
+    setFiles((prev) => [...prev, ...Array.from(list)].slice(0, MAX_FILES));
+  };
   const listRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -94,19 +122,21 @@ export default function RequestThread({
   const closed = req.status === 'done' || req.status === 'rejected';
 
   async function submit() {
-    const text = body.trim();
+    const text = body.trim() || (files.length ? '📎 Gửi file đính kèm' : '');
     if (!text) {
       setMsg('⚠️ Nhập nội dung trước khi gửi');
       return;
     }
     setSending(true);
-    setMsg('Đang gửi…');
+    setMsg(files.length ? 'Đang tải file lên…' : 'Đang gửi…');
     try {
+      const attachments: Attachment[] = [];
+      for (const f of files) attachments.push(await uploadFile(f));
       const r = await fetch(`/api/requests/${requestId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ body: text }),
+        body: JSON.stringify({ body: text, attachments }),
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
@@ -121,11 +151,12 @@ export default function RequestThread({
         return;
       }
       setBody('');
+      setFiles([]);
       setMsg('');
       await load();
       onChange?.();
-    } catch {
-      setMsg('⚠️ Lỗi mạng — thử lại sau.');
+    } catch (err) {
+      setMsg('⚠️ ' + (err instanceof Error && err.message !== 'Failed to fetch' ? err.message : 'Lỗi mạng — thử lại sau.'));
     } finally {
       setSending(false);
     }
@@ -170,6 +201,24 @@ export default function RequestThread({
             e.preventDefault();
             submit();
           }}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            addFiles(e.dataTransfer?.files || null);
+          }}
+          onPaste={(e) => {
+            const imgs: File[] = [];
+            for (const it of Array.from(e.clipboardData?.items || [])) {
+              if (it.kind === 'file') {
+                const f = it.getAsFile();
+                if (f) imgs.push(new File([f], f.name && f.name !== 'image.png' ? f.name : `dan-anh-${Date.now()}.png`, { type: f.type }));
+              }
+            }
+            if (imgs.length) {
+              e.preventDefault();
+              addFiles(imgs);
+            }
+          }}
         >
           {closed && (
             <div className="rt-reopen-note">
@@ -188,9 +237,33 @@ export default function RequestThread({
                 submit();
               }
             }}
-            placeholder="Trao đổi tiếp với Ban điều hành AI… (Enter để gửi, Shift+Enter xuống dòng)"
+            placeholder="Trao đổi tiếp với Ban điều hành AI… (Enter để gửi, Shift+Enter xuống dòng · dán ảnh trực tiếp được)"
           />
+          {files.length > 0 && (
+            <div className="rt-files">
+              {files.map((f, i) => (
+                <span key={i} className="rt-file-chip">
+                  📎 {f.name} <small>({Math.max(1, Math.round(f.size / 1024))} KB)</small>
+                  <button type="button" onClick={() => setFiles((p) => p.filter((_, j) => j !== i))} aria-label="Bỏ file">✕</button>
+                </span>
+              ))}
+            </div>
+          )}
           <div className="rt-composer-bar">
+            <input
+              ref={fileRef}
+              type="file"
+              multiple
+              hidden
+              accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
+              onChange={(e) => {
+                addFiles(e.target.files);
+                e.target.value = '';
+              }}
+            />
+            <button type="button" className="rt-attach" onClick={() => fileRef.current?.click()} title="Đính kèm ảnh / file (có thể dán ảnh hoặc kéo-thả vào đây)">
+              📎 Đính kèm
+            </button>
             <span className="rt-cmsg">{msg}</span>
             <button type="submit" className="rt-send" disabled={sending}>
               Gửi 📨
