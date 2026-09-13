@@ -969,6 +969,13 @@
   .mh-menu[hidden]{display:none}
   .mh-menu a,.mh-menu button{all:unset;cursor:pointer;padding:10px 12px;border-radius:9px;font:700 17px 'Nunito',sans-serif;color:#1f3b63}
   .mh-menu a:hover,.mh-menu button:hover{background:#eaf4ff}
+  /* req #164 (phản hồi): nút xem sơ đồ toàn màn hình — cạnh nút Cài đặt */
+  .mh-fullscreen{position:fixed;left:64px;bottom:12px;z-index:40;width:44px;height:44px;border-radius:50%;border:3px solid #fff;cursor:pointer;
+    background:linear-gradient(180deg,#2f8be0,#1d6fc0);color:#fff;font-size:19px;line-height:1;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 3px 0 #15508c,0 6px 14px rgba(0,0,0,.25)}
+  .mh-fullscreen:hover{filter:brightness(1.08)}
+  :fullscreen #mapStage,:-webkit-full-screen #mapStage{width:100vw;height:100vh;max-width:100vw}
+  :fullscreen #mapScreen,:-webkit-full-screen #mapScreen{background:#bfe6f7;display:flex;align-items:center;justify-content:center}
   body.legend-off .map-legend{display:none}
   .tu-switch{display:inline-block;margin-top:4px;font-size:.78rem;font-weight:800;color:#225C4E;text-decoration:none;
     background:#fff;border:2px solid #cfe7df;border-radius:12px;padding:3px 10px}
@@ -1208,6 +1215,7 @@
   <!-- req #164 (phản hồi): nút cài đặt gọn nhỏ, neo cố định ở góc màn hình
        thay vì đè lên sơ đồ, để dành trọn diện tích cho nhà thuốc. -->
   <button type="button" class="mh-gear" id="mhGear" title="Cài đặt">⚙️</button>
+  <button type="button" class="mh-fullscreen" id="mhFullscreen" title="Xem toàn màn hình">⛶</button>
   <div class="mh-menu" id="mhMenu" hidden>
     <button type="button" data-act="facade">🚪 Ra mặt tiền nhà thuốc</button>
     <a href="/pharma-crush.html">💊 Chơi Pharma Crush</a>
@@ -2867,6 +2875,31 @@ const LEGEND_BG = { 'z-rx':'#2f7fd8','z-otc':'#2e9b53','z-nondrug':'#8b5cf6','z-
     else if(b.dataset.act === 'guide'){ document.getElementById('mapGuide').classList.toggle('hidden-manual'); }
   });
   document.addEventListener('click', () => { menu.hidden = true; });
+
+  /* req #164 (phản hồi): nút xem sơ đồ toàn màn hình. Fullscreen áp cho
+     #mapStage (map + 2 bảng bên) chứ không phải cả trang, để tránh phóng to
+     luôn cả nút Cài đặt/⛶ (đang neo theo viewport) đè lên nội dung. */
+  const fsBtn = document.getElementById('mhFullscreen');
+  const mapStageEl = document.getElementById('mapStage');
+  function isFs(){ return document.fullscreenElement || document.webkitFullscreenElement; }
+  function updateFsBtn(){
+    fsBtn.textContent = isFs() ? '✕' : '⛶';
+    fsBtn.title = isFs() ? 'Thoát toàn màn hình' : 'Xem toàn màn hình';
+    setTimeout(fitMap, 60);
+  }
+  fsBtn.addEventListener('click', () => {
+    if(isFs()){
+      (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+    } else if(mapStageEl.requestFullscreen){
+      mapStageEl.requestFullscreen().catch(() => { pmZoneLabel.textContent = '⚠️ Trình duyệt không cho xem toàn màn hình.'; });
+    } else if(mapStageEl.webkitRequestFullscreen){
+      mapStageEl.webkitRequestFullscreen();
+    } else {
+      pmZoneLabel.textContent = '⚠️ Trình duyệt này không hỗ trợ xem toàn màn hình.';
+    }
+  });
+  document.addEventListener('fullscreenchange', updateFsBtn);
+  document.addEventListener('webkitfullscreenchange', updateFsBtn);
 })();
 
 /* req #164 (phản hồi): thẻ "Hướng dẫn luyện tập" — nhiệm vụ hiện tại lấy từ
