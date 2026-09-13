@@ -763,6 +763,13 @@
        cabinet and the delivery cart get all the vertical space. */
     .toolbar{display:none;}
     .search-results{display:none !important;}
+    /* req (tối ưu mobile): nút "Xếp bằng tay (camera)" neo cố định theo
+       viewport (bottom:107px) — ở khổ máy này .side-panel co xuống dải
+       thấp ~30dvh phía dưới (mini-games-in + delivery-cart), nút nổi đè
+       thẳng lên thẻ Pharma Sort, che mất chữ. Cách chơi bằng cử chỉ tay qua
+       webcam vốn hợp máy tính bàn hơn — trên điện thoại đã có kéo-thả bằng
+       ngón tay, nên ẩn hẳn nút + khung xem camera này, đỡ chồng chéo. */
+    .hand-btn, #handCamPreview{display:none !important;}
 
     /* no side gutter either — cabinet and delivery cart both run edge to
        edge on a phone screen instead of sitting in a narrower centred card. */
@@ -3539,6 +3546,20 @@ function updateHand(time){
   else if(!handState.pinching && wasPinching) releaseHandGrab(clientX, clientY);
 }
 (function handLoop(t){ updateHand(t); requestAnimationFrame(handLoop); })();
+
+/* req (tối ưu mobile): mặt tiền vẽ theo khung 16:9 (1600×900) + preserveAspectRatio
+   "slice" — trên điện thoại dọc (rất cao, rất hẹp) "slice" phải cắt bỏ gần hết
+   hai bên để lấp đầy chiều cao, chỉ còn thấy một dải hẹp ở giữa biển hiệu (mất cả
+   hai logo, mất luôn nút Pharma Crush/Sort). Đổi sang "meet" khi màn hình dọc/hẹp
+   hơn hẳn 16:9 — nhìn thấy trọn cảnh (viền trên dưới trống bù vào), còn màn ngang
+   bình thường vẫn giữ "slice" để lấp đầy khung như cũ. */
+const facadeSvgEl = document.getElementById('facadeSvg');
+function fitFacade(){
+  const isPortraitNarrow = (window.innerWidth / window.innerHeight) < (1600/900) * 0.7;
+  facadeSvgEl.setAttribute('preserveAspectRatio', isPortraitNarrow ? 'xMidYMid meet' : 'xMidYMid slice');
+}
+fitFacade();
+window.addEventListener('resize', fitFacade);
 
 /* ---- boot: req #154 — mở ở MẶT TIỀN nhà thuốc, phải bấm cửa mới vào sơ đồ ----
    pStart()/fitMap() vẫn chạy sẵn trong showMap() khi người dùng bước qua cửa. */
