@@ -278,7 +278,7 @@ export default function SuggestionFab() {
           setMsg(
             <>
               ⚠️ Bạn đang ở trường khác.{' '}
-              <a href={`/school.html?domain=${encodeURIComponent(e2.your_school || '')}`} style={{ color: '#fbbf24', textDecoration: 'underline' }}>
+              <a href={`/school?domain=${encodeURIComponent(e2.your_school || '')}`} style={{ color: '#fbbf24', textDecoration: 'underline' }}>
                 Về trường của bạn
               </a>{' '}
               để gửi đề nghị.
@@ -350,9 +350,7 @@ export default function SuggestionFab() {
               <div className="sgf-head-ico">🏛️</div>
               <div className="sgf-head-text">
                 <h3 id="sgf-title">Ban điều hành AI</h3>
-                <p>
-                  Trường do <b>AI điều hành</b> — gửi đề nghị, AI sẽ xem xét &amp; phản hồi. Yêu cầu được làm xong sẽ tick ✓ kèm lời nhắn.
-                </p>
+                <p>Gửi đề nghị cải tiến trang này — AI sẽ xem xét &amp; phản hồi.</p>
               </div>
               <button type="button" className="sgf-x" onClick={() => setOpen(false)} aria-label="Đóng">✕</button>
             </div>
@@ -387,7 +385,6 @@ export default function SuggestionFab() {
                 ) : (
                   <button type="button" className="sgf-pick" onClick={pickOnPage} disabled={picking}>
                     🎯 Chọn đối tượng trên trang
-                    <small>Bấm rồi trỏ vào đúng phần cần sửa — không phải mô tả bằng lời</small>
                   </button>
                 )}
               </div>
@@ -433,10 +430,10 @@ export default function SuggestionFab() {
               >
                 <label className="sgf-attach-row">
                   <input type="checkbox" checked={shot} onChange={(e) => setShot(e.target.checked)} />
-                  <span>📸 Đính kèm ảnh chụp <b>màn hình hiện tại</b> (Ban điều hành xem trực tiếp giao diện anh/chị đang gặp)</span>
+                  <span>📸 Đính kèm ảnh chụp màn hình hiện tại</span>
                 </label>
                 <label className="sgf-attach-row sgf-file-row">
-                  <span className="sgf-attach-lbl">📎 Đính kèm file (ảnh / PDF / Word / Excel / PPT / CSDL .db / .sql — tối đa 50MB × 5 file):</span>
+                  <span className="sgf-attach-lbl">📎 Đính kèm file</span>
                   <input
                     type="file"
                     multiple
@@ -444,8 +441,7 @@ export default function SuggestionFab() {
                     onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }}
                   />
                 </label>
-                <div className="sgf-attach-hint">💡 Có thể <b>kéo-thả</b> file vào khung này hoặc <b>dán ảnh</b> trực tiếp (Ctrl/⌘+V).</div>
-                <div className="sgf-attach-hint">📄 Yêu cầu dài? Có thể viết <b>toàn bộ nội dung trong file Word/PDF</b> rồi đính kèm — Ban điều hành AI sẽ <b>mở file đọc kỹ</b> trước khi thực hiện (tiêu đề vẫn cần điền, VD: &quot;Xem yêu cầu trong file&quot;).</div>
+                <div className="sgf-attach-hint">💡 Kéo-thả hoặc dán ảnh (Ctrl/⌘+V) vào đây.</div>
                 {(shot || files.length > 0) && (
                   <div className="sgf-attach-list">
                     {shot && (

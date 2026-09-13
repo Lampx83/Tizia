@@ -132,8 +132,7 @@ function autoMount() {
           <div class="sgf-head-ico">🏛️</div>
           <div class="sgf-head-text">
             <h3 id="sgf-title">Ban điều hành AI</h3>
-            <p>Trường do <b>AI điều hành</b> — gửi đề nghị, AI sẽ xem xét &amp;
-               phản hồi. Yêu cầu được làm xong sẽ tick ✓ kèm lời nhắn.</p>
+            <p>Gửi đề nghị cải tiến trang này — AI sẽ xem xét &amp; phản hồi.</p>
           </div>
           <button type="button" class="sgf-x" data-close aria-label="Đóng">✕</button>
         </div>
@@ -141,9 +140,7 @@ function autoMount() {
         <form id="sgf-form" class="sgf-form">
           <!-- Trỏ thẳng vào phần cần sửa thay vì tả bằng lời (đỡ bị hiểu nhầm). -->
           <div class="sgf-lab">Đối tượng cần thay đổi
-            <button type="button" class="sgf-pick" id="sgf-pick">🎯 Chọn đối tượng trên trang
-              <small>Bấm rồi trỏ vào đúng phần cần sửa — không phải mô tả bằng lời</small>
-            </button>
+            <button type="button" class="sgf-pick" id="sgf-pick">🎯 Chọn đối tượng trên trang</button>
             <div class="sgf-target" id="sgf-target" hidden>
               <span class="sgf-target-ico">🎯</span>
               <span class="sgf-target-txt"><b id="sgf-target-lb"></b><i id="sgf-target-pa"></i></span>
@@ -162,14 +159,13 @@ function autoMount() {
           <div class="sgf-attach">
             <label class="sgf-attach-row">
               <input type="checkbox" id="sgf-shot-check" />
-              <span>📸 Đính kèm ảnh chụp <b>màn hình hiện tại</b> (Ban điều hành xem trực tiếp giao diện anh/chị đang gặp)</span>
+              <span>📸 Đính kèm ảnh chụp màn hình hiện tại</span>
             </label>
             <label class="sgf-attach-row sgf-file-row">
-              <span class="sgf-attach-lbl">📎 Đính kèm file (ảnh / PDF / Word / Excel / PPT / CSDL .db / .sql — tối đa 50MB × 5 file):</span>
+              <span class="sgf-attach-lbl">📎 Đính kèm file</span>
               <input type="file" id="sgf-file-in" multiple accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.db,.sqlite,.sqlite3,.sql,application/sql,application/x-sqlite3" />
             </label>
-            <div class="sgf-attach-hint">💡 Có thể <b>kéo-thả</b> file vào khung này hoặc <b>dán ảnh</b> trực tiếp (Ctrl/⌘+V).</div>
-            <div class="sgf-attach-hint">📄 Yêu cầu dài? Có thể viết <b>toàn bộ nội dung trong file Word/PDF</b> rồi đính kèm — Ban điều hành AI sẽ <b>mở file đọc kỹ</b> trước khi thực hiện (tiêu đề vẫn cần điền, VD: "Xem yêu cầu trong file").</div>
+            <div class="sgf-attach-hint">💡 Kéo-thả hoặc dán ảnh (Ctrl/⌘+V) vào đây.</div>
             <div class="sgf-attach-list" id="sgf-attach-list"></div>
           </div>
 
