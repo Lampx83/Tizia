@@ -902,7 +902,10 @@
   #doorPwMask{position:fixed;inset:0;z-index:200;background:rgba(20,40,50,.45);display:flex;align-items:center;justify-content:center;padding:16px}
   #doorPwMask[hidden]{display:none}
   /* req #164: sơ đồ theo ảnh mẫu của giảng viên + bảng khu vực bên phải */
-  .map-stage{gap:14px;align-items:flex-start}
+  .map-stage{display:grid;grid-template-columns:250px auto 250px;gap:14px;align-items:start;justify-content:center;width:100%}
+  .map-stage .pharmacy-map.iso{grid-column:2;justify-self:center}
+  .map-stage .map-legend{grid-column:3;justify-self:start}
+  .map-stage .map-guide{grid-column:1;justify-self:end}
   .pharmacy-map.iso{transform-origin:top left;border:4px solid #fff;border-radius:18px;
     background:#eef4f6 url(/img/gpp/so-do-nha-thuoc.jpg) 0 0/100% 100% no-repeat;
     box-shadow:0 4px 0 #b9d3e6,0 12px 28px rgba(40,80,120,.25)}
@@ -923,7 +926,22 @@
   .map-legend li .ml-ico{width:30px;height:30px;flex:none;border-radius:9px;display:grid;place-items:center;font-size:17px;color:#fff}
   .map-legend li.go b{color:#b3700f;font-size:.7rem;margin-left:auto;white-space:nowrap}
   .map-legend .ml-foot{margin:8px 0 0;font:700 .78rem 'Baloo 2',sans-serif;color:#2c6aa0;text-align:center;font-style:italic}
-  @media (max-width:980px){ .map-legend{display:none} }
+  @media (max-width:980px){ .map-legend{display:none} .map-guide{display:none} .map-stage{grid-template-columns:auto} }
+  /* req #164 (phản hồi): thẻ hướng dẫn trò chơi — bên đối diện thẻ khu vực,
+     cùng ngôn ngữ thị giác (thẻ trắng bo góc trong bảng). */
+  .map-guide{flex:none;width:250px;background:rgba(255,255,255,.93);border:2px solid #fff;border-radius:18px;
+    box-shadow:0 4px 0 #b9d3e6,0 10px 22px rgba(40,80,120,.18);padding:10px 12px;max-height:100%;overflow:auto;
+    display:flex;flex-direction:column;gap:9px}
+  .map-guide h3{margin:0;font:800 1rem 'Baloo 2',sans-serif;color:#1f3b63}
+  .mg-card{background:#f3f8ff;border:1px solid #dce8fa;border-radius:12px;padding:8px 10px}
+  .mg-card h4{margin:0 0 4px;font:800 .78rem 'Baloo 2',sans-serif;color:#2c6aa0}
+  .mg-card p{margin:0;font:600 .74rem/1.4 'Nunito',sans-serif;color:#3f5170}
+  .mg-tip{display:flex;gap:8px;align-items:flex-start}
+  .mg-tip .who{font-size:20px;flex:none}
+  .mg-book-btn{border:2px solid #fff;border-radius:14px;background:linear-gradient(180deg,#5aa7ff,#2f7fd8);color:#fff;
+    font:800 .82rem 'Baloo 2',sans-serif;padding:8px;cursor:pointer;box-shadow:0 3px 0 #1f5da0}
+  .mg-book-btn:hover{filter:brightness(1.06)}
+  .map-guide.hidden-manual{display:none}
   .mh-bar{flex:none;width:100%;max-width:1480px;box-sizing:border-box;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
     background:linear-gradient(180deg,#1d4f91,#173f78);color:#fff;border-radius:18px;padding:7px 14px;box-shadow:0 4px 0 #0f2f5c,0 8px 18px rgba(20,50,90,.3)}
   .mh-left{display:flex;align-items:center;gap:10px}
@@ -1132,6 +1150,22 @@
   </header>
   <p class="map-hint">Bấm vào <b>Tủ thuốc kê đơn</b> hoặc <b>Tủ thuốc không kê đơn</b> để sắp xếp thuốc vào tủ · đi bằng <b>phím mũi tên / WASD</b> hoặc bấm vào sàn · <b>🚪 Lối vào</b> để ra ngoài. 📍 <span id="pmZone">Đang ở lối vào</span></p>
   <div class="map-stage" id="mapStage">
+  <aside class="map-guide" id="mapGuide">
+    <h3>🎮 Hướng dẫn luyện tập</h3>
+    <div class="mg-card">
+      <h4>🎯 Nhiệm vụ hiện tại</h4>
+      <p id="mgMission">Sắp xếp đúng thuốc vào tủ Kê đơn &amp; Không kê đơn.</p>
+    </div>
+    <div class="mg-card">
+      <h4>🧰 Công cụ hỗ trợ</h4>
+      <p id="mgTools">Bộ công cụ riêng (gợi ý, kiểm tra nhanh…) sẽ có cùng hệ nhiệm vụ mới, đang chờ giảng viên xác nhận.</p>
+    </div>
+    <div class="mg-card mg-tip">
+      <span class="who">👩‍⚕️</span>
+      <p><b>MẸO —</b> <span id="mgTip">—</span></p>
+    </div>
+    <button type="button" class="mg-book-btn" id="mgBookBtn">📖 Sổ tay dược sĩ</button>
+  </aside>
   <div class="pharmacy-map iso" id="pharmacyMap">
     <!-- req #164: nền là sơ đồ nhà thuốc do giảng viên gửi; mỗi khu là một vùng bấm trong suốt
          đặt đè đúng vị trí (toạ độ theo ảnh 1180×936). -->
@@ -1156,6 +1190,7 @@
       <a href="/pharma-sort.html">🗂️ Chơi Pharma Sort</a>
       <button type="button" data-act="home">📍 Đưa nhân vật về lối vào</button>
       <button type="button" data-act="legend">🗂️ Ẩn/hiện bảng khu vực</button>
+      <button type="button" data-act="guide">📖 Ẩn/hiện bảng hướng dẫn</button>
     </div>
     <div class="pm-char" id="pmChar">
       <div class="pm-body">
@@ -1174,6 +1209,16 @@
     <p class="ml-foot">Quản lý tốt hôm nay<br>Phục vụ sức khỏe ngày mai 💚</p>
   </aside>
   </div><!-- /#mapStage -->
+
+  <div class="overlay" id="gbOverlay">
+    <div class="modal" style="max-width:560px">
+      <div class="modal-head">
+        <div><h2>📖 Sổ tay dược sĩ</h2><div class="sub">Kiến thức nền GPP cho việc sắp xếp &amp; cấp phát</div></div>
+        <button type="button" id="gbClose">✕</button>
+      </div>
+      <div class="modal-body" id="gbBody" style="padding:14px 18px"></div>
+    </div>
+  </div>
   <div class="map-action" id="mapAction"></div>
 </div>
 
@@ -2813,8 +2858,55 @@ const LEGEND_BG = { 'z-rx':'#2f7fd8','z-otc':'#2e9b53','z-nondrug':'#8b5cf6','z-
     if(b.dataset.act === 'facade') showFacade();
     else if(b.dataset.act === 'home'){ charX = 588; charY = 690; targetX = targetY = null; }
     else if(b.dataset.act === 'legend'){ document.body.classList.toggle('legend-off'); fitMap(); }
+    else if(b.dataset.act === 'guide'){ document.getElementById('mapGuide').classList.toggle('hidden-manual'); }
   });
   document.addEventListener('click', () => { menu.hidden = true; });
+})();
+
+/* req #164 (phản hồi): thẻ "Hướng dẫn luyện tập" — nhiệm vụ hiện tại lấy từ
+   danh hiệu/sao thật (không hard-code), mẹo dược sĩ xoay vòng, sổ tay dược sĩ
+   mở hộp thoại riêng (không đụng tới modal chi tiết thuốc). Nội dung "Công cụ
+   hỗ trợ" còn là placeholder — chờ phạm vi hệ 5 nhiệm vụ ở #163 mới có tool
+   thật để gắn vào đây. */
+(function initMapGuide(){
+  const starsOf = k => { try{ return (JSON.parse(localStorage.getItem(k) || '{}').stars) || 0; }catch(e){ return 0; } };
+  const rxS = starsOf('tu-thuoc-mo-phong:game_v2'), otcS = starsOf('tu-thuoc-mo-phong:game_v2:otc');
+  const titleOf = s => { let t = TITLES[0]; for(const x of TITLES){ if(s >= x.min) t = x; } return t; };
+  const mgMission = document.getElementById('mgMission');
+  if(mgMission) mgMission.textContent = 'Tủ kê đơn: ' + titleOf(rxS).name + ' (' + rxS + '⭐) · Tủ không kê đơn: ' + titleOf(otcS).name + ' (' + otcS + '⭐)';
+
+  const TIPS = [
+    'Luôn xếp thuốc theo nguyên tắc FEFO — thuốc hết hạn SỚM đưa ra phía trước, dễ lấy trước.',
+    'Thuốc kê đơn (Rx) chỉ cấp phát khi có đơn thuốc hợp lệ của bác sĩ.',
+    'Kiểm tra "5 Đúng" trước khi giao thuốc: đúng thuốc – đúng người – đúng liều – đúng đường dùng – đúng thời điểm.',
+    'Vắc xin, insulin và các thuốc cần lạnh phải giữ ở 2–8°C, không để chung khoang đông đá.',
+    'Thuốc kiểm soát đặc biệt (gây nghiện, hướng thần) luôn phải cất trong tủ có khóa riêng, ghi sổ theo dõi.',
+    'Khi nhận hàng mới, đối chiếu số lô – hạn dùng – số lượng với phiếu giao hàng trước khi nhập tủ.',
+  ];
+  const mgTip = document.getElementById('mgTip');
+  if(mgTip) mgTip.textContent = TIPS[Math.floor(Math.random() * TIPS.length)];
+
+  const gbOverlay = document.getElementById('gbOverlay');
+  const gbBody = document.getElementById('gbBody');
+  document.getElementById('mgBookBtn')?.addEventListener('click', () => {
+    gbBody.innerHTML = `
+      <p><b>Nguyên tắc GPP cơ bản khi bảo quản &amp; sắp xếp:</b></p>
+      <ul style="margin:6px 0 14px;padding-left:18px;line-height:1.6">
+        <li><b>FEFO</b> (First Expired, First Out) — thuốc hết hạn trước xếp ra ngoài, lấy trước.</li>
+        <li>Phân khu rõ: <b>Rx</b> (kê đơn) · <b>OTC</b> (không kê đơn) · kiểm soát đặc biệt (có khóa) · sản phẩm không phải thuốc.</li>
+        <li>Bảo quản lạnh <b>2–8°C</b> cho vắc xin, insulin và các thuốc ghi rõ yêu cầu này trên nhãn.</li>
+        <li>Hàng mới về phải qua khu <b>chờ kiểm nhập</b>, đối chiếu đủ trước khi lên tủ.</li>
+        <li>Thuốc cận hạn/hư hỏng chuyển sang khu <b>chờ xử lý</b>, không để lẫn với hàng còn bán được.</li>
+      </ul>
+      <p><b>5 Đúng khi cấp phát thuốc:</b></p>
+      <ul style="margin:6px 0 0;padding-left:18px;line-height:1.6">
+        <li>Đúng người bệnh · Đúng thuốc · Đúng liều dùng · Đúng đường dùng · Đúng thời điểm</li>
+      </ul>
+      <p style="margin-top:14px;opacity:.7;font-size:.82rem">Nội dung chi tiết theo giáo trình 5 nhiệm vụ sẽ được bổ sung khi hệ nhiệm vụ chính thức triển khai.</p>`;
+    gbOverlay.style.display = 'flex';
+  });
+  document.getElementById('gbClose')?.addEventListener('click', () => { gbOverlay.style.display = 'none'; });
+  gbOverlay?.addEventListener('click', e => { if(e.target === gbOverlay) gbOverlay.style.display = 'none'; });
 })();
 let hasKey = localStorage.getItem('tu-thuoc-mo-phong:key') === '1'
   || gameMax('pharma_crush_progress_v1') > KEY_LEVEL || gameMax('pharma_sort_progress_v1') > KEY_LEVEL;
