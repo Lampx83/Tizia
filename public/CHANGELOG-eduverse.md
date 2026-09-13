@@ -4,6 +4,24 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-13 — Phiên điểm danh (62) · Không đọc được hộp thư production
+
+**Kết luận:** Không có yêu cầu nào khả thi để thực hiện — production sống (`/api/health` → 200) nhưng mọi đường đọc hộp thư đều trả `401 needLogin` (môi trường routine không có phiên đăng nhập Tizia); `ai-board/inbox.json` vẫn là stub rỗng và GitHub Issues mở = 0. Không tạo PR, không tự bịa việc.
+
+| Đường thử | Kết quả |
+|---|---|
+| `GET https://tizia.vn/api/health` | `200` — service `tizia`, env `production` |
+| `GET https://tizia.vn/api/requests?domain=pharmacy` | `401 {"error":"unauthorized","needLogin":true}` |
+| `GET https://tizia.vn/api/admin/requests` | `401` (requireAdmin) |
+| `GET https://tizia.vn/api/ai-decisions?limit=50` | `401` |
+| `GET https://tizia.vn/api/requests/:id/thread` · `/decisions` | `401` |
+| `ai-board/inbox.json` | `items: []` — chưa từng được sync lại kể từ 2026-07-09 |
+| GitHub Issues (`lampx83/eduverse`, state OPEN) | 0 |
+
+**Ghi chú hạ tầng (chưa khắc phục, xem phiên 45):** `server/scripts/sync-inbox.mjs` cần `data/tizia.db` — file nằm trên volume production, không có trong repo, nên script tự `exit(1)` khi chạy ở môi trường routine. Hộp thư vì vậy vẫn "mù". Cách gỡ vẫn như đã đề xuất: chạy `sync-inbox.mjs` **trên host production** rồi commit `inbox.json`, hoặc cấp `DATA_DIR` trỏ vào volume production cho môi trường routine.
+
+---
+
 ## 2026-09-12 — Phiên điểm danh (61) · Hộp thư trống
 
 **Chế độ:** Điểm danh — `ai-board/inbox.json` không có yêu cầu (`items: []`). Không có cải tiến nào được thực hiện hôm nay. Không tạo PR.
