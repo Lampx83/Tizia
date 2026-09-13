@@ -710,9 +710,14 @@
   .map-key{font-size:.78rem;font-weight:800;padding:4px 12px;border-radius:14px;white-space:nowrap;}
   .map-key.locked{background:#e7d7bf;color:#7a5b2c;border:1px solid #b99a63;}
   .map-key.has{background:#fff2c2;color:#8a5a10;border:1px solid #e0a83a;box-shadow:0 0 12px rgba(224,168,58,.6);}
-  .map-hint{margin:0;font-size:.74rem;color:#4a3a1c;text-align:center;max-width:900px;flex:none;}
-  .map-hint b{color:var(--wood-dark);}
-  .map-action{flex:none;min-height:34px;display:flex;align-items:center;}
+  /* req #164 (phản hồi): trạng thái vị trí + nút hành động nổi ngay trên sơ đồ
+     (không còn chiếm một hàng riêng) để nhường tối đa chiều cao cho nhà thuốc. */
+  .map-hud{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:15;
+    display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;max-width:92%;}
+  .map-hud-status{margin:0;font-size:.74rem;font-weight:700;color:#4a5b7a;background:rgba(255,255,255,.88);
+    border:2px solid #fff;border-radius:14px;padding:4px 12px;box-shadow:0 3px 0 rgba(200,220,240,.9);
+    text-align:center;pointer-events:auto;}
+  .map-action{min-height:0;display:flex;align-items:center;pointer-events:auto;}
   .act-btn{border:none;background:#2e8256;color:#fff;font-weight:800;font-size:.86rem;padding:8px 18px;border-radius:20px;
     cursor:pointer;box-shadow:0 3px 8px rgba(0,0,0,.25);animation:act-pulse 1.2s infinite;}
   .act-btn.locked{background:#a3271f;animation:none;cursor:not-allowed;}
@@ -851,8 +856,7 @@
     border:2px solid #fff;box-shadow:0 4px 0 #e8cfa2,0 8px 16px rgba(70,110,160,.22);
     padding:8px 16px;color:#4a5b7a}
   .map-title{color:#3f5170}
-  .map-hint{background:rgba(255,255,255,.82);border-radius:16px;padding:8px 14px;
-    border:2px solid #fff;box-shadow:0 3px 0 rgba(200,220,240,.9);color:#4a5b7a}
+  .map-hud-status{background:rgba(255,255,255,.88);border:2px solid #fff;box-shadow:0 3px 0 rgba(200,220,240,.9);color:#4a5b7a}
   .act-btn{font-family:'Baloo 2',cursive;border-radius:16px;border:2px solid #fff;
     box-shadow:0 4px 0 #3aa653,0 8px 14px rgba(70,110,160,.25)}
   .act-btn.locked{box-shadow:0 4px 0 #b9c4d4}
@@ -926,7 +930,6 @@
   .map-legend li .ml-ico{width:30px;height:30px;flex:none;border-radius:9px;display:grid;place-items:center;font-size:17px;color:#fff}
   .map-legend li.go b{color:#b3700f;font-size:.7rem;margin-left:auto;white-space:nowrap}
   .map-legend .ml-foot{margin:8px 0 0;font:700 .78rem 'Baloo 2',sans-serif;color:#2c6aa0;text-align:center;font-style:italic}
-  @media (max-width:980px){ .map-legend{display:none} .map-guide{display:none} .map-stage{grid-template-columns:auto} }
   /* req #164 (phản hồi): thẻ hướng dẫn trò chơi — bên đối diện thẻ khu vực,
      cùng ngôn ngữ thị giác (thẻ trắng bo góc trong bảng). */
   .map-guide{flex:none;width:250px;background:rgba(255,255,255,.93);border:2px solid #fff;border-radius:18px;
@@ -942,30 +945,31 @@
     font:800 .82rem 'Baloo 2',sans-serif;padding:8px;cursor:pointer;box-shadow:0 3px 0 #1f5da0}
   .mg-book-btn:hover{filter:brightness(1.06)}
   .map-guide.hidden-manual{display:none}
-  .mh-bar{flex:none;width:100%;max-width:1480px;box-sizing:border-box;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
-    background:linear-gradient(180deg,#1d4f91,#173f78);color:#fff;border-radius:18px;padding:7px 14px;box-shadow:0 4px 0 #0f2f5c,0 8px 18px rgba(20,50,90,.3)}
-  .mh-left{display:flex;align-items:center;gap:10px}
-  .mh-logo{width:38px;height:38px;border-radius:50%;background:#fff;color:#1d7fd0;display:grid;place-items:center;font:900 24px/1 sans-serif;box-shadow:inset 0 0 0 3px #7cc3f0}
-  .mh-title{font:800 1.35rem 'Baloo 2',sans-serif;white-space:nowrap}
-  .mh-title em{font-style:normal;color:#7fd3ff}
-  .mh-mid{font:700 1rem 'Baloo 2',sans-serif;opacity:.92;padding-left:14px;border-left:2px solid rgba(255,255,255,.35);white-space:nowrap}
-  .mh-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .mh-points{background:#0f2f5c;border-radius:14px;padding:5px 12px;font:700 .85rem 'Nunito',sans-serif;white-space:nowrap}
+  /* req #164 (phản hồi): sửa lỗi cũ — quy tắc ẩn 2 bảng bên trên di động từng
+     đứng TRƯỚC .map-guide{display:flex} nên bị ghi đè, bảng hướng dẫn không
+     bao giờ ẩn được trên điện thoại; chuyển xuống sau để có hiệu lực đúng. */
+  @media (max-width:980px){ .map-legend{display:none} .map-guide{display:none} .map-stage{grid-template-columns:auto} }
+  /* req #164 (phản hồi): bỏ thanh tiêu đề lớn phía trên — điểm/chìa khóa/danh
+     hiệu/tên dồn vào 2 dải nhỏ đầu mỗi bảng bên (hướng dẫn bên trái, khu vực
+     bên phải) thay vì choán riêng một hàng ngang phía trên sơ đồ. */
+  .mg-top,.ml-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .ml-top{justify-content:flex-end}
+  .mh-points{background:#0f2f5c;border-radius:14px;padding:5px 12px;font:700 .85rem 'Nunito',sans-serif;white-space:nowrap;color:#fff}
   .mh-points b{color:#ffd24a;font:800 1.05rem 'Baloo 2',sans-serif;margin-left:4px}
-  .mh-ico{border:0;background:#0f2f5c;border-radius:12px;width:36px;height:34px;font-size:18px;cursor:pointer}
-  .mh-user{background:#0f2f5c;border-radius:14px;padding:6px 12px;font:700 .82rem 'Nunito',sans-serif;white-space:nowrap}
-  .mh-bar .map-key{font-size:.74rem}
-  .mh-gear{position:absolute;left:14px;bottom:14px;z-index:20;width:76px;height:76px;border-radius:50%;border:3px solid #fff;cursor:pointer;
-    background:linear-gradient(180deg,#2f8be0,#1d6fc0);color:#fff;font-size:30px;line-height:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    box-shadow:0 4px 0 #15508c,0 8px 16px rgba(0,0,0,.25)}
-  .mh-gear small{font:800 13px 'Baloo 2',sans-serif;margin-top:2px}
-  .mh-menu{position:absolute;left:14px;bottom:100px;z-index:21;background:#fff;border-radius:14px;padding:6px;display:flex;flex-direction:column;
-    box-shadow:0 12px 30px rgba(0,0,0,.3);min-width:260px}
+  .mh-ico{border:0;background:#0f2f5c;border-radius:12px;width:36px;height:34px;font-size:18px;cursor:pointer;color:#fff}
+  .mh-user{background:#0f2f5c;border-radius:14px;padding:6px 12px;font:700 .82rem 'Nunito',sans-serif;white-space:nowrap;color:#fff}
+  .ml-top .map-key{font-size:.74rem}
+  /* req #164 (phản hồi): nút cài đặt gọn nhỏ, neo cố định ở góc màn hình thay
+     vì đè lên sơ đồ nhà thuốc, nhường tối đa diện tích cho phần chơi chính. */
+  .mh-gear{position:fixed;left:12px;bottom:12px;z-index:40;width:44px;height:44px;border-radius:50%;border:3px solid #fff;cursor:pointer;
+    background:linear-gradient(180deg,#2f8be0,#1d6fc0);color:#fff;font-size:19px;line-height:1;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 3px 0 #15508c,0 6px 14px rgba(0,0,0,.25)}
+  .mh-menu{position:fixed;left:12px;bottom:64px;z-index:41;background:#fff;border-radius:14px;padding:6px;display:flex;flex-direction:column;
+    box-shadow:0 12px 30px rgba(0,0,0,.3);min-width:240px}
   .mh-menu[hidden]{display:none}
   .mh-menu a,.mh-menu button{all:unset;cursor:pointer;padding:10px 12px;border-radius:9px;font:700 17px 'Nunito',sans-serif;color:#1f3b63}
   .mh-menu a:hover,.mh-menu button:hover{background:#eaf4ff}
   body.legend-off .map-legend{display:none}
-  @media (max-width:760px){ .mh-mid{display:none} .mh-title{font-size:1.05rem} }
   .tu-switch{display:inline-block;margin-top:4px;font-size:.78rem;font-weight:800;color:#225C4E;text-decoration:none;
     background:#fff;border:2px solid #cfe7df;border-radius:12px;padding:3px 10px}
   .tu-switch:hover{background:#eafaf6}
@@ -1137,20 +1141,12 @@
 </div>
 
 <div id="mapScreen">
-  <!-- req #164: thanh tiêu đề theo mẫu của giảng viên -->
-  <header class="mh-bar">
-    <div class="mh-left"><span class="mh-logo">✚</span><span class="mh-title">Nhà thuốc – <em>Cấp 1 (Cơ bản)</em></span></div>
-    <div class="mh-mid">Học thật – Hành nghề thật</div>
-    <div class="mh-right">
-      <span class="mh-points" title="Tổng sao đã tích lũy khi xếp thuốc vào tủ kê đơn và không kê đơn">⭐ Điểm tích lũy <b id="mhPoints">0</b></span>
-      <span class="map-key locked" id="mapKey">🔒 Chưa có Chìa khóa</span>
-      <button type="button" class="mh-ico" id="mhTrophy" title="Danh hiệu">🏆</button>
-      <span class="mh-user" id="mhUser">👤 Sinh viên</span>
-    </div>
-  </header>
-  <p class="map-hint">Bấm vào <b>Tủ thuốc kê đơn</b> hoặc <b>Tủ thuốc không kê đơn</b> để sắp xếp thuốc vào tủ · đi bằng <b>phím mũi tên / WASD</b> hoặc bấm vào sàn · <b>🚪 Lối vào</b> để ra ngoài. 📍 <span id="pmZone">Đang ở lối vào</span></p>
   <div class="map-stage" id="mapStage">
   <aside class="map-guide" id="mapGuide">
+    <div class="mg-top">
+      <span class="mh-user" id="mhUser">👤 Sinh viên</span>
+      <span class="mh-points" title="Tổng sao đã tích lũy khi xếp thuốc vào tủ kê đơn và không kê đơn">⭐ <b id="mhPoints">0</b></span>
+    </div>
     <h3>🎮 Hướng dẫn luyện tập</h3>
     <div class="mg-card">
       <h4>🎯 Nhiệm vụ hiện tại</h4>
@@ -1183,15 +1179,6 @@
     <div class="pm-zone z-wait" data-zone="info" data-name="Khu vực ghế chờ cho khách" data-short="Ghế chờ" data-ico="🛋️" title="Ghế chờ" style="left:46px;top:670px;width:338px;height:96px;"></div>
     <div class="pm-zone z-entrance" data-zone="door" data-name="Lối vào — bấm để ra ngoài mặt tiền nhà thuốc" data-short="Lối vào" data-ico="🚪" title="Lối vào" style="left:444px;top:684px;width:322px;height:196px;"></div>
 
-    <button type="button" class="mh-gear" id="mhGear" title="Cài đặt">⚙️<small>Cài đặt</small></button>
-    <div class="mh-menu" id="mhMenu" hidden>
-      <button type="button" data-act="facade">🚪 Ra mặt tiền nhà thuốc</button>
-      <a href="/pharma-crush.html">💊 Chơi Pharma Crush</a>
-      <a href="/pharma-sort.html">🗂️ Chơi Pharma Sort</a>
-      <button type="button" data-act="home">📍 Đưa nhân vật về lối vào</button>
-      <button type="button" data-act="legend">🗂️ Ẩn/hiện bảng khu vực</button>
-      <button type="button" data-act="guide">📖 Ẩn/hiện bảng hướng dẫn</button>
-    </div>
     <div class="pm-char" id="pmChar">
       <div class="pm-body">
         <span class="pm-arm pm-arm-l"></span>
@@ -1204,11 +1191,31 @@
     </div>
   </div>
   <aside class="map-legend" id="mapLegend">
+    <div class="ml-top">
+      <span class="map-key locked" id="mapKey">🔒 Chưa có Chìa khóa</span>
+      <button type="button" class="mh-ico" id="mhTrophy" title="Danh hiệu">🏆</button>
+    </div>
     <h3>Các khu vực trong nhà thuốc</h3>
     <ul id="mapLegendList"></ul>
     <p class="ml-foot">Quản lý tốt hôm nay<br>Phục vụ sức khỏe ngày mai 💚</p>
   </aside>
+  <div class="map-hud" id="mapHud">
+    <p class="map-hud-status">📍 <span id="pmZone">Đang ở lối vào</span></p>
+    <div class="map-action" id="mapAction"></div>
+  </div>
   </div><!-- /#mapStage -->
+
+  <!-- req #164 (phản hồi): nút cài đặt gọn nhỏ, neo cố định ở góc màn hình
+       thay vì đè lên sơ đồ, để dành trọn diện tích cho nhà thuốc. -->
+  <button type="button" class="mh-gear" id="mhGear" title="Cài đặt">⚙️</button>
+  <div class="mh-menu" id="mhMenu" hidden>
+    <button type="button" data-act="facade">🚪 Ra mặt tiền nhà thuốc</button>
+    <a href="/pharma-crush.html">💊 Chơi Pharma Crush</a>
+    <a href="/pharma-sort.html">🗂️ Chơi Pharma Sort</a>
+    <button type="button" data-act="home">📍 Đưa nhân vật về lối vào</button>
+    <button type="button" data-act="legend">🗂️ Ẩn/hiện bảng khu vực</button>
+    <button type="button" data-act="guide">📖 Ẩn/hiện bảng hướng dẫn</button>
+  </div>
 
   <div class="overlay" id="gbOverlay">
     <div class="modal" style="max-width:560px">
@@ -1219,7 +1226,6 @@
       <div class="modal-body" id="gbBody" style="padding:14px 18px"></div>
     </div>
   </div>
-  <div class="map-action" id="mapAction"></div>
 </div>
 
 <div id="pharmacyScreen">
@@ -2983,7 +2989,7 @@ function fitMap(){
   if(!document.body.classList.contains('view-map')) return;
   pMap.style.transform = 'none';
   const topY = pMap.getBoundingClientRect().top;
-  const availH = window.innerHeight - topY - 52;   // leave room for the action button
+  const availH = window.innerHeight - topY - 12;   // req #164 (phản hồi): nút hành động giờ nổi đè lên sơ đồ, không còn chiếm hàng riêng bên dưới
   const availW = (mapStage.clientWidth || window.innerWidth) - 6;
   const legendEl = document.getElementById('mapLegend');
   const legendW = legendEl && legendEl.offsetParent ? legendEl.offsetWidth + 14 : 0;
@@ -3027,12 +3033,18 @@ function showFacade(){
   stopHandTracking();
   document.body.classList.remove('view-map','view-pharmacy','doors-open');
   document.body.classList.add('view-facade');
+  history.replaceState(null, '', location.pathname);
 }
 document.getElementById('fDoorHit')?.addEventListener('click', enterThroughDoors);
 document.getElementById('fGoCrush')?.addEventListener('click', (e) => { e.stopPropagation(); location.href = '/pharma-crush.html'; });
 document.getElementById('fGoSort')?.addEventListener('click',  (e) => { e.stopPropagation(); location.href = '/pharma-sort.html'; });
 
-function showMap(){ stopHandTracking(); document.body.classList.remove('view-pharmacy','view-facade'); document.body.classList.add('view-map'); pStart(); fitMap(); requestAnimationFrame(fitMap); setTimeout(fitMap,60); }
+function showMap(){
+  stopHandTracking(); document.body.classList.remove('view-pharmacy','view-facade'); document.body.classList.add('view-map');
+  // F5 giữ nguyên màn sơ đồ thay vì bật lại mặt tiền — xem điểm khởi động cuối file.
+  history.replaceState(null, '', location.pathname + '?view=map');
+  pStart(); fitMap(); requestAnimationFrame(fitMap); setTimeout(fitMap,60);
+}
 function showPharmacy(){
   pStop();
   document.body.classList.remove('view-map','view-facade'); document.body.classList.add('view-pharmacy');
@@ -3124,21 +3136,23 @@ doorPwMask.addEventListener('click', e => { if(e.target === doorPwMask) closeDoo
 /* req #159 — con đường trước nhà thuốc: thỉnh thoảng thả một phương tiện / người đi
    ngang qua. Mỗi "diễn viên" là nhóm emoji SVG; emoji mặc định quay mặt sang trái,
    đi sang phải thì lật ngang cả nhóm. Chỉ chạy khi đang ở màn mặt tiền và đã có khóa. */
+// req #164 (phản hồi): người & xe quá nhỏ so với ngôi nhà — tăng cỡ ~1.6 lần
+// (giữ nguyên tỉ lệ tương đối giữa các loại) để tương xứng với mặt tiền 2 tầng.
 const ROAD_KINDS = [
-  { w:3, y:806, speed:430, parts:[{t:'🚗',fs:92}] },
-  { w:1, y:806, speed:400, parts:[{t:'🚕',fs:92}] },
-  { w:1, y:880, speed:300, parts:[{t:'🚚',fs:100}] },
+  { w:3, y:806, speed:430, parts:[{t:'🚗',fs:147}] },
+  { w:1, y:806, speed:400, parts:[{t:'🚕',fs:147}] },
+  { w:1, y:880, speed:300, parts:[{t:'🚚',fs:160}] },
   // req #159 (phản hồi): xe máy vẽ TRƯỚC (làm nền, to rõ), thùng hàng nhỏ hơn
   // vẽ SAU đè lên baga sau xe — trước đây thùng vẽ trước nên che mất xe máy,
   // nhìn như chỉ có mỗi thùng hàng chạy.
-  { w:3, y:880, speed:330, parts:[{t:'🛵',fs:86},{t:'📦',fs:28,dx:18,dy:-30}] },
-  { w:2, y:880, speed:170, parts:[{t:'🚴',fs:74}] },
-  { w:3, y:728, speed:70,  parts:[{t:'🚶',fs:82}], walk:true },
-  { w:2, y:728, speed:80,  parts:[{t:'🚶‍♀️',fs:82}], walk:true },
+  { w:3, y:880, speed:330, parts:[{t:'🛵',fs:138},{t:'📦',fs:45,dx:29,dy:-48}] },
+  { w:2, y:880, speed:170, parts:[{t:'🚴',fs:118}] },
+  { w:3, y:728, speed:70,  parts:[{t:'🚶',fs:131}], walk:true },
+  { w:2, y:728, speed:80,  parts:[{t:'🚶‍♀️',fs:131}], walk:true },
   // req #159 (phản hồi): chó phải NHỎ hơn & đứng CÙNG mặt đất với em bé (không
   // lơ lửng phía trên đầu) — vẽ chó trước (nền), em bé vẽ sau (đè lên, luôn
   // thấy rõ), chó nhỏ & thấp hơn hẳn để đúng tỉ lệ thật.
-  { w:2, y:728, speed:55,  parts:[{t:'🐕',fs:32,dx:-46,dy:8},{t:'🧒',fs:66,dx:0,dy:0}], leash:true, walk:true },
+  { w:2, y:728, speed:55,  parts:[{t:'🐕',fs:51,dx:-74,dy:13},{t:'🧒',fs:106,dx:0,dy:0}], leash:true, walk:true },
 ];
 const fActors = document.getElementById('fActors');
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -3152,7 +3166,7 @@ function spawnActor(){
   if(dir > 0) inner.setAttribute('transform','scale(-1,1)');
   if(kind.leash){
     const l = document.createElementNS(SVGNS,'path');
-    l.setAttribute('d','M-8,-22 Q-26,-8 -42,2'); l.setAttribute('stroke','#b3261e'); l.setAttribute('stroke-width','2.5'); l.setAttribute('fill','none');
+    l.setAttribute('d','M-13,-35 Q-42,-13 -67,3'); l.setAttribute('stroke','#b3261e'); l.setAttribute('stroke-width','2.5'); l.setAttribute('fill','none');
     inner.appendChild(l);
   }
   for(const p of kind.parts){
@@ -3380,7 +3394,13 @@ function updateHand(time){
    pStart()/fitMap() vẫn chạy sẵn trong showMap() khi người dùng bước qua cửa. */
 applyLocks();
 // req #161: vào bằng ?tu=rx|otc (bấm tủ trên sơ đồ) thì mở thẳng tủ đó.
-if(new URLSearchParams(location.search).has('tu')) showPharmacy(); else showFacade();
+// req #164 (phản hồi): vào bằng ?view=map (đã qua cửa) thì F5 vẫn ở lại sơ đồ, không bị đẩy ra mặt tiền.
+{
+  const bootParams = new URLSearchParams(location.search);
+  if(bootParams.has('tu')) showPharmacy();
+  else if(bootParams.get('view') === 'map') showMap();
+  else showFacade();
+}
 </script>
 </body>
 </html>
