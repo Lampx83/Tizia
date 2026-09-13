@@ -210,6 +210,47 @@
     transform:scaleX(-1);display:none;
   }
   #handCamPreview.shown{display:block;}
+  /* ===== req #169 — Nhiệm vụ 1: Lập dự trù và mua thuốc ===== */
+  .pos-modal{max-width:760px;font-family:'Nunito',system-ui,sans-serif;}
+  .pos-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
+  .pos-tab{border:1px solid #d8c9a3;background:#f6f1e6;color:#5c4a2c;font-weight:800;font-size:.72rem;
+    padding:7px 11px;border-radius:10px;cursor:pointer;}
+  .pos-tab:hover{background:#efe6d2;}
+  .pos-tab.active{background:var(--wood,#7a5230);color:#fff;border-color:var(--wood,#7a5230);}
+  .pos-panel{min-height:120px;}
+  .pos-note{margin:0 0 10px;font-size:.86rem;color:#4a3a1c;line-height:1.5;}
+  .pos-note b{color:var(--wood-dark,#3a2a12);}
+  .pos-table{width:100%;border-collapse:collapse;margin:0 0 12px;font-size:.82rem;}
+  .pos-table th,.pos-table td{border:1px solid #e3d8bf;padding:6px 8px;text-align:left;}
+  .pos-table th{background:#f3ecdb;color:#5c4a2c;}
+  .pos-table input[type="number"]{width:80px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px;font:inherit;}
+  .pos-table .pos-hint{display:block;font-size:.68rem;opacity:.65;margin-top:2px;}
+  .pos-btn{border:none;background:#2e8256;color:#fff;font-weight:800;font-size:.86rem;padding:9px 16px;
+    border-radius:16px;cursor:pointer;box-shadow:0 3px 8px rgba(0,0,0,.2);}
+  .pos-btn:hover{filter:brightness(1.06);}
+  .pos-btn:disabled{opacity:.55;cursor:not-allowed;}
+  .pos-soon{padding:20px;text-align:center;color:#8a7550;font-weight:700;font-size:.9rem;}
+  .pos-err{color:#b3261e;font-weight:800;font-size:.78rem;margin-top:6px;min-height:1.2em;}
+  /* checklist nổi trên màn tủ — cùng vị trí/kiểu với nút "Xếp bằng tay" để
+     không đụng layout cabinet-col/side-panel */
+  .m1-checklist{
+    position:fixed;left:14px;bottom:14px;z-index:499;width:280px;max-width:calc(100vw - 28px);
+    background:#fffdf6;border:2px solid #e0a412;border-radius:14px;padding:10px 12px;
+    box-shadow:0 8px 24px rgba(0,0,0,.3);font-family:'Nunito',system-ui,sans-serif;
+  }
+  .m1-checklist[hidden]{display:none;}
+  .m1-checklist h5{margin:0 0 6px;font:800 .82rem 'Baloo 2',cursive;color:#8a5a10;}
+  .m1-checklist .m1-item{display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:5px 0;border-top:1px dashed #e7d7bf;font-size:.78rem;color:#4a3a1c;}
+  .m1-checklist .m1-item:first-of-type{border-top:none;}
+  .m1-checklist .m1-btns{display:flex;gap:4px;flex:none;}
+  .m1-checklist button{border:none;border-radius:8px;padding:4px 8px;font-size:.72rem;font-weight:800;cursor:pointer;}
+  .m1-ok{background:#dcf5e3;color:#1f7a3d;} .m1-ok:hover{background:#c3edd0;}
+  .m1-bad{background:#fbdede;color:#a3271f;} .m1-bad:hover{background:#f6c6c6;}
+  .m1-checklist .m1-fix{display:flex;gap:6px;align-items:center;margin-top:4px;}
+  .m1-checklist .m1-fix input{width:60px;padding:3px 5px;border:1px solid #caa25a;border-radius:6px;font-size:.76rem;}
+  .m1-checklist .m1-done{font-size:.76rem;color:#1f7a3d;font-weight:800;text-align:center;padding:4px 0;}
+  @media (max-width:860px){ .m1-checklist{left:8px;bottom:8px;width:240px;padding:8px 10px;} }
   @media (max-width:820px){
     .hand-btn{right:8px;bottom:107px;font-size:.66rem;padding:7px 11px;}
     #handCamPreview{right:8px;bottom:8px;width:120px;height:90px;}
@@ -981,7 +1022,21 @@
   /* req #164 (phản hồi): sửa lỗi cũ — quy tắc ẩn 2 bảng bên trên di động từng
      đứng TRƯỚC .map-guide{display:flex} nên bị ghi đè, bảng hướng dẫn không
      bao giờ ẩn được trên điện thoại; chuyển xuống sau để có hiệu lực đúng. */
-  @media (max-width:980px){ .map-legend{display:none} .map-guide{display:none} .map-stage{grid-template-columns:auto} }
+  /* req (tối ưu mobile): trước đây ẩn hẳn 2 bảng bên dưới 980px — làm mất
+     luôn thẻ "Hướng dẫn luyện tập" (chứa nhiệm vụ 1 bấm được) và "Các khu
+     vực" trên điện thoại. Đổi sang xếp CHỒNG XUỐNG DƯỚI sơ đồ (thay vì cạnh
+     bên như desktop) — vẫn xem/bấm được đủ, chỉ đổi hướng bố cục. */
+  @media (max-width:980px){
+    .map-stage{display:flex;flex-direction:column;align-items:center;gap:10px;overflow:visible;height:auto !important;}
+    .pharmacy-map.iso{order:1;}
+    /* map-hud vốn position:absolute + bottom:10px NEO THEO .map-stage — khi
+       stage cao gộp cả 2 bảng xếp chồng, "bottom:10px" hoá ra là đáy TOÀN
+       BỘ cột (không phải đáy sơ đồ), làm tooltip/nút hành động trôi lên giữa
+       trang. Chuyển về nằm trong dòng chảy (order:2, ngay sau sơ đồ) là hết. */
+    .map-hud{position:relative;left:auto;bottom:auto;transform:none;order:2;width:100%;max-width:520px;pointer-events:auto;}
+    .map-guide{order:3;width:100%;max-width:520px;max-height:none;}
+    .map-legend{order:4;width:100%;max-width:520px;max-height:none;}
+  }
   /* req #164 (phản hồi): bỏ thanh tiêu đề lớn phía trên — điểm/chìa khóa/danh
      hiệu/tên dồn vào 2 dải nhỏ đầu mỗi bảng bên (hướng dẫn bên trái, khu vực
      bên phải) thay vì choán riêng một hàng ngang phía trên sơ đồ. */
@@ -1219,7 +1274,7 @@
     <div class="pm-zone z-nondrug" data-zone="info" data-name="Sản phẩm không phải là thuốc (mỹ phẩm, vật tư y tế, TPCN, chăm sóc cá nhân)" data-short="Sản phẩm không phải thuốc" data-ico="🧴" title="Sản phẩm không phải thuốc" style="left:800px;top:30px;width:290px;height:182px;"></div>
     <div class="pm-zone z-receive" data-zone="info" data-name="Khu vực chờ kiểm nhập (hàng mới về, chờ kiểm tra)" data-short="Khu vực chờ kiểm nhập" data-ico="📦" title="Khu vực chờ kiểm nhập" style="left:92px;top:218px;width:178px;height:196px;"></div>
     <div class="pm-zone z-process" data-zone="info" data-name="Khu vực hàng chờ xử lý (hàng cận hạn, hỏng, thu hồi, hủy bỏ)" data-short="Khu vực hàng chờ xử lý" data-ico="⚠️" title="Khu vực hàng chờ xử lý" style="left:78px;top:436px;width:214px;height:160px;"></div>
-    <div class="pm-zone z-cashier" data-zone="info" data-name="Quầy thu ngân: máy tính, máy quét mã vạch, máy in hóa đơn" data-short="Quầy thu ngân" data-ico="💵" title="Quầy thu ngân" style="left:384px;top:296px;width:418px;height:140px;"></div>
+    <div class="pm-zone z-cashier" id="zCashier" data-zone="info" data-name="Quầy thu ngân: máy tính, máy quét mã vạch, máy in hóa đơn" data-short="Quầy thu ngân" data-ico="💵" title="Quầy thu ngân" style="left:384px;top:296px;width:418px;height:140px;"></div>
     <div class="pm-zone z-fridge" data-zone="info" data-name="Tủ lạnh (bảo quản 2–8°C: vắc xin, insulin…)" data-short="Tủ lạnh" data-ico="❄️" title="Tủ lạnh" style="left:890px;top:200px;width:150px;height:176px;"></div>
     <div class="pm-zone z-fire" data-zone="info" data-name="Bình chữa cháy" data-short="Bình chữa cháy" data-ico="🧯" title="Bình chữa cháy" style="left:1050px;top:212px;width:110px;height:150px;"></div>
     <div class="pm-zone z-dispense" data-zone="info" data-name="Khu vực ra lẻ thuốc" data-short="Khu vực ra lẻ thuốc" data-ico="⚖️" title="Khu vực ra lẻ thuốc" style="left:880px;top:432px;width:272px;height:140px;"></div>
@@ -1275,9 +1330,36 @@
       <div class="modal-body" id="gbBody" style="padding:14px 18px"></div>
     </div>
   </div>
+
+  <!-- req #169 (ThS Hương Lý) — Nhiệm vụ 1: Lập dự trù và mua thuốc.
+       "Máy tính" ở Quầy thu ngân mở phần mềm bán hàng này; tab Dự trù là
+       tab duy nhất có nghiệp vụ thật ở bản đầu tiên, 4 tab còn lại chờ mở
+       cùng các nhiệm vụ 2/4/5 (Kiểm nhập, Kiểm kê, Thu hồi…). -->
+  <div class="overlay" id="posOverlay">
+    <div class="modal pos-modal">
+      <div class="modal-head">
+        <div><h2>🖥️ Phần mềm bán hàng</h2><div class="sub">Nhiệm vụ 1 · Lập dự trù và mua thuốc</div></div>
+        <button type="button" id="posClose">✕</button>
+      </div>
+      <div class="modal-body pos-body">
+        <div class="pos-tabs" id="posTabs">
+          <button type="button" class="pos-tab" data-tab="quanly">📋 Quản lý thuốc</button>
+          <button type="button" class="pos-tab" data-tab="banhang">💵 Bán hàng</button>
+          <button type="button" class="pos-tab active" data-tab="dutru">📦 Dự trù</button>
+          <button type="button" class="pos-tab" data-tab="thucnhap">📥 Thực nhập</button>
+          <button type="button" class="pos-tab" data-tab="nhacc">🏭 Quản lý nhà cung ứng</button>
+        </div>
+        <div class="pos-panel" id="posPanel"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div id="pharmacyScreen">
+<!-- req #169 — Nhiệm vụ 1 bước 2: đứng ở đúng tủ (Rx/OTC), kiểm thực tế từng
+     mặt hàng cần dự trù. Nổi cố định như nút "Xếp bằng tay" cạnh bên, để
+     không phải sửa layout 2 cột cabinet-col/side-panel đã ổn định sẵn. -->
+<div class="m1-checklist" id="m1Checklist" hidden></div>
 <div class="side-panel">
   <div class="page-head">
     <h1><span class="mascot" aria-hidden="true"></span><span id="tuTitle">TỦ THUỐC KÊ ĐƠN</span></h1>
@@ -2943,6 +3025,159 @@ const LEGEND_BG = { 'z-rx':'#2f7fd8','z-otc':'#2e9b53','z-nondrug':'#8b5cf6','z-
   document.addEventListener('webkitfullscreenchange', updateFsBtn);
 })();
 
+/* =====================================================================
+   req #169 (ThS Hương Lý) — Nhiệm vụ 1: Lập dự trù và mua thuốc.
+   Luôn mở sẵn (không khóa như 4 nhiệm vụ kia). Quy trình 5 bước cô mô tả:
+   1) Máy tính ở Quầy thu ngân → Phần mềm bán hàng → tab Dự trù: hệ thống
+      báo 4 mặt hàng cần kiểm (2 ở tủ Rx, 2 ở tủ OTC) + tồn kho theo phần mềm.
+   2) Rời máy tính, đến đúng tủ kiểm thực tế từng mặt hàng — khớp thì tick,
+      sai thì sửa lại số tồn thực tế (checklist nổi trên màn tủ).
+   3) Quay lại máy tính: bảng tổng hợp tồn thực tế cả 4 mặt hàng.
+   4) Xem lịch sử bán 1 tuần từng mặt hàng.
+   5) Điền số lượng cần đặt cho tất cả — xong nhiệm vụ.
+   Bản đầu tiên: chỉ tab "Dự trù" có nghiệp vụ thật, 4 tab kia (Quản lý thuốc,
+   Bán hàng, Thực nhập, Quản lý nhà cung ứng) để "sắp có" — sẽ gắn dần khi tới
+   nhiệm vụ 2/4/5. Vật phẩm cố định (không random) để theo dõi tiến độ được. */
+const LS_M1 = 'tu-thuoc-mo-phong:mission1';
+function getM1State(){
+  try{
+    const s = JSON.parse(localStorage.getItem(LS_M1));
+    if(s && s.step) return s;
+  }catch(e){}
+  return { step:'dutru', confirmed:{}, actual:{}, orders:{} };
+}
+function saveM1State(s){ localStorage.setItem(LS_M1, JSON.stringify(s)); }
+function m1HashNum(s, min, max){
+  let h = 0; for(let i=0;i<s.length;i++){ h = (h*31 + s.charCodeAt(i)) | 0; }
+  h = Math.abs(h);
+  return min + (h % (max - min + 1));
+}
+let M1_ITEMS = null;
+function getM1Items(){
+  if(M1_ITEMS) return M1_ITEMS;
+  const pick = (cab, n) => allRecords
+    .filter(r => r['Tên hoạt chất'] && drugClass(r) === cab)
+    .slice(0, n)
+    .map(r => {
+      const key = r['STT Buổi'] + '|' + r['Tên hoạt chất'];
+      return { key, name: r['Tên hoạt chất'], cabinet: cab, tonKho: m1HashNum(key+'k',3,14), banTuan: m1HashNum(key+'b',6,38) };
+    });
+  M1_ITEMS = [...pick('rx',2), ...pick('otc',2)];
+  return M1_ITEMS;
+}
+
+const posOverlay = document.getElementById('posOverlay');
+const posPanel = document.getElementById('posPanel');
+function openPOS(){
+  posOverlay.style.display = 'flex';
+  document.querySelectorAll('#posTabs .pos-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === 'dutru'));
+  renderDuTruTab();
+}
+function closePOS(){ posOverlay.style.display = 'none'; }
+document.getElementById('posClose').addEventListener('click', closePOS);
+posOverlay.addEventListener('click', e => { if(e.target === posOverlay) closePOS(); });
+document.getElementById('posTabs').addEventListener('click', e => {
+  const b = e.target.closest('.pos-tab'); if(!b) return;
+  document.querySelectorAll('#posTabs .pos-tab').forEach(x => x.classList.toggle('active', x === b));
+  if(b.dataset.tab === 'dutru') renderDuTruTab();
+  else posPanel.innerHTML = '<div class="pos-soon">🔒 Tab này sẽ có nghiệp vụ ở các nhiệm vụ sau (2, 4, 5).</div>';
+});
+
+function renderDuTruTab(){
+  const items = getM1Items();
+  const st = getM1State();
+  if(st.step === 'dutru'){
+    posPanel.innerHTML = `
+      <p class="pos-note">📦 Phần mềm phát hiện <b>${items.length} mặt hàng</b> cần kiểm tra trước khi lập dự trù (tồn kho đang ghi trên hệ thống):</p>
+      <table class="pos-table"><thead><tr><th>Tên thuốc</th><th>Tồn kho (PM)</th><th>Vị trí</th></tr></thead><tbody>
+        ${items.map(it => `<tr><td>${esc(it.name)}</td><td>${it.tonKho}</td><td>${it.cabinet==='rx'?'Tủ thuốc kê đơn':'Tủ thuốc không kê đơn'}</td></tr>`).join('')}
+      </tbody></table>
+      <p class="pos-note">👉 Rời máy tính, đến đúng tủ kiểm tra thực tế từng mặt hàng trước khi lên đơn.</p>
+      <button type="button" class="pos-btn" id="posGoCheck">🚶 Rời máy tính, đi kiểm tủ →</button>`;
+    document.getElementById('posGoCheck').addEventListener('click', () => {
+      st.step = 'checking'; saveM1State(st); closePOS();
+      pmZoneLabel.textContent = '📋 Nhiệm vụ 1: đến tủ thuốc kê đơn hoặc không kê đơn để kiểm tra hàng.';
+      window.refreshMissionsList?.();
+    });
+  } else if(st.step === 'checking'){
+    const left = items.filter(it => !st.confirmed[it.key]).length;
+    posPanel.innerHTML = `<p class="pos-note">🔍 Còn <b>${left} mặt hàng</b> chưa kiểm xong. Đến tủ tương ứng (xem thẻ nổi góc màn hình khi ở trong tủ) để kiểm và xác nhận từng mặt hàng.</p>`;
+  } else if(st.step === 'return'){
+    posPanel.innerHTML = `
+      <p class="pos-note">✅ Đã kiểm xong thực tế. Bảng tổng hợp — xem <b>lịch sử bán 1 tuần</b> rồi điền <b>số lượng cần đặt</b> cho từng mặt hàng:</p>
+      <table class="pos-table"><thead><tr><th>Tên thuốc</th><th>Tồn thực tế</th><th>Bán/tuần</th><th>SL cần đặt</th></tr></thead><tbody>
+        ${items.map(it => `<tr>
+          <td>${esc(it.name)}</td>
+          <td>${st.actual[it.key] != null ? st.actual[it.key] : it.tonKho}</td>
+          <td>${it.banTuan}<span class="pos-hint">lịch sử bán</span></td>
+          <td><input type="number" min="0" step="1" class="pos-order-in" data-key="${esc(it.key)}" value="${st.orders[it.key] != null ? st.orders[it.key] : ''}" placeholder="SL"></td>
+        </tr>`).join('')}
+      </tbody></table>
+      <p class="pos-note" style="font-size:.76rem;opacity:.75">💡 Gợi ý: SL đặt ≈ SL bán tuần trước − tồn thực tế hiện có (nếu ra số dương).</p>
+      <button type="button" class="pos-btn" id="posSubmit">✅ Xác nhận đặt hàng</button>
+      <div class="pos-err" id="posErr"></div>`;
+    posPanel.querySelectorAll('.pos-order-in').forEach(inp => {
+      inp.addEventListener('input', () => { st.orders[inp.dataset.key] = inp.value; saveM1State(st); });
+    });
+    document.getElementById('posSubmit').addEventListener('click', () => {
+      const errEl = document.getElementById('posErr');
+      const missing = items.some(it => !(Number(st.orders[it.key]) >= 0) || st.orders[it.key] === '' || st.orders[it.key] == null);
+      if(missing){ errEl.textContent = '⚠️ Điền số lượng cần đặt cho đủ tất cả mặt hàng.'; return; }
+      st.step = 'done'; saveM1State(st);
+      posPanel.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">🎉 Đã lập xong dự trù &amp; đơn mua thuốc cho ${items.length} mặt hàng!<br>Đóng lại để về sơ đồ — có thể bấm "Luyện lại" ở thẻ nhiệm vụ bất cứ lúc nào.</div>`;
+      window.refreshMissionsList?.();
+    });
+  } else {
+    posPanel.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">🎉 Bạn đã hoàn thành nhiệm vụ 1!</div>
+      <button type="button" class="pos-btn" id="posRestart">🔁 Luyện lại từ đầu</button>`;
+    document.getElementById('posRestart').addEventListener('click', () => {
+      saveM1State({ step:'dutru', confirmed:{}, actual:{}, orders:{} });
+      renderDuTruTab(); window.refreshMissionsList?.();
+    });
+  }
+}
+
+/* Checklist nổi trên màn tủ (view-pharmacy) khi nhiệm vụ 1 đang ở bước kiểm
+   thực tế — chỉ hiện các mặt hàng thuộc ĐÚNG tủ đang mở (rx/otc). */
+function renderM1Checklist(){
+  const panel = document.getElementById('m1Checklist');
+  if(!panel) return;
+  const st = getM1State();
+  if(st.step !== 'checking'){ panel.hidden = true; return; }
+  const items = getM1Items().filter(it => it.cabinet === TU_MODE);
+  if(!items.length){ panel.hidden = true; return; }
+  const pending = items.filter(it => !st.confirmed[it.key]);
+  panel.hidden = false;
+  if(!pending.length){
+    const allDone = getM1Items().every(it => st.confirmed[it.key]);
+    panel.innerHTML = `<h5>📋 Kiểm tủ — Nhiệm vụ 1</h5><div class="m1-done">${allDone ? '✅ Đã kiểm xong tất cả! Quay lại Quầy thu ngân để chốt đơn.' : '✅ Xong tủ này! Sang tủ còn lại để kiểm nốt.'}</div>`;
+    if(allDone){ st.step = 'return'; saveM1State(st); window.refreshMissionsList?.(); }
+    return;
+  }
+  panel.innerHTML = `<h5>📋 Kiểm tủ — còn ${pending.length} mặt hàng</h5>` + pending.map(it => `
+    <div class="m1-item" data-key="${esc(it.key)}">
+      <span>${esc(it.name)} <i style="opacity:.6">(PM: ${it.tonKho})</i></span>
+      <span class="m1-btns">
+        <button type="button" class="m1-ok" data-act="ok">✅ Đúng</button>
+        <button type="button" class="m1-bad" data-act="bad">❌ Sai</button>
+      </span>
+    </div>`).join('');
+  panel.querySelectorAll('.m1-item').forEach(row => {
+    const key = row.dataset.key;
+    row.querySelector('[data-act="ok"]').addEventListener('click', () => {
+      st.confirmed[key] = true; saveM1State(st); renderM1Checklist();
+    });
+    row.querySelector('[data-act="bad"]').addEventListener('click', () => {
+      row.insertAdjacentHTML('beforeend', `<div class="m1-fix">Tồn thực tế: <input type="number" min="0" step="1" class="m1-fix-in"><button type="button" class="m1-ok" data-act="save">Lưu</button></div>`);
+      row.querySelector('[data-act="save"]').addEventListener('click', () => {
+        const v = row.querySelector('.m1-fix-in').value;
+        if(v === '' || Number(v) < 0) return;
+        st.actual[key] = Number(v); st.confirmed[key] = true; saveM1State(st); renderM1Checklist();
+      });
+    });
+  });
+}
+
 /* req #164 (phản hồi): thẻ "Hướng dẫn luyện tập" — nhiệm vụ hiện tại lấy từ
    danh hiệu/sao thật (không hard-code), mẹo dược sĩ xoay vòng, sổ tay dược sĩ
    mở hộp thoại riêng (không đụng tới modal chi tiết thuốc). Nội dung "Công cụ
@@ -2958,17 +3193,32 @@ const LEGEND_BG = { 'z-rx':'#2f7fd8','z-otc':'#2e9b53','z-nondrug':'#8b5cf6','z-
   // "Bảo quản & sắp xếp hàng hóa" là nhiệm vụ ĐÃ có trò chơi thật (xếp thuốc
   // vào tủ Rx/OTC ở màn này), 4 nhiệm vụ còn lại đang chờ xây theo giáo trình
   // (xem #163). Bấm vào dòng có trò chơi thật là chơi được ngay.
+  // req #169: nhiệm vụ 1 giờ cũng có trò chơi thật (phần mềm bán hàng ở
+  // Quầy thu ngân) — đọc trạng thái từ localStorage để hiện đúng bước/số sao.
+  const m1state = (typeof getM1State === 'function') ? getM1State() : { step:'dutru' };
   const MISSIONS = [
-    { name:'Lập dự trù và mua thuốc' },
+    { name:'Lập dự trù và mua thuốc', play:true, m1:true },
     { name:'Kiểm nhập thuốc, niêm yết giá' },
     { name:'Bảo quản thuốc và sắp xếp hàng hóa', play:true },
     { name:'Kiểm kê và kiểm soát chất lượng định kỳ' },
     { name:'Xử lý thuốc bị thu hồi' },
   ];
   const missionsEl = document.getElementById('mgMissions');
-  if(missionsEl){
+  function renderMissions(){
     missionsEl.innerHTML = MISSIONS.map((m,i) => {
       const n = i+1;
+      if(m.m1){
+        const st = (typeof getM1State === 'function') ? getM1State() : { step:'dutru' };
+        const label = st.step === 'done' ? '✅ Xong · Lại →'
+          : st.step === 'return' ? '🖥️ Chốt đơn →'
+          : st.step === 'checking' ? '🔍 Đang làm →'
+          : '▶ Chơi →';
+        return `<li class="mg-mission play${st.step==='done'?'':' current'}" data-mission="${n}">
+          <span class="mg-mission-n">${n}</span>
+          <span class="mg-mission-tx">${m.name}</span>
+          <span class="mg-mission-st">${label}</span>
+        </li>`;
+      }
       if(m.play){
         const done = rxS + otcS;
         return `<li class="mg-mission play current" data-mission="${n}">
@@ -2983,10 +3233,10 @@ const LEGEND_BG = { 'z-rx':'#2f7fd8','z-otc':'#2e9b53','z-nondrug':'#8b5cf6','z-
         <span class="mg-mission-st">🔒 Sắp ra mắt</span>
       </li>`;
     }).join('');
-    missionsEl.querySelectorAll('.mg-mission.play').forEach(li => {
-      li.addEventListener('click', () => { document.querySelector('.z-rx')?.dispatchEvent(new MouseEvent('click', { bubbles:true })); });
-    });
+    missionsEl.querySelector('[data-mission="1"]')?.addEventListener('click', () => { if(typeof openPOS === 'function') openPOS(); });
+    missionsEl.querySelector('[data-mission="3"]')?.addEventListener('click', () => { document.querySelector('.z-rx')?.dispatchEvent(new MouseEvent('click', { bubbles:true })); });
   }
+  if(missionsEl){ renderMissions(); window.refreshMissionsList = renderMissions; }
 
   const TIPS = [
     'Luôn xếp thuốc theo nguyên tắc FEFO — thuốc hết hạn SỚM đưa ra phía trước, dễ lấy trước.',
@@ -3103,19 +3353,41 @@ function fitMap(){
   const availW = (mapStage.clientWidth || window.innerWidth) - 6;
   const legendEl = document.getElementById('mapLegend');
   const guideEl = document.getElementById('mapGuide');
-  const legendW = legendEl && legendEl.offsetParent ? legendEl.offsetWidth + 14 : 0;
+  // req (tối ưu mobile): dưới 980px hai bảng này xếp CHỒNG XUỐNG DƯỚI sơ đồ
+  // (flex-column) chứ không còn cạnh bên (grid) — không được trừ bề rộng của
+  // chúng ra khỏi availW nữa, kẻo sơ đồ bị bóp nhỏ vô lý dù đang đứng một
+  // mình trên hàng riêng.
+  const sideBySide = window.innerWidth > 980;
+  const legendW = sideBySide && legendEl && legendEl.offsetParent ? legendEl.offsetWidth + 14 : 0;
   // req #164 (phản hồi): quên trừ bảng "Hướng dẫn luyện tập" bên TRÁI — chỉ trừ
   // legendW nên ở màn hình rộng (nhất là bấm toàn màn hình) sơ đồ bị tính to
   // hơn thực tế, tràn ra ngoài khiến 2 bảng bên bị cắt (overflow:hidden +
   // justify-content:center clip đều hai bên).
-  const guideW = guideEl && guideEl.offsetParent ? guideEl.offsetWidth + 14 : 0;
+  const guideW = sideBySide && guideEl && guideEl.offsetParent ? guideEl.offsetWidth + 14 : 0;
   // req #156: trước đây chặn ở 1 nên màn hình rộng vẫn hiện sơ đồ bé tí. Cho
   // phóng to tới 1,7 lần để lấp khung, vẫn giữ đúng tỉ lệ (không méo).
   mapScale = Math.max(0.3, Math.min(1.4, (availW - legendW - guideW)/P_W, availH/P_H));
   pMap.style.transform = 'scale(' + mapScale + ')';
   pMap.style.width = P_W + 'px'; pMap.style.height = P_H + 'px';
-  pMap.style.marginRight = (P_W * mapScale - P_W) + 'px';   // transform không đổi layout → bù bề ngang
-  mapStage.style.height = (P_H * mapScale) + 'px';
+  // req (tối ưu mobile): 2 dòng dưới đây (bù bề ngang + ép chiều cao khung)
+  // chỉ đúng khi sơ đồ với 2 bảng bên nằm CẠNH NHAU trên 1 hàng (desktop
+  // grid) — .map-stage lúc đó chỉ cần cao bằng sơ đồ. Ở chế độ xếp CHỒNG
+  // (mobile, xem media 980px), .map-stage phải cao đủ chứa cả 2 bảng xếp
+  // dưới sơ đồ; ép height + margin-right kiểu desktop làm nó cắt (clip)
+  // gần hết nội dung bên dưới. Bỏ cả hai, để flex-column tự tính chiều cao.
+  if(sideBySide){
+    pMap.style.marginRight = (P_W * mapScale - P_W) + 'px';   // transform không đổi layout → bù bề ngang
+    pMap.style.marginBottom = '0px';
+    mapStage.style.height = (P_H * mapScale) + 'px';
+  } else {
+    pMap.style.marginRight = (P_W * mapScale - P_W) + 'px';   // vẫn cần bù ngang để canh giữa đúng
+    // req (tối ưu mobile): transform không đổi layout, nên dù NHÌN sơ đồ bé
+    // lại, nó vẫn CHIẾM chỗ theo kích thước gốc (936px cao) trong dòng chảy
+    // flex-column — hụt luôn 1 khoảng trắng to giữa sơ đồ và 2 bảng xếp dưới.
+    // Bù âm margin-bottom để bảng kế tiếp trồi lên sát mép sơ đồ đã co lại.
+    pMap.style.marginBottom = (P_H * mapScale - P_H) + 'px';
+    mapStage.style.height = 'auto';
+  }
 }
 window.addEventListener('resize', fitMap);
 
@@ -3168,6 +3440,9 @@ function showPharmacy(){
      directly (layout is synchronous) plus a couple of timer retries in case
      fonts/images settle the row height a touch late */
   if(typeof syncBoxSize==='function'){ syncBoxSize(); requestAnimationFrame(syncBoxSize); setTimeout(syncBoxSize,80); setTimeout(syncBoxSize,240); }
+  // req #169: hiện/ẩn checklist nhiệm vụ 1 mỗi lần vào màn tủ (kể cả vào
+  // thẳng bằng URL ?tu=rx|otc, không chỉ đi qua sơ đồ).
+  if(typeof renderM1Checklist === 'function') renderM1Checklist();
 }
 document.getElementById('toMapBtn').addEventListener('click', showMap);
 document.getElementById('mobileMapBtn').addEventListener('click', showMap);
@@ -3184,7 +3459,11 @@ function doZoneAction(zone){
     else location.href = location.pathname + '?tu=' + mode;
   }
   else if(z === 'info'){
-    pmZoneLabel.textContent = zone.dataset.name + ' — khu vực này sẽ có nghiệp vụ riêng ở các nhiệm vụ sau.';
+    // req #169: máy tính ở quầy thu ngân là nơi mở "Phần mềm bán hàng" cho
+    // nhiệm vụ 1 — các khu "info" khác vẫn chỉ hiện chú thích như cũ, chờ
+    // nghiệp vụ riêng ở các nhiệm vụ sau.
+    if(zone.id === 'zCashier' && typeof openPOS === 'function') openPOS();
+    else pmZoneLabel.textContent = zone.dataset.name + ' — khu vực này sẽ có nghiệp vụ riêng ở các nhiệm vụ sau.';
   }
   else if(z === 'door'){ showFacade(); }
 }
