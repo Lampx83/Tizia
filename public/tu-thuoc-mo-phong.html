@@ -977,6 +977,13 @@
   :fullscreen #mapStage,:-webkit-full-screen #mapStage{width:100vw;height:100vh;max-width:100vw}
   :fullscreen #mapScreen,:-webkit-full-screen #mapScreen{background:#bfe6f7;display:flex;align-items:center;justify-content:center}
   body.legend-off .map-legend{display:none}
+  /* req #167: người đi bộ trên con đường trước nhà thuốc — trước đây dùng thẳng
+     emoji 🚶 (hình tĩnh, chân không nhúc nhích). Vẽ lại bằng SVG (đầu tròn +
+     thân + 2 chân) và cho 2 chân thay nhau xoay quanh khớp hông, dùng LẠI đúng
+     2 keyframe pm-step-a/pm-step-b đã có sẵn cho nhân vật dược sĩ trong sơ đồ. */
+  .rw-leg{transform-box:fill-box;transform-origin:top center;animation-duration:.46s;animation-iteration-count:infinite;animation-timing-function:ease-in-out}
+  .rw-leg-l{animation-name:pm-step-a}
+  .rw-leg-r{animation-name:pm-step-b}
   .tu-switch{display:inline-block;margin-top:4px;font-size:.78rem;font-weight:800;color:#225C4E;text-decoration:none;
     background:#fff;border:2px solid #cfe7df;border-radius:12px;padding:3px 10px}
   .tu-switch:hover{background:#eafaf6}
@@ -3177,24 +3184,63 @@ doorPwMask.addEventListener('click', e => { if(e.target === doorPwMask) closeDoo
    đi sang phải thì lật ngang cả nhóm. Chỉ chạy khi đang ở màn mặt tiền và đã có khóa. */
 // req #164 (phản hồi): người & xe quá nhỏ so với ngôi nhà — tăng cỡ ~1.6 lần
 // (giữ nguyên tỉ lệ tương đối giữa các loại) để tương xứng với mặt tiền 2 tầng.
+// req #167: 3 kiểu "người" (chú, cô, em bé) vẽ bằng SVG riêng (đầu + thân + 2
+// chân xoay được), thay cho emoji 🚶 tĩnh — xem personSVG() + .rw-leg bên dưới.
+const P_MAN   = { scale:2.1, skin:'#f0c191', shirt:'#2f6fb0', pants:'#33445c' };
+const P_WOMAN = { scale:2.0, skin:'#f0c191', shirt:'#d9548a', pants:'#7a3253', hair:'#3a2418' };
+const P_CHILD = { scale:1.35, skin:'#f4c9a0', shirt:'#e8a63a', pants:'#3d6b8a' };
 const ROAD_KINDS = [
   { w:3, y:806, speed:430, parts:[{t:'🚗',fs:147}] },
   { w:1, y:806, speed:400, parts:[{t:'🚕',fs:147}] },
   { w:1, y:880, speed:300, parts:[{t:'🚚',fs:160}] },
   // req #159 (phản hồi): xe máy vẽ TRƯỚC (làm nền, to rõ), thùng hàng nhỏ hơn
-  // vẽ SAU đè lên baga sau xe — trước đây thùng vẽ trước nên che mất xe máy,
-  // nhìn như chỉ có mỗi thùng hàng chạy.
-  { w:3, y:880, speed:330, parts:[{t:'🛵',fs:138},{t:'📦',fs:45,dx:29,dy:-48}] },
+  // vẽ SAU đè lên baga sau xe. req #167: thêm người ngồi lái (đầu+thân, không
+  // vẽ chân vì đang ngồi) ngồi giữa xe, vẽ sau xe — trước để trống trông như
+  // xe chạy không người.
+  { w:3, y:880, speed:330, parts:[
+    {t:'🛵',fs:138},
+    {rider:{scale:1.5, skin:'#f0c191', shirt:'#c0392b'}, dx:-10, dy:-46},
+    {t:'📦',fs:45,dx:29,dy:-48},
+  ] },
   { w:2, y:880, speed:170, parts:[{t:'🚴',fs:118}] },
-  { w:3, y:728, speed:70,  parts:[{t:'🚶',fs:131}], walk:true },
-  { w:2, y:728, speed:80,  parts:[{t:'🚶‍♀️',fs:131}], walk:true },
-  // req #159 (phản hồi): chó phải NHỎ hơn & đứng CÙNG mặt đất với em bé (không
-  // lơ lửng phía trên đầu) — vẽ chó trước (nền), em bé vẽ sau (đè lên, luôn
-  // thấy rõ), chó nhỏ & thấp hơn hẳn để đúng tỉ lệ thật.
-  { w:2, y:728, speed:55,  parts:[{t:'🐕',fs:51,dx:-74,dy:13},{t:'🧒',fs:106,dx:0,dy:0}], leash:true, walk:true },
+  { w:3, y:728, speed:70,  parts:[{person:P_MAN}], walk:true },
+  { w:2, y:728, speed:80,  parts:[{person:P_WOMAN}], walk:true },
+  // req #167 (phản hồi lần 2): chó VẪN bị chê "cạnh đầu em bé" — đưa hẳn xuống
+  // ngang chân/đầu gối em bé (không phải ngang vai/đầu như trước), dây dắt nối
+  // từ tay em bé (ngang hông, y quanh -30 theo scale) xuống tới cổ chó.
+  { w:2, y:728, speed:55,  parts:[{t:'🐕',fs:44,dx:-46,dy:-2},{person:P_CHILD}], leash:true, walk:true },
 ];
 const fActors = document.getElementById('fActors');
 const SVGNS = 'http://www.w3.org/2000/svg';
+function svgEl(name, attrs){
+  const el = document.createElementNS(SVGNS, name);
+  for(const k in attrs) el.setAttribute(k, attrs[k]);
+  return el;
+}
+// Người đi bộ: đầu tròn + thân + 2 chân — 2 chân mang class rw-leg-l/rw-leg-r,
+// DÙNG LẠI đúng 2 keyframe pm-step-a/pm-step-b của nhân vật dược sĩ trong sơ đồ
+// (xem CSS .rw-leg) nên chân thật sự thay nhau bước, không còn đứng im.
+function personSVG(inner, o, dx, dy){
+  const s = o.scale, X = dx||0, Y = dy||0;
+  const g = svgEl('g', { transform: `translate(${X},${Y})` });
+  if(o.hair) g.appendChild(svgEl('path', {
+    d: `M${-9*s},${-34*s} Q0,${-46*s} ${9*s},${-34*s} L${9*s},${-30*s} Q0,${-40*s} ${-9*s},${-30*s} Z`,
+    fill:o.hair,
+  }));
+  g.appendChild(svgEl('rect', { class:'rw-leg rw-leg-l', x:-13*s, y:-24*s, width:11*s, height:30*s, rx:5*s, fill:o.pants }));
+  g.appendChild(svgEl('rect', { class:'rw-leg rw-leg-r', x:2*s,   y:-24*s, width:11*s, height:30*s, rx:5*s, fill:o.pants }));
+  g.appendChild(svgEl('rect', { x:-16*s, y:-64*s, width:32*s, height:42*s, rx:12*s, fill:o.shirt }));
+  g.appendChild(svgEl('circle', { cx:0, cy:-78*s, r:17*s, fill:o.skin }));
+  inner.appendChild(g);
+}
+// Người ngồi lái xe máy — chỉ đầu + thân (không vẽ chân vì đang gập ngồi).
+function riderSVG(inner, o, dx, dy){
+  const s = o.scale, X = dx||0, Y = dy||0;
+  const g = svgEl('g', { transform: `translate(${X},${Y})` });
+  g.appendChild(svgEl('rect', { x:-13*s, y:-30*s, width:26*s, height:32*s, rx:11*s, fill:o.shirt }));
+  g.appendChild(svgEl('circle', { cx:0, cy:-42*s, r:13*s, fill:o.skin }));
+  inner.appendChild(g);
+}
 let roadActors = [], roadLast = 0, roadNext = 0;
 function spawnActor(){
   const tot = ROAD_KINDS.reduce((a,k)=>a+k.w,0); let r = Math.random()*tot, kind = ROAD_KINDS[0];
@@ -3205,10 +3251,12 @@ function spawnActor(){
   if(dir > 0) inner.setAttribute('transform','scale(-1,1)');
   if(kind.leash){
     const l = document.createElementNS(SVGNS,'path');
-    l.setAttribute('d','M-13,-35 Q-42,-13 -67,3'); l.setAttribute('stroke','#b3261e'); l.setAttribute('stroke-width','2.5'); l.setAttribute('fill','none');
+    l.setAttribute('d','M-11,-34 Q-24,-20 -38,-4'); l.setAttribute('stroke','#b3261e'); l.setAttribute('stroke-width','2.5'); l.setAttribute('fill','none');
     inner.appendChild(l);
   }
   for(const p of kind.parts){
+    if(p.person){ personSVG(inner, p.person, p.dx, p.dy); continue; }
+    if(p.rider){ riderSVG(inner, p.rider, p.dx, p.dy); continue; }
     const t = document.createElementNS(SVGNS,'text');
     t.setAttribute('x', p.dx||0); t.setAttribute('y', p.dy||0); t.setAttribute('font-size', p.fs);
     t.setAttribute('text-anchor','middle'); t.textContent = p.t; inner.appendChild(t);
