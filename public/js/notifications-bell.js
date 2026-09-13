@@ -9,6 +9,9 @@
 // Page muốn ẩn: <body data-no-notifications-bell>. Guest (401) → tự ẩn.
 // ============================================================
 
+import { renderRequestThread } from './request-thread.js?v=reqdetail1';
+import { getPlayerName } from './api.js';
+
 const POLL_MS = 60_000;
 const fmtTime = (t) => {
   const d = Date.now() - t; const mm = Math.floor(d / 60_000);
@@ -97,7 +100,7 @@ async function autoMount() {
       return;
     }
     listEl.innerHTML = items.map(it => `
-      <div class="nbell-item ${it.read_at ? 'read' : 'unread'}" data-id="${it.id}" data-url="${escapeHtml(it.url || '')}">
+      <div class="nbell-item ${it.read_at ? 'read' : 'unread'}" data-id="${it.id}" data-rid="${it.request_id || ''}" data-url="${escapeHtml(it.url || '')}">
         <div class="nbell-item-title">${escapeHtml(it.title || '')}</div>
         ${it.body ? `<div class="nbell-item-body">${escapeHtml(it.body)}</div>` : ''}
         <div class="nbell-item-time">${fmtTime(it.created_at)}</div>
@@ -125,7 +128,28 @@ async function autoMount() {
       unread = Math.max(0, unread - 1); paintBadge();
       api(`/api/notifications/${id}/read`, { method: 'POST' }).catch(() => {});
     }
+    // Thông báo gắn với 1 yêu cầu → mở chi tiết yêu cầu đó ngay tại chỗ.
+    if (el.dataset.rid) { panel.hidden = true; openRequestDetail(el.dataset.rid); return; }
     if (url) { setTimeout(() => { location.href = url; }, 80); }
+  }
+  function openRequestDetail(rid) {
+    const wrap = document.createElement('div');
+    wrap.className = 'rqd-modal';
+    wrap.innerHTML = `<div class="rqd-backdrop"></div>
+      <div class="rqd-dialog" role="dialog" aria-modal="true" aria-label="Chi tiết yêu cầu">
+        <div class="rqd-head"><span>🏛️ Yêu cầu gửi Ban điều hành AI</span><button type="button" class="rqd-x" aria-label="Đóng">✕</button></div>
+        <div class="rqd-body"></div>
+      </div>`;
+    document.body.appendChild(wrap);
+    const close = () => { wrap.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    wrap.querySelector('.rqd-backdrop').addEventListener('click', close);
+    wrap.querySelector('.rqd-x').addEventListener('click', close);
+    wrap.addEventListener('click', (e) => e.stopPropagation());
+    let me = '';
+    try { me = getPlayerName() || ''; } catch { /* */ }
+    renderRequestThread({ host: wrap.querySelector('.rqd-body'), requestId: rid, me, onChange: refresh, showTitle: true });
   }
   async function onReadAll() {
     if (unread === 0) return;
@@ -209,6 +233,17 @@ let stylesInjected = false;
 function injectStylesOnce() {
   if (stylesInjected) return; stylesInjected = true;
   const css = `
+    .rqd-modal { position: fixed; inset: 0; z-index: 2147483002; display: grid; place-items: center; }
+    .rqd-backdrop { position: absolute; inset: 0; background: rgba(15,23,42,.55); backdrop-filter: blur(3px); }
+    .rqd-dialog { position: relative; width: min(820px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow: auto;
+      background: #fff; color: #1f2937; border-radius: 16px; box-shadow: 0 30px 80px rgba(15,23,42,.45);
+      padding: 14px 22px 18px; font: 14px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; text-align: left; }
+    .rqd-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 800; color: #4338ca; font-size: 13px; margin-bottom: 8px; }
+    .rqd-x { border: 0; background: rgba(0,0,0,.06); color: #475569; width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+    .rqd-dialog .rt-list { max-height: calc(100vh - 300px); }
+    .rqd-dialog .rt-body { font-size: 14px; }
+    .rqd-dialog .rt-att-thumb img { max-width: 220px; max-height: 160px; }
+
     #nbell-root {
       position: fixed; top: 14px; right: 14px; z-index: 9998;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;

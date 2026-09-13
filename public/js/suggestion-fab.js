@@ -12,7 +12,7 @@
 // ============================================================
 
 import { getPlayerName } from './api.js';
-import { renderRequestThread } from './request-thread.js';
+import { renderRequestThread } from './request-thread.js?v=reqdetail1';
 
 const TYPES = [
   { v: 'game',   icon: '🎮', label: 'Thêm trò chơi / mini-game' },
@@ -155,7 +155,7 @@ function autoMount() {
                    placeholder="VD: Thêm dạng bài Toán có nhiều cách giải" />
           </label>
           <label class="sgf-lab">Mô tả chi tiết (tuỳ chọn) <span id="sgf-detail-count" style="opacity:.55;font-size:11px;float:right">0 / 10000</span>
-            <textarea id="sgf-detail" class="sgf-in" rows="3" maxlength="10000"
+            <textarea id="sgf-detail" class="sgf-in" rows="7" maxlength="10000"
                       placeholder="Càng cụ thể, AI càng dễ hiểu &amp; phản hồi đúng nhu cầu của bạn."></textarea>
           </label>
 
@@ -620,7 +620,7 @@ function bind(root) {
           if (!panel) return;
           if (panel.hidden) {
             panel.hidden = false;
-            renderRequestThread({ host: panel, requestId: id, me, onChange: loadInbox });
+            renderRequestThread({ host: panel, requestId: id, me, onChange: loadInbox, showTitle: true });
           } else { panel.hidden = true; panel.innerHTML = ''; }
         });
       });
@@ -650,7 +650,7 @@ function renderItem(it, me = '') {
     </div>` : '';
   return `
     <div class="sgf-it">
-      <div class="sgf-it-line">
+      <div class="sgf-it-line sgf-it-line-click" data-req-toggle="${it.id}" title="Bấm để xem chi tiết yêu cầu">
         <span class="sgf-it-ico">${t.icon}</span>
         <span class="sgf-it-title">${escapeHtml(it.title)}</span>
         <span class="sgf-it-st ${sm.cls}">${sm.label}</span>
@@ -703,24 +703,24 @@ function injectStyles() {
     .sgf-modal[hidden] { display: none !important; }
     .sgf-backdrop { position: absolute; inset: 0; background: rgba(15,23,42,.55); backdrop-filter: blur(3px); }
     .sgf-dialog {
-      position: relative; width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 36px);
+      position: relative; width: min(920px, calc(100vw - 32px)); max-height: calc(100vh - 36px);
       overflow: auto; background: #fff; color: #1f2937; border-radius: 16px;
       box-shadow: 0 30px 80px rgba(15,23,42,.45);
-      font: 14px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+      font: 15px/1.55 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
     }
     .sgf-head { display: flex; gap: 12px; align-items: flex-start; padding: 18px 20px 8px; }
     .sgf-head-ico { font-size: 30px; line-height: 1; }
     .sgf-head-text { flex: 1; }
-    .sgf-head-text h3 { margin: 0 0 4px; font-size: 17px; color: #1f1147; }
-    .sgf-head-text p { margin: 0; font-size: 12.5px; color: #4b5563; }
+    .sgf-head-text h3 { margin: 0 0 4px; font-size: 20px; color: #1f1147; }
+    .sgf-head-text p { margin: 0; font-size: 14px; color: #4b5563; }
     .sgf-x {
       border: 0; background: rgba(0,0,0,.05); color: #475569; width: 30px; height: 30px;
       border-radius: 8px; cursor: pointer; font-size: 14px;
     }
     .sgf-x:hover { background: rgba(0,0,0,.1); }
 
-    .sgf-form { display: flex; flex-direction: column; gap: 10px; padding: 8px 20px 14px; }
-    .sgf-lab { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: #475569; font-weight: 600; }
+    .sgf-form { display: flex; flex-direction: column; gap: 12px; padding: 10px 26px 16px; }
+    .sgf-lab { display: flex; flex-direction: column; gap: 5px; font-size: 14px; color: #475569; font-weight: 600; }
     .sgf-pick { width:100%; cursor:pointer; font:inherit; text-align:left; display:flex; flex-direction:column; gap:2px;
       background:linear-gradient(135deg,rgba(124,58,237,.13),rgba(79,70,229,.08));
       border:1px dashed rgba(124,58,237,.5); border-radius:12px; padding:10px 13px; color:inherit;
@@ -737,11 +737,13 @@ function injectStyles() {
       width:26px; height:26px; font-size:13px; flex:none; }
     .sgf-req { color: #ef4444; }
     .sgf-in {
-      width: 100%; box-sizing: border-box; padding: 9px 11px; border-radius: 9px;
+      width: 100%; box-sizing: border-box; padding: 10px 13px; border-radius: 10px;
       border: 1px solid #d1d5db; background: #fff; color: #1f2937; font: inherit;
     }
     .sgf-in:focus { outline: 2px solid #c7d2fe; border-color: #6366f1; }
-    textarea.sgf-in { resize: vertical; min-height: 60px; }
+    textarea.sgf-in { resize: vertical; min-height: 150px; }
+    .sgf-it-line-click { cursor: pointer; }
+    .sgf-it-line-click:hover .sgf-it-title { text-decoration: underline; }
 
     /* Attachments: ảnh chụp màn hình + file đính kèm */
     .sgf-attach { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 9px; font-size: 12.5px; color: #475569; }

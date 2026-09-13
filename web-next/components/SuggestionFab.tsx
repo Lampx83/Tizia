@@ -409,7 +409,7 @@ export default function SuggestionFab() {
                 </span>
                 <textarea
                   className="sgf-in"
-                  rows={3}
+                  rows={7}
                   maxLength={10000}
                   value={detail}
                   onChange={(e) => setDetail(e.target.value)}
@@ -505,7 +505,18 @@ export default function SuggestionFab() {
                     const openThread = openThreads.has(id);
                     return (
                       <div className="sgf-it" key={id}>
-                        <div className="sgf-it-line">
+                        <div
+                          className="sgf-it-line sgf-it-line-click"
+                          title="Bấm để xem chi tiết yêu cầu"
+                          onClick={() =>
+                            setOpenThreads((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(id)) next.delete(id);
+                              else next.add(id);
+                              return next;
+                            })
+                          }
+                        >
                           <span className="sgf-it-ico">{t.icon}</span>
                           <span className="sgf-it-title">{it.title}</span>
                           <span className={`sgf-it-st ${sm.cls}`}>{sm.label}</span>
@@ -543,7 +554,7 @@ export default function SuggestionFab() {
                         </button>
                         {openThread && (
                           <div className="sgf-it-thread">
-                            <RequestThread requestId={id} me={me} onChange={loadInbox} />
+                            <RequestThread requestId={id} me={me} onChange={loadInbox} showTitle />
                           </div>
                         )}
                       </div>

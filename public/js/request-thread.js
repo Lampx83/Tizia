@@ -78,7 +78,7 @@ function renderMessage(m, me) {
  * Mount thread vào `host`. Tải /thread, hiện hội thoại + ô trả lời (nếu `me` là
  * chủ yêu cầu). `onChange` gọi sau khi HS gửi tin mới (để parent reload list).
  */
-export async function renderRequestThread({ host, requestId, me = '', onChange }) {
+export async function renderRequestThread({ host, requestId, me = '', onChange, showTitle = false }) {
   injectStylesOnce();
   host.classList.add('rt-root');
   host.innerHTML = `<div class="rt-loading">Đang tải phiên trao đổi…</div>`;
@@ -100,6 +100,7 @@ export async function renderRequestThread({ host, requestId, me = '', onChange }
   const closed = req.status === 'done' || req.status === 'rejected';
 
   host.innerHTML = `
+    ${showTitle && req.title ? `<div class="rt-title">#${escapeHtml(req.id)} · ${escapeHtml(req.title)}${req.created_at ? `<small>Gửi ${fmtTime(req.created_at)}</small>` : ''}</div>` : ''}
     <div class="rt-head">
       <span class="rt-status ${sm.cls}">${sm.label}</span>
       <span class="rt-count">${msgs.length} tin nhắn</span>
@@ -151,7 +152,7 @@ export async function renderRequestThread({ host, requestId, me = '', onChange }
       }
       input.value = '';
       msgEl.textContent = '';
-      await renderRequestThread({ host, requestId, me, onChange });
+      await renderRequestThread({ host, requestId, me, onChange, showTitle });
       if (typeof onChange === 'function') onChange();
     } catch {
       msgEl.textContent = '⚠️ Lỗi mạng — thử lại sau.';
@@ -181,7 +182,9 @@ function injectStylesOnce() {
     .rt-status.done      { background: #bbf7d0; color: #065f46; }
     .rt-status.rejected  { background: #fecaca; color: #991b1b; }
     .rt-count { font-size: 11px; opacity: .6; }
-    .rt-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; padding: 2px; }
+    .rt-title { font-size: 15px; font-weight: 800; line-height: 1.35; }
+    .rt-title small { display: block; font-size: 11.5px; font-weight: 500; opacity: .6; margin-top: 2px; }
+    .rt-list { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; padding: 2px; }
     .rt-msg { display: flex; }
     .rt-msg.rt-right { justify-content: flex-end; }
     .rt-msg.rt-left  { justify-content: flex-start; }

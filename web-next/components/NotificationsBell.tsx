@@ -8,12 +8,14 @@
 // để script vanilla (nếu còn bị chèn) thấy đã có widget và tự bỏ qua.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fmtTime } from '@/lib/request-board';
+import { fmtTime, getPlayerName } from '@/lib/request-board';
+import RequestThread from './RequestThread';
 
 const POLL_MS = 60_000;
 
 type Notif = {
   id: number | string;
+  request_id?: number | null;
   title?: string;
   body?: string;
   url?: string;
@@ -40,6 +42,8 @@ export default function NotificationsBell() {
   const [pushSupported, setPushSupported] = useState(false);
   const [pushOn, setPushOn] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
+  // Yêu cầu đang mở xem chi tiết (bấm vào thông báo gắn với 1 yêu cầu).
+  const [detailId, setDetailId] = useState<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const subRef = useRef<PushSubscription | null>(null);
 
@@ -142,8 +146,24 @@ export default function NotificationsBell() {
       setUnread((u) => Math.max(0, u - 1));
       api(`/api/notifications/${it.id}/read`, { method: 'POST' }).catch(() => {});
     }
+    // Thông báo gắn với 1 yêu cầu → mở ngay chi tiết yêu cầu đó (nội dung đã gửi,
+    // file đính kèm, phản hồi) thay vì đưa về bảng yêu cầu chung của trường.
+    if (it.request_id) {
+      setOpen(false);
+      setDetailId(Number(it.request_id));
+      return;
+    }
     if (it.url) setTimeout(() => (location.href = it.url!), 80);
   }
+
+  useEffect(() => {
+    if (detailId == null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDetailId(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [detailId]);
 
   function onReadAll() {
     if (unread === 0) return;
@@ -211,6 +231,19 @@ export default function NotificationsBell() {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {detailId != null && (
+        <div className="rqd-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="sgf-backdrop" onClick={() => setDetailId(null)} />
+          <div className="rqd-dialog" role="dialog" aria-modal="true" aria-label="Chi tiết yêu cầu">
+            <div className="rqd-head">
+              <span>🏛️ Yêu cầu gửi Ban điều hành AI</span>
+              <button type="button" className="sgf-x" onClick={() => setDetailId(null)} aria-label="Đóng">✕</button>
+            </div>
+            <RequestThread requestId={detailId} me={getPlayerName()} onChange={refresh} showTitle />
+          </div>
         </div>
       )}
     </div>

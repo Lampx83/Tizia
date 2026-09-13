@@ -15,7 +15,7 @@ import {
 } from '@/lib/request-board';
 
 type ThreadData = {
-  request: { status?: string; student?: string };
+  request: { id?: number; status?: string; student?: string; title?: string; created_at?: number };
   messages: ThreadMessage[];
 };
 
@@ -48,10 +48,13 @@ export default function RequestThread({
   requestId,
   me = '',
   onChange,
+  showTitle = false,
 }: {
   requestId: number | string;
   me?: string;
   onChange?: () => void;
+  /** Hiện tiêu đề yêu cầu ở đầu — dùng khi mở riêng (từ chuông thông báo). */
+  showTitle?: boolean;
 }) {
   const [data, setData] = useState<ThreadData | null>(null);
   const [failed, setFailed] = useState(false);
@@ -130,6 +133,12 @@ export default function RequestThread({
 
   return (
     <div className="rt-root">
+      {showTitle && req.title && (
+        <div className="rt-title">
+          #{req.id} · {req.title}
+          {req.created_at ? <small>Gửi {fmtTime(req.created_at)}</small> : null}
+        </div>
+      )}
       <div className="rt-head">
         <span className={`rt-status ${sm.cls}`}>{sm.label}</span>
         <span className="rt-count">{msgs.length} tin nhắn</span>
