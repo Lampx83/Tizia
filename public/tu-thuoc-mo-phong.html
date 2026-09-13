@@ -700,6 +700,17 @@
   .pm-char.walk .pm-leg-r{animation:pm-step-b .42s infinite;}
   .pm-char.walk .pm-arm-l{animation:pm-step-b .42s infinite;}
   .pm-char.walk .pm-arm-r{animation:pm-step-a .42s infinite;}
+  /* req (giảng viên): đi ngang dùng nguyên bước xoạc chân bình thường (khớp
+     với .flip lật trái/phải); đi DỌC (lên/xuống) mà vẫn xoạc chân ngang y hệt
+     thì nhìn sai hướng — thay bằng bước nhẹ, gần thẳng chân hơn (biên độ nhỏ),
+     giống dáng đi nhìn từ trước/sau thay vì nhìn nghiêng. */
+  .pm-char.walk-v .pm-body{animation:pm-bob .42s infinite;}
+  .pm-char.walk-v .pm-leg-l{animation:pm-step-a-v .42s infinite;}
+  .pm-char.walk-v .pm-leg-r{animation:pm-step-b-v .42s infinite;}
+  .pm-char.walk-v .pm-arm-l{animation:pm-step-b-v .42s infinite;}
+  .pm-char.walk-v .pm-arm-r{animation:pm-step-a-v .42s infinite;}
+  @keyframes pm-step-a-v{0%,100%{transform:rotate(9deg);}50%{transform:rotate(-9deg);}}
+  @keyframes pm-step-b-v{0%,100%{transform:rotate(-9deg);}50%{transform:rotate(9deg);}}
   @keyframes pm-bob{0%,100%{transform:translateX(-50%) translateY(0);}50%{transform:translateX(-50%) translateY(-2px);}}
   @keyframes pm-step-a{0%,100%{transform:rotate(24deg);}50%{transform:rotate(-24deg);}}
   @keyframes pm-step-b{0%,100%{transform:rotate(-24deg);}50%{transform:rotate(24deg);}}
@@ -3060,10 +3071,13 @@ function pLoop(){
     vx = vx/len * C_SPEED; vy = vy/len * C_SPEED;
     if(!pCollide(charX + vx, charY)) charX += vx;
     if(!pCollide(charX, charY + vy)) charY += vy;
-    pChar.classList.add('walk');
+    // Đi ngang chủ đạo → dáng xoạc chân bình thường (khớp .flip lật mặt);
+    // đi dọc chủ đạo (lên/xuống) → dáng bước nhẹ, không xoạc ngang sai hướng.
+    if(Math.abs(vx) >= Math.abs(vy)){ pChar.classList.add('walk'); pChar.classList.remove('walk-v'); }
+    else { pChar.classList.add('walk-v'); pChar.classList.remove('walk'); }
     if(vx > 0.15) pChar.classList.add('flip'); else if(vx < -0.15) pChar.classList.remove('flip');
   } else {
-    pChar.classList.remove('walk');
+    pChar.classList.remove('walk'); pChar.classList.remove('walk-v');
   }
   pChar.style.left = charX + 'px';
   pChar.style.top = charY + 'px';
