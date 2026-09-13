@@ -3025,10 +3025,16 @@ function fitMap(){
   const availH = window.innerHeight - topY - 12;   // req #164 (phản hồi): nút hành động giờ nổi đè lên sơ đồ, không còn chiếm hàng riêng bên dưới
   const availW = (mapStage.clientWidth || window.innerWidth) - 6;
   const legendEl = document.getElementById('mapLegend');
+  const guideEl = document.getElementById('mapGuide');
   const legendW = legendEl && legendEl.offsetParent ? legendEl.offsetWidth + 14 : 0;
+  // req #164 (phản hồi): quên trừ bảng "Hướng dẫn luyện tập" bên TRÁI — chỉ trừ
+  // legendW nên ở màn hình rộng (nhất là bấm toàn màn hình) sơ đồ bị tính to
+  // hơn thực tế, tràn ra ngoài khiến 2 bảng bên bị cắt (overflow:hidden +
+  // justify-content:center clip đều hai bên).
+  const guideW = guideEl && guideEl.offsetParent ? guideEl.offsetWidth + 14 : 0;
   // req #156: trước đây chặn ở 1 nên màn hình rộng vẫn hiện sơ đồ bé tí. Cho
   // phóng to tới 1,7 lần để lấp khung, vẫn giữ đúng tỉ lệ (không méo).
-  mapScale = Math.max(0.3, Math.min(1.4, (availW - legendW)/P_W, availH/P_H));
+  mapScale = Math.max(0.3, Math.min(1.4, (availW - legendW - guideW)/P_W, availH/P_H));
   pMap.style.transform = 'scale(' + mapScale + ')';
   pMap.style.width = P_W + 'px'; pMap.style.height = P_H + 'px';
   pMap.style.marginRight = (P_W * mapScale - P_W) + 'px';   // transform không đổi layout → bù bề ngang
