@@ -315,16 +315,9 @@ const SPACES_PHARMACY = {
 
   gpp:{emoji:'💊',name:'Nhà thuốc GPP',accent:'#16a34a',intro:'Quầy thuốc đạt chuẩn GPP — sắp xếp, cấp phát đúng, tư vấn OTC và sàng lọc cờ đỏ.',
     rooms:[{ic:'🏪',name:'Nhà thuốc 3D đầy đủ (Pharmacy-AI port)',rd:'Vào quầy ảo: 180 thuốc, 4 tủ Rx/OTC + tủ kiểm soát đặc biệt, POS, dán nhãn HDSD, tư vấn AI theo SEGUE.',href:'/nha-thuoc-3d.html'},
-      {ic:'💊',name:'Pharma Crush — ghép 3 học nhóm thuốc',rd:'Game ghép 3: ghép các thuốc CÙNG NHÓM tác dụng dược lý để ăn điểm. Có cấp độ, combo, công cụ hỗ trợ và mẹo dược sĩ sau mỗi lần ghép.',href:'/pharma-crush.html'},
-      {ic:'🏥',name:'Nhà thuốc 2D An Tâm Pharma',rd:'Tham quan trực quan full màn hình: mặt tiền tân cổ điển + nội thất quầy chữ L, hệ tủ Rx/OTC/sản phẩm không phải thuốc. Bấm vào từng tủ để xem danh mục theo chuẩn GPP.',href:'/nha-thuoc-2d.html'},
-      {ic:'🗂️',name:'Pharma Sort — phân loại thuốc theo nhóm',rd:'Trò phân loại: kéo từng thuốc về đúng nhóm tác dụng dược lý, tăng dần độ khó. Cùng bộ dữ liệu thuốc với Pharma Crush.',href:'/pharma-sort.html'},
       {ic:'🏬',name:'Nhà thuốc thực hành',rd:'Quầy thực hành tổng hợp: nhận diện & sắp xếp thuốc theo tủ Rx/OTC/kiểm soát đặc biệt, tra nhanh theo hoạt chất, kéo-thả cất hàng — kèm hai trò luyện tập Pharma Crush và Pharma Sort.',href:'/tu-thuoc-mo-phong.html'},
       {ic:'🗂️',name:'Sắp xếp thuốc ATC',rd:'Phân loại & xếp kệ.',href:'/sap-xep-hub.html'},
       {ic:'🕹️',name:'Arcade 2D',rd:'Luyện tốc độ phân loại.',href:'/2d-arcade.html'},
-      {ic:'📝',name:'Cấp phát thuốc kê đơn (Rx)',rd:'Quy trình 6 bước an toàn.',panel:[
-        {h:'Checklist cấp phát đơn thuốc'},
-        {check:['Kiểm tra đơn hợp lệ (tên, tuổi BN, chữ ký bác sĩ)','Đối chiếu thuốc – hàm lượng – số lượng','Rà tương tác & chống chỉ định','Dán nhãn & ghi rõ cách dùng','Tư vấn bảo quản & tác dụng phụ thường gặp','Ghi sổ thuốc kê đơn theo quy định']},
-        {note:'Thuốc kê đơn (Rx) chỉ bán khi có đơn hợp lệ; kháng sinh không bán tự do.'}]},
       {ic:'🩸',name:'Đo HA & đường huyết',rd:'Dịch vụ sàng lọc tại nhà thuốc.',panel:[
         {h:'Quy trình đo huyết áp đúng'},
         {ol:['Cho khách nghỉ 5 phút, ngồi tựa lưng, chân chạm đất','Quấn băng đo ngang tim, không nói chuyện khi đo','Đo 2 lần cách 1–2 phút rồi lấy trung bình','Ghi lại kết quả & so với ngưỡng']},

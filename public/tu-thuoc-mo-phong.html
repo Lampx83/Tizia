@@ -889,6 +889,79 @@
   body.doors-open #doorR{transform:translateX(565px)}
   #fSanhSign{transition:opacity .45s ease}
   body.doors-open #fSanhSign{opacity:0}
+
+  /* req #159: qua màn 10 Pharma Crush/Sort → có chìa khóa: sảnh biến mất, trước cửa
+     thành con đường có xe cộ, người đi lại; hiện lời nhắc bấm cửa để vào. */
+  #fRoad,#fKeyHint{display:none}
+  body.has-key #fSanhSign{display:none}
+  body.has-key #fRoad,body.has-key #fKeyHint{display:inline}
+  #fKeyHint{animation:fkh-pulse 1.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+  @keyframes fkh-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+  body.doors-open #fKeyHint{opacity:0}
+  /* req #160: hộp mở khóa cửa bằng mật khẩu */
+  #doorPwMask{position:fixed;inset:0;z-index:200;background:rgba(20,40,50,.45);display:flex;align-items:center;justify-content:center;padding:16px}
+  #doorPwMask[hidden]{display:none}
+  /* req #164: sơ đồ theo ảnh mẫu của giảng viên + bảng khu vực bên phải */
+  .map-stage{gap:14px;align-items:flex-start}
+  .pharmacy-map.iso{transform-origin:top left;border:4px solid #fff;border-radius:18px;
+    background:#eef4f6 url(/img/gpp/so-do-nha-thuoc.jpg) 0 0/100% 100% no-repeat;
+    box-shadow:0 4px 0 #b9d3e6,0 12px 28px rgba(40,80,120,.25)}
+  .pharmacy-map.iso .pm-zone{background:transparent;border:3px solid transparent;box-shadow:none;border-radius:14px;cursor:pointer;
+    transition:background .15s,border-color .15s,box-shadow .15s}
+  .pharmacy-map.iso .pm-zone:hover,.pharmacy-map.iso .pm-zone.here,.pharmacy-map.iso .pm-zone.lg-hover{
+    border-color:#ffc93c;background:rgba(255,214,90,.18);box-shadow:0 0 22px rgba(255,190,40,.85);outline:none}
+  .pharmacy-map.iso .pm-zone:hover::after,.pharmacy-map.iso .pm-zone.lg-hover::after{content:attr(data-short);position:absolute;left:50%;bottom:6px;transform:translateX(-50%);
+    white-space:nowrap;background:#1f3b63;color:#fff;font:800 15px 'Baloo 2',sans-serif;padding:3px 12px;border-radius:10px;pointer-events:none}
+  .pharmacy-map.iso .pm-body{scale:1.8;transform-origin:bottom center}
+  .map-legend{flex:none;width:250px;background:rgba(255,255,255,.93);border:2px solid #fff;border-radius:18px;
+    box-shadow:0 4px 0 #b9d3e6,0 10px 22px rgba(40,80,120,.18);padding:10px 12px;max-height:100%;overflow:auto}
+  .map-legend h3{margin:0 0 6px;font:800 1rem 'Baloo 2',sans-serif;color:#1f3b63}
+  .map-legend ul{list-style:none;margin:0;padding:0}
+  .map-legend li{display:flex;align-items:center;gap:9px;padding:5px 4px;border-bottom:1px solid #e3edf3;cursor:pointer;border-radius:8px;
+    font:700 .8rem 'Nunito',sans-serif;color:#26405f}
+  .map-legend li:hover{background:#fff4c8}
+  .map-legend li .ml-ico{width:30px;height:30px;flex:none;border-radius:9px;display:grid;place-items:center;font-size:17px;color:#fff}
+  .map-legend li.go b{color:#b3700f;font-size:.7rem;margin-left:auto;white-space:nowrap}
+  .map-legend .ml-foot{margin:8px 0 0;font:700 .78rem 'Baloo 2',sans-serif;color:#2c6aa0;text-align:center;font-style:italic}
+  @media (max-width:980px){ .map-legend{display:none} }
+  .mh-bar{flex:none;width:100%;max-width:1480px;box-sizing:border-box;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    background:linear-gradient(180deg,#1d4f91,#173f78);color:#fff;border-radius:18px;padding:7px 14px;box-shadow:0 4px 0 #0f2f5c,0 8px 18px rgba(20,50,90,.3)}
+  .mh-left{display:flex;align-items:center;gap:10px}
+  .mh-logo{width:38px;height:38px;border-radius:50%;background:#fff;color:#1d7fd0;display:grid;place-items:center;font:900 24px/1 sans-serif;box-shadow:inset 0 0 0 3px #7cc3f0}
+  .mh-title{font:800 1.35rem 'Baloo 2',sans-serif;white-space:nowrap}
+  .mh-title em{font-style:normal;color:#7fd3ff}
+  .mh-mid{font:700 1rem 'Baloo 2',sans-serif;opacity:.92;padding-left:14px;border-left:2px solid rgba(255,255,255,.35);white-space:nowrap}
+  .mh-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .mh-points{background:#0f2f5c;border-radius:14px;padding:5px 12px;font:700 .85rem 'Nunito',sans-serif;white-space:nowrap}
+  .mh-points b{color:#ffd24a;font:800 1.05rem 'Baloo 2',sans-serif;margin-left:4px}
+  .mh-ico{border:0;background:#0f2f5c;border-radius:12px;width:36px;height:34px;font-size:18px;cursor:pointer}
+  .mh-user{background:#0f2f5c;border-radius:14px;padding:6px 12px;font:700 .82rem 'Nunito',sans-serif;white-space:nowrap}
+  .mh-bar .map-key{font-size:.74rem}
+  .mh-gear{position:absolute;left:14px;bottom:14px;z-index:20;width:76px;height:76px;border-radius:50%;border:3px solid #fff;cursor:pointer;
+    background:linear-gradient(180deg,#2f8be0,#1d6fc0);color:#fff;font-size:30px;line-height:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    box-shadow:0 4px 0 #15508c,0 8px 16px rgba(0,0,0,.25)}
+  .mh-gear small{font:800 13px 'Baloo 2',sans-serif;margin-top:2px}
+  .mh-menu{position:absolute;left:14px;bottom:100px;z-index:21;background:#fff;border-radius:14px;padding:6px;display:flex;flex-direction:column;
+    box-shadow:0 12px 30px rgba(0,0,0,.3);min-width:260px}
+  .mh-menu[hidden]{display:none}
+  .mh-menu a,.mh-menu button{all:unset;cursor:pointer;padding:10px 12px;border-radius:9px;font:700 17px 'Nunito',sans-serif;color:#1f3b63}
+  .mh-menu a:hover,.mh-menu button:hover{background:#eaf4ff}
+  body.legend-off .map-legend{display:none}
+  @media (max-width:760px){ .mh-mid{display:none} .mh-title{font-size:1.05rem} }
+  .tu-switch{display:inline-block;margin-top:4px;font-size:.78rem;font-weight:800;color:#225C4E;text-decoration:none;
+    background:#fff;border:2px solid #cfe7df;border-radius:12px;padding:3px 10px}
+  .tu-switch:hover{background:#eafaf6}
+  #doorPwBox{background:linear-gradient(180deg,#fffdf6,#fdf3dd);border:3px solid #fff;border-radius:22px;max-width:430px;width:100%;
+    padding:18px 20px;box-shadow:0 6px 0 #e8cfa2,0 18px 40px rgba(0,0,0,.3);color:#3f5170;text-align:center}
+  #doorPwBox h3{font-family:'Baloo 2',cursive;margin:0 0 6px;font-size:1.3rem}
+  #doorPwBox p{margin:0 0 10px;font-size:.9rem;line-height:1.4}
+  #doorPwBox input{width:100%;box-sizing:border-box;font-size:1.1rem;padding:9px 12px;border-radius:12px;border:2px solid #caa25a;text-align:center;letter-spacing:.2em}
+  #doorPwErr{color:#b3261e;font-weight:800;min-height:1.3em;font-size:.85rem;margin-top:6px}
+  #doorPwBox .row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:6px}
+  #doorPwBox button{font-family:'Baloo 2',cursive;font-size:1rem;border:2px solid #fff;border-radius:16px;padding:8px 16px;cursor:pointer}
+  #doorPwGo{background:linear-gradient(180deg,#ffc93c,#e08c14);color:#4a3200;box-shadow:0 4px 0 #b3700f}
+  #doorPwCancel{background:#dfe6ef;color:#3f5170;box-shadow:0 4px 0 #b9c4d4}
+  #doorPwBox .games{display:flex;gap:8px;justify-content:center;margin:4px 0 12px}
 </style>
 </head>
 <body class="view-facade">
@@ -923,9 +996,13 @@
            preserveAspectRatio="xMidYMid meet"/>
     <text x="800" y="152" text-anchor="middle" font-size="62" font-weight="900" fill="#fff" letter-spacing="6" font-family="'Baloo 2',system-ui,sans-serif">NHÀ THUỐC</text>
     <text x="800" y="214" text-anchor="middle" font-size="46" font-weight="800" fill="#eafff8" letter-spacing="10" font-family="'Baloo 2',system-ui,sans-serif">THỰC HÀNH</text>
-    <rect x="1306" y="104" width="126" height="126" rx="6" fill="#fff" opacity=".95"/>
-    <image href="/img/gpp/logo-cdyt-hanoi.jpg" x="1310" y="108" width="118" height="118"
-           preserveAspectRatio="xMidYMid meet"/>
+    <!-- req #157 (lần 2): logo chỉ để góc trái, góc phải là chữ "Đạt chuẩn GPP" -->
+    <g font-family="'Baloo 2',system-ui,sans-serif" text-anchor="middle">
+      <circle cx="1369" cy="167" r="62" fill="none" stroke="#f6d77a" stroke-width="4"/>
+      <circle cx="1369" cy="167" r="54" fill="none" stroke="#f6d77a" stroke-width="1.5" stroke-dasharray="4 4"/>
+      <text x="1369" y="150" font-size="16" font-weight="800" fill="#fff" letter-spacing="1">ĐẠT CHUẨN</text>
+      <text x="1369" y="196" font-size="44" font-weight="900" fill="#f6d77a" letter-spacing="3">GPP</text>
+    </g>
 
     <!-- cột biển dọc hai bên -->
     <g font-family="'Nunito',system-ui,sans-serif" font-weight="800" fill="#fff" letter-spacing="2">
@@ -993,60 +1070,87 @@
       <rect id="fGoSort"  x="818" y="770" width="270" height="36" fill="transparent" style="cursor:pointer"/>
     </g>
 
+    <!-- req #159: khi đã có chìa khóa, sảnh nhường chỗ cho con đường trước nhà thuốc.
+         Xe cộ, người đi bộ do JS (roadTick) thả vào #fActors thỉnh thoảng một lần. -->
+    <g id="fRoad">
+      <rect x="0" y="662" width="1600" height="70" fill="#d9d4c8"/>
+      <g stroke="#c4bdae" stroke-width="2"><line x1="0" y1="697" x2="1600" y2="697"/>
+        <line x1="100" y1="662" x2="100" y2="732"/><line x1="300" y1="662" x2="300" y2="732"/><line x1="500" y1="662" x2="500" y2="732"/>
+        <line x1="700" y1="662" x2="700" y2="732"/><line x1="900" y1="662" x2="900" y2="732"/><line x1="1100" y1="662" x2="1100" y2="732"/>
+        <line x1="1300" y1="662" x2="1300" y2="732"/><line x1="1500" y1="662" x2="1500" y2="732"/></g>
+      <rect x="0" y="732" width="1600" height="12" fill="#9a9a94"/>
+      <rect x="0" y="744" width="1600" height="156" fill="#4b5058"/>
+      <line x1="0" y1="822" x2="1600" y2="822" stroke="#f2f2f2" stroke-width="6" stroke-dasharray="60 44"/>
+      <g id="fActors"></g>
+    </g>
+    <g id="fKeyHint">
+      <rect x="520" y="560" width="560" height="76" rx="22" fill="#fff4c8" stroke="#e08c14" stroke-width="4"/>
+      <text x="800" y="594" text-anchor="middle" font-size="27" font-weight="900" fill="#6b4a05" font-family="'Baloo 2',system-ui,sans-serif">🔑 Bạn đã có chìa khóa!</text>
+      <text x="800" y="622" text-anchor="middle" font-size="18" font-weight="800" fill="#8a6a2a" font-family="'Nunito',system-ui,sans-serif">Bấm vào cánh cửa để vào nhà thuốc</text>
+    </g>
+
     <!-- vùng bấm mở cửa (trong suốt, phủ đúng khoang cửa) -->
     <rect id="fDoorHit" x="240" y="250" width="1120" height="412" fill="transparent" style="cursor:pointer"/>
   </svg>
 </div>
 
+<div id="doorPwMask" hidden>
+  <div id="doorPwBox" role="dialog" aria-modal="true" aria-labelledby="doorPwTitle">
+    <h3 id="doorPwTitle">🔒 Cửa nhà thuốc đang khóa</h3>
+    <p>Qua <b>màn 10</b> ở một trong hai trò dưới đây để nhận 🔑 chìa khóa:</p>
+    <div class="games">
+      <a class="mg-btn mg-crush" href="/pharma-crush.html">💊 Pharma Crush</a>
+      <a class="mg-btn mg-sort" href="/pharma-sort.html">🗂️ Pharma Sort</a>
+    </div>
+    <p>Hoặc nhập <b>mật khẩu</b> để vào ngay:</p>
+    <input id="doorPwInput" type="password" inputmode="numeric" autocomplete="off" placeholder="Mật khẩu">
+    <div id="doorPwErr"></div>
+    <div class="row">
+      <button id="doorPwGo" type="button">🔓 Mở cửa</button>
+      <button id="doorPwCancel" type="button">Để sau</button>
+    </div>
+  </div>
+</div>
+
 <div id="mapScreen">
-  <div class="map-topbar">
-    <span class="map-title">🏬 NHÀ THUỐC THỰC HÀNH — TOÀN CẢNH</span>
-    <span class="map-key locked" id="mapKey">🔒 Chưa có Chìa khóa</span>
-  </div>
-  <p class="map-hint">Dùng <b>phím mũi tên / WASD</b> để đi (hoặc bấm vào sàn). Đứng ở <b>🎓 Sảnh Tiền Thực Hành GPP</b> (trước cửa) bấm để <b>sắp xếp thuốc vào tủ theo bài</b>. Đạt danh hiệu <b>Dược sĩ thực tập (25⭐)</b> sẽ nhận 🔑 mở <b>🚪 Cửa ra vào</b>. 📍 <span id="pmZone">Đang ở Sảnh Tiền Thực Hành GPP</span></p>
-  <!-- req #147: hai trò luyện tập cùng phong cách, đặt ngay ở màn toàn cảnh để
-       sinh viên thấy được lối sang mà không phải quay ra không gian trường. -->
-  <div class="mini-games">
-    <span class="mg-lead">🎮 Luyện thêm:</span>
-    <a class="mg-btn mg-crush" href="/pharma-crush.html">💊 Pharma Crush<small>Ghép 3 cùng nhóm dược lý</small></a>
-    <a class="mg-btn mg-sort" href="/pharma-sort.html">🗂️ Pharma Sort<small>Phân loại thuốc theo nhóm</small></a>
-  </div>
+  <!-- req #164: thanh tiêu đề theo mẫu của giảng viên -->
+  <header class="mh-bar">
+    <div class="mh-left"><span class="mh-logo">✚</span><span class="mh-title">Nhà thuốc – <em>Cấp 1 (Cơ bản)</em></span></div>
+    <div class="mh-mid">Học thật – Hành nghề thật</div>
+    <div class="mh-right">
+      <span class="mh-points" title="Tổng sao đã tích lũy khi xếp thuốc vào tủ kê đơn và không kê đơn">⭐ Điểm tích lũy <b id="mhPoints">0</b></span>
+      <span class="map-key locked" id="mapKey">🔒 Chưa có Chìa khóa</span>
+      <button type="button" class="mh-ico" id="mhTrophy" title="Danh hiệu">🏆</button>
+      <span class="mh-user" id="mhUser">👤 Sinh viên</span>
+    </div>
+  </header>
+  <p class="map-hint">Bấm vào <b>Tủ thuốc kê đơn</b> hoặc <b>Tủ thuốc không kê đơn</b> để sắp xếp thuốc vào tủ · đi bằng <b>phím mũi tên / WASD</b> hoặc bấm vào sàn · <b>🚪 Lối vào</b> để ra ngoài. 📍 <span id="pmZone">Đang ở lối vào</span></p>
   <div class="map-stage" id="mapStage">
-  <div class="pharmacy-map" id="pharmacyMap">
-    <div class="pharmacy-walls"></div>
-    <div class="pm-banner">🏬 KHU VỰC TRƯNG BÀY</div>
+  <div class="pharmacy-map iso" id="pharmacyMap">
+    <!-- req #164: nền là sơ đồ nhà thuốc do giảng viên gửi; mỗi khu là một vùng bấm trong suốt
+         đặt đè đúng vị trí (toạ độ theo ảnh 1180×936). -->
+    <div class="pm-zone z-special" data-zone="info" data-name="Tủ thuốc kiểm soát đặc biệt (có khóa): thuốc gây nghiện, hướng thần, tiền chất" data-short="Thuốc kiểm soát đặc biệt" data-ico="🔒" title="Thuốc kiểm soát đặc biệt" style="left:112px;top:30px;width:182px;height:180px;"></div>
+    <div class="pm-zone z-rx" data-zone="tu-rx" data-name="Tủ thuốc kê đơn (Rx) — bấm để sắp xếp thuốc vào tủ" data-short="Tủ thuốc kê đơn" data-ico="℞" title="Tủ thuốc kê đơn" style="left:302px;top:30px;width:260px;height:182px;"></div>
+    <div class="pm-zone z-otc" data-zone="tu-otc" data-name="Tủ thuốc không kê đơn (OTC) — bấm để sắp xếp thuốc vào tủ" data-short="Tủ thuốc không kê đơn" data-ico="✚" title="Tủ thuốc không kê đơn" style="left:566px;top:30px;width:268px;height:182px;"></div>
+    <div class="pm-zone z-nondrug" data-zone="info" data-name="Sản phẩm không phải là thuốc (mỹ phẩm, vật tư y tế, TPCN, chăm sóc cá nhân)" data-short="Sản phẩm không phải thuốc" data-ico="🧴" title="Sản phẩm không phải thuốc" style="left:838px;top:30px;width:282px;height:182px;"></div>
+    <div class="pm-zone z-receive" data-zone="info" data-name="Khu vực chờ kiểm nhập (hàng mới về, chờ kiểm tra)" data-short="Khu vực chờ kiểm nhập" data-ico="📦" title="Khu vực chờ kiểm nhập" style="left:92px;top:218px;width:178px;height:196px;"></div>
+    <div class="pm-zone z-process" data-zone="info" data-name="Khu vực hàng chờ xử lý (hàng cận hạn, hỏng, thu hồi, hủy bỏ)" data-short="Khu vực hàng chờ xử lý" data-ico="⚠️" title="Khu vực hàng chờ xử lý" style="left:78px;top:436px;width:214px;height:160px;"></div>
+    <div class="pm-zone z-cashier" data-zone="info" data-name="Quầy thu ngân: máy tính, máy quét mã vạch, máy in hóa đơn" data-short="Quầy thu ngân" data-ico="💵" title="Quầy thu ngân" style="left:384px;top:296px;width:418px;height:140px;"></div>
+    <div class="pm-zone z-fridge" data-zone="info" data-name="Tủ lạnh (bảo quản 2–8°C: vắc xin, insulin…)" data-short="Tủ lạnh" data-ico="❄️" title="Tủ lạnh" style="left:912px;top:200px;width:136px;height:176px;"></div>
+    <div class="pm-zone z-fire" data-zone="info" data-name="Bình chữa cháy" data-short="Bình chữa cháy" data-ico="🧯" title="Bình chữa cháy" style="left:1056px;top:212px;width:98px;height:144px;"></div>
+    <div class="pm-zone z-dispense" data-zone="info" data-name="Khu vực ra lẻ thuốc" data-short="Khu vực ra lẻ thuốc" data-ico="⚖️" title="Khu vực ra lẻ thuốc" style="left:888px;top:432px;width:272px;height:140px;"></div>
+    <div class="pm-zone z-consult" data-zone="info" data-name="Phòng tư vấn" data-short="Phòng tư vấn" data-ico="🧑‍⚕️" title="Phòng tư vấn" style="left:1036px;top:574px;width:140px;height:190px;"></div>
+    <div class="pm-zone z-wait" data-zone="info" data-name="Khu vực ghế chờ cho khách" data-short="Ghế chờ" data-ico="🛋️" title="Ghế chờ" style="left:46px;top:670px;width:338px;height:96px;"></div>
+    <div class="pm-zone z-entrance" data-zone="door" data-name="Lối vào — bấm để ra ngoài mặt tiền nhà thuốc" data-short="Lối vào" data-ico="🚪" title="Lối vào" style="left:444px;top:684px;width:322px;height:196px;"></div>
 
-    <div class="pm-zone z-special" data-zone="tu"  data-name="Tủ thuốc kiểm soát đặc biệt (gây nghiện, hướng thần)" style="left:8px;top:34px;width:205px;height:74px;">
-      <span class="pm-ico">🔒</span><span class="pm-label">Kiểm soát đặc biệt</span></div>
-    <div class="pm-zone z-rx" data-zone="tu"       data-name="Tủ thuốc kê đơn (Rx)" style="left:223px;top:34px;width:205px;height:74px;">
-      <span class="pm-ico">℞</span><span class="pm-label">Thuốc kê đơn</span></div>
-    <div class="pm-zone z-otc" data-zone="tu"      data-name="Tủ thuốc không kê đơn (OTC)" style="left:438px;top:34px;width:205px;height:74px;">
-      <span class="pm-ico">💊</span><span class="pm-label">Không kê đơn</span></div>
-    <div class="pm-zone z-nondrug" data-zone="tu"  data-name="Tủ sản phẩm không phải thuốc (TPCN, mỹ phẩm, vật tư y tế)" style="left:653px;top:34px;width:219px;height:74px;">
-      <span class="pm-ico">🧴</span><span class="pm-label">SP không phải thuốc</span></div>
-
-    <div class="pm-zone z-dispense" data-zone="tu" data-name="Khu vực ra lẻ thuốc (cắt liều, tư vấn)" style="left:8px;top:150px;width:150px;height:120px;">
-      <span class="pm-ico">⚖️</span><span class="pm-label">Ra lẻ thuốc</span></div>
-    <div class="pm-zone z-fridge" data-zone="tu"   data-name="Tủ lạnh (bảo quản 2–8°C: vắc xin, insulin)" style="left:8px;top:288px;width:150px;height:96px;">
-      <span class="pm-ico">❄️</span><span class="pm-label">Tủ lạnh</span></div>
-    <div class="pm-zone z-wash"     data-name="Khu vực rửa tay" style="left:8px;top:402px;width:150px;height:96px;">
-      <span class="pm-ico">🚰</span><span class="pm-label">Rửa tay</span></div>
-
-    <div class="pm-zone z-receive" data-zone="tu"  data-name="Khu hàng chờ kiểm nhập (hàng mới về, chờ kiểm tra)" style="left:714px;top:150px;width:158px;height:120px;">
-      <span class="pm-ico">📦</span><span class="pm-label">Hàng chờ kiểm nhập</span></div>
-    <div class="pm-zone z-process" data-zone="tu"  data-name="Khu hàng chờ xử lý (thuốc hết hạn, hư hỏng, thu hồi)" style="left:714px;top:288px;width:158px;height:120px;">
-      <span class="pm-ico">⚠️</span><span class="pm-label">Hàng chờ xử lý</span></div>
-    <div class="pm-zone z-fire"     data-name="Bình chữa cháy" style="left:832px;top:430px;width:40px;height:70px;">
-      <span class="pm-ico">🧯</span></div>
-
-    <div class="pm-zone z-cashier"  data-name="Quầy thu ngân: máy tính, máy quét mã vạch, máy in hóa đơn" style="left:305px;top:250px;width:280px;height:120px;">
-      <span class="pm-ico">💵</span><span class="pm-label">Quầy thu ngân</span>
-      <span class="pm-sub2">🖥️ Máy tính · 📷 Quét mã · 🖨️ In</span></div>
-
-    <div class="pm-zone z-entrance" data-zone="door" data-name="Cửa ra vào nhà thuốc (trên tường, dẫn vào trong)" style="left:330px;top:512px;width:230px;height:62px;">
-      <span class="pm-ico">🚪</span><span class="pm-label">Cửa ra vào</span>
-      <span class="pm-sub2" id="doorSub">🔒 Cần Chìa khóa</span></div>
-
+    <button type="button" class="mh-gear" id="mhGear" title="Cài đặt">⚙️<small>Cài đặt</small></button>
+    <div class="mh-menu" id="mhMenu" hidden>
+      <button type="button" data-act="facade">🚪 Ra mặt tiền nhà thuốc</button>
+      <a href="/pharma-crush.html">💊 Chơi Pharma Crush</a>
+      <a href="/pharma-sort.html">🗂️ Chơi Pharma Sort</a>
+      <button type="button" data-act="home">📍 Đưa nhân vật về lối vào</button>
+      <button type="button" data-act="legend">🗂️ Ẩn/hiện bảng khu vực</button>
+    </div>
     <div class="pm-char" id="pmChar">
       <div class="pm-body">
         <span class="pm-arm pm-arm-l"></span>
@@ -1058,6 +1162,11 @@
       </div>
     </div>
   </div>
+  <aside class="map-legend" id="mapLegend">
+    <h3>Các khu vực trong nhà thuốc</h3>
+    <ul id="mapLegendList"></ul>
+    <p class="ml-foot">Quản lý tốt hôm nay<br>Phục vụ sức khỏe ngày mai 💚</p>
+  </aside>
   </div><!-- /#mapStage -->
   <div class="map-action" id="mapAction"></div>
 </div>
@@ -1065,7 +1174,8 @@
 <div id="pharmacyScreen">
 <div class="side-panel">
   <div class="page-head">
-    <h1><span class="mascot" aria-hidden="true"></span>SẢNH TIỀN THỰC HÀNH GPP</h1>
+    <h1><span class="mascot" aria-hidden="true"></span><span id="tuTitle">TỦ THUỐC KÊ ĐƠN</span></h1>
+    <a class="tu-switch" id="tuSwitch" href="?tu=otc">Sang tủ thuốc không kê đơn →</a>
   </div>
 
   <div class="toolbar">
@@ -1369,9 +1479,21 @@ function parseCSV(text){
 
 const rows = parseCSV(CSV_DATA.trim());
 const header = rows[0].map(h=>h.trim());
-const records = rows.slice(1).filter(r=>r[0]).map(r=>{
+const allRecords = rows.slice(1).filter(r=>r[0]).map(r=>{
   const o={}; header.forEach((h,i)=> o[h]=(r[i]||'').trim()); return o;
 });
+
+/* req #161 (ThS Hương Lý) — tách hai tủ: THUỐC KÊ ĐƠN và THUỐC KHÔNG KÊ ĐƠN.
+   Bấm tủ nào trên sơ đồ thì trang mở với ?tu=rx hoặc ?tu=otc và chỉ dựng các
+   thuốc thuộc loại đó. Phân loại theo Thông tư 07/2017/TT-BYT (Danh mục thuốc
+   không kê đơn): thuốc KHÔNG có trong danh mục, mọi thuốc tiêm/truyền và kháng
+   sinh đường toàn thân đều là thuốc kê đơn. Khóa = "STT Buổi|Tên hoạt chất" (Aspirin
+   bài giảm đau là OTC, Aspirin 81mg bài tim mạch là kê đơn). */
+const OTC_NAMES = new Set(["Buổi 2|Xylomethazolin nhỏ mắt", "Buổi 4|Paracetamol vỉ", "Buổi 4|Pallas ống", "Buổi 4|Hapacol gói", "Buổi 4|Decolgen vỉ", "Buổi 4|Efferalgan viên đặt", "Buổi 4|Voltaren tuyp", "Buổi 4|Mofen hoặc Ibudor vỉ", "Buổi 4|Nurofen siro", "Buổi 4|Aspirin vỉ", "Buổi 4|Alaxan vỉ", "Buổi 4|Pharmaton vỉ", "Buổi 4|Uniferon B9 vỉ", "Buổi 4|Folacid vỉ", "Buổi 4|Vitamin B6 vỉ", "Buổi 4|Vitamin PP vỉ", "Buổi 4|Vitamin B2 lọ", "Buổi 4|Vitamin E vỉ", "Buổi 4|Vitamin B1-B6-B12 vỉ", "Buổi 4|Vitamin C vỉ", "Buổi 4|Vitamin C lọ", "Buổi 4|Vitamin B1 vỉ", "Buổi 5|Loratadin vỉ", "Buổi 5|Cetirizine vỉ", "Buổi 5|Clorpheniramin vỉ", "Buổi 5|Theralene vỉ", "Buổi 5|Theralene lọ siro", "Buổi 5|Promethazin tuyp", "Buổi 5|Halodimenal vỉ", "Buổi 5|Erolin lọ siro", "Buổi 5|Xyral vỉ", "Buổi 5|Acyclovir tuyp", "Buổi 7|Newchoice vỉ", "Buổi 7|Postinor vỉ", "Buổi 10|Nước uống Hye lyte lọ", "Buổi 10|Berberin lọ", "Buổi 10|Oresol gói cam", "Buổi 10|Oresol gói 27,9g", "Buổi 10|Edoper vỉ", "Buổi 10|Maloox vỉ", "Buổi 10|Yumangel gói", "Buổi 10|Phosphaslugel gói", "Buổi 10|Noigel gói", "Buổi 10|Gastrolpulgit gói", "Buổi 10|Bisacodyl vỉ", "Buổi 10|Biosubtyl gói", "Buổi 10|Sorbitol gói", "Buổi 11|Mekocitrin viêm ngậm", "Buổi 11|Acemuc gói", "Buổi 11|Acetyl stein vỉ", "Buổi 11|Bromhexin vỉ", "Buổi 11|Terpin – codein vỉ", "Buổi 12|Calcrem tuyp", "Buổi 12|Nystatin tuyp"]);
+const TU_MODE = new URLSearchParams(location.search).get('tu') === 'otc' ? 'otc' : 'rx';
+const TU_NAME = TU_MODE === 'otc' ? 'Tủ thuốc không kê đơn' : 'Tủ thuốc kê đơn';
+const drugClass = rec => OTC_NAMES.has(rec['STT Buổi'] + '|' + rec['Tên hoạt chất']) ? 'otc' : 'rx';
+const records = allRecords.filter(rec => drugClass(rec) === TU_MODE);
 
 /* group by "Nhóm dược lý" (pharmacology class, column D of the sheet)
    rather than by teaching session, preserving first-seen order */
@@ -1574,6 +1696,11 @@ const pharmacyScreenEl = document.getElementById('pharmacyScreen');
 const statsBar = document.getElementById('statsBar');
 
 const totalDrugs = records.length;
+document.getElementById('tuTitle').textContent = TU_NAME.toUpperCase();
+document.title = TU_NAME + ' · Nhà thuốc thực hành';
+{ const sw = document.getElementById('tuSwitch');
+  sw.href = '?tu=' + (TU_MODE === 'otc' ? 'rx' : 'otc');
+  sw.textContent = 'Sang ' + (TU_MODE === 'otc' ? 'tủ thuốc kê đơn' : 'tủ thuốc không kê đơn') + ' →'; }
 statsBar.innerHTML = `
   <span class="chip">Tổng số thuốc: <b>${totalDrugs}</b></span>
   <span class="chip">Số tủ: <b>${cabinets.length}</b></span>
@@ -1733,7 +1860,8 @@ const TITLES = [
 const KEY_TITLE = 'Dược sĩ thực tập';
 const STARS_PER_SHIELD = 8;
 // Namespaced để tránh đụng localStorage của app khác khi chạy chung origin (host AI Portal/Tizia).
-const LS_GAME = 'tu-thuoc-mo-phong:game_v2';
+// mỗi tủ (kê đơn / không kê đơn) lên hạng riêng vì số tủ và bộ thuốc khác nhau
+const LS_GAME = 'tu-thuoc-mo-phong:game_v2' + (TU_MODE === 'otc' ? ':otc' : '');
 const LS_MASTERY = 'tu-thuoc-mo-phong:drug_mastery';
 function loadGame(){
   try{ const g=JSON.parse(localStorage.getItem(LS_GAME)); if(g && typeof g.tier==='number') return g; }catch(e){}
@@ -2627,15 +2755,63 @@ const pZoneEls = [...pMap.querySelectorAll('.pm-zone')];
 const pmZoneLabel = document.getElementById('pmZone');
 const mapKeyEl = document.getElementById('mapKey');
 const mapActionEl = document.getElementById('mapAction');
-const P_W = 890, P_H = 690, C_W = 34, C_H = 30, C_SPEED = 3.6, P_BORDER = 5;
+const P_W = 1180, P_H = 936, C_W = 34, C_H = 30, C_SPEED = 4.4, P_BORDER = 4;   // req #164: kích thước ảnh sơ đồ
 const mapStage = document.getElementById('mapStage');
 let mapScale = 1;
-let charX = 420, charY = 616, targetX = null, targetY = null;   // start in the Sảnh strip (outside/in front of the pharmacy frame)
+let charX = 588, charY = 690, targetX = null, targetY = null;   // đứng ngay trong lối vào
 const pKeys = {};
 let pRects = [];
 let pRaf = null;
 let pHereZone = null;
-let hasKey = localStorage.getItem('tu-thuoc-mo-phong:key') === '1';
+/* req #159: chìa khóa có được khi (a) đã qua màn 10 Pharma Crush hoặc Pharma Sort
+   (hai trò đọc/ghi prog.max = màn cao nhất đã mở, qua màn 10 thì max ≥ 11), hoặc
+   (b) đã mở bằng mật khẩu / mốc sao cũ (khóa 'tu-thuoc-mo-phong:key'). */
+const KEY_LEVEL = 10;
+function gameMax(k){ try{ return (JSON.parse(localStorage.getItem(k) || '{}').max) || 1; }catch(e){ return 1; } }
+/* bảng "Các khu vực trong nhà thuốc" — dựng từ chính các vùng bấm để khỏi lệch nhau */
+const LEGEND_BG = { 'z-rx':'#2f7fd8','z-otc':'#2e9b53','z-nondrug':'#8b5cf6','z-special':'#2f3e5c','z-receive':'#f59e0b',
+  'z-process':'#dc2626','z-dispense':'#14b8a6','z-fridge':'#3b82f6','z-fire':'#ef4444','z-cashier':'#2563eb',
+  'z-consult':'#1d4ed8','z-wait':'#16a34a','z-entrance':'#225C4E' };
+(function buildLegend(){
+  const ul = document.getElementById('mapLegendList'); if(!ul) return;
+  pZoneEls.forEach(z => {
+    const cls = [...z.classList].find(c => LEGEND_BG[c]);
+    const li = document.createElement('li');
+    const go = z.dataset.zone === 'tu-rx' || z.dataset.zone === 'tu-otc';
+    if(go) li.className = 'go';
+    li.innerHTML = '<span class="ml-ico" style="background:' + (LEGEND_BG[cls]||'#64748b') + '">' + z.dataset.ico + '</span><span>' + z.dataset.short + '</span>' + (go ? '<b>Xếp thuốc →</b>' : '');
+    li.addEventListener('mouseenter', () => z.classList.add('lg-hover'));
+    li.addEventListener('mouseleave', () => z.classList.remove('lg-hover'));
+    li.addEventListener('click', () => z.dispatchEvent(new MouseEvent('click', { bubbles:true })));
+    ul.appendChild(li);
+  });
+})();
+/* thanh tiêu đề: điểm = tổng sao của hai tủ; tên người học lấy từ phiên Tizia */
+(function initMapHeader(){
+  const starsOf = k => { try{ return (JSON.parse(localStorage.getItem(k) || '{}').stars) || 0; }catch(e){ return 0; } };
+  const pts = starsOf('tu-thuoc-mo-phong:game_v2') + starsOf('tu-thuoc-mo-phong:game_v2:otc');
+  document.getElementById('mhPoints').textContent = pts.toLocaleString('vi-VN');
+  let nm = ''; try{ nm = localStorage.getItem('tizia:playerName') || ''; }catch(e){}
+  if(nm) document.getElementById('mhUser').textContent = '👤 ' + nm;
+  document.getElementById('mhTrophy').addEventListener('click', () => {
+    const t = TITLES.filter(x => pts >= x.min).pop() || TITLES[0];
+    const nx = TITLES.find(x => x.min > pts);
+    pmZoneLabel.textContent = '🏆 Danh hiệu hiện tại: ' + t.name + (nx ? ' — cần thêm ' + (nx.min - pts) + '⭐ để đạt "' + nx.name + '"' : ' — cao nhất!');
+  });
+  const menu = document.getElementById('mhMenu');
+  document.getElementById('mhGear').addEventListener('click', e => { e.stopPropagation(); menu.hidden = !menu.hidden; });
+  menu.addEventListener('click', e => {
+    e.stopPropagation();
+    const b = e.target.closest('[data-act]'); if(!b) return;
+    menu.hidden = true;
+    if(b.dataset.act === 'facade') showFacade();
+    else if(b.dataset.act === 'home'){ charX = 588; charY = 690; targetX = targetY = null; }
+    else if(b.dataset.act === 'legend'){ document.body.classList.toggle('legend-off'); fitMap(); }
+  });
+  document.addEventListener('click', () => { menu.hidden = true; });
+})();
+let hasKey = localStorage.getItem('tu-thuoc-mo-phong:key') === '1'
+  || gameMax('pharma_crush_progress_v1') > KEY_LEVEL || gameMax('pharma_sort_progress_v1') > KEY_LEVEL;
 
 function pComputeRects(){
   pRects = pZoneEls.map(z=>({ el:z, x:z.offsetLeft, y:z.offsetTop, w:z.offsetWidth, h:z.offsetHeight }));
@@ -2669,13 +2845,11 @@ function pUpdateZone(){
   renderMapAction();
 }
 function renderMapAction(){
-  if(pHereZone && pHereZone.dataset.zone === 'sanh'){
-    mapActionEl.innerHTML = '<button class="act-btn" data-act="go">⏎ Sắp xếp thuốc vào tủ (Sảnh Tiền Thực Hành)</button>';
+  const hz = pHereZone && pHereZone.dataset.zone;
+  if(hz === 'tu-rx' || hz === 'tu-otc'){
+    mapActionEl.innerHTML = '<button class="act-btn" data-act="go">⏎ Sắp xếp thuốc vào ' + (hz === 'tu-otc' ? 'tủ thuốc không kê đơn' : 'tủ thuốc kê đơn') + '</button>';
   } else if(pHereZone && pHereZone.dataset.zone === 'door'){
-    mapActionEl.innerHTML = hasKey
-      ? '<button class="act-btn" data-act="go">🔓 Cửa đã mở khóa</button>'
-      : '<button class="act-btn locked" disabled>🔒 Cần Chìa khóa — đạt "Dược sĩ thực tập" (25⭐)</button>'
-        + '<button class="act-btn act-pw" id="unlockPwBtn" type="button">🔑 Mở khóa bằng mật khẩu</button>';
+    mapActionEl.innerHTML = '<button class="act-btn" data-act="go">🚪 Ra ngoài mặt tiền</button>';
   } else {
     mapActionEl.innerHTML = '';
   }
@@ -2713,11 +2887,15 @@ function fitMap(){
   const topY = pMap.getBoundingClientRect().top;
   const availH = window.innerHeight - topY - 52;   // leave room for the action button
   const availW = (mapStage.clientWidth || window.innerWidth) - 6;
+  const legendEl = document.getElementById('mapLegend');
+  const legendW = legendEl && legendEl.offsetParent ? legendEl.offsetWidth + 14 : 0;
   // req #156: trước đây chặn ở 1 nên màn hình rộng vẫn hiện sơ đồ bé tí. Cho
   // phóng to tới 1,7 lần để lấp khung, vẫn giữ đúng tỉ lệ (không méo).
-  mapScale = Math.max(0.4, Math.min(1.7, availW/900, availH/600));
+  mapScale = Math.max(0.3, Math.min(1.4, (availW - legendW)/P_W, availH/P_H));
   pMap.style.transform = 'scale(' + mapScale + ')';
-  mapStage.style.height = (600 * mapScale) + 'px';
+  pMap.style.width = P_W + 'px'; pMap.style.height = P_H + 'px';
+  pMap.style.marginRight = (P_W * mapScale - P_W) + 'px';   // transform không đổi layout → bù bề ngang
+  mapStage.style.height = (P_H * mapScale) + 'px';
 }
 window.addEventListener('resize', fitMap);
 
@@ -2726,7 +2904,7 @@ function applyLocks(){
   document.querySelectorAll('.pm-zone.lockable').forEach(z=> z.classList.toggle('locked', !hasKey));
   mapKeyEl.textContent = hasKey ? '🔑 Đã có Chìa khóa' : '🔒 Chưa có Chìa khóa';
   mapKeyEl.className = 'map-key ' + (hasKey ? 'has' : 'locked');
-  const ds = document.getElementById('doorSub'); if(ds) ds.textContent = hasKey ? '🔓 Đã mở khóa' : '🔒 Cần Chìa khóa';
+  document.body.classList.toggle('has-key', hasKey);
   renderMapAction();
 }
 
@@ -2737,6 +2915,8 @@ function applyLocks(){
 let facadeOpening = false;
 function enterThroughDoors(){
   if(facadeOpening) return;
+  // req #160: chưa có chìa khóa thì hỏi mật khẩu thay vì cho vào luôn
+  if(!hasKey){ openDoorPw(); return; }
   facadeOpening = true;
   document.body.classList.add('doors-open');
   setTimeout(() => {
@@ -2757,7 +2937,7 @@ document.getElementById('fGoSort')?.addEventListener('click',  (e) => { e.stopPr
 function showMap(){ stopHandTracking(); document.body.classList.remove('view-pharmacy','view-facade'); document.body.classList.add('view-map'); pStart(); fitMap(); requestAnimationFrame(fitMap); setTimeout(fitMap,60); }
 function showPharmacy(){
   pStop();
-  document.body.classList.remove('view-map'); document.body.classList.add('view-pharmacy');
+  document.body.classList.remove('view-map','view-facade'); document.body.classList.add('view-pharmacy');
   /* the cabinet was in a hidden screen so it never got sized — size it now,
      directly (layout is synchronous) plus a couple of timer retries in case
      fonts/images settle the row height a touch late */
@@ -2771,11 +2951,16 @@ function doZoneAction(zone){
   const z = zone && zone.dataset.zone;
   // req #156: sảnh đã dời ra NGOÀI cửa (là khu luyện tập Crush/Sort), nên trong
   // sơ đồ chính các TỦ là nơi vào thực hiện nghiệp vụ bảo quản – sắp xếp hàng hoá.
-  if(z === 'tu' || z === 'sanh'){ showPharmacy(); }
-  else if(z === 'door'){
-    if(hasKey) pmZoneLabel.textContent = '🔓 Cửa đã mở khóa — chào mừng vào Nhà thuốc GPP!';
-    else pmZoneLabel.textContent = '🔒 Cửa đang khóa — xếp thuốc ở các tủ đến danh hiệu "Dược sĩ thực tập" (25⭐) để nhận 🔑 Chìa khóa mở cửa.';
+  // req #161: chỉ hai tủ Kê đơn / Không kê đơn mở màn xếp thuốc, đúng loại tủ đã bấm.
+  if(z === 'tu-rx' || z === 'tu-otc'){
+    const mode = z === 'tu-otc' ? 'otc' : 'rx';
+    if(mode === TU_MODE && new URLSearchParams(location.search).has('tu')) showPharmacy();
+    else location.href = location.pathname + '?tu=' + mode;
   }
+  else if(z === 'info'){
+    pmZoneLabel.textContent = zone.dataset.name + ' — khu vực này sẽ có nghiệp vụ riêng ở các nhiệm vụ sau.';
+  }
+  else if(z === 'door'){ showFacade(); }
 }
 mapActionEl.addEventListener('click', e=>{
   if(e.target.closest('#unlockPwBtn')){ askUnlockPassword(); return; }
@@ -2807,26 +2992,87 @@ function earnKey(){ hasKey = true; localStorage.setItem('tu-thuoc-mo-phong:key',
    khóa; giảng viên cần vào thẳng để dạy/demo nên có lối mở bằng mật khẩu.
    Mật khẩu do MÁY CHỦ kiểm (/api/gpp/unlock-level) — không nằm trong mã nguồn
    trang này, xem source cũng không thấy. Đổi mật khẩu: biến GPP_LEVEL_PASSWORD. */
-async function askUnlockPassword(){
-  const pw = window.prompt('🔑 Nhập mật khẩu của giảng viên để mở khóa cửa nhà thuốc:');
-  if(pw === null) return;
+const doorPwMask = document.getElementById('doorPwMask');
+const doorPwInput = document.getElementById('doorPwInput');
+const doorPwErr = document.getElementById('doorPwErr');
+function openDoorPw(){
+  doorPwErr.textContent = ''; doorPwInput.value = '';
+  doorPwMask.hidden = false; setTimeout(() => doorPwInput.focus(), 30);
+}
+function closeDoorPw(){ doorPwMask.hidden = true; }
+async function submitDoorPw(){
+  doorPwErr.textContent = '';
   try{
     const r = await fetch('/api/gpp/unlock-level', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ level: 0, password: pw })
+      body: JSON.stringify({ level: 0, password: doorPwInput.value })
     });
     if(!r.ok){
       const d = await r.json().catch(()=>({}));
-      alert('❌ ' + (d.error || 'Mật khẩu không đúng.'));
-      return;
+      doorPwErr.textContent = d.error || 'Mật khẩu không đúng.'; doorPwInput.select(); return;
     }
-    earnKey();
-    renderMapAction();
-    alert('🔓 Đã mở khóa! Cửa nhà thuốc giờ vào được.');
+    earnKey(); closeDoorPw();
+    if(document.body.classList.contains('view-facade')) enterThroughDoors();
   }catch(err){
-    alert('⚠️ Không kết nối được máy chủ để kiểm tra mật khẩu.');
+    doorPwErr.textContent = 'Không kết nối được máy chủ để kiểm tra mật khẩu.';
   }
 }
+function askUnlockPassword(){ openDoorPw(); }
+document.getElementById('doorPwGo').addEventListener('click', submitDoorPw);
+document.getElementById('doorPwCancel').addEventListener('click', closeDoorPw);
+doorPwInput.addEventListener('keydown', e => { if(e.key === 'Enter') submitDoorPw(); if(e.key === 'Escape') closeDoorPw(); });
+doorPwMask.addEventListener('click', e => { if(e.target === doorPwMask) closeDoorPw(); });
+
+/* req #159 — con đường trước nhà thuốc: thỉnh thoảng thả một phương tiện / người đi
+   ngang qua. Mỗi "diễn viên" là nhóm emoji SVG; emoji mặc định quay mặt sang trái,
+   đi sang phải thì lật ngang cả nhóm. Chỉ chạy khi đang ở màn mặt tiền và đã có khóa. */
+const ROAD_KINDS = [
+  { w:3, y:806, speed:430, parts:[{t:'🚗',fs:92}] },
+  { w:1, y:806, speed:400, parts:[{t:'🚕',fs:92}] },
+  { w:1, y:880, speed:300, parts:[{t:'🚚',fs:100}] },
+  { w:3, y:880, speed:330, parts:[{t:'📦',fs:40,dx:30,dy:-52},{t:'🛵',fs:80}] },
+  { w:2, y:880, speed:170, parts:[{t:'🚴',fs:74}] },
+  { w:3, y:728, speed:70,  parts:[{t:'🚶',fs:82}] },
+  { w:2, y:728, speed:80,  parts:[{t:'🚶‍♀️',fs:82}] },
+  { w:2, y:728, speed:60,  parts:[{t:'🐕',fs:52,dx:-66,dy:-2},{t:'🧒',fs:70}], leash:true },
+];
+const fActors = document.getElementById('fActors');
+const SVGNS = 'http://www.w3.org/2000/svg';
+let roadActors = [], roadLast = 0, roadNext = 0;
+function spawnActor(){
+  const tot = ROAD_KINDS.reduce((a,k)=>a+k.w,0); let r = Math.random()*tot, kind = ROAD_KINDS[0];
+  for(const k of ROAD_KINDS){ if((r -= k.w) < 0){ kind = k; break; } }
+  // làn trên (y 806) chạy sang trái, làn dưới sang phải; vỉa hè đi cả hai chiều
+  const dir = kind.y === 806 ? -1 : kind.y === 880 ? 1 : (Math.random() < .5 ? -1 : 1);
+  const g = document.createElementNS(SVGNS,'g'), inner = document.createElementNS(SVGNS,'g');
+  if(dir > 0) inner.setAttribute('transform','scale(-1,1)');
+  if(kind.leash){
+    const l = document.createElementNS(SVGNS,'path');
+    l.setAttribute('d','M-14,-34 Q-40,-18 -60,-20'); l.setAttribute('stroke','#b3261e'); l.setAttribute('stroke-width','2.5'); l.setAttribute('fill','none');
+    inner.appendChild(l);
+  }
+  for(const p of kind.parts){
+    const t = document.createElementNS(SVGNS,'text');
+    t.setAttribute('x', p.dx||0); t.setAttribute('y', p.dy||0); t.setAttribute('font-size', p.fs);
+    t.setAttribute('text-anchor','middle'); t.textContent = p.t; inner.appendChild(t);
+  }
+  g.appendChild(inner); fActors.appendChild(g);
+  const x = dir > 0 ? -120 : 1720;
+  roadActors.push({ g, x, y:kind.y, v:dir*kind.speed*(0.85+Math.random()*0.3) });
+}
+function roadTick(ts){
+  requestAnimationFrame(roadTick);
+  if(!hasKey || !document.body.classList.contains('view-facade') || document.hidden){ roadLast = ts; return; }
+  const dt = Math.min(0.05, (ts - (roadLast||ts))/1000); roadLast = ts;
+  if(ts >= roadNext && roadActors.length < 6){ spawnActor(); roadNext = ts + 1200 + Math.random()*2800; }
+  roadActors = roadActors.filter(a => {
+    a.x += a.v*dt;
+    if(a.x < -200 || a.x > 1800){ a.g.remove(); return false; }
+    a.g.setAttribute('transform', 'translate(' + a.x.toFixed(1) + ',' + a.y + ')');
+    return true;
+  });
+}
+requestAnimationFrame(roadTick);
 
 /* ---- keyboard: steer in map view, Enter to interact ---- */
 const P_KEYMAP = { arrowup:'up', w:'up', arrowdown:'down', s:'down', arrowleft:'left', a:'left', arrowright:'right', d:'right' };
@@ -3024,7 +3270,8 @@ function updateHand(time){
 /* ---- boot: req #154 — mở ở MẶT TIỀN nhà thuốc, phải bấm cửa mới vào sơ đồ ----
    pStart()/fitMap() vẫn chạy sẵn trong showMap() khi người dùng bước qua cửa. */
 applyLocks();
-showFacade();
+// req #161: vào bằng ?tu=rx|otc (bấm tủ trên sơ đồ) thì mở thẳng tủ đó.
+if(new URLSearchParams(location.search).has('tu')) showPharmacy(); else showFacade();
 </script>
 </body>
 </html>

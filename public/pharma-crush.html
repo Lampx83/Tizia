@@ -398,6 +398,9 @@ let level=1, score=0, trophies={g:0,s:0,b:0};
 let board=null, cfg=null, collected=0, movesLeft=0;
 let stat={byGroup:{},rx:0,otc:0,specials:0,score:0,unlocked:0};
 const SAVE='pharma_crush_progress_v1';
+// req #159: qua màn 10 (Crush hoặc Sort) là nhận chìa khóa cửa nhà thuốc — trang
+// tu-thuoc-mo-phong.html đọc prog.max > KEY_LEVEL từ localStorage này.
+const KEY_LEVEL=10;
 function loadProgress(){ try{ return JSON.parse(localStorage.getItem(SAVE))||{max:1,stars:{}}; }catch{ return {max:1,stars:{}}; } }
 function saveProgress(p){ try{ localStorage.setItem(SAVE, JSON.stringify(p)); }catch{} }
 let prog=loadProgress();
@@ -880,12 +883,16 @@ function endLevel(win){
     <p>Điểm: <b style="font-size:20px;color:#12508f">${score.toLocaleString('vi-VN')}</b></p>
     <div class="tip" style="text-align:left;margin-top:12px"><div class="who">👩‍⚕️</div><div class="txt">
       <b>GHI NHỚ</b>${cfg.goalGroup.name}: ${G.groupDesc(cfg.goalGroup.name)}</div></div>
+    ${win&&level===KEY_LEVEL?`<div class="tip" style="text-align:left;margin-top:12px;background:#fff4c8"><div class="who">🔑</div><div class="txt">
+      <b>BẠN ĐÃ CÓ CHÌA KHÓA!</b>Sảnh tiền thực hành đã hoàn thành. Quay về cửa nhà thuốc và bấm vào cánh cửa để vào trong.</div></div>
+    <button class="btn" id="mDoor" style="background:linear-gradient(180deg,#ffc93c,#e08c14)">🚪 Tới cửa nhà thuốc</button>`:''}
     <button class="btn" id="mNext">${win?'Level tiếp theo →':'Thử lại màn này'}</button>
     <button class="btn blue" id="mMap">🗺️ Bản đồ màn</button>
     <button class="btn gray" id="mHome2">Về trang thực hành</button>`);
   $('mMap').onclick=openMap;
+  if($('mDoor')) $('mDoor').onclick=()=>location.href='/tu-thuoc-mo-phong.html';
   $('mNext').onclick=()=>{ tools={shuffle:3,hint:3,break:2,time:2}; closeModal(); startLevel(win?level+1:level); };
-  $('mHome2').onclick=()=>location.href='/gpp.html';
+  $('mHome2').onclick=()=>location.href='/tu-thuoc-mo-phong.html';
 }
 
 function openMap(){
@@ -952,7 +959,7 @@ function openBook(){
 }
 $('btnMap').onclick=openMap;
 $('btnBook').onclick=openBook; $('btnBook2').onclick=openBook;
-$('btnHome').onclick=()=>location.href='/gpp.html';
+$('btnHome').onclick=()=>location.href='/tu-thuoc-mo-phong.html';
 $('btnNew').onclick=()=>{ if(confirm('Chơi lại màn này?')) startLevel(level); };
 $('btnSound').onclick=()=>{ unlock(); setMuted(!isMuted()); $('btnSound').textContent=isMuted()?'🔇':'🔊'; };
 $('mLeft').onclick=()=>{ $('sideR').classList.remove('mopen'); $('sideL').classList.toggle('mopen'); };

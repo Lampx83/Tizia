@@ -267,6 +267,9 @@ const $ = id => document.getElementById(id);
 let SLOTS = 25;   // 5 cột × 3–5 hàng, tuỳ chiều cao màn hình
 let level=1, score=0, total=0, cfg=null, cards=[], done=0, movesLeft=0, streak=0, busy=false;
 let tools={wand:3,shuffle:3,moves:2,hint:3};
+// req #159: lưu màn cao nhất đã qua; qua màn 10 là có chìa khóa cửa nhà thuốc
+// (tu-thuoc-mo-phong.html đọc cùng khóa localStorage này).
+const SORT_SAVE='pharma_sort_progress_v1', KEY_LEVEL=10;
 let spot=null, callQ=[], rafId=0, over=false;   // spot = lượt gọi nhóm đang diễn ra
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
 /** Bốc thẻ mới, cố tránh trùng quá 2 thẻ cùng một thuốc cho lưới đỡ nhàm. */
@@ -643,6 +646,7 @@ function endLevel(win){
   total+=score;
   $('call').classList.remove('urgent');
   const st=starCount();
+  if(win){ try{ const p=JSON.parse(localStorage.getItem(SORT_SAVE)||'{}'); p.max=Math.max(p.max||1, level+1); localStorage.setItem(SORT_SAVE, JSON.stringify(p)); }catch{} }
   win?sfx.win():sfx.lose();
   const stars=[0,1,2].map(i=>`<span style="font-size:34px;${i<st?'':'filter:grayscale(1);opacity:.3'}">★</span>`).join('');
   modal(`<h2>${win?'🎉 Hoàn thành màn '+level:'Hết lượt đi'}</h2>
@@ -652,12 +656,15 @@ function endLevel(win){
     <p>Điểm màn này: <b style="font-size:20px;color:#2f7fc4">${score.toLocaleString('vi-VN')}</b>
        &nbsp;·&nbsp; Tổng: <b>${total.toLocaleString('vi-VN')}</b></p>
     <div class="glist">${cfg.lanes.map(g=>`<div class="gitem">${groupIcon(g.name,g.hex,20)}<span>${g.name}</span></div>`).join('')}</div>
+    ${win&&level===KEY_LEVEL?`<p style="background:#fff4c8;border-radius:12px;padding:8px 10px">🔑 <b>Bạn đã có chìa khóa!</b> Sảnh tiền thực hành đã hoàn thành — quay về cửa nhà thuốc và bấm vào cánh cửa để vào trong.</p>
+    <button class="btn" id="mDoor">🚪 Tới cửa nhà thuốc</button>`:''}
     <button class="btn" id="mNext">${win?'Màn tiếp theo →':'Thử lại màn này'}</button>
     <button class="btn blue" id="mCrush">🍬 Chơi Pharma Crush</button>
     <button class="btn gray" id="mHome">Về trang thực hành</button>`);
   $('mNext').onclick=()=>{ tools={wand:3,shuffle:3,moves:2,hint:3}; closeModal(); startLevel(win?level+1:level); };
   $('mCrush').onclick=()=>location.href='/pharma-crush.html';
-  $('mHome').onclick=()=>location.href='/gpp.html';
+  if($('mDoor')) $('mDoor').onclick=()=>location.href='/tu-thuoc-mo-phong.html';
+  $('mHome').onclick=()=>location.href='/tu-thuoc-mo-phong.html';
 }
 $('btnBook').onclick=()=>{
   modal(`<h2>📖 Sổ tay dược sĩ</h2>
@@ -673,12 +680,13 @@ $('btnBook').onclick=()=>{
     <button class="btn" id="mClose">Đóng</button>`);
   $('mClose').onclick=closeModal;
 };
-$('btnHome').onclick=()=>location.href='/gpp.html';
+$('btnHome').onclick=()=>location.href='/tu-thuoc-mo-phong.html';
 $('btnSound').onclick=()=>{ unlock(); setMuted(!isMuted()); $('btnSound').textContent=isMuted()?'🔇':'🔊'; };
 addEventListener('resize',()=>{ if(cfg){ renderLanes(); renderGrid(false); if(spot&&!over) paintCall(); reflow(); } });
 let reflowT; new ResizeObserver(()=>{ clearTimeout(reflowT); reflowT=setTimeout(reflow,120); }).observe($('grid'));
 
-startLevel(1);
+// Vào lại thì chơi tiếp từ màn cao nhất đã mở, không phải cày lại từ màn 1.
+startLevel((()=>{ try{ return Math.max(1, JSON.parse(localStorage.getItem(SORT_SAVE)||'{}').max||1); }catch{ return 1; } })());
 // Font web nạp xong thì chữ cao/rộng khác lúc đo lần đầu → đo lại cho chắc.
 if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>{ if(cfg&&!over) reflow(); });
 requestAnimationFrame(()=>{ if(cfg&&!over) reflow(); });
