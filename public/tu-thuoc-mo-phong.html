@@ -945,6 +945,21 @@
     font:800 .82rem 'Baloo 2',sans-serif;padding:8px;cursor:pointer;box-shadow:0 3px 0 #1f5da0}
   .mg-book-btn:hover{filter:brightness(1.06)}
   .map-guide.hidden-manual{display:none}
+  /* req #168: danh sách 5 nhiệm vụ lớn — thay cho ô "Nhiệm vụ hiện tại" cũ chỉ
+     nói chung chung về xếp thuốc. Mỗi dòng = 1 nhiệm vụ lớn, có trạng thái
+     riêng; nhiệm vụ nào ĐÃ có trò chơi thật thì bấm vào chơi được ngay. */
+  .mg-missions{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+  .mg-mission{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:9px;background:#fff;border:1px solid #dce8fa}
+  .mg-mission.play{cursor:pointer;border-color:#7fc2ff}
+  .mg-mission.play:hover{background:#eaf4ff}
+  .mg-mission.current{border-color:#2f7fd8;box-shadow:0 0 0 2px rgba(47,127,216,.18)}
+  .mg-mission-n{flex:none;width:20px;height:20px;border-radius:50%;background:#2f7fd8;color:#fff;font:800 .7rem/20px 'Baloo 2',sans-serif;text-align:center}
+  .mg-mission.soon .mg-mission-n{background:#94a3b8}
+  .mg-mission-tx{flex:1;min-width:0;font:700 .74rem/1.25 'Nunito',sans-serif;color:#26405f}
+  .mg-mission-st{flex:none;font-size:.66rem;font-weight:800;white-space:nowrap}
+  .mg-mission.play .mg-mission-st{color:#2c8341}
+  .mg-mission.soon .mg-mission-st{color:#94a3b8}
+  .mg-missions-note{margin:6px 0 0;font:600 .66rem/1.4 'Nunito',sans-serif;color:#8a97ab;font-style:italic}
   /* req #164 (phản hồi): sửa lỗi cũ — quy tắc ẩn 2 bảng bên trên di động từng
      đứng TRƯỚC .map-guide{display:flex} nên bị ghi đè, bảng hướng dẫn không
      bao giờ ẩn được trên điện thoại; chuyển xuống sau để có hiệu lực đúng. */
@@ -1163,8 +1178,9 @@
     </div>
     <h3>🎮 Hướng dẫn luyện tập</h3>
     <div class="mg-card">
-      <h4>🎯 Nhiệm vụ hiện tại</h4>
-      <p id="mgMission">Sắp xếp đúng thuốc vào tủ Kê đơn &amp; Không kê đơn.</p>
+      <h4>🎯 5 nhiệm vụ của dược sĩ</h4>
+      <ul class="mg-missions" id="mgMissions"></ul>
+      <p class="mg-missions-note">Nhiệm vụ 2, 4, 5 đang được xây dựng theo giáo trình — sẽ mở lần lượt.</p>
     </div>
     <div class="mg-card">
       <h4>🧰 Công cụ hỗ trợ</h4>
@@ -2918,8 +2934,41 @@ const LEGEND_BG = { 'z-rx':'#2f7fd8','z-otc':'#2e9b53','z-nondrug':'#8b5cf6','z-
   const starsOf = k => { try{ return (JSON.parse(localStorage.getItem(k) || '{}').stars) || 0; }catch(e){ return 0; } };
   const rxS = starsOf('tu-thuoc-mo-phong:game_v2'), otcS = starsOf('tu-thuoc-mo-phong:game_v2:otc');
   const titleOf = s => { let t = TITLES[0]; for(const x of TITLES){ if(s >= x.min) t = x; } return t; };
-  const mgMission = document.getElementById('mgMission');
-  if(mgMission) mgMission.textContent = 'Tủ kê đơn: ' + titleOf(rxS).name + ' (' + rxS + '⭐) · Tủ không kê đơn: ' + titleOf(otcS).name + ' (' + otcS + '⭐)';
+
+  // req #168 (ThS Hương Lý): 5 nhiệm vụ lớn của nghề dược sĩ tại nhà thuốc,
+  // mở lần lượt (làm xong nhiệm vụ trước mới hiện nhiệm vụ sau) — trong đó
+  // "Bảo quản & sắp xếp hàng hóa" là nhiệm vụ ĐÃ có trò chơi thật (xếp thuốc
+  // vào tủ Rx/OTC ở màn này), 4 nhiệm vụ còn lại đang chờ xây theo giáo trình
+  // (xem #163). Bấm vào dòng có trò chơi thật là chơi được ngay.
+  const MISSIONS = [
+    { name:'Lập dự trù và mua thuốc' },
+    { name:'Kiểm nhập thuốc, niêm yết giá' },
+    { name:'Bảo quản thuốc và sắp xếp hàng hóa', play:true },
+    { name:'Kiểm kê và kiểm soát chất lượng định kỳ' },
+    { name:'Xử lý thuốc bị thu hồi' },
+  ];
+  const missionsEl = document.getElementById('mgMissions');
+  if(missionsEl){
+    missionsEl.innerHTML = MISSIONS.map((m,i) => {
+      const n = i+1;
+      if(m.play){
+        const done = rxS + otcS;
+        return `<li class="mg-mission play current" data-mission="${n}">
+          <span class="mg-mission-n">${n}</span>
+          <span class="mg-mission-tx">${m.name}</span>
+          <span class="mg-mission-st">${done}⭐ · Chơi →</span>
+        </li>`;
+      }
+      return `<li class="mg-mission soon" data-mission="${n}">
+        <span class="mg-mission-n">${n}</span>
+        <span class="mg-mission-tx">${m.name}</span>
+        <span class="mg-mission-st">🔒 Sắp ra mắt</span>
+      </li>`;
+    }).join('');
+    missionsEl.querySelectorAll('.mg-mission.play').forEach(li => {
+      li.addEventListener('click', () => { document.querySelector('.z-rx')?.dispatchEvent(new MouseEvent('click', { bubbles:true })); });
+    });
+  }
 
   const TIPS = [
     'Luôn xếp thuốc theo nguyên tắc FEFO — thuốc hết hạn SỚM đưa ra phía trước, dễ lấy trước.',
