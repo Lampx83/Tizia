@@ -473,7 +473,7 @@ function renderRequests() {
     <table>
       <thead><tr>
         <th>#</th><th>Trường</th><th>Tiêu đề</th><th>Loại</th>
-        <th>HS</th><th>Trạng thái</th><th>Vote</th><th>Tạo lúc</th><th></th>
+        <th>HS</th><th>Trạng thái</th><th>Vote</th><th>Tạo lúc</th><th>Cập nhật</th><th></th>
       </tr></thead>
       <tbody>
       ${pageRows.map(r => `
@@ -486,6 +486,7 @@ function renderRequests() {
           <td><span class="pill ${r.status}">${r.status}</span></td>
           <td>${r.votes}</td>
           <td style="font-size:12px;opacity:.7">${fmt(r.created_at)}</td>
+          <td style="font-size:12px;opacity:.7">${r.updated_at && r.updated_at !== r.created_at ? fmt(r.updated_at) : '—'}</td>
           <td class="actions" style="white-space:nowrap">
             <button class="btn" data-act="detail" data-rid="${r.id}" title="Xem chi tiết">👁</button>
             <button class="btn primary" data-act="reply" data-rid="${r.id}" title="Trả lời + đổi trạng thái">💬</button>
