@@ -4,6 +4,25 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-14 — Phiên điểm danh (62) · Không đọc được hộp thư production
+
+**Kết luận:** Không xử lý yêu cầu nào — hộp thư production **không đọc được** (mọi route `/api/requests` đều đòi session đăng nhập mà môi trường phiên này không có), nên không thể xác nhận có hay không yêu cầu đang chờ; không tạo PR, không bịa việc.
+
+| Đường đọc hộp thư | Kết quả đo hôm nay |
+|---|---|
+| `https://tizia.vn/api/health` | `200` — server production **đang sống** |
+| `https://tizia.vn/api/requests?domain=…` | `401 {"error":"unauthorized","needLogin":true}` |
+| `https://tizia.vn/api/admin/requests` | `401` (route cần `requireAdmin`, chỉ nhận cookie session) |
+| `https://tizia.vn/ps/api/requests?domain=…` | `302` → `/login.html` |
+| `https://ps.tizia.vn/api/requests` | không kết nối được |
+| `server/scripts/sync-inbox.mjs` | không chạy được — thiếu `data/tizia.db` và `node_modules` |
+| `ai-board/inbox.json` (trong repo) | `items: []` — nhưng là **stub cũ**, lần sync cuối là commit `b3ca7c8` (2026-07-09), **không phải nguồn dữ liệu thật** |
+| GitHub Issues (`Lampx83/EduVerse`) | 0 issue đang mở |
+
+**Ghi chú hạ tầng (lặp lại từ phiên 45 & 58, vẫn chưa khắc phục):** Ban điều hành AI không có đường đọc hộp thư tự động. `sync-inbox.mjs` đọc SQLite trên volume production, không chạy được từ môi trường CI/agent. Cần một trong hai: (a) một route đọc-chỉ có auth bằng header (vd `x-ai-board-key`) cho phép export `requests` pending/reviewing, hoặc (b) một job trên server chạy `sync-inbox.mjs` rồi commit `ai-board/inbox.json` vào repo trước mỗi phiên. Chừng nào chưa có, các phiên hàng ngày **không thể phục vụ yêu cầu thật của sinh viên**.
+
+---
+
 ## 2026-09-12 — Phiên điểm danh (61) · Hộp thư trống
 
 **Chế độ:** Điểm danh — `ai-board/inbox.json` không có yêu cầu (`items: []`). Không có cải tiến nào được thực hiện hôm nay. Không tạo PR.
