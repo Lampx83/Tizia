@@ -4,6 +4,56 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-14 — Hạ tầng (62b) · Mở đường đọc hộp thư cho Ban điều hành AI
+
+**Chế độ:** Sửa hạ tầng theo phê duyệt của người vận hành, ngay sau phiên điểm danh 62 bên dưới.
+
+**Vấn đề:** Từ 2026-07 tới nay Ban điều hành AI không đọc được yêu cầu thật của người học. `sync-inbox.mjs` đọc thẳng file SQLite nên chỉ chạy được trên máy production; mọi route hộp thư qua HTTP đều đòi cookie session (`/api/requests` → 401, `/api/admin/requests` → 401 + `requireAdmin`). Phiên hàng ngày chạy trong môi trường agent không có cả hai.
+
+### Thay đổi
+
+| File | Loại | Nội dung |
+|------|------|----------|
+| `server/contexts/ai-agent/inbox-api.js` | **Mới** | Route `GET /api/ai-board/inbox` — đọc-chỉ, auth bằng header `x-ai-board-key` |
+| `scripts/fetch-inbox.mjs` | **Mới** | Kéo hộp thư qua HTTP → `ai-board/inbox.json`; không cần dependency, chạy được trên repo sạch |
+| `server/db.js` | Thêm | `listBoardInbox()` — yêu cầu `pending`/`reviewing` toàn hệ thống kèm thread; cùng truy vấn với `sync-inbox.mjs` |
+| `server/contexts/identity/auth.js` | Thêm | `/api/ai-board/` vào `PUBLIC_PATH_PREFIXES` (tự verify key, không dùng cookie) |
+| `server/index.js` | Thêm | Nối `attachAiBoardInbox(r)` |
+| `.env.example`, `README.md` | Tài liệu | Biến `AI_BOARD_KEY` + hướng dẫn vận hành |
+
+### Ràng buộc bảo mật
+
+- **Tắt mặc định** — không set `AI_BOARD_KEY` thì route không được mount, path trả 404 như path không tồn tại.
+- **Key yếu bị từ chối** — `<24` ký tự → không bật, ghi cảnh báo lúc khởi động.
+- **So khớp timing-safe** — `timingSafeEqual` trên digest SHA-256 (độ dài cố định nên key sai độ dài cũng không crash).
+- **Không dùng cookie** → không phải bề mặt CSRF, không mượn được quyền người đang đăng nhập.
+- **Đọc-chỉ tuyệt đối** — chỉ `SELECT`, không có route ghi. Đổi trạng thái/phản hồi HS vẫn phải qua admin (cookie + `requireAdmin`) hoặc `scripts/admin-reply.js`.
+
+### Kiểm thử
+
+`node --check` toàn bộ 5 file `.js`/`.mjs` đã sửa: **pass**. Ngoài ra chạy test end-to-end trên DB tạm (seed 3 yêu cầu, mount route thật bằng express) — **12/12 pass**:
+
+```
+1.  lọc pending/reviewing, loại done        PASS
+2.  thread + shape dữ liệu                  PASS
+3.  không set AI_BOARD_KEY → không mount    PASS
+4.  key yếu (<24) → không mount             PASS
+5.  key mạnh → mount                        PASS
+6.  thiếu header → 401                      PASS
+7.  key sai (khác độ dài) → 403, không crash PASS
+8.  key sai (cùng độ dài) → 403             PASS
+9.  key đúng → 200 + dữ liệu đúng           PASS
+10. Cache-Control: no-store                 PASS
+11. POST → 404 (đọc-chỉ)                    PASS
+12. limit ngoài khoảng vẫn 200 (bị cap)     PASS
+```
+
+### Còn lại
+
+Route này mới giải quyết chiều **đọc**. Chiều **phản hồi người học** từ môi trường agent vẫn chưa có đường — cần người vận hành quyết định có mở route ghi tương ứng hay không.
+
+---
+
 ## 2026-09-14 — Phiên điểm danh (62) · Không đọc được hộp thư production
 
 **Kết luận:** Không xử lý yêu cầu nào — hộp thư production **không đọc được** (mọi route `/api/requests` đều đòi session đăng nhập mà môi trường phiên này không có), nên không thể xác nhận có hay không yêu cầu đang chờ; không tạo PR, không bịa việc.
