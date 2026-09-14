@@ -231,10 +231,14 @@
   .pos-btn:disabled{opacity:.55;cursor:not-allowed;}
   .pos-soon{padding:20px;text-align:center;color:#8a7550;font-weight:700;font-size:.9rem;}
   .pos-err{color:#b3261e;font-weight:800;font-size:.78rem;margin-top:6px;min-height:1.2em;}
-  /* checklist nổi trên màn tủ — cùng vị trí/kiểu với nút "Xếp bằng tay" để
-     không đụng layout cabinet-col/side-panel */
+  .pos-sup-chosen{background:#eaf7ee;}
+  .pos-tab[disabled]{opacity:.45;cursor:not-allowed;}
+  /* checklist nổi trên màn tủ. req #169 (phản hồi): góc dưới-trái đã có nút
+     🏛️ "Gửi đề nghị" (id=sgf-fab, z-index rất cao) — đặt cùng góc làm che
+     mất nút đó. Chuyển checklist lên góc TRÊN-trái, không đụng nút nào có
+     sẵn (dưới-trái = sgf-fab, dưới-phải = "Xếp bằng tay"). */
   .m1-checklist{
-    position:fixed;left:14px;bottom:14px;z-index:499;width:280px;max-width:calc(100vw - 28px);
+    position:fixed;left:14px;top:14px;z-index:499;width:280px;max-width:calc(100vw - 28px);
     background:#fffdf6;border:2px solid #e0a412;border-radius:14px;padding:10px 12px;
     box-shadow:0 8px 24px rgba(0,0,0,.3);font-family:'Nunito',system-ui,sans-serif;
   }
@@ -250,7 +254,7 @@
   .m1-checklist .m1-fix{display:flex;gap:6px;align-items:center;margin-top:4px;}
   .m1-checklist .m1-fix input{width:60px;padding:3px 5px;border:1px solid #caa25a;border-radius:6px;font-size:.76rem;}
   .m1-checklist .m1-done{font-size:.76rem;color:#1f7a3d;font-weight:800;text-align:center;padding:4px 0;}
-  @media (max-width:860px){ .m1-checklist{left:8px;bottom:8px;width:240px;padding:8px 10px;} }
+  @media (max-width:860px){ .m1-checklist{left:8px;top:8px;width:240px;padding:8px 10px;} }
   @media (max-width:820px){
     .hand-btn{right:8px;bottom:107px;font-size:.66rem;padding:7px 11px;}
     #handCamPreview{right:8px;bottom:8px;width:120px;height:90px;}
@@ -3065,13 +3069,39 @@ function getM1Items(){
   M1_ITEMS = [...pick('rx',2), ...pick('otc',2)];
   return M1_ITEMS;
 }
+// req #169 (phản hồi): "số ngày cần dự trù" — chu kỳ nhập hàng chuẩn của nhà
+// thuốc, dùng cho công thức SL đặt = Bán/tuần ÷ 7 × số ngày − tồn. Đang để
+// tạm 10 ngày (chưa có giáo trình nêu con số chính thức) — đổi ở đây nếu cô
+// Hương Lý cho biết chu kỳ thật của nhà thuốc.
+const M1_RESTOCK_DAYS = 10;
+function m1OrderQty(it, tonThuc){
+  return Math.max(0, Math.round(it.banTuan / 7 * M1_RESTOCK_DAYS - tonThuc));
+}
+
+// req #169 (phản hồi): 3 nhà cung ứng "gợi ý" ở tab Quản lý nhà cung ứng —
+// A thiếu giấy phân phối thuốc tốt (GDP) nên KHÔNG đạt chuẩn; B và C đều đủ
+// 3 loại giấy tờ hợp pháp, phải so tiếp giá/thời gian giao hàng để chọn C
+// (tốt nhất). Không dựng lại ảnh chứng nhận thật — chỉ liệt kê dạng checklist
+// để không tạo ra thứ trông như giấy tờ nhà nước thật.
+const M1_SUPPLIERS = [
+  { id:'A', name:'Công ty TNHH Dược phẩm An Phát', dkkd:true, ddk:true, gdp:false,
+    price:'210.000đ/hộp', ship:'3 ngày' },
+  { id:'B', name:'Công ty CP Thương mại Dược phẩm Quốc Anh', dkkd:true, ddk:true, gdp:true,
+    price:'220.000đ/hộp', ship:'2 ngày' },
+  { id:'C', name:'Công ty CP Dược phẩm Việt Tín', dkkd:true, ddk:true, gdp:true,
+    price:'185.000đ/hộp', ship:'1 ngày', best:true },
+];
 
 const posOverlay = document.getElementById('posOverlay');
 const posPanel = document.getElementById('posPanel');
+// req #169 (phản hồi): mở phần mềm CHỈ khi bấm vào máy tính ở Quầy thu ngân —
+// bấm vào THẺ nhiệm vụ ở sidebar giờ chỉ nhắc bước đang làm (xem m1Hint()).
 function openPOS(){
+  const st = getM1State();
   posOverlay.style.display = 'flex';
-  document.querySelectorAll('#posTabs .pos-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === 'dutru'));
-  renderDuTruTab();
+  const wantTab = (st.step === 'supplier' || st.step === 'order') ? 'nhacc' : 'dutru';
+  document.querySelectorAll('#posTabs .pos-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === wantTab));
+  if(wantTab === 'nhacc') renderNhaCCTab(); else renderDuTruTab();
 }
 function closePOS(){ posOverlay.style.display = 'none'; }
 document.getElementById('posClose').addEventListener('click', closePOS);
@@ -3080,17 +3110,34 @@ document.getElementById('posTabs').addEventListener('click', e => {
   const b = e.target.closest('.pos-tab'); if(!b) return;
   document.querySelectorAll('#posTabs .pos-tab').forEach(x => x.classList.toggle('active', x === b));
   if(b.dataset.tab === 'dutru') renderDuTruTab();
+  else if(b.dataset.tab === 'nhacc') renderNhaCCTab();
   else posPanel.innerHTML = '<div class="pos-soon">🔒 Tab này sẽ có nghiệp vụ ở các nhiệm vụ sau (2, 4, 5).</div>';
 });
+
+// req #169 (phản hồi): lời nhắc khi bấm vào THẺ nhiệm vụ 1 (không mở phần
+// mềm nữa) — đọc đúng bước đang làm để chỉ dẫn tiếp, không lặp lại từ đầu.
+function m1Hint(){
+  const st = getM1State();
+  const text = st.step === 'dutru'
+      ? '🖥️ Nhiệm vụ 1: đi tới Quầy thu ngân, bấm vào máy tính để mở Phần mềm bán hàng.'
+    : st.step === 'checking'
+      ? '🔍 Nhiệm vụ 1: đến tủ thuốc kê đơn hoặc không kê đơn để kiểm tra hàng — xem thẻ nổi góc màn hình.'
+    : st.step === 'return'
+      ? '🖥️ Nhiệm vụ 1: quay lại máy tính ở Quầy thu ngân để chốt số lượng cần đặt.'
+    : st.step === 'supplier' || st.step === 'order'
+      ? '🖥️ Nhiệm vụ 1: quay lại máy tính, sang tab "Quản lý nhà cung ứng" để chọn nhà cung ứng và gửi đơn đặt hàng.'
+      : '✅ Nhiệm vụ 1 đã hoàn thành! Có thể bấm lại để luyện tập.';
+  pmZoneLabel.textContent = text;
+}
 
 function renderDuTruTab(){
   const items = getM1Items();
   const st = getM1State();
   if(st.step === 'dutru'){
     posPanel.innerHTML = `
-      <p class="pos-note">📦 Phần mềm phát hiện <b>${items.length} mặt hàng</b> cần kiểm tra trước khi lập dự trù (tồn kho đang ghi trên hệ thống):</p>
-      <table class="pos-table"><thead><tr><th>Tên thuốc</th><th>Tồn kho (PM)</th><th>Vị trí</th></tr></thead><tbody>
-        ${items.map(it => `<tr><td>${esc(it.name)}</td><td>${it.tonKho}</td><td>${it.cabinet==='rx'?'Tủ thuốc kê đơn':'Tủ thuốc không kê đơn'}</td></tr>`).join('')}
+      <p class="pos-note">📦 Phần mềm phát hiện <b>${items.length} mặt hàng</b> cần kiểm tra trước khi lập dự trù. Chu kỳ dự trù chuẩn của nhà thuốc: <b>${M1_RESTOCK_DAYS} ngày</b>.</p>
+      <table class="pos-table"><thead><tr><th>Tên thuốc</th><th>Tồn kho (PM)</th><th>Số ngày cần dự trù</th><th>Vị trí</th></tr></thead><tbody>
+        ${items.map(it => `<tr><td>${esc(it.name)}</td><td>${it.tonKho}</td><td>${M1_RESTOCK_DAYS} ngày</td><td>${it.cabinet==='rx'?'Tủ thuốc kê đơn':'Tủ thuốc không kê đơn'}</td></tr>`).join('')}
       </tbody></table>
       <p class="pos-note">👉 Rời máy tính, đến đúng tủ kiểm tra thực tế từng mặt hàng trước khi lên đơn.</p>
       <button type="button" class="pos-btn" id="posGoCheck">🚶 Rời máy tính, đi kiểm tủ →</button>`;
@@ -3113,7 +3160,7 @@ function renderDuTruTab(){
           <td><input type="number" min="0" step="1" class="pos-order-in" data-key="${esc(it.key)}" value="${st.orders[it.key] != null ? st.orders[it.key] : ''}" placeholder="SL"></td>
         </tr>`).join('')}
       </tbody></table>
-      <p class="pos-note" style="font-size:.76rem;opacity:.75">💡 Gợi ý: SL đặt ≈ SL bán tuần trước − tồn thực tế hiện có (nếu ra số dương).</p>
+      <p class="pos-note" style="font-size:.76rem;opacity:.75">💡 Công thức: SL đặt = Bán/tuần ÷ 7 × ${M1_RESTOCK_DAYS} ngày − Tồn thực tế.</p>
       <button type="button" class="pos-btn" id="posSubmit">✅ Xác nhận đặt hàng</button>
       <div class="pos-err" id="posErr"></div>`;
     posPanel.querySelectorAll('.pos-order-in').forEach(inp => {
@@ -3121,20 +3168,107 @@ function renderDuTruTab(){
     });
     document.getElementById('posSubmit').addEventListener('click', () => {
       const errEl = document.getElementById('posErr');
-      const missing = items.some(it => !(Number(st.orders[it.key]) >= 0) || st.orders[it.key] === '' || st.orders[it.key] == null);
+      const missing = items.some(it => st.orders[it.key] === '' || st.orders[it.key] == null || !(Number(st.orders[it.key]) >= 0));
       if(missing){ errEl.textContent = '⚠️ Điền số lượng cần đặt cho đủ tất cả mặt hàng.'; return; }
-      st.step = 'done'; saveM1State(st);
-      posPanel.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">🎉 Đã lập xong dự trù &amp; đơn mua thuốc cho ${items.length} mặt hàng!<br>Đóng lại để về sơ đồ — có thể bấm "Luyện lại" ở thẻ nhiệm vụ bất cứ lúc nào.</div>`;
+      const wrong = items.find(it => Number(st.orders[it.key]) !== m1OrderQty(it, st.actual[it.key] != null ? st.actual[it.key] : it.tonKho));
+      if(wrong){ errEl.textContent = `⚠️ "${wrong.name}" chưa đúng — xem lại công thức: SL đặt = Bán/tuần ÷ 7 × ${M1_RESTOCK_DAYS} ngày − Tồn thực tế.`; return; }
+      st.step = 'supplier'; saveM1State(st);
+      posPanel.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đã lập xong số lượng cần đặt cho ${items.length} mặt hàng!<br>Sang tab "Quản lý nhà cung ứng" để chọn nhà cung ứng và gửi đơn đặt hàng.</div>`;
       window.refreshMissionsList?.();
     });
+  } else if(st.step === 'supplier' || st.step === 'order'){
+    posPanel.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đã lập xong số lượng cần đặt.<br>Sang tab "Quản lý nhà cung ứng" để chọn nhà cung ứng và gửi đơn đặt hàng.</div>`;
   } else {
     posPanel.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">🎉 Bạn đã hoàn thành nhiệm vụ 1!</div>
       <button type="button" class="pos-btn" id="posRestart">🔁 Luyện lại từ đầu</button>`;
     document.getElementById('posRestart').addEventListener('click', () => {
-      saveM1State({ step:'dutru', confirmed:{}, actual:{}, orders:{} });
+      saveM1State({ step:'dutru', confirmed:{}, actual:{}, orders:{}, supplier:null });
       renderDuTruTab(); window.refreshMissionsList?.();
     });
   }
+}
+
+// req #169 (phản hồi): tab "Quản lý nhà cung ứng" — 2 thẻ con: chọn hồ sơ nhà
+// cung ứng (lọc theo giấy tờ hợp pháp rồi so giá/thời gian giao), rồi lập +
+// gửi đơn đặt hàng. Chỉ có nghiệp vụ thật khi đã lập xong số lượng (bước
+// 'supplier' trở đi) — bấm sớm hơn thì báo cần hoàn thành tab Dự trù trước.
+function renderNhaCCTab(){
+  const st = getM1State();
+  if(st.step === 'dutru' || st.step === 'checking' || st.step === 'return'){
+    posPanel.innerHTML = '<div class="pos-soon">🔒 Chưa tới bước này — hoàn thành tab Dự trù (lập đủ số lượng cần đặt) trước.</div>';
+    return;
+  }
+  const sub = st.nhaccSub || 'hoso';
+  posPanel.innerHTML = `
+    <div class="pos-tabs" style="margin-bottom:12px">
+      <button type="button" class="pos-tab${sub==='hoso'?' active':''}" data-sub="hoso">📁 Hồ sơ nhà cung ứng</button>
+      <button type="button" class="pos-tab${sub==='donhang'?' active':''}" data-sub="donhang"${st.step==='order'||st.supplier?'':' disabled'}>🧾 Lập đơn đặt hàng</button>
+    </div>
+    <div id="nhaccBody"></div>`;
+  posPanel.querySelectorAll('[data-sub]').forEach(b => b.addEventListener('click', () => {
+    if(b.disabled) return;
+    st.nhaccSub = b.dataset.sub; saveM1State(st); renderNhaCCTab();
+  }));
+  if(sub === 'hoso') renderHoSoSub(st); else renderDonHangSub(st);
+}
+function renderHoSoSub(st){
+  const body = document.getElementById('nhaccBody');
+  const chosen = st.supplier;
+  body.innerHTML = `
+    <p class="pos-note">Chọn nhà cung ứng có <b>đủ giấy tờ hợp pháp</b> để được phép mua hàng. Nếu nhiều nhà cung ứng đều đủ giấy tờ, so tiếp <b>giá &amp; thời gian giao hàng</b> để chọn nơi tốt nhất.</p>
+    <table class="pos-table"><thead><tr><th>Nhà cung ứng</th><th>ĐK kinh doanh</th><th>Đủ điều kiện KD dược</th><th>GDP (Thực hành tốt phân phối)</th><th>Giá</th><th>Giao hàng</th><th></th></tr></thead><tbody>
+      ${M1_SUPPLIERS.map(s => `<tr class="${chosen===s.id?'pos-sup-chosen':''}">
+        <td>${esc(s.name)}</td>
+        <td>${s.dkkd?'✅':'❌'}</td>
+        <td>${s.ddk?'✅':'❌'}</td>
+        <td>${s.gdp?'✅':'❌'}</td>
+        <td>${(s.dkkd&&s.ddk&&s.gdp) ? s.price : '—'}</td>
+        <td>${(s.dkkd&&s.ddk&&s.gdp) ? s.ship : '—'}</td>
+        <td><button type="button" class="pos-btn" style="padding:5px 10px;font-size:.74rem" data-pick="${s.id}">${chosen===s.id?'Đã chọn':'Chọn'}</button></td>
+      </tr>`).join('')}
+    </tbody></table>
+    <div class="pos-err" id="hosoErr"></div>`;
+  body.querySelectorAll('[data-pick]').forEach(btn => btn.addEventListener('click', () => {
+    const s = M1_SUPPLIERS.find(x => x.id === btn.dataset.pick);
+    const errEl = document.getElementById('hosoErr');
+    if(!s.dkkd || !s.ddk || !s.gdp){
+      errEl.textContent = `⚠️ ${s.name} chưa đủ giấy tờ hợp pháp (thiếu ${!s.gdp?'giấy chứng nhận GDP':!s.ddk?'giấy đủ điều kiện kinh doanh dược':'giấy đăng ký kinh doanh'}) — không đạt chuẩn, chọn nhà cung ứng khác.`;
+      return;
+    }
+    // req: renderNhaCCTab() vẽ lại toàn bộ panel (kể cả #hosoErr rỗng) —
+    // phải đặt lại chữ cảnh báo SAU khi vẽ lại, không thì bị xoá mất ngay.
+    const warn = s.best ? '' : `${s.name} đủ giấy tờ, nhưng còn nhà cung ứng khác giá tốt hơn / giao nhanh hơn — cân nhắc so sánh thêm trước khi chọn.`;
+    st.supplier = s.id; saveM1State(st); renderNhaCCTab();
+    const newErrEl = document.getElementById('hosoErr'); if(newErrEl) newErrEl.textContent = warn;
+  }));
+}
+function renderDonHangSub(st){
+  const body = document.getElementById('nhaccBody');
+  const items = getM1Items();
+  const supplier = M1_SUPPLIERS.find(s => s.id === st.supplier);
+  if(st.step === 'order' && st.orderSent){
+    body.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ ${esc(supplier.name)} đã chấp nhận đơn đặt hàng — hẹn giao hàng sau <b>${supplier.ship}</b>.</div>
+      <button type="button" class="pos-btn" id="posFinish">🎉 Hoàn thành nhiệm vụ 1</button>`;
+    document.getElementById('posFinish').addEventListener('click', () => {
+      st.step = 'done'; saveM1State(st);
+      posPanel.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">🎉 Đã lập xong dự trù, chọn nhà cung ứng &amp; gửi đơn mua thuốc cho ${items.length} mặt hàng!<br>Đóng lại để về sơ đồ — có thể bấm "Luyện lại" ở thẻ nhiệm vụ bất cứ lúc nào.</div>`;
+      window.refreshMissionsList?.();
+    });
+    return;
+  }
+  body.innerHTML = `
+    <p class="pos-note">Kính gửi: <b>${esc(supplier.name)}</b></p>
+    <table class="pos-table"><thead><tr><th>Sản phẩm</th><th>Quy cách</th><th>SL</th><th>ĐVT</th></tr></thead><tbody>
+      ${items.map(it => `<tr><td>${esc(it.name)}</td><td>Hộp</td><td>${st.orders[it.key]}</td><td>Hộp</td></tr>`).join('')}
+    </tbody></table>
+    <label style="display:flex;gap:8px;align-items:center;font-size:.82rem;margin:8px 0"><input type="checkbox" id="posOrderCheck"> Tôi đã kiểm tra kỹ thông tin đơn đặt hàng.</label>
+    <button type="button" class="pos-btn" id="posOrderSend" disabled>📨 Gửi đơn đặt hàng cho nhà cung ứng</button>`;
+  const check = document.getElementById('posOrderCheck'), sendBtn = document.getElementById('posOrderSend');
+  check.addEventListener('change', () => { sendBtn.disabled = !check.checked; });
+  sendBtn.addEventListener('click', () => {
+    st.step = 'order'; st.orderSent = true; saveM1State(st);
+    renderDonHangSub(st); window.refreshMissionsList?.();
+  });
 }
 
 /* Checklist nổi trên màn tủ (view-pharmacy) khi nhiệm vụ 1 đang ở bước kiểm
@@ -3143,6 +3277,11 @@ function renderM1Checklist(){
   const panel = document.getElementById('m1Checklist');
   if(!panel) return;
   const st = getM1State();
+  // req #169 (phản hồi): "Hàng mới về" (thùng hàng + đơn) là nghiệp vụ RIÊNG
+  // của nhiệm vụ 3 (Bảo quản — sắp xếp) — hiện cùng lúc với checklist nhiệm
+  // vụ 1 gây rối, ẩn đi khi đang kiểm tủ cho nhiệm vụ 1.
+  const cartEl = document.getElementById('deliveryCart');
+  if(cartEl) cartEl.style.display = (st.step === 'checking') ? 'none' : '';
   if(st.step !== 'checking'){ panel.hidden = true; return; }
   const items = getM1Items().filter(it => it.cabinet === TU_MODE);
   if(!items.length){ panel.hidden = true; return; }
@@ -3151,7 +3290,7 @@ function renderM1Checklist(){
   if(!pending.length){
     const allDone = getM1Items().every(it => st.confirmed[it.key]);
     panel.innerHTML = `<h5>📋 Kiểm tủ — Nhiệm vụ 1</h5><div class="m1-done">${allDone ? '✅ Đã kiểm xong tất cả! Quay lại Quầy thu ngân để chốt đơn.' : '✅ Xong tủ này! Sang tủ còn lại để kiểm nốt.'}</div>`;
-    if(allDone){ st.step = 'return'; saveM1State(st); window.refreshMissionsList?.(); }
+    if(allDone){ st.step = 'return'; saveM1State(st); window.refreshMissionsList?.(); if(cartEl) cartEl.style.display = ''; }
     return;
   }
   panel.innerHTML = `<h5>📋 Kiểm tủ — còn ${pending.length} mặt hàng</h5>` + pending.map(it => `
@@ -3233,7 +3372,10 @@ function renderM1Checklist(){
         <span class="mg-mission-st">🔒 Sắp ra mắt</span>
       </li>`;
     }).join('');
-    missionsEl.querySelector('[data-mission="1"]')?.addEventListener('click', () => { if(typeof openPOS === 'function') openPOS(); });
+    // req #169 (phản hồi): bấm vào THẺ nhiệm vụ không mở luôn phần mềm bán
+    // hàng nữa — chỉ CHỈ DẪN bước đang làm; phải tự đi tới máy tính ở Quầy
+    // thu ngân và bấm vào đó mới mở được (giống game thật, không tắt tuỳ ý).
+    missionsEl.querySelector('[data-mission="1"]')?.addEventListener('click', () => { if(typeof m1Hint === 'function') m1Hint(); });
     missionsEl.querySelector('[data-mission="3"]')?.addEventListener('click', () => { document.querySelector('.z-rx')?.dispatchEvent(new MouseEvent('click', { bubbles:true })); });
   }
   if(missionsEl){ renderMissions(); window.refreshMissionsList = renderMissions; }
