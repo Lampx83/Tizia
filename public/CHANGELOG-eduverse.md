@@ -4,6 +4,60 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-15 — Phiên điểm danh (63) · Vẫn không đọc được hộp thư — chờ duyệt PR #89
+
+**Kết luận:** Không xử lý yêu cầu nào. Hộp thư production vẫn **không đọc được**; đường khắc phục đã được phiên 62 dựng sẵn ở **[PR #89](https://github.com/Lampx83/Tizia/pull/89)** nhưng **chưa được duyệt/merge**, nên hôm nay không có việc mới để làm và cũng không dựng lại thứ đã có. Không tạo PR, không bịa việc.
+
+**Đo lại hôm nay (2026-09-15):**
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `GET https://tizia.vn/api/health` | `200` — production đang sống (uptime ~44 h, node v20.20.2) |
+| `GET /api/requests?domain=…` | `401 {"error":"unauthorized","needLogin":true}` |
+| `GET /api/requests/:id/thread` | `401` — dù route khai báo công khai, `makeAuthGate` chặn trước vì path không nằm trong `PUBLIC_PATH_PREFIXES` |
+| `GET /api/admin/requests` | `401` (`requireAdmin`, chỉ nhận cookie session) |
+| `GET /api/ai-board/inbox` | `401` **của auth gate chung** (không phải `404`/`403` của route trong PR #89) → **PR #89 chưa được deploy lên production** |
+| `ai-board/inbox.json` (repo) | `items: []` — stub cũ, sync lần cuối commit `7bcecf0` (2026-07-10), không phải dữ liệu thật |
+| GitHub Issues `Lampx83/Tizia` | 0 issue đang mở |
+| PR #89 | `open`, `mergeable_state: clean`, 0 check-run, chưa có review |
+
+**Lưu ý quan trọng:** kết quả trên chỉ chứng minh **không đọc được** hộp thư, **không** chứng minh hộp thư rỗng. Nếu có sinh viên đang chờ phản hồi thì họ vẫn đang chờ.
+
+**Việc cần người thật làm (3 bước, ~5 phút) để mở lại vòng phục vụ:**
+
+1. Duyệt & merge [PR #89](https://github.com/Lampx83/Tizia/pull/89) (326 dòng thêm, 0 dòng xoá, tắt mặc định — merge không đổi gì trên production).
+2. Sinh key `openssl rand -hex 32`, thêm `AI_BOARD_KEY=<key>` vào `.env` production, restart container.
+3. Cấp key đó cho môi trường chạy routine Ban điều hành AI.
+
+Chưa xong bước 2 thì route không tồn tại và các phiên hàng ngày tiếp theo vẫn **không phục vụ được yêu cầu thật của sinh viên** (đây là phiên thứ 4 liên tiếp bị chặn: 45 · 58 · 62 · 63).
+
+---
+
+## 2026-09-14 — Phiên điểm danh (62) · Không đọc được hộp thư production
+
+**Kết luận:** Không xử lý yêu cầu nào — hộp thư production **không đọc được** (mọi route `/api/requests` đều đòi session đăng nhập mà môi trường phiên này không có), nên không thể xác nhận có hay không yêu cầu đang chờ; không tạo PR, không bịa việc.
+
+| Đường đọc hộp thư | Kết quả đo hôm nay |
+|---|---|
+| `https://tizia.vn/api/health` | `200` — server production **đang sống** |
+| `https://tizia.vn/api/requests?domain=…` | `401 {"error":"unauthorized","needLogin":true}` |
+| `https://tizia.vn/api/admin/requests` | `401` (route cần `requireAdmin`, chỉ nhận cookie session) |
+| `https://tizia.vn/ps/api/requests?domain=…` | `302` → `/login.html` |
+| `https://ps.tizia.vn/api/requests` | không kết nối được |
+| `server/scripts/sync-inbox.mjs` | không chạy được — thiếu `data/tizia.db` và `node_modules` |
+| `ai-board/inbox.json` (trong repo) | `items: []` — nhưng là **stub cũ**, lần sync cuối là commit `b3ca7c8` (2026-07-09), **không phải nguồn dữ liệu thật** |
+| GitHub Issues (`Lampx83/EduVerse`) | 0 issue đang mở |
+
+**Ghi chú hạ tầng (lặp lại từ phiên 45 & 58, vẫn chưa khắc phục):** Ban điều hành AI không có đường đọc hộp thư tự động. `sync-inbox.mjs` đọc SQLite trên volume production, không chạy được từ môi trường CI/agent. Cần một trong hai: (a) một route đọc-chỉ có auth bằng header (vd `x-ai-board-key`) cho phép export `requests` pending/reviewing, hoặc (b) một job trên server chạy `sync-inbox.mjs` rồi commit `ai-board/inbox.json` vào repo trước mỗi phiên. Chừng nào chưa có, các phiên hàng ngày **không thể phục vụ yêu cầu thật của sinh viên**.
+
+---
+
+## 2026-09-12 — Phiên điểm danh (61) · Hộp thư trống
+
+**Chế độ:** Điểm danh — `ai-board/inbox.json` không có yêu cầu (`items: []`). Không có cải tiến nào được thực hiện hôm nay. Không tạo PR.
+
+---
+
 ## 2026-09-10 — Phiên cải tiến (60) · THPT · THCS · CNTT · Kinh tế — 4 achievement bổ sung
 
 **Chế độ:** Chủ động — hộp thư `ai-board/inbox.json` trống (`items: []`); DB production không truy cập được trong môi trường này. GitHub Issues: 0 yêu cầu mở.
