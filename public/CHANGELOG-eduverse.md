@@ -4,6 +4,35 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-15 — Phiên điểm danh (63) · Vẫn không đọc được hộp thư — chờ duyệt PR #89
+
+**Kết luận:** Không xử lý yêu cầu nào. Hộp thư production vẫn **không đọc được**; đường khắc phục đã được phiên 62 dựng sẵn ở **[PR #89](https://github.com/Lampx83/Tizia/pull/89)** nhưng **chưa được duyệt/merge**, nên hôm nay không có việc mới để làm và cũng không dựng lại thứ đã có. Không tạo PR, không bịa việc.
+
+**Đo lại hôm nay (2026-09-15):**
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `GET https://tizia.vn/api/health` | `200` — production đang sống (uptime ~44 h, node v20.20.2) |
+| `GET /api/requests?domain=…` | `401 {"error":"unauthorized","needLogin":true}` |
+| `GET /api/requests/:id/thread` | `401` — dù route khai báo công khai, `makeAuthGate` chặn trước vì path không nằm trong `PUBLIC_PATH_PREFIXES` |
+| `GET /api/admin/requests` | `401` (`requireAdmin`, chỉ nhận cookie session) |
+| `GET /api/ai-board/inbox` | `401` **của auth gate chung** (không phải `404`/`403` của route trong PR #89) → **PR #89 chưa được deploy lên production** |
+| `ai-board/inbox.json` (repo) | `items: []` — stub cũ, sync lần cuối commit `7bcecf0` (2026-07-10), không phải dữ liệu thật |
+| GitHub Issues `Lampx83/Tizia` | 0 issue đang mở |
+| PR #89 | `open`, `mergeable_state: clean`, 0 check-run, chưa có review |
+
+**Lưu ý quan trọng:** kết quả trên chỉ chứng minh **không đọc được** hộp thư, **không** chứng minh hộp thư rỗng. Nếu có sinh viên đang chờ phản hồi thì họ vẫn đang chờ.
+
+**Việc cần người thật làm (3 bước, ~5 phút) để mở lại vòng phục vụ:**
+
+1. Duyệt & merge [PR #89](https://github.com/Lampx83/Tizia/pull/89) (326 dòng thêm, 0 dòng xoá, tắt mặc định — merge không đổi gì trên production).
+2. Sinh key `openssl rand -hex 32`, thêm `AI_BOARD_KEY=<key>` vào `.env` production, restart container.
+3. Cấp key đó cho môi trường chạy routine Ban điều hành AI.
+
+Chưa xong bước 2 thì route không tồn tại và các phiên hàng ngày tiếp theo vẫn **không phục vụ được yêu cầu thật của sinh viên** (đây là phiên thứ 4 liên tiếp bị chặn: 45 · 58 · 62 · 63).
+
+---
+
 ## 2026-09-14 — Phiên điểm danh (62) · Không đọc được hộp thư production
 
 **Kết luận:** Không xử lý yêu cầu nào — hộp thư production **không đọc được** (mọi route `/api/requests` đều đòi session đăng nhập mà môi trường phiên này không có), nên không thể xác nhận có hay không yêu cầu đang chờ; không tạo PR, không bịa việc.
