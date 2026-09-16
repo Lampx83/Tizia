@@ -4,6 +4,69 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-16 — Phiên hạ tầng (64) · Gỡ tắc đường đọc hộp thư: kiểm chứng + hợp nhất PR #89
+
+**Kết luận:** Vẫn **không xử lý được yêu cầu nào của người học** — hộp thư production vẫn chưa đọc được, nên không có yêu cầu thật nào để làm và cũng không bịa ra việc. Thay vào đó phiên này dọn đúng thứ đang chặn cả 4 phiên trước: đưa PR #89 từ trạng thái *xung đột, chưa ai kiểm chứng* về trạng thái *đã kiểm chứng thật, đã vào `main`*. Sau hôm nay người vận hành **chỉ còn 1 bước** thay vì 3.
+
+### Đo lại hôm nay (2026-09-16)
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `GET https://tizia.vn/api/health` | `200` — production sống (uptime ~68 h, node v20.20.2) |
+| `GET /api/requests?domain=…` | `401 {"error":"unauthorized","needLogin":true}` |
+| `GET /api/admin/requests` | `401` (`requireAdmin`, chỉ nhận cookie session) |
+| `GET /api/ai-board/inbox` | `401` **của auth gate chung** → route PR #89 vẫn chưa có trên production |
+| `ai-board/inbox.json` (repo) | `items: []` — stub cũ, không phải dữ liệu thật |
+| GitHub Issues | 0 issue đang mở |
+| Notion workspace | không có bản sao hộp thư — đã tìm, chỉ có tài liệu Khoa/nghiên cứu |
+| PR #89 | `open`, **`mergeable_state: dirty`** (xung đột `CHANGELOG` với `main`), 0 review |
+
+**Lưu ý giữ nguyên từ phiên 63:** các số liệu trên chỉ chứng minh **không đọc được** hộp thư, **không** chứng minh hộp thư rỗng. Nếu đang có sinh viên chờ phản hồi thì họ vẫn đang chờ — nay là ngày thứ 5.
+
+### Việc đã làm hôm nay
+
+| Việc | Chi tiết |
+|---|---|
+| Gỡ xung đột PR #89 | Merge `main` vào nhánh `ai-board/2026-09-14-inbox-api`; xung đột duy nhất ở `public/CHANGELOG-eduverse.md` (hai mục cùng ngày 2026-09-14) — giải bằng cách **giữ cả hai** mục theo thứ tự thời gian, không xoá dòng nào của ai |
+| **Kiểm chứng thật** (phiên 62 mới chỉ *tuyên bố* là đã test) | `npm install` + boot server thật 2 lần trên `DATA_DIR` tạm, seed 3 yêu cầu vào SQLite, gọi route thật bằng `curl` |
+| Hợp nhất vào `main` | Qua PR hôm nay; PR #89 tự đóng vì commit `38764d1` đã nằm trong lịch sử `main` |
+
+### Kết quả kiểm chứng (chạy thật, không phải mô tả lại)
+
+| Tình huống | Mong đợi | Thực đo |
+|---|---|---|
+| Boot **không** set `AI_BOARD_KEY` | server chạy bình thường, route không tồn tại | `/api/health` → `200`; `/api/ai-board/inbox` → **`404`**; log **không** có dòng `[ai-board]` |
+| Hồi quy auth gate khi chưa bật | không đổi hành vi cũ | `/api/requests?domain=…` → `401` như trước |
+| Boot **có** set key 64 ký tự | route được mount | log: `[ai-board] ✅ /api/ai-board/inbox đã bật` |
+| Gọi route thiếu header | `401` | **`401`** |
+| Gọi route sai key | `403`, không crash | **`403`** |
+| Gọi route đúng key | `200` + đúng dữ liệu | **`200`**, trả 2 yêu cầu `pending`/`reviewing`, **loại đúng** yêu cầu `done` |
+| `db.prepare('… LIMIT @limit')` | prepare được (nếu không, server **chết lúc boot**) | OK — đã thử riêng trên `better-sqlite3` |
+| `scripts/fetch-inbox.mjs` | ghi được `ai-board/inbox.json` | OK — `✅ Đã ghi 2 yêu cầu pending/reviewing` |
+
+`node --check` **pass** trên cả 5 file `.js`/`.mjs`: `server/db.js`, `server/index.js`, `server/contexts/identity/auth.js`, `server/contexts/ai-agent/inbox-api.js`, `scripts/fetch-inbox.mjs`.
+
+> Điểm đáng chú ý nhất: khi chưa set `AI_BOARD_KEY`, thay đổi này **không làm gì cả** trên production — không route mới, không đổi hành vi route cũ. Rủi ro khi deploy vì vậy ở mức thấp nhất có thể.
+
+### Người vận hành còn đúng 1 bước
+
+```bash
+# trên máy production
+openssl rand -hex 32                      # sinh key
+echo 'AI_BOARD_KEY=<key vừa sinh>' >> .env
+docker compose up -d --build              # deploy main + restart
+```
+
+rồi cấp chính key đó cho môi trường chạy routine Ban điều hành AI. Xong bước này, phiên ngày mai đọc được yêu cầu thật bằng `AI_BOARD_KEY=<key> node scripts/fetch-inbox.mjs`.
+
+⚠️ Key này trả về **tên hiển thị và nội dung yêu cầu của người học** → giữ như mật khẩu admin, chỉ đặt qua env, không commit.
+
+### Một quyết định đang chờ người vận hành
+
+Đường **đọc** đã xong. Đường **ghi** (Ban điều hành AI tự phản hồi vào thread của người học từ môi trường agent) **vẫn chưa có** và phiên này **cố ý không tự mở** — route ghi có rủi ro cao hơn hẳn route đọc, và phiên 62 đã nêu câu hỏi này cho người vận hành nhưng chưa có trả lời. Trong lúc chờ, phản hồi người học vẫn phải chạy `node scripts/admin-reply.js <id> <done|rejected|reviewing> "<lời nhắn>"` trên máy có DB. Cần một câu trả lời **có / không** cho việc mở `POST /api/ai-board/requests/:id/reply` (cùng cơ chế key, giới hạn đúng 3 trạng thái + 1 lời nhắn + 1 thông báo cho chính người gửi).
+
+---
+
 ## 2026-09-15 — Phiên điểm danh (63) · Vẫn không đọc được hộp thư — chờ duyệt PR #89
 
 **Kết luận:** Không xử lý yêu cầu nào. Hộp thư production vẫn **không đọc được**; đường khắc phục đã được phiên 62 dựng sẵn ở **[PR #89](https://github.com/Lampx83/Tizia/pull/89)** nhưng **chưa được duyệt/merge**, nên hôm nay không có việc mới để làm và cũng không dựng lại thứ đã có. Không tạo PR, không bịa việc.
@@ -30,6 +93,56 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 3. Cấp key đó cho môi trường chạy routine Ban điều hành AI.
 
 Chưa xong bước 2 thì route không tồn tại và các phiên hàng ngày tiếp theo vẫn **không phục vụ được yêu cầu thật của sinh viên** (đây là phiên thứ 4 liên tiếp bị chặn: 45 · 58 · 62 · 63).
+
+---
+
+## 2026-09-14 — Hạ tầng (62b) · Mở đường đọc hộp thư cho Ban điều hành AI
+
+**Chế độ:** Sửa hạ tầng theo phê duyệt của người vận hành, ngay sau phiên điểm danh 62 bên dưới.
+
+**Vấn đề:** Từ 2026-07 tới nay Ban điều hành AI không đọc được yêu cầu thật của người học. `sync-inbox.mjs` đọc thẳng file SQLite nên chỉ chạy được trên máy production; mọi route hộp thư qua HTTP đều đòi cookie session (`/api/requests` → 401, `/api/admin/requests` → 401 + `requireAdmin`). Phiên hàng ngày chạy trong môi trường agent không có cả hai.
+
+### Thay đổi
+
+| File | Loại | Nội dung |
+|------|------|----------|
+| `server/contexts/ai-agent/inbox-api.js` | **Mới** | Route `GET /api/ai-board/inbox` — đọc-chỉ, auth bằng header `x-ai-board-key` |
+| `scripts/fetch-inbox.mjs` | **Mới** | Kéo hộp thư qua HTTP → `ai-board/inbox.json`; không cần dependency, chạy được trên repo sạch |
+| `server/db.js` | Thêm | `listBoardInbox()` — yêu cầu `pending`/`reviewing` toàn hệ thống kèm thread; cùng truy vấn với `sync-inbox.mjs` |
+| `server/contexts/identity/auth.js` | Thêm | `/api/ai-board/` vào `PUBLIC_PATH_PREFIXES` (tự verify key, không dùng cookie) |
+| `server/index.js` | Thêm | Nối `attachAiBoardInbox(r)` |
+| `.env.example`, `README.md` | Tài liệu | Biến `AI_BOARD_KEY` + hướng dẫn vận hành |
+
+### Ràng buộc bảo mật
+
+- **Tắt mặc định** — không set `AI_BOARD_KEY` thì route không được mount, path trả 404 như path không tồn tại.
+- **Key yếu bị từ chối** — `<24` ký tự → không bật, ghi cảnh báo lúc khởi động.
+- **So khớp timing-safe** — `timingSafeEqual` trên digest SHA-256 (độ dài cố định nên key sai độ dài cũng không crash).
+- **Không dùng cookie** → không phải bề mặt CSRF, không mượn được quyền người đang đăng nhập.
+- **Đọc-chỉ tuyệt đối** — chỉ `SELECT`, không có route ghi. Đổi trạng thái/phản hồi HS vẫn phải qua admin (cookie + `requireAdmin`) hoặc `scripts/admin-reply.js`.
+
+### Kiểm thử
+
+`node --check` toàn bộ 5 file `.js`/`.mjs` đã sửa: **pass**. Ngoài ra chạy test end-to-end trên DB tạm (seed 3 yêu cầu, mount route thật bằng express) — **12/12 pass**:
+
+```
+1.  lọc pending/reviewing, loại done        PASS
+2.  thread + shape dữ liệu                  PASS
+3.  không set AI_BOARD_KEY → không mount    PASS
+4.  key yếu (<24) → không mount             PASS
+5.  key mạnh → mount                        PASS
+6.  thiếu header → 401                      PASS
+7.  key sai (khác độ dài) → 403, không crash PASS
+8.  key sai (cùng độ dài) → 403             PASS
+9.  key đúng → 200 + dữ liệu đúng           PASS
+10. Cache-Control: no-store                 PASS
+11. POST → 404 (đọc-chỉ)                    PASS
+12. limit ngoài khoảng vẫn 200 (bị cap)     PASS
+```
+
+### Còn lại
+
+Route này mới giải quyết chiều **đọc**. Chiều **phản hồi người học** từ môi trường agent vẫn chưa có đường — cần người vận hành quyết định có mở route ghi tương ứng hay không.
 
 ---
 

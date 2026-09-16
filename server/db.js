@@ -752,6 +752,51 @@ export function reopenRequestIfClosed(id) {
   return reopenRequestStmt.run({ id: Number(id), t: Date.now() }).changes > 0;
 }
 
+// --- Hộp thư Ban điều hành AI (đọc-chỉ, xuyên mọi trường) ---
+// Trả các yêu cầu ĐANG CHỜ XỬ LÝ ('pending'/'reviewing') của toàn hệ thống kèm
+// thread trao đổi. Yêu cầu đã đóng ('done'/'rejected') bị bỏ qua — Ban điều hành
+// chỉ cần việc còn tồn.
+//
+// Đây là nguồn dữ liệu cho route đọc-chỉ /api/ai-board/inbox (xem
+// contexts/ai-agent/inbox-api.js). Truy vấn CỐ TÌNH giống hệt
+// server/scripts/sync-inbox.mjs — script đó đọc thẳng file SQLite trên volume
+// production, route này đọc qua HTTP; hai đường phải cho cùng một kết quả để
+// phiên hàng ngày dùng đường nào cũng được.
+const boardInboxStmt = db.prepare(`
+  SELECT id, domain, type, title, detail, student, status, votes, admin_note,
+         created_at, updated_at, attachments
+  FROM requests
+  WHERE status IN ('pending', 'reviewing')
+  ORDER BY votes DESC, created_at DESC
+  LIMIT @limit
+`);
+
+export function listBoardInbox(limit = 200) {
+  const cap = Math.min(Math.max(Number(limit) || 200, 1), 500);
+  const rows = boardInboxStmt.all({ limit: cap });
+  return rows.map(r => ({
+    id: `req-${r.id}`,
+    db_id: r.id,
+    from: r.student,
+    domain: r.domain,
+    type: r.type,
+    subject: r.title,
+    body: r.detail || '',
+    status: r.status,
+    votes: r.votes,
+    admin_note: r.admin_note || null,
+    attachments: safeParseAtts(r.attachments),
+    thread: listRequestMessages(r.id).map(m => ({
+      role: m.role,
+      author: m.author_name || null,
+      body: m.body,
+      at: new Date(m.created_at).toISOString(),
+    })),
+    created_at: new Date(r.created_at).toISOString(),
+    updated_at: new Date(r.updated_at).toISOString(),
+  }));
+}
+
 // --- Kho học liệu AI sinh thêm ---
 const insertAiContentStmt = db.prepare(`
   INSERT INTO ai_lesson_content (week_id, subject, topic, kind, stem, payload, student, created_at)
