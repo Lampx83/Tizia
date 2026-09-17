@@ -4,6 +4,53 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-17 — Phiên 65 · Vẫn chưa đọc được hộp thư — nhưng đã xác định đúng nguyên nhân
+
+**Kết luận:** **Không xử lý được yêu cầu nào của người học** (ngày thứ 6). Không có yêu cầu thật để làm nên không bịa việc. Việc duy nhất làm hôm nay là sửa một **thông báo chẩn đoán sai** phát hiện ngay trong lúc thử đọc hộp thư — cái đang chỉ người vận hành đi sửa nhầm chỗ.
+
+### Đo lại hôm nay
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `GET https://tizia.vn/api/health` | `200` — production sống (node v20.20.2, boot `2026-09-17T05:52Z`) |
+| `GET /api/ai-board/inbox` (3 lần) | `401 {"error":"unauthorized","needLogin":true}` |
+| `GET /api/requests`, `/api/requests/1/thread` | `401` cùng dạng |
+| GitHub Issues | 0 issue đang mở |
+| `AI_BOARD_KEY` trong môi trường routine | **chưa có** |
+
+**Chẩn đoán (mới, khác 5 phiên trước):** thân phản hồi là `needLogin:true` — đó là **auth gate chung** (`server/contexts/identity/auth.js`). Nếu production đã chạy `main` sau khi PR #89 vào (`ab8e9b3`, 2026-09-16), path `/api/ai-board/` đã nằm trong `PUBLIC_PATH_PREFIXES` nên gate phải cho đi qua, và vì chưa set key thì route không mount → phải là **`404`**, không phải `401`. Production trả `401` ⇒ **server đang chạy bản build cũ, chưa deploy `main`**. Việc phải làm là **deploy**, chưa phải chuyện key.
+
+### Việc đã làm
+
+| File | Thay đổi |
+|---|---|
+| `scripts/fetch-inbox.mjs` | Tách 4 nguyên nhân lỗi thay vì gộp 2. Trước đây `401` bất kỳ → *"Key sai hoặc thiếu"* — sai hẳn với tình huống thực tế hôm nay và đẩy người vận hành đi kiểm tra key trong khi lỗi là chưa deploy. |
+
+Bảng chẩn đoán mới:
+
+| HTTP | Thân phản hồi | Kết luận | Việc cần làm |
+|---|---|---|---|
+| `401` | có `needLogin:true` | server chạy code cũ | `git pull && docker compose up -d --build` |
+| `404` | — | code đã deploy, chưa set key | set `AI_BOARD_KEY` (≥24 ký tự) rồi restart |
+| `401` | không `needLogin` | thiếu header | lỗi phía script/proxy |
+| `403` | — | key sai | đối chiếu key |
+
+**Kiểm thử (chạy thật, không mô tả suông):** `node --check scripts/fetch-inbox.mjs` pass. Dựng server giả tại `127.0.0.1:8799` trả lần lượt `404` / `401`-không-`needLogin` / `403` / `200` → script in đúng cả 4 kết luận; nhánh `200` vẫn ghi đúng `ai-board/inbox.json` (`✅ Đã ghi 1 yêu cầu`). Gọi thật production → in đúng "server CHƯA deploy". `ai-board/inbox.json` được khôi phục nguyên trạng sau kiểm thử.
+
+### Người vận hành cần 2 bước (trước nay tưởng là 1)
+
+```bash
+# 1) trên máy production — deploy main (bước đang thiếu, phát hiện hôm nay)
+git pull && docker compose up -d --build
+# 2) sinh + đặt key, rồi restart
+openssl rand -hex 32
+echo 'AI_BOARD_KEY=<key vừa sinh>' >> .env && docker compose up -d
+```
+
+Sau đó cấp **chính key đó** cho môi trường chạy routine Ban điều hành AI (biến môi trường `AI_BOARD_KEY`) — hiện routine chưa có key nên dù server bật xong vẫn chưa đọc được.
+
+---
+
 ## 2026-09-16 — Phiên hạ tầng (64) · Gỡ tắc đường đọc hộp thư: kiểm chứng + hợp nhất PR #89
 
 **Kết luận:** Vẫn **không xử lý được yêu cầu nào của người học** — hộp thư production vẫn chưa đọc được, nên không có yêu cầu thật nào để làm và cũng không bịa ra việc. Thay vào đó phiên này dọn đúng thứ đang chặn cả 4 phiên trước: đưa PR #89 từ trạng thái *xung đột, chưa ai kiểm chứng* về trạng thái *đã kiểm chứng thật, đã vào `main`*. Sau hôm nay người vận hành **chỉ còn 1 bước** thay vì 3.

@@ -48,10 +48,29 @@ try {
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     console.error(`[fetch-inbox] ✖ ${url} → HTTP ${res.status}`);
-    if (res.status === 404) {
-      console.error('  → Route chưa bật trên server. Người vận hành cần set AI_BOARD_KEY (≥24 ký tự) rồi khởi động lại.');
-    } else if (res.status === 401 || res.status === 403) {
-      console.error('  → Key sai hoặc thiếu. Đối chiếu AI_BOARD_KEY với giá trị đặt trên server.');
+    // PHÂN BIỆT 3 nguyên nhân khác hẳn nhau — đoán sai là người vận hành đi sửa
+    // nhầm chỗ (đo thật ngày 2026-09-17: server trả 401 needLogin, script cũ
+    // bảo "key sai" trong khi thực ra server chưa deploy code có route).
+    //
+    //   401 + {"needLogin":true} → auth gate CHUNG nuốt request ⇒ server đang
+    //       chạy code CŨ, chưa có '/api/ai-board/' trong PUBLIC_PATH_PREFIXES
+    //       (xem server/contexts/identity/auth.js). Sửa bằng DEPLOY, không phải
+    //       bằng đổi key.
+    //   401 không có needLogin → route đã có, chỉ thiếu header x-ai-board-key.
+    //   403                    → route đã có, key gửi lên không khớp.
+    //   404                    → code đã deploy nhưng AI_BOARD_KEY chưa set/quá
+    //       ngắn ⇒ route không được mount.
+    const staleBuild = res.status === 401 && /"needLogin"\s*:\s*true/.test(body);
+    if (staleBuild) {
+      console.error('  → Server CHƯA deploy code có route này (auth gate chung trả 401 needLogin).');
+      console.error('    Key KHÔNG phải vấn đề. Người vận hành cần deploy nhánh main rồi restart:');
+      console.error('      git pull && docker compose up -d --build');
+    } else if (res.status === 404) {
+      console.error('  → Code đã có nhưng route chưa bật: AI_BOARD_KEY chưa set hoặc <24 ký tự. Set key rồi khởi động lại server.');
+    } else if (res.status === 401) {
+      console.error('  → Route đã bật nhưng thiếu header x-ai-board-key (lỗi phía script/proxy).');
+    } else if (res.status === 403) {
+      console.error('  → Key sai. Đối chiếu AI_BOARD_KEY với giá trị đặt trên server.');
     }
     if (body) console.error(`  ${body.slice(0, 200)}`);
     process.exit(1);
