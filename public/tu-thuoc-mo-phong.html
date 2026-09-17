@@ -3290,7 +3290,12 @@ function renderM1Checklist(){
   if(!pending.length){
     const allDone = getM1Items().every(it => st.confirmed[it.key]);
     panel.innerHTML = `<h5>📋 Kiểm tủ — Nhiệm vụ 1</h5><div class="m1-done">${allDone ? '✅ Đã kiểm xong tất cả! Quay lại Quầy thu ngân để chốt đơn.' : '✅ Xong tủ này! Sang tủ còn lại để kiểm nốt.'}</div>`;
-    if(allDone){ st.step = 'return'; saveM1State(st); window.refreshMissionsList?.(); if(cartEl) cartEl.style.display = ''; }
+    // req #171 (phản hồi): trước đây hiện lại "Hàng mới về" NGAY khi kiểm
+    // xong hết (allDone), trong khi thẻ "Đã kiểm xong tất cả!" vẫn còn hiện
+    // trên chính màn này — 2 nghiệp vụ hiện chồng lên nhau như cũ. Đổi
+    // step sang 'return' nhưng GIỮ ẩn cho tới khi rời màn tủ này; tủ Rx/OTC
+    // vào lại sau (renderM1Checklist() chạy lại lúc đó) sẽ tự hiện đúng.
+    if(allDone){ st.step = 'return'; saveM1State(st); window.refreshMissionsList?.(); }
     return;
   }
   panel.innerHTML = `<h5>📋 Kiểm tủ — còn ${pending.length} mặt hàng</h5>` + pending.map(it => `
