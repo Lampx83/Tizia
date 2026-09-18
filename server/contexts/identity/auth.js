@@ -179,6 +179,10 @@ const PUBLIC_PATH_PREFIXES = [
   '/api/ai-board/',
   // Bundle JS/scenarios không phải bí mật — guest cần để render trang chủ + trường Mầm non.
   '/js/',
+  // Bundle i18n (public/i18n/*.json) — i18n.js fetch() ngay từ đầu trang, kể cả
+  // guest/login.html. Thiếu whitelist này thì fetch bị auth gate redirect sang
+  // /login.html (trả HTML thay vì JSON) — cùng dạng bug với /api/requests (#73).
+  '/i18n/',
   // Bản đồ khuôn viên (iframe nhúng vào school.html) — không có bí mật, là HTML/JS thuần.
   '/campus-proto/',
   // Layout override của bản đồ — guest cũng cần fetch để render đúng map đã chỉnh.
@@ -203,6 +207,15 @@ const PUBLIC_PATH_PREFIXES = [
   '/api/pharmacy/',
   '/manifest.webmanifest', '/sw.js', '/favicon',
   '/vendor/', '/models/',
+  // Hộp thư "Ban điều hành AI" (bug #73: comment ở dưới từng khẳng định GET đã
+  // công khai nhưng prefix này chưa từng có trong whitelist — 65% phiên AI board
+  // ghi "hộp thư trống" vì route bị 401 trước khi tới handler). Route ghi (POST
+  // /api/requests, /api/requests/attachments, /api/requests/:id/messages) đã có
+  // requireAuth/requireEnrolled riêng ở handler nên vẫn được bảo vệ; các route
+  // còn lại (GET /api/requests, /vote, /status, /decisions, /thread) vốn không
+  // có gate riêng — handler GET /api/requests đã tự trả rỗng cho khách (xem
+  // comment "không 401" ở server/index.js) nên để công khai đúng như thiết kế.
+  '/api/requests',
   // Đính kèm yêu cầu (ảnh chụp màn hình / file HS gửi cho "Ban điều hành AI").
   // GET công khai vì inbox /api/requests cũng công khai; POST upload đã có
   // requireAuth + requireEnrolled gate riêng ở route /api/requests/attachments.

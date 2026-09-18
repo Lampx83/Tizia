@@ -15,6 +15,8 @@
 import { WebSocketServer } from 'ws';
 import { db } from '../../db.js';
 import { requireAuth, getCurrentUser } from '../identity/auth.js';
+import { log } from '../../observability.js';
+import { guardedSend, onMessageJSON, logSocketLifecycle } from '../../ws-safety.js';
 
 const TIME_PER_Q_MS = 20_000;     // 20s/câu
 const TIME_BONUS_MAX = 500;       // điểm tối đa thưởng tốc độ
@@ -58,15 +60,8 @@ function snapshot(room) {
 
 function broadcast(room, payload, exceptId = null) {
   const msg = JSON.stringify(payload);
-  for (const p of room.players.values()) {
-    if (p.id === exceptId) continue;
-    if (p.ws && p.ws.readyState === 1) {
-      try { p.ws.send(msg); } catch {}
-    }
-  }
-  if (room.hostWs && room.hostWs.readyState === 1) {
-    try { room.hostWs.send(msg); } catch {}
-  }
+  for (const p of room.players.values()) if (p.id !== exceptId) guardedSend(p.ws, msg);
+  guardedSend(room.hostWs, msg);
 }
 
 function leaderboard(room) {
@@ -140,14 +135,10 @@ function handleAnswer(room, playerId, optIndex) {
     p.lastCorrect = true;
   }
   // Báo riêng cho HS này
-  if (p.ws && p.ws.readyState === 1) {
-    try { p.ws.send(JSON.stringify({ type: 'answer_ack', correct, score: p.score })); } catch {}
-  }
+  guardedSend(p.ws, { type: 'answer_ack', correct, score: p.score });
   // Báo host số người đã trả lời (không tiết lộ ai đúng)
-  if (room.hostWs && room.hostWs.readyState === 1) {
-    const ans = [...room.players.values()].filter(x => x.answered).length;
-    try { room.hostWs.send(JSON.stringify({ type: 'answer_progress', answered: ans, total: room.players.size })); } catch {}
-  }
+  const ans = [...room.players.values()].filter(x => x.answered).length;
+  guardedSend(room.hostWs, { type: 'answer_progress', answered: ans, total: room.players.size });
   // Tất cả đã trả lời → close sớm
   if ([...room.players.values()].every(x => x.answered)) {
     clearTimeout(room.timer);
@@ -205,9 +196,11 @@ export function attachLiveQuizHttp(router) {
 export function attachLiveQuizWs(server, basePath = '') {
   // WebSocket route /ws-live
   const wss = new WebSocketServer({ noServer: true });
+  wss.on('error', (err) => log.error('[ws:live-quiz] server error', { err }));
   server.prependListener('upgrade', (req, socket, head) => {
     const path = (req.url || '').split('?')[0];
     if (path === basePath + '/ws-live') {
+      socket.on('error', (err) => log.warn('[ws:live-quiz] upgrade socket error', { err }));
       wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
     }
   });
@@ -219,7 +212,7 @@ export function attachLiveQuizWs(server, basePath = '') {
     const name = (url.searchParams.get('name') || 'Khách').slice(0, 24);
     const room = rooms.get(pin);
     if (!room) {
-      ws.send(JSON.stringify({ type: 'error', error: 'room_not_found' }));
+      guardedSend(ws, { type: 'error', error: 'room_not_found' });
       return ws.close();
     }
     if (role === 'host') {
@@ -227,21 +220,22 @@ export function attachLiveQuizWs(server, basePath = '') {
       // upgrade request, không tin query param. WS same-origin tự gửi cookie.
       const u = getCurrentUser(req);
       if (!u || (u.id !== room.hostId && u.role !== 'admin')) {
-        ws.send(JSON.stringify({ type: 'error', error: 'host_unauthorized' }));
+        guardedSend(ws, { type: 'error', error: 'host_unauthorized' });
         return ws.close();
       }
       room.hostWs = ws;
-      ws.send(JSON.stringify({ type: 'host_ack', snapshot: snapshot(room) }));
+      guardedSend(ws, { type: 'host_ack', snapshot: snapshot(room) });
     } else {
       // Player: gen id ngẫu nhiên, name từ query
       const pid = 'p' + Math.random().toString(36).slice(2, 10);
       const player = { id: pid, name, score: 0, answered: false, lastCorrect: false, ws };
       room.players.set(pid, player);
-      ws.send(JSON.stringify({ type: 'joined', id: pid, snapshot: snapshot(room) }));
+      guardedSend(ws, { type: 'joined', id: pid, snapshot: snapshot(room) });
       broadcast(room, { type: 'player_join', player: { id: pid, name } }, pid);
     }
-    ws.on('message', (data) => {
-      let msg; try { msg = JSON.parse(data); } catch { return; }
+    logSocketLifecycle(ws, 'live-quiz', { pin, role });
+
+    onMessageJSON(ws, (msg) => {
       if (role === 'host') {
         if (msg.type === 'start' && room.status === 'lobby') {
           room.status = 'running';

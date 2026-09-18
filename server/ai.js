@@ -6,15 +6,18 @@
 //   POST /api/ai/patient-turn      — 1 lượt đối thoại với AI patient
 //   POST /api/ai/evaluate-roleplay — chấm toàn bộ phiên role-play
 //
-// Cấu hình env:
-//   OLLAMA_URL     — endpoint Ollama (mặc định = dev tunnel)
-//                    Dev:  http://101.96.66.232:8037/ollama/api
-//                    Prod: http://10.2.13.58/ollama/api  (LAN — khi app chạy
-//                          trên cùng host 232, đi qua nginx nội bộ)
-//   OLLAMA_SECKEY  — Header x-ollama-seckey (mặc định "pharmasim" — shared
-//                    secret với Ollama server nội bộ; KHÔNG đổi tuỳ ý).
-//   OLLAMA_MODEL   — Tên model (mặc định qwen2.5:14b-instruct-ctx16k)
-//   OLLAMA_TIMEOUT_MS — Timeout 1 yêu cầu (mặc định 60s)
+// Cấu hình env — KHÔNG có fallback cứng trong code (trước đây có, đã bỏ: một
+// endpoint dev-tunnel + shared secret nằm thẳng trong source là rò rỉ, và mỗi
+// nơi đọc biến này lại tự chép một bản default riêng, chưa kể phải sync tay
+// với ai-board/harness/models.py). Nguồn sự thật DUY NHẤT là `.env` — thiếu
+// biến nào thì `/api/ai/*` trả 503 rõ ràng thay vì âm thầm gọi ra một endpoint
+// không ai biết trước là gì:
+//   OLLAMA_URL     — endpoint Ollama, ví dụ http://<host>:<port>/ollama/api
+//   OLLAMA_SECKEY  — Header x-ollama-seckey. Tuỳ endpoint có gateway hay không
+//                    (không set thì không gắn header, xem đoạn header bên dưới).
+//   OLLAMA_MODEL   — tên model (ví dụ qwen2.5:14b-instruct-ctx16k)
+//   OLLAMA_TIMEOUT_MS — timeout 1 yêu cầu (mặc định 60s — không phải bí mật,
+//                       giữ default này vì chỉ là tuning, không phải endpoint/key)
 //
 // Ưu điểm khi dùng Ollama nội bộ:
 //   - Miễn phí token (chạy on-prem, không gọi cloud)
@@ -26,12 +29,17 @@ import { aiQuotaGate, recordAiCall } from './ai-quota.js';
 import { saveAiQuestions, saveAiQa, getAiQuestions, getAiQa, getAiContentCounts } from './db.js';
 import { sendGA4Event } from './contexts/analytics/ga4-mp.js';
 
-const OLLAMA_URL = (process.env.OLLAMA_URL || 'http://101.96.66.232:8037/ollama/api').replace(/\/+$/, '');
-const OLLAMA_SECKEY = process.env.OLLAMA_SECKEY || 'pharmasim';
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:14b-instruct-ctx16k';
+const OLLAMA_URL = (process.env.OLLAMA_URL || '').replace(/\/+$/, '');
+const OLLAMA_SECKEY = process.env.OLLAMA_SECKEY || '';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || '';
 const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS) || 60_000;
+const OLLAMA_CONFIGURED = Boolean(OLLAMA_URL && OLLAMA_MODEL);
 
-console.log(`[ai] Ollama backend = ${OLLAMA_URL} (model=${OLLAMA_MODEL})`);
+if (OLLAMA_CONFIGURED) {
+  console.log(`[ai] Ollama backend = ${OLLAMA_URL} (model=${OLLAMA_MODEL})`);
+} else {
+  console.warn('[ai] OLLAMA_URL/OLLAMA_MODEL chưa set trong .env — /api/ai/* sẽ trả 503 cho mọi call.');
+}
 
 /**
  * Attach AI routes to an Express Router.
@@ -80,6 +88,9 @@ function wrapAi(endpoint, handler) {
   return [
     aiQuotaGate(endpoint),
     async (req, res) => {
+      if (!OLLAMA_CONFIGURED) {
+        return res.status(503).json({ error: 'AI backend chưa cấu hình (thiếu OLLAMA_URL/OLLAMA_MODEL trong .env)' });
+      }
       const t0 = Date.now();
       try {
         const result = await handler(req.body || {}, req);

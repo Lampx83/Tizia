@@ -2103,3 +2103,25 @@ const _getSystemOwnerStmt = db.prepare(
 export function getSystemOwnerId() {
   return _getSystemOwnerStmt.get()?.id || null;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SKILL PROPOSALS — lineage của mỗi skill AI board đề xuất, ghi lại mỗi lần đi
+// qua 1 cổng của harness 7-cổng (xem .scratch/ai-board-plugin-registry/spec.md).
+// Chỉ để đo/truy vết — không có code nào khác phụ thuộc bảng này để chạy.
+// ─────────────────────────────────────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS skill_proposals (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    origin        TEXT    NOT NULL,   -- 'core-skill' | 'domain-synthesized'
+    domain        TEXT,
+    gate_reached  REAL    NOT NULL,   -- 1..7, có cổng 5.5 (risk-triage)
+    outcome       TEXT,
+    request_ids   TEXT,               -- JSON array
+    template_key  TEXT,               -- đếm N=10 rollback-sạch liên tiếp (ticket 13)
+    budget_json   TEXT,
+    pr_url        TEXT,
+    created_at    INTEGER NOT NULL,
+    updated_at    INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_skill_proposals_template ON skill_proposals(template_key, created_at DESC);
+`);

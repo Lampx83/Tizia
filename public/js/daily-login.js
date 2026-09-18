@@ -170,7 +170,12 @@ class DailyLogin {
 async function autoShow() {
   const today = new Date(Date.now() + 7*3600_000).toISOString().slice(0, 10);
   if (localStorage.getItem(KEY_SHOWN) === today) return;
-  if (window.__tziaDaily) return;
+  // Claim ĐỒNG BỘ, trước await bên dưới — auth-header.js VÀ trang đều import
+  // file này (2 module instance khác URL), cả 2 gọi autoShow() gần như cùng
+  // lúc. `window.__tziaDaily` cũ chỉ set SAU await f.load() nên cả 2 lọt qua
+  // check cũ trước khi cái nào set được flag → 2 popup. Cờ riêng, set ngay.
+  if (window.__tziaDailyClaimed) return;
+  window.__tziaDailyClaimed = true;
   // Gate: chỉ show Daily Bonus khi feature unlocked
   try {
     const f = window.__tziaFeatures;
