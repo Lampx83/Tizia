@@ -207,15 +207,11 @@ const PUBLIC_PATH_PREFIXES = [
   '/api/pharmacy/',
   '/manifest.webmanifest', '/sw.js', '/favicon',
   '/vendor/', '/models/',
-  // Hộp thư "Ban điều hành AI" (bug #73: comment ở dưới từng khẳng định GET đã
-  // công khai nhưng prefix này chưa từng có trong whitelist — 65% phiên AI board
-  // ghi "hộp thư trống" vì route bị 401 trước khi tới handler). Route ghi (POST
-  // /api/requests, /api/requests/attachments, /api/requests/:id/messages) đã có
-  // requireAuth/requireEnrolled riêng ở handler nên vẫn được bảo vệ; các route
-  // còn lại (GET /api/requests, /vote, /status, /decisions, /thread) vốn không
-  // có gate riêng — handler GET /api/requests đã tự trả rỗng cho khách (xem
-  // comment "không 401" ở server/index.js) nên để công khai đúng như thiết kế.
-  '/api/requests',
+  // (Reverted, xem ticket 01 trong .scratch/ai-board-plugin-registry/issues/ —
+  // đã từng thêm '/api/requests' vào đây để vá bug #73, nhưng '/api/ai-board/'
+  // ở trên (route riêng, key auth) là đường đọc chính thức Lampx đã xây và
+  // đang chạy thật — bỏ lại route này về yêu cầu đăng nhập như cũ, tránh giữ
+  // 2 đường đọc song song, 1 trong đó không có auth.)
   // Đính kèm yêu cầu (ảnh chụp màn hình / file HS gửi cho "Ban điều hành AI").
   // GET công khai vì inbox /api/requests cũng công khai; POST upload đã có
   // requireAuth + requireEnrolled gate riêng ở route /api/requests/attachments.
