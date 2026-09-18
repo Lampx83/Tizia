@@ -240,3 +240,10 @@ export function attachAdaptive(r) {
     });
   });
 }
+
+export const plugin = {
+  name: 'adaptive',
+  mount(router) {
+    attachAdaptive(router);
+  },
+};

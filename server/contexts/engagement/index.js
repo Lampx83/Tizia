@@ -373,3 +373,10 @@ export function attachEngagement(app) {
     res.json({ ok: true, ...result, state: snapshot(req.user.id) });
   });
 }
+
+export const plugin = {
+  name: 'engagement',
+  mount(router) {
+    attachEngagement(router);
+  },
+};

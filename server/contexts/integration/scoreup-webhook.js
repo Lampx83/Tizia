@@ -131,3 +131,10 @@ export function attachScoreUpWebhook(app) {
   );
   console.log('[scoreup-webhook] mounted: POST /api/webhooks/scoreup');
 }
+
+export const plugin = {
+  name: 'scoreup-webhook',
+  mount(app) {
+    attachScoreUpWebhook(app);
+  },
+};

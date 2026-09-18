@@ -216,3 +216,10 @@ export function attachFeatureGate(router) {
 }
 
 export { FEATURES };
+
+export const plugin = {
+  name: 'feature-gate',
+  mount(router) {
+    attachFeatureGate(router);
+  },
+};

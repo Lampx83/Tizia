@@ -54,10 +54,18 @@ class FakeModels:
 
     gate1_model = "fake-gate1"
     gate3_model = "fake-gate3"
+    gate3_model_light = "fake-gate3-light"
     embed_model = "fake-embed"
 
-    def __init__(self, plan):
+    def __init__(self, plan, codegen=None):
         self.plan = plan
+        # Response mặc định cho cổng 3 (ticket 11) — generate() tự chọn theo
+        # TÊN MODEL được gọi (gate1_model → plan, gate3_model*/… → codegen),
+        # nên mọi fixture cũ gọi deps_with(plan_with(...)) vẫn tự đi hết tới
+        # cổng 7 mà không cần biết gì về cổng 3.
+        self.codegen = codegen or {
+            "code": "// fixture code\n", "test_file": "test/fixture.test.js", "test": "// fixture test\n",
+        }
         self.calls = []
         self.embed_calls = []
         # text → vector; text lạ nhận one-hot riêng (không giống ai). Vector
@@ -76,7 +84,11 @@ class FakeModels:
 
     def generate(self, model, prompt, **kw):
         self.calls.append({"model": model, "prompt": prompt, **kw})
-        body = self.plan if isinstance(self.plan, str) else json.dumps(self.plan, ensure_ascii=False)
+        if model in (self.gate3_model, self.gate3_model_light):
+            payload = self.codegen
+        else:
+            payload = self.plan
+        body = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
         return {"response": body, "prompt_eval_count": 120, "eval_count": 80}
 
 

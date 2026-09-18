@@ -11,6 +11,8 @@
 // ============================================================
 
 
+import { BASE_PATH } from '../../base-path.js';
+
 // Origin tuyệt đối cho sitemap/canonical: ưu tiên env, fallback từ header request.
 function originOf(req, basePath = '') {
   const env = process.env.PUBLIC_ORIGIN;
@@ -188,3 +190,10 @@ export function attachSeo(r, { basePath = '' } = {}) {
 
   console.log('[seo] routes mounted: /robots.txt, /sitemap.xml, /welcome');
 }
+
+export const plugin = {
+  name: 'seo',
+  mount(router) {
+    attachSeo(router, { basePath: BASE_PATH });
+  },
+};

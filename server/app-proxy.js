@@ -19,6 +19,7 @@
 // ============================================================
 
 import http from 'node:http';
+import { BASE_PATH } from './base-path.js';
 
 /**
  * @typedef {Object} AppProxyConfig
@@ -82,6 +83,51 @@ export function attachAppProxy(app, cfg) {
 export function attachAppProxies(app, configs) {
   for (const cfg of configs) attachAppProxy(app, cfg);
 }
+
+// Danh sách app anh em của Tizia (ScoreUp/Codelab/Smartdoc/FeedBackMe) — chuyển
+// từ server/index.js sang đây nguyên vẹn (ticket 06) để plugin tự đứng một
+// mình, không cần index.js truyền configs vào qua ctx (registry chỉ cho
+// mount(app, ctx) với ctx = { surface }, không có chỗ cho tham số riêng).
+function tiziaAppProxyConfigs() {
+  return [
+    {
+      id: 'scoreup', label: 'ScoreUp', mount: `${BASE_PATH}/scoreup`,
+      target: process.env.SCOREUP_TARGET || 'http://127.0.0.1:3000',
+      publicPath: process.env.SCOREUP_PUBLIC_PATH || undefined,
+      startHint: 'cd ScoreUp && ./scripts/dev.sh up',
+    },
+    {
+      id: 'codelab', label: 'Codelab (NEU OJ)', mount: `${BASE_PATH}/codelab`,
+      target: process.env.CODELAB_TARGET || 'http://127.0.0.1:8024',
+      publicPath: process.env.CODELAB_PUBLIC_PATH || undefined,
+      startHint: 'cd Codelab && docker compose up -d',
+    },
+    {
+      id: 'smartdoc', label: 'Smartdoc', mount: `${BASE_PATH}/smartdoc`,
+      target: process.env.SMARTDOC_TARGET || 'http://127.0.0.1:8017',
+      publicPath: process.env.SMARTDOC_PUBLIC_PATH || undefined,
+      startHint: 'cd Smartdoc && docker compose up -d',
+    },
+    {
+      id: 'feedback', label: 'FeedBackMe', mount: `${BASE_PATH}/feedback`,
+      target: process.env.FEEDBACK_TARGET || 'http://127.0.0.1:3300',
+      publicPath: process.env.FEEDBACK_PUBLIC_PATH || undefined,
+      startHint: 'cd FeedBackMe && pnpm db:up && pnpm dev',
+    },
+  ].map((c) => ({ ...c, publicPath: c.publicPath || c.mount, backHref: `${BASE_PATH || ''}/apps.html` }));
+}
+
+// Plugin app-level (PHẢI mount trước express.json() — xem registry.js docstring).
+// origin: 'dev-owned' + sourceModule khớp CORE_MODULES → registry từ chối mọi
+// proposal AI tự xưng mount lại đúng module này (xem registry.test.js).
+export const plugin = {
+  name: 'app-proxy',
+  origin: 'dev-owned',
+  sourceModule: 'server/app-proxy.js',
+  mount(app) {
+    attachAppProxies(app, tiziaAppProxyConfigs());
+  },
+};
 
 /** Drop the `frame-ancestors …;` directive so the app can be framed by Tizia. */
 function stripFrameAncestors(csp) {

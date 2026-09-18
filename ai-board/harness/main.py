@@ -1,8 +1,11 @@
 """Ratchet loop: đọc snapshot inbox, đi 7 cổng, ghi kết quả vào skill_proposals.
 
-Cổng 1 (plan) + 2 (scope-check) thật từ ticket 10; 3-7 còn là stub, vào ở
-ticket 11-13. Chỉ chạy nhánh DRY_RUN=1 — không git, không GitHub, không
-Telegram ở bất kỳ đâu trong file này (Ollama thì gọi thật ở cổng 1).
+Cổng 1 (plan) + 2 (scope-check) thật từ ticket 10; cổng 3 (implement) thật từ
+ticket 11; 4-7 còn là stub, vào ở ticket 12-13. Chỉ chạy nhánh DRY_RUN=1 —
+không git thật (repo Tizia), không GitHub, không Telegram ở bất kỳ đâu trong
+file này (Ollama thì gọi thật ở cổng 1 + 3; cổng 3 có git cục bộ riêng vào 1
+repo scratch tạm, xem gates/implement.py — không phải deps.git, cái đó vẫn
+Unavailable).
 """
 from __future__ import annotations
 
@@ -18,7 +21,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from budget import Budget          # noqa: E402
-from gates import brainstorm, scope_check  # noqa: E402
+from gates import brainstorm, implement, scope_check  # noqa: E402
 from models import OllamaClient    # noqa: E402
 import prescreen                   # noqa: E402
 
@@ -94,6 +97,8 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
         return out
     if number == 2:
         return scope_check.run(state)
+    if number == 3:
+        return implement.run(state, deps, budget)
     return {"gate": number, "blocked": False, "reason": None}
 
 

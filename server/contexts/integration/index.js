@@ -174,3 +174,10 @@ export function attachIntegration(r) {
   startDispatcher();
   console.log('[integration] routes mounted: /api/integrations/{endpoints,outbox,emit}');
 }
+
+export const plugin = {
+  name: 'integration',
+  mount(router) {
+    attachIntegration(router);
+  },
+};

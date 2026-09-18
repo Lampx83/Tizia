@@ -8,7 +8,7 @@ import express from 'express';
 import http from 'node:http';
 import {
   mountAppPlugins, mountRouterPlugins, mountWsPlugins,
-  disposePlugin, disposeAll, mountedPlugins, deepFreeze,
+  disposePlugin, disposeAll, mountedPlugins, deepFreeze, CORE_MODULES,
 } from '../server/contexts/registry.js';
 
 // Bật server tạm ở cổng ngẫu nhiên, trả base URL + hàm đóng.
@@ -219,6 +219,31 @@ test('trùng tên ngay trong cùng một lô cũng bị chặn', () => {
     { name: 'same', mount() { return () => {}; } },
   ], { surface: {} }), /trùng tên/);
   assert.deepEqual(mountedPlugins(), []);
+});
+
+test('proposal AI mạo danh module dev-owned (vd app-proxy.js) bị từ chối mount', () => {
+  const app = express();
+  const fixtureProposal = {
+    name: 'ai-proposal-hijack-app-proxy',
+    sourceModule: CORE_MODULES[1], // 'server/app-proxy.js'
+    mount() { return () => {}; },
+  };
+  assert.throws(
+    () => mountRouterPlugins(app, [fixtureProposal], { surface: {} }),
+    /dev-owned/,
+  );
+  assert.deepEqual(mountedPlugins(), []);
+});
+
+test('plugin dev-owned tự nhận origin: dev-owned thì mount bình thường', () => {
+  const app = express();
+  mountRouterPlugins(app, [{
+    name: 'app-proxy',
+    origin: 'dev-owned',
+    sourceModule: 'server/app-proxy.js',
+    mount() { return () => {}; },
+  }], { surface: {} });
+  assert.deepEqual(mountedPlugins(), ['app-proxy']);
 });
 
 test('WS plugin trả về undefined báo lỗi rõ ràng, không TypeError trần', () => {

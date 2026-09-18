@@ -5,52 +5,55 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { db, insertAttempt, getLeaderboard, getStats, getRecent, getAllAttempts, getHistogram, getConfusion, getAchievements, unlockAchievement, createClass, getClassByCode, listClasses, getClassMembers, getClassAttempts, getPlayerAttempts, createRequest, listRequests, voteRequest, setRequestStatus, getRequestStats, getRequestById, addRequestMessage, listRequestMessages, reopenRequestIfClosed, listNotifications, countUnreadNotifications, markNotificationRead, markAllNotificationsRead, getUserWallet, upsertUserWallet, getScenarioRunsForUser, recordScenarioRunDb, getUserState, putUserState, UserStateValueTooLargeError } from './db.js';
+import { mountAppPlugins, mountRouterPlugins, mountWsPlugins } from './contexts/registry.js';
+import { surface } from './contexts/capabilities.js';
+import { BASE_PATH } from './base-path.js';
 import { attachRoom } from './room.js';
-import { attachAi } from './ai.js';
-import { attachPharmacy } from './pharmacy.js';
+import { plugin as aiPlugin } from './ai.js';
+import { plugin as pharmacyPlugin } from './pharmacy.js';
 import { acknowledgeNewRequest, getDecisionsForRequest, getRecentDecisions } from './contexts/ai-agent/decisions.js';
-import { attachAiBoardInbox } from './contexts/ai-agent/inbox-api.js';
-import { attachAppProxies } from './app-proxy.js';
-import { attachScoreUpWebhook } from './contexts/integration/scoreup-webhook.js';
-import { attachCodelabWebhook } from './contexts/integration/codelab-webhook.js';
+import { plugin as aiBoardInboxPlugin } from './contexts/ai-agent/inbox-api.js';
+import { plugin as appProxyPlugin } from './app-proxy.js';
+import { plugin as scoreUpWebhookPlugin } from './contexts/integration/scoreup-webhook.js';
+import { plugin as codelabWebhookPlugin } from './contexts/integration/codelab-webhook.js';
 import * as scoreup from './integrations/scoreup.js';
 import * as codelab from './integrations/codelab.js';
 import { getContestProblemSlugs, getContestName, hasContestMapping } from './integrations/codelab-contests.js';
 import { countCodelabAcceptedProblems } from './db.js';
-import { recordQuestionAttempt, getRecentQuestionAttempts, getSrsStateByPrefix, recordSrsReview, pruneScoreUpEventsSeen } from './db.js';
-import { attachAssets } from './assets.js';
-import { attachAdaptive } from './adaptive.js';
-import { attachLessons } from './lessons.js';
-import { attachUser, makeAuthGate, makeProfileGate, requireAuth, requireEnrolled, attachAuth } from './contexts/identity/auth.js';
-import { attachOAuth, listEnabledProviders } from './contexts/identity/oauth.js';
-import { attachSeo } from './contexts/seo/index.js';
+import { recordQuestionAttempt, getRecentQuestionAttempts, getSrsStateByPrefix, pruneScoreUpEventsSeen } from './db.js';
+import { plugin as assetsPlugin } from './assets.js';
+import { plugin as adaptivePlugin } from './adaptive.js';
+import { plugin as lessonsPlugin } from './lessons.js';
+import { attachUser, makeAuthGate, makeProfileGate, requireAuth, requireEnrolled, plugin as authPlugin } from './contexts/identity/auth.js';
+import { listEnabledProviders, plugin as oauthPlugin } from './contexts/identity/oauth.js';
+import { plugin as seoPlugin } from './contexts/seo/index.js';
 import { injectSeoHead, originOf as seoOriginOf } from './contexts/seo/inject.js';
-import { attachAnalytics } from './contexts/analytics/index.js';
+import { plugin as analyticsPlugin } from './contexts/analytics/index.js';
 import { sendGA4Event } from './contexts/analytics/ga4-mp.js';
-import { attachBilling } from './contexts/billing/index.js';
-import { attachIntegration } from './contexts/integration/index.js';
-import { attachAdmin, requireAdmin } from './contexts/admin/index.js';
-import { attachAdminDb } from './contexts/admin/db-admin.js';
-import { attachEngagement, trackEngagementProgress } from './contexts/engagement/index.js';
+import { plugin as billingPlugin } from './contexts/billing/index.js';
+import { plugin as integrationPlugin } from './contexts/integration/index.js';
+import { plugin as adminPlugin } from './contexts/admin/index.js';
+import { plugin as adminDbPlugin } from './contexts/admin/db-admin.js';
+import { trackEngagementProgress, plugin as engagementPlugin } from './contexts/engagement/index.js';
 import { addLeagueWeekXp } from './contexts/engagement/league.js';
-import { attachLearning, updateIrt } from './contexts/learning/index.js';
-import { attachCurriculum } from './contexts/curriculum/index.js';
-import { attachContent } from './contexts/content/index.js';
+import { updateIrt, plugin as learningPlugin } from './contexts/learning/index.js';
+import { plugin as curriculumPlugin } from './contexts/curriculum/index.js';
+import { plugin as contentPlugin } from './contexts/content/index.js';
 import { attachPresence } from './contexts/multiplayer/presence.js';
-import { attachUgc } from './contexts/ugc/index.js';
-import { attachEconomy, addBpXp } from './contexts/economy/index.js';
-import { attachParentReport } from './contexts/parent-report/index.js';
-import { attachTeacher } from './contexts/teacher/index.js';
-import { attachExperiments, getVariant, checkFlag } from './contexts/experiments/index.js';
-import { attachLiveQuizHttp, attachLiveQuizWs } from './contexts/live-quiz/index.js';
-import { attachSrs } from './contexts/srs/index.js';
-import { attachSmartNotif, scheduleSmartNudges, logActivity } from './contexts/smart-notif/index.js';
-import { attachFeatureGate } from './contexts/feature-gate/index.js';
-import { attachDashboard } from './contexts/dashboard/index.js';
-import { attachCampusLayout } from './contexts/campus/layout.js';
-import { attachPortalApps } from './contexts/portal-apps/index.js';
-import { attachSkills, grantSkillsForSpace, grantSkillsForScenario } from './skills.js';
-import { attachSecurity, securityHeaders, csrf, apiLimiter, sensitiveAuthLimiter } from './contexts/security/index.js';
+import { plugin as ugcPlugin } from './contexts/ugc/index.js';
+import { plugin as economyPlugin } from './contexts/economy/index.js';
+import { plugin as parentReportPlugin } from './contexts/parent-report/index.js';
+import { plugin as teacherPlugin } from './contexts/teacher/index.js';
+import { plugin as experimentsPlugin } from './contexts/experiments/index.js';
+import { attachLiveQuizWs, plugin as liveQuizHttpPlugin } from './contexts/live-quiz/index.js';
+import { plugin as srsPlugin } from './contexts/srs/index.js';
+import { plugin as smartNotifPlugin } from './contexts/smart-notif/index.js';
+import { plugin as featureGatePlugin } from './contexts/feature-gate/index.js';
+import { plugin as dashboardPlugin } from './contexts/dashboard/index.js';
+import { plugin as campusLayoutPlugin } from './contexts/campus/layout.js';
+import { plugin as portalAppsPlugin } from './contexts/portal-apps/index.js';
+import { grantSkillsForScenario, plugin as skillsPlugin } from './skills.js';
+import { securityHeaders, csrf, apiLimiter, sensitiveAuthLimiter, plugin as securityPlugin } from './contexts/security/index.js';
 import { log, initErrorTracking, installProcessGuards, requestContext, requestLogger, expressErrorHandler } from './observability.js';
 // Payment context — chỉ nạp khi PAYMENT_ENABLED=1 (dynamic import bên dưới) để bảng
 // payment + route KHÔNG xuất hiện ở deployment chưa bật thanh toán.
@@ -67,7 +70,8 @@ const PORT = Number(process.env.PORT) || 8041;
 const HOST = process.env.HOST || '0.0.0.0';
 // Optional path prefix when deployed behind a reverse proxy at a sub-path
 // e.g. https://tizia.vn/ps/* → set BASE_PATH=/ps so all routes work under /ps.
-const BASE_PATH = (process.env.BASE_PATH || '').replace(/\/$/, '');
+// (định nghĩa ở server/base-path.js — nhiều plugin dev-owned cũng cần giá trị
+// này mà không nhận được qua ctx của registry, xem base-path.js.)
 
 const VALID_VERSIONS = new Set([
   '2d-arcade', '3d-shelf', 'quiz', 'metaverse', 'time-attack', 'race',
@@ -276,46 +280,14 @@ app.use(makeProfileGate({ basePath: BASE_PATH }));
 // Rate-limit CHỈ /api/* (không tính static asset) + key theo user (R5) — SAU attachUser.
 app.use('/api', apiLimiter);
 
-// Integrated sibling apps — each reverse-proxied under its own sub-path so the
-// whole suite is reachable on Tizia's single origin (iframe + cookie/auth
-// friendly). Targets are configurable per deployment via *_TARGET env vars;
-// *_PUBLIC_PATH only when the upstream was built with a basePath != its mount.
-// Apps that aren't running degrade to a graceful "chưa chạy" page. Surfaced to
-// users via public/apps.html. MUST stay before express.json (stream POST bodies).
-attachAppProxies(app, [
-  {
-    id: 'scoreup', label: 'ScoreUp', mount: `${BASE_PATH}/scoreup`,
-    target: process.env.SCOREUP_TARGET || 'http://127.0.0.1:3000',
-    publicPath: process.env.SCOREUP_PUBLIC_PATH || undefined,
-    startHint: 'cd ScoreUp && ./scripts/dev.sh up',
-  },
-  {
-    id: 'codelab', label: 'Codelab (NEU OJ)', mount: `${BASE_PATH}/codelab`,
-    target: process.env.CODELAB_TARGET || 'http://127.0.0.1:8024',
-    publicPath: process.env.CODELAB_PUBLIC_PATH || undefined,
-    startHint: 'cd Codelab && docker compose up -d',
-  },
-  {
-    id: 'smartdoc', label: 'Smartdoc', mount: `${BASE_PATH}/smartdoc`,
-    target: process.env.SMARTDOC_TARGET || 'http://127.0.0.1:8017',
-    publicPath: process.env.SMARTDOC_PUBLIC_PATH || undefined,
-    startHint: 'cd Smartdoc && docker compose up -d',
-  },
-  {
-    id: 'feedback', label: 'FeedBackMe', mount: `${BASE_PATH}/feedback`,
-    target: process.env.FEEDBACK_TARGET || 'http://127.0.0.1:3300',
-    publicPath: process.env.FEEDBACK_PUBLIC_PATH || undefined,
-    startHint: 'cd FeedBackMe && pnpm db:up && pnpm dev',
-  },
-].map((c) => ({ ...c, publicPath: c.publicPath || c.mount, backHref: `${BASE_PATH || ''}/apps.html` })));
-
-// ScoreUp webhook receiver — POST /api/webhooks/scoreup với express.raw()
-// (cần raw bytes để verify HMAC). MUST nằm trước express.json. Auth gate đã
-// whitelist '/api/webhooks/' để webhook ScoreUp không có session vẫn qua được.
-attachScoreUpWebhook(app);
-// Codelab webhook receiver — POST /api/webhooks/codelab. Cùng yêu cầu raw bytes
-// + cùng whitelist '/api/webhooks/'. Fire khi Judge0 chấm xong submission Tizia.
-attachCodelabWebhook(app);
+// App-level plugin (registry.js): mount TRƯỚC express.json() — proxy/webhook
+// cần raw body stream nguyên vẹn.
+//   - app-proxy: sibling apps (ScoreUp/Codelab/Smartdoc/FeedBackMe) reverse-proxy
+//     dưới sub-path riêng, cùng origin (iframe + cookie/auth friendly). App chưa
+//     chạy degrade về trang "chưa chạy" (public/apps.html).
+//   - scoreup-webhook / codelab-webhook: nhận webhook (HMAC verify cần raw bytes).
+//     Auth gate đã whitelist '/api/webhooks/' để webhook không có session vẫn qua.
+mountAppPlugins(app, [appProxyPlugin, scoreUpWebhookPlugin, codelabWebhookPlugin], { surface });
 
 app.use(express.json({ limit: '64kb' }));
 // CSRF double-submit (R4) — sau express.json (cần req.body cho fallback _csrf).
@@ -341,57 +313,26 @@ r.get('/api/health', (_req, res) => {
   });
 });
 
-// SEO public (robots.txt, sitemap.xml, /welcome) — crawlable, ngoài auth gate.
-attachSeo(r, { basePath: BASE_PATH });
-
-// Đăng ký / đăng nhập / logout / me
-attachAuth(r);
-// SSO/OAuth providers (Google/Microsoft/GitHub). Chỉ bật những provider có env CLIENT_ID/SECRET.
-attachOAuth(r, { basePath: BASE_PATH });
-// Analytics (#6 pipeline + #5 funnel), Billing (#5 gói/entitlement), Integration (#3 outbox).
-attachAnalytics(r);
-attachBilling(r);
-attachIntegration(r);
-// Security token endpoint (/api/csrf) + Admin xuyên tenant (role=admin).
-attachSecurity(r);
-attachAdmin(r);
-attachAdminDb(r);
-// Hộp thư Ban điều hành AI (đọc-chỉ, auth bằng header x-ai-board-key). Chỉ được
-// mount khi env AI_BOARD_KEY đủ mạnh — không set thì không có route nào thêm.
-attachAiBoardInbox(r);
-attachCampusLayout(r, requireAdmin);
-// Portal Apps — Developer cài SPA theo chuẩn AI Portal (manifest + zip).
-attachPortalApps(r, { requireAuth, requireAdmin });
-attachSkills(r, { requireAuth, requireEnrolled });
-// Engagement loop — Streak / Hearts / Daily Quests (Trục A — Duolingo/Prodigy)
-attachEngagement(r);
-// Learning depth — Knowledge graph + Adaptive next-question (Trục B — Khanmigo/Squirrel)
-attachLearning(r);
-// Curriculum — content học (quiz + lý thuyết) lưu DB, sửa nóng + admin CRUD
-attachCurriculum(r);
-// Content store tổng quát — data heterogeneous (ca lâm sàng, nhân vật LS, thuốc…)
-attachContent(r);
-// UGC marketplace — Quest Builder + Play + Like/Flag (Trục C — Roblox Edu)
-attachUgc(r);
-// Economy — Battle Pass + Skin Shop + Daily Login Bonus
-attachEconomy(r);
-// Parent Weekly Report
-attachParentReport(r);
-// Teacher — Team Quest + Class Leaderboard
-attachTeacher(r);
-// Experiments + Feature Flags + Event Registry
-attachExperiments(r);
-// Live Quiz HTTP routes (WebSocket /ws-live attached later khi có httpServer)
-attachLiveQuizHttp(r);
-// SRS Flashcards — review queue + decks
-attachSrs(r);
-// Smart Notifications — activity log + best-time-to-nudge analytics + web push
-attachSmartNotif(r);
-scheduleSmartNudges();
-// Feature Gate — Progressive Disclosure (Duolingo-style)
-attachFeatureGate(r);
-// Dashboard — single source of truth (personal + engagement + league + recs)
-attachDashboard(r);
+// Mọi context "thường" (không phải WS, không phải app-level pre-json) mount ở
+// ĐÂY, qua registry.js, theo ĐÚNG thứ tự cũ (route order match hành vi hiện
+// tại — đã audit toàn bộ path context vs inline route phía dưới, không còn va
+// chạm nào; PATH /api/srs/review từng trùng với 1 handler chết phía dưới, đã
+// xoá handler chết đó thay vì chỉ giữ thứ tự mount, xem code-review round).
+// Payment CHỈ nạp khi PAYMENT_ENABLED=1 (dynamic import) để bảng payment +
+// route không tồn tại ở deployment chưa bật thanh toán.
+const paymentPlugin = PAYMENT_ENABLED
+  ? (await import('./contexts/payment/index.js')).plugin
+  : null;
+mountRouterPlugins(r, [
+  seoPlugin, authPlugin, oauthPlugin, analyticsPlugin, billingPlugin, integrationPlugin,
+  securityPlugin, adminPlugin, adminDbPlugin, aiBoardInboxPlugin, campusLayoutPlugin,
+  portalAppsPlugin, skillsPlugin, engagementPlugin, learningPlugin, curriculumPlugin,
+  contentPlugin, ugcPlugin, economyPlugin, parentReportPlugin, teacherPlugin,
+  experimentsPlugin, liveQuizHttpPlugin, srsPlugin, smartNotifPlugin, featureGatePlugin,
+  dashboardPlugin, aiPlugin, pharmacyPlugin,
+  ...(paymentPlugin ? [paymentPlugin] : []),
+  assetsPlugin, adaptivePlugin, lessonsPlugin,
+], { surface });
 
 
 r.post('/api/attempts', requireAuth, requireEnrolled, (req, res) => {
@@ -987,22 +928,6 @@ r.get('/api/srs/state', requireAuth, (req, res) => {
   }
 });
 
-r.post('/api/srs/review', requireAuth, requireEnrolled, (req, res) => {
-  const cardKey = String(req.body?.card_key || '').slice(0, 128);
-  const correct = !!req.body?.correct;
-  if (!cardKey) return res.status(400).json({ error: 'card_key_required' });
-  try {
-    const card = recordSrsReview({
-      user_id: req.user.id,
-      card_key: cardKey, correct,
-    });
-    res.json(card);
-  } catch (e) {
-    console.warn('[srs/review]', e?.message);
-    res.status(500).json({ error: 'db_error' });
-  }
-});
-
 // Trục 3: ?role=pupil|student|teacher → trả về badge phù hợp audience + 'all'.
 // Không truyền role → trả tất cả (legacy + admin dashboard).
 r.get('/api/badges', (req, res) => {
@@ -1011,40 +936,8 @@ r.get('/api/badges', (req, res) => {
   res.json(BADGES.filter(b => badgeApplies(b, role)));
 });
 
-// ============================================================
-// AI TUTOR — Claude API endpoints (grade-soap, patient-turn, evaluate-roleplay, tutor-chat)
-// ============================================================
-attachAi(r);
-
-// ============================================================
-// PHARMACY-AI — port từ github.com/Lampx83/Pharmacy-AI (nhà thuốc 3D GPP).
-// Session + chat + action + SEGUE scoring + fatal-error detection.
-// ============================================================
-attachPharmacy(r);
-
-// ============================================================
-// PAYMENT (Phase 1) — chỉ bật khi PAYMENT_ENABLED=1. Dynamic import để bảng
-// payment + routes không tồn tại ở deployment chưa cần thanh toán.
-// ============================================================
-if (PAYMENT_ENABLED) {
-  const { attachPayment } = await import('./contexts/payment/index.js');
-  attachPayment(r, { basePath: BASE_PATH });
-}
-
-// ============================================================
-// ASSET LIBRARY (GAP 4) — quét tự động 3D model, trả JSON catalogue
-// ============================================================
-attachAssets(r, PUBLIC_DIR);
-
-// ============================================================
-// ADAPTIVE QUIZ (GAP 11) — BKT-lite (local)
-// ============================================================
-attachAdaptive(r);
-
-// ============================================================
-// LESSON BUILDER + MARKETPLACE (GAP 3 + 5)
-// ============================================================
-attachLessons(r);
+// AI Tutor, Pharmacy-AI, Payment (nếu bật), Asset Library, Adaptive Quiz, Lesson
+// Builder — đã mount ở khối registry.mountRouterPlugins phía trên (đúng thứ tự cũ).
 
 // ============================================================
 // CLASS MANAGEMENT
@@ -1533,9 +1426,16 @@ if (BASE_PATH) {
 app.use(expressErrorHandler);
 
 const httpServer = http.createServer(app);
-attachRoom(httpServer, BASE_PATH);
-attachPresence(httpServer);  // /ws-presence — multiplayer campus avatars
-attachLiveQuizWs(httpServer, BASE_PATH);  // /ws-live
+// 3 endpoint WS qua registry.js — wsPriority PHẢI khớp hành vi .on()/.prependListener()
+// hiện tại (room dùng .on() = 'append', presence/live-quiz dùng .prependListener()
+// = 'prepend'); mount THEO ĐÚNG THỨ TỰ room → presence → live-quiz để danh sách
+// listener 'upgrade' cuối cùng giống hệt trước refactor (xem ghi chú wsPriority
+// ngay tại attachRoom/attachPresence/attachLiveQuizWs).
+mountWsPlugins(httpServer, [
+  { name: 'ws-room', wsPriority: 'append', mount: () => attachRoom(httpServer, BASE_PATH) },
+  { name: 'ws-presence', wsPriority: 'prepend', mount: () => attachPresence() },  // /ws-presence — multiplayer campus avatars
+  { name: 'ws-live-quiz', wsPriority: 'prepend', mount: () => attachLiveQuizWs(BASE_PATH) },  // /ws-live
+], { surface });
 // Prune scoreup_webhook_events_seen mỗi 6h, giữ 7 ngày. Bảng nhỏ nhưng dedup
 // theo event_id sẽ tích luỹ nếu ScoreUp gửi vài nghìn event/ngày — cleanup để
 // tránh phình index. Không cần block startup.

@@ -115,3 +115,10 @@ export function attachContent(router) {
   const total = listCollsStmt.all().reduce((s, r) => s + r.c, 0);
   console.log(`[content] routes mounted: /api/content/* (${total} item trong DB)`);
 }
+
+export const plugin = {
+  name: 'content',
+  mount(router) {
+    attachContent(router);
+  },
+};

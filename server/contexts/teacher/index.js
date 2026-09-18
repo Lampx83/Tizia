@@ -171,3 +171,10 @@ export function attachTeacher(router) {
     res.json({ class: cls, leaderboard: memberRows });
   });
 }
+
+export const plugin = {
+  name: 'teacher',
+  mount(router) {
+    attachTeacher(router);
+  },
+};

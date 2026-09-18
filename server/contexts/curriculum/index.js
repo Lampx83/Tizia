@@ -205,3 +205,10 @@ export function attachCurriculum(router) {
 
   console.log(`[curriculum] routes mounted: /api/curriculum/* (đang có ${curriculumCount()} content trong DB)`);
 }
+
+export const plugin = {
+  name: 'curriculum',
+  mount(router) {
+    attachCurriculum(router);
+  },
+};

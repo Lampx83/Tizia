@@ -68,6 +68,13 @@ export function attachAi(r) {
   r.get( '/api/ai/health',            wrap(handleHealth));
 }
 
+export const plugin = {
+  name: 'ai-tutor',
+  mount(router) {
+    attachAi(router);
+  },
+};
+
 // wrap: cho health probe — không quota, không log usage.
 function wrap(handler) {
   return async (req, res) => {

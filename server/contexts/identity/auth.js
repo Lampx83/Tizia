@@ -656,3 +656,10 @@ export function makeProfileGate({ basePath = '' } = {}) {
     return res.redirect(`${basePath || ''}/complete-profile.html`);
   };
 }
+
+export const plugin = {
+  name: 'auth',
+  mount(router) {
+    attachAuth(router);
+  },
+};

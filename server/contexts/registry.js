@@ -19,8 +19,37 @@
  */
 import express from 'express';
 
+// Module dev-owned — plugin nào tự nhận diện qua `sourceModule` trùng list này
+// PHẢI khai `origin: 'dev-owned'` mới được mount. AI-generated proposal không
+// bao giờ tự khai 'dev-owned' (cổng 4/ticket 12 chặn ở bước lint import), nên
+// đây là lớp phòng vệ runtime thứ hai: registry từ chối mount thẳng, kể cả nếu
+// lint bị bỏ qua. capabilities.js re-export list này làm CORE_MODULES.
+export const CORE_MODULES = Object.freeze([
+  'server/db.js',
+  'server/app-proxy.js',
+  'server/contexts/registry.js',
+  'server/contexts/admin/index.js',
+  'server/contexts/security/index.js',
+  'server/contexts/payment/index.js',
+  'server/integrations/scoreup.js',
+  'server/integrations/codelab.js',
+  'server/integrations/codelab-contests.js',
+  'server/contexts/portal-apps/index.js',
+]);
+
 // name → dispose. Gỡ một skill = gọi một hàm.
 const mounted = new Map();
+
+// Plugin khai `sourceModule` trùng CORE_MODULES mà không tự nhận `origin:
+// 'dev-owned'` bị từ chối NGAY LÚC MOUNT — không cần đợi request đầu tiên.
+function assertOriginAllowed(p) {
+  if (p.sourceModule && CORE_MODULES.includes(p.sourceModule) && p.origin !== 'dev-owned') {
+    throw new Error(
+      `[registry] plugin '${p.name}' khai sourceModule dev-owned (${p.sourceModule}) `
+      + `nhưng origin không phải 'dev-owned' — từ chối mount`,
+    );
+  }
+}
 
 // Object.freeze chỉ khoá một tầng. Surface chứa object thật dùng chung với phần
 // còn lại của server (vd FEATURES mà feature-gate đọc lại mỗi request), nên
@@ -49,6 +78,7 @@ function assertNamesFree(plugins) {
     if (mounted.has(p.name) || seen.has(p.name)) {
       throw new Error(`[registry] plugin trùng tên: ${p.name}`);
     }
+    assertOriginAllowed(p);
     seen.add(p.name);
   }
 }
@@ -60,10 +90,13 @@ function assertNamesFree(plugins) {
 // nếu về sau mount/dispose chạy hàng nghìn lần thì mới cần gỡ hẳn khỏi stack.
 function mountHttp(target, plugins, ctx) {
   assertNamesFree(plugins);
+  // pluginCtx() làm 1 lượt deepFreeze — `ctx` giống hệt nhau cho cả lô, tính
+  // 1 lần thay vì 1 lần/plugin (mountRouterPlugins gọi 1 lần với ~30 plugin).
+  const frozenCtx = pluginCtx(ctx);
   for (const p of plugins) {
     let inner = express.Router();
     target.use((req, res, next) => (inner ? inner(req, res, next) : next()));
-    const disposePlugin = p.mount(inner, pluginCtx(ctx));
+    const disposePlugin = p.mount(inner, frozenCtx);
     mounted.set(p.name, () => {
       inner = null;
       disposePlugin?.();
@@ -82,11 +115,12 @@ export function mountRouterPlugins(router, plugins, ctx) {
 
 export function mountWsPlugins(httpServer, plugins, ctx) {
   assertNamesFree(plugins);
+  const frozenCtx = pluginCtx(ctx);
   for (const p of plugins) {
     if (p.wsPriority !== 'prepend' && p.wsPriority !== 'append') {
       throw new Error(`[registry] plugin WS ${p.name} phải khai báo wsPriority: 'prepend' | 'append'`);
     }
-    const handle = p.mount(pluginCtx(ctx));
+    const handle = p.mount(frozenCtx);
     if (typeof handle?.onUpgrade !== 'function') {
       throw new Error(`[registry] plugin WS ${p.name} phải trả { onUpgrade }`);
     }

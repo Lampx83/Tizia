@@ -69,15 +69,14 @@ function roomSnapshot(roomId) {
   }));
 }
 
-export function attachPresence(server) {
+// wsPriority 'prepend': registry.mountWsPlugins phải gọi httpServer.prependListener
+// cho onUpgrade trả về ở đây — GIỮ NGUYÊN thứ tự chạy TRƯỚC handler của room.js
+// (cái cuối có else socket.destroy()) như hành vi hiện tại.
+export function attachPresence() {
   const wss = new WebSocketServer({ noServer: true, path: '/ws-presence' });
   wss.on('error', (err) => log.error('[ws:presence] server error', { err }));
 
-  // prependListener để chạy TRƯỚC handler của room.js (cái cuối có else
-  // socket.destroy()). Khi path khớp /ws-presence, ta xử lý + stop other handlers
-  // bằng cách remove path khỏi req tạm thời? Đơn giản: handle ngay, các handler
-  // sau nhận socket đã upgrade.
-  server.prependListener('upgrade', (req, socket, head) => {
+  const onUpgrade = (req, socket, head) => {
     const path = (req.url || '').split('?')[0];
     if (path === '/ws-presence') {
       socket.on('error', (err) => log.warn('[ws:presence] upgrade socket error', { err }));
@@ -85,7 +84,7 @@ export function attachPresence(server) {
       // Stop propagation: ngăn handler khác chạm vào socket đã upgrade
       req._wsHandled = true;
     }
-  });
+  };
 
   wss.on('connection', (ws, req) => {
     const auth = authConn(req);
@@ -190,4 +189,5 @@ export function attachPresence(server) {
   }, HEARTBEAT_MS);
 
   console.log('[presence] WebSocket server attached at /ws-presence');
+  return { onUpgrade };
 }

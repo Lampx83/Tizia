@@ -194,3 +194,10 @@ export function attachBilling(r) {
 
   console.log('[billing] routes mounted: /api/billing/{plans,me,subscribe} + /api/family/*');
 }
+
+export const plugin = {
+  name: 'billing',
+  mount(router) {
+    attachBilling(router);
+  },
+};
