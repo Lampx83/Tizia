@@ -21,7 +21,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from budget import Budget          # noqa: E402
-from gates import brainstorm, implement, scope_check  # noqa: E402
+from gates import brainstorm, implement, scope_check, static_check  # noqa: E402
 from models import OllamaClient    # noqa: E402
 import prescreen                   # noqa: E402
 
@@ -102,6 +102,8 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
         return scope_check.run(state)
     if number == 3:
         return implement.run(state, deps, budget, db_path=db_path, proposal_id=proposal_id)
+    if number == 4:
+        return static_check.run(state)
     return {"gate": number, "blocked": False, "reason": None}
 
 
