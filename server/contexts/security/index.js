@@ -133,6 +133,11 @@ export const plugin = {
   name: 'security',
   origin: 'dev-owned',
   sourceModule: 'server/contexts/security/index.js',
+  catalog: {
+    kind: 'context', tier: 'dev-owned',
+    provides: ['csrf', 'rateLimit', 'apiLimiter', 'sensitiveAuthLimiter', 'securityHeaders'],
+    description: 'CSRF/rate-limit/security headers — thuộc `core`, không mount lại hay bypass.',
+  },
   mount(router) {
     attachSecurity(router);
   },

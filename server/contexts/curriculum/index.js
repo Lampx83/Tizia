@@ -208,6 +208,11 @@ export function attachCurriculum(router) {
 
 export const plugin = {
   name: 'curriculum',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['/api/curriculum/*'],
+    description: 'Kịch bản tuần (quiz + lý thuyết) theo domain/khối lớp.',
+  },
   mount(router) {
     attachCurriculum(router);
   },

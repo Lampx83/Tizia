@@ -376,6 +376,11 @@ export function attachEngagement(app) {
 
 export const plugin = {
   name: 'engagement',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['/api/league/*', '/api/pet/*', '/api/parent/dashboard'],
+    description: 'Giữ chân người học: league xếp hạng, pet ảo, dashboard phụ huynh.',
+  },
   mount(router) {
     attachEngagement(router);
   },

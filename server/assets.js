@@ -150,6 +150,11 @@ export function attachAssets(r, publicDir) {
 
 export const plugin = {
   name: 'assets',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['upload/serve asset tĩnh'],
+    description: 'Upload + phục vụ file tĩnh (ảnh, audio…) ngoài public/.',
+  },
   mount(router) {
     attachAssets(router, PUBLIC_DIR);
   },

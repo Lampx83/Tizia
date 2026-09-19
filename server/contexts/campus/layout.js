@@ -157,6 +157,11 @@ export function attachCampusLayout(r, requireAdmin) {
 
 export const plugin = {
   name: 'campus-layout',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['campus map layout (admin sửa, client đọc)'],
+    description: 'Bố cục bản đồ campus (metaverse selector).',
+  },
   mount(router) {
     attachCampusLayout(router, requireAdmin);
   },

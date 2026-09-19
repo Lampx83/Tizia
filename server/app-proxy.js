@@ -124,6 +124,11 @@ export const plugin = {
   name: 'app-proxy',
   origin: 'dev-owned',
   sourceModule: 'server/app-proxy.js',
+  catalog: {
+    kind: 'context', tier: 'dev-owned',
+    provides: ['reverse-proxy sibling apps (ScoreUp/Codelab/Smartdoc/FeedBackMe)'],
+    description: 'Proxy nguyên app anh em dưới sub-path cùng origin. Mount app-level trước express.json().',
+  },
   mount(app) {
     attachAppProxies(app, tiziaAppProxyConfigs());
   },

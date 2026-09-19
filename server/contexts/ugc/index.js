@@ -320,6 +320,11 @@ export function attachUgc(router) {
 
 export const plugin = {
   name: 'ugc',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['/api/ugc/{mine,quests,me/stats}'],
+    description: 'Nội dung do người dùng tạo (UGC) + quest liên quan.',
+  },
   mount(router) {
     attachUgc(router);
   },

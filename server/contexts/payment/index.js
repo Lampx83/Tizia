@@ -216,6 +216,11 @@ export const plugin = {
   name: 'payment',
   origin: 'dev-owned',
   sourceModule: 'server/contexts/payment/index.js',
+  catalog: {
+    kind: 'context', tier: 'dev-owned',
+    provides: ['/api/payment/* (vnpay + refund + reconcile)'],
+    description: 'Cổng thanh toán VNPay thật. Chỉ nạp khi PAYMENT_ENABLED=1, tuyệt đối không mount lại/gọi trực tiếp.',
+  },
   mount(router) {
     attachPayment(router, { basePath: BASE_PATH });
   },

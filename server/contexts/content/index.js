@@ -118,6 +118,11 @@ export function attachContent(router) {
 
 export const plugin = {
   name: 'content',
+  catalog: {
+    kind: 'context', tier: 'surface',
+    provides: ['content.getCollection', 'content.collectionCount', '/api/content/*'],
+    description: 'Content store tổng quát (collection, item_key) → body JSON. getCollection/collectionCount đã có trong surface.',
+  },
   mount(router) {
     attachContent(router);
   },

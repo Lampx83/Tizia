@@ -268,6 +268,11 @@ export function attachDashboard(router) {
 
 export const plugin = {
   name: 'dashboard',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['/api/dashboard/me'],
+    description: 'Tổng hợp dashboard học sinh (tiến độ, streak, gợi ý) từ nhiều context khác.',
+  },
   mount(router) {
     attachDashboard(router);
   },

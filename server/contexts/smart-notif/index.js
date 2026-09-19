@@ -205,6 +205,11 @@ export function scheduleSmartNudges() {
 
 export const plugin = {
   name: 'smart-notif',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['/api/notif/{subscribe,heartbeat,best-slots,test}'],
+    description: 'Push notification: đăng ký, khung giờ tốt nhất, nhắc nhở định kỳ.',
+  },
   mount(router) {
     attachSmartNotif(router);
     scheduleSmartNudges();

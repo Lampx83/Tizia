@@ -329,6 +329,11 @@ export const plugin = {
   name: 'portal-apps',
   origin: 'dev-owned',
   sourceModule: 'server/contexts/portal-apps/index.js',
+  catalog: {
+    kind: 'context', tier: 'dev-owned',
+    provides: ['builtin app catalog (ScoreUp/Codelab/Smartdoc/FeedBackMe visibility)'],
+    description: 'Danh mục + bật/tắt các app nhúng dưới sub-path (xem app-proxy.js). Không sửa trực tiếp.',
+  },
   mount(router) {
     attachPortalApps(router, { requireAuth, requireAdmin });
   },

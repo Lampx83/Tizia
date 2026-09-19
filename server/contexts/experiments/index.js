@@ -232,6 +232,11 @@ export function attachExperiments(router) {
 
 export const plugin = {
   name: 'experiments',
+  catalog: {
+    kind: 'context', tier: 'surface',
+    provides: ['experiments.checkFlag', 'experiments.getVariant', '/api/admin/{flags,experiments,events/registry}'],
+    description: 'Feature flag + A/B variant. checkFlag/getVariant đã có trong surface — đừng tự viết flag riêng.',
+  },
   mount(router) {
     attachExperiments(router);
   },
