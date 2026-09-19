@@ -172,6 +172,56 @@ def test_run_spends_budget_once_per_subtask(tmp_path):
     assert budget.model_calls == len(plan["subtasks"])
 
 
+# ── code-review round: model không được ghi ra NGOÀI scratch repo ──────────
+
+def test_absolute_path_from_model_is_rejected_not_written(tmp_path):
+    codegen = {"code": "evil", "test_file": "/etc/passwd", "test": "y"}
+    models = FakeModels(plan_with(["features"]), codegen=codegen)
+    deps = deps_with(models)
+    plan = plan_with(["features"])
+
+    out = implement.run({"plan": plan}, deps, Budget(max_wall_clock_s=999), repo_dir=tmp_path)
+
+    assert out["blocked"] is True
+    assert "thoát" in out["reason"] or "tuyệt đối" in out["reason"]
+    assert not (Path("/etc/passwd_TIZIA_TEST_SHOULD_NOT_EXIST")).exists()  # sanity: no real write attempted
+
+
+def test_windows_absolute_path_from_model_is_rejected(tmp_path):
+    codegen = {"code": "x", "test_file": "C:/Windows/Temp/evil.js", "test": "y"}
+    models = FakeModels(plan_with(["features"]), codegen=codegen)
+    deps = deps_with(models)
+
+    out = implement.run({"plan": plan_with(["features"])}, deps, Budget(max_wall_clock_s=999), repo_dir=tmp_path)
+
+    assert out["blocked"] is True
+    assert "tuyệt đối" in out["reason"]
+
+
+def test_path_traversal_via_dotdot_is_rejected(tmp_path):
+    codegen = {"code": "x", "test_file": "../../../outside.js", "test": "y"}
+    models = FakeModels(plan_with(["features"]), codegen=codegen)
+    deps = deps_with(models)
+
+    out = implement.run({"plan": plan_with(["features"])}, deps, Budget(max_wall_clock_s=999), repo_dir=tmp_path)
+
+    assert out["blocked"] is True
+    assert "thoát khỏi scratch repo" in out["reason"]
+    assert not (tmp_path.parent.parent / "outside.js").exists()
+
+
+def test_normal_relative_paths_still_work_after_traversal_guard(tmp_path):
+    """Guard mới không được chặn nhầm case bình thường."""
+    codegen = {"code": "x", "test_file": "test/nested/deep.test.js", "test": "y"}
+    models = FakeModels(plan_with(["features"]), codegen=codegen)
+    deps = deps_with(models)
+
+    out = implement.run({"plan": plan_with(["features"])}, deps, Budget(max_wall_clock_s=999), repo_dir=tmp_path)
+
+    assert out["blocked"] is False
+    assert (tmp_path / "test/nested/deep.test.js").exists()
+
+
 def test_ensure_scratch_repo_never_reuses_real_tizia_repo(tmp_path):
     """repo_dir=None → tempfile.mkdtemp(), KHÔNG bao giờ trỏ vào ROOT của Tizia
     (ticket 04: deps.git vẫn Unavailable, git thật không được chạm)."""

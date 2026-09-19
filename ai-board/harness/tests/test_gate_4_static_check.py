@@ -124,3 +124,104 @@ def test_diff_within_estimate_and_in_plan_passes_clean():
 def test_missing_plan_or_diffs_blocks():
     assert static_check.run({})["blocked"] is True
     assert static_check.run({"plan": _plan([])})["blocked"] is True
+
+
+# ── code-review round: dynamic import cũng bị chặn (không chỉ static import) ─
+
+def test_dynamic_import_of_db_js_fails_gate_4(tmp_path):
+    plan = _plan([{"title": "t", "file": "server/contexts/_ai-generated/x/index.js", "verify": "v", "size": "small"}])
+    _write(tmp_path, "server/contexts/_ai-generated/x/index.js",
+           "export const plugin = { async mount(r, ctx) { const { db } = await import('../../db.js'); db.prepare('x'); } };\n")
+    diffs = [{"title": "t", "file": "server/contexts/_ai-generated/x/index.js", "diff": "+x\n"}]
+
+    out = static_check.run({"plan": plan, "diffs": diffs, "scratch_repo": str(tmp_path)})
+
+    assert out["blocked"] is True
+    assert "db.js" in out["reason"]
+
+
+# ── code-review round: file NGOÀI plan vẫn phải qua lint/node-check thật ────
+
+def test_file_outside_plan_still_gets_import_lint_not_just_flagged(tmp_path):
+    """Trước fix: file ngoài plan chỉ bị needs_careful_review, KHÔNG bao giờ
+    chạm lint_imports/node_check — đúng lúc là file đáng ngờ nhất thì lại
+    được miễn kiểm tra cứng."""
+    plan = _plan([{"title": "t", "file": "server/contexts/_ai-generated/x/index.js", "verify": "v", "size": "small"}])
+    rogue = "server/db.js"  # KHÔNG có trong plan
+    _write(tmp_path, rogue, "export const evil = true; import { db } from './db.js';\n")
+    diffs = [{"title": "t", "file": rogue, "diff": "+x\n"}]
+
+    out = static_check.run({"plan": plan, "diffs": diffs, "scratch_repo": str(tmp_path)})
+
+    assert out["blocked"] is True  # db.js tự import chính nó -> vẫn bắt được
+    assert "db.js" in out["reason"]
+
+
+def test_file_outside_plan_with_clean_code_only_flags_not_blocks(tmp_path):
+    plan = _plan([{"title": "t", "file": "server/contexts/_ai-generated/x/index.js", "verify": "v", "size": "small"}])
+    rogue = "server/contexts/_ai-generated/x/helper.js"
+    _write(tmp_path, rogue, "export const clean = 1;\n")
+    diffs = [{"title": "t", "file": rogue, "diff": "+x\n"}]
+
+    out = static_check.run({"plan": plan, "diffs": diffs, "scratch_repo": str(tmp_path)})
+
+    assert out["blocked"] is False
+    assert out["needs_careful_review"] is True
+    assert any("không có trong plan" in i for i in out["issues"])
+
+
+# ── code-review round: size đo ĐÚNG file implementation, không tính lẫn test ─
+
+def test_oversize_only_counts_the_implementation_files_own_diff_section():
+    plan = _plan([{"title": "t", "file": "a.js", "verify": "v", "size": "small"}])  # ước lượng 30, limit=60
+    # diff gộp 2 file (a.js NHỎ + a.test.js LỚN) giống thật _write_and_diff sinh ra.
+    diff = (
+        "diff --git a/a.js b/a.js\n"
+        "new file mode 100644\n"
+        "--- /dev/null\n"
+        "+++ b/a.js\n"
+        + "\n".join(f"+impl line {i}" for i in range(10)) + "\n"
+        "diff --git a/a.test.js b/a.test.js\n"
+        "new file mode 100644\n"
+        "--- /dev/null\n"
+        "+++ b/a.test.js\n"
+        + "\n".join(f"+test line {i}" for i in range(80)) + "\n"
+    )
+    diffs = [{"title": "t", "file": "a.js", "diff": diff}]
+
+    out = static_check.run({"plan": plan, "diffs": diffs})
+
+    # 10 dòng impl < limit 60 -> KHÔNG flag, dù tổng cả diff (90 dòng) vượt xa.
+    assert out["needs_careful_review"] is False
+    assert out["issues"] == []
+
+
+def test_oversize_still_flags_when_the_implementation_file_itself_is_big():
+    plan = _plan([{"title": "t", "file": "a.js", "verify": "v", "size": "small"}])  # limit=60
+    diff = (
+        "diff --git a/a.js b/a.js\n"
+        "+++ b/a.js\n"
+        + "\n".join(f"+impl line {i}" for i in range(95)) + "\n"
+        "diff --git a/a.test.js b/a.test.js\n"
+        "+++ b/a.test.js\n"
+        "+one test line\n"
+    )
+    diffs = [{"title": "t", "file": "a.js", "diff": diff}]
+
+    out = static_check.run({"plan": plan, "diffs": diffs})
+
+    assert out["needs_careful_review"] is True
+    assert any("vượt" in i for i in out["issues"])
+
+
+# ── code-review round: backslash path (Windows-style) vẫn bị chuẩn hoá ──────
+
+def test_backslash_path_is_normalized_before_import_lint(tmp_path):
+    plan = _plan([{"title": "t", "file": "server/contexts/_ai-generated/x/index.js", "verify": "v", "size": "small"}])
+    _write(tmp_path, "server/contexts/_ai-generated/x/index.js", "import { db } from '../../db.js';\n")
+    diffs = [{"title": "t", "file": r"server\contexts\_ai-generated\x\index.js", "diff": "+x\n"}]
+
+    out = static_check.run({"plan": plan, "diffs": diffs, "scratch_repo": str(tmp_path)})
+
+    assert out["blocked"] is True
+    assert "db.js" in out["reason"]

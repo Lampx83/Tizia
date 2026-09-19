@@ -90,6 +90,27 @@ def test_gate_sequence_includes_plan_validate_2_5_and_risk_triage_5_5():
     assert main.GATES == (1, 2, 2.5, 3, 4, 5, 5.5, 6, 7)
 
 
+def test_gate_exception_still_finalizes_the_skill_proposals_row(inbox_file, db_file, fake_deps, monkeypatch):
+    """code-review round: trước fix, create_proposal() ghi khung ngay đầu
+    run_once() nhưng KHÔNG có finally — 1 cổng raise giữa chừng để lại dòng
+    gate_reached=0/outcome=NULL vĩnh viễn, không ai cập nhật. Giờ phải luôn
+    ghi lại trạng thái cuối (outcome bắt đầu bằng 'error_gate_'), và exception
+    vẫn phải bay lên (không nuốt lỗi)."""
+    (item,) = load_inbox(inbox_file)
+
+    def _boom(*a, **kw):
+        raise RuntimeError("gia lap loi Ollama")
+    monkeypatch.setattr(main.brainstorm, "run", _boom)
+
+    with pytest.raises(RuntimeError, match="gia lap loi Ollama"):
+        run_once(item, db_path=db_file, deps=fake_deps)
+
+    (row,) = rows(db_file)
+    assert row["outcome"].startswith("error_gate_")
+    assert "gia lap loi Ollama" in row["outcome"]
+    assert row["gate_reached"] == 0.0  # raise xảy ra TRONG cổng 1, chưa cổng nào xong
+
+
 def test_cli_refuses_to_run_without_dry_run(monkeypatch, inbox_file, db_file, tmp_path, capsys):
     monkeypatch.delenv("DRY_RUN", raising=False)
     monkeypatch.setenv("TIZIA_INBOX_PATH", str(inbox_file))

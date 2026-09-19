@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import subprocess
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import codegraph
 import gate_trace
@@ -96,11 +96,30 @@ def _ensure_scratch_repo(repo_dir: str | Path | None) -> Path:
     return p
 
 
+def _safe_join(repo_dir: Path, rel: str) -> Path:
+    """rel (subtask['file'] từ plan, hoặc out['test_file'] model TỰ đặt tên ở
+    cổng 3) là chuỗi KHÔNG đáng tin — model có thể trả path tuyệt đối hay
+    '../..' để thoát khỏi repo scratch. Path(repo_dir) / rel của pathlib ÂM
+    THẦM bỏ qua repo_dir nếu rel là tuyệt đối (Unix '/etc/x' HAY Windows
+    'C:/Windows/x' — kể cả khi harness chạy trên Windows, chỉ tự check bằng
+    Path().is_absolute() của chính platform đang chạy sẽ bỏ lọt dạng kia,
+    nên check CẢ HAI kiểu tường minh bằng PurePosixPath/PureWindowsPath).
+    Raise ValueError nếu rel thoát khỏi repo_dir dưới bất kỳ hình thức nào —
+    không bao giờ ghi ra ngoài scratch repo."""
+    if PurePosixPath(rel).is_absolute() or PureWindowsPath(rel).is_absolute():
+        raise ValueError(f"path tuyệt đối không được phép: '{rel}'")
+    candidate = (repo_dir / rel).resolve()
+    repo_resolved = repo_dir.resolve()
+    if candidate != repo_resolved and repo_resolved not in candidate.parents:
+        raise ValueError(f"path thoát khỏi scratch repo: '{rel}'")
+    return candidate
+
+
 def _write_and_diff(repo_dir: Path, file_rel: str, code: str, test_file_rel: str, test_code: str) -> str:
     """Ghi code + test vào repo scratch, trả diff thật (git diff --cached), rồi
     commit để lần ghi kế tiếp (subtask sau) diff đúng phần MỚI thêm."""
     for rel, content in ((file_rel, code), (test_file_rel, test_code)):
-        path = repo_dir / rel
+        path = _safe_join(repo_dir, rel)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
     _git(["add", "-A"], cwd=repo_dir)
@@ -149,7 +168,14 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
             reason = f"subtask '{subtask.get('title')}': {e}"
             state["diffs"] = diffs
             return {"gate": 3, "blocked": True, "reason": reason, "diffs": diffs}
-        diff_text = _write_and_diff(repo, subtask["file"], out["code"], out["test_file"], out["test"])
+        try:
+            diff_text = _write_and_diff(repo, subtask["file"], out["code"], out["test_file"], out["test"])
+        except ValueError as e:
+            # _safe_join: model trả path tuyệt đối/thoát repo scratch — chặn
+            # NGAY, không ghi 1 byte nào ra ngoài, không phải lỗi âm thầm bỏ qua.
+            reason = f"subtask '{subtask.get('title')}': {e}"
+            state["diffs"] = diffs
+            return {"gate": 3, "blocked": True, "reason": reason, "diffs": diffs}
         diffs.append({
             "title": subtask["title"], "file": subtask["file"], "test_file": out["test_file"],
             "model": model, "diff": diff_text,

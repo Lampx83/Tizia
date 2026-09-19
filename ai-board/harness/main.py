@@ -176,21 +176,33 @@ def run_once(request: dict, *, db_path, deps: Deps, budget: Budget | None = None
 
     proposal_id = create_proposal(db_path, request=request)
 
-    for gate in GATES:
-        if not budget.tick():
-            outcome = "budget_exhausted"
-            break
-        result = run_gate(gate, request, deps, budget, state, db_path=db_path, proposal_id=proposal_id)
-        reached = gate
-        if result.get("blocked"):
-            # Cổng 2.5 (ticket 22) tự đặt outcome cụ thể (needs_clarification/
-            # complexity_gated) thay vì generic blocked_gate_N — mọi cổng khác
-            # không set key này nên hành vi cũ giữ nguyên.
-            outcome = result.get("outcome") or f"blocked_gate_{gate}"
-            reason = result.get("reason")
-            break
+    # try/finally (code-review round): create_proposal() ghi dòng NGAY từ đầu
+    # (ticket 23), khác bản cũ ghi 1 lần DUY NHẤT ở cuối sau khi mọi cổng đã
+    # chạy xong — nếu 1 cổng raise (lỗi Ollama, bug gate...) mà không có
+    # finally ở đây, dòng vừa tạo kẹt lại mãi mãi với gate_reached=0/
+    # outcome=NULL, không ai cập nhật. finally đảm bảo LUÔN ghi lại trạng thái
+    # cuối cùng — kể cả khi lỗi — rồi mới để exception tiếp tục bay lên
+    # (không nuốt lỗi, main() vẫn thấy được).
+    try:
+        for gate in GATES:
+            if not budget.tick():
+                outcome = "budget_exhausted"
+                break
+            result = run_gate(gate, request, deps, budget, state, db_path=db_path, proposal_id=proposal_id)
+            reached = gate
+            if result.get("blocked"):
+                # Cổng 2.5 (ticket 22) tự đặt outcome cụ thể (needs_clarification/
+                # complexity_gated) thay vì generic blocked_gate_N — mọi cổng khác
+                # không set key này nên hành vi cũ giữ nguyên.
+                outcome = result.get("outcome") or f"blocked_gate_{gate}"
+                reason = result.get("reason")
+                break
+    except Exception as e:
+        outcome = f"error_gate_{reached}: {e}"
+        raise
+    finally:
+        update_proposal(db_path, proposal_id, gate_reached=reached, outcome=outcome, budget=budget)
 
-    update_proposal(db_path, proposal_id, gate_reached=reached, outcome=outcome, budget=budget)
     return {
         "proposal_id": proposal_id,
         "request_id": request.get("id"),
