@@ -1,0 +1,4 @@
+# Prompt gửi model phải byte-để-byte giống nhau trên mọi OS (kỷ luật cache,
+# spec.md rule 1) — autocrlf=true trên Windows biến LF thành CRLF trong working
+# tree, đổi prefix gửi Ollama và làm prompts.lock.json lệch hash.
+ai-board/harness/prompts/*.md text eol=lf
