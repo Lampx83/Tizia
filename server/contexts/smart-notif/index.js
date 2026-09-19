@@ -202,3 +202,11 @@ export function scheduleSmartNudges() {
     NUDGE_EVERY_MS).unref?.();
   console.log('[smart-notif] nudge scheduler bật (15 phút/lần)');
 }
+
+export const plugin = {
+  name: 'smart-notif',
+  mount(router) {
+    attachSmartNotif(router);
+    scheduleSmartNudges();
+  },
+};

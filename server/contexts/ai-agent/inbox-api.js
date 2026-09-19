@@ -89,3 +89,10 @@ export function attachAiBoardInbox(r, { env = process.env } = {}) {
   console.log('[ai-board] ✅ /api/ai-board/inbox đã bật (auth: header x-ai-board-key)');
   return true;
 }
+
+export const plugin = {
+  name: 'ai-board-inbox',
+  mount(router) {
+    attachAiBoardInbox(router);
+  },
+};

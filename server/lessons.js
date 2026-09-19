@@ -222,3 +222,10 @@ export function attachLessons(r) {
 function safeParse(s) {
   try { return JSON.parse(s); } catch { return []; }
 }
+
+export const plugin = {
+  name: 'lessons',
+  mount(router) {
+    attachLessons(router);
+  },
+};

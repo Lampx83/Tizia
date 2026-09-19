@@ -252,3 +252,10 @@ export function attachAdminDb(r) {
     fs.createReadStream(filePath).pipe(res);
   });
 }
+
+export const plugin = {
+  name: 'admin-db',
+  mount(router) {
+    attachAdminDb(router);
+  },
+};

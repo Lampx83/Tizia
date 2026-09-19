@@ -13,6 +13,7 @@ import { db } from '../../db.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { requireAdmin } from '../admin/index.js'; // sibling context, no circularity
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(__dirname, '..', '..', '..', 'public');
@@ -153,3 +154,10 @@ export function attachCampusLayout(r, requireAdmin) {
 
   console.log('[campus-layout] routes mounted (DB backend): GET /api/campus-layout/:domain · POST/DELETE /api/admin/campus-layout/:domain');
 }
+
+export const plugin = {
+  name: 'campus-layout',
+  mount(router) {
+    attachCampusLayout(router, requireAdmin);
+  },
+};

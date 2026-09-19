@@ -141,3 +141,10 @@ export function attachParentReport(router) {
     res.json({ ok: true, report });
   });
 }
+
+export const plugin = {
+  name: 'parent-report',
+  mount(router) {
+    attachParentReport(router);
+  },
+};

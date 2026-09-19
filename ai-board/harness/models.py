@@ -21,6 +21,9 @@ class OllamaClient:
     base_url: str = ""
     gate1_model: str = ""
     gate3_model: str = ""
+    # Ticket 11: subtask "small" (1 file, theo mẫu) đi model nhẹ hơn — cùng lý do
+    # "không hardcode default" ở trên, .env là nguồn thật duy nhất.
+    gate3_model_light: str = ""
     embed_model: str = ""
     timeout_s: float = 300.0
     # Đọc 1 lần lúc dựng client. KHÔNG đọc lại os.environ trong _post: test bơm
@@ -34,6 +37,7 @@ class OllamaClient:
             base_url=(env.get("OLLAMA_URL") or "").rstrip("/"),
             gate1_model=env.get("GATE1_MODEL") or "",
             gate3_model=env.get("GATE3_MODEL") or "",
+            gate3_model_light=env.get("GATE3_MODEL_LIGHT") or "",
             embed_model=env.get("EMBED_MODEL") or "",
             seckey=env.get("OLLAMA_SECKEY") or None,
         )

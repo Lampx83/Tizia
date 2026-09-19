@@ -51,8 +51,9 @@ def test_dry_run_never_calls_git_or_telegram(inbox_file, db_file, fake_deps):
 
     assert fake_deps.git.mock_calls == []
     assert fake_deps.notify.mock_calls == []
-    # Cổng 1 gọi model đúng 1 lần — qua fake, không mạng.
-    assert len(fake_deps.models.calls) == 1
+    # Cổng 1 gọi model 1 lần + cổng 3 gọi thêm 1 lần/subtask (plan_with có 2) —
+    # tất cả qua fake, không mạng.
+    assert len(fake_deps.models.calls) == 1 + len(fake_deps.models.plan["subtasks"])
 
 
 def test_real_deps_make_git_and_telegram_explode_if_touched():
@@ -141,6 +142,7 @@ def test_ollama_client_from_env_has_no_hardcoded_fallback():
     assert client.base_url == ""
     assert client.gate1_model == ""
     assert client.gate3_model == ""
+    assert client.gate3_model_light == ""
     assert client.embed_model == ""
 
 

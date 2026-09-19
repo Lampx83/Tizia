@@ -265,3 +265,10 @@ export function attachDashboard(router) {
     }
   });
 }
+
+export const plugin = {
+  name: 'dashboard',
+  mount(router) {
+    attachDashboard(router);
+  },
+};

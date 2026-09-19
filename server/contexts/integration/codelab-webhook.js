@@ -160,3 +160,10 @@ export function attachCodelabWebhook(app) {
   );
   console.log('[codelab-webhook] mounted: POST /api/webhooks/codelab');
 }
+
+export const plugin = {
+  name: 'codelab-webhook',
+  mount(app) {
+    attachCodelabWebhook(app);
+  },
+};

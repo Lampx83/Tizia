@@ -8,6 +8,7 @@ import {
   findUserByOAuth, linkOAuth, createUser, updateUserProfile, isUsernameTaken,
   createSession,
 } from '../../db.js';
+import { BASE_PATH } from '../../base-path.js';
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const STATE_TTL_MS = 10 * 60 * 1000;     // 10 phút cho luồng login
@@ -326,3 +327,10 @@ export function listEnabledProviders() {
 
 // Reload provider list (cho hot-reload nếu cần). Không dùng trong runtime hiện tại.
 export function reloadProviders() { PROVIDERS = buildProviders(); }
+
+export const plugin = {
+  name: 'oauth',
+  mount(router) {
+    attachOAuth(router, { basePath: BASE_PATH });
+  },
+};

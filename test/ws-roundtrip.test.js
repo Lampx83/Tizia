@@ -13,7 +13,11 @@ let server, base;
 
 test.before(async () => {
   server = http.createServer((req, res) => { res.statusCode = 404; res.end(); });
-  attachRoom(server, '');
+  // attachRoom không tự đăng ký 'upgrade' nữa (ticket 06) — trả { onUpgrade },
+  // registry.mountWsPlugins mới là nơi gọi httpServer.on(...). Test seam JS
+  // (không kéo db.js) nên gắn thẳng onUpgrade thay vì qua registry đầy đủ.
+  const { onUpgrade } = attachRoom(server, '');
+  server.on('upgrade', onUpgrade);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   base = `ws://127.0.0.1:${server.address().port}`;
 });

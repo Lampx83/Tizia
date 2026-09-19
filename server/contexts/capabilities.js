@@ -25,7 +25,7 @@ import { csrf, rateLimit, apiLimiter, sensitiveAuthLimiter } from './security/in
 import * as scoreup from '../integrations/scoreup.js';
 import * as codelab from '../integrations/codelab.js';
 import * as registry from './registry.js';
-import { deepFreeze } from './registry.js';
+import { deepFreeze, CORE_MODULES } from './registry.js';
 
 // deepFreeze, không Object.freeze: freeze nông chỉ khoá cái vỏ. FEATURES là
 // object thật feature-gate đọc lại ở mỗi request — plugin chỉ cầm `surface` vẫn
@@ -61,15 +61,7 @@ export const core = Object.freeze({
 });
 
 // Tên module cấm import trực tiếp từ plugin AI sinh. Cổng 4 (ticket 12) đọc
-// danh sách này thay vì tự chép lại một bản thứ hai.
-export const CORE_MODULES = Object.freeze([
-  'server/db.js',
-  'server/app-proxy.js',
-  'server/contexts/registry.js',
-  'server/contexts/admin/index.js',
-  'server/contexts/security/index.js',
-  'server/contexts/payment/index.js',
-  'server/integrations/scoreup.js',
-  'server/integrations/codelab.js',
-  'server/integrations/codelab-contests.js',
-]);
+// danh sách này thay vì tự chép lại một bản thứ hai. Nguồn thật ở registry.js
+// (nó cũng dùng chính list này để từ chối mount runtime — xem
+// assertOriginAllowed) — re-export ở đây để chỗ import cũ khỏi phải đổi.
+export { CORE_MODULES };

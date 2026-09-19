@@ -145,3 +145,10 @@ export function attachPharmacy(r) {
     res.json({ session: s });
   });
 }
+
+export const plugin = {
+  name: 'pharmacy',
+  mount(router) {
+    attachPharmacy(router);
+  },
+};

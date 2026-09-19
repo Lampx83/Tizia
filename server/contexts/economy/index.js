@@ -377,3 +377,10 @@ export function attachEconomy(router) {
     res.json(result);
   });
 }
+
+export const plugin = {
+  name: 'economy',
+  mount(router) {
+    attachEconomy(router);
+  },
+};

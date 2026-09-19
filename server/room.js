@@ -314,6 +314,9 @@ function attachLabWS(httpServer, basePath = '') {
   return wss;
 }
 
+// wsPriority 'append': registry.mountWsPlugins phải gọi httpServer.on('upgrade', …)
+// (KHÔNG prependListener) cho onUpgrade trả về ở đây — đây là handler catch-all,
+// chạy SAU presence/live-quiz (chúng dùng prependListener) như hành vi hiện tại.
 export function attachRoom(httpServer, basePath = '') {
   const raceWss = attachRaceWS(httpServer, basePath);
   const sackyWss = attachSackyMetaWS(httpServer, basePath);
@@ -447,7 +450,7 @@ export function attachRoom(httpServer, basePath = '') {
   const RACE_PATH = basePath + '/ws-race';
   const SACKY_PATH = basePath + '/ws-sacky';
   const LAB_PATH = basePath + '/ws-lab';
-  httpServer.on('upgrade', (req, socket, head) => {
+  const onUpgrade = (req, socket, head) => {
     const pathname = (req.url || '').split('?')[0];
     // Malformed upgrade (bad handshake headers, client abort mid-handshake…) emits
     // 'error' on the raw socket — không log ở đây thì mất luôn ngữ cảnh path nào.
@@ -471,7 +474,8 @@ export function attachRoom(httpServer, basePath = '') {
     } else {
       socket.destroy();
     }
-  });
+  };
 
   console.log(`[room] WebSocket server attached at ${basePath || ''}/ws`);
+  return { onUpgrade };
 }

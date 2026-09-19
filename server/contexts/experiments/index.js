@@ -229,3 +229,10 @@ export function attachExperiments(router) {
     res.json({ events: db.prepare(`SELECT * FROM event_registry WHERE deprecated = 0 ORDER BY name`).all() });
   });
 }
+
+export const plugin = {
+  name: 'experiments',
+  mount(router) {
+    attachExperiments(router);
+  },
+};

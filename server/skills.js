@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db } from './db.js';
+import { requireAuth, requireEnrolled } from './contexts/identity/auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MAPPING_PATH = path.resolve(__dirname, 'skills-mapping.json');
@@ -424,3 +425,10 @@ export function attachSkills(router, { requireAuth, requireEnrolled }) {
     });
   });
 }
+
+export const plugin = {
+  name: 'skills',
+  mount(router) {
+    attachSkills(router, { requireAuth, requireEnrolled });
+  },
+};

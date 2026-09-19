@@ -285,6 +285,13 @@ export function attachLearning(router) {
   });
 }
 
+export const plugin = {
+  name: 'learning',
+  mount(router) {
+    attachLearning(router);
+  },
+};
+
 function thetaLabel(theta) {
   if (theta >= 1.5)  return 'Xuất sắc';
   if (theta >= 0.5)  return 'Khá';

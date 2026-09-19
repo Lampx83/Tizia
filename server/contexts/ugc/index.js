@@ -317,3 +317,10 @@ export function attachUgc(router) {
     });
   });
 }
+
+export const plugin = {
+  name: 'ugc',
+  mount(router) {
+    attachUgc(router);
+  },
+};

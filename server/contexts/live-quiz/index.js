@@ -193,17 +193,26 @@ export function attachLiveQuizHttp(router) {
   });
 }
 
-export function attachLiveQuizWs(server, basePath = '') {
+export const plugin = {
+  name: 'live-quiz-http',
+  mount(router) {
+    attachLiveQuizHttp(router);
+  },
+};
+
+// wsPriority 'prepend': registry.mountWsPlugins phải gọi httpServer.prependListener
+// cho onUpgrade trả về ở đây — GIỮ NGUYÊN thứ tự chạy trước handler .on() của room.js.
+export function attachLiveQuizWs(basePath = '') {
   // WebSocket route /ws-live
   const wss = new WebSocketServer({ noServer: true });
   wss.on('error', (err) => log.error('[ws:live-quiz] server error', { err }));
-  server.prependListener('upgrade', (req, socket, head) => {
+  const onUpgrade = (req, socket, head) => {
     const path = (req.url || '').split('?')[0];
     if (path === basePath + '/ws-live') {
       socket.on('error', (err) => log.warn('[ws:live-quiz] upgrade socket error', { err }));
       wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
     }
-  });
+  };
 
   wss.on('connection', (ws, req) => {
     const url = new URL(req.url, 'http://x');
@@ -269,4 +278,5 @@ export function attachLiveQuizWs(server, basePath = '') {
   });
 
   console.log('[live-quiz] WebSocket /ws-live attached');
+  return { onUpgrade };
 }

@@ -152,3 +152,10 @@ export function attachSrs(router) {
     res.json({ ok: true, ...stats });
   });
 }
+
+export const plugin = {
+  name: 'srs',
+  mount(router) {
+    attachSrs(router);
+  },
+};

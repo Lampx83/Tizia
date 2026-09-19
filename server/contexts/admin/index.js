@@ -696,3 +696,12 @@ export function attachAdmin(r) {
 
   console.log('[admin] routes mounted: /api/admin/* (role=admin) + dashboard + CRUD + ai-prompt logs + backup + db-admin');
 }
+
+export const plugin = {
+  name: 'admin',
+  origin: 'dev-owned',
+  sourceModule: 'server/contexts/admin/index.js',
+  mount(router) {
+    attachAdmin(router);
+  },
+};

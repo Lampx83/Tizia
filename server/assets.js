@@ -7,6 +7,9 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const PUBLIC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
 const SUPPORTED = new Set(['.glb', '.gltf', '.fbx', '.obj']);
 
@@ -144,3 +147,10 @@ export function attachAssets(r, publicDir) {
     res.json({ ok: true, count: CACHE.count });
   });
 }
+
+export const plugin = {
+  name: 'assets',
+  mount(router) {
+    attachAssets(router, PUBLIC_DIR);
+  },
+};

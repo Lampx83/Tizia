@@ -283,3 +283,10 @@ export function attachAnalytics(r) {
 
   console.log('[analytics] routes mounted: /api/events, /api/analytics/{funnel,overview}');
 }
+
+export const plugin = {
+  name: 'analytics',
+  mount(router) {
+    attachAnalytics(router);
+  },
+};
