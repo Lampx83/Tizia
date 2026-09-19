@@ -130,7 +130,12 @@ def parse_validation(text: str) -> dict:
 
 
 def is_complex(plan: dict) -> bool:
-    """3/5 tín hiệu gate 5.5 (ticket 13), tính sớm từ plan — xem docstring module."""
+    """3/5 tín hiệu gate 5.5 (ticket 13), tính sớm từ plan — xem docstring module.
+    Lưu ý cho người xây gate 5.5 thật (code-review round): tín hiệu "route/
+    middleware mới" ở ĐÂY đo vị trí file (ngoài _ai-generated/public hay
+    không) — KHÔNG PHẢI cùng phép đo với "route/middleware mới=high" gate 5.5
+    dự định làm trên DIFF thật (spec.md mục 09). Cùng tên, khác đối tượng đo
+    — đừng giả định 2 cái tương đương khi build gate 5.5."""
     if len(set(plan.get("capabilities") or [])) >= 2:
         return True
     if any(not _SAFE_FILE_PREFIX.match(st.get("file", "")) for st in plan.get("subtasks") or []):
