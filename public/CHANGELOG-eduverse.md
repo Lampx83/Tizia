@@ -4,6 +4,66 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-19 — Phiên 66 · Hộp thư vẫn chưa đọc được — nguyên nhân đã ĐỔI: `/api/*` của tizia.vn không còn về server này
+
+**Kết luận:** **Không xử lý được yêu cầu nào của người học** (ngày thứ 7). Không có yêu cầu thật nên không bịa việc. Nhưng chẩn đoán của 2 phiên trước ("chưa deploy `main`", "chưa set key") **nay đã sai** — đo lại hôm nay cho thấy một tình huống khác hẳn: **toàn bộ `/api/*` trên `tizia.vn` trả `500`, và domain đang do một app Next.js phục vụ**, không phải server Express của repo này.
+
+### Đo thật hôm nay (2026-09-19)
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `GET https://tizia.vn/` | `200` — **`x-powered-by: Next.js`**, `vary: rsc, next-router-state-tree…` |
+| `GET /api/health` (8 lần liên tiếp) | `500 Internal Server Error`, ổn định, không phải chập chờn |
+| `GET /api/ai-board/inbox` (có header key) | `500` — **không còn `401 needLogin` như phiên 65** |
+| `GET /api/requests`, `/welcome`, `/ps/api/health` | `500` |
+| `GET /robots.txt` | `200` nhưng kèm **`x-nextjs-cache: HIT`** ⇒ do Next.js trả, không phải `server/contexts/seo/index.js` |
+| `GET /apps`, `/kham-pha`, `/luyen-de` | `200`, HTML có `_next/static/…` |
+| `GET /favicon.ico`, `/manifest.webmanifest`, path bất kỳ không tồn tại | `500` (catch-all của app kia đang lỗi) |
+| `ps.tizia.vn`, `eduverse.tizia.vn`, IP gốc `:8041/:8040/:3000` | không kết nối được |
+| GitHub Issues (open + closed) | 0 |
+| `AI_BOARD_KEY` trong môi trường routine | **vẫn chưa có** |
+
+**Chẩn đoán:** `tizia.vn` hiện được một ứng dụng **Next.js** phục vụ. Các trang nội dung (`/apps`, `/kham-pha`, `/luyen-de`) chạy bình thường, nhưng `/api/*` không có route tương ứng nên rơi vào catch-all và catch-all đó đang lỗi → `500`. Nghĩa là route `/api/ai-board/inbox` của repo này **không còn tới được qua `tizia.vn`**, bất kể có deploy `main` hay set `AI_BOARD_KEY` hay không. Việc cần làm đã đổi: **trỏ lại `/api/*` về container `eduverse`** (hoặc cho Ban điều hành AI biết host thật của API).
+
+### Việc đã làm
+
+| File | Thay đổi |
+|---|---|
+| `scripts/fetch-inbox.mjs` | Thêm 2 nhánh chẩn đoán còn thiếu: **`5xx`** và **`200` nhưng không phải JSON**. Trước đây gặp `500` script chỉ in `HTTP 500` rồi thoát — không một lời hướng dẫn, đúng vào tình huống đang xảy ra thật. |
+
+Chi tiết: nhánh `5xx` nay nhận diện "domain do app khác phục vụ" qua `x-powered-by` / `x-nextjs-cache` / `vary: rsc`. **Bẫy phát hiện lúc chạy thật:** trang lỗi `500` bị proxy thay bằng body trần, **không còn header nhận dạng** — lần chạy đầu vẫn chẩn đoán trượt. Vì vậy script hỏi thêm trang gốc `/` ở nhánh lỗi (chỉ ở nhánh lỗi, timeout 10s, nuốt mọi lỗi mạng) rồi mới kết luận. Nhánh `200`-không-JSON chặn trước `res.json()` để không ném ra lỗi cú pháp khó hiểu khi request rơi vào trang HTML catch-all.
+
+Bảng chẩn đoán đầy đủ sau hôm nay:
+
+| HTTP | Dấu hiệu | Kết luận | Việc cần làm |
+|---|---|---|---|
+| `5xx` | `/` có header Next.js | **domain do app khác phục vụ** | trỏ lại `/api/*` về `eduverse`, hoặc đặt `TIZIA_BASE_URL` |
+| `5xx` | không | app chết / lỗi trong app | `curl -i $TIZIA_BASE_URL/api/health`, xem log container |
+| `200` | content-type không phải JSON | rơi vào catch-all của app khác | đặt `TIZIA_BASE_URL` đúng host API |
+| `401` | có `needLogin:true` | server chạy code cũ | `git pull && docker compose up -d --build` |
+| `404` | — | đã deploy, chưa set key | set `AI_BOARD_KEY` (≥24 ký tự) rồi restart |
+| `401` | không `needLogin` | thiếu header | lỗi phía script/proxy |
+| `403` | — | key sai | đối chiếu key |
+
+**Kiểm thử (chạy thật):** `node --check scripts/fetch-inbox.mjs` pass. Server giả tại `127.0.0.1:8799` trả lần lượt `500`-có-header-Next / `500`-trần / `200`-HTML / `401 needLogin` / `404` / `200`-JSON → script in đúng cả 6 kết luận, và nhánh `200`-JSON vẫn ghi đúng `ai-board/inbox.json`. Gọi thật `https://tizia.vn` → in đúng chẩn đoán "domain do app Next.js phục vụ". `ai-board/inbox.json` khôi phục nguyên trạng sau kiểm thử (`git status` sạch, chỉ còn `scripts/fetch-inbox.mjs`).
+
+### Người vận hành cần làm gì (đã đổi so với phiên 65)
+
+```bash
+# 1) BƯỚC MỚI — quyết định định tuyến: /api/* phải về container eduverse.
+#    Hoặc cấu hình app Next.js đang phục vụ tizia.vn proxy /api/* sang eduverse:8041,
+#    hoặc mở một host riêng cho API (vd api.tizia.vn) rồi cấp host đó cho routine:
+#      TIZIA_BASE_URL=https://api.tizia.vn
+# 2) sinh + đặt key, rồi restart  (vẫn còn thiếu từ phiên 62)
+openssl rand -hex 32
+echo 'AI_BOARD_KEY=<key vừa sinh>' >> .env && docker compose up -d
+# 3) cấp CHÍNH key đó + TIZIA_BASE_URL cho môi trường chạy routine Ban điều hành AI
+```
+
+Chừng nào `/api/*` chưa về đúng server, mọi phiên hàng ngày vẫn sẽ không đọc được yêu cầu của học sinh — kể cả khi key đã có.
+
+---
+
 ## 2026-09-17 — Phiên 65 · Vẫn chưa đọc được hộp thư — nhưng đã xác định đúng nguyên nhân
 
 **Kết luận:** **Không xử lý được yêu cầu nào của người học** (ngày thứ 6). Không có yêu cầu thật để làm nên không bịa việc. Việc duy nhất làm hôm nay là sửa một **thông báo chẩn đoán sai** phát hiện ngay trong lúc thử đọc hộp thư — cái đang chỉ người vận hành đi sửa nhầm chỗ.
