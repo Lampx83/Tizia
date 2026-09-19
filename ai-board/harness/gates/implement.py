@@ -12,6 +12,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import gate_trace
+
+
 def _git(args: list[str], cwd: Path, **kw) -> subprocess.CompletedProcess:
     """subprocess.run(['git', ...]) với stdin=DEVNULL — pytest capture trên
     Windows thay stdin bằng 1 handle không nhân bản được, subprocess.Popen vỡ
@@ -84,7 +87,8 @@ def _write_and_diff(repo_dir: Path, file_rel: str, code: str, test_file_rel: str
     return diff
 
 
-def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None) -> dict:
+def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
+        db_path=None, proposal_id: int | None = None) -> dict:
     """Điểm vào cho main.run_gate. Đọc state['plan'] do cổng 1 để lại, sinh code
     cho từng subtask với model theo size, ghi diff thật vào repo scratch."""
     plan = state.get("plan")
@@ -109,9 +113,13 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None) -> dic
                 "diffs": diffs,
             }
         model = model_for(subtask, deps.models)
-        body = deps.models.generate(model, build_prompt(subtask), format="json")
+        prompt = build_prompt(subtask)
+        body = deps.models.generate(model, prompt, format="json")
         budget.spend("model_calls")
         budget.spend("tokens", int(body.get("prompt_eval_count") or 0) + int(body.get("eval_count") or 0))
+        if db_path is not None and proposal_id is not None:
+            gate_trace.record(db_path, skill_proposal_id=proposal_id, gate=3,
+                               model=model, prompt=prompt, body=body)
         try:
             out = parse_codegen(body.get("response", ""))
         except ValueError as e:
