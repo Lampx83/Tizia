@@ -90,10 +90,14 @@ def test_gate_sequence_includes_risk_triage_5_5():
     assert main.GATES == (1, 2, 3, 4, 5, 5.5, 6, 7)
 
 
-def test_cli_refuses_to_run_without_dry_run(monkeypatch, inbox_file, db_file, capsys):
+def test_cli_refuses_to_run_without_dry_run(monkeypatch, inbox_file, db_file, tmp_path, capsys):
     monkeypatch.delenv("DRY_RUN", raising=False)
     monkeypatch.setenv("TIZIA_INBOX_PATH", str(inbox_file))
     monkeypatch.setenv("TIZIA_DB_PATH", str(db_file))
+    # .env thật repo có thể chứa placeholder (ví dụ OLLAMA_URL) làm nổ code
+    # sau nhánh DRY_RUN nếu lỡ chạy tới — trỏ ENV_FILE sang file không
+    # tồn tại để load_dotenv là no-op, cô lập test khỏi .env thật.
+    monkeypatch.setattr(main, "ENV_FILE", tmp_path / "no-such.env")
 
     assert main.main([]) == 2
     assert not db_file.exists()
