@@ -6,6 +6,7 @@ import { WebSocketServer } from 'ws';
 import { attachOrchestration } from './orchestration.js';
 import { log } from './observability.js';
 import { guardedSend, onMessageJSON, logSocketLifecycle } from './ws-safety.js';
+import { sweepStaleConnections, HEARTBEAT_INTERVAL_MS } from './ws-heartbeat.js';
 
 const ROOM_MEDICINES = [
   { id: 'amox', name: 'AMOXICILLIN', category: 'Kháng sinh', color: '#43a047', dose: '500mg', form: 'Viên nang' },
@@ -211,13 +212,8 @@ function attachSackyMetaWS(httpServer, basePath = '') {
   });
 
   setInterval(() => {
-    for (const p of players.values()) {
-      if (p.ws.readyState !== 1) {
-        players.delete(p.id);
-        broadcast({ type: 'leave', id: p.id });
-      }
-    }
-  }, 15000).unref();
+    sweepStaleConnections(players, (id) => broadcast({ type: 'leave', id }));
+  }, HEARTBEAT_INTERVAL_MS).unref();
 
   return wss;
 }
@@ -303,13 +299,8 @@ function attachLabWS(httpServer, basePath = '') {
   });
 
   setInterval(() => {
-    for (const p of players.values()) {
-      if (p.ws.readyState !== 1) {
-        players.delete(p.id);
-        broadcast({ type: 'leave', id: p.id });
-      }
-    }
-  }, 15000).unref();
+    sweepStaleConnections(players, (id) => broadcast({ type: 'leave', id }));
+  }, HEARTBEAT_INTERVAL_MS).unref();
 
   return wss;
 }
@@ -437,13 +428,8 @@ export function attachRoom(httpServer, basePath = '') {
 
   // Heartbeat to detect zombie connections
   setInterval(() => {
-    for (const p of players.values()) {
-      if (p.ws.readyState !== 1) {
-        players.delete(p.id);
-        broadcast({ type: 'leave', id: p.id });
-      }
-    }
-  }, 15000).unref();
+    sweepStaleConnections(players, (id) => broadcast({ type: 'leave', id }));
+  }, HEARTBEAT_INTERVAL_MS).unref();
 
   // Single upgrade listener routes to the right WS server by path.
   const ROOM_PATH = basePath + '/ws';
