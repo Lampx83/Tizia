@@ -25,9 +25,10 @@ def test_full_loop_writes_one_gate_trace_row_per_model_call(inbox_file, db_file,
     out = run_once(item, db_path=db_file, deps=fake_deps)
 
     traces = rows(db_file, "gate_trace")
-    # cổng 1 (1 lần gọi) + cổng 3 (1 lần/subtask, plan_with có 2 subtask) = 3.
-    assert len(traces) == 1 + len(fake_deps.models.plan["subtasks"])
-    assert {t["gate"] for t in traces} == {1.0, 3.0}
+    # cổng 1 (1 lần) + cổng 2.5 (1 lần, ticket 22) + cổng 3 (1 lần/subtask,
+    # plan_with có 2 subtask) = 4.
+    assert len(traces) == 2 + len(fake_deps.models.plan["subtasks"])
+    assert {t["gate"] for t in traces} == {1.0, 2.5, 3.0}
     assert all(t["prompt"] for t in traces)
     assert all(t["raw_response"] for t in traces)
     assert out["outcome"] == "ok"
@@ -49,7 +50,7 @@ def test_gate_trace_joins_to_its_skill_proposal(inbox_file, db_file, fake_deps):
         ).fetchall()
     finally:
         con.close()
-    assert len(joined) == 1 + len(fake_deps.models.plan["subtasks"])
+    assert len(joined) == 2 + len(fake_deps.models.plan["subtasks"])
     assert all(sp_id == out["proposal_id"] for _id, sp_id in joined)
 
 

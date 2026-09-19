@@ -51,9 +51,9 @@ def test_dry_run_never_calls_git_or_telegram(inbox_file, db_file, fake_deps):
 
     assert fake_deps.git.mock_calls == []
     assert fake_deps.notify.mock_calls == []
-    # Cổng 1 gọi model 1 lần + cổng 3 gọi thêm 1 lần/subtask (plan_with có 2) —
-    # tất cả qua fake, không mạng.
-    assert len(fake_deps.models.calls) == 1 + len(fake_deps.models.plan["subtasks"])
+    # Cổng 1 (1 lần) + cổng 2.5 (1 lần, ticket 22) + cổng 3 (1 lần/subtask,
+    # plan_with có 2) — tất cả qua fake, không mạng.
+    assert len(fake_deps.models.calls) == 2 + len(fake_deps.models.plan["subtasks"])
 
 
 def test_real_deps_make_git_and_telegram_explode_if_touched():
@@ -86,8 +86,8 @@ def test_budget_model_call_cap_blocks_further_spend():
     assert Budget.restore(b.snapshot()).model_calls == 2
 
 
-def test_gate_sequence_includes_risk_triage_5_5():
-    assert main.GATES == (1, 2, 3, 4, 5, 5.5, 6, 7)
+def test_gate_sequence_includes_plan_validate_2_5_and_risk_triage_5_5():
+    assert main.GATES == (1, 2, 2.5, 3, 4, 5, 5.5, 6, 7)
 
 
 def test_cli_refuses_to_run_without_dry_run(monkeypatch, inbox_file, db_file, capsys):

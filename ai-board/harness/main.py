@@ -21,16 +21,17 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from budget import Budget          # noqa: E402
-from gates import brainstorm, implement, scope_check, static_check  # noqa: E402
+from gates import brainstorm, implement, plan_validate, scope_check, static_check  # noqa: E402
 from models import OllamaClient    # noqa: E402
 import prescreen                   # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 ENV_FILE = ROOT / ".env"
 
-# 7 cổng + cổng 5.5 (risk-triage). Thứ tự này là hợp đồng: gate_reached ghi lại
-# đúng phần tử cuối cùng chạy xong, resume bắt đầu từ đó chứ không từ cổng 1.
-GATES: tuple[float, ...] = (1, 2, 3, 4, 5, 5.5, 6, 7)
+# 7 cổng + cổng 2.5 (plan-validate/complexity, ticket 22) + cổng 5.5
+# (risk-triage). Thứ tự này là hợp đồng: gate_reached ghi lại đúng phần tử
+# cuối cùng chạy xong, resume bắt đầu từ đó chứ không từ cổng 1.
+GATES: tuple[float, ...] = (1, 2, 2.5, 3, 4, 5, 5.5, 6, 7)
 
 # Nguồn thật của schema là server/db.js (bảng tạo lúc Express khởi động).
 # Bản CREATE IF NOT EXISTS này chỉ để harness chạy được trên DB tạm trong test.
@@ -100,6 +101,8 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
         return out
     if number == 2:
         return scope_check.run(state)
+    if number == 2.5:
+        return plan_validate.run(request, deps, budget, state, db_path=db_path, proposal_id=proposal_id)
     if number == 3:
         return implement.run(state, deps, budget, db_path=db_path, proposal_id=proposal_id)
     if number == 4:
@@ -180,7 +183,10 @@ def run_once(request: dict, *, db_path, deps: Deps, budget: Budget | None = None
         result = run_gate(gate, request, deps, budget, state, db_path=db_path, proposal_id=proposal_id)
         reached = gate
         if result.get("blocked"):
-            outcome = f"blocked_gate_{gate}"
+            # Cổng 2.5 (ticket 22) tự đặt outcome cụ thể (needs_clarification/
+            # complexity_gated) thay vì generic blocked_gate_N — mọi cổng khác
+            # không set key này nên hành vi cũ giữ nguyên.
+            outcome = result.get("outcome") or f"blocked_gate_{gate}"
             reason = result.get("reason")
             break
 
