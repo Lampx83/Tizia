@@ -11,6 +11,18 @@ if str(HARNESS_DIR) not in sys.path:
     sys.path.insert(0, str(HARNESS_DIR))
 
 
+@pytest.fixture(autouse=True)
+def _no_real_codegraph(monkeypatch):
+    """Ticket 21: gates/brainstorm.py + gates/implement.py gọi codegraph.query()
+    thật -> subprocess ra ngoài (graphify CLI), chậm và phụ thuộc máy có cài +
+    graph.json đã build. Autouse fake trả [] cho MỌI test (đúng fallback
+    "graphify chưa cài" — seam Python đã chốt: mọi biên I/O thật đều fake,
+    xem main.py's Deps cho Ollama/git/Telegram). Test riêng của ticket 21 tự
+    monkeypatch lại codegraph.query khi cần kiểm tra hành vi có gợi ý graph."""
+    import codegraph
+    monkeypatch.setattr(codegraph, "query", lambda *a, **kw: [])
+
+
 @pytest.fixture
 def request_item():
     """Đúng hình dạng 1 item do server/scripts/sync-inbox.mjs sinh ra."""

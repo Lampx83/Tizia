@@ -12,7 +12,10 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import codegraph
 import gate_trace
+
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def _git(args: list[str], cwd: Path, **kw) -> subprocess.CompletedProcess:
@@ -60,6 +63,25 @@ def parse_codegen(text: str) -> dict:
         if not isinstance(out.get(k), str) or not out[k].strip():
             raise ValueError(f"thiếu {k}")
     return out
+
+
+def check_file_path(subtask_file: str) -> None:
+    """Ticket 21: TRƯỚC khi sinh code, xác nhận subtask.file khớp (hoặc gần
+    khớp) thứ gì đó thật trong codebase — KHÔNG BAO GIỜ tự thay path, chỉ in
+    cảnh báo cho người soát. File thật (mới tạo) CHƯA tồn tại trên đĩa là
+    chuyện bình thường (đa số skill AI sinh là file _ai-generated hoàn toàn
+    mới) — hàm này chỉ cảnh báo khi graph tìm ra 1 file thật KHÁC path plan
+    chọn (gợi ý lệch extension/folder — đúng ví dụ ticket 21 nêu), không
+    cảnh báo khi graph không tìm ra gì (trường hợp file mới, không phải typo).
+    Gọi `codegraph.query` qua tên module (không bind sẵn vào default param)
+    để test monkeypatch được — bind sẵn sẽ giữ tham chiếu hàm GỐC, patch
+    `codegraph.query` sau đó sẽ vô tác dụng."""
+    if (ROOT / subtask_file).exists():
+        return
+    candidates = codegraph.query(subtask_file)
+    if candidates and candidates[0] != subtask_file:
+        print(f"[codegraph] subtask.file '{subtask_file}' không khớp file thật — "
+              f"gần nhất trong graph: '{candidates[0]}' (KHÔNG tự thay, chỉ cảnh báo)")
 
 
 def _ensure_scratch_repo(repo_dir: str | Path | None) -> Path:
@@ -112,6 +134,7 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
                 "reason": f"budget cạn giữa chừng (đã xong {len(diffs)}/{len(subtasks)} subtask)",
                 "diffs": diffs,
             }
+        check_file_path(subtask["file"])
         model = model_for(subtask, deps.models)
         prompt = build_prompt(subtask)
         body = deps.models.generate(model, prompt, format="json")

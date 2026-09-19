@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import codegraph
 import gate_trace
 from gates.scope_check import load_capability_names
 
@@ -28,7 +29,7 @@ SUBTASK_KEYS = ("title", "file", "verify", "size")
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "brainstorm.md").read_text(encoding="utf-8")
 
 
-def build_prompt(request: dict, surface: frozenset[str]) -> str:
+def build_prompt(request: dict, surface: frozenset[str], graph_hints: list[str] | None = None) -> str:
     thread = " | ".join(
         f"{m.get('role')}: {m.get('body')}" for m in (request.get("thread") or [])
     ) or "(không có)"
@@ -41,6 +42,7 @@ def build_prompt(request: dict, surface: frozenset[str]) -> str:
         body=request.get("body", ""),
         thread=thread,
         surface=", ".join(sorted(surface)),
+        graph_hints=", ".join(graph_hints) if graph_hints else "(không có — graphify chưa cài hoặc graph chưa build)",
     )
 
 
@@ -76,9 +78,16 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
     """1 lời gọi GATE1_MODEL, tính phí budget. Plan sai schema → blocked.
     db_path/proposal_id (ticket 23): có cả hai thì ghi 1 dòng gate_trace —
     thiếu 1 trong 2 (vd test gọi run() trực tiếp không qua main.run_once) thì
-    bỏ qua, không phải lỗi."""
+    bỏ qua, không phải lỗi.
+
+    Ticket 21: query codegraph TRƯỚC khi dựng prompt — model vẫn tự chọn/
+    xác nhận file thật trong subtasks[].file, graph chỉ là gợi ý thu hẹp
+    phạm vi (KHÔNG override). graphify chưa cài/graph.json chưa build ->
+    codegraph.query() trả [] êm re, gate 1 chạy y hệt hôm nay, không bao giờ
+    bị chặn vì thiếu graph."""
     surface = load_capability_names()["surface"]
-    prompt = build_prompt(request, surface)
+    graph_hints = codegraph.query(f"{request.get('domain', '')} {request.get('subject', '')}".strip())
+    prompt = build_prompt(request, surface, graph_hints)
     body = deps.models.generate(deps.models.gate1_model, prompt, format="json")
     budget.spend("model_calls")
     budget.spend("tokens", int(body.get("prompt_eval_count") or 0) + int(body.get("eval_count") or 0))

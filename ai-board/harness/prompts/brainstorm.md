@@ -14,6 +14,9 @@ CAPABILITY PLUGIN ĐƯỢC DÙNG (chỉ những tên này, không có gì khác)
 Plugin sinh ra nằm ở server/contexts/_ai-generated/{domain}/<skill>/index.js và/hoặc public/*.html.
 KHÔNG được xin db, admin, csrf, rate-limit, payment, registry, websocket, sse, http server.
 
+GỢI Ý FILE LIÊN QUAN TỪ CHỈ MỤC CODEGRAPH (chỉ là gợi ý thu hẹp phạm vi — tự
+xác nhận đúng file thật trước khi chọn, KHÔNG phải nguồn sự thật): {graph_hints}
+
 QUY TẮC PLAN
 - 2-6 subtask, mỗi subtask 2-5 phút, làm đúng 1 file.
 - Mỗi subtask có: title, file (đường dẫn cụ thể), verify (1 bước kiểm tra chạy được), size.
