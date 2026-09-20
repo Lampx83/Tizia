@@ -19,7 +19,7 @@ import { attachCodelabWebhook } from './contexts/integration/codelab-webhook.js'
 import * as scoreup from './integrations/scoreup.js';
 import * as codelab from './integrations/codelab.js';
 import { getContestProblemSlugs, getContestName, hasContestMapping } from './integrations/codelab-contests.js';
-import { countCodelabAcceptedProblems, DATA_DIR } from './db.js';
+import { countCodelabAcceptedProblems, DATA_DIR, setEnrolledDomain } from './db.js';
 import { recordQuestionAttempt, getRecentQuestionAttempts, getSrsStateByPrefix, recordSrsReview, pruneScoreUpEventsSeen } from './db.js';
 import { attachAssets } from './assets.js';
 import { attachAdaptive } from './adaptive.js';
@@ -1228,7 +1228,7 @@ function requestUploadSniffOk(mime, buf) {
   }
 }
 r.post('/api/requests/attachments',
-  requireAuth, requireEnrolled,
+  requireAuth,
   // 50MB: ảnh/office nhỏ, nhưng file dữ liệu (.db SQLite, .sql dump) có thể lớn.
   express.raw({ type: () => true, limit: '50mb' }),
   async (req, res) => {
@@ -1287,7 +1287,21 @@ r.post('/api/requests/attachments',
     }
   });
 
-r.post('/api/requests', requireAuth, requireEnrolled, async (req, res) => {
+// Gửi yêu cầu KHÔNG bắt buộc đã chọn trường / đúng trường (cho mọi người tự do
+// chọn & đổi trường): chưa có trường → tự ghi danh vào trường đang gửi; đang ở
+// trường khác vẫn gửi được cho trường đó (không đổi enrolled_domain, không mất
+// tiến trình ở trường hiện tại). Giữ nguyên requireAuth.
+async function requestsAnySchool(req, res, next) {
+  try {
+    const dom = String(req.body?.domain || '').trim().slice(0, 40);
+    if (req.user && req.user.role !== 'admin' && !req.user.enrolled_domain && dom) {
+      await setEnrolledDomain(req.user.id, dom);
+      req.user.enrolled_domain = dom;
+    }
+  } catch (e) { console.warn('[requests] auto-enroll failed:', e?.message || e); }
+  next();
+}
+r.post('/api/requests', requireAuth, requestsAnySchool, async (req, res) => {
   // requireEnrolled đã đảm bảo body.domain == enrolled_domain (nếu có) → HS chỉ
   // gửi yêu cầu trong trường đang theo học. Admin bypass (gửi mọi trường).
   const b = req.body ?? {};
