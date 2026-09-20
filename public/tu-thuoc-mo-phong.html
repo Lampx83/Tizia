@@ -240,6 +240,12 @@
   .m2-pack.dent{transform:rotate(-3deg) skewX(-4deg);clip-path:polygon(0 0,42% 2%,48% 9%,58% 1%,100% 0,98% 46%,100% 55%,97% 100%,55% 98%,50% 92%,40% 100%,0 100%,2% 58%,0 50%);box-shadow:inset 0 0 26px rgba(0,0,0,.45);}
   .m2-pack.mold::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 22% 30%,rgba(70,90,40,.75) 0 9%,transparent 10%),radial-gradient(circle at 70% 62%,rgba(50,70,30,.7) 0 12%,transparent 13%),radial-gradient(circle at 48% 80%,rgba(90,70,30,.65) 0 7%,transparent 8%),radial-gradient(circle at 80% 22%,rgba(60,80,40,.6) 0 6%,transparent 7%);}
   .m2-pack.blur img,.m2-pack.blur .ph{filter:blur(3.2px);opacity:.8;}
+  .m2-mb{display:inline-block;width:20px;height:27px;margin:2px;border-radius:3px;background:linear-gradient(#f7f1e1 0 68%,#4aa3df 68% 100%);border:1px solid #b9a875;}
+  .m2-tile{border:2px solid #d8c9a3;border-radius:10px;background:#fffdf6;padding:8px 10px;margin:8px 0;}
+  .m2-tile.done{border-color:#2e8256;background:#e6f6ec;}
+  .m2-tile > button.nm{all:unset;cursor:pointer;font:800 .86rem 'Nunito',sans-serif;color:#5c3a0a;text-decoration:underline;}
+  .m2-openbox{border:3px dashed #c98d3d;border-radius:14px;background:#f6e3bd;padding:14px;margin:8px 0;}
+  #m2Delivery .m2-say{}
   @keyframes m1-pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,212,0,0);background:rgba(255,212,0,.10);}50%{box-shadow:0 0 0 10px rgba(255,212,0,.6);background:rgba(255,212,0,.32);}}
   .pharmacy-map .pm-zone.m1-next{animation:m1-pulse 1.4s ease-in-out infinite;border-color:#ffd400 !important;z-index:6;}
   .pharmacy-map .pm-zone.m1-next::before{content:'👉 Làm tiếp ở đây';position:absolute;left:50%;top:-26px;transform:translateX(-50%);
@@ -993,8 +999,14 @@
      thành con đường có xe cộ, người đi lại; hiện lời nhắc bấm cửa để vào. */
   #fRoad,#fKeyHint{display:none}
   body.has-key #fSanhSign{display:none}
-  body.has-key #fRoad,body.has-key #fKeyHint{display:inline}
-  #fKeyHint{animation:fkh-pulse 1.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+  body.has-key #fRoad{display:inline}
+  /* req #219: dòng "Bạn đã có chìa khóa" chỉ hiện 1 LẦN (ngay khi vừa lấy được chìa), không nhấp nháy;
+     sau đó thay bằng 1 ký hiệu nhỏ nhấp nháy giữa cửa (#fDoorDot). */
+  body.has-key.key-fresh #fKeyHint{display:inline}
+  #fDoorDot{display:none;pointer-events:none}
+  body.has-key:not(.key-fresh):not(.doors-open) #fDoorDot{display:inline}
+  #fDoorDot .dot{animation:fdd-blink 1s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+  @keyframes fdd-blink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.25;transform:scale(1.35)}}
   @keyframes fkh-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
   body.doors-open #fKeyHint{opacity:0}
   /* req #160: hộp mở khóa cửa bằng mật khẩu */
@@ -1254,6 +1266,7 @@
       <text x="800" y="622" text-anchor="middle" font-size="18" font-weight="800" fill="#8a6a2a" font-family="'Nunito',system-ui,sans-serif">Bấm vào cánh cửa để vào nhà thuốc</text>
     </g>
 
+    <g id="fDoorDot"><g class="dot"><circle cx="800" cy="456" r="22" fill="#ffd400" stroke="#e08c14" stroke-width="4"/><text x="800" y="465" text-anchor="middle" font-size="24">🔑</text></g></g>
     <!-- vùng bấm mở cửa (trong suốt, phủ đúng khoang cửa) -->
     <rect id="fDoorHit" x="240" y="250" width="1120" height="412" fill="transparent" style="cursor:pointer"/>
     </g><!-- /#fSceneScale -->
@@ -3495,7 +3508,7 @@ function startM2(){
     it.recv = i === mis ? (it.qty > 1 ? it.qty - 1 - Math.floor(Math.random()*Math.min(2, it.qty-1)) : it.qty + 1) : it.qty;
     it.defect = i === dfe ? ['dent','mold','blur'][Math.floor(Math.random()*3)] : null;
   });
-  saveM2State({ step:'deliver', vehicle: Math.random() < .5 ? '🚗' : '🛵', supplierId: sup.id, supplierName: sup.name, items, mismatch: mis, sub:'invoice', pack:{} });
+  saveM2State({ step:'deliver', vehicle: Math.random() < .5 ? '🚐' : '🛵', supplierId: sup.id, supplierName: sup.name, items, mismatch: mis, sub:'invoice', pack:{} });
 }
 function m2Hint(){
   const x = getM2State();
@@ -3594,15 +3607,17 @@ const M2_BIKE_SVG = `<svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/sv
   <g class="m2-crate-g"><rect x="190" y="58" width="72" height="48" rx="4" fill="#c98d3d" stroke="#7a5230" stroke-width="3"/>
     <rect x="221" y="58" width="10" height="48" fill="#e9c98a"/><text x="226" y="90" font-size="20" text-anchor="middle">📦</text></g>
 </svg>`;
-const M2_CAR_SVG = `<svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg" aria-label="Ô tô giao hàng">
-  <rect x="30" y="112" width="240" height="50" rx="16" fill="#f4c430"/>
-  <path d="M80 112 L106 74 H200 L230 112 Z" fill="#f4c430"/>
-  <path d="M96 108 L114 82 H150 V108 Z" fill="#bfe6f7"/><path d="M158 108 V82 H196 L214 108 Z" fill="#bfe6f7"/>
-  <circle cx="92" cy="168" r="23" fill="#222"/><circle cx="92" cy="168" r="10" fill="#999"/>
-  <circle cx="212" cy="168" r="23" fill="#222"/><circle cx="212" cy="168" r="10" fill="#999"/>
-  <circle cx="122" cy="94" r="10" fill="#f1c27d"/>
-  <g class="m2-crate-g"><rect x="112" y="26" width="84" height="50" rx="4" fill="#c98d3d" stroke="#7a5230" stroke-width="3"/>
-    <rect x="146" y="26" width="10" height="50" fill="#e9c98a"/><text x="154" y="62" font-size="22" text-anchor="middle">📦</text></g>
+const M2_CAR_SVG = `<svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg" aria-label="Xe van giao hàng">
+  <rect x="16" y="46" width="176" height="108" rx="10" fill="#f2f4f7" stroke="#9aa5b1" stroke-width="3"/>
+  <path d="M192 78 H238 Q262 82 272 110 V154 H192 Z" fill="#2a9df4" stroke="#1b6fae" stroke-width="3"/>
+  <path d="M204 88 H236 Q252 92 258 108 H204 Z" fill="#bfe6f7"/>
+  <rect x="24" y="62" width="70" height="80" rx="6" fill="#3b3f46"/>
+  <path d="M8 60 L24 62 V142 L8 146 Z" fill="#c9d0d8" stroke="#9aa5b1" stroke-width="2"/>
+  <g class="m2-crate-g"><rect x="30" y="84" width="58" height="56" rx="3" fill="#c98d3d" stroke="#7a5230" stroke-width="3"/>
+    <rect x="52" y="84" width="9" height="56" fill="#e9c98a"/><text x="66" y="118" font-size="20" text-anchor="middle">📦</text></g>
+  <circle cx="78" cy="160" r="23" fill="#222"/><circle cx="78" cy="160" r="10" fill="#999"/>
+  <circle cx="226" cy="160" r="23" fill="#222"/><circle cx="226" cy="160" r="10" fill="#999"/>
+  <text x="136" y="108" font-size="15" font-weight="800" fill="#5b6675" text-anchor="middle">GIAO HÀNG</text>
 </svg>`;
 function m2OpenCrate(){
   const x = getM2State();
@@ -3675,29 +3690,39 @@ function m2RenderInvoice(){
 }
 function m2RenderQty(){
   const x = getM2State();
-  const body = m2Modal('📋 So sánh số lượng thực nhận', `
-    <p class="pos-note">✅ Tên công ty trùng khớp. Đếm hàng trong thùng và so với số lượng ghi trên hoá đơn — từng mặt hàng khớp hay không?</p>
-    <table class="pos-table"><thead><tr><th>Sản phẩm</th><th>Trên hoá đơn</th><th>Thực nhận</th><th>Kết luận</th></tr></thead><tbody>
-      ${x.items.map((it,i) => `<tr><td>${esc(it.name)}</td><td>${it.qty} ${it.unit}</td><td>${it.recv} ${it.unit}</td>
-        <td><label><input type="radio" name="q${i}" value="1"> Khớp</label> <label><input type="radio" name="q${i}" value="0"> Không khớp</label></td></tr>`).join('')}</tbody></table>
-    <button type="button" class="pos-btn" id="m2QtyOk">✅ Xác nhận</button><div class="pos-err" id="m2Err"></div>`);
-  body.querySelector('#m2QtyOk').addEventListener('click', () => {
-    const err = body.querySelector('#m2Err');
-    let ok = true, any = false;
-    for(let i = 0; i < x.items.length; i++){
-      const v = body.querySelector(`input[name=q${i}]:checked`)?.value;
-      if(v == null){ err.textContent = '⚠️ Chọn kết luận cho tất cả mặt hàng.'; return; }
-      const truth = x.items[i].recv === x.items[i].qty ? '1' : '0';
-      if(truth === '0') any = true;
-      if(v !== truth) ok = false;
-    }
-    if(!ok){ err.textContent = '⚠️ Có mặt hàng kết luận chưa đúng — đếm và so lại số lượng.'; return; }
-    if(any){
+  const body = m2Modal('📦 Kiểm tra số lượng trong thùng', `
+    <p class="pos-note">✅ Đã đối chiếu xong công ty. Bây giờ kiểm tra hàng: <b>bấm vào thùng hàng để mở</b>, bấm vào <b>từng loại thuốc</b> để xem tổng số hộp trong thùng, rồi so với hoá đơn và bấm <b>Khớp</b> hoặc <b>Không khớp</b>.</p>
+    <div id="m2Closed" style="text-align:center"><button type="button" class="pos-btn" id="m2OpenBox" style="font-size:1rem;padding:14px 26px">📦 Bấm vào thùng để mở</button></div>
+    <div id="m2OpenWrap" class="m2-openbox" hidden>
+      ${x.items.map((it,i) => `<div class="m2-tile" data-i="${i}">
+        <button type="button" class="nm">💊 ${esc(it.name)} — bấm để đếm</button>
+        <div>${Array.from({length: it.recv}, () => '<span class="m2-mb"></span>').join('')}</div>
+        <div class="m2-info" hidden></div></div>`).join('')}
+    </div><div class="pos-err" id="m2Err"></div>`);
+  const err = body.querySelector('#m2Err'), got = {};
+  body.querySelector('#m2OpenBox').addEventListener('click', () => { body.querySelector('#m2Closed').hidden = true; body.querySelector('#m2OpenWrap').hidden = false; });
+  const finish = () => {
+    if(x.items.some((it,i) => got[i] == null)) return;
+    if(x.items.some(it => it.recv !== it.qty)){
       x.step = 'toProcess'; saveM2State(x); m2CloseModal();
       pmZoneLabel.textContent = '⚠️ Số lượng không khớp — bấm vào Khu vực hàng chờ xử lý để chuyển thùng hàng sang đó.';
-    } else {
-      x.step = 'packaging'; x.sub = 'pack'; saveM2State(x); m2RenderPack();
-    }
+    } else { x.step = 'packaging'; x.sub = 'pack'; saveM2State(x); m2RenderPack(); }
+  };
+  body.querySelectorAll('.m2-tile').forEach(tile => {
+    const i = Number(tile.dataset.i), it = x.items[i], info = tile.querySelector('.m2-info');
+    tile.querySelector('.nm').addEventListener('click', () => {
+      if(!info.hidden || got[i] != null) return;
+      info.hidden = false;
+      info.innerHTML = `<div style="margin:6px 0">Tổng số hộp trong thùng: <b>${it.recv} ${it.unit}</b> · Trên hoá đơn: <b>${it.qty} ${it.unit}</b></div>
+        <button type="button" class="pos-btn" data-v="1">✅ Khớp</button> <button type="button" class="pos-btn" data-v="0" style="background:#b03a2e">❌ Không khớp</button>`;
+      info.querySelectorAll('[data-v]').forEach(b => b.addEventListener('click', () => {
+        const truth = it.recv === it.qty ? '1' : '0';
+        if(b.dataset.v !== truth){ err.textContent = '⚠️ Chưa đúng — so lại số hộp đếm được với số lượng trên hoá đơn.'; return; }
+        err.textContent = ''; got[i] = truth; tile.classList.add('done');
+        info.innerHTML = `<div style="margin:6px 0">Tổng: <b>${it.recv} ${it.unit}</b> · Hoá đơn: <b>${it.qty} ${it.unit}</b> → <b>${truth === '1' ? '✅ Khớp' : '❌ Không khớp'}</b></div>`;
+        finish();
+      }));
+    });
   });
 }
 function m2RenderPack(){
@@ -4082,6 +4107,7 @@ function applyLocks(){
   mapKeyEl.textContent = hasKey ? '🔑 Đã có Chìa khóa' : '🔒 Chưa có Chìa khóa';
   mapKeyEl.className = 'map-key ' + (hasKey ? 'has' : 'locked');
   document.body.classList.toggle('has-key', hasKey);
+  document.body.classList.toggle('key-fresh', hasKey && localStorage.getItem('tu-thuoc-mo-phong:keyseen') !== '1');
   renderMapAction();
 }
 
@@ -4095,6 +4121,8 @@ function enterThroughDoors(){
   // req #160: chưa có chìa khóa thì hỏi mật khẩu thay vì cho vào luôn
   if(!hasKey){ openDoorPw(); return; }
   facadeOpening = true;
+  try{ localStorage.setItem('tu-thuoc-mo-phong:keyseen','1'); }catch(e){}
+  document.body.classList.remove('key-fresh');
   document.body.classList.add('doors-open');
   setTimeout(() => {
     showMap();
@@ -4228,9 +4256,9 @@ doorPwMask.addEventListener('click', e => { if(e.target === doorPwMask) closeDoo
 // (giữ nguyên tỉ lệ tương đối giữa các loại) để tương xứng với mặt tiền 2 tầng.
 // req #167: 3 kiểu "người" (chú, cô, em bé) vẽ bằng SVG riêng (đầu + thân + 2
 // chân xoay được), thay cho emoji 🚶 tĩnh — xem personSVG() + .rw-leg bên dưới.
-const P_MAN   = { scale:2.1, skin:'#f0c191', shirt:'#2f6fb0', pants:'#33445c' };
-const P_WOMAN = { scale:2.0, skin:'#f0c191', shirt:'#d9548a', pants:'#7a3253', hair:'#3a2418' };
-const P_CHILD = { scale:1.35, skin:'#f4c9a0', shirt:'#e8a63a', pants:'#3d6b8a' };
+const P_MAN   = { scale:1.35, skin:'#f0c191', shirt:'#2f6fb0', pants:'#33445c' };
+const P_WOMAN = { scale:1.3, skin:'#f0c191', shirt:'#d9548a', pants:'#7a3253', hair:'#3a2418' };
+const P_CHILD = { scale:0.9, skin:'#f4c9a0', shirt:'#e8a63a', pants:'#3d6b8a' };
 const ROAD_KINDS = [
   { w:3, y:806, speed:430, parts:[{t:'🚗',fs:147}] },
   { w:1, y:806, speed:400, parts:[{t:'🚕',fs:147}] },
@@ -4245,12 +4273,12 @@ const ROAD_KINDS = [
     {t:'📦',fs:45,dx:29,dy:-48},
   ] },
   { w:2, y:880, speed:170, parts:[{t:'🚴',fs:118}] },
-  { w:3, y:728, speed:70,  parts:[{person:P_MAN}], walk:true },
-  { w:2, y:728, speed:80,  parts:[{person:P_WOMAN}], walk:true },
+  { w:1, y:728, speed:70,  parts:[{person:P_MAN}], walk:true },
+  { w:1, y:728, speed:80,  parts:[{person:P_WOMAN}], walk:true },
   // req #167 (phản hồi lần 2): chó VẪN bị chê "cạnh đầu em bé" — đưa hẳn xuống
   // ngang chân/đầu gối em bé (không phải ngang vai/đầu như trước), dây dắt nối
   // từ tay em bé (ngang hông, y quanh -30 theo scale) xuống tới cổ chó.
-  { w:2, y:728, speed:55,  parts:[{t:'🐕',fs:44,dx:-46,dy:-2},{person:P_CHILD}], leash:true, walk:true },
+  { w:1, y:728, speed:55,  parts:[{t:'🐕',fs:30,dx:-30,dy:-2},{person:P_CHILD}], leash:true, walk:true },
 ];
 const fActors = document.getElementById('fActors');
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -4293,7 +4321,7 @@ function spawnActor(){
   if(dir > 0) inner.setAttribute('transform','scale(-1,1)');
   if(kind.leash){
     const l = document.createElementNS(SVGNS,'path');
-    l.setAttribute('d','M-11,-34 Q-24,-20 -38,-4'); l.setAttribute('stroke','#b3261e'); l.setAttribute('stroke-width','2.5'); l.setAttribute('fill','none');
+    l.setAttribute('d','M-8,-23 Q-16,-13 -26,-3'); l.setAttribute('stroke','#b3261e'); l.setAttribute('stroke-width','2.5'); l.setAttribute('fill','none');
     inner.appendChild(l);
   }
   for(const p of kind.parts){
