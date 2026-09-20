@@ -212,6 +212,10 @@
   #handCamPreview.shown{display:block;}
   /* ===== req #169 — Nhiệm vụ 1: Lập dự trù và mua thuốc ===== */
   .pos-modal{max-width:760px;font-family:'Nunito',system-ui,sans-serif;}
+  @keyframes m1-pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,212,0,0);background:rgba(255,212,0,.10);}50%{box-shadow:0 0 0 10px rgba(255,212,0,.6);background:rgba(255,212,0,.32);}}
+  .pharmacy-map .pm-zone.m1-next{animation:m1-pulse 1.4s ease-in-out infinite;border-color:#ffd400 !important;z-index:6;}
+  .pharmacy-map .pm-zone.m1-next::after{content:'👉 Làm tiếp ở đây';position:absolute;left:50%;top:-26px;transform:translateX(-50%);
+    background:#ffd400;color:#3a2a00;font:800 12px 'Nunito',sans-serif;padding:3px 10px;border-radius:999px;white-space:nowrap;pointer-events:none;box-shadow:0 2px 6px rgba(0,0,0,.3);}
   .pos-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
   .pos-tab{border:1px solid #d8c9a3;background:#f6f1e6;color:#5c4a2c;font-weight:800;font-size:.72rem;
     padding:7px 11px;border-radius:10px;cursor:pointer;}
@@ -1981,7 +1985,7 @@ cabinets.forEach((cab,cabIdx)=>{
     img.loading = 'lazy';
     attachPhoto(img, slugify(it['Tên hoạt chất']));
     btn.querySelector('.icon').appendChild(img);
-    applyStock(btn, illustrativeQty());
+    { const q1 = m1CabQty(it['Tên hoạt chất']); applyStock(btn, q1 != null ? q1 : illustrativeQty()); }
     it._btn = btn;
     it._cabIdx = cabIdx;
     btn.addEventListener('click', e=> {
@@ -2057,14 +2061,32 @@ const LS_GAME = 'tu-thuoc-mo-phong:game_v2' + (TU_MODE === 'otc' ? ':otc' : '');
 const LS_MASTERY = 'tu-thuoc-mo-phong:drug_mastery';
 function loadGame(){
   try{ const g=JSON.parse(localStorage.getItem(LS_GAME)); if(g && typeof g.tier==='number') return g; }catch(e){}
-  return { tier:0, progress:0, stars:0, shields:0, combo:0, shieldsFromStars:0 };
+  return { tier:0, progress:0, stars:0, shields:0, combo:0, shieldsFromStars:0, plays:0 };
 }
 function saveGame(){ localStorage.setItem(LS_GAME, JSON.stringify(game)); }
 function loadMastery(){ try{ return JSON.parse(localStorage.getItem(LS_MASTERY)) || {}; }catch(e){ return {}; } }
 function saveMastery(m){ localStorage.setItem(LS_MASTERY, JSON.stringify(m)); }
+/* req #174: cấp độ (số tủ hiện ra) phụ thuộc SỐ LẦN CHƠI — mỗi lần chơi = hoàn
+   thành 1 lô hàng (xếp hết các thùng của lô) — KHÔNG còn phụ thuộc việc xếp
+   đúng/nhanh bao nhiêu hộp. Cứ PLAYS_PER_TIER lần chơi thì lên 1 cấp. */
+const PLAYS_PER_TIER = 2;
 let game = loadGame();
+if(typeof game.plays !== 'number') game.plays = game.tier * PLAYS_PER_TIER;   // giữ cấp người chơi đã đạt
 let mastery = loadMastery();
-function tierCabinets(){ return Math.min(TIERS[game.tier].cabinets, cabinets.length); }
+/* req #174: khi đang KIỂM TỦ cho nhiệm vụ 1, số tủ hiện ra phải đủ để chứa các
+   thuốc được yêu cầu dự trù (không được ẩn mất tủ có thuốc cần kiểm). */
+function m1CabNeed(){
+  try{
+    if(getM1State().step !== 'checking') return 0;
+    let mx = 0;
+    getM1Items().filter(it => it.cabinet === TU_MODE).forEach(it => {
+      const i = cabinets.findIndex(c => c.items.some(r => r['Tên hoạt chất'] === it.name));
+      if(i + 1 > mx) mx = i + 1;
+    });
+    return mx;
+  }catch(e){ return 0; }
+}
+function tierCabinets(){ return Math.min(Math.max(TIERS[game.tier].cabinets, m1CabNeed()), cabinets.length); }
 let cartWindow = tierCabinets();
 function drugSlugOf(it){ return slugify(it['Tên hoạt chất']); }
 function currentTitle(){ let t=TITLES[0]; for(const x of TITLES){ if(game.stars>=x.min) t=x; } return t; }
@@ -2084,6 +2106,7 @@ const gamePanelEl = document.getElementById('gamePanel');
 gamePanelEl.addEventListener('click', ()=> gamePanelEl.classList.toggle('gp-open'));
 function renderGameUI(){
   const T = TIERS[game.tier];
+  game.progress = game.tier >= TIERS.length-1 ? 100 : ((game.plays % PLAYS_PER_TIER) / PLAYS_PER_TIER) * 100;
   gpTier.textContent = `${T.name} · ${tierCabinets()} tủ`;
   gpTitle.textContent = '🎖️ ' + currentTitle().name;
   gpBar.style.width = Math.max(0, Math.min(100, game.progress)) + '%';
@@ -2126,26 +2149,16 @@ function addStars(k){
 
 /* move the progress bar by delta%. Negative deltas are absorbed by a shield
    if one is available (bar stays put). Filling to 100% promotes a tier. */
-function applyProgress(delta){
-  if(delta < 0 && game.shields > 0){
-    game.shields--; popEl(gpShields); flashBar('shield');
-    renderGameUI();
-    return { shielded:true, promoted:false };
-  }
-  game.progress += delta;
-  flashBar(delta >= 0 ? 'gain' : 'loss');
+function applyProgress(){ renderGameUI(); return { shielded:false, promoted:false }; }
+/* ghi nhận 1 lần chơi (xong 1 lô) → có thể lên cấp. Trả về true nếu vừa lên cấp. */
+function registerPlay(){
+  game.plays = (game.plays || 0) + 1;
+  const newTier = Math.min(TIERS.length-1, Math.floor(game.plays / PLAYS_PER_TIER));
   let promoted = false;
-  while(game.progress >= 100 && game.tier < TIERS.length-1){
-    game.progress -= 100;
-    game.tier++;
-    game.shields += 1;      // promotion bonus shield
-    promoted = true;
-  }
-  if(game.tier === TIERS.length-1) game.progress = Math.min(game.progress, 100);
-  if(game.progress < 0) game.progress = 0;
+  if(newTier > game.tier){ game.tier = newTier; game.shields += 1; promoted = true; }
   cartWindow = tierCabinets();
   renderGameUI();
-  return { shielded:false, promoted };
+  return promoted;
 }
 /* weighted random sample without replacement — rarely-mastered drugs are
    far more likely to be picked than ones already nailed several times */
@@ -2353,7 +2366,7 @@ function attemptDrop(cartBox, droppedOn){
     else if(elapsed<=4){ delta=15; star=true; tag='⚡ Xuất sắc'; }
     else if(elapsed<=8){ delta=10; star=true; tag='✅ Nhanh'; }
     else if(elapsed<=14){ delta=4; tag='🙂 Đạt'; }
-    else { delta=-7; tag='🐢 Chậm — lùi tiến độ'; }
+    else { delta=-7; tag='🐢 Hơi chậm'; }
 
     let bonus='';
     if(star){
@@ -2366,16 +2379,13 @@ function attemptDrop(cartBox, droppedOn){
       game.combo = 0;
     }
 
-    const res = applyProgress(delta);
-    const deltaTxt = res.shielded ? '🛡️ Dùng thẻ Khiên — giữ nguyên tiến độ'
-                                  : (delta>=0 ? `+${delta}%` : `${delta}%`);
+    const res = applyProgress();
+    const deltaTxt = '';
     let promoMsg = '';
-    if(res.promoted){ applyCabinetVisibility(); promoMsg = ` 🎉 LÊN MỨC: ${TIERS[game.tier].name} — mở ${tierCabinets()} tủ!`; }
-
-    /* xếp NHANH & ĐÚNG cả lô (mọi hộp đều đạt ⭐, không nhầm) → chắc chắn lên 1 mức */
-    if(cartPlacedCount===cartTotal && cartFastClean===cartTotal && game.tier < TIERS.length-1){
-      const resLo = applyProgress(100 - game.progress);   // đẩy đủ 100% để lên đúng 1 mức
-      if(resLo.promoted){ applyCabinetVisibility(); promoMsg += ` 🏆 XẾP NHANH & ĐÚNG CẢ LÔ — LÊN MỨC: ${TIERS[game.tier].name} (mở ${tierCabinets()} tủ)!`; }
+    /* xong cả lô = 1 lần chơi → đủ PLAYS_PER_TIER lần thì lên cấp (mở thêm tủ) */
+    if(cartPlacedCount===cartTotal && registerPlay()){
+      applyCabinetVisibility();
+      promoMsg = ` 🎉 LÊN MỨC: ${TIERS[game.tier].name} — mở ${tierCabinets()} tủ!`;
     }
     saveGame();
 
@@ -3050,13 +3060,32 @@ function getM1State(){
   }catch(e){}
   return { step:'dutru', confirmed:{}, actual:{}, orders:{} };
 }
-function saveM1State(s){ localStorage.setItem(LS_M1, JSON.stringify(s)); }
+function saveM1State(s){
+  localStorage.setItem(LS_M1, JSON.stringify(s));
+  try{ applyM1Highlight(); }catch(e){}
+}
+/* req #174: làm sáng VÙNG cần tới ở bước tiếp theo trên sơ đồ (Quầy thu ngân
+   hoặc tủ còn thuốc chưa kiểm) để người học biết phải làm gì tiếp. */
+function applyM1Highlight(){
+  document.querySelectorAll('.pm-zone.m1-next').forEach(z => z.classList.remove('m1-next'));
+  const st = getM1State();
+  if(st.step === 'done') return;
+  if(st.step === 'checking'){
+    const pend = getM1Items().filter(it => !st.confirmed[it.key]);
+    if(pend.some(it => it.cabinet === 'rx')) document.querySelector('.pm-zone.z-rx')?.classList.add('m1-next');
+    if(pend.some(it => it.cabinet === 'otc')) document.querySelector('.pm-zone.z-otc')?.classList.add('m1-next');
+  } else {
+    document.getElementById('zCashier')?.classList.add('m1-next');
+  }
+}
 function m1HashNum(s, min, max){
   let h = 0; for(let i=0;i<s.length;i++){ h = (h*31 + s.charCodeAt(i)) | 0; }
   h = Math.abs(h);
   return min + (h % (max - min + 1));
 }
-let M1_ITEMS = null;
+var M1_ITEMS = null;
+// req #174: đơn vị tính theo QUY CÁCH ĐÓNG GÓI (hộp/lọ…), không lấy đơn vị nhỏ nhất.
+function m1UnitOf(name){ return /nhỏ mắt|nhỏ mũi|siro|xịt|lọ|dung dịch/i.test(name) ? 'lọ' : 'hộp'; }
 function getM1Items(){
   if(M1_ITEMS) return M1_ITEMS;
   const pick = (cab, n) => allRecords
@@ -3064,10 +3093,21 @@ function getM1Items(){
     .slice(0, n)
     .map(r => {
       const key = r['STT Buổi'] + '|' + r['Tên hoạt chất'];
-      return { key, name: r['Tên hoạt chất'], cabinet: cab, tonKho: m1HashNum(key+'k',3,14), banTuan: m1HashNum(key+'b',6,38) };
+      const ton = m1HashNum(key+'k',1,2);   // hộp; tủ chỉ chứa 1–2 hộp mỗi loại
+      return { key, name: r['Tên hoạt chất'], cabinet: cab, tonKho: ton, tonThuc: ton, unit: m1UnitOf(r['Tên hoạt chất']), banTuan: m1HashNum(key+'b',6,38) };
     });
   M1_ITEMS = [...pick('rx',2), ...pick('otc',2)];
+  // req #174: tồn trong phần mềm KHỚP thực tế, trừ tối đa 1 mặt hàng lệch (1↔2 hộp).
+  if(M1_ITEMS.length){
+    const mi = m1HashNum('m1-mismatch', 0, M1_ITEMS.length - 1);
+    M1_ITEMS[mi].tonThuc = 3 - M1_ITEMS[mi].tonKho;
+  }
   return M1_ITEMS;
+}
+// Số hộp thực tế ghi trên tủ cho thuốc thuộc nhiệm vụ 1 (null = không thuộc nhiệm vụ 1).
+function m1CabQty(drugName){
+  try{ const it = getM1Items().find(x => x.name === drugName); return it ? it.tonThuc : null; }
+  catch(e){ return null; }
 }
 // req #169 (phản hồi): "số ngày cần dự trù" — chu kỳ nhập hàng chuẩn của nhà
 // thuốc, dùng cho công thức SL đặt = Bán/tuần ÷ 7 × số ngày − tồn. Đang để
@@ -3083,6 +3123,11 @@ function m1OrderQty(it, tonThuc){
 // 3 loại giấy tờ hợp pháp, phải so tiếp giá/thời gian giao hàng để chọn C
 // (tốt nhất). Không dựng lại ảnh chứng nhận thật — chỉ liệt kê dạng checklist
 // để không tạo ra thứ trông như giấy tờ nhà nước thật.
+const M1_DOCS = [
+  { k:'dkkd', label:'Giấy đăng ký kinh doanh' },
+  { k:'ddk',  label:'Giấy chứng nhận đủ điều kiện kinh doanh dược' },
+  { k:'gdp',  label:'Giấy chứng nhận GDP (Thực hành tốt phân phối thuốc)' },
+];
 const M1_SUPPLIERS = [
   { id:'A', name:'Công ty TNHH Dược phẩm An Phát', dkkd:true, ddk:true, gdp:false,
     price:'210.000đ/hộp', ship:'3 ngày' },
@@ -3111,6 +3156,7 @@ document.getElementById('posTabs').addEventListener('click', e => {
   document.querySelectorAll('#posTabs .pos-tab').forEach(x => x.classList.toggle('active', x === b));
   if(b.dataset.tab === 'dutru') renderDuTruTab();
   else if(b.dataset.tab === 'nhacc') renderNhaCCTab();
+  else if(b.dataset.tab === 'quanly') renderQuanLyTab();
   else posPanel.innerHTML = '<div class="pos-soon">🔒 Tab này sẽ có nghiệp vụ ở các nhiệm vụ sau (2, 4, 5).</div>';
 });
 
@@ -3130,6 +3176,29 @@ function m1Hint(){
   pmZoneLabel.textContent = text;
 }
 
+// req #174: tab "Quản lý thuốc" — tồn kho trong phần mềm, tính theo ĐƠN VỊ ĐÓNG GÓI
+// (hộp/lọ…) khớp với số hộp ở tủ (tối đa 1 mặt hàng lệch để người học phát hiện).
+function renderQuanLyTab(){
+  const items = getM1Items();
+  posPanel.innerHTML = `
+    <p class="pos-note">📋 Tồn kho ghi trong phần mềm — tính theo <b>đơn vị đóng gói</b> (hộp, lọ…), không tính đơn vị nhỏ nhất (viên, ống…).</p>
+    <table class="pos-table"><thead><tr><th>Tên thuốc</th><th>Tồn kho (PM)</th><th>ĐVT</th><th>Vị trí</th></tr></thead><tbody>
+      ${items.map(it => `<tr><td>${esc(it.name)}</td><td>${it.tonKho}</td><td>${it.unit}</td><td>${it.cabinet==='rx'?'Tủ thuốc kê đơn':'Tủ thuốc không kê đơn'}</td></tr>`).join('')}
+    </tbody></table>`;
+}
+// Các đáp số gợi ý cho 1 mặt hàng: 1 đúng + 3 sai do nhầm công thức, xáo theo hash để cố định.
+function m1QtyChoices(it, ton){
+  const right = m1OrderQty(it, ton);
+  const wrongs = [
+    Math.max(0, Math.round(it.banTuan / 7 * M1_RESTOCK_DAYS)),        // quên trừ tồn
+    Math.max(0, it.banTuan - ton),                                    // quên ÷7 × ngày
+    Math.max(0, Math.round(it.banTuan / 7 * M1_RESTOCK_DAYS + ton)),  // cộng thay vì trừ tồn
+  ];
+  const set = [right];
+  for(const w of wrongs){ if(!set.includes(w)) set.push(w); }
+  for(let k = 1; set.length < 4; k++){ if(!set.includes(right + k)) set.push(right + k); }
+  return set.sort((a,b) => m1HashNum(it.key+'c'+a,0,999) - m1HashNum(it.key+'c'+b,0,999));
+}
 function renderDuTruTab(){
   const items = getM1Items();
   const st = getM1State();
@@ -3137,7 +3206,7 @@ function renderDuTruTab(){
     posPanel.innerHTML = `
       <p class="pos-note">📦 Phần mềm phát hiện <b>${items.length} mặt hàng</b> cần kiểm tra trước khi lập dự trù. Chu kỳ dự trù chuẩn của nhà thuốc: <b>${M1_RESTOCK_DAYS} ngày</b>.</p>
       <table class="pos-table"><thead><tr><th>Tên thuốc</th><th>Tồn kho (PM)</th><th>Số ngày cần dự trù</th><th>Vị trí</th></tr></thead><tbody>
-        ${items.map(it => `<tr><td>${esc(it.name)}</td><td>${it.tonKho}</td><td>${M1_RESTOCK_DAYS} ngày</td><td>${it.cabinet==='rx'?'Tủ thuốc kê đơn':'Tủ thuốc không kê đơn'}</td></tr>`).join('')}
+        ${items.map(it => `<tr><td>${esc(it.name)}</td><td>${it.tonKho} ${it.unit}</td><td>${M1_RESTOCK_DAYS} ngày</td><td>${it.cabinet==='rx'?'Tủ thuốc kê đơn':'Tủ thuốc không kê đơn'}</td></tr>`).join('')}
       </tbody></table>
       <p class="pos-note">👉 Rời máy tính, đến đúng tủ kiểm tra thực tế từng mặt hàng trước khi lên đơn.</p>
       <button type="button" class="pos-btn" id="posGoCheck">🚶 Rời máy tính, đi kiểm tủ →</button>`;
@@ -3151,25 +3220,25 @@ function renderDuTruTab(){
     posPanel.innerHTML = `<p class="pos-note">🔍 Còn <b>${left} mặt hàng</b> chưa kiểm xong. Đến tủ tương ứng (xem thẻ nổi góc màn hình khi ở trong tủ) để kiểm và xác nhận từng mặt hàng.</p>`;
   } else if(st.step === 'return'){
     posPanel.innerHTML = `
-      <p class="pos-note">✅ Đã kiểm xong thực tế. Bảng tổng hợp — xem <b>lịch sử bán 1 tuần</b> rồi điền <b>số lượng cần đặt</b> cho từng mặt hàng:</p>
-      <table class="pos-table"><thead><tr><th>Tên thuốc</th><th>Tồn thực tế</th><th>Bán/tuần</th><th>SL cần đặt</th></tr></thead><tbody>
-        ${items.map(it => `<tr>
+      <p class="pos-note">✅ Đã kiểm xong thực tế. Bảng tổng hợp — xem <b>lịch sử bán 1 tuần</b>, áp công thức rồi <b>chọn số lượng cần đặt</b> đúng cho từng mặt hàng:</p>
+      <table class="pos-table"><thead><tr><th>Tên thuốc</th><th>Tồn thực tế</th><th>Bán/tuần</th><th>SL cần đặt (chọn 1)</th></tr></thead><tbody>
+        ${items.map(it => { const ton = st.actual[it.key] != null ? st.actual[it.key] : it.tonKho; return `<tr>
           <td>${esc(it.name)}</td>
-          <td>${st.actual[it.key] != null ? st.actual[it.key] : it.tonKho}</td>
+          <td>${ton} ${it.unit}</td>
           <td>${it.banTuan}<span class="pos-hint">lịch sử bán</span></td>
-          <td><input type="number" min="0" step="1" class="pos-order-in" data-key="${esc(it.key)}" value="${st.orders[it.key] != null ? st.orders[it.key] : ''}" placeholder="SL"></td>
-        </tr>`).join('')}
+          <td>${m1QtyChoices(it, ton).map(q => `<label style="display:block;white-space:nowrap;cursor:pointer;padding:1px 0"><input type="radio" class="pos-order-in" name="ord-${esc(it.key)}" data-key="${esc(it.key)}" value="${q}"${String(st.orders[it.key])===String(q)?' checked':''}> ${q} ${it.unit}</label>`).join('')}</td>
+        </tr>`; }).join('')}
       </tbody></table>
-      <p class="pos-note" style="font-size:.76rem;opacity:.75">💡 Công thức: SL đặt = Bán/tuần ÷ 7 × ${M1_RESTOCK_DAYS} ngày − Tồn thực tế.</p>
+      <p class="pos-note" style="font-size:.76rem;opacity:.75">💡 Công thức: SL đặt = Bán/tuần ÷ 7 × ${M1_RESTOCK_DAYS} ngày − Tồn thực tế. Chọn đáp số khớp với công thức.</p>
       <button type="button" class="pos-btn" id="posSubmit">✅ Xác nhận đặt hàng</button>
       <div class="pos-err" id="posErr"></div>`;
     posPanel.querySelectorAll('.pos-order-in').forEach(inp => {
-      inp.addEventListener('input', () => { st.orders[inp.dataset.key] = inp.value; saveM1State(st); });
+      inp.addEventListener('change', () => { st.orders[inp.dataset.key] = inp.value; saveM1State(st); });
     });
     document.getElementById('posSubmit').addEventListener('click', () => {
       const errEl = document.getElementById('posErr');
       const missing = items.some(it => st.orders[it.key] === '' || st.orders[it.key] == null || !(Number(st.orders[it.key]) >= 0));
-      if(missing){ errEl.textContent = '⚠️ Điền số lượng cần đặt cho đủ tất cả mặt hàng.'; return; }
+      if(missing){ errEl.textContent = '⚠️ Chọn số lượng cần đặt cho đủ tất cả mặt hàng.'; return; }
       const wrong = items.find(it => Number(st.orders[it.key]) !== m1OrderQty(it, st.actual[it.key] != null ? st.actual[it.key] : it.tonKho));
       if(wrong){ errEl.textContent = `⚠️ "${wrong.name}" chưa đúng — xem lại công thức: SL đặt = Bán/tuần ÷ 7 × ${M1_RESTOCK_DAYS} ngày − Tồn thực tế.`; return; }
       st.step = 'supplier'; saveM1State(st);
@@ -3214,29 +3283,41 @@ function renderNhaCCTab(){
 function renderHoSoSub(st){
   const body = document.getElementById('nhaccBody');
   const chosen = st.supplier;
+  st.ticks = st.ticks || {};
+  st.viewed = st.viewed || {};
+  // req #174: KHÔNG tick sẵn — người học mở hồ sơ từng nhà cung ứng, xem họ có những
+  // giấy tờ nào rồi tự tick. Đủ cả 3 giấy tờ mới hiện giá + thời gian giao hàng.
   body.innerHTML = `
-    <p class="pos-note">Chọn nhà cung ứng có <b>đủ giấy tờ hợp pháp</b> để được phép mua hàng. Nếu nhiều nhà cung ứng đều đủ giấy tờ, so tiếp <b>giá &amp; thời gian giao hàng</b> để chọn nơi tốt nhất.</p>
+    <p class="pos-note">Mở <b>hồ sơ</b> từng nhà cung ứng, kiểm tra họ có những giấy tờ nào rồi <b>tự tick</b> vào các giấy tờ đó. Chỉ nhà cung ứng có <b>đủ 3 giấy tờ</b> mới được mua hàng; nếu nhiều nơi đủ giấy tờ, so tiếp <b>giá &amp; thời gian giao hàng</b>.</p>
     <table class="pos-table"><thead><tr><th>Nhà cung ứng</th><th>ĐK kinh doanh</th><th>Đủ điều kiện KD dược</th><th>GDP (Thực hành tốt phân phối)</th><th>Giá</th><th>Giao hàng</th><th></th></tr></thead><tbody>
-      ${M1_SUPPLIERS.map(s => `<tr class="${chosen===s.id?'pos-sup-chosen':''}">
-        <td>${esc(s.name)}</td>
-        <td>${s.dkkd?'✅':'❌'}</td>
-        <td>${s.ddk?'✅':'❌'}</td>
-        <td>${s.gdp?'✅':'❌'}</td>
-        <td>${(s.dkkd&&s.ddk&&s.gdp) ? s.price : '—'}</td>
-        <td>${(s.dkkd&&s.ddk&&s.gdp) ? s.ship : '—'}</td>
+      ${M1_SUPPLIERS.map(s => { const t = st.ticks[s.id] || {}; const all = t.dkkd && t.ddk && t.gdp; return `<tr class="${chosen===s.id?'pos-sup-chosen':''}">
+        <td>${esc(s.name)}<br><button type="button" class="pos-btn" style="padding:3px 8px;font-size:.68rem;margin-top:4px" data-view="${s.id}">🔍 ${st.viewed[s.id]?'Ẩn hồ sơ':'Xem hồ sơ'}</button>
+          ${st.viewed[s.id] ? `<div style="font-size:.72rem;margin-top:6px;line-height:1.5">Hồ sơ đang có:<br>${M1_DOCS.filter(d => s[d.k]).map(d => '• ' + esc(d.label)).join('<br>')}</div>` : ''}</td>
+        ${M1_DOCS.map(d => `<td><input type="checkbox" data-tick="${s.id}:${d.k}"${t[d.k]?' checked':''}></td>`).join('')}
+        <td>${all ? s.price : '—'}</td>
+        <td>${all ? s.ship : '—'}</td>
         <td><button type="button" class="pos-btn" style="padding:5px 10px;font-size:.74rem" data-pick="${s.id}">${chosen===s.id?'Đã chọn':'Chọn'}</button></td>
-      </tr>`).join('')}
+      </tr>`; }).join('')}
     </tbody></table>
     <div class="pos-err" id="hosoErr"></div>`;
+  body.querySelectorAll('[data-view]').forEach(btn => btn.addEventListener('click', () => {
+    st.viewed[btn.dataset.view] = !st.viewed[btn.dataset.view]; saveM1State(st); renderHoSoSub(st);
+  }));
+  body.querySelectorAll('[data-tick]').forEach(cb => cb.addEventListener('change', () => {
+    const [id, k] = cb.dataset.tick.split(':');
+    (st.ticks[id] = st.ticks[id] || {})[k] = cb.checked; saveM1State(st); renderHoSoSub(st);
+  }));
   body.querySelectorAll('[data-pick]').forEach(btn => btn.addEventListener('click', () => {
     const s = M1_SUPPLIERS.find(x => x.id === btn.dataset.pick);
     const errEl = document.getElementById('hosoErr');
+    const t = st.ticks[s.id] || {};
+    if(!st.viewed[s.id]){ errEl.textContent = `⚠️ Bạn chưa mở hồ sơ của ${s.name} — bấm "Xem hồ sơ" và tick các giấy tờ họ có trước khi chọn.`; return; }
+    if(M1_DOCS.some(d => !!t[d.k] !== !!s[d.k])){ errEl.textContent = `⚠️ Phần tick của bạn chưa khớp hồ sơ của ${s.name} — đối chiếu lại từng giấy tờ trong "Hồ sơ đang có".`; return; }
     if(!s.dkkd || !s.ddk || !s.gdp){
       errEl.textContent = `⚠️ ${s.name} chưa đủ giấy tờ hợp pháp (thiếu ${!s.gdp?'giấy chứng nhận GDP':!s.ddk?'giấy đủ điều kiện kinh doanh dược':'giấy đăng ký kinh doanh'}) — không đạt chuẩn, chọn nhà cung ứng khác.`;
       return;
     }
-    // req: renderNhaCCTab() vẽ lại toàn bộ panel (kể cả #hosoErr rỗng) —
-    // phải đặt lại chữ cảnh báo SAU khi vẽ lại, không thì bị xoá mất ngay.
+    // renderNhaCCTab() vẽ lại toàn bộ panel — đặt lại chữ cảnh báo SAU khi vẽ lại.
     const warn = s.best ? '' : `${s.name} đủ giấy tờ, nhưng còn nhà cung ứng khác giá tốt hơn / giao nhanh hơn — cân nhắc so sánh thêm trước khi chọn.`;
     st.supplier = s.id; saveM1State(st); renderNhaCCTab();
     const newErrEl = document.getElementById('hosoErr'); if(newErrEl) newErrEl.textContent = warn;
@@ -3259,7 +3340,7 @@ function renderDonHangSub(st){
   body.innerHTML = `
     <p class="pos-note">Kính gửi: <b>${esc(supplier.name)}</b></p>
     <table class="pos-table"><thead><tr><th>Sản phẩm</th><th>Quy cách</th><th>SL</th><th>ĐVT</th></tr></thead><tbody>
-      ${items.map(it => `<tr><td>${esc(it.name)}</td><td>Hộp</td><td>${st.orders[it.key]}</td><td>Hộp</td></tr>`).join('')}
+      ${items.map(it => `<tr><td>${esc(it.name)}</td><td>${it.unit[0].toUpperCase()+it.unit.slice(1)}</td><td>${st.orders[it.key]}</td><td>${it.unit[0].toUpperCase()+it.unit.slice(1)}</td></tr>`).join('')}
     </tbody></table>
     <label style="display:flex;gap:8px;align-items:center;font-size:.82rem;margin:8px 0"><input type="checkbox" id="posOrderCheck"> Tôi đã kiểm tra kỹ thông tin đơn đặt hàng.</label>
     <button type="button" class="pos-btn" id="posOrderSend" disabled>📨 Gửi đơn đặt hàng cho nhà cung ứng</button>`;
@@ -3282,9 +3363,18 @@ function renderM1Checklist(){
   // vụ 1 gây rối, ẩn đi khi đang kiểm tủ cho nhiệm vụ 1.
   const cartEl = document.getElementById('deliveryCart');
   if(cartEl) cartEl.style.display = (st.step === 'checking') ? 'none' : '';
-  if(st.step !== 'checking'){ panel.hidden = true; return; }
+  if(st.step !== 'checking'){
+    panel.hidden = true;
+    if(cartWindow > tierCabinets()){ cartWindow = tierCabinets(); applyCabinetVisibility(); }
+    return;
+  }
   const items = getM1Items().filter(it => it.cabinet === TU_MODE);
   if(!items.length){ panel.hidden = true; return; }
+  // req #174: đảm bảo tủ chứa thuốc cần kiểm đang hiện, và nhảy tới tủ đó.
+  if(m1CabNeed() > cartWindow){ cartWindow = tierCabinets(); applyCabinetVisibility(); }
+  { const pendNow = items.filter(it => !st.confirmed[it.key]);
+    const idxOf = it => cabinets.findIndex(c => c.items.some(r => r['Tên hoạt chất'] === it.name));
+    if(pendNow.length && !pendNow.some(it => idxOf(it) === activeCabIdx)){ const j = idxOf(pendNow[0]); if(j >= 0) showCabinet(j); } }
   const pending = items.filter(it => !st.confirmed[it.key]);
   panel.hidden = false;
   if(!pending.length){
@@ -3298,17 +3388,25 @@ function renderM1Checklist(){
     if(allDone){ st.step = 'return'; saveM1State(st); window.refreshMissionsList?.(); }
     return;
   }
-  panel.innerHTML = `<h5>📋 Kiểm tủ — còn ${pending.length} mặt hàng</h5>` + pending.map(it => `
+  panel.innerHTML = `<h5>📋 Kiểm tủ — còn ${pending.length} mặt hàng</h5><div style="font-size:.7rem;opacity:.8;margin-bottom:4px">So số hộp ghi trên tủ (x…) với tồn phần mềm (PM).</div>` + pending.map(it => {
+    const ci = cabinets.findIndex(c => c.items.some(r => r['Tên hoạt chất'] === it.name));
+    return `
     <div class="m1-item" data-key="${esc(it.key)}">
-      <span>${esc(it.name)} <i style="opacity:.6">(PM: ${it.tonKho})</i></span>
+      <span>${esc(it.name)} <i style="opacity:.6">(PM: ${it.tonKho} ${it.unit}${ci>=0?' · Tủ số '+(ci+1):''})</i></span>
       <span class="m1-btns">
         <button type="button" class="m1-ok" data-act="ok">✅ Đúng</button>
         <button type="button" class="m1-bad" data-act="bad">❌ Sai</button>
       </span>
-    </div>`).join('');
+    </div>`; }).join('');
   panel.querySelectorAll('.m1-item').forEach(row => {
     const key = row.dataset.key;
+    const it1 = getM1Items().find(x => x.key === key);
     row.querySelector('[data-act="ok"]').addEventListener('click', () => {
+      if(it1 && it1.tonThuc !== it1.tonKho){
+        row.querySelector('.m1-warn')?.remove();
+        row.insertAdjacentHTML('beforeend', '<div class="m1-warn" style="color:#b91c1c;font-size:.72rem;margin-top:4px">⚠️ Số hộp trên tủ chưa khớp với PM — đếm lại rồi bấm ❌ Sai để sửa tồn thực tế.</div>');
+        return;
+      }
       st.confirmed[key] = true; saveM1State(st); renderM1Checklist();
     });
     row.querySelector('[data-act="bad"]').addEventListener('click', () => {
@@ -3316,6 +3414,11 @@ function renderM1Checklist(){
       row.querySelector('[data-act="save"]').addEventListener('click', () => {
         const v = row.querySelector('.m1-fix-in').value;
         if(v === '' || Number(v) < 0) return;
+        if(it1 && Number(v) !== it1.tonThuc){
+          row.querySelector('.m1-warn')?.remove();
+          row.insertAdjacentHTML('beforeend', '<div class="m1-warn" style="color:#b91c1c;font-size:.72rem;margin-top:4px">⚠️ Số này chưa đúng — đếm lại số hộp ghi trên tủ (x…).</div>');
+          return;
+        }
         st.actual[key] = Number(v); st.confirmed[key] = true; saveM1State(st); renderM1Checklist();
       });
     });
@@ -3384,6 +3487,7 @@ function renderM1Checklist(){
     missionsEl.querySelector('[data-mission="3"]')?.addEventListener('click', () => { document.querySelector('.z-rx')?.dispatchEvent(new MouseEvent('click', { bubbles:true })); });
   }
   if(missionsEl){ renderMissions(); window.refreshMissionsList = renderMissions; }
+  try{ applyM1Highlight(); }catch(e){}
 
   const TIPS = [
     'Luôn xếp thuốc theo nguyên tắc FEFO — thuốc hết hạn SỚM đưa ra phía trước, dễ lấy trước.',
