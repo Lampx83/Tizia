@@ -3224,40 +3224,60 @@ function renderDuTruTab(){
     const left = items.filter(it => !st.confirmed[it.key]).length;
     posPanel.innerHTML = `<p class="pos-note">🔍 Còn <b>${left} mặt hàng</b> chưa kiểm xong. Đến tủ tương ứng (xem thẻ nổi góc màn hình khi ở trong tủ) để kiểm và xác nhận từng mặt hàng.</p>`;
   } else if(st.step === 'return'){
-    posPanel.innerHTML = `
-      <p class="pos-note">✅ Đã kiểm xong thực tế. Bảng tổng hợp — xem <b>lịch sử bán 1 tuần</b>, áp công thức rồi <b>chọn số lượng cần đặt</b> đúng cho từng mặt hàng:</p>
-      <table class="pos-table"><thead><tr><th>Tên thuốc</th><th>Tồn thực tế</th><th>Bán/tuần</th><th>Số ngày dự trù</th><th>SL cần đặt (chọn 1)</th></tr></thead><tbody>
-        ${items.map(it => { const ton = st.actual[it.key] != null ? st.actual[it.key] : it.tonKho; return `<tr>
+    // req #179: hỏi CÔNG THỨC dạng điền khuyết; trả lời đúng thì phần mềm tự tính luôn
+    // số lượng cần đặt (không còn chọn đáp số trắc nghiệm).
+    const rows = items.map(it => { const ton = st.actual[it.key] != null ? st.actual[it.key] : it.tonKho; return { it, ton }; });
+    const table = withQty => `<table class="pos-table"><thead><tr><th>Tên thuốc</th><th>Tồn thực tế</th><th>Bán/tuần</th><th>Số ngày dự trù</th>${withQty?'<th>SL cần đặt</th>':''}</tr></thead><tbody>
+        ${rows.map(({it,ton}) => `<tr>
           <td>${esc(it.name)}</td>
           <td>${ton} ${it.unit}</td>
           <td>${it.banTuan}<span class="pos-hint">lịch sử bán</span></td>
           <td>${m1Days(it)} ngày</td>
-          <td>${m1QtyChoices(it, ton).map(q => `<label style="display:block;white-space:nowrap;cursor:pointer;padding:1px 0"><input type="radio" class="pos-order-in" name="ord-${esc(it.key)}" data-key="${esc(it.key)}" value="${q}"${String(st.orders[it.key])===String(q)?' checked':''}> ${q} ${it.unit}</label>`).join('')}</td>
-        </tr>`; }).join('')}
-      </tbody></table>
-      <p class="pos-note" style="font-size:.76rem;opacity:.75">💡 Công thức: SL đặt = Bán/tuần ÷ 7 × số ngày dự trù − Tồn thực tế. Chọn đáp số khớp với công thức.</p>
-      <button type="button" class="pos-btn" id="posSubmit">✅ Xác nhận đặt hàng</button>
-      <div class="pos-err" id="posErr"></div>`;
-    posPanel.querySelectorAll('.pos-order-in').forEach(inp => {
-      inp.addEventListener('change', () => { st.orders[inp.dataset.key] = inp.value; saveM1State(st); });
-    });
-    document.getElementById('posSubmit').addEventListener('click', () => {
-      const errEl = document.getElementById('posErr');
-      const missing = items.some(it => st.orders[it.key] === '' || st.orders[it.key] == null || !(Number(st.orders[it.key]) >= 0));
-      if(missing){ errEl.textContent = '⚠️ Chọn số lượng cần đặt cho đủ tất cả mặt hàng.'; return; }
-      const wrong = items.find(it => Number(st.orders[it.key]) !== m1OrderQty(it, st.actual[it.key] != null ? st.actual[it.key] : it.tonKho));
-      if(wrong){ errEl.textContent = `⚠️ "${wrong.name}" chưa đúng — xem lại công thức: SL đặt = Bán/tuần ÷ 7 × ${m1Days(wrong)} ngày − Tồn thực tế.`; return; }
-      st.step = 'supplier'; saveM1State(st);
-      posPanel.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đã lập xong số lượng cần đặt cho ${items.length} mặt hàng!<br>Sang tab "Quản lý nhà cung ứng" để chọn nhà cung ứng và gửi đơn đặt hàng.</div>`;
-      window.refreshMissionsList?.();
-    });
+          ${withQty ? `<td><b>${m1OrderQty(it, ton)} ${it.unit}</b></td>` : ''}
+        </tr>`).join('')}
+      </tbody></table>`;
+    if(!st.formulaOk){
+      posPanel.innerHTML = `
+        <p class="pos-note">✅ Đã kiểm xong thực tế. Xem bảng <b>lịch sử bán 1 tuần</b>, rồi <b>điền công thức</b> tính số lượng cần đặt — điền đúng, phần mềm sẽ tính giúp số lượng cho từng mặt hàng.</p>
+        ${table(false)}
+        <p class="pos-note" style="line-height:2.2">SL đặt = Bán/tuần ÷
+          <input type="text" id="fmA" class="m1-fm" size="4" placeholder="?" inputmode="numeric" aria-label="Số ngày trong tuần"> ×
+          <input type="text" id="fmB" class="m1-fm" size="14" placeholder="điền vào đây" aria-label="Thừa số thứ hai"> −
+          <input type="text" id="fmC" class="m1-fm" size="14" placeholder="điền vào đây" aria-label="Số bị trừ"></p>
+        <p class="pos-note" style="font-size:.76rem;opacity:.75">Gợi ý: chia cho số ngày trong 1 tuần, nhân với số ngày cần dự trù, rồi trừ đi lượng đang còn ở tủ.</p>
+        <button type="button" class="pos-btn" id="posFormula">✅ Kiểm tra công thức</button>
+        <div class="pos-err" id="posErr"></div>`;
+      posPanel.querySelectorAll('.m1-fm').forEach(i => { i.style.cssText = 'padding:4px 6px;border:1px solid #caa25a;border-radius:6px;font:inherit;'; });
+      const norm = v => String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+      document.getElementById('posFormula').addEventListener('click', () => {
+        const a1 = norm(document.getElementById('fmA').value), b1 = norm(document.getElementById('fmB').value), c1 = norm(document.getElementById('fmC').value);
+        const okA = a1 === '7' || a1 === 'bay', okB = /\bngay\b/.test(b1), okC = /\bton\b/.test(c1);
+        const errEl = document.getElementById('posErr');
+        if(okA && okB && okC){
+          st.formulaOk = true; saveM1State(st); renderDuTruTab(); return;
+        }
+        const bad = [!okA && 'số chia (1 tuần có bao nhiêu ngày?)', !okB && 'thừa số nhân (số gì cần nhân với lượng bán mỗi ngày?)', !okC && 'số bị trừ (lượng còn ở tủ gọi là gì?)'].filter(Boolean);
+        errEl.textContent = '⚠️ Chưa đúng ở: ' + bad.join('; ') + '. Đọc lại gợi ý rồi điền lại nhé.';
+      });
+    } else {
+      posPanel.innerHTML = `
+        <p class="pos-note">🎉 Công thức đúng: <b>SL đặt = Bán/tuần ÷ 7 × số ngày dự trù − Tồn thực tế</b>. Phần mềm đã tính số lượng cần đặt cho từng mặt hàng:</p>
+        ${table(true)}
+        <button type="button" class="pos-btn" id="posSubmit">✅ Xác nhận đặt hàng</button>`;
+      document.getElementById('posSubmit').addEventListener('click', () => {
+        rows.forEach(({it,ton}) => { st.orders[it.key] = String(m1OrderQty(it, ton)); });
+        st.step = 'supplier'; saveM1State(st);
+        posPanel.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đã lập xong số lượng cần đặt cho ${items.length} mặt hàng!<br>Sang tab "Quản lý nhà cung ứng" để chọn nhà cung ứng và gửi đơn đặt hàng.</div>`;
+        window.refreshMissionsList?.();
+      });
+    }
   } else if(st.step === 'supplier' || st.step === 'order'){
     posPanel.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đã lập xong số lượng cần đặt.<br>Sang tab "Quản lý nhà cung ứng" để chọn nhà cung ứng và gửi đơn đặt hàng.</div>`;
   } else {
     posPanel.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">🎉 Bạn đã hoàn thành nhiệm vụ 1!</div>
       <button type="button" class="pos-btn" id="posRestart">🔁 Luyện lại từ đầu</button>`;
     document.getElementById('posRestart').addEventListener('click', () => {
-      saveM1State({ step:'dutru', confirmed:{}, actual:{}, orders:{}, supplier:null });
+      saveM1State({ step:'dutru', confirmed:{}, actual:{}, orders:{}, supplier:null, formulaOk:false });
       renderDuTruTab(); window.refreshMissionsList?.();
     });
   }
