@@ -211,9 +211,31 @@
   }
   #handCamPreview.shown{display:block;}
   /* ===== req #169 — Nhiệm vụ 1: Lập dự trù và mua thuốc ===== */
-  .pos-modal{max-width:760px;font-family:'Nunito',system-ui,sans-serif;}
+  /* req #212: hộp thoại phần mềm bán hàng rộng hơn; nội dung dài thì cuộn trong hộp */
+  .modal.pos-modal{max-width:min(1100px,96vw);width:100%;max-height:92vh;display:flex;flex-direction:column;font-family:'Nunito',system-ui,sans-serif;}
+  .modal.pos-modal .pos-body{overflow-y:auto;flex:1 1 auto;min-height:0;}
   /* req #175: bỏ khung tương tác của "Khu vực ra lẻ thuốc" trên sơ đồ */
   .pharmacy-map .pm-zone.z-dispense{display:none !important;}
+  /* req #215 — nhiệm vụ 2: xe giao hàng + thùng hàng */
+  #m2Delivery{position:absolute;left:0;right:0;bottom:7%;height:150px;z-index:30;pointer-events:none;}
+  #m2Delivery .m2-veh{position:absolute;right:-260px;bottom:0;font-size:120px;line-height:1;transition:right 2.4s cubic-bezier(.2,.7,.3,1);filter:drop-shadow(0 6px 4px rgba(0,0,0,.3));}
+  #m2Delivery.arrived .m2-veh{right:9%;}
+  #m2Delivery .m2-crate{position:absolute;right:calc(9% + 150px);bottom:4px;pointer-events:auto;cursor:pointer;opacity:0;transition:opacity .4s .2s;
+    border:3px solid #fff;border-radius:16px;background:#c98d3d;color:#fff;font:800 1rem 'Nunito',sans-serif;padding:10px 16px;box-shadow:0 6px 16px rgba(0,0,0,.4);animation:carton-bob 1.6s ease-in-out infinite;}
+  #m2Delivery.arrived .m2-crate{opacity:1;}
+  #m2Banner{position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:40;background:#ffd400;color:#3a2a00;font:800 .95rem 'Nunito',sans-serif;padding:8px 18px;border-radius:999px;box-shadow:0 4px 12px rgba(0,0,0,.3);}
+  .m2-crate-map{position:absolute;z-index:8;font-size:46px;line-height:1;cursor:pointer;border:0;background:transparent;filter:drop-shadow(0 4px 3px rgba(0,0,0,.35));animation:carton-bob 1.6s ease-in-out infinite;}
+  .m2-inv{border:1px solid #cdbb8a;border-radius:8px;background:#fffdf6;padding:10px 12px;position:relative;overflow:hidden;font-size:.82rem;}
+  .m2-inv .wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;transform:rotate(-14deg);font:800 1.3rem 'Nunito',sans-serif;color:rgba(180,60,60,.12);pointer-events:none;text-align:center}
+  .m2-pk{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:8px 0;}
+  .m2-pk button{border:2px solid #d8c9a3;background:#fffdf6;border-radius:10px;padding:8px;cursor:pointer;font:700 .8rem 'Nunito',sans-serif;}
+  .m2-pk button.ok{border-color:#2e8256;background:#e6f6ec;} .m2-pk button.bad{border-color:#c0392b;background:#fdecea;}
+  .m2-pack{position:relative;width:220px;height:170px;margin:8px auto;border-radius:10px;background:linear-gradient(135deg,#f3ecdb,#fff);border:2px solid #d8c9a3;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+  .m2-pack img{max-width:100%;max-height:100%;object-fit:contain;}
+  .m2-pack .ph{font:800 .9rem 'Nunito',sans-serif;text-align:center;padding:8px;color:#5c4a2c;}
+  .m2-pack.dent{transform:rotate(-3deg) skewX(-4deg);clip-path:polygon(0 0,42% 2%,48% 9%,58% 1%,100% 0,98% 46%,100% 55%,97% 100%,55% 98%,50% 92%,40% 100%,0 100%,2% 58%,0 50%);box-shadow:inset 0 0 26px rgba(0,0,0,.45);}
+  .m2-pack.mold::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 22% 30%,rgba(70,90,40,.75) 0 9%,transparent 10%),radial-gradient(circle at 70% 62%,rgba(50,70,30,.7) 0 12%,transparent 13%),radial-gradient(circle at 48% 80%,rgba(90,70,30,.65) 0 7%,transparent 8%),radial-gradient(circle at 80% 22%,rgba(60,80,40,.6) 0 6%,transparent 7%);}
+  .m2-pack.blur img,.m2-pack.blur .ph{filter:blur(3.2px);opacity:.8;}
   @keyframes m1-pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,212,0,0);background:rgba(255,212,0,.10);}50%{box-shadow:0 0 0 10px rgba(255,212,0,.6);background:rgba(255,212,0,.32);}}
   .pharmacy-map .pm-zone.m1-next{animation:m1-pulse 1.4s ease-in-out infinite;border-color:#ffd400 !important;z-index:6;}
   .pharmacy-map .pm-zone.m1-next::before{content:'👉 Làm tiếp ở đây';position:absolute;left:50%;top:-26px;transform:translateX(-50%);
@@ -1278,19 +1300,19 @@
   <div class="pharmacy-map iso" id="pharmacyMap">
     <!-- req #164: nền là sơ đồ nhà thuốc do giảng viên gửi; mỗi khu là một vùng bấm trong suốt
          đặt đè đúng vị trí (toạ độ theo ảnh 1180×936). -->
-    <div class="pm-zone z-special" data-zone="info" data-name="Tủ thuốc kiểm soát đặc biệt (có khóa): thuốc gây nghiện, hướng thần, tiền chất" data-short="Thuốc kiểm soát đặc biệt" data-ico="🔒" title="Thuốc kiểm soát đặc biệt" style="left:112px;top:30px;width:182px;height:180px;"></div>
-    <div class="pm-zone z-rx" data-zone="tu-rx" data-name="Tủ thuốc kê đơn (Rx) — bấm để sắp xếp thuốc vào tủ" data-short="Tủ thuốc kê đơn" data-ico="℞" title="Tủ thuốc kê đơn" style="left:300px;top:30px;width:255px;height:182px;"></div>
-    <div class="pm-zone z-otc" data-zone="tu-otc" data-name="Tủ thuốc không kê đơn (OTC) — bấm để sắp xếp thuốc vào tủ" data-short="Tủ thuốc không kê đơn" data-ico="✚" title="Tủ thuốc không kê đơn" style="left:555px;top:30px;width:255px;height:182px;"></div>
-    <div class="pm-zone z-nondrug" data-zone="info" data-name="Sản phẩm không phải là thuốc (mỹ phẩm, vật tư y tế, TPCN, chăm sóc cá nhân)" data-short="Sản phẩm không phải thuốc" data-ico="🧴" title="Sản phẩm không phải thuốc" style="left:800px;top:30px;width:290px;height:182px;"></div>
-    <div class="pm-zone z-receive" data-zone="info" data-name="Khu vực chờ kiểm nhập (hàng mới về, chờ kiểm tra)" data-short="Khu vực chờ kiểm nhập" data-ico="📦" title="Khu vực chờ kiểm nhập" style="left:92px;top:218px;width:178px;height:196px;"></div>
-    <div class="pm-zone z-process" data-zone="info" data-name="Khu vực hàng chờ xử lý (hàng cận hạn, hỏng, thu hồi, hủy bỏ)" data-short="Khu vực hàng chờ xử lý" data-ico="⚠️" title="Khu vực hàng chờ xử lý" style="left:78px;top:436px;width:214px;height:160px;"></div>
-    <div class="pm-zone z-cashier" id="zCashier" data-zone="info" data-name="Quầy thu ngân: máy tính, máy quét mã vạch, máy in hóa đơn" data-short="Quầy thu ngân" data-ico="💵" title="Quầy thu ngân" style="left:384px;top:296px;width:418px;height:140px;"></div>
-    <div class="pm-zone z-fridge" data-zone="info" data-name="Tủ lạnh (bảo quản 2–8°C: vắc xin, insulin…)" data-short="Tủ lạnh" data-ico="❄️" title="Tủ lạnh" style="left:890px;top:200px;width:150px;height:176px;"></div>
-    <div class="pm-zone z-fire" data-zone="info" data-name="Bình chữa cháy" data-short="Bình chữa cháy" data-ico="🧯" title="Bình chữa cháy" style="left:1050px;top:212px;width:110px;height:150px;"></div>
+    <div class="pm-zone z-special" data-zone="info" data-name="Tủ thuốc kiểm soát đặc biệt (có khóa): thuốc gây nghiện, hướng thần, tiền chất" data-short="Thuốc kiểm soát đặc biệt" data-ico="🔒" title="Thuốc kiểm soát đặc biệt" style="left:168px;top:22px;width:172px;height:146px;"></div>
+    <div class="pm-zone z-rx" data-zone="tu-rx" data-name="Tủ thuốc kê đơn (Rx) — bấm để sắp xếp thuốc vào tủ" data-short="Tủ thuốc kê đơn" data-ico="℞" title="Tủ thuốc kê đơn" style="left:345px;top:22px;width:212px;height:146px;"></div>
+    <div class="pm-zone z-otc" data-zone="tu-otc" data-name="Tủ thuốc không kê đơn (OTC) — bấm để sắp xếp thuốc vào tủ" data-short="Tủ thuốc không kê đơn" data-ico="✚" title="Tủ thuốc không kê đơn" style="left:562px;top:22px;width:240px;height:146px;"></div>
+    <div class="pm-zone z-nondrug" data-zone="info" data-name="Sản phẩm không phải là thuốc (mỹ phẩm, vật tư y tế, TPCN, chăm sóc cá nhân)" data-short="Sản phẩm không phải thuốc" data-ico="🧴" title="Sản phẩm không phải thuốc" style="left:808px;top:22px;width:244px;height:146px;"></div>
+    <div class="pm-zone z-receive" data-zone="info" data-name="Khu vực chờ kiểm nhập (hàng mới về, chờ kiểm tra)" data-short="Khu vực chờ kiểm nhập" data-ico="📦" title="Khu vực chờ kiểm nhập" style="left:135px;top:178px;width:175px;height:176px;"></div>
+    <div class="pm-zone z-process" data-zone="info" data-name="Khu vực hàng chờ xử lý (hàng cận hạn, hỏng, thu hồi, hủy bỏ)" data-short="Khu vực hàng chờ xử lý" data-ico="⚠️" title="Khu vực hàng chờ xử lý" style="left:122px;top:370px;width:192px;height:122px;"></div>
+    <div class="pm-zone z-cashier" id="zCashier" data-zone="info" data-name="Quầy thu ngân: máy tính, máy quét mã vạch, máy in hóa đơn" data-short="Quầy thu ngân" data-ico="💵" title="Quầy thu ngân" style="left:405px;top:255px;width:392px;height:130px;"></div>
+    <div class="pm-zone z-fridge" data-zone="info" data-name="Tủ lạnh (bảo quản 2–8°C: vắc xin, insulin…)" data-short="Tủ lạnh" data-ico="❄️" title="Tủ lạnh" style="left:888px;top:175px;width:125px;height:160px;"></div>
+    <div class="pm-zone z-fire" data-zone="info" data-name="Bình chữa cháy" data-short="Bình chữa cháy" data-ico="🧯" title="Bình chữa cháy" style="left:1022px;top:190px;width:88px;height:172px;"></div>
     <div class="pm-zone z-dispense" data-zone="info" data-name="Khu vực ra lẻ thuốc" data-short="Khu vực ra lẻ thuốc" data-ico="⚖️" title="Khu vực ra lẻ thuốc" style="left:880px;top:432px;width:272px;height:140px;"></div>
-    <div class="pm-zone z-consult" data-zone="info" data-name="Phòng tư vấn" data-short="Phòng tư vấn" data-ico="🧑‍⚕️" title="Phòng tư vấn" style="left:1030px;top:574px;width:140px;height:190px;"></div>
-    <div class="pm-zone z-wait" data-zone="info" data-name="Khu vực ghế chờ cho khách" data-short="Ghế chờ" data-ico="🛋️" title="Ghế chờ" style="left:46px;top:670px;width:338px;height:96px;"></div>
-    <div class="pm-zone z-entrance" data-zone="door" data-name="Lối vào — bấm để ra ngoài mặt tiền nhà thuốc" data-short="Lối vào" data-ico="🚪" title="Lối vào" style="left:444px;top:684px;width:322px;height:196px;"></div>
+    <div class="pm-zone z-consult" data-zone="info" data-name="Phòng tư vấn" data-short="Phòng tư vấn" data-ico="🧑‍⚕️" title="Phòng tư vấn" style="left:978px;top:542px;width:190px;height:150px;"></div>
+    <div class="pm-zone z-wait" data-zone="info" data-name="Khu vực ghế chờ cho khách" data-short="Ghế chờ" data-ico="🛋️" title="Ghế chờ" style="left:100px;top:598px;width:325px;height:100px;"></div>
+    <div class="pm-zone z-entrance" data-zone="door" data-name="Lối vào — bấm để ra ngoài mặt tiền nhà thuốc" data-short="Lối vào" data-ico="🚪" title="Lối vào" style="left:470px;top:672px;width:300px;height:190px;"></div>
 
     <div class="pm-char" id="pmChar">
       <div class="pm-body">
@@ -3070,6 +3092,12 @@ function saveM1State(s){
    hoặc tủ còn thuốc chưa kiểm) để người học biết phải làm gì tiếp. */
 function applyM1Highlight(){
   document.querySelectorAll('.pm-zone.m1-next').forEach(z => z.classList.remove('m1-next'));
+  const m2 = (typeof getM2State === 'function') ? getM2State() : { step:'idle' };
+  if(m2.step !== 'idle' && m2.step !== 'done'){
+    const q = { deliver:'.pm-zone.z-entrance', inbox:'.pm-zone.z-receive', packaging:'.pm-zone.z-receive', toProcess:'.pm-zone.z-process', mail:'#zCashier' }[m2.step];
+    if(q) document.querySelector(q)?.classList.add('m1-next');
+    return;
+  }
   const st = getM1State();
   if(st.step === 'done') return;
   if(st.step === 'checking'){
@@ -3149,7 +3177,9 @@ const posPanel = document.getElementById('posPanel');
 function openPOS(){
   const st = getM1State();
   posOverlay.style.display = 'flex';
-  const wantTab = (st.step === 'supplier' || st.step === 'order') ? 'nhacc' : 'dutru';
+  const m2mail = getM2State().step === 'mail';
+  if(m2mail){ st.nhaccSub = 'thu'; saveM1State(st); }
+  const wantTab = (m2mail || st.step === 'supplier' || st.step === 'order') ? 'nhacc' : 'dutru';
   document.querySelectorAll('#posTabs .pos-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === wantTab));
   if(wantTab === 'nhacc') renderNhaCCTab(); else renderDuTruTab();
 }
@@ -3240,23 +3270,32 @@ function renderDuTruTab(){
       posPanel.innerHTML = `
         <p class="pos-note">✅ Đã kiểm xong thực tế. Xem bảng <b>lịch sử bán 1 tuần</b>, rồi <b>điền công thức</b> tính số lượng cần đặt — điền đúng, phần mềm sẽ tính giúp số lượng cho từng mặt hàng.</p>
         ${table(false)}
-        <p class="pos-note" style="line-height:2.2">SL đặt = Bán/tuần ÷
-          <input type="text" id="fmA" class="m1-fm" size="4" placeholder="?" inputmode="numeric" aria-label="Số ngày trong tuần"> ×
-          <input type="text" id="fmB" class="m1-fm" size="14" placeholder="điền vào đây" aria-label="Thừa số thứ hai"> −
-          <input type="text" id="fmC" class="m1-fm" size="14" placeholder="điền vào đây" aria-label="Số bị trừ"></p>
-        <p class="pos-note" style="font-size:.76rem;opacity:.75">Gợi ý: chia cho số ngày trong 1 tuần, nhân với số ngày cần dự trù, rồi trừ đi lượng đang còn ở tủ.</p>
+        <p class="pos-note" style="line-height:2.4" id="fmLine"></p>
+        <p class="pos-note" style="font-size:.76rem;opacity:.75">Gợi ý: lấy lượng bán 1 tuần chia cho số ngày trong tuần, nhân với số ngày cần dự trù, rồi trừ đi lượng đang còn ở tủ.</p>
         <button type="button" class="pos-btn" id="posFormula">✅ Kiểm tra công thức</button>
         <div class="pos-err" id="posErr"></div>`;
-      posPanel.querySelectorAll('.m1-fm').forEach(i => { i.style.cssText = 'padding:4px 6px;border:1px solid #caa25a;border-radius:6px;font:inherit;'; });
+      // req #170 (phản hồi lần 3): mỗi lần chơi khuyết CÁC CHỖ KHÁC NHAU của công thức (chọn ngẫu
+      // nhiên 3 trong 4 vị trí, lưu vào trạng thái để không đổi khi mở lại).
+      if(!Array.isArray(st.fmBlanks)){
+        const idx = [0,1,2,3].sort(() => Math.random() - .5).slice(0,3);
+        st.fmBlanks = [0,1,2,3].map(i => idx.includes(i)); saveM1State(st);
+      }
+      const FM = [
+        { show:'Bán/tuần', ph:'vế 1', ok: v => /\bban\b/.test(v) && /\btuan\b/.test(v), hint:'số hạng đầu (lượng gì bán được trong 1 tuần?)' },
+        { show:'7', ph:'số chia', ok: v => v === '7' || v === 'bay', hint:'số chia (1 tuần có bao nhiêu ngày?)' },
+        { show:'số ngày dự trù', ph:'thừa số nhân', ok: v => /\bngay\b/.test(v), hint:'thừa số nhân (số gì cần nhân với lượng bán mỗi ngày?)' },
+        { show:'Tồn thực tế', ph:'số bị trừ', ok: v => /\bton\b/.test(v), hint:'số bị trừ (lượng còn ở tủ gọi là gì?)' },
+      ];
+      const cell = i => st.fmBlanks[i]
+        ? `<input type="text" class="m1-fm" data-i="${i}" size="${i===1?4:14}" placeholder="${FM[i].ph}" style="padding:4px 6px;border:1px solid #caa25a;border-radius:6px;font:inherit;">`
+        : `<b>${esc(FM[i].show)}</b>`;
+      document.getElementById('fmLine').innerHTML = `SL đặt = ${cell(0)} ÷ ${cell(1)} × ${cell(2)} − ${cell(3)}`;
       const norm = v => String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
       document.getElementById('posFormula').addEventListener('click', () => {
-        const a1 = norm(document.getElementById('fmA').value), b1 = norm(document.getElementById('fmB').value), c1 = norm(document.getElementById('fmC').value);
-        const okA = a1 === '7' || a1 === 'bay', okB = /\bngay\b/.test(b1), okC = /\bton\b/.test(c1);
         const errEl = document.getElementById('posErr');
-        if(okA && okB && okC){
-          st.formulaOk = true; saveM1State(st); renderDuTruTab(); return;
-        }
-        const bad = [!okA && 'số chia (1 tuần có bao nhiêu ngày?)', !okB && 'thừa số nhân (số gì cần nhân với lượng bán mỗi ngày?)', !okC && 'số bị trừ (lượng còn ở tủ gọi là gì?)'].filter(Boolean);
+        const bad = [];
+        posPanel.querySelectorAll('.m1-fm').forEach(inp => { const i = Number(inp.dataset.i); if(!FM[i].ok(norm(inp.value))) bad.push(FM[i].hint); });
+        if(!bad.length){ st.formulaOk = true; saveM1State(st); renderDuTruTab(); return; }
         errEl.textContent = '⚠️ Chưa đúng ở: ' + bad.join('; ') + '. Đọc lại gợi ý rồi điền lại nhé.';
       });
     } else {
@@ -3277,7 +3316,7 @@ function renderDuTruTab(){
     posPanel.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">🎉 Bạn đã hoàn thành nhiệm vụ 1!</div>
       <button type="button" class="pos-btn" id="posRestart">🔁 Luyện lại từ đầu</button>`;
     document.getElementById('posRestart').addEventListener('click', () => {
-      saveM1State({ step:'dutru', confirmed:{}, actual:{}, orders:{}, supplier:null, formulaOk:false });
+      saveM1State({ step:'dutru', confirmed:{}, actual:{}, orders:{}, supplier:null, formulaOk:false, fmBlanks:null });
       renderDuTruTab(); window.refreshMissionsList?.();
     });
   }
@@ -3289,13 +3328,15 @@ function renderDuTruTab(){
 // 'supplier' trở đi) — bấm sớm hơn thì báo cần hoàn thành tab Dự trù trước.
 function renderNhaCCTab(){
   const st = getM1State();
-  if(st.step === 'dutru' || st.step === 'checking' || st.step === 'return'){
+  const m2mail = getM2State().step === 'mail';
+  if(!m2mail && (st.step === 'dutru' || st.step === 'checking' || st.step === 'return')){
     posPanel.innerHTML = '<div class="pos-soon">🔒 Chưa tới bước này — hoàn thành tab Dự trù (lập đủ số lượng cần đặt) trước.</div>';
     return;
   }
-  const sub = st.nhaccSub || 'hoso';
+  const sub = (m2mail && st.nhaccSub === 'thu') ? 'thu' : (st.nhaccSub === 'thu' ? 'hoso' : (st.nhaccSub || 'hoso'));
   posPanel.innerHTML = `
     <div class="pos-tabs" style="margin-bottom:12px">
+      ${m2mail ? `<button type="button" class="pos-tab${sub==='thu'?' active':''}" data-sub="thu">✉️ Gửi thư báo sai lệch</button>` : ''}
       <button type="button" class="pos-tab${sub==='hoso'?' active':''}" data-sub="hoso">📁 Hồ sơ nhà cung ứng</button>
       <button type="button" class="pos-tab${sub==='donhang'?' active':''}" data-sub="donhang"${st.step==='order'||st.supplier?'':' disabled'}>🧾 Lập đơn đặt hàng</button>
     </div>
@@ -3304,7 +3345,7 @@ function renderNhaCCTab(){
     if(b.disabled) return;
     st.nhaccSub = b.dataset.sub; saveM1State(st); renderNhaCCTab();
   }));
-  if(sub === 'hoso') renderHoSoSub(st); else renderDonHangSub(st);
+  if(sub === 'thu') renderThuSub(); else if(sub === 'hoso') renderHoSoSub(st); else renderDonHangSub(st);
 }
 // req #170 (phản hồi lần 2): giúp người học HÌNH DUNG hồ sơ — hiện thẻ minh hoạ từng giấy tờ với
 // các mục cần soát (tên doanh nghiệp, phạm vi, hiệu lực). Cố ý là thẻ tóm tắt có chữ "MẪU MINH HOẠ",
@@ -3372,7 +3413,9 @@ function renderHoSoSub(st){
 }
 // req #174 (phản hồi): "số lần chơi" = số lần HOÀN THÀNH NHIỆM VỤ (xong nhiệm vụ 1, hoặc xong 1
 // lô ở nhiệm vụ 3). Xong nhiệm vụ 1 tính cho cả hai tủ (kê đơn + không kê đơn).
+function m1PracticeCount(){ try{ return Number(localStorage.getItem('tu-thuoc-mo-phong:m1count')) || 0; }catch(e){ return 0; } }
 function m1CountPlay(){
+  try{ localStorage.setItem('tu-thuoc-mo-phong:m1count', String(m1PracticeCount() + 1)); }catch(e){}
   try{
     registerPlay(); saveGame(); applyCabinetVisibility();
     const otherKey = 'tu-thuoc-mo-phong:game_v2' + (TU_MODE === 'otc' ? '' : ':otc');
@@ -3409,6 +3452,246 @@ function renderDonHangSub(st){
   sendBtn.addEventListener('click', () => {
     st.step = 'order'; st.orderSent = true; saveM1State(st);
     renderDonHangSub(st); window.refreshMissionsList?.();
+  });
+}
+
+/* =====================================================================
+   req #215 (ThS Hương Lý) — NHIỆM VỤ 2: Kiểm nhập thuốc, niêm yết giá.
+   Mở khoá khi đã hoàn thành tối thiểu 1 lần nhiệm vụ 1. Các bước:
+   1) ra cửa → xe (ô tô/xe máy, ngẫu nhiên) dừng trước cửa → bấm thùng hàng → thùng vào khu chờ kiểm nhập
+   2) bấm thùng ở khu chờ kiểm nhập → hoá đơn VAT: đối chiếu tên công ty với nhà cung ứng đã đặt ở NV1
+   3) so số lượng thực nhận với hoá đơn (ban đầu luôn khớp; luyện >3 lần thỉnh thoảng lệch — lệch thì
+      chuyển thùng sang khu hàng chờ xử lý, ra quầy thu ngân → Quản lý nhà cung ứng → gửi thư báo sai lệch)
+   4) soi bao bì từng sản phẩm (móp méo, ẩm mốc, chữ nhoè)
+   Bước "niêm yết giá" sẽ bổ sung khi cô có yêu cầu tiếp theo. Hoá đơn chỉ là MẪU MINH HOẠ. */
+const LS_M2 = 'tu-thuoc-mo-phong:mission2', LS_M2N = 'tu-thuoc-mo-phong:m2count';
+function m2Count(){ try{ return Number(localStorage.getItem(LS_M2N)) || 0; }catch(e){ return 0; } }
+function getM2State(){
+  try{ const x = JSON.parse(localStorage.getItem(LS_M2)); if(x && x.step) return x; }catch(e){}
+  return { step:'idle' };
+}
+function saveM2State(x){
+  localStorage.setItem(LS_M2, JSON.stringify(x));
+  try{ applyM1Highlight(); }catch(e){}
+  try{ m2Sync(); }catch(e){}
+  try{ window.refreshMissionsList?.(); }catch(e){}
+}
+function m2Unlocked(){ return m1PracticeCount() >= 1; }
+function m2Active(){ const x = getM2State(); return x.step !== 'idle' && x.step !== 'done'; }
+const M2_DEFECTS = { dent:'móp méo', mold:'ẩm mốc', blur:'chữ nhoè, mờ' };
+function startM2(){
+  const m1 = getM1State();
+  const sup = M1_SUPPLIERS.find(x => x.id === m1.supplier) || M1_SUPPLIERS[2];
+  const n = m2Count();
+  const items = getM1Items().map(it => ({ key:it.key, name:it.name, unit:it.unit, qty: Number(m1.orders && m1.orders[it.key]) || m1OrderQty(it, it.tonKho) }));
+  // Cấp độ đầu luôn khớp số lượng; luyện >3 lần thì thi thoảng lệch 1 mặt hàng.
+  const mis = (n > 3 && Math.random() < .5) ? Math.floor(Math.random()*items.length) : -1;
+  const dfe = (n >= 1 && Math.random() < .5) ? Math.floor(Math.random()*items.length) : -1;
+  items.forEach((it, i) => {
+    it.recv = i === mis ? (it.qty > 1 ? it.qty - 1 - Math.floor(Math.random()*Math.min(2, it.qty-1)) : it.qty + 1) : it.qty;
+    it.defect = i === dfe ? ['dent','mold','blur'][Math.floor(Math.random()*3)] : null;
+  });
+  saveM2State({ step:'deliver', vehicle: Math.random() < .5 ? '🚗' : '🛵', supplierId: sup.id, supplierName: sup.name, items, mismatch: mis, sub:'invoice', pack:{} });
+}
+function m2Hint(){
+  const x = getM2State();
+  if(!m2Unlocked()) return '🔒 Nhiệm vụ 2: hoàn thành tối thiểu 1 lần Nhiệm vụ 1 để mở khoá.';
+  return x.step === 'deliver' ? '🚪 Nhiệm vụ 2: ra cửa ra vào — sẽ có xe giao hàng dừng trước cửa. Bấm vào thùng hàng để nhận.'
+    : x.step === 'inbox' ? '📦 Nhiệm vụ 2: bấm vào thùng hàng ở Khu vực chờ kiểm nhập để kiểm tra hoá đơn và hàng.'
+    : x.step === 'toProcess' ? '⚠️ Nhiệm vụ 2: số lượng không khớp — bấm vào Khu vực hàng chờ xử lý để chuyển thùng hàng sang đó.'
+    : x.step === 'mail' ? '✉️ Nhiệm vụ 2: đến Quầy thu ngân, mở máy tính → Quản lý nhà cung ứng → Gửi thư báo sai lệch.'
+    : x.step === 'packaging' ? '🔍 Nhiệm vụ 2: bấm thùng ở Khu vực chờ kiểm nhập để kiểm tra bao bì từng sản phẩm.'
+    : '✅ Nhiệm vụ 2 đã xong. Bấm để luyện tập lại.';
+}
+function m2Click(){
+  const x = getM2State();
+  if(m2Unlocked() && (x.step === 'idle' || x.step === 'done')){ startM2(); }
+  pmZoneLabel.textContent = m2Hint();
+}
+// Modal dùng chung cho nhiệm vụ 2
+function m2Modal(title, bodyHtml){
+  let ov = document.getElementById('m2Overlay');
+  if(!ov){
+    ov = document.createElement('div'); ov.className = 'overlay'; ov.id = 'm2Overlay';
+    ov.innerHTML = '<div class="modal pos-modal"><div class="modal-head"><div><h2 id="m2Title"></h2><div class="sub">Nhiệm vụ 2 · Kiểm nhập thuốc, niêm yết giá</div></div><button type="button" id="m2Close">✕</button></div><div class="modal-body pos-body" id="m2Body"></div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', e => { if(e.target === ov) ov.style.display = 'none'; });
+    ov.querySelector('#m2Close').addEventListener('click', () => { ov.style.display = 'none'; });
+  }
+  ov.querySelector('#m2Title').textContent = title;
+  ov.querySelector('#m2Body').innerHTML = bodyHtml;
+  ov.style.display = 'flex';
+  return ov.querySelector('#m2Body');
+}
+function m2CloseModal(){ const ov = document.getElementById('m2Overlay'); if(ov) ov.style.display = 'none'; }
+
+// Đồng bộ hiển thị: thùng hàng trên sơ đồ + xe giao hàng ở mặt tiền + biểu ngữ.
+function m2Sync(){
+  const x = getM2State();
+  let crate = document.getElementById('m2CrateMap');
+  const at = (x.step === 'inbox' || x.step === 'packaging') ? [175, 268] : (x.step === 'toProcess' || x.step === 'mail') ? [160, 402] : null;
+  if(at && typeof pMap !== 'undefined' && pMap){
+    if(!crate){
+      crate = document.createElement('button'); crate.type = 'button'; crate.id = 'm2CrateMap'; crate.className = 'm2-crate-map'; crate.textContent = '📦';
+      crate.addEventListener('click', ev => { ev.stopPropagation(); m2OpenCrate(); });
+      pMap.appendChild(crate);
+    }
+    crate.style.left = at[0] + 'px'; crate.style.top = at[1] + 'px'; crate.style.display = '';
+  } else if(crate){ crate.style.display = 'none'; }
+  // mặt tiền
+  const fs = document.getElementById('facadeScreen');
+  let dv = document.getElementById('m2Delivery'), bn = document.getElementById('m2Banner');
+  const show = x.step === 'deliver' && fs && document.body.classList.contains('view-facade');
+  if(show){
+    if(!dv){
+      dv = document.createElement('div'); dv.id = 'm2Delivery';
+      dv.innerHTML = '<span class="m2-veh"></span><button type="button" class="m2-crate">📦 Bấm để nhận hàng</button>';
+      fs.appendChild(dv);
+      dv.querySelector('.m2-crate').addEventListener('click', ev => {
+        ev.stopPropagation();
+        const cur = getM2State(); cur.step = 'inbox'; saveM2State(cur);
+        pmZoneLabel.textContent = '📦 Thùng hàng đã được chuyển vào Khu vực chờ kiểm nhập — vào trong và bấm vào thùng để kiểm tra.';
+      });
+    }
+    if(!bn){ bn = document.createElement('div'); bn.id = 'm2Banner'; fs.appendChild(bn); }
+    bn.textContent = '🚚 Có xe giao hàng dừng trước cửa — bấm vào thùng hàng để nhận!';
+    dv.querySelector('.m2-veh').textContent = x.vehicle || '🚗';
+    dv.classList.remove('arrived'); void dv.offsetWidth;
+    setTimeout(() => dv.classList.add('arrived'), 60);
+  } else { dv?.remove(); bn?.remove(); }
+}
+function m2OpenCrate(){
+  const x = getM2State();
+  if(x.step === 'inbox' || x.step === 'packaging') m2RenderInspect();
+  else pmZoneLabel.textContent = m2Hint();
+}
+function m2RenderInspect(){
+  const x = getM2State();
+  if(x.step === 'packaging' || x.sub === 'pack') return m2RenderPack();
+  if(x.sub === 'qty') return m2RenderQty();
+  m2RenderInvoice();
+}
+function m2RenderInvoice(){
+  const x = getM2State();
+  const body = m2Modal('🧾 Kiểm tra hoá đơn VAT', `
+    <div class="m2-inv"><div class="wm">HOÁ ĐƠN MẪU MINH HOẠ · KHÔNG CÓ GIÁ TRỊ PHÁP LÝ</div>
+      <b>HOÁ ĐƠN GIÁ TRỊ GIA TĂNG (mẫu)</b>
+      <div>Đơn vị bán hàng: <b>${esc(x.supplierName)}</b></div>
+      <div>Đơn vị mua hàng: Nhà thuốc thực hành</div>
+      <table class="pos-table" style="margin-top:8px"><thead><tr><th>Sản phẩm</th><th>ĐVT</th><th>Số lượng</th></tr></thead><tbody>
+        ${x.items.map(it => `<tr><td>${esc(it.name)}</td><td>${it.unit}</td><td>${it.qty}</td></tr>`).join('')}</tbody></table></div>
+    <p class="pos-note">Kiểm tra nguồn gốc: <b>tên công ty xuất hoá đơn phải trùng với nhà cung ứng bạn đã gửi đơn dự trù ở Nhiệm vụ 1</b>. Bạn đã đặt hàng ở công ty nào?</p>
+    ${M1_SUPPLIERS.map(sp => `<label style="display:block;margin:4px 0;cursor:pointer"><input type="radio" name="m2sup" value="${sp.id}"> ${esc(sp.name)}</label>`).join('')}
+    <button type="button" class="pos-btn" id="m2InvOk" style="margin-top:8px">✅ Xác nhận đối chiếu</button><div class="pos-err" id="m2Err"></div>`);
+  body.querySelector('#m2InvOk').addEventListener('click', () => {
+    const v = body.querySelector('input[name=m2sup]:checked')?.value;
+    const err = body.querySelector('#m2Err');
+    if(!v){ err.textContent = '⚠️ Chọn công ty bạn đã gửi đơn dự trù.'; return; }
+    if(v !== x.supplierId){ err.textContent = '⚠️ Chưa đúng — xem lại nhà cung ứng bạn đã chọn ở Nhiệm vụ 1 (tab Quản lý nhà cung ứng).'; return; }
+    x.sub = 'qty'; saveM2State(x); m2RenderQty();
+  });
+}
+function m2RenderQty(){
+  const x = getM2State();
+  const body = m2Modal('📋 So sánh số lượng thực nhận', `
+    <p class="pos-note">✅ Tên công ty trùng khớp. Đếm hàng trong thùng và so với số lượng ghi trên hoá đơn — từng mặt hàng khớp hay không?</p>
+    <table class="pos-table"><thead><tr><th>Sản phẩm</th><th>Trên hoá đơn</th><th>Thực nhận</th><th>Kết luận</th></tr></thead><tbody>
+      ${x.items.map((it,i) => `<tr><td>${esc(it.name)}</td><td>${it.qty} ${it.unit}</td><td>${it.recv} ${it.unit}</td>
+        <td><label><input type="radio" name="q${i}" value="1"> Khớp</label> <label><input type="radio" name="q${i}" value="0"> Không khớp</label></td></tr>`).join('')}</tbody></table>
+    <button type="button" class="pos-btn" id="m2QtyOk">✅ Xác nhận</button><div class="pos-err" id="m2Err"></div>`);
+  body.querySelector('#m2QtyOk').addEventListener('click', () => {
+    const err = body.querySelector('#m2Err');
+    let ok = true, any = false;
+    for(let i = 0; i < x.items.length; i++){
+      const v = body.querySelector(`input[name=q${i}]:checked`)?.value;
+      if(v == null){ err.textContent = '⚠️ Chọn kết luận cho tất cả mặt hàng.'; return; }
+      const truth = x.items[i].recv === x.items[i].qty ? '1' : '0';
+      if(truth === '0') any = true;
+      if(v !== truth) ok = false;
+    }
+    if(!ok){ err.textContent = '⚠️ Có mặt hàng kết luận chưa đúng — đếm và so lại số lượng.'; return; }
+    if(any){
+      x.step = 'toProcess'; saveM2State(x); m2CloseModal();
+      pmZoneLabel.textContent = '⚠️ Số lượng không khớp — bấm vào Khu vực hàng chờ xử lý để chuyển thùng hàng sang đó.';
+    } else {
+      x.step = 'packaging'; x.sub = 'pack'; saveM2State(x); m2RenderPack();
+    }
+  });
+}
+function m2RenderPack(){
+  const x = getM2State();
+  const cards = x.items.map((it,i) => `<button type="button" data-i="${i}" class="${x.pack[i] != null ? (x.pack[i] === (it.defect ? 'bad' : 'ok') ? (x.pack[i]) : '') : ''}">${x.pack[i] != null ? (x.pack[i]==='ok'?'✅ ':'❌ ') : '🔍 '}${esc(it.name)}</button>`).join('');
+  const body = m2Modal('🔍 Kiểm tra cảm quan bao bì', `
+    <p class="pos-note">Bấm từng sản phẩm, quan sát bao bì: <b>còn nguyên vẹn, sạch sẽ</b>, không <b>móp méo</b>, <b>ẩm mốc</b>; thông tin trên bao bì <b>rõ nét</b>, không nhoè, không mờ.</p>
+    <div class="m2-pk">${cards}</div><div id="m2Insp"></div><div class="pos-err" id="m2Err"></div>`);
+  const insp = body.querySelector('#m2Insp'), err = body.querySelector('#m2Err');
+  const finishIfDone = () => {
+    if(x.items.every((it,i) => x.pack[i] === (it.defect ? 'bad' : 'ok'))){
+      x.step = 'done'; saveM2State(x);
+      try{ localStorage.setItem(LS_M2N, String(m2Count() + 1)); }catch(e){}
+      m2CountPlay();
+      body.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">🎉 Đã kiểm nhập xong lô hàng! Sản phẩm bao bì không đạt được ghi nhận để xử lý.<br>(Bước niêm yết giá sẽ được bổ sung.)</div>`;
+      window.refreshMissionsList?.();
+    }
+  };
+  body.querySelectorAll('.m2-pk button').forEach(b => b.addEventListener('click', () => {
+    const i = Number(b.dataset.i), it = x.items[i];
+    err.textContent = '';
+    insp.innerHTML = `<div style="text-align:center"><b>${esc(it.name)}</b>
+      <div class="m2-pack ${it.defect || ''}" id="m2Pack"></div>
+      <button type="button" class="pos-btn" data-v="ok">✅ Bao bì đạt</button>
+      <button type="button" class="pos-btn" data-v="bad" style="background:#b03a2e">❌ Bao bì không đạt</button></div>`;
+    const pk = insp.querySelector('#m2Pack'), slug = slugify(it.name.split(' ')[0]);
+    const label = `<div class="ph">📦 ${esc(it.name)}<br><small>Thông tin thuốc trên bao bì</small></div>`;
+    const full = slugify(it.name);
+    const slugOk = (typeof PHOTO_SLUGS !== 'undefined') ? (PHOTO_SLUGS.has(full) ? full : (PHOTO_SLUGS.has(slug) ? slug : null)) : null;
+    if(slugOk){
+      const im = new Image(); im.alt = it.name; im.onerror = () => { pk.innerHTML = label; }; im.src = PHOTO_DIR + slugOk + '.' + ((typeof PHOTO_EXTS !== 'undefined' && PHOTO_EXTS[0]) || 'jpg'); pk.appendChild(im);
+    } else pk.innerHTML = label;
+    insp.querySelectorAll('[data-v]').forEach(btn => btn.addEventListener('click', () => {
+      const truth = it.defect ? 'bad' : 'ok';
+      if(btn.dataset.v !== truth){ err.textContent = it.defect ? '⚠️ Quan sát kỹ lại — bao bì này có dấu hiệu không đạt.' : '⚠️ Bao bì này còn nguyên vẹn, sạch, chữ rõ nét — chưa cần loại.'; return; }
+      x.pack[i] = truth; saveM2State(x);
+      err.textContent = it.defect ? `✔ Đúng — bao bì ${M2_DEFECTS[it.defect]}, không đạt.` : '';
+      b.classList.add(truth); b.textContent = (truth==='ok' ? '✅ ' : '❌ ') + it.name;
+      insp.innerHTML = '';
+      finishIfDone();
+    }));
+  }));
+}
+// Nhiệm vụ 2 hoàn thành = 1 lần chơi (tính cho cả hai tủ, như nhiệm vụ 1).
+function m2CountPlay(){
+  try{
+    registerPlay(); saveGame(); applyCabinetVisibility();
+    const otherKey = 'tu-thuoc-mo-phong:game_v2' + (TU_MODE === 'otc' ? '' : ':otc');
+    const g = JSON.parse(localStorage.getItem(otherKey) || 'null') || { tier:0, progress:0, stars:0, shields:0, combo:0, shieldsFromStars:0, plays:0 };
+    g.plays = (typeof g.plays === 'number' ? g.plays : (g.tier||0) * PLAYS_PER_TIER) + 1;
+    g.tier = Math.max(g.tier||0, Math.min(TIERS.length-1, Math.floor(g.plays / PLAYS_PER_TIER)));
+    localStorage.setItem(otherKey, JSON.stringify(g));
+  }catch(e){}
+}
+// Thư báo sai lệch gửi nhà cung ứng — tab "Quản lý nhà cung ứng" của phần mềm bán hàng.
+function renderThuSub(){
+  const x = getM2State(), body = document.getElementById('nhaccBody');
+  const bad = x.items.filter(it => it.recv !== it.qty);
+  body.innerHTML = `
+    <p class="pos-note">Gửi thư cho <b>${esc(x.supplierName)}</b> báo về sự sai lệch số lượng giữa hoá đơn và hàng thực nhận.</p>
+    <div class="f" style="margin-bottom:8px">Mặt hàng lệch: <select id="thuItem">${x.items.map((it,i) => `<option value="${i}">${esc(it.name)}</option>`).join('')}</select></div>
+    <div style="margin-bottom:8px">Số lượng thực nhận: <input type="number" min="0" id="thuRecv" style="width:90px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px"></div>
+    <textarea id="thuText" rows="5" style="width:100%;padding:8px;border:1px solid #caa25a;border-radius:8px;font:inherit" placeholder="Kính gửi ${esc(x.supplierName)}, ... (nêu rõ mặt hàng, số lượng trên hoá đơn, số lượng thực nhận và đề nghị xử lý)"></textarea>
+    <button type="button" class="pos-btn" id="thuSend" style="margin-top:8px">📨 Gửi thư</button><div class="pos-err" id="thuErr"></div>`;
+  document.getElementById('thuSend').addEventListener('click', () => {
+    const it = x.items[Number(document.getElementById('thuItem').value)];
+    const recv = document.getElementById('thuRecv').value, txt = document.getElementById('thuText').value.trim();
+    const err = document.getElementById('thuErr');
+    if(!bad.includes(it)){ err.textContent = '⚠️ Mặt hàng này số lượng vẫn khớp — chọn mặt hàng bị lệch.'; return; }
+    if(recv === '' || Number(recv) !== it.recv){ err.textContent = '⚠️ Số lượng thực nhận chưa đúng — đếm lại hàng ở khu hàng chờ xử lý.'; return; }
+    if(txt.length < 25){ err.textContent = '⚠️ Nội dung thư quá ngắn — nêu rõ mặt hàng, số lượng trên hoá đơn, số lượng thực nhận và đề nghị xử lý.'; return; }
+    x.step = 'done'; saveM2State(x);
+    try{ localStorage.setItem(LS_M2N, String(m2Count() + 1)); }catch(e){}
+    m2CountPlay();
+    body.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đã gửi thư báo sai lệch cho ${esc(x.supplierName)}. Hàng được giữ ở khu chờ xử lý cho tới khi nhà cung ứng phản hồi.<br>🎉 Hoàn thành nhiệm vụ 2 (nhánh xử lý sai lệch).</div>`;
+    window.refreshMissionsList?.();
   });
 }
 
@@ -3505,7 +3788,7 @@ function renderM1Checklist(){
   const m1state = (typeof getM1State === 'function') ? getM1State() : { step:'dutru' };
   const MISSIONS = [
     { name:'Lập dự trù và mua thuốc', play:true, m1:true },
-    { name:'Kiểm nhập thuốc, niêm yết giá' },
+    { name:'Kiểm nhập thuốc, niêm yết giá', m2:true },
     { name:'Bảo quản thuốc và sắp xếp hàng hóa', play:true },
     { name:'Kiểm kê và kiểm soát chất lượng định kỳ' },
     { name:'Xử lý thuốc bị thu hồi' },
@@ -3516,7 +3799,7 @@ function renderM1Checklist(){
       const n = i+1;
       if(m.m1){
         const st = (typeof getM1State === 'function') ? getM1State() : { step:'dutru' };
-        const label = st.step === 'done' ? '✅ Xong · Lại →'
+        const label = st.step === 'done' ? `🔁 Luyện tập · ${m1PracticeCount()} lần →`
           : st.step === 'return' ? '🖥️ Chốt đơn →'
           : st.step === 'checking' ? '🔍 Đang làm →'
           : '▶ Chơi →';
@@ -3525,6 +3808,13 @@ function renderM1Checklist(){
           <span class="mg-mission-tx">${m.name}</span>
           <span class="mg-mission-st">${label}</span>
         </li>`;
+      }
+      if(m.m2){
+        if(!m2Unlocked()) return `<li class="mg-mission soon" data-mission="${n}" title="Hoàn thành tối thiểu 1 lần nhiệm vụ 1 để mở khoá">
+          <span class="mg-mission-n">${n}</span><span class="mg-mission-tx">${m.name}</span><span class="mg-mission-st">🔒 Xong NV1 để mở</span></li>`;
+        const x2 = getM2State();
+        const lb2 = x2.step === 'idle' ? '▶ Chơi →' : x2.step === 'done' ? `🔁 Luyện tập · ${m2Count()} lần →` : '🔍 Đang làm →';
+        return `<li class="mg-mission play${x2.step==='done'?'':' current'}" data-mission="${n}"><span class="mg-mission-n">${n}</span><span class="mg-mission-tx">${m.name}</span><span class="mg-mission-st">${lb2}</span></li>`;
       }
       if(m.play){
         const done = rxS + otcS;
@@ -3544,10 +3834,12 @@ function renderM1Checklist(){
     // hàng nữa — chỉ CHỈ DẪN bước đang làm; phải tự đi tới máy tính ở Quầy
     // thu ngân và bấm vào đó mới mở được (giống game thật, không tắt tuỳ ý).
     missionsEl.querySelector('[data-mission="1"]')?.addEventListener('click', () => { if(typeof m1Hint === 'function') m1Hint(); });
+    missionsEl.querySelector('[data-mission="2"]')?.addEventListener('click', () => { if(typeof m2Click === 'function') m2Click(); });
     missionsEl.querySelector('[data-mission="3"]')?.addEventListener('click', () => { document.querySelector('.z-rx')?.dispatchEvent(new MouseEvent('click', { bubbles:true })); });
   }
   if(missionsEl){ renderMissions(); window.refreshMissionsList = renderMissions; }
   try{ applyM1Highlight(); }catch(e){}
+  try{ m2Sync(); }catch(e){}
 
   const TIPS = [
     'Luôn xếp thuốc theo nguyên tắc FEFO — thuốc hết hạn SỚM đưa ra phía trước, dễ lấy trước.',
@@ -3733,6 +4025,7 @@ function showFacade(){
   document.body.classList.remove('view-map','view-pharmacy','doors-open');
   document.body.classList.add('view-facade');
   history.replaceState(null, '', location.pathname);
+  try{ m2Sync(); }catch(e){}
 }
 document.getElementById('fDoorHit')?.addEventListener('click', enterThroughDoors);
 document.getElementById('fGoCrush')?.addEventListener('click', (e) => { e.stopPropagation(); location.href = '/pharma-crush.html'; });
@@ -3743,6 +4036,7 @@ function showMap(){
   // F5 giữ nguyên màn sơ đồ thay vì bật lại mặt tiền — xem điểm khởi động cuối file.
   history.replaceState(null, '', location.pathname + '?view=map');
   pStart(); fitMap(); requestAnimationFrame(fitMap); setTimeout(fitMap,60);
+  try{ m2Sync(); applyM1Highlight(); }catch(e){}
 }
 function showPharmacy(){
   pStop();
@@ -3773,7 +4067,13 @@ function doZoneAction(zone){
     // req #169: máy tính ở quầy thu ngân là nơi mở "Phần mềm bán hàng" cho
     // nhiệm vụ 1 — các khu "info" khác vẫn chỉ hiện chú thích như cũ, chờ
     // nghiệp vụ riêng ở các nhiệm vụ sau.
+    const m2s = getM2State();
     if(zone.id === 'zCashier' && typeof openPOS === 'function') openPOS();
+    else if(zone.classList.contains('z-receive') && (m2s.step === 'inbox' || m2s.step === 'packaging')) m2OpenCrate();
+    else if(zone.classList.contains('z-process') && m2s.step === 'toProcess'){
+      m2s.step = 'mail'; saveM2State(m2s);
+      pmZoneLabel.textContent = '✉️ Thùng hàng đã chuyển sang khu chờ xử lý — đến Quầy thu ngân, mở máy tính → Quản lý nhà cung ứng → Gửi thư báo sai lệch.';
+    }
     else pmZoneLabel.textContent = zone.dataset.name + ' — khu vực này sẽ có nghiệp vụ riêng ở các nhiệm vụ sau.';
   }
   else if(z === 'door'){ showFacade(); }
