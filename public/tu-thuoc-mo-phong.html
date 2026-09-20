@@ -216,7 +216,7 @@
   .pharmacy-map .pm-zone.z-dispense{display:none !important;}
   @keyframes m1-pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,212,0,0);background:rgba(255,212,0,.10);}50%{box-shadow:0 0 0 10px rgba(255,212,0,.6);background:rgba(255,212,0,.32);}}
   .pharmacy-map .pm-zone.m1-next{animation:m1-pulse 1.4s ease-in-out infinite;border-color:#ffd400 !important;z-index:6;}
-  .pharmacy-map .pm-zone.m1-next::after{content:'👉 Làm tiếp ở đây';position:absolute;left:50%;top:-26px;transform:translateX(-50%);
+  .pharmacy-map .pm-zone.m1-next::before{content:'👉 Làm tiếp ở đây';position:absolute;left:50%;top:-26px;transform:translateX(-50%);
     background:#ffd400;color:#3a2a00;font:800 12px 'Nunito',sans-serif;padding:3px 10px;border-radius:999px;white-space:nowrap;pointer-events:none;box-shadow:0 2px 6px rgba(0,0,0,.3);}
   .pos-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
   .pos-tab{border:1px solid #d8c9a3;background:#f6f1e6;color:#5c4a2c;font-weight:800;font-size:.72rem;
@@ -3115,9 +3115,12 @@ function m1CabQty(drugName){
 // thuốc, dùng cho công thức SL đặt = Bán/tuần ÷ 7 × số ngày − tồn. Đang để
 // tạm 10 ngày (chưa có giáo trình nêu con số chính thức) — đổi ở đây nếu cô
 // Hương Lý cho biết chu kỳ thật của nhà thuốc.
-const M1_RESTOCK_DAYS = 10;
+// req #170 (phản hồi lần 2): số ngày dự trù TÙY NHÓM HÀNG — hàng bán nhanh đặt thường xuyên
+// (chu kỳ ngắn), hàng bán chậm đặt thưa hơn (chu kỳ dài). Phân nhóm theo lượng bán/tuần.
+function m1Days(it){ return it.banTuan >= 30 ? 2 : it.banTuan >= 15 ? 5 : 10; }
+function m1Group(it){ return it.banTuan >= 30 ? 'bán nhanh' : it.banTuan >= 15 ? 'bán vừa' : 'bán chậm'; }
 function m1OrderQty(it, tonThuc){
-  return Math.max(0, Math.round(it.banTuan / 7 * M1_RESTOCK_DAYS - tonThuc));
+  return Math.max(0, Math.round(it.banTuan / 7 * m1Days(it) - tonThuc));
 }
 
 // req #169 (phản hồi): 3 nhà cung ứng "gợi ý" ở tab Quản lý nhà cung ứng —
@@ -3192,9 +3195,9 @@ function renderQuanLyTab(){
 function m1QtyChoices(it, ton){
   const right = m1OrderQty(it, ton);
   const wrongs = [
-    Math.max(0, Math.round(it.banTuan / 7 * M1_RESTOCK_DAYS)),        // quên trừ tồn
+    Math.max(0, Math.round(it.banTuan / 7 * m1Days(it))),        // quên trừ tồn
     Math.max(0, it.banTuan - ton),                                    // quên ÷7 × ngày
-    Math.max(0, Math.round(it.banTuan / 7 * M1_RESTOCK_DAYS + ton)),  // cộng thay vì trừ tồn
+    Math.max(0, Math.round(it.banTuan / 7 * m1Days(it) + ton)),  // cộng thay vì trừ tồn
   ];
   const set = [right];
   for(const w of wrongs){ if(!set.includes(w)) set.push(w); }
@@ -3206,9 +3209,9 @@ function renderDuTruTab(){
   const st = getM1State();
   if(st.step === 'dutru'){
     posPanel.innerHTML = `
-      <p class="pos-note">📦 Phần mềm phát hiện <b>${items.length} mặt hàng</b> cần kiểm tra trước khi lập dự trù. Chu kỳ dự trù chuẩn của nhà thuốc: <b>${M1_RESTOCK_DAYS} ngày</b>.</p>
+      <p class="pos-note">📦 Phần mềm phát hiện <b>${items.length} mặt hàng</b> cần kiểm tra trước khi lập dự trù. Số ngày dự trù <b>tuỳ nhóm hàng</b>: hàng bán nhanh đặt thường xuyên (chu kỳ ngắn), hàng bán chậm đặt thưa hơn (chu kỳ dài).</p>
       <table class="pos-table"><thead><tr><th>Tên thuốc</th><th>Tồn kho (PM)</th><th>Số ngày cần dự trù</th><th>Vị trí</th></tr></thead><tbody>
-        ${items.map(it => `<tr><td>${esc(it.name)}</td><td>${it.tonKho} ${it.unit}</td><td>${M1_RESTOCK_DAYS} ngày</td><td>${it.cabinet==='rx'?'Tủ thuốc kê đơn':'Tủ thuốc không kê đơn'}</td></tr>`).join('')}
+        ${items.map(it => `<tr><td>${esc(it.name)}</td><td>${it.tonKho} ${it.unit}</td><td>${m1Days(it)} ngày <span class="pos-hint">(${m1Group(it)})</span></td><td>${it.cabinet==='rx'?'Tủ thuốc kê đơn':'Tủ thuốc không kê đơn'}</td></tr>`).join('')}
       </tbody></table>
       <p class="pos-note">👉 Rời máy tính, đến đúng tủ kiểm tra thực tế từng mặt hàng trước khi lên đơn.</p>
       <button type="button" class="pos-btn" id="posGoCheck">🚶 Rời máy tính, đi kiểm tủ →</button>`;
@@ -3223,15 +3226,16 @@ function renderDuTruTab(){
   } else if(st.step === 'return'){
     posPanel.innerHTML = `
       <p class="pos-note">✅ Đã kiểm xong thực tế. Bảng tổng hợp — xem <b>lịch sử bán 1 tuần</b>, áp công thức rồi <b>chọn số lượng cần đặt</b> đúng cho từng mặt hàng:</p>
-      <table class="pos-table"><thead><tr><th>Tên thuốc</th><th>Tồn thực tế</th><th>Bán/tuần</th><th>SL cần đặt (chọn 1)</th></tr></thead><tbody>
+      <table class="pos-table"><thead><tr><th>Tên thuốc</th><th>Tồn thực tế</th><th>Bán/tuần</th><th>Số ngày dự trù</th><th>SL cần đặt (chọn 1)</th></tr></thead><tbody>
         ${items.map(it => { const ton = st.actual[it.key] != null ? st.actual[it.key] : it.tonKho; return `<tr>
           <td>${esc(it.name)}</td>
           <td>${ton} ${it.unit}</td>
           <td>${it.banTuan}<span class="pos-hint">lịch sử bán</span></td>
+          <td>${m1Days(it)} ngày</td>
           <td>${m1QtyChoices(it, ton).map(q => `<label style="display:block;white-space:nowrap;cursor:pointer;padding:1px 0"><input type="radio" class="pos-order-in" name="ord-${esc(it.key)}" data-key="${esc(it.key)}" value="${q}"${String(st.orders[it.key])===String(q)?' checked':''}> ${q} ${it.unit}</label>`).join('')}</td>
         </tr>`; }).join('')}
       </tbody></table>
-      <p class="pos-note" style="font-size:.76rem;opacity:.75">💡 Công thức: SL đặt = Bán/tuần ÷ 7 × ${M1_RESTOCK_DAYS} ngày − Tồn thực tế. Chọn đáp số khớp với công thức.</p>
+      <p class="pos-note" style="font-size:.76rem;opacity:.75">💡 Công thức: SL đặt = Bán/tuần ÷ 7 × số ngày dự trù − Tồn thực tế. Chọn đáp số khớp với công thức.</p>
       <button type="button" class="pos-btn" id="posSubmit">✅ Xác nhận đặt hàng</button>
       <div class="pos-err" id="posErr"></div>`;
     posPanel.querySelectorAll('.pos-order-in').forEach(inp => {
@@ -3242,7 +3246,7 @@ function renderDuTruTab(){
       const missing = items.some(it => st.orders[it.key] === '' || st.orders[it.key] == null || !(Number(st.orders[it.key]) >= 0));
       if(missing){ errEl.textContent = '⚠️ Chọn số lượng cần đặt cho đủ tất cả mặt hàng.'; return; }
       const wrong = items.find(it => Number(st.orders[it.key]) !== m1OrderQty(it, st.actual[it.key] != null ? st.actual[it.key] : it.tonKho));
-      if(wrong){ errEl.textContent = `⚠️ "${wrong.name}" chưa đúng — xem lại công thức: SL đặt = Bán/tuần ÷ 7 × ${M1_RESTOCK_DAYS} ngày − Tồn thực tế.`; return; }
+      if(wrong){ errEl.textContent = `⚠️ "${wrong.name}" chưa đúng — xem lại công thức: SL đặt = Bán/tuần ÷ 7 × ${m1Days(wrong)} ngày − Tồn thực tế.`; return; }
       st.step = 'supplier'; saveM1State(st);
       posPanel.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đã lập xong số lượng cần đặt cho ${items.length} mặt hàng!<br>Sang tab "Quản lý nhà cung ứng" để chọn nhà cung ứng và gửi đơn đặt hàng.</div>`;
       window.refreshMissionsList?.();
@@ -3282,6 +3286,27 @@ function renderNhaCCTab(){
   }));
   if(sub === 'hoso') renderHoSoSub(st); else renderDonHangSub(st);
 }
+// req #170 (phản hồi lần 2): giúp người học HÌNH DUNG hồ sơ — hiện thẻ minh hoạ từng giấy tờ với
+// các mục cần soát (tên doanh nghiệp, phạm vi, hiệu lực). Cố ý là thẻ tóm tắt có chữ "MẪU MINH HOẠ",
+// không quốc huy/con dấu, số giấy là số giả — để không lẫn với giấy tờ nhà nước thật.
+const M1_DOC_FIELDS = {
+  dkkd: [['Nội dung','Giấy chứng nhận đăng ký doanh nghiệp'],['Mã số doanh nghiệp','0xxxxxxxxx (số minh hoạ)'],['Ngành nghề','Bán buôn thuốc, dụng cụ y tế'],['Tình trạng','Đang hoạt động']],
+  ddk:  [['Nội dung','Giấy chứng nhận đủ điều kiện kinh doanh dược'],['Số giấy','xxx/ĐKKDD (số minh hoạ)'],['Phạm vi','Bán buôn thuốc'],['Hiệu lực','Còn hiệu lực']],
+  gdp:  [['Nội dung','Giấy chứng nhận đạt Thực hành tốt phân phối thuốc (GDP)'],['Số giấy','xxx/GDP (số minh hoạ)'],['Phạm vi','Phân phối, bảo quản, vận chuyển thuốc'],['Hiệu lực','Còn hiệu lực']],
+};
+function m1DocCards(sup){
+  const card = d => {
+    const has = !!sup[d.k];
+    if(!has) return `<div style="border:1px dashed #c9b98f;border-radius:8px;padding:6px 8px;margin-top:6px;font-size:.7rem;color:#a33">✖ ${esc(d.label)}: <b>không có trong hồ sơ</b></div>`;
+    return `<div style="position:relative;overflow:hidden;border:1px solid #cdbb8a;border-radius:8px;background:#fffdf6;padding:6px 8px 6px;margin-top:6px;font-size:.7rem;line-height:1.45">
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;transform:rotate(-18deg);font:800 .9rem 'Nunito',sans-serif;color:rgba(180,60,60,.13);pointer-events:none;text-align:center">MẪU MINH HOẠ · KHÔNG CÓ GIÁ TRỊ PHÁP LÝ</div>
+      <b style="color:#5c4a2c">📄 ${esc(d.label)}</b>
+      ${M1_DOC_FIELDS[d.k].map(([k,v]) => `<div><span style="opacity:.65">${k}:</span> ${k==='Nội dung'?esc(v):k==='Tên'?esc(v):esc(v)}</div>`).join('')}
+      <div><span style="opacity:.65">Tên đơn vị:</span> ${esc(sup.name)}</div>
+    </div>`;
+  };
+  return `<div style="font-size:.72rem"><div style="opacity:.75">Hồ sơ của <b>${esc(sup.name)}</b> — khi soát cần xem: <b>đúng tên đơn vị</b>, <b>đúng phạm vi</b>, <b>còn hiệu lực</b>.</div><div style="display:flex;gap:8px;flex-wrap:wrap">${M1_DOCS.map(d => `<div style="flex:1 1 200px;min-width:190px">${card(d)}</div>`).join('')}</div></div>`;
+}
 function renderHoSoSub(st){
   const body = document.getElementById('nhaccBody');
   const chosen = st.supplier;
@@ -3294,12 +3319,12 @@ function renderHoSoSub(st){
     <table class="pos-table"><thead><tr><th>Nhà cung ứng</th><th>ĐK kinh doanh</th><th>Đủ điều kiện KD dược</th><th>GDP (Thực hành tốt phân phối)</th><th>Giá</th><th>Giao hàng</th><th></th></tr></thead><tbody>
       ${M1_SUPPLIERS.map(s => { const t = st.ticks[s.id] || {}; const all = t.dkkd && t.ddk && t.gdp; return `<tr class="${chosen===s.id?'pos-sup-chosen':''}">
         <td>${esc(s.name)}<br><button type="button" class="pos-btn" style="padding:3px 8px;font-size:.68rem;margin-top:4px" data-view="${s.id}">🔍 ${st.viewed[s.id]?'Ẩn hồ sơ':'Xem hồ sơ'}</button>
-          ${st.viewed[s.id] ? `<div style="font-size:.72rem;margin-top:6px;line-height:1.5">Hồ sơ đang có:<br>${M1_DOCS.filter(d => s[d.k]).map(d => '• ' + esc(d.label)).join('<br>')}</div>` : ''}</td>
+</td>
         ${M1_DOCS.map(d => `<td><input type="checkbox" data-tick="${s.id}:${d.k}"${t[d.k]?' checked':''}></td>`).join('')}
         <td>${all ? s.price : '—'}</td>
         <td>${all ? s.ship : '—'}</td>
         <td><button type="button" class="pos-btn" style="padding:5px 10px;font-size:.74rem" data-pick="${s.id}">${chosen===s.id?'Đã chọn':'Chọn'}</button></td>
-      </tr>`; }).join('')}
+      </tr>${st.viewed[s.id] ? `<tr><td colspan="7" style="background:#fbf7ec">${m1DocCards(s)}</td></tr>` : ''}`; }).join('')}
     </tbody></table>
     <div class="pos-err" id="hosoErr"></div>`;
   body.querySelectorAll('[data-view]').forEach(btn => btn.addEventListener('click', () => {
@@ -3325,6 +3350,18 @@ function renderHoSoSub(st){
     const newErrEl = document.getElementById('hosoErr'); if(newErrEl) newErrEl.textContent = warn;
   }));
 }
+// req #174 (phản hồi): "số lần chơi" = số lần HOÀN THÀNH NHIỆM VỤ (xong nhiệm vụ 1, hoặc xong 1
+// lô ở nhiệm vụ 3). Xong nhiệm vụ 1 tính cho cả hai tủ (kê đơn + không kê đơn).
+function m1CountPlay(){
+  try{
+    registerPlay(); saveGame(); applyCabinetVisibility();
+    const otherKey = 'tu-thuoc-mo-phong:game_v2' + (TU_MODE === 'otc' ? '' : ':otc');
+    const g = JSON.parse(localStorage.getItem(otherKey) || 'null') || { tier:0, progress:0, stars:0, shields:0, combo:0, shieldsFromStars:0, plays:0 };
+    g.plays = (typeof g.plays === 'number' ? g.plays : (g.tier||0) * PLAYS_PER_TIER) + 1;
+    g.tier = Math.max(g.tier||0, Math.min(TIERS.length-1, Math.floor(g.plays / PLAYS_PER_TIER)));
+    localStorage.setItem(otherKey, JSON.stringify(g));
+  }catch(e){}
+}
 function renderDonHangSub(st){
   const body = document.getElementById('nhaccBody');
   const items = getM1Items();
@@ -3334,6 +3371,7 @@ function renderDonHangSub(st){
       <button type="button" class="pos-btn" id="posFinish">🎉 Hoàn thành nhiệm vụ 1</button>`;
     document.getElementById('posFinish').addEventListener('click', () => {
       st.step = 'done'; saveM1State(st);
+      m1CountPlay();
       posPanel.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">🎉 Đã lập xong dự trù, chọn nhà cung ứng &amp; gửi đơn mua thuốc cho ${items.length} mặt hàng!<br>Đóng lại để về sơ đồ — có thể bấm "Luyện lại" ở thẻ nhiệm vụ bất cứ lúc nào.</div>`;
       window.refreshMissionsList?.();
     });

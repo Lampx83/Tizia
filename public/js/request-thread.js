@@ -219,7 +219,7 @@ function injectStylesOnce() {
     .rt-count { font-size: 11px; opacity: .6; }
     .rt-title { font-size: 15px; font-weight: 800; line-height: 1.35; }
     .rt-title small { display: block; font-size: 11.5px; font-weight: 500; opacity: .6; margin-top: 2px; }
-    .rt-list { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; padding: 2px; }
+    .rt-list { display: flex; flex-direction: column; gap: 8px; padding: 2px; }
     .rt-msg { display: flex; }
     .rt-msg.rt-right { justify-content: flex-end; }
     .rt-msg.rt-left  { justify-content: flex-start; }

@@ -9,7 +9,7 @@
 // Page muốn ẩn: <body data-no-notifications-bell>. Guest (401) → tự ẩn.
 // ============================================================
 
-import { renderRequestThread } from './request-thread.js?v=reqfile1';
+import { renderRequestThread } from './request-thread.js?v=oneScroll1';
 import { getPlayerName } from './api.js';
 
 const POLL_MS = 60_000;
@@ -235,12 +235,11 @@ function injectStylesOnce() {
   const css = `
     .rqd-modal { position: fixed; inset: 0; z-index: 2147483002; display: grid; place-items: center; }
     .rqd-backdrop { position: absolute; inset: 0; background: rgba(15,23,42,.55); backdrop-filter: blur(3px); }
-    .rqd-dialog { position: relative; width: min(820px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow: auto;
+    .rqd-dialog { position: relative; width: min(820px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow-y: auto; overflow-x: hidden;
       background: #fff; color: #1f2937; border-radius: 16px; box-shadow: 0 30px 80px rgba(15,23,42,.45);
       padding: 14px 22px 18px; font: 14px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; text-align: left; }
     .rqd-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 800; color: #4338ca; font-size: 13px; margin-bottom: 8px; }
     .rqd-x { border: 0; background: rgba(0,0,0,.06); color: #475569; width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 14px; }
-    .rqd-dialog .rt-list { max-height: calc(100vh - 300px); }
     .rqd-dialog .rt-body { font-size: 14px; }
     .rqd-dialog .rt-att-thumb img { max-width: 220px; max-height: 160px; }
 
