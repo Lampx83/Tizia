@@ -719,7 +719,7 @@ export function attachPharmacyPractice(r) {
         messages,
         actions: actions.map((a) => ({ ...a, action_details: jp(a.action_details) })),
         scores,
-        summary: summarize(scores),
+        summary: summarize(scores, row.rubric_version === OTC_RUBRIC_VERSION ? OTC_GROUPS : RUBRIC_GROUPS),
         groups: row.rubric_version === OTC_RUBRIC_VERSION ? OTC_GROUPS : RUBRIC_GROUPS,
         maxTotal: row.rubric_version === OTC_RUBRIC_VERSION ? OTC_MAX_TOTAL : MAX_TOTAL,
         scale: row.rubric_version === OTC_RUBRIC_VERSION ? 5 : 4,

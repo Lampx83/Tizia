@@ -75,9 +75,9 @@ export const MAX_TOTAL = RUBRIC.length * MAX_PER_CRITERION;   // 100
 export const byCode = (code) => RUBRIC.find((c) => c.code === code) || null;
 
 // Gộp điểm theo nhóm A–E + điểm chung, quy về thang 100.
-export function summarize(rows) {
+export function summarize(rows, names = RUBRIC_GROUPS) {
   const groups = {};
-  for (const g of Object.keys(RUBRIC_GROUPS)) groups[g] = { group: g, name: RUBRIC_GROUPS[g], score: 0, max: 0 };
+  for (const g of Object.keys(names)) groups[g] = { group: g, name: names[g], score: 0, max: 0 };
   let score = 0, max = 0;
   for (const r of rows) {
     const g = groups[r.criterion_group];
