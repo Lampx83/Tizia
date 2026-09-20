@@ -1119,9 +1119,16 @@
      emoji 🚶 (hình tĩnh, chân không nhúc nhích). Vẽ lại bằng SVG (đầu tròn +
      thân + 2 chân) và cho 2 chân thay nhau xoay quanh khớp hông, dùng LẠI đúng
      2 keyframe pm-step-a/pm-step-b đã có sẵn cho nhân vật dược sĩ trong sơ đồ. */
-  .rw-leg{transform-box:fill-box;transform-origin:top center;animation-duration:.46s;animation-iteration-count:infinite;animation-timing-function:ease-in-out}
+  .rw-leg,.rw-arm{transform-box:fill-box;transform-origin:top center;
+    animation-duration:var(--rw-dur,.9s);animation-iteration-count:infinite;animation-timing-function:ease-in-out}
   .rw-leg-l{animation-name:pm-step-a}
   .rw-leg-r{animation-name:pm-step-b}
+  /* Tay vung NGƯỢC pha với chân cùng bên (tay trái tiến khi chân trái lùi) —
+     cùng pha sẽ thành dáng đi đều kiểu rô-bốt. */
+  .rw-arm-l{animation-name:rw-arm-a}
+  .rw-arm-r{animation-name:rw-arm-b}
+  @keyframes rw-arm-a{0%,100%{transform:rotate(-30deg)}50%{transform:rotate(30deg)}}
+  @keyframes rw-arm-b{0%,100%{transform:rotate(30deg)}50%{transform:rotate(-30deg)}}
   .tu-switch{display:inline-block;margin-top:4px;font-size:.78rem;font-weight:800;color:#225C4E;text-decoration:none;
     background:#fff;border:2px solid #cfe7df;border-radius:12px;padding:3px 10px}
   .tu-switch:hover{background:#eafaf6}
@@ -3793,9 +3800,9 @@ function renderThuSub(){
   body.innerHTML = `
     <div class="m2-inv" style="font-size:.84rem;line-height:1.7">
       <p style="margin:0 0 6px"><b>Kính gửi: ${esc(x.supplierName)}</b></p>
-      <p style="margin:0 0 6px">Nhà thuốc thực hành đã nhận lô hàng giao ngày ${dt}. Qua kiểm nhập, chúng tôi ghi nhận số lượng thực nhận như sau:</p>
+      <p style="margin:0 0 6px">Nhà thuốc thực hành đã nhận lô hàng giao ngày ${dt}. Qua kiểm nhập, chúng tôi ghi nhận số lượng thực nhận như sau (mặt hàng không khớp được tô màu):</p>
       <table class="pos-table" style="font-size:.8rem"><thead><tr><th>Tên thuốc</th><th>Số lượng trên hoá đơn</th><th>Số lượng thực nhận</th></tr></thead><tbody>
-        ${x.items.map((it,i) => `<tr><td>${esc(it.name)}</td><td>${it.qty} ${it.unit}</td><td><input type="number" min="0" data-recv="${i}" style="${inp}"> ${it.unit}</td></tr>`).join('')}
+        ${x.items.map(it => { const bad = it.recv !== it.qty; return `<tr style="${bad ? 'background:#ffd9a8;font-weight:800;color:#a02510' : ''}"><td>${bad ? '⚠️ ' : ''}${esc(it.name)}</td><td>${it.qty} ${it.unit}</td><td>${it.recv} ${it.unit}${bad ? ' ← không khớp' : ''}</td></tr>`; }).join('')}
       </tbody></table>
       <p style="margin:6px 0 2px"><b>Vấn đề ghi nhận khi nhập hàng</b> (tick vào):</p>
       ${['Số lượng thực nhận KHÔNG khớp hoá đơn','Bao bì móp méo, hư hỏng','Bao bì ẩm mốc','Thông tin trên bao bì mờ, nhoè','Tên đơn vị bán trên hoá đơn không đúng'].map((t,i) => `<label style="display:block;cursor:pointer"><input type="checkbox" data-prob="${i}"> ${t}</label>`).join('')}
@@ -3806,11 +3813,6 @@ function renderThuSub(){
     <button type="button" class="pos-btn" id="thuSend" style="margin-top:8px">📨 Gửi thư</button><div class="pos-err" id="thuErr"></div>`;
   document.getElementById('thuSend').addEventListener('click', () => {
     const err = document.getElementById('thuErr');
-    for(let i = 0; i < x.items.length; i++){
-      const v = body.querySelector(`[data-recv="${i}"]`).value;
-      if(v === ''){ err.textContent = '⚠️ Điền số lượng thực nhận cho tất cả các mặt hàng.'; return; }
-      if(Number(v) !== x.items[i].recv){ err.textContent = `⚠️ Số lượng thực nhận của "${x.items[i].name}" chưa đúng — xem lại hàng ở khu hàng chờ xử lý / hoá đơn.`; return; }
-    }
     const probs = [...body.querySelectorAll('[data-prob]:checked')].map(c => Number(c.dataset.prob));
     if(!probs.includes(0)){ err.textContent = '⚠️ Hãy tick vấn đề đã xảy ra khi nhập hàng (số lượng không khớp hoá đơn).'; return; }
     if(probs.some(p => p !== 0)){ err.textContent = '⚠️ Có vấn đề bạn tick chưa xảy ra trong lô hàng này — chỉ tick vấn đề đã ghi nhận.'; return; }
@@ -4280,6 +4282,10 @@ doorPwMask.addEventListener('click', e => { if(e.target === doorPwMask) closeDoo
 // (giữ nguyên tỉ lệ tương đối giữa các loại) để tương xứng với mặt tiền 2 tầng.
 // req #167: 3 kiểu "người" (chú, cô, em bé) vẽ bằng SVG riêng (đầu + thân + 2
 // chân xoay được), thay cho emoji 🚶 tĩnh — xem personSVG() + .rw-leg bên dưới.
+// req (giảng viên): người đi NGANG màn hình mà hai chân lại đặt cạnh nhau như
+// nhìn từ trước → mỗi chân xoay quanh một khớp hông riêng, đỉnh bước thành dáng
+// xoạc chân. Sửa: hai đùi dùng CHUNG một khớp hông giữa thân (dáng nhìn
+// nghiêng), chân/tay phía xa tô sẫm hơn để mắt tách được hai bên.
 const P_MAN   = { scale:1.35, skin:'#f0c191', shirt:'#2f6fb0', pants:'#33445c' };
 const P_WOMAN = { scale:1.3, skin:'#f0c191', shirt:'#d9548a', pants:'#7a3253', hair:'#3a2418' };
 const P_CHILD = { scale:0.9, skin:'#f4c9a0', shirt:'#e8a63a', pants:'#3d6b8a' };
@@ -4314,16 +4320,41 @@ function svgEl(name, attrs){
 // Người đi bộ: đầu tròn + thân + 2 chân — 2 chân mang class rw-leg-l/rw-leg-r,
 // DÙNG LẠI đúng 2 keyframe pm-step-a/pm-step-b của nhân vật dược sĩ trong sơ đồ
 // (xem CSS .rw-leg) nên chân thật sự thay nhau bước, không còn đứng im.
+// Tô sẫm một màu để làm bên "phía xa" của dáng nhìn nghiêng.
+function shade(hex, f){
+  const n = parseInt(hex.slice(1), 16), d = v => Math.round(v * f);
+  return '#' + [d(n >> 16), d((n >> 8) & 255), d(n & 255)]
+    .map(v => v.toString(16).padStart(2, '0')).join('');
+}
+// Tay: bọc trong <g> riêng vì cả cánh tay lẫn bàn tay cùng xoay quanh khớp vai.
+function armSVG(o, s, side){
+  const far = side === 'r';
+  const g = svgEl('g', { class:`rw-arm rw-arm-${side}` });
+  g.appendChild(svgEl('rect', { x:-4*s, y:-58*s, width:8*s, height:32*s, rx:4*s,
+    fill: far ? shade(o.shirt,.74) : shade(o.shirt,.88) }));
+  g.appendChild(svgEl('circle', { cx:0, cy:-28*s, r:4.6*s,
+    fill: far ? shade(o.skin,.85) : o.skin }));
+  return g;
+}
+// Người đi bộ nhìn NGHIÊNG: thứ tự vẽ từ xa tới gần —
+// chân xa → tay xa → thân → chân gần → tay gần → đầu.
 function personSVG(inner, o, dx, dy){
   const s = o.scale, X = dx||0, Y = dy||0;
   const g = svgEl('g', { transform: `translate(${X},${Y})` });
-  if(o.hair) g.appendChild(svgEl('path', {
-    d: `M${-9*s},${-34*s} Q0,${-46*s} ${9*s},${-34*s} L${9*s},${-30*s} Q0,${-40*s} ${-9*s},${-30*s} Z`,
-    fill:o.hair,
-  }));
-  g.appendChild(svgEl('rect', { class:'rw-leg rw-leg-l', x:-13*s, y:-24*s, width:11*s, height:30*s, rx:5*s, fill:o.pants }));
-  g.appendChild(svgEl('rect', { class:'rw-leg rw-leg-r', x:2*s,   y:-24*s, width:11*s, height:30*s, rx:5*s, fill:o.pants }));
+  const leg = (side, fill) => svgEl('rect', { class:`rw-leg rw-leg-${side}`,
+    x:-5.5*s, y:-24*s, width:11*s, height:30*s, rx:5*s, fill });
+
+  g.appendChild(leg('r', shade(o.pants, .72)));
+  g.appendChild(armSVG(o, s, 'r'));
   g.appendChild(svgEl('rect', { x:-16*s, y:-64*s, width:32*s, height:42*s, rx:12*s, fill:o.shirt }));
+  g.appendChild(leg('l', o.pants));
+  g.appendChild(armSVG(o, s, 'l'));
+  // Tóc: vành tóc quanh đỉnh đầu + búi phía sau gáy (mặt quay sang trái theo
+  // hướng vẽ gốc). Trước đây path tóc nằm ở ngang ngực nên bị thân che kín.
+  if(o.hair){
+    g.appendChild(svgEl('circle', { cx:0, cy:-81*s, r:17.5*s, fill:o.hair }));
+    g.appendChild(svgEl('circle', { cx:13*s, cy:-72*s, r:6.5*s, fill:o.hair }));
+  }
   g.appendChild(svgEl('circle', { cx:0, cy:-78*s, r:17*s, fill:o.skin }));
   inner.appendChild(g);
 }
@@ -4360,7 +4391,18 @@ function spawnActor(){
   // req #159 (phản hồi): người đi bộ "bước" — nhún người lên xuống theo quãng
   // đường đã đi (không phải theo thời gian) nên nhịp bước luôn đều dù tốc độ
   // khác nhau; xe cộ (walk=false) đứng yên theo chiều dọc như cũ.
-  roadActors.push({ g, x, y:kind.y, v:dir*kind.speed*(0.85+Math.random()*0.3), walk:!!kind.walk, dist:0 });
+  const v = dir*kind.speed*(0.85+Math.random()*0.3);
+  // req (giảng viên): chân "dao động hơi nhanh". Nhịp bước trước đây cố định
+  // .46s bất kể đi nhanh hay chậm nên bàn chân quay tít hơn thân người di
+  // chuyển. Nay tính theo quãng đường thật: một chu kỳ = 2 bước, mỗi bước dài
+  // ≈ 2·(dài chân 30)·sin(biên độ 24°) → người lớn ra ~0,9s, em bé đi chậm thì
+  // bước cũng thưa theo.
+  const per = kind.parts.find(p => p.person);
+  if(per){
+    const stride = 4 * 30 * per.person.scale * Math.sin(24 * Math.PI / 180);
+    g.style.setProperty('--rw-dur', (stride / Math.abs(v)).toFixed(2) + 's');
+  }
+  roadActors.push({ g, x, y:kind.y, v, walk:!!kind.walk, dist:0 });
 }
 function roadTick(ts){
   requestAnimationFrame(roadTick);
