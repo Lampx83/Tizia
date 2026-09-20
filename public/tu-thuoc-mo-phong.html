@@ -3355,7 +3355,7 @@ function renderNhaCCTab(){
   const sub = (m2mail && st.nhaccSub === 'thu') ? 'thu' : (st.nhaccSub === 'thu' ? 'hoso' : (st.nhaccSub || 'hoso'));
   posPanel.innerHTML = `
     <div class="pos-tabs" style="margin-bottom:12px">
-      ${m2mail ? `<button type="button" class="pos-tab${sub==='thu'?' active':''}" data-sub="thu">✉️ Gửi thư báo sai lệch</button>` : ''}
+      ${m2mail ? `<button type="button" class="pos-tab${sub==='thu'?' active':''}" data-sub="thu">✉️ Gửi thư cho nhà cung ứng</button>` : ''}
       <button type="button" class="pos-tab${sub==='hoso'?' active':''}" data-sub="hoso">📁 Hồ sơ nhà cung ứng</button>
       <button type="button" class="pos-tab${sub==='donhang'?' active':''}" data-sub="donhang"${st.step==='order'||st.supplier?'':' disabled'}>🧾 Lập đơn đặt hàng</button>
     </div>
@@ -3518,7 +3518,7 @@ function m2Hint(){
   return x.step === 'deliver' ? '🚪 Nhiệm vụ 2: ra cửa ra vào — sẽ có xe giao hàng dừng trước cửa. Bấm vào thùng hàng để nhận.'
     : x.step === 'inbox' ? '📦 Nhiệm vụ 2: bấm vào thùng hàng ở Khu vực chờ kiểm nhập để kiểm tra hoá đơn và hàng.'
     : x.step === 'toProcess' ? '⚠️ Nhiệm vụ 2: số lượng không khớp — bấm vào Khu vực hàng chờ xử lý để chuyển thùng hàng sang đó.'
-    : x.step === 'mail' ? '✉️ Nhiệm vụ 2: đến Quầy thu ngân, mở máy tính → Quản lý nhà cung ứng → Gửi thư báo sai lệch.'
+    : x.step === 'mail' ? '✉️ Nhiệm vụ 2: đến Quầy thu ngân, mở máy tính → Quản lý nhà cung ứng → Gửi thư cho nhà cung ứng.'
     : x.step === 'packaging' ? '🔍 Nhiệm vụ 2: bấm thùng ở Khu vực chờ kiểm nhập để kiểm tra bao bì từng sản phẩm.'
     : '✅ Nhiệm vụ 2 đã xong. Bấm để luyện tập lại.';
 }
@@ -3696,43 +3696,40 @@ function m2RenderInvoice(){
 function m2RenderQty(){
   const x = getM2State();
   const body = m2Modal('📦 Kiểm tra số lượng trong thùng', `
-    <p class="pos-note">✅ Đã đối chiếu xong công ty. Bây giờ kiểm tra hàng: <b>bấm vào thùng hàng để mở</b>, bấm vào <b>từng loại thuốc</b> để xem tổng số hộp trong thùng, rồi so với hoá đơn và bấm <b>Khớp</b> hoặc <b>Không khớp</b>.</p>
+    <p class="pos-note">✅ Đã đối chiếu xong công ty. Kiểm tra hàng từng mặt hàng: so <b>số hộp trong thùng</b> với <b>hoá đơn</b> rồi tick <b>Khớp</b> hoặc <b>Không khớp</b>. Tick xong mới sang mặt hàng tiếp theo.</p>
     <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">
-    <div style="flex:1 1 380px;min-width:0">
-    <div id="m2Closed" style="text-align:center"><button type="button" class="pos-btn" id="m2OpenBox" style="font-size:1rem;padding:14px 26px">📦 Bấm vào thùng để mở</button></div>
-    <div id="m2OpenWrap" class="m2-openbox" hidden>
-      ${x.items.map((it,i) => `<div class="m2-tile" data-i="${i}">
-        <button type="button" class="nm">💊 ${esc(it.name)} — bấm để đếm</button>
-        <div style="line-height:0">${Array.from({length: it.recv}, () => `<img class="m2-mb-img" alt="Hộp ${esc(it.name)}" src="${PHOTO_DIR}${slugify(it.name)}.jpg" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'m2-mb'}))">`).join('')}</div>
-        <div class="m2-info" hidden></div></div>`).join('')}
-    </div></div>
-    <div style="flex:1 1 380px;min-width:0"><div style="font:800 .8rem Nunito,sans-serif;margin-bottom:4px">🧾 Hoá đơn để đối chiếu</div>${m2InvoiceHtml(x)}</div>
+      <div style="flex:1 1 380px;min-width:0">
+        <div id="m2Closed" style="text-align:center"><button type="button" class="pos-btn" id="m2OpenBox" style="font-size:1rem;padding:14px 26px">📦 Bấm vào thùng để mở</button></div>
+        <div id="m2OpenWrap" class="m2-openbox" hidden></div>
+      </div>
+      <div style="flex:1 1 380px;min-width:0"><div style="font:800 .8rem Nunito,sans-serif;margin-bottom:4px">🧾 Hoá đơn để đối chiếu</div>${m2InvoiceHtml(x)}</div>
     </div><div class="pos-err" id="m2Err"></div>`);
-  const err = body.querySelector('#m2Err'), got = {};
-  body.querySelector('#m2OpenBox').addEventListener('click', () => { body.querySelector('#m2Closed').hidden = true; body.querySelector('#m2OpenWrap').hidden = false; });
+  const err = body.querySelector('#m2Err'), wrap = body.querySelector('#m2OpenWrap');
+  let cur = 0;
   const finish = () => {
-    if(x.items.some((it,i) => got[i] == null)) return;
     if(x.items.some(it => it.recv !== it.qty)){
       x.step = 'toProcess'; saveM2State(x); m2CloseModal();
       pmZoneLabel.textContent = '⚠️ Số lượng không khớp — bấm vào Khu vực hàng chờ xử lý để chuyển thùng hàng sang đó.';
     } else { x.step = 'packaging'; x.sub = 'pack'; saveM2State(x); m2RenderPack(); }
   };
-  body.querySelectorAll('.m2-tile').forEach(tile => {
-    const i = Number(tile.dataset.i), it = x.items[i], info = tile.querySelector('.m2-info');
-    tile.querySelector('.nm').addEventListener('click', () => {
-      if(!info.hidden || got[i] != null) return;
-      info.hidden = false;
-      info.innerHTML = `<div style="margin:6px 0">Tổng số hộp trong thùng: <b>${it.recv} ${it.unit}</b> · Trên hoá đơn: <b>${it.qty} ${it.unit}</b></div>
-        <button type="button" class="pos-btn" data-v="1">✅ Khớp</button> <button type="button" class="pos-btn" data-v="0" style="background:#b03a2e">❌ Không khớp</button>`;
-      info.querySelectorAll('[data-v]').forEach(b => b.addEventListener('click', () => {
-        const truth = it.recv === it.qty ? '1' : '0';
-        if(b.dataset.v !== truth){ err.textContent = '⚠️ Chưa đúng — so lại số hộp đếm được với số lượng trên hoá đơn.'; return; }
-        err.textContent = ''; got[i] = truth; tile.classList.add('done');
-        info.innerHTML = `<div style="margin:6px 0">Tổng: <b>${it.recv} ${it.unit}</b> · Hoá đơn: <b>${it.qty} ${it.unit}</b> → <b>${truth === '1' ? '✅ Khớp' : '❌ Không khớp'}</b></div>`;
-        finish();
-      }));
-    });
-  });
+  const showItem = () => {
+    const it = x.items[cur];
+    wrap.innerHTML = `<div class="m2-tile"><div style="font:800 .9rem Nunito,sans-serif;color:#5c3a0a;margin-bottom:4px">Mặt hàng ${cur+1}/${x.items.length}: 💊 ${esc(it.name)}</div>
+      <div style="line-height:0">${Array.from({length: it.recv}, () => `<img class="m2-mb-img" alt="Hộp ${esc(it.name)}" src="${PHOTO_DIR}${slugify(it.name)}.jpg" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'m2-mb'}))">`).join('')}</div>
+      <div style="margin:8px 0">Tổng số hộp trong thùng: <b>${it.recv} ${it.unit}</b> · Trên hoá đơn: <b>${it.qty} ${it.unit}</b></div>
+      <label style="margin-right:18px;cursor:pointer;font-weight:800"><input type="checkbox" data-v="1"> Khớp</label>
+      <label style="cursor:pointer;font-weight:800"><input type="checkbox" data-v="0"> Không khớp</label></div>`;
+    wrap.querySelectorAll('input[data-v]').forEach(cb => cb.addEventListener('change', () => {
+      if(!cb.checked) return;
+      wrap.querySelectorAll('input[data-v]').forEach(o => { if(o !== cb) o.checked = false; });
+      const truth = it.recv === it.qty ? '1' : '0';
+      if(cb.dataset.v !== truth){ err.textContent = '⚠️ Chưa đúng — so lại số hộp trong thùng với số lượng trên hoá đơn.'; return; }
+      err.textContent = '';
+      wrap.querySelectorAll('input[data-v]').forEach(o => { o.disabled = true; });
+      setTimeout(() => { cur++; if(cur < x.items.length) showItem(); else finish(); }, 500);
+    }));
+  };
+  body.querySelector('#m2OpenBox').addEventListener('click', () => { body.querySelector('#m2Closed').hidden = true; wrap.hidden = false; showItem(); });
 }
 function m2RenderPack(){
   const x = getM2State();
@@ -3789,24 +3786,42 @@ function m2CountPlay(){
 // Thư báo sai lệch gửi nhà cung ứng — tab "Quản lý nhà cung ứng" của phần mềm bán hàng.
 function renderThuSub(){
   const x = getM2State(), body = document.getElementById('nhaccBody');
-  const bad = x.items.filter(it => it.recv !== it.qty);
+  const d = new Date(), dt = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+  const short = x.items.some(it => it.recv < it.qty), over = x.items.some(it => it.recv > it.qty);
+  const inp = 'width:80px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px';
+  // req #222: thư soạn sẵn — người học chỉ điền số và tick, hạn chế tối đa gõ chữ.
   body.innerHTML = `
-    <p class="pos-note">Gửi thư cho <b>${esc(x.supplierName)}</b> báo về sự sai lệch số lượng giữa hoá đơn và hàng thực nhận.</p>
-    <div class="f" style="margin-bottom:8px">Mặt hàng lệch: <select id="thuItem">${x.items.map((it,i) => `<option value="${i}">${esc(it.name)}</option>`).join('')}</select></div>
-    <div style="margin-bottom:8px">Số lượng thực nhận: <input type="number" min="0" id="thuRecv" style="width:90px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px"></div>
-    <textarea id="thuText" rows="5" style="width:100%;padding:8px;border:1px solid #caa25a;border-radius:8px;font:inherit" placeholder="Kính gửi ${esc(x.supplierName)}, ... (nêu rõ mặt hàng, số lượng trên hoá đơn, số lượng thực nhận và đề nghị xử lý)"></textarea>
+    <div class="m2-inv" style="font-size:.84rem;line-height:1.7">
+      <p style="margin:0 0 6px"><b>Kính gửi: ${esc(x.supplierName)}</b></p>
+      <p style="margin:0 0 6px">Nhà thuốc thực hành đã nhận lô hàng giao ngày ${dt}. Qua kiểm nhập, chúng tôi ghi nhận số lượng thực nhận như sau:</p>
+      <table class="pos-table" style="font-size:.8rem"><thead><tr><th>Tên thuốc</th><th>Số lượng trên hoá đơn</th><th>Số lượng thực nhận</th></tr></thead><tbody>
+        ${x.items.map((it,i) => `<tr><td>${esc(it.name)}</td><td>${it.qty} ${it.unit}</td><td><input type="number" min="0" data-recv="${i}" style="${inp}"> ${it.unit}</td></tr>`).join('')}
+      </tbody></table>
+      <p style="margin:6px 0 2px"><b>Vấn đề ghi nhận khi nhập hàng</b> (tick vào):</p>
+      ${['Số lượng thực nhận KHÔNG khớp hoá đơn','Bao bì móp méo, hư hỏng','Bao bì ẩm mốc','Thông tin trên bao bì mờ, nhoè','Tên đơn vị bán trên hoá đơn không đúng'].map((t,i) => `<label style="display:block;cursor:pointer"><input type="checkbox" data-prob="${i}"> ${t}</label>`).join('')}
+      <p style="margin:6px 0 2px"><b>Đề nghị nhà cung ứng</b> (tick vào):</p>
+      ${['Bổ sung số hàng còn thiếu','Nhận lại phần hàng giao thừa','Điều chỉnh lại hoá đơn cho khớp thực nhận','Đổi lô hàng khác'].map((t,i) => `<label style="display:block;cursor:pointer"><input type="checkbox" data-req="${i}"> ${t}</label>`).join('')}
+      <p style="margin:8px 0 0">Rất mong nhận được phản hồi sớm. Trân trọng cảm ơn!<br><i>Nhà thuốc thực hành</i></p>
+    </div>
     <button type="button" class="pos-btn" id="thuSend" style="margin-top:8px">📨 Gửi thư</button><div class="pos-err" id="thuErr"></div>`;
   document.getElementById('thuSend').addEventListener('click', () => {
-    const it = x.items[Number(document.getElementById('thuItem').value)];
-    const recv = document.getElementById('thuRecv').value, txt = document.getElementById('thuText').value.trim();
     const err = document.getElementById('thuErr');
-    if(!bad.includes(it)){ err.textContent = '⚠️ Mặt hàng này số lượng vẫn khớp — chọn mặt hàng bị lệch.'; return; }
-    if(recv === '' || Number(recv) !== it.recv){ err.textContent = '⚠️ Số lượng thực nhận chưa đúng — đếm lại hàng ở khu hàng chờ xử lý.'; return; }
-    if(txt.length < 25){ err.textContent = '⚠️ Nội dung thư quá ngắn — nêu rõ mặt hàng, số lượng trên hoá đơn, số lượng thực nhận và đề nghị xử lý.'; return; }
+    for(let i = 0; i < x.items.length; i++){
+      const v = body.querySelector(`[data-recv="${i}"]`).value;
+      if(v === ''){ err.textContent = '⚠️ Điền số lượng thực nhận cho tất cả các mặt hàng.'; return; }
+      if(Number(v) !== x.items[i].recv){ err.textContent = `⚠️ Số lượng thực nhận của "${x.items[i].name}" chưa đúng — xem lại hàng ở khu hàng chờ xử lý / hoá đơn.`; return; }
+    }
+    const probs = [...body.querySelectorAll('[data-prob]:checked')].map(c => Number(c.dataset.prob));
+    if(!probs.includes(0)){ err.textContent = '⚠️ Hãy tick vấn đề đã xảy ra khi nhập hàng (số lượng không khớp hoá đơn).'; return; }
+    if(probs.some(p => p !== 0)){ err.textContent = '⚠️ Có vấn đề bạn tick chưa xảy ra trong lô hàng này — chỉ tick vấn đề đã ghi nhận.'; return; }
+    const reqs = [...body.querySelectorAll('[data-req]:checked')].map(c => Number(c.dataset.req));
+    if(!reqs.length){ err.textContent = '⚠️ Tick ít nhất một đề nghị gửi nhà cung ứng.'; return; }
+    const okReq = r => r === 2 || (r === 0 && short) || (r === 1 && over);
+    if(!reqs.every(okReq)){ err.textContent = '⚠️ Đề nghị chưa phù hợp với tình trạng hàng (thiếu thì đề nghị bổ sung, thừa thì nhận lại, hoặc điều chỉnh hoá đơn).'; return; }
     x.step = 'done'; saveM2State(x);
     try{ localStorage.setItem(LS_M2N, String(m2Count() + 1)); }catch(e){}
     m2CountPlay();
-    body.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đã gửi thư báo sai lệch cho ${esc(x.supplierName)}. Hàng được giữ ở khu chờ xử lý cho tới khi nhà cung ứng phản hồi.<br>🎉 Hoàn thành nhiệm vụ 2 (nhánh xử lý sai lệch).</div>`;
+    body.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đã gửi thư cho ${esc(x.supplierName)}. Hàng được giữ ở khu chờ xử lý cho tới khi nhà cung ứng phản hồi.<br>🎉 Hoàn thành nhiệm vụ 2 (nhánh xử lý sai lệch).</div>`;
     window.refreshMissionsList?.();
   });
 }
@@ -4191,7 +4206,7 @@ function doZoneAction(zone){
     else if(zone.classList.contains('z-receive') && (m2s.step === 'inbox' || m2s.step === 'packaging')) m2OpenCrate();
     else if(zone.classList.contains('z-process') && m2s.step === 'toProcess'){
       m2s.step = 'mail'; saveM2State(m2s);
-      pmZoneLabel.textContent = '✉️ Thùng hàng đã chuyển sang khu chờ xử lý — đến Quầy thu ngân, mở máy tính → Quản lý nhà cung ứng → Gửi thư báo sai lệch.';
+      pmZoneLabel.textContent = '✉️ Thùng hàng đã chuyển sang khu chờ xử lý — đến Quầy thu ngân, mở máy tính → Quản lý nhà cung ứng → Gửi thư cho nhà cung ứng.';
     }
     else pmZoneLabel.textContent = zone.dataset.name + ' — khu vực này sẽ có nghiệp vụ riêng ở các nhiệm vụ sau.';
   }
