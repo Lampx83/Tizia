@@ -46,7 +46,18 @@ $('btn-out').addEventListener('click', async () => {
 
 // Chạy thử tình huống: mở đúng giao diện sinh viên. Máy chủ tự nhận ra cookie
 // giảng viên và đánh dấu lượt là TEACHER_TEST, không lẫn vào dữ liệu sinh viên.
-$('btn-try').addEventListener('click', () => { location.href = '/nha-thuoc-3d'; });
+// Điền sẵn danh tính giảng viên (cùng khoá localStorage với màn nhập SV) để bỏ qua
+// màn chọn vai trò và vào thẳng danh sách tình huống (req #172).
+$('btn-try').addEventListener('click', () => {
+  try {
+    localStorage.setItem('pharmacomm:student', JSON.stringify({
+      studentCode: 'GV-' + String(ME?.username || 'GV').toUpperCase(),
+      studentName: ME?.displayName || ME?.username || 'Giảng viên',
+      className: 'Giảng viên chạy thử',
+    }));
+  } catch {}
+  location.href = '/nha-thuoc-3d';
+});
 
 // ---- đổi mật khẩu ---------------------------------------------------
 $('btn-pw').addEventListener('click', () => $('pw-box').classList.toggle('hide'));
