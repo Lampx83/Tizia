@@ -3697,12 +3697,16 @@ function m2RenderQty(){
   const x = getM2State();
   const body = m2Modal('📦 Kiểm tra số lượng trong thùng', `
     <p class="pos-note">✅ Đã đối chiếu xong công ty. Bây giờ kiểm tra hàng: <b>bấm vào thùng hàng để mở</b>, bấm vào <b>từng loại thuốc</b> để xem tổng số hộp trong thùng, rồi so với hoá đơn và bấm <b>Khớp</b> hoặc <b>Không khớp</b>.</p>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">
+    <div style="flex:1 1 380px;min-width:0">
     <div id="m2Closed" style="text-align:center"><button type="button" class="pos-btn" id="m2OpenBox" style="font-size:1rem;padding:14px 26px">📦 Bấm vào thùng để mở</button></div>
     <div id="m2OpenWrap" class="m2-openbox" hidden>
       ${x.items.map((it,i) => `<div class="m2-tile" data-i="${i}">
         <button type="button" class="nm">💊 ${esc(it.name)} — bấm để đếm</button>
         <div style="line-height:0">${Array.from({length: it.recv}, () => `<img class="m2-mb-img" alt="Hộp ${esc(it.name)}" src="${PHOTO_DIR}${slugify(it.name)}.jpg" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'m2-mb'}))">`).join('')}</div>
         <div class="m2-info" hidden></div></div>`).join('')}
+    </div></div>
+    <div style="flex:1 1 380px;min-width:0"><div style="font:800 .8rem Nunito,sans-serif;margin-bottom:4px">🧾 Hoá đơn để đối chiếu</div>${m2InvoiceHtml(x)}</div>
     </div><div class="pos-err" id="m2Err"></div>`);
   const err = body.querySelector('#m2Err'), got = {};
   body.querySelector('#m2OpenBox').addEventListener('click', () => { body.querySelector('#m2Closed').hidden = true; body.querySelector('#m2OpenWrap').hidden = false; });
