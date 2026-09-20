@@ -4,6 +4,63 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-20 — Phiên 67 · `/api/*` đã về lại server này — nhưng production đang chạy bản build cũ ~69 ngày
+
+**Kết luận:** **Không xử lý được yêu cầu nào của người học** (ngày thứ 8) — vẫn không đọc được hộp thư nên không có yêu cầu thật, và không bịa việc. Nhưng hôm nay tình hình **đổi theo hướng tốt** và nguyên nhân còn lại đã được **đo ra bằng chứng cứ**, không còn phải đoán.
+
+### Đo thật hôm nay (2026-09-20)
+
+| Kiểm tra | Kết quả | So với phiên 66 |
+|---|---|---|
+| `GET /api/health` (3 lần) | `200` — `{"ok":true,"service":"tizia","port":8041,…,"env":"production"}` | **ĐÃ SỬA** (hôm 19/9 còn `500`) |
+| `GET /api/ai-board/inbox` (có header key) | `401 {"needLogin":true}` | đổi từ `500` → auth gate chung, **không phải** chuyện key |
+| `GET /api/track/pageview`, `/api/webhooks/scoreup` | `404` (không phải `401`) | các prefix public **cũ** vẫn qua được gate |
+| `GET /api/analytics/bootstrap` | `200 {"measurementId":…}` | prefix public **cũ** chạy bình thường |
+| `js/engine/domain.js` trên production | khớp **commit `7632aaf` (2026-07-14)** | — |
+| `js/domains/it/achievements.js` trên production | 10 achievement, **không khớp bản nào** trong lịch sử (bản `main` hiện tại: 50) | — |
+| `api.tizia.vn`, `app.tizia.vn`, `edu.tizia.vn`, `eduverse.tizia.vn`, `ps.tizia.vn`, `beta.tizia.vn` | không kết nối được | không có host API thay thế |
+| GitHub Issues (open + closed) | 0 | — |
+| `AI_BOARD_KEY` trong môi trường routine | **vẫn chưa có** | — |
+
+**Chẩn đoán (đã thu hẹp còn một nguyên nhân duy nhất):** định tuyến đã được sửa — `/api/*` của `tizia.vn` nay về đúng server Express của repo này (app Next.js của phiên 66 không còn nuốt `/api` nữa). Nhưng **bản build đang chạy là bản từ trước `2026-07-14`, cũ hơn hôm nay ~69 ngày**. Route `/api/ai-board/inbox` và dòng `'/api/ai-board/'` trong `PUBLIC_PATH_PREFIXES` được thêm ngày **2026-09-14** (`38764d1`) nên **chưa tồn tại** trong bản đang chạy → auth gate chung nuốt request và trả `401 needLogin`. Đây không phải chuyện key: có key đúng cũng vẫn `401`.
+
+Bằng chứng gọn nhất nằm ngay trong bảng trên: các prefix public **cũ** (`/api/track/pageview`, `/api/webhooks/`, `/api/analytics/bootstrap`) đều **qua được** auth gate, chỉ riêng `/api/ai-board/` — dòng thêm mới nhất — bị chặn. Tức `auth.js` trên production đúng là bản chưa có dòng đó.
+
+Bằng chứng cho "bản build cũ": nội dung `js/engine/domain.js` mà production trả về **trùng khít từng byte** với bản ở commit `7632aaf` (14/7), còn `js/domains/it/achievements.js` chỉ có 10 achievement — ít hơn cả bản cũ nhất trong lịch sử repo (36) — tức bản deploy còn cũ hơn cả điểm bắt đầu lịch sử đã ghi của file đó.
+
+### Việc đã làm
+
+| File | Thay đổi |
+|---|---|
+| `scripts/check-deployed-build.mjs` | **MỚI** — tự động hoá đúng phép đo trên: tải vài file JS tĩnh public từ production, băm theo công thức blob của git, dò ngược lịch sử để tìm commit khớp, rồi kết luận tuổi bản deploy + trạng thái route hộp thư. Không dependency, **đọc-chỉ**, chạy được trên repo sạch chưa `npm install`. |
+
+Lý do thêm script này: suốt các phiên 62→66, mỗi phiên lại kết luận một nguyên nhân khác nhau vì **không ai đo tuổi bản build**. Từ nay chỉ cần một lệnh:
+
+```bash
+node scripts/check-deployed-build.mjs
+# exit 0 = production khớp main · 1 = build cũ · 2 = không đo được
+```
+
+**Kiểm thử (chạy thật):** `node --check` pass cho `scripts/check-deployed-build.mjs` và `scripts/fetch-inbox.mjs`. Gọi thật `https://tizia.vn` → in đúng "bản build tương ứng khoảng 2026-07-14 — cũ hơn hôm nay ~69 ngày" kèm `401 needLogin`. Server giả tại `127.0.0.1:8799` ở 3 chế độ (`head` = đúng main / `nokey` = route 404 / `html` = catch-all) → in đúng cả 3 kết luận với exit code `0` / `0` / `2`. Hai lỗi tự phát hiện lúc chạy thật đã sửa trước khi commit: đường dẫn URL (`js/…`) không phải đường dẫn repo (`public/js/…`), và `stderr` của `git` rò "fatal:" ra giữa báo cáo.
+
+Phiên này cũng đưa nốt commit của **phiên 66** (`d6124ba` — 2 nhánh chẩn đoán `5xx` và `200`-không-JSON cho `fetch-inbox.mjs`) lên `main`; lần trước merge xong nhưng **chưa push được** nên `main` còn thiếu.
+
+### Người vận hành cần làm gì (chỉ còn 2 bước)
+
+```bash
+# 1) DEPLOY LẠI — đây là nút thắt duy nhất còn lại. Bản đang chạy ~69 ngày tuổi.
+git pull && docker compose up -d --build
+node scripts/check-deployed-build.mjs      # phải in ✅ trước khi sang bước 2
+
+# 2) Sinh + đặt key, restart, rồi cấp CHÍNH key đó cho môi trường chạy routine
+openssl rand -hex 32
+echo 'AI_BOARD_KEY=<key vừa sinh>' >> .env && docker compose up -d
+```
+
+Xong 2 bước này, phiên hàng ngày sẽ đọc được yêu cầu thật của HS/SV ngay hôm sau.
+
+---
+
 ## 2026-09-19 — Phiên 66 · Hộp thư vẫn chưa đọc được — nguyên nhân đã ĐỔI: `/api/*` của tizia.vn không còn về server này
 
 **Kết luận:** **Không xử lý được yêu cầu nào của người học** (ngày thứ 7). Không có yêu cầu thật nên không bịa việc. Nhưng chẩn đoán của 2 phiên trước ("chưa deploy `main`", "chưa set key") **nay đã sai** — đo lại hôm nay cho thấy một tình huống khác hẳn: **toàn bộ `/api/*` trên `tizia.vn` trả `500`, và domain đang do một app Next.js phục vụ**, không phải server Express của repo này.
