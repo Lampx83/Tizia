@@ -212,6 +212,8 @@
   #handCamPreview.shown{display:block;}
   /* ===== req #169 — Nhiệm vụ 1: Lập dự trù và mua thuốc ===== */
   .pos-modal{max-width:760px;font-family:'Nunito',system-ui,sans-serif;}
+  /* req #175: bỏ khung tương tác của "Khu vực ra lẻ thuốc" trên sơ đồ */
+  .pharmacy-map .pm-zone.z-dispense{display:none !important;}
   @keyframes m1-pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,212,0,0);background:rgba(255,212,0,.10);}50%{box-shadow:0 0 0 10px rgba(255,212,0,.6);background:rgba(255,212,0,.32);}}
   .pharmacy-map .pm-zone.m1-next{animation:m1-pulse 1.4s ease-in-out infinite;border-color:#ffd400 !important;z-index:6;}
   .pharmacy-map .pm-zone.m1-next::after{content:'👉 Làm tiếp ở đây';position:absolute;left:50%;top:-26px;transform:translateX(-50%);
@@ -3888,6 +3890,10 @@ requestAnimationFrame(roadTick);
 const P_KEYMAP = { arrowup:'up', w:'up', arrowdown:'down', s:'down', arrowleft:'left', a:'left', arrowright:'right', d:'right' };
 document.addEventListener('keydown', e=>{
   if(!document.body.classList.contains('view-map')) return;
+  // req #176: đang gõ trong ô nhập (vd hộp gửi yêu cầu) thì KHÔNG bắt phím — trước đây
+  // W/A/S/D và Enter bị chặn nên không gõ được tiếng Việt.
+  const ae = document.activeElement, tg = ae && ae.tagName;
+  if(e.isComposing || tg==='INPUT' || tg==='TEXTAREA' || tg==='SELECT' || (ae && ae.isContentEditable)) return;
   if(e.key === 'Enter'){ if(pHereZone){ doZoneAction(pHereZone); e.preventDefault(); } return; }
   const dir = P_KEYMAP[e.key.toLowerCase()];
   if(dir){ pKeys[dir] = true; e.preventDefault(); }
