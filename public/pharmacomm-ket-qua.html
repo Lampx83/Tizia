@@ -154,10 +154,10 @@ async function main() {
 
   // ── thẻ 1: hội thoại ────────────────────────────────────────────────
   const convo = (d.messages || []).length
-    ? d.messages.map((m) => `
+    ? d.messages.map((m, i) => `
       <div class="msg ${m.speaker === 'student' ? 'student' : 'patient'}">
         <div class="b">
-          <span class="who-t">${m.speaker === 'student' ? '🎓 Sinh viên (dược sĩ)' : '🧑‍💼 Người bệnh (AI)'}</span>
+          <span class="who-t">L${i + 1} · ${m.speaker === 'student' ? '🎓 Sinh viên (dược sĩ)' : '🧑‍💼 Người bệnh (AI)'}</span>
           ${esc(m.content)}
           <span class="ts">${hhmmss(m.created_at)}</span>
         </div>
@@ -168,7 +168,7 @@ async function main() {
   const RES_LABEL = { success: 'Hợp lệ', invalid: 'Không hợp lệ', corrected: 'Đã sửa lại', cancelled: 'Đã huỷ' };
   const actRows = (d.actions || []).map((a) => `
     <tr class="${esc(a.action_result)}">
-      <td>${a.action_order + 1}</td>
+      <td>A${a.action_order + 1}</td>
       <td>${hhmmss(a.created_at)}</td>
       <td>${esc(a.description_vi || a.action_type)}</td>
       <td>${esc(a.object_name || '—')}</td>
@@ -184,26 +184,35 @@ async function main() {
 
   // ── thẻ 3: điểm từng tiêu chí, gom theo nhóm ────────────────────────
   const byGroup = {};
-  for (const c of d.scores || []) (byGroup[c.criterion_group] ||= []).push(c);
+  const flagRows = (d.scores || []).filter((c) => c.criterion_group === 'F');
+  for (const c of (d.scores || []).filter((x) => x.criterion_group !== 'F')) (byGroup[c.criterion_group] ||= []).push(c);
+  const NA_LABEL = { 'N/A': 'N/A · không áp dụng', 'N/O': 'N/O · chưa đủ dữ liệu' };
+  const flagHtml = flagRows.length
+    ? `<div class="note" style="border-color:#ef4444;background:rgba(239,68,68,.12)"><b>🚩 Lỗi an toàn cần lưu ý:</b>
+        ${flagRows.map((f) => `<div>• ${esc(f.criterion_name)}${f.evidence ? ` <i>(${esc(f.evidence)})</i>` : ''}</div>`).join('')}</div>`
+    : '';
   const scoreHtml = (d.scores || []).length
-    ? Object.keys(byGroup).sort().map((g) => {
+    ? flagHtml + Object.keys(byGroup).sort().map((g) => {
         const gs = sum.groups.find((x) => x.group === g);
         return `<div class="grp-h">${esc(g)}. ${esc((d.groups || {})[g] || '')} — <b>${gs ? gs.score : 0}</b>/${gs ? gs.max : 0}</div>` +
-          byGroup[g].map((c) => `
+          byGroup[g].map((c) => {
+            const na = NA_LABEL[c.evidence_source];
+            return `
             <div class="crit">
               <div class="crit-top">
                 <span class="crit-code">${esc(c.criterion_code)}</span>
                 <span class="crit-name">${esc(c.criterion_name)}</span>
-                <span class="src">${esc(SRC_LABEL[c.evidence_source] || c.evidence_source)}</span>
-                <span class="crit-sc">${c.score}/${c.max_score}</span>
+                <span class="src">${esc(na ? '' : (SRC_LABEL[c.evidence_source] || c.evidence_source))}</span>
+                <span class="crit-sc">${na ? esc(na) : `${c.score}/${c.max_score}`}</span>
               </div>
-              <div class="bar"><i style="width:${Math.round((c.score / (c.max_score || 4)) * 100)}%"></i></div>
+              ${na ? '' : `<div class="bar"><i style="width:${Math.round((c.score / (c.max_score || 4)) * 100)}%"></i></div>`}
               <div class="crit-body">
                 ${c.evidence ? `<div><b>Minh chứng:</b> ${esc(c.evidence)}</div>` : ''}
                 ${c.comment ? `<div><b>Nhận xét:</b> ${esc(c.comment)}</div>` : ''}
                 ${c.improvement_feedback ? `<div><b>Lần sau nên:</b> ${esc(c.improvement_feedback)}</div>` : ''}
               </div>
-            </div>`).join('');
+            </div>`;
+          }).join('');
       }).join('')
     : '<p class="empty">Chưa có kết quả chấm điểm cho lượt này.</p>';
 

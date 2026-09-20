@@ -83,9 +83,9 @@ export function summarize(rows) {
     const g = groups[r.criterion_group];
     if (!g) continue;
     g.score += Number(r.score) || 0;
-    g.max += Number(r.max_score) || MAX_PER_CRITERION;
+    g.max += Number(r.max_score ?? MAX_PER_CRITERION);
     score += Number(r.score) || 0;
-    max += Number(r.max_score) || MAX_PER_CRITERION;
+    max += Number(r.max_score ?? MAX_PER_CRITERION);
   }
   const pct = max > 0 ? Math.round((score / max) * 1000) / 10 : 0;
   return { groups: Object.values(groups), score, max, percent: pct };

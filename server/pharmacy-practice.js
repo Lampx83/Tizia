@@ -18,7 +18,11 @@ import express from 'express';
 import { randomUUID } from 'node:crypto';
 import { db } from './db.js';
 import { ollamaGenerate } from './ai.js';
-import { SCENARIOS } from '../public/js/pharmacy/scenarios.js';
+import { SCENARIOS, SCENARIO_CARDS } from '../public/js/pharmacy/scenarios.js';
+import {
+  OTC_RUBRIC, OTC_RUBRIC_VERSION, OTC_GROUPS, OTC_MAX_PER_CRITERION, OTC_MAX_TOTAL,
+  OTC_SAFETY_FLAGS, OTC_PRINCIPLES,
+} from '../public/js/pharmacy/otc-rubric.js';
 import { currentTeacher } from './pharmacy-teacher.js';   // req #143: nhận diện lượt GV chạy thử
 import {
   RUBRIC, RUBRIC_VERSION, RUBRIC_GROUPS, MAX_PER_CRITERION, MAX_TOTAL, summarize,
@@ -90,7 +94,8 @@ const upsertScore = db.prepare(`
   VALUES (@session_id, @criterion_code, @criterion_name, @criterion_group, @score, @max_score,
      @evidence_source, @evidence, @comment, @improvement_feedback, @t)
   ON CONFLICT (session_id, criterion_code) DO UPDATE SET
-    score = EXCLUDED.score, evidence = EXCLUDED.evidence, comment = EXCLUDED.comment,
+    score = EXCLUDED.score, max_score = EXCLUDED.max_score, evidence_source = EXCLUDED.evidence_source,
+    evidence = EXCLUDED.evidence, comment = EXCLUDED.comment,
     improvement_feedback = EXCLUDED.improvement_feedback, scored_at = EXCLUDED.scored_at
 `);
 const listScores = db.prepare(`
@@ -269,6 +274,155 @@ async function scoreWithAi(sessionRow, messages, actions, crits) {
   return { map: out, failedBatches: failed };
 }
 
+
+// =====================================================================
+// RUBRIC OTC_AI_v1.0 (req #173) — bán thuốc KHÔNG KÊ ĐƠN, thang 1–5.
+// Khác bộ A1–E5 cũ: AI chấm CẢ 21 tiêu chí theo mô tả từng mức của giảng viên,
+// mỗi điểm kèm bằng chứng (mã lượt L#/thao tác A#), có N/A, N/O và cờ an toàn.
+// N/A và N/O lưu với max_score = 0 → tự loại khỏi mẫu số khi tính điểm.
+// =====================================================================
+const OTC_TAG = 'Không kê đơn';
+function isOtcScenario(moduleId) {
+  return (SCENARIO_CARDS || []).some((c) => c.id === moduleId && c.tag === OTC_TAG);
+}
+
+// Thao tác 3D liên quan tới từng tiêu chí thao tác (C2/C3/C6): chưa có sự kiện nào
+// thì AI không được cho điểm cao chỉ vì sinh viên NÓI đã làm.
+const OTC_ACTION_TYPES = {
+  C2: ['pick_box', 'pick_unit', 'open_box_unit', 'inspect_drug', 'check_drug_info', 'check_expiry'],
+  C3: ['pos_checkout', 'print_receipt'],
+  C6: ['retail_split', 'pack_retail', 'pack_retail_tray', 'label_dose', 'pack_label'],
+};
+
+function buildOtcPrompt(sc, messages, actions, crits) {
+  const transcript = messages
+    .map((m, i) => `L${i + 1} ${m.speaker === 'student' ? 'Dược sĩ (SV)' : 'Khách hàng'}: ${m.content}`)
+    .join('\n');
+  const actionLog = actions.length
+    ? actions.map((a) => `A${Number(a.action_order) + 1} ${a.description_vi || a.action_type} [${a.action_result}]`).join('\n')
+    : '(không có thao tác nào được ghi nhận)';
+  const dossier = String(sc?.npcPersona || sc?.setting || '').slice(0, 3500);
+  const critText = crits.map((c) => `### ${c.code}. ${c.name}
+Trọng tâm: ${c.focus}
+Nguồn dữ liệu: ${c.evidence || (c.source === 'combined' ? 'Hội thoại + nhật ký thao tác' : 'Hội thoại')}
+${c.levels.map((t, i) => `Mức ${i + 1}: ${t}`).join('\n')}`).join('\n\n');
+  return `Bạn chấm kỹ năng giao tiếp bán thuốc KHÔNG KÊ ĐƠN của sinh viên dược (rubric OTC_AI_v1.0).
+
+=== HỒ SƠ TÌNH HUỐNG (nội dung chuyên môn của khách hàng — dùng để đối chiếu dữ kiện, thuốc phù hợp) ===
+${dossier || '(không có)'}
+
+=== HỘI THOẠI (mỗi dòng có mã lượt L#) ===
+${transcript || '(không có lời thoại)'}
+
+=== NHẬT KÝ THAO TÁC 3D (mã A#) ===
+${actionLog}
+
+=== NGUYÊN TẮC CHẤM BẮT BUỘC ===
+${OTC_PRINCIPLES.map((t) => '- ' + t).join('\n')}
+
+=== TIÊU CHÍ CẦN CHẤM (mô tả từng mức 1–5) ===
+${critText}
+
+Với TỪNG tiêu chí, chọn "status":
+- "scored": có áp dụng và đủ bằng chứng → "score" là số nguyên 1–5 theo đúng mô tả mức.
+- "N/A": không áp dụng (vd đúng ra là không bán thuốc) → "score": null.
+- "N/O": có áp dụng nhưng thiếu dữ liệu để quan sát → "score": null.
+"evidence": trích ngắn kèm mã lượt/thao tác, vd "L3: 'bé mấy tháng ạ?'; A5 Lấy thuốc". "comment": nhận xét ngắn tiếng Việt. "improvement": góp ý sửa lỗi cụ thể cho sinh viên, tiếng Việt.
+
+CHỈ trả về JSON hợp lệ, đúng dạng:
+{"scores":[{"code":"A1","status":"scored","score":4,"evidence":"...","comment":"...","improvement":"..."}]}`;
+}
+
+async function scoreOtcBatch(sc, messages, actions, crits, out) {
+  const raw = await ollamaGenerate({
+    prompt: buildOtcPrompt(sc, messages, actions, crits),
+    system: 'Bạn là giảng viên dược chấm kỹ năng giao tiếp bán thuốc. Bám sát mô tả từng mức của rubric, chỉ dựa vào bằng chứng có trong bản ghi. Chỉ trả về JSON hợp lệ.',
+    temperature: 0.2,
+    maxTokens: 1600,
+    json: true,
+  });
+  const m = String(raw || '').match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('AI không trả về JSON');
+  const parsed = JSON.parse(m[0]);
+  for (const it of parsed.scores || []) {
+    const code = String(it?.code || '').toUpperCase();
+    if (!code) continue;
+    const st = String(it.status || 'scored').toUpperCase();
+    const sc5 = Math.round(Number(it.score));
+    let status = st === 'N/A' ? 'N/A' : st === 'N/O' ? 'N/O' : 'scored';
+    if (status === 'scored' && !(sc5 >= 1 && sc5 <= OTC_MAX_PER_CRITERION)) status = 'N/O';
+    out.set(code, {
+      status, score: status === 'scored' ? sc5 : null,
+      evidence: clean(it.evidence, 500), comment: clean(it.comment, 500), improvement: clean(it.improvement, 500),
+    });
+  }
+}
+
+// Cờ lỗi an toàn — gọi riêng để không lẫn vào chấm điểm từng tiêu chí.
+async function detectOtcSafetyFlags(sc, messages, actions) {
+  const transcript = messages.map((m, i) => `L${i + 1} ${m.speaker === 'student' ? 'Dược sĩ (SV)' : 'Khách hàng'}: ${m.content}`).join('\n');
+  const actionLog = actions.map((a) => `A${Number(a.action_order) + 1} ${a.description_vi || a.action_type} [${a.action_result}]`).join('\n') || '(không có)';
+  const raw = await ollamaGenerate({
+    prompt: `Hồ sơ tình huống:\n${String(sc?.npcPersona || sc?.setting || '').slice(0, 3500)}\n\nHội thoại:\n${transcript || '(không có)'}\n\nNhật ký thao tác:\n${actionLog}\n\nKiểm tra sinh viên có mắc LỖI AN TOÀN nào sau đây không (chỉ gắn cờ khi có bằng chứng rõ ràng trong bản ghi):\n${OTC_SAFETY_FLAGS.map((t, i) => `${i + 1}. ${t}`).join('\n')}\n\nCHỈ trả về JSON: {"flags":[{"n":1,"evidence":"L4: ... / A7 ..."}]} — "flags" rỗng nếu không có lỗi.`,
+    system: 'Bạn là giảng viên dược kiểm tra an toàn thuốc. Chỉ trả về JSON hợp lệ.',
+    temperature: 0.1, maxTokens: 500, json: true,
+  });
+  const m = String(raw || '').match(/\{[\s\S]*\}/);
+  if (!m) return [];
+  const parsed = JSON.parse(m[0]);
+  const seen = new Set();
+  const flags = [];
+  for (const f of parsed.flags || []) {
+    const n = Math.round(Number(f?.n));
+    if (!(n >= 1 && n <= OTC_SAFETY_FLAGS.length) || seen.has(n)) continue;
+    seen.add(n);
+    flags.push({ n, text: OTC_SAFETY_FLAGS[n - 1], evidence: clean(f.evidence, 400) });
+  }
+  return flags;
+}
+
+async function scoreOtc(sessionRow, messages, actions) {
+  const sc = SCENARIOS[Object.keys(SCENARIOS).find((k) => (SCENARIOS[k].code || k) === sessionRow.scenario_code)] || null;
+  const aiCrits = OTC_RUBRIC.filter((c) => c.source !== 'audio');
+  const out = new Map();
+  let failed = 0;
+  for (let i = 0; i < aiCrits.length; i += 3) {
+    const b = aiCrits.slice(i, i + 3);
+    try { await scoreOtcBatch(sc, messages, actions, b, out); }
+    catch (err) {
+      failed++;
+      console.error(`[pharmacy-practice] OTC lô ${b.map((c) => c.code).join(',')} lỗi:`, err.message);
+    }
+  }
+  const aiOk = out.size > 0;
+  const rows = [];
+  for (const c of OTC_RUBRIC) {
+    let r0;
+    if (c.source === 'audio') {
+      r0 = { status: 'N/O', score: null, evidence: 'Chưa có ghi âm giọng nói.',
+        comment: 'Tiêu chí này chỉ chấm khi có âm thanh; phần mềm hiện chưa thu âm nên cần giảng viên xem thủ công.', improvement: '' };
+    } else {
+      const got = out.get(c.code);
+      r0 = got || {
+        status: 'N/O', score: null,
+        evidence: aiOk ? 'AI không trả điểm cho tiêu chí này.' : 'Chưa chấm được do lỗi hệ thống chấm điểm.',
+        comment: 'Cần chấm lại hoặc xem thủ công.', improvement: '',
+      };
+      // C2/C3/C6: không có thao tác tương ứng trong nhật ký thì không được điểm cao.
+      const types = OTC_ACTION_TYPES[c.code];
+      if (types && r0.status === 'scored' && r0.score >= 3 && !actions.some((a) => types.includes(a.action_type))) {
+        r0 = { ...r0, score: 2, comment: (r0.comment ? r0.comment + ' ' : '') + 'Nhật ký 3D không có thao tác tương ứng nên tối đa 2 điểm.' };
+      }
+      if (r0.status === 'scored' && !r0.evidence) r0 = { ...r0, evidence: '(AI chưa nêu trích dẫn cụ thể — giảng viên nên đối chiếu hội thoại)' };
+    }
+    rows.push({ crit: c, ...r0 });
+  }
+  let flags = [];
+  try { flags = await detectOtcSafetyFlags(sc, messages, actions); }
+  catch (err) { console.error('[pharmacy-practice] OTC cờ an toàn lỗi:', err.message); }
+  return { rows, flags, aiOk, failed };
+}
+
 export function attachPharmacyPractice(r) {
   const J = express.json({ limit: '256kb' });
 
@@ -321,7 +475,7 @@ export function attachPharmacyPractice(r) {
         scenario_code: sc.code || moduleId,
         scenario_name: sc.title || null,
         scenario_version: sc.version || 'v1',
-        rubric_version: RUBRIC_VERSION,
+        rubric_version: isOtcScenario(moduleId) ? OTC_RUBRIC_VERSION : RUBRIC_VERSION,
         ai_model_version: null,
         chat_session_id: clean(b.chatSessionId, 80) || null,
         user_ref: userRef(req),
@@ -429,6 +583,39 @@ export function attachPharmacyPractice(r) {
       const completed_at = row.completed_at || now();
       const duration_ms = completed_at - Number(row.started_at);
 
+      if (row.rubric_version === OTC_RUBRIC_VERSION) {
+        const o = await scoreOtc(row, messages, actions);
+        const t = now();
+        for (const r0 of o.rows) {
+          const scored = r0.status === 'scored';
+          await upsertScore.run({
+            session_id: row.session_id, criterion_code: r0.crit.code, criterion_name: r0.crit.name,
+            criterion_group: r0.crit.group, score: scored ? r0.score : 0,
+            max_score: scored ? OTC_MAX_PER_CRITERION : 0,
+            evidence_source: scored ? r0.crit.source : r0.status,
+            evidence: r0.evidence || null, comment: r0.comment || null,
+            improvement_feedback: r0.improvement || null, t,
+          });
+        }
+        // Cờ an toàn: nhóm 'F', max_score 0 → không tính vào điểm, chỉ để hiển thị.
+        for (const f of o.flags) {
+          await upsertScore.run({
+            session_id: row.session_id, criterion_code: 'FLAG' + f.n, criterion_name: f.text,
+            criterion_group: 'F', score: 0, max_score: 0, evidence_source: 'safety_flag',
+            evidence: f.evidence || null, comment: null, improvement_feedback: null, t,
+          });
+        }
+        const rows = await listScores.all(row.session_id);
+        const sum = summarize(rows);
+        await finishSession.run({
+          session_id: row.session_id, completed_at, duration_ms,
+          status: o.aiOk ? 'completed' : 'scoring_failed',
+          total_score: sum.percent,
+          ai_model_version: process.env.OLLAMA_MODEL || null, t,
+        });
+        return;
+      }
+
       // 1) Tiêu chí thao tác 3D → chấm tất định trước (không phụ thuộc AI).
       const results = [];
       const actionCrits = RUBRIC.filter((c) => c.source === 'action_3d');
@@ -533,8 +720,9 @@ export function attachPharmacyPractice(r) {
         actions: actions.map((a) => ({ ...a, action_details: jp(a.action_details) })),
         scores,
         summary: summarize(scores),
-        groups: RUBRIC_GROUPS,
-        maxTotal: MAX_TOTAL,
+        groups: row.rubric_version === OTC_RUBRIC_VERSION ? OTC_GROUPS : RUBRIC_GROUPS,
+        maxTotal: row.rubric_version === OTC_RUBRIC_VERSION ? OTC_MAX_TOTAL : MAX_TOTAL,
+        scale: row.rubric_version === OTC_RUBRIC_VERSION ? 5 : 4,
       });
     } catch (err) {
       console.error('[pharmacy-practice] result failed:', err.message);
