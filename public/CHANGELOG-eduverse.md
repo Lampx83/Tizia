@@ -4,6 +4,72 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-21 — Phiên 68 · Tìm ra bản build production thật: **nhánh `feat/postgres-migration`, không phải `main`**
+
+**Kết luận:** **Không xử lý được yêu cầu nào của người học** (ngày thứ 9) — hộp thư vẫn không đọc được nên không có yêu cầu thật, và không bịa việc. Nhưng hôm nay **tìm ra nguyên nhân gốc thật sự**, và nó khác hẳn cái mà 6 phiên trước kết luận.
+
+### Phát hiện chính — 6 phiên trước chẩn đoán SAI hướng
+
+Từ phiên 62 tới 67, mọi kết luận đều xoay quanh *"production chạy bản `main` cũ, cần deploy lại"*. Hôm nay dò lại trên **toàn bộ nhánh** (thay vì chỉ lịch sử `main`) thì ra đáp án khác:
+
+> **Production KHÔNG chạy `main`. Production chạy nhánh `feat/postgres-migration` @ `40fd384` (2026-07-24) — một lịch sử KHÔNG CHUNG GỐC với `main`.**
+
+`git merge-base main 40fd384` trả về **rỗng**: hai cây lịch sử rời nhau hoàn toàn.
+
+| | `main` | `feat/postgres-migration` (đang chạy trên production) |
+|---|---|---|
+| Commit gốc | `7632aaf` — 2026-07-14 | `e6d29ec` — 2026-05-26 "Initial PharmacySIM web app" |
+| Số commit | 67 | 386 |
+| Tổ tiên chung | **không có** | **không có** |
+| PR liên quan | — | **PR #32** (mở từ 2026-07-04, chưa merge) |
+
+Vì sao phiên 67 không thấy: script chỉ dò trong `git rev-list main` nên 2/5 file chứng cứ "không khớp bản nào trong lịch sử" — và kết luận cụt ở đó. Thật ra chúng khớp hoàn hảo, chỉ là khớp ở **nhánh khác**.
+
+### Bằng chứng (4 phép đo độc lập, đều đồng ý)
+
+| Phép đo | Kết quả |
+|---|---|
+| Băm blob 6 file JS tĩnh từ production | **khớp từng byte** với `40fd384`, kể cả các file **khác** `main` (`domain.js`, `it/achievements.js`, `pharmacy/achievements.js`, `economics/achievements.js`) |
+| File chỉ có ở nhánh production (`js/baoche-curriculum.js`, `js/pharmacy/baoche/curriculum.js`) | `200` — **có** trên production |
+| File chỉ có ở `main` (`js/scenarios/economics-careers.js`, `economics-games.js`) | `404` — **không có** trên production |
+| `git branch -r --contains 40fd384` | chỉ `feat/postgres-migration` |
+
+### Hệ quả — điều quan trọng nhất của phiên này
+
+1. **Mọi cải tiến merge vào `main` từ 2026-07-24 tới nay chưa từng tới tay người học.** Toàn bộ 67 commit của `main` (các phiên Ban điều hành AI 40→67) nằm trên một nhánh production chưa bao giờ được dựng.
+2. **Lời khuyên "git pull && docker compose up -d --build" của các phiên trước là sai và có rủi ro.** Vì hai lịch sử rời nhau, chuyển production sang `main` **không phải cập nhật** mà là **đổi hẳn sang một cây code khác** — trong đó có phần migration SQLite → Postgres chỉ tồn tại ở nhánh đang chạy. Làm ẩu có thể gãy production.
+3. Route `/api/ai-board/inbox` (thêm vào `main` ngày 2026-09-14) đương nhiên không tồn tại trên bản đang chạy → `401 needLogin`. Đây là **hệ quả**, không phải nguyên nhân.
+
+### Việc đã làm
+
+| File | Thay đổi |
+|---|---|
+| `scripts/check-deployed-build.mjs` | **Sửa lỗi chẩn đoán gốc.** Trước: chỉ dò trong lịch sử `main`, kết luận cụt khi không khớp. Nay: (1) quét **mọi ref** tìm commit mới nhất mà **cả bộ** file chứng cứ khớp cùng lúc; (2) in ra **nhánh** chứa commit đó và **có chung gốc lịch sử với `main` hay không**; (3) kiểm chứng độc lập bằng file chỉ-có-ở-một-nhánh (kỳ vọng `200` vs `404`); (4) cảnh báo rõ khi hai lịch sử rời nhau thay vì khuyên deploy ẩu; (5) thử lại 1 lần khi gặp 5xx thoáng qua. Dùng `git ls-tree` một lần cho cả bộ path nên quét ~500 commit chỉ mất ~4 giây. |
+| `scripts/fetch-inbox.mjs` | Nhánh `401 needLogin` trước đây khuyên "deploy nhánh main rồi restart" — nay đã biết là lời khuyên rủi ro. Đổi thành: nói rõ production đang chạy nhánh rời lịch sử, và bảo chạy `check-deployed-build.mjs` trước khi quyết định. |
+
+**Kiểm thử (chạy thật, không phải mô tả):** `node --check` pass cho cả hai file. Chạy thật với `https://tizia.vn` → định vị đúng `40fd384`, cả 4 phép kiểm chứng `200`/`404` đều ✔, exit `1`. Server giả tại `127.0.0.1` ở 3 chế độ: phục vụ đúng `main` → exit `0` ✅; catch-all trả HTML → exit `2` ⚠; "chập chờn" trả `503` lần đầu mỗi path → nhánh thử-lại khôi phục đủ 5/5 file và vẫn định vị đúng commit. Hai lỗi tự phát hiện lúc chạy thật đã sửa trước khi commit: điều kiện chạy bước kiểm chứng chéo bị sai (`!atHead.length` → bỏ qua đúng lúc cần nhất, vì file không đổi giữa hai nhánh vẫn "trùng main"), và một file chứng cứ bị rơi vì `503` thoáng qua.
+
+### Người vận hành cần quyết định (không còn là việc deploy đơn thuần)
+
+Đây là **quyết định kiến trúc**, Ban điều hành AI không tự làm vì vượt xa mức "rủi ro thấp":
+
+```bash
+# 1) Xác nhận lại phép đo (4 giây, đọc-chỉ, không sửa gì):
+node scripts/check-deployed-build.mjs
+
+# 2) Chọn MỘT nhánh làm nhánh production thật. Hai lịch sử rời nhau nên phải
+#    hợp nhất có chủ đích (PR #32 đang mở chính là chỗ để làm việc này),
+#    KHÔNG chuyển thẳng production sang `main`.
+
+# 3) Sau khi hợp nhất & deploy, đặt key rồi cấp cho môi trường chạy routine:
+openssl rand -hex 32
+echo 'AI_BOARD_KEY=<key vừa sinh>' >> .env && docker compose up -d
+```
+
+Chừng nào bước 2 chưa xong, phiên hàng ngày vẫn không đọc được yêu cầu của HS/SV, và mọi cải tiến vẫn dừng ở `main` chứ không tới người học.
+
+---
+
 ## 2026-09-20 — Phiên 67 · `/api/*` đã về lại server này — nhưng production đang chạy bản build cũ ~69 ngày
 
 **Kết luận:** **Không xử lý được yêu cầu nào của người học** (ngày thứ 8) — vẫn không đọc được hộp thư nên không có yêu cầu thật, và không bịa việc. Nhưng hôm nay tình hình **đổi theo hướng tốt** và nguyên nhân còn lại đã được **đo ra bằng chứng cứ**, không còn phải đoán.

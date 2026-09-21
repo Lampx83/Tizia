@@ -91,8 +91,11 @@ try {
     const staleBuild = res.status === 401 && /"needLogin"\s*:\s*true/.test(body);
     if (staleBuild) {
       console.error('  → Server CHƯA deploy code có route này (auth gate chung trả 401 needLogin).');
-      console.error('    Key KHÔNG phải vấn đề. Người vận hành cần deploy nhánh main rồi restart:');
-      console.error('      git pull && docker compose up -d --build');
+      console.error('    Key KHÔNG phải vấn đề. Nhưng ĐỪNG vội "git pull && docker compose up -d --build":');
+      console.error('    đo thật 2026-09-21, production đang chạy nhánh `feat/postgres-migration` @ 40fd384,');
+      console.error('    một lịch sử KHÔNG chung gốc với `main` — chuyển sang main là đổi hẳn cây code.');
+      console.error('    Chạy phép đo trước rồi hãy quyết định:');
+      console.error('      node scripts/check-deployed-build.mjs');
     } else if (res.status === 404) {
       console.error('  → Code đã có nhưng route chưa bật: AI_BOARD_KEY chưa set hoặc <24 ký tự. Set key rồi khởi động lại server.');
     } else if (res.status === 401) {
