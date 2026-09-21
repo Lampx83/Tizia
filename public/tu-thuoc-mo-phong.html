@@ -240,13 +240,16 @@
   .m2-pack.dent{transform:rotate(-3deg) skewX(-4deg);clip-path:polygon(0 0,42% 2%,48% 9%,58% 1%,100% 0,98% 46%,100% 55%,97% 100%,55% 98%,50% 92%,40% 100%,0 100%,2% 58%,0 50%);box-shadow:inset 0 0 26px rgba(0,0,0,.45);}
   .m2-pack.mold::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 22% 30%,rgba(70,90,40,.75) 0 9%,transparent 10%),radial-gradient(circle at 70% 62%,rgba(50,70,30,.7) 0 12%,transparent 13%),radial-gradient(circle at 48% 80%,rgba(90,70,30,.65) 0 7%,transparent 8%),radial-gradient(circle at 80% 22%,rgba(60,80,40,.6) 0 6%,transparent 7%);}
   .m2-pack.blur img,.m2-pack.blur .ph{filter:blur(3.2px);opacity:.8;}
-  .m2-mb-img{width:58px;height:58px;object-fit:contain;background:#fff;border:1px solid #d8c9a3;border-radius:4px;margin:2px;box-shadow:0 1px 2px rgba(0,0,0,.15);}
+  .m2-mb-img{width:104px;height:104px;object-fit:contain;background:#fff;border:1px solid #d8c9a3;border-radius:4px;margin:2px;box-shadow:0 1px 2px rgba(0,0,0,.15);}
   .m2-mb{display:inline-block;width:20px;height:27px;margin:2px;border-radius:3px;background:linear-gradient(#f7f1e1 0 68%,#4aa3df 68% 100%);border:1px solid #b9a875;}
   .m2-tile{border:2px solid #d8c9a3;border-radius:10px;background:#fffdf6;padding:8px 10px;margin:8px 0;}
   .m2-tile.done{border-color:#2e8256;background:#e6f6ec;}
   .m2-tile > button.nm{all:unset;cursor:pointer;font:800 .86rem 'Nunito',sans-serif;color:#5c3a0a;text-decoration:underline;}
   .m2-openbox{border:3px dashed #c98d3d;border-radius:14px;background:#f6e3bd;padding:14px;margin:8px 0;}
   #m2Delivery .m2-say{}
+  .m2-crate-map .m2-tag{position:absolute;left:50%;top:-22px;transform:translateX(-50%);white-space:nowrap;background:#fff8d6;border:2px solid #e0a020;color:#5c3a0a;border-radius:8px;font:800 10px 'Nunito',sans-serif;padding:2px 6px;}
+  /* req #225: bỏ luyện tập theo mức độ và thanh tiến độ ở giao diện tủ thuốc */
+  #gpTier,#gpBarWrap{display:none !important;}
   @keyframes m1-pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,212,0,0);background:rgba(255,212,0,.10);}50%{box-shadow:0 0 0 10px rgba(255,212,0,.6);background:rgba(255,212,0,.32);}}
   .pharmacy-map .pm-zone.m1-next{animation:m1-pulse 1.4s ease-in-out infinite;border-color:#ffd400 !important;z-index:6;}
   .pharmacy-map .pm-zone.m1-next::before{content:'👉 Làm tiếp ở đây';position:absolute;left:50%;top:-26px;transform:translateX(-50%);
@@ -772,7 +775,19 @@
   .pm-cross{position:absolute;top:5px;left:50%;transform:translateX(-50%);width:8px;height:8px;
     background:linear-gradient(#e23b3b,#e23b3b) center/100% 34% no-repeat,
                linear-gradient(#e23b3b,#e23b3b) center/34% 100% no-repeat;}
-  .pm-arm{position:absolute;top:14px;width:4px;height:13px;border-radius:3px;background:#f0f3f4;z-index:1;transform-origin:top center;}
+  /* req (giảng viên): "dược sĩ chưa có tay à". Tay vẫn có trong mã và vẫn vung
+     theo nhịp, nhưng màu #f0f3f4 gần trùng áo blouse trắng, lại bị thân
+     (z-index 2) đè lên tay (z-index 1) nên chỉ hở 2px — coi như vô hình. Sửa:
+     ống tay xám hơn áo một bậc + viền mảnh để tách khỏi áo, đẩy ra sát mép
+     người cho hở hẳn, và thêm BÀN TAY màu da — ở cỡ thật thì bàn tay mới là
+     thứ đọc ra được. */
+  .pm-arm{position:absolute;top:14px;width:4px;height:14px;border-radius:3px;z-index:1;
+    background:linear-gradient(#f8fbfc,#dde6ec);box-shadow:0 0 0 .5px rgba(60,95,130,.22);
+    transform-origin:top center;}
+  .pm-arm::after{content:"";position:absolute;bottom:-2px;left:-1px;width:6px;height:5px;border-radius:3px;
+    background:radial-gradient(circle at 40% 35%,#ffe0bd,#eab98a);box-shadow:0 0 0 .5px rgba(90,60,30,.18);}
+  /* sát vào thân cho dính vai (hở ~2px mỗi bên) — nhờ đã đổi màu và thêm bàn
+     tay nên 2px là đủ đọc, đẩy ra xa hơn thì tay trông như rời khỏi người. */
   .pm-arm-l{left:1px;} .pm-arm-r{right:1px;}
   .pm-leg{position:absolute;top:28px;width:5px;height:13px;border-radius:3px;background:linear-gradient(#3b5a86,#2c4468);
     z-index:1;transform-origin:top center;}
@@ -791,15 +806,17 @@
   .pm-char.v-side .pm-torso{width:12px;}
   .pm-char.v-side .pm-leg{left:9px;right:auto;width:6px;}
   .pm-char.v-side .pm-leg-l{z-index:2;} .pm-char.v-side .pm-leg-r{z-index:0;background:linear-gradient(#2c4468,#243a5a);}
-  .pm-char.v-side .pm-arm-l{left:9px;z-index:4;} .pm-char.v-side .pm-arm-r{left:9px;right:auto;z-index:0;}
-  .pm-char.walk.v-side .pm-leg-l,.pm-char.walk.v-side .pm-arm-r{animation:pm-side-a 1.1s ease-in-out infinite;}
-  .pm-char.walk.v-side .pm-leg-r,.pm-char.walk.v-side .pm-arm-l{animation:pm-side-b 1.1s ease-in-out infinite;}
-  .pm-char.walk.v-side .pm-body{animation:pm-lean .55s ease-in-out infinite;}
-  .pm-char.walk-v .pm-leg-l{animation:pm-lift-a 1.1s ease-in-out infinite;}
-  .pm-char.walk-v .pm-leg-r{animation:pm-lift-b 1.1s ease-in-out infinite;}
-  .pm-char.walk-v .pm-arm-l{animation:pm-armv-b 1.1s ease-in-out infinite;}
-  .pm-char.walk-v .pm-arm-r{animation:pm-armv-a 1.1s ease-in-out infinite;}
-  .pm-char.walk-v .pm-body{animation:pm-bob .55s ease-in-out infinite;}
+  .pm-char.v-side .pm-arm-l{left:9px;z-index:4;}
+  .pm-char.v-side .pm-arm-r{left:9px;right:auto;z-index:0;background:linear-gradient(#d9e2e9,#bdc9d2);}
+  .pm-char.v-side .pm-arm-r::after{background:radial-gradient(circle at 40% 35%,#e6c39c,#cfa172);}
+  .pm-char.walk.v-side .pm-leg-l,.pm-char.walk.v-side .pm-arm-r{animation:pm-side-a var(--pm-dur,.5s) ease-in-out infinite;}
+  .pm-char.walk.v-side .pm-leg-r,.pm-char.walk.v-side .pm-arm-l{animation:pm-side-b var(--pm-dur,.5s) ease-in-out infinite;}
+  .pm-char.walk.v-side .pm-body{animation:pm-lean var(--pm-bob,.25s) ease-in-out infinite;}
+  .pm-char.walk-v .pm-leg-l{animation:pm-lift-a var(--pm-dur-v,.38s) ease-in-out infinite;}
+  .pm-char.walk-v .pm-leg-r{animation:pm-lift-b var(--pm-dur-v,.38s) ease-in-out infinite;}
+  .pm-char.walk-v .pm-arm-l{animation:pm-armv-b var(--pm-dur-v,.38s) ease-in-out infinite;}
+  .pm-char.walk-v .pm-arm-r{animation:pm-armv-a var(--pm-dur-v,.38s) ease-in-out infinite;}
+  .pm-char.walk-v .pm-body{animation:pm-bob var(--pm-bob-v,.19s) ease-in-out infinite;}
   @keyframes pm-side-a{0%,100%{transform:rotate(22deg);}50%{transform:rotate(-22deg);}}
   @keyframes pm-side-b{0%,100%{transform:rotate(-22deg);}50%{transform:rotate(22deg);}}
   @keyframes pm-lift-a{0%,100%{transform:translateY(-4px) scaleY(.8);}50%{transform:translateY(0) scaleY(1);}}
@@ -1322,8 +1339,9 @@
     <h3>🎮 Hướng dẫn luyện tập</h3>
     <div class="mg-card">
       <h4>🎯 5 nhiệm vụ của dược sĩ</h4>
+      <div id="mgLevel" style="margin:0 0 8px"></div>
       <ul class="mg-missions" id="mgMissions"></ul>
-      <p class="mg-missions-note">Nhiệm vụ 2, 4, 5 đang được xây dựng theo giáo trình — sẽ mở lần lượt.</p>
+      <p class="mg-missions-note">Nhiệm vụ 4, 5 đang được xây dựng theo giáo trình — sẽ mở lần lượt.</p>
     </div>
     <div class="mg-card">
       <h4>🧰 Công cụ hỗ trợ</h4>
@@ -2139,10 +2157,12 @@ let mastery = loadMastery();
    thuốc được yêu cầu dự trù (không được ẩn mất tủ có thuốc cần kiểm). */
 function m1CabNeed(){
   try{
-    if(getM1State().step !== 'checking') return 0;
+    let names = [];
+    if(getM1State().step === 'checking') names = getM1Items().filter(it => it.cabinet === TU_MODE).map(it => it.name);
+    const m3n = m3SortItemsFor(TU_MODE); if(m3n) names = names.concat(m3n);   // req #225: tủ phải hiện ra để sắp xếp
     let mx = 0;
-    getM1Items().filter(it => it.cabinet === TU_MODE).forEach(it => {
-      const i = cabinets.findIndex(c => c.items.some(r => r['Tên hoạt chất'] === it.name));
+    names.forEach(nm => {
+      const i = cabinets.findIndex(c => c.items.some(r => r['Tên hoạt chất'] === nm));
       if(i + 1 > mx) mx = i + 1;
     });
     return mx;
@@ -2323,9 +2343,15 @@ cabinetTabs.addEventListener('click', e=>{
    yet — the learner clicks the carton to dispense the first one) */
 function pickDelivery(){
   applyCabinetVisibility();
-  let poolItems = photoItems.filter(it=> it._cabIdx < cartWindow);
-  if(poolItems.length===0) poolItems = photoItems; // window too narrow to have any photographed drug — fall back rather than show an empty carton
-  deliveryQueue = weightedPick(poolItems, Math.min(5, poolItems.length));
+  const m3names = (typeof m3SortItemsFor === 'function') ? m3SortItemsFor(TU_MODE) : null;   // req #225: chỉ sắp xếp đúng các thuốc của nhiệm vụ 3
+  if(m3names){
+    deliveryQueue = photoItems.filter(it => m3names.includes(it['Tên hoạt chất']));
+    if(!deliveryQueue.length) deliveryQueue = weightedPick(photoItems, Math.min(5, photoItems.length));
+  } else {
+    let poolItems = photoItems.filter(it=> it._cabIdx < cartWindow);
+    if(poolItems.length===0) poolItems = photoItems; // window too narrow to have any photographed drug — fall back rather than show an empty carton
+    deliveryQueue = weightedPick(poolItems, Math.min(5, poolItems.length));
+  }
   cartTotal = deliveryQueue.length; cartPlacedCount = 0; cartFastClean = 0;
   currentCartBox = null; pendingDispense = false;
   cartItemsEl.innerHTML = '';
@@ -2445,10 +2471,7 @@ function attemptDrop(cartBox, droppedOn){
     const deltaTxt = '';
     let promoMsg = '';
     /* xong cả lô = 1 lần chơi → đủ PLAYS_PER_TIER lần thì lên cấp (mở thêm tủ) */
-    if(cartPlacedCount===cartTotal && registerPlay()){
-      applyCabinetVisibility();
-      promoMsg = ` 🎉 LÊN MỨC: ${TIERS[game.tier].name} — mở ${tierCabinets()} tủ!`;
-    }
+    if(cartPlacedCount===cartTotal && typeof m3ModeDone === 'function'){ promoMsg = m3ModeDone(TU_MODE); }
     saveGame();
 
     const good = delta>=0 || res.shielded;
@@ -3019,7 +3042,61 @@ const pZoneEls = [...pMap.querySelectorAll('.pm-zone')];
 const pmZoneLabel = document.getElementById('pmZone');
 const mapKeyEl = document.getElementById('mapKey');
 const mapActionEl = document.getElementById('mapAction');
-const P_W = 1180, P_H = 936, C_W = 34, C_H = 30, C_SPEED = 4.4, P_BORDER = 4;   // req #164: kích thước ảnh sơ đồ
+/* req (giảng viên): bấm phím mũi tên thì nhân vật chạy hơi nhanh.
+   C_SPEED trước đây là 4,4 px MỖI KHUNG HÌNH — vừa nhanh, vừa phụ thuộc màn
+   hình: máy 120Hz chạy nhanh gấp đôi máy 60Hz. Nay đổi sang px MỖI GIÂY và
+   nhân với thời gian thực của khung, nên tốc độ như nhau trên mọi máy.
+   4,4 px/khung ≈ 264 px/giây → hạ còn 180 px/giây. */
+const P_W = 1180, P_H = 936, C_W = 34, C_H = 30, C_SPEED = 180, P_BORDER = 4;   // req #164: kích thước ảnh sơ đồ
+/* req (giảng viên): đi ngang nhanh thêm 10% so với đi dọc. Tách riêng tốc độ
+   theo từng trục thay vì một con số chung. */
+const C_SPEED_X = Math.round(C_SPEED * 1.10);   // 198 px/giây — trái/phải
+const C_SPEED_Y = C_SPEED;                      // 180 px/giây — lên/xuống
+/* req (giảng viên): dược sĩ trèo được cả lên tường. Trước đây chỉ chặn ở MÉP
+   ẢNH, mà tường lại nằm bên trong ảnh nên phần tường vẫn đi được. Ảnh sơ đồ vẽ
+   theo phối cảnh → sàn là một HÌNH THANG, càng xuống gần người xem càng rộng.
+   Các số dưới đây đo bằng cách phủ đa giác lên chính ảnh rồi soi mắt thường.
+   Xét theo ĐIỂM CHÂN của nhân vật, không phải cả khung: đầu che lên tường phía
+   sau là bình thường, chỉ bàn chân mới phải nằm trên sàn. */
+const FLOOR = { top:168, bottom:705, lx0:143, lx1:84, rx0:1087, rx1:1175 };
+const FLOOR_DOOR = { x0:480, x1:760, y1:800 };   // khe cửa kính — bước xuống để ra mặt tiền
+/* req (giảng viên): dược sĩ vẫn trèo lên vách phòng tư vấn và đứng cả lên bàn
+   máy tính. Những thứ này được VẼ SẴN trong ảnh sơ đồ nhưng không có vùng bấm
+   nào phủ lên, nên trước giờ không chặn gì cả. Toạ độ dưới đây đo bằng cách dò
+   màu gạch sàn trên chính ảnh (lưới 20px). Vách trái của phòng cố ý cắt làm
+   hai đoạn để CHỪA CỬA — muốn vào phòng thì phải đi qua cửa. */
+const P_SOLID = [
+  { x:852,  y:425, w:298, h:110, ten:'bàn máy tính + vách sau + giá tài liệu' },
+  { x:930,  y:686, w:250, h:26,  ten:'tường mặt tiền phía phải (cao hơn bên trái)' },
+  // Chỉ VÁCH KÍNH phía trên mới chặn. Dải phía dưới nó là CÁNH CỬA GỖ đang mở
+  // — đi xuyên qua cánh cửa thì được, nên để trống làm lối vào phòng.
+  { x:855,  y:532, w:76,  h:80,  ten:'vách kính trái (phía trên cửa)' },
+  { x:992,  y:548, w:56,  h:64,  ten:'ghế đẩu trong phòng' },
+  { x:1112, y:628, w:44,  h:46,  ten:'chậu cây góc phòng' },
+];
+function pOnFloor(fx, fy){
+  if(fy > FLOOR.bottom)
+    return fy <= FLOOR_DOOR.y1 && fx >= FLOOR_DOOR.x0 && fx <= FLOOR_DOOR.x1;
+  if(fy < FLOOR.top) return false;
+  const t = (fy - FLOOR.top) / (FLOOR.bottom - FLOOR.top);
+  return fx >= FLOOR.lx0 + (FLOOR.lx1 - FLOOR.lx0) * t
+      && fx <= FLOOR.rx0 + (FLOOR.rx1 - FLOOR.rx0) * t;
+}
+/* req (giảng viên): "bước chân cần nhanh hơn". Nhịp 1,1s quá thong thả so với
+   tốc độ đi → trông như trượt chân. Suy nhịp từ chính tốc độ: một chu kỳ = 2
+   bước, mỗi bước ≈ 2·(dài chân 13px)·sin(biên độ 22°). Khớp tuyệt đối ra ~0,11s
+   — nhanh thành nhoè, nên giữ lại chút trượt chân (hệ số 0,22) → ~0,5s, nhanh
+   gấp đôi hiện tại. Người nhún 1 nhịp mỗi BƯỚC nên bằng nửa chu kỳ. */
+const PM_STRIDE = 4 * 13 * Math.sin(22 * Math.PI / 180);
+/* Nhịp = quãng một chu kỳ ÷ tốc độ, nhân hệ số "trượt chân" cho dễ nhìn.
+   Hai hướng chỉnh riêng theo đúng yêu cầu của giảng viên qua từng lượt xem:
+     · ngang: 0,22 → 0,20  ⇒ 0,49s → 0,54s  (chậm lại 10%)
+     · dọc  : 0,29 → 0,264 ⇒ 0,37s → 0,41s  (chậm lại 10%)
+   Hệ số càng NHỎ thì nhịp càng CHẬM. */
+const PM_DUR = PM_STRIDE / (C_SPEED * 0.20);
+/* Đi lên/xuống nhìn thẳng nên gần như không thấy sải chân, chỉ thấy chân nhấc
+   lên hạ xuống — vẫn giữ nhanh hơn lúc đi ngang một chút. */
+const PM_DUR_V = PM_STRIDE / (C_SPEED * 0.264);
 const mapStage = document.getElementById('mapStage');
 let mapScale = 1;
 let charX = 588, charY = 690, targetX = null, targetY = null;   // đứng ngay trong lối vào
@@ -3069,7 +3146,7 @@ const LEGEND_BG = { 'z-rx':'#2f7fd8','z-otc':'#2e9b53','z-nondrug':'#8b5cf6','z-
     const b = e.target.closest('[data-act]'); if(!b) return;
     menu.hidden = true;
     if(b.dataset.act === 'facade') showFacade();
-    else if(b.dataset.act === 'home'){ charX = 588; charY = 690; targetX = targetY = null; }
+    else if(b.dataset.act === 'home'){ charX = 588; charY = 690; targetX = targetY = null; pPath = null; pPendingZone = null; }
     else if(b.dataset.act === 'legend'){ document.body.classList.toggle('legend-off'); fitMap(); }
     else if(b.dataset.act === 'guide'){ document.getElementById('mapGuide').classList.toggle('hidden-manual'); }
   });
@@ -3130,9 +3207,16 @@ function saveM1State(s){
    hoặc tủ còn thuốc chưa kiểm) để người học biết phải làm gì tiếp. */
 function applyM1Highlight(){
   document.querySelectorAll('.pm-zone.m1-next').forEach(z => z.classList.remove('m1-next'));
+  const m3h = (typeof getM3State === 'function') ? getM3State() : { step:'idle' };
+  if(m3h.step === 'stored' || m3h.step === 'classify'){ document.querySelector('.pm-zone.z-receive')?.classList.add('m1-next'); return; }
+  if(m3h.step === 'sort'){
+    if(!(m3h.done && m3h.done.rx) && (m3h.roomItems||[]).some(it => it.cabinet === 'rx')) document.querySelector('.pm-zone.z-rx')?.classList.add('m1-next');
+    if(!(m3h.done && m3h.done.otc) && (m3h.roomItems||[]).some(it => it.cabinet === 'otc')) document.querySelector('.pm-zone.z-otc')?.classList.add('m1-next');
+    return;
+  }
   const m2 = (typeof getM2State === 'function') ? getM2State() : { step:'idle' };
   if(m2.step !== 'idle' && m2.step !== 'done'){
-    const q = { deliver:'.pm-zone.z-entrance', inbox:'.pm-zone.z-receive', packaging:'.pm-zone.z-receive', toProcess:'.pm-zone.z-process', mail:'#zCashier' }[m2.step];
+    const q = { deliver:'.pm-zone.z-entrance', inbox:'.pm-zone.z-receive', packaging:'.pm-zone.z-receive', quality:'.pm-zone.z-receive', price:'.pm-zone.z-receive', ledger:'#zCashier', toProcess:'.pm-zone.z-process', mail:'#zCashier' }[m2.step];
     if(q) document.querySelector(q)?.classList.add('m1-next');
     return;
   }
@@ -3154,17 +3238,74 @@ function m1HashNum(s, min, max){
 var M1_ITEMS = null;
 // req #174: đơn vị tính theo QUY CÁCH ĐÓNG GÓI (hộp/lọ…), không lấy đơn vị nhỏ nhất.
 function m1UnitOf(name){ return /nhỏ mắt|nhỏ mũi|siro|xịt|lọ|dung dịch/i.test(name) ? 'lọ' : 'hộp'; }
+// req #224: quy cách đóng gói + đơn vị nhỏ nhất (dùng cho niêm yết giá & sổ kiểm nhập).
+function m1PackInfo(it){
+  const n = it.name.toLowerCase();
+  if(/ống/.test(n)) return { unit:'ống', per:10, spec:'Hộp 10 ống' };
+  if(/nhỏ mắt|nhỏ mũi|xịt|siro|dung dịch|lọ/.test(n)) return { unit:'lọ', per:1, spec:'Hộp 1 lọ' };
+  if(/tuýp|tuyp|gel|kem|mỡ/.test(n)) return { unit:'tuýp', per:1, spec:'Hộp 1 tuýp' };
+  if(/gói|cốm|bột/.test(n)) return { unit:'gói', per:20, spec:'Hộp 20 gói' };
+  const bl = m1HashNum(it.key+'bl',0,1) ? 3 : 10;
+  return { unit:'viên', per:bl*10, spec:`Hộp ${bl} vỉ × 10 viên` };
+}
+function m1PkgPrice(it){ return 12000 + m1HashNum(it.key+'p', 0, 78) * 1000; }   // giá nhập / 1 đơn vị đóng gói (chưa VAT)
+// req #226: danh mục thuốc của các nhiệm vụ 1-2-3 MỞ RỘNG dần theo mức độ — mức 1 lấy thuốc trong 2 tủ
+// đầu, rồi 4 tủ, 8, 12, 18… Mỗi lượt chơi mới bốc ngẫu nhiên 2 thuốc kê đơn + 2 thuốc không kê đơn.
+function m1ItemsKey(){ return 'tu-thuoc-mo-phong:m1items'; }
+function m1TierCabs(){ return [2,4,8,12,18]; }
+function m1SharedTier(){
+  let t = 0;
+  for(const k of ['tu-thuoc-mo-phong:game_v2','tu-thuoc-mo-phong:game_v2:otc']){
+    try{ const g = JSON.parse(localStorage.getItem(k) || 'null'); if(g && typeof g.tier === 'number') t = Math.max(t, g.tier); }catch(e){}
+  }
+  return Math.min(m1TierCabs().length - 1, t);
+}
+function m1ClassPool(cls, nCab){
+  const groups = [], byKey = {};
+  allRecords.filter(r => r['Tên hoạt chất'] && drugClass(r) === cls).forEach(r => {
+    const k = (r['Nhóm dược lý']||'').trim() || r['Tên Bài'];
+    if(!byKey[k]){ byKey[k] = []; groups.push(byKey[k]); }
+    byKey[k].push(r);
+  });
+  const cabs = [];
+  groups.forEach(g => { for(let i = 0; i < g.length; i += 20) cabs.push(g.slice(i, i + 20)); });
+  const pool = cabs.slice(0, nCab).flat().filter(r => PHOTO_SLUGS.has(slugify(r['Tên hoạt chất'])));
+  return pool;
+}
+function m1KeyOf(r){ return r['STT Buổi'] + '|' + r['Tên hoạt chất']; }
+function m1GenerateKeys(){
+  const nCab = m1TierCabs()[m1SharedTier()];
+  const pick = cls => {
+    let pool = m1ClassPool(cls, nCab);
+    if(pool.length < 2) pool = allRecords.filter(r => r['Tên hoạt chất'] && drugClass(r) === cls);
+    const out = [];
+    while(out.length < 2 && pool.length){ out.push(pool.splice(Math.floor(Math.random()*pool.length), 1)[0]); }
+    return out.map(m1KeyOf);
+  };
+  return [...pick('rx'), ...pick('otc')];
+}
+function m1ResetItems(){ try{ localStorage.removeItem(m1ItemsKey()); }catch(e){} M1_ITEMS = null; }
 function getM1Items(){
   if(M1_ITEMS) return M1_ITEMS;
-  const pick = (cab, n) => allRecords
-    .filter(r => r['Tên hoạt chất'] && drugClass(r) === cab)
-    .slice(0, n)
-    .map(r => {
-      const key = r['STT Buổi'] + '|' + r['Tên hoạt chất'];
-      const ton = m1HashNum(key+'k',1,2);   // hộp; tủ chỉ chứa 1–2 hộp mỗi loại
-      return { key, name: r['Tên hoạt chất'], cabinet: cab, tonKho: ton, tonThuc: ton, unit: m1UnitOf(r['Tên hoạt chất']), banTuan: m1HashNum(key+'b',6,38) };
-    });
-  M1_ITEMS = [...pick('rx',2), ...pick('otc',2)];
+  let keys = null;
+  try{ keys = JSON.parse(localStorage.getItem(m1ItemsKey()) || 'null'); }catch(e){}
+  const byKey = {}; allRecords.forEach(r => { if(r['Tên hoạt chất']) byKey[m1KeyOf(r)] = r; });
+  if(!Array.isArray(keys) || keys.length < 4 || keys.some(k => !byKey[k])){
+    // người chơi đang dở nhiệm vụ 1 từ trước → giữ bộ 4 thuốc cũ để không vỡ tiến độ
+    if(localStorage.getItem('tu-thuoc-mo-phong:mission1')){
+      const legacy = c => allRecords.filter(r => r['Tên hoạt chất'] && drugClass(r) === c).slice(0, 2).map(m1KeyOf);
+      keys = [...legacy('rx'), ...legacy('otc')];
+    } else keys = m1GenerateKeys();
+    try{ localStorage.setItem(m1ItemsKey(), JSON.stringify(keys)); }catch(e){}
+  }
+  M1_ITEMS = keys.map(key => {
+    const r = byKey[key];
+    const ton = m1HashNum(key+'k',1,2);   // hộp; tủ chỉ chứa 1–2 hộp mỗi loại
+    const it = { key, name: r['Tên hoạt chất'], cabinet: drugClass(r), tonKho: ton, tonThuc: ton, unit: m1UnitOf(r['Tên hoạt chất']), banTuan: m1HashNum(key+'b',6,38),
+                 cold: m1HashNum(key+'cold',0,99) < 30 };
+    it.pack = m1PackInfo(it);
+    return it;
+  });
   // req #174: tồn trong phần mềm KHỚP thực tế, trừ tối đa 1 mặt hàng lệch (1↔2 hộp).
   if(M1_ITEMS.length){
     const mi = m1HashNum('m1-mismatch', 0, M1_ITEMS.length - 1);
@@ -3217,9 +3358,10 @@ function openPOS(){
   posOverlay.style.display = 'flex';
   const m2mail = getM2State().step === 'mail';
   if(m2mail){ st.nhaccSub = 'thu'; saveM1State(st); }
-  const wantTab = (m2mail || st.step === 'supplier' || st.step === 'order') ? 'nhacc' : 'dutru';
+  const m2ledger = getM2State().step === 'ledger';
+  const wantTab = m2ledger ? 'thucnhap' : (m2mail || st.step === 'supplier' || st.step === 'order') ? 'nhacc' : 'dutru';
   document.querySelectorAll('#posTabs .pos-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === wantTab));
-  if(wantTab === 'nhacc') renderNhaCCTab(); else renderDuTruTab();
+  if(wantTab === 'nhacc') renderNhaCCTab(); else if(wantTab === 'thucnhap') renderThucNhapTab(); else renderDuTruTab();
 }
 function closePOS(){ posOverlay.style.display = 'none'; }
 document.getElementById('posClose').addEventListener('click', closePOS);
@@ -3230,6 +3372,7 @@ document.getElementById('posTabs').addEventListener('click', e => {
   if(b.dataset.tab === 'dutru') renderDuTruTab();
   else if(b.dataset.tab === 'nhacc') renderNhaCCTab();
   else if(b.dataset.tab === 'quanly') renderQuanLyTab();
+  else if(b.dataset.tab === 'thucnhap') renderThucNhapTab();
   else posPanel.innerHTML = '<div class="pos-soon">🔒 Tab này sẽ có nghiệp vụ ở các nhiệm vụ sau (2, 4, 5).</div>';
 });
 
@@ -3354,7 +3497,7 @@ function renderDuTruTab(){
     posPanel.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">🎉 Bạn đã hoàn thành nhiệm vụ 1!</div>
       <button type="button" class="pos-btn" id="posRestart">🔁 Luyện lại từ đầu</button>`;
     document.getElementById('posRestart').addEventListener('click', () => {
-      saveM1State({ step:'dutru', confirmed:{}, actual:{}, orders:{}, supplier:null, formulaOk:false, fmBlanks:null });
+      m1ResetItems(); saveM1State({ step:'dutru', confirmed:{}, actual:{}, orders:{}, supplier:null, formulaOk:false, fmBlanks:null });
       renderDuTruTab(); window.refreshMissionsList?.();
     });
   }
@@ -3521,14 +3664,21 @@ function startM2(){
   const m1 = getM1State();
   const sup = M1_SUPPLIERS.find(x => x.id === m1.supplier) || M1_SUPPLIERS[2];
   const n = m2Count();
-  const items = getM1Items().map(it => ({ key:it.key, name:it.name, unit:it.unit, qty: Number(m1.orders && m1.orders[it.key]) || m1OrderQty(it, it.tonKho) }));
+  const items = getM1Items().map(it => ({ key:it.key, name:it.name, unit:it.unit, cold:it.cold, pack:it.pack, qty: Number(m1.orders && m1.orders[it.key]) || m1OrderQty(it, it.tonKho) }));
   // Cấp độ đầu luôn khớp số lượng; luyện >3 lần thì thi thoảng lệch 1 mặt hàng.
   const mis = (n > 3 && Math.random() < .5) ? Math.floor(Math.random()*items.length) : -1;
   const dfe = (n >= 1 && Math.random() < .5) ? Math.floor(Math.random()*items.length) : -1;
   items.forEach((it, i) => {
     it.recv = i === mis ? (it.qty > 1 ? it.qty - 1 - Math.floor(Math.random()*Math.min(2, it.qty-1)) : it.qty + 1) : it.qty;
     it.defect = i === dfe ? ['dent','mold','blur'][Math.floor(Math.random()*3)] : null;
+    // req #224 bước 5: sản phẩm CÓ niêm phong hay KHÔNG (cố định theo thuốc); lỗi cảm quan ngẫu nhiên từ lần luyện thứ 2
+    it.sealed = m1HashNum(it.key+'seal', 0, 1) === 1;
+    it.q5 = null;
   });
+  if(n >= 1 && Math.random() < .5){
+    const d5 = items[Math.floor(Math.random()*items.length)];
+    d5.q5 = d5.sealed ? 'seal' : ['inout','color','shape'][Math.floor(Math.random()*3)];
+  }
   saveM2State({ step:'deliver', vehicle: Math.random() < .5 ? '🚐' : '🛵', supplierId: sup.id, supplierName: sup.name, items, mismatch: mis, sub:'invoice', pack:{} });
 }
 function m2Hint(){
@@ -3536,9 +3686,12 @@ function m2Hint(){
   if(!m2Unlocked()) return '🔒 Nhiệm vụ 2: hoàn thành tối thiểu 1 lần Nhiệm vụ 1 để mở khoá.';
   return x.step === 'deliver' ? '🚪 Nhiệm vụ 2: ra cửa ra vào — sẽ có xe giao hàng dừng trước cửa. Bấm vào thùng hàng để nhận.'
     : x.step === 'inbox' ? '📦 Nhiệm vụ 2: bấm vào thùng hàng ở Khu vực chờ kiểm nhập để kiểm tra hoá đơn và hàng.'
-    : x.step === 'toProcess' ? '⚠️ Nhiệm vụ 2: số lượng không khớp — bấm vào Khu vực hàng chờ xử lý để chuyển thùng hàng sang đó.'
+    : x.step === 'toProcess' ? (x.mailKind === 'quality' ? '⚠️ Nhiệm vụ 2 (bước 6): có sản phẩm không đạt — bấm vào Khu vực hàng chờ xử lý để chuyển sản phẩm đó sang.' : '⚠️ Nhiệm vụ 2: số lượng không khớp — bấm vào Khu vực hàng chờ xử lý để chuyển thùng hàng sang đó.')
     : x.step === 'mail' ? '✉️ Nhiệm vụ 2: đến Quầy thu ngân, mở máy tính → Quản lý nhà cung ứng → Gửi thư cho nhà cung ứng.'
     : x.step === 'packaging' ? '🔍 Nhiệm vụ 2: bấm thùng ở Khu vực chờ kiểm nhập để kiểm tra bao bì từng sản phẩm.'
+    : x.step === 'quality' ? '🔬 Nhiệm vụ 2 (bước 5): bấm thùng ở Khu vực chờ kiểm nhập để kiểm tra chất lượng sản phẩm bằng cảm quan.'
+    : x.step === 'price' ? '🏷️ Nhiệm vụ 2 (bước 7): bấm thùng ở Khu vực chờ kiểm nhập để niêm yết giá cho các sản phẩm đạt.'
+    : x.step === 'ledger' ? '📒 Nhiệm vụ 2 (bước 8): đến Quầy thu ngân, mở máy tính → tab Thực nhập để ghi sổ kiểm nhập.'
     : '✅ Nhiệm vụ 2 đã xong. Bấm để luyện tập lại.';
 }
 function m2Click(){
@@ -3568,7 +3721,8 @@ function m2Sync(){
   const x = getM2State();
   document.body.classList.toggle('m2-enter', x.step === 'inbox');
   let crate = document.getElementById('m2CrateMap');
-  const at = (x.step === 'inbox' || x.step === 'packaging') ? [175, 268] : (x.step === 'toProcess' || x.step === 'mail') ? [160, 402] : null;
+  const m3 = getM3State(); const m3crate = m3.step === 'stored' || m3.step === 'classify';
+  const at = m3crate ? [175, 268] : (x.step === 'inbox' || x.step === 'packaging' || x.step === 'quality' || x.step === 'price' || x.step === 'ledger') ? [175, 268] : (x.step === 'toProcess' || x.step === 'mail') ? [160, 402] : null;
   if(at && typeof pMap !== 'undefined' && pMap){
     if(!crate){
       crate = document.createElement('button'); crate.type = 'button'; crate.id = 'm2CrateMap'; crate.className = 'm2-crate-map'; crate.textContent = '📦';
@@ -3576,6 +3730,7 @@ function m2Sync(){
       pMap.appendChild(crate);
     }
     crate.style.left = at[0] + 'px'; crate.style.top = at[1] + 'px'; crate.style.display = '';
+    crate.innerHTML = m3crate ? '📦<span class="m2-tag">Đã kiểm nhập, chờ sắp xếp</span>' : '📦';
   } else if(crate){ crate.style.display = 'none'; }
   // mặt tiền
   const fs = document.getElementById('facadeScreen');
@@ -3645,11 +3800,14 @@ const M2_CAR_SVG = `<svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg
 </svg>`;
 function m2OpenCrate(){
   const x = getM2State();
-  if(x.step === 'inbox' || x.step === 'packaging') m2RenderInspect();
+  if(m3Active() && (getM3State().step === 'stored' || getM3State().step === 'classify')){ m3OpenCrate(); return; }
+  if(x.step === 'inbox' || x.step === 'packaging' || x.step === 'quality' || x.step === 'price') m2RenderInspect();
   else pmZoneLabel.textContent = m2Hint();
 }
 function m2RenderInspect(){
   const x = getM2State();
+  if(x.step === 'quality') return m2RenderQuality();
+  if(x.step === 'price') return m2RenderPrice();
   if(x.step === 'packaging' || x.sub === 'pack') return m2RenderPack();
   if(x.sub === 'qty') return m2RenderQty();
   m2RenderInvoice();
@@ -3759,11 +3917,7 @@ function m2RenderPack(){
   const insp = body.querySelector('#m2Insp'), err = body.querySelector('#m2Err');
   const finishIfDone = () => {
     if(x.items.every((it,i) => x.pack[i] === (it.defect ? 'bad' : 'ok'))){
-      x.step = 'done'; saveM2State(x);
-      try{ localStorage.setItem(LS_M2N, String(m2Count() + 1)); }catch(e){}
-      m2CountPlay();
-      body.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">🎉 Đã kiểm nhập xong lô hàng! Sản phẩm bao bì không đạt được ghi nhận để xử lý.<br>(Bước niêm yết giá sẽ được bổ sung.)</div>`;
-      window.refreshMissionsList?.();
+      x.step = 'quality'; saveM2State(x); m2RenderQuality();
     }
   };
   body.querySelectorAll('.m2-pk button').forEach(b => b.addEventListener('click', () => {
@@ -3791,6 +3945,297 @@ function m2RenderPack(){
     }));
   }));
 }
+// ===================== req #224: bước 5–8 của nhiệm vụ 2 =====================
+const M2_PROBLEMS = [
+  ['qty','Số lượng thực nhận KHÔNG khớp hoá đơn'], ['dent','Bao bì móp méo, hư hỏng'], ['mold','Bao bì ẩm mốc'],
+  ['blur','Thông tin trên bao bì mờ, nhoè'], ['seal','Niêm phong bị rách, không còn nguyên vẹn'],
+  ['inout','Bao bì trực tiếp và bao bì ngoài không thống nhất'], ['color','Màu sắc sản phẩm bất thường'],
+  ['shape','Hình dáng, thể chất sản phẩm bất thường'], ['inv','Tên đơn vị bán trên hoá đơn không đúng'],
+];
+const M2_REASON_TXT = { dent:'bao bì móp méo', mold:'bao bì ẩm mốc', blur:'thông tin trên bao bì mờ, nhoè', seal:'niêm phong bị rách', inout:'bao bì trong và ngoài không thống nhất', color:'màu sắc bất thường', shape:'hình dáng, thể chất bất thường' };
+function m2Reasons(it){ const r = []; if(it.defect) r.push(it.defect); if(it.q5) r.push(it.q5); return r; }
+function m2PhotoUrl(name){ const sl = slugify(name); return PHOTO_SLUGS.has(sl) ? PHOTO_DIR + sl + '.jpg' : null; }
+function m2SealSvg(broken){
+  return `<svg viewBox="0 0 220 130" width="220" height="130" xmlns="http://www.w3.org/2000/svg" aria-label="Hộp thuốc có niêm phong">
+    <rect x="20" y="30" width="180" height="80" rx="6" fill="#fff" stroke="#9aa5b1" stroke-width="3"/>
+    <rect x="20" y="30" width="180" height="22" rx="6" fill="#dfe8ef"/>
+    ${broken
+      ? `<path d="M80 22 L100 34 L92 46 L112 40 L108 58 L60 58 Z" fill="#37a26b" transform="rotate(-8 90 40)"/><path d="M122 30 H190 V50 H130 L140 40 Z" fill="#37a26b"/><path d="M84 46 l10 14 l8 -12" stroke="#c0392b" stroke-width="2" fill="none"/>`
+      : `<rect x="20" y="30" width="180" height="22" fill="#37a26b" opacity=".9"/><text x="110" y="46" font-size="12" font-weight="800" fill="#fff" text-anchor="middle">NIÊM PHONG</text>`}
+    <rect x="40" y="70" width="140" height="10" rx="3" fill="#cfd8df"/><rect x="40" y="86" width="90" height="8" rx="3" fill="#dfe6ec"/></svg>`;
+}
+function m2InnerSvg(name){
+  return `<svg viewBox="0 0 220 130" width="220" height="130" xmlns="http://www.w3.org/2000/svg" aria-label="Bao bì trực tiếp">
+    <rect x="15" y="20" width="190" height="90" rx="8" fill="#e8edf1" stroke="#9aa5b1" stroke-width="3"/>
+    ${[0,1,2,3,4].map(i => `<ellipse cx="${48+i*32}" cy="50" rx="11" ry="9" fill="#f7f7f7" stroke="#b8c2cb"/>`).join('')}
+    <text x="110" y="88" font-size="12" font-weight="800" fill="#33526f" text-anchor="middle">${esc(name.slice(0,22))}</text>
+    <text x="110" y="102" font-size="9" fill="#5b6675" text-anchor="middle">Lô sản xuất — HSD (minh hoạ)</text></svg>`;
+}
+function m2PillSvg(kind){
+  const base = kind === 'color' ? '#d9b44a' : '#fbfbfb', edge = kind === 'color' ? '#8a6a1a' : '#b8c2cb';
+  const pills = [0,1,2,3,4,5].map(i => {
+    const cx = 40 + (i%3)*60, cy = 40 + Math.floor(i/3)*44;
+    if(kind === 'shape' && (i === 1 || i === 4)) return `<path d="M${cx-16} ${cy} A16 14 0 0 1 ${cx+2} ${cy-13} L${cx-3} ${cy+2} L${cx+6} ${cy+12} A16 14 0 0 1 ${cx-16} ${cy} Z" fill="${base}" stroke="${edge}"/><circle cx="${cx+14}" cy="${cy+10}" r="2" fill="${base}" stroke="${edge}"/><circle cx="${cx+20}" cy="${cy+4}" r="1.5" fill="${base}" stroke="${edge}"/>`;
+    return `<ellipse cx="${cx}" cy="${cy}" rx="18" ry="14" fill="${base}" stroke="${edge}" stroke-width="1.5"/>${kind === 'color' && i%2 ? `<circle cx="${cx-4}" cy="${cy-3}" r="3" fill="#7a5a12"/>` : ''}<line x1="${cx-8}" y1="${cy}" x2="${cx+8}" y2="${cy}" stroke="${edge}" stroke-width="1" opacity=".6"/>`;
+  }).join('');
+  return `<svg viewBox="0 0 220 110" width="220" height="110" xmlns="http://www.w3.org/2000/svg" aria-label="Sản phẩm"><rect x="5" y="5" width="210" height="100" rx="8" fill="#f2f4f7"/>${pills}</svg>`;
+}
+function m2RenderQuality(){
+  const x = getM2State();
+  x.q5ok = x.q5ok || {};
+  const cards = () => x.items.map((it,i) => `<button type="button" data-i="${i}" class="${x.q5ok[i] ? (it.q5 ? 'bad' : 'ok') : ''}">${x.q5ok[i] ? (it.q5 ? '❌ ' : '✅ ') : '🔬 '}${esc(it.name)} <small>(${it.sealed ? 'có niêm phong' : 'không niêm phong'})</small></button>`).join('');
+  const body = m2Modal('🔬 Bước 5 — Kiểm tra chất lượng bằng cảm quan', `
+    <p class="pos-note">Bấm từng sản phẩm. <b>Có niêm phong:</b> kiểm tra niêm phong còn nguyên vẹn. <b>Không có niêm phong:</b> kiểm tra bao bì trực tiếp và bao bì ngoài có thống nhất không, rồi quan sát sản phẩm (màu sắc, thể chất, hình dáng…).</p>
+    <div class="m2-pk" id="m2Cards">${cards()}</div><div id="m2Insp"></div><div class="pos-err" id="m2Err"></div>`);
+  const insp = body.querySelector('#m2Insp'), err = body.querySelector('#m2Err');
+  const refresh = () => { body.querySelector('#m2Cards').innerHTML = cards(); bind(); };
+  const finish = () => {
+    if(!x.items.every((it,i) => x.q5ok[i])) return;
+    const fails = x.items.filter(it => m2Reasons(it).length);
+    if(fails.length){
+      x.step = 'toProcess'; x.mailKind = 'quality'; saveM2State(x); m2CloseModal();
+      pmZoneLabel.textContent = '⚠️ Bước 6: có sản phẩm không đạt — bấm vào Khu vực hàng chờ xử lý để chuyển sản phẩm đó sang.';
+    } else { x.step = 'price'; saveM2State(x); m2RenderPrice(); }
+  };
+  const bind = () => body.querySelectorAll('#m2Cards button').forEach(b => b.addEventListener('click', () => {
+    const i = Number(b.dataset.i), it = x.items[i]; err.textContent = '';
+    if(x.q5ok[i]) return;
+    const photo = m2PhotoUrl(it.name);
+    const other = x.items.find(o => o !== it) || it;
+    if(it.sealed){
+      insp.innerHTML = `<div style="text-align:center"><b>${esc(it.name)}</b> — bao bì có niêm phong<div>${m2SealSvg(it.q5 === 'seal')}</div>
+        <label style="margin-right:14px"><input type="radio" name="q5s" value="ok"> Niêm phong còn nguyên vẹn</label>
+        <label><input type="radio" name="q5s" value="bad"> Niêm phong bị rách, hở</label>
+        <div style="margin-top:8px"><button type="button" class="pos-btn" id="q5Ok">Xác nhận sản phẩm này</button></div></div>`;
+    } else {
+      const grp = (nm, a, b) => `<div style="margin:4px 0"><label style="margin-right:14px"><input type="radio" name="${nm}" value="ok"> ${a}</label><label><input type="radio" name="${nm}" value="bad"> ${b}</label></div>`;
+      insp.innerHTML = `<div style="text-align:center"><b>${esc(it.name)}</b> — bao bì không có niêm phong
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:6px 0">
+          <div><small>Bao bì ngoài</small><br>${photo ? `<img src="${photo}" alt="" style="width:150px;height:110px;object-fit:contain;background:#fff;border:1px solid #d8c9a3;border-radius:6px">` : `<div class="ph">${esc(it.name)}</div>`}</div>
+          <div><small>Bao bì trực tiếp</small><br>${m2InnerSvg(it.q5 === 'inout' ? other.name : it.name)}</div>
+          <div><small>Sản phẩm</small><br>${m2PillSvg(it.q5)}</div></div>
+        <div style="text-align:left;display:inline-block">
+          ${grp('q5a','Bao bì trong và ngoài thống nhất','Không thống nhất')}
+          ${grp('q5b','Màu sắc bình thường','Màu sắc bất thường')}
+          ${grp('q5c','Hình dáng, thể chất bình thường','Hình dáng, thể chất bất thường')}</div>
+        <div style="margin-top:8px"><button type="button" class="pos-btn" id="q5Ok">Xác nhận sản phẩm này</button></div></div>`;
+    }
+    insp.querySelector('#q5Ok').addEventListener('click', () => {
+      const v = n => insp.querySelector(`input[name=${n}]:checked`)?.value;
+      let ok;
+      if(it.sealed){ const a = v('q5s'); if(!a){ err.textContent = '⚠️ Chọn tình trạng niêm phong.'; return; } ok = (a === 'bad') === (it.q5 === 'seal'); }
+      else {
+        const a = v('q5a'), c = v('q5b'), d = v('q5c'); if(!a || !c || !d){ err.textContent = '⚠️ Chọn đủ 3 nhận xét.'; return; }
+        ok = (a === 'bad') === (it.q5 === 'inout') && (c === 'bad') === (it.q5 === 'color') && (d === 'bad') === (it.q5 === 'shape');
+      }
+      if(!ok){ err.textContent = '⚠️ Chưa đúng — quan sát kỹ lại hình ảnh rồi chọn lại.'; return; }
+      x.q5ok[i] = true; saveM2State(x); err.textContent = it.q5 ? `✔ Đúng — ${M2_REASON_TXT[it.q5]}, sản phẩm không đạt.` : '✔ Đúng — sản phẩm đạt yêu cầu cảm quan.';
+      insp.innerHTML = ''; refresh(); finish();
+    });
+  }));
+  bind();
+}
+// Bước 7: niêm yết giá bán cho sản phẩm ĐẠT — tính trên đơn vị đóng gói NHỎ NHẤT (viên, ống, lọ, tuýp…).
+function m2RenderPrice(){
+  const x = getM2State();
+  const pass = x.items.filter(it => !m2Reasons(it).length);
+  if(!pass.length){ x.step = 'done'; saveM2State(x); m2FinishDone(); return; }
+  const cost = it => (m1PkgPrice(it) * 1.05) / it.pack.per;
+  const sell = it => Math.max(100, Math.round(cost(it) * 1.2 / 100) * 100);
+  const fmt = v => v.toLocaleString('vi-VN');
+  const body = m2Modal('🏷️ Bước 7 — Niêm yết giá bán', `
+    <p class="pos-note">Ghi giá bán cho các sản phẩm <b>đạt</b>, tính theo <b>đơn vị đóng gói nhỏ nhất</b> (viên, ống, lọ, tuýp…). <b>Chính sách giá:</b> giá vốn = giá nhập + VAT 5%, chia cho số đơn vị nhỏ nhất trong 1 hộp; giá bán = giá vốn + 20% lãi gộp, làm tròn đến hàng trăm đồng.</p>
+    <table class="pos-table"><thead><tr><th>Sản phẩm</th><th>Quy cách</th><th>Giá nhập / hộp (chưa VAT)</th><th>Giá vốn / đơn vị nhỏ nhất (đ)</th><th>Giá bán niêm yết / đơn vị nhỏ nhất (đ)</th></tr></thead><tbody>
+      ${pass.map((it,i) => `<tr><td>${esc(it.name)}</td><td>${it.pack.spec}</td><td>${fmt(m1PkgPrice(it))} đ</td>
+        <td><input type="number" min="0" data-c="${i}" style="width:90px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px"> đ/${it.pack.unit}</td>
+        <td><input type="number" min="0" data-s="${i}" style="width:90px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px"> đ/${it.pack.unit}</td></tr>`).join('')}
+    </tbody></table><button type="button" class="pos-btn" id="m2PriceOk">✅ Niêm yết giá</button><div class="pos-err" id="m2Err"></div>`);
+  body.querySelector('#m2PriceOk').addEventListener('click', () => {
+    const err = body.querySelector('#m2Err');
+    for(let i = 0; i < pass.length; i++){
+      const c = body.querySelector(`[data-c="${i}"]`).value, sv = body.querySelector(`[data-s="${i}"]`).value, it = pass[i];
+      if(c === '' || sv === ''){ err.textContent = '⚠️ Điền đủ giá vốn và giá bán cho tất cả sản phẩm.'; return; }
+      if(Math.abs(Number(c) - cost(it)) > Math.max(2, cost(it) * 0.02)){ err.textContent = `⚠️ Giá vốn của "${it.name}" chưa đúng — (giá nhập × 1,05) ÷ ${it.pack.per} ${it.pack.unit}.`; return; }
+      if(Math.abs(Number(sv) - sell(it)) > 100){ err.textContent = `⚠️ Giá bán của "${it.name}" chưa đúng — giá vốn × 1,2, làm tròn đến 100 đồng.`; return; }
+    }
+    x.step = 'ledger'; saveM2State(x); m2CloseModal();
+    pmZoneLabel.textContent = '📒 Bước 8: đến Quầy thu ngân, mở máy tính → tab Thực nhập để ghi sổ kiểm nhập.';
+  });
+}
+// Bước 8: sổ kiểm nhập (tab "Thực nhập" của phần mềm bán hàng) theo biểu mẫu cô gửi.
+function renderThucNhapTab(){
+  const x = getM2State();
+  if(x.step !== 'ledger'){ posPanel.innerHTML = '<div class="pos-soon">🔒 Tab này dùng ở Nhiệm vụ 2 (bước 8 — ghi sổ kiểm nhập) sau khi đã niêm yết giá.</div>'; return; }
+  const pass = x.items.filter(it => !m2Reasons(it).length);
+  const d = new Date(), dt = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+  const rec = it => allRecords.find(r => r['Tên hoạt chất'] === it.name) || {};
+  const specs = () => ['Hộp 3 vỉ × 10 viên','Hộp 10 vỉ × 10 viên','Hộp 10 ống','Hộp 1 lọ','Hộp 1 tuýp','Hộp 20 gói'];
+  const sel = (nm, opts) => `<select data-f="${nm}" style="padding:3px;border:1px solid #caa25a;border-radius:6px;max-width:130px"><option value="">— chọn —</option>${opts.map(o => `<option>${esc(o)}</option>`).join('')}</select>`;
+  const th = ['Ngày/tháng/năm','Tên thuốc, hàm lượng nồng độ','Số ĐK/GPNK','Số lô, hạn dùng','Nhà SX/nhập khẩu','Cơ sở cung cấp','Số hóa đơn/chứng từ','Điều kiện bảo quản','Quy cách đóng gói','Số lượng','Đơn vị tính','Đơn giá (đ, chưa VAT)'];
+  posPanel.innerHTML = `
+    <p class="pos-note">📒 <b>Sổ kiểm nhập thuốc</b> (mẫu). Các cột thông tin đã điền từ hoá đơn và nhãn; điền nốt <b>điều kiện bảo quản, quy cách đóng gói, số lượng, đơn vị tính, đơn giá</b> cho các sản phẩm đạt.</p>
+    <div style="overflow-x:auto"><table class="pos-table" style="font-size:.72rem;min-width:900px"><thead><tr>${th.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>
+      ${pass.map((it,i) => { const r = rec(it); return `<tr data-i="${i}"><td>${dt}</td><td>${esc(it.name)}${r['Hoạt chất, hàm lượng/nồng độ'] ? '<br>' + esc(r['Hoạt chất, hàm lượng/nồng độ']) : ''}</td>
+        <td>VD-${10000 + m1HashNum(it.key+'dk',0,89999)}-24 <small>(số minh hoạ)</small></td><td>LO${m1HashNum(it.key+'lo',1000,9999)} / ${String(m1HashNum(it.key+'hd',1,12)).padStart(2,'0')}/${d.getFullYear()+2}</td>
+        <td>${esc(r['Nơi sản xuất'] || 'Công ty SX (minh hoạ)')}</td><td>${esc(x.supplierName)}</td><td>00000014</td>
+        <td>${sel('cold', ['Nhiệt độ thường, dưới 30°C, tránh ánh sáng','Tủ lạnh 2–8°C'])}</td><td>${sel('spec', specs())}</td>
+        <td><input type="number" min="0" data-f="qty" style="width:64px;padding:3px;border:1px solid #caa25a;border-radius:6px"></td>
+        <td>${sel('unit', ['hộp','lọ','vỉ','viên','ống','tuýp','gói'])}</td>
+        <td><input type="number" min="0" data-f="price" style="width:84px;padding:3px;border:1px solid #caa25a;border-radius:6px"></td></tr>`; }).join('')}
+    </tbody></table></div>
+    <button type="button" class="pos-btn" id="m2LedgerOk">📝 Ghi sổ</button><div class="pos-err" id="m2LedErr"></div>`;
+  document.getElementById('m2LedgerOk').addEventListener('click', () => {
+    const err = document.getElementById('m2LedErr');
+    for(const tr of posPanel.querySelectorAll('tbody tr')){
+      const it = pass[Number(tr.dataset.i)], g = n => tr.querySelector(`[data-f="${n}"]`).value;
+      if(!g('cold') || !g('spec') || g('qty') === '' || !g('unit') || g('price') === ''){ err.textContent = '⚠️ Điền đủ các ô của tất cả sản phẩm.'; return; }
+      if((g('cold').startsWith('Tủ lạnh')) !== !!it.cold){ err.textContent = `⚠️ Điều kiện bảo quản của "${it.name}" chưa đúng — đọc lại nhãn bảo quản.`; return; }
+      if(g('spec') !== it.pack.spec){ err.textContent = `⚠️ Quy cách đóng gói của "${it.name}" chưa đúng.`; return; }
+      if(Number(g('qty')) !== it.recv){ err.textContent = `⚠️ Số lượng của "${it.name}" chưa đúng — theo số thực nhận.`; return; }
+      if(g('unit') !== it.unit){ err.textContent = `⚠️ Đơn vị tính của "${it.name}" chưa đúng — đơn vị đóng gói lớn nhất (hộp, lọ…).`; return; }
+      if(Math.abs(Number(g('price')) - m1PkgPrice(it)) > 1){ err.textContent = `⚠️ Đơn giá của "${it.name}" chưa đúng — lấy giá nhập trên hoá đơn (chưa VAT).`; return; }
+    }
+    x.step = 'done'; saveM2State(x); m2FinishDone();
+  });
+}
+function m2FinishDone(){
+  try{ localStorage.setItem(LS_M2N, String(m2Count() + 1)); }catch(e){}
+  m2CountPlay();
+  const msg = '🎉 Hoàn thành nhiệm vụ 2: đã kiểm nhập, niêm yết giá và ghi sổ.';
+  const ov = document.getElementById('m2Overlay');
+  if(ov && ov.style.display !== 'none') ov.querySelector('#m2Body').innerHTML = `<div class="pos-soon" style="color:#1f7a3d">${msg}</div>`;
+  else posPanel.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">${msg}</div>`;
+  pmZoneLabel.textContent = msg;
+  window.refreshMissionsList?.();
+}
+// ===================== req #225: NHIỆM VỤ 3 — Bảo quản thuốc và sắp xếp hàng hoá =====================
+// Chỉ mở khoá khi đã hoàn thành tối thiểu 1 lần nhiệm vụ 2. Thùng hàng (sau kiểm nhập) nằm ở khu chờ kiểm nhập, dán thẻ
+// "Đã kiểm nhập, chờ sắp xếp". Bước 2: phân loại theo điều kiện bảo quản; bước 3: phân loại ngành hàng (tick đúng thì có thùng
+// hàng ở tủ tương ứng); rồi vào tủ bấm thùng để sắp xếp như thiết kế cũ (kéo hộp vào đúng vị trí, FEFO).
+function getM3State(){ try{ const v = JSON.parse(localStorage.getItem('tu-thuoc-mo-phong:mission3')); if(v && v.step) return v; }catch(e){} return { step:'idle' }; }
+function saveM3State(x){
+  localStorage.setItem('tu-thuoc-mo-phong:mission3', JSON.stringify(x));
+  try{ applyM1Highlight(); }catch(e){}
+  try{ m2Sync(); }catch(e){}
+  try{ window.refreshMissionsList?.(); }catch(e){}
+  try{ if(typeof renderM1Checklist === 'function') renderM1Checklist(); }catch(e){}
+}
+function m3Unlocked(){ return m2Count() >= 1; }
+function m3Active(){ const x = getM3State(); return x.step === 'stored' || x.step === 'classify' || x.step === 'sort'; }
+// Danh sách tên thuốc cần sắp xếp trong tủ `mode` (null nếu nhiệm vụ 3 không ở bước sắp xếp / tủ này đã xong)
+function m3SortItemsFor(mode){
+  const x = getM3State();
+  if(x.step !== 'sort' || (x.done && x.done[mode])) return null;
+  const names = (x.roomItems || []).filter(it => it.cabinet === mode).map(it => it.name);
+  return names.length ? names : null;
+}
+function m3CartVisible(){ return !!m3SortItemsFor(TU_MODE); }
+function startM3(){
+  const m2 = getM2State();
+  const src = (m2.items && m2.items.length ? m2.items.filter(it => !m2Reasons(it).length) : []);
+  const all = getM1Items();
+  const list = (src.length ? src : all).map(it => { const base = all.find(a => a.key === it.key) || it; return { key: it.key, name: it.name, cold: !!base.cold, cabinet: base.cabinet }; });
+  saveM3State({ step:'stored', items:list, cls:{}, done:{}, roomItems:[] });
+}
+function m3Hint(){
+  const x = getM3State();
+  if(!m3Unlocked()) return '🔒 Nhiệm vụ 3: hoàn thành tối thiểu 1 lần Nhiệm vụ 2 để mở khoá.';
+  return x.step === 'stored' ? '📦 Nhiệm vụ 3: bấm vào thùng hàng có thẻ "Đã kiểm nhập, chờ sắp xếp" ở Khu vực chờ kiểm nhập để bắt đầu.'
+    : x.step === 'classify' ? '📋 Nhiệm vụ 3 (bước 3): bấm vào thùng hàng ở Khu vực chờ kiểm nhập để phân loại theo ngành hàng.'
+    : x.step === 'sort' ? '🗄️ Nhiệm vụ 3: thùng hàng đã tới tủ tương ứng — vào tủ thuốc kê đơn / không kê đơn, bấm thùng để sắp xếp.'
+    : '✅ Nhiệm vụ 3 đã xong. Bấm để luyện tập lại.';
+}
+function m3Click(){
+  const x = getM3State();
+  if(m3Unlocked() && (x.step === 'idle' || x.step === 'done')) startM3();
+  pmZoneLabel.textContent = m3Hint();
+}
+function m3OpenCrate(){
+  const x = getM3State();
+  if(x.step === 'stored') m3RenderStorage();
+  else if(x.step === 'classify') m3RenderClassify();
+  else pmZoneLabel.textContent = m3Hint();
+}
+function m3Photo(name, w){ const u = m2PhotoUrl(name); return u ? `<img src="${u}" alt="" style="width:${w}px;height:${Math.round(w*.75)}px;object-fit:contain;background:#fff;border:1px solid #d8c9a3;border-radius:6px">` : `<div class="ph" style="width:${w}px">${esc(name)}</div>`; }
+function m3Modal(title, html){
+  const ov = document.getElementById('m2Overlay');
+  const body = m2Modal(title, html);
+  const sub = document.querySelector('#m2Overlay .sub'); if(sub) sub.textContent = 'Nhiệm vụ 3 · Bảo quản thuốc và sắp xếp hàng hoá';
+  return body;
+}
+// Bước 2: đọc nhãn → phân loại theo điều kiện bảo quản
+function m3RenderStorage(){
+  const x = getM3State();
+  const body = m3Modal('🌡️ Bước 2 — Phân loại theo điều kiện bảo quản', `
+    <p class="pos-note">Đọc <b>thông tin bảo quản trên nhãn</b> của từng sản phẩm rồi chọn nơi bảo quản phù hợp.</p>
+    ${x.items.map((it,i) => `<div class="m2-tile" data-i="${i}" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">${m3Photo(it.name, 110)}
+      <div style="flex:1;min-width:220px"><b>${esc(it.name)}</b>
+        <div style="font-size:.8rem;background:#fff8d6;border:1px dashed #c98d3d;border-radius:6px;padding:4px 8px;margin:4px 0">Nhãn: <i>${it.cold ? 'Bảo quản trong tủ lạnh 2–8°C, tránh ánh sáng, không để đông băng.' : 'Bảo quản nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng.'}</i></div>
+        <label style="margin-right:14px"><input type="radio" name="st${i}" value="room"> Nhiệt độ thường (dưới 30°C)</label>
+        <label><input type="radio" name="st${i}" value="cold"> Tủ lạnh (2–8°C)</label></div></div>`).join('')}
+    <button type="button" class="pos-btn" id="m3StOk">✅ Xác nhận phân loại</button><div class="pos-err" id="m2Err"></div>`);
+  body.querySelector('#m3StOk').addEventListener('click', () => {
+    const err = body.querySelector('#m2Err');
+    for(let i = 0; i < x.items.length; i++){
+      const v = body.querySelector(`input[name=st${i}]:checked`)?.value;
+      if(!v){ err.textContent = '⚠️ Chọn nơi bảo quản cho tất cả sản phẩm.'; return; }
+      if((v === 'cold') !== x.items[i].cold){ err.textContent = `⚠️ "${x.items[i].name}" chưa đúng — đọc lại nhãn bảo quản.`; return; }
+    }
+    x.roomItems = x.items.filter(it => !it.cold);
+    if(!x.roomItems.length){ x.step = 'done'; saveM3State(x); m3Finish('Tất cả sản phẩm đều bảo quản tủ lạnh — đã chuyển vào tủ lạnh.'); return; }
+    x.step = 'classify'; saveM3State(x);
+    body.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đúng rồi!${x.items.some(it => it.cold) ? ' Sản phẩm bảo quản lạnh đã được chuyển vào Tủ lạnh.' : ''}<br>Tiếp theo (bước 3): bấm thùng để phân loại theo ngành hàng.</div><button type="button" class="pos-btn" id="m3Next">➡️ Sang bước 3</button>`;
+    body.querySelector('#m3Next').addEventListener('click', m3RenderClassify);
+  });
+}
+// Bước 3: phân loại ngành hàng (thuốc / không phải thuốc → kê đơn / không kê đơn / kiểm soát đặc biệt)
+function m3RenderClassify(){
+  const x = getM3State();
+  const body = m3Modal('🗂️ Bước 3 — Phân loại theo ngành hàng', `
+    <p class="pos-note">Xác định mỗi sản phẩm là <b>thuốc</b> hay <b>sản phẩm không phải thuốc</b> (mỹ phẩm, dụng cụ, vật tư y tế, thực phẩm bảo vệ sức khỏe). Nếu là thuốc, chọn tiếp: <b>kê đơn</b>, <b>không kê đơn</b> hay <b>kiểm soát đặc biệt</b>. Tick đúng thì thùng hàng sẽ chuyển tới tủ tương ứng.</p>
+    ${x.roomItems.map((it,i) => `<div class="m2-tile" data-i="${i}" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">${m3Photo(it.name, 110)}
+      <div style="flex:1;min-width:220px"><b>${esc(it.name)}</b><br>
+        <label style="margin-right:14px"><input type="radio" name="k${i}" value="drug"> Thuốc</label>
+        <label><input type="radio" name="k${i}" value="non"> Sản phẩm không phải thuốc</label>
+        <div class="sub" data-sub="${i}" hidden style="margin-top:4px">
+          <label style="margin-right:10px"><input type="radio" name="g${i}" value="rx"> Thuốc kê đơn</label>
+          <label style="margin-right:10px"><input type="radio" name="g${i}" value="otc"> Thuốc không kê đơn</label>
+          <label><input type="radio" name="g${i}" value="special"> Thuốc kiểm soát đặc biệt</label></div></div></div>`).join('')}
+    <button type="button" class="pos-btn" id="m3ClOk">✅ Xác nhận</button><div class="pos-err" id="m2Err"></div>`);
+  body.querySelectorAll('input[name^=k]').forEach(r => r.addEventListener('change', () => {
+    const i = r.name.slice(1); body.querySelector(`[data-sub="${i}"]`).hidden = r.value !== 'drug';
+  }));
+  body.querySelector('#m3ClOk').addEventListener('click', () => {
+    const err = body.querySelector('#m2Err');
+    for(let i = 0; i < x.roomItems.length; i++){
+      const it = x.roomItems[i], k = body.querySelector(`input[name=k${i}]:checked`)?.value;
+      if(!k){ err.textContent = '⚠️ Chọn thuốc / không phải thuốc cho tất cả sản phẩm.'; return; }
+      if(k !== 'drug'){ err.textContent = `⚠️ "${it.name}" là thuốc — chọn "Thuốc" rồi phân nhóm.`; return; }
+      const g = body.querySelector(`input[name=g${i}]:checked`)?.value;
+      if(!g){ err.textContent = '⚠️ Chọn nhóm thuốc (kê đơn / không kê đơn / kiểm soát đặc biệt).'; return; }
+      if(g !== it.cabinet){ err.textContent = `⚠️ "${it.name}" chưa đúng nhóm — xem lại danh mục thuốc kê đơn / không kê đơn.`; return; }
+    }
+    x.step = 'sort'; x.done = {}; saveM3State(x); m2CloseModal();
+    pmZoneLabel.textContent = '🗄️ Đúng rồi! Thùng hàng đã chuyển tới các tủ tương ứng — vào tủ thuốc kê đơn / không kê đơn, bấm thùng để sắp xếp.';
+  });
+}
+// Gọi từ màn tủ khi xếp xong lô của tủ `mode`
+function m3ModeDone(mode){
+  const x = getM3State();
+  if(x.step !== 'sort') return '';
+  x.done = x.done || {}; x.done[mode] = true;
+  const need = [...new Set((x.roomItems || []).map(it => it.cabinet))];
+  if(need.every(m => x.done[m])){ x.step = 'done'; saveM3State(x); m3Finish(); return ' 🎉 Hoàn thành nhiệm vụ 3!'; }
+  saveM3State(x);
+  return ' ✅ Xong tủ này — sang tủ còn lại để sắp xếp nốt.';
+}
+function m3Finish(msg){
+  try{ localStorage.setItem('tu-thuoc-mo-phong:m3count', String((Number(localStorage.getItem('tu-thuoc-mo-phong:m3count')) || 0) + 1)); }catch(e){}
+  m2CountPlay();
+  try{ window.refreshMissionsList?.(); }catch(e){}
+  if(msg){ pmZoneLabel.textContent = msg; }
+}
+function m3Count(){ try{ return Number(localStorage.getItem('tu-thuoc-mo-phong:m3count')) || 0; }catch(e){ return 0; } }
 // Nhiệm vụ 2 hoàn thành = 1 lần chơi (tính cho cả hai tủ, như nhiệm vụ 1).
 function m2CountPlay(){
   try{
@@ -3805,37 +4250,51 @@ function m2CountPlay(){
 // Thư báo sai lệch gửi nhà cung ứng — tab "Quản lý nhà cung ứng" của phần mềm bán hàng.
 function renderThuSub(){
   const x = getM2State(), body = document.getElementById('nhaccBody');
+  const kind = x.mailKind === 'quality' ? 'quality' : 'qty';
   const d = new Date(), dt = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
   const short = x.items.some(it => it.recv < it.qty), over = x.items.some(it => it.recv > it.qty);
-  const inp = 'width:80px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px';
-  // req #222: thư soạn sẵn — người học chỉ điền số và tick, hạn chế tối đa gõ chữ.
+  // req #222/#224: thư soạn sẵn — người học chỉ tick vấn đề + đề nghị (không gõ chữ).
+  const rows = kind === 'qty'
+    ? `<table class="pos-table" style="font-size:.8rem"><thead><tr><th>Tên thuốc</th><th>Số lượng trên hoá đơn</th><th>Số lượng thực nhận</th></tr></thead><tbody>
+        ${x.items.map(it => { const bad = it.recv !== it.qty; return `<tr style="${bad ? 'background:#ffd9a8;font-weight:800;color:#a02510' : ''}"><td>${bad ? '⚠️ ' : ''}${esc(it.name)}</td><td>${it.qty} ${it.unit}</td><td>${it.recv} ${it.unit}${bad ? ' ← không khớp' : ''}</td></tr>`; }).join('')}</tbody></table>`
+    : `<table class="pos-table" style="font-size:.8rem"><thead><tr><th>Tên thuốc</th><th>Kết quả kiểm tra khi nhập hàng</th></tr></thead><tbody>
+        ${x.items.map(it => { const rs = m2Reasons(it); return `<tr style="${rs.length ? 'background:#ffd9a8;font-weight:800;color:#a02510' : ''}"><td>${rs.length ? '⚠️ ' : ''}${esc(it.name)}</td><td>${rs.length ? 'Không đạt: ' + rs.map(r => M2_REASON_TXT[r]).join('; ') : 'Đạt'}</td></tr>`; }).join('')}</tbody></table>`;
+  const REQS = kind === 'qty'
+    ? [['Bổ sung số hàng còn thiếu', short], ['Nhận lại phần hàng giao thừa', over], ['Điều chỉnh lại hoá đơn cho khớp thực nhận', true], ['Đổi lô hàng khác', false]]
+    : [['Đổi sản phẩm không đạt sang lô khác', true], ['Trả lại sản phẩm không đạt', true], ['Bổ sung số hàng còn thiếu', false], ['Điều chỉnh lại hoá đơn cho khớp thực nhận', false]];
+  const expected = kind === 'qty' ? ['qty'] : [...new Set(x.items.flatMap(m2Reasons))];
   body.innerHTML = `
     <div class="m2-inv" style="font-size:.84rem;line-height:1.7">
       <p style="margin:0 0 6px"><b>Kính gửi: ${esc(x.supplierName)}</b></p>
-      <p style="margin:0 0 6px">Nhà thuốc thực hành đã nhận lô hàng giao ngày ${dt}. Qua kiểm nhập, chúng tôi ghi nhận số lượng thực nhận như sau (mặt hàng không khớp được tô màu):</p>
-      <table class="pos-table" style="font-size:.8rem"><thead><tr><th>Tên thuốc</th><th>Số lượng trên hoá đơn</th><th>Số lượng thực nhận</th></tr></thead><tbody>
-        ${x.items.map(it => { const bad = it.recv !== it.qty; return `<tr style="${bad ? 'background:#ffd9a8;font-weight:800;color:#a02510' : ''}"><td>${bad ? '⚠️ ' : ''}${esc(it.name)}</td><td>${it.qty} ${it.unit}</td><td>${it.recv} ${it.unit}${bad ? ' ← không khớp' : ''}</td></tr>`; }).join('')}
-      </tbody></table>
+      <p style="margin:0 0 6px">Nhà thuốc thực hành đã nhận lô hàng giao ngày ${dt}. Qua kiểm nhập, chúng tôi ghi nhận như sau (mặt hàng có vấn đề được tô màu):</p>
+      ${rows}
       <p style="margin:6px 0 2px"><b>Vấn đề ghi nhận khi nhập hàng</b> (tick vào):</p>
-      ${['Số lượng thực nhận KHÔNG khớp hoá đơn','Bao bì móp méo, hư hỏng','Bao bì ẩm mốc','Thông tin trên bao bì mờ, nhoè','Tên đơn vị bán trên hoá đơn không đúng'].map((t,i) => `<label style="display:block;cursor:pointer"><input type="checkbox" data-prob="${i}"> ${t}</label>`).join('')}
+      ${M2_PROBLEMS.map(([k,t]) => `<label style="display:block;cursor:pointer"><input type="checkbox" data-prob="${k}"> ${t}</label>`).join('')}
       <p style="margin:6px 0 2px"><b>Đề nghị nhà cung ứng</b> (tick vào):</p>
-      ${['Bổ sung số hàng còn thiếu','Nhận lại phần hàng giao thừa','Điều chỉnh lại hoá đơn cho khớp thực nhận','Đổi lô hàng khác'].map((t,i) => `<label style="display:block;cursor:pointer"><input type="checkbox" data-req="${i}"> ${t}</label>`).join('')}
+      ${REQS.map(([t],i) => `<label style="display:block;cursor:pointer"><input type="checkbox" data-req="${i}"> ${t}</label>`).join('')}
       <p style="margin:8px 0 0">Rất mong nhận được phản hồi sớm. Trân trọng cảm ơn!<br><i>Nhà thuốc thực hành</i></p>
     </div>
     <button type="button" class="pos-btn" id="thuSend" style="margin-top:8px">📨 Gửi thư</button><div class="pos-err" id="thuErr"></div>`;
   document.getElementById('thuSend').addEventListener('click', () => {
     const err = document.getElementById('thuErr');
-    const probs = [...body.querySelectorAll('[data-prob]:checked')].map(c => Number(c.dataset.prob));
-    if(!probs.includes(0)){ err.textContent = '⚠️ Hãy tick vấn đề đã xảy ra khi nhập hàng (số lượng không khớp hoá đơn).'; return; }
-    if(probs.some(p => p !== 0)){ err.textContent = '⚠️ Có vấn đề bạn tick chưa xảy ra trong lô hàng này — chỉ tick vấn đề đã ghi nhận.'; return; }
+    const probs = [...body.querySelectorAll('[data-prob]:checked')].map(c => c.dataset.prob);
+    if(!probs.length){ err.textContent = '⚠️ Hãy tick các vấn đề đã xảy ra khi nhập hàng.'; return; }
+    if(probs.some(p => !expected.includes(p))){ err.textContent = '⚠️ Có vấn đề bạn tick chưa xảy ra trong lô hàng này — chỉ tick vấn đề đã ghi nhận.'; return; }
+    if(expected.some(p => !probs.includes(p))){ err.textContent = '⚠️ Còn vấn đề đã ghi nhận nhưng bạn chưa tick — xem lại kết quả kiểm tra ở bảng trên.'; return; }
     const reqs = [...body.querySelectorAll('[data-req]:checked')].map(c => Number(c.dataset.req));
     if(!reqs.length){ err.textContent = '⚠️ Tick ít nhất một đề nghị gửi nhà cung ứng.'; return; }
-    const okReq = r => r === 2 || (r === 0 && short) || (r === 1 && over);
-    if(!reqs.every(okReq)){ err.textContent = '⚠️ Đề nghị chưa phù hợp với tình trạng hàng (thiếu thì đề nghị bổ sung, thừa thì nhận lại, hoặc điều chỉnh hoá đơn).'; return; }
+    if(!reqs.every(r => REQS[r][1])){ err.textContent = '⚠️ Đề nghị chưa phù hợp với tình trạng hàng.'; return; }
+    const pass = x.items.filter(it => !m2Reasons(it).length);
+    if(kind === 'quality' && pass.length){
+      x.step = 'price'; saveM2State(x);
+      body.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đã gửi thư cho ${esc(x.supplierName)}. Sản phẩm không đạt được giữ ở khu chờ xử lý.<br>Tiếp theo (bước 7): quay lại Khu vực chờ kiểm nhập, bấm thùng để niêm yết giá cho các sản phẩm đạt.</div>`;
+      pmZoneLabel.textContent = '🏷️ Bước 7: bấm thùng ở Khu vực chờ kiểm nhập để niêm yết giá cho các sản phẩm đạt.';
+      return;
+    }
     x.step = 'done'; saveM2State(x);
     try{ localStorage.setItem(LS_M2N, String(m2Count() + 1)); }catch(e){}
     m2CountPlay();
-    body.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đã gửi thư cho ${esc(x.supplierName)}. Hàng được giữ ở khu chờ xử lý cho tới khi nhà cung ứng phản hồi.<br>🎉 Hoàn thành nhiệm vụ 2 (nhánh xử lý sai lệch).</div>`;
+    body.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đã gửi thư cho ${esc(x.supplierName)}. Hàng được giữ ở khu chờ xử lý cho tới khi nhà cung ứng phản hồi.<br>🎉 Hoàn thành nhiệm vụ 2 (nhánh xử lý hàng không đạt).</div>`;
     window.refreshMissionsList?.();
   });
 }
@@ -3850,7 +4309,7 @@ function renderM1Checklist(){
   // của nhiệm vụ 3 (Bảo quản — sắp xếp) — hiện cùng lúc với checklist nhiệm
   // vụ 1 gây rối, ẩn đi khi đang kiểm tủ cho nhiệm vụ 1.
   const cartEl = document.getElementById('deliveryCart');
-  if(cartEl) cartEl.style.display = (st.step === 'checking') ? 'none' : '';
+  if(cartEl) cartEl.style.display = (st.step === 'checking' || !m3CartVisible()) ? 'none' : '';
   if(st.step !== 'checking'){
     panel.hidden = true;
     if(cartWindow > tierCabinets()){ cartWindow = tierCabinets(); applyCabinetVisibility(); }
@@ -3934,12 +4393,23 @@ function renderM1Checklist(){
   const MISSIONS = [
     { name:'Lập dự trù và mua thuốc', play:true, m1:true },
     { name:'Kiểm nhập thuốc, niêm yết giá', m2:true },
-    { name:'Bảo quản thuốc và sắp xếp hàng hóa', play:true },
+    { name:'Bảo quản thuốc và sắp xếp hàng hóa', m3:true },
     { name:'Kiểm kê và kiểm soát chất lượng định kỳ' },
     { name:'Xử lý thuốc bị thu hồi' },
   ];
   const missionsEl = document.getElementById('mgMissions');
+  // req #226: thanh mức độ (rất dễ → rất khó) dùng CHUNG cho cả 3 nhiệm vụ — mức càng cao thuốc bốc từ càng nhiều tủ.
+  function renderLevel(){
+    const el = document.getElementById('mgLevel'); if(!el) return;
+    const names = ['Siêu dễ','Dễ','Trung bình','Khó','Rất khó'], cabs = [2,4,8,12,18];
+    let plays = 0; for(const k of ['tu-thuoc-mo-phong:game_v2','tu-thuoc-mo-phong:game_v2:otc']){ try{ const g = JSON.parse(localStorage.getItem(k)||'null'); if(g && typeof g.plays === 'number') plays = Math.max(plays, g.plays); }catch(e){} }
+    const tier = Math.min(4, Math.floor(plays / PLAYS_PER_TIER)), inTier = tier >= 4 ? PLAYS_PER_TIER : plays % PLAYS_PER_TIER;
+    el.innerHTML = `<div style="font:800 .72rem 'Nunito',sans-serif;color:#26405f">Mức độ: <b>${names[tier]}</b> · thuốc trong ${cabs[tier]} tủ</div>
+      <div style="height:8px;background:#dfe6ee;border-radius:6px;overflow:hidden;margin:3px 0"><div style="height:100%;width:${tier>=4?100:Math.round(inTier/PLAYS_PER_TIER*100)}%;background:#2e8256"></div></div>
+      <div style="font:600 .62rem 'Nunito',sans-serif;color:#8a97ab">${tier>=4 ? 'Đã đạt mức cao nhất' : inTier + '/' + PLAYS_PER_TIER + ' lần hoàn thành nhiệm vụ để lên mức tiếp theo'}</div>`;
+  }
   function renderMissions(){
+    renderLevel();
     missionsEl.innerHTML = MISSIONS.map((m,i) => {
       const n = i+1;
       if(m.m1){
@@ -3961,6 +4431,12 @@ function renderM1Checklist(){
         const lb2 = x2.step === 'idle' ? '▶ Chơi →' : x2.step === 'done' ? `🔁 Luyện tập · ${m2Count()} lần →` : '🔍 Đang làm →';
         return `<li class="mg-mission play${x2.step==='done'?'':' current'}" data-mission="${n}"><span class="mg-mission-n">${n}</span><span class="mg-mission-tx">${m.name}</span><span class="mg-mission-st">${lb2}</span></li>`;
       }
+      if(m.m3){
+        if(!m3Unlocked()) return `<li class="mg-mission soon" data-mission="${n}" title="Hoàn thành tối thiểu 1 lần nhiệm vụ 2 để mở khoá"><span class="mg-mission-n">${n}</span><span class="mg-mission-tx">${m.name}</span><span class="mg-mission-st">🔒 Xong NV2 để mở</span></li>`;
+        const x3 = getM3State();
+        const lb3 = x3.step === 'idle' ? '▶ Chơi →' : x3.step === 'done' ? `🔁 Luyện tập · ${m3Count()} lần →` : '🔍 Đang làm →';
+        return `<li class="mg-mission play${x3.step==='done'?'':' current'}" data-mission="${n}"><span class="mg-mission-n">${n}</span><span class="mg-mission-tx">${m.name}</span><span class="mg-mission-st">${lb3}</span></li>`;
+      }
       if(m.play){
         const done = rxS + otcS;
         return `<li class="mg-mission play current" data-mission="${n}">
@@ -3980,7 +4456,7 @@ function renderM1Checklist(){
     // thu ngân và bấm vào đó mới mở được (giống game thật, không tắt tuỳ ý).
     missionsEl.querySelector('[data-mission="1"]')?.addEventListener('click', () => { if(typeof m1Hint === 'function') m1Hint(); });
     missionsEl.querySelector('[data-mission="2"]')?.addEventListener('click', () => { if(typeof m2Click === 'function') m2Click(); });
-    missionsEl.querySelector('[data-mission="3"]')?.addEventListener('click', () => { document.querySelector('.z-rx')?.dispatchEvent(new MouseEvent('click', { bubbles:true })); });
+    missionsEl.querySelector('[data-mission="3"]')?.addEventListener('click', () => { if(typeof m3Click === 'function') m3Click(); });
   }
   if(missionsEl){ renderMissions(); window.refreshMissionsList = renderMissions; }
   try{ applyM1Highlight(); }catch(e){}
@@ -4023,15 +4499,171 @@ let hasKey = localStorage.getItem('tu-thuoc-mo-phong:key') === '1'
   || gameMax('pharma_crush_progress_v1') > KEY_LEVEL || gameMax('pharma_sort_progress_v1') > KEY_LEVEL;
 
 function pComputeRects(){
-  pRects = pZoneEls.map(z=>({ el:z, x:z.offsetLeft, y:z.offsetTop, w:z.offsetWidth, h:z.offsetHeight }));
+  pRects = pZoneEls
+    .map(z=>({ el:z, x:z.offsetLeft, y:z.offsetTop, w:z.offsetWidth, h:z.offsetHeight }))
+    .filter(r=>r.w > 0 && r.h > 0);   // vùng đang ẩn (vd Khu ra lẻ) không tính
+  pBuildGrid();
 }
+/* req (giảng viên): dược sĩ KHÔNG được giẫm lên quầy thu ngân và các khu vực
+   khác — chúng là quầy, tủ, kệ, ghế thật. Trước đây mọi phần tử có data-zone
+   đều được cho đi xuyên qua (chú thích cũ chỉ đúng với sơ đồ Sảnh ở màn khác),
+   nên thực tế không có vật cản nào ngoài 4 bức tường. Nay chỉ LỐI VÀO là chỗ
+   đứng lên được, còn lại phải đi vòng và đứng sát cạnh. */
+const P_WALKABLE = new Set(['door']);
+/* Phòng tư vấn là CĂN PHÒNG có cửa, không phải món đồ — lòng phòng đi được,
+   còn vách và bàn đã chặn riêng trong P_SOLID với một khe chừa làm cửa. */
+const P_WALK_CLASS = 'z-consult';
 function pCollide(px, py){
-  if(px < 2 || py < 2 || px + C_W > P_W - 2 || py + C_H > P_H - 2) return true;
+  if(!pOnFloor(px + C_W/2, py + C_H)) return true;   // bàn chân phải ở trên sàn
+  for(const r of P_SOLID)
+    if(px < r.x + r.w && px + C_W > r.x && py < r.y + r.h && py + C_H > r.y) return true;
   for(const r of pRects){
-    if(r.el.dataset.zone) continue;   // Sảnh & Cửa ra vào are walkable — you stand in/on them
+    if(P_WALKABLE.has(r.el.dataset.zone) || r.el.classList.contains(P_WALK_CLASS)) continue;
     if(px < r.x + r.w && px + C_W > r.x && py < r.y + r.h && py + C_H > r.y) return true;
   }
   return false;
+}
+/* ---------- TÌM ĐƯỜNG kiểu unit game chiến thuật ----------
+   req (giảng viên): bấm sang chỗ khác thì phải tìm lối đi hợp lý, không lao
+   thẳng đường chéo rồi dí vào quầy. Lưới 10px; mỗi ô ghi sẵn "đặt nhân vật ở
+   đây có chạm gì không" — tức đã tính cả kích thước người, nên đường tìm ra
+   dùng thẳng được, không cần nới thêm. A* 8 hướng với hàm ước lượng octile,
+   cấm lách chéo qua khe hẹp giữa hai vật cản, xong "kéo dây" bỏ bớt các khúc
+   gãy thừa của lưới để đường đi mượt như người thật. */
+const PG = 10;
+let pGrid = null, pGW = 0, pGH = 0;
+function pBuildGrid(){
+  pGW = Math.ceil(P_W / PG); pGH = Math.ceil(P_H / PG);
+  pGrid = new Uint8Array(pGW * pGH);
+  for(let gy = 0; gy < pGH; gy++)
+    for(let gx = 0; gx < pGW; gx++)
+      if(pCollide(gx * PG, gy * PG)) pGrid[gy * pGW + gx] = 1;
+  /* Bịt các TÚI CỤT: vài khe hẹp kẹt giữa tường – tủ – kệ tuy "không chạm gì"
+     nhưng không thông ra sàn chính (vd ô 8×10px ở góc trên bên trái). Nếu để
+     lại, hàm tìm ô trống gần nhất có thể chọn trúng một túi như vậy rồi A* báo
+     không có đường. Loang một lượt từ chỗ nhân vật đang đứng, ô nào không tới
+     được thì coi như vật cản. */
+  const seed = (x, y) => (pCollide(x, y) ? null : (Math.round(y / PG) * pGW + Math.round(x / PG)));
+  const si = seed(charX, charY) ?? seed(588, 690) ?? pGrid.findIndex(v => v === 0);
+  if(si == null || si < 0) return;
+  const seen = new Uint8Array(pGW * pGH), q = [si]; seen[si] = 1;
+  for(let h = 0; h < q.length; h++){
+    const c = q[h], cx = c % pGW, cy = (c / pGW) | 0;
+    for(const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx = cx + dx, ny = cy + dy;
+      if(nx < 0 || ny < 0 || nx >= pGW || ny >= pGH) continue;
+      const ni = ny * pGW + nx;
+      if(seen[ni] || pGrid[ni]) continue;
+      seen[ni] = 1; q.push(ni);
+    }
+  }
+  for(let i = 0; i < pGrid.length; i++) if(!pGrid[i] && !seen[i]) pGrid[i] = 1;
+}
+const pBlocked = (gx, gy) =>
+  gx < 0 || gy < 0 || gx >= pGW || gy >= pGH || pGrid[gy * pGW + gx] === 1;
+/* Ô trống gần nhất — bấm trúng quầy thì đi tới mép quầy chứ không đứng im. */
+function pNearestFree(gx, gy){
+  if(!pBlocked(gx, gy)) return [gx, gy];
+  for(let r = 1; r <= 30; r++)
+    for(let dy = -r; dy <= r; dy++)
+      for(let dx = -r; dx <= r; dx++){
+        if(Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        if(!pBlocked(gx + dx, gy + dy)) return [gx + dx, gy + dy];
+      }
+  return null;
+}
+function pHeapPush(h, n){
+  h.push(n); let c = h.length - 1;
+  while(c > 0){ const q = (c - 1) >> 1;
+    if(h[q][0] <= h[c][0]) break;
+    const t = h[q]; h[q] = h[c]; h[c] = t; c = q; }
+}
+function pHeapPop(h){
+  const top = h[0], last = h.pop();
+  if(h.length){ h[0] = last; let q = 0;
+    for(;;){ const l = q*2+1, r = l+1; let m = q;
+      if(l < h.length && h[l][0] < h[m][0]) m = l;
+      if(r < h.length && h[r][0] < h[m][0]) m = r;
+      if(m === q) break;
+      const t = h[q]; h[q] = h[m]; h[m] = t; q = m; } }
+  return top;
+}
+const PDIR = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+function pAStar(sx, sy, gx, gy){
+  const N = pGW * pGH, si = sy*pGW + sx, gi = gy*pGW + gx;
+  if(si === gi) return [gi];
+  const g = new Float64Array(N).fill(Infinity);
+  const from = new Int32Array(N).fill(-1);
+  const done = new Uint8Array(N);
+  const K = Math.SQRT2;
+  const oct = i => { const x = i % pGW, y = (i / pGW) | 0;
+    const dx = Math.abs(x - gx), dy = Math.abs(y - gy);
+    return (dx + dy) + (K - 2) * Math.min(dx, dy); };
+  const heap = []; g[si] = 0; pHeapPush(heap, [oct(si), si]);
+  while(heap.length){
+    const cur = pHeapPop(heap)[1];
+    if(cur === gi) break;
+    if(done[cur]) continue; done[cur] = 1;
+    const cx = cur % pGW, cy = (cur / pGW) | 0;
+    for(const [dx, dy] of PDIR){
+      const nx = cx + dx, ny = cy + dy;
+      if(pBlocked(nx, ny)) continue;
+      if(dx && dy && (pBlocked(cx + dx, cy) || pBlocked(cx, cy + dy))) continue;
+      const ni = ny*pGW + nx, ng = g[cur] + (dx && dy ? K : 1);
+      if(ng < g[ni]){ g[ni] = ng; from[ni] = cur; pHeapPush(heap, [ng + oct(ni), ni]); }
+    }
+  }
+  if(from[gi] === -1) return null;
+  const out = []; for(let i = gi; i !== -1; i = from[i]) out.push(i);
+  return out.reverse();
+}
+/* Nối thẳng được hai điểm không? (dò dọc đoạn, bước 4px) */
+function pClear(ax, ay, bx, by){
+  const d = Math.hypot(bx - ax, by - ay), n = Math.max(1, Math.ceil(d / 4));
+  for(let i = 1; i <= n; i++){ const t = i / n;
+    if(pCollide(ax + (bx - ax) * t, ay + (by - ay) * t)) return false; }
+  return true;
+}
+/* Trả về danh sách điểm mốc (toạ độ góc trên–trái của nhân vật). */
+function pPlanPath(tx, ty){
+  if(!pGrid) pBuildGrid();
+  const s = pNearestFree(Math.round(charX / PG), Math.round(charY / PG));
+  const e = pNearestFree(Math.round(tx / PG),    Math.round(ty / PG));
+  if(!s || !e) return null;
+  const cells = pAStar(s[0], s[1], e[0], e[1]);
+  if(!cells) return null;
+  const pts = cells.map(i => [(i % pGW) * PG, ((i / pGW) | 0) * PG]);
+  pts[0] = [charX, charY];                        // xuất phát từ chỗ đang đứng
+  const out = []; let i = 0;
+  while(i < pts.length - 1){                      // kéo dây
+    let j = pts.length - 1;
+    while(j > i + 1 && !pClear(pts[i][0], pts[i][1], pts[j][0], pts[j][1])) j--;
+    out.push(pts[j]); i = j;
+  }
+  return out.length ? out : null;
+}
+
+/* Chỗ đứng sát CẠNH một vùng (không đè lên). Bản đầu chỉ thử 4 hướng cố định
+   (dưới → trên → phải → trái) nên chịu thua hai tủ tường hàng trên: phía dưới
+   vướng kệ, ba phía kia đều ra ngoài sàn. Nay quét cả lưới đi được — vốn đã
+   lược bỏ chỗ không tới nổi — lấy ô vừa sát vùng (đủ gần để vùng sáng lên)
+   vừa gần nhân vật nhất. */
+function pStandBeside(z){
+  if(!pGrid) pBuildGrid();
+  const zx = z.offsetLeft, zy = z.offsetTop, zw = z.offsetWidth, zh = z.offsetHeight;
+  let best = null, bs = Infinity;
+  for(let gy = 0; gy < pGH; gy++)
+    for(let gx = 0; gx < pGW; gx++){
+      if(pBlocked(gx, gy)) continue;
+      const x = gx * PG, y = gy * PG, cx = x + C_W/2, cy = y + C_H/2;
+      const dx = Math.max(zx - cx, 0, cx - (zx + zw));
+      const dy = Math.max(zy - cy, 0, cy - (zy + zh));
+      const d = Math.hypot(dx, dy);
+      if(d > 44) continue;                       // phải đủ gần để vùng sáng lên
+      const sc = d * 4 + Math.hypot(x - charX, y - charY) * 0.15;
+      if(sc < bs){ bs = sc; best = [x, y]; }
+    }
+  return best || [charX, charY];
 }
 function pUpdateZone(){
   const ccx = charX + C_W/2, ccy = charY + C_H/2;
@@ -4043,7 +4675,7 @@ function pUpdateZone(){
     if(d < bd){ bd = d; best = r; }
   }
   pZoneEls.forEach(z=> z.classList.remove('here'));
-  if(best && bd < 34){
+  if(best && bd < 46){   // đứng sát cạnh quầy thì tâm nhân vật cách mép ~21px
     best.el.classList.add('here');
     pmZoneLabel.textContent = 'Bạn đang ở: ' + best.el.dataset.name;
     pHereZone = best.el.dataset.zone ? best.el : null;
@@ -4063,19 +4695,33 @@ function renderMapAction(){
     mapActionEl.innerHTML = '';
   }
 }
-function pLoop(){
+let pLast = 0, pPath = null, pPendingZone = null;
+function pLoop(ts){
+  const dt = Math.min(0.05, (ts - (pLast || ts)) / 1000); pLast = ts;
+  const stepX = C_SPEED_X * dt, stepY = C_SPEED_Y * dt;   // quãng đi trong khung này
+  const step  = Math.min(stepX, stepY);                   // ngưỡng "đã tới đích"
   let vx = (pKeys.right?1:0) - (pKeys.left?1:0);
   let vy = (pKeys.down?1:0) - (pKeys.up?1:0);
-  if(vx || vy){ targetX = targetY = null; }
-  else if(targetX != null){
-    const dx = targetX - charX, dy = targetY - charY, d = Math.hypot(dx, dy);
-    if(d > C_SPEED){ vx = dx/d; vy = dy/d; } else { targetX = targetY = null; }
+  if(vx || vy){ targetX = targetY = null; pPath = null; pPendingZone = null; }
+  else if(pPath){
+    while(pPath.length){                      // tới mốc nào thì bỏ mốc đó
+      const dx = pPath[0][0] - charX, dy = pPath[0][1] - charY, d = Math.hypot(dx, dy);
+      if(d <= step * 1.2){ pPath.shift(); continue; }
+      vx = dx/d; vy = dy/d; break;
+    }
+    if(!pPath.length){                        // đã tới đích
+      pPath = null; targetX = targetY = null;
+      if(pPendingZone){ const z = pPendingZone; pPendingZone = null; doZoneAction(z); }
+    }
   }
   if(vx || vy){
     const len = Math.hypot(vx, vy) || 1;
-    vx = vx/len * C_SPEED; vy = vy/len * C_SPEED;
-    if(!pCollide(charX + vx, charY)) charX += vx;
-    if(!pCollide(charX, charY + vy)) charY += vy;
+    vx = vx/len * stepX; vy = vy/len * stepY;
+    // Nếu vì lý do nào đó đang đứng lọt trong vật cản thì cho đi tự do để
+    // thoát ra, khỏi kẹt cứng một chỗ.
+    const stuck = pCollide(charX, charY);
+    if(stuck || !pCollide(charX + vx, charY)) charX += vx;
+    if(stuck || !pCollide(charX, charY + vy)) charY += vy;
     // Đi ngang chủ đạo → dáng xoạc chân bình thường (khớp .flip lật mặt);
     // đi dọc chủ đạo (lên/xuống) → dáng bước nhẹ, không xoạc ngang sai hướng.
     if(Math.abs(vx) >= Math.abs(vy)){
@@ -4092,7 +4738,12 @@ function pLoop(){
   pUpdateZone();
   pRaf = requestAnimationFrame(pLoop);
 }
-function pStart(){ requestAnimationFrame(()=>{ pComputeRects(); if(!pRaf) pRaf = requestAnimationFrame(pLoop); }); }
+function pStart(){
+  pChar.style.setProperty('--pm-dur',   PM_DUR.toFixed(2) + 's');
+  pChar.style.setProperty('--pm-bob',   (PM_DUR / 2).toFixed(2) + 's');
+  pChar.style.setProperty('--pm-dur-v', PM_DUR_V.toFixed(2) + 's');
+  pChar.style.setProperty('--pm-bob-v', (PM_DUR_V / 2).toFixed(2) + 's');
+  pLast = 0; requestAnimationFrame(()=>{ pComputeRects(); if(!pRaf) pRaf = requestAnimationFrame(pLoop); }); }
 function pStop(){ if(pRaf){ cancelAnimationFrame(pRaf); pRaf = null; } for(const k in pKeys) pKeys[k]=false; }
 
 /* scale the whole scene so it always fits the viewport (map is 900×700) */
@@ -4220,7 +4871,7 @@ function doZoneAction(zone){
     // nghiệp vụ riêng ở các nhiệm vụ sau.
     const m2s = getM2State();
     if(zone.id === 'zCashier' && typeof openPOS === 'function') openPOS();
-    else if(zone.classList.contains('z-receive') && (m2s.step === 'inbox' || m2s.step === 'packaging')) m2OpenCrate();
+    else if(zone.classList.contains('z-receive') && (['inbox','packaging','quality','price'].includes(m2s.step) || ['stored','classify'].includes(getM3State().step))) m2OpenCrate();
     else if(zone.classList.contains('z-process') && m2s.step === 'toProcess'){
       m2s.step = 'mail'; saveM2State(m2s);
       pmZoneLabel.textContent = '✉️ Thùng hàng đã chuyển sang khu chờ xử lý — đến Quầy thu ngân, mở máy tính → Quản lý nhà cung ứng → Gửi thư cho nhà cung ứng.';
@@ -4240,16 +4891,25 @@ pMap.addEventListener('click', e=>{
      right away — walk the pharmacist there first, then open it */
   const zoneEl = e.target.closest('.pm-zone[data-zone]');
   if(zoneEl){
-    charX = zoneEl.offsetLeft + zoneEl.offsetWidth/2 - C_W/2;
-    charY = zoneEl.offsetTop  + zoneEl.offsetHeight/2 - C_H/2;
-    pChar.style.left = charX + 'px'; pChar.style.top = charY + 'px';
-    targetX = targetY = null;
-    doZoneAction(zoneEl);
+    // Đang đứng ngay đó rồi thì mở luôn; còn lại thì ĐI BỘ tới (trước đây dịch
+    // chuyển tức thời, trông như xuyên tường) rồi mới mở khi tới nơi.
+    if(pHereZone === zoneEl){ pPath = null; pPendingZone = null; doZoneAction(zoneEl); return; }
+    const [nx, ny] = P_WALKABLE.has(zoneEl.dataset.zone)
+      ? [zoneEl.offsetLeft + zoneEl.offsetWidth/2 - C_W/2,
+         zoneEl.offsetTop  + zoneEl.offsetHeight/2 - C_H/2]
+      : pStandBeside(zoneEl);
+    const path = pPlanPath(nx, ny);
+    if(path){ pPath = path; pPendingZone = zoneEl; targetX = nx; targetY = ny; }
+    else { charX = nx; charY = ny; pChar.style.left = charX+'px'; pChar.style.top = charY+'px';
+           doZoneAction(zoneEl); }                    // không có lối thì mở luôn
     return;
   }
   const r = pMap.getBoundingClientRect();
-  targetX = Math.max(0, Math.min(P_W - C_W, (e.clientX - r.left)/mapScale - P_BORDER - C_W/2));
-  targetY = Math.max(0, Math.min(P_H - C_H, (e.clientY - r.top )/mapScale - P_BORDER - C_H/2));
+  const cx = Math.max(0, Math.min(P_W - C_W, (e.clientX - r.left)/mapScale - P_BORDER - C_W/2));
+  const cy = Math.max(0, Math.min(P_H - C_H, (e.clientY - r.top )/mapScale - P_BORDER - C_H/2));
+  pPendingZone = null;
+  pPath = pPlanPath(cx, cy);
+  targetX = pPath ? cx : null; targetY = pPath ? cy : null;
 });
 
 function earnKey(){ hasKey = true; localStorage.setItem('tu-thuoc-mo-phong:key','1'); applyLocks(); }
