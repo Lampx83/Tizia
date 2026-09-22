@@ -11,6 +11,18 @@ if str(HARNESS_DIR) not in sys.path:
     sys.path.insert(0, str(HARNESS_DIR))
 
 
+@pytest.fixture(autouse=True)
+def _no_real_codegraph(monkeypatch):
+    """Ticket 21: gates/brainstorm.py + gates/implement.py gọi codegraph.query()
+    thật -> subprocess ra ngoài (graphify CLI), chậm và phụ thuộc máy có cài +
+    graph.json đã build. Autouse fake trả [] cho MỌI test (đúng fallback
+    "graphify chưa cài" — seam Python đã chốt: mọi biên I/O thật đều fake,
+    xem main.py's Deps cho Ollama/git/Telegram). Test riêng của ticket 21 tự
+    monkeypatch lại codegraph.query khi cần kiểm tra hành vi có gợi ý graph."""
+    import codegraph
+    monkeypatch.setattr(codegraph, "query", lambda *a, **kw: [])
+
+
 @pytest.fixture
 def request_item():
     """Đúng hình dạng 1 item do server/scripts/sync-inbox.mjs sinh ra."""
@@ -57,7 +69,7 @@ class FakeModels:
     gate3_model_light = "fake-gate3-light"
     embed_model = "fake-embed"
 
-    def __init__(self, plan, codegen=None):
+    def __init__(self, plan, codegen=None, validation=None):
         self.plan = plan
         # Response mặc định cho cổng 3 (ticket 11) — generate() tự chọn theo
         # TÊN MODEL được gọi (gate1_model → plan, gate3_model*/… → codegen),
@@ -66,6 +78,13 @@ class FakeModels:
         self.codegen = codegen or {
             "code": "// fixture code\n", "test_file": "test/fixture.test.js", "test": "// fixture test\n",
         }
+        # Response mặc định cho cổng 2.5 (ticket 22) — clear=True nghĩa là "plan
+        # ổn, đi tiếp", nên fixture cũ (không biết gì về cổng 2.5) tự qua trót
+        # lọt tới cổng 7 mà không cần đổi gì. Cổng 2.5 dùng CHUNG gate1_model
+        # với cổng 1 (đúng thiết kế thật — vai validator, không phải model
+        # khác) nên generate() phân biệt 2 lời gọi bằng nội dung PROMPT
+        # (marker "PLAN CẦN SOÁT" chỉ có trong prompts/plan_validate.md).
+        self.validation = validation if validation is not None else {"clear": True, "question": None}
         self.calls = []
         self.embed_calls = []
         # text → vector; text lạ nhận one-hot riêng (không giống ai). Vector
@@ -86,6 +105,8 @@ class FakeModels:
         self.calls.append({"model": model, "prompt": prompt, **kw})
         if model in (self.gate3_model, self.gate3_model_light):
             payload = self.codegen
+        elif "PLAN CẦN SOÁT" in prompt:  # cổng 2.5 — xem docstring __init__
+            payload = self.validation
         else:
             payload = self.plan
         body = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)

@@ -177,6 +177,11 @@ export function attachIntegration(r) {
 
 export const plugin = {
   name: 'integration',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['/api/integrations/{endpoints,outbox,emit}'],
+    description: 'Outbox event chung + trạng thái tích hợp sibling apps.',
+  },
   mount(router) {
     attachIntegration(router);
   },

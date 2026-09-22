@@ -219,6 +219,11 @@ export { FEATURES };
 
 export const plugin = {
   name: 'feature-gate',
+  catalog: {
+    kind: 'context', tier: 'surface',
+    provides: ['features.FEATURES', '/api/features/{catalog,me}'],
+    description: 'Catalog tier/mở khoá tính năng theo user. FEATURES đã có trong surface — chỉ đọc, không đổi tier.',
+  },
   mount(router) {
     attachFeatureGate(router);
   },

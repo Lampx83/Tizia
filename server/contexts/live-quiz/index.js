@@ -195,6 +195,11 @@ export function attachLiveQuizHttp(router) {
 
 export const plugin = {
   name: 'live-quiz-http',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['/api/live-quiz/{create,:pin/info}'],
+    description: 'Phòng quiz trực tiếp (HTTP phần tạo/info; WS phần chơi thật — xem plugin ws-live-quiz).',
+  },
   mount(router) {
     attachLiveQuizHttp(router);
   },

@@ -10,7 +10,13 @@ from __future__ import annotations
 import json
 import subprocess
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
+
+import codegraph
+import gate_trace
+
+ROOT = Path(__file__).resolve().parents[3]
+
 
 def _git(args: list[str], cwd: Path, **kw) -> subprocess.CompletedProcess:
     """subprocess.run(['git', ...]) với stdin=DEVNULL — pytest capture trên
@@ -59,6 +65,25 @@ def parse_codegen(text: str) -> dict:
     return out
 
 
+def check_file_path(subtask_file: str) -> None:
+    """Ticket 21: TRƯỚC khi sinh code, xác nhận subtask.file khớp (hoặc gần
+    khớp) thứ gì đó thật trong codebase — KHÔNG BAO GIỜ tự thay path, chỉ in
+    cảnh báo cho người soát. File thật (mới tạo) CHƯA tồn tại trên đĩa là
+    chuyện bình thường (đa số skill AI sinh là file _ai-generated hoàn toàn
+    mới) — hàm này chỉ cảnh báo khi graph tìm ra 1 file thật KHÁC path plan
+    chọn (gợi ý lệch extension/folder — đúng ví dụ ticket 21 nêu), không
+    cảnh báo khi graph không tìm ra gì (trường hợp file mới, không phải typo).
+    Gọi `codegraph.query` qua tên module (không bind sẵn vào default param)
+    để test monkeypatch được — bind sẵn sẽ giữ tham chiếu hàm GỐC, patch
+    `codegraph.query` sau đó sẽ vô tác dụng."""
+    if (ROOT / subtask_file).exists():
+        return
+    candidates = codegraph.query(subtask_file)
+    if candidates and candidates[0] != subtask_file:
+        print(f"[codegraph] subtask.file '{subtask_file}' không khớp file thật — "
+              f"gần nhất trong graph: '{candidates[0]}' (KHÔNG tự thay, chỉ cảnh báo)")
+
+
 def _ensure_scratch_repo(repo_dir: str | Path | None) -> Path:
     """Repo git để diff thật vào — KHÔNG bao giờ là Tizia thật (deps.git còn
     Unavailable ở ticket này). Không truyền repo_dir → tạo 1 thư mục tạm mới."""
@@ -71,11 +96,30 @@ def _ensure_scratch_repo(repo_dir: str | Path | None) -> Path:
     return p
 
 
+def _safe_join(repo_dir: Path, rel: str) -> Path:
+    """rel (subtask['file'] từ plan, hoặc out['test_file'] model TỰ đặt tên ở
+    cổng 3) là chuỗi KHÔNG đáng tin — model có thể trả path tuyệt đối hay
+    '../..' để thoát khỏi repo scratch. Path(repo_dir) / rel của pathlib ÂM
+    THẦM bỏ qua repo_dir nếu rel là tuyệt đối (Unix '/etc/x' HAY Windows
+    'C:/Windows/x' — kể cả khi harness chạy trên Windows, chỉ tự check bằng
+    Path().is_absolute() của chính platform đang chạy sẽ bỏ lọt dạng kia,
+    nên check CẢ HAI kiểu tường minh bằng PurePosixPath/PureWindowsPath).
+    Raise ValueError nếu rel thoát khỏi repo_dir dưới bất kỳ hình thức nào —
+    không bao giờ ghi ra ngoài scratch repo."""
+    if PurePosixPath(rel).is_absolute() or PureWindowsPath(rel).is_absolute():
+        raise ValueError(f"path tuyệt đối không được phép: '{rel}'")
+    candidate = (repo_dir / rel).resolve()
+    repo_resolved = repo_dir.resolve()
+    if candidate != repo_resolved and repo_resolved not in candidate.parents:
+        raise ValueError(f"path thoát khỏi scratch repo: '{rel}'")
+    return candidate
+
+
 def _write_and_diff(repo_dir: Path, file_rel: str, code: str, test_file_rel: str, test_code: str) -> str:
     """Ghi code + test vào repo scratch, trả diff thật (git diff --cached), rồi
     commit để lần ghi kế tiếp (subtask sau) diff đúng phần MỚI thêm."""
     for rel, content in ((file_rel, code), (test_file_rel, test_code)):
-        path = repo_dir / rel
+        path = _safe_join(repo_dir, rel)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
     _git(["add", "-A"], cwd=repo_dir)
@@ -84,7 +128,8 @@ def _write_and_diff(repo_dir: Path, file_rel: str, code: str, test_file_rel: str
     return diff
 
 
-def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None) -> dict:
+def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
+        db_path=None, proposal_id: int | None = None) -> dict:
     """Điểm vào cho main.run_gate. Đọc state['plan'] do cổng 1 để lại, sinh code
     cho từng subtask với model theo size, ghi diff thật vào repo scratch."""
     plan = state.get("plan")
@@ -108,17 +153,29 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None) -> dic
                 "reason": f"budget cạn giữa chừng (đã xong {len(diffs)}/{len(subtasks)} subtask)",
                 "diffs": diffs,
             }
+        check_file_path(subtask["file"])
         model = model_for(subtask, deps.models)
-        body = deps.models.generate(model, build_prompt(subtask), format="json")
+        prompt = build_prompt(subtask)
+        body = deps.models.generate(model, prompt, format="json")
         budget.spend("model_calls")
         budget.spend("tokens", int(body.get("prompt_eval_count") or 0) + int(body.get("eval_count") or 0))
+        if db_path is not None and proposal_id is not None:
+            gate_trace.record(db_path, skill_proposal_id=proposal_id, gate=3,
+                               model=model, prompt=prompt, body=body)
         try:
             out = parse_codegen(body.get("response", ""))
         except ValueError as e:
             reason = f"subtask '{subtask.get('title')}': {e}"
             state["diffs"] = diffs
             return {"gate": 3, "blocked": True, "reason": reason, "diffs": diffs}
-        diff_text = _write_and_diff(repo, subtask["file"], out["code"], out["test_file"], out["test"])
+        try:
+            diff_text = _write_and_diff(repo, subtask["file"], out["code"], out["test_file"], out["test"])
+        except ValueError as e:
+            # _safe_join: model trả path tuyệt đối/thoát repo scratch — chặn
+            # NGAY, không ghi 1 byte nào ra ngoài, không phải lỗi âm thầm bỏ qua.
+            reason = f"subtask '{subtask.get('title')}': {e}"
+            state["diffs"] = diffs
+            return {"gate": 3, "blocked": True, "reason": reason, "diffs": diffs}
         diffs.append({
             "title": subtask["title"], "file": subtask["file"], "test_file": out["test_file"],
             "model": model, "diff": diff_text,

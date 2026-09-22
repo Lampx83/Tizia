@@ -21,16 +21,17 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from budget import Budget          # noqa: E402
-from gates import brainstorm, implement, scope_check  # noqa: E402
+from gates import brainstorm, implement, plan_validate, scope_check, static_check  # noqa: E402
 from models import OllamaClient    # noqa: E402
 import prescreen                   # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 ENV_FILE = ROOT / ".env"
 
-# 7 cổng + cổng 5.5 (risk-triage). Thứ tự này là hợp đồng: gate_reached ghi lại
-# đúng phần tử cuối cùng chạy xong, resume bắt đầu từ đó chứ không từ cổng 1.
-GATES: tuple[float, ...] = (1, 2, 3, 4, 5, 5.5, 6, 7)
+# 7 cổng + cổng 2.5 (plan-validate/complexity, ticket 22) + cổng 5.5
+# (risk-triage). Thứ tự này là hợp đồng: gate_reached ghi lại đúng phần tử
+# cuối cùng chạy xong, resume bắt đầu từ đó chứ không từ cổng 1.
+GATES: tuple[float, ...] = (1, 2, 2.5, 3, 4, 5, 5.5, 6, 7)
 
 # Nguồn thật của schema là server/db.js (bảng tạo lúc Express khởi động).
 # Bản CREATE IF NOT EXISTS này chỉ để harness chạy được trên DB tạm trong test.
@@ -88,22 +89,33 @@ def load_inbox(path: str | os.PathLike) -> list[dict]:
     return list(data.get("items") or [])
 
 
-def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: dict) -> dict:
+def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: dict,
+             *, db_path=None, proposal_id: int | None = None) -> dict:
     """Điểm thay duy nhất khi 1 cổng có logic thật. `state` mang plan/artifact
-    giữa các cổng trong cùng 1 lượt (cổng 1 ghi plan, cổng 2 đọc)."""
+    giữa các cổng trong cùng 1 lượt (cổng 1 ghi plan, cổng 2 đọc). db_path/
+    proposal_id (ticket 23) chỉ để gate_trace ghi trace — cổng nào không gọi
+    model (2, 4, 5.5) không cần và không dùng tới 2 tham số này."""
     if number == 1:
-        out = brainstorm.run(request, deps, budget)
+        out = brainstorm.run(request, deps, budget, db_path=db_path, proposal_id=proposal_id)
         state["plan"] = out.get("plan")
         return out
     if number == 2:
         return scope_check.run(state)
+    if number == 2.5:
+        return plan_validate.run(request, deps, budget, state, db_path=db_path, proposal_id=proposal_id)
     if number == 3:
-        return implement.run(state, deps, budget)
+        return implement.run(state, deps, budget, db_path=db_path, proposal_id=proposal_id)
+    if number == 4:
+        return static_check.run(state)
     return {"gate": number, "blocked": False, "reason": None}
 
 
-def record_proposal(db_path, *, request: dict, gate_reached: float, outcome: str, budget: Budget) -> int:
-    """INSERT 1 dòng lineage. Trả id."""
+def create_proposal(db_path, *, request: dict) -> int:
+    """INSERT khung skill_proposals TRƯỚC khi chạy cổng nào (gate_reached=0,
+    outcome=NULL) — ticket 23: gate_trace cần id thật này ngay từ cổng 1, và
+    spec.md's cơ chế resume (gate_reached đọc lại giữa các lần chạy) cũng cần
+    dòng tồn tại trong lúc đang chạy, không chỉ sau khi xong. update_proposal()
+    ghi lại kết quả cuối vào ĐÚNG dòng này (UPDATE, không INSERT thêm)."""
     now = int(time.time() * 1000)
     origin = "domain-synthesized" if request.get("domain") else "core-skill"
     con = sqlite3.connect(str(db_path))
@@ -113,16 +125,12 @@ def record_proposal(db_path, *, request: dict, gate_reached: float, outcome: str
             """INSERT INTO skill_proposals
                  (origin, domain, gate_reached, outcome, request_ids,
                   template_key, budget_json, pr_url, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, 0, NULL, ?, ?, NULL, NULL, ?, ?)""",
             (
                 origin,
                 request.get("domain"),
-                float(gate_reached),
-                outcome,
                 json.dumps(request.get("request_ids") or [request.get("id")]),
                 request.get("template_key"),
-                json.dumps(budget.snapshot()),
-                None,
                 now,
                 now,
             ),
@@ -133,6 +141,31 @@ def record_proposal(db_path, *, request: dict, gate_reached: float, outcome: str
         con.close()
 
 
+def update_proposal(db_path, proposal_id: int, *, gate_reached: float, outcome: str, budget: Budget) -> None:
+    """Cập nhật dòng skill_proposals đã tạo từ create_proposal() với kết quả
+    cuối cùng của lượt chạy."""
+    con = sqlite3.connect(str(db_path))
+    try:
+        con.execute(SKILL_PROPOSALS_DDL)
+        con.execute(
+            "UPDATE skill_proposals SET gate_reached=?, outcome=?, budget_json=?, updated_at=? WHERE id=?",
+            (float(gate_reached), outcome, json.dumps(budget.snapshot()), int(time.time() * 1000), proposal_id),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+
+def record_proposal(db_path, *, request: dict, gate_reached: float, outcome: str, budget: Budget) -> int:
+    """Tiện ích tạo+cập nhật 1 dòng skill_proposals trong 1 lần gọi — dùng để
+    seed lịch sử trong test (xem tests/test_prescreen.py). run_once() tự dùng
+    create_proposal()/update_proposal() tách rời vì cần proposal_id TRƯỚC khi
+    cổng nào chạy (ticket 23: gate_trace cần id đó ngay từ cổng 1)."""
+    proposal_id = create_proposal(db_path, request=request)
+    update_proposal(db_path, proposal_id, gate_reached=gate_reached, outcome=outcome, budget=budget)
+    return proposal_id
+
+
 def run_once(request: dict, *, db_path, deps: Deps, budget: Budget | None = None) -> dict:
     """Đẩy 1 request qua 7 cổng, ghi đúng 1 dòng skill_proposals. Trả kết quả."""
     budget = budget or Budget.from_env()
@@ -141,20 +174,35 @@ def run_once(request: dict, *, db_path, deps: Deps, budget: Budget | None = None
     reason = None
     state: dict = {}
 
-    for gate in GATES:
-        if not budget.tick():
-            outcome = "budget_exhausted"
-            break
-        result = run_gate(gate, request, deps, budget, state)
-        reached = gate
-        if result.get("blocked"):
-            outcome = f"blocked_gate_{gate}"
-            reason = result.get("reason")
-            break
+    proposal_id = create_proposal(db_path, request=request)
 
-    proposal_id = record_proposal(
-        db_path, request=request, gate_reached=reached, outcome=outcome, budget=budget
-    )
+    # try/finally (code-review round): create_proposal() ghi dòng NGAY từ đầu
+    # (ticket 23), khác bản cũ ghi 1 lần DUY NHẤT ở cuối sau khi mọi cổng đã
+    # chạy xong — nếu 1 cổng raise (lỗi Ollama, bug gate...) mà không có
+    # finally ở đây, dòng vừa tạo kẹt lại mãi mãi với gate_reached=0/
+    # outcome=NULL, không ai cập nhật. finally đảm bảo LUÔN ghi lại trạng thái
+    # cuối cùng — kể cả khi lỗi — rồi mới để exception tiếp tục bay lên
+    # (không nuốt lỗi, main() vẫn thấy được).
+    try:
+        for gate in GATES:
+            if not budget.tick():
+                outcome = "budget_exhausted"
+                break
+            result = run_gate(gate, request, deps, budget, state, db_path=db_path, proposal_id=proposal_id)
+            reached = gate
+            if result.get("blocked"):
+                # Cổng 2.5 (ticket 22) tự đặt outcome cụ thể (needs_clarification/
+                # complexity_gated) thay vì generic blocked_gate_N — mọi cổng khác
+                # không set key này nên hành vi cũ giữ nguyên.
+                outcome = result.get("outcome") or f"blocked_gate_{gate}"
+                reason = result.get("reason")
+                break
+    except Exception as e:
+        outcome = f"error_gate_{reached}: {e}"
+        raise
+    finally:
+        update_proposal(db_path, proposal_id, gate_reached=reached, outcome=outcome, budget=budget)
+
     return {
         "proposal_id": proposal_id,
         "request_id": request.get("id"),

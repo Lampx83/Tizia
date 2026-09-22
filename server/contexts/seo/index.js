@@ -193,6 +193,11 @@ export function attachSeo(r, { basePath = '' } = {}) {
 
 export const plugin = {
   name: 'seo',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['/robots.txt', '/sitemap.xml', '/welcome'],
+    description: 'SEO headers + sitemap/robots.',
+  },
   mount(router) {
     attachSeo(router, { basePath: BASE_PATH });
   },

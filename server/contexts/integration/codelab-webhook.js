@@ -163,6 +163,11 @@ export function attachCodelabWebhook(app) {
 
 export const plugin = {
   name: 'codelab-webhook',
+  catalog: {
+    kind: 'context', tier: 'dev-owned',
+    provides: ['webhook nhận sự kiện Codelab (HMAC verify)'],
+    description: 'Nhận webhook Codelab — raw body/HMAC, mount app-level trước express.json().',
+  },
   mount(app) {
     attachCodelabWebhook(app);
   },

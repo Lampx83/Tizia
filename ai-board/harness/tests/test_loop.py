@@ -51,9 +51,9 @@ def test_dry_run_never_calls_git_or_telegram(inbox_file, db_file, fake_deps):
 
     assert fake_deps.git.mock_calls == []
     assert fake_deps.notify.mock_calls == []
-    # Cổng 1 gọi model 1 lần + cổng 3 gọi thêm 1 lần/subtask (plan_with có 2) —
-    # tất cả qua fake, không mạng.
-    assert len(fake_deps.models.calls) == 1 + len(fake_deps.models.plan["subtasks"])
+    # Cổng 1 (1 lần) + cổng 2.5 (1 lần, ticket 22) + cổng 3 (1 lần/subtask,
+    # plan_with có 2) — tất cả qua fake, không mạng.
+    assert len(fake_deps.models.calls) == 2 + len(fake_deps.models.plan["subtasks"])
 
 
 def test_real_deps_make_git_and_telegram_explode_if_touched():
@@ -86,8 +86,29 @@ def test_budget_model_call_cap_blocks_further_spend():
     assert Budget.restore(b.snapshot()).model_calls == 2
 
 
-def test_gate_sequence_includes_risk_triage_5_5():
-    assert main.GATES == (1, 2, 3, 4, 5, 5.5, 6, 7)
+def test_gate_sequence_includes_plan_validate_2_5_and_risk_triage_5_5():
+    assert main.GATES == (1, 2, 2.5, 3, 4, 5, 5.5, 6, 7)
+
+
+def test_gate_exception_still_finalizes_the_skill_proposals_row(inbox_file, db_file, fake_deps, monkeypatch):
+    """code-review round: trước fix, create_proposal() ghi khung ngay đầu
+    run_once() nhưng KHÔNG có finally — 1 cổng raise giữa chừng để lại dòng
+    gate_reached=0/outcome=NULL vĩnh viễn, không ai cập nhật. Giờ phải luôn
+    ghi lại trạng thái cuối (outcome bắt đầu bằng 'error_gate_'), và exception
+    vẫn phải bay lên (không nuốt lỗi)."""
+    (item,) = load_inbox(inbox_file)
+
+    def _boom(*a, **kw):
+        raise RuntimeError("gia lap loi Ollama")
+    monkeypatch.setattr(main.brainstorm, "run", _boom)
+
+    with pytest.raises(RuntimeError, match="gia lap loi Ollama"):
+        run_once(item, db_path=db_file, deps=fake_deps)
+
+    (row,) = rows(db_file)
+    assert row["outcome"].startswith("error_gate_")
+    assert "gia lap loi Ollama" in row["outcome"]
+    assert row["gate_reached"] == 0.0  # raise xảy ra TRONG cổng 1, chưa cổng nào xong
 
 
 def test_cli_refuses_to_run_without_dry_run(monkeypatch, inbox_file, db_file, tmp_path, capsys):

@@ -37,8 +37,35 @@ export const CORE_MODULES = Object.freeze([
   'server/contexts/portal-apps/index.js',
 ]);
 
+// Capability không đi qua mount (ticket 08): ScoreUp/Codelab là hàm gọi thẳng
+// từ surface.quiz/core.integrations (xem capabilities.js), không phải
+// registry.mount*Plugins — nên không bao giờ xuất hiện trong `mounted`/
+// `catalogs` bên dưới. Khai tĩnh ở đây để listAvailableCapabilities() vẫn
+// liệt kê được chúng. Cố ý KHÔNG có field path/module/file — AI board đọc
+// catalog để biết "đã có gì rồi", không phải để suy ra đường tới file.
+export const STATIC_CAPABILITIES = Object.freeze([
+  {
+    id: 'scoreup', kind: 'integration', tier: 'dev-owned',
+    provides: ['quiz.listSubjects', 'quiz.listChapters', 'quiz.listQuestions', 'quiz.getRandomQuestions', 'quiz.getQuestion'],
+    description: 'ScoreUp — nguồn câu hỏi quiz thật. Gọi qua surface.quiz.*, chỉ đọc.',
+  },
+  {
+    id: 'codelab', kind: 'integration', tier: 'dev-owned',
+    provides: ['codelab (submit/status chấm code)'],
+    description: 'Codelab/NEU OJ — chấm bài code. Chỉ gọi được từ core.integrations, không có trong surface.',
+  },
+  {
+    id: 'safety', kind: 'library', tier: 'core',
+    provides: ['checkContentSafety', 'extractPromptText'],
+    description: 'Guardrail nội dung (profanity/self_harm/violence_threat/pii tiếng Việt) — đã có sẵn, đừng tự viết bộ lọc riêng.',
+  },
+]);
+
 // name → dispose. Gỡ một skill = gọi một hàm.
 const mounted = new Map();
+// name → catalog entry, chỉ cho plugin ĐANG mount VÀ có khai `catalog`
+// (ticket 08). Sống/chết theo đúng vòng đời mounted — dispose() gỡ cả hai.
+const catalogs = new Map();
 
 // Plugin khai `sourceModule` trùng CORE_MODULES mà không tự nhận `origin:
 // 'dev-owned'` bị từ chối NGAY LÚC MOUNT — không cần đợi request đầu tiên.
@@ -101,6 +128,7 @@ function mountHttp(target, plugins, ctx) {
       inner = null;
       disposePlugin?.();
     });
+    if (p.catalog) catalogs.set(p.name, { name: p.name, ...p.catalog });
   }
   return plugins.map((p) => p.name);
 }
@@ -131,6 +159,7 @@ export function mountWsPlugins(httpServer, plugins, ctx) {
       httpServer.removeListener('upgrade', onUpgrade);
       dispose?.();
     });
+    if (p.catalog) catalogs.set(p.name, { name: p.name, ...p.catalog });
   }
   return plugins.map((p) => p.name);
 }
@@ -139,6 +168,7 @@ export function disposePlugin(name) {
   const dispose = mounted.get(name);
   if (!dispose) return false;
   mounted.delete(name);
+  catalogs.delete(name);
   dispose();
   return true;
 }
@@ -151,4 +181,17 @@ export function disposeAll() {
 
 export function mountedPlugins() {
   return [...mounted.keys()];
+}
+
+// Ticket 08 — danh mục năng lực: catalog của mọi plugin ĐANG mount có khai
+// `catalog`, cộng STATIC_CAPABILITIES (ScoreUp/Codelab, không đi qua mount).
+// AI board đọc trước khi đề xuất skill mới, để không phát minh lại cái đã có.
+export function listAvailableCapabilities() {
+  return [...STATIC_CAPABILITIES, ...catalogs.values()];
+}
+
+// Tương đương `dsh --dump-config` — resolved mount state + capability, cho cả
+// người debug (scripts/dump-config.mjs) và AI board dùng làm input bắt buộc.
+export function dumpConfig() {
+  return { mounted: mountedPlugins(), capabilities: listAvailableCapabilities() };
 }

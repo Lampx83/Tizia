@@ -659,6 +659,11 @@ export function makeProfileGate({ basePath = '' } = {}) {
 
 export const plugin = {
   name: 'auth',
+  catalog: {
+    kind: 'context', tier: 'dev-owned',
+    provides: ['session auth', 'requireAuth/requireEnrolled', 'attachUser/makeAuthGate/makeProfileGate'],
+    description: 'Xác thực phiên đăng nhập — nền tảng bảo mật, không phải năng lực AI board được cấp.',
+  },
   mount(router) {
     attachAuth(router);
   },

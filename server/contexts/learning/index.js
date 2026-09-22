@@ -287,6 +287,11 @@ export function attachLearning(router) {
 
 export const plugin = {
   name: 'learning',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['/api/learning/theta', '/api/quiz/adaptive-next', '/api/skills/*'],
+    description: 'IRT adaptive learning + skill tree prerequisite.',
+  },
   mount(router) {
     attachLearning(router);
   },

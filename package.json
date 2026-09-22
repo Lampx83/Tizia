@@ -10,7 +10,8 @@
     "dev:prod": "node --watch server/dev-proxy.js",
     "test": "node --test",
     "check:content": "node scripts/check-content-integrity.mjs",
-    "codegraph:update": "graphify update ."
+    "codegraph:update": "graphify update .",
+    "dump-config": "node scripts/dump-config.mjs"
   },
   "engines": {
     "node": ">=20"

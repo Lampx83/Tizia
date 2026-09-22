@@ -134,6 +134,11 @@ export function attachScoreUpWebhook(app) {
 
 export const plugin = {
   name: 'scoreup-webhook',
+  catalog: {
+    kind: 'context', tier: 'dev-owned',
+    provides: ['webhook nhận sự kiện ScoreUp (HMAC verify)'],
+    description: 'Nhận webhook ScoreUp — raw body/HMAC, mount app-level trước express.json().',
+  },
   mount(app) {
     attachScoreUpWebhook(app);
   },

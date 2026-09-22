@@ -70,6 +70,11 @@ export function attachAi(r) {
 
 export const plugin = {
   name: 'ai-tutor',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['/api/ai/* (AITutor chat qua Ollama)'],
+    description: 'Chatbot AITutor — gọi Ollama trực tiếp, không phải qua surface.',
+  },
   mount(router) {
     attachAi(router);
   },

@@ -428,6 +428,11 @@ export function attachSkills(router, { requireAuth, requireEnrolled }) {
 
 export const plugin = {
   name: 'skills',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['/api/skills/{catalog,grant,class/:code,child/:child_id}'],
+    description: 'Cấp/thu hồi skill theo khung năng lực GDPT 2018.',
+  },
   mount(router) {
     attachSkills(router, { requireAuth, requireEnrolled });
   },

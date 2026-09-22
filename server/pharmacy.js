@@ -148,6 +148,11 @@ export function attachPharmacy(r) {
 
 export const plugin = {
   name: 'pharmacy',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['pharmacy domain routes'],
+    description: 'Route riêng trường Dược (ngoài phần đã tách sang contexts/).',
+  },
   mount(router) {
     attachPharmacy(router);
   },

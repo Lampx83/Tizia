@@ -174,6 +174,11 @@ export function attachTeacher(router) {
 
 export const plugin = {
   name: 'teacher',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['/api/teacher/{classes,class/:code/leaderboard,team-quest}'],
+    description: 'Công cụ giáo viên: lớp, leaderboard, team quest.',
+  },
   mount(router) {
     attachTeacher(router);
   },

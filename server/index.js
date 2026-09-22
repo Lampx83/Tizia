@@ -1432,9 +1432,18 @@ const httpServer = http.createServer(app);
 // listener 'upgrade' cuối cùng giống hệt trước refactor (xem ghi chú wsPriority
 // ngay tại attachRoom/attachPresence/attachLiveQuizWs).
 mountWsPlugins(httpServer, [
-  { name: 'ws-room', wsPriority: 'append', mount: () => attachRoom(httpServer, BASE_PATH) },
-  { name: 'ws-presence', wsPriority: 'prepend', mount: () => attachPresence() },  // /ws-presence — multiplayer campus avatars
-  { name: 'ws-live-quiz', wsPriority: 'prepend', mount: () => attachLiveQuizWs(BASE_PATH) },  // /ws-live
+  {
+    name: 'ws-room', wsPriority: 'append', mount: () => attachRoom(httpServer, BASE_PATH),
+    catalog: { kind: 'ws', tier: 'dev-owned', provides: ['/ws', '/ws-race', '/ws-sacky', '/ws-lab', '/ws-orchestrate'], description: 'Metaverse room + race/sacky/lab minigame + teacher orchestration — raw WS, dev-owned.' },
+  },
+  {
+    name: 'ws-presence', wsPriority: 'prepend', mount: () => attachPresence(),  // /ws-presence — multiplayer campus avatars
+    catalog: { kind: 'ws', tier: 'dev-owned', provides: ['/ws-presence'], description: 'Avatar campus hiện diện theo thời gian thực — raw WS, dev-owned.' },
+  },
+  {
+    name: 'ws-live-quiz', wsPriority: 'prepend', mount: () => attachLiveQuizWs(BASE_PATH),  // /ws-live
+    catalog: { kind: 'ws', tier: 'dev-owned', provides: ['/ws-live'], description: 'Phòng live-quiz thời gian thực — raw WS, dev-owned.' },
+  },
 ], { surface });
 // Prune scoreup_webhook_events_seen mỗi 6h, giữ 7 ngày. Bảng nhỏ nhưng dedup
 // theo event_id sẽ tích luỹ nếu ScoreUp gửi vài nghìn event/ngày — cleanup để

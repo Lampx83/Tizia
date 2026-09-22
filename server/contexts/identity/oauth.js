@@ -330,6 +330,11 @@ export function reloadProviders() { PROVIDERS = buildProviders(); }
 
 export const plugin = {
   name: 'oauth',
+  catalog: {
+    kind: 'context', tier: 'dev-owned',
+    provides: ['OAuth login (Google/Microsoft/GitHub)'],
+    description: 'Đăng nhập OAuth bên thứ ba — cùng lớp bảo mật với auth.js.',
+  },
   mount(router) {
     attachOAuth(router, { basePath: BASE_PATH });
   },

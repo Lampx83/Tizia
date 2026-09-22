@@ -701,6 +701,11 @@ export const plugin = {
   name: 'admin',
   origin: 'dev-owned',
   sourceModule: 'server/contexts/admin/index.js',
+  catalog: {
+    kind: 'context', tier: 'dev-owned',
+    provides: ['/api/admin/* (role=admin)', 'dashboard/CRUD/ai-prompt logs/backup/db-admin'],
+    description: 'Bảng điều khiển admin — quản trị người dùng, nội dung, backup, db-admin.',
+  },
   mount(router) {
     attachAdmin(router);
   },
