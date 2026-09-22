@@ -67,12 +67,33 @@ async function frontedByNextAtRoot(base) {
   }
 }
 
-let payload;
-try {
-  const res = await fetch(url, {
+/**
+ * Gọi hộp thư, thử lại MỘT lần khi gặp 5xx. Lý do có mặt: 2026-09-22 lần gọi đầu
+ * trả `503` kèm body "DNS resolution failed (transient resolver error)" — lỗi của
+ * lớp mạng/proxy giữa đường, không phải của tizia.vn (gọi lại ngay sau đó ra
+ * `401` như thường). Không thử lại thì script kết luận "domain do app khác phục
+ * vụ" — sai hẳn hướng sửa. Chỉ thử lại 5xx: 401/403/404 là câu trả lời thật của
+ * server, lặp lại chỉ tốn thời gian.
+ */
+async function callInbox() {
+  let res = await fetch(url, {
     headers: { 'x-ai-board-key': KEY, accept: 'application/json' },
     signal: AbortSignal.timeout(30000),
   });
+  if (res.status >= 500) {
+    await new Promise(r => setTimeout(r, 2000));
+    const retry = await fetch(url, {
+      headers: { 'x-ai-board-key': KEY, accept: 'application/json' },
+      signal: AbortSignal.timeout(30000),
+    }).catch(() => null);
+    if (retry) res = retry;
+  }
+  return res;
+}
+
+let payload;
+try {
+  const res = await callInbox();
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     console.error(`[fetch-inbox] ✖ ${url} → HTTP ${res.status}`);
@@ -96,6 +117,10 @@ try {
       console.error('    một lịch sử KHÔNG chung gốc với `main` — chuyển sang main là đổi hẳn cây code.');
       console.error('    Chạy phép đo trước rồi hãy quyết định:');
       console.error('      node scripts/check-deployed-build.mjs');
+      console.error('    ĐƯỜNG NGẮN (không phải quyết định kiến trúc): route hộp thư đã được port sẵn');
+      console.error('    sang chính nhánh production ở PR "port /api/ai-board/inbox sang nhánh production"');
+      console.error('    (nhánh ai-board/2026-09-22-inbox-prod-branch). Merge PR đó + đặt AI_BOARD_KEY');
+      console.error('    rồi deploy lại nhánh production hiện hành là hộp thư đọc được ngay.');
     } else if (res.status === 404) {
       console.error('  → Code đã có nhưng route chưa bật: AI_BOARD_KEY chưa set hoặc <24 ký tự. Set key rồi khởi động lại server.');
     } else if (res.status === 401) {
