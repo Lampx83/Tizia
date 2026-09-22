@@ -39,6 +39,34 @@ if (!KEY) {
 }
 
 const url = `${BASE}/api/ai-board/inbox`;
+
+/**
+ * Domain có đang do một app KHÁC (không phải server Express của repo này) phục
+ * vụ không? Express/Caddy trong repo không đặt các header này. Nhận ra sớm để
+ * không đổ lỗi nhầm cho key/deploy của EduVerse (đo thật 2026-09-19).
+ */
+function frontedByNext(res) {
+  const poweredBy = String(res.headers.get('x-powered-by') || '');
+  const vary = String(res.headers.get('vary') || '');
+  return /next\.?js/i.test(poweredBy) || res.headers.has('x-nextjs-cache') || /\brsc\b/i.test(vary);
+}
+
+/**
+ * Hỏi thêm trang gốc của domain. CẦN THIẾT vì trang lỗi 5xx thường bị proxy
+ * thay bằng body trần, KHÔNG còn header nhận dạng (đo thật 2026-09-19: tizia.vn
+ * trả 500 "Internal Server Error" không header, trong khi '/' trả 200 kèm
+ * `x-powered-by: Next.js`). Chỉ gọi ở nhánh lỗi, và nuốt mọi lỗi mạng — đây là
+ * thông tin thêm cho chẩn đoán, không được làm hỏng luồng báo lỗi chính.
+ */
+async function frontedByNextAtRoot(base) {
+  try {
+    const res = await fetch(`${base}/`, { signal: AbortSignal.timeout(10000) });
+    return frontedByNext(res);
+  } catch {
+    return false;
+  }
+}
+
 let payload;
 try {
   const res = await fetch(url, {
@@ -63,16 +91,44 @@ try {
     const staleBuild = res.status === 401 && /"needLogin"\s*:\s*true/.test(body);
     if (staleBuild) {
       console.error('  → Server CHƯA deploy code có route này (auth gate chung trả 401 needLogin).');
-      console.error('    Key KHÔNG phải vấn đề. Người vận hành cần deploy nhánh main rồi restart:');
-      console.error('      git pull && docker compose up -d --build');
+      console.error('    Key KHÔNG phải vấn đề. Nhưng ĐỪNG vội "git pull && docker compose up -d --build":');
+      console.error('    đo thật 2026-09-21, production đang chạy nhánh `feat/postgres-migration` @ 40fd384,');
+      console.error('    một lịch sử KHÔNG chung gốc với `main` — chuyển sang main là đổi hẳn cây code.');
+      console.error('    Chạy phép đo trước rồi hãy quyết định:');
+      console.error('      node scripts/check-deployed-build.mjs');
     } else if (res.status === 404) {
       console.error('  → Code đã có nhưng route chưa bật: AI_BOARD_KEY chưa set hoặc <24 ký tự. Set key rồi khởi động lại server.');
     } else if (res.status === 401) {
       console.error('  → Route đã bật nhưng thiếu header x-ai-board-key (lỗi phía script/proxy).');
     } else if (res.status === 403) {
       console.error('  → Key sai. Đối chiếu AI_BOARD_KEY với giá trị đặt trên server.');
+    } else if (res.status >= 500) {
+      // Trước 2026-09-19 script im lặng ở nhánh này: chỉ in "HTTP 500" rồi thoát,
+      // người vận hành không biết nhìn đi đâu. Hôm đó tizia.vn trả 500 cho MỌI
+      // /api/* trong khi '/' vẫn 200 — header cho thấy domain đã do một app
+      // Next.js phục vụ, tức server Express của repo này không còn nhận /api nữa.
+      console.error('  → Server trả lỗi 5xx cho chính route hộp thư. Đây KHÔNG phải chuyện key.');
+      if (frontedByNext(res) || await frontedByNextAtRoot(BASE)) {
+        console.error('    Header (x-powered-by / x-nextjs-cache / vary: rsc) cho thấy domain đang do một app');
+        console.error('    Next.js phục vụ, không phải server Express của repo này ⇒ /api/* rơi vào catch-all.');
+        console.error('    Cần: trỏ lại /api/* về container eduverse, hoặc đặt TIZIA_BASE_URL sang host thật của API:');
+        console.error('      TIZIA_BASE_URL=https://<host-api-that> AI_BOARD_KEY=<key> node scripts/fetch-inbox.mjs');
+      } else {
+        console.error('    Kiểm tra app còn sống không: curl -i $TIZIA_BASE_URL/api/health, rồi xem log container.');
+      }
     }
     if (body) console.error(`  ${body.slice(0, 200)}`);
+    process.exit(1);
+  }
+  // 200 vẫn có thể KHÔNG phải hộp thư: một front-end catch-all (Next.js, trang
+  // lỗi của proxy…) cũng trả 200 kèm HTML. res.json() khi đó ném lỗi cú pháp khó
+  // hiểu — chặn trước và nói thẳng nguyên nhân.
+  const ctype = String(res.headers.get('content-type') || '');
+  if (!/\bjson\b/i.test(ctype)) {
+    console.error(`[fetch-inbox] ✖ ${url} → HTTP 200 nhưng content-type "${ctype || '(không có)'}", không phải JSON.`);
+    console.error('  → Request rơi vào một app khác đang phục vụ domain, không tới được route hộp thư.');
+    if (frontedByNext(res)) console.error('    Header cho thấy đó là một app Next.js.');
+    console.error('    Đặt TIZIA_BASE_URL trỏ đúng host đang chạy server Express của repo này.');
     process.exit(1);
   }
   payload = await res.json();
