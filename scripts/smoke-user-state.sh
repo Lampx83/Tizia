@@ -79,8 +79,8 @@ http_check "PUT 200 keys → 413" 413 "$CODE"
 
 say "Reject value > 32KB (chống truncate JSON ngầm)"
 HUGE_VAL=$(node -e "console.log(JSON.stringify({'tizia.tutor.history.v1': 'x'.repeat(33000)}))")
-CODE=$(curl -s -b $COOKIE -X PUT $BASE/api/user-state \
-  -H 'Content-Type: application/json' -d "$HUGE_VAL" \
+CODE=$(printf '%s' "$HUGE_VAL" | curl -s -b $COOKIE -X PUT $BASE/api/user-state \
+  -H 'Content-Type: application/json' --data-binary @- \
   -o /tmp/_huge.json -w "%{http_code}")
 http_check "PUT 33KB value → 413" 413 "$CODE"
 grep -q '"error":"value_too_large"' /tmp/_huge.json || { echo "  ❌ thiếu error code"; cat /tmp/_huge.json; exit 1; }
