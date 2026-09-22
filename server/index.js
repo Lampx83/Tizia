@@ -10,6 +10,7 @@ import { attachAi } from './ai.js';
 import { attachTts } from './tts.js';
 import { attachPharmacy } from './pharmacy.js';
 import { acknowledgeNewRequest, getDecisionsForRequest, getRecentDecisions } from './contexts/ai-agent/decisions.js';
+import { attachAiBoardInbox } from './contexts/ai-agent/inbox-api.js';
 import { attachAppProxies } from './app-proxy.js';
 import { attachScoreUpWebhook } from './contexts/integration/scoreup-webhook.js';
 import { attachCodelabWebhook } from './contexts/integration/codelab-webhook.js';
@@ -358,6 +359,9 @@ attachIntegration(r);
 attachSecurity(r);
 attachAdmin(r);
 attachAdminDb(r);
+// Hộp thư Ban điều hành AI (đọc-chỉ, auth bằng header x-ai-board-key). Chỉ được
+// mount khi env AI_BOARD_KEY đủ mạnh — không set thì không có route nào thêm.
+attachAiBoardInbox(r);
 attachCampusLayout(r, requireAdmin, requireSchoolAccess);
 // Portal Apps — Developer cài SPA theo chuẩn AI Portal (manifest + zip).
 attachPortalApps(r, { requireAuth, requireAdmin, basePath: BASE_PATH });

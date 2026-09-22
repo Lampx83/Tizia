@@ -445,6 +445,59 @@ export async function reopenRequestIfClosed(id) {
   return (await reopenRequestStmt.run({ id: Number(id), t: Date.now() })).changes > 0;
 }
 
+// --- Hộp thư Ban điều hành AI (đọc-chỉ, xuyên mọi trường) ---
+// Trả các yêu cầu ĐANG CHỜ XỬ LÝ ('pending'/'reviewing') của toàn hệ thống kèm
+// thread trao đổi. Yêu cầu đã đóng ('done'/'rejected') bị bỏ qua — Ban điều hành
+// chỉ cần việc còn tồn. 'awaiting_user' CŨNG bỏ qua: bóng đang ở sân HS, khi HS
+// nhắn lại reopenRequestIfClosed() tự đẩy về 'reviewing' nên yêu cầu quay lại
+// hộp thư đúng lúc cần.
+//
+// Đây là nguồn dữ liệu cho route đọc-chỉ /api/ai-board/inbox (xem
+// contexts/ai-agent/inbox-api.js). Hình dạng bản ghi trả về phải GIỮ NGUYÊN
+// (id/db_id/from/subject/body/thread…) vì scripts/fetch-inbox.mjs và phiên hàng
+// ngày đọc đúng các field đó.
+const boardInboxStmt = db.prepare(`
+  SELECT id, domain, type, title, detail, student, status, votes, admin_note,
+         created_at, updated_at, attachments
+  FROM requests
+  WHERE status IN ('pending', 'reviewing')
+  ORDER BY votes DESC, created_at DESC
+  LIMIT @limit
+`);
+
+export async function listBoardInbox(limit = 200) {
+  const cap = Math.min(Math.max(Number(limit) || 200, 1), 500);
+  const rows = await boardInboxStmt.all({ limit: cap });
+  // Lấy thread tuần tự thay vì Promise.all: hộp thư chỉ vài chục dòng và route
+  // này chạy vài lần mỗi ngày, không đáng đánh đổi rủi ro chiếm hết pool.
+  const out = [];
+  for (const r of rows) {
+    const msgs = await listRequestMessages(r.id);
+    out.push({
+      id: `req-${r.id}`,
+      db_id: r.id,
+      from: r.student,
+      domain: r.domain,
+      type: r.type,
+      subject: r.title,
+      body: r.detail || '',
+      status: r.status,
+      votes: r.votes,
+      admin_note: r.admin_note || null,
+      attachments: safeParseAtts(r.attachments),
+      thread: msgs.map(m => ({
+        role: m.role,
+        author: m.author_name || null,
+        body: m.body,
+        at: new Date(m.created_at).toISOString(),
+      })),
+      created_at: new Date(r.created_at).toISOString(),
+      updated_at: new Date(r.updated_at).toISOString(),
+    });
+  }
+  return out;
+}
+
 // --- Kho học liệu AI sinh thêm ---
 const insertAiContentStmt = db.prepare(`
   INSERT INTO ai_lesson_content (week_id, subject, topic, kind, stem, payload, student, created_at)
