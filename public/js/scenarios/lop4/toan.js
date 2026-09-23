@@ -332,6 +332,15 @@ export const P4_TOAN_WEEKS = [
     Q('Một mảnh đất hình chữ nhật dài 25 m, rộng 18 m. Diện tích?', ['86 m²', '450 m²', '425 m²', '43 m²'], 1, '25 × 18 = 450 m².', ['Sai — đó là chu vi (25 + 18) × 2.', 'Đúng — diện tích = 25 × 18 = 450 m².', 'Sai — em tính nhầm phép nhân.', 'Sai — đó là 25 + 18, không phải diện tích.']),
     Q('Số nào chia hết cho cả 3 và 9?', ['345', '432', '567', '234'], 1, 'Tổng chữ số 4+3+2=9 chia hết cho 9 (và đương nhiên chia hết cho 3).', ['Sai — 3+4+5=12 chia hết cho 3 nhưng không chia hết cho 9.', 'Đúng — 4+3+2=9 chia hết cho cả 9 và 3.', 'Sai — 5+6+7=18 chia hết cho 9 nhưng đáp án chuẩn của bài là 432.', 'Sai — 2+3+4=9 chia hết cho 9 nhưng đáp án chuẩn của bài là 432.']),
   ], { difficulty: 3, description: 'Bài kiểm tra cuối năm — tổng hợp toàn bộ kiến thức Toán Lớp 4.' }),
+
+  M(36, 'Kết thúc Lớp 4 — Hành trang vào Lớp 5', [
+    Q('3/4 + 5/6 = ?', ['8/10', '19/12', '15/24', '4/5'], 1, 'Quy đồng mẫu 12: 9/12 + 10/12 = 19/12.', ['Sai — không cộng tử với tử rồi mẫu với mẫu; phải quy đồng mẫu trước.', 'Đúng — quy đồng mẫu 12: 9/12 + 10/12 = 19/12.', 'Sai — 15/24 là kết quả của phép NHÂN 3/4 × 5/6.', 'Sai — hai phân số đều gần 1 nên tổng phải lớn hơn 1.']),
+    Q('Số nào chia hết cho CẢ 2 và 5?', ['135', '412', '250', '308'], 2, 'Số tận cùng bằng 0 thì chia hết cho cả 2 và 5.', ['Sai — 135 tận cùng là 5 nên chia hết cho 5 nhưng không chia hết cho 2.', 'Sai — 412 chia hết cho 2 nhưng không chia hết cho 5.', 'Đúng — 250 tận cùng là 0 nên chia hết cho cả 2 và 5.', 'Sai — 308 chia hết cho 2 nhưng không chia hết cho 5.']),
+    Q('Hình chữ nhật dài 12 cm, rộng 7 cm có diện tích bao nhiêu?', ['38 cm²', '84 cm²', '19 cm²', '84 cm'], 1, 'Diện tích = dài × rộng = 12 × 7 = 84 cm².', ['Sai — 38 cm là chu vi (12 + 7) × 2, không phải diện tích.', 'Đúng — 12 × 7 = 84 cm².', 'Sai — 19 cm chỉ là tổng hai cạnh, chưa nhân.', 'Sai — số đúng nhưng đơn vị diện tích phải là cm², không phải cm.']),
+    Q('Trung bình cộng của 12, 18 và 24 là?', ['54', '16', '20', '18'], 3, '(12 + 18 + 24) : 3 = 54 : 3 = 18.', ['Sai — 54 là tổng ba số, còn phải chia cho 3.', 'Sai — chia chưa đúng; 54 : 3 = 18.', 'Sai — trung bình cộng là 18, không phải 20.', 'Đúng — (12 + 18 + 24) : 3 = 18.']),
+    Q('Hai số có tổng 45, số lớn gấp 4 lần số bé. Số bé là?', ['9', '15', '36', '5'], 0, 'Tổng số phần là 1 + 4 = 5 phần nên số bé = 45 : 5 = 9.', ['Đúng — 45 : (1 + 4) = 9 nên số bé là 9.', 'Sai — 15 ứng với tỉ số gấp 2 lần, không phải gấp 4 lần.', 'Sai — 36 là số LỚN (4 phần), không phải số bé.', 'Sai — chia nhầm cho 9; tổng số phần là 5 nên số bé = 9.']),
+    Q('1 thế kỷ bằng bao nhiêu năm?', ['10 năm', '50 năm', '100 năm', '1000 năm'], 2, '1 thế kỷ = 100 năm.', ['Sai — 10 năm là 1 thập kỷ.', 'Sai — 50 năm chỉ là nửa thế kỷ.', 'Đúng — 1 thế kỷ = 100 năm.', 'Sai — 1000 năm là 10 thế kỷ.']),
+  ], { difficulty: 3, description: 'Tổng kết Toán Lớp 4 theo năm mảng lớn và chuẩn bị hành trang vào Lớp 5.' }),
 ];
 
 export const P4_TOAN_SCENARIOS = indexBy(P4_TOAN_WEEKS);
