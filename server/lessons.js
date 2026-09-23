@@ -222,3 +222,15 @@ export function attachLessons(r) {
 function safeParse(s) {
   try { return JSON.parse(s); } catch { return []; }
 }
+
+export const plugin = {
+  name: 'lessons',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['lesson content routes'],
+    description: 'Route nội dung bài học.',
+  },
+  mount(router) {
+    attachLessons(router);
+  },
+};

@@ -174,3 +174,15 @@ export function attachIntegration(r) {
   startDispatcher();
   console.log('[integration] routes mounted: /api/integrations/{endpoints,outbox,emit}');
 }
+
+export const plugin = {
+  name: 'integration',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['/api/integrations/{endpoints,outbox,emit}'],
+    description: 'Outbox event chung + trạng thái tích hợp sibling apps.',
+  },
+  mount(router) {
+    attachIntegration(router);
+  },
+};

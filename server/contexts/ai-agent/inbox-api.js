@@ -89,3 +89,15 @@ export function attachAiBoardInbox(r, { env = process.env } = {}) {
   console.log('[ai-board] ✅ /api/ai-board/inbox đã bật (auth: header x-ai-board-key)');
   return true;
 }
+
+export const plugin = {
+  name: 'ai-board-inbox',
+  catalog: {
+    kind: 'context', tier: 'dev-owned',
+    provides: ['GET /api/ai-board/inbox (key auth AI_BOARD_KEY)'],
+    description: 'Control-plane route harness dùng để đọc hộp thư (fetch-inbox.mjs). Không phải năng lực AI-generated skill.',
+  },
+  mount(router) {
+    attachAiBoardInbox(router);
+  },
+};

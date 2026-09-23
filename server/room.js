@@ -4,6 +4,9 @@
 
 import { WebSocketServer } from 'ws';
 import { attachOrchestration } from './orchestration.js';
+import { log } from './observability.js';
+import { guardedSend, onMessageJSON, logSocketLifecycle } from './ws-safety.js';
+import { sweepStaleConnections, HEARTBEAT_INTERVAL_MS } from './ws-heartbeat.js';
 
 const ROOM_MEDICINES = [
   { id: 'amox', name: 'AMOXICILLIN', category: 'Kháng sinh', color: '#43a047', dose: '500mg', form: 'Viên nang' },
@@ -52,28 +55,23 @@ const raceRooms = new Map();   // roomId → { players: [{ws,id,name}, ...], sta
 let raceRoomId = 1;
 let racePlayerId = 1;
 
-function raceSend(p, msg) {
-  if (p.ws.readyState === 1) p.ws.send(JSON.stringify(msg));
-}
+function raceSend(p, msg) { guardedSend(p.ws, msg); }
 function raceBroadcast(room, msg, exceptId = null) {
   const data = JSON.stringify(msg);
-  for (const p of room.players) {
-    if (p.id === exceptId) continue;
-    if (p.ws.readyState === 1) p.ws.send(data);
-  }
+  for (const p of room.players) if (p.id !== exceptId) guardedSend(p.ws, data);
 }
 
 function attachRaceWS(httpServer, basePath = '') {
   // noServer: true → caller routes upgrade events manually (so multiple WS
   // servers on same httpServer don't fight each other on shouldHandle().
   const wss = new WebSocketServer({ noServer: true });
+  wss.on('error', (err) => log.error('[ws:race] server error', { err }));
 
   wss.on('connection', (ws) => {
     const player = { id: racePlayerId++, ws, name: 'Khách', score: 0, correct: 0, total: 0, finished: false, room: null };
+    logSocketLifecycle(ws, 'race', { playerId: player.id });
 
-    ws.on('message', (raw) => {
-      let msg; try { msg = JSON.parse(raw); } catch { return; }
-
+    onMessageJSON(ws, (msg) => {
       if (msg.type === 'join') {
         player.name = String(msg.name || '').trim().slice(0, 32) || ('Khách ' + player.id);
         // Try to pair with someone in queue
@@ -142,6 +140,7 @@ function attachRaceWS(httpServer, basePath = '') {
 // ============================================================
 function attachSackyMetaWS(httpServer, basePath = '') {
   const wss = new WebSocketServer({ noServer: true });
+  wss.on('error', (err) => log.error('[ws:sacky] server error', { err }));
   const players = new Map(); // id → { id, ws, name, color, avatar }
   let nextSId = 1;
 
@@ -152,13 +151,10 @@ function attachSackyMetaWS(httpServer, basePath = '') {
       })),
     };
   }
-  function send(p, msg) { if (p.ws.readyState === 1) p.ws.send(JSON.stringify(msg)); }
+  function send(p, msg) { guardedSend(p.ws, msg); }
   function broadcast(msg, exceptId = null) {
     const data = JSON.stringify(msg);
-    for (const p of players.values()) {
-      if (p.id === exceptId) continue;
-      if (p.ws.readyState === 1) p.ws.send(data);
-    }
+    for (const p of players.values()) if (p.id !== exceptId) guardedSend(p.ws, data);
   }
 
   wss.on('connection', (ws) => {
@@ -171,9 +167,9 @@ function attachSackyMetaWS(httpServer, basePath = '') {
       step: 1, score: 0,
     };
     players.set(id, player);
+    logSocketLifecycle(ws, 'sacky', { playerId: id });
 
-    ws.on('message', (raw) => {
-      let msg; try { msg = JSON.parse(raw); } catch { return; }
+    onMessageJSON(ws, (msg) => {
       switch (msg.type) {
         case 'join': {
           if (typeof msg.name === 'string' && msg.name.trim()) {
@@ -216,13 +212,8 @@ function attachSackyMetaWS(httpServer, basePath = '') {
   });
 
   setInterval(() => {
-    for (const p of players.values()) {
-      if (p.ws.readyState !== 1) {
-        players.delete(p.id);
-        broadcast({ type: 'leave', id: p.id });
-      }
-    }
-  }, 15000);
+    sweepStaleConnections(players, (id) => broadcast({ type: 'leave', id }));
+  }, HEARTBEAT_INTERVAL_MS).unref();
 
   return wss;
 }
@@ -232,6 +223,7 @@ function attachSackyMetaWS(httpServer, basePath = '') {
 // ============================================================
 function attachLabWS(httpServer, basePath = '') {
   const wss = new WebSocketServer({ noServer: true });
+  wss.on('error', (err) => log.error('[ws:lab] server error', { err }));
   const players = new Map(); // id → { id, ws, name, color, cursor, recipeId, step, weight, beakerVol }
   let nextLId = 1;
 
@@ -244,13 +236,10 @@ function attachLabWS(httpServer, basePath = '') {
       })),
     };
   }
-  function send(p, msg) { if (p.ws.readyState === 1) p.ws.send(JSON.stringify(msg)); }
+  function send(p, msg) { guardedSend(p.ws, msg); }
   function broadcast(msg, exceptId = null) {
     const data = JSON.stringify(msg);
-    for (const p of players.values()) {
-      if (p.id === exceptId) continue;
-      if (p.ws.readyState === 1) p.ws.send(data);
-    }
+    for (const p of players.values()) if (p.id !== exceptId) guardedSend(p.ws, data);
   }
 
   wss.on('connection', (ws) => {
@@ -264,9 +253,9 @@ function attachLabWS(httpServer, basePath = '') {
       step: 1, weight: 0, beakerVol: 0,
     };
     players.set(id, player);
+    logSocketLifecycle(ws, 'lab', { playerId: id });
 
-    ws.on('message', (raw) => {
-      let msg; try { msg = JSON.parse(raw); } catch { return; }
+    onMessageJSON(ws, (msg) => {
       switch (msg.type) {
         case 'join': {
           if (typeof msg.name === 'string' && msg.name.trim()) player.name = msg.name.trim().slice(0, 32);
@@ -310,23 +299,22 @@ function attachLabWS(httpServer, basePath = '') {
   });
 
   setInterval(() => {
-    for (const p of players.values()) {
-      if (p.ws.readyState !== 1) {
-        players.delete(p.id);
-        broadcast({ type: 'leave', id: p.id });
-      }
-    }
-  }, 15000);
+    sweepStaleConnections(players, (id) => broadcast({ type: 'leave', id }));
+  }, HEARTBEAT_INTERVAL_MS).unref();
 
   return wss;
 }
 
+// wsPriority 'append': registry.mountWsPlugins phải gọi httpServer.on('upgrade', …)
+// (KHÔNG prependListener) cho onUpgrade trả về ở đây — đây là handler catch-all,
+// chạy SAU presence/live-quiz (chúng dùng prependListener) như hành vi hiện tại.
 export function attachRoom(httpServer, basePath = '') {
   const raceWss = attachRaceWS(httpServer, basePath);
   const sackyWss = attachSackyMetaWS(httpServer, basePath);
   const labWss = attachLabWS(httpServer, basePath);
   const orchestrate = attachOrchestration(httpServer, basePath);
   const wss = new WebSocketServer({ noServer: true });
+  wss.on('error', (err) => log.error('[ws:room] server error', { err }));
   const players = new Map();   // id → { id, ws, name, color, cursor }
   let state = freshState();
 
@@ -341,16 +329,11 @@ export function attachRoom(httpServer, basePath = '') {
     };
   }
 
-  function send(p, msg) {
-    if (p.ws.readyState === 1) p.ws.send(JSON.stringify(msg));
-  }
+  function send(p, msg) { guardedSend(p.ws, msg); }
 
   function broadcast(msg, exceptId = null) {
     const data = JSON.stringify(msg);
-    for (const p of players.values()) {
-      if (p.id === exceptId) continue;
-      if (p.ws.readyState === 1) p.ws.send(data);
-    }
+    for (const p of players.values()) if (p.id !== exceptId) guardedSend(p.ws, data);
   }
 
   wss.on('connection', (ws) => {
@@ -362,11 +345,9 @@ export function attachRoom(httpServer, basePath = '') {
       cursor: { x: 0, y: 1, z: 1, pinching: false },
     };
     players.set(id, player);
+    logSocketLifecycle(ws, 'room', { playerId: id });
 
-    ws.on('message', (raw) => {
-      let msg;
-      try { msg = JSON.parse(raw); } catch { return; }
-
+    onMessageJSON(ws, (msg) => {
       switch (msg.type) {
         case 'join': {
           if (typeof msg.name === 'string' && msg.name.trim()) {
@@ -447,21 +428,19 @@ export function attachRoom(httpServer, basePath = '') {
 
   // Heartbeat to detect zombie connections
   setInterval(() => {
-    for (const p of players.values()) {
-      if (p.ws.readyState !== 1) {
-        players.delete(p.id);
-        broadcast({ type: 'leave', id: p.id });
-      }
-    }
-  }, 15000);
+    sweepStaleConnections(players, (id) => broadcast({ type: 'leave', id }));
+  }, HEARTBEAT_INTERVAL_MS).unref();
 
   // Single upgrade listener routes to the right WS server by path.
   const ROOM_PATH = basePath + '/ws';
   const RACE_PATH = basePath + '/ws-race';
   const SACKY_PATH = basePath + '/ws-sacky';
   const LAB_PATH = basePath + '/ws-lab';
-  httpServer.on('upgrade', (req, socket, head) => {
+  const onUpgrade = (req, socket, head) => {
     const pathname = (req.url || '').split('?')[0];
+    // Malformed upgrade (bad handshake headers, client abort mid-handshake…) emits
+    // 'error' on the raw socket — không log ở đây thì mất luôn ngữ cảnh path nào.
+    socket.on('error', (err) => log.warn('[ws:upgrade] socket error', { err, path: pathname }));
     if (pathname === ROOM_PATH) {
       wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
     } else if (pathname === RACE_PATH) {
@@ -481,7 +460,8 @@ export function attachRoom(httpServer, basePath = '') {
     } else {
       socket.destroy();
     }
-  });
+  };
 
   console.log(`[room] WebSocket server attached at ${basePath || ''}/ws`);
+  return { onUpgrade };
 }

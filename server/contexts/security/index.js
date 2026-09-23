@@ -129,6 +129,20 @@ export function attachSecurity(r) {
   console.log(`[security] headers + rate-limit ON; CSRF enforce=${CSRF_ENFORCE ? 'ON' : 'log-only'}; CSP=${process.env.CSP_ENFORCE === '1' ? 'ON' : 'off'}`);
 }
 
+export const plugin = {
+  name: 'security',
+  origin: 'dev-owned',
+  sourceModule: 'server/contexts/security/index.js',
+  catalog: {
+    kind: 'context', tier: 'dev-owned',
+    provides: ['csrf', 'rateLimit', 'apiLimiter', 'sensitiveAuthLimiter', 'securityHeaders'],
+    description: 'CSRF/rate-limit/security headers — thuộc `core`, không mount lại hay bypass.',
+  },
+  mount(router) {
+    attachSecurity(router);
+  },
+};
+
 // Tiện ích export cho index.js gắn app-level.
 // apiLimiter: CHỈ áp cho /api/* (mount app.use('/api', apiLimiter)), KHÔNG đụng
 // static asset (1 lần tải trang giàu asset không được tính). Key theo user khi đã

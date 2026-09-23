@@ -125,6 +125,36 @@ Bộ data: 81 thuốc, 30 dược liệu, 10 ca lâm sàng, 85+ scenarios theo D
 
 Mở `http://<host>:8041`.
 
+### ⏪ Rollback — refactor mount-order qua registry.js (ticket 04/06)
+
+Ticket 04+06 đổi cách `server/index.js` mount context: từ ~30 lệnh `attachX()`
+rải rác sang 3 lệnh `registry.mountAppPlugins/mountRouterPlugins/mountWsPlugins`
+gọi 1 lần với mảng plugin — đụng tới **thứ tự mount của toàn bộ app** (route
+HTTP lẫn 3 endpoint WebSocket `/ws`, `/ws-presence`, `/ws-live`). Runbook này
+CHỈ cho refactor cụ thể đó — không phải cơ chế rollback tổng quát.
+
+**Dấu hiệu cần rollback:** route trả 404/lỗi trước đó không có, WS không connect
+được, hoặc 2 route trùng path đổi handler thắng (biết trước 1 trường hợp:
+`POST /api/srs/review` — `contexts/srs/index.js` phải thắng, xem comment tại
+lệnh `mountRouterPlugins` trong `server/index.js`).
+
+**Cách revert (Portainer deploy `refs/heads/main` qua "Stack from Git"):**
+```bash
+# 1. Tìm merge commit đưa refactor vào main
+git log --oneline main -- server/index.js server/contexts/registry.js | head -20
+
+# 2. Revert (giữ lịch sử, không rewrite) — dùng -m 1 nếu là merge commit
+git revert -m 1 <merge-commit-sha>
+git push origin main
+```
+Portainer poll `main` mỗi 5–15 phút (nếu bật Automatic updates) → tự redeploy
+image build từ commit vừa revert. Cần gấp: Portainer → Stacks → `tizia` →
+**Pull and redeploy** để redeploy ngay, không chờ poll.
+
+Revert **không cần** thao tác DB — `db.js` không đổi migration nào ở ticket
+04/06 (chỉ đổi cách mount route/WS, không đổi schema), nên container cũ chạy
+lại với volume hiện tại là an toàn.
+
 ### Lưu ý production
 - **HTTPS BẮT BUỘC nếu cần webcam**: MediaPipe `getUserMedia` **chỉ chạy trên HTTPS hoặc localhost**.
   3 cách bật HTTPS:
@@ -137,6 +167,17 @@ Mở `http://<host>:8041`.
     tar czf /backup/tizia-backup.tar.gz /data
   ```
 - **Đổi port host**: sửa `8041:8041` → `<host_port>:8041` trong compose, KHÔNG đổi `PORT` env.
+- **Chỉ mục đồ thị codebase cho AI board (codegraph)**: `npm run codegraph:update` chạy
+  `graphify update .` (AST thuần, CPU-only, 0 LLM token — cần cài `graphify` CLI trên host,
+  không cài trong container) để cập nhật `graphify-out/` cho harness AI board tra cứu trước
+  khi đọc file thật. Đặt tên script riêng `codegraph:update` (không phải `graphify:update`)
+  để tách biệt rõ với việc dùng CLI `graphify` cá nhân qua Claude Code (`/graphify`, cấu
+  hình global của người viết code) — cùng 1 binary `graphify`, nhưng 2 người gọi khác nhau:
+  harness AI board tự động gọi `codegraph:update` sau mỗi merge; Claude Code interactive
+  vẫn gọi thẳng `graphify` như bình thường, không qua script này. Không có CI/cron sẵn
+  trong repo — lên lịch bằng cron/Task Scheduler của host sau mỗi merge vào `main`, hoặc
+  chạy nightly. Đây chỉ để THU HẸP phạm vi tìm kiếm — luôn đọc lại file thật trước khi kết
+  luận, không coi kết quả graph là câu trả lời cuối.
 
 ---
 
@@ -196,6 +237,37 @@ AI_BOARD_KEY=<key> node scripts/fetch-inbox.mjs
 Route là **đọc-chỉ** — không đổi được trạng thái yêu cầu qua key này. Phản hồi HS
 vẫn đi qua admin (`POST /api/admin/requests/:id/reply`, cần cookie + `role=admin`)
 hoặc `node scripts/admin-reply.js` chạy trên máy có DB.
+
+### 🌿 Quy ước tên branch — 3 tác giả, 3 namespace
+
+Repo này có 3 "tác giả" tạo branch, mỗi loại một namespace — nhìn tên branch là
+biết ngay ai/cái gì tạo ra nó, không cần mở PR để đoán:
+
+| Namespace | Ai/cái gì tạo | Ví dụ |
+|---|---|---|
+| `feat/<slug>`, `fix/<slug>` | Dev dùng Claude Code (phiên tương tác, người yêu cầu Claude build) | `feat/live-quiz-timer` |
+| `ai-board/<yyyy-mm-dd>-<skill-id>` | Harness "Ban điều hành AI" tự động (autonomous, không người giám sát trực tiếp) | `ai-board/2026-09-17-gate3-implement` |
+| `claude/…` | Phiên Claude Code **của Lampx** cho phần việc riêng của họ | *(không dùng khi làm việc trong repo thay họ)* |
+
+**Vì sao `ai-board/<yyyy-mm-dd>-<skill-id>` (nối bằng `-`, không phải thêm `/`
+sau ngày):** tại thời điểm viết, remote đã có **60+ branch** dạng
+`ai-board/yyyy-mm-dd` (từ 2026-06-25). Git ref là cây thư mục thật — một tên
+vừa làm branch lá (`ai-board/2026-09-17`) vừa làm thư mục cha
+(`ai-board/2026-09-17/gate3-implement`) là xung đột, tạo branch thứ hai sẽ lỗi
+`cannot lock ref`. Nối `-skill-id` sau ngày né được xung đột đó, và đã có tiền
+lệ `ai-board/2026-08-19-fix` dùng đúng format này.
+
+**Vì sao tách namespace:** agent (dù người hay AI board) **không bao giờ push
+thẳng lên `main`** — luôn qua branch + PR. `ai-board/` là việc harness tự chạy
+ngoài giờ, không ai review trước khi mở PR; `feat/`/`fix/` là việc dev chủ động
+yêu cầu ngay trong phiên. Trộn hai loại vào cùng namespace thì mất luôn tín
+hiệu "cái PR này có người ngồi cạnh khi nó chạy hay không" — quan trọng khi
+review vì mức độ tin cậy khác nhau.
+
+**PR summary** (mọi PR, người hay AI board) nên nêu: thay đổi gì, ảnh hưởng
+mấy domain/context, gate nào đã qua (áp dụng cho AI board — brainstorm/scope-
+check/implement/…), và bằng chứng đã chạy thật (log test, URL curl, screenshot)
+— không chỉ mô tả ý định.
 
 ---
 

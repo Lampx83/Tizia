@@ -20,6 +20,7 @@ import {
 import { recordPaymentSettled } from './ledger.js';
 import { reconcile, refundPayment } from './reconcile.js';
 import { VALID_USER_PLANS, priceFor, expiresAtFor, USER_PLANS } from '../billing/user-plans.js';
+import { BASE_PATH } from '../../base-path.js';
 
 // ── Data access ──
 const insertInvoiceStmt = db.prepare(`
@@ -210,3 +211,17 @@ export function attachPayment(r, { basePath = '' } = {}) {
 
   console.log('[payment] routes mounted: /api/payment/* (vnpay + refund + reconcile)');
 }
+
+export const plugin = {
+  name: 'payment',
+  origin: 'dev-owned',
+  sourceModule: 'server/contexts/payment/index.js',
+  catalog: {
+    kind: 'context', tier: 'dev-owned',
+    provides: ['/api/payment/* (vnpay + refund + reconcile)'],
+    description: 'Cổng thanh toán VNPay thật. Chỉ nạp khi PAYMENT_ENABLED=1, tuyệt đối không mount lại/gọi trực tiếp.',
+  },
+  mount(router) {
+    attachPayment(router, { basePath: BASE_PATH });
+  },
+};

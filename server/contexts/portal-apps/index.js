@@ -29,6 +29,8 @@ import {
   getSystemOwnerId,
 } from '../../db.js';
 import { BUILTIN_APPS, CATALOG_VERSION } from './builtin-catalog.js';
+import { requireAuth } from '../identity/auth.js';
+import { requireAdmin } from '../admin/index.js';
 
 // Seed builtin catalog vào DB (upsert theo alias). Chỉ chạy 1 lần / catalog version.
 // Lưu marker version trong file để tránh re-seed mỗi khi server restart.
@@ -322,3 +324,17 @@ export function attachPortalApps(r, { requireAuth, requireAdmin }) {
     res.json({ ok: true, isPublic });
   });
 }
+
+export const plugin = {
+  name: 'portal-apps',
+  origin: 'dev-owned',
+  sourceModule: 'server/contexts/portal-apps/index.js',
+  catalog: {
+    kind: 'context', tier: 'dev-owned',
+    provides: ['builtin app catalog (ScoreUp/Codelab/Smartdoc/FeedBackMe visibility)'],
+    description: 'Danh mục + bật/tắt các app nhúng dưới sub-path (xem app-proxy.js). Không sửa trực tiếp.',
+  },
+  mount(router) {
+    attachPortalApps(router, { requireAuth, requireAdmin });
+  },
+};

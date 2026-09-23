@@ -179,6 +179,10 @@ const PUBLIC_PATH_PREFIXES = [
   '/api/ai-board/',
   // Bundle JS/scenarios không phải bí mật — guest cần để render trang chủ + trường Mầm non.
   '/js/',
+  // Bundle i18n (public/i18n/*.json) — i18n.js fetch() ngay từ đầu trang, kể cả
+  // guest/login.html. Thiếu whitelist này thì fetch bị auth gate redirect sang
+  // /login.html (trả HTML thay vì JSON) — cùng dạng bug với /api/requests (#73).
+  '/i18n/',
   // Bản đồ khuôn viên (iframe nhúng vào school.html) — không có bí mật, là HTML/JS thuần.
   '/campus-proto/',
   // Layout override của bản đồ — guest cũng cần fetch để render đúng map đã chỉnh.
@@ -203,6 +207,11 @@ const PUBLIC_PATH_PREFIXES = [
   '/api/pharmacy/',
   '/manifest.webmanifest', '/sw.js', '/favicon',
   '/vendor/', '/models/',
+  // (Reverted, xem ticket 01 trong .scratch/ai-board-plugin-registry/issues/ —
+  // đã từng thêm '/api/requests' vào đây để vá bug #73, nhưng '/api/ai-board/'
+  // ở trên (route riêng, key auth) là đường đọc chính thức Lampx đã xây và
+  // đang chạy thật — bỏ lại route này về yêu cầu đăng nhập như cũ, tránh giữ
+  // 2 đường đọc song song, 1 trong đó không có auth.)
   // Đính kèm yêu cầu (ảnh chụp màn hình / file HS gửi cho "Ban điều hành AI").
   // GET công khai vì inbox /api/requests cũng công khai; POST upload đã có
   // requireAuth + requireEnrolled gate riêng ở route /api/requests/attachments.
@@ -647,3 +656,15 @@ export function makeProfileGate({ basePath = '' } = {}) {
     return res.redirect(`${basePath || ''}/complete-profile.html`);
   };
 }
+
+export const plugin = {
+  name: 'auth',
+  catalog: {
+    kind: 'context', tier: 'dev-owned',
+    provides: ['session auth', 'requireAuth/requireEnrolled', 'attachUser/makeAuthGate/makeProfileGate'],
+    description: 'Xác thực phiên đăng nhập — nền tảng bảo mật, không phải năng lực AI board được cấp.',
+  },
+  mount(router) {
+    attachAuth(router);
+  },
+};

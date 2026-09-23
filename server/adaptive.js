@@ -240,3 +240,15 @@ export function attachAdaptive(r) {
     });
   });
 }
+
+export const plugin = {
+  name: 'adaptive',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['adaptive difficulty engine'],
+    description: 'Engine độ khó thích ứng (song song với learning/IRT).',
+  },
+  mount(router) {
+    attachAdaptive(router);
+  },
+};

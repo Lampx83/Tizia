@@ -115,3 +115,15 @@ export function attachContent(router) {
   const total = listCollsStmt.all().reduce((s, r) => s + r.c, 0);
   console.log(`[content] routes mounted: /api/content/* (${total} item trong DB)`);
 }
+
+export const plugin = {
+  name: 'content',
+  catalog: {
+    kind: 'context', tier: 'surface',
+    provides: ['content.getCollection', 'content.collectionCount', '/api/content/*'],
+    description: 'Content store tổng quát (collection, item_key) → body JSON. getCollection/collectionCount đã có trong surface.',
+  },
+  mount(router) {
+    attachContent(router);
+  },
+};

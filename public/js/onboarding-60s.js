@@ -401,6 +401,20 @@ function cleanLingeringModal() {
 }
 
 async function maybeShow() {
+  // Mutex đồng bộ — auth-header.js VÀ trang đều import file này (2 module
+  // instance khác URL), cả 2 gọi maybeShow() gần như cùng lúc ở DOMContentLoaded.
+  // Không dùng flag "đã chạy" vĩnh viễn: pageshow (bfcache) bên dưới cố ý gọi
+  // lại maybeShow() sau khi hoàn tất, nên chỉ khoá lúc đang chạy, mở lại ở finally.
+  if (window.__tziaOnboardingRunning) return;
+  window.__tziaOnboardingRunning = true;
+  try {
+    return await maybeShowInner();
+  } finally {
+    window.__tziaOnboardingRunning = false;
+  }
+}
+
+async function maybeShowInner() {
   // 1) Đã hoàn thành/skip ở thiết bị này → bỏ qua ngay.
   if (localStorage.getItem(STORAGE_KEY)) { cleanLingeringModal(); return; }
   // 2) Phải đăng nhập (HUD đã ẩn cho guest)

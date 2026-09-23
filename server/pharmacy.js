@@ -145,3 +145,15 @@ export function attachPharmacy(r) {
     res.json({ session: s });
   });
 }
+
+export const plugin = {
+  name: 'pharmacy',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['pharmacy domain routes'],
+    description: 'Route riêng trường Dược (ngoài phần đã tách sang contexts/).',
+  },
+  mount(router) {
+    attachPharmacy(router);
+  },
+};

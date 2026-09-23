@@ -152,3 +152,15 @@ export function attachSrs(router) {
     res.json({ ok: true, ...stats });
   });
 }
+
+export const plugin = {
+  name: 'srs',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['/api/srs/{decks,queue,review}'],
+    description: 'Spaced repetition — deck, hàng đợi ôn tập, review theo thuật toán SRS.',
+  },
+  mount(router) {
+    attachSrs(router);
+  },
+};

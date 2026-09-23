@@ -283,3 +283,15 @@ export function attachAnalytics(r) {
 
   console.log('[analytics] routes mounted: /api/events, /api/analytics/{funnel,overview}');
 }
+
+export const plugin = {
+  name: 'analytics',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['/api/events', '/api/analytics/{funnel,overview}'],
+    description: 'Event tracking + GA4 Measurement Protocol, funnel/overview cho admin.',
+  },
+  mount(router) {
+    attachAnalytics(router);
+  },
+};

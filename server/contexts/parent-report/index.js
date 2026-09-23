@@ -141,3 +141,15 @@ export function attachParentReport(router) {
     res.json({ ok: true, report });
   });
 }
+
+export const plugin = {
+  name: 'parent-report',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['/api/parent/report/*'],
+    description: 'Báo cáo học tập tuần gửi phụ huynh.',
+  },
+  mount(router) {
+    attachParentReport(router);
+  },
+};

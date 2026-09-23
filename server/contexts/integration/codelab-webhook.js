@@ -160,3 +160,15 @@ export function attachCodelabWebhook(app) {
   );
   console.log('[codelab-webhook] mounted: POST /api/webhooks/codelab');
 }
+
+export const plugin = {
+  name: 'codelab-webhook',
+  catalog: {
+    kind: 'context', tier: 'dev-owned',
+    provides: ['webhook nhận sự kiện Codelab (HMAC verify)'],
+    description: 'Nhận webhook Codelab — raw body/HMAC, mount app-level trước express.json().',
+  },
+  mount(app) {
+    attachCodelabWebhook(app);
+  },
+};

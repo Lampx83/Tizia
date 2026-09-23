@@ -194,3 +194,15 @@ export function attachBilling(r) {
 
   console.log('[billing] routes mounted: /api/billing/{plans,me,subscribe} + /api/family/*');
 }
+
+export const plugin = {
+  name: 'billing',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['/api/billing/{plans,me,subscribe}', '/api/family/*'],
+    description: 'Gói thuê bao (user plans) + gói gia đình — không phải cổng thanh toán thật (xem payment).',
+  },
+  mount(router) {
+    attachBilling(router);
+  },
+};

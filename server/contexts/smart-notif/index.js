@@ -202,3 +202,16 @@ export function scheduleSmartNudges() {
     NUDGE_EVERY_MS).unref?.();
   console.log('[smart-notif] nudge scheduler bật (15 phút/lần)');
 }
+
+export const plugin = {
+  name: 'smart-notif',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['/api/notif/{subscribe,heartbeat,best-slots,test}'],
+    description: 'Push notification: đăng ký, khung giờ tốt nhất, nhắc nhở định kỳ.',
+  },
+  mount(router) {
+    attachSmartNotif(router);
+    scheduleSmartNudges();
+  },
+};

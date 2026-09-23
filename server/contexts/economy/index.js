@@ -377,3 +377,15 @@ export function attachEconomy(router) {
     res.json(result);
   });
 }
+
+export const plugin = {
+  name: 'economy',
+  catalog: {
+    kind: 'context', tier: 'core',
+    provides: ['/api/bp/{me,claim,buy-premium}', '/api/daily/claim'],
+    description: 'Battle-pass + thưởng hằng ngày (currency trong game, không phải tiền thật).',
+  },
+  mount(router) {
+    attachEconomy(router);
+  },
+};

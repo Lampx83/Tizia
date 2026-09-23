@@ -252,3 +252,15 @@ export function attachAdminDb(r) {
     fs.createReadStream(filePath).pipe(res);
   });
 }
+
+export const plugin = {
+  name: 'admin-db',
+  catalog: {
+    kind: 'context', tier: 'dev-owned',
+    provides: ['raw DB admin tools (role=admin)'],
+    description: 'Công cụ đọc/sửa DB thô cho admin — chạm core.db trực tiếp.',
+  },
+  mount(router) {
+    attachAdminDb(router);
+  },
+};
