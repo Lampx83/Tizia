@@ -25,6 +25,8 @@ export class WorkerContractError extends Error {
   }
 }
 
+export class RequestValidationError extends Error {}
+
 export function applyAiBoardMigrations(db, migrationsDir = MIGRATIONS_DIR) {
   db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
     scope TEXT NOT NULL,
@@ -130,13 +132,13 @@ export function createAiBoardStore(db, hooks = {}) {
   });
 
   function createRequestWithRoot(input) {
-    if (!Number.isInteger(Number(input.ownerUserId)) || Number(input.ownerUserId) <= 0) throw new TypeError('ownerUserId is required');
+    if (!Number.isInteger(Number(input.ownerUserId)) || Number(input.ownerUserId) <= 0) throw new RequestValidationError('ownerUserId is required');
     const domain = String(input.ownerDomain || '').trim();
-    if (!domain) throw new TypeError('ownerDomain is required');
+    if (!domain) throw new RequestValidationError('ownerDomain is required');
     const title = String(input.title || '').trim();
-    if (title.length < 4) throw new TypeError('title is too short');
+    if (title.length < 4) throw new RequestValidationError('title is too short');
     const idempotencyKey = String(input.idempotencyKey || '').trim();
-    if (!/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) throw new TypeError('invalid idempotency key');
+    if (!/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) throw new RequestValidationError('invalid idempotency key');
     return createRequestTransaction({
       ...input,
       ownerUserId: Number(input.ownerUserId),

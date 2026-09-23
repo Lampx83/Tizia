@@ -1,9 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import Database from 'better-sqlite3';
 
 import { applyAiBoardMigrations, createAiBoardStore, PlanGuardrailError } from '../server/ai-board/store.js';
-import { CAPABILITY_POLICY, CAPABILITY_POLICY_HASH } from '../server/ai-board/policy.js';
+import {
+  CAPABILITY_POLICY, CAPABILITY_POLICY_HASH, CAPABILITY_POLICY_VERSION, hashCapabilityPolicy, validatePlan,
+} from '../server/ai-board/policy.js';
 
 function fixture() {
   const db = new Database(':memory:');
@@ -93,6 +96,27 @@ test('validated surface plan creates ordered children once', () => {
   assert.equal(db.prepare('SELECT COUNT(*) n FROM ai_tickets WHERE parent_id=?').get(ticket.id).n, 1);
   assert.equal(db.prepare('SELECT COUNT(*) n FROM ai_gate_traces WHERE run_id=?').get(run.id).n, 3);
   db.close();
+});
+
+test('policy identity includes enforced fields only and versions the persisted plan hash', () => {
+  const metadataOnlyChanges = Object.fromEntries(Object.entries(CAPABILITY_POLICY).map(([name, entry]) => [name, {
+    ...entry,
+    imports: ['metadata-only'],
+    dependencies: ['metadata-only'],
+    owner: 'metadata-only',
+    rationale: 'metadata-only',
+  }]));
+  assert.equal(hashCapabilityPolicy(metadataOnlyChanges), CAPABILITY_POLICY_HASH);
+  assert.notEqual(hashCapabilityPolicy({
+    ...CAPABILITY_POLICY,
+    'public.ui': { ...CAPABILITY_POLICY['public.ui'], allow: ['server/'] },
+  }), CAPABILITY_POLICY_HASH);
+  assert.equal(CAPABILITY_POLICY_VERSION, 'd0-v2');
+  const checked = validatePlan(plan(), 'pharmacy');
+  assert.equal(checked.planHash, createHash('sha256')
+    .update(`d0-v2\n${CAPABILITY_POLICY_HASH}\n${checked.planJson}`).digest('hex'));
+  assert.notEqual(checked.planHash, createHash('sha256')
+    .update(`d0-v1\n${CAPABILITY_POLICY_HASH}\n${checked.planJson}`).digest('hex'));
 });
 
 test('malformed, cross-domain and unknown-capability plans fail closed with separate reasons', () => {

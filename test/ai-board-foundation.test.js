@@ -4,7 +4,7 @@ import http from 'node:http';
 import express from 'express';
 import Database from 'better-sqlite3';
 
-import { applyAiBoardMigrations, createAiBoardStore } from '../server/ai-board/store.js';
+import { applyAiBoardMigrations, createAiBoardStore, RequestValidationError } from '../server/ai-board/store.js';
 import { attachAiBoardRequestRoutes } from '../server/ai-board/routes.js';
 
 function fixtureDb() {
@@ -74,6 +74,7 @@ async function serve(store) {
     ? next()
     : res.status(403).json({ error: 'csrf_failed' });
   attachAiBoardRequestRoutes(app, { store, requireAuth, requireEnrolled, requireAdmin, requireStrictCsrf });
+  app.use((error, _req, res, _next) => res.status(500).json({ error: 'internal_error', message: error.message }));
   const server = http.createServer(app);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const { port } = server.address();
@@ -112,6 +113,36 @@ test('authenticated request uses enrolled identity and retry returns the same ro
   } finally {
     await close();
     db.close();
+  }
+});
+
+test('invalid request input keeps the public 400 response', async () => {
+  const { base, close } = await serve({ createRequestWithRoot() { throw new RequestValidationError('title is too short'); } });
+  try {
+    const response = await fetch(`${base}/api/requests`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-test-user': '1', 'idempotency-key': 'invalid-title-001' },
+      body: JSON.stringify({ title: 'abc' }),
+    });
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: 'invalid_request', message: 'title is too short' });
+  } finally {
+    await close();
+  }
+});
+
+test('unexpected request store failure reaches Express error handling', async () => {
+  const { base, close } = await serve({ createRequestWithRoot() { throw new Error('storage unavailable'); } });
+  try {
+    const response = await fetch(`${base}/api/requests`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-test-user': '1', 'idempotency-key': 'request-failure-001' },
+      body: JSON.stringify({ title: 'Valid request' }),
+    });
+    assert.equal(response.status, 500);
+    assert.deepEqual(await response.json(), { error: 'internal_error', message: 'storage unavailable' });
+  } finally {
+    await close();
   }
 });
 
