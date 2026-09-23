@@ -4,7 +4,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import threading
+import tempfile
 import time
 import urllib.request
 from dataclasses import dataclass
@@ -17,6 +19,93 @@ Transport = Callable[[str, str, dict, dict], dict]
 
 class LeaseLostError(RuntimeError):
     pass
+
+
+def _load_harness():
+    harness_dir = Path(__file__).resolve().parent / "harness"
+    if str(harness_dir) not in os.sys.path:
+        os.sys.path.insert(0, str(harness_dir))
+    from budget import Budget
+    from main import Deps, run_gate
+    return Budget, Deps, run_gate
+
+
+def _execution_plan(plan: dict) -> dict:
+    """Map the server-owned plan contract back to the existing Gate-3 seam."""
+    subtasks = []
+    for step in plan.get("steps") or []:
+        scope = step.get("allowed_scope") or []
+        tests = step.get("tests") or []
+        if not scope or not tests:
+            raise ValueError("plan step requires allowed_scope and tests")
+        subtasks.append({
+            "title": step["title"], "file": scope[0], "verify": tests[0],
+            "size": "small" if step.get("risk") == "low" else "large",
+        })
+    if not subtasks:
+        raise ValueError("plan requires at least one step")
+    return {"subtasks": subtasks, "capabilities": list(plan.get("capabilities") or [])}
+
+
+def _public_gate_result(result: dict) -> dict:
+    out = {
+        "gate": result["gate"], "blocked": bool(result.get("blocked")),
+        "reason": result.get("reason"),
+    }
+    if result["gate"] == 4:
+        out["issues"] = list(result.get("issues") or [])
+    elif result["gate"] == 5:
+        out["smoke_passed"] = bool((result.get("evidence") or {}).get("smoke_passed"))
+        out["http_observed"] = bool((result.get("evidence") or {}).get("http_observed"))
+    elif result["gate"] == 5.5:
+        out["risk_level"] = result.get("risk_level")
+        out["risk_signals"] = list(result.get("risk_signals") or [])
+    return out
+
+
+def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate) -> dict:
+    """Run one planned change through Gates 3→5.5 without exposing raw artifacts."""
+    scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
+    state = {
+        "plan": _execution_plan(plan), "scratch_repo": str(scratch),
+        "checkout_source": str(checkout_source), "skill_id": f"ticket-{ticket_id}",
+        "manifest": {"capabilities": {"core": [
+            cap for cap in plan.get("capabilities") or [] if str(cap).startswith("core.")
+        ]}},
+    }
+    gates = []
+    try:
+        for gate in (3, 4, 5, 5.5):
+            if not budget.tick():
+                result = {"gate": gate, "blocked": True, "reason": "budget exhausted"}
+            else:
+                try:
+                    result = run_gate(gate, {}, deps, budget, state)
+                except Exception as error:
+                    result = {"gate": gate, "blocked": True, "reason": str(error)[:1000]}
+            public = _public_gate_result(result)
+            if gate == 5 and not public["blocked"] and not public["http_observed"]:
+                public["blocked"] = True
+                public["reason"] = "change has no HTTP-observable result"
+            gates.append(public)
+            if public["blocked"]:
+                break
+    finally:
+        if state.get("_owned_full_checkout"):
+            shutil.rmtree(state["full_checkout"], ignore_errors=True)
+        shutil.rmtree(scratch, ignore_errors=True)
+    last = gates[-1]
+    smoke = next((gate for gate in gates if gate["gate"] == 5), None)
+    risk = next((gate for gate in gates if gate["gate"] == 5.5), None)
+    passed = (last["gate"] == 5.5 and not last["blocked"] and smoke
+              and smoke["smoke_passed"] and smoke["http_observed"])
+    needs_review = passed and risk["risk_level"] in ("high", "critical")
+    outcome = "needs_review" if needs_review else "ready_for_pr" if passed else "blocked"
+    reason = "risk triage requires human review" if needs_review else last["reason"]
+    return {
+        "outcome": outcome, "gate_reached": last["gate"], "reason": reason,
+        "budget_used": int(getattr(budget, "model_calls", 0)) * 40, "gates": gates,
+    }
 
 
 class WorkerClient:
@@ -47,9 +136,10 @@ class HttpWorker:
     version: str = "d0"
     mode: str = "off"
     planner: Callable[[dict], tuple[dict, int]] | None = None
+    change_runner: Callable[[dict, int, int, int], dict] | None = None
     heartbeat_interval: float = 30.0
 
-    def _plan_with_heartbeat(self, snapshot: dict, ticket_id: int, lease: dict) -> tuple[dict, int]:
+    def _with_heartbeat(self, operation: Callable, ticket_id: int, lease: dict):
         stopped = threading.Event()
         failures: list[Exception] = []
 
@@ -64,7 +154,7 @@ class HttpWorker:
         heartbeat_thread = threading.Thread(target=heartbeat_loop, name="ai-board-lease-heartbeat", daemon=True)
         heartbeat_thread.start()
         try:
-            result = self.planner(snapshot)
+            result = operation()
         finally:
             stopped.set()
             heartbeat_thread.join(timeout=max(self.client.timeout, 1.0))
@@ -105,7 +195,7 @@ class HttpWorker:
         })
         if self.planner:
             try:
-                plan, budget_used = self._plan_with_heartbeat(snapshot, ticket_id, lease)
+                plan, budget_used = self._with_heartbeat(lambda: self.planner(snapshot), ticket_id, lease)
                 planned = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/plan", {
                     **lease, "run_id": run["id"], "plan": plan, "budget_used": budget_used,
                     "idempotency_key": f"{prefix}:plan",
@@ -124,13 +214,28 @@ class HttpWorker:
                     "idempotency_key": f"{prefix}:release-blocked",
                 })
                 raise
+            verdict = None
+            if self.change_runner and planned["status"] == "planned":
+                candidate = self._with_heartbeat(
+                    lambda: self.change_runner(
+                        plan, ticket_id, budget_used,
+                        int(snapshot.get("ticket", {}).get("cumulative_budget") or 0),
+                    ), ticket_id, lease,
+                )
+                verdict = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/verdict", {
+                    **lease, "run_id": run["id"], "verdict": candidate,
+                    "idempotency_key": f"{prefix}:verdict",
+                })["verdict"]
             self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/release", {
                 **lease, "outcome": "planned", "idempotency_key": f"{prefix}:release",
             })
-            return {
+            result = {
                 "status": planned["status"], "ticket_id": ticket_id, "run_id": run["id"],
                 "tier": planned["tier"], "children": len(planned.get("children") or []),
             }
+            if verdict is not None:
+                result["pre_pr_verdict"] = verdict
+            return result
         self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/release", {
             **lease, "outcome": "shadow_ok", "idempotency_key": f"{prefix}:release",
         })
@@ -141,11 +246,7 @@ class HarnessPlanner:
     """Runs existing gates 1, 2 and 2.5, then emits the server-owned D0 schema."""
 
     def __init__(self):
-        harness_dir = Path(__file__).resolve().parent / "harness"
-        if str(harness_dir) not in os.sys.path:
-            os.sys.path.insert(0, str(harness_dir))
-        from budget import Budget
-        from main import Deps, run_gate
+        Budget, Deps, run_gate = _load_harness()
         self.Budget = Budget
         self.deps = Deps.real()
         self.run_gate = run_gate
@@ -209,11 +310,33 @@ class HarnessPlanner:
         return self._canonical(request, state["plan"]), budget_used
 
 
+class HarnessChangeRunner:
+    """Connect an accepted HTTP plan to the existing full-checkout gate pipeline."""
+
+    def __init__(self, checkout_source=None):
+        Budget, Deps, run_gate = _load_harness()
+        self.Budget = Budget
+        self.deps = Deps.real()
+        self.run_gate = run_gate
+        self.checkout_source = checkout_source or Path(__file__).resolve().parents[1]
+
+    def __call__(self, plan: dict, ticket_id: int, budget_used: int = 0,
+                 cumulative_budget: int = 0) -> dict:
+        budget = self.Budget.from_env()
+        remaining = 200 - cumulative_budget - budget_used
+        budget.max_model_calls = min(budget.max_model_calls, max(remaining // 40, 0))
+        return execute_pre_pr(
+            plan, ticket_id=ticket_id, checkout_source=self.checkout_source,
+            deps=self.deps, budget=budget, run_gate=self.run_gate,
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Tizia AI Board HTTP worker")
     parser.add_argument("--mode", choices=("off", "shadow"), default=os.getenv("AI_BOARD_WORKER_MODE", "off"))
     parser.add_argument("--once", action="store_true", help="poll once, then exit")
     parser.add_argument("--plan", action="store_true", help="run gates 1, 2 and 2.5, then submit child-ticket plan")
+    parser.add_argument("--execute", action="store_true", help="run the accepted plan through gates 3, 4, 5 and 5.5")
     parser.add_argument("--poll-seconds", type=float, default=5.0)
     args = parser.parse_args(argv)
     base_url = os.getenv("TIZIA_URL", "http://127.0.0.1:8041")
@@ -225,7 +348,8 @@ def main(argv: list[str] | None = None) -> int:
         worker_id=os.getenv("AI_BOARD_WORKER_ID", "local-worker-1"),
         version=os.getenv("AI_BOARD_WORKER_VERSION", "d0"),
         mode=args.mode,
-        planner=HarnessPlanner() if args.plan else None,
+        planner=HarnessPlanner() if args.plan or args.execute else None,
+        change_runner=HarnessChangeRunner() if args.execute else None,
     )
     while True:
         print(json.dumps(worker.run_once(), ensure_ascii=False))

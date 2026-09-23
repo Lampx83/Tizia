@@ -174,6 +174,17 @@ export function attachAiBoardWorkerRoutes(router, {
     res.json(result);
   }));
 
+  router.post('/api/ai-board/worker/tickets/:id/verdict', authenticate, handle((req, res) => {
+    const lease = leaseInput(req.body);
+    const verdict = store.submitPrePrVerdict(req.params.id, {
+      ...lease,
+      runId: req.body?.run_id,
+      verdict: req.body?.verdict,
+      idempotencyKey: req.body?.idempotency_key,
+    });
+    res.json({ verdict });
+  }));
+
   router.post('/api/ai-board/worker/tickets/:id/release', authenticate, handle((req, res) => {
     const lease = leaseInput(req.body);
     const ticket = store.releaseLease(req.params.id, {

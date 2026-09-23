@@ -8,6 +8,7 @@ diff thật, không tự chấm.
 from __future__ import annotations
 
 import json
+import posixpath
 import subprocess
 import tempfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -168,6 +169,18 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
             reason = f"subtask '{subtask.get('title')}': {e}"
             state["diffs"] = diffs
             return {"gate": 3, "blocked": True, "reason": reason, "diffs": diffs}
+        try:
+            _safe_join(repo, out["test_file"])
+        except ValueError as e:
+            reason = f"subtask '{subtask.get('title')}': {e}"
+            state["diffs"] = diffs
+            return {"gate": 3, "blocked": True, "reason": reason, "diffs": diffs}
+        test_file = posixpath.normpath(out["test_file"].replace("\\", "/"))
+        if not test_file.startswith(("test/", "tests/")):
+            reason = f"subtask '{subtask.get('title')}': test_file phải nằm trong test/ hoặc tests/"
+            state["diffs"] = diffs
+            return {"gate": 3, "blocked": True, "reason": reason, "diffs": diffs}
+        out["test_file"] = test_file
         try:
             diff_text = _write_and_diff(repo, subtask["file"], out["code"], out["test_file"], out["test"])
         except ValueError as e:

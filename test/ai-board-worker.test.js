@@ -9,6 +9,17 @@ import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from '../server
 
 const KEY = 'fixture-worker-key-32-characters-long';
 
+function surfacePlan() {
+  return {
+    domain: 'pharmacy', goal: 'Tạo trang demo học tập tĩnh.',
+    allowed_scope: ['public/pharmacy/demo.html'], acceptance: ['Trang có tiêu đề.'],
+    tests: ['node --test'], capabilities: ['public.ui'], risk: 'low', non_goals: ['Không sửa auth.'],
+    steps: [{ order: 1, title: 'Tạo trang demo', description: 'Thêm HTML tĩnh.',
+      allowed_scope: ['public/pharmacy/demo.html'], acceptance: ['Trang có tiêu đề.'],
+      tests: ['node --test'], capability: 'public.ui', risk: 'low', non_goals: ['Không sửa auth.'] }],
+  };
+}
+
 function fixture({ seedRequest = true } = {}) {
   const db = new Database(':memory:');
   db.pragma('foreign_keys = ON');
@@ -92,14 +103,7 @@ test('D0 HTTP flow creates a root request, validates a plan, and creates child t
       ...lease, trigger: 'plan', idempotency_key: 'd0-http-run-001',
     });
     const { run } = await runResponse.json();
-    const plan = {
-      domain: 'pharmacy', goal: 'Tạo trang demo học tập tĩnh.',
-      allowed_scope: ['public/pharmacy/demo.html'], acceptance: ['Trang có tiêu đề.'],
-      tests: ['node --test'], capabilities: ['public.ui'], risk: 'low', non_goals: ['Không sửa auth.'],
-      steps: [{ order: 1, title: 'Tạo trang demo', description: 'Thêm HTML tĩnh.',
-        allowed_scope: ['public/pharmacy/demo.html'], acceptance: ['Trang có tiêu đề.'],
-        tests: ['node --test'], capability: 'public.ui', risk: 'low', non_goals: ['Không sửa auth.'] }],
-    };
+    const plan = surfacePlan();
     const planBody = { ...lease, run_id: run.id, plan, budget_used: 1, idempotency_key: 'd0-http-plan-001' };
     const planned = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/plan`, planBody);
     const result = await planned.json();
@@ -134,6 +138,96 @@ test('D0 HTTP flow creates a root request, validates a plan, and creates child t
     assert.equal(rejected.status, 422);
     assert.equal((await rejected.json()).error, 'domain_mismatch');
     assert.equal(db.prepare('SELECT COUNT(*) n FROM ai_tickets WHERE parent_id=?').get(rejectedTicket.id).n, 0);
+  } finally {
+    await close();
+    db.close();
+  }
+});
+
+test('pre-PR verdict is persisted and observable through the request HTTP API', async () => {
+  const { db, store } = fixture();
+  const { base, close } = await serve(store);
+  try {
+    const { ticket } = await (await post(base, '/api/ai-board/worker/claim', {
+      worker_id: 'verdict-worker', version: 'test', mode: 'shadow', intent: 'plan',
+    })).json();
+    const lease = { worker_id: 'verdict-worker', lease_token: ticket.lease_token };
+    const { run } = await (await post(base, `/api/ai-board/worker/tickets/${ticket.id}/runs`, {
+      ...lease, trigger: 'plan', idempotency_key: 'verdict-run-001',
+    })).json();
+    const passingVerdict = {
+      outcome: 'ready_for_pr', gate_reached: 5.5, reason: null, budget_used: 40,
+      gates: [
+        { gate: 3, blocked: false, reason: null },
+        { gate: 4, blocked: false, reason: null, issues: [] },
+        { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true },
+        { gate: 5.5, blocked: false, reason: null, risk_level: 'low', risk_signals: [] },
+      ],
+    };
+    const bypass = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, {
+      ...lease, run_id: run.id, verdict: passingVerdict, idempotency_key: 'pre-pr-bypass-001',
+    });
+    assert.equal(bypass.status, 409);
+    const plan = surfacePlan();
+    await post(base, `/api/ai-board/worker/tickets/${ticket.id}/plan`, {
+      ...lease, run_id: run.id, plan, budget_used: 1, idempotency_key: 'verdict-plan-001',
+    });
+    const bound = db.prepare('SELECT plan_hash, plan_revision FROM ai_runs WHERE id=?').get(run.id);
+    assert.equal(bound.plan_hash, db.prepare('SELECT plan_hash FROM ai_tickets WHERE id=?').get(ticket.id).plan_hash);
+    assert.equal(bound.plan_revision, 1);
+    db.prepare('UPDATE ai_runs SET plan_revision=? WHERE id=?').run(2, run.id);
+    const mismatchedRun = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, {
+      ...lease, run_id: run.id, verdict: passingVerdict, idempotency_key: 'pre-pr-wrong-plan-001',
+    });
+    assert.equal(mismatchedRun.status, 409);
+    assert.equal((await mismatchedRun.json()).error, 'plan_run_mismatch');
+    db.prepare('UPDATE ai_runs SET plan_revision=? WHERE id=?').run(1, run.id);
+    const body = {
+      ...lease, run_id: run.id, idempotency_key: 'pre-pr-verdict-001',
+      verdict: passingVerdict,
+    };
+    const shortcut = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, {
+      ...body, idempotency_key: 'pre-pr-shortcut-001',
+      verdict: { outcome: 'ready_for_pr', gate_reached: 5.5, reason: null,
+        gates: [{ gate: 5.5, blocked: false, reason: null, risk_level: 'low', risk_signals: [] }] },
+    });
+    assert.equal(shortcut.status, 400);
+    const noSmoke = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, {
+      ...body, idempotency_key: 'pre-pr-no-smoke-001',
+      verdict: { ...body.verdict, gates: body.verdict.gates.map((gate) =>
+        gate.gate === 5 ? { ...gate, smoke_passed: false } : gate) },
+    });
+    assert.equal(noSmoke.status, 400);
+    const noHttpObservation = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, {
+      ...body, idempotency_key: 'pre-pr-no-http-001',
+      verdict: { ...body.verdict, gates: body.verdict.gates.map((gate) =>
+        gate.gate === 5 ? { ...gate, http_observed: false } : gate) },
+    });
+    assert.equal(noHttpObservation.status, 400);
+    const criticalReady = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, {
+      ...body, idempotency_key: 'pre-pr-critical-ready-001',
+      verdict: { ...body.verdict, gates: body.verdict.gates.map((gate) =>
+        gate.gate === 5.5 ? { ...gate, risk_level: 'critical' } : gate) },
+    });
+    assert.equal(criticalReady.status, 400);
+    const submitted = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, body);
+    assert.equal(submitted.status, 200);
+    assert.equal((await submitted.json()).verdict.outcome, 'ready_for_pr');
+    const retry = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, body);
+    assert.equal((await retry.json()).verdict.outcome, 'ready_for_pr');
+
+    const visible = await fetch(`${base}/api/requests?domain=pharmacy`, { headers: { 'x-test-user': '1' } });
+    const listed = await visible.json();
+    assert.equal(listed.items[0].pre_pr_verdict, 'ready_for_pr');
+    assert.equal(listed.items[0].pre_pr_gate, 5.5);
+    assert.deepEqual(db.prepare('SELECT outcome, gate FROM ai_runs WHERE id=?').get(run.id),
+      { outcome: 'ready_for_pr', gate: 5.5 });
+    assert.equal(db.prepare('SELECT cumulative_budget FROM ai_tickets WHERE id=?').get(ticket.id).cumulative_budget, 41);
+    assert.deepEqual(db.prepare('SELECT gate, status FROM ai_gate_traces WHERE run_id=? ORDER BY gate').all(run.id), [
+      { gate: 1, status: 'passed' }, { gate: 2, status: 'passed' }, { gate: 2.5, status: 'passed' },
+      { gate: 3, status: 'passed' }, { gate: 4, status: 'passed' },
+      { gate: 5, status: 'passed' }, { gate: 5.5, status: 'passed' },
+    ]);
   } finally {
     await close();
     db.close();
@@ -273,6 +367,50 @@ test('expired lease fails closed and another worker can reclaim it', async () =>
     const second = await (await post(base, '/api/ai-board/worker/claim', { worker_id: 'new', version: 'test', mode: 'shadow' })).json();
     assert.equal(second.ticket.id, first.ticket.id);
     assert.notEqual(second.ticket.lease_token, first.ticket.lease_token);
+  } finally {
+    await close();
+    db.close();
+  }
+});
+
+test('expired lease after plan submission can resume the pre-PR pipeline', async () => {
+  const { db, store } = fixture();
+  const { base, close } = await serve(store);
+  try {
+    const first = await (await post(base, '/api/ai-board/worker/claim', {
+      worker_id: 'crashed', version: 'test', mode: 'shadow', intent: 'plan',
+    })).json();
+    const lease = { worker_id: 'crashed', lease_token: first.ticket.lease_token };
+    const { run } = await (await post(base, `/api/ai-board/worker/tickets/${first.ticket.id}/runs`, {
+      ...lease, trigger: 'plan', idempotency_key: 'crashed-run-001',
+    })).json();
+    await post(base, `/api/ai-board/worker/tickets/${first.ticket.id}/plan`, {
+      ...lease, run_id: run.id, plan: surfacePlan(), budget_used: 1,
+      idempotency_key: 'crashed-plan-001',
+    });
+    db.prepare('UPDATE ai_tickets SET lease_expires_at=? WHERE id=?').run(Date.now() - 1, first.ticket.id);
+
+    const resumed = await (await post(base, '/api/ai-board/worker/claim', {
+      worker_id: 'resumer', version: 'test', mode: 'shadow', intent: 'plan',
+    })).json();
+    const resumedLease = { worker_id: 'resumer', lease_token: resumed.ticket.lease_token };
+    const { run: resumedRun } = await (await post(base, `/api/ai-board/worker/tickets/${resumed.ticket.id}/runs`, {
+      ...resumedLease, trigger: 'plan', idempotency_key: 'resumed-run-001',
+    })).json();
+    const duplicate = await (await post(base, `/api/ai-board/worker/tickets/${resumed.ticket.id}/plan`, {
+      ...resumedLease, run_id: resumedRun.id, plan: surfacePlan(), budget_used: 40,
+      idempotency_key: 'resumed-plan-001',
+    })).json();
+
+    assert.equal(resumed.ticket.id, first.ticket.id);
+    assert.equal(duplicate.status, 'planned');
+    assert.equal(duplicate.duplicate, true);
+    assert.equal(db.prepare('SELECT cumulative_budget FROM ai_tickets WHERE id=?').get(first.ticket.id).cumulative_budget, 41);
+    const released = await post(base, `/api/ai-board/worker/tickets/${resumed.ticket.id}/release`, {
+      ...resumedLease, outcome: 'planned', idempotency_key: 'resumed-release-001',
+    });
+    assert.equal(released.status, 200);
+    assert.equal(db.prepare('SELECT lease_owner FROM ai_tickets WHERE id=?').get(first.ticket.id).lease_owner, null);
   } finally {
     await close();
     db.close();

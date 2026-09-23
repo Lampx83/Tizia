@@ -131,17 +131,20 @@ def run(state: dict) -> dict:
 
         if not scratch_repo:
             continue
-        path = Path(scratch_repo) / file_path
-        if path.suffix != ".js" or not path.exists():
-            continue
-        code = path.read_text(encoding="utf-8")
-        bad_imports = lint_imports(code, file_path)
-        if bad_imports:
-            reason = f"'{d['file']}': {'; '.join(bad_imports)}"
-            return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True, "issues": [*issues, reason]}
-        err = node_check(path)
-        if err:
-            reason = f"'{d['file']}' node --check: {err}"
-            return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True, "issues": [*issues, reason]}
+        for candidate in (file_path, _posix(d.get("test_file", ""))):
+            if not candidate:
+                continue
+            path = Path(scratch_repo) / candidate
+            if path.suffix != ".js" or not path.exists():
+                continue
+            code = path.read_text(encoding="utf-8")
+            bad_imports = lint_imports(code, candidate)
+            if bad_imports:
+                reason = f"'{candidate}': {'; '.join(bad_imports)}"
+                return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True, "issues": [*issues, reason]}
+            err = node_check(path)
+            if err:
+                reason = f"'{candidate}' node --check: {err}"
+                return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True, "issues": [*issues, reason]}
 
     return {"gate": 4, "blocked": False, "reason": None, "needs_careful_review": needs_careful_review, "issues": issues}

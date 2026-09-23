@@ -28,6 +28,19 @@ def test_generated_code_importing_db_js_fails_gate_4(tmp_path):
     assert "db.js" in out["reason"]
 
 
+def test_generated_test_importing_db_js_fails_gate_4(tmp_path):
+    plan = _plan([{"title": "t", "file": "public/x.js", "verify": "v", "size": "small"}])
+    _write(tmp_path, "public/x.js", "export const x = 1;\n")
+    _write(tmp_path, "test/x.test.js", "import { db } from '../server/db.js';\n")
+    diffs = [{"title": "t", "file": "public/x.js", "test_file": "test/x.test.js", "diff": "+x\n"}]
+
+    out = static_check.run({"plan": plan, "diffs": diffs, "scratch_repo": str(tmp_path)})
+
+    assert out["blocked"] is True
+    assert "test/x.test.js" in out["reason"]
+    assert "db.js" in out["reason"]
+
+
 def test_generated_code_importing_another_context_directly_fails_gate_4(tmp_path):
     plan = _plan([{"title": "t", "file": "server/contexts/_ai-generated/x/index.js", "verify": "v", "size": "small"}])
     _write(tmp_path, "server/contexts/_ai-generated/x/index.js", "import { attachAdmin } from '../../admin/index.js';\n")

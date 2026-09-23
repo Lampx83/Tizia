@@ -98,6 +98,8 @@ def prepare_full_checkout(state: dict, source_repo: str | os.PathLike) -> None:
             for rel in (item["file"], item["test_file"]):
                 src = implement._safe_join(scratch, rel)
                 dst = implement._safe_join(checkout, rel)
+                if rel == item["test_file"] and dst.exists():
+                    raise ValueError(f"test_file đã tồn tại trong checkout: {rel}")
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src, dst)
         subprocess.run(["git", "add", "-A"], cwd=checkout, check=True,

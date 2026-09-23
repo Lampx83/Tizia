@@ -113,7 +113,7 @@ def test_run_produces_real_diff_against_scratch_repo(tmp_path):
 
 
 def test_run_uses_fresh_temp_repo_when_no_repo_dir_given():
-    codegen = {"code": "x", "test_file": "t.js", "test": "y"}
+    codegen = {"code": "x", "test_file": "test/t.test.js", "test": "y"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
     plan = plan_with(["features"])
@@ -146,7 +146,7 @@ def test_run_blocks_on_malformed_model_response(tmp_path):
 def test_run_stops_mid_gate_when_budget_exhausted_between_subtasks(tmp_path):
     """max_model_calls=1: subtask đầu tiêu hết budget, subtask thứ hai (plan_with
     có 2) không được gọi model — không được âm thầm báo blocked=False."""
-    codegen = {"code": "x", "test_file": "t.js", "test": "y"}
+    codegen = {"code": "x", "test_file": "test/t.test.js", "test": "y"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
     plan = plan_with(["features"])
@@ -161,7 +161,7 @@ def test_run_stops_mid_gate_when_budget_exhausted_between_subtasks(tmp_path):
 
 
 def test_run_spends_budget_once_per_subtask(tmp_path):
-    codegen = {"code": "x", "test_file": "t.js", "test": "y"}
+    codegen = {"code": "x", "test_file": "test/t.test.js", "test": "y"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
     plan = plan_with(["features"])
@@ -208,6 +208,19 @@ def test_path_traversal_via_dotdot_is_rejected(tmp_path):
     assert out["blocked"] is True
     assert "thoát khỏi scratch repo" in out["reason"]
     assert not (tmp_path.parent.parent / "outside.js").exists()
+
+
+def test_model_test_file_cannot_overwrite_an_approved_source_path(tmp_path):
+    codegen = {"code": "x", "test_file": "test/../server/db.js", "test": "evil"}
+    models = FakeModels(plan_with(["features"]), codegen=codegen)
+    deps = deps_with(models)
+
+    out = implement.run({"plan": plan_with(["features"])}, deps,
+                        Budget(max_wall_clock_s=999), repo_dir=tmp_path)
+
+    assert out["blocked"] is True
+    assert "test/" in out["reason"]
+    assert not (tmp_path / "server/db.js").exists()
 
 
 def test_normal_relative_paths_still_work_after_traversal_guard(tmp_path):

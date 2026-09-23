@@ -16,6 +16,8 @@ const EVENT_TYPES = new Set([
   'shadow_precheck_passed', 'shadow_precheck_failed', 'plan_validated',
   'plan_blocked', 'heartbeat', 'lease_released',
 ]);
+const PRE_PR_GATES = new Set([3, 4, 5, 5.5]);
+const PRE_PR_SEQUENCE = [3, 4, 5, 5.5];
 
 export class WorkerContractError extends Error {
   constructor(message, status = 400, code = 'invalid_worker_operation') {
@@ -67,6 +69,59 @@ function parseAttachments(value) {
   } catch {
     return [];
   }
+}
+
+function validatePrePrVerdict(value) {
+  if (!value || typeof value !== 'object' || !['ready_for_pr', 'needs_review', 'blocked'].includes(value.outcome)) {
+    throw new WorkerContractError('invalid pre-PR verdict');
+  }
+  if (!Array.isArray(value.gates) || value.gates.length < 1 || value.gates.length > 4) {
+    throw new WorkerContractError('invalid pre-PR gates');
+  }
+  let previous = 0;
+  const gates = value.gates.map((item) => {
+    const gate = Number(item?.gate);
+    if (!PRE_PR_GATES.has(gate) || gate <= previous || typeof item?.blocked !== 'boolean') {
+      throw new WorkerContractError('invalid pre-PR gate result');
+    }
+    previous = gate;
+    const clean = { gate, blocked: item.blocked, reason: item.reason ? String(item.reason).slice(0, 1000) : null };
+    if (gate === 4) clean.issues = Array.isArray(item.issues) ? item.issues.slice(0, 20).map((x) => String(x).slice(0, 500)) : [];
+    if (gate === 5) {
+      clean.smoke_passed = item.smoke_passed === true;
+      clean.http_observed = item.http_observed === true;
+    }
+    if (gate === 5.5) {
+      clean.risk_level = ['low', 'medium', 'high', 'critical'].includes(item.risk_level) ? item.risk_level : null;
+      clean.risk_signals = Array.isArray(item.risk_signals) ? item.risk_signals.slice(0, 20).map((signal) => ({
+        name: String(signal?.name || '').slice(0, 80),
+        tier: String(signal?.tier || '').slice(0, 20),
+        detail: String(signal?.detail || '').slice(0, 500),
+      })) : [];
+    }
+    return clean;
+  });
+  const last = gates.at(-1);
+  if (gates.some((gate, index) => gate.gate !== PRE_PR_SEQUENCE[index])) {
+    throw new WorkerContractError('pre-PR gates must be sequential');
+  }
+  if (Number(value.gate_reached) !== last.gate) throw new WorkerContractError('pre-PR gate mismatch');
+  const gate5 = gates.find((gate) => gate.gate === 5);
+  const gate55 = gates.find((gate) => gate.gate === 5.5);
+  const passed = last.gate === 5.5 && !gates.some((gate) => gate.blocked)
+    && gate5?.smoke_passed === true && gate5?.http_observed === true;
+  if (['ready_for_pr', 'needs_review'].includes(value.outcome) && !passed) {
+    throw new WorkerContractError('passing verdict requires successful smoke through gate 5.5');
+  }
+  if (value.outcome === 'ready_for_pr' && !['low', 'medium'].includes(gate55?.risk_level))
+    throw new WorkerContractError('ready verdict requires low or medium risk');
+  if (value.outcome === 'needs_review' && !['high', 'critical'].includes(gate55?.risk_level))
+    throw new WorkerContractError('review verdict requires high or critical risk');
+  if (value.outcome === 'blocked' && !last.blocked) throw new WorkerContractError('blocked verdict requires a blocked gate');
+  const budgetUsed = Number(value.budget_used ?? 0);
+  if (!Number.isFinite(budgetUsed) || budgetUsed < 0 || budgetUsed > 200) throw new WorkerContractError('invalid verdict budget');
+  return { outcome: value.outcome, gate_reached: last.gate, reason: value.reason ? String(value.reason).slice(0, 1000) : last.reason,
+    budget_used: budgetUsed, gates };
 }
 
 export function createAiBoardStore(db, hooks = {}) {
@@ -153,7 +208,9 @@ export function createAiBoardStore(db, hooks = {}) {
       SELECT r.id, r.domain, r.type, r.title, r.detail, r.student, r.status, r.votes,
              r.admin_note, r.created_at, r.updated_at, r.attachments,
              t.id AS root_ticket_id, t.status AS workflow_status, t.phase,
-             t.public_note
+             t.public_note,
+             (SELECT ar.outcome FROM ai_runs ar WHERE ar.ticket_id=t.id AND ar.outcome IS NOT NULL ORDER BY ar.id DESC LIMIT 1) AS pre_pr_verdict,
+             (SELECT ar.gate FROM ai_runs ar WHERE ar.ticket_id=t.id AND ar.outcome IS NOT NULL ORDER BY ar.id DESC LIMIT 1) AS pre_pr_gate
       FROM requests r
       LEFT JOIN ai_tickets t ON t.source_request_id = r.id AND t.parent_id IS NULL
       WHERE r.owner_user_id = ? AND r.domain = ?
@@ -239,9 +296,10 @@ export function createAiBoardStore(db, hooks = {}) {
               t.phase IN ('intake', 'needs_replan')
               OR (? = 'plan' AND t.phase = 'shadow_checked')
             ))
-          OR (t.status='running' AND t.lease_expires_at<=?))
+          OR (t.status='running' AND t.lease_expires_at<=?)
+          OR (? = 'plan' AND t.lease_token IS NOT NULL AND t.lease_expires_at<=?))
         ORDER BY t.priority DESC, t.created_at ASC LIMIT 1
-    `).get(intent, now);
+    `).get(intent, now, intent, now);
     if (!candidate) return null;
     const token = randomBytes(24).toString('hex');
     const expires = now + leaseMs;
@@ -428,10 +486,63 @@ export function createAiBoardStore(db, hooks = {}) {
     `)
       .get(Number(ticketId), checked.planHash);
     if (existing) {
+      const sameSubmission = db.prepare(`
+        SELECT 1 FROM ai_events WHERE ticket_id=? AND idempotency_key=?
+      `).get(Number(ticketId), `plan-valid:${input.idempotencyKey}`);
+      const authorized = !!db.prepare(`
+        SELECT 1 FROM ai_authorizations WHERE root_ticket_id=? AND plan_hash=? AND plan_revision=?
+      `).get(Number(ticketId), existing.plan_hash, existing.revision);
+      const plannedStatus = existing.tier === 'surface' ? 'planned'
+        : existing.tier === 'protected' && authorized ? 'planned'
+          : existing.tier === 'protected' ? 'waiting_authorization' : 'human_owned';
+      if (!sameSubmission) {
+        const rounds = root.auto_rounds + 1;
+        const budget = root.cumulative_budget + input.budgetUsed;
+        if (rounds > 2 || budget > 200) {
+          const reason = rounds > 2 ? 'automatic_round_limit' : 'cumulative_budget_exhausted';
+          db.prepare(`
+            UPDATE ai_tickets SET status='waiting_admin', phase='budget_exhausted',
+              public_note='Yêu cầu đang chờ quản trị viên xem xét.', internal_reason=?,
+              auto_rounds=?, cumulative_budget=?, updated_at=? WHERE id=?
+          `).run(reason, rounds, budget, now, Number(ticketId));
+          insertEvent.run(
+            Number(ticketId), 'plan_validated', 'worker', input.workerId, 'running->waiting_admin',
+            'Yêu cầu đang chờ quản trị viên xem xét.', reason,
+            `plan-valid:${input.idempotencyKey}`, now,
+          );
+          return {
+            plan_hash: existing.plan_hash, tier: existing.tier, status: 'waiting_admin',
+            reason, children: planChildren(ticketId, existing.revision), duplicate: true,
+          };
+        }
+        db.prepare(`
+          UPDATE ai_tickets SET status=?, phase='ticketized', auto_rounds=?,
+            cumulative_budget=?, updated_at=? WHERE id=?
+        `).run(plannedStatus, rounds, budget, now, Number(ticketId));
+        insertEvent.run(
+          Number(ticketId), 'plan_validated', 'worker', input.workerId, `running->${plannedStatus}`,
+          root.public_note, 'resumed existing validated plan',
+          `plan-valid:${input.idempotencyKey}`, now,
+        );
+      }
+      const duplicateStatus = ['planned', 'waiting_authorization', 'human_owned', 'waiting_admin'].includes(root.status)
+        ? root.status : plannedStatus;
+      db.prepare(`UPDATE ai_runs SET plan_hash=?, plan_revision=?, updated_at=? WHERE id=?`)
+        .run(existing.plan_hash, existing.revision, now, run.id);
+      const traced = new Set(db.prepare(`
+        SELECT gate FROM ai_gate_traces WHERE run_id=? AND status='passed' AND gate IN (1, 2, 2.5)
+      `).all(run.id).map((row) => Number(row.gate)));
+      const insertTrace = db.prepare(`
+        INSERT INTO ai_gate_traces(run_id, gate, status, public_reason, internal_reason, created_at)
+        VALUES (?, ?, 'passed', NULL, NULL, ?)
+      `);
+      for (const gate of [1, 2, 2.5]) {
+        if (!traced.has(gate)) insertTrace.run(run.id, gate, now);
+      }
       return {
         plan_hash: existing.plan_hash,
         tier: existing.tier,
-        status: root.status,
+        status: duplicateStatus,
         children: planChildren(ticketId, existing.revision),
         duplicate: true,
       };
@@ -477,6 +588,8 @@ export function createAiBoardStore(db, hooks = {}) {
         tier=?, plan_hash=?, plan_revision=?, auto_rounds=?, cumulative_budget=?, updated_at=?
       WHERE id=?
     `).run(rootStatus, publicNote, internalReason, checked.tier, checked.planHash, revision, rounds, budget, now, Number(ticketId));
+    db.prepare(`UPDATE ai_runs SET plan_hash=?, plan_revision=?, updated_at=? WHERE id=?`)
+      .run(checked.planHash, revision, now, run.id);
 
     const insertChild = db.prepare(`
       INSERT INTO ai_tickets(parent_id, source_request_id, sequence, kind, title, description,
@@ -535,6 +648,84 @@ export function createAiBoardStore(db, hooks = {}) {
     return submitPlanTransaction(Number(ticketId), { ...input, idempotencyKey, budgetUsed, now }, checked);
   }
 
+  const submitPrePrVerdictTransaction = db.transaction((ticketId, input, verdict) => {
+    const root = assertLease(ticketId, input.workerId, input.leaseToken, input.now);
+    const run = db.prepare('SELECT * FROM ai_runs WHERE id=? AND ticket_id=?').get(Number(input.runId), Number(ticketId));
+    if (!run) throw new WorkerContractError('run does not belong to ticket');
+    const plan = root.plan_hash && db.prepare(`
+      SELECT * FROM ai_plans
+      WHERE root_ticket_id=? AND plan_hash=? AND revision=? AND status='valid'
+    `).get(root.id, root.plan_hash, root.plan_revision);
+    if (!plan || root.status !== 'planned') {
+      throw new WorkerContractError('pre-PR verdict requires the current accepted plan', 409, 'plan_required');
+    }
+    if (run.plan_hash !== plan.plan_hash || Number(run.plan_revision) !== Number(plan.revision)) {
+      throw new WorkerContractError('run belongs to a different plan revision', 409, 'plan_run_mismatch');
+    }
+    if (plan.tier === 'core') {
+      throw new WorkerContractError('core plan remains human-owned', 409, 'core_human_owned');
+    }
+    if (plan.tier === 'protected' && !db.prepare(`
+      SELECT 1 FROM ai_authorizations WHERE root_ticket_id=? AND plan_hash=? AND plan_revision=?
+    `).get(root.id, plan.plan_hash, plan.revision)) {
+      throw new WorkerContractError('protected plan requires authorization', 409, 'authorization_required');
+    }
+    const precheckGates = new Set(db.prepare(`
+      SELECT gate FROM ai_gate_traces WHERE run_id=? AND status='passed' AND gate IN (1, 2, 2.5)
+    `).all(run.id).map((row) => Number(row.gate)));
+    if (![1, 2, 2.5].every((gate) => precheckGates.has(gate))) {
+      throw new WorkerContractError('pre-PR verdict requires plan guardrail traces', 409, 'plan_trace_required');
+    }
+    const existing = db.prepare('SELECT id, event_type FROM ai_events WHERE ticket_id=? AND idempotency_key=?')
+      .get(Number(ticketId), input.idempotencyKey);
+    if (existing) {
+      if (existing.event_type !== 'pre_pr_verdict' || !run.outcome) {
+        throw new WorkerContractError('idempotency key already used', 409, 'idempotency_conflict');
+      }
+      if (run.outcome !== verdict.outcome || Number(run.gate) !== verdict.gate_reached) {
+        throw new WorkerContractError('run already has a different verdict', 409, 'idempotency_conflict');
+      }
+      return JSON.parse(run.evidence_json).verdict;
+    }
+    if (run.outcome) throw new WorkerContractError('run already has a verdict', 409, 'idempotency_conflict');
+    const cumulativeBudget = root.cumulative_budget + verdict.budget_used;
+    if (cumulativeBudget > 200) throw new WorkerContractError('cumulative budget exhausted', 409, 'cumulative_budget_exhausted');
+    const evidence = JSON.stringify({ verdict });
+    db.prepare(`UPDATE ai_runs SET outcome=?, gate=?, cumulative_budget=?, evidence_json=?, failure_reason=?, updated_at=? WHERE id=?`)
+      .run(verdict.outcome, verdict.gate_reached, cumulativeBudget, evidence, verdict.reason, input.now, run.id);
+    const trace = db.prepare(`
+      INSERT INTO ai_gate_traces(run_id, gate, status, public_reason, internal_reason, evidence_json, created_at)
+      VALUES (?, ?, ?, ?, NULL, ?, ?)
+    `);
+    for (const gate of verdict.gates) {
+      trace.run(run.id, gate.gate, gate.blocked ? 'blocked' : 'passed', gate.reason,
+        JSON.stringify(gate), input.now);
+    }
+    const phase = verdict.outcome === 'ready_for_pr' ? 'pre_pr_ready'
+      : verdict.outcome === 'needs_review' ? 'pre_pr_review' : 'pre_pr_blocked';
+    const note = verdict.outcome === 'ready_for_pr' ? 'Thay đổi đã qua kiểm tra trước PR.'
+      : verdict.outcome === 'needs_review' ? 'Thay đổi cần con người xem xét trước PR.'
+        : 'Thay đổi chưa qua kiểm tra trước PR.';
+    db.prepare('UPDATE ai_tickets SET phase=?, public_note=?, internal_reason=?, cumulative_budget=?, updated_at=? WHERE id=?')
+      .run(phase, note, verdict.reason, cumulativeBudget, input.now, root.id);
+    db.prepare(`
+      INSERT INTO ai_events(ticket_id, run_id, event_type, actor_type, actor_id, transition,
+        public_message, internal_detail, idempotency_key, created_at)
+      VALUES (?, ?, 'pre_pr_verdict', 'worker', ?, ?, ?, ?, ?, ?)
+    `).run(root.id, run.id, input.workerId, `running->${phase}`, note, verdict.reason,
+      input.idempotencyKey, input.now);
+    return verdict;
+  });
+
+  function submitPrePrVerdict(ticketId, input) {
+    const idempotencyKey = String(input.idempotencyKey || '');
+    if (!/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) throw new WorkerContractError('invalid idempotency key');
+    const verdict = validatePrePrVerdict(input.verdict);
+    return submitPrePrVerdictTransaction(Number(ticketId), {
+      ...input, idempotencyKey, now: input.now ?? Date.now(),
+    }, verdict);
+  }
+
   const authorizePlanTransaction = db.transaction((rootTicketId, planHash, adminUserId, now) => {
     const plan = db.prepare('SELECT * FROM ai_plans WHERE root_ticket_id=? AND plan_hash=? AND status=?')
       .get(Number(rootTicketId), String(planHash), 'valid');
@@ -589,6 +780,7 @@ export function createAiBoardStore(db, hooks = {}) {
     recordWorkerEvent,
     releaseLease,
     submitPlan,
+    submitPrePrVerdict,
     authorizePlan,
     invalidatePlanForRequest,
   };

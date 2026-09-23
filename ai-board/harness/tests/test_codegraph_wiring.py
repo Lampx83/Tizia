@@ -191,7 +191,7 @@ def test_run_calls_check_file_path_for_every_subtask_before_generating(monkeypat
     matches ticket 18's constraint: graph không thay việc đọc file thật."""
     calls = []
     monkeypatch.setattr(implement, "check_file_path", lambda f: calls.append(f))
-    codegen = {"code": "x", "test_file": "t.js", "test": "y"}
+    codegen = {"code": "x", "test_file": "test/t.test.js", "test": "y"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
     plan = plan_with(["features"])
