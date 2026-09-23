@@ -113,6 +113,15 @@ class FakeModels:
         return {"response": body, "prompt_eval_count": 120, "eval_count": 80}
 
 
+class FakeVerify:
+    """Older full-loop tests stay on the Python seam without a Docker daemon."""
+
+    def run(self, state, deps, budget):
+        state["evidence"] = {"text": "fixture smoke: one user-state flow", "smoke_passed": True,
+                             "screenshot": None}
+        return {"gate": 5, "blocked": False, "reason": None, "evidence": state["evidence"]}
+
+
 def plan_with(caps):
     """Plan hợp lệ theo schema gates/brainstorm.py, xin đúng `caps`."""
     return {
@@ -134,7 +143,8 @@ def deps_with(models):
     from main import Deps
     if not isinstance(models, FakeModels):
         models = FakeModels(models)
-    return Deps(models=models, git=MagicMock(name="git"), notify=MagicMock(name="telegram"))
+    return Deps(models=models, git=MagicMock(name="git"), notify=MagicMock(name="telegram"),
+                verify=FakeVerify())
 
 
 @pytest.fixture

@@ -11,8 +11,11 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sqlite3
+import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,7 +24,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from budget import Budget          # noqa: E402
-from gates import brainstorm, implement, plan_validate, scope_check, static_check  # noqa: E402
+from gates import brainstorm, implement, plan_validate, risk_triage, scope_check, static_check, verify  # noqa: E402
 from models import OllamaClient    # noqa: E402
 import prescreen                   # noqa: E402
 
@@ -73,6 +76,7 @@ class Deps:
     models: Any
     git: Any
     notify: Any
+    verify: Any = None
 
     @classmethod
     def real(cls) -> "Deps":
@@ -81,6 +85,32 @@ class Deps:
             git=Unavailable("git"),
             notify=Unavailable("telegram"),
         )
+
+
+def prepare_full_checkout(state: dict, source_repo: str | os.PathLike) -> None:
+    """At the 4→5 seam, clone the local branch and apply gate-3 files once."""
+    scratch = Path(state["scratch_repo"])
+    checkout = Path(tempfile.mkdtemp(prefix="ai-board-gate5-"))
+    try:
+        subprocess.run(["git", "clone", "--local", "--no-hardlinks", str(source_repo), str(checkout)],
+                       check=True, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        for item in state["diffs"]:
+            for rel in (item["file"], item["test_file"]):
+                src = implement._safe_join(scratch, rel)
+                dst = implement._safe_join(checkout, rel)
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
+        subprocess.run(["git", "add", "-A"], cwd=checkout, check=True,
+                       capture_output=True, stdin=subprocess.DEVNULL)
+        diff = subprocess.run(["git", "diff", "--cached", "--no-ext-diff"], cwd=checkout,
+                              check=True, capture_output=True, text=True, encoding="utf-8",
+                              stdin=subprocess.DEVNULL).stdout
+        state["full_checkout"] = str(checkout)
+        state["_owned_full_checkout"] = True
+        state["full_diff"] = [{"file": "", "diff": diff}]
+    except Exception:
+        shutil.rmtree(checkout, ignore_errors=True)
+        raise
 
 
 def load_inbox(path: str | os.PathLike) -> list[dict]:
@@ -107,6 +137,17 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
         return implement.run(state, deps, budget, db_path=db_path, proposal_id=proposal_id)
     if number == 4:
         return static_check.run(state)
+    if number == 5:
+        if deps.verify is not None:
+            return deps.verify.run(state, deps, budget)
+        if not state.get("full_checkout") and state.get("checkout_source"):
+            try:
+                prepare_full_checkout(state, state["checkout_source"])
+            except (OSError, ValueError, subprocess.CalledProcessError) as e:
+                return {"gate": 5, "blocked": True, "reason": f"không tạo được full_checkout: {e}", "evidence": None}
+        return verify.run(state, deps, budget)
+    if number == 5.5:
+        return risk_triage.run(state)
     return {"gate": number, "blocked": False, "reason": None}
 
 
@@ -166,13 +207,20 @@ def record_proposal(db_path, *, request: dict, gate_reached: float, outcome: str
     return proposal_id
 
 
-def run_once(request: dict, *, db_path, deps: Deps, budget: Budget | None = None) -> dict:
+def run_once(request: dict, *, db_path, deps: Deps, budget: Budget | None = None,
+             checkout_source=None, full_checkout=None, manifest=None) -> dict:
     """Đẩy 1 request qua 7 cổng, ghi đúng 1 dòng skill_proposals. Trả kết quả."""
     budget = budget or Budget.from_env()
     reached: float = 0.0
     outcome = "ok"
     reason = None
-    state: dict = {}
+    state: dict = {"skill_id": request.get("id") or ""}
+    if checkout_source is not None:
+        state["checkout_source"] = checkout_source
+    if full_checkout is not None:
+        state["full_checkout"] = full_checkout
+    if manifest is not None:
+        state["manifest"] = manifest
 
     proposal_id = create_proposal(db_path, request=request)
 
@@ -201,7 +249,11 @@ def run_once(request: dict, *, db_path, deps: Deps, budget: Budget | None = None
         outcome = f"error_gate_{reached}: {e}"
         raise
     finally:
-        update_proposal(db_path, proposal_id, gate_reached=reached, outcome=outcome, budget=budget)
+        try:
+            update_proposal(db_path, proposal_id, gate_reached=reached, outcome=outcome, budget=budget)
+        finally:
+            if state.get("_owned_full_checkout"):
+                shutil.rmtree(state["full_checkout"], ignore_errors=True)
 
     return {
         "proposal_id": proposal_id,
