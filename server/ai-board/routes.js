@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { PlanGuardrailError, WorkerContractError } from './store.js';
+import { PlanGuardrailError, RequestValidationError, WorkerContractError } from './store.js';
 
 export function attachAiBoardRequestRoutes(router, {
   store,
@@ -39,7 +39,10 @@ export function attachAiBoardRequestRoutes(router, {
         }
       }
     } catch (error) {
-      res.status(400).json({ error: 'invalid_request', message: error.message });
+      if (error instanceof RequestValidationError) {
+        return res.status(400).json({ error: 'invalid_request', message: error.message });
+      }
+      throw error;
     }
   });
 

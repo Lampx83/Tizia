@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-export const CAPABILITY_POLICY_VERSION = 'd0-v1';
+export const CAPABILITY_POLICY_VERSION = 'd0-v2';
 const capability = (tier, allow, rationale, overrides = {}) => Object.freeze({
   tier,
   allow,
@@ -73,9 +73,17 @@ export function stablePlanJson(plan) {
   return JSON.stringify(stable(plan));
 }
 
-export const CAPABILITY_POLICY_HASH = createHash('sha256')
-  .update(JSON.stringify(stable(CAPABILITY_POLICY)))
-  .digest('hex');
+export function hashCapabilityPolicy(policy) {
+  const enforcedPolicy = Object.fromEntries(Object.entries(policy).map(([name, entry]) => [name, {
+    tier: entry.tier,
+    allow: entry.allow,
+    deny: entry.deny,
+    mandatoryTests: entry.mandatoryTests,
+  }]));
+  return createHash('sha256').update(JSON.stringify(stable(enforcedPolicy))).digest('hex');
+}
+
+export const CAPABILITY_POLICY_HASH = hashCapabilityPolicy(CAPABILITY_POLICY);
 
 export function validatePlan(plan, requestDomain) {
   if (!plan || typeof plan !== 'object' || Array.isArray(plan)) fail('malformed_plan', 'plan must be an object');
