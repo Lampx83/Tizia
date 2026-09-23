@@ -12,8 +12,16 @@ const fmt = (t) => t ? new Date(t).toLocaleString('vi-VN', { hour12:false }) : '
 const fmtNum = (n) => (n == null) ? '—' : Number(n).toLocaleString('vi-VN');
 
 // ─────────── API helper ───────────
-async function api(path, opts) {
-  const r = await fetch(path, { credentials:'same-origin', headers:{'Content-Type':'application/json'}, ...opts });
+let csrfToken = null;
+async function api(path, opts = {}) {
+  const method = String(opts.method || 'GET').toUpperCase();
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && !csrfToken) {
+    const tokenResponse = await fetch('/api/csrf', { credentials:'same-origin' });
+    csrfToken = (await tokenResponse.json()).token;
+  }
+  const headers = { 'Content-Type':'application/json', ...(opts.headers || {}) };
+  if (csrfToken && !['GET', 'HEAD', 'OPTIONS'].includes(method)) headers['X-CSRF-Token'] = csrfToken;
+  const r = await fetch(path, { credentials:'same-origin', ...opts, headers });
   if (r.status === 401) { location.href = '/login.html?return=' + encodeURIComponent('/admin.html'); throw new Error('login'); }
   const data = await r.json().catch(()=>({}));
   return { status: r.status, ok: r.ok, data };
@@ -382,20 +390,38 @@ function renderSystem(sys) {
 
 // ─────────── Tabs (legacy: Góp ý / Users / Schools / AI / Content / Billing) ───────────
 let reqCache = [];
+let aiTicketCache = [];
+let aiWorkerCache = [];
 let reqFilter = 'all';
 let userCache = [];
 let currentTab = 'dashboard';
 
 async function loadRequests() {
-  const r = await api('/api/admin/requests?limit=300');
+  const [r, ai] = await Promise.all([
+    api('/api/admin/requests?limit=300'),
+    api('/api/admin/ai-board/queue'),
+  ]);
   reqCache = r.data.requests || [];
+  aiTicketCache = ai.data.tickets || [];
+  aiWorkerCache = ai.data.workers || [];
   renderRequests();
 }
 function renderRequests() {
   const filtered = reqFilter === 'all' ? reqCache : reqCache.filter(r => r.status === reqFilter);
   const counts = reqCache.reduce((m,r) => (m[r.status] = (m[r.status]||0)+1, m), {});
+  const ticketByRequest = new Map(aiTicketCache.map(ticket => [ticket.source_request_id, ticket]));
   const host = $('#tabbody');
   host.innerHTML = `
+    <section class="card" style="margin-bottom:14px;padding:12px 16px">
+      <div style="font-weight:700;margin-bottom:8px">AI Board workers</div>
+      ${aiWorkerCache.length ? aiWorkerCache.map(worker => `
+        <div style="font-size:12px;margin:4px 0">
+          <span class="pill">${esc(worker.worker_id)}</span>
+          ${esc(worker.mode)} · ${esc(worker.status)} · ticket #${worker.current_ticket_id || '—'}
+          · heartbeat ${fmt(worker.last_seen_at)} · ${esc(worker.version)}
+        </div>
+      `).join('') : '<div style="font-size:12px;opacity:.65">Chưa có worker heartbeat.</div>'}
+    </section>
     <div class="toolbar">
       <span style="font-size:12px;opacity:.6">Lọc:</span>
       <select id="reqFilter">
@@ -411,10 +437,16 @@ function renderRequests() {
     <table>
       <thead><tr>
         <th>#</th><th>Trường</th><th>Tiêu đề</th><th>Loại</th>
-        <th>HS</th><th>Trạng thái</th><th>Vote</th><th>Tạo lúc</th><th></th>
+        <th>HS</th><th>Trạng thái</th><th>AI Board</th><th>Vote</th><th>Tạo lúc</th><th></th>
       </tr></thead>
       <tbody>
       ${filtered.map(r => `
+        ${(() => {
+          const ticket = ticketByRequest.get(r.id);
+          const ticketSummary = ticket
+            ? `<span class="pill">#${ticket.id} · ${esc(ticket.status)}/${esc(ticket.phase)}</span><div style="font-size:11px;opacity:.75;max-width:260px">${esc(ticket.public_note || ticket.internal_reason || '')}</div>`
+            : '<span style="opacity:.45">legacy</span>';
+          return `
         <tr data-rid="${r.id}">
           <td>${r.id}</td>
           <td><span class="pill">${esc(r.domain)}</span></td>
@@ -422,14 +454,17 @@ function renderRequests() {
           <td><span class="pill">${esc(r.type)}</span></td>
           <td>${esc(r.student)}</td>
           <td><span class="pill ${r.status}">${r.status}</span></td>
+          <td>${ticketSummary}</td>
           <td>${r.votes}</td>
           <td style="font-size:12px;opacity:.7">${fmt(r.created_at)}</td>
           <td class="actions" style="white-space:nowrap">
             <button class="btn" data-act="detail" data-rid="${r.id}" title="Xem chi tiết">👁</button>
             <button class="btn primary" data-act="reply" data-rid="${r.id}" title="Trả lời + đổi trạng thái">💬</button>
-            <button class="btn danger" data-act="delreq" data-rid="${r.id}" title="Xoá yêu cầu">🗑</button>
+            ${ticket ? '' : `<button class="btn danger" data-act="delreq" data-rid="${r.id}" title="Xoá yêu cầu">🗑</button>`}
           </td>
         </tr>
+          `;
+        })()}
       `).join('')}
       </tbody>
     </table>

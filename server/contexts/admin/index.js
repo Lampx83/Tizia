@@ -15,6 +15,7 @@ import { VALID_USER_PLANS, expiresAtFor } from '../billing/user-plans.js';
 import { listAiPrompts, listAiPromptsForUser } from '../../ai-quota.js';
 import { attachBackup, scheduleAutoBackup } from './backup.js';
 import { attachAdminDb } from './db-admin.js';
+import { requireStrictCsrf } from '../security/index.js';
 import { getPageviewStats } from '../analytics/index.js';
 
 // Scrypt hash — đồng bộ format với contexts/identity/auth.js (scrypt$salt$hash)
@@ -279,7 +280,7 @@ export function attachAdmin(r) {
     const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
     res.json({ requests: Q.requests.all({ limit }) });
   });
-  r.post('/api/admin/requests/:id/status', requireAdmin, (req, res) => {
+  r.post('/api/admin/requests/:id/status', requireAdmin, requireStrictCsrf, (req, res) => {
     const status = String(req.body?.status || '');
     if (!['pending', 'reviewing', 'done', 'rejected'].includes(status)) return res.status(400).json({ error: 'invalid_status' });
     Q.setRequestStatus.run({ id: Number(req.params.id), status, note: req.body?.note ? String(req.body.note).slice(0, 500) : null, t: Date.now() });
@@ -298,7 +299,7 @@ export function attachAdmin(r) {
   `);
   const ACTION_BY_STATUS = { done: 'approve', rejected: 'reject', reviewing: 'approve' };
 
-  r.post('/api/admin/requests/:id/reply', requireAdmin, (req, res) => {
+  r.post('/api/admin/requests/:id/reply', requireAdmin, requireStrictCsrf, (req, res) => {
     const id = Number(req.params.id);
     const status = String(req.body?.status || 'done');
     if (!['done', 'rejected', 'reviewing'].includes(status)) return res.status(400).json({ error: 'invalid_status' });
@@ -642,10 +643,13 @@ export function attachAdmin(r) {
   // CRUD: Requests + Content — chỉ thêm DELETE (status/reply đã có)
   // ─────────────────────────────────────────────────────────────
 
-  r.delete('/api/admin/requests/:id', requireAdmin, (req, res) => {
+  r.delete('/api/admin/requests/:id', requireAdmin, requireStrictCsrf, (req, res) => {
     const id = Number(req.params.id);
     const cur = db.prepare(`SELECT id FROM requests WHERE id = ?`).get(id);
     if (!cur) return res.status(404).json({ error: 'request_not_found' });
+    if (tableExists('ai_tickets') && db.prepare(`SELECT 1 FROM ai_tickets WHERE source_request_id = ? LIMIT 1`).get(id)) {
+      return res.status(409).json({ error: 'request_has_ai_board_history' });
+    }
     const tx = db.transaction((rid) => {
       if (tableExists('ai_decisions')) db.prepare(`DELETE FROM ai_decisions WHERE request_id = ?`).run(rid);
       db.prepare(`DELETE FROM requests WHERE id = ?`).run(rid);

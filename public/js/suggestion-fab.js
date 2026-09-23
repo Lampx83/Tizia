@@ -343,6 +343,7 @@ function bind(root) {
   });
   root.querySelector('#sgf-reload').addEventListener('click', loadInbox);
 
+  let pendingRequestKey = null;
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const type = root.querySelector('#sgf-type').value;
@@ -389,9 +390,10 @@ function bind(root) {
       }
 
       msg.textContent = 'Đang gửi…';
+      pendingRequestKey ||= crypto.randomUUID();
       const r = await fetch('api/requests', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': pendingRequestKey },
         body: JSON.stringify({
           domain: inferDomain(), type, title, detail, attachments,
           student: (typeof getPlayerName === 'function' && getPlayerName()) || 'Ẩn danh',
@@ -411,6 +413,7 @@ function bind(root) {
         return;
       }
       msg.textContent = '✓ Đã gửi! Hiệu trưởng AI đang xem xét…';
+      pendingRequestKey = null;
       root.querySelector('#sgf-title-in').value = '';
       root.querySelector('#sgf-detail').value = '';
       if (detailCount) detailCount.textContent = '0 / 10.000';

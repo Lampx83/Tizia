@@ -197,6 +197,8 @@ lại với volume hiện tại là an toàn.
 | `GET`  | `/api/achievements?player=` | Huy hiệu đã mở khoá của 1 SV |
 | `POST` | `/api/ai/grade-soap`, `/patient-turn`, `/evaluate-roleplay` | AI tutor (Ollama) |
 | `GET`  | `/api/ai-board/inbox` | Hộp thư Ban điều hành AI — yêu cầu pending/reviewing toàn hệ thống. **Đọc-chỉ**, auth bằng header `x-ai-board-key`, chỉ tồn tại khi đặt `AI_BOARD_KEY` (xem dưới) |
+| `POST` | `/api/ai-board/worker/*` | Worker D0 claim/snapshot/heartbeat/run/event/plan/release qua lease, auth bằng `x-ai-worker-key`; không có route SQL/admin/merge |
+| `GET`  | `/api/admin/ai-board/queue` | Hàng đợi root ticket tối thiểu cho admin |
 | `WS`   | `/ws` | Multiplayer cho Metaverse |
 | `WS`   | `/ws-lab` | Multiplayer cho Phòng bào chế |
 | `WS`   | `/ws-race` | Race 1v1 (sắp có) |
@@ -213,6 +215,7 @@ lại với volume hiện tại là an toàn.
 | `OLLAMA_SECKEY` | `pharmasim` | Header `x-ollama-seckey` (shared secret nội bộ) |
 | `OLLAMA_MODEL` | `qwen2.5:14b-instruct-ctx16k` | Tên model |
 | `AI_BOARD_KEY` | *(trống)* | Bật `/api/ai-board/inbox`. ≥24 ký tự (`openssl rand -hex 32`); trống = route 404 |
+| `AI_BOARD_WORKER_KEY` | *(trống)* | Bật worker API D0. Dùng key riêng ≥24 ký tự; trống = route 404 |
 
 ### 🏛️ Hộp thư cho Ban điều hành AI
 
@@ -237,6 +240,23 @@ AI_BOARD_KEY=<key> node scripts/fetch-inbox.mjs
 Route là **đọc-chỉ** — không đổi được trạng thái yêu cầu qua key này. Phản hồi HS
 vẫn đi qua admin (`POST /api/admin/requests/:id/reply`, cần cookie + `role=admin`)
 hoặc `node scripts/admin-reply.js` chạy trên máy có DB.
+
+### Worker D0 qua HTTP
+
+Worker host không mount/mở SQLite. `off` là mặc định và không claim việc;
+`shadow` chỉ precheck/lập plan/tạo child tickets, không tạo branch, code hay PR.
+
+```bash
+# Chỉ precheck một root ticket
+AI_BOARD_WORKER_MODE=shadow python ai-board/worker.py --once
+
+# Chạy Gate 1 → 2 → 2.5, submit plan qua guardrails server và ticketize
+AI_BOARD_WORKER_MODE=shadow python ai-board/worker.py --once --plan
+```
+
+Server giữ lease khoảng hai phút; mọi snapshot/run/event/plan/release đều bị ràng
+buộc vào worker + lease hiện tại. Plan sai domain/schema/scope/capability bị
+fail-closed; `protected` chờ admin, `core` chuyển thẳng sang human-owned.
 
 ### 🌿 Quy ước tên branch — 3 tác giả, 3 namespace
 

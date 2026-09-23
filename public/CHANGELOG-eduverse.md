@@ -4,6 +4,66 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-22 — Phiên 69 · Hết đường vòng: **port thẳng route hộp thư sang nhánh production**
+
+**Kết luận:** **Không xử lý được yêu cầu nào của người học** (ngày thứ 10) — hộp thư vẫn chưa đọc được nên không có yêu cầu thật, và không bịa việc. Nhưng phiên này **không dừng ở chẩn đoán nữa**: thay vì lại đề nghị người vận hành quyết định chuyện kiến trúc (việc đã treo 10 ngày), Ban điều hành AI **port sẵn route đọc-chỉ sang chính nhánh mà production đang chạy** và mở PR để merge là dùng được ngay.
+
+### Đo thật hôm nay (2026-09-22)
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `GET /api/health` | `200` — `{"ok":true,"service":"tizia","port":8041,…,"env":"production"}`, uptime ~2,3 ngày |
+| `GET /api/ai-board/inbox` (có header key) | `401 {"needLogin":true}` — như phiên 68 |
+| `node scripts/check-deployed-build.mjs` | vẫn **`40fd384` (2026-07-24)**, nhánh `feat/postgres-migration`, **không** chung gốc với `main`; 4/4 phép kiểm chứng `200`/`404` khớp |
+| `GET /api/requests/:id/thread` (id 1, 5, 20, 100, 200) | `401 needLogin` — **đường đọc cuối cùng còn lại cũng bị chặn** |
+| `dev/staging/stg/board/ai/api2/new/v2/main.tizia.vn` | không kết nối được |
+| `AI_BOARD_KEY` trong môi trường routine | **vẫn chưa có** |
+
+**Phát hiện mới:** trên chính nhánh production, `GET /api/requests` chỉ trả yêu cầu của **tài khoản đang đăng nhập** và `/api/requests/:id/thread` bị auth gate chung chặn. Nghĩa là **không tồn tại đường nào** để phiên hàng ngày (không đăng nhập được) đọc yêu cầu của HS/SV trên bản đang chạy — dù có key, dù biết đúng id. Đây là lý do 10 ngày qua không phiên nào đọc được gì.
+
+### Việc đã làm — 2 nhánh
+
+**1) `ai-board/2026-09-22-inbox-prod-branch` (PR riêng, nhắm vào `feat/postgres-migration`)** — port route đọc-chỉ `/api/ai-board/inbox` sang đúng nhánh production:
+
+| File | Thay đổi |
+|---|---|
+| `server/contexts/ai-agent/inbox-api.js` | **MỚI** — route `GET /api/ai-board/inbox`, auth bằng header `x-ai-board-key` (`timingSafeEqual` trên digest SHA-256), **tắt mặc định**: không set `AI_BOARD_KEY` (≥24 ký tự) thì không mount route nào, path trả `404`. Khác bản trên `main`: DB là Postgres (async) nên handler `await`, và bọc `try/catch` để lỗi truy vấn thành `500` JSON thay vì unhandled rejection treo request. |
+| `server/db.js` | Thêm `listBoardInbox()` — `SELECT` yêu cầu `pending`/`reviewing` kèm thread. Chỉ đọc, **không có đường ghi nào**. Bỏ qua `awaiting_user` vì bóng đang ở sân HS (HS nhắn lại thì `reopenRequestIfClosed()` tự đẩy về `reviewing`). |
+| `server/index.js` | Mount `attachAiBoardInbox(r)` cạnh `attachAdminDb(r)`. |
+| `server/contexts/identity/auth.js` | `'/api/ai-board/'` vào `PUBLIC_PATH_PREFIXES` — route tự verify key qua header, không dùng cookie nên không mượn được quyền người đang đăng nhập, cũng không phải bề mặt CSRF. |
+| `.env.example` | Tài liệu `AI_BOARD_KEY`. |
+| `scripts/test-ai-board-inbox.mjs` | **MỚI** — bộ kiểm thử chạy được **không cần Postgres**. |
+
+**2) `ai-board/2026-09-22` (PR vào `main`)** — `scripts/fetch-inbox.mjs`: (a) nhánh `401 needLogin` chỉ thêm **đường ngắn** (merge PR port + đặt key + deploy lại chính nhánh đang chạy) bên cạnh lời khuyên cũ "quyết định kiến trúc trước"; (b) **thử lại 1 lần khi gặp 5xx** — hôm nay lần gọi đầu trả `503` kèm body `DNS resolution failed (transient resolver error)` (lỗi lớp mạng giữa đường, gọi lại ngay sau đó ra `401` bình thường), bản cũ kết luận nhầm thành "domain do app Next.js phục vụ" — sai hẳn hướng sửa.
+
+**Kiểm thử (chạy thật, không phải mô tả):**
+- `node --check` pass cho toàn bộ 5 file `.js/.mjs` đã sửa/thêm.
+- `scripts/test-ai-board-inbox.mjs`: SQL sau `convert()` của `server/pg.js` dùng `$1` (không còn `@named`), `limit` bị cap `500` / mặc định `200`, hình dạng bản ghi giữ nguyên (`id`/`db_id`/`from`/`subject`/`thread`…), route trả `401`/`403`/`200`/`500` đúng.
+- **Boot server thật** của nhánh production (pg bị chặn bằng stub, auth gate đầy đủ): `401` trả về là thông điệp của **chính route** ("Thiếu header x-ai-board-key"), **không phải** `needLogin` ⇒ gate đã cho `/api/ai-board/` đi qua; key sai → `403`; key đúng → `200` kèm `stats`/`by_domain`.
+- `scripts/fetch-inbox.mjs` trỏ vào server đó → ghi đúng `ai-board/inbox.json` (chuỗi đầu-cuối chạy thông).
+- Nhánh thử-lại 5xx: server giả `503`-rồi-`200` → script phục hồi và ghi inbox; server giả `503` liên tục → vẫn in đúng chẩn đoán cũ, exit `1`. `ai-board/inbox.json` khôi phục nguyên trạng sau kiểm thử.
+
+**Một lỗi tự phát hiện lúc chạy thật đã sửa trước khi commit:** trong bộ kiểm thử, hai server `express` được `listen()` rồi `await` tuần tự — server thứ hai đã phát `listening` xong trước khi gắn listener nên promise không bao giờ resolve (kiểm thử treo). Sửa bằng cách kiểm `srv.listening` trước rồi `Promise.all`.
+
+### Người vận hành cần làm gì (nay chỉ còn 2 bước, KHÔNG phải quyết định kiến trúc)
+
+```bash
+# 1) Merge PR "port /api/ai-board/inbox sang nhánh production"
+#    (nhánh ai-board/2026-09-22-inbox-prod-branch → feat/postgres-migration).
+#    Diff: +1 file route, +1 hàm SELECT, +1 dòng mount, +1 prefix public. Tắt mặc định.
+
+# 2) Sinh key, đặt vào .env, deploy lại CHÍNH nhánh production hiện hành:
+openssl rand -hex 32
+echo 'AI_BOARD_KEY=<key vừa sinh>' >> .env && docker compose up -d --build
+
+# 3) Kiểm chứng (phải thấy danh sách yêu cầu, không còn 401):
+AI_BOARD_KEY=<key> node scripts/fetch-inbox.mjs
+```
+
+Rồi cấp **chính key đó** cho môi trường chạy routine. Xong là hôm sau phiên hàng ngày đọc được yêu cầu thật của HS/SV và bắt đầu xử lý. Việc hợp nhất `main` ↔ `feat/postgres-migration` vẫn nên làm, nhưng **không còn chặn** dịch vụ cho người học nữa.
+
+---
+
 ## 2026-09-21 — Phiên 68 · Tìm ra bản build production thật: **nhánh `feat/postgres-migration`, không phải `main`**
 
 **Kết luận:** **Không xử lý được yêu cầu nào của người học** (ngày thứ 9) — hộp thư vẫn không đọc được nên không có yêu cầu thật, và không bịa việc. Nhưng hôm nay **tìm ra nguyên nhân gốc thật sự**, và nó khác hẳn cái mà 6 phiên trước kết luận.
