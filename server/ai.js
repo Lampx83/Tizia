@@ -12,10 +12,11 @@
 // với ai-board/harness/models.py). Nguồn sự thật DUY NHẤT là `.env` — thiếu
 // biến nào thì `/api/ai/*` trả 503 rõ ràng thay vì âm thầm gọi ra một endpoint
 // không ai biết trước là gì:
-//   OLLAMA_URL     — endpoint Ollama, ví dụ http://<host>:<port>/ollama/api
+//   OLLAMA_URL     — base URL của Ollama; client nối thêm /api/generate hoặc /chat
 //   OLLAMA_SECKEY  — Header x-ollama-seckey. Tuỳ endpoint có gateway hay không
 //                    (không set thì không gắn header, xem đoạn header bên dưới).
-//   OLLAMA_MODEL   — tên model (ví dụ qwen2.5:14b-instruct-ctx16k)
+//   TIZIA_MODEL_<ENDPOINT> / TIZIA_MODEL_DEFAULT — model route-specific hoặc mặc định
+//   OLLAMA_MODEL   — fallback tương thích; GATE1_MODEL là fallback cuối cho dev
 //   OLLAMA_TIMEOUT_MS — timeout 1 yêu cầu (mặc định 60s — không phải bí mật,
 //                       giữ default này vì chỉ là tuning, không phải endpoint/key)
 //
@@ -28,17 +29,24 @@
 import { aiQuotaGate, recordAiCall } from './ai-quota.js';
 import { saveAiQuestions, saveAiQa, getAiQuestions, getAiQa, getAiContentCounts } from './db.js';
 import { sendGA4Event } from './contexts/analytics/ga4-mp.js';
+import {
+  addSecurityGuardrails,
+  containsPromptDisclosure,
+  isPromptExtractionRequest,
+  PROMPT_DISCLOSURE_REFUSAL,
+  wrapUntrustedInput,
+} from './ai-prompt-guardrails.js';
+import { currentAIModel, resolveAIModel, runWithAIModel } from './ai-model-router.js';
 
 const OLLAMA_URL = (process.env.OLLAMA_URL || '').replace(/\/+$/, '');
 const OLLAMA_SECKEY = process.env.OLLAMA_SECKEY || '';
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || '';
+const OLLAMA_MODEL = resolveAIModel('default');
 const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS) || 60_000;
-const OLLAMA_CONFIGURED = Boolean(OLLAMA_URL && OLLAMA_MODEL);
 
-if (OLLAMA_CONFIGURED) {
-  console.log(`[ai] Ollama backend = ${OLLAMA_URL} (model=${OLLAMA_MODEL})`);
+if (OLLAMA_URL) {
+  console.log(`[ai] Ollama backend = ${OLLAMA_URL} (default model=${OLLAMA_MODEL || 'per-route'})`);
 } else {
-  console.warn('[ai] OLLAMA_URL/OLLAMA_MODEL chưa set trong .env — /api/ai/* sẽ trả 503 cho mọi call.');
+  console.warn('[ai] OLLAMA_URL chưa set trong .env — /api/ai/* sẽ trả 503 cho mọi call.');
 }
 
 /**
@@ -100,22 +108,23 @@ function wrapAi(endpoint, handler) {
   return [
     aiQuotaGate(endpoint),
     async (req, res) => {
-      if (!OLLAMA_CONFIGURED) {
-        return res.status(503).json({ error: 'AI backend chưa cấu hình (thiếu OLLAMA_URL/OLLAMA_MODEL trong .env)' });
+      const model = resolveAIModel(endpoint);
+      if (!OLLAMA_URL || !model) {
+        return res.status(503).json({ error: 'AI backend chưa cấu hình (thiếu OLLAMA_URL hoặc model cho route)' });
       }
       const t0 = Date.now();
       try {
-        const result = await handler(req.body || {}, req);
+        const result = await runWithAIModel(model, () => handler(req.body || {}, req));
         const u = result?._usage || {};
         recordAiCall(req, {
-          provider: 'ollama', model: OLLAMA_MODEL,
+          provider: 'ollama', model,
           prompt_tokens:     u.prompt_tokens     || 0,
           completion_tokens: u.completion_tokens || 0,
           status: 'ok',
         });
         // GA4: ai_chat — endpoint + model + thời gian xử lý. Tokens nếu handler báo.
         sendGA4Event(req, 'ai_chat', {
-          endpoint, model: OLLAMA_MODEL,
+          endpoint, model,
           prompt_tokens: u.prompt_tokens || 0,
           completion_tokens: u.completion_tokens || 0,
           duration_ms: Date.now() - t0,
@@ -124,9 +133,9 @@ function wrapAi(endpoint, handler) {
         if (result && '_usage' in result) delete result._usage;
         res.json(result);
       } catch (e) {
-        recordAiCall(req, { provider: 'ollama', model: OLLAMA_MODEL, status: 'error' });
+        recordAiCall(req, { provider: 'ollama', model, status: 'error' });
         sendGA4Event(req, 'ai_chat', {
-          endpoint, model: OLLAMA_MODEL,
+          endpoint, model,
           duration_ms: Date.now() - t0, status: 'error',
         });
         console.error('[ai] handler error:', e?.message || e);
@@ -154,24 +163,29 @@ export async function ollamaGenerate({ prompt, system, temperature = 0.3, json =
   const ctrl = new AbortController();
   const tid = setTimeout(() => ctrl.abort(), OLLAMA_TIMEOUT_MS);
   try {
+    const protectedSystem = addSecurityGuardrails([{ role: 'system', content: system || '' }])[0].content;
     const body = {
-      model: OLLAMA_MODEL,
-      prompt,
+      model: currentAIModel(OLLAMA_MODEL),
+      prompt: wrapUntrustedInput(prompt),
+      system: protectedSystem,
       stream: false,
       options: { temperature, num_predict: maxTokens },
     };
-    if (system) body.system = system;
     if (json) body.format = 'json';
 
-    const res = await fetch(`${OLLAMA_URL}/generate`, {
+    const headers = { 'Content-Type': 'application/json' };
+    if (OLLAMA_SECKEY) headers['x-ollama-seckey'] = OLLAMA_SECKEY;
+    const res = await fetch(`${OLLAMA_URL}/api/generate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-ollama-seckey': OLLAMA_SECKEY },
+      headers,
       body: JSON.stringify(body),
       signal: ctrl.signal,
     });
     if (!res.ok) throw new Error(`Ollama HTTP ${res.status}: ${await res.text().catch(() => '')}`);
     const data = await res.json();
-    return String(data.response || '').trim();
+    const reply = String(data.response || '').trim();
+    if (containsPromptDisclosure(reply, protectedSystem)) throw new Error('AI response blocked by prompt-disclosure guard');
+    return reply;
   } finally {
     clearTimeout(tid);
   }
@@ -189,23 +203,30 @@ async function ollamaChat({ messages, temperature = 0.7, json = false, maxTokens
   const ctrl = new AbortController();
   const tid = setTimeout(() => ctrl.abort(), OLLAMA_TIMEOUT_MS);
   try {
+    const latestUserMessage = [...messages].reverse().find((message) => message.role === 'user')?.content || '';
+    if (isPromptExtractionRequest(latestUserMessage)) return PROMPT_DISCLOSURE_REFUSAL;
+    const protectedMessages = addSecurityGuardrails(messages);
+    const protectedSystem = protectedMessages[0].content;
     const body = {
-      model: OLLAMA_MODEL,
-      messages,
+      model: currentAIModel(OLLAMA_MODEL),
+      messages: protectedMessages,
       stream: false,
       options: { temperature, num_predict: maxTokens },
     };
     if (json) body.format = 'json';
 
+    const headers = { 'Content-Type': 'application/json' };
+    if (OLLAMA_SECKEY) headers['x-ollama-seckey'] = OLLAMA_SECKEY;
     const res = await fetch(`${OLLAMA_URL}/chat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-ollama-seckey': OLLAMA_SECKEY },
+      headers,
       body: JSON.stringify(body),
       signal: ctrl.signal,
     });
     if (!res.ok) throw new Error(`Ollama HTTP ${res.status}: ${await res.text().catch(() => '')}`);
     const data = await res.json();
-    return String(data.message?.content || '').trim();
+    const reply = String(data.message?.content || '').trim();
+    return containsPromptDisclosure(reply, protectedSystem) ? PROMPT_DISCLOSURE_REFUSAL : reply;
   } finally {
     clearTimeout(tid);
   }
@@ -216,9 +237,11 @@ async function ollamaChat({ messages, temperature = 0.7, json = false, maxTokens
 // ─────────────────────────────────────────────────────────────
 
 async function handleHealth() {
+  const model = resolveAIModel('health');
+  if (!OLLAMA_URL || !model) return { ok: false, error: 'AI backend chưa cấu hình (thiếu OLLAMA_URL hoặc model)' };
   try {
-    const reply = await ollamaGenerate({ prompt: 'Trả lời gọn: OK', maxTokens: 20 });
-    return { ok: true, url: OLLAMA_URL, model: OLLAMA_MODEL, sampleReply: reply };
+    const reply = await runWithAIModel(model, () => ollamaGenerate({ prompt: 'Trả lời gọn: OK', maxTokens: 20 }));
+    return { ok: true, url: OLLAMA_URL, model, sampleReply: reply };
   } catch (e) {
     return { ok: false, url: OLLAMA_URL, error: String(e?.message || e) };
   }
@@ -490,7 +513,7 @@ async function handleTutorChat({ domain = 'general', grade, context, history = [
     console.warn('[ai-tutor] ollama failed, fallback template:', e?.message || e);
     reply = templateTutorReply(domain, message);
   }
-  return { reply: reply.trim(), domain, mode: isSocratic ? 'socratic' : 'direct', model: OLLAMA_MODEL };
+  return { reply: reply.trim(), domain, mode: isSocratic ? 'socratic' : 'direct', model: currentAIModel(OLLAMA_MODEL) };
 }
 
 function templateTutorReply(domain, message) {
@@ -1244,7 +1267,7 @@ Soạn ${n} câu hỏi MỚI. CHỈ JSON.`;
       }));
     } catch (e) { console.warn('[practice-more] save failed:', e?.message); }
   }
-  return { questions, topic, saved, model: OLLAMA_MODEL };
+  return { questions, topic, saved, model: currentAIModel(OLLAMA_MODEL) };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1294,7 +1317,7 @@ QUY TẮC:
       }));
     } catch (e) { console.warn('[lesson-coach] save failed:', e?.message); }
   }
-  return { reply, saved, model: OLLAMA_MODEL };
+  return { reply, saved, model: currentAIModel(OLLAMA_MODEL) };
 }
 
 // ─────────────────────────────────────────────────────────────

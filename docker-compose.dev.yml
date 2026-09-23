@@ -1,0 +1,22 @@
+services:
+  tizia-dev:
+    build:
+      context: .
+    image: tizia:dev
+    container_name: tizia-dev
+    restart: unless-stopped
+    ports:
+      - "8042:8041"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      PORT: 8041
+      HOST: 0.0.0.0
+      DATA_DIR: /data
+    volumes:
+      - tizia-dev-data:/data
+
+volumes:
+  tizia-dev-data:
+    driver: local

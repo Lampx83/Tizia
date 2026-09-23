@@ -5,11 +5,11 @@ import express from 'express';
 import Database from 'better-sqlite3';
 
 import { applyAiBoardMigrations, createAiBoardStore } from '../server/ai-board/store.js';
-import { attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
+import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
 
 const KEY = 'fixture-worker-key-32-characters-long';
 
-function fixture() {
+function fixture({ seedRequest = true } = {}) {
   const db = new Database(':memory:');
   db.pragma('foreign_keys = ON');
   db.exec(`
@@ -28,17 +28,32 @@ function fixture() {
   `);
   applyAiBoardMigrations(db);
   const store = createAiBoardStore(db);
-  store.createRequestWithRoot({
+  if (seedRequest) store.createRequestWithRoot({
     ownerUserId: 1, ownerDomain: 'pharmacy', ownerDisplayName: 'Lan',
     idempotencyKey: 'worker-request-001', title: 'Thêm bộ thẻ thuốc', detail: 'Nội dung fixture',
   });
   return { db, store };
 }
 
-async function serve(store) {
+async function serve(store, env = { AI_BOARD_WORKER_KEY: KEY }) {
   const app = express();
   app.use(express.json());
-  attachAiBoardWorkerRoutes(app, { store, env: { AI_BOARD_WORKER_KEY: KEY }, leaseMs: 120_000 });
+  app.use((req, _res, next) => {
+    if (req.headers['x-test-user'] === '1') {
+      req.user = { id: 1, username: 'lan', display_name: 'Lan', role: 'student', enrolled_domain: 'pharmacy' };
+    }
+    next();
+  });
+  attachAiBoardRequestRoutes(app, {
+    store,
+    requireAuth: (req, res, next) => req.user ? next() : res.status(401).json({ error: 'unauthorized' }),
+    requireEnrolled: (req, res, next) => req.user?.enrolled_domain
+      ? next()
+      : res.status(403).json({ error: 'enrollment_required' }),
+    requireAdmin: (_req, res) => res.status(403).json({ error: 'forbidden' }),
+    requireStrictCsrf: (_req, res) => res.status(403).json({ error: 'csrf_failed' }),
+  });
+  attachAiBoardWorkerRoutes(app, { store, env, leaseMs: 120_000 });
   const server = http.createServer(app);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   return {
@@ -46,6 +61,98 @@ async function serve(store) {
     close: () => new Promise((resolve, reject) => server.close((e) => e ? reject(e) : resolve())),
   };
 }
+
+test('D0 HTTP flow creates a root request, validates a plan, and creates child tickets', async () => {
+  const { db, store } = fixture({ seedRequest: false });
+  const { base, close } = await serve(store, { AI_BOARD_KEY: KEY });
+  try {
+    const created = await fetch(`${base}/api/requests`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-test-user': '1', 'idempotency-key': 'd0-http-request-001' },
+      body: JSON.stringify({ title: 'Thêm trang học tập', detail: 'Trang demo tĩnh.' }),
+    });
+    assert.equal(created.status, 200);
+    const request = await created.json();
+    assert.equal(request.created, true);
+    assert.ok(request.request_id);
+    assert.ok(request.root_ticket_id);
+
+    const claim = await post(base, '/api/ai-board/worker/claim', {
+      worker_id: 'd0-http-worker', version: 'd0', mode: 'shadow', intent: 'plan',
+    });
+    const { ticket } = await claim.json();
+    assert.equal(claim.status, 200);
+    assert.equal(ticket.id, request.root_ticket_id);
+
+    const lease = { worker_id: 'd0-http-worker', lease_token: ticket.lease_token };
+    const snapshot = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/snapshot`, lease);
+    assert.equal((await snapshot.json()).request.title, 'Thêm trang học tập');
+
+    const runResponse = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/runs`, {
+      ...lease, trigger: 'plan', idempotency_key: 'd0-http-run-001',
+    });
+    const { run } = await runResponse.json();
+    const plan = {
+      domain: 'pharmacy', goal: 'Tạo trang demo học tập tĩnh.',
+      allowed_scope: ['public/pharmacy/demo.html'], acceptance: ['Trang có tiêu đề.'],
+      tests: ['node --test'], capabilities: ['public.ui'], risk: 'low', non_goals: ['Không sửa auth.'],
+      steps: [{ order: 1, title: 'Tạo trang demo', description: 'Thêm HTML tĩnh.',
+        allowed_scope: ['public/pharmacy/demo.html'], acceptance: ['Trang có tiêu đề.'],
+        tests: ['node --test'], capability: 'public.ui', risk: 'low', non_goals: ['Không sửa auth.'] }],
+    };
+    const planBody = { ...lease, run_id: run.id, plan, budget_used: 1, idempotency_key: 'd0-http-plan-001' };
+    const planned = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/plan`, planBody);
+    const result = await planned.json();
+    assert.equal(planned.status, 200);
+    assert.equal(result.status, 'planned');
+    assert.equal(result.children.length, 1);
+    assert.equal(result.children[0].status, 'queued');
+
+    const retry = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/plan`, planBody);
+    assert.equal((await retry.json()).children[0].id, result.children[0].id);
+
+    const rejectedRequestResponse = await fetch(`${base}/api/requests`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-test-user': '1', 'idempotency-key': 'd0-http-request-002' },
+      body: JSON.stringify({ title: 'Yêu cầu cần chặn', detail: 'Plan sai domain.' }),
+    });
+    const rejectedRequest = await rejectedRequestResponse.json();
+    const rejectedClaim = await post(base, '/api/ai-board/worker/claim', {
+      worker_id: 'd0-http-rejector', version: 'd0', mode: 'shadow', intent: 'plan',
+    });
+    const { ticket: rejectedTicket } = await rejectedClaim.json();
+    assert.equal(rejectedTicket.id, rejectedRequest.root_ticket_id);
+    const rejectedLease = { worker_id: 'd0-http-rejector', lease_token: rejectedTicket.lease_token };
+    const rejectedRunResponse = await post(base, `/api/ai-board/worker/tickets/${rejectedTicket.id}/runs`, {
+      ...rejectedLease, trigger: 'plan', idempotency_key: 'd0-http-run-002',
+    });
+    const { run: rejectedRun } = await rejectedRunResponse.json();
+    const rejected = await post(base, `/api/ai-board/worker/tickets/${rejectedTicket.id}/plan`, {
+      ...rejectedLease, run_id: rejectedRun.id, plan: { ...plan, domain: 'it' },
+      budget_used: 1, idempotency_key: 'd0-http-plan-002',
+    });
+    assert.equal(rejected.status, 422);
+    assert.equal((await rejected.json()).error, 'domain_mismatch');
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM ai_tickets WHERE parent_id=?').get(rejectedTicket.id).n, 0);
+  } finally {
+    await close();
+    db.close();
+  }
+});
+
+test('AI_BOARD_KEY can authenticate the D0 worker API', async () => {
+  const { db, store } = fixture();
+  const { base, close } = await serve(store, { AI_BOARD_KEY: KEY });
+  try {
+    const response = await post(base, '/api/ai-board/worker/claim', {
+      worker_id: 'key-alias-worker', version: 'test', mode: 'shadow',
+    });
+    assert.equal(response.status, 200);
+  } finally {
+    await close();
+    db.close();
+  }
+});
 
 function post(base, path, body, { key = KEY } = {}) {
   return fetch(`${base}${path}`, {
