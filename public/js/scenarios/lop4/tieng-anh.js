@@ -324,6 +324,15 @@ export const P4TA_WEEKS = [
     Q('Đáp: "Did you go out yesterday?"', ['Yes, I did', 'Yes, I do', 'Yes, I was', 'Yes, I am'], 0, 'Did → Yes, I did / No, I didn\'t.', ['Đúng — Did hỏi thì đáp Yes, I did.', 'Sai — câu hỏi Did không đáp bằng do.', 'Sai — câu hỏi Did không đáp bằng was.', 'Sai — câu hỏi Did không đáp bằng am.']),
     Q('"There ___ many students in my class."', ['is (dùng với danh từ số ít)', 'are', 'be (dạng nguyên thể, không chia ngôi)', 'am (chỉ dùng với I)'], 1, 'Students số nhiều → are.', ['Sai — is dùng với danh từ số ít.', 'Đúng — students số nhiều nên there are.', 'Sai — be là nguyên thể, phải chia ngôi.', 'Sai — am chỉ dùng với I.']),
   ]),
+
+  M(36, 'End of Grade 4 — Review and Grade 5 Preview', [
+    Q('Chọn câu ĐÚNG diễn tả dự định: (she / visit / grandma / next week)', ['She going to visit her grandma next week.', 'She is going to visit her grandma next week.', 'She is go to visit her grandma next week.', 'She will going to visit her grandma next week.'], 1, 'Cấu trúc dự định: be + going to + V nguyên thể.', ['Sai — thiếu động từ be (is) trước going to.', 'Đúng — is going to + visit (nguyên thể).', 'Sai — sau going to phải là to + V, không phải is go to.', 'Sai — không dùng will cùng going to.']),
+    Q('"Mount Everest is ___ mountain in the world."', ['the highest', 'higher', 'high', 'more high'], 0, 'So sánh nhất của tính từ ngắn: the + adj-est.', ['Đúng — so sánh nhất của high là the highest.', 'Sai — higher là so sánh hơn, cần thêm than.', 'Sai — high là dạng nguyên, không so sánh.', 'Sai — high là tính từ ngắn nên dùng highest, không dùng more high.']),
+    Q('Dạng quá khứ (V2) của "go" là?', ['goed', 'gone', 'went', 'going'], 2, 'go — went — gone; V2 là went.', ['Sai — go là động từ bất quy tắc, không thêm -ed.', 'Sai — gone là V3 (quá khứ phân từ), dùng với have/has.', 'Đúng — quá khứ đơn của go là went.', 'Sai — going là dạng V-ing.']),
+    Q('Modal verb nào diễn tả KHẢ NĂNG (ability)?', ['must', 'can', 'should', 'may'], 1, 'Can diễn tả khả năng: I can swim.', ['Sai — must chỉ sự bắt buộc.', 'Đúng — can diễn tả khả năng làm được việc gì.', 'Sai — should là lời khuyên.', 'Sai — may xin phép hoặc chỉ khả năng có thể xảy ra.']),
+    Q('"___ books do you have?" — điền từ hỏi đúng.', ['How much', 'How long', 'How many', 'How often'], 2, 'Books là danh từ đếm được số nhiều nên dùng How many.', ['Sai — How much dùng cho danh từ không đếm được (water, money).', 'Sai — How long hỏi độ dài hoặc thời gian.', 'Đúng — books đếm được số nhiều nên dùng How many.', 'Sai — How often hỏi mức độ thường xuyên.']),
+    Q('Ở Lớp 5 em sẽ học thì mới nào?', ['Present perfect (have/has + V3)', 'Simple present', 'Simple past', 'Present continuous'], 0, 'Lớp 5 giới thiệu present perfect và future simple.', ['Đúng — present perfect (have/has + V3) là thì mới của Lớp 5.', 'Sai — simple present em đã học ở Lớp 4.', 'Sai — simple past em đã học ở Lớp 4.', 'Sai — present continuous em đã học ở Lớp 4.']),
+  ], { difficulty: 3, description: 'Review Grade 4 vocabulary and grammar, then preview what comes in Grade 5.' }),
 ];
 
 export const P4TA_SCENARIOS = indexBy(P4TA_WEEKS);

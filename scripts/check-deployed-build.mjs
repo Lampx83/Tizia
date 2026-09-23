@@ -111,7 +111,7 @@ function blobsAt(sha, paths) {
 }
 
 /**
- * Commit MỚI NHẤT (trên MỌI ref) mà TẤT CẢ file chứng cứ khớp cùng lúc.
+ * TẤT CẢ commit (trên MỌI ref) mà cả bộ file chứng cứ khớp cùng lúc — mới nhất trước.
  *
  * Vì sao phải khớp CÙNG LÚC: dò từng file riêng lẻ cho ra các mốc lệch nhau (một
  * file có thể giữ nguyên nội dung suốt 2 tháng) và ghép lại thành bức tranh sai.
@@ -119,18 +119,33 @@ function blobsAt(sha, paths) {
  *
  * Vì sao quét MỌI ref chứ không riêng `main`: xem phần đầu file — production đang
  * chạy một nhánh không chung gốc lịch sử với `main`.
+ *
+ * Vì sao trả về CẢ DANH SÁCH, không chỉ commit mới nhất (sửa 2026-09-23): bản cũ
+ * `return` ngay commit đầu tiên khớp và in ra như một câu trả lời chắc chắn. Đo
+ * thật hôm đó: nó báo "Khớp 38b9a58 — nhánh ai-board/2026-09-22-inbox-prod-branch"
+ * trong khi commit ấy KHÔNG đổi một file nào dưới `public/` so với 40fd384 (nó chỉ
+ * thêm route ở `server/`). Cả hai commit đều khớp hoàn hảo, bộ chứng cứ không thể
+ * phân biệt — nhưng báo cáo lại khiến người đọc tin PR port route đã deploy, tức
+ * đẩy việc sửa đi đúng hướng ngược lại. Biết có bao nhiêu ứng viên là biết phép đo
+ * này nói được đến đâu.
  */
-function findDeployCommit(want) {
+function findDeployCommits(want) {
   const paths = [...want.keys()];
   const revs = git(['rev-list', '--all', '--date-order']).split('\n').filter(Boolean);
+  const matches = [];
   for (const sha of revs.slice(0, MAX_SCAN)) {
     const have = blobsAt(sha, paths);
     if (have.size !== paths.length) continue;
     let ok = true;
     for (const [p, h] of want) if (have.get(p) !== h) { ok = false; break; }
-    if (ok) return commitInfo(sha);
+    if (ok) matches.push(commitInfo(sha));
   }
-  return null;
+  return matches.filter(Boolean);
+}
+
+/** Commit này có chứa file đó không? Dùng để loại ứng viên bằng bằng chứng hành vi. */
+function hasPath(sha, repoFile) {
+  return Boolean(git(['ls-tree', '--name-only', sha, '--', repoFile]));
 }
 
 /** Các nhánh remote chứa commit này — để người vận hành biết deploy từ đâu. */
@@ -214,7 +229,8 @@ if (!want.size) {
 
 // ── 2. Dò commit trên MỌI nhánh ──
 console.log('\n[check-build] Dò commit khớp cả bộ chứng cứ trên mọi ref…');
-const deploy = findDeployCommit(want);
+const candidates = findDeployCommits(want);
+const deploy = candidates[0] || null;
 let deployBranches = [];
 let sharesHistory = null;
 if (deploy) {
@@ -225,6 +241,17 @@ if (deploy) {
   console.log(`  ✔ Khớp ${deploy.short} (${deploy.date}) — ${deploy.subject.slice(0, 64)}`);
   console.log(`    nhánh chứa commit này: ${deployBranches.length ? deployBranches.join(', ') : '(không nhánh remote nào)'}`);
   console.log(`    chung gốc lịch sử với '${REF}'? ${sharesHistory ? 'CÓ' : 'KHÔNG — hai lịch sử rời nhau'}`);
+  // Bao nhiêu commit khác cũng khớp y hệt? Nếu >1 thì đây là một KHOẢNG, không
+  // phải một điểm — nói rõ ra thay vì để người đọc tưởng đã chốt được commit.
+  if (candidates.length > 1) {
+    const oldest = candidates[candidates.length - 1];
+    console.log(`    ⚠ CÒN ${candidates.length - 1} commit khác khớp y hệt — bộ chứng cứ KHÔNG phân biệt được:`);
+    console.log(`      cũ nhất trong nhóm: ${oldest.short} (${oldest.date}) — ${oldest.subject.slice(0, 56)}`);
+    console.log('      (các commit này không đổi file nào dưới public/ so với nhau). Vậy bản deploy là MỘT');
+    console.log(`      commit nào đó trong nhóm ${oldest.short}..${deploy.short}, KHÔNG chắc là commit mới nhất.`);
+    console.log('      → Muốn thu hẹp: thêm vào PROBES một file public/ mà các commit đó khác nhau, hoặc');
+    console.log('        dùng bằng chứng hành vi (route/API sống hay chưa) ở bước 4.');
+  }
 } else {
   console.log(`  ✖ Không commit nào trong repo này khớp cả bộ (đã quét tối đa ${MAX_SCAN} commit).`);
   console.log('    → Bản deploy dựng từ code chưa từng push lên đây, hoặc thiếu ref: `git fetch origin --prune` rồi chạy lại.');
@@ -262,14 +289,18 @@ if (deploy && atHead.length !== rows.length) {
 // ── 4. Route hộp thư đã sống chưa ──
 console.log('');
 let inboxNote = '(không gọi được)';
+// null = không suy ra được; false = bản deploy CHƯA có route; true = ĐÃ có route.
+let deployHasInboxRoute = null;
 try {
   const r = await getText(`${BASE}/api/ai-board/inbox`);
   if (r.status === 401 && /"needLogin"\s*:\s*true/.test(r.body)) {
     inboxNote = '401 needLogin ⇒ auth gate chung nuốt request — bản deploy CHƯA có "/api/ai-board/" trong PUBLIC_PATH_PREFIXES';
+    deployHasInboxRoute = false;
   } else if (r.status === 404) {
     inboxNote = '404 ⇒ code đã deploy nhưng AI_BOARD_KEY chưa set (hoặc <24 ký tự) nên route không mount';
   } else if (r.status === 401 || r.status === 403) {
     inboxNote = `${r.status} ⇒ route ĐÃ sống, chỉ là header/key chưa đúng — đây là trạng thái mong muốn`;
+    deployHasInboxRoute = true;
   } else {
     inboxNote = `HTTP ${r.status}`;
   }
@@ -277,6 +308,37 @@ try {
   inboxNote = `lỗi mạng: ${err?.message || err}`;
 }
 console.log(`  /api/ai-board/inbox  ${inboxNote}`);
+
+// ── 4b. Thu hẹp nhóm ứng viên bằng BẰNG CHỨNG HÀNH VI ──
+// File tĩnh chỉ nói về `public/`, nên hai commit khác nhau CHỈ ở `server/` thì
+// không phân biệt được (đúng trường hợp của PR port route hộp thư). Nhưng route
+// sống hay chưa lại là câu trả lời trực tiếp về code `server/` đang chạy: bản
+// deploy trả 401 needLogin thì nó KHÔNG THỂ là một commit đã có file route.
+const ROUTE_FILE = 'server/contexts/ai-agent/inbox-api.js';
+let narrowed = candidates;
+if (candidates.length > 1 && deployHasInboxRoute !== null) {
+  narrowed = candidates.filter(c => hasPath(c.sha, ROUTE_FILE) === deployHasInboxRoute);
+  if (narrowed.length && narrowed.length < candidates.length) {
+    const newest = narrowed[0];
+    const oldest = narrowed[narrowed.length - 1];
+    console.log(`\n[check-build] Thu hẹp bằng bằng chứng hành vi (route ${deployHasInboxRoute ? 'ĐÃ' : 'CHƯA'} sống):`);
+    console.log(`  ${candidates.length} → ${narrowed.length} ứng viên; ${narrowed.length === 1
+      ? `chốt được ${newest.short} (${newest.date})`
+      : `nhóm còn lại ${oldest.short}..${newest.short}`}`);
+    if (narrowed[0].sha !== candidates[0].sha) {
+      console.log(`  ⚠ Commit mới nhất khớp file tĩnh (${candidates[0].short}) đã BỊ LOẠI: nó có ${ROUTE_FILE}`);
+      console.log('    nhưng route lại chưa sống ⇒ bản deploy không thể là commit đó.');
+    }
+  } else if (!narrowed.length) {
+    // Hai nguồn bằng chứng chỏi nhau — đừng im lặng chọn một bên.
+    narrowed = candidates;
+    console.log('\n[check-build] ⚠ Bằng chứng tĩnh và bằng chứng hành vi KHÔNG khớp nhau:');
+    console.log(`  mọi ứng viên đều ${deployHasInboxRoute ? 'thiếu' : 'có'} ${ROUTE_FILE}, trái với hành vi đo được.`);
+    console.log('  → Có thể bản deploy dựng từ code chưa push, hoặc `public/` và `server/` không cùng một commit');
+    console.log('    (ví dụ public/ mount từ checkout mới trong khi tiến trình Node vẫn là image cũ chưa restart).');
+  }
+}
+const running = narrowed[0] || deploy;
 
 // ── 5. Kết luận ──
 console.log('');
@@ -289,9 +351,24 @@ if (!deploy) {
   process.exit(2);
 }
 
-const lagDays = Math.round((Date.now() - Date.parse(deploy.date)) / 86400000);
-console.log(`[check-build] ✖ Production KHÔNG chạy '${REF}'. Đang chạy ${deploy.short} (${deploy.date})` +
-  ` — cũ hơn hôm nay ~${lagDays} ngày.`);
+const lag = d => Math.round((Date.now() - Date.parse(d)) / 86400000);
+if (narrowed.length > 1) {
+  // Một KHOẢNG thì phải in ra là khoảng. Bản cũ in mốc mới nhất kèm "~N ngày" như
+  // số đo chắc chắn — con số đó là trường hợp TỐT NHẤT, dễ làm nhẹ đi độ trễ thật.
+  const oldest = narrowed[narrowed.length - 1];
+  console.log(`[check-build] ✖ Production KHÔNG chạy '${REF}'. Đang chạy MỘT commit trong nhóm` +
+    ` ${oldest.short} (${oldest.date}) .. ${running.short} (${running.date})`);
+  console.log(`  — tức cũ hơn hôm nay khoảng ${lag(running.date)}–${lag(oldest.date)} ngày (chưa chốt được commit nào).`);
+} else {
+  console.log(`[check-build] ✖ Production KHÔNG chạy '${REF}'. Đang chạy ${running.short} (${running.date})` +
+    ` — cũ hơn hôm nay ~${lag(running.date)} ngày.`);
+}
+// Nhánh/lịch sử phải nói về commit còn lại SAU khi thu hẹp, không phải về ứng viên
+// mới nhất đã bị bằng chứng hành vi loại (nếu có) — nếu không lại chỉ sai nhánh.
+if (running.sha !== deploy.sha) {
+  deployBranches = branchesContaining(running.sha);
+  sharesHistory = Boolean(git(['merge-base', REF, running.sha]));
+}
 if (deployBranches.length) {
   console.log(`  Nhánh của bản đang chạy: ${deployBranches.join(', ')}`);
 }

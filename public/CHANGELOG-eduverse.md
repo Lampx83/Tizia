@@ -4,6 +4,87 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-23 — Phiên 70 · Tiểu học Lớp 4: **hồi sinh 12 bài lí thuyết "chết"** + sửa một kết luận SAI của công cụ đo bản deploy
+
+**Kết luận về hộp thư:** vẫn **không đọc được** (ngày thứ 11) ⇒ **không xử lý được yêu cầu nào của người học**, không bịa ra yêu cầu. Nhưng phiên này không đi tay không: công cụ kiểm tra toàn vẹn học liệu của chính hệ thống (phiên 58 viết ra) vẫn đang chỉ ra **110 bài lí thuyết mà học sinh KHÔNG BAO GIỜ nhìn thấy** — nội dung đã viết xong, nằm trong repo, nhưng không gắn được vào bài nào. Đó là việc thật, đã đo được, phục vụ trực tiếp người học. Hôm nay đóng trọn **Lớp 4 (12/12 môn)**.
+
+### Đo thật hôm nay (2026-09-23)
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `GET /api/health` | `200` — `{"ok":true,"service":"tizia",…,"env":"production"}`, uptime ~3,3 ngày |
+| `GET /api/ai-board/inbox` | `401 {"needLogin":true}` — auth gate chung vẫn nuốt request ⇒ **PR #97 chưa được merge + deploy** |
+| `GET /api/requests?domain=it` · `/api/requests/1/thread` · `/api/admin/requests` · `/api/ai-board/requests` | tất cả `401 needLogin` — **không còn đường đọc nào** cho phiên tự động (không đăng nhập được) |
+| `AI_BOARD_KEY` trong môi trường routine | **vẫn chưa có** |
+| `node scripts/check-content-integrity.mjs` | **110** bài lí thuyết mồ côi (y như phiên 58 đo ngày 2026-09-07 — 16 ngày không ai sửa) |
+
+**Nguyên nhân 110 bài chết (đã truy ra hôm nay):** các phiên trước viết bài lí thuyết **tuần 36** ("Kết thúc năm học / Hành trang vào lớp sau") với key `<PREFIX>-w36-quiz`, nhưng file scenario của môn đó **chỉ có 35 tuần** — không có quiz tuần 36 nào để bài lí thuyết gắn vào. Cơ chế gắn bài là tra cứu theo đúng id quiz (`if (LOP4_LESSONS[id]) sc.lesson = …` trong `lop4/_index.js`), nên key không khớp = nội dung biến mất im lặng, `node --check` không bắt được.
+
+### Việc đã làm — Lớp 4 (trường Tiểu học), 12/12 môn
+
+Bổ sung **tuần 36** vào 12 file scenario, mỗi tuần **6 câu hỏi** đúng format chung (`Q(stem, 4 lựa chọn, đáp án, giải thích, 4 phản hồi theo lựa chọn)`), nội dung **khớp đúng bài lí thuyết tuần 36 đã có sẵn** của môn đó:
+
+| File (`public/js/scenarios/lop4/`) | Tuần 36 mới | Bài lí thuyết được hồi sinh |
+|---|---|---|
+| `toan.js` | Kết thúc Lớp 4 — Hành trang vào Lớp 5 | `P4-w36-quiz` |
+| `tieng-viet.js` | Hành trang Tiếng Việt vào Lớp 5 | `P4TV-w36-quiz` |
+| `tieng-anh.js` | End of Grade 4 — Review and Grade 5 Preview | `P4TA-w36-quiz` |
+| `khoa-hoc.js` | Hành trang Khoa học vào Lớp 5 | `P4KH-w36-quiz` |
+| `lich-su-dia-ly.js` | Hành trang Lịch sử và Địa lý vào Lớp 5 | `P4LSDL-w36-quiz` |
+| `dao-duc.js` | Hành trang Đạo đức vào Lớp 5 | `P4DD-w36-quiz` |
+| `am-nhac.js` | Hành trang Âm nhạc vào Lớp 5 | `P4AN-w36-quiz` |
+| `my-thuat.js` | Hành trang Mỹ thuật vào Lớp 5 | `P4MT-w36-quiz` |
+| `gdtc.js` | Hành trang Thể chất vào Lớp 5 | `P4GDTC-w36-quiz` |
+| `hdtn.js` | Hành trình Trải nghiệm và Kế hoạch hè | `P4HDTN-w36-quiz` |
+| `cong-nghe.js` | Hành trang Công nghệ vào Lớp 5 | `P4CN-w36-quiz` |
+| `tin-hoc.js` | Hành trang Tin học vào Lớp 5 | `P4TIN-w36-quiz` |
+
+Kèm `public/js/domains/primary/modules.js`: mô tả 12 môn Lớp 4 sửa **"35 tuần" → "36 tuần"** cho khớp thực tế (và sửa luôn dòng tiêu đề khối ghi sai "11 môn" → "12 môn"). Không đổi logic: module loader liệt kê scenario theo prefix id, không dùng con số tuần nào.
+
+### Sửa một lỗi CHẨN ĐOÁN trong `scripts/check-deployed-build.mjs`
+
+Chạy script hôm nay, nó in: **"✔ Khớp `38b9a58` … nhánh `ai-board/2026-09-22-inbox-prod-branch`"** — nghe như PR port route hộp thư **đã** được deploy. **Sai.** Commit `38b9a58` không đổi **một file nào** dưới `public/` so với `40fd384` (nó chỉ thêm code `server/`), nên mọi file chứng cứ đều khớp cả hai. Bản cũ `return` ngay commit khớp **đầu tiên** (mới nhất) và trình bày nó như kết luận chắc chắn — đúng loại sai lầm mà chính file này được viết ra để chống.
+
+Đã sửa thành: trả về **toàn bộ** nhóm commit khớp, và
+
+- nói rõ nhóm có bao nhiêu ứng viên + commit **cũ nhất** trong nhóm ⇒ kết quả là một **khoảng**, không phải một điểm;
+- **thu hẹp bằng bằng chứng hành vi**: route hộp thư trả `401 needLogin` ⇒ bản deploy **không thể** là commit đã có `server/contexts/ai-agent/inbox-api.js` ⇒ loại các ứng viên đó;
+- cảnh báo khi hai nguồn bằng chứng **chỏi nhau** (gợi ý đúng khả năng `public/` mount từ checkout mới trong khi tiến trình Node vẫn là image cũ chưa restart);
+- độ trễ in ra dạng **khoảng** thay vì một con số (số cũ là trường hợp tốt nhất, làm nhẹ đi độ trễ thật);
+- dòng "nhánh của bản đang chạy" tính lại theo commit **sau khi** thu hẹp.
+
+Kết quả đo sau khi sửa: **263 commit khớp y hệt** bộ chứng cứ tĩnh (các file probe không đổi trên nhánh production kể từ 2026-06-08), bằng chứng hành vi thu về nhóm `d98a086..40fd384` ⇒ **bản deploy cũ hơn hôm nay khoảng 62–108 ngày**, và `40fd384` chỉ là **giới hạn trên**. Kết luận "production chạy `40fd384`" của các phiên 68–69 vì vậy cần đọc là "mới nhất có thể là `40fd384`".
+
+### Kiểm thử (chạy thật)
+
+- `node --check` **pass** cho **14/14** file đã sửa (12 scenario Lớp 4 + `modules.js` + `check-deployed-build.mjs`).
+- Nạp thật `lop4/_index.js` rồi kiểm 12 scenario tuần 36: **12/12** gắn được bài lí thuyết (`sc.lesson` khác null), `week=36`, `semester=2`, đủ 6 câu, mỗi câu 4 lựa chọn + 4 phản hồi, chỉ số đáp án trong 0..3, phản hồi đúng/sai khớp đáp án. **0 lỗi.**
+- `node scripts/check-content-integrity.mjs`: **110 → 98** bài mồ côi; **Lớp 4 còn 0**.
+- `node scripts/audit-answer-distribution.js --grade=lop4`: 2158 câu, A 29,4% · B 23,2% · C 24,4% · D 23,0% — 72 câu mới không làm lệch thêm (đáp án rải đều A–D).
+- `node scripts/check-deployed-build.mjs` chạy thật trên production, đối chiếu từng dòng kết luận mới.
+
+### Còn nợ — xếp hàng cho các phiên sau
+
+| Việc | Quy mô |
+|---|---|
+| Bài lí thuyết tuần 36 mồ côi còn lại | **98 bài**: Lớp 1 (9) · Lớp 3 (11) · Lớp 5 (12) · Lớp 7 (6) · Lớp 8 (12) · Lớp 9 (12) · Lớp 10 (12) · Lớp 11 (12) · Lớp 12 (12) |
+| `lop4:tin-hoc` lệch đáp án nặng (**có từ trước**, không phải do phiên này) | 181 câu: **A 82,9%** · B 12,2% · C 5,0% · D 0,0% (χ²=328) — HS đoán "A" là qua bài; cần trộn lại đáp án bằng `scripts/shuffle-answers.js` và rà tay |
+
+### Người vận hành cần làm gì (vẫn là 2 bước cũ, chưa ai làm)
+
+```bash
+# 1) Merge PR #97 (ai-board/2026-09-22-inbox-prod-branch → feat/postgres-migration)
+# 2) Sinh key, đặt vào .env, deploy lại nhánh production hiện hành:
+openssl rand -hex 32
+echo 'AI_BOARD_KEY=<key vừa sinh>' >> .env && docker compose up -d --build
+# 3) Kiểm chứng:
+AI_BOARD_KEY=<key> node scripts/fetch-inbox.mjs
+```
+
+Rồi cấp **chính key đó** cho môi trường chạy routine. Chừng nào chưa xong, mọi phiên hàng ngày vẫn **không thấy** yêu cầu của HS/SV — và mọi cải tiến merge vào `main` (kể cả 12 tuần 36 hôm nay) **chưa tới tay người học**, vì production chạy một nhánh khác.
+
+---
+
 ## 2026-09-22 — Phiên 69 · Hết đường vòng: **port thẳng route hộp thư sang nhánh production**
 
 **Kết luận:** **Không xử lý được yêu cầu nào của người học** (ngày thứ 10) — hộp thư vẫn chưa đọc được nên không có yêu cầu thật, và không bịa việc. Nhưng phiên này **không dừng ở chẩn đoán nữa**: thay vì lại đề nghị người vận hành quyết định chuyện kiến trúc (việc đã treo 10 ngày), Ban điều hành AI **port sẵn route đọc-chỉ sang chính nhánh mà production đang chạy** và mở PR để merge là dùng được ngay.
