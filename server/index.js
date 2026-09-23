@@ -4,7 +4,7 @@ import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { db, insertAttempt, getLeaderboard, getStats, getRecent, getAllAttempts, getHistogram, getConfusion, getAchievements, unlockAchievement, createClass, getClassByCode, listClasses, getClassMembers, getClassAttempts, getPlayerAttempts, createRequest, listRequests, voteRequest, setRequestStatus, getRequestStats, getRequestById, addRequestMessage, listRequestMessages, reopenRequestIfClosed, listNotifications, countUnreadNotifications, markNotificationRead, markAllNotificationsRead, getUserWallet, upsertUserWallet, getScenarioRunsForUser, recordScenarioRunDb, getUserState, putUserState, UserStateValueTooLargeError } from './db.js';
+import { db, insertAttempt, getLeaderboard, getStats, getRecent, getAllAttempts, getHistogram, getConfusion, getAchievements, unlockAchievement, createClass, getClassByCode, listClasses, getClassMembers, getClassAttempts, getPlayerAttempts, voteRequest, getRequestStats, getRequestById, addRequestMessage, listRequestMessages, reopenRequestIfClosed, listNotifications, countUnreadNotifications, markNotificationRead, markAllNotificationsRead, getUserWallet, upsertUserWallet, getScenarioRunsForUser, recordScenarioRunDb, getUserState, putUserState, UserStateValueTooLargeError } from './db.js';
 import { mountAppPlugins, mountRouterPlugins, mountWsPlugins } from './contexts/registry.js';
 import { surface } from './contexts/capabilities.js';
 import { BASE_PATH } from './base-path.js';
@@ -32,7 +32,7 @@ import { plugin as analyticsPlugin } from './contexts/analytics/index.js';
 import { sendGA4Event } from './contexts/analytics/ga4-mp.js';
 import { plugin as billingPlugin } from './contexts/billing/index.js';
 import { plugin as integrationPlugin } from './contexts/integration/index.js';
-import { plugin as adminPlugin } from './contexts/admin/index.js';
+import { requireAdmin, plugin as adminPlugin } from './contexts/admin/index.js';
 import { plugin as adminDbPlugin } from './contexts/admin/db-admin.js';
 import { trackEngagementProgress, plugin as engagementPlugin } from './contexts/engagement/index.js';
 import { addLeagueWeekXp } from './contexts/engagement/league.js';
@@ -53,7 +53,9 @@ import { plugin as dashboardPlugin } from './contexts/dashboard/index.js';
 import { plugin as campusLayoutPlugin } from './contexts/campus/layout.js';
 import { plugin as portalAppsPlugin } from './contexts/portal-apps/index.js';
 import { grantSkillsForScenario, plugin as skillsPlugin } from './skills.js';
-import { securityHeaders, csrf, apiLimiter, sensitiveAuthLimiter, plugin as securityPlugin } from './contexts/security/index.js';
+import { securityHeaders, csrf, requireStrictCsrf, apiLimiter, sensitiveAuthLimiter, plugin as securityPlugin } from './contexts/security/index.js';
+import { createAiBoardStore } from './ai-board/store.js';
+import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from './ai-board/routes.js';
 import { log, initErrorTracking, installProcessGuards, requestContext, requestLogger, expressErrorHandler } from './observability.js';
 // Payment context — chỉ nạp khi PAYMENT_ENABLED=1 (dynamic import bên dưới) để bảng
 // payment + route KHÔNG xuất hiện ở deployment chưa bật thanh toán.
@@ -333,6 +335,17 @@ mountRouterPlugins(r, [
   ...(paymentPlugin ? [paymentPlugin] : []),
   assetsPlugin, adaptivePlugin, lessonsPlugin,
 ], { surface });
+
+const aiBoardStore = createAiBoardStore(db);
+attachAiBoardRequestRoutes(r, {
+  store: aiBoardStore,
+  requireAuth,
+  requireEnrolled,
+  requireAdmin,
+  requireStrictCsrf,
+  onCreated: acknowledgeNewRequest,
+});
+attachAiBoardWorkerRoutes(r, { store: aiBoardStore });
 
 
 r.post('/api/attempts', requireAuth, requireEnrolled, (req, res) => {
@@ -1142,58 +1155,8 @@ r.post('/api/requests/attachments',
     }
   });
 
-r.post('/api/requests', requireAuth, requireEnrolled, (req, res) => {
-  // requireEnrolled đã đảm bảo body.domain == enrolled_domain (nếu có) → HS chỉ
-  // gửi yêu cầu trong trường đang theo học. Admin bypass (gửi mọi trường).
-  const b = req.body ?? {};
-  const domain = String(b.domain || '').trim();
-  const title = String(b.title || '').trim();
-  if (!domain) return res.status(400).json({ error: 'domain required' });
-  if (title.length < 4) return res.status(400).json({ error: 'title quá ngắn (≥4 ký tự)' });
-  const row = createRequest({
-    domain, type: b.type, title, detail: b.detail, student: b.student,
-    attachments: Array.isArray(b.attachments) ? b.attachments : null,
-  });
-  res.json({ ok: true, ...row });
-
-  // Server CHỈ tự GHI NHẬN góp ý (giữ pending) + báo chuông cho HS. KHÔNG tự
-  // quyết định nữa — Ollama đã gỡ; quyết định approve/reject/defer/priority do
-  // Ban điều hành AI (Routine Claude Opus trên Claude Desktop) xử lý riêng.
-  // Không chặn response, lỗi chỉ log.
-  try {
-    acknowledgeNewRequest({
-      requestId: row.id, domain, title,
-      student: String(b.student || '').trim() || null,
-    });
-  } catch (err) { console.warn('[requests] acknowledge failed:', err?.message || err); }
-});
-
-r.get('/api/requests', (req, res) => {
-  const domain = String(req.query.domain || '').trim();
-  if (!domain) return res.status(400).json({ error: 'domain required' });
-  const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
-  // RIÊNG TƯ: mỗi tài khoản CHỈ thấy yêu cầu của CHÍNH MÌNH — không thấy của
-  // tài khoản khác. Lọc server-side theo display_name lấy từ session (attachUser
-  // luôn gắn req.user, client không giả mạo được). Khách chưa đăng nhập → không
-  // có yêu cầu cá nhân → trả rỗng để board degrade mượt (không 401).
-  // Quy mô nhỏ (vài chục/ trường) nên lọc trong JS sau khi lấy tối đa 200 là đủ.
-  const me = String(req.user?.display_name || '').trim();
-  if (!me) return res.json({ items: [], stats: {} });
-  const mine = listRequests(domain, 200).filter(it => it.student === me).slice(0, limit);
-  const stats = {};
-  for (const it of mine) stats[it.status] = (stats[it.status] || 0) + 1;
-  res.json({ items: mine, stats });
-});
-
 r.post('/api/requests/:id/vote', (req, res) => {
   const ok = voteRequest(req.params.id);
-  res.json({ ok });
-});
-
-// Admin (AI board) — đổi trạng thái khi đã xử lý. Để mở; sau có thể gate teacher.
-r.post('/api/requests/:id/status', (req, res) => {
-  const b = req.body ?? {};
-  const ok = setRequestStatus(req.params.id, String(b.status || ''), b.note);
   res.json({ ok });
 });
 
@@ -1209,9 +1172,12 @@ r.get('/api/requests/:id/decisions', (req, res) => {
 // GET trả { request, messages }. messages[0] = tin mở đầu dựng từ chính nội dung
 // yêu cầu (head, không lưu lặp ở request_messages). Yêu cầu cũ (trước tính năng
 // này) có admin_note nhưng chưa có message → bù 1 tin AI ảo để không mất phản hồi.
-r.get('/api/requests/:id/thread', (req, res) => {
+r.get('/api/requests/:id/thread', requireAuth, (req, res) => {
   const reqRow = getRequestById(req.params.id);
   if (!reqRow) return res.status(404).json({ error: 'not_found' });
+  if (req.user.role !== 'admin' && reqRow.owner_user_id !== req.user.id) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
   const msgs = listRequestMessages(reqRow.id);
   const hasBoardMsg = msgs.some(m => m.role === 'ai' || m.role === 'admin');
   const thread = [{
@@ -1247,13 +1213,14 @@ r.post('/api/requests/:id/messages', requireAuth, (req, res) => {
   if (!reqRow) return res.status(404).json({ error: 'not_found' });
   const me = req.user.display_name;
   const isAdmin = req.user.role === 'admin';
-  const isOwner = !!me && me === reqRow.student;
+  const isOwner = reqRow.owner_state === 'verified' && reqRow.owner_user_id === req.user.id;
   if (!isOwner && !isAdmin) return res.status(403).json({ error: 'forbidden' });
   const body = String(req.body?.body || '').trim();
   if (!body) return res.status(400).json({ error: 'empty' });
   const attachments = Array.isArray(req.body?.attachments) ? req.body.attachments : null;
   const role = isOwner ? 'student' : 'admin';
   const msg = addRequestMessage({ request_id: reqRow.id, role, author_name: me, body, attachments });
+  if (role === 'student') aiBoardStore.invalidatePlanForRequest(reqRow.id, 'requester clarification');
   const reopened = role === 'student' ? reopenRequestIfClosed(reqRow.id) : false;
   res.json({ ok: true, message_id: msg.id, reopened });
 });

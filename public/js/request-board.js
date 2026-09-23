@@ -65,6 +65,7 @@ export async function renderRequestBoard({ host, domain, domainName }) {
 
   const form = host.querySelector('#rb-form');
   const msg = host.querySelector('#rb-msg');
+  let pendingRequestKey = null;
 
   async function load() {
     try {
@@ -85,13 +86,15 @@ export async function renderRequestBoard({ host, domain, domainName }) {
     if (title.length < 4) { msg.textContent = '⚠️ Tiêu đề quá ngắn'; return; }
     msg.textContent = 'Đang gửi…';
     try {
+      pendingRequestKey ||= crypto.randomUUID();
       const r = await fetch('api/requests', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': pendingRequestKey },
         body: JSON.stringify({ domain, type, title, detail, student: getPlayerName() || 'Ẩn danh' }),
       });
       if (!r.ok) { const e2 = await r.json().catch(() => ({})); msg.textContent = '⚠️ ' + (e2.error || 'Lỗi gửi'); return; }
       msg.textContent = '✓ Đã gửi! Hiệu trưởng AI đang xem xét…';
+      pendingRequestKey = null;
       host.querySelector('#rb-title').value = '';
       host.querySelector('#rb-detail').value = '';
       load();

@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { applyAiBoardMigrations } from './ai-board/store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR
@@ -155,6 +156,9 @@ try { db.exec(`ALTER TABLE users ADD COLUMN school_name TEXT`); } catch {}
 // Admin: NULL (không gắn trường, có quyền tương tác mọi trường — bypass gate).
 try { db.exec(`ALTER TABLE users ADD COLUMN enrolled_domain TEXT`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_users_enrolled_domain ON users(enrolled_domain)`); } catch {}
+
+// D0 AI Board: một nguồn migration có số thứ tự, dùng chung với test store.
+applyAiBoardMigrations(db);
 
 // Trục 4: family plan. family_links cho phép 1 PH link n con HS
 // (parent_user_id phải là role='teacher' hoặc 'student' tuổi >=18 — kiểm ở app
@@ -684,7 +688,8 @@ export function markAllNotificationsRead(user_display_name) {
 // --- Request thread (phiên trao đổi của 1 yêu cầu) ---
 const VALID_MSG_ROLES = new Set(['student', 'ai', 'admin', 'system']);
 const getRequestByIdStmt = db.prepare(`
-  SELECT id, domain, type, title, detail, student, status, votes, admin_note, created_at, updated_at, attachments
+  SELECT id, domain, type, title, detail, student, status, votes, admin_note, created_at, updated_at,
+         attachments, owner_user_id, owner_domain, owner_state
   FROM requests WHERE id = ?
 `);
 const insertReqMsgStmt = db.prepare(`

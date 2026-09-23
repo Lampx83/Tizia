@@ -123,6 +123,15 @@ export function csrf(req, res, next) {
   next();
 }
 
+/** Route nhạy cảm không được phụ thuộc CSRF_ENFORCE log-only. */
+export function requireStrictCsrf(req, res, next) {
+  const sent = req.headers['x-csrf-token'] || req.body?._csrf;
+  if (!req.csrfToken || !validToken(sent) || sent !== req.csrfToken) {
+    return res.status(403).json({ error: 'csrf_failed', message: 'Thiếu/sai CSRF token.' });
+  }
+  next();
+}
+
 /** Route cấp token tường minh cho client SPA/fetch. */
 export function attachSecurity(r) {
   r.get('/api/csrf', (req, res) => res.json({ token: req.csrfToken || null }));
