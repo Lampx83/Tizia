@@ -414,3 +414,11 @@ def test_execution_plan_keeps_step_order_and_scope():
     subtasks = _execution_plan(plan)['subtasks']
     assert [s['title'] for s in subtasks] == ['a', 'b']
     assert subtasks[0]['allowed_scope'] == ['public/a.html', 'public/a.json']
+
+
+def test_worker_id_defaults_to_a_valid_per_machine_name(monkeypatch):
+    import worker
+    monkeypatch.setattr(worker.socket, "gethostname", lambda: "DESKTOP ADMIN/Ổ#1")
+    assert worker.default_worker_id() == "desktop-admin-1-worker"
+    monkeypatch.setattr(worker.socket, "gethostname", lambda: "")
+    assert worker.default_worker_id() == "local-worker"

@@ -4,7 +4,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
+import socket
 import threading
 import tempfile
 import time
@@ -155,6 +157,12 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
         "candidate": candidate if passed else None,
         "budget_used": int(getattr(budget, "model_calls", 0)) * 40, "gates": gates,
     }
+
+
+def default_worker_id() -> str:
+    """Per-machine worker id from hostname. Per-request identity is the server's lease token + run id."""
+    host = re.sub(r"[^a-z0-9]+", "-", socket.gethostname().lower()).strip("-")[:60]
+    return f"{host}-worker" if host else "local-worker"
 
 
 class WorkerClient:
@@ -412,7 +420,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("AI_BOARD_WORKER_KEY must be at least 24 characters")
     worker = HttpWorker(
         WorkerClient(base_url, key),
-        worker_id=os.getenv("AI_BOARD_WORKER_ID", "local-worker-1"),
+        worker_id=os.getenv("AI_BOARD_WORKER_ID") or default_worker_id(),
         version=os.getenv("AI_BOARD_WORKER_VERSION", "d0"),
         mode=args.mode,
         planner=HarnessPlanner() if args.plan or args.execute else None,

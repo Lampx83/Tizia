@@ -1,7 +1,7 @@
 """Cổng 3 — plan (cổng 1) → code thật, mỗi subtask 1 lần gọi model riêng, context
 mới hoàn toàn (chỉ subtask đó, không lịch sử các subtask trước — spec
 subagent-driven-development). Routing theo `size` (ticket 10): "small" →
-model nhẹ (GATE3_MODEL_LIGHT), "large" → GATE3_MODEL. Cổng 4 (ticket 12) mới
+model nhẹ (GATE3_MODEL_LIGHT), "large" → GATE3_MODEL_HEAVY (tên cũ GATE3_MODEL). Cổng 4 (ticket 12) mới
 lint/kiểm tra 2x ponytail/caveman — cổng này chỉ sinh code + test (TDD) và ghi
 diff thật, không tự chấm.
 """
