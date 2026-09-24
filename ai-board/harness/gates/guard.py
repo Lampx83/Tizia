@@ -24,6 +24,9 @@ _PII = [re.compile(p) for p in (
     r"(?<!\d)(?:\+84|0)(?:3|5|7|8|9)\d{8}(?!\d)",   # di động VN
     r"(?<!\d)0\d{11}(?!\d)",                        # CCCD 12 số
 )]
+# `name@2x.png` là tên ảnh retina, không phải email.
+_IMAGE_NAME = re.compile(r"\.(?:png|jpe?g|gif|webp|svg|avif|ico|bmp)$", re.I)
+_OWN_DOMAIN = re.compile(r"@(?:[\w-]+\.)*tizia\.vn$", re.I)
 _INJECTION = [re.compile(p, re.I) for p in (
     r"<\s*script\b", r"javascript\s*:", r"\son[a-z]+\s*=", r"\beval\s*\(", r"new\s+Function\s*\(",
     r"child_process", r"document\.write\s*\(",
@@ -54,8 +57,19 @@ def _sections(text: str):
     return out
 
 
-def scan(diff_text: str, checkout: str | Path | None = None) -> dict:
-    """Findings [{check, failure_class, detail}] + checks ran + ui_changed. Detail never echoes a secret."""
+def contacts_in(text: str) -> set[str]:
+    """Emails/phones/ID numbers found in text (e.g. the base commit's public/ files) — PII allowlist."""
+    return {m.group() for p in _PII for m in p.finditer(text)}
+
+
+def _pii(line: str, allowed: set[str]) -> bool:
+    return any(not _IMAGE_NAME.search(value) and not _OWN_DOMAIN.search(value) and value not in allowed
+               for p in _PII for value in (m.group() for m in p.finditer(line)))
+
+
+def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts: set[str] = frozenset()) -> dict:
+    """Findings [{check, failure_class, detail}] + checks ran + ui_changed. Detail never echoes a secret.
+    allowed_contacts: contacts already public at the base (see contacts_in); tizia.vn emails always allowed."""
     findings = []
 
     def add(check, kind, detail):
@@ -76,7 +90,7 @@ def scan(diff_text: str, checkout: str | Path | None = None) -> dict:
                 add("secret", "critical", f"{path}: dòng thêm trông như secret")
             if is_test:
                 continue  # code test hợp lệ có eval/import; PII/nội dung chỉ xét file giao cho người dùng
-            if any(p.search(line) for p in _PII):
+            if _pii(line, allowed_contacts):
                 add("pii", "ordinary", f"{path}: dòng thêm có email/SĐT/CCCD")
             if path.startswith("public/") and any(p.search(line) for p in _INJECTION):
                 add("injection", "critical", f"{path}: dòng thêm có script/handler/prompt injection")

@@ -170,3 +170,21 @@ def test_gate_4_size_flag_counts_the_real_base_diff_not_the_scratch_rewrite(tmp_
     assert out["blocked"] is False
     assert not any("vượt" in issue for issue in out["issues"])
     assert out["needs_careful_review"] is False
+
+
+def test_gate_4_allows_contacts_already_public_at_the_base_commit(tmp_path, source, fake_deps):
+    (source / "public" / "contact.html").write_text("<p>hotro@truong.edu.vn · 0912345678</p>\n", encoding="utf-8")
+    git(source, "add", "-A")
+    git(source, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "contact page")
+    scratch = implement._ensure_scratch_repo(tmp_path / "scratch")
+    page = "<p>old a</p>\n<p>Liên hệ hotro@truong.edu.vn, 0912345678</p>\n"
+    state = state_for(tmp_path, [child(scratch, "x", "public/a.html", page)])
+    state["checkout_source"] = str(source)
+
+    try:
+        out = main.run_gate(4, {}, fake_deps, None, state)
+    finally:
+        main.cleanup_full_checkout(state, keep_branch=False)
+
+    assert not any(issue.startswith("pii") for issue in out["issues"])  # base's own contacts are allowlisted
+    assert out["blocked"] is False

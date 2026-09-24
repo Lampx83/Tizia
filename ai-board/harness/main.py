@@ -211,6 +211,17 @@ def _ensure_full_checkout(state: dict, gate: float) -> dict | None:
     return None
 
 
+def _base_public_contacts(state: dict) -> set[str]:
+    """Contacts already in public/ at the base commit; empty without a worktree (nothing allowlisted)."""
+    checkout, base = state.get("full_checkout"), state.get("base_sha")
+    if not checkout or not base:
+        return set()
+    found = subprocess.run(["git", "grep", "-I", "-h", "-E", "@|[0-9]{9}", base, "--", "public"], cwd=checkout,
+                           capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           stdin=subprocess.DEVNULL)
+    return guard.contacts_in(found.stdout)  # exit 1 = no match, stdout empty
+
+
 def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: dict,
              *, db_path=None, proposal_id: int | None = None) -> dict:
     """Điểm thay duy nhất khi 1 cổng có logic thật. `state` mang plan/artifact
@@ -236,7 +247,7 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
         if out.get("blocked"):
             return out
         text = "".join(item.get("diff", "") for item in state.get("full_diff") or state.get("diffs") or [])
-        scanned = guard.scan(text, state.get("full_checkout"))
+        scanned = guard.scan(text, state.get("full_checkout"), allowed_contacts=_base_public_contacts(state))
         state["ui_changed"] = scanned["ui_changed"]
         out = {**out, "checks": scanned["checks"]}
         found = scanned["findings"]
