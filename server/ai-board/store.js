@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { PlanGuardrailError, validatePlan } from './policy.js';
+import { CAPABILITY_CATALOG, PlanGuardrailError, validatePlan } from './policy.js';
 
 export { PlanGuardrailError } from './policy.js';
 
@@ -381,7 +381,10 @@ export function createAiBoardStore(db, hooks = {}) {
       SELECT id, role, author_name, body, attachments, created_at
       FROM request_messages WHERE request_id=? ORDER BY created_at, id
     `).all(ticket.source_request_id).map((row) => ({ ...row, attachments: parseAttachments(row.attachments) }));
-    return { ticket: { ...ticket, lease_token: undefined }, request: { ...request, attachments: parseAttachments(request.attachments) }, thread };
+    return {
+      ticket: { ...ticket, lease_token: undefined }, request: { ...request, attachments: parseAttachments(request.attachments) },
+      thread, capability_policy: CAPABILITY_CATALOG,
+    };
   }
 
   function heartbeat(ticketId, workerId, leaseToken, { now = Date.now(), leaseMs = 120_000 } = {}) {
@@ -588,6 +591,7 @@ export function createAiBoardStore(db, hooks = {}) {
       }
       return {
         plan_hash: existing.plan_hash,
+        capability_policy_hash: existing.capability_policy_hash,
         tier: existing.tier,
         status: duplicateStatus,
         children: planChildren(ticketId, existing.revision),

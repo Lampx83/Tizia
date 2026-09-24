@@ -9,6 +9,10 @@ if str(AI_BOARD_DIR) not in sys.path:
 from worker import HttpWorker, WorkerClient, _execution_plan, execute_pre_pr, main
 
 
+POLICY = {'version': 'd0-v2', 'hash': 'c' * 64,
+          'capabilities': {'public.ui': {'tier': 'surface', 'allow': ['public/'], 'deny': []}}}
+
+
 class FakeTransport:
     def __init__(self):
         self.calls = []
@@ -18,14 +22,15 @@ class FakeTransport:
         if path.endswith('/claim'):
             return {'ticket': {'id': 7, 'lease_token': 'lease-7'}}
         if path.endswith('/snapshot'):
-            return {'ticket': {'cumulative_budget': 20},
+            return {'ticket': {'cumulative_budget': 20}, 'capability_policy': POLICY,
                     'request': {'id': 3, 'title': 'fixture'}, 'thread': []}
         if path.endswith('/runs'):
             return {'run': {'id': 11}}
         if path.endswith('/events'):
             return {'event': {'id': 12}}
         if path.endswith('/plan'):
-            return {'status': 'planned', 'tier': 'surface', 'children': [{'id': 13}]}
+            return {'status': 'planned', 'tier': 'surface', 'children': [{'id': 13}],
+                    'capability_policy_hash': POLICY['hash']}
         if path.endswith('/verdict'):
             return {'verdict': payload['verdict']}
         return {'ok': True}
@@ -188,10 +193,13 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
         return {'gate': 5.5, 'blocked': False, 'reason': None,
                 'risk_level': 'low', 'risk_signals': []}
 
-    def change_runner(plan, ticket_id, _budget_used, cumulative_budget, budget_limit):
+    def change_runner(plan, ticket_id, _budget_used, cumulative_budget, budget_limit, *, policy,
+                      accepted_policy_hash):
         assert (cumulative_budget, budget_limit) == (20, 200)
+        assert (policy, accepted_policy_hash) == (POLICY, POLICY['hash'])
         return execute_pre_pr(
             plan, ticket_id=ticket_id, checkout_source=tmp_path,
+            policy=policy, accepted_policy_hash=accepted_policy_hash,
             deps=object(), budget=Budget(), run_gate=run_gate, cleanup=lambda *_, **__: None,
         )
 
@@ -205,6 +213,7 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
 
     assert out['pre_pr_verdict']['outcome'] == 'ready_for_pr'
     assert [gate for gate, _ in states] == [3, 4, 5, 5.5]
+    assert states[0][1]['catalog'] == POLICY['capabilities']
     assert states[2][1]['plan']['subtasks'][0] == {
         'title': 'Thay đổi quan sát được', 'file': 'public/x.html',
         'verify': 'smoke', 'size': 'small', 'allowed_scope': ['public/x.html'],
@@ -459,3 +468,18 @@ def test_complexity_gated_plan_records_reason_signals_and_truncated_plan():
     assert detail['gate'] == 2.5 and detail['reason'] == 'complexity_gated'
     assert detail['signals'] == ['capabilities: features, quiz', 'file ngoài vùng an toàn: server/index.js']
     assert detail['plan'].startswith('{"summary_vi": "xxx') and len(detail['plan']) <= 2000
+
+
+def test_catalog_changed_since_plan_acceptance_is_a_plan_failure_before_any_gate():
+    for policy in ({**POLICY, 'hash': 'd' * 64}, {}):
+        run_gate, calls = scripted_gates({})
+        verdict = execute_pre_pr(
+            ONE_STEP_PLAN, ticket_id=7, checkout_source='unused', deps=object(), budget=TickBudget(),
+            run_gate=run_gate, cleanup=lambda *_, **__: None,
+            policy=policy, accepted_policy_hash=POLICY['hash'],
+        )
+        assert calls == []
+        assert verdict['outcome'] == 'blocked'
+        assert verdict['failure_class'] == 'plan'
+        assert verdict['gate_reached'] == 3 and 'catalog' in verdict['reason']
+        assert verdict['gates'] == [{'gate': 3, 'blocked': True, 'reason': verdict['reason']}]

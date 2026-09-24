@@ -302,7 +302,7 @@ def record_proposal(db_path, *, request: dict, gate_reached: float, outcome: str
 
 
 def run_once(request: dict, *, db_path, deps: Deps, budget: Budget | None = None,
-             checkout_source=None, full_checkout=None, manifest=None) -> dict:
+             checkout_source=None, full_checkout=None) -> dict:
     """Đẩy 1 request qua 7 cổng, ghi đúng 1 dòng skill_proposals. Trả kết quả."""
     budget = budget or Budget.from_env()
     reached: float = 0.0
@@ -313,8 +313,6 @@ def run_once(request: dict, *, db_path, deps: Deps, budget: Budget | None = None
         state["checkout_source"] = checkout_source
     if full_checkout is not None:
         state["full_checkout"] = full_checkout
-    if manifest is not None:
-        state["manifest"] = manifest
 
     proposal_id = create_proposal(db_path, request=request)
 

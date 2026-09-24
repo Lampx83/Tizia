@@ -6,6 +6,7 @@ import Database from 'better-sqlite3';
 
 import { applyAiBoardMigrations, createAiBoardStore } from '../server/ai-board/store.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
+import { CAPABILITY_POLICY_HASH } from '../server/ai-board/policy.js';
 
 const KEY = 'fixture-worker-key-32-characters-long';
 const CANDIDATE = {
@@ -343,6 +344,11 @@ test('off mode claims nothing; shadow claim is idempotent and exposes only lease
     assert.equal(snap.request.owner_user_id, 1);
     assert.equal(snap.request.title, 'Thêm bộ thẻ thuốc');
     assert.equal(snap.request.idempotency_key, undefined);
+    // Worker judges risk with the same catalog version the server accepts plans against.
+    assert.equal(snap.capability_policy.hash, CAPABILITY_POLICY_HASH);
+    assert.deepEqual(snap.capability_policy.capabilities['core.server'], {
+      tier: 'core', allow: ['server/', 'scripts/'], deny: [],
+    });
   } finally {
     await close();
     db.close();
@@ -462,6 +468,7 @@ test('expired lease after plan submission can resume the pre-PR pipeline', async
     assert.equal(resumed.ticket.id, first.ticket.id);
     assert.equal(duplicate.status, 'planned');
     assert.equal(duplicate.duplicate, true);
+    assert.equal(duplicate.capability_policy_hash, CAPABILITY_POLICY_HASH);
     assert.equal(db.prepare('SELECT cumulative_budget FROM ai_tickets WHERE id=?').get(first.ticket.id).cumulative_budget, 41);
     const released = await post(base, `/api/ai-board/worker/tickets/${resumed.ticket.id}/release`, {
       ...resumedLease, outcome: 'planned', idempotency_key: 'resumed-release-001',

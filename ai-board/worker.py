@@ -80,16 +80,15 @@ MAX_REPAIRS = 1  # ponytail: one repair child per verdict; server enforces the s
 
 
 def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate, cleanup,
-             repair_reason: str | None) -> tuple[list[dict], str | None, dict | None]:
+             repair_reason: str | None, catalog: dict | None) -> tuple[list[dict], str | None, dict | None]:
     """One pass of Gates 3→5.5 on fresh scratch + worktree. Return (public gates, failure kind, candidate)."""
     scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
     state = {
         "plan": _execution_plan(plan), "scratch_repo": str(scratch),
         "checkout_source": str(checkout_source), "skill_id": f"ticket-{ticket_id}",
-        "manifest": {"capabilities": {"core": [
-            cap for cap in plan.get("capabilities") or [] if str(cap).startswith("core.")
-        ]}},
     }
+    if catalog is not None:
+        state["catalog"] = catalog
     if repair_reason:
         state["repair_reason"] = repair_reason
     gates: list[dict] = []
@@ -133,17 +132,25 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
 
 
 def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate,
-                   cleanup: Callable) -> dict:
+                   cleanup: Callable, policy: dict | None = None, accepted_policy_hash: str | None = None) -> dict:
     """Run Gates 3→5.5, repairing an ordinary failure at most MAX_REPAIRS times. Return a redacted verdict.
 
+    policy = snapshot catalog {hash, capabilities}; None only outside the HTTP worker (no catalog check).
     failure_class: ordinary (repair exhausted) | transient (retry exhausted) | critical (boundary
-    violation, never repaired) | budget (no budget left to run or repair)."""
+    violation, never repaired) | budget (no budget left to run or repair) | plan (the accepted plan
+    cannot be carried out as written; admin decides)."""
+    if policy is not None and (not policy.get("hash") or policy.get("hash") != accepted_policy_hash):
+        reason = "capability catalog changed since the plan was accepted"
+        return {"outcome": "blocked", "gate_reached": 3, "reason": reason, "failure_class": "plan",
+                "repairs": [], "candidate": None, "budget_used": 0,
+                "gates": [{"gate": 3, "blocked": True, "reason": reason}]}
+    catalog = policy.get("capabilities") if policy is not None else None
     repairs: list[dict] = []
     repair_reason = None
     while True:
         gates, kind, candidate = _attempt(
             plan, ticket_id=ticket_id, checkout_source=checkout_source, deps=deps, budget=budget,
-            run_gate=run_gate, cleanup=cleanup, repair_reason=repair_reason,
+            run_gate=run_gate, cleanup=cleanup, repair_reason=repair_reason, catalog=catalog,
         )
         last = gates[-1]
         if kind != "ordinary" or len(repairs) >= MAX_REPAIRS:
@@ -293,6 +300,9 @@ class HttpWorker:
                         plan, ticket_id, budget_used,
                         int(ticket_row.get("cumulative_budget") or 0),
                         int(ticket_row.get("budget_limit") or 200),
+                        # {} when missing: fails the hash check closed instead of skipping the catalog.
+                        policy=snapshot.get("capability_policy") or {},
+                        accepted_policy_hash=planned.get("capability_policy_hash"),
                     ), ticket_id, lease,
                 )
                 verdict = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/verdict", {
@@ -399,13 +409,15 @@ class HarnessChangeRunner:
         self.checkout_source = checkout_source or Path(__file__).resolve().parents[1]
 
     def __call__(self, plan: dict, ticket_id: int, budget_used: int = 0,
-                 cumulative_budget: int = 0, budget_limit: int = 200) -> dict:
+                 cumulative_budget: int = 0, budget_limit: int = 200, *, policy: dict,
+                 accepted_policy_hash: str | None) -> dict:
         budget = self.Budget.from_env()
         remaining = budget_limit - cumulative_budget - budget_used
         budget.max_model_calls = min(budget.max_model_calls, max(remaining // 40, 0))
         return execute_pre_pr(
             plan, ticket_id=ticket_id, checkout_source=self.checkout_source,
             deps=self.deps, budget=budget, run_gate=self.run_gate, cleanup=self.cleanup,
+            policy=policy, accepted_policy_hash=accepted_policy_hash,
         )
 
 
