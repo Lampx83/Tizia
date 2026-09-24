@@ -297,13 +297,18 @@ def test_execution_without_http_observation_blocks_at_gate_5(tmp_path):
 
 class TickBudget:
     model_calls = 0
+    retries = 0
 
-    def __init__(self, ticks=10**6):
+    def __init__(self, ticks=10**6, max_retries=3):
         self.ticks = ticks
+        self.max_retries = max_retries
 
     def tick(self):
         self.ticks -= 1
         return self.ticks >= 0
+
+    def spend(self, cap, n=1):
+        setattr(self, cap, getattr(self, cap) + n)
 
 
 ONE_STEP_PLAN = {
@@ -352,6 +357,27 @@ def test_transient_docker_failure_gets_exactly_one_mechanical_retry():
     assert [gate for gate, _ in calls] == [3, 4, 5, 5, 5.5]
     assert verdict['gates'][2]['retried'] is True
     assert verdict['failure_class'] is None and verdict['repairs'] == []
+
+
+def test_mechanical_retry_spends_the_retry_cap_not_the_gpu_budget():
+    transient = {'blocked': True, 'reason': 'docker compose up exit 1', 'failure_class': 'transient'}
+    budget = TickBudget()
+    run_gate, _calls = scripted_gates({5: [transient, {}]})
+    verdict = execute_pre_pr(ONE_STEP_PLAN, ticket_id=7, checkout_source='unused', deps=object(),
+                             budget=budget, run_gate=run_gate, cleanup=lambda *_, **__: None)
+    assert verdict['outcome'] == 'ready_for_pr'
+    assert budget.retries == 1
+    assert verdict['budget_used'] == 0
+
+
+def test_no_retry_once_the_retry_cap_would_be_reached():
+    transient = {'blocked': True, 'reason': 'docker daemon unreachable', 'failure_class': 'transient'}
+    budget = TickBudget(max_retries=1)
+    verdict, calls = run({5: [transient, {}]}, budget=budget)
+    assert verdict['outcome'] == 'blocked'
+    assert verdict['failure_class'] == 'transient'
+    assert [gate for gate, _ in calls] == [3, 4, 5]
+    assert budget.retries == 0
 
 
 def test_second_transient_failure_blocks_without_repair():

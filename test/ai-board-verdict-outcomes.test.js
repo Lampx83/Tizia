@@ -163,10 +163,50 @@ test('budget exhaustion waits for a reasoned admin extension', () => {
   const event = db.prepare(`SELECT actor_type, actor_id, internal_detail FROM ai_events WHERE event_type='budget_extended'`).get();
   assert.equal(event.actor_type, 'admin');
   assert.equal(event.actor_id, '9');
-  assert.deepEqual(JSON.parse(event.internal_detail), { amount: 80, reason: 'Fixture cần thêm một vòng sửa lỗi.' });
+  assert.deepEqual(JSON.parse(event.internal_detail), {
+    amount: 80, reason: 'Fixture cần thêm một vòng sửa lỗi.', relaxed: 'cumulative_budget_exhausted',
+  });
   // Only a budget-exhausted root can be extended.
   assert.throws(() => store.extendBudget(ticket.id, { amount: 10, reason: 'lần hai không hợp lệ', adminUserId: 9 }),
     (error) => error.code === 'not_budget_exhausted');
+});
+
+const REASON = 'Cho phép thêm một vòng xử lý.';
+const exhaust = (db, id, why = 'cumulative_budget_exhausted') => db.prepare(
+  `UPDATE ai_tickets SET status='waiting_admin', phase='budget_exhausted', internal_reason=? WHERE id=?`).run(why, id);
+
+test('an automatic-round extension records that the round limit was relaxed', () => {
+  const { db, store, ticket } = plannedRoot();
+  exhaust(db, ticket.id, 'automatic_round_limit');
+  store.extendBudget(ticket.id, { amount: 40, reason: REASON, adminUserId: 9 });
+  const detail = JSON.parse(db.prepare(`SELECT internal_detail FROM ai_events WHERE event_type='budget_extended'`).get().internal_detail);
+  assert.equal(detail.relaxed, 'automatic_round_limit');
+});
+
+test('a third extension hands the root to a human permanently', () => {
+  const { db, store, ticket } = plannedRoot();
+  for (const limit of [400, 600]) {
+    exhaust(db, ticket.id);
+    assert.deepEqual(store.extendBudget(ticket.id, { amount: 200, reason: REASON, adminUserId: 9 }),
+      { ok: true, status: 'queued', budget_limit: limit });
+  }
+  exhaust(db, ticket.id);
+  const refused = store.extendBudget(ticket.id, { amount: 1, reason: REASON, adminUserId: 9 });
+  assert.deepEqual(refused, { ok: false, status: 'human_owned', budget_limit: 600, reason: 'extension_count_ceiling' });
+  const root = db.prepare('SELECT status, phase, budget_limit FROM ai_tickets WHERE id=?').get(ticket.id);
+  assert.deepEqual({ ...root }, { status: 'human_owned', phase: 'budget_ceiling', budget_limit: 600 });
+  // A requester clarification cannot reopen it; a later attempt needs a new request.
+  assert.equal(store.invalidatePlanForRequest(1, 'thêm chi tiết'), false);
+  assert.equal(db.prepare('SELECT status FROM ai_tickets WHERE id=?').get(ticket.id).status, 'human_owned');
+});
+
+test('an extension past the 600 unit ceiling hands the root to a human', () => {
+  const { db, store, ticket } = plannedRoot();
+  db.prepare('UPDATE ai_tickets SET budget_limit=500 WHERE id=?').run(ticket.id);
+  exhaust(db, ticket.id);
+  const refused = store.extendBudget(ticket.id, { amount: 150, reason: REASON, adminUserId: 9 });
+  assert.deepEqual(refused, { ok: false, status: 'human_owned', budget_limit: 500, reason: 'budget_limit_ceiling' });
+  assert.equal(db.prepare(`SELECT COUNT(*) n FROM ai_events WHERE event_type='budget_extended'`).get().n, 0);
 });
 
 test('verdict budget is checked against the extended limit, not a fixed 200', () => {

@@ -108,9 +108,12 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
                     except Exception as error:  # model/network/tool outage, not the candidate's code
                         result = {"gate": gate, "blocked": True, "reason": str(error)[:1000],
                                   "failure_class": "transient"}
-                # Transient Docker/checkout trouble gets one mechanical retry, no model call.
-                if gate == 5 and result.get("blocked") and result.get("failure_class") == "transient" and not retried:
+                # Transient Docker/checkout trouble gets one mechanical retry, no model call. It spends the
+                # retry cap, never budget_used; skipped when spending would exhaust the cap (and so the run).
+                if (gate == 5 and result.get("blocked") and result.get("failure_class") == "transient"
+                        and not retried and budget.retries + 1 < budget.max_retries):
                     retried = True
+                    budget.spend("retries")
                     continue
                 break
             public = _public_gate_result(result)

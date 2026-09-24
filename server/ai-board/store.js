@@ -21,6 +21,8 @@ const PRE_PR_SEQUENCE = [3, 4, 5, 5.5];
 const FAILURE_CLASSES = new Set(['ordinary', 'transient', 'critical', 'budget', 'plan']);
 const MAX_REPAIRS = 1; // same bound as ai-board/worker.py MAX_REPAIRS
 const MAX_BUDGET_EXTENSION = 200;
+const MAX_BUDGET_LIMIT = 600; // hard ceiling across all extensions of one root
+const MAX_BUDGET_EXTENSIONS = 2;
 const SHA = /^[0-9a-f]{40}$/;
 const AI_BRANCH = /^ai-board\/\d{4}-\d{2}-\d{2}-[a-z0-9-]{1,60}$/;
 
@@ -820,6 +822,24 @@ export function createAiBoardStore(db, hooks = {}) {
       throw new WorkerContractError('ticket is not waiting on an exhausted budget', 409, 'not_budget_exhausted');
     }
     const limit = root.budget_limit + amount;
+    const extensions = db.prepare(`SELECT COUNT(*) AS n FROM ai_events WHERE ticket_id=? AND event_type='budget_extended'`)
+      .get(root.id).n;
+    const ceiling = extensions >= MAX_BUDGET_EXTENSIONS ? 'extension_count_ceiling'
+      : limit > MAX_BUDGET_LIMIT ? 'budget_limit_ceiling' : null;
+    if (ceiling) {
+      // Permanent: phase budget_ceiling is never requeued (see invalidatePlanTransaction); a retry needs a new request.
+      db.prepare(`
+        UPDATE ai_tickets SET status='human_owned', phase='budget_ceiling',
+          public_note='Yêu cầu đã được chuyển cho con người xử lý.', internal_reason=?, updated_at=? WHERE id=?
+      `).run(ceiling, now, root.id);
+      insertEvent.run(
+        root.id, 'budget_ceiling', 'admin', String(adminUserId), 'waiting_admin->human_owned',
+        'Yêu cầu đã được chuyển cho con người xử lý.', JSON.stringify({ amount, reason, ceiling }),
+        `budget-ceiling:${root.id}`, now,
+      );
+      return { ok: false, status: 'human_owned', budget_limit: root.budget_limit, reason: ceiling };
+    }
+    const relaxed = root.internal_reason === 'automatic_round_limit' ? 'automatic_round_limit' : 'cumulative_budget_exhausted';
     // The admin grants one more automatic round with the extra budget; the limits stay enforced.
     db.prepare(`
       UPDATE ai_tickets SET status='queued', phase='needs_replan', budget_limit=?,
@@ -828,10 +848,10 @@ export function createAiBoardStore(db, hooks = {}) {
     `).run(limit, now, root.id);
     insertEvent.run(
       root.id, 'budget_extended', 'admin', String(adminUserId), 'waiting_admin->queued',
-      'Quản trị viên đã gia hạn ngân sách.', JSON.stringify({ amount, reason }),
-      `budget-extended:${root.id}:${now}`, now,
+      'Quản trị viên đã gia hạn ngân sách.', JSON.stringify({ amount, reason, relaxed }),
+      `budget-extended:${root.id}:${extensions + 1}`, now,
     );
-    return { ok: true, budget_limit: limit };
+    return { ok: true, status: 'queued', budget_limit: limit };
   });
 
   function extendBudget(rootTicketId, { amount, reason, adminUserId }) {
@@ -866,7 +886,7 @@ export function createAiBoardStore(db, hooks = {}) {
 
   const invalidatePlanTransaction = db.transaction((requestId, reason, now) => {
     const root = db.prepare(`SELECT * FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL`).get(Number(requestId));
-    if (!root || !root.plan_hash) return false;
+    if (!root || !root.plan_hash || root.phase === 'budget_ceiling') return false;
     db.prepare(`UPDATE ai_plans SET status='invalidated', invalidated_at=? WHERE root_ticket_id=? AND plan_hash=? AND status='valid'`)
       .run(now, root.id, root.plan_hash);
     db.prepare(`UPDATE ai_tickets SET status='invalidated', phase='clarification_received', updated_at=? WHERE parent_id=? AND plan_revision=?`)
