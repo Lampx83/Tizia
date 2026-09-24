@@ -14,7 +14,6 @@ import tempfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import codegraph
-import gate_trace
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -157,12 +156,8 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
         check_file_path(subtask["file"])
         model = model_for(subtask, deps.models)
         prompt = build_prompt(subtask)
-        body = deps.models.generate(model, prompt, format="json")
-        budget.spend("model_calls")
-        budget.spend("tokens", int(body.get("prompt_eval_count") or 0) + int(body.get("eval_count") or 0))
-        if db_path is not None and proposal_id is not None:
-            gate_trace.record(db_path, skill_proposal_id=proposal_id, gate=3,
-                               model=model, prompt=prompt, body=body)
+        body = deps.call_model(model, prompt, gate=3, budget=budget,
+                                db_path=db_path, proposal_id=proposal_id)
         try:
             out = parse_codegen(body.get("response", ""))
         except ValueError as e:

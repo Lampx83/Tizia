@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -24,6 +23,8 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from budget import Budget          # noqa: E402
+from dbconn import harness_db      # noqa: E402
+import gate_trace                  # noqa: E402
 from gates import brainstorm, implement, plan_validate, risk_triage, scope_check, static_check, verify  # noqa: E402
 from models import OllamaClient    # noqa: E402
 import prescreen                   # noqa: E402
@@ -85,6 +86,22 @@ class Deps:
             git=Unavailable("git"),
             notify=Unavailable("telegram"),
         )
+
+    def call_model(self, model: str, prompt: str, *, gate: float, budget,
+                    db_path=None, proposal_id: int | None = None, format: str | None = "json") -> dict:
+        """1 lời gọi model + phí budget + trace — chỗ duy nhất 3 cổng (1, 2.5, 3)
+        lặp lại trước đây (flagged ai-log 2026-09-19 "gate_trace call sites
+        duplicated"). Behavior y hệt bản lặp: model_calls luôn +1, tokens cộng
+        prompt_eval_count+eval_count, gate_trace.record() chỉ chạy khi có cả
+        db_path và proposal_id (test gọi run() trực tiếp không truyền 2 cái đó
+        vẫn chạy được, không phải lỗi — xem docstring gates/brainstorm.py)."""
+        body = self.models.generate(model, prompt, format=format)
+        budget.spend("model_calls")
+        budget.spend("tokens", int(body.get("prompt_eval_count") or 0) + int(body.get("eval_count") or 0))
+        if db_path is not None and proposal_id is not None:
+            gate_trace.record(db_path, skill_proposal_id=proposal_id, gate=gate,
+                               model=model, prompt=prompt, body=body)
+        return body
 
 
 def prepare_full_checkout(state: dict, source_repo: str | os.PathLike) -> None:
@@ -161,9 +178,7 @@ def create_proposal(db_path, *, request: dict) -> int:
     ghi lại kết quả cuối vào ĐÚNG dòng này (UPDATE, không INSERT thêm)."""
     now = int(time.time() * 1000)
     origin = "domain-synthesized" if request.get("domain") else "core-skill"
-    con = sqlite3.connect(str(db_path))
-    try:
-        con.execute(SKILL_PROPOSALS_DDL)
+    with harness_db(db_path, ddl=SKILL_PROPOSALS_DDL) as con:
         cur = con.execute(
             """INSERT INTO skill_proposals
                  (origin, domain, gate_reached, outcome, request_ids,
@@ -178,25 +193,17 @@ def create_proposal(db_path, *, request: dict) -> int:
                 now,
             ),
         )
-        con.commit()
         return cur.lastrowid
-    finally:
-        con.close()
 
 
 def update_proposal(db_path, proposal_id: int, *, gate_reached: float, outcome: str, budget: Budget) -> None:
     """Cập nhật dòng skill_proposals đã tạo từ create_proposal() với kết quả
     cuối cùng của lượt chạy."""
-    con = sqlite3.connect(str(db_path))
-    try:
-        con.execute(SKILL_PROPOSALS_DDL)
+    with harness_db(db_path, ddl=SKILL_PROPOSALS_DDL) as con:
         con.execute(
             "UPDATE skill_proposals SET gate_reached=?, outcome=?, budget_json=?, updated_at=? WHERE id=?",
             (float(gate_reached), outcome, json.dumps(budget.snapshot()), int(time.time() * 1000), proposal_id),
         )
-        con.commit()
-    finally:
-        con.close()
 
 
 def record_proposal(db_path, *, request: dict, gate_reached: float, outcome: str, budget: Budget) -> int:
