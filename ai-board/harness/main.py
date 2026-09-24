@@ -216,6 +216,7 @@ def _base_public_contacts(state: dict) -> set[str]:
     checkout, base = state.get("full_checkout"), state.get("base_sha")
     if not checkout or not base:
         return set()
+    # ponytail: crude "@ or 9 digits" line prefilter, exact matching is contacts_in; fine while public/ stays small.
     found = subprocess.run(["git", "grep", "-I", "-h", "-E", "@|[0-9]{9}", base, "--", "public"], cwd=checkout,
                            capture_output=True, text=True, encoding="utf-8", errors="replace",
                            stdin=subprocess.DEVNULL)

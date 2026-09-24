@@ -87,7 +87,6 @@ export const CAPABILITY_POLICY_HASH = hashCapabilityPolicy(CAPABILITY_POLICY);
 
 // What the worker needs for Gate 5.5 path matching; the hash pins it to the version plans were accepted against.
 export const CAPABILITY_CATALOG = Object.freeze({
-  version: CAPABILITY_POLICY_VERSION,
   hash: CAPABILITY_POLICY_HASH,
   capabilities: Object.fromEntries(Object.entries(CAPABILITY_POLICY).map(([name, entry]) => [name, {
     tier: entry.tier, allow: entry.allow, deny: entry.deny,

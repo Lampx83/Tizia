@@ -21,6 +21,7 @@ const PRE_PR_SEQUENCE = [3, 4, 5, 5.5];
 const FAILURE_CLASSES = new Set(['ordinary', 'transient', 'critical', 'budget', 'plan']);
 const MAX_REPAIRS = 1; // same bound as ai-board/worker.py MAX_REPAIRS
 const MAX_BUDGET_EXTENSION = 200;
+// ponytail: fixed D0 ceilings from the hardening spec; make them admin config only if real tickets hit them.
 const MAX_BUDGET_LIMIT = 600; // hard ceiling across all extensions of one root
 const MAX_BUDGET_EXTENSIONS = 2;
 const SHA = /^[0-9a-f]{40}$/;
@@ -136,10 +137,11 @@ function validatePrePrVerdict(value) {
   const gate55 = gates.find((gate) => gate.gate === 5.5);
   const passed = last.gate === 5.5 && !gates.some((gate) => gate.blocked)
     && gate5?.smoke_passed === true && gate5?.http_observed === true;
-  if (['ready_for_pr', 'needs_review'].includes(value.outcome) && !passed) {
+  const passing = ['ready_for_pr', 'needs_review'].includes(value.outcome);
+  if (passing && !passed) {
     throw new WorkerContractError('passing verdict requires successful smoke through gate 5.5');
   }
-  if (['ready_for_pr', 'needs_review'].includes(value.outcome) && gate5.runner !== 'docker') {
+  if (passing && gate5.runner !== 'docker') {
     throw new WorkerContractError('passing verdict requires gate 5 on real docker');
   }
   if (value.outcome === 'ready_for_pr' && !['low', 'medium'].includes(gate55?.risk_level))
@@ -839,7 +841,7 @@ export function createAiBoardStore(db, hooks = {}) {
       );
       return { ok: false, status: 'human_owned', budget_limit: root.budget_limit, reason: ceiling };
     }
-    const relaxed = root.internal_reason === 'automatic_round_limit' ? 'automatic_round_limit' : 'cumulative_budget_exhausted';
+    const liftedLimit = root.internal_reason === 'automatic_round_limit' ? 'automatic_round_limit' : 'cumulative_budget_exhausted';
     // The admin grants one more automatic round with the extra budget; the limits stay enforced.
     db.prepare(`
       UPDATE ai_tickets SET status='queued', phase='needs_replan', budget_limit=?,
@@ -848,7 +850,7 @@ export function createAiBoardStore(db, hooks = {}) {
     `).run(limit, now, root.id);
     insertEvent.run(
       root.id, 'budget_extended', 'admin', String(adminUserId), 'waiting_admin->queued',
-      'Quản trị viên đã gia hạn ngân sách.', JSON.stringify({ amount, reason, relaxed }),
+      'Quản trị viên đã gia hạn ngân sách.', JSON.stringify({ amount, reason, relaxed: liftedLimit }),
       `budget-extended:${root.id}:${extensions + 1}`, now,
     );
     return { ok: true, status: 'queued', budget_limit: limit };
@@ -869,6 +871,10 @@ export function createAiBoardStore(db, hooks = {}) {
       .get(Number(rootTicketId), String(planHash), 'valid');
     if (!plan) throw new WorkerContractError('plan not found', 404, 'plan_not_found');
     if (plan.tier === 'core') throw new WorkerContractError('core work remains human-owned', 409, 'core_human_owned');
+    const root = db.prepare('SELECT phase FROM ai_tickets WHERE id=?').get(Number(rootTicketId));
+    if (root?.phase === 'budget_ceiling') {
+      throw new WorkerContractError('ticket passed the budget ceiling; a new request is required', 409, 'budget_ceiling');
+    }
     db.prepare(`INSERT OR IGNORE INTO ai_authorizations(root_ticket_id, plan_hash, plan_revision, admin_user_id, created_at) VALUES (?, ?, ?, ?, ?)`)
       .run(Number(rootTicketId), String(planHash), Number(plan.revision), Number(adminUserId), now);
     if (plan.tier === 'protected') {

@@ -69,7 +69,7 @@ def _pii(line: str, allowed: set[str]) -> bool:
 
 def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts: set[str] = frozenset()) -> dict:
     """Findings [{check, failure_class, detail}] + checks ran + ui_changed. Detail never echoes a secret.
-    allowed_contacts: contacts already public at the base (see contacts_in); tizia.vn emails always allowed."""
+    PII skips allowed_contacts (base public/, see contacts_in) and tizia.vn emails."""
     findings = []
 
     def add(check, kind, detail):

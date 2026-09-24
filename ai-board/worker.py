@@ -144,11 +144,10 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
     """Run Gates 3→5.5, repairing an ordinary failure at most MAX_REPAIRS times. Return a redacted verdict.
 
     policy = snapshot catalog {hash, capabilities}; None only outside the HTTP worker (no catalog check).
-    failure_class: ordinary (repair exhausted) | transient (retry exhausted) | critical (boundary
-    violation, never repaired) | budget (no budget left to run or repair) | plan (the accepted plan
-    cannot be carried out as written; admin decides)."""
+    failure_class: ordinary | transient | critical | budget | plan (see store.js FAILURE_CLASSES)."""
     if policy is not None and (not policy.get("hash") or policy.get("hash") != accepted_policy_hash):
-        reason = "capability catalog changed since the plan was accepted"
+        reason = ("snapshot has no capability catalog" if not policy.get("hash")
+                  else "capability catalog changed since the plan was accepted")
         return {"outcome": "blocked", "gate_reached": 3, "reason": reason, "failure_class": "plan",
                 "repairs": [], "candidate": None, "budget_used": 0,
                 "gates": [{"gate": 3, "blocked": True, "reason": reason}]}

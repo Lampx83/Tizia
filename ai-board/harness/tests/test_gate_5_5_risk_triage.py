@@ -58,6 +58,11 @@ def test_path_no_capability_allows_blocks_as_critical():
         assert path in out["reason"]
 
 
+def test_only_the_generated_test_dirs_skip_catalog_matching():
+    out = risk_triage.run(with_catalog(state_for(("server/foo/tests/x.js", "x", True), TEST)))
+    assert out["risk_level"] == "critical"
+
+
 def test_plan_self_declared_capabilities_are_not_an_input():
     out = risk_triage.run(with_catalog(state_for(("public/x.js", "x", True), TEST, caps=["core.server"])))
     assert out["risk_level"] == "low"

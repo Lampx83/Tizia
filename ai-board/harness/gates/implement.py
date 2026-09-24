@@ -178,7 +178,8 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
         big = [f for f, content in existing.items() if len(content) > EXISTING_MAX_BYTES]
         if big:
             return {"gate": 3, "blocked": True, "diffs": None, "failure_class": "plan",
-                    "reason": f"file sẵn có lớn hơn 20 KB, cần tách nhỏ hoặc con người sửa: {', '.join(big)}"}
+                    "reason": f"file sẵn có lớn hơn {EXISTING_MAX_BYTES // 1024} KB, cần tách nhỏ hoặc con người sửa: "
+                              f"{', '.join(big)}"}
 
     repo = _ensure_scratch_repo(repo_dir if repo_dir is not None else state.get("scratch_repo"))
     diffs = []

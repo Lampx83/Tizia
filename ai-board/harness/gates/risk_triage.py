@@ -7,8 +7,9 @@ TIERS = ("low", "medium", "high", "critical")
 _ROUTE = re.compile(r"\b(?:app|router)\s*\.\s*(?:get|post|put|patch|delete|all|use)\s*\(")
 _DOMAIN = re.compile(r"(?:^|/)(?:_ai-generated|domains)/([^/]+)/")
 _TEST = re.compile(r"(?:^|/)(?:tests?|__tests__)/|(?:\.|_)(?:test|spec)\.[^/]+$")
-_CATALOG_TIER = {"surface": None, "protected": "high", "core": "critical"}
-_TIER_RANK = {"surface": 0, "protected": 1, "core": 2}
+# catalog tier -> (privilege rank, risk it adds)
+_CATALOG_TIER = {"surface": (0, None), "protected": (1, "high"), "core": (2, "critical")}
+_GENERATED_TEST = re.compile(r"^tests?/")  # where gate 3/full checkout force generated tests
 
 
 def _sections(diffs: list[dict]) -> list[tuple[str, bool, list[str]]]:
@@ -36,7 +37,7 @@ def _sections(diffs: list[dict]) -> list[tuple[str, bool, list[str]]]:
 
 def _least_privileged(path: str, catalog: dict) -> tuple[str, str] | None:
     """(capability, tier) of the lowest-tier capability allowing path, None if none does."""
-    allowed = [(_TIER_RANK[c["tier"]], name, c["tier"]) for name, c in sorted(catalog.items())
+    allowed = [(_CATALOG_TIER[c["tier"]][0], name, c["tier"]) for name, c in sorted(catalog.items())
                if any(path.startswith(p) for p in c.get("allow") or [])
                and not any(path == d or path.startswith(d) for d in c.get("deny") or [])]
     return min(allowed)[1:] if allowed else None
@@ -57,12 +58,12 @@ def run(state: dict) -> dict:
 
     unmatched = []
     # Generated tests live under test/ by gate 3/4 rules (guard forbids touching existing ones); no capability owns them.
-    for path in sorted(p for p in paths if catalog is not None and not _TEST.search(p)):
+    for path in sorted(p for p in paths if catalog is not None and not _GENERATED_TEST.match(p)):
         match = _least_privileged(path, catalog)
         if not match:
             unmatched.append(path)
-        elif _CATALOG_TIER[match[1]]:
-            add("catalog_tier", _CATALOG_TIER[match[1]], f"{path}: {match[0]}")
+        elif _CATALOG_TIER[match[1]][1]:
+            add("catalog_tier", _CATALOG_TIER[match[1]][1], f"{path}: {match[0]}")
     if unmatched:
         add("outside_catalog", "critical", ", ".join(unmatched))
     if any(_ROUTE.search(line) for _, _, lines in sections for line in lines):
