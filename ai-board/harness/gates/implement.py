@@ -259,7 +259,8 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
         if not test_file.startswith(("test/", "tests/")):
             reason = f"subtask '{subtask.get('title')}': test_file phải nằm trong test/ hoặc tests/"
             state["diffs"] = diffs
-            return {"gate": 3, "blocked": True, "reason": reason, "diffs": diffs, "failure_class": "critical"}
+            # Chưa ghi gì ra ngoài scratch: lỗi của model, sửa 1 lần được. Path thoát repo vẫn critical ở trên.
+            return {"gate": 3, "blocked": True, "reason": reason, "diffs": diffs, "failure_class": "ordinary"}
         out["test_file"] = test_file
         try:
             diff_text = _write_and_diff(repo, subtask["file"], out["code"], out["test_file"], out["test"])

@@ -352,3 +352,18 @@ def test_lessons_from_past_verdicts_are_added_to_the_prompt(tmp_path):
     existing_prompt = models.calls[1]["prompt"]
     assert "BÀI HỌC" in existing_prompt and "does not match checkout" in existing_prompt
     assert "BÀI HỌC" not in models.calls[0]["prompt"]  # other file, no keyword match
+
+
+def test_test_file_outside_test_dir_is_a_repairable_model_mistake(tmp_path):
+    """Nothing leaves the scratch repo yet, so it is ordinary (one repair), not a critical boundary alert."""
+    codegen = {"code": "// x\n", "test_file": "public/flashcards.test.js", "test": "// t\n"}
+    out = implement.run({"plan": plan_with(["features"])}, deps_with(FakeModels(plan_with(["features"]), codegen=codegen)),
+                        Budget(max_wall_clock_s=999), repo_dir=tmp_path)
+    assert out["blocked"] is True
+    assert "test/" in out["reason"]
+    assert out["failure_class"] == "ordinary"
+
+
+def test_prompt_states_where_generated_tests_must_live():
+    prompt = implement.build_prompt({"title": "t", "file": "public/x.html", "verify": "v", "size": "small"})
+    assert "`test_file` phải nằm trong thư mục `test/`" in prompt
