@@ -172,7 +172,7 @@ def test_run_stops_mid_gate_when_budget_exhausted_between_subtasks(tmp_path):
 
     assert out["blocked"] is True
     assert "budget" in out["reason"]
-    assert out["failure_kind"] == "budget"
+    assert out["failure_class"] == "budget"
     assert len(models.calls) == 1
     assert len(out["diffs"]) == 1
 
@@ -213,7 +213,7 @@ def test_windows_absolute_path_from_model_is_rejected(tmp_path):
 
     assert out["blocked"] is True
     assert "tuyệt đối" in out["reason"]
-    assert out["failure_kind"] == "critical"
+    assert out["failure_class"] == "critical"
 
 
 def test_path_traversal_via_dotdot_is_rejected(tmp_path):

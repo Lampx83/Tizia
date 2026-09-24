@@ -90,15 +90,15 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
             retried = False
             while True:
                 if not budget.tick():
-                    result = {"gate": gate, "blocked": True, "reason": "budget exhausted", "failure_kind": "budget"}
+                    result = {"gate": gate, "blocked": True, "reason": "budget exhausted", "failure_class": "budget"}
                 else:
                     try:
                         result = run_gate(gate, {}, deps, budget, state)
                     except Exception as error:  # model/network/tool outage, not the candidate's code
                         result = {"gate": gate, "blocked": True, "reason": str(error)[:1000],
-                                  "failure_kind": "transient"}
+                                  "failure_class": "transient"}
                 # Transient Docker/checkout trouble gets one mechanical retry, no model call.
-                if gate == 5 and result.get("blocked") and result.get("failure_kind") == "transient" and not retried:
+                if gate == 5 and result.get("blocked") and result.get("failure_class") == "transient" and not retried:
                     retried = True
                     continue
                 break
@@ -110,7 +110,7 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
                     public["reason"] = "change has no HTTP-observable result"
             gates.append(public)
             if public["blocked"]:
-                kind = result.get("failure_kind") or "ordinary"
+                kind = result.get("failure_class") or "ordinary"
                 break
     finally:
         passed = kind is None and bool(gates) and gates[-1]["gate"] == 5.5

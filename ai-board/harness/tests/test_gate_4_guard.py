@@ -14,7 +14,7 @@ def diff(path, added=(), removed=(), new=False):
 
 
 def kinds(text, checkout=None):
-    return {(f["check"], f["failure_kind"]) for f in guard.scan(text, checkout)["findings"]}
+    return {(f["check"], f["failure_class"]) for f in guard.scan(text, checkout)["findings"]}
 
 
 def test_clean_content_change_passes_and_lists_what_ran():
@@ -79,7 +79,7 @@ def test_gate_4_blocks_on_guard_findings_with_the_worst_kind(monkeypatch, fake_d
     monkeypatch.setattr(main.static_check, "run", lambda s: {"gate": 4, "blocked": False, "reason": None, "issues": []})
     out = main.run_gate(4, {}, replace(fake_deps, verify=None), None, state)
     assert out["blocked"] is True
-    assert out["failure_kind"] == "critical"
+    assert out["failure_class"] == "critical"
     assert "injection" in out["reason"]
     assert "secret" in out["checks"]
     assert state["ui_changed"] is True

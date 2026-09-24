@@ -206,7 +206,7 @@ def _ensure_full_checkout(state: dict, gate: float) -> dict | None:
         # Scope escape is a boundary violation; anything else is the environment, not the code.
         kind = "critical" if isinstance(e, ScopeViolation) else "transient"
         return {"gate": gate, "blocked": True, "reason": f"không tạo được full_checkout: {e}",
-                "evidence": None, "failure_kind": kind}
+                "evidence": None, "failure_class": kind}
     return None
 
 
@@ -240,9 +240,9 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
         out = {**out, "checks": scanned["checks"]}
         found = scanned["findings"]
         if found:
-            worst = "critical" if any(f["failure_kind"] == "critical" for f in found) else "ordinary"
+            worst = "critical" if any(f["failure_class"] == "critical" for f in found) else "ordinary"
             reason = "; ".join(f"{f['check']}: {f['detail']}" for f in found)[:1000]
-            out.update(blocked=True, reason=reason, failure_kind=worst,
+            out.update(blocked=True, reason=reason, failure_class=worst,
                        issues=[*out.get("issues", []), *(f"{f['check']}: {f['detail']}" for f in found)])
         return out
     if number == 5:

@@ -142,11 +142,11 @@ def run(state: dict) -> dict:
             if bad_imports:
                 reason = f"'{candidate}': {'; '.join(bad_imports)}"
                 return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
-                        "issues": [*issues, reason], "failure_kind": "critical"}
+                        "issues": [*issues, reason], "failure_class": "critical"}
             err = node_check(path)
             if err:
                 reason = f"'{candidate}' node --check: {err}"
                 return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
-                        "issues": [*issues, reason], "failure_kind": "ordinary"}
+                        "issues": [*issues, reason], "failure_class": "ordinary"}
 
     return {"gate": 4, "blocked": False, "reason": None, "needs_careful_review": needs_careful_review, "issues": issues}

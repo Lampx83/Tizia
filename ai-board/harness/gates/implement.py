@@ -159,7 +159,7 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
             return {
                 "gate": 3, "blocked": True,
                 "reason": f"budget cạn giữa chừng (đã xong {len(diffs)}/{len(subtasks)} subtask)",
-                "diffs": diffs, "failure_kind": "budget",
+                "diffs": diffs, "failure_class": "budget",
             }
         check_file_path(subtask["file"])
         model = model_for(subtask, deps.models)
@@ -177,12 +177,12 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
         except ValueError as e:
             reason = f"subtask '{subtask.get('title')}': {e}"
             state["diffs"] = diffs
-            return {"gate": 3, "blocked": True, "reason": reason, "diffs": diffs, "failure_kind": "critical"}
+            return {"gate": 3, "blocked": True, "reason": reason, "diffs": diffs, "failure_class": "critical"}
         test_file = posixpath.normpath(out["test_file"].replace("\\", "/"))
         if not test_file.startswith(("test/", "tests/")):
             reason = f"subtask '{subtask.get('title')}': test_file phải nằm trong test/ hoặc tests/"
             state["diffs"] = diffs
-            return {"gate": 3, "blocked": True, "reason": reason, "diffs": diffs, "failure_kind": "critical"}
+            return {"gate": 3, "blocked": True, "reason": reason, "diffs": diffs, "failure_class": "critical"}
         out["test_file"] = test_file
         try:
             diff_text = _write_and_diff(repo, subtask["file"], out["code"], out["test_file"], out["test"])
@@ -191,7 +191,7 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
             # NGAY, không ghi 1 byte nào ra ngoài, không phải lỗi âm thầm bỏ qua.
             reason = f"subtask '{subtask.get('title')}': {e}"
             state["diffs"] = diffs
-            return {"gate": 3, "blocked": True, "reason": reason, "diffs": diffs, "failure_kind": "critical"}
+            return {"gate": 3, "blocked": True, "reason": reason, "diffs": diffs, "failure_class": "critical"}
         diffs.append({
             "title": subtask["title"], "file": subtask["file"], "test_file": out["test_file"],
             "model": model, "diff": diff_text,

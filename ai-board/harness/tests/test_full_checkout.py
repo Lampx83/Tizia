@@ -136,7 +136,7 @@ def test_missing_git_checkout_blocks_gate_5_clearly(tmp_path, fake_deps):
 
     assert out["blocked"] is True
     assert out["reason"].startswith("không tạo được full_checkout")
-    assert out["failure_kind"] == "transient"
+    assert out["failure_class"] == "transient"
 
 
 def test_scope_violation_at_gate_5_is_critical(tmp_path, source, fake_deps):
@@ -148,4 +148,4 @@ def test_scope_violation_at_gate_5_is_critical(tmp_path, source, fake_deps):
     out = main.run_gate(5, {}, replace(fake_deps, verify=None), None, state)
 
     assert out["blocked"] is True
-    assert out["failure_kind"] == "critical"
+    assert out["failure_class"] == "critical"

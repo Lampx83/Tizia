@@ -98,7 +98,7 @@ def test_generated_test_failure_blocks_before_smoke(tmp_path):
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
     assert out["reason"] == "generated tests failed"
-    assert out["failure_kind"] == "ordinary"
+    assert out["failure_class"] == "ordinary"
     assert not any(args[0] != "docker" for args, _ in runner.calls)
     assert runner.calls[-1][0][-2:] == ["down", "-v"]
 
@@ -115,14 +115,14 @@ def test_teardown_failure_is_environmental_not_repairable(tmp_path):
     out = verify.run(state(checkout(tmp_path)), runner=FakeRunner(fail="down"))
     assert out["blocked"] is True
     assert "teardown" in out["reason"]
-    assert out["failure_kind"] == "transient"
+    assert out["failure_class"] == "transient"
 
 
 def test_up_failure_still_tears_down(tmp_path):
     runner = FakeRunner(fail="up")
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
-    assert out["failure_kind"] == "transient"
+    assert out["failure_class"] == "transient"
     assert runner.calls[-1][0][-2:] == ["down", "-v"]
 
 
@@ -140,7 +140,7 @@ def test_unsafe_compose_config_blocks_before_up(tmp_path):
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
     assert "không cách ly" in out["reason"]
-    assert out["failure_kind"] == "critical"
+    assert out["failure_class"] == "critical"
     assert not any("up" in args for args, _ in runner.calls)
     assert runner.calls[-1][0][-2:] == ["down", "-v"]
 
@@ -150,7 +150,7 @@ def test_container_secret_blocks_without_leaking_value_to_evidence(tmp_path):
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
     assert "OLLAMA_SECKEY" in out["reason"]
-    assert out["failure_kind"] == "critical"
+    assert out["failure_class"] == "critical"
     assert "do-not-log" not in out["evidence"]["text"]
     assert runner.calls[-1][0][-2:] == ["down", "-v"]
 
@@ -174,7 +174,7 @@ def test_html_screenshot_artifact_is_mandatory_for_ui_changes(tmp_path, monkeypa
     out = verify.run(s, runner=runner, http_probe=lambda _url: (200, body))
     assert out["blocked"] is True
     assert "screenshot" in out["reason"] and "playwright absent" in out["reason"]
-    assert out["failure_kind"] == "transient"  # missing browser is the environment, not the candidate
+    assert out["failure_class"] == "transient"  # missing browser is the environment, not the candidate
     assert out["evidence"]["screenshot"] is None
     assert runner.calls[-1][0][-2:] == ["down", "-v"]
 
@@ -221,11 +221,11 @@ def test_docker_binary_missing_is_transient(tmp_path):
         raise FileNotFoundError("docker")
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
-    assert out["failure_kind"] == "transient"
+    assert out["failure_class"] == "transient"
 
 
-def test_pass_has_no_failure_kind(tmp_path):
-    assert verify.run(state(checkout(tmp_path)), runner=FakeRunner())["failure_kind"] is None
+def test_pass_has_no_failure_class(tmp_path):
+    assert verify.run(state(checkout(tmp_path)), runner=FakeRunner())["failure_class"] is None
 
 
 def test_missing_full_checkout_blocks_clearly(fake_deps):

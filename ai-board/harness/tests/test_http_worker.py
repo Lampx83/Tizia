@@ -333,7 +333,7 @@ def run(script, budget=None, cleanups=None):
 
 
 def test_transient_docker_failure_gets_exactly_one_mechanical_retry():
-    transient = {'blocked': True, 'reason': 'docker compose up exit 1', 'failure_kind': 'transient'}
+    transient = {'blocked': True, 'reason': 'docker compose up exit 1', 'failure_class': 'transient'}
     verdict, calls = run({5: [transient, {}]})
     assert verdict['outcome'] == 'ready_for_pr'
     assert [gate for gate, _ in calls] == [3, 4, 5, 5, 5.5]
@@ -342,7 +342,7 @@ def test_transient_docker_failure_gets_exactly_one_mechanical_retry():
 
 
 def test_second_transient_failure_blocks_without_repair():
-    transient = {'blocked': True, 'reason': 'docker daemon unreachable', 'failure_kind': 'transient'}
+    transient = {'blocked': True, 'reason': 'docker daemon unreachable', 'failure_class': 'transient'}
     verdict, calls = run({5: [transient]})
     assert verdict['outcome'] == 'blocked'
     assert verdict['failure_class'] == 'transient'
@@ -351,7 +351,7 @@ def test_second_transient_failure_blocks_without_repair():
 
 
 def test_ordinary_failure_gets_one_repair_pass_with_the_failure_reason():
-    failed = {'blocked': True, 'reason': 'generated tests failed', 'failure_kind': 'ordinary'}
+    failed = {'blocked': True, 'reason': 'generated tests failed', 'failure_class': 'ordinary'}
     cleanups = []
     verdict, calls = run({5: [failed, {}]}, cleanups=cleanups)
     assert verdict['outcome'] == 'ready_for_pr'
@@ -364,7 +364,7 @@ def test_ordinary_failure_gets_one_repair_pass_with_the_failure_reason():
 
 
 def test_repair_is_bounded_to_one_child():
-    failed = {'blocked': True, 'reason': 'node --check lỗi', 'failure_kind': 'ordinary'}
+    failed = {'blocked': True, 'reason': 'node --check lỗi', 'failure_class': 'ordinary'}
     verdict, calls = run({4: [failed]})
     assert verdict['outcome'] == 'blocked'
     assert verdict['failure_class'] == 'ordinary'
@@ -374,7 +374,7 @@ def test_repair_is_bounded_to_one_child():
 
 
 def test_critical_boundary_violation_stops_without_repair():
-    critical = {'blocked': True, 'reason': "import cấm: '../../db.js'", 'failure_kind': 'critical'}
+    critical = {'blocked': True, 'reason': "import cấm: '../../db.js'", 'failure_class': 'critical'}
     verdict, calls = run({4: [critical]})
     assert verdict['outcome'] == 'blocked'
     assert verdict['failure_class'] == 'critical'
@@ -391,7 +391,7 @@ def test_exhausted_budget_blocks_before_any_gate():
 
 
 def test_ordinary_failure_without_budget_for_repair_is_a_budget_failure():
-    failed = {'blocked': True, 'reason': 'generated tests failed', 'failure_kind': 'ordinary'}
+    failed = {'blocked': True, 'reason': 'generated tests failed', 'failure_class': 'ordinary'}
     verdict, calls = run({5: [failed]}, budget=TickBudget(ticks=3))
     assert verdict['failure_class'] == 'budget'
     assert [gate for gate, _ in calls] == [3, 4, 5]

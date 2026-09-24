@@ -55,11 +55,11 @@ def _sections(text: str):
 
 
 def scan(diff_text: str, checkout: str | Path | None = None) -> dict:
-    """Findings [{check, failure_kind, detail}] + checks ran + ui_changed. Detail never echoes a secret."""
+    """Findings [{check, failure_class, detail}] + checks ran + ui_changed. Detail never echoes a secret."""
     findings = []
 
     def add(check, kind, detail):
-        findings.append({"check": check, "failure_kind": kind, "detail": detail[:300]})
+        findings.append({"check": check, "failure_class": kind, "detail": detail[:300]})
 
     ui_changed = False
     for path, deleted, added, removed, existing in _sections(diff_text):

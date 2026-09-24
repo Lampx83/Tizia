@@ -103,16 +103,16 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     checkout = checkout_dir if checkout_dir is not None else state.get("full_checkout")
     if not checkout:
         return {"gate": 5, "blocked": True, "reason": "thiếu full_checkout cho Docker verify", "evidence": None,
-                "failure_kind": "transient"}
+                "failure_class": "transient"}
     checkout = Path(checkout)
     if not (checkout / "docker-compose.yml").is_file() or not (checkout / "Dockerfile").is_file():
         return {"gate": 5, "blocked": True, "reason": "full_checkout thiếu Dockerfile/docker-compose.yml", "evidence": None,
-                "failure_kind": "transient"}
+                "failure_class": "transient"}
 
     skill_id = re.sub(r"[^a-z0-9-]+", "-", str(state.get("skill_id") or "").lower()).strip("-")
     if not skill_id:
         return {"gate": 5, "blocked": True, "reason": "thiếu skill_id cho Docker verify", "evidence": None,
-                "failure_kind": "transient"}
+                "failure_class": "transient"}
     project = f"ai-verify-{skill_id}"
     runner = runner or subprocess.run
     http_probe = http_probe or probe_http
@@ -241,4 +241,4 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 "screenshot": str(screenshot) if screenshot else None}
     state["evidence"] = evidence
     return {"gate": 5, "blocked": bool(reason), "reason": reason, "evidence": evidence,
-            "failure_kind": kind if reason else None}
+            "failure_class": kind if reason else None}
