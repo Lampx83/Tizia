@@ -306,8 +306,8 @@ export function createAiBoardStore(db, hooks = {}) {
     const phase = intent === 'plan' ? 'planning' : 'shadow_precheck';
     db.prepare(`
       UPDATE ai_tickets SET status='running', phase=?, lease_owner=?,
-        lease_token=?, lease_expires_at=?, updated_at=? WHERE id=?
-    `).run(phase, workerId, token, expires, now, candidate.id);
+        lease_token=?, lease_expires_at=?, lease_mode=?, updated_at=? WHERE id=?
+    `).run(phase, workerId, token, expires, mode, now, candidate.id);
     db.prepare(`
       UPDATE ai_workers SET status='running', current_ticket_id=?, last_seen_at=?, updated_at=?
       WHERE worker_id=?
@@ -650,8 +650,7 @@ export function createAiBoardStore(db, hooks = {}) {
 
   const submitPrePrVerdictTransaction = db.transaction((ticketId, input, verdict) => {
     const root = assertLease(ticketId, input.workerId, input.leaseToken, input.now);
-    const worker = db.prepare('SELECT mode FROM ai_workers WHERE worker_id=?').get(input.workerId);
-    if (worker?.mode !== 'active') {
+    if (root.lease_mode !== 'active') {
       throw new WorkerContractError('pre-PR verdict requires active worker mode', 409, 'active_worker_required');
     }
     const run = db.prepare('SELECT * FROM ai_runs WHERE id=? AND ticket_id=?').get(Number(input.runId), Number(ticketId));

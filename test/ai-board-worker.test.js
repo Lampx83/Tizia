@@ -182,13 +182,13 @@ test('pre-PR verdict is persisted and observable through the request HTTP API', 
     assert.equal(mismatchedRun.status, 409);
     assert.equal((await mismatchedRun.json()).error, 'plan_run_mismatch');
     db.prepare('UPDATE ai_runs SET plan_revision=? WHERE id=?').run(1, run.id);
-    db.prepare(`UPDATE ai_workers SET mode='shadow' WHERE worker_id='verdict-worker'`).run();
+    db.prepare(`UPDATE ai_tickets SET lease_mode='shadow' WHERE id=?`).run(ticket.id);
     const shadowVerdict = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, {
       ...lease, run_id: run.id, verdict: passingVerdict, idempotency_key: 'pre-pr-shadow-001',
     });
     assert.equal(shadowVerdict.status, 409);
     assert.equal((await shadowVerdict.json()).error, 'active_worker_required');
-    db.prepare(`UPDATE ai_workers SET mode='active' WHERE worker_id='verdict-worker'`).run();
+    db.prepare(`UPDATE ai_tickets SET lease_mode='active' WHERE id=?`).run(ticket.id);
     const body = {
       ...lease, run_id: run.id, idempotency_key: 'pre-pr-verdict-001',
       verdict: passingVerdict,
@@ -249,6 +249,52 @@ test('AI_BOARD_KEY cannot authenticate or mount the worker API', async () => {
       worker_id: 'key-alias-worker', version: 'test', mode: 'shadow',
     });
     assert.equal(response.status, 404);
+  } finally {
+    await close();
+    db.close();
+  }
+});
+
+test('a root claimed under shadow cannot receive an active verdict via a same-worker reclaim', async () => {
+  const { db, store } = fixture();
+  const { base, close } = await serve(store);
+  try {
+    const { ticket } = await (await post(base, '/api/ai-board/worker/claim', {
+      worker_id: 'w1', version: 'test', mode: 'shadow', intent: 'plan',
+    })).json();
+    const lease = { worker_id: 'w1', lease_token: ticket.lease_token };
+    const { run } = await (await post(base, `/api/ai-board/worker/tickets/${ticket.id}/runs`, {
+      ...lease, trigger: 'plan', idempotency_key: 'shadow-reclaim-run-001',
+    })).json();
+    await post(base, `/api/ai-board/worker/tickets/${ticket.id}/plan`, {
+      ...lease, run_id: run.id, plan: surfacePlan(), budget_used: 1, idempotency_key: 'shadow-reclaim-plan-001',
+    });
+
+    // Same worker_id re-claims while the shadow lease is still held and valid.
+    // The transaction upserts ai_workers.mode='active' first, then finds the
+    // existing lease and just returns it unchanged.
+    const reclaim = await post(base, '/api/ai-board/worker/claim', {
+      worker_id: 'w1', version: 'test', mode: 'active', intent: 'plan',
+    });
+    assert.equal(reclaim.status, 200);
+    assert.equal((await reclaim.json()).ticket.id, ticket.id);
+
+    const verdict = {
+      outcome: 'ready_for_pr', gate_reached: 5.5, reason: null, budget_used: 40,
+      gates: [
+        { gate: 3, blocked: false, reason: null },
+        { gate: 4, blocked: false, reason: null, issues: [] },
+        { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true },
+        { gate: 5.5, blocked: false, reason: null, risk_level: 'low', risk_signals: [] },
+      ],
+    };
+    const submitted = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, {
+      ...lease, run_id: run.id, verdict, idempotency_key: 'shadow-reclaim-verdict-001',
+    });
+    // The ticket/lease was claimed under `shadow`; a same-worker reclaim as
+    // `active` afterwards must not retroactively authorize a verdict for it.
+    assert.equal(submitted.status, 409);
+    assert.equal((await submitted.json()).error, 'active_worker_required');
   } finally {
     await close();
     db.close();
