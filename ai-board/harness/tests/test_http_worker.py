@@ -508,6 +508,7 @@ def test_complexity_gated_plan_records_reason_signals_and_truncated_plan():
     detail = json.loads(event['internal_detail'])
     assert detail['gate'] == 2.5 and detail['reason'] == 'complexity_gated'
     assert detail['signals'] == ['capabilities: features, quiz', 'file ngoài vùng an toàn: server/index.js']
+    assert json.loads(transport.calls[-1][2]['internal_detail']) == detail  # root's internal_reason too
     assert detail['plan'].startswith('{"summary_vi": "xxx') and len(detail['plan']) <= 2000
 
 

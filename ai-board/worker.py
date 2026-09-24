@@ -315,15 +315,17 @@ class HttpWorker:
             except Exception as error:
                 if isinstance(error, LeaseLostError):
                     raise
+                # Same detail on the event and the root's internal_reason, so the admin queue API shows why.
+                detail = (json.dumps(error.detail, ensure_ascii=False) if isinstance(error, PlanBlockedError)
+                          else str(error))
                 self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/events", {
                     **lease, "run_id": run["id"], "event_type": "plan_blocked",
                     "public_message": "Kế hoạch chưa vượt qua kiểm tra an toàn.",
-                    "internal_detail": json.dumps(error.detail, ensure_ascii=False)
-                    if isinstance(error, PlanBlockedError) else str(error),
+                    "internal_detail": detail,
                     "idempotency_key": f"{prefix}:plan-blocked",
                 })
                 self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/release", {
-                    **lease, "outcome": "waiting", "internal_detail": str(error),
+                    **lease, "outcome": "waiting", "internal_detail": detail,
                     "idempotency_key": f"{prefix}:release-blocked",
                 })
                 raise
@@ -494,7 +496,11 @@ def main(argv: list[str] | None = None) -> int:
         change_runner=HarnessChangeRunner() if args.execute else None,
     )
     while True:
-        print(json.dumps(worker.run_once(), ensure_ascii=False))
+        try:
+            result = worker.run_once()
+        except PlanBlockedError as error:  # an expected outcome, not a crash: show why
+            result = {"status": "plan_blocked", **error.detail}
+        print(json.dumps(result, ensure_ascii=False))
         if args.once or args.mode == "off":
             return 0
         time.sleep(max(args.poll_seconds, 1.0))
