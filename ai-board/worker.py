@@ -396,6 +396,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--execute", action="store_true", help="run the accepted plan through gates 3, 4, 5 and 5.5")
     parser.add_argument("--poll-seconds", type=float, default=5.0)
     args = parser.parse_args(argv)
+    try:  # same repo env file as harness/main.py; process env still wins
+        from dotenv import load_dotenv
+    except ImportError:
+        pass
+    else:
+        load_dotenv(Path(__file__).resolve().parents[1] / ".env")
     if args.execute and args.mode != "active":
         parser.error("--execute requires --mode active")
     if args.mode == "active" and not args.execute:
