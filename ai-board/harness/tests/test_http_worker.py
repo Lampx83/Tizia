@@ -23,7 +23,7 @@ class FakeTransport:
             return {'ticket': {'id': 7, 'lease_token': 'lease-7'}}
         if path.endswith('/snapshot'):
             return {'ticket': {'cumulative_budget': 20}, 'capability_policy': POLICY,
-                    'request': {'id': 3, 'title': 'fixture'}, 'thread': []}
+                    'request': {'id': 3, 'title': 'fixture', 'detail': '[Trang: X] /x.html'}, 'thread': []}
         if path.endswith('/runs'):
             return {'run': {'id': 11}}
         if path.endswith('/events'):
@@ -194,12 +194,12 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
                 'risk_level': 'low', 'risk_signals': []}
 
     def change_runner(plan, ticket_id, _budget_used, cumulative_budget, budget_limit, *, policy,
-                      accepted_policy_hash):
+                      accepted_policy_hash, request_detail):
         assert (cumulative_budget, budget_limit) == (20, 200)
         assert (policy, accepted_policy_hash) == (POLICY, POLICY['hash'])
         return execute_pre_pr(
             plan, ticket_id=ticket_id, checkout_source=tmp_path,
-            policy=policy, accepted_policy_hash=accepted_policy_hash,
+            policy=policy, accepted_policy_hash=accepted_policy_hash, request_detail=request_detail,
             deps=object(), budget=Budget(), run_gate=run_gate, cleanup=lambda *_, **__: None,
         )
 
@@ -214,6 +214,7 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
     assert out['pre_pr_verdict']['outcome'] == 'ready_for_pr'
     assert [gate for gate, _ in states] == [3, 4, 5, 5.5]
     assert states[0][1]['catalog'] == POLICY['capabilities']
+    assert states[0][1]['request_detail'] == '[Trang: X] /x.html'
     assert states[2][1]['plan']['subtasks'][0] == {
         'title': 'Thay đổi quan sát được', 'file': 'public/x.html',
         'verify': 'smoke', 'size': 'small', 'allowed_scope': ['public/x.html'],
@@ -290,6 +291,8 @@ def test_execution_without_http_observation_blocks_at_gate_5(tmp_path):
     assert verdict['outcome'] == 'blocked'
     assert verdict['gate_reached'] == 5
     assert verdict['reason'] == 'change has no HTTP-observable result'
+    assert verdict['failure_class'] == 'plan'  # a repair cannot make an unobservable change observable
+    assert verdict['repairs'] == []
 
 
 class TickBudget:

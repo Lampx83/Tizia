@@ -138,6 +138,15 @@ test('ordinary and transient blocks keep the root planned with no alert', () => 
   }
 });
 
+test('a plan-class failure waits for the admin as plan_unfit, with no repair child or alert', () => {
+  const { db, submit, ticket } = plannedRoot();
+  submit(blocked(5, 'change touches no public file', 'plan'));
+  const root = db.prepare('SELECT status, phase, internal_reason FROM ai_tickets WHERE id=?').get(ticket.id);
+  assert.deepEqual({ ...root }, { status: 'waiting_admin', phase: 'plan_unfit', internal_reason: 'change touches no public file' });
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM ai_alerts').get().n, 0);
+  assert.equal(db.prepare(`SELECT COUNT(*) n FROM ai_tickets WHERE kind='review_fix'`).get().n, 0);
+});
+
 test('budget exhaustion waits for a reasoned admin extension', () => {
   const { db, store, submit, ticket } = plannedRoot();
   submit(blocked(3, 'budget exhausted', 'budget'));

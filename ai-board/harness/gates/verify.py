@@ -55,13 +55,26 @@ def _bash() -> str:
     return shutil.which("bash") or "bash"
 
 
-def _visual_pages(diffs: list[dict]) -> list[str]:
+def _public_paths(diffs: list[dict]) -> list[str]:
+    """URL path of every changed file under public/ (HTML, CSS, JS, data), in diff order."""
     return list(dict.fromkeys(
         "/" + path.removeprefix("public/")
         for item in diffs
         if (path := item.get("file", "").replace("\\", "/")).startswith("public/")
-        and path.endswith(".html")
     ))
+
+
+_REQUEST_PAGE = re.compile(r"^\[Trang: .*\] (\S+)\s*$")
+
+
+def _request_page(detail: str | None) -> str | None:
+    """Internal path from the requester's `[Trang: …] /path` line; None for anything else.
+    The request text is untrusted: '//host' or a scheme would point the browser off the isolated container."""
+    match = _REQUEST_PAGE.match((detail or "").split("\n", 1)[0].strip())
+    path = match.group(1) if match else ""
+    if not path.startswith("/") or path.startswith("//") or "\\" in path:
+        return None
+    return path
 
 
 def _expected_lines(state: dict, checkout: Path, page: str) -> list[str]:
@@ -114,6 +127,13 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
         return {"gate": 5, "blocked": True, "reason": "thiếu skill_id cho Docker verify", "evidence": None,
                 "failure_class": "transient"}
     project = f"ai-verify-{skill_id}"
+    pages = _public_paths(state.get("diffs") or [])
+    if not pages:
+        # Nothing the isolated server serves can show the change; a repair cannot fix that, the plan must.
+        return {"gate": 5, "blocked": True, "reason": "thay đổi không chạm file public nào để quan sát qua HTTP",
+                "evidence": None, "failure_class": "plan"}
+    html = [page for page in pages if page.endswith(".html")]
+    shot_page = html[0] if html else _request_page(state.get("request_detail"))
     runner_name = "fake" if runner else "docker"  # injected runner = test double, never real evidence
     runner = runner or subprocess.run
     http_probe = http_probe or probe_http
@@ -204,26 +224,26 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             smoke = command([_bash(), SMOKE_SCRIPT.as_posix()], env=env)
             smoke_ok = smoke.returncode == 0
 
-            pages = _visual_pages(state.get("diffs") or [])
-            if pages:
-                for page in pages:
-                    status, body = http_probe(base + page)
-                    if not 200 <= status < 300:
-                        smoke_ok = False
-                        raise RuntimeError(f"changed page returned HTTP {status}: {page}")
-                    # The server injects analytics/SEO tags into every HTML page, so compare the
-                    # candidate's own lines, not bytes: each must be served.
-                    served = body.decode("utf-8", "replace")
-                    if any(line not in served for line in _expected_lines(state, checkout, page)):
-                        smoke_ok = False
-                        raise RuntimeError(f"changed page body does not match checkout: {page}")
-                    logs.append(f"Changed page HTTP {status}: {page}")
-                http_observed = True
+            for page in pages:
+                status, body = http_probe(base + page)
+                if not 200 <= status < 300:
+                    smoke_ok = False
+                    raise RuntimeError(f"changed page returned HTTP {status}: {page}")
+                # The server injects analytics/SEO tags into every HTML page, so compare the
+                # candidate's own lines, not bytes: each must be served.
+                served = body.decode("utf-8", "replace")
+                if any(line not in served for line in _expected_lines(state, checkout, page)):
+                    smoke_ok = False
+                    raise RuntimeError(f"changed page body does not match checkout: {page}")
+                logs.append(f"Changed page HTTP {status}: {page}")
+            http_observed = True
+            # Changed HTML page, else the page the requester was on (CSS/JS change); none named = no shot.
+            if shot_page:
                 screenshot = Path(tempfile.mkdtemp(prefix=f"{project}-artifact-")) / "screenshot.png"
                 try:
-                    capture_screenshot(base + pages[0], screenshot)
-                    logs.append(f"Screenshot: {screenshot}")
-                except Exception as exc:  # D0: UI changes require a screenshot; absent browser = environment
+                    capture_screenshot(base + shot_page, screenshot)
+                    logs.append(f"Screenshot {shot_page}: {screenshot}")
+                except Exception as exc:  # D0: UI evidence is mandatory; absent browser = environment
                     shutil.rmtree(screenshot.parent, ignore_errors=True)
                     screenshot = None
                     kind = "transient"

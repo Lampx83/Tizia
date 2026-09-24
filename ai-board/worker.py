@@ -80,7 +80,8 @@ MAX_REPAIRS = 1  # ponytail: one repair child per verdict; server enforces the s
 
 
 def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate, cleanup,
-             repair_reason: str | None, catalog: dict | None) -> tuple[list[dict], str | None, dict | None]:
+             repair_reason: str | None, catalog: dict | None,
+             request_detail: str | None) -> tuple[list[dict], str | None, dict | None]:
     """One pass of Gates 3→5.5 on fresh scratch + worktree. Return (public gates, failure kind, candidate)."""
     scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
     state = {
@@ -89,6 +90,8 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
     }
     if catalog is not None:
         state["catalog"] = catalog
+    if request_detail:
+        state["request_detail"] = request_detail
     if repair_reason:
         state["repair_reason"] = repair_reason
     gates: list[dict] = []
@@ -116,6 +119,7 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
                 if not public["blocked"] and not public["http_observed"]:
                     public["blocked"] = True
                     public["reason"] = "change has no HTTP-observable result"
+                    result["failure_class"] = "plan"
             gates.append(public)
             if public["blocked"]:
                 kind = result.get("failure_class") or "ordinary"
@@ -132,7 +136,8 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
 
 
 def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate,
-                   cleanup: Callable, policy: dict | None = None, accepted_policy_hash: str | None = None) -> dict:
+                   cleanup: Callable, policy: dict | None = None, accepted_policy_hash: str | None = None,
+                   request_detail: str | None = None) -> dict:
     """Run Gates 3→5.5, repairing an ordinary failure at most MAX_REPAIRS times. Return a redacted verdict.
 
     policy = snapshot catalog {hash, capabilities}; None only outside the HTTP worker (no catalog check).
@@ -151,6 +156,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
         gates, kind, candidate = _attempt(
             plan, ticket_id=ticket_id, checkout_source=checkout_source, deps=deps, budget=budget,
             run_gate=run_gate, cleanup=cleanup, repair_reason=repair_reason, catalog=catalog,
+            request_detail=request_detail,
         )
         last = gates[-1]
         if kind != "ordinary" or len(repairs) >= MAX_REPAIRS:
@@ -303,6 +309,7 @@ class HttpWorker:
                         # {} when missing: fails the hash check closed instead of skipping the catalog.
                         policy=snapshot.get("capability_policy") or {},
                         accepted_policy_hash=planned.get("capability_policy_hash"),
+                        request_detail=(snapshot.get("request") or {}).get("detail"),
                     ), ticket_id, lease,
                 )
                 verdict = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/verdict", {
@@ -410,14 +417,14 @@ class HarnessChangeRunner:
 
     def __call__(self, plan: dict, ticket_id: int, budget_used: int = 0,
                  cumulative_budget: int = 0, budget_limit: int = 200, *, policy: dict,
-                 accepted_policy_hash: str | None) -> dict:
+                 accepted_policy_hash: str | None, request_detail: str | None = None) -> dict:
         budget = self.Budget.from_env()
         remaining = budget_limit - cumulative_budget - budget_used
         budget.max_model_calls = min(budget.max_model_calls, max(remaining // 40, 0))
         return execute_pre_pr(
             plan, ticket_id=ticket_id, checkout_source=self.checkout_source,
             deps=self.deps, budget=budget, run_gate=self.run_gate, cleanup=self.cleanup,
-            policy=policy, accepted_policy_hash=accepted_policy_hash,
+            policy=policy, accepted_policy_hash=accepted_policy_hash, request_detail=request_detail,
         )
 
 

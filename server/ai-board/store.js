@@ -18,7 +18,7 @@ const EVENT_TYPES = new Set([
 ]);
 const PRE_PR_GATES = new Set([3, 4, 5, 5.5]);
 const PRE_PR_SEQUENCE = [3, 4, 5, 5.5];
-const FAILURE_CLASSES = new Set(['ordinary', 'transient', 'critical', 'budget']);
+const FAILURE_CLASSES = new Set(['ordinary', 'transient', 'critical', 'budget', 'plan']);
 const MAX_REPAIRS = 1; // same bound as ai-board/worker.py MAX_REPAIRS
 const MAX_BUDGET_EXTENSION = 200;
 const SHA = /^[0-9a-f]{40}$/;
@@ -772,6 +772,11 @@ export function createAiBoardStore(db, hooks = {}) {
     } else if (verdict.failure_class === 'budget') {
       status = 'waiting_admin';
       phase = 'budget_exhausted';
+      note = 'Yêu cầu đang chờ quản trị viên xem xét.';
+    } else if (verdict.failure_class === 'plan') {
+      // The accepted plan cannot be carried out as written: admin clarifies, rejects or hands it to a human.
+      status = 'waiting_admin';
+      phase = 'plan_unfit';
       note = 'Yêu cầu đang chờ quản trị viên xem xét.';
     }
     const repairSequence = db.prepare(`

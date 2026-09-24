@@ -4,8 +4,16 @@ from pathlib import Path
 import json
 import subprocess
 
+import pytest
+
 import main
 from gates import verify
+
+
+@pytest.fixture(autouse=True)
+def served(monkeypatch):
+    """Default isolated container serves every fixture public file as checked out."""
+    monkeypatch.setattr(verify, "probe_http", lambda _url: (200, b"<h1>changed</h1>\n// x\n"))
 
 
 class FakeRunner:
@@ -50,6 +58,7 @@ def checkout(tmp_path):
     (tmp_path / "scripts" / "smoke-user-state.sh").write_text("true\n", encoding="utf-8")
     (tmp_path / "public").mkdir()
     (tmp_path / "public" / "x.html").write_text("<h1>changed</h1>\n", encoding="utf-8")
+    (tmp_path / "public" / "x.js").write_text("// x\n", encoding="utf-8")
     (tmp_path / "test").mkdir()
     (tmp_path / "test" / "generated.test.js").write_text("// generated\n", encoding="utf-8")
     return tmp_path
@@ -69,7 +78,8 @@ def test_pass_uses_isolated_compose_smoke_and_down(tmp_path):
 
     assert out["blocked"] is False
     assert out["evidence"]["smoke_passed"] is True
-    assert out["evidence"]["http_observed"] is False
+    assert out["evidence"]["http_observed"] is True
+    assert out["evidence"]["screenshot"] is None  # JS change, no request page named
     assert "một luồng user-state" in out["evidence"]["text"]
     assert "pharmacysim-data:/data" not in runner.override
     assert "127.0.0.1::8041" in runner.override
@@ -197,8 +207,56 @@ def test_changed_html_response_must_match_the_checkout(tmp_path):
     assert out["evidence"]["http_observed"] is False
 
 
-def test_non_html_change_has_no_canonical_http_page():
-    assert verify._visual_pages([{"file": "public/x.js", "diff": "+const x = { style: 'red' };"}]) == []
+def test_css_change_is_observed_over_http_and_screenshots_the_request_page(tmp_path, monkeypatch):
+    root = checkout(tmp_path)
+    (root / "public" / "css").mkdir()
+    (root / "public" / "css" / "school.css").write_text(".title { color: #f5c400; }\n", encoding="utf-8")
+    s = {"skill_id": "skill-42", "full_checkout": str(root),
+         "request_detail": "[Trang: Trường IT] /school.html?domain=it\nđổi màu chữ thành vàng",
+         "diffs": [{"file": "public/css/school.css", "test_file": "test/generated.test.js", "diff": "+x"}]}
+    probed, shots = [], []
+    monkeypatch.setattr(verify, "capture_screenshot", lambda url, path: (shots.append(url), path.write_bytes(b"png")))
+
+    def probe(url):
+        probed.append(url)
+        return 200, b"body{}\n.title { color: #f5c400; }\n"
+
+    out = verify.run(s, runner=FakeRunner(), http_probe=probe)
+    assert out["blocked"] is False
+    assert out["evidence"]["http_observed"] is True
+    assert probed == ["http://127.0.0.1:49152/css/school.css"]
+    assert shots == ["http://127.0.0.1:49152/school.html?domain=it"]
+    assert Path(out["evidence"]["screenshot"]).read_bytes() == b"png"
+
+    out = verify.run(s, runner=FakeRunner(), http_probe=lambda _url: (200, b".title { color: red; }"))
+    assert out["blocked"] is True and "does not match checkout" in out["reason"]
+    assert out["failure_class"] == "ordinary"
+
+
+def test_screenshot_target_from_the_request_must_be_an_internal_path(tmp_path, monkeypatch):
+    shots = []
+    monkeypatch.setattr(verify, "capture_screenshot", lambda url, path: shots.append(url))
+    details = ("[Trang: x] https://evil.example/", "[Trang: x] //evil.example/a", "[Trang: x] /\\evil.example",
+               "không có dòng trang")
+    for index, detail in enumerate(details):
+        (tmp_path / str(index)).mkdir()
+        s = state(checkout(tmp_path / str(index)))
+        s["request_detail"] = detail
+        out = verify.run(s, runner=FakeRunner())
+        assert out["blocked"] is False
+        assert out["evidence"]["screenshot"] is None
+    assert shots == []
+
+
+def test_diff_without_a_public_file_is_a_plan_failure_before_docker(tmp_path):
+    runner = FakeRunner()
+    s = state(checkout(tmp_path))
+    s["diffs"][0]["file"] = "server/contexts/_ai-generated/x/index.js"
+    out = verify.run(s, runner=runner)
+    assert out["blocked"] is True
+    assert out["failure_class"] == "plan"
+    assert "public" in out["reason"]
+    assert runner.calls == []
 
 
 def test_every_changed_html_page_must_match(tmp_path):
