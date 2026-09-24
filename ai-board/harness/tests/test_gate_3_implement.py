@@ -267,7 +267,7 @@ def test_ensure_scratch_repo_never_reuses_real_tizia_repo(tmp_path):
         shutil.rmtree(repo, ignore_errors=True)
 
 
-def test_heavy_gate3_model_reads_the_new_name_and_falls_back_to_the_legacy_one():
+def test_heavy_gate3_model_reads_only_gate3_model_heavy():
     from models import OllamaClient
-    assert OllamaClient.from_env({"GATE3_MODEL_HEAVY": "heavy", "GATE3_MODEL": "old"}).gate3_model == "heavy"
-    assert OllamaClient.from_env({"GATE3_MODEL": "old"}).gate3_model == "old"
+    assert OllamaClient.from_env({"GATE3_MODEL_HEAVY": "heavy"}).gate3_model == "heavy"
+    assert OllamaClient.from_env({"GATE3_MODEL": "old"}).gate3_model == ""

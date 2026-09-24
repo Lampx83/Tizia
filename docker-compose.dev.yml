@@ -6,7 +6,7 @@ services:
     container_name: tizia-dev
     restart: unless-stopped
     ports:
-      - "8042:8041"
+      - "${PORT:-8041}:8041"  # host port follows PORT so the host worker reaches 127.0.0.1:$PORT
     env_file:
       - .env
     environment:

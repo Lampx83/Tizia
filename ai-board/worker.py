@@ -414,13 +414,14 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--execute requires --mode active")
     if args.mode == "active" and not args.execute:
         parser.error("--mode active requires --execute")
-    base_url = os.getenv("TIZIA_URL", "http://127.0.0.1:8041")
+    # Same machine as the server; HOST is its bind address (0.0.0.0), not a connect address.
+    base_url = f"http://127.0.0.1:{os.getenv('PORT', '8041')}"
     key = os.getenv("AI_BOARD_WORKER_KEY", "")
     if args.mode != "off" and len(key) < 24:
         parser.error("AI_BOARD_WORKER_KEY must be at least 24 characters")
     worker = HttpWorker(
         WorkerClient(base_url, key),
-        worker_id=os.getenv("AI_BOARD_WORKER_ID") or default_worker_id(),
+        worker_id=default_worker_id(),
         version=os.getenv("AI_BOARD_WORKER_VERSION", "d0"),
         mode=args.mode,
         planner=HarnessPlanner() if args.plan or args.execute else None,

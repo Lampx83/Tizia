@@ -36,7 +36,7 @@ class OllamaClient:
         return cls(
             base_url=(env.get("OLLAMA_URL") or "").rstrip("/"),
             gate1_model=env.get("GATE1_MODEL") or "",
-            gate3_model=env.get("GATE3_MODEL_HEAVY") or env.get("GATE3_MODEL") or "",  # GATE3_MODEL = tên cũ
+            gate3_model=env.get("GATE3_MODEL_HEAVY") or "",
             gate3_model_light=env.get("GATE3_MODEL_LIGHT") or "",
             embed_model=env.get("EMBED_MODEL") or "",
             seckey=env.get("OLLAMA_SECKEY") or None,
