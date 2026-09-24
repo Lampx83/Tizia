@@ -75,7 +75,7 @@ async function serve(store, env = { AI_BOARD_WORKER_KEY: KEY }) {
 
 test('D0 HTTP flow creates a root request, validates a plan, and creates child tickets', async () => {
   const { db, store } = fixture({ seedRequest: false });
-  const { base, close } = await serve(store, { AI_BOARD_KEY: KEY });
+  const { base, close } = await serve(store, { AI_BOARD_WORKER_KEY: KEY });
   try {
     const created = await fetch(`${base}/api/requests`, {
       method: 'POST',
@@ -149,7 +149,7 @@ test('pre-PR verdict is persisted and observable through the request HTTP API', 
   const { base, close } = await serve(store);
   try {
     const { ticket } = await (await post(base, '/api/ai-board/worker/claim', {
-      worker_id: 'verdict-worker', version: 'test', mode: 'shadow', intent: 'plan',
+      worker_id: 'verdict-worker', version: 'test', mode: 'active', intent: 'plan',
     })).json();
     const lease = { worker_id: 'verdict-worker', lease_token: ticket.lease_token };
     const { run } = await (await post(base, `/api/ai-board/worker/tickets/${ticket.id}/runs`, {
@@ -182,6 +182,13 @@ test('pre-PR verdict is persisted and observable through the request HTTP API', 
     assert.equal(mismatchedRun.status, 409);
     assert.equal((await mismatchedRun.json()).error, 'plan_run_mismatch');
     db.prepare('UPDATE ai_runs SET plan_revision=? WHERE id=?').run(1, run.id);
+    db.prepare(`UPDATE ai_workers SET mode='shadow' WHERE worker_id='verdict-worker'`).run();
+    const shadowVerdict = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, {
+      ...lease, run_id: run.id, verdict: passingVerdict, idempotency_key: 'pre-pr-shadow-001',
+    });
+    assert.equal(shadowVerdict.status, 409);
+    assert.equal((await shadowVerdict.json()).error, 'active_worker_required');
+    db.prepare(`UPDATE ai_workers SET mode='active' WHERE worker_id='verdict-worker'`).run();
     const body = {
       ...lease, run_id: run.id, idempotency_key: 'pre-pr-verdict-001',
       verdict: passingVerdict,
@@ -234,14 +241,14 @@ test('pre-PR verdict is persisted and observable through the request HTTP API', 
   }
 });
 
-test('AI_BOARD_KEY can authenticate the D0 worker API', async () => {
+test('AI_BOARD_KEY cannot authenticate or mount the worker API', async () => {
   const { db, store } = fixture();
   const { base, close } = await serve(store, { AI_BOARD_KEY: KEY });
   try {
     const response = await post(base, '/api/ai-board/worker/claim', {
       worker_id: 'key-alias-worker', version: 'test', mode: 'shadow',
     });
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 404);
   } finally {
     await close();
     db.close();
@@ -452,12 +459,12 @@ test('shadow-checked roots stop reclaiming the queue and later roots can run', a
   }
 });
 
-test('server rejects an unimplemented active worker mode', async () => {
+test('server rejects an unknown worker mode', async () => {
   const { db, store } = fixture();
   const { base, close } = await serve(store);
   try {
     const response = await post(base, '/api/ai-board/worker/claim', {
-      worker_id: 'w1', version: 'test', mode: 'active',
+      worker_id: 'w1', version: 'test', mode: 'unexpected',
     });
     assert.equal(response.status, 400);
   } finally {

@@ -6,7 +6,7 @@ AI_BOARD_DIR = Path(__file__).resolve().parents[2]
 if str(AI_BOARD_DIR) not in sys.path:
     sys.path.insert(0, str(AI_BOARD_DIR))
 
-from worker import HttpWorker, WorkerClient, execute_pre_pr
+from worker import HttpWorker, WorkerClient, execute_pre_pr, main
 
 
 class FakeTransport:
@@ -50,6 +50,33 @@ def test_shadow_run_uses_only_the_worker_http_contract():
         'claim', 'snapshot', 'heartbeat', 'runs', 'events', 'release',
     ]
     assert all(call[3]['x-ai-worker-key'] == 'secret' for call in transport.calls)
+
+
+def test_shadow_mode_refuses_change_execution_before_http():
+    transport = FakeTransport()
+    worker = HttpWorker(
+        WorkerClient('http://fixture', 'secret', transport=transport),
+        worker_id='w1', version='test', mode='shadow',
+        planner=lambda _snapshot: ({'goal': 'x'}, 0),
+        change_runner=lambda *_: {'outcome': 'ready_for_pr'},
+    )
+
+    try:
+        worker.run_once()
+    except ValueError as error:
+        assert 'shadow' in str(error)
+    else:
+        raise AssertionError('shadow mode must not execute implementation gates')
+    assert transport.calls == []
+
+
+def test_execute_flag_requires_active_mode():
+    try:
+        main(['--mode', 'shadow', '--execute', '--once'])
+    except SystemExit as error:
+        assert error.code == 2
+    else:
+        raise AssertionError('--execute must reject shadow mode')
 
 
 def test_planner_result_is_submitted_through_guardrails_before_release():
@@ -169,7 +196,7 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
 
     worker = HttpWorker(
         WorkerClient('http://fixture', 'secret', transport=transport),
-        worker_id='w1', version='test', mode='shadow',
+        worker_id='w1', version='test', mode='active',
         planner=lambda _snapshot: (canonical_plan, 80), change_runner=change_runner,
     )
 

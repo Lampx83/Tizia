@@ -165,8 +165,12 @@ class HttpWorker:
     def run_once(self) -> dict:
         if self.mode == "off":
             return {"status": "off"}
-        if self.mode != "shadow":
-            raise ValueError("D0 worker only supports off or shadow")
+        if self.mode not in ("shadow", "active"):
+            raise ValueError("D0 worker only supports off, shadow or active")
+        if self.mode == "shadow" and self.change_runner:
+            raise ValueError("shadow mode cannot execute implementation gates")
+        if self.mode == "active" and (not self.planner or not self.change_runner):
+            raise ValueError("active mode requires planner and change runner")
 
         claim = self.client.post("/api/ai-board/worker/claim", {
             "worker_id": self.worker_id, "version": self.version, "mode": self.mode,
@@ -333,12 +337,16 @@ class HarnessChangeRunner:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Tizia AI Board HTTP worker")
-    parser.add_argument("--mode", choices=("off", "shadow"), default=os.getenv("AI_BOARD_WORKER_MODE", "off"))
+    parser.add_argument("--mode", choices=("off", "shadow", "active"), default=os.getenv("AI_BOARD_WORKER_MODE", "off"))
     parser.add_argument("--once", action="store_true", help="poll once, then exit")
     parser.add_argument("--plan", action="store_true", help="run gates 1, 2 and 2.5, then submit child-ticket plan")
     parser.add_argument("--execute", action="store_true", help="run the accepted plan through gates 3, 4, 5 and 5.5")
     parser.add_argument("--poll-seconds", type=float, default=5.0)
     args = parser.parse_args(argv)
+    if args.execute and args.mode != "active":
+        parser.error("--execute requires --mode active")
+    if args.mode == "active" and not args.execute:
+        parser.error("--mode active requires --execute")
     base_url = os.getenv("TIZIA_URL", "http://127.0.0.1:8041")
     key = os.getenv("AI_BOARD_WORKER_KEY", "")
     if args.mode != "off" and len(key) < 24:

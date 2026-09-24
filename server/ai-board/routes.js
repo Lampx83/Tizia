@@ -87,7 +87,7 @@ export function attachAiBoardWorkerRoutes(router, {
   env = process.env,
   leaseMs = 120_000,
 }) {
-  const key = String(env.AI_BOARD_WORKER_KEY || env.AI_BOARD_KEY || '').trim();
+  const key = String(env.AI_BOARD_WORKER_KEY || '').trim();
   if (key.length < 24) return false;
   const expected = digest(key);
   const authenticate = (req, res, next) => {

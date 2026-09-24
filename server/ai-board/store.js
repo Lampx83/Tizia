@@ -9,7 +9,7 @@ export { PlanGuardrailError } from './policy.js';
 const MIGRATIONS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'migrations');
 const REQUEST_TYPES = new Set(['game', 'theory', 'lab', 'skill', 'other']);
 const REQUEST_STATUSES = new Set(['pending', 'reviewing', 'done', 'rejected']);
-const WORKER_MODES = new Set(['off', 'shadow']);
+const WORKER_MODES = new Set(['off', 'shadow', 'active']);
 const CLAIM_INTENTS = new Set(['precheck', 'plan']);
 const RUN_TRIGGERS = new Set(['shadow_precheck', 'plan']);
 const EVENT_TYPES = new Set([
@@ -650,6 +650,10 @@ export function createAiBoardStore(db, hooks = {}) {
 
   const submitPrePrVerdictTransaction = db.transaction((ticketId, input, verdict) => {
     const root = assertLease(ticketId, input.workerId, input.leaseToken, input.now);
+    const worker = db.prepare('SELECT mode FROM ai_workers WHERE worker_id=?').get(input.workerId);
+    if (worker?.mode !== 'active') {
+      throw new WorkerContractError('pre-PR verdict requires active worker mode', 409, 'active_worker_required');
+    }
     const run = db.prepare('SELECT * FROM ai_runs WHERE id=? AND ticket_id=?').get(Number(input.runId), Number(ticketId));
     if (!run) throw new WorkerContractError('run does not belong to ticket');
     const plan = root.plan_hash && db.prepare(`

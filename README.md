@@ -244,9 +244,10 @@ hoặc `node scripts/admin-reply.js` chạy trên máy có DB.
 ### Worker D0 qua HTTP
 
 Worker host không mount/mở SQLite. `off` là mặc định và không claim việc;
-`shadow` mặc định chỉ precheck/lập plan/tạo child tickets. Thêm `--execute` để
-tạo thay đổi trong scratch repo, ghép vào full checkout tạm, chạy Gate 4/5/5.5
-và ghi verdict trước PR qua HTTP; worker vẫn không tạo branch hay PR.
+`shadow` chỉ precheck/lập plan/tạo child tickets và không sinh code. Mode
+`active` cùng `--execute` mới được tạo thay đổi trong scratch repo, ghép vào
+full checkout tạm, chạy Gate 4/5/5.5 và ghi verdict trước PR qua HTTP; worker
+vẫn không tạo branch hay PR.
 
 ```bash
 # Chỉ precheck một root ticket
@@ -256,7 +257,7 @@ AI_BOARD_WORKER_MODE=shadow python ai-board/worker.py --once
 AI_BOARD_WORKER_MODE=shadow python ai-board/worker.py --once --plan
 
 # Chạy trọn plan → full checkout → pre-PR verdict (không tạo PR)
-AI_BOARD_WORKER_MODE=shadow python ai-board/worker.py --once --execute
+AI_BOARD_WORKER_MODE=active python ai-board/worker.py --once --execute
 ```
 
 Server giữ lease khoảng hai phút; mọi snapshot/run/event/plan/verdict/release đều bị ràng
