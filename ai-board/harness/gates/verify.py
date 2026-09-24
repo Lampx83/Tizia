@@ -45,13 +45,14 @@ volumes:
 
 
 def _bash() -> str:
+    """Git Bash on Windows. Bare "bash" lets CreateProcess pick System32's WSL bash first."""
     if os.name == "nt":
         git = shutil.which("git")
-        if git:
-            bash = Path(git).resolve().parent.parent / "bin" / "bash.exe"
-            if bash.exists():
-                return str(bash)
-    return "bash"
+        if git:  # Git/cmd/git.exe or Git/mingw64/bin/git.exe -> Git/bin/bash.exe
+            for parent in Path(git).resolve().parents:
+                if (parent / "bin" / "bash.exe").exists():
+                    return str(parent / "bin" / "bash.exe")
+    return shutil.which("bash") or "bash"
 
 
 def _visual_pages(diffs: list[dict]) -> list[str]:
@@ -61,6 +62,20 @@ def _visual_pages(diffs: list[dict]) -> list[str]:
         if (path := item.get("file", "").replace("\\", "/")).startswith("public/")
         and path.endswith(".html")
     ))
+
+
+def _expected_lines(state: dict, checkout: Path, page: str) -> list[str]:
+    """Trimmed lines the candidate added to the page (base..HEAD diff); whole file when no diff is known."""
+    rel = "public" + page
+    text = "".join(item.get("diff", "") for item in state.get("full_diff") or [])
+    added, in_page = [], False
+    for line in text.splitlines():
+        if line.startswith("diff --git "):
+            in_page = line.rstrip().endswith(f" b/{rel}")
+        elif in_page and line.startswith("+") and not line.startswith("+++"):
+            added.append(line[1:].strip())
+    lines = added or (checkout / rel).read_text(encoding="utf-8").splitlines()
+    return [line.strip() for line in lines if line.strip()]
 
 
 def capture_screenshot(url: str, path: Path) -> None:
@@ -87,19 +102,25 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     """Caller supplies a full checkout; a gate-3 scratch repo is never buildable."""
     checkout = checkout_dir if checkout_dir is not None else state.get("full_checkout")
     if not checkout:
-        return {"gate": 5, "blocked": True, "reason": "thiếu full_checkout cho Docker verify", "evidence": None}
+        return {"gate": 5, "blocked": True, "reason": "thiếu full_checkout cho Docker verify", "evidence": None,
+                "failure_kind": "transient"}
     checkout = Path(checkout)
     if not (checkout / "docker-compose.yml").is_file() or not (checkout / "Dockerfile").is_file():
-        return {"gate": 5, "blocked": True, "reason": "full_checkout thiếu Dockerfile/docker-compose.yml", "evidence": None}
+        return {"gate": 5, "blocked": True, "reason": "full_checkout thiếu Dockerfile/docker-compose.yml", "evidence": None,
+                "failure_kind": "transient"}
 
     skill_id = re.sub(r"[^a-z0-9-]+", "-", str(state.get("skill_id") or "").lower()).strip("-")
     if not skill_id:
-        return {"gate": 5, "blocked": True, "reason": "thiếu skill_id cho Docker verify", "evidence": None}
+        return {"gate": 5, "blocked": True, "reason": "thiếu skill_id cho Docker verify", "evidence": None,
+                "failure_kind": "transient"}
     project = f"ai-verify-{skill_id}"
     runner = runner or subprocess.run
     http_probe = http_probe or probe_http
     logs: list[str] = []
     reason = None
+    # Failure class by stage: before containers run = environment (transient, retried once);
+    # isolation/secret checks = critical boundary violation; after = the candidate (ordinary).
+    kind = "transient"
     screenshot = None
     smoke_ok = False
     http_observed = False
@@ -126,6 +147,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             volumes = service.get("volumes") or []
             expected_env = {"NODE_ENV": "production", "PORT": "8041", "HOST": "0.0.0.0",
                             "DATA_DIR": "/data", "BASE_PATH": ""}
+            kind = "critical"
             if (service.get("environment") != expected_env or service.get("env_file") or
                     service.get("secrets") or service.get("container_name") or
                     service.get("image") != f"{project}:latest" or
@@ -137,20 +159,25 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     len(volumes) != 1 or volumes[0].get("source") != f"{project}-data" or
                     volumes[0].get("target") != "/data"):
                 raise RuntimeError("Compose config không cách ly port/volume/env/image")
+            kind = "transient"
             command([*compose, "up", "--build", "-d", "--wait", "--wait-timeout", "120"])
             port_output = command([*compose, "port", "tizia", "8041"]).stdout.strip()
+            kind = "critical"
             match = re.search(r":(\d+)\s*$", port_output)
             if not match or int(match.group(1)) == 8041:
                 raise RuntimeError(f"Docker trả host port không an toàn: {port_output!r}")
             port = int(match.group(1))
 
+            kind = "transient"
             env_output = command([*compose, "exec", "-T", "tizia", "env"], log_output=False).stdout
+            kind = "critical"
             container_env = dict(line.split("=", 1) for line in env_output.splitlines() if "=" in line)
             leaked = sorted(name for name, value in container_env.items()
                             if value and (name in _REQUIRED_ABSENT or _SECRET_NAME.search(name)))
             if leaked:
                 raise RuntimeError(f"container có biến bí mật: {', '.join(leaked)}")
             logs.append("Container env: 5 biến ứng dụng cho phép; các key/secret/token đều vắng mặt hoặc rỗng.")
+            kind = "ordinary"
 
             test_files = sorted({item.get("test_file") for item in state.get("diffs") or []
                                  if item.get("test_file")})
@@ -173,7 +200,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             env = os.environ.copy()
             env["BASE"] = base
             # Use the harness owner's script, not a possibly modified copy in the proposal checkout.
-            smoke = command([_bash(), str(SMOKE_SCRIPT)], env=env)
+            smoke = command([_bash(), SMOKE_SCRIPT.as_posix()], env=env)
             smoke_ok = smoke.returncode == 0
 
             pages = _visual_pages(state.get("diffs") or [])
@@ -183,8 +210,10 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     if not 200 <= status < 300:
                         smoke_ok = False
                         raise RuntimeError(f"changed page returned HTTP {status}: {page}")
-                    expected = (checkout / "public" / page.lstrip("/")).read_bytes()
-                    if body != expected:
+                    # The server injects analytics/SEO tags into every HTML page, so compare the
+                    # candidate's own lines, not bytes: each must be served.
+                    served = body.decode("utf-8", "replace")
+                    if any(line not in served for line in _expected_lines(state, checkout, page)):
                         smoke_ok = False
                         raise RuntimeError(f"changed page body does not match checkout: {page}")
                     logs.append(f"Changed page HTTP {status}: {page}")
@@ -204,9 +233,11 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 command([*compose, "down", "-v"])
             except (OSError, RuntimeError) as exc:
                 reason = f"{reason or 'verify'}; teardown thất bại: {exc}"
+                kind = "transient"  # leaked containers are the environment's problem, not the candidate's
 
     evidence = {"text": "Smoke scripts/smoke-user-state.sh: một luồng user-state, không bao phủ toàn ứng dụng.\n"
                         + "\n".join(logs), "smoke_passed": smoke_ok, "http_observed": http_observed,
                 "screenshot": str(screenshot) if screenshot else None}
     state["evidence"] = evidence
-    return {"gate": 5, "blocked": bool(reason), "reason": reason, "evidence": evidence}
+    return {"gate": 5, "blocked": bool(reason), "reason": reason, "evidence": evidence,
+            "failure_kind": kind if reason else None}

@@ -55,6 +55,22 @@ def test_build_prompt_contains_only_this_subtask():
     assert subtask["title"] in prompt
     assert subtask["file"] in prompt
     assert subtask["verify"] in prompt
+    assert "LẦN TRƯỚC" not in prompt
+
+
+def test_repair_prompt_keeps_the_locked_prefix_and_appends_the_gate_reason():
+    subtask = {"title": "t", "file": "public/x.html", "verify": "v", "size": "small"}
+    plain = implement.build_prompt(subtask)
+    repair = implement.build_prompt(subtask, repair_reason="cổng 5: generated tests failed")
+    assert repair.startswith(plain)
+    assert "cổng 5: generated tests failed" in repair[len(plain):]
+
+
+def test_run_passes_repair_reason_to_every_subtask_prompt(tmp_path):
+    models = FakeModels(plan_with(["features"]))
+    implement.run({"plan": plan_with(["features"]), "repair_reason": "cổng 4: node --check"},
+                  deps_with(models), Budget(max_wall_clock_s=999), repo_dir=tmp_path)
+    assert models.calls and all("cổng 4: node --check" in call["prompt"] for call in models.calls)
 
 
 def test_run_second_subtask_prompt_excludes_first_subtasks_content(tmp_path):
@@ -156,6 +172,7 @@ def test_run_stops_mid_gate_when_budget_exhausted_between_subtasks(tmp_path):
 
     assert out["blocked"] is True
     assert "budget" in out["reason"]
+    assert out["failure_kind"] == "budget"
     assert len(models.calls) == 1
     assert len(out["diffs"]) == 1
 
@@ -196,6 +213,7 @@ def test_windows_absolute_path_from_model_is_rejected(tmp_path):
 
     assert out["blocked"] is True
     assert "tuyệt đối" in out["reason"]
+    assert out["failure_kind"] == "critical"
 
 
 def test_path_traversal_via_dotdot_is_rejected(tmp_path):

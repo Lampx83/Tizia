@@ -1,0 +1,1 @@
+ALTER TABLE ai_tickets ADD COLUMN budget_limit INTEGER NOT NULL DEFAULT 200;

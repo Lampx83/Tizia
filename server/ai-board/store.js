@@ -18,6 +18,27 @@ const EVENT_TYPES = new Set([
 ]);
 const PRE_PR_GATES = new Set([3, 4, 5, 5.5]);
 const PRE_PR_SEQUENCE = [3, 4, 5, 5.5];
+const FAILURE_CLASSES = new Set(['ordinary', 'transient', 'critical', 'budget']);
+const MAX_REPAIRS = 1; // same bound as ai-board/worker.py MAX_REPAIRS
+const MAX_BUDGET_EXTENSION = 200;
+const SHA = /^[0-9a-f]{40}$/;
+const AI_BRANCH = /^ai-board\/\d{4}-\d{2}-\d{2}-[a-z0-9-]{1,60}$/;
+
+function validateCandidate(value) {
+  const commits = Array.isArray(value?.commits) ? value.commits : [];
+  const ok = value && typeof value === 'object' && AI_BRANCH.test(String(value.branch))
+    && SHA.test(String(value.base_sha)) && SHA.test(String(value.head_sha))
+    && commits.length >= 1 && commits.length <= 20
+    && commits.every((c) => SHA.test(String(c?.sha)) && Array.isArray(c?.files) && c.files.length <= 20)
+    && commits.at(-1).sha === value.head_sha;
+  if (!ok) throw new WorkerContractError('invalid pre-PR candidate');
+  return {
+    branch: value.branch, base_sha: value.base_sha, head_sha: value.head_sha,
+    commits: commits.map((c) => ({
+      sha: c.sha, title: String(c.title || '').slice(0, 200), files: c.files.map((f) => String(f).slice(0, 300)),
+    })),
+  };
+}
 
 export class WorkerContractError extends Error {
   constructor(message, status = 400, code = 'invalid_worker_operation') {
@@ -90,6 +111,7 @@ function validatePrePrVerdict(value) {
     if (gate === 5) {
       clean.smoke_passed = item.smoke_passed === true;
       clean.http_observed = item.http_observed === true;
+      clean.retried = item.retried === true;
     }
     if (gate === 5.5) {
       clean.risk_level = ['low', 'medium', 'high', 'critical'].includes(item.risk_level) ? item.risk_level : null;
@@ -119,9 +141,24 @@ function validatePrePrVerdict(value) {
     throw new WorkerContractError('review verdict requires high or critical risk');
   if (value.outcome === 'blocked' && !last.blocked) throw new WorkerContractError('blocked verdict requires a blocked gate');
   const budgetUsed = Number(value.budget_used ?? 0);
-  if (!Number.isFinite(budgetUsed) || budgetUsed < 0 || budgetUsed > 200) throw new WorkerContractError('invalid verdict budget');
+  if (!Number.isInteger(budgetUsed) || budgetUsed < 0) throw new WorkerContractError('invalid verdict budget');
+  // Workers predating ticket 05 omit failure_class; their blocks are treated as ordinary.
+  const failureClass = value.outcome === 'blocked' ? (value.failure_class ?? 'ordinary') : (value.failure_class ?? null);
+  if (value.outcome === 'blocked' ? !FAILURE_CLASSES.has(failureClass) : failureClass !== null) {
+    throw new WorkerContractError('invalid pre-PR failure class');
+  }
+  const repairs = value.repairs ?? [];
+  if (!Array.isArray(repairs) || repairs.length > MAX_REPAIRS
+    || repairs.some((r) => !PRE_PR_GATES.has(Number(r?.gate)))) {
+    throw new WorkerContractError('invalid pre-PR repairs');
+  }
+  const candidate = value.candidate == null ? null : validateCandidate(value.candidate);
+  if (candidate && value.outcome === 'blocked') throw new WorkerContractError('blocked verdict cannot keep a candidate');
+  if (!candidate && value.outcome !== 'blocked') throw new WorkerContractError('passing verdict requires its candidate branch');
   return { outcome: value.outcome, gate_reached: last.gate, reason: value.reason ? String(value.reason).slice(0, 1000) : last.reason,
-    budget_used: budgetUsed, gates };
+    budget_used: budgetUsed, failure_class: failureClass,
+    repairs: repairs.map((r) => ({ gate: Number(r.gate), reason: String(r.reason || '').slice(0, 1000) })),
+    candidate, gates };
 }
 
 export function createAiBoardStore(db, hooks = {}) {
@@ -240,6 +277,8 @@ export function createAiBoardStore(db, hooks = {}) {
     return db.prepare(`
       SELECT t.id, t.source_request_id, t.title, t.status, t.phase, t.priority,
              t.public_note, t.internal_reason, t.lease_owner, t.lease_expires_at,
+             t.cumulative_budget, t.budget_limit,
+             (SELECT COUNT(*) FROM ai_alerts a WHERE a.ticket_id=t.id AND a.status='open') AS open_alerts,
              r.domain, r.owner_user_id, r.owner_state, r.created_at
       FROM ai_tickets t JOIN requests r ON r.id = t.source_request_id
       WHERE t.parent_id IS NULL
@@ -418,7 +457,9 @@ export function createAiBoardStore(db, hooks = {}) {
     db.prepare(`
       UPDATE ai_tickets SET status=?, phase=?, public_note=?, internal_reason=?,
         lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE id=?
-    `).run(next[0], next[1], next[2], input.internalDetail || null, input.now, Number(ticketId));
+    `).run(next[0], next[1], next[2],
+      // A planned release keeps the verdict's reason (e.g. the critical violation) unless the worker adds one.
+      input.internalDetail || (input.outcome === 'planned' ? current.internal_reason : null), input.now, Number(ticketId));
     db.prepare(`UPDATE ai_workers SET status='idle', current_ticket_id=NULL, last_seen_at=?, updated_at=? WHERE worker_id=?`)
       .run(input.now, input.now, input.workerId);
     db.prepare(`INSERT INTO ai_release_receipts(ticket_id, idempotency_key, worker_id, status, phase, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
@@ -498,7 +539,7 @@ export function createAiBoardStore(db, hooks = {}) {
       if (!sameSubmission) {
         const rounds = root.auto_rounds + 1;
         const budget = root.cumulative_budget + input.budgetUsed;
-        if (rounds > 2 || budget > 200) {
+        if (rounds > 2 || budget > root.budget_limit) {
           const reason = rounds > 2 ? 'automatic_round_limit' : 'cumulative_budget_exhausted';
           db.prepare(`
             UPDATE ai_tickets SET status='waiting_admin', phase='budget_exhausted',
@@ -550,7 +591,7 @@ export function createAiBoardStore(db, hooks = {}) {
 
     const rounds = root.auto_rounds + 1;
     const budget = root.cumulative_budget + input.budgetUsed;
-    if (rounds > 2 || budget > 200) {
+    if (rounds > 2 || budget > root.budget_limit) {
       const reason = rounds > 2 ? 'automatic_round_limit' : 'cumulative_budget_exhausted';
       db.prepare(`
         UPDATE ai_tickets SET status='waiting_admin', phase='budget_exhausted',
@@ -692,7 +733,7 @@ export function createAiBoardStore(db, hooks = {}) {
     }
     if (run.outcome) throw new WorkerContractError('run already has a verdict', 409, 'idempotency_conflict');
     const cumulativeBudget = root.cumulative_budget + verdict.budget_used;
-    if (cumulativeBudget > 200) throw new WorkerContractError('cumulative budget exhausted', 409, 'cumulative_budget_exhausted');
+    if (cumulativeBudget > root.budget_limit) throw new WorkerContractError('cumulative budget exhausted', 409, 'cumulative_budget_exhausted');
     const evidence = JSON.stringify({ verdict });
     db.prepare(`UPDATE ai_runs SET outcome=?, gate=?, cumulative_budget=?, evidence_json=?, failure_reason=?, updated_at=? WHERE id=?`)
       .run(verdict.outcome, verdict.gate_reached, cumulativeBudget, evidence, verdict.reason, input.now, run.id);
@@ -704,13 +745,41 @@ export function createAiBoardStore(db, hooks = {}) {
       trace.run(run.id, gate.gate, gate.blocked ? 'blocked' : 'passed', gate.reason,
         JSON.stringify(gate), input.now);
     }
-    const phase = verdict.outcome === 'ready_for_pr' ? 'pre_pr_ready'
+    let status = root.status;
+    let phase = verdict.outcome === 'ready_for_pr' ? 'pre_pr_ready'
       : verdict.outcome === 'needs_review' ? 'pre_pr_review' : 'pre_pr_blocked';
-    const note = verdict.outcome === 'ready_for_pr' ? 'Thay đổi đã qua kiểm tra trước PR.'
+    let note = verdict.outcome === 'ready_for_pr' ? 'Thay đổi đã qua kiểm tra trước PR.'
       : verdict.outcome === 'needs_review' ? 'Thay đổi cần con người xem xét trước PR.'
         : 'Thay đổi chưa qua kiểm tra trước PR.';
-    db.prepare('UPDATE ai_tickets SET phase=?, public_note=?, internal_reason=?, cumulative_budget=?, updated_at=? WHERE id=?')
-      .run(phase, note, verdict.reason, cumulativeBudget, input.now, root.id);
+    if (verdict.failure_class === 'critical') {
+      status = 'waiting_admin';
+      phase = 'critical_violation';
+      note = 'Thay đổi vi phạm ranh giới an toàn; đã dừng và chờ quản trị viên.';
+      db.prepare(`
+        INSERT INTO ai_alerts(ticket_id, severity, category, status, public_message, internal_detail, created_at, updated_at)
+        VALUES (?, 'critical', 'boundary_violation', 'open', ?, ?, ?, ?)
+      `).run(root.id, note, verdict.reason, input.now, input.now);
+    } else if (verdict.failure_class === 'budget') {
+      status = 'waiting_admin';
+      phase = 'budget_exhausted';
+      note = 'Yêu cầu đang chờ quản trị viên xem xét.';
+    }
+    const repairSequence = db.prepare(`
+      SELECT COALESCE(MAX(sequence), 0) + 1 AS next FROM ai_tickets WHERE parent_id=? AND plan_revision=?
+    `).get(root.id, plan.revision).next;
+    verdict.repairs.forEach((repair, index) => {
+      const child = db.prepare(`
+        INSERT INTO ai_tickets(parent_id, source_request_id, sequence, kind, title, description,
+          status, phase, public_note, internal_reason, tier, plan_revision, created_at, updated_at)
+        VALUES (?, ?, ?, 'review_fix', ?, ?, ?, 'pre_pr_repair', ?, ?, ?, ?, ?, ?)
+      `).run(root.id, root.source_request_id, repairSequence + index, `Sửa lỗi cổng ${repair.gate}`,
+        JSON.stringify(repair), verdict.outcome === 'blocked' ? 'failed' : 'done',
+        'Đã tự sửa một lần sau khi kiểm tra trước PR chưa đạt.', repair.reason, plan.tier, plan.revision,
+        input.now, input.now);
+      insertTag.run(Number(child.lastInsertRowid), 'repair');
+    });
+    db.prepare('UPDATE ai_tickets SET status=?, phase=?, public_note=?, internal_reason=?, cumulative_budget=?, updated_at=? WHERE id=?')
+      .run(status, phase, note, verdict.reason, cumulativeBudget, input.now, root.id);
     db.prepare(`
       INSERT INTO ai_events(ticket_id, run_id, event_type, actor_type, actor_id, transition,
         public_message, internal_detail, idempotency_key, created_at)
@@ -727,6 +796,37 @@ export function createAiBoardStore(db, hooks = {}) {
     return submitPrePrVerdictTransaction(Number(ticketId), {
       ...input, idempotencyKey, now: input.now ?? Date.now(),
     }, verdict);
+  }
+
+  const extendBudgetTransaction = db.transaction((rootTicketId, amount, reason, adminUserId, now) => {
+    const root = db.prepare(`SELECT * FROM ai_tickets WHERE id=? AND kind='root'`).get(Number(rootTicketId));
+    if (!root) throw new WorkerContractError('ticket not found', 404, 'ticket_not_found');
+    if (root.status !== 'waiting_admin' || root.phase !== 'budget_exhausted') {
+      throw new WorkerContractError('ticket is not waiting on an exhausted budget', 409, 'not_budget_exhausted');
+    }
+    const limit = root.budget_limit + amount;
+    // The admin grants one more automatic round with the extra budget; the limits stay enforced.
+    db.prepare(`
+      UPDATE ai_tickets SET status='queued', phase='needs_replan', budget_limit=?,
+        auto_rounds=MAX(auto_rounds - 1, 0), public_note='Quản trị viên đã gia hạn ngân sách; yêu cầu sẽ được xử lý tiếp.',
+        internal_reason=NULL, updated_at=? WHERE id=?
+    `).run(limit, now, root.id);
+    insertEvent.run(
+      root.id, 'budget_extended', 'admin', String(adminUserId), 'waiting_admin->queued',
+      'Quản trị viên đã gia hạn ngân sách.', JSON.stringify({ amount, reason }),
+      `budget-extended:${root.id}:${now}`, now,
+    );
+    return { ok: true, budget_limit: limit };
+  });
+
+  function extendBudget(rootTicketId, { amount, reason, adminUserId }) {
+    const value = Number(amount);
+    if (!Number.isInteger(value) || value < 1 || value > MAX_BUDGET_EXTENSION) {
+      throw new WorkerContractError(`amount must be an integer from 1 to ${MAX_BUDGET_EXTENSION}`);
+    }
+    const why = String(reason || '').trim();
+    if (why.length < 10) throw new WorkerContractError('a reason of at least 10 characters is required');
+    return extendBudgetTransaction(rootTicketId, value, why.slice(0, 500), Number(adminUserId), Date.now());
   }
 
   const authorizePlanTransaction = db.transaction((rootTicketId, planHash, adminUserId, now) => {
@@ -785,6 +885,7 @@ export function createAiBoardStore(db, hooks = {}) {
     submitPlan,
     submitPrePrVerdict,
     authorizePlan,
+    extendBudget,
     invalidatePlanForRequest,
   };
 }

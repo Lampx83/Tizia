@@ -11,6 +11,9 @@ from __future__ import annotations
 
 import json
 import os
+import posixpath
+import re
+import secrets
 import shutil
 import subprocess
 import sys
@@ -104,32 +107,87 @@ class Deps:
         return body
 
 
-def prepare_full_checkout(state: dict, source_repo: str | os.PathLike) -> None:
-    """At the 4→5 seam, clone the local branch and apply gate-3 files once."""
+class ScopeViolation(ValueError):
+    """Candidate tried to write outside its child's allowed scope — critical, never repaired."""
+
+
+def _git_out(args: list[str], cwd) -> str:
+    """git with stderr kept in the error message (CalledProcessError hides it)."""
+    result = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, encoding="utf-8",
+                            errors="replace", stdin=subprocess.DEVNULL)
+    if result.returncode:
+        raise OSError(f"git {args[0]}: {(result.stderr or result.stdout).strip()[:300]}")
+    return result.stdout
+
+
+def prepare_full_checkout(state: dict, source_repo: str | os.PathLike, *, base_ref: str = "HEAD") -> None:
+    """At the 4→5 seam: new git worktree on branch ai-board/<date>-<skill_id>-<hex6> from base_ref,
+    one commit per child in plan order. Raise ScopeViolation (nothing left behind) on out-of-scope writes."""
     scratch = Path(state["scratch_repo"])
-    checkout = Path(tempfile.mkdtemp(prefix="ai-board-gate5-"))
+    slug = re.sub(r"[^a-z0-9-]+", "-", str(state.get("skill_id") or "").lower()).strip("-")
+    if not slug:
+        raise ValueError("thiếu skill_id để đặt tên nhánh AI Board")
+    subtasks = (state.get("plan") or {}).get("subtasks") or []
+    diffs = state["diffs"]
+    if len(subtasks) != len(diffs):
+        raise ValueError(f"cổng 3 chưa xong: {len(diffs)}/{len(subtasks)} child có diff")
+    base = _git_out(["rev-parse", "--verify", f"{base_ref}^{{commit}}"], source_repo).strip()
+    # Random suffix: a kept candidate from an earlier run must not block a rerun of the same ticket.
+    branch = f"ai-board/{time.strftime('%Y-%m-%d')}-{slug}-{secrets.token_hex(3)}"
+    checkout = Path(tempfile.mkdtemp(prefix="ai-board-worktree-"))
     try:
-        subprocess.run(["git", "clone", "--local", "--no-hardlinks", str(source_repo), str(checkout)],
-                       check=True, capture_output=True, text=True, stdin=subprocess.DEVNULL)
-        for item in state["diffs"]:
-            for rel in (item["file"], item["test_file"]):
-                src = implement._safe_join(scratch, rel)
-                dst = implement._safe_join(checkout, rel)
-                if rel == item["test_file"] and dst.exists():
-                    raise ValueError(f"test_file đã tồn tại trong checkout: {rel}")
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src, dst)
-        subprocess.run(["git", "add", "-A"], cwd=checkout, check=True,
-                       capture_output=True, stdin=subprocess.DEVNULL)
-        diff = subprocess.run(["git", "diff", "--cached", "--no-ext-diff"], cwd=checkout,
-                              check=True, capture_output=True, text=True, encoding="utf-8",
-                              stdin=subprocess.DEVNULL).stdout
-        state["full_checkout"] = str(checkout)
-        state["_owned_full_checkout"] = True
-        state["full_diff"] = [{"file": "", "diff": diff}]
-    except Exception:
+        _git_out(["worktree", "add", "-q", "-b", branch, str(checkout), base], source_repo)
+    except OSError:
         shutil.rmtree(checkout, ignore_errors=True)
         raise
+    owned = {"full_checkout": str(checkout), "checkout_repo": str(source_repo), "branch": branch}
+    try:
+        created: set[str] = set()
+        commits = []
+        for index, (subtask, item) in enumerate(zip(subtasks, diffs), start=1):
+            allowed = {posixpath.normpath(p.replace("\\", "/"))
+                       for p in subtask.get("allowed_scope") or [subtask["file"]]}
+            file = posixpath.normpath(item["file"].replace("\\", "/"))
+            test_file = posixpath.normpath(item["test_file"].replace("\\", "/"))
+            if file not in allowed:
+                raise ScopeViolation(f"child {index} ghi '{file}' ngoài allowed_scope {sorted(allowed)}")
+            if not test_file.startswith(("test/", "tests/")):
+                raise ScopeViolation(f"child {index} ghi test '{test_file}' ngoài test/ hoặc tests/")
+            for rel in (file, test_file):
+                dst = implement._safe_join(checkout, rel)
+                if rel == test_file and dst.exists() and rel not in created:
+                    raise ScopeViolation(f"test_file đã tồn tại trong checkout: {rel}")
+                content = subprocess.run(["git", "show", f"{item['commit']}:{rel}"], cwd=scratch, check=True,
+                                         capture_output=True, stdin=subprocess.DEVNULL).stdout
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                dst.write_bytes(content)
+                created.add(rel)
+            title = f"ai-board({slug}): {index}/{len(diffs)} {subtask['title']}"
+            _git_out(["add", "--", file, test_file], checkout)
+            _git_out(["-c", "user.name=AI Board", "-c", "user.email=ai-board@tizia.local",
+                      "commit", "-q", "-m", title], checkout)
+            commits.append({"sha": _git_out(["rev-parse", "HEAD"], checkout).strip(), "title": title,
+                            "files": [file, test_file]})
+        diff = _git_out(["diff", "--no-ext-diff", base, "HEAD"], checkout)
+    except BaseException:
+        cleanup_full_checkout(owned, keep_branch=False)
+        raise
+    state.update(owned, _owned_full_checkout=True, base_sha=base, commits=commits,
+                 full_diff=[{"file": "", "diff": diff}])
+
+
+def cleanup_full_checkout(state: dict, *, keep_branch: bool) -> None:
+    """Remove the AI Board worktree; delete its branch unless the candidate is kept for PR."""
+    repo, checkout = state.get("checkout_repo"), state.get("full_checkout")
+    if not repo or not checkout:
+        return
+    subprocess.run(["git", "worktree", "remove", "--force", checkout], cwd=repo,
+                   capture_output=True, stdin=subprocess.DEVNULL)
+    shutil.rmtree(checkout, ignore_errors=True)
+    subprocess.run(["git", "worktree", "prune"], cwd=repo, capture_output=True, stdin=subprocess.DEVNULL)
+    if not keep_branch and state.get("branch"):
+        subprocess.run(["git", "branch", "-D", state["branch"]], cwd=repo,
+                       capture_output=True, stdin=subprocess.DEVNULL)
 
 
 def load_inbox(path: str | os.PathLike) -> list[dict]:
@@ -163,7 +221,10 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
             try:
                 prepare_full_checkout(state, state["checkout_source"])
             except (OSError, ValueError, subprocess.CalledProcessError) as e:
-                return {"gate": 5, "blocked": True, "reason": f"không tạo được full_checkout: {e}", "evidence": None}
+                # Scope escape is a boundary violation; anything else is the environment, not the code.
+                kind = "critical" if isinstance(e, ScopeViolation) else "transient"
+                return {"gate": 5, "blocked": True, "reason": f"không tạo được full_checkout: {e}",
+                        "evidence": None, "failure_kind": kind}
         return verify.run(state, deps, budget)
     if number == 5.5:
         return risk_triage.run(state)
@@ -261,8 +322,7 @@ def run_once(request: dict, *, db_path, deps: Deps, budget: Budget | None = None
         try:
             update_proposal(db_path, proposal_id, gate_reached=reached, outcome=outcome, budget=budget)
         finally:
-            if state.get("_owned_full_checkout"):
-                shutil.rmtree(state["full_checkout"], ignore_errors=True)
+            cleanup_full_checkout(state, keep_branch=False)
 
     return {
         "proposal_id": proposal_id,

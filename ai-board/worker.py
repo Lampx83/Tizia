@@ -33,7 +33,7 @@ def _load_harness():
 def _execution_plan(plan: dict) -> dict:
     """Map the server-owned plan contract back to the existing Gate-3 seam."""
     subtasks = []
-    for step in plan.get("steps") or []:
+    for step in sorted(plan.get("steps") or [], key=lambda step: step.get("order", 0)):
         scope = step.get("allowed_scope") or []
         tests = step.get("tests") or []
         if not scope or not tests:
@@ -41,6 +41,7 @@ def _execution_plan(plan: dict) -> dict:
         subtasks.append({
             "title": step["title"], "file": scope[0], "verify": tests[0],
             "size": "small" if step.get("risk") == "low" else "large",
+            "allowed_scope": list(scope),
         })
     if not subtasks:
         raise ValueError("plan requires at least one step")
@@ -63,8 +64,12 @@ def _public_gate_result(result: dict) -> dict:
     return out
 
 
-def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate) -> dict:
-    """Run one planned change through Gates 3→5.5 without exposing raw artifacts."""
+MAX_REPAIRS = 1  # ponytail: one repair child per verdict; server enforces the same bound
+
+
+def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate, cleanup,
+             repair_reason: str | None) -> tuple[list[dict], str | None, dict | None]:
+    """One pass of Gates 3→5.5 on fresh scratch + worktree. Return (public gates, failure kind, candidate)."""
     scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
     state = {
         "plan": _execution_plan(plan), "scratch_repo": str(scratch),
@@ -73,37 +78,80 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
             cap for cap in plan.get("capabilities") or [] if str(cap).startswith("core.")
         ]}},
     }
-    gates = []
+    if repair_reason:
+        state["repair_reason"] = repair_reason
+    gates: list[dict] = []
+    kind = None
     try:
         for gate in (3, 4, 5, 5.5):
-            if not budget.tick():
-                result = {"gate": gate, "blocked": True, "reason": "budget exhausted"}
-            else:
-                try:
-                    result = run_gate(gate, {}, deps, budget, state)
-                except Exception as error:
-                    result = {"gate": gate, "blocked": True, "reason": str(error)[:1000]}
+            retried = False
+            while True:
+                if not budget.tick():
+                    result = {"gate": gate, "blocked": True, "reason": "budget exhausted", "failure_kind": "budget"}
+                else:
+                    try:
+                        result = run_gate(gate, {}, deps, budget, state)
+                    except Exception as error:  # model/network/tool outage, not the candidate's code
+                        result = {"gate": gate, "blocked": True, "reason": str(error)[:1000],
+                                  "failure_kind": "transient"}
+                # Transient Docker/checkout trouble gets one mechanical retry, no model call.
+                if gate == 5 and result.get("blocked") and result.get("failure_kind") == "transient" and not retried:
+                    retried = True
+                    continue
+                break
             public = _public_gate_result(result)
-            if gate == 5 and not public["blocked"] and not public["http_observed"]:
-                public["blocked"] = True
-                public["reason"] = "change has no HTTP-observable result"
+            if gate == 5:
+                public["retried"] = retried
+                if not public["blocked"] and not public["http_observed"]:
+                    public["blocked"] = True
+                    public["reason"] = "change has no HTTP-observable result"
             gates.append(public)
             if public["blocked"]:
+                kind = result.get("failure_kind") or "ordinary"
                 break
     finally:
-        if state.get("_owned_full_checkout"):
-            shutil.rmtree(state["full_checkout"], ignore_errors=True)
+        passed = kind is None and bool(gates) and gates[-1]["gate"] == 5.5
+        candidate = {
+            "branch": state["branch"], "base_sha": state["base_sha"],
+            "head_sha": state["commits"][-1]["sha"], "commits": state["commits"],
+        } if passed and state.get("commits") else None
+        cleanup(state, keep_branch=candidate is not None)
         shutil.rmtree(scratch, ignore_errors=True)
-    last = gates[-1]
+    return gates, kind, candidate
+
+
+def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate,
+                   cleanup: Callable) -> dict:
+    """Run Gates 3→5.5, repairing an ordinary failure at most MAX_REPAIRS times. Return a redacted verdict.
+
+    failure_class: ordinary (repair exhausted) | transient (retry exhausted) | critical (boundary
+    violation, never repaired) | budget (no budget left to run or repair)."""
+    repairs: list[dict] = []
+    repair_reason = None
+    while True:
+        gates, kind, candidate = _attempt(
+            plan, ticket_id=ticket_id, checkout_source=checkout_source, deps=deps, budget=budget,
+            run_gate=run_gate, cleanup=cleanup, repair_reason=repair_reason,
+        )
+        last = gates[-1]
+        if kind != "ordinary" or len(repairs) >= MAX_REPAIRS:
+            break
+        if not budget.tick():
+            kind = "budget"
+            break
+        repairs.append({"gate": last["gate"], "reason": last["reason"]})
+        repair_reason = f"cổng {last['gate']}: {last['reason']}"
     smoke = next((gate for gate in gates if gate["gate"] == 5), None)
     risk = next((gate for gate in gates if gate["gate"] == 5.5), None)
-    passed = (last["gate"] == 5.5 and not last["blocked"] and smoke
+    passed = (kind is None and last["gate"] == 5.5 and not last["blocked"] and smoke
               and smoke["smoke_passed"] and smoke["http_observed"])
     needs_review = passed and risk["risk_level"] in ("high", "critical")
     outcome = "needs_review" if needs_review else "ready_for_pr" if passed else "blocked"
     reason = "risk triage requires human review" if needs_review else last["reason"]
     return {
         "outcome": outcome, "gate_reached": last["gate"], "reason": reason,
+        "failure_class": None if passed else kind, "repairs": repairs,
+        "candidate": candidate if passed else None,
         "budget_used": int(getattr(budget, "model_calls", 0)) * 40, "gates": gates,
     }
 
@@ -220,10 +268,12 @@ class HttpWorker:
                 raise
             verdict = None
             if self.change_runner and planned["status"] == "planned":
+                ticket_row = snapshot.get("ticket", {})
                 candidate = self._with_heartbeat(
                     lambda: self.change_runner(
                         plan, ticket_id, budget_used,
-                        int(snapshot.get("ticket", {}).get("cumulative_budget") or 0),
+                        int(ticket_row.get("cumulative_budget") or 0),
+                        int(ticket_row.get("budget_limit") or 200),
                     ), ticket_id, lease,
                 )
                 verdict = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/verdict", {
@@ -319,19 +369,21 @@ class HarnessChangeRunner:
 
     def __init__(self, checkout_source=None):
         Budget, Deps, run_gate = _load_harness()
+        from main import cleanup_full_checkout
         self.Budget = Budget
         self.deps = Deps.real()
         self.run_gate = run_gate
+        self.cleanup = cleanup_full_checkout
         self.checkout_source = checkout_source or Path(__file__).resolve().parents[1]
 
     def __call__(self, plan: dict, ticket_id: int, budget_used: int = 0,
-                 cumulative_budget: int = 0) -> dict:
+                 cumulative_budget: int = 0, budget_limit: int = 200) -> dict:
         budget = self.Budget.from_env()
-        remaining = 200 - cumulative_budget - budget_used
+        remaining = budget_limit - cumulative_budget - budget_used
         budget.max_model_calls = min(budget.max_model_calls, max(remaining // 40, 0))
         return execute_pre_pr(
             plan, ticket_id=ticket_id, checkout_source=self.checkout_source,
-            deps=self.deps, budget=budget, run_gate=self.run_gate,
+            deps=self.deps, budget=budget, run_gate=self.run_gate, cleanup=self.cleanup,
         )
 
 

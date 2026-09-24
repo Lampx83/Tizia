@@ -66,6 +66,19 @@ export function attachAiBoardRequestRoutes(router, {
     res.json({ tickets: store.listAdminQueue(req.query.limit), workers: store.listWorkers() });
   });
 
+  router.post('/api/admin/ai-board/tickets/:id/extend-budget', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
+    try {
+      res.json(store.extendBudget(req.params.id, {
+        amount: req.body?.amount, reason: req.body?.reason, adminUserId: req.user.id,
+      }));
+    } catch (error) {
+      if (error instanceof WorkerContractError) {
+        return res.status(error.status).json({ error: error.code, message: error.message });
+      }
+      throw error;
+    }
+  });
+
   router.post('/api/admin/ai-board/tickets/:id/authorize-plan', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
     try {
       res.json(store.authorizePlan(req.params.id, req.body?.plan_hash, req.user.id));

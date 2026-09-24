@@ -8,6 +8,10 @@ import { applyAiBoardMigrations, createAiBoardStore } from '../server/ai-board/s
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
 
 const KEY = 'fixture-worker-key-32-characters-long';
+const CANDIDATE = {
+  branch: 'ai-board/2026-09-24-ticket-1', base_sha: 'a'.repeat(40), head_sha: 'b'.repeat(40),
+  commits: [{ sha: 'b'.repeat(40), title: 'ai-board(ticket-1): 1/1 x', files: ['public/pharmacy/demo.html'] }],
+};
 
 function surfacePlan() {
   return {
@@ -156,7 +160,7 @@ test('pre-PR verdict is persisted and observable through the request HTTP API', 
       ...lease, trigger: 'plan', idempotency_key: 'verdict-run-001',
     })).json();
     const passingVerdict = {
-      outcome: 'ready_for_pr', gate_reached: 5.5, reason: null, budget_used: 40,
+      outcome: 'ready_for_pr', gate_reached: 5.5, reason: null, budget_used: 40, candidate: CANDIDATE,
       gates: [
         { gate: 3, blocked: false, reason: null },
         { gate: 4, blocked: false, reason: null, issues: [] },
@@ -280,7 +284,7 @@ test('a root claimed under shadow cannot receive an active verdict via a same-wo
     assert.equal((await reclaim.json()).ticket.id, ticket.id);
 
     const verdict = {
-      outcome: 'ready_for_pr', gate_reached: 5.5, reason: null, budget_used: 40,
+      outcome: 'ready_for_pr', gate_reached: 5.5, reason: null, budget_used: 40, candidate: CANDIDATE,
       gates: [
         { gate: 3, blocked: false, reason: null },
         { gate: 4, blocked: false, reason: null, issues: [] },

@@ -26,6 +26,7 @@ def test_generated_code_importing_db_js_fails_gate_4(tmp_path):
 
     assert out["blocked"] is True
     assert "db.js" in out["reason"]
+    assert out["failure_kind"] == "critical"
 
 
 def test_generated_test_importing_db_js_fails_gate_4(tmp_path):
@@ -85,6 +86,7 @@ def test_syntax_error_in_generated_js_fails_gate_4(tmp_path):
 
     assert out["blocked"] is True
     assert "node --check" in out["reason"]
+    assert out["failure_kind"] == "ordinary"
 
 
 def test_non_js_file_skips_node_check_and_import_lint(tmp_path):

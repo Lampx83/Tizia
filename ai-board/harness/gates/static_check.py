@@ -141,10 +141,12 @@ def run(state: dict) -> dict:
             bad_imports = lint_imports(code, candidate)
             if bad_imports:
                 reason = f"'{candidate}': {'; '.join(bad_imports)}"
-                return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True, "issues": [*issues, reason]}
+                return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
+                        "issues": [*issues, reason], "failure_kind": "critical"}
             err = node_check(path)
             if err:
                 reason = f"'{candidate}' node --check: {err}"
-                return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True, "issues": [*issues, reason]}
+                return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
+                        "issues": [*issues, reason], "failure_kind": "ordinary"}
 
     return {"gate": 4, "blocked": False, "reason": None, "needs_careful_review": needs_careful_review, "issues": issues}

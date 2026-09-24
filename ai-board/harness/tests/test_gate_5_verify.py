@@ -98,6 +98,7 @@ def test_generated_test_failure_blocks_before_smoke(tmp_path):
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
     assert out["reason"] == "generated tests failed"
+    assert out["failure_kind"] == "ordinary"
     assert not any(args[0] != "docker" for args, _ in runner.calls)
     assert runner.calls[-1][0][-2:] == ["down", "-v"]
 
@@ -110,10 +111,18 @@ def test_generated_test_timeout_blocks_and_tears_down(tmp_path):
     assert runner.calls[-1][0][-2:] == ["down", "-v"]
 
 
+def test_teardown_failure_is_environmental_not_repairable(tmp_path):
+    out = verify.run(state(checkout(tmp_path)), runner=FakeRunner(fail="down"))
+    assert out["blocked"] is True
+    assert "teardown" in out["reason"]
+    assert out["failure_kind"] == "transient"
+
+
 def test_up_failure_still_tears_down(tmp_path):
     runner = FakeRunner(fail="up")
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
+    assert out["failure_kind"] == "transient"
     assert runner.calls[-1][0][-2:] == ["down", "-v"]
 
 
@@ -131,6 +140,7 @@ def test_unsafe_compose_config_blocks_before_up(tmp_path):
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
     assert "không cách ly" in out["reason"]
+    assert out["failure_kind"] == "critical"
     assert not any("up" in args for args, _ in runner.calls)
     assert runner.calls[-1][0][-2:] == ["down", "-v"]
 
@@ -140,6 +150,7 @@ def test_container_secret_blocks_without_leaking_value_to_evidence(tmp_path):
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
     assert "OLLAMA_SECKEY" in out["reason"]
+    assert out["failure_kind"] == "critical"
     assert "do-not-log" not in out["evidence"]["text"]
     assert runner.calls[-1][0][-2:] == ["down", "-v"]
 
@@ -202,6 +213,18 @@ def test_every_changed_html_page_must_match(tmp_path):
     assert out["evidence"]["http_observed"] is False
 
 
+def test_docker_binary_missing_is_transient(tmp_path):
+    def runner(args, **_):
+        raise FileNotFoundError("docker")
+    out = verify.run(state(checkout(tmp_path)), runner=runner)
+    assert out["blocked"] is True
+    assert out["failure_kind"] == "transient"
+
+
+def test_pass_has_no_failure_kind(tmp_path):
+    assert verify.run(state(checkout(tmp_path)), runner=FakeRunner())["failure_kind"] is None
+
+
 def test_missing_full_checkout_blocks_clearly(fake_deps):
     deps = replace(fake_deps, verify=None)
     out = main.run_gate(5, {}, deps, None, {"skill_id": "x"})
@@ -228,51 +251,39 @@ def test_main_prepares_checkout_at_gate_5_then_calls_verify(monkeypatch, fake_de
     assert calls == [("prepare", str(tmp_path)), ("verify", str(tmp_path))]
 
 
-def test_main_prepares_checkout_only_at_gate_5(tmp_path, monkeypatch, fake_deps):
-    scratch = tmp_path / "scratch"
-    (scratch / "public").mkdir(parents=True)
-    (scratch / "public" / "x.html").write_text("new", encoding="utf-8")
-    (scratch / "test").mkdir()
-    (scratch / "test" / "x.test.js").write_text("test", encoding="utf-8")
-    target = tmp_path / "checkout"
-    target.mkdir()
-    monkeypatch.setattr(main.tempfile, "mkdtemp", lambda **_: str(target))
-    commands = []
-
-    def fake_git(args, **kw):
-        commands.append(args)
-        return subprocess.CompletedProcess(args, 0, "diff --git a/public/x.html b/public/x.html\n", "")
-
-    monkeypatch.setattr(main.subprocess, "run", fake_git)
-    s = {"scratch_repo": str(scratch), "checkout_source": tmp_path / "source",
-         "diffs": [{"file": "public/x.html", "test_file": "test/x.test.js"}], "skill_id": "x"}
-    main.prepare_full_checkout(s, s["checkout_source"])
-    assert (target / "public" / "x.html").read_text(encoding="utf-8") == "new"
-    assert s["full_checkout"] == str(target)
-    assert s["full_diff"][0]["diff"].startswith("diff --git")
-    assert commands[0][:3] == ["git", "clone", "--local"]
-
-
-def test_full_checkout_refuses_to_overwrite_an_existing_test(tmp_path, monkeypatch):
-    def write(root, rel, text):
-        path = root / rel
+def test_bash_is_git_bash_even_when_git_lives_in_mingw64(tmp_path, monkeypatch):
+    git = tmp_path / "Git" / "mingw64" / "bin" / "git.exe"
+    bash = tmp_path / "Git" / "bin" / "bash.exe"
+    for path in (git, bash):
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+        path.write_text("", encoding="utf-8")
+    monkeypatch.setattr(verify.os, "name", "nt")
+    monkeypatch.setattr(verify.shutil, "which", lambda name: str(git) if name == "git" else None)
+    assert verify._bash() == str(bash)
 
-    scratch = tmp_path / "scratch"
-    write(scratch, "public/x.html", "new")
-    write(scratch, "test/existing.test.js", "model")
-    target = tmp_path / "checkout"
-    write(target, "test/existing.test.js", "trusted")
-    monkeypatch.setattr(main.tempfile, "mkdtemp", lambda **_: str(target))
-    monkeypatch.setattr(main.subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args, 0, "", ""))
-    state = {"scratch_repo": str(scratch), "diffs": [{
-        "file": "public/x.html", "test_file": "test/existing.test.js",
-    }]}
 
-    try:
-        main.prepare_full_checkout(state, tmp_path / "source")
-    except ValueError as error:
-        assert "đã tồn tại" in str(error)
-    else:
-        raise AssertionError("existing trusted test must not be overwritten")
+def test_smoke_script_path_is_posix_for_git_bash(tmp_path):
+    runner = FakeRunner()
+    verify.run(state(checkout(tmp_path)), runner=runner)
+    smoke_args = next(args for args, _ in runner.calls if args[0] != "docker")
+    assert "\\" not in smoke_args[-1]
+
+
+def test_changed_lines_must_be_served_even_when_the_server_injects_tags(tmp_path):
+    """Tizia injects analytics/SEO tags into every HTML page, so bytes never match the file."""
+    root = checkout(tmp_path)
+    (root / "public" / "x.html").write_text("<head></head><body>\n<h1>old</h1>\n<p>new line</p>\n</body>\n",
+                                            encoding="utf-8")
+    s = state(root, visual=True)
+    s["full_diff"] = [{"file": "", "diff": (
+        "diff --git a/public/x.html b/public/x.html\n--- a/public/x.html\n+++ b/public/x.html\n"
+        "@@ -1,3 +1,4 @@\n <h1>old</h1>\n+<p>new line</p>\n"
+        "diff --git a/test/generated.test.js b/test/generated.test.js\n+// generated\n")}]
+    served = b"<head><meta name=x></head><body>\n<h1>old</h1>\n<p>new line</p>\n<script src=a.js></script>\n</body>\n"
+    out = verify.run(s, runner=FakeRunner(), http_probe=lambda _url: (200, served))
+    assert out["blocked"] is False
+    assert out["evidence"]["http_observed"] is True
+
+    out = verify.run(s, runner=FakeRunner(), http_probe=lambda _url: (200, b"<body>\n<h1>old</h1>\n</body>"))
+    assert out["blocked"] is True
+    assert "does not match checkout" in out["reason"]
