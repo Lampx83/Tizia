@@ -4,6 +4,96 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-24 — Phiên 71 · Tiểu học **ĐÓNG TRỌN cấp 1**: hồi sinh 32 bài lí thuyết "chết" của Lớp 1, Lớp 3 và Lớp 5
+
+**Kết luận về hộp thư:** vẫn **không đọc được** (ngày thứ 12) ⇒ **không xử lý được yêu cầu nào của người học**, không bịa ra yêu cầu. Phiên này tiếp tục việc đã đo được từ phiên 58: học liệu đã viết xong nhưng học sinh **không bao giờ nhìn thấy**. Hôm nay đóng nốt 3 khối còn lại của cấp Tiểu học ⇒ **lớp 1→5 không còn bài lí thuyết mồ côi nào**.
+
+### Đo thật hôm nay (2026-09-24)
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `GET /api/health` | `200` — `{"ok":true,"service":"tizia",…,"env":"production"}`, uptime ~16 giờ |
+| `GET /api/ai-board/inbox` | `401 {"needLogin":true}` (kể cả khi gửi header `x-ai-board-key`) ⇒ auth gate chung vẫn nuốt request, **PR #97 chưa merge + deploy** |
+| `GET /api/requests` · `/api/ai-board/requests` · `/api/admin/requests` · `/api/board/inbox` | tất cả `401 needLogin` — không còn đường đọc nào cho phiên tự động |
+| `AI_BOARD_KEY` trong môi trường routine | **vẫn chưa có** |
+| `node scripts/check-deployed-build.mjs` | không commit nào trong repo khớp cả bộ chứng cứ ⇒ bản deploy dựng từ code chưa push lên đây; bằng chứng hành vi vẫn xác nhận **chưa có route hộp thư** |
+| `node scripts/check-content-integrity.mjs` (trước) | **98** bài lí thuyết mồ côi |
+| `node scripts/check-content-integrity.mjs` (sau) | **66** — giảm 32, **toàn bộ cấp Tiểu học về 0** |
+
+**Nguyên nhân 32 bài chết (cùng một lỗi với phiên 70):** bài lí thuyết **tuần 36** ("Kết thúc năm học / Hành trang vào lớp sau") đã được viết với key `<PREFIX>-w36-quiz`, nhưng file scenario của môn đó **chỉ có 35 tuần** — không có quiz tuần 36 để bài lí thuyết gắn vào. Cơ chế gắn là tra cứu đúng id (`if (LOPn_LESSONS[id]) sc.lesson = …` trong `lopN/_index.js`), nên key không khớp = nội dung biến mất im lặng và `node --check` không bắt được.
+
+### Việc đã làm — 32 môn thuộc 3 khối
+
+Bổ sung **tuần 36** vào 32 file scenario, mỗi tuần **6 câu hỏi** đúng format chung (`Q(stem, 4 lựa chọn, đáp án, giải thích, 4 phản hồi theo lựa chọn)`), nội dung **bám đúng bài lí thuyết tuần 36 đã có sẵn** của môn đó:
+
+**Lớp 1 (9/9 môn)** — `public/js/scenarios/lop1/`
+
+| File | Tuần 36 mới | Bài lí thuyết được hồi sinh |
+|---|---|---|
+| `toan.js` | Kết thúc Lớp 1 — Hành trang vào Lớp 2 | `P1-w36-quiz` |
+| `tieng-viet.js` | Hành trang Tiếng Việt vào Lớp 2 | `P1TV-w36-quiz` |
+| `tieng-anh.js` | End of Grade 1 — Ready for Grade 2! | `P1TA-w36-quiz` |
+| `tnxh.js` | Tổng kết Tự nhiên và Xã hội | `P1TNXH-w36-quiz` |
+| `dao-duc.js` | 5 Phẩm chất em mang theo vào Lớp 2 | `P1DD-w36-quiz` |
+| `am-nhac.js` | Một năm hát ca vui vẻ | `P1AN-w36-quiz` |
+| `my-thuat.js` | Nhìn lại hành trình sáng tạo | `P1MT-w36-quiz` |
+| `gdtc.js` | Một năm chăm vận động | `P1GDTC-w36-quiz` |
+| `hdtn.js` | Hành trang trải nghiệm vào Lớp 2 | `P1HDTN-w36-quiz` |
+
+**Lớp 3 (11/11 môn)** — `public/js/scenarios/lop3/`
+
+| File | Tuần 36 mới | Bài lí thuyết được hồi sinh |
+|---|---|---|
+| `toan.js` | Kết thúc Lớp 3 — Hành trang vào Lớp 4 | `P3-w36-quiz` |
+| `tieng-viet.js` | Hành trang Tiếng Việt vào Lớp 4 | `P3TV-w36-quiz` |
+| `tieng-anh.js` | End of Grade 3 — Ready for Grade 4! | `P3TA-w36-quiz` |
+| `tnxh.js` | TNXH: Hành trang vào Lớp 4 | `P3TNXH-w36-quiz` |
+| `dao-duc.js` | Em lớn lên với những giá trị tốt đẹp | `P3DD-w36-quiz` |
+| `am-nhac.js` | Những giai điệu em mang theo | `P3AN-w36-quiz` |
+| `my-thuat.js` | Sắc màu của một năm học | `P3MT-w36-quiz` |
+| `gdtc.js` | Cơ thể khoẻ mạnh, tinh thần vui vẻ | `P3GDTC-w36-quiz` |
+| `hdtn.js` | Em lớn lên, em trải nghiệm! | `P3HDTN-w36-quiz` |
+| `tin-hoc.js` | Em đã là "công dân số" nhỏ! | `P3TIN-w36-quiz` |
+| `cong-nghe.js` | Đôi tay khéo léo, tâm hồn sáng tạo | `P3CN-w36-quiz` |
+
+**Lớp 5 (12/12 môn)** — `public/js/scenarios/lop5/`
+
+| File | Tuần 36 mới | Bài lí thuyết được hồi sinh |
+|---|---|---|
+| `toan.js` | Kết thúc Tiểu học — Hành trang Toán vào Lớp 6 | `P5-w36-quiz` |
+| `tieng-viet.js` | Hành trang Tiếng Việt vào Lớp 6 | `P5TV-w36-quiz` |
+| `tieng-anh.js` | End of Primary — Ready for Grade 6 English! | `P5TA-w36-quiz` |
+| `khoa-hoc.js` | Hành trang Khoa học vào THCS | `P5KH-w36-quiz` |
+| `lich-su-dia-ly.js` | Hành trang Lịch sử & Địa lý vào THCS | `P5LSDL-w36-quiz` |
+| `dao-duc.js` | 5 Phẩm chất học sinh Lớp 6 | `P5DD-w36-quiz` |
+| `am-nhac.js` | Âm nhạc đồng hành cả đời | `P5AN-w36-quiz` |
+| `my-thuat.js` | Hành trình sáng tạo 5 năm | `P5MT-w36-quiz` |
+| `gdtc.js` | Sức khoẻ là hành trang lên cấp 2 | `P5GDTC-w36-quiz` |
+| `hdtn.js` | Tốt nghiệp cấp 1, bước vào cấp 2 | `P5HDTN-w36-quiz` |
+| `tin-hoc.js` | Hành trang Tin học vào THCS | `P5TIN-w36-quiz` |
+| `cong-nghe.js` | Hành trang Công nghệ vào THCS | `P5CN-w36-quiz` |
+
+### Sửa mô tả module cho khớp thực tế
+
+`public/js/domains/primary/modules.js`: 35 chỗ ghi **"35 tuần" → "36 tuần"** (Lớp 1, 3, 5) cho khớp số tuần thật sau thay đổi này. Sửa luôn 3 dòng tiêu đề khối đang đếm **sai số môn** — đối chiếu bằng cách đếm trực tiếp các mục `M(...)` trong file:
+
+| Tiêu đề khối | Trước | Sau (số đếm thật) |
+|---|---|---|
+| LỚP 1 | "8 môn × 35 tuần" | **9 môn × 36 tuần** |
+| LỚP 3 | "9 môn × 35 tuần" | **11 môn × 36 tuần** |
+| LỚP 5 | "11 môn × 35 tuần" | **12 môn × 36 tuần** |
+
+Không đổi logic: module loader liệt kê scenario theo prefix id, không dùng con số tuần hay con số môn nào.
+
+### Kiểm thử (chạy thật)
+
+- `node --check` **pass** cho **33/33** file đã sửa (32 scenario + `modules.js`).
+- `node scripts/check-content-integrity.mjs`: **98 → 66** bài mồ côi; lop1/lop3/lop5 **không còn mục nào**. Phần còn lại (66) là THCS lop7–9 và THPT lop10–12, để dành cho các phiên sau.
+- Kiểm tra **runtime** (không chỉ cú pháp): import thật 3 barrel `lopN/_index.js`, xác nhận **32/32** scenario tuần 36 nạp được, **có `lesson` gắn vào**, mỗi câu đủ **4 lựa chọn không trùng nhau**, `answer` nằm trong 0..3 và đủ **4 `choiceFeedback`**. 0 lỗi.
+- Phân bố đáp án 192 câu mới: **A 46 · B 55 · C 54 · D 37** — không có vị trí nào thành "đáp án tủ".
+
+---
+
 ## 2026-09-23 — Phiên 70 · Tiểu học Lớp 4: **hồi sinh 12 bài lí thuyết "chết"** + sửa một kết luận SAI của công cụ đo bản deploy
 
 **Kết luận về hộp thư:** vẫn **không đọc được** (ngày thứ 11) ⇒ **không xử lý được yêu cầu nào của người học**, không bịa ra yêu cầu. Nhưng phiên này không đi tay không: công cụ kiểm tra toàn vẹn học liệu của chính hệ thống (phiên 58 viết ra) vẫn đang chỉ ra **110 bài lí thuyết mà học sinh KHÔNG BAO GIỜ nhìn thấy** — nội dung đã viết xong, nằm trong repo, nhưng không gắn được vào bài nào. Đó là việc thật, đã đo được, phục vụ trực tiếp người học. Hôm nay đóng trọn **Lớp 4 (12/12 môn)**.

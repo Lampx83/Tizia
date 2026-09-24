@@ -256,6 +256,15 @@ export const P1MT_WEEKS = [
     Q('Đồ dùng Mĩ thuật cuối năm em nên?', ['Vứt đi hết', 'Cho mượn rồi quên', 'Cất gọn, giữ cho năm sau', 'Đập bẹp'], 2, 'Cất gọn để dùng tiếp năm sau.', ['Sai — không vứt đi hết.', 'Sai — cho mượn thì nên nhớ lấy lại.', 'Đúng — cất gọn, giữ cho năm sau dùng tiếp.', 'Sai — không đập bẹp đồ dùng.']),
     Q('Điều quan trọng nhất khi vẽ là?', ['Phải đẹp nhất lớp', 'Vẽ thật nhanh', 'Phải giống y người khác', 'Cảm xúc và sáng tạo của em'], 3, 'Cảm xúc và sáng tạo là quan trọng nhất.', ['Sai — không cần phải đẹp nhất lớp.', 'Sai — vẽ nhanh không phải điều quan trọng nhất.', 'Sai — không cần giống y người khác.', 'Đúng — cảm xúc và sáng tạo của em là quan trọng nhất.']),
   ]),
+
+  M(36, 'Kết thúc Lớp 1 — Nhìn lại hành trình sáng tạo', [
+    Q('Ba màu cơ bản là gì?', ['Đỏ, vàng, xanh lam', 'Đen, trắng, xám', 'Hồng, tím, nâu', 'Cam, lục, tím'], 0, 'Đỏ – vàng – xanh lam là ba màu cơ bản.', ['Đúng — đỏ, vàng, xanh lam là ba màu cơ bản.', 'Sai — đen, trắng, xám là các sắc độ, không phải màu cơ bản.', 'Sai — đây là các màu pha, không phải màu cơ bản.', 'Sai — cam, lục, tím là màu thứ cấp, do pha hai màu cơ bản mà thành.']),
+    Q('Pha màu đỏ với màu vàng được màu gì?', ['Xanh lá', 'Cam', 'Tím', 'Nâu'], 1, 'Đỏ + vàng = cam.', ['Sai — xanh lá do vàng pha với xanh lam.', 'Đúng — đỏ pha vàng ra màu cam.', 'Sai — tím do đỏ pha với xanh lam.', 'Sai — nâu thường do pha nhiều màu lẫn nhau.']),
+    Q('Hình nào có 4 cạnh bằng nhau?', ['Hình tròn', 'Hình tam giác', 'Hình vuông', 'Hình chữ nhật'], 2, 'Hình vuông có 4 cạnh dài bằng nhau.', ['Sai — hình tròn không có cạnh thẳng.', 'Sai — tam giác chỉ có 3 cạnh.', 'Đúng — hình vuông có 4 cạnh bằng nhau.', 'Sai — hình chữ nhật có cạnh dài và cạnh ngắn khác nhau.']),
+    Q('Xé dán là kĩ thuật dùng gì để tạo hình?', ['Bút mực', 'Đất nặn nung lửa', 'Máy tính', 'Giấy xé thành hình rồi dán'], 3, 'Xé dán: xé giấy thành hình rồi dán lên nền.', ['Sai — bút mực dùng để viết và vẽ nét.', 'Sai — nặn đất là kĩ thuật khác, và Lớp 1 không nung lửa.', 'Sai — xé dán làm bằng tay với giấy thật.', 'Đúng — xé giấy thành hình rồi dán lên nền giấy.']),
+    Q('Khi xem tranh của bạn, em nên làm gì?', ['Chê bai bức tranh', 'Vẽ thêm lên tranh bạn', 'Nói điều em thích ở bức tranh', 'Quay đi không nhìn'], 2, 'Cảm thụ tranh là biết nói điều mình thích.', ['Sai — chê bai làm bạn buồn và không giúp bạn tiến bộ.', 'Sai — không được vẽ lên tranh của bạn khi chưa xin phép.', 'Đúng — nói điều em thích là cách xem tranh hay nhất.', 'Sai — xem tranh của bạn giúp em học hỏi thêm.']),
+    Q('Lên Lớp 2 em sẽ học thêm cách vẽ nào?', ['Chỉ vẽ bằng một màu', 'Không vẽ nữa', 'Chỉ tô màu vào hình có sẵn', 'Phối cảnh gần – xa đơn giản'], 3, 'Lớp 2 làm quen phối cảnh gần – xa.', ['Sai — em vẫn dùng nhiều màu như ở Lớp 1.', 'Sai — lên Lớp 2 em vẫn học Mĩ thuật.', 'Sai — em sẽ tự vẽ nhiều hơn, không chỉ tô hình sẵn.', 'Đúng — Lớp 2 em sẽ học vẽ phối cảnh gần – xa đơn giản.']),
+  ], { difficulty: 2 }),
 ];
 
 export const P1MT_SCENARIOS = indexBy(P1MT_WEEKS);

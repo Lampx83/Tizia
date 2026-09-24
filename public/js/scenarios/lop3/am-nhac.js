@@ -292,6 +292,15 @@ export const P3AN_WEEKS = [
     Q('Sáo recorder đã giúp em?', ['Vẽ đẹp', 'Đá bóng giỏi', 'Học toán', 'Làm quen với nhạc cụ thực hành'], 3, 'Sáo là nhạc cụ thực hành cơ bản.', ['Sai — sáo không liên quan vẽ.', 'Sai — sáo không liên quan đá bóng.', 'Sai — sáo không liên quan học toán.', 'Đúng — làm quen với nhạc cụ thực hành.']),
     Q('Để âm nhạc giỏi hơn, em cần?', ['Bỏ cuộc khi khó', 'Không cần làm gì', 'Luyện tập đều đặn và yêu thích âm nhạc', 'Học vì điểm số'], 2, 'Kiên trì và yêu thích là chìa khoá.', ['Sai — không bỏ cuộc khi khó.', 'Sai — cần luyện tập mới giỏi.', 'Đúng — luyện tập đều đặn và yêu thích âm nhạc.', 'Sai — học vì yêu thích chứ không chỉ vì điểm.']),
   ], { difficulty: 2 }),
+
+  M(36, 'Kết thúc Lớp 3 — Những giai điệu em mang theo', [
+    Q('Thứ tự bảy nốt nhạc cơ bản từ THẤP đến CAO là?', ['Đô – Rê – Mi – Fa – Sol – La – Si', 'Đô – Mi – Rê – Fa – La – Sol – Si', 'Si – La – Sol – Fa – Mi – Rê – Đô', 'Đô – Rê – Mi – Sol – Fa – La – Si'], 0, 'Đô, Rê, Mi, Fa, Sol, La, Si — từ thấp lên cao.', ['Đúng — Đô, Rê, Mi, Fa, Sol, La, Si là thứ tự từ thấp lên cao.', 'Sai — Rê và Mi bị đảo chỗ.', 'Sai — đây là thứ tự từ cao xuống thấp.', 'Sai — Fa và Sol bị đảo chỗ.']),
+    Q('Trong các nốt Đô, Rê, Mi, Sol, La — nốt nào CAO nhất?', ['Đô', 'Mi', 'La', 'Sol'], 2, 'Thứ tự từ thấp lên cao: Đô – Rê – Mi – Sol – La.', ['Sai — Đô là nốt thấp nhất trong số này.', 'Sai — Mi còn thấp hơn Sol và La.', 'Đúng — La cao nhất trong số các nốt đã kể.', 'Sai — Sol thấp hơn La.']),
+    Q('Nhịp 3/4 có mấy phách trong một ô nhịp?', ['2 phách', '3 phách', '4 phách', '6 phách'], 1, 'Số trên của nhịp cho biết số phách: 3/4 có 3 phách.', ['Sai — 2 phách là nhịp 2/4.', 'Đúng — nhịp 3/4 có 3 phách mỗi ô nhịp.', 'Sai — 4 phách là nhịp 4/4.', 'Sai — không có nhịp 6 phách trong các nhịp đã học ở Lớp 3.']),
+    Q('Nốt nào có trường độ DÀI hơn?', ['Nốt đen', 'Bằng nhau', 'Nốt trắng', 'Nốt móc đơn'], 2, 'Nốt trắng dài gấp đôi nốt đen; nốt móc đơn ngắn nhất.', ['Sai — nốt đen ngắn hơn nốt trắng.', 'Sai — hai nốt này có trường độ khác nhau.', 'Đúng — nốt trắng dài gấp đôi nốt đen.', 'Sai — nốt móc đơn là ngắn nhất trong ba loại đã học.']),
+    Q('Nhạc cụ gõ nào em đã dùng để đệm khi hát tập thể?', ['Đàn organ', 'Trống và phách', 'Kèn trumpet', 'Đàn guitar điện'], 1, 'Trống, phách, thanh gõ là nhạc cụ gõ dùng đệm hát.', ['Sai — organ là nhạc cụ phím, không phải nhạc cụ gõ.', 'Đúng — trống và phách là nhạc cụ gõ dùng đệm khi hát.', 'Sai — trumpet là nhạc cụ hơi.', 'Sai — guitar điện là nhạc cụ dây.']),
+    Q('Lên Lớp 4 em sẽ được tìm hiểu thêm về gì?', ['Không học nhạc nữa', 'Chỉ nghe nhạc, không hát', 'Chỉ hát Quốc ca', 'Nhạc cụ dân tộc và âm nhạc dân gian Việt Nam'], 3, 'Lớp 4 mở rộng sang nhạc cụ dân tộc và âm nhạc dân gian.', ['Sai — lên Lớp 4 em vẫn học Âm nhạc.', 'Sai — em vẫn hát, còn hát nhiều bài mới hơn.', 'Sai — em sẽ học thêm rất nhiều bài hát khác.', 'Đúng — Lớp 4 tìm hiểu nhạc cụ dân tộc và âm nhạc dân gian Việt Nam.']),
+  ]),
 ];
 
 export const P3AN_SCENARIOS = indexBy(P3AN_WEEKS);
