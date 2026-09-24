@@ -55,6 +55,7 @@ def _public_gate_result(result: dict) -> dict:
     }
     if result["gate"] == 4:
         out["issues"] = list(result.get("issues") or [])
+        out["checks"] = list(result.get("checks") or [])
     elif result["gate"] == 5:
         out["smoke_passed"] = bool((result.get("evidence") or {}).get("smoke_passed"))
         out["http_observed"] = bool((result.get("evidence") or {}).get("http_observed"))

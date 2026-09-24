@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from budget import Budget          # noqa: E402
 from dbconn import harness_db      # noqa: E402
 import gate_trace                  # noqa: E402
-from gates import brainstorm, implement, plan_validate, risk_triage, scope_check, static_check, verify  # noqa: E402
+from gates import brainstorm, guard, implement, plan_validate, risk_triage, scope_check, static_check, verify  # noqa: E402
 from models import OllamaClient    # noqa: E402
 import prescreen                   # noqa: E402
 
@@ -121,7 +121,7 @@ def _git_out(args: list[str], cwd) -> str:
 
 
 def prepare_full_checkout(state: dict, source_repo: str | os.PathLike, *, base_ref: str = "HEAD") -> None:
-    """At the 4→5 seam: new git worktree on branch ai-board/<date>-<skill_id>-<hex6> from base_ref,
+    """At the 3→4 seam: new git worktree on branch ai-board/<date>-<skill_id>-<hex6> from base_ref,
     one commit per child in plan order. Raise ScopeViolation (nothing left behind) on out-of-scope writes."""
     scratch = Path(state["scratch_repo"])
     slug = re.sub(r"[^a-z0-9-]+", "-", str(state.get("skill_id") or "").lower()).strip("-")
@@ -196,6 +196,20 @@ def load_inbox(path: str | os.PathLike) -> list[dict]:
     return list(data.get("items") or [])
 
 
+def _ensure_full_checkout(state: dict, gate: float) -> dict | None:
+    """Dựng worktree nếu chưa có. None khi sẵn sàng/không có nguồn; dict blocked khi lỗi."""
+    if state.get("full_checkout") or not state.get("checkout_source"):
+        return None
+    try:
+        prepare_full_checkout(state, state["checkout_source"])
+    except (OSError, ValueError, subprocess.CalledProcessError) as e:
+        # Scope escape is a boundary violation; anything else is the environment, not the code.
+        kind = "critical" if isinstance(e, ScopeViolation) else "transient"
+        return {"gate": gate, "blocked": True, "reason": f"không tạo được full_checkout: {e}",
+                "evidence": None, "failure_kind": kind}
+    return None
+
+
 def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: dict,
              *, db_path=None, proposal_id: int | None = None) -> dict:
     """Điểm thay duy nhất khi 1 cổng có logic thật. `state` mang plan/artifact
@@ -213,19 +227,28 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
     if number == 3:
         return implement.run(state, deps, budget, db_path=db_path, proposal_id=proposal_id)
     if number == 4:
-        return static_check.run(state)
+        out = static_check.run(state)
+        if out.get("blocked"):
+            return out
+        # Checks bắt buộc cần diff thật base..HEAD nên worktree được dựng ngay ở 3→4.
+        failed = _ensure_full_checkout(state, 4)
+        if failed:
+            return failed
+        text = "".join(item.get("diff", "") for item in state.get("full_diff") or state.get("diffs") or [])
+        scanned = guard.scan(text, state.get("full_checkout"))
+        state["ui_changed"] = scanned["ui_changed"]
+        out = {**out, "checks": scanned["checks"]}
+        found = scanned["findings"]
+        if found:
+            worst = "critical" if any(f["failure_kind"] == "critical" for f in found) else "ordinary"
+            reason = "; ".join(f"{f['check']}: {f['detail']}" for f in found)[:1000]
+            out.update(blocked=True, reason=reason, failure_kind=worst,
+                       issues=[*out.get("issues", []), *(f"{f['check']}: {f['detail']}" for f in found)])
+        return out
     if number == 5:
         if deps.verify is not None:
             return deps.verify.run(state, deps, budget)
-        if not state.get("full_checkout") and state.get("checkout_source"):
-            try:
-                prepare_full_checkout(state, state["checkout_source"])
-            except (OSError, ValueError, subprocess.CalledProcessError) as e:
-                # Scope escape is a boundary violation; anything else is the environment, not the code.
-                kind = "critical" if isinstance(e, ScopeViolation) else "transient"
-                return {"gate": 5, "blocked": True, "reason": f"không tạo được full_checkout: {e}",
-                        "evidence": None, "failure_kind": kind}
-        return verify.run(state, deps, budget)
+        return _ensure_full_checkout(state, 5) or verify.run(state, deps, budget)
     if number == 5.5:
         return risk_triage.run(state)
     return {"gate": number, "blocked": False, "reason": None}

@@ -217,7 +217,7 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
         'failure_class': None, 'repairs': [], 'candidate': None,
         'gates': [
             {'gate': 3, 'blocked': False, 'reason': None},
-            {'gate': 4, 'blocked': False, 'reason': None, 'issues': []},
+            {'gate': 4, 'blocked': False, 'reason': None, 'issues': [], 'checks': []},
             {'gate': 5, 'blocked': False, 'reason': None,
              'smoke_passed': True, 'http_observed': True, 'retried': False},
             {'gate': 5.5, 'blocked': False, 'reason': None,

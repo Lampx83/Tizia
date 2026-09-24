@@ -222,10 +222,11 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 try:
                     capture_screenshot(base + pages[0], screenshot)
                     logs.append(f"Screenshot: {screenshot}")
-                except Exception as exc:  # best effort, including Playwright/browser absence
-                    logs.append(f"Screenshot bỏ qua: {exc}")
+                except Exception as exc:  # D0: UI changes require a screenshot; absent browser = environment
                     shutil.rmtree(screenshot.parent, ignore_errors=True)
                     screenshot = None
+                    kind = "transient"
+                    raise RuntimeError(f"thiếu screenshot bắt buộc cho thay đổi UI: {exc}") from exc
         except (OSError, RuntimeError, ValueError, KeyError, TypeError) as exc:
             reason = str(exc)
         finally:

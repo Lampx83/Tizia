@@ -1,2 +1,3 @@
 python-dotenv>=1.0
 pytest>=8.0
+playwright>=1.40  # gate 5: screenshot bắt buộc cho thay đổi UI (sau pip: python -m playwright install chromium)

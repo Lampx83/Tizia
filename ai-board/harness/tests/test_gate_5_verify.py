@@ -155,7 +155,7 @@ def test_container_secret_blocks_without_leaking_value_to_evidence(tmp_path):
     assert runner.calls[-1][0][-2:] == ["down", "-v"]
 
 
-def test_html_screenshot_artifact_and_missing_playwright_is_best_effort(tmp_path, monkeypatch):
+def test_html_screenshot_artifact_is_mandatory_for_ui_changes(tmp_path, monkeypatch):
     s = state(checkout(tmp_path), visual=True)
 
     def capture(url, path):
@@ -170,10 +170,13 @@ def test_html_screenshot_artifact_and_missing_playwright_is_best_effort(tmp_path
     assert Path(out["evidence"]["screenshot"]).read_bytes() == b"png"
 
     monkeypatch.setattr(verify, "capture_screenshot", lambda *_: (_ for _ in ()).throw(ImportError("playwright absent")))
-    out = verify.run(s, runner=FakeRunner(), http_probe=lambda _url: (200, body))
-    assert out["blocked"] is False
+    runner = FakeRunner()
+    out = verify.run(s, runner=runner, http_probe=lambda _url: (200, body))
+    assert out["blocked"] is True
+    assert "screenshot" in out["reason"] and "playwright absent" in out["reason"]
+    assert out["failure_kind"] == "transient"  # missing browser is the environment, not the candidate
     assert out["evidence"]["screenshot"] is None
-    assert "playwright absent" in out["evidence"]["text"]
+    assert runner.calls[-1][0][-2:] == ["down", "-v"]
 
 
 def test_changed_html_must_return_success_over_http(tmp_path):
@@ -269,7 +272,8 @@ def test_smoke_script_path_is_posix_for_git_bash(tmp_path):
     assert "\\" not in smoke_args[-1]
 
 
-def test_changed_lines_must_be_served_even_when_the_server_injects_tags(tmp_path):
+def test_changed_lines_must_be_served_even_when_the_server_injects_tags(tmp_path, monkeypatch):
+    monkeypatch.setattr(verify, "capture_screenshot", lambda _url, path: path.write_bytes(b"png"))
     """Tizia injects analytics/SEO tags into every HTML page, so bytes never match the file."""
     root = checkout(tmp_path)
     (root / "public" / "x.html").write_text("<head></head><body>\n<h1>old</h1>\n<p>new line</p>\n</body>\n",

@@ -216,3 +216,10 @@ test('releasing after a critical stop keeps the violation reason on the root', (
   const root = db.prepare('SELECT status, internal_reason, lease_owner FROM ai_tickets WHERE id=?').get(ticket.id);
   assert.deepEqual({ ...root }, { status: 'waiting_admin', internal_reason: "import cấm: '../../db.js'", lease_owner: null });
 });
+
+test('gate 4 records which mandatory checks ran', () => {
+  const { submit } = plannedRoot();
+  const checks = ['secret', 'pii', 'injection', 'content', 'test_removal', 'protected_path', 'python_syntax'];
+  const verdict = submit(passing({ gates: [gates[3], { ...gates[4], checks }, gates[5], gates[55]] }));
+  assert.deepEqual(verdict.gates[1].checks, checks);
+});
