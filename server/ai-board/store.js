@@ -113,6 +113,7 @@ function validatePrePrVerdict(value) {
       clean.smoke_passed = item.smoke_passed === true;
       clean.http_observed = item.http_observed === true;
       clean.retried = item.retried === true;
+      clean.runner = ['docker', 'fake'].includes(item.runner) ? item.runner : null;
     }
     if (gate === 5.5) {
       clean.risk_level = ['low', 'medium', 'high', 'critical'].includes(item.risk_level) ? item.risk_level : null;
@@ -135,6 +136,9 @@ function validatePrePrVerdict(value) {
     && gate5?.smoke_passed === true && gate5?.http_observed === true;
   if (['ready_for_pr', 'needs_review'].includes(value.outcome) && !passed) {
     throw new WorkerContractError('passing verdict requires successful smoke through gate 5.5');
+  }
+  if (['ready_for_pr', 'needs_review'].includes(value.outcome) && gate5.runner !== 'docker') {
+    throw new WorkerContractError('passing verdict requires gate 5 on real docker');
   }
   if (value.outcome === 'ready_for_pr' && !['low', 'medium'].includes(gate55?.risk_level))
     throw new WorkerContractError('ready verdict requires low or medium risk');

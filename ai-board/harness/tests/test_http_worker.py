@@ -183,7 +183,8 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
             assert state['checkout_source'] == str(tmp_path)
             state['full_checkout'] = str(tmp_path / 'checkout')
             return {'gate': 5, 'blocked': False, 'reason': None,
-                    'evidence': {'smoke_passed': True, 'http_observed': True, 'text': 'private log'}}
+                    'evidence': {'smoke_passed': True, 'http_observed': True, 'runner': 'docker',
+                                 'text': 'private log'}}
         return {'gate': 5.5, 'blocked': False, 'reason': None,
                 'risk_level': 'low', 'risk_signals': []}
 
@@ -219,7 +220,7 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
             {'gate': 3, 'blocked': False, 'reason': None},
             {'gate': 4, 'blocked': False, 'reason': None, 'issues': [], 'checks': []},
             {'gate': 5, 'blocked': False, 'reason': None,
-             'smoke_passed': True, 'http_observed': True, 'retried': False},
+             'smoke_passed': True, 'http_observed': True, 'runner': 'docker', 'retried': False},
             {'gate': 5.5, 'blocked': False, 'reason': None,
              'risk_level': 'low', 'risk_signals': []},
         ],

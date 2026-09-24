@@ -114,6 +114,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
         return {"gate": 5, "blocked": True, "reason": "thiếu skill_id cho Docker verify", "evidence": None,
                 "failure_class": "transient"}
     project = f"ai-verify-{skill_id}"
+    runner_name = "fake" if runner else "docker"  # injected runner = test double, never real evidence
     runner = runner or subprocess.run
     http_probe = http_probe or probe_http
     logs: list[str] = []
@@ -237,7 +238,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 kind = "transient"  # leaked containers are the environment's problem, not the candidate's
 
     evidence = {"text": "Smoke scripts/smoke-user-state.sh: một luồng user-state, không bao phủ toàn ứng dụng.\n"
-                        + "\n".join(logs), "smoke_passed": smoke_ok, "http_observed": http_observed,
+                        + "\n".join(logs), "smoke_passed": smoke_ok, "http_observed": http_observed, "runner": runner_name,
                 "screenshot": str(screenshot) if screenshot else None}
     state["evidence"] = evidence
     return {"gate": 5, "blocked": bool(reason), "reason": reason, "evidence": evidence,

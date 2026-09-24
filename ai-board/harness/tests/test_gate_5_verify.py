@@ -291,3 +291,10 @@ def test_changed_lines_must_be_served_even_when_the_server_injects_tags(tmp_path
     out = verify.run(s, runner=FakeRunner(), http_probe=lambda _url: (200, b"<body>\n<h1>old</h1>\n</body>"))
     assert out["blocked"] is True
     assert "does not match checkout" in out["reason"]
+
+
+def test_evidence_names_the_runner_so_a_fake_run_is_never_presented_as_real(tmp_path, monkeypatch):
+    assert verify.run(state(checkout(tmp_path)), runner=FakeRunner())["evidence"]["runner"] == "fake"
+    monkeypatch.setattr(verify.subprocess, "run", FakeRunner())
+    (tmp_path / "real").mkdir()
+    assert verify.run(state(checkout(tmp_path / "real")))["evidence"]["runner"] == "docker"

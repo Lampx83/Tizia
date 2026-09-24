@@ -58,7 +58,7 @@ function plannedRoot() {
 const gates = {
   3: { gate: 3, blocked: false, reason: null },
   4: { gate: 4, blocked: false, reason: null, issues: [] },
-  5: { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true, retried: false },
+  5: { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true, runner: 'docker', retried: false },
   55: { gate: 5.5, blocked: false, reason: null, risk_level: 'medium', risk_signals: [] },
 };
 
@@ -95,6 +95,18 @@ test('a repaired verdict records one review_fix child after the ordered children
   assert.equal(tag.tag, 'repair');
   const stored = JSON.parse(db.prepare('SELECT evidence_json FROM ai_runs').get().evidence_json).verdict;
   assert.equal(stored.candidate.branch, 'ai-board/2026-09-24-ticket-1');
+});
+
+test('a passing verdict needs gate 5 to have run on real docker', () => {
+  for (const runner of ['fake', undefined]) {
+    const { submit } = plannedRoot();
+    const fake = { ...gates[5], runner };
+    assert.throws(() => submit(passing({ gates: [gates[3], gates[4], fake, gates[55]] })), /docker/);
+    assert.throws(() => submit(passing({ outcome: 'needs_review', gates: [gates[3], gates[4], fake,
+      { ...gates[55], risk_level: 'high' }] })), /docker/);
+  }
+  const { submit } = plannedRoot();
+  assert.doesNotThrow(() => submit(passing()));
 });
 
 test('more than one repair per verdict is rejected', () => {

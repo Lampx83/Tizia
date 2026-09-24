@@ -61,6 +61,7 @@ def _public_gate_result(result: dict) -> dict:
     elif result["gate"] == 5:
         out["smoke_passed"] = bool((result.get("evidence") or {}).get("smoke_passed"))
         out["http_observed"] = bool((result.get("evidence") or {}).get("http_observed"))
+        out["runner"] = (result.get("evidence") or {}).get("runner")
     elif result["gate"] == 5.5:
         out["risk_level"] = result.get("risk_level")
         out["risk_signals"] = list(result.get("risk_signals") or [])
