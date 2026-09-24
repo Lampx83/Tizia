@@ -85,6 +85,14 @@ export function hashCapabilityPolicy(policy) {
 
 export const CAPABILITY_POLICY_HASH = hashCapabilityPolicy(CAPABILITY_POLICY);
 
+// What the worker needs for Gate 5.5 path matching; the hash pins it to the version plans were accepted against.
+export const CAPABILITY_CATALOG = Object.freeze({
+  hash: CAPABILITY_POLICY_HASH,
+  capabilities: Object.fromEntries(Object.entries(CAPABILITY_POLICY).map(([name, entry]) => [name, {
+    tier: entry.tier, allow: entry.allow, deny: entry.deny,
+  }])),
+});
+
 export function validatePlan(plan, requestDomain) {
   if (!plan || typeof plan !== 'object' || Array.isArray(plan)) fail('malformed_plan', 'plan must be an object');
   const domain = nonEmptyString(plan.domain, 'domain');

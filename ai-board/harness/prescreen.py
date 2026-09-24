@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import json
 import math
-import sqlite3
 import time
 from datetime import datetime, timedelta, timezone
+
+from dbconn import harness_db
 
 # cosine ≥ DUP → "cùng một yêu cầu"; RELATED ≤ cos < DUP → liên quan nhưng khác
 # (đầu vào `dependencies`). Ngưỡng cho bge-m3; chỉnh khi có gold set (ticket 16).
@@ -89,16 +90,13 @@ def history_factor(db_path, cand: dict) -> float:
     """cost/benefit từ skill_proposals: lần thử gần nhất cùng request_ids (ưu
     tiên) hoặc cùng domain. Chưa thử → 0.5; chặn ở cổng 2 (scope) → 0 (không
     làm được); chặn cổng sau → 0.25 (làm được nhưng khó); ok → 1."""
-    con = sqlite3.connect(str(db_path))
-    try:
+    with harness_db(db_path) as con:
         if not con.execute("SELECT name FROM sqlite_master WHERE name='skill_proposals'").fetchone():
             return 0.5
         rows = con.execute(
             "SELECT request_ids, gate_reached, outcome FROM skill_proposals WHERE domain IS ? ORDER BY id DESC",
             (cand.get("domain"),),
         ).fetchall()
-    finally:
-        con.close()
     if not rows:
         return 0.5
     ids = set(cand["request_ids"])
@@ -136,9 +134,7 @@ def score(cands: list[dict], vecs: list, k: int, *, db_path, now: datetime) -> t
 def record(db_path, cand: dict, model: str | None) -> None:
     """1 dòng ai_decisions (decided_by='rule', action='priority') cho MỖI request trong cụm."""
     now = int(time.time() * 1000)
-    con = sqlite3.connect(str(db_path))
-    try:
-        con.execute(AI_DECISIONS_DDL)
+    with harness_db(db_path, ddl=AI_DECISIONS_DDL) as con:
         con.executemany(
             """INSERT INTO ai_decisions
                  (request_id, decided_by, model, action, reason, priority_score, input_snapshot, created_at)
@@ -149,9 +145,6 @@ def record(db_path, cand: dict, model: str | None) -> None:
                 for m in cand["members"] if m.get("db_id") is not None
             ],
         )
-        con.commit()
-    finally:
-        con.close()
 
 
 def run(items: list[dict], *, models, db_path, now: datetime | None = None) -> list[dict]:

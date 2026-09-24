@@ -9,8 +9,9 @@ log lại rồi bỏ qua, không raise ra ngoài (chốt trong acceptance criter
 """
 from __future__ import annotations
 
-import sqlite3
 import time
+
+from dbconn import harness_db
 
 DDL = """
 CREATE TABLE IF NOT EXISTS gate_trace (
@@ -36,9 +37,7 @@ def record(db_path, *, skill_proposal_id: int, gate: float, model: str | None, p
     dict /api/generate trả về — response/prompt_eval_count/eval_count/
     prompt_eval_duration/eval_duration đọc thẳng từ đó, không tính lại)."""
     try:
-        con = sqlite3.connect(str(db_path))
-        try:
-            con.executescript(DDL)  # 2 câu lệnh (CREATE TABLE + CREATE INDEX) — execute() chỉ nhận 1
+        with harness_db(db_path, ddl=DDL) as con:
             con.execute(
                 """INSERT INTO gate_trace
                      (skill_proposal_id, gate, model, prompt, raw_response,
@@ -51,8 +50,5 @@ def record(db_path, *, skill_proposal_id: int, gate: float, model: str | None, p
                     int(time.time() * 1000),
                 ),
             )
-            con.commit()
-        finally:
-            con.close()
     except Exception as e:  # best-effort thật — không raise, chỉ báo rồi bỏ qua
         print(f"[gate_trace] ghi lỗi (bỏ qua, không làm hỏng cổng đang chạy): {e}")

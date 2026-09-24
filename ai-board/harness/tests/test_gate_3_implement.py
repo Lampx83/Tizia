@@ -55,6 +55,22 @@ def test_build_prompt_contains_only_this_subtask():
     assert subtask["title"] in prompt
     assert subtask["file"] in prompt
     assert subtask["verify"] in prompt
+    assert "LẦN TRƯỚC" not in prompt
+
+
+def test_repair_prompt_keeps_the_locked_prefix_and_appends_the_gate_reason():
+    subtask = {"title": "t", "file": "public/x.html", "verify": "v", "size": "small"}
+    plain = implement.build_prompt(subtask)
+    repair = implement.build_prompt(subtask, repair_reason="cổng 5: generated tests failed")
+    assert repair.startswith(plain)
+    assert "cổng 5: generated tests failed" in repair[len(plain):]
+
+
+def test_run_passes_repair_reason_to_every_subtask_prompt(tmp_path):
+    models = FakeModels(plan_with(["features"]))
+    implement.run({"plan": plan_with(["features"]), "repair_reason": "cổng 4: node --check"},
+                  deps_with(models), Budget(max_wall_clock_s=999), repo_dir=tmp_path)
+    assert models.calls and all("cổng 4: node --check" in call["prompt"] for call in models.calls)
 
 
 def test_run_second_subtask_prompt_excludes_first_subtasks_content(tmp_path):
@@ -113,7 +129,7 @@ def test_run_produces_real_diff_against_scratch_repo(tmp_path):
 
 
 def test_run_uses_fresh_temp_repo_when_no_repo_dir_given():
-    codegen = {"code": "x", "test_file": "t.js", "test": "y"}
+    codegen = {"code": "x", "test_file": "test/t.test.js", "test": "y"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
     plan = plan_with(["features"])
@@ -146,7 +162,7 @@ def test_run_blocks_on_malformed_model_response(tmp_path):
 def test_run_stops_mid_gate_when_budget_exhausted_between_subtasks(tmp_path):
     """max_model_calls=1: subtask đầu tiêu hết budget, subtask thứ hai (plan_with
     có 2) không được gọi model — không được âm thầm báo blocked=False."""
-    codegen = {"code": "x", "test_file": "t.js", "test": "y"}
+    codegen = {"code": "x", "test_file": "test/t.test.js", "test": "y"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
     plan = plan_with(["features"])
@@ -156,12 +172,13 @@ def test_run_stops_mid_gate_when_budget_exhausted_between_subtasks(tmp_path):
 
     assert out["blocked"] is True
     assert "budget" in out["reason"]
+    assert out["failure_class"] == "budget"
     assert len(models.calls) == 1
     assert len(out["diffs"]) == 1
 
 
 def test_run_spends_budget_once_per_subtask(tmp_path):
-    codegen = {"code": "x", "test_file": "t.js", "test": "y"}
+    codegen = {"code": "x", "test_file": "test/t.test.js", "test": "y"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
     plan = plan_with(["features"])
@@ -196,6 +213,7 @@ def test_windows_absolute_path_from_model_is_rejected(tmp_path):
 
     assert out["blocked"] is True
     assert "tuyệt đối" in out["reason"]
+    assert out["failure_class"] == "critical"
 
 
 def test_path_traversal_via_dotdot_is_rejected(tmp_path):
@@ -208,6 +226,19 @@ def test_path_traversal_via_dotdot_is_rejected(tmp_path):
     assert out["blocked"] is True
     assert "thoát khỏi scratch repo" in out["reason"]
     assert not (tmp_path.parent.parent / "outside.js").exists()
+
+
+def test_model_test_file_cannot_overwrite_an_approved_source_path(tmp_path):
+    codegen = {"code": "x", "test_file": "test/../server/db.js", "test": "evil"}
+    models = FakeModels(plan_with(["features"]), codegen=codegen)
+    deps = deps_with(models)
+
+    out = implement.run({"plan": plan_with(["features"])}, deps,
+                        Budget(max_wall_clock_s=999), repo_dir=tmp_path)
+
+    assert out["blocked"] is True
+    assert "test/" in out["reason"]
+    assert not (tmp_path / "server/db.js").exists()
 
 
 def test_normal_relative_paths_still_work_after_traversal_guard(tmp_path):
@@ -234,3 +265,52 @@ def test_ensure_scratch_repo_never_reuses_real_tizia_repo(tmp_path):
         assert "Tizia" not in Path(out.stdout.strip()).name
     finally:
         shutil.rmtree(repo, ignore_errors=True)
+
+
+def test_heavy_gate3_model_reads_only_gate3_model_heavy():
+    from models import OllamaClient
+    assert OllamaClient.from_env({"GATE3_MODEL_HEAVY": "heavy"}).gate3_model == "heavy"
+    assert OllamaClient.from_env({"GATE3_MODEL": "old"}).gate3_model == ""
+
+
+# ── Existing target file: current content in view, 20 KB ceiling ────────────
+
+def _source_with(tmp_path, rel, content):
+    repo = tmp_path / "source"
+    (repo / rel).parent.mkdir(parents=True)
+    (repo / rel).write_text(content, encoding="utf-8")
+    for args in (["init", "-q"], ["add", "-A"], ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "base"]):
+        subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, stdin=subprocess.DEVNULL)
+    return repo
+
+
+def test_existing_target_content_is_appended_after_the_locked_prefix(tmp_path):
+    source = _source_with(tmp_path, "public/flashcards.html", "<h1>Thẻ cũ</h1>\n<p>giữ nguyên</p>\n")
+    models = FakeModels(plan_with(["features"]))
+    plan = plan_with(["features"])
+    state = {"plan": plan, "checkout_source": str(source)}
+
+    out = implement.run(state, deps_with(models), Budget(max_wall_clock_s=999), repo_dir=tmp_path / "scratch")
+
+    assert out["blocked"] is False
+    new_file_prompt, existing_prompt = [call["prompt"] for call in models.calls]
+    plain = implement.build_prompt(plan["subtasks"][1])
+    assert existing_prompt.startswith(plain)
+    assert "<p>giữ nguyên</p>" in existing_prompt[len(plain):]
+    assert "giữ nguyên" not in new_file_prompt
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=source, capture_output=True, text=True,
+                          stdin=subprocess.DEVNULL).stdout.strip()
+    assert state["base_sha"] == head  # the worktree is cut from the same base the model saw
+
+
+def test_existing_target_over_20kb_stops_as_plan_failure_before_any_model_call(tmp_path):
+    source = _source_with(tmp_path, "public/flashcards.html", "x" * (20 * 1024 + 1))
+    models = FakeModels(plan_with(["features"]))
+
+    out = implement.run({"plan": plan_with(["features"]), "checkout_source": str(source)},
+                        deps_with(models), Budget(max_wall_clock_s=999), repo_dir=tmp_path / "scratch")
+
+    assert out["blocked"] is True
+    assert out["failure_class"] == "plan"
+    assert "public/flashcards.html" in out["reason"] and "20 KB" in out["reason"]
+    assert models.calls == []

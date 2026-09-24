@@ -4,8 +4,16 @@ from pathlib import Path
 import json
 import subprocess
 
+import pytest
+
 import main
 from gates import verify
+
+
+@pytest.fixture(autouse=True)
+def served(monkeypatch):
+    """Default isolated container serves every fixture public file as checked out."""
+    monkeypatch.setattr(verify, "probe_http", lambda _url: (200, b"<h1>changed</h1>\n// x\n"))
 
 
 class FakeRunner:
@@ -18,21 +26,28 @@ class FakeRunner:
     def __call__(self, args, **kwargs):
         self.calls.append((args, kwargs))
         if args[0] == "docker":
-            action = next(x for x in ("config", "up", "port", "exec", "down") if x in args)
+            action = next(x for x in ("config", "up", "port", "exec", "cp", "down") if x in args)
             if action == "up":
                 self.override = Path(args[args.index("-f") + 3]).read_text(encoding="utf-8")
             project = args[args.index("-p") + 1]
             config = {"services": {"tizia": {"environment": {"NODE_ENV": "production", "PORT": "8041",
                                                           "HOST": "0.0.0.0", "DATA_DIR": "/data", "BASE_PATH": ""},
                                                "image": f"{project}:latest",
+                                               "cpus": 1.0, "mem_limit": 536870912, "pids_limit": 128,
                                                "ports": [{"target": 8041, "host_ip": "127.0.0.1"}],
                                                "volumes": [{"source": f"{project}-data", "target": "/data"}]}}}
-            stdout = {"config": json.dumps(config), "up": "started", "port": "127.0.0.1:49152\n",
-                      "exec": self.container_env, "down": "removed"}[action]
+            if action == "exec" and args[-1] == "env":
+                stdout = self.container_env
+            else:
+                stdout = {"config": json.dumps(config), "up": "started", "port": "127.0.0.1:49152\n",
+                          "exec": "generated tests passed", "cp": "copied", "down": "removed"}[action]
         else:
             action = "smoke"
             stdout = "user-state smoke PASS"
-        code = 1 if self.fail == action else 0
+        generated_test = action == "exec" and "node" in args
+        if self.fail == "generated_timeout" and generated_test:
+            raise subprocess.TimeoutExpired(args, kwargs.get("timeout") or 60)
+        code = 1 if self.fail == action or (self.fail == "generated_test" and generated_test) else 0
         return subprocess.CompletedProcess(args, code, stdout, "failed" if code else "")
 
 
@@ -41,12 +56,18 @@ def checkout(tmp_path):
     (tmp_path / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
     (tmp_path / "scripts").mkdir()
     (tmp_path / "scripts" / "smoke-user-state.sh").write_text("true\n", encoding="utf-8")
+    (tmp_path / "public").mkdir()
+    (tmp_path / "public" / "x.html").write_text("<h1>changed</h1>\n", encoding="utf-8")
+    (tmp_path / "public" / "x.js").write_text("// x\n", encoding="utf-8")
+    (tmp_path / "test").mkdir()
+    (tmp_path / "test" / "generated.test.js").write_text("// generated\n", encoding="utf-8")
     return tmp_path
 
 
 def state(path, *, visual=False):
     return {"skill_id": "skill-42", "full_checkout": str(path),
-            "diffs": [{"file": "public/x.html" if visual else "public/x.js", "diff": "+<style>x</style>" if visual else "+x"}]}
+            "diffs": [{"file": "public/x.html" if visual else "public/x.js",
+                       "test_file": "test/generated.test.js", "diff": "+x"}]}
 
 
 def test_pass_uses_isolated_compose_smoke_and_down(tmp_path):
@@ -57,14 +78,16 @@ def test_pass_uses_isolated_compose_smoke_and_down(tmp_path):
 
     assert out["blocked"] is False
     assert out["evidence"]["smoke_passed"] is True
+    assert out["evidence"]["http_observed"] is True
+    assert out["evidence"]["screenshot"] is None  # JS change, no request page named
     assert "một luồng user-state" in out["evidence"]["text"]
     assert "pharmacysim-data:/data" not in runner.override
     assert "127.0.0.1::8041" in runner.override
     assert "name: ai-verify-skill-42-data" in runner.override
     assert "image: ai-verify-skill-42:latest" in runner.override
     assert "!override" in runner.override
-    assert ["config", "up", "port", "exec", "down"] == [
-        next(x for x in ("config", "up", "port", "exec", "down") if x in args)
+    assert ["config", "up", "port", "exec", "exec", "cp", "exec", "down"] == [
+        next(x for x in ("config", "up", "port", "exec", "cp", "down") if x in args)
         for args, _ in runner.calls if args[0] == "docker"]
     assert runner.calls[-1][0][-2:] == ["down", "-v"]
     smoke_args, smoke_kw = next((args, kw) for args, kw in runner.calls if args[0] != "docker")
@@ -80,10 +103,36 @@ def test_smoke_failure_still_tears_down(tmp_path):
     assert runner.calls[-1][0][-2:] == ["down", "-v"]
 
 
+def test_generated_test_failure_blocks_before_smoke(tmp_path):
+    runner = FakeRunner(fail="generated_test")
+    out = verify.run(state(checkout(tmp_path)), runner=runner)
+    assert out["blocked"] is True
+    assert out["reason"] == "generated tests failed"
+    assert out["failure_class"] == "ordinary"
+    assert not any(args[0] != "docker" for args, _ in runner.calls)
+    assert runner.calls[-1][0][-2:] == ["down", "-v"]
+
+
+def test_generated_test_timeout_blocks_and_tears_down(tmp_path):
+    runner = FakeRunner(fail="generated_timeout")
+    out = verify.run(state(checkout(tmp_path)), runner=runner)
+    assert out["blocked"] is True
+    assert out["reason"] == "generated tests timed out"
+    assert runner.calls[-1][0][-2:] == ["down", "-v"]
+
+
+def test_teardown_failure_is_environmental_not_repairable(tmp_path):
+    out = verify.run(state(checkout(tmp_path)), runner=FakeRunner(fail="down"))
+    assert out["blocked"] is True
+    assert "teardown" in out["reason"]
+    assert out["failure_class"] == "transient"
+
+
 def test_up_failure_still_tears_down(tmp_path):
     runner = FakeRunner(fail="up")
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
+    assert out["failure_class"] == "transient"
     assert runner.calls[-1][0][-2:] == ["down", "-v"]
 
 
@@ -101,6 +150,7 @@ def test_unsafe_compose_config_blocks_before_up(tmp_path):
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
     assert "không cách ly" in out["reason"]
+    assert out["failure_class"] == "critical"
     assert not any("up" in args for args, _ in runner.calls)
     assert runner.calls[-1][0][-2:] == ["down", "-v"]
 
@@ -110,11 +160,12 @@ def test_container_secret_blocks_without_leaking_value_to_evidence(tmp_path):
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
     assert "OLLAMA_SECKEY" in out["reason"]
+    assert out["failure_class"] == "critical"
     assert "do-not-log" not in out["evidence"]["text"]
     assert runner.calls[-1][0][-2:] == ["down", "-v"]
 
 
-def test_html_screenshot_artifact_and_missing_playwright_is_best_effort(tmp_path, monkeypatch):
+def test_html_screenshot_artifact_is_mandatory_for_ui_changes(tmp_path, monkeypatch):
     s = state(checkout(tmp_path), visual=True)
 
     def capture(url, path):
@@ -122,19 +173,140 @@ def test_html_screenshot_artifact_and_missing_playwright_is_best_effort(tmp_path
         path.write_bytes(b"png")
 
     monkeypatch.setattr(verify, "capture_screenshot", capture)
-    out = verify.run(s, runner=FakeRunner())
+    body = (tmp_path / "public" / "x.html").read_bytes()
+    out = verify.run(s, runner=FakeRunner(), http_probe=lambda _url: (200, body))
     assert out["blocked"] is False
+    assert out["evidence"]["http_observed"] is True
     assert Path(out["evidence"]["screenshot"]).read_bytes() == b"png"
 
     monkeypatch.setattr(verify, "capture_screenshot", lambda *_: (_ for _ in ()).throw(ImportError("playwright absent")))
-    out = verify.run(s, runner=FakeRunner())
-    assert out["blocked"] is False
+    runner = FakeRunner()
+    out = verify.run(s, runner=runner, http_probe=lambda _url: (200, body))
+    assert out["blocked"] is True
+    assert "screenshot" in out["reason"] and "playwright absent" in out["reason"]
+    assert out["failure_class"] == "transient"  # missing browser is the environment, not the candidate
     assert out["evidence"]["screenshot"] is None
-    assert "playwright absent" in out["evidence"]["text"]
+    assert runner.calls[-1][0][-2:] == ["down", "-v"]
 
 
-def test_added_style_value_requests_one_best_effort_capture():
-    assert verify._visual_page([{"file": "public/x.js", "diff": "+const x = { style: 'red' };"}]) == "/"
+def test_changed_html_must_return_success_over_http(tmp_path):
+    out = verify.run(state(checkout(tmp_path), visual=True), runner=FakeRunner(),
+                     http_probe=lambda _url: (404, b""))
+
+    assert out["blocked"] is True
+    assert "HTTP 404" in out["reason"]
+    assert out["evidence"]["smoke_passed"] is False
+
+
+def test_changed_html_response_must_match_the_checkout(tmp_path):
+    out = verify.run(state(checkout(tmp_path), visual=True), runner=FakeRunner(),
+                     http_probe=lambda _url: (200, b"old page"))
+
+    assert out["blocked"] is True
+    assert "does not match checkout" in out["reason"]
+    assert out["evidence"]["http_observed"] is False
+
+
+def test_css_change_is_observed_over_http_and_screenshots_the_request_page(tmp_path, monkeypatch):
+    root = checkout(tmp_path)
+    (root / "public" / "css").mkdir()
+    (root / "public" / "css" / "school.css").write_text(".title { color: #f5c400; }\n", encoding="utf-8")
+    s = {"skill_id": "skill-42", "full_checkout": str(root),
+         "request_detail": "[Trang: Trường IT] /school.html?domain=it\nđổi màu chữ thành vàng",
+         "diffs": [{"file": "public/css/school.css", "test_file": "test/generated.test.js", "diff": "+x"}]}
+    probed, shots = [], []
+    monkeypatch.setattr(verify, "capture_screenshot", lambda url, path: (shots.append(url), path.write_bytes(b"png")))
+
+    def probe(url):
+        probed.append(url)
+        return 200, b"body{}\n.title { color: #f5c400; }\n"
+
+    out = verify.run(s, runner=FakeRunner(), http_probe=probe)
+    assert out["blocked"] is False
+    assert out["evidence"]["http_observed"] is True
+    assert probed == ["http://127.0.0.1:49152/css/school.css"]
+    assert shots == ["http://127.0.0.1:49152/school.html?domain=it"]
+    assert Path(out["evidence"]["screenshot"]).read_bytes() == b"png"
+
+    out = verify.run(s, runner=FakeRunner(), http_probe=lambda _url: (200, b".title { color: red; }"))
+    assert out["blocked"] is True and "does not match checkout" in out["reason"]
+    assert out["failure_class"] == "ordinary"
+
+
+def test_screenshot_target_from_the_request_must_be_an_internal_path(tmp_path, monkeypatch):
+    shots = []
+    monkeypatch.setattr(verify, "capture_screenshot", lambda url, path: shots.append(url))
+    details = ("[Trang: x] https://evil.example/", "[Trang: x] //evil.example/a", "[Trang: x] /\\evil.example",
+               "không có dòng trang")
+    for index, detail in enumerate(details):
+        (tmp_path / str(index)).mkdir()
+        s = state(checkout(tmp_path / str(index)))
+        s["request_detail"] = detail
+        out = verify.run(s, runner=FakeRunner())
+        assert out["blocked"] is False
+        assert out["evidence"]["screenshot"] is None
+    assert shots == []
+
+
+def test_screenshot_must_land_on_the_requested_page_with_success():
+    verify.check_landing("http://h:1/school.html?domain=it", "http://h:1/school.html?domain=it", 200)
+    for landed, status in (("http://h:1/login.html", 200), ("http://h:1/school.html", 404), ("http://h:1/x", None)):
+        try:
+            verify.check_landing("http://h:1/school.html", landed, status)
+        except verify.ScreenshotTargetError:
+            continue
+        raise AssertionError((landed, status))
+
+
+def test_wrong_screenshot_landing_is_a_plan_failure(tmp_path, monkeypatch):
+    def capture(_url, _path):
+        raise verify.ScreenshotTargetError("trang chụp bị chuyển hướng sang /login.html")
+
+    monkeypatch.setattr(verify, "capture_screenshot", capture)
+    s = state(checkout(tmp_path))
+    s["request_detail"] = "[Trang: x] /student-dashboard.html"
+    out = verify.run(s, runner=FakeRunner())
+    assert out["blocked"] is True
+    assert out["failure_class"] == "plan"
+    assert "login.html" in out["reason"]
+
+
+def test_diff_without_a_public_file_is_a_plan_failure_before_docker(tmp_path):
+    runner = FakeRunner()
+    s = state(checkout(tmp_path))
+    s["diffs"][0]["file"] = "server/contexts/_ai-generated/x/index.js"
+    out = verify.run(s, runner=runner)
+    assert out["blocked"] is True
+    assert out["failure_class"] == "plan"
+    assert "public" in out["reason"]
+    assert runner.calls == []
+
+
+def test_every_changed_html_page_must_match(tmp_path):
+    root = checkout(tmp_path)
+    (root / "public" / "y.html").write_text("<h1>second</h1>\n", encoding="utf-8")
+    s = state(root, visual=True)
+    s["diffs"].append({"file": "public/y.html", "test_file": "test/generated.test.js", "diff": "+y"})
+
+    def probe(url):
+        return (200, (root / "public" / "x.html").read_bytes()) if url.endswith("x.html") else (200, b"stale")
+
+    out = verify.run(s, runner=FakeRunner(), http_probe=probe)
+    assert out["blocked"] is True
+    assert "y.html" in out["reason"]
+    assert out["evidence"]["http_observed"] is False
+
+
+def test_docker_binary_missing_is_transient(tmp_path):
+    def runner(args, **_):
+        raise FileNotFoundError("docker")
+    out = verify.run(state(checkout(tmp_path)), runner=runner)
+    assert out["blocked"] is True
+    assert out["failure_class"] == "transient"
+
+
+def test_pass_has_no_failure_class(tmp_path):
+    assert verify.run(state(checkout(tmp_path)), runner=FakeRunner())["failure_class"] is None
 
 
 def test_missing_full_checkout_blocks_clearly(fake_deps):
@@ -149,7 +321,7 @@ def test_main_prepares_checkout_at_gate_5_then_calls_verify(monkeypatch, fake_de
     s = {"checkout_source": str(tmp_path), "skill_id": "x"}
     calls = []
 
-    def prepare(state, source):
+    def prepare(state, source, **_):
         calls.append(("prepare", source))
         state["full_checkout"] = str(tmp_path)
 
@@ -163,26 +335,47 @@ def test_main_prepares_checkout_at_gate_5_then_calls_verify(monkeypatch, fake_de
     assert calls == [("prepare", str(tmp_path)), ("verify", str(tmp_path))]
 
 
-def test_main_prepares_checkout_only_at_gate_5(tmp_path, monkeypatch, fake_deps):
-    scratch = tmp_path / "scratch"
-    (scratch / "public").mkdir(parents=True)
-    (scratch / "public" / "x.html").write_text("new", encoding="utf-8")
-    (scratch / "test").mkdir()
-    (scratch / "test" / "x.test.js").write_text("test", encoding="utf-8")
-    target = tmp_path / "checkout"
-    target.mkdir()
-    monkeypatch.setattr(main.tempfile, "mkdtemp", lambda **_: str(target))
-    commands = []
+def test_bash_is_git_bash_even_when_git_lives_in_mingw64(tmp_path, monkeypatch):
+    git = tmp_path / "Git" / "mingw64" / "bin" / "git.exe"
+    bash = tmp_path / "Git" / "bin" / "bash.exe"
+    for path in (git, bash):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("", encoding="utf-8")
+    monkeypatch.setattr(verify.os, "name", "nt")
+    monkeypatch.setattr(verify.shutil, "which", lambda name: str(git) if name == "git" else None)
+    assert verify._bash() == str(bash)
 
-    def fake_git(args, **kw):
-        commands.append(args)
-        return subprocess.CompletedProcess(args, 0, "diff --git a/public/x.html b/public/x.html\n", "")
 
-    monkeypatch.setattr(main.subprocess, "run", fake_git)
-    s = {"scratch_repo": str(scratch), "checkout_source": tmp_path / "source",
-         "diffs": [{"file": "public/x.html", "test_file": "test/x.test.js"}], "skill_id": "x"}
-    main.prepare_full_checkout(s, s["checkout_source"])
-    assert (target / "public" / "x.html").read_text(encoding="utf-8") == "new"
-    assert s["full_checkout"] == str(target)
-    assert s["full_diff"][0]["diff"].startswith("diff --git")
-    assert commands[0][:3] == ["git", "clone", "--local"]
+def test_smoke_script_path_is_posix_for_git_bash(tmp_path):
+    runner = FakeRunner()
+    verify.run(state(checkout(tmp_path)), runner=runner)
+    smoke_args = next(args for args, _ in runner.calls if args[0] != "docker")
+    assert "\\" not in smoke_args[-1]
+
+
+def test_changed_lines_must_be_served_even_when_the_server_injects_tags(tmp_path, monkeypatch):
+    monkeypatch.setattr(verify, "capture_screenshot", lambda _url, path: path.write_bytes(b"png"))
+    """Tizia injects analytics/SEO tags into every HTML page, so bytes never match the file."""
+    root = checkout(tmp_path)
+    (root / "public" / "x.html").write_text("<head></head><body>\n<h1>old</h1>\n<p>new line</p>\n</body>\n",
+                                            encoding="utf-8")
+    s = state(root, visual=True)
+    s["full_diff"] = [{"file": "", "diff": (
+        "diff --git a/public/x.html b/public/x.html\n--- a/public/x.html\n+++ b/public/x.html\n"
+        "@@ -1,3 +1,4 @@\n <h1>old</h1>\n+<p>new line</p>\n"
+        "diff --git a/test/generated.test.js b/test/generated.test.js\n+// generated\n")}]
+    served = b"<head><meta name=x></head><body>\n<h1>old</h1>\n<p>new line</p>\n<script src=a.js></script>\n</body>\n"
+    out = verify.run(s, runner=FakeRunner(), http_probe=lambda _url: (200, served))
+    assert out["blocked"] is False
+    assert out["evidence"]["http_observed"] is True
+
+    out = verify.run(s, runner=FakeRunner(), http_probe=lambda _url: (200, b"<body>\n<h1>old</h1>\n</body>"))
+    assert out["blocked"] is True
+    assert "does not match checkout" in out["reason"]
+
+
+def test_evidence_names_the_runner_so_a_fake_run_is_never_presented_as_real(tmp_path, monkeypatch):
+    assert verify.run(state(checkout(tmp_path)), runner=FakeRunner())["evidence"]["runner"] == "fake"
+    monkeypatch.setattr(verify.subprocess, "run", FakeRunner())
+    (tmp_path / "real").mkdir()
+    assert verify.run(state(checkout(tmp_path / "real")))["evidence"]["runner"] == "docker"

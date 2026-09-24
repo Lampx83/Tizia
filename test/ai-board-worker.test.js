@@ -5,11 +5,27 @@ import express from 'express';
 import Database from 'better-sqlite3';
 
 import { applyAiBoardMigrations, createAiBoardStore } from '../server/ai-board/store.js';
-import { attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
+import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
+import { CAPABILITY_POLICY_HASH } from '../server/ai-board/policy.js';
 
 const KEY = 'fixture-worker-key-32-characters-long';
+const CANDIDATE = {
+  branch: 'ai-board/2026-09-24-ticket-1', base_sha: 'a'.repeat(40), head_sha: 'b'.repeat(40),
+  commits: [{ sha: 'b'.repeat(40), title: 'ai-board(ticket-1): 1/1 x', files: ['public/pharmacy/demo.html'] }],
+};
 
-function fixture() {
+function surfacePlan() {
+  return {
+    domain: 'pharmacy', goal: 'Tạo trang demo học tập tĩnh.',
+    allowed_scope: ['public/pharmacy/demo.html'], acceptance: ['Trang có tiêu đề.'],
+    tests: ['node --test'], capabilities: ['public.ui'], risk: 'low', non_goals: ['Không sửa auth.'],
+    steps: [{ order: 1, title: 'Tạo trang demo', description: 'Thêm HTML tĩnh.',
+      allowed_scope: ['public/pharmacy/demo.html'], acceptance: ['Trang có tiêu đề.'],
+      tests: ['node --test'], capability: 'public.ui', risk: 'low', non_goals: ['Không sửa auth.'] }],
+  };
+}
+
+function fixture({ seedRequest = true } = {}) {
   const db = new Database(':memory:');
   db.pragma('foreign_keys = ON');
   db.exec(`
@@ -28,17 +44,32 @@ function fixture() {
   `);
   applyAiBoardMigrations(db);
   const store = createAiBoardStore(db);
-  store.createRequestWithRoot({
+  if (seedRequest) store.createRequestWithRoot({
     ownerUserId: 1, ownerDomain: 'pharmacy', ownerDisplayName: 'Lan',
     idempotencyKey: 'worker-request-001', title: 'Thêm bộ thẻ thuốc', detail: 'Nội dung fixture',
   });
   return { db, store };
 }
 
-async function serve(store) {
+async function serve(store, env = { AI_BOARD_WORKER_KEY: KEY }) {
   const app = express();
   app.use(express.json());
-  attachAiBoardWorkerRoutes(app, { store, env: { AI_BOARD_WORKER_KEY: KEY }, leaseMs: 120_000 });
+  app.use((req, _res, next) => {
+    if (req.headers['x-test-user'] === '1') {
+      req.user = { id: 1, username: 'lan', display_name: 'Lan', role: 'student', enrolled_domain: 'pharmacy' };
+    }
+    next();
+  });
+  attachAiBoardRequestRoutes(app, {
+    store,
+    requireAuth: (req, res, next) => req.user ? next() : res.status(401).json({ error: 'unauthorized' }),
+    requireEnrolled: (req, res, next) => req.user?.enrolled_domain
+      ? next()
+      : res.status(403).json({ error: 'enrollment_required' }),
+    requireAdmin: (_req, res) => res.status(403).json({ error: 'forbidden' }),
+    requireStrictCsrf: (_req, res) => res.status(403).json({ error: 'csrf_failed' }),
+  });
+  attachAiBoardWorkerRoutes(app, { store, env, leaseMs: 120_000 });
   const server = http.createServer(app);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   return {
@@ -46,6 +77,234 @@ async function serve(store) {
     close: () => new Promise((resolve, reject) => server.close((e) => e ? reject(e) : resolve())),
   };
 }
+
+test('D0 HTTP flow creates a root request, validates a plan, and creates child tickets', async () => {
+  const { db, store } = fixture({ seedRequest: false });
+  const { base, close } = await serve(store, { AI_BOARD_WORKER_KEY: KEY });
+  try {
+    const created = await fetch(`${base}/api/requests`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-test-user': '1', 'idempotency-key': 'd0-http-request-001' },
+      body: JSON.stringify({ title: 'Thêm trang học tập', detail: 'Trang demo tĩnh.' }),
+    });
+    assert.equal(created.status, 200);
+    const request = await created.json();
+    assert.equal(request.created, true);
+    assert.ok(request.request_id);
+    assert.ok(request.root_ticket_id);
+
+    const claim = await post(base, '/api/ai-board/worker/claim', {
+      worker_id: 'd0-http-worker', version: 'd0', mode: 'shadow', intent: 'plan',
+    });
+    const { ticket } = await claim.json();
+    assert.equal(claim.status, 200);
+    assert.equal(ticket.id, request.root_ticket_id);
+
+    const lease = { worker_id: 'd0-http-worker', lease_token: ticket.lease_token };
+    const snapshot = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/snapshot`, lease);
+    assert.equal((await snapshot.json()).request.title, 'Thêm trang học tập');
+
+    const runResponse = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/runs`, {
+      ...lease, trigger: 'plan', idempotency_key: 'd0-http-run-001',
+    });
+    const { run } = await runResponse.json();
+    const plan = surfacePlan();
+    const planBody = { ...lease, run_id: run.id, plan, budget_used: 1, idempotency_key: 'd0-http-plan-001' };
+    const planned = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/plan`, planBody);
+    const result = await planned.json();
+    assert.equal(planned.status, 200);
+    assert.equal(result.status, 'planned');
+    assert.equal(result.children.length, 1);
+    assert.equal(result.children[0].status, 'queued');
+
+    const retry = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/plan`, planBody);
+    assert.equal((await retry.json()).children[0].id, result.children[0].id);
+
+    const rejectedRequestResponse = await fetch(`${base}/api/requests`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-test-user': '1', 'idempotency-key': 'd0-http-request-002' },
+      body: JSON.stringify({ title: 'Yêu cầu cần chặn', detail: 'Plan sai domain.' }),
+    });
+    const rejectedRequest = await rejectedRequestResponse.json();
+    const rejectedClaim = await post(base, '/api/ai-board/worker/claim', {
+      worker_id: 'd0-http-rejector', version: 'd0', mode: 'shadow', intent: 'plan',
+    });
+    const { ticket: rejectedTicket } = await rejectedClaim.json();
+    assert.equal(rejectedTicket.id, rejectedRequest.root_ticket_id);
+    const rejectedLease = { worker_id: 'd0-http-rejector', lease_token: rejectedTicket.lease_token };
+    const rejectedRunResponse = await post(base, `/api/ai-board/worker/tickets/${rejectedTicket.id}/runs`, {
+      ...rejectedLease, trigger: 'plan', idempotency_key: 'd0-http-run-002',
+    });
+    const { run: rejectedRun } = await rejectedRunResponse.json();
+    const rejected = await post(base, `/api/ai-board/worker/tickets/${rejectedTicket.id}/plan`, {
+      ...rejectedLease, run_id: rejectedRun.id, plan: { ...plan, domain: 'it' },
+      budget_used: 1, idempotency_key: 'd0-http-plan-002',
+    });
+    assert.equal(rejected.status, 422);
+    assert.equal((await rejected.json()).error, 'domain_mismatch');
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM ai_tickets WHERE parent_id=?').get(rejectedTicket.id).n, 0);
+  } finally {
+    await close();
+    db.close();
+  }
+});
+
+test('pre-PR verdict is persisted and observable through the request HTTP API', async () => {
+  const { db, store } = fixture();
+  const { base, close } = await serve(store);
+  try {
+    const { ticket } = await (await post(base, '/api/ai-board/worker/claim', {
+      worker_id: 'verdict-worker', version: 'test', mode: 'active', intent: 'plan',
+    })).json();
+    const lease = { worker_id: 'verdict-worker', lease_token: ticket.lease_token };
+    const { run } = await (await post(base, `/api/ai-board/worker/tickets/${ticket.id}/runs`, {
+      ...lease, trigger: 'plan', idempotency_key: 'verdict-run-001',
+    })).json();
+    const passingVerdict = {
+      outcome: 'ready_for_pr', gate_reached: 5.5, reason: null, budget_used: 40, candidate: CANDIDATE,
+      gates: [
+        { gate: 3, blocked: false, reason: null },
+        { gate: 4, blocked: false, reason: null, issues: [] },
+        { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true, runner: 'docker' },
+        { gate: 5.5, blocked: false, reason: null, risk_level: 'low', risk_signals: [] },
+      ],
+    };
+    const bypass = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, {
+      ...lease, run_id: run.id, verdict: passingVerdict, idempotency_key: 'pre-pr-bypass-001',
+    });
+    assert.equal(bypass.status, 409);
+    const plan = surfacePlan();
+    await post(base, `/api/ai-board/worker/tickets/${ticket.id}/plan`, {
+      ...lease, run_id: run.id, plan, budget_used: 1, idempotency_key: 'verdict-plan-001',
+    });
+    const bound = db.prepare('SELECT plan_hash, plan_revision FROM ai_runs WHERE id=?').get(run.id);
+    assert.equal(bound.plan_hash, db.prepare('SELECT plan_hash FROM ai_tickets WHERE id=?').get(ticket.id).plan_hash);
+    assert.equal(bound.plan_revision, 1);
+    db.prepare('UPDATE ai_runs SET plan_revision=? WHERE id=?').run(2, run.id);
+    const mismatchedRun = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, {
+      ...lease, run_id: run.id, verdict: passingVerdict, idempotency_key: 'pre-pr-wrong-plan-001',
+    });
+    assert.equal(mismatchedRun.status, 409);
+    assert.equal((await mismatchedRun.json()).error, 'plan_run_mismatch');
+    db.prepare('UPDATE ai_runs SET plan_revision=? WHERE id=?').run(1, run.id);
+    db.prepare(`UPDATE ai_tickets SET lease_mode='shadow' WHERE id=?`).run(ticket.id);
+    const shadowVerdict = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, {
+      ...lease, run_id: run.id, verdict: passingVerdict, idempotency_key: 'pre-pr-shadow-001',
+    });
+    assert.equal(shadowVerdict.status, 409);
+    assert.equal((await shadowVerdict.json()).error, 'active_worker_required');
+    db.prepare(`UPDATE ai_tickets SET lease_mode='active' WHERE id=?`).run(ticket.id);
+    const body = {
+      ...lease, run_id: run.id, idempotency_key: 'pre-pr-verdict-001',
+      verdict: passingVerdict,
+    };
+    const shortcut = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, {
+      ...body, idempotency_key: 'pre-pr-shortcut-001',
+      verdict: { outcome: 'ready_for_pr', gate_reached: 5.5, reason: null,
+        gates: [{ gate: 5.5, blocked: false, reason: null, risk_level: 'low', risk_signals: [] }] },
+    });
+    assert.equal(shortcut.status, 400);
+    const noSmoke = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, {
+      ...body, idempotency_key: 'pre-pr-no-smoke-001',
+      verdict: { ...body.verdict, gates: body.verdict.gates.map((gate) =>
+        gate.gate === 5 ? { ...gate, smoke_passed: false } : gate) },
+    });
+    assert.equal(noSmoke.status, 400);
+    const noHttpObservation = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, {
+      ...body, idempotency_key: 'pre-pr-no-http-001',
+      verdict: { ...body.verdict, gates: body.verdict.gates.map((gate) =>
+        gate.gate === 5 ? { ...gate, http_observed: false } : gate) },
+    });
+    assert.equal(noHttpObservation.status, 400);
+    const criticalReady = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, {
+      ...body, idempotency_key: 'pre-pr-critical-ready-001',
+      verdict: { ...body.verdict, gates: body.verdict.gates.map((gate) =>
+        gate.gate === 5.5 ? { ...gate, risk_level: 'critical' } : gate) },
+    });
+    assert.equal(criticalReady.status, 400);
+    const submitted = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, body);
+    assert.equal(submitted.status, 200);
+    assert.equal((await submitted.json()).verdict.outcome, 'ready_for_pr');
+    const retry = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, body);
+    assert.equal((await retry.json()).verdict.outcome, 'ready_for_pr');
+
+    const visible = await fetch(`${base}/api/requests?domain=pharmacy`, { headers: { 'x-test-user': '1' } });
+    const listed = await visible.json();
+    assert.equal(listed.items[0].pre_pr_verdict, 'ready_for_pr');
+    assert.equal(listed.items[0].pre_pr_gate, 5.5);
+    assert.deepEqual(db.prepare('SELECT outcome, gate FROM ai_runs WHERE id=?').get(run.id),
+      { outcome: 'ready_for_pr', gate: 5.5 });
+    assert.equal(db.prepare('SELECT cumulative_budget FROM ai_tickets WHERE id=?').get(ticket.id).cumulative_budget, 41);
+    assert.deepEqual(db.prepare('SELECT gate, status FROM ai_gate_traces WHERE run_id=? ORDER BY gate').all(run.id), [
+      { gate: 1, status: 'passed' }, { gate: 2, status: 'passed' }, { gate: 2.5, status: 'passed' },
+      { gate: 3, status: 'passed' }, { gate: 4, status: 'passed' },
+      { gate: 5, status: 'passed' }, { gate: 5.5, status: 'passed' },
+    ]);
+  } finally {
+    await close();
+    db.close();
+  }
+});
+
+test('AI_BOARD_KEY cannot authenticate or mount the worker API', async () => {
+  const { db, store } = fixture();
+  const { base, close } = await serve(store, { AI_BOARD_KEY: KEY });
+  try {
+    const response = await post(base, '/api/ai-board/worker/claim', {
+      worker_id: 'key-alias-worker', version: 'test', mode: 'shadow',
+    });
+    assert.equal(response.status, 404);
+  } finally {
+    await close();
+    db.close();
+  }
+});
+
+test('a root claimed under shadow cannot receive an active verdict via a same-worker reclaim', async () => {
+  const { db, store } = fixture();
+  const { base, close } = await serve(store);
+  try {
+    const { ticket } = await (await post(base, '/api/ai-board/worker/claim', {
+      worker_id: 'w1', version: 'test', mode: 'shadow', intent: 'plan',
+    })).json();
+    const lease = { worker_id: 'w1', lease_token: ticket.lease_token };
+    const { run } = await (await post(base, `/api/ai-board/worker/tickets/${ticket.id}/runs`, {
+      ...lease, trigger: 'plan', idempotency_key: 'shadow-reclaim-run-001',
+    })).json();
+    await post(base, `/api/ai-board/worker/tickets/${ticket.id}/plan`, {
+      ...lease, run_id: run.id, plan: surfacePlan(), budget_used: 1, idempotency_key: 'shadow-reclaim-plan-001',
+    });
+
+    // Same worker_id re-claims while the shadow lease is still held and valid.
+    // The transaction upserts ai_workers.mode='active' first, then finds the
+    // existing lease and just returns it unchanged.
+    const reclaim = await post(base, '/api/ai-board/worker/claim', {
+      worker_id: 'w1', version: 'test', mode: 'active', intent: 'plan',
+    });
+    assert.equal(reclaim.status, 200);
+    assert.equal((await reclaim.json()).ticket.id, ticket.id);
+
+    const verdict = {
+      outcome: 'ready_for_pr', gate_reached: 5.5, reason: null, budget_used: 40, candidate: CANDIDATE,
+      gates: [
+        { gate: 3, blocked: false, reason: null },
+        { gate: 4, blocked: false, reason: null, issues: [] },
+        { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true, runner: 'docker' },
+        { gate: 5.5, blocked: false, reason: null, risk_level: 'low', risk_signals: [] },
+      ],
+    };
+    const submitted = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, {
+      ...lease, run_id: run.id, verdict, idempotency_key: 'shadow-reclaim-verdict-001',
+    });
+    // The ticket/lease was claimed under `shadow`; a same-worker reclaim as
+    // `active` afterwards must not retroactively authorize a verdict for it.
+    assert.equal(submitted.status, 409);
+    assert.equal((await submitted.json()).error, 'active_worker_required');
+  } finally {
+    await close();
+    db.close();
+  }
+});
 
 function post(base, path, body, { key = KEY } = {}) {
   return fetch(`${base}${path}`, {
@@ -85,6 +344,11 @@ test('off mode claims nothing; shadow claim is idempotent and exposes only lease
     assert.equal(snap.request.owner_user_id, 1);
     assert.equal(snap.request.title, 'Thêm bộ thẻ thuốc');
     assert.equal(snap.request.idempotency_key, undefined);
+    // Worker judges risk with the same catalog version the server accepts plans against.
+    assert.equal(snap.capability_policy.hash, CAPABILITY_POLICY_HASH);
+    assert.deepEqual(snap.capability_policy.capabilities['core.server'], {
+      tier: 'core', allow: ['server/', 'scripts/'], deny: [],
+    });
   } finally {
     await close();
     db.close();
@@ -172,6 +436,51 @@ test('expired lease fails closed and another worker can reclaim it', async () =>
   }
 });
 
+test('expired lease after plan submission can resume the pre-PR pipeline', async () => {
+  const { db, store } = fixture();
+  const { base, close } = await serve(store);
+  try {
+    const first = await (await post(base, '/api/ai-board/worker/claim', {
+      worker_id: 'crashed', version: 'test', mode: 'shadow', intent: 'plan',
+    })).json();
+    const lease = { worker_id: 'crashed', lease_token: first.ticket.lease_token };
+    const { run } = await (await post(base, `/api/ai-board/worker/tickets/${first.ticket.id}/runs`, {
+      ...lease, trigger: 'plan', idempotency_key: 'crashed-run-001',
+    })).json();
+    await post(base, `/api/ai-board/worker/tickets/${first.ticket.id}/plan`, {
+      ...lease, run_id: run.id, plan: surfacePlan(), budget_used: 1,
+      idempotency_key: 'crashed-plan-001',
+    });
+    db.prepare('UPDATE ai_tickets SET lease_expires_at=? WHERE id=?').run(Date.now() - 1, first.ticket.id);
+
+    const resumed = await (await post(base, '/api/ai-board/worker/claim', {
+      worker_id: 'resumer', version: 'test', mode: 'shadow', intent: 'plan',
+    })).json();
+    const resumedLease = { worker_id: 'resumer', lease_token: resumed.ticket.lease_token };
+    const { run: resumedRun } = await (await post(base, `/api/ai-board/worker/tickets/${resumed.ticket.id}/runs`, {
+      ...resumedLease, trigger: 'plan', idempotency_key: 'resumed-run-001',
+    })).json();
+    const duplicate = await (await post(base, `/api/ai-board/worker/tickets/${resumed.ticket.id}/plan`, {
+      ...resumedLease, run_id: resumedRun.id, plan: surfacePlan(), budget_used: 40,
+      idempotency_key: 'resumed-plan-001',
+    })).json();
+
+    assert.equal(resumed.ticket.id, first.ticket.id);
+    assert.equal(duplicate.status, 'planned');
+    assert.equal(duplicate.duplicate, true);
+    assert.equal(duplicate.capability_policy_hash, CAPABILITY_POLICY_HASH);
+    assert.equal(db.prepare('SELECT cumulative_budget FROM ai_tickets WHERE id=?').get(first.ticket.id).cumulative_budget, 41);
+    const released = await post(base, `/api/ai-board/worker/tickets/${resumed.ticket.id}/release`, {
+      ...resumedLease, outcome: 'planned', idempotency_key: 'resumed-release-001',
+    });
+    assert.equal(released.status, 200);
+    assert.equal(db.prepare('SELECT lease_owner FROM ai_tickets WHERE id=?').get(first.ticket.id).lease_owner, null);
+  } finally {
+    await close();
+    db.close();
+  }
+});
+
 test('shadow-checked roots stop reclaiming the queue and later roots can run', async () => {
   const { db, store } = fixture();
   store.createRequestWithRoot({
@@ -207,16 +516,24 @@ test('shadow-checked roots stop reclaiming the queue and later roots can run', a
   }
 });
 
-test('server rejects an unimplemented active worker mode', async () => {
+test('server rejects an unknown worker mode', async () => {
   const { db, store } = fixture();
   const { base, close } = await serve(store);
   try {
     const response = await post(base, '/api/ai-board/worker/claim', {
-      worker_id: 'w1', version: 'test', mode: 'active',
+      worker_id: 'w1', version: 'test', mode: 'unexpected',
     });
     assert.equal(response.status, 400);
   } finally {
     await close();
     db.close();
   }
+});
+
+test('a running worker silent for longer than the lease lists as stale, read-time only', () => {
+  const { db, store } = fixture();
+  store.claimNext({ workerId: 'w1', version: 'test', mode: 'shadow', now: 1_000 });
+  assert.equal(store.listWorkers({ now: 1_000 + 120_000 })[0].status, 'running');
+  assert.equal(store.listWorkers({ now: 1_000 + 120_001 })[0].status, 'stale');
+  assert.equal(db.prepare('SELECT status FROM ai_workers').get().status, 'running');
 });

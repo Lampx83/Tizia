@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { PlanGuardrailError, RequestValidationError, WorkerContractError } from './store.js';
+import { LEASE_MS, PlanGuardrailError, RequestValidationError, WorkerContractError } from './store.js';
 
 export function attachAiBoardRequestRoutes(router, {
   store,
@@ -66,6 +66,19 @@ export function attachAiBoardRequestRoutes(router, {
     res.json({ tickets: store.listAdminQueue(req.query.limit), workers: store.listWorkers() });
   });
 
+  router.post('/api/admin/ai-board/tickets/:id/extend-budget', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
+    try {
+      res.json(store.extendBudget(req.params.id, {
+        amount: req.body?.amount, reason: req.body?.reason, adminUserId: req.user.id,
+      }));
+    } catch (error) {
+      if (error instanceof WorkerContractError) {
+        return res.status(error.status).json({ error: error.code, message: error.message });
+      }
+      throw error;
+    }
+  });
+
   router.post('/api/admin/ai-board/tickets/:id/authorize-plan', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
     try {
       res.json(store.authorizePlan(req.params.id, req.body?.plan_hash, req.user.id));
@@ -85,7 +98,7 @@ function digest(value) {
 export function attachAiBoardWorkerRoutes(router, {
   store,
   env = process.env,
-  leaseMs = 120_000,
+  leaseMs = LEASE_MS,
 }) {
   const key = String(env.AI_BOARD_WORKER_KEY || '').trim();
   if (key.length < 24) return false;
@@ -172,6 +185,17 @@ export function attachAiBoardWorkerRoutes(router, {
       idempotencyKey: req.body?.idempotency_key,
     });
     res.json(result);
+  }));
+
+  router.post('/api/ai-board/worker/tickets/:id/verdict', authenticate, handle((req, res) => {
+    const lease = leaseInput(req.body);
+    const verdict = store.submitPrePrVerdict(req.params.id, {
+      ...lease,
+      runId: req.body?.run_id,
+      verdict: req.body?.verdict,
+      idempotencyKey: req.body?.idempotency_key,
+    });
+    res.json({ verdict });
   }));
 
   router.post('/api/ai-board/worker/tickets/:id/release', authenticate, handle((req, res) => {

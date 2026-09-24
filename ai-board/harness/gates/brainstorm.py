@@ -16,7 +16,6 @@ import json
 from pathlib import Path
 
 import codegraph
-import gate_trace
 from gates.scope_check import load_capability_names
 
 SIZES = ("small", "large")
@@ -88,12 +87,8 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
     surface = load_capability_names()["surface"]
     graph_hints = codegraph.query(f"{request.get('domain', '')} {request.get('subject', '')}".strip())
     prompt = build_prompt(request, surface, graph_hints)
-    body = deps.models.generate(deps.models.gate1_model, prompt, format="json")
-    budget.spend("model_calls")
-    budget.spend("tokens", int(body.get("prompt_eval_count") or 0) + int(body.get("eval_count") or 0))
-    if db_path is not None and proposal_id is not None:
-        gate_trace.record(db_path, skill_proposal_id=proposal_id, gate=1,
-                           model=deps.models.gate1_model, prompt=prompt, body=body)
+    body = deps.call_model(deps.models.gate1_model, prompt, gate=1, budget=budget,
+                            db_path=db_path, proposal_id=proposal_id)
     try:
         plan = parse_plan(body.get("response", ""))
     except ValueError as e:

@@ -41,11 +41,10 @@ from __future__ import annotations
 
 import json
 import re
-import sqlite3
 import time
 from pathlib import Path
 
-import gate_trace
+from dbconn import harness_db
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_validate.md").read_text(encoding="utf-8")
 
@@ -136,13 +135,22 @@ def is_complex(plan: dict) -> bool:
     không) — KHÔNG PHẢI cùng phép đo với "route/middleware mới=high" gate 5.5
     dự định làm trên DIFF thật (spec.md mục 09). Cùng tên, khác đối tượng đo
     — đừng giả định 2 cái tương đương khi build gate 5.5."""
-    if len(set(plan.get("capabilities") or [])) >= 2:
-        return True
-    if any(not _SAFE_FILE_PREFIX.match(st.get("file", "")) for st in plan.get("subtasks") or []):
-        return True
-    if len(plan.get("subtasks") or []) >= 4:
-        return True
-    return False
+    return bool(complexity_signals(plan))
+
+
+def complexity_signals(plan: dict) -> list[str]:
+    """Tín hiệu phức tạp đã bật, dạng '<tên>: <chi tiết>' cho admin đọc. Rỗng = đơn giản."""
+    signals = []
+    caps = sorted(set(plan.get("capabilities") or []))
+    if len(caps) >= 2:
+        signals.append(f"capabilities: {', '.join(caps)}")
+    subtasks = plan.get("subtasks") or []
+    outside = sorted({st.get("file", "") for st in subtasks if not _SAFE_FILE_PREFIX.match(st.get("file", ""))})
+    if outside:
+        signals.append(f"file ngoài vùng an toàn: {', '.join(outside)}")
+    if len(subtasks) >= 4:
+        signals.append(f"subtasks: {len(subtasks)}")
+    return signals
 
 
 def _lookup_requester(db_path, display_name: str | None) -> dict | None:
@@ -150,30 +158,22 @@ def _lookup_requester(db_path, display_name: str | None) -> dict | None:
     None nếu không map được (guest/tên không khớp) -> fail-closed phía caller."""
     if not display_name:
         return None
-    con = sqlite3.connect(str(db_path))
-    try:
-        con.executescript(_SCHEMA_DDL)
+    with harness_db(db_path, ddl=_SCHEMA_DDL) as con:
         row = con.execute(
             "SELECT id, role FROM users WHERE display_name = ? LIMIT 1", (display_name,)
         ).fetchone()
-    finally:
-        con.close()
     return {"id": row[0], "role": row[1]} if row else None
 
 
 def _has_domain_grant(db_path, user_id: int, domain: str | None) -> bool:
     if not domain:
         return False
-    con = sqlite3.connect(str(db_path))
-    try:
-        con.executescript(_SCHEMA_DDL)
+    with harness_db(db_path, ddl=_SCHEMA_DDL) as con:
         row = con.execute(
             """SELECT 1 FROM user_domain_grants
                WHERE user_id = ? AND domain_id = ? AND (expires_at IS NULL OR expires_at > ?) LIMIT 1""",
             (user_id, domain, int(time.time() * 1000)),
         ).fetchone()
-    finally:
-        con.close()
     return row is not None
 
 
@@ -196,19 +196,14 @@ def write_clarification(db_path, request: dict, question: str) -> None:
     db_id = request.get("db_id")
     if db_id is None:
         return  # request không map được sang row thật -> không có id để ghi vào
-    con = sqlite3.connect(str(db_path))
-    try:
-        con.executescript(_SCHEMA_DDL)
-        now = int(time.time() * 1000)
+    now = int(time.time() * 1000)
+    with harness_db(db_path, ddl=_SCHEMA_DDL) as con:
         con.execute(
             """INSERT INTO request_messages (request_id, role, author_name, body, attachments, created_at)
                VALUES (?, 'admin', 'AI Board', ?, NULL, ?)""",
             (db_id, question, now),
         )
         con.execute("UPDATE requests SET updated_at = ? WHERE id = ?", (now, db_id))
-        con.commit()
-    finally:
-        con.close()
 
 
 def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: int | None = None) -> dict:
@@ -218,12 +213,8 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
         return {"gate": 2.5, "blocked": True, "reason": "không có plan từ cổng 1"}
 
     prompt = build_prompt(request, plan)
-    body = deps.models.generate(deps.models.gate1_model, prompt, format="json")
-    budget.spend("model_calls")
-    budget.spend("tokens", int(body.get("prompt_eval_count") or 0) + int(body.get("eval_count") or 0))
-    if db_path is not None and proposal_id is not None:
-        gate_trace.record(db_path, skill_proposal_id=proposal_id, gate=2.5,
-                           model=deps.models.gate1_model, prompt=prompt, body=body)
+    body = deps.call_model(deps.models.gate1_model, prompt, gate=2.5, budget=budget,
+                            db_path=db_path, proposal_id=proposal_id)
 
     try:
         validation = parse_validation(body.get("response", ""))
@@ -236,7 +227,9 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
             write_clarification(db_path, request, question)
         return {"gate": 2.5, "blocked": True, "reason": "needs_clarification", "outcome": "needs_clarification"}
 
-    if is_complex(plan) and not (db_path is not None and is_authorized_for_complex(db_path, request)):
-        return {"gate": 2.5, "blocked": True, "reason": "complexity_gated", "outcome": "complexity_gated"}
+    signals = complexity_signals(plan)
+    if signals and not (db_path is not None and is_authorized_for_complex(db_path, request)):
+        return {"gate": 2.5, "blocked": True, "reason": "complexity_gated", "outcome": "complexity_gated",
+                "signals": signals}
 
     return {"gate": 2.5, "blocked": False, "reason": None}

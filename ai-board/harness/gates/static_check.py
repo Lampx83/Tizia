@@ -98,20 +98,38 @@ def node_check(path: Path) -> str | None:
     return None if result.returncode == 0 else (result.stderr.strip() or "node --check thất bại")
 
 
-def run(state: dict) -> dict:
+def oversize_issues(state: dict) -> list[str]:
+    """Cờ size (không chặn) cho file trong plan; đếm trên full_diff base..HEAD khi có, không thì diff scratch."""
+    plan, diffs = state.get("plan") or {}, state.get("diffs") or []
+    size_by_file = {_posix(st["file"]): st["size"] for st in plan.get("subtasks") or []}
+    # Scratch repo không có base nên file sẵn có hiện như viết lại toàn bộ; diff thật base..HEAD thì không.
+    full_diff = "".join(item.get("diff", "") for item in state.get("full_diff") or [])
+    issues = []
+    for d in diffs:
+        file_path = _posix(d["file"])
+        if file_path not in size_by_file:
+            continue
+        limit = SIZE_ESTIMATE_LINES[size_by_file[file_path]] * OVERSIZE_MULTIPLIER
+        added = _added_lines_for_file(full_diff or d["diff"], file_path)
+        if added > limit:
+            issues.append(f"'{d['file']}': +{added} dòng, vượt {OVERSIZE_MULTIPLIER}x ước lượng ({limit})")
+    return issues
+
+
+def run(state: dict, *, check_size: bool = True) -> dict:
     """Điểm vào cho main.run_gate. Đọc state['plan'] (cổng 1) + state['diffs']/
-    state['scratch_repo'] (cổng 3). Không gọi model — cổng thuần code."""
+    state['scratch_repo'] (cổng 3). Không gọi model — cổng thuần code.
+    check_size=False: bỏ cờ size để caller tính lại trên full_diff (oversize_issues)."""
     plan = state.get("plan")
     diffs = state.get("diffs")
     if not plan or not diffs:
         return {"gate": 4, "blocked": True, "reason": "không có plan/diffs từ cổng 1/3", "needs_careful_review": True}
 
     planned_files = {_posix(st["file"]) for st in plan["subtasks"]}
-    size_by_file = {_posix(st["file"]): st["size"] for st in plan["subtasks"]}
     scratch_repo = state.get("scratch_repo")
 
-    issues: list[str] = []
-    needs_careful_review = False
+    issues: list[str] = oversize_issues(state) if check_size else []
+    needs_careful_review = bool(issues)
     for d in diffs:
         file_path = _posix(d["file"])
         in_plan = file_path in planned_files
@@ -122,26 +140,25 @@ def run(state: dict) -> dict:
             # tra import cấm/cú pháp cho đúng file dễ bị lợi dụng nhất.
             issues.append(f"file '{d['file']}' không có trong plan")
             needs_careful_review = True
-        else:
-            limit = SIZE_ESTIMATE_LINES[size_by_file[file_path]] * OVERSIZE_MULTIPLIER
-            added = _added_lines_for_file(d["diff"], file_path)
-            if added > limit:
-                issues.append(f"'{d['file']}': +{added} dòng, vượt {OVERSIZE_MULTIPLIER}x ước lượng ({limit})")
-                needs_careful_review = True
 
         if not scratch_repo:
             continue
-        path = Path(scratch_repo) / file_path
-        if path.suffix != ".js" or not path.exists():
-            continue
-        code = path.read_text(encoding="utf-8")
-        bad_imports = lint_imports(code, file_path)
-        if bad_imports:
-            reason = f"'{d['file']}': {'; '.join(bad_imports)}"
-            return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True, "issues": [*issues, reason]}
-        err = node_check(path)
-        if err:
-            reason = f"'{d['file']}' node --check: {err}"
-            return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True, "issues": [*issues, reason]}
+        for candidate in (file_path, _posix(d.get("test_file", ""))):
+            if not candidate:
+                continue
+            path = Path(scratch_repo) / candidate
+            if path.suffix != ".js" or not path.exists():
+                continue
+            code = path.read_text(encoding="utf-8")
+            bad_imports = lint_imports(code, candidate)
+            if bad_imports:
+                reason = f"'{candidate}': {'; '.join(bad_imports)}"
+                return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
+                        "issues": [*issues, reason], "failure_class": "critical"}
+            err = node_check(path)
+            if err:
+                reason = f"'{candidate}' node --check: {err}"
+                return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
+                        "issues": [*issues, reason], "failure_class": "ordinary"}
 
     return {"gate": 4, "blocked": False, "reason": None, "needs_careful_review": needs_careful_review, "issues": issues}

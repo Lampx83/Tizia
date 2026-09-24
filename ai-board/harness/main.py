@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import json
 import os
+import posixpath
+import re
+import secrets
 import shutil
-import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -24,7 +26,9 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from budget import Budget          # noqa: E402
-from gates import brainstorm, implement, plan_validate, risk_triage, scope_check, static_check, verify  # noqa: E402
+from dbconn import harness_db      # noqa: E402
+import gate_trace                  # noqa: E402
+from gates import brainstorm, guard, implement, plan_validate, risk_triage, scope_check, static_check, verify  # noqa: E402
 from models import OllamaClient    # noqa: E402
 import prescreen                   # noqa: E402
 
@@ -86,37 +90,137 @@ class Deps:
             notify=Unavailable("telegram"),
         )
 
+    def call_model(self, model: str, prompt: str, *, gate: float, budget,
+                    db_path=None, proposal_id: int | None = None, format: str | None = "json") -> dict:
+        """1 lời gọi model + phí budget + trace — chỗ duy nhất 3 cổng (1, 2.5, 3)
+        lặp lại trước đây (flagged ai-log 2026-09-19 "gate_trace call sites
+        duplicated"). Behavior y hệt bản lặp: model_calls luôn +1, tokens cộng
+        prompt_eval_count+eval_count, gate_trace.record() chỉ chạy khi có cả
+        db_path và proposal_id (test gọi run() trực tiếp không truyền 2 cái đó
+        vẫn chạy được, không phải lỗi — xem docstring gates/brainstorm.py)."""
+        body = self.models.generate(model, prompt, format=format)
+        budget.spend("model_calls")
+        budget.spend("tokens", int(body.get("prompt_eval_count") or 0) + int(body.get("eval_count") or 0))
+        if db_path is not None and proposal_id is not None:
+            gate_trace.record(db_path, skill_proposal_id=proposal_id, gate=gate,
+                               model=model, prompt=prompt, body=body)
+        return body
 
-def prepare_full_checkout(state: dict, source_repo: str | os.PathLike) -> None:
-    """At the 4→5 seam, clone the local branch and apply gate-3 files once."""
+
+class ScopeViolation(ValueError):
+    """Candidate tried to write outside its child's allowed scope — critical, never repaired."""
+
+
+def _git_out(args: list[str], cwd) -> str:
+    """git with stderr kept in the error message (CalledProcessError hides it)."""
+    result = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, encoding="utf-8",
+                            errors="replace", stdin=subprocess.DEVNULL)
+    if result.returncode:
+        raise OSError(f"git {args[0]}: {(result.stderr or result.stdout).strip()[:300]}")
+    return result.stdout
+
+
+def prepare_full_checkout(state: dict, source_repo: str | os.PathLike, *, base_ref: str = "HEAD") -> None:
+    """At the 3→4 seam: new git worktree on branch ai-board/<date>-<skill_id>-<hex6> from base_ref,
+    one commit per child in plan order. Raise ScopeViolation (nothing left behind) on out-of-scope writes."""
     scratch = Path(state["scratch_repo"])
-    checkout = Path(tempfile.mkdtemp(prefix="ai-board-gate5-"))
+    slug = re.sub(r"[^a-z0-9-]+", "-", str(state.get("skill_id") or "").lower()).strip("-")
+    if not slug:
+        raise ValueError("thiếu skill_id để đặt tên nhánh AI Board")
+    subtasks = (state.get("plan") or {}).get("subtasks") or []
+    diffs = state["diffs"]
+    if len(subtasks) != len(diffs):
+        raise ValueError(f"cổng 3 chưa xong: {len(diffs)}/{len(subtasks)} child có diff")
+    base = _git_out(["rev-parse", "--verify", f"{base_ref}^{{commit}}"], source_repo).strip()
+    # Random suffix: a kept candidate from an earlier run must not block a rerun of the same ticket.
+    branch = f"ai-board/{time.strftime('%Y-%m-%d')}-{slug}-{secrets.token_hex(3)}"
+    checkout = Path(tempfile.mkdtemp(prefix="ai-board-worktree-"))
     try:
-        subprocess.run(["git", "clone", "--local", "--no-hardlinks", str(source_repo), str(checkout)],
-                       check=True, capture_output=True, text=True, stdin=subprocess.DEVNULL)
-        for item in state["diffs"]:
-            for rel in (item["file"], item["test_file"]):
-                src = implement._safe_join(scratch, rel)
-                dst = implement._safe_join(checkout, rel)
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src, dst)
-        subprocess.run(["git", "add", "-A"], cwd=checkout, check=True,
-                       capture_output=True, stdin=subprocess.DEVNULL)
-        diff = subprocess.run(["git", "diff", "--cached", "--no-ext-diff"], cwd=checkout,
-                              check=True, capture_output=True, text=True, encoding="utf-8",
-                              stdin=subprocess.DEVNULL).stdout
-        state["full_checkout"] = str(checkout)
-        state["_owned_full_checkout"] = True
-        state["full_diff"] = [{"file": "", "diff": diff}]
-    except Exception:
+        _git_out(["worktree", "add", "-q", "-b", branch, str(checkout), base], source_repo)
+    except OSError:
         shutil.rmtree(checkout, ignore_errors=True)
         raise
+    owned = {"full_checkout": str(checkout), "checkout_repo": str(source_repo), "branch": branch}
+    try:
+        created: set[str] = set()
+        commits = []
+        for index, (subtask, item) in enumerate(zip(subtasks, diffs), start=1):
+            allowed = {posixpath.normpath(p.replace("\\", "/"))
+                       for p in subtask.get("allowed_scope") or [subtask["file"]]}
+            file = posixpath.normpath(item["file"].replace("\\", "/"))
+            test_file = posixpath.normpath(item["test_file"].replace("\\", "/"))
+            if file not in allowed:
+                raise ScopeViolation(f"child {index} ghi '{file}' ngoài allowed_scope {sorted(allowed)}")
+            if not test_file.startswith(("test/", "tests/")):
+                raise ScopeViolation(f"child {index} ghi test '{test_file}' ngoài test/ hoặc tests/")
+            for rel in (file, test_file):
+                dst = implement._safe_join(checkout, rel)
+                if rel == test_file and dst.exists() and rel not in created:
+                    raise ScopeViolation(f"test_file đã tồn tại trong checkout: {rel}")
+                content = subprocess.run(["git", "show", f"{item['commit']}:{rel}"], cwd=scratch, check=True,
+                                         capture_output=True, stdin=subprocess.DEVNULL).stdout
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                dst.write_bytes(content)
+                created.add(rel)
+            title = f"ai-board({slug}): {index}/{len(diffs)} {subtask['title']}"
+            _git_out(["add", "--", file, test_file], checkout)
+            _git_out(["-c", "user.name=AI Board", "-c", "user.email=ai-board@tizia.local",
+                      "commit", "-q", "-m", title], checkout)
+            commits.append({"sha": _git_out(["rev-parse", "HEAD"], checkout).strip(), "title": title,
+                            "files": [file, test_file]})
+        diff = _git_out(["diff", "--no-ext-diff", base, "HEAD"], checkout)
+    except BaseException:
+        cleanup_full_checkout(owned, keep_branch=False)
+        raise
+    state.update(owned, _owned_full_checkout=True, base_sha=base, commits=commits,
+                 full_diff=[{"file": "", "diff": diff}])
+
+
+def cleanup_full_checkout(state: dict, *, keep_branch: bool) -> None:
+    """Remove the AI Board worktree; delete its branch unless the candidate is kept for PR."""
+    repo, checkout = state.get("checkout_repo"), state.get("full_checkout")
+    if not repo or not checkout:
+        return
+    subprocess.run(["git", "worktree", "remove", "--force", checkout], cwd=repo,
+                   capture_output=True, stdin=subprocess.DEVNULL)
+    shutil.rmtree(checkout, ignore_errors=True)
+    subprocess.run(["git", "worktree", "prune"], cwd=repo, capture_output=True, stdin=subprocess.DEVNULL)
+    if not keep_branch and state.get("branch"):
+        subprocess.run(["git", "branch", "-D", state["branch"]], cwd=repo,
+                       capture_output=True, stdin=subprocess.DEVNULL)
 
 
 def load_inbox(path: str | os.PathLike) -> list[dict]:
     """Đọc snapshot JSON do server/scripts/sync-inbox.mjs sinh. Trả items[]."""
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     return list(data.get("items") or [])
+
+
+def _ensure_full_checkout(state: dict, gate: float) -> dict | None:
+    """Dựng worktree nếu chưa có. None khi sẵn sàng/không có nguồn; dict blocked khi lỗi."""
+    if state.get("full_checkout") or not state.get("checkout_source"):
+        return None
+    try:
+        # Same base gate 3 showed the model, even if the source HEAD moved since.
+        prepare_full_checkout(state, state["checkout_source"], base_ref=state.get("base_sha") or "HEAD")
+    except (OSError, ValueError, subprocess.CalledProcessError) as e:
+        # Scope escape is a boundary violation; anything else is the environment, not the code.
+        kind = "critical" if isinstance(e, ScopeViolation) else "transient"
+        return {"gate": gate, "blocked": True, "reason": f"không tạo được full_checkout: {e}",
+                "evidence": None, "failure_class": kind}
+    return None
+
+
+def _base_public_contacts(state: dict) -> set[str]:
+    """Contacts already in public/ at the base commit; empty without a worktree (nothing allowlisted)."""
+    checkout, base = state.get("full_checkout"), state.get("base_sha")
+    if not checkout or not base:
+        return set()
+    # ponytail: crude "@ or 9 digits" line prefilter, exact matching is contacts_in; fine while public/ stays small.
+    found = subprocess.run(["git", "grep", "-I", "-h", "-E", "@|[0-9]{9}", base, "--", "public"], cwd=checkout,
+                           capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           stdin=subprocess.DEVNULL)
+    return guard.contacts_in(found.stdout)  # exit 1 = no match, stdout empty
 
 
 def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: dict,
@@ -136,16 +240,39 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
     if number == 3:
         return implement.run(state, deps, budget, db_path=db_path, proposal_id=proposal_id)
     if number == 4:
-        return static_check.run(state)
+        # Lint/node --check rẻ, chạy trước; worktree (diff thật base..HEAD) chỉ dựng khi qua.
+        out = static_check.run(state, check_size=False)
+        if out.get("blocked"):
+            return out
+        failed = _ensure_full_checkout(state, 4)
+        if failed:
+            return failed
+        size = static_check.oversize_issues(state)
+        out = {**out, "issues": [*size, *out.get("issues", [])],
+               "needs_careful_review": out.get("needs_careful_review") or bool(size)}
+        diffs = state.get("full_diff") or state.get("diffs") or []
+        text = "".join(item.get("diff", "") for item in diffs)
+        scanned = guard.scan(text, state.get("full_checkout"), allowed_contacts=_base_public_contacts(state))
+        state["ui_changed"] = scanned["ui_changed"]
+        out = {**out, "checks": scanned["checks"]}
+        found = scanned["findings"]
+        if state.get("catalog") is not None:
+            # Catalog boundary is a pure diff check: stop here, before Gate 5 runs the code in Docker.
+            out["checks"] = [*out["checks"], "catalog"]
+            outside = risk_triage.outside_catalog(diffs, state["catalog"])
+            if outside:
+                found = [*found, {"check": "catalog", "failure_class": "critical",
+                                  "detail": f"path ngoài catalog capability: {', '.join(outside)}"[:300]}]
+        if found:
+            worst = "critical" if any(f["failure_class"] == "critical" for f in found) else "ordinary"
+            reason = "; ".join(f"{f['check']}: {f['detail']}" for f in found)[:1000]
+            out.update(blocked=True, reason=reason, failure_class=worst,
+                       issues=[*out.get("issues", []), *(f"{f['check']}: {f['detail']}" for f in found)])
+        return out
     if number == 5:
         if deps.verify is not None:
             return deps.verify.run(state, deps, budget)
-        if not state.get("full_checkout") and state.get("checkout_source"):
-            try:
-                prepare_full_checkout(state, state["checkout_source"])
-            except (OSError, ValueError, subprocess.CalledProcessError) as e:
-                return {"gate": 5, "blocked": True, "reason": f"không tạo được full_checkout: {e}", "evidence": None}
-        return verify.run(state, deps, budget)
+        return _ensure_full_checkout(state, 5) or verify.run(state, deps, budget)
     if number == 5.5:
         return risk_triage.run(state)
     return {"gate": number, "blocked": False, "reason": None}
@@ -159,9 +286,7 @@ def create_proposal(db_path, *, request: dict) -> int:
     ghi lại kết quả cuối vào ĐÚNG dòng này (UPDATE, không INSERT thêm)."""
     now = int(time.time() * 1000)
     origin = "domain-synthesized" if request.get("domain") else "core-skill"
-    con = sqlite3.connect(str(db_path))
-    try:
-        con.execute(SKILL_PROPOSALS_DDL)
+    with harness_db(db_path, ddl=SKILL_PROPOSALS_DDL) as con:
         cur = con.execute(
             """INSERT INTO skill_proposals
                  (origin, domain, gate_reached, outcome, request_ids,
@@ -176,25 +301,17 @@ def create_proposal(db_path, *, request: dict) -> int:
                 now,
             ),
         )
-        con.commit()
         return cur.lastrowid
-    finally:
-        con.close()
 
 
 def update_proposal(db_path, proposal_id: int, *, gate_reached: float, outcome: str, budget: Budget) -> None:
     """Cập nhật dòng skill_proposals đã tạo từ create_proposal() với kết quả
     cuối cùng của lượt chạy."""
-    con = sqlite3.connect(str(db_path))
-    try:
-        con.execute(SKILL_PROPOSALS_DDL)
+    with harness_db(db_path, ddl=SKILL_PROPOSALS_DDL) as con:
         con.execute(
             "UPDATE skill_proposals SET gate_reached=?, outcome=?, budget_json=?, updated_at=? WHERE id=?",
             (float(gate_reached), outcome, json.dumps(budget.snapshot()), int(time.time() * 1000), proposal_id),
         )
-        con.commit()
-    finally:
-        con.close()
 
 
 def record_proposal(db_path, *, request: dict, gate_reached: float, outcome: str, budget: Budget) -> int:
@@ -208,7 +325,7 @@ def record_proposal(db_path, *, request: dict, gate_reached: float, outcome: str
 
 
 def run_once(request: dict, *, db_path, deps: Deps, budget: Budget | None = None,
-             checkout_source=None, full_checkout=None, manifest=None) -> dict:
+             checkout_source=None, full_checkout=None) -> dict:
     """Đẩy 1 request qua 7 cổng, ghi đúng 1 dòng skill_proposals. Trả kết quả."""
     budget = budget or Budget.from_env()
     reached: float = 0.0
@@ -219,8 +336,6 @@ def run_once(request: dict, *, db_path, deps: Deps, budget: Budget | None = None
         state["checkout_source"] = checkout_source
     if full_checkout is not None:
         state["full_checkout"] = full_checkout
-    if manifest is not None:
-        state["manifest"] = manifest
 
     proposal_id = create_proposal(db_path, request=request)
 
@@ -252,8 +367,7 @@ def run_once(request: dict, *, db_path, deps: Deps, budget: Budget | None = None
         try:
             update_proposal(db_path, proposal_id, gate_reached=reached, outcome=outcome, budget=budget)
         finally:
-            if state.get("_owned_full_checkout"):
-                shutil.rmtree(state["full_checkout"], ignore_errors=True)
+            cleanup_full_checkout(state, keep_branch=False)
 
     return {
         "proposal_id": proposal_id,

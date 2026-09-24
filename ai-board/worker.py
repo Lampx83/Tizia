@@ -4,7 +4,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import shutil
+import socket
 import threading
+import tempfile
 import time
 import urllib.request
 from dataclasses import dataclass
@@ -17,6 +21,174 @@ Transport = Callable[[str, str, dict, dict], dict]
 
 class LeaseLostError(RuntimeError):
     pass
+
+
+class PlanBlockedError(RuntimeError):
+    """Gate 1/2/2.5 stop. `detail` = JSON-safe {gate, reason, signals, plan} for the plan_blocked event."""
+
+    def __init__(self, message: str, detail: dict):
+        super().__init__(message)
+        self.detail = detail
+
+
+def _load_harness():
+    harness_dir = Path(__file__).resolve().parent / "harness"
+    if str(harness_dir) not in os.sys.path:
+        os.sys.path.insert(0, str(harness_dir))
+    from budget import Budget
+    from main import Deps, run_gate
+    return Budget, Deps, run_gate
+
+
+def _execution_plan(plan: dict) -> dict:
+    """Map the server-owned plan contract back to the existing Gate-3 seam."""
+    subtasks = []
+    for step in sorted(plan.get("steps") or [], key=lambda step: step.get("order", 0)):
+        scope = step.get("allowed_scope") or []
+        tests = step.get("tests") or []
+        if not scope or not tests:
+            raise ValueError("plan step requires allowed_scope and tests")
+        subtasks.append({
+            "title": step["title"], "file": scope[0], "verify": tests[0],
+            "size": "small" if step.get("risk") == "low" else "large",
+            "allowed_scope": list(scope),
+        })
+    if not subtasks:
+        raise ValueError("plan requires at least one step")
+    return {"subtasks": subtasks, "capabilities": list(plan.get("capabilities") or [])}
+
+
+def _public_gate_result(result: dict) -> dict:
+    out = {
+        "gate": result["gate"], "blocked": bool(result.get("blocked")),
+        "reason": result.get("reason"),
+    }
+    if result["gate"] == 4:
+        out["issues"] = list(result.get("issues") or [])
+        out["checks"] = list(result.get("checks") or [])
+    elif result["gate"] == 5:
+        out["smoke_passed"] = bool((result.get("evidence") or {}).get("smoke_passed"))
+        out["http_observed"] = bool((result.get("evidence") or {}).get("http_observed"))
+        out["runner"] = (result.get("evidence") or {}).get("runner")
+    elif result["gate"] == 5.5:
+        out["risk_level"] = result.get("risk_level")
+        out["risk_signals"] = list(result.get("risk_signals") or [])
+    return out
+
+
+MAX_REPAIRS = 1  # ponytail: one repair child per verdict; server enforces the same bound
+
+
+def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate, cleanup,
+             repair_reason: str | None, catalog: dict | None,
+             request_detail: str | None) -> tuple[list[dict], str | None, dict | None]:
+    """One pass of Gates 3→5.5 on fresh scratch + worktree. Return (public gates, failure kind, candidate)."""
+    scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
+    state = {
+        "plan": _execution_plan(plan), "scratch_repo": str(scratch),
+        "checkout_source": str(checkout_source), "skill_id": f"ticket-{ticket_id}",
+    }
+    if catalog is not None:
+        state["catalog"] = catalog
+    if request_detail:
+        state["request_detail"] = request_detail
+    if repair_reason:
+        state["repair_reason"] = repair_reason
+    gates: list[dict] = []
+    kind = None
+    try:
+        for gate in (3, 4, 5, 5.5):
+            retried = False
+            while True:
+                if not budget.tick():
+                    result = {"gate": gate, "blocked": True, "reason": "budget exhausted", "failure_class": "budget"}
+                else:
+                    try:
+                        result = run_gate(gate, {}, deps, budget, state)
+                    except Exception as error:  # model/network/tool outage, not the candidate's code
+                        result = {"gate": gate, "blocked": True, "reason": str(error)[:1000],
+                                  "failure_class": "transient"}
+                # Transient Docker/checkout trouble gets one mechanical retry, no model call. It spends the
+                # retry cap, never budget_used; no retry once the cap is reached.
+                if (gate == 5 and result.get("blocked") and result.get("failure_class") == "transient"
+                        and not retried and budget.retries < budget.max_retries):
+                    retried = True
+                    budget.spend("retries")
+                    continue
+                break
+            public = _public_gate_result(result)
+            if gate == 5:
+                public["retried"] = retried
+                if not public["blocked"] and not public["http_observed"]:
+                    public["blocked"] = True
+                    public["reason"] = "change has no HTTP-observable result"
+                    result["failure_class"] = "plan"
+            gates.append(public)
+            if public["blocked"]:
+                kind = result.get("failure_class") or "ordinary"
+                break
+    finally:
+        passed = kind is None and bool(gates) and gates[-1]["gate"] == 5.5
+        candidate = {
+            "branch": state["branch"], "base_sha": state["base_sha"],
+            "head_sha": state["commits"][-1]["sha"], "commits": state["commits"],
+        } if passed and state.get("commits") else None
+        cleanup(state, keep_branch=candidate is not None)
+        shutil.rmtree(scratch, ignore_errors=True)
+    return gates, kind, candidate
+
+
+def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate,
+                   cleanup: Callable, policy: dict | None = None, accepted_policy_hash: str | None = None,
+                   request_detail: str | None = None) -> dict:
+    """Run Gates 3→5.5, repairing an ordinary failure at most MAX_REPAIRS times. Return a redacted verdict.
+
+    policy = snapshot catalog {hash, capabilities}; None only outside the HTTP worker (no catalog check).
+    failure_class: ordinary | transient | critical | budget | plan (see store.js FAILURE_CLASSES)."""
+    # plan_hash embeds the policy hash, so a catalog change between leases already forces a fresh plan
+    # server-side; this guards the in-lease race and a snapshot missing its catalog (fail closed).
+    if policy is not None and (not policy.get("hash") or policy.get("hash") != accepted_policy_hash):
+        reason = ("snapshot has no capability catalog" if not policy.get("hash")
+                  else "capability catalog changed since the plan was accepted")
+        return {"outcome": "blocked", "gate_reached": 3, "reason": reason, "failure_class": "plan",
+                "repairs": [], "candidate": None, "budget_used": 0,
+                "gates": [{"gate": 3, "blocked": True, "reason": reason}]}
+    catalog = policy.get("capabilities") if policy is not None else None
+    repairs: list[dict] = []
+    repair_reason = None
+    while True:
+        gates, kind, candidate = _attempt(
+            plan, ticket_id=ticket_id, checkout_source=checkout_source, deps=deps, budget=budget,
+            run_gate=run_gate, cleanup=cleanup, repair_reason=repair_reason, catalog=catalog,
+            request_detail=request_detail,
+        )
+        last = gates[-1]
+        if kind != "ordinary" or len(repairs) >= MAX_REPAIRS:
+            break
+        if not budget.tick():
+            kind = "budget"
+            break
+        repairs.append({"gate": last["gate"], "reason": last["reason"]})
+        repair_reason = f"cổng {last['gate']}: {last['reason']}"
+    smoke = next((gate for gate in gates if gate["gate"] == 5), None)
+    risk = next((gate for gate in gates if gate["gate"] == 5.5), None)
+    passed = (kind is None and last["gate"] == 5.5 and not last["blocked"] and smoke
+              and smoke["smoke_passed"] and smoke["http_observed"])
+    needs_review = passed and risk["risk_level"] in ("high", "critical")
+    outcome = "needs_review" if needs_review else "ready_for_pr" if passed else "blocked"
+    reason = "risk triage requires human review" if needs_review else last["reason"]
+    return {
+        "outcome": outcome, "gate_reached": last["gate"], "reason": reason,
+        "failure_class": None if passed else kind, "repairs": repairs,
+        "candidate": candidate if passed else None,
+        "budget_used": int(getattr(budget, "model_calls", 0)) * 40, "gates": gates,
+    }
+
+
+def default_worker_id() -> str:
+    """Per-machine worker id from hostname. Per-request identity is the server's lease token + run id."""
+    host = re.sub(r"[^a-z0-9]+", "-", socket.gethostname().lower()).strip("-")[:60]
+    return f"{host}-worker" if host else "local-worker"
 
 
 class WorkerClient:
@@ -47,9 +219,10 @@ class HttpWorker:
     version: str = "d0"
     mode: str = "off"
     planner: Callable[[dict], tuple[dict, int]] | None = None
+    change_runner: Callable[[dict, int, int, int], dict] | None = None
     heartbeat_interval: float = 30.0
 
-    def _plan_with_heartbeat(self, snapshot: dict, ticket_id: int, lease: dict) -> tuple[dict, int]:
+    def _with_heartbeat(self, operation: Callable, ticket_id: int, lease: dict):
         stopped = threading.Event()
         failures: list[Exception] = []
 
@@ -64,7 +237,7 @@ class HttpWorker:
         heartbeat_thread = threading.Thread(target=heartbeat_loop, name="ai-board-lease-heartbeat", daemon=True)
         heartbeat_thread.start()
         try:
-            result = self.planner(snapshot)
+            result = operation()
         finally:
             stopped.set()
             heartbeat_thread.join(timeout=max(self.client.timeout, 1.0))
@@ -75,8 +248,12 @@ class HttpWorker:
     def run_once(self) -> dict:
         if self.mode == "off":
             return {"status": "off"}
-        if self.mode != "shadow":
-            raise ValueError("D0 worker only supports off or shadow")
+        if self.mode not in ("shadow", "active"):
+            raise ValueError("D0 worker only supports off, shadow or active")
+        if self.mode == "shadow" and self.change_runner:
+            raise ValueError("shadow mode cannot execute implementation gates")
+        if self.mode == "active" and (not self.planner or not self.change_runner):
+            raise ValueError("active mode requires planner and change runner")
 
         claim = self.client.post("/api/ai-board/worker/claim", {
             "worker_id": self.worker_id, "version": self.version, "mode": self.mode,
@@ -105,7 +282,7 @@ class HttpWorker:
         })
         if self.planner:
             try:
-                plan, budget_used = self._plan_with_heartbeat(snapshot, ticket_id, lease)
+                plan, budget_used = self._with_heartbeat(lambda: self.planner(snapshot), ticket_id, lease)
                 planned = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/plan", {
                     **lease, "run_id": run["id"], "plan": plan, "budget_used": budget_used,
                     "idempotency_key": f"{prefix}:plan",
@@ -116,7 +293,8 @@ class HttpWorker:
                 self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/events", {
                     **lease, "run_id": run["id"], "event_type": "plan_blocked",
                     "public_message": "Kế hoạch chưa vượt qua kiểm tra an toàn.",
-                    "internal_detail": str(error),
+                    "internal_detail": json.dumps(error.detail, ensure_ascii=False)
+                    if isinstance(error, PlanBlockedError) else str(error),
                     "idempotency_key": f"{prefix}:plan-blocked",
                 })
                 self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/release", {
@@ -124,13 +302,34 @@ class HttpWorker:
                     "idempotency_key": f"{prefix}:release-blocked",
                 })
                 raise
+            verdict = None
+            if self.change_runner and planned["status"] == "planned":
+                ticket_row = snapshot.get("ticket", {})
+                candidate = self._with_heartbeat(
+                    lambda: self.change_runner(
+                        plan, ticket_id, budget_used,
+                        int(ticket_row.get("cumulative_budget") or 0),
+                        int(ticket_row.get("budget_limit") or 200),
+                        # {} when missing: fails the hash check closed instead of skipping the catalog.
+                        policy=snapshot.get("capability_policy") or {},
+                        accepted_policy_hash=planned.get("capability_policy_hash"),
+                        request_detail=(snapshot.get("request") or {}).get("detail"),
+                    ), ticket_id, lease,
+                )
+                verdict = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/verdict", {
+                    **lease, "run_id": run["id"], "verdict": candidate,
+                    "idempotency_key": f"{prefix}:verdict",
+                })["verdict"]
             self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/release", {
                 **lease, "outcome": "planned", "idempotency_key": f"{prefix}:release",
             })
-            return {
+            result = {
                 "status": planned["status"], "ticket_id": ticket_id, "run_id": run["id"],
                 "tier": planned["tier"], "children": len(planned.get("children") or []),
             }
+            if verdict is not None:
+                result["pre_pr_verdict"] = verdict
+            return result
         self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/release", {
             **lease, "outcome": "shadow_ok", "idempotency_key": f"{prefix}:release",
         })
@@ -141,11 +340,7 @@ class HarnessPlanner:
     """Runs existing gates 1, 2 and 2.5, then emits the server-owned D0 schema."""
 
     def __init__(self):
-        harness_dir = Path(__file__).resolve().parent / "harness"
-        if str(harness_dir) not in os.sys.path:
-            os.sys.path.insert(0, str(harness_dir))
-        from budget import Budget
-        from main import Deps, run_gate
+        Budget, Deps, run_gate = _load_harness()
         self.Budget = Budget
         self.deps = Deps.real()
         self.run_gate = run_gate
@@ -203,29 +398,70 @@ class HarnessPlanner:
         for gate in (1, 2, 2.5):
             result = self.run_gate(gate, request, self.deps, budget, state)
             if result.get("blocked"):
-                raise RuntimeError(f"gate {gate} blocked: {result.get('reason')}")
+                raise PlanBlockedError(f"gate {gate} blocked: {result.get('reason')}", {
+                    "gate": gate, "reason": result.get("reason"), "signals": list(result.get("signals") or []),
+                    "plan": json.dumps(state.get("plan"), ensure_ascii=False)[:2000],
+                })
         spent = budget.snapshot()
         budget_used = int(spent.get("model_calls", 0)) * 40
         return self._canonical(request, state["plan"]), budget_used
 
 
+class HarnessChangeRunner:
+    """Connect an accepted HTTP plan to the existing full-checkout gate pipeline."""
+
+    def __init__(self, checkout_source=None):
+        Budget, Deps, run_gate = _load_harness()
+        from main import cleanup_full_checkout
+        self.Budget = Budget
+        self.deps = Deps.real()
+        self.run_gate = run_gate
+        self.cleanup = cleanup_full_checkout
+        self.checkout_source = checkout_source or Path(__file__).resolve().parents[1]
+
+    def __call__(self, plan: dict, ticket_id: int, budget_used: int = 0,
+                 cumulative_budget: int = 0, budget_limit: int = 200, *, policy: dict,
+                 accepted_policy_hash: str | None, request_detail: str | None = None) -> dict:
+        budget = self.Budget.from_env()
+        remaining = budget_limit - cumulative_budget - budget_used
+        budget.max_model_calls = min(budget.max_model_calls, max(remaining // 40, 0))
+        return execute_pre_pr(
+            plan, ticket_id=ticket_id, checkout_source=self.checkout_source,
+            deps=self.deps, budget=budget, run_gate=self.run_gate, cleanup=self.cleanup,
+            policy=policy, accepted_policy_hash=accepted_policy_hash, request_detail=request_detail,
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Tizia AI Board HTTP worker")
-    parser.add_argument("--mode", choices=("off", "shadow"), default=os.getenv("AI_BOARD_WORKER_MODE", "off"))
+    parser.add_argument("--mode", choices=("off", "shadow", "active"), default=os.getenv("AI_BOARD_WORKER_MODE", "off"))
     parser.add_argument("--once", action="store_true", help="poll once, then exit")
     parser.add_argument("--plan", action="store_true", help="run gates 1, 2 and 2.5, then submit child-ticket plan")
+    parser.add_argument("--execute", action="store_true", help="run the accepted plan through gates 3, 4, 5 and 5.5")
     parser.add_argument("--poll-seconds", type=float, default=5.0)
     args = parser.parse_args(argv)
-    base_url = os.getenv("TIZIA_URL", "http://127.0.0.1:8041")
+    try:  # same repo env file as harness/main.py; process env still wins
+        from dotenv import load_dotenv
+    except ImportError:
+        pass
+    else:
+        load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+    if args.execute and args.mode != "active":
+        parser.error("--execute requires --mode active")
+    if args.mode == "active" and not args.execute:
+        parser.error("--mode active requires --execute")
+    # Same machine as the server; HOST is its bind address (0.0.0.0), not a connect address.
+    base_url = f"http://127.0.0.1:{os.getenv('PORT', '8041')}"
     key = os.getenv("AI_BOARD_WORKER_KEY", "")
     if args.mode != "off" and len(key) < 24:
         parser.error("AI_BOARD_WORKER_KEY must be at least 24 characters")
     worker = HttpWorker(
         WorkerClient(base_url, key),
-        worker_id=os.getenv("AI_BOARD_WORKER_ID", "local-worker-1"),
+        worker_id=default_worker_id(),
         version=os.getenv("AI_BOARD_WORKER_VERSION", "d0"),
         mode=args.mode,
-        planner=HarnessPlanner() if args.plan else None,
+        planner=HarnessPlanner() if args.plan or args.execute else None,
+        change_runner=HarnessChangeRunner() if args.execute else None,
     )
     while True:
         print(json.dumps(worker.run_once(), ensure_ascii=False))

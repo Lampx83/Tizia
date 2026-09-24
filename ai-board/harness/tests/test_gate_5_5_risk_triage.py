@@ -18,11 +18,54 @@ def state_for(*items, caps=()):
 TEST = ("test/skill.test.js", "assert(true)", True)
 
 
-def test_core_is_always_critical_even_for_one_line_with_test():
-    state = state_for(("public/x.js", "x", True), TEST)
-    out = risk_triage.run(state, manifest={"capabilities": {"core": ["db"]}})
+CATALOG = {
+    "public.ui": {"tier": "surface", "allow": ["public/"], "deny": []},
+    "generated.context": {"tier": "surface", "allow": ["server/contexts/_ai-generated/"], "deny": []},
+    "content.write": {"tier": "protected", "allow": ["server/contexts/content/", "public/"], "deny": []},
+    "core.server": {"tier": "core", "allow": ["server/", "scripts/"], "deny": ["server/secrets/"]},
+}
+
+
+def with_catalog(state):
+    state["catalog"] = CATALOG
+    return state
+
+
+def test_path_only_a_core_capability_allows_is_critical_even_for_one_line_with_test():
+    out = risk_triage.run(with_catalog(state_for(("server/db.js", "x", False), TEST)))
+    assert out["blocked"] is False
     assert out["risk_level"] == "critical"
-    assert any(s["name"] == "core" and s["detail"] == "db" for s in out["risk_signals"])
+    assert {"name": "catalog_tier", "tier": "critical", "detail": "server/db.js: core.server"} in out["risk_signals"]
+
+
+def test_path_whose_least_privileged_capability_is_protected_is_high():
+    out = risk_triage.run(with_catalog(state_for(("server/contexts/content/x.js", "x", True), TEST)))
+    assert out["risk_level"] == "high"
+    assert any(s["name"] == "catalog_tier" and "content.write" in s["detail"] for s in out["risk_signals"])
+
+
+def test_surface_paths_add_no_catalog_signal():
+    out = risk_triage.run(with_catalog(state_for(("public/x.js", "x", True), TEST)))
+    assert out["risk_level"] == "low"
+    assert out["risk_signals"] == []
+
+
+def test_path_no_capability_allows_blocks_as_critical():
+    for path in ("Dockerfile", "server/secrets/key.js"):
+        out = risk_triage.run(with_catalog(state_for((path, "x", True), TEST)))
+        assert out["blocked"] is True
+        assert out["failure_class"] == "critical"
+        assert path in out["reason"]
+
+
+def test_only_the_generated_test_dirs_skip_catalog_matching():
+    out = risk_triage.run(with_catalog(state_for(("server/foo/tests/x.js", "x", True), TEST)))
+    assert out["risk_level"] == "critical"
+
+
+def test_plan_self_declared_capabilities_are_not_an_input():
+    out = risk_triage.run(with_catalog(state_for(("public/x.js", "x", True), TEST, caps=["core.server"])))
+    assert out["risk_level"] == "low"
 
 
 def test_new_route_and_middleware_are_high():
@@ -63,7 +106,6 @@ def test_full_diff_overrides_scratch_diff_new_file_metadata():
 
 def test_main_gate_5_5_exposes_structured_signals_without_model_calls(fake_deps):
     state = state_for(("public/x.js", "x", True), TEST)
-    state["manifest"] = {"capabilities": {"core": []}}
     out = main.run_gate(5.5, {}, fake_deps, None, state)
     assert out["risk_signals"] == state["risk_signals"]
     assert fake_deps.models.calls == []

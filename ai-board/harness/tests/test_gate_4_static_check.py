@@ -26,6 +26,20 @@ def test_generated_code_importing_db_js_fails_gate_4(tmp_path):
 
     assert out["blocked"] is True
     assert "db.js" in out["reason"]
+    assert out["failure_class"] == "critical"
+
+
+def test_generated_test_importing_db_js_fails_gate_4(tmp_path):
+    plan = _plan([{"title": "t", "file": "public/x.js", "verify": "v", "size": "small"}])
+    _write(tmp_path, "public/x.js", "export const x = 1;\n")
+    _write(tmp_path, "test/x.test.js", "import { db } from '../server/db.js';\n")
+    diffs = [{"title": "t", "file": "public/x.js", "test_file": "test/x.test.js", "diff": "+x\n"}]
+
+    out = static_check.run({"plan": plan, "diffs": diffs, "scratch_repo": str(tmp_path)})
+
+    assert out["blocked"] is True
+    assert "test/x.test.js" in out["reason"]
+    assert "db.js" in out["reason"]
 
 
 def test_generated_code_importing_another_context_directly_fails_gate_4(tmp_path):
@@ -72,6 +86,7 @@ def test_syntax_error_in_generated_js_fails_gate_4(tmp_path):
 
     assert out["blocked"] is True
     assert "node --check" in out["reason"]
+    assert out["failure_class"] == "ordinary"
 
 
 def test_non_js_file_skips_node_check_and_import_lint(tmp_path):
