@@ -194,7 +194,8 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
                 'risk_level': 'low', 'risk_signals': []}
 
     def change_runner(plan, ticket_id, _budget_used, cumulative_budget, budget_limit, *, policy,
-                      accepted_policy_hash, request_detail):
+                      accepted_policy_hash, request_detail, should_stop):
+        assert should_stop() is False  # lease healthy while the heartbeat succeeds
         assert (cumulative_budget, budget_limit) == (20, 200)
         assert (policy, accepted_policy_hash) == (POLICY, POLICY['hash'])
         return execute_pre_pr(
@@ -508,6 +509,22 @@ def test_complexity_gated_plan_records_reason_signals_and_truncated_plan():
     assert detail['gate'] == 2.5 and detail['reason'] == 'complexity_gated'
     assert detail['signals'] == ['capabilities: features, quiz', 'file ngoài vùng an toàn: server/index.js']
     assert detail['plan'].startswith('{"summary_vi": "xxx') and len(detail['plan']) <= 2000
+
+
+def test_revoked_lease_stops_before_the_next_gate_and_keeps_nothing():
+    from worker import LeaseLostError
+    run_gate, calls = scripted_gates({})
+    cleanups = []
+    try:
+        execute_pre_pr(ONE_STEP_PLAN, ticket_id=7, checkout_source='unused', deps=object(), budget=TickBudget(),
+                       run_gate=run_gate, cleanup=lambda state, keep_branch: cleanups.append(keep_branch),
+                       should_stop=lambda: len(calls) >= 2)
+    except LeaseLostError as error:
+        assert 'gate 5' in str(error)
+    else:
+        raise AssertionError('a revoked lease must stop the run')
+    assert [gate for gate, _ in calls] == [3, 4]
+    assert cleanups == [False]
 
 
 def test_verdicts_leave_lessons_that_later_runs_can_recall(tmp_path):

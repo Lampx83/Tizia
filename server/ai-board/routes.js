@@ -55,6 +55,18 @@ export function attachAiBoardRequestRoutes(router, {
     res.json({ items, stats });
   });
 
+  // Owner only; global CSRF middleware covers it like POST /api/requests.
+  router.post('/api/requests/:id/cancel', requireAuth, (req, res) => {
+    try {
+      res.json(store.cancelRequest(req.params.id, { ownerUserId: req.user.id }));
+    } catch (error) {
+      if (error instanceof WorkerContractError) {
+        return res.status(error.status).json({ error: error.code, message: error.message });
+      }
+      throw error;
+    }
+  });
+
   router.post('/api/requests/:id/status', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
     const status = String(req.body?.status || '');
     const ok = store.setRequestStatus(req.params.id, status, req.body?.note, req.user.id);

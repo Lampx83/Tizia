@@ -26,6 +26,7 @@ const STATUS = {
   reviewing: { label: 'Đang làm',     cls: 'reviewing' },
   done:      { label: '✓ Hoàn thành', cls: 'done' },
   rejected:  { label: 'Chưa thực hiện', cls: 'rejected' },
+  cancelled: { label: 'Đã hủy',       cls: 'cancelled' },
 };
 
 function inferDomain() {
@@ -447,6 +448,28 @@ function bind(root) {
         return;
       }
       inbox.innerHTML = shown.map(it => renderItem(it, me)).join('');
+      // Hủy 2 bước: bấm lần 1 để xác nhận, lần 2 mới gửi (viewer không có confirm()).
+      inbox.querySelectorAll('[data-req-cancel]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (!btn.dataset.armed) {
+            btn.dataset.armed = '1';
+            btn.textContent = 'Bấm lần nữa để hủy';
+            return;
+          }
+          btn.disabled = true;
+          btn.textContent = 'Đang hủy…';
+          try {
+            const r = await fetch(`api/requests/${encodeURIComponent(btn.dataset.reqCancel)}/cancel`, { method: 'POST' });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(data.error === 'request_closed' ? 'Yêu cầu đã đóng, không hủy được.' : 'Không hủy được, thử lại sau.');
+            loadInbox();
+          } catch (err) {
+            btn.disabled = false;
+            delete btn.dataset.armed;
+            btn.textContent = err.message;
+          }
+        });
+      });
       // Mỗi item mở rộng thành phiên trao đổi (thread) ngay trong modal.
       inbox.querySelectorAll('[data-req-toggle]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -495,6 +518,8 @@ function renderItem(it, me = '') {
       <button type="button" class="sgf-it-thread-btn" data-req-toggle="${it.id}">
         💬 ${mine ? 'Trao đổi với Ban điều hành' : 'Xem trao đổi'}
       </button>
+      ${mine && ['pending', 'reviewing'].includes(it.status)
+        ? `<button type="button" class="sgf-it-cancel" data-req-cancel="${it.id}">Hủy yêu cầu</button>` : ''}
       <div class="sgf-it-thread" id="sgf-thread-${it.id}" hidden></div>
     </div>
   `;
@@ -617,6 +642,7 @@ function injectStyles() {
     .sgf-it-st.reviewing { background: #fde68a; color: #92400e; }
     .sgf-it-st.done      { background: #bbf7d0; color: #065f46; }
     .sgf-it-st.rejected  { background: #fecaca; color: #991b1b; }
+    .sgf-it-st.cancelled { background: #e5e7eb; color: #6b7280; text-decoration: line-through; }
     .sgf-it-note {
       font-size: 12px; color: #1f2937; margin-top: 6px; padding: 6px 9px; border-radius: 8px;
       background: #fef3c7; border-left: 3px solid #f59e0b;
@@ -626,6 +652,12 @@ function injectStyles() {
       cursor: pointer; font: 700 11.5px/1 inherit; padding: 5px 10px; border-radius: 7px;
     }
     .sgf-it-thread-btn:hover { background: #e0e7ff; }
+    .sgf-it-cancel {
+      margin: 7px 0 0 6px; border: 1px solid #fecaca; background: #fff; color: #b91c1c;
+      cursor: pointer; font: 700 11.5px/1 inherit; padding: 5px 10px; border-radius: 7px;
+    }
+    .sgf-it-cancel:hover, .sgf-it-cancel[data-armed] { background: #fee2e2; }
+    .sgf-it-cancel:focus-visible, .sgf-it-thread-btn:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
     .sgf-it-thread { margin-top: 8px; }
     .sgf-it-thread[hidden] { display: none; }
 
@@ -657,6 +689,8 @@ function injectStyles() {
       .sgf-it-thumb { border-color: #4338ca; }
       .sgf-it-thread-btn { background: #312e81; color: #c7d2fe; border-color: #4338ca; }
       .sgf-it-thread-btn:hover { background: #4338ca; }
+      .sgf-it-cancel { background: #1e1b4b; color: #fca5a5; border-color: #7f1d1d; }
+      .sgf-it-cancel:hover, .sgf-it-cancel[data-armed] { background: #450a0a; }
     }
   `;
   const st = document.createElement('style');

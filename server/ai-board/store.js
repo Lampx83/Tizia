@@ -867,6 +867,43 @@ export function createAiBoardStore(db, hooks = {}) {
     return extendBudgetTransaction(rootTicketId, value, why.slice(0, 500), Number(adminUserId), Date.now());
   }
 
+  const cancelRequestTransaction = db.transaction((requestId, ownerUserId, now) => {
+    const request = db.prepare('SELECT id, status, owner_user_id FROM requests WHERE id=?').get(Number(requestId));
+    // Someone else's request looks the same as a missing one.
+    if (!request || request.owner_user_id !== Number(ownerUserId)) {
+      throw new WorkerContractError('request not found', 404, 'request_not_found');
+    }
+    if (request.status === 'cancelled') return { ok: true, request_id: request.id, status: 'cancelled', duplicate: true };
+    if (['done', 'rejected'].includes(request.status)) {
+      throw new WorkerContractError('request is already closed', 409, 'request_closed');
+    }
+    const note = 'Người gửi đã hủy yêu cầu.';
+    db.prepare(`UPDATE requests SET status='cancelled', updated_at=? WHERE id=?`).run(now, request.id);
+    const root = db.prepare('SELECT * FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL').get(request.id);
+    if (root) {
+      // Clearing the lease makes the worker's next heartbeat/verdict fail with stale_lease, so it stops.
+      db.prepare(`
+        UPDATE ai_tickets SET status='cancelled', phase='requester_cancelled', public_note=?, lease_owner=NULL,
+          lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE id=?
+      `).run(note, now, root.id);
+      db.prepare(`
+        UPDATE ai_tickets SET status='cancelled', updated_at=?
+        WHERE parent_id=? AND status NOT IN ('done', 'failed', 'invalidated', 'cancelled')
+      `).run(now, root.id);
+      db.prepare(`UPDATE ai_workers SET status='idle', current_ticket_id=NULL, updated_at=? WHERE current_ticket_id=?`)
+        .run(now, root.id);
+      insertEvent.run(
+        root.id, 'request_cancelled', 'requester', String(ownerUserId), `${root.status}->cancelled`,
+        note, null, `request-cancelled:${root.id}`, now,
+      );
+    }
+    return { ok: true, request_id: request.id, status: 'cancelled' };
+  });
+
+  function cancelRequest(requestId, { ownerUserId, now = Date.now() }) {
+    return cancelRequestTransaction(requestId, ownerUserId, now);
+  }
+
   const authorizePlanTransaction = db.transaction((rootTicketId, planHash, adminUserId, now) => {
     const plan = db.prepare('SELECT * FROM ai_plans WHERE root_ticket_id=? AND plan_hash=? AND status=?')
       .get(Number(rootTicketId), String(planHash), 'valid');
@@ -893,7 +930,7 @@ export function createAiBoardStore(db, hooks = {}) {
 
   const invalidatePlanTransaction = db.transaction((requestId, reason, now) => {
     const root = db.prepare(`SELECT * FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL`).get(Number(requestId));
-    if (!root || !root.plan_hash || root.phase === 'budget_ceiling') return false;
+    if (!root || !root.plan_hash || root.phase === 'budget_ceiling' || root.status === 'cancelled') return false;
     db.prepare(`UPDATE ai_plans SET status='invalidated', invalidated_at=? WHERE root_ticket_id=? AND plan_hash=? AND status='valid'`)
       .run(now, root.id, root.plan_hash);
     db.prepare(`UPDATE ai_tickets SET status='invalidated', phase='clarification_received', updated_at=? WHERE parent_id=? AND plan_revision=?`)
@@ -918,6 +955,7 @@ export function createAiBoardStore(db, hooks = {}) {
     setRequestStatus,
     listAdminQueue,
     listWorkers,
+    cancelRequest,
     claimNext,
     getLeasedSnapshot,
     heartbeat,

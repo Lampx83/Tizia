@@ -81,7 +81,8 @@ MAX_REPAIRS = 1  # ponytail: one repair child per verdict; server enforces the s
 
 def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate, cleanup,
              repair_reason: str | None, catalog: dict | None,
-             request_detail: str | None, memory_path) -> tuple[list[dict], str | None, dict | None]:
+             request_detail: str | None, memory_path,
+             should_stop: Callable[[], bool] | None) -> tuple[list[dict], str | None, dict | None]:
     """One pass of Gates 3→5.5 on fresh scratch + worktree. Return (public gates, failure kind, candidate)."""
     scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
     state = {
@@ -100,6 +101,8 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
     kind = None
     try:
         for gate in (3, 4, 5, 5.5):
+            if should_stop and should_stop():  # lease revoked, e.g. the requester cancelled
+                raise LeaseLostError(f"lease revoked before gate {gate}")
             retried = False
             while True:
                 if not budget.tick():
@@ -142,11 +145,13 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
 
 def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate,
                    cleanup: Callable, policy: dict | None = None, accepted_policy_hash: str | None = None,
-                   request_detail: str | None = None, memory_path=None) -> dict:
+                   request_detail: str | None = None, memory_path=None,
+                   should_stop: Callable[[], bool] | None = None) -> dict:
     """Run Gates 3→5.5, repairing an ordinary failure at most MAX_REPAIRS times. Return a redacted verdict.
 
     policy = snapshot catalog {hash, capabilities}; None only outside the HTTP worker (no catalog check).
     memory_path = lessons JSONL: Gate 3 recalls from it, repairs and final blocks are appended to it.
+    should_stop() true between gates (lease lost) → LeaseLostError, worktree cleaned, nothing kept.
     failure_class: ordinary | transient | critical | budget | plan (see store.js FAILURE_CLASSES)."""
     # plan_hash embeds the policy hash, so a catalog change between leases already forces a fresh plan
     # server-side; this guards the in-lease race and a snapshot missing its catalog (fail closed).
@@ -163,7 +168,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
         gates, kind, candidate = _attempt(
             plan, ticket_id=ticket_id, checkout_source=checkout_source, deps=deps, budget=budget,
             run_gate=run_gate, cleanup=cleanup, repair_reason=repair_reason, catalog=catalog,
-            request_detail=request_detail, memory_path=memory_path,
+            request_detail=request_detail, memory_path=memory_path, should_stop=should_stop,
         )
         last = gates[-1]
         if kind != "ordinary" or len(repairs) >= MAX_REPAIRS:
@@ -257,7 +262,7 @@ class HttpWorker:
         heartbeat_thread = threading.Thread(target=heartbeat_loop, name="ai-board-lease-heartbeat", daemon=True)
         heartbeat_thread.start()
         try:
-            result = operation()
+            result = operation(lambda: bool(failures))
         finally:
             stopped.set()
             heartbeat_thread.join(timeout=max(self.client.timeout, 1.0))
@@ -302,7 +307,7 @@ class HttpWorker:
         })
         if self.planner:
             try:
-                plan, budget_used = self._with_heartbeat(lambda: self.planner(snapshot), ticket_id, lease)
+                plan, budget_used = self._with_heartbeat(lambda _lost: self.planner(snapshot), ticket_id, lease)
                 planned = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/plan", {
                     **lease, "run_id": run["id"], "plan": plan, "budget_used": budget_used,
                     "idempotency_key": f"{prefix}:plan",
@@ -326,7 +331,7 @@ class HttpWorker:
             if self.change_runner and planned["status"] == "planned":
                 ticket_row = snapshot.get("ticket", {})
                 candidate = self._with_heartbeat(
-                    lambda: self.change_runner(
+                    lambda lost: self.change_runner(
                         plan, ticket_id, budget_used,
                         int(ticket_row.get("cumulative_budget") or 0),
                         int(ticket_row.get("budget_limit") or 200),
@@ -334,6 +339,7 @@ class HttpWorker:
                         policy=snapshot.get("capability_policy") or {},
                         accepted_policy_hash=planned.get("capability_policy_hash"),
                         request_detail=(snapshot.get("request") or {}).get("detail"),
+                        should_stop=lost,
                     ), ticket_id, lease,
                 )
                 verdict = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/verdict", {
@@ -443,7 +449,8 @@ class HarnessChangeRunner:
 
     def __call__(self, plan: dict, ticket_id: int, budget_used: int = 0,
                  cumulative_budget: int = 0, budget_limit: int = 200, *, policy: dict,
-                 accepted_policy_hash: str | None, request_detail: str | None = None) -> dict:
+                 accepted_policy_hash: str | None, request_detail: str | None = None,
+                 should_stop: Callable[[], bool] | None = None) -> dict:
         budget = self.Budget.from_env()
         remaining = budget_limit - cumulative_budget - budget_used
         budget.max_model_calls = min(budget.max_model_calls, max(remaining // 40, 0))
@@ -451,7 +458,7 @@ class HarnessChangeRunner:
             plan, ticket_id=ticket_id, checkout_source=self.checkout_source,
             deps=self.deps, budget=budget, run_gate=self.run_gate, cleanup=self.cleanup,
             policy=policy, accepted_policy_hash=accepted_policy_hash, request_detail=request_detail,
-            memory_path=self.memory_path,
+            memory_path=self.memory_path, should_stop=should_stop,
         )
 
 

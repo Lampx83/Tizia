@@ -430,6 +430,7 @@ function renderRequests() {
         <option value="reviewing">Đang xử lý (${counts.reviewing||0})</option>
         <option value="done">Hoàn thành (${counts.done||0})</option>
         <option value="rejected">Từ chối (${counts.rejected||0})</option>
+        <option value="cancelled">Học sinh đã hủy (${counts.cancelled||0})</option>
       </select>
       <div class="spacer"></div>
       <button class="btn" id="reqRefresh">↻ Tải lại</button>

@@ -537,3 +537,57 @@ test('a running worker silent for longer than the lease lists as stale, read-tim
   assert.equal(store.listWorkers({ now: 1_000 + 120_001 })[0].status, 'stale');
   assert.equal(db.prepare('SELECT status FROM ai_workers').get().status, 'running');
 });
+
+test('requester cancels a queued request: root and request close, the worker never claims it', () => {
+  const { db, store } = fixture();
+  const out = store.cancelRequest(1, { ownerUserId: 1, now: 5_000 });
+  assert.deepEqual(out, { ok: true, request_id: 1, status: 'cancelled' });
+  assert.equal(db.prepare('SELECT status FROM requests WHERE id=1').get().status, 'cancelled');
+  const root = db.prepare('SELECT status, phase, lease_token FROM ai_tickets WHERE parent_id IS NULL').get();
+  assert.deepEqual({ ...root }, { status: 'cancelled', phase: 'requester_cancelled', lease_token: null });
+  const event = db.prepare(`SELECT actor_type, actor_id FROM ai_events WHERE event_type='request_cancelled'`).get();
+  assert.deepEqual({ ...event }, { actor_type: 'requester', actor_id: '1' });
+  assert.equal(store.claimNext({ workerId: 'w1', mode: 'shadow', intent: 'plan' }), null);
+  // Idempotent; a clarification afterwards does not reopen it.
+  assert.equal(store.cancelRequest(1, { ownerUserId: 1 }).duplicate, true);
+  assert.equal(store.invalidatePlanForRequest(1, 'thêm chi tiết'), false);
+});
+
+test('cancelling while a worker holds the lease revokes it and closes planned children', () => {
+  const { db, store } = fixture();
+  const ticket = store.claimNext({ workerId: 'w1', version: 'test', mode: 'active', intent: 'plan' });
+  const lease = { workerId: 'w1', leaseToken: ticket.lease_token };
+  const run = store.createRun(ticket.id, { ...lease, trigger: 'plan', idempotencyKey: 'cancel-run-0001' });
+  store.submitPlan(ticket.id, { ...lease, runId: run.id, plan: surfacePlan(), budgetUsed: 40, idempotencyKey: 'cancel-plan-001' });
+
+  store.cancelRequest(1, { ownerUserId: 1 });
+
+  assert.throws(() => store.heartbeat(ticket.id, 'w1', ticket.lease_token), (error) => error.code === 'stale_lease');
+  const children = db.prepare('SELECT status FROM ai_tickets WHERE parent_id=?').all(ticket.id);
+  assert.ok(children.length && children.every((c) => c.status === 'cancelled'));
+  assert.deepEqual({ ...db.prepare('SELECT status, current_ticket_id FROM ai_workers').get() },
+    { status: 'idle', current_ticket_id: null });
+});
+
+test('only the owner can cancel, and never after the request is closed', () => {
+  const { db, store } = fixture();
+  assert.throws(() => store.cancelRequest(1, { ownerUserId: 2 }), (error) => error.status === 404);
+  db.prepare(`UPDATE requests SET status='done' WHERE id=1`).run();
+  assert.throws(() => store.cancelRequest(1, { ownerUserId: 1 }), (error) => error.code === 'request_closed');
+});
+
+test('student cancels through POST /api/requests/:id/cancel', async () => {
+  const { db, store } = fixture();
+  const { base, close } = await serve(store);
+  try {
+    const url = `${base}/api/requests/1/cancel`;
+    assert.equal((await fetch(url, { method: 'POST' })).status, 401);
+    const ok = await fetch(url, { method: 'POST', headers: { 'x-test-user': '1' } });
+    assert.equal(ok.status, 200);
+    assert.equal((await ok.json()).status, 'cancelled');
+    assert.equal((await fetch(`${base}/api/requests/999/cancel`, { method: 'POST', headers: { 'x-test-user': '1' } })).status, 404);
+  } finally {
+    await close();
+    db.close();
+  }
+});
