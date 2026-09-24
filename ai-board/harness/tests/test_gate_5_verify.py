@@ -240,7 +240,7 @@ def test_main_prepares_checkout_at_gate_5_then_calls_verify(monkeypatch, fake_de
     s = {"checkout_source": str(tmp_path), "skill_id": "x"}
     calls = []
 
-    def prepare(state, source):
+    def prepare(state, source, **_):
         calls.append(("prepare", source))
         state["full_checkout"] = str(tmp_path)
 

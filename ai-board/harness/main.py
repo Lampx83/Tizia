@@ -201,7 +201,8 @@ def _ensure_full_checkout(state: dict, gate: float) -> dict | None:
     if state.get("full_checkout") or not state.get("checkout_source"):
         return None
     try:
-        prepare_full_checkout(state, state["checkout_source"])
+        # Same base gate 3 showed the model, even if the source HEAD moved since.
+        prepare_full_checkout(state, state["checkout_source"], base_ref=state.get("base_sha") or "HEAD")
     except (OSError, ValueError, subprocess.CalledProcessError) as e:
         # Scope escape is a boundary violation; anything else is the environment, not the code.
         kind = "critical" if isinstance(e, ScopeViolation) else "transient"

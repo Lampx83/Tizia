@@ -271,3 +271,46 @@ def test_heavy_gate3_model_reads_only_gate3_model_heavy():
     from models import OllamaClient
     assert OllamaClient.from_env({"GATE3_MODEL_HEAVY": "heavy"}).gate3_model == "heavy"
     assert OllamaClient.from_env({"GATE3_MODEL": "old"}).gate3_model == ""
+
+
+# ── Existing target file: current content in view, 20 KB ceiling ────────────
+
+def _source_with(tmp_path, rel, content):
+    repo = tmp_path / "source"
+    (repo / rel).parent.mkdir(parents=True)
+    (repo / rel).write_text(content, encoding="utf-8")
+    for args in (["init", "-q"], ["add", "-A"], ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "base"]):
+        subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, stdin=subprocess.DEVNULL)
+    return repo
+
+
+def test_existing_target_content_is_appended_after_the_locked_prefix(tmp_path):
+    source = _source_with(tmp_path, "public/flashcards.html", "<h1>Thẻ cũ</h1>\n<p>giữ nguyên</p>\n")
+    models = FakeModels(plan_with(["features"]))
+    plan = plan_with(["features"])
+    state = {"plan": plan, "checkout_source": str(source)}
+
+    out = implement.run(state, deps_with(models), Budget(max_wall_clock_s=999), repo_dir=tmp_path / "scratch")
+
+    assert out["blocked"] is False
+    new_file_prompt, existing_prompt = [call["prompt"] for call in models.calls]
+    plain = implement.build_prompt(plan["subtasks"][1])
+    assert existing_prompt.startswith(plain)
+    assert "<p>giữ nguyên</p>" in existing_prompt[len(plain):]
+    assert "giữ nguyên" not in new_file_prompt
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=source, capture_output=True, text=True,
+                          stdin=subprocess.DEVNULL).stdout.strip()
+    assert state["base_sha"] == head  # the worktree is cut from the same base the model saw
+
+
+def test_existing_target_over_20kb_stops_as_plan_failure_before_any_model_call(tmp_path):
+    source = _source_with(tmp_path, "public/flashcards.html", "x" * (20 * 1024 + 1))
+    models = FakeModels(plan_with(["features"]))
+
+    out = implement.run({"plan": plan_with(["features"]), "checkout_source": str(source)},
+                        deps_with(models), Budget(max_wall_clock_s=999), repo_dir=tmp_path / "scratch")
+
+    assert out["blocked"] is True
+    assert out["failure_class"] == "plan"
+    assert "public/flashcards.html" in out["reason"] and "20 KB" in out["reason"]
+    assert models.calls == []
