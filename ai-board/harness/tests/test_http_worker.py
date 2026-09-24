@@ -510,6 +510,35 @@ def test_complexity_gated_plan_records_reason_signals_and_truncated_plan():
     assert detail['plan'].startswith('{"summary_vi": "xxx') and len(detail['plan']) <= 2000
 
 
+def test_verdicts_leave_lessons_that_later_runs_can_recall(tmp_path):
+    import memory
+    lessons = tmp_path / "lessons.jsonl"
+    failed = {'blocked': True, 'reason': 'generated tests failed', 'failure_class': 'ordinary'}
+    seen = []
+
+    def run_gate(gate, request, deps, budget, state):
+        seen.append(state.get('memory_path'))
+        return scripted(gate, request, deps, budget, state)
+
+    scripted, _calls = scripted_gates({5: [failed, {}]})
+    execute_pre_pr(ONE_STEP_PLAN, ticket_id=7, checkout_source='unused', deps=object(), budget=TickBudget(),
+                   run_gate=run_gate, cleanup=lambda *_, **__: None, memory_path=lessons)
+    assert set(seen) == {str(lessons)}
+    assert memory.recall(lessons, 'public/x.html', []) == [
+        '- [cổng 5] public/x.html: generated tests failed (đã sửa được)']
+
+    critical = {'blocked': True, 'reason': "import cấm: '../../db.js'", 'failure_class': 'critical'}
+    transient = {'blocked': True, 'reason': 'docker daemon unreachable', 'failure_class': 'transient'}
+    for script in ({4: [critical]}, {5: [transient]}):
+        scripted, _calls = scripted_gates(script)
+        execute_pre_pr(ONE_STEP_PLAN, ticket_id=8, checkout_source='unused', deps=object(),
+                       budget=TickBudget(max_retries=0), run_gate=scripted, cleanup=lambda *_, **__: None,
+                       memory_path=lessons)
+    got = memory.recall(lessons, 'public/x.html', [], limit=10)
+    assert any("import cấm" in line and "vẫn bị chặn" in line for line in got)
+    assert not any("docker daemon" in line for line in got)  # environment trouble teaches nothing
+
+
 def test_catalog_changed_since_plan_acceptance_is_a_plan_failure_before_any_gate():
     for policy in ({**POLICY, 'hash': 'd' * 64}, {}):
         run_gate, calls = scripted_gates({})

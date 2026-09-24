@@ -81,7 +81,7 @@ MAX_REPAIRS = 1  # ponytail: one repair child per verdict; server enforces the s
 
 def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate, cleanup,
              repair_reason: str | None, catalog: dict | None,
-             request_detail: str | None) -> tuple[list[dict], str | None, dict | None]:
+             request_detail: str | None, memory_path) -> tuple[list[dict], str | None, dict | None]:
     """One pass of Gates 3→5.5 on fresh scratch + worktree. Return (public gates, failure kind, candidate)."""
     scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
     state = {
@@ -92,6 +92,8 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
         state["catalog"] = catalog
     if request_detail:
         state["request_detail"] = request_detail
+    if memory_path:
+        state["memory_path"] = str(memory_path)
     if repair_reason:
         state["repair_reason"] = repair_reason
     gates: list[dict] = []
@@ -140,10 +142,11 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
 
 def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate,
                    cleanup: Callable, policy: dict | None = None, accepted_policy_hash: str | None = None,
-                   request_detail: str | None = None) -> dict:
+                   request_detail: str | None = None, memory_path=None) -> dict:
     """Run Gates 3→5.5, repairing an ordinary failure at most MAX_REPAIRS times. Return a redacted verdict.
 
     policy = snapshot catalog {hash, capabilities}; None only outside the HTTP worker (no catalog check).
+    memory_path = lessons JSONL: Gate 3 recalls from it, repairs and final blocks are appended to it.
     failure_class: ordinary | transient | critical | budget | plan (see store.js FAILURE_CLASSES)."""
     # plan_hash embeds the policy hash, so a catalog change between leases already forces a fresh plan
     # server-side; this guards the in-lease race and a snapshot missing its catalog (fail closed).
@@ -160,7 +163,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
         gates, kind, candidate = _attempt(
             plan, ticket_id=ticket_id, checkout_source=checkout_source, deps=deps, budget=budget,
             run_gate=run_gate, cleanup=cleanup, repair_reason=repair_reason, catalog=catalog,
-            request_detail=request_detail,
+            request_detail=request_detail, memory_path=memory_path,
         )
         last = gates[-1]
         if kind != "ordinary" or len(repairs) >= MAX_REPAIRS:
@@ -176,6 +179,8 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
               and smoke["smoke_passed"] and smoke["http_observed"])
     needs_review = passed and risk["risk_level"] in ("high", "critical")
     outcome = "needs_review" if needs_review else "ready_for_pr" if passed else "blocked"
+    if memory_path:
+        _remember(memory_path, plan, ticket_id, repairs, None if passed else kind, last, bool(passed))
     reason = "risk triage requires human review" if needs_review else last["reason"]
     return {
         "outcome": outcome, "gate_reached": last["gate"], "reason": reason,
@@ -183,6 +188,21 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
         "candidate": candidate if passed else None,
         "budget_used": int(getattr(budget, "model_calls", 0)) * 40, "gates": gates,
     }
+
+
+def _remember(memory_path, plan: dict, ticket_id: int, repairs: list[dict], kind: str | None,
+              last: dict, passed: bool) -> None:
+    """Ghi bài học: mỗi lần sửa (đã sửa được hay chưa) + lý do chặn cuối nếu là lỗi của code/plan.
+    Lỗi môi trường (transient) và budget không dạy gì về code nên bỏ qua."""
+    import memory
+
+    files = [(step.get("allowed_scope") or [""])[0] for step in plan.get("steps") or []]
+    lessons = [{"files": files, "gate": r["gate"], "failure_class": "ordinary", "reason": r["reason"],
+                "outcome": "fixed" if passed else "blocked", "ticket": ticket_id} for r in repairs]
+    if kind in ("ordinary", "critical", "plan") and all(r["reason"] != last["reason"] for r in repairs):
+        lessons.append({"files": files, "gate": last["gate"], "failure_class": kind, "reason": last["reason"],
+                        "outcome": "blocked", "ticket": ticket_id})
+    memory.record(memory_path, lessons)
 
 
 def default_worker_id() -> str:
@@ -413,6 +433,8 @@ class HarnessChangeRunner:
     def __init__(self, checkout_source=None):
         Budget, Deps, run_gate = _load_harness()
         from main import cleanup_full_checkout
+        from memory import DEFAULT_PATH
+        self.memory_path = DEFAULT_PATH
         self.Budget = Budget
         self.deps = Deps.real()
         self.run_gate = run_gate
@@ -429,6 +451,7 @@ class HarnessChangeRunner:
             plan, ticket_id=ticket_id, checkout_source=self.checkout_source,
             deps=self.deps, budget=budget, run_gate=self.run_gate, cleanup=self.cleanup,
             policy=policy, accepted_policy_hash=accepted_policy_hash, request_detail=request_detail,
+            memory_path=self.memory_path,
         )
 
 

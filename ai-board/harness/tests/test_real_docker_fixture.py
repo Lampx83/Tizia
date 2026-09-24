@@ -42,7 +42,9 @@ def test_d0_fixture_reaches_docker_http_on_an_ai_board_branch(tmp_path):
                    check=True, stdin=subprocess.DEVNULL)
     page = (source / PAGE).read_text(encoding="utf-8")
     assert "</body>" in page
-    codegen = {"code": page.replace("</body>", MARKER + "\n</body>", 1),
+    assert page.count("</body>") == 1
+    # Existing file: Gate 3 only accepts search/replace edits, never a whole-file rewrite.
+    codegen = {"edits": [{"search": "</body>", "replace": MARKER + "\n</body>"}],
                "test_file": "test/ai-board-d0-fixture.test.js", "test": TEST}
     deps = replace(deps_with(FakeModels(plan=None, codegen=codegen)), verify=None)  # real Gate 5
     plan = {"capabilities": ["public.ui"], "steps": [{

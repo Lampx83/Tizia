@@ -38,6 +38,7 @@ def test_parse_codegen_valid():
 @pytest.mark.parametrize("bad", [
     "khong phai json",
     '{"code": "x"}',                                   # thiếu test_file/test
+    '{"test_file": "t.js", "test": "y"}',              # thiếu code cho file mới
     '{"code": "", "test_file": "t.js", "test": "y"}',  # code rỗng
     '[1, 2]',                                            # không phải object
 ])
@@ -273,7 +274,7 @@ def test_heavy_gate3_model_reads_only_gate3_model_heavy():
     assert OllamaClient.from_env({"GATE3_MODEL": "old"}).gate3_model == ""
 
 
-# ── Existing target file: current content in view, 20 KB ceiling ────────────
+# ── Existing target file: grep excerpt in, search/replace edits out ─────────
 
 def _source_with(tmp_path, rel, content):
     repo = tmp_path / "source"
@@ -284,33 +285,70 @@ def _source_with(tmp_path, rel, content):
     return repo
 
 
-def test_existing_target_content_is_appended_after_the_locked_prefix(tmp_path):
-    source = _source_with(tmp_path, "public/flashcards.html", "<h1>Thẻ cũ</h1>\n<p>giữ nguyên</p>\n")
-    models = FakeModels(plan_with(["features"]))
+BIG_PAGE = "".join(f"<p>đoạn {i}</p>\n" for i in range(3000)) + '<footer id="chan-trang">Bản quyền</footer>\n</body>\n'
+EDITS = {"code": "// fixture code\n", "test_file": "test/fixture.test.js", "test": "// fixture test\n",
+         "edits": [{"search": '<footer id="chan-trang">Bản quyền</footer>',
+                    "replace": '<p>Tizia được cập nhật liên tục.</p>\n<footer id="chan-trang">Bản quyền</footer>'}]}
+
+
+def _written(tmp_path, rel):
+    return (tmp_path / "scratch" / rel).read_text(encoding="utf-8")
+
+
+def test_large_existing_file_is_shown_as_an_excerpt_and_edited_in_place(tmp_path):
+    source = _source_with(tmp_path, "public/flashcards.html", BIG_PAGE)
+    models = FakeModels(plan_with(["features"]), codegen=EDITS)
     plan = plan_with(["features"])
-    state = {"plan": plan, "checkout_source": str(source)}
+    state = {"plan": plan, "checkout_source": str(source), "request_detail": "Thêm dòng ở chân trang"}
 
     out = implement.run(state, deps_with(models), Budget(max_wall_clock_s=999), repo_dir=tmp_path / "scratch")
 
     assert out["blocked"] is False
     new_file_prompt, existing_prompt = [call["prompt"] for call in models.calls]
     plain = implement.build_prompt(plan["subtasks"][1])
-    assert existing_prompt.startswith(plain)
-    assert "<p>giữ nguyên</p>" in existing_prompt[len(plain):]
-    assert "giữ nguyên" not in new_file_prompt
+    assert existing_prompt.startswith(plain)  # locked prefix unchanged
+    context = existing_prompt[len(plain):]
+    assert 'L3001| <footer id="chan-trang">Bản quyền</footer>' in context
+    assert "3002 dòng" in context and "flashcards.html" in context
+    assert len(context) < 8000 < len(BIG_PAGE)  # excerpt, not the 60 KB file
+    assert new_file_prompt == implement.build_prompt(plan["subtasks"][0])  # new file: prefix only
+    written = _written(tmp_path, "public/flashcards.html")
+    assert written == BIG_PAGE.replace('<footer id="chan-trang">', '<p>Tizia được cập nhật liên tục.</p>\n<footer id="chan-trang">')
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=source, capture_output=True, text=True,
                           stdin=subprocess.DEVNULL).stdout.strip()
     assert state["base_sha"] == head  # the worktree is cut from the same base the model saw
 
 
-def test_existing_target_over_20kb_stops_as_plan_failure_before_any_model_call(tmp_path):
-    source = _source_with(tmp_path, "public/flashcards.html", "x" * (20 * 1024 + 1))
-    models = FakeModels(plan_with(["features"]))
-
+def test_whole_file_rewrite_of_an_existing_file_is_refused(tmp_path):
+    source = _source_with(tmp_path, "public/flashcards.html", BIG_PAGE)
+    models = FakeModels(plan_with(["features"]))  # default codegen: `code` only
     out = implement.run({"plan": plan_with(["features"]), "checkout_source": str(source)},
                         deps_with(models), Budget(max_wall_clock_s=999), repo_dir=tmp_path / "scratch")
-
     assert out["blocked"] is True
-    assert out["failure_class"] == "plan"
-    assert "public/flashcards.html" in out["reason"] and "20 KB" in out["reason"]
-    assert models.calls == []
+    assert "edits" in out["reason"]
+    assert out.get("failure_class") in (None, "ordinary")  # model mistake: one repair pass may fix it
+
+
+def test_edit_whose_search_is_not_in_the_file_blocks_for_repair(tmp_path):
+    source = _source_with(tmp_path, "public/flashcards.html", BIG_PAGE)
+    bad = {**EDITS, "edits": [{"search": "<footer>không có</footer>", "replace": "x"}]}
+    out = implement.run({"plan": plan_with(["features"]), "checkout_source": str(source)},
+                        deps_with(FakeModels(plan_with(["features"]), codegen=bad)),
+                        Budget(max_wall_clock_s=999), repo_dir=tmp_path / "scratch")
+    assert out["blocked"] is True
+    assert "không khớp" in out["reason"]
+    assert out.get("failure_class") in (None, "ordinary")
+
+
+def test_lessons_from_past_verdicts_are_added_to_the_prompt(tmp_path):
+    import memory
+    source = _source_with(tmp_path, "public/flashcards.html", BIG_PAGE)
+    lessons = tmp_path / "lessons.jsonl"
+    memory.record(lessons, [{"files": ["public/flashcards.html"], "gate": 5, "failure_class": "ordinary",
+                             "reason": "changed page body does not match checkout", "outcome": "fixed"}])
+    models = FakeModels(plan_with(["features"]), codegen=EDITS)
+    implement.run({"plan": plan_with(["features"]), "checkout_source": str(source), "memory_path": str(lessons)},
+                  deps_with(models), Budget(max_wall_clock_s=999), repo_dir=tmp_path / "scratch")
+    existing_prompt = models.calls[1]["prompt"]
+    assert "BÀI HỌC" in existing_prompt and "does not match checkout" in existing_prompt
+    assert "BÀI HỌC" not in models.calls[0]["prompt"]  # other file, no keyword match
