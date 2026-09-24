@@ -23,6 +23,14 @@ class LeaseLostError(RuntimeError):
     pass
 
 
+class PlanBlockedError(RuntimeError):
+    """Gate 1/2/2.5 stop. `detail` = JSON-safe {gate, reason, signals, plan} for the plan_blocked event."""
+
+    def __init__(self, message: str, detail: dict):
+        super().__init__(message)
+        self.detail = detail
+
+
 def _load_harness():
     harness_dir = Path(__file__).resolve().parent / "harness"
     if str(harness_dir) not in os.sys.path:
@@ -268,7 +276,8 @@ class HttpWorker:
                 self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/events", {
                     **lease, "run_id": run["id"], "event_type": "plan_blocked",
                     "public_message": "Kế hoạch chưa vượt qua kiểm tra an toàn.",
-                    "internal_detail": str(error),
+                    "internal_detail": json.dumps(error.detail, ensure_ascii=False)
+                    if isinstance(error, PlanBlockedError) else str(error),
                     "idempotency_key": f"{prefix}:plan-blocked",
                 })
                 self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/release", {
@@ -368,7 +377,10 @@ class HarnessPlanner:
         for gate in (1, 2, 2.5):
             result = self.run_gate(gate, request, self.deps, budget, state)
             if result.get("blocked"):
-                raise RuntimeError(f"gate {gate} blocked: {result.get('reason')}")
+                raise PlanBlockedError(f"gate {gate} blocked: {result.get('reason')}", {
+                    "gate": gate, "reason": result.get("reason"), "signals": list(result.get("signals") or []),
+                    "plan": json.dumps(state.get("plan"), ensure_ascii=False)[:2000],
+                })
         spent = budget.snapshot()
         budget_used = int(spent.get("model_calls", 0)) * 40
         return self._canonical(request, state["plan"]), budget_used

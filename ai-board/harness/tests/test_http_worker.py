@@ -423,3 +423,39 @@ def test_worker_id_defaults_to_a_valid_per_machine_name(monkeypatch):
     assert worker.default_worker_id() == "desktop-admin-1-worker"
     monkeypatch.setattr(worker.socket, "gethostname", lambda: "")
     assert worker.default_worker_id() == "local-worker"
+
+
+def test_complexity_gated_plan_records_reason_signals_and_truncated_plan():
+    import json
+    from worker import HarnessPlanner
+    from budget import Budget
+
+    big_plan = {'summary_vi': 'x' * 5000, 'capabilities': ['features', 'quiz'],
+                'subtasks': [{'title': 'a', 'file': 'server/index.js', 'verify': 'v', 'size': 'small'}]}
+
+    def run_gate(gate, _request, _deps, _budget, state):
+        if gate == 1:
+            state['plan'] = big_plan
+        if gate == 2.5:
+            return {'gate': 2.5, 'blocked': True, 'reason': 'complexity_gated', 'outcome': 'complexity_gated',
+                    'signals': ['capabilities: features, quiz', 'file ngoài vùng an toàn: server/index.js']}
+        return {'gate': gate, 'blocked': False, 'reason': None}
+
+    planner = HarnessPlanner.__new__(HarnessPlanner)
+    planner.Budget, planner.deps, planner.run_gate = Budget, object(), run_gate
+    transport = FakeTransport()
+    worker = HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport),
+                        worker_id='w1', version='test', mode='shadow', planner=planner)
+    try:
+        worker.run_once()
+    except RuntimeError as error:
+        assert 'complexity_gated' in str(error)
+    else:
+        raise AssertionError('blocked plan must propagate')
+
+    event = transport.calls[-2][2]
+    assert event['event_type'] == 'plan_blocked'
+    detail = json.loads(event['internal_detail'])
+    assert detail['gate'] == 2.5 and detail['reason'] == 'complexity_gated'
+    assert detail['signals'] == ['capabilities: features, quiz', 'file ngoài vùng an toàn: server/index.js']
+    assert detail['plan'].startswith('{"summary_vi": "xxx') and len(detail['plan']) <= 2000

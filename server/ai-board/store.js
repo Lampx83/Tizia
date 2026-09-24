@@ -291,11 +291,12 @@ export function createAiBoardStore(db, hooks = {}) {
     `).all(Math.min(Math.max(Number(limit) || 100, 1), 500));
   }
 
-  function listWorkers() {
+  // Read-time only: a dead worker never writes its own exit, and nothing else may write ai_workers for it.
+  function listWorkers({ now = Date.now(), leaseMs = 120_000 } = {}) {
     return db.prepare(`
       SELECT worker_id, version, mode, status, current_ticket_id, last_seen_at, updated_at
       FROM ai_workers ORDER BY last_seen_at DESC, worker_id
-    `).all();
+    `).all().map((w) => (w.status === 'running' && now - w.last_seen_at > leaseMs ? { ...w, status: 'stale' } : w));
   }
 
   function assertLease(ticketId, workerId, leaseToken, now = Date.now()) {

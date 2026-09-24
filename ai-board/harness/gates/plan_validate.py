@@ -135,13 +135,22 @@ def is_complex(plan: dict) -> bool:
     không) — KHÔNG PHẢI cùng phép đo với "route/middleware mới=high" gate 5.5
     dự định làm trên DIFF thật (spec.md mục 09). Cùng tên, khác đối tượng đo
     — đừng giả định 2 cái tương đương khi build gate 5.5."""
-    if len(set(plan.get("capabilities") or [])) >= 2:
-        return True
-    if any(not _SAFE_FILE_PREFIX.match(st.get("file", "")) for st in plan.get("subtasks") or []):
-        return True
-    if len(plan.get("subtasks") or []) >= 4:
-        return True
-    return False
+    return bool(complexity_signals(plan))
+
+
+def complexity_signals(plan: dict) -> list[str]:
+    """Tín hiệu phức tạp đã bật, dạng '<tên>: <chi tiết>' cho admin đọc. Rỗng = đơn giản."""
+    signals = []
+    caps = sorted(set(plan.get("capabilities") or []))
+    if len(caps) >= 2:
+        signals.append(f"capabilities: {', '.join(caps)}")
+    subtasks = plan.get("subtasks") or []
+    outside = sorted({st.get("file", "") for st in subtasks if not _SAFE_FILE_PREFIX.match(st.get("file", ""))})
+    if outside:
+        signals.append(f"file ngoài vùng an toàn: {', '.join(outside)}")
+    if len(subtasks) >= 4:
+        signals.append(f"subtasks: {len(subtasks)}")
+    return signals
 
 
 def _lookup_requester(db_path, display_name: str | None) -> dict | None:
@@ -218,7 +227,9 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
             write_clarification(db_path, request, question)
         return {"gate": 2.5, "blocked": True, "reason": "needs_clarification", "outcome": "needs_clarification"}
 
-    if is_complex(plan) and not (db_path is not None and is_authorized_for_complex(db_path, request)):
-        return {"gate": 2.5, "blocked": True, "reason": "complexity_gated", "outcome": "complexity_gated"}
+    signals = complexity_signals(plan)
+    if signals and not (db_path is not None and is_authorized_for_complex(db_path, request)):
+        return {"gate": 2.5, "blocked": True, "reason": "complexity_gated", "outcome": "complexity_gated",
+                "signals": signals}
 
     return {"gate": 2.5, "blocked": False, "reason": None}

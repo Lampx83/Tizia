@@ -123,6 +123,14 @@ def test_complex_plan_from_ordinary_user_is_gated(db_file, request_item):
     assert len(models.calls) == 2  # cổng 1 + cổng 2.5, cổng 3 không chạy
 
 
+def test_complexity_gate_names_the_signals_that_fired():
+    plan = plan_with(["features", "quiz"])
+    plan["subtasks"] = [{**plan["subtasks"][0], "file": "server/index.js"}] * 4
+    signals = plan_validate.complexity_signals(plan)
+    assert [s.split(":")[0] for s in signals] == ["capabilities", "file ngoài vùng an toàn", "subtasks"]
+    assert plan_validate.complexity_signals(plan_with(["features"])) == []
+
+
 def test_complex_plan_from_unmapped_guest_is_gated_fail_closed(db_file, request_item):
     # KHÔNG seed user nào -> display_name không map được sang user thật.
     models = FakeModels(plan_with(["features", "quiz"]))

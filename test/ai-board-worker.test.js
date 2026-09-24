@@ -522,3 +522,11 @@ test('server rejects an unknown worker mode', async () => {
     db.close();
   }
 });
+
+test('a running worker silent for longer than the lease lists as stale, read-time only', () => {
+  const { db, store } = fixture();
+  store.claimNext({ workerId: 'w1', version: 'test', mode: 'shadow', now: 1_000 });
+  assert.equal(store.listWorkers({ now: 1_000 + 120_000 })[0].status, 'running');
+  assert.equal(store.listWorkers({ now: 1_000 + 120_001 })[0].status, 'stale');
+  assert.equal(db.prepare('SELECT status FROM ai_workers').get().status, 'running');
+});
