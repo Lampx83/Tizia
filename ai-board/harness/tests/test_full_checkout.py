@@ -38,7 +38,7 @@ def child(scratch, title, file, code, test_file="test/generated.test.js", test="
 
 
 def state_for(tmp_path, children, scopes=None):
-    subtasks = [{"title": c["title"], "file": c["file"],
+    subtasks = [{"title": c["title"], "file": c["file"], "size": "small",
                  "allowed_scope": (scopes or {}).get(c["title"], [c["file"]])} for c in children]
     return {"skill_id": "ticket-7", "scratch_repo": str(tmp_path / "scratch"),
             "plan": {"subtasks": subtasks}, "diffs": children}
@@ -149,3 +149,24 @@ def test_scope_violation_at_gate_5_is_critical(tmp_path, source, fake_deps):
 
     assert out["blocked"] is True
     assert out["failure_class"] == "critical"
+
+
+def test_gate_4_size_flag_counts_the_real_base_diff_not_the_scratch_rewrite(tmp_path, source, fake_deps):
+    page = "".join(f"<p>line {i}</p>\n" for i in range(100))
+    (source / "public" / "big.html").write_text(page, encoding="utf-8")
+    git(source, "add", "-A")
+    git(source, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "big page")
+    scratch = implement._ensure_scratch_repo(tmp_path / "scratch")
+    edited = page.replace("<p>line 7</p>", "<p>line seven</p>")
+    state = state_for(tmp_path, [child(scratch, "x", "public/big.html", edited)])
+    state["checkout_source"] = str(source)
+    assert state["diffs"][0]["diff"].count("\n+<p>") == 100  # scratch sees the whole file as new
+
+    try:
+        out = main.run_gate(4, {}, fake_deps, None, state)
+    finally:
+        main.cleanup_full_checkout(state, keep_branch=False)
+
+    assert out["blocked"] is False
+    assert not any("vượt" in issue for issue in out["issues"])
+    assert out["needs_careful_review"] is False

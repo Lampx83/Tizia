@@ -227,13 +227,13 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
     if number == 3:
         return implement.run(state, deps, budget, db_path=db_path, proposal_id=proposal_id)
     if number == 4:
-        out = static_check.run(state)
-        if out.get("blocked"):
-            return out
-        # Checks bắt buộc cần diff thật base..HEAD nên worktree được dựng ngay ở 3→4.
+        # Checks bắt buộc + cờ size cần diff thật base..HEAD nên worktree được dựng ngay ở 3→4.
         failed = _ensure_full_checkout(state, 4)
         if failed:
             return failed
+        out = static_check.run(state)
+        if out.get("blocked"):
+            return out
         text = "".join(item.get("diff", "") for item in state.get("full_diff") or state.get("diffs") or [])
         scanned = guard.scan(text, state.get("full_checkout"))
         state["ui_changed"] = scanned["ui_changed"]

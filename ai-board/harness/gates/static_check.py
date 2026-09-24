@@ -109,6 +109,8 @@ def run(state: dict) -> dict:
     planned_files = {_posix(st["file"]) for st in plan["subtasks"]}
     size_by_file = {_posix(st["file"]): st["size"] for st in plan["subtasks"]}
     scratch_repo = state.get("scratch_repo")
+    # Scratch repo không có base nên file sẵn có hiện như viết lại toàn bộ; diff thật base..HEAD thì không.
+    full_diff = "".join(item.get("diff", "") for item in state.get("full_diff") or [])
 
     issues: list[str] = []
     needs_careful_review = False
@@ -124,7 +126,7 @@ def run(state: dict) -> dict:
             needs_careful_review = True
         else:
             limit = SIZE_ESTIMATE_LINES[size_by_file[file_path]] * OVERSIZE_MULTIPLIER
-            added = _added_lines_for_file(d["diff"], file_path)
+            added = _added_lines_for_file(full_diff or d["diff"], file_path)
             if added > limit:
                 issues.append(f"'{d['file']}': +{added} dòng, vượt {OVERSIZE_MULTIPLIER}x ước lượng ({limit})")
                 needs_careful_review = True
