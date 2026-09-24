@@ -5,8 +5,8 @@
 // Self-contained: tự chèn <style> (dùng biến theme --card/--text… có sẵn ở cả trang
 // Express lẫn Next, kèm màu dự phòng) nên KHÔNG phải sửa CSS ở 2 nơi. Dùng chung cho
 // public/nha-thuoc-3d.html (Express) và web-next (Next) — 1 nguồn duy nhất.
-import { SCENARIO_CARDS, SCENARIOS } from './scenarios.js?v=ph0804';
-import { getStudent, setStudent, clearStudent, setGuest, isGuest } from './practice-client.js?v=ph0822b';
+import { SCENARIO_CARDS, SCENARIOS } from './scenarios.js?v=ph0924';
+import { getStudent, setStudent, clearStudent, setGuest, isGuest } from './practice-client.js?v=ph0924';
 
 // req #143: đã BỎ dải 4 ô "mục tiêu học tập" và phần mô tả dài dưới mỗi thẻ khỏi
 // màn chọn tình huống theo yêu cầu của giảng viên — màn này chỉ còn danh sách tên
@@ -45,6 +45,10 @@ function injectStyle() {
   .pc-card-title { font-weight: 700; font-size: 14.5px; line-height: 1.4; }
   .pc-card-go { margin-top: auto; align-self: flex-start; font-size: 12.5px; font-weight: 700; color: var(--accent, #38bdf8); }
   .pc-card:hover .pc-card-go { text-decoration: underline; }
+  .pc-hist { font-size: 13px; color: var(--muted, #94a3b8); }
+  .pc-ht { width: 100%; border-collapse: collapse; font-size: 12.5px; color: var(--text, #e2e8f0); }
+  .pc-ht th, .pc-ht td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border, #334155); }
+  .pc-ht a { color: var(--accent, #38bdf8); }
   .pc-foot { margin: 22px 0 8px; color: var(--muted, #94a3b8); font-size: 12px; }
   /* Màn nhập thông tin sinh viên (#142 mục 2) — định danh tự khai, KHÔNG mật khẩu. */
   .pc-id { max-width: 520px; margin: 40px auto 0; background: var(--card, #111827);
@@ -155,8 +159,6 @@ export function showRolePicker(onDone) {
   document.body.appendChild(overlay);
 }
 
-// Màn "THÔNG TIN SINH VIÊN" (#142 mục 2). Ba trường bắt buộc, KHÔNG mật khẩu,
-// không đăng ký tài khoản — đây là màn định danh, không phải xác thực.
 export function showStudentForm(onDone) {
   injectStyle();
   document.title = 'Thông tin sinh viên — Pharmacomm · Tizia';
@@ -272,9 +274,11 @@ export function showIntro({ moduleId, onPick }) {
               </div>
             </div>
             <div class="pc-card-title">${c.title || ''}</div>
-            <span class="pc-card-go">Bắt đầu →</span>
+            <span class="pc-card-go">▶ Bắt đầu thực hành</span>
           </button>`).join('')}
       </div>
+
+      ${isGuest() ? '' : `<div class="pc-sec">🕘 Lịch sử thực hành của bạn <small>· mỗi lần thực hành là một lượt riêng, bấm để xem chi tiết</small></div><div id="pc-hist" class="pc-hist">Đang tải…</div>`}
 
       <div class="pc-ask">
         <div class="pc-ask-ic">🏛️</div>
@@ -312,4 +316,24 @@ export function showIntro({ moduleId, onPick }) {
   });
 
   document.body.appendChild(overlay);
+  loadHistory(overlay);
+}
+
+// req #227: lịch sử ĐẦY ĐỦ các lượt (mới nhất trước), mỗi lượt một dòng riêng có mã lượt, giờ bắt đầu/kết thúc, điểm.
+async function loadHistory(overlay) {
+  const box = overlay.querySelector('#pc-hist');
+  const st = getStudent();
+  if (!box || !st) return;
+  const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const vn = (ms) => { if (!ms) return '—'; const d = new Date(Number(ms) + 7 * 3600 * 1000), p = (n) => String(n).padStart(2, '0'); return `${p(d.getUTCHours())}:${p(d.getUTCMinutes())} ${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`; };
+  try {
+    const r = await fetch('/api/pharmacy/practice/history?code=' + encodeURIComponent(st.studentCode));
+    const d = await r.json();
+    const items = d.items || [];
+    if (!items.length) { box.textContent = 'Chưa có lượt thực hành nào.'; return; }
+    box.innerHTML = `<table class="pc-ht"><thead><tr><th>Mã lượt</th><th>Tình huống</th><th>Bắt đầu</th><th>Kết thúc</th><th>Điểm</th></tr></thead><tbody>${items.map((s) => `<tr>
+      <td><a href="/pharmacomm-ket-qua.html?session=${encodeURIComponent(s.session_id)}">${esc(String(s.session_id).slice(0, 8))}</a></td>
+      <td>${esc(s.scenario_code)}</td><td>${vn(s.started_at)}</td><td>${vn(s.completed_at)}</td>
+      <td>${s.status === 'completed' ? esc(s.total_score) : (s.status === 'in_progress' ? 'Chưa chấm' : esc(s.status))}</td></tr>`).join('')}</tbody></table>`;
+  } catch { box.textContent = 'Không tải được lịch sử.'; }
 }

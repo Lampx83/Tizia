@@ -60,7 +60,10 @@ let creating = null;
 export async function startPractice({ moduleId, chatSessionId }) {
   const st = getStudent();
   if (!st) throw new Error('Chưa có thông tin sinh viên.');
-  // Cùng tình huống + phiên còn dở trong tab này → dùng lại, không tạo phiên mới.
+  // Cùng tình huống + phiên còn DỞ (chưa bấm "Kết thúc và chấm điểm") trong tab này → dùng lại.
+  // req #227: phiên ĐÃ KẾT THÚC thì tuyệt đối không dùng lại — trước đây lượt sau lấy lại đúng mã lượt
+  // cũ (bị khoá) nên hội thoại/thao tác không ghi được và trang kết quả hiện điểm lượt đầu.
+  if (state && state.finished) endPracticeLocal();
   if (state && state.moduleId === moduleId && state.practiceId) return state.practiceId;
   if (creating) return creating;
   creating = (async () => {
@@ -150,6 +153,7 @@ export async function finishPractice() {
   });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.error || 'Chấm điểm lỗi.');
+  endPracticeLocal();   // req #227: lượt này xong — lượt sau phải tạo mã lượt MỚI
   // Máy chủ chỉ nhận việc rồi chấm ở nền (mất 60–120s) — trang kết quả sẽ tự
   // theo dõi tiến độ, ở đây không đợi.
   return { sessionId: id, status: d.status || 'scoring' };

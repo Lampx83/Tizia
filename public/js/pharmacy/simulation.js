@@ -1,8 +1,8 @@
 // SimulationClient — port từ Pharmacy-AI/src/components/SimulationClient.tsx.
 // Wire chat panel + actions → /api/pharmacy/* + scoring panel.
-import { buildScene, makeDrugLabelTex, makeDrugBackLabelTex, makeDrugSideLabelTex, getBoxStyle, deviceModelFor } from './scene.js?v=ph0803';
-import { loadDrugs } from './catalog.js?v=ph0803';
-import { initMobileUI } from './mobile-ui.js?v=ph0803';
+import { buildScene, makeDrugLabelTex, makeDrugBackLabelTex, makeDrugSideLabelTex, getBoxStyle, deviceModelFor } from './scene.js?v=ph0804';
+import { loadDrugs } from './catalog.js?v=ph0804';
+import { initMobileUI } from './mobile-ui.js?v=ph0804';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -30,12 +30,12 @@ function swapUnitToGlb(group, file, sizeRef) {
     group.add(m);
   }).catch(() => { /* giữ procedural làm fallback */ });
 }
-import { openPosTerminal } from './pos.js?v=ph0803';
-import { openHdsdEditor, openPackageEditor, PACKAGE_TYPES, RETAIL_FORMS } from './label-editor.js?v=ph0803';
+import { openPosTerminal } from './pos.js?v=ph0804';
+import { openHdsdEditor, openPackageEditor, PACKAGE_TYPES, RETAIL_FORMS } from './label-editor.js?v=ph0804';
 import { STAGE_LABEL } from './rubric.js';
 // #142 — lưu bền vững hội thoại + thao tác 3D vào DB (trước đây chỉ nằm trong
 // bộ nhớ máy chủ nên mất sạch mỗi lần khởi động lại).
-import { startPractice, logMessage, logAction, finishPractice, getPracticeId } from './practice-client.js?v=ph0822b';
+import { startPractice, logMessage, logAction, finishPractice, getPracticeId } from './practice-client.js?v=ph0924';
 
 const $ = (id) => document.getElementById(id);
 
@@ -327,6 +327,32 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
     $('chat').scrollTop = $('chat').scrollHeight;
   }
 
+  // Bộ chọn mô hình AI (Qwen mặc định / GPT) — lưu lựa chọn trong localStorage,
+  // gửi kèm mỗi lượt chat (`provider`). Server tự rơi về Qwen nếu chưa cấu hình
+  // OPENAI_API_KEY hoặc chưa chọn GPT.
+  const PROVIDER_KEY = 'tizia_pharmacy_provider';
+  let provider = (() => { try { return localStorage.getItem(PROVIDER_KEY) === 'gpt' ? 'gpt' : 'qwen'; } catch { return 'qwen'; } })();
+  const modelSelect = $('model-select');
+  if (modelSelect) {
+    modelSelect.value = provider;
+    modelSelect.addEventListener('change', () => {
+      provider = modelSelect.value === 'gpt' ? 'gpt' : 'qwen';
+      try { localStorage.setItem(PROVIDER_KEY, provider); } catch {}
+    });
+  }
+  const MODEL_TAG_LABEL = { qwen: '🐫 Qwen', gpt: '✨ GPT' };
+  // Chèn nhãn model NGAY SAU bong bóng (không nằm trong bubble) → không bị đè khi
+  // stream cập nhật textContent liên tục. Bỏ qua khi provider rỗng (câu từ guard
+  // tất định, không phải từ model, vd chào/né/nhắc-bài — không gắn nhãn model).
+  function tagBubbleModel(bubbleEl, prov) {
+    const label = MODEL_TAG_LABEL[prov];
+    if (!label || !bubbleEl?.parentNode) return;
+    const tag = document.createElement('div');
+    tag.className = 'bubble-model-tag';
+    tag.textContent = label;
+    bubbleEl.insertAdjacentElement('afterend', tag);
+  }
+
   async function send() {
     const ta = $('ta');
     const text = ta.value.trim();
@@ -352,7 +378,7 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
       try {
         const r = await fetch('/api/pharmacy/chat-stream', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: session.id, message: text })
+          body: JSON.stringify({ sessionId: session.id, message: text, provider })
         });
         if (r.status === 404) throw sessionLostErr();
         if (!r.ok || !r.body || !(r.headers.get('content-type') || '').includes('text/event-stream')) {
@@ -360,7 +386,7 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
         }
         const reader = r.body.getReader();
         const dec = new TextDecoder();
-        let buf = '', shown = '', finalReply = null;
+        let buf = '', shown = '', finalReply = null, usedProvider = null;
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -372,44 +398,45 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
             if (!line) continue;
             let j; try { j = JSON.parse(line.slice(6)); } catch { continue; }
             if (j.delta) { shown += j.delta; if (shown.trim()) { thinking.textContent = shown.trimStart(); scrollBottom(); } }
-            if (j.done) { finalReply = j.reply || shown; thinking.textContent = finalReply; scrollBottom(); }
+            if (j.done) { finalReply = j.reply || shown; usedProvider = j.provider || null; thinking.textContent = finalReply; scrollBottom(); }
           }
         }
         if (finalReply === null && !shown.trim()) throw new Error('empty-stream');
-        return finalReply != null ? finalReply : shown.trimStart();
+        return { text: finalReply != null ? finalReply : shown.trimStart(), provider: usedProvider };
       } catch (e) {
         if (e.sessionLost) throw e;
         // Fallback: endpoint không-stream cũ (server cũ / proxy chặn SSE).
         const r = await fetch('/api/pharmacy/chat', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: session.id, message: text })
+          body: JSON.stringify({ sessionId: session.id, message: text, provider })
         });
         if (r.status === 404) throw sessionLostErr();
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || 'chat failed');
         session = d.session;
-        const reply = d.session.messages[d.session.messages.length - 1].content;
-        thinking.textContent = reply;
-        return reply;
+        const lastMsg = d.session.messages[d.session.messages.length - 1];
+        thinking.textContent = lastMsg.content;
+        return { text: lastMsg.content, provider: lastMsg.provider || null };
       }
     }
 
     try {
-      let reply;
+      let result;
       try {
-        reply = await chatAttempt();
+        result = await chatAttempt();
       } catch (e) {
         if (!e.sessionLost) throw e;
         await recreateSession();       // phiên mới + khôi phục transcript/hành động
-        reply = await chatAttempt();   // gửi lại đúng câu vừa rồi
+        result = await chatAttempt();  // gửi lại đúng câu vừa rồi
       }
+      tagBubbleModel(thinking, result.provider);
       // Ghi bản sao SAU khi thành công: nếu phải khôi phục thì restore chưa chứa câu
       // hiện tại → gửi lại không bị trùng tin nhắn trong phiên mới.
       localMsgs.push({ role: 'user', content: text, ts: Date.now() });
-      localMsgs.push({ role: 'npc', content: reply, ts: Date.now() });
+      localMsgs.push({ role: 'npc', content: result.text, ts: Date.now() });
       // #142 mục 5: lưu NGAY sau mỗi lượt trao đổi, không đợi kết thúc tình huống.
       logMessage('student', text);
-      logMessage('patient', reply);
+      logMessage('patient', result.text);
     } catch (e) {
       thinking.textContent = '[Lỗi: ' + e.message + ']';
     } finally {
