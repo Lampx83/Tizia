@@ -325,6 +325,15 @@ export const P1AN_WEEKS = [
     Q('Lên lớp 2, em mong?', ['Học thêm nhiều bài hát mới', 'Không hát nữa', 'Quên hết', 'Bỏ môn nhạc'], 0, 'Cứ tiếp tục yêu âm nhạc nhé.', ['Đúng — học thêm nhiều bài hát mới.', 'Sai — vẫn nên tiếp tục hát.', 'Sai — không nên quên hết.', 'Sai — không bỏ môn nhạc.']),
     Q('Em yêu âm nhạc nghĩa là?', ['Phá tiếng hát bạn', 'Hát lung tung', 'Chỉ hát lúc cô bắt', 'Trân trọng và hát bằng cả tấm lòng'], 3, 'Hát bằng cả tấm lòng là yêu âm nhạc.', ['Sai — không phá tiếng hát bạn.', 'Sai — không hát lung tung.', 'Sai — không chỉ hát lúc cô bắt.', 'Đúng — trân trọng và hát bằng cả tấm lòng.']),
   ]),
+
+  M(36, 'Kết thúc Lớp 1 — Một năm hát ca vui vẻ', [
+    Q('Khi hát Quốc ca Việt Nam em phải làm gì?', ['Vừa hát vừa đùa', 'Đứng nghiêm, hát rõ lời', 'Ngồi xuống cho đỡ mỏi', 'Nói chuyện riêng'], 1, 'Quốc ca hát khi chào cờ — đứng nghiêm, trang trọng.', ['Sai — Quốc ca là bài hát trang trọng, không đùa nghịch.', 'Đúng — đứng nghiêm và hát rõ lời, thể hiện lòng tự hào.', 'Sai — chào cờ phải đứng nghiêm.', 'Sai — nói chuyện riêng là thiếu tôn trọng.']),
+    Q('Thanh phách dùng để làm gì?', ['Vẽ tranh', 'Viết chữ', 'Gõ đệm theo nhịp', 'Đo chiều cao'], 2, 'Thanh phách là nhạc cụ gõ, dùng đệm nhịp cho bài hát.', ['Sai — vẽ tranh dùng bút màu, không dùng thanh phách.', 'Sai — viết chữ dùng bút.', 'Đúng — thanh phách dùng gõ đệm theo nhịp bài hát.', 'Sai — đo chiều cao dùng thước.']),
+    Q('Nhạc cụ nào là nhạc cụ gõ em đã học ở Lớp 1?', ['Đàn piano', 'Trống nhỏ', 'Đàn violin', 'Sáo trúc'], 1, 'Nhạc cụ gõ Lớp 1: thanh phách, trống nhỏ, song loan.', ['Sai — piano là nhạc cụ phím, chưa học ở Lớp 1.', 'Đúng — trống nhỏ là nhạc cụ gõ em đã được học.', 'Sai — violin là nhạc cụ dây.', 'Sai — sáo trúc là nhạc cụ hơi.']),
+    Q('Tiếng hát to và tiếng hát nhỏ khác nhau về điều gì?', ['Độ cao', 'Tốc độ', 'Độ to (to – nhỏ)', 'Lời bài hát'], 2, 'To – nhỏ là nói về độ to của âm thanh.', ['Sai — độ cao là cao – thấp, không phải to – nhỏ.', 'Sai — tốc độ là nhanh – chậm.', 'Đúng — to – nhỏ là nói về độ to của âm thanh.', 'Sai — lời bài hát không đổi khi hát to hay hát nhỏ.']),
+    Q('Hát nhanh – hát chậm là nói về?', ['Tốc độ', 'Màu sắc', 'Độ to', 'Số câu hát'], 0, 'Nhanh – chậm là tốc độ (nhịp độ) của bài hát.', ['Đúng — nhanh – chậm chính là tốc độ của bài hát.', 'Sai — màu sắc là của môn Mĩ thuật.', 'Sai — độ to là to – nhỏ.', 'Sai — số câu hát không đổi khi hát nhanh hay chậm.']),
+    Q('Lên Lớp 2 em sẽ được học thêm điều gì trong môn Âm nhạc?', ['Không học nhạc nữa', 'Chỉ nghe, không hát', 'Chỉ hát đúng một bài', 'Nhịp và nốt nhạc đơn giản'], 3, 'Lớp 2 bắt đầu làm quen nhịp và nốt nhạc đơn giản.', ['Sai — lên Lớp 2 em vẫn học Âm nhạc.', 'Sai — em vẫn được hát, còn hát nhiều bài mới nữa.', 'Sai — em sẽ học thêm nhiều bài, không chỉ một bài.', 'Đúng — Lớp 2 em sẽ học nhịp và nốt nhạc đơn giản.']),
+  ]),
 ];
 
 export const P1AN_SCENARIOS = indexBy(P1AN_WEEKS);

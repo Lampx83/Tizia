@@ -330,6 +330,15 @@ export const P1TA_WEEKS = [
     Q('"It is sunny and hot." nghĩa là?', ['Trời ấm mát', 'Trời lạnh và mưa', 'Trời nắng và nóng', 'Trời mây gió'], 2, 'Sunny = nắng; hot = nóng.', ['Sai — sunny là nắng, hot là nóng, không phải ấm mát.', 'Sai — lạnh là cold, mưa là rainy.', 'Đúng — Sunny là nắng, hot là nóng.', 'Sai — mây là cloudy, gió là windy.']),
     Q('"Goodbye! See you!" nghĩa là?', ['Cảm ơn nhé', 'Xin chào, gặp lại', 'Tạm biệt, hẹn gặp lại', 'Xin lỗi nhé'], 2, 'Goodbye + See you = Tạm biệt, hẹn gặp lại.', ['Sai — Cảm ơn là Thank you.', 'Sai — Goodbye là tạm biệt, không phải xin chào.', 'Đúng — Goodbye! See you! là Tạm biệt, hẹn gặp lại.', 'Sai — Xin lỗi là Sorry.']),
   ], { difficulty: 2 }),
+
+  M(36, 'End of Grade 1 — Ready for Grade 2!', [
+    Q('"Good morning!" nghĩa là gì?', ['Chào buổi sáng', 'Chúc ngủ ngon', 'Tạm biệt', 'Cảm ơn'], 0, 'Good morning = Chào buổi sáng.', ['Đúng — Good morning là lời chào buổi sáng.', 'Sai — Chúc ngủ ngon là Good night.', 'Sai — Tạm biệt là Goodbye.', 'Sai — Cảm ơn là Thank you.']),
+    Q('Số 10 trong tiếng Anh là?', ['nine', 'eight', 'ten', 'seven'], 2, 'Ten = 10.', ['Sai — nine là số 9.', 'Sai — eight là số 8.', 'Đúng — ten là số 10.', 'Sai — seven là số 7.']),
+    Q('"The sky is ___." (Bầu trời màu xanh da trời)', ['red', 'blue', 'green', 'black'], 1, 'Blue = xanh da trời.', ['Sai — red là màu đỏ.', 'Đúng — blue là màu xanh da trời.', 'Sai — green là màu xanh lá.', 'Sai — black là màu đen.']),
+    Q('"My name is Lan. I am six years old." — câu này nói về gì?', ['Màu sắc', 'Con vật', 'Tên và tuổi', 'Đồ ăn'], 2, 'My name is… + I am… years old = giới thiệu tên và tuổi.', ['Sai — câu này không nhắc tới màu nào.', 'Sai — câu này không nhắc tới con vật nào.', 'Đúng — câu này giới thiệu tên và tuổi của mình.', 'Sai — câu này không nhắc tới món ăn nào.']),
+    Q('Từ nào là món ăn (food)?', ['cat', 'hand', 'blue', 'rice'], 3, 'Rice = cơm/gạo, là food.', ['Sai — cat là con mèo (animal).', 'Sai — hand là bàn tay (body).', 'Sai — blue là màu xanh (colour).', 'Đúng — rice là cơm/gạo, thuộc nhóm food.']),
+    Q('Lên Lớp 2 em sẽ học thêm nhóm từ chỉ vị trí nào?', ['one, two, three', 'mum, dad', 'in, on, under', 'red, blue'], 2, 'Lớp 2 học giới từ chỉ vị trí: in, on, under, next to.', ['Sai — đó là các số đếm em đã học ở Lớp 1.', 'Sai — đó là từ chỉ gia đình em đã học ở Lớp 1.', 'Đúng — in, on, under, next to là các từ chỉ vị trí học ở Lớp 2.', 'Sai — đó là màu sắc em đã học ở Lớp 1.']),
+  ], { difficulty: 2 }),
 ];
 
 export const P1TA_SCENARIOS = indexBy(P1TA_WEEKS);

@@ -331,6 +331,15 @@ export const P1TNXH_WEEKS = [
     Q('Trước khi ăn em nên?', ['Rửa tay sạch', 'Xem TV', 'Chạy chơi', 'Ăn liền'], 0, 'Rửa tay chống vi khuẩn.', ['Đúng — rửa tay sạch trước khi ăn để chống vi khuẩn.', 'Sai — xem TV không giúp tay sạch.', 'Sai — chạy chơi không giúp tay sạch.', 'Sai — tay bẩn ăn liền dễ bị đau bụng.']),
     Q('Bảo vệ cây xanh là?', ['Khắc tên', 'Chặt phá', 'Đốt cây', 'Tưới nước, không bẻ cành'], 3, 'Chăm sóc, không phá hoại cây.', ['Sai — khắc tên làm cây bị thương.', 'Sai — chặt phá là phá hoại cây.', 'Sai — đốt cây là phá hoại cây.', 'Đúng — tưới nước và không bẻ cành là bảo vệ cây.']),
   ], { difficulty: 2 }),
+
+  M(36, 'Kết thúc Lớp 1 — Tổng kết Tự nhiên và Xã hội', [
+    Q('Giác quan nào giúp em nhận biết màu sắc?', ['Tai', 'Mũi', 'Lưỡi', 'Mắt'], 3, 'Mắt (thị giác) giúp em nhìn thấy màu sắc.', ['Sai — tai dùng để nghe âm thanh.', 'Sai — mũi dùng để ngửi mùi.', 'Sai — lưỡi dùng để nếm vị.', 'Đúng — mắt giúp em nhìn thấy hình dạng và màu sắc.']),
+    Q('Tai giúp em làm gì?', ['Nghe', 'Nhìn', 'Ngửi', 'Nếm'], 0, 'Tai là cơ quan thính giác.', ['Đúng — tai giúp em nghe âm thanh.', 'Sai — nhìn là việc của mắt.', 'Sai — ngửi là việc của mũi.', 'Sai — nếm là việc của lưỡi.']),
+    Q('Việc nào giúp bảo vệ môi trường?', ['Xả rác xuống sông', 'Bỏ rác đúng nơi quy định', 'Bẻ cành hái hoa', 'Để vòi nước chảy mãi'], 1, 'Bỏ rác đúng chỗ là việc nhỏ nhưng rất quan trọng.', ['Sai — xả rác xuống sông làm ô nhiễm nguồn nước.', 'Đúng — bỏ rác đúng nơi quy định giúp giữ môi trường sạch.', 'Sai — bẻ cành hái hoa làm hại cây.', 'Sai — để nước chảy mãi là lãng phí nước sạch.']),
+    Q('Nơi có ông bà, bố mẹ, nơi em được yêu thương là?', ['Trường học', 'Bệnh viện', 'Gia đình', 'Siêu thị'], 2, 'Gia đình là nơi em được yêu thương và chăm sóc.', ['Sai — trường học là nơi em học và có bạn bè.', 'Sai — bệnh viện là nơi khám chữa bệnh.', 'Đúng — gia đình là nơi em được yêu thương.', 'Sai — siêu thị là nơi mua sắm.']),
+    Q('Trước khi ăn và sau khi đi vệ sinh, em cần làm gì?', ['Rửa tay bằng xà phòng', 'Xem tivi', 'Chạy chơi ngay', 'Không cần làm gì'], 0, 'Rửa tay giúp phòng bệnh đường tiêu hoá.', ['Đúng — rửa tay bằng xà phòng giúp em không bị đau bụng.', 'Sai — xem tivi không làm tay sạch.', 'Sai — chạy chơi làm tay bẩn thêm.', 'Sai — tay bẩn mang nhiều vi khuẩn, cần rửa sạch.']),
+    Q('Khi ra đường, học sinh Lớp 1 nên?', ['Đi thật xa một mình', 'Đi cùng người lớn', 'Chạy giữa lòng đường', 'Chơi gần đường ray'], 1, 'Trẻ Lớp 1 ra đường cần có người lớn đi cùng.', ['Sai — đi xa một mình rất nguy hiểm với bạn nhỏ.', 'Đúng — em nên đi cùng người lớn để được an toàn.', 'Sai — lòng đường dành cho xe, rất nguy hiểm.', 'Sai — đường ray là nơi tàu chạy, tuyệt đối không chơi ở đó.']),
+  ], { difficulty: 2 }),
 ];
 
 export const P1TNXH_SCENARIOS = indexBy(P1TNXH_WEEKS);

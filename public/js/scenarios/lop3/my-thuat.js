@@ -289,6 +289,15 @@ export const P3MT_WEEKS = [
     Q('Origami là nghệ thuật gấp giấy của?', ['Trung Quốc', 'Nhật Bản', 'Việt Nam', 'Hàn Quốc'], 1, 'Origami Nhật Bản.', ['Sai — origami không phải của Trung Quốc.', 'Đúng — origami là nghệ thuật gấp giấy của Nhật Bản.', 'Sai — origami không phải của Việt Nam.', 'Sai — origami không phải của Hàn Quốc.']),
     Q('Để giỏi mĩ thuật hơn em cần?', ['Quan sát kĩ và luyện tập đều', 'Học vì điểm', 'Bỏ cuộc khi khó', 'Không cần làm gì'], 0, 'Quan sát và luyện tập là chìa khoá.', ['Đúng — quan sát kĩ và luyện tập đều giúp em giỏi hơn.', 'Sai — học vì điểm thì khó tiến bộ thật sự.', 'Sai — bỏ cuộc khi khó thì không giỏi lên được.', 'Sai — muốn giỏi cần chăm luyện tập.']),
   ], { difficulty: 2 }),
+
+  M(36, 'Kết thúc Lớp 3 — Sắc màu của một năm học', [
+    Q('Trộn màu đỏ với màu vàng được màu gì?', ['Xanh lá', 'Cam', 'Tím', 'Nâu'], 1, 'Đỏ + vàng = cam.', ['Sai — xanh lá do vàng trộn với xanh dương.', 'Đúng — đỏ trộn vàng ra màu cam.', 'Sai — tím do đỏ trộn với xanh dương.', 'Sai — nâu thường do trộn nhiều màu lẫn nhau.']),
+    Q('Trộn màu xanh dương với màu vàng được màu gì?', ['Xanh lá', 'Cam', 'Tím', 'Đen'], 0, 'Xanh dương + vàng = xanh lá.', ['Đúng — xanh dương trộn vàng ra màu xanh lá.', 'Sai — cam do đỏ trộn vàng.', 'Sai — tím do đỏ trộn xanh dương.', 'Sai — đen không tạo ra bằng cách trộn hai màu này.']),
+    Q('Nhóm nào là các màu NÓNG?', ['Xanh lam, xanh lá, tím', 'Đen, trắng, xám', 'Tím, chàm, lam', 'Đỏ, cam, vàng'], 3, 'Màu nóng gợi cảm giác ấm: đỏ, cam, vàng.', ['Sai — đó là nhóm màu lạnh.', 'Sai — đó là các sắc độ trung tính.', 'Sai — đó là nhóm màu lạnh.', 'Đúng — đỏ, cam, vàng là nhóm màu nóng.']),
+    Q('In mộc bản bằng lá cây thuộc kĩ thuật nào?', ['Vẽ', 'Nặn', 'In ấn', 'Điêu khắc'], 2, 'In lá cây, in bọt biển đều thuộc kĩ thuật in ấn.', ['Sai — vẽ là dùng bút chì, màu sáp, màu nước.', 'Sai — nặn là tạo hình khối từ đất sét.', 'Đúng — in lá cây lên giấy hoặc vải là kĩ thuật in ấn.', 'Sai — điêu khắc là đục đẽo tạo hình khối.']),
+    Q('Origami là nghệ thuật gì?', ['Gấp giấy', 'Nặn đất', 'Vẽ sơn dầu', 'Khắc gỗ'], 0, 'Origami là nghệ thuật gấp giấy tạo hình.', ['Đúng — origami là nghệ thuật gấp giấy.', 'Sai — nặn đất là kĩ thuật tạo hình 3D khác.', 'Sai — vẽ sơn dầu là kĩ thuật hội hoạ.', 'Sai — khắc gỗ là kĩ thuật điêu khắc trên gỗ.']),
+    Q('Lên Lớp 4 em sẽ học về dòng tranh dân gian Việt Nam nào?', ['Tranh sơn mài hiện đại', 'Tranh trừu tượng châu Âu', 'Tranh Đông Hồ, tranh Hàng Trống', 'Tranh kĩ thuật số'], 2, 'Lớp 4 tìm hiểu tranh Đông Hồ và tranh Hàng Trống.', ['Sai — sơn mài hiện đại không phải tranh dân gian.', 'Sai — đó là dòng tranh phương Tây, không phải tranh dân gian Việt Nam.', 'Đúng — tranh Đông Hồ và tranh Hàng Trống là tranh dân gian Việt Nam.', 'Sai — tranh kĩ thuật số là loại tranh hiện đại làm trên máy tính.']),
+  ]),
 ];
 
 export const P3MT_SCENARIOS = indexBy(P3MT_WEEKS);

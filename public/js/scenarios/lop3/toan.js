@@ -1434,6 +1434,15 @@ export const P3_TOAN_WEEKS = [
       'Sai — 1 tháng × 4 mùa = 4 tháng, chưa đủ một năm.',
     ]),
   ]),
+
+  M(36, 'Kết thúc Lớp 3 — Hành trang vào Lớp 4', [
+    Q('Tính: 3456 + 2789 = ?', ['6145', '6245', '6235', '5245'], 1, 'Cộng từ phải sang trái có nhớ: 3456 + 2789 = 6245.', ['Sai — cộng hàng trăm thiếu 1 (quên nhớ).', 'Đúng — 3456 + 2789 = 6245.', 'Sai — cộng hàng chục thiếu 1.', 'Sai — cộng hàng nghìn thiếu 1.']),
+    Q('Tìm x biết: x × 6 = 54', ['x = 8', 'x = 48', 'x = 9', 'x = 60'], 2, 'Muốn tìm thừa số chưa biết, lấy tích chia cho thừa số kia: x = 54 : 6 = 9.', ['Sai — 8 × 6 = 48, chưa đủ 54.', 'Sai — 48 là kết quả của 8 × 6, không phải giá trị của x.', 'Đúng — x = 54 : 6 = 9.', 'Sai — 60 là kết quả của 10 × 6, lớn hơn 54.']),
+    Q('Số lớn nhất có BỐN chữ số là số nào?', ['10 000', '9999', '9000', '999'], 1, '9999 là số lớn nhất có 4 chữ số; thêm 1 thành 10 000 (5 chữ số).', ['Sai — 10 000 có tới 5 chữ số.', 'Đúng — 9999 là số lớn nhất có 4 chữ số.', 'Sai — 9000 nhỏ hơn 9999.', 'Sai — 999 chỉ có 3 chữ số.']),
+    Q('Hình chữ nhật dài 8cm, rộng 5cm. Chu vi bằng bao nhiêu?', ['40 cm', '13 cm', '26 cm', '18 cm'], 2, 'Chu vi = (dài + rộng) × 2 = (8 + 5) × 2 = 26 cm.', ['Sai — 8 × 5 = 40 là cách tính diện tích, em sẽ học ở Lớp 4.', 'Sai — 13 mới là (dài + rộng), còn thiếu bước nhân 2.', 'Đúng — (8 + 5) × 2 = 26 cm.', 'Sai — 18 không khớp với công thức chu vi.']),
+    Q('1 lít bằng bao nhiêu mililít?', ['10 ml', '100 ml', '10 000 ml', '1000 ml'], 3, '1 l = 1000 ml.', ['Sai — nhỏ hơn rất nhiều so với 1 lít.', 'Sai — 100 ml mới bằng một phần mười lít.', 'Sai — 10 000 ml là 10 lít.', 'Đúng — 1 lít = 1000 mililít.']),
+    Q('Lên Lớp 4 em sẽ bắt đầu học loại số mới nào?', ['Phân số', 'Số La Mã', 'Số âm', 'Số thập phân'], 0, 'Lớp 4 học phân số; số thập phân để dành cho Lớp 5.', ['Đúng — Lớp 4 em sẽ được học phân số.', 'Sai — số La Mã chỉ là cách viết số, không phải loại số mới ở Lớp 4.', 'Sai — số âm học ở cấp lớn hơn nhiều.', 'Sai — số thập phân là nội dung của Lớp 5.']),
+  ]),
 ];
 
 export const P3_TOAN_SCENARIOS = indexBy(P3_TOAN_WEEKS);

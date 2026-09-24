@@ -1410,6 +1410,15 @@ export const P3TV_WEEKS = [
       'Sai — câu bộc lộ cảm xúc nên không phải câu kể bình thường.',
     ]),
   ]),
+
+  M(36, 'Kết thúc Lớp 3 — Hành trang Tiếng Việt vào Lớp 4', [
+    Q('Câu "Bạn Lan chạy nhanh như cơn gió." dùng biện pháp tu từ nào?', ['Nhân hoá', 'So sánh', 'Điệp từ', 'Không dùng biện pháp nào'], 1, 'Từ "như" là dấu hiệu của phép so sánh.', ['Sai — nhân hoá là gán đặc điểm của người cho vật.', 'Đúng — từ "như" cho thấy đây là phép so sánh.', 'Sai — điệp từ là lặp lại một từ nhiều lần.', 'Sai — câu này có hình ảnh so sánh rõ ràng.']),
+    Q('Câu "Ông Mặt Trời thức dậy sau rặng tre." dùng biện pháp tu từ nào?', ['Nhân hoá', 'So sánh', 'Liệt kê', 'Không dùng biện pháp nào'], 0, 'Gọi Mặt Trời là "ông" và cho "thức dậy" — đó là nhân hoá.', ['Đúng — gọi vật bằng từ xưng hô của người và tả vật như người là nhân hoá.', 'Sai — câu này không có từ so sánh (như, tựa, giống).', 'Sai — liệt kê là kể ra nhiều sự vật nối tiếp.', 'Sai — câu này rõ ràng đang nhân hoá Mặt Trời.']),
+    Q('Câu "Bạn Nam là học sinh giỏi." thuộc mẫu câu nào?', ['Ai làm gì?', 'Ai thế nào?', 'Ai là gì?', 'Câu hỏi'], 2, 'Có từ "là" nối chủ ngữ với vị ngữ → mẫu Ai – là gì?', ['Sai — mẫu Ai làm gì? có vị ngữ chỉ hoạt động.', 'Sai — mẫu Ai thế nào? có vị ngữ chỉ đặc điểm, trạng thái.', 'Đúng — có từ "là" nên đây là mẫu Ai – là gì?', 'Sai — câu này kết thúc bằng dấu chấm, không phải câu hỏi.']),
+    Q('Từ nào viết ĐÚNG chính tả?', ['suất sắc', 'xuất xắc', 'suất xắc', 'xuất sắc'], 3, 'Viết đúng là "xuất sắc".', ['Sai — sai âm đầu ở tiếng thứ nhất.', 'Sai — sai âm đầu ở tiếng thứ hai.', 'Sai — sai âm đầu ở cả hai tiếng.', 'Đúng — "xuất sắc" là cách viết đúng.']),
+    Q('Từ "chăm chỉ" thuộc từ loại nào?', ['Danh từ', 'Động từ', 'Tính từ', 'Quan hệ từ'], 2, '"Chăm chỉ" chỉ đặc điểm, tính chất → tính từ.', ['Sai — danh từ chỉ người, vật, hiện tượng.', 'Sai — động từ chỉ hoạt động, trạng thái.', 'Đúng — "chăm chỉ" chỉ đặc điểm nên là tính từ.', 'Sai — quan hệ từ là các từ nối như "và", "vì", "nên".']),
+    Q('Lên Lớp 4 em sẽ viết bài văn hoàn chỉnh gồm những phần nào?', ['Chỉ có mở bài và kết bài', 'Chỉ có thân bài', 'Chỉ một đoạn duy nhất', 'Mở bài, thân bài, kết bài'], 3, 'Bài văn hoàn chỉnh có 3 phần: mở bài – thân bài – kết bài.', ['Sai — thiếu thân bài thì bài văn không có nội dung chính.', 'Sai — thiếu mở bài và kết bài thì bài văn chưa hoàn chỉnh.', 'Sai — bài văn Lớp 4 gồm nhiều đoạn, chia theo ba phần.', 'Đúng — bài văn hoàn chỉnh gồm mở bài, thân bài và kết bài.']),
+  ]),
 ];
 
 export const P3TV_SCENARIOS = indexBy(P3TV_WEEKS);

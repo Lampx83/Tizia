@@ -324,6 +324,15 @@ export const P5TA_WEEKS = [
     Q('"I have ___ apple." điền?', ['a (trước phụ âm)', 'any (dùng phủ định)', 'an', 'some (dùng số nhiều)'], 2, 'Trước nguyên âm "a" → an apple.', ['Sai — "a" dùng trước phụ âm; "apple" bắt đầu bằng nguyên âm.', 'Sai — "any" thường dùng trong câu phủ định/nghi vấn.', 'Đúng — "apple" bắt đầu bằng nguyên âm → an apple.', 'Sai — "some" dùng với số nhiều/không đếm được.']),
     Q('"There ___ many books on the desk." điền?', ['are', 'has', 'have', 'were'], 0, 'Books (số nhiều) → are.', ['Đúng — "books" số nhiều ở hiện tại → There are.', 'Sai — "has" không dùng trong cấu trúc "There…".', 'Sai — "have" không dùng trong cấu trúc "There…".', 'Sai — "were" là quá khứ; câu này ở hiện tại.']),
   ]),
+
+  M(36, 'End of Primary — Ready for Grade 6 English!', [
+    Q('Câu nào ở thì QUÁ KHỨ ĐƠN (simple past)?', ['I go to school.', 'I went to school yesterday.', 'I will go to school.', 'I am going to school.'], 1, 'Quá khứ đơn dùng động từ dạng V2: go → went.', ['Sai — đó là thì hiện tại đơn.', 'Đúng — "went" là dạng quá khứ của "go".', 'Sai — "will go" là thì tương lai đơn.', 'Sai — "am going" là hiện tại tiếp diễn.']),
+    Q('"Where were you last Sunday?" — câu trả lời đúng là?', ['I am at home.', 'I will be at home.', 'I was at the zoo.', 'I go to the zoo.'], 2, 'Câu hỏi ở quá khứ nên câu trả lời cũng ở quá khứ.', ['Sai — "am" là hiện tại, không hợp với "last Sunday".', 'Sai — "will be" là tương lai.', 'Đúng — "was" là dạng quá khứ, hợp với "last Sunday".', 'Sai — "go" là hiện tại đơn.']),
+    Q('Which WH-word asks about a REASON?', ['Where', 'When', 'Who', 'Why'], 3, 'Why = tại sao, hỏi về lí do.', ['Sai — Where hỏi về nơi chốn.', 'Sai — When hỏi về thời gian.', 'Sai — Who hỏi về người.', 'Đúng — Why hỏi về lí do.']),
+    Q('Câu nào dùng "going to" để nói về dự định?', ['I am going to visit my grandma next week.', 'I visited my grandma.', 'I visit my grandma every Sunday.', 'I can visit my grandma.'], 0, 'be going to + V = dự định sắp làm.', ['Đúng — "am going to visit" diễn tả dự định sắp tới.', 'Sai — đó là thì quá khứ đơn.', 'Sai — đó là thì hiện tại đơn, nói về thói quen.', 'Sai — "can" nói về khả năng, không phải dự định.']),
+    Q('"My brother is taller than me." dùng cấu trúc nào?', ['So sánh nhất', 'So sánh hơn', 'Câu hỏi', 'Câu phủ định'], 1, 'tall → taller + than = so sánh hơn.', ['Sai — so sánh nhất dùng "the tallest".', 'Đúng — "taller than" là cấu trúc so sánh hơn.', 'Sai — câu này không phải câu hỏi.', 'Sai — câu này không có từ phủ định.']),
+    Q('In Grade 6 you will learn a new tense called:', ['Simple present', 'Simple past', 'Present perfect', 'Imperative'], 2, 'Lớp 6 học thêm present continuous và present perfect.', ['Sai — hiện tại đơn em đã học ở tiểu học.', 'Sai — quá khứ đơn em đã học ở Lớp 5.', 'Đúng — thì hiện tại hoàn thành (present perfect) là nội dung mới ở Lớp 6.', 'Sai — câu mệnh lệnh không phải một thì.']),
+  ]),
 ];
 
 export const P5TA_SCENARIOS = indexBy(P5TA_WEEKS);

@@ -325,6 +325,15 @@ export const P1DD_WEEKS = [
     Q('Em hứa với bố mẹ và cô giáo điều gì?', ['Cố gắng học và sống tốt', 'Không hứa gì', 'Hứa rồi quên', 'Hứa cho có'], 0, 'Lời hứa đi đôi với hành động mới có giá trị.', ['Đúng — hứa cố gắng học và sống tốt là điều hay.', 'Sai — em nên có lời hứa cố gắng.', 'Sai — hứa rồi quên là không giữ lời.', 'Sai — hứa cho có thì lời hứa không có giá trị.']),
     Q('Một bạn nhỏ lớn hơn là bạn?', ['Hay cãi và lười', 'Chỉ thích chơi', 'Không quan tâm ai', 'Biết yêu thương, lễ phép, trung thực, chăm chỉ'], 3, 'Lớn không chỉ ở chiều cao, mà ở tính nết nữa.', ['Sai — hay cãi và lười là chưa lớn về tính nết.', 'Sai — chỉ thích chơi là chưa lớn về tính nết.', 'Sai — không quan tâm ai là chưa lớn về tính nết.', 'Đúng — biết yêu thương, lễ phép, trung thực, chăm chỉ là lớn hơn.']),
   ]),
+
+  M(36, 'Kết thúc Lớp 1 — 5 Phẩm chất em mang theo vào Lớp 2', [
+    Q('Làm sai và tự nhận lỗi với cô là phẩm chất nào?', ['Thật thà', 'Sạch sẽ', 'An toàn', 'Chăm chỉ'], 0, 'Thật thà là không nói dối và biết nhận lỗi.', ['Đúng — nhận lỗi khi sai chính là thật thà.', 'Sai — sạch sẽ là giữ vệ sinh bản thân và lớp học.', 'Sai — an toàn là biết tự bảo vệ mình.', 'Sai — chăm chỉ là cố gắng học, không bỏ cuộc.']),
+    Q('Mỗi ngày làm bài đầy đủ, bài khó cũng không bỏ cuộc là?', ['Yêu thương', 'Chăm chỉ', 'Sạch sẽ', 'Thật thà'], 1, 'Chăm chỉ là cố gắng đều đặn mỗi ngày.', ['Sai — yêu thương là quan tâm tới người khác.', 'Đúng — cố gắng mỗi ngày, không bỏ cuộc là chăm chỉ.', 'Sai — sạch sẽ là giữ vệ sinh.', 'Sai — thật thà là không nói dối.']),
+    Q('Đỡ bạn dậy khi bạn bị ngã thể hiện phẩm chất?', ['An toàn', 'Sạch sẽ', 'Yêu thương', 'Chăm chỉ'], 2, 'Yêu thương là quan tâm, giúp đỡ người khác.', ['Sai — an toàn là biết tránh nguy hiểm cho mình.', 'Sai — sạch sẽ là giữ vệ sinh.', 'Đúng — giúp đỡ bạn là biểu hiện của yêu thương.', 'Sai — chăm chỉ nói về việc học và làm việc.']),
+    Q('Bỏ rác vào thùng, lau bàn học gọn gàng là?', ['Thật thà', 'Chăm chỉ', 'Yêu thương', 'Sạch sẽ'], 3, 'Sạch sẽ là giữ vệ sinh bản thân và lớp học.', ['Sai — thật thà là không nói dối.', 'Sai — chăm chỉ nói về sự cố gắng trong học tập.', 'Sai — yêu thương là quan tâm tới người khác.', 'Đúng — giữ vệ sinh bản thân và lớp học là sạch sẽ.']),
+    Q('Không chơi gần ổ điện, không nghịch vật sắc nhọn là?', ['An toàn', 'Yêu thương', 'Thật thà', 'Chăm chỉ'], 0, 'An toàn là biết tự bảo vệ mình và không làm hại bạn.', ['Đúng — tránh nguy hiểm cho mình và cho bạn là an toàn.', 'Sai — yêu thương là quan tâm tới người khác.', 'Sai — thật thà là không nói dối.', 'Sai — chăm chỉ nói về sự cố gắng trong học tập.']),
+    Q('Lời hứa có giá trị khi nào?', ['Hứa cho vui', 'Hứa thật nhiều', 'Hứa rồi làm đúng lời hứa', 'Hứa rồi quên'], 2, 'Lời hứa đi đôi với hành động mới có giá trị.', ['Sai — hứa cho vui thì lời hứa không có giá trị.', 'Sai — hứa nhiều mà không làm thì cũng không có giá trị.', 'Đúng — hứa và làm đúng lời hứa mới là giữ lời.', 'Sai — hứa rồi quên là không giữ lời hứa.']),
+  ]),
 ];
 
 export const P1DD_SCENARIOS = indexBy(P1DD_WEEKS);
