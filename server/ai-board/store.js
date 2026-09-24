@@ -25,6 +25,7 @@ const MAX_BUDGET_EXTENSION = 200;
 const MAX_BUDGET_LIMIT = 600; // hard ceiling across all extensions of one root
 const MAX_BUDGET_EXTENSIONS = 2;
 const SHA = /^[0-9a-f]{40}$/;
+export const LEASE_MS = 120_000; // worker lease; also the admin view's stale threshold
 const AI_BRANCH = /^ai-board\/\d{4}-\d{2}-\d{2}-[a-z0-9-]{1,60}$/;
 
 function validateCandidate(value) {
@@ -296,7 +297,7 @@ export function createAiBoardStore(db, hooks = {}) {
   }
 
   // Read-time only: a dead worker never writes its own exit, and nothing else may write ai_workers for it.
-  function listWorkers({ now = Date.now(), leaseMs = 120_000 } = {}) {
+  function listWorkers({ now = Date.now(), leaseMs = LEASE_MS } = {}) {
     return db.prepare(`
       SELECT worker_id, version, mode, status, current_ticket_id, last_seen_at, updated_at
       FROM ai_workers ORDER BY last_seen_at DESC, worker_id
@@ -368,7 +369,7 @@ export function createAiBoardStore(db, hooks = {}) {
     return { id: candidate.id, lease_token: token, lease_expires_at: expires, status: 'running', phase };
   });
 
-  function claimNext({ workerId, version = 'unknown', mode = 'off', intent = 'precheck', now = Date.now(), leaseMs = 120_000 }) {
+  function claimNext({ workerId, version = 'unknown', mode = 'off', intent = 'precheck', now = Date.now(), leaseMs = LEASE_MS }) {
     workerId = String(workerId || '').trim();
     if (!/^[A-Za-z0-9._:-]{2,80}$/.test(workerId)) throw new WorkerContractError('invalid worker id');
     return claimTransaction({ workerId, version: String(version).slice(0, 80), mode, intent, now, leaseMs });
@@ -391,7 +392,7 @@ export function createAiBoardStore(db, hooks = {}) {
     };
   }
 
-  function heartbeat(ticketId, workerId, leaseToken, { now = Date.now(), leaseMs = 120_000 } = {}) {
+  function heartbeat(ticketId, workerId, leaseToken, { now = Date.now(), leaseMs = LEASE_MS } = {}) {
     assertLease(ticketId, workerId, leaseToken, now);
     const expires = now + leaseMs;
     db.prepare('UPDATE ai_tickets SET lease_expires_at=?, updated_at=? WHERE id=?').run(expires, now, Number(ticketId));

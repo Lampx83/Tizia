@@ -89,7 +89,7 @@ def test_changed_python_must_parse(tmp_path):
 def test_gate_4_blocks_on_guard_findings_with_the_worst_kind(monkeypatch, fake_deps):
     state = {"full_diff": [{"file": "", "diff": diff("public/a.html", added=["a@b.vn", "<script>x</script>"])}],
              "full_checkout": "unused"}
-    monkeypatch.setattr(main.static_check, "run", lambda s: {"gate": 4, "blocked": False, "reason": None, "issues": []})
+    monkeypatch.setattr(main.static_check, "run", lambda s, **_: {"gate": 4, "blocked": False, "reason": None, "issues": []})
     out = main.run_gate(4, {}, replace(fake_deps, verify=None), None, state)
     assert out["blocked"] is True
     assert out["failure_class"] == "critical"

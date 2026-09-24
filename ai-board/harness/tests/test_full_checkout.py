@@ -151,6 +151,40 @@ def test_scope_violation_at_gate_5_is_critical(tmp_path, source, fake_deps):
     assert out["failure_class"] == "critical"
 
 
+def test_gate_4_lint_block_needs_no_worktree(tmp_path, source, fake_deps):
+    scratch = implement._ensure_scratch_repo(tmp_path / "scratch")
+    state = state_for(tmp_path, [child(scratch, "x", "public/a.js", "import db from '../server/db.js';\n")])
+    state["checkout_source"] = str(source)
+
+    out = main.run_gate(4, {}, fake_deps, None, state)
+
+    assert out["blocked"] is True and out["failure_class"] == "critical"
+    assert "full_checkout" not in state
+    assert git(source, "branch", "--list", "ai-board/*") == ""
+
+
+def test_gate_4_without_gate_3_output_blocks_instead_of_raising(tmp_path, source, fake_deps):
+    out = main.run_gate(4, {}, fake_deps, None, {"skill_id": "ticket-7", "checkout_source": str(source),
+                                                 "plan": {"subtasks": []}})
+    assert out["blocked"] is True
+    assert "diffs" in out["reason"]
+
+
+def test_gate_4_blocks_a_path_outside_the_catalog_before_docker(tmp_path, source, fake_deps):
+    scratch = implement._ensure_scratch_repo(tmp_path / "scratch")
+    state = state_for(tmp_path, [child(scratch, "x", "public/a.html", "<p>x</p>\n")])
+    state["checkout_source"] = str(source)
+    state["catalog"] = {"generated.context": {"tier": "surface", "allow": ["server/contexts/_ai-generated/"],
+                                              "deny": []}}
+    try:
+        out = main.run_gate(4, {}, fake_deps, None, state)
+    finally:
+        main.cleanup_full_checkout(state, keep_branch=False)
+
+    assert out["blocked"] is True and out["failure_class"] == "critical"
+    assert "public/a.html" in out["reason"] and "catalog" in out["checks"]
+
+
 def test_gate_4_size_flag_counts_the_real_base_diff_not_the_scratch_rewrite(tmp_path, source, fake_deps):
     page = "".join(f"<p>line {i}</p>\n" for i in range(100))
     (source / "public" / "big.html").write_text(page, encoding="utf-8")

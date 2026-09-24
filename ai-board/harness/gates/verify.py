@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import urllib.request
 from pathlib import Path
+from urllib.parse import urlsplit
 
 _SECRET_NAME = re.compile(r"(?:SECRET|TOKEN|PASSWORD|API_KEY|SECKEY|PRIVATE_KEY)", re.I)
 _REQUIRED_ABSENT = {"SCOREUP_API_KEY", "CODELAB_API_KEY", "GA_API_SECRET",
@@ -91,6 +92,18 @@ def _expected_lines(state: dict, checkout: Path, page: str) -> list[str]:
     return [line.strip() for line in lines if line.strip()]
 
 
+class ScreenshotTargetError(RuntimeError):
+    """Capture landed on another page (auth redirect) or an error status — not evidence of the change."""
+
+
+def check_landing(requested: str, landed: str, status: int | None) -> None:
+    """Raise ScreenshotTargetError unless landed on the requested path with a 2xx/3xx final status."""
+    if status is None or status >= 400:
+        raise ScreenshotTargetError(f"trang chụp trả HTTP {status}: {urlsplit(requested).path}")
+    if urlsplit(landed).path != urlsplit(requested).path:
+        raise ScreenshotTargetError(f"trang chụp bị chuyển hướng sang {urlsplit(landed).path}")
+
+
 def capture_screenshot(url: str, path: Path) -> None:
     """Optional dependency: a single Chromium capture, with no visual diff engine."""
     from playwright.sync_api import sync_playwright
@@ -99,7 +112,8 @@ def capture_screenshot(url: str, path: Path) -> None:
         browser = playwright.chromium.launch(headless=True)
         try:
             page = browser.new_page()
-            page.goto(url, wait_until="domcontentloaded", timeout=15000)
+            response = page.goto(url, wait_until="domcontentloaded", timeout=15000)
+            check_landing(url, page.url, response.status if response else None)
             page.screenshot(path=str(path), full_page=True)
         finally:
             browser.close()
@@ -246,7 +260,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 except Exception as exc:  # D0: UI evidence is mandatory; absent browser = environment
                     shutil.rmtree(screenshot.parent, ignore_errors=True)
                     screenshot = None
-                    kind = "transient"
+                    # Wrong landing page is not fixed by a retry or a repair; admin decides.
+                    kind = "plan" if isinstance(exc, ScreenshotTargetError) else "transient"
                     raise RuntimeError(f"thiếu screenshot bắt buộc cho thay đổi UI: {exc}") from exc
         except (OSError, RuntimeError, ValueError, KeyError, TypeError) as exc:
             reason = str(exc)

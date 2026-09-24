@@ -248,6 +248,29 @@ def test_screenshot_target_from_the_request_must_be_an_internal_path(tmp_path, m
     assert shots == []
 
 
+def test_screenshot_must_land_on_the_requested_page_with_success():
+    verify.check_landing("http://h:1/school.html?domain=it", "http://h:1/school.html?domain=it", 200)
+    for landed, status in (("http://h:1/login.html", 200), ("http://h:1/school.html", 404), ("http://h:1/x", None)):
+        try:
+            verify.check_landing("http://h:1/school.html", landed, status)
+        except verify.ScreenshotTargetError:
+            continue
+        raise AssertionError((landed, status))
+
+
+def test_wrong_screenshot_landing_is_a_plan_failure(tmp_path, monkeypatch):
+    def capture(_url, _path):
+        raise verify.ScreenshotTargetError("trang chụp bị chuyển hướng sang /login.html")
+
+    monkeypatch.setattr(verify, "capture_screenshot", capture)
+    s = state(checkout(tmp_path))
+    s["request_detail"] = "[Trang: x] /student-dashboard.html"
+    out = verify.run(s, runner=FakeRunner())
+    assert out["blocked"] is True
+    assert out["failure_class"] == "plan"
+    assert "login.html" in out["reason"]
+
+
 def test_diff_without_a_public_file_is_a_plan_failure_before_docker(tmp_path):
     runner = FakeRunner()
     s = state(checkout(tmp_path))

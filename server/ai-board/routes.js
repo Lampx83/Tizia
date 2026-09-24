@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { PlanGuardrailError, RequestValidationError, WorkerContractError } from './store.js';
+import { LEASE_MS, PlanGuardrailError, RequestValidationError, WorkerContractError } from './store.js';
 
 export function attachAiBoardRequestRoutes(router, {
   store,
@@ -98,7 +98,7 @@ function digest(value) {
 export function attachAiBoardWorkerRoutes(router, {
   store,
   env = process.env,
-  leaseMs = 120_000,
+  leaseMs = LEASE_MS,
 }) {
   const key = String(env.AI_BOARD_WORKER_KEY || '').trim();
   if (key.length < 24) return false;

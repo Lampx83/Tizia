@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 # Cộng dồn qua các lần resume (skill_proposals.budget_json), không reset —
 # đây là cái chặn loop vô hạn ăn GPU máy dùng chung.
 CAPS = ("model_calls", "tool_calls", "tokens", "retries")
+# retries chỉ chặn retry tiếp theo (worker tự kiểm), không kết thúc cả lượt chạy.
+RUN_CAPS = ("model_calls", "tool_calls", "tokens")
 
 
 @dataclass
@@ -64,7 +66,7 @@ class Budget:
         """Tên cap đã chạm, None nếu còn chỗ."""
         if self.elapsed_s >= self.max_wall_clock_s:
             return "wall_clock_s"
-        for cap in CAPS:
+        for cap in RUN_CAPS:
             if getattr(self, cap) >= getattr(self, f"max_{cap}"):
                 return cap
         return None

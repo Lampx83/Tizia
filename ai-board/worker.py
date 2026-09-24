@@ -109,9 +109,9 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
                         result = {"gate": gate, "blocked": True, "reason": str(error)[:1000],
                                   "failure_class": "transient"}
                 # Transient Docker/checkout trouble gets one mechanical retry, no model call. It spends the
-                # retry cap, never budget_used; skipped when spending would exhaust the cap (and so the run).
+                # retry cap, never budget_used; no retry once the cap is reached.
                 if (gate == 5 and result.get("blocked") and result.get("failure_class") == "transient"
-                        and not retried and budget.retries + 1 < budget.max_retries):
+                        and not retried and budget.retries < budget.max_retries):
                     retried = True
                     budget.spend("retries")
                     continue
@@ -145,6 +145,8 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
 
     policy = snapshot catalog {hash, capabilities}; None only outside the HTTP worker (no catalog check).
     failure_class: ordinary | transient | critical | budget | plan (see store.js FAILURE_CLASSES)."""
+    # plan_hash embeds the policy hash, so a catalog change between leases already forces a fresh plan
+    # server-side; this guards the in-lease race and a snapshot missing its catalog (fail closed).
     if policy is not None and (not policy.get("hash") or policy.get("hash") != accepted_policy_hash):
         reason = ("snapshot has no capability catalog" if not policy.get("hash")
                   else "capability catalog changed since the plan was accepted")

@@ -240,18 +240,29 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
     if number == 3:
         return implement.run(state, deps, budget, db_path=db_path, proposal_id=proposal_id)
     if number == 4:
-        # Checks bắt buộc + cờ size cần diff thật base..HEAD nên worktree được dựng ngay ở 3→4.
+        # Lint/node --check rẻ, chạy trước; worktree (diff thật base..HEAD) chỉ dựng khi qua.
+        out = static_check.run(state, check_size=False)
+        if out.get("blocked"):
+            return out
         failed = _ensure_full_checkout(state, 4)
         if failed:
             return failed
-        out = static_check.run(state)
-        if out.get("blocked"):
-            return out
-        text = "".join(item.get("diff", "") for item in state.get("full_diff") or state.get("diffs") or [])
+        size = static_check.oversize_issues(state)
+        out = {**out, "issues": [*size, *out.get("issues", [])],
+               "needs_careful_review": out.get("needs_careful_review") or bool(size)}
+        diffs = state.get("full_diff") or state.get("diffs") or []
+        text = "".join(item.get("diff", "") for item in diffs)
         scanned = guard.scan(text, state.get("full_checkout"), allowed_contacts=_base_public_contacts(state))
         state["ui_changed"] = scanned["ui_changed"]
         out = {**out, "checks": scanned["checks"]}
         found = scanned["findings"]
+        if state.get("catalog") is not None:
+            # Catalog boundary is a pure diff check: stop here, before Gate 5 runs the code in Docker.
+            out["checks"] = [*out["checks"], "catalog"]
+            outside = risk_triage.outside_catalog(diffs, state["catalog"])
+            if outside:
+                found = [*found, {"check": "catalog", "failure_class": "critical",
+                                  "detail": f"path ngoài catalog capability: {', '.join(outside)}"[:300]}]
         if found:
             worst = "critical" if any(f["failure_class"] == "critical" for f in found) else "ordinary"
             reason = "; ".join(f"{f['check']}: {f['detail']}" for f in found)[:1000]

@@ -370,14 +370,25 @@ def test_mechanical_retry_spends_the_retry_cap_not_the_gpu_budget():
     assert verdict['budget_used'] == 0
 
 
-def test_no_retry_once_the_retry_cap_would_be_reached():
+def test_retries_run_up_to_the_cap_and_none_once_it_is_reached():
     transient = {'blocked': True, 'reason': 'docker daemon unreachable', 'failure_class': 'transient'}
     budget = TickBudget(max_retries=1)
+    verdict, _calls = run({5: [transient, {}]}, budget=budget)
+    assert verdict['outcome'] == 'ready_for_pr' and budget.retries == 1
+
+    budget = TickBudget(max_retries=0)
     verdict, calls = run({5: [transient, {}]}, budget=budget)
     assert verdict['outcome'] == 'blocked'
     assert verdict['failure_class'] == 'transient'
     assert [gate for gate, _ in calls] == [3, 4, 5]
     assert budget.retries == 0
+
+
+def test_reaching_the_retry_cap_does_not_exhaust_the_run_budget():
+    from budget import Budget
+    budget = Budget(max_retries=1, max_wall_clock_s=999)
+    budget.spend("retries")
+    assert budget.tick() is True
 
 
 def test_second_transient_failure_blocks_without_repair():

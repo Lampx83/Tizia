@@ -43,6 +43,13 @@ def _least_privileged(path: str, catalog: dict) -> tuple[str, str] | None:
     return min(allowed)[1:] if allowed else None
 
 
+def outside_catalog(diffs: list[dict], catalog: dict) -> list[str]:
+    """Changed paths no catalog capability allows (generated test dirs exempt)."""
+    # Generated tests live under test/ by gate 3/4 rules (guard forbids touching existing ones); no capability owns them.
+    paths = {path for path, _, _ in _sections(diffs)}
+    return sorted(p for p in paths if not _GENERATED_TEST.match(p) and not _least_privileged(p, catalog))
+
+
 def run(state: dict) -> dict:
     """Return structured active signals; never waive the later human review gate.
     state['catalog'] (worker path) is authoritative; a path no capability allows blocks as critical."""
@@ -56,13 +63,10 @@ def run(state: dict) -> dict:
     def add(name: str, tier: str, detail: str) -> None:
         signals.append({"name": name, "tier": tier, "detail": detail})
 
-    unmatched = []
-    # Generated tests live under test/ by gate 3/4 rules (guard forbids touching existing ones); no capability owns them.
+    unmatched = outside_catalog(diffs, catalog) if catalog is not None else []
     for path in sorted(p for p in paths if catalog is not None and not _GENERATED_TEST.match(p)):
         match = _least_privileged(path, catalog)
-        if not match:
-            unmatched.append(path)
-        elif _CATALOG_TIER[match[1]][1]:
+        if match and _CATALOG_TIER[match[1]][1]:
             add("catalog_tier", _CATALOG_TIER[match[1]][1], f"{path}: {match[0]}")
     if unmatched:
         add("outside_catalog", "critical", ", ".join(unmatched))
