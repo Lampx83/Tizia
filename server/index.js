@@ -1305,8 +1305,9 @@ r.get(/.*/, async (req, res, next) => {
     const html = await fs.readFile(file, 'utf8');
     // Tránh nhúng trùng nếu trang đã include sẵn auth-header.js / analytics.js.
     // data-no-auth-header: trang không cần header (vd cửa sổ con chi tiết góp ý) → không nạp header lẫn gamify đi kèm.
-    const hasHeader = /auth-header\.js/i.test(html) || /<body[^>]*\bdata-no-auth-header\b/i.test(html);
-    const hasAnalytics = /\banalytics\.js/i.test(html);
+    // Chỉ tính thẻ <script src>: comment nhắc tên file (vd school.html) không được làm mất header.
+    const hasHeader = /<script[^>]+src=["'][^"']*auth-header\.js/i.test(html) || /<body[^>]*\bdata-no-auth-header\b/i.test(html);
+    const hasAnalytics = /<script[^>]+src=["'][^"']*\banalytics\.js/i.test(html);
     const tags =
       (hasAnalytics ? '' : ANALYTICS_TAG + '\n')
       + (hasHeader ? '' : HEADER_TAG + '\n')
