@@ -469,7 +469,7 @@ function render(host, user) {
             ? `<a class="ev-plan-cta" href="cv.html" style="background:linear-gradient(135deg,#0ea5e9,#22c55e);margin-top:10px">🪪 Xuất CV / Portfolio</a>`
             : ''}
           ${user.role === 'admin'
-            ? `<a class="ev-plan-cta" href="admin.html" style="background:linear-gradient(135deg,#6366f1,#a855f7);margin-top:10px">🏛️ Trang quản trị</a>`
+            ? `<a class="ev-plan-cta" href="admin.html" style="background:linear-gradient(135deg,#6366f1,#a855f7);margin-top:10px">Trang quản trị</a>`
             : ''}
           <div class="pf-divider" style="margin-top:14px"></div>
           <div class="pf-actions">

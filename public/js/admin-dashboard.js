@@ -212,18 +212,18 @@ async function navigateKpi(k) {
 function renderKpi(overview) {
   const d = overview.delta || {};
   const heroCards = [
-    { k:'users', label:'Người dùng', icon:'👥', delta: deltaCmp(d.users_24h, d.users_prev_24h), deltaLabel:'24h' },
-    { k:'attempts', label:'Lượt học', icon:'🎮', delta: deltaCmp(d.attempts_24h, d.attempts_prev_24h), deltaLabel:'24h' },
-    { k:'requests_pending', label:'Góp ý chờ', icon:'💡', cls:'pending' },
+    { k:'users', label:'Người dùng', delta: deltaCmp(d.users_24h, d.users_prev_24h), deltaLabel:'24h' },
+    { k:'attempts', label:'Lượt học', delta: deltaCmp(d.attempts_24h, d.attempts_prev_24h), deltaLabel:'24h' },
+    { k:'requests_pending', label:'Góp ý chờ', cls:'pending' },
   ];
   const subCards = [
-    { k:'pageviews_24h', label:'Pageview 24h', icon:'👀', cls:'info' },
-    { k:'pageviews_7d', label:'Pageview 7 ngày', icon:'👁️', cls:'info' },
-    { k:'ai_decisions', label:'Quyết định AI', icon:'🤖', cls:'info' },
-    { k:'ai_tokens_24h', label:'AI tokens 24h', icon:'⚡', cls:'info', fallback:'—' },
-    { k:'active_sessions', label:'Tài khoản còn phiên', icon:'🟢', cls:'ok' },
-    { k:'events', label:'Sự kiện', icon:'📊' },
-    { k:'requests', label:'Tổng góp ý', icon:'✉️' },
+    { k:'pageviews_24h', label:'Pageview 24h', cls:'info' },
+    { k:'pageviews_7d', label:'Pageview 7 ngày', cls:'info' },
+    { k:'ai_decisions', label:'Quyết định AI', cls:'info' },
+    { k:'ai_tokens_24h', label:'AI tokens 24h', cls:'info', fallback:'—' },
+    { k:'active_sessions', label:'Tài khoản còn phiên', cls:'ok' },
+    { k:'events', label:'Sự kiện' },
+    { k:'requests', label:'Tổng góp ý' },
   ];
   const card = (c) => {
     const v = overview[c.k];
@@ -235,13 +235,12 @@ function renderKpi(overview) {
         <div class="label">${c.label}</div>
         <div class="value">${v != null ? fmtNum(v) : c.fallback}</div>
         ${dlt}
-        <div class="icon">${c.icon}</div>
       </div>
     `;
   };
   return `
     <section class="section">
-      <h2 class="section-title">📊 Tổng quan <span class="line"></span></h2>
+      <h2 class="section-title">Tổng quan <span class="line"></span></h2>
       <div class="kpi-grid">${heroCards.map(card).join('')}</div>
       <div style="height:10px"></div>
       <div class="kpi-grid">${subCards.map(card).join('')}</div>
@@ -264,10 +263,8 @@ function renderTopList(rows, opts) {
 // ─────────── Activity feed ───────────
 function renderFeed(items) {
   if (!items.length) return `<div class="empty">Chưa có hoạt động</div>`;
-  const icons = { user_register:'👤', attempt:'🎮', request:'💡', event:'📊' };
   return `<div class="feed">${items.map(it => `
     <div class="item">
-      <div class="kind">${icons[it.kind] || '·'}</div>
       <div class="body">
         <div class="label" title="${esc(it.label)}">${esc(it.label)}</div>
         <div class="time">${humanTime(it.t)}</div>
@@ -279,8 +276,8 @@ function renderFeed(items) {
 // ─────────── Pageview section ───────────
 // Hai biểu đồ chồng (tổng + unique visitor) + top path + breakdown role.
 const ROLE_LABEL = {
-  guest: '👤 Khách', pupil: '🧒 Học sinh', student: '🎓 Sinh viên',
-  teacher: '👨‍🏫 Giáo viên', admin: '🛡️ Admin', unknown: '? Không rõ',
+  guest: 'Khách', pupil: 'Học sinh', student: 'Sinh viên',
+  teacher: 'Giáo viên', admin: 'Admin', unknown: '? Không rõ',
 };
 function renderPageviewSection(pv) {
   const t = pv.totals || {};
@@ -292,7 +289,7 @@ function renderPageviewSection(pv) {
     </div>`;
   return `
     <section class="section" id="pageview-section">
-      <h2 class="section-title">👀 Lượt truy cập (Pageview) <span class="line"></span></h2>
+      <h2 class="section-title">Lượt truy cập (Pageview) <span class="line"></span></h2>
       <div class="kpi-grid">
         ${stat('Pageview 24h', t.last_24h, t.unique_24h)}
         ${stat('Pageview 7 ngày', t.last_7d, t.unique_7d)}
@@ -300,7 +297,7 @@ function renderPageviewSection(pv) {
       </div>
       <div style="height:12px"></div>
       <div class="panel">
-        <div class="panel-title">📈 Pageview vs khách duy nhất theo ngày
+        <div class="panel-title">Pageview vs khách duy nhất theo ngày
           <span class="legend">
             <span><i style="background:var(--cyan)"></i>Pageview</span>
             <span><i style="background:var(--purple)"></i>Khách duy nhất</span>
@@ -312,11 +309,11 @@ function renderPageviewSection(pv) {
       <div style="height:14px"></div>
       <div class="two-col">
         <div class="panel">
-          <div class="panel-title">🔝 Top trang được xem nhiều (30 ngày)</div>
+          <div class="panel-title">Top trang được xem nhiều (30 ngày)</div>
           <div id="pv-top-paths"></div>
         </div>
         <div class="panel">
-          <div class="panel-title">👥 Phân bổ theo vai trò (30 ngày)</div>
+          <div class="panel-title">Phân bổ theo vai trò (30 ngày)</div>
           <div id="pv-by-role"></div>
         </div>
       </div>
@@ -375,7 +372,7 @@ function renderSystem(sys) {
   ];
   return `
     <section class="section">
-      <h2 class="section-title">⚙️ Hệ thống <span class="line"></span></h2>
+      <h2 class="section-title">Hệ thống <span class="line"></span></h2>
       <div class="syshealth">
         ${items.map(i => `
           <div class="item ${i.cls || ''}">
@@ -391,7 +388,6 @@ function renderSystem(sys) {
 // ─────────── Tabs (legacy: Góp ý / Users / Schools / AI / Content / Billing) ───────────
 let reqCache = [];
 let aiTicketCache = [];
-let aiWorkerCache = [];
 let reqFilter = 'all';
 let userCache = [];
 let currentTab = 'dashboard';
@@ -403,7 +399,6 @@ async function loadRequests() {
   ]);
   reqCache = r.data.requests || [];
   aiTicketCache = ai.data.tickets || [];
-  aiWorkerCache = ai.data.workers || [];
   renderRequests();
 }
 function renderRequests() {
@@ -412,16 +407,6 @@ function renderRequests() {
   const ticketByRequest = new Map(aiTicketCache.map(ticket => [ticket.source_request_id, ticket]));
   const host = $('#tabbody');
   host.innerHTML = `
-    <section class="card" style="margin-bottom:14px;padding:12px 16px">
-      <div style="font-weight:700;margin-bottom:8px">AI Board workers</div>
-      ${aiWorkerCache.length ? aiWorkerCache.map(worker => `
-        <div style="font-size:12px;margin:4px 0">
-          <span class="pill">${esc(worker.worker_id)}</span>
-          ${esc(worker.mode)} · ${esc(worker.status)} · ticket #${worker.current_ticket_id || '—'}
-          · heartbeat ${fmt(worker.last_seen_at)} · ${esc(worker.version)}
-        </div>
-      `).join('') : '<div style="font-size:12px;opacity:.65">Chưa có worker heartbeat.</div>'}
-    </section>
     <div class="toolbar">
       <span style="font-size:12px;opacity:.6">Lọc:</span>
       <select id="reqFilter">
@@ -433,7 +418,7 @@ function renderRequests() {
         <option value="cancelled">Học sinh đã hủy (${counts.cancelled||0})</option>
       </select>
       <div class="spacer"></div>
-      <button class="btn" id="reqRefresh">↻ Tải lại</button>
+      <button class="btn" id="reqRefresh">Tải lại</button>
     </div>
     <table>
       <thead><tr>
@@ -481,119 +466,21 @@ function renderRequests() {
       else if (b.dataset.act === 'delreq') {
         const r = reqCache.find(x => x.id === id);
         openConfirm({
-          title: '🗑 Xoá yêu cầu?',
+          title: 'Xoá yêu cầu?',
           msg: 'Hành động không thể undo. Cascade xoá: ai_decisions liên quan.',
           ctx: `#${r.id} · ${r.student} · ${r.title}`.slice(0, 100),
           onConfirm: async () => {
             const dr = await api(`/api/admin/requests/${id}`, { method:'DELETE' });
             if (!dr.ok) return toast('Lỗi: ' + (dr.data?.message || dr.data?.error || dr.status), 'err');
-            toast('✓ Đã xoá');
+            toast('Đã xoá');
             closeModal();
             await loadRequests();
           },
         });
       }
-      else toggleDetail(id);
+      else window.open(`/admin-request.html?id=${id}`, `request-${id}`);
     });
   });
-}
-async function toggleDetail(id) {
-  const tr = $(`#tabbody tr[data-rid="${id}"]`);
-  if (!tr) return;
-  const next = tr.nextElementSibling;
-  if (next && next.classList.contains('detail-row')) {
-    next.remove(); tr.classList.remove('expanded'); return;
-  }
-  tr.classList.add('expanded');
-  const colspan = tr.children.length;
-  const detail = document.createElement('tr');
-  detail.className = 'detail-row';
-  detail.innerHTML = `<td colspan="${colspan}"><div class="detail-box">Đang tải…</div></td>`;
-  tr.after(detail);
-  const r = reqCache.find(x => x.id === id);
-  const [dr, tr2] = await Promise.all([
-    api(`/api/requests/${id}/decisions`),
-    api(`/api/requests/${id}/thread`),
-  ]);
-  const decisions = dr.data?.decisions || [];
-  const msgs = tr2.data?.messages || [];
-  const threadHtml = msgs.map(m => {
-    const board = m.role === 'ai' || m.role === 'admin';
-    const who = board ? `🏛️ ${esc(m.author_name || 'Ban điều hành AI')}` : `👤 ${esc(m.author_name || 'HS')}`;
-    return `<div class="blk" style="border-left:3px solid ${board ? '#10b981' : '#6366f1'};margin-bottom:6px">
-      <div style="font-size:11px;opacity:.6;margin-bottom:3px">${who} · ${fmt(m.created_at)}</div>
-      <div style="white-space:pre-wrap">${esc(m.body)}</div>
-    </div>`;
-  }).join('');
-  detail.querySelector('.detail-box').innerHTML = `
-    <h4>Nội dung yêu cầu</h4>
-    <div class="blk">${esc(r.title)}${r.detail ? `<div style="opacity:.7;margin-top:5px">${esc(r.detail)}</div>` : ''}</div>
-    <h4>Phiên trao đổi (${msgs.length})</h4>
-    ${threadHtml || '<div class="blk" style="opacity:.6">Chưa có trao đổi nào.</div>'}
-    <h4>Lịch sử quyết định AI (${decisions.length})</h4>
-    ${decisions.length === 0 ? '<div class="blk" style="opacity:.6">Chưa có quyết định nào.</div>' :
-      decisions.map(d => `
-        <div class="blk">
-          <div style="font-size:11px;opacity:.6;margin-bottom:4px">${fmt(d.created_at)} · <b>${d.decided_by}</b>${d.model ? ' · ' + d.model : ''} · confidence: ${(d.confidence||0).toFixed(2)}</div>
-          <div><b>${d.action}</b> → ${d.status_applied}${d.priority_score != null ? ` · priority ${d.priority_score}` : ''}</div>
-          ${d.reason ? `<div style="opacity:.75;margin-top:4px;font-size:11.5px">↳ ${esc(d.reason)}</div>` : ''}
-          ${d.public_note ? `<div style="opacity:.85;margin-top:4px">💬 ${esc(d.public_note)}</div>` : ''}
-        </div>
-      `).join('')
-    }
-  `;
-  if (!aiTicketCache.some(t => t.source_request_id === id)) return;
-  const box = detail.querySelector('.detail-box');
-  box.insertAdjacentHTML('beforeend', `<details class="ai-trace" style="margin-top:10px">
-    <summary style="cursor:pointer;font-weight:700">Trace AI</summary><div class="ai-trace-body">Đang tải…</div></details>`);
-  const section = box.querySelector('.ai-trace');
-  section.addEventListener('toggle', async () => {
-    if (!section.open || section.dataset.loaded) return;
-    section.dataset.loaded = '1';
-    const res = await api(`/api/admin/ai-board/requests/${id}/trace`);
-    if (!res.ok) delete section.dataset.loaded; // retry on next open
-    section.querySelector('.ai-trace-body').innerHTML = res.ok ? renderTrace(res.data)
-      : `<div class="blk" style="opacity:.6">Không tải được trace (${esc(res.data?.error || res.status)}).</div>`;
-  });
-}
-// Trace AI: every value (prompt, output, reasons) is untrusted model/student text → esc() everything.
-const secs = (ms) => ms == null ? '—' : (ms / 1000).toFixed(1);
-function renderTrace(t) {
-  const x = t.totals || {};
-  const unit = x.budget_unit === 'k_tokens' ? 'k tokens' : 'GPU-s';
-  const strip = `<div class="blk" style="display:flex;flex-wrap:wrap;gap:4px 16px">
-    <span>GPU-s: <b>${esc(x.gpu_s)}</b></span>
-    <span>Ngân sách: <b>${esc(x.budget_used)} / ${esc(x.budget_limit)}</b> ${unit}</span>
-    <span>Tokens vào/ra: <b>${fmtNum(x.tokens_in)} / ${fmtNum(x.tokens_out)}</b></span>
-    <span>Lượt gọi: <b>${esc(x.calls)}</b></span>
-    <span>Nạp model: <b>${esc(x.model_loads)}</b></span>
-    <span>Thử lại: <b>${esc(x.retries)}</b></span>
-  </div>`;
-  const runs = (t.runs || []).map(run => `
-    <div style="font-weight:600;margin:10px 0 4px">Run #${esc(run.id)} · ${esc(run.trigger)} · ${esc(run.status || 'chưa có kết luận')}
-      · ${fmt(run.created_at)} · ${esc(run.totals?.calls)} lượt · ${esc(run.totals?.gpu_s)} GPU-s</div>
-    ${run.gates.map(g => `<div class="blk">Cổng ${esc(g.gate)} · <b>${esc(g.status)}</b>${g.public_reason ? ` — ${esc(g.public_reason)}` : ''}${g.internal_reason ? ` <span style="opacity:.6">(${esc(g.internal_reason)})</span>` : ''}</div>`).join('')}
-    ${run.calls.length ? `<table style="font-size:11px;width:100%">
-      <thead><tr><th>Cổng</th><th>Con</th><th>Lần/vòng</th><th>Model</th><th>Wall s</th><th>GPU s</th><th>Load s</th><th>Queue s</th><th>Tokens vào/ra</th><th>tok/s</th><th>done</th><th>Kết quả</th></tr></thead>
-      <tbody>${run.calls.map(c => traceCallRows(c.evidence || {})).join('')}</tbody></table>` : ''}
-  `).join('');
-  return strip + (runs || '<div class="blk" style="opacity:.6">Chưa có run nào.</div>');
-}
-function traceCallRows(e) {
-  const m = e.metrics || {};
-  const cut = (flag) => flag ? ' <span style="opacity:.6">(đã cắt)</span>' : '';
-  return `<tr>
-    <td>${esc(e.gate)}</td><td>${esc(e.child ?? '—')}</td><td>${esc(e.attempt ?? '—')}/${esc(e.iteration ?? '—')}</td>
-    <td>${esc(e.model)}</td><td>${secs(m.wall_ms)}</td><td>${secs(m.gpu_ms)}</td><td>${secs(m.load_ms)}</td><td>${secs(m.queue_ms)}</td>
-    <td>${fmtNum(m.tokens_in)} / ${fmtNum(m.tokens_out)}</td><td>${esc(m.tok_s ?? '—')}</td><td>${esc(m.done_reason ?? '—')}</td>
-    <td><span class="pill">${esc(e.result ?? '—')}</span>${e.error ? `<div style="opacity:.7">${esc(e.error)}</div>` : ''}</td>
-  </tr>
-  <tr><td colspan="12"><details><summary style="cursor:pointer;opacity:.7">${esc(e.call_id)} · ${esc(e.prompt_name ?? '')} · prompt / output</summary>
-    <div style="opacity:.6;margin-top:4px">Prompt (${fmtNum(e.prompt_len)} ký tự)${cut(e.truncated?.prompt)}</div>
-    <pre style="white-space:pre-wrap;max-height:320px;overflow:auto;margin:2px 0">${esc(e.prompt_var)}</pre>
-    <div style="opacity:.6">Output (${fmtNum(e.output_len)} ký tự)${cut(e.truncated?.output)}</div>
-    <pre style="white-space:pre-wrap;max-height:320px;overflow:auto;margin:2px 0">${esc(e.output)}</pre>
-  </details></td></tr>`;
 }
 function openReplyModal(id) {
   const r = reqCache.find(x => x.id === id);
@@ -619,7 +506,7 @@ async function submitReply() {
     ? await api(`/api/requests/${id}/status`, { method:'POST', body: JSON.stringify({ status, note: message }) })
     : { ok: true };
   if (!close.ok) toast('Đã phản hồi nhưng chưa đóng được ticket AI: ' + (close.data?.error || close.status), 'err');
-  else toast(r.data.notified ? '✓ Đã gửi phản hồi + 🔔 cho HS' : '✓ Đã đóng yêu cầu');
+  else toast(r.data.notified ? 'Đã gửi phản hồi + cho HS' : 'Đã đóng yêu cầu');
   closeModal();
   await loadRequests();
 }
@@ -636,13 +523,13 @@ function renderUsers() {
     <div class="toolbar">
       <span style="font-size:12px;opacity:.6">Tổng: <b>${userCache.length}</b> user</span>
       <div class="spacer"></div>
-      <button class="btn primary" id="userCreate">➕ Tạo user mới</button>
-      <button class="btn" id="userRefresh">↻ Tải lại</button>
+      <button class="btn primary" id="userCreate">Tạo user mới</button>
+      <button class="btn" id="userRefresh">Tải lại</button>
     </div>
     <table>
       <thead><tr>
         <th>#</th><th>Username</th><th>Tên hiển thị</th><th>Vai trò</th>
-        <th>Gói</th><th title="Trường HS đang theo học (mỗi tài khoản 1 trường)">🎓 Đang học</th>
+        <th>Gói</th><th title="Trường HS đang theo học (mỗi tài khoản 1 trường)">Đang học</th>
         <th title="Level tính từ XP">Lv</th>
         <th>XP</th><th>Coin</th><th title="Chuỗi ngày liên tục">🔥</th>
         <th>Email</th><th>Đăng nhập gần nhất</th><th></th>
@@ -697,13 +584,13 @@ function renderUsers() {
 // theo enrolled_domain hiện tại. Đổi sang giá trị NULL = bỏ gắn trường (admin).
 function openEnrollModal(u) {
   const DOMAINS = [
-    ['preschool','🧸 Mầm non'], ['primary','🎒 Tiểu học'], ['secondary','📐 THCS'], ['highschool','🏫 THPT'],
-    ['pharmacy','💊 Dược'], ['it','💻 CNTT'], ['economics','📉 Kinh tế'], ['business','📈 Kinh doanh'],
-    ['finance','🏦 Tài chính'], ['medicine','⚕️ Y'], ['nursing','🩺 Điều dưỡng'], ['law','⚖️ Luật'],
-    ['education','🎓 Sư phạm'], ['engineering','⚙️ Kỹ thuật'], ['architecture','🏛️ Kiến trúc'],
-    ['languages','🗣️ Ngoại ngữ'], ['agriculture','🌾 Nông nghiệp'], ['tourism','🏖️ Du lịch'],
-    ['arts','🎨 Mỹ thuật'], ['media','📰 Truyền thông'], ['social-sciences','📚 KHXH&NV'],
-    ['natural-sciences','🔬 KHTN'], ['logistics','🚚 Logistics'], ['public-admin','🏢 Hành chính'],
+    ['preschool','Mầm non'], ['primary','Tiểu học'], ['secondary','THCS'], ['highschool','THPT'],
+    ['pharmacy','Dược'], ['it','CNTT'], ['economics','Kinh tế'], ['business','Kinh doanh'],
+    ['finance','Tài chính'], ['medicine','Y'], ['nursing','Điều dưỡng'], ['law','Luật'],
+    ['education','Sư phạm'], ['engineering','Kỹ thuật'], ['architecture','Kiến trúc'],
+    ['languages','Ngoại ngữ'], ['agriculture','Nông nghiệp'], ['tourism','Du lịch'],
+    ['arts','Mỹ thuật'], ['media','Truyền thông'], ['social-sciences','KHXH&NV'],
+    ['natural-sciences','KHTN'], ['logistics','Logistics'], ['public-admin','Hành chính'],
   ];
   const cur = u.enrolled_domain || '';
   const opts = DOMAINS.map(([id, label]) =>
@@ -713,7 +600,7 @@ function openEnrollModal(u) {
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(2,6,23,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(6px);';
   ov.innerHTML = `
     <div style="background:#0f172a;border:1px solid #334155;color:#f1f5f9;border-radius:14px;padding:20px 22px;max-width:480px;width:100%;box-shadow:0 30px 80px rgba(0,0,0,.6)">
-      <h3 style="margin:0 0 4px;font-size:18px">🎓 Đặt/đổi trường đang học</h3>
+      <h3 style="margin:0 0 4px;font-size:18px">Đặt/đổi trường đang học</h3>
       <p style="font-size:13px;opacity:.7;margin:0 0 10px">@${esc(u.username)} · ${esc(u.display_name)} · hiện tại: <b>${cur || '— chưa chọn —'}</b></p>
       <p style="font-size:12px;color:#fbbf24;margin:0 0 12px;line-height:1.5">Bucket cũ (ví, skill, level) ở trường trước <b>vẫn lưu</b> — quay lại trường đó sẽ khôi phục.</p>
       <label style="font-size:12px;display:block;margin-bottom:5px">Trường mới</label>
@@ -732,7 +619,7 @@ function openEnrollModal(u) {
     try {
       await api(`/api/admin/users/${u.id}/enrollment`, { method: 'POST', body: JSON.stringify({ enrolled_domain: newDomain }) });
       close();
-      toast('✓ Đã đổi trường' + (newDomain ? ' → ' + newDomain : ' (bỏ gắn trường)'));
+      toast('Đã đổi trường' + (newDomain ? ' → ' + newDomain : ' (bỏ gắn trường)'));
       await loadUsers();
     } catch (e) {
       toast('Lỗi: ' + (e.message || 'không lưu được'), 'err');
@@ -759,7 +646,7 @@ async function submitCreateUser() {
   };
   const r = await api('/api/admin/users', { method:'POST', body: JSON.stringify(body) });
   if (!r.ok) return toast('Lỗi: ' + (r.data?.message || r.data?.error || r.status), 'err');
-  toast('✓ Đã tạo @' + body.username);
+  toast('Đã tạo @' + body.username);
   closeModal();
   await loadUsers();
 }
@@ -782,7 +669,7 @@ async function submitEditUser() {
   };
   const r = await api(`/api/admin/users/${uid}`, { method:'PATCH', body: JSON.stringify(body) });
   if (!r.ok) return toast('Lỗi: ' + (r.data?.message || r.data?.error || r.status), 'err');
-  toast('✓ Đã cập nhật');
+  toast('Đã cập nhật');
   closeModal();
   await loadUsers();
 }
@@ -806,19 +693,19 @@ async function submitResetPwd() {
   if (password.length < 6) return toast('Mật khẩu ≥6 ký tự', 'err');
   const r = await api(`/api/admin/users/${uid}/password`, { method:'POST', body: JSON.stringify({ password }) });
   if (!r.ok) return toast('Lỗi: ' + (r.data?.message || r.data?.error || r.status), 'err');
-  toast('✓ Đã đổi mật khẩu + huỷ mọi session');
+  toast('Đã đổi mật khẩu + huỷ mọi session');
   closeModal();
   await loadUsers();
 }
 function confirmDeleteUser(u) {
   openConfirm({
-    title: '🗑 Xoá người dùng?',
+    title: 'Xoá người dùng?',
     msg: 'Hành động không thể undo. Cascade xoá: sessions, oauth_identities, subscriptions, notifications. Attempts/achievements giữ nguyên (link bằng tên hiển thị, không phải user_id).',
     ctx: `@${u.username} · ${u.display_name} · role=${u.role}`,
     onConfirm: async () => {
       const r = await api(`/api/admin/users/${u.id}`, { method:'DELETE' });
       if (!r.ok) return toast('Lỗi: ' + (r.data?.message || r.data?.error || r.status), 'err');
-      toast('✓ Đã xoá @' + r.data.deleted);
+      toast('Đã xoá @' + r.data.deleted);
       closeModal();
       await loadUsers();
     },
@@ -898,7 +785,7 @@ async function submitWallet() {
   };
   const r = await api(`/api/admin/users/${uid}/wallet`, { method:'PATCH', body: JSON.stringify(body) });
   if (!r.ok) return toast('Lỗi lưu ví: ' + (r.data?.error || r.status), 'err');
-  toast(`✓ Đã lưu ví · Lv${lvFromXp(body.xp)}`);
+  toast(`Đã lưu ví · Lv${lvFromXp(body.xp)}`);
   closeModal();
   await loadUsers();
 }
@@ -917,7 +804,7 @@ async function submitRole() {
   const role = $('#modal-role').value;
   const r = await api(`/api/admin/users/${uid}/role`, { method:'POST', body: JSON.stringify({ role }) });
   if (!r.ok) return toast('Lỗi đổi vai trò', 'err');
-  toast('✓ Đã đổi vai trò → ' + role);
+  toast('Đã đổi vai trò → ' + role);
   closeModal();
   await loadUsers();
 }
@@ -964,7 +851,7 @@ async function loadCampus(host = $('#tabbody')) {
 
   const renderCard = (c) => {
     const statusBadge = c.status === 'locked'
-      ? '<span style="background:rgba(148,163,184,.15);color:#94a3b8;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700">🔒 SẮP MỞ</span>'
+      ? '<span style="background:rgba(148,163,184,.15);color:#94a3b8;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700">SẮP MỞ</span>'
       : c.status === 'preview'
         ? '<span style="background:rgba(251,191,36,.15);color:#fbbf24;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700">PREVIEW</span>'
         : '<span style="background:rgba(34,197,94,.15);color:#22c55e;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700">READY</span>';
@@ -979,7 +866,7 @@ async function loadCampus(host = $('#tabbody')) {
           <div style="font-size:11.5px;color:var(--muted);margin-top:2px">${editorState}</div>
         </div>
         <div style="display:flex;gap:6px;margin-top:auto">
-          <button class="btn primary" style="flex:1;font-size:12px" data-campus-edit="${c.domain}" data-campus-label="${c.label} ${c.emoji}">✏️ Sửa</button>
+          <button class="btn primary" style="flex:1;font-size:12px" data-campus-edit="${c.domain}" data-campus-label="${c.label} ${c.emoji}">Sửa</button>
           ${overrides.has(c.domain) ? `<button class="btn" style="color:var(--bad);border-color:var(--bad);background:rgba(239,68,68,.08);font-size:12px" data-campus-del="${c.domain}" title="Xoá override">↺</button>` : ''}
         </div>
       </div>
@@ -987,21 +874,21 @@ async function loadCampus(host = $('#tabbody')) {
   };
 
   host.innerHTML = `
-    <h2 class="section-title">🗺️ Campus 2.5D theo trường <span class="line"></span></h2>
+    <h2 class="section-title">Campus 2.5D theo trường <span class="line"></span></h2>
     <p style="color:var(--muted);font-size:13px;margin:0 0 14px">
       Quản lý bố cục bản đồ cho <b>${CAMPUS_DOMAINS.length} trường</b> trong hệ thống Tizia
       — đồng bộ với trang chủ. Override lưu vào DB; Reset để về layout mặc định.
     </p>
 
     <h3 style="font-size:13px;margin:12px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">
-      🎒 Phổ thông (${grpSchool.length})
+      Phổ thông (${grpSchool.length})
     </h3>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
       ${grpSchool.map(renderCard).join('')}
     </div>
 
     <h3 style="font-size:13px;margin:24px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">
-      🎓 Đại học & Cao đẳng (${grpHE.length})
+      Đại học & Cao đẳng (${grpHE.length})
     </h3>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
       ${grpHE.map(renderCard).join('')}
@@ -1027,11 +914,11 @@ async function loadSchoolsCampus() {
 // Tab campus nhúng /admin/campus-editor.html (giữ postMessage dirty/state cũ);
 // các tab khác render inline trong #school-tab-content.
 const SCHOOL_TABS = [
-  { id: 'campus',     label: '🗺️ Campus',         hint: 'Bố cục bản đồ 2.5D' },
-  { id: 'apps',       label: '🧩 Apps',           hint: 'App gán cho trường' },
-  { id: 'curriculum', label: '📚 Curriculum',     hint: 'Coverage chương trình' },
-  { id: 'admins',     label: '🛡️ Quản lý',        hint: 'School admins' },
-  { id: 'users',      label: '👥 Người dùng',     hint: 'HS/SV enrolled + grants' },
+  { id: 'campus',     label: 'Campus',         hint: 'Bố cục bản đồ 2.5D' },
+  { id: 'apps',       label: 'Apps',           hint: 'App gán cho trường' },
+  { id: 'curriculum', label: 'Curriculum',     hint: 'Coverage chương trình' },
+  { id: 'admins',     label: 'Quản lý',        hint: 'School admins' },
+  { id: 'users',      label: 'Người dùng',     hint: 'HS/SV enrolled + grants' },
 ];
 let _activeSchoolTab = 'campus';
 
@@ -1040,7 +927,7 @@ function openSchoolPanel(domain, label) {
   _campusLayoutCache  = null;
   const meta = CAMPUS_DOMAINS.find(c => c.domain === domain);
   const displayLabel = label || (meta ? `${meta.emoji} ${meta.label}` : domain);
-  $('#school-overlay-title').textContent = `🏫 Quản lý trường — ${displayLabel}`;
+  $('#school-overlay-title').textContent = `Quản lý trường — ${displayLabel}`;
   $('#school-overlay').style.display = 'flex';
 
   // Render sidebar tabs
@@ -1097,7 +984,7 @@ function switchSchoolTab(tabId) {
   }
   iframe.style.display = 'none';
   content.style.display = 'block';
-  content.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center">⏳ Đang tải…</div>';
+  content.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center">Đang tải…</div>';
 
   if (tabId === 'apps')        return renderSchoolAppsTab(_campusEditorDomain, content);
   if (tabId === 'curriculum')  return renderSchoolCurriculumTab(_campusEditorDomain, content);
@@ -1119,7 +1006,7 @@ async function saveCampusLayout() {
     method: 'POST', body: JSON.stringify({ layout: _campusLayoutCache }),
   });
   if (!r.ok) return toast('Lỗi lưu: ' + (r.data?.message || r.data?.error || r.status), 'err');
-  toast(`✓ Đã lưu campus ${_campusEditorDomain}`);
+  toast(`Đã lưu campus ${_campusEditorDomain}`);
   $('#campus-dirty-badge').style.display = 'none';
   _campusLayoutCache = null;
 }
@@ -1128,7 +1015,7 @@ async function resetCampusLayout(domain) {
   if (!confirm(`Reset về layout mặc định cho "${domain}"? Override DB sẽ bị xoá.`)) return;
   const r = await api(`/api/admin/campus-layout/${domain}`, { method: 'DELETE' });
   if (!r.ok) return toast('Lỗi: ' + (r.data?.error || r.status), 'err');
-  toast(`✓ Đã reset campus ${domain}`);
+  toast(`Đã reset campus ${domain}`);
   if (_campusEditorDomain === domain) closeSchoolOverlay();
   await showTab(currentTab);
 }
@@ -1150,7 +1037,7 @@ async function renderSchoolAppsTab(domain, host) {
   const apps = (r.builtin || []).filter(a => a.domain === domain);
   if (!apps.length) {
     host.innerHTML = `
-      <h2 class="section-title">🧩 Apps của trường <span class="line"></span></h2>
+      <h2 class="section-title">Apps của trường <span class="line"></span></h2>
       <p style="color:var(--muted);font-size:13px">Trường <b>${esc(domain)}</b> chưa có app nào trong catalog (<code>builtin-catalog.js</code>).</p>
       <p style="color:var(--muted);font-size:12px;margin-top:8px">Thêm app: edit <code>server/contexts/portal-apps/builtin-catalog.js</code>, set <code>domain: '${esc(domain)}'</code>, restart server.</p>
     `;
@@ -1158,9 +1045,9 @@ async function renderSchoolAppsTab(domain, host) {
   }
   const byCat = {};
   for (const a of apps) (byCat[a.category || 'misc'] ||= []).push(a);
-  const catLabel = { game: '🎮 Game', tool: '🛠️ Tool', course: '📘 Course', misc: '📦 Khác' };
+  const catLabel = { game: 'Game', tool: 'Tool', course: 'Course', misc: 'Khác' };
   host.innerHTML = `
-    <h2 class="section-title">🧩 Apps của trường (${apps.length}) <span class="line"></span></h2>
+    <h2 class="section-title">Apps của trường (${apps.length}) <span class="line"></span></h2>
     <p style="color:var(--muted);font-size:13px;margin-bottom:16px">
       Danh sách app từ <code>builtin-catalog.js</code> domain=<b>${esc(domain)}</b> — catalog version <code>${esc(r.version || '?')}</code>.
     </p>
@@ -1200,7 +1087,7 @@ async function renderSchoolCurriculumTab(domain, host) {
   const meta = DOMAIN_META.find(d => d.id === domain);
   if (!DOMAIN_REGISTRY[domain]) {
     host.innerHTML = `
-      <h2 class="section-title">📚 Curriculum <span class="line"></span></h2>
+      <h2 class="section-title">Curriculum <span class="line"></span></h2>
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;text-align:center;color:var(--muted)">
         <div style="font-size:32px;margin-bottom:8px">${meta?.icon || '🔒'}</div>
         <b>Chưa có module registry cho trường này</b>
@@ -1236,9 +1123,9 @@ async function renderSchoolCurriculumTab(domain, host) {
   const coverage = agg.length ? Math.round((subjectsFull / agg.length) * 100) : 0;
 
   host.innerHTML = `
-    <h2 class="section-title">📚 Curriculum coverage <span class="line"></span></h2>
+    <h2 class="section-title">Curriculum coverage <span class="line"></span></h2>
     <p style="color:var(--muted);font-size:13px;margin-bottom:14px">
-      ${meta?.icon || '📘'} <b>${esc(meta?.name || domain)}</b> — ${modules.length} module, ${Object.keys(subjects).length} môn metadata.
+      <b>${esc(meta?.name || domain)}</b> — ${modules.length} module, ${Object.keys(subjects).length} môn metadata.
       Mỗi môn chuẩn GDPT 2018 cần <b>${TARGET_WEEKS}</b> tuần.
     </p>
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:14px">
@@ -1256,11 +1143,11 @@ async function renderSchoolCurriculumTab(domain, host) {
       </div>
       ${agg.map(s => {
         const st = s.weekCount >= TARGET_WEEKS ? 'ok' : s.weekCount > 0 ? 'partial' : 'empty';
-        const stLabel = st === 'ok' ? '✓ Đủ' : st === 'partial' ? '⚠ Thiếu' : '✗ Trống';
+        const stLabel = st === 'ok' ? 'Đủ' : st === 'partial' ? 'Thiếu' : 'Trống';
         const stColor = st === 'ok' ? 'var(--ok)' : st === 'partial' ? 'var(--warn)' : 'var(--bad)';
         return `
           <div style="display:grid;grid-template-columns:1fr 100px 110px;gap:8px;padding:10px 14px;background:var(--bg);align-items:center">
-            <div style="font-size:13px">${s.icon || '📘'} ${esc(s.label)}${s.allOptional ? ' <span style="font-size:10px;background:rgba(251,191,36,.15);color:var(--warn);padding:1px 6px;border-radius:999px;margin-left:4px">TỰ CHỌN</span>' : ''}</div>
+            <div style="font-size:13px">${esc(s.label)}${s.allOptional ? ' <span style="font-size:10px;background:rgba(251,191,36,.15);color:var(--warn);padding:1px 6px;border-radius:999px;margin-left:4px">TỰ CHỌN</span>' : ''}</div>
             <div style="text-align:right;font-variant-numeric:tabular-nums">${s.weekCount}/${TARGET_WEEKS}</div>
             <div style="text-align:center;color:${stColor};font-weight:700;font-size:12px">${stLabel}</div>
           </div>
@@ -1268,7 +1155,7 @@ async function renderSchoolCurriculumTab(domain, host) {
       }).join('') || '<div style="padding:18px;text-align:center;color:var(--muted)">Chưa có môn nào.</div>'}
     </div>
     <p style="font-size:11.5px;color:var(--muted);margin-top:12px">
-      Full view all domains: <a href="/admin/curriculum-gap.html" style="color:var(--brand)">📊 Curriculum Gap Dashboard</a>.
+      Full view all domains: <a href="/admin/curriculum-gap.html" style="color:var(--brand)">Curriculum Gap Dashboard</a>.
     </p>
   `;
 }
@@ -1279,7 +1166,7 @@ async function renderSchoolAdminsTab(domain, host) {
   if (!r.ok) { host.innerHTML = `<div style="color:var(--bad);padding:20px">Lỗi: ${esc(r.data?.error || r.status)}</div>`; return; }
   const admins = r.data?.admins || [];
   host.innerHTML = `
-    <h2 class="section-title">🛡️ Quản lý trường — ${admins.length} admin <span class="line"></span></h2>
+    <h2 class="section-title">Quản lý trường — ${admins.length} admin <span class="line"></span></h2>
     <p style="color:var(--muted);font-size:13px;margin-bottom:14px">
       User có trong danh sách này sẽ thấy menu <b>"Quản lý trường ${esc(domain)}"</b> sau khi đăng nhập (qua <code>managed_domains</code> trong <code>/api/auth/me</code>).
     </p>
@@ -1290,7 +1177,7 @@ async function renderSchoolAdminsTab(domain, host) {
         <input id="sa-note"   type="text" placeholder="Ghi chú (tuỳ chọn)" style="flex:1;min-width:160px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px">
         <button class="btn primary" id="sa-add-btn" style="font-size:12px">+ Bổ nhiệm</button>
       </div>
-      <div style="font-size:11.5px;color:var(--muted);margin-top:6px">💡 Lấy user_id từ tab <b>Người dùng</b> hoặc từ <code>GET /api/admin/users</code>.</div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:6px">Lấy user_id từ tab <b>Người dùng</b> hoặc từ <code>GET /api/admin/users</code>.</div>
     </div>
     ${admins.length === 0
       ? '<div style="padding:24px;text-align:center;color:var(--muted);background:var(--bg2);border:1px solid var(--border);border-radius:10px">Chưa có admin nào.</div>'
@@ -1304,7 +1191,7 @@ async function renderSchoolAdminsTab(domain, host) {
               <div><b>${esc(a.display_name || a.username || '?')}</b><br><span style="font-size:11px;color:var(--muted)">@${esc(a.username || '')}</span></div>
               <div style="font-size:12px;color:var(--muted)">${esc(a.note || '—')}</div>
               <div style="font-size:11.5px;color:var(--muted)">${fmt(a.granted_at)}</div>
-              <div style="text-align:right"><button class="btn" data-revoke="${a.user_id}" style="font-size:11px;padding:5px 8px;color:var(--bad);border-color:var(--bad);background:rgba(239,68,68,.08)">🗑 Thu hồi</button></div>
+              <div style="text-align:right"><button class="btn" data-revoke="${a.user_id}" style="font-size:11px;padding:5px 8px;color:var(--bad);border-color:var(--bad);background:rgba(239,68,68,.08)">Thu hồi</button></div>
             </div>
           `).join('')}
         </div>`
@@ -1318,7 +1205,7 @@ async function renderSchoolAdminsTab(domain, host) {
       method: 'POST', body: JSON.stringify({ domain_id: domain, note: note || null }),
     });
     if (!rr.ok) return toast('Lỗi: ' + (rr.data?.error || rr.status), 'err');
-    toast(`✓ Bổ nhiệm user #${uid} làm admin trường ${domain}`);
+    toast(`Bổ nhiệm user #${uid} làm admin trường ${domain}`);
     renderSchoolAdminsTab(domain, host);
   });
   host.querySelectorAll('[data-revoke]').forEach(btn => {
@@ -1327,7 +1214,7 @@ async function renderSchoolAdminsTab(domain, host) {
       if (!confirm(`Thu hồi quyền quản lý trường "${domain}" của user #${uid}?`)) return;
       const rr = await api(`/api/admin/users/${uid}/school-admin/${encodeURIComponent(domain)}`, { method: 'DELETE' });
       if (!rr.ok) return toast('Lỗi: ' + (rr.data?.error || rr.status), 'err');
-      toast(`✓ Đã thu hồi`);
+      toast(`Đã thu hồi`);
       renderSchoolAdminsTab(domain, host);
     });
   });
@@ -1360,13 +1247,13 @@ async function renderSchoolUsersTab(domain, host) {
         <div style="text-align:right;display:flex;gap:4px;justify-content:flex-end">
           ${kind === 'enrolled'
             ? `<button class="btn" data-unenroll="${u.id}" style="font-size:11px;padding:5px 8px" title="Bỏ gắn enrolled_domain">↺ Bỏ enroll</button>`
-            : `<button class="btn" data-revoke-grant="${u.id}" style="font-size:11px;padding:5px 8px;color:var(--bad);border-color:var(--bad);background:rgba(239,68,68,.08)">🗑 Thu hồi</button>`}
+            : `<button class="btn" data-revoke-grant="${u.id}" style="font-size:11px;padding:5px 8px;color:var(--bad);border-color:var(--bad);background:rgba(239,68,68,.08)">Thu hồi</button>`}
         </div>
       </div>`;
   };
 
   host.innerHTML = `
-    <h2 class="section-title">👥 Người dùng của trường <span class="line"></span></h2>
+    <h2 class="section-title">Người dùng của trường <span class="line"></span></h2>
     <div style="display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap">
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 16px;flex:1;min-width:160px">
         <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Enrolled</div>
@@ -1407,7 +1294,7 @@ async function renderSchoolUsersTab(domain, host) {
       method: 'POST', body: JSON.stringify({ domain_id: domain, note: note || null }),
     });
     if (!rr.ok) return toast('Lỗi: ' + (rr.data?.error || rr.status), 'err');
-    toast(`✓ Cấp grant trường ${domain} cho user #${uid}`);
+    toast(`Cấp grant trường ${domain} cho user #${uid}`);
     renderSchoolUsersTab(domain, host);
   });
   host.querySelectorAll('[data-unenroll]').forEach(btn => {
@@ -1418,7 +1305,7 @@ async function renderSchoolUsersTab(domain, host) {
         method: 'POST', body: JSON.stringify({ enrolled_domain: null }),
       });
       if (!rr.ok) return toast('Lỗi: ' + (rr.data?.error || rr.status), 'err');
-      toast(`✓ Bỏ enroll xong`);
+      toast(`Bỏ enroll xong`);
       renderSchoolUsersTab(domain, host);
     });
   });
@@ -1428,7 +1315,7 @@ async function renderSchoolUsersTab(domain, host) {
       if (!confirm(`Thu hồi grant trường "${domain}" của user #${uid}?`)) return;
       const rr = await api(`/api/admin/users/${uid}/grant-domain/${encodeURIComponent(domain)}`, { method: 'DELETE' });
       if (!rr.ok) return toast('Lỗi: ' + (rr.data?.error || rr.status), 'err');
-      toast(`✓ Thu hồi xong`);
+      toast(`Thu hồi xong`);
       renderSchoolUsersTab(domain, host);
     });
   });
@@ -1439,7 +1326,7 @@ async function renderSchoolUsersTab(domain, host) {
 // hiện shortcut + preview stats; full view ở /admin/curriculum-gap.html.
 async function loadCurriculumTab() {
   $('#tabbody').innerHTML = `
-    <h2 class="section-title">📊 Curriculum Gap Dashboard <span class="line"></span></h2>
+    <h2 class="section-title">Curriculum Gap Dashboard <span class="line"></span></h2>
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px 22px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
       <div style="flex:1;min-width:280px;">
         <div style="font-weight:700;font-size:15px;margin-bottom:6px">Heatmap độ phủ K-12 vs GDPT 2018</div>
@@ -1448,10 +1335,10 @@ async function loadCurriculumTab() {
           Sau khi anh chạy upgrade <code style="background:#020617;color:var(--accent);padding:2px 6px;border-radius:4px;font-size:11.5px">SCOREUP-UPGRADE.md</code> Phase 4, dashboard tự lấy coverage thực từ ScoreUp.
         </div>
       </div>
-      <a class="btn primary" href="/admin/curriculum-gap.html" style="font-weight:700">📊 Mở Dashboard →</a>
+      <a class="btn primary" href="/admin/curriculum-gap.html" style="font-weight:700">Mở Dashboard →</a>
     </div>
     <div style="margin-top:24px;color:var(--muted);font-size:12.5px;line-height:1.6">
-      🧪 <b>Quick refs:</b><br>
+      <b>Quick refs:</b><br>
       • Audit chi tiết: <code style="background:#020617;color:var(--accent);padding:1px 5px;border-radius:3px">docs/AUDIT-2026-06-05.md</code><br>
       • Seed JSON Lịch sử L11/L12: <code style="background:#020617;color:var(--accent);padding:1px 5px;border-radius:3px">docs/curriculum-seeds/lich-su-{11,12}.json</code><br>
       • Upgrade prompts: <code style="background:#020617;color:var(--accent);padding:1px 5px;border-radius:3px">docs/upgrade-prompts/{SCOREUP,CODELAB}-UPGRADE.md</code>
@@ -1460,7 +1347,7 @@ async function loadCurriculumTab() {
 }
 
 // ─────────── CSDL TAB — admin trực tiếp browse + CRUD sqlite tizia.db ───────────
-// Sub-section: 📋 Tables | 🔍 SQL Console | 💾 Backups | 📜 Audit
+// Sub-section: Tables | SQL Console | Backups | Audit
 // Mọi non-SELECT đều ghi vào admin_db_audit + console của server.
 let _dbActiveSub  = 'tables';
 let _dbActiveTbl  = null;
@@ -1470,17 +1357,17 @@ const DB_PAGE_SIZE = 100;
 async function loadDbTab() {
   const host = $('#tabbody');
   host.innerHTML = `
-    <h2 class="section-title">🗄️ Cơ sở dữ liệu (SQLite) <span class="line"></span></h2>
+    <h2 class="section-title">Cơ sở dữ liệu (SQLite) <span class="line"></span></h2>
     <p style="color:var(--muted);font-size:13px;margin:0 0 14px">
       Browse + CRUD trực tiếp <code>tizia.db</code>. Mọi thao tác <b>ghi</b> sẽ vào
       <code>admin_db_audit</code>. Hãy <b>backup trước khi UPDATE/DELETE</b> số lượng lớn.
     </p>
     <div style="display:flex;gap:6px;border-bottom:1px solid var(--border);margin-bottom:16px;flex-wrap:wrap">
       ${[
-        ['tables',  '📋 Tables'],
-        ['sql',     '🔍 SQL Console'],
-        ['backups', '💾 Backups'],
-        ['audit',   '📜 Audit log'],
+        ['tables',  'Tables'],
+        ['sql',     'SQL Console'],
+        ['backups', 'Backups'],
+        ['audit',   'Audit log'],
       ].map(([id, lbl]) => `
         <button class="btn db-sub" data-db-sub="${id}" style="border-radius:8px 8px 0 0;border-bottom:0;font-size:12.5px">${lbl}</button>
       `).join('')}
@@ -1501,7 +1388,7 @@ function switchDbSub(sub) {
     btn.style.background = active ? '' : 'transparent';
   });
   const body = $('#db-sub-body');
-  body.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center">⏳ Đang tải…</div>';
+  body.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center">Đang tải…</div>';
   if (sub === 'tables')  return renderDbTablesSub(body);
   if (sub === 'sql')     return renderDbSqlSub(body);
   if (sub === 'backups') return renderDbBackupsSub(body);
@@ -1551,7 +1438,7 @@ async function renderDbTablesSub(host) {
 
 async function renderDbTableDetail(tbl) {
   const host = $('#db-table-detail');
-  host.innerHTML = '<div style="color:var(--muted);padding:30px;text-align:center">⏳ Đang tải…</div>';
+  host.innerHTML = '<div style="color:var(--muted);padding:30px;text-align:center">Đang tải…</div>';
   const [schemaR, rowsR] = await Promise.all([
     api(`/api/admin/db/schema/${encodeURIComponent(tbl)}`),
     api(`/api/admin/db/rows/${encodeURIComponent(tbl)}?limit=${DB_PAGE_SIZE}&offset=${_dbRowOffset}`),
@@ -1574,11 +1461,11 @@ async function renderDbTableDetail(tbl) {
   host.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px;flex-wrap:wrap">
       <div>
-        <h3 style="margin:0;font-size:16px">📋 ${esc(tbl)}</h3>
+        <h3 style="margin:0;font-size:16px">${esc(tbl)}</h3>
         <small style="color:var(--muted)">${cols.length} cột · ${fmtNum(total)} rows · PK: <code>${esc(pk.name)}</code></small>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn" id="db-tbl-schema" style="font-size:11.5px">📐 Xem DDL</button>
+        <button class="btn" id="db-tbl-schema" style="font-size:11.5px">Xem DDL</button>
         <button class="btn primary" id="db-tbl-insert" style="font-size:11.5px">+ Insert row</button>
       </div>
     </div>
@@ -1638,7 +1525,7 @@ async function renderDbTableDetail(tbl) {
         method: 'POST', body: JSON.stringify({ pk_col: pk.name, pk_val: pkVal }),
       });
       if (!rr.ok) return toast('Lỗi: ' + (rr.data?.message || rr.data?.error), 'err');
-      toast(`✓ Xoá ${rr.data.changes} row`);
+      toast(`Xoá ${rr.data.changes} row`);
       renderDbTableDetail(tbl);
     });
   });
@@ -1651,7 +1538,7 @@ function openDbRowEditor(tbl, cols, pkCol, existing) {
     <div id="db-row-modal" style="position:fixed;inset:0;z-index:2000;background:rgba(11,18,32,.85);display:flex;align-items:center;justify-content:center;padding:20px">
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;max-width:640px;width:100%;max-height:88vh;overflow:auto">
         <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
-          <h3 style="margin:0;font-size:15px">${isInsert ? '➕ Insert row' : '✏️ Edit row'} — <code>${esc(tbl)}</code></h3>
+          <h3 style="margin:0;font-size:15px">${isInsert ? 'Insert row' : 'Edit row'} — <code>${esc(tbl)}</code></h3>
           <button class="btn" id="db-row-cancel" style="font-size:12px">✕</button>
         </div>
         <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
@@ -1674,11 +1561,11 @@ function openDbRowEditor(tbl, cols, pkCol, existing) {
               </div>
             `;
           }).join('')}
-          <small style="color:var(--muted)">💡 Để trống = NULL (nếu cột cho phép NULL). Số/JSON cứ paste, server giữ nguyên.</small>
+          <small style="color:var(--muted)">Để trống = NULL (nếu cột cho phép NULL). Số/JSON cứ paste, server giữ nguyên.</small>
         </div>
         <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
           <button class="btn" id="db-row-close" style="font-size:12px">Huỷ</button>
-          <button class="btn primary" id="db-row-save" style="font-size:12px">${isInsert ? '💾 Insert' : '💾 Lưu'}</button>
+          <button class="btn primary" id="db-row-save" style="font-size:12px">${isInsert ? 'Insert' : 'Lưu'}</button>
         </div>
       </div>
     </div>
@@ -1701,13 +1588,13 @@ function openDbRowEditor(tbl, cols, pkCol, existing) {
         method: 'POST', body: JSON.stringify({ values: data }),
       });
       if (!rr.ok) return toast('Lỗi: ' + (rr.data?.message || rr.data?.error), 'err');
-      toast(`✓ Insert row #${rr.data.last_id}`);
+      toast(`Insert row #${rr.data.last_id}`);
     } else {
       const rr = await api(`/api/admin/db/rows/${encodeURIComponent(tbl)}/update`, {
         method: 'POST', body: JSON.stringify({ pk_col: pkCol, pk_val: existing[pkCol], set: data }),
       });
       if (!rr.ok) return toast('Lỗi: ' + (rr.data?.message || rr.data?.error), 'err');
-      toast(`✓ Update ${rr.data.changes} row`);
+      toast(`Update ${rr.data.changes} row`);
     }
     close();
     renderDbTableDetail(tbl);
@@ -1743,13 +1630,13 @@ function renderDbSqlSub(host) {
     const isRead = /^\s*(SELECT|WITH|EXPLAIN|PRAGMA)\b/i.test(sql);
     if (!isRead) {
       if (!allowWrite) return toast('Tick "Cho phép WRITE" trước', 'err');
-      const c1 = confirm(`⚠️ Non-SELECT query:\n\n${sql.slice(0, 300)}${sql.length > 300 ? '…' : ''}\n\nChạy thử?`);
+      const c1 = confirm(`Non-SELECT query:\n\n${sql.slice(0, 300)}${sql.length > 300 ? '…' : ''}\n\nChạy thử?`);
       if (!c1) return;
-      const c2 = confirm(`⚠️ Xác nhận lần 2 — không thể undo.\n\nThực sự chạy?`);
+      const c2 = confirm(`Xác nhận lần 2 — không thể undo.\n\nThực sự chạy?`);
       if (!c2) return;
     }
     const result = $('#db-sql-result');
-    result.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center">⏳ Đang chạy…</div>';
+    result.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center">Đang chạy…</div>';
     const r = await api('/api/admin/db/query', {
       method: 'POST', body: JSON.stringify({ sql, allow_write: allowWrite }),
     });
@@ -1758,8 +1645,8 @@ function renderDbSqlSub(host) {
       return;
     }
     if (r.data.mode === 'write') {
-      result.innerHTML = `<div style="padding:14px;background:rgba(34,197,94,.08);border:1px solid var(--ok);border-radius:8px;color:var(--ok);font-size:13px">✓ Write OK — <b>${r.data.changes}</b> rows affected${r.data.last_id ? ` · last_id=<b>${r.data.last_id}</b>` : ''}.</div>`;
-      toast('✓ Write OK');
+      result.innerHTML = `<div style="padding:14px;background:rgba(34,197,94,.08);border:1px solid var(--ok);border-radius:8px;color:var(--ok);font-size:13px">Write OK — <b>${r.data.changes}</b> rows affected${r.data.last_id ? ` · last_id=<b>${r.data.last_id}</b>` : ''}.</div>`;
+      toast('Write OK');
       return;
     }
     const cols = r.data.columns || [];
@@ -1791,9 +1678,9 @@ async function renderDbBackupsSub(host) {
   const backups = r.data?.backups || [];
   host.innerHTML = `
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-      <button class="btn primary" id="db-bk-new" style="font-size:12.5px">📸 Tạo backup mới (snapshot)</button>
-      <a class="btn" href="/api/admin/db/backup/download?name=current" target="_blank" style="font-size:12.5px;text-decoration:none">⬇ Tải tizia.db hiện tại</a>
-      <button class="btn" id="db-bk-refresh" style="font-size:12.5px">↻ Refresh</button>
+      <button class="btn primary" id="db-bk-new" style="font-size:12.5px">Tạo backup mới (snapshot)</button>
+      <a class="btn" href="/api/admin/db/backup/download?name=current" target="_blank" style="font-size:12.5px;text-decoration:none">Tải tizia.db hiện tại</a>
+      <button class="btn" id="db-bk-refresh" style="font-size:12.5px">Refresh</button>
     </div>
     <p style="color:var(--muted);font-size:12.5px;margin:0 0 12px">
       Backup folder: <code>${esc(r.data?.data_dir || '?')}</code> — tổng <b>${backups.length}</b> file.
@@ -1828,7 +1715,7 @@ async function renderDbBackupsSub(host) {
     if (!confirm('Tạo snapshot backup tizia.db ngay? (an toàn — không khoá DB)')) return;
     const rr = await api('/api/admin/db/backup', { method: 'POST' });
     if (!rr.ok) return toast('Lỗi: ' + (rr.data?.message || rr.data?.error), 'err');
-    toast(`✓ Tạo ${rr.data.name} (${fmtBytes(rr.data.size)})`);
+    toast(`Tạo ${rr.data.name} (${fmtBytes(rr.data.size)})`);
     renderDbBackupsSub(host);
   });
   $('#db-bk-refresh').addEventListener('click', () => renderDbBackupsSub(host));
@@ -1849,7 +1736,7 @@ async function renderDbAuditSub(host) {
             <div style="padding:10px 14px;background:var(--bg)">
               <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11.5px;color:var(--muted);margin-bottom:4px">
                 <span><b style="color:var(--text)">@${esc(a.username || '?')}</b> (uid=${a.user_id}) · ${fmt(a.created_at)}</span>
-                <span>${a.error ? `<span style="color:var(--bad)">✗ ${esc(a.error)}</span>` : `<span style="color:var(--ok)">✓ ${a.changes} rows${a.last_id ? ` · last_id=${a.last_id}` : ''}</span>`}</span>
+                <span>${a.error ? `<span style="color:var(--bad)">${esc(a.error)}</span>` : `<span style="color:var(--ok)">${a.changes} rows${a.last_id ? ` · last_id=${a.last_id}` : ''}</span>`}</span>
               </div>
               <code style="display:block;font-size:11.5px;background:var(--bg2);padding:6px 9px;border-radius:5px;white-space:pre-wrap;word-break:break-all;color:${a.error ? 'var(--bad)' : 'var(--text)'};max-height:120px;overflow:auto">${esc(a.sql)}</code>
             </div>
@@ -1860,13 +1747,13 @@ async function renderDbAuditSub(host) {
 }
 
 const TABS = {
-  dashboard:  { label:'📊 Dashboard', load: loadDashboard },
-  schools:    { label:'🏫 Trường', load: loadSchoolsCampus },
-  curriculum: { label:'📊 Curriculum', load: loadCurriculumTab },
-  requests:   { label:'💡 Góp ý', load: loadRequests, badge: () => reqCache.filter(r => r.status === 'pending').length },
-  users:      { label:'👥 Người dùng', load: loadUsers },
-  db:         { label:'🗄️ CSDL',     load: loadDbTab },
-  config:     { label:'⚙️ Cấu hình', load: loadConfig },
+  dashboard:  { label:'Dashboard', load: loadDashboard },
+  schools:    { label:'Trường', load: loadSchoolsCampus },
+  curriculum: { label:'Curriculum', load: loadCurriculumTab },
+  requests:   { label:'Góp ý', load: loadRequests, badge: () => reqCache.filter(r => r.status === 'pending').length },
+  users:      { label:'Người dùng', load: loadUsers },
+  db:         { label:'CSDL',     load: loadDbTab },
+  config:     { label:'Cấu hình', load: loadConfig },
 };
 
 // ─────────── Dashboard tab (KPI + charts + tops + feed + system) ───────────
@@ -1882,7 +1769,7 @@ async function loadDashboard() {
   ]);
 
   if (ov.status === 403) {
-    $('#tabbody').innerHTML = `<div class="err">⛔ Cần quyền <b>admin</b>. Tài khoản hiện tại không đủ quyền.<br>
+    $('#tabbody').innerHTML = `<div class="err">Cần quyền <b>admin</b>. Tài khoản hiện tại không đủ quyền.<br>
       Liên hệ quản trị để được cấp quyền.</div>`;
     return;
   }
@@ -1890,25 +1777,25 @@ async function loadDashboard() {
   const kpiHtml = renderKpi(ov.data || {});
   const chartsHtml = `
     <section class="section">
-      <h2 class="section-title">📈 Xu hướng 30 ngày <span class="line"></span></h2>
+      <h2 class="section-title">Xu hướng 30 ngày <span class="line"></span></h2>
       <div class="two-col">
         <div class="panel">
-          <div class="panel-title">🎮 Lượt học theo ngày <span class="legend"><span><i style="background:var(--accent)"></i>Lượt học</span></span></div>
+          <div class="panel-title">Lượt học theo ngày <span class="legend"><span><i style="background:var(--accent)"></i>Lượt học</span></span></div>
           <div class="chart" id="chart-attempts"></div>
         </div>
         <div class="panel">
-          <div class="panel-title">👤 User mới theo ngày <span class="legend"><span><i style="background:var(--accent2)"></i>Đăng ký</span></span></div>
+          <div class="panel-title">User mới theo ngày <span class="legend"><span><i style="background:var(--accent2)"></i>Đăng ký</span></span></div>
           <div class="chart" id="chart-users"></div>
         </div>
       </div>
       <div style="height:14px"></div>
       <div class="two-col">
         <div class="panel">
-          <div class="panel-title">🤖 AI tokens theo ngày <span class="legend"><span><i style="background:var(--purple)"></i>Tokens</span></span></div>
+          <div class="panel-title">AI tokens theo ngày <span class="legend"><span><i style="background:var(--purple)"></i>Tokens</span></span></div>
           <div class="chart" id="chart-tokens"></div>
         </div>
         <div class="panel">
-          <div class="panel-title">⚡ Tokens theo model</div>
+          <div class="panel-title">Tokens theo model</div>
           <div id="chart-tokens-model" style="padding:6px 0"></div>
         </div>
       </div>
@@ -1917,9 +1804,9 @@ async function loadDashboard() {
   const pvHtml = renderPageviewSection(pv.data || {});
   const topsHtml = `
     <section class="section">
-      <h2 class="section-title">🏆 Bảng xếp hạng <span class="line"></span></h2>
+      <h2 class="section-title">Bảng xếp hạng <span class="line"></span></h2>
       <div class="panel">
-        <div class="panel-title">🏆 Top học sinh năng động</div>
+        <div class="panel-title">Top học sinh năng động</div>
         <div id="top-students"></div>
       </div>
     </section>
@@ -1928,11 +1815,11 @@ async function loadDashboard() {
     <section class="section">
       <div class="two-col">
         <div class="panel">
-          <div class="panel-title">📋 Hoạt động gần đây</div>
+          <div class="panel-title">Hoạt động gần đây</div>
           <div id="activity-feed"></div>
         </div>
         <div class="panel">
-          <div class="panel-title">⚙️ Hệ thống (snapshot)</div>
+          <div class="panel-title">Hệ thống (snapshot)</div>
           <div id="sysblock"></div>
         </div>
       </div>
@@ -1970,14 +1857,11 @@ async function loadDashboard() {
   $('#sysblock').innerHTML = renderSystem(sys.data || {});
 
   // Đồng bộ badge "Góp ý" sau khi dashboard load xong (nhẹ, không trùng request)
-  if (ov.data?.requests_pending != null) {
-    const tb = document.querySelector('.tab[data-k="requests"] .count');
-    if (tb) tb.textContent = ov.data.requests_pending;
-  }
+  if (ov.data?.requests_pending != null) updateRequestBadge(ov.data.requests_pending);
 }
 
 // ─────────── Cấu hình hệ thống (Runtime info + Auto-backup config + DB backup) ───────────
-// Tab "⚙️ Cấu hình" gom 3 nhóm:
+// Tab "Cấu hình" gom 3 nhóm:
 //   1. Runtime snapshot: uptime, memory, DB size, Node version (readonly)
 //   2. Cấu hình môi trường: env var chính (BACKUP_HOUR/KEEP, AI, …) — readonly
 //      vì sửa cần restart server; chỉ là window để admin biết đang chạy gì.
@@ -1997,7 +1881,7 @@ async function loadConfig() {
   // ── 2. Env config snapshot (readonly — sửa cần restart) ──
   const envHtml = `
     <section class="section">
-      <h2 class="section-title">🔧 Cấu hình môi trường <span class="line"></span></h2>
+      <h2 class="section-title">Cấu hình môi trường <span class="line"></span></h2>
       <p style="color:var(--muted);font-size:12.5px;margin:0 0 12px">
         Các giá trị dưới đây đọc từ biến môi trường lúc khởi động server. Sửa = đổi
         env var trên prod rồi restart container.
@@ -2016,7 +1900,7 @@ async function loadConfig() {
   // ── 3. Sao lưu / Phục hồi DB ──
   const pgWarn = pgReady ? '' : `
     <div class="panel" style="margin-bottom:14px;background:rgba(251,146,60,0.08);border-color:rgba(251,146,60,0.4)">
-      <div class="panel-title" style="color:var(--warn)">⚠️ Postgres chưa sẵn sàng</div>
+      <div class="panel-title" style="color:var(--warn)">Postgres chưa sẵn sàng</div>
       <div style="padding:6px 14px 12px;font-size:13px;line-height:1.55;color:var(--txt)">
         Server không có biến môi trường <code style="background:rgba(0,0,0,.3);padding:1px 5px;border-radius:4px">DATABASE_URL</code>.
         Tính năng <b>Tạo backup</b> / <b>Phục hồi</b> dùng <code>pg_dump</code>/<code>pg_restore</code> → chỉ hoạt động khi server đã chuyển sang Postgres.
@@ -2026,7 +1910,7 @@ async function loadConfig() {
 
   const meta = `
     <div class="panel" style="margin-bottom:14px">
-      <div class="panel-title">📦 Tóm tắt backup</div>
+      <div class="panel-title">Tóm tắt backup</div>
       <div style="padding:10px 14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;font-size:13px">
         <div><div style="color:var(--muted)">Số file</div><div style="font-weight:700">${items.length}</div></div>
         <div><div style="color:var(--muted)">Tổng dung lượng</div><div style="font-weight:700">${fmtBytes(r.data.total_size)}</div></div>
@@ -2037,12 +1921,12 @@ async function loadConfig() {
   const disAttr = pgReady ? '' : 'disabled style="opacity:.4;cursor:not-allowed" title="Cần DATABASE_URL"';
   const actions = `
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
-      <button class="btn primary" id="do-snapshot" ${disAttr}>📸 Tạo backup ngay</button>
+      <button class="btn primary" id="do-snapshot" ${disAttr}>Tạo backup ngay</button>
       <label class="btn" style="cursor:${pgReady ? 'pointer' : 'not-allowed'};${pgReady ? '' : 'opacity:.4'}" title="${pgReady ? '' : 'Cần DATABASE_URL'}">
         ⤴️ Phục hồi từ file…
         <input type="file" id="restore-file" accept=".dump,application/octet-stream" style="display:none" ${pgReady ? '' : 'disabled'}>
       </label>
-      <button class="btn" id="refresh-bk">↻ Tải lại</button>
+      <button class="btn" id="refresh-bk">Tải lại</button>
     </div>`;
 
   let body;
@@ -2065,16 +1949,16 @@ async function loadConfig() {
 
   const backupSection = `
     <section class="section">
-      <h2 class="section-title">💾 Sao lưu / Phục hồi DB <span class="line"></span></h2>
+      <h2 class="section-title">Sao lưu / Phục hồi DB <span class="line"></span></h2>
       ${pgWarn}${meta}${actions}${body}
     </section>`;
   $('#tabbody').innerHTML = sysHtml + envHtml + backupSection;
 
   $('#do-snapshot').onclick = async () => {
-    $('#do-snapshot').disabled = true; $('#do-snapshot').textContent = '⏳ Đang sao lưu…';
+    $('#do-snapshot').disabled = true; $('#do-snapshot').textContent = 'Đang sao lưu…';
     const rr = await api('/api/admin/backups', { method:'POST', body: JSON.stringify({ label:'manual' }) });
     if (!rr.ok) return toast('Lỗi: ' + (rr.data?.detail || rr.data?.error || rr.status), 'err');
-    toast('✓ Đã tạo ' + rr.data.backup.name); await loadConfig();
+    toast('Đã tạo ' + rr.data.backup.name); await loadConfig();
   };
 
   $('#refresh-bk').onclick = () => loadConfig();
@@ -2083,13 +1967,13 @@ async function loadConfig() {
     btn.onclick = () => {
       const name = btn.dataset.del;
       openConfirm({
-        title:'🗑 Xoá backup?',
+        title:'Xoá backup?',
         msg:'Không thể khôi phục lại. File sẽ bị xoá vĩnh viễn khỏi đĩa.',
         ctx: name,
         onConfirm: async () => {
           const rr = await api(`/api/admin/backups/${encodeURIComponent(name)}`, { method:'DELETE' });
           if (!rr.ok) return toast('Lỗi xoá', 'err');
-          toast('✓ Đã xoá ' + name); closeModal(); await loadConfig();
+          toast('Đã xoá ' + name); closeModal(); await loadConfig();
         },
       });
     };
@@ -2099,7 +1983,7 @@ async function loadConfig() {
     btn.onclick = () => {
       const name = btn.dataset.restore;
       openConfirm({
-        title:'⚠️ Phục hồi từ snapshot?',
+        title:'Phục hồi từ snapshot?',
         msg:'pg_restore --clean sẽ chạy ngay trên DB đang sống — mọi bảng bị DROP rồi tạo lại từ snapshot. Server tự lưu safety snapshot pre-restore trước khi restore. Có chắc chắn?',
         ctx: name,
         onConfirm: async () => {
@@ -2113,7 +1997,7 @@ async function loadConfig() {
           });
           const j = await rr.json().catch(()=>({}));
           if (!rr.ok) return toast('Lỗi: ' + (j.detail || j.error || rr.status), 'err');
-          toast('✓ Đã phục hồi · safety=' + (j.safety_backup || '—')); closeModal(); await loadConfig();
+          toast('Đã phục hồi · safety=' + (j.safety_backup || '—')); closeModal(); await loadConfig();
         },
       });
     };
@@ -2125,7 +2009,7 @@ async function loadConfig() {
       const file = e.target.files?.[0]; if (!file) return;
       if (!/\.dump$/i.test(file.name)) { toast('Chỉ nhận file .dump (pg_dump -Fc)', 'err'); fileInput.value=''; return; }
       openConfirm({
-        title:'⚠️ Phục hồi từ file upload?',
+        title:'Phục hồi từ file upload?',
         msg:'pg_restore --clean sẽ chạy ngay — bảng hiện tại bị DROP rồi tạo lại từ file upload. Server tự lưu safety snapshot pre-restore. Có chắc chắn?',
         ctx: `${file.name} · ${fmtBytes(file.size)}`,
         onConfirm: async () => {
@@ -2137,7 +2021,7 @@ async function loadConfig() {
           });
           const j = await rr.json().catch(()=>({}));
           if (!rr.ok) return toast('Lỗi: ' + (j.message || j.detail || j.error || rr.status), 'err');
-          toast('✓ Đã phục hồi · safety=' + (j.safety_backup || '—')); closeModal(); fileInput.value=''; await loadConfig();
+          toast('Đã phục hồi · safety=' + (j.safety_backup || '—')); closeModal(); fileInput.value=''; await loadConfig();
         },
       });
     };
@@ -2161,13 +2045,13 @@ async function loadSimpleWithDelete(path, key, cols, fmtMap = {}, deleteBase, en
       const id = Number(b.dataset.rid);
       const row = rows.find(x => x.id === id);
       openConfirm({
-        title: `🗑 Xoá ${entityLabel}?`,
+        title: `Xoá ${entityLabel}?`,
         msg: 'Hành động không thể undo.',
         ctx: `id=${row.id}` + (row.title ? ' · ' + row.title.slice(0, 80) : ''),
         onConfirm: async () => {
           const dr = await api(`${deleteBase}/${id}`, { method:'DELETE' });
           if (!dr.ok) return toast('Lỗi: ' + (dr.data?.message || dr.data?.error || dr.status), 'err');
-          toast('✓ Đã xoá');
+          toast('Đã xoá');
           closeModal();
           await TABS[currentTab].load();
         },
@@ -2182,7 +2066,7 @@ function renderTabBar() {
     return `<button class="tab ${k === currentTab ? 'active' : ''}" data-k="${k}">${v.label}${badge}</button>`;
   }).join('')
     // Link ra trang sửa nội dung học (curriculum_content) — không phải tab SPA.
-    + `<a class="tab" href="/admin-curriculum.html" title="Sửa nóng quiz + lý thuyết trong DB">✏️ Sửa nội dung</a>`;
+    + `<a class="tab" href="/admin-curriculum.html" title="Sửa nóng quiz + lý thuyết trong DB">Sửa nội dung</a>`;
   const bar = $('#tabs');
   if (bar) bar.innerHTML = tabsHtml;
 }
@@ -2193,7 +2077,7 @@ function tabFromHash() {
   return TABS[h] ? h : null;
 }
 
-async function showTab(key) {
+async function showTab(key, { silent = false } = {}) {
   if (!TABS[key]) key = 'dashboard';
   currentTab = key;
   // Sync URL hash để F5 / share link giữ nguyên tab. Dùng replaceState để
@@ -2203,21 +2087,33 @@ async function showTab(key) {
     try { history.replaceState(null, '', location.pathname + location.search + want); } catch {}
   }
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.k === key));
-  $('#tabbody').innerHTML = '<div class="loading">⏳ Đang tải…</div>';
+  if (!silent) $('#tabbody').innerHTML = '<div class="loading">Đang tải…</div>';
   try {
     await TABS[key].load();
-    // Cập nhật badge "Góp ý" sau khi load xong (vd: requests tab vừa fetch lại reqCache)
-    const reqBadge = document.querySelector('.tab[data-k="requests"] .count');
-    if (reqBadge && TABS.requests.badge) reqBadge.textContent = TABS.requests.badge();
+    // Badge "Góp ý" lấy từ reqCache chỉ khi tab Góp ý vừa tải lại; tab khác (vd dashboard) tự cập nhật
+    // bằng số của server — trước đây ghi đè bằng reqCache rỗng nên badge hiện 0.
+    if (key === 'requests') updateRequestBadge(TABS.requests.badge());
   } catch(e) {
     $('#tabbody').innerHTML = `<div class="err">Lỗi: ${e.message}</div>`;
   }
 }
 
-async function refresh() {
+// Tab tự làm mới: chỉ tab đọc số liệu; tab có form (trường, cấu hình, CSDL…) không bị vẽ lại khi đang sửa.
+const AUTO_REFRESH_TABS = new Set(['dashboard', 'requests']);
+function autoRefresh() {
+  const busy = document.hidden || $('#modal-bg')?.classList.contains('show')
+    || ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
+  if (!busy && AUTO_REFRESH_TABS.has(currentTab)) refresh({ silent: true });
+}
+function updateRequestBadge(count) {
+  const tb = document.querySelector('.tab[data-k="requests"] .count');
+  if (tb) tb.textContent = count;
+}
+
+async function refresh({ silent = false } = {}) {
   const btn = $('#refreshBtn');
   btn?.classList.add('spin');
-  try { await showTab(currentTab); }
+  try { await showTab(currentTab, { silent }); }
   catch(e) { if (e.message !== 'login') console.error(e); }
   finally { setTimeout(() => $('#refreshBtn')?.classList.remove('spin'), 400); }
 }
@@ -2241,7 +2137,7 @@ async function init() {
   // Render shell một lần — tab bar lớn + container nội dung
   $('#app').innerHTML = `
     <div class="tabs" id="tabs"></div>
-    <div id="tabbody"><div class="loading">⏳ Đang tải…</div></div>
+    <div id="tabbody"><div class="loading">Đang tải…</div></div>
   `;
   renderTabBar();
   $('#tabs').addEventListener('click', e => {
@@ -2258,8 +2154,16 @@ async function init() {
   });
   await showTab(startTab);
 
-  // Auto-refresh 60s (chỉ reload tab hiện tại)
-  setInterval(refresh, 60_000);
+  // Vào thẳng tab khác (vd #users): badge "Góp ý" vẫn có số, không đợi mở tab Góp ý.
+  if (!['requests', 'dashboard'].includes(currentTab)) {
+    api('/api/admin/requests?limit=300').then(r => {
+      if (!r.ok) return;
+      reqCache = r.data.requests || [];
+      updateRequestBadge(TABS.requests.badge());
+    }).catch(() => {});
+  }
+  // Auto-refresh 60s, im lặng (không nháy), bỏ qua khi đang gõ/mở modal/ẩn tab.
+  setInterval(autoRefresh, 60_000);
 
   // Manual refresh
   $('#refreshBtn')?.addEventListener('click', refresh);
