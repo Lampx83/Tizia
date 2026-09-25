@@ -1,0 +1,10 @@
+*
+!ai-board/
+!server/
+!scripts/
+ai-board/memory/
+ai-board/ai-log.md
+ai-board/inbox.json
+ai-board/harness/.venv/
+**/__pycache__/
+**/.pytest_cache/

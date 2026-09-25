@@ -44,7 +44,7 @@ class FakeCandidates:
     def discard(self, candidate):
         self.discarded.append(candidate)
 
-    def rollback(self, candidate, ticket_id):
+    def rollback(self, candidate, ticket_id, pull_request=None):
         if self.fail:
             raise OSError('git revert: conflict')
         return {'outcome': 'discarded', 'detail': f'deleted {candidate["branch"]} of {ticket_id}'}
@@ -960,3 +960,171 @@ def test_approved_multi_scope_multi_test_step_reaches_gate_3_intact():
     assert {k: subtask[k] for k in step} == step  # every approved field survives
     assert subtask['file'] == 'public/a.html' and subtask['size'] == 'large'
     assert subtask['verify'] == 'node --test test/a.test.js; smoke /a; trang /a trả 200'
+
+
+def test_server_url_prefers_ai_board_server_url_then_same_machine_port():
+    from worker import server_url
+
+    assert server_url({'AI_BOARD_SERVER_URL': 'http://tizia:8041/'}) == 'http://tizia:8041'
+    assert server_url({'PORT': '9000'}) == 'http://127.0.0.1:9000'
+    assert server_url({}) == 'http://127.0.0.1:8041'
+
+
+def test_claimed_ticket_syncs_the_clone_before_the_snapshot():
+    order = []
+
+    class Recording(FakeTransport):
+        def __call__(self, method, path, payload, headers):
+            order.append(path.rsplit('/', 1)[-1])
+            return super().__call__(method, path, payload, headers)
+
+    worker = HttpWorker(WorkerClient('http://fixture', 'secret', transport=Recording()),
+                        worker_id='w1', version='test', mode='shadow', sync=lambda: order.append('sync'))
+    worker.run_once()
+    assert order[:3] == ['claim', 'sync', 'snapshot']
+
+
+def test_idle_claim_does_not_touch_the_clone():
+    synced = []
+
+    class Idle(FakeTransport):
+        def __call__(self, method, path, payload, headers):
+            return {'ticket': None} if path.endswith('/claim') else super().__call__(method, path, payload, headers)
+
+    worker = HttpWorker(WorkerClient('http://fixture', 'secret', transport=Idle()),
+                        worker_id='w1', version='test', mode='shadow', sync=lambda: synced.append(1))
+    assert worker.run_once() == {'status': 'idle'}
+    assert synced == []
+
+
+def test_sync_moves_the_dedicated_clone_to_the_latest_origin_base(tmp_path):
+    import subprocess
+    import candidate
+
+    def git(cwd, *args):
+        return subprocess.run(['git', '-c', 'user.name=T', '-c', 'user.email=t@example.invalid', *args], cwd=cwd,
+                              check=True, capture_output=True, text=True, stdin=subprocess.DEVNULL).stdout.strip()
+
+    upstream = tmp_path / 'upstream'
+    upstream.mkdir()
+    git(upstream, 'init', '-q', '-b', 'dev')
+    git(upstream, 'commit', '-q', '--allow-empty', '-m', 'base')
+    clone = tmp_path / 'clone'
+    git(tmp_path, 'clone', '-q', str(upstream), str(clone))
+    git(clone, 'branch', 'ai-board/2026-09-26-ticket-1-abc123')  # a kept candidate
+    (upstream / 'new.txt').write_text('new', encoding='utf-8')
+    git(upstream, 'add', 'new.txt')
+    git(upstream, 'commit', '-q', '-m', 'newer dev')
+    (clone / 'stray.txt').write_text('left by a crashed job', encoding='utf-8')
+
+    sha = candidate.sync(clone, 'dev')
+
+    assert sha == git(upstream, 'rev-parse', 'HEAD') == git(clone, 'rev-parse', 'HEAD')
+    assert (clone / 'new.txt').exists() and not (clone / 'stray.txt').exists()
+    assert git(clone, 'branch', '--list', 'ai-board/*') != ''  # candidates survive the sync
+
+
+def test_gate_1_reads_context_from_the_checkout_source(monkeypatch, fake_deps, tmp_path):
+    import main
+
+    seen = {}
+    monkeypatch.setattr(main.intake_guard, 'run', lambda *_a, **_k: {'verdict': 'allow', 'labels': ['ok']})
+    monkeypatch.setattr(main.brainstorm, 'run',
+                        lambda request, deps, budget, **kw: seen.update(kw) or {'gate': 1, 'blocked': False})
+    main.run_gate(1, {'subject': 's', 'body': 'b'}, fake_deps, None, {'checkout_source': str(tmp_path)})
+    assert seen['source'] == str(tmp_path)
+
+
+PASSING = {
+    'outcome': 'ready_for_pr', 'gate_reached': 5.5, 'reason': None, 'failure_class': None, 'repairs': [],
+    'budget_used': 10,
+    'candidate': {'branch': 'ai-board/2026-09-26-ticket-7-abc123', 'base_sha': 'a' * 40, 'head_sha': 'b' * 40,
+                  'commits': [{'sha': 'b' * 40, 'title': 'ai-board(ticket-7): 1/1 Sửa', 'files': ['public/x.html']}]},
+    'gates': [{'gate': 3, 'blocked': False, 'reason': None}, {'gate': 4, 'blocked': False, 'reason': None},
+              {'gate': 5, 'blocked': False, 'reason': None, 'smoke_passed': True, 'http_observed': True,
+               'runner': 'docker'},
+              {'gate': 5.5, 'blocked': False, 'reason': None, 'risk_level': 'medium', 'risk_signals': []}],
+}
+PLAN = {'goal': 'Sửa trang x', 'tests': ['node --test test/x.test.js'], 'steps': [
+    {'order': 1, 'title': 'Sửa', 'allowed_scope': ['public/x.html'], 'tests': ['node --test test/x.test.js']}]}
+
+
+class PublishingCandidates(FakeCandidates):
+    def __init__(self, fail=None):
+        super().__init__()
+        self.published, self.publish_fail = [], fail
+
+    def publish(self, candidate, *, title, body, labels=()):
+        if self.publish_fail:
+            raise self.publish_fail
+        self.published.append((candidate, title, body, list(labels)))
+        return {'number': 42, 'url': 'https://github.com/Lampx83/Tizia/pull/42', 'branch': candidate['branch'],
+                'base': 'dev', 'base_sha': candidate['base_sha'], 'head_sha': candidate['head_sha']}
+
+
+def _publishing_worker(transport, candidates, verdict=PASSING):
+    return HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1', mode='active',
+                      planner=lambda _snapshot: (PLAN, 0), change_runner=lambda *_a, **_k: dict(verdict),
+                      candidates=candidates, open_prs=True)
+
+
+def test_passing_verdict_opens_one_pr_and_reports_it_before_release():
+    transport, candidates = FakeTransport(), PublishingCandidates()
+    _publishing_worker(transport, candidates).run_once()
+    tail = [call[1].rsplit('/', 1)[-1] for call in transport.calls][-3:]
+    assert tail == ['verdict', 'pull-request', 'release']
+    sent = transport.calls[-2][2]
+    assert sent['pull_request']['number'] == 42 and sent['run_id'] == 11 and 'lease-7' in sent['idempotency_key']
+    (candidate, title, body, labels), = candidates.published
+    assert candidate['head_sha'] == 'b' * 40 and title.startswith('AI Board #3')
+    for part in ('a' * 40, 'b' * 40, 'medium', 'node --test test/x.test.js', 'Không tự merge'):
+        assert part in body
+    assert labels == ['ai-board', 'ai-board:tier-surface', 'ai-board:daily-batch']
+
+
+def test_blocked_verdict_or_existing_pr_opens_nothing():
+    blocked = {**PASSING, 'outcome': 'blocked', 'candidate': None, 'failure_class': 'ordinary'}
+    candidates = PublishingCandidates()
+    _publishing_worker(FakeTransport(), candidates, blocked).run_once()
+
+    class HasPr(FakeTransport):
+        def __call__(self, method, path, payload, headers):
+            out = super().__call__(method, path, payload, headers)
+            if path.endswith('/snapshot'):
+                out['pull_request'] = {'number': 41}
+            return out
+
+    transport = HasPr()
+    _publishing_worker(transport, candidates).run_once()
+    assert candidates.published == []
+    assert not any(call[1].endswith('/pull-request') for call in transport.calls)
+    assert '#41' in transport.calls[-1][2]['internal_detail']
+
+
+def test_failed_publish_still_releases_with_the_reason():
+    transport = FakeTransport()
+    _publishing_worker(transport, PublishingCandidates(fail=OSError('git push: denied'))).run_once()
+    assert not any(call[1].endswith('/pull-request') for call in transport.calls)
+    assert transport.calls[-1][1].endswith('/release')
+    assert 'git push: denied' in transport.calls[-1][2]['internal_detail']
+
+
+def test_pr_text_hides_the_student_and_defuses_mentions():
+    from worker import pr_text
+
+    snapshot = {'request': {'id': 3, 'title': 'Đổi màu @team', 'detail': 'ping @admin please', 'student': 'Lan'}}
+    title, body, labels = pr_text(snapshot, PLAN, 'protected',
+                                  {**PASSING, 'outcome': 'needs_review',
+                                   'gates': [*PASSING['gates'][:3], {**PASSING['gates'][3], 'risk_level': 'high'}]})
+    assert 'Lan' not in body and '@admin' not in body and '@team' not in title
+    assert labels == ['ai-board', 'ai-board:tier-protected', 'ai-board:review-carefully']
+
+
+def test_worker_env_secrets_are_taken_out_of_the_process_environment(monkeypatch):
+    import os
+    from worker import take_secret
+
+    monkeypatch.setenv('AI_BOARD_GITHUB_TOKEN', 'tok')
+    assert take_secret('AI_BOARD_GITHUB_TOKEN') == 'tok'
+    assert 'AI_BOARD_GITHUB_TOKEN' not in os.environ
+    assert take_secret('AI_BOARD_GITHUB_TOKEN') == ''

@@ -1,6 +1,7 @@
 """Gate 5: run one user-state smoke flow in an isolated Docker Compose project."""
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import re
@@ -17,19 +18,30 @@ _REQUIRED_ABSENT = {"SCOREUP_API_KEY", "CODELAB_API_KEY", "GA_API_SECRET",
 SMOKE_SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "smoke-user-state.sh"
 
 
+def _internal() -> bool:
+    """AI_BOARD_VERIFY_NETWORK=internal: worker runs Docker-in-Docker, so the candidate gets a network
+    with no egress and is reached on its container IP. Default publishes to 127.0.0.1 (local Docker Desktop)."""
+    return os.getenv("AI_BOARD_VERIFY_NETWORK", "published") == "internal"
+
+
 def _override(project: str) -> str:
     """!override replaces Compose lists; ordinary merge would retain prod port/volume."""
     volume = f"{project}-data"
+    ports = "ports: !reset []" if _internal() else 'ports: !override\n      - "127.0.0.1::8041"'
+    network = f"""networks:
+  default:
+    name: {project}-net
+    internal: true
+""" if _internal() else ""
     return f"""services:
   tizia:
     container_name: !reset null
     image: {project}:latest
     restart: "no"
     cpus: 1.0
-    mem_limit: 512m
+    mem_limit: 1536m
     pids_limit: 128
-    ports: !override
-      - "127.0.0.1::8041"
+    {ports}
     volumes: !override
       - {volume}:/data
     environment: !override
@@ -38,7 +50,7 @@ def _override(project: str) -> str:
       HOST: 0.0.0.0
       DATA_DIR: /data
       BASE_PATH: ""
-volumes:
+{network}volumes:
   pharmacysim-data: !reset null
   {volume}:
     name: {volume}
@@ -199,25 +211,42 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             expected_env = {"NODE_ENV": "production", "PORT": "8041", "HOST": "0.0.0.0",
                             "DATA_DIR": "/data", "BASE_PATH": ""}
             kind = "critical"
+            internal = _internal()
+            network = (config.get("networks") or {}).get("default") or {}
+            isolated_net = (not ports and network.get("internal") is True if internal else
+                            len(ports) == 1 and ports[0].get("target") == 8041 and
+                            ports[0].get("host_ip") == "127.0.0.1" and not ports[0].get("published"))
             if (service.get("environment") != expected_env or service.get("env_file") or
                     service.get("secrets") or service.get("container_name") or
                     service.get("image") != f"{project}:latest" or
                     float(service.get("cpus") or 0) != 1.0 or
-                    int(service.get("mem_limit") or 0) != 536870912 or
-                    int(service.get("pids_limit") or 0) != 128 or
-                    len(ports) != 1 or ports[0].get("target") != 8041 or
-                    ports[0].get("host_ip") != "127.0.0.1" or ports[0].get("published") or
+                    int(service.get("mem_limit") or 0) != 1536 * 1024 * 1024 or
+                    int(service.get("pids_limit") or 0) != 128 or not isolated_net or
                     len(volumes) != 1 or volumes[0].get("source") != f"{project}-data" or
                     volumes[0].get("target") != "/data"):
-                raise RuntimeError("Compose config không cách ly port/volume/env/image")
+                raise RuntimeError("Compose config không cách ly port/network/volume/env/image")
             kind = "transient"
             command([*compose, "up", "--build", "-d", "--wait", "--wait-timeout", "120"])
-            port_output = command([*compose, "port", "tizia", "8041"]).stdout.strip()
-            kind = "critical"
-            match = re.search(r":(\d+)\s*$", port_output)
-            if not match or int(match.group(1)) == 8041:
-                raise RuntimeError(f"Docker trả host port không an toàn: {port_output!r}")
-            port = int(match.group(1))
+            if internal:
+                # Address from the daemon, not from inside the candidate container.
+                cid = command([*compose, "ps", "-q", "tizia"]).stdout.strip()
+                ip_output = command(["docker", "inspect", "-f",
+                                     "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}", cid]).stdout
+                kind = "critical"
+                try:
+                    ip = ipaddress.ip_address((ip_output.split() or [""])[0])
+                except ValueError:
+                    ip = None
+                if ip is None or not ip.is_private or ip.is_loopback:
+                    raise RuntimeError(f"Docker trả địa chỉ container không an toàn: {ip_output.strip()!r}")
+                base = f"http://{ip}:8041"
+            else:
+                port_output = command([*compose, "port", "tizia", "8041"]).stdout.strip()
+                kind = "critical"
+                match = re.search(r":(\d+)\s*$", port_output)
+                if not match or int(match.group(1)) == 8041:
+                    raise RuntimeError(f"Docker trả host port không an toàn: {port_output!r}")
+                base = f"http://127.0.0.1:{int(match.group(1))}"
 
             kind = "transient"
             env_output = command([*compose, "exec", "-T", "tizia", "env"], log_output=False).stdout
@@ -247,7 +276,6 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 raise RuntimeError("generated tests failed") from exc
             logs.append(f"Generated tests passed: {', '.join(test_files)}")
 
-            base = f"http://127.0.0.1:{port}"
             env = os.environ.copy()
             env["BASE"] = base
             # Use the harness owner's script, not a possibly modified copy in the proposal checkout.

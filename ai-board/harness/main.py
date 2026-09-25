@@ -160,7 +160,8 @@ def _intake_and_plan(request, deps, budget, state, **trace) -> dict:
         return {"gate": 1, "blocked": True, "reason": f"intake_{g['verdict']}: {g['internal_reason']}"[:1000],
                 "outcome": f"intake_{g['verdict']}", "signals": g["labels"],
                 "public_message": g["public_message"]}
-    out = brainstorm.run(request, deps, budget, **trace)
+    # Worker clone at origin/<base> when set; else the repo holding the harness.
+    out = brainstorm.run(request, deps, budget, source=state.get("checkout_source"), **trace)
     state["plan"] = out.get("plan")
     return out
 

@@ -256,6 +256,13 @@ export function attachAiBoardWorkerRoutes(router, {
     res.json({ verdict });
   }));
 
+  router.post('/api/ai-board/worker/tickets/:id/pull-request', authenticate, handle((req, res) => {
+    const lease = leaseInput(req.body);
+    res.json({ pull_request: store.recordPullRequest(req.params.id, {
+      ...lease, runId: req.body?.run_id, pullRequest: req.body?.pull_request, idempotencyKey: req.body?.idempotency_key,
+    }) });
+  }));
+
   router.post('/api/ai-board/worker/tickets/:id/release', authenticate, handle((req, res) => {
     const lease = leaseInput(req.body);
     const ticket = store.releaseLease(req.params.id, {

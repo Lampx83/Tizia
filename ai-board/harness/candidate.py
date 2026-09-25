@@ -12,6 +12,8 @@ import shutil
 import subprocess
 import tempfile
 import time
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 from gates import implement
@@ -22,6 +24,71 @@ BRANCH_PREFIX = _CONTRACT["branch_prefix"]
 BRANCH_SLUG_MAX = _CONTRACT["branch_slug_max"]
 BRANCH_PATTERN = re.compile(_CONTRACT["branch_pattern"])
 _AUTHOR = ["-c", "user.name=AI Board", "-c", "user.email=ai-board@tizia.local"]
+PR_BASE = "dev"  # AI Board PRs only ever target dev; nothing here merges, approves or pushes dev/main
+# Credential helper reads the token from the git child's env: never in argv, a file or this process's env.
+_CREDENTIAL = "!f() { echo username=x-access-token; echo \"password=$AI_BOARD_PUSH_TOKEN\"; }; f"
+
+
+class GitHub:
+    """One repo's REST calls + branch push; the only holder of the token. No merge/approve/review method on purpose."""
+
+    API = "https://api.github.com"
+
+    def __init__(self, repo: str, token: str, *, transport=None, remote_url: str | None = None):
+        self.repo = repo
+        self._token = token
+        self.transport = transport or self._request
+        self.remote_url = remote_url or f"https://github.com/{repo}.git"
+
+    def _request(self, method: str, path: str, payload: dict | None):
+        request = urllib.request.Request(
+            self.API + path, method=method,
+            data=None if payload is None else json.dumps(payload).encode("utf-8"),
+            headers={"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28",
+                     "User-Agent": "tizia-ai-board",
+                     **({"Authorization": f"Bearer {self._token}"} if self._token else {})})  # public repo reads
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.loads(response.read() or b"null")
+
+    def _git_remote(self, repo, *args: str) -> None:
+        env = {**os.environ, "AI_BOARD_PUSH_TOKEN": self._token, "GIT_TERMINAL_PROMPT": "0"}
+        result = subprocess.run(["git", "-c", "credential.helper=", "-c", f"credential.helper={_CREDENTIAL}",
+                                 "push", "-q", self.remote_url, *args], cwd=repo, env=env, capture_output=True,
+                                text=True, encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL)
+        if result.returncode:
+            raise OSError(f"git push: {(result.stderr or result.stdout).strip()[:300]}")
+
+    @staticmethod
+    def _checked(branch: str) -> str:
+        if not BRANCH_PATTERN.fullmatch(branch or "") or ".." in branch:
+            raise ValueError(f"chỉ đẩy nhánh AI Board, không đẩy {branch!r}")
+        return branch
+
+    def push(self, repo, branch: str) -> None:
+        """Create the remote AI Board branch from the local one (no force). Raise ValueError for any other branch."""
+        branch = self._checked(branch)
+        self._git_remote(repo, f"refs/heads/{branch}:refs/heads/{branch}")
+
+    def delete_branch(self, repo, branch: str) -> None:
+        """Delete a remote AI Board branch; GitHub closes its open PR."""
+        self._git_remote(repo, "--delete", f"refs/heads/{self._checked(branch)}")
+
+    def open_pull(self, branch: str, *, title: str, body: str) -> dict:
+        """The open PR of this branch, else a new one into dev. Raise ValueError if it targets another base."""
+        owner = self.repo.split("/")[0]
+        head = urllib.parse.quote(f"{owner}:{branch}", safe=":/")
+        found = self.transport("GET", f"/repos/{self.repo}/pulls?state=open&head={head}", None) or []
+        pr = found[0] if found else self.transport("POST", f"/repos/{self.repo}/pulls", {
+            "title": title[:250], "head": branch, "base": PR_BASE, "body": body, "maintainer_can_modify": False})
+        if pr["base"]["ref"] != PR_BASE:
+            raise ValueError(f"PR #{pr['number']} không vào {PR_BASE} mà vào {pr['base']['ref']}")
+        return pr
+
+    def add_labels(self, number: int, labels: list[str]) -> None:
+        self.transport("POST", f"/repos/{self.repo}/issues/{int(number)}/labels", {"labels": labels})
+
+    def pull(self, number: int) -> dict:
+        return self.transport("GET", f"/repos/{self.repo}/pulls/{int(number)}", None)
 
 
 class ScopeViolation(ValueError):
@@ -57,6 +124,15 @@ def branch_name(name: str) -> str:
     if not BRANCH_PATTERN.fullmatch(branch):
         raise ValueError(f"tên nhánh sai contract: {branch}")
     return branch
+
+
+def sync(repo, base: str) -> str:
+    """Worker's dedicated clone only (never a dev checkout): fetch, detach at origin/<base>, drop
+    leftovers of a crashed job. Kept candidate branches stay. Return the base sha. Raise OSError on git failure."""
+    _git_out(["fetch", "-q", "--prune", "origin"], repo)
+    _git_out(["checkout", "-q", "-f", "--detach", f"origin/{base}"], repo)
+    _git_out(["clean", "-q", "-fd"], repo)
+    return _git_out(["rev-parse", "HEAD"], repo).strip()
 
 
 def create(state: dict, source_repo: str | os.PathLike, *, base_ref: str = "HEAD") -> None:
@@ -147,10 +223,26 @@ def record(state: dict) -> dict | None:
 
 
 class Candidates:
-    """Nhánh candidate đã giữ trong repo nguồn: bỏ hoặc hoàn tác."""
+    """Nhánh candidate đã giữ trong repo nguồn: mở PR, bỏ hoặc hoàn tác."""
 
-    def __init__(self, repo):
+    def __init__(self, repo, github: GitHub | None = None):
         self.repo = repo
+        self.github = github
+
+    def publish(self, candidate: dict, *, title: str, body: str, labels=()) -> dict:
+        """Push the verified candidate, open (or find) its one PR into dev. Return the server's pull_request record.
+        Raise ValueError when GitHub's PR head is not the verified head (stale) or targets another base."""
+        self.github.push(self.repo, candidate["branch"])
+        pr = self.github.open_pull(candidate["branch"], title=title, body=body)
+        if pr["head"]["sha"] != candidate["head_sha"]:
+            raise ValueError(f"PR #{pr['number']} head {pr['head']['sha']} không phải head đã kiểm {candidate['head_sha']}")
+        if labels:
+            try:
+                self.github.add_labels(pr["number"], list(labels))
+            except Exception as error:  # noqa: BLE001 — labels only help the reviewer sort
+                print(f"[candidate] gắn nhãn PR #{pr['number']} lỗi: {str(error)[:200]}")
+        return {"number": pr["number"], "url": pr["html_url"], "branch": candidate["branch"], "base": PR_BASE,
+                "base_sha": candidate["base_sha"], "head_sha": candidate["head_sha"]}
 
     def discard(self, candidate: dict | None) -> None:
         """Xóa nhánh candidate. Đã mất cũng là xong; còn nhánh (vd checkout ở 1 worktree) → OSError."""
@@ -161,14 +253,20 @@ class Candidates:
         if not _git(self.repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}").returncode:
             raise OSError(f"git branch -D {branch}: {deleted.stderr.strip()[:300]}")
 
-    def rollback(self, candidate: dict, ticket_id: int) -> dict:
-        """Chưa merge: xóa nhánh. Đã merge vào base: nhánh revert mới từ base, để người mở PR.
+    def rollback(self, candidate: dict, ticket_id: int, pull_request: dict | None = None) -> dict:
+        """Chưa merge: xóa nhánh (cả nhánh đã đẩy, GitHub tự đóng PR). Đã merge vào base: nhánh revert mới từ base,
+        để người mở PR; PR đã merge thì revert đúng merge commit của nó (nhận cả squash nhiều commit).
         Return {outcome: discarded|revert_ready, detail, revert?}."""
         repo, head = self.repo, candidate["head_sha"]
         base = os.getenv("PR_BASE_BRANCH", "dev")
         refs = [ref for name in dict.fromkeys((base, "main")) for ref in (f"origin/{name}", name)]
-        merged_into = next((ref for ref in refs if self.merged(candidate, ref)), None)
+        pr = self.github.pull(pull_request["number"]) if pull_request and self.github else None
+        merge_commit = pr.get("merge_commit_sha") if pr and pr.get("merged") else None
+        merged_into = f"origin/{base}" if merge_commit else next(
+            (ref for ref in refs if self.merged(candidate, ref)), None)
         if not merged_into:
+            if pr:
+                self.github.delete_branch(repo, candidate["branch"])
             self.discard(candidate)
             return {"outcome": "discarded", "detail": f"deleted unmerged branch {candidate['branch']}"}
         branch = branch_name(f"ticket-{ticket_id}-revert")
@@ -176,7 +274,12 @@ class Candidates:
         try:
             _git_out(["worktree", "add", "-q", "-b", branch, checkout, merged_into], repo)
             base_sha = _git_out(["rev-parse", "HEAD"], checkout).strip()
-            _git_out([*_AUTHOR, "revert", "--no-edit", f"{candidate['base_sha']}..{head}"], checkout)
+            if merge_commit:
+                parents = _git_out(["rev-list", "--parents", "-n", "1", merge_commit], checkout).split()[1:]
+                mainline = ["-m", "1"] if len(parents) > 1 else []
+                _git_out([*_AUTHOR, "revert", "--no-edit", *mainline, merge_commit], checkout)
+            else:
+                _git_out([*_AUTHOR, "revert", "--no-edit", f"{candidate['base_sha']}..{head}"], checkout)
             shas = _git_out(["rev-list", "--reverse", f"{base_sha}..HEAD"], checkout).split()
             commits = [{"sha": sha, "title": _git_out(["log", "-1", "--format=%s", sha], checkout).strip(),
                         "files": _git_out(["show", "--name-only", "--format=", sha], checkout).split()}
@@ -193,7 +296,7 @@ class Candidates:
 
     def merged(self, candidate: dict, ref: str) -> bool:
         """Candidate đã vào ref: head là tổ tiên, hoặc mọi commit có bản vá tương đương (cherry-pick/squash 1 commit)."""
-        # ponytail: squash nhiều commit thành 1 không nhận ra được; nhận thêm merge commit khi có PR thật (ticket 06).
+        # ponytail: không có PR thì squash nhiều commit thành 1 không nhận ra được; có PR thì rollback hỏi GitHub.
         if _git(self.repo, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").returncode:
             return False
         if not _git(self.repo, "merge-base", "--is-ancestor", candidate["head_sha"], ref).returncode:

@@ -249,6 +249,67 @@ def _remember(memory_path, plan: dict, ticket_id: int, repairs: list[dict], kind
     memory.record(memory_path, lessons)
 
 
+def take_secret(name: str) -> str:
+    """Read a secret and drop it from os.environ so no subprocess (git, docker compose, smoke) inherits it."""
+    return os.environ.pop(name, "") or ""
+
+
+_MENTION = re.compile(r"@(?=[\w-])")
+
+
+def pr_text(snapshot: dict, plan: dict, tier: str | None, verdict: dict) -> tuple[str, str, list[str]]:
+    """(title, body, labels) of the candidate's PR. Request text is the requester's, untrusted: no name, no @mention."""
+    request = snapshot.get("request") or {}
+
+    def safe(text) -> str:
+        return _MENTION.sub("@​", str(text or "")).strip()
+
+    candidate = verdict["candidate"]
+    gates = verdict.get("gates") or []
+    risk = next((g for g in gates if g.get("gate") == 5.5), {})
+    smoke = next((g for g in gates if g.get("gate") == 5), {})
+    level = risk.get("risk_level") or "?"
+    names = CONTRACT["gates"]["names"]
+    tests = list(dict.fromkeys([*(plan.get("tests") or []),
+                                *(t for step in plan.get("steps") or [] for t in step.get("tests") or [])]))
+    lines = [
+        "## Yêu cầu",
+        f"Yêu cầu #{request.get('id')} ({request.get('domain') or '—'}): **{safe(request.get('title'))}**",
+        "", safe(request.get("clarified_spec") or request.get("detail")) or "(không có mô tả)", "",
+        "## Thay đổi",
+        f"Mục tiêu: {safe(plan.get('goal'))}",
+        *(f"- `{c['sha'][:10]}` {safe(c.get('title'))} — {', '.join(f'`{f}`' for f in c.get('files') or [])}"
+          for c in candidate.get("commits") or []),
+        "", "## Rủi ro",
+        f"Mức rủi ro cổng 5.5: **{level}**; tier: **{tier or '—'}**."
+        + (f" Tín hiệu: {', '.join(risk.get('risk_signals') or [])}." if risk.get("risk_signals") else ""),
+        "", "## Kiểm thử",
+        *(f"- `{safe(t)}`" for t in tests),
+        f"- Docker smoke: {'đạt' if smoke.get('smoke_passed') else 'không đạt'}; quan sát qua HTTP: "
+        f"{'có' if smoke.get('http_observed') else 'không'}.",
+        "", "## Kết quả các cổng",
+        *(f"- Cổng {g.get('gate')} ({names.get(str(g.get('gate')).removesuffix('.0'), '')}): "
+          f"{'chặn — ' + safe(g.get('reason')) if g.get('blocked') else 'qua'}" for g in gates),
+        "", "## Bằng chứng SHA",
+        f"- base (`dev` lúc kiểm): `{candidate['base_sha']}`",
+        f"- head (đã kiểm): `{candidate['head_sha']}`",
+        "Base hoặc head đổi thì bằng chứng trên hết hiệu lực: kiểm lại bằng `python ai-board/review_pr.py <số PR>`.",
+        "", "_Mở tự động bởi AI Board. Không tự merge, không tự duyệt: người review quyết định._",
+    ]
+    labels = ["ai-board", f"ai-board:tier-{tier or 'unknown'}"]
+    if level in ("high", "critical"):
+        labels.append("ai-board:review-carefully")
+    elif tier == "surface":
+        labels.append("ai-board:daily-batch")  # surface PRs are reviewed together once a day
+    return f"AI Board #{request.get('id')}: {safe(request.get('title'))}"[:120], "\n".join(lines), labels
+
+
+def server_url(env=None) -> str:
+    """App base URL: AI_BOARD_SERVER_URL (compose: http://tizia:8041), else this machine on PORT."""
+    env = os.environ if env is None else env
+    return (env.get("AI_BOARD_SERVER_URL") or f"http://127.0.0.1:{env.get('PORT') or '8041'}").rstrip("/")
+
+
 def default_worker_id() -> str:
     """Per-machine worker id from hostname. Per-request identity is the server's lease token + run id."""
     host = re.sub(r"[^a-z0-9]+", "-", socket.gethostname().lower()).strip("-")[:60]
@@ -288,6 +349,8 @@ class HttpWorker:
     candidates: Any = None  # candidate.Candidates: discard(candidate), rollback(candidate, ticket_id)
     heartbeat_interval: float = 30.0
     tracer: Any = None  # meter.Tracer chung với planner/change runner
+    sync: Callable[[], Any] | None = None  # dedicated clone → origin/<base>, once per claimed ticket
+    open_prs: bool = False  # candidates.publish after a passing verdict (needs AI_BOARD_GITHUB_TOKEN)
     _report_gate: Callable[[float], None] | None = dataclasses.field(default=None, init=False, repr=False)
 
     def gate_started(self, gate: float) -> None:
@@ -347,6 +410,9 @@ class HttpWorker:
             return {"status": "idle"}
         ticket_id = ticket["id"]
         lease = {"worker_id": self.worker_id, "lease_token": ticket["lease_token"]}
+        if self.sync:
+            # Fails loudly (no snapshot, no run): the lease expires and a later claim recovers it.
+            self.sync()
         # A new lease is a new workflow attempt; retries within that lease keep
         # the same keys, while a later clarification/replan gets fresh keys.
         prefix = f"{self.worker_id}:{ticket_id}:{ticket['lease_token'][:16]}"
@@ -383,6 +449,26 @@ class HttpWorker:
             if self.tracer:
                 self.tracer.flush()
 
+    def _open_pr(self, ticket_id: int, lease: dict, prefix: str, snapshot: dict, run: dict, plan: dict,
+                 tier: str | None, verdict: dict) -> str | None:
+        """Push the verified candidate and open its one PR into dev, then report it. Return why not, else None.
+        GitHub/git trouble is not the candidate's fault: the verdict stands, the admin sees the reason."""
+        existing = snapshot.get("pull_request")
+        if existing:
+            return f"root already has PR #{existing.get('number')}; not opening another"
+        title, body, labels = pr_text(snapshot, plan, tier, verdict)
+        try:
+            pr = self._with_heartbeat(lambda _lost: self.candidates.publish(
+                verdict["candidate"], title=title, body=body, labels=labels), ticket_id, lease)
+            self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/pull-request", {
+                **lease, "run_id": run["id"], "pull_request": pr, "idempotency_key": f"{prefix}:pr",
+            })
+        except LeaseLostError:
+            raise
+        except Exception as error:  # noqa: BLE001
+            return f"PR not opened: {str(error)[:500]}"
+        return None
+
     def _release(self, ticket_id: int, payload: dict) -> dict:
         """Gửi nốt trace còn đệm khi còn lease (sau release server trả 409 stale_lease), rồi trả lease."""
         if self.tracer:
@@ -396,7 +482,8 @@ class HttpWorker:
             if not candidate:
                 raise ValueError("no candidate branch to roll back")
             result = self._with_heartbeat(
-                lambda _lost: self.candidates.rollback(candidate, ticket_id), ticket_id, lease)
+                lambda _lost: self.candidates.rollback(candidate, ticket_id,
+                                                       pull_request=snapshot.get("pull_request")), ticket_id, lease)
         except LeaseLostError:
             raise
         except Exception as error:  # noqa: BLE001 — git/IO: báo server, không để root kẹt 'running'
@@ -473,8 +560,12 @@ class HttpWorker:
                     if _is_stale_lease(error):
                         self.candidates.discard(result.get("candidate"))
                     raise
+            pr_problem = None
+            if self.open_prs and verdict and verdict.get("outcome") in ("ready_for_pr", "needs_review"):
+                pr_problem = self._open_pr(ticket_id, lease, prefix, snapshot, run, plan, planned.get("tier"), verdict)
             self._release(ticket_id, {
                 **lease, "outcome": "planned", "idempotency_key": f"{prefix}:release",
+                **({"internal_detail": pr_problem} if pr_problem else {}),
             })
             result = {
                 "status": planned["status"], "ticket_id": ticket_id, "run_id": run["id"],
@@ -492,11 +583,14 @@ class HttpWorker:
 class HarnessPlanner:
     """Runs existing gates 1, 2 and 2.5, then emits the server-owned D0 schema."""
 
-    def __init__(self, tracer=None, progress=None):
+    source = None
+
+    def __init__(self, tracer=None, progress=None, source=None):
         Budget, Deps, run_gate = _load_harness()
         self.Budget = Budget
         self.deps = _real_deps(Deps, tracer, progress)
         self.run_gate = run_gate
+        self.source = source  # gate 1 reads repo context here (worker clone), else the harness repo
 
     @staticmethod
     def _request(snapshot: dict) -> dict:
@@ -550,7 +644,7 @@ class HarnessPlanner:
         budget.max_model_calls = min(budget.max_model_calls, 5)
         ticket = snapshot.get("ticket") or {}
         budget.max_units = int(ticket.get("budget_limit") or DEFAULT_BUDGET_LIMIT)  # trần mỗi lượt, không trừ các lượt trước
-        state = {}
+        state = {"checkout_source": str(self.source)} if self.source else {}
         for gate in PLAN_GATES:
             result = self.run_gate(gate, request, self.deps, budget, state)
             if result.get("blocked"):
@@ -596,9 +690,9 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--execute requires --mode active")
     if args.mode == "active" and not args.execute:
         parser.error("--mode active requires --execute")
-    # Same machine as the server; HOST is its bind address (0.0.0.0), not a connect address.
-    base_url = f"http://127.0.0.1:{os.getenv('PORT', '8041')}"
-    key = os.getenv("AI_BOARD_WORKER_KEY", "")
+    base_url = server_url()
+    key = take_secret("AI_BOARD_WORKER_KEY")
+    github_token = take_secret("AI_BOARD_GITHUB_TOKEN")
     if args.mode != "off" and len(key) < 24:
         parser.error("AI_BOARD_WORKER_KEY must be at least 24 characters")
     _load_harness()
@@ -613,12 +707,24 @@ def main(argv: list[str] | None = None) -> int:
         tracer=tracer,
     )
     # Cổng báo tiến độ qua worker.gate_started → event gate_started của run đang giữ lease.
+    # AI_BOARD_REPO_DIR = the worker's own clone (prod container): reset to origin/<PR_BASE_BRANCH> before
+    # every ticket and used as the candidate base. Unset = this checkout, never reset (a dev's working tree).
+    repo_dir = os.getenv("AI_BOARD_REPO_DIR")
+    repo = Path(repo_dir) if repo_dir else REPO_ROOT
+    if repo_dir:
+        import candidate
+        base = os.getenv("PR_BASE_BRANCH", "dev")
+        worker.sync = lambda: candidate.sync(repo, base)
     if args.plan or args.execute:
-        worker.planner = HarnessPlanner(tracer, progress=worker.gate_started)
+        worker.planner = HarnessPlanner(tracer, progress=worker.gate_started, source=repo if repo_dir else None)
     if args.execute:
         import candidate
-        worker.change_runner = harness_change_runner(tracer=tracer, progress=worker.gate_started)
-        worker.candidates = candidate.Candidates(REPO_ROOT)
+        worker.change_runner = harness_change_runner(checkout_source=repo, tracer=tracer,
+                                                     progress=worker.gate_started)
+        github = (candidate.GitHub(os.getenv("AI_BOARD_GITHUB_REPO", "Lampx83/Tizia"), github_token)
+                  if github_token else None)
+        worker.candidates = candidate.Candidates(repo, github=github)
+        worker.open_prs = github is not None  # no token: verdicts stop at ready_for_pr, as before
     while True:
         try:
             result = worker.run_once()

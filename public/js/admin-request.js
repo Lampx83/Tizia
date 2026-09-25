@@ -206,6 +206,9 @@ const CHILD_STATE = {
   done: ['ok', 'xong'], failed: ['bad', 'lỗi'], cancelled: ['bad', 'đã dừng'], invalidated: ['idle', 'bỏ (kế hoạch cũ)'],
 };
 const code = (s) => `<code>${esc(s)}</code>`;
+// Mức rủi ro cổng 5.5 của lượt gần nhất có đánh giá.
+const riskOf = (runs) => [...runs].reverse().flatMap((r) => r.gates || [])
+  .find((g) => Number(g.gate) === 5.5)?.evidence?.risk_level;
 const capText = (c) => `${esc(CAP_TEXT[c] || c)} ${code(c)}`;
 
 function planApproval(p, root) {
@@ -348,7 +351,10 @@ function renderAiBoard(t) {
         <span>${esc(root.phase_label)}</span>${root.live ? '<span class="pulse" title="Worker đang giữ yêu cầu này"></span>' : ''}</div>
       ${root.public_note ? `<div style="margin-top:4px">${esc(root.public_note)}</div>` : ''}
       ${root.internal_reason ? `<div class="meta">${esc(root.internal_reason)}</div>` : ''}
-      ${t.candidate ? `<div class="meta" style="margin-top:4px">Nhánh thay đổi: ${code(t.candidate.branch)} · ${esc(t.candidate.commits?.length)} commit</div>` : ''}</div>
+      ${t.candidate ? `<div class="meta" style="margin-top:4px">Nhánh thay đổi: ${code(t.candidate.branch)} · ${esc(t.candidate.commits?.length)} commit</div>` : ''}
+      ${t.pull_request && /^https:\/\/github\.com\//.test(t.pull_request.url) ? `<div class="meta" style="margin-top:4px">PR vào ${code(t.pull_request.base)}:
+        <a href="${esc(t.pull_request.url)}" target="_blank" rel="noopener noreferrer">#${esc(t.pull_request.number)}</a>
+        · head ${code(String(t.pull_request.head_sha).slice(0, 10))}${riskOf(runs) ? ` · rủi ro ${code(riskOf(runs))}` : ''}</div>` : ''}</div>
     <div class="blk strip">
       <span>Trần mỗi lượt: <b>${fmtNum(x.budget_limit)}</b> ${unit}</span>
       <span>Tổng tích lũy các lượt: <b>${fmtNum(x.budget_used)}</b></span>

@@ -1,0 +1,43 @@
+# AI Board worker in the same stack as the app. Overlay on docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.ai-board.yml up -d --build
+# Secrets come from the stack env (Portainer / local .env), never from this file.
+services:
+  tizia:
+    environment:
+      AI_BOARD_WORKER_KEY: ${AI_BOARD_WORKER_KEY:?AI_BOARD_WORKER_KEY is required}
+
+  ai-board-worker:
+    build:
+      context: .
+      dockerfile: ai-board/worker.Dockerfile
+    image: tizia-ai-board-worker:latest
+    depends_on: [tizia]
+    restart: on-failure            # mode off exits 0 and stays down
+    privileged: true               # its own dockerd for gate 5; the host docker socket is never mounted
+    cpus: 2
+    mem_limit: 4g
+    environment:
+      AI_BOARD_SERVER_URL: http://tizia:8041
+      AI_BOARD_WORKER_KEY: ${AI_BOARD_WORKER_KEY:?AI_BOARD_WORKER_KEY is required}
+      AI_BOARD_WORKER_MODE: ${AI_BOARD_WORKER_MODE:-shadow}
+      AI_BOARD_REPO_DIR: /repo
+      AI_BOARD_VERIFY_NETWORK: internal
+      AI_BOARD_GITHUB_TOKEN: ${AI_BOARD_GITHUB_TOKEN:-}
+      PR_BASE_BRANCH: dev
+      OLLAMA_URL: ${OLLAMA_URL:?OLLAMA_URL is required}
+      OLLAMA_SECKEY: ${OLLAMA_SECKEY:-}
+      GATE1_MODEL: ${GATE1_MODEL:-qwen3:8b}
+      GATE3_MODEL_HEAVY: ${GATE3_MODEL_HEAVY:-qwen2.5-coder:14b}
+      GATE3_MODEL_LIGHT: ${GATE3_MODEL_LIGHT:-qwen2.5-coder:14b}
+      EMBED_MODEL: ${EMBED_MODEL:-bge-m3}
+      AI_BOARD_CLASSIFIER_MODEL: ${AI_BOARD_CLASSIFIER_MODEL:-qwen3.5:4b}
+      BUDGET_MAX_WALL_CLOCK_S: "1200"   # one job at most 20 minutes
+    volumes:
+      - ai-board-repo:/repo
+      - ai-board-docker:/var/lib/docker
+      - ai-board-memory:/opt/ai-board/ai-board/memory
+
+volumes:
+  ai-board-repo:
+  ai-board-docker:
+  ai-board-memory:

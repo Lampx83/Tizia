@@ -33,7 +33,7 @@ class FakeRunner:
             config = {"services": {"tizia": {"environment": {"NODE_ENV": "production", "PORT": "8041",
                                                           "HOST": "0.0.0.0", "DATA_DIR": "/data", "BASE_PATH": ""},
                                                "image": f"{project}:latest",
-                                               "cpus": 1.0, "mem_limit": 536870912, "pids_limit": 128,
+                                               "cpus": 1.0, "mem_limit": 1610612736, "pids_limit": 128,
                                                "ports": [{"target": 8041, "host_ip": "127.0.0.1"}],
                                                "volumes": [{"source": f"{project}-data", "target": "/data"}]}}}
             if action == "exec" and args[-1] == "env":
@@ -379,3 +379,65 @@ def test_evidence_names_the_runner_so_a_fake_run_is_never_presented_as_real(tmp_
     monkeypatch.setattr(verify.subprocess, "run", FakeRunner())
     (tmp_path / "real").mkdir()
     assert verify.run(state(checkout(tmp_path / "real")))["evidence"]["runner"] == "docker"
+
+
+class InternalRunner(FakeRunner):
+    """Worker-in-Docker mode: no published port, container reached on its internal network IP."""
+
+    def __init__(self, ip="172.28.0.2", **kwargs):
+        super().__init__(**kwargs)
+        self.ip = ip
+
+    def __call__(self, args, **kwargs):
+        if args[0] == "docker" and "ps" in args:
+            self.calls.append((args, kwargs))
+            return subprocess.CompletedProcess(args, 0, "cid123\n", "")
+        if args[:2] == ["docker", "inspect"]:
+            self.calls.append((args, kwargs))
+            return subprocess.CompletedProcess(args, 0, f"{self.ip} \n", "")
+        out = super().__call__(args, **kwargs)
+        if args[0] == "docker" and "config" in args:
+            config = json.loads(out.stdout)
+            config["services"]["tizia"]["ports"] = []
+            config["networks"] = {"default": {"name": f"{args[args.index('-p') + 1]}-net", "internal": True}}
+            out = subprocess.CompletedProcess(args, 0, json.dumps(config), "")
+        return out
+
+
+def test_internal_network_mode_has_no_egress_and_probes_the_container_ip(tmp_path, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_VERIFY_NETWORK", "internal")
+    urls = []
+    monkeypatch.setattr(verify, "probe_http", lambda url: urls.append(url) or (200, b"<h1>changed</h1>\n// x\n"))
+    runner = InternalRunner()
+
+    out = verify.run(state(checkout(tmp_path)), runner=runner)
+
+    assert out["blocked"] is False, out["reason"]
+    assert "internal: true" in runner.override and "127.0.0.1::8041" not in runner.override
+    assert urls == ["http://172.28.0.2:8041/x.js"]
+    assert not any("port" in args for args, _ in runner.calls if args[0] == "docker")
+
+
+def test_internal_network_mode_rejects_a_published_port_or_public_ip(tmp_path, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_VERIFY_NETWORK", "internal")
+
+    class Published(InternalRunner):
+        def __call__(self, args, **kwargs):
+            out = super().__call__(args, **kwargs)
+            if args[0] == "docker" and "config" in args:
+                config = json.loads(out.stdout)
+                config["services"]["tizia"]["ports"] = [{"target": 8041, "host_ip": "127.0.0.1"}]
+                out = subprocess.CompletedProcess(args, 0, json.dumps(config), "")
+            return out
+
+    s = state(checkout(tmp_path))
+    out = verify.run(s, runner=Published())
+    assert out["blocked"] and out["failure_class"] == "critical"
+    out = verify.run(s, runner=InternalRunner(ip="8.8.8.8"))
+    assert out["blocked"] and out["failure_class"] == "critical"
+
+
+def test_verify_container_gets_one_cpu_and_1536_mb(tmp_path):
+    runner = FakeRunner()
+    verify.run(state(checkout(tmp_path)), runner=runner)
+    assert "cpus: 1.0" in runner.override and "mem_limit: 1536m" in runner.override

@@ -328,3 +328,46 @@ test('gate 4 records which mandatory checks ran', () => {
   const verdict = submit(passing({ gates: [gates[3], { ...gates[4], checks }, gates[5], gates[55]] }));
   assert.deepEqual(verdict.gates[1].checks, checks);
 });
+
+// Ticket 03 (e2e/06): one PR into dev per root, recorded under the lease, safe state for the requester.
+const PR = { number: 42, url: 'https://github.com/Lampx83/Tizia/pull/42', branch: candidate.branch,
+  base: 'dev', base_sha: SHA_A, head_sha: SHA_B };
+
+function openPr(store, ticket, pullRequest = PR, key = 'outcome-pr-001') {
+  const runId = store.db.prepare('SELECT id FROM ai_runs WHERE ticket_id=? ORDER BY id DESC').get(ticket.id).id;
+  return store.recordPullRequest(ticket.id, { workerId: 'w1', leaseToken: ticket.lease_token, runId,
+    pullRequest, idempotencyKey: key });
+}
+
+test('a passing verdict records its PR once; the requester sees reviewing, the admin sees the link', () => {
+  const { db, store, submit, ticket } = plannedRoot();
+  submit(passing());
+  assert.equal(openPr(store, ticket).number, 42);
+  assert.equal(openPr(store, ticket).number, 42); // same PR again is idempotent
+  const root = db.prepare('SELECT phase, public_note FROM ai_tickets WHERE id=?').get(ticket.id);
+  assert.equal(root.phase, 'pr_open');
+  const [own] = store.listRequestsForOwner(1, 'pharmacy');
+  assert.equal(own.status, 'reviewing');
+  assert.ok(!JSON.stringify(own).includes('github.com'));
+  const trace = store.getRequestTrace(1);
+  assert.equal(trace.pull_request.url, PR.url);
+  assert.equal(trace.runs.at(-1).gates.find((g) => g.gate === 5.5).evidence.risk_level, 'medium');
+  assert.equal(store.getLeasedSnapshot(ticket.id, 'w1', ticket.lease_token).pull_request.number, 42);
+});
+
+test('a second PR for the same root, a wrong base, or a stale head is refused', () => {
+  const { store, submit, ticket } = plannedRoot();
+  submit(passing());
+  assert.throws(() => openPr(store, ticket, { ...PR, base: 'main' }, 'outcome-pr-002'), /dev/);
+  assert.throws(() => openPr(store, ticket, { ...PR, head_sha: 'c'.repeat(40) }, 'outcome-pr-003'), /candidate/);
+  assert.throws(() => openPr(store, ticket, { ...PR, url: 'https://evil.example/pull/42' }, 'outcome-pr-004'), /url/);
+  openPr(store, ticket);
+  assert.throws(() => openPr(store, ticket, { ...PR, number: 43, url: PR.url.replace('42', '43') }, 'outcome-pr-005'),
+    (e) => e.code === 'pr_already_open');
+});
+
+test('a blocked verdict never gets a PR', () => {
+  const { store, submit, ticket } = plannedRoot();
+  submit(blocked(4, 'lint', 'ordinary'));
+  assert.throws(() => openPr(store, ticket), /passing verdict/);
+});

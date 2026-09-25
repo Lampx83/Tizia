@@ -40,6 +40,7 @@ const PHASES = {
   pre_pr_ready: { label: 'đã qua kiểm tra, sẵn sàng PR' },
   pre_pr_review: { label: 'cần người xem trước PR' },
   pre_pr_blocked: { label: 'chưa qua kiểm tra trước PR' },
+  pr_open: { label: 'đã mở PR vào dev, chờ người duyệt' },
   critical_violation: { label: 'vi phạm an toàn' },
   budget_exhausted: { label: 'hết ngân sách' },
   plan_unfit: { label: 'kế hoạch không làm được' },
@@ -81,6 +82,8 @@ const MAX_BUDGET_EXTENSIONS = 2;
 const SHA = /^[0-9a-f]{40}$/;
 export const LEASE_MS = 120_000; // worker lease; also the admin view's stale threshold
 const AI_BRANCH = new RegExp(CONTRACT.branch_pattern);
+const PR_BASE = 'dev'; // AI Board PRs only ever target dev; merge, approve and main stay human
+const PR_URL = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/(\d+)$/;
 
 function validateCandidate(value) {
   const commits = Array.isArray(value?.commits) ? value.commits : [];
@@ -581,6 +584,60 @@ export function createAiBoardStore(db, hooks = {}) {
     return parseJson(row?.evidence_json)?.verdict?.candidate ?? null;
   }
 
+  // PR của root (mở gần nhất); worker không mở PR thứ hai khi đã có.
+  function latestPullRequest(rootId) {
+    const row = db.prepare(`
+      SELECT evidence_json FROM ai_runs WHERE ticket_id=? AND evidence_json LIKE '%"pull_request"%'
+      ORDER BY id DESC LIMIT 1
+    `).get(rootId);
+    return parseJson(row?.evidence_json)?.pull_request ?? null;
+  }
+
+  const recordPullRequestTransaction = db.transaction((ticketId, input, pr) => {
+    const root = assertLease(ticketId, input.workerId, input.leaseToken, input.now);
+    const run = db.prepare('SELECT * FROM ai_runs WHERE id=? AND ticket_id=?').get(Number(input.runId), root.id);
+    if (!run) throw new WorkerContractError('run does not belong to ticket');
+    const verdict = parseJson(run.evidence_json)?.verdict;
+    if (!['ready_for_pr', 'needs_review'].includes(run.outcome) || !verdict?.candidate) {
+      throw new WorkerContractError('a PR needs a passing verdict with its candidate');
+    }
+    if (pr.branch !== verdict.candidate.branch || pr.head_sha !== verdict.candidate.head_sha
+      || pr.base_sha !== verdict.candidate.base_sha) {
+      throw new WorkerContractError('PR does not match the verified candidate');
+    }
+    const existing = latestPullRequest(root.id);
+    if (existing && existing.number === pr.number) return existing;
+    if (existing) throw new WorkerContractError('root already has an open PR', 409, 'pr_already_open');
+    const evidence = JSON.stringify({ ...parseJson(run.evidence_json), pull_request: pr });
+    db.prepare('UPDATE ai_runs SET evidence_json=?, updated_at=? WHERE id=?').run(evidence, input.now, run.id);
+    const note = 'Thay đổi đang chờ người duyệt.';
+    db.prepare(`UPDATE ai_tickets SET phase='pr_open', public_note=?, updated_at=? WHERE id=?`)
+      .run(note, input.now, root.id);
+    db.prepare(`UPDATE requests SET status='reviewing', updated_at=? WHERE id=?`).run(input.now, root.source_request_id);
+    db.prepare(`
+      INSERT INTO ai_events(ticket_id, run_id, event_type, actor_type, actor_id, transition,
+        public_message, internal_detail, idempotency_key, created_at)
+      VALUES (?, ?, 'pull_request_opened', 'worker', ?, ?, ?, ?, ?, ?)
+    `).run(root.id, run.id, input.workerId, `${root.phase}->pr_open`, note, JSON.stringify(pr),
+      input.idempotencyKey, input.now);
+    return pr;
+  });
+
+  function recordPullRequest(ticketId, input) {
+    const idempotencyKey = String(input.idempotencyKey || '');
+    if (!KEY.test(idempotencyKey)) throw new WorkerContractError('invalid idempotency key');
+    const value = input.pullRequest || {};
+    const match = PR_URL.exec(String(value.url || ''));
+    if (!match || Number(match[1]) !== Number(value.number)) throw new WorkerContractError('invalid PR url');
+    if (value.base !== PR_BASE) throw new WorkerContractError(`PR must target ${PR_BASE}`);
+    if (!AI_BRANCH.test(String(value.branch)) || !SHA.test(String(value.head_sha)) || !SHA.test(String(value.base_sha))) {
+      throw new WorkerContractError('invalid PR branch or sha');
+    }
+    const pr = { number: Number(value.number), url: value.url, branch: value.branch, base: PR_BASE,
+      base_sha: value.base_sha, head_sha: value.head_sha };
+    return recordPullRequestTransaction(Number(ticketId), { ...input, idempotencyKey, now: input.now ?? Date.now() }, pr);
+  }
+
   function getLeasedSnapshot(ticketId, workerId, leaseToken, now = Date.now()) {
     const ticket = assertLease(ticketId, workerId, leaseToken, now);
     const request = db.prepare(`
@@ -594,7 +651,7 @@ export function createAiBoardStore(db, hooks = {}) {
     `).all(ticket.source_request_id).map((row) => ({ ...row, attachments: parseAttachments(row.attachments) }));
     return {
       ticket: { ...ticket, lease_token: undefined }, request: { ...request, attachments: parseAttachments(request.attachments) },
-      thread, capability_policy: CAPABILITY_CATALOG,
+      thread, capability_policy: CAPABILITY_CATALOG, pull_request: latestPullRequest(ticket.id),
       ...(ticket.phase === 'rolling_back' ? { rollback_candidate: latestCandidate(ticket.id) } : {}),
     };
   }
@@ -1255,7 +1312,8 @@ export function createAiBoardStore(db, hooks = {}) {
     const candidate = latestCandidate(root.id);
     root.can_rollback = !!candidate && !PHASES[root.phase]?.rollback;
     return {
-      root, plan, children, runs, events, candidate, gate_names: CONTRACT.gates.names,
+      root, plan, children, runs, events, candidate, pull_request: latestPullRequest(root.id),
+      gate_names: CONTRACT.gates.names,
       totals: {
         ...summarizeCalls(evidences),
         by_model: Object.fromEntries(Object.entries(byModel).map(([model, list]) => [model, summarizeCalls(list)])),
@@ -1363,6 +1421,7 @@ export function createAiBoardStore(db, hooks = {}) {
     releaseLease,
     submitPlan,
     submitPrePrVerdict,
+    recordPullRequest,
     authorizePlan,
     resumeAuthorizedPlan,
     extendBudget,
