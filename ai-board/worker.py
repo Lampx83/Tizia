@@ -431,10 +431,12 @@ class HarnessPlanner:
             "type": request.get("type"), "subject": request.get("title"),
             "body": request.get("detail") or request.get("title"),
             "thread": snapshot.get("thread") or [], "votes": request.get("votes", 1),
+            "complexity_by_server": True,
         }
 
     @staticmethod
-    def _canonical(request: dict, old: dict) -> dict:
+    def _canonical(request: dict, old: dict, signals: list[str] | None = None) -> dict:
+        """Plan cổng 1 → schema D0 của server. Có tín hiệu phức tạp → risk high → tier protected (admin cho phép)."""
         old_caps = list(dict.fromkeys(old.get("capabilities") or []))
         steps = []
         for index, subtask in enumerate(old.get("subtasks") or [], start=1):
@@ -461,7 +463,7 @@ class HarnessPlanner:
             "acceptance": [item for step in steps for item in step["acceptance"]],
             "tests": [item for step in steps for item in step["tests"]],
             "capabilities": capabilities,
-            "risk": "medium" if any(step["risk"] == "medium" for step in steps) else "low",
+            "risk": "high" if signals else "medium" if any(step["risk"] == "medium" for step in steps) else "low",
             "non_goals": ["Không sửa file ngoài allowed_scope.", "Không tự mở rộng quyền."],
             "steps": steps,
         }
@@ -480,7 +482,7 @@ class HarnessPlanner:
                     "gate": gate, "reason": result.get("reason"), "signals": list(result.get("signals") or []),
                     "plan": json.dumps(state.get("plan"), ensure_ascii=False)[:2000],
                 })
-        return self._canonical(request, state["plan"]), int(budget.units)
+        return self._canonical(request, state["plan"], state.get("complexity_signals")), int(budget.units)
 
 
 class HarnessChangeRunner:

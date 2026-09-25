@@ -206,3 +206,23 @@ def test_run_blocks_without_plan_in_state():
     deps = deps_with(plan_with(["features"]))
     out = plan_validate.run({"id": "x"}, deps, Budget(max_wall_clock_s=999), {})
     assert out["blocked"] is True
+
+
+def test_http_worker_leaves_complexity_to_the_server_tier():
+    from conftest import FakeModels, deps_with
+    from budget import Budget
+    plan = plan_with(["features", "quiz"])  # 2 capabilities: complex
+    state = {"plan": plan}
+    out = plan_validate.run({"id": "req-1", "complexity_by_server": True}, deps_with(FakeModels(plan)), Budget(), state)
+    assert out["blocked"] is False and out["signals"] and state["complexity_signals"] == out["signals"]
+
+
+def test_complex_http_plan_is_submitted_as_high_risk():
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from worker import HarnessPlanner
+    old = {"summary_vi": "x", "capabilities": ["features"],
+           "subtasks": [{"title": "t", "file": "public/a.html", "verify": "v", "size": "small"}]}
+    assert HarnessPlanner._canonical({"domain": "it"}, old, ["subtasks: 4"])["risk"] == "high"
+    assert HarnessPlanner._canonical({"domain": "it"}, old)["risk"] == "low"

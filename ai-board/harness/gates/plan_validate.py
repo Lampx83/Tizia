@@ -228,6 +228,10 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
         return {"gate": 2.5, "blocked": True, "reason": "needs_clarification", "outcome": "needs_clarification"}
 
     signals = complexity_signals(plan)
+    if request.get("complexity_by_server"):
+        # HTTP worker không có DB: server quyết qua tier (risk high → protected → admin cho phép plan).
+        state["complexity_signals"] = signals
+        return {"gate": 2.5, "blocked": False, "reason": None, "signals": signals}
     if signals and not (db_path is not None and is_authorized_for_complex(db_path, request)):
         return {"gate": 2.5, "blocked": True, "reason": "complexity_gated", "outcome": "complexity_gated",
                 "signals": signals}
