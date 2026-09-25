@@ -26,6 +26,7 @@ class OllamaClient:
     # "không hardcode default" ở trên, .env là nguồn thật duy nhất.
     gate3_model_light: str = ""
     embed_model: str = ""
+    classifier_model: str = ""  # logprob classifier (classifier.py), shared with server/ai-board/classifier.js
     timeout_s: float = 300.0
     # Đọc 1 lần lúc dựng client. KHÔNG đọc lại os.environ trong _post: test bơm
     # env giả mà vẫn moi key thật ra rồi gửi tới base_url giả là rò credential.
@@ -40,10 +41,12 @@ class OllamaClient:
             gate3_model=env.get("GATE3_MODEL_HEAVY") or "",
             gate3_model_light=env.get("GATE3_MODEL_LIGHT") or "",
             embed_model=env.get("EMBED_MODEL") or "",
+            classifier_model=env.get("AI_BOARD_CLASSIFIER_MODEL") or "",
             seckey=env.get("OLLAMA_SECKEY") or None,
         )
 
-    def generate(self, model: str, prompt: str, *, format: str | None = None, **options) -> dict:
+    def generate(self, model: str, prompt: str, *, format: str | None = None, extra: dict | None = None,
+                 **options) -> dict:
         """POST /api/generate. Trả nguyên body JSON.
 
         `format="json"` là field cấp 1 của Ollama (ép output JSON hợp lệ), không
@@ -59,6 +62,7 @@ class OllamaClient:
         }
         if format:
             payload["format"] = format
+        payload.update(extra or {})  # top-level fields: think, logprobs, top_logprobs
         return self._post("/api/generate", payload)
 
     def embed(self, text: str) -> dict:

@@ -105,15 +105,17 @@ class Deps:
 
     def call_model(self, model: str, prompt: str, *, gate: float, budget,
                     db_path=None, proposal_id: int | None = None, format: str | None = "json",
-                    prompt_name: str | None = None, child: int | None = None, iteration: int = 0) -> dict:
+                    prompt_name: str | None = None, child: int | None = None, iteration: int = 0,
+                    options: dict | None = None, extra: dict | None = None) -> dict:
         """1 lời gọi model + phí budget + trace — chỗ duy nhất mọi cổng đi qua.
         Phí: model_calls +1, tokens, units (meter: giây GPU ollama / 1K token api).
         Lỗi HTTP/timeout vẫn tính units theo wall (GPU có thể đã chạy) rồi raise lại.
         body["_metrics"] = metrics đã chuẩn hoá cho cổng dùng (done_reason, …)."""
-        options = {"num_predict": NUM_PREDICT.get(gate, NUM_PREDICT_DEFAULT), "temperature": 0}
+        options = {"num_predict": NUM_PREDICT.get(gate, NUM_PREDICT_DEFAULT), "temperature": 0, **(options or {})}
         started = time.monotonic()
         try:
-            body = self.models.generate(model, prompt, format=format, **options)
+            body = (self.models.generate(model, prompt, format=format, extra=extra, **options) if extra
+                    else self.models.generate(model, prompt, format=format, **options))
         except Exception as error:
             metrics = meter.measure(self.provider, {}, int((time.monotonic() - started) * 1000))
             n = meter.units(self.provider, metrics)

@@ -5,6 +5,10 @@ services:
   tizia:
     environment:
       AI_BOARD_WORKER_KEY: ${AI_BOARD_WORKER_KEY:?AI_BOARD_WORKER_KEY is required}
+      # Request classifier (ticket 04) and clarification chat (ticket 06) call Ollama from the app.
+      OLLAMA_URL: ${OLLAMA_URL:?OLLAMA_URL is required}
+      OLLAMA_SECKEY: ${OLLAMA_SECKEY:-}
+      AI_BOARD_CLASSIFIER_MODEL: ${AI_BOARD_CLASSIFIER_MODEL:-qwen3.5:4b}
 
   ai-board-worker:
     build:

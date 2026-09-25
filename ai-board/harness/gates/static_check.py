@@ -16,6 +16,7 @@ import subprocess
 from pathlib import Path
 
 import candidate
+import classifier
 from gates import guard, intake_guard, risk_triage
 
 CONTENT_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "content_guard.md").read_text(encoding="utf-8")
@@ -156,11 +157,16 @@ def content_review(state: dict, deps, budget, *, db_path=None, proposal_id: int 
             labels, why = intake_guard.parse_labels(body.get("response", ""), CONTENT_LABELS), ""
         except Exception as e:  # model sập/JSON sai — chuyển người soát, không cho qua im lặng
             why = f"bộ soát nội dung lỗi: {str(e)[:200]}"
+    # Logprob classifier beside the JSON guard (ticket 04): may only add a "needs a human" block.
+    scored = classifier.danger("\n".join(parts), deps, budget, gate=4, db_path=db_path, proposal_id=proposal_id)
+    if scored and scored["escalate"]:
+        labels = [x for x in labels if x != "ok"] + [f"model_{key}" for key in scored["labels"]]
+    extra = {"classifier": scored} if scored else {}
     if labels == ["ok"]:
-        return {"blocked": False, "labels": labels}
+        return {"blocked": False, "labels": labels, **extra}
     reason = f"content_guard: {', '.join(labels)}" + (f" ({why})" if why else "") + " — cần người soát"
     return {"blocked": True, "labels": labels, "reason": reason,
-            "failure_class": guard.SEVERITY_CLASS["high"]}
+            "failure_class": guard.SEVERITY_CLASS["high"], **extra}
 
 
 def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path=None,

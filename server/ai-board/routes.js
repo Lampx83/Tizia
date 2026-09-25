@@ -1,6 +1,12 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { assertConfirmed, LEASE_MS, PlanGuardrailError, RequestValidationError, WorkerContractError } from './store.js';
 import { checkIntake, recordIntakeFlags } from './intake-guard.js';
+import { classifyRequest as classifyWithModel, recordClassification } from './classifier.js';
+
+// Không cấu hình model phân loại → không gọi gì (hành vi trước ticket 04).
+const defaultClassifyRequest = (title, detail) => (
+  process.env.OLLAMA_URL && process.env.AI_BOARD_CLASSIFIER_MODEL
+    ? classifyWithModel(title, detail) : Promise.resolve(null));
 
 export function attachAiBoardRequestRoutes(router, {
   store,
@@ -10,14 +16,23 @@ export function attachAiBoardRequestRoutes(router, {
   requireStrictCsrf,
   onCreated = null,
   db = null, // chỉ để intake-guard ghi cờ; thiếu thì vẫn chặn 422 bình thường
+  classifyRequest = defaultClassifyRequest, // (title, detail) → {model, clarity, danger} | null
 }) {
-  router.post('/api/requests', requireAuth, requireEnrolled, (req, res) => {
+  router.post('/api/requests', requireAuth, requireEnrolled, async (req, res, next) => {
     const body = req.body || {};
     const ownerDomain = req.user.role === 'admin'
       ? String(body.domain || '').trim()
       : req.user.enrolled_domain;
     const intake = checkIntake(body.title, body.detail);
     if (intake.block) return res.status(422).json({ error: 'request_rejected', message: intake.message });
+    // Luật cứng đã qua. Model chỉ thêm human_review / đòi làm rõ; lỗi model = hành vi cũ.
+    const classified = await classifyRequest(body.title, body.detail).catch((error) => {
+      console.warn('[ai-board] classifier unavailable:', error.message);
+      return null;
+    });
+    const modelLabels = (classified?.danger?.labels || []).map((key) => `model_${key}`);
+    const clarify = classified?.clarity ? { needed: classified.clarity.needed, mode: classified.clarity.mode }
+      : { needed: false, mode: null };
     try {
       const result = store.createRequestWithRoot({
         ownerUserId: req.user.id,
@@ -29,8 +44,11 @@ export function attachAiBoardRequestRoutes(router, {
         detail: body.detail,
         attachments: body.attachments,
       });
-      if (result.created) recordIntakeFlags(db, result.root_ticket_id, intake.labels);
-      res.json({ ok: true, ...result, id: result.request_id, createdAt: Date.now() });
+      if (result.created) {
+        recordIntakeFlags(db, result.root_ticket_id, [...intake.labels, ...modelLabels]);
+        recordClassification(db, result.root_ticket_id, classified);
+      }
+      res.json({ ok: true, ...result, id: result.request_id, createdAt: Date.now(), clarify });
       if (result.created && onCreated) {
         try {
           onCreated({
@@ -47,7 +65,7 @@ export function attachAiBoardRequestRoutes(router, {
       if (error instanceof RequestValidationError) {
         return res.status(400).json({ error: 'invalid_request', message: error.message });
       }
-      throw error;
+      next(error); // async handler: Express 4 does not catch a throw here
     }
   });
 

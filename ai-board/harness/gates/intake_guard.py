@@ -25,6 +25,7 @@ import json
 import re
 from pathlib import Path
 
+import classifier
 from gates import guard
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "intake_guard.md").read_text(encoding="utf-8")
@@ -106,6 +107,7 @@ def run(request_title: str, request_detail: str | None, deps, budget, *, db_path
     hits = deterministic(f"{title}\n{detail}")
     verdict = _worst(hits.values())
     reasons = [f"tất định: {', '.join(hits)}"] if hits else []
+    scored = None
     if verdict in ("allow", "needs_info"):
         llm, why = classify(title, detail, deps, budget, db_path=db_path, proposal_id=proposal_id)
         llm_verdicts = ["allow" if x == "ok" else "needs_info" if x in _LLM_NEEDS_INFO else "human_review"
@@ -113,6 +115,12 @@ def run(request_title: str, request_detail: str | None, deps, budget, *, db_path
         verdict = _worst([verdict, *llm_verdicts])
         hits.update({x: v for x, v in zip(llm, llm_verdicts) if x != "ok"})
         reasons.append(f"LLM: {', '.join(llm)}" + (f" ({why})" if why else ""))
+        # Logprob classifier beside the JSON guard (ticket 04): only ever raises to human_review.
+        scored = classifier.danger(f"{title}\n{detail}", deps, budget, gate=1, db_path=db_path, proposal_id=proposal_id)
+        if scored and scored["escalate"]:
+            verdict = _worst([verdict, "human_review"])
+            hits.update({f"model_{key}": "human_review" for key in scored["labels"]})
+            reasons.append(f"logprob: {', '.join(scored['labels'])}")
     messages = guard.LEXICON["public_messages"]
     if verdict == "allow":
         public = None
@@ -120,5 +128,8 @@ def run(request_title: str, request_detail: str | None, deps, budget, *, db_path
         public = messages["needs_info_pii"]
     else:
         public = messages[verdict]
-    return {"verdict": verdict, "labels": list(hits) or ["ok"], "public_message": public,
-            "internal_reason": "; ".join(reasons)[:1000] or "không có tín hiệu"}
+    out = {"verdict": verdict, "labels": list(hits) or ["ok"], "public_message": public,
+           "internal_reason": "; ".join(reasons)[:1000] or "không có tín hiệu"}
+    if scored:
+        out["classifier"] = scored  # model, probs, escalate, logged: compared with the JSON guard (ticket 01)
+    return out
