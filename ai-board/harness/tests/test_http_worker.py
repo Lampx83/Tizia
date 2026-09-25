@@ -1,4 +1,5 @@
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -155,6 +156,113 @@ def test_long_planning_heartbeats_until_the_gates_finish():
 
     heartbeats = [call for call in transport.calls if call[1].endswith('/heartbeat')]
     assert len(heartbeats) >= 2
+
+
+def test_heartbeat_loss_after_operation_discards_returned_candidate():
+    from worker import LeaseLostError
+
+    heartbeat_failed = threading.Event()
+    discarded = []
+
+    def transport(_method, _path, _payload, _headers):
+        heartbeat_failed.set()
+        raise RuntimeError('lease cancelled')
+
+    worker = HttpWorker(WorkerClient('http://fixture', 'secret', timeout=1, transport=transport),
+                        worker_id='w1', heartbeat_interval=0.01)
+    result = {'candidate': {'branch': 'ai-board/example'}}
+    try:
+        worker._with_heartbeat(lambda _lost: (heartbeat_failed.wait(2), result)[1], 7, {},
+                               on_lease_lost=discarded.append)
+    except LeaseLostError:
+        pass
+    else:
+        raise AssertionError('heartbeat loss must reject the result')
+    assert discarded == [result]
+
+
+def test_rejected_verdict_discards_candidate_before_propagating():
+    import io
+    from urllib.error import HTTPError
+
+    class RejectVerdict(FakeTransport):
+        def __call__(self, method, path, payload, headers):
+            if path.endswith('/verdict'):
+                raise HTTPError(path, 409, 'stale lease', {}, io.BytesIO(b'{"error":"stale_lease"}'))
+            return super().__call__(method, path, payload, headers)
+
+    class ChangeRunner:
+        def __init__(self):
+            self.discarded = []
+
+        def __call__(self, *_args, **_kwargs):
+            return {'candidate': {'branch': 'ai-board/example'}}
+
+        def discard_candidate(self, verdict):
+            self.discarded.append(verdict)
+
+    runner = ChangeRunner()
+    worker = HttpWorker(WorkerClient('http://fixture', 'secret', transport=RejectVerdict()),
+                        worker_id='w1', mode='active', planner=lambda _snapshot: ({'goal': 'x'}, 0),
+                        change_runner=runner)
+    try:
+        worker.run_once()
+    except HTTPError as error:
+        assert error.code == 409
+    else:
+        raise AssertionError('a rejected verdict must propagate')
+    assert runner.discarded == [{'candidate': {'branch': 'ai-board/example'}}]
+
+
+def test_ambiguous_verdict_response_keeps_candidate():
+    class LostResponse(FakeTransport):
+        def __call__(self, method, path, payload, headers):
+            if path.endswith('/verdict'):
+                raise TimeoutError('response lost')
+            return super().__call__(method, path, payload, headers)
+
+    class ChangeRunner:
+        def __init__(self):
+            self.discarded = []
+
+        def __call__(self, *_args, **_kwargs):
+            return {'candidate': {'branch': 'ai-board/example'}}
+
+        def discard_candidate(self, verdict):
+            self.discarded.append(verdict)
+
+    runner = ChangeRunner()
+    worker = HttpWorker(WorkerClient('http://fixture', 'secret', transport=LostResponse()),
+                        worker_id='w1', mode='active', planner=lambda _snapshot: ({'goal': 'x'}, 0),
+                        change_runner=runner)
+    try:
+        worker.run_once()
+    except TimeoutError:
+        pass
+    else:
+        raise AssertionError('a lost verdict response must propagate')
+    assert runner.discarded == []
+
+
+def test_change_runner_discard_removes_candidate_branch(tmp_path):
+    import subprocess
+    from worker import HarnessChangeRunner
+
+    repo = tmp_path / 'source'
+    repo.mkdir()
+    quiet = {'check': True, 'capture_output': True, 'stdin': subprocess.DEVNULL}
+    subprocess.run(['git', 'init', '-q', str(repo)], **quiet)
+    subprocess.run(['git', '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+                    'commit', '-q', '--allow-empty', '-m', 'base'], cwd=repo, **quiet)
+    subprocess.run(['git', 'branch', 'ai-board/candidate'], cwd=repo, **quiet)
+    runner = HarnessChangeRunner.__new__(HarnessChangeRunner)
+    runner.checkout_source = repo
+
+    runner.discard_candidate({'candidate': {'branch': 'ai-board/candidate'}})
+
+    remaining = subprocess.run(['git', 'branch', '--list', 'ai-board/candidate'], cwd=repo,
+                               check=True, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    assert remaining.stdout == ''
 
 
 def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
@@ -526,6 +634,42 @@ def test_revoked_lease_stops_before_the_next_gate_and_keeps_nothing():
         raise AssertionError('a revoked lease must stop the run')
     assert [gate for gate, _ in calls] == [3, 4]
     assert cleanups == [False]
+
+
+def test_revoked_lease_during_final_gate_drops_candidate():
+    from worker import LeaseLostError
+
+    run_gate, calls = scripted_gates({})
+    cleanups = []
+    try:
+        execute_pre_pr(ONE_STEP_PLAN, ticket_id=7, checkout_source='unused', deps=object(), budget=TickBudget(),
+                       run_gate=run_gate, cleanup=lambda state, keep_branch: cleanups.append(keep_branch),
+                       should_stop=lambda: len(calls) == 4)
+    except LeaseLostError:
+        pass
+    else:
+        raise AssertionError('a lease revoked during gate 5.5 must stop the run')
+    assert [gate for gate, _ in calls] == [3, 4, 5, 5.5]
+    assert cleanups == [False]
+
+
+def test_revoked_lease_during_cleanup_drops_kept_candidate():
+    from worker import LeaseLostError
+
+    run_gate, _calls = scripted_gates({})
+    cleanups = []
+    def cleanup(state, keep_branch):
+        cleanups.append(keep_branch)
+
+    try:
+        execute_pre_pr(ONE_STEP_PLAN, ticket_id=7, checkout_source='unused', deps=object(), budget=TickBudget(),
+                       run_gate=run_gate, cleanup=cleanup,
+                       should_stop=lambda: bool(cleanups))
+    except LeaseLostError:
+        pass
+    else:
+        raise AssertionError('a lease revoked while cleaning up must drop the candidate')
+    assert cleanups == [True, False]
 
 
 def test_verdicts_leave_lessons_that_later_runs_can_recall(tmp_path):

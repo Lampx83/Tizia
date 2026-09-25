@@ -7,9 +7,11 @@ import os
 import re
 import shutil
 import socket
+import subprocess
 import threading
 import tempfile
 import time
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +23,15 @@ Transport = Callable[[str, str, dict, dict], dict]
 
 class LeaseLostError(RuntimeError):
     pass
+
+
+def _is_stale_lease(error: Exception) -> bool:
+    if not isinstance(error, urllib.error.HTTPError) or error.code != 409:
+        return False
+    try:
+        return json.loads(error.read().decode("utf-8")).get("error") == "stale_lease"
+    except (ValueError, UnicodeError):
+        return False
 
 
 class PlanBlockedError(RuntimeError):
@@ -99,6 +110,7 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
         state["repair_reason"] = repair_reason
     gates: list[dict] = []
     kind = None
+    lease_lost = False
     try:
         for gate in (3, 4, 5, 5.5):
             if should_stop and should_stop():  # lease revoked, e.g. the requester cancelled
@@ -133,13 +145,20 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
                 kind = result.get("failure_class") or "ordinary"
                 break
     finally:
-        passed = kind is None and bool(gates) and gates[-1]["gate"] == 5.5
+        lease_lost = bool(should_stop and should_stop())
+        passed = kind is None and bool(gates) and gates[-1]["gate"] == 5.5 and not lease_lost
         candidate = {
             "branch": state["branch"], "base_sha": state["base_sha"],
             "head_sha": state["commits"][-1]["sha"], "commits": state["commits"],
         } if passed and state.get("commits") else None
         cleanup(state, keep_branch=candidate is not None)
+        if candidate and should_stop and should_stop():
+            # The heartbeat can fail while the passing worktree is being removed.
+            cleanup(state, keep_branch=False)
+            lease_lost = True
         shutil.rmtree(scratch, ignore_errors=True)
+    if lease_lost:
+        raise LeaseLostError("lease revoked during gate execution")
     return gates, kind, candidate
 
 
@@ -151,7 +170,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
 
     policy = snapshot catalog {hash, capabilities}; None only outside the HTTP worker (no catalog check).
     memory_path = lessons JSONL: Gate 3 recalls from it, repairs and final blocks are appended to it.
-    should_stop() true between gates (lease lost) → LeaseLostError, worktree cleaned, nothing kept.
+    should_stop() true between or during gates (lease lost) → LeaseLostError, worktree cleaned, nothing kept.
     failure_class: ordinary | transient | critical | budget | plan (see store.js FAILURE_CLASSES)."""
     # plan_hash embeds the policy hash, so a catalog change between leases already forces a fresh plan
     # server-side; this guards the in-lease race and a snapshot missing its catalog (fail closed).
@@ -247,7 +266,8 @@ class HttpWorker:
     change_runner: Callable[[dict, int, int, int], dict] | None = None
     heartbeat_interval: float = 30.0
 
-    def _with_heartbeat(self, operation: Callable, ticket_id: int, lease: dict):
+    def _with_heartbeat(self, operation: Callable, ticket_id: int, lease: dict,
+                        on_lease_lost: Callable | None = None):
         stopped = threading.Event()
         failures: list[Exception] = []
 
@@ -267,6 +287,8 @@ class HttpWorker:
             stopped.set()
             heartbeat_thread.join(timeout=max(self.client.timeout, 1.0))
         if failures:
+            if on_lease_lost:
+                on_lease_lost(result)
             raise LeaseLostError("worker lease heartbeat failed") from failures[0]
         return result
 
@@ -343,11 +365,19 @@ class HttpWorker:
                         request_detail=(snapshot.get("request") or {}).get("detail"),
                         should_stop=lost,
                     ), ticket_id, lease,
+                    on_lease_lost=getattr(self.change_runner, "discard_candidate", None),
                 )
-                verdict = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/verdict", {
-                    **lease, "run_id": run["id"], "verdict": candidate,
-                    "idempotency_key": f"{prefix}:verdict",
-                })["verdict"]
+                try:
+                    verdict = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/verdict", {
+                        **lease, "run_id": run["id"], "verdict": candidate,
+                        "idempotency_key": f"{prefix}:verdict",
+                    })["verdict"]
+                except Exception as error:
+                    if _is_stale_lease(error):
+                        discard = getattr(self.change_runner, "discard_candidate", None)
+                        if discard:
+                            discard(candidate)
+                    raise
             self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/release", {
                 **lease, "outcome": "planned", "idempotency_key": f"{prefix}:release",
             })
@@ -462,6 +492,14 @@ class HarnessChangeRunner:
             policy=policy, accepted_policy_hash=accepted_policy_hash, request_detail=request_detail,
             memory_path=self.memory_path, should_stop=should_stop,
         )
+
+    def discard_candidate(self, verdict: dict) -> None:
+        """Drop a candidate that could not be submitted under its lease."""
+        candidate = verdict.get("candidate") or {}
+        branch = candidate.get("branch")
+        if branch:
+            subprocess.run(["git", "branch", "-D", branch], cwd=self.checkout_source,
+                           capture_output=True, text=True, stdin=subprocess.DEVNULL, check=True)
 
 
 def main(argv: list[str] | None = None) -> int:

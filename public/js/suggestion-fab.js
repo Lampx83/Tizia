@@ -459,7 +459,15 @@ function bind(root) {
           btn.disabled = true;
           btn.textContent = 'Đang hủy…';
           try {
-            const r = await fetch(`api/requests/${encodeURIComponent(btn.dataset.reqCancel)}/cancel`, { method: 'POST' });
+            const csrfResponse = await fetch('api/csrf', { credentials: 'same-origin' });
+            if (!csrfResponse.ok) throw new Error('Không hủy được, thử lại sau.');
+            const { token } = await csrfResponse.json();
+            if (!token) throw new Error('Không hủy được, thử lại sau.');
+            const r = await fetch(`api/requests/${encodeURIComponent(btn.dataset.reqCancel)}/cancel`, {
+              method: 'POST',
+              headers: { 'X-CSRF-Token': token },
+              credentials: 'same-origin',
+            });
             const data = await r.json().catch(() => ({}));
             if (!r.ok) throw new Error(data.error === 'request_closed' ? 'Yêu cầu đã đóng, không hủy được.' : 'Không hủy được, thử lại sau.');
             loadInbox();

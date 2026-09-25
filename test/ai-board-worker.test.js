@@ -57,6 +57,8 @@ async function serve(store, env = { AI_BOARD_WORKER_KEY: KEY }) {
   app.use((req, _res, next) => {
     if (req.headers['x-test-user'] === '1') {
       req.user = { id: 1, username: 'lan', display_name: 'Lan', role: 'student', enrolled_domain: 'pharmacy' };
+    } else if (req.headers['x-test-user'] === '2') {
+      req.user = { id: 2, username: 'other', display_name: 'Other', role: 'student', enrolled_domain: 'pharmacy' };
     }
     next();
   });
@@ -67,7 +69,9 @@ async function serve(store, env = { AI_BOARD_WORKER_KEY: KEY }) {
       ? next()
       : res.status(403).json({ error: 'enrollment_required' }),
     requireAdmin: (_req, res) => res.status(403).json({ error: 'forbidden' }),
-    requireStrictCsrf: (_req, res) => res.status(403).json({ error: 'csrf_failed' }),
+    requireStrictCsrf: (req, res, next) => req.headers['x-csrf-token'] === 'ok'
+      ? next()
+      : res.status(403).json({ error: 'csrf_failed' }),
   });
   attachAiBoardWorkerRoutes(app, { store, env, leaseMs: 120_000 });
   const server = http.createServer(app);
@@ -582,10 +586,15 @@ test('student cancels through POST /api/requests/:id/cancel', async () => {
   try {
     const url = `${base}/api/requests/1/cancel`;
     assert.equal((await fetch(url, { method: 'POST' })).status, 401);
-    const ok = await fetch(url, { method: 'POST', headers: { 'x-test-user': '1' } });
+    const noToken = await fetch(url, { method: 'POST', headers: { 'x-test-user': '1' } });
+    assert.equal(noToken.status, 403);
+    assert.equal((await noToken.json()).error, 'csrf_failed');
+    assert.equal(db.prepare('SELECT status FROM requests WHERE id=1').get().status, 'pending');
+    assert.equal((await fetch(url, { method: 'POST', headers: { 'x-test-user': '2', 'x-csrf-token': 'ok' } })).status, 404);
+    const ok = await fetch(url, { method: 'POST', headers: { 'x-test-user': '1', 'x-csrf-token': 'ok' } });
     assert.equal(ok.status, 200);
     assert.equal((await ok.json()).status, 'cancelled');
-    assert.equal((await fetch(`${base}/api/requests/999/cancel`, { method: 'POST', headers: { 'x-test-user': '1' } })).status, 404);
+    assert.equal((await fetch(`${base}/api/requests/999/cancel`, { method: 'POST', headers: { 'x-test-user': '1', 'x-csrf-token': 'ok' } })).status, 404);
   } finally {
     await close();
     db.close();
