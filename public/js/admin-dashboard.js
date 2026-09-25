@@ -4,7 +4,7 @@
 // Auto-refresh 60s, vanilla — không phụ thuộc thư viện ngoài.
 
 import { DOMAIN_META } from './engine/domain.js';
-import { patchChildren } from './dom-morph.js';
+import { morph } from './dom-morph.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
@@ -503,7 +503,7 @@ function renderRequests() {
 // Chi tiết yêu cầu trong cửa sổ con (dialog + iframe) ngay trên trang admin; Esc hoặc "Đóng" để thoát.
 function openRequestDialog(id) {
   const dlg = $('#req-dialog');
-  const url = `/admin-request.html?id=${id}&v=rollback`; // v: đổi khi trang con đổi (HTML cache 5 phút)
+  const url = `/admin-request.html?id=${id}&v=lifecycle`; // v: đổi khi trang con đổi (HTML cache 5 phút)
   $('#req-dialog-title').textContent = `Yêu cầu #${id}`;
   $('#req-dialog-frame').src = url;
   if (!dlg.open) dlg.showModal();
@@ -536,7 +536,7 @@ async function submitReply() {
   if (!r.ok) return toast('Lỗi: ' + (r.data?.error || r.status), 'err');
   // /reply only updates the requests row; the AI Board status route also cancels the root, lease and alerts.
   const close = status === 'rejected' && aiTicketCache.some(t => t.source_request_id === id)
-    ? await api(`/api/requests/${id}/status`, { method:'POST', body: JSON.stringify({ status, note: message }) })
+    ? await api(`/api/requests/${id}/status`, { method:'POST', body: JSON.stringify({ status, note: message, confirm: String(id) }) })
     : { ok: true };
   if (!close.ok) toast('Đã phản hồi nhưng chưa đóng được ticket AI: ' + (close.data?.error || close.status), 'err');
   else toast(r.data.notified ? 'Đã gửi phản hồi + cho HS' : 'Đã đóng yêu cầu');
@@ -2054,11 +2054,18 @@ async function showTab(key, { silent = false } = {}) {
   }
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.k === key));
   const host = $('#tabbody');
-  const previous = silent ? [...host.childNodes] : null;
+  // Làm mới ngầm: tab render thẳng vào host, rồi đưa nút cũ về và vá theo bản mới (1 khung hình, không nháy;
+  // nút mới được chuyển sang nguyên vẹn nên giữ listener mà load() gắn).
+  const shown = silent ? [...host.childNodes] : null;
   if (!silent) host.innerHTML = '<div class="loading">Đang tải…</div>';
   try {
     await TABS[key].load();
-    if (previous) patchChildren(host, previous);
+    if (shown) {
+      const fresh = host.cloneNode(false);
+      fresh.append(...host.childNodes);
+      host.replaceChildren(...shown);
+      morph(host, fresh);
+    }
     // Badge "Góp ý" lấy từ reqCache chỉ khi tab Góp ý vừa tải lại; tab khác (vd dashboard) tự cập nhật
     // bằng số của server — trước đây ghi đè bằng reqCache rỗng nên badge hiện 0.
     if (key === 'requests') updateRequestBadge(TABS.requests.badge());

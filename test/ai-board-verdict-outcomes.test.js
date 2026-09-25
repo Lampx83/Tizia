@@ -110,6 +110,7 @@ test('admin rollback needs the typed request number, waits for a free lease, and
   assert.equal(store.claimNext({ workerId: 'w1', mode: 'shadow', intent: 'plan' }), null);
   const claim = store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' });
   assert.equal(claim.phase, 'rolling_back');
+  assert.equal(claim.trigger, 'rollback');
   const lease = { workerId: 'w1', leaseToken: claim.lease_token };
   assert.equal(store.getLeasedSnapshot(ticket.id, 'w1', claim.lease_token).rollback_candidate.branch, candidate.branch);
   const run = store.createRun(ticket.id, { ...lease, trigger: 'rollback', idempotencyKey: 'outcome-rollback-run' });
@@ -247,7 +248,16 @@ test('verdict budget is checked per run against the extended limit, not a fixed 
   const { db, submit, ticket } = plannedRoot();
   assert.throws(() => submit(passing({ budget_used: 201 })), (error) => error.code === 'run_budget_exhausted');
   db.prepare('UPDATE ai_tickets SET budget_limit=280 WHERE id=?').run(ticket.id);
-  assert.equal(submit(passing({ budget_used: 250 }), 'outcome-verdict-002').outcome, 'ready_for_pr');
+  assert.equal(submit(passing({ budget_used: 240 }), 'outcome-verdict-002').outcome, 'ready_for_pr');
+});
+
+test('one run budget covers plan plus execution: the server adds the run\'s plan spend to the verdict', () => {
+  const { db, submit } = plannedRoot(); // plan spent 40 in this run, limit 200
+  assert.throws(() => submit(passing({ budget_used: 161 })), (error) => error.code === 'run_budget_exhausted' && error.status === 409);
+  assert.equal(submit(passing({ budget_used: 160 }), 'outcome-verdict-002').outcome, 'ready_for_pr');
+  const evidence = JSON.parse(db.prepare('SELECT evidence_json FROM ai_runs').get().evidence_json);
+  assert.equal(evidence.plan_budget, 40);
+  assert.equal(evidence.verdict.budget_used, 160, 'verdict budget stays execution-only');
 });
 
 test('candidate metadata is validated and only allowed on a passing verdict', () => {

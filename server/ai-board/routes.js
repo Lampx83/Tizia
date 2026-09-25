@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { LEASE_MS, PlanGuardrailError, RequestValidationError, WorkerContractError } from './store.js';
+import { assertConfirmed, LEASE_MS, PlanGuardrailError, RequestValidationError, WorkerContractError } from './store.js';
 import { checkIntake, recordIntakeFlags } from './intake-guard.js';
 
 export function attachAiBoardRequestRoutes(router, {
@@ -73,6 +73,12 @@ export function attachAiBoardRequestRoutes(router, {
 
   router.post('/api/requests/:id/status', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
     const status = String(req.body?.status || '');
+    // Hủy = đóng root, không mở lại được: bắt gõ đúng số yêu cầu như hoàn tác.
+    if (status === 'rejected') {
+      try { assertConfirmed(req.params.id, req.body?.confirm); } catch (error) {
+        return res.status(error.status).json({ error: error.code, message: error.message });
+      }
+    }
     const ok = store.setRequestStatus(req.params.id, status, req.body?.note, req.user.id);
     if (!ok) return res.status(400).json({ error: 'invalid_status_or_request' });
     res.json({ ok: true });
@@ -203,6 +209,8 @@ export function attachAiBoardWorkerRoutes(router, {
       eventType: req.body?.event_type,
       publicMessage: req.body?.public_message,
       internalDetail: req.body?.internal_detail,
+      gate: req.body?.gate,
+      attempt: req.body?.attempt,
       idempotencyKey: req.body?.idempotency_key,
     });
     res.json({ event });

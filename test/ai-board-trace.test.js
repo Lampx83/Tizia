@@ -5,7 +5,7 @@ import http from 'node:http';
 import express from 'express';
 import Database from 'better-sqlite3';
 
-import { applyAiBoardMigrations, createAiBoardStore } from '../server/ai-board/store.js';
+import { applyAiBoardMigrations, createAiBoardStore, runProgress } from '../server/ai-board/store.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
 
 const KEY = 'fixture-worker-key-32-characters-long';
@@ -76,9 +76,12 @@ async function serve(store) {
     getTrace: (requestId, user) => fetch(`${base}/api/admin/ai-board/requests/${requestId}/trace`, {
       headers: { 'x-test-user': String(user) },
     }),
-    setStatus: (requestId, status) => fetch(`${base}/api/requests/${requestId}/status`, {
+    setStatus: (requestId, status, confirm = `#${requestId}`) => fetch(`${base}/api/requests/${requestId}/status`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-test-user': '9', 'x-csrf-token': 'ok' },
-      body: JSON.stringify({ status, note: 'Không phù hợp' }),
+      body: JSON.stringify({ status, note: 'Không phù hợp', confirm }),
+    }),
+    postEvent: (ticketId, body) => fetch(`${base}/api/ai-board/worker/tickets/${ticketId}/events`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-ai-worker-key': KEY }, body: JSON.stringify(body),
     }),
     close: () => new Promise((resolve, reject) => server.close((e) => e ? reject(e) : resolve())),
   };
@@ -264,6 +267,10 @@ test('admin reject cancels the root, open children, lease, worker and alerts, id
       db.prepare(`INSERT INTO ai_alerts(ticket_id, severity, category, status, created_at, updated_at)
         VALUES (?, 'critical', 'boundary_violation', 'open', 1, 1)`).run(rootId);
 
+      const unconfirmed = await api.setStatus(requestId, 'rejected', String(requestId + 1));
+      assert.equal(unconfirmed.status, 400);
+      assert.equal((await unconfirmed.json()).error, 'confirmation_required');
+      assert.equal(db.prepare('SELECT status FROM ai_tickets WHERE id=?').get(rootId).status, status, 'unconfirmed reject changes nothing');
       const res = await api.setStatus(requestId, 'rejected');
       assert.equal(res.status, 200);
       assert.equal((await api.setStatus(requestId, 'rejected')).status, 200, 'second reject is a no-op success');
@@ -297,4 +304,57 @@ test('admin done leaves the root untouched', () => {
   assert.equal(store.setRequestStatus(requestId, 'done', null, 9), true);
   assert.equal(db.prepare('SELECT status FROM ai_tickets WHERE id=?').get(rootId).status, 'queued');
   db.close();
+});
+
+test('gate_started progress is validated and the trace computes per-run gate states', async () => {
+  const { db, store } = fixture();
+  const api = await serve(store);
+  try {
+    const { request_id: requestId } = newRequest(store, 'progress-request-001');
+    const { ticket, lease, run } = leasedRun(store, 'progress-worker');
+    assert.equal(ticket.trigger, 'plan');
+    const event = (gate, attempt, extra = {}) => api.postEvent(ticket.id, {
+      ...lease, run_id: run.id, event_type: 'gate_started', gate, attempt,
+      idempotency_key: `progress-evt-${gate}-${attempt}`, ...extra,
+    });
+    for (const [gate, attempt] of [[7, 0], [3, -1], [3, 1.5], ['x', 0]]) {
+      const res = await event(gate, attempt);
+      assert.equal(res.status, 400, `gate ${gate} attempt ${attempt}`);
+      assert.equal((await res.json()).error, 'invalid_progress');
+    }
+    // The server's validated gate/attempt wins over what the worker put in internal_detail.
+    assert.equal((await event(1, 0, { internal_detail: '{"gate":9}' })).status, 200);
+    // Old workers send the gate only inside internal_detail.
+    assert.equal((await event(undefined, undefined, { internal_detail: JSON.stringify({ gate: 2, attempt: 0 }),
+      idempotency_key: 'progress-evt-legacy' })).status, 200);
+    const stored = db.prepare(`SELECT internal_detail FROM ai_events WHERE event_type='gate_started' ORDER BY id`).all();
+    assert.deepEqual(stored.map((e) => JSON.parse(e.internal_detail)), [{ gate: 1, attempt: 0 }, { gate: 2, attempt: 0 }]);
+
+    db.prepare(`INSERT INTO ai_gate_traces(run_id, gate, status, created_at) VALUES (?, 1, 'passed', 1)`).run(run.id);
+    const trace = store.getRequestTrace(requestId);
+    assert.equal(trace.root.phase_label, 'đang lập kế hoạch');
+    assert.equal(trace.root.can_rollback, false);
+    assert.equal(trace.gate_names['2.5'], 'Soát plan');
+    const { progress } = trace.runs[0];
+    assert.deepEqual(progress.gates.map((g) => [g.gate, g.state]), [[1, 'ok'], [2, 'run'], [2.5, 'wait']]);
+    assert.equal(progress.gates[1].name, 'Phạm vi');
+    assert.equal(progress.current, 2);
+    assert.equal(typeof progress.since, 'number');
+  } finally {
+    await api.close();
+    db.close();
+  }
+});
+
+test('run progress: active plan runs show exec gates, finished runs skip the rest', () => {
+  const run = { id: 1, trigger: 'plan', worker_mode: 'active', calls: [],
+    gates: [{ gate: 1, status: 'passed' }, { gate: 2, status: 'passed' }, { gate: 2.5, status: 'passed' }, { gate: 3, status: 'blocked' }] };
+  const done = runProgress(run, [], false);
+  assert.deepEqual(done.gates.map((g) => g.state), ['ok', 'ok', 'ok', 'bad', 'skip', 'skip', 'skip']);
+  assert.equal(done.current, null);
+  const events = [4, 3].map((gate, i) => ({ event_type: 'gate_started', run_id: 1, internal_detail: JSON.stringify({ gate }), created_at: 10 + i }));
+  const live = runProgress({ ...run, gates: run.gates.slice(0, 3) }, events, true);
+  assert.deepEqual(live.gates.map((g) => g.state), ['ok', 'ok', 'ok', 'ok', 'run', 'wait', 'wait']);
+  assert.deepEqual([live.current, live.since], [4, 10]);
+  assert.deepEqual(runProgress({ ...run, trigger: 'rollback' }, [], true).gates, []);
 });

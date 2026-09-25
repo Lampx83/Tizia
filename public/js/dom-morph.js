@@ -24,16 +24,6 @@ export function morph(from, to) {
   return from;
 }
 
-// host vừa được render mới; đưa nút cũ trở lại rồi vá theo bản mới — 1 khung hình, không nháy.
-export function patchChildren(host, previous) {
-  const fresh = document.createElement('div');
-  fresh.append(...host.childNodes);
-  const old = document.createElement('div');
-  old.append(...previous);
-  morph(old, fresh);
-  host.append(...old.childNodes);
-}
-
 // Thay nội dung host bằng html, vá thay vì ghi đè.
 export function patchHtml(host, html) {
   const fresh = document.createElement(host.nodeName);
