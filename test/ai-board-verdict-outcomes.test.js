@@ -164,7 +164,7 @@ test('budget exhaustion waits for a reasoned admin extension', () => {
   assert.equal(event.actor_type, 'admin');
   assert.equal(event.actor_id, '9');
   assert.deepEqual(JSON.parse(event.internal_detail), {
-    amount: 80, reason: 'Fixture cần thêm một vòng sửa lỗi.', relaxed: 'cumulative_budget_exhausted',
+    amount: 80, reason: 'Fixture cần thêm một vòng sửa lỗi.', relaxed: 'run_budget_exhausted',
   });
   // Only a budget-exhausted root can be extended.
   assert.throws(() => store.extendBudget(ticket.id, { amount: 10, reason: 'lần hai không hợp lệ', adminUserId: 9 }),
@@ -172,7 +172,7 @@ test('budget exhaustion waits for a reasoned admin extension', () => {
 });
 
 const REASON = 'Cho phép thêm một vòng xử lý.';
-const exhaust = (db, id, why = 'cumulative_budget_exhausted') => db.prepare(
+const exhaust = (db, id, why = 'run_budget_exhausted') => db.prepare(
   `UPDATE ai_tickets SET status='waiting_admin', phase='budget_exhausted', internal_reason=? WHERE id=?`).run(why, id);
 
 test('an automatic-round extension records that the round limit was relaxed', () => {
@@ -211,11 +211,11 @@ test('an extension past the 600 unit ceiling hands the root to a human', () => {
   assert.equal(db.prepare(`SELECT COUNT(*) n FROM ai_events WHERE event_type='budget_extended'`).get().n, 0);
 });
 
-test('verdict budget is checked against the extended limit, not a fixed 200', () => {
+test('verdict budget is checked per run against the extended limit, not a fixed 200', () => {
   const { db, submit, ticket } = plannedRoot();
-  assert.throws(() => submit(passing({ budget_used: 200 })), (error) => error.code === 'cumulative_budget_exhausted');
+  assert.throws(() => submit(passing({ budget_used: 201 })), (error) => error.code === 'run_budget_exhausted');
   db.prepare('UPDATE ai_tickets SET budget_limit=280 WHERE id=?').run(ticket.id);
-  assert.equal(submit(passing({ budget_used: 200 }), 'outcome-verdict-002').outcome, 'ready_for_pr');
+  assert.equal(submit(passing({ budget_used: 250 }), 'outcome-verdict-002').outcome, 'ready_for_pr');
 });
 
 test('candidate metadata is validated and only allowed on a passing verdict', () => {

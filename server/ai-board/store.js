@@ -634,8 +634,8 @@ export function createAiBoardStore(db, hooks = {}) {
       if (!sameSubmission) {
         const rounds = root.auto_rounds + 1;
         const budget = root.cumulative_budget + input.budgetUsed;
-        if (rounds > 2 || budget > root.budget_limit) {
-          const reason = rounds > 2 ? 'automatic_round_limit' : 'cumulative_budget_exhausted';
+        if (rounds > 2 || input.budgetUsed > root.budget_limit) { // budget_limit là trần MỖI lượt, không phải cả ticket
+          const reason = rounds > 2 ? 'automatic_round_limit' : 'run_budget_exhausted';
           db.prepare(`
             UPDATE ai_tickets SET status='waiting_admin', phase='budget_exhausted',
               public_note='Yêu cầu đang chờ quản trị viên xem xét.', internal_reason=?,
@@ -687,8 +687,8 @@ export function createAiBoardStore(db, hooks = {}) {
 
     const rounds = root.auto_rounds + 1;
     const budget = root.cumulative_budget + input.budgetUsed;
-    if (rounds > 2 || budget > root.budget_limit) {
-      const reason = rounds > 2 ? 'automatic_round_limit' : 'cumulative_budget_exhausted';
+    if (rounds > 2 || input.budgetUsed > root.budget_limit) { // budget_limit là trần MỖI lượt, không phải cả ticket
+      const reason = rounds > 2 ? 'automatic_round_limit' : 'run_budget_exhausted';
       db.prepare(`
         UPDATE ai_tickets SET status='waiting_admin', phase='budget_exhausted',
           public_note='Yêu cầu đang chờ quản trị viên xem xét.', internal_reason=?,
@@ -829,7 +829,7 @@ export function createAiBoardStore(db, hooks = {}) {
     }
     if (run.outcome) throw new WorkerContractError('run already has a verdict', 409, 'idempotency_conflict');
     const cumulativeBudget = root.cumulative_budget + verdict.budget_used;
-    if (cumulativeBudget > root.budget_limit) throw new WorkerContractError('cumulative budget exhausted', 409, 'cumulative_budget_exhausted');
+    if (verdict.budget_used > root.budget_limit) throw new WorkerContractError('run budget exhausted', 409, 'run_budget_exhausted');
     const evidence = JSON.stringify({ verdict });
     db.prepare(`UPDATE ai_runs SET outcome=?, gate=?, cumulative_budget=?, evidence_json=?, failure_reason=?, updated_at=? WHERE id=?`)
       .run(verdict.outcome, verdict.gate_reached, cumulativeBudget, evidence, verdict.reason, input.now, run.id);
@@ -923,7 +923,7 @@ export function createAiBoardStore(db, hooks = {}) {
       );
       return { ok: false, status: 'human_owned', budget_limit: root.budget_limit, reason: ceiling };
     }
-    const liftedLimit = root.internal_reason === 'automatic_round_limit' ? 'automatic_round_limit' : 'cumulative_budget_exhausted';
+    const liftedLimit = root.internal_reason === 'automatic_round_limit' ? 'automatic_round_limit' : 'run_budget_exhausted';
     // The admin grants one more automatic round with the extra budget; the limits stay enforced.
     db.prepare(`
       UPDATE ai_tickets SET status='queued', phase='needs_replan', budget_limit=?,

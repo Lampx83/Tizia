@@ -125,3 +125,12 @@ def test_insert_after_body_close_is_retried_with_the_right_line(tmp_path):
     out, prompts = _run(tmp_path, SeqModels([after_body, GOOD]))
     assert out["blocked"] is False and len(prompts) == 2
     assert "sau </body>" in prompts[1] and "after_line 5" in prompts[1]
+
+
+def test_node_check_handles_vietnamese_source(tmp_path):
+    from gates import static_check
+    f = tmp_path / "t.test.js"
+    f.write_text("import test from 'node:test';\ntest('trang có dòng giới thiệu cuối', () => {});\n", encoding="utf-8")
+    assert static_check.node_check(f) is None
+    f.write_text("const x = ;\n// chữ Việt\n", encoding="utf-8")
+    assert static_check.node_check(f)

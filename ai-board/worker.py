@@ -474,7 +474,7 @@ class HarnessPlanner:
         budget = self.Budget.from_env()
         budget.max_model_calls = min(budget.max_model_calls, 5)
         ticket = snapshot.get("ticket") or {}
-        budget.max_units = max(int(ticket.get("budget_limit") or 200) - int(ticket.get("cumulative_budget") or 0), 0)
+        budget.max_units = int(ticket.get("budget_limit") or 200)  # trần mỗi lượt, không trừ các lượt trước
         state = {}
         for gate in (1, 2, 2.5):
             result = self.run_gate(gate, request, self.deps, budget, state)
@@ -506,7 +506,7 @@ class HarnessChangeRunner:
                  accepted_policy_hash: str | None, request_detail: str | None = None,
                  should_stop: Callable[[], bool] | None = None) -> dict:
         budget = self.Budget.from_env()
-        budget.max_units = max(budget_limit - cumulative_budget - budget_used, 0)  # giây GPU còn lại
+        budget.max_units = max(budget_limit - budget_used, 0)  # giây GPU còn lại của lượt này (đã trừ phần lập plan)
         return execute_pre_pr(
             plan, ticket_id=ticket_id, checkout_source=self.checkout_source,
             deps=self.deps, budget=budget, run_gate=self.run_gate, cleanup=self.cleanup,

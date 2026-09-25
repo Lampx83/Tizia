@@ -98,10 +98,16 @@ def node_check(path: Path) -> str | None:
     <path>` rơi vào suy đoán CommonJS/ESM không đáng tin (tự kiểm chứng: 1 file
     ESM cú pháp hỏng vẫn exit 0 khi thiếu ngữ cảnh "type":"module" xác nhận
     module-ness). None nếu sạch, string lỗi nếu không."""
-    result = subprocess.run(
-        ["node", "--input-type=module", "--check"],
-        input=path.read_text(encoding="utf-8"), capture_output=True, text=True,
-    )
+    # encoding tường minh: mặc định Windows là cp1252, chữ Việt làm luồng ghi stdin vỡ, stdin không đóng
+    # và node chờ mãi (demo 2026-09-25 treo ở đây). timeout chặn mọi trường hợp treo khác.
+    try:
+        result = subprocess.run(
+            ["node", "--input-type=module", "--check"],
+            input=path.read_text(encoding="utf-8"), capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        return "node --check quá 60 giây"
     return None if result.returncode == 0 else (result.stderr.strip() or "node --check thất bại")
 
 

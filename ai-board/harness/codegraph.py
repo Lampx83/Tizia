@@ -39,7 +39,8 @@ def query(question: str, *, budget: int = 500, timeout_s: float = 15.0) -> list[
     try:
         result = subprocess.run(
             ["graphify", "query", question, "--budget", str(budget), "--graph", str(GRAPH_JSON)],
-            capture_output=True, text=True, timeout=timeout_s, stdin=subprocess.DEVNULL,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout_s,
+            stdin=subprocess.DEVNULL,
         )
     except (OSError, subprocess.TimeoutExpired):
         return []
