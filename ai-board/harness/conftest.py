@@ -76,7 +76,7 @@ class FakeModels:
         # nên mọi fixture cũ gọi deps_with(plan_with(...)) vẫn tự đi hết tới
         # cổng 7 mà không cần biết gì về cổng 3.
         self.codegen = codegen or {
-            "code": "// fixture code\n", "test_file": "test/fixture.test.js", "test": "// fixture test\n",
+            "code": "// fixture code\n", "test_file": "test/fixture.test.js", "test": "import test from 'node:test';\n// fixture test\n",
         }
         # Response mặc định cho cổng 2.5 (ticket 22) — clear=True nghĩa là "plan
         # ổn, đi tiếp", nên fixture cũ (không biết gì về cổng 2.5) tự qua trót

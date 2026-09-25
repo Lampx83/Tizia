@@ -77,7 +77,7 @@ def test_run_passes_repair_reason_to_every_subtask_prompt(tmp_path):
 def test_run_second_subtask_prompt_excludes_first_subtasks_content(tmp_path):
     """'Fresh context per subtask' là cơ chế (build_prompt chỉ nhận 1 subtask),
     không phải quy ước — test này khẳng định bằng cách soi prompt thật đã gửi."""
-    codegen = {"code": "// noop\n", "test_file": "test/noop.test.js", "test": "// noop test\n"}
+    codegen = {"code": "// noop\n", "test_file": "test/noop.test.js", "test": "import test from 'node:test';\n// noop test\n"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
     plan = plan_with(["features"])  # 2 subtask: "Tạo plugin" (small) + "Trang HTML" (large)
@@ -97,7 +97,7 @@ def test_run_second_subtask_prompt_excludes_first_subtasks_content(tmp_path):
 
 
 def test_run_routes_each_subtask_to_correct_model_by_size():
-    codegen = {"code": "// noop\n", "test_file": "test/noop.test.js", "test": "// noop test\n"}
+    codegen = {"code": "// noop\n", "test_file": "test/noop.test.js", "test": "import test from 'node:test';\n// noop test\n"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
     plan = plan_with(["features"])  # subtasks[0].size='small', subtasks[1].size='large'
@@ -111,7 +111,7 @@ def test_run_routes_each_subtask_to_correct_model_by_size():
 # ── run(): diff thật vào repo scratch, không phải Tizia thật ────────────────
 
 def test_run_produces_real_diff_against_scratch_repo(tmp_path):
-    codegen = {"code": "console.log('hi');\n", "test_file": "test/hi.test.js", "test": "// test hi\n"}
+    codegen = {"code": "console.log('hi');\n", "test_file": "test/hi.test.js", "test": "import test from 'node:test';\n// test hi\n"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
     plan = plan_with(["features"])
@@ -130,7 +130,7 @@ def test_run_produces_real_diff_against_scratch_repo(tmp_path):
 
 
 def test_run_uses_fresh_temp_repo_when_no_repo_dir_given():
-    codegen = {"code": "x", "test_file": "test/t.test.js", "test": "y"}
+    codegen = {"code": "x", "test_file": "test/t.test.js", "test": "import test from 'node:test';\ny"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
     plan = plan_with(["features"])
@@ -163,7 +163,7 @@ def test_run_blocks_on_malformed_model_response(tmp_path):
 def test_run_stops_mid_gate_when_budget_exhausted_between_subtasks(tmp_path):
     """max_model_calls=1: subtask đầu tiêu hết budget, subtask thứ hai (plan_with
     có 2) không được gọi model — không được âm thầm báo blocked=False."""
-    codegen = {"code": "x", "test_file": "test/t.test.js", "test": "y"}
+    codegen = {"code": "x", "test_file": "test/t.test.js", "test": "import test from 'node:test';\ny"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
     plan = plan_with(["features"])
@@ -179,7 +179,7 @@ def test_run_stops_mid_gate_when_budget_exhausted_between_subtasks(tmp_path):
 
 
 def test_run_spends_budget_once_per_subtask(tmp_path):
-    codegen = {"code": "x", "test_file": "test/t.test.js", "test": "y"}
+    codegen = {"code": "x", "test_file": "test/t.test.js", "test": "import test from 'node:test';\ny"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
     plan = plan_with(["features"])
@@ -193,7 +193,7 @@ def test_run_spends_budget_once_per_subtask(tmp_path):
 # ── code-review round: model không được ghi ra NGOÀI scratch repo ──────────
 
 def test_absolute_path_from_model_is_rejected_not_written(tmp_path):
-    codegen = {"code": "evil", "test_file": "/etc/passwd", "test": "y"}
+    codegen = {"code": "evil", "test_file": "/etc/passwd", "test": "import test from 'node:test';\ny"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
     plan = plan_with(["features"])
@@ -206,7 +206,7 @@ def test_absolute_path_from_model_is_rejected_not_written(tmp_path):
 
 
 def test_windows_absolute_path_from_model_is_rejected(tmp_path):
-    codegen = {"code": "x", "test_file": "C:/Windows/Temp/evil.js", "test": "y"}
+    codegen = {"code": "x", "test_file": "C:/Windows/Temp/evil.js", "test": "import test from 'node:test';\ny"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
 
@@ -218,7 +218,7 @@ def test_windows_absolute_path_from_model_is_rejected(tmp_path):
 
 
 def test_path_traversal_via_dotdot_is_rejected(tmp_path):
-    codegen = {"code": "x", "test_file": "../../../outside.js", "test": "y"}
+    codegen = {"code": "x", "test_file": "../../../outside.js", "test": "import test from 'node:test';\ny"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
 
@@ -230,7 +230,7 @@ def test_path_traversal_via_dotdot_is_rejected(tmp_path):
 
 
 def test_model_test_file_cannot_overwrite_an_approved_source_path(tmp_path):
-    codegen = {"code": "x", "test_file": "test/../server/db.js", "test": "evil"}
+    codegen = {"code": "x", "test_file": "test/../server/db.js", "test": "import test from 'node:test';\nevil"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
 
@@ -244,7 +244,7 @@ def test_model_test_file_cannot_overwrite_an_approved_source_path(tmp_path):
 
 def test_normal_relative_paths_still_work_after_traversal_guard(tmp_path):
     """Guard mới không được chặn nhầm case bình thường."""
-    codegen = {"code": "x", "test_file": "test/nested/deep.test.js", "test": "y"}
+    codegen = {"code": "x", "test_file": "test/nested/deep.test.js", "test": "import test from 'node:test';\ny"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
 
@@ -286,7 +286,7 @@ def _source_with(tmp_path, rel, content):
 
 
 BIG_PAGE = "".join(f"<p>đoạn {i}</p>\n" for i in range(3000)) + '<footer id="chan-trang">Bản quyền</footer>\n</body>\n'
-EDITS = {"code": "// fixture code\n", "test_file": "test/fixture.test.js", "test": "// fixture test\n",
+EDITS = {"code": "// fixture code\n", "test_file": "test/fixture.test.js", "test": "import test from 'node:test';\n// fixture test\n",
          "edits": [{"search": '<footer id="chan-trang">Bản quyền</footer>',
                     "replace": '<p>Tizia được cập nhật liên tục.</p>\n<footer id="chan-trang">Bản quyền</footer>'}]}
 
@@ -356,7 +356,7 @@ def test_lessons_from_past_verdicts_are_added_to_the_prompt(tmp_path):
 
 def test_test_file_outside_test_dir_is_a_repairable_model_mistake(tmp_path):
     """Nothing leaves the scratch repo yet, so it is ordinary (one repair), not a critical boundary alert."""
-    codegen = {"code": "// x\n", "test_file": "public/flashcards.test.js", "test": "// t\n"}
+    codegen = {"code": "// x\n", "test_file": "public/flashcards.test.js", "test": "import test from 'node:test';\n// t\n"}
     out = implement.run({"plan": plan_with(["features"])}, deps_with(FakeModels(plan_with(["features"]), codegen=codegen)),
                         Budget(max_wall_clock_s=999), repo_dir=tmp_path)
     assert out["blocked"] is True
@@ -366,4 +366,4 @@ def test_test_file_outside_test_dir_is_a_repairable_model_mistake(tmp_path):
 
 def test_prompt_states_where_generated_tests_must_live():
     prompt = implement.build_prompt({"title": "t", "file": "public/x.html", "verify": "v", "size": "small"})
-    assert "`test_file` phải nằm trong thư mục `test/`" in prompt
+    assert "\"test_file\" nằm trong thư mục test/" in prompt and "node:test" in prompt
