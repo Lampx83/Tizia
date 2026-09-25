@@ -104,12 +104,28 @@ def check_landing(requested: str, landed: str, status: int | None) -> None:
         raise ScreenshotTargetError(f"trang chụp bị chuyển hướng sang {urlsplit(landed).path}")
 
 
+def _launch(playwright):
+    """Chromium đi kèm Playwright; thiếu bản đúng phiên bản (chưa `playwright install`) thì dùng Chrome/Edge
+    đã cài trên máy worker. Không có trình duyệt nào → raise lỗi gốc."""
+    try:
+        return playwright.chromium.launch(headless=True)
+    except Exception as missing:
+        if "Executable doesn't exist" not in str(missing):
+            raise
+        for channel in ("chrome", "msedge"):
+            try:
+                return playwright.chromium.launch(headless=True, channel=channel)
+            except Exception:
+                continue
+        raise
+
+
 def capture_screenshot(url: str, path: Path) -> None:
     """Optional dependency: a single Chromium capture, with no visual diff engine."""
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
+        browser = _launch(playwright)
         try:
             page = browser.new_page()
             response = page.goto(url, wait_until="domcontentloaded", timeout=15000)
