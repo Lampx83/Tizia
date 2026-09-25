@@ -77,6 +77,12 @@ export function attachAiBoardRequestRoutes(router, {
     res.json({ tickets: store.listAdminQueue(req.query.limit), workers: store.listWorkers() });
   });
 
+  router.get('/api/admin/ai-board/requests/:requestId/trace', requireAuth, requireAdmin, (req, res) => {
+    const trace = store.getRequestTrace(req.params.requestId);
+    if (!trace) return res.status(404).json({ error: 'ticket_not_found' });
+    res.json(trace);
+  });
+
   router.post('/api/admin/ai-board/tickets/:id/extend-budget', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
     try {
       res.json(store.extendBudget(req.params.id, {
@@ -184,6 +190,11 @@ export function attachAiBoardWorkerRoutes(router, {
       idempotencyKey: req.body?.idempotency_key,
     });
     res.json({ event });
+  }));
+
+  router.post('/api/ai-board/worker/tickets/:id/traces', authenticate, handle((req, res) => {
+    const lease = leaseInput(req.body);
+    res.json(store.recordModelCalls(req.params.id, { ...lease, runId: req.body?.run_id, calls: req.body?.calls }));
   }));
 
   router.post('/api/ai-board/worker/tickets/:id/plan', authenticate, handle((req, res) => {

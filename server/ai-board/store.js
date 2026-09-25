@@ -171,6 +171,64 @@ function validatePrePrVerdict(value) {
     candidate, gates };
 }
 
+const MAX_TRACE_BATCH = 50;
+const CALL_RESULTS = new Set(['ok', 'retry', 'error', 'http_error', 'timeout']);
+const CALL_METRICS = ['wall_ms', 'tokens_in', 'tokens_out', 'tok_s', 'gpu_ms', 'load_ms', 'prompt_eval_ms', 'eval_ms', 'queue_ms'];
+const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+const str = (v, max) => (v == null ? null : String(v).slice(0, max));
+
+/** Whitelist + cap one worker model-call record. Throw invalid_trace on bad call_id/gate. */
+function cleanModelCall(c) {
+  const callId = typeof c?.call_id === 'string' ? c.call_id : '';
+  if (!callId || callId.length > 120) throw new WorkerContractError('invalid call_id', 400, 'invalid_trace');
+  const gate = num(c.gate);
+  if (gate === null) throw new WorkerContractError('invalid gate', 400, 'invalid_trace');
+  const m = c.metrics && typeof c.metrics === 'object' ? c.metrics : {};
+  const promptVar = str(c.prompt_var, Infinity);
+  const output = str(c.output, Infinity);
+  return {
+    call_id: callId, gate, child: num(c.child), attempt: num(c.attempt), iteration: num(c.iteration),
+    provider: ['ollama', 'api'].includes(c.provider) ? c.provider : null,
+    model: str(c.model, 120), prompt_name: str(c.prompt_name, 120), prompt_hash: str(c.prompt_hash, 128),
+    prompt_var: promptVar?.slice(0, 8192) ?? null, prompt_len: num(c.prompt_len),
+    output: output?.slice(0, 8192) ?? null, output_len: num(c.output_len),
+    truncated: {
+      prompt: c.truncated?.prompt === true || (promptVar?.length ?? 0) > 8192,
+      output: c.truncated?.output === true || (output?.length ?? 0) > 8192,
+    },
+    metrics: {
+      ...Object.fromEntries(CALL_METRICS.map((k) => [k, num(m[k])])),
+      done_reason: str(m.done_reason, 40),
+      cache_hit: typeof m.cache_hit === 'boolean' ? m.cache_hit : null,
+    },
+    budget_units: num(c.budget_units),
+    result: CALL_RESULTS.has(c.result) ? c.result : null,
+    error: str(c.error, 300),
+    at: num(c.at),
+  };
+}
+
+function parseJson(value) {
+  try { return value ? JSON.parse(value) : null; } catch { return null; }
+}
+
+/** Sum model-call evidences: GPU/wall seconds (0.1 rounding), tokens, loads (>500ms), retries. */
+function summarizeCalls(calls) {
+  let gpuMs = 0;
+  let wallMs = 0;
+  const s = { calls: calls.length, tokens_in: 0, tokens_out: 0, model_loads: 0, retries: 0 };
+  for (const c of calls) {
+    const m = c?.metrics || {};
+    gpuMs += m.gpu_ms || 0;
+    wallMs += m.wall_ms || 0;
+    s.tokens_in += m.tokens_in || 0;
+    s.tokens_out += m.tokens_out || 0;
+    if ((m.load_ms || 0) > 500) s.model_loads += 1;
+    if (c?.result === 'retry') s.retries += 1;
+  }
+  return { ...s, gpu_s: Math.round(gpuMs / 100) / 10, wall_s: Math.round(wallMs / 100) / 10 };
+}
+
 export function createAiBoardStore(db, hooks = {}) {
   const findRetry = db.prepare(`
     SELECT r.id AS request_id, t.id AS root_ticket_id
@@ -266,15 +324,38 @@ export function createAiBoardStore(db, hooks = {}) {
     return rows.map((row) => ({ ...row, attachments: parseAttachments(row.attachments) }));
   }
 
+  // Admin reject = cancel the whole root, like cancelRequestTransaction; every statement is a no-op on repeat.
+  function closeRootForAdmin(root, actorId, now) {
+    const note = 'Quản trị viên đã từ chối yêu cầu.';
+    db.prepare(`
+      UPDATE ai_tickets SET status='cancelled', phase='admin_rejected', public_note=?, internal_reason='admin_rejected',
+        lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE id=? AND status != 'cancelled'
+    `).run(note, now, root.id);
+    db.prepare(`
+      UPDATE ai_tickets SET status='cancelled', internal_reason='admin_rejected', updated_at=?
+      WHERE parent_id=? AND status NOT IN ('done', 'failed', 'invalidated', 'cancelled')
+    `).run(now, root.id);
+    db.prepare(`UPDATE ai_workers SET status='idle', current_ticket_id=NULL, updated_at=? WHERE current_ticket_id=?`)
+      .run(now, root.id);
+    db.prepare(`UPDATE ai_alerts SET status='resolved', updated_at=? WHERE ticket_id=? AND status='open'`).run(now, root.id);
+    const key = `request-rejected:${root.id}`;
+    if (!db.prepare('SELECT 1 FROM ai_events WHERE ticket_id=? AND idempotency_key=?').get(root.id, key)) {
+      insertEvent.run(root.id, 'request_rejected', 'admin', String(actorId), `${root.status}->cancelled`, note, 'admin_rejected', key, now);
+    }
+  }
+
   const setStatusTransaction = db.transaction((requestId, status, note, actorId) => {
-    const root = db.prepare('SELECT id FROM ai_tickets WHERE source_request_id = ? AND parent_id IS NULL').get(requestId);
+    const root = db.prepare('SELECT id, status FROM ai_tickets WHERE source_request_id = ? AND parent_id IS NULL').get(requestId);
+    const now = Date.now();
     const result = db.prepare('UPDATE requests SET status = ?, admin_note = ?, updated_at = ? WHERE id = ?')
-      .run(status, note || null, Date.now(), requestId);
+      .run(status, note || null, now, requestId);
     if (!result.changes || !root) return false;
+    // Random suffix: two status posts in the same millisecond must not collide on the unique key.
     insertEvent.run(
       root.id, 'request_status_changed', 'admin', String(actorId), null,
-      note || null, `request status -> ${status}`, `status:${requestId}:${Date.now()}`, Date.now(),
+      note || null, `request status -> ${status}`, `status:${requestId}:${now}:${randomBytes(4).toString('hex')}`, now,
     );
+    if (status === 'rejected') closeRootForAdmin(root, actorId, now);
     return true;
   });
 
@@ -904,6 +985,80 @@ export function createAiBoardStore(db, hooks = {}) {
     return cancelRequestTransaction(requestId, ownerUserId, now);
   }
 
+  // One ai_gate_traces row per model call: status='model_call', internal_reason=call_id (idempotency key per run).
+  const recordModelCallsTransaction = db.transaction((ticketId, input) => {
+    assertLease(ticketId, input.workerId, input.leaseToken, input.now);
+    const run = db.prepare('SELECT id FROM ai_runs WHERE id=? AND ticket_id=?').get(Number(input.runId), Number(ticketId));
+    if (!run) throw new WorkerContractError('run does not belong to ticket');
+    if (!Array.isArray(input.calls) || input.calls.length > MAX_TRACE_BATCH) {
+      throw new WorkerContractError(`calls must be an array of at most ${MAX_TRACE_BATCH}`, 400, 'invalid_trace');
+    }
+    const clean = input.calls.map(cleanModelCall);
+    const seen = db.prepare(`SELECT 1 FROM ai_gate_traces WHERE run_id=? AND status='model_call' AND internal_reason=?`);
+    const insert = db.prepare(`
+      INSERT INTO ai_gate_traces(run_id, gate, status, public_reason, internal_reason, evidence_json, created_at)
+      VALUES (?, ?, 'model_call', NULL, ?, ?, ?)
+    `);
+    let stored = 0;
+    for (const call of clean) {
+      if (seen.get(run.id, call.call_id)) continue;
+      insert.run(run.id, call.gate, call.call_id, JSON.stringify(call), call.at ?? input.now);
+      stored += 1;
+    }
+    return { stored, duplicates: clean.length - stored };
+  });
+
+  function recordModelCalls(ticketId, input) {
+    return recordModelCallsTransaction(ticketId, { ...input, now: input.now ?? Date.now() });
+  }
+
+  function getRequestTrace(requestId) {
+    const root = db.prepare(`
+      SELECT id, status, phase, cumulative_budget, budget_limit, public_note, internal_reason
+      FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL
+    `).get(Number(requestId));
+    if (!root) return null;
+    const children = db.prepare(`
+      SELECT id, title, status, sequence AS "order", plan_revision FROM ai_tickets
+      WHERE parent_id=? ORDER BY plan_revision, sequence, id
+    `).all(root.id);
+    const traces = db.prepare(`
+      SELECT g.id, g.run_id, g.gate, g.status, g.public_reason, g.internal_reason, g.evidence_json, g.created_at
+      FROM ai_gate_traces g JOIN ai_runs r ON r.id=g.run_id
+      WHERE r.ticket_id=? ORDER BY g.created_at, g.id
+    `).all(root.id);
+    const allCalls = [];
+    // ai_runs has no status column; the verdict outcome (null until one lands) is the run's status.
+    const runs = db.prepare(`
+      SELECT id, attempt, trigger, outcome AS status, gate, created_at FROM ai_runs
+      WHERE ticket_id=? ORDER BY created_at, id
+    `).all(root.id).map((run) => {
+      const gates = [];
+      const calls = [];
+      for (const { run_id: runId, evidence_json: json, ...row } of traces) {
+        if (runId !== run.id) continue;
+        const item = { ...row, evidence: parseJson(json) };
+        if (row.status === 'model_call') calls.push(item); else gates.push(item);
+      }
+      allCalls.push(...calls);
+      return { ...run, gates, calls, totals: summarizeCalls(calls.map((c) => c.evidence)) };
+    });
+    const evidences = allCalls.map((c) => c.evidence);
+    const byModel = {};
+    for (const e of evidences) (byModel[e?.model || 'unknown'] ??= []).push(e);
+    const onlyApi = evidences.length > 0 && evidences.every((e) => e?.provider === 'api');
+    return {
+      root, children, runs,
+      totals: {
+        ...summarizeCalls(evidences),
+        by_model: Object.fromEntries(Object.entries(byModel).map(([model, list]) => [model, summarizeCalls(list)])),
+        budget_used: root.cumulative_budget,
+        budget_limit: root.budget_limit,
+        budget_unit: onlyApi ? 'k_tokens' : 'gpu_s',
+      },
+    };
+  }
+
   const authorizePlanTransaction = db.transaction((rootTicketId, planHash, adminUserId, now) => {
     const plan = db.prepare('SELECT * FROM ai_plans WHERE root_ticket_id=? AND plan_hash=? AND status=?')
       .get(Number(rootTicketId), String(planHash), 'valid');
@@ -956,6 +1111,8 @@ export function createAiBoardStore(db, hooks = {}) {
     listAdminQueue,
     listWorkers,
     cancelRequest,
+    recordModelCalls,
+    getRequestTrace,
     claimNext,
     getLeasedSnapshot,
     heartbeat,

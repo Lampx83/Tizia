@@ -542,6 +542,58 @@ async function toggleDetail(id) {
       `).join('')
     }
   `;
+  if (!aiTicketCache.some(t => t.source_request_id === id)) return;
+  const box = detail.querySelector('.detail-box');
+  box.insertAdjacentHTML('beforeend', `<details class="ai-trace" style="margin-top:10px">
+    <summary style="cursor:pointer;font-weight:700">Trace AI</summary><div class="ai-trace-body">Đang tải…</div></details>`);
+  const section = box.querySelector('.ai-trace');
+  section.addEventListener('toggle', async () => {
+    if (!section.open || section.dataset.loaded) return;
+    section.dataset.loaded = '1';
+    const res = await api(`/api/admin/ai-board/requests/${id}/trace`);
+    if (!res.ok) delete section.dataset.loaded; // retry on next open
+    section.querySelector('.ai-trace-body').innerHTML = res.ok ? renderTrace(res.data)
+      : `<div class="blk" style="opacity:.6">Không tải được trace (${esc(res.data?.error || res.status)}).</div>`;
+  });
+}
+// Trace AI: every value (prompt, output, reasons) is untrusted model/student text → esc() everything.
+const secs = (ms) => ms == null ? '—' : (ms / 1000).toFixed(1);
+function renderTrace(t) {
+  const x = t.totals || {};
+  const unit = x.budget_unit === 'k_tokens' ? 'k tokens' : 'GPU-s';
+  const strip = `<div class="blk" style="display:flex;flex-wrap:wrap;gap:4px 16px">
+    <span>GPU-s: <b>${esc(x.gpu_s)}</b></span>
+    <span>Ngân sách: <b>${esc(x.budget_used)} / ${esc(x.budget_limit)}</b> ${unit}</span>
+    <span>Tokens vào/ra: <b>${fmtNum(x.tokens_in)} / ${fmtNum(x.tokens_out)}</b></span>
+    <span>Lượt gọi: <b>${esc(x.calls)}</b></span>
+    <span>Nạp model: <b>${esc(x.model_loads)}</b></span>
+    <span>Thử lại: <b>${esc(x.retries)}</b></span>
+  </div>`;
+  const runs = (t.runs || []).map(run => `
+    <div style="font-weight:600;margin:10px 0 4px">Run #${esc(run.id)} · ${esc(run.trigger)} · ${esc(run.status || 'chưa có kết luận')}
+      · ${fmt(run.created_at)} · ${esc(run.totals?.calls)} lượt · ${esc(run.totals?.gpu_s)} GPU-s</div>
+    ${run.gates.map(g => `<div class="blk">Cổng ${esc(g.gate)} · <b>${esc(g.status)}</b>${g.public_reason ? ` — ${esc(g.public_reason)}` : ''}${g.internal_reason ? ` <span style="opacity:.6">(${esc(g.internal_reason)})</span>` : ''}</div>`).join('')}
+    ${run.calls.length ? `<table style="font-size:11px;width:100%">
+      <thead><tr><th>Cổng</th><th>Con</th><th>Lần/vòng</th><th>Model</th><th>Wall s</th><th>GPU s</th><th>Load s</th><th>Queue s</th><th>Tokens vào/ra</th><th>tok/s</th><th>done</th><th>Kết quả</th></tr></thead>
+      <tbody>${run.calls.map(c => traceCallRows(c.evidence || {})).join('')}</tbody></table>` : ''}
+  `).join('');
+  return strip + (runs || '<div class="blk" style="opacity:.6">Chưa có run nào.</div>');
+}
+function traceCallRows(e) {
+  const m = e.metrics || {};
+  const cut = (flag) => flag ? ' <span style="opacity:.6">(đã cắt)</span>' : '';
+  return `<tr>
+    <td>${esc(e.gate)}</td><td>${esc(e.child ?? '—')}</td><td>${esc(e.attempt ?? '—')}/${esc(e.iteration ?? '—')}</td>
+    <td>${esc(e.model)}</td><td>${secs(m.wall_ms)}</td><td>${secs(m.gpu_ms)}</td><td>${secs(m.load_ms)}</td><td>${secs(m.queue_ms)}</td>
+    <td>${fmtNum(m.tokens_in)} / ${fmtNum(m.tokens_out)}</td><td>${esc(m.tok_s ?? '—')}</td><td>${esc(m.done_reason ?? '—')}</td>
+    <td><span class="pill">${esc(e.result ?? '—')}</span>${e.error ? `<div style="opacity:.7">${esc(e.error)}</div>` : ''}</td>
+  </tr>
+  <tr><td colspan="12"><details><summary style="cursor:pointer;opacity:.7">${esc(e.call_id)} · ${esc(e.prompt_name ?? '')} · prompt / output</summary>
+    <div style="opacity:.6;margin-top:4px">Prompt (${fmtNum(e.prompt_len)} ký tự)${cut(e.truncated?.prompt)}</div>
+    <pre style="white-space:pre-wrap;max-height:320px;overflow:auto;margin:2px 0">${esc(e.prompt_var)}</pre>
+    <div style="opacity:.6">Output (${fmtNum(e.output_len)} ký tự)${cut(e.truncated?.output)}</div>
+    <pre style="white-space:pre-wrap;max-height:320px;overflow:auto;margin:2px 0">${esc(e.output)}</pre>
+  </details></td></tr>`;
 }
 function openReplyModal(id) {
   const r = reqCache.find(x => x.id === id);
@@ -562,7 +614,12 @@ async function submitReply() {
   if (message.length < 4) return toast('Lời nhắn quá ngắn (≥4 ký tự)', 'err');
   const r = await api(`/api/admin/requests/${id}/reply`, { method:'POST', body: JSON.stringify({ status, message }) });
   if (!r.ok) return toast('Lỗi: ' + (r.data?.error || r.status), 'err');
-  toast(r.data.notified ? '✓ Đã gửi phản hồi + 🔔 cho HS' : '✓ Đã đóng yêu cầu');
+  // /reply only updates the requests row; the AI Board status route also cancels the root, lease and alerts.
+  const close = status === 'rejected' && aiTicketCache.some(t => t.source_request_id === id)
+    ? await api(`/api/requests/${id}/status`, { method:'POST', body: JSON.stringify({ status, note: message }) })
+    : { ok: true };
+  if (!close.ok) toast('Đã phản hồi nhưng chưa đóng được ticket AI: ' + (close.data?.error || close.status), 'err');
+  else toast(r.data.notified ? '✓ Đã gửi phản hồi + 🔔 cho HS' : '✓ Đã đóng yêu cầu');
   closeModal();
   await loadRequests();
 }
