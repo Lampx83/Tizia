@@ -138,13 +138,13 @@ def test_summarize_handles_zero_comparable_rows():
     assert out["agreement_rate"] is None
 
 
-def test_run_never_touches_git_or_telegram(db_file):
+def test_run_never_touches_telegram(db_file):
     insert_decision(db_file, request_id=20, action="approve", snapshot=snapshot_for(20))
     models = FakeModels(plan_with(["features"]))
-    deps = Deps(models=models, git=Unavailable("git"), notify=Unavailable("telegram"))
+    deps = Deps(models=models, notify=Unavailable("telegram"))
 
     report = calibrate.summarize(calibrate.run(db_file, deps=deps))
 
     assert report["n_compared"] == 1
     with pytest.raises(NotImplementedError):
-        deps.git.push("x")
+        deps.notify.send("x")

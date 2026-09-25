@@ -256,7 +256,7 @@ def test_normal_relative_paths_still_work_after_traversal_guard(tmp_path):
 
 def test_ensure_scratch_repo_never_reuses_real_tizia_repo(tmp_path):
     """repo_dir=None → tempfile.mkdtemp(), KHÔNG bao giờ trỏ vào ROOT của Tizia
-    (ticket 04: deps.git vẫn Unavailable, git thật không được chạm)."""
+    (git thật chỉ candidate.py chạm, không phải cổng 3)."""
     repo = implement._ensure_scratch_repo(None)
     try:
         assert (repo / ".git").exists()

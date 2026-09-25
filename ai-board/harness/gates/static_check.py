@@ -15,7 +15,8 @@ import re
 import subprocess
 from pathlib import Path
 
-from gates import guard, intake_guard
+import candidate
+from gates import guard, intake_guard, risk_triage
 
 CONTENT_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "content_guard.md").read_text(encoding="utf-8")
 CONTENT_LABELS = tuple(x for x in intake_guard.LABELS
@@ -216,3 +217,57 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
                     "issues": [*issues, review["reason"]], "failure_class": review["failure_class"],
                     "content_labels": review["labels"]}
     return {"gate": 4, "blocked": False, "reason": None, "needs_careful_review": needs_careful_review, "issues": issues}
+
+
+def _base_public_contacts(state: dict) -> set[str]:
+    """Contacts already in public/ at the base commit; empty without a worktree (nothing allowlisted)."""
+    checkout, base = state.get("full_checkout"), state.get("base_sha")
+    if not checkout or not base:
+        return set()
+    # ponytail: crude "@ or 9 digits" line prefilter, exact matching is contacts_in; fine while public/ stays small.
+    found = subprocess.run(["git", "grep", "-I", "-h", "-E", "@|[0-9]{9}", base, "--", "public"], cwd=checkout,
+                           capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           stdin=subprocess.DEVNULL)
+    return guard.contacts_in(found.stdout)  # exit 1 = no match, stdout empty
+
+
+def run_gate(state: dict, deps, budget, *, db_path=None, proposal_id: int | None = None) -> dict:
+    """Cổng 4 đầy đủ cho main.run_gate: lint/node --check rẻ trước; qua thì dựng candidate (diff thật
+    base..HEAD) rồi size, guard, catalog, soát nội dung LLM. Mọi finding gộp thành 1 kết quả blocked."""
+    out = run(state, check_size=False)
+    if out.get("blocked"):
+        return out
+    failed = candidate.ensure(state, 4)
+    if failed:
+        return failed
+    size = oversize_issues(state)
+    out = {**out, "issues": [*size, *out.get("issues", [])],
+           "needs_careful_review": out.get("needs_careful_review") or bool(size)}
+    diffs = state.get("full_diff") or state.get("diffs") or []
+    text = "".join(item.get("diff", "") for item in diffs)
+    scanned = guard.scan(text, state.get("full_checkout"), allowed_contacts=_base_public_contacts(state),
+                         request_text=state.get("request_detail"))
+    state["ui_changed"] = scanned["ui_changed"]
+    state["guard_flags"] = scanned["flags"]
+    state["review_required"] = scanned["review_required"]
+    out = {**out, "checks": scanned["checks"]}
+    found = scanned["findings"]
+    if state.get("catalog") is not None:
+        # Catalog boundary is a pure diff check: stop here, before Gate 5 runs the code in Docker.
+        out["checks"] = [*out["checks"], "catalog"]
+        outside = risk_triage.outside_catalog(diffs, state["catalog"])
+        if outside:
+            found = [*found, {"check": "catalog", "failure_class": "critical",
+                              "detail": f"path ngoài catalog capability: {', '.join(outside)}"[:300]}]
+    if not found and budget is not None and getattr(deps, "models", None) is not None:
+        # Chữ hiển thị mới trên diff thật (base..HEAD) qua LLM soát nội dung; lỗi/không chắc → người soát.
+        review = content_review(state, deps, budget, db_path=db_path, proposal_id=proposal_id)
+        if review and review["blocked"]:
+            found = [{"check": "content_guard", "failure_class": review["failure_class"],
+                      "detail": review["reason"][:300]}]
+    if found:
+        worst = "critical" if any(f["failure_class"] == "critical" for f in found) else "ordinary"
+        reason = "; ".join(f"{f['check']}: {f['detail']}" for f in found)[:1000]
+        out.update(blocked=True, reason=reason, failure_class=worst,
+                   issues=[*out.get("issues", []), *(f"{f['check']}: {f['detail']}" for f in found)])
+    return out

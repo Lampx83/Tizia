@@ -8,7 +8,6 @@ import os
 import re
 import shutil
 import socket
-import subprocess
 import threading
 import tempfile
 import time
@@ -20,8 +19,9 @@ from typing import Any, Callable
 
 
 Transport = Callable[[str, str, dict, dict], dict]
+REPO_ROOT = Path(__file__).resolve().parents[1]
 # Worker <-> server contract, shared with server/ai-board/store.js.
-CONTRACT = json.loads((Path(__file__).resolve().parents[1] / "server" / "ai-board" / "contract.json")
+CONTRACT = json.loads((REPO_ROOT / "server" / "ai-board" / "contract.json")
                       .read_text(encoding="utf-8"))
 PLAN_GATES = tuple(CONTRACT["gates"]["plan"])
 PRE_PR_GATES = tuple(CONTRACT["gates"]["pre_pr"])
@@ -58,18 +58,25 @@ def _load_harness():
     return Budget, Deps, run_gate
 
 
+def _real_deps(Deps, tracer, progress):
+    """Deps thật + tracer và progress (HttpWorker.gate_started) của worker."""
+    deps = dataclasses.replace(Deps.real(), trace=tracer)
+    return dataclasses.replace(deps, progress=progress) if progress else deps
+
+
 def _execution_plan(plan: dict) -> dict:
-    """Map the server-owned plan contract back to the existing Gate-3 seam."""
+    """Server plan → subtask Gate 3. Giữ nguyên mọi field của step đã duyệt (allowed_scope, tests,
+    acceptance, risk, …); thêm file = scope[0], verify = mọi test + acceptance, size theo risk."""
     subtasks = []
     for step in sorted(plan.get("steps") or [], key=lambda step: step.get("order", 0)):
         scope = step.get("allowed_scope") or []
         tests = step.get("tests") or []
         if not scope or not tests:
             raise ValueError("plan step requires allowed_scope and tests")
+        checks = dict.fromkeys([*tests, *(step.get("acceptance") or [])])
         subtasks.append({
-            "title": step["title"], "file": scope[0], "verify": tests[0],
+            **step, "file": scope[0], "verify": "; ".join(checks),
             "size": "small" if step.get("risk") == "low" else "large",
-            "allowed_scope": list(scope),
         })
     if not subtasks:
         raise ValueError("plan requires at least one step")
@@ -95,6 +102,13 @@ def _public_gate_result(result: dict) -> dict:
 
 
 MAX_REPAIRS = CONTRACT["max_repairs"]  # server enforces the same bound
+
+
+def _passed(gates: list[dict], kind: str | None) -> bool:
+    """Qua hết: không lỗi, tới 5.5 không bị chặn, smoke qua và quan sát được qua HTTP."""
+    smoke = next((gate for gate in gates if gate["gate"] == 5), None)
+    return bool(kind is None and gates and gates[-1]["gate"] == 5.5 and not gates[-1]["blocked"]
+                and smoke and smoke["smoke_passed"] and smoke["http_observed"])
 
 
 def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate, cleanup,
@@ -154,12 +168,10 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
                 kind = result.get("failure_class") or "ordinary"
                 break
     finally:
+        import candidate as candidates
+
         lease_lost = bool(should_stop and should_stop())
-        passed = kind is None and bool(gates) and gates[-1]["gate"] == 5.5 and not lease_lost
-        candidate = {
-            "branch": state["branch"], "base_sha": state["base_sha"],
-            "head_sha": state["commits"][-1]["sha"], "commits": state["commits"],
-        } if passed and state.get("commits") else None
+        candidate = candidates.record(state) if _passed(gates, kind) and not lease_lost else None
         cleanup(state, keep_branch=candidate is not None)
         if candidate and should_stop and should_stop():
             # The heartbeat can fail while the passing worktree is being removed.
@@ -208,11 +220,8 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
             break
         repairs.append({"gate": last["gate"], "reason": last["reason"]})
         repair_reason = f"cổng {last['gate']}: {last['reason']}"
-    smoke = next((gate for gate in gates if gate["gate"] == 5), None)
-    risk = next((gate for gate in gates if gate["gate"] == 5.5), None)
-    passed = (kind is None and last["gate"] == 5.5 and not last["blocked"] and smoke
-              and smoke["smoke_passed"] and smoke["http_observed"])
-    needs_review = passed and risk["risk_level"] in ("high", "critical")
+    passed = _passed(gates, kind)
+    needs_review = passed and last["risk_level"] in ("high", "critical")
     outcome = "needs_review" if needs_review else "ready_for_pr" if passed else "blocked"
     if memory_path:
         _remember(memory_path, plan, ticket_id, repairs, None if passed else kind, last, bool(passed))
@@ -274,9 +283,21 @@ class HttpWorker:
     version: str = "d0"
     mode: str = "off"
     planner: Callable[[dict], tuple[dict, int]] | None = None
-    change_runner: Callable[[dict, int, int, int], dict] | None = None
+    # change_runner(plan, ticket_id, max_units, *, policy, accepted_policy_hash, request_detail, should_stop) → verdict
+    change_runner: Callable[..., dict] | None = None
+    candidates: Any = None  # candidate.Candidates: discard(candidate), rollback(candidate, ticket_id)
     heartbeat_interval: float = 30.0
     tracer: Any = None  # meter.Tracer chung với planner/change runner
+    _report_gate: Callable[[float], None] | None = dataclasses.field(default=None, init=False, repr=False)
+
+    def gate_started(self, gate: float) -> None:
+        """Deps.progress: báo server cổng vừa bắt đầu trong run đang giữ lease. Lỗi gửi không làm hỏng cổng."""
+        if self._report_gate is None:
+            return
+        try:
+            self._report_gate(gate)
+        except Exception as error:  # noqa: BLE001 — tiến độ best-effort
+            print(f"[worker] báo cổng {gate} lỗi: {str(error)[:200]}")
 
     def _with_heartbeat(self, operation: Callable, ticket_id: int, lease: dict,
                         on_lease_lost: Callable | None = None):
@@ -311,8 +332,8 @@ class HttpWorker:
             raise ValueError("D0 worker only supports off, shadow or active")
         if self.mode == "shadow" and self.change_runner:
             raise ValueError("shadow mode cannot execute implementation gates")
-        if self.mode == "active" and (not self.planner or not self.change_runner):
-            raise ValueError("active mode requires planner and change runner")
+        if self.mode == "active" and (not self.planner or not self.change_runner or not self.candidates):
+            raise ValueError("active mode requires planner, change runner and candidates")
         if self.tracer and self.tracer.over_hourly_cap():
             # GPU dùng chung: hết trần giờ thì không nhận ticket mới; ticket đang chạy không bị phạt.
             return {"status": "gpu_paused", "gpu_s_last_hour": round(self.tracer.gpu_s_last_hour(), 1)}
@@ -332,8 +353,9 @@ class HttpWorker:
 
         snapshot = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/snapshot", lease)
         self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/heartbeat", lease)
+        # Server nói lượt này làm gì; server cũ chưa gửi trigger thì suy từ phase.
         phase = (snapshot.get("ticket") or {}).get("phase")
-        trigger = {"executing": "execute", "rolling_back": "rollback"}.get(phase) or (
+        trigger = ticket.get("trigger") or {"executing": "execute", "rolling_back": "rollback"}.get(phase) or (
             "plan" if self.planner else "shadow_precheck")
         run = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/runs", {
             **lease, "trigger": trigger, "idempotency_key": f"{prefix}:run",
@@ -343,15 +365,21 @@ class HttpWorker:
                 run["id"],
                 lambda calls: self.client.post(
                     f"/api/ai-board/worker/tickets/{ticket_id}/traces", {**lease, "run_id": run["id"], "calls": calls}),
-                on_gate=lambda gate, attempt: self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/events", {
-                    **lease, "run_id": run["id"], "event_type": "gate_started",
-                    "internal_detail": json.dumps({"gate": gate, "attempt": attempt}),
-                    "idempotency_key": f"{prefix}:gate:{attempt}:{gate}",
-                }),
             )
+
+        def report_gate(gate: float) -> None:
+            attempt = self.tracer.attempt if self.tracer else 0  # lần sửa thứ mấy (execute_pre_pr đặt)
+            self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/events", {
+                **lease, "run_id": run["id"], "event_type": "gate_started", "gate": gate, "attempt": attempt,
+                "internal_detail": json.dumps({"gate": gate, "attempt": attempt}),
+                "idempotency_key": f"{prefix}:gate:{attempt}:{gate}",
+            })
+
+        self._report_gate = report_gate
         try:
-            return self._run_leased(ticket_id, lease, prefix, snapshot, run)
+            return self._run_leased(ticket_id, lease, prefix, snapshot, run, trigger)
         finally:
+            self._report_gate = None
             if self.tracer:
                 self.tracer.flush()
 
@@ -368,7 +396,7 @@ class HttpWorker:
             if not candidate:
                 raise ValueError("no candidate branch to roll back")
             result = self._with_heartbeat(
-                lambda _lost: self.change_runner.rollback(candidate, ticket_id), ticket_id, lease)
+                lambda _lost: self.candidates.rollback(candidate, ticket_id), ticket_id, lease)
         except LeaseLostError:
             raise
         except Exception as error:  # noqa: BLE001 — git/IO: báo server, không để root kẹt 'running'
@@ -378,11 +406,12 @@ class HttpWorker:
         })
         return {"status": done["status"], "ticket_id": ticket_id, "run_id": run["id"], "rollback": result["outcome"]}
 
-    def _run_leased(self, ticket_id: int, lease: dict, prefix: str, snapshot: dict, run: dict) -> dict:
-        if (snapshot.get("ticket") or {}).get("phase") == "rolling_back":
+    def _run_leased(self, ticket_id: int, lease: dict, prefix: str, snapshot: dict, run: dict,
+                    trigger: str) -> dict:
+        if trigger == "rollback":
             return self._rollback(ticket_id, lease, snapshot, run)
-        # 'executing' = admin đã cho phép plan (tier protected): lượt này không lập plan lại mà chạy plan đã duyệt.
-        executing = (snapshot.get("ticket") or {}).get("phase") == "executing"
+        # 'execute' = admin đã cho phép plan (tier protected): lượt này không lập plan lại mà chạy plan đã duyệt.
+        executing = trigger == "execute"
         if not executing:
             self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/events", {
                 **lease, "run_id": run["id"], "event_type": "shadow_precheck_passed",
@@ -423,30 +452,26 @@ class HttpWorker:
         if self.planner:
             verdict = None
             if self.change_runner and planned["status"] == "planned":
-                ticket_row = snapshot.get("ticket", {})
-                candidate = self._with_heartbeat(
+                limit = int((snapshot.get("ticket") or {}).get("budget_limit") or DEFAULT_BUDGET_LIMIT)
+                result = self._with_heartbeat(
                     lambda lost: self.change_runner(
-                        plan, ticket_id, budget_used,
-                        int(ticket_row.get("cumulative_budget") or 0),
-                        int(ticket_row.get("budget_limit") or DEFAULT_BUDGET_LIMIT),
+                        plan, ticket_id, max(limit - budget_used, 0),  # giây GPU còn lại của lượt (trừ phần lập plan)
                         # {} when missing: fails the hash check closed instead of skipping the catalog.
                         policy=snapshot.get("capability_policy") or {},
                         accepted_policy_hash=planned.get("capability_policy_hash"),
                         request_detail=(snapshot.get("request") or {}).get("detail"),
                         should_stop=lost,
                     ), ticket_id, lease,
-                    on_lease_lost=getattr(self.change_runner, "discard_candidate", None),
+                    on_lease_lost=lambda lost_result: self.candidates.discard((lost_result or {}).get("candidate")),
                 )
                 try:
                     verdict = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/verdict", {
-                        **lease, "run_id": run["id"], "verdict": candidate,
+                        **lease, "run_id": run["id"], "verdict": result,
                         "idempotency_key": f"{prefix}:verdict",
                     })["verdict"]
                 except Exception as error:
                     if _is_stale_lease(error):
-                        discard = getattr(self.change_runner, "discard_candidate", None)
-                        if discard:
-                            discard(candidate)
+                        self.candidates.discard(result.get("candidate"))
                     raise
             self._release(ticket_id, {
                 **lease, "outcome": "planned", "idempotency_key": f"{prefix}:release",
@@ -467,10 +492,10 @@ class HttpWorker:
 class HarnessPlanner:
     """Runs existing gates 1, 2 and 2.5, then emits the server-owned D0 schema."""
 
-    def __init__(self, tracer=None):
+    def __init__(self, tracer=None, progress=None):
         Budget, Deps, run_gate = _load_harness()
         self.Budget = Budget
-        self.deps = dataclasses.replace(Deps.real(), trace=tracer)
+        self.deps = _real_deps(Deps, tracer, progress)
         self.run_gate = run_gate
 
     @staticmethod
@@ -537,92 +562,20 @@ class HarnessPlanner:
         return self._canonical(request, state["plan"], state.get("complexity_signals")), int(budget.units)
 
 
-class HarnessChangeRunner:
-    """Connect an accepted HTTP plan to the existing full-checkout gate pipeline."""
+def harness_change_runner(checkout_source=None, tracer=None, progress=None) -> Callable[..., dict]:
+    """Accepted HTTP plan → Gates 3→5.5 on the full checkout. Return HttpWorker.change_runner."""
+    Budget, Deps, run_gate = _load_harness()
+    import candidate
+    from memory import DEFAULT_PATH
+    deps = _real_deps(Deps, tracer, progress)
 
-    def __init__(self, checkout_source=None, tracer=None):
-        Budget, Deps, run_gate = _load_harness()
-        from main import cleanup_full_checkout
-        from memory import DEFAULT_PATH
-        self.memory_path = DEFAULT_PATH
-        self.Budget = Budget
-        self.deps = dataclasses.replace(Deps.real(), trace=tracer)
-        self.run_gate = run_gate
-        self.cleanup = cleanup_full_checkout
-        self.checkout_source = checkout_source or Path(__file__).resolve().parents[1]
-
-    def __call__(self, plan: dict, ticket_id: int, budget_used: int = 0,
-                 cumulative_budget: int = 0, budget_limit: int = 200, *, policy: dict,
-                 accepted_policy_hash: str | None, request_detail: str | None = None,
-                 should_stop: Callable[[], bool] | None = None) -> dict:
-        budget = self.Budget.from_env()
-        budget.max_units = max(budget_limit - budget_used, 0)  # giây GPU còn lại của lượt này (đã trừ phần lập plan)
-        return execute_pre_pr(
-            plan, ticket_id=ticket_id, checkout_source=self.checkout_source,
-            deps=self.deps, budget=budget, run_gate=self.run_gate, cleanup=self.cleanup,
-            policy=policy, accepted_policy_hash=accepted_policy_hash, request_detail=request_detail,
-            memory_path=self.memory_path, should_stop=should_stop,
-        )
-
-    def rollback(self, candidate: dict, ticket_id: int) -> dict:
-        """Chưa merge: xóa nhánh candidate. Đã merge vào base: nhánh revert mới từ base, để người mở PR."""
-        from main import _git_out
-        repo, head = self.checkout_source, candidate["head_sha"]
-        base = os.getenv("PR_BASE_BRANCH", "dev")
-        refs = [ref for name in dict.fromkeys((base, "main")) for ref in (f"origin/{name}", name)]
-        merged_into = next((ref for ref in refs if _merged(repo, candidate, ref)), None)
-        if not merged_into:
-            deleted = subprocess.run(["git", "branch", "-D", candidate["branch"]], cwd=repo, capture_output=True,
-                                     text=True, stdin=subprocess.DEVNULL)
-            # Đã mất nhánh cũng coi như xong; còn nhánh (vd đang checkout ở 1 worktree) thì báo lỗi, không nói dối.
-            if not subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"refs/heads/{candidate['branch']}"],
-                                  cwd=repo, capture_output=True, stdin=subprocess.DEVNULL).returncode:
-                raise OSError(f"git branch -D {candidate['branch']}: {deleted.stderr.strip()[:300]}")
-            return {"outcome": "discarded", "detail": f"deleted unmerged branch {candidate['branch']}"}
-        branch = f"ai-board/{time.strftime('%Y-%m-%d')}-ticket-{ticket_id}-revert-{os.urandom(3).hex()}"
-        checkout = tempfile.mkdtemp(prefix="ai-board-revert-")
-        try:
-            _git_out(["worktree", "add", "-q", "-b", branch, checkout, merged_into], repo)
-            base_sha = _git_out(["rev-parse", "HEAD"], checkout).strip()
-            _git_out(["-c", "user.name=AI Board", "-c", "user.email=ai-board@tizia.local",
-                      "revert", "--no-edit", f"{candidate['base_sha']}..{head}"], checkout)
-            shas = _git_out(["rev-list", "--reverse", f"{base_sha}..HEAD"], checkout).split()
-            commits = [{"sha": sha, "title": _git_out(["log", "-1", "--format=%s", sha], checkout).strip(),
-                        "files": _git_out(["show", "--name-only", "--format=", sha], checkout).split()}
-                       for sha in shas]
-        except Exception:
-            subprocess.run(["git", "worktree", "remove", "--force", checkout], cwd=repo, capture_output=True,
-                           stdin=subprocess.DEVNULL)
-            subprocess.run(["git", "branch", "-D", branch], cwd=repo, capture_output=True, stdin=subprocess.DEVNULL)
-            raise
-        finally:
-            subprocess.run(["git", "worktree", "remove", "--force", checkout], cwd=repo, capture_output=True,
-                           stdin=subprocess.DEVNULL)
-            shutil.rmtree(checkout, ignore_errors=True)
-        return {"outcome": "revert_ready", "detail": f"{candidate['branch']} was merged into {merged_into}",
-                "revert": {"branch": branch, "base_sha": base_sha, "head_sha": shas[-1], "commits": commits}}
-
-    def discard_candidate(self, verdict: dict) -> None:
-        """Drop a candidate that could not be submitted under its lease."""
-        candidate = verdict.get("candidate") or {}
-        branch = candidate.get("branch")
-        if branch:
-            subprocess.run(["git", "branch", "-D", branch], cwd=self.checkout_source,
-                           capture_output=True, text=True, stdin=subprocess.DEVNULL, check=True)
-
-
-def _merged(repo, candidate: dict, ref: str) -> bool:
-    """Candidate đã vào ref: head là tổ tiên, hoặc mọi commit có bản vá tương đương (cherry-pick/squash 1 commit)."""
-    # ponytail: squash nhiều commit thành 1 không nhận ra được; nhận thêm merge commit khi có PR thật (ticket 06).
-    def git(*args):
-        return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, stdin=subprocess.DEVNULL)
-    if git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").returncode:
-        return False
-    if not git("merge-base", "--is-ancestor", candidate["head_sha"], ref).returncode:
-        return True
-    cherry = git("cherry", ref, candidate["head_sha"], candidate["base_sha"])
-    lines = cherry.stdout.split()
-    return not cherry.returncode and bool(lines) and "+" not in lines
+    def run(plan: dict, ticket_id: int, max_units: int, **kwargs) -> dict:
+        budget = Budget.from_env()
+        budget.max_units = max_units
+        return execute_pre_pr(plan, ticket_id=ticket_id, checkout_source=checkout_source or REPO_ROOT, deps=deps,
+                              budget=budget, run_gate=run_gate, cleanup=candidate.cleanup,
+                              memory_path=DEFAULT_PATH, **kwargs)
+    return run
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -657,10 +610,15 @@ def main(argv: list[str] | None = None) -> int:
         worker_id=default_worker_id(),
         version=os.getenv("AI_BOARD_WORKER_VERSION", "d0"),
         mode=args.mode,
-        planner=HarnessPlanner(tracer) if args.plan or args.execute else None,
-        change_runner=HarnessChangeRunner(tracer=tracer) if args.execute else None,
         tracer=tracer,
     )
+    # Cổng báo tiến độ qua worker.gate_started → event gate_started của run đang giữ lease.
+    if args.plan or args.execute:
+        worker.planner = HarnessPlanner(tracer, progress=worker.gate_started)
+    if args.execute:
+        import candidate
+        worker.change_runner = harness_change_runner(tracer=tracer, progress=worker.gate_started)
+        worker.candidates = candidate.Candidates(REPO_ROOT)
     while True:
         try:
             result = worker.run_once()

@@ -196,8 +196,8 @@ def check_file_path(subtask_file: str) -> None:
 
 
 def _ensure_scratch_repo(repo_dir: str | Path | None) -> Path:
-    """Repo git để diff thật vào — KHÔNG bao giờ là Tizia thật (deps.git còn
-    Unavailable ở ticket này). Không truyền repo_dir → tạo 1 thư mục tạm mới."""
+    """Repo git để diff thật vào — KHÔNG bao giờ là Tizia thật (nhánh trên repo thật
+    chỉ do candidate.py tạo). Không truyền repo_dir → tạo 1 thư mục tạm mới."""
     p = Path(repo_dir) if repo_dir else Path(tempfile.mkdtemp(prefix="ai-board-gate3-"))
     p.mkdir(parents=True, exist_ok=True)
     if not (p / ".git").exists():
