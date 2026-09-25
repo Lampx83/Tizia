@@ -814,3 +814,113 @@ def test_authorized_plan_is_executed_without_replanning():
     assert runs[0]['trigger'] == 'execute'
     assert seen == {'plan': {'goal': 'approved'}, 'budget_used': 0, 'policy_hash': POLICY['hash']}
     assert out['status'] == 'planned' and out['tier'] == 'protected'
+
+
+def test_gate_start_is_reported_as_an_idempotent_event():
+    import meter
+
+    transport = FakeTransport()
+    tracer = meter.Tracer(None)
+
+    def planner(_snapshot):
+        tracer.gate_started(2.5)
+        return {'goal': 'x'}, 0
+
+    HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1',
+               mode='shadow', planner=planner, tracer=tracer).run_once()
+    (event,) = [c[2] for c in transport.calls if c[1].endswith('/events') and c[2]['event_type'] == 'gate_started']
+    assert event['run_id'] == 11 and event['internal_detail'] == '{"gate": 2.5, "attempt": 0}'
+    assert event['idempotency_key'].endswith(':gate:0:2.5')
+
+
+def test_rollback_lease_runs_the_rollback_and_reports_failures():
+    candidate = {'branch': 'ai-board/2026-09-25-ticket-7-abc123', 'base_sha': 'a' * 40, 'head_sha': 'b' * 40}
+
+    class RollingBack(FakeTransport):
+        def __call__(self, method, path, payload, headers):
+            if path.endswith('/snapshot'):
+                self.calls.append((method, path, payload, headers))
+                return {'ticket': {'phase': 'rolling_back'}, 'rollback_candidate': candidate}
+            if path.endswith('/rollback'):
+                self.calls.append((method, path, payload, headers))
+                return {'status': 'cancelled', 'phase': 'rolled_back'}
+            return super().__call__(method, path, payload, headers)
+
+    class Runner:
+        def __init__(self, fail):
+            self.fail = fail
+
+        def __call__(self, *_args, **_kwargs):
+            raise AssertionError('a rollback must not run the gates')
+
+        def rollback(self, cand, ticket_id):
+            assert cand == candidate and ticket_id == 7
+            if self.fail:
+                raise OSError('git revert: conflict')
+            return {'outcome': 'discarded', 'detail': 'deleted'}
+
+    def planner(_snapshot):
+        raise AssertionError('a rollback must not plan')
+
+    for fail, outcome in ((False, 'discarded'), (True, 'failed')):
+        transport = RollingBack()
+        out = HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1',
+                         mode='active', planner=planner, change_runner=Runner(fail)).run_once()
+        runs = [c[2] for c in transport.calls if c[1].endswith('/runs')]
+        (sent,) = [c[2] for c in transport.calls if c[1].endswith('/rollback')]
+        assert runs[0]['trigger'] == 'rollback' and sent['run_id'] == 11 and sent['outcome'] == outcome
+        assert out['rollback'] == outcome
+    assert 'conflict' in sent['detail']
+
+
+def test_change_runner_rollback_deletes_unmerged_and_reverts_merged(tmp_path, monkeypatch):
+    import subprocess
+    from worker import HarnessChangeRunner
+
+    monkeypatch.setenv('PR_BASE_BRANCH', 'dev')
+    repo = tmp_path / 'source'
+    repo.mkdir()
+
+    def git(*args):
+        return subprocess.run(['git', '-c', 'user.name=T', '-c', 'user.email=t@example.invalid', *args], cwd=repo,
+                              check=True, capture_output=True, text=True, stdin=subprocess.DEVNULL).stdout.strip()
+
+    git('init', '-q', '-b', 'dev')
+    git('commit', '-q', '--allow-empty', '-m', 'base')
+    base = git('rev-parse', 'HEAD')
+
+    def make_candidate(name):
+        branch = f'ai-board/2026-09-25-{name}'
+        git('checkout', '-q', '-b', branch, base)
+        (repo / f'{name}.txt').write_text('x', encoding='utf-8')
+        git('add', f'{name}.txt')
+        git('commit', '-q', '-m', name)
+        head = git('rev-parse', 'HEAD')
+        git('checkout', '-q', 'dev')
+        return {'branch': branch, 'base_sha': base, 'head_sha': head}
+
+    runner = HarnessChangeRunner.__new__(HarnessChangeRunner)
+    runner.checkout_source = repo
+
+    unmerged = make_candidate('ticket-1-aaa111')
+    assert runner.rollback(unmerged, 1)['outcome'] == 'discarded'
+    assert git('branch', '--list', unmerged['branch']) == ''
+
+    merged = make_candidate('ticket-2-bbb222')
+    git('merge', '-q', '--no-ff', '-m', 'merge', merged['branch'])
+    out = runner.rollback(merged, 2)
+    assert out['outcome'] == 'revert_ready'
+    revert = out['revert']
+    assert revert['branch'].startswith('ai-board/') and '-ticket-2-revert-' in revert['branch']
+    assert revert['base_sha'] == git('rev-parse', 'dev') and revert['head_sha'] == git('rev-parse', revert['branch'])
+    assert revert['commits'][0]['files'] == ['ticket-2-bbb222.txt']
+    assert git('ls-tree', '--name-only', revert['branch']) == ''  # file removed on the revert branch
+    assert (repo / 'ticket-2-bbb222.txt').exists()  # dev itself untouched
+    assert git('worktree', 'list').count('\n') == 0  # temporary worktree removed
+
+    busy = make_candidate('ticket-3-ccc333')
+    git('worktree', 'add', '-q', str(tmp_path / 'preview'), busy['branch'])  # e.g. an admin preview checkout
+    import pytest
+    with pytest.raises(OSError, match='branch -D'):
+        runner.rollback(busy, 3)
+    assert git('branch', '--list', busy['branch']) != ''

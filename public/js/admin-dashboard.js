@@ -4,6 +4,7 @@
 // Auto-refresh 60s, vanilla — không phụ thuộc thư viện ngoài.
 
 import { DOMAIN_META } from './engine/domain.js';
+import { patchChildren } from './dom-morph.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
@@ -502,7 +503,7 @@ function renderRequests() {
 // Chi tiết yêu cầu trong cửa sổ con (dialog + iframe) ngay trên trang admin; Esc hoặc "Đóng" để thoát.
 function openRequestDialog(id) {
   const dlg = $('#req-dialog');
-  const url = `/admin-request.html?id=${id}&v=authorize`; // v: đổi khi trang con đổi (HTML cache 5 phút)
+  const url = `/admin-request.html?id=${id}&v=rollback`; // v: đổi khi trang con đổi (HTML cache 5 phút)
   $('#req-dialog-title').textContent = `Yêu cầu #${id}`;
   $('#req-dialog-frame').src = url;
   if (!dlg.open) dlg.showModal();
@@ -529,6 +530,8 @@ async function submitReply() {
   const status = $('#modal-status').value;
   const message = $('#modal-msg').value.trim();
   if (message.length < 4) return toast('Lời nhắn quá ngắn (≥4 ký tự)', 'err');
+  if (status === 'rejected' && (!confirm(`Từ chối và hủy yêu cầu #${id}? AI Board sẽ dừng xử lý yêu cầu này.`)
+    || !confirm(`Xác nhận lần 2: hủy yêu cầu #${id}. Không hoàn tác được.`))) return;
   const r = await api(`/api/admin/requests/${id}/reply`, { method:'POST', body: JSON.stringify({ status, message }) });
   if (!r.ok) return toast('Lỗi: ' + (r.data?.error || r.status), 'err');
   // /reply only updates the requests row; the AI Board status route also cancels the root, lease and alerts.
@@ -2074,40 +2077,6 @@ function autoRefresh() {
 function updateRequestBadge(count) {
   const tb = document.querySelector('.tab[data-k="requests"] .count');
   if (tb) tb.textContent = count;
-}
-
-// Vá cây DOM `from` cho giống `to`, giữ nguyên nút nào không đổi (vị trí cuộn, <details> đang mở, ô chọn,
-// biểu đồ không vẽ lại). Nút mới/khác loại thì lấy nút của bản render mới (đã gắn sẵn listener).
-function morph(from, to) {
-  if (from.nodeType !== to.nodeType || from.nodeName !== to.nodeName) return to;
-  if (from.nodeType !== 1) {
-    if (from.nodeValue !== to.nodeValue) from.nodeValue = to.nodeValue;
-    return from;
-  }
-  if (from.isEqualNode(to)) return from;
-  for (const a of [...from.attributes]) {
-    // `open` của <details> là trạng thái người dùng vừa bấm, không phải dữ liệu mới.
-    if (!to.hasAttribute(a.name) && !(a.name === 'open' && from.nodeName === 'DETAILS')) from.removeAttribute(a.name);
-  }
-  for (const a of [...to.attributes]) if (from.getAttribute(a.name) !== a.value) from.setAttribute(a.name, a.value);
-  const next = [...to.childNodes];
-  const prev = [...from.childNodes];
-  next.forEach((child, i) => {
-    if (!prev[i]) { from.appendChild(child); return; }
-    const kept = morph(prev[i], child);
-    if (kept !== prev[i]) prev[i].replaceWith(kept);
-  });
-  prev.slice(next.length).forEach(n => n.remove());
-  return from;
-}
-// host vừa được render mới; đưa nút cũ trở lại rồi vá theo bản mới — 1 khung hình, không nháy.
-function patchChildren(host, previous) {
-  const fresh = document.createElement('div');
-  fresh.append(...host.childNodes);
-  const old = document.createElement('div');
-  old.append(...previous);
-  morph(old, fresh);
-  host.append(...old.childNodes);
 }
 
 async function refresh({ silent = false } = {}) {

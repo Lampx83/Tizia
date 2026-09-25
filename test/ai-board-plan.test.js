@@ -177,6 +177,20 @@ test('protected plan waits for explicit admin authorization; core plan is human-
     assert.equal(db.prepare('SELECT status FROM ai_tickets WHERE id=?').get(ticket.id).status, 'planned');
     assert.equal(db.prepare('SELECT plan_hash FROM ai_runs WHERE id=?').get(execRun.id).plan_hash, waiting.plan_hash);
     assert.equal(store.resumeAuthorizedPlan(ticket.id, { workerId: 'planner', leaseToken: exec.lease_token, runId: execRun.id }).duplicate, true);
+    // The execute run has no gate 1/2/2.5 traces of its own; the planning run's count for the same plan.
+    const sha = (c) => c.repeat(40);
+    const verdict = store.submitPrePrVerdict(ticket.id, {
+      workerId: 'planner', leaseToken: exec.lease_token, runId: execRun.id, idempotencyKey: 'plan-verdict-exec-001',
+      verdict: {
+        outcome: 'ready_for_pr', gate_reached: 5.5, reason: null, budget_used: 10, failure_class: null, repairs: [],
+        candidate: { branch: 'ai-board/2026-09-25-ticket-1-abc123', base_sha: sha('a'), head_sha: sha('b'),
+          commits: [{ sha: sha('b'), title: 't', files: ['server/contexts/content/index.js'] }] },
+        gates: [{ gate: 3, blocked: false }, { gate: 4, blocked: false, issues: [] },
+          { gate: 5, blocked: false, smoke_passed: true, http_observed: true, runner: 'docker' },
+          { gate: 5.5, blocked: false, risk_level: 'medium', risk_signals: [] }],
+      },
+    });
+    assert.equal(verdict.outcome, 'ready_for_pr');
     db.close();
   }
   {

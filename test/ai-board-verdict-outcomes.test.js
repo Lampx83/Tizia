@@ -97,6 +97,38 @@ test('a repaired verdict records one review_fix child after the ordered children
   assert.equal(stored.candidate.branch, 'ai-board/2026-09-24-ticket-1');
 });
 
+test('admin rollback needs the typed request number, waits for a free lease, and only an active worker runs it', () => {
+  const { db, store, submit, ticket } = plannedRoot();
+  submit(passing());
+  assert.throws(() => store.requestRollback(1, { adminUserId: 9, confirm: '1' }), (e) => e.code === 'ticket_busy');
+  store.releaseLease(ticket.id, { workerId: 'w1', leaseToken: ticket.lease_token, outcome: 'planned',
+    idempotencyKey: 'outcome-release-001' });
+  assert.throws(() => store.requestRollback(1, { adminUserId: 9, confirm: '2' }), (e) => e.code === 'confirmation_required');
+  assert.equal(store.requestRollback(1, { adminUserId: 9, confirm: '#1' }).branch, candidate.branch);
+  assert.equal(store.requestRollback(1, { adminUserId: 9, confirm: '1' }).duplicate, true);
+
+  assert.equal(store.claimNext({ workerId: 'w1', mode: 'shadow', intent: 'plan' }), null);
+  const claim = store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' });
+  assert.equal(claim.phase, 'rolling_back');
+  const lease = { workerId: 'w1', leaseToken: claim.lease_token };
+  assert.equal(store.getLeasedSnapshot(ticket.id, 'w1', claim.lease_token).rollback_candidate.branch, candidate.branch);
+  const run = store.createRun(ticket.id, { ...lease, trigger: 'rollback', idempotencyKey: 'outcome-rollback-run' });
+  assert.throws(() => store.submitRollback(ticket.id, { ...lease, runId: run.id, outcome: 'revert_ready',
+    revert: { branch: 'main' } }), /candidate/);
+  assert.equal(store.submitRollback(ticket.id, { ...lease, runId: run.id, outcome: 'discarded' }).phase, 'rolled_back');
+  const root = db.prepare('SELECT status, phase, lease_owner FROM ai_tickets WHERE id=?').get(ticket.id);
+  assert.deepEqual({ ...root }, { status: 'cancelled', phase: 'rolled_back', lease_owner: null });
+  assert.equal(store.getRequestTrace(1).runs.at(-1).rollback.outcome, 'discarded');
+});
+
+test('rollback without a kept change is refused', () => {
+  const { store, submit, ticket } = plannedRoot();
+  submit(blocked(4, 'lint', 'ordinary'));
+  store.releaseLease(ticket.id, { workerId: 'w1', leaseToken: ticket.lease_token, outcome: 'planned',
+    idempotencyKey: 'outcome-release-002' });
+  assert.throws(() => store.requestRollback(1, { adminUserId: 9, confirm: '1' }), (e) => e.code === 'nothing_to_rollback');
+});
+
 test('a passing verdict needs gate 5 to have run on real docker', () => {
   for (const runner of ['fake', undefined]) {
     const { submit } = plannedRoot();

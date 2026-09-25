@@ -326,14 +326,23 @@ class HttpWorker:
 
         snapshot = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/snapshot", lease)
         self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/heartbeat", lease)
-        executing = (snapshot.get("ticket") or {}).get("phase") == "executing"
+        phase = (snapshot.get("ticket") or {}).get("phase")
+        trigger = {"executing": "execute", "rolling_back": "rollback"}.get(phase) or (
+            "plan" if self.planner else "shadow_precheck")
         run = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/runs", {
-            **lease, "trigger": "execute" if executing else "plan" if self.planner else "shadow_precheck",
-            "idempotency_key": f"{prefix}:run",
+            **lease, "trigger": trigger, "idempotency_key": f"{prefix}:run",
         })["run"]
         if self.tracer:
-            self.tracer.begin(run["id"], lambda calls: self.client.post(
-                f"/api/ai-board/worker/tickets/{ticket_id}/traces", {**lease, "run_id": run["id"], "calls": calls}))
+            self.tracer.begin(
+                run["id"],
+                lambda calls: self.client.post(
+                    f"/api/ai-board/worker/tickets/{ticket_id}/traces", {**lease, "run_id": run["id"], "calls": calls}),
+                on_gate=lambda gate, attempt: self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/events", {
+                    **lease, "run_id": run["id"], "event_type": "gate_started",
+                    "internal_detail": json.dumps({"gate": gate, "attempt": attempt}),
+                    "idempotency_key": f"{prefix}:gate:{attempt}:{gate}",
+                }),
+            )
         try:
             return self._run_leased(ticket_id, lease, prefix, snapshot, run)
         finally:
@@ -346,7 +355,26 @@ class HttpWorker:
             self.tracer.flush()
         return self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/release", payload)
 
+    def _rollback(self, ticket_id: int, lease: dict, snapshot: dict, run: dict) -> dict:
+        """Admin yêu cầu hoàn tác: bỏ nhánh candidate, hoặc tạo nhánh revert nếu đã merge. Lỗi → server chờ admin."""
+        candidate = snapshot.get("rollback_candidate")
+        try:
+            if not candidate:
+                raise ValueError("no candidate branch to roll back")
+            result = self._with_heartbeat(
+                lambda _lost: self.change_runner.rollback(candidate, ticket_id), ticket_id, lease)
+        except LeaseLostError:
+            raise
+        except Exception as error:  # noqa: BLE001 — git/IO: báo server, không để root kẹt 'running'
+            result = {"outcome": "failed", "detail": str(error)[:1000]}
+        done = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/rollback", {
+            **lease, "run_id": run["id"], **result,
+        })
+        return {"status": done["status"], "ticket_id": ticket_id, "run_id": run["id"], "rollback": result["outcome"]}
+
     def _run_leased(self, ticket_id: int, lease: dict, prefix: str, snapshot: dict, run: dict) -> dict:
+        if (snapshot.get("ticket") or {}).get("phase") == "rolling_back":
+            return self._rollback(ticket_id, lease, snapshot, run)
         # 'executing' = admin đã cho phép plan (tier protected): lượt này không lập plan lại mà chạy plan đã duyệt.
         executing = (snapshot.get("ticket") or {}).get("phase") == "executing"
         if not executing:
@@ -530,6 +558,44 @@ class HarnessChangeRunner:
             memory_path=self.memory_path, should_stop=should_stop,
         )
 
+    def rollback(self, candidate: dict, ticket_id: int) -> dict:
+        """Chưa merge: xóa nhánh candidate. Đã merge vào base: nhánh revert mới từ base, để người mở PR."""
+        from main import _git_out
+        repo, head = self.checkout_source, candidate["head_sha"]
+        base = os.getenv("PR_BASE_BRANCH", "dev")
+        refs = [ref for name in dict.fromkeys((base, "main")) for ref in (f"origin/{name}", name)]
+        merged_into = next((ref for ref in refs if _merged(repo, candidate, ref)), None)
+        if not merged_into:
+            deleted = subprocess.run(["git", "branch", "-D", candidate["branch"]], cwd=repo, capture_output=True,
+                                     text=True, stdin=subprocess.DEVNULL)
+            # Đã mất nhánh cũng coi như xong; còn nhánh (vd đang checkout ở 1 worktree) thì báo lỗi, không nói dối.
+            if not subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"refs/heads/{candidate['branch']}"],
+                                  cwd=repo, capture_output=True, stdin=subprocess.DEVNULL).returncode:
+                raise OSError(f"git branch -D {candidate['branch']}: {deleted.stderr.strip()[:300]}")
+            return {"outcome": "discarded", "detail": f"deleted unmerged branch {candidate['branch']}"}
+        branch = f"ai-board/{time.strftime('%Y-%m-%d')}-ticket-{ticket_id}-revert-{os.urandom(3).hex()}"
+        checkout = tempfile.mkdtemp(prefix="ai-board-revert-")
+        try:
+            _git_out(["worktree", "add", "-q", "-b", branch, checkout, merged_into], repo)
+            base_sha = _git_out(["rev-parse", "HEAD"], checkout).strip()
+            _git_out(["-c", "user.name=AI Board", "-c", "user.email=ai-board@tizia.local",
+                      "revert", "--no-edit", f"{candidate['base_sha']}..{head}"], checkout)
+            shas = _git_out(["rev-list", "--reverse", f"{base_sha}..HEAD"], checkout).split()
+            commits = [{"sha": sha, "title": _git_out(["log", "-1", "--format=%s", sha], checkout).strip(),
+                        "files": _git_out(["show", "--name-only", "--format=", sha], checkout).split()}
+                       for sha in shas]
+        except Exception:
+            subprocess.run(["git", "worktree", "remove", "--force", checkout], cwd=repo, capture_output=True,
+                           stdin=subprocess.DEVNULL)
+            subprocess.run(["git", "branch", "-D", branch], cwd=repo, capture_output=True, stdin=subprocess.DEVNULL)
+            raise
+        finally:
+            subprocess.run(["git", "worktree", "remove", "--force", checkout], cwd=repo, capture_output=True,
+                           stdin=subprocess.DEVNULL)
+            shutil.rmtree(checkout, ignore_errors=True)
+        return {"outcome": "revert_ready", "detail": f"{candidate['branch']} was merged into {merged_into}",
+                "revert": {"branch": branch, "base_sha": base_sha, "head_sha": shas[-1], "commits": commits}}
+
     def discard_candidate(self, verdict: dict) -> None:
         """Drop a candidate that could not be submitted under its lease."""
         candidate = verdict.get("candidate") or {}
@@ -537,6 +603,20 @@ class HarnessChangeRunner:
         if branch:
             subprocess.run(["git", "branch", "-D", branch], cwd=self.checkout_source,
                            capture_output=True, text=True, stdin=subprocess.DEVNULL, check=True)
+
+
+def _merged(repo, candidate: dict, ref: str) -> bool:
+    """Candidate đã vào ref: head là tổ tiên, hoặc mọi commit có bản vá tương đương (cherry-pick/squash 1 commit)."""
+    # ponytail: squash nhiều commit thành 1 không nhận ra được; nhận thêm merge commit khi có PR thật (ticket 06).
+    def git(*args):
+        return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    if git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").returncode:
+        return False
+    if not git("merge-base", "--is-ancestor", candidate["head_sha"], ref).returncode:
+        return True
+    cherry = git("cherry", ref, candidate["head_sha"], candidate["base_sha"])
+    lines = cherry.stdout.split()
+    return not cherry.returncode and bool(lines) and "+" not in lines
 
 
 def main(argv: list[str] | None = None) -> int:

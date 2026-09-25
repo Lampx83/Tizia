@@ -101,6 +101,17 @@ export function attachAiBoardRequestRoutes(router, {
     }
   });
 
+  router.post('/api/admin/ai-board/requests/:requestId/rollback', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
+    try {
+      res.json(store.requestRollback(req.params.requestId, { adminUserId: req.user.id, confirm: req.body?.confirm }));
+    } catch (error) {
+      if (error instanceof WorkerContractError) {
+        return res.status(error.status).json({ error: error.code, message: error.message });
+      }
+      throw error;
+    }
+  });
+
   router.post('/api/admin/ai-board/tickets/:id/authorize-plan', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
     try {
       res.json(store.authorizePlan(req.params.id, req.body?.plan_hash, req.user.id));
@@ -217,6 +228,13 @@ export function attachAiBoardWorkerRoutes(router, {
   router.post('/api/ai-board/worker/tickets/:id/resume-plan', authenticate, handle((req, res) => {
     const lease = leaseInput(req.body);
     res.json(store.resumeAuthorizedPlan(req.params.id, { ...lease, runId: req.body?.run_id }));
+  }));
+
+  router.post('/api/ai-board/worker/tickets/:id/rollback', authenticate, handle((req, res) => {
+    const lease = leaseInput(req.body);
+    res.json(store.submitRollback(req.params.id, {
+      ...lease, runId: req.body?.run_id, outcome: req.body?.outcome, revert: req.body?.revert, detail: req.body?.detail,
+    }));
   }));
 
   router.post('/api/ai-board/worker/tickets/:id/verdict', authenticate, handle((req, res) => {

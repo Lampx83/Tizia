@@ -275,6 +275,8 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
     giữa các cổng trong cùng 1 lượt (cổng 1 ghi plan, cổng 2 đọc). db_path/
     proposal_id (ticket 23) chỉ để gate_trace ghi trace — cổng nào không gọi
     model (2, 4, 5.5) không cần và không dùng tới 2 tham số này."""
+    if getattr(deps, "trace", None):
+        deps.trace.gate_started(number)
     if number == 1:
         # Guardrail yêu cầu trước khi lập plan: tất định rồi LLM; chỉ leo thang tới người soát, không tự duyệt.
         g = intake_guard.run(request.get("subject"), request.get("body"), deps, budget,

@@ -11,11 +11,19 @@ const REQUEST_TYPES = new Set(['game', 'theory', 'lab', 'skill', 'other']);
 const REQUEST_STATUSES = new Set(['pending', 'reviewing', 'done', 'rejected']);
 const WORKER_MODES = new Set(['off', 'shadow', 'active']);
 const CLAIM_INTENTS = new Set(['precheck', 'plan']);
-const RUN_TRIGGERS = new Set(['shadow_precheck', 'plan', 'execute']);
+const RUN_TRIGGERS = new Set(['shadow_precheck', 'plan', 'execute', 'rollback']);
 const EVENT_TYPES = new Set([
   'shadow_precheck_passed', 'shadow_precheck_failed', 'plan_validated',
-  'plan_blocked', 'heartbeat', 'lease_released',
+  'plan_blocked', 'heartbeat', 'lease_released', 'gate_started',
 ]);
+// Queued phases only an active worker may pick up, and the phase its lease runs under.
+const ACTIVE_PHASE = { authorized: 'executing', executing: 'executing', rollback: 'rolling_back', rolling_back: 'rolling_back' };
+const ROLLBACK_PHASES = new Set(['rollback', 'rolling_back', 'rolled_back', 'revert_ready']);
+const ROLLBACK_OUTCOMES = {
+  discarded: ['cancelled', 'rolled_back', 'Thay đổi của yêu cầu này đã được hoàn tác theo quyết định của quản trị viên.'],
+  revert_ready: ['waiting_admin', 'revert_ready', 'Đã tạo nhánh hoàn tác; chờ con người merge.'],
+  failed: ['waiting_admin', 'rollback_failed', 'Hoàn tác chưa thực hiện được; chờ quản trị viên xem xét.'],
+};
 const PRE_PR_GATES = new Set([3, 4, 5, 5.5]);
 const PRE_PR_SEQUENCE = [3, 4, 5, 5.5];
 const FAILURE_CLASSES = new Set(['ordinary', 'transient', 'critical', 'budget', 'plan']);
@@ -425,10 +433,12 @@ export function createAiBoardStore(db, hooks = {}) {
       WHERE t.kind='root' AND r.owner_state='verified'
         AND ((t.status='queued' AND (
               t.phase IN ('intake', 'needs_replan')
-              OR (? = 'plan' AND (t.phase = 'shadow_checked' OR (t.phase = 'authorized' AND ? = 'active')))
+              OR (? = 'plan' AND t.phase IN ('shadow_checked', 'authorized', 'rollback'))
             ))
           OR (t.status='running' AND t.lease_expires_at<=?)
           OR (? = 'plan' AND t.lease_token IS NOT NULL AND t.lease_expires_at<=?))
+        -- Chạy plan đã duyệt và hoàn tác chỉ worker 'active' làm được, kể cả khi cứu lease hết hạn.
+        AND (? = 'active' OR t.phase NOT IN ('authorized', 'executing', 'rollback', 'rolling_back'))
         -- 1 request = 1 phiên worker từ đầu đến cuối: root quay lại hàng đợi chỉ về worker cũ, trừ khi
         -- worker đó đã quá 1 lease không liên lạc. Root mất lease giữa chừng thì worker nào cũng cứu được.
         AND (t.status <> 'queued' OR NOT EXISTS (
@@ -436,12 +446,12 @@ export function createAiBoardStore(db, hooks = {}) {
           WHERE ar.id = (SELECT MAX(id) FROM ai_runs WHERE ticket_id = t.id AND trigger <> 'shadow_precheck')
             AND ar.worker_id <> ? AND aw.last_seen_at > ?))
         ORDER BY t.priority DESC, t.created_at ASC LIMIT 1
-    `).get(intent, mode, now, intent, now, workerId, now - leaseMs);
+    `).get(intent, now, intent, now, mode, workerId, now - leaseMs);
     if (!candidate) return null;
     const token = randomBytes(24).toString('hex');
     const expires = now + leaseMs;
-    // 'executing': plan đã duyệt, lượt này bỏ qua lập plan và chạy thẳng các cổng thực hiện.
-    const phase = candidate.phase === 'authorized' ? 'executing' : intent === 'plan' ? 'planning' : 'shadow_precheck';
+    // 'executing': plan đã duyệt, bỏ qua lập plan. 'rolling_back': hoàn tác thay đổi đã giữ lại.
+    const phase = ACTIVE_PHASE[candidate.phase] || (intent === 'plan' ? 'planning' : 'shadow_precheck');
     db.prepare(`
       UPDATE ai_tickets SET status='running', phase=?, lease_owner=?,
         lease_token=?, lease_expires_at=?, lease_mode=?, updated_at=? WHERE id=?
@@ -463,6 +473,15 @@ export function createAiBoardStore(db, hooks = {}) {
     return claimTransaction({ workerId, version: String(version).slice(0, 80), mode, intent, now, leaseMs });
   }
 
+  // Nhánh candidate của verdict qua kiểm tra gần nhất (thứ admin có thể hoàn tác).
+  function latestCandidate(rootId) {
+    const row = db.prepare(`
+      SELECT evidence_json FROM ai_runs WHERE ticket_id=? AND outcome IN ('ready_for_pr', 'needs_review')
+      ORDER BY id DESC LIMIT 1
+    `).get(rootId);
+    return parseJson(row?.evidence_json)?.verdict?.candidate ?? null;
+  }
+
   function getLeasedSnapshot(ticketId, workerId, leaseToken, now = Date.now()) {
     const ticket = assertLease(ticketId, workerId, leaseToken, now);
     const request = db.prepare(`
@@ -477,6 +496,7 @@ export function createAiBoardStore(db, hooks = {}) {
     return {
       ticket: { ...ticket, lease_token: undefined }, request: { ...request, attachments: parseAttachments(request.attachments) },
       thread, capability_policy: CAPABILITY_CATALOG,
+      ...(ticket.phase === 'rolling_back' ? { rollback_candidate: latestCandidate(ticket.id) } : {}),
     };
   }
 
@@ -817,9 +837,11 @@ export function createAiBoardStore(db, hooks = {}) {
     `).get(root.id, plan.plan_hash, plan.revision)) {
       throw new WorkerContractError('protected plan requires authorization', 409, 'authorization_required');
     }
+    // Any run of this plan revision: an authorized protected plan executes in a later run than it was planned in.
     const precheckGates = new Set(db.prepare(`
-      SELECT gate FROM ai_gate_traces WHERE run_id=? AND status='passed' AND gate IN (1, 2, 2.5)
-    `).all(run.id).map((row) => Number(row.gate)));
+      SELECT g.gate FROM ai_gate_traces g JOIN ai_runs r ON r.id=g.run_id
+      WHERE r.ticket_id=? AND r.plan_hash=? AND r.plan_revision=? AND g.status='passed' AND g.gate IN (1, 2, 2.5)
+    `).all(root.id, plan.plan_hash, plan.revision).map((row) => Number(row.gate)));
     if (![1, 2, 2.5].every((gate) => precheckGates.has(gate))) {
       throw new WorkerContractError('pre-PR verdict requires plan guardrail traces', 409, 'plan_trace_required');
     }
@@ -992,6 +1014,63 @@ export function createAiBoardStore(db, hooks = {}) {
     return cancelRequestTransaction(requestId, ownerUserId, now);
   }
 
+  const requestRollbackTransaction = db.transaction((requestId, adminUserId, now) => {
+    const root = db.prepare('SELECT * FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL').get(requestId);
+    if (!root) throw new WorkerContractError('ticket not found', 404, 'ticket_not_found');
+    if (ROLLBACK_PHASES.has(root.phase)) return { ok: true, status: root.status, phase: root.phase, duplicate: true };
+    // Status stays 'planned' while gates 3→5.5 run, so a live lease is what means "working".
+    if (root.lease_token && root.lease_expires_at > now) {
+      throw new WorkerContractError('AI Board is working on this request; cancel it to stop the work', 409, 'ticket_busy');
+    }
+    const candidate = latestCandidate(root.id);
+    if (!candidate) throw new WorkerContractError('no kept change to roll back', 409, 'nothing_to_rollback');
+    const note = 'Quản trị viên yêu cầu hoàn tác thay đổi; đang chờ AI Board.';
+    db.prepare(`
+      UPDATE ai_tickets SET status='queued', phase='rollback', public_note=?, internal_reason=NULL,
+        lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE id=?
+    `).run(note, now, root.id);
+    const attempt = db.prepare(`SELECT COUNT(*) n FROM ai_events WHERE ticket_id=? AND event_type='rollback_requested'`).get(root.id).n;
+    insertEvent.run(root.id, 'rollback_requested', 'admin', String(adminUserId), `${root.status}->queued`, note,
+      JSON.stringify({ branch: candidate.branch, head_sha: candidate.head_sha }), `rollback-requested:${root.id}:${attempt + 1}`, now);
+    return { ok: true, status: 'queued', phase: 'rollback', branch: candidate.branch };
+  });
+
+  // Xác nhận lần 2 kiểm ở server: admin phải gõ đúng số yêu cầu.
+  function requestRollback(requestId, { adminUserId, confirm, now = Date.now() }) {
+    if (String(confirm ?? '').trim().replace(/^#/, '') !== String(Number(requestId))) {
+      throw new WorkerContractError('type the request number to confirm', 400, 'confirmation_required');
+    }
+    return requestRollbackTransaction(Number(requestId), adminUserId, now);
+  }
+
+  const submitRollbackTransaction = db.transaction((ticketId, input) => {
+    const root = assertLease(ticketId, input.workerId, input.leaseToken, input.now);
+    if (root.phase !== 'rolling_back') throw new WorkerContractError('ticket is not rolling back', 409, 'not_rolling_back');
+    const run = db.prepare('SELECT id FROM ai_runs WHERE id=? AND ticket_id=?').get(Number(input.runId), root.id);
+    if (!run) throw new WorkerContractError('run does not belong to ticket');
+    const next = ROLLBACK_OUTCOMES[input.outcome];
+    if (!next) throw new WorkerContractError('invalid rollback outcome');
+    const revert = input.outcome === 'revert_ready' ? validateCandidate(input.revert) : null;
+    const detail = String(input.detail || '').slice(0, 1000) || null;
+    const [status, phase, note] = next;
+    db.prepare('UPDATE ai_runs SET evidence_json=?, failure_reason=?, updated_at=? WHERE id=?')
+      .run(JSON.stringify({ rollback: { outcome: input.outcome, revert, detail } }),
+        input.outcome === 'failed' ? detail : null, input.now, run.id);
+    db.prepare(`
+      UPDATE ai_tickets SET status=?, phase=?, public_note=?, internal_reason=?,
+        lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE id=?
+    `).run(status, phase, note, detail, input.now, root.id);
+    db.prepare(`UPDATE ai_workers SET status='idle', current_ticket_id=NULL, updated_at=? WHERE current_ticket_id=?`)
+      .run(input.now, root.id);
+    insertEvent.run(root.id, 'rollback_done', 'worker', input.workerId, `running->${status}`, note,
+      JSON.stringify({ outcome: input.outcome, branch: revert?.branch ?? null, detail }), `rollback-done:${run.id}`, input.now);
+    return { status, phase, outcome: input.outcome, revert };
+  });
+
+  function submitRollback(ticketId, input) {
+    return submitRollbackTransaction(Number(ticketId), { ...input, now: input.now ?? Date.now() });
+  }
+
   // One ai_gate_traces row per model call: status='model_call', internal_reason=call_id (idempotency key per run).
   const recordModelCallsTransaction = db.transaction((ticketId, input) => {
     assertLease(ticketId, input.workerId, input.leaseToken, input.now);
@@ -1021,10 +1100,12 @@ export function createAiBoardStore(db, hooks = {}) {
 
   function getRequestTrace(requestId) {
     const root = db.prepare(`
-      SELECT id, status, phase, cumulative_budget, budget_limit, public_note, internal_reason, plan_hash
+      SELECT id, status, phase, cumulative_budget, budget_limit, public_note, internal_reason, plan_hash,
+             lease_owner, lease_expires_at
       FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL
     `).get(Number(requestId));
     if (!root) return null;
+    root.live = !!root.lease_owner && root.lease_expires_at > Date.now(); // 1 worker đang giữ lease = đang xử lý
     const children = db.prepare(`
       SELECT id, title, status, sequence AS "order", plan_revision FROM ai_tickets
       WHERE parent_id=? ORDER BY plan_revision, sequence, id
@@ -1037,11 +1118,11 @@ export function createAiBoardStore(db, hooks = {}) {
     const allCalls = [];
     // ai_runs has no status column; the verdict outcome (null until one lands) is the run's status.
     const runs = db.prepare(`
-      SELECT r.id, r.attempt, r.trigger, r.outcome AS status, r.gate, r.created_at, r.updated_at, r.worker_id,
+      SELECT r.id, r.attempt, r.trigger, r.outcome AS status, r.gate, r.created_at, r.updated_at, r.worker_id, r.evidence_json,
              w.mode AS worker_mode, w.version AS worker_version, w.last_seen_at AS worker_last_seen
       FROM ai_runs r LEFT JOIN ai_workers w ON w.worker_id = r.worker_id
       WHERE r.ticket_id=? ORDER BY r.created_at, r.id
-    `).all(root.id).map((run) => {
+    `).all(root.id).map(({ evidence_json: runEvidence, ...run }) => {
       const gates = [];
       const calls = [];
       for (const { run_id: runId, evidence_json: json, ...row } of traces) {
@@ -1052,7 +1133,7 @@ export function createAiBoardStore(db, hooks = {}) {
       allCalls.push(...calls);
       // Ngân sách tính theo lượt: mỗi run có trần budget_limit riêng.
       const budgetUsed = calls.reduce((sum, c) => sum + (Number(c.evidence?.budget_units) || 0), 0);
-      return { ...run, gates, calls, totals: summarizeCalls(calls.map((c) => c.evidence)),
+      return { ...run, rollback: parseJson(runEvidence)?.rollback ?? null, gates, calls, totals: summarizeCalls(calls.map((c) => c.evidence)),
         budget_used: budgetUsed, budget_limit: root.budget_limit };
     });
     const evidences = allCalls.map((c) => c.evidence);
@@ -1076,7 +1157,7 @@ export function createAiBoardStore(db, hooks = {}) {
       WHERE t.id=? OR t.parent_id=? ORDER BY e.created_at, e.id
     `).all(root.id, root.id);
     return {
-      root, plan, children, runs, events,
+      root, plan, children, runs, events, candidate: latestCandidate(root.id),
       totals: {
         ...summarizeCalls(evidences),
         by_model: Object.fromEntries(Object.entries(byModel).map(([model, list]) => [model, summarizeCalls(list)])),
@@ -1172,6 +1253,8 @@ export function createAiBoardStore(db, hooks = {}) {
     listAdminQueue,
     listWorkers,
     cancelRequest,
+    requestRollback,
+    submitRollback,
     recordModelCalls,
     getRequestTrace,
     claimNext,
