@@ -30,6 +30,7 @@ from budget import Budget          # noqa: E402
 from dbconn import harness_db      # noqa: E402
 import gate_trace                  # noqa: E402
 import meter                       # noqa: E402
+import context                     # noqa: E402
 from gates import brainstorm, guard, implement, plan_validate, risk_triage, scope_check, static_check, verify  # noqa: E402
 from models import OllamaClient    # noqa: E402
 import prescreen                   # noqa: E402
@@ -143,8 +144,11 @@ class Deps:
     def _trace(self, gate, model, prompt, prompt_name, output, metrics, n, result, error, child, iteration):
         if self.trace is None:
             return
+        prefix = _static_prefix(prompt_name)
+        if prompt_name and prompt.startswith(context.manual()):
+            prefix = context.manual() + prefix  # AIBOARD.md luôn đứng đầu, cũng là phần cố định
         self.trace.record(gate=gate, model=model, prompt=prompt, prompt_name=prompt_name,
-                          prompt_hash=_PROMPT_LOCK.get(prompt_name), static_prefix=_static_prefix(prompt_name),
+                          prompt_hash=_PROMPT_LOCK.get(prompt_name), static_prefix=prefix,
                           output=output, metrics=metrics, budget_units=n, result=result, error=error,
                           child=child, iteration=iteration)
 

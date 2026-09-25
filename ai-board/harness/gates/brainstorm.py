@@ -123,7 +123,7 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             break
         ask = prompt if not attempt else prompt + RETRY_SUFFIX.format(reason=reason)
         body = deps.call_model(deps.models.gate1_model, ask, gate=1, budget=budget,
-                               db_path=db_path, proposal_id=proposal_id)
+                               db_path=db_path, proposal_id=proposal_id, prompt_name="brainstorm.md")
         try:
             plan = parse_plan(body.get("response", ""))
             check_files(plan, source, commit)

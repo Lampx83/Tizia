@@ -80,9 +80,10 @@ def run_case(name: str, case: dict, model: str, base: Deps) -> dict:
     content = written.read_text(encoding="utf-8") if written.exists() else ""
     calls = tracer.records
     total = lambda key: sum((c["metrics"].get(key) or 0) for c in calls)  # noqa: E731
+    passed = bool(content) and not out.get("blocked") and case["oracle"](content)
     return {
-        "case": name, "model": model, "gate_passed": not out.get("blocked"),
-        "oracle": bool(content) and not out.get("blocked") and case["oracle"](content),
+        "case": name, "model": model, "gate_passed": not out.get("blocked"), "oracle": passed,
+        "last_output": None if passed or not calls else calls[-1]["output"][:1500],
         "reason": out.get("reason"), "calls": len(calls),
         "retries": sum(c["result"] == "retry" for c in calls),
         "gpu_s": round(total("gpu_ms") / 1000, 1), "wall_s": round(time.monotonic() - started, 1),

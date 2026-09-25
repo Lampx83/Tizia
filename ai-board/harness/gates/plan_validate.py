@@ -217,7 +217,7 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
 
     prompt = build_prompt(request, plan)
     body = deps.call_model(deps.models.gate1_model, prompt, gate=2.5, budget=budget,
-                            db_path=db_path, proposal_id=proposal_id)
+                            db_path=db_path, proposal_id=proposal_id, prompt_name="plan_validate.md")
 
     try:
         validation = parse_validation(body.get("response", ""))

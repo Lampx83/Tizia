@@ -350,8 +350,8 @@ def test_lessons_from_past_verdicts_are_added_to_the_prompt(tmp_path):
     implement.run({"plan": plan_with(["features"]), "checkout_source": str(source), "memory_path": str(lessons)},
                   deps_with(models), Budget(max_wall_clock_s=999), repo_dir=tmp_path / "scratch")
     existing_prompt = models.calls[1]["prompt"]
-    assert "BÀI HỌC" in existing_prompt and "does not match checkout" in existing_prompt
-    assert "BÀI HỌC" not in models.calls[0]["prompt"]  # other file, no keyword match
+    assert "does not match checkout" in existing_prompt  # qua tool lessons của skill
+    assert "does not match checkout" not in models.calls[0]["prompt"]  # other file, no keyword match
 
 
 def test_test_file_outside_test_dir_is_a_repairable_model_mistake(tmp_path):

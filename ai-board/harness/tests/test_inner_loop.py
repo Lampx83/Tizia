@@ -118,3 +118,10 @@ def test_search_tolerates_indentation_drift_but_stays_unique():
     else:
         raise AssertionError("khớp nhiều chỗ phải lỗi")
 
+
+
+def test_insert_after_body_close_is_retried_with_the_right_line(tmp_path):
+    after_body = {**GOOD, "edits": [{"after_line": 6, "insert": "<p>Mới.</p>"}]}
+    out, prompts = _run(tmp_path, SeqModels([after_body, GOOD]))
+    assert out["blocked"] is False and len(prompts) == 2
+    assert "sau </body>" in prompts[1] and "after_line 5" in prompts[1]

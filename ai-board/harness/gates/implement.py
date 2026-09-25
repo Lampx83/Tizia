@@ -15,10 +15,12 @@ import tempfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import codegraph
+import context as repo_context
 import file_context
 import memory
 
 ROOT = Path(__file__).resolve().parents[3]
+_EXCERPT_LINE = re.compile(r"^L\d+\| ", re.M)
 
 
 def _git(args: list[str], cwd: Path, **kw) -> subprocess.CompletedProcess:
@@ -74,7 +76,8 @@ def build_prompt(subtask: dict, repair_reason: str | None = None, context: str |
     """Prompt CHỈ từ 1 subtask — không plan, không subtask khác. Đây là cơ chế
     (không phải quy ước) đảm bảo context mới hoàn toàn mỗi lần gọi. Ngữ cảnh
     file, bài học cũ, lý do repair nối SAU prefix đã khoá, prefix giữ nguyên byte."""
-    prompt = PROMPT.format(title=subtask["title"], file=subtask["file"], verify=subtask["verify"])
+    prompt = repo_context.manual() + PROMPT.format(title=subtask["title"], file=subtask["file"],
+                                                   verify=subtask["verify"])
     if context is not None:
         prompt += CONTEXT_SUFFIX.format(file=subtask["file"], context=context)
     if lessons:
@@ -161,6 +164,9 @@ def check_output(out: dict, current: str | None, done_reason: str | None) -> dic
         raise ValueError("output bị cắt vì quá dài; chỉ trả các edit cần thiết, test ngắn")
     if current is not None:
         out["code"] = file_context.apply_edits(current, out["edits"])
+        if "</body>" in current and out["code"].rsplit("</body>", 1)[-1] != current.rsplit("</body>", 1)[-1]:
+            line = current[:current.rindex("</body>")].count("\n") + 1
+            raise ValueError(f"nội dung bị chèn sau </body> (dòng L{line}); chèn trước nó: after_line {line - 1}")
     test_file = posixpath.normpath(out["test_file"].replace("\\", "/"))
     if not test_file.startswith(("test/", "tests/")):
         raise ValueError(f"test_file '{out['test_file']}' phải nằm trong test/")
@@ -279,6 +285,14 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
         context = None if current is None else file_prompt_context(
             subtask, current, _siblings(state["checkout_source"], state["base_sha"], subtask["file"]), words)
         lessons = memory.recall(state["memory_path"], subtask["file"], words) if state.get("memory_path") else []
+        if current is not None:
+            # Skill chọn tool (grep `Lnn|`, dàn ý, bài học) trên base sha. Không có trích dòng → giữ excerpt cũ.
+            ctx = repo_context.build_context(
+                3, {"subject": subtask["title"], "body": state.get("request_detail") or subtask["verify"]},
+                subtask, state["checkout_source"], state["base_sha"], memory_path=state.get("memory_path"))
+            if _EXCERPT_LINE.search(ctx["text"]):
+                context = context.split("\n", 1)[0] + "\n" + ctx["text"]
+                lessons = []  # skill đã kèm tool lessons
         prompt = build_prompt(subtask, state.get("repair_reason"), context, lessons)
         feedback = ""
         trace = getattr(deps, "trace", None)

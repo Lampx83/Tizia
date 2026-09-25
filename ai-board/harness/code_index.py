@@ -305,7 +305,7 @@ def refresh_notes(changed_files: list[str], deps, budget_files: int = 5, *, budg
         for attempt in range(2):
             ask = prompt if attempt == 0 else prompt + f"\n\nLẦN TRƯỚC SAI: {error}. Chỉ dùng anchor có trong DÀN Ý."
             body = deps.call_model(deps.models.gate1_model, ask, gate=1, budget=budget,
-                                   db_path=db_path, proposal_id=proposal_id)
+                                   db_path=db_path, proposal_id=proposal_id, prompt_name="note_refresh.md")
             try:
                 note = parse_note(body.get("response", ""), anchors(entry))
                 break
