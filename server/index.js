@@ -1280,7 +1280,7 @@ r.get('/api/export.csv', (_req, res) => {
 // Page muốn opt-out: thêm thuộc tính tương ứng vào <body>:
 //   data-no-auth-header, data-no-notifications-bell, data-no-suggestion-fab.
 // Tránh phải sửa thủ công 59+ file.
-const HEADER_TAG = `<script type="module" src="js/auth-header.js"></script>`;
+const HEADER_TAG = `<script type="module" src="js/auth-header.js?v=admin-role"></script>`;
 // ?v=attach2 — cache-bust khi nâng UX đính kèm (preview thumbnail, kéo-thả, dán
 // ảnh, lọc loại, chống trùng + siết whitelist bỏ SVG). Bump mỗi lần đổi UX FAB.
 const SGF_TAG = `<script type="module" src="js/suggestion-fab.js?v=cancel-csrf"></script>\n<script type="module" src="js/notifications-bell.js"></script>`;
@@ -1304,7 +1304,8 @@ r.get(/.*/, async (req, res, next) => {
   try {
     const html = await fs.readFile(file, 'utf8');
     // Tránh nhúng trùng nếu trang đã include sẵn auth-header.js / analytics.js.
-    const hasHeader = /auth-header\.js/i.test(html);
+    // data-no-auth-header: trang không cần header (vd cửa sổ con chi tiết góp ý) → không nạp header lẫn gamify đi kèm.
+    const hasHeader = /auth-header\.js/i.test(html) || /<body[^>]*\bdata-no-auth-header\b/i.test(html);
     const hasAnalytics = /\banalytics\.js/i.test(html);
     const tags =
       (hasAnalytics ? '' : ANALYTICS_TAG + '\n')

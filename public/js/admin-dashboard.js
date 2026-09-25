@@ -407,6 +407,8 @@ const REQUEST_TYPE_LABEL = { game: 'Trò chơi', theory: 'Lý thuyết / học l
 const REQUEST_STATUS_LABEL = { pending: 'Chờ xử lý', reviewing: 'Đang xử lý', done: 'Hoàn thành',
   rejected: 'Từ chối', cancelled: 'Đã hủy' };
 const ROLE_NAME = { admin: 'Quản trị', teacher: 'Giảng viên', student: 'Sinh viên', pupil: 'Học sinh', parent: 'Phụ huynh' };
+// Nút Góp ý chèn dòng đầu "[Trang: …] /đường-dẫn" làm ngữ cảnh; cột nội dung chỉ hiện lời người yêu cầu.
+const requestBody = (detail) => String(detail || '').replace(/^\[Trang:[^\n]*\n?/, '').trim();
 // Màu ticket AI: xanh = qua kiểm tra trước PR, cam = chờ người, đỏ = chặn/hủy.
 function aiTone(t) {
   if (t.phase === 'pre_pr_ready') return 'ai-ok';
@@ -450,7 +452,7 @@ function renderRequests() {
           <td>${r.id}</td>
           <td><span class="pill">${esc(r.domain)}</span></td>
           <td style="max-width:260px">${esc(r.title)}</td>
-          <td><div class="req-detail" title="${esc(r.detail || '')}">${esc(r.detail || '—')}</div></td>
+          <td><div class="req-detail" title="${esc(r.detail || '')}">${esc(requestBody(r.detail) || '—')}</div></td>
           <td title="${esc(r.type)}">${esc(REQUEST_TYPE_LABEL[r.type] || r.type)}</td>
           <td>${esc(r.student)}</td>
           <td>${esc(ROLE_NAME[r.requester_role] || r.requester_role || '—')}</td>
@@ -500,7 +502,7 @@ function renderRequests() {
 // Chi tiết yêu cầu trong cửa sổ con (dialog + iframe) ngay trên trang admin; Esc hoặc "Đóng" để thoát.
 function openRequestDialog(id) {
   const dlg = $('#req-dialog');
-  const url = `/admin-request.html?id=${id}`;
+  const url = `/admin-request.html?id=${id}&v=no-header`; // v: đổi khi trang con đổi (HTML cache 5 phút)
   $('#req-dialog-title').textContent = `Yêu cầu #${id}`;
   $('#req-dialog-frame').src = url;
   if (!dlg.open) dlg.showModal();

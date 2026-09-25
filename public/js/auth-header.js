@@ -20,6 +20,7 @@ import './tts-reader.js';
 import './feature-gate.js';
 
 const ROLE_LABEL = {
+  admin:   { ico: '🛡️', label: 'Quản trị' },
   pupil:   { ico: '🎒', label: 'Học sinh' },
   student: { ico: '🎓', label: 'Sinh viên' },
   teacher: { ico: '👨‍🏫', label: 'Giảng viên' },

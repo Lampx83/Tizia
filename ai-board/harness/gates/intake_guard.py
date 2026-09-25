@@ -85,7 +85,7 @@ def classify(title: str, detail: str, deps, budget, *, db_path=None, proposal_id
     prompt = PROMPT.format(title=_fence(title, MAX_TITLE), detail=_fence(detail, MAX_DETAIL) or "(trống)")
     try:
         body = deps.call_model(deps.models.gate1_model, prompt, gate=1, budget=budget,
-                               db_path=db_path, proposal_id=proposal_id)
+                               db_path=db_path, proposal_id=proposal_id, prompt_name="intake_guard.md")
         text = body.get("response", "")
         labels = parse_labels(text)
     except Exception as e:  # model sập/timeout/JSON sai — fail closed, không bao giờ auto-approve
