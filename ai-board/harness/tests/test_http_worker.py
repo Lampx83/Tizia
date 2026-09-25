@@ -762,3 +762,21 @@ def test_trace_posts_are_split_under_the_server_body_limit():
     tracer.flush()
     assert len(batches) == 3
     assert all(len(json.dumps(b, ensure_ascii=False).encode()) < 64 * 1024 for b in batches)
+
+
+def test_pending_traces_are_sent_before_the_lease_is_released():
+    import meter
+
+    transport = FakeTransport()
+    tracer = meter.Tracer(None)
+
+    def planner(_snapshot):
+        tracer.record(gate=2.5, model='qwen3:8b', prompt='p', prompt_name=None, prompt_hash=None,
+                      static_prefix='', output='{}', metrics={}, budget_units=1, result='ok')
+        return {'goal': 'x'}, 1
+
+    worker = HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1',
+                        mode='shadow', planner=planner, tracer=tracer)
+    worker.run_once()
+    paths = [call[1].rsplit('/', 1)[-1] for call in transport.calls]
+    assert paths.index('traces') < paths.index('release')

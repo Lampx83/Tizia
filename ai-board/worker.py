@@ -339,6 +339,12 @@ class HttpWorker:
             if self.tracer:
                 self.tracer.flush()
 
+    def _release(self, ticket_id: int, payload: dict) -> dict:
+        """Gửi nốt trace còn đệm khi còn lease (sau release server trả 409 stale_lease), rồi trả lease."""
+        if self.tracer:
+            self.tracer.flush()
+        return self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/release", payload)
+
     def _run_leased(self, ticket_id: int, lease: dict, prefix: str, snapshot: dict, run: dict) -> dict:
         self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/events", {
             **lease, "run_id": run["id"], "event_type": "shadow_precheck_passed",
@@ -366,7 +372,7 @@ class HttpWorker:
                     "internal_detail": detail,
                     "idempotency_key": f"{prefix}:plan-blocked",
                 })
-                self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/release", {
+                self._release(ticket_id, {
                     **lease, "outcome": "waiting", "internal_detail": detail,
                     "idempotency_key": f"{prefix}:release-blocked",
                 })
@@ -398,7 +404,7 @@ class HttpWorker:
                         if discard:
                             discard(candidate)
                     raise
-            self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/release", {
+            self._release(ticket_id, {
                 **lease, "outcome": "planned", "idempotency_key": f"{prefix}:release",
             })
             result = {
@@ -408,7 +414,7 @@ class HttpWorker:
             if verdict is not None:
                 result["pre_pr_verdict"] = verdict
             return result
-        self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/release", {
+        self._release(ticket_id, {
             **lease, "outcome": "shadow_ok", "idempotency_key": f"{prefix}:release",
         })
         return {"status": "shadow_ok", "ticket_id": ticket_id, "run_id": run["id"]}
