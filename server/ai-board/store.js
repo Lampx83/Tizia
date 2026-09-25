@@ -7,11 +7,14 @@ import { CAPABILITY_CATALOG, PlanGuardrailError, validatePlan } from './policy.j
 export { PlanGuardrailError } from './policy.js';
 
 const MIGRATIONS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'migrations');
+// Worker <-> server contract, shared with ai-board/worker.py.
+export const CONTRACT = JSON.parse(fs.readFileSync(new URL('./contract.json', import.meta.url), 'utf8'));
+const KEY = new RegExp(CONTRACT.idempotency_key_pattern);
 const REQUEST_TYPES = new Set(['game', 'theory', 'lab', 'skill', 'other']);
 const REQUEST_STATUSES = new Set(['pending', 'reviewing', 'done', 'rejected']);
 const WORKER_MODES = new Set(['off', 'shadow', 'active']);
 const CLAIM_INTENTS = new Set(['precheck', 'plan']);
-const RUN_TRIGGERS = new Set(['shadow_precheck', 'plan', 'execute', 'rollback']);
+const RUN_TRIGGERS = new Set(CONTRACT.run_triggers);
 const EVENT_TYPES = new Set([
   'shadow_precheck_passed', 'shadow_precheck_failed', 'plan_validated',
   'plan_blocked', 'heartbeat', 'lease_released', 'gate_started',
@@ -24,17 +27,17 @@ const ROLLBACK_OUTCOMES = {
   revert_ready: ['waiting_admin', 'revert_ready', 'Đã tạo nhánh hoàn tác; chờ con người merge.'],
   failed: ['waiting_admin', 'rollback_failed', 'Hoàn tác chưa thực hiện được; chờ quản trị viên xem xét.'],
 };
-const PRE_PR_GATES = new Set([3, 4, 5, 5.5]);
-const PRE_PR_SEQUENCE = [3, 4, 5, 5.5];
-const FAILURE_CLASSES = new Set(['ordinary', 'transient', 'critical', 'budget', 'plan']);
-const MAX_REPAIRS = 1; // same bound as ai-board/worker.py MAX_REPAIRS
+const PRE_PR_GATES = new Set(CONTRACT.gates.pre_pr);
+const PRE_PR_SEQUENCE = CONTRACT.gates.pre_pr;
+const FAILURE_CLASSES = new Set(CONTRACT.failure_classes);
+const MAX_REPAIRS = CONTRACT.max_repairs;
 const MAX_BUDGET_EXTENSION = 200;
 // ponytail: fixed D0 ceilings from the hardening spec; make them admin config only if real tickets hit them.
 const MAX_BUDGET_LIMIT = 600; // hard ceiling across all extensions of one root
 const MAX_BUDGET_EXTENSIONS = 2;
 const SHA = /^[0-9a-f]{40}$/;
 export const LEASE_MS = 120_000; // worker lease; also the admin view's stale threshold
-const AI_BRANCH = /^ai-board\/\d{4}-\d{2}-\d{2}-[a-z0-9-]{1,60}$/;
+const AI_BRANCH = new RegExp(CONTRACT.branch_pattern);
 
 function validateCandidate(value) {
   const commits = Array.isArray(value?.commits) ? value.commits : [];
@@ -105,7 +108,7 @@ function parseAttachments(value) {
 }
 
 function validatePrePrVerdict(value) {
-  if (!value || typeof value !== 'object' || !['ready_for_pr', 'needs_review', 'blocked'].includes(value.outcome)) {
+  if (!value || typeof value !== 'object' || !CONTRACT.verdict_outcomes.includes(value.outcome)) {
     throw new WorkerContractError('invalid pre-PR verdict');
   }
   if (!Array.isArray(value.gates) || value.gates.length < 1 || value.gates.length > 4) {
@@ -306,7 +309,7 @@ export function createAiBoardStore(db, hooks = {}) {
     const title = String(input.title || '').trim();
     if (title.length < 4) throw new RequestValidationError('title is too short');
     const idempotencyKey = String(input.idempotencyKey || '').trim();
-    if (!/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) throw new RequestValidationError('invalid idempotency key');
+    if (!KEY.test(idempotencyKey)) throw new RequestValidationError('invalid idempotency key');
     return createRequestTransaction({
       ...input,
       ownerUserId: Number(input.ownerUserId),
@@ -525,7 +528,7 @@ export function createAiBoardStore(db, hooks = {}) {
 
   function createRun(ticketId, input) {
     const idempotencyKey = String(input.idempotencyKey || '');
-    if (!/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) throw new WorkerContractError('invalid idempotency key');
+    if (!KEY.test(idempotencyKey)) throw new WorkerContractError('invalid idempotency key');
     return createRunTransaction(ticketId, { ...input, idempotencyKey, now: input.now ?? Date.now() });
   }
 
@@ -552,7 +555,7 @@ export function createAiBoardStore(db, hooks = {}) {
 
   function recordWorkerEvent(ticketId, input) {
     const idempotencyKey = String(input.idempotencyKey || '');
-    if (!/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) throw new WorkerContractError('invalid idempotency key');
+    if (!KEY.test(idempotencyKey)) throw new WorkerContractError('invalid idempotency key');
     return recordWorkerEventTransaction(ticketId, { ...input, idempotencyKey, now: input.now ?? Date.now() });
   }
 
@@ -595,7 +598,7 @@ export function createAiBoardStore(db, hooks = {}) {
 
   function releaseLease(ticketId, input) {
     const idempotencyKey = String(input.idempotencyKey || '');
-    if (!/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) throw new WorkerContractError('invalid idempotency key');
+    if (!KEY.test(idempotencyKey)) throw new WorkerContractError('invalid idempotency key');
     return releaseTransaction(ticketId, { ...input, idempotencyKey, now: input.now ?? Date.now() });
   }
 
@@ -795,7 +798,7 @@ export function createAiBoardStore(db, hooks = {}) {
 
   function submitPlan(ticketId, input) {
     const idempotencyKey = String(input.idempotencyKey || '');
-    if (!/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) throw new WorkerContractError('invalid idempotency key');
+    if (!KEY.test(idempotencyKey)) throw new WorkerContractError('invalid idempotency key');
     const budgetUsed = Number(input.budgetUsed ?? 0);
     if (!Number.isFinite(budgetUsed) || budgetUsed < 0) throw new WorkerContractError('invalid budget');
     const now = input.now ?? Date.now();
@@ -921,7 +924,7 @@ export function createAiBoardStore(db, hooks = {}) {
 
   function submitPrePrVerdict(ticketId, input) {
     const idempotencyKey = String(input.idempotencyKey || '');
-    if (!/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) throw new WorkerContractError('invalid idempotency key');
+    if (!KEY.test(idempotencyKey)) throw new WorkerContractError('invalid idempotency key');
     const verdict = validatePrePrVerdict(input.verdict);
     return submitPrePrVerdictTransaction(Number(ticketId), {
       ...input, idempotencyKey, now: input.now ?? Date.now(),

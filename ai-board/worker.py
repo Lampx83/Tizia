@@ -20,6 +20,12 @@ from typing import Any, Callable
 
 
 Transport = Callable[[str, str, dict, dict], dict]
+# Worker <-> server contract, shared with server/ai-board/store.js.
+CONTRACT = json.loads((Path(__file__).resolve().parents[1] / "server" / "ai-board" / "contract.json")
+                      .read_text(encoding="utf-8"))
+PLAN_GATES = tuple(CONTRACT["gates"]["plan"])
+PRE_PR_GATES = tuple(CONTRACT["gates"]["pre_pr"])
+DEFAULT_BUDGET_LIMIT = CONTRACT["default_budget_limit"]
 
 
 class LeaseLostError(RuntimeError):
@@ -88,7 +94,7 @@ def _public_gate_result(result: dict) -> dict:
     return out
 
 
-MAX_REPAIRS = 1  # ponytail: one repair child per verdict; server enforces the same bound
+MAX_REPAIRS = CONTRACT["max_repairs"]  # server enforces the same bound
 
 
 def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate, cleanup,
@@ -113,7 +119,7 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
     kind = None
     lease_lost = False
     try:
-        for gate in (3, 4, 5, 5.5):
+        for gate in PRE_PR_GATES:
             if should_stop and should_stop():  # lease revoked, e.g. the requester cancelled
                 raise LeaseLostError(f"lease revoked before gate {gate}")
             retried = False
@@ -422,7 +428,7 @@ class HttpWorker:
                     lambda lost: self.change_runner(
                         plan, ticket_id, budget_used,
                         int(ticket_row.get("cumulative_budget") or 0),
-                        int(ticket_row.get("budget_limit") or 200),
+                        int(ticket_row.get("budget_limit") or DEFAULT_BUDGET_LIMIT),
                         # {} when missing: fails the hash check closed instead of skipping the catalog.
                         policy=snapshot.get("capability_policy") or {},
                         accepted_policy_hash=planned.get("capability_policy_hash"),
@@ -518,9 +524,9 @@ class HarnessPlanner:
         budget = self.Budget.from_env()
         budget.max_model_calls = min(budget.max_model_calls, 5)
         ticket = snapshot.get("ticket") or {}
-        budget.max_units = int(ticket.get("budget_limit") or 200)  # trần mỗi lượt, không trừ các lượt trước
+        budget.max_units = int(ticket.get("budget_limit") or DEFAULT_BUDGET_LIMIT)  # trần mỗi lượt, không trừ các lượt trước
         state = {}
-        for gate in (1, 2, 2.5):
+        for gate in PLAN_GATES:
             result = self.run_gate(gate, request, self.deps, budget, state)
             if result.get("blocked"):
                 raise PlanBlockedError(f"gate {gate} blocked: {result.get('reason')}", {

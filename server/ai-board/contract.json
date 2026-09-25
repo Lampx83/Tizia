@@ -1,0 +1,18 @@
+{
+  "_comment": "Worker <-> server contract. Read by server/ai-board/store.js and ai-board/worker.py; change here only.",
+  "gates": {
+    "plan": [1, 2, 2.5],
+    "pre_pr": [3, 4, 5, 5.5],
+    "names": { "1": "Lập plan", "2": "Phạm vi", "2.5": "Soát plan", "3": "Sinh code", "4": "Kiểm tĩnh + guard", "5": "Chạy Docker", "5.5": "Đánh giá rủi ro" }
+  },
+  "verdict_outcomes": ["ready_for_pr", "needs_review", "blocked"],
+  "failure_classes": ["ordinary", "transient", "critical", "budget", "plan"],
+  "run_triggers": ["shadow_precheck", "plan", "execute", "rollback"],
+  "rollback_outcomes": ["discarded", "revert_ready", "failed"],
+  "max_repairs": 1,
+  "default_budget_limit": 200,
+  "branch_prefix": "ai-board/",
+  "branch_slug_max": 60,
+  "branch_pattern": "^ai-board/\\d{4}-\\d{2}-\\d{2}-[a-z0-9-]{1,60}$",
+  "idempotency_key_pattern": "^[A-Za-z0-9._:-]{8,128}$"
+}
