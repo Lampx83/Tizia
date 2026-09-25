@@ -88,37 +88,44 @@ export const MODULES = [
     scenarioIds: ['S6GDDP-w01-quiz'], knowledgeQuiz: 'S6GDDP-w01-quiz', minStarsToUnlock: 0,
     description: '36 tuần GDĐP Hà Nội (HK1: vị trí–dân cư–lịch sử Thăng Long, danh nhân, khởi nghĩa. HK2: ẩm thực–làng nghề–lễ hội–đô thị thông minh).' },
 
-  // ──────────────── LỚP 7 — 12 môn × 35 tuần ────────────────
+  // ──────────────── LỚP 7 · 8 · 9 — 12 môn mỗi lớp ────────────────
   ...((() => {
     // Helper compact tạo module S7/S8/S9 — 12 môn mỗi lớp, mirror cấu trúc S6 nhưng dùng prefix mới.
     const yLvl = { S7: 2, S8: 3, S9: 4 };
     const yMin = { S7: 8,  S8: 12, S9: 16 };
     const yPrev = { S7: 'S6TOAN', S8: 'S7TOAN', S9: 'S8TOAN' };
+    // Số tuần THẬT của từng môn — đếm trực tiếp trong public/js/scenarios/lopN/ (2026-09-25).
+    // Lớp 8 và lớp 9: cả 12/12 môn đã đủ 36 tuần. Lớp 7: 6 môn dưới đây còn dừng ở 35 tuần
+    // (tuần 36 chưa soạn) nên phải ghi đúng 35, không gộp chung một con số cho cả ba lớp.
+    // Con số này CHỈ dùng để hiển thị: loader liệt kê scenario theo prefix id, không theo số tuần.
+    const WEEKS_35 = new Set(['S7CN', 'S7GDDP', 'S7GDTC', 'S7HDTN', 'S7NT', 'S7TIN']);
+    const weeksOf = (id) => (WEEKS_35.has(id) ? 35 : 36);
     const subjects = [
-      ['TOAN',  'Toán',                'toan',           '35 tuần (số hữu tỉ, đa thức, phương trình, hình học)' ],
-      ['NV',    'Ngữ văn',             'ngu-van',        '35 tuần (thơ-truyện-nghị luận theo CT mới)' ],
-      ['TA',    'Tiếng Anh',           'tieng-anh',      '35 tuần (Global Success)' ],
-      ['KHTN',  'Khoa học tự nhiên',   'khtn',           '35 tuần (lý-hoá-sinh tích hợp)' ],
-      ['LSDL',  'Lịch sử & Địa lý',    'lich-su-dia',    '35 tuần (LS thế giới-VN + ĐL khu vực)' ],
-      ['GDCD',  'Giáo dục công dân',   'gdcd',           '35 tuần (đạo đức, pháp luật, kỹ năng sống)' ],
-      ['CN',    'Công nghệ',           'cong-nghe',      '35 tuần (theo định hướng nghề)' ],
-      ['TIN',   'Tin học',             'tin-hoc',        '35 tuần (mạng, văn bản, bảng tính, thuật toán)' ],
-      ['GDTC',  'GD thể chất',         'gdtc',           '35 tuần (chạy-nhảy-bóng-cầu-võ)' ],
-      ['NT',    'Nghệ thuật',          'nghe-thuat',     '35 tuần (Âm nhạc + Mỹ thuật)' ],
-      ['HDTN',  'HĐ trải nghiệm',      'hdtn',           '35 tuần (4 mạch GDPT 2018)' ],
-      ['GDDP',  'GD địa phương',       'gd-dia-phuong',  '35 tuần (lịch sử-văn hoá địa phương)' ],
+      ['TOAN',  'Toán',                'toan',           '(số hữu tỉ, đa thức, phương trình, hình học)' ],
+      ['NV',    'Ngữ văn',             'ngu-van',        '(thơ-truyện-nghị luận theo CT mới)' ],
+      ['TA',    'Tiếng Anh',           'tieng-anh',      '(Global Success)' ],
+      ['KHTN',  'Khoa học tự nhiên',   'khtn',           '(lý-hoá-sinh tích hợp)' ],
+      ['LSDL',  'Lịch sử & Địa lý',    'lich-su-dia',    '(LS thế giới-VN + ĐL khu vực)' ],
+      ['GDCD',  'Giáo dục công dân',   'gdcd',           '(đạo đức, pháp luật, kỹ năng sống)' ],
+      ['CN',    'Công nghệ',           'cong-nghe',      '(theo định hướng nghề)' ],
+      ['TIN',   'Tin học',             'tin-hoc',        '(mạng, văn bản, bảng tính, thuật toán)' ],
+      ['GDTC',  'GD thể chất',         'gdtc',           '(chạy-nhảy-bóng-cầu-võ)' ],
+      ['NT',    'Nghệ thuật',          'nghe-thuat',     '(Âm nhạc + Mỹ thuật)' ],
+      ['HDTN',  'HĐ trải nghiệm',      'hdtn',           '(4 mạch GDPT 2018)' ],
+      ['GDDP',  'GD địa phương',       'gd-dia-phuong',  '(lịch sử-văn hoá địa phương)' ],
     ];
     const out = [];
     for (const grade of ['S7', 'S8', 'S9']) {
       for (const [code, label, subj, desc] of subjects) {
         const id = grade + code;
+        const weeks = weeksOf(id);
         out.push({
-          category: 'curriculum', id, title: `${label} lớp ${grade[1]} (35 tuần)`,
+          category: 'curriculum', id, title: `${label} lớp ${grade[1]} (${weeks} tuần)`,
           yearLevel: yLvl[grade], subject: subj,
           scenarioIds: [`${id}-w01-quiz`], knowledgeQuiz: `${id}-w01-quiz`,
           minStarsToUnlock: code === 'TOAN' ? yMin[grade] : 0,
           ...(code === 'TOAN' ? { prerequisites: [yPrev[grade]] } : {}),
-          description: desc,
+          description: `${weeks} tuần ${desc}`,
         });
       }
     }

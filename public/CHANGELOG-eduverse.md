@@ -4,6 +4,90 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-25 — Phiên 72 · THCS **ĐÓNG TRỌN cấp 2**: hồi sinh 30 bài lí thuyết "chết" của Lớp 7, Lớp 8 và Lớp 9
+
+**Kết luận về hộp thư:** vẫn **không đọc được** (ngày thứ 13) ⇒ **không xử lý được yêu cầu nào của người học**, không bịa ra yêu cầu. Phiên này tiếp tục việc đã đo được từ phiên 58: học liệu đã viết xong nhưng học sinh **không bao giờ nhìn thấy**. Hôm nay đóng nốt 3 khối còn lại của cấp THCS ⇒ **lớp 6→9 không còn bài lí thuyết mồ côi nào**.
+
+### Đo thật hôm nay (2026-09-25)
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `GET /api/health` | `200` — `{"ok":true,"service":"tizia",…,"env":"production"}`, uptime ~40 giờ, node v20.20.2 |
+| `GET /api/ai-board/inbox` | `401 {"error":"unauthorized","needLogin":true}` ⇒ auth gate chung vẫn nuốt request, **PR #97 chưa merge + deploy** |
+| `GET /api/requests` · `/api/requests?domain=it` · `/api/ai-board/requests` · `/api/admin/requests` · `/api/board/inbox` · `/api/public/requests` | tất cả `401 needLogin` — không còn đường đọc nào cho phiên tự động |
+| `AI_BOARD_KEY` trong môi trường routine | **vẫn chưa có** |
+| `node scripts/check-deployed-build.mjs` | production chạy MỘT commit trong nhóm `d98a086` (2026-06-08) .. `40fd384` (2026-07-24) trên nhánh `feat/postgres-migration` — trễ **64–110 ngày**, nhánh **không chung gốc lịch sử** với `main`; bằng chứng hành vi xác nhận **chưa có route hộp thư** |
+| `node scripts/check-content-integrity.mjs` (trước) | **66** bài lí thuyết mồ côi |
+| `node scripts/check-content-integrity.mjs` (sau) | **36** — giảm 30, **toàn bộ cấp THCS về 0** |
+
+**Nguyên nhân 30 bài chết (cùng một lỗi với phiên 70 và 71):** bài lí thuyết **tuần 36** ("Kết thúc … — Hành trang vào lớp sau") đã được viết với key `<PREFIX>-w36-quiz`, nhưng file scenario của môn đó **chỉ có 35 tuần** — không có quiz tuần 36 để bài lí thuyết gắn vào. Cơ chế gắn là tra cứu đúng id (`if (LOPn_LESSONS[id]) sc.lesson = …` trong `lopN/_index.js`), nên key không khớp = nội dung biến mất im lặng và `node --check` không bắt được.
+
+### Việc đã làm — 30 môn thuộc 3 khối
+
+Bổ sung **tuần 36** vào 30 file scenario, mỗi tuần **6 câu hỏi** đúng format chung (`Q(stem, 4 lựa chọn, đáp án, giải thích, theory[], 4 choiceFeedback)`), nội dung **bám đúng bài lí thuyết tuần 36 đã có sẵn** của môn đó.
+
+**Lớp 7 (6/12 môn — 6 môn còn lại chưa có bài lí thuyết tuần 36)** — `public/js/scenarios/lop7/`
+
+| File | Tuần 36 mới | Bài lí thuyết được hồi sinh |
+|---|---|---|
+| `toan.js` | Kết thúc Toán 7 — Hành trang vào lớp 8 | `S7TOAN-w36-quiz` |
+| `ngu-van.js` | Kết thúc Ngữ Văn 7 — Ngôn ngữ và tâm hồn bước vào lớp 8 | `S7NV-w36-quiz` |
+| `tieng-anh.js` | Closing Year — Grade 7 English & the Road to Grade 8 | `S7TA-w36-quiz` |
+| `khtn.js` | Kết thúc KHTN 7 — Ba khoa học, một hành trình | `S7KHTN-w36-quiz` |
+| `lich-su-dia.js` | Kết thúc Lịch Sử & Địa Lý 7 — Thế giới và Việt Nam trong tầm tay | `S7LSDL-w36-quiz` |
+| `gdcd.js` | Kết thúc GDCD 7 — Công dân trẻ vững bước vào lớp 8 | `S7GDCD-w36-quiz` |
+
+**Lớp 8 (12/12 môn)** — `public/js/scenarios/lop8/`
+
+| File | Tuần 36 mới | Bài lí thuyết được hồi sinh |
+|---|---|---|
+| `toan.js` | Kết thúc Toán 8 — Hành trang vào lớp 9 | `S8TOAN-w36-quiz` |
+| `ngu-van.js` | Kết thúc Ngữ Văn 8 — Ngôn ngữ và tâm hồn bước vào lớp 9 | `S8NV-w36-quiz` |
+| `tieng-anh.js` | Closing Year — Grade 8 English & the Road to Grade 9 | `S8TA-w36-quiz` |
+| `khtn.js` | Kết thúc KHTN 8 — Ba ngành khoa học, một hành trình | `S8KHTN-w36-quiz` |
+| `lich-su-dia.js` | Kết thúc Lịch Sử & Địa Lý 8 — Việt Nam trên hành trình lịch sử và địa lý | `S8LSDL-w36-quiz` |
+| `gdcd.js` | Kết thúc GDCD 8 — Công dân trẻ với đạo đức và pháp luật | `S8GDCD-w36-quiz` |
+| `cong-nghe.js` | Kết thúc Công Nghệ 8 — Từ bản vẽ đến mạch điện | `S8CN-w36-quiz` |
+| `tin-hoc.js` | Kết thúc Tin Học 8 — Tư duy lập trình bước vào kỉ nguyên số | `S8TIN-w36-quiz` |
+| `gdtc.js` | Kết thúc GDTC 8 — Thể chất khoẻ mạnh, tinh thần vững vàng | `S8GDTC-w36-quiz` |
+| `nghe-thuat.js` | Kết thúc Nghệ Thuật 8 — Âm nhạc & Mỹ thuật nuôi dưỡng tâm hồn | `S8NT-w36-quiz` |
+| `hdtn.js` | Kết thúc HĐTN 8 — Trưởng thành qua từng trải nghiệm | `S8HDTN-w36-quiz` |
+| `gd-dia-phuong.js` | Kết thúc GD Địa Phương 8 — Hà Nội ngàn năm trong tim | `S8GDDP-w36-quiz` |
+
+**Lớp 9 (12/12 môn)** — `public/js/scenarios/lop9/`
+
+| File | Tuần 36 mới | Bài lí thuyết được hồi sinh |
+|---|---|---|
+| `toan.js` | Kết thúc Toán THCS — Nhìn lại hành trình | `S9TOAN-w36-quiz` |
+| `ngu-van.js` | Kết thúc Ngữ Văn THCS — Hành trình của những con chữ | `S9NV-w36-quiz` |
+| `tieng-anh.js` | Kết thúc Tiếng Anh THCS — Keep Going Forward! | `S9TA-w36-quiz` |
+| `khtn.js` | Kết thúc KHTN THCS — Khoa học là hành trình, không phải đích đến | `S9KHTN-w36-quiz` |
+| `lich-su-dia.js` | Kết thúc Lịch sử – Địa lí THCS — Đất nước nhìn từ quá khứ và không gian | `S9LSDL-w36-quiz` |
+| `gdcd.js` | Kết thúc GDCD THCS — Người công dân tốt bắt đầu từ đây | `S9GDCD-w36-quiz` |
+| `cong-nghe.js` | Kết thúc Công nghệ THCS — Đôi tay tạo nên tương lai | `S9CN-w36-quiz` |
+| `tin-hoc.js` | Kết thúc Tin học THCS — Tư duy số cho thế kỉ 21 | `S9TIN-w36-quiz` |
+| `gdtc.js` | Kết thúc GDTC THCS — Sức khoẻ là nền tảng của mọi thành công | `S9GDTC-w36-quiz` |
+| `nghe-thuat.js` | Kết thúc Nghệ thuật THCS — Hành trình của cái đẹp | `S9NT-w36-quiz` |
+| `hdtn.js` | Kết thúc HĐTN THCS — Lễ bế giảng trong tim | `S9HDTN-w36-quiz` |
+| `gd-dia-phuong.js` | Kết thúc Giáo dục địa phương — Người trẻ của mảnh đất này | `S9GDDP-w36-quiz` |
+
+### Sửa mô tả module cho khớp thực tế
+
+`public/js/domains/secondary/modules.js`: trước đây **36 module S7/S8/S9 đều bị ghi cứng "35 tuần"** trong cả `title` và `description`. Nay số tuần được lấy từ một bảng đếm THẬT (`weeksOf()`): **lớp 8 và lớp 9 = 36 tuần (24/24 môn)**, **lớp 7 = 36 tuần cho 6 môn đã có tuần 36** và **35 tuần cho 6 môn chưa có** (`S7CN`, `S7GDDP`, `S7GDTC`, `S7HDTN`, `S7NT`, `S7TIN`). Không gộp một con số chung cho cả ba lớp như phiên trước vì lớp 7 chưa đủ 12/12 môn.
+
+Không đổi logic: module loader liệt kê scenario theo prefix id, không dùng con số tuần nào.
+
+### Kiểm thử (chạy thật)
+
+- `node --check` **pass** cho **31/31** file đã sửa (30 scenario + `modules.js`).
+- `node scripts/check-content-integrity.mjs`: **66 → 36** bài mồ côi; lop7/lop8/lop9 **không còn mục nào**. Phần còn lại (36) là THPT lop10–12, để dành cho các phiên sau.
+- Kiểm tra **runtime** (không chỉ cú pháp): import thật 3 barrel `lopN/_index.js`, xác nhận **30/30** scenario tuần 36 nạp được, **có `lesson` gắn vào**, `week === 36`, mỗi câu đủ **4 lựa chọn không trùng nhau**, `answer` nằm trong 0..3, đủ **4 `choiceFeedback`** và có `theory`. 0 lỗi.
+- Soát chéo **180 câu mới**: không có stem trùng trong cùng tuần; `choiceFeedback` của đáp án đúng luôn mở đầu "Đúng/Correct", của lựa chọn sai luôn mở đầu "Sai/No" ⇒ **không có câu nào lệch index `answer`**. 0 lỗi.
+- Import `public/js/scenarios/_all-content.js`: **5384** scenario nạp được, không lỗi.
+- Runtime `domains/secondary/modules.js`: 36 module S7–S9 sinh đúng — **30 module ghi "36 tuần"**, **6 module lớp 7 ghi "35 tuần"**.
+
+---
+
 ## 2026-09-24 — Phiên 71 · Tiểu học **ĐÓNG TRỌN cấp 1**: hồi sinh 32 bài lí thuyết "chết" của Lớp 1, Lớp 3 và Lớp 5
 
 **Kết luận về hộp thư:** vẫn **không đọc được** (ngày thứ 12) ⇒ **không xử lý được yêu cầu nào của người học**, không bịa ra yêu cầu. Phiên này tiếp tục việc đã đo được từ phiên 58: học liệu đã viết xong nhưng học sinh **không bao giờ nhìn thấy**. Hôm nay đóng nốt 3 khối còn lại của cấp Tiểu học ⇒ **lớp 1→5 không còn bài lí thuyết mồ côi nào**.
