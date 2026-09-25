@@ -130,6 +130,48 @@ function renderEvents(events) {
   }).join('')}</div>`;
 }
 
+const TIER_LABEL = { surface: 'bề mặt (tự chạy)', protected: 'được bảo vệ (cần admin cho phép)', core: 'lõi (chỉ người làm)' };
+
+// Kế hoạch hiện hành; tier protected đang chờ thì admin xem bước + phạm vi rồi bấm cho phép.
+function renderPlan(p, root) {
+  if (!p) return '';
+  const plan = p.plan || {};
+  const waiting = root.status === 'waiting_authorization' && !p.authorized;
+  const state = p.authorized || p.tier === 'surface' ? 'ok' : waiting ? 'warn' : 'idle';
+  const label = p.tier === 'surface' ? 'không cần duyệt' : p.authorized ? 'đã được cho phép' : 'chờ admin cho phép';
+  return `<h2>Kế hoạch (bản ${esc(p.revision)})</h2>
+    <div class="blk"><div class="line1" style="display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center">
+      <b>${esc(plan.goal || '')}</b> ${tag(state, label)}<span class="meta">tier ${esc(TIER_LABEL[p.tier] || p.tier)} · rủi ro ${esc(plan.risk || '—')}</span></div>
+      <div class="meta" style="margin-top:4px">Phạm vi: ${(plan.allowed_scope || []).map(esc).join(', ') || '—'} · quyền: ${(plan.capabilities || []).map(esc).join(', ') || '—'}</div>
+      <div class="timeline" style="margin-top:8px">${(plan.steps || []).map(st => `<div class="step st-idle"><div class="line1">
+        <b>${esc(st.title)}</b><span class="meta">${esc(st.capability)} · ${(st.allowed_scope || []).map(esc).join(', ')} · rủi ro ${esc(st.risk)}</span></div>
+        ${st.acceptance?.length ? `<div class="meta">Chấp nhận khi: ${st.acceptance.map(esc).join('; ')}</div>` : ''}</div>`).join('')}</div>
+      ${waiting ? `<button class="approve" id="authorize-plan" data-root="${esc(root.id)}" data-hash="${esc(p.plan_hash)}">Cho phép thực hiện kế hoạch</button>
+        <span class="meta" id="authorize-msg"></span>` : ''}
+    </div>`;
+}
+
+async function authorizePlan(btn) {
+  if (!confirm('Cho phép AI Board thực hiện kế hoạch này? Worker sẽ chạy các cổng 3 → 5.5 trên plan đã duyệt.')) return;
+  btn.disabled = true;
+  const msg = $('#authorize-msg');
+  try {
+    const { token } = await fetch('/api/csrf', { credentials: 'same-origin' }).then(r => r.json());
+    const r = await fetch(`/api/admin/ai-board/tickets/${encodeURIComponent(btn.dataset.root)}/authorize-plan`, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
+      body: JSON.stringify({ plan_hash: btn.dataset.hash }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.message || data.error || r.status);
+    msg.textContent = 'Đã cho phép; worker sẽ nhận ở lượt tới.';
+    setTimeout(() => location.reload(), 800);
+  } catch (e) {
+    btn.disabled = false;
+    msg.textContent = `Không cho phép được: ${e.message}`;
+  }
+}
+
 function renderAiBoard(t) {
   const x = t.totals || {};
   const unit = x.budget_unit === 'k_tokens' ? 'nghìn token' : 'GPU-s';
@@ -148,6 +190,7 @@ function renderAiBoard(t) {
       <span>Nạp model: <b>${esc(x.model_loads)}</b></span>
       <span>Hỏi lại: <b>${esc(x.retries)}</b></span>
     </div>
+    ${renderPlan(t.plan, root)}
     ${t.children.length ? `<div class="blk">${t.children.map(c =>
       `<div>Bước ${esc(c.order)} · #${esc(c.id)} · ${esc(c.title)} · <span class="pill">${esc(c.status)}</span></div>`).join('')}</div>` : ''}
     <h2>Phiên xử lý</h2>
@@ -185,6 +228,7 @@ async function main() {
     ${renderDecisions(decisions.data?.decisions || [])}
     ${trace.ok ? renderAiBoard(trace.data) : '<h2>AI Board</h2><div class="blk meta">Yêu cầu này chưa có ticket AI Board.</div>'}
   `;
+  $('#authorize-plan')?.addEventListener('click', e => authorizePlan(e.currentTarget));
 }
 
 main().catch(e => { if (e.message !== 'login') $('#app').innerHTML = `<p class="err">Lỗi: ${esc(e.message)}</p>`; });

@@ -326,8 +326,9 @@ class HttpWorker:
 
         snapshot = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/snapshot", lease)
         self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/heartbeat", lease)
+        executing = (snapshot.get("ticket") or {}).get("phase") == "executing"
         run = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/runs", {
-            **lease, "trigger": "plan" if self.planner else "shadow_precheck",
+            **lease, "trigger": "execute" if executing else "plan" if self.planner else "shadow_precheck",
             "idempotency_key": f"{prefix}:run",
         })["run"]
         if self.tracer:
@@ -346,13 +347,21 @@ class HttpWorker:
         return self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/release", payload)
 
     def _run_leased(self, ticket_id: int, lease: dict, prefix: str, snapshot: dict, run: dict) -> dict:
-        self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/events", {
-            **lease, "run_id": run["id"], "event_type": "shadow_precheck_passed",
-            "public_message": "Đã kiểm tra yêu cầu; đang chờ lập kế hoạch.",
-            "internal_detail": "HTTP shadow precheck completed",
-            "idempotency_key": f"{prefix}:event",
-        })
-        if self.planner:
+        # 'executing' = admin đã cho phép plan (tier protected): lượt này không lập plan lại mà chạy plan đã duyệt.
+        executing = (snapshot.get("ticket") or {}).get("phase") == "executing"
+        if not executing:
+            self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/events", {
+                **lease, "run_id": run["id"], "event_type": "shadow_precheck_passed",
+                "public_message": "Đã kiểm tra yêu cầu; đang chờ lập kế hoạch.",
+                "internal_detail": "HTTP shadow precheck completed",
+                "idempotency_key": f"{prefix}:event",
+            })
+        if self.planner and executing:
+            planned = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/resume-plan", {
+                **lease, "run_id": run["id"],
+            })
+            plan, budget_used = planned["plan"], 0
+        if self.planner and not executing:
             try:
                 plan, budget_used = self._with_heartbeat(lambda _lost: self.planner(snapshot), ticket_id, lease)
                 planned = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/plan", {
@@ -377,6 +386,7 @@ class HttpWorker:
                     "idempotency_key": f"{prefix}:release-blocked",
                 })
                 raise
+        if self.planner:
             verdict = None
             if self.change_runner and planned["status"] == "planned":
                 ticket_row = snapshot.get("ticket", {})

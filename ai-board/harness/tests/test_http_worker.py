@@ -780,3 +780,37 @@ def test_pending_traces_are_sent_before_the_lease_is_released():
     worker.run_once()
     paths = [call[1].rsplit('/', 1)[-1] for call in transport.calls]
     assert paths.index('traces') < paths.index('release')
+
+
+def test_authorized_plan_is_executed_without_replanning():
+    class Executing(FakeTransport):
+        def __call__(self, method, path, payload, headers):
+            self.calls.append((method, path, payload, headers))
+            if path.endswith('/snapshot'):
+                return {'ticket': {'phase': 'executing', 'cumulative_budget': 30, 'budget_limit': 200},
+                        'capability_policy': POLICY, 'request': {'id': 3, 'detail': 'x'}, 'thread': []}
+            if path.endswith('/resume-plan'):
+                return {'status': 'planned', 'tier': 'protected', 'plan': {'goal': 'approved'},
+                        'capability_policy_hash': POLICY['hash'], 'children': [{'id': 13}]}
+            self.calls.pop()
+            return super().__call__(method, path, payload, headers)
+
+    seen = {}
+
+    def planner(_snapshot):
+        raise AssertionError('an authorized plan must not be planned again')
+
+    def change_runner(plan, ticket_id, budget_used, *_args, **kwargs):
+        seen.update(plan=plan, budget_used=budget_used, policy_hash=kwargs['accepted_policy_hash'])
+        return {'outcome': 'blocked', 'candidate': None}
+
+    transport = Executing()
+    worker = HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1',
+                        mode='active', planner=planner, change_runner=change_runner)
+    out = worker.run_once()
+    paths = [call[1].rsplit('/', 1)[-1] for call in transport.calls]
+    assert 'resume-plan' in paths and 'plan' not in paths and 'verdict' in paths
+    runs = [call[2] for call in transport.calls if call[1].endswith('/runs')]
+    assert runs[0]['trigger'] == 'execute'
+    assert seen == {'plan': {'goal': 'approved'}, 'budget_used': 0, 'policy_hash': POLICY['hash']}
+    assert out['status'] == 'planned' and out['tier'] == 'protected'

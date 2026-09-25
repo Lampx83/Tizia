@@ -11,7 +11,7 @@ const REQUEST_TYPES = new Set(['game', 'theory', 'lab', 'skill', 'other']);
 const REQUEST_STATUSES = new Set(['pending', 'reviewing', 'done', 'rejected']);
 const WORKER_MODES = new Set(['off', 'shadow', 'active']);
 const CLAIM_INTENTS = new Set(['precheck', 'plan']);
-const RUN_TRIGGERS = new Set(['shadow_precheck', 'plan']);
+const RUN_TRIGGERS = new Set(['shadow_precheck', 'plan', 'execute']);
 const EVENT_TYPES = new Set([
   'shadow_precheck_passed', 'shadow_precheck_failed', 'plan_validated',
   'plan_blocked', 'heartbeat', 'lease_released',
@@ -420,12 +420,12 @@ export function createAiBoardStore(db, hooks = {}) {
     if (current) return current;
 
     const candidate = db.prepare(`
-      SELECT t.id
+      SELECT t.id, t.phase
       FROM ai_tickets t JOIN requests r ON r.id=t.source_request_id
       WHERE t.kind='root' AND r.owner_state='verified'
         AND ((t.status='queued' AND (
               t.phase IN ('intake', 'needs_replan')
-              OR (? = 'plan' AND t.phase = 'shadow_checked')
+              OR (? = 'plan' AND (t.phase = 'shadow_checked' OR (t.phase = 'authorized' AND ? = 'active')))
             ))
           OR (t.status='running' AND t.lease_expires_at<=?)
           OR (? = 'plan' AND t.lease_token IS NOT NULL AND t.lease_expires_at<=?))
@@ -436,11 +436,12 @@ export function createAiBoardStore(db, hooks = {}) {
           WHERE ar.id = (SELECT MAX(id) FROM ai_runs WHERE ticket_id = t.id AND trigger <> 'shadow_precheck')
             AND ar.worker_id <> ? AND aw.last_seen_at > ?))
         ORDER BY t.priority DESC, t.created_at ASC LIMIT 1
-    `).get(intent, now, intent, now, workerId, now - leaseMs);
+    `).get(intent, mode, now, intent, now, workerId, now - leaseMs);
     if (!candidate) return null;
     const token = randomBytes(24).toString('hex');
     const expires = now + leaseMs;
-    const phase = intent === 'plan' ? 'planning' : 'shadow_precheck';
+    // 'executing': plan đã duyệt, lượt này bỏ qua lập plan và chạy thẳng các cổng thực hiện.
+    const phase = candidate.phase === 'authorized' ? 'executing' : intent === 'plan' ? 'planning' : 'shadow_precheck';
     db.prepare(`
       UPDATE ai_tickets SET status='running', phase=?, lease_owner=?,
         lease_token=?, lease_expires_at=?, lease_mode=?, updated_at=? WHERE id=?
@@ -1020,7 +1021,7 @@ export function createAiBoardStore(db, hooks = {}) {
 
   function getRequestTrace(requestId) {
     const root = db.prepare(`
-      SELECT id, status, phase, cumulative_budget, budget_limit, public_note, internal_reason
+      SELECT id, status, phase, cumulative_budget, budget_limit, public_note, internal_reason, plan_hash
       FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL
     `).get(Number(requestId));
     if (!root) return null;
@@ -1058,6 +1059,16 @@ export function createAiBoardStore(db, hooks = {}) {
     const byModel = {};
     for (const e of evidences) (byModel[e?.model || 'unknown'] ??= []).push(e);
     const onlyApi = evidences.length > 0 && evidences.every((e) => e?.provider === 'api');
+    const current = root.plan_hash && db.prepare(`
+      SELECT plan_hash, revision, tier, status, plan_json FROM ai_plans WHERE root_ticket_id=? AND plan_hash=?
+      ORDER BY revision DESC LIMIT 1
+    `).get(root.id, root.plan_hash);
+    const plan = current ? {
+      plan_hash: current.plan_hash, revision: current.revision, tier: current.tier, status: current.status,
+      plan: parseJson(current.plan_json),
+      authorized: !!db.prepare('SELECT 1 FROM ai_authorizations WHERE root_ticket_id=? AND plan_hash=? AND plan_revision=?')
+        .get(root.id, current.plan_hash, current.revision),
+    } : null;
     const events = db.prepare(`
       SELECT e.ticket_id, e.run_id, e.event_type, e.actor_type, e.actor_id, e.transition,
              e.public_message, e.internal_detail, e.created_at
@@ -1065,7 +1076,7 @@ export function createAiBoardStore(db, hooks = {}) {
       WHERE t.id=? OR t.parent_id=? ORDER BY e.created_at, e.id
     `).all(root.id, root.id);
     return {
-      root, children, runs, events,
+      root, plan, children, runs, events,
       totals: {
         ...summarizeCalls(evidences),
         by_model: Object.fromEntries(Object.entries(byModel).map(([model, list]) => [model, summarizeCalls(list)])),
@@ -1088,13 +1099,46 @@ export function createAiBoardStore(db, hooks = {}) {
     db.prepare(`INSERT OR IGNORE INTO ai_authorizations(root_ticket_id, plan_hash, plan_revision, admin_user_id, created_at) VALUES (?, ?, ?, ?, ?)`)
       .run(Number(rootTicketId), String(planHash), Number(plan.revision), Number(adminUserId), now);
     if (plan.tier === 'protected') {
-      db.prepare(`UPDATE ai_tickets SET status='planned', public_note='Kế hoạch đã được cho phép.', internal_reason=NULL, updated_at=? WHERE id=?`)
+      db.prepare(`UPDATE ai_tickets SET status='queued', phase='authorized', public_note='Kế hoạch đã được cho phép; đang chờ thực hiện.', internal_reason=NULL, updated_at=? WHERE id=?`)
         .run(now, Number(rootTicketId));
       db.prepare(`UPDATE ai_tickets SET status='queued', public_note='Kế hoạch đã được cho phép.', internal_reason=NULL, updated_at=? WHERE parent_id=? AND plan_revision=?`)
         .run(now, Number(rootTicketId), plan.revision);
     }
     return { ok: true };
   });
+
+  const resumeAuthorizedPlanTransaction = db.transaction((ticketId, input) => {
+    const root = assertLease(ticketId, input.workerId, input.leaseToken, input.now);
+    const run = db.prepare('SELECT * FROM ai_runs WHERE id=? AND ticket_id=?').get(Number(input.runId), Number(ticketId));
+    if (!run) throw new WorkerContractError('run does not belong to ticket');
+    const plan = root.plan_hash && db.prepare(`
+      SELECT * FROM ai_plans WHERE root_ticket_id=? AND plan_hash=? AND revision=? AND status='valid'
+    `).get(root.id, root.plan_hash, root.plan_revision);
+    const authorized = plan && (plan.tier === 'surface' || !!db.prepare(`
+      SELECT 1 FROM ai_authorizations WHERE root_ticket_id=? AND plan_hash=? AND plan_revision=?
+    `).get(root.id, plan.plan_hash, plan.revision));
+    const resumed = root.status === 'planned' && run.plan_hash === plan?.plan_hash;
+    if (!plan || !authorized || plan.tier === 'core' || (root.phase !== 'executing' && !resumed)) {
+      throw new WorkerContractError('no authorized plan waiting for execution', 409, 'not_authorized_execution');
+    }
+    if (!resumed) {
+      db.prepare(`UPDATE ai_tickets SET status='planned', phase='ticketized', updated_at=? WHERE id=?`).run(input.now, root.id);
+      db.prepare(`UPDATE ai_runs SET plan_hash=?, plan_revision=?, updated_at=? WHERE id=?`)
+        .run(plan.plan_hash, plan.revision, input.now, run.id);
+      insertEvent.run(root.id, 'plan_resumed', 'worker', input.workerId, 'running->planned',
+        'Đang thực hiện kế hoạch đã được cho phép.', `run ${run.id} executes plan revision ${plan.revision}`,
+        `plan-resumed:${run.id}`, input.now);
+    }
+    return {
+      status: 'planned', tier: plan.tier, plan_hash: plan.plan_hash,
+      capability_policy_hash: plan.capability_policy_hash, plan: JSON.parse(plan.plan_json),
+      children: planChildren(root.id, plan.revision), duplicate: resumed,
+    };
+  });
+
+  function resumeAuthorizedPlan(ticketId, input) {
+    return resumeAuthorizedPlanTransaction(Number(ticketId), { ...input, now: input.now ?? Date.now() });
+  }
 
   function authorizePlan(rootTicketId, planHash, adminUserId) {
     return authorizePlanTransaction(rootTicketId, planHash, adminUserId, Date.now());
@@ -1139,6 +1183,7 @@ export function createAiBoardStore(db, hooks = {}) {
     submitPlan,
     submitPrePrVerdict,
     authorizePlan,
+    resumeAuthorizedPlan,
     extendBudget,
     invalidatePlanForRequest,
   };

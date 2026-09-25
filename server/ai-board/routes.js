@@ -214,6 +214,11 @@ export function attachAiBoardWorkerRoutes(router, {
     res.json(result);
   }));
 
+  router.post('/api/ai-board/worker/tickets/:id/resume-plan', authenticate, handle((req, res) => {
+    const lease = leaseInput(req.body);
+    res.json(store.resumeAuthorizedPlan(req.params.id, { ...lease, runId: req.body?.run_id }));
+  }));
+
   router.post('/api/ai-board/worker/tickets/:id/verdict', authenticate, handle((req, res) => {
     const lease = leaseInput(req.body);
     const verdict = store.submitPrePrVerdict(req.params.id, {

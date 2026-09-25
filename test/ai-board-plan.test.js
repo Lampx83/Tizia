@@ -157,11 +157,26 @@ test('protected plan waits for explicit admin authorization; core plan is human-
     const waiting = submit(store, ticket, run, protectedPlan);
     assert.equal(waiting.status, 'waiting_authorization');
     assert.equal(waiting.children[0].status, 'waiting_authorization');
+    store.releaseLease(ticket.id, { workerId: 'planner', leaseToken: ticket.lease_token, outcome: 'planned',
+      idempotencyKey: 'plan-release-001' });
     store.authorizePlan(ticket.id, waiting.plan_hash, 9);
-    const root = db.prepare('SELECT status FROM ai_tickets WHERE id=?').get(ticket.id);
+    const root = db.prepare('SELECT status, phase FROM ai_tickets WHERE id=?').get(ticket.id);
     const child = db.prepare('SELECT status FROM ai_tickets WHERE parent_id=?').get(ticket.id);
-    assert.equal(root.status, 'planned');
+    assert.deepEqual(root, { status: 'queued', phase: 'authorized' }); // back in the queue for execution
     assert.equal(child.status, 'queued');
+    // A shadow (plan-only) worker must not take it; an active worker executes the authorized plan.
+    assert.equal(store.claimNext({ workerId: 'planner', mode: 'shadow', intent: 'plan' }), null);
+    const exec = store.claimNext({ workerId: 'planner', mode: 'active', intent: 'plan' });
+    assert.equal(exec.phase, 'executing');
+    const execRun = store.createRun(ticket.id, { workerId: 'planner', leaseToken: exec.lease_token,
+      trigger: 'execute', idempotencyKey: 'plan-run-exec-001' });
+    const resumed = store.resumeAuthorizedPlan(ticket.id, { workerId: 'planner', leaseToken: exec.lease_token, runId: execRun.id });
+    assert.equal(resumed.status, 'planned');
+    assert.equal(resumed.plan_hash, waiting.plan_hash);
+    assert.equal(resumed.plan.steps[0].capability, 'content.write');
+    assert.equal(db.prepare('SELECT status FROM ai_tickets WHERE id=?').get(ticket.id).status, 'planned');
+    assert.equal(db.prepare('SELECT plan_hash FROM ai_runs WHERE id=?').get(execRun.id).plan_hash, waiting.plan_hash);
+    assert.equal(store.resumeAuthorizedPlan(ticket.id, { workerId: 'planner', leaseToken: exec.lease_token, runId: execRun.id }).duplicate, true);
     db.close();
   }
   {
