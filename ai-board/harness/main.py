@@ -31,7 +31,7 @@ from dbconn import harness_db      # noqa: E402
 import gate_trace                  # noqa: E402
 import meter                       # noqa: E402
 import context                     # noqa: E402
-from gates import brainstorm, guard, implement, plan_validate, risk_triage, scope_check, static_check, verify  # noqa: E402
+from gates import brainstorm, guard, implement, intake_guard, plan_validate, risk_triage, scope_check, static_check, verify  # noqa: E402
 from models import OllamaClient    # noqa: E402
 import prescreen                   # noqa: E402
 
@@ -276,6 +276,14 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
     proposal_id (ticket 23) chỉ để gate_trace ghi trace — cổng nào không gọi
     model (2, 4, 5.5) không cần và không dùng tới 2 tham số này."""
     if number == 1:
+        # Guardrail yêu cầu trước khi lập plan: tất định rồi LLM; chỉ leo thang tới người soát, không tự duyệt.
+        g = intake_guard.run(request.get("subject"), request.get("body"), deps, budget,
+                             db_path=db_path, proposal_id=proposal_id)
+        state["intake"] = g
+        if g["verdict"] != "allow":
+            return {"gate": 1, "blocked": True, "reason": f"intake_{g['verdict']}: {g['internal_reason']}"[:1000],
+                    "outcome": f"intake_{g['verdict']}", "signals": g["labels"],
+                    "public_message": g["public_message"]}
         out = brainstorm.run(request, deps, budget, db_path=db_path, proposal_id=proposal_id)
         state["plan"] = out.get("plan")
         return out
@@ -298,8 +306,11 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
                "needs_careful_review": out.get("needs_careful_review") or bool(size)}
         diffs = state.get("full_diff") or state.get("diffs") or []
         text = "".join(item.get("diff", "") for item in diffs)
-        scanned = guard.scan(text, state.get("full_checkout"), allowed_contacts=_base_public_contacts(state))
+        scanned = guard.scan(text, state.get("full_checkout"), allowed_contacts=_base_public_contacts(state),
+                             request_text=state.get("request_detail"))
         state["ui_changed"] = scanned["ui_changed"]
+        state["guard_flags"] = scanned["flags"]
+        state["review_required"] = scanned["review_required"]
         out = {**out, "checks": scanned["checks"]}
         found = scanned["findings"]
         if state.get("catalog") is not None:
@@ -309,6 +320,12 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
             if outside:
                 found = [*found, {"check": "catalog", "failure_class": "critical",
                                   "detail": f"path ngoài catalog capability: {', '.join(outside)}"[:300]}]
+        if not found and budget is not None and getattr(deps, "models", None) is not None:
+            # Chữ hiển thị mới trên diff thật (base..HEAD) qua LLM soát nội dung; lỗi/không chắc → người soát.
+            review = static_check.content_review(state, deps, budget, db_path=db_path, proposal_id=proposal_id)
+            if review and review["blocked"]:
+                found = [{"check": "content_guard", "failure_class": review["failure_class"],
+                          "detail": review["reason"][:300]}]
         if found:
             worst = "critical" if any(f["failure_class"] == "critical" for f in found) else "ordinary"
             reason = "; ".join(f"{f['check']}: {f['detail']}" for f in found)[:1000]

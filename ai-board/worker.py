@@ -361,7 +361,8 @@ class HttpWorker:
                           else str(error))
                 self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/events", {
                     **lease, "run_id": run["id"], "event_type": "plan_blocked",
-                    "public_message": "Kế hoạch chưa vượt qua kiểm tra an toàn.",
+                    "public_message": (getattr(error, "detail", None) or {}).get("public_message")
+                    or "Kế hoạch chưa vượt qua kiểm tra an toàn.",
                     "internal_detail": detail,
                     "idempotency_key": f"{prefix}:plan-blocked",
                 })
@@ -480,6 +481,7 @@ class HarnessPlanner:
             if result.get("blocked"):
                 raise PlanBlockedError(f"gate {gate} blocked: {result.get('reason')}", {
                     "gate": gate, "reason": result.get("reason"), "signals": list(result.get("signals") or []),
+                    "public_message": result.get("public_message"),
                     "plan": json.dumps(state.get("plan"), ensure_ascii=False)[:2000],
                 })
         return self._canonical(request, state["plan"], state.get("complexity_signals")), int(budget.units)

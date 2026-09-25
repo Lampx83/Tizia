@@ -339,6 +339,7 @@ mountRouterPlugins(r, [
 const aiBoardStore = createAiBoardStore(db);
 attachAiBoardRequestRoutes(r, {
   store: aiBoardStore,
+  db,
   requireAuth,
   requireEnrolled,
   requireAdmin,

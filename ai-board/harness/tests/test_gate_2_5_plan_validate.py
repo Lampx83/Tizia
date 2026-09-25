@@ -97,7 +97,7 @@ def test_unclear_plan_blocks_before_gate_3_and_writes_clarification(db_file, req
     assert out["outcome"] == "needs_clarification"
     assert out["gate_reached"] == 2.5
     # cổng 3 không được gọi: chỉ có lời gọi cổng 1 + cổng 2.5, không có subtask nào.
-    assert len(models.calls) == 2
+    assert len(models.calls) == 3  # intake + cổng 1 + cổng 2.5
 
     con = sqlite3.connect(str(db_file))
     try:
@@ -120,7 +120,7 @@ def test_complex_plan_from_ordinary_user_is_gated(db_file, request_item):
 
     assert out["outcome"] == "complexity_gated"
     assert out["gate_reached"] == 2.5
-    assert len(models.calls) == 2  # cổng 1 + cổng 2.5, cổng 3 không chạy
+    assert len(models.calls) == 3  # intake + cổng 1 + cổng 2.5, cổng 3 không chạy
 
 
 def test_complexity_gate_names_the_signals_that_fired():

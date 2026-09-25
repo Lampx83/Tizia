@@ -103,7 +103,11 @@ class FakeModels:
 
     def generate(self, model, prompt, **kw):
         self.calls.append({"model": model, "prompt": prompt, **kw})
-        if model in (self.gate3_model, self.gate3_model_light):
+        if "<<<YEU_CAU" in prompt or "<<<NOI_DUNG" in prompt:  # guardrail yêu cầu/nội dung
+            # Test guardrail truyền nhãn qua `plan`; plan thật (có subtasks) → mặc định cho qua.
+            guard_reply = isinstance(self.plan, str) or "labels" in self.plan
+            payload = self.plan if guard_reply else {"labels": ["ok"], "reason": "fixture"}
+        elif model in (self.gate3_model, self.gate3_model_light):
             payload = self.codegen
         elif "PLAN CẦN SOÁT" in prompt:  # cổng 2.5 — xem docstring __init__
             payload = self.validation

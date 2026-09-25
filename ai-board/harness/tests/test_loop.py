@@ -53,7 +53,7 @@ def test_dry_run_never_calls_git_or_telegram(inbox_file, db_file, fake_deps):
     assert fake_deps.notify.mock_calls == []
     # Cổng 1 (1 lần) + cổng 2.5 (1 lần, ticket 22) + cổng 3 (1 lần/subtask,
     # plan_with có 2) — tất cả qua fake, không mạng.
-    assert len(fake_deps.models.calls) == 2 + len(fake_deps.models.plan["subtasks"])
+    assert len(fake_deps.models.calls) == 4 + len(fake_deps.models.plan["subtasks"])
 
 
 def test_real_deps_make_git_and_telegram_explode_if_touched():
