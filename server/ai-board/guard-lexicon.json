@@ -1,0 +1,159 @@
+{
+  "_doc": [
+    "Từ điển guardrail DÙNG CHUNG: server/ai-board/intake-guard.js (chặn/gắn cờ lúc nhận yêu cầu) và ai-board/harness/gates/guard.py + intake_guard.py (cổng 4 + intake worker). Sửa 1 chỗ, 3 nơi cùng đổi.",
+    "terms = mảnh regex (cú pháp chung JS/Python: nhóm, |, ?, escape ký tự đặc biệt; KHÔNG lookaround, KHÔNG flag). Dấu cách trong term = \\s+ (bắt buộc ≥1); khoảng trắng tuỳ chọn thì viết \\s*, KHÔNG viết ' ?'. Code tự bọc ranh giới chữ 2 đầu (ký tự ngay ngoài term không được là chữ/số) — nên term đuôi ký hiệu như 'ref=' sẽ không khớp 'ref=abc'.",
+    "Term toàn ASCII được so trên văn bản ĐÃ BỎ DẤU (bắt cả 'hoang sa' lẫn 'hoàng sa') → chỉ thêm term ASCII khi bỏ dấu không trùng từ tiếng Việt thường. KHÔNG được thêm: 'bien dong' (biến động), 'lam tinh' (làm tính), 'ma tuy' (mà tuỳ), 'tu tu' (từ từ), 'co bac' (cô bác), 'ca do' (ca đó), 'da dang' (đa dạng), 'phan dong' (phần đông), 'dang nhap' (đang nhập), 'khung bo' (khung bo góc). Cụm có dấu cũng có thể là tiền tố của cụm thường: 'làm tình' nằm trong 'làm tình hình/tình huống' → đã bỏ, để LLM xử lý.",
+    "Term có dấu so trên văn bản NFC chữ thường, có dấu. Viết cả 2 kiểu đặt dấu thanh (khỏa/khoả) nếu cần.",
+    "intake = verdict khi yêu cầu học viên trúng nhãn: reject/critical → server trả 422, không tạo yêu cầu; human_review → nhận, gắn cờ.",
+    "diff = mức nghiêm trọng khi chữ HIỂN THỊ trong diff cổng 4 trúng nhãn (null = không áp cho diff). Mặc định là finding chặn (medium = sửa 1 lần, high/critical = người); diff_flag=true → chỉ gắn cờ người soát + để LLM content_guard phân xử, không chặn (chủ đề hay xuất hiện hợp lệ trong bài học: tôn giáo/chiến tranh trong lịch sử, 'ý nghĩ tự sát' trong cảnh báo thuốc, 'ma tuý, cờ bạc, mại dâm' trong bài tệ nạn xã hội). Đo trên toàn bộ public/ hiện có trước khi đổi nhãn nào sang chặn."
+  ],
+  "allowed_hosts": [
+    "tizia.vn", "gov.vn", "edu.vn", "localhost", "example.com",
+    "unpkg.com", "cdn.jsdelivr.net", "cdnjs.cloudflare.com", "fonts.googleapis.com", "fonts.gstatic.com",
+    "www.w3.org", "schema.org", "youtube.com", "youtu.be", "youtube-nocookie.com",
+    "wikipedia.org", "who.int", "github.com", "developer.mozilla.org", "learn.microsoft.com",
+    "roadmap.sh", "freecodecamp.org", "git-scm.com", "orcid.org", "aframe.io"
+  ],
+  "public_messages": {
+    "reject": "Yêu cầu có nội dung chưa phù hợp với môi trường học tập nên chưa thể tiếp nhận. Bạn vui lòng viết lại lịch sự, tập trung vào tính năng hoặc bài học cần thay đổi nhé.",
+    "critical": "Yêu cầu chưa thể xử lý tự động và đã được chuyển cho quản trị viên xem xét.",
+    "human_review": "Yêu cầu đã được ghi nhận và sẽ được quản trị viên xem xét trước khi thực hiện.",
+    "needs_info": "Yêu cầu chưa đủ rõ để thực hiện. Bạn mô tả cụ thể hơn giúp nhé: trang nào, muốn thêm hoặc sửa gì.",
+    "needs_info_pii": "Yêu cầu có thông tin cá nhân (email, số điện thoại, số giấy tờ). Bạn vui lòng bỏ các thông tin đó rồi gửi lại nhé."
+  },
+  "labels": {
+    "prompt_injection": {
+      "intake": "critical", "diff": "critical",
+      "terms": [
+        "ignore (all )?(the |your )?(previous|prior|above|earlier) (instructions|rules|prompts?)",
+        "disregard (all |the |your )?(previous|prior|above) (instructions|rules)",
+        "forget (all |your )?(previous )?instructions",
+        "(reveal|show|print|leak) (the |your )?system prompt", "(enable|enter) developer mode",
+        "do anything now", "from now on you are",
+        "<\\|im_start\\|","\\[inst\\]", "<<sys>>", "### (system|instruction)",
+        "bỏ qua (mọi|tất cả|các|toàn bộ) (chỉ dẫn|hướng dẫn|lệnh|quy tắc)",
+        "bo qua (moi|tat ca|cac|toan bo) (chi dan|huong dan|lenh|quy tac)",
+        "quên (hết|mọi|tất cả) (chỉ dẫn|hướng dẫn|quy tắc)",
+        "quen (het|moi|tat ca) (chi dan|huong dan|quy tac)",
+        "(in ra|tiết lộ|cho xem) (lời nhắc hệ thống|system prompt)", "bật chế độ nhà phát triển",
+        "failure_class", "allowed_scope", "\"?blocked\"?\\s*:\\s*false", "auto[- ]?approve this", "tự động duyệt yêu cầu này",
+        "(gán|trả về|trả|chọn|cho) nhãn \"?ok", "(gan|tra ve|chon) nhan \"?ok", "(return|assign|output|give) (the )?label \"?ok",
+        "\"?labels?\"?\\s*:\\s*\\[?\\s*\"ok\""
+      ]
+    },
+    "harassment_profanity": {
+      "intake": "reject", "diff": "medium",
+      "terms": [
+        "địt", "đụ", "đĩ", "lồn", "cặc", "buồi", "đéo", "óc chó", "đồ ngu", "đmm", "đcm", "đkm",
+        "dit me", "dit con me", "du ma", "du me", "dcm", "dmm", "dkm", "vcl", "vkl", "clgt",
+        "fuck", "fucking", "motherfucker", "shit", "bitch", "asshole", "cunt", "bastard"
+      ]
+    },
+    "sexual": {
+      "intake": "reject", "diff": "high",
+      "terms": [
+        "khiêu dâm", "phim sex", "ảnh sex", "truyện sex", "chịch", "nứng", "địt nhau",
+        "ảnh nude", "ảnh khỏa thân", "ảnh khoả thân", "gái gọi",
+        "khieu dam", "porn", "porno", "pornhub", "xvideos", "xnxx", "hentai", "nsfw",
+        "onlyfans", "blowjob", "pedophile", "child porn"
+      ]
+    },
+    "discrimination_hate": {
+      "intake": "reject", "diff": "high",
+      "terms": [
+        "tàu khựa", "khựa", "đồ mọi", "bọn mọi", "mọi rợ", "đồ bê đê", "bọn bắc kỳ", "bọn nam kỳ", "parky",
+        "nigger", "nigga", "faggot", "chink", "kike", "spic"
+      ]
+    },
+    "politics_sovereignty": {
+      "intake": "human_review", "diff": "high",
+      "terms": [
+        "hoàng sa", "trường sa", "biển đông", "đường lưỡi bò", "đường chín đoạn", "cờ vàng",
+        "việt nam cộng hòa", "việt nam cộng hoà", "quốc kỳ", "quốc huy", "cờ đỏ sao vàng",
+        "cộng sản", "chế độ độc tài", "lật đổ", "biểu tình", "phản động", "đa đảng", "nhân quyền",
+        "tổng bí thư", "chủ tịch nước", "thủ tướng", "bộ chính trị", "đảng viên",
+        "hoang sa", "truong sa", "duong luoi bo", "vnch", "co vang ba soc",
+        "tong bi thu", "chu tich nuoc", "bo chinh tri",
+        "paracel", "spratly", "south china sea", "nine-dash line", "communist party", "dictator"
+      ]
+    },
+    "religion": {
+      "intake": "human_review", "diff": "medium", "diff_flag": true,
+      "terms": [
+        "truyền đạo", "cải đạo", "tà giáo", "tà đạo", "pháp luân công", "đạo lạ", "thánh chiến", "báng bổ",
+        "phap luan cong", "falun gong", "jihad", "blasphemy"
+      ]
+    },
+    "violence_weapons": {
+      "intake": "human_review", "diff": "medium", "diff_flag": true,
+      "terms": [
+        "chế tạo bom", "làm bom", "tự chế súng", "súng tự chế", "cách giết", "giết người hàng loạt",
+        "khủng bố", "thảm sát", "chém giết", "hiếp dâm", "ấu dâm", "loạn luân", "mại dâm",
+        "che tao bom", "lam bom", "cach giet", "tham sat",
+        "how to kill", "make a bomb", "bomb making", "school shooting", "mass shooting"
+      ]
+    },
+    "drugs_gambling": {
+      "intake": "human_review", "diff": "medium", "diff_flag": true,
+      "terms": [
+        "ma túy", "ma tuý", "thuốc lắc", "cần sa", "cá độ", "cờ bạc", "lô đề", "nhà cái",
+        "đánh bạc", "cá cược", "tài xỉu",
+        "heroin", "cocaine", "marijuana", "casino", "sports betting"
+      ]
+    },
+    "self_harm": {
+      "intake": "human_review", "diff": "medium", "diff_flag": true,
+      "terms": [
+        "tự tử", "tự sát", "muốn chết", "cắt tay", "tự hại", "tự làm hại bản thân",
+        "tu sat", "muon chet", "kill myself", "suicide", "self[- ]?harm"
+      ]
+    },
+    "privileged_area": {
+      "intake": "human_review", "diff": null,
+      "terms": [
+        "mật khẩu", "đăng nhập", "xác thực", "phân quyền", "quyền admin", "quyền quản trị", "trang quản trị",
+        "thanh toán", "nạp tiền", "chuyển khoản", "hoàn tiền",
+        "sửa điểm", "đổi điểm", "tăng điểm", "cộng điểm cho", "chấm điểm lại", "bảng điểm", "điểm thi",
+        "cộng sao", "cộng xu", "tặng xu", "hack điểm", "hack xu",
+        "dữ liệu của (bạn|người) khác", "thông tin (của )?(học sinh|sinh viên|người dùng) khác",
+        "danh sách (học sinh|sinh viên|người dùng)", "tắt (bảo mật|xác thực|captcha)",
+        "mat khau", "phan quyen", "thanh toan", "nap tien", "chuyen khoan", "sua diem", "hack diem",
+        "password", "login", "oauth", "csrf", "session", "cookie", "admin", "payment", "hack",
+        "rate limit", "captcha", "api key", "secret key", "\\.env"
+      ]
+    },
+    "academic_cheating": {
+      "intake": "human_review", "diff": null,
+      "terms": [
+        "lộ đề", "đáp án đề thi", "đáp án (bài )?kiểm tra", "giải hộ", "làm hộ bài", "làm bài hộ",
+        "hack đáp án", "hiện đáp án trước",
+        "dap an de thi", "lam bai ho", "giai ho",
+        "exam answers", "answer key", "leaked exam"
+      ]
+    },
+    "health_legal_finance_claim": {
+      "intake": "human_review", "diff": "medium", "diff_flag": true,
+      "terms": [
+        "chữa khỏi hoàn toàn", "chữa dứt điểm", "thần dược", "100% khỏi", "không cần (đi )?bác sĩ",
+        "không cần kê đơn", "cam kết lợi nhuận", "lợi nhuận đảm bảo", "đầu tư chắc thắng", "lách luật", "trốn thuế",
+        "chua khoi hoan toan", "chua dut diem", "than duoc", "khong can bac si",
+        "miracle cure", "guaranteed cure", "guaranteed profit"
+      ]
+    },
+    "copyright": {
+      "intake": "human_review", "diff": null,
+      "terms": [
+        "copy nguyên", "chép nguyên văn", "tải lậu", "bản crack", "full sách", "scan sách",
+        "chep nguyen van", "tai lau", "crack", "reup", "pirated"
+      ]
+    },
+    "ads_spam": {
+      "intake": "human_review", "diff": null,
+      "terms": [
+        "mua ngay", "giảm giá", "khuyến mãi", "liên hệ zalo", "mã giới thiệu", "kiếm tiền online", "vay tiền",
+        "click vào link", "giam gia", "khuyen mai", "kiem tien online", "vay tien",
+        "zalo", "telegram", "shopee", "lazada", "affiliate"
+      ]
+    }
+  }
+}
