@@ -44,6 +44,7 @@ import re
 import time
 from pathlib import Path
 
+import context
 from dbconn import harness_db
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_validate.md").read_text(encoding="utf-8")
@@ -102,10 +103,11 @@ CREATE TABLE IF NOT EXISTS request_messages (
 
 
 def build_prompt(request: dict, plan: dict) -> str:
+    """AIBOARD.md (context.manual) đứng đầu, trước prompt đã khoá — prefix KV giống hệt mọi lần gọi."""
     thread = " | ".join(
         f"{m.get('role')}: {m.get('body')}" for m in (request.get("thread") or [])
     ) or "(không có)"
-    return PROMPT.format(
+    return context.manual() + PROMPT.format(
         domain=request.get("domain") or "(core)",
         subject=request.get("subject", ""),
         body=request.get("body", ""),
@@ -125,7 +127,8 @@ def parse_validation(text: str) -> dict:
     question = out.get("question")
     if question is not None and not isinstance(question, str):
         raise ValueError("'question' phải là string hoặc null")
-    return {"clear": out["clear"], "question": question}
+    # clear=true thì câu hỏi (nếu model lỡ viết) bị bỏ; câu hỏi gửi thẳng học viên nên cắt 300 ký tự.
+    return {"clear": out["clear"], "question": None if out["clear"] else ((question or "").strip()[:300] or None)}
 
 
 def is_complex(plan: dict) -> bool:
