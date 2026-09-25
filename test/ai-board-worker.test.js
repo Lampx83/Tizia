@@ -600,3 +600,23 @@ test('student cancels through POST /api/requests/:id/cancel', async () => {
     db.close();
   }
 });
+
+test('a request stays with the worker that ran it until that worker goes stale', () => {
+  const { db, store } = fixture();
+  const t0 = 1_000_000;
+  const first = store.claimNext({ workerId: 'worker-a', mode: 'shadow', intent: 'plan', now: t0 });
+  store.createRun(first.id, { workerId: 'worker-a', leaseToken: first.lease_token, trigger: 'plan',
+    idempotencyKey: 'affinity-run-001', now: t0 });
+  // The root comes back (e.g. a clarification) while worker-a is still polling.
+  db.prepare(`UPDATE ai_tickets SET status='queued', phase='needs_replan', lease_owner=NULL, lease_token=NULL,
+    lease_expires_at=NULL WHERE id=?`).run(first.id);
+  assert.equal(store.claimNext({ workerId: 'worker-b', mode: 'shadow', intent: 'plan', now: t0 + 6_000 }), null);
+  const again = store.claimNext({ workerId: 'worker-a', mode: 'shadow', intent: 'plan', now: t0 + 7_000 });
+  assert.equal(again.id, first.id);
+  db.prepare(`UPDATE ai_tickets SET status='queued', phase='needs_replan', lease_owner=NULL, lease_token=NULL,
+    lease_expires_at=NULL WHERE id=?`).run(first.id);
+  // worker-a stopped polling: after one lease period another worker may take over.
+  const takeover = store.claimNext({ workerId: 'worker-b', mode: 'shadow', intent: 'plan', now: t0 + 7_000 + 121_000 });
+  assert.equal(takeover.id, first.id);
+  db.close();
+});

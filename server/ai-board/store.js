@@ -429,8 +429,14 @@ export function createAiBoardStore(db, hooks = {}) {
             ))
           OR (t.status='running' AND t.lease_expires_at<=?)
           OR (? = 'plan' AND t.lease_token IS NOT NULL AND t.lease_expires_at<=?))
+        -- 1 request = 1 phiên worker từ đầu đến cuối: root quay lại hàng đợi chỉ về worker cũ, trừ khi
+        -- worker đó đã quá 1 lease không liên lạc. Root mất lease giữa chừng thì worker nào cũng cứu được.
+        AND (t.status <> 'queued' OR NOT EXISTS (
+          SELECT 1 FROM ai_runs ar JOIN ai_workers aw ON aw.worker_id = ar.worker_id
+          WHERE ar.id = (SELECT MAX(id) FROM ai_runs WHERE ticket_id = t.id AND trigger <> 'shadow_precheck')
+            AND ar.worker_id <> ? AND aw.last_seen_at > ?))
         ORDER BY t.priority DESC, t.created_at ASC LIMIT 1
-    `).get(intent, now, intent, now);
+    `).get(intent, now, intent, now, workerId, now - leaseMs);
     if (!candidate) return null;
     const token = randomBytes(24).toString('hex');
     const expires = now + leaseMs;
@@ -1030,8 +1036,10 @@ export function createAiBoardStore(db, hooks = {}) {
     const allCalls = [];
     // ai_runs has no status column; the verdict outcome (null until one lands) is the run's status.
     const runs = db.prepare(`
-      SELECT id, attempt, trigger, outcome AS status, gate, created_at FROM ai_runs
-      WHERE ticket_id=? ORDER BY created_at, id
+      SELECT r.id, r.attempt, r.trigger, r.outcome AS status, r.gate, r.created_at, r.updated_at, r.worker_id,
+             w.mode AS worker_mode, w.version AS worker_version, w.last_seen_at AS worker_last_seen
+      FROM ai_runs r LEFT JOIN ai_workers w ON w.worker_id = r.worker_id
+      WHERE r.ticket_id=? ORDER BY r.created_at, r.id
     `).all(root.id).map((run) => {
       const gates = [];
       const calls = [];
@@ -1041,19 +1049,28 @@ export function createAiBoardStore(db, hooks = {}) {
         if (row.status === 'model_call') calls.push(item); else gates.push(item);
       }
       allCalls.push(...calls);
-      return { ...run, gates, calls, totals: summarizeCalls(calls.map((c) => c.evidence)) };
+      // Ngân sách tính theo lượt: mỗi run có trần budget_limit riêng.
+      const budgetUsed = calls.reduce((sum, c) => sum + (Number(c.evidence?.budget_units) || 0), 0);
+      return { ...run, gates, calls, totals: summarizeCalls(calls.map((c) => c.evidence)),
+        budget_used: budgetUsed, budget_limit: root.budget_limit };
     });
     const evidences = allCalls.map((c) => c.evidence);
     const byModel = {};
     for (const e of evidences) (byModel[e?.model || 'unknown'] ??= []).push(e);
     const onlyApi = evidences.length > 0 && evidences.every((e) => e?.provider === 'api');
+    const events = db.prepare(`
+      SELECT e.ticket_id, e.run_id, e.event_type, e.actor_type, e.actor_id, e.transition,
+             e.public_message, e.internal_detail, e.created_at
+      FROM ai_events e JOIN ai_tickets t ON t.id = e.ticket_id
+      WHERE t.id=? OR t.parent_id=? ORDER BY e.created_at, e.id
+    `).all(root.id, root.id);
     return {
-      root, children, runs,
+      root, children, runs, events,
       totals: {
         ...summarizeCalls(evidences),
         by_model: Object.fromEntries(Object.entries(byModel).map(([model, list]) => [model, summarizeCalls(list)])),
-        budget_used: root.cumulative_budget,
-        budget_limit: root.budget_limit,
+        budget_used: root.cumulative_budget, // tổng tích lũy mọi lượt, chỉ để báo cáo
+        budget_limit: root.budget_limit, // trần MỖI lượt
         budget_unit: onlyApi ? 'k_tokens' : 'gpu_s',
       },
     };
