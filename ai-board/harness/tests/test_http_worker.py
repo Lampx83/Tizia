@@ -714,3 +714,51 @@ def test_catalog_changed_since_plan_acceptance_is_a_plan_failure_before_any_gate
         assert verdict['failure_class'] == 'plan'
         assert verdict['gate_reached'] == 3 and 'catalog' in verdict['reason']
         assert verdict['gates'] == [{'gate': 3, 'blocked': True, 'reason': verdict['reason']}]
+
+
+def test_model_call_traces_are_posted_under_the_lease_and_run():
+    import meter
+
+    transport = FakeTransport()
+    tracer = meter.Tracer(None)
+
+    def planner(_snapshot):
+        tracer.record(gate=1, model='qwen3:8b', prompt='p', prompt_name=None, prompt_hash=None, static_prefix='',
+                      output='{}', metrics={'gpu_ms': 2100}, budget_units=3, result='ok')
+        return {'goal': 'x'}, 3
+
+    worker = HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1',
+                        mode='shadow', planner=planner, tracer=tracer)
+    worker.run_once()
+    (trace_post,) = [call for call in transport.calls if call[1].endswith('/traces')]
+    assert trace_post[1] == '/api/ai-board/worker/tickets/7/traces'
+    assert trace_post[2]['run_id'] == 11 and trace_post[2]['lease_token'] == 'lease-7'
+    assert trace_post[2]['calls'][0]['call_id'] == 'run11:g1:cNone:a0:i0:s1'
+
+
+def test_worker_pauses_claims_over_the_hourly_gpu_cap():
+    import meter
+
+    transport = FakeTransport()
+    tracer = meter.Tracer(None)
+    tracer._gpu.append((time.monotonic(), float(meter.HOURLY_GPU_S)))
+    worker = HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1',
+                        mode='shadow', tracer=tracer)
+    assert worker.run_once()['status'] == 'gpu_paused'
+    assert transport.calls == []
+
+
+def test_trace_posts_are_split_under_the_server_body_limit():
+    import json
+    import meter
+
+    tracer = meter.Tracer(None)
+    batches = []
+    tracer.begin(1, batches.append)
+    big = 'đ' * 8000
+    for _ in range(3):
+        tracer.record(gate=3, model='m', prompt=big, prompt_name=None, prompt_hash=None, static_prefix='',
+                      output=big, metrics={}, budget_units=1, result='ok')
+    tracer.flush()
+    assert len(batches) == 3
+    assert all(len(json.dumps(b, ensure_ascii=False).encode()) < 64 * 1024 for b in batches)

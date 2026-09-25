@@ -8,9 +8,10 @@ from dataclasses import dataclass, field
 
 # Cộng dồn qua các lần resume (skill_proposals.budget_json), không reset —
 # đây là cái chặn loop vô hạn ăn GPU máy dùng chung.
-CAPS = ("model_calls", "tool_calls", "tokens", "retries")
+CAPS = ("model_calls", "tool_calls", "tokens", "retries", "units")
 # retries chỉ chặn retry tiếp theo (worker tự kiểm), không kết thúc cả lượt chạy.
-RUN_CAPS = ("model_calls", "tool_calls", "tokens")
+# units = đơn vị budget theo nhà cung cấp (meter.py): giây GPU với ollama, 1K token với api.
+RUN_CAPS = ("model_calls", "tool_calls", "tokens", "units")
 
 
 @dataclass
@@ -19,12 +20,14 @@ class Budget:
     max_tool_calls: int = 200
     max_tokens: int = 200_000
     max_retries: int = 3
+    max_units: int = 600
     max_wall_clock_s: float = 900.0
 
     model_calls: int = 0
     tool_calls: int = 0
     tokens: int = 0
     retries: int = 0
+    units: int = 0
     # Giây đã tiêu ở các lần chạy TRƯỚC. Wall-clock phải cộng dồn qua resume như
     # mọi cap khác — nếu reset mỗi lần thì một skill fail rồi resume 20 lần được
     # 20 × max_wall_clock_s GPU mà budget không bao giờ báo chạm trần.
@@ -45,6 +48,7 @@ class Budget:
             max_tool_calls=num("tool_calls", 200, int),
             max_tokens=num("tokens", 200_000, int),
             max_retries=num("retries", 3, int),
+            max_units=num("units", 600, int),
             max_wall_clock_s=num("wall_clock_s", 900.0, float),
         )
 
@@ -89,6 +93,7 @@ class Budget:
             max_tool_calls=self.max_tool_calls,
             max_tokens=self.max_tokens,
             max_retries=self.max_retries,
+            max_units=self.max_units,
             max_wall_clock_s=self.max_wall_clock_s,
             elapsed_s=round(self.elapsed_s, 3),
             exhausted=self.exhausted(),

@@ -7,8 +7,9 @@ import os
 import urllib.request
 from dataclasses import dataclass
 
-# num_ctx khai tường minh (spec: 1 model nóng, ctx là giới hạn cứng).
-NUM_CTX = 16384
+# num_ctx khai tường minh (spec: 1 model nóng, ctx là giới hạn cứng). 8K: prompt ≤ ~4.5K + output ≤ 3K
+# token vừa đủ; bớt ~1.5 GiB KV so với 16K trên GPU dùng chung đã sát trần 75% (42,500 MiB).
+NUM_CTX = 8192
 
 
 @dataclass

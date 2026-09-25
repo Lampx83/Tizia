@@ -9,6 +9,7 @@ Unavailable).
 """
 from __future__ import annotations
 
+import functools
 import json
 import os
 import posixpath
@@ -28,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from budget import Budget          # noqa: E402
 from dbconn import harness_db      # noqa: E402
 import gate_trace                  # noqa: E402
+import meter                       # noqa: E402
 from gates import brainstorm, guard, implement, plan_validate, risk_triage, scope_check, static_check, verify  # noqa: E402
 from models import OllamaClient    # noqa: E402
 import prescreen                   # noqa: E402
@@ -73,6 +75,21 @@ class Unavailable:
         )
 
 
+# Trần output theo cổng: Gate 3 ~43 s ở 72 tok/s, dưới timeout gateway ~60 s; cổng khác chỉ trả JSON ngắn.
+NUM_PREDICT = {3: 3072}
+NUM_PREDICT_DEFAULT = 1024
+PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
+_PROMPT_LOCK = json.loads((PROMPTS_DIR / "prompts.lock.json").read_text(encoding="utf-8"))
+
+
+@functools.lru_cache(maxsize=None)
+def _static_prefix(prompt_name: str | None) -> str:
+    """Phần prompt cố định (trước placeholder đầu tiên) — trace chỉ gửi phần sau nó."""
+    if not prompt_name:
+        return ""
+    return (PROMPTS_DIR / prompt_name).read_text(encoding="utf-8").split("{", 1)[0]
+
+
 @dataclass(frozen=True)
 class Deps:
     """Mọi biên I/O ra ngoài process. Test bơm fake vào đây."""
@@ -81,6 +98,8 @@ class Deps:
     git: Any
     notify: Any
     verify: Any = None
+    trace: Any = None  # meter.Tracer; None = không trace (test cũ, CLI)
+    provider: str = "ollama"
 
     @classmethod
     def real(cls) -> "Deps":
@@ -91,20 +110,43 @@ class Deps:
         )
 
     def call_model(self, model: str, prompt: str, *, gate: float, budget,
-                    db_path=None, proposal_id: int | None = None, format: str | None = "json") -> dict:
-        """1 lời gọi model + phí budget + trace — chỗ duy nhất 3 cổng (1, 2.5, 3)
-        lặp lại trước đây (flagged ai-log 2026-09-19 "gate_trace call sites
-        duplicated"). Behavior y hệt bản lặp: model_calls luôn +1, tokens cộng
-        prompt_eval_count+eval_count, gate_trace.record() chỉ chạy khi có cả
-        db_path và proposal_id (test gọi run() trực tiếp không truyền 2 cái đó
-        vẫn chạy được, không phải lỗi — xem docstring gates/brainstorm.py)."""
-        body = self.models.generate(model, prompt, format=format)
+                    db_path=None, proposal_id: int | None = None, format: str | None = "json",
+                    prompt_name: str | None = None, child: int | None = None, iteration: int = 0) -> dict:
+        """1 lời gọi model + phí budget + trace — chỗ duy nhất mọi cổng đi qua.
+        Phí: model_calls +1, tokens, units (meter: giây GPU ollama / 1K token api).
+        Lỗi HTTP/timeout vẫn tính units theo wall (GPU có thể đã chạy) rồi raise lại.
+        body["_metrics"] = metrics đã chuẩn hoá cho cổng dùng (done_reason, …)."""
+        options = {"num_predict": NUM_PREDICT.get(gate, NUM_PREDICT_DEFAULT), "temperature": 0}
+        started = time.monotonic()
+        try:
+            body = self.models.generate(model, prompt, format=format, **options)
+        except Exception as error:
+            metrics = meter.measure(self.provider, {}, int((time.monotonic() - started) * 1000))
+            n = meter.units(self.provider, metrics)
+            budget.spend("model_calls")
+            budget.spend("units", n)
+            self._trace(gate, model, prompt, prompt_name, "", metrics, n,
+                        "timeout" if isinstance(error, TimeoutError) else "http_error", str(error), child, iteration)
+            raise
+        metrics = meter.measure(self.provider, body, int((time.monotonic() - started) * 1000))
+        n = meter.units(self.provider, metrics)
         budget.spend("model_calls")
         budget.spend("tokens", int(body.get("prompt_eval_count") or 0) + int(body.get("eval_count") or 0))
+        budget.spend("units", n)
         if db_path is not None and proposal_id is not None:
             gate_trace.record(db_path, skill_proposal_id=proposal_id, gate=gate,
                                model=model, prompt=prompt, body=body)
+        self._trace(gate, model, prompt, prompt_name, body.get("response", ""), metrics, n, "ok", None, child, iteration)
+        body["_metrics"] = metrics
         return body
+
+    def _trace(self, gate, model, prompt, prompt_name, output, metrics, n, result, error, child, iteration):
+        if self.trace is None:
+            return
+        self.trace.record(gate=gate, model=model, prompt=prompt, prompt_name=prompt_name,
+                          prompt_hash=_PROMPT_LOCK.get(prompt_name), static_prefix=_static_prefix(prompt_name),
+                          output=output, metrics=metrics, budget_units=n, result=result, error=error,
+                          child=child, iteration=iteration)
 
 
 class ScopeViolation(ValueError):

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import os
 import re
@@ -15,7 +16,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 
 Transport = Callable[[str, str, dict, dict], dict]
@@ -125,6 +126,8 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
                     except Exception as error:  # model/network/tool outage, not the candidate's code
                         result = {"gate": gate, "blocked": True, "reason": str(error)[:1000],
                                   "failure_class": "transient"}
+                    if getattr(deps, "trace", None):
+                        deps.trace.flush()  # 1 lô trace mỗi cổng
                 # Transient Docker/checkout trouble gets one mechanical retry, no model call. It spends the
                 # retry cap, never budget_used; no retry once the cap is reached.
                 if (gate == 5 and result.get("blocked") and result.get("failure_class") == "transient"
@@ -184,6 +187,8 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
     repairs: list[dict] = []
     repair_reason = None
     while True:
+        if getattr(deps, "trace", None):
+            deps.trace.attempt = len(repairs)
         gates, kind, candidate = _attempt(
             plan, ticket_id=ticket_id, checkout_source=checkout_source, deps=deps, budget=budget,
             run_gate=run_gate, cleanup=cleanup, repair_reason=repair_reason, catalog=catalog,
@@ -210,7 +215,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
         "outcome": outcome, "gate_reached": last["gate"], "reason": reason,
         "failure_class": None if passed else kind, "repairs": repairs,
         "candidate": candidate if passed else None,
-        "budget_used": int(getattr(budget, "model_calls", 0)) * 40, "gates": gates,
+        "budget_used": int(getattr(budget, "units", 0)), "gates": gates,
     }
 
 
@@ -245,7 +250,7 @@ class WorkerClient:
     def _request(self, method: str, path: str, payload: dict, headers: dict) -> dict:
         request = urllib.request.Request(
             self.base_url + path,
-            data=json.dumps(payload).encode("utf-8"),
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),  # tiếng Việt: 2-3 byte, không phải 6
             headers={"content-type": "application/json", **headers},
             method=method,
         )
@@ -265,6 +270,7 @@ class HttpWorker:
     planner: Callable[[dict], tuple[dict, int]] | None = None
     change_runner: Callable[[dict, int, int, int], dict] | None = None
     heartbeat_interval: float = 30.0
+    tracer: Any = None  # meter.Tracer chung với planner/change runner
 
     def _with_heartbeat(self, operation: Callable, ticket_id: int, lease: dict,
                         on_lease_lost: Callable | None = None):
@@ -301,6 +307,9 @@ class HttpWorker:
             raise ValueError("shadow mode cannot execute implementation gates")
         if self.mode == "active" and (not self.planner or not self.change_runner):
             raise ValueError("active mode requires planner and change runner")
+        if self.tracer and self.tracer.over_hourly_cap():
+            # GPU dùng chung: hết trần giờ thì không nhận ticket mới; ticket đang chạy không bị phạt.
+            return {"status": "gpu_paused", "gpu_s_last_hour": round(self.tracer.gpu_s_last_hour(), 1)}
 
         claim = self.client.post("/api/ai-board/worker/claim", {
             "worker_id": self.worker_id, "version": self.version, "mode": self.mode,
@@ -321,6 +330,16 @@ class HttpWorker:
             **lease, "trigger": "plan" if self.planner else "shadow_precheck",
             "idempotency_key": f"{prefix}:run",
         })["run"]
+        if self.tracer:
+            self.tracer.begin(run["id"], lambda calls: self.client.post(
+                f"/api/ai-board/worker/tickets/{ticket_id}/traces", {**lease, "run_id": run["id"], "calls": calls}))
+        try:
+            return self._run_leased(ticket_id, lease, prefix, snapshot, run)
+        finally:
+            if self.tracer:
+                self.tracer.flush()
+
+    def _run_leased(self, ticket_id: int, lease: dict, prefix: str, snapshot: dict, run: dict) -> dict:
         self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/events", {
             **lease, "run_id": run["id"], "event_type": "shadow_precheck_passed",
             "public_message": "Đã kiểm tra yêu cầu; đang chờ lập kế hoạch.",
@@ -397,10 +416,10 @@ class HttpWorker:
 class HarnessPlanner:
     """Runs existing gates 1, 2 and 2.5, then emits the server-owned D0 schema."""
 
-    def __init__(self):
+    def __init__(self, tracer=None):
         Budget, Deps, run_gate = _load_harness()
         self.Budget = Budget
-        self.deps = Deps.real()
+        self.deps = dataclasses.replace(Deps.real(), trace=tracer)
         self.run_gate = run_gate
 
     @staticmethod
@@ -450,8 +469,9 @@ class HarnessPlanner:
     def __call__(self, snapshot: dict) -> tuple[dict, int]:
         request = self._request(snapshot)
         budget = self.Budget.from_env()
-        # D0 uses 40 units per model call and a hard 200-unit automatic cap.
         budget.max_model_calls = min(budget.max_model_calls, 5)
+        ticket = snapshot.get("ticket") or {}
+        budget.max_units = max(int(ticket.get("budget_limit") or 200) - int(ticket.get("cumulative_budget") or 0), 0)
         state = {}
         for gate in (1, 2, 2.5):
             result = self.run_gate(gate, request, self.deps, budget, state)
@@ -460,21 +480,19 @@ class HarnessPlanner:
                     "gate": gate, "reason": result.get("reason"), "signals": list(result.get("signals") or []),
                     "plan": json.dumps(state.get("plan"), ensure_ascii=False)[:2000],
                 })
-        spent = budget.snapshot()
-        budget_used = int(spent.get("model_calls", 0)) * 40
-        return self._canonical(request, state["plan"]), budget_used
+        return self._canonical(request, state["plan"]), int(budget.units)
 
 
 class HarnessChangeRunner:
     """Connect an accepted HTTP plan to the existing full-checkout gate pipeline."""
 
-    def __init__(self, checkout_source=None):
+    def __init__(self, checkout_source=None, tracer=None):
         Budget, Deps, run_gate = _load_harness()
         from main import cleanup_full_checkout
         from memory import DEFAULT_PATH
         self.memory_path = DEFAULT_PATH
         self.Budget = Budget
-        self.deps = Deps.real()
+        self.deps = dataclasses.replace(Deps.real(), trace=tracer)
         self.run_gate = run_gate
         self.cleanup = cleanup_full_checkout
         self.checkout_source = checkout_source or Path(__file__).resolve().parents[1]
@@ -484,8 +502,7 @@ class HarnessChangeRunner:
                  accepted_policy_hash: str | None, request_detail: str | None = None,
                  should_stop: Callable[[], bool] | None = None) -> dict:
         budget = self.Budget.from_env()
-        remaining = budget_limit - cumulative_budget - budget_used
-        budget.max_model_calls = min(budget.max_model_calls, max(remaining // 40, 0))
+        budget.max_units = max(budget_limit - cumulative_budget - budget_used, 0)  # giây GPU còn lại
         return execute_pre_pr(
             plan, ticket_id=ticket_id, checkout_source=self.checkout_source,
             deps=self.deps, budget=budget, run_gate=self.run_gate, cleanup=self.cleanup,
@@ -525,13 +542,18 @@ def main(argv: list[str] | None = None) -> int:
     key = os.getenv("AI_BOARD_WORKER_KEY", "")
     if args.mode != "off" and len(key) < 24:
         parser.error("AI_BOARD_WORKER_KEY must be at least 24 characters")
+    _load_harness()
+    import meter
+    from memory import DEFAULT_PATH
+    tracer = meter.Tracer(Path(DEFAULT_PATH).with_name("traces.jsonl"))
     worker = HttpWorker(
         WorkerClient(base_url, key),
         worker_id=default_worker_id(),
         version=os.getenv("AI_BOARD_WORKER_VERSION", "d0"),
         mode=args.mode,
-        planner=HarnessPlanner() if args.plan or args.execute else None,
-        change_runner=HarnessChangeRunner() if args.execute else None,
+        planner=HarnessPlanner(tracer) if args.plan or args.execute else None,
+        change_runner=HarnessChangeRunner(tracer=tracer) if args.execute else None,
+        tracer=tracer,
     )
     while True:
         try:
