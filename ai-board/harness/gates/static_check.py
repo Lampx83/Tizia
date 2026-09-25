@@ -15,6 +15,13 @@ import re
 import subprocess
 from pathlib import Path
 
+from gates import guard, intake_guard
+
+CONTENT_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "content_guard.md").read_text(encoding="utf-8")
+CONTENT_LABELS = tuple(x for x in intake_guard.LABELS
+                       if x not in ("privileged_area", "personal_data", "copyright", "off_topic"))
+MAX_CONTENT_CHARS = 3500  # prompt ~1.2k token + chữ tiếng Việt, vừa num_ctx 8192
+
 # ponytail: hằng số ước lượng dòng/size, không đo thật từ template — đủ cho
 # ngưỡng "vượt xa" (2x). Cần chính xác hơn thì hiệu chuẩn qua ticket 16 (gold set).
 SIZE_ESTIMATE_LINES = {"small": 30, "large": 80}
@@ -116,9 +123,44 @@ def oversize_issues(state: dict) -> list[str]:
     return issues
 
 
-def run(state: dict, *, check_size: bool = True) -> dict:
+def content_review(state: dict, deps, budget, *, db_path=None, proposal_id: int | None = None) -> dict | None:
+    """LLM soát chữ hiển thị mới (prompts/content_guard.md). None nếu diff không đổi chữ hiển thị.
+    Nhãn ≠ ok, model lỗi, JSON sai hay hết budget → blocked cần người (fail closed, không bao giờ tự duyệt).
+    Dùng full_diff (base..HEAD) khi có; diff scratch coi file sẵn có như viết lại toàn bộ."""
+    diffs = state.get("full_diff") or state.get("diffs") or []
+    parts = []
+    for item in diffs:
+        text = item.get("diff", "")
+        if not text.startswith("diff --git "):  # diff scratch 1 file thô, không header
+            text = f"diff --git a/{item.get('file', '')} b/{item.get('file', '')}\n{text}"
+        for path, deleted, added, *_ in guard._sections(text):
+            visible = "" if deleted or guard._TEST_PATH.search(path) else guard.visible_text(path, added)
+            if visible.strip():
+                parts.append(f"[{path}] {intake_guard._fence(visible, MAX_CONTENT_CHARS)}")
+    if not parts:
+        return None
+    labels = ["classifier_error"]
+    why = "hết budget, không gọi được bộ soát nội dung"
+    if budget.tick():
+        prompt = CONTENT_PROMPT.format(content="\n".join(parts)[:MAX_CONTENT_CHARS])
+        try:
+            body = deps.call_model(deps.models.gate1_model, prompt, gate=4, budget=budget,
+                                   db_path=db_path, proposal_id=proposal_id)
+            labels, why = intake_guard.parse_labels(body.get("response", ""), CONTENT_LABELS), ""
+        except Exception as e:  # model sập/JSON sai — chuyển người soát, không cho qua im lặng
+            why = f"bộ soát nội dung lỗi: {str(e)[:200]}"
+    if labels == ["ok"]:
+        return {"blocked": False, "labels": labels}
+    reason = f"content_guard: {', '.join(labels)}" + (f" ({why})" if why else "") + " — cần người soát"
+    return {"blocked": True, "labels": labels, "reason": reason,
+            "failure_class": guard.SEVERITY_CLASS["high"]}
+
+
+def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path=None,
+        proposal_id: int | None = None) -> dict:
     """Điểm vào cho main.run_gate. Đọc state['plan'] (cổng 1) + state['diffs']/
-    state['scratch_repo'] (cổng 3). Không gọi model — cổng thuần code.
+    state['scratch_repo'] (cổng 3). Không gọi model — trừ khi có cả deps.models lẫn budget: khi đó
+    chữ hiển thị mới đi qua content_review (1 lời gọi gate1_model, gate=4).
     check_size=False: bỏ cờ size để caller tính lại trên full_diff (oversize_issues)."""
     plan = state.get("plan")
     diffs = state.get("diffs")
@@ -161,4 +203,10 @@ def run(state: dict, *, check_size: bool = True) -> dict:
                 return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
                         "issues": [*issues, reason], "failure_class": "ordinary"}
 
+    if deps is not None and budget is not None and getattr(deps, "models", None) is not None:
+        review = content_review(state, deps, budget, db_path=db_path, proposal_id=proposal_id)
+        if review and review["blocked"]:
+            return {"gate": 4, "blocked": True, "reason": review["reason"], "needs_careful_review": True,
+                    "issues": [*issues, review["reason"]], "failure_class": review["failure_class"],
+                    "content_labels": review["labels"]}
     return {"gate": 4, "blocked": False, "reason": None, "needs_careful_review": needs_careful_review, "issues": issues}

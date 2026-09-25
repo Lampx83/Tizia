@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { LEASE_MS, PlanGuardrailError, RequestValidationError, WorkerContractError } from './store.js';
+import { checkIntake, recordIntakeFlags } from './intake-guard.js';
 
 export function attachAiBoardRequestRoutes(router, {
   store,
@@ -8,12 +9,15 @@ export function attachAiBoardRequestRoutes(router, {
   requireAdmin,
   requireStrictCsrf,
   onCreated = null,
+  db = null, // chỉ để intake-guard ghi cờ; thiếu thì vẫn chặn 422 bình thường
 }) {
   router.post('/api/requests', requireAuth, requireEnrolled, (req, res) => {
     const body = req.body || {};
     const ownerDomain = req.user.role === 'admin'
       ? String(body.domain || '').trim()
       : req.user.enrolled_domain;
+    const intake = checkIntake(body.title, body.detail);
+    if (intake.block) return res.status(422).json({ error: 'request_rejected', message: intake.message });
     try {
       const result = store.createRequestWithRoot({
         ownerUserId: req.user.id,
@@ -25,6 +29,7 @@ export function attachAiBoardRequestRoutes(router, {
         detail: body.detail,
         attachments: body.attachments,
       });
+      if (result.created) recordIntakeFlags(db, result.root_ticket_id, intake.labels);
       res.json({ ok: true, ...result, id: result.request_id, createdAt: Date.now() });
       if (result.created && onCreated) {
         try {
