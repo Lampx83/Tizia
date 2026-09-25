@@ -478,10 +478,24 @@ function renderRequests() {
           },
         });
       }
-      else window.open(`/admin-request.html?id=${id}`, `request-${id}`);
+      else openRequestDialog(id);
     });
   });
 }
+// Chi tiết yêu cầu trong cửa sổ con (dialog + iframe) ngay trên trang admin; Esc hoặc "Đóng" để thoát.
+function openRequestDialog(id) {
+  const dlg = $('#req-dialog');
+  const url = `/admin-request.html?id=${id}`;
+  $('#req-dialog-title').textContent = `Yêu cầu #${id}`;
+  $('#req-dialog-tab').href = url;
+  $('#req-dialog-frame').src = url;
+  if (!dlg.open) dlg.showModal();
+}
+document.addEventListener('click', e => {
+  if (e.target.id === 'req-dialog-close') $('#req-dialog').close();
+});
+$('#req-dialog')?.addEventListener('close', () => { $('#req-dialog-frame').src = 'about:blank'; });
+
 function openReplyModal(id) {
   const r = reqCache.find(x => x.id === id);
   if (!r) return;

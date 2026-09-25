@@ -31,11 +31,28 @@
   pre { white-space:pre-wrap; word-break:break-word; max-height:320px; overflow:auto; background:var(--bg); padding:8px; border-radius:6px; margin:4px 0; }
   details summary { cursor:pointer; color:var(--muted); }
   .over { color:var(--bad); font-weight:700; }
+  /* Trạng thái: xanh = qua/ok, cam = hỏi lại/cần xem, đỏ = chặn/lỗi, xám = chưa có kết luận */
+  .st-ok { --c:var(--ok); } .st-warn { --c:var(--warn); } .st-bad { --c:var(--bad); } .st-idle { --c:var(--muted); }
+  .tag { display:inline-block; font-size:11px; padding:1px 8px; border-radius:999px; border:1px solid var(--c); color:var(--c); }
+  /* Timeline: 1 đường dọc nối các bước theo đúng thứ tự, mỗi bước 1 chấm màu + số thứ tự */
+  .timeline { position:relative; margin:6px 0 4px; padding-left:34px; counter-reset:step; }
+  .timeline::before { content:""; position:absolute; left:13px; top:6px; bottom:6px; width:2px; background:var(--border); }
+  .step { position:relative; background:var(--bg2); border:1px solid var(--border); border-left:3px solid var(--c);
+          border-radius:8px; padding:8px 10px; margin-bottom:8px; font-size:13px; counter-increment:step; }
+  .step::before { content:counter(step); position:absolute; left:-34px; top:7px; width:22px; height:22px; border-radius:50%;
+                  background:var(--c); color:#0b1220; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center; }
+  .step.gate { background:var(--bg3); }
+  .step .line1 { display:flex; flex-wrap:wrap; gap:4px 12px; align-items:center; }
+  .step .metrics { color:var(--muted); font-size:12px; margin-top:4px; display:flex; flex-wrap:wrap; gap:2px 14px; }
+  .run-head { display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center; margin:22px 0 8px; padding:8px 12px;
+              border-radius:10px; background:var(--bg2); border:1px solid var(--border); border-left:4px solid var(--c); }
+  .run-head b { font-size:14px; }
+  .embedded .back { display:none; }
   .err { color:var(--bad); }
 </style>
 </head>
 <body>
 <main id="app"><p class="meta">Đang tải…</p></main>
-<script type="module" src="/js/admin-request.js?v=1"></script>
+<script type="module" src="/js/admin-request.js?v=timeline"></script>
 </body>
 </html>
