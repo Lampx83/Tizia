@@ -1,38 +1,51 @@
 """Cổng 1 — request → plan JSON (kiểu writing-plans: subtask 2-5 phút, mỗi cái
 nêu file + bước verify + nhãn size để cổng 3 chọn coder model).
 
-Schema plan (hợp đồng với cổng 2, 3, 13):
+Schema plan (hợp đồng với cổng 2, 2.5, 3 và worker.HarnessPlanner._canonical):
 {
   "summary_vi":   str   # 1-2 câu tiếng Việt: giải quyết gì, đổi gì (cổng 5/7 ghép vào PR/Telegram)
   "capabilities": [str] # tên key surface plugin cần — cổng 2 chặn nếu có gì ngoài surface
   "subtasks": [
     {"title": str, "file": str, "verify": str, "size": "small" | "large"}
-  ]                     # small → qwen2.5-coder:14b, large → qwen3-coder:30b (ticket 11)
+  ]
 }
+
+Prompt = context.manual() (AIBOARD.md) + prompts/brainstorm.md; phần {context} lấy từ
+context.build_context(gate 1): harness chọn skill theo request, chạy tool của skill
+(outline/tree/grep/graph/lessons ở 1 sha) rồi mới dựng prompt — model thấy css/js liên kết
+của trang ứng viên nên chọn đúng file. Plan có file không tồn tại (ngoài đường mới được phép)
+→ hỏi lại model đúng 1 lần kèm lý do, vẫn sai → blocked.
 """
 from __future__ import annotations
 
 import json
+import posixpath
+import re
 from pathlib import Path
 
-import codegraph
+import code_index
+import context
 from gates.scope_check import load_capability_names
 
+ROOT = Path(__file__).resolve().parents[3]
 SIZES = ("small", "large")
 SUBTASK_KEYS = ("title", "file", "verify", "size")
+# File chưa có ở base chỉ được là trang mới, module JS mới, hoặc plugin _ai-generated mới.
+_NEW_OK = re.compile(r"^(public/[a-z0-9][a-z0-9-]*\.html|public/js/[\w/-]+\.js"
+                     r"|server/contexts/_ai-generated/[\w-]+/[\w-]+/index\.js)$")
+RETRY_SUFFIX = "\n\nYOUR PREVIOUS ANSWER WAS REJECTED: {reason}\nFix exactly that. Output ONLY the JSON object."
 
-# Prompt sống ở file riêng (ai-board/harness/prompts/), không phải string
-# literal ở đây — dễ review/diff độc lập với logic Python, và vẫn giữ đúng
-# "kỷ luật cache" rule 1 (đọc 1 lần lúc import, byte-để-byte cố định mọi
-# lần gọi, y hệt lúc còn là string cứng).
+# Prompt sống ở file riêng (ai-board/harness/prompts/), đọc 1 lần lúc import — phần trước
+# {context} cố định byte-để-byte mọi lần gọi (kỷ luật cache, khoá bằng prompts.lock.json).
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "brainstorm.md").read_text(encoding="utf-8")
 
 
-def build_prompt(request: dict, surface: frozenset[str], graph_hints: list[str] | None = None) -> str:
+def build_prompt(request: dict, surface: frozenset[str], context_text: str = "") -> str:
+    """AIBOARD.md + prompt đã khoá (prefix cố định) rồi mới tới context/request thay đổi theo lượt."""
     thread = " | ".join(
         f"{m.get('role')}: {m.get('body')}" for m in (request.get("thread") or [])
     ) or "(không có)"
-    return PROMPT.format(
+    return context.manual() + PROMPT.format(
         id=request.get("id"),
         domain=request.get("domain") or "(core)",
         type=request.get("type"),
@@ -41,7 +54,7 @@ def build_prompt(request: dict, surface: frozenset[str], graph_hints: list[str] 
         body=request.get("body", ""),
         thread=thread,
         surface=", ".join(sorted(surface)),
-        graph_hints=", ".join(graph_hints) if graph_hints else "(không có — graphify chưa cài hoặc graph chưa build)",
+        context=context_text or "REPO DATA: (không có)",
     )
 
 
@@ -73,24 +86,51 @@ def parse_plan(text: str) -> dict:
     return plan
 
 
-def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = None) -> dict:
-    """1 lời gọi GATE1_MODEL, tính phí budget. Plan sai schema → blocked.
-    db_path/proposal_id (ticket 23): có cả hai thì ghi 1 dòng gate_trace —
-    thiếu 1 trong 2 (vd test gọi run() trực tiếp không qua main.run_once) thì
-    bỏ qua, không phải lỗi.
+def check_files(plan: dict, source, sha: str | None) -> None:
+    """Mỗi subtask.file phải có ở `sha` hoặc là đường mới được phép; không 2 subtask cùng file.
+    Ghi lại file đã chuẩn hoá (posix, bỏ ./). Raise ValueError nêu file sai. sha None → chỉ kiểm trùng."""
+    seen: list[str] = []
+    for st in plan["subtasks"]:
+        file = st["file"] = posixpath.normpath(st["file"].strip().replace("\\", "/").lstrip("./"))
+        if file in seen:
+            raise ValueError(f"2 subtask cùng sửa {file} — gộp thành 1")
+        seen.append(file)
+    must_exist = [f for f in seen if not _NEW_OK.match(f)]
+    if sha is None or not must_exist:
+        return
+    try:  # 1 tiến trình git cho mọi file
+        found = set(code_index.git(source, "ls-tree", "--name-only", sha, "--", *must_exist)
+                    .decode("utf-8", "replace").splitlines())
+    except OSError:
+        found = set()
+    missing = [f for f in must_exist if f not in found]
+    if missing:
+        raise ValueError(f"file '{missing[0]}' không có trong repo — chọn file có trong REPO DATA")
 
-    Ticket 21: query codegraph TRƯỚC khi dựng prompt — model vẫn tự chọn/
-    xác nhận file thật trong subtasks[].file, graph chỉ là gợi ý thu hẹp
-    phạm vi (KHÔNG override). graphify chưa cài/graph.json chưa build ->
-    codegraph.query() trả [] êm re, gate 1 chạy y hệt hôm nay, không bao giờ
-    bị chặn vì thiếu graph."""
-    surface = load_capability_names()["surface"]
-    graph_hints = codegraph.query(f"{request.get('domain', '')} {request.get('subject', '')}".strip())
-    prompt = build_prompt(request, surface, graph_hints)
-    body = deps.call_model(deps.models.gate1_model, prompt, gate=1, budget=budget,
-                            db_path=db_path, proposal_id=proposal_id)
-    try:
-        plan = parse_plan(body.get("response", ""))
-    except ValueError as e:
-        return {"gate": 1, "blocked": True, "reason": f"plan không hợp lệ: {e}", "plan": None}
-    return {"gate": 1, "blocked": False, "reason": None, "plan": plan}
+
+def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = None,
+        source=None, sha: str | None = None) -> dict:
+    """1 lời gọi GATE1_MODEL (+1 lần hỏi lại nếu plan sai schema/file), tính phí budget.
+    source/sha: repo + commit để đọc context (mặc định repo chứa harness, HEAD).
+    db_path/proposal_id có cả hai thì ghi gate_trace — thiếu 1 thì bỏ qua, không phải lỗi."""
+    source = source or ROOT
+    ctx = context.build_context(1, request, None, source, sha or "HEAD")
+    commit = ctx["sha"]
+    prompt = build_prompt(request, load_capability_names()["surface"], ctx["text"])
+    reason = None
+    for attempt in range(2):
+        if attempt and not budget.tick():
+            break
+        ask = prompt if not attempt else prompt + RETRY_SUFFIX.format(reason=reason)
+        body = deps.call_model(deps.models.gate1_model, ask, gate=1, budget=budget,
+                               db_path=db_path, proposal_id=proposal_id)
+        try:
+            plan = parse_plan(body.get("response", ""))
+            check_files(plan, source, commit)
+        except ValueError as e:
+            reason = str(e)
+            continue
+        return {"gate": 1, "blocked": False, "reason": None, "plan": plan,
+                "skill": ctx["skill"], "context_chars": ctx["chars"]}
+    return {"gate": 1, "blocked": True, "reason": f"plan không hợp lệ: {reason}", "plan": None,
+            "skill": ctx["skill"]}
