@@ -4,3 +4,4 @@
 ai-board/harness/prompts/*.md text eol=lf
 ai-board/harness/skills/*/SKILL.md text eol=lf
 scripts/smoke-user-state.sh text eol=lf
+ai-board/worker-entrypoint.sh text eol=lf
