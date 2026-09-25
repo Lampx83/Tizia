@@ -51,32 +51,12 @@ const Q = {
     (SELECT COUNT(*) FROM attempts) AS attempts,
     (SELECT COUNT(*) FROM requests) AS requests,
     (SELECT COUNT(*) FROM requests WHERE status='pending') AS requests_pending`),
-  // LEFT JOIN user_wallets BUCKET trường HS đang theo học (enrolled_domain). Vì
-  // user_wallets giờ là composite (user_id, domain), nếu không filter domain thì
-  // user có nhiều bucket sẽ ra nhiều row → sai số liệu admin. enrolled_domain
-  // NULL (admin/chưa enroll) → bucket '' = legacy.
   users: db.prepare(`
     SELECT u.id, u.username, u.display_name, u.role, u.email,
            u.plan, u.plan_expires_at, u.billing_cycle, u.created_at, u.last_login,
-           u.enrolled_domain,
-           w.xp, w.coins, w.streak, w.longest_streak, w.last_visit_day,
-           w.quizzes_passed, w.updated_at AS wallet_updated_at
+           u.enrolled_domain
     FROM users u
-    LEFT JOIN user_wallets w
-      ON w.user_id = u.id AND w.domain = COALESCE(u.enrolled_domain, '')
     ORDER BY u.created_at DESC LIMIT @limit
-  `),
-  // Wallet chi tiết — cùng nguyên tắc: chỉ ví trường HS đang học.
-  userWalletDetail: db.prepare(`
-    SELECT u.id, u.username, u.display_name, u.role, u.enrolled_domain,
-           w.coins, w.xp, w.streak, w.longest_streak, w.streak_shields,
-           w.last_visit_day, w.achievements, w.vr_sessions, w.meta_sessions,
-           w.quizzes_passed, w.modules_by_day, w.daily, w.quests_claimed,
-           w.updated_at
-    FROM users u
-    LEFT JOIN user_wallets w
-      ON w.user_id = u.id AND w.domain = COALESCE(u.enrolled_domain, '')
-    WHERE u.id = ?
   `),
   setUserRole: db.prepare(`UPDATE users SET role=@role WHERE id=@id`),
   requests: db.prepare(`SELECT id, domain, type, title, detail, status, votes, student, admin_note, created_at, updated_at
@@ -208,56 +188,6 @@ export function attachAdmin(r) {
     res.json({ ok: true, enrolled_domain: target });
   });
 
-  // GET /api/admin/users/:id/wallet — chi tiết ví game của 1 HS/SV. Parse JSON
-  // string achievements/modules_by_day/daily/quests_claimed về object để FE
-  // không phải parse 2 lần. Null nếu user chưa từng có wallet row.
-  r.get('/api/admin/users/:id/wallet', requireAdmin, (req, res) => {
-    const row = Q.userWalletDetail.get(Number(req.params.id));
-    if (!row) return res.status(404).json({ error: 'user_not_found' });
-    const parse = (s, fb) => { try { return JSON.parse(s || ''); } catch { return fb; } };
-    res.json({
-      user: { id: row.id, username: row.username, display_name: row.display_name, role: row.role },
-      wallet: row.xp == null ? null : {
-        coins: row.coins, xp: row.xp,
-        streak: row.streak, longest_streak: row.longest_streak, streak_shields: row.streak_shields,
-        last_visit_day: row.last_visit_day,
-        achievements: parse(row.achievements, []),
-        vr_sessions: row.vr_sessions, meta_sessions: row.meta_sessions,
-        quizzes_passed: row.quizzes_passed,
-        modules_by_day: parse(row.modules_by_day, {}),
-        daily: parse(row.daily, {}),
-        quests_claimed: parse(row.quests_claimed, {}),
-        updated_at: row.updated_at,
-      },
-    });
-  });
-
-  // PATCH /api/admin/users/:id/wallet — admin chỉnh ví thủ công (vd khôi phục
-  // XP user mất do bug, thưởng coin cho sự kiện, reset streak). Chỉ field nào
-  // truyền lên mới update; field còn lại giữ nguyên. Clamp ≥0 để chống nhập âm.
-  const ALLOWED_WALLET_FIELDS = ['xp', 'coins', 'streak', 'longest_streak', 'streak_shields',
-                                  'vr_sessions', 'meta_sessions', 'quizzes_passed'];
-  r.patch('/api/admin/users/:id/wallet', requireAdmin, (req, res) => {
-    const id = Number(req.params.id);
-    const cur = Q.userWalletDetail.get(id);
-    if (!cur) return res.status(404).json({ error: 'user_not_found' });
-    const patch = req.body || {};
-    const sets = [], vals = { id, updated_at: Date.now() };
-    for (const f of ALLOWED_WALLET_FIELDS) {
-      if (patch[f] != null) {
-        sets.push(`${f} = @${f}`);
-        vals[f] = Math.max(0, Math.floor(Number(patch[f])) || 0);
-      }
-    }
-    if (!sets.length) return res.status(400).json({ error: 'no_fields' });
-    // Wallet row có thể chưa tồn tại → INSERT trước với defaults rồi UPDATE.
-    if (cur.xp == null) {
-      db.prepare(`INSERT INTO user_wallets (user_id, updated_at) VALUES (?, ?)`).run(id, Date.now());
-    }
-    db.prepare(`UPDATE user_wallets SET ${sets.join(', ')}, updated_at = @updated_at WHERE user_id = @id`).run(vals);
-    res.json({ ok: true, wallet: Q.userWalletDetail.get(id) });
-  });
-
   // Admin set gói cước thủ công (cấp/gia hạn/huỷ). cycle 'month'|'year'|null;
   // null + plan 'free' → vĩnh viễn. days override để cấp thử (vd trial 7 ngày).
   r.post('/api/admin/users/:id/plan', requireAdmin, (req, res) => {
@@ -278,7 +208,16 @@ export function attachAdmin(r) {
   // Góp ý — xuyên tenant (giám sát Ban điều hành AI) + can thiệp status
   r.get('/api/admin/requests', requireAdmin, (req, res) => {
     const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
-    res.json({ requests: Q.requests.all({ limit }) });
+    let rows;
+    try {
+      rows = db.prepare(`SELECT r.id, r.domain, r.type, r.title, r.detail, r.status, r.votes, r.student, r.admin_note,
+          r.created_at, r.updated_at, u.role AS requester_role
+        FROM requests r LEFT JOIN users u ON u.id = r.owner_user_id
+        ORDER BY r.created_at DESC LIMIT @limit`).all({ limit });
+    } catch {
+      rows = Q.requests.all({ limit });
+    }
+    res.json({ requests: rows });
   });
   r.post('/api/admin/requests/:id/status', requireAdmin, requireStrictCsrf, (req, res) => {
     const status = String(req.body?.status || '');

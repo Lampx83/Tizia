@@ -185,17 +185,30 @@
   .req-dialog .dlg-head { display:flex; align-items:center; gap:10px; padding:10px 14px;
                           border-bottom:1px solid var(--border); background:var(--bg2); }
   .req-dialog .dlg-head b { flex:1; }
+  .req-dialog .dlg-x { width:32px; height:32px; border-radius:8px; border:1px solid var(--border); background:transparent;
+                        color:var(--txt); font-size:22px; line-height:1; cursor:pointer; }
+  .req-dialog .dlg-x:hover { background:var(--bg3); }
+  /* Trạng thái góp ý: màu theo nghĩa */
+  .pill.st-pending   { background:rgba(251,146,60,0.18); color:#fdba74; }
+  .pill.st-reviewing { background:rgba(96,165,250,0.18); color:#93c5fd; }
+  .pill.st-done      { background:rgba(34,197,94,0.18);  color:#86efac; }
+  .pill.st-rejected  { background:rgba(239,68,68,0.18);  color:#fca5a5; }
+  .pill.st-cancelled { background:rgba(148,163,184,0.16); color:#94a3b8; }
+  .pill.ai-ok   { background:rgba(34,197,94,0.18);  color:#86efac; }
+  .pill.ai-warn { background:rgba(251,146,60,0.18); color:#fdba74; }
+  .pill.ai-bad  { background:rgba(239,68,68,0.18);  color:#fca5a5; }
+  .req-detail { max-width:320px; font-size:12px; color:var(--muted); display:-webkit-box; -webkit-line-clamp:2;
+                -webkit-box-orient:vertical; overflow:hidden; }
   .req-dialog iframe { width:100%; height:calc(100% - 49px); border:0; display:block; background:var(--bg); }
 </style>
 </head>
-<body data-no-suggestion-fab data-page-title="Ban điều hành">
+<body data-no-suggestion-fab data-no-gamify data-page-title="Ban điều hành">
 <header id="auth-header"></header>
 <script type="module" src="/js/auth-header.js"></script>
 <main id="app"><div class="loading">Đang tải dashboard…</div></main>
 <dialog class="req-dialog" id="req-dialog">
   <div class="dlg-head"><b id="req-dialog-title">Chi tiết yêu cầu</b>
-    <a class="btn" id="req-dialog-tab" target="_blank" rel="noopener">Mở tab riêng</a>
-    <button class="btn" id="req-dialog-close" type="button">Đóng</button></div>
+    <button class="dlg-x" id="req-dialog-close" type="button" aria-label="Đóng" title="Đóng">&times;</button></div>
   <iframe id="req-dialog-frame" title="Chi tiết yêu cầu"></iframe>
 </dialog>
 
@@ -295,29 +308,6 @@
     </div>
   </div>
 
-  <!-- View / edit wallet (XP / coin / streak / achievements / modules) -->
-  <div class="modal" id="modal-wallet" style="display:none;max-width:640px">
-    <h3>Ví game của HS/SV</h3>
-    <p class="sub" id="ew-sub"></p>
-    <div id="ew-summary" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div class="grp"><label>XP</label><input id="ew-xp" type="number" min="0"></div>
-      <div class="grp"><label>Coin</label><input id="ew-coins" type="number" min="0"></div>
-      <div class="grp"><label>Streak (chuỗi ngày)</label><input id="ew-streak" type="number" min="0"></div>
-      <div class="grp"><label>Streak shields (khiên)</label><input id="ew-shields" type="number" min="0"></div>
-    </div>
-    <div class="ctx" style="font-size:12px;background:rgba(59,130,246,0.08);border-left-color:#3b82f6">
-      Sửa XP/coin trực tiếp ghi đè ví của user. Achievements + modules đã hoàn thành chỉ xem, không sửa qua form này.
-    </div>
-    <details style="margin-top:10px;font-size:13px"><summary>Chi tiết achievements / modules theo ngày / quest</summary>
-      <pre id="ew-raw" style="background:#0f1729;padding:10px;border-radius:6px;max-height:240px;overflow:auto;font-size:11px"></pre>
-    </details>
-    <div class="actions">
-      <button class="btn" id="ew-cancel">Đóng</button>
-      <button class="btn primary" id="ew-submit">Lưu ví</button>
-    </div>
-  </div>
-
   <!-- Confirm delete (chung cho mọi entity) -->
   <div class="modal" id="modal-confirm" style="display:none;border-color:rgba(239,68,68,0.4)">
     <h3 id="cf-title">Xác nhận xoá</h3>
@@ -355,10 +345,9 @@
 <div class="toast" id="toast"></div>
 <div class="chart-tooltip" id="ctt"></div>
 
-<script type="module" src="/js/admin-dashboard.js?v=detail-dialog"></script>
+<script type="module" src="/js/admin-dashboard.js?v=patch-refresh"></script>
 <script type="module" src="./js/engagement-hud.js?v=2026-06-05-r2"></script>
 <script type="module" src="./js/onboarding-60s.js?v=2026-06-08-r8"></script>
-<script type="module" src="./js/pet-widget.js?v=2026-06-10-tl1"></script>
 <script type="module" src="./js/daily-login.js?v=2026-06-07b"></script>
 </body>
 </html>

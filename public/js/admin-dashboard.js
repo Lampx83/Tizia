@@ -401,6 +401,19 @@ async function loadRequests() {
   aiTicketCache = ai.data.tickets || [];
   renderRequests();
 }
+// Loại = lựa chọn "Loại đề nghị" trong nút Góp ý (suggestion-fab.js) khi học sinh gửi.
+const REQUEST_TYPE_LABEL = { game: 'Trò chơi', theory: 'Lý thuyết / học liệu', lab: 'Thực hành / thí nghiệm',
+  skill: 'Luyện kỹ năng', other: 'Góp ý / báo lỗi' };
+const REQUEST_STATUS_LABEL = { pending: 'Chờ xử lý', reviewing: 'Đang xử lý', done: 'Hoàn thành',
+  rejected: 'Từ chối', cancelled: 'Đã hủy' };
+const ROLE_NAME = { admin: 'Quản trị', teacher: 'Giảng viên', student: 'Sinh viên', pupil: 'Học sinh', parent: 'Phụ huynh' };
+// Màu ticket AI: xanh = qua kiểm tra trước PR, cam = chờ người, đỏ = chặn/hủy.
+function aiTone(t) {
+  if (t.phase === 'pre_pr_ready') return 'ai-ok';
+  if (['cancelled', 'failed'].includes(t.status) || /blocked|violation|exhausted|unfit/.test(t.phase || '')) return 'ai-bad';
+  if (/waiting|human_owned/.test(t.status || '') || t.phase === 'pre_pr_review') return 'ai-warn';
+  return '';
+}
 function renderRequests() {
   const filtered = reqFilter === 'all' ? reqCache : reqCache.filter(r => r.status === reqFilter);
   const counts = reqCache.reduce((m,r) => (m[r.status] = (m[r.status]||0)+1, m), {});
@@ -422,24 +435,26 @@ function renderRequests() {
     </div>
     <table>
       <thead><tr>
-        <th>#</th><th>Trường</th><th>Tiêu đề</th><th>Loại</th>
-        <th>HS</th><th>Trạng thái</th><th>AI Board</th><th>Vote</th><th>Tạo lúc</th><th></th>
+        <th>#</th><th>Trường</th><th>Tiêu đề</th><th>Nội dung yêu cầu</th><th>Loại</th>
+        <th>Người yêu cầu</th><th>Vai trò</th><th>Trạng thái</th><th>AI Board</th><th>Vote</th><th>Tạo lúc</th><th></th>
       </tr></thead>
       <tbody>
       ${filtered.map(r => `
         ${(() => {
           const ticket = ticketByRequest.get(r.id);
           const ticketSummary = ticket
-            ? `<span class="pill">#${ticket.id} · ${esc(ticket.status)}/${esc(ticket.phase)}</span><div style="font-size:11px;opacity:.75;max-width:260px">${esc(ticket.public_note || ticket.internal_reason || '')}</div>`
+            ? `<span class="pill ${aiTone(ticket)}">#${ticket.id} · ${esc(ticket.status)}/${esc(ticket.phase)}</span><div style="font-size:11px;opacity:.75;max-width:260px">${esc(ticket.public_note || ticket.internal_reason || '')}</div>`
             : '<span style="opacity:.45">legacy</span>';
           return `
         <tr data-rid="${r.id}">
           <td>${r.id}</td>
           <td><span class="pill">${esc(r.domain)}</span></td>
-          <td style="max-width:340px">${esc(r.title)}</td>
-          <td><span class="pill">${esc(r.type)}</span></td>
+          <td style="max-width:260px">${esc(r.title)}</td>
+          <td><div class="req-detail" title="${esc(r.detail || '')}">${esc(r.detail || '—')}</div></td>
+          <td title="${esc(r.type)}">${esc(REQUEST_TYPE_LABEL[r.type] || r.type)}</td>
           <td>${esc(r.student)}</td>
-          <td><span class="pill ${r.status}">${r.status}</span></td>
+          <td>${esc(ROLE_NAME[r.requester_role] || r.requester_role || '—')}</td>
+          <td><span class="pill st-${esc(r.status)}">${esc(REQUEST_STATUS_LABEL[r.status] || r.status)}</span></td>
           <td>${ticketSummary}</td>
           <td>${r.votes}</td>
           <td style="font-size:12px;opacity:.7">${fmt(r.created_at)}</td>
@@ -487,7 +502,6 @@ function openRequestDialog(id) {
   const dlg = $('#req-dialog');
   const url = `/admin-request.html?id=${id}`;
   $('#req-dialog-title').textContent = `Yêu cầu #${id}`;
-  $('#req-dialog-tab').href = url;
   $('#req-dialog-frame').src = url;
   if (!dlg.open) dlg.showModal();
 }
@@ -544,8 +558,6 @@ function renderUsers() {
       <thead><tr>
         <th>#</th><th>Username</th><th>Tên hiển thị</th><th>Vai trò</th>
         <th>Gói</th><th title="Trường HS đang theo học (mỗi tài khoản 1 trường)">Đang học</th>
-        <th title="Level tính từ XP">Lv</th>
-        <th>XP</th><th>Coin</th><th title="Chuỗi ngày liên tục">🔥</th>
         <th>Email</th><th>Đăng nhập gần nhất</th><th></th>
       </tr></thead>
       <tbody>
@@ -557,14 +569,9 @@ function renderUsers() {
           <td><span class="pill ${u.role}">${u.role}</span></td>
           <td><span class="pill">${esc(u.plan || 'free')}</span></td>
           <td style="font-size:12px">${u.enrolled_domain ? `<span class="pill" style="background:#16a34a;color:#fff">${esc(u.enrolled_domain)}</span>` : '<span style="opacity:.5">—</span>'}</td>
-          <td style="font-weight:600;color:#a78bfa">${lvFromXp(u.xp || 0)}</td>
-          <td style="font-size:12px">${u.xp != null ? u.xp : '—'}</td>
-          <td style="font-size:12px">${u.coins != null ? u.coins : '—'}</td>
-          <td style="font-size:12px">${u.streak || 0}</td>
           <td style="font-size:12px;opacity:.7">${u.email ? esc(u.email) : '—'}</td>
           <td style="font-size:12px;opacity:.7">${fmt(u.last_login)}</td>
           <td class="actions" style="white-space:nowrap">
-            <button class="btn" data-act="wallet" data-uid="${u.id}" title="Xem/sửa ví XP/coin">🎮</button>
             <button class="btn" data-act="enroll" data-uid="${u.id}" data-domain="${esc(u.enrolled_domain || '')}" title="Đổi trường đang học">🎓</button>
             <button class="btn" data-act="role" data-uid="${u.id}" data-role="${u.role}" title="Đổi vai trò">👥</button>
             <button class="btn" data-act="edit" data-uid="${u.id}" title="Sửa thông tin">✏️</button>
@@ -585,7 +592,6 @@ function renderUsers() {
       if (!u) return;
       if (b.dataset.act === 'role') openRoleModal(id, b.dataset.role);
       else if (b.dataset.act === 'edit') openEditUserModal(u);
-      else if (b.dataset.act === 'wallet') openWalletModal(u);
       else if (b.dataset.act === 'pwd') openResetPwdModal(u);
       else if (b.dataset.act === 'del') confirmDeleteUser(u);
       else if (b.dataset.act === 'enroll') openEnrollModal(u);
@@ -738,71 +744,12 @@ function openConfirm({ title, msg, ctx, onConfirm }) {
 }
 
 function hideAllModals() {
-  ['modal-replyReq','modal-setRole','modal-createUser','modal-editUser','modal-resetPwd','modal-confirm','modal-wallet'].forEach(id => {
+  ['modal-replyReq','modal-setRole','modal-createUser','modal-editUser','modal-resetPwd','modal-confirm'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
 }
 
-// ─── Wallet (XP/coin/streak) viewer + editor ───
-// Cùng công thức với public/js/engine/gamification.js để admin thấy đúng level
-// mà user đang hiển thị. Đổi đây phải đổi cả gamification.js.
-function lvFromXp(xp) {
-  xp = Math.max(0, xp | 0);
-  const cum = L => { const n = Math.max(1, L) - 1; return 60 * n + 40 * (n * (n + 1)) / 2; };
-  let L = 1; while (xp >= cum(L + 1)) L++; return L;
-}
-async function openWalletModal(u) {
-  const r = await api(`/api/admin/users/${u.id}/wallet`);
-  if (!r.ok) return toast('Không tải được ví: ' + (r.data?.error || r.status), 'err');
-  const w = r.data.wallet;
-  $('#ew-sub').textContent = `@${u.username} · ${u.display_name} (id=${u.id}, role=${u.role})`;
-  if (!w) {
-    $('#ew-summary').innerHTML = '<div class="ctx" style="grid-column:1/-1">Chưa có ví — user chưa hoạt động lần nào</div>';
-    $('#ew-xp').value = 0; $('#ew-coins').value = 0; $('#ew-streak').value = 0; $('#ew-shields').value = 0;
-    $('#ew-raw').textContent = '(empty)';
-  } else {
-    const lv = lvFromXp(w.xp);
-    $('#ew-summary').innerHTML = `
-      <div class="ctx" style="text-align:center"><div style="font-size:11px;opacity:.7">Level</div><div style="font-size:22px;font-weight:700;color:#a78bfa">${lv}</div></div>
-      <div class="ctx" style="text-align:center"><div style="font-size:11px;opacity:.7">XP</div><div style="font-size:18px;font-weight:600">${w.xp}</div></div>
-      <div class="ctx" style="text-align:center"><div style="font-size:11px;opacity:.7">Coin</div><div style="font-size:18px;font-weight:600;color:#fbbf24">${w.coins}</div></div>
-      <div class="ctx" style="text-align:center"><div style="font-size:11px;opacity:.7">Streak</div><div style="font-size:18px;font-weight:600;color:#ef4444">${w.streak} 🔥</div></div>
-    `;
-    $('#ew-xp').value = w.xp;
-    $('#ew-coins').value = w.coins;
-    $('#ew-streak').value = w.streak;
-    $('#ew-shields').value = w.streak_shields;
-    $('#ew-raw').textContent = JSON.stringify({
-      achievements: w.achievements,
-      modules_by_day: w.modules_by_day,
-      daily: w.daily,
-      quests_claimed: w.quests_claimed,
-      longest_streak: w.longest_streak,
-      vr_sessions: w.vr_sessions, meta_sessions: w.meta_sessions,
-      quizzes_passed: w.quizzes_passed,
-      last_visit_day: w.last_visit_day,
-      updated_at: w.updated_at && new Date(w.updated_at).toISOString(),
-    }, null, 2);
-  }
-  $('#modal-bg').dataset.uid = u.id;
-  hideAllModals(); $('#modal-wallet').style.display = '';
-  $('#modal-bg').classList.add('show');
-}
-async function submitWallet() {
-  const uid = Number($('#modal-bg').dataset.uid);
-  const body = {
-    xp: Number($('#ew-xp').value) || 0,
-    coins: Number($('#ew-coins').value) || 0,
-    streak: Number($('#ew-streak').value) || 0,
-    streak_shields: Number($('#ew-shields').value) || 0,
-  };
-  const r = await api(`/api/admin/users/${uid}/wallet`, { method:'PATCH', body: JSON.stringify(body) });
-  if (!r.ok) return toast('Lỗi lưu ví: ' + (r.data?.error || r.status), 'err');
-  toast(`Đã lưu ví · Lv${lvFromXp(body.xp)}`);
-  closeModal();
-  await loadUsers();
-}
 function openRoleModal(uid, currentRole) {
   const u = userCache.find(x => x.id === uid);
   if (!u) return;
@@ -2101,9 +2048,12 @@ async function showTab(key, { silent = false } = {}) {
     try { history.replaceState(null, '', location.pathname + location.search + want); } catch {}
   }
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.k === key));
-  if (!silent) $('#tabbody').innerHTML = '<div class="loading">Đang tải…</div>';
+  const host = $('#tabbody');
+  const previous = silent ? [...host.childNodes] : null;
+  if (!silent) host.innerHTML = '<div class="loading">Đang tải…</div>';
   try {
     await TABS[key].load();
+    if (previous) patchChildren(host, previous);
     // Badge "Góp ý" lấy từ reqCache chỉ khi tab Góp ý vừa tải lại; tab khác (vd dashboard) tự cập nhật
     // bằng số của server — trước đây ghi đè bằng reqCache rỗng nên badge hiện 0.
     if (key === 'requests') updateRequestBadge(TABS.requests.badge());
@@ -2122,6 +2072,40 @@ function autoRefresh() {
 function updateRequestBadge(count) {
   const tb = document.querySelector('.tab[data-k="requests"] .count');
   if (tb) tb.textContent = count;
+}
+
+// Vá cây DOM `from` cho giống `to`, giữ nguyên nút nào không đổi (vị trí cuộn, <details> đang mở, ô chọn,
+// biểu đồ không vẽ lại). Nút mới/khác loại thì lấy nút của bản render mới (đã gắn sẵn listener).
+function morph(from, to) {
+  if (from.nodeType !== to.nodeType || from.nodeName !== to.nodeName) return to;
+  if (from.nodeType !== 1) {
+    if (from.nodeValue !== to.nodeValue) from.nodeValue = to.nodeValue;
+    return from;
+  }
+  if (from.isEqualNode(to)) return from;
+  for (const a of [...from.attributes]) {
+    // `open` của <details> là trạng thái người dùng vừa bấm, không phải dữ liệu mới.
+    if (!to.hasAttribute(a.name) && !(a.name === 'open' && from.nodeName === 'DETAILS')) from.removeAttribute(a.name);
+  }
+  for (const a of [...to.attributes]) if (from.getAttribute(a.name) !== a.value) from.setAttribute(a.name, a.value);
+  const next = [...to.childNodes];
+  const prev = [...from.childNodes];
+  next.forEach((child, i) => {
+    if (!prev[i]) { from.appendChild(child); return; }
+    const kept = morph(prev[i], child);
+    if (kept !== prev[i]) prev[i].replaceWith(kept);
+  });
+  prev.slice(next.length).forEach(n => n.remove());
+  return from;
+}
+// host vừa được render mới; đưa nút cũ trở lại rồi vá theo bản mới — 1 khung hình, không nháy.
+function patchChildren(host, previous) {
+  const fresh = document.createElement('div');
+  fresh.append(...host.childNodes);
+  const old = document.createElement('div');
+  old.append(...previous);
+  morph(old, fresh);
+  host.append(...old.childNodes);
 }
 
 async function refresh({ silent = false } = {}) {
@@ -2202,8 +2186,6 @@ async function init() {
   $('#eu-submit').addEventListener('click', submitEditUser);
   $('#rp-cancel').addEventListener('click', closeModal);
   $('#rp-submit').addEventListener('click', submitResetPwd);
-  $('#ew-cancel').addEventListener('click', closeModal);
-  $('#ew-submit').addEventListener('click', submitWallet);
   $('#rp-gen').addEventListener('click', () => { $('#rp-password').value = genPassword(16); });
   $('#cf-cancel').addEventListener('click', closeModal);
 

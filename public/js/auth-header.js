@@ -4,15 +4,14 @@
 
 import { bootstrapMe, currentUser, logout, updateProfile } from './auth.js';
 import { PLAN_BADGES, USER_PLANS, effectivePlanId } from './plans.js';
-// Engagement HUD (Streak · Hearts · Daily Quest) — tự mount cho user đã login.
-// Side-effect import: chỉ cần load là HUD xuất hiện top-right.
-import './engagement-hud.js';
-// Onboarding 60s cho user mới — modal 4 bước, tự bypass nếu đã hoàn thành.
-import './onboarding-60s.js';
-// Pet đồng hành (Prodigy-style) — bubble góc dưới trái.
-import './pet-widget.js';
-// Daily Login Bonus — popup 1 lần/ngày khi chưa claim.
-import './daily-login.js';
+// Gamify dành cho người học: Engagement HUD (Streak · Hearts · Daily Quest), onboarding 60s, pet đồng
+// hành, điểm danh hằng ngày. Trang quản trị gắn <body data-no-gamify> để không nạp các module này.
+if (document.body?.dataset?.noGamify === undefined) {
+  import('./engagement-hud.js');
+  import('./onboarding-60s.js');
+  import('./pet-widget.js');
+  import('./daily-login.js');
+}
 // i18n — auto-load bundle theo locale (vi/en/id).
 import './i18n.js';
 // TTS Reader — toggle 🔊 đọc to bài cho tiểu học.
