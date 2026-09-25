@@ -14,7 +14,6 @@ npm-debug.log*
 dist/
 .claude/
 .scratch/
-AGENTS.md
 docs/agents/
 
 # Chỉ mục đồ thị codebase (AST, sinh bởi `npm run graphify:update` / cron —
