@@ -168,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
 
     base = OllamaClient.from_env()
     candidate_models = dataclasses.replace(base, gate1_model=args.model)
-    deps = Deps(models=candidate_models, git=Unavailable("git"), notify=Unavailable("telegram"))
+    deps = Deps(models=candidate_models, notify=Unavailable("telegram"))
 
     run_result = run(args.db, deps=deps)
     report = {"model": args.model, **summarize(run_result), "results": run_result["results"]}

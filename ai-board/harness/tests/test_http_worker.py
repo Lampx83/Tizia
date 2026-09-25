@@ -37,6 +37,19 @@ class FakeTransport:
         return {'ok': True}
 
 
+class FakeCandidates:
+    def __init__(self, fail=False):
+        self.discarded, self.fail = [], fail
+
+    def discard(self, candidate):
+        self.discarded.append(candidate)
+
+    def rollback(self, candidate, ticket_id):
+        if self.fail:
+            raise OSError('git revert: conflict')
+        return {'outcome': 'discarded', 'detail': f'deleted {candidate["branch"]} of {ticket_id}'}
+
+
 def test_off_mode_makes_no_http_calls():
     transport = FakeTransport()
     worker = HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1')
@@ -191,27 +204,18 @@ def test_rejected_verdict_discards_candidate_before_propagating():
                 raise HTTPError(path, 409, 'stale lease', {}, io.BytesIO(b'{"error":"stale_lease"}'))
             return super().__call__(method, path, payload, headers)
 
-    class ChangeRunner:
-        def __init__(self):
-            self.discarded = []
-
-        def __call__(self, *_args, **_kwargs):
-            return {'candidate': {'branch': 'ai-board/example'}}
-
-        def discard_candidate(self, verdict):
-            self.discarded.append(verdict)
-
-    runner = ChangeRunner()
+    candidates = FakeCandidates()
     worker = HttpWorker(WorkerClient('http://fixture', 'secret', transport=RejectVerdict()),
                         worker_id='w1', mode='active', planner=lambda _snapshot: ({'goal': 'x'}, 0),
-                        change_runner=runner)
+                        change_runner=lambda *_a, **_k: {'candidate': {'branch': 'ai-board/example'}},
+                        candidates=candidates)
     try:
         worker.run_once()
     except HTTPError as error:
         assert error.code == 409
     else:
         raise AssertionError('a rejected verdict must propagate')
-    assert runner.discarded == [{'candidate': {'branch': 'ai-board/example'}}]
+    assert candidates.discarded == [{'branch': 'ai-board/example'}]
 
 
 def test_ambiguous_verdict_response_keeps_candidate():
@@ -221,32 +225,23 @@ def test_ambiguous_verdict_response_keeps_candidate():
                 raise TimeoutError('response lost')
             return super().__call__(method, path, payload, headers)
 
-    class ChangeRunner:
-        def __init__(self):
-            self.discarded = []
-
-        def __call__(self, *_args, **_kwargs):
-            return {'candidate': {'branch': 'ai-board/example'}}
-
-        def discard_candidate(self, verdict):
-            self.discarded.append(verdict)
-
-    runner = ChangeRunner()
+    candidates = FakeCandidates()
     worker = HttpWorker(WorkerClient('http://fixture', 'secret', transport=LostResponse()),
                         worker_id='w1', mode='active', planner=lambda _snapshot: ({'goal': 'x'}, 0),
-                        change_runner=runner)
+                        change_runner=lambda *_a, **_k: {'candidate': {'branch': 'ai-board/example'}},
+                        candidates=candidates)
     try:
         worker.run_once()
     except TimeoutError:
         pass
     else:
         raise AssertionError('a lost verdict response must propagate')
-    assert runner.discarded == []
+    assert candidates.discarded == []
 
 
-def test_change_runner_discard_removes_candidate_branch(tmp_path):
+def test_candidates_discard_removes_candidate_branch(tmp_path):
     import subprocess
-    from worker import HarnessChangeRunner
+    from candidate import Candidates
 
     repo = tmp_path / 'source'
     repo.mkdir()
@@ -255,10 +250,9 @@ def test_change_runner_discard_removes_candidate_branch(tmp_path):
     subprocess.run(['git', '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
                     'commit', '-q', '--allow-empty', '-m', 'base'], cwd=repo, **quiet)
     subprocess.run(['git', 'branch', 'ai-board/candidate'], cwd=repo, **quiet)
-    runner = HarnessChangeRunner.__new__(HarnessChangeRunner)
-    runner.checkout_source = repo
-
-    runner.discard_candidate({'candidate': {'branch': 'ai-board/candidate'}})
+    Candidates(repo).discard({'branch': 'ai-board/candidate'})
+    Candidates(repo).discard({'branch': 'ai-board/candidate'})  # already gone is done, not an error
+    Candidates(repo).discard(None)
 
     remaining = subprocess.run(['git', 'branch', '--list', 'ai-board/candidate'], cwd=repo,
                                check=True, capture_output=True, text=True, stdin=subprocess.DEVNULL)
@@ -301,10 +295,9 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
         return {'gate': 5.5, 'blocked': False, 'reason': None,
                 'risk_level': 'low', 'risk_signals': []}
 
-    def change_runner(plan, ticket_id, _budget_used, cumulative_budget, budget_limit, *, policy,
-                      accepted_policy_hash, request_detail, should_stop):
+    def change_runner(plan, ticket_id, max_units, *, policy, accepted_policy_hash, request_detail, should_stop):
         assert should_stop() is False  # lease healthy while the heartbeat succeeds
-        assert (cumulative_budget, budget_limit) == (20, 200)
+        assert max_units == 200 - 80  # per-run limit minus what planning spent
         assert (policy, accepted_policy_hash) == (POLICY, POLICY['hash'])
         return execute_pre_pr(
             plan, ticket_id=ticket_id, checkout_source=tmp_path,
@@ -316,6 +309,7 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
         WorkerClient('http://fixture', 'secret', transport=transport),
         worker_id='w1', version='test', mode='active',
         planner=lambda _snapshot: (canonical_plan, 80), change_runner=change_runner,
+        candidates=FakeCandidates(),
     )
 
     out = worker.run_once()
@@ -325,8 +319,7 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
     assert states[0][1]['catalog'] == POLICY['capabilities']
     assert states[0][1]['request_detail'] == '[Trang: X] /x.html'
     assert states[2][1]['plan']['subtasks'][0] == {
-        'title': 'Thay đổi quan sát được', 'file': 'public/x.html',
-        'verify': 'smoke', 'size': 'small', 'allowed_scope': ['public/x.html'],
+        **canonical_plan['steps'][0], 'file': 'public/x.html', 'verify': 'smoke; 200', 'size': 'small',
     }
     assert [call[1].rsplit('/', 1)[-1] for call in transport.calls] == [
         'claim', 'snapshot', 'heartbeat', 'runs', 'events', 'plan', 'verdict', 'release',
@@ -800,37 +793,47 @@ def test_authorized_plan_is_executed_without_replanning():
     def planner(_snapshot):
         raise AssertionError('an authorized plan must not be planned again')
 
-    def change_runner(plan, ticket_id, budget_used, *_args, **kwargs):
-        seen.update(plan=plan, budget_used=budget_used, policy_hash=kwargs['accepted_policy_hash'])
+    def change_runner(plan, ticket_id, max_units, **kwargs):
+        seen.update(plan=plan, max_units=max_units, policy_hash=kwargs['accepted_policy_hash'])
         return {'outcome': 'blocked', 'candidate': None}
 
     transport = Executing()
     worker = HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1',
-                        mode='active', planner=planner, change_runner=change_runner)
+                        mode='active', planner=planner, change_runner=change_runner,
+                        candidates=FakeCandidates())
     out = worker.run_once()
     paths = [call[1].rsplit('/', 1)[-1] for call in transport.calls]
     assert 'resume-plan' in paths and 'plan' not in paths and 'verdict' in paths
     runs = [call[2] for call in transport.calls if call[1].endswith('/runs')]
     assert runs[0]['trigger'] == 'execute'
-    assert seen == {'plan': {'goal': 'approved'}, 'budget_used': 0, 'policy_hash': POLICY['hash']}
+    assert seen == {'plan': {'goal': 'approved'}, 'max_units': 200, 'policy_hash': POLICY['hash']}
     assert out['status'] == 'planned' and out['tier'] == 'protected'
 
 
 def test_gate_start_is_reported_as_an_idempotent_event():
     import meter
 
+    import main as harness_main
+
     transport = FakeTransport()
     tracer = meter.Tracer(None)
+    worker = HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1',
+                        mode='shadow', tracer=tracer)
+    deps = harness_main.Deps(models=None, notify=None, progress=worker.gate_started)
 
     def planner(_snapshot):
-        tracer.gate_started(2.5)
+        harness_main.run_gate(2, {}, deps, None, {})  # run_gate reports through deps.progress
         return {'goal': 'x'}, 0
 
-    HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1',
-               mode='shadow', planner=planner, tracer=tracer).run_once()
+    worker.planner = planner
+    worker.run_once()
     (event,) = [c[2] for c in transport.calls if c[1].endswith('/events') and c[2]['event_type'] == 'gate_started']
-    assert event['run_id'] == 11 and event['internal_detail'] == '{"gate": 2.5, "attempt": 0}'
-    assert event['idempotency_key'].endswith(':gate:0:2.5')
+    assert event['run_id'] == 11 and (event['gate'], event['attempt']) == (2, 0)
+    assert event['internal_detail'] == '{"gate": 2, "attempt": 0}'
+    assert event['idempotency_key'].endswith(':gate:0:2')
+    sent = len(transport.calls)
+    worker.gate_started(3)  # outside a run: no-op
+    assert len(transport.calls) == sent
 
 
 def test_rollback_lease_runs_the_rollback_and_reports_failures():
@@ -846,26 +849,17 @@ def test_rollback_lease_runs_the_rollback_and_reports_failures():
                 return {'status': 'cancelled', 'phase': 'rolled_back'}
             return super().__call__(method, path, payload, headers)
 
-    class Runner:
-        def __init__(self, fail):
-            self.fail = fail
-
-        def __call__(self, *_args, **_kwargs):
-            raise AssertionError('a rollback must not run the gates')
-
-        def rollback(self, cand, ticket_id):
-            assert cand == candidate and ticket_id == 7
-            if self.fail:
-                raise OSError('git revert: conflict')
-            return {'outcome': 'discarded', 'detail': 'deleted'}
-
     def planner(_snapshot):
         raise AssertionError('a rollback must not plan')
+
+    def change_runner(*_args, **_kwargs):
+        raise AssertionError('a rollback must not run the gates')
 
     for fail, outcome in ((False, 'discarded'), (True, 'failed')):
         transport = RollingBack()
         out = HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1',
-                         mode='active', planner=planner, change_runner=Runner(fail)).run_once()
+                         mode='active', planner=planner, change_runner=change_runner,
+                         candidates=FakeCandidates(fail)).run_once()
         runs = [c[2] for c in transport.calls if c[1].endswith('/runs')]
         (sent,) = [c[2] for c in transport.calls if c[1].endswith('/rollback')]
         assert runs[0]['trigger'] == 'rollback' and sent['run_id'] == 11 and sent['outcome'] == outcome
@@ -873,9 +867,9 @@ def test_rollback_lease_runs_the_rollback_and_reports_failures():
     assert 'conflict' in sent['detail']
 
 
-def test_change_runner_rollback_deletes_unmerged_and_reverts_merged(tmp_path, monkeypatch):
+def test_candidates_rollback_deletes_unmerged_and_reverts_merged(tmp_path, monkeypatch):
     import subprocess
-    from worker import HarnessChangeRunner
+    from candidate import Candidates
 
     monkeypatch.setenv('PR_BASE_BRANCH', 'dev')
     repo = tmp_path / 'source'
@@ -899,8 +893,7 @@ def test_change_runner_rollback_deletes_unmerged_and_reverts_merged(tmp_path, mo
         git('checkout', '-q', 'dev')
         return {'branch': branch, 'base_sha': base, 'head_sha': head}
 
-    runner = HarnessChangeRunner.__new__(HarnessChangeRunner)
-    runner.checkout_source = repo
+    runner = Candidates(repo)
 
     unmerged = make_candidate('ticket-1-aaa111')
     assert runner.rollback(unmerged, 1)['outcome'] == 'discarded'
@@ -924,3 +917,46 @@ def test_change_runner_rollback_deletes_unmerged_and_reverts_merged(tmp_path, mo
     with pytest.raises(OSError, match='branch -D'):
         runner.rollback(busy, 3)
     assert git('branch', '--list', busy['branch']) != ''
+
+
+def test_claim_trigger_wins_over_the_phase_mapping():
+    candidate = {'branch': 'ai-board/2026-09-25-ticket-7-abc123', 'base_sha': 'a' * 40, 'head_sha': 'b' * 40}
+
+    class Triggered(FakeTransport):
+        def __call__(self, method, path, payload, headers):
+            if path.endswith('/claim'):
+                self.calls.append((method, path, payload, headers))
+                return {'ticket': {'id': 7, 'lease_token': 'lease-7', 'trigger': 'rollback'}}
+            if path.endswith('/snapshot'):
+                self.calls.append((method, path, payload, headers))
+                return {'ticket': {'phase': 'planned'}, 'rollback_candidate': candidate}
+            if path.endswith('/rollback'):
+                self.calls.append((method, path, payload, headers))
+                return {'status': 'cancelled'}
+            return super().__call__(method, path, payload, headers)
+
+    transport = Triggered()
+    out = HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1',
+                     mode='active', planner=lambda _s: (_ for _ in ()).throw(AssertionError('no plan')),
+                     change_runner=lambda *_a, **_k: None, candidates=FakeCandidates()).run_once()
+    runs = [c[2] for c in transport.calls if c[1].endswith('/runs')]
+    assert runs[0]['trigger'] == 'rollback' and out['rollback'] == 'discarded'
+
+
+def test_approved_multi_scope_multi_test_step_reaches_gate_3_intact():
+    step = {'order': 1, 'title': 'Trang + dữ liệu', 'description': 'd',
+            'allowed_scope': ['public/a.html', 'public/a.json'], 'tests': ['node --test test/a.test.js', 'smoke /a'],
+            'acceptance': ['trang /a trả 200', 'smoke /a'], 'capability': 'public.ui', 'risk': 'medium',
+            'non_goals': ['x']}
+    seen = {}
+
+    def run_gate(gate, _request, _deps, _budget, state):
+        seen.setdefault(gate, state['plan']['subtasks'][0])
+        return {'gate': gate, 'blocked': True, 'reason': 'stop', 'failure_class': 'critical'}
+
+    execute_pre_pr({'capabilities': ['public.ui'], 'steps': [step]}, ticket_id=7, checkout_source='unused',
+                   deps=object(), budget=TickBudget(), run_gate=run_gate, cleanup=lambda *_, **__: None)
+    subtask = seen[3]
+    assert {k: subtask[k] for k in step} == step  # every approved field survives
+    assert subtask['file'] == 'public/a.html' and subtask['size'] == 'large'
+    assert subtask['verify'] == 'node --test test/a.test.js; smoke /a; trang /a trả 200'

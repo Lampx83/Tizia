@@ -329,7 +329,7 @@ def test_main_prepares_checkout_at_gate_5_then_calls_verify(monkeypatch, fake_de
         calls.append(("verify", state["full_checkout"]))
         return {"gate": 5, "blocked": False, "reason": None}
 
-    monkeypatch.setattr(main, "prepare_full_checkout", prepare)
+    monkeypatch.setattr(main.candidate, "create", prepare)
     monkeypatch.setattr(main.verify, "run", run)
     assert main.run_gate(5, {}, deps, None, s)["blocked"] is False
     assert calls == [("prepare", str(tmp_path)), ("verify", str(tmp_path))]

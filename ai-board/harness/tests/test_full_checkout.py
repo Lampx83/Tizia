@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+import candidate
 import main
 from gates import implement
 
@@ -53,7 +54,7 @@ def test_children_commit_in_order_on_an_ai_board_branch(tmp_path, source):
     state = state_for(tmp_path, children)
     head_before = git(source, "rev-parse", "HEAD")
 
-    main.prepare_full_checkout(state, source)
+    candidate.create(state, source)
     try:
         branch = state["branch"]
         assert re.fullmatch(r"ai-board/\d{4}-\d{2}-\d{2}-ticket-7-[0-9a-f]{6}", branch)
@@ -73,7 +74,7 @@ def test_children_commit_in_order_on_an_ai_board_branch(tmp_path, source):
         assert git(source, "rev-parse", "HEAD") == head_before
         assert (source / "public" / "a.html").read_text(encoding="utf-8") == "<p>old a</p>\n"
     finally:
-        main.cleanup_full_checkout(state, keep_branch=True)
+        candidate.cleanup(state, keep_branch=True)
     assert not Path(state["full_checkout"]).exists()
     assert git(source, "branch", "--list", branch).strip().endswith(branch)
 
@@ -83,8 +84,8 @@ def test_out_of_scope_file_is_rejected_without_leaving_a_branch(tmp_path, source
     children = [child(scratch, "Lạc phạm vi", "server/index.js", "// hijack\n")]
     state = state_for(tmp_path, children, scopes={"Lạc phạm vi": ["public/a.html"]})
 
-    with pytest.raises(main.ScopeViolation, match="server/index.js"):
-        main.prepare_full_checkout(state, source)
+    with pytest.raises(candidate.ScopeViolation, match="server/index.js"):
+        candidate.create(state, source)
     assert "full_checkout" not in state
     assert git(source, "branch", "--list", "ai-board/*") == ""
     assert "ai-board" not in git(source, "worktree", "list")
@@ -93,15 +94,15 @@ def test_out_of_scope_file_is_rejected_without_leaving_a_branch(tmp_path, source
 def test_generated_test_outside_test_dirs_is_rejected(tmp_path, source):
     scratch = implement._ensure_scratch_repo(tmp_path / "scratch")
     children = [child(scratch, "x", "public/a.html", "<p>x</p>\n", test_file="public/evil.test.js")]
-    with pytest.raises(main.ScopeViolation, match="public/evil.test.js"):
-        main.prepare_full_checkout(state_for(tmp_path, children), source)
+    with pytest.raises(candidate.ScopeViolation, match="public/evil.test.js"):
+        candidate.create(state_for(tmp_path, children), source)
 
 
 def test_existing_trusted_test_is_not_overwritten(tmp_path, source):
     scratch = implement._ensure_scratch_repo(tmp_path / "scratch")
     children = [child(scratch, "x", "public/a.html", "<p>x</p>\n", test_file="test/trusted.test.js")]
-    with pytest.raises(main.ScopeViolation, match="đã tồn tại"):
-        main.prepare_full_checkout(state_for(tmp_path, children), source)
+    with pytest.raises(candidate.ScopeViolation, match="đã tồn tại"):
+        candidate.create(state_for(tmp_path, children), source)
     assert git(source, "branch", "--list", "ai-board/*") == ""
 
 
@@ -109,10 +110,10 @@ def test_rerun_after_a_kept_candidate_gets_its_own_branch(tmp_path, source):
     scratch = implement._ensure_scratch_repo(tmp_path / "scratch")
     children = [child(scratch, "x", "public/a.html", "<p>x</p>\n")]
     first, second = state_for(tmp_path, children), state_for(tmp_path, children)
-    main.prepare_full_checkout(first, source)
-    main.cleanup_full_checkout(first, keep_branch=True)
-    main.prepare_full_checkout(second, source)
-    main.cleanup_full_checkout(second, keep_branch=True)
+    candidate.create(first, source)
+    candidate.cleanup(first, keep_branch=True)
+    candidate.create(second, source)
+    candidate.cleanup(second, keep_branch=True)
     assert first["branch"] != second["branch"]
     assert len(git(source, "branch", "--list", "ai-board/*").splitlines()) == 2
 
@@ -120,8 +121,8 @@ def test_rerun_after_a_kept_candidate_gets_its_own_branch(tmp_path, source):
 def test_cleanup_without_keep_deletes_the_branch(tmp_path, source):
     scratch = implement._ensure_scratch_repo(tmp_path / "scratch")
     state = state_for(tmp_path, [child(scratch, "x", "public/a.html", "<p>x</p>\n")])
-    main.prepare_full_checkout(state, source)
-    main.cleanup_full_checkout(state, keep_branch=False)
+    candidate.create(state, source)
+    candidate.cleanup(state, keep_branch=False)
     assert git(source, "branch", "--list", "ai-board/*") == ""
     assert not Path(state["full_checkout"]).exists()
 
@@ -179,7 +180,7 @@ def test_gate_4_blocks_a_path_outside_the_catalog_before_docker(tmp_path, source
     try:
         out = main.run_gate(4, {}, fake_deps, None, state)
     finally:
-        main.cleanup_full_checkout(state, keep_branch=False)
+        candidate.cleanup(state, keep_branch=False)
 
     assert out["blocked"] is True and out["failure_class"] == "critical"
     assert "public/a.html" in out["reason"] and "catalog" in out["checks"]
@@ -199,7 +200,7 @@ def test_gate_4_size_flag_counts_the_real_base_diff_not_the_scratch_rewrite(tmp_
     try:
         out = main.run_gate(4, {}, fake_deps, None, state)
     finally:
-        main.cleanup_full_checkout(state, keep_branch=False)
+        candidate.cleanup(state, keep_branch=False)
 
     assert out["blocked"] is False
     assert not any("vượt" in issue for issue in out["issues"])
@@ -218,7 +219,15 @@ def test_gate_4_allows_contacts_already_public_at_the_base_commit(tmp_path, sour
     try:
         out = main.run_gate(4, {}, fake_deps, None, state)
     finally:
-        main.cleanup_full_checkout(state, keep_branch=False)
+        candidate.cleanup(state, keep_branch=False)
 
     assert not any(issue.startswith("pii") for issue in out["issues"])  # base's own contacts are allowlisted
     assert out["blocked"] is False
+
+
+def test_long_skill_id_still_yields_a_contract_branch_name():
+    branch = candidate.branch_name("ticket-" + "Rất dài " * 40)
+    assert candidate.BRANCH_PATTERN.fullmatch(branch), branch
+    assert re.search(r"-[0-9a-f]{6}$", branch)  # truncation keeps the unique suffix
+    with pytest.raises(ValueError):
+        candidate.branch_name("!!!")

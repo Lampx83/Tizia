@@ -65,7 +65,7 @@ def test_d0_fixture_reaches_docker_http_on_an_ai_board_branch(tmp_path):
         cwd=REPO, check=True, capture_output=True, text=True, encoding="utf-8").stdout)
     verdict = execute_pre_pr(plan, ticket_id=4, checkout_source=source, deps=deps,
                              budget=Budget(max_wall_clock_s=1800), run_gate=run_gate,
-                             cleanup=main.cleanup_full_checkout, policy=policy,
+                             cleanup=main.candidate.cleanup, policy=policy,
                              accepted_policy_hash=policy["hash"],
                              request_detail="[Trang: Tính năng] /tinh-nang.html\nThêm dòng cập nhật")
     print(json.dumps(verdict, ensure_ascii=False, indent=2))

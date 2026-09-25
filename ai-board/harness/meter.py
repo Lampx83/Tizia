@@ -80,26 +80,16 @@ class Tracer:
         self.path = Path(path) if path else None
         self.provider = provider
         self.post = None
-        self.on_gate = None
         self.run_id = None
         self.attempt = 0
         self.pending: list[dict] = []
         self._seq = 0
         self._gpu = deque()  # (monotonic s, giây GPU) trong 1 giờ gần nhất
 
-    def begin(self, run_id, post, on_gate=None) -> None:
-        """Gắn run mới; xả đệm của run cũ nếu còn. on_gate(gate, attempt): báo server cổng vừa bắt đầu."""
+    def begin(self, run_id, post) -> None:
+        """Gắn run mới; xả đệm của run cũ nếu còn."""
         self.flush()
-        self.run_id, self.post, self.on_gate, self.attempt, self._seq = run_id, post, on_gate, 0, 0
-
-    def gate_started(self, gate: float) -> None:
-        """Admin thấy lượt đang ở cổng nào; lỗi gửi không làm hỏng cổng."""
-        if not self.on_gate:
-            return
-        try:
-            self.on_gate(gate, self.attempt)
-        except Exception as error:  # noqa: BLE001 — tiến độ best-effort
-            print(f"[trace] báo cổng {gate} lỗi: {str(error)[:200]}")
+        self.run_id, self.post, self.attempt, self._seq = run_id, post, 0, 0
 
     def record(self, *, gate: float, model: str, prompt: str, prompt_name: str | None, prompt_hash: str | None,
                static_prefix: str, output: str, metrics: dict, budget_units: int, result: str,

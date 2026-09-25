@@ -17,7 +17,7 @@ def _no_real_codegraph(monkeypatch):
     thật -> subprocess ra ngoài (graphify CLI), chậm và phụ thuộc máy có cài +
     graph.json đã build. Autouse fake trả [] cho MỌI test (đúng fallback
     "graphify chưa cài" — seam Python đã chốt: mọi biên I/O thật đều fake,
-    xem main.py's Deps cho Ollama/git/Telegram). Test riêng của ticket 21 tự
+    xem main.py's Deps cho Ollama/Telegram). Test riêng của ticket 21 tự
     monkeypatch lại codegraph.query khi cần kiểm tra hành vi có gợi ý graph."""
     import codegraph
     monkeypatch.setattr(codegraph, "query", lambda *a, **kw: [])
@@ -141,13 +141,13 @@ def plan_with(caps):
 
 
 def deps_with(models):
-    """Deps với model fake (FakeModels hoặc plan cho FakeModels); git/telegram là
+    """Deps với model fake (FakeModels hoặc plan cho FakeModels); telegram là
     MagicMock để khẳng định không bao giờ bị gọi."""
     from unittest.mock import MagicMock
     from main import Deps
     if not isinstance(models, FakeModels):
         models = FakeModels(models)
-    return Deps(models=models, git=MagicMock(name="git"), notify=MagicMock(name="telegram"),
+    return Deps(models=models, notify=MagicMock(name="telegram"),
                 verify=FakeVerify())
 
 

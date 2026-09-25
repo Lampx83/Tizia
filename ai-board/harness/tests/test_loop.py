@@ -44,25 +44,22 @@ def test_full_loop_reaches_gate_7_and_writes_one_row(inbox_file, db_file, fake_d
     assert row["id"] == out["proposal_id"]
 
 
-def test_dry_run_never_calls_git_or_telegram(inbox_file, db_file, fake_deps):
+def test_dry_run_never_calls_telegram(inbox_file, db_file, fake_deps):
     (item,) = load_inbox(inbox_file)
 
     run_once(item, db_path=db_file, deps=fake_deps)
 
-    assert fake_deps.git.mock_calls == []
     assert fake_deps.notify.mock_calls == []
     # Cổng 1 (1 lần) + cổng 2.5 (1 lần, ticket 22) + cổng 3 (1 lần/subtask,
     # plan_with có 2) — tất cả qua fake, không mạng.
     assert len(fake_deps.models.calls) == 4 + len(fake_deps.models.plan["subtasks"])
 
 
-def test_real_deps_make_git_and_telegram_explode_if_touched():
+def test_real_deps_make_telegram_explode_if_touched():
     deps = Deps.real()
     with pytest.raises(NotImplementedError):
-        deps.git.push("nhanh-nao-do")
-    with pytest.raises(NotImplementedError):
         deps.notify.send("canh bao")
-    assert isinstance(deps.git, Unavailable)
+    assert isinstance(deps.notify, Unavailable)
 
 
 def test_budget_exhausted_stops_loop_and_is_recorded(inbox_file, db_file, fake_deps):
