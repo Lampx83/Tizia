@@ -20,6 +20,7 @@ const TYPES = [
   { v: 'lab',   icon: '🧪', label: 'Cải thiện phòng thí nghiệm / thực hành' },
   { v: 'skill', icon: '🎯', label: 'Luyện kỹ năng' },
   { v: 'other', icon: '💬', label: 'Góp ý / báo lỗi / khác' },
+  { v: 'feature', icon: '✨', label: 'Chức năng mới (Ban làm bản nháp, bạn sửa tiếp)' },
 ];
 const STATUS = {
   pending:   { label: 'Chờ duyệt',    cls: 'pending' },
@@ -105,10 +106,14 @@ function autoMount() {
               ${TYPES.map(t => `<option value="${t.v}">${t.icon} ${t.label}</option>`).join('')}
             </select>
           </label>
+          <label class="sgf-lab" id="sgf-folder-row" hidden>Gắn vào chức năng
+            <select id="sgf-folder" class="sgf-in"><option value="">— Yêu cầu lẻ —</option></select>
+          </label>
           <label class="sgf-lab">Tiêu đề <span class="sgf-req">*</span>
             <input id="sgf-title-in" class="sgf-in" maxlength="200"
                    placeholder="VD: Thêm dạng bài Toán có nhiều cách giải" />
           </label>
+          <div class="sgf-folder-hint" id="sgf-folder-hint" hidden></div>
           <label class="sgf-lab">Mô tả chi tiết (tuỳ chọn) <span id="sgf-detail-count" style="opacity:.55;font-size:11px;float:right">0 / 10000</span>
             <textarea id="sgf-detail" class="sgf-in" rows="3" maxlength="10000"
                       placeholder="Càng cụ thể, AI càng dễ hiểu &amp; phản hồi đúng nhu cầu của bạn."></textarea>
@@ -133,6 +138,8 @@ function autoMount() {
             <button type="submit" class="sgf-send" id="sgf-send">📨 Gửi tới Ban điều hành</button>
           </div>
         </form>
+
+        <div class="sgf-folders" id="sgf-folders" hidden></div>
 
         <div class="sgf-inbox">
           <div class="sgf-inbox-head">
@@ -680,6 +687,7 @@ function bind(root) {
           'X-AI-Board-Features': 'onboarding,clarify' }, // panel này có UI cho cả hai
         body: JSON.stringify({
           domain: inferDomain(), type, title, detail, attachments,
+          folder_id: type !== 'feature' && folderSel.value ? Number(folderSel.value) : undefined,
           student: (typeof getPlayerName === 'function' && getPlayerName()) || 'Ẩn danh',
         }),
       });
@@ -710,6 +718,7 @@ function bind(root) {
       }
       root.querySelector('#sgf-title-in').value = '';
       root.querySelector('#sgf-detail').value = '';
+      folderHint.hidden = true;
       if (detailCount) detailCount.textContent = '0 / 10.000';
       // Reset đính kèm để lần gửi sau bắt đầu sạch (revoke object URL tránh rò rỉ).
       clearAttachments();
@@ -724,7 +733,86 @@ function bind(root) {
     }
   });
 
+  // ── Folder chức năng (feature-folders ticket 04) ──
+  const folderBox = root.querySelector('#sgf-folders');
+  const folderRow = root.querySelector('#sgf-folder-row');
+  const folderSel = root.querySelector('#sgf-folder');
+  const folderHint = root.querySelector('#sgf-folder-hint');
+  const typeSel = root.querySelector('#sgf-type');
+  let myFolders = [];
+  const FOLDER_STATE = { draft: 'chờ Ban duyệt', active: 'đang làm', awaiting_merge: 'chờ phát hành', released: 'đã phát hành' };
+
+  function syncFolderRow() {
+    folderRow.hidden = !myFolders.length || typeSel.value === 'feature';
+    if (folderRow.hidden) folderSel.value = '';
+  }
+  typeSel.addEventListener('change', syncFolderRow);
+
+  async function loadFolders() {
+    try {
+      const r = await fetch(`api/ai-board/folders?domain=${encodeURIComponent(inferDomain())}`, { credentials: 'same-origin' });
+      if (!r.ok) { folderBox.hidden = true; return; }
+      const { mine = [], school = [] } = await r.json();
+      myFolders = mine;
+      const keep = folderSel.value;
+      folderSel.innerHTML = '<option value="">— Yêu cầu lẻ —</option>'
+        + mine.map(f => `<option value="${f.id}">✨ ${escapeHtml(f.title)}</option>`).join('');
+      folderSel.value = mine.some(f => String(f.id) === keep) ? keep : '';
+      syncFolderRow();
+      folderBox.hidden = !mine.length && !school.length;
+      folderBox.innerHTML = `
+        ${mine.length ? `<div class="sgf-inbox-head"><span>Chức năng của bạn</span></div>
+          ${mine.map(f => `<div class="sgf-folder">
+            <span class="sgf-folder-t">✨ ${escapeHtml(f.title)}</span>
+            <span class="sgf-folder-m">${escapeHtml(FOLDER_STATE[f.state] || f.state)} · ${Number(f.requests)} yêu cầu</span>
+            <button type="button" class="sgf-chip" data-folder-add="${f.id}">＋ Yêu cầu tiếp</button></div>`).join('')}` : ''}
+        ${school.length ? `<div class="sgf-inbox-head"><span>Chức năng bạn khác đang làm</span></div>
+          ${school.slice(0, 5).map(f => `<div class="sgf-folder">
+            <span class="sgf-folder-t">✨ ${escapeHtml(f.title)}</span>
+            <span class="sgf-folder-m">${escapeHtml(FOLDER_STATE[f.state] || f.state)}</span>
+            <button type="button" class="sgf-chip" data-folder-vote="${f.id}" ${f.voted ? 'disabled' : ''}>👍 ${Number(f.votes)}</button></div>`).join('')}` : ''}`;
+    } catch { folderBox.hidden = true; }
+  }
+
+  folderBox.addEventListener('click', async (e) => {
+    const add = e.target.closest('[data-folder-add]');
+    if (add) {
+      if (typeSel.value === 'feature') typeSel.value = 'other';
+      syncFolderRow();
+      folderSel.value = add.dataset.folderAdd;
+      root.querySelector('#sgf-title-in').focus();
+      return;
+    }
+    const vote = e.target.closest('[data-folder-vote]');
+    if (vote) {
+      vote.disabled = true;
+      const r = await fetch(`api/ai-board/folders/${encodeURIComponent(vote.dataset.folderVote)}/vote`, {
+        method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': await csrfToken() } }).catch(() => null);
+      if (r?.ok) vote.textContent = `👍 ${(await r.json()).votes}`; else vote.disabled = false;
+    }
+  });
+
+  // Gợi ý tất định: tiêu đề chung ≥ 2 từ có nghĩa với 1 folder của mình → hỏi có gắn vào không.
+  const foldWords = (s) => new Set(String(s).normalize('NFD').replace(/\p{M}/gu, '').replace(/đ/gi, 'd').toLowerCase()
+    .split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !['cho', 'cua', 'trang', 'them', 'nhung', 'duoc'].includes(w)));
+  root.querySelector('#sgf-title-in').addEventListener('input', (e) => {
+    const words = foldWords(e.target.value);
+    const match = typeSel.value === 'feature' || folderSel.value ? null
+      : myFolders.find(f => [...foldWords(f.title)].filter(w => words.has(w)).length >= 2);
+    folderHint.hidden = !match;
+    if (match) {
+      folderHint.innerHTML = `Có vẻ thuộc chức năng «${escapeHtml(match.title)}». <button type="button" class="sgf-chip" data-hint-folder="${match.id}">Gắn vào</button>`;
+    }
+  });
+  folderHint.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-hint-folder]');
+    if (!btn) return;
+    folderSel.value = btn.dataset.hintFolder;
+    folderHint.hidden = true;
+  });
+
   async function loadInbox() {
+    loadFolders();
     inbox.textContent = 'Đang tải…';
     try {
       const dom = inferDomain();
@@ -1007,6 +1095,11 @@ function injectStyles() {
     .sgf-it { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 9px 11px; }
     .sgf-it-line { display: flex; align-items: center; gap: 8px; }
     .sgf-it-queue { font-size: 12px; color: #6b7280; margin: 4px 0 2px; }
+    .sgf-folders { padding: 0 20px 8px; }
+    .sgf-folder { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(148,163,184,.25); font-size: 13px; }
+    .sgf-folder-t { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+    .sgf-folder-m { font-size: 12px; color: #6b7280; white-space: nowrap; }
+    .sgf-folder-hint { font-size: 12.5px; color: #92400e; background: #fef3c7; border-radius: 8px; padding: 6px 10px; margin: -4px 0 8px; }
     .sgf-it-ico { font-size: 14px; }
     .sgf-it-title { flex: 1; font-size: 13px; font-weight: 600; color: #1f2937; }
     .sgf-it-st { font-size: 11px; padding: 2px 8px; border-radius: 7px; font-weight: 700; white-space: nowrap; }

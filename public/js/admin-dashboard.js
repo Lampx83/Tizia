@@ -1731,10 +1731,43 @@ const TABS = {
   schools:    { label:'Trường', load: loadSchoolsCampus },
   curriculum: { label:'Curriculum', load: loadCurriculumTab },
   requests:   { label:'Góp ý', load: loadRequests, badge: () => reqCache.filter(r => r.status === 'pending').length },
+  features:   { label:'Chức năng', load: loadFeatureFolders },
   users:      { label:'Người dùng', load: loadUsers },
   db:         { label:'CSDL',     load: loadDbTab },
   config:     { label:'Cấu hình', load: loadConfig },
 };
+
+// ─────────── Chức năng (folder chức năng mới, feature-folders ticket 04) ───────────
+const FOLDER_STATE_LABEL = { draft: 'chờ duyệt', active: 'đang làm', awaiting_merge: 'chờ merge', released: 'đã phát hành', archived: 'lưu trữ' };
+async function loadFeatureFolders() {
+  const r = await api('/api/admin/ai-board/folders');
+  const folders = r.data?.folders || [];
+  const host = $('#tabbody');
+  host.innerHTML = folders.length ? `
+    <table>
+      <thead><tr><th>#</th><th>Chức năng</th><th>Trường</th><th>Người tạo</th><th>Trạng thái</th><th>Yêu cầu</th>
+        <th>Vote</th><th>GPU-s</th><th>Duyệt</th></tr></thead>
+      <tbody>${folders.map(f => `
+        <tr>
+          <td>${f.id}</td>
+          <td style="max-width:280px">${esc(f.title)}<div class="trace-sub">${esc(f.slug)}</div>${traceSub(f.trace_ref)}</td>
+          <td><span class="pill">${esc(f.domain)}</span></td>
+          <td>${esc(f.owner_name || '—')}</td>
+          <td><span class="pill">${esc(FOLDER_STATE_LABEL[f.state] || f.state)}</span></td>
+          <td>${f.requests}</td><td>${f.votes}</td><td>${f.gpu_s}</td>
+          <td style="white-space:nowrap">${f.approved
+            ? `<span class="pill">đã duyệt</span> <button class="btn danger" data-folder-act="revoke" data-fid="${f.id}">Thu hồi</button>`
+            : `<button class="btn primary" data-folder-act="approve" data-fid="${f.id}">Duyệt</button>`}</td>
+        </tr>`).join('')}</tbody>
+    </table>` : '<div class="loading">Chưa có chức năng nào.</div>';
+  host.querySelectorAll('[data-folder-act]').forEach(btn => btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    const res = await api(`/api/admin/ai-board/folders/${btn.dataset.fid}/${btn.dataset.folderAct}`, { method: 'POST' });
+    if (!res.ok) { toast('Lỗi: ' + (res.data?.message || res.data?.error || res.status), 'err'); btn.disabled = false; return; }
+    toast(btn.dataset.folderAct === 'approve' ? `Đã duyệt; ${res.data.authorized || 0} kế hoạch được cho chạy` : 'Đã thu hồi duyệt');
+    loadFeatureFolders();
+  }));
+}
 
 // ─────────── Dashboard tab (KPI + charts + tops + feed + system) ───────────
 async function loadDashboard() {

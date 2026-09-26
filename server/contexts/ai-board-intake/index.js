@@ -14,7 +14,7 @@ import { beginChat } from '../../ai-board/chat-activity.js';
 import { RequestValidationError, WorkerContractError } from '../../ai-board/store.js';
 import { resolveAIModel } from '../../ai-model-router.js';
 import {
-  DAILY_TURNS, MAX_QUESTIONS, checkAnswer, conversationText, nextStep, ollamaStreamer, plainSpec, questionPrompt, withUserWords,
+  DAILY_TURNS, FEATURE_QUESTIONS, MAX_QUESTIONS, checkAnswer, conversationText, nextStep, ollamaStreamer, plainSpec, questionPrompt, withUserWords,
   specPrompt, streamGuarded,
 } from './clarify.js';
 
@@ -93,7 +93,9 @@ export function clarifyNotifier(createNotification) {
   });
 }
 
-// Clarity mode lúc gửi (ask | split) từ event phân loại (luật + model, ticket 08); thiếu thì hỏi thường.
+const maxQuestions = (mode) => (mode === 'feature' ? FEATURE_QUESTIONS : MAX_QUESTIONS);
+
+// Clarity mode lúc gửi (ask | split | feature) từ event phân loại (luật + model, ticket 08); thiếu thì hỏi thường.
 function initialMode(db, rootId) {
   const row = db.prepare(`SELECT internal_detail FROM ai_events WHERE ticket_id=? AND event_type='request_classified'`).get(rootId);
   try {
@@ -126,7 +128,7 @@ function attachClarify(router, { db, store, profiles, requireAuth, requireStrict
   router.get('/api/ai-board/requests/:id/clarify', requireAuth, (req, res) => {
     try {
       const { request, turns, asked } = store.getClarification(req.params.id, req.user.id);
-      res.json({ request: { id: request.id, title: request.title }, turns, asked, max: MAX_QUESTIONS });
+      res.json({ request: { id: request.id, title: request.title }, turns, asked, max: maxQuestions(initialMode(db, request.root_id)) });
     } catch (error) { sendError(res, error); }
   });
 
@@ -158,15 +160,19 @@ function attachClarify(router, { db, store, profiles, requireAuth, requireStrict
       res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('X-Accel-Buffering', 'no');
       const send = (event) => res.write(`${JSON.stringify(event)}\n`);
+      const startMode = initialMode(db, request.root_id);
+      const max = maxQuestions(startMode);
       if (!hasAnswer && last && last.kind !== 'answer') {
         // Mở lại panel: gửi lại lượt đang chờ, không gọi model.
-        send({ t: 'done', kind: last.kind, text: last.text, asked, max: MAX_QUESTIONS, complete: asked < MAX_QUESTIONS });
+        send({ t: 'done', kind: last.kind, text: last.text, asked, max, complete: asked < MAX_QUESTIONS });
         return res.end();
       }
-      const rulesClear = answersClear(turns.filter((t) => t.kind === 'answer').map((t) => t.text));
-      const clarity = hasAnswer && !rulesClear ? await classifyClarity(conversationText(request, turns)).catch(() => null) : null;
-      const step = asked === 0 ? { kind: 'question', mode: initialMode(db, request.root_id) } : nextStep({ asked, clarity, rulesClear });
-      const mode = step.mode || initialMode(db, request.root_id);
+      const feature = startMode === 'feature';
+      const rulesClear = !feature && answersClear(turns.filter((t) => t.kind === 'answer').map((t) => t.text));
+      const clarity = hasAnswer && !rulesClear && !feature
+        ? await classifyClarity(conversationText(request, turns)).catch(() => null) : null;
+      const step = asked === 0 ? { kind: 'question', mode: startMode } : nextStep({ asked, clarity, rulesClear, mode: startMode });
+      const mode = step.mode || startMode;
       const profile = profiles.get(req.user.id);
       const isQuestion = step.kind === 'question';
       const prompt = isQuestion
@@ -178,7 +184,7 @@ function attachClarify(router, { db, store, profiles, requireAuth, requireStrict
       if (out.replaced) console.warn(`[ai-board] clarify output replaced (${out.reason}) for request ${request.id}`);
       store.addClarifyTurn(request.id, { kind: step.kind, text: out.text });
       recordUsage(req, { provider: 'ollama', model, status: out.replaced ? 'error' : 'ok' });
-      send({ t: 'done', kind: step.kind, text: out.text, asked: asked + (isQuestion ? 1 : 0), max: MAX_QUESTIONS,
+      send({ t: 'done', kind: step.kind, text: out.text, asked: asked + (isQuestion ? 1 : 0), max,
         complete: isQuestion ? null : step.complete });
       res.end();
     } catch (error) {

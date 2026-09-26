@@ -20,10 +20,20 @@ const TECH_STYLE = {
 const MODE_STYLE = {
   ask: 'Yêu cầu còn mơ hồ: hỏi điều quan trọng nhất còn thiếu.',
   split: 'Yêu cầu quá rộng: đề nghị tách thành các yêu cầu nhỏ, hỏi người dùng muốn làm phần nào trước.',
+  // Chức năng mới (feature-folders ticket 04): chủ đề của lượt được ghép tất định ở questionPrompt.
+  feature: 'Đây là ý tưởng chức năng mới.',
 };
+// Mỗi lượt đúng 1 chủ đề (model nhỏ không tự theo thứ tự nếu chỉ liệt kê cả 3).
+const FEATURE_TOPICS = [
+  'chức năng này để làm gì và cho ai dùng',
+  'người dùng làm gì theo từng bước trên màn hình (bấm gì, thấy gì)',
+  'chức năng này giống chức năng nào đã có trên Tizia, để Ban làm theo',
+];
+export const FEATURE_QUESTIONS = FEATURE_TOPICS.length;
 const FALLBACK_QUESTION = {
   ask: 'Bạn mô tả giúp Ban: bạn đang ở trang nào, muốn thay đổi điều gì, và sau khi đổi thì mong thấy gì?',
   split: 'Yêu cầu này gồm nhiều phần. Bạn muốn Ban làm phần nào trước tiên?',
+  feature: 'Bạn kể giúp Ban: chức năng này để làm gì, và bạn sẽ bấm những gì theo từng bước?',
 };
 // Model tự nhận đã/vừa làm gì đó: nó không có công cụ nào nên câu đó luôn sai. Chỉ chủ ngữ ngôi thứ nhất,
 // có ranh giới chữ, không bắt "sẽ" (câu hỏi "bạn muốn chúng tôi sẽ thêm ở đâu?" là hợp lệ).
@@ -43,8 +53,11 @@ export function conversationText(request, turns) {
 }
 
 export function questionPrompt({ request, turns, techLevel, mode, turn }) {
+  const style = mode === 'feature'
+    ? `${MODE_STYLE.feature} Lượt này CHỈ hỏi về: ${FEATURE_TOPICS[Math.min(turn, FEATURE_QUESTIONS) - 1]}. Không hỏi chủ đề khác.`
+    : MODE_STYLE[mode] || MODE_STYLE.ask;
   return GRILL.replace('{tech_style}', TECH_STYLE[techLevel] || TECH_STYLE.some)
-    .replace('{mode_style}', MODE_STYLE[mode] || MODE_STYLE.ask)
+    .replace('{mode_style}', style)
     .replace('{turn}', String(turn)).replace('{max_turns}', String(MAX_QUESTIONS))
     .replace('{conversation}', () => conversationText(request, turns));
 }
@@ -169,7 +182,9 @@ export function ollamaStreamer({ env = process.env, fetchImpl = fetch, timeoutMs
 }
 
 /** Next step after the requester's latest turn: another question, or the summary (complete = clear enough). */
-export function nextStep({ asked, clarity, rulesClear = false }) {
+export function nextStep({ asked, clarity, rulesClear = false, mode = null }) {
+  // Chức năng mới: đủ 3 chủ đề rồi mới tóm tắt, không dừng sớm theo luật/model của yêu cầu lẻ.
+  if (mode === 'feature') return asked >= FEATURE_QUESTIONS ? { kind: 'summary', complete: true } : { kind: 'question', mode };
   if (rulesClear || (clarity && !clarity.needed)) return { kind: 'summary', complete: true };
   if (asked >= MAX_QUESTIONS) return { kind: 'summary', complete: false };
   return { kind: 'question', mode: clarity?.mode || 'ask' };

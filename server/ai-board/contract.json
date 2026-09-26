@@ -20,6 +20,7 @@
     },
     "max_subtasks_per_run": 10,
     "pending_roots_per_user": { "value": 3, "_why": "one person cannot fill the school's queue" },
+    "open_folders_per_user": { "value": 3, "_why": "feature folders not yet archived; keeps branches and context bounded" },
     "gpu_s_per_user_day": { "loose": 1500, "folder": 4000, "_why": "rolling 24h; over it the request waits, a running run is never cut" },
     "gpu_s_per_worker_hour": { "value": 2700, "_why": "must exceed one max run (2400) so big tasks are not starved" }
   },

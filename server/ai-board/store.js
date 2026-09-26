@@ -10,7 +10,7 @@ const MIGRATIONS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '
 // Worker <-> server contract, shared with ai-board/worker.py.
 export const CONTRACT = JSON.parse(fs.readFileSync(new URL('./contract.json', import.meta.url), 'utf8'));
 const KEY = new RegExp(CONTRACT.idempotency_key_pattern);
-const REQUEST_TYPES = new Set(['game', 'theory', 'lab', 'skill', 'other']);
+const REQUEST_TYPES = new Set(['game', 'theory', 'lab', 'skill', 'other', 'feature']);
 const REQUEST_STATUSES = new Set(['pending', 'reviewing', 'done', 'rejected']);
 const WORKER_MODES = new Set(['off', 'shadow', 'active']);
 const CLAIM_INTENTS = new Set(['precheck', 'plan']);
@@ -365,10 +365,10 @@ export function createAiBoardStore(db, hooks = {}) {
   const insertRequest = db.prepare(`
     INSERT INTO requests (
       domain, type, title, detail, student, status, votes, created_at, updated_at,
-      attachments, owner_user_id, owner_domain, idempotency_key, owner_state
+      attachments, owner_user_id, owner_domain, idempotency_key, owner_state, folder_id
     ) VALUES (
       @domain, @type, @title, @detail, @student, 'pending', 1, @now, @now,
-      @attachments, @owner_user_id, @owner_domain, @idempotency_key, 'verified'
+      @attachments, @owner_user_id, @owner_domain, @idempotency_key, 'verified', @folder_id
     )
   `);
   const insertRoot = db.prepare(`
@@ -408,6 +408,7 @@ export function createAiBoardStore(db, hooks = {}) {
     const retry = findRetry.get(input.ownerUserId, input.idempotencyKey);
     if (retry) return { ...retry, created: false };
     const now = input.now ?? Date.now();
+    const folderId = folderForRequest(input, now);
     const info = insertRequest.run({
       domain: input.ownerDomain,
       type: REQUEST_TYPES.has(input.type) ? input.type : 'other',
@@ -418,6 +419,7 @@ export function createAiBoardStore(db, hooks = {}) {
       owner_user_id: input.ownerUserId,
       owner_domain: input.ownerDomain,
       idempotency_key: input.idempotencyKey,
+      folder_id: folderId,
       now,
     });
     const requestId = Number(info.lastInsertRowid);
@@ -436,8 +438,118 @@ export function createAiBoardStore(db, hooks = {}) {
       'created->queued', 'Yêu cầu đã được ghi nhận.', null,
       `request-created:${input.idempotencyKey}`, now,
     );
-    return { request_id: requestId, root_ticket_id: rootTicketId, created: true };
+    if (folderId) insertTag.run(rootTicketId, `folder:${folderId}`);
+    return { request_id: requestId, root_ticket_id: rootTicketId, folder_id: folderId, created: true };
   });
+
+  // ── Folder chức năng (feature-folders ticket 04) ──
+  const OPEN_FOLDER_STATES = "('draft', 'active', 'awaiting_merge')";
+
+  /** Folder của yêu cầu mới: gắn vào folder của chính người gửi, hoặc loại 'feature' thì tạo folder mới. */
+  function folderForRequest(input, now) {
+    if (input.folderId) {
+      const folder = db.prepare('SELECT * FROM ai_feature_folders WHERE id=?').get(Number(input.folderId));
+      if (!folder || folder.owner_user_id !== input.ownerUserId || folder.state === 'archived') {
+        throw new RequestValidationError('Không tìm thấy chức năng này trong danh sách của bạn.');
+      }
+      db.prepare('UPDATE ai_feature_folders SET last_activity_at=?, updated_at=? WHERE id=?').run(now, now, folder.id);
+      return folder.id;
+    }
+    if (input.type !== 'feature') return null;
+    const cap = LIMITS.open_folders_per_user.value;
+    const open = db.prepare(`SELECT COUNT(*) AS n FROM ai_feature_folders WHERE owner_user_id=? AND state IN ${OPEN_FOLDER_STATES}`)
+      .get(input.ownerUserId).n;
+    if (open >= cap) {
+      throw new RequestValidationError(`Bạn đang có ${cap} chức năng chưa xong. Lưu trữ bớt một chức năng rồi tạo mới nhé.`);
+    }
+    const title = String(input.title).trim().slice(0, 120);
+    const info = db.prepare(`
+      INSERT INTO ai_feature_folders (slug, title, owner_user_id, domain, state, created_at, updated_at, last_activity_at)
+      VALUES (?, ?, ?, ?, 'draft', ?, ?, ?)
+    `).run(uniqueSlug(title), title, input.ownerUserId, input.ownerDomain, now, now, now);
+    return Number(info.lastInsertRowid);
+  }
+
+  function uniqueSlug(title) {
+    const base = String(title).normalize('NFD').replace(/\p{M}/gu, '').replace(/đ/gi, 'd').toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '') || 'chuc-nang';
+    const taken = db.prepare('SELECT 1 FROM ai_feature_folders WHERE slug=?');
+    let slug = base;
+    for (let i = 2; taken.get(slug); i += 1) slug = `${base}-${i}`;
+    return slug;
+  }
+
+  const folderRow = (f) => f && ({ id: f.id, slug: f.slug, title: f.title, domain: f.domain, state: f.state,
+    approved: !!f.approved_at, owner_user_id: f.owner_user_id, requests: f.requests ?? 0, votes: f.votes ?? 0,
+    created_at: f.created_at, last_activity_at: f.last_activity_at });
+  const FOLDER_COLUMNS = `f.*,
+    (SELECT COUNT(*) FROM requests fr WHERE fr.folder_id = f.id) AS requests,
+    (SELECT COUNT(*) FROM ai_feature_folder_votes fv WHERE fv.folder_id = f.id) AS votes`;
+
+  /** Folder của 1 người (FAB "Chức năng của bạn") + folder người khác cùng trường (chỉ xem, vote). */
+  function listFolders(userId, domain) {
+    const rows = db.prepare(`
+      SELECT ${FOLDER_COLUMNS},
+        EXISTS(SELECT 1 FROM ai_feature_folder_votes v WHERE v.folder_id = f.id AND v.user_id = ?) AS voted
+      FROM ai_feature_folders f WHERE f.domain = ? AND f.state <> 'archived'
+      ORDER BY f.last_activity_at DESC LIMIT 100
+    `).all(Number(userId), String(domain || ''));
+    const mine = [];
+    const school = [];
+    for (const f of rows) (f.owner_user_id === Number(userId) ? mine : school).push({ ...folderRow(f), voted: !!f.voted });
+    return { mine, school: school.map(({ owner_user_id: _owner, ...f }) => f) };
+  }
+
+  function voteFolder(folderId, userId, now = Date.now()) {
+    const folder = db.prepare('SELECT * FROM ai_feature_folders WHERE id=?').get(Number(folderId));
+    if (!folder || folder.state === 'archived') throw new WorkerContractError('folder not found', 404, 'folder_not_found');
+    if (folder.owner_user_id === Number(userId)) throw new WorkerContractError('cannot vote own folder', 409, 'own_folder');
+    db.prepare('INSERT OR IGNORE INTO ai_feature_folder_votes(folder_id, user_id, created_at) VALUES (?, ?, ?)')
+      .run(folder.id, Number(userId), now);
+    return { ok: true, votes: db.prepare('SELECT COUNT(*) AS n FROM ai_feature_folder_votes WHERE folder_id=?').get(folder.id).n };
+  }
+
+  /** Admin: mọi folder (tab "Chức năng"): trạng thái, số yêu cầu, GPU-s đã dùng, trace của root mới nhất. */
+  function listAdminFolders(limit = 200) {
+    return db.prepare(`
+      SELECT ${FOLDER_COLUMNS}, u.display_name AS owner_name,
+        (SELECT COALESCE(SUM(json_extract(g.evidence_json, '$.budget_units')), 0)
+          FROM ai_gate_traces g JOIN ai_runs gr ON gr.id = g.run_id JOIN ai_tickets gt ON gt.id = gr.ticket_id
+          JOIN requests gq ON gq.id = gt.source_request_id WHERE g.status = 'model_call' AND gq.folder_id = f.id) AS gpu_s,
+        (SELECT t.id FROM ai_tickets t JOIN requests q ON q.id = t.source_request_id
+          WHERE q.folder_id = f.id AND t.parent_id IS NULL ORDER BY t.id DESC LIMIT 1) AS latest_root_id
+      FROM ai_feature_folders f LEFT JOIN users u ON u.id = f.owner_user_id
+      ORDER BY f.last_activity_at DESC LIMIT ?
+    `).all(Math.min(Math.max(Number(limit) || 200, 1), 500)).map((f) => ({ ...folderRow(f), owner_name: f.owner_name,
+      gpu_s: Math.round(f.gpu_s), trace_ref: f.latest_root_id ? traceRef(f.latest_root_id) : null }));
+  }
+
+  /** Admin duyệt folder 1 lần: plan đang chờ CHỈ vì folder chưa duyệt được cho phép luôn; lượt sau tự chạy. */
+  const approveFolderTransaction = db.transaction((folderId, adminUserId, now) => {
+    const folder = db.prepare('SELECT * FROM ai_feature_folders WHERE id=?').get(Number(folderId));
+    if (!folder) throw new WorkerContractError('folder not found', 404, 'folder_not_found');
+    db.prepare(`UPDATE ai_feature_folders SET approved_by=?, approved_at=?, updated_at=?,
+      state=CASE WHEN state='draft' THEN 'active' ELSE state END WHERE id=?`).run(Number(adminUserId), now, now, folder.id);
+    const waiting = db.prepare(`
+      SELECT t.id, t.plan_hash FROM ai_tickets t JOIN requests q ON q.id = t.source_request_id
+      WHERE q.folder_id = ? AND t.parent_id IS NULL AND t.status = 'waiting_authorization'
+        AND t.internal_reason = 'folder_not_approved'
+    `).all(folder.id);
+    for (const root of waiting) authorizePlanTransaction(root.id, root.plan_hash, adminUserId, now);
+    return { ok: true, authorized: waiting.length };
+  });
+
+  function approveFolder(folderId, adminUserId) {
+    return approveFolderTransaction(folderId, adminUserId, Date.now());
+  }
+
+  /** Thu hồi: các plan sau của folder lại chờ admin. Việc đang chạy không bị cắt. */
+  function revokeFolder(folderId, now = Date.now()) {
+    const changed = db.prepare('UPDATE ai_feature_folders SET approved_by=NULL, approved_at=NULL, updated_at=? WHERE id=?')
+      .run(now, Number(folderId)).changes;
+    if (!changed) throw new WorkerContractError('folder not found', 404, 'folder_not_found');
+    return { ok: true };
+  }
 
   function createRequestWithRoot(input) {
     if (!Number.isInteger(Number(input.ownerUserId)) || Number(input.ownerUserId) <= 0) throw new RequestValidationError('ownerUserId is required');
@@ -1054,6 +1166,11 @@ export function createAiBoardStore(db, hooks = {}) {
       return { plan_hash: checked.planHash, tier: checked.tier, status: 'waiting_admin', reason, children: [] };
     }
 
+    // Folder chức năng chưa được admin duyệt: plan mặt bằng cũng phải chờ (ticket 04). Đã duyệt → tier như thường.
+    const folder = db.prepare(`SELECT f.approved_at FROM requests q JOIN ai_feature_folders f ON f.id = q.folder_id
+      WHERE q.id = ?`).get(root.source_request_id);
+    const folderGate = !!folder && !folder.approved_at && checked.tier === 'surface';
+    if (folderGate) checked = { ...checked, tier: 'protected' };
     const revision = root.plan_revision + 1;
     const authorized = !!db.prepare(`
       SELECT 1 FROM ai_authorizations WHERE root_ticket_id=? AND plan_hash=? AND plan_revision=?
@@ -1065,7 +1182,7 @@ export function createAiBoardStore(db, hooks = {}) {
     if (checked.tier === 'protected' && !authorized) {
       rootStatus = childStatus = 'waiting_authorization';
       publicNote = 'Kế hoạch đang chờ quản trị viên cho phép trước khi triển khai.';
-      internalReason = 'protected capability requires explicit admin authorization';
+      internalReason = folderGate ? 'folder_not_approved' : 'protected capability requires explicit admin authorization';
     } else if (checked.tier === 'core') {
       rootStatus = childStatus = 'human_owned';
       publicNote = 'Yêu cầu chạm phần lõi và đã được chuyển cho con người xử lý.';
@@ -1583,6 +1700,11 @@ export function createAiBoardStore(db, hooks = {}) {
     countPendingRoots,
     setRequestStatus,
     listAdminQueue,
+    listFolders,
+    voteFolder,
+    listAdminFolders,
+    approveFolder,
+    revokeFolder,
     listWorkers,
     cancelRequest,
     requestRollback,

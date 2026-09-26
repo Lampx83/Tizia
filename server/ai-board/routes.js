@@ -50,11 +50,13 @@ export function attachAiBoardRequestRoutes(router, {
     const danger = classified?.danger?.shadow ? null : classified?.danger;
     const modelLabels = (danger?.labels || []).map((key) => `model_${key}`);
     // Làm rõ = luật cứng HOẶC model clarity 'active'; ghi lại nguồn để ticket 01 so sánh.
-    const rules = checkClarity(body.title, body.detail);
-    const model = classified?.clarity?.shadow ? null : classified?.clarity;
+    // Chức năng mới (ticket 04 feature-folders): luôn hỏi đúng 3 câu chế độ 'feature', không áp luật "quá rộng".
+    const isFeature = body.type === 'feature' && !body.folder_id;
+    const rules = isFeature ? { needed: true, mode: 'feature', reasons: ['chức năng mới'] } : checkClarity(body.title, body.detail);
+    const model = classified?.clarity?.shadow || isFeature ? null : classified?.clarity;
     const source = [rules.needed && 'rules', model?.needed && 'model'].filter(Boolean);
     let clarify = features.has('clarify') && source.length
-      ? { needed: true, mode: [rules.mode, model?.mode].includes('split') ? 'split' : 'ask' }
+      ? { needed: true, mode: isFeature ? 'feature' : [rules.mode, model?.mode].includes('split') ? 'split' : 'ask' }
       : { needed: false, mode: null };
     const trace = classified || rules.needed ? { ...classified, rules, clarify: { ...clarify, source } } : null;
     try {
@@ -67,6 +69,7 @@ export function attachAiBoardRequestRoutes(router, {
         title: body.title,
         detail: body.detail,
         attachments: body.attachments,
+        folderId: body.folder_id ? Number(body.folder_id) : null,
         clarifying: clarify.needed,
       });
       if (result.created) {
@@ -137,6 +140,29 @@ export function attachAiBoardRequestRoutes(router, {
     const ok = store.setRequestStatus(req.params.id, status, req.body?.note, req.user.id);
     if (!ok) return res.status(400).json({ error: 'invalid_status_or_request' });
     res.json({ ok: true });
+  });
+
+  // ── Folder chức năng (feature-folders ticket 04) ──
+  const folderError = (res, error) => {
+    if (error instanceof WorkerContractError) return res.status(error.status).json({ error: error.code, message: error.message });
+    throw error;
+  };
+  router.get('/api/ai-board/folders', requireAuth, (req, res) => {
+    const domain = String(req.query.domain || req.user.enrolled_domain || '').trim();
+    if (!domain) return res.status(400).json({ error: 'domain required' });
+    res.json(store.listFolders(req.user.id, domain));
+  });
+  router.post('/api/ai-board/folders/:id/vote', requireAuth, requireStrictCsrf, (req, res) => {
+    try { res.json(store.voteFolder(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
+  });
+  router.get('/api/admin/ai-board/folders', requireAuth, requireAdmin, (req, res) => {
+    res.json({ folders: store.listAdminFolders(req.query.limit) });
+  });
+  router.post('/api/admin/ai-board/folders/:id/approve', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
+    try { res.json(store.approveFolder(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
+  });
+  router.post('/api/admin/ai-board/folders/:id/revoke', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
+    try { res.json(store.revokeFolder(req.params.id)); } catch (error) { folderError(res, error); }
   });
 
   router.get('/api/admin/ai-board/queue', requireAuth, requireAdmin, (req, res) => {
