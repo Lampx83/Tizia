@@ -339,6 +339,7 @@ function bind(root) {
         'Content-Type': blob.type || 'application/octet-stream',
         'X-Filename': encodeURIComponent(name || 'attachment'),
         'X-Kind': kind,
+        'X-CSRF-Token': await csrfToken(),
       },
       body: blob,
     });
@@ -459,6 +460,8 @@ function bind(root) {
       lastSummary = done;
       clarSpec.value = done.text;
       clarSpec.readOnly = true;
+      // Nút "Đúng, gửi" nằm cuối panel: cuộn tới để người dùng thấy ngay trên màn hình thấp.
+      setTimeout(() => clarSum.scrollIntoView({ block: 'end', behavior: 'smooth' }), 30);
     }
   }
 
@@ -673,6 +676,7 @@ function bind(root) {
       const r = await fetch('api/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Idempotency-Key': pendingRequestKey,
+          'X-CSRF-Token': await csrfToken(),
           'X-AI-Board-Features': 'onboarding,clarify' }, // panel này có UI cho cả hai
         body: JSON.stringify({
           domain: inferDomain(), type, title, detail, attachments,
@@ -904,6 +908,8 @@ function injectStyles() {
     .sgf-clar-banner span { flex: 1; }
     .sgf-clar-banner .sgf-send { white-space: nowrap; }
     .sgf-clar-log { display: flex; flex-direction: column; gap: 8px; max-height: 42vh; overflow-y: auto; }
+    /* Bản tóm tắt đã nằm trong ô bên dưới: thu nhỏ khung chat để nút xác nhận vừa màn hình. */
+    .sgf-clarify:has(.sgf-clar-sum:not([hidden])) .sgf-clar-log { max-height: 20vh; }
     .sgf-clar-msg { max-width: 88%; padding: 8px 12px; border-radius: 14px; white-space: pre-wrap; font-size: 13.5px;
       animation: sgf-pop .25s ease-out both; }
     .sgf-clar-ai { align-self: flex-start; background: #eef2ff; color: #1e1b4b; border-bottom-left-radius: 4px; }
