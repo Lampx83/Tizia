@@ -1011,7 +1011,7 @@ export const H10GDQP_LESSONS = {
     ],
   },
 
-  'H10QP-w36-quiz': {
+  'H10GDQP-w36-quiz': {
     topic: 'Kết thúc GDQP-AN 10 — Tuổi trẻ, Tổ quốc và Trách nhiệm',
     intro: 'GDQP-AN 10 xây dựng nền tảng ý thức quốc phòng, an ninh và kỹ năng sống quan trọng. Hôm nay chúng ta nhìn lại hành trình đó và chuẩn bị cho những thách thức lớn hơn ở lớp 11.',
     objectives: [

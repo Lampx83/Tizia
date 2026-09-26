@@ -1117,7 +1117,7 @@ export const H10TA_LESSONS = {
     ],
   },
 
-  'H10ENG-w36-quiz': {
+  'H10TA-w36-quiz': {
     topic: 'Closing Chapter — Grade 10 English & the Road Ahead',
     intro: 'Grade 10 English has taken you from foundational grammar to rich vocabulary and meaningful communication skills. Let\'s look back at the journey, celebrate your progress, and set clear goals for Grade 11.',
     objectives: [

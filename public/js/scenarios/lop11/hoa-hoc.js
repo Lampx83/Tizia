@@ -1,5 +1,5 @@
 // ============================================================
-// Lớp 11 · HOÁ HỌC — 35 tuần (HK1: 1–18 · HK2: 19–35)
+// Lớp 11 · HOÁ HỌC — 36 tuần (HK1: 1–18 · HK2: 19–36)
 // Bám CTGD 2018 (Hoá học 11).
 // ID prefix: "H11HOA-wNN-quiz".
 // ============================================================
@@ -323,6 +323,14 @@ export const H11HOA_WEEKS = [
     Q('Hidrocacbon thơm + Br₂ (Fe) →?', ['Thế ở vòng', 'Không phản ứng', 'Cộng vào vòng phá vỡ tính thơm', 'Trùng hợp'], 0, 'Thế thơm.', ['Đúng — hidrocacbon thơm + Br₂ (Fe) cho phản ứng thế ở vòng thơm.', 'Sai — có phản ứng thế khi có xúc tác Fe.', 'Sai — với Fe xảy ra thế, không phải cộng phá vỡ vòng thơm.', 'Sai — hidrocacbon thơm không trùng hợp với Br₂.']),
     Q('Ancol bậc 1 oxi hoá nhẹ thành?', ['Axit ngay', 'Eter R-O-R\' (do tách nước giữa 2 phân tử)', 'Andehit', 'Xeton (sản phẩm của ancol bậc 2)'], 2, 'Bậc 1: -CH₂OH → -CHO.', ['Sai — oxi hoá nhẹ dừng ở andehit, chưa lên tới axit ngay.', 'Sai — ete tạo do tách nước, không phải oxi hoá.', 'Đúng — ancol bậc 1 oxi hoá nhẹ thành andehit (-CH₂OH → -CHO).', 'Sai — xeton là sản phẩm oxi hoá của ancol bậc 2.']),
     Q('Phản ứng este hoá thuận nghịch nên cần?', ['H₂SO₄ đặc làm xúc tác và hút nước', 'Đun lạnh', 'Ánh sáng', 'Bazơ NaOH làm xúc tác'], 0, 'H₂SO₄ đặc.', ['Đúng — phản ứng este hoá thuận nghịch nên dùng H₂SO₄ đặc làm xúc tác và hút nước để tăng hiệu suất.', 'Sai — phản ứng cần đun nóng, không phải đun lạnh.', 'Sai — ánh sáng không phải điều kiện của phản ứng este hoá.', 'Sai — NaOH gây thuỷ phân este (xà phòng hoá), không xúc tác este hoá.']),
+  ]),
+  M(36, 'Kết thúc Hoá Học 11 — Hữu cơ và bước ngoặt lớp 12', [
+    Q('Ankan, anken và ankin khác nhau ở đặc điểm nào?', ['Số nguyên tử oxygen trong phân tử', 'Ankan chỉ có liên kết đơn, anken có liên kết đôi C=C, ankin có liên kết ba', 'Trạng thái tồn tại ở nhiệt độ thường', 'Màu sắc của dung dịch'], 1, 'Ankan là hydrocarbon no, anken có một liên kết đôi C=C, ankin có một liên kết ba.', ['Sai — cả ba đều là hydrocarbon, không chứa oxygen.', 'Đúng — khác biệt nằm ở loại liên kết giữa hai nguyên tử carbon.', 'Sai — trạng thái phụ thuộc số carbon, không phải tiêu chí phân loại.', 'Sai — hydrocarbon đều không màu.']),
+    Q('Nhóm chức của axit carboxylic là gì?', ['–OH', '–CHO', '–COOH', '–COO–'], 2, 'Axit carboxylic mang nhóm chức –COOH.', ['Sai — đó là nhóm hydroxyl của ancol và phenol.', 'Sai — đó là nhóm chức của aldehyde.', 'Đúng — nhóm carboxyl –COOH là đặc trưng của axit carboxylic.', 'Sai — đó là nhóm chức của ester.']),
+    Q('Phản ứng tráng bạc là phản ứng nhận biết chất nào?', ['Ankan', 'Aldehyde và axit fomic HCOOH', 'Benzen', 'Muối ăn'], 1, 'Phản ứng tráng bạc dùng nhận biết aldehyde và HCOOH nhờ nhóm –CHO.', ['Sai — ankan trơ, không tham gia phản ứng tráng bạc.', 'Đúng — nhóm –CHO bị oxy hoá, giải phóng bạc kim loại bám lên thành ống nghiệm.', 'Sai — benzen không có nhóm –CHO.', 'Sai — muối ăn là hợp chất vô cơ, không tham gia phản ứng này.']),
+    Q('Trong chuỗi biến hoá, ancol bị oxy hoá nhẹ sẽ tạo ra chất gì?', ['Aldehyde', 'Anken', 'Ankan', 'Muối'], 0, 'Ancol bậc một bị oxy hoá nhẹ tạo aldehyde, oxy hoá mạnh tiếp tạo axit.', ['Đúng — oxy hoá nhẹ ancol bậc một cho aldehyde.', 'Sai — anken tạo thành khi tách nước khỏi ancol, không phải oxy hoá.', 'Sai — ankan thu được khi hydro hoá, không phải oxy hoá.', 'Sai — muối tạo thành khi axit phản ứng với bazơ.']),
+    Q('Benzen phản ứng với Br2 có xúc tác bột Fe sẽ tạo ra sản phẩm nào?', ['Nitrobenzene', 'Bromobenzene', 'Phenol', 'Toluene'], 1, 'Benzen cộng Br2 với xúc tác Fe cho phản ứng thế tạo bromobenzene.', ['Sai — nitrobenzene sinh ra khi nitro hoá bằng HNO3 và H2SO4 đặc.', 'Đúng — phản ứng thế ở vòng thơm tạo bromobenzene.', 'Sai — phenol có nhóm –OH gắn trực tiếp vào vòng thơm.', 'Sai — toluene là benzen gắn nhóm methyl.']),
+    Q('Nội dung hoá hữu cơ nào của lớp 12 mở rộng trực tiếp từ nhóm –NH2 và –COOH?', ['Điện phân dung dịch', 'Amin, amino axit và protein', 'Bảng tuần hoàn', 'Phản ứng nhiệt nhôm'], 1, 'Nhóm –NH2 kết hợp với –COOH tạo nên amino axit và protein, chương học của lớp 12.', ['Sai — điện phân thuộc phần điện hoá vô cơ.', 'Đúng — amin, amino axit và protein là bước tiếp theo từ hai nhóm chức này.', 'Sai — bảng tuần hoàn là nội dung lớp 10.', 'Sai — nhiệt nhôm là phản ứng vô cơ.']),
   ]),
 ];
 

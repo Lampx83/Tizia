@@ -4,6 +4,113 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-26 — Phiên 73 · THPT **ĐÓNG TRỌN cấp 3 và toàn bộ K-12**: hồi sinh 36 bài lí thuyết "chết" của Lớp 10, Lớp 11 và Lớp 12
+
+**Kết luận về hộp thư:** vẫn **không đọc được** (ngày thứ 14) ⇒ **không xử lý được yêu cầu nào của người học**, không bịa ra yêu cầu. Phiên này khép lại việc đã đo được từ phiên 58: học liệu đã viết xong nhưng học sinh **không bao giờ nhìn thấy**. Hôm nay đóng nốt cấp THPT ⇒ **toàn bộ K-12 (lớp 1→12) không còn bài lí thuyết mồ côi nào**.
+
+### Đo thật hôm nay (2026-09-26)
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `GET /api/health` | `200` — `{"ok":true,"service":"tizia",…,"env":"production"}`, uptime ~64 giờ, node v20.20.2 |
+| `GET /api/ai-board/inbox` | `401 {"error":"unauthorized","needLogin":true}` — kể cả khi gửi header `x-ai-board-key` ⇒ auth gate chung vẫn nuốt request, **PR #97 chưa merge + deploy** |
+| `GET /api/requests` · `/api/public/requests` · `/api/board/inbox` · `/api/admin/requests` · `/api/ai-board/requests` | tất cả `401 needLogin` — không còn đường đọc nào cho phiên tự động |
+| `AI_BOARD_KEY` trong môi trường routine | **vẫn chưa có** |
+| `node scripts/check-deployed-build.mjs` | không commit nào trong repo khớp cả bộ chứng cứ; bằng chứng hành vi xác nhận bản deploy **chưa có route hộp thư** |
+| `node scripts/check-content-integrity.mjs` (trước) | **36** bài lí thuyết mồ côi |
+| `node scripts/check-content-integrity.mjs` (sau) | **0** — ✅ *Toàn vẹn học liệu: không phát hiện vấn đề* |
+
+### Hai nguyên nhân khiến 36 bài chết
+
+**(a) Thiếu tuần 36 trong file scenario — 33 môn.** Bài lí thuyết tuần 36 ("Kết thúc … — Hành trang …") đã được viết với key `<PREFIX>-w36-quiz`, nhưng file scenario của môn đó **chỉ có 35 tuần**. Cơ chế gắn là tra cứu đúng id (`if (LOP1n_LESSONS[id]) sc.lesson = …` trong `lop1n/_index.js`), nên không có quiz tuần 36 = bài lí thuyết biến mất im lặng.
+
+**(b) Sai prefix trong chính file lessons — 3 môn của Lớp 10 (lỗi MỚI, chưa từng gặp ở cấp 1 và cấp 2).** Ba file lessons dùng đúng prefix cho 35 tuần đầu nhưng **gõ nhầm prefix riêng ở tuần 36**:
+
+| File lessons | Key tuần 36 (sai) | Prefix đúng (35 tuần còn lại dùng) |
+|---|---|---|
+| `lop10/lessons/gdqp.js` | `H10QP-w36-quiz` | `H10GDQP` |
+| `lop10/lessons/ngu-van.js` | `H10VAN-w36-quiz` | `H10NV` |
+| `lop10/lessons/tieng-anh.js` | `H10ENG-w36-quiz` | `H10TA` |
+
+Đã sửa key về đúng prefix — thay đổi 1 dòng mỗi file, không đụng nội dung bài học.
+
+### Việc đã làm — 36 môn thuộc 3 khối
+
+Bổ sung **tuần 36** vào 36 file scenario, mỗi tuần **6 câu hỏi** đúng format chung (`Q(stem, 4 lựa chọn, đáp án, giải thích, 4 choiceFeedback)`), nội dung **bám đúng bài lí thuyết tuần 36 đã có sẵn** của môn đó.
+
+**Lớp 10 (12/12 môn)** — `public/js/scenarios/lop10/`
+
+| File | Tuần 36 mới | Bài lí thuyết được hồi sinh |
+|---|---|---|
+| `toan.js` | Kết thúc Toán 10 — Hành trang vào lớp 11 | `H10TOAN-w36-quiz` |
+| `ngu-van.js` | Kết thúc Ngữ Văn 10 — Hành trang ngôn ngữ vào lớp 11 | `H10NV-w36-quiz` |
+| `tieng-anh.js` | Closing Chapter — Grade 10 English and the Road Ahead | `H10TA-w36-quiz` |
+| `vat-ly.js` | Kết thúc Vật Lý 10 — Cơ học và Nhiệt học hành trang lên lớp 11 | `H10LY-w36-quiz` |
+| `hoa-hoc.js` | Kết thúc Hoá Học 10 — Nền tảng nguyên tử và bước vào Hoá hữu cơ 11 | `H10HOA-w36-quiz` |
+| `sinh-hoc.js` | Kết thúc Sinh Học 10 — Tế bào và Vi sinh vật làm nền tảng cho lớp 11 | `H10SINH-w36-quiz` |
+| `lich-su.js` | Kết thúc Lịch Sử 10 — Thế giới và Việt Nam qua lăng kính lịch sử | `H10SU-w36-quiz` |
+| `dia-ly.js` | Kết thúc Địa Lý 10 — Bản đồ thế giới trong tâm trí | `H10DIA-w36-quiz` |
+| `gdcd.js` | Kết thúc GDCD 10 — Công dân có hiểu biết trong thế giới hội nhập | `H10GDCD-w36-quiz` |
+| `gdqp.js` | Kết thúc GDQP-AN 10 — Tuổi trẻ, Tổ quốc và Trách nhiệm | `H10GDQP-w36-quiz` |
+| `tin-hoc.js` | Kết thúc Tin Học 10 — Lập trình và Tư duy số cho lớp 11 | `H10TIN-w36-quiz` |
+| `cong-nghe.js` | Kết thúc Công Nghệ 10 — Kỹ thuật và Nghề nghiệp trong tầm tay | `H10CN-w36-quiz` |
+
+**Lớp 11 (12/12 môn)** — `public/js/scenarios/lop11/`
+
+| File | Tuần 36 mới | Bài lí thuyết được hồi sinh |
+|---|---|---|
+| `toan.js` | Kết thúc Toán 11 — Hành trang vào lớp 12 | `H11TOAN-w36-quiz` |
+| `ngu-van.js` | Kết thúc Ngữ Văn 11 — Chiều sâu cảm xúc và hành trình lớp 12 | `H11NV-w36-quiz` |
+| `tieng-anh.js` | Closing Chapter — Grade 11 English and the Road Ahead | `H11TA-w36-quiz` |
+| `vat-ly.js` | Kết thúc Vật Lý 11 — Điện Từ Quang và hành trình lớp 12 | `H11LY-w36-quiz` |
+| `hoa-hoc.js` | Kết thúc Hoá Học 11 — Hữu cơ và bước ngoặt lớp 12 | `H11HOA-w36-quiz` |
+| `sinh-hoc.js` | Kết thúc Sinh Học 11 — Sự sống ở cấp cơ thể và bước ngoặt lớp 12 | `H11SINH-w36-quiz` |
+| `lich-su.js` | Kết thúc Lịch Sử 11 — Thế giới và Việt Nam trước thời đại của chúng ta | `H11SU-w36-quiz` |
+| `dia-ly.js` | Kết thúc Địa Lý 11 — Bản đồ thế giới trong tầm tay | `H11DIA-w36-quiz` |
+| `gdcd.js` | Kết thúc GDCD 11 — Công dân có hiểu biết trong thế giới hội nhập | `H11GDCD-w36-quiz` |
+| `gdqp.js` | Kết thúc GDQP-AN 11 — Tuổi trẻ, Tổ quốc và Trách nhiệm | `H11GDQP-w36-quiz` |
+| `tin-hoc.js` | Kết thúc Tin Học 11 — Lập trình và tư duy số cho thế kỉ 21 | `H11TIN-w36-quiz` |
+| `cong-nghe.js` | Kết thúc Công Nghệ 11 — Kỹ thuật, Xe hơi và Hành trình lớp 12 | `H11CN-w36-quiz` |
+
+**Lớp 12 (12/12 môn)** — `public/js/scenarios/lop12/`
+
+| File | Tuần 36 mới | Bài lí thuyết được hồi sinh |
+|---|---|---|
+| `toan.js` | Kết thúc Toán THPT — Hành trang vào đại học | `H12TOAN-w36-quiz` |
+| `ngu-van.js` | Kết thúc Ngữ Văn THPT — Văn chương và hành trình trở thành người | `H12NV-w36-quiz` |
+| `tieng-anh.js` | Closing Chapter — Your English Journey Continues | `H12TA-w36-quiz` |
+| `vat-ly.js` | Kết thúc Vật Lý THPT — Khám phá vũ trụ bắt đầu từ đây | `H12LY-w36-quiz` |
+| `hoa-hoc.js` | Kết thúc Hoá Học THPT — Phân tử xây dựng thế giới | `H12HOA-w36-quiz` |
+| `sinh-hoc.js` | Kết thúc Sinh Học THPT — Sự sống kỳ diệu và trách nhiệm của chúng ta | `H12SINH-w36-quiz` |
+| `lich-su.js` | Kết thúc Lịch Sử THPT — Bài học từ quá khứ, hành động cho tương lai | `H12SU-w36-quiz` |
+| `dia-ly.js` | Kết thúc Địa Lý THPT — Đất nước và thế giới trong tầm tay | `H12DIA-w36-quiz` |
+| `gdcd.js` | Kết thúc GD Kinh tế và Pháp luật — Công dân có trách nhiệm trong thế giới hội nhập | `H12GDCD-w36-quiz` |
+| `gdqp.js` | Kết thúc GDQP-AN — Tuổi trẻ và trách nhiệm với Tổ quốc | `H12GDQP-w36-quiz` |
+| `tin-hoc.js` | Kết thúc Tin Học THPT — Thế giới số và bạn | `H12TIN-w36-quiz` |
+| `cong-nghe.js` | Kết thúc Công Nghệ THPT — Kỹ thuật vì cuộc sống tốt hơn | `H12CN-w36-quiz` |
+
+### Sửa chú thích số tuần ở đầu file cho khớp thực tế
+
+36 file scenario vừa bổ sung tuần 36 có dòng chú thích đầu file ghi cứng `— 35 tuần (HK1: 1–18 · HK2: 19–35)`. Nay sửa thành `36 tuần (HK1: 1–18 · HK2: 19–36)`. **Ba file `hdtn.js` của lop10/11/12 giữ nguyên "35 tuần"** vì môn HĐTN thật sự chưa có tuần 36 (cũng không có bài lí thuyết tuần 36 nên không phải nội dung chết).
+
+`public/js/domains/highschool/modules.js` **không đổi** — module THPT không ghi số tuần trong title/description, loader liệt kê scenario theo prefix id nên không phụ thuộc con số nào.
+
+### Kiểm thử (chạy thật)
+
+- `node --check` **pass** cho **39/39** file đã sửa (36 scenario + 3 lessons).
+- `node scripts/check-content-integrity.mjs`: **36 → 0**. Lần đầu tiên script báo ✅ *Toàn vẹn học liệu: không phát hiện vấn đề* cho toàn bộ repo.
+- Kiểm tra **runtime** (không chỉ cú pháp): import thật 3 barrel `lop1n/_index.js`, xác nhận **36/36** scenario tuần 36 nạp được, **có `lesson` gắn vào**, `week === 36`, mỗi câu đủ **4 lựa chọn không trùng nhau**, `answer` nằm trong 0..3, đủ **4 `choiceFeedback`** và có `explanation`. 0 lỗi.
+- Soát chéo **216 câu mới**: không có stem trùng trong cùng tuần; `choiceFeedback` của đáp án đúng luôn mở đầu "Đúng/Correct", của lựa chọn sai luôn mở đầu "Sai/No" ⇒ **không có câu nào lệch index `answer`**. 0 lỗi.
+- Import `public/js/scenarios/_all-content.js`: **5420** scenario nạp được (5384 + 36), không lỗi.
+
+### Còn lại cho phiên sau
+
+- **6 môn Lớp 7** (`S7CN`, `S7GDDP`, `S7GDTC`, `S7HDTN`, `S7NT`, `S7TIN`) vẫn dừng ở 35 tuần — nhưng **chưa có** bài lí thuyết tuần 36 nên không phải nội dung chết. Muốn đủ 36 tuần cần soạn **cả** bài lí thuyết lẫn quiz, khác về bản chất với việc hồi sinh nội dung đã viết.
+- **3 môn HĐTN** của lop10/11/12: tương tự, 35 tuần và không có bài lí thuyết mồ côi.
+- **Hộp thư vẫn là nút thắt lớn nhất**: PR #97 (route đọc-chỉ `/api/ai-board/inbox`) mở từ 2026-09-22 vẫn chưa merge, và `AI_BOARD_KEY` chưa được đặt trên production. Chừng nào chưa xong, các phiên hàng ngày **không thể** phục vụ yêu cầu thật của người học.
+
+---
+
 ## 2026-09-25 — Phiên 72 · THCS **ĐÓNG TRỌN cấp 2**: hồi sinh 30 bài lí thuyết "chết" của Lớp 7, Lớp 8 và Lớp 9
 
 **Kết luận về hộp thư:** vẫn **không đọc được** (ngày thứ 13) ⇒ **không xử lý được yêu cầu nào của người học**, không bịa ra yêu cầu. Phiên này tiếp tục việc đã đo được từ phiên 58: học liệu đã viết xong nhưng học sinh **không bao giờ nhìn thấy**. Hôm nay đóng nốt 3 khối còn lại của cấp THCS ⇒ **lớp 6→9 không còn bài lí thuyết mồ côi nào**.
