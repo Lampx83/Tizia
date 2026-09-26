@@ -56,7 +56,9 @@ import { grantSkillsForScenario, plugin as skillsPlugin } from './skills.js';
 import { securityHeaders, csrf, requireStrictCsrf, apiLimiter, sensitiveAuthLimiter, plugin as securityPlugin } from './contexts/security/index.js';
 import { createAiBoardStore } from './ai-board/store.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from './ai-board/routes.js';
-import { attachAiBoardIntake } from './contexts/ai-board-intake/index.js';
+import { attachAiBoardIntake, clarifyNotifier } from './contexts/ai-board-intake/index.js';
+import { aiQuotaGate, recordAiCall } from './ai-quota.js';
+import { createNotification } from './db.js';
 import { log, initErrorTracking, installProcessGuards, requestContext, requestLogger, expressErrorHandler } from './observability.js';
 // Payment context — chỉ nạp khi PAYMENT_ENABLED=1 (dynamic import bên dưới) để bảng
 // payment + route KHÔNG xuất hiện ở deployment chưa bật thanh toán.
@@ -338,7 +340,10 @@ mountRouterPlugins(r, [
 ], { surface });
 
 const aiBoardStore = createAiBoardStore(db);
-const aiBoardProfiles = attachAiBoardIntake(r, { db, requireAuth, requireStrictCsrf });
+const aiBoardProfiles = attachAiBoardIntake(r, {
+  db, store: aiBoardStore, requireAuth, requireStrictCsrf,
+  quotaGate: aiQuotaGate('ai_board_grill'), recordUsage: recordAiCall,
+});
 attachAiBoardRequestRoutes(r, {
   store: aiBoardStore,
   db,
@@ -348,6 +353,7 @@ attachAiBoardRequestRoutes(r, {
   requireStrictCsrf,
   onCreated: acknowledgeNewRequest,
   needsProfile: aiBoardProfiles.needed,
+  onClarify: clarifyNotifier(createNotification),
 });
 attachAiBoardWorkerRoutes(r, { store: aiBoardStore });
 
@@ -1286,7 +1292,7 @@ r.get('/api/export.csv', (_req, res) => {
 const HEADER_TAG = `<script type="module" src="js/auth-header.js?v=admin-role"></script>`;
 // ?v=attach2 — cache-bust khi nâng UX đính kèm (preview thumbnail, kéo-thả, dán
 // ảnh, lọc loại, chống trùng + siết whitelist bỏ SVG). Bump mỗi lần đổi UX FAB.
-const SGF_TAG = `<script type="module" src="js/suggestion-fab.js?v=onboarding"></script>\n<script type="module" src="js/notifications-bell.js"></script>`;
+const SGF_TAG = `<script type="module" src="js/suggestion-fab.js?v=clarify"></script>\n<script type="module" src="js/notifications-bell.js"></script>`;
 // Analytics: chỉ gtag loader (analytics.js). Consent banner đã được bỏ theo
 // yêu cầu user (jun 2026) — gây phiền và che nội dung. Analytics vẫn hoạt
 // động theo mặc định "denied" (xem analytics.js) cho đến khi có cơ chế consent

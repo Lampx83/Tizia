@@ -78,7 +78,26 @@ function autoMount() {
           <button type="button" class="sgf-x" data-close aria-label="Đóng">✕</button>
         </div>
 
+        <div id="sgf-pending" class="sgf-clar-banner" hidden role="status"></div>
         <section id="sgf-onboard" class="sgf-onboard" hidden aria-live="polite"></section>
+        <section id="sgf-clarify" class="sgf-clarify" hidden>
+          <div class="sgf-clar-banner sgf-clar-live" role="status">🏛️ <span>Ban điều hành cần trao đổi thêm để làm rõ yêu cầu
+            <b id="sgf-clar-title"></b></span></div>
+          <div class="sgf-clar-log" id="sgf-clar-log" aria-live="polite"></div>
+          <div class="sgf-clar-reply" id="sgf-clar-reply" hidden>
+            <textarea id="sgf-clar-in" class="sgf-in" rows="2" maxlength="2000"
+                      placeholder="Trả lời Ban điều hành… (Enter để gửi, Shift+Enter xuống dòng)"></textarea>
+            <div class="sgf-bar"><span class="sgf-msg" id="sgf-clar-count"></span>
+              <button type="button" class="sgf-send" id="sgf-clar-send">Trả lời</button></div>
+          </div>
+          <div class="sgf-clar-sum" id="sgf-clar-sum" hidden>
+            <div class="sgf-ob-q">Ban hiểu yêu cầu của bạn như sau — đúng chưa?</div>
+            <textarea id="sgf-clar-spec" class="sgf-in" rows="7" maxlength="4000" readonly></textarea>
+            <div class="sgf-bar"><button type="button" class="sgf-chip" id="sgf-clar-edit">✏️ Sửa</button>
+              <button type="button" class="sgf-send" id="sgf-clar-ok">✓ Đúng, gửi</button></div>
+          </div>
+          <div class="sgf-msg" id="sgf-clar-msg"></div>
+        </section>
 
         <form id="sgf-form" class="sgf-form">
           <label class="sgf-lab">Loại đề nghị
@@ -400,12 +419,197 @@ function bind(root) {
     }
   }
 
+  // ── Làm rõ yêu cầu mơ hồ (ticket 06): Ban hỏi tối đa 5 câu, chữ hiện dần theo stream ──
+  const clarifyBox = root.querySelector('#sgf-clarify');
+  const clarLog = root.querySelector('#sgf-clar-log');
+  const clarReply = root.querySelector('#sgf-clar-reply');
+  const clarIn = root.querySelector('#sgf-clar-in');
+  const clarSend = root.querySelector('#sgf-clar-send');
+  const clarCount = root.querySelector('#sgf-clar-count');
+  const clarSum = root.querySelector('#sgf-clar-sum');
+  const clarSpec = root.querySelector('#sgf-clar-spec');
+  const clarMsg = root.querySelector('#sgf-clar-msg');
+  const pendingBox = root.querySelector('#sgf-pending');
+  let clarifyId = null;
+  let lastSummary = null;
+
+  async function csrfToken() {
+    const r = await fetch('api/csrf', { credentials: 'same-origin' });
+    const { token } = await r.json();
+    if (!token) throw new Error('csrf');
+    return token;
+  }
+
+  function bubble(kind, text = '') {
+    const el = document.createElement('div');
+    el.className = `sgf-clar-msg sgf-clar-${kind}`;
+    el.textContent = text;
+    clarLog.appendChild(el);
+    clarLog.scrollTop = clarLog.scrollHeight;
+    return el;
+  }
+
+  function showStep(done) {
+    clarReply.hidden = done.kind !== 'question';
+    clarSum.hidden = done.kind !== 'summary';
+    if (done.kind === 'question') {
+      clarCount.textContent = `Câu ${done.asked}/${done.max}`;
+      setTimeout(() => clarIn.focus(), 30);
+    } else {
+      lastSummary = done;
+      clarSpec.value = done.text;
+      clarSpec.readOnly = true;
+    }
+  }
+
+  async function startClarify(id, title) {
+    clarifyId = Number(id);
+    form.hidden = true;
+    onboard.hidden = true;
+    pendingBox.hidden = true;
+    clarifyBox.hidden = false;
+    clarLog.innerHTML = '';
+    clarMsg.textContent = '';
+    root.querySelector('#sgf-clar-title').textContent = title ? `«${title}»` : '';
+    try {
+      const r = await fetch(`api/ai-board/requests/${clarifyId}/clarify`, { credentials: 'same-origin' });
+      if (!r.ok) throw new Error();
+      const data = await r.json();
+      root.querySelector('#sgf-clar-title').textContent = `«${data.request.title}»`;
+      for (const turn of data.turns) bubble(turn.kind === 'answer' ? 'me' : 'ai', turn.text);
+      const last = data.turns.at(-1);
+      if (!last || last.kind === 'answer') return runTurn();
+      showStep({ kind: last.kind, text: last.text, asked: data.asked, max: data.max,
+        complete: data.asked < data.max });
+    } catch {
+      clarMsg.textContent = '⚠️ Không mở được phần trao đổi — thử lại sau.';
+    }
+  }
+
+  async function runTurn(answer) {
+    clarReply.hidden = true;
+    clarSum.hidden = true;
+    clarMsg.textContent = '';
+    if (answer !== undefined) bubble('me', answer);
+    const out = bubble('ai');
+    out.classList.add('sgf-typing');
+    try {
+      const r = await fetch(`api/ai-board/requests/${clarifyId}/clarify`, {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': await csrfToken() },
+        body: JSON.stringify(answer === undefined ? {} : { answer }),
+      });
+      if (!(r.headers.get('content-type') || '').includes('ndjson')) {
+        const e = await r.json().catch(() => ({}));
+        out.remove();
+        clarMsg.textContent = '⚠️ ' + (e.message || 'Chưa gửi được — thử lại sau.');
+        clarReply.hidden = false;
+        if (answer !== undefined) { clarLog.lastChild?.remove(); clarIn.value = answer; }
+        return;
+      }
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let done = null;
+      for (;;) {
+        const { value, done: end } = await reader.read();
+        if (end) break;
+        buffer += decoder.decode(value, { stream: true });
+        let nl;
+        while ((nl = buffer.indexOf('\n')) >= 0) {
+          const event = JSON.parse(buffer.slice(0, nl));
+          buffer = buffer.slice(nl + 1);
+          if (event.t === 'delta') {
+            out.classList.remove('sgf-typing');
+            out.textContent += event.text;
+            clarLog.scrollTop = clarLog.scrollHeight;
+          } else if (event.t === 'done') done = event;
+        }
+      }
+      out.classList.remove('sgf-typing');
+      if (!done) throw new Error('stream');
+      out.textContent = done.text; // bản đã qua guard của server là bản chuẩn
+      showStep(done);
+    } catch {
+      out.remove();
+      clarMsg.textContent = '⚠️ Lỗi mạng — thử lại sau.';
+      clarReply.hidden = false;
+    }
+  }
+
+  clarSend.addEventListener('click', () => {
+    const answer = clarIn.value.trim();
+    if (!answer) return;
+    clarIn.value = '';
+    runTurn(answer);
+  });
+  clarIn.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); clarSend.click(); }
+  });
+  root.querySelector('#sgf-clar-edit').addEventListener('click', () => {
+    clarSpec.readOnly = false;
+    clarSpec.focus();
+  });
+  root.querySelector('#sgf-clar-ok').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      const r = await fetch(`api/ai-board/requests/${clarifyId}/clarify/confirm`, {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': await csrfToken() },
+        body: JSON.stringify({ spec: clarSpec.value, complete: lastSummary?.complete !== false }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.message || 'Chưa gửi được — thử lại sau.');
+      clarifyBox.hidden = true;
+      form.hidden = false;
+      msg.textContent = '✓ Đã gửi! Ban điều hành bắt đầu xử lý yêu cầu đã làm rõ.';
+      clarifyId = null;
+      refreshPending();
+      loadInbox();
+    } catch (err) {
+      clarMsg.textContent = '⚠️ ' + err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // Yêu cầu còn chờ người gửi trả lời: FAB nhấp nháy + banner đầu panel.
+  async function refreshPending() {
+    try {
+      const r = await fetch('api/ai-board/clarifications', { credentials: 'same-origin' });
+      if (!r.ok) return;
+      const { items } = await r.json();
+      fab.classList.toggle('sgf-fab-ask', items.length > 0);
+      fab.title = items.length ? 'Ban điều hành đang chờ bạn trả lời' : 'Gửi đề nghị cho Ban điều hành AI';
+      const first = items[0];
+      pendingBox.hidden = !first || clarifyId !== null;
+      if (first) {
+        pendingBox.innerHTML = `🏛️ <span>Ban điều hành đang chờ bạn trả lời về <b>«${escapeHtml(first.title)}»</b></span>
+          <button type="button" class="sgf-send" data-clarify="${first.id}">Trả lời ngay</button>`;
+      }
+    } catch { /* offline: không có nhắc */ }
+  }
+  pendingBox.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-clarify]');
+    if (btn) startClarify(btn.dataset.clarify);
+  });
+  refreshPending();
+
   const open = () => {
     modal.hidden = false;
     setTimeout(() => root.querySelector('#sgf-title-in')?.focus(), 50);
     ensureOnboarding();
+    refreshPending();
     loadInbox();
   };
+  // Chuông thông báo trỏ tới #sgf-clarify-<id>: mở thẳng phần trao đổi của yêu cầu đó.
+  const hashed = /^#sgf-clarify-(\d+)$/.exec(location.hash);
+  if (hashed) {
+    open();
+    startClarify(hashed[1]);
+    history.replaceState(null, '', location.pathname + location.search);
+  }
   const close = () => { modal.hidden = true; msg.textContent = ''; };
 
   fab.addEventListener('click', open);
@@ -490,8 +694,14 @@ function bind(root) {
         }
         return;
       }
+      const created = await r.json().catch(() => ({}));
       msg.textContent = '✓ Đã gửi! Hiệu trưởng AI đang xem xét…';
       pendingRequestKey = null;
+      if (created.clarify?.needed) {
+        msg.textContent = '';
+        startClarify(created.request_id, title);
+        fab.classList.add('sgf-fab-ask');
+      }
       root.querySelector('#sgf-title-in').value = '';
       root.querySelector('#sgf-detail').value = '';
       if (detailCount) detailCount.textContent = '0 / 10.000';
@@ -555,6 +765,9 @@ function bind(root) {
           }
         });
       });
+      inbox.querySelectorAll('[data-clarify]').forEach(btn => {
+        btn.addEventListener('click', () => startClarify(btn.dataset.clarify));
+      });
       // Mỗi item mở rộng thành phiên trao đổi (thread) ngay trong modal.
       inbox.querySelectorAll('[data-req-toggle]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -596,8 +809,10 @@ function renderItem(it, me = '') {
       <div class="sgf-it-line">
         <span class="sgf-it-ico">${t.icon}</span>
         <span class="sgf-it-title">${escapeHtml(it.title)}</span>
-        <span class="sgf-it-st ${sm.cls}">${sm.label}</span>
+        <span class="sgf-it-st ${sm.cls}">${it.phase === 'clarifying' ? 'Chờ bạn trả lời' : sm.label}</span>
       </div>
+      ${mine && it.phase === 'clarifying'
+        ? `<button type="button" class="sgf-send sgf-it-clarify" data-clarify="${it.id}">💬 Trả lời Ban điều hành</button>` : ''}
       ${attHtml}
       ${it.admin_note ? `<div class="sgf-it-note">🏛️ ${escapeHtml(it.admin_note)}</div>` : ''}
       <button type="button" class="sgf-it-thread-btn" data-req-toggle="${it.id}">
@@ -676,7 +891,40 @@ function injectStyles() {
     .sgf-chip:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
     .sgf-chip[aria-pressed="true"] { background: linear-gradient(135deg,#7c3aed,#4f46e5); color: #fff; border-color: transparent; }
     .sgf-ob-status { min-height: 18px; font-size: 12.5px; color: #4338ca; }
-    @media (prefers-reduced-motion: reduce) { .sgf-chip { transition: none; } }
+    .sgf-clarify[hidden], .sgf-clar-banner[hidden], .sgf-clar-reply[hidden], .sgf-clar-sum[hidden] { display: none; }
+    .sgf-clarify { display: flex; flex-direction: column; gap: 10px; padding: 8px 20px 16px; }
+    .sgf-clar-banner {
+      display: flex; align-items: center; gap: 10px; margin: 0 20px 8px; padding: 10px 12px; border-radius: 12px;
+      background: linear-gradient(135deg,#fef3c7,#fde68a); color: #78350f; font-size: 13px;
+      border: 1px solid #f59e0b; animation: sgf-slide-in .45s ease-out both, sgf-glow 2.4s ease-in-out 0.45s 3;
+    }
+    .sgf-clarify .sgf-clar-banner { margin: 0; }
+    .sgf-clar-banner span { flex: 1; }
+    .sgf-clar-banner .sgf-send { white-space: nowrap; }
+    .sgf-clar-log { display: flex; flex-direction: column; gap: 8px; max-height: 42vh; overflow-y: auto; }
+    .sgf-clar-msg { max-width: 88%; padding: 8px 12px; border-radius: 14px; white-space: pre-wrap; font-size: 13.5px;
+      animation: sgf-pop .25s ease-out both; }
+    .sgf-clar-ai { align-self: flex-start; background: #eef2ff; color: #1e1b4b; border-bottom-left-radius: 4px; }
+    .sgf-clar-me { align-self: flex-end; background: linear-gradient(135deg,#7c3aed,#4f46e5); color: #fff; border-bottom-right-radius: 4px; }
+    .sgf-typing::after { content: '● ● ●'; letter-spacing: 2px; opacity: .6; animation: sgf-blink 1s steps(3, end) infinite; }
+    .sgf-clar-reply, .sgf-clar-sum { display: flex; flex-direction: column; gap: 6px; }
+    .sgf-it-clarify { margin: 6px 0 2px; }
+    #sgf-fab.sgf-fab-ask { animation: sgf-ring 1.6s ease-out infinite; }
+    #sgf-fab.sgf-fab-ask::after {
+      content: '!'; position: absolute; top: -2px; right: -2px; width: 20px; height: 20px; border-radius: 50%;
+      background: #f59e0b; color: #fff; font: 800 13px/20px system-ui, sans-serif; text-align: center;
+    }
+    @keyframes sgf-ring { 0% { box-shadow: 0 0 0 0 rgba(245,158,11,.7), 0 8px 24px rgba(79,70,229,.45); }
+      70% { box-shadow: 0 0 0 16px rgba(245,158,11,0), 0 8px 24px rgba(79,70,229,.45); }
+      100% { box-shadow: 0 0 0 0 rgba(245,158,11,0), 0 8px 24px rgba(79,70,229,.45); } }
+    @keyframes sgf-slide-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+    @keyframes sgf-glow { 50% { box-shadow: 0 0 0 4px rgba(245,158,11,.35); } }
+    @keyframes sgf-pop { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+    @keyframes sgf-blink { from { opacity: .2; } to { opacity: .8; } }
+    @media (prefers-reduced-motion: reduce) {
+      .sgf-chip { transition: none; }
+      .sgf-clar-banner, .sgf-clar-msg, .sgf-typing::after, #sgf-fab.sgf-fab-ask { animation: none; }
+    }
     .sgf-lab { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: #475569; font-weight: 600; }
     .sgf-req { color: #ef4444; }
     .sgf-in {
@@ -775,6 +1023,8 @@ function injectStyles() {
       .sgf-chip { background: #1a1740; color: #e0e7ff; border-color: #4338ca; }
       .sgf-chip:hover { background: #312e81; }
       .sgf-ob-status { color: #c7d2fe; }
+      .sgf-clar-ai { background: #312e81; color: #e0e7ff; }
+      .sgf-clar-banner { background: linear-gradient(135deg,#422006,#78350f); color: #fde68a; border-color: #b45309; }
       .sgf-in { background: #312e81; color: #f1f5f9; border-color: #4338ca; }
       .sgf-in:focus { outline-color: #818cf8; border-color: #a5b4fc; }
       .sgf-ctx { background: #312e81; color: #c7d2fe; }

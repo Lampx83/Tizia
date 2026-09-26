@@ -25,6 +25,7 @@ const EVENT_TYPES = new Set([
 // của lease ở phase này; rollback: đang/đã hoàn tác (không yêu cầu hoàn tác lần nữa); terminal: đóng hẳn.
 const PHASES = {
   intake: { label: 'mới nhận', queue: 'any' },
+  clarifying: { label: 'đang làm rõ với người gửi' }, // không queue: worker chỉ thấy sau khi người gửi xác nhận
   needs_replan: { label: 'chờ lập lại kế hoạch', queue: 'any' },
   shadow_checked: { label: 'đã kiểm tra, chờ lập kế hoạch', queue: 'plan' },
   authorized: { label: 'đã được cho phép, chờ worker', queue: 'plan', active: true, lease: 'executing' },
@@ -83,6 +84,10 @@ const SHA = /^[0-9a-f]{40}$/;
 export const LEASE_MS = 120_000; // worker lease; also the admin view's stale threshold
 const AI_BRANCH = new RegExp(CONTRACT.branch_pattern);
 const PR_BASE = 'dev'; // AI Board PRs only ever target dev; merge, approve and main stay human
+const CLARIFYING_NOTE = 'Ban điều hành cần trao đổi thêm để làm rõ yêu cầu.';
+// Tác giả request_messages của lượt làm rõ: câu hỏi và bản tóm tắt tách nhau để đếm và để xác nhận.
+export const CLARIFY_AUTHOR = 'Ban điều hành AI · làm rõ';
+export const SPEC_AUTHOR = 'Ban điều hành AI · tóm tắt';
 const PR_URL = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/(\d+)$/;
 
 function validateCandidate(value) {
@@ -348,8 +353,8 @@ export function createAiBoardStore(db, hooks = {}) {
       source_request_id, sequence, kind, title, description, status, phase,
       priority, public_note, internal_reason, created_at, updated_at
     ) VALUES (
-      @request_id, 0, 'root', @title, @description, 'queued', 'intake',
-      0, 'Yêu cầu đã được ghi nhận và đang chờ xử lý.', NULL, @now, @now
+      @request_id, 0, 'root', @title, @description, 'queued', @phase,
+      0, @note, NULL, @now, @now
     )
   `);
   const insertTag = db.prepare('INSERT OR IGNORE INTO ai_ticket_tags(ticket_id, tag) VALUES (?, ?)');
@@ -394,7 +399,12 @@ export function createAiBoardStore(db, hooks = {}) {
     });
     const requestId = Number(info.lastInsertRowid);
     hooks.afterRequestInserted?.({ requestId, input });
-    const root = insertRoot.run({ request_id: requestId, title: input.title, description: input.detail || null, now });
+    // clarifying: chưa vào hàng đợi worker cho tới khi người gửi xác nhận spec (ticket 06).
+    const root = insertRoot.run({
+      request_id: requestId, title: input.title, description: input.detail || null, now,
+      phase: input.clarifying ? 'clarifying' : 'intake',
+      note: input.clarifying ? CLARIFYING_NOTE : 'Yêu cầu đã được ghi nhận và đang chờ xử lý.',
+    });
     const rootTicketId = Number(root.lastInsertRowid);
     insertTag.run(rootTicketId, 'request');
     insertTag.run(rootTicketId, `domain:${input.ownerDomain}`);
@@ -584,6 +594,71 @@ export function createAiBoardStore(db, hooks = {}) {
     return parseJson(row?.evidence_json)?.verdict?.candidate ?? null;
   }
 
+  // ── Làm rõ yêu cầu với người gửi (ticket 06) ──
+  // Yêu cầu của chính người gửi đang ở phase clarifying + các lượt hỏi đáp. Không phải của mình → 404 (không lộ tồn tại).
+  function getClarification(requestId, ownerUserId) {
+    const request = db.prepare(`
+      SELECT r.id, r.title, r.detail, r.student, r.domain, t.id AS root_id, t.phase
+      FROM requests r JOIN ai_tickets t ON t.source_request_id=r.id AND t.parent_id IS NULL
+      WHERE r.id=? AND r.owner_user_id=?
+    `).get(Number(requestId), Number(ownerUserId));
+    if (!request) throw new WorkerContractError('request not found', 404, 'request_not_found');
+    if (request.phase !== 'clarifying') throw new WorkerContractError('request is not being clarified', 409, 'not_clarifying');
+    const turns = db.prepare(`
+      SELECT role, author_name, body, created_at FROM request_messages WHERE request_id=? ORDER BY created_at, id
+    `).all(request.id).map((m) => ({
+      kind: m.author_name === CLARIFY_AUTHOR ? 'question' : m.author_name === SPEC_AUTHOR ? 'summary' : 'answer',
+      text: m.body, at: m.created_at,
+    }));
+    return { request, turns, asked: turns.filter((t) => t.kind === 'question').length };
+  }
+
+  function addClarifyTurn(requestId, { kind, text, author, now = Date.now() }) {
+    const name = kind === 'question' ? CLARIFY_AUTHOR : kind === 'summary' ? SPEC_AUTHOR : String(author || 'Học viên');
+    db.prepare(`
+      INSERT INTO request_messages(request_id, role, author_name, body, attachments, created_at)
+      VALUES (?, ?, ?, ?, NULL, ?)
+    `).run(Number(requestId), kind === 'answer' ? 'student' : 'ai', name.slice(0, 60), String(text).slice(0, 4000), now);
+  }
+
+  /** Số lượt model (câu hỏi + tóm tắt) người này đã dùng từ `since` — trần mỗi ngày. */
+  function countClarifyTurns(ownerUserId, since) {
+    return db.prepare(`
+      SELECT COUNT(*) AS n FROM request_messages m JOIN requests r ON r.id=m.request_id
+      WHERE r.owner_user_id=? AND m.author_name IN (?, ?) AND m.created_at >= ?
+    `).get(Number(ownerUserId), CLARIFY_AUTHOR, SPEC_AUTHOR, since).n;
+  }
+
+  /** Yêu cầu đang chờ người gửi trả lời (lượt cuối là của Ban điều hành) — FAB nhấp nháy + banner. */
+  function listPendingClarifications(ownerUserId) {
+    return db.prepare(`
+      SELECT r.id, r.title, r.domain FROM requests r
+      JOIN ai_tickets t ON t.source_request_id=r.id AND t.parent_id IS NULL AND t.phase='clarifying'
+      WHERE r.owner_user_id=? ORDER BY r.updated_at DESC LIMIT 5
+    `).all(Number(ownerUserId));
+  }
+
+  /** Người gửi xác nhận spec → root vào hàng đợi worker. complete=false: hết 5 câu vẫn mơ hồ, gắn cờ cho cổng 2.5. */
+  const confirmClarificationTransaction = db.transaction((requestId, ownerUserId, spec, complete, now) => {
+    const { request } = getClarification(requestId, ownerUserId);
+    const hasSummary = db.prepare('SELECT 1 FROM request_messages WHERE request_id=? AND author_name=?')
+      .get(request.id, SPEC_AUTHOR);
+    if (!hasSummary) throw new WorkerContractError('no summary to confirm yet', 409, 'no_summary');
+    db.prepare('UPDATE requests SET clarified_spec=?, updated_at=? WHERE id=?').run(spec, now, request.id);
+    const note = 'Yêu cầu đã được làm rõ và đang chờ xử lý.';
+    db.prepare(`UPDATE ai_tickets SET phase='intake', public_note=?, updated_at=? WHERE id=?`).run(note, now, request.root_id);
+    if (!complete) insertTag.run(request.root_id, 'needs_clarification');
+    insertEvent.run(request.root_id, 'request_clarified', 'requester', String(ownerUserId), 'clarifying->intake',
+      note, JSON.stringify({ complete }), `request-clarified:${request.root_id}`, now);
+    return { ok: true, status: 'queued', complete };
+  });
+
+  function confirmClarification(requestId, ownerUserId, { spec, complete }) {
+    const text = String(spec ?? '').trim();
+    if (text.length < 10 || text.length > 4000) throw new RequestValidationError('spec must be 10–4000 characters');
+    return confirmClarificationTransaction(requestId, ownerUserId, text, complete !== false, Date.now());
+  }
+
   // Onboarding (ticket 05) cho giọng văn của worker: không kèm tên hay id người gửi.
   function requesterProfile(userId) {
     const row = db.prepare('SELECT role, tech_level, domain_expertise FROM ai_board_profile WHERE user_id=?').get(userId);
@@ -648,7 +723,7 @@ export function createAiBoardStore(db, hooks = {}) {
     const ticket = assertLease(ticketId, workerId, leaseToken, now);
     const request = db.prepare(`
       SELECT id, domain, type, title, detail, student, status, owner_user_id,
-             owner_domain, owner_state, created_at, updated_at, attachments
+             owner_domain, owner_state, created_at, updated_at, attachments, clarified_spec
       FROM requests WHERE id=?
     `).get(ticket.source_request_id);
     const thread = db.prepare(`
@@ -659,6 +734,9 @@ export function createAiBoardStore(db, hooks = {}) {
       ticket: { ...ticket, lease_token: undefined }, request: { ...request, attachments: parseAttachments(request.attachments) },
       thread, capability_policy: CAPABILITY_CATALOG, pull_request: latestPullRequest(ticket.id),
       requester_profile: requesterProfile(request.owner_user_id),
+      // Hết 5 câu vẫn mơ hồ (ticket 06): cổng 2.5 / tier xử lý kỹ hơn.
+      clarification_incomplete: !!db.prepare("SELECT 1 FROM ai_ticket_tags WHERE ticket_id=? AND tag='needs_clarification'")
+        .get(ticket.id),
       ...(ticket.phase === 'rolling_back' ? { rollback_candidate: latestCandidate(ticket.id) } : {}),
     };
   }
@@ -1429,6 +1507,11 @@ export function createAiBoardStore(db, hooks = {}) {
     submitPlan,
     submitPrePrVerdict,
     recordPullRequest,
+    getClarification,
+    addClarifyTurn,
+    countClarifyTurns,
+    listPendingClarifications,
+    confirmClarification,
     authorizePlan,
     resumeAuthorizedPlan,
     extendBudget,

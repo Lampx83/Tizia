@@ -599,7 +599,8 @@ class HarnessPlanner:
             "id": f"req-{request['id']}", "db_id": request["id"],
             "from": request.get("student"), "domain": request.get("domain"),
             "type": request.get("type"), "subject": request.get("title"),
-            "body": request.get("detail") or request.get("title"),
+            # Spec đã làm rõ với người gửi (ticket 06) thay mô tả gốc; không có thì như cũ.
+            "body": request.get("clarified_spec") or request.get("detail") or request.get("title"),
             "thread": snapshot.get("thread") or [], "votes": request.get("votes", 1),
             "complexity_by_server": True,
         }
@@ -653,7 +654,10 @@ class HarnessPlanner:
                     "public_message": result.get("public_message"),
                     "plan": json.dumps(state.get("plan"), ensure_ascii=False)[:2000],
                 })
-        return self._canonical(request, state["plan"], state.get("complexity_signals")), int(budget.units)
+        signals = list(state.get("complexity_signals") or [])
+        if snapshot.get("clarification_incomplete"):
+            signals.append("requester_still_vague")  # 5 câu hỏi vẫn mơ hồ → risk high → admin cho phép plan
+        return self._canonical(request, state["plan"], signals), int(budget.units)
 
 
 def harness_change_runner(checkout_source=None, tracer=None, progress=None) -> Callable[..., dict]:

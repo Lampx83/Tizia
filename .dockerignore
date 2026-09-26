@@ -11,6 +11,7 @@ npm-debug.log
 .claude
 .env*
 ai-board/
+!ai-board/harness/prompts/
 data
 *.db
 *.db-journal

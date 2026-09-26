@@ -24,6 +24,8 @@ COPY public/ ./public/
 # db.js init có thể tự gọi nếu phát hiện bảng skills/competencies rỗng. Chỉ
 # +~30KB nên rẻ.
 COPY scripts/ ./scripts/
+# Prompt làm rõ yêu cầu (server/contexts/ai-board-intake) dùng chung file khoá hash với harness.
+COPY ai-board/harness/prompts/ ./ai-board/harness/prompts/
 
 RUN mkdir -p /data && chown -R node:node /data /app
 USER node

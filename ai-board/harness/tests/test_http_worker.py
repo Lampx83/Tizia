@@ -1128,3 +1128,26 @@ def test_worker_env_secrets_are_taken_out_of_the_process_environment(monkeypatch
     assert take_secret('AI_BOARD_GITHUB_TOKEN') == 'tok'
     assert 'AI_BOARD_GITHUB_TOKEN' not in os.environ
     assert take_secret('AI_BOARD_GITHUB_TOKEN') == ''
+
+
+def test_planner_reads_the_clarified_spec_and_flags_a_still_vague_request():
+    from worker import HarnessPlanner
+
+    snapshot = {'request': {'id': 3, 'title': 'Sửa trang', 'detail': 'làm đẹp hơn', 'domain': 'primary',
+                            'clarified_spec': 'Trang / chức năng: trang chủ\nThay đổi mong muốn: nút to hơn'},
+                'clarification_incomplete': True}
+    assert HarnessPlanner._request(snapshot)['body'].startswith('Trang / chức năng: trang chủ')
+    assert HarnessPlanner._request({'request': {**snapshot['request'], 'clarified_spec': None}})['body'] == 'làm đẹp hơn'
+    seen = []
+
+    def run_gate(gate, request, deps, budget, state):
+        seen.append(request['body'])
+        if gate == 1:
+            state['plan'] = {'summary_vi': 'x', 'subtasks': [{'title': 't', 'file': 'public/x.html', 'verify': 'v'}]}
+        return {'gate': gate, 'blocked': False}
+
+    from budget import Budget
+    planner = HarnessPlanner.__new__(HarnessPlanner)
+    planner.Budget, planner.deps, planner.run_gate = Budget, object(), run_gate
+    plan, _ = planner(snapshot)
+    assert plan['risk'] == 'high'  # still vague after 5 questions: admin authorizes the plan (tier protected)

@@ -18,6 +18,7 @@ export function attachAiBoardRequestRoutes(router, {
   db = null, // chỉ để intake-guard ghi cờ; thiếu thì vẫn chặn 422 bình thường
   classifyRequest = defaultClassifyRequest, // (title, detail) → {model, clarity, danger} | null
   needsProfile = () => false, // (user) → true while the onboarding is unanswered (admin never)
+  onClarify = null, // ({requestId, domain, title, student}) when a new request waits for clarification (bell)
 }) {
   router.post('/api/requests', requireAuth, requireEnrolled, async (req, res, next) => {
     const body = req.body || {};
@@ -47,10 +48,19 @@ export function attachAiBoardRequestRoutes(router, {
         title: body.title,
         detail: body.detail,
         attachments: body.attachments,
+        clarifying: clarify.needed,
       });
       if (result.created) {
         recordIntakeFlags(db, result.root_ticket_id, [...intake.labels, ...modelLabels]);
         recordClassification(db, result.root_ticket_id, classified);
+        if (clarify.needed && onClarify) {
+          try {
+            onClarify({ requestId: result.request_id, domain: ownerDomain, title: String(body.title || '').trim(),
+              student: req.user.display_name || req.user.username });
+          } catch (error) {
+            console.warn('[ai-board] clarify notification failed:', error.message);
+          }
+        }
       }
       res.json({ ok: true, ...result, id: result.request_id, createdAt: Date.now(), clarify });
       if (result.created && onCreated) {
