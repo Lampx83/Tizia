@@ -313,12 +313,13 @@ function renderActions(request, trace) {
   const root = trace?.root;
   const candidate = trace?.candidate;
   const canRollback = root?.can_rollback;
-  const canCancel = !['rejected', 'cancelled', 'done'].includes(request.status);
+  // Đã có thay đổi (candidate) → chỉ hoàn tác; chưa làm hoặc đang làm → chỉ hủy.
+  const canCancel = !candidate && !['rejected', 'cancelled', 'done'].includes(request.status);
   if (!canRollback && !canCancel) return ui.flash ? `<div class="flash">${esc(ui.flash)}</div>` : '';
   const busy = root?.live;
   return `<div class="actions">
       ${canRollback ? `<button class="btn danger-outline" data-action="rollback" ${busy ? 'disabled' : ''}
-        title="${busy ? 'AI Board đang xử lý; chờ lượt này xong hoặc hủy yêu cầu.' : 'Gỡ thay đổi AI Board đã làm cho yêu cầu này'}">Hoàn tác thay đổi</button>` : ''}
+        title="${busy ? 'AI Board đang xử lý; chờ lượt này xong.' : 'Gỡ thay đổi AI Board đã làm cho yêu cầu này'}">Hoàn tác thay đổi</button>` : ''}
       ${canCancel ? '<button class="btn danger-outline" data-action="cancel">Hủy yêu cầu</button>' : ''}
       ${ui.flash ? `<span class="flash">${esc(ui.flash)}</span>` : ''}
     </div>
@@ -334,7 +335,7 @@ function renderConfirm(request, candidate) {
     'Nếu đã merge vào dev/main: tạo nhánh revert mới. Cần người mở PR và merge nhánh đó để gỡ thay đổi khỏi web.',
   ] : [
     'Yêu cầu chuyển sang "Từ chối", AI Board dừng mọi lượt đang chạy của yêu cầu này.',
-    'Nhánh thay đổi đã tạo (nếu có) không bị xóa; dùng "Hoàn tác thay đổi" nếu muốn bỏ nó.',
+    'AI Board chưa tạo thay đổi nào cho yêu cầu này nên không có gì phải gỡ.',
     'Không mở lại được; muốn làm tiếp thì học sinh phải gửi yêu cầu mới.',
   ];
   const verb = rollback ? 'Hoàn tác' : 'Hủy yêu cầu';
