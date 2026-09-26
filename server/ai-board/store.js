@@ -584,6 +584,12 @@ export function createAiBoardStore(db, hooks = {}) {
     return parseJson(row?.evidence_json)?.verdict?.candidate ?? null;
   }
 
+  // Onboarding (ticket 05) cho giọng văn của worker: không kèm tên hay id người gửi.
+  function requesterProfile(userId) {
+    const row = db.prepare('SELECT role, tech_level, domain_expertise FROM ai_board_profile WHERE user_id=?').get(userId);
+    return row ? { role: row.role, tech_level: row.tech_level, domain_expertise: parseJson(row.domain_expertise) ?? [] } : null;
+  }
+
   // PR của root (mở gần nhất); worker không mở PR thứ hai khi đã có.
   function latestPullRequest(rootId) {
     const row = db.prepare(`
@@ -652,6 +658,7 @@ export function createAiBoardStore(db, hooks = {}) {
     return {
       ticket: { ...ticket, lease_token: undefined }, request: { ...request, attachments: parseAttachments(request.attachments) },
       thread, capability_policy: CAPABILITY_CATALOG, pull_request: latestPullRequest(ticket.id),
+      requester_profile: requesterProfile(request.owner_user_id),
       ...(ticket.phase === 'rolling_back' ? { rollback_candidate: latestCandidate(ticket.id) } : {}),
     };
   }

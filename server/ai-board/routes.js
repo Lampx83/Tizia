@@ -17,9 +17,13 @@ export function attachAiBoardRequestRoutes(router, {
   onCreated = null,
   db = null, // chỉ để intake-guard ghi cờ; thiếu thì vẫn chặn 422 bình thường
   classifyRequest = defaultClassifyRequest, // (title, detail) → {model, clarity, danger} | null
+  needsProfile = () => false, // (user) → true while the onboarding is unanswered (admin never)
 }) {
   router.post('/api/requests', requireAuth, requireEnrolled, async (req, res, next) => {
     const body = req.body || {};
+    if (needsProfile(req.user)) {
+      return res.status(428).json({ error: 'profile_required', message: 'Trả lời 3 câu giới thiệu trước khi gửi yêu cầu.' });
+    }
     const ownerDomain = req.user.role === 'admin'
       ? String(body.domain || '').trim()
       : req.user.enrolled_domain;

@@ -78,6 +78,8 @@ function autoMount() {
           <button type="button" class="sgf-x" data-close aria-label="Đóng">✕</button>
         </div>
 
+        <section id="sgf-onboard" class="sgf-onboard" hidden aria-live="polite"></section>
+
         <form id="sgf-form" class="sgf-form">
           <label class="sgf-lab">Loại đề nghị
             <select id="sgf-type" class="sgf-in">
@@ -328,9 +330,80 @@ function bind(root) {
     return await r.json();
   }
 
+  // ── Onboarding (1 lần, admin miễn): 3 câu chip trước yêu cầu đầu tiên ──
+  const onboard = root.querySelector('#sgf-onboard');
+  let onboardChecked = false;
+
+  async function ensureOnboarding() {
+    if (onboardChecked) return;
+    try {
+      const r = await fetch('api/ai-board/profile', { credentials: 'same-origin' });
+      if (!r.ok) return; // chưa đăng nhập: lời nhắc đăng nhập có sẵn khi gửi
+      onboardChecked = true;
+      if ((await r.json()).needed) await showOnboarding();
+    } catch { /* mạng lỗi: server vẫn chặn gửi bằng 428 */ }
+  }
+
+  async function showOnboarding() {
+    const { DOMAIN_META } = await import('./engine/domain.js');
+    const answers = { role: null, domain_expertise: [], tech_level: null };
+    const chips = (q, items) => `<div class="sgf-chips" role="group" aria-label="${escapeHtml(q.label)}">${items.map(([v, text]) =>
+      `<button type="button" class="sgf-chip" data-q="${q.key}" data-v="${escapeHtml(v)}" aria-pressed="false">${escapeHtml(text)}</button>`).join('')}</div>`;
+    onboard.innerHTML = `
+      <div class="sgf-ob-intro">👋 Lần đầu gặp Ban điều hành? Trả lời nhanh 3 câu để Ban hỏi lại đúng cách bạn quen.</div>
+      <div class="sgf-ob-q">1. Bạn là</div>
+      ${chips({ key: 'role', label: 'Bạn là' }, [['pupil', '🧒 Học sinh'], ['student', '🎓 Sinh viên'], ['teacher', '👩‍🏫 Giáo viên'], ['parent', '👪 Phụ huynh'], ['other', '🙂 Khác']])}
+      <div class="sgf-ob-q">2. Lĩnh vực bạn am hiểu <span class="sgf-ob-hint">(chọn nhiều)</span></div>
+      ${chips({ key: 'domain_expertise', label: 'Lĩnh vực am hiểu' }, DOMAIN_META.map(d => [d.id, `${d.icon || ''} ${d.shortName || d.name}`]))}
+      <div class="sgf-ob-q">3. Bạn từng viết code / làm phần mềm chưa?</div>
+      ${chips({ key: 'tech_level', label: 'Mức kỹ thuật' }, [['none', 'Chưa bao giờ'], ['some', 'Biết chút ít'], ['fluent', 'Thành thạo']])}
+      <div class="sgf-ob-status" id="sgf-ob-status"></div>`;
+    form.hidden = true;
+    onboard.hidden = false;
+    const status = onboard.querySelector('#sgf-ob-status');
+    let timer = null;
+    onboard.onclick = (e) => { // onclick, not addEventListener: a second showOnboarding replaces it
+      const chip = e.target.closest('[data-q]');
+      if (!chip) return;
+      const { q, v } = chip.dataset;
+      if (q === 'domain_expertise') {
+        const on = !answers.domain_expertise.includes(v);
+        answers.domain_expertise = on ? [...answers.domain_expertise, v] : answers.domain_expertise.filter(x => x !== v);
+        chip.setAttribute('aria-pressed', String(on));
+      } else {
+        answers[q] = v;
+        onboard.querySelectorAll(`[data-q="${q}"]`).forEach(b => b.setAttribute('aria-pressed', String(b === chip)));
+      }
+      clearTimeout(timer);
+      const done = answers.role && answers.tech_level && answers.domain_expertise.length;
+      status.textContent = done ? 'Đang lưu…' : '';
+      // Đủ 3 câu thì tự lưu sau 1 nhịp (vẫn kịp chọn thêm lĩnh vực) — không cần nút bấm thêm.
+      if (done) timer = setTimeout(() => saveOnboarding(answers, status), 1200);
+    };
+  }
+
+  async function saveOnboarding(answers, status) {
+    try {
+      const { token } = await (await fetch('api/csrf', { credentials: 'same-origin' })).json();
+      const r = await fetch('api/ai-board/profile', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
+        body: JSON.stringify(answers),
+      });
+      if (!r.ok) throw new Error();
+      onboard.hidden = true;
+      form.hidden = false;
+      msg.textContent = '✓ Cảm ơn! Giờ bạn có thể gửi đề nghị.';
+      root.querySelector('#sgf-title-in')?.focus();
+    } catch {
+      status.textContent = '⚠️ Chưa lưu được — bấm lại một lựa chọn để thử lại.';
+    }
+  }
+
   const open = () => {
     modal.hidden = false;
     setTimeout(() => root.querySelector('#sgf-title-in')?.focus(), 50);
+    ensureOnboarding();
     loadInbox();
   };
   const close = () => { modal.hidden = true; msg.textContent = ''; };
@@ -404,6 +477,10 @@ function bind(root) {
         const e2 = await r.json().catch(() => ({}));
         if (e2.viewOnly || e2.error === 'view_only') {
           msg.innerHTML = `⚠️ Bạn đang ở trường khác. <a href="/school.html?domain=${encodeURIComponent(e2.your_school || '')}" style="color:#fbbf24;text-decoration:underline">Về trường của bạn</a> để gửi đề nghị.`;
+        } else if (e2.error === 'profile_required') {
+          msg.textContent = '';
+          onboardChecked = true;
+          await showOnboarding();
         } else if (e2.needLogin) {
           msg.textContent = '⚠️ Hãy đăng nhập để gửi đề nghị.';
         } else if (e2.needEnroll) {
@@ -584,6 +661,22 @@ function injectStyles() {
     .sgf-x:hover { background: rgba(0,0,0,.1); }
 
     .sgf-form { display: flex; flex-direction: column; gap: 10px; padding: 8px 20px 14px; }
+    .sgf-form[hidden], .sgf-onboard[hidden] { display: none; }
+    .sgf-onboard { display: flex; flex-direction: column; gap: 8px; padding: 8px 20px 16px; }
+    .sgf-ob-intro { padding: 10px 12px; border-radius: 10px; background: #eef2ff; color: #3730a3; font-size: 13px; }
+    .sgf-ob-q { font-weight: 700; font-size: 13px; color: #1f1147; margin-top: 4px; }
+    .sgf-ob-hint { font-weight: 400; color: #64748b; font-size: 12px; }
+    .sgf-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sgf-chip {
+      border: 1px solid #c7d2fe; background: #fff; color: #3730a3; border-radius: 999px;
+      padding: 6px 12px; font: 600 12.5px/1.2 inherit; cursor: pointer; min-height: 32px;
+      transition: background .15s ease, transform .1s ease;
+    }
+    .sgf-chip:hover { background: #eef2ff; }
+    .sgf-chip:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
+    .sgf-chip[aria-pressed="true"] { background: linear-gradient(135deg,#7c3aed,#4f46e5); color: #fff; border-color: transparent; }
+    .sgf-ob-status { min-height: 18px; font-size: 12.5px; color: #4338ca; }
+    @media (prefers-reduced-motion: reduce) { .sgf-chip { transition: none; } }
     .sgf-lab { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: #475569; font-weight: 600; }
     .sgf-req { color: #ef4444; }
     .sgf-in {
@@ -676,6 +769,12 @@ function injectStyles() {
       .sgf-x { background: rgba(255,255,255,.08); color: #cbd5e1; }
       .sgf-x:hover { background: rgba(255,255,255,.15); }
       .sgf-lab { color: #cbd5e1; }
+      .sgf-ob-intro { background: #312e81; color: #e0e7ff; }
+      .sgf-ob-q { color: #f1f5f9; }
+      .sgf-ob-hint { color: #94a3b8; }
+      .sgf-chip { background: #1a1740; color: #e0e7ff; border-color: #4338ca; }
+      .sgf-chip:hover { background: #312e81; }
+      .sgf-ob-status { color: #c7d2fe; }
       .sgf-in { background: #312e81; color: #f1f5f9; border-color: #4338ca; }
       .sgf-in:focus { outline-color: #818cf8; border-color: #a5b4fc; }
       .sgf-ctx { background: #312e81; color: #c7d2fe; }
