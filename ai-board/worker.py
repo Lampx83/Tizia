@@ -530,8 +530,10 @@ class HttpWorker:
                     trigger: str, folder_src: dict | None = None) -> dict:
         # Folder (ticket 05): planner + cổng đọc từ đỉnh nhánh chu kỳ; candidate commit nối tiếp chính nhánh đó.
         plan_kwargs = {"source": folder_src["path"]} if folder_src else {}
+        brief = (snapshot.get("folder") or {}).get("brief") or {}
         run_kwargs = {"source": folder_src["path"], "candidate_opts": {
-            "branch_name": folder_src["branch"], "branch_restore": folder_src["tip"]}} if folder_src else {}
+            "branch_name": folder_src["branch"], "branch_restore": folder_src["tip"],
+            "folder_brief": brief.get("text")}} if folder_src else {}
         if trigger == "rollback":
             return self._rollback(ticket_id, lease, snapshot, run)
         # 'execute' = admin đã cho phép plan (tier protected): lượt này không lập plan lại mà chạy plan đã duyệt.
@@ -640,6 +642,9 @@ class HarnessPlanner:
             "body": request.get("clarified_spec") or request.get("detail") or request.get("title"),
             "thread": snapshot.get("thread") or [], "votes": request.get("votes", 1),
             "complexity_by_server": True,
+            # Folder (ticket 06): L1 brief, L3 yêu cầu gần nhất, L2 file sở hữu — server tính, có trần.
+            **({"folder_brief": brief["text"], "folder_recent": brief["recent"], "owned_files": brief["owned_files"]}
+               if (brief := (snapshot.get("folder") or {}).get("brief")) else {}),
         }
 
     @staticmethod
@@ -678,6 +683,16 @@ class HarnessPlanner:
 
     def __call__(self, snapshot: dict, source=None) -> tuple[dict, int]:
         request = self._request(snapshot)
+        if request.get("folder_brief"):
+            # Lách guard qua nhiều lượt nhỏ (ticket 06): soát lexicon trên cả bản mô tả gộp của folder.
+            from gates import guard
+            hits = {label: guard.LEXICON["labels"][label]["intake"]
+                    for label in guard.topic_hits(f"{request['folder_brief']}\n{request.get('folder_recent') or ''}")}
+            stop = sorted(label for label, verdict in hits.items() if verdict in ("reject", "critical"))
+            if stop:
+                raise PlanBlockedError("folder brief crosses a hard rule", {
+                    "gate": 1, "reason": f"folder_brief: {', '.join(stop)}", "signals": stop, "plan": None,
+                    "public_message": "Chức năng này cần quản trị viên xem lại trước khi làm tiếp."})
         budget = self.Budget.from_env()
         budget.max_model_calls = min(budget.max_model_calls, 5)
         ticket = snapshot.get("ticket") or {}

@@ -288,7 +288,8 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
         if current is not None:
             # Skill chọn tool (grep `Lnn|`, dàn ý, bài học) trên base sha. Không có trích dòng → giữ excerpt cũ.
             ctx = repo_context.build_context(
-                3, {"subject": subtask["title"], "body": state.get("request_detail") or subtask["verify"]},
+                3, {"subject": subtask["title"], "body": state.get("request_detail") or subtask["verify"],
+                    "folder_brief": state.get("folder_brief")},
                 subtask, state["checkout_source"], state["base_sha"], memory_path=state.get("memory_path"))
             if _EXCERPT_LINE.search(ctx["text"]):
                 context = context.split("\n", 1)[0] + "\n" + ctx["text"]

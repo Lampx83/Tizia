@@ -7,7 +7,7 @@ AI_BOARD_DIR = Path(__file__).resolve().parents[2]
 if str(AI_BOARD_DIR) not in sys.path:
     sys.path.insert(0, str(AI_BOARD_DIR))
 
-from worker import HttpWorker, WorkerClient, _execution_plan, execute_pre_pr, main
+from worker import HarnessPlanner, HttpWorker, PlanBlockedError, WorkerClient, _execution_plan, execute_pre_pr, main
 
 
 POLICY = {'version': 'd0-v2', 'hash': 'c' * 64,
@@ -1195,7 +1195,8 @@ def test_folder_root_plans_and_commits_on_the_folder_branch(monkeypatch):
                         mode='active', planner=planner, change_runner=runner, candidates=candidates)
     assert worker.run_once()['status'] == 'planned'
     assert seen == {'plan_source': '/tmp/folder-src', 'run_source': '/tmp/folder-src',
-                    'opts': {'branch_name': 'ai-board/2026-09-26-feature-tro-doan-tu', 'branch_restore': 'c' * 40}}
+                    'opts': {'branch_name': 'ai-board/2026-09-26-feature-tro-doan-tu', 'branch_restore': 'c' * 40,
+                             'folder_brief': None}}
     assert dropped == ['/tmp/folder-src']  # worktree tạm luôn được gỡ
 
 
@@ -1216,3 +1217,19 @@ def test_folder_conflict_with_dev_waits_for_a_human(monkeypatch):
     release = [c for c in transport.calls if c[1].endswith('/release')][-1][2]
     assert release['outcome'] == 'waiting' and 'folder_conflict' in release['internal_detail']
     assert not any(c[1].endswith('/plan') for c in transport.calls)
+
+
+def test_folder_brief_reaches_gate_1_and_a_brief_crossing_a_hard_rule_stops_the_plan():
+    """Feature-folders ticket 06: L1 brief + L3 recent + L2 owned files go to gate 1; lexicon runs on the whole brief."""
+    brief = {'text': 'Chức năng: Trò đoán từ\nĐã làm (mới nhất trước):\n- Trang chơi', 'recent': '[#3] Thêm điểm: x',
+             'owned_files': ['public/tro-doan-tu.html']}
+    request = HarnessPlanner._request({'request': {'id': 3, 'title': 't', 'detail': 'd'}, 'folder': {'brief': brief}})
+    assert request['folder_brief'].startswith('Chức năng') and request['owned_files'] == ['public/tro-doan-tu.html']
+    planner = HarnessPlanner.__new__(HarnessPlanner)
+    bad = {**brief, 'recent': '[#4] thêm ảnh sex vào trang chơi'}
+    try:
+        planner({'request': {'id': 4, 'title': 't', 'detail': 'd'}, 'folder': {'brief': bad}})
+    except PlanBlockedError as error:
+        assert error.detail['reason'].startswith('folder_brief:')
+    else:
+        raise AssertionError('brief crossing a hard rule must stop the plan')

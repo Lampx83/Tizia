@@ -548,6 +548,61 @@ export function createAiBoardStore(db, hooks = {}) {
     return approveFolderTransaction(folderId, adminUserId, Date.now());
   }
 
+  /** Bản mô tả chức năng (ticket 06) tính lúc đọc từ DB, không lưu riêng nên không lệch thực tế:
+      L1 = mục đích/luồng (2 câu trả lời đầu của lượt làm rõ đầu tiên), Đã làm (lượt đạt), Đang yêu cầu (còn mở),
+      file sở hữu (file trong candidate đạt); L3 = 2 yêu cầu gần nhất nguyên văn. Trần: contract.json limits.context.
+      ponytail: vượt trần thì bỏ mục cũ nhất (tất định); gộp bằng model nhỏ khi folder dài thật sự. */
+  function folderBrief(folderId) {
+    const cap = LIMITS.context;
+    const folder = db.prepare('SELECT id, title FROM ai_feature_folders WHERE id=?').get(Number(folderId));
+    if (!folder) return null;
+    const rows = db.prepare(`
+      SELECT q.id, q.title, q.detail, q.clarified_spec, t.status, t.id AS root_id,
+        (SELECT ar.evidence_json FROM ai_runs ar WHERE ar.ticket_id = t.id AND ar.outcome IN ('ready_for_pr', 'needs_review')
+          ORDER BY ar.id DESC LIMIT 1) AS passed
+      FROM requests q JOIN ai_tickets t ON t.source_request_id = q.id AND t.parent_id IS NULL
+      WHERE q.folder_id = ? ORDER BY q.id
+    `).all(folder.id);
+    const clip = (s, n) => { const t = String(s ?? '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
+    const answers = rows.length ? db.prepare(`
+      SELECT body FROM request_messages WHERE request_id = ? AND role = 'student'
+        AND id > COALESCE((SELECT MIN(id) FROM request_messages WHERE request_id = ? AND role = 'ai'), 1e18)
+      ORDER BY id LIMIT 2
+    `).all(rows[0].id, rows[0].id).map((m) => m.body) : [];
+    const done = [];
+    const requested = [];
+    const files = new Set();
+    for (const row of rows) {
+      const candidate = parseJson(row.passed)?.verdict?.candidate;
+      if (candidate) {
+        done.push(clip(row.title, 120));
+        for (const commit of candidate.commits || []) {
+          for (const file of commit.files || []) if (!/^tests?\//.test(file)) files.add(file);
+        }
+      } else if (!['cancelled', 'done'].includes(row.status)) requested.push(clip(row.title, 120));
+    }
+    const lines = [`Chức năng: ${clip(folder.title, 120)}`];
+    if (answers[0]) lines.push(`Mục đích: ${clip(answers[0], 300)}`);
+    if (answers[1]) lines.push(`Luồng người dùng: ${clip(answers[1], 300)}`);
+    const owned = [...files].slice(-cap.owned_files);
+    if (owned.length) lines.push(`File sở hữu: ${owned.join(', ')}`);
+    if (requested.length) lines.push('Đang yêu cầu:', ...requested.map((r) => `- ${r}`));
+    // Đã làm: mới nhất trước; vượt trần thì bỏ mục cũ nhất, ghi số đã bỏ.
+    const doneLines = done.reverse().map((d) => `- ${d}`);
+    let text = lines.join('\n');
+    let kept = 0;
+    const RESERVE = 40; // chỗ cho dòng "(+N việc cũ hơn đã làm)"
+    while (kept < doneLines.length
+      && `${text}\nĐã làm (mới nhất trước):\n${doneLines.slice(0, kept + 1).join('\n')}`.length <= cap.brief_chars - RESERVE) {
+      kept += 1;
+    }
+    if (kept) text += `\nĐã làm (mới nhất trước):\n${doneLines.slice(0, kept).join('\n')}`;
+    if (kept < doneLines.length) text += `\n(+${doneLines.length - kept} việc cũ hơn đã làm)`;
+    const recent = rows.slice(-2).map((r) => `[#${r.id}] ${clip(r.title, 150)}: ${clip(r.clarified_spec || r.detail, 330)}`)
+      .join('\n').slice(0, cap.recent_chars);
+    return { text: text.slice(0, cap.brief_chars), recent, owned_files: owned };
+  }
+
   /** Người tạo bấm "Xong": chu kỳ này chờ con người merge PR (gate 6, không tự động). */
   function markFolderDone(folderId, ownerUserId, now = Date.now()) {
     const folder = db.prepare('SELECT * FROM ai_feature_folders WHERE id=?').get(Number(folderId));
@@ -962,11 +1017,13 @@ export function createAiBoardStore(db, hooks = {}) {
       clarification_incomplete: !!db.prepare("SELECT 1 FROM ai_ticket_tags WHERE ticket_id=? AND tag='needs_clarification'")
         .get(ticket.id),
       ...(ticket.phase === 'rolling_back' ? { rollback_candidate: latestCandidate(ticket.id) } : {}),
-      // Folder (ticket 05): worker dựng code từ đỉnh nhánh chu kỳ này thay cho dev.
-      folder: db.prepare(`SELECT f.id, f.slug, f.title, f.branch, f.head_sha, f.pr_number, f.pr_url, f.cycle
-        FROM requests q JOIN ai_feature_folders f ON f.id = q.folder_id WHERE q.id = ?`).get(ticket.source_request_id) ?? null,
+      // Folder (ticket 05): worker dựng code từ đỉnh nhánh chu kỳ này thay cho dev; brief = tầng L1/L3 (ticket 06).
+      folder: withBrief(db.prepare(`SELECT f.id, f.slug, f.title, f.branch, f.head_sha, f.pr_number, f.pr_url, f.cycle
+        FROM requests q JOIN ai_feature_folders f ON f.id = q.folder_id WHERE q.id = ?`).get(ticket.source_request_id)),
     };
   }
+
+  const withBrief = (folder) => (folder ? { ...folder, brief: folderBrief(folder.id) } : null);
 
   function heartbeat(ticketId, workerId, leaseToken, { now = Date.now(), leaseMs = LEASE_MS } = {}) {
     assertLease(ticketId, workerId, leaseToken, now);
@@ -1743,6 +1800,7 @@ export function createAiBoardStore(db, hooks = {}) {
     revokeFolder,
     markFolderDone,
     markFolderReleased,
+    folderBrief,
     listWorkers,
     cancelRequest,
     requestRollback,

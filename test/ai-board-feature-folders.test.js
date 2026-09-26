@@ -154,3 +154,41 @@ test('a folder cycle keeps its branch head and PR; done then released starts a n
   assert.deepEqual({ ...after }, { branch: null, pr_number: null, cycle: 2, state: 'released' });
   assert.throws(() => store.markFolderReleased(first.folder_id), (e) => e.code === 'nothing_to_release');
 });
+
+// Feature-folders ticket 06: the brief is derived from the DB at read time and capped.
+test('folder brief: purpose, flow, done, requested, owned files and recent requests, within caps', () => {
+  const { db, store, submit } = fixture();
+  const first = submit(1, { type: 'feature', title: 'Trò đoán từ khoá' });
+  const second = submit(1, { folderId: first.folder_id, title: 'Thêm bảng điểm cuối ván' });
+  const msg = db.prepare('INSERT INTO request_messages(request_id, role, author_name, body, created_at) VALUES (?, ?, ?, ?, ?)');
+  msg.run(first.request_id, 'student', 'u1', 'mô tả gốc', 1);
+  msg.run(first.request_id, 'ai', 'Ban', 'Để làm gì?', 2);
+  msg.run(first.request_id, 'student', 'u1', 'ôn từ khoá lập trình cho lớp CNTT', 3);
+  msg.run(first.request_id, 'ai', 'Ban', 'Bấm gì?', 4);
+  msg.run(first.request_id, 'student', 'u1', 'bấm Bắt đầu, gõ từ, đúng thì cộng sao', 5);
+  const candidate = { branch: 'ai-board/2026-09-26-feature-x', base_sha: 'a'.repeat(40), head_sha: 'b'.repeat(40),
+    commits: [{ sha: 'b'.repeat(40), title: 't', files: ['public/tro-doan-tu.html', 'test/tro.test.js'] }] };
+  db.prepare(`INSERT INTO ai_runs(ticket_id, attempt, trigger, outcome, gate, idempotency_key, evidence_json, created_at, updated_at)
+    VALUES (?, 1, 'plan', 'ready_for_pr', 5.5, 'brief-run-001', ?, 1, 1)`).run(first.root_ticket_id, JSON.stringify({ verdict: { candidate } }));
+
+  const brief = store.folderBrief(first.folder_id);
+  assert.match(brief.text, /Mục đích: ôn từ khoá lập trình/);
+  assert.match(brief.text, /Luồng người dùng: bấm Bắt đầu/);
+  assert.match(brief.text, /Đang yêu cầu:\n- Thêm bảng điểm cuối ván/);
+  assert.match(brief.text, /Đã làm \(mới nhất trước\):\n- Trò đoán từ khoá/);
+  assert.deepEqual(brief.owned_files, ['public/tro-doan-tu.html']); // test files are not owned
+  assert.match(brief.recent, /\[#2\] Thêm bảng điểm cuối ván/);
+  assert.ok(brief.text.length <= LIMITS.context.brief_chars && brief.recent.length <= LIMITS.context.recent_chars);
+  assert.equal(second.folder_id, first.folder_id);
+
+  // Many done runs: newest kept, older counted, never over the cap.
+  for (let i = 0; i < 60; i += 1) {
+    const r = submit(1, { folderId: first.folder_id, title: `Việc số ${i} với một tiêu đề khá dài để chiếm chỗ` });
+    db.prepare(`INSERT INTO ai_runs(ticket_id, attempt, trigger, outcome, gate, idempotency_key, evidence_json, created_at, updated_at)
+      VALUES (?, 1, 'plan', 'ready_for_pr', 5.5, ?, ?, 1, 1)`).run(r.root_ticket_id, `brief-run-${100 + i}`, JSON.stringify({ verdict: { candidate } }));
+  }
+  const big = store.folderBrief(first.folder_id);
+  assert.ok(big.text.length <= LIMITS.context.brief_chars);
+  assert.match(big.text, /Việc số 59/);
+  assert.match(big.text, /việc cũ hơn đã làm/);
+});
