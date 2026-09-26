@@ -98,8 +98,12 @@
 
   /* ============ ACTIVITY FEED ============ */
   .feed { display:flex; flex-direction:column; gap:7px; max-height:340px; overflow-y:auto; padding-right:4px; }
-  .feed::-webkit-scrollbar { width:6px; }
-  .feed::-webkit-scrollbar-thumb { background:var(--border-strong); border-radius:3px; }
+  /* Scrollbar mảnh theo theme tối cho cả trang (Firefox + Chromium) */
+  * { scrollbar-width:thin; scrollbar-color:var(--border-strong) transparent; }
+  ::-webkit-scrollbar { width:8px; height:8px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--border-strong); border-radius:8px; border:2px solid transparent; background-clip:padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background:rgba(251,191,36,0.55); background-clip:padding-box; }
   .feed .item { display:flex; gap:9px; padding:7px 8px; border-radius:7px; align-items:flex-start; font-size:12.5px; }
   .feed .item:hover { background:rgba(255,255,255,0.03); }
   .feed .kind { font-size:14px; line-height:1.2; margin-top:1px; }

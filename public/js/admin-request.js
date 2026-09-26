@@ -176,6 +176,42 @@ function eventState(e) {
   return 'ok';
 }
 
+const PROB_LABEL = {
+  clear: 'rõ', vague: 'mơ hồ', too_broad: 'quá rộng', safe: 'an toàn', system_attack: 'tấn công hệ thống',
+  abuse_hate: 'xúc phạm', sexual: 'tình dục', violence_self_harm: 'bạo lực/tự hại', politics_religion: 'chính trị/tôn giáo',
+  drugs_advice: 'chất cấm/thuốc', cheating_spam: 'gian lận/spam',
+};
+const pct = (p) => `${Math.round(Number(p) * 100)}%`;
+// Top 3 xác suất, bỏ nhãn < 1%.
+const topProbs = (probs = {}) => Object.entries(probs).sort((a, b) => b[1] - a[1]).filter(([, p]) => p >= 0.01)
+  .slice(0, 3).map(([k, p]) => `${PROB_LABEL[k] || k} ${pct(p)}`).join(' · ');
+const shadowTag = (x) => (x?.shadow ? ' <span class="pill">shadow — chỉ ghi log</span>' : '');
+
+function classifiedRows(d) {
+  const rows = [];
+  if (d.model) rows.push(['Model', esc(d.model)]);
+  if (d.clarity) rows.push(['Độ rõ', `${esc(topProbs(d.clarity.probs))}${shadowTag(d.clarity)}`]);
+  if (d.danger) {
+    const labels = (d.danger.labels || []).map((k) => PROB_LABEL[k] || k);
+    rows.push(['Nguy hiểm', `${esc(topProbs(d.danger.probs))}${labels.length ? ` → soát: ${esc(labels.join(', '))}` : ''}${shadowTag(d.danger)}`]);
+  }
+  if (d.rules) rows.push(['Luật cứng', d.rules.needed ? `${esc(d.rules.mode === 'split' ? 'quá rộng' : 'mơ hồ')}: ${esc((d.rules.reasons || []).join('; '))}` : 'rõ']);
+  if (d.clarify) rows.push(['Làm rõ', d.clarify.needed ? `có (${esc(d.clarify.mode)}) · nguồn: ${esc((d.clarify.source || []).join(', ') || '—')}` : 'không']);
+  return rows;
+}
+
+// Chi tiết nội bộ: JSON → vài dòng đọc được + JSON gốc gập lại; text thường giữ nguyên (xuống dòng được).
+function eventDetail(e) {
+  let data;
+  try { data = JSON.parse(e.internal_detail); } catch { data = null; }
+  if (!data || typeof data !== 'object') return `<div class="meta detail">${esc(e.internal_detail)}</div>`;
+  const flat = Object.entries(data).filter(([, v]) => v !== null && typeof v !== 'object');
+  const rows = e.event_type === 'request_classified' ? classifiedRows(data) : flat.slice(0, 6).map(([k, v]) => [esc(k), esc(v)]);
+  const covered = e.event_type !== 'request_classified' && flat.length === Object.keys(data).length && flat.length <= 6;
+  return `${rows.length ? `<dl class="kv">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>` : ''}
+    ${covered ? '' : `<details class="raw"><summary>JSON gốc</summary><pre>${esc(JSON.stringify(data, null, 2))}</pre></details>`}`;
+}
+
 function renderEvents(events) {
   const shown = events.filter(e => e.event_type !== 'gate_started'); // đã thể hiện ở thanh tiến độ
   if (!shown.length) return '<div class="blk meta">Chưa có sự kiện.</div>';
@@ -185,7 +221,7 @@ function renderEvents(events) {
         ${e.transition ? tag(state, e.transition) : ''}<span class="meta">${fmt(e.created_at)} · ticket #${esc(e.ticket_id)}
         · ${esc(e.actor_type)}${e.actor_id ? ` ${esc(e.actor_id)}` : ''}</span></div>
       ${e.public_message ? `<div style="margin-top:4px">${esc(e.public_message)}</div>` : ''}
-      ${e.internal_detail ? `<div class="meta">${esc(e.internal_detail)}</div>` : ''}</div>`;
+      ${e.internal_detail ? eventDetail(e) : ''}</div>`;
   }).join('')}</div>`;
 }
 
