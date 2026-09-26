@@ -64,7 +64,7 @@ def test_intake_escalates_to_human_review_when_the_model_is_sure_of_a_danger():
     assert out["verdict"] == "human_review" and "model_politics_religion" in out["labels"]
     assert out["classifier"]["model"] == "fake-classifier" and out["classifier"]["escalate"] is True
     call = next(c for c in deps.models.calls if c["model"] == "fake-classifier")
-    assert call["extra"] == {"think": False, "logprobs": True, "top_logprobs": 20} and call["num_predict"] == 1
+    assert call["extra"] == classifier.LOGPROB_FIELDS and call["extra"]["logprobs"] is True and call["num_predict"] == 1
 
 
 def test_intake_stays_allow_when_safe_or_when_the_classifier_is_down():

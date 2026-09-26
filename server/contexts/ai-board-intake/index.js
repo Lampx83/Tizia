@@ -10,6 +10,7 @@
 import { checkIntake } from '../../ai-board/intake-guard.js';
 import { classify, decideClarity, taskMode } from '../../ai-board/classifier.js';
 import { answersClear } from '../../ai-board/clarity-rules.js';
+import { beginChat } from '../../ai-board/chat-activity.js';
 import { RequestValidationError, WorkerContractError } from '../../ai-board/store.js';
 import { resolveAIModel } from '../../ai-model-router.js';
 import {
@@ -57,7 +58,7 @@ export function attachAiBoardIntake(router, {
   recordUsage = () => {}, // recordAiCall(req, {...}) in the app
   generate = ollamaStreamer(),
   classifyClarity = defaultClarity,
-  models = { question: resolveAIModel('ai_board_grill'), spec: resolveAIModel('ai_board_spec') },
+  models = { question: chatModel('ai_board_grill'), spec: chatModel('ai_board_spec') },
 }) {
   const profiles = createProfileStore(db);
 
@@ -77,6 +78,11 @@ export function attachAiBoardIntake(router, {
     generate, classifyClarity, models });
   return profiles;
 }
+
+// Chat làm rõ dùng model nhỏ nạp sẵn (model của classifier) thay cho model mặc định chung, để không tranh
+// GPU với 14B của worker (feature-folders ticket 03). Biến TIZIA_MODEL_<ROUTE> riêng vẫn thắng.
+export const chatModel = (endpoint, env = process.env) => resolveAIModel(endpoint,
+  { ...env, TIZIA_MODEL_DEFAULT: env.AI_BOARD_CLASSIFIER_MODEL || env.TIZIA_MODEL_DEFAULT });
 
 /** onClarify cho routes: chuông báo "Ban điều hành cần trao đổi", bấm vào mở FAB đúng yêu cầu. */
 export function clarifyNotifier(createNotification) {
@@ -140,6 +146,9 @@ function attachClarify(router, { db, store, profiles, requireAuth, requireStrict
       return res.status(429).json({ error: 'clarify_limit',
         message: 'Hôm nay Ban đã trao đổi nhiều với bạn rồi. Bạn quay lại vào ngày mai để làm rõ tiếp nhé!' });
     }
+    // Phiên chat đang chờ token: worker tạm không nhận ticket mới (feature-folders ticket 03).
+    const endChat = beginChat();
+    res.on('close', endChat);
     try {
       if (hasAnswer) store.addClarifyTurn(request.id, { kind: 'answer', text: String(req.body.answer).trim(), author: request.student });
       const { turns, asked } = store.getClarification(request.id, req.user.id);
@@ -175,6 +184,8 @@ function attachClarify(router, { db, store, profiles, requireAuth, requireStrict
     } catch (error) {
       if (res.headersSent) { res.end(); return; }
       next(error);
+    } finally {
+      endChat();
     }
   });
 

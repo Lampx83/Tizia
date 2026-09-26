@@ -590,7 +590,7 @@ export function createAiBoardStore(db, hooks = {}) {
     return ticket;
   }
 
-  const claimTransaction = db.transaction(({ workerId, version, mode, intent, now, leaseMs }) => {
+  const claimTransaction = db.transaction(({ workerId, version, mode, intent, now, leaseMs, yieldNew }) => {
     if (!WORKER_MODES.has(mode)) throw new WorkerContractError('invalid worker mode');
     if (!CLAIM_INTENTS.has(intent)) throw new WorkerContractError('invalid claim intent');
     db.prepare(`
@@ -609,6 +609,7 @@ export function createAiBoardStore(db, hooks = {}) {
       ORDER BY updated_at DESC LIMIT 1
     `).get(workerId, now);
     if (current) return { ...current, trigger: triggerFor(current.phase, intent) };
+    if (yieldNew) return null; // có người đang chat: không nhận ticket mới, việc đang giữ vẫn trả về ở trên
 
     const candidate = db.prepare(`
       SELECT t.id, t.phase
@@ -653,10 +654,11 @@ export function createAiBoardStore(db, hooks = {}) {
       trigger: triggerFor(phase, intent) };
   });
 
-  function claimNext({ workerId, version = 'unknown', mode = 'off', intent = 'precheck', now = Date.now(), leaseMs = LEASE_MS }) {
+  function claimNext({ workerId, version = 'unknown', mode = 'off', intent = 'precheck', now = Date.now(), leaseMs = LEASE_MS,
+    yieldNew = false }) {
     workerId = String(workerId || '').trim();
     if (!/^[A-Za-z0-9._:-]{2,80}$/.test(workerId)) throw new WorkerContractError('invalid worker id');
-    return claimTransaction({ workerId, version: String(version).slice(0, 80), mode, intent, now, leaseMs });
+    return claimTransaction({ workerId, version: String(version).slice(0, 80), mode, intent, now, leaseMs, yieldNew });
   }
 
   // Nhánh candidate của verdict qua kiểm tra gần nhất (thứ admin có thể hoàn tác).

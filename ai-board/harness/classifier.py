@@ -12,7 +12,8 @@ CONFIG_PATH = Path(__file__).resolve().parents[2] / "server" / "ai-board" / "cla
 CLASSIFIER = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
 MAX_TEXT = 2000
 _LETTER = re.compile(r"^([A-Z])[.):]?$")
-LOGPROB_FIELDS = {"think": False, "logprobs": True, "top_logprobs": 20}
+# keep_alive: model nhỏ dùng chung với chat làm rõ, giữ nạp sẵn (feature-folders ticket 03).
+LOGPROB_FIELDS = {"think": False, "logprobs": True, "top_logprobs": 20, "keep_alive": CLASSIFIER["keep_alive"]}
 
 
 def build_prompt(task: str, text: str) -> str:

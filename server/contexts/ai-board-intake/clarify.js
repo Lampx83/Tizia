@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { checkIntake } from '../../ai-board/intake-guard.js';
 import { checkContentSafety } from '../safety/profanity-vi.js';
 import { containsPromptDisclosure } from '../../ai-prompt-guardrails.js';
+import { CLASSIFIER } from '../../ai-board/classifier.js';
 
 export const MAX_QUESTIONS = 5;
 export const DAILY_TURNS = 20;
@@ -138,7 +139,7 @@ export function ollamaStreamer({ env = process.env, fetchImpl = fetch, timeoutMs
     try {
       const res = await fetchImpl(`${url}/api/generate`, {
         method: 'POST', headers, signal: controller.signal,
-        body: JSON.stringify({ model, prompt, stream: true, think: false,
+        body: JSON.stringify({ model, prompt, stream: true, think: false, keep_alive: CLASSIFIER.keep_alive,
           options: { temperature: 0.3, num_predict: kind === 'summary' ? 600 : 160, num_ctx: 4096 } }),
       });
       if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`);

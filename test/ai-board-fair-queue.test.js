@@ -82,3 +82,25 @@ test('per-run caps grow with the plan size and stop at the configured max', () =
   assert.ok(scaledLimit('units', LIMITS.max_subtasks_per_run) <= max);
   assert.ok(LIMITS.gpu_s_per_worker_hour.value > max, 'one worker hour must fit the biggest run');
 });
+
+// Feature-folders ticket 03: a student's clarification chat gets the GPU before background work.
+test('while a chat streams, a worker keeps its current ticket but takes no new one', async () => {
+  const { beginChat, activeChats } = await import('../server/ai-board/chat-activity.js');
+  const { store, submit } = fixture();
+  submit(1); submit(2);
+  const held = store.claimNext({ workerId: 'w1', mode: 'shadow' });
+  const end = beginChat();
+  assert.equal(activeChats(), 1);
+  assert.equal(store.claimNext({ workerId: 'w2', mode: 'shadow', yieldNew: activeChats() > 0 }), null);
+  assert.equal(store.claimNext({ workerId: 'w1', mode: 'shadow', yieldNew: true }).id, held.id); // own lease still returned
+  end(); end(); // idempotent
+  assert.equal(activeChats(), 0);
+  assert.ok(store.claimNext({ workerId: 'w2', mode: 'shadow', yieldNew: activeChats() > 0 }));
+});
+
+test('clarification chat defaults to the small classifier model unless its route is set', async () => {
+  const { chatModel } = await import('../server/contexts/ai-board-intake/index.js');
+  assert.equal(chatModel('ai_board_grill', { AI_BOARD_CLASSIFIER_MODEL: 'small', OLLAMA_MODEL: 'big' }), 'small');
+  assert.equal(chatModel('ai_board_grill', { AI_BOARD_CLASSIFIER_MODEL: 'small', TIZIA_MODEL_AI_BOARD_GRILL: 'x' }), 'x');
+  assert.equal(chatModel('ai_board_spec', { OLLAMA_MODEL: 'big' }), 'big');
+});

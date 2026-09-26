@@ -64,6 +64,7 @@ export async function classify(task, text, { env = process.env, fetchImpl = fetc
     method: 'POST', headers, signal: AbortSignal.timeout(timeoutMs),
     body: JSON.stringify({
       model, prompt: buildPrompt(task, text), stream: false, think: false, logprobs: true, top_logprobs: 20,
+      keep_alive: CLASSIFIER.keep_alive,
       options: { num_predict: 1, temperature: 0, num_ctx: 4096 },
     }),
   });

@@ -3,6 +3,7 @@ import { assertConfirmed, LEASE_MS, LIMITS, PlanGuardrailError, RequestValidatio
 import { checkIntake, recordIntakeFlags } from './intake-guard.js';
 import { classifyRequest as classifyWithModel, recordClassification } from './classifier.js';
 import { checkClarity } from './clarity-rules.js';
+import { activeChats } from './chat-activity.js';
 
 // Không cấu hình model phân loại → không gọi gì (hành vi trước ticket 04).
 const defaultClassifyRequest = (title, detail) => (
@@ -231,8 +232,9 @@ export function attachAiBoardWorkerRoutes(router, {
       mode: req.body?.mode,
       intent: req.body?.intent || 'precheck',
       leaseMs,
+      yieldNew: activeChats() > 0, // người đang chat làm rõ: GPU cho họ trước
     });
-    res.json({ ticket });
+    res.json({ ticket, ...(!ticket && activeChats() > 0 ? { reason: 'yield_to_chat' } : {}) });
   }));
 
   router.post('/api/ai-board/worker/tickets/:id/snapshot', authenticate, handle((req, res) => {
