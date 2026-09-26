@@ -493,7 +493,7 @@ export function createAiBoardStore(db, hooks = {}) {
       FROM ai_tickets t JOIN requests r ON r.id = t.source_request_id
       WHERE t.parent_id IS NULL
       ORDER BY t.priority DESC, t.created_at ASC LIMIT ?
-    `).all(Math.min(Math.max(Number(limit) || 100, 1), 500));
+    `).all(Math.min(Math.max(Number(limit) || 100, 1), 500)).map((t) => ({ ...t, trace_ref: traceRef(t.id) }));
   }
 
   // Read-time only: a dead worker never writes its own exit, and nothing else may write ai_workers for it.
@@ -592,6 +592,15 @@ export function createAiBoardStore(db, hooks = {}) {
       ORDER BY id DESC LIMIT 1
     `).get(rootId);
     return parseJson(row?.evidence_json)?.verdict?.candidate ?? null;
+  }
+
+  /** Chỉ cho API admin: nhánh · commit · PR của root để trace; null khi AI Board chưa tạo thay đổi. */
+  function traceRef(rootId) {
+    const candidate = latestCandidate(rootId);
+    const pr = latestPullRequest(rootId);
+    if (!candidate && !pr) return null;
+    return { branch: pr?.branch || candidate?.branch || null, head_sha: pr?.head_sha || candidate?.head_sha || null,
+      pr_number: pr?.number ?? null, pr_url: pr?.url ?? null };
   }
 
   // ── Làm rõ yêu cầu với người gửi (ticket 06) ──
@@ -1376,7 +1385,9 @@ export function createAiBoardStore(db, hooks = {}) {
       const budgetUsed = calls.reduce((sum, c) => sum + (Number(c.evidence?.budget_units) || 0), 0);
       const rollback = parseJson(runEvidence)?.rollback ?? null;
       const live = root.live && i === runRows.length - 1 && !run.status && !rollback;
+      const produced = parseJson(runEvidence)?.verdict?.candidate; // commit của chính lượt này (trace admin)
       return { ...run, rollback, gates, calls, totals: summarizeCalls(calls.map((c) => c.evidence)),
+        commit: produced ? { branch: produced.branch, head_sha: produced.head_sha } : null,
         budget_used: budgetUsed, budget_limit: root.budget_limit,
         progress: runProgress({ ...run, gates, calls }, events, live) };
     });
@@ -1397,7 +1408,7 @@ export function createAiBoardStore(db, hooks = {}) {
     const candidate = latestCandidate(root.id);
     root.can_rollback = !!candidate && !PHASES[root.phase]?.rollback;
     return {
-      root, plan, children, runs, events, candidate, pull_request: latestPullRequest(root.id),
+      root, plan, children, runs, events, candidate, pull_request: latestPullRequest(root.id), trace_ref: traceRef(root.id),
       gate_names: CONTRACT.gates.names,
       totals: {
         ...summarizeCalls(evidences),

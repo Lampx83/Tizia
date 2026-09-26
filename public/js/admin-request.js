@@ -164,6 +164,7 @@ function renderRun(run, root, latest) {
     : items.length ? `<div class="timeline">${items.map(i => i.html).join('')}</div>` : '<div class="blk meta">Lượt này chưa có dữ liệu cổng.</div>';
   return `<div class="run-head st-${state}"><b>Lượt #${esc(run.id)}</b>${tag(state, label)}
       <span>${esc(TRIGGER_LABEL[run.trigger] || run.trigger)}</span><span class="meta">worker ${esc(run.worker_id || '—')} · ${fmt(run.created_at)}</span>
+      ${run.commit?.head_sha ? `<button type="button" class="trace-copy" data-copy="${esc(run.commit.head_sha)}" title="Commit của lượt này, bấm để copy">${esc(run.commit.head_sha.slice(0, 7))}</button>` : ''}
       <span>GPU-s ${budgetCell(run.budget_used, run.budget_limit)}</span></div>
     ${renderProgress(p)}
     ${body}`;
@@ -410,6 +411,20 @@ function renderAiBoard(t) {
   `;
 }
 
+// Trace cho admin: nhánh · commit ngắn · PR. Bấm nhánh/commit để copy. Server chỉ trả ở API admin.
+function traceLine(ref) {
+  if (!ref?.branch && !ref?.head_sha) return '';
+  const part = (value, label) => (value ? `<button type="button" class="trace-copy" data-copy="${esc(value)}" title="Bấm để copy">${esc(label)}</button>` : '');
+  return `<div class="trace-ref">${[part(ref.branch, ref.branch), part(ref.head_sha, String(ref.head_sha).slice(0, 7)),
+    ref.pr_url ? `<a href="${esc(ref.pr_url)}" target="_blank" rel="noopener">PR #${esc(ref.pr_number)}</a>` : ''].filter(Boolean).join(' · ')}</div>`;
+}
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.trace-copy');
+  if (!btn) return;
+  try { await navigator.clipboard.writeText(btn.dataset.copy); btn.classList.add('copied'); setTimeout(() => btn.classList.remove('copied'), 1200); } catch { /* clipboard bị chặn: vẫn đọc được */ }
+});
+
 function render() {
   if (!view) return;
   const { thread, decisions, trace } = view;
@@ -419,6 +434,7 @@ function render() {
   patchHtml($('#app'), `
     <a class="back" href="/admin.html#requests">Về trang quản trị</a>
     <h1>Yêu cầu #${esc(r.id)}: ${esc(r.title)}</h1>
+    ${traceLine(trace?.trace_ref)}
     <div class="meta">${esc(r.domain)} · ${esc(r.type)} · ${esc(r.student)} · <span class="pill">${esc(r.status)}</span> · tạo ${fmt(r.created_at)}
       · <span class="${live ? 'auto live' : 'auto'}">${live ? 'tự cập nhật mỗi 2 giây' : 'tự cập nhật mỗi 10 giây'}</span></div>
     ${renderActions(r, trace)}

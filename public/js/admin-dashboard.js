@@ -417,6 +417,20 @@ function aiTone(t) {
   if (/waiting|human_owned/.test(t.status || '') || t.phase === 'pre_pr_review') return 'ai-warn';
   return '';
 }
+// Dòng phụ dưới tiêu đề: nhánh · commit ngắn · PR (chỉ API admin có trace_ref). Bấm để copy.
+function traceSub(ref) {
+  if (!ref?.branch && !ref?.head_sha) return '';
+  const copy = (value, label) => (value ? `<span class="trace-copy" data-copy="${esc(value)}" title="Bấm để copy">${esc(label)}</span>` : '');
+  return `<div class="trace-sub">${[copy(ref.branch, ref.branch), copy(ref.head_sha, String(ref.head_sha).slice(0, 7)),
+    ref.pr_url ? `<a href="${esc(ref.pr_url)}" target="_blank" rel="noopener">PR #${esc(ref.pr_number)}</a>` : ''].filter(Boolean).join(' · ')}</div>`;
+}
+document.addEventListener('click', async (e) => {
+  const el = e.target.closest('.trace-copy');
+  if (!el) return;
+  e.stopPropagation();
+  try { await navigator.clipboard.writeText(el.dataset.copy); el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1200); } catch { /* clipboard bị chặn */ }
+}, true);
+
 function renderRequests() {
   const filtered = reqFilter === 'all' ? reqCache : reqCache.filter(r => r.status === reqFilter);
   const counts = reqCache.reduce((m,r) => (m[r.status] = (m[r.status]||0)+1, m), {});
@@ -452,7 +466,7 @@ function renderRequests() {
         <tr data-rid="${r.id}">
           <td>${r.id}</td>
           <td><span class="pill">${esc(r.domain)}</span></td>
-          <td style="max-width:260px">${esc(r.title)}</td>
+          <td style="max-width:260px">${esc(r.title)}${traceSub(ticket?.trace_ref)}</td>
           <td><div class="req-detail" title="${esc(r.detail || '')}">${esc(requestBody(r.detail) || '—')}</div></td>
           <td title="${esc(r.type)}">${esc(REQUEST_TYPE_LABEL[r.type] || r.type)}</td>
           <td>${esc(r.student)}</td>

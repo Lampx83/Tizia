@@ -98,6 +98,10 @@
 
   /* ============ ACTIVITY FEED ============ */
   .feed { display:flex; flex-direction:column; gap:7px; max-height:340px; overflow-y:auto; padding-right:4px; }
+  .trace-sub { font-size:11px; color:var(--dim); margin-top:3px; overflow-wrap:anywhere; }
+  .trace-copy { font-family:ui-monospace,Consolas,monospace; cursor:pointer; }
+  .trace-copy:hover { color:var(--txt); text-decoration:underline; }
+  .trace-copy.copied::after { content:" ✓"; color:var(--ok); }
   /* Scrollbar mảnh theo theme tối cho cả trang (Firefox + Chromium) */
   * { scrollbar-width:thin; scrollbar-color:var(--border-strong) transparent; }
   ::-webkit-scrollbar { width:8px; height:8px; }
@@ -349,6 +353,6 @@
 <div class="toast" id="toast"></div>
 <div class="chart-tooltip" id="ctt"></div>
 
-<script type="module" src="/js/admin-dashboard.js?v=lifecycle"></script>
+<script type="module" src="/js/admin-dashboard.js?v=trace-ref"></script>
 </body>
 </html>

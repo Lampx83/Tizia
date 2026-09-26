@@ -371,3 +371,21 @@ test('a blocked verdict never gets a PR', () => {
   submit(blocked(4, 'lint', 'ordinary'));
   assert.throws(() => openPr(store, ticket), /passing verdict/);
 });
+
+// Feature-folders ticket 01: branch · commit · PR for tracing, admin APIs only.
+test('the trace ref (branch, commit, PR) reaches admin views but never the requester', () => {
+  const { store, submit, ticket } = plannedRoot();
+  const [before] = store.listAdminQueue();
+  assert.equal(before.trace_ref, null); // nothing produced yet
+  submit(passing());
+  let [row] = store.listAdminQueue();
+  assert.deepEqual(row.trace_ref, { branch: candidate.branch, head_sha: candidate.head_sha, pr_number: null, pr_url: null });
+  openPr(store, ticket);
+  [row] = store.listAdminQueue();
+  assert.deepEqual(row.trace_ref, { branch: PR.branch, head_sha: PR.head_sha, pr_number: 42, pr_url: PR.url });
+  const trace = store.getRequestTrace(1);
+  assert.deepEqual(trace.trace_ref, row.trace_ref);
+  assert.equal(trace.runs.at(-1).commit.head_sha, candidate.head_sha); // commit of that run
+  const own = JSON.stringify(store.listRequestsForOwner(1, 'pharmacy'));
+  for (const secret of [candidate.branch, candidate.head_sha, PR.url]) assert.ok(!own.includes(secret), secret);
+});
