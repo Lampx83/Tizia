@@ -31,7 +31,7 @@ from gates import guard
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "intake_guard.md").read_text(encoding="utf-8")
 
 LABELS = (
-    "ok", "prompt_injection", "privileged_area", "personal_data", "politics_sovereignty", "religion",
+    "ok", "prompt_injection", "privileged_area", "money", "personal_data", "politics_sovereignty", "religion",
     "discrimination_hate", "sexual", "violence_weapons", "drugs_gambling", "self_harm", "harassment_profanity",
     "defamation", "health_legal_finance_claim", "copyright", "ads_spam", "academic_cheating", "off_topic",
 )

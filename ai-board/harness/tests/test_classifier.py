@@ -70,7 +70,7 @@ def test_intake_escalates_to_human_review_when_the_model_is_sure_of_a_danger():
 def test_intake_stays_allow_when_safe_or_when_the_classifier_is_down():
     for models in (Classifying([["A", math.log(0.9)], ["F", math.log(0.1)]]),
                    Classifying([["A", 0.0]], fail=True)):
-        out = intake_guard.run("Đổi màu nút", "trang pricing, nút xanh", deps_with(models), Budget())
+        out = intake_guard.run("Đổi màu nút", "trang giới thiệu, nút xanh", deps_with(models), Budget())
         assert out["verdict"] == "allow", out
 
 
@@ -124,7 +124,7 @@ def test_json_guards_constrain_output_to_the_closed_label_set():
                                                              "@@ -0,0 +1 @@\n+<p>Nội dung mới cho bài</p>\n"}]}
     deps = deps_with(Classifying([["A", 0.0]]))
     static_check.content_review(state, deps, Budget())
-    intake_guard.run("Đổi màu nút", "trang pricing, nút xanh", deps, Budget())
+    intake_guard.run("Đổi màu nút", "trang giới thiệu, nút xanh", deps, Budget())
     guards = [c for c in deps.models.calls if c["model"] != "fake-classifier"]
     assert len(guards) == 2
     for call in guards:
@@ -132,3 +132,12 @@ def test_json_guards_constrain_output_to_the_closed_label_set():
         assert schema["required"] == ["labels", "reason"]
         assert schema["properties"]["labels"]["minItems"] == 1 and "ok" in schema["properties"]["labels"]["items"]["enum"]
     assert "personal_data" not in guards[0]["format"]["properties"]["labels"]["items"]["enum"]  # gate 4 subset
+
+
+def test_money_requests_stop_the_worker_at_gate_1_for_a_human():
+    """guard-lexicon.json label money: intake human_review, so gate 1 blocks and the root waits for an admin."""
+    out = intake_guard.run("Giảm học phí gói Pro", "cho học sinh nghèo", deps_with(Classifying([["A", 0.0]])), Budget())
+    assert out["verdict"] == "human_review" and "money" in out["labels"]
+    lesson = intake_guard.run("Thêm bài tập tính doanh thu", "cho trường Kinh tế, có giá bán",
+                              deps_with(Classifying([["A", 0.0]])), Budget())
+    assert "money" not in lesson["labels"]

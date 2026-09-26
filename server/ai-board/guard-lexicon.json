@@ -7,6 +7,10 @@
     "intake = verdict khi yêu cầu học viên trúng nhãn: reject/critical → server trả 422, không tạo yêu cầu; human_review → nhận, gắn cờ.",
     "diff = mức nghiêm trọng khi chữ HIỂN THỊ trong diff cổng 4 trúng nhãn (null = không áp cho diff). Mặc định là finding chặn (medium = sửa 1 lần, high/critical = người); diff_flag=true → chỉ gắn cờ người soát + để LLM content_guard phân xử, không chặn (chủ đề hay xuất hiện hợp lệ trong bài học: tôn giáo/chiến tranh trong lịch sử, 'ý nghĩ tự sát' trong cảnh báo thuốc, 'ma tuý, cờ bạc, mại dâm' trong bài tệ nạn xã hội). Đo trên toàn bộ public/ hiện có trước khi đổi nhãn nào sang chặn."
   ],
+  "money_paths": {
+    "_why": "File public/ chạm tiền thật (giá gói, mirror billing) hoặc xu/sao trong ví (dễ bị lợi dụng). Kế hoạch sửa chúng bị policy chặn (money_scope); diff cổng 4 chạm chúng là critical, cần người.",
+    "paths": ["public/pricing.html", "public/js/plans.js", "public/js/engine/wallet.js"]
+  },
   "allowed_hosts": [
     "tizia.vn", "gov.vn", "edu.vn", "localhost", "example.com",
     "unpkg.com", "cdn.jsdelivr.net", "cdnjs.cloudflare.com", "fonts.googleapis.com", "fonts.gstatic.com",
@@ -129,6 +133,18 @@
         "hack đáp án", "hiện đáp án trước",
         "dap an de thi", "lam bai ho", "giai ho",
         "exam answers", "answer key", "leaked exam"
+      ]
+    },
+    "money": {
+      "_why": "Yêu cầu chạm tiền thật của nền tảng (giá gói, học phí, thanh toán, hoàn tiền, mã giảm giá, ngân hàng) luôn cần người: intake human_review → cổng 1 worker dừng. Không đưa từ vựng kinh tế học chung (doanh thu, giá bán, tiền tệ) để khỏi chặn nhầm bài học trường Kinh tế. File tiền trong public/ nằm ở money_paths.",
+      "intake": "human_review", "diff": null,
+      "_diff_null": "Đo 2026-09-26: số tiền '…đ' + từ tiền có trong 111/619 file public/ (bài Kinh tế, mô phỏng nhà thuốc, bài Toán) → cổng 4 không soát theo chữ mà theo money_paths.",
+      "terms": [
+        "học phí", "bảng giá", "giá gói", "mua gói", "nâng cấp gói", "đăng ký gói", "gói (plus|pro|premium|trả phí|vip)",
+        "trả phí", "thu phí", "tính phí", "phí dịch vụ", "phí thành viên", "mã giảm giá", "mã khuyến mãi",
+        "rút tiền", "tiền thật", "ví điện tử", "thẻ tín dụng", "thẻ ngân hàng", "tài khoản ngân hàng", "số tài khoản",
+        "vnpay", "momo", "zalopay", "hoc phi", "thu phi",
+        "pricing", "billing", "invoice", "refund", "subscription", "premium plan", "credit card"
       ]
     },
     "health_legal_finance_claim": {

@@ -111,10 +111,10 @@ test('policy identity includes enforced fields only and versions the persisted p
     ...CAPABILITY_POLICY,
     'public.ui': { ...CAPABILITY_POLICY['public.ui'], allow: ['server/'] },
   }), CAPABILITY_POLICY_HASH);
-  assert.equal(CAPABILITY_POLICY_VERSION, 'd0-v2');
+  assert.equal(CAPABILITY_POLICY_VERSION, 'd0-v3');
   const checked = validatePlan(plan(), 'pharmacy');
   assert.equal(checked.planHash, createHash('sha256')
-    .update(`d0-v2\n${CAPABILITY_POLICY_HASH}\n${checked.planJson}`).digest('hex'));
+    .update(`d0-v3\n${CAPABILITY_POLICY_HASH}\n${checked.planJson}`).digest('hex'));
   assert.notEqual(checked.planHash, createHash('sha256')
     .update(`d0-v1\n${CAPABILITY_POLICY_HASH}\n${checked.planJson}`).digest('hex'));
 });

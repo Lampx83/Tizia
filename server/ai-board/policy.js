@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
+import fs from 'node:fs';
 
-export const CAPABILITY_POLICY_VERSION = 'd0-v2';
+export const CAPABILITY_POLICY_VERSION = 'd0-v3'; // v3: money_paths luôn cần người
+const MONEY_PATHS = JSON.parse(fs.readFileSync(new URL('./guard-lexicon.json', import.meta.url), 'utf8')).money_paths.paths;
 const capability = (tier, allow, rationale, overrides = {}) => Object.freeze({
   tier,
   allow,
@@ -137,6 +139,11 @@ export function validatePlan(plan, requestDomain) {
       'Kế hoạch yêu cầu quyền chưa được hỗ trợ và đang chờ xem lại.');
     const allowedScope = stringList(step.allowed_scope, `steps[${index}].allowed_scope`).map((item) => safePath(item, `steps[${index}].allowed_scope`));
     for (const item of allowedScope) {
+      // Tiền thật / ví xu (guard-lexicon.json money_paths): không capability nào tự sửa được.
+      if (MONEY_PATHS.some((money) => item === money || money.startsWith(item.endsWith('/') ? item : `${item}/`))) {
+        fail('money_scope', `scope '${item}' touches money: ${MONEY_PATHS.join(', ')}`,
+          'Yêu cầu liên quan đến tiền hoặc thanh toán nên cần quản trị viên trực tiếp xử lý.');
+      }
       if (policy.deny.some((denied) => item === denied || item.startsWith(denied))
         || !planScope.has(item) || !policy.allow.some((prefix) => item.startsWith(prefix))) {
         fail('scope_violation', `scope '${item}' is not granted to capability '${capability}'`,

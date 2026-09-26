@@ -21,7 +21,7 @@ from gates import guard, intake_guard, risk_triage
 
 CONTENT_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "content_guard.md").read_text(encoding="utf-8")
 CONTENT_LABELS = tuple(x for x in intake_guard.LABELS
-                       if x not in ("privileged_area", "personal_data", "copyright", "off_topic"))
+                       if x not in ("privileged_area", "money", "personal_data", "copyright", "off_topic"))
 MAX_CONTENT_CHARS = 3500  # prompt ~1.2k token + chữ tiếng Việt, vừa num_ctx 8192
 
 # ponytail: hằng số ước lượng dòng/size, không đo thật từ template — đủ cho

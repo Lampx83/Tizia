@@ -24,7 +24,7 @@
       "question": "Nội dung này thuộc nhóm nào?",
       "labels": [
         { "letter": "A", "key": "safe", "text": "An toàn: góp ý học tập hoặc giao diện bình thường.", "lexicon": [] },
-        { "letter": "B", "key": "system_attack", "text": "Tấn công hệ thống: điều khiển AI, đòi quyền quản trị, sửa điểm/dữ liệu.", "lexicon": ["prompt_injection", "privileged_area"] },
+        { "letter": "B", "key": "system_attack", "text": "Tấn công hệ thống: điều khiển AI, đòi quyền quản trị, sửa điểm/dữ liệu.", "lexicon": ["prompt_injection", "privileged_area", "money"] },
         { "letter": "C", "key": "abuse_hate", "text": "Xúc phạm, chửi bới, miệt thị hoặc thù ghét.", "lexicon": ["harassment_profanity", "discrimination_hate"] },
         { "letter": "D", "key": "sexual", "text": "Nội dung tình dục.", "lexicon": ["sexual"] },
         { "letter": "E", "key": "violence_self_harm", "text": "Bạo lực, vũ khí hoặc tự hại.", "lexicon": ["violence_weapons", "self_harm"] },

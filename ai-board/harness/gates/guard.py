@@ -40,8 +40,11 @@ def _term(term: str) -> re.Pattern:
     return re.compile(rf"(?<!\w)(?:{term.replace(' ', r'\s+')})(?!\w)")
 
 
+# File tiền thật / ví xu: diff chạm là critical (cùng danh sách với policy.js money_scope).
+MONEY_PATHS = frozenset(LEXICON["money_paths"]["paths"])
+
 # Term ASCII so trên bản bỏ dấu, term có dấu so trên bản NFC — xem _doc trong guard-lexicon.json.
-_TOPICS = {label: [(_term(t), t.isascii()) for t in spec["terms"]] for label, spec in LEXICON["labels"].items()}
+_TOPICS ={label: [(_term(t), t.isascii()) for t in spec["terms"]] for label, spec in LEXICON["labels"].items()}
 
 
 def topic_hits(text: str | None) -> list[str]:
@@ -298,6 +301,8 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
             add("secret", "critical", f"{path}: không được chạm file env")
         if _PROTECTED.match(path):
             add("protected_path", "critical", f"{path}: path hạ tầng/registry cần con người")
+        if path in MONEY_PATHS:
+            add("protected_path", "critical", f"{path}: file tiền/thanh toán cần con người")
         if is_test and existing and (removed or deleted):
             add("test_removal", "critical", f"{path}: xoá/sửa test có sẵn")
         if not deleted and not existing and (binary or _IMAGE_FILE.search(path)):

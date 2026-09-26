@@ -36,19 +36,19 @@ function plannedRoot() {
   const store = createAiBoardStore(db);
   store.createRequestWithRoot({
     ownerUserId: 1, ownerDomain: 'pharmacy', ownerDisplayName: 'Lan',
-    idempotencyKey: 'outcome-request-001', title: 'Sửa trang giá', detail: 'fixture',
+    idempotencyKey: 'outcome-request-001', title: 'Sửa trang giới thiệu', detail: 'fixture',
   });
   const ticket = store.claimNext({ workerId: 'w1', version: 'test', mode: 'active', intent: 'plan' });
   const lease = { workerId: 'w1', leaseToken: ticket.lease_token };
   const run = store.createRun(ticket.id, { ...lease, trigger: 'plan', idempotencyKey: 'outcome-run-001' });
   const step = {
-    order: 1, title: 'Sửa trang giá', description: 'Đổi 1 dòng.', allowed_scope: ['public/pricing.html'],
+    order: 1, title: 'Sửa trang giới thiệu', description: 'Đổi 1 dòng.', allowed_scope: ['public/gioi-thieu.html'],
     acceptance: ['Trang đổi.'], tests: ['node --test'], capability: 'public.ui', risk: 'low', non_goals: ['x'],
   };
   store.submitPlan(ticket.id, {
     ...lease, runId: run.id, budgetUsed: 40, idempotencyKey: 'outcome-plan-001',
     plan: {
-      domain: 'pharmacy', goal: 'Sửa trang giá.', allowed_scope: step.allowed_scope, acceptance: step.acceptance,
+      domain: 'pharmacy', goal: 'Sửa trang giới thiệu.', allowed_scope: step.allowed_scope, acceptance: step.acceptance,
       tests: step.tests, capabilities: ['public.ui'], risk: 'low', non_goals: ['x'], steps: [step],
     },
   });
@@ -75,7 +75,7 @@ function blocked(gate, reason, failureClass, extra = {}) {
 
 const candidate = {
   branch: 'ai-board/2026-09-24-ticket-1', base_sha: SHA_A, head_sha: SHA_B,
-  commits: [{ sha: SHA_B, title: 'ai-board(ticket-1): 1/1 Sửa trang giá', files: ['public/pricing.html', 'test/p.test.js'] }],
+  commits: [{ sha: SHA_B, title: 'ai-board(ticket-1): 1/1 Sửa trang giới thiệu', files: ['public/gioi-thieu.html', 'test/p.test.js'] }],
 };
 
 function passing(extra = {}) {

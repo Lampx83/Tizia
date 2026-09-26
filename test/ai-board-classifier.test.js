@@ -134,7 +134,7 @@ test('a vague request is marked for clarification; a safe clear one is not sent 
     const vague = await app.post('classifier-req-001', { title: 'Sửa cái đó', detail: 'làm đẹp hơn' });
     assert.equal(vague.status, 200);
     assert.deepEqual(vague.json.clarify, { needed: true, mode: 'ask' });
-    const clear = await app.post('classifier-req-002', { title: 'Đổi màu nút Gửi', detail: 'trang pricing, nút xanh' });
+    const clear = await app.post('classifier-req-002', { title: 'Đổi màu nút Gửi', detail: 'trang giới thiệu, nút xanh' });
     assert.equal(clear.json.clarify.needed, false);
     const tags = db.prepare("SELECT tag FROM ai_ticket_tags WHERE tag='guard:human_review'").all();
     assert.equal(tags.length, 0);
@@ -159,7 +159,7 @@ test('the model adds human review but never blocks; hard rules still block; outa
     const blocked = await app.post('classifier-req-004', { title: 'x', detail: 'dit me cai trang' });
     assert.equal(blocked.status, 422);
     // Clear by the hard rules too (ticket 08): long enough, names a concrete object.
-    const outage = await app.post('classifier-req-005', { title: 'Đổi màu nút Gửi', detail: 'trang pricing, nút xanh hơn' });
+    const outage = await app.post('classifier-req-005', { title: 'Đổi màu nút Gửi', detail: 'trang giới thiệu, nút xanh hơn' });
     assert.equal(outage.status, 200);
     assert.equal(outage.json.clarify.needed, false);
   } finally {
@@ -176,7 +176,7 @@ test('ticket 08: hard rules clarify without a model; shadow model results are lo
   try {
     const broad = await app.post('classifier-req-101', { title: 'Làm lại toàn bộ trang web', detail: 'cho hiện đại' });
     assert.deepEqual(broad.json.clarify, { needed: true, mode: 'split' });
-    const clear = await app.post('classifier-req-102', { title: 'Đổi màu nút Gửi trang pricing sang xanh #2563eb', detail: '' });
+    const clear = await app.post('classifier-req-102', { title: 'Đổi màu nút Gửi trang giới thiệu sang xanh #2563eb', detail: '' });
     assert.equal(clear.json.clarify.needed, false);
     const tags = db.prepare('SELECT tag FROM ai_ticket_tags').all().map((r) => r.tag);
     assert.ok(!tags.includes('guard:human_review'));

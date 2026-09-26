@@ -18,7 +18,7 @@ def kinds(text, checkout=None):
 
 
 def test_clean_content_change_passes_and_lists_what_ran():
-    out = guard.scan(diff("public/pricing.html", added=["<p>Bảng giá mới</p>"]))
+    out = guard.scan(diff("public/gioi-thieu.html", added=["<p>Lời giới thiệu mới</p>"]))
     assert out["findings"] == []
     assert {"secret", "pii", "injection", "content", "test_removal", "protected_path"} <= set(out["checks"])
     assert out["ui_changed"] is True
@@ -96,3 +96,11 @@ def test_gate_4_blocks_on_guard_findings_with_the_worst_kind(monkeypatch, fake_d
     assert "injection" in out["reason"]
     assert "secret" in out["checks"]
     assert state["ui_changed"] is True
+
+
+def test_money_files_need_a_human_but_lesson_prices_do_not():
+    """guard-lexicon.json money_paths: any diff on them is critical; prices inside a lesson page are not flagged."""
+    for path in sorted(guard.MONEY_PATHS):
+        assert ("protected_path", "critical") in kinds(diff(path, added=["<p>x</p>"])), path
+    lesson = guard.scan(diff("public/js/scenarios/economics-practice.js", added=["  q: 'Giá bán 25.000đ, lãi bao nhiêu?',"]))
+    assert not [f for f in lesson["findings"] if f["check"] in ("protected_path", "content")]
