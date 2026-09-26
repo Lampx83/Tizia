@@ -817,13 +817,14 @@ function renderItem(it, me = '') {
         <span class="sgf-it-title">${escapeHtml(it.title)}</span>
         <span class="sgf-it-st ${sm.cls}">${it.phase === 'clarifying' ? 'Chờ bạn trả lời' : sm.label}</span>
       </div>
-      ${mine && it.phase === 'clarifying'
-        ? `<button type="button" class="sgf-send sgf-it-clarify" data-clarify="${it.id}">💬 Trả lời Ban điều hành</button>` : ''}
       ${attHtml}
       ${it.admin_note ? `<div class="sgf-it-note">🏛️ ${escapeHtml(it.admin_note)}</div>` : ''}
-      <button type="button" class="sgf-it-thread-btn" data-req-toggle="${it.id}">
+      ${mine && it.phase === 'clarifying'
+        // Ban đang chờ trả lời: cùng nút trao đổi, nhấp nháy, mở thẳng phần làm rõ.
+        ? `<button type="button" class="sgf-it-thread-btn sgf-it-ask" data-clarify="${it.id}">💬 Trả lời Ban điều hành</button>`
+        : `<button type="button" class="sgf-it-thread-btn" data-req-toggle="${it.id}">
         💬 ${mine ? 'Trao đổi với Ban điều hành' : 'Xem trao đổi'}
-      </button>
+      </button>`}
       ${mine && ['pending', 'reviewing'].includes(it.status)
         ? `<button type="button" class="sgf-it-cancel" data-req-cancel="${it.id}">Hủy yêu cầu</button>` : ''}
       <div class="sgf-it-thread" id="sgf-thread-${it.id}" hidden></div>
@@ -916,7 +917,11 @@ function injectStyles() {
     .sgf-clar-me { align-self: flex-end; background: linear-gradient(135deg,#7c3aed,#4f46e5); color: #fff; border-bottom-right-radius: 4px; }
     .sgf-typing::after { content: '● ● ●'; letter-spacing: 2px; opacity: .6; animation: sgf-blink 1s steps(3, end) infinite; }
     .sgf-clar-reply, .sgf-clar-sum { display: flex; flex-direction: column; gap: 6px; }
-    .sgf-it-clarify { margin: 6px 0 2px; }
+    .sgf-it-thread-btn.sgf-it-ask {
+      background: linear-gradient(135deg,#fbbf24,#f97316); color: #451a03; border-color: #f59e0b; font-weight: 700;
+      animation: sgf-ring 1.6s ease-out infinite;
+    }
+    .sgf-it-thread-btn.sgf-it-ask:hover { filter: brightness(1.05); }
     #sgf-fab.sgf-fab-ask { animation: sgf-ring 1.6s ease-out infinite; }
     #sgf-fab.sgf-fab-ask::after {
       content: '!'; position: absolute; top: -2px; right: -2px; width: 20px; height: 20px; border-radius: 50%;
@@ -931,7 +936,7 @@ function injectStyles() {
     @keyframes sgf-blink { from { opacity: .2; } to { opacity: .8; } }
     @media (prefers-reduced-motion: reduce) {
       .sgf-chip { transition: none; }
-      .sgf-clar-banner, .sgf-clar-msg, .sgf-typing::after, #sgf-fab.sgf-fab-ask { animation: none; }
+      .sgf-clar-banner, .sgf-clar-msg, .sgf-typing::after, #sgf-fab.sgf-fab-ask, .sgf-it-ask { animation: none; }
     }
     .sgf-lab { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: #475569; font-weight: 600; }
     .sgf-req { color: #ef4444; }
