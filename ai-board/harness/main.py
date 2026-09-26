@@ -104,7 +104,7 @@ class Deps:
         )
 
     def call_model(self, model: str, prompt: str, *, gate: float, budget,
-                    db_path=None, proposal_id: int | None = None, format: str | None = "json",
+                    db_path=None, proposal_id: int | None = None, format: str | dict | None = "json",
                     prompt_name: str | None = None, child: int | None = None, iteration: int = 0,
                     options: dict | None = None, extra: dict | None = None) -> dict:
         """1 lời gọi model + phí budget + trace — chỗ duy nhất mọi cổng đi qua.

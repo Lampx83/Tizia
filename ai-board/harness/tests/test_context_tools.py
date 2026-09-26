@@ -91,9 +91,11 @@ def _data(text):
     return text.split("<<<\n", 1)[1].rsplit("\n>>>", 1)[0]
 
 
-def test_build_context_colour_request_includes_linked_css(repo):
+def test_build_context_colour_request_includes_linked_css(repo, tmp_path):
     src, sha = repo
-    ctx = context.build_context(1, {"subject": "Đổi màu chữ tiêu đề trang school.html thành xanh dương"}, None, src, sha)
+    # Empty lessons file: the real ai-board/memory/lessons.jsonl grows with every local worker run.
+    ctx = context.build_context(1, {"subject": "Đổi màu chữ tiêu đề trang school.html thành xanh dương"}, None, src, sha,
+                                memory_path=tmp_path / "lessons.jsonl")
     assert ctx["skill"] == "edit-css-style"
     assert ctx["used_tools"] == ["outline"]
     assert "css liên kết: public/css/school.css" in ctx["text"]

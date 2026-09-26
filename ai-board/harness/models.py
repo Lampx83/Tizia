@@ -45,7 +45,7 @@ class OllamaClient:
             seckey=env.get("OLLAMA_SECKEY") or None,
         )
 
-    def generate(self, model: str, prompt: str, *, format: str | None = None, extra: dict | None = None,
+    def generate(self, model: str, prompt: str, *, format: str | dict | None = None, extra: dict | None = None,
                  **options) -> dict:
         """POST /api/generate. Trả nguyên body JSON.
 

@@ -115,3 +115,20 @@ def test_shadow_danger_is_logged_but_never_escalates_and_off_skips_the_call(monk
     deps = deps_with(Classifying(sure))
     assert intake_guard.run("Thêm bài", "một bài lịch sử", deps, Budget())["verdict"] == "allow"
     assert not any(c["model"] == "fake-classifier" for c in deps.models.calls)
+
+
+def test_json_guards_constrain_output_to_the_closed_label_set():
+    """Plain format="json" let qwen3:8b answer "{}" at gate 4; both guards now send a schema."""
+    state = {"full_diff": [{"file": "public/x.html", "diff": "diff --git a/public/x.html b/public/x.html\n"
+                                                             "--- a/public/x.html\n+++ b/public/x.html\n"
+                                                             "@@ -0,0 +1 @@\n+<p>Nội dung mới cho bài</p>\n"}]}
+    deps = deps_with(Classifying([["A", 0.0]]))
+    static_check.content_review(state, deps, Budget())
+    intake_guard.run("Đổi màu nút", "trang pricing, nút xanh", deps, Budget())
+    guards = [c for c in deps.models.calls if c["model"] != "fake-classifier"]
+    assert len(guards) == 2
+    for call in guards:
+        schema = call["format"]
+        assert schema["required"] == ["labels", "reason"]
+        assert schema["properties"]["labels"]["minItems"] == 1 and "ok" in schema["properties"]["labels"]["items"]["enum"]
+    assert "personal_data" not in guards[0]["format"]["properties"]["labels"]["items"]["enum"]  # gate 4 subset

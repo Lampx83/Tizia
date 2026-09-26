@@ -153,7 +153,8 @@ def content_review(state: dict, deps, budget, *, db_path=None, proposal_id: int 
         prompt = CONTENT_PROMPT.format(content="\n".join(parts)[:MAX_CONTENT_CHARS])
         try:
             body = deps.call_model(deps.models.gate1_model, prompt, gate=4, budget=budget,
-                                   db_path=db_path, proposal_id=proposal_id, prompt_name="content_guard.md")
+                                   db_path=db_path, proposal_id=proposal_id, prompt_name="content_guard.md",
+                                   format=intake_guard.labels_format(CONTENT_LABELS))
             labels, why = intake_guard.parse_labels(body.get("response", ""), CONTENT_LABELS), ""
         except Exception as e:  # model sập/JSON sai — chuyển người soát, không cho qua im lặng
             why = f"bộ soát nội dung lỗi: {str(e)[:200]}"

@@ -79,6 +79,14 @@ def _fence(text: str, limit: int) -> str:
     return re.sub(r"<{3,}|>{3,}", "", text or "")[:limit]
 
 
+def labels_format(allowed=LABELS) -> dict:
+    """Ollama JSON schema for {"labels", "reason"}: labels non-empty, closed set.
+    Plain format="json" let qwen3:8b answer "{}" on the gate 4 prompt (2026-09-26 run)."""
+    return {"type": "object", "required": ["labels", "reason"], "properties": {
+        "labels": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": list(allowed)}},
+        "reason": {"type": "string"}}}
+
+
 def classify(title: str, detail: str, deps, budget, *, db_path=None, proposal_id=None) -> tuple[list[str], str]:
     """(nhãn LLM, lý do nội bộ). Lỗi/hết budget → (["classifier_error"], lý do) — người gọi coi là human_review."""
     if not budget.tick():
@@ -86,7 +94,8 @@ def classify(title: str, detail: str, deps, budget, *, db_path=None, proposal_id
     prompt = PROMPT.format(title=_fence(title, MAX_TITLE), detail=_fence(detail, MAX_DETAIL) or "(trống)")
     try:
         body = deps.call_model(deps.models.gate1_model, prompt, gate=1, budget=budget,
-                               db_path=db_path, proposal_id=proposal_id, prompt_name="intake_guard.md")
+                               db_path=db_path, proposal_id=proposal_id, prompt_name="intake_guard.md",
+                               format=labels_format())
         text = body.get("response", "")
         labels = parse_labels(text)
     except Exception as e:  # model sập/timeout/JSON sai — fail closed, không bao giờ auto-approve
