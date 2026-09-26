@@ -61,6 +61,13 @@ function plainSpec(request, turns) {
     'Kết quả mong đợi (cách kiểm): chưa rõ', 'Ngoài phạm vi: chưa rõ'].filter(Boolean).join('\n').slice(0, 4000);
 }
 
+/** Spec gửi worker = bản đã xác nhận + nguyên văn lời người dùng: tóm tắt của model có thể gọi sai tên phần tử. */
+export function withUserWords(spec, request, turns) {
+  const words = [`- Tiêu đề: ${request.title}`, request.detail ? `- Mô tả: ${request.detail}` : '',
+    ...turns.filter((t) => t.kind === 'answer').map((t) => `- Đáp: ${t.text}`)].filter(Boolean);
+  return `${String(spec).trim()}\n\nNguyên văn người dùng:\n${words.join('\n')}`.slice(0, 4000);
+}
+
 /** Lý do chặn đầu ra model, null nếu sạch. */
 function violation(text) {
   if (!text.trim()) return 'empty';
@@ -73,7 +80,10 @@ function violation(text) {
 
 /** {text, replaced, reason}: câu hỏi/spec an toàn để hiện và lưu. */
 export function guardModelText(raw, kind, mode, fallback = null) {
-  const text = String(raw ?? '').replace(/<think>[\s\S]*?<\/think>/g, '').trim().slice(0, kind === 'question' ? 500 : 4000);
+  let text = String(raw ?? '').replace(/<think>[\s\S]*?<\/think>/g, '');
+  // Model hay chép lại dòng chỉ dẫn hướng hỏi của prompt vào cuối spec: cắt đi, không phải lời người dùng.
+  if (kind === 'summary') text = text.replace(/^\s*(?:Hướng|Bối cảnh cho bạn)\b.*$/gmu, '');
+  text = text.trim().slice(0, kind === 'question' ? 500 : 4000);
   const reason = violation(text);
   if (!reason) return { text, replaced: false, reason: null };
   return { text: fallback ?? FALLBACK_QUESTION[mode] ?? FALLBACK_QUESTION.ask, replaced: true, reason };

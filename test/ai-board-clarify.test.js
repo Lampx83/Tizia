@@ -132,6 +132,8 @@ test('questions stream token by token in the requester tone, then a confirmed su
     const claim = app.store.claimNext({ workerId: 'w1', mode: 'shadow', intent: 'precheck' });
     const snapshot = app.store.getLeasedSnapshot(claim.id, 'w1', claim.lease_token);
     assert.match(snapshot.request.clarified_spec, /nút cao 48px/);
+    // The worker also gets the requester's own words: the summary may misname the element.
+    assert.match(snapshot.request.clarified_spec, /Nguyên văn người dùng:\n- Tiêu đề: .+\n- Mô tả: làm cho đẹp hơn\n- Đáp: Trang chủ Tiểu học, nút Bắt đầu nhỏ quá$/);
     assert.equal(snapshot.request.detail, 'làm cho đẹp hơn'); // original kept
     assert.equal(snapshot.clarification_incomplete, false);
     const kinds = db.prepare('SELECT role, author_name FROM request_messages ORDER BY id').all().map((m) => m.role);
@@ -183,6 +185,9 @@ test('model text that claims work was done, leaks PII or crosses a hard rule is 
   }
   assert.equal(guardModelText('Bạn đã thử tải lại trang chưa?', 'question', 'ask').replaced, false);
   assert.equal(guardModelText('<think>x</think>Trang nào ạ?', 'question', 'ask').text, 'Trang nào ạ?');
+  // Seen live: the summary echoed the prompt's direction line at the end.
+  const spec = 'Trang / chức năng: trang trường\nNgoài phạm vi: chưa rõ\n\nHướng: Yêu cầu còn mơ hồ: hỏi điều quan trọng nhất còn thiếu.';
+  assert.equal(guardModelText(spec, 'summary', 'ask').text, 'Trang / chức năng: trang trường\nNgoài phạm vi: chưa rõ');
 });
 
 test('twenty model turns a day per person, then a polite refusal', async () => {

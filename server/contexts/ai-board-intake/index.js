@@ -13,7 +13,7 @@ import { answersClear } from '../../ai-board/clarity-rules.js';
 import { RequestValidationError, WorkerContractError } from '../../ai-board/store.js';
 import { resolveAIModel } from '../../ai-model-router.js';
 import {
-  DAILY_TURNS, MAX_QUESTIONS, checkAnswer, conversationText, nextStep, ollamaStreamer, plainSpec, questionPrompt,
+  DAILY_TURNS, MAX_QUESTIONS, checkAnswer, conversationText, nextStep, ollamaStreamer, plainSpec, questionPrompt, withUserWords,
   specPrompt, streamGuarded,
 } from './clarify.js';
 
@@ -185,8 +185,9 @@ function attachClarify(router, { db, store, profiles, requireAuth, requireStrict
     if (intake.block) return res.status(422).json({ error: 'request_rejected', message: intake.message });
     try {
       // Server quyết "đã rõ": hỏi hết 5 câu mới tóm tắt = vẫn mơ hồ (cờ cho cổng 2.5), bất kể trình duyệt gửi gì.
-      const { asked } = store.getClarification(req.params.id, req.user.id);
-      res.json(store.confirmClarification(req.params.id, req.user.id, { spec, complete: asked < MAX_QUESTIONS }));
+      const { request, turns, asked } = store.getClarification(req.params.id, req.user.id);
+      const full = spec.trim().length >= 10 ? withUserWords(spec, request, turns) : spec; // ngắn quá: store báo 400
+      res.json(store.confirmClarification(req.params.id, req.user.id, { spec: full, complete: asked < MAX_QUESTIONS }));
     } catch (error) { sendError(res, error); }
   });
 }
