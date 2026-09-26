@@ -12,7 +12,6 @@ from __future__ import annotations
 import fnmatch
 import posixpath
 import re
-import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -49,11 +48,7 @@ class Skill:
     sections: dict  # {1: text, 3: text}
 
 
-def fold(text: str) -> str:
-    """Bỏ dấu tiếng Việt, đ→d, chữ thường, mọi ký tự không chữ/số → 1 khoảng trắng."""
-    text = unicodedata.normalize("NFD", (text or "").lower().replace("đ", "d"))
-    text = "".join(c for c in text if not unicodedata.combining(c))
-    return " ".join(re.sub(r"[^a-z0-9]+", " ", text).split())
+fold = file_context.fold
 
 
 def _csv(value: str) -> tuple[str, ...]:
@@ -175,10 +170,10 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
         targets = [file] if file else _mentioned_files(request_text, source, commit)
         # Chữ người dùng nhắc có thể không nằm ở trang trong dòng [Trang: …] mà ở module JS trang đó import:
         # gate 1 thì đưa module đó lên đầu target (model 8B/14B bỏ qua gợi ý nếu chỉ là 1 dòng dữ liệu).
-        hits, users = tools.find_text(source, commit, file_context.phrases(request.get("subject"),
-                                                                           request.get("body"), thread))
         pages = [t for t in targets if t.endswith(".html")]
-        render, render_words = ([], []) if file else tools.renderers(hits, users, pages)
+        said = file_context.phrases(request.get("subject"), request.get("body"), thread)
+        hits, users = tools.find_text(source, commit, said, pages)
+        render, render_words = ([], []) if file else tools.renderers(source, commit, said, pages)
         if render:  # trang không chứa chữ đó: bỏ trang khỏi target, budget dành cho module render
             targets = render
             parts.append(f"LƯU Ý: chữ người dùng nhắc KHÔNG nằm trong {', '.join(pages)}; trang hiển thị nó qua "

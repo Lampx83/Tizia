@@ -2,6 +2,7 @@
 import code_index
 import codegraph
 import context
+import file_context
 import memory
 import pytest
 import tools
@@ -139,11 +140,35 @@ def test_note_used_only_when_hash_matches(repo, tmp_path):
 
 # ── locate: chữ người dùng nhắc → file thật, kể cả JS dữ liệu ───────────────
 
-def test_phrases_keep_quoted_and_title_case_names_not_sentence_starts():
-    import file_context
-    assert file_context.phrases("Thẻ IT Game Master che mất nút",
-                                "[Trang: 💻 Trường Công nghệ] /school.html\nNút \"Bắt đầu học\" ở trang chủ Tiểu học") \
-        == ["IT Game Master", "Bắt đầu học"]
+def test_phrases_are_folded_2_to_5_word_runs_without_page_line():
+    out = file_context.phrases("Thẻ IT Game Master che mất nút",
+                               "[Trang: 💻 Trường Công nghệ] /school.html\nnút \"bắt đầu học\" ở trang chủ")
+    assert {"it game master", "bat dau hoc", "bat dau", "the it game master che"} <= set(out)
+    assert all(2 <= len(p.split()) <= 5 for p in out)
+    assert not any("cong nghe" in p for p in out)            # dòng [Trang: …] FAB tự thêm bị bỏ
+    assert "cua trang" not in file_context.phrases("của trang")  # cụm toàn stopword bị bỏ
+    assert file_context.fold("Đổi TRƯỜNG — Bắt đầu") == "doi truong bat dau"
+
+
+def test_visible_text_takes_text_nodes_and_string_pieces_not_code():
+    html = '<h1>Trường ảo</h1>\n<script>\nconst x = `<b>Bắt đầu học</b> ${n} bài`; // it\'s code\nel.className = "btn";\n</script>'
+    assert code_index.visible_text("public/a.html", html) == [(1, "Trường ảo"), (3, "Bắt đầu học")]  # 1 từ: bỏ
+    assert code_index.visible_text("public/a.js", "f('Chơi lại nhé', 'id')\n") == [(1, "Chơi lại nhé")]
+
+
+def test_locate_lowercase_description_finds_the_label_via_the_index(repo, tmp_path):
+    src, _ = repo
+    sha = _commit(src, {
+        "public/js/start.js": "export function showStart() {\n  return `<button class=\"go\">Bắt đầu</button>`;\n}\n",
+        "public/js/other.js": "export const TIP = 'Bắt đầu nhỏ, đi đường dài';\n",
+        "public/start.html": "<script type=\"module\">\nimport { showStart } from './js/start.js';\n</script>\n",
+    })
+    hits, _ = tools.find_text(src, sha, file_context.phrases("nút bắt đầu nhỏ quá"), ["public/start.html"])
+    assert hits[0][:2] == ("public/js/start.js", "2")        # file trang tải được lên trước cụm hiếm hơn ở nơi khác
+    assert ("public/js/other.js", "1", "export const TIP = 'Bắt đầu nhỏ, đi đường dài';") in hits
+    ctx = context.build_context(1, {"subject": "nút bắt đầu nhỏ quá", "body": "[Trang: x] /start.html\n"}, None,
+                                src, sha, memory_path=tmp_path / "lessons.jsonl")
+    assert "public/js/start.js:2|" in ctx["text"]
 
 
 def test_locate_finds_text_in_a_data_module_and_the_page_importing_its_renderer(repo, tmp_path):
@@ -160,6 +185,7 @@ def test_locate_finds_text_in_a_data_module_and_the_page_importing_its_renderer(
                                 None, src, sha, memory_path=tmp_path / "lessons.jsonl")
     assert ctx["used_tools"][0] == "locate" and "achievements.js:2|" in ctx["text"]
     assert tools.run("locate", src, sha, {"phrases": ["không có ở đâu"]}, 800) == ""
+    assert "achievements.js:2|" in tools.run("locate", src, sha, {"phrases": ["it game master"]}, 800)  # viết thường
     # The FAB's [Trang: …] line names page.html, which does not contain the text: gate 1 targets the renderer.
     ctx = context.build_context(1, {"subject": "Thẻ IT Game Master che mất nút",
                                     "body": "[Trang: Trường CNTT] /page.html\nđè lên nút con cú"},

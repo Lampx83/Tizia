@@ -7,6 +7,7 @@ trả text ≤ `budget` ký tự, và không bao giờ raise (lỗi git → chu�
 """
 from __future__ import annotations
 
+import functools
 import posixpath
 import re
 from dataclasses import dataclass
@@ -85,76 +86,119 @@ def grep(source, sha: str, *, words: list[str], file: str | None = None, path: s
     return "file khớp từ khoá: " + ", ".join(f"{f} ({n})" for n, f in hits[:8]) if hits else ""
 
 
-# Chữ hiển thị có thể nằm trong JS (dữ liệu, component render) chứ không chỉ trong trang .html.
-_UI_FILES = ("public/*.html", "public/*.js", "public/*.css")
+def _files_with(index: dict, gram: str) -> list[str]:
+    """File có cụm (đã fold) nằm trọn trong 1 mảnh chữ hiển thị."""
+    words = gram.split()
+    candidates = set.intersection(*(index["words"].get(w, set()) for w in words)) if words else set()
+    return sorted(f for f in candidates if any(f" {gram} " in t for _, t in index["files"][f]["text"]))
 
 
-def _grep_lines(source, sha: str, args: list[str]) -> list[tuple[str, str, str]]:
-    """git grep -n → [(file, dòng, nội dung)]; không khớp/lỗi → []."""
+def _reach(files: dict, pages: list[str]) -> dict[str, int]:
+    """{file: số bước import từ trang} theo đồ thị import thật (script src, import, import('…') tĩnh, export … from)."""
+    depth = {p: 0 for p in pages if p in files}
+    queue = list(depth)
+    for file in queue:
+        for module in files[file]["imports"]:
+            if module in files and module not in depth:
+                depth[module] = depth[file] + 1
+                queue.append(module)
+    return depth
+
+
+@functools.lru_cache(maxsize=8)
+def _ranked(source: str, commit: str, grams: tuple, pages: tuple) -> tuple[dict, dict, list]:
+    """(index, depth, [(cụm, file có cụm — gần trang trước)]). Thứ tự cụm: có trong file trang tải được (đồ thị
+    import) trước, rồi hiếm nhất trên toàn chỉ mục (df nhỏ = IDF lớn), rồi dài hơn; bỏ cụm nằm trong cụm đã chọn
+    mà không thêm file nào. Cache: find_text và renderers cùng hỏi 1 câu."""
+    index = code_index.ui_index(source, commit)
+    depth = _reach(index["files"], list(pages))
+    found = {g: _files_with(index, g) for g in grams}
+    chosen: list[tuple[str, list[str]]] = []
+    for gram in sorted((g for g in grams if found[g]),
+                       key=lambda g: (not any(f in depth for f in found[g]), len(found[g]), -g.count(" "))):
+        if len(chosen) < file_context.MAX_PHRASES and not any(
+                f" {gram} " in f" {c} " and set(found[gram]) <= set(files) for c, files in chosen):
+            chosen.append((gram, sorted(found[gram], key=lambda f: (f not in depth, depth.get(f, 0), f))))
+    return index, depth, chosen
+
+
+def _rank(source, sha: str, phrases: list[str], pages) -> tuple[dict, dict, list]:
+    """Resolve sha rồi _ranked. Raise OSError nếu git lỗi."""
+    commit = code_index.git(source, "rev-parse", "--verify", f"{sha}^{{commit}}").decode().strip()
+    grams = tuple(dict.fromkeys(g for g in map(file_context.fold, phrases) if g))
+    return _ranked(str(source), commit, grams, tuple(pages))
+
+
+def _stems(files) -> set[str]:
+    """achievements.js → achievement; path-renderer.js → pathrenderer (so với tên hàm viết thường). Chỉ file JS."""
+    stems = {re.sub(r"[^a-z0-9]", "", posixpath.splitext(posixpath.basename(f))[0].lower()).rstrip("s")
+             for f in files if f.endswith((".js", ".mjs"))}
+    return {s for s in stems if len(s) >= file_context.MIN_STEM}
+
+
+def find_text(source, sha: str, phrases: list[str], pages: list[str] = ()) -> tuple[list, list]:
+    """(hits, users): cụm người dùng nhắc (bỏ dấu, không cần hoa) khớp chỉ mục chữ hiển thị html/js của public/,
+    theo thứ tự _ranked. users = dòng `import {…}` có tên chứa stem file JS chứa chữ (component render dữ liệu đó).
+    Lỗi git → ([], [])."""
     try:
-        raw = code_index.git(source, "grep", "-n", "-i", "-I", *args).decode("utf-8", "replace")
+        index, _, chosen = _rank(source, sha, phrases, pages)
     except OSError:
-        return []  # exit 1 = không khớp
-    return [(p[1], p[2], p[3].strip()[:160]) for p in (line.split(":", 3) for line in raw.splitlines()) if len(p) == 4]
-
-
-def find_text(source, sha: str, phrases: list[str]) -> tuple[list, list]:
-    """(hits, users): dòng chứa chữ người dùng nhắc trong html/js/css của public/; chữ nằm ở file dữ liệu
-    public/js/domains/<d>/<kind>s.js → users = các dòng `import … from` nhắc tới <kind> (component render nó).
-    ponytail: 1 bước lần theo tên file, đồ thị import thật nếu quy ước này hụt."""
-    if not phrases:
         return [], []
-    hits = _grep_lines(source, sha, ["-F", *[x for p in phrases for x in ("-e", p)], sha, "--", *_UI_FILES])
-    kinds = {posixpath.splitext(posixpath.basename(f))[0].rstrip("s") for f, _, _ in hits if "/js/domains/" in f}
-    users = [u for kind in sorted(kinds) if len(kind) >= 4
-             for u in _grep_lines(source, sha, ["-e", "import ", "--and", "-e", " from ", "--and", "-e", kind, sha, "--", *_UI_FILES])
-             if "/js/domains/" not in u[0]]
+    hits = list(dict.fromkeys((f, str(n), index["files"][f]["lines"][n - 1].strip()[:160]) for g, files in chosen
+                              for f in files for n, t in index["files"][f]["text"] if f" {g} " in t))
+    texts = {f for f, _, _ in hits}
+    stems = _stems(texts)
+    users = [(f, str(n), raw) for f in sorted(index["files"]) if f not in texts
+             for _, names, n, raw in index["files"][f]["uses"] if any(s in x.lower() for x in names for s in stems)]
     return hits, users
 
 
-_FROM = re.compile(r"""\bfrom\s+['"](\.{1,2}/[^'"]+\.m?js)['"]""")
-
-
-_NAMES = re.compile(r"import\s*\{([^}]*)\}")
-
-
-def renderers(hits: list, users: list, pages: list[str]) -> tuple[list[str], list[str]]:
-    """(module, từ khoá) — module JS mà trang import để hiện chữ người dùng nhắc, khi chữ đó không nằm trong
-    chính trang. Module có hàm show…/render…<kind> lên trước; từ khoá = <kind> + tên hàm đó (để trích đúng đoạn)."""
-    if not hits or not pages or any(f in pages for f, _, _ in hits):
+def renderers(source, sha: str, phrases: list[str], pages: list[str]) -> tuple[list[str], list[str]]:
+    """(module, từ khoá) — khi cụm đứng đầu (_ranked) không nằm trong chính trang: module trong đồ thị import của
+    trang được import kèm tên chứa stem file JS chứa cụm (vd showAchievementToast ← achievements.js). Chỉ xét file
+    chứa cụm gần trang nhất (cụm phổ biến như "bắt đầu" có ở cả trăm file). show…/render… trước, rồi gần trang hơn.
+    Từ khoá = stem + tên đó (để trích đúng đoạn)."""
+    if not pages:
         return [], []
-    kinds = {posixpath.splitext(posixpath.basename(f))[0].rstrip("s").lower() for f, _, _ in hits if "/js/domains/" in f}
-    found = []
-    for file, _, text in users:
-        path, names = _FROM.search(text), _NAMES.search(text)
-        if file not in pages or not path:
-            continue
-        symbols = [n.strip() for n in (names.group(1) if names else "").split(",")
-                   if any(k in n.lower() for k in kinds)]
-        shows = any(re.match(r"(show|render)", s) for s in symbols)
-        found.append((not shows, posixpath.normpath(posixpath.join(posixpath.dirname(file), path.group(1))), symbols))
-    found.sort(key=lambda row: row[0])
-    if found and not found[0][0]:  # có module show…/render…: chỉ giữ loại đó
-        found = [row for row in found if not row[0]]
-    modules = list(dict.fromkeys(m for _, m, _ in found))[:2]
-    words = list(dict.fromkeys([*sorted(kinds), *(s for _, m, syms in found if m in modules for s in syms)]))
+    try:
+        index, depth, chosen = _rank(source, sha, phrases, pages)
+    except OSError:
+        return [], []
+    if not chosen or any(f in pages for f in chosen[0][1]):
+        return [], []
+    near = [f for f in chosen[0][1] if f in depth]  # đồ thị hụt (import động theo biến) → dùng mọi file chứa cụm
+    stems = _stems([f for f in near if depth[f] == depth[near[0]]] if near else chosen[0][1])
+    rows = []
+    for importer in sorted(depth, key=lambda f: (depth[f], f)):
+        for module, names, _, _ in index["files"][importer]["uses"]:
+            symbols = [n for n in names if any(s in n.lower() for s in stems)]
+            if symbols:
+                rows.append(((not any(re.match(r"(show|render)", s) for s in symbols), depth[importer]), module, symbols))
+    best = [row for row in rows if row[0] == min(r[0] for r in rows)] if rows else []
+    modules = list(dict.fromkeys(m for _, m, _ in best))[:file_context.MAX_RENDERERS]
+    symbols = list(dict.fromkeys(s for _, m, syms in best if m in modules for s in syms))
+    words = [s for s in sorted(stems) if any(s in x.lower() for x in symbols)] + symbols
     return modules, words
 
 
 def locate(source, sha: str, *, phrases: list[str], prefer: list[str] = (), budget: int = 1200) -> str:
     """Chữ người dùng nhắc → `file:dòng| nội dung` (file trong `prefer` lên trước), rồi dòng import render nó."""
-    return format_located(*find_text(source, sha, phrases), prefer=prefer, budget=budget)
+    pages = [p for p in prefer if p.endswith(".html")]
+    return format_located(*find_text(source, sha, phrases, pages), prefer=prefer, budget=budget)
 
 
 def format_located(hits: list, users: list, *, prefer=(), budget: int = 1200) -> str:
     hits = sorted(hits, key=lambda row: row[0] not in prefer)
     users = sorted(users, key=lambda row: row[0] not in prefer)
     lines, used = [], 0
-    for title, rows in (("chữ người dùng nhắc nằm ở:", hits), ("dữ liệu đó được dùng ở (import):", users)):
+    # Hit nhiều (cụm phổ biến) không được đẩy mất dòng import — đường tới component render.
+    reserve = min(int(budget * file_context.USERS_SHARE), sum(len(f"{f}:{n}| {t}") + 1 for f, n, t in users) + 40)
+    for title, rows, cap in (("chữ người dùng nhắc nằm ở:", hits, budget - reserve),
+                             ("dữ liệu đó được dùng ở (import):", users, budget)):
         block = [title] if rows else []
         for file, no, text in rows:
             item = f"{file}:{no}| {text}"
-            if used + len(item) + len(title) + 2 > budget:
+            if used + len(item) + len(title) + 2 > cap:
                 break
             block.append(item)
             used += len(item) + 1
@@ -184,7 +228,7 @@ TOOLS: dict[str, Tool] = {t.name: t for t in (
          {"type": "object", "properties": {"file": _STR}, "required": ["file"]}, outline),
     Tool("grep", "Cửa sổ dòng quanh từ khoá trong 1 file; không có file thì liệt kê file khớp trong path.",
          {"type": "object", "properties": {"words": _WORDS, "file": _STR, "path": _STR}, "required": ["words"]}, grep),
-    Tool("locate", "Tìm chữ hiển thị người dùng nhắc trong html/js/css của public/, trả file:dòng.",
+    Tool("locate", "Tìm chữ hiển thị người dùng nhắc (không cần dấu/hoa) trong html/js của public/, trả file:dòng.",
          {"type": "object", "properties": {"phrases": _WORDS}, "required": ["phrases"]}, locate),
     Tool("graph", "Gợi ý file liên quan từ graphify graph.json nếu có (không phải nguồn sự thật).",
          {"type": "object", "properties": {"question": _STR}, "required": ["question"]}, graph),

@@ -11,6 +11,8 @@ CLI: python code_index.py build --source <repo> --sha <sha>
 from __future__ import annotations
 
 import argparse
+import bisect
+import functools
 import json
 import posixpath
 import re
@@ -18,6 +20,8 @@ import subprocess
 import time
 from html.parser import HTMLParser
 from pathlib import Path
+
+import file_context
 
 DEFAULT_PATH = Path(__file__).resolve().parents[1] / "memory" / "code_index.json"
 ROOTS = ("public", "server/contexts")
@@ -35,7 +39,8 @@ _KEYFRAME_STEP = re.compile(r"^(from|to|[\d.]+%)$")
 _EXPORT_DECL = re.compile(r"^\s*export\s+(?:default\s+)?(?:async\s+)?(?:function\*?|class|const|let|var)\s+([A-Za-z_$][\w$]*)", re.M)
 _EXPORT_LIST = re.compile(r"^\s*export\s*\{([^}]*)\}", re.M)
 _EXPORT_DEFAULT = re.compile(r"^\s*export\s+default\b", re.M)
-_IMPORT = re.compile(r"""(?:\bimport\s+(?:[^'"()]*?\bfrom\s*)?|\bimport\s*\(\s*)['"]([^'"]+)['"]""")
+_IMPORT = re.compile(r"""(?:\bimport\s+(?:[^'"()]*?\bfrom\s*)?|\bimport\s*\(\s*"""
+                     r"""|\bexport\s*(?:\*(?:\s*as\s+[\w$]+)?|\{[^}]*\})\s*from\s*)['"]([^'"]+)['"]""")
 
 
 def git(source, *args: str, input: bytes | None = None) -> bytes:
@@ -89,6 +94,7 @@ class _Page(HTMLParser):
         self.owner = owner
         self.tags, self.ids, self.classes, self.css, self.js, self.pages = [], [], [], [], [], []
         self.headings, self.styles, self.scripts = [], [], []
+        self.chunks = []  # (dòng, "script"/"style"/None, data) — cho visible_text
         self.inline_handlers = 0
         self._in, self._heading = None, None
 
@@ -119,6 +125,7 @@ class _Page(HTMLParser):
             self._heading = None
 
     def handle_data(self, data):
+        self.chunks.append((self.getpos()[0], self._in, data))
         if self._in == "style":
             self.styles.append(data)
         elif self._in == "script":
@@ -212,6 +219,82 @@ def _parse_many(source, blobs: dict[str, tuple[str, int]]) -> dict[str, dict]:
     paths = sorted(blobs)
     texts = _read_blobs(source, [blobs[p][0] for p in paths])
     return {p: {"hash": blobs[p][0], **parse(p, t)} for p, t in zip(paths, texts)}
+
+
+# ── chữ hiển thị + đồ thị import (RAM, theo commit; không ghi vào code_index.json) ──
+# ponytail: tách literal bằng regex, không parse JS thật — dấu ' trong regex literal / template lồng nhau làm lệch
+# vài mảnh trong file đó; đổi sang tokenizer JS nếu locate trượt vì lý do này.
+_JS_TOKEN = re.compile(r"""(?=[/'"`])(?://[^\n]*|/\*.*?\*/|'([^'\\\n]*(?:\\.[^'\\\n]*)*)'"""
+                       r"""|"([^"\\\n]*(?:\\.[^"\\\n]*)*)"|`([^`\\]*(?:\\.[^`\\]*)*)`)""", re.S)
+_PIECE = re.compile(r"<[^>]*>|\$\{[^}]*\}|([^<$]+)")
+_NAMED = re.compile(r"""\bimport\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]""")
+
+
+def _js_texts(js: str, first: int = 1) -> list[tuple[int, str]]:
+    """(dòng, mảnh) — chữ trong string/template literal, bỏ thẻ HTML và ${…}; mảnh nhiều dòng tách từng dòng."""
+    newlines = [m.start() for m in re.finditer("\n", js)]
+    out = []
+    for lit in _JS_TOKEN.finditer(js):
+        group = lit.lastindex  # None = comment
+        if group is None or (" " not in lit.group(group) and "\t" not in lit.group(group)):
+            continue  # không khoảng trắng → không thể là cụm ≥ 2 từ
+        for piece in _PIECE.finditer(lit.group(group)):
+            if piece.group(1) is None:
+                continue
+            line = first + bisect.bisect_left(newlines, lit.start(group) + piece.start(1))
+            out += [(line + k, part) for k, part in enumerate(piece.group(1).split("\n")) if len(part) <= file_context.TEXT_MAX]
+    return out
+
+
+def visible_text(path: str, text: str) -> list[tuple[int, str]]:
+    """(dòng, chữ gốc) người dùng đọc thấy: text node HTML + mảnh chuỗi trong JS/<script>. Chỉ giữ mảnh có
+    khoảng trắng (cụm tìm kiếm luôn ≥ 2 từ) — 1 từ trần như 'click', 'btn' gần như luôn là code."""
+    if path.endswith(".html"):
+        page = _Page(path)
+        try:
+            page.feed(text)
+            page.close()
+        except Exception:  # noqa: BLE001 — giữ phần đã đọc
+            pass
+        found = []
+        for line, kind, data in page.chunks:
+            if kind == "script":
+                found += _js_texts(data, line)
+            elif kind is None:
+                found += [(line + k, part) for k, part in enumerate(data.split("\n"))]
+    else:
+        found = _js_texts(text)
+    return [(n, t) for n, t in ((n, " ".join(t.split())) for n, t in found) if " " in t]
+
+
+# ponytail: dựng lại cả chỉ mục mỗi process (~15–25 s cho ~30 MB html/js của public/, 1 lần/lượt chạy worker);
+# lưu theo blob hash vào ai-board/memory/ + chỉ dựng lại file đổi nếu thời gian này thành vấn đề.
+@functools.lru_cache(maxsize=2)
+def ui_index(source: str, commit: str) -> dict:
+    """Chỉ mục html/js dưới public/ ở `commit` (sha đã resolve — cache theo nó):
+    files[path] = {text: [(dòng, " fold ")], lines: [dòng gốc], uses: [(module, [tên import], dòng, dòng gốc)],
+                   imports: [path]}
+    words[từ fold] = {path} để lọc nhanh file ứng viên trước khi so cụm."""
+    blobs = {p: b for p, b in _blobs(source, commit, ["public"]).items() if not p.endswith(".css")}
+    paths = sorted(blobs)
+    files, words = {}, {}
+    for path, text in zip(paths, _read_blobs(source, [blobs[p][0] for p in paths])):
+        lines = text.split("\n")
+        imports = (parse(path, text)["links"]["js"] if path.endswith(".html")
+                   else _uniq(resolve(path, m) for m in _IMPORT.findall(text)))
+        found =[(n, t) for n, t in visible_text(path, text) if n <= len(lines)]
+        folded = file_context.fold_many([t for _, t in found])
+        texts = [(n, f" {t} ") for (n, _), t in zip(found, folded) if " " in t]
+        uses = []
+        for m in _NAMED.finditer(text):
+            module, line = resolve(path, m.group(2)), text.count("\n", 0, m.start()) + 1
+            if module:
+                uses.append((module, [n.split(" as ")[0].strip() for n in m.group(1).split(",") if n.strip()],
+                             line, lines[line - 1].strip()[:160]))
+        files[path] = {"text": texts, "lines": lines, "uses": uses, "imports": imports}
+        for word in set(" ".join(t for _, t in texts).split()):
+            words.setdefault(word, set()).add(path)
+    return {"files": files, "words": words}
 
 
 def load(path=DEFAULT_PATH) -> dict:

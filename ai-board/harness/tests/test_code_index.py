@@ -88,6 +88,8 @@ def test_parse_css_and_js_symbols():
     js = code_index.parse("public/js/app.js", APP)
     assert js["exports"] == ["start", "VERSION", "a", "bee"]
     assert js["imports"] == ["public/js/engine/x.js"]                  # package npm bỏ
+    barrel = "export { A } from './a.js';\nexport * from './b.js';\n"       # re-export = cạnh import thật
+    assert code_index.parse("public/js/i.js", barrel)["imports"] == ["public/js/a.js", "public/js/b.js"]
 
 
 # ── code_index: build / refresh / notes ─────────────────────────────────────
