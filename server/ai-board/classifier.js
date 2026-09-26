@@ -71,16 +71,21 @@ export async function classify(task, text, { env = process.env, fetchImpl = fetc
   return { model, probs: labelProbs(await res.json(), task) };
 }
 
-/** Both tasks for a new request. Each side is null when its call failed (old behaviour for that side). */
-export async function classifyRequest(title, detail, options) {
+/** Per-task mode (ticket 08): active acts, shadow is logged only (shadow: true), off skips the call. */
+export const taskMode = (task, modes) => modes?.[task] ?? CLASSIFIER.tasks[task].mode ?? 'active';
+
+/** Both tasks for a new request. A side is null when off or its call failed (old behaviour for that side). */
+export async function classifyRequest(title, detail, { modes, ...options } = {}) {
   const text = `${title ?? ''}\n${detail ?? ''}`;
-  const [clarity, danger] = await Promise.allSettled([classify('clarity', text, options), classify('danger', text, options)]);
+  const run = (task) => (taskMode(task, modes) === 'off' ? Promise.resolve(null) : classify(task, text, options));
+  const [clarity, danger] = await Promise.allSettled([run('clarity'), run('danger')]);
   const model = clarity.value?.model || danger.value?.model || null;
   if (!model) return null;
+  const shadow = (task) => taskMode(task, modes) === 'shadow';
   return {
     model,
-    clarity: clarity.value ? { probs: clarity.value.probs, ...decideClarity(clarity.value.probs) } : null,
-    danger: danger.value ? { probs: danger.value.probs, ...decideDanger(danger.value.probs) } : null,
+    clarity: clarity.value ? { probs: clarity.value.probs, ...decideClarity(clarity.value.probs), shadow: shadow('clarity') } : null,
+    danger: danger.value ? { probs: danger.value.probs, ...decideDanger(danger.value.probs), shadow: shadow('danger') } : null,
   };
 }
 

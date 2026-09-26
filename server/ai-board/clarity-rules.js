@@ -1,0 +1,54 @@
+// Luật cứng độ rõ (ticket 08): quyết định có cần làm rõ yêu cầu mà không cần model.
+// Danh sách từ ở clarity-rules.json; bộ phân loại logprobs chỉ bổ sung khi ở mode 'active'.
+import fs from 'node:fs';
+
+const RULES = JSON.parse(fs.readFileSync(new URL('./clarity-rules.json', import.meta.url), 'utf8'));
+const fold = (text) => text.normalize('NFD').replace(/\p{M}/gu, '').replace(/đ/g, 'd');
+const escape = (term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+');
+// "#" và "px" là ký hiệu (48px, #2563eb): dính liền số phía trước; "#" dính mã màu phía sau.
+const SYMBOLS = new Set(['#', 'px']);
+const pattern = (term) => new RegExp(
+  `${SYMBOLS.has(term) ? '' : '(?<![\\p{L}\\p{N}])'}${escape(term)}${term === '#' ? '' : '(?![\\p{L}])'}`, 'u');
+
+/** Chữ thường; gõ không dấu thì từ khoá cũng bỏ dấu (có dấu thì giữ, tránh "chủ" ≈ "chữ"). */
+function matcher(text) {
+  const lower = text.normalize('NFC').toLowerCase();
+  const ascii = !/[^\x00-\x7f]/.test(lower);
+  return (term) => pattern(ascii ? fold(term.toLowerCase()) : term.toLowerCase()).test(lower);
+}
+
+/** Bỏ dòng "[Trang: …] /url" do FAB tự thêm: không phải lời người dùng. */
+const userText = (title, detail) => `${title ?? ''}\n${String(detail ?? '').split('\n')
+  .filter((line) => !/^\s*\[Trang:/.test(line)).join('\n')}`;
+
+function broadReasons(text, has) {
+  const reasons = RULES.broad_keywords.filter(has).map((k) => `rộng: "${k}"`);
+  const bullets = (text.match(/^\s*(?:[-*•+]|\d+[.)])\s+/gm) || []).length;
+  if (bullets >= RULES.max_tasks) reasons.push(`rộng: ${bullets} gạch đầu dòng`);
+  const verbs = new Set(RULES.task_verbs.filter(has).map((v) => v.replace('xoá', 'xóa')));
+  if (verbs.size >= RULES.max_tasks) reasons.push(`rộng: ${verbs.size} việc (${[...verbs].join(', ')})`);
+  return reasons;
+}
+
+/** {needed, mode: 'split'|'ask'|null, reasons} cho yêu cầu mới. */
+export function checkClarity(title, detail) {
+  const text = userText(title, detail);
+  const has = matcher(text);
+  const broad = broadReasons(text, has);
+  const vague = [];
+  const words = text.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+  if (words < RULES.min_words) vague.push(`ngắn: ${words} từ`);
+  const concrete = RULES.concrete_objects.some(has);
+  vague.push(...RULES.vague_phrases.filter(has).filter(() => !concrete).map((p) => `chung chung: "${p}"`));
+  vague.push(...RULES.vague_pointers.filter(has).map((p) => `trỏ không rõ: "${p}"`));
+  if (broad.length) return { needed: true, mode: 'split', reasons: [...broad, ...vague] };
+  if (vague.length) return { needed: true, mode: 'ask', reasons: vague };
+  return { needed: false, mode: null, reasons: [] };
+}
+
+/** Grilling dừng theo luật: câu trả lời đã nêu đối tượng cụ thể và không còn quá rộng. */
+export function answersClear(answers) {
+  const text = answers.join('\n');
+  const has = matcher(text);
+  return RULES.concrete_objects.some(has) && broadReasons(text, has).length === 0;
+}

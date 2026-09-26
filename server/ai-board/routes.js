@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { assertConfirmed, LEASE_MS, PlanGuardrailError, RequestValidationError, WorkerContractError } from './store.js';
 import { checkIntake, recordIntakeFlags } from './intake-guard.js';
 import { classifyRequest as classifyWithModel, recordClassification } from './classifier.js';
+import { checkClarity } from './clarity-rules.js';
 
 // Không cấu hình model phân loại → không gọi gì (hành vi trước ticket 04).
 const defaultClassifyRequest = (title, detail) => (
@@ -38,9 +39,17 @@ export function attachAiBoardRequestRoutes(router, {
       console.warn('[ai-board] classifier unavailable:', error.message);
       return null;
     });
-    const modelLabels = (classified?.danger?.labels || []).map((key) => `model_${key}`);
-    let clarify = classified?.clarity && features.has('clarify')
-      ? { needed: classified.clarity.needed, mode: classified.clarity.mode } : { needed: false, mode: null };
+    // Ticket 08: kết quả model ở mode 'shadow' chỉ ghi log, không hành động.
+    const danger = classified?.danger?.shadow ? null : classified?.danger;
+    const modelLabels = (danger?.labels || []).map((key) => `model_${key}`);
+    // Làm rõ = luật cứng HOẶC model clarity 'active'; ghi lại nguồn để ticket 01 so sánh.
+    const rules = checkClarity(body.title, body.detail);
+    const model = classified?.clarity?.shadow ? null : classified?.clarity;
+    const source = [rules.needed && 'rules', model?.needed && 'model'].filter(Boolean);
+    let clarify = features.has('clarify') && source.length
+      ? { needed: true, mode: [rules.mode, model?.mode].includes('split') ? 'split' : 'ask' }
+      : { needed: false, mode: null };
+    const trace = classified || rules.needed ? { ...classified, rules, clarify: { ...clarify, source } } : null;
     try {
       const result = store.createRequestWithRoot({
         ownerUserId: req.user.id,
@@ -55,7 +64,7 @@ export function attachAiBoardRequestRoutes(router, {
       });
       if (result.created) {
         recordIntakeFlags(db, result.root_ticket_id, [...intake.labels, ...modelLabels]);
-        recordClassification(db, result.root_ticket_id, classified);
+        recordClassification(db, result.root_ticket_id, trace);
         if (clarify.needed && onClarify) {
           try {
             onClarify({ requestId: result.request_id, domain: ownerDomain, title: String(body.title || '').trim(),

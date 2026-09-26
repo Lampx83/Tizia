@@ -70,7 +70,7 @@ def classify(task: str, text: str, deps, budget, *, gate: float, db_path=None, p
     """{model, probs} via deps.call_model (metered + traced). None when no classifier model, no budget, or any
     error: callers keep the old behaviour (nothing extra blocked, no hard rule dropped)."""
     model = getattr(deps.models, "classifier_model", "")
-    if not model or not budget.tick():
+    if not model or task_mode(task) == "off" or not budget.tick():
         return None
     try:
         body = deps.call_model(model, build_prompt(task, text), gate=gate, budget=budget, db_path=db_path,
@@ -82,7 +82,17 @@ def classify(task: str, text: str, deps, budget, *, gate: float, db_path=None, p
         return None
 
 
+def task_mode(task: str) -> str:
+    """active acts, shadow only logs, off skips the call (ticket 08)."""
+    return CLASSIFIER["tasks"][task].get("mode", "active")
+
+
 def danger(text: str, deps, budget, **kwargs) -> dict | None:
-    """Danger task + decision, or None (see classify)."""
+    """Danger task + decision, or None (see classify). Shadow mode: probs kept, never escalates."""
     out = classify("danger", text, deps, budget, **kwargs)
-    return {**out, **decide_danger(out["probs"])} if out else None
+    if not out:
+        return None
+    decision = decide_danger(out["probs"])
+    if task_mode("danger") == "shadow":
+        decision.update(escalate=False, labels=[], shadow=True)
+    return {**out, **decision}

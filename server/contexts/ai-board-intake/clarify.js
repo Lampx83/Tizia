@@ -158,8 +158,8 @@ export function ollamaStreamer({ env = process.env, fetchImpl = fetch, timeoutMs
 }
 
 /** Next step after the requester's latest turn: another question, or the summary (complete = clear enough). */
-export function nextStep({ asked, clarity }) {
-  if (clarity && !clarity.needed) return { kind: 'summary', complete: true };
+export function nextStep({ asked, clarity, rulesClear = false }) {
+  if (rulesClear || (clarity && !clarity.needed)) return { kind: 'summary', complete: true };
   if (asked >= MAX_QUESTIONS) return { kind: 'summary', complete: false };
   return { kind: 'question', mode: clarity?.mode || 'ask' };
 }

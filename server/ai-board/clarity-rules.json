@@ -1,0 +1,10 @@
+{
+  "_comment": "Luật cứng độ rõ của yêu cầu (ticket 08), không cần model. Có dấu thì so trên văn bản có dấu; người dùng gõ không dấu thì so cả hai phía đã bỏ dấu. Sửa danh sách ở đây, không sửa code.",
+  "min_words": 6,
+  "vague_phrases": ["làm đẹp", "đẹp hơn", "cải thiện", "sửa lại", "tối ưu", "nâng cấp", "hay hơn", "tốt hơn", "xịn hơn", "chuyên nghiệp hơn"],
+  "vague_pointers": ["cái đó", "cái này", "chỗ này", "chỗ đó", "như trên", "như vậy"],
+  "concrete_objects": ["nút", "màu", "chữ", "cỡ chữ", "phông", "font", "bài", "bài tập", "câu hỏi", "đáp án", "ảnh", "hình", "video", "âm thanh", "tiêu đề", "menu", "bảng", "biểu đồ", "khung", "icon", "biểu tượng", "liên kết", "link", "thẻ", "trò chơi", "game", "điểm", "lớp", "môn", "px", "#"],
+  "broad_keywords": ["toàn bộ", "cả hệ thống", "làm lại", "tất cả các trang", "tất cả mọi", "mọi trang"],
+  "task_verbs": ["thêm", "sửa", "đổi", "xóa", "xoá", "bỏ", "tạo", "viết", "chuyển", "cập nhật"],
+  "max_tasks": 3
+}

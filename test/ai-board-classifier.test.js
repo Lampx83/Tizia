@@ -158,9 +158,33 @@ test('the model adds human review but never blocks; hard rules still block; outa
     assert.ok(tags.includes('guard:human_review') && tags.includes('guard:model_politics_religion'));
     const blocked = await app.post('classifier-req-004', { title: 'x', detail: 'dit me cai trang' });
     assert.equal(blocked.status, 422);
-    const outage = await app.post('classifier-req-005', { title: 'Đổi màu', detail: 'nút xanh hơn' });
+    // Clear by the hard rules too (ticket 08): long enough, names a concrete object.
+    const outage = await app.post('classifier-req-005', { title: 'Đổi màu nút Gửi', detail: 'trang pricing, nút xanh hơn' });
     assert.equal(outage.status, 200);
     assert.equal(outage.json.clarify.needed, false);
+  } finally {
+    await app.close();
+  }
+});
+
+test('ticket 08: hard rules clarify without a model; shadow model results are logged but never act', async () => {
+  const db = fixtureDb();
+  const shadowVague = { probs: { clear: 0.1, vague: 0.9 }, ...decideClarity({ clear: 0.1, vague: 0.9, too_broad: 0 }), shadow: true };
+  const shadowRisky = { probs: { safe: 0.1, sexual: 0.9 }, ...decideDanger({ safe: 0.1, sexual: 0.9 }), shadow: true };
+  const replies = [null, result(shadowVague, shadowRisky)];
+  const app = await serve(db, async () => replies.shift());
+  try {
+    const broad = await app.post('classifier-req-101', { title: 'Làm lại toàn bộ trang web', detail: 'cho hiện đại' });
+    assert.deepEqual(broad.json.clarify, { needed: true, mode: 'split' });
+    const clear = await app.post('classifier-req-102', { title: 'Đổi màu nút Gửi trang pricing sang xanh #2563eb', detail: '' });
+    assert.equal(clear.json.clarify.needed, false);
+    const tags = db.prepare('SELECT tag FROM ai_ticket_tags').all().map((r) => r.tag);
+    assert.ok(!tags.includes('guard:human_review'));
+    const events = db.prepare("SELECT internal_detail FROM ai_events WHERE event_type='request_classified' ORDER BY id")
+      .all().map((r) => JSON.parse(r.internal_detail));
+    assert.deepEqual(events[0].clarify.source, ['rules']);
+    assert.equal(events[1].clarity.shadow, true); // kept for ticket 01
+    assert.deepEqual(events[1].clarify.source, []);
   } finally {
     await app.close();
   }

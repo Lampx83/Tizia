@@ -102,3 +102,16 @@ def test_ollama_client_sends_top_level_logprob_fields(monkeypatch):
 def test_shared_config_is_the_server_file():
     server = json.loads((classifier.CONFIG_PATH).read_text(encoding="utf-8"))
     assert classifier.CLASSIFIER == server and not server["calibrated"]
+
+
+def test_shadow_danger_is_logged_but_never_escalates_and_off_skips_the_call(monkeypatch):
+    """Ticket 08: per-task mode from the shared config."""
+    sure = [["F", math.log(0.9)], ["A", math.log(0.1)]]
+    monkeypatch.setitem(classifier.CLASSIFIER["tasks"]["danger"], "mode", "shadow")
+    out = intake_guard.run("Thêm bài", "một bài lịch sử", deps_with(Classifying(sure)), Budget())
+    assert out["verdict"] == "allow" and out["classifier"]["shadow"] is True
+    assert out["classifier"]["probs"]["politics_religion"] > 0.8
+    monkeypatch.setitem(classifier.CLASSIFIER["tasks"]["danger"], "mode", "off")
+    deps = deps_with(Classifying(sure))
+    assert intake_guard.run("Thêm bài", "một bài lịch sử", deps, Budget())["verdict"] == "allow"
+    assert not any(c["model"] == "fake-classifier" for c in deps.models.calls)

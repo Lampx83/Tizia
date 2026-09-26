@@ -8,7 +8,8 @@
 
 // Cùng từ vựng users.role: pupil = học sinh, student = sinh viên.
 import { checkIntake } from '../../ai-board/intake-guard.js';
-import { classify, decideClarity } from '../../ai-board/classifier.js';
+import { classify, decideClarity, taskMode } from '../../ai-board/classifier.js';
+import { answersClear } from '../../ai-board/clarity-rules.js';
 import { RequestValidationError, WorkerContractError } from '../../ai-board/store.js';
 import { resolveAIModel } from '../../ai-model-router.js';
 import {
@@ -86,14 +87,18 @@ export function clarifyNotifier(createNotification) {
   });
 }
 
-// Clarity mode lúc gửi (ask | split) từ event phân loại (ticket 04); thiếu thì hỏi thường.
+// Clarity mode lúc gửi (ask | split) từ event phân loại (luật + model, ticket 08); thiếu thì hỏi thường.
 function initialMode(db, rootId) {
   const row = db.prepare(`SELECT internal_detail FROM ai_events WHERE ticket_id=? AND event_type='request_classified'`).get(rootId);
-  try { return JSON.parse(row?.internal_detail || '{}')?.clarity?.mode || 'ask'; } catch { return 'ask'; }
+  try {
+    const detail = JSON.parse(row?.internal_detail || '{}');
+    return detail.clarify?.mode || detail.clarity?.mode || 'ask';
+  } catch { return 'ask'; }
 }
 
+// Model clarity chỉ quyết định dừng sớm khi ở mode 'active'; shadow/off không tốn GPU cho mỗi lượt.
 const defaultClarity = async (text) => {
-  if (!process.env.OLLAMA_URL || !process.env.AI_BOARD_CLASSIFIER_MODEL) return null;
+  if (!process.env.OLLAMA_URL || !process.env.AI_BOARD_CLASSIFIER_MODEL || taskMode('clarity') !== 'active') return null;
   const { probs } = await classify('clarity', text);
   return decideClarity(probs);
 };
@@ -149,8 +154,9 @@ function attachClarify(router, { db, store, profiles, requireAuth, requireStrict
         send({ t: 'done', kind: last.kind, text: last.text, asked, max: MAX_QUESTIONS, complete: asked < MAX_QUESTIONS });
         return res.end();
       }
-      const clarity = hasAnswer ? await classifyClarity(conversationText(request, turns)).catch(() => null) : null;
-      const step = asked === 0 ? { kind: 'question', mode: initialMode(db, request.root_id) } : nextStep({ asked, clarity });
+      const rulesClear = answersClear(turns.filter((t) => t.kind === 'answer').map((t) => t.text));
+      const clarity = hasAnswer && !rulesClear ? await classifyClarity(conversationText(request, turns)).catch(() => null) : null;
+      const step = asked === 0 ? { kind: 'question', mode: initialMode(db, request.root_id) } : nextStep({ asked, clarity, rulesClear });
       const mode = step.mode || initialMode(db, request.root_id);
       const profile = profiles.get(req.user.id);
       const isQuestion = step.kind === 'question';
