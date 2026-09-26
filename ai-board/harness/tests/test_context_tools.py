@@ -135,3 +135,39 @@ def test_note_used_only_when_hash_matches(repo, tmp_path):
     ctx = context.build_context(1, {"subject": "đổi màu chữ school.html"}, None, src, sha2, index_path=index_path)
     assert "ghi chú" not in ctx["text"]
 
+
+
+# ── locate: chữ người dùng nhắc → file thật, kể cả JS dữ liệu ───────────────
+
+def test_phrases_keep_quoted_and_title_case_names_not_sentence_starts():
+    import file_context
+    assert file_context.phrases("Thẻ IT Game Master che mất nút",
+                                "[Trang: 💻 Trường Công nghệ] /school.html\nNút \"Bắt đầu học\" ở trang chủ Tiểu học") \
+        == ["IT Game Master", "Bắt đầu học"]
+
+
+def test_locate_finds_text_in_a_data_module_and_the_page_importing_its_renderer(repo, tmp_path):
+    src, _ = repo
+    sha = _commit(src, {
+        "public/js/domains/it/achievements.js": "export const A = [\n  { id: 'm', title: 'IT Game Master' },\n];\n",
+        "public/js/engine/path-renderer.js": "export function showAchievementToast(a) {}\n",
+        "public/page.html": "<script type=\"module\">\nimport { showAchievementToast } from './js/engine/path-renderer.js';\n</script>\n",
+    })
+    out = tools.run("locate", src, sha, {"phrases": ["IT Game Master"]}, 800)
+    assert "public/js/domains/it/achievements.js:2|" in out
+    assert "public/page.html:2| import { showAchievementToast }" in out
+    ctx = context.build_context(1, {"subject": "Thẻ IT Game Master che mất nút", "body": "đè lên nút con cú"},
+                                None, src, sha, memory_path=tmp_path / "lessons.jsonl")
+    assert ctx["used_tools"][0] == "locate" and "achievements.js:2|" in ctx["text"]
+    assert tools.run("locate", src, sha, {"phrases": ["không có ở đâu"]}, 800) == ""
+    # The FAB's [Trang: …] line names page.html, which does not contain the text: gate 1 targets the renderer.
+    ctx = context.build_context(1, {"subject": "Thẻ IT Game Master che mất nút",
+                                    "body": "[Trang: Trường CNTT] /page.html\nđè lên nút con cú"},
+                                None, src, sha, memory_path=tmp_path / "lessons.jsonl")
+    assert "KHÔNG nằm trong public/page.html; trang hiển thị nó qua public/js/engine/path-renderer.js" in ctx["text"]
+    assert "public/js/engine/: path-renderer.js" in ctx["text"]  # skill default: tree of the renderer's folder
+    assert "public/page.html (trích)" not in ctx["text"]
+    # Gate 3 keeps the subtask's file: no redirect.
+    sub = {"title": "Dời thẻ", "file": "public/page.html", "verify": "x"}
+    assert "LƯU Ý" not in context.build_context(3, {"subject": "Thẻ IT Game Master"}, sub, src, sha,
+                                                 memory_path=tmp_path / "lessons.jsonl")["text"]

@@ -25,6 +25,7 @@ _MANUAL = (HERE / "prompts" / "AIBOARD.md").read_text(encoding="utf-8").strip() 
 SKILLS_DIR = HERE / "skills"
 _PATH_REF = re.compile(r"[\w./-]*[\w-]\.(?:html|css|js|mjs)\b", re.I)
 RESERVE = 300  # ký tự tối thiểu giữ cho mỗi tool phía sau
+LOCATE_BUDGET = 800  # vị trí chữ người dùng nhắc, trước các tool của skill
 _SECTION = re.compile(r"^## gate (\d)\s*$", re.M)
 
 
@@ -172,13 +173,33 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
     parts, used = [], []
     if commit:
         targets = [file] if file else _mentioned_files(request_text, source, commit)
+        # Chữ người dùng nhắc có thể không nằm ở trang trong dòng [Trang: …] mà ở module JS trang đó import:
+        # gate 1 thì đưa module đó lên đầu target (model 8B/14B bỏ qua gợi ý nếu chỉ là 1 dòng dữ liệu).
+        hits, users = tools.find_text(source, commit, file_context.phrases(request.get("subject"),
+                                                                           request.get("body"), thread))
+        pages = [t for t in targets if t.endswith(".html")]
+        render, render_words = ([], []) if file else tools.renderers(hits, users, pages)
+        if render:  # trang không chứa chữ đó: bỏ trang khỏi target, budget dành cho module render
+            targets = render
+            parts.append(f"LƯU Ý: chữ người dùng nhắc KHÔNG nằm trong {', '.join(pages)}; trang hiển thị nó qua "
+                         f"{', '.join(render)}. Sửa ở file đó, không thêm phần tử mới vào trang.")
+            used.append("locate")
         css = _linked_css(source, commit, targets) if skill.follow_css else []
         words = [w for w in file_context.keywords(request.get("subject"), sub_text or request.get("body"),
                                                   request.get("body")) if not _PATH_REF.search(w)]
         question = f"{request.get('domain') or ''} {request.get('subject') or ''}".strip()
         calls = _calls(skill.tools if gate == 1 else skill.tools3, targets, [c for c in css if c not in targets],
                        words, question, memory_path, index_path)
-        remaining = skill.budget if gate == 1 else skill.budget3
+        # Module render: trích quanh <kind>/hàm show… (vd .achievement-toast), không quanh từ chung như "game".
+        calls = [(n, {**p, "words": [w.lower() for w in render_words]}) if n == "grep" and p.get("file") in render
+                 else (n, p) for n, p in calls]
+        remaining = (skill.budget if gate == 1 else skill.budget3) - sum(len(p) + 2 for p in parts)
+        share = min(LOCATE_BUDGET, remaining // 3)
+        located = tools._cap(tools.format_located(hits, users, prefer=targets, budget=share), share)
+        if located:
+            parts.append(located)
+            remaining -= len(located) + 2
+            used.append("locate")
         for i, (name, params) in enumerate(calls):
             # Tool đứng trước (quan trọng hơn theo thứ tự skill) lấy phần lớn; mỗi tool sau giữ RESERVE.
             share = min(remaining, max(remaining - RESERVE * (len(calls) - i - 1), RESERVE)) - 2

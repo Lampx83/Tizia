@@ -36,6 +36,35 @@ def keywords(*texts: str | None) -> list[str]:
     return list(dict.fromkeys(w for w in found if w not in _STOP and not w.isdigit()))[:MAX_KEYWORDS]
 
 
+_PAGE_LINE = re.compile(r"^\s*\[Trang:.*$", re.M)
+_SENTENCE = re.compile(r"[.!?,;:\n()]+")
+
+
+def _title_runs(sentence: str) -> list[str]:
+    """≥ 2 chữ liền nhau viết hoa đầu ("IT Game Master"). Chữ đầu câu viết hoa theo ngữ pháp → bỏ nó ra."""
+    words, runs, run = sentence.split(), [], []
+    for i, word in enumerate(words + [""]):
+        if word[:1].isupper():
+            run.append((i, word))
+            continue
+        if run and run[0][0] == 0:
+            run = run[1:]
+        if len(run) >= 2:
+            runs.append(" ".join(w for _, w in run))
+        run = []
+    return runs
+
+
+def phrases(*texts: str | None) -> list[str]:
+    """Chữ hiển thị người dùng nhắc: cụm trong ngoặc + cụm viết hoa đầu. Bỏ dòng [Trang: …] FAB tự thêm."""
+    found: list[str] = []
+    for text in filter(None, texts):
+        text = _PAGE_LINE.sub("", text)
+        found += [q.strip() for q in _QUOTED.findall(text)]
+        found += [r for s in _SENTENCE.split(text) for r in _title_runs(s)]
+    return list(dict.fromkeys(p for p in found if len(p) >= 5))[:6]
+
+
 def excerpt(content: str, words: list[str], *, budget: int = CONTEXT_BUDGET) -> str:
     """Các dòng `Lnn| …` theo ưu tiên: quanh dòng khớp từ khoá, cuối file, dàn ý; dừng khi hết budget."""
     lines = content.splitlines()
