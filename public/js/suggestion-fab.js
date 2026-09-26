@@ -615,10 +615,13 @@ function bind(root) {
     loadInbox();
   };
   // Chuông thông báo trỏ tới #sgf-clarify-<id>: mở thẳng phần trao đổi của yêu cầu đó.
-  const hashed = /^#sgf-clarify-(\d+)$/.exec(location.hash);
+  // #sgf-thread-<id> (chuông bản nháp): mở panel, loadInbox tự bung thread đó.
+  let openThreadId = null;
+  const hashed = /^#sgf-(clarify|thread)-(\d+)$/.exec(location.hash);
   if (hashed) {
+    if (hashed[1] === 'thread') openThreadId = hashed[2];
     open();
-    startClarify(hashed[1]);
+    if (hashed[1] === 'clarify') startClarify(hashed[2]);
     history.replaceState(null, '', location.pathname + location.search);
   }
   const close = () => { modal.hidden = true; msg.textContent = ''; };
@@ -871,6 +874,24 @@ function bind(root) {
       inbox.querySelectorAll('[data-clarify]').forEach(btn => {
         btn.addEventListener('click', () => startClarify(btn.dataset.clarify));
       });
+      // "Thử cách khác": lượt hỏng → Ban lập kế hoạch mới (server chỉ nhận root hỏng của chính mình).
+      inbox.querySelectorAll('[data-req-retry]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          btn.textContent = 'Đang gửi…';
+          const r = await fetch(`api/requests/${encodeURIComponent(btn.dataset.reqRetry)}/retry`, {
+            method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': await csrfToken().catch(() => '') },
+          }).catch(() => null);
+          if (r?.ok) { loadInbox(); return; }
+          const e2 = await r?.json().catch(() => ({})) || {};
+          btn.textContent = e2.message && e2.error === 'too_many_pending' ? e2.message : 'Chưa thử lại được, thử sau nhé.';
+        });
+      });
+      // Chuông "xem ảnh" trỏ #sgf-thread-<id>: mở sẵn thread của yêu cầu đó.
+      if (openThreadId) {
+        inbox.querySelector(`[data-req-toggle="${openThreadId}"]`)?.click();
+        openThreadId = null;
+      }
       // Mỗi item mở rộng thành phiên trao đổi (thread) ngay trong modal.
       inbox.querySelectorAll('[data-req-toggle]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -931,6 +952,9 @@ function renderItem(it, me = '') {
         : `<button type="button" class="sgf-it-thread-btn" data-req-toggle="${it.id}">
         💬 ${mine ? 'Trao đổi với Ban điều hành' : 'Xem trao đổi'}
       </button>`}
+      ${mine && it.retry === 'retry'
+        ? `<button type="button" class="sgf-it-thread-btn" data-req-retry="${it.id}" title="Ban lập kế hoạch mới cho yêu cầu này">🔄 Thử cách khác</button>` : ''}
+      ${mine && it.retry === 'admin' ? '<div class="sgf-it-queue">🏛️ Đã chuyển quản trị viên</div>' : ''}
       ${mine && ['pending', 'reviewing'].includes(it.status)
         ? `<button type="button" class="sgf-it-cancel" data-req-cancel="${it.id}">Hủy yêu cầu</button>` : ''}
       <div class="sgf-it-thread" id="sgf-thread-${it.id}" hidden></div>

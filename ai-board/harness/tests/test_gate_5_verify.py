@@ -168,7 +168,7 @@ def test_container_secret_blocks_without_leaking_value_to_evidence(tmp_path):
 def test_html_screenshot_artifact_is_mandatory_for_ui_changes(tmp_path, monkeypatch):
     s = state(checkout(tmp_path), visual=True)
 
-    def capture(url, path):
+    def capture(url, path, width=1280):
         assert url == "http://127.0.0.1:49152/x.html"
         path.write_bytes(b"png")
 
@@ -215,7 +215,7 @@ def test_css_change_is_observed_over_http_and_screenshots_the_request_page(tmp_p
          "request_detail": "[Trang: Trường IT] /school.html?domain=it\nđổi màu chữ thành vàng",
          "diffs": [{"file": "public/css/school.css", "test_file": "test/generated.test.js", "diff": "+x"}]}
     probed, shots = [], []
-    monkeypatch.setattr(verify, "capture_screenshot", lambda url, path: (shots.append(url), path.write_bytes(b"png")))
+    monkeypatch.setattr(verify, "capture_screenshot", lambda url, path, width=1280: (shots.append(url), path.write_bytes(b"png")))
 
     def probe(url):
         probed.append(url)
@@ -225,7 +225,7 @@ def test_css_change_is_observed_over_http_and_screenshots_the_request_page(tmp_p
     assert out["blocked"] is False
     assert out["evidence"]["http_observed"] is True
     assert probed == ["http://127.0.0.1:49152/css/school.css"]
-    assert shots == ["http://127.0.0.1:49152/school.html?domain=it"]
+    assert shots == ["http://127.0.0.1:49152/school.html?domain=it"] * 2  # 375 + 1280, không biết base → không BEFORE
     assert Path(out["evidence"]["screenshot"]).read_bytes() == b"png"
 
     out = verify.run(s, runner=FakeRunner(), http_probe=lambda _url: (200, b".title { color: red; }"))
@@ -235,7 +235,7 @@ def test_css_change_is_observed_over_http_and_screenshots_the_request_page(tmp_p
 
 def test_screenshot_target_from_the_request_must_be_an_internal_path(tmp_path, monkeypatch):
     shots = []
-    monkeypatch.setattr(verify, "capture_screenshot", lambda url, path: shots.append(url))
+    monkeypatch.setattr(verify, "capture_screenshot", lambda url, path, width=1280: shots.append(url))
     details = ("[Trang: x] https://evil.example/", "[Trang: x] //evil.example/a", "[Trang: x] /\\evil.example",
                "không có dòng trang")
     for index, detail in enumerate(details):
@@ -259,7 +259,7 @@ def test_screenshot_must_land_on_the_requested_page_with_success():
 
 
 def test_wrong_screenshot_landing_is_a_plan_failure(tmp_path, monkeypatch):
-    def capture(_url, _path):
+    def capture(_url, _path, _width=1280):
         raise verify.ScreenshotTargetError("trang chụp bị chuyển hướng sang /login.html")
 
     monkeypatch.setattr(verify, "capture_screenshot", capture)
@@ -354,7 +354,7 @@ def test_smoke_script_path_is_posix_for_git_bash(tmp_path):
 
 
 def test_changed_lines_must_be_served_even_when_the_server_injects_tags(tmp_path, monkeypatch):
-    monkeypatch.setattr(verify, "capture_screenshot", lambda _url, path: path.write_bytes(b"png"))
+    monkeypatch.setattr(verify, "capture_screenshot", lambda _url, path, _width=1280: path.write_bytes(b"png"))
     """Tizia injects analytics/SEO tags into every HTML page, so bytes never match the file."""
     root = checkout(tmp_path)
     (root / "public" / "x.html").write_text("<head></head><body>\n<h1>old</h1>\n<p>new line</p>\n</body>\n",
@@ -441,3 +441,77 @@ def test_verify_container_gets_one_cpu_and_1536_mb(tmp_path):
     runner = FakeRunner()
     verify.run(state(checkout(tmp_path)), runner=runner)
     assert "cpus: 1.0" in runner.override and "mem_limit: 1536m" in runner.override
+
+
+def _git(root, *args):
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], cwd=root, check=True,
+                   capture_output=True)
+
+
+def test_changed_pages_get_after_and_before_shots_at_two_widths(tmp_path, monkeypatch):
+    """≤ 2 trang × 375/1280 × sau/trước; BEFORE = bản base chép vào container đang chạy; trang mới không có BEFORE."""
+    root = checkout(tmp_path)
+    for name in ("x", "y"):
+        (root / "public" / f"{name}.html").write_text(f"<h1>old {name}</h1>\n", encoding="utf-8")
+    _git(root, "init", "-q")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-qm", "base")
+    base_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True).stdout.strip()
+    for name in ("x", "y", "z"):
+        (root / "public" / f"{name}.html").write_text("<h1>changed</h1>\n", encoding="utf-8")
+    shots, copied = [], {}
+    monkeypatch.setattr(verify, "capture_screenshot",
+                        lambda url, path, width: (shots.append((url.rsplit("/", 1)[-1], width)), path.write_bytes(b"png")))
+
+    class Runner(FakeRunner):
+        def __call__(self, args, **kwargs):
+            if args[0] == "docker" and "cp" in args and args[-1].startswith("tizia:/app/public/"):
+                copied[args[-1]] = Path(args[-2]).read_text(encoding="utf-8")
+            return super().__call__(args, **kwargs)
+
+    s = {"skill_id": "skill-42", "full_checkout": str(root), "base_sha": base_sha,
+         "diffs": [{"file": f"public/{n}.html", "test_file": "test/generated.test.js", "diff": "+x"}
+                   for n in ("z", "x", "y")]}
+    out = verify.run(s, runner=Runner())
+
+    assert out["blocked"] is False, out["reason"]
+    # z.html mới + x.html (2 trang đầu của diff); z không có ở base → chỉ x có BEFORE.
+    assert shots == [("z.html", 375), ("z.html", 1280), ("x.html", 375), ("x.html", 1280),
+                     ("x.html", 375), ("x.html", 1280)]
+    assert [(i["phase"], i["page"], i["width"]) for i in out["evidence"]["screenshots"]] == [
+        ("after", "/z.html", 375), ("after", "/z.html", 1280), ("after", "/x.html", 375), ("after", "/x.html", 1280),
+        ("before", "/x.html", 375), ("before", "/x.html", 1280)]
+    assert all(Path(i["path"]).read_bytes() == b"png" for i in out["evidence"]["screenshots"])
+    assert out["evidence"]["screenshot"] == out["evidence"]["screenshots"][1]["path"]  # trang chính, 1280
+    assert copied == {"tizia:/app/public/x.html": "<h1>old x</h1>\n", "tizia:/app/public/y.html": "<h1>old y</h1>\n"}
+
+    # 2 trang đều có ở base → đủ 8 ảnh.
+    s["diffs"] = s["diffs"][1:]
+    shots.clear()
+    out = verify.run(s, runner=Runner())
+    assert len(out["evidence"]["screenshots"]) == 8 and len(shots) == 8
+
+
+def test_before_shot_failure_never_blocks_the_gate(tmp_path, monkeypatch):
+    s = state(checkout(tmp_path), visual=True)
+    s["base_sha"] = "0" * 40  # không phải repo git: không lấy được base → bỏ BEFORE, gate vẫn qua
+    monkeypatch.setattr(verify, "capture_screenshot", lambda _u, path, _w: path.write_bytes(b"png"))
+    out = verify.run(s, runner=FakeRunner(), http_probe=lambda _url: (200, b"<h1>changed</h1>\n"))
+    assert out["blocked"] is False, out["reason"]
+    assert {i["phase"] for i in out["evidence"]["screenshots"]} == {"after"}
+
+
+def test_js_change_shoots_the_pages_that_load_it(tmp_path):
+    root = checkout(tmp_path)
+    js = root / "public" / "js"
+    js.mkdir()
+    (js / "a.js").write_text("export const a = 1;\n", encoding="utf-8")
+    (js / "b.js").write_text("import { a } from './a.js';\n", encoding="utf-8")
+    (root / "public" / "p.html").write_text('<script type="module" src="js/b.js"></script>\n', encoding="utf-8")
+    (root / "public" / "q.html").write_text('<script src="js/a.js"></script>\n', encoding="utf-8")
+    (root / "public" / "r.html").write_text("<p>không liên quan</p>\n", encoding="utf-8")
+
+    assert verify._shot_pages(root, ["/js/a.js"], None) == ["/q.html", "/p.html"]  # trực tiếp trước, qua import sau
+    assert verify._shot_pages(root, ["/js/a.js"], "/school.html?domain=it") == ["/school.html?domain=it", "/q.html"]
+    assert verify._shot_pages(root, ["/x.html", "/y.html", "/z.html"], None) == ["/x.html", "/y.html"]
+    assert verify._shot_pages(root, ["/js/none.js"], None) == []
