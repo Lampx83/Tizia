@@ -1739,14 +1739,20 @@ const TABS = {
 
 // ─────────── Chức năng (folder chức năng mới, feature-folders ticket 04) ───────────
 const FOLDER_STATE_LABEL = { draft: 'chờ duyệt', active: 'đang làm', awaiting_merge: 'chờ merge', released: 'đã phát hành', archived: 'lưu trữ' };
+const RELEASE_LABEL = { owner_only: 'chỉ người tạo', school: 'cả trường', off: 'tắt' };
+const releaseSelect = (slug, status) => status
+  ? `<select data-release="${esc(slug)}">${Object.entries(RELEASE_LABEL).map(([v, l]) =>
+      `<option value="${v}"${v === status ? ' selected' : ''}>${l}</option>`).join('')}</select>`
+  : '—';
 async function loadFeatureFolders() {
-  const r = await api('/api/admin/ai-board/folders');
+  const [r, rel] = await Promise.all([api('/api/admin/ai-board/folders'), api('/api/ai-board/releases?domain=')]);
   const folders = r.data?.folders || [];
+  const releaseOf = Object.fromEntries((rel.data?.releases || []).map(x => [x.slug, x.status]));
   const host = $('#tabbody');
   host.innerHTML = folders.length ? `
     <table>
       <thead><tr><th>#</th><th>Chức năng</th><th>Trường</th><th>Người tạo</th><th>Trạng thái</th><th>Yêu cầu</th>
-        <th>Vote</th><th>GPU-s</th><th>Duyệt</th></tr></thead>
+        <th>Vote</th><th>GPU-s</th><th>Duyệt</th><th>Phát hành</th></tr></thead>
       <tbody>${folders.map(f => `
         <tr>
           <td>${f.id}</td>
@@ -1758,8 +1764,17 @@ async function loadFeatureFolders() {
           <td style="white-space:nowrap">${f.approved
             ? `<span class="pill">đã duyệt</span> <button class="btn danger" data-folder-act="revoke" data-fid="${f.id}">Thu hồi</button>`
             : `<button class="btn primary" data-folder-act="approve" data-fid="${f.id}">Duyệt</button>`}</td>
+          <td>${releaseSelect(f.slug, releaseOf[f.slug])}</td>
         </tr>`).join('')}</tbody>
     </table>` : '<div class="loading">Chưa có chức năng nào.</div>';
+  host.querySelectorAll('[data-release]').forEach(sel => sel.addEventListener('change', async () => {
+    sel.disabled = true;
+    const res = await api(`/api/admin/ai-board/releases/${encodeURIComponent(sel.dataset.release)}`,
+      { method: 'POST', body: JSON.stringify({ status: sel.value }) });
+    sel.disabled = false;
+    if (!res.ok) { toast('Lỗi: ' + (res.data?.error || res.status), 'err'); return loadFeatureFolders(); }
+    toast(`Phát hành: ${RELEASE_LABEL[sel.value]}`);
+  }));
   host.querySelectorAll('[data-folder-act]').forEach(btn => btn.addEventListener('click', async () => {
     btn.disabled = true;
     const res = await api(`/api/admin/ai-board/folders/${btn.dataset.fid}/${btn.dataset.folderAct}`, { method: 'POST' });
