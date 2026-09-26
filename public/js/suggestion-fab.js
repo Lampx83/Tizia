@@ -792,6 +792,14 @@ function bind(root) {
   }
 }
 
+// Vị trí trong hàng đợi công bằng (server tính theo đúng thứ tự worker nhận việc).
+function queueLine(q) {
+  if (!q) return '';
+  if (q.deferred) return '<div class="sgf-it-queue">⏳ Hôm nay Ban đã làm nhiều việc cho bạn rồi — yêu cầu này sẽ được làm tiếp vào ngày mai.</div>';
+  const min = Math.max(1, Math.round((q.eta_s || 0) / 60));
+  return `<div class="sgf-it-queue">⏳ Đang xếp hàng: thứ ${Number(q.position)} · khoảng ${min} phút nữa tới lượt</div>`;
+}
+
 function renderItem(it, me = '') {
   const sm = STATUS[it.status] || STATUS.pending;
   const t = (TYPES.find(t => t.v === it.type) || TYPES[4]);
@@ -817,6 +825,7 @@ function renderItem(it, me = '') {
         <span class="sgf-it-title">${escapeHtml(it.title)}</span>
         <span class="sgf-it-st ${sm.cls}">${it.phase === 'clarifying' ? 'Chờ bạn trả lời' : sm.label}</span>
       </div>
+      ${queueLine(it.queue)}
       ${attHtml}
       ${it.admin_note ? `<div class="sgf-it-note">🏛️ ${escapeHtml(it.admin_note)}</div>` : ''}
       ${mine && it.phase === 'clarifying'
@@ -997,6 +1006,7 @@ function injectStyles() {
     .sgf-empty { font-size: 12.5px; color: #6b7280; text-align: center; padding: 10px 0; font-style: italic; }
     .sgf-it { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 9px 11px; }
     .sgf-it-line { display: flex; align-items: center; gap: 8px; }
+    .sgf-it-queue { font-size: 12px; color: #6b7280; margin: 4px 0 2px; }
     .sgf-it-ico { font-size: 14px; }
     .sgf-it-title { flex: 1; font-size: 13px; font-weight: 600; color: #1f2937; }
     .sgf-it-st { font-size: 11px; padding: 2px 8px; border-radius: 7px; font-weight: 700; white-space: nowrap; }

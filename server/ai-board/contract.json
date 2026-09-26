@@ -11,6 +11,18 @@
   "rollback_outcomes": ["discarded", "revert_ready", "failed"],
   "max_repairs": 1,
   "default_budget_limit": 200,
+  "limits": {
+    "_why": "All AI Board caps in one place (feature-folders ticket 02). Per-run caps scale with the plan's subtask count n: base + per_subtask * n, clamped to max. Numbers are starting points; retune from the stratified eval (ticket 12).",
+    "per_run": {
+      "units": { "base": 120, "per_subtask": 150, "max": 2400, "_why": "GPU-s per run; a feature draft of 3-10 subtasks needs ~450-1600" },
+      "wall_clock_s": { "base": 300, "per_subtask": 360, "max": 3600, "_why": "each subtask may retry up to 4 times at 14B speed" },
+      "model_calls": { "base": 10, "per_subtask": 12, "max": 150, "_why": "gate 1/2.5 calls + up to 4 attempts x (implement, repair) per subtask" }
+    },
+    "max_subtasks_per_run": 10,
+    "pending_roots_per_user": { "value": 3, "_why": "one person cannot fill the school's queue" },
+    "gpu_s_per_user_day": { "loose": 1500, "folder": 4000, "_why": "rolling 24h; over it the request waits, a running run is never cut" },
+    "gpu_s_per_worker_hour": { "value": 2700, "_why": "must exceed one max run (2400) so big tasks are not starved" }
+  },
   "branch_prefix": "ai-board/",
   "branch_slug_max": 60,
   "branch_pattern": "^ai-board/\\d{4}-\\d{2}-\\d{2}-[a-z0-9-]{1,60}$",

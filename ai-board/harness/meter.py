@@ -18,7 +18,10 @@ TRACE_CAP = 8192  # ký tự mỗi phần prompt/output gửi server; JSONL cụ
 POST_BYTES = 56_000  # dưới express.json limit 64kb, chừa chỗ lease/run_id
 ROTATE_BYTES = 20 * 1024 * 1024
 ROTATE_KEEP = 3
-HOURLY_GPU_S = 900  # trần mỗi worker; vượt thì ngừng nhận ticket mới, không phạt ticket đang chạy
+# Trần mỗi worker, đọc từ server/ai-board/contract.json (limits); vượt thì ngừng nhận ticket mới,
+# không phạt ticket đang chạy. Phải lớn hơn 1 lượt lớn nhất để task lớn không bị bỏ đói.
+HOURLY_GPU_S = json.loads((Path(__file__).resolve().parents[2] / "server" / "ai-board" / "contract.json")
+                          .read_text(encoding="utf-8"))["limits"]["gpu_s_per_worker_hour"]["value"]
 
 # Cùng họ mẫu với gates/guard.py _SECRET — che trước khi ghi/gửi trace.
 _SECRET = re.compile(

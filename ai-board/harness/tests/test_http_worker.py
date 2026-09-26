@@ -1151,3 +1151,14 @@ def test_planner_reads_the_clarified_spec_and_flags_a_still_vague_request():
     planner.Budget, planner.deps, planner.run_gate = Budget, object(), run_gate
     plan, _ = planner(snapshot)
     assert plan['risk'] == 'high'  # still vague after 5 questions: admin authorizes the plan (tier protected)
+
+
+def test_per_run_caps_scale_with_the_plan_and_come_from_the_shared_contract():
+    """Feature-folders ticket 02: same formula as store.js scaledLimit; worker hourly cap fits the biggest run."""
+    import meter
+    from worker import LIMITS, scaled_limit
+    units = LIMITS["per_run"]["units"]
+    assert scaled_limit("units", 3) == units["base"] + 3 * units["per_subtask"]
+    assert scaled_limit("units", 999) <= units["max"]
+    assert scaled_limit("wall_clock_s", 10) > 900 and scaled_limit("model_calls", 10) > 40
+    assert meter.HOURLY_GPU_S == LIMITS["gpu_s_per_worker_hour"]["value"] > units["max"]

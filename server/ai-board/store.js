@@ -78,7 +78,30 @@ const FAILURE_CLASSES = new Set(CONTRACT.failure_classes);
 const MAX_REPAIRS = CONTRACT.max_repairs;
 const MAX_BUDGET_EXTENSION = 200;
 // ponytail: fixed D0 ceilings from the hardening spec; make them admin config only if real tickets hit them.
-const MAX_BUDGET_LIMIT = 600; // hard ceiling across all extensions of one root
+export const LIMITS = CONTRACT.limits;
+const MAX_BUDGET_LIMIT = LIMITS.per_run.units.max; // hard ceiling across all extensions of one root
+
+const DAY_MS = 24 * 3600_000;
+// GPU-s người gửi r đã dùng từ mốc `?` (tổng budget_units các lần gọi model của mọi root của họ).
+// ponytail: subquery tương quan mỗi dòng ứng viên; đủ cho ~100 yêu cầu/ngày, lên quy mô lớn thì cộng dồn vào bảng.
+const ownerGpuS = (owner) => `(SELECT COALESCE(SUM(json_extract(g.evidence_json, '$.budget_units')), 0)
+  FROM ai_gate_traces g JOIN ai_runs gr ON gr.id = g.run_id JOIN ai_tickets gt ON gt.id = gr.ticket_id
+  JOIN requests grq ON grq.id = gt.source_request_id
+  WHERE g.status = 'model_call' AND g.created_at > ? AND grq.owner_user_id = ${owner})`;
+const OWNER_GPU_S = ownerGpuS('r.owner_user_id');
+// Hàng đợi công bằng: priority trước; cùng mức thì người được phục vụ lâu nhất rồi (hoặc chưa bao giờ) trước; rồi FIFO.
+const FAIR_ORDER = `t.priority DESC,
+  COALESCE((SELECT MAX(se.created_at) FROM ai_events se JOIN ai_tickets st ON st.id = se.ticket_id
+    JOIN requests sq ON sq.id = st.source_request_id
+    WHERE se.transition = 'queued->running' AND sq.owner_user_id = r.owner_user_id), 0) ASC,
+  t.created_at ASC, t.id ASC`;
+
+/** Trần mỗi lượt theo số subtask n (contract.json limits.per_run): base + per_subtask·n, kẹp ở max. */
+export function scaledLimit(kind, n) {
+  const { base, per_subtask: step, max } = LIMITS.per_run[kind];
+  const count = Math.min(Math.max(Number(n) || 0, 0), LIMITS.max_subtasks_per_run);
+  return Math.min(base + step * count, max);
+}
 const MAX_BUDGET_EXTENSIONS = 2;
 const SHA = /^[0-9a-f]{40}$/;
 export const LEASE_MS = 120_000; // worker lease; also the admin view's stale threshold
@@ -446,7 +469,56 @@ export function createAiBoardStore(db, hooks = {}) {
       WHERE r.owner_user_id = ? AND r.domain = ?
       ORDER BY r.updated_at DESC LIMIT ?
     `).all(Number(ownerUserId), String(domain || ''), Math.min(Math.max(Number(limit) || 50, 1), 200));
-    return rows.map((row) => ({ ...row, attachments: parseAttachments(row.attachments) }));
+    const queue = queueInfo(ownerUserId);
+    return rows.map((row) => ({ ...row, attachments: parseAttachments(row.attachments),
+      queue: row.workflow_status === 'queued' ? queue.get(row.root_ticket_id) ?? null : null }));
+  }
+
+  /** Map rootId → {position, eta_s, deferred} cho root đang chờ của 1 người, theo đúng thứ tự FAIR_ORDER của claim. */
+  function queueInfo(ownerUserId, now = Date.now()) {
+    const waiting = db.prepare(`
+      SELECT t.id, t.priority, t.created_at, r.owner_user_id,
+        COALESCE((SELECT MAX(se.created_at) FROM ai_events se JOIN ai_tickets st ON st.id = se.ticket_id
+          JOIN requests sq ON sq.id = st.source_request_id
+          WHERE se.transition = 'queued->running' AND sq.owner_user_id = r.owner_user_id), 0) AS served
+      FROM ai_tickets t JOIN requests r ON r.id = t.source_request_id
+      WHERE t.kind = 'root' AND t.status = 'queued' AND t.phase <> 'clarifying' AND r.owner_state = 'verified'
+    `).all();
+    // Mô phỏng các lượt claim liên tiếp theo FAIR_ORDER: người vừa được phục vụ xuống cuối vòng.
+    // ponytail: O(n²) trên hàng đợi; đủ cho vài trăm root đang chờ.
+    const served = new Map(waiting.map((w) => [w.owner_user_id, w.served]));
+    const order = [];
+    let tick = now;
+    while (waiting.length) {
+      waiting.sort((a, b) => b.priority - a.priority || served.get(a.owner_user_id) - served.get(b.owner_user_id)
+        || a.created_at - b.created_at || a.id - b.id);
+      const next = waiting.shift();
+      order.push(next);
+      served.set(next.owner_user_id, (tick += 1));
+    }
+    // Thời lượng trung bình 20 lượt gần nhất (tường), tối thiểu 60 s khi chưa có dữ liệu.
+    const avg = db.prepare(`
+      SELECT AVG(updated_at - created_at) AS ms FROM (
+        SELECT updated_at, created_at FROM ai_runs WHERE outcome IS NOT NULL ORDER BY id DESC LIMIT 20)
+    `).get()?.ms;
+    const runS = Math.max(Math.round((avg || 0) / 1000), 60);
+    const used = db.prepare(`SELECT ${ownerGpuS('?')} AS s`).get(now - DAY_MS, Number(ownerUserId)).s;
+    const deferred = used >= LIMITS.gpu_s_per_user_day.loose;
+    const out = new Map();
+    order.forEach((row, i) => {
+      if (row.owner_user_id === Number(ownerUserId)) out.set(row.id, { position: i + 1, eta_s: (i + 1) * runS, deferred });
+    });
+    return out;
+  }
+
+  /** Số root chưa xong của 1 người (đang chờ làm rõ, xếp hàng hoặc đang chạy): trần limits.pending_roots_per_user.
+      Gửi lại cùng Idempotency-Key → 0 (store sẽ trả yêu cầu cũ, không tạo mới). */
+  function countPendingRoots(ownerUserId, idempotencyKey = null) {
+    if (idempotencyKey && findRetry.get(Number(ownerUserId), String(idempotencyKey).trim())) return 0;
+    return db.prepare(`
+      SELECT COUNT(*) AS n FROM ai_tickets t JOIN requests r ON r.id = t.source_request_id
+      WHERE t.kind = 'root' AND r.owner_user_id = ? AND t.status IN ('queued', 'running')
+    `).get(Number(ownerUserId)).n;
   }
 
   // Admin reject = cancel the whole root, like cancelRequestTransaction; every statement is a no-op on repeat.
@@ -556,8 +628,10 @@ export function createAiBoardStore(db, hooks = {}) {
           SELECT 1 FROM ai_runs ar JOIN ai_workers aw ON aw.worker_id = ar.worker_id
           WHERE ar.id = (SELECT MAX(id) FROM ai_runs WHERE ticket_id = t.id AND trigger <> 'shadow_precheck')
             AND ar.worker_id <> ? AND aw.last_seen_at > ?))
-        ORDER BY t.priority DESC, t.created_at ASC LIMIT 1
-    `).get(intent, now, intent, now, mode, workerId, now - leaseMs);
+        -- Trần GPU-s/người/24h: lượt mới chờ; lease đang chạy hết hạn vẫn được cứu (không cắt việc đang làm).
+        AND (t.status <> 'queued' OR ${OWNER_GPU_S} < ?)
+        ORDER BY ${FAIR_ORDER} LIMIT 1
+    `).get(intent, now, intent, now, mode, workerId, now - leaseMs, now - DAY_MS, LIMITS.gpu_s_per_user_day.loose);
     if (!candidate) return null;
     const token = randomBytes(24).toString('hex');
     const expires = now + leaseMs;
@@ -1001,11 +1075,14 @@ export function createAiBoardStore(db, hooks = {}) {
       VALUES (?, ?, ?, ?, 'valid', ?, ?, ?, ?, ?)
     `).run(Number(ticketId), revision, checked.planHash, checked.planJson, checked.tier,
       checked.policyHash, publicNote, internalReason, now);
+    // Trần lượt thực thi theo số bước của plan; không bao giờ hạ trần admin đã nới.
+    const runLimit = Math.max(root.budget_limit, scaledLimit('units', checked.plan.steps.length));
     db.prepare(`
       UPDATE ai_tickets SET status=?, phase='ticketized', public_note=?, internal_reason=?,
-        tier=?, plan_hash=?, plan_revision=?, auto_rounds=?, cumulative_budget=?, updated_at=?
+        tier=?, plan_hash=?, plan_revision=?, auto_rounds=?, cumulative_budget=?, budget_limit=?, updated_at=?
       WHERE id=?
-    `).run(rootStatus, publicNote, internalReason, checked.tier, checked.planHash, revision, rounds, budget, now, Number(ticketId));
+    `).run(rootStatus, publicNote, internalReason, checked.tier, checked.planHash, revision, rounds, budget, runLimit, now,
+      Number(ticketId));
     db.prepare(`UPDATE ai_runs SET plan_hash=?, plan_revision=?, updated_at=? WHERE id=?`)
       .run(checked.planHash, revision, now, run.id);
 
@@ -1501,6 +1578,7 @@ export function createAiBoardStore(db, hooks = {}) {
     db,
     createRequestWithRoot,
     listRequestsForOwner,
+    countPendingRoots,
     setRequestStatus,
     listAdminQueue,
     listWorkers,

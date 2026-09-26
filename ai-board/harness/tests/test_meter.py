@@ -91,7 +91,8 @@ def test_trace_batches_per_gate_and_marks_retries():
 
 def test_hourly_gpu_cap():
     tracer = meter.Tracer(None)
-    tracer._gpu.extend([(10**9, 600.0), (10**9, 300.0)])
+    # Cap comes from contract.json limits; two calls summing exactly to it trip it.
+    tracer._gpu.extend([(10**9, meter.HOURLY_GPU_S * 2 / 3), (10**9, meter.HOURLY_GPU_S / 3)])
     assert tracer.over_hourly_cap()
     assert not meter.Tracer(None).over_hourly_cap()
 

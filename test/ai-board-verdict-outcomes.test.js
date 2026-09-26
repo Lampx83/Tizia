@@ -6,11 +6,14 @@ import http from 'node:http';
 import express from 'express';
 import Database from 'better-sqlite3';
 
-import { applyAiBoardMigrations, createAiBoardStore, WorkerContractError } from '../server/ai-board/store.js';
+import { applyAiBoardMigrations, createAiBoardStore, LIMITS, scaledLimit, WorkerContractError } from '../server/ai-board/store.js';
 import { attachAiBoardRequestRoutes } from '../server/ai-board/routes.js';
 
 const SHA_A = 'a'.repeat(40);
 const SHA_B = 'b'.repeat(40);
+// Per-run cap after a 1-step plan (contract.json limits.per_run.units) and the extension ceiling.
+const RUN = scaledLimit('units', 1);
+const CEIL = LIMITS.per_run.units.max;
 
 function plannedRoot() {
   const db = new Database(':memory:');
@@ -184,7 +187,7 @@ test('budget exhaustion waits for a reasoned admin extension', () => {
   const { db, store, submit, ticket } = plannedRoot();
   submit(blocked(3, 'budget exhausted', 'budget'));
   let root = db.prepare('SELECT status, phase, budget_limit, auto_rounds FROM ai_tickets WHERE id=?').get(ticket.id);
-  assert.deepEqual({ ...root }, { status: 'waiting_admin', phase: 'budget_exhausted', budget_limit: 200, auto_rounds: 1 });
+  assert.deepEqual({ ...root }, { status: 'waiting_admin', phase: 'budget_exhausted', budget_limit: RUN, auto_rounds: 1 });
 
   for (const bad of [{ amount: 80, reason: '' }, { amount: 0, reason: 'đủ lý do dài hơn mười ký tự' },
     { amount: 500, reason: 'đủ lý do dài hơn mười ký tự' }]) {
@@ -192,7 +195,7 @@ test('budget exhaustion waits for a reasoned admin extension', () => {
   }
   store.extendBudget(ticket.id, { amount: 80, reason: 'Fixture cần thêm một vòng sửa lỗi.', adminUserId: 9 });
   root = db.prepare('SELECT status, phase, budget_limit, auto_rounds FROM ai_tickets WHERE id=?').get(ticket.id);
-  assert.deepEqual({ ...root }, { status: 'queued', phase: 'needs_replan', budget_limit: 280, auto_rounds: 0 });
+  assert.deepEqual({ ...root }, { status: 'queued', phase: 'needs_replan', budget_limit: RUN + 80, auto_rounds: 0 });
   const event = db.prepare(`SELECT actor_type, actor_id, internal_detail FROM ai_events WHERE event_type='budget_extended'`).get();
   assert.equal(event.actor_type, 'admin');
   assert.equal(event.actor_id, '9');
@@ -218,16 +221,16 @@ test('an automatic-round extension records that the round limit was relaxed', ()
 
 test('a third extension hands the root to a human permanently', () => {
   const { db, store, ticket } = plannedRoot();
-  for (const limit of [400, 600]) {
+  for (const limit of [RUN + 200, RUN + 400]) {
     exhaust(db, ticket.id);
     assert.deepEqual(store.extendBudget(ticket.id, { amount: 200, reason: REASON, adminUserId: 9 }),
       { ok: true, status: 'queued', budget_limit: limit });
   }
   exhaust(db, ticket.id);
   const refused = store.extendBudget(ticket.id, { amount: 1, reason: REASON, adminUserId: 9 });
-  assert.deepEqual(refused, { ok: false, status: 'human_owned', budget_limit: 600, reason: 'extension_count_ceiling' });
+  assert.deepEqual(refused, { ok: false, status: 'human_owned', budget_limit: RUN + 400, reason: 'extension_count_ceiling' });
   const root = db.prepare('SELECT status, phase, budget_limit FROM ai_tickets WHERE id=?').get(ticket.id);
-  assert.deepEqual({ ...root }, { status: 'human_owned', phase: 'budget_ceiling', budget_limit: 600 });
+  assert.deepEqual({ ...root }, { status: 'human_owned', phase: 'budget_ceiling', budget_limit: RUN + 400 });
   // A requester clarification cannot reopen it; a later attempt needs a new request.
   assert.equal(store.invalidatePlanForRequest(1, 'thêm chi tiết'), false);
   const { plan_hash: planHash } = db.prepare('SELECT plan_hash FROM ai_tickets WHERE id=?').get(ticket.id);
@@ -235,29 +238,29 @@ test('a third extension hands the root to a human permanently', () => {
   assert.equal(db.prepare('SELECT status FROM ai_tickets WHERE id=?').get(ticket.id).status, 'human_owned');
 });
 
-test('an extension past the 600 unit ceiling hands the root to a human', () => {
+test('an extension past the unit ceiling hands the root to a human', () => {
   const { db, store, ticket } = plannedRoot();
-  db.prepare('UPDATE ai_tickets SET budget_limit=500 WHERE id=?').run(ticket.id);
+  db.prepare('UPDATE ai_tickets SET budget_limit=? WHERE id=?').run(CEIL - 100, ticket.id);
   exhaust(db, ticket.id);
   const refused = store.extendBudget(ticket.id, { amount: 150, reason: REASON, adminUserId: 9 });
-  assert.deepEqual(refused, { ok: false, status: 'human_owned', budget_limit: 500, reason: 'budget_limit_ceiling' });
+  assert.deepEqual(refused, { ok: false, status: 'human_owned', budget_limit: CEIL - 100, reason: 'budget_limit_ceiling' });
   assert.equal(db.prepare(`SELECT COUNT(*) n FROM ai_events WHERE event_type='budget_extended'`).get().n, 0);
 });
 
-test('verdict budget is checked per run against the extended limit, not a fixed 200', () => {
+test('verdict budget is checked per run against the extended limit, not a fixed number', () => {
   const { db, submit, ticket } = plannedRoot();
-  assert.throws(() => submit(passing({ budget_used: 201 })), (error) => error.code === 'run_budget_exhausted');
-  db.prepare('UPDATE ai_tickets SET budget_limit=280 WHERE id=?').run(ticket.id);
-  assert.equal(submit(passing({ budget_used: 240 }), 'outcome-verdict-002').outcome, 'ready_for_pr');
+  assert.throws(() => submit(passing({ budget_used: RUN - 40 + 1 })), (error) => error.code === 'run_budget_exhausted');
+  db.prepare('UPDATE ai_tickets SET budget_limit=? WHERE id=?').run(RUN + 80, ticket.id);
+  assert.equal(submit(passing({ budget_used: RUN + 40 }), 'outcome-verdict-002').outcome, 'ready_for_pr');
 });
 
 test('one run budget covers plan plus execution: the server adds the run\'s plan spend to the verdict', () => {
-  const { db, submit } = plannedRoot(); // plan spent 40 in this run, limit 200
-  assert.throws(() => submit(passing({ budget_used: 161 })), (error) => error.code === 'run_budget_exhausted' && error.status === 409);
-  assert.equal(submit(passing({ budget_used: 160 }), 'outcome-verdict-002').outcome, 'ready_for_pr');
+  const { db, submit } = plannedRoot(); // plan spent 40 in this run, limit RUN
+  assert.throws(() => submit(passing({ budget_used: RUN - 40 + 1 })), (error) => error.code === 'run_budget_exhausted' && error.status === 409);
+  assert.equal(submit(passing({ budget_used: RUN - 40 }), 'outcome-verdict-002').outcome, 'ready_for_pr');
   const evidence = JSON.parse(db.prepare('SELECT evidence_json FROM ai_runs').get().evidence_json);
   assert.equal(evidence.plan_budget, 40);
-  assert.equal(evidence.verdict.budget_used, 160, 'verdict budget stays execution-only');
+  assert.equal(evidence.verdict.budget_used, RUN - 40, 'verdict budget stays execution-only');
 });
 
 test('candidate metadata is validated and only allowed on a passing verdict', () => {
@@ -299,7 +302,7 @@ test('admin budget extension route requires admin and strict CSRF', async () => 
     assert.equal((await send({ 'x-test-user': '9', 'x-csrf-token': 'ok' }, { amount: 40 })).status, 400);
     const ok = await send({ 'x-test-user': '9', 'x-csrf-token': 'ok' }, body);
     assert.equal(ok.status, 200);
-    assert.equal((await ok.json()).budget_limit, 240);
+    assert.equal((await ok.json()).budget_limit, RUN + 40);
   } finally {
     await new Promise((resolve) => server.close(resolve));
     db.close();

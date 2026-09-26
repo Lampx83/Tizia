@@ -73,7 +73,9 @@ async function serve(store) {
   const requireStrictCsrf = (req, res, next) => req.headers['x-csrf-token'] === 'ok'
     ? next()
     : res.status(403).json({ error: 'csrf_failed' });
-  attachAiBoardRequestRoutes(app, { store, requireAuth, requireEnrolled, requireAdmin, requireStrictCsrf });
+  // Fake stores only stub what a test needs; the pending-cap check is not under test here.
+  attachAiBoardRequestRoutes(app, { store: { countPendingRoots: () => 0, ...store }, requireAuth, requireEnrolled,
+    requireAdmin, requireStrictCsrf });
   app.use((error, _req, res, _next) => res.status(500).json({ error: 'internal_error', message: error.message }));
   const server = http.createServer(app);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));

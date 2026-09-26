@@ -26,6 +26,14 @@ CONTRACT = json.loads((REPO_ROOT / "server" / "ai-board" / "contract.json")
 PLAN_GATES = tuple(CONTRACT["gates"]["plan"])
 PRE_PR_GATES = tuple(CONTRACT["gates"]["pre_pr"])
 DEFAULT_BUDGET_LIMIT = CONTRACT["default_budget_limit"]
+LIMITS = CONTRACT["limits"]
+
+
+def scaled_limit(kind: str, n: int) -> int:
+    """Trần mỗi lượt theo số subtask n, cùng công thức với store.js scaledLimit (contract.json limits.per_run)."""
+    spec = LIMITS["per_run"][kind]
+    count = min(max(int(n or 0), 0), LIMITS["max_subtasks_per_run"])
+    return min(spec["base"] + spec["per_subtask"] * count, spec["max"])
 
 
 class LeaseLostError(RuntimeError):
@@ -670,6 +678,10 @@ def harness_change_runner(checkout_source=None, tracer=None, progress=None) -> C
     def run(plan: dict, ticket_id: int, max_units: int, **kwargs) -> dict:
         budget = Budget.from_env()
         budget.max_units = max_units
+        # Thời gian + số lần gọi model lớn theo số bước của plan (task lớn không chạm trần cố định 900 s / 40 lần).
+        steps = len(plan.get("steps") or [])
+        budget.max_wall_clock_s = float(scaled_limit("wall_clock_s", steps))
+        budget.max_model_calls = scaled_limit("model_calls", steps)
         return execute_pre_pr(plan, ticket_id=ticket_id, checkout_source=checkout_source or REPO_ROOT, deps=deps,
                               budget=budget, run_gate=run_gate, cleanup=candidate.cleanup,
                               memory_path=DEFAULT_PATH, **kwargs)

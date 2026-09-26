@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { assertConfirmed, LEASE_MS, PlanGuardrailError, RequestValidationError, WorkerContractError } from './store.js';
+import { assertConfirmed, LEASE_MS, LIMITS, PlanGuardrailError, RequestValidationError, WorkerContractError } from './store.js';
 import { checkIntake, recordIntakeFlags } from './intake-guard.js';
 import { classifyRequest as classifyWithModel, recordClassification } from './classifier.js';
 import { checkClarity } from './clarity-rules.js';
@@ -34,6 +34,12 @@ export function attachAiBoardRequestRoutes(router, {
       : req.user.enrolled_domain;
     const intake = checkIntake(body.title, body.detail);
     if (intake.block) return res.status(422).json({ error: 'request_rejected', message: intake.message });
+    // Mỗi người tối đa N yêu cầu đang chờ (contract.json limits): 1 người không lấp hàng đợi cả trường.
+    const pendingCap = LIMITS.pending_roots_per_user.value;
+    if (req.user.role !== 'admin' && store.countPendingRoots(req.user.id, req.get('Idempotency-Key')) >= pendingCap) {
+      return res.status(429).json({ error: 'too_many_pending',
+        message: `Bạn đang có ${pendingCap} yêu cầu chờ Ban xử lý. Đợi một yêu cầu xong rồi gửi tiếp nhé!` });
+    }
     // Luật cứng đã qua. Model chỉ thêm human_review / đòi làm rõ; lỗi model = hành vi cũ.
     const classified = await classifyRequest(body.title, body.detail).catch((error) => {
       console.warn('[ai-board] classifier unavailable:', error.message);
