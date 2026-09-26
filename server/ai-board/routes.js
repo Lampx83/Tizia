@@ -175,6 +175,12 @@ export function attachAiBoardRequestRoutes(router, {
   router.post('/api/ai-board/folders/:id/vote', requireAuth, requireStrictCsrf, (req, res) => {
     try { res.json(store.voteFolder(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
   });
+  router.post('/api/ai-board/folders/:id/archive', requireAuth, requireStrictCsrf, (req, res) => {
+    try { res.json(store.archiveFolder(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
+  });
+  router.post('/api/ai-board/folders/:id/reopen', requireAuth, requireStrictCsrf, (req, res) => {
+    try { res.json(store.reopenFolder(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
+  });
   router.post('/api/ai-board/folders/:id/done', requireAuth, requireStrictCsrf, (req, res) => {
     try { res.json(store.markFolderDone(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
   });

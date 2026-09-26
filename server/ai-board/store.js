@@ -489,12 +489,13 @@ export function createAiBoardStore(db, hooks = {}) {
 
   /** Folder của 1 người (FAB "Chức năng của bạn") + folder người khác cùng trường (chỉ xem, vote). */
   function listFolders(userId, domain) {
+    archiveStaleFolders();
     const rows = db.prepare(`
       SELECT ${FOLDER_COLUMNS},
         EXISTS(SELECT 1 FROM ai_feature_folder_votes v WHERE v.folder_id = f.id AND v.user_id = ?) AS voted
-      FROM ai_feature_folders f WHERE f.domain = ? AND f.state <> 'archived'
-      ORDER BY f.last_activity_at DESC LIMIT 100
-    `).all(Number(userId), String(domain || ''));
+      FROM ai_feature_folders f WHERE f.domain = ? AND (f.state <> 'archived' OR f.owner_user_id = ?)
+      ORDER BY f.state = 'archived', f.last_activity_at DESC LIMIT 100
+    `).all(Number(userId), String(domain || ''), Number(userId));
     const mine = [];
     const school = [];
     for (const f of rows) (f.owner_user_id === Number(userId) ? mine : school).push({ ...folderRow(f), voted: !!f.voted });
@@ -512,6 +513,7 @@ export function createAiBoardStore(db, hooks = {}) {
 
   /** Admin: mọi folder (tab "Chức năng"): trạng thái, số yêu cầu, GPU-s đã dùng, trace của root mới nhất. */
   function listAdminFolders(limit = 200) {
+    archiveStaleFolders();
     return db.prepare(`
       SELECT ${FOLDER_COLUMNS}, u.display_name AS owner_name,
         (SELECT COALESCE(SUM(json_extract(g.evidence_json, '$.budget_units')), 0)
@@ -602,6 +604,52 @@ export function createAiBoardStore(db, hooks = {}) {
     const recent = rows.slice(-2).map((r) => `[#${r.id}] ${clip(r.title, 150)}: ${clip(r.clarified_spec || r.detail, 330)}`)
       .join('\n').slice(0, cap.recent_chars);
     return { text: text.slice(0, cap.brief_chars), recent, owned_files: owned };
+  }
+
+  // ── Vòng đời folder (ticket 11): draft → active → awaiting_merge → released → archived; mở lại → chu kỳ mới ──
+  /** Đóng chu kỳ + lưu trữ; nhánh chưa merge ghi vào event để dọn trên GitHub.
+      ponytail: xoá nhánh remote do người/cron làm theo event folder_archived; worker chưa có job dọn. */
+  function archiveFolderRow(folder, reason, actorId, now) {
+    db.prepare(`UPDATE ai_feature_folders SET state='archived', branch=NULL, head_sha=NULL, pr_number=NULL, pr_url=NULL,
+      cycle=CASE WHEN branch IS NULL THEN cycle ELSE cycle + 1 END, updated_at=? WHERE id=?`).run(now, folder.id);
+    const root = db.prepare(`SELECT t.id FROM ai_tickets t JOIN requests q ON q.id = t.source_request_id
+      WHERE q.folder_id = ? AND t.parent_id IS NULL ORDER BY t.id DESC LIMIT 1`).get(folder.id);
+    if (root) {
+      insertEvent.run(root.id, 'folder_archived', actorId ? 'requester' : 'system', String(actorId ?? 'lifecycle'),
+        `${folder.state}->archived`, 'Chức năng đã được lưu trữ.',
+        JSON.stringify({ folder_id: folder.id, reason, unmerged_branch: folder.branch, pr_number: folder.pr_number }),
+        `folder-archived:${folder.id}:${now}`, now);
+    }
+  }
+
+  /** Lưu trữ folder im lặng quá limits.folder_archive_days. Gọi lúc đọc danh sách: tất định, không cần cron. */
+  function archiveStaleFolders(now = Date.now()) {
+    const cutoff = now - LIMITS.folder_archive_days.value * DAY_MS;
+    const stale = db.prepare(`SELECT * FROM ai_feature_folders WHERE state <> 'archived' AND last_activity_at < ?`).all(cutoff);
+    for (const folder of stale) archiveFolderRow(folder, 'inactive', null, now);
+    return stale.length;
+  }
+
+  function archiveFolder(folderId, ownerUserId, now = Date.now()) {
+    const folder = db.prepare('SELECT * FROM ai_feature_folders WHERE id=?').get(Number(folderId));
+    if (!folder || folder.owner_user_id !== Number(ownerUserId)) throw new WorkerContractError('folder not found', 404, 'folder_not_found');
+    if (folder.state !== 'archived') archiveFolderRow(folder, 'owner', ownerUserId, now);
+    return { ok: true, state: 'archived' };
+  }
+
+  /** Mở lại folder đã lưu trữ/đã phát hành: chu kỳ mới (nhánh mới từ dev khi có lượt đạt), giữ lịch sử + brief. */
+  function reopenFolder(folderId, ownerUserId, now = Date.now()) {
+    const folder = db.prepare('SELECT * FROM ai_feature_folders WHERE id=?').get(Number(folderId));
+    if (!folder || folder.owner_user_id !== Number(ownerUserId)) throw new WorkerContractError('folder not found', 404, 'folder_not_found');
+    if (!['archived', 'released'].includes(folder.state)) return { ok: true, state: folder.state };
+    const open = db.prepare(`SELECT COUNT(*) AS n FROM ai_feature_folders WHERE owner_user_id=? AND state IN ${OPEN_FOLDER_STATES}`)
+      .get(folder.owner_user_id).n;
+    if (open >= LIMITS.open_folders_per_user.value) {
+      throw new WorkerContractError('too many open folders', 409, 'folder_limit');
+    }
+    const state = folder.approved_at ? 'active' : 'draft';
+    db.prepare('UPDATE ai_feature_folders SET state=?, last_activity_at=?, updated_at=? WHERE id=?').run(state, now, now, folder.id);
+    return { ok: true, state };
   }
 
   /** Người tạo bấm "Xong": chu kỳ này chờ con người merge PR (gate 6, không tự động). */
@@ -1801,6 +1849,9 @@ export function createAiBoardStore(db, hooks = {}) {
     revokeFolder,
     markFolderDone,
     markFolderReleased,
+    archiveFolder,
+    reopenFolder,
+    archiveStaleFolders,
     folderBrief,
     listWorkers,
     cancelRequest,

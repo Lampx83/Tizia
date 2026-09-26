@@ -21,6 +21,7 @@
     "max_subtasks_per_run": 10,
     "pending_roots_per_user": { "value": 3, "_why": "one person cannot fill the school's queue" },
     "open_folders_per_user": { "value": 3, "_why": "feature folders not yet archived; keeps branches and context bounded" },
+    "folder_archive_days": { "value": 30, "_why": "a folder with no activity this long is archived: its cycle closes, history and brief stay" },
     "context": {
       "_why": "Feature-folder context tiers (ticket 06), chars. L1 brief + L3 recent requests are computed from the DB at read time; L2 owned-file outlines come from git. Full history never enters a prompt.",
       "brief_chars": 1500, "recent_chars": 1000, "owned_files": 6

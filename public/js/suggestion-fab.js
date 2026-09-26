@@ -743,7 +743,8 @@ function bind(root) {
   const folderHint = root.querySelector('#sgf-folder-hint');
   const typeSel = root.querySelector('#sgf-type');
   let myFolders = [];
-  const FOLDER_STATE = { draft: 'chờ Ban duyệt', active: 'đang làm', awaiting_merge: 'chờ phát hành', released: 'đã phát hành' };
+  const FOLDER_STATE = { draft: 'chờ Ban duyệt', active: 'đang làm', awaiting_merge: 'chờ phát hành', released: 'đã phát hành',
+    archived: 'đã lưu trữ' };
 
   function syncFolderRow() {
     folderRow.hidden = !myFolders.length || typeSel.value === 'feature';
@@ -756,10 +757,10 @@ function bind(root) {
       const r = await fetch(`api/ai-board/folders?domain=${encodeURIComponent(inferDomain())}`, { credentials: 'same-origin' });
       if (!r.ok) { folderBox.hidden = true; return; }
       const { mine = [], school = [] } = await r.json();
-      myFolders = mine;
+      myFolders = mine.filter(f => f.state !== 'archived'); // lưu trữ rồi thì không gắn yêu cầu mới
       const keep = folderSel.value;
       folderSel.innerHTML = '<option value="">— Yêu cầu lẻ —</option>'
-        + mine.map(f => `<option value="${f.id}">✨ ${escapeHtml(f.title)}</option>`).join('');
+        + myFolders.map(f => `<option value="${f.id}">✨ ${escapeHtml(f.title)}</option>`).join('');
       folderSel.value = mine.some(f => String(f.id) === keep) ? keep : '';
       syncFolderRow();
       folderBox.hidden = !mine.length && !school.length;
@@ -768,7 +769,10 @@ function bind(root) {
           ${mine.map(f => `<div class="sgf-folder">
             <span class="sgf-folder-t">✨ ${escapeHtml(f.title)}</span>
             <span class="sgf-folder-m">${escapeHtml(FOLDER_STATE[f.state] || f.state)} · ${Number(f.requests)} yêu cầu</span>
-            <button type="button" class="sgf-chip" data-folder-add="${f.id}">＋ Yêu cầu tiếp</button>
+            ${f.state === 'archived'
+              ? `<button type="button" class="sgf-chip" data-folder-reopen="${f.id}">↺ Mở lại</button>`
+              : `<button type="button" class="sgf-chip" data-folder-add="${f.id}">＋ Yêu cầu tiếp</button>
+                 <button type="button" class="sgf-chip" data-folder-archive="${f.id}" title="Cất folder này để mở chỗ cho chức năng khác">Lưu trữ</button>`}
             ${f.has_change && f.state === 'active' ? `<button type="button" class="sgf-chip" data-folder-done="${f.id}" title="Bản nháp đã ổn: gửi Ban điều hành duyệt để phát hành">✓ Xong</button>` : ''}</div>`).join('')}` : ''}
         ${school.length ? `<div class="sgf-inbox-head"><span>Chức năng bạn khác đang làm</span></div>
           ${school.slice(0, 5).map(f => `<div class="sgf-folder">
@@ -785,6 +789,20 @@ function bind(root) {
       syncFolderRow();
       folderSel.value = add.dataset.folderAdd;
       root.querySelector('#sgf-title-in').focus();
+      return;
+    }
+    const life = e.target.closest('[data-folder-archive], [data-folder-reopen]');
+    if (life) {
+      life.disabled = true;
+      const [act, id] = life.dataset.folderArchive ? ['archive', life.dataset.folderArchive] : ['reopen', life.dataset.folderReopen];
+      const r = await fetch(`api/ai-board/folders/${encodeURIComponent(id)}/${act}`, {
+        method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': await csrfToken() } }).catch(() => null);
+      if (r?.ok) loadFolders();
+      else {
+        life.disabled = false;
+        const e2 = r ? await r.json().catch(() => ({})) : {};
+        life.textContent = e2.error === 'folder_limit' ? 'Đã đủ 3 chức năng đang mở' : 'Thử lại';
+      }
       return;
     }
     const done = e.target.closest('[data-folder-done]');

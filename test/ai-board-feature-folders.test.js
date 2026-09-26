@@ -192,3 +192,36 @@ test('folder brief: purpose, flow, done, requested, owned files and recent reque
   assert.match(big.text, /Việc số 59/);
   assert.match(big.text, /việc cũ hơn đã làm/);
 });
+
+// Feature-folders ticket 11: lifecycle.
+test('an idle folder is archived after the configured days; the owner can reopen it into a new cycle', () => {
+  const { db, store, submit } = fixture();
+  const { folder_id: id } = submit(1, { type: 'feature' });
+  db.prepare("UPDATE ai_feature_folders SET branch='ai-board/2026-09-26-feature-x', head_sha=?, approved_at=1 WHERE id=?")
+    .run('b'.repeat(40), id);
+  const day = 24 * 3600_000;
+  const later = Date.now() + (LIMITS.folder_archive_days.value + 1) * day;
+  assert.equal(store.archiveStaleFolders(Date.now()), 0);
+  assert.equal(store.archiveStaleFolders(later), 1);
+  const row = db.prepare('SELECT state, branch, cycle FROM ai_feature_folders WHERE id=?').get(id);
+  assert.deepEqual({ ...row }, { state: 'archived', branch: null, cycle: 2 });
+  const event = JSON.parse(db.prepare("SELECT internal_detail FROM ai_events WHERE event_type='folder_archived'").get().internal_detail);
+  assert.equal(event.unmerged_branch, 'ai-board/2026-09-26-feature-x'); // left for cleanup on GitHub
+  assert.equal(store.listFolders(1, 'it').mine[0].state, 'archived'); // the owner still sees it
+  assert.equal(store.listFolders(2, 'it').school.length, 0); // classmates do not
+  assert.throws(() => submit(1, { folderId: id }), /Không tìm thấy chức năng/);
+  assert.throws(() => store.reopenFolder(id, 2), (e) => e.code === 'folder_not_found');
+  assert.equal(store.reopenFolder(id, 1).state, 'active');
+  assert.ok(submit(1, { folderId: id, title: 'Làm tiếp sau khi mở lại' }).folder_id);
+});
+
+test('archiving frees a slot; reopening respects the open-folder cap', () => {
+  const { store, submit } = fixture();
+  const ids = [];
+  for (let i = 0; i < LIMITS.open_folders_per_user.value; i += 1) ids.push(submit(1, { type: 'feature' }).folder_id);
+  assert.throws(() => submit(1, { type: 'feature' }), /chức năng chưa xong/);
+  store.archiveFolder(ids[0], 1);
+  const fresh = submit(1, { type: 'feature' }).folder_id;
+  assert.ok(fresh);
+  assert.throws(() => store.reopenFolder(ids[0], 1), (e) => e.code === 'folder_limit');
+});

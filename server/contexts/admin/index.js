@@ -571,6 +571,10 @@ export function attachAdmin(r) {
       }
       // subscriptions là user-level — xoá theo user.
       if (tableExists('subscriptions')) db.prepare(`DELETE FROM subscriptions WHERE user_id = ?`).run(uid);
+      // Folder chức năng của người bị xoá chuyển cho admin đang xoá: giữ lịch sử, không mất bản nháp.
+      if (tableExists('ai_feature_folders')) {
+        db.prepare(`UPDATE ai_feature_folders SET owner_user_id = ? WHERE owner_user_id = ?`).run(req.user.id, uid);
+      }
       // attempts/achievements link bằng player_name=display_name, để lại làm thống kê lịch sử.
       db.prepare(`DELETE FROM users WHERE id = ?`).run(uid);
     });
