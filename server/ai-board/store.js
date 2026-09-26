@@ -3,6 +3,7 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { CAPABILITY_CATALOG, PlanGuardrailError, validatePlan } from './policy.js';
+import { registerRelease } from './releases.js';
 
 export { PlanGuardrailError } from './policy.js';
 
@@ -533,6 +534,7 @@ export function createAiBoardStore(db, hooks = {}) {
     if (!folder) throw new WorkerContractError('folder not found', 404, 'folder_not_found');
     db.prepare(`UPDATE ai_feature_folders SET approved_by=?, approved_at=?, updated_at=?,
       state=CASE WHEN state='draft' THEN 'active' ELSE state END WHERE id=?`).run(Number(adminUserId), now, now, folder.id);
+    registerRelease(db, folder, adminUserId, now); // ticket 10: cờ phát hành, mặc định chỉ người tạo
     const waiting = db.prepare(`
       SELECT t.id, t.plan_hash FROM ai_tickets t JOIN requests q ON q.id = t.source_request_id
       WHERE q.folder_id = ? AND t.parent_id IS NULL AND t.status = 'waiting_authorization'

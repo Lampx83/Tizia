@@ -57,6 +57,7 @@ import { securityHeaders, csrf, requireStrictCsrf, apiLimiter, sensitiveAuthLimi
 import { createAiBoardStore } from './ai-board/store.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from './ai-board/routes.js';
 import { attachAiBoardIntake, clarifyNotifier } from './contexts/ai-board-intake/index.js';
+import { attachAiBoardReleases } from './contexts/ai-board-releases/index.js';
 import { aiQuotaGate, recordAiCall } from './ai-quota.js';
 import { createNotification } from './db.js';
 import { log, initErrorTracking, installProcessGuards, requestContext, requestLogger, expressErrorHandler } from './observability.js';
@@ -356,6 +357,8 @@ attachAiBoardRequestRoutes(r, {
   onClarify: clarifyNotifier(createNotification),
 });
 attachAiBoardWorkerRoutes(r, { store: aiBoardStore });
+// Cờ phát hành (ticket 10): có page gate /<slug>.html → phải trước route HTML + static bên dưới.
+attachAiBoardReleases(r, { db, requireAuth, requireAdmin, requireStrictCsrf });
 
 
 r.post('/api/attempts', requireAuth, requireEnrolled, (req, res) => {
