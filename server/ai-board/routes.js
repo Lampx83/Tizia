@@ -1,5 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
+import express from 'express';
 import { assertConfirmed, LEASE_MS, LIMITS, PlanGuardrailError, RequestValidationError, WorkerContractError } from './store.js';
+import { afterVerdict, retryRequest, retryState, saveDraftScreenshots, SHOTS_BODY_LIMIT, SHOTS_TYPE } from './drafts.js';
 import { checkIntake, recordIntakeFlags } from './intake-guard.js';
 import { classifyRequest as classifyWithModel, recordClassification } from './classifier.js';
 import { checkClarity } from './clarity-rules.js';
@@ -112,7 +114,8 @@ export function attachAiBoardRequestRoutes(router, {
   router.get('/api/requests', requireAuth, (req, res) => {
     const domain = String(req.query.domain || req.user.enrolled_domain || '').trim();
     if (!domain) return res.status(400).json({ error: 'domain required' });
-    const items = store.listRequestsForOwner(req.user.id, domain, req.query.limit);
+    const items = store.listRequestsForOwner(req.user.id, domain, req.query.limit)
+      .map((item) => ({ ...item, retry: retryState(store.db, item.root_ticket_id, item.phase) }));
     const stats = {};
     for (const item of items) stats[item.status] = (stats[item.status] || 0) + 1;
     res.json({ items, stats });
@@ -121,6 +124,23 @@ export function attachAiBoardRequestRoutes(router, {
   router.post('/api/requests/:id/cancel', requireAuth, requireStrictCsrf, (req, res) => {
     try {
       res.json(store.cancelRequest(req.params.id, { ownerUserId: req.user.id }));
+    } catch (error) {
+      if (error instanceof WorkerContractError) {
+        return res.status(error.status).json({ error: error.code, message: error.message });
+      }
+      throw error;
+    }
+  });
+
+  // "Thử cách khác" (ticket 09): lượt hỏng của chính mình → lập plan mới; hỏng 2 lượt liền thì chờ admin.
+  router.post('/api/requests/:id/retry', requireAuth, requireStrictCsrf, (req, res) => {
+    const pendingCap = LIMITS.pending_roots_per_user.value;
+    if (req.user.role !== 'admin' && store.countPendingRoots(req.user.id) >= pendingCap) {
+      return res.status(429).json({ error: 'too_many_pending',
+        message: `Bạn đang có ${pendingCap} yêu cầu chờ Ban xử lý. Đợi một yêu cầu xong rồi thử lại nhé!` });
+    }
+    try {
+      res.json(retryRequest(store, req.params.id, req.user.id));
     } catch (error) {
       if (error instanceof WorkerContractError) {
         return res.status(error.status).json({ error: error.code, message: error.message });
@@ -225,6 +245,8 @@ export function attachAiBoardWorkerRoutes(router, {
   store,
   env = process.env,
   leaseMs = LEASE_MS,
+  uploadsDir = null, // thư mục /uploads/requests (ảnh bản nháp); thiếu → route ảnh trả 503
+  onVerdict = null, // ({request_id, title, domain, student, kind}) sau mỗi verdict: chuông cho người gửi
 }) {
   const key = String(env.AI_BOARD_WORKER_KEY || '').trim();
   if (key.length < 24) return false;
@@ -341,8 +363,28 @@ export function attachAiBoardWorkerRoutes(router, {
       verdict: req.body?.verdict,
       idempotencyKey: req.body?.idempotency_key,
     });
+    const notice = afterVerdict(store.db, req.params.id, verdict);
     res.json({ verdict });
+    if (notice && onVerdict) {
+      try { onVerdict(notice); } catch (error) { console.warn('[ai-board] verdict notification failed:', error.message); }
+    }
   }));
+
+  // Ảnh bản nháp (ticket 09): auth trước rồi mới parse body lớn; content-type riêng để express.json chung bỏ qua.
+  router.post('/api/ai-board/worker/tickets/:id/screenshots', authenticate,
+    express.json({ type: SHOTS_TYPE, limit: SHOTS_BODY_LIMIT }), async (req, res, next) => {
+      if (!uploadsDir) return res.status(503).json({ error: 'uploads_unavailable' });
+      if (!req.is(SHOTS_TYPE)) return res.status(415).json({ error: 'unsupported_media_type' });
+      try {
+        const lease = leaseInput(req.body);
+        res.json(await saveDraftScreenshots(store, req.params.id, {
+          ...lease, runId: req.body?.run_id, images: req.body?.images, uploadsDir,
+        }));
+      } catch (error) {
+        if (error instanceof WorkerContractError) return res.status(error.status).json({ error: error.code, message: error.message });
+        next(error);
+      }
+    });
 
   router.post('/api/ai-board/worker/tickets/:id/pull-request', authenticate, handle((req, res) => {
     const lease = leaseInput(req.body);

@@ -1750,6 +1750,7 @@ export function createAiBoardStore(db, hooks = {}) {
     recordModelCalls,
     getRequestTrace,
     claimNext,
+    assertLease, // drafts.js: route ảnh bản nháp kiểm lease như các route worker khác
     getLeasedSnapshot,
     heartbeat,
     createRun,

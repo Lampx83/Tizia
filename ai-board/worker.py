@@ -123,8 +123,9 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
              repair_reason: str | None, catalog: dict | None,
              request_detail: str | None, memory_path,
              should_stop: Callable[[], bool] | None,
-             candidate_opts: dict | None = None) -> tuple[list[dict], str | None, dict | None]:
-    """One pass of Gates 3→5.5 on fresh scratch + worktree. Return (public gates, failure kind, candidate)."""
+             candidate_opts: dict | None = None) -> tuple[list[dict], str | None, dict | None, list[dict]]:
+    """One pass of Gates 3→5.5 on fresh scratch + worktree. Return (public gates, failure kind, candidate,
+    ảnh chụp cổng 5 — file tạm cục bộ)."""
     scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
     state = {
         "plan": _execution_plan(plan), "scratch_repo": str(scratch),
@@ -188,9 +189,24 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
             cleanup(state, keep_branch=False)
             lease_lost = True
         shutil.rmtree(scratch, ignore_errors=True)
+    shots = list((state.get("evidence") or {}).get("screenshots") or [])
     if lease_lost:
+        drop_screenshots(shots)
         raise LeaseLostError("lease revoked during gate execution")
-    return gates, kind, candidate
+    return gates, kind, candidate, shots
+
+
+def drop_screenshots(shots: list[dict]) -> None:
+    """Xoá file ảnh tạm của cổng 5 (và thư mục chứa nếu đã rỗng)."""
+    for shot in shots or []:
+        if not shot.get("path"):
+            continue
+        path = Path(shot["path"])
+        path.unlink(missing_ok=True)
+        try:
+            path.parent.rmdir()
+        except OSError:
+            pass
 
 
 def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate,
@@ -214,10 +230,12 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
     catalog = policy.get("capabilities") if policy is not None else None
     repairs: list[dict] = []
     repair_reason = None
+    shots: list[dict] = []
     while True:
         if getattr(deps, "trace", None):
             deps.trace.attempt = len(repairs)
-        gates, kind, candidate = _attempt(
+        drop_screenshots(shots)  # ảnh của lần trước lần sửa: bỏ
+        gates, kind, candidate, shots = _attempt(
             plan, ticket_id=ticket_id, checkout_source=checkout_source, deps=deps, budget=budget,
             run_gate=run_gate, cleanup=cleanup, repair_reason=repair_reason, catalog=catalog,
             request_detail=request_detail, memory_path=memory_path, should_stop=should_stop,
@@ -242,6 +260,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
         "failure_class": None if passed else kind, "repairs": repairs,
         "candidate": candidate if passed else None,
         "budget_used": int(getattr(budget, "units", 0)), "gates": gates,
+        "screenshots": shots,  # chỉ cục bộ: HttpWorker lấy ra trước khi gửi verdict
     }
 
 
@@ -344,8 +363,33 @@ class WorkerClient:
         with urllib.request.urlopen(request, timeout=self.timeout) as response:
             return json.loads(response.read().decode("utf-8"))
 
-    def post(self, path: str, payload: dict) -> dict:
-        return self.transport("POST", path, payload, {"x-ai-worker-key": self.key})
+    def post(self, path: str, payload: dict, content_type: str | None = None) -> dict:
+        """content_type riêng (vd SHOTS_TYPE) → bỏ qua express.json 64kb chung, route tự parse với trần riêng."""
+        headers = {"x-ai-worker-key": self.key, **({"content-type": content_type} if content_type else {})}
+        return self.transport("POST", path, payload, headers)
+
+
+# Khớp server/ai-board/drafts.js: PNG, ≤ 8 ảnh, mỗi ảnh ≤ 2 MB.
+SHOTS_TYPE = "application/vnd.tizia.screenshots+json"
+MAX_SHOT_BYTES = 2 * 1024 * 1024
+MAX_SHOTS = 8
+
+
+def screenshot_payload(shots: list[dict]) -> list[dict]:
+    """Ảnh cổng 5 → body upload (base64). Bỏ ảnh quá trần/không đọc được; không bao giờ raise."""
+    import base64
+
+    images = []
+    for shot in shots[:MAX_SHOTS]:
+        try:
+            data = Path(shot["path"]).read_bytes()
+        except (OSError, KeyError, TypeError):
+            continue
+        if not data or len(data) > MAX_SHOT_BYTES:
+            continue
+        images.append({"phase": shot.get("phase"), "page": shot.get("page"), "width": shot.get("width"),
+                       "png_base64": base64.b64encode(data).decode("ascii")})
+    return images
 
 
 @dataclass
@@ -502,6 +546,17 @@ class HttpWorker:
             return f"PR not opened: {str(error)[:500]}"
         return None
 
+    def _upload_screenshots(self, ticket_id: int, lease: dict, run: dict, shots: list[dict]) -> None:
+        """Đăng ảnh bản nháp vào thread yêu cầu. Best-effort: lỗi không đổi verdict (mất lease → verdict tự báo)."""
+        images = screenshot_payload(shots)
+        if not images:
+            return
+        try:
+            self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/screenshots",
+                             {**lease, "run_id": run["id"], "images": images}, content_type=SHOTS_TYPE)
+        except Exception as error:  # noqa: BLE001
+            print(f"[worker] đăng ảnh bản nháp lỗi: {str(error)[:200]}")
+
     def _release(self, ticket_id: int, payload: dict) -> dict:
         """Gửi nốt trace còn đệm khi còn lease (sau release server trả 409 stale_lease), rồi trả lease."""
         if self.tracer:
@@ -588,6 +643,13 @@ class HttpWorker:
                     ), ticket_id, lease,
                     on_lease_lost=lambda lost_result: self.candidates.discard((lost_result or {}).get("candidate")),
                 )
+                shots = (result.pop("screenshots", None) if isinstance(result, dict) else None) or []
+                try:
+                    # Ảnh trước verdict: chuông "xem ảnh" của verdict đạt mở ra thread đã có ảnh.
+                    if shots and result.get("outcome") in ("ready_for_pr", "needs_review"):
+                        self._upload_screenshots(ticket_id, lease, run, shots)
+                finally:
+                    drop_screenshots(shots)
                 try:
                     verdict = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/verdict", {
                         **lease, "run_id": run["id"], "verdict": result,

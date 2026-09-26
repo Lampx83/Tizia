@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 import urllib.request
 from pathlib import Path
+from typing import Callable
 from urllib.parse import urlsplit
 
 _SECRET_NAME = re.compile(r"(?:SECRET|TOKEN|PASSWORD|API_KEY|SECKEY|PRIVATE_KEY)", re.I)
@@ -132,19 +133,115 @@ def _launch(playwright):
         raise
 
 
-def capture_screenshot(url: str, path: Path) -> None:
+SHOT_WIDTHS = (375, 1280)  # điện thoại, máy tính
+MAX_SHOT_PAGES = 2         # ≤ 2 trang × 2 khổ × (trước, sau) = 8 ảnh
+MAX_SHOT_HEIGHT = 2000     # cắt trang dài: PNG vừa trần upload của server
+
+
+def capture_screenshot(url: str, path: Path, width: int = 1280) -> None:
     """Optional dependency: a single Chromium capture, with no visual diff engine."""
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as playwright:
         browser = _launch(playwright)
         try:
-            page = browser.new_page()
+            page = browser.new_page(viewport={"width": width, "height": 812 if width < 768 else 800})
             response = page.goto(url, wait_until="domcontentloaded", timeout=15000)
             check_landing(url, page.url, response.status if response else None)
-            page.screenshot(path=str(path), full_page=True)
+            height = min(max(int(page.evaluate("document.documentElement.scrollHeight") or 1), 1), MAX_SHOT_HEIGHT)
+            page.screenshot(path=str(path), full_page=True, clip={"x": 0, "y": 0, "width": width, "height": height})
         finally:
             browser.close()
+
+
+def _loader_pages(checkout: Path, assets: list[str], depth: int = 3) -> list[str]:
+    """Trang HTML nạp file JS/CSS đã đổi (link/script trực tiếp hoặc qua import, ≤ depth bước), gần trước rồi theo tên.
+    ponytail: quét lại public/ mỗi lần (~600 file, dưới 1 s); dùng code_index.json lưu sẵn nếu chậm."""
+    import code_index
+
+    owners: dict[str, set[str]] = {}
+    for file in sorted((checkout / "public").rglob("*")):
+        rel = file.relative_to(checkout).as_posix()
+        if file.suffix not in (".html", ".js", ".mjs") or not file.is_file() or file.stat().st_size > code_index.MAX_BYTES:
+            continue
+        entry = code_index.parse(rel, file.read_text(encoding="utf-8", errors="replace"))
+        links = entry.get("links") or {}
+        for target in [*links.get("css", []), *links.get("js", []), *entry.get("imports", [])]:
+            owners.setdefault(target, set()).add(rel)
+    found, frontier, seen = [], list(assets), set(assets)
+    for _ in range(depth):
+        nxt = []
+        for owner in sorted({o for target in frontier for o in owners.get(target, ())} - seen):
+            seen.add(owner)
+            (found if owner.endswith(".html") else nxt).append(owner)
+        frontier = nxt
+    return found
+
+
+def _shot_pages(checkout: Path, pages: list[str], primary: str | None) -> list[str]:
+    """Trang chụp: HTML trong diff; không có thì trang người gửi đang xem + trang nạp JS/CSS đổi."""
+    html = [page for page in pages if page.endswith(".html")]
+    if html:
+        return html[:MAX_SHOT_PAGES]
+    loaders = ["/" + p.removeprefix("public/") for p in _loader_pages(checkout, ["public" + p for p in pages])]
+    return list(dict.fromkeys([*([primary] if primary else []), *loaders]))[:MAX_SHOT_PAGES]
+
+
+def _restore_base(state: dict, checkout: Path, pages: list[str], cp: Callable[[Path, str], None]) -> set[str] | None:
+    """Chép bản base của file public đã đổi vào container đang chạy (server đọc file mỗi request) để chụp BEFORE
+    không phải build base. Trả file mới ở candidate (base không có → không chụp BEFORE); None = không biết base.
+    ponytail: file mới vẫn nằm trong container; trang base không trỏ tới nên không ảnh hưởng ảnh."""
+    import code_index
+
+    base_sha = state.get("base_sha")
+    if not base_sha:
+        return None
+    new: set[str] = set()
+    with tempfile.TemporaryDirectory(prefix="ai-verify-base-") as temp:
+        for index, page in enumerate(pages):
+            try:
+                blob = code_index.git(checkout, "show", f"{base_sha}:public{page}")
+            except OSError:
+                new.add(page)
+                continue
+            local = Path(temp) / str(index)
+            local.write_bytes(blob)
+            cp(local, f"/app/public{page}")
+    return new
+
+
+def _capture_all(base: str, shot_pages: list[str], primary: str | None, restore: Callable[[], set[str] | None],
+                 logs: list[str]) -> list[dict]:
+    """AFTER rồi BEFORE, mỗi trang × SHOT_WIDTHS. Ảnh AFTER của trang chính bắt buộc: lỗi → raise lỗi gốc.
+    Ảnh khác lỗi (trang cần đăng nhập, base hỏng) chỉ ghi log."""
+    shot_dir = Path(tempfile.mkdtemp(prefix="ai-verify-shots-"))
+    shots: list[dict] = []
+    for phase in ("after", "before"):
+        targets = shot_pages
+        if phase == "before":
+            try:
+                new = restore()
+            except (OSError, RuntimeError) as exc:
+                logs.append(f"Bỏ ảnh BEFORE: {exc}")
+                break
+            if new is None:
+                logs.append("Bỏ ảnh BEFORE: không biết commit base")
+                break
+            targets = [page for page in shot_pages if page.split("?")[0] not in new]
+        for page in targets:
+            for width in SHOT_WIDTHS:
+                path = shot_dir / f"{phase}-{len(shots)}-{width}.png"
+                try:
+                    capture_screenshot(base + page, path, width)
+                except Exception as exc:
+                    if phase == "after" and page == primary:
+                        shutil.rmtree(shot_dir, ignore_errors=True)
+                        raise
+                    logs.append(f"Bỏ ảnh {phase} {page} {width}px: {exc}")
+                    continue
+                shots.append({"phase": phase, "page": page, "width": width, "path": str(path)})
+                logs.append(f"Screenshot {phase} {page} {width}px: {path}")
+    return shots
 
 
 def probe_http(url: str) -> tuple[int, bytes]:
@@ -175,7 +272,9 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
         return {"gate": 5, "blocked": True, "reason": "thay đổi không chạm file public nào để quan sát qua HTTP",
                 "evidence": None, "failure_class": "plan"}
     html = [page for page in pages if page.endswith(".html")]
-    shot_page = html[0] if html else _request_page(state.get("request_detail"))
+    # Trang chính: ảnh AFTER bắt buộc (D0). Các trang/khổ/ảnh BEFORE khác là best-effort.
+    primary = html[0] if html else _request_page(state.get("request_detail"))
+    shots: list[dict] = []
     runner_name = "fake" if runner else "docker"  # injected runner = test double, never real evidence
     runner = runner or subprocess.run
     http_probe = http_probe or probe_http
@@ -296,17 +395,20 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 logs.append(f"Changed page HTTP {status}: {page}")
             http_observed = True
             # Changed HTML page, else the page the requester was on (CSS/JS change); none named = no shot.
-            if shot_page:
-                screenshot = Path(tempfile.mkdtemp(prefix=f"{project}-artifact-")) / "screenshot.png"
+            shot_pages = _shot_pages(checkout, pages, primary)
+            if shot_pages:
+                def cp(local: Path, target: str) -> None:
+                    command([*compose, "cp", str(local), f"tizia:{target}"])
+
                 try:
-                    capture_screenshot(base + shot_page, screenshot)
-                    logs.append(f"Screenshot {shot_page}: {screenshot}")
+                    shots = _capture_all(base, shot_pages, primary,
+                                         lambda: _restore_base(state, checkout, pages, cp), logs)
                 except Exception as exc:  # D0: UI evidence is mandatory; absent browser = environment
-                    shutil.rmtree(screenshot.parent, ignore_errors=True)
-                    screenshot = None
                     # Wrong landing page is not fixed by a retry or a repair; admin decides.
                     kind = "plan" if isinstance(exc, ScreenshotTargetError) else "transient"
                     raise RuntimeError(f"thiếu screenshot bắt buộc cho thay đổi UI: {exc}") from exc
+                screenshot = next((s["path"] for s in shots
+                                   if s["phase"] == "after" and s["page"] == primary and s["width"] == 1280), None)
         except (OSError, RuntimeError, ValueError, KeyError, TypeError) as exc:
             reason = str(exc)
         finally:
@@ -318,7 +420,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
 
     evidence = {"text": "Smoke scripts/smoke-user-state.sh: một luồng user-state, không bao phủ toàn ứng dụng.\n"
                         + "\n".join(logs), "smoke_passed": smoke_ok, "http_observed": http_observed, "runner": runner_name,
-                "screenshot": str(screenshot) if screenshot else None}
+                "screenshot": str(screenshot) if screenshot else None, "screenshots": shots}
     state["evidence"] = evidence
     return {"gate": 5, "blocked": bool(reason), "reason": reason, "evidence": evidence,
             "failure_class": kind if reason else None}

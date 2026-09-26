@@ -452,6 +452,28 @@ def run(script, budget=None, cleanups=None):
     return verdict, calls
 
 
+def test_verdict_carries_the_last_attempts_gate_5_screenshots_and_drops_older_ones(tmp_path):
+    ordinary = {'blocked': True, 'reason': 'risk', 'failure_class': 'ordinary'}
+    inner, _calls = scripted_gates({5.5: [ordinary, {}]})
+    made = []
+
+    def run_gate(gate, request, deps, budget, state):
+        result = inner(gate, request, deps, budget, state)
+        if gate == 5:
+            path = tmp_path / f'shots-{len(made)}' / 'after.png'  # mỗi lượt cổng 5 một thư mục tạm, như verify
+            path.parent.mkdir()
+            path.write_bytes(b'png')
+            made.append(path)
+            state['evidence'] = {'screenshots': [{'phase': 'after', 'page': '/x.html', 'width': 1280, 'path': str(path)}]}
+        return result
+
+    verdict = execute_pre_pr(ONE_STEP_PLAN, ticket_id=7, checkout_source='unused', deps=object(),
+                             budget=TickBudget(), run_gate=run_gate, cleanup=lambda *_, **__: None)
+    assert verdict['outcome'] == 'ready_for_pr' and len(made) == 2
+    assert verdict['screenshots'] == [{'phase': 'after', 'page': '/x.html', 'width': 1280, 'path': str(made[1])}]
+    assert not made[0].parent.exists() and made[1].exists()
+
+
 def test_transient_docker_failure_gets_exactly_one_mechanical_retry():
     transient = {'blocked': True, 'reason': 'docker compose up exit 1', 'failure_class': 'transient'}
     verdict, calls = run({5: [transient, {}]})
@@ -1099,6 +1121,58 @@ def test_blocked_verdict_or_existing_pr_opens_nothing():
     assert candidates.published == []
     assert not any(call[1].endswith('/pull-request') for call in transport.calls)
     assert '#41' in transport.calls[-1][2]['internal_detail']
+
+
+def _shots(tmp_path, sizes):
+    out = []
+    for index, size in enumerate(sizes):
+        path = tmp_path / f'shot-{index}.png'
+        path.write_bytes(b'\x89PNG\r\n\x1a\n' + b'x' * size)
+        out.append({'phase': 'after' if index < 2 else 'before', 'page': '/x.html', 'width': (375, 1280)[index % 2],
+                    'path': str(path)})
+    return out
+
+
+def test_passing_draft_screenshots_are_uploaded_before_the_verdict_then_deleted(tmp_path):
+    import base64
+    import worker as worker_module
+
+    shots = _shots(tmp_path, [10, 20, 30, worker_module.MAX_SHOT_BYTES])  # ảnh cuối quá trần → bỏ
+    transport = FakeTransport()
+    _publishing_worker(transport, PublishingCandidates(), {**PASSING, 'screenshots': shots}).run_once()
+    names = [call[1].rsplit('/', 1)[-1] for call in transport.calls]
+    assert names.index('screenshots') == names.index('verdict') - 1
+    _method, path, payload, headers = transport.calls[names.index('screenshots')]
+    assert path == '/api/ai-board/worker/tickets/7/screenshots'
+    assert headers['content-type'] == worker_module.SHOTS_TYPE and headers['x-ai-worker-key'] == 'secret'
+    assert payload['lease_token'] == 'lease-7' and payload['run_id'] == 11
+    assert [(i['phase'], i['width']) for i in payload['images']] == [('after', 375), ('after', 1280), ('before', 375)]
+    assert base64.b64decode(payload['images'][0]['png_base64']).startswith(b'\x89PNG')
+    assert 'screenshots' not in transport.calls[names.index('verdict')][2]['verdict']  # đường dẫn cục bộ không lên server
+    assert not any(Path(s['path']).exists() for s in shots)
+
+
+def test_blocked_run_uploads_no_screenshots_but_still_deletes_them(tmp_path):
+    shots = _shots(tmp_path, [10])
+    blocked = {**PASSING, 'outcome': 'blocked', 'candidate': None, 'failure_class': 'ordinary', 'screenshots': shots}
+    transport = FakeTransport()
+    _publishing_worker(transport, PublishingCandidates(), blocked).run_once()
+    assert not any(call[1].endswith('/screenshots') for call in transport.calls)
+    assert not Path(shots[0]['path']).exists()
+
+
+def test_failed_screenshot_upload_does_not_change_the_verdict(tmp_path):
+    class Down(FakeTransport):
+        def __call__(self, method, path, payload, headers):
+            if path.endswith('/screenshots'):
+                self.calls.append((method, path, payload, headers))
+                raise OSError('connection reset')
+            return super().__call__(method, path, payload, headers)
+
+    transport = Down()
+    result = _publishing_worker(transport, PublishingCandidates(), {**PASSING, 'screenshots': _shots(tmp_path, [5])}).run_once()
+    assert result['pre_pr_verdict']['outcome'] == 'ready_for_pr'
+    assert transport.calls[-1][1].endswith('/release')
 
 
 def test_failed_publish_still_releases_with_the_reason():
