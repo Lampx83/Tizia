@@ -5,12 +5,20 @@ Output ngắn → không vượt timeout gateway; file lớn không còn là gi�
 from __future__ import annotations
 
 import re
+import unicodedata
 
 CONTEXT_BUDGET = 6000  # ký tự trích đưa vào prompt cho 1 file
 RADIUS = 3             # số dòng quanh mỗi dòng khớp từ khoá
 TAIL_LINES = 8         # luôn kèm cuối file: nhiều yêu cầu là "thêm vào cuối trang"
 MAX_KEYWORDS = 12
 MAX_LINE = 400         # dòng dài hơn bị cắt, không dùng làm search được
+# locate (chỉ mục chữ hiển thị) — mọi núm ở đây:
+NGRAM = (2, 5)         # cụm 2–5 từ: 1 từ khớp quá rộng, > 5 từ người dùng hiếm chép nguyên văn
+MAX_PHRASES = 6        # số cụm hiếm nhất (IDF) đem đi tìm; nhiều hơn chỉ thêm nhiễu vào 800 ký tự locate
+TEXT_MAX = 200         # mảnh chuỗi JS dài hơn = dữ liệu/code dài, không phải nhãn người dùng đọc thấy
+MAX_RENDERERS = 2      # module render tối đa đưa lên target cổng 1 (mỗi cái còn cần budget trích)
+MIN_STEM = 4           # stem tên file ngắn hơn ("app", "ui") khớp tên hàm bừa bãi
+USERS_SHARE = 1 / 3    # phần budget locate giữ cho dòng import: đủ 2–3 dòng, hit vẫn chiếm phần lớn
 
 _WORD = re.compile(r"[0-9A-Za-zÀ-ỹ_-]{3,}")
 _QUOTED = re.compile(r"['\"“‘]([^'\"”’\n]{3,80})['\"”’]")
@@ -40,29 +48,42 @@ _PAGE_LINE = re.compile(r"^\s*\[Trang:.*$", re.M)
 _SENTENCE = re.compile(r"[.!?,;:\n()]+")
 
 
-def _title_runs(sentence: str) -> list[str]:
-    """≥ 2 chữ liền nhau viết hoa đầu ("IT Game Master"). Chữ đầu câu viết hoa theo ngữ pháp → bỏ nó ra."""
-    words, runs, run = sentence.split(), [], []
-    for i, word in enumerate(words + [""]):
-        if word[:1].isupper():
-            run.append((i, word))
-            continue
-        if run and run[0][0] == 0:
-            run = run[1:]
-        if len(run) >= 2:
-            runs.append(" ".join(w for _, w in run))
-        run = []
-    return runs
+# Chữ Latin có dấu → chữ gốc, đ → d, dấu rời (text đã NFD) → bỏ. Bảng thay vì NFD: unicodedata.normalize trên
+# chuỗi lớn chậm phi tuyến (20 MB mất vài phút), mà chỉ mục fold ~ 20 MB chữ.
+_UNMARK = str.maketrans({**{c: unicodedata.normalize("NFD", chr(c))[0] for c in (*range(0xC0, 0x250), *range(0x1E00, 0x1F00))
+                            if unicodedata.normalize("NFD", chr(c))[0] != chr(c)},
+                         0x111: "d", **{c: None for c in range(0x300, 0x370)}})
+_NON_ALNUM = re.compile(r"[^a-z0-9\n]+")
+
+
+def _unmark(text: str) -> str:
+    return text.lower().translate(_UNMARK)
+
+
+def fold(text: str) -> str:
+    """Bỏ dấu tiếng Việt, đ→d, chữ thường, mọi ký tự không chữ/số → 1 khoảng trắng."""
+    return _NON_ALNUM.sub(" ", _unmark((text or "").replace("\n", " "))).strip()
+
+
+def fold_many(texts: list[str]) -> list[str]:
+    """[fold(t)] trong 1 lượt translate/sub (chỉ mục gọi cho ~ nửa triệu mảnh). Mảnh không được chứa xuống dòng."""
+    return [part.strip() for part in _NON_ALNUM.sub(" ", _unmark("\n".join(texts))).split("\n")] if texts else []
+
+
+_STOP_FOLDED = {fold(w) for w in _STOP}
 
 
 def phrases(*texts: str | None) -> list[str]:
-    """Chữ hiển thị người dùng nhắc: cụm trong ngoặc + cụm viết hoa đầu. Bỏ dòng [Trang: …] FAB tự thêm."""
+    """Cụm 2–5 từ liên tiếp (đã fold) trong từng câu người dùng viết, dài trước; bỏ cụm toàn stopword.
+    Không dựa chữ hoa. Bỏ dòng [Trang: …] FAB tự thêm. Chọn cụm nào là việc của chỉ mục (tools.find_text)."""
     found: list[str] = []
     for text in filter(None, texts):
-        text = _PAGE_LINE.sub("", text)
-        found += [q.strip() for q in _QUOTED.findall(text)]
-        found += [r for s in _SENTENCE.split(text) for r in _title_runs(s)]
-    return list(dict.fromkeys(p for p in found if len(p) >= 5))[:6]
+        for sentence in _SENTENCE.split(_PAGE_LINE.sub("", text)):
+            words = fold(sentence).split()
+            found += [" ".join(words[i:i + n]) for n in range(NGRAM[1], NGRAM[0] - 1, -1)
+                      for i in range(len(words) - n + 1)
+                      if not all(w in _STOP_FOLDED for w in words[i:i + n])]
+    return list(dict.fromkeys(found))
 
 
 def excerpt(content: str, words: list[str], *, budget: int = CONTEXT_BUDGET) -> str:
