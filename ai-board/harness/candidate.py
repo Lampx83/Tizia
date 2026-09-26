@@ -126,6 +126,51 @@ def branch_name(name: str) -> str:
     return branch
 
 
+class FolderConflict(RuntimeError):
+    """Nhánh folder không gộp được base: dừng, chờ người. Không tự giải xung đột."""
+
+
+def folder_branch(folder_slug: str, cycle: int = 1) -> str:
+    """Nhánh chu kỳ folder (ticket 05): ai-board/<date>-feature-<slug>[-c<n>], cùng tên cho mọi lượt của chu kỳ."""
+    head = f"feature-{slug(folder_slug)}"[:BRANCH_SLUG_MAX - 4].rstrip("-") + (f"-c{int(cycle)}" if int(cycle) > 1 else "")
+    branch = f"{BRANCH_PREFIX}{time.strftime('%Y-%m-%d')}-{head}"
+    if not BRANCH_PATTERN.fullmatch(branch):
+        raise ValueError(f"tên nhánh folder sai contract: {branch}")
+    return branch
+
+
+def _ref_sha(repo, ref: str) -> str | None:
+    out = _git(repo, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}")
+    return out.stdout.strip() if not out.returncode else None
+
+
+def folder_source(repo, branch: str, base_ref: str) -> tuple[str, str | None]:
+    """Worktree tạm tách tại đỉnh nhánh folder đã gộp base_ref, để lượt sau đọc/sửa trên code của lượt trước.
+    Return (path, đỉnh cũ | None khi chu kỳ mới). Raise FolderConflict khi gộp xung đột (không để lại gì)."""
+    base = _git_out(["rev-parse", "--verify", f"{base_ref}^{{commit}}"], repo).strip()
+    tip = _ref_sha(repo, f"refs/heads/{branch}") or _ref_sha(repo, f"refs/remotes/origin/{branch}")
+    path = tempfile.mkdtemp(prefix="ai-board-folder-")
+    try:
+        _git_out(["worktree", "add", "-q", "--detach", path, tip or base], repo)
+        if tip and _git(path, "merge-base", "--is-ancestor", base, "HEAD").returncode:
+            merged = subprocess.run(["git", *_AUTHOR, "merge", "--no-edit", "-q", base], cwd=path, capture_output=True,
+                                    text=True, encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL)
+            if merged.returncode:
+                _git(path, "merge", "--abort")
+                raise FolderConflict(f"{branch} xung đột khi gộp {base_ref}: {(merged.stdout + merged.stderr).strip()[:300]}")
+    except BaseException:
+        drop_source(repo, path)
+        raise
+    return path, tip
+
+
+def drop_source(repo, path) -> None:
+    """Gỡ worktree tạm của folder_source."""
+    _git(repo, "worktree", "remove", "--force", str(path))
+    shutil.rmtree(path, ignore_errors=True)
+    _git(repo, "worktree", "prune")
+
+
 def sync(repo, base: str) -> str:
     """Worker's dedicated clone only (never a dev checkout): fetch, detach at origin/<base>, drop
     leftovers of a crashed job. Kept candidate branches stay. Return the base sha. Raise OSError on git failure."""
@@ -145,14 +190,17 @@ def create(state: dict, source_repo: str | os.PathLike, *, base_ref: str = "HEAD
     if len(subtasks) != len(diffs):
         raise ValueError(f"cổng 3 chưa xong: {len(diffs)}/{len(subtasks)} child có diff")
     base = _git_out(["rev-parse", "--verify", f"{base_ref}^{{commit}}"], source_repo).strip()
-    branch = branch_name(label)
+    # Folder (ticket 05): nối tiếp nhánh chu kỳ; base đã chứa đỉnh cũ nên -B không làm mất commit nào.
+    branch = state.get("branch_name") or branch_name(label)
     checkout = Path(tempfile.mkdtemp(prefix="ai-board-worktree-"))
     try:
-        _git_out(["worktree", "add", "-q", "-b", branch, str(checkout), base], source_repo)
+        _git_out(["worktree", "add", "-q", "-B" if state.get("branch_name") else "-b", branch, str(checkout), base],
+                 source_repo)
     except OSError:
         shutil.rmtree(checkout, ignore_errors=True)
         raise
-    owned = {"full_checkout": str(checkout), "checkout_repo": str(source_repo), "branch": branch}
+    owned = {"full_checkout": str(checkout), "checkout_repo": str(source_repo), "branch": branch,
+             "branch_restore": state.get("branch_restore")}
     try:
         created: set[str] = set()
         commits = []
@@ -211,7 +259,10 @@ def cleanup(state: dict, *, keep_branch: bool) -> None:
     shutil.rmtree(checkout, ignore_errors=True)
     _git(repo, "worktree", "prune")
     if not keep_branch and state.get("branch"):
-        _git(repo, "branch", "-D", state["branch"])
+        if state.get("branch_restore"):  # nhánh folder có từ lượt trước: trả về đỉnh cũ, không xoá
+            _git(repo, "branch", "-f", state["branch"], state["branch_restore"])
+        else:
+            _git(repo, "branch", "-D", state["branch"])
 
 
 def record(state: dict) -> dict | None:

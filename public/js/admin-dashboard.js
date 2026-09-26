@@ -1757,6 +1757,8 @@ async function loadFeatureFolders() {
           <td>${f.requests}</td><td>${f.votes}</td><td>${f.gpu_s}</td>
           <td style="white-space:nowrap">${f.approved
             ? `<span class="pill">đã duyệt</span> <button class="btn danger" data-folder-act="revoke" data-fid="${f.id}">Thu hồi</button>`
+              + (f.state === 'awaiting_merge' ? ` <button class="btn" data-folder-act="released" data-fid="${f.id}"
+                  title="PR của chu kỳ này đã merge: phát hành, chu kỳ sau mở nhánh mới">Đã merge</button>` : '')
             : `<button class="btn primary" data-folder-act="approve" data-fid="${f.id}">Duyệt</button>`}</td>
         </tr>`).join('')}</tbody>
     </table>` : '<div class="loading">Chưa có chức năng nào.</div>';
@@ -1764,7 +1766,8 @@ async function loadFeatureFolders() {
     btn.disabled = true;
     const res = await api(`/api/admin/ai-board/folders/${btn.dataset.fid}/${btn.dataset.folderAct}`, { method: 'POST' });
     if (!res.ok) { toast('Lỗi: ' + (res.data?.message || res.data?.error || res.status), 'err'); btn.disabled = false; return; }
-    toast(btn.dataset.folderAct === 'approve' ? `Đã duyệt; ${res.data.authorized || 0} kế hoạch được cho chạy` : 'Đã thu hồi duyệt');
+    toast({ approve: `Đã duyệt; ${res.data.authorized || 0} kế hoạch được cho chạy`, revoke: 'Đã thu hồi duyệt',
+      released: 'Đã phát hành; yêu cầu sau sẽ mở chu kỳ mới' }[btn.dataset.folderAct]);
     loadFeatureFolders();
   }));
 }

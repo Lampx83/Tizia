@@ -122,7 +122,8 @@ def _passed(gates: list[dict], kind: str | None) -> bool:
 def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate, cleanup,
              repair_reason: str | None, catalog: dict | None,
              request_detail: str | None, memory_path,
-             should_stop: Callable[[], bool] | None) -> tuple[list[dict], str | None, dict | None]:
+             should_stop: Callable[[], bool] | None,
+             candidate_opts: dict | None = None) -> tuple[list[dict], str | None, dict | None]:
     """One pass of Gates 3→5.5 on fresh scratch + worktree. Return (public gates, failure kind, candidate)."""
     scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
     state = {
@@ -133,6 +134,7 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
         state["catalog"] = catalog
     if request_detail:
         state["request_detail"] = request_detail
+    state.update(candidate_opts or {})  # folder (ticket 05): branch_name + branch_restore cho candidate.create
     if memory_path:
         state["memory_path"] = str(memory_path)
     if repair_reason:
@@ -194,7 +196,7 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
 def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate,
                    cleanup: Callable, policy: dict | None = None, accepted_policy_hash: str | None = None,
                    request_detail: str | None = None, memory_path=None,
-                   should_stop: Callable[[], bool] | None = None) -> dict:
+                   should_stop: Callable[[], bool] | None = None, candidate_opts: dict | None = None) -> dict:
     """Run Gates 3→5.5, repairing an ordinary failure at most MAX_REPAIRS times. Return a redacted verdict.
 
     policy = snapshot catalog {hash, capabilities}; None only outside the HTTP worker (no catalog check).
@@ -219,6 +221,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
             plan, ticket_id=ticket_id, checkout_source=checkout_source, deps=deps, budget=budget,
             run_gate=run_gate, cleanup=cleanup, repair_reason=repair_reason, catalog=catalog,
             request_detail=request_detail, memory_path=memory_path, should_stop=should_stop,
+            candidate_opts=candidate_opts,
         )
         last = gates[-1]
         if kind != "ordinary" or len(repairs) >= MAX_REPAIRS:
@@ -359,6 +362,7 @@ class HttpWorker:
     tracer: Any = None  # meter.Tracer chung với planner/change runner
     sync: Callable[[], Any] | None = None  # dedicated clone → origin/<base>, once per claimed ticket
     open_prs: bool = False  # candidates.publish after a passing verdict (needs AI_BOARD_GITHUB_TOKEN)
+    folder_base_ref: str = "HEAD"  # nhánh folder gộp ref này mỗi lượt: clone riêng → origin/<base>, checkout dev → HEAD
     _report_gate: Callable[[float], None] | None = dataclasses.field(default=None, init=False, repr=False)
 
     def gate_started(self, gate: float) -> None:
@@ -450,10 +454,31 @@ class HttpWorker:
             })
 
         self._report_gate = report_gate
+        folder_src = None
         try:
-            return self._run_leased(ticket_id, lease, prefix, snapshot, run, trigger)
+            if snapshot.get("folder") and self.planner and self.candidates and trigger != "rollback":
+                import candidate
+                folder = snapshot["folder"]
+                branch = folder.get("branch") or candidate.folder_branch(folder["slug"], folder.get("cycle") or 1)
+                try:
+                    path, tip = candidate.folder_source(self.candidates.repo, branch, self.folder_base_ref)
+                except candidate.FolderConflict as error:
+                    # Không tự giải xung đột: báo admin, trả lease ở trạng thái chờ.
+                    self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/events", {
+                        **lease, "run_id": run["id"], "event_type": "plan_blocked",
+                        "public_message": "Chức năng cần người gộp code trước khi làm tiếp.",
+                        "internal_detail": f"folder_conflict: {error}", "idempotency_key": f"{prefix}:folder-conflict",
+                    })
+                    self._release(ticket_id, {**lease, "outcome": "waiting", "internal_detail": f"folder_conflict: {error}",
+                                              "idempotency_key": f"{prefix}:release-conflict"})
+                    return {"status": "folder_conflict", "ticket_id": ticket_id, "run_id": run["id"]}
+                folder_src = {"path": path, "branch": branch, "tip": tip}
+            return self._run_leased(ticket_id, lease, prefix, snapshot, run, trigger, folder_src)
         finally:
             self._report_gate = None
+            if folder_src:
+                import candidate
+                candidate.drop_source(self.candidates.repo, folder_src["path"])
             if self.tracer:
                 self.tracer.flush()
 
@@ -502,7 +527,11 @@ class HttpWorker:
         return {"status": done["status"], "ticket_id": ticket_id, "run_id": run["id"], "rollback": result["outcome"]}
 
     def _run_leased(self, ticket_id: int, lease: dict, prefix: str, snapshot: dict, run: dict,
-                    trigger: str) -> dict:
+                    trigger: str, folder_src: dict | None = None) -> dict:
+        # Folder (ticket 05): planner + cổng đọc từ đỉnh nhánh chu kỳ; candidate commit nối tiếp chính nhánh đó.
+        plan_kwargs = {"source": folder_src["path"]} if folder_src else {}
+        run_kwargs = {"source": folder_src["path"], "candidate_opts": {
+            "branch_name": folder_src["branch"], "branch_restore": folder_src["tip"]}} if folder_src else {}
         if trigger == "rollback":
             return self._rollback(ticket_id, lease, snapshot, run)
         # 'execute' = admin đã cho phép plan (tier protected): lượt này không lập plan lại mà chạy plan đã duyệt.
@@ -521,7 +550,7 @@ class HttpWorker:
             plan, budget_used = planned["plan"], 0
         if self.planner and not executing:
             try:
-                plan, budget_used = self._with_heartbeat(lambda _lost: self.planner(snapshot), ticket_id, lease)
+                plan, budget_used = self._with_heartbeat(lambda _lost: self.planner(snapshot, **plan_kwargs), ticket_id, lease)
                 planned = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/plan", {
                     **lease, "run_id": run["id"], "plan": plan, "budget_used": budget_used,
                     "idempotency_key": f"{prefix}:plan",
@@ -555,7 +584,7 @@ class HttpWorker:
                         policy=snapshot.get("capability_policy") or {},
                         accepted_policy_hash=planned.get("capability_policy_hash"),
                         request_detail=(snapshot.get("request") or {}).get("detail"),
-                        should_stop=lost,
+                        should_stop=lost, **run_kwargs,
                     ), ticket_id, lease,
                     on_lease_lost=lambda lost_result: self.candidates.discard((lost_result or {}).get("candidate")),
                 )
@@ -647,13 +676,14 @@ class HarnessPlanner:
             "steps": steps,
         }
 
-    def __call__(self, snapshot: dict) -> tuple[dict, int]:
+    def __call__(self, snapshot: dict, source=None) -> tuple[dict, int]:
         request = self._request(snapshot)
         budget = self.Budget.from_env()
         budget.max_model_calls = min(budget.max_model_calls, 5)
         ticket = snapshot.get("ticket") or {}
         budget.max_units = int(ticket.get("budget_limit") or DEFAULT_BUDGET_LIMIT)  # trần mỗi lượt, không trừ các lượt trước
-        state = {"checkout_source": str(self.source)} if self.source else {}
+        source = source or self.source  # folder (ticket 05): đỉnh nhánh chu kỳ thay cho checkout chung
+        state = {"checkout_source": str(source)} if source else {}
         for gate in PLAN_GATES:
             result = self.run_gate(gate, request, self.deps, budget, state)
             if result.get("blocked"):
@@ -675,14 +705,14 @@ def harness_change_runner(checkout_source=None, tracer=None, progress=None) -> C
     from memory import DEFAULT_PATH
     deps = _real_deps(Deps, tracer, progress)
 
-    def run(plan: dict, ticket_id: int, max_units: int, **kwargs) -> dict:
+    def run(plan: dict, ticket_id: int, max_units: int, source=None, **kwargs) -> dict:
         budget = Budget.from_env()
         budget.max_units = max_units
         # Thời gian + số lần gọi model lớn theo số bước của plan (task lớn không chạm trần cố định 900 s / 40 lần).
         steps = len(plan.get("steps") or [])
         budget.max_wall_clock_s = float(scaled_limit("wall_clock_s", steps))
         budget.max_model_calls = scaled_limit("model_calls", steps)
-        return execute_pre_pr(plan, ticket_id=ticket_id, checkout_source=checkout_source or REPO_ROOT, deps=deps,
+        return execute_pre_pr(plan, ticket_id=ticket_id, checkout_source=source or checkout_source or REPO_ROOT, deps=deps,
                               budget=budget, run_gate=run_gate, cleanup=candidate.cleanup,
                               memory_path=DEFAULT_PATH, **kwargs)
     return run
@@ -731,6 +761,7 @@ def main(argv: list[str] | None = None) -> int:
         import candidate
         base = os.getenv("PR_BASE_BRANCH", "dev")
         worker.sync = lambda: candidate.sync(repo, base)
+        worker.folder_base_ref = f"origin/{base}"
     if args.plan or args.execute:
         worker.planner = HarnessPlanner(tracer, progress=worker.gate_started, source=repo if repo_dir else None)
     if args.execute:

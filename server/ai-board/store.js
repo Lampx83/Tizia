@@ -481,7 +481,7 @@ export function createAiBoardStore(db, hooks = {}) {
 
   const folderRow = (f) => f && ({ id: f.id, slug: f.slug, title: f.title, domain: f.domain, state: f.state,
     approved: !!f.approved_at, owner_user_id: f.owner_user_id, requests: f.requests ?? 0, votes: f.votes ?? 0,
-    created_at: f.created_at, last_activity_at: f.last_activity_at });
+    has_change: !!f.branch, cycle: f.cycle ?? 1, created_at: f.created_at, last_activity_at: f.last_activity_at });
   const FOLDER_COLUMNS = `f.*,
     (SELECT COUNT(*) FROM requests fr WHERE fr.folder_id = f.id) AS requests,
     (SELECT COUNT(*) FROM ai_feature_folder_votes fv WHERE fv.folder_id = f.id) AS votes`;
@@ -521,7 +521,10 @@ export function createAiBoardStore(db, hooks = {}) {
       FROM ai_feature_folders f LEFT JOIN users u ON u.id = f.owner_user_id
       ORDER BY f.last_activity_at DESC LIMIT ?
     `).all(Math.min(Math.max(Number(limit) || 200, 1), 500)).map((f) => ({ ...folderRow(f), owner_name: f.owner_name,
-      gpu_s: Math.round(f.gpu_s), trace_ref: f.latest_root_id ? traceRef(f.latest_root_id) : null }));
+      gpu_s: Math.round(f.gpu_s),
+      // Chu kỳ đang mở: nhánh/đỉnh/PR của folder; chưa có thì trace của root mới nhất.
+      trace_ref: f.branch ? { branch: f.branch, head_sha: f.head_sha, pr_number: f.pr_number, pr_url: f.pr_url }
+        : f.latest_root_id ? traceRef(f.latest_root_id) : null }));
   }
 
   /** Admin duyệt folder 1 lần: plan đang chờ CHỈ vì folder chưa duyệt được cho phép luôn; lượt sau tự chạy. */
@@ -541,6 +544,25 @@ export function createAiBoardStore(db, hooks = {}) {
 
   function approveFolder(folderId, adminUserId) {
     return approveFolderTransaction(folderId, adminUserId, Date.now());
+  }
+
+  /** Người tạo bấm "Xong": chu kỳ này chờ con người merge PR (gate 6, không tự động). */
+  function markFolderDone(folderId, ownerUserId, now = Date.now()) {
+    const folder = db.prepare('SELECT * FROM ai_feature_folders WHERE id=?').get(Number(folderId));
+    if (!folder || folder.owner_user_id !== Number(ownerUserId)) throw new WorkerContractError('folder not found', 404, 'folder_not_found');
+    if (!folder.branch) throw new WorkerContractError('folder has no change yet', 409, 'nothing_to_merge');
+    db.prepare("UPDATE ai_feature_folders SET state='awaiting_merge', updated_at=?, last_activity_at=? WHERE id=?")
+      .run(now, now, folder.id);
+    return { ok: true, state: 'awaiting_merge' };
+  }
+
+  /** Admin xác nhận PR của chu kỳ đã merge: phát hành; yêu cầu sau mở chu kỳ mới (nhánh mới từ dev, giữ lịch sử).
+      ponytail: admin bấm tay; tự nhận merge qua GitHub khi worker có token (Candidates.merged). */
+  function markFolderReleased(folderId, now = Date.now()) {
+    const changed = db.prepare(`UPDATE ai_feature_folders SET state='released', branch=NULL, head_sha=NULL, pr_number=NULL,
+      pr_url=NULL, cycle=cycle+1, updated_at=? WHERE id=? AND branch IS NOT NULL`).run(now, Number(folderId)).changes;
+    if (!changed) throw new WorkerContractError('folder has no open cycle', 409, 'nothing_to_release');
+    return { ok: true, state: 'released' };
   }
 
   /** Thu hồi: các plan sau của folder lại chờ admin. Việc đang chạy không bị cắt. */
@@ -892,6 +914,9 @@ export function createAiBoardStore(db, hooks = {}) {
     db.prepare(`UPDATE ai_tickets SET phase='pr_open', public_note=?, updated_at=? WHERE id=?`)
       .run(note, input.now, root.id);
     db.prepare(`UPDATE requests SET status='reviewing', updated_at=? WHERE id=?`).run(input.now, root.source_request_id);
+    // 1 PR draft cho cả chu kỳ folder: các lượt sau đẩy tiếp lên cùng nhánh, GitHub cập nhật PR đó.
+    db.prepare('UPDATE ai_feature_folders SET pr_number=?, pr_url=?, updated_at=? WHERE id=(SELECT folder_id FROM requests WHERE id=?)')
+      .run(pr.number, pr.url, input.now, root.source_request_id);
     db.prepare(`
       INSERT INTO ai_events(ticket_id, run_id, event_type, actor_type, actor_id, transition,
         public_message, internal_detail, idempotency_key, created_at)
@@ -935,6 +960,9 @@ export function createAiBoardStore(db, hooks = {}) {
       clarification_incomplete: !!db.prepare("SELECT 1 FROM ai_ticket_tags WHERE ticket_id=? AND tag='needs_clarification'")
         .get(ticket.id),
       ...(ticket.phase === 'rolling_back' ? { rollback_candidate: latestCandidate(ticket.id) } : {}),
+      // Folder (ticket 05): worker dựng code từ đỉnh nhánh chu kỳ này thay cho dev.
+      folder: db.prepare(`SELECT f.id, f.slug, f.title, f.branch, f.head_sha, f.pr_number, f.pr_url, f.cycle
+        FROM requests q JOIN ai_feature_folders f ON f.id = q.folder_id WHERE q.id = ?`).get(ticket.source_request_id) ?? null,
     };
   }
 
@@ -1316,6 +1344,12 @@ export function createAiBoardStore(db, hooks = {}) {
     const evidence = JSON.stringify({ ...runEvidence, verdict });
     db.prepare(`UPDATE ai_runs SET outcome=?, gate=?, cumulative_budget=?, evidence_json=?, failure_reason=?, updated_at=? WHERE id=?`)
       .run(verdict.outcome, verdict.gate_reached, cumulativeBudget, evidence, verdict.reason, input.now, run.id);
+    // Folder chức năng (ticket 05): lượt đạt → đỉnh nhánh chu kỳ tiến lên commit vừa kiểm; lượt sau nối tiếp từ đó.
+    if (verdict.candidate) {
+      db.prepare(`UPDATE ai_feature_folders SET branch=?, head_sha=?, last_activity_at=?, updated_at=?
+        WHERE id=(SELECT folder_id FROM requests WHERE id=?)`)
+        .run(verdict.candidate.branch, verdict.candidate.head_sha, input.now, input.now, root.source_request_id);
+    }
     const trace = db.prepare(`
       INSERT INTO ai_gate_traces(run_id, gate, status, public_reason, internal_reason, evidence_json, created_at)
       VALUES (?, ?, ?, ?, NULL, ?, ?)
@@ -1705,6 +1739,8 @@ export function createAiBoardStore(db, hooks = {}) {
     listAdminFolders,
     approveFolder,
     revokeFolder,
+    markFolderDone,
+    markFolderReleased,
     listWorkers,
     cancelRequest,
     requestRollback,

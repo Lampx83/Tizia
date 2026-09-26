@@ -1162,3 +1162,57 @@ def test_per_run_caps_scale_with_the_plan_and_come_from_the_shared_contract():
     assert scaled_limit("units", 999) <= units["max"]
     assert scaled_limit("wall_clock_s", 10) > 900 and scaled_limit("model_calls", 10) > 40
     assert meter.HOURLY_GPU_S == LIMITS["gpu_s_per_worker_hour"]["value"] > units["max"]
+
+
+class FolderTransport(FakeTransport):
+    """Snapshot of a root inside a feature folder (feature-folders ticket 05)."""
+
+    def __call__(self, method, path, payload, headers):
+        out = super().__call__(method, path, payload, headers)
+        if path.endswith('/snapshot'):
+            out['folder'] = {'id': 1, 'slug': 'tro-doan-tu', 'branch': 'ai-board/2026-09-26-feature-tro-doan-tu',
+                             'head_sha': 'b' * 40, 'cycle': 1}
+        return out
+
+
+def test_folder_root_plans_and_commits_on_the_folder_branch(monkeypatch):
+    import candidate
+    dropped, seen = [], {}
+    monkeypatch.setattr(candidate, 'folder_source', lambda repo, branch, base: ('/tmp/folder-src', 'c' * 40))
+    monkeypatch.setattr(candidate, 'drop_source', lambda repo, path: dropped.append(path))
+    candidates = PublishingCandidates()
+    candidates.repo = '/tmp/repo'
+
+    def planner(snapshot, source=None):
+        seen['plan_source'] = source
+        return PLAN, 0
+
+    def runner(*_a, **kw):
+        seen.update(run_source=kw.get('source'), opts=kw.get('candidate_opts'))
+        return dict(PASSING)
+
+    worker = HttpWorker(WorkerClient('http://fixture', 'secret', transport=FolderTransport()), worker_id='w1',
+                        mode='active', planner=planner, change_runner=runner, candidates=candidates)
+    assert worker.run_once()['status'] == 'planned'
+    assert seen == {'plan_source': '/tmp/folder-src', 'run_source': '/tmp/folder-src',
+                    'opts': {'branch_name': 'ai-board/2026-09-26-feature-tro-doan-tu', 'branch_restore': 'c' * 40}}
+    assert dropped == ['/tmp/folder-src']  # worktree tạm luôn được gỡ
+
+
+def test_folder_conflict_with_dev_waits_for_a_human(monkeypatch):
+    import candidate
+
+    def conflict(repo, branch, base):
+        raise candidate.FolderConflict('public/a.html')
+
+    monkeypatch.setattr(candidate, 'folder_source', conflict)
+    candidates = PublishingCandidates()
+    candidates.repo = '/tmp/repo'
+    transport = FolderTransport()
+    worker = HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1', mode='active',
+                        planner=lambda *_a, **_k: (PLAN, 0), change_runner=lambda *_a, **_k: dict(PASSING),
+                        candidates=candidates)
+    assert worker.run_once()['status'] == 'folder_conflict'
+    release = [c for c in transport.calls if c[1].endswith('/release')][-1][2]
+    assert release['outcome'] == 'waiting' and 'folder_conflict' in release['internal_detail']
+    assert not any(c[1].endswith('/plan') for c in transport.calls)

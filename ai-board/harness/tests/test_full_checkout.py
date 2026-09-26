@@ -231,3 +231,70 @@ def test_long_skill_id_still_yields_a_contract_branch_name():
     assert re.search(r"-[0-9a-f]{6}$", branch)  # truncation keeps the unique suffix
     with pytest.raises(ValueError):
         candidate.branch_name("!!!")
+
+
+# ── Feature-folders ticket 05: every run of a folder cycle commits onto one branch ──
+
+def _commit_file(repo, rel, text, msg):
+    (Path(repo) / rel).parent.mkdir(parents=True, exist_ok=True)
+    (Path(repo) / rel).write_text(text, encoding="utf-8")
+    git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "add", "-A")
+    git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", msg)
+
+
+def _folder_run(tmp_path, source, branch, name, file, text):
+    """1 lượt folder như worker: nguồn = đỉnh nhánh đã gộp HEAD, candidate nối tiếp nhánh."""
+    path, tip = candidate.folder_source(source, branch, "HEAD")
+    scratch = implement._ensure_scratch_repo(tmp_path / f"scratch-{name}")
+    state = state_for(tmp_path, [child(scratch, name, file, text, f"test/{name}.test.js")])
+    state["scratch_repo"] = str(scratch)
+    state.update(branch_name=branch, branch_restore=tip)
+    candidate.create(state, path, base_ref=git(path, "rev-parse", "HEAD"))
+    return path, tip, state
+
+
+def test_folder_runs_stack_on_one_branch_and_pick_up_dev(tmp_path, source):
+    branch = candidate.folder_branch("tro-doan-tu")
+    path, tip, first = _folder_run(tmp_path, source, branch, "trang", "public/game.html", "<p>v1</p>\n")
+    assert tip is None and first["branch"] == branch
+    candidate.cleanup(first, keep_branch=True)
+    candidate.drop_source(source, path)
+    _commit_file(source, "public/other.html", "<p>dev moved</p>\n", "dev work")  # dev tiến lên giữa 2 lượt
+
+    path, tip, second = _folder_run(tmp_path, source, branch, "diem", "public/game.js", "export const s = 1;\n")
+    try:
+        assert tip == first["commits"][-1]["sha"]
+        checkout = Path(second["full_checkout"])
+        # Lượt 2 thấy code lượt 1 và code dev mới.
+        assert (checkout / "public" / "game.html").read_text(encoding="utf-8") == "<p>v1</p>\n"
+        assert (checkout / "public" / "other.html").exists()
+    finally:
+        candidate.cleanup(second, keep_branch=True)
+        candidate.drop_source(source, path)
+    subjects = git(source, "log", "--format=%s", branch).splitlines()
+    assert subjects[0].endswith("1/1 diem") and any(s.endswith("1/1 trang") for s in subjects)
+    assert git(source, "branch", "--list", "ai-board/*").strip().endswith(branch)  # vẫn 1 nhánh
+
+
+def test_a_failed_folder_run_puts_the_branch_back_instead_of_deleting_it(tmp_path, source):
+    branch = candidate.folder_branch("bang-xep-hang")
+    path, _, first = _folder_run(tmp_path, source, branch, "trang", "public/rank.html", "<p>v1</p>\n")
+    candidate.cleanup(first, keep_branch=True)
+    candidate.drop_source(source, path)
+    kept = git(source, "rev-parse", branch)
+    path, _, second = _folder_run(tmp_path, source, branch, "loi", "public/rank.js", "x\n")
+    candidate.cleanup(second, keep_branch=False)
+    candidate.drop_source(source, path)
+    assert git(source, "rev-parse", branch) == kept
+
+
+def test_a_folder_that_conflicts_with_dev_stops_for_a_human(tmp_path, source):
+    branch = candidate.folder_branch("xung-dot")
+    path, _, first = _folder_run(tmp_path, source, branch, "a", "public/a.html", "<p>folder</p>\n")
+    candidate.cleanup(first, keep_branch=True)
+    candidate.drop_source(source, path)
+    _commit_file(source, "public/a.html", "<p>dev</p>\n", "dev edits the same line")
+    before = git(source, "worktree", "list")
+    with pytest.raises(candidate.FolderConflict):
+        candidate.folder_source(source, branch, "HEAD")
+    assert git(source, "worktree", "list") == before  # không để lại worktree

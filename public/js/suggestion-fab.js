@@ -765,7 +765,8 @@ function bind(root) {
           ${mine.map(f => `<div class="sgf-folder">
             <span class="sgf-folder-t">✨ ${escapeHtml(f.title)}</span>
             <span class="sgf-folder-m">${escapeHtml(FOLDER_STATE[f.state] || f.state)} · ${Number(f.requests)} yêu cầu</span>
-            <button type="button" class="sgf-chip" data-folder-add="${f.id}">＋ Yêu cầu tiếp</button></div>`).join('')}` : ''}
+            <button type="button" class="sgf-chip" data-folder-add="${f.id}">＋ Yêu cầu tiếp</button>
+            ${f.has_change && f.state === 'active' ? `<button type="button" class="sgf-chip" data-folder-done="${f.id}" title="Bản nháp đã ổn: gửi Ban điều hành duyệt để phát hành">✓ Xong</button>` : ''}</div>`).join('')}` : ''}
         ${school.length ? `<div class="sgf-inbox-head"><span>Chức năng bạn khác đang làm</span></div>
           ${school.slice(0, 5).map(f => `<div class="sgf-folder">
             <span class="sgf-folder-t">✨ ${escapeHtml(f.title)}</span>
@@ -781,6 +782,14 @@ function bind(root) {
       syncFolderRow();
       folderSel.value = add.dataset.folderAdd;
       root.querySelector('#sgf-title-in').focus();
+      return;
+    }
+    const done = e.target.closest('[data-folder-done]');
+    if (done) {
+      done.disabled = true;
+      const r = await fetch(`api/ai-board/folders/${encodeURIComponent(done.dataset.folderDone)}/done`, {
+        method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': await csrfToken() } }).catch(() => null);
+      if (r?.ok) loadFolders(); else done.disabled = false;
       return;
     }
     const vote = e.target.closest('[data-folder-vote]');

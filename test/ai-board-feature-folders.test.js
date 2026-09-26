@@ -115,3 +115,42 @@ test('each feature turn names exactly its own topic', async () => {
   assert.match(p1, /CHỈ hỏi về: chức năng này để làm gì/);
   assert.match(p3, /CHỈ hỏi về: chức năng này giống chức năng nào/);
 });
+
+// Feature-folders ticket 05: one branch + one draft PR per folder cycle.
+test('a folder cycle keeps its branch head and PR; done then released starts a new cycle', () => {
+  const { db, store, submit } = fixture();
+  const first = submit(1, { type: 'feature' });
+  store.approveFolder(first.folder_id, 9);
+  const ticket = store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' });
+  const lease = { workerId: 'w1', leaseToken: ticket.lease_token };
+  const run = store.createRun(ticket.id, { ...lease, trigger: 'plan', idempotencyKey: 'cycle-run-001' });
+  assert.equal(store.getLeasedSnapshot(ticket.id, 'w1', ticket.lease_token).folder.branch, null);
+  const step = { order: 1, title: 'Trang mới', description: 'x', allowed_scope: ['public/tro-doan-tu.html'],
+    acceptance: ['a'], tests: ['node --test'], capability: 'public.ui', risk: 'low', non_goals: ['x'] };
+  store.submitPlan(ticket.id, { ...lease, runId: run.id, budgetUsed: 10, idempotencyKey: 'cycle-plan-001',
+    plan: { domain: 'it', goal: 'g', allowed_scope: step.allowed_scope, acceptance: step.acceptance, tests: step.tests,
+      capabilities: ['public.ui'], risk: 'low', non_goals: ['x'], steps: [step] } });
+  const branch = 'ai-board/2026-09-26-feature-tro-doan-tu';
+  const candidate = { branch, base_sha: 'a'.repeat(40), head_sha: 'b'.repeat(40),
+    commits: [{ sha: 'b'.repeat(40), title: 'ai-board(ticket-1): 1/1 Trang mới', files: ['public/tro-doan-tu.html', 'test/t.test.js'] }] };
+  const gates = [{ gate: 3, blocked: false, reason: null }, { gate: 4, blocked: false, reason: null, issues: [] },
+    { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true, runner: 'docker', retried: false },
+    { gate: 5.5, blocked: false, reason: null, risk_level: 'low', risk_signals: [] }];
+  store.submitPrePrVerdict(ticket.id, { ...lease, runId: run.id, idempotencyKey: 'cycle-verdict-001', verdict: {
+    outcome: 'ready_for_pr', gate_reached: 5.5, reason: null, budget_used: 20, failure_class: null, repairs: [], candidate, gates } });
+  store.recordPullRequest(ticket.id, { ...lease, runId: run.id, idempotencyKey: 'cycle-pr-001', pullRequest: {
+    number: 7, url: 'https://github.com/Lampx83/Tizia/pull/7', branch, base: 'dev', base_sha: candidate.base_sha,
+    head_sha: candidate.head_sha } });
+  const snap = store.getLeasedSnapshot(ticket.id, 'w1', ticket.lease_token).folder;
+  assert.deepEqual({ branch: snap.branch, head: snap.head_sha, pr: snap.pr_number }, { branch, head: 'b'.repeat(40), pr: 7 });
+  assert.equal(store.listFolders(1, 'it').mine[0].has_change, true);
+  assert.ok(!JSON.stringify(store.listFolders(2, 'it')).includes(branch), 'branch is admin-only');
+  assert.equal(store.listAdminFolders()[0].trace_ref.pr_number, 7);
+
+  assert.throws(() => store.markFolderDone(first.folder_id, 2), (e) => e.code === 'folder_not_found');
+  assert.equal(store.markFolderDone(first.folder_id, 1).state, 'awaiting_merge');
+  assert.equal(store.markFolderReleased(first.folder_id).state, 'released');
+  const after = db.prepare('SELECT branch, pr_number, cycle, state FROM ai_feature_folders WHERE id=?').get(first.folder_id);
+  assert.deepEqual({ ...after }, { branch: null, pr_number: null, cycle: 2, state: 'released' });
+  assert.throws(() => store.markFolderReleased(first.folder_id), (e) => e.code === 'nothing_to_release');
+});
