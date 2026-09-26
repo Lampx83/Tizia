@@ -148,6 +148,8 @@ def _calls(names: tuple[str, ...], targets: list[str], css: list[str], words: li
             calls.append(("tree", {"path": posixpath.dirname(targets[0]) if targets else "public"}))
         elif name == "graph":
             calls.append(("graph", {"question": question}))
+        elif name == "exemplar":
+            calls.append(("exemplar", {"words": [question, *words]}))
         elif name == "lessons":
             calls.append(("lessons", {"file": targets[0] if targets else "", "words": words, "path": memory_path}))
     return calls
@@ -187,6 +189,9 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
         question = f"{request.get('domain') or ''} {request.get('subject') or ''}".strip()
         calls = _calls(skill.tools if gate == 1 else skill.tools3, targets, [c for c in css if c not in targets],
                        words, question, memory_path, index_path)
+        # Trang mẫu (ticket 08): tính cả lời làm rõ trong thread ("giống trò …") và bản mô tả folder.
+        calls = [(n, {**p, "words": [*p["words"], thread, request.get("folder_brief") or ""]}) if n == "exemplar"
+                 else (n, p) for n, p in calls]
         # Module render: trích quanh <kind>/hàm show… (vd .achievement-toast), không quanh từ chung như "game".
         calls = [(n, {**p, "words": [w.lower() for w in render_words]}) if n == "grep" and p.get("file") in render
                  else (n, p) for n, p in calls]

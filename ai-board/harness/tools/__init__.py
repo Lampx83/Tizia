@@ -8,6 +8,7 @@ trả text ≤ `budget` ký tự, và không bao giờ raise (lỗi git → chu�
 from __future__ import annotations
 
 import functools
+import math
 import posixpath
 import re
 from dataclasses import dataclass
@@ -221,6 +222,41 @@ def lessons(source, sha: str, *, file: str, words: list[str], path=None) -> str:
 
 _STR = {"type": "string"}
 _WORDS = {"type": "array", "items": {"type": "string"}}
+_TOP_PAGE = re.compile(r"^public/[^/]+\.html$")
+EXEMPLARS = 2  # số trang mẫu liệt kê; chỉ trang đầu có dàn ý + phần đầu trang
+
+
+def exemplar(source, sha: str, *, words: list[str], budget: int = 2500) -> str:
+    """Trang mẫu cho chức năng mới (ticket 08): xếp trang public/*.html theo tổng IDF các từ (đã bỏ dấu) của yêu cầu
+    có trong chữ hiển thị của trang — truy xuất trên chỉ mục tự sinh, không danh sách tay. Trả dàn ý + đầu trang
+    (head/theme tới </style>) của trang gần nhất để làm khung."""
+    commit = code_index.git(source, "rev-parse", "--verify", f"{sha}^{{commit}}").decode().strip()
+    index = code_index.ui_index(source, commit)
+    pages = [p for p in index["files"] if _TOP_PAGE.match(p)]
+    total = max(len(index["files"]), 1)
+    terms = {w for w in file_context.fold(" ".join(words)).split() if len(w) >= 3}
+    score = {p: 0.0 for p in pages}
+    for term in terms:
+        holders = index["words"].get(term, set())
+        if not holders or len(holders) > total / 4:  # từ quá phổ biến không phân biệt được trang
+            continue
+        idf = math.log(total / len(holders))
+        for page in holders & set(pages):
+            score[page] += idf
+    # Chuẩn hoá theo độ dài: trang tổng hợp (index.html…) chứa đủ mọi từ, không được thắng chỉ vì dài.
+    size = {p: len({w for _, t in index["files"][p]["text"] for w in t.split()}) or 1 for p in pages}
+    score = {p: s / math.sqrt(size[p]) for p, s in score.items()}
+    ranked = [p for p in sorted(pages, key=lambda p: -score[p]) if score[p] > 0][:EXEMPLARS]
+    if not ranked:
+        return ""
+    best = ranked[0]
+    text = _show(source, commit, best) or ""
+    head = text.split("</style>", 1)[0] + "</style>" if "</style>" in text else "\n".join(text.splitlines()[:40])
+    return (f"trang mẫu gần nhất (theo chữ hiển thị): {', '.join(ranked)}\n"
+            f"{code_index.outline_text(best, code_index.parse(best, text))}\n"
+            f"đầu trang mẫu {best} (theme dùng lại):\n{_cap(head, budget // 2)}")
+
+
 TOOLS: dict[str, Tool] = {t.name: t for t in (
     Tool("tree", "Liệt kê file/thư mục con trực tiếp của 1 thư mục ở base sha.",
          {"type": "object", "properties": {"path": _STR}, "required": ["path"]}, tree),
@@ -230,6 +266,8 @@ TOOLS: dict[str, Tool] = {t.name: t for t in (
          {"type": "object", "properties": {"words": _WORDS, "file": _STR, "path": _STR}, "required": ["words"]}, grep),
     Tool("locate", "Tìm chữ hiển thị người dùng nhắc (không cần dấu/hoa) trong html/js của public/, trả file:dòng.",
          {"type": "object", "properties": {"phrases": _WORDS}, "required": ["phrases"]}, locate),
+    Tool("exemplar", "Trang có sẵn giống chức năng mới nhất (theo chữ hiển thị) + dàn ý và phần đầu trang để làm khung.",
+         {"type": "object", "properties": {"words": _WORDS}, "required": ["words"]}, exemplar),
     Tool("graph", "Gợi ý file liên quan từ graphify graph.json nếu có (không phải nguồn sự thật).",
          {"type": "object", "properties": {"question": _STR}, "required": ["question"]}, graph),
     Tool("lessons", "Bài học từ verdict cũ liên quan tới file/từ khoá.",
@@ -240,7 +278,7 @@ TOOLS: dict[str, Tool] = {t.name: t for t in (
 def run(name: str, source, sha: str, params: dict, budget: int) -> str:
     """Chạy 1 tool, cắt output ≤ budget ký tự. Không raise (tool lỗi → "")."""
     tool = TOOLS[name]
-    if name in ("grep", "locate"):
+    if name in ("grep", "locate", "exemplar"):
         params = {**params, "budget": budget}
     try:
         return _cap(tool.fn(source, sha, **params), budget)

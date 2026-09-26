@@ -289,7 +289,9 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
             # Skill chọn tool (grep `Lnn|`, dàn ý, bài học) trên base sha. Không có trích dòng → giữ excerpt cũ.
             ctx = repo_context.build_context(
                 3, {"subject": subtask["title"], "body": state.get("request_detail") or subtask["verify"],
-                    "folder_brief": state.get("folder_brief")},
+                    "folder_brief": state.get("folder_brief"),
+                    # Folder chức năng: trang/module mới chọn skill new-feature (có dòng script module được phép).
+                    "type": "feature" if state.get("folder_brief") else None},
                 subtask, state["checkout_source"], state["base_sha"], memory_path=state.get("memory_path"))
             if _EXCERPT_LINE.search(ctx["text"]):
                 context = context.split("\n", 1)[0] + "\n" + ctx["text"]

@@ -554,7 +554,7 @@ export function createAiBoardStore(db, hooks = {}) {
       ponytail: vượt trần thì bỏ mục cũ nhất (tất định); gộp bằng model nhỏ khi folder dài thật sự. */
   function folderBrief(folderId) {
     const cap = LIMITS.context;
-    const folder = db.prepare('SELECT id, title FROM ai_feature_folders WHERE id=?').get(Number(folderId));
+    const folder = db.prepare('SELECT id, title, slug FROM ai_feature_folders WHERE id=?').get(Number(folderId));
     if (!folder) return null;
     const rows = db.prepare(`
       SELECT q.id, q.title, q.detail, q.clarified_spec, t.status, t.id AS root_id,
@@ -581,7 +581,8 @@ export function createAiBoardStore(db, hooks = {}) {
         }
       } else if (!['cancelled', 'done'].includes(row.status)) requested.push(clip(row.title, 120));
     }
-    const lines = [`Chức năng: ${clip(folder.title, 120)}`];
+    // Trang = slug folder: cờ phát hành (ticket 10) mở/ẩn đúng /<slug>.html, module ở js/features/<slug>/.
+    const lines = [`Chức năng: ${clip(folder.title, 120)} · trang: public/${folder.slug}.html · module: public/js/features/${folder.slug}/index.js`];
     if (answers[0]) lines.push(`Mục đích: ${clip(answers[0], 300)}`);
     if (answers[1]) lines.push(`Luồng người dùng: ${clip(answers[1], 300)}`);
     const owned = [...files].slice(-cap.owned_files);

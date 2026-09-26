@@ -80,7 +80,7 @@ def test_skill_match_uses_request_type_and_gate3_file():
 
 def test_every_skill_parses_with_both_gate_sections():
     assert set(context.SKILLS) == {"edit-html-text", "edit-css-style", "add-html-section", "new-static-page",
-                                   "fix-js-behavior", "default"}
+                                   "fix-js-behavior", "new-feature", "default"}
     for skill in context.SKILLS.values():
         assert skill.sections.get(1) and skill.sections.get(3), skill.name
         assert skill.tools and skill.tools3
@@ -212,3 +212,27 @@ def test_folder_brief_leads_the_context_so_runs_of_a_folder_share_a_prefix(repo,
     assert a["text"].index("RECENT REQUESTS") < a["text"].index("REPO DATA")
     assert a["tiers"]["brief"] == len(brief) and a["tiers"]["recent"] == len("[#2] a")
     assert "FEATURE BRIEF" not in context.build_context(1, {"subject": "x", "body": "y"}, None, src, sha)["text"]
+
+
+def test_exemplar_retrieves_the_most_similar_existing_page_and_its_head(repo, tmp_path):
+    """Feature-folders ticket 08: exemplar = IDF over the visible-text index, no hand-written list."""
+    src, _ = repo
+    sha = _commit(src, {
+        "public/doan-mat-ma.html": "<html><head><style>body{background:#0f172a}</style></head><body>"
+                                   "<h1>Đoán mật mã</h1><p>Gõ từ khoá bí mật để mở khoá</p></body></html>\n",
+        "public/nau-an.html": "<html><head><style>body{background:#fff}</style></head><body>"
+                              "<h1>Nấu ăn vui</h1><p>Chọn nguyên liệu</p></body></html>\n",
+    })
+    out = tools.run("exemplar", src, sha, {"words": ["Trò đoán từ khoá lập trình", "giống trò Đoán mật mã"]}, 2500)
+    assert out.startswith("trang mẫu gần nhất (theo chữ hiển thị): public/doan-mat-ma.html")
+    assert "background:#0f172a" in out and "</style>" in out
+    assert tools.run("exemplar", src, sha, {"words": ["xyzxyz"]}, 2500) == ""
+    ctx = context.build_context(1, {"subject": "Trò đoán từ khoá", "body": "giống trò Đoán mật mã", "type": "feature"},
+                                None, src, sha, memory_path=tmp_path / "l.jsonl")
+    assert ctx["skill"] == "new-feature" and "exemplar" in ctx["used_tools"]
+
+
+def test_feature_folder_new_files_pick_the_feature_skill_at_gate_3():
+    assert context.pick_skill("Trang chơi", "feature", "public/tro-doan-tu.html", exists=False).name == "new-feature"
+    assert context.pick_skill("Module", "feature", "public/js/features/tro-doan-tu/index.js", exists=False).name == "new-feature"
+    assert context.pick_skill("làm theo mô tả", None, "public/moi.html", exists=False).name == "new-static-page"

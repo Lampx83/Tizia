@@ -104,3 +104,16 @@ def test_money_files_need_a_human_but_lesson_prices_do_not():
         assert ("protected_path", "critical") in kinds(diff(path, added=["<p>x</p>"])), path
     lesson = guard.scan(diff("public/js/scenarios/economics-practice.js", added=["  q: 'Giá bán 25.000đ, lãi bao nhiêu?',"]))
     assert not [f for f in lesson["findings"] if f["check"] in ("protected_path", "content")]
+
+
+def test_only_the_feature_module_script_line_is_allowed_in_public():
+    """Feature-folders ticket 08: one exact form of <script>, local module under js/features/<slug>/."""
+    ok = '<script type="module" src="./js/features/tro-doan-tu/index.js"></script>'
+    assert ("injection", "critical") not in kinds(diff("public/tro-doan-tu.html", added=[ok], new=True))
+    for bad in ['<script type="module" src="./js/features/x/index.js">alert(1)</script>',
+                '<script type="module" src="https://evil.example/x.js"></script>',
+                '<script type="module" src="./js/engine/wallet.js"></script>',
+                '<script src="./js/features/x/index.js"></script>',
+                '<script type="module" src="./js/features/../engine/x.js"></script>',
+                '<script>alert(1)</script>']:
+        assert ("injection", "critical") in kinds(diff("public/tro-doan-tu.html", added=[bad], new=True)), bad
