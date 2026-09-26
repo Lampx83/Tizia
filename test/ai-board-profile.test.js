@@ -65,7 +65,7 @@ test('a new non-admin user must answer before the first request; the answer stic
   try {
     assert.deepEqual((await app.call('GET', '/api/ai-board/profile')).json, { needed: true, profile: null });
     const refused = await app.call('POST', '/api/requests', { title: 'Đổi màu nút', detail: 'x' },
-      { 'idempotency-key': 'profile-req-001' });
+      { 'idempotency-key': 'profile-req-001', 'x-ai-board-features': 'onboarding,clarify' });
     assert.equal(refused.status, 428);
     assert.equal(refused.json.error, 'profile_required');
     const saved = await app.call('POST', '/api/ai-board/profile', ANSWERS);
@@ -74,7 +74,7 @@ test('a new non-admin user must answer before the first request; the answer stic
     assert.equal(again.json.needed, false);
     assert.deepEqual(again.json.profile.domain_expertise, ['pharmacy', 'it']);
     const sent = await app.call('POST', '/api/requests', { title: 'Đổi màu nút', detail: 'x' },
-      { 'idempotency-key': 'profile-req-002' });
+      { 'idempotency-key': 'profile-req-002', 'x-ai-board-features': 'onboarding,clarify' });
     assert.equal(sent.status, 200);
   } finally {
     await app.close();
@@ -117,4 +117,16 @@ test('the worker snapshot carries the requester tone inputs, not their identity'
   const ticket = store.claimNext({ workerId: 'w1', version: 't', mode: 'shadow', intent: 'precheck' });
   const snapshot = store.getLeasedSnapshot(ticket.id, 'w1', ticket.lease_token);
   assert.deepEqual(snapshot.requester_profile, { role: 'student', tech_level: 'some', domain_expertise: ['pharmacy', 'it'] });
+});
+
+test('a client without the onboarding UI (prod web-next FAB) is not blocked by the unanswered profile', async () => {
+  const db = fixtureDb();
+  const app = await serve(db, 1);
+  try {
+    const legacy = await app.call('POST', '/api/requests', { title: 'Đổi màu nút', detail: 'x' },
+      { 'idempotency-key': 'profile-req-004' });
+    assert.equal(legacy.status, 200);
+  } finally {
+    await app.close();
+  }
 });

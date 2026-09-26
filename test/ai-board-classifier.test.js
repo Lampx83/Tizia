@@ -113,7 +113,7 @@ async function serve(db, classifyRequest) {
   const server = http.createServer(app);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const post = (key, payload) => fetch(`http://127.0.0.1:${server.address().port}/api/requests`, {
-    method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': key },
+    method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': key, 'x-ai-board-features': 'onboarding,clarify' },
     body: JSON.stringify(payload),
   }).then(async (res) => ({ status: res.status, json: await res.json() }));
   return { post, close: () => new Promise((resolve) => server.close(resolve)) };

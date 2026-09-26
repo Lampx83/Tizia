@@ -22,7 +22,10 @@ export function attachAiBoardRequestRoutes(router, {
 }) {
   router.post('/api/requests', requireAuth, requireEnrolled, async (req, res, next) => {
     const body = req.body || {};
-    if (needsProfile(req.user)) {
+    // Onboarding / làm rõ chỉ bật cho client có giao diện cho chúng (FAB public/ gửi header này). Client cũ
+    // (FAB React web-next trên prod) vẫn gửi như trước: không 428, không kẹt ở phase clarifying.
+    const features = new Set(String(req.get('X-AI-Board-Features') || '').split(',').map((f) => f.trim()));
+    if (features.has('onboarding') && needsProfile(req.user)) {
       return res.status(428).json({ error: 'profile_required', message: 'Trả lời 3 câu giới thiệu trước khi gửi yêu cầu.' });
     }
     const ownerDomain = req.user.role === 'admin'
@@ -36,8 +39,8 @@ export function attachAiBoardRequestRoutes(router, {
       return null;
     });
     const modelLabels = (classified?.danger?.labels || []).map((key) => `model_${key}`);
-    const clarify = classified?.clarity ? { needed: classified.clarity.needed, mode: classified.clarity.mode }
-      : { needed: false, mode: null };
+    let clarify = classified?.clarity && features.has('clarify')
+      ? { needed: classified.clarity.needed, mode: classified.clarity.mode } : { needed: false, mode: null };
     try {
       const result = store.createRequestWithRoot({
         ownerUserId: req.user.id,
@@ -61,6 +64,10 @@ export function attachAiBoardRequestRoutes(router, {
             console.warn('[ai-board] clarify notification failed:', error.message);
           }
         }
+      } else {
+        // Gửi lại cùng Idempotency-Key: trả đúng trạng thái đã tạo lần đầu, không theo lần phân loại này.
+        const phase = store.db.prepare('SELECT phase FROM ai_tickets WHERE id=?').get(result.root_ticket_id)?.phase;
+        clarify = { needed: phase === 'clarifying', mode: phase === 'clarifying' ? 'ask' : null };
       }
       res.json({ ok: true, ...result, id: result.request_id, createdAt: Date.now(), clarify });
       if (result.created && onCreated) {

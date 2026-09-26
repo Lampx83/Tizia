@@ -87,9 +87,11 @@ def check(tuple_: dict, number: int) -> dict:
         if error:
             problems.append(f"{rel} node --check: {error}")
     tests = [f for f in files if f.startswith(("test/", "tests/"))]
+    # verify.run runs every distinct test_file of the diffs: one entry per test, pages carry the first.
+    diffs = [{"file": f, "test_file": tests[0] if tests else ""} for f in files if f not in tests]
+    diffs += [{"file": "", "test_file": t} for t in tests[1:]]
     state = {"skill_id": f"review-pr-{int(number)}", "full_checkout": checkout,
-             "full_diff": [{"file": "", "diff": diff}],
-             "diffs": [{"file": f, "test_file": tests[0] if tests else ""} for f in files if f not in tests]}
+             "full_diff": [{"file": "", "diff": diff}], "diffs": diffs}
     smoke = verify.run(state)
     return {"guard_problems": problems, "flags": scan["flags"], "gate5": {k: smoke.get(k) for k in ("blocked", "reason")},
             "passed": not problems and not smoke.get("blocked")}

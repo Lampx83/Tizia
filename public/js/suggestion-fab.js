@@ -594,7 +594,8 @@ function bind(root) {
     const btn = e.target.closest('[data-clarify]');
     if (btn) startClarify(btn.dataset.clarify);
   });
-  refreshPending();
+  // Khách chưa đăng nhập không có yêu cầu nào để trả lời: khỏi gọi API mỗi lần xem trang.
+  if (typeof getPlayerName === 'function' && getPlayerName()) refreshPending();
 
   const open = () => {
     modal.hidden = false;
@@ -671,7 +672,8 @@ function bind(root) {
       pendingRequestKey ||= crypto.randomUUID();
       const r = await fetch('api/requests', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': pendingRequestKey },
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': pendingRequestKey,
+          'X-AI-Board-Features': 'onboarding,clarify' }, // panel này có UI cho cả hai
         body: JSON.stringify({
           domain: inferDomain(), type, title, detail, attachments,
           student: (typeof getPlayerName === 'function' && getPlayerName()) || 'Ẩn danh',

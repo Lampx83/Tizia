@@ -87,7 +87,7 @@ async function serve(db, { userId = 1, model, clarity = [], notify = () => {} } 
 
 async function vagueRequest(app, key = 'clarify-req-001') {
   const res = await app.post('/api/requests', { title: 'Sửa cái trang', detail: 'làm cho đẹp hơn' },
-    { 'idempotency-key': key });
+    { 'idempotency-key': key, 'x-ai-board-features': 'onboarding,clarify' });
   return res.json();
 }
 
@@ -213,5 +213,45 @@ test('someone else cannot clarify or confirm my request', async () => {
   } finally {
     await mine.close();
     await other.close();
+  }
+});
+
+test('a legacy client never gets a stranded clarifying request; a retry reports the phase created first', async () => {
+  const db = fixtureDb();
+  const app = await serve(db, { model: fakeModel([]) });
+  try {
+    const legacy = await (await app.post('/api/requests', { title: 'Sửa cái trang', detail: 'x' },
+      { 'idempotency-key': 'clarify-req-legacy' })).json();
+    assert.equal(legacy.clarify.needed, false);
+    assert.equal(db.prepare('SELECT phase FROM ai_tickets WHERE id=?').get(legacy.root_ticket_id).phase, 'intake');
+    const first = await vagueRequest(app, 'clarify-req-retry');
+    const retry = await vagueRequest(app, 'clarify-req-retry');
+    assert.equal(retry.request_id, first.request_id);
+    assert.equal(retry.clarify.needed, true);
+  } finally {
+    await app.close();
+  }
+});
+
+test('the server, not the browser, decides whether a summary was complete', async () => {
+  const db = fixtureDb();
+  const app = await serve(db, { model: fakeModel([]) });
+  try {
+    const { request_id: id } = await vagueRequest(app);
+    let last = await app.turn(id);
+    for (let i = 0; i < MAX_QUESTIONS; i += 1) last = await app.turn(id, `trả lời ${i + 1}`);
+    await app.post(`/api/ai-board/requests/${id}/clarify/confirm`, { spec: last.done.text, complete: true });
+    const claim = app.store.claimNext({ workerId: 'w1', mode: 'shadow', intent: 'precheck' });
+    assert.equal(app.store.getLeasedSnapshot(claim.id, 'w1', claim.lease_token).clarification_incomplete, true);
+  } finally {
+    await app.close();
+  }
+});
+
+test('ordinary questions, specs and numbers are not mistaken for claims or phone numbers', () => {
+  for (const ok of ['Bạn muốn chúng tôi sẽ thêm nút ở trang nào?', 'Bạn đã thử tải lại trang chưa?',
+    'Thay đổi mong muốn: nút mà hệ thống đã tạo trước đó to hơn', 'Kết quả mong đợi: thứ tự 0 1 2 3 4 5 6 7 8 9',
+    'Mã đơn 0123456789012 hiển thị đúng', 'Ai đã thêm bài này, bạn nhớ không?']) {
+    assert.equal(guardModelText(ok, 'summary', 'ask', 'fallback').replaced, false, ok);
   }
 });

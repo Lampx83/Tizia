@@ -24,9 +24,11 @@ const FALLBACK_QUESTION = {
   ask: 'Bạn mô tả giúp Ban: bạn đang ở trang nào, muốn thay đổi điều gì, và sau khi đổi thì mong thấy gì?',
   split: 'Yêu cầu này gồm nhiều phần. Bạn muốn Ban làm phần nào trước tiên?',
 };
-// Model tự nhận đã/vừa làm gì đó: nó không có công cụ nào nên câu đó luôn sai.
-const CLAIMS_WORK = /(tôi|mình|chúng tôi|ban điều hành|hệ thống|ai)\s+(đã|vừa|sẽ)\s+(được\s+)?(sửa|làm|thêm|cập nhật|thay đổi|triển khai|hoàn thành|thực hiện|xử lý|tạo|xoá|xóa)|đã\s+(sửa|làm|xử lý)\s+xong/iu;
-const CONTACT = /[\w.+-]+@[\w-]+\.[\w.]+|(?:\+?84|0)(?:[\s.-]?\d){8,10}\b/u;
+// Model tự nhận đã/vừa làm gì đó: nó không có công cụ nào nên câu đó luôn sai. Chỉ chủ ngữ ngôi thứ nhất,
+// có ranh giới chữ, không bắt "sẽ" (câu hỏi "bạn muốn chúng tôi sẽ thêm ở đâu?" là hợp lệ).
+const CLAIMS_WORK = /(?<![\p{L}])(tôi|mình|chúng tôi|ban điều hành|ban)\s+(đã|vừa)\s+(được\s+)?(sửa|làm|thêm|cập nhật|thay đổi|triển khai|hoàn thành|thực hiện|xử lý|tạo|xoá|xóa)(?![\p{L}])|(?<![\p{L}])đã\s+(sửa|làm|xử lý)\s+xong/iu;
+// Email hoặc số di động Việt Nam (0/+84 + đầu 3,5,7,8,9 + 8 số), không phải mọi dãy số dài.
+const CONTACT = /[\w.+-]+@[\w-]+\.[a-z]{2,}|(?<![\d.])(?:\+?84|0)[35789](?:[\s.-]?\d){8}(?!\d)/iu;
 const fence = (text) => String(text ?? '').replace(/<{3,}|>{3,}/g, '');
 
 /** Hội thoại cho prompt: tiêu đề, mô tả, rồi các lượt hỏi/đáp. Toàn bộ là dữ liệu của người dùng. */

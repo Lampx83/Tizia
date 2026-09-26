@@ -178,7 +178,9 @@ function attachClarify(router, { db, store, profiles, requireAuth, requireStrict
     const intake = checkIntake('', spec);
     if (intake.block) return res.status(422).json({ error: 'request_rejected', message: intake.message });
     try {
-      res.json(store.confirmClarification(req.params.id, req.user.id, { spec, complete: req.body?.complete }));
+      // Server quyết "đã rõ": hỏi hết 5 câu mới tóm tắt = vẫn mơ hồ (cờ cho cổng 2.5), bất kể trình duyệt gửi gì.
+      const { asked } = store.getClarification(req.params.id, req.user.id);
+      res.json(store.confirmClarification(req.params.id, req.user.id, { spec, complete: asked < MAX_QUESTIONS }));
     } catch (error) { sendError(res, error); }
   });
 }
