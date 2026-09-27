@@ -1,7 +1,7 @@
 ---
 name: default
 match:
-tools: tree, graph, lessons
+tools: tree, repomap, lessons
 tools3: grep, outline, lessons
 budget: 2200
 budget3: 5000

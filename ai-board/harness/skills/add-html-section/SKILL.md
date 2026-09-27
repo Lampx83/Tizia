@@ -1,7 +1,7 @@
 ---
 name: add-html-section
 match: thêm mục, thêm phần, thêm khối, thêm khung, thêm ô, thêm nút, thêm bảng, thêm danh sách, thêm đoạn, thêm liên kết, thêm link, thêm hình, thêm ảnh, thêm chú thích, thêm ghi chú, thêm lời chào, thêm dòng, chèn, add section, add block, add button, add link, add table, insert
-tools: outline, graph, lessons
+tools: outline, repomap, lessons
 tools3: grep, outline, lessons
 budget: 2200
 budget3: 5000

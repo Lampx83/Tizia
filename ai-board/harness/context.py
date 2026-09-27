@@ -146,8 +146,8 @@ def _calls(names: tuple[str, ...], targets: list[str], css: list[str], words: li
                       or [("grep", {"words": words, "path": "public/*.html"})])
         elif name == "tree":
             calls.append(("tree", {"path": posixpath.dirname(targets[0]) if targets else "public"}))
-        elif name == "graph":
-            calls.append(("graph", {"question": question}))
+        elif name == "repomap":
+            calls.append(("repomap", {"question": question}))
         elif name == "exemplar":
             calls.append(("exemplar", {"words": [question, *words]}))
         elif name == "lessons":

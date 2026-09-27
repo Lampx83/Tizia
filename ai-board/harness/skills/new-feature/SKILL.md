@@ -3,7 +3,7 @@ name: new-feature
 match: chức năng mới, tính năng mới, trò chơi mới, trò mới, bảng xếp hạng, trang chức năng, feature mới, new feature
 types: feature
 files: new:*.html, new:index.js
-tools: exemplar, graph, tree, lessons
+tools: exemplar, repomap, tree, lessons
 tools3: exemplar, lessons
 budget: 3200
 budget3: 5000

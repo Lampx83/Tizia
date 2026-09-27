@@ -1,10 +1,10 @@
 """tools/ + skills/ + context.build_context. Repo git tạm (fixture từ test_code_index)."""
 import code_index
-import codegraph
 import context
 import file_context
 import memory
 import pytest
+import repomap
 import tools
 from test_code_index import SCHOOL, _commit, repo  # noqa: F401 — repo là fixture
 
@@ -26,9 +26,9 @@ def test_tree_grep_graph_lessons(repo, tmp_path, monkeypatch):
     assert 'L8| <h1 id="title" class="big">Trường ảo</h1>' in excerpt
     listing = tools.run("grep", src, sha, {"words": ["mẹo học"], "path": "public/*.html"}, 500)
     assert listing == "file khớp từ khoá: public/inline.html (1)"
-    assert tools.run("graph", src, sha, {"question": "x"}, 500) == ""   # conftest: graphify không có
-    monkeypatch.setattr(codegraph, "query", lambda *a, **kw: ["public/school.html"])
-    assert "public/school.html" in tools.run("graph", src, sha, {"question": "x"}, 500)
+    assert tools.run("repomap", src, sha, {"question": "x"}, 500) == ""   # conftest: repomap tắt
+    monkeypatch.setattr(repomap, "related", lambda *a, **kw: ["public/school.html"])
+    assert "public/school.html" in tools.run("repomap", src, sha, {"question": "x"}, 500)
     lessons = tmp_path / "lessons.jsonl"
     memory.record(lessons, [{"files": ["public/school.html"], "gate": 4, "failure_class": "ordinary",
                              "reason": "thiếu test", "outcome": "fixed", "ticket": 1}])

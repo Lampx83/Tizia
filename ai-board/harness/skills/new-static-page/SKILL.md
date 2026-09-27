@@ -3,7 +3,7 @@ name: new-static-page
 match: trang mới, tạo trang, thêm trang, làm trang, trang riêng, một trang, page mới, new page, create page, landing page
 types: game, lab, theory
 files: new:*.html
-tools: tree, graph, lessons
+tools: tree, repomap, lessons
 tools3: tree, lessons
 budget: 2200
 budget3: 3000

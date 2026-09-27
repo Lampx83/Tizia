@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 import code_index
-import codegraph
+import repomap
 import file_context
 import memory
 
@@ -209,10 +209,10 @@ def format_located(hits: list, users: list, *, prefer=(), budget: int = 1200) ->
     return "\n".join(lines)
 
 
-def graph(source, sha: str, *, question: str) -> str:
-    """Gợi ý graphify (chỉ khi có graph.json); rỗng khi không có — không bao giờ bắt buộc."""
-    found = codegraph.query(question)
-    return "gợi ý graphify (chưa xác nhận): " + ", ".join(found[:8]) if found else ""
+def repomap_tool(source, sha: str, *, question: str) -> str:
+    """Gợi ý file liên quan từ sơ đồ repo của AI Board (chữ hiển thị + import); rỗng khi không khớp."""
+    found = repomap.related(source, sha, question)
+    return "sơ đồ repo gợi ý (chưa xác nhận): " + ", ".join(found) if found else ""
 
 
 def lessons(source, sha: str, *, file: str, words: list[str], path=None) -> str:
@@ -268,8 +268,8 @@ TOOLS: dict[str, Tool] = {t.name: t for t in (
          {"type": "object", "properties": {"phrases": _WORDS}, "required": ["phrases"]}, locate),
     Tool("exemplar", "Trang có sẵn giống chức năng mới nhất (theo chữ hiển thị) + dàn ý và phần đầu trang để làm khung.",
          {"type": "object", "properties": {"words": _WORDS}, "required": ["words"]}, exemplar),
-    Tool("graph", "Gợi ý file liên quan từ graphify graph.json nếu có (không phải nguồn sự thật).",
-         {"type": "object", "properties": {"question": _STR}, "required": ["question"]}, graph),
+    Tool("repomap", "File liên quan theo chữ hiển thị + đồ thị import ở đúng commit (gợi ý, không phải nguồn sự thật).",
+         {"type": "object", "properties": {"question": _STR}, "required": ["question"]}, repomap_tool),
     Tool("lessons", "Bài học từ verdict cũ liên quan tới file/từ khoá.",
          {"type": "object", "properties": {"file": _STR, "words": _WORDS}, "required": ["file", "words"]}, lessons),
 )}
