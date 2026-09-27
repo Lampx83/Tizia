@@ -1422,3 +1422,15 @@ def test_sync_prs_flag_without_token_exits_cleanly(monkeypatch, capsys):
     monkeypatch.setattr('dotenv.load_dotenv', lambda *_a, **_k: False, raising=False)
     assert main(['--sync-prs']) == 0
     assert '"skipped"' in capsys.readouterr().out
+
+
+def test_diagnose_flag_runs_one_diagnosis_with_traced_deps_then_exits(monkeypatch, capsys):
+    import diagnose
+    monkeypatch.setenv('AI_BOARD_WORKER_KEY', 'k' * 32)
+    monkeypatch.setattr('dotenv.load_dotenv', lambda *_a, **_k: False, raising=False)
+    seen = {}
+    monkeypatch.setattr(diagnose, 'diagnose_to_self_request',
+                        lambda client, deps, **kw: seen.update(client=client, deps=deps, **kw) or {'status': 'no_cluster'})
+    assert main(['--diagnose']) == 0
+    assert '"no_cluster"' in capsys.readouterr().out
+    assert isinstance(seen['client'], WorkerClient) and seen['deps'].trace is not None and seen['now_ms'] > 0
