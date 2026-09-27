@@ -4,21 +4,66 @@ Output ngắn → không vượt timeout gateway; file lớn không còn là gi�
 """
 from __future__ import annotations
 
+import json
+import logging
 import re
 import unicodedata
+from pathlib import Path
 
-CONTEXT_BUDGET = 6000  # ký tự trích đưa vào prompt cho 1 file
-RADIUS = 3             # số dòng quanh mỗi dòng khớp từ khoá
-TAIL_LINES = 8         # luôn kèm cuối file: nhiều yêu cầu là "thêm vào cuối trang"
-MAX_KEYWORDS = 12
-MAX_LINE = 400         # dòng dài hơn bị cắt, không dùng làm search được
-# locate (chỉ mục chữ hiển thị) — mọi núm ở đây:
-NGRAM = (2, 5)         # cụm 2–5 từ: 1 từ khớp quá rộng, > 5 từ người dùng hiếm chép nguyên văn
-MAX_PHRASES = 6        # số cụm hiếm nhất (IDF) đem đi tìm; nhiều hơn chỉ thêm nhiễu vào 800 ký tự locate
-TEXT_MAX = 200         # mảnh chuỗi JS dài hơn = dữ liệu/code dài, không phải nhãn người dùng đọc thấy
-MAX_RENDERERS = 2      # module render tối đa đưa lên target cổng 1 (mỗi cái còn cần budget trích)
-MIN_STEM = 4           # stem tên file ngắn hơn ("app", "ui") khớp tên hàm bừa bãi
-USERS_SHARE = 1 / 3    # phần budget locate giữ cho dòng import: đủ 2–3 dòng, hit vẫn chiếm phần lớn
+# Mọi núm truy xuất context (trích file, locate, exemplar, repomap, chia budget tool) nằm ở retrieval_weights.json,
+# mỗi khoá kèm _why. Dưới đây chỉ là giá trị dự phòng khi file hỏng/thiếu khoá.
+WEIGHTS_PATH = Path(__file__).resolve().parent / "retrieval_weights.json"
+DEFAULT_WEIGHTS = {
+    "context_budget": 6000, "radius": 3, "tail_lines": 8, "max_keywords": 12, "max_line": 400, "ngram": [2, 5],
+    "max_phrases": 6, "text_max": 200, "max_renderers": 2, "min_stem": 4, "users_share": 1 / 3,
+    "locate_budget": 800, "locate_divisor": 3, "tool_min_budget": 300, "max_mentioned_files": 3,
+    "grep_top_files": 8, "locate_line_max": 160, "exemplars": 2, "common_word_share": 0.25, "min_term_len": 3,
+    "repomap_seeds": 3, "repomap_limit": 8,
+}
+
+
+def _valid(value, default) -> bool:
+    """Cùng kiểu với mặc định (float nhận cả int, list cùng độ dài), dương và hữu hạn (json nhận cả Infinity/NaN)."""
+    if isinstance(default, list):
+        return isinstance(value, list) and len(value) == len(default) and all(map(_valid, value, default))
+    return (type(value) is type(default) or (type(default) is float and type(value) is int)) and 0 < value < float("inf")
+
+
+def load_weights(path=WEIGHTS_PATH) -> dict:
+    """{khoá: value} từ file `{khoá: {value, _why}}`. File hỏng → toàn bộ mặc định; khoá thiếu/sai → mặc định khoá
+    đó. Cả 2 ghi cảnh báo, không raise (cổng không được sập vì file này)."""
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("không phải object")
+    except (OSError, ValueError) as e:
+        logging.getLogger(__name__).warning("retrieval_weights %s hỏng (%s): dùng toàn bộ mặc định", path, e)
+        return dict(DEFAULT_WEIGHTS)
+    out, bad = {}, []
+    for key, default in DEFAULT_WEIGHTS.items():
+        entry = data.get(key)
+        value = entry.get("value") if isinstance(entry, dict) else None
+        ok = _valid(value, default)
+        out[key] = value if ok else default
+        if not ok:
+            bad.append(key)
+    if bad:
+        logging.getLogger(__name__).warning("retrieval_weights %s thiếu/sai khoá %s: dùng mặc định", path, bad)
+    return out
+
+
+WEIGHTS = load_weights()
+CONTEXT_BUDGET = WEIGHTS["context_budget"]
+RADIUS = WEIGHTS["radius"]
+TAIL_LINES = WEIGHTS["tail_lines"]
+MAX_KEYWORDS = WEIGHTS["max_keywords"]
+MAX_LINE = WEIGHTS["max_line"]
+NGRAM = WEIGHTS["ngram"]
+MAX_PHRASES = WEIGHTS["max_phrases"]
+TEXT_MAX = WEIGHTS["text_max"]
+MAX_RENDERERS = WEIGHTS["max_renderers"]
+MIN_STEM = WEIGHTS["min_stem"]
+USERS_SHARE = WEIGHTS["users_share"]
 
 _WORD = re.compile(r"[0-9A-Za-zÀ-ỹ_-]{3,}")
 _QUOTED = re.compile(r"['\"“‘]([^'\"”’\n]{3,80})['\"”’]")

@@ -36,3 +36,26 @@ def test_apply_edits_keeps_crlf():
 def test_apply_edits_rejects_missing_or_ambiguous_search(edit, message):
     with pytest.raises(ValueError, match=message):
         file_context.apply_edits("a\na\n", [edit])
+
+
+def test_retrieval_weights_fall_back_to_defaults_with_warning(tmp_path, caplog):
+    """File hỏng → toàn bộ mặc định; khoá thiếu/sai kiểu → mặc định cho khoá đó, khoá hợp lệ vẫn dùng. Luôn cảnh báo."""
+    bad = tmp_path / "w.json"
+    bad.write_text("{not json", encoding="utf-8")
+    assert file_context.load_weights(bad) == file_context.DEFAULT_WEIGHTS
+    assert "retrieval_weights" in caplog.text
+
+    caplog.clear()
+    bad.write_text('{"max_phrases": {"value": 9, "_why": "x"}, "radius": {"value": "ba"}, "ngram": {"value": [2]}}',
+                   encoding="utf-8")
+    weights = file_context.load_weights(bad)
+    assert weights["max_phrases"] == 9
+    assert weights["radius"] == file_context.DEFAULT_WEIGHTS["radius"]
+    assert weights["ngram"] == file_context.DEFAULT_WEIGHTS["ngram"]
+    assert weights["exemplars"] == file_context.DEFAULT_WEIGHTS["exemplars"]
+    assert "radius" in caplog.text and "exemplars" in caplog.text
+
+
+def test_committed_retrieval_weights_load_without_warning(caplog):
+    file_context.load_weights(file_context.WEIGHTS_PATH)
+    assert caplog.text == ""

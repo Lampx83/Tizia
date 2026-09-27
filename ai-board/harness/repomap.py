@@ -16,14 +16,14 @@ import code_index
 import file_context
 
 ROOT = Path(__file__).resolve().parents[2]
-SEEDS = 3
+SEEDS = file_context.WEIGHTS["repomap_seeds"]
 
 
 def _tokens(text: str) -> set[str]:
-    return {w for w in re.split(r"[^a-z0-9]+", file_context.fold(text)) if len(w) >= 3}
+    return {w for w in re.split(r"[^a-z0-9]+", file_context.fold(text)) if len(w) >= file_context.WEIGHTS["min_term_len"]}
 
 
-def related(source, sha: str, question: str, *, limit: int = 8) -> list[str]:
+def related(source, sha: str, question: str, *, limit: int = file_context.WEIGHTS["repomap_limit"]) -> list[str]:
     """File liên quan tới câu hỏi, file khớp nhất trước rồi hàng xóm import của nó. Rỗng khi không khớp gì."""
     commit = code_index.git(source, "rev-parse", "--verify", f"{sha}^{{commit}}").decode().strip()
     index = code_index.ui_index(source, commit)
@@ -32,7 +32,7 @@ def related(source, sha: str, question: str, *, limit: int = 8) -> list[str]:
     score = dict.fromkeys(files, 0.0)
     for term in terms:
         holders = index["words"].get(term, set())
-        if holders and len(holders) <= total / 4:  # từ quá phổ biến không phân biệt được file
+        if holders and len(holders) <= total * file_context.WEIGHTS["common_word_share"]:  # từ quá phổ biến không phân biệt được file
             for path in holders:
                 score[path] += math.log(total / len(holders))
         for path in files:

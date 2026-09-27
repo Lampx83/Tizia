@@ -84,7 +84,7 @@ def grep(source, sha: str, *, words: list[str], file: str | None = None, path: s
         return ""  # exit 1 = không khớp
     hits = sorted(((int(n), f.split(":", 1)[1]) for f, n in (line.rsplit(":", 1) for line in raw.splitlines())),
                   reverse=True)
-    return "file khớp từ khoá: " + ", ".join(f"{f} ({n})" for n, f in hits[:8]) if hits else ""
+    return "file khớp từ khoá: " + ", ".join(f"{f} ({n})" for n, f in hits[:file_context.WEIGHTS["grep_top_files"]]) if hits else ""
 
 
 def _files_with(index: dict, gram: str) -> list[str]:
@@ -145,7 +145,7 @@ def find_text(source, sha: str, phrases: list[str], pages: list[str] = ()) -> tu
         index, _, chosen = _rank(source, sha, phrases, pages)
     except OSError:
         return [], []
-    hits = list(dict.fromkeys((f, str(n), index["files"][f]["lines"][n - 1].strip()[:160]) for g, files in chosen
+    hits = list(dict.fromkeys((f, str(n), index["files"][f]["lines"][n - 1].strip()[:file_context.WEIGHTS["locate_line_max"]]) for g, files in chosen
                               for f in files for n, t in index["files"][f]["text"] if f" {g} " in t))
     texts = {f for f, _, _ in hits}
     stems = _stems(texts)
@@ -223,7 +223,7 @@ def lessons(source, sha: str, *, file: str, words: list[str], path=None) -> str:
 _STR = {"type": "string"}
 _WORDS = {"type": "array", "items": {"type": "string"}}
 _TOP_PAGE = re.compile(r"^public/[^/]+\.html$")
-EXEMPLARS = 2  # số trang mẫu liệt kê; chỉ trang đầu có dàn ý + phần đầu trang
+EXEMPLARS = file_context.WEIGHTS["exemplars"]
 
 
 def exemplar(source, sha: str, *, words: list[str], budget: int = 2500) -> str:
@@ -234,11 +234,11 @@ def exemplar(source, sha: str, *, words: list[str], budget: int = 2500) -> str:
     index = code_index.ui_index(source, commit)
     pages = [p for p in index["files"] if _TOP_PAGE.match(p)]
     total = max(len(index["files"]), 1)
-    terms = {w for w in file_context.fold(" ".join(words)).split() if len(w) >= 3}
+    terms = {w for w in file_context.fold(" ".join(words)).split() if len(w) >= file_context.WEIGHTS["min_term_len"]}
     score = {p: 0.0 for p in pages}
     for term in terms:
         holders = index["words"].get(term, set())
-        if not holders or len(holders) > total / 4:  # từ quá phổ biến không phân biệt được trang
+        if not holders or len(holders) > total * file_context.WEIGHTS["common_word_share"]:  # từ quá phổ biến không phân biệt được trang
             continue
         idf = math.log(total / len(holders))
         for page in holders & set(pages):
