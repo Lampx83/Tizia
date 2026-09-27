@@ -1,9 +1,26 @@
 {
- "school=it": 33.3,
+ "_config": {
+  "skills.lock.json": "8d124a4792",
+  "prompts.lock.json": "77b9546b06",
+  "contract.json": "de3c7c7826",
+  "clarity-rules.json": "6fe4386a9c"
+ },
+ "school=it": 69.2,
  "school=pharmacy": 100.0,
- "style=named": 66.7,
- "style=plain": 66.7,
+ "style=named": 80.0,
+ "style=plain": 89.5,
  "type=feature": 50.0,
+ "type=followup": 100.0,
  "type=logic": 50.0,
- "type=ui": 100.0
+ "type=ui": 100.0,
+ "clarity_fp": 0.0,
+ "clarity_fp school=it": 0.0,
+ "clarity_fp school=pharmacy": 0.0,
+ "clarity_fp style=named": 0.0,
+ "clarity_fp style=plain": 0.0,
+ "clarity_miss": 0.0,
+ "clarity_miss school=it": 0.0,
+ "clarity_miss school=pharmacy": 0.0,
+ "clarity_miss style=named": 0.0,
+ "clarity_miss style=plain": 0.0
 }
