@@ -4,6 +4,60 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-27 — Phiên 74 · Sửa chính cái ROUTINE: leo thang tự động, bậc thang việc dự phòng, và cân bằng lại 216 câu phiên 73 tự làm lệch
+
+**Kết luận về hộp thư:** vẫn **không đọc được** — nay đã **đếm được bằng máy**: `consecutive_failures = 15`, từ `2026-09-13` (`ai-board/inbox-status.json`). Phiên này **không xử lý yêu cầu nào của người học** và không bịa ra yêu cầu.
+
+Phiên 73 đóng xong toàn bộ nội dung chết (K-12 về 0) ⇒ **nguồn việc dự phòng đã cạn**. Đó là lúc routine dễ bịa việc nhất. Nên hôm nay sửa chính cơ chế vận hành thay vì tìm việc mới.
+
+### Ba lỗi của routine, và cách sửa
+
+| Lỗi (lặp suốt 14 phiên) | Cách sửa |
+|---|---|
+| Hộp thư chết nhiều ngày mà **không có cơ chế buộc con người quyết định** | `scripts/ai-board-preflight.mjs` đếm số ngày hỏng liên tiếp; **≥3 ngày ⇒ in lệnh leo thang** nêu đúng 2 việc cần người bấm nút |
+| Khi hộp thư chết, phiên **tự nghĩ ra việc** | **Bậc thang việc dự phòng** 3 bậc, mỗi bậc phải có lệnh chứng minh vấn đề tồn tại **trước khi** sửa; cả ba sạch ⇒ **không tạo PR** |
+| Không ai đếm được đã hỏng bao nhiêu ngày, ngoài cách đọc văn xuôi CHANGELOG | Trạng thái ghi ra `ai-board/inbox-status.json`, một lần mỗi ngày |
+
+### File mới
+
+- **`scripts/ai-board-preflight.mjs`** — bước 0 bắt buộc của mọi phiên. Đo 6 endpoint hộp thư, đếm ngày hỏng, chạy bậc thang, in **một kết luận duy nhất** phiên phải tuân theo. Chỉ đọc; ghi đúng một file trạng thái; không sửa học liệu, không commit.
+- **`ai-board/ROUTINE.md`** — bản luật có version. Prompt của scheduled task nằm ngoài repo và không ai version được; **khi prompt mâu thuẫn với file này thì file này thắng**.
+- **`ai-board/inbox-status.json`** — bộ đếm, gieo đúng lịch sử thật (15 ngày, từ 2026-09-13).
+
+### Bậc thang việc dự phòng — trạng thái hôm nay
+
+| Bậc | Vấn đề | Lệnh chứng minh | Hôm nay |
+|---|---|---|---|
+| 1 | Bài lí thuyết mồ côi | `check-content-integrity.mjs` | ✅ sạch (phiên 73 đóng xong) |
+| 2 | Môn dừng ở 35 tuần | `ai-board-preflight.mjs` | ⚠️ **9 môn** — 6 môn Lớp 7 + 3 môn HĐTN THPT |
+| 3 | Lệch phân bố đáp án, câu dị dạng | `audit-answer-distribution.js` | ⚠️ **11 môn** lệch ≥60% + **2 câu** không đủ 4 lựa chọn |
+
+### Sửa lỗi do CHÍNH phiên 73 gây ra
+
+`audit-answer-distribution.js` cho thấy 216 câu tuần 36 mà phiên 73 vừa thêm **bị lệch đáp án**: A 26,9% · B 46,8% · C 23,6% · **D chỉ 2,8%**, và **7 tuần có ≥4/6 câu cùng một vị trí đáp án**. Học sinh đoán "B" liên tục vẫn được điểm cao mà không cần biết kiến thức — đúng loại lỗi mà `shuffle-answers.js` từng được viết ra để chữa.
+
+Đã hoán vị lại vị trí đáp án của **cả 216 câu**, giữ nguyên 100% nội dung:
+
+- **Sau khi sửa: A 25,0% · B 25,0% · C 25,0% · D 25,0%** (chẵn 54/54/54/54).
+- **Không tuần nào** còn ≥3/6 câu cùng vị trí.
+
+> ⚠️ **Không dùng `scripts/shuffle-answers.js` cho nội dung có `choiceFeedback`.** Script đó viết trước khi trường này tồn tại: nó hoán vị `choices` + `answer` nhưng **không** hoán vị `choiceFeedback` ⇒ làm lệch feedback so với đáp án. Phiên này dùng bộ hoán vị riêng, di chuyển cặp `(choice, choiceFeedback)` cùng nhau. Đã ghi cảnh báo này vào `ai-board/ROUTINE.md`.
+
+### Ba lỗi kỹ thuật trong văn bản routine (đã ghi vào ROUTINE.md)
+
+- Routine bảo dùng `gh pr create`, nhưng **`gh` và `hub` không tồn tại** trong môi trường này — phải dùng công cụ GitHub sẵn có của phiên.
+- Repo đã đổi tên **`Lampx83/EduVerse` → `Lampx83/Tizia`**; tên cũ chỉ còn redirect.
+- Routine cho phép tự merge vô điều kiện. Nay siết lại: **chỉ tự merge khi diff chỉ đụng học liệu** (`public/js/scenarios/**`, `CHANGELOG`, `ai-board/**`), không đụng `server/**` hay `public/js/engine/**`.
+
+### Kiểm thử (chạy thật)
+
+- `node --check` **pass 40/40** file `.js` đã sửa (36 scenario + preflight + 3 file phiên trước không đổi nội dung).
+- **Kiểm tra runtime** sau khi hoán vị: 36/36 scenario tuần 36 vẫn nạp được, có `lesson` gắn vào, `week === 36`, 4 lựa chọn không trùng, `answer` ∈ 0..3, đủ 4 `choiceFeedback`, và **feedback tại vị trí `answer` vẫn mở đầu bằng "Đúng"/"Correct"** ⇒ chứng minh hoán vị không làm lệch feedback. 0 lỗi.
+- `check-content-integrity.mjs`: **vẫn 0** bài mồ côi.
+- `ai-board-preflight.mjs` chạy đầu-cuối: đo đúng 6 endpoint, đếm đúng 15 ngày, kích hoạt đúng nhánh leo thang, chỉ đúng bậc 2 là việc kế tiếp.
+
+---
+
 ## 2026-09-26 — Phiên 73 · THPT **ĐÓNG TRỌN cấp 3 và toàn bộ K-12**: hồi sinh 36 bài lí thuyết "chết" của Lớp 10, Lớp 11 và Lớp 12
 
 **Kết luận về hộp thư:** vẫn **không đọc được** (ngày thứ 14) ⇒ **không xử lý được yêu cầu nào của người học**, không bịa ra yêu cầu. Phiên này khép lại việc đã đo được từ phiên 58: học liệu đã viết xong nhưng học sinh **không bao giờ nhìn thấy**. Hôm nay đóng nốt cấp THPT ⇒ **toàn bộ K-12 (lớp 1→12) không còn bài lí thuyết mồ côi nào**.
