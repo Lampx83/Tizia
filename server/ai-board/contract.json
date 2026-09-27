@@ -6,7 +6,7 @@
     "names": { "1": "Lập plan", "2": "Phạm vi", "2.5": "Soát plan", "3": "Sinh code", "4": "Kiểm tĩnh + guard", "5": "Chạy Docker", "5.5": "Đánh giá rủi ro" }
   },
   "verdict_outcomes": ["ready_for_pr", "needs_review", "blocked"],
-  "failure_classes": ["ordinary", "transient", "critical", "budget", "plan"],
+  "failure_classes": ["ordinary", "transient", "critical", "budget", "plan", "eval"],
   "run_triggers": ["shadow_precheck", "plan", "execute", "rollback"],
   "rollback_outcomes": ["discarded", "revert_ready", "failed"],
   "max_repairs": 1,

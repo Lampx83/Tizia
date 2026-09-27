@@ -1422,3 +1422,89 @@ def test_sync_prs_flag_without_token_exits_cleanly(monkeypatch, capsys):
     monkeypatch.setattr('dotenv.load_dotenv', lambda *_a, **_k: False, raising=False)
     assert main(['--sync-prs']) == 0
     assert '"skipped"' in capsys.readouterr().out
+
+
+# Self-improve ticket 05: cổng 5 của yêu cầu self là eval 2 sha trên phần kiểm tra, không phải Docker/HTTP.
+LEARNING = [{'id': 1, 'request_text': 'cũ', 'expected_files': ['public/1.html']}]
+TEST_PART = [{'id': i, 'request_text': f'mới {i}', 'expected_files': [f'public/{i}.html']} for i in (2, 3, 4)]
+
+
+def _self_run(tmp_path, variant_hits):
+    import self_eval
+
+    class SelfTransport(FakeTransport):
+        def __call__(self, method, path, payload, headers):
+            out = super().__call__(method, path, payload, headers)
+            if path.endswith('/snapshot'):
+                out['request'] = {**out['request'], 'type': 'self'}
+            if path.endswith('/eval-tasks'):
+                return {'ready': True, 'labelled': 4, 'min_tasks': 20, 'split': 0.7,
+                        'learning': LEARNING, 'test': TEST_PART}
+            return out
+
+    snapshots, seen = [], {}
+
+    def planner(snapshot):
+        snapshots.append(snapshot)
+        return PLAN, 0
+
+    def run_at(sha, job, payload):
+        if job == 'strata':
+            return {'strata': {'type=ui': 80.0}, 'config': {'prompts.lock.json': sha[:10]}}
+        hits = variant_hits if sha == 'b' * 40 else {2}
+        return {'results': [{'id': t['id'], 'passed': t['id'] in hits} for t in payload['tasks']],
+                'units': 5, 'exhausted': False}
+
+    def run_gate(gate, _request, _deps, _budget, state):
+        seen[gate] = dict(state)
+        if gate == 3:
+            state.update(base_sha='a' * 40, branch='ai-board/2026-09-28-ticket-7-abc123', commits=[
+                {'sha': 'b' * 40, 'title': 'x', 'files': ['ai-board/harness/skills/default/SKILL.md']}])
+        if gate == 5:
+            return self_eval.run(state, run_at=run_at)
+        if gate == 5.5:
+            return {'gate': 5.5, 'blocked': False, 'reason': None, 'risk_level': 'high',
+                    'risk_signals': [{'name': 'catalog_tier', 'tier': 'high', 'detail': 'self.config'}]}
+        return {'gate': gate, 'blocked': False, 'reason': None}
+
+    transport = SelfTransport()
+    HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1', mode='active',
+               planner=planner, candidates=FakeCandidates(),
+               change_runner=lambda plan, ticket_id, _units, **kw: execute_pre_pr(
+                   plan, ticket_id=ticket_id, checkout_source=tmp_path, deps=object(), budget=TickBudget(),
+                   run_gate=run_gate, cleanup=lambda *_a, **_k: None, **kw)).run_once()
+    verdict = next(call[2]['verdict'] for call in transport.calls if call[1].endswith('/verdict'))
+    return verdict, snapshots, seen, transport
+
+
+def test_a_self_variant_that_wins_the_eval_passes_gate_5_without_http_and_goes_to_human_review(tmp_path):
+    verdict, snapshots, seen, transport = _self_run(tmp_path, variant_hits={2, 3})
+    assert verdict['outcome'] == 'needs_review' and verdict['failure_class'] is None
+    gate5 = next(g for g in verdict['gates'] if g['gate'] == 5)
+    assert gate5['runner'] == 'eval' and gate5['http_observed'] is False and gate5['blocked'] is False
+    assert (gate5['eval']['wins'], gate5['eval']['losses'], gate5['eval']['accepted']) == (1, 0, True)
+    assert gate5['eval']['gpu_s'] == 10 and gate5['eval']['base_sha'] == 'a' * 40
+    assert verdict['candidate']['head_sha'] == 'b' * 40
+    # Phần kiểm tra chỉ tới cổng eval: người lập plan (cổng 1–2.5) không thấy, phần học không vào cổng nào.
+    assert [t['id'] for t in seen[5]['eval_tasks']] == [2, 3, 4]
+    paths = [call[1] for call in transport.calls]
+    assert paths.index('/api/ai-board/worker/eval-tasks') > next(i for i, p in enumerate(paths) if p.endswith('/plan'))
+    assert 'mới 2' not in repr(snapshots) and 'cũ' not in repr(seen)
+
+
+def test_a_self_pr_shows_its_eval_evidence_and_is_labelled_self(tmp_path):
+    from worker import pr_text
+
+    verdict, _, _, _ = _self_run(tmp_path, variant_hits={2, 3})
+    snapshot = {'request': {'id': 3, 'title': 'Sửa skill', 'type': 'self'}}
+    _title, body, labels = pr_text(snapshot, PLAN, 'protected', verdict)
+    assert 'thắng 1, thua 0, hoà 2 trên 3 task kiểm tra' in body and 'Docker smoke' not in body
+    assert 'ai-board:self' in labels
+    assert 'ai-board:self' not in pr_text({'request': {'id': 3, 'title': 'x'}}, PLAN, 'surface', PASSING)[2]
+
+
+def test_a_self_variant_that_loses_the_eval_is_blocked_without_a_repair(tmp_path):
+    verdict, _, _, _ = _self_run(tmp_path, variant_hits=set())
+    assert verdict['outcome'] == 'blocked' and verdict['failure_class'] == 'eval'
+    assert verdict['gate_reached'] == 5 and verdict['reason'] == 'thua 1 task, thắng 0, hoà 2'
+    assert verdict['repairs'] == [] and verdict['candidate'] is None

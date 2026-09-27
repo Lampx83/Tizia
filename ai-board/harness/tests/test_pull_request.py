@@ -209,6 +209,28 @@ def test_review_refuses_a_pr_into_another_base_or_branch():
     review_pr.check_pr({'number': 1, 'base': {'ref': 'dev'}, 'head': {'ref': BRANCH}})
 
 
+def test_review_of_a_self_pr_uses_the_self_edit_rules(tmp_path):
+    """Self-improve ticket 05: PR gắn nhãn ai-board:self → guard theo luật self, không Docker smoke (bằng chứng là eval)."""
+    import review_pr
+
+    repo = tmp_path / 'r'
+    skill = repo / 'ai-board' / 'harness' / 'skills' / 'default' / 'SKILL.md'
+    skill.parent.mkdir(parents=True)
+    skill.write_text('match: sửa chữ\n', encoding='utf-8')
+    git(tmp_path, 'init', '-q', str(repo))
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-q', '-m', 'base')
+    base = git(repo, 'rev-parse', 'HEAD')
+    skill.write_text('match: sửa chữ, đổi tên\n', encoding='utf-8')
+    git(repo, 'commit', '-q', '-am', 'self')
+    built = {'checkout': str(repo), 'base_sha': base}
+    assert review_pr.request_type({'labels': [{'name': 'ai-board'}, {'name': 'ai-board:self'}]}) == 'self'
+    assert review_pr.request_type({'labels': [{'name': 'ai-board'}]}) is None
+    ok = review_pr.check(built, 1, request_type='self')
+    assert ok['guard_problems'] == [] and ok['passed'] is True
+    assert any('protected_path' in p for p in review_pr.check(built, 1)['guard_problems'])
+
+
 def test_pull_files_reads_every_page():
     pages = {1: [{'filename': f'public/{i}.html'} for i in range(100)], 2: [{'filename': 'server/x.js'}]}
     calls = []

@@ -103,6 +103,8 @@ def _public_gate_result(result: dict) -> dict:
         out["smoke_passed"] = bool((result.get("evidence") or {}).get("smoke_passed"))
         out["http_observed"] = bool((result.get("evidence") or {}).get("http_observed"))
         out["runner"] = (result.get("evidence") or {}).get("runner")
+        if (result.get("evidence") or {}).get("eval"):  # yêu cầu self: kết quả eval 2 sha (self_eval.py)
+            out["eval"] = result["evidence"]["eval"]
     elif result["gate"] == 5.5:
         out["risk_level"] = result.get("risk_level")
         out["risk_signals"] = list(result.get("risk_signals") or [])
@@ -113,10 +115,11 @@ MAX_REPAIRS = CONTRACT["max_repairs"]  # server enforces the same bound
 
 
 def _passed(gates: list[dict], kind: str | None) -> bool:
-    """Qua hết: không lỗi, tới 5.5 không bị chặn, smoke qua và quan sát được qua HTTP."""
+    """Qua hết: không lỗi, tới 5.5 không bị chặn, smoke qua và quan sát được qua HTTP (self: biến thể thắng eval)."""
     smoke = next((gate for gate in gates if gate["gate"] == 5), None)
     return bool(kind is None and gates and gates[-1]["gate"] == 5.5 and not gates[-1]["blocked"]
-                and smoke and smoke["smoke_passed"] and smoke["http_observed"])
+                and smoke and ((smoke["smoke_passed"] and smoke["http_observed"])
+                               or (smoke["runner"] == "eval" and (smoke.get("eval") or {}).get("accepted"))))
 
 
 def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate, cleanup,
@@ -124,7 +127,8 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
              request_detail: str | None, memory_path,
              should_stop: Callable[[], bool] | None,
              candidate_opts: dict | None = None,
-             request_type: str | None = None) -> tuple[list[dict], str | None, dict | None, list[dict], str | None]:
+             request_type: str | None = None,
+             eval_tasks: list[dict] | None = None) -> tuple[list[dict], str | None, dict | None, list[dict], str | None]:
     """One pass of Gates 3→5.5 on fresh scratch + worktree. Return (public gates, failure kind, candidate,
     ảnh chụp cổng 5 — file tạm cục bộ, base sha các cổng đã dùng | None)."""
     scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
@@ -138,6 +142,8 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
         state["request_detail"] = request_detail
     if request_type:
         state["request_type"] = request_type  # 'self': cổng 4 nới vùng tự sửa + tính lại file khoá
+    if eval_tasks is not None:
+        state["eval_tasks"] = eval_tasks  # self: phần kiểm tra, chỉ cổng 5 (eval) đọc
     state.update(candidate_opts or {})  # folder (ticket 05): branch_name + branch_restore cho candidate.create
     if memory_path:
         state["memory_path"] = str(memory_path)
@@ -173,7 +179,7 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
             public = _public_gate_result(result)
             if gate == 5:
                 public["retried"] = retried
-                if not public["blocked"] and not public["http_observed"]:
+                if not public["blocked"] and not public["http_observed"] and public["runner"] != "eval":
                     public["blocked"] = True
                     public["reason"] = "change has no HTTP-observable result"
                     result["failure_class"] = "plan"
@@ -216,13 +222,14 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
                    cleanup: Callable, policy: dict | None = None, accepted_policy_hash: str | None = None,
                    request_detail: str | None = None, memory_path=None,
                    should_stop: Callable[[], bool] | None = None, candidate_opts: dict | None = None,
-                   request_type: str | None = None) -> dict:
+                   request_type: str | None = None, eval_tasks: list[dict] | None = None) -> dict:
     """Run Gates 3→5.5, repairing an ordinary failure at most MAX_REPAIRS times. Return a redacted verdict.
 
     policy = snapshot catalog {hash, capabilities}; None only outside the HTTP worker (no catalog check).
     memory_path = lessons JSONL: Gate 3 recalls from it, repairs and final blocks are appended to it.
     should_stop() true between or during gates (lease lost) → LeaseLostError, worktree cleaned, nothing kept.
-    failure_class: ordinary | transient | critical | budget | plan (see store.js FAILURE_CLASSES)."""
+    failure_class: ordinary | transient | critical | budget | plan | eval (see store.js FAILURE_CLASSES).
+    eval_tasks (self only) = phần kiểm tra của task eval cho cổng 5; biến thể thua eval → 'eval', không sửa lại."""
     # plan_hash embeds the policy hash, so a catalog change between leases already forces a fresh plan
     # server-side; this guards the in-lease race and a snapshot missing its catalog (fail closed).
     if policy is not None and (not policy.get("hash") or policy.get("hash") != accepted_policy_hash):
@@ -243,7 +250,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
             plan, ticket_id=ticket_id, checkout_source=checkout_source, deps=deps, budget=budget,
             run_gate=run_gate, cleanup=cleanup, repair_reason=repair_reason, catalog=catalog,
             request_detail=request_detail, memory_path=memory_path, should_stop=should_stop,
-            candidate_opts=candidate_opts, request_type=request_type,
+            candidate_opts=candidate_opts, request_type=request_type, eval_tasks=eval_tasks,
         )
         last = gates[-1]
         if kind != "ordinary" or len(repairs) >= MAX_REPAIRS:
@@ -317,11 +324,14 @@ def pr_text(snapshot: dict, plan: dict, tier: str | None, verdict: dict) -> tupl
           for c in candidate.get("commits") or []),
         "", "## Rủi ro",
         f"Mức rủi ro cổng 5.5: **{level}**; tier: **{tier or '—'}**."
-        + (f" Tín hiệu: {', '.join(risk.get('risk_signals') or [])}." if risk.get("risk_signals") else ""),
+        + (f" Tín hiệu: {', '.join(s['name'] for s in risk['risk_signals'])}." if risk.get("risk_signals") else ""),
         "", "## Kiểm thử",
         *(f"- `{safe(t)}`" for t in tests),
-        f"- Docker smoke: {'đạt' if smoke.get('smoke_passed') else 'không đạt'}; quan sát qua HTTP: "
-        f"{'có' if smoke.get('http_observed') else 'không'}.",
+        (f"- Eval (self): thắng {ev['wins']}, thua {ev['losses']}, hoà {ev['ties']} trên {ev['tasks']} task kiểm tra; "
+         f"{ev['gpu_s']}/{ev['gpu_s_limit']} GPU-s; gốc `{ev['base_sha'][:10]}` → biến thể `{ev['variant_sha'][:10]}`."
+         if (ev := smoke.get("eval")) else
+         f"- Docker smoke: {'đạt' if smoke.get('smoke_passed') else 'không đạt'}; quan sát qua HTTP: "
+         f"{'có' if smoke.get('http_observed') else 'không'}."),
         "", "## Kết quả các cổng",
         *(f"- Cổng {g.get('gate')} ({names.get(str(g.get('gate')).removesuffix('.0'), '')}): "
           f"{'chặn — ' + safe(g.get('reason')) if g.get('blocked') else 'qua'}" for g in gates),
@@ -332,6 +342,8 @@ def pr_text(snapshot: dict, plan: dict, tier: str | None, verdict: dict) -> tupl
         "", "_Mở tự động bởi AI Board. Không tự merge, không tự duyệt: người review quyết định._",
     ]
     labels = ["ai-board", f"ai-board:tier-{tier or 'unknown'}"]
+    if request.get("type") == "self":
+        labels.append("ai-board:self")  # review_pr.py soát guard theo luật của yêu cầu self
     if level in ("high", "critical"):
         labels.append("ai-board:review-carefully")
     elif tier == "surface":
@@ -668,6 +680,8 @@ class HttpWorker:
             # Skill cổng 1 của lượt lập plan này; lượt 'execute' (plan đã duyệt từ lease trước) không biết skill.
             skill = None if executing else getattr(self.planner, "last_skill", None)
             if self.change_runner and planned["status"] == "planned":
+                if type_kwargs:  # phần kiểm tra chỉ lấy sau khi đã có plan: người lập plan không bao giờ thấy
+                    type_kwargs["eval_tasks"] = self.client.post("/api/ai-board/worker/eval-tasks", {}).get("test") or []
                 limit = int((snapshot.get("ticket") or {}).get("budget_limit") or DEFAULT_BUDGET_LIMIT)
                 result = self._with_heartbeat(
                     lambda lost: self.change_runner(

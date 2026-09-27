@@ -186,7 +186,32 @@ function parseAttachments(value) {
   }
 }
 
-function validatePrePrVerdict(value) {
+const count = (v) => (Number.isInteger(v) && v >= 0 ? v : 0);
+/** {tên: giá trị} có trần: điểm nhóm (số) hoặc mã cấu hình (chuỗi ≤ 64). */
+const smallMap = (m, keep) => Object.fromEntries(Object.entries(m && typeof m === 'object' ? m : {}).slice(0, 60)
+  .filter(([, v]) => keep(v)).map(([k, v]) => [String(k).slice(0, 80), typeof v === 'string' ? v.slice(0, 64) : v]));
+const isScore = (v) => typeof v === 'number' && Number.isFinite(v);
+const isHash = (v) => typeof v === 'string';
+
+/** Kết quả cổng eval của yêu cầu self (self-improve ticket 05) — whitelist + trần; accepted phải khớp thắng > thua. */
+function cleanEval(e) {
+  if (!e || typeof e !== 'object') return null;
+  const out = {
+    base_sha: SHA.test(String(e.base_sha)) ? e.base_sha : null, variant_sha: SHA.test(String(e.variant_sha)) ? e.variant_sha : null,
+    tasks: count(e.tasks), wins: count(e.wins), losses: count(e.losses), ties: count(e.ties),
+    gpu_s: Number.isFinite(Number(e.gpu_s)) ? Number(e.gpu_s) : 0, gpu_s_limit: count(e.gpu_s_limit), gold: e.gold === true,
+    dropped: Array.isArray(e.dropped) ? e.dropped.slice(0, 20).map((d) => String(d).slice(0, 200)) : [],
+    strata: { base: smallMap(e.strata?.base, isScore), variant: smallMap(e.strata?.variant, isScore) },
+    config: { base: smallMap(e.config?.base, isHash), variant: smallMap(e.config?.variant, isHash) },
+    pairs: Array.isArray(e.pairs) ? e.pairs.slice(0, 200).map((p) => ({
+      id: Number.isInteger(p?.id) ? p.id : String(p?.id ?? '').slice(0, 60), base: p?.base === true, variant: p?.variant === true,
+    })) : [],
+  };
+  return { accepted: e.accepted === true && out.wins > out.losses && !out.dropped.length, ...out };
+}
+
+/** selfRequest: yêu cầu board tự sửa — cổng 5 là eval 2 sha (runner 'eval') thay Docker smoke + HTTP. */
+function validatePrePrVerdict(value, selfRequest = false) {
   if (!value || typeof value !== 'object' || !CONTRACT.verdict_outcomes.includes(value.outcome)) {
     throw new WorkerContractError('invalid pre-PR verdict');
   }
@@ -207,7 +232,8 @@ function validatePrePrVerdict(value) {
       clean.smoke_passed = item.smoke_passed === true;
       clean.http_observed = item.http_observed === true;
       clean.retried = item.retried === true;
-      clean.runner = ['docker', 'fake'].includes(item.runner) ? item.runner : null;
+      clean.runner = ['docker', 'fake', ...(selfRequest ? ['eval'] : [])].includes(item.runner) ? item.runner : null;
+      if (selfRequest && item.eval) clean.eval = cleanEval(item.eval);
     }
     if (gate === 5.5) {
       clean.risk_level = ['low', 'medium', 'high', 'critical'].includes(item.risk_level) ? item.risk_level : null;
@@ -226,13 +252,15 @@ function validatePrePrVerdict(value) {
   if (Number(value.gate_reached) !== last.gate) throw new WorkerContractError('pre-PR gate mismatch');
   const gate5 = gates.find((gate) => gate.gate === 5);
   const gate55 = gates.find((gate) => gate.gate === 5.5);
-  const passed = last.gate === 5.5 && !gates.some((gate) => gate.blocked)
-    && gate5?.smoke_passed === true && gate5?.http_observed === true;
+  const observed = selfRequest ? gate5?.runner === 'eval' && gate5.eval?.accepted === true
+    : gate5?.smoke_passed === true && gate5?.http_observed === true;
+  const passed = last.gate === 5.5 && !gates.some((gate) => gate.blocked) && observed;
   const passing = ['ready_for_pr', 'needs_review'].includes(value.outcome);
   if (passing && !passed) {
-    throw new WorkerContractError('passing verdict requires successful smoke through gate 5.5');
+    throw new WorkerContractError(selfRequest ? 'passing self verdict requires a won eval through gate 5.5'
+      : 'passing verdict requires successful smoke through gate 5.5');
   }
-  if (passing && gate5.runner !== 'docker') {
+  if (passing && !selfRequest && gate5.runner !== 'docker') {
     throw new WorkerContractError('passing verdict requires gate 5 on real docker');
   }
   if (value.outcome === 'ready_for_pr' && !['low', 'medium'].includes(gate55?.risk_level))
@@ -244,7 +272,8 @@ function validatePrePrVerdict(value) {
   if (!Number.isInteger(budgetUsed) || budgetUsed < 0) throw new WorkerContractError('invalid verdict budget');
   // Workers predating ticket 05 omit failure_class; their blocks are treated as ordinary.
   const failureClass = value.outcome === 'blocked' ? (value.failure_class ?? 'ordinary') : (value.failure_class ?? null);
-  if (value.outcome === 'blocked' ? !FAILURE_CLASSES.has(failureClass) : failureClass !== null) {
+  if (value.outcome === 'blocked' ? !FAILURE_CLASSES.has(failureClass) || (failureClass === 'eval' && !selfRequest)
+    : failureClass !== null) {
     throw new WorkerContractError('invalid pre-PR failure class');
   }
   const repairs = value.repairs ?? [];
@@ -1553,7 +1582,9 @@ export function createAiBoardStore(db, hooks = {}) {
   function submitPrePrVerdict(ticketId, input) {
     const idempotencyKey = String(input.idempotencyKey || '');
     if (!KEY.test(idempotencyKey)) throw new WorkerContractError('invalid idempotency key');
-    const verdict = validatePrePrVerdict(input.verdict);
+    const selfRequest = db.prepare(`SELECT r.type FROM ai_tickets t JOIN requests r ON r.id = t.source_request_id
+      WHERE t.id=?`).get(Number(ticketId))?.type === 'self';
+    const verdict = validatePrePrVerdict(input.verdict, selfRequest);
     return submitPrePrVerdictTransaction(Number(ticketId), {
       ...input, idempotencyKey, now: input.now ?? Date.now(),
     }, verdict);

@@ -198,6 +198,82 @@ test('the board spending a day of GPU does not hold back its next self request',
   } finally { f.close(); }
 });
 
+// Self-improve ticket 05: cổng 5 của yêu cầu self là eval 2 sha (không có trang để smoke Docker/HTTP).
+const SHA = (c) => c.repeat(40);
+const EVAL = { accepted: true, base_sha: SHA('a'), variant_sha: SHA('b'), tasks: 6, wins: 3, losses: 1, ties: 2,
+  gpu_s: 812, gpu_s_limit: 2400, gold: false, dropped: [],
+  strata: { base: { 'type=logic': 50, clarity_fp: 10 }, variant: { 'type=logic': 55, clarity_fp: 10 } },
+  config: { base: { 'prompts.lock.json': 'aaaaaaaaaa' }, variant: { 'prompts.lock.json': 'bbbbbbbbbb' } },
+  pairs: [{ id: 7, base: false, variant: true }] };
+const selfGates = (evalResult = EVAL, gate5 = {}) => [{ gate: 3, blocked: false }, { gate: 4, blocked: false, issues: [] },
+  { gate: 5, blocked: false, smoke_passed: false, http_observed: false, runner: 'eval', eval: evalResult, ...gate5 },
+  { gate: 5.5, blocked: false, risk_level: 'high', risk_signals: [{ name: 'catalog_tier', tier: 'high', detail: SKILL }] }];
+const selfCandidate = { branch: 'ai-board/2026-09-28-ticket-1-abc123', base_sha: SHA('a'), head_sha: SHA('b'),
+  commits: [{ sha: SHA('b'), title: 't', files: [SKILL, 'ai-board/harness/skills/skills.lock.json'] }] };
+const review = (gates) => ({ outcome: 'needs_review', gate_reached: 5.5, reason: 'risk triage requires human review',
+  budget_used: 10, failure_class: null, repairs: [], candidate: selfCandidate, gates });
+
+/** Yêu cầu self đã được admin duyệt plan, đang ở lượt execute: trả hàm nộp verdict. */
+async function executingSelf(f) {
+  const { root_ticket_id: id } = (await f.selfRequest()).body;
+  const held = f.lease(id);
+  const waiting = f.submit(held, f.plan(SKILL, 'self.config'));
+  f.store.releaseLease(id, { workerId: 'w1', leaseToken: held.ticket.lease_token, outcome: 'planned',
+    idempotencyKey: 'self-release-exec' });
+  f.store.authorizePlan(id, waiting.plan_hash, 9);
+  const exec = f.store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' });
+  const lease = { workerId: 'w1', leaseToken: exec.lease_token };
+  const run = f.store.createRun(id, { ...lease, trigger: 'execute', idempotencyKey: 'self-run-exec-001' });
+  f.store.resumeAuthorizedPlan(id, { ...lease, runId: run.id });
+  let n = 0;
+  return { id, run, verdict: (verdict) => f.store.submitPrePrVerdict(id, { ...lease, runId: run.id, verdict,
+    idempotencyKey: `self-verdict-${++n}` }) };
+}
+
+test('a self change passes gate 5 on a won eval instead of docker smoke, and the eval result is traced', async () => {
+  const f = await fixture();
+  try {
+    const { run, verdict } = await executingSelf(f);
+    assert.throws(() => verdict(review(selfGates({ ...EVAL, accepted: false }))), /smoke|eval/);
+    assert.throws(() => verdict(review(selfGates(undefined, { runner: 'docker' }))), /smoke|eval/);
+    assert.equal(verdict(review(selfGates())).outcome, 'needs_review');
+    const traced = JSON.parse(f.db.prepare('SELECT evidence_json FROM ai_gate_traces WHERE run_id=? AND gate=5')
+      .get(run.id).evidence_json);
+    assert.equal(traced.runner, 'eval');
+    assert.deepEqual(traced.eval, EVAL);
+  } finally { f.close(); }
+});
+
+test('a self variant that lost the eval is blocked as eval, not parked for the admin', async () => {
+  const f = await fixture();
+  try {
+    const { id, verdict } = await executingSelf(f);
+    const lost = { ...EVAL, accepted: false, wins: 1, losses: 3 };
+    const out = verdict({ outcome: 'blocked', gate_reached: 5, reason: 'thua 3 task, thắng 1, hoà 2', budget_used: 10,
+      failure_class: 'eval', repairs: [], candidate: null,
+      gates: selfGates(lost, { blocked: true, reason: 'thua 3 task, thắng 1, hoà 2' }).slice(0, 3) });
+    assert.equal(out.failure_class, 'eval');
+    assert.equal(f.db.prepare('SELECT phase FROM ai_tickets WHERE id=?').get(id).phase, 'pre_pr_blocked');
+  } finally { f.close(); }
+});
+
+test('a student change can neither pass on an eval nor block with the eval class', async () => {
+  const f = await fixture();
+  try {
+    f.store.createRequestWithRoot({ ownerUserId: 1, ownerDomain: 'it', ownerDisplayName: 'Lan',
+      idempotencyKey: 'student-request-eval', title: 'Đổi màu nút', detail: 'x' });
+    const held = f.lease(1);
+    f.submit(held, f.plan('public/index.html', 'public.ui', 'it'));
+    const verdict = (v, key) => f.store.submitPrePrVerdict(1, { workerId: 'w1', leaseToken: held.ticket.lease_token,
+      runId: held.run.id, verdict: v, idempotencyKey: key });
+    const student = { ...selfCandidate, commits: [{ sha: SHA('b'), title: 't', files: ['public/index.html'] }] };
+    assert.throws(() => verdict({ ...review(selfGates()), candidate: student }, 'student-verdict-001'), /smoke|docker/);
+    assert.throws(() => verdict({ outcome: 'blocked', gate_reached: 5, reason: 'x', budget_used: 1, failure_class: 'eval',
+      repairs: [], candidate: null, gates: selfGates(EVAL, { blocked: true }).slice(0, 3) }, 'student-verdict-002'),
+    /failure class/);
+  } finally { f.close(); }
+});
+
 test('a blocked self run is not recorded as a production miss', async () => {
   const f = await fixture();
   try {
