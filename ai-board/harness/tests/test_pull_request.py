@@ -207,3 +207,17 @@ def test_review_refuses_a_pr_into_another_base_or_branch():
     with pytest.raises(review_pr.ReviewStop, match='AI Board'):
         review_pr.check_pr({'number': 1, 'base': {'ref': 'dev'}, 'head': {'ref': 'feature/x'}})
     review_pr.check_pr({'number': 1, 'base': {'ref': 'dev'}, 'head': {'ref': BRANCH}})
+
+
+def test_pull_files_reads_every_page():
+    pages = {1: [{'filename': f'public/{i}.html'} for i in range(100)], 2: [{'filename': 'server/x.js'}]}
+    calls = []
+
+    def api(method, path, payload):
+        calls.append(path)
+        return pages.get(int(path.rsplit('page=', 1)[1]), [])
+
+    files = GitHub('Lampx83/Tizia', 'tok', transport=api).pull_files(7)
+    assert len(files) == 101 and files[-1] == 'server/x.js'
+    assert calls == ['/repos/Lampx83/Tizia/pulls/7/files?per_page=100&page=1',
+                     '/repos/Lampx83/Tizia/pulls/7/files?per_page=100&page=2']

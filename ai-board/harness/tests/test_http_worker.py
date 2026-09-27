@@ -1359,3 +1359,66 @@ def test_a_self_request_reaches_the_gates_as_self_and_its_verdict_names_base_sha
     verdict = next(call[2]['verdict'] for call in transport.calls if call[1].endswith('/verdict'))
     assert verdict['outcome'] == 'blocked'
     assert (verdict['base_sha'], verdict['skill']) == ('a' * 40, 'edit-html-text')
+
+
+# Self-improve ticket 03: worker hỏi GitHub các PR server còn coi là mở, báo PR đã đóng.
+class FakePrServer:
+    def __init__(self, numbers):
+        self.numbers, self.calls = numbers, []
+
+    def __call__(self, method, path, payload, headers):
+        self.calls.append((path, payload))
+        if path.endswith('/pull-requests/open'):
+            return {'pull_requests': [{'number': n, 'url': f'https://github.com/o/r/pull/{n}',
+                                       'branch': f'ai-board/2026-09-28-ticket-{n}'} for n in self.numbers]}
+        return {'pull_request': {'number': payload['number'], 'state': payload['state']}}
+
+
+class FakePulls:
+    """candidate.GitHub double: pull(n) → state, pull_files(n) → paths."""
+
+    def __init__(self, pulls):
+        self.pulls = pulls
+
+    def pull(self, number):
+        pr = self.pulls[number]
+        if isinstance(pr, Exception):
+            raise pr
+        return pr
+
+    def pull_files(self, number):
+        return [f'public/p{number}.html']
+
+
+def test_pr_sync_reports_merged_and_closed_prs_and_skips_open_ones():
+    from worker import sync_pull_requests
+    server = FakePrServer([41, 42, 43, 44])
+    github = FakePulls({
+        41: {'state': 'closed', 'merged_at': '2026-09-28T01:00:00Z', 'closed_at': '2026-09-28T01:00:00Z'},
+        42: {'state': 'closed', 'merged_at': None, 'closed_at': '2026-09-28T02:00:00Z'},
+        43: {'state': 'open', 'merged_at': None, 'closed_at': None},
+        44: OSError('GitHub 502'),  # 1 PR lỗi không chặn các PR khác
+    })
+    out = sync_pull_requests(WorkerClient('http://fixture', 'secret', transport=server), github)
+    reports = [payload for path, payload in server.calls if path.endswith('/pull-requests/state')]
+    assert reports == [
+        {'number': 41, 'state': 'merged', 'closed_at': '2026-09-28T01:00:00Z', 'files': ['public/p41.html']},
+        {'number': 42, 'state': 'closed', 'closed_at': '2026-09-28T02:00:00Z', 'files': ['public/p42.html']},
+    ]
+    assert out == {'status': 'synced', 'open': 4, 'merged': [41], 'closed': [42], 'errors': [44]}
+
+
+def test_pr_sync_without_github_token_skips_quietly(capsys):
+    from worker import sync_pull_requests
+    server = FakePrServer([41])
+    assert sync_pull_requests(WorkerClient('http://fixture', 'secret', transport=server), None) == {'status': 'skipped'}
+    assert server.calls == []
+    assert 'AI_BOARD_GITHUB_TOKEN' in capsys.readouterr().out
+
+
+def test_sync_prs_flag_without_token_exits_cleanly(monkeypatch, capsys):
+    monkeypatch.delenv('AI_BOARD_GITHUB_TOKEN', raising=False)
+    monkeypatch.setenv('AI_BOARD_WORKER_KEY', 'k' * 32)
+    monkeypatch.setattr('dotenv.load_dotenv', lambda *_a, **_k: False, raising=False)
+    assert main(['--sync-prs']) == 0
+    assert '"skipped"' in capsys.readouterr().out

@@ -374,6 +374,32 @@ class WorkerClient:
         return self.transport("POST", path, payload, headers)
 
 
+def sync_pull_requests(client: WorkerClient, github) -> dict:
+    """Ask GitHub about the PRs the server still thinks are open; report merged/closed ones (self-improve ticket 03).
+    github None (no token) → skip with a log line. One PR's GitHub/HTTP error → listed in errors, retried next sync."""
+    if github is None:
+        print(json.dumps({"pr_sync": "skipped", "reason": "AI_BOARD_GITHUB_TOKEN not set"}))
+        return {"status": "skipped"}
+    prs = client.post("/api/ai-board/worker/pull-requests/open", {})["pull_requests"]
+    out = {"status": "synced", "open": len(prs), "merged": [], "closed": [], "errors": []}
+    for pr in prs:
+        number = pr["number"]
+        try:
+            info = github.pull(number)
+            if info.get("state") != "closed":
+                continue
+            state = "merged" if info.get("merged_at") else "closed"
+            client.post("/api/ai-board/worker/pull-requests/state", {
+                "number": number, "state": state, "closed_at": info.get("merged_at") or info.get("closed_at"),
+                "files": github.pull_files(number)})
+        except (OSError, ValueError, KeyError) as error:  # urllib HTTPError/URLError are OSError
+            print(json.dumps({"pr_sync_error": number, "error": str(error)[:200]}))
+            out["errors"].append(number)
+            continue
+        out[state].append(number)
+    return out
+
+
 # Khớp server/ai-board/drafts.js: PNG, ≤ 8 ảnh, mỗi ảnh ≤ 2 MB.
 SHOTS_TYPE = "application/vnd.tizia.screenshots+json"
 MAX_SHOT_BYTES = 2 * 1024 * 1024
@@ -818,6 +844,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--plan", action="store_true", help="run gates 1, 2 and 2.5, then submit child-ticket plan")
     parser.add_argument("--execute", action="store_true", help="run the accepted plan through gates 3, 4, 5 and 5.5")
     parser.add_argument("--poll-seconds", type=float, default=5.0)
+    parser.add_argument("--sync-prs", action="store_true", help="report merged/closed ai-board PRs from GitHub, then exit")
     args = parser.parse_args(argv)
     try:  # same repo env file as harness/main.py; process env still wins
         from dotenv import load_dotenv
@@ -832,9 +859,15 @@ def main(argv: list[str] | None = None) -> int:
     base_url = server_url()
     key = take_secret("AI_BOARD_WORKER_KEY")
     github_token = take_secret("AI_BOARD_GITHUB_TOKEN")
-    if args.mode != "off" and len(key) < 24:
+    if (args.mode != "off" or args.sync_prs) and len(key) < 24:
         parser.error("AI_BOARD_WORKER_KEY must be at least 24 characters")
     _load_harness()
+    if args.sync_prs:
+        import candidate
+        github = (candidate.GitHub(os.getenv("AI_BOARD_GITHUB_REPO", "Lampx83/Tizia"), github_token)
+                  if github_token else None)
+        print(json.dumps(sync_pull_requests(WorkerClient(base_url, key), github), ensure_ascii=False))
+        return 0
     import meter
     from memory import DEFAULT_PATH
     tracer = meter.Tracer(Path(DEFAULT_PATH).with_name("traces.jsonl"))
