@@ -66,13 +66,12 @@ def pick_cluster(tasks: list[dict], now_ms: int, strata: dict | None = None, ski
 
 
 def allowed_files() -> list[str]:
-    """File có thật trong vùng self được sửa (regex guard-lexicon self_edit_paths), trừ chính prompt chẩn đoán:
-    cổng eval self đo cổng 1–2.5, không đo được thay đổi của nó."""
+    """File có thật trong vùng self được sửa (regex guard-lexicon self_edit_paths; regex đã loại diagnose.md)."""
     paths = []
     for root, dirs, files in os.walk(HERE):
         dirs[:] = [d for d in dirs if not d.startswith((".", "__"))]  # .venv, __pycache__: nghìn file vô ích
         paths += [(Path(root) / f).relative_to(REPO).as_posix() for f in files]
-    return sorted(p for p in paths if any(rx.match(p) for rx in SELF_EDIT) and not p.endswith(f"/{PROMPT_NAME}"))
+    return sorted(p for p in paths if any(rx.match(p) for rx in SELF_EDIT))
 
 
 def _traces(path: Path, run_ids: set) -> dict:
