@@ -859,6 +859,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--execute", action="store_true", help="run the accepted plan through gates 3, 4, 5 and 5.5")
     parser.add_argument("--poll-seconds", type=float, default=5.0)
     parser.add_argument("--sync-prs", action="store_true", help="report merged/closed ai-board PRs from GitHub, then exit")
+    parser.add_argument("--diagnose", action="store_true",
+                        help="turn the top learning-part failure cluster into at most one self request, then exit")
     args = parser.parse_args(argv)
     try:  # same repo env file as harness/main.py; process env still wins
         from dotenv import load_dotenv
@@ -873,9 +875,16 @@ def main(argv: list[str] | None = None) -> int:
     base_url = server_url()
     key = take_secret("AI_BOARD_WORKER_KEY")
     github_token = take_secret("AI_BOARD_GITHUB_TOKEN")
-    if (args.mode != "off" or args.sync_prs) and len(key) < 24:
+    if (args.mode != "off" or args.sync_prs or args.diagnose) and len(key) < 24:
         parser.error("AI_BOARD_WORKER_KEY must be at least 24 characters")
-    _load_harness()
+    _, Deps, _ = _load_harness()
+    if args.diagnose:  # self-improve ticket 06: chạy tay; vòng đêm (ticket 07) gọi cùng hàm
+        import diagnose
+        import meter
+        deps = _real_deps(Deps, meter.Tracer(diagnose.TRACES_PATH), None)
+        print(json.dumps(diagnose.diagnose_to_self_request(WorkerClient(base_url, key), deps,
+                                                           now_ms=int(time.time() * 1000)), ensure_ascii=False))
+        return 0
     if args.sync_prs:
         import candidate
         github = (candidate.GitHub(os.getenv("AI_BOARD_GITHUB_REPO", "Lampx83/Tizia"), github_token)
