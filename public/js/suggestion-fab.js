@@ -1,10 +1,10 @@
 // ============================================================
-// Suggestion FAB — nút "🏛️ Đề nghị" nổi ở mọi trang
+// Suggestion FAB — nút "Đề nghị" nổi ở mọi trang
 // ============================================================
 // Cho phép SV gửi đề nghị / góp ý / yêu cầu tính năng cho Ban điều
 // hành AI ngay tại trang đang xem. Tự gắn URL + tiêu đề trang vào
 // để AI có ngữ cảnh phản hồi. Sau khi gửi, modal cũng liệt kê các
-// yêu cầu gần đây kèm phản hồi của AI ("✓ Đã làm" / "Tiếc là…").
+// yêu cầu gần đây kèm phản hồi của AI ("Đã làm" / "Tiếc là…").
 //
 // Tự mount vào mọi trang HTML qua middleware ở server/index.js — KHÔNG
 // cần page sửa gì. Page muốn ẩn nút: thêm <body data-no-suggestion-fab>.
@@ -12,20 +12,20 @@
 // ============================================================
 
 import { getPlayerName } from './api.js';
-import { renderRequestThread } from './request-thread.js';
+import { renderRequestThread } from './request-thread.js?v=no-icons';
 
 const TYPES = [
-  { v: 'game',   icon: '🎮', label: 'Thêm trò chơi / mini-game' },
-  { v: 'theory', icon: '📖', label: 'Thêm lý thuyết / học liệu' },
-  { v: 'lab',   icon: '🧪', label: 'Cải thiện phòng thí nghiệm / thực hành' },
-  { v: 'skill', icon: '🎯', label: 'Luyện kỹ năng' },
-  { v: 'other', icon: '💬', label: 'Góp ý / báo lỗi / khác' },
-  { v: 'feature', icon: '✨', label: 'Chức năng mới (Ban làm bản nháp, bạn sửa tiếp)' },
+  { v: 'game',   label: 'Thêm trò chơi / mini-game' },
+  { v: 'theory', label: 'Thêm lý thuyết / học liệu' },
+  { v: 'lab',   label: 'Cải thiện phòng thí nghiệm / thực hành' },
+  { v: 'skill', label: 'Luyện kỹ năng' },
+  { v: 'other', label: 'Góp ý / báo lỗi / khác' },
+  { v: 'feature', label: 'Chức năng mới (Ban làm bản nháp, bạn sửa tiếp)' },
 ];
 const STATUS = {
   pending:   { label: 'Chờ duyệt',    cls: 'pending' },
   reviewing: { label: 'Đang làm',     cls: 'reviewing' },
-  done:      { label: '✓ Hoàn thành', cls: 'done' },
+  done:      { label: 'Hoàn thành', cls: 'done' },
   rejected:  { label: 'Chưa thực hiện', cls: 'rejected' },
   cancelled: { label: 'Đã hủy',       cls: 'cancelled' },
 };
@@ -63,26 +63,24 @@ function autoMount() {
   root.innerHTML = `
     <button id="sgf-fab" type="button" aria-label="Gửi đề nghị tới Ban điều hành AI"
             title="Gửi đề nghị cho Ban điều hành AI">
-      <span class="sgf-fab-ico">🏛️</span>
       <span class="sgf-fab-lbl">Đề nghị</span>
     </button>
     <div id="sgf-modal" class="sgf-modal" hidden>
       <div class="sgf-backdrop" data-close></div>
       <div class="sgf-dialog" role="dialog" aria-modal="true" aria-labelledby="sgf-title">
         <div class="sgf-head">
-          <div class="sgf-head-ico">🏛️</div>
           <div class="sgf-head-text">
             <h3 id="sgf-title">Ban điều hành AI</h3>
             <p>Trường do <b>AI điều hành</b> — gửi đề nghị, AI sẽ xem xét &amp;
-               phản hồi. Yêu cầu được làm xong sẽ tick ✓ kèm lời nhắn.</p>
+               phản hồi. Yêu cầu được làm xong sẽ đánh dấu hoàn thành kèm lời nhắn.</p>
           </div>
           <button type="button" class="sgf-x" data-close aria-label="Đóng">✕</button>
         </div>
 
         <div id="sgf-pending" class="sgf-clar-banner" hidden role="status"></div>
         <div class="sgf-tabs" role="tablist">
-          <button type="button" class="sgf-tab" role="tab" data-tab="new" aria-selected="true">✍️ Gửi đề nghị mới</button>
-          <button type="button" class="sgf-tab" role="tab" data-tab="mine" aria-selected="false">📂 Của bạn
+          <button type="button" class="sgf-tab" role="tab" data-tab="new" aria-selected="true">Gửi đề nghị mới</button>
+          <button type="button" class="sgf-tab" role="tab" data-tab="mine" aria-selected="false">Của bạn
             <span class="sgf-tab-badge" id="sgf-tab-badge" hidden></span></button>
         </div>
         <div class="sgf-pane" id="sgf-pane-new" role="tabpanel">
@@ -90,7 +88,7 @@ function autoMount() {
         <form id="sgf-form" class="sgf-form">
           <label class="sgf-lab">Loại đề nghị
             <select id="sgf-type" class="sgf-in">
-              ${TYPES.map(t => `<option value="${t.v}">${t.icon} ${t.label}</option>`).join('')}
+              ${TYPES.map(t => `<option value="${t.v}">${t.label}</option>`).join('')}
             </select>
           </label>
           <label class="sgf-lab" id="sgf-folder-row" hidden>Gắn vào chức năng
@@ -109,20 +107,20 @@ function autoMount() {
           <div class="sgf-attach">
             <label class="sgf-attach-row">
               <input type="checkbox" id="sgf-shot-check" />
-              <span>📸 Đính kèm ảnh chụp <b>màn hình hiện tại</b> (Ban điều hành xem trực tiếp giao diện anh/chị đang gặp)</span>
+              <span>Đính kèm ảnh chụp <b>màn hình hiện tại</b> (Ban điều hành xem trực tiếp giao diện anh/chị đang gặp)</span>
             </label>
             <label class="sgf-attach-row sgf-file-row">
-              <span class="sgf-attach-lbl">📎 Đính kèm file (ảnh / PDF / Word / Excel / PPT / CSDL .db / .sql — tối đa 50MB × 5 file):</span>
+              <span class="sgf-attach-lbl">Đính kèm file (ảnh / PDF / Word / Excel / PPT / CSDL .db / .sql — tối đa 50MB × 5 file):</span>
               <input type="file" id="sgf-file-in" multiple accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.db,.sqlite,.sqlite3,.sql,application/sql,application/x-sqlite3" />
             </label>
-            <div class="sgf-attach-hint">💡 Có thể <b>kéo-thả</b> file vào khung này hoặc <b>dán ảnh</b> trực tiếp (Ctrl/⌘+V).</div>
+            <div class="sgf-attach-hint">Có thể <b>kéo-thả</b> file vào khung này hoặc <b>dán ảnh</b> trực tiếp (Ctrl/⌘+V).</div>
             <div class="sgf-attach-list" id="sgf-attach-list"></div>
           </div>
 
           <div class="sgf-ctx" id="sgf-ctx"></div>
           <div class="sgf-bar">
             <span class="sgf-msg" id="sgf-msg"></span>
-            <button type="submit" class="sgf-send" id="sgf-send">📨 Gửi tới Ban điều hành</button>
+            <button type="submit" class="sgf-send" id="sgf-send">Gửi tới Ban điều hành</button>
           </div>
         </form>
         </div>
@@ -131,7 +129,7 @@ function autoMount() {
         <div class="sgf-folders" id="sgf-folders" hidden></div>
         <div id="sgf-clar-slot">
         <section id="sgf-clarify" class="sgf-clarify" hidden>
-          <div class="sgf-clar-banner sgf-clar-live" role="status">🏛️ <span>Ban điều hành cần trao đổi thêm để làm rõ yêu cầu
+          <div class="sgf-clar-banner sgf-clar-live" role="status"><span>Ban điều hành cần trao đổi thêm để làm rõ yêu cầu
             <b id="sgf-clar-title"></b></span></div>
           <div class="sgf-clar-log" id="sgf-clar-log" aria-live="polite"></div>
           <div class="sgf-clar-reply" id="sgf-clar-reply" hidden>
@@ -143,8 +141,8 @@ function autoMount() {
           <div class="sgf-clar-sum" id="sgf-clar-sum" hidden>
             <div class="sgf-ob-q">Ban hiểu yêu cầu của bạn như sau — đúng chưa?</div>
             <textarea id="sgf-clar-spec" class="sgf-in" rows="7" maxlength="4000" readonly></textarea>
-            <div class="sgf-bar"><button type="button" class="sgf-chip" id="sgf-clar-edit">✏️ Sửa</button>
-              <button type="button" class="sgf-send" id="sgf-clar-ok">✓ Đúng, gửi</button></div>
+            <div class="sgf-bar"><button type="button" class="sgf-chip" id="sgf-clar-edit">Sửa</button>
+              <button type="button" class="sgf-send" id="sgf-clar-ok">Đúng, gửi</button></div>
           </div>
           <div class="sgf-msg" id="sgf-clar-msg"></div>
         </section>
@@ -189,7 +187,7 @@ function bind(root) {
   }
 
   const ctx = pageContext();
-  ctxBox.innerHTML = `📍 <b>Trang đang xem:</b> ${escapeHtml(ctx.title || ctx.url)}
+  ctxBox.innerHTML = `<b>Trang đang xem:</b> ${escapeHtml(ctx.title || ctx.url)}
                       <span class="sgf-ctx-url">${escapeHtml(ctx.url)}</span>`;
 
   // ── Đính kèm: ảnh chụp màn hình + file ──
@@ -220,17 +218,6 @@ function bind(root) {
   let pendingFiles = [];
   let previewUrls = [];
 
-  function fileIcon(name) {
-    const n = String(name || '').toLowerCase();
-    if (/\.pdf$/.test(n)) return '📄';
-    if (/\.(docx?|odt)$/.test(n)) return '📝';
-    if (/\.(xlsx?|csv)$/.test(n)) return '📊';
-    if (/\.pptx?$/.test(n)) return '📑';
-    if (/\.zip$/.test(n)) return '🗜️';
-    if (/\.txt$/.test(n)) return '📃';
-    if (/\.(db|sqlite3?|sql)$/.test(n)) return '🗄️';
-    return '📎';
-  }
   function clearAttachments() {
     previewUrls.forEach(u => { if (u) URL.revokeObjectURL(u); });
     pendingFiles.length = 0;
@@ -251,11 +238,7 @@ function bind(root) {
       const rm = it.kind === 'file'
         ? `<button type="button" class="sgf-attach-rm" data-rm-file="${it.idx}" title="Bỏ file">✕</button>`
         : `<button type="button" class="sgf-attach-rm" data-rm-shot="1" title="Bỏ ảnh chụp">✕</button>`;
-      const thumb = it.kind === 'screenshot'
-        ? `<span class="sgf-attach-ic">📸</span>`
-        : (it.isImg && it.url
-            ? `<img class="sgf-attach-thumb" src="${it.url}" alt="" />`
-            : `<span class="sgf-attach-ic">${fileIcon(it.name)}</span>`);
+      const thumb = it.isImg && it.url ? `<img class="sgf-attach-thumb" src="${it.url}" alt="" />` : '';
       return `<div class="sgf-attach-it">${thumb}<span class="sgf-attach-nm">${escapeHtml(it.name)}${sz}</span>${rm}</div>`;
     }).join('');
   }
@@ -272,7 +255,7 @@ function bind(root) {
       pendingFiles.push(f);
       previewUrls.push(/^image\//.test(f.type) ? URL.createObjectURL(f) : null);
     }
-    msg.textContent = errs.length ? '⚠️ Bỏ qua: ' + errs.join('; ') : '';
+    msg.textContent = errs.length ? 'Bỏ qua: ' + errs.join('; ') : '';
     renderAttachList();
   }
 
@@ -387,11 +370,11 @@ function bind(root) {
     const chips = (q, items) => `<div class="sgf-chips" role="group" aria-label="${escapeHtml(q.label)}">${items.map(([v, text]) =>
       `<button type="button" class="sgf-chip" data-q="${q.key}" data-v="${escapeHtml(v)}" aria-pressed="false">${escapeHtml(text)}</button>`).join('')}</div>`;
     onboard.innerHTML = `
-      <div class="sgf-ob-intro">👋 Lần đầu gặp Ban điều hành? Trả lời nhanh 3 câu để Ban hỏi lại đúng cách bạn quen.</div>
+      <div class="sgf-ob-intro">Lần đầu gặp Ban điều hành? Trả lời nhanh 3 câu để Ban hỏi lại đúng cách bạn quen.</div>
       <div class="sgf-ob-q">1. Bạn là</div>
-      ${chips({ key: 'role', label: 'Bạn là' }, [['pupil', '🧒 Học sinh'], ['student', '🎓 Sinh viên'], ['teacher', '👩‍🏫 Giáo viên'], ['parent', '👪 Phụ huynh'], ['other', '🙂 Khác']])}
+      ${chips({ key: 'role', label: 'Bạn là' }, [['pupil', 'Học sinh'], ['student', 'Sinh viên'], ['teacher', 'Giáo viên'], ['parent', 'Phụ huynh'], ['other', 'Khác']])}
       <div class="sgf-ob-q">2. Lĩnh vực bạn am hiểu <span class="sgf-ob-hint">(chọn nhiều)</span></div>
-      ${chips({ key: 'domain_expertise', label: 'Lĩnh vực am hiểu' }, DOMAIN_META.map(d => [d.id, `${d.icon || ''} ${d.shortName || d.name}`]))}
+      ${chips({ key: 'domain_expertise', label: 'Lĩnh vực am hiểu' }, DOMAIN_META.map(d => [d.id, d.shortName || d.name]))}
       <div class="sgf-ob-q">3. Bạn từng viết code / làm phần mềm chưa?</div>
       ${chips({ key: 'tech_level', label: 'Mức kỹ thuật' }, [['none', 'Chưa bao giờ'], ['some', 'Biết chút ít'], ['fluent', 'Thành thạo']])}
       <div class="sgf-ob-status" id="sgf-ob-status"></div>`;
@@ -430,10 +413,10 @@ function bind(root) {
       if (!r.ok) throw new Error();
       onboard.hidden = true;
       form.hidden = false;
-      msg.textContent = '✓ Cảm ơn! Giờ bạn có thể gửi đề nghị.';
+      msg.textContent = 'Cảm ơn! Giờ bạn có thể gửi đề nghị.';
       root.querySelector('#sgf-title-in')?.focus();
     } catch {
-      status.textContent = '⚠️ Chưa lưu được — bấm lại một lựa chọn để thử lại.';
+      status.textContent = 'Chưa lưu được — bấm lại một lựa chọn để thử lại.';
     }
   }
 
@@ -526,7 +509,7 @@ function bind(root) {
       showStep({ kind: last.kind, text: last.text, asked: data.asked, max: data.max,
         complete: data.asked < data.max });
     } catch {
-      clarMsg.textContent = '⚠️ Không mở được phần trao đổi — thử lại sau.';
+      clarMsg.textContent = 'Không mở được phần trao đổi — thử lại sau.';
     }
   }
 
@@ -546,7 +529,7 @@ function bind(root) {
       if (!(r.headers.get('content-type') || '').includes('ndjson')) {
         const e = await r.json().catch(() => ({}));
         out.remove();
-        clarMsg.textContent = '⚠️ ' + (e.message || 'Chưa gửi được — thử lại sau.');
+        clarMsg.textContent = '' + (e.message || 'Chưa gửi được — thử lại sau.');
         clarReply.hidden = false;
         if (answer !== undefined) { clarLog.lastChild?.remove(); clarIn.value = answer; }
         return;
@@ -576,7 +559,7 @@ function bind(root) {
       showStep(done);
     } catch {
       out.remove();
-      clarMsg.textContent = '⚠️ Lỗi mạng — thử lại sau.';
+      clarMsg.textContent = 'Lỗi mạng — thử lại sau.';
       clarReply.hidden = false;
     }
   }
@@ -610,7 +593,7 @@ function bind(root) {
       refreshPending();
       loadInbox();
     } catch (err) {
-      clarMsg.textContent = '⚠️ ' + err.message;
+      clarMsg.textContent = '' + err.message;
     } finally {
       btn.disabled = false;
     }
@@ -629,7 +612,7 @@ function bind(root) {
       const first = items[0];
       pendingBox.hidden = !first || clarifyId !== null;
       if (first) {
-        pendingBox.innerHTML = `🏛️ <span>Ban điều hành đang chờ bạn trả lời về <b>«${escapeHtml(first.title)}»</b></span>
+        pendingBox.innerHTML = `<span>Ban điều hành đang chờ bạn trả lời về <b>«${escapeHtml(first.title)}»</b></span>
           <button type="button" class="sgf-send" data-clarify="${first.id}">Trả lời ngay</button>`;
       }
     } catch { /* offline: không có nhắc */ }
@@ -678,7 +661,7 @@ function bind(root) {
     const type = root.querySelector('#sgf-type').value;
     const title = root.querySelector('#sgf-title-in').value.trim();
     const userDetail = root.querySelector('#sgf-detail').value.trim();
-    if (title.length < 4) { msg.textContent = '⚠️ Tiêu đề quá ngắn (≥ 4 ký tự)'; return; }
+    if (title.length < 4) { msg.textContent = 'Tiêu đề quá ngắn (≥ 4 ký tự)'; return; }
 
     const detail = [
       `[Trang: ${ctx.title || '—'}] ${ctx.url}`,
@@ -700,7 +683,7 @@ function bind(root) {
             attachments.push(meta);
           }
         } catch (e) {
-          msg.textContent = '⚠️ Không chụp được màn hình: ' + (e.message || e);
+          msg.textContent = 'Không chụp được màn hình: ' + (e.message || e);
           sendBtn.disabled = false;
           return;
         }
@@ -712,7 +695,7 @@ function bind(root) {
           const meta = await uploadOne(f, f.name, 'file');
           attachments.push(meta);
         } catch (e) {
-          msg.textContent = `⚠️ Không tải được "${f.name}": ${e.message || e}`;
+          msg.textContent = `Không tải được "${f.name}": ${e.message || e}`;
           sendBtn.disabled = false;
           return;
         }
@@ -734,22 +717,22 @@ function bind(root) {
       if (!r.ok) {
         const e2 = await r.json().catch(() => ({}));
         if (e2.viewOnly || e2.error === 'view_only') {
-          msg.innerHTML = `⚠️ Bạn đang ở trường khác. <a href="/school.html?domain=${encodeURIComponent(e2.your_school || '')}" style="color:#fbbf24;text-decoration:underline">Về trường của bạn</a> để gửi đề nghị.`;
+          msg.innerHTML = `Bạn đang ở trường khác. <a href="/school.html?domain=${encodeURIComponent(e2.your_school || '')}" style="color:#fbbf24;text-decoration:underline">Về trường của bạn</a> để gửi đề nghị.`;
         } else if (e2.error === 'profile_required') {
           msg.textContent = '';
           onboardChecked = true;
           await showOnboarding();
         } else if (e2.needLogin) {
-          msg.textContent = '⚠️ Hãy đăng nhập để gửi đề nghị.';
+          msg.textContent = 'Hãy đăng nhập để gửi đề nghị.';
         } else if (e2.needEnroll) {
-          msg.textContent = '⚠️ Hãy chọn trường để bắt đầu gửi đề nghị.';
+          msg.textContent = 'Hãy chọn trường để bắt đầu gửi đề nghị.';
         } else {
-          msg.textContent = '⚠️ ' + (e2.message || e2.error || 'Không gửi được');
+          msg.textContent = '' + (e2.message || e2.error || 'Không gửi được');
         }
         return;
       }
       const created = await r.json().catch(() => ({}));
-      msg.textContent = '✓ Đã gửi! Theo dõi ở mục «Của bạn».';
+      msg.textContent = 'Đã gửi! Theo dõi ở mục «Của bạn».';
       pendingRequestKey = null;
       if (created.clarify?.needed) {
         msg.textContent = '';
@@ -767,7 +750,7 @@ function bind(root) {
       setTimeout(loadInbox, 2500);
       setTimeout(loadInbox, 6000);
     } catch {
-      msg.textContent = '⚠️ Lỗi mạng — thử lại sau.';
+      msg.textContent = 'Lỗi mạng — thử lại sau.';
     } finally {
       sendBtn.disabled = false;
     }
@@ -797,25 +780,25 @@ function bind(root) {
       myFolders = mine.filter(f => f.state !== 'archived'); // lưu trữ rồi thì không gắn yêu cầu mới
       const keep = folderSel.value;
       folderSel.innerHTML = '<option value="">— Yêu cầu lẻ —</option>'
-        + myFolders.map(f => `<option value="${f.id}">✨ ${escapeHtml(f.title)}</option>`).join('');
+        + myFolders.map(f => `<option value="${f.id}">${escapeHtml(f.title)}</option>`).join('');
       folderSel.value = mine.some(f => String(f.id) === keep) ? keep : '';
       syncFolderRow();
       folderBox.hidden = !mine.length && !school.length;
       folderBox.innerHTML = `
         ${mine.length ? `<div class="sgf-inbox-head"><span>Chức năng của bạn</span></div>
           ${mine.map(f => `<div class="sgf-folder">
-            <span class="sgf-folder-t">✨ ${escapeHtml(f.title)}</span>
+            <span class="sgf-folder-t">${escapeHtml(f.title)}</span>
             <span class="sgf-folder-m">${escapeHtml(FOLDER_STATE[f.state] || f.state)} · ${Number(f.requests)} yêu cầu</span>
             ${f.state === 'archived'
-              ? `<button type="button" class="sgf-chip" data-folder-reopen="${f.id}">↺ Mở lại</button>`
-              : `<button type="button" class="sgf-chip" data-folder-add="${f.id}">＋ Yêu cầu tiếp</button>
+              ? `<button type="button" class="sgf-chip" data-folder-reopen="${f.id}">Mở lại</button>`
+              : `<button type="button" class="sgf-chip" data-folder-add="${f.id}">Yêu cầu tiếp</button>
                  <button type="button" class="sgf-chip" data-folder-archive="${f.id}" title="Cất folder này để mở chỗ cho chức năng khác">Lưu trữ</button>`}
-            ${f.has_change && f.state === 'active' ? `<button type="button" class="sgf-chip" data-folder-done="${f.id}" title="Bản nháp đã ổn: gửi Ban điều hành duyệt để phát hành">✓ Xong</button>` : ''}</div>`).join('')}` : ''}
+            ${f.has_change && f.state === 'active' ? `<button type="button" class="sgf-chip" data-folder-done="${f.id}" title="Bản nháp đã ổn: gửi Ban điều hành duyệt để phát hành">Xong</button>` : ''}</div>`).join('')}` : ''}
         ${school.length ? `<div class="sgf-inbox-head"><span>Chức năng bạn khác đang làm</span></div>
           ${school.slice(0, 5).map(f => `<div class="sgf-folder">
-            <span class="sgf-folder-t">✨ ${escapeHtml(f.title)}</span>
+            <span class="sgf-folder-t">${escapeHtml(f.title)}</span>
             <span class="sgf-folder-m">${escapeHtml(FOLDER_STATE[f.state] || f.state)}</span>
-            <button type="button" class="sgf-chip" data-folder-vote="${f.id}" ${f.voted ? 'disabled' : ''}>👍 ${Number(f.votes)}</button></div>`).join('')}` : ''}`;
+            <button type="button" class="sgf-chip" data-folder-vote="${f.id}" ${f.voted ? 'disabled' : ''}>Ủng hộ · ${Number(f.votes)}</button></div>`).join('')}` : ''}`;
     } catch { folderBox.hidden = true; }
   }
 
@@ -856,7 +839,7 @@ function bind(root) {
       vote.disabled = true;
       const r = await fetch(`api/ai-board/folders/${encodeURIComponent(vote.dataset.folderVote)}/vote`, {
         method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': await csrfToken() } }).catch(() => null);
-      if (r?.ok) vote.textContent = `👍 ${(await r.json()).votes}`; else vote.disabled = false;
+      if (r?.ok) vote.textContent = `Ủng hộ · ${(await r.json()).votes}`; else vote.disabled = false;
     }
   });
 
@@ -894,7 +877,7 @@ function bind(root) {
       const withReply = items.filter(it => it.admin_note && it.student !== me).slice(0, 3);
       const shown = (mine.length ? mine : withReply).slice(0, 8);
       if (!shown.length) {
-        inbox.innerHTML = '<div class="sgf-empty">Chưa có yêu cầu nào. Hãy là người đầu tiên đề xuất cải tiến trang này! 🚀</div>';
+        inbox.innerHTML = '<div class="sgf-empty">Chưa có yêu cầu nào. Hãy là người đầu tiên đề xuất cải tiến trang này!</div>';
         return;
       }
       inbox.innerHTML = shown.map(it => renderItem(it, me)).join('');
@@ -971,48 +954,45 @@ function bind(root) {
 // Vị trí trong hàng đợi công bằng (server tính theo đúng thứ tự worker nhận việc).
 function queueLine(q) {
   if (!q) return '';
-  if (q.deferred) return '<div class="sgf-it-queue">⏳ Hôm nay Ban đã làm nhiều việc cho bạn rồi — yêu cầu này sẽ được làm tiếp vào ngày mai.</div>';
+  if (q.deferred) return '<div class="sgf-it-queue">Hôm nay Ban đã làm nhiều việc cho bạn rồi — yêu cầu này sẽ được làm tiếp vào ngày mai.</div>';
   const min = Math.max(1, Math.round((q.eta_s || 0) / 60));
-  return `<div class="sgf-it-queue">⏳ Đang xếp hàng: thứ ${Number(q.position)} · khoảng ${min} phút nữa tới lượt</div>`;
+  return `<div class="sgf-it-queue">Đang xếp hàng: thứ ${Number(q.position)} · khoảng ${min} phút nữa tới lượt</div>`;
 }
 
 function renderItem(it, me = '') {
   const sm = STATUS[it.status] || STATUS.pending;
-  const t = (TYPES.find(t => t.v === it.type) || TYPES[4]);
   const mine = me && it.student === me;
   const atts = Array.isArray(it.attachments) ? it.attachments : [];
   const attHtml = atts.length ? `
     <div class="sgf-it-att">
       ${atts.map(a => {
         const isImg = /^image\//.test(a.mime || '');
-        const ic = a.kind === 'screenshot' ? '📸' : (isImg ? '🖼️' : '📎');
         if (isImg) {
           return `<a class="sgf-it-thumb" href="${escapeHtml(a.url)}" target="_blank" rel="noopener" title="${escapeHtml(a.name)}">
                     <img loading="lazy" src="${escapeHtml(a.url)}" alt="${escapeHtml(a.name)}" />
                   </a>`;
         }
-        return `<a class="sgf-it-file" href="${escapeHtml(a.url)}" target="_blank" rel="noopener" download="${escapeHtml(a.name)}">${ic} ${escapeHtml(a.name)}</a>`;
+        return `<a class="sgf-it-file" href="${escapeHtml(a.url)}" target="_blank" rel="noopener" download="${escapeHtml(a.name)}">${escapeHtml(a.name)}</a>`;
       }).join('')}
     </div>` : '';
   return `
     <div class="sgf-it" data-item="${it.id}">
       <div class="sgf-it-line">
-        <span class="sgf-it-ico">${t.icon}</span>
         <span class="sgf-it-title">${escapeHtml(it.title)}</span>
         <span class="sgf-it-st ${sm.cls}">${it.phase === 'clarifying' ? 'Chờ bạn trả lời' : sm.label}</span>
       </div>
       ${queueLine(it.queue)}
       ${attHtml}
-      ${it.admin_note ? `<div class="sgf-it-note">🏛️ ${escapeHtml(it.admin_note)}</div>` : ''}
+      ${it.admin_note ? `<div class="sgf-it-note">${escapeHtml(it.admin_note)}</div>` : ''}
       ${mine && it.phase === 'clarifying'
         // Ban đang chờ trả lời: cùng nút trao đổi, nhấp nháy, mở thẳng phần làm rõ.
-        ? `<button type="button" class="sgf-it-thread-btn sgf-it-ask" data-clarify="${it.id}">💬 Trả lời Ban điều hành</button>`
+        ? `<button type="button" class="sgf-it-thread-btn sgf-it-ask" data-clarify="${it.id}">Trả lời Ban điều hành</button>`
         : `<button type="button" class="sgf-it-thread-btn" data-req-toggle="${it.id}">
-        💬 ${mine ? 'Trao đổi với Ban điều hành' : 'Xem trao đổi'}
+        ${mine ? 'Trao đổi với Ban điều hành' : 'Xem trao đổi'}
       </button>`}
       ${mine && it.retry === 'retry'
-        ? `<button type="button" class="sgf-it-thread-btn" data-req-retry="${it.id}" title="Ban lập kế hoạch mới cho yêu cầu này">🔄 Thử cách khác</button>` : ''}
-      ${mine && it.retry === 'admin' ? '<div class="sgf-it-queue">🏛️ Đã chuyển quản trị viên</div>' : ''}
+        ? `<button type="button" class="sgf-it-thread-btn" data-req-retry="${it.id}" title="Ban lập kế hoạch mới cho yêu cầu này">Thử cách khác</button>` : ''}
+      ${mine && it.retry === 'admin' ? '<div class="sgf-it-queue">Đã chuyển quản trị viên</div>' : ''}
       ${mine && ['pending', 'reviewing'].includes(it.status)
         ? `<button type="button" class="sgf-it-cancel" data-req-cancel="${it.id}">Hủy yêu cầu</button>` : ''}
       <div class="sgf-it-thread" id="sgf-thread-${it.id}" hidden></div>
@@ -1033,9 +1013,9 @@ function injectStyles() {
   const css = `
     #sgf-fab {
       position: fixed; left: 18px; bottom: 18px; z-index: 2147483000;
-      width: 60px; height: 60px; border-radius: 50%;
+      height: 44px; border-radius: 22px;
       display: inline-flex; align-items: center; justify-content: center;
-      padding: 0; border: 0; cursor: pointer;
+      padding: 0 18px; border: 0; cursor: pointer;
       background: linear-gradient(135deg,#7c3aed,#4f46e5); color: #fff;
       font: 600 14px/1 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
       box-shadow: 0 8px 24px rgba(79,70,229,.45), 0 2px 6px rgba(0,0,0,.18);
@@ -1043,11 +1023,8 @@ function injectStyles() {
     }
     #sgf-fab:hover { transform: scale(1.08); filter: brightness(1.05); box-shadow: 0 14px 30px rgba(79,70,229,.55); }
     #sgf-fab:active { transform: scale(1); }
-    .sgf-fab-ico { font-size: 28px; line-height: 1; }
-    .sgf-fab-lbl { display: none; }
     @media (max-width: 540px) {
-      #sgf-fab { left: 12px; bottom: 12px; width: 54px; height: 54px; }
-      .sgf-fab-ico { font-size: 24px; }
+      #sgf-fab { left: 12px; bottom: 12px; height: 40px; }
     }
 
     .sgf-modal { position: fixed; inset: 0; z-index: 2147483001; display: grid; place-items: center; }
@@ -1060,7 +1037,6 @@ function injectStyles() {
       font: 14px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
     }
     .sgf-head { display: flex; gap: 12px; align-items: flex-start; padding: 18px 20px 8px; }
-    .sgf-head-ico { font-size: 30px; line-height: 1; }
     .sgf-head-text { flex: 1; }
     .sgf-head-text h3 { margin: 0 0 4px; font-size: 17px; color: #1f1147; }
     .sgf-head-text p { margin: 0; font-size: 12.5px; color: #4b5563; }
@@ -1162,7 +1138,6 @@ function injectStyles() {
     .sgf-attach-list:empty { display: none; }
     .sgf-attach-it { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #e5e7eb; border-radius: 7px; padding: 5px 8px; font-size: 12px; color: #1f2937; }
     .sgf-attach-thumb { width: 34px; height: 34px; object-fit: cover; border-radius: 5px; flex-shrink: 0; border: 1px solid #e5e7eb; }
-    .sgf-attach-ic { font-size: 18px; width: 26px; text-align: center; flex-shrink: 0; }
     .sgf-attach-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .sgf-attach-size { opacity: .6; margin-left: 4px; }
     .sgf-attach-rm { margin-left: auto; border: 0; background: transparent; cursor: pointer; color: #ef4444; font-weight: 700; font-size: 13px; padding: 0 4px; flex-shrink: 0; }
@@ -1202,7 +1177,6 @@ function injectStyles() {
     .sgf-folder-t { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
     .sgf-folder-m { font-size: 12px; color: #6b7280; white-space: nowrap; }
     .sgf-folder-hint { font-size: 12.5px; color: #92400e; background: #fef3c7; border-radius: 8px; padding: 6px 10px; margin: -4px 0 8px; }
-    .sgf-it-ico { font-size: 14px; }
     .sgf-it-title { flex: 1; font-size: 13px; font-weight: 600; color: #1f2937; }
     .sgf-it-st { font-size: 11px; padding: 2px 8px; border-radius: 7px; font-weight: 700; white-space: nowrap; }
     .sgf-it-st.pending   { background: #e2e8f0; color: #475569; }

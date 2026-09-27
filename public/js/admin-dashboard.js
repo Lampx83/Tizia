@@ -476,9 +476,9 @@ function renderRequests() {
           <td>${r.votes}</td>
           <td style="font-size:12px;opacity:.7">${fmt(r.created_at)}</td>
           <td class="actions" style="white-space:nowrap">
-            <button class="btn" data-act="detail" data-rid="${r.id}" title="Xem chi tiết">👁</button>
-            <button class="btn primary" data-act="reply" data-rid="${r.id}" title="Trả lời + đổi trạng thái">💬</button>
-            ${ticket ? '' : `<button class="btn danger" data-act="delreq" data-rid="${r.id}" title="Xoá yêu cầu">🗑</button>`}
+            <button class="btn" data-act="detail" data-rid="${r.id}" title="Xem chi tiết">Chi tiết</button>
+            <button class="btn primary" data-act="reply" data-rid="${r.id}" title="Trả lời + đổi trạng thái">Trả lời</button>
+            ${ticket ? '' : `<button class="btn danger" data-act="delreq" data-rid="${r.id}" title="Xoá yêu cầu">Xoá</button>`}
           </td>
         </tr>
           `;

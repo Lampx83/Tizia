@@ -66,7 +66,7 @@ async function autoMount() {
     </button>
     <div class="nbell-panel" id="nbell-panel" hidden>
       <div class="nbell-head">
-        <span class="nbell-title">🏛️ Ban điều hành AI phản hồi</span>
+        <span class="nbell-title">Ban điều hành AI phản hồi</span>
         <button class="nbell-readall" id="nbell-readall" type="button">Đánh dấu đã đọc</button>
       </div>
       <div class="nbell-list" id="nbell-list">Đang tải…</div>
@@ -93,7 +93,7 @@ async function autoMount() {
   }
   function paintList() {
     if (!items.length) {
-      listEl.innerHTML = `<div class="nbell-empty">Chưa có phản hồi nào. Gửi đề nghị qua nút 🏛️ ở góc phải bên dưới.</div>`;
+      listEl.innerHTML = `<div class="nbell-empty">Chưa có phản hồi nào. Gửi đề nghị qua nút Đề nghị ở góc trái bên dưới.</div>`;
       return;
     }
     listEl.innerHTML = items.map(it => `

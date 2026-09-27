@@ -4,7 +4,7 @@
 // Render luồng hội thoại nhiều lượt cho 1 request: tin mở đầu của HS →
 // phản hồi của Ban điều hành AI → HS trao đổi tiếp… tới khi hoàn thành.
 // Dùng chung cho request-board (trong space.html) và suggestion-fab
-// (nút 🏛️ Đề nghị ở mọi trang). Trao đổi BẤT ĐỒNG BỘ: HS gửi → Ban điều
+// (nút Đề nghị ở mọi trang). Trao đổi BẤT ĐỒNG BỘ: HS gửi → Ban điều
 // hành AI (Routine Claude Opus, ngoài repo) trả lời sau → chuông báo.
 //
 // Usage:
@@ -15,7 +15,7 @@
 const STATUS = {
   pending:   { label: 'Chờ duyệt',    cls: 'pending' },
   reviewing: { label: 'Đang trao đổi', cls: 'reviewing' },
-  done:      { label: '✓ Hoàn thành',  cls: 'done' },
+  done:      { label: 'Hoàn thành',  cls: 'done' },
   rejected:  { label: 'Chưa thực hiện', cls: 'rejected' },
 };
 
@@ -47,8 +47,7 @@ function renderAtts(atts) {
                 <img loading="lazy" src="${escapeHtml(a.url)}" alt="${escapeHtml(a.name)}" />
               </a>`;
     }
-    const ic = a.kind === 'screenshot' ? '📸' : '📎';
-    return `<a class="rt-att-file" href="${escapeHtml(a.url)}" target="_blank" rel="noopener" download="${escapeHtml(a.name)}">${ic} ${escapeHtml(a.name)}</a>`;
+    return `<a class="rt-att-file" href="${escapeHtml(a.url)}" target="_blank" rel="noopener" download="${escapeHtml(a.name)}">${escapeHtml(a.name)}</a>`;
   }).join('');
   return `<div class="rt-att">${inner}</div>`;
 }
@@ -58,8 +57,8 @@ function renderMessage(m, me) {
   const side = (m.role === 'student') ? 'right' : 'left';
   const isBoard = m.role === 'ai' || m.role === 'admin';
   const who = isBoard
-    ? `🏛️ ${escapeHtml(m.author_name || 'Ban điều hành AI')}`
-    : `👤 ${escapeHtml(m.author_name || 'Học sinh')}${mine ? ' (bạn)' : ''}`;
+    ? `${escapeHtml(m.author_name || 'Ban điều hành AI')}`
+    : `${escapeHtml(m.author_name || 'Học sinh')}${mine ? ' (bạn)' : ''}`;
   // Giữ xuống dòng của tin nhắn (white-space: pre-wrap qua class).
   return `
     <div class="rt-msg rt-${side} ${isBoard ? 'rt-board' : 'rt-student'}">
@@ -113,7 +112,7 @@ export async function renderRequestThread({ host, requestId, me = '', onChange }
           placeholder="Trao đổi tiếp với Ban điều hành AI… (Enter để gửi, Shift+Enter xuống dòng)"></textarea>
         <div class="rt-composer-bar">
           <span class="rt-cmsg" id="rt-msg-${requestId}"></span>
-          <button type="submit" class="rt-send" id="rt-send-${requestId}">Gửi 📨</button>
+          <button type="submit" class="rt-send" id="rt-send-${requestId}">Gửi</button>
         </div>
       </form>
     ` : (me ? '' : `<div class="rt-login-hint">Đăng nhập để trao đổi với Ban điều hành AI.</div>`)}
@@ -131,7 +130,7 @@ export async function renderRequestThread({ host, requestId, me = '', onChange }
 
   async function submit() {
     const body = input.value.trim();
-    if (!body) { msgEl.textContent = '⚠️ Nhập nội dung trước khi gửi'; return; }
+    if (!body) { msgEl.textContent = 'Nhập nội dung trước khi gửi'; return; }
     sendBtn.disabled = true;
     msgEl.textContent = 'Đang gửi…';
     try {
@@ -143,7 +142,7 @@ export async function renderRequestThread({ host, requestId, me = '', onChange }
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
-        msgEl.textContent = '⚠️ ' + (e.error === 'forbidden' ? 'Chỉ chủ yêu cầu mới trao đổi được'
+        msgEl.textContent = '' + (e.error === 'forbidden' ? 'Chỉ chủ yêu cầu mới trao đổi được'
           : e.error === 'empty' ? 'Nội dung trống' : (e.error || 'Không gửi được'));
         sendBtn.disabled = false;
         return;
@@ -153,7 +152,7 @@ export async function renderRequestThread({ host, requestId, me = '', onChange }
       await renderRequestThread({ host, requestId, me, onChange });
       if (typeof onChange === 'function') onChange();
     } catch {
-      msgEl.textContent = '⚠️ Lỗi mạng — thử lại sau.';
+      msgEl.textContent = 'Lỗi mạng — thử lại sau.';
       sendBtn.disabled = false;
     }
   }
