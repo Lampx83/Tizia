@@ -6,6 +6,7 @@ import { checkIntake, recordIntakeFlags } from './intake-guard.js';
 import { classifyRequest as classifyWithModel, recordClassification } from './classifier.js';
 import { checkClarity } from './clarity-rules.js';
 import { activeChats } from './chat-activity.js';
+import { deleteEvalTask, evalTaskSplit, labelEvalTask, listEvalTasks, recordMiss, recordRequestMiss } from './eval-tasks.js';
 
 // Không cấu hình model phân loại → không gọi gì (hành vi trước ticket 04).
 const defaultClassifyRequest = (title, detail) => (
@@ -140,7 +141,9 @@ export function attachAiBoardRequestRoutes(router, {
         message: `Bạn đang có ${pendingCap} yêu cầu chờ Ban xử lý. Đợi một yêu cầu xong rồi thử lại nhé!` });
     }
     try {
-      res.json(retryRequest(store, req.params.id, req.user.id));
+      const result = retryRequest(store, req.params.id, req.user.id);
+      recordRequestMiss(store.db, req.params.id, 'retry');
+      res.json(result);
     } catch (error) {
       if (error instanceof WorkerContractError) {
         return res.status(error.status).json({ error: error.code, message: error.message });
@@ -222,13 +225,26 @@ export function attachAiBoardRequestRoutes(router, {
 
   router.post('/api/admin/ai-board/requests/:requestId/rollback', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
     try {
-      res.json(store.requestRollback(req.params.requestId, { adminUserId: req.user.id, confirm: req.body?.confirm }));
+      const result = store.requestRollback(req.params.requestId, { adminUserId: req.user.id, confirm: req.body?.confirm });
+      recordRequestMiss(store.db, req.params.requestId, 'undo');
+      res.json(result);
     } catch (error) {
       if (error instanceof WorkerContractError) {
         return res.status(error.status).json({ error: error.code, message: error.message });
       }
       throw error;
     }
+  });
+
+  // ── Task eval từ lần hỏng (self-improve ticket 02) ──
+  router.get('/api/admin/ai-board/eval-tasks', requireAuth, requireAdmin, (req, res) => {
+    try { res.json(listEvalTasks(store.db, req.query.status || undefined)); } catch (error) { folderError(res, error); }
+  });
+  router.post('/api/admin/ai-board/eval-tasks/:id/label', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
+    try { res.json({ task: labelEvalTask(store.db, req.params.id, req.body || {}) }); } catch (error) { folderError(res, error); }
+  });
+  router.delete('/api/admin/ai-board/eval-tasks/:id', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
+    try { res.json(deleteEvalTask(store.db, req.params.id)); } catch (error) { folderError(res, error); }
   });
 
   router.post('/api/admin/ai-board/tickets/:id/authorize-plan', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
@@ -370,10 +386,16 @@ export function attachAiBoardWorkerRoutes(router, {
       idempotencyKey: req.body?.idempotency_key,
     });
     const notice = afterVerdict(store.db, req.params.id, verdict);
+    if (verdict.outcome === 'blocked') recordMiss(store.db, req.body.run_id, 'verdict_blocked');
     res.json({ verdict });
     if (notice && onVerdict) {
       try { onVerdict(notice); } catch (error) { console.warn('[ai-board] verdict notification failed:', error.message); }
     }
+  }));
+
+  // Task eval đã gắn nhãn (self-improve ticket 02): server chia học / kiểm tra theo thời gian, worker không tự chia.
+  router.post('/api/ai-board/worker/eval-tasks', authenticate, handle((_req, res) => {
+    res.json(evalTaskSplit(store.db));
   }));
 
   // Ảnh bản nháp (ticket 09): auth trước rồi mới parse body lớn; content-type riêng để express.json chung bỏ qua.

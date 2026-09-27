@@ -31,6 +31,20 @@
     "memory": {
       "_why": "Worker-local files under ai-board/memory/ (gitignored). Everything there is a rebuildable cache except lessons; the worker prunes at start. Folder memory lives in the DB, not here. With a second worker, lessons move to a server table.",
       "lessons_max": 500, "traces_mb": 5, "traces_keep": 2, "eval_keep": 20
+    },
+    "self_improve": {
+      "_why": "Nightly self-improvement loop (.scratch/ai-board-self-improve spec). Off until an admin turns it on; never starts below min_labelled_tasks. Labelled eval tasks split by time: oldest learning_split to learn from, the rest to test on.",
+      "enabled": false,
+      "window": { "start": "03:00", "end": "05:30", "tz": "Asia/Ho_Chi_Minh" },
+      "night_gpu_s": { "total": 3600, "propose": 1200, "eval": 2400 },
+      "max_variants_per_night": 3,
+      "min_labelled_tasks": 20,
+      "learning_split": 0.7,
+      "max_stratum_drop_pts": 10,
+      "pause_after_empty_nights": 5,
+      "cluster_skip": { "after_failed_nights": 3, "days": 7 },
+      "post_merge_watch": { "days": 7, "min_runs": 10, "max_drop_pts": 10 },
+      "retire_days": 180
     }
   },
   "branch_prefix": "ai-board/",
