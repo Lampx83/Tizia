@@ -11,6 +11,14 @@
     "_why": "File public/ chạm tiền thật (giá gói, mirror billing) hoặc xu/sao trong ví (dễ bị lợi dụng). Kế hoạch sửa chúng bị policy chặn (money_scope); diff cổng 4 chạm chúng là critical, cần người.",
     "paths": ["public/pricing.html", "public/js/plans.js", "public/js/engine/wallet.js"]
   },
+  "self_edit_paths": {
+    "_why": "Vùng DUY NHẤT yêu cầu loại self (board tự sửa) được chạm: SKILL.md của skill, prompt từng cổng (trừ AIBOARD.md), trọng số truy xuất. Server từ chối tạo yêu cầu self có file ngoài vùng (policy.js); cổng 4 chỉ nới luật path hạ tầng cho đúng các file này khi yêu cầu là self (guard.py). Code cổng, lexicon này, policy, contract, file khoá vẫn bị chặn. Regex toàn chuỗi, cú pháp chung JS/Python.",
+    "patterns": [
+      "^ai-board/harness/skills/[a-z0-9-]+/SKILL\\.md$",
+      "^ai-board/harness/prompts/(?!AIBOARD\\.md$)[a-z0-9_-]+\\.md$",
+      "^ai-board/harness/retrieval_weights\\.json$"
+    ]
+  },
   "allowed_hosts": [
     "tizia.vn", "gov.vn", "edu.vn", "localhost", "example.com",
     "unpkg.com", "cdn.jsdelivr.net", "cdnjs.cloudflare.com", "fonts.googleapis.com", "fonts.gstatic.com",

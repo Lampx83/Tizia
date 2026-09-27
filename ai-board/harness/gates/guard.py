@@ -42,6 +42,8 @@ def _term(term: str) -> re.Pattern:
 
 # File tiền thật / ví xu: diff chạm là critical (cùng danh sách với policy.js money_scope).
 MONEY_PATHS = frozenset(LEXICON["money_paths"]["paths"])
+# Vùng yêu cầu self được sửa (cùng regex với policy.js isSelfEditable): chỉ nới luật path hạ tầng cho đúng các file này.
+SELF_EDIT = [re.compile(p) for p in LEXICON["self_edit_paths"]["patterns"]]
 
 # Term ASCII so trên bản bỏ dấu, term có dấu so trên bản NFC — xem _doc trong guard-lexicon.json.
 _TOPICS ={label: [(_term(t), t.isascii()) for t in spec["terms"]] for label, spec in LEXICON["labels"].items()}
@@ -283,11 +285,12 @@ def _pii(line: str, allowed: set[str]) -> bool:
 
 
 def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts: set[str] = frozenset(),
-         request_text: str | None = None) -> dict:
+         request_text: str | None = None, request_type: str | None = None) -> dict:
     """Findings [{check, severity, failure_class, detail}] chặn + flags [{check, severity, detail}] không chặn
     + checks ran + ui_changed + visible_text_changed + review_required (có flag high). Detail never echoes
     a secret or the offending text. PII skips allowed_contacts (base public/, see contacts_in) and tizia.vn
-    emails. request_text (yêu cầu gốc) chỉ để leo thang bảng màu cờ khi yêu cầu chạm chủ đề nhạy cảm."""
+    emails. request_text (yêu cầu gốc) chỉ để leo thang bảng màu cờ khi yêu cầu chạm chủ đề nhạy cảm.
+    request_type 'self' (board tự sửa): sửa/thêm file trong SELF_EDIT không tính protected_path."""
     findings, flags = [], []
 
     def add(check, severity, detail):
@@ -304,7 +307,8 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
         ui_changed |= path.startswith("public/")
         if path == ".env" or (path.startswith(".env.") and not path.endswith(".example")):
             add("secret", "critical", f"{path}: không được chạm file env")
-        if _PROTECTED.match(path):
+        self_edit = request_type == "self" and not deleted and any(p.match(path) for p in SELF_EDIT)
+        if _PROTECTED.match(path) and not self_edit:
             add("protected_path", "critical", f"{path}: path hạ tầng/registry cần con người")
         if path in MONEY_PATHS:
             add("protected_path", "critical", f"{path}: file tiền/thanh toán cần con người")

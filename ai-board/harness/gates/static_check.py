@@ -253,7 +253,7 @@ def run_gate(state: dict, deps, budget, *, db_path=None, proposal_id: int | None
     diffs = state.get("full_diff") or state.get("diffs") or []
     text = "".join(item.get("diff", "") for item in diffs)
     scanned = guard.scan(text, state.get("full_checkout"), allowed_contacts=_base_public_contacts(state),
-                         request_text=state.get("request_detail"))
+                         request_text=state.get("request_detail"), request_type=state.get("request_type"))
     state["ui_changed"] = scanned["ui_changed"]
     state["guard_flags"] = scanned["flags"]
     state["review_required"] = scanned["review_required"]
@@ -277,4 +277,9 @@ def run_gate(state: dict, deps, budget, *, db_path=None, proposal_id: int | None
         reason = "; ".join(f"{f['check']}: {f['detail']}" for f in found)[:1000]
         out.update(blocked=True, reason=reason, failure_class=worst,
                    issues=[*out.get("issues", []), *(f"{f['check']}: {f['detail']}" for f in found)])
+    elif state.get("request_type") == "self":
+        try:  # board tự sửa: file khoá skill/prompt do pipeline tính lại, cùng commit, sau khi guard đã qua
+            candidate.relock(state)
+        except (OSError, ValueError) as e:
+            out.update(blocked=True, reason=f"không tính lại được file khoá: {e}"[:1000], failure_class="transient")
     return out

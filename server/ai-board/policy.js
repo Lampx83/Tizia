@@ -2,7 +2,13 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 
 export const CAPABILITY_POLICY_VERSION = 'd0-v3'; // v3: money_paths luôn cần người
-const MONEY_PATHS = JSON.parse(fs.readFileSync(new URL('./guard-lexicon.json', import.meta.url), 'utf8')).money_paths.paths;
+const LEXICON = JSON.parse(fs.readFileSync(new URL('./guard-lexicon.json', import.meta.url), 'utf8'));
+const MONEY_PATHS = LEXICON.money_paths.paths;
+const SELF_EDIT = LEXICON.self_edit_paths.patterns.map((p) => new RegExp(p));
+export const SELF_CAPABILITY = 'self.config';
+
+/** File yêu cầu self được sửa (guard-lexicon.json self_edit_paths, cùng regex với cổng 4). */
+export const isSelfEditable = (file) => SELF_EDIT.some((re) => re.test(String(file ?? '')));
 const capability = (tier, allow, rationale, overrides = {}) => Object.freeze({
   tier,
   allow,
@@ -24,6 +30,13 @@ export const CAPABILITY_POLICY = Object.freeze({
   'content.write': capability('protected', ['server/contexts/content/', 'public/'], 'Changes the shared content service.'),
   'integration.write': capability('protected', ['server/contexts/integration/'], 'Changes external service integrations.'),
   'core.server': capability('core', ['server/', 'scripts/'], 'Core server or operational code always needs a human.'),
+  // Board tự sửa (self-improve ticket 04): prefix thô cho catalog cổng 4/5.5; file chính xác do isSelfEditable + guard.
+  [SELF_CAPABILITY]: capability('protected',
+    ['ai-board/harness/skills/', 'ai-board/harness/prompts/', 'ai-board/harness/retrieval_weights.json'],
+    'The board edits its own skills, gate prompts or retrieval weights; an admin approves every plan.', {
+      deny: ['ai-board/harness/skills/skills.lock.json', 'ai-board/harness/prompts/prompts.lock.json',
+        'ai-board/harness/prompts/AIBOARD.md'],
+    }),
 });
 
 const TIERS = Object.freeze({ surface: 0, protected: 1, core: 2 });
@@ -95,7 +108,8 @@ export const CAPABILITY_CATALOG = Object.freeze({
   }])),
 });
 
-export function validatePlan(plan, requestDomain) {
+/** selfTarget: file đích của yêu cầu self (null với mọi loại khác) — self chỉ dùng self.config, chỉ trên file đó. */
+export function validatePlan(plan, requestDomain, selfTarget = null) {
   if (!plan || typeof plan !== 'object' || Array.isArray(plan)) fail('malformed_plan', 'plan must be an object');
   const domain = nonEmptyString(plan.domain, 'domain');
   if (domain !== requestDomain) {
@@ -123,6 +137,10 @@ export function validatePlan(plan, requestDomain) {
     const policy = CAPABILITY_POLICY[capability];
     if (!policy) fail('unknown_capability', `unknown capability '${capability}'`,
       'Kế hoạch yêu cầu quyền chưa được hỗ trợ và đang chờ xem lại.');
+    if ((capability === SELF_CAPABILITY) !== (selfTarget != null)) {
+      fail('unknown_capability', `capability '${capability}' ${selfTarget != null ? 'is not allowed for' : 'is only for'} self requests`,
+        'Kế hoạch yêu cầu quyền chưa được hỗ trợ và đang chờ xem lại.');
+    }
     if (TIERS[policy.tier] > TIERS[tier]) tier = policy.tier;
     for (const requiredTest of policy.mandatoryTests) {
       if (!normalized.tests.includes(requiredTest)) fail('missing_mandatory_test', `capability '${capability}' requires test '${requiredTest}'`);
@@ -145,7 +163,8 @@ export function validatePlan(plan, requestDomain) {
           'Yêu cầu liên quan đến tiền hoặc thanh toán nên cần quản trị viên trực tiếp xử lý.');
       }
       if (policy.deny.some((denied) => item === denied || item.startsWith(denied))
-        || !planScope.has(item) || !policy.allow.some((prefix) => item.startsWith(prefix))) {
+        || !planScope.has(item) || !policy.allow.some((prefix) => item.startsWith(prefix))
+        || (selfTarget != null && item !== selfTarget)) {
         fail('scope_violation', `scope '${item}' is not granted to capability '${capability}'`,
           'Kế hoạch vượt ngoài phạm vi an toàn và đang chờ xem lại.');
       }
