@@ -99,6 +99,7 @@ def test_hourly_gpu_cap():
 
 def test_local_trace_rotates_keeping_three_files(tmp_path, monkeypatch):
     monkeypatch.setattr(meter, "ROTATE_BYTES", 10)
+    monkeypatch.setattr(meter, "ROTATE_KEEP", 3)
     tracer = meter.Tracer(tmp_path / "t.jsonl")
     for _ in range(5):
         tracer._write({"x": "y" * 20})

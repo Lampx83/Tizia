@@ -27,7 +27,11 @@
       "brief_chars": 1500, "recent_chars": 1000, "owned_files": 6
     },
     "gpu_s_per_user_day": { "loose": 1500, "folder": 4000, "_why": "rolling 24h; over it the request waits, a running run is never cut" },
-    "gpu_s_per_worker_hour": { "value": 2700, "_why": "must exceed one max run (2400) so big tasks are not starved" }
+    "gpu_s_per_worker_hour": { "value": 2700, "_why": "must exceed one max run (2400) so big tasks are not starved" },
+    "memory": {
+      "_why": "Worker-local files under ai-board/memory/ (gitignored). Everything there is a rebuildable cache except lessons; the worker prunes at start. Folder memory lives in the DB, not here. With a second worker, lessons move to a server table.",
+      "lessons_max": 500, "traces_mb": 5, "traces_keep": 2, "eval_keep": 20
+    }
   },
   "branch_prefix": "ai-board/",
   "branch_slug_max": 60,

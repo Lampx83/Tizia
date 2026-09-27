@@ -16,8 +16,10 @@ from pathlib import Path
 PROVIDERS = ("ollama", "api")
 TRACE_CAP = 8192  # ký tự mỗi phần prompt/output gửi server; JSONL cục bộ giữ đủ
 POST_BYTES = 56_000  # dưới express.json limit 64kb, chừa chỗ lease/run_id
-ROTATE_BYTES = 20 * 1024 * 1024
-ROTATE_KEEP = 3
+_MEMORY = json.loads((Path(__file__).resolve().parents[2] / "server" / "ai-board" / "contract.json")
+                     .read_text(encoding="utf-8"))["limits"]["memory"]
+ROTATE_BYTES = _MEMORY["traces_mb"] * 1024 * 1024
+ROTATE_KEEP = _MEMORY["traces_keep"]  # file hiện tại + (KEEP-1) bản cũ
 # Trần mỗi worker, đọc từ server/ai-board/contract.json (limits); vượt thì ngừng nhận ticket mới,
 # không phạt ticket đang chạy. Phải lớn hơn 1 lượt lớn nhất để task lớn không bị bỏ đói.
 HOURLY_GPU_S = json.loads((Path(__file__).resolve().parents[2] / "server" / "ai-board" / "contract.json")

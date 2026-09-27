@@ -839,6 +839,8 @@ def main(argv: list[str] | None = None) -> int:
         base = os.getenv("PR_BASE_BRANCH", "dev")
         worker.sync = lambda: candidate.sync(repo, base)
         worker.folder_base_ref = f"origin/{base}"
+    import memory
+    print(json.dumps({"memory_pruned": memory.prune(DEFAULT_PATH, source=repo)}))
     if args.plan or args.execute:
         worker.planner = HarnessPlanner(tracer, progress=worker.gate_started, source=repo if repo_dir else None)
     if args.execute:
