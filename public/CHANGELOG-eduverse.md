@@ -4,6 +4,63 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-27 — Phiên 75 · Đóng bậc 2: tuần 36 cho 9 môn cuối cùng còn dừng ở tuần 35
+
+**Kết luận về hộp thư:** vẫn **không đọc được** — `consecutive_failures = 15`, từ `2026-09-13` (`ai-board/inbox-status.json`). Sáu endpoint đều trả **401**, `AI_BOARD_KEY` chưa có trong môi trường. Phiên này **không xử lý yêu cầu nào của người học** vì không có yêu cầu nào đọc được, và **không bịa ra yêu cầu**.
+
+### Leo thang (việc đầu tiên của phiên, đúng luật Bước 2a)
+
+Đã gửi thông báo cho chủ sở hữu nêu đúng **hai việc cần người bấm nút** — AI không được phép tự làm:
+
+1. **Merge PR #97** — route đọc-chỉ `/api/ai-board/inbox` vào nhánh production. PR đụng `auth.js` + `index.js` ⇒ vượt ngưỡng "rủi ro thấp".
+2. **Đặt `AI_BOARD_KEY`** trên production (`openssl rand -hex 32`) rồi redeploy. Đây là secret; AI không đặt và không đọc secret.
+
+Đây là phiên thứ **15** liên tiếp bị chặn bởi đúng hai việc này.
+
+### Việc dự phòng — bậc 2 (bậc thấp nhất còn việc)
+
+`ai-board-preflight.mjs` chỉ đúng bậc 2: **9 môn** còn dừng ở tuần 35, thiếu **cả** bài lí thuyết lẫn quiz tuần 36. Đã soạn xong toàn bộ 9 môn.
+
+| Cấp | Môn | Việc đã làm |
+|---|---|---|
+| THCS · Lớp 7 | Tin học, Công nghệ, GDTC, HĐTN, Nghệ thuật, GD Địa phương | Thêm **quiz tuần 36** (bài lí thuyết tuần 36 đã có sẵn nhưng **mồ côi** — xem mục dưới) |
+| THPT · Lớp 10, 11, 12 | HĐTN-HN | Thêm **cả bài lí thuyết lẫn quiz** tuần 36 |
+
+**Con số trước → sau:**
+
+- Bậc 2 (môn dừng ở tuần 35): **9 → 0**. Toàn bộ K-12 nay không còn môn nào theo mô hình 35/36 tuần mà thiếu tuần 36.
+- Bậc 1 (bài lí thuyết mồ côi): **0 → 0** (vẫn sạch).
+- Nội dung mới: **9 scenario · 54 câu hỏi · 3 bài lí thuyết**, 792 dòng, **chỉ thêm mới, không sửa một dòng nội dung cũ nào**.
+- Phân bố đáp án của 54 câu mới: **A 13 · B 12 · C 14 · D 15** (24,1% / 22,2% / 25,9% / 27,8%), **không tuần nào** có ≥3/6 câu cùng vị trí — soạn cân bằng ngay từ đầu, không phải sửa lại như phiên 73 → 74.
+- Hiệu ứng phụ có lợi: hai môn lệch nặng nhất giảm nhẹ nhờ tuần 36 cân bằng — `lop12:hdtn` **100% → 97%**, `lop11:hdtn` **98% → 96%** (vẫn là việc của bậc 3, chưa xử lý).
+
+### Phát hiện: `check-content-integrity.mjs` có điểm mù, bậc 1 "sạch" là sạch giả
+
+Sáu bài lí thuyết tuần 36 của Lớp 7 **đã nằm sẵn trong repo từ phiên trước nhưng chưa bao giờ hiển thị cho học sinh**, vì không có quiz nào mang id tương ứng để gắn vào. Đúng định nghĩa "nội dung chết" — nhưng bậc 1 vẫn báo ✅ sạch.
+
+Nguyên nhân: hàm `lessonKeysOf()` chỉ bắt key viết **literal** dạng `'S7TIN-w36-quiz':`. Sáu file `lop7/lessons/*.js` lại sinh key bằng **template literal** trong helper `L(n, …)`:
+
+```js
+const L = (n, topic, …) => ({ [`S7HDTN-w${String(n).padStart(2,'0')}-quiz`]: { … } });
+```
+
+⇒ checker trích được **0 key** từ **6/12** file lessons của Lớp 7, nên không thể phát hiện bài mồ côi trong đó. Đo được: `lop7: 12 file lessons, 6 file checker KHÔNG trích được key nào` (`lop10` thì 0/13 — các cấp khác dùng key literal nên không bị).
+
+Phiên này **không sửa** `scripts/check-content-integrity.mjs`: sửa script làm diff vượt ra ngoài phạm vi tự merge theo `ai-board/ROUTINE.md`. Đề xuất để phiên sau hoặc chủ sở hữu duyệt riêng. Sau hôm nay điểm mù này **không còn che giấu lỗi nào** (cả 6 bài đã có quiz), nhưng nó vẫn sẽ che lỗi mới nếu có.
+
+### Kiểm thử (chạy thật)
+
+- `node --check` **pass 12/12** file `.js` đã sửa.
+- **Kiểm tra runtime** (không chỉ cú pháp): import thật `lop7/_index.js`, `lop10/_index.js`, `lop11/_index.js`, `lop12/_index.js` — **9/9** scenario tuần 36 nạp được, **9/9** có `lesson` gắn đúng (topic + theory + examples), `week === 36`, `semester === 2`, mỗi câu đủ **4 lựa chọn không trùng nhau**, `answer` ∈ 0..3, đủ **4 `choiceFeedback`**, feedback tại vị trí `answer` mở đầu bằng "Đúng" và ba feedback còn lại mở đầu bằng "Sai". **0 lỗi.**
+- `check-content-integrity.mjs`: **0 → 0** bài mồ côi.
+- `ai-board-preflight.mjs` chạy lại sau khi sửa: bậc 2 chuyển từ ⚠️ 9 mục sang ✅ **sạch**.
+
+### Việc còn lại cho phiên sau
+
+Bậc 3 — lệch phân bố đáp án: **11 môn** ≥60% dồn vào một vị trí (nặng nhất `lop11:gdqp` 98%, `lop5:tin-hoc` 98%, `lop12:hdtn` 97%, `lop11:hdtn` 96%, `lop11:cong-nghe` 93%) và **2 câu dị dạng** không đủ 4 lựa chọn (`lop8/gdtc.js` `S8GDTC-w24-quiz`, `lop9/hdtn.js` `S9HDTN-w17-quiz`). Hoán vị phải di chuyển cặp `(choice, choiceFeedback)` cùng nhau — **không dùng `scripts/shuffle-answers.js`**.
+
+---
+
 ## 2026-09-27 — Phiên 74 · Sửa chính cái ROUTINE: leo thang tự động, bậc thang việc dự phòng, và cân bằng lại 216 câu phiên 73 tự làm lệch
 
 **Kết luận về hộp thư:** vẫn **không đọc được** — nay đã **đếm được bằng máy**: `consecutive_failures = 15`, từ `2026-09-13` (`ai-board/inbox-status.json`). Phiên này **không xử lý yêu cầu nào của người học** và không bịa ra yêu cầu.
