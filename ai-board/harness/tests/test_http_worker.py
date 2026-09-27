@@ -1307,3 +1307,55 @@ def test_folder_brief_reaches_gate_1_and_a_brief_crossing_a_hard_rule_stops_the_
         assert error.detail['reason'].startswith('folder_brief:')
     else:
         raise AssertionError('brief crossing a hard rule must stop the plan')
+
+
+def test_a_self_request_plan_asks_only_for_self_config():
+    """Self-improve ticket 04: server gives self.config (tier protected) only to self requests."""
+    old = {'summary_vi': 'x', 'capabilities': ['features'],
+           'subtasks': [{'title': 't', 'file': 'ai-board/harness/skills/default/SKILL.md', 'verify': 'v', 'size': 'small'}]}
+    plan = HarnessPlanner._canonical({'domain': 'ai-board', 'type': 'self'}, old)
+    assert plan['capabilities'] == ['self.config']
+    assert [step['capability'] for step in plan['steps']] == ['self.config']
+    assert HarnessPlanner._canonical({'domain': 'it', 'type': 'other'}, old)['capabilities'] == ['features']
+
+
+def test_a_self_request_reaches_the_gates_as_self_and_its_verdict_names_base_sha_and_skill(tmp_path):
+    class SelfTransport(FakeTransport):
+        def __call__(self, method, path, payload, headers):
+            out = super().__call__(method, path, payload, headers)
+            if path.endswith('/snapshot'):
+                out['request'] = {**out['request'], 'type': 'self'}
+            return out
+
+    class Planner:
+        last_skill = None
+
+        def __call__(self, _snapshot):
+            self.last_skill = 'edit-html-text'
+            return PLAN, 0
+
+    class Budget:
+        @staticmethod
+        def tick():
+            return True
+
+    seen = {}
+
+    def run_gate(gate, _request, _deps, _budget, state):
+        seen[gate] = dict(state)
+        if gate == 3:
+            state['base_sha'] = 'a' * 40  # gate 3 records the base it showed the model
+            return {'gate': 3, 'blocked': False, 'reason': None}
+        return {'gate': 4, 'blocked': True, 'reason': 'protected_path', 'failure_class': 'critical'}
+
+    transport = SelfTransport()
+    HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1', mode='active',
+               planner=Planner(), candidates=FakeCandidates(),
+               change_runner=lambda plan, ticket_id, _units, **kw: execute_pre_pr(
+                   plan, ticket_id=ticket_id, checkout_source=tmp_path, deps=object(), budget=Budget(),
+                   run_gate=run_gate, cleanup=lambda *_a, **_k: None, **kw)).run_once()
+
+    assert seen[3]['request_type'] == 'self' == seen[4]['request_type']
+    verdict = next(call[2]['verdict'] for call in transport.calls if call[1].endswith('/verdict'))
+    assert verdict['outcome'] == 'blocked'
+    assert (verdict['base_sha'], verdict['skill']) == ('a' * 40, 'edit-html-text')

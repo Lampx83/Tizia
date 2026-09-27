@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { CAPABILITY_CATALOG, PlanGuardrailError, validatePlan } from './policy.js';
+import { CAPABILITY_CATALOG, isSelfEditable, PlanGuardrailError, validatePlan } from './policy.js';
 import { registerRelease } from './releases.js';
 
 export { PlanGuardrailError } from './policy.js';
@@ -12,6 +12,9 @@ const MIGRATIONS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '
 export const CONTRACT = JSON.parse(fs.readFileSync(new URL('./contract.json', import.meta.url), 'utf8'));
 const KEY = new RegExp(CONTRACT.idempotency_key_pattern);
 const REQUEST_TYPES = new Set(['game', 'theory', 'lab', 'skill', 'other', 'feature']);
+// Yêu cầu board tự sửa (self-improve ticket 04): chỉ createSelfRequest tạo, chủ là người dùng hệ thống này.
+const SELF_USER = 'ai-board';
+const SELF_TAG = 'self_target:';
 const REQUEST_STATUSES = new Set(['pending', 'reviewing', 'done', 'rejected']);
 const WORKER_MODES = new Set(['off', 'shadow', 'active']);
 const CLAIM_INTENTS = new Set(['precheck', 'plan']);
@@ -90,8 +93,9 @@ const ownerGpuS = (owner) => `(SELECT COALESCE(SUM(json_extract(g.evidence_json,
   JOIN requests grq ON grq.id = gt.source_request_id
   WHERE g.status = 'model_call' AND g.created_at > ? AND grq.owner_user_id = ${owner})`;
 const OWNER_GPU_S = ownerGpuS('r.owner_user_id');
-// Hàng đợi công bằng: priority trước; cùng mức thì người được phục vụ lâu nhất rồi (hoặc chưa bao giờ) trước; rồi FIFO.
-const FAIR_ORDER = `t.priority DESC,
+// Hàng đợi công bằng: việc tự sửa của board (self) sau mọi yêu cầu thật; priority; cùng mức thì người được phục vụ
+// lâu nhất rồi (hoặc chưa bao giờ) trước; rồi FIFO.
+const FAIR_ORDER = `r.type = 'self' ASC, t.priority DESC,
   COALESCE((SELECT MAX(se.created_at) FROM ai_events se JOIN ai_tickets st ON st.id = se.ticket_id
     JOIN requests sq ON sq.id = st.source_request_id
     WHERE se.transition = 'queued->running' AND sq.owner_user_id = r.owner_user_id), 0) ASC,
@@ -415,7 +419,7 @@ export function createAiBoardStore(db, hooks = {}) {
     const folderId = folderForRequest(input, now);
     const info = insertRequest.run({
       domain: input.ownerDomain,
-      type: REQUEST_TYPES.has(input.type) ? input.type : 'other',
+      type: input.selfTarget ? 'self' : REQUEST_TYPES.has(input.type) ? input.type : 'other',
       title: String(input.title).trim().slice(0, 200),
       detail: input.detail ? String(input.detail).slice(0, 10000) : null,
       student: String(input.ownerDisplayName || input.ownerUserId).slice(0, 60),
@@ -443,6 +447,7 @@ export function createAiBoardStore(db, hooks = {}) {
       `request-created:${input.idempotencyKey}`, now,
     );
     if (folderId) insertTag.run(rootTicketId, `folder:${folderId}`);
+    if (input.selfTarget) insertTag.run(rootTicketId, `${SELF_TAG}${input.selfTarget}`);
     return { request_id: requestId, root_ticket_id: rootTicketId, folder_id: folderId, created: true };
   });
 
@@ -699,6 +704,27 @@ export function createAiBoardStore(db, hooks = {}) {
     });
   }
 
+  /** Người dùng hệ thống `ai-board` (tạo lần đầu, không đăng nhập được). Tên đã thuộc tài khoản thật → 409. */
+  function selfUserId() {
+    const user = db.prepare('SELECT id, role FROM users WHERE username = ?').get(SELF_USER);
+    if (user && user.role !== 'system') {
+      throw new WorkerContractError(`username ${SELF_USER} belongs to a real account`, 409, 'self_user_conflict');
+    }
+    return user?.id ?? Number(db.prepare(`INSERT INTO users(username, display_name, password_hash, role, created_at)
+      VALUES (?, 'Ban điều hành AI', '!', 'system', ?)`).run(SELF_USER, Date.now()).lastInsertRowid);
+  }
+
+  /** Worker tạo yêu cầu self (board tự sửa 1 file trong vùng cho phép). File ngoài vùng → 422. */
+  const createSelfRequest = db.transaction(({ title, detail, targetFile, idempotencyKey }) => {
+    const target = String(targetFile ?? '').trim();
+    if (!isSelfEditable(target)) {
+      throw new WorkerContractError(`target file outside the self-edit area: ${target.slice(0, 200)}`, 422,
+        'self_target_outside_area');
+    }
+    return createRequestWithRoot({ ownerUserId: selfUserId(), ownerDomain: SELF_USER, ownerDisplayName: SELF_USER,
+      idempotencyKey, title, detail, selfTarget: target });
+  });
+
   function listRequestsForOwner(ownerUserId, domain, limit = 50) {
     const rows = db.prepare(`
       SELECT r.id, r.domain, r.type, r.title, r.detail, r.student, r.status, r.votes,
@@ -726,6 +752,7 @@ export function createAiBoardStore(db, hooks = {}) {
           WHERE se.transition = 'queued->running' AND sq.owner_user_id = r.owner_user_id), 0) AS served
       FROM ai_tickets t JOIN requests r ON r.id = t.source_request_id
       WHERE t.kind = 'root' AND t.status = 'queued' AND t.phase <> 'clarifying' AND r.owner_state = 'verified'
+        AND r.type <> 'self'
     `).all();
     // Mô phỏng các lượt claim liên tiếp theo FAIR_ORDER: người vừa được phục vụ xuống cuối vòng.
     // ponytail: O(n²) trên hàng đợi; đủ cho vài trăm root đang chờ.
@@ -873,7 +900,8 @@ export function createAiBoardStore(db, hooks = {}) {
           WHERE ar.id = (SELECT MAX(id) FROM ai_runs WHERE ticket_id = t.id AND trigger <> 'shadow_precheck')
             AND ar.worker_id <> ? AND aw.last_seen_at > ?))
         -- Trần GPU-s/người/24h: lượt mới chờ; lease đang chạy hết hạn vẫn được cứu (không cắt việc đang làm).
-        AND (t.status <> 'queued' OR ${OWNER_GPU_S} < ?)
+        -- Việc tự sửa của board không tính trần học viên (ngân sách đêm riêng, ticket 07).
+        AND (t.status <> 'queued' OR r.type = 'self' OR ${OWNER_GPU_S} < ?)
         ORDER BY ${FAIR_ORDER} LIMIT 1
     `).get(intent, now, intent, now, mode, workerId, now - leaseMs, now - DAY_MS, LIMITS.gpu_s_per_user_day.loose);
     if (!candidate) return null;
@@ -1389,10 +1417,14 @@ export function createAiBoardStore(db, hooks = {}) {
     if (!Number.isFinite(budgetUsed) || budgetUsed < 0) throw new WorkerContractError('invalid budget');
     const now = input.now ?? Date.now();
     const root = assertLease(ticketId, input.workerId, input.leaseToken, now);
-    const request = db.prepare('SELECT domain FROM requests WHERE id=?').get(root.source_request_id);
+    const request = db.prepare('SELECT domain, type FROM requests WHERE id=?').get(root.source_request_id);
+    const selfTarget = request.type === 'self'
+      ? db.prepare('SELECT substr(tag, ?) AS f FROM ai_ticket_tags WHERE ticket_id=? AND tag LIKE ?')
+        .get(SELF_TAG.length + 1, root.id, `${SELF_TAG}%`)?.f ?? '' // thiếu tag → '' khớp không file nào
+      : null;
     let checked;
     try {
-      checked = validatePlan(input.plan, request.domain);
+      checked = validatePlan(input.plan, request.domain, selfTarget);
     } catch (error) {
       if (!(error instanceof PlanGuardrailError)) throw error;
       recordPlanBlock(ticketId, { ...input, idempotencyKey, now }, error);
@@ -1841,6 +1873,7 @@ export function createAiBoardStore(db, hooks = {}) {
   return {
     db,
     createRequestWithRoot,
+    createSelfRequest,
     listRequestsForOwner,
     countPendingRoots,
     setRequestStatus,

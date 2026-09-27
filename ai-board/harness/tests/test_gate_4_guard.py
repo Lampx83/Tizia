@@ -79,6 +79,33 @@ def test_protected_paths_need_a_human():
         assert ("protected_path", "critical") in kinds(diff(path, added=["x"])), path
 
 
+SELF_AREA = ["ai-board/harness/skills/edit-html-text/SKILL.md", "ai-board/harness/prompts/brainstorm.md",
+             "ai-board/harness/retrieval_weights.json"]
+
+
+def test_only_a_self_request_may_edit_skills_gate_prompts_and_retrieval_weights():
+    """Self-improve ticket 04: same diff passes for type self, stays protected_path for every other type."""
+    for path in SELF_AREA:
+        text = diff(path, added=["match: đổi tên, sửa chữ"], removed=["match: sửa chữ"])
+        assert guard.scan(text, request_type="self")["findings"] == [], path
+        for other in (None, "feature", "other"):
+            found = {(f["check"], f["failure_class"]) for f in guard.scan(text, request_type=other)["findings"]}
+            assert ("protected_path", "critical") in found, (path, other)
+
+
+def test_a_self_request_still_cannot_touch_gate_code_lexicon_policy_contract_or_locks():
+    for path in ["ai-board/harness/gates/guard.py", "ai-board/harness/main.py", "ai-board/worker.py",
+                 "server/ai-board/guard-lexicon.json", "server/ai-board/policy.js", "server/ai-board/contract.json",
+                 "ai-board/harness/skills/skills.lock.json", "ai-board/harness/prompts/prompts.lock.json",
+                 "ai-board/harness/prompts/AIBOARD.md", "ai-board/harness/skills/edit-html-text/tools.py",
+                 "ai-board/harness/eval/strata-baseline.json", "package.json"]:
+        found = {(f["check"], f["failure_class"]) for f in guard.scan(diff(path, added=["x"]), request_type="self")["findings"]}
+        assert ("protected_path", "critical") in found, path
+    gone = ("diff --git a/ai-board/harness/skills/default/SKILL.md b/ai-board/harness/skills/default/SKILL.md\n"
+            "deleted file mode 100644\n--- a/ai-board/harness/skills/default/SKILL.md\n+++ /dev/null\n-x\n")
+    assert "protected_path" in {f["check"] for f in guard.scan(gone, request_type="self")["findings"]}
+
+
 def test_changed_python_must_parse(tmp_path):
     (tmp_path / "server").mkdir()
     (tmp_path / "server" / "tool.py").write_text("def broken(:\n", encoding="utf-8")

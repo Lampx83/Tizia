@@ -27,6 +27,8 @@ export function attachAiBoardRequestRoutes(router, {
 }) {
   router.post('/api/requests', requireAuth, requireEnrolled, async (req, res, next) => {
     const body = req.body || {};
+    // Yêu cầu board tự sửa chỉ hệ thống tạo (POST /api/ai-board/worker/self-requests), không bao giờ từ FAB.
+    if (body.type === 'self') return res.status(400).json({ error: 'invalid_request', message: 'Loại yêu cầu không hợp lệ.' });
     // Onboarding / làm rõ chỉ bật cho client có giao diện cho chúng (FAB public/ gửi header này). Client cũ
     // (FAB React web-next trên prod) vẫn gửi như trước: không 428, không kẹt ở phase clarifying.
     const features = new Set(String(req.get('X-AI-Board-Features') || '').split(',').map((f) => f.trim()));
@@ -396,6 +398,17 @@ export function attachAiBoardWorkerRoutes(router, {
   // Task eval đã gắn nhãn (self-improve ticket 02): server chia học / kiểm tra theo thời gian, worker không tự chia.
   router.post('/api/ai-board/worker/eval-tasks', authenticate, handle((_req, res) => {
     res.json(evalTaskSplit(store.db));
+  }));
+
+  // Board tự sửa (self-improve ticket 04): yêu cầu self, chủ là người dùng hệ thống ai-board; file ngoài vùng → 422.
+  router.post('/api/ai-board/worker/self-requests', authenticate, handle((req, res) => {
+    try {
+      res.json({ ok: true, ...store.createSelfRequest({ title: req.body?.title, detail: req.body?.detail,
+        targetFile: req.body?.target_file, idempotencyKey: req.body?.idempotency_key }) });
+    } catch (error) {
+      if (error instanceof RequestValidationError) return res.status(400).json({ error: 'invalid_request', message: error.message });
+      throw error;
+    }
   }));
 
   // Ảnh bản nháp (ticket 09): auth trước rồi mới parse body lớn; content-type riêng để express.json chung bỏ qua.

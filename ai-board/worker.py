@@ -123,9 +123,10 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
              repair_reason: str | None, catalog: dict | None,
              request_detail: str | None, memory_path,
              should_stop: Callable[[], bool] | None,
-             candidate_opts: dict | None = None) -> tuple[list[dict], str | None, dict | None, list[dict]]:
+             candidate_opts: dict | None = None,
+             request_type: str | None = None) -> tuple[list[dict], str | None, dict | None, list[dict], str | None]:
     """One pass of Gates 3→5.5 on fresh scratch + worktree. Return (public gates, failure kind, candidate,
-    ảnh chụp cổng 5 — file tạm cục bộ)."""
+    ảnh chụp cổng 5 — file tạm cục bộ, base sha các cổng đã dùng | None)."""
     scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
     state = {
         "plan": _execution_plan(plan), "scratch_repo": str(scratch),
@@ -135,6 +136,8 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
         state["catalog"] = catalog
     if request_detail:
         state["request_detail"] = request_detail
+    if request_type:
+        state["request_type"] = request_type  # 'self': cổng 4 nới vùng tự sửa + tính lại file khoá
     state.update(candidate_opts or {})  # folder (ticket 05): branch_name + branch_restore cho candidate.create
     if memory_path:
         state["memory_path"] = str(memory_path)
@@ -193,7 +196,7 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
     if lease_lost:
         drop_screenshots(shots)
         raise LeaseLostError("lease revoked during gate execution")
-    return gates, kind, candidate, shots
+    return gates, kind, candidate, shots, state.get("base_sha")
 
 
 def drop_screenshots(shots: list[dict]) -> None:
@@ -212,7 +215,8 @@ def drop_screenshots(shots: list[dict]) -> None:
 def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate,
                    cleanup: Callable, policy: dict | None = None, accepted_policy_hash: str | None = None,
                    request_detail: str | None = None, memory_path=None,
-                   should_stop: Callable[[], bool] | None = None, candidate_opts: dict | None = None) -> dict:
+                   should_stop: Callable[[], bool] | None = None, candidate_opts: dict | None = None,
+                   request_type: str | None = None) -> dict:
     """Run Gates 3→5.5, repairing an ordinary failure at most MAX_REPAIRS times. Return a redacted verdict.
 
     policy = snapshot catalog {hash, capabilities}; None only outside the HTTP worker (no catalog check).
@@ -235,11 +239,11 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
         if getattr(deps, "trace", None):
             deps.trace.attempt = len(repairs)
         drop_screenshots(shots)  # ảnh của lần trước lần sửa: bỏ
-        gates, kind, candidate, shots = _attempt(
+        gates, kind, candidate, shots, base_sha = _attempt(
             plan, ticket_id=ticket_id, checkout_source=checkout_source, deps=deps, budget=budget,
             run_gate=run_gate, cleanup=cleanup, repair_reason=repair_reason, catalog=catalog,
             request_detail=request_detail, memory_path=memory_path, should_stop=should_stop,
-            candidate_opts=candidate_opts,
+            candidate_opts=candidate_opts, request_type=request_type,
         )
         last = gates[-1]
         if kind != "ordinary" or len(repairs) >= MAX_REPAIRS:
@@ -261,6 +265,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
         "candidate": candidate if passed else None,
         "budget_used": int(getattr(budget, "units", 0)), "gates": gates,
         "screenshots": shots,  # chỉ cục bộ: HttpWorker lấy ra trước khi gửi verdict
+        **({"base_sha": base_sha} if base_sha else {}),  # task eval từ lần hỏng chạy lại đúng sha này
     }
 
 
@@ -632,6 +637,10 @@ class HttpWorker:
                 raise
         if self.planner:
             verdict = None
+            # Chỉ yêu cầu self mới gửi loại (change runner cũ không nhận tham số này).
+            type_kwargs = {"request_type": "self"} if (snapshot.get("request") or {}).get("type") == "self" else {}
+            # Skill cổng 1 của lượt lập plan này; lượt 'execute' (plan đã duyệt từ lease trước) không biết skill.
+            skill = None if executing else getattr(self.planner, "last_skill", None)
             if self.change_runner and planned["status"] == "planned":
                 limit = int((snapshot.get("ticket") or {}).get("budget_limit") or DEFAULT_BUDGET_LIMIT)
                 result = self._with_heartbeat(
@@ -641,7 +650,7 @@ class HttpWorker:
                         policy=snapshot.get("capability_policy") or {},
                         accepted_policy_hash=planned.get("capability_policy_hash"),
                         request_detail=(snapshot.get("request") or {}).get("detail"),
-                        should_stop=lost, **run_kwargs,
+                        should_stop=lost, **run_kwargs, **type_kwargs,
                     ), ticket_id, lease,
                     on_lease_lost=lambda lost_result: self.candidates.discard((lost_result or {}).get("candidate")),
                 )
@@ -654,7 +663,7 @@ class HttpWorker:
                     drop_screenshots(shots)
                 try:
                     verdict = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/verdict", {
-                        **lease, "run_id": run["id"], "verdict": result,
+                        **lease, "run_id": run["id"], "verdict": {**result, "skill": skill} if skill else result,
                         "idempotency_key": f"{prefix}:verdict",
                     })["verdict"]
                 except Exception as error:
@@ -711,8 +720,10 @@ class HarnessPlanner:
 
     @staticmethod
     def _canonical(request: dict, old: dict, signals: list[str] | None = None) -> dict:
-        """Plan cổng 1 → schema D0 của server. Có tín hiệu phức tạp → risk high → tier protected (admin cho phép)."""
-        old_caps = list(dict.fromkeys(old.get("capabilities") or []))
+        """Plan cổng 1 → schema D0 của server. Có tín hiệu phức tạp → risk high → tier protected (admin cho phép).
+        Yêu cầu self (board tự sửa): luôn self.config — server chỉ cấp năng lực này cho self, tier protected."""
+        old_caps = (["self.config"] if request.get("type") == "self"
+                    else list(dict.fromkeys(old.get("capabilities") or [])))
         steps = []
         for index, subtask in enumerate(old.get("subtasks") or [], start=1):
             file = subtask["file"].replace("\\", "/")
@@ -743,7 +754,10 @@ class HarnessPlanner:
             "steps": steps,
         }
 
+    last_skill = None  # skill cổng 1 của lần gọi gần nhất: worker gửi kèm verdict cùng lease
+
     def __call__(self, snapshot: dict, source=None) -> tuple[dict, int]:
+        self.last_skill = None
         request = self._request(snapshot)
         if request.get("folder_brief"):
             # Lách guard qua nhiều lượt nhỏ (ticket 06): soát lexicon trên cả bản mô tả gộp của folder.
@@ -763,6 +777,8 @@ class HarnessPlanner:
         state = {"checkout_source": str(source)} if source else {}
         for gate in PLAN_GATES:
             result = self.run_gate(gate, request, self.deps, budget, state)
+            if gate == 1:
+                self.last_skill = result.get("skill")
             if result.get("blocked"):
                 raise PlanBlockedError(f"gate {gate} blocked: {result.get('reason')}", {
                     "gate": gate, "reason": result.get("reason"), "signals": list(result.get("signals") or []),

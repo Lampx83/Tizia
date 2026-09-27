@@ -3,6 +3,7 @@
 Chỉ file này tạo/xóa nhánh ai-board/* trong repo nguồn. Tên nhánh theo contract.json (branch_pattern)."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import posixpath
@@ -233,6 +234,33 @@ def create(state: dict, source_repo: str | os.PathLike, *, base_ref: str = "HEAD
         raise
     state.update(owned, _owned_full_checkout=True, base_sha=base, commits=commits,
                  full_diff=[{"file": "", "diff": diff}])
+
+
+# File khoá hash → (thư mục, glob file được khoá, tên khoá của file). Cùng dạng test_skill_lock / test_prompt_lock.
+_LOCKS = {
+    "ai-board/harness/skills/skills.lock.json": ("ai-board/harness/skills", "*/SKILL.md", lambda p: p.parent.name),
+    "ai-board/harness/prompts/prompts.lock.json": ("ai-board/harness/prompts", "*.md", lambda p: p.name),
+}
+
+
+def relock(state: dict) -> None:
+    """Yêu cầu self, sau khi diff qua guard: tính lại sha256 skill/prompt vào file khoá, gộp vào commit cuối
+    của candidate (model không bao giờ viết file khoá: guard chặn). Raise OSError khi git lỗi."""
+    checkout = Path(state["full_checkout"])
+    changed = []
+    for lock, (folder, pattern, key) in _LOCKS.items():
+        fresh = {key(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in (checkout / folder).glob(pattern)}
+        if json.loads((checkout / lock).read_text(encoding="utf-8")) != fresh:
+            (checkout / lock).write_text(json.dumps(fresh, indent=2, sort_keys=True) + "\n", encoding="utf-8",
+                                         newline="\n")
+            changed.append(lock)
+    if not changed:
+        return
+    _git_out(["add", "--", *changed], checkout)
+    _git_out([*_AUTHOR, "commit", "-q", "--amend", "--no-edit"], checkout)
+    last = state["commits"][-1]
+    last.update(sha=_git_out(["rev-parse", "HEAD"], checkout).strip(), files=[*last["files"], *changed])
+    # full_diff giữ nguyên diff của model: catalog cổng 5.5 soát đúng thứ model viết, khoá là việc của pipeline.
 
 
 def ensure(state: dict, gate: float) -> dict | None:

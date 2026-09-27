@@ -24,10 +24,10 @@ const view = ({ deleted_at: _d, ...t }) => ({ ...t, expected_files: parse(t.expe
 /** Ghi lần hỏng của run thành task ứng viên. Lặp lại / đã có (kể cả đã xoá) → bỏ qua. Lỗi môi trường không tính. */
 export function recordMiss(db, runId, trigger, now = Date.now()) {
   const run = db.prepare(`
-    SELECT r.id, r.ticket_id, r.plan_hash, r.evidence_json, q.id AS request_id, q.title, q.detail, q.clarified_spec
+    SELECT r.id, r.ticket_id, r.plan_hash, r.evidence_json, q.id AS request_id, q.type, q.title, q.detail, q.clarified_spec
     FROM ai_runs r JOIN ai_tickets t ON t.id = r.ticket_id JOIN requests q ON q.id = t.source_request_id WHERE r.id=?
   `).get(Number(runId));
-  if (!run) return;
+  if (!run || run.type === 'self') return; // lượt board tự sửa: cổng eval của self tự chấm (ticket 05), không phải lần hỏng production
   const verdict = parse(run.evidence_json, {}).verdict ?? {};
   if (verdict.failure_class === 'transient') return; // hạ tầng hỏng, không phải lỗi của board
   const undo = trigger === 'undo';
