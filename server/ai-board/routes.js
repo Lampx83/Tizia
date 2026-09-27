@@ -6,7 +6,8 @@ import { checkIntake, recordIntakeFlags } from './intake-guard.js';
 import { classifyRequest as classifyWithModel, recordClassification } from './classifier.js';
 import { checkClarity } from './clarity-rules.js';
 import { activeChats } from './chat-activity.js';
-import { deleteEvalTask, evalTaskSplit, labelEvalTask, listEvalTasks, recordMiss, recordRequestMiss } from './eval-tasks.js';
+import { deleteEvalTask, evalTaskSplit, labelEvalTask, listEvalTasks, openPullRequests, recordMiss, recordRequestMiss,
+  reportPullRequest } from './eval-tasks.js';
 
 // Không cấu hình model phân loại → không gọi gì (hành vi trước ticket 04).
 const defaultClassifyRequest = (title, detail) => (
@@ -409,6 +410,14 @@ export function attachAiBoardWorkerRoutes(router, {
       if (error instanceof RequestValidationError) return res.status(400).json({ error: 'invalid_request', message: error.message });
       throw error;
     }
+  }));
+
+  // Trạng thái PR (self-improve ticket 03): worker hỏi GitHub các PR này rồi báo PR đã đóng; không webhook.
+  router.post('/api/ai-board/worker/pull-requests/open', authenticate, handle((_req, res) => {
+    res.json({ pull_requests: openPullRequests(store.db) });
+  }));
+  router.post('/api/ai-board/worker/pull-requests/state', authenticate, handle((req, res) => {
+    res.json({ pull_request: reportPullRequest(store.db, req.body) });
   }));
 
   // Ảnh bản nháp (ticket 09): auth trước rồi mới parse body lớn; content-type riêng để express.json chung bỏ qua.

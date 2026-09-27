@@ -91,6 +91,17 @@ class GitHub:
     def pull(self, number: int) -> dict:
         return self.transport("GET", f"/repos/{self.repo}/pulls/{int(number)}", None)
 
+    def pull_files(self, number: int) -> list[str]:
+        """Paths the PR changed (GitHub caps the list at 3000 = 30 pages)."""
+        files = []
+        for page in range(1, 31):
+            batch = self.transport("GET", f"/repos/{self.repo}/pulls/{int(number)}/files?per_page=100&page={page}",
+                                   None) or []
+            files += [f["filename"] for f in batch]
+            if len(batch) < 100:
+                break
+        return files
+
 
 class ScopeViolation(ValueError):
     """Candidate tried to write outside its child's allowed scope — critical, never repaired."""

@@ -1,7 +1,8 @@
 // ============================================================
 // Task eval từ production (self-improve ticket 02)
 // ============================================================
-// Lần hỏng (verdict blocked, "Thử cách khác", admin hoàn tác) → 1 task ứng viên / lượt;
+// Lần hỏng (verdict blocked, "Thử cách khác", admin hoàn tác, PR đóng không merge) → 1 task ứng viên / lượt;
+// PR merged → 1 task win đã có nhãn = file của PR (ticket 03, worker hỏi GitHub rồi báo);
 // admin gắn nhãn (file mong đợi, chuỗi phải có / không được có); worker lấy phần học /
 // phần kiểm tra chia theo thời gian. Không lưu tên hay mã người gửi.
 // Retire lúc đọc: quá retire_days, hoặc mọi file mong đợi không còn trong cây làm việc.
@@ -21,12 +22,24 @@ const parse = (json, fallback = null) => { try { return JSON.parse(json) ?? fall
 const view = ({ deleted_at: _d, ...t }) => ({ ...t, expected_files: parse(t.expected_files, []),
   must_contain: parse(t.must_contain), must_not_contain: parse(t.must_not_contain) });
 
+const RUN = `
+  SELECT r.id, r.ticket_id, r.plan_hash, r.evidence_json, q.id AS request_id, q.type, q.title, q.detail, q.clarified_spec
+  FROM ai_runs r JOIN ai_tickets t ON t.id = r.ticket_id JOIN requests q ON q.id = t.source_request_id WHERE r.id=?`;
+
+/** 1 task / (nguồn, lượt); đã có (kể cả đã xoá) → bỏ qua. */
+function insertTask(db, run, verdict, { source = 'miss', trigger, gate = null, failureClass = null, files, labelled = false }, now) {
+  db.prepare(`
+    INSERT OR IGNORE INTO ai_eval_tasks(source, trigger, request_id, run_id, request_text, clarified_spec, base_sha,
+      gate, failure_class, skill, expected_files, status, created_at, labelled_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(source, trigger, run.request_id, run.id, [run.title, run.detail].filter(Boolean).join('\n\n'),
+    run.clarified_spec ?? null, verdict.base_sha ?? verdict.candidate?.base_sha ?? null, gate, failureClass,
+    verdict.skill ?? null, JSON.stringify([...new Set(files)]), labelled ? 'labelled' : 'candidate', now, labelled ? now : null);
+}
+
 /** Ghi lần hỏng của run thành task ứng viên. Lặp lại / đã có (kể cả đã xoá) → bỏ qua. Lỗi môi trường không tính. */
 export function recordMiss(db, runId, trigger, now = Date.now()) {
-  const run = db.prepare(`
-    SELECT r.id, r.ticket_id, r.plan_hash, r.evidence_json, q.id AS request_id, q.type, q.title, q.detail, q.clarified_spec
-    FROM ai_runs r JOIN ai_tickets t ON t.id = r.ticket_id JOIN requests q ON q.id = t.source_request_id WHERE r.id=?
-  `).get(Number(runId));
+  const run = db.prepare(RUN).get(Number(runId));
   if (!run || run.type === 'self') return; // lượt board tự sửa: cổng eval của self tự chấm (ticket 05), không phải lần hỏng production
   const verdict = parse(run.evidence_json, {}).verdict ?? {};
   if (verdict.failure_class === 'transient') return; // hạ tầng hỏng, không phải lỗi của board
@@ -35,13 +48,8 @@ export function recordMiss(db, runId, trigger, now = Date.now()) {
     .get(run.ticket_id, run.plan_hash)?.plan_json);
   // Gợi ý nhãn: hoàn tác → file của commit bị hoàn tác; bị chặn → phạm vi plan đã nhắm.
   const files = undo ? (verdict.candidate?.commits ?? []).flatMap((c) => c.files) : plan?.allowed_scope ?? [];
-  db.prepare(`
-    INSERT OR IGNORE INTO ai_eval_tasks(source, trigger, request_id, run_id, request_text, clarified_spec, base_sha,
-      gate, failure_class, skill, expected_files, created_at)
-    VALUES ('miss', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(trigger, run.request_id, run.id, [run.title, run.detail].filter(Boolean).join('\n\n'), run.clarified_spec ?? null,
-    verdict.base_sha ?? verdict.candidate?.base_sha ?? null, undo ? null : verdict.gate_reached ?? null,
-    undo ? 'undone' : verdict.failure_class ?? null, verdict.skill ?? null, JSON.stringify([...new Set(files)]), now);
+  insertTask(db, run, verdict, { trigger, gate: undo ? null : verdict.gate_reached ?? null,
+    failureClass: undo ? 'undone' : verdict.failure_class ?? null, files }, now);
 }
 
 /** "Thử cách khác" → lượt hỏng cuối; hoàn tác → lượt đạt cuối (thay đổi bị hoàn tác) của yêu cầu. */
@@ -116,4 +124,49 @@ export function evalTaskSplit(db, now = Date.now()) {
   const cut = Math.floor(labelled.length * split);
   return { ready: labelled.length >= min, labelled: labelled.length, min_tasks: min, split,
     learning: labelled.slice(0, cut), test: labelled.slice(cut) };
+}
+
+// ── Trạng thái PR (ticket 03): worker hỏi GitHub các PR server còn coi là mở, báo lại khi đã đóng ──
+const PR_NUMBER = "json_extract(r.evidence_json, '$.pull_request.number')";
+const PR_STATES = new Set(['merged', 'closed']);
+
+/** Worker: PR server đã ghi mà chưa báo đóng — worker hỏi GitHub đúng các PR này. */
+export function openPullRequests(db) {
+  return db.prepare(`
+    SELECT DISTINCT ${PR_NUMBER} AS number, json_extract(r.evidence_json, '$.pull_request.url') AS url,
+      json_extract(r.evidence_json, '$.pull_request.branch') AS branch
+    FROM ai_runs r WHERE ${PR_NUMBER} IS NOT NULL AND ${PR_NUMBER} NOT IN (SELECT number FROM ai_pull_requests)
+    ORDER BY number
+  `).all();
+}
+
+/** Worker báo PR đã đóng: ghi trạng thái (lần báo đầu thắng); merged → task win có nhãn = file PR, đóng không
+ * merge → task miss ứng viên. Báo lại không sinh trùng. Yêu cầu self: chỉ ghi trạng thái (cổng eval self chấm riêng). */
+export function reportPullRequest(db, { number, state, closed_at: closedAt, files } = {}, now = Date.now()) {
+  const closed = typeof closedAt === 'number' ? closedAt : Date.parse(String(closedAt ?? ''));
+  if (!Number.isInteger(number) || number < 1 || !PR_STATES.has(state) || !Number.isFinite(closed)
+    || !Array.isArray(files) || files.length > 3000) {
+    throw new WorkerContractError('number, state merged|closed, closed_at and files[] required', 400, 'invalid_pr_state');
+  }
+  const prFiles = [...new Set(files.map((f) => String(f ?? '')).filter((f) => SAFE_PATH.test(f) && !f.split('/').includes('..')))];
+  return db.transaction(() => {
+    const runs = db.prepare(`SELECT r.id FROM ai_runs r WHERE ${PR_NUMBER} = ? ORDER BY r.id`).all(number);
+    if (!runs.length) throw new WorkerContractError('pull request not recorded', 404, 'pr_not_found');
+    db.prepare(`INSERT OR IGNORE INTO ai_pull_requests(number, state, closed_at, files, reported_at) VALUES (?, ?, ?, ?, ?)`)
+      .run(number, state, closed, JSON.stringify(prFiles), now);
+    const row = db.prepare('SELECT * FROM ai_pull_requests WHERE number=?').get(number);
+    const pr = { ...row, files: parse(row.files, []) };
+    for (const { id } of runs) {
+      const run = db.prepare(RUN).get(id);
+      if (run.type === 'self') continue;
+      const verdict = parse(run.evidence_json, {}).verdict ?? {};
+      // PR folder gom nhiều lượt: mỗi lượt chỉ nhận file PR mà commit của chính nó đã đổi.
+      const own = runs.length > 1 && new Set((verdict.candidate?.commits ?? []).flatMap((c) => c.files));
+      const files = own ? pr.files.filter((f) => own.has(f)) : pr.files;
+      insertTask(db, run, verdict, pr.state === 'merged'
+        ? { source: 'win', trigger: 'pr_merged', files, labelled: files.length >= 1 && files.length <= 50 }
+        : { trigger: 'pr_closed', failureClass: 'closed', files }, now);
+    }
+    return pr;
+  })();
 }

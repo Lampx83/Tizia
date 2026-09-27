@@ -75,7 +75,7 @@ async function fixture() {
 
   let n = 0;
   /** Yêu cầu mới + 1 lượt: claim → run → plan → verdict qua HTTP. */
-  async function miss(verdict = BLOCKED, { title = 'Sửa trang admin', files = ['public/admin.html'] } = {}) {
+  async function miss(verdict = BLOCKED, { title = 'Sửa trang admin', files = ['public/admin.html'], pr = null } = {}) {
     n += 1;
     store.createRequestWithRoot({ ownerUserId: 1, ownerDomain: 'pharmacy', ownerDisplayName: 'Lan Nguyễn',
       idempotencyKey: `eval-request-${n}`, title, detail: 'Chi tiết yêu cầu' });
@@ -91,6 +91,11 @@ async function fixture() {
     const verdictUrl = `/api/ai-board/worker/tickets/${ticket.id}/verdict`;
     const sent = await worker(verdictUrl, { ...body, verdict, idempotency_key: `eval-verdict-${n}` });
     assert.equal(sent.status, 200);
+    if (pr) {
+      const { branch, base_sha: baseSha, head_sha: headSha } = verdict.candidate;
+      store.recordPullRequest(ticket.id, { ...lease, runId: run.id, idempotencyKey: `eval-pr-${n}`, pullRequest: {
+        number: pr, url: `https://github.com/Lampx83/Tizia/pull/${pr}`, base: 'dev', branch, base_sha: baseSha, head_sha: headSha } });
+    }
     store.releaseLease(ticket.id, { ...lease, outcome: 'planned', idempotencyKey: `eval-release-${n}` });
     const resend = () => worker(verdictUrl, { ...body, verdict, idempotency_key: `eval-verdict-${n}` });
     return { requestId: n, ticketId: ticket.id, runId: run.id, resend };
@@ -242,5 +247,93 @@ test('the worker gets labelled tasks split by time: oldest 70% to learn from, ne
     assert.deepEqual(times, [...times].sort((x, y) => x - y));
     assert.ok(learning.every((t) => t.status === 'labelled'));
     assert.equal(JSON.stringify(res.body).includes('Lan'), false);
+  } finally { f.close(); }
+});
+
+// Self-improve ticket 03: worker hỏi GitHub trạng thái PR server còn coi là mở, báo merged / closed.
+const openPrs = async (f) => (await f.worker('/api/ai-board/worker/pull-requests/open')).body.pull_requests;
+const reportPr = (f, number, state, files = ['public/admin.html', 'public/js/admin-dashboard.js']) => f.worker(
+  '/api/ai-board/worker/pull-requests/state', { number, state, closed_at: '2026-09-28T01:00:00Z', files });
+
+test('a merged PR becomes one labelled win task with the PR files, and leaves the open list', async () => {
+  const f = await fixture();
+  try {
+    const { requestId, runId } = await f.miss(PASSING, { pr: 42 });
+    assert.deepEqual(await openPrs(f), [{ number: 42, url: 'https://github.com/Lampx83/Tizia/pull/42',
+      branch: PASSING.candidate.branch }]);
+    const res = await reportPr(f, 42, 'merged');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.pull_request.state, 'merged');
+    assert.equal(res.body.pull_request.closed_at, Date.parse('2026-09-28T01:00:00Z'));
+    assert.equal((await reportPr(f, 42, 'merged')).status, 200, 'báo lại: không lỗi');
+    assert.deepEqual(await openPrs(f), []);
+    const { tasks } = (await f.admin('GET', '/api/admin/ai-board/eval-tasks?status=labelled')).body;
+    assert.equal(tasks.length, 1);
+    const [task] = tasks;
+    assert.equal(task.source, 'win');
+    assert.equal(task.trigger, 'pr_merged');
+    assert.equal(task.request_id, requestId);
+    assert.equal(task.run_id, runId);
+    assert.equal(task.base_sha, SHA_A);
+    assert.deepEqual(task.expected_files, ['public/admin.html', 'public/js/admin-dashboard.js']);
+    assert.ok(task.labelled_at);
+  } finally { f.close(); }
+});
+
+test('a PR closed without merge becomes one candidate miss prefilled with the PR files', async () => {
+  const f = await fixture();
+  try {
+    const { runId } = await f.miss(PASSING, { pr: 43 });
+    assert.equal((await reportPr(f, 43, 'closed', ['public/admin.html'])).status, 200);
+    assert.equal((await reportPr(f, 43, 'merged')).body.pull_request.state, 'closed', 'lần báo đầu thắng');
+    const tasks = await f.candidates();
+    assert.equal(tasks.length, 1);
+    assert.equal(tasks[0].source, 'miss');
+    assert.equal(tasks[0].trigger, 'pr_closed');
+    assert.equal(tasks[0].run_id, runId);
+    assert.deepEqual(tasks[0].expected_files, ['public/admin.html']);
+    assert.equal((await f.admin('GET', '/api/admin/ai-board/eval-tasks?status=labelled')).body.tasks.length, 0);
+  } finally { f.close(); }
+});
+
+test('a folder PR shared by two runs labels each run with only its own files', async () => {
+  const f = await fixture();
+  try {
+    await f.miss(PASSING, { pr: 44 });
+    const second = { ...PASSING, candidate: { ...PASSING.candidate,
+      commits: [{ sha: SHA_B, title: 'ai-board(ticket-2): 1/1 y', files: ['public/js/admin-dashboard.js'] }] } };
+    await f.miss(second, { pr: 44 });
+    assert.equal((await openPrs(f)).length, 1);
+    await reportPr(f, 44, 'merged');
+    const { tasks } = (await f.admin('GET', '/api/admin/ai-board/eval-tasks?status=labelled')).body;
+    assert.deepEqual(tasks.map((t) => t.expected_files), [['public/admin.html'], ['public/js/admin-dashboard.js']]);
+  } finally { f.close(); }
+});
+
+test('a self PR records its state but never becomes an eval task', async () => {
+  const f = await fixture();
+  try {
+    const { requestId } = await f.miss(PASSING, { pr: 45 });
+    f.db.prepare("UPDATE requests SET type='self' WHERE id=?").run(requestId); // lối tắt: luồng self đủ (duyệt plan) ở test ticket 04
+    assert.deepEqual((await openPrs(f)).map((p) => p.number), [45]);
+    const res = await reportPr(f, 45, 'merged', ['ai-board/harness/skills/edit-html-text/SKILL.md']);
+    assert.equal(res.status, 200);
+    assert.equal(res.body.pull_request.state, 'merged');
+    assert.deepEqual(await openPrs(f), []);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM ai_eval_tasks').get().n, 0);
+  } finally { f.close(); }
+});
+
+test('PR state routes need the worker key, a recorded PR and a valid state', async () => {
+  const f = await fixture();
+  try {
+    await f.miss(PASSING, { pr: 46 });
+    assert.equal((await f.call('POST', '/api/ai-board/worker/pull-requests/open', { body: {} })).status, 401);
+    assert.equal((await f.call('POST', '/api/ai-board/worker/pull-requests/state', { body: {} })).status, 401);
+    assert.equal((await reportPr(f, 999, 'merged')).status, 404);
+    assert.equal((await reportPr(f, 46, 'open')).status, 400);
+    assert.equal((await f.worker('/api/ai-board/worker/pull-requests/state', { number: 46, state: 'merged',
+      closed_at: 'hôm qua', files: [] })).status, 400);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM ai_eval_tasks').get().n, 0);
   } finally { f.close(); }
 });
