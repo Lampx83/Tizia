@@ -1732,7 +1732,8 @@ const TABS = {
   curriculum: { label:'Curriculum', load: loadCurriculumTab },
   requests:   { label:'Góp ý', load: loadRequests, badge: () => reqCache.filter(r => r.status === 'pending').length },
   features:   { label:'Chức năng', load: loadFeatureFolders },
-  users:      { label:'Người dùng', load: loadUsers },
+  selfimprove: { label:'Tự cải thiện', load: loadSelfImprove },
+  users:     { label:'Người dùng', load: loadUsers },
   db:         { label:'CSDL',     load: loadDbTab },
   config:     { label:'Cấu hình', load: loadConfig },
 };
@@ -1784,6 +1785,65 @@ async function loadFeatureFolders() {
     toast({ approve: `Đã duyệt; ${res.data.authorized || 0} kế hoạch được cho chạy`, revoke: 'Đã thu hồi duyệt',
       released: 'Đã phát hành; yêu cầu sau sẽ mở chu kỳ mới' }[btn.dataset.folderAct]);
     loadFeatureFolders();
+  }));
+}
+
+// ─────────── Tự cải thiện (self-improve ticket 02: task eval từ lần hỏng, gắn nhãn 1 click) ───────────
+const EVAL_STATUS_LABEL = { candidate: 'Chờ gắn nhãn', labelled: 'Đã gắn nhãn', retired: 'Đã loại' };
+const EVAL_TRIGGER_LABEL = { verdict_blocked: 'bị chặn', retry: 'Thử cách khác', undo: 'admin hoàn tác',
+  pr_closed: 'PR bị đóng', pr_merged: 'PR đã merge' };
+let evalStatus = 'candidate';
+const lines = (v) => String(v || '').split('\n').map(s => s.trim()).filter(Boolean);
+const evalBox = (field, id, list, rows, ph) => `<textarea data-eval-${field}="${id}" rows="${rows}" placeholder="${ph}"
+  style="width:100%;min-width:180px;box-sizing:border-box;background:var(--bg);color:var(--txt);border:1px solid var(--border);border-radius:6px;padding:5px 7px;font:12px/1.4 ui-monospace,monospace"
+  >${esc((list || []).join('\n'))}</textarea>`;
+async function loadSelfImprove() {
+  const r = await api(`/api/admin/ai-board/eval-tasks?status=${evalStatus}`);
+  const host = $('#tabbody');
+  if (!r.ok) { host.innerHTML = `<div class="err">Lỗi: ${esc(r.data?.error || r.status)}</div>`; return; }
+  const { tasks = [], counts = {} } = r.data;
+  const editable = evalStatus !== 'retired';
+  host.innerHTML = `
+    <div class="toolbar">${Object.entries(EVAL_STATUS_LABEL).map(([k, l]) =>
+      `<button class="btn${k === evalStatus ? ' primary' : ''}" data-eval-status="${k}">${l} (${counts[k] || 0})</button>`).join(' ')}</div>
+    <p style="color:var(--muted);font-size:12.5px;margin:10px 0">Mỗi lần Ban hỏng ở production thành một task eval.
+      Gắn nhãn = tập file đúng (mỗi dòng 1 file), tuỳ chọn chuỗi phải có / không được có. Vòng tự cải thiện cần ≥ 20 task có nhãn.</p>
+    ${tasks.length ? `<table>
+      <thead><tr><th>#</th><th>Yêu cầu</th><th>Lần hỏng</th><th>File mong đợi</th><th>Phải có</th><th>Không được có</th><th></th></tr></thead>
+      <tbody>${tasks.map(t => `
+        <tr>
+          <td>${t.id}<div class="trace-sub">yêu cầu #${t.request_id} · lượt ${t.run_id}</div></td>
+          <td style="max-width:320px;white-space:pre-wrap">${esc(String(t.request_text).slice(0, 400))}
+            ${t.clarified_spec ? `<div class="trace-sub">spec: ${esc(String(t.clarified_spec).slice(0, 300))}</div>` : ''}</td>
+          <td><span class="pill">${esc(EVAL_TRIGGER_LABEL[t.trigger] || t.trigger)}</span>
+            <div class="trace-sub">${[t.gate != null && `cổng ${t.gate}`, t.failure_class, t.skill,
+              t.base_sha && String(t.base_sha).slice(0, 7), fmt(t.created_at)].filter(Boolean).map(esc).join(' · ')}</div></td>
+          <td>${evalBox('files', t.id, t.expected_files, 3, 'public/trang.html')}</td>
+          <td>${evalBox('must', t.id, t.must_contain, 2, 'tuỳ chọn')}</td>
+          <td>${evalBox('mustnot', t.id, t.must_not_contain, 2, 'tuỳ chọn')}</td>
+          <td style="white-space:nowrap">${editable ? `<button class="btn primary" data-eval-label="${t.id}">Gắn nhãn</button> ` : ''}
+            <button class="btn danger" data-eval-delete="${t.id}">Xoá</button></td>
+        </tr>`).join('')}</tbody>
+    </table>` : '<div class="loading">Không có task nào.</div>'}`;
+  host.querySelectorAll('[data-eval-status]').forEach(b => b.addEventListener('click', () => {
+    evalStatus = b.dataset.evalStatus; loadSelfImprove();
+  }));
+  host.querySelectorAll('[data-eval-label]').forEach(btn => btn.addEventListener('click', async () => {
+    const id = btn.dataset.evalLabel;
+    const val = (f) => lines(host.querySelector(`[data-eval-${f}="${id}"]`).value);
+    btn.disabled = true;
+    const res = await api(`/api/admin/ai-board/eval-tasks/${id}/label`, { method: 'POST',
+      body: JSON.stringify({ expected_files: val('files'), must_contain: val('must'), must_not_contain: val('mustnot') }) });
+    if (!res.ok) { toast('Lỗi: ' + (res.data?.message || res.data?.error || res.status), 'err'); btn.disabled = false; return; }
+    toast(`Đã gắn nhãn task #${id}`);
+    loadSelfImprove();
+  }));
+  host.querySelectorAll('[data-eval-delete]').forEach(btn => btn.addEventListener('click', async () => {
+    if (!confirm(`Xoá task #${btn.dataset.evalDelete}? Nội dung yêu cầu bị xoá hẳn.`)) return;
+    const res = await api(`/api/admin/ai-board/eval-tasks/${btn.dataset.evalDelete}`, { method: 'DELETE' });
+    if (!res.ok) return toast('Lỗi: ' + (res.data?.message || res.data?.error || res.status), 'err');
+    toast('Đã xoá');
+    loadSelfImprove();
   }));
 }
 

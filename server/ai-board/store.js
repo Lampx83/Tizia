@@ -254,7 +254,10 @@ function validatePrePrVerdict(value) {
   return { outcome: value.outcome, gate_reached: last.gate, reason: value.reason ? String(value.reason).slice(0, 1000) : last.reason,
     budget_used: budgetUsed, failure_class: failureClass,
     repairs: repairs.map((r) => ({ gate: Number(r.gate), reason: String(r.reason || '').slice(0, 1000) })),
-    candidate, gates };
+    candidate, gates,
+    // Tuỳ chọn (self-improve ticket 02): sha gốc + skill cổng 1 của lượt, để task eval từ lần hỏng chạy lại được.
+    ...(SHA.test(String(value.base_sha)) ? { base_sha: value.base_sha } : {}),
+    ...(/^[a-z0-9-]{1,80}$/.test(String(value.skill)) ? { skill: value.skill } : {}) };
 }
 
 const MAX_TRACE_BATCH = 50;
