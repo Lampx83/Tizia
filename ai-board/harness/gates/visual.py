@@ -16,6 +16,10 @@ import re
 # ponytail: nền ảnh (url) không đo được — coi như nền màu gần nhất; lấy mẫu pixel từ ảnh chụp nếu gặp sai.
 AUDIT_JS = r"""
 (sels) => {
+  // Hiện dần/trượt vào: đo trạng thái cuối, không đo khung hình giữa chừng (opacity ~0 → tương phản giả 1.00).
+  for (const a of document.getAnimations()) {
+    try { if (a.effect && a.effect.getComputedTiming().iterations !== Infinity) a.finish(); } catch (_) {}
+  }
   const vw = innerWidth, vh = innerHeight, cs = e => getComputedStyle(e);
   const key = e => {
     const cls = typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\s+/).slice(0, 2).join('.') : '';
@@ -47,6 +51,7 @@ AUDIT_JS = r"""
   const lum = c => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
     return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
   const ratio = (x, y) => { const [a, b] = [lum(x), lum(y)].sort((p, q) => q - p); return (a + 0.05) / (b + 0.05); };
+  const opacity = e => { let o = 1; for (let x = e; x; x = x.parentElement) o *= Number(cs(x).opacity); return o; };
   const own = e => { const s = cs(e), stops = [...(s.backgroundImage || '').matchAll(/rgba?\([^)]+\)/g)].map(m => rgba(m[0]));
     const weight = stops.reduce((a, c) => a + c[3], 0); // điểm màu trong suốt không kéo màu nền
     if (weight > 0) return [0, 1, 2].map(i => stops.reduce((a, c) => a + c[i] * c[3], 0) / weight).concat(Math.max(...stops.map(c => c[3])));
@@ -72,6 +77,7 @@ AUDIT_JS = r"""
     if (![...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) continue;
     if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'OPTION'].includes(e.tagName) || e.dataset.visualProbe || !shown(e)) continue;
     checked++;
+    if (opacity(e) < 0.1) continue; // gần như trong suốt: không phải chữ người dùng đọc
     const s = cs(e), { bg, text } = effective(e), r = ratio(text, bg);
     const size = parseFloat(s.fontSize), large = size >= 24 || (size >= 18.66 && Number(s.fontWeight) >= 700);
     if (r < (large ? 3 : 4.5)) contrast.push(key(e) + ' ' + r.toFixed(2));
