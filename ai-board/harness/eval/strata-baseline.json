@@ -1,0 +1,9 @@
+{
+ "school=it": 33.3,
+ "school=pharmacy": 100.0,
+ "style=named": 66.7,
+ "style=plain": 66.7,
+ "type=feature": 50.0,
+ "type=logic": 50.0,
+ "type=ui": 100.0
+}
