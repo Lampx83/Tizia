@@ -1013,9 +1013,9 @@ function injectStyles() {
   const css = `
     #sgf-fab {
       position: fixed; left: 18px; bottom: 18px; z-index: 2147483000;
-      height: 44px; border-radius: 22px;
+      width: 60px; height: 60px; border-radius: 50%;
       display: inline-flex; align-items: center; justify-content: center;
-      padding: 0 18px; border: 0; cursor: pointer;
+      padding: 0; border: 0; cursor: pointer;
       background: linear-gradient(135deg,#7c3aed,#4f46e5); color: #fff;
       font: 600 14px/1 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
       box-shadow: 0 8px 24px rgba(79,70,229,.45), 0 2px 6px rgba(0,0,0,.18);
@@ -1023,8 +1023,9 @@ function injectStyles() {
     }
     #sgf-fab:hover { transform: scale(1.08); filter: brightness(1.05); box-shadow: 0 14px 30px rgba(79,70,229,.55); }
     #sgf-fab:active { transform: scale(1); }
+    .sgf-fab-lbl { font-size: 13px; line-height: 1.1; text-align: center; }
     @media (max-width: 540px) {
-      #sgf-fab { left: 12px; bottom: 12px; height: 40px; }
+      #sgf-fab { left: 12px; bottom: 12px; width: 54px; height: 54px; font-size: 12px; }
     }
 
     .sgf-modal { position: fixed; inset: 0; z-index: 2147483001; display: grid; place-items: center; }

@@ -1298,7 +1298,7 @@ r.get('/api/export.csv', (_req, res) => {
 const HEADER_TAG = `<script type="module" src="js/auth-header.js?v=admin-role"></script>`;
 // ?v=attach2 — cache-bust khi nâng UX đính kèm (preview thumbnail, kéo-thả, dán
 // ảnh, lọc loại, chống trùng + siết whitelist bỏ SVG). Bump mỗi lần đổi UX FAB.
-const SGF_TAG = `<script type="module" src="js/suggestion-fab.js?v=no-icons"></script>\n<script type="module" src="js/notifications-bell.js"></script>`;
+const SGF_TAG = `<script type="module" src="js/suggestion-fab.js?v=no-icons2"></script>\n<script type="module" src="js/notifications-bell.js"></script>`;
 // Analytics: chỉ gtag loader (analytics.js). Consent banner đã được bỏ theo
 // yêu cầu user (jun 2026) — gây phiền và che nội dung. Analytics vẫn hoạt
 // động theo mặc định "denied" (xem analytics.js) cho đến khi có cơ chế consent
