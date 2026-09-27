@@ -625,4 +625,44 @@ export const H12HDTN_LESSONS = {
       { q: 'Lời khuyên quan trọng nhất cho bản thân ở giai đoạn tiếp theo là gì?', a: 'Dũng cảm thử — sợ thất bại là cản trở lớn nhất; hầu hết hối tiếc trong cuộc sống đến từ điều không dám thử chứ không phải từ những gì đã thử và thất bại.' },
     ]
   ),
+
+  'H12HDTN-w36-quiz': L(
+    'Kết thúc HĐTN-HN 12 — Khép lại phổ thông, mở ra cuộc đời',
+    'Đây là tuần cuối cùng của mười hai năm phổ thông. Từ đây, không còn thời khoá biểu nào được ai đó lập sẵn cho em — mọi lựa chọn đều là của em và hệ quả cũng vậy. Hãy cùng nhìn lại ba năm HĐTN-HN ở THPT và mang theo những gì cần thiết nhất để bước ra ngoài cánh cổng trường.',
+    ['Hệ thống hoá lộ trình hướng nghiệp ba năm THPT và nội dung lớp 12.', 'Chuẩn bị tâm thế và kĩ năng cho giai đoạn sau tốt nghiệp: học tiếp, học nghề hoặc đi làm.', 'Xây dựng kế hoạch hành động cho 12 tháng đầu tiên sau THPT.'],
+    [
+      { h: 'Ba năm THPT nhìn lại' },
+      { ul: [
+        'Lớp 10 — KHÁM PHÁ RỘNG: hiểu tính cách, giá trị, năng lực; thử nhiều lĩnh vực; chưa chốt gì cả.',
+        'Lớp 11 — TRẢI NGHIỆM SÂU: kiểm chứng sự phù hợp bằng trải nghiệm thật; tìm hiểu thông tin đào tạo; thu hẹp dần lựa chọn.',
+        'Lớp 12 — QUYẾT ĐỊNH: chốt định hướng, chuẩn bị hồ sơ và nguyện vọng, rèn kĩ năng tự lập, sẵn sàng cho giai đoạn sau phổ thông.',
+      ] },
+      { h: 'Những gì HĐTN-HN 12 đã trang bị' },
+      { ul: [
+        'Ra quyết định nghề nghiệp có căn cứ: đối chiếu bản thân với yêu cầu nghề và thực tế thị trường lao động.',
+        'Kĩ năng hồ sơ và tuyển sinh: đọc đề án tuyển sinh, hiểu phương thức xét tuyển, sắp xếp nguyện vọng theo nhóm ước mơ – vừa sức – an toàn.',
+        'Kĩ năng sống tự lập: quản lí thời gian và tài chính, tự chăm sóc sức khoẻ, việc nhà cơ bản, xử lí tình huống khẩn cấp.',
+        'Sức bền tinh thần: nhận diện và ứng phó với căng thẳng, thất bại và thay đổi — những thứ chắc chắn sẽ đến.',
+      ] },
+      { h: 'Ba điều cần mang theo' },
+      { ul: [
+        '"Một kì thi không phải cả cuộc đời." Kết quả tuyển sinh mở hoặc đóng một cánh cửa, nhưng không quyết định em trở thành người thế nào. Rất nhiều con đường dẫn tới cùng một đích.',
+        '"Tự học là năng lực bền nhất." Kiến thức chuyên ngành sẽ lạc hậu, công cụ sẽ đổi, nghề nghiệp sẽ chuyển dạng. Khả năng tự học lại từ đầu là thứ duy nhất đi cùng em suốt đời.',
+        '"Chủ động hơn chờ đợi." Cơ hội hiếm khi được trao cho người ngồi yên. Hỏi, thử, đề nghị, xin phản hồi — từ bây giờ không còn ai nhắc em làm những việc đó nữa.',
+      ] },
+      { h: 'Kế hoạch 12 tháng đầu sau THPT' },
+      { ul: [
+        'Ba tháng đầu: ổn định chỗ ở, nhịp sinh hoạt và tài chính; làm quen môi trường học tập hoặc làm việc mới.',
+        'Sáu tháng đầu: xây dựng ít nhất hai mối quan hệ chất lượng trong môi trường mới; tìm một người đi trước để học hỏi.',
+        'Trong năm đầu: bổ sung một kĩ năng mà môi trường mới đòi hỏi nhưng phổ thông chưa dạy; tham gia một hoạt động ngoài việc học hoặc việc làm chính.',
+        'Cuối năm đầu: nhìn lại trung thực — hướng đi này có đúng như hình dung không, cần điều chỉnh gì. Điều chỉnh sớm rẻ hơn rất nhiều so với chịu đựng.',
+      ] },
+      { note: 'Kết thúc phổ thông không phải là đích đến mà là vạch xuất phát. Điều quan trọng không phải em bắt đầu từ đâu, mà là em có tiếp tục đi hay không.' },
+    ],
+    [
+      { q: 'Nếu kết quả tuyển sinh không như mong muốn, em có những phương án nào?', a: 'Rất nhiều, và việc liệt kê trước sẽ giúp em bình tĩnh nếu tình huống đó xảy ra: xét tuyển bổ sung vào ngành hoặc trường khác; chọn ngành gần với ngành yêu thích rồi học thêm hoặc chuyển tiếp sau; học cao đẳng hoặc trường nghề với thời gian ngắn và cơ hội việc làm cụ thể; đi làm một thời gian để tích luỹ kinh nghiệm và tài chính rồi học tiếp; ôn lại và thi năm sau. Điều quan trọng là quyết định dựa trên tính toán chứ không phải trong lúc đang thất vọng nhất.' },
+      { q: 'Em sắp sống xa nhà lần đầu. Hãy lập danh sách những kĩ năng cần rèn ngay trong hè này.', a: 'Nhóm sinh hoạt: nấu vài món cơ bản, giặt giũ, dọn dẹp, đi chợ và bảo quản thực phẩm. Nhóm tài chính: lập ngân sách tháng, ghi chép chi tiêu, phân biệt "cần" với "muốn", dự phòng khoản phát sinh. Nhóm hành chính: các loại giấy tờ tuỳ thân, bảo hiểm y tế, đăng kí tạm trú, sử dụng dịch vụ ngân hàng an toàn. Nhóm an toàn: số điện thoại khẩn cấp, xử lí khi ốm, nhận biết các hình thức lừa đảo nhắm vào sinh viên năm nhất.' },
+      { q: 'Lời khuyên quan trọng nhất em muốn nhắn cho chính mình của một năm sau là gì?', a: 'Câu hỏi mở, không có đáp án đúng. Một câu trả lời sâu sắc thường chạm tới ba điều: dám thử dù chưa chắc thành công — phần lớn hối tiếc đến từ việc không dám thử chứ không phải từ thất bại; đừng so sánh tốc độ của mình với người khác, vì mỗi người xuất phát từ hoàn cảnh khác nhau; và giữ liên lạc với những người đã đồng hành cùng em ở phổ thông, vì các mối quan hệ cần được nuôi dưỡng chứ không tự tồn tại.' },
+    ]
+  ),
 };

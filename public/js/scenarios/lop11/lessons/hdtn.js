@@ -623,4 +623,38 @@ export const H11HDTN_LESSONS = {
       { q: 'Ba điều em cần hoàn thành trong năm lớp 12 là gì?', a: 'Câu trả lời tuỳ cá nhân. Một kế hoạch tốt thường có ít nhất một mục tiêu học tập (điểm số/thi), một mục tiêu hướng nghiệp (quyết định đào tạo sau THPT) và một mục tiêu phát triển bản thân (kĩ năng hay trải nghiệm).' },
     ]
   ),
+
+  'H11HDTN-w36-quiz': L(
+    'Kết thúc HĐTN-HN 11 — Hành trang vào lớp 12',
+    'Lớp 11 là năm bản lề: không còn mới mẻ như lớp 10, cũng chưa chịu áp lực thi cử như lớp 12. Đây chính là năm quý nhất để trải nghiệm sâu và thu hẹp dần lựa chọn. Tuần cuối, ta hệ thống lại cả năm và bước vào lớp 12 với một định hướng đã có cơ sở.',
+    ['Hệ thống hoá nội dung HĐTN-HN lớp 11 theo bốn mạch.', 'Đánh giá mức độ rõ ràng của định hướng nghề nghiệp bản thân sau hai năm THPT.', 'Lập cam kết và kế hoạch cụ thể cho năm lớp 12 — năm quyết định.'],
+    [
+      { h: 'Bức tranh toàn cảnh HĐTN-HN 11' },
+      { ul: [
+        'Hướng vào bản thân: sự tự tin và khả năng thích ứng; quản lí bản thân và tài chính ở mức nâng cao; cân bằng học tập – trải nghiệm – sức khoẻ.',
+        'Hướng đến xã hội: giao tiếp hiệu quả; xây dựng và giữ gìn các mối quan hệ; trách nhiệm với gia đình và cộng đồng.',
+        'Hướng đến tự nhiên: bảo vệ môi trường bằng dự án cụ thể; sống xanh và tiêu dùng có trách nhiệm.',
+        'Hướng nghiệp: các nhóm nghề; đánh giá sự phù hợp nghề; tìm hiểu thông tin đào tạo; tham vấn hướng nghiệp; rèn luyện theo yêu cầu nghề; lập kế hoạch hướng nghiệp.',
+      ] },
+      { h: 'Ba nguyên tắc chọn hướng đi đã học' },
+      { ul: [
+        'Phù hợp nghề = giao điểm của NĂNG LỰC, TÍNH CÁCH – GIÁ TRỊ và YÊU CẦU THỰC TẾ của nghề. Thiếu một vế nào cũng dẫn tới lựa chọn lệch.',
+        'Mọi phán đoán về sự phù hợp phải được KIỂM CHỨNG bằng trải nghiệm thật: làm thử, quan sát người trong nghề, tham gia dự án — không dừng ở cảm giác hay trắc nghiệm trên mạng.',
+        'Thông tin tuyển sinh chỉ lấy từ NGUỒN CHÍNH THỨC: đề án tuyển sinh trên website của trường và thông tin từ Bộ GD&ĐT. Tin đồn và quảng cáo thương mại đều có thể sai lệch.',
+      ] },
+      { h: 'Chuẩn bị cho lớp 12' },
+      { ul: [
+        'Chốt sơ bộ 2–3 hướng ngành nghề khả thi, kèm lí do dựa trên bằng chứng chứ không phải cảm tính.',
+        'Lập kế hoạch ôn thi với mục tiêu điểm số cụ thể cho từng môn xét tuyển.',
+        'Tìm hiểu trước phương thức xét tuyển của các trường trong tầm ngắm: tổ hợp môn, chứng chỉ, học bạ, kì thi riêng.',
+        'Giữ sức khoẻ thể chất và tâm thần — năm lớp 12 dài và nhiều áp lực, thể lực là tài nguyên chứ không phải thứ hi sinh được.',
+      ] },
+      { note: 'Kết thúc lớp 11, em chưa cần câu trả lời cuối cùng — nhưng nên trả lời được: "Em đang nghiêng về hướng nào, và đâu là bằng chứng cho việc đó?"' },
+    ],
+    [
+      { q: 'Sau hai năm THPT, hãy tự đánh giá mức độ rõ ràng trong định hướng nghề nghiệp của em và nêu bằng chứng.', a: 'Một câu trả lời tốt không dừng ở "em đã rõ hơn" mà nêu bằng chứng cụ thể: đã trải nghiệm việc gì, quan sát hay phỏng vấn ai trong nghề, kết quả học tập ở các môn liên quan ra sao, và điều gì khiến em loại bớt một hướng từng cân nhắc. Loại bớt một lựa chọn có căn cứ cũng là tiến bộ, không phải thất bại.' },
+      { q: 'Em đọc trên một nhóm mạng xã hội rằng ngành mình thích "sắp bão hoà, ra trường thất nghiệp". Em xử lí thông tin này thế nào?', a: 'Không bác bỏ cũng không tin ngay. Ba bước: (1) Kiểm chứng nguồn — thông tin này từ đâu, có số liệu nào từ cơ quan thống kê hay báo cáo thị trường lao động không? (2) Tìm nguồn chính thức — tỉ lệ việc làm sau tốt nghiệp thường có trong đề án tuyển sinh của trường. (3) Hỏi người trong nghề — một cuộc trò chuyện 30 phút với người đang làm nghề đó cho thông tin sát thực tế hơn hàng trăm bình luận ẩn danh.' },
+      { q: 'Ba việc quan trọng nhất em cần hoàn thành trong hè trước lớp 12 là gì?', a: 'Một kế hoạch hè hợp lí thường gồm: (1) một mục tiêu học tập — ôn nền tảng các môn xét tuyển, không để mất gốc trước năm cuối; (2) một mục tiêu hướng nghiệp — tìm hiểu kĩ phương thức xét tuyển và yêu cầu của 2–3 ngành trong tầm ngắm; (3) một mục tiêu cho bản thân — nghỉ ngơi thật sự, giữ sức khoẻ và các mối quan hệ, vì lớp 12 sẽ tiêu tốn rất nhiều năng lượng.' },
+    ]
+  ),
 };
