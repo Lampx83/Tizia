@@ -63,12 +63,14 @@ function autoMount() {
   root.innerHTML = `
     <button id="sgf-fab" type="button" aria-label="Gửi đề nghị tới Ban điều hành AI"
             title="Gửi đề nghị cho Ban điều hành AI">
+      <span class="sgf-fab-ico">🏛️</span>
       <span class="sgf-fab-lbl">Đề nghị</span>
     </button>
     <div id="sgf-modal" class="sgf-modal" hidden>
       <div class="sgf-backdrop" data-close></div>
       <div class="sgf-dialog" role="dialog" aria-modal="true" aria-labelledby="sgf-title">
         <div class="sgf-head">
+          <div class="sgf-head-ico">🏛️</div>
           <div class="sgf-head-text">
             <h3 id="sgf-title">Ban điều hành AI</h3>
             <p>Trường do <b>AI điều hành</b> — gửi đề nghị, AI sẽ xem xét &amp;
@@ -1023,9 +1025,11 @@ function injectStyles() {
     }
     #sgf-fab:hover { transform: scale(1.08); filter: brightness(1.05); box-shadow: 0 14px 30px rgba(79,70,229,.55); }
     #sgf-fab:active { transform: scale(1); }
-    .sgf-fab-lbl { font-size: 13px; line-height: 1.1; text-align: center; }
+    .sgf-fab-ico { font-size: 28px; line-height: 1; }
+    .sgf-fab-lbl { display: none; }
     @media (max-width: 540px) {
-      #sgf-fab { left: 12px; bottom: 12px; width: 54px; height: 54px; font-size: 12px; }
+      #sgf-fab { left: 12px; bottom: 12px; width: 54px; height: 54px; }
+      .sgf-fab-ico { font-size: 24px; }
     }
 
     .sgf-modal { position: fixed; inset: 0; z-index: 2147483001; display: grid; place-items: center; }
@@ -1038,6 +1042,7 @@ function injectStyles() {
       font: 14px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
     }
     .sgf-head { display: flex; gap: 12px; align-items: flex-start; padding: 18px 20px 8px; }
+    .sgf-head-ico { font-size: 30px; line-height: 1; }
     .sgf-head-text { flex: 1; }
     .sgf-head-text h3 { margin: 0 0 4px; font-size: 17px; color: #1f1147; }
     .sgf-head-text p { margin: 0; font-size: 12.5px; color: #4b5563; }

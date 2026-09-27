@@ -93,7 +93,7 @@ async function autoMount() {
   }
   function paintList() {
     if (!items.length) {
-      listEl.innerHTML = `<div class="nbell-empty">Chưa có phản hồi nào. Gửi đề nghị qua nút Đề nghị ở góc phải bên dưới.</div>`;
+      listEl.innerHTML = `<div class="nbell-empty">Chưa có phản hồi nào. Gửi đề nghị qua nút Ban điều hành ở góc trái bên dưới.</div>`;
       return;
     }
     listEl.innerHTML = items.map(it => `
