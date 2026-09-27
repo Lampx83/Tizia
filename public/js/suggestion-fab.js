@@ -80,26 +80,13 @@ function autoMount() {
         </div>
 
         <div id="sgf-pending" class="sgf-clar-banner" hidden role="status"></div>
+        <div class="sgf-tabs" role="tablist">
+          <button type="button" class="sgf-tab" role="tab" data-tab="new" aria-selected="true">✍️ Gửi đề nghị mới</button>
+          <button type="button" class="sgf-tab" role="tab" data-tab="mine" aria-selected="false">📂 Của bạn
+            <span class="sgf-tab-badge" id="sgf-tab-badge" hidden></span></button>
+        </div>
+        <div class="sgf-pane" id="sgf-pane-new" role="tabpanel">
         <section id="sgf-onboard" class="sgf-onboard" hidden aria-live="polite"></section>
-        <section id="sgf-clarify" class="sgf-clarify" hidden>
-          <div class="sgf-clar-banner sgf-clar-live" role="status">🏛️ <span>Ban điều hành cần trao đổi thêm để làm rõ yêu cầu
-            <b id="sgf-clar-title"></b></span></div>
-          <div class="sgf-clar-log" id="sgf-clar-log" aria-live="polite"></div>
-          <div class="sgf-clar-reply" id="sgf-clar-reply" hidden>
-            <textarea id="sgf-clar-in" class="sgf-in" rows="2" maxlength="2000"
-                      placeholder="Trả lời Ban điều hành… (Enter để gửi, Shift+Enter xuống dòng)"></textarea>
-            <div class="sgf-bar"><span class="sgf-msg" id="sgf-clar-count"></span>
-              <button type="button" class="sgf-send" id="sgf-clar-send">Trả lời</button></div>
-          </div>
-          <div class="sgf-clar-sum" id="sgf-clar-sum" hidden>
-            <div class="sgf-ob-q">Ban hiểu yêu cầu của bạn như sau — đúng chưa?</div>
-            <textarea id="sgf-clar-spec" class="sgf-in" rows="7" maxlength="4000" readonly></textarea>
-            <div class="sgf-bar"><button type="button" class="sgf-chip" id="sgf-clar-edit">✏️ Sửa</button>
-              <button type="button" class="sgf-send" id="sgf-clar-ok">✓ Đúng, gửi</button></div>
-          </div>
-          <div class="sgf-msg" id="sgf-clar-msg"></div>
-        </section>
-
         <form id="sgf-form" class="sgf-form">
           <label class="sgf-lab">Loại đề nghị
             <select id="sgf-type" class="sgf-in">
@@ -138,8 +125,30 @@ function autoMount() {
             <button type="submit" class="sgf-send" id="sgf-send">📨 Gửi tới Ban điều hành</button>
           </div>
         </form>
+        </div>
 
+        <div class="sgf-pane" id="sgf-pane-mine" role="tabpanel" hidden>
         <div class="sgf-folders" id="sgf-folders" hidden></div>
+        <div id="sgf-clar-slot">
+        <section id="sgf-clarify" class="sgf-clarify" hidden>
+          <div class="sgf-clar-banner sgf-clar-live" role="status">🏛️ <span>Ban điều hành cần trao đổi thêm để làm rõ yêu cầu
+            <b id="sgf-clar-title"></b></span></div>
+          <div class="sgf-clar-log" id="sgf-clar-log" aria-live="polite"></div>
+          <div class="sgf-clar-reply" id="sgf-clar-reply" hidden>
+            <textarea id="sgf-clar-in" class="sgf-in" rows="2" maxlength="2000"
+                      placeholder="Trả lời Ban điều hành… (Enter để gửi, Shift+Enter xuống dòng)"></textarea>
+            <div class="sgf-bar"><span class="sgf-msg" id="sgf-clar-count"></span>
+              <button type="button" class="sgf-send" id="sgf-clar-send">Trả lời</button></div>
+          </div>
+          <div class="sgf-clar-sum" id="sgf-clar-sum" hidden>
+            <div class="sgf-ob-q">Ban hiểu yêu cầu của bạn như sau — đúng chưa?</div>
+            <textarea id="sgf-clar-spec" class="sgf-in" rows="7" maxlength="4000" readonly></textarea>
+            <div class="sgf-bar"><button type="button" class="sgf-chip" id="sgf-clar-edit">✏️ Sửa</button>
+              <button type="button" class="sgf-send" id="sgf-clar-ok">✓ Đúng, gửi</button></div>
+          </div>
+          <div class="sgf-msg" id="sgf-clar-msg"></div>
+        </section>
+        </div>
 
         <div class="sgf-inbox">
           <div class="sgf-inbox-head">
@@ -147,6 +156,7 @@ function autoMount() {
             <button type="button" class="sgf-reload" id="sgf-reload" title="Tải lại">↻</button>
           </div>
           <div class="sgf-inbox-list" id="sgf-inbox">Đang tải…</div>
+        </div>
         </div>
       </div>
     </div>
@@ -440,6 +450,30 @@ function bind(root) {
   const pendingBox = root.querySelector('#sgf-pending');
   let clarifyId = null;
   let lastSummary = null;
+  const paneNew = root.querySelector('#sgf-pane-new');
+  const paneMine = root.querySelector('#sgf-pane-mine');
+  const clarSlot = root.querySelector('#sgf-clar-slot');
+  const tabBadge = root.querySelector('#sgf-tab-badge');
+
+  function showTab(name) {
+    root.querySelectorAll('[data-tab]').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === name)));
+    paneNew.hidden = name !== 'new';
+    paneMine.hidden = name !== 'mine';
+  }
+  root.querySelector('.sgf-tabs').addEventListener('click', (e) => {
+    const tab = e.target.closest('[data-tab]');
+    if (tab) showTab(tab.dataset.tab);
+  });
+
+  // Phần trao đổi là phần mở rộng của đúng yêu cầu đó trong "Của bạn"; chưa có item thì đứng đầu danh sách.
+  function mountClarify() {
+    const host = clarifyId && inbox.querySelector(`[data-item="${clarifyId}"]`);
+    (host || clarSlot).appendChild(clarifyBox);
+  }
+  function toggleClarify(id) {
+    if (clarifyId === Number(id)) { clarifyBox.hidden = !clarifyBox.hidden; return; } // thu gọn, giữ nguyên hội thoại
+    startClarify(id);
+  }
 
   async function csrfToken() {
     const r = await fetch('api/csrf', { credentials: 'same-origin' });
@@ -474,10 +508,10 @@ function bind(root) {
 
   async function startClarify(id, title) {
     clarifyId = Number(id);
-    form.hidden = true;
-    onboard.hidden = true;
+    showTab('mine');
     pendingBox.hidden = true;
     clarifyBox.hidden = false;
+    mountClarify();
     clarLog.innerHTML = '';
     clarMsg.textContent = '';
     root.querySelector('#sgf-clar-title').textContent = title ? `«${title}»` : '';
@@ -572,8 +606,6 @@ function bind(root) {
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.message || 'Chưa gửi được — thử lại sau.');
       clarifyBox.hidden = true;
-      form.hidden = false;
-      msg.textContent = '✓ Đã gửi! Ban điều hành bắt đầu xử lý yêu cầu đã làm rõ.';
       clarifyId = null;
       refreshPending();
       loadInbox();
@@ -591,6 +623,8 @@ function bind(root) {
       if (!r.ok) return;
       const { items } = await r.json();
       fab.classList.toggle('sgf-fab-ask', items.length > 0);
+      tabBadge.hidden = !items.length;
+      tabBadge.textContent = items.length;
       fab.title = items.length ? 'Ban điều hành đang chờ bạn trả lời' : 'Gửi đề nghị cho Ban điều hành AI';
       const first = items[0];
       pendingBox.hidden = !first || clarifyId !== null;
@@ -602,14 +636,16 @@ function bind(root) {
   }
   pendingBox.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-clarify]');
-    if (btn) startClarify(btn.dataset.clarify);
+    if (btn) toggleClarify(btn.dataset.clarify);
   });
   // Khách chưa đăng nhập không có yêu cầu nào để trả lời: khỏi gọi API mỗi lần xem trang.
   if (typeof getPlayerName === 'function' && getPlayerName()) refreshPending();
 
   const open = () => {
     modal.hidden = false;
-    setTimeout(() => root.querySelector('#sgf-title-in')?.focus(), 50);
+    // Đang có câu Ban chờ trả lời → mở "Của bạn"; không thì mở form gửi mới.
+    showTab(fab.classList.contains('sgf-fab-ask') ? 'mine' : 'new');
+    if (!paneNew.hidden) setTimeout(() => root.querySelector('#sgf-title-in')?.focus(), 50);
     ensureOnboarding();
     refreshPending();
     loadInbox();
@@ -621,6 +657,7 @@ function bind(root) {
   if (hashed) {
     if (hashed[1] === 'thread') openThreadId = hashed[2];
     open();
+    showTab('mine');
     if (hashed[1] === 'clarify') startClarify(hashed[2]);
     history.replaceState(null, '', location.pathname + location.search);
   }
@@ -712,7 +749,7 @@ function bind(root) {
         return;
       }
       const created = await r.json().catch(() => ({}));
-      msg.textContent = '✓ Đã gửi! Hiệu trưởng AI đang xem xét…';
+      msg.textContent = '✓ Đã gửi! Theo dõi ở mục «Của bạn».';
       pendingRequestKey = null;
       if (created.clarify?.needed) {
         msg.textContent = '';
@@ -786,6 +823,7 @@ function bind(root) {
     const add = e.target.closest('[data-folder-add]');
     if (add) {
       if (typeSel.value === 'feature') typeSel.value = 'other';
+      showTab('new');
       syncFolderRow();
       folderSel.value = add.dataset.folderAdd;
       root.querySelector('#sgf-title-in').focus();
@@ -843,6 +881,7 @@ function bind(root) {
 
   async function loadInbox() {
     loadFolders();
+    clarSlot.appendChild(clarifyBox); // khỏi bị xoá theo innerHTML của danh sách
     inbox.textContent = 'Đang tải…';
     try {
       const dom = inferDomain();
@@ -859,6 +898,7 @@ function bind(root) {
         return;
       }
       inbox.innerHTML = shown.map(it => renderItem(it, me)).join('');
+      mountClarify();
       // Hủy 2 bước: bấm lần 1 để xác nhận, lần 2 mới gửi (viewer không có confirm()).
       inbox.querySelectorAll('[data-req-cancel]').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -890,7 +930,7 @@ function bind(root) {
         });
       });
       inbox.querySelectorAll('[data-clarify]').forEach(btn => {
-        btn.addEventListener('click', () => startClarify(btn.dataset.clarify));
+        btn.addEventListener('click', () => toggleClarify(btn.dataset.clarify));
       });
       // "Thử cách khác": lượt hỏng → Ban lập kế hoạch mới (server chỉ nhận root hỏng của chính mình).
       inbox.querySelectorAll('[data-req-retry]').forEach(btn => {
@@ -955,7 +995,7 @@ function renderItem(it, me = '') {
       }).join('')}
     </div>` : '';
   return `
-    <div class="sgf-it">
+    <div class="sgf-it" data-item="${it.id}">
       <div class="sgf-it-line">
         <span class="sgf-it-ico">${t.icon}</span>
         <span class="sgf-it-title">${escapeHtml(it.title)}</span>
@@ -1030,6 +1070,17 @@ function injectStyles() {
     }
     .sgf-x:hover { background: rgba(0,0,0,.1); }
 
+    .sgf-tabs { display: flex; gap: 4px; padding: 0 20px; border-bottom: 1px solid #e5e7eb; }
+    .sgf-tab { flex: 1; padding: 9px 6px; border: 0; border-bottom: 2px solid transparent; background: none;
+      font: inherit; font-size: 13px; color: #64748b; cursor: pointer; }
+    .sgf-tab[aria-selected="true"] { border-bottom-color: #6366f1; color: #4338ca; font-weight: 700; }
+    .sgf-tab-badge { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px; background: #f59e0b;
+      color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; }
+    .sgf-pane { padding-top: 8px; }
+    .sgf-pane[hidden], .sgf-tab-badge[hidden] { display: none; }
+    .sgf-it .sgf-clarify { padding: 8px 0 0; margin-top: 8px; border-top: 1px dashed #c7d2fe; }
+    .sgf-it .sgf-clar-live { display: none; } /* nằm trong đúng yêu cầu rồi: khỏi nhắc lại tiêu đề */
+    #sgf-clar-slot > .sgf-clarify { padding: 0 20px 12px; }
     .sgf-form { display: flex; flex-direction: column; gap: 10px; padding: 8px 20px 14px; }
     .sgf-form[hidden], .sgf-onboard[hidden] { display: none; }
     .sgf-onboard { display: flex; flex-direction: column; gap: 8px; padding: 8px 20px 16px; }
@@ -1180,6 +1231,9 @@ function injectStyles() {
     @media (prefers-color-scheme: dark) {
       .sgf-dialog { background: #1e1b4b; color: #e5e7eb; }
       .sgf-head-text h3 { color: #fff; }
+      .sgf-tabs { border-bottom-color: #312e81; }
+      .sgf-tab { color: #94a3b8; }
+      .sgf-tab[aria-selected="true"] { color: #c7d2fe; border-bottom-color: #818cf8; }
       .sgf-head-text p { color: #cbd5e1; }
       .sgf-x { background: rgba(255,255,255,.08); color: #cbd5e1; }
       .sgf-x:hover { background: rgba(255,255,255,.15); }
