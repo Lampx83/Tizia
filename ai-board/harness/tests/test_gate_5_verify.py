@@ -168,7 +168,7 @@ def test_container_secret_blocks_without_leaking_value_to_evidence(tmp_path):
 def test_html_screenshot_artifact_is_mandatory_for_ui_changes(tmp_path, monkeypatch):
     s = state(checkout(tmp_path), visual=True)
 
-    def capture(url, path, width=1280):
+    def capture(url, path, width=1280, **_):
         assert url == "http://127.0.0.1:49152/x.html"
         path.write_bytes(b"png")
 
@@ -179,7 +179,7 @@ def test_html_screenshot_artifact_is_mandatory_for_ui_changes(tmp_path, monkeypa
     assert out["evidence"]["http_observed"] is True
     assert Path(out["evidence"]["screenshot"]).read_bytes() == b"png"
 
-    monkeypatch.setattr(verify, "capture_screenshot", lambda *_: (_ for _ in ()).throw(ImportError("playwright absent")))
+    monkeypatch.setattr(verify, "capture_screenshot", lambda *_, **__: (_ for _ in ()).throw(ImportError("playwright absent")))
     runner = FakeRunner()
     out = verify.run(s, runner=runner, http_probe=lambda _url: (200, body))
     assert out["blocked"] is True
@@ -215,7 +215,7 @@ def test_css_change_is_observed_over_http_and_screenshots_the_request_page(tmp_p
          "request_detail": "[Trang: Trường IT] /school.html?domain=it\nđổi màu chữ thành vàng",
          "diffs": [{"file": "public/css/school.css", "test_file": "test/generated.test.js", "diff": "+x"}]}
     probed, shots = [], []
-    monkeypatch.setattr(verify, "capture_screenshot", lambda url, path, width=1280: (shots.append(url), path.write_bytes(b"png")))
+    monkeypatch.setattr(verify, "capture_screenshot", lambda url, path, width=1280, **_: (shots.append(url), path.write_bytes(b"png")))
 
     def probe(url):
         probed.append(url)
@@ -235,7 +235,7 @@ def test_css_change_is_observed_over_http_and_screenshots_the_request_page(tmp_p
 
 def test_screenshot_target_from_the_request_must_be_an_internal_path(tmp_path, monkeypatch):
     shots = []
-    monkeypatch.setattr(verify, "capture_screenshot", lambda url, path, width=1280: shots.append(url))
+    monkeypatch.setattr(verify, "capture_screenshot", lambda url, path, width=1280, **_: shots.append(url))
     details = ("[Trang: x] https://evil.example/", "[Trang: x] //evil.example/a", "[Trang: x] /\\evil.example",
                "không có dòng trang")
     for index, detail in enumerate(details):
@@ -259,7 +259,7 @@ def test_screenshot_must_land_on_the_requested_page_with_success():
 
 
 def test_wrong_screenshot_landing_is_a_plan_failure(tmp_path, monkeypatch):
-    def capture(_url, _path, _width=1280):
+    def capture(_url, _path, _width=1280, **_):
         raise verify.ScreenshotTargetError("trang chụp bị chuyển hướng sang /login.html")
 
     monkeypatch.setattr(verify, "capture_screenshot", capture)
@@ -354,7 +354,7 @@ def test_smoke_script_path_is_posix_for_git_bash(tmp_path):
 
 
 def test_changed_lines_must_be_served_even_when_the_server_injects_tags(tmp_path, monkeypatch):
-    monkeypatch.setattr(verify, "capture_screenshot", lambda _url, path, _width=1280: path.write_bytes(b"png"))
+    monkeypatch.setattr(verify, "capture_screenshot", lambda _url, path, _width=1280, **_: path.write_bytes(b"png"))
     """Tizia injects analytics/SEO tags into every HTML page, so bytes never match the file."""
     root = checkout(tmp_path)
     (root / "public" / "x.html").write_text("<head></head><body>\n<h1>old</h1>\n<p>new line</p>\n</body>\n",
@@ -461,7 +461,7 @@ def test_changed_pages_get_after_and_before_shots_at_two_widths(tmp_path, monkey
         (root / "public" / f"{name}.html").write_text("<h1>changed</h1>\n", encoding="utf-8")
     shots, copied = [], {}
     monkeypatch.setattr(verify, "capture_screenshot",
-                        lambda url, path, width: (shots.append((url.rsplit("/", 1)[-1], width)), path.write_bytes(b"png")))
+                        lambda url, path, width, **_: (shots.append((url.rsplit("/", 1)[-1], width)), path.write_bytes(b"png")))
 
     class Runner(FakeRunner):
         def __call__(self, args, **kwargs):
@@ -495,7 +495,7 @@ def test_changed_pages_get_after_and_before_shots_at_two_widths(tmp_path, monkey
 def test_before_shot_failure_never_blocks_the_gate(tmp_path, monkeypatch):
     s = state(checkout(tmp_path), visual=True)
     s["base_sha"] = "0" * 40  # không phải repo git: không lấy được base → bỏ BEFORE, gate vẫn qua
-    monkeypatch.setattr(verify, "capture_screenshot", lambda _u, path, _w: path.write_bytes(b"png"))
+    monkeypatch.setattr(verify, "capture_screenshot", lambda _u, path, _w, **_: path.write_bytes(b"png"))
     out = verify.run(s, runner=FakeRunner(), http_probe=lambda _url: (200, b"<h1>changed</h1>\n"))
     assert out["blocked"] is False, out["reason"]
     assert {i["phase"] for i in out["evidence"]["screenshots"]} == {"after"}

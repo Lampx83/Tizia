@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Callable
 from urllib.parse import urlsplit
 
+from gates import visual
+
 _SECRET_NAME = re.compile(r"(?:SECRET|TOKEN|PASSWORD|API_KEY|SECKEY|PRIVATE_KEY)", re.I)
 _REQUIRED_ABSENT = {"SCOREUP_API_KEY", "CODELAB_API_KEY", "GA_API_SECRET",
                     "OLLAMA_SECKEY", "AI_BOARD_KEY"}
@@ -138,8 +140,8 @@ MAX_SHOT_PAGES = 2         # ≤ 2 trang × 2 khổ × (trước, sau) = 8 ảnh
 MAX_SHOT_HEIGHT = 2000     # cắt trang dài: PNG vừa trần upload của server
 
 
-def capture_screenshot(url: str, path: Path, width: int = 1280) -> None:
-    """Optional dependency: a single Chromium capture, with no visual diff engine."""
+def capture_screenshot(url: str, path: Path, width: int = 1280, *, selectors: list[str] = ()) -> dict:
+    """Một lần chụp Chromium + đo cổng ảnh (ticket 13) trên cùng trang đó. Trả kết quả visual.audit."""
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as playwright:
@@ -150,6 +152,7 @@ def capture_screenshot(url: str, path: Path, width: int = 1280) -> None:
             check_landing(url, page.url, response.status if response else None)
             height = min(max(int(page.evaluate("document.documentElement.scrollHeight") or 1), 1), MAX_SHOT_HEIGHT)
             page.screenshot(path=str(path), full_page=True, clip={"x": 0, "y": 0, "width": width, "height": height})
+            return visual.audit(page, list(selectors))
         finally:
             browser.close()
 
@@ -211,7 +214,7 @@ def _restore_base(state: dict, checkout: Path, pages: list[str], cp: Callable[[P
 
 
 def _capture_all(base: str, shot_pages: list[str], primary: str | None, restore: Callable[[], set[str] | None],
-                 logs: list[str]) -> list[dict]:
+                 logs: list[str], selectors: list[str] = ()) -> list[dict]:
     """AFTER rồi BEFORE, mỗi trang × SHOT_WIDTHS. Ảnh AFTER của trang chính bắt buộc: lỗi → raise lỗi gốc.
     Ảnh khác lỗi (trang cần đăng nhập, base hỏng) chỉ ghi log."""
     shot_dir = Path(tempfile.mkdtemp(prefix="ai-verify-shots-"))
@@ -232,16 +235,28 @@ def _capture_all(base: str, shot_pages: list[str], primary: str | None, restore:
             for width in SHOT_WIDTHS:
                 path = shot_dir / f"{phase}-{len(shots)}-{width}.png"
                 try:
-                    capture_screenshot(base + page, path, width)
+                    audit = capture_screenshot(base + page, path, width, selectors=selectors)
                 except Exception as exc:
                     if phase == "after" and page == primary:
                         shutil.rmtree(shot_dir, ignore_errors=True)
                         raise
                     logs.append(f"Bỏ ảnh {phase} {page} {width}px: {exc}")
                     continue
-                shots.append({"phase": phase, "page": page, "width": width, "path": str(path)})
+                shots.append({"phase": phase, "page": page, "width": width, "path": str(path),
+                              **({"audit": audit} if isinstance(audit, dict) else {})})
                 logs.append(f"Screenshot {phase} {page} {width}px: {path}")
     return shots
+
+
+def visual_regressions(shots: list[dict]) -> list[str]:
+    """So ảnh AFTER với BEFORE cùng trang + khổ; chỉ lỗi mới. Không đo được (ảnh không có audit) → bỏ qua."""
+    before = {(s["page"], s["width"]): s.get("audit") for s in shots if s["phase"] == "before"}
+    out = []
+    for shot in shots:
+        if shot["phase"] == "after" and shot.get("audit"):
+            out += [f"{shot['page']} {shot['width']}px: {issue}"
+                    for issue in visual.regressions(before.get((shot["page"], shot["width"])), shot["audit"])]
+    return out
 
 
 def probe_http(url: str) -> tuple[int, bytes]:
@@ -402,13 +417,18 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
 
                 try:
                     shots = _capture_all(base, shot_pages, primary,
-                                         lambda: _restore_base(state, checkout, pages, cp), logs)
+                                         lambda: _restore_base(state, checkout, pages, cp), logs,
+                                         visual.changed_selectors(state.get("full_diff")))
                 except Exception as exc:  # D0: UI evidence is mandatory; absent browser = environment
                     # Wrong landing page is not fixed by a retry or a repair; admin decides.
                     kind = "plan" if isinstance(exc, ScreenshotTargetError) else "transient"
                     raise RuntimeError(f"thiếu screenshot bắt buộc cho thay đổi UI: {exc}") from exc
                 screenshot = next((s["path"] for s in shots
                                    if s["phase"] == "after" and s["page"] == primary and s["width"] == 1280), None)
+                visual_issues = visual_regressions(shots)
+                logs += [f"Cổng ảnh: {issue}" for issue in visual_issues] or ["Cổng ảnh: không có lỗi hiển thị mới."]
+                if visual_issues:  # bản sau tệ hơn bản trước: sửa được bằng lượt sửa, như test hỏng
+                    raise RuntimeError("giao diện tệ hơn bản trước — " + " | ".join(visual_issues))
         except (OSError, RuntimeError, ValueError, KeyError, TypeError) as exc:
             reason = str(exc)
         finally:
