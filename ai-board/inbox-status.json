@@ -1,0 +1,68 @@
+{
+  "_doc": "Trạng thái hộp thư Ban điều hành AI. Do scripts/ai-board-preflight.mjs ghi, mỗi ngày một lần. consecutive_failures >= 3 ⇒ phiên phải leo thang cho chủ sở hữu trước khi làm việc khác.",
+  "first_failure_date": "2026-09-13",
+  "consecutive_failures": 15,
+  "last_checked": "2026-09-27",
+  "history": [
+    {
+      "date": "2026-09-13",
+      "readable": false
+    },
+    {
+      "date": "2026-09-14",
+      "readable": false
+    },
+    {
+      "date": "2026-09-15",
+      "readable": false
+    },
+    {
+      "date": "2026-09-16",
+      "readable": false
+    },
+    {
+      "date": "2026-09-17",
+      "readable": false
+    },
+    {
+      "date": "2026-09-18",
+      "readable": false
+    },
+    {
+      "date": "2026-09-19",
+      "readable": false
+    },
+    {
+      "date": "2026-09-20",
+      "readable": false
+    },
+    {
+      "date": "2026-09-21",
+      "readable": false
+    },
+    {
+      "date": "2026-09-22",
+      "readable": false
+    },
+    {
+      "date": "2026-09-23",
+      "readable": false
+    },
+    {
+      "date": "2026-09-24",
+      "readable": false
+    },
+    {
+      "date": "2026-09-25",
+      "readable": false
+    },
+    {
+      "date": "2026-09-26",
+      "readable": false
+    },
+    {
+      "date": "2026-09-27",
+      "readable": false
+    }
+  ]
+}
