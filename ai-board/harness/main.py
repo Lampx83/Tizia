@@ -28,6 +28,7 @@ import context                     # noqa: E402
 from gates import brainstorm, implement, intake_guard, plan_validate, risk_triage, scope_check, static_check, verify  # noqa: E402
 from models import OllamaClient    # noqa: E402
 import prescreen                   # noqa: E402
+import self_eval                   # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 ENV_FILE = ROOT / ".env"
@@ -169,7 +170,9 @@ def _intake_and_plan(request, deps, budget, state, **trace) -> dict:
 
 
 def _smoke(request, deps, budget, state, **_) -> dict:
-    """Cổng 5: verify bơm vào (test) hoặc Docker thật trên candidate."""
+    """Cổng 5: yêu cầu self → eval 2 sha thay Docker smoke; khác: verify bơm vào (test) hoặc Docker thật."""
+    if state.get("request_type") == "self":
+        return candidate.ensure(state, 5) or self_eval.run(state, deps, budget)
     if deps.verify is not None:
         return deps.verify.run(state, deps, budget)
     return candidate.ensure(state, 5) or verify.run(state, deps, budget)

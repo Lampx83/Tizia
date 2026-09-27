@@ -71,14 +71,20 @@ def is_current(evidence: dict | None, base_sha: str, head_sha: str) -> bool:
     return bool(evidence) and evidence.get("base_sha") == base_sha and evidence.get("head_sha") == head_sha
 
 
-def check(tuple_: dict, number: int) -> dict:
-    """Gate 4 guard + gate 5 smoke on the built candidate. Return JSON-safe results."""
+def request_type(pr: dict) -> str | None:
+    """'self' khi PR mang nhãn ai-board:self (worker.pr_text gắn cho yêu cầu board tự sửa)."""
+    return "self" if "ai-board:self" in {label.get("name") for label in pr.get("labels") or []} else None
+
+
+def check(tuple_: dict, number: int, request_type: str | None = None) -> dict:
+    """Gate 4 guard + gate 5 smoke on the built candidate. Return JSON-safe results.
+    request_type 'self': guard theo vùng tự sửa; không Docker smoke (cổng 5 của self là eval, bằng chứng trong PR)."""
     from gates import guard, static_check, verify
 
     checkout = tuple_["checkout"]
     diff = _git(checkout, "diff", "--no-ext-diff", tuple_["base_sha"], "HEAD")
     files = _git(checkout, "diff", "--name-only", tuple_["base_sha"], "HEAD").split()
-    scan = guard.scan(diff, checkout)
+    scan = guard.scan(diff, checkout, request_type=request_type)
     problems = [f"{f['check']}: {f['detail']}" for f in scan["findings"]]
     for rel in (f for f in files if f.endswith(".js")):
         path = Path(checkout) / rel
@@ -92,7 +98,8 @@ def check(tuple_: dict, number: int) -> dict:
     diffs += [{"file": "", "test_file": t} for t in tests[1:]]
     state = {"skill_id": f"review-pr-{int(number)}", "full_checkout": checkout,
              "full_diff": [{"file": "", "diff": diff}], "diffs": diffs}
-    smoke = verify.run(state)
+    smoke = ({"blocked": False, "reason": "self: không smoke Docker, xem eval trong PR"} if request_type == "self"
+             else verify.run(state))
     return {"guard_problems": problems, "flags": scan["flags"], "gate5": {k: smoke.get(k) for k in ("blocked", "reason")},
             "passed": not problems and not smoke.get("blocked")}
 
@@ -116,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if prior and not is_current(prior, built["base_sha"], built["head_sha"]):
             print(f"Bằng chứng cũ (base {prior['base_sha'][:10]}, head {prior['head_sha'][:10]}) hết hiệu lực.")
-        result = check(built, args.number)
+        result = check(built, args.number, request_type(pr))
     finally:
         cleanup(args.repo, built["checkout"])
     evidence = {"pr": args.number, "base_sha": built["base_sha"], "head_sha": built["head_sha"],
