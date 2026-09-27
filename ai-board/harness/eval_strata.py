@@ -172,6 +172,7 @@ def clarity_strata(asked: dict[str, bool]) -> dict[str, float]:
 def config_sha() -> dict[str, str]:
     """Mã git của cấu hình ảnh hưởng kết quả: kết quả chỉ so được khi biết đo trên cấu hình nào."""
     files = ["ai-board/harness/skills/skills.lock.json", "ai-board/harness/prompts/prompts.lock.json",
+             "ai-board/harness/retrieval_weights.json",
              "server/ai-board/contract.json", "server/ai-board/clarity-rules.json"]
     out = subprocess.run(["git", "hash-object", *files], cwd=REPO, capture_output=True, text=True, check=True).stdout
     return {Path(f).name: h[:10] for f, h in zip(files, out.split())}

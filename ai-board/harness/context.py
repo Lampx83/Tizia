@@ -23,8 +23,8 @@ HERE = Path(__file__).resolve().parent
 _MANUAL = (HERE / "prompts" / "AIBOARD.md").read_text(encoding="utf-8").strip() + "\n\n"
 SKILLS_DIR = HERE / "skills"
 _PATH_REF = re.compile(r"[\w./-]*[\w-]\.(?:html|css|js|mjs)\b", re.I)
-RESERVE = 300  # ký tự tối thiểu giữ cho mỗi tool phía sau
-LOCATE_BUDGET = 800  # vị trí chữ người dùng nhắc, trước các tool của skill
+RESERVE = file_context.WEIGHTS["tool_min_budget"]
+LOCATE_BUDGET = file_context.WEIGHTS["locate_budget"]
 _SECTION = re.compile(r"^## gate (\d)\s*$", re.M)
 
 
@@ -122,7 +122,7 @@ def _mentioned_files(text: str, source, sha: str) -> list[str]:
         by_name = sorted((f for f in files if posixpath.basename(f) == posixpath.basename(ref)), key=len)
         if exact or by_name:
             found.append((exact or by_name)[0])
-    return list(dict.fromkeys(found))[:3]
+    return list(dict.fromkeys(found))[:file_context.WEIGHTS["max_mentioned_files"]]
 
 
 def _linked_css(source, sha: str, files: list[str]) -> list[str]:
@@ -196,7 +196,7 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
         calls = [(n, {**p, "words": [w.lower() for w in render_words]}) if n == "grep" and p.get("file") in render
                  else (n, p) for n, p in calls]
         remaining = (skill.budget if gate == 1 else skill.budget3) - sum(len(p) + 2 for p in parts)
-        share = min(LOCATE_BUDGET, remaining // 3)
+        share = min(LOCATE_BUDGET, remaining // file_context.WEIGHTS["locate_divisor"])
         located = tools._cap(tools.format_located(hits, users, prefer=targets, budget=share), share)
         if located:
             parts.append(located)

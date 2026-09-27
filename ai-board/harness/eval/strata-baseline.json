@@ -2,6 +2,7 @@
  "_config": {
   "skills.lock.json": "8d124a4792",
   "prompts.lock.json": "77b9546b06",
+  "retrieval_weights.json": "5210807bcd",
   "contract.json": "de3c7c7826",
   "clarity-rules.json": "6fe4386a9c"
  },
