@@ -3,7 +3,7 @@
   "gates": {
     "plan": [1, 2, 2.5],
     "pre_pr": [3, 4, 5, 5.5],
-    "names": { "1": "Lập plan", "2": "Phạm vi", "2.5": "Soát plan", "3": "Sinh code", "4": "Kiểm tĩnh + guard", "5": "Chạy Docker", "5.5": "Đánh giá rủi ro" }
+    "names": { "1": "Lập plan", "2": "Phạm vi", "2.5": "Soát plan", "3": "Sinh code", "4": "Checks and guardrails", "5": "Chạy Docker", "5.5": "Đánh giá rủi ro" }
   },
   "verdict_outcomes": ["ready_for_pr", "needs_review", "blocked"],
   "failure_classes": ["ordinary", "transient", "critical", "budget", "plan", "eval"],

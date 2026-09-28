@@ -404,7 +404,7 @@ async function loadRequests() {
 }
 // Loại = lựa chọn "Loại đề nghị" trong nút Góp ý (suggestion-fab.js) khi học sinh gửi.
 const REQUEST_TYPE_LABEL = { game: 'Trò chơi', theory: 'Lý thuyết / học liệu', lab: 'Thực hành / thí nghiệm',
-  skill: 'Luyện kỹ năng', other: 'Góp ý / báo lỗi' };
+  skill: 'Luyện kỹ năng', other: 'Góp ý / báo lỗi', self: 'AI Board tự đề xuất' };
 const REQUEST_STATUS_LABEL = { pending: 'Chờ xử lý', reviewing: 'Đang xử lý', done: 'Hoàn thành',
   rejected: 'Từ chối', cancelled: 'Đã hủy' };
 const ROLE_NAME = { admin: 'Quản trị', teacher: 'Giảng viên', student: 'Sinh viên', pupil: 'Học sinh', parent: 'Phụ huynh' };
@@ -465,7 +465,7 @@ function renderRequests() {
           return `
         <tr data-rid="${r.id}">
           <td>${r.id}</td>
-          <td><span class="pill">${esc(r.domain)}</span></td>
+          <td><span class="pill">${r.type === 'self' ? '—' : esc(r.domain)}</span></td>
           <td style="max-width:260px">${esc(r.title)}${traceSub(ticket?.trace_ref)}</td>
           <td><div class="req-detail" title="${esc(r.detail || '')}">${esc(requestBody(r.detail) || '—')}</div></td>
           <td title="${esc(r.type)}">${esc(REQUEST_TYPE_LABEL[r.type] || r.type)}</td>
@@ -532,7 +532,7 @@ function openReplyModal(id) {
   if (!r) return;
   $('#modal-replyReq').style.display = '';
   $('#modal-setRole').style.display = 'none';
-  $('#modal-ctx').innerHTML = `<b>#${r.id}</b> · ${esc(r.domain)}/${esc(r.type)} · gửi bởi <b>${esc(r.student)}</b><br>${esc(r.title)}`;
+  $('#modal-ctx').innerHTML = `<b>#${r.id}</b> · ${r.type === 'self' ? 'AI Board tự đề xuất' : `${esc(r.domain)}/${esc(r.type)} · gửi bởi <b>${esc(r.student)}</b>`}<br>${esc(r.title)}`;
   $('#modal-status').value = r.status === 'rejected' ? 'rejected' : 'done';
   $('#modal-msg').value = '';
   $('#modal-bg').classList.add('show');
@@ -544,8 +544,21 @@ async function submitReply() {
   const status = $('#modal-status').value;
   const message = $('#modal-msg').value.trim();
   if (message.length < 4) return toast('Lời nhắn quá ngắn (≥4 ký tự)', 'err');
-  if (status === 'rejected' && (!confirm(`Từ chối và hủy yêu cầu #${id}? AI Board sẽ dừng xử lý yêu cầu này.`)
-    || !confirm(`Xác nhận lần 2: hủy yêu cầu #${id}. Không hoàn tác được.`))) return;
+  if (status === 'rejected') {
+    openConfirm({
+      title: `Từ chối và hủy yêu cầu #${id}?`,
+      msg: 'AI Board sẽ dừng xử lý yêu cầu này.',
+      onConfirm: () => openConfirm({
+        title: 'Xác nhận lần 2',
+        msg: `Hủy yêu cầu #${id}. Không hoàn tác được.`,
+        onConfirm: () => doSubmitReply(id, status, message),
+      }),
+    });
+    return;
+  }
+  await doSubmitReply(id, status, message);
+}
+async function doSubmitReply(id, status, message) {
   const r = await api(`/api/admin/requests/${id}/reply`, { method:'POST', body: JSON.stringify({ status, message }) });
   if (!r.ok) return toast('Lỗi: ' + (r.data?.error || r.status), 'err');
   // /reply only updates the requests row; the AI Board status route also cancels the root, lease and alerts.
@@ -1952,12 +1965,19 @@ async function loadSelfImprove() {
     toast(`Đã gắn nhãn task #${id}`);
     loadSelfImprove();
   }));
-  host.querySelectorAll('[data-eval-delete]').forEach(btn => btn.addEventListener('click', async () => {
-    if (!confirm(`Xoá task #${btn.dataset.evalDelete}? Nội dung yêu cầu bị xoá hẳn.`)) return;
-    const res = await api(`/api/admin/ai-board/eval-tasks/${btn.dataset.evalDelete}`, { method: 'DELETE' });
-    if (!res.ok) return toast('Lỗi: ' + (res.data?.message || res.data?.error || res.status), 'err');
-    toast('Đã xoá');
-    loadSelfImprove();
+  host.querySelectorAll('[data-eval-delete]').forEach(btn => btn.addEventListener('click', () => {
+    const id = btn.dataset.evalDelete;
+    openConfirm({
+      title: `Xoá task #${id}?`,
+      msg: 'Nội dung yêu cầu bị xoá hẳn.',
+      onConfirm: async () => {
+        const res = await api(`/api/admin/ai-board/eval-tasks/${id}`, { method: 'DELETE' });
+        if (!res.ok) return toast('Lỗi: ' + (res.data?.message || res.data?.error || res.status), 'err');
+        toast('Đã xoá');
+        closeModal();
+        loadSelfImprove();
+      },
+    });
   }));
 }
 

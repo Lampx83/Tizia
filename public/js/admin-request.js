@@ -12,7 +12,7 @@ const elapsed = (t) => { const s = Math.max(0, Math.round((Date.now() - t) / 100
 
 const REQUEST_ID = Number(new URLSearchParams(location.search).get('id'));
 // Trạng thái giao diện riêng của admin (không phải dữ liệu server): bảng xác nhận đang mở ở bước nào.
-const ui = { confirm: null, step: 1, msg: '', flash: '' };
+const ui = { confirm: null, step: 1, msg: '', flash: '', authorizeConfirm: null };
 let view = null;
 let gateNames = {}; // tên cổng lấy từ trace (contract.gates.names của server)
 
@@ -68,11 +68,16 @@ const CALL_STATE = { ok: 'ok', retry: 'warn', error: 'bad', http_error: 'bad', t
 const GATE_STATE = { passed: 'ok', blocked: 'bad' };
 const RUN_LABEL = { ready_for_pr: 'sẵn sàng PR', needs_review: 'cần người xem', blocked: 'bị chặn' };
 const ROLLBACK_STATE = { discarded: ['ok', 'đã xóa nhánh'], revert_ready: ['warn', 'có nhánh revert'], failed: ['bad', 'hoàn tác lỗi'] };
-const CALL_LABEL = { ok: 'ok', retry: 'hỏi lại', error: 'lỗi', http_error: 'lỗi HTTP', timeout: 'quá giờ' };
+// 1 bộ tag trạng thái xuyên suốt, tiếng Anh, không phân biệt "ok" (lần gọi model) với "qua" (cổng đạt) — cùng 1 nghĩa.
+const STATE_LABEL = { ok: 'OK', bad: 'Blocked', run: 'Running', wait: 'Pending', skip: 'Skipped' };
+const CALL_LABEL = { ok: 'OK', retry: 'Retry', error: 'Error', http_error: 'HTTP error', timeout: 'Timeout' };
 const TRIGGER_LABEL = { plan: 'lập kế hoạch và thực hiện', execute: 'thực hiện kế hoạch đã duyệt', rollback: 'hoàn tác',
   shadow_precheck: 'kiểm tra ban đầu' };
 const tag = (state, text) => `<span class="tag st-${state}">${esc(text)}</span>`;
-const gateName = (g) => gateNames[Number(g)] ? `Cổng ${Number(g)} · ${esc(gateNames[Number(g)])}` : `Cổng ${esc(g)}`;
+// Thứ tự hiển thị: bước tuần tự 1..7, không lộ số cổng nội bộ có phần thập phân (2.5/5.5 trông như substep).
+const GATE_ORDER = [1, 2, 2.5, 3, 4, 5, 5.5];
+const gatePos = (g) => { const i = GATE_ORDER.indexOf(Number(g)); return i < 0 ? esc(g) : i + 1; };
+const gateName = (g) => gateNames[Number(g)] ? `${gatePos(g)} · ${esc(gateNames[Number(g)])}` : `Bước ${esc(g)}`;
 
 const ROOT_STATUS = {
   queued: ['idle', 'Chờ worker nhận'], running: ['run', 'Đang xử lý'], planned: ['ok', 'Đã có kế hoạch'],
@@ -82,9 +87,8 @@ const ROOT_STATUS = {
 // Tiến độ do server tính (run.progress): cổng nào qua / chặn / đang chạy / chưa tới / không chạy.
 function renderProgress(p) {
   if (!p?.gates.length) return '';
-  const label = { ok: 'qua', bad: 'chặn', run: 'đang chạy', wait: 'chưa tới', skip: 'không chạy' };
   return `<div class="prog" role="list">${p.gates.map(({ gate, name, state }) =>
-    `<span class="seg ${state}" role="listitem" title="${gateName(gate)}: ${label[state]}"${state === 'run' ? ' aria-current="step"' : ''}>${esc(gate)} · ${esc(name)}</span>`).join('')}</div>
+    `<span class="seg ${state}" role="listitem" title="${gateName(gate)}: ${STATE_LABEL[state]}"${state === 'run' ? ' aria-current="step"' : ''}>${gatePos(gate)} · ${esc(name)}</span>`).join('')}</div>
     ${p.current != null ? `<div class="live-line"><span class="pulse"></span>Đang chạy ${gateName(p.current)}${p.since ? ` · ${elapsed(p.since)}` : ''}</div>` : ''}`;
 }
 
@@ -100,8 +104,8 @@ function renderSessions(runs, root) {
   return `<div class="timeline">${runs.map((run, i) => {
     const [state, label] = runState(run, i === runs.length - 1 && root.live);
     return `<div class="step st-${state}"><div class="line1">
-      <b>Lượt #${esc(run.id)}</b> ${tag(state, label)}
-      <span>${esc(TRIGGER_LABEL[run.trigger] || run.trigger)}${run.gate != null ? ` · dừng ở cổng ${esc(run.gate)}` : ''}</span>
+      <b>Lần thử #${i + 1}</b> ${tag(state, label)}
+      <span>${esc(TRIGGER_LABEL[run.trigger] || run.trigger)}${run.gate != null ? ` · dừng ở bước ${gatePos(run.gate)}` : ''}</span>
       <span class="meta">worker ${esc(run.worker_id || '—')} (${esc(run.worker_mode || '—')})</span></div>
       <div class="metrics"><span>${fmt(run.created_at)} → ${fmt(run.updated_at)}</span>
         <span>GPU-s lượt / trần: ${budgetCell(run.budget_used, run.budget_limit)}</span>
@@ -134,7 +138,7 @@ function callStep(e) {
 function gateStep(g) {
   const state = GATE_STATE[g.status] || 'idle';
   return `<div class="step gate st-${state}"><div class="line1"><b>${gateName(g.gate)}</b>
-      ${tag(state, g.status === 'passed' ? 'qua' : g.status === 'blocked' ? 'chặn' : g.status)}</div>
+      ${tag(state, g.status === 'passed' ? 'OK' : g.status === 'blocked' ? 'Blocked' : g.status)}</div>
     ${g.public_reason ? `<div style="margin-top:4px">${esc(g.public_reason)}</div>` : ''}
     ${g.internal_reason ? `<div class="meta">${esc(g.internal_reason)}</div>` : ''}</div>`;
 }
@@ -147,9 +151,19 @@ function rollbackStep(run, live) {
     ${r?.detail ? `<div class="meta">${esc(r.detail)}</div>` : ''}</div></div>`;
 }
 
+// Bước chưa từng chạy tới (state 'skip') ở cuối progress bar của 1 lượt đã xong: lượt sau sẽ tự có bảng riêng
+// cho các bước đó, giữ lại chỉ làm trùng lặp — chỉ lượt đang chạy thật (live) mới cần xem trước các bước tới.
+function trimUnreached(p, showFull) {
+  if (!p || showFull) return p;
+  let end = p.gates.length;
+  while (end > 0 && p.gates[end - 1].state === 'skip') end -= 1;
+  return { ...p, gates: p.gates.slice(0, end) };
+}
+
 // Thứ tự: theo cổng; trong 1 cổng các lần gọi model trước, kết luận của cổng sau cùng.
-function renderRun(run, root, latest) {
-  const p = run.progress;
+function renderRun(run, root, latest, attempt) {
+  const showFull = latest && root.live;
+  const p = trimUnreached(run.progress, showFull);
   const items = [
     ...run.calls.map(c => ({ gate: Number(c.evidence?.gate ?? c.gate), kind: 0, at: c.created_at, id: c.id, html: callStep(c.evidence || {}) })),
     ...run.gates.map(g => ({ gate: Number(g.gate), kind: 1, at: g.created_at, id: g.id, html: gateStep(g) })),
@@ -159,10 +173,10 @@ function renderRun(run, root, latest) {
       <b>${gateName(p.current)}</b>${tag('run', 'đang chạy')}${p.since ? `<span class="meta">${elapsed(p.since)}</span>` : ''}</div></div>` });
   }
   items.sort((a, b) => a.gate - b.gate || a.kind - b.kind || a.at - b.at || a.id - b.id);
-  const [state, label] = runState(run, latest && root.live);
-  const body = run.trigger === 'rollback' ? rollbackStep(run, latest && root.live)
+  const [state, label] = runState(run, showFull);
+  const body = run.trigger === 'rollback' ? rollbackStep(run, showFull)
     : items.length ? `<div class="timeline">${items.map(i => i.html).join('')}</div>` : '<div class="blk meta">Lượt này chưa có dữ liệu cổng.</div>';
-  return `<div class="run-head st-${state}"><b>Lượt #${esc(run.id)}</b>${tag(state, label)}
+  return `<div class="run-head st-${state}"><b>Lần thử #${attempt}</b>${tag(state, label)}
       <span>${esc(TRIGGER_LABEL[run.trigger] || run.trigger)}</span><span class="meta">worker ${esc(run.worker_id || '—')} · ${fmt(run.created_at)}</span>
       ${run.commit?.head_sha ? `<button type="button" class="trace-copy" data-copy="${esc(run.commit.head_sha)}" title="Commit của lượt này, bấm để copy">${esc(run.commit.head_sha.slice(0, 7))}</button>` : ''}
       <span>GPU-s ${budgetCell(run.budget_used, run.budget_limit)}</span></div>
@@ -291,16 +305,25 @@ function renderPlan(p, root, children) {
         return `<li class="st-${state}"><div class="line1"><b>${esc(c.title)}</b>${tag(state, label)}</div>
           <div class="meta">AI tự sửa thêm sau khi kiểm tra chưa đạt</div></li>`;
       }).join('')}</ol>
-      ${waiting ? `<button class="btn ok" data-action="authorize" data-root="${esc(root.id)}" data-hash="${esc(p.plan_hash)}">Cho phép thực hiện kế hoạch</button>
-        <span class="meta">${esc(ui.authorizeMsg || '')}</span>` : ''}
+      ${waiting ? (ui.authorizeConfirm === p.plan_hash
+        ? `<div class="confirm" role="alertdialog" aria-label="Cho phép thực hiện kế hoạch">
+             <div class="confirm-title">Cho phép AI Board thực hiện kế hoạch này?</div>
+             <div class="meta">Worker sẽ chạy các cổng 3 → 5.5 trên kế hoạch đã duyệt.</div>
+             <div class="row" style="margin-top:8px">
+               <button class="btn ok" data-action="authorize-go" data-root="${esc(root.id)}" data-hash="${esc(p.plan_hash)}">Đồng ý, thực hiện</button>
+               <button class="btn" data-action="authorize-close">Thôi</button>
+             </div>
+           </div>`
+        : `<button class="btn ok" data-action="authorize-ask" data-hash="${esc(p.plan_hash)}">Cho phép thực hiện kế hoạch</button>`) : ''}
+        <span class="meta">${esc(ui.authorizeMsg || '')}</span>
     </div>`;
 }
 
 async function authorizePlan(btn) {
-  if (!confirm('Cho phép AI Board thực hiện kế hoạch này? Worker sẽ chạy các cổng 3 → 5.5 trên kế hoạch đã duyệt.')) return;
   btn.disabled = true;
   try {
     await post(`/api/admin/ai-board/tickets/${encodeURIComponent(btn.dataset.root)}/authorize-plan`, { plan_hash: btn.dataset.hash });
+    ui.authorizeConfirm = null;
     ui.authorizeMsg = '';
     ui.flash = 'Đã cho phép; worker sẽ nhận ở lượt tới.';
   } catch (e) {
@@ -405,7 +428,7 @@ function renderAiBoard(t) {
     ${renderPlan(t.plan, root, t.children || [])}
     <h2>Phiên xử lý</h2>
     ${renderSessions(runs, root)}
-    ${runs.map((run, i) => renderRun(run, root, i === runs.length - 1)).join('')}
+    ${runs.map((run, i) => renderRun(run, root, i === runs.length - 1, i + 1)).join('')}
     <h2>Sự kiện</h2>
     ${renderEvents(t.events || [])}
   `;
@@ -435,8 +458,9 @@ function render() {
     <a class="back" href="/admin.html#requests">Về trang quản trị</a>
     <h1>Yêu cầu #${esc(r.id)}: ${esc(r.title)}</h1>
     ${traceLine(trace?.trace_ref)}
-    <div class="meta">${esc(r.domain)} · ${esc(r.type)} · ${esc(r.student)} · <span class="pill">${esc(r.status)}</span> · tạo ${fmt(r.created_at)}
-      · <span class="${live ? 'auto live' : 'auto'}">${live ? 'tự cập nhật mỗi 2 giây' : 'tự cập nhật mỗi 10 giây'}</span></div>
+    <div class="meta">${r.type === 'self' ? 'AI Board tự đề xuất' : `${esc(r.domain)} · ${esc(r.type)} · ${esc(r.student)}`}
+      · <span class="pill">${esc(r.status)}</span> · tạo ${fmt(r.created_at)}
+      ${live ? '· <span class="auto live">tự cập nhật mỗi 2 giây</span>' : ''}</div>
     ${renderActions(r, trace)}
     <h2>Trao đổi</h2>
     ${renderThread(thread.messages || [])}
@@ -485,7 +509,9 @@ document.addEventListener('click', e => {
   else if (action === 'confirm-next') ui.step = 2;
   else if (action === 'confirm-close') ui.confirm = null;
   else if (action === 'confirm-go') return submitConfirm(btn);
-  else if (action === 'authorize') return authorizePlan(btn);
+  else if (action === 'authorize-ask') { ui.authorizeConfirm = btn.dataset.hash; ui.authorizeMsg = ''; }
+  else if (action === 'authorize-close') { ui.authorizeConfirm = null; }
+  else if (action === 'authorize-go') return authorizePlan(btn);
   render();
   if (action === 'confirm-next') $('#confirm-input')?.focus();
 });
