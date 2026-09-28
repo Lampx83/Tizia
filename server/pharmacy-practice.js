@@ -23,6 +23,7 @@ import {
   OTC_RUBRIC, OTC_RUBRIC_VERSION, OTC_GROUPS, OTC_MAX_PER_CRITERION, OTC_MAX_TOTAL,
   OTC_SAFETY_FLAGS, OTC_PRINCIPLES,
 } from '../public/js/pharmacy/otc-rubric.js';
+import { OTC02_LEVEL_OVERRIDES } from '../public/js/pharmacy/otc02-rubric.js';
 import { currentTeacher } from './pharmacy-teacher.js';   // req #143: nhận diện lượt GV chạy thử
 import {
   RUBRIC, RUBRIC_VERSION, RUBRIC_GROUPS, MAX_PER_CRITERION, MAX_TOTAL, summarize,
@@ -294,6 +295,12 @@ const OTC_ACTION_TYPES = {
   C6: ['retail_split', 'pack_retail', 'pack_retail_tray', 'label_dose', 'pack_label'],
 };
 
+// req #230 mục 4 — 2 tiêu chí bị chấm quá tay, ghi rõ luật để AI bám đúng thay vì tự suy diễn.
+const OTC_CRITERION_NOTES = {
+  C5: 'LƯU Ý CHẤM: nếu chỉ tư vấn tác dụng không mong muốn (ADR) mà KHÔNG đề cập tương tác thuốc/thức ăn, lối sống–sinh hoạt hay bảo quản thì tối đa 2 điểm dù ADR nói đúng.',
+  D2: 'LƯU Ý CHẤM: nếu trong TOÀN BỘ hội thoại không có bất kỳ câu nào của dược sĩ thể hiện đồng cảm/động viên với khách hàng thì cho 0 điểm, không được cho điểm cao hơn vì lý do khác.',
+};
+
 function buildOtcPrompt(sc, messages, actions, crits) {
   const transcript = messages
     .map((m, i) => `L${i + 1} ${m.speaker === 'student' ? 'Dược sĩ (SV)' : 'Khách hàng'}: ${m.content}`)
@@ -302,16 +309,24 @@ function buildOtcPrompt(sc, messages, actions, crits) {
     ? actions.map((a) => `A${Number(a.action_order) + 1} ${a.description_vi || a.action_type} [${a.action_result}]`).join('\n')
     : '(không có thao tác nào được ghi nhận)';
   const dossier = String(sc?.npcPersona || sc?.setting || '').slice(0, 3500);
-  const critText = crits.map((c) => `### ${c.code}. ${c.name}
+  // req #229 — OTC-02 (bán Alaxan) có đáp án chấm RIÊNG cho 11/21 tiêu chí (ghi đè mô tả 5 mức
+  // bằng ví dụ đúng chuyên môn của thuốc này); tiêu chí không có đáp án riêng vẫn dùng mô tả chung.
+  const overrides = sc?.code === 'OTC-02' ? OTC02_LEVEL_OVERRIDES : null;
+  const critText = crits.map((c) => {
+    const ov = overrides?.[c.code];
+    const note = OTC_CRITERION_NOTES[c.code] ? `\n${OTC_CRITERION_NOTES[c.code]}` : '';
+    return `### ${c.code}. ${c.name}
 Trọng tâm: ${c.focus}
 Nguồn dữ liệu: ${c.evidence || (c.source === 'combined' ? 'Hội thoại + nhật ký thao tác' : 'Hội thoại')}
-${c.levels.map((t, i) => `Mức ${i + 1}: ${t}`).join('\n')}`).join('\n\n');
+${ov ? '(Đáp án riêng cho tình huống này)' : ''}
+${(ov || c.levels).map((t, i) => `Mức ${i + 1}: ${t}`).join('\n')}${note}`;
+  }).join('\n\n');
   return `Bạn chấm kỹ năng giao tiếp bán thuốc KHÔNG KÊ ĐƠN của sinh viên dược (rubric OTC_AI_v1.0).
 
 === HỒ SƠ TÌNH HUỐNG (nội dung chuyên môn của khách hàng — dùng để đối chiếu dữ kiện, thuốc phù hợp) ===
 ${dossier || '(không có)'}
 
-=== HỘI THOẠI (mỗi dòng có mã lượt L#) ===
+=== HỘI THOẠI (mỗi dòng có mã lượt L#, ghi rõ ai nói) ===
 ${transcript || '(không có lời thoại)'}
 
 === NHẬT KÝ THAO TÁC 3D (mã A#) ===
@@ -319,6 +334,8 @@ ${actionLog}
 
 === NGUYÊN TẮC CHẤM BẮT BUỘC ===
 ${OTC_PRINCIPLES.map((t) => '- ' + t).join('\n')}
+- req #230: NGƯỜI ĐƯỢC CHẤM là DƯỢC SĨ (SV), không phải khách hàng. "evidence" PHẢI trích lời hoặc thao tác CỦA DƯỢC SĨ (mã L# ứng với dòng "Dược sĩ (SV)"), KHÔNG được trích lời của khách hàng làm minh chứng — trừ khi minh chứng đó chỉ dùng để nêu bối cảnh (khách hàng hỏi/giục gì) đi kèm với chính câu trả lời của dược sĩ ngay sau đó. Ví dụ SAI: evidence="L4: 'Tôi không sốt.'" (đây là lời khách hàng). Ví dụ ĐÚNG: evidence="L5: 'Anh có sốt không ạ?'" (lời dược sĩ hỏi).
+- "improvement": khi score < 5, PHẢI kèm một CÂU VÍ DỤ CỤ THỂ trong ngoặc kép mà sinh viên có thể nói lại đúng tình huống này (không viết giải pháp chung chung như "cần hỏi kỹ hơn"). Ví dụ: A2 → "nên đặt câu hỏi đề cập cả nhu cầu mua thuốc và tư vấn, ví dụ: \"Anh cần mua thuốc gì hay cần em tư vấn về vấn đề gì ạ?\""
 
 === TIÊU CHÍ CẦN CHẤM (mô tả từng mức 1–5) ===
 ${critText}
@@ -327,7 +344,7 @@ Với TỪNG tiêu chí, chọn "status":
 - "scored": có áp dụng và đủ bằng chứng → "score" là số nguyên 1–5 theo đúng mô tả mức.
 - "N/A": không áp dụng (vd đúng ra là không bán thuốc) → "score": null.
 - "N/O": có áp dụng nhưng thiếu dữ liệu để quan sát → "score": null.
-"evidence": trích ngắn kèm mã lượt/thao tác, vd "L3: 'bé mấy tháng ạ?'; A5 Lấy thuốc". "comment": nhận xét ngắn tiếng Việt. "improvement": góp ý sửa lỗi cụ thể cho sinh viên, tiếng Việt.
+"evidence": trích ngắn kèm mã lượt/thao tác của DƯỢC SĨ, vd "L3: 'Bé mấy tháng tuổi ạ?'; A5 Lấy thuốc". "comment": nhận xét ngắn tiếng Việt. "improvement": góp ý sửa lỗi CỤ THỂ kèm câu ví dụ (xem quy tắc ở trên).
 
 CHỈ trả về JSON hợp lệ, đúng dạng:
 {"scores":[{"code":"A1","status":"scored","score":4,"evidence":"...","comment":"...","improvement":"..."}]}`;
@@ -381,6 +398,15 @@ async function detectOtcSafetyFlags(sc, messages, actions) {
   return flags;
 }
 
+// req #230 mục 1 — kiểm tra "evidence" có trích đúng lời/thao tác của DƯỢC SĨ hay không (không
+// chỉ trích lời khách hàng). Đối chiếu mã L# trong evidence với vai (speaker) của đúng lượt đó;
+// không chặn điểm (LLM có thể đúng nhưng quên format L#) nhưng gắn cảnh báo để giảng viên soát.
+function otcEvidenceCitesStudent(messages, evidence) {
+  const nums = [...String(evidence || '').matchAll(/L(\d+)/g)].map((m) => Number(m[1]));
+  if (!nums.length) return true;   // không trích mã lượt nào — không đủ căn cứ để bắt lỗi, bỏ qua
+  return nums.some((n) => messages[n - 1]?.speaker === 'student');
+}
+
 async function scoreOtc(sessionRow, messages, actions) {
   const sc = SCENARIOS[Object.keys(SCENARIOS).find((k) => (SCENARIOS[k].code || k) === sessionRow.scenario_code)] || null;
   const aiCrits = OTC_RUBRIC.filter((c) => c.source !== 'audio');
@@ -408,12 +434,26 @@ async function scoreOtc(sessionRow, messages, actions) {
         evidence: aiOk ? 'AI không trả điểm cho tiêu chí này.' : 'Chưa chấm được do lỗi hệ thống chấm điểm.',
         comment: 'Cần chấm lại hoặc xem thủ công.', improvement: '',
       };
-      // C2/C3/C6: không có thao tác tương ứng trong nhật ký thì không được điểm cao.
+      // req #230 mục 2 — C2/C3/C6: không có thao tác nào trong nhật ký thì cho 0 điểm (không suy
+      // đoán từ lời nói); có thao tác nhưng ghi nhận KHÔNG HỢP LỆ (vd lấy sai thuốc, thu sai tiền,
+      // ghi thiếu/sai HDSD) thì tối đa 2 điểm dù AI đọc hội thoại thấy sinh viên "nói" là đã làm đúng.
       const types = OTC_ACTION_TYPES[c.code];
-      if (types && r0.status === 'scored' && r0.score >= 3 && !actions.some((a) => types.includes(a.action_type))) {
-        r0 = { ...r0, score: 2, comment: (r0.comment ? r0.comment + ' ' : '') + 'Nhật ký 3D không có thao tác tương ứng nên tối đa 2 điểm.' };
+      if (types && r0.status === 'scored') {
+        const hits = actions.filter((a) => types.includes(a.action_type));
+        const invalidHits = hits.filter((a) => a.action_result === 'invalid');
+        if (!hits.length) {
+          r0 = { ...r0, score: 0, evidence: 'Không tìm thấy thao tác tương ứng trong nhật ký 3D.',
+            comment: 'Chưa thực hiện thao tác này trong môi trường mô phỏng — cho 0 điểm dù hội thoại có nhắc tới.' };
+        } else if (invalidHits.length && r0.score > 2) {
+          r0 = { ...r0, score: 2, comment: (r0.comment ? r0.comment + ' ' : '')
+            + `Nhật ký 3D ghi nhận ${invalidHits.length} thao tác KHÔNG hợp lệ (${invalidHits.map((a) => a.description_vi || a.action_type).slice(0, 2).join('; ')}) nên tối đa 2 điểm.` };
+        }
       }
       if (r0.status === 'scored' && !r0.evidence) r0 = { ...r0, evidence: '(AI chưa nêu trích dẫn cụ thể — giảng viên nên đối chiếu hội thoại)' };
+      // req #230 mục 1 — evidence chỉ trích lời khách hàng (không có lượt của dược sĩ) → gắn cảnh báo.
+      if (r0.status === 'scored' && c.source !== 'audio' && !otcEvidenceCitesStudent(messages, r0.evidence)) {
+        r0 = { ...r0, comment: '⚠️ Minh chứng AI trích dẫn có thể là lời khách hàng, chưa phải lời dược sĩ — giảng viên nên đối chiếu lại hội thoại. ' + (r0.comment || '') };
+      }
     }
     rows.push({ crit: c, ...r0 });
   }
