@@ -799,8 +799,10 @@ function bind(root) {
         ${school.length ? `<div class="sgf-inbox-head"><span>Chức năng bạn khác đang làm</span></div>
           ${school.slice(0, 5).map(f => `<div class="sgf-folder">
             <span class="sgf-folder-t">${escapeHtml(f.title)}</span>
-            <span class="sgf-folder-m">${escapeHtml(FOLDER_STATE[f.state] || f.state)}</span>
-            <button type="button" class="sgf-chip" data-folder-vote="${f.id}" ${f.voted ? 'disabled' : ''}>Ủng hộ · ${Number(f.votes)}</button></div>`).join('')}` : ''}`;
+            <span class="sgf-folder-m">${escapeHtml(FOLDER_STATE[f.state] || f.state)} · ${Number(f.requests)} yêu cầu</span>
+            <button type="button" class="sgf-chip" data-folder-vote="${f.id}" data-voted="${f.voted ? '1' : '0'}" aria-pressed="${f.voted ? 'true' : 'false'}"
+              title="Ủng hộ: báo Ban điều hành bạn cũng muốn chức năng này, không làm gì thêm. Bấm lại để bỏ ủng hộ.">
+              ${f.voted ? 'Đã ủng hộ' : 'Ủng hộ'} · ${Number(f.votes)}</button></div>`).join('')}` : ''}`;
     } catch { folderBox.hidden = true; }
   }
 
@@ -839,9 +841,16 @@ function bind(root) {
     const vote = e.target.closest('[data-folder-vote]');
     if (vote) {
       vote.disabled = true;
+      const voted = vote.dataset.voted === '1';
       const r = await fetch(`api/ai-board/folders/${encodeURIComponent(vote.dataset.folderVote)}/vote`, {
-        method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': await csrfToken() } }).catch(() => null);
-      if (r?.ok) vote.textContent = `Ủng hộ · ${(await r.json()).votes}`; else vote.disabled = false;
+        method: voted ? 'DELETE' : 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': await csrfToken() } }).catch(() => null);
+      if (r?.ok) {
+        const body = await r.json();
+        vote.dataset.voted = body.voted ? '1' : '0';
+        vote.setAttribute('aria-pressed', body.voted ? 'true' : 'false');
+        vote.textContent = `${body.voted ? 'Đã ủng hộ' : 'Ủng hộ'} · ${body.votes}`;
+      }
+      vote.disabled = false;
     }
   });
 

@@ -184,6 +184,9 @@ export function attachAiBoardRequestRoutes(router, {
   router.post('/api/ai-board/folders/:id/vote', requireAuth, requireStrictCsrf, (req, res) => {
     try { res.json(store.voteFolder(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
   });
+  router.delete('/api/ai-board/folders/:id/vote', requireAuth, requireStrictCsrf, (req, res) => {
+    try { res.json(store.unvoteFolder(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
+  });
   router.post('/api/ai-board/folders/:id/archive', requireAuth, requireStrictCsrf, (req, res) => {
     try { res.json(store.archiveFolder(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
   });

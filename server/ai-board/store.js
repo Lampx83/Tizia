@@ -545,7 +545,14 @@ export function createAiBoardStore(db, hooks = {}) {
     if (folder.owner_user_id === Number(userId)) throw new WorkerContractError('cannot vote own folder', 409, 'own_folder');
     db.prepare('INSERT OR IGNORE INTO ai_feature_folder_votes(folder_id, user_id, created_at) VALUES (?, ?, ?)')
       .run(folder.id, Number(userId), now);
-    return { ok: true, votes: db.prepare('SELECT COUNT(*) AS n FROM ai_feature_folder_votes WHERE folder_id=?').get(folder.id).n };
+    return { ok: true, voted: true, votes: db.prepare('SELECT COUNT(*) AS n FROM ai_feature_folder_votes WHERE folder_id=?').get(folder.id).n };
+  }
+
+  function unvoteFolder(folderId, userId) {
+    const folder = db.prepare('SELECT id FROM ai_feature_folders WHERE id=?').get(Number(folderId));
+    if (!folder) throw new WorkerContractError('folder not found', 404, 'folder_not_found');
+    db.prepare('DELETE FROM ai_feature_folder_votes WHERE folder_id=? AND user_id=?').run(folder.id, Number(userId));
+    return { ok: true, voted: false, votes: db.prepare('SELECT COUNT(*) AS n FROM ai_feature_folder_votes WHERE folder_id=?').get(folder.id).n };
   }
 
   /** Admin: mọi folder (tab "Chức năng"): trạng thái, số yêu cầu, GPU-s đã dùng, trace của root mới nhất. */
@@ -1911,6 +1918,7 @@ export function createAiBoardStore(db, hooks = {}) {
     listAdminQueue,
     listFolders,
     voteFolder,
+    unvoteFolder,
     listAdminFolders,
     approveFolder,
     revokeFolder,
