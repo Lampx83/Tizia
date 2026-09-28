@@ -7,6 +7,7 @@
 import { LIMITS, WorkerContractError } from './store.js';
 import { evalTaskSplit } from './eval-tasks.js';
 import { listFrozenScores } from './frozen-benchmark.js';
+import { listPostMergeWatch } from './post-merge-watch.js';
 
 const SI = LIMITS.self_improve;
 const DAY_MS = 24 * 3600_000;
@@ -126,7 +127,9 @@ export function listNights(db, limit = 30) {
   const empty = emptyNights(db);
   return { ...state(db), paused: empty >= SI.pause_after_empty_nights, empty_nights: empty, limits: SI, nights,
     // Ticket 08: đường cong học — không phụ thuộc đêm nào, gộp vào cùng response cho tab admin.
-    frozen: listFrozenScores(db) };
+    frozen: listFrozenScores(db),
+    // Ticket 09: kết quả theo dõi production sau mỗi lần merge self, cùng response cho tab admin.
+    post_merge_watch: listPostMergeWatch(db) };
 }
 
 // frozen_at (ticket 08): mốc chụp bộ đánh giá đóng băng — chỉ ghi lần bật đầu tiên (COALESCE giữ giá trị cũ),

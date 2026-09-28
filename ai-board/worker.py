@@ -456,6 +456,13 @@ def run_self_improve_night(client: WorkerClient, deps, *, clock: Callable[[], in
                                         checkout_repo=REPO_ROOT)
         client.post("/api/ai-board/worker/self-improve/frozen-benchmark/report", {"pr_number": item["pr_number"], **measured})
         return {"status": "progress", "step": "frozen_measured", "pr_number": item["pr_number"]}
+    # Theo dõi production sau merge + tự revert (ticket 09): 1 self PR đã merge có cửa sổ "sau" vừa trôi qua
+    # chưa kết luận → server tự tính (không cần model/GPU), có thể tự tạo yêu cầu self revert. Trước chẩn đoán.
+    watch_pending = client.post("/api/ai-board/worker/self-improve/post-merge-watch/pending", {})
+    if watch_pending.get("pending"):
+        item = watch_pending["pending"][0]
+        client.post("/api/ai-board/worker/self-improve/post-merge-watch/check", {"pr_number": item["pr_number"]})
+        return {"status": "progress", "step": "post_merge_watched", "pr_number": item["pr_number"]}
     rows = state.get("variants") or []
     created = [v for v in rows if v.get("status") != "dropped"]  # "biến thể" = yêu cầu self đã tạo được
     spent = state.get("gpu_s_propose") or 0

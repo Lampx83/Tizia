@@ -48,7 +48,7 @@ class FakeNightServer:
     """server + worker/self-improve/night(-report) + eval-tasks + self-requests + frozen-benchmark, không mạng."""
 
     def __init__(self, *, run=True, reason=None, skip_clusters=None, learning=None, self_replies=None,
-                 frozen_pending=None, frozen_tasks=None):
+                 frozen_pending=None, frozen_tasks=None, watch_pending=None):
         self.run, self.reason, self.skip_clusters = run, reason, list(skip_clusters or [])
         self.night_state = {"variants": [], "pr_sync": None, "gpu_s_propose": 0}
         self.learning = learning if learning is not None else [task(1)]
@@ -58,6 +58,8 @@ class FakeNightServer:
         self.frozen_pending = list(frozen_pending or [])  # [{pr_number, sha}], self-improve ticket 08
         self.frozen_tasks = list(frozen_tasks or [])
         self.frozen_reports = []
+        self.watch_pending = list(watch_pending or [])  # [{pr_number, sha, closed_at}], self-improve ticket 09
+        self.watch_checked = []
 
     def post(self, path, payload):
         self.calls.append((path, payload))
@@ -87,6 +89,12 @@ class FakeNightServer:
         if path.endswith("/frozen-benchmark/report"):
             self.frozen_reports.append(payload)
             return {"score": payload}
+        if path.endswith("/post-merge-watch/pending"):
+            done = {c["pr_number"] for c in self.watch_checked}
+            return {"pending": [p for p in self.watch_pending if p["pr_number"] not in done]}
+        if path.endswith("/post-merge-watch/check"):
+            self.watch_checked.append(payload)
+            return {"watch": {"pr_number": payload["pr_number"], "status": "ok"}}
         raise AssertionError(path)
 
 
@@ -245,6 +253,48 @@ def test_no_pending_frozen_measurement_falls_straight_through_to_diagnosis():
     second = run_self_improve_night(server, d, clock=lambda: IN_WINDOW_MS)  # bỏ qua bước đo, chẩn đoán luôn
     assert second["status"] == "progress" and second["step"] == "created"
     assert calls_to(server, "/frozen-benchmark/report") == []
+
+
+# ---- theo dõi production sau merge + tự revert (ticket 09): 1 self PR đã merge có cửa sổ "sau" đã trôi qua,
+# chưa kết luận → server tự tính (không cần model/GPU), worker chỉ báo đúng pr_number cần kiểm, trước chẩn đoán ----
+
+def test_a_pending_post_merge_watch_is_checked_once_before_diagnosis_resumes():
+    server = FakeNightServer(learning=[], watch_pending=[{"pr_number": 72, "sha": "c" * 40, "closed_at": 1}])
+
+    first = run_self_improve_night(server, deps(), clock=lambda: IN_WINDOW_MS)
+    assert first == {"status": "progress", "step": "pr_sync"}
+    assert calls_to(server, "/post-merge-watch/pending") == []  # bước 1 chỉ đồng bộ PR
+
+    second = run_self_improve_night(server, deps(), clock=lambda: IN_WINDOW_MS)
+    assert second == {"status": "progress", "step": "post_merge_watched", "pr_number": 72}
+    assert [p for _, p in calls_to(server, "/post-merge-watch/check")] == [{"pr_number": 72}]
+
+    third = run_self_improve_night(server, deps(), clock=lambda: IN_WINDOW_MS)
+    assert third == {"status": "done", "variants": 0}  # đã kiểm xong, phần học rỗng: hết việc cho đêm nay
+    assert calls_to(server, "/post-merge-watch/pending")[-1][1] == {}  # gọi lại: không còn pending, không kiểm nữa
+    assert len(server.watch_checked) == 1
+
+
+def test_no_pending_post_merge_watch_falls_straight_through_to_diagnosis():
+    server = FakeNightServer(learning=[task(1)])  # watch_pending mặc định rỗng
+    d = deps(GOOD)
+    run_self_improve_night(server, d, clock=lambda: IN_WINDOW_MS)  # pr_sync
+    second = run_self_improve_night(server, d, clock=lambda: IN_WINDOW_MS)  # bỏ qua bước theo dõi, chẩn đoán luôn
+    assert second["status"] == "progress" and second["step"] == "created"
+    assert calls_to(server, "/post-merge-watch/check") == []
+
+
+def test_multiple_pending_post_merge_watches_are_checked_one_per_call():
+    server = FakeNightServer(learning=[], watch_pending=[
+        {"pr_number": 10, "sha": "a" * 40, "closed_at": 1}, {"pr_number": 11, "sha": "b" * 40, "closed_at": 2}])
+    run_self_improve_night(server, deps(), clock=lambda: IN_WINDOW_MS)  # pr_sync
+    a = run_self_improve_night(server, deps(), clock=lambda: IN_WINDOW_MS)
+    assert a == {"status": "progress", "step": "post_merge_watched", "pr_number": 10}
+    b = run_self_improve_night(server, deps(), clock=lambda: IN_WINDOW_MS)
+    assert b == {"status": "progress", "step": "post_merge_watched", "pr_number": 11}
+    c = run_self_improve_night(server, deps(), clock=lambda: IN_WINDOW_MS)
+    assert c == {"status": "done", "variants": 0}
+    assert [p["pr_number"] for p in server.watch_checked] == [10, 11]
 
 
 def test_skip_clusters_from_the_server_are_passed_to_diagnosis():

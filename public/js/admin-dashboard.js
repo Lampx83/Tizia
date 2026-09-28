@@ -1838,9 +1838,31 @@ function frozenChart(scores) {
     <div style="font-size:11px;color:var(--muted);margin-top:4px">${legend}</div>`;
 }
 
+// Theo dõi sau merge + tự revert (self-improve ticket 09): kết quả theo self PR đã merge.
+const WATCH_STATUS_LABEL = { waiting: 'chưa đủ dữ liệu', ok: 'không tụt', dropped: 'tụt — đã tạo yêu cầu revert' };
+function pct(v) { return v == null ? '—' : `${v}%`; }
+function watchSection(rows) {
+  if (!rows.length) return '';
+  return `
+    <div class="panel-title" style="margin-top:18px">Theo dõi production sau merge
+      <span class="trace-sub">mỗi dòng = 1 self PR đã merge; tụt quá ngưỡng tự tạo yêu cầu self revert</span></div>
+    <table>
+      <thead><tr><th>PR</th><th>Trạng thái</th><th>Trước merge</th><th>Sau merge</th><th>Tụt (điểm)</th><th>Revert</th></tr></thead>
+      <tbody>${rows.map(w => `
+        <tr>
+          <td>#${w.pr_number}${w.sha ? `<div class="trace-sub">${esc(String(w.sha).slice(0, 7))}</div>` : ''}</td>
+          <td><span class="pill"${w.status === 'dropped' ? ' style="color:var(--bad)"' : ''}>${esc(WATCH_STATUS_LABEL[w.status] || w.status)}</span></td>
+          <td>${w.before_runs} lượt<div class="trace-sub">ready ${pct(w.before_ready_pct)} · merge ${pct(w.before_merge_pct)}</div></td>
+          <td>${w.after_runs} lượt<div class="trace-sub">ready ${pct(w.after_ready_pct)} · merge ${pct(w.after_merge_pct)}</div></td>
+          <td>${w.drop_ready_pts != null ? `ready ${w.drop_ready_pts}` : ''}${w.drop_merge_pts != null ? `${w.drop_ready_pts != null ? ' · ' : ''}merge ${w.drop_merge_pts}` : ''}</td>
+          <td>${w.revert_request_id ? `yêu cầu #${w.revert_request_id}` : '—'}</td>
+        </tr>`).join('')}</tbody>
+    </table>`;
+}
+
 function nightSection(si) {
   if (!si) return '';
-  const { enabled, paused, empty_nights: empty, limits, nights = [], frozen = [] } = si;
+  const { enabled, paused, empty_nights: empty, limits, nights = [], frozen = [], post_merge_watch: watch = [] } = si;
   return `
     <div id="si-nights" style="margin-bottom:22px">
       <div class="toolbar" style="align-items:center;gap:10px">
@@ -1873,6 +1895,7 @@ function nightSection(si) {
       <div class="panel-title" style="margin-top:18px">Đường cong học — bộ đánh giá đóng băng
         <span class="trace-sub">mỗi điểm = 1 lần merge thay đổi self; bộ này chưa bao giờ đưa cho board</span></div>
       ${frozenChart(frozen)}
+      ${watchSection(watch)}
     </div>`;
 }
 function wireNightSection(host) {
