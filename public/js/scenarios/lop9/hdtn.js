@@ -615,13 +615,13 @@ export const S9HDTN_WEEKS = [
         'Để cha mẹ giữ hết hay tiêu hết ngay đều khiến em <b>không học được</b> cách quản lý tiền.',
       ],
       ['Sai — để cha mẹ giữ hết thì không tập quản lý tiền.', 'Sai — quản lý tiền tiêu vặt là việc cần.', 'Đúng — lập kế hoạch chi tiêu và để dành một phần tiết kiệm.', 'Sai — tiêu hết ngay là thói quen không tốt.']),
-    Q('Quy tắc 50-30-20?', ['50% mong muốn, 30% nhu cầu, 20% tiết kiệm', '50% nhu cầu thiết yếu, 30% mong muốn, 20% tiết kiệm', '50-50', '50% tiết kiệm, 30% đầu tư, 20% chi tiêu', '100% tiêu'], 1, 'Quy tắc 50-30-20 phổ biến.',
+    Q('Quy tắc 50-30-20?', ['50% mong muốn, 30% nhu cầu, 20% tiết kiệm', '50% nhu cầu thiết yếu, 30% mong muốn, 20% tiết kiệm', '50-50', '50% tiết kiệm, 30% đầu tư, 20% chi tiêu'], 1, 'Quy tắc 50-30-20 phổ biến.',
       [
         '<b>Quy tắc 50-30-20</b> là cách chia thu nhập (hay tiền tiêu vặt) thành ba phần để chi tiêu cân đối:',
         '<ul><li><b>50%</b> cho <b>nhu cầu thiết yếu</b> (ăn, học, đi lại).</li><li><b>30%</b> cho <b>mong muốn</b> (giải trí, sở thích).</li><li><b>20%</b> để <b>tiết kiệm</b>.</li></ul>',
         'Nhớ thứ tự: <i>nhu cầu trước, mong muốn sau, luôn dành một phần tiết kiệm</i>.',
       ],
-      ['Sai — đảo ngược nhu cầu và mong muốn so với quy tắc.', 'Đúng — 50% nhu cầu thiết yếu, 30% mong muốn, 20% tiết kiệm.', 'Sai — quy tắc chia làm ba phần, không phải hai.', 'Sai — tỷ lệ này không đúng với quy tắc 50-30-20.', 'Sai — tiêu hết 100% thì không còn tiết kiệm.']),
+      ['Sai — đảo ngược nhu cầu và mong muốn so với quy tắc.', 'Đúng — 50% nhu cầu thiết yếu, 30% mong muốn, 20% tiết kiệm.', 'Sai — quy tắc chia làm ba phần, không phải hai.', 'Sai — tỷ lệ này không đúng với quy tắc 50-30-20.']),
     Q('Tiết kiệm có ích khi?', ['Chỉ tích trữ tiền mặt trong nhà', 'Có quỹ dự phòng, mua thứ lớn', 'Chỉ khi đã có nhiều tiền dư', 'Không cần'], 1, 'Tiết kiệm tạo an toàn tài chính.',
       [
         '<b>Tiết kiệm</b> là dành lại một phần tiền cho tương lai, tạo <i>an toàn tài chính</i>:',

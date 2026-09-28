@@ -35,13 +35,25 @@ Xử lý yêu cầu thật. Bậc thang dự phòng bên dưới **không dùng 
 Việc **đầu tiên** của phiên là gửi thông báo cho chủ sở hữu, nêu đúng hai việc
 cần người bấm nút — rồi mới làm việc dự phòng:
 
-1. **Merge PR #97** — route đọc-chỉ `/api/ai-board/inbox` vào nhánh production.
-2. **Đặt `AI_BOARD_KEY`** trên production (`openssl rand -hex 32`) rồi redeploy.
+1. ~~**Merge PR #97**~~ — **ĐÃ XONG 2026-09-27.** Route đọc-chỉ
+   `/api/ai-board/inbox` đã nằm trên nhánh production `feat/postgres-migration`.
+2. **Đặt `AI_BOARD_KEY`** trên production (`openssl rand -hex 32`) **rồi
+   redeploy nhánh `feat/postgres-migration`.**
 
-Hai việc này **KHÔNG được tự làm**. PR #97 đụng `auth.js` + `index.js` trên nhánh
-production; `AI_BOARD_KEY` là secret nhạy cảm ngang mật khẩu admin. Cả hai vượt
-ngưỡng "rủi ro thấp". Lặp lại thông báo mỗi phiên cho tới khi xong — im lặng
-chịu đựng đã khiến bế tắc kéo dài 14 ngày mà không ai biết.
+Việc (2) **KHÔNG được tự làm**: `AI_BOARD_KEY` là secret nhạy cảm ngang mật khẩu
+admin, và redeploy nhánh production vượt ngưỡng "rủi ro thấp". Lặp lại thông báo
+mỗi phiên cho tới khi xong — im lặng chịu đựng đã khiến bế tắc kéo dài 14 ngày
+mà không ai biết.
+
+> **Cách phân biệt "chưa merge" với "đã merge nhưng chưa redeploy"** (đo bằng
+> `node scripts/check-deployed-build.mjs`): nếu `/api/ai-board/inbox` trả
+> `401 {"needLogin":true}` thì đó là thông điệp của **gate chung** ⇒ bản đang
+> chạy **chưa có code PR #97**, tức chưa redeploy. Nếu trả `401 "Thiếu header
+> x-ai-board-key"` thì code đã lên, chỉ còn thiếu `AI_BOARD_KEY`. Nếu trả `404`
+> thì code đã lên nhưng `AI_BOARD_KEY` chưa đặt (route không được mount).
+>
+> ⚠️ Thông điệp leo thang in ra bởi `scripts/ai-board-preflight.mjs` vẫn hardcode
+> "merge PR #97" — **đã lạc hậu**. Tin file này, đừng tin dòng đó.
 
 ### 2b. Bậc thang việc dự phòng
 
