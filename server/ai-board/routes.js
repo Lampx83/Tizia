@@ -10,6 +10,7 @@ import { deleteEvalTask, evalTaskSplit, labelEvalTask, listEvalTasks, openPullRe
   reportPullRequest } from './eval-tasks.js';
 import { listNights, recordSelfVerdict, reportNight, setSelfImproveEnabled, startNight } from './self-improve.js';
 import { pendingFrozenMeasurements, recordFrozenMeasurement } from './frozen-benchmark.js';
+import { checkPostMergeWatch, pendingPostMergeWatch } from './post-merge-watch.js';
 
 // Không cấu hình model phân loại → không gọi gì (hành vi trước ticket 04).
 const defaultClassifyRequest = (title, detail) => (
@@ -442,6 +443,16 @@ export function attachAiBoardWorkerRoutes(router, {
   }));
   router.post('/api/ai-board/worker/self-improve/frozen-benchmark/report', authenticate, handle((req, res) => {
     res.json({ score: recordFrozenMeasurement(store.db, req.body) });
+  }));
+
+  // Theo dõi production sau merge + tự revert (self-improve ticket 09): self PR đã merge, cửa sổ sau đã trôi
+  // qua, chưa kết luận → worker gọi check đúng PR đó; server tự đọc closed_at/sha, tính tỉ lệ, ghi kết luận,
+  // tự tạo đúng 1 yêu cầu self revert nếu tụt quá ngưỡng (không tự merge).
+  router.post('/api/ai-board/worker/self-improve/post-merge-watch/pending', authenticate, handle((_req, res) => {
+    res.json({ pending: pendingPostMergeWatch(store.db) });
+  }));
+  router.post('/api/ai-board/worker/self-improve/post-merge-watch/check', authenticate, handle((req, res) => {
+    res.json({ watch: checkPostMergeWatch(store.db, req.body?.pr_number, store.createSelfRequest) });
   }));
 
   // Trạng thái PR (self-improve ticket 03): worker hỏi GitHub các PR này rồi báo PR đã đóng; không webhook.
