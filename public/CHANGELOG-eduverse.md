@@ -4,6 +4,84 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-28 — Phiên 76 · Đóng bậc 3: xoá sạch lệch phân bố đáp án, ngân hàng quiz về ~25/25/25/25
+
+**Kết luận về hộp thư:** vẫn **không đọc được** — `consecutive_failures = 16`, từ `2026-09-13` (`ai-board/inbox-status.json`). Sáu endpoint đều trả **401**, `AI_BOARD_KEY` chưa có trong môi trường. Phiên này **không xử lý yêu cầu nào của người học** vì không có yêu cầu nào đọc được, và **không bịa ra yêu cầu**.
+
+### Leo thang — nay chỉ còn MỘT việc cần người bấm nút (không còn hai)
+
+**PR #97 đã được merge ngày 2026-09-27.** Nửa đầu của bế tắc 16 ngày đã xong. Nhưng đo thật hôm nay:
+
+```
+node scripts/check-deployed-build.mjs
+  /api/ai-board/inbox  401 needLogin  ⇒ auth gate chung vẫn nuốt request
+```
+
+`401 needLogin` là thông điệp của **gate chung**, không phải của route hộp thư (route trả `"Thiếu header x-ai-board-key"`). Nghĩa là **bản đang chạy trên production chưa có code của PR #97** — production chưa được build lại sau khi merge. Việc còn lại, AI không được phép tự làm:
+
+1. ~~Merge PR #97~~ — **xong 2026-09-27**.
+2. **Đặt `AI_BOARD_KEY`** trên production (`openssl rand -hex 32`) **rồi redeploy nhánh `feat/postgres-migration`**. Secret + nhánh production ⇒ vượt ngưỡng "rủi ro thấp".
+
+### Việc dự phòng — bậc 3 (bậc thấp nhất còn việc)
+
+`ai-board-preflight.mjs` chỉ đúng bậc 3: **11 môn** có ≥60% đáp án đúng dồn vào **một** vị trí, cộng **2 câu dị dạng**. Nặng nhất là `lop11:gdqp` với **98,1% đáp án đúng nằm ở A** — học sinh chỉ cần chọn A cho mọi câu là đạt 98%, bài kiểm tra mất hoàn toàn giá trị đo lường.
+
+**Con số trước → sau:**
+
+| Chỉ số | Trước | Sau |
+|---|---|---|
+| Môn có ≥60% dồn vào một vị trí | **11** | **0** |
+| Câu dị dạng (không đủ 4 lựa chọn) | **2** | **0** |
+| Toàn bộ ngân hàng (A/B/C/D) | 26,7 / 27,6 / 23,2 / 22,5 | **25,0 / 25,6 / 25,0 / 24,4** |
+| χ² toàn bộ ngân hàng | 212,15 | **8,49** |
+
+Chi tiết 11 môn đã cân bằng (A/B/C/D %, n = 2201 câu):
+
+| Môn | Trước | Sau |
+|---|---|---|
+| `lop11:gdqp` | **98,1** / 0,9 / 0,5 / 0,5 | 25,0 / 25,0 / 25,0 / 25,0 |
+| `lop5:tin-hoc` | **97,8** / 1,1 / 0,6 / 0,6 | 25,4 / 24,9 / 24,9 / 24,9 |
+| `lop12:hdtn` | 1,1 / **97,2** / 1,1 / 0,6 | 25,4 / 24,9 / 24,9 / 24,9 |
+| `lop11:hdtn` | 2,2 / **95,6** / 1,7 / 0,6 | 25,4 / 24,9 / 24,9 / 24,9 |
+| `lop11:cong-nghe` | **92,6** / 6,0 / 0,9 / 0,5 | 25,0 / 25,0 / 25,0 / 25,0 |
+| `lop12:gdcd` | 6,0 / **92,6** / 0,9 / 0,5 | 25,0 / 25,0 / 25,0 / 25,0 |
+| `lop12:cong-nghe` | 9,3 / **88,4** / 1,4 / 0,9 | 25,0 / 25,0 / 25,0 / 25,0 |
+| `lop3:tin-hoc` | **87,8** / 9,9 / 1,7 / 0,6 | 24,9 / 25,4 / 24,9 / 24,9 |
+| `lop4:tin-hoc` | **82,9** / 12,2 / 5,0 / 0,0 | 25,4 / 24,9 / 24,9 / 24,9 |
+| `lop12:tin-hoc` | 26,9 / **69,9** / 2,3 / 0,9 | 25,0 / 25,0 / 25,0 / 25,0 |
+| `lop11:sinh-hoc` | 17,1 / **68,5** / 12,0 / 2,3 | 25,0 / 25,0 / 25,0 / 25,0 |
+
+2 câu dị dạng (đều có **5** lựa chọn thay vì 4, đã bỏ 1 phương án nhiễu yếu nhất, đáp án đúng giữ nguyên):
+
+- `lop8/gdtc.js · S8GDTC-w24-quiz · q[4]` — bỏ `'Không phối hợp'` (trùng ý với `'Cá nhân'`).
+- `lop9/hdtn.js · S9HDTN-w17-quiz · q[1]` — bỏ `'100% tiêu'`.
+
+### Cách làm: hoán vị CẶP `(choice, choiceFeedback)`, không dùng `shuffle-answers.js`
+
+ROUTINE.md cấm `scripts/shuffle-answers.js` vì script đó hoán vị `choices` + `answer` nhưng **không** hoán vị `choiceFeedback` ⇒ làm lệch feedback so với đáp án. Phiên này viết codemod riêng: quét nguồn bằng tokenizer (nhận biết chuỗi/comment/template), lấy **đúng range nguồn** của từng phần tử, rồi **đổi chỗ nguyên văn slice** của cặp `(choice, choiceFeedback)` cùng nhau và ghi lại `answer`. Không serialize lại chuỗi ⇒ không có nguy cơ làm hỏng dấu tiếng Việt hay escape.
+
+Vị trí đích lấy từ "túi" `[0,1,2,3]` trộn bằng RNG **xác định** (mulberry32, seed = hash đường dẫn file) ⇒ phân bố đều 25% mỗi vị trí, **không** tạo chu kỳ đoán được như 0-1-2-3-0-1-2-3, và không tuần nào có ≥3 câu cùng vị trí.
+
+### Ghi chú kiểm thử (chạy thật)
+
+1. `node --check` **PASS** cho cả **13** file `.js` đã sửa.
+2. `node scripts/audit-answer-distribution.js` — con số trước → sau ở bảng trên.
+3. **Kiểm tra runtime**, không chỉ cú pháp: import **thật** file môn + đối chiếu barrel `_index.js`, soi **2557 câu**: nạp được qua barrel · 4 lựa chọn **khác nhau** · `answer` ∈ 0..3 · đủ 4 `choiceFeedback` · feedback tại vị trí `answer` mở đầu `"Đúng"`, ba feedback còn lại mở đầu `"Sai"` — đây là cách duy nhất bắt lỗi lệch index `answer`. **✅ 0 vấn đề.**
+4. **So sánh HEAD ↔ bản sửa trên 2201 câu**: `stem`/`explanation` không đổi · tập hợp cặp `(choice, choiceFeedback)` **y hệt** · đáp án đúng vẫn là **cùng một nội dung** và **cùng một feedback**. Chứng minh chỉ vị trí đổi, nội dung không đổi. **✅ 0 sai lệch.**
+5. Ràng buộc mỗi tuần: soi **396 tuần**, số câu cùng vị trí nhiều nhất trong một tuần = **2** (ngưỡng < 3). ✅
+6. `node scripts/check-content-integrity.mjs` → ✅ sạch (bậc 1 vẫn 0 → 0).
+
+### ⚠️ Bậc thang dự phòng đã HẾT VIỆC ĐO ĐƯỢC
+
+Sau phiên này `ai-board-preflight.mjs` báo **cả ba bậc đều ✅ sạch**. Theo ROUTINE.md Bước 2b, nếu hộp thư vẫn chết ở phiên sau thì routine **phải ghi 1 dòng kết luận và KHÔNG tạo PR** — không còn việc dự phòng nào để làm. Từ đây, giá trị của routine phụ thuộc **hoàn toàn** vào việc hộp thư sống lại (mục 2 phần leo thang ở trên).
+
+### Hai phát hiện chỉ báo cáo, KHÔNG tự sửa (ngoài phạm vi "rủi ro thấp")
+
+1. **Slug môn HĐTN không thống nhất giữa các domain.** `public/js/domains/primary/subjects.js` và `highschool/subjects.js` đăng ký slug `'htn'`, còn `secondary/subjects.js` đăng ký `'hdtn'`. File học liệu đi theo: `lop1, lop2, lop10, lop11, lop12` khai `'htn'`; `lop6→lop9` khai `'hdtn'`; nhưng **`lop3, lop4, lop5` khai `'hdtn'` trong khi domain primary của chúng chỉ đăng ký `'htn'`** ⇒ 108 scenario của ba lớp này có `subject` không khớp bảng đăng ký môn của domain. Sửa việc này là đổi slug xuyên domain (đụng `modules.js`, `achievements.js`, `scoreup-subject-map.js`) ⇒ **không phải việc rủi ro thấp**, để chủ sở hữu quyết.
+2. **Thông điệp leo thang trong `scripts/ai-board-preflight.mjs` đã lạc hậu.** Script vẫn hardcode "merge PR #97" dù PR #97 merged từ 2026-09-27, nên phiên sau sẽ đọc được chỉ dẫn sai. Sửa nằm trong `scripts/**` ⇒ ngoài phạm vi tự merge của ROUTINE.md, để chủ sở hữu quyết.
+
+---
+
 ## 2026-09-27 — Phiên 75 · Đóng bậc 2: tuần 36 cho 9 môn cuối cùng còn dừng ở tuần 35
 
 **Kết luận về hộp thư:** vẫn **không đọc được** — `consecutive_failures = 15`, từ `2026-09-13` (`ai-board/inbox-status.json`). Sáu endpoint đều trả **401**, `AI_BOARD_KEY` chưa có trong môi trường. Phiên này **không xử lý yêu cầu nào của người học** vì không có yêu cầu nào đọc được, và **không bịa ra yêu cầu**.

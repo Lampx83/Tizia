@@ -794,12 +794,12 @@ export const S8GDTC_WEEKS = [
         '<i>Quan hệ:</i> đập và chắn là hai vai trò <b>đối lập nhưng gắn bó</b>, tương tác chặt chẽ với nhau.<ul><li>Không phải "không liên quan" hay "loại trừ nhau".</li></ul>',
       ],
       ['Đúng — đập để khắc chế chắn, chắn để ngăn đập, là cuộc đối đầu chiến thuật.', 'Sai — đập và chắn là 2 vai trò đối lập, không cùng vai trò.', 'Sai — đập và chắn liên quan chặt chẽ.', 'Sai — chúng tương tác nhau chứ không loại trừ.']),
-    Q('Tinh thần đồng đội bóng chuyền?', ['5 chạm', '1 chạm', 'Cá nhân', 'Mỗi bóng cần 3 chạm + phối hợp đỡ-chuyền-đập', 'Không phối hợp'], 3, 'Sơ đồ chuẩn: chạm 1 đỡ, chạm 2 chuyền 2 (setter), chạm 3 đập (chủ công).',
+    Q('Tinh thần đồng đội bóng chuyền?', ['5 chạm', '1 chạm', 'Cá nhân', 'Mỗi bóng cần 3 chạm + phối hợp đỡ-chuyền-đập'], 3, 'Sơ đồ chuẩn: chạm 1 đỡ, chạm 2 chuyền 2 (setter), chạm 3 đập (chủ công).',
       [
         '<b>Phối hợp đồng đội bóng chuyền</b>: mỗi pha bóng nên dùng <code>3 chạm</code> theo sơ đồ <b>đỡ (chạm 1) → chuyền 2/setter (chạm 2) → đập/chủ công (chạm 3)</b>.<ul><li>Phối hợp nhịp nhàng mới tấn công hiệu quả.</li></ul>',
         '<i>Luật:</i> mỗi bên được chạm bóng <b>tối đa 3 lần</b> trước khi đưa bóng qua lưới (không tính chạm chắn).<ul><li>Chỉ 1 chạm hay không phối hợp đều kém hiệu quả.</li></ul>',
       ],
-      ['Sai — luật cho tối đa 3 chạm mỗi bên, không phải 5.', 'Sai — chỉ 1 chạm thì không phối hợp được.', 'Sai — bóng chuyền là môn đồng đội, không chơi cá nhân.', 'Đúng — mỗi bóng nên dùng 3 chạm phối hợp đỡ-chuyền-đập.', 'Sai — không phối hợp thì không hiệu quả.']),
+      ['Sai — luật cho tối đa 3 chạm mỗi bên, không phải 5.', 'Sai — chỉ 1 chạm thì không phối hợp được.', 'Sai — bóng chuyền là môn đồng đội, không chơi cá nhân.', 'Đúng — mỗi bóng nên dùng 3 chạm phối hợp đỡ-chuyền-đập.']),
   ]),
 
   M(25, 'Đá cầu — Đá hất và đá cầu nhóm 3 người', [
