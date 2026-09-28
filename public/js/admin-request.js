@@ -339,15 +339,30 @@ function renderActions(request, trace) {
   const canRollback = root?.can_rollback;
   // Đã có thay đổi (candidate) → chỉ hoàn tác; chưa làm hoặc đang làm → chỉ hủy.
   const canCancel = !candidate && !['rejected', 'cancelled', 'done'].includes(request.status);
-  if (!canRollback && !canCancel) return ui.flash ? `<div class="flash">${esc(ui.flash)}</div>` : '';
+  const canRetryTransient = root?.phase === 'transient_blocked';
+  if (!canRollback && !canCancel && !canRetryTransient) return ui.flash ? `<div class="flash">${esc(ui.flash)}</div>` : '';
   const busy = root?.live;
   return `<div class="actions">
+      ${canRetryTransient ? `<button class="btn ok" data-action="retry-transient" data-root="${esc(root.id)}"
+        title="Lỗi hạ tầng thoáng qua (GPU dùng chung); chạy lại khi bạn thấy GPU rảnh">Chạy lại ngay</button>` : ''}
       ${canRollback ? `<button class="btn danger-outline" data-action="rollback" ${busy ? 'disabled' : ''}
         title="${busy ? 'AI Board đang xử lý; chờ lượt này xong.' : 'Gỡ thay đổi AI Board đã làm cho yêu cầu này'}">Hoàn tác thay đổi</button>` : ''}
       ${canCancel ? '<button class="btn danger-outline" data-action="cancel">Hủy yêu cầu</button>' : ''}
       ${ui.flash ? `<span class="flash">${esc(ui.flash)}</span>` : ''}
     </div>
     ${ui.confirm ? renderConfirm(request, candidate) : ''}`;
+}
+
+async function retryTransient(btn) {
+  btn.disabled = true;
+  try {
+    await post(`/api/admin/ai-board/tickets/${encodeURIComponent(btn.dataset.root)}/retry-transient`, {});
+    ui.flash = 'Đã đưa yêu cầu về hàng đợi; worker sẽ nhận ở lượt tới.';
+  } catch (e) {
+    ui.flash = `Không chạy lại được: ${e.message}`;
+    btn.disabled = false;
+  }
+  await refresh();
 }
 
 function renderConfirm(request, candidate) {
@@ -512,6 +527,7 @@ document.addEventListener('click', e => {
   else if (action === 'authorize-ask') { ui.authorizeConfirm = btn.dataset.hash; ui.authorizeMsg = ''; }
   else if (action === 'authorize-close') { ui.authorizeConfirm = null; }
   else if (action === 'authorize-go') return authorizePlan(btn);
+  else if (action === 'retry-transient') return retryTransient(btn);
   render();
   if (action === 'confirm-next') $('#confirm-input')?.focus();
 });

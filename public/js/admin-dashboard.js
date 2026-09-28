@@ -1920,15 +1920,58 @@ function wireNightSection(host) {
     toast(res.data.enabled ? 'Đã bật vòng tự cải thiện đêm' : 'Đã tắt vòng tự cải thiện đêm');
     loadSelfImprove();
   }));
+  host.querySelectorAll('[data-tr-switch]').forEach(btn => btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    const res = await api('/api/admin/ai-board/transient-retry/switch', { method: 'POST',
+      body: JSON.stringify({ enabled: btn.dataset.trSwitch === '1' }) });
+    if (!res.ok) { toast('Lỗi: ' + (res.data?.message || res.data?.error || res.status), 'err'); btn.disabled = false; return; }
+    toast(res.data.enabled ? 'Đã bật tự chạy lại' : 'Đã tắt tự chạy lại');
+    loadSelfImprove();
+  }));
+  host.querySelectorAll('[data-tr-retry]').forEach(btn => btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    const res = await api(`/api/admin/ai-board/tickets/${btn.dataset.trRetry}/retry-transient`, { method: 'POST' });
+    if (!res.ok) { toast('Lỗi: ' + (res.data?.message || res.data?.error || res.status), 'err'); btn.disabled = false; return; }
+    toast('Đã đưa yêu cầu về hàng đợi');
+    loadSelfImprove();
+  }));
+}
+
+// Tự chạy lại yêu cầu bị chặn do lỗi hạ tầng thoáng qua (mọi loại yêu cầu, không riêng self improve —
+// công tắc sống chung tab "Tự cải thiện" theo yêu cầu admin, dù áp dụng rộng hơn self).
+function transientRetrySection(tr) {
+  if (!tr) return '';
+  const { enabled, retry_after_ms, blocked = [] } = tr;
+  return `
+    <div id="tr-blocked" style="margin-bottom:22px">
+      <div class="toolbar" style="align-items:center;gap:10px">
+        <button class="btn${enabled ? ' primary' : ''}" data-tr-switch="${enabled ? '0' : '1'}">
+          ${enabled ? `Đang bật — tắt tự chạy lại sau ${Math.round(retry_after_ms / 60000)} phút` : 'Đang tắt — bật tự chạy lại'}</button>
+        <span class="trace-sub">Áp dụng mọi loại yêu cầu, không riêng tự cải thiện. Tắt = bạn tự bấm "Chạy lại ngay" khi thấy GPU rảnh trên Grafana.</span>
+      </div>
+      ${blocked.length ? `<table>
+        <thead><tr><th>#</th><th>Tiêu đề</th><th>Loại</th><th>Lý do</th><th></th></tr></thead>
+        <tbody>${blocked.map(b => `
+          <tr>
+            <td>${b.source_request_id}</td>
+            <td><a href="/admin-request.html?id=${b.source_request_id}" target="_blank" rel="noopener">${esc(b.title)}</a></td>
+            <td>${esc(b.type)}</td>
+            <td>${esc(b.public_note || '')}</td>
+            <td><button class="btn primary" data-tr-retry="${b.id}">Chạy lại ngay</button></td>
+          </tr>`).join('')}</tbody>
+      </table>` : '<div class="loading">Không có yêu cầu nào đang chờ.</div>'}
+    </div>`;
 }
 
 async function loadSelfImprove() {
-  const [si, r] = await Promise.all([api('/api/admin/ai-board/self-improve'), api(`/api/admin/ai-board/eval-tasks?status=${evalStatus}`)]);
+  const [si, tr, r] = await Promise.all([api('/api/admin/ai-board/self-improve'), api('/api/admin/ai-board/transient-retry'),
+    api(`/api/admin/ai-board/eval-tasks?status=${evalStatus}`)]);
   const host = $('#tabbody');
   if (!r.ok) { host.innerHTML = `<div class="err">Lỗi: ${esc(r.data?.error || r.status)}</div>`; return; }
   const { tasks = [], counts = {} } = r.data;
   const editable = evalStatus !== 'retired';
   host.innerHTML = `
+    ${tr.ok ? transientRetrySection(tr.data) : `<div class="err">Lỗi tự chạy lại: ${esc(tr.data?.error || tr.status)}</div>`}
     ${si.ok ? nightSection(si.data) : `<div class="err">Lỗi vòng đêm: ${esc(si.data?.error || si.status)}</div>`}
     <div class="toolbar">${Object.entries(EVAL_STATUS_LABEL).map(([k, l]) =>
       `<button class="btn${k === evalStatus ? ' primary' : ''}" data-eval-status="${k}">${l} (${counts[k] || 0})</button>`).join(' ')}</div>

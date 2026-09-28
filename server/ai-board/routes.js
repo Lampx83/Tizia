@@ -11,6 +11,7 @@ import { deleteEvalTask, evalTaskSplit, labelEvalTask, listEvalTasks, openPullRe
 import { listNights, recordSelfVerdict, reportNight, setSelfImproveEnabled, startNight } from './self-improve.js';
 import { pendingFrozenMeasurements, recordFrozenMeasurement } from './frozen-benchmark.js';
 import { checkPostMergeWatch, pendingPostMergeWatch } from './post-merge-watch.js';
+import { listTransientBlocked, retryTransientTicket, setTransientRetryEnabled, transientRetryState } from './transient-retry.js';
 
 // Không cấu hình model phân loại → không gọi gì (hành vi trước ticket 04).
 const defaultClassifyRequest = (title, detail) => (
@@ -262,6 +263,17 @@ export function attachAiBoardRequestRoutes(router, {
   });
   router.post('/api/admin/ai-board/self-improve/switch', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
     try { res.json(setSelfImproveEnabled(store.db, req.body?.enabled, req.user.id)); } catch (error) { folderError(res, error); }
+  });
+
+  // ── Tự chạy lại yêu cầu bị chặn do lỗi hạ tầng thoáng qua (mọi loại yêu cầu, không riêng self) ──
+  router.get('/api/admin/ai-board/transient-retry', requireAuth, requireAdmin, (_req, res) => {
+    res.json({ ...transientRetryState(store.db), blocked: listTransientBlocked(store.db) });
+  });
+  router.post('/api/admin/ai-board/transient-retry/switch', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
+    try { res.json(setTransientRetryEnabled(store.db, req.body?.enabled, req.user.id)); } catch (error) { folderError(res, error); }
+  });
+  router.post('/api/admin/ai-board/tickets/:id/retry-transient', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
+    try { res.json(retryTransientTicket(store.db, req.params.id)); } catch (error) { folderError(res, error); }
   });
 
   router.post('/api/admin/ai-board/tickets/:id/authorize-plan', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {

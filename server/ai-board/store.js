@@ -45,6 +45,10 @@ const PHASES = {
   pre_pr_ready: { label: 'đã qua kiểm tra, sẵn sàng PR' },
   pre_pr_review: { label: 'cần người xem trước PR' },
   pre_pr_blocked: { label: 'chưa qua kiểm tra trước PR' },
+  // Lỗi hạ tầng thoáng qua (transient) sau khi backoff gọi model đã hết: không tự về hàng đợi qua lease hết hạn
+  // như các phase khác (status chuyển waiting_admin nên tránh nhánh status='running' của claimTransaction) —
+  // admin bấm "Chạy lại ngay" (retryTransientTicket), hoặc công tắc limits.transient_retry.enabled tự làm việc đó sau retry_after_ms.
+  transient_blocked: { label: 'lỗi hạ tầng, chờ chạy lại' },
   pr_open: { label: 'đã mở PR vào dev, chờ người duyệt' },
   critical_violation: { label: 'vi phạm an toàn' },
   budget_exhausted: { label: 'hết ngân sách' },
@@ -921,7 +925,9 @@ export function createAiBoardStore(db, hooks = {}) {
       SELECT t.id, t.phase
       FROM ai_tickets t JOIN requests r ON r.id=t.source_request_id
       WHERE t.kind='root' AND r.owner_state='verified'
-        AND ((t.status='queued' AND (
+        -- lease_expires_at trên hàng 'queued' (bình thường NULL) đóng vai "không nhận trước giờ này": tự chạy
+        -- lại sau lỗi hạ tầng thoáng qua (transient_retry) dời nó tới tương lai thay vì cho nhận ngay.
+        AND ((t.status='queued' AND (t.lease_expires_at IS NULL OR t.lease_expires_at<=?) AND (
               t.phase IN (${ANY_QUEUE})
               OR (? = 'plan' AND t.phase IN (${PLAN_QUEUE}))
             ))
@@ -939,7 +945,7 @@ export function createAiBoardStore(db, hooks = {}) {
         -- Việc tự sửa của board không tính trần học viên (ngân sách đêm riêng, ticket 07).
         AND (t.status <> 'queued' OR r.type = 'self' OR ${OWNER_GPU_S} < ?)
         ORDER BY ${FAIR_ORDER} LIMIT 1
-    `).get(intent, now, intent, now, mode, workerId, now - leaseMs, now - DAY_MS, LIMITS.gpu_s_per_user_day.loose);
+    `).get(now, intent, now, intent, now, mode, workerId, now - leaseMs, now - DAY_MS, LIMITS.gpu_s_per_user_day.loose);
     if (!candidate) return null;
     const token = randomBytes(24).toString('hex');
     const expires = now + leaseMs;
@@ -1543,6 +1549,7 @@ export function createAiBoardStore(db, hooks = {}) {
     let note = verdict.outcome === 'ready_for_pr' ? 'Thay đổi đã qua kiểm tra trước PR.'
       : verdict.outcome === 'needs_review' ? 'Thay đổi cần con người xem xét trước PR.'
         : 'Thay đổi chưa qua kiểm tra trước PR.';
+    let leaseExpiresAt = null; // non-null chỉ khi transient_retry bật: dời deadline lease để claimTransaction tự cứu
     if (verdict.failure_class === 'critical') {
       status = 'waiting_admin';
       phase = 'critical_violation';
@@ -1560,6 +1567,26 @@ export function createAiBoardStore(db, hooks = {}) {
       status = 'waiting_admin';
       phase = 'plan_unfit';
       note = 'Yêu cầu đang chờ quản trị viên xem xét.';
+    } else if (verdict.failure_class === 'transient') {
+      // Lỗi hạ tầng thoáng qua, backoff gọi model đã hết mà vẫn hỏng (main.py MODEL_RETRY_BACKOFF_S). Plan vẫn
+      // hợp lệ (chỉ hạ tầng hỏng, không phải plan sai) nên dùng lại đúng đường "đã duyệt, chờ worker" của một
+      // plan protected vừa được cho phép: status='queued', phase='authorized' → claimTransaction (nhánh
+      // PLAN_QUEUE) tự nhận lại, worker thực hiện lại từ cổng 3 như một lượt execute mới.
+      // Bật limits.transient_retry: lease_expires_at dời tới tương lai retry_after_ms — hàng 'queued' không
+      // được nhận trước giờ đó (xem WHERE của claimTransaction). Tắt (mặc định): waiting_admin/transient_blocked,
+      // admin tự xem Grafana rồi bấm "Chạy lại ngay" (retryTransientTicket) lúc rảnh GPU.
+      const retryState = db.prepare('SELECT enabled FROM ai_transient_retry_state WHERE id=1').get();
+      const retryEnabled = retryState ? !!retryState.enabled : CONTRACT.limits.transient_retry.enabled;
+      if (retryEnabled) {
+        status = 'queued';
+        phase = 'authorized';
+        leaseExpiresAt = input.now + CONTRACT.limits.transient_retry.retry_after_ms;
+        note = `Lỗi hạ tầng thoáng qua; tự chạy lại sau ${Math.round(CONTRACT.limits.transient_retry.retry_after_ms / 60000)} phút.`;
+      } else {
+        status = 'waiting_admin';
+        phase = 'transient_blocked';
+        note = 'Lỗi hạ tầng thoáng qua; chờ admin bấm "Chạy lại ngay" lúc GPU rảnh.';
+      }
     }
     const repairSequence = db.prepare(`
       SELECT COALESCE(MAX(sequence), 0) + 1 AS next FROM ai_tickets WHERE parent_id=? AND plan_revision=?
@@ -1575,8 +1602,15 @@ export function createAiBoardStore(db, hooks = {}) {
         input.now, input.now);
       insertTag.run(Number(child.lastInsertRowid), 'repair');
     });
-    db.prepare('UPDATE ai_tickets SET status=?, phase=?, public_note=?, internal_reason=?, cumulative_budget=?, updated_at=? WHERE id=?')
-      .run(status, phase, note, verdict.reason, cumulativeBudget, input.now, root.id);
+    if (leaseExpiresAt != null) {
+      // Về hàng đợi (không ai giữ): xoá lease_owner/token cũ, lease_expires_at dùng làm "không nhận trước giờ này".
+      db.prepare(`UPDATE ai_tickets SET status=?, phase=?, public_note=?, internal_reason=?, cumulative_budget=?,
+          lease_owner=NULL, lease_token=NULL, lease_expires_at=?, updated_at=? WHERE id=?`)
+        .run(status, phase, note, verdict.reason, cumulativeBudget, leaseExpiresAt, input.now, root.id);
+    } else {
+      db.prepare('UPDATE ai_tickets SET status=?, phase=?, public_note=?, internal_reason=?, cumulative_budget=?, updated_at=? WHERE id=?')
+        .run(status, phase, note, verdict.reason, cumulativeBudget, input.now, root.id);
+    }
     db.prepare(`
       INSERT INTO ai_events(ticket_id, run_id, event_type, actor_type, actor_id, transition,
         public_message, internal_detail, idempotency_key, created_at)

@@ -47,6 +47,11 @@
       "post_merge_watch": { "days": 7, "min_runs": 10, "max_drop_pts": 10 },
       "retire_days": 180,
       "frozen_window_days": 14
+    },
+    "transient_retry": {
+      "_why": "Yêu cầu (mọi loại, không riêng self) bị chặn ở cổng 5 vì lỗi hạ tầng thoáng qua (GPU dùng chung quá tải) sau khi backoff gọi model (main.py MODEL_RETRY_BACKOFF_S) đã hết mà vẫn hỏng. Mặc định tắt: admin tự xem Grafana rồi bấm 'Chạy lại ngay' lúc rảnh GPU. Bật: ticket tự về hàng đợi sau retry_after_ms, không cần admin theo dõi liên tục.",
+      "enabled": false,
+      "retry_after_ms": 300000
     }
   },
   "branch_prefix": "ai-board/",

@@ -165,13 +165,21 @@ test('critical boundary violation stops the root and opens a critical alert', ()
   assert.equal(db.prepare(`SELECT COUNT(*) n FROM ai_tickets WHERE kind='review_fix'`).get().n, 0);
 });
 
-test('ordinary and transient blocks keep the root planned with no alert', () => {
-  for (const failureClass of ['ordinary', 'transient']) {
-    const { db, submit, ticket } = plannedRoot();
-    submit(blocked(5, 'generated tests failed', failureClass));
-    assert.equal(db.prepare('SELECT status FROM ai_tickets WHERE id=?').get(ticket.id).status, 'planned');
-    assert.equal(db.prepare('SELECT COUNT(*) n FROM ai_alerts').get().n, 0);
-  }
+test('an ordinary block keeps the root planned with no alert', () => {
+  const { db, submit, ticket } = plannedRoot();
+  submit(blocked(5, 'generated tests failed', 'ordinary'));
+  assert.equal(db.prepare('SELECT status FROM ai_tickets WHERE id=?').get(ticket.id).status, 'planned');
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM ai_alerts').get().n, 0);
+});
+
+// transient (self-improve: tự chạy lại) — mặc định tắt (không có dòng ai_transient_retry_state) → waiting_admin;
+// hành vi bật xem test/ai-board-transient-retry.test.js.
+test('a transient block with auto-retry off waits for the admin, with no alert', () => {
+  const { db, submit, ticket } = plannedRoot();
+  submit(blocked(5, 'ollama 500', 'transient'));
+  const root = db.prepare('SELECT status, phase FROM ai_tickets WHERE id=?').get(ticket.id);
+  assert.deepEqual({ ...root }, { status: 'waiting_admin', phase: 'transient_blocked' });
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM ai_alerts').get().n, 0);
 });
 
 test('a plan-class failure waits for the admin as plan_unfit, with no repair child or alert', () => {
