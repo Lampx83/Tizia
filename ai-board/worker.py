@@ -432,6 +432,7 @@ def run_self_improve_night(client: WorkerClient, deps, *, clock: Callable[[], in
     ponytail: đêm dở dang đúng lúc hết cửa sổ giờ không tự đóng (status vẫn 'running') — không chặn đêm sau
     (khác ngày), chỉ còn sai ở cột trạng thái trên tab admin; đóng hẳn khi cần xem đúng, chưa cấp thiết."""
     import diagnose
+    import self_eval
     from budget import Budget
 
     limits = LIMITS["self_improve"]
@@ -446,6 +447,15 @@ def run_self_improve_night(client: WorkerClient, deps, *, clock: Callable[[], in
     if state.get("pr_sync") is None:
         report({"pr_sync": sync_pull_requests(client, github)})
         return {"status": "progress", "step": "pr_sync"}
+    # Bộ đánh giá đóng băng (ticket 08): 1 self PR vừa merge (đã báo ở bước pr_sync, có thể của đêm trước) chưa
+    # đo → đo đúng 1 lần trong cùng ngân sách đêm, trước khi tiếp tục chẩn đoán. Không chọn biến thể, chỉ ghi lại.
+    pending = client.post("/api/ai-board/worker/self-improve/frozen-benchmark/pending", {})
+    if pending.get("pending"):
+        item = pending["pending"][0]
+        measured = self_eval.run_frozen(item["sha"], pending.get("tasks") or [], limits["night_gpu_s"]["eval"],
+                                        checkout_repo=REPO_ROOT)
+        client.post("/api/ai-board/worker/self-improve/frozen-benchmark/report", {"pr_number": item["pr_number"], **measured})
+        return {"status": "progress", "step": "frozen_measured", "pr_number": item["pr_number"]}
     rows = state.get("variants") or []
     created = [v for v in rows if v.get("status") != "dropped"]  # "biến thể" = yêu cầu self đã tạo được
     spent = state.get("gpu_s_propose") or 0

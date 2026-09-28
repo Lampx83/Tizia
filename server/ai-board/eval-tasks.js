@@ -73,9 +73,30 @@ function retire(db, now) {
   }
 }
 
+// ── Bộ đánh giá đóng băng (self-improve ticket 08): chụp lúc bật vòng lần đầu (frozen_at, self-improve.js) +
+// mọi task gắn nhãn trong frozen_window_days ngày sau đó. Task đóng băng không bao giờ vào evalTaskSplit (hard
+// exclusion). Gọi lúc đọc (như retire): tất định, không cần cron; đã đóng băng thì không bao giờ bỏ cờ lại. ──
+function freeze(db, now) {
+  const frozenAt = db.prepare('SELECT frozen_at FROM ai_self_improve_state WHERE id=1').get()?.frozen_at;
+  if (!frozenAt) return;
+  const deadline = frozenAt + LIMITS.self_improve.frozen_window_days * DAY_MS;
+  db.prepare(`UPDATE ai_eval_tasks SET frozen=1 WHERE frozen=0 AND labelled_at IS NOT NULL AND labelled_at <= ?`)
+    .run(deadline);
+}
+
+/** Worker (self-improve ticket 08): task đóng băng đang labelled — dùng để đo lại sau mỗi lần merge self,
+ * không bao giờ đưa cho người đề xuất hay dùng để chọn biến thể. */
+export function frozenTasks(db, now = Date.now()) {
+  freeze(db, now);
+  retire(db, now);
+  return db.prepare(`SELECT * FROM ai_eval_tasks WHERE status='labelled' AND frozen=1 ORDER BY created_at, id`)
+    .all().map(view);
+}
+
 /** Admin: task theo trạng thái (mặc định ứng viên) + đếm mỗi trạng thái. */
 export function listEvalTasks(db, status = 'candidate', now = Date.now()) {
   if (!STATUSES.has(status)) throw new WorkerContractError('invalid status');
+  freeze(db, now);
   retire(db, now);
   const counts = Object.fromEntries(db.prepare(`
     SELECT status, COUNT(*) AS n FROM ai_eval_tasks WHERE deleted_at IS NULL GROUP BY status
@@ -116,11 +137,14 @@ export function deleteEvalTask(db, id, now = Date.now()) {
   return { ok: true };
 }
 
-/** Worker: task đã gắn nhãn chia theo thời gian — cũ nhất (split) để học, mới nhất để kiểm tra. */
+/** Worker: task đã gắn nhãn chia theo thời gian — cũ nhất (split) để học, mới nhất để kiểm tra. Task đóng băng
+ * (ticket 08) không bao giờ lọt vào đây — hard exclusion, kể cả khi đã labelled. */
 export function evalTaskSplit(db, now = Date.now()) {
+  freeze(db, now);
   retire(db, now);
   const { min_labelled_tasks: min, learning_split: split } = LIMITS.self_improve;
-  const labelled = db.prepare(`SELECT * FROM ai_eval_tasks WHERE status='labelled' ORDER BY created_at, id`).all().map(view);
+  const labelled = db.prepare(`SELECT * FROM ai_eval_tasks WHERE status='labelled' AND frozen=0 ORDER BY created_at, id`)
+    .all().map(view);
   const cut = Math.floor(labelled.length * split);
   return { ready: labelled.length >= min, labelled: labelled.length, min_tasks: min, split,
     learning: labelled.slice(0, cut), test: labelled.slice(cut) };

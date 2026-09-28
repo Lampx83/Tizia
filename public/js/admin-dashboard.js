@@ -1801,9 +1801,46 @@ const evalBox = (field, id, list, rows, ph) => `<textarea data-eval-${field}="${
 // ── Vòng tự cải thiện ban đêm (self-improve ticket 07): công tắc + bảng các đêm. Ticket 08 thêm đồ thị bộ
 // đóng băng vào cùng khối #si-nights; giữ dữ liệu đêm (biến thể, eval, PR) dễ mở rộng thêm cột. ──
 const VARIANT_STATUS_LABEL = { waiting: 'chờ admin duyệt', accepted: 'thắng', rejected: 'thua', dropped: 'bỏ cụm' };
+
+// Đường cong học (self-improve ticket 08): điểm bộ đóng băng theo nhóm qua thời gian; mỗi điểm/PR = 1 lần đo,
+// đúng lúc 1 thay đổi self vừa merge. Chưa bao giờ đưa cho board, chỉ vẽ cho hội đồng xem — không thư viện mới.
+const FROZEN_PALETTE = ['#60a5fa', '#fbbf24', '#a78bfa', '#22d3ee', '#f472b6', '#86efac', '#fcd34d', '#fb923c'];
+function frozenChart(scores) {
+  if (!scores.length) return '<div class="loading">Chưa có lần đo bộ đóng băng nào.</div>';
+  const keys = [...new Set(scores.flatMap(s => Object.keys(s.strata || {})))].sort();
+  const w = 720, h = 220, pad = { l: 34, r: 12, t: 10, b: 22 };
+  const innerW = w - pad.l - pad.r, innerH = h - pad.t - pad.b;
+  const stepX = scores.length > 1 ? innerW / (scores.length - 1) : innerW;
+  const x = i => pad.l + i * stepX;
+  const y = v => pad.t + innerH - (Math.max(0, Math.min(100, v)) / 100) * innerH;
+  const grid = [0, 25, 50, 75, 100].map(v => `
+    <line x1="${pad.l}" x2="${w - pad.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--border)" stroke-width="0.5"></line>
+    <text x="${pad.l - 5}" y="${y(v) + 3}" text-anchor="end" font-size="9" fill="var(--muted)">${v}</text>`).join('');
+  const markers = scores.map((s, i) => `
+    <line x1="${x(i).toFixed(1)}" x2="${x(i).toFixed(1)}" y1="${pad.t}" y2="${h - pad.b}"
+      stroke="var(--border)" stroke-dasharray="2,3"></line>
+    <text x="${x(i).toFixed(1)}" y="${h - 6}" text-anchor="middle" font-size="9" fill="var(--muted)">#${s.pr_number}</text>`).join('');
+  const lines = keys.map((k, ki) => {
+    const color = FROZEN_PALETTE[ki % FROZEN_PALETTE.length];
+    const pts = scores.map((s, i) => (s.strata?.[k] == null ? null : { i, x: x(i), y: y(s.strata[k]), v: s.strata[k] })).filter(Boolean);
+    if (!pts.length) return '';
+    const path = 'M' + pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L');
+    return `<path d="${path}" fill="none" stroke="${color}" stroke-width="1.6"></path>
+      ${pts.map(p => `<a href="${scores[p.i].pr_url ? esc(scores[p.i].pr_url) : '#'}" target="_blank" rel="noopener">
+        <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.6" fill="${color}">
+          <title>${esc(k)}: ${p.v} · PR #${scores[p.i].pr_number}</title></circle></a>`).join('')}`;
+  }).join('');
+  const legend = keys.map((k, ki) => `<span style="color:${FROZEN_PALETTE[ki % FROZEN_PALETTE.length]}">■</span> ${esc(k)}`).join(' &nbsp; ');
+  return `
+    <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:${h}px">
+      ${grid}${markers}${lines}
+    </svg>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px">${legend}</div>`;
+}
+
 function nightSection(si) {
   if (!si) return '';
-  const { enabled, paused, empty_nights: empty, limits, nights = [] } = si;
+  const { enabled, paused, empty_nights: empty, limits, nights = [], frozen = [] } = si;
   return `
     <div id="si-nights" style="margin-bottom:22px">
       <div class="toolbar" style="align-items:center;gap:10px">
@@ -1833,6 +1870,9 @@ function nightSection(si) {
             <td>${fmtNum(n.gpu_s_propose)} / ${fmtNum(n.gpu_s_eval)}</td>
           </tr>`).join('')}</tbody>
       </table>` : '<div class="loading">Chưa có đêm nào.</div>'}
+      <div class="panel-title" style="margin-top:18px">Đường cong học — bộ đánh giá đóng băng
+        <span class="trace-sub">mỗi điểm = 1 lần merge thay đổi self; bộ này chưa bao giờ đưa cho board</span></div>
+      ${frozenChart(frozen)}
     </div>`;
 }
 function wireNightSection(host) {
