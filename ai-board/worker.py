@@ -412,6 +412,69 @@ def sync_pull_requests(client: WorkerClient, github) -> dict:
     return out
 
 
+def _local_night(now_ms: int, window: dict) -> tuple[str, bool]:
+    """Ngày (YYYY-MM-DD) và trong cửa sổ giờ (window: {start,end,tz} của contract.json) hay không, tại now_ms."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    dt = datetime.fromtimestamp(now_ms / 1000, ZoneInfo(window["tz"]))
+    return dt.strftime("%Y-%m-%d"), window["start"] <= dt.strftime("%H:%M") < window["end"]
+
+
+def run_self_improve_night(client: WorkerClient, deps, *, clock: Callable[[], int], github=None) -> dict:
+    """MỘT BƯỚC của vòng tự cải thiện đêm (self-improve ticket 07): đồng bộ PR, hoặc 1 lần chẩn đoán. Gọi lại
+    mỗi lượt poll khi worker rảnh việc thật (idle/gpu_paused) — chính cách gọi này là cách nhường việc thật:
+    lượt poll sau luôn thử claim thật trước (yield_to_chat hiện có) rồi mới gọi lại đây, nên tối đa 1 bước
+    trôi qua trước khi có thể nhường; không cần seam nào khác để "dừng giữa chừng".
+    clock() → giờ hệ thống hiện tại (ms) — seam duy nhất được thêm, để test giả lập đêm/ngoài đêm.
+    Ngoài cửa sổ giờ hoặc server từ chối (công tắc/nhãn/PR mở/tự dừng) → không làm gì.
+    Trả {status: outside_window|not_run|progress|done, ...}.
+    ponytail: đêm dở dang đúng lúc hết cửa sổ giờ không tự đóng (status vẫn 'running') — không chặn đêm sau
+    (khác ngày), chỉ còn sai ở cột trạng thái trên tab admin; đóng hẳn khi cần xem đúng, chưa cấp thiết."""
+    import diagnose
+    from budget import Budget
+
+    limits = LIMITS["self_improve"]
+    night, inside = _local_night(clock(), limits["window"])
+    if not inside:
+        return {"status": "outside_window"}
+    started = client.post("/api/ai-board/worker/self-improve/night", {"night": night})
+    if not started.get("run"):
+        return {"status": "not_run", "reason": started.get("reason")}
+    report = lambda body: client.post("/api/ai-board/worker/self-improve/night/report", {"night": night, **body})
+    state = started["night"]
+    if state.get("pr_sync") is None:
+        report({"pr_sync": sync_pull_requests(client, github)})
+        return {"status": "progress", "step": "pr_sync"}
+    rows = state.get("variants") or []
+    created = [v for v in rows if v.get("status") != "dropped"]  # "biến thể" = yêu cầu self đã tạo được
+    spent = state.get("gpu_s_propose") or 0
+    remaining = limits["night_gpu_s"]["propose"] - spent
+    if len(created) >= limits["max_variants_per_night"] or remaining <= 0:
+        report({"finished": "done"})
+        return {"status": "done", "variants": len(created)}
+    # Cụm đã thành 1 dòng đêm nay (kể cả bỏ cụm) tự loại khỏi lần chẩn đoán tiếp theo trong đêm.
+    skip = set(started.get("skip_clusters") or []) | {v["cluster"]["key"] for v in rows if v.get("cluster")}
+    budget = Budget(max_units=remaining)
+    result = diagnose.diagnose_to_self_request(client, deps, now_ms=clock(), budget=budget, skip=frozenset(skip))
+    spent += budget.units
+    if result["status"] == "dropped" and result.get("cluster"):
+        # Chẩn đoán sai khuôn / file ngoài vùng sau khi thử lại: bỏ cụm này (đếm vào 3 đêm liền thất bại),
+        # bước sau (poll tiếp) thử cụm khác — không tính vào 3 biến thể (chưa tạo yêu cầu self).
+        report({"variant": {"cluster": result["cluster"], "diagnosis": None, "request_id": None,
+                            "root_ticket_id": None, "status": "dropped", "reason": result.get("reason")},
+               "gpu_s_propose": spent})
+        return {"status": "progress", "step": "dropped", "variants": len(created)}
+    if result["status"] != "created":
+        report({"finished": "done", "gpu_s_propose": spent})
+        return {"status": "done", "variants": len(created)}  # không còn cụm: hết việc cho đêm nay
+    report({"variant": {"cluster": result["cluster"], "diagnosis": result["diagnosis"],
+                        "request_id": result["request"]["request_id"],
+                        "root_ticket_id": result["request"]["root_ticket_id"], "status": "waiting"},
+           "gpu_s_propose": spent})
+    return {"status": "progress", "step": "created", "variants": len(created) + 1}
+
+
 # Khớp server/ai-board/drafts.js: PNG, ≤ 8 ảnh, mỗi ảnh ≤ 2 MB.
 SHOTS_TYPE = "application/vnd.tizia.screenshots+json"
 MAX_SHOT_BYTES = 2 * 1024 * 1024
@@ -923,12 +986,25 @@ def main(argv: list[str] | None = None) -> int:
                   if github_token else None)
         worker.candidates = candidate.Candidates(repo, github=github)
         worker.open_prs = github is not None  # no token: verdicts stop at ready_for_pr, as before
+    # Vòng tự cải thiện đêm (ticket 07): chỉ worker có thể execute mới đề xuất được biến thể. Việc thật
+    # luôn đi trước — chỉ thử đêm khi lượt claim vừa rồi rảnh (idle/gpu_paused), never khi đang giữ ticket.
+    night_deps = None
+    if args.execute:
+        import diagnose as _diagnose
+        night_deps = _real_deps(Deps, meter.Tracer(_diagnose.TRACES_PATH), worker.gate_started)
     while True:
         try:
             result = worker.run_once()
         except PlanBlockedError as error:  # an expected outcome, not a crash: show why
             result = {"status": "plan_blocked", **error.detail}
         print(json.dumps(result, ensure_ascii=False))
+        # 1 bước/tick, chỉ khi lượt claim vừa rồi rảnh việc thật: lượt poll tiếp theo tự ưu tiên claim thật
+        # trước (yield_to_chat hiện có), nên đêm không bao giờ giữ worker quá 1 bước trước khi nhường.
+        if night_deps is not None and result.get("status") in ("idle", "gpu_paused"):
+            night_result = run_self_improve_night(worker.client, night_deps, clock=lambda: int(time.time() * 1000),
+                                                   github=worker.candidates.github if worker.candidates else None)
+            if night_result["status"] not in ("outside_window", "not_run"):
+                print(json.dumps({"self_improve_night": night_result}, ensure_ascii=False))
         if args.once or args.mode == "off":
             return 0
         time.sleep(max(args.poll_seconds, 1.0))

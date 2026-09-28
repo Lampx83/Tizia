@@ -8,6 +8,7 @@ import { checkClarity } from './clarity-rules.js';
 import { activeChats } from './chat-activity.js';
 import { deleteEvalTask, evalTaskSplit, labelEvalTask, listEvalTasks, openPullRequests, recordMiss, recordRequestMiss,
   reportPullRequest } from './eval-tasks.js';
+import { listNights, recordSelfVerdict, reportNight, setSelfImproveEnabled, startNight } from './self-improve.js';
 
 // Không cấu hình model phân loại → không gọi gì (hành vi trước ticket 04).
 const defaultClassifyRequest = (title, detail) => (
@@ -250,6 +251,14 @@ export function attachAiBoardRequestRoutes(router, {
     try { res.json(deleteEvalTask(store.db, req.params.id)); } catch (error) { folderError(res, error); }
   });
 
+  // ── Vòng tự cải thiện ban đêm (self-improve ticket 07): công tắc + bảng các đêm, chỉ admin ──
+  router.get('/api/admin/ai-board/self-improve', requireAuth, requireAdmin, (_req, res) => {
+    res.json(listNights(store.db));
+  });
+  router.post('/api/admin/ai-board/self-improve/switch', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
+    try { res.json(setSelfImproveEnabled(store.db, req.body?.enabled, req.user.id)); } catch (error) { folderError(res, error); }
+  });
+
   router.post('/api/admin/ai-board/tickets/:id/authorize-plan', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
     try {
       res.json(store.authorizePlan(req.params.id, req.body?.plan_hash, req.user.id));
@@ -272,6 +281,7 @@ export function attachAiBoardWorkerRoutes(router, {
   leaseMs = LEASE_MS,
   uploadsDir = null, // thư mục /uploads/requests (ảnh bản nháp); thiếu → route ảnh trả 503
   onVerdict = null, // ({request_id, title, domain, student, kind}) sau mỗi verdict: chuông cho người gửi
+  onSelfWin = null, // ({night, request_id}) biến thể tự cải thiện thắng eval: chuông cho admin
 }) {
   const key = String(env.AI_BOARD_WORKER_KEY || '').trim();
   if (key.length < 24) return false;
@@ -390,7 +400,11 @@ export function attachAiBoardWorkerRoutes(router, {
     });
     const notice = afterVerdict(store.db, req.params.id, verdict);
     if (verdict.outcome === 'blocked') recordMiss(store.db, req.body.run_id, 'verdict_blocked');
+    const won = recordSelfVerdict(store.db, req.params.id, verdict);
     res.json({ verdict });
+    if (won && onSelfWin) {
+      try { onSelfWin(won); } catch (error) { console.warn('[ai-board] self win notification failed:', error.message); }
+    }
     if (notice && onVerdict) {
       try { onVerdict(notice); } catch (error) { console.warn('[ai-board] verdict notification failed:', error.message); }
     }
@@ -410,6 +424,14 @@ export function attachAiBoardWorkerRoutes(router, {
       if (error instanceof RequestValidationError) return res.status(400).json({ error: 'invalid_request', message: error.message });
       throw error;
     }
+  }));
+
+  // Vòng đêm (self-improve ticket 07): worker hỏi được chạy không (tạo dòng đêm), rồi ghi từng bước vào dòng đó.
+  router.post('/api/ai-board/worker/self-improve/night', authenticate, handle((req, res) => {
+    res.json(startNight(store.db, req.body?.night));
+  }));
+  router.post('/api/ai-board/worker/self-improve/night/report', authenticate, handle((req, res) => {
+    res.json({ night: reportNight(store.db, req.body) });
   }));
 
   // Trạng thái PR (self-improve ticket 03): worker hỏi GitHub các PR này rồi báo PR đã đóng; không webhook.
