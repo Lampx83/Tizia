@@ -74,6 +74,8 @@ const CALL_LABEL = { ok: 'OK', retry: 'Retry', error: 'Error', http_error: 'HTTP
 const TRIGGER_LABEL = { plan: 'lập kế hoạch và thực hiện', execute: 'thực hiện kế hoạch đã duyệt', rollback: 'hoàn tác',
   shadow_precheck: 'kiểm tra ban đầu' };
 const tag = (state, text) => `<span class="tag st-${state}">${esc(text)}</span>`;
+const cap = (s) => s ? s[0].toUpperCase() + s.slice(1) : s;
+const runTitle = (run) => cap(TRIGGER_LABEL[run.trigger] || run.trigger);
 // Thứ tự hiển thị: bước tuần tự 1..7, không lộ số cổng nội bộ có phần thập phân (2.5/5.5 trông như substep).
 const GATE_ORDER = [1, 2, 2.5, 3, 4, 5, 5.5];
 const gatePos = (g) => { const i = GATE_ORDER.indexOf(Number(g)); return i < 0 ? esc(g) : i + 1; };
@@ -104,8 +106,8 @@ function renderSessions(runs, root) {
   return `<div class="timeline">${runs.map((run, i) => {
     const [state, label] = runState(run, i === runs.length - 1 && root.live);
     return `<div class="step st-${state}"><div class="line1">
-      <b>Lần thử #${i + 1}</b> ${tag(state, label)}
-      <span>${esc(TRIGGER_LABEL[run.trigger] || run.trigger)}${run.gate != null ? ` · dừng ở bước ${gatePos(run.gate)}` : ''}</span>
+      <b>${esc(runTitle(run))}</b> ${tag(state, label)}
+      ${run.gate != null ? `<span>dừng ở bước ${gatePos(run.gate)}</span>` : ''}
       <span class="meta">worker ${esc(run.worker_id || '—')} (${esc(run.worker_mode || '—')})</span></div>
       <div class="metrics"><span>${fmt(run.created_at)} → ${fmt(run.updated_at)}</span>
         <span>GPU-s lượt / trần: ${budgetCell(run.budget_used, run.budget_limit)}</span>
@@ -161,7 +163,7 @@ function trimUnreached(p, showFull) {
 }
 
 // Thứ tự: theo cổng; trong 1 cổng các lần gọi model trước, kết luận của cổng sau cùng.
-function renderRun(run, root, latest, attempt) {
+function renderRun(run, root, latest) {
   const showFull = latest && root.live;
   const p = trimUnreached(run.progress, showFull);
   const items = [
@@ -176,8 +178,8 @@ function renderRun(run, root, latest, attempt) {
   const [state, label] = runState(run, showFull);
   const body = run.trigger === 'rollback' ? rollbackStep(run, showFull)
     : items.length ? `<div class="timeline">${items.map(i => i.html).join('')}</div>` : '<div class="blk meta">Lượt này chưa có dữ liệu cổng.</div>';
-  return `<div class="run-head st-${state}"><b>Lần thử #${attempt}</b>${tag(state, label)}
-      <span>${esc(TRIGGER_LABEL[run.trigger] || run.trigger)}</span><span class="meta">worker ${esc(run.worker_id || '—')} · ${fmt(run.created_at)}</span>
+  return `<div class="run-head st-${state}"><b>${esc(runTitle(run))}</b>${tag(state, label)}
+      <span class="meta">worker ${esc(run.worker_id || '—')} · ${fmt(run.created_at)}</span>
       ${run.commit?.head_sha ? `<button type="button" class="trace-copy" data-copy="${esc(run.commit.head_sha)}" title="Commit của lượt này, bấm để copy">${esc(run.commit.head_sha.slice(0, 7))}</button>` : ''}
       <span>GPU-s ${budgetCell(run.budget_used, run.budget_limit)}</span></div>
     ${renderProgress(p)}
@@ -443,7 +445,7 @@ function renderAiBoard(t) {
     ${renderPlan(t.plan, root, t.children || [])}
     <h2>Phiên xử lý</h2>
     ${renderSessions(runs, root)}
-    ${runs.map((run, i) => renderRun(run, root, i === runs.length - 1, i + 1)).join('')}
+    ${runs.map((run, i) => renderRun(run, root, i === runs.length - 1)).join('')}
     <h2>Sự kiện</h2>
     ${renderEvents(t.events || [])}
   `;
