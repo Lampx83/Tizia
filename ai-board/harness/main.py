@@ -13,6 +13,7 @@ import json
 import os
 import sys
 import time
+import urllib.error
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -77,6 +78,24 @@ NUM_PREDICT_DEFAULT = 1024
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 _PROMPT_LOCK = json.loads((PROMPTS_DIR / "prompts.lock.json").read_text(encoding="utf-8"))
 
+# Backoff cho lỗi hạ tầng thoáng qua khi gọi Ollama (GPU dùng chung, tenant khác chiếm chỗ →
+# 500/timeout/connection ngắt). 2 lần thử lại, 2s rồi 5s — đủ ngắn để không đội thời gian lease
+# (BUDGET_MAX_WALL_CLOCK_S mặc định 1200s), đủ để vượt qua 1 lần nghẽn thoáng qua.
+# ponytail: hằng số cố định, chỉnh tại đây nếu thực tế cần khác.
+MODEL_RETRY_BACKOFF_S = (2.0, 5.0)
+
+
+def _retryable_model_error(error: Exception) -> bool:
+    """Lỗi hạ tầng thoáng qua (5xx, timeout, mất kết nối) mới thử lại — lỗi 4xx (request/cấu hình
+    sai) thử lại vô ích, tốn ngân sách GPU-s oan."""
+    if isinstance(error, urllib.error.HTTPError):
+        return error.code >= 500
+    if isinstance(error, TimeoutError):
+        return True
+    if isinstance(error, urllib.error.URLError):
+        return True
+    return False
+
 
 @functools.lru_cache(maxsize=None)
 def _static_prefix(prompt_name: str | None) -> str:
@@ -96,6 +115,7 @@ class Deps:
     trace: Any = None  # meter.Tracer; None = không trace (test cũ, CLI)
     progress: Callable[[float], None] = lambda _gate: None  # run_gate báo cổng vừa bắt đầu (worker → server)
     provider: str = "ollama"
+    sleep: Callable[[float], None] = time.sleep  # test bơm no-op: backoff thật không làm chậm test suite
 
     @classmethod
     def real(cls) -> "Deps":
@@ -113,18 +133,25 @@ class Deps:
         Lỗi HTTP/timeout vẫn tính units theo wall (GPU có thể đã chạy) rồi raise lại.
         body["_metrics"] = metrics đã chuẩn hoá cho cổng dùng (done_reason, …)."""
         options = {"num_predict": NUM_PREDICT.get(gate, NUM_PREDICT_DEFAULT), "temperature": 0, **(options or {})}
-        started = time.monotonic()
-        try:
-            body = (self.models.generate(model, prompt, format=format, extra=extra, **options) if extra
-                    else self.models.generate(model, prompt, format=format, **options))
-        except Exception as error:
-            metrics = meter.measure(self.provider, {}, int((time.monotonic() - started) * 1000))
-            n = meter.units(self.provider, metrics)
-            budget.spend("model_calls")
-            budget.spend("units", n)
-            self._trace(gate, model, prompt, prompt_name, "", metrics, n,
-                        "timeout" if isinstance(error, TimeoutError) else "http_error", str(error), child, iteration)
-            raise
+        for attempt, wait_s in enumerate((0.0,) + MODEL_RETRY_BACKOFF_S):
+            if wait_s:
+                self.sleep(wait_s)
+            started = time.monotonic()
+            try:
+                body = (self.models.generate(model, prompt, format=format, extra=extra, **options) if extra
+                        else self.models.generate(model, prompt, format=format, **options))
+                break
+            except Exception as error:
+                metrics = meter.measure(self.provider, {}, int((time.monotonic() - started) * 1000))
+                n = meter.units(self.provider, metrics)
+                budget.spend("model_calls")
+                budget.spend("units", n)
+                last_attempt = attempt == len(MODEL_RETRY_BACKOFF_S)
+                if last_attempt or not _retryable_model_error(error):
+                    self._trace(gate, model, prompt, prompt_name, "", metrics, n,
+                                "timeout" if isinstance(error, TimeoutError) else "http_error", str(error),
+                                child, iteration)
+                    raise
         metrics = meter.measure(self.provider, body, int((time.monotonic() - started) * 1000))
         n = meter.units(self.provider, metrics)
         budget.spend("model_calls")

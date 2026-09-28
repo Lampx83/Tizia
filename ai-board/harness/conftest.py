@@ -144,7 +144,7 @@ def deps_with(models):
     if not isinstance(models, FakeModels):
         models = FakeModels(models)
     return Deps(models=models, notify=MagicMock(name="telegram"),
-                verify=FakeVerify())
+                verify=FakeVerify(), sleep=lambda _s: None)
 
 
 @pytest.fixture
