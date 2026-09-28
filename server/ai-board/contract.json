@@ -41,6 +41,7 @@
       "min_labelled_tasks": 20,
       "learning_split": 0.7,
       "max_stratum_drop_pts": 10,
+      "shadow_judge": true,
       "pause_after_empty_nights": 5,
       "cluster_skip": { "after_failed_nights": 3, "days": 7 },
       "post_merge_watch": { "days": 7, "min_runs": 10, "max_drop_pts": 10 },

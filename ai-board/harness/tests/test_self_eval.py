@@ -1,5 +1,6 @@
 """Cổng eval của yêu cầu self (self-improve ticket 05): bộ đo tất định ở 2 sha, cổng 1–2.5 trên phần kiểm tra,
 thắng/thua từng task, ngân sách eval. Model giả; sha giả qua run_at (không Ollama)."""
+import json
 import subprocess
 
 import self_eval
@@ -164,7 +165,8 @@ def test_the_tasks_job_plans_each_test_task_through_gates_1_to_2_5_with_the_mode
               "must_contain": ["nút"]},
              {"id": 2, "request_text": "Sửa trang khác", "expected_files": ["public/khac.html"]}]
     out = self_eval.child("tasks", {"tasks": tasks, "limit": 2400})
-    assert out["results"] == [{"id": 1, "passed": True}, {"id": 2, "passed": False}]
+    assert [(r["id"], r["passed"]) for r in out["results"]] == [(1, True), (2, False)]
+    assert "public/flashcards.html" in out["results"][0]["plan"]  # plan text cho giám khảo
     assert out["units"] >= 2 and out["exhausted"] is False and models.calls  # GPU-s từ trace của mọi lời gọi
 
 
@@ -182,3 +184,68 @@ def test_gate_5_runs_the_eval_only_for_a_self_request(monkeypatch, fake_deps):
 def test_no_test_tasks_means_no_accept():
     out, _ = _eval(Shas(set(), set()), _state(tasks=[]))
     assert out["blocked"] is True and out["failure_class"] == "eval" and "task kiểm tra" in out["reason"]
+
+
+# ---- giám khảo shadow (ticket 10): chỉ ghi, không bao giờ đổi verdict ----
+
+class Judge:
+    """deps giả: giám khảo luôn chọn `pick`, mỗi lời gọi tốn `gpu` GPU-s vào budget truyền vào."""
+
+    class models:
+        gate3_model = "fake-gate3"
+
+    def __init__(self, pick, gpu=5):
+        self.pick, self.gpu, self.prompts = pick, gpu, []
+
+    def call_model(self, model, prompt, *, gate, budget, prompt_name, format):
+        self.prompts.append(prompt)
+        budget.spend("model_calls")
+        budget.spend("units", self.gpu)
+        return {"response": json.dumps({"better": {"base": "A", "variant": "B"}.get(self.pick, self.pick),
+                                             "reason": "giả"})}
+
+
+def _plans(shas):
+    """Shas giả kèm plan text mỗi kết quả tasks (như process con thật)."""
+    def at(sha, job, payload):
+        got = shas(sha, job, payload)
+        if job == "tasks":
+            got["results"] = [{**r, "plan": f"plan {sha[0]} {r['id']}"} for r in got["results"]]
+        return got
+    return at
+
+
+def test_a_judge_contradicting_the_rule_never_changes_the_verdict_but_its_agreement_is_recorded():
+    judge = Judge(pick="base")  # luật: biến thể thắng 2, hoà 4 → giám khảo chọn gốc mọi cặp
+    out = self_eval.run(_state(), judge, run_at=_plans(Shas(base_hits={0, 1, 2}, variant_hits={0, 1, 2, 3, 4})))
+    result = out["evidence"]["eval"]
+    assert out["blocked"] is False and result["accepted"] is True and (result["wins"], result["losses"]) == (2, 0)
+    j = result["judge"]
+    assert (j["agree"], j["disagree"], j["skipped"], j["gpu_s"]) == (0, 6, 0, 30)
+    assert {"id": 3, "pick": "base", "rule": "variant"} in j["pairs"]
+    assert {"id": 0, "pick": "base", "rule": "tie"} in j["pairs"]
+    assert result["gpu_s"] == 120 + 30  # giám khảo tính vào ngân sách eval
+    assert "plan b 3" in judge.prompts[3] and "plan v 3" in judge.prompts[3]
+    agreeing = self_eval.run(_state(), Judge(pick="tie"), run_at=_plans(Shas({0}, {0})))["evidence"]["eval"]
+    assert (agreeing["judge"]["agree"], agreeing["judge"]["disagree"]) == (6, 0)
+
+
+def test_the_judge_flag_off_means_no_judge_calls(monkeypatch):
+    monkeypatch.setattr(self_eval, "JUDGE", False)
+    judge = Judge(pick="base")
+    result = self_eval.run(_state(), judge, run_at=_plans(Shas({0}, {0, 1})))["evidence"]["eval"]
+    assert judge.prompts == [] and "judge" not in result and result["accepted"] is True
+
+
+def test_a_short_budget_skips_the_judge_first_and_keeps_the_rule_verdict():
+    judge = Judge(pick="base", gpu=50)
+    out = self_eval.run(_state(eval_gpu_s=2400 - 120 - 60), judge, run_at=_plans(Shas({0}, {0, 1})))
+    result = out["evidence"]["eval"]
+    assert out["blocked"] is False and result["accepted"] is True  # không thành chặn ngân sách
+    assert (result["judge"]["agree"] + result["judge"]["disagree"], result["judge"]["skipped"]) == (1, 5)
+    assert result["gpu_s"] == 2400 - 10
+
+
+def test_the_tasks_child_returns_the_plan_text_for_the_judge():
+    out = self_eval.score([TASK], lambda _t, _l: (True, 1, "plan text"), limit=10)
+    assert out["results"] == [{"id": 1, "passed": True, "plan": "plan text"}]

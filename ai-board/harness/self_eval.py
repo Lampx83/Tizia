@@ -23,6 +23,11 @@ LIMITS = json.loads((REPO / "server" / "ai-board" / "contract.json").read_text(e
 EVAL_GPU_S = LIMITS["night_gpu_s"]["eval"]
 MAX_DROP = LIMITS["max_stratum_drop_pts"]
 GATE3_PROMPTS = {"ai-board/harness/prompts/implement.md"}  # biến thể sửa file này → chạy thêm gold set cổng 3
+JUDGE = LIMITS["shadow_judge"]  # giám khảo model shadow (ticket 10): chỉ ghi, không đổi verdict
+JUDGE_PROMPT_NAME = "judge.md"
+JUDGE_SCHEMA = {"type": "object", "required": ["better", "reason"],
+                "properties": {"better": {"type": "string", "enum": ["A", "B", "tie"]}, "reason": {"type": "string"}}}
+MAX_PLAN = 3000  # ký tự plan / bên trong prompt giám khảo
 
 
 def _text(plan: dict) -> str:
@@ -41,15 +46,15 @@ def task_passed(task: dict, plan: dict | None) -> bool:
 
 
 def score(items: list[dict], attempt, limit: float) -> dict:
-    """attempt(item, giây GPU còn lại) → (đạt?, giây GPU đã tiêu). Hết ngân sách → không mở item mới.
-    exhausted: đã chạm trần (kết quả không đủ để nhận biến thể)."""
+    """attempt(item, giây GPU còn lại) → (đạt?, giây GPU đã tiêu[, plan text cho giám khảo]). Hết ngân sách →
+    không mở item mới. exhausted: đã chạm trần (kết quả không đủ để nhận biến thể)."""
     results, units = [], 0
     for item in items:
         if units >= limit:
             break
-        passed, spent = attempt(item, limit - units)
+        passed, spent, *plan = attempt(item, limit - units)
         units += spent
-        results.append({"id": item["id"], "passed": bool(passed)})
+        results.append({"id": item["id"], "passed": bool(passed), **({"plan": plan[0]} if plan else {})})
     return {"results": results, "units": units, "exhausted": units >= limit}
 
 
@@ -75,7 +80,8 @@ def _plan_attempt():
         except PlanBlockedError:
             plan = None
         tracer.flush()
-        return task_passed(task, plan), sum(r["budget_units"] for r in tracer.records[before:])
+        return (task_passed(task, plan), sum(r["budget_units"] for r in tracer.records[before:]),
+                json.dumps(plan, ensure_ascii=False)[:MAX_PLAN] if plan else "")
     return attempt
 
 
@@ -135,6 +141,43 @@ def _checkouts(repo, shas):
             candidate.drop_source(repo, path)
 
 
+def _judge(tasks: list[dict], pairs: dict, plans: dict, deps, left: float) -> dict:
+    """Giám khảo shadow: model chọn plan gốc (A) hay biến thể (B) từng cặp; so với luật tất định. Chỉ dùng phần
+    ngân sách eval còn lại; cặp mà lời gọi có thể vượt (ước = lời gọi đắt nhất đã thấy) → skipped. Model lỗi /
+    trả sai khuôn → skipped. Không raise."""
+    from budget import Budget
+
+    prompt = (HARNESS / "prompts" / JUDGE_PROMPT_NAME).read_text(encoding="utf-8")
+    requests = {t["id"]: t.get("request_text") or "" for t in tasks}
+    out = {"pairs": [], "agree": 0, "disagree": 0, "skipped": 0, "gpu_s": 0}
+    need = 1  # ponytail: ước phí = lời gọi đắt nhất đã thấy; lời gọi đầu vẫn có thể vượt phần còn lại
+    for pid, sides in plans.items():
+        if set(sides) != {"base", "variant"}:
+            continue
+        p = pairs[pid]
+        rule = "variant" if p["variant"] and not p["base"] else "base" if p["base"] and not p["variant"] else "tie"
+        if left - out["gpu_s"] < need:
+            out["skipped"] += 1
+            continue
+        budget = Budget(max_units=max(1, int(left - out["gpu_s"])), max_model_calls=1)
+        try:
+            # ponytail: A luôn là gốc — lệch vị trí của model (nếu có) nằm trong tỉ lệ đồng ý; đổi chỗ khi cần đo lệch
+            body = deps.call_model(deps.models.gate3_model,
+                                   prompt.format(request=requests.get(pid, ""), a=sides["base"], b=sides["variant"]),
+                                   gate=5, budget=budget, prompt_name=JUDGE_PROMPT_NAME, format=JUDGE_SCHEMA)
+            pick = {"A": "base", "B": "variant", "tie": "tie"}[json.loads(body.get("response", ""))["better"]]
+        except Exception:  # noqa: BLE001 — shadow: lỗi giám khảo không bao giờ chạm verdict
+            pick = None
+        out["gpu_s"] += budget.units
+        need = max(need, budget.units)
+        if pick is None:
+            out["skipped"] += 1
+            continue
+        out["pairs"].append({"id": pid, "pick": pick, "rule": rule})
+        out["agree" if pick == rule else "disagree"] += 1
+    return out
+
+
 def run(state: dict, deps=None, budget=None, *, run_at=None) -> dict:
     """Cổng 5 của yêu cầu self. state: base_sha, commits (sha biến thể = commit cuối), eval_tasks (phần kiểm tra),
     checkout_repo. GPU-s eval cộng dồn ở state['eval_gpu_s'] (lượt thử lại cơ học không được ngân sách mới).
@@ -166,6 +209,7 @@ def run(state: dict, deps=None, budget=None, *, run_at=None) -> dict:
             if not tasks:
                 return out("chưa có task kiểm tra (phần test của task eval rỗng)", "eval")
             pairs: dict = {}
+            plans: dict = {}
             for job in ("tasks", "gold") if result["gold"] else ("tasks",):
                 for side, sha in sides:
                     got = at(sha, job, {"tasks": tasks, "limit": EVAL_GPU_S - result["gpu_s"]})
@@ -175,12 +219,17 @@ def run(state: dict, deps=None, budget=None, *, run_at=None) -> dict:
                                    f"{result['gpu_s']}/{EVAL_GPU_S} GPU-s", "budget")
                     for r in got["results"]:
                         pairs.setdefault(r["id"], {})[side] = r["passed"]
+                        if "plan" in r:
+                            plans.setdefault(r["id"], {})[side] = r["plan"]
     except (OSError, RuntimeError, ValueError, KeyError) as error:  # git/process/Ollama: môi trường, không phải biến thể
         return out(f"eval lỗi: {error}"[:1000], "transient")
     result["pairs"] = [{"id": k, **v} for k, v in pairs.items()]
     wins = sum(p.get("variant", False) and not p.get("base", False) for p in pairs.values())
     losses = sum(p.get("base", False) and not p.get("variant", False) for p in pairs.values())
     result.update(wins=wins, losses=losses, ties=len(pairs) - wins - losses, accepted=wins > losses)
+    if JUDGE and deps is not None:
+        result["judge"] = _judge(tasks, pairs, plans, deps, EVAL_GPU_S - result["gpu_s"])
+        result["gpu_s"] = state["eval_gpu_s"] = result["gpu_s"] + result["judge"]["gpu_s"]
     return out(None) if wins > losses else out(f"thua {losses} task, thắng {wins}, hoà {result['ties']}", "eval")
 
 
