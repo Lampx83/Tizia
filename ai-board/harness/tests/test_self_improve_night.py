@@ -45,15 +45,19 @@ class FakeModels:
 
 
 class FakeNightServer:
-    """server + worker/self-improve/night(-report) + eval-tasks + self-requests, không mạng."""
+    """server + worker/self-improve/night(-report) + eval-tasks + self-requests + frozen-benchmark, không mạng."""
 
-    def __init__(self, *, run=True, reason=None, skip_clusters=None, learning=None, self_replies=None):
+    def __init__(self, *, run=True, reason=None, skip_clusters=None, learning=None, self_replies=None,
+                 frozen_pending=None, frozen_tasks=None):
         self.run, self.reason, self.skip_clusters = run, reason, list(skip_clusters or [])
         self.night_state = {"variants": [], "pr_sync": None, "gpu_s_propose": 0}
         self.learning = learning if learning is not None else [task(1)]
         self.self_replies = list(self_replies) if self_replies is not None else None  # None → dựng tự động
         self.calls = []
         self._next_request_id = 900
+        self.frozen_pending = list(frozen_pending or [])  # [{pr_number, sha}], self-improve ticket 08
+        self.frozen_tasks = list(frozen_tasks or [])
+        self.frozen_reports = []
 
     def post(self, path, payload):
         self.calls.append((path, payload))
@@ -77,6 +81,12 @@ class FakeNightServer:
             self._next_request_id += 1
             return {"ok": True, "request_id": self._next_request_id, "root_ticket_id": self._next_request_id,
                     "folder_id": None, "created": True}
+        if path.endswith("/frozen-benchmark/pending"):
+            done = {r["pr_number"] for r in self.frozen_reports}
+            return {"pending": [p for p in self.frozen_pending if p["pr_number"] not in done], "tasks": self.frozen_tasks}
+        if path.endswith("/frozen-benchmark/report"):
+            self.frozen_reports.append(payload)
+            return {"score": payload}
         raise AssertionError(path)
 
 
@@ -194,6 +204,47 @@ def test_the_window_ending_between_polls_stops_the_night_with_no_extra_calls():
     calls_before_window_end = len(server.calls)
     run_self_improve_night(server, d, clock=clock)
     assert len(server.calls) == calls_before_window_end  # ngoài cửa sổ: không gọi server thêm gì cả
+
+
+# ---- bộ đánh giá đóng băng (ticket 08): 1 self PR vừa merge → đo đúng 1 lần trước khi chẩn đoán tiếp tục ----
+
+def test_a_merged_self_pr_is_measured_once_before_diagnosis_resumes(monkeypatch):
+    import self_eval
+
+    calls = []
+
+    def fake_run_frozen(sha, tasks, budget, **kw):
+        calls.append((sha, tasks, budget, kw.get("checkout_repo")))
+        return {"sha": sha, "config": {"prompts.lock.json": "abc1234567"}, "strata": {"type=ui": 80.0}, "gpu_s": 12.0}
+
+    monkeypatch.setattr(self_eval, "run_frozen", fake_run_frozen)
+    server = FakeNightServer(learning=[], frozen_pending=[{"pr_number": 50, "sha": "f" * 40}], frozen_tasks=[task(1)])
+    from worker import LIMITS, REPO_ROOT
+
+    first = run_self_improve_night(server, deps(), clock=lambda: IN_WINDOW_MS)
+    assert first == {"status": "progress", "step": "pr_sync"}
+    assert calls_to(server, "/frozen-benchmark/pending") == []  # bước 1 chỉ đồng bộ PR
+
+    second = run_self_improve_night(server, deps(), clock=lambda: IN_WINDOW_MS)
+    assert second == {"status": "progress", "step": "frozen_measured", "pr_number": 50}
+    assert calls == [("f" * 40, [task(1)], LIMITS["self_improve"]["night_gpu_s"]["eval"], REPO_ROOT)]
+    [reported] = server.frozen_reports
+    assert reported == {"pr_number": 50, "sha": "f" * 40, "config": {"prompts.lock.json": "abc1234567"},
+                        "strata": {"type=ui": 80.0}, "gpu_s": 12.0}
+
+    third = run_self_improve_night(server, deps(), clock=lambda: IN_WINDOW_MS)
+    assert third == {"status": "done", "variants": 0}  # đã đo xong, phần học rỗng: hết việc cho đêm nay
+    assert calls_to(server, "/frozen-benchmark/pending")[-1][1] == {}  # gọi lại: không còn pending, không đo nữa
+    assert len(calls) == 1
+
+
+def test_no_pending_frozen_measurement_falls_straight_through_to_diagnosis():
+    server = FakeNightServer(learning=[task(1)])  # frozen_pending mặc định rỗng
+    d = deps(GOOD)
+    run_self_improve_night(server, d, clock=lambda: IN_WINDOW_MS)  # pr_sync
+    second = run_self_improve_night(server, d, clock=lambda: IN_WINDOW_MS)  # bỏ qua bước đo, chẩn đoán luôn
+    assert second["status"] == "progress" and second["step"] == "created"
+    assert calls_to(server, "/frozen-benchmark/report") == []
 
 
 def test_skip_clusters_from_the_server_are_passed_to_diagnosis():

@@ -45,7 +45,8 @@
       "pause_after_empty_nights": 5,
       "cluster_skip": { "after_failed_nights": 3, "days": 7 },
       "post_merge_watch": { "days": 7, "min_runs": 10, "max_drop_pts": 10 },
-      "retire_days": 180
+      "retire_days": 180,
+      "frozen_window_days": 14
     }
   },
   "branch_prefix": "ai-board/",

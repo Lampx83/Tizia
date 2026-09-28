@@ -6,6 +6,7 @@
 // ============================================================
 import { LIMITS, WorkerContractError } from './store.js';
 import { evalTaskSplit } from './eval-tasks.js';
+import { listFrozenScores } from './frozen-benchmark.js';
 
 const SI = LIMITS.self_improve;
 const DAY_MS = 24 * 3600_000;
@@ -123,15 +124,21 @@ export function listNights(db, limit = 30) {
   const nights = db.prepare('SELECT * FROM ai_self_improve_nights ORDER BY night DESC LIMIT ?').all(limit).map(view)
     .map((n) => ({ ...n, variants: n.variants.map((v) => ({ ...v, pr: v.request_id ? pr.get(v.request_id) ?? null : null })) }));
   const empty = emptyNights(db);
-  return { ...state(db), paused: empty >= SI.pause_after_empty_nights, empty_nights: empty, limits: SI, nights };
+  return { ...state(db), paused: empty >= SI.pause_after_empty_nights, empty_nights: empty, limits: SI, nights,
+    // Ticket 08: đường cong học — không phụ thuộc đêm nào, gộp vào cùng response cho tab admin.
+    frozen: listFrozenScores(db) };
 }
 
+// frozen_at (ticket 08): mốc chụp bộ đánh giá đóng băng — chỉ ghi lần bật đầu tiên (COALESCE giữ giá trị cũ),
+// khác enabled_at vốn đếm lại mỗi lần bật/tắt.
 export function setSelfImproveEnabled(db, enabled, adminUserId, now = Date.now()) {
   if (typeof enabled !== 'boolean') throw new WorkerContractError('enabled must be boolean');
-  db.prepare(`INSERT INTO ai_self_improve_state(id, enabled, enabled_at, updated_by, updated_at) VALUES (1, ?, ?, ?, ?)
+  db.prepare(`INSERT INTO ai_self_improve_state(id, enabled, enabled_at, frozen_at, updated_by, updated_at)
+      VALUES (1, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET enabled=excluded.enabled, updated_by=excluded.updated_by, updated_at=excluded.updated_at,
-      enabled_at=CASE WHEN excluded.enabled THEN excluded.enabled_at ELSE enabled_at END`)
-    .run(enabled ? 1 : 0, now, adminUserId ?? null, now);
+      enabled_at=CASE WHEN excluded.enabled THEN excluded.enabled_at ELSE enabled_at END,
+      frozen_at=COALESCE(frozen_at, excluded.frozen_at)`)
+    .run(enabled ? 1 : 0, now, enabled ? now : null, adminUserId ?? null, now);
   return listNights(db);
 }
 

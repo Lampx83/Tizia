@@ -141,6 +141,30 @@ def _checkouts(repo, shas):
             candidate.drop_source(repo, path)
 
 
+def run_frozen(sha: str, tasks: list[dict], budget: float, *, checkout_repo=None, run_at=None) -> dict:
+    """Đo bộ đánh giá đóng băng 1 lần ở `sha` (self-improve ticket 08, gọi sau khi 1 thay đổi self vừa merge):
+    bộ đo tất định hiện tại (eval_strata) + gold cổng 3 (eval_gold) + task đóng băng đã gắn nhãn (server lọc qua
+    eval-tasks.js frozenTasks) — cùng process con job strata/gold/tasks self_eval.py đã có cho cổng eval của
+    yêu cầu self, không chạy lại logic riêng, trong 1 worktree tách rời của đúng sha đó (run_at tiêm được cho
+    test). Không bao giờ chọn biến thể, chỉ ghi lại để vẽ đường cong học trước hội đồng.
+    Trả {sha, config, strata (kèm gold_gate3, frozen_tasks nếu có dữ liệu), gpu_s}."""
+    with contextlib.nullcontext(run_at) if run_at else _checkouts(checkout_repo, (sha,)) as at:
+        got = at(sha, "strata", {})
+        strata = dict(got["strata"])
+        spent = 0.0
+        gold = at(sha, "gold", {"tasks": [], "limit": budget})
+        spent += gold["units"]
+        if gold["results"]:
+            strata["gold_gate3"] = round(100 * sum(r["passed"] for r in gold["results"]) / len(gold["results"]), 1)
+        left = budget - spent
+        if tasks and left > 0:
+            got_tasks = at(sha, "tasks", {"tasks": tasks, "limit": left})
+            spent += got_tasks["units"]
+            if got_tasks["results"]:
+                strata["frozen_tasks"] = round(100 * sum(r["passed"] for r in got_tasks["results"]) / len(got_tasks["results"]), 1)
+        return {"sha": sha, "config": got["config"], "strata": strata, "gpu_s": round(spent, 1)}
+
+
 def _judge(tasks: list[dict], pairs: dict, plans: dict, deps, left: float) -> dict:
     """Giám khảo shadow: model chọn plan gốc (A) hay biến thể (B) từng cặp; so với luật tất định. Chỉ dùng phần
     ngân sách eval còn lại; cặp mà lời gọi có thể vượt (ước = lời gọi đắt nhất đã thấy) → skipped. Model lỗi /

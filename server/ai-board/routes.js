@@ -9,6 +9,7 @@ import { activeChats } from './chat-activity.js';
 import { deleteEvalTask, evalTaskSplit, labelEvalTask, listEvalTasks, openPullRequests, recordMiss, recordRequestMiss,
   reportPullRequest } from './eval-tasks.js';
 import { listNights, recordSelfVerdict, reportNight, setSelfImproveEnabled, startNight } from './self-improve.js';
+import { pendingFrozenMeasurements, recordFrozenMeasurement } from './frozen-benchmark.js';
 
 // Không cấu hình model phân loại → không gọi gì (hành vi trước ticket 04).
 const defaultClassifyRequest = (title, detail) => (
@@ -432,6 +433,15 @@ export function attachAiBoardWorkerRoutes(router, {
   }));
   router.post('/api/ai-board/worker/self-improve/night/report', authenticate, handle((req, res) => {
     res.json({ night: reportNight(store.db, req.body) });
+  }));
+
+  // Bộ đánh giá đóng băng (self-improve ticket 08): self PR đã merge còn cần đo, đo cùng bộ task đóng băng hiện
+  // có; ghi lại đúng 1 lần điểm đo được (idempotent theo pr_number).
+  router.post('/api/ai-board/worker/self-improve/frozen-benchmark/pending', authenticate, handle((_req, res) => {
+    res.json(pendingFrozenMeasurements(store.db));
+  }));
+  router.post('/api/ai-board/worker/self-improve/frozen-benchmark/report', authenticate, handle((req, res) => {
+    res.json({ score: recordFrozenMeasurement(store.db, req.body) });
   }));
 
   // Trạng thái PR (self-improve ticket 03): worker hỏi GitHub các PR này rồi báo PR đã đóng; không webhook.

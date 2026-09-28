@@ -3,6 +3,8 @@ thắng/thua từng task, ngân sách eval. Model giả; sha giả qua run_at (k
 import json
 import subprocess
 
+import pytest
+
 import self_eval
 
 
@@ -249,3 +251,80 @@ def test_a_short_budget_skips_the_judge_first_and_keeps_the_rule_verdict():
 def test_the_tasks_child_returns_the_plan_text_for_the_judge():
     out = self_eval.score([TASK], lambda _t, _l: (True, 1, "plan text"), limit=10)
     assert out["results"] == [{"id": 1, "passed": True, "plan": "plan text"}]
+
+
+# ---- bộ đánh giá đóng băng (ticket 08): đo 1 sha, không so 2 bên, không bao giờ chọn biến thể ----
+
+class FrozenSha:
+    """1 sha giả: strata tất định + gold + task đóng băng, giống Shas nhưng chỉ 1 bên."""
+
+    def __init__(self, strata, gold_ids, task_hits, gpu=10):
+        self.strata, self.gold_ids, self.task_hits, self.gpu = strata, gold_ids, task_hits, gpu
+        self.calls = []
+
+    def __call__(self, sha, job, payload):
+        self.calls.append((sha, job))
+        if job == "strata":
+            return {"strata": self.strata, "config": {"prompts.lock.json": sha[:10]}}
+        if job == "gold":
+            return {"results": [{"id": f"gold:{c}", "passed": True} for c in self.gold_ids],
+                    "units": self.gpu, "exhausted": False}
+        def attempt(task, _left):
+            file = task["expected_files"][0] if task["id"] in self.task_hits else "public/khac.html"
+            return self_eval.task_passed(task, {"steps": [{"allowed_scope": [file]}]}), self.gpu
+        return self_eval.score(payload["tasks"], attempt, payload["limit"])
+
+
+FROZEN_SHA = "f" * 40
+FROZEN_TASKS = [{"id": i, "request_text": f"task {i}", "expected_files": [f"public/{i}.html"]} for i in range(3)]
+
+
+def test_run_frozen_combines_strata_gold_and_frozen_tasks_into_one_score():
+    fake = FrozenSha({"type=ui": 80.0, "type=logic": 60.0}, gold_ids=["css-color", "edit-text"], task_hits={0, 1})
+    out = self_eval.run_frozen(FROZEN_SHA, FROZEN_TASKS, budget=1000, run_at=fake)
+    assert out["sha"] == FROZEN_SHA
+    assert out["config"] == {"prompts.lock.json": FROZEN_SHA[:10]}
+    assert out["strata"]["type=ui"] == 80.0 and out["strata"]["type=logic"] == 60.0
+    assert out["strata"]["gold_gate3"] == 100.0  # 2/2 gold đạt
+    assert out["strata"]["frozen_tasks"] == pytest.approx(66.7, abs=0.1)  # 2/3 task đóng băng đạt
+    assert out["gpu_s"] == 10 + 3 * 10  # gold (1 lời gọi, đã hết ngân sách theo units trả về) + 3 task
+    assert {job for _, job in fake.calls} == {"strata", "gold", "tasks"}
+
+
+def test_run_frozen_never_compares_two_shas_or_returns_an_accept_verdict():
+    fake = FrozenSha({"type=ui": 80.0}, gold_ids=[], task_hits=set())
+    out = self_eval.run_frozen(FROZEN_SHA, FROZEN_TASKS, budget=1000, run_at=fake)
+    assert "accepted" not in out and "wins" not in out and "losses" not in out
+    assert {sha for sha, _ in fake.calls} == {FROZEN_SHA}  # 1 sha duy nhất, không sha thứ hai để so
+
+
+def test_run_frozen_skips_frozen_tasks_when_the_budget_runs_out_on_gold():
+    fake = FrozenSha({"type=ui": 80.0}, gold_ids=["css-color"], task_hits={0})
+    out = self_eval.run_frozen(FROZEN_SHA, FROZEN_TASKS, budget=10, run_at=fake)  # gold đã tiêu hết 10
+    assert "frozen_tasks" not in out["strata"]
+    assert {job for _, job in fake.calls} == {"strata", "gold"}
+
+
+def test_run_frozen_with_no_frozen_tasks_yet_still_measures_strata_and_gold():
+    fake = FrozenSha({"type=ui": 90.0}, gold_ids=["css-color", "edit-text"], task_hits=set())
+    out = self_eval.run_frozen(FROZEN_SHA, [], budget=1000, run_at=fake)
+    assert out["strata"]["gold_gate3"] == 100.0
+    assert "frozen_tasks" not in out["strata"]
+    assert {job for _, job in fake.calls} == {"strata", "gold"}
+
+
+def test_run_frozen_opens_and_removes_its_own_detached_worktree(tmp_path):
+    repo = tmp_path / "frozen-repo"
+    script = repo / "ai-board" / "harness" / "self_eval.py"
+    script.parent.mkdir(parents=True)
+    script.write_text(
+        "import json, sys\njson.load(sys.stdin)\n"
+        "out = {'strata': {}, 'config': {}} if sys.argv[1] == 'strata' else {'results': [], 'units': 0, 'exhausted': False}\n"
+        "print(json.dumps(out))\n", encoding="utf-8")
+    git(repo.parent, "init", "-q", str(repo))
+    git(repo, "add", "-A")
+    git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "v1")
+    sha = git(repo, "rev-parse", "HEAD")
+    out = self_eval.run_frozen(sha, [], budget=5, checkout_repo=repo)
+    assert out["sha"] == sha
+    assert len(git(repo, "worktree", "list").splitlines()) == 1
