@@ -1797,13 +1797,63 @@ const lines = (v) => String(v || '').split('\n').map(s => s.trim()).filter(Boole
 const evalBox = (field, id, list, rows, ph) => `<textarea data-eval-${field}="${id}" rows="${rows}" placeholder="${ph}"
   style="width:100%;min-width:180px;box-sizing:border-box;background:var(--bg);color:var(--txt);border:1px solid var(--border);border-radius:6px;padding:5px 7px;font:12px/1.4 ui-monospace,monospace"
   >${esc((list || []).join('\n'))}</textarea>`;
+
+// ── Vòng tự cải thiện ban đêm (self-improve ticket 07): công tắc + bảng các đêm. Ticket 08 thêm đồ thị bộ
+// đóng băng vào cùng khối #si-nights; giữ dữ liệu đêm (biến thể, eval, PR) dễ mở rộng thêm cột. ──
+const VARIANT_STATUS_LABEL = { waiting: 'chờ admin duyệt', accepted: 'thắng', rejected: 'thua', dropped: 'bỏ cụm' };
+function nightSection(si) {
+  if (!si) return '';
+  const { enabled, paused, empty_nights: empty, limits, nights = [] } = si;
+  return `
+    <div id="si-nights" style="margin-bottom:22px">
+      <div class="toolbar" style="align-items:center;gap:10px">
+        <button class="btn${enabled ? ' primary' : ''}" data-si-switch="${enabled ? '0' : '1'}">
+          ${enabled ? 'Đang bật — tắt vòng đêm' : 'Đang tắt — bật vòng đêm'}</button>
+        ${paused ? `<span class="pill" style="color:var(--bad)">Tự dừng: ${empty} đêm liền không biến thể nào thắng</span>` : ''}
+        <span class="trace-sub">Khung ${limits.window.start}–${limits.window.end} (${limits.window.tz}) ·
+          tối đa ${limits.max_variants_per_night} biến thể/đêm · cần ≥ ${limits.min_labelled_tasks} task có nhãn</span>
+      </div>
+      ${nights.length ? `<table>
+        <thead><tr><th>Đêm</th><th>Trạng thái</th><th>Đồng bộ PR</th><th>Biến thể</th><th>GPU-s (đề xuất/eval)</th></tr></thead>
+        <tbody>${nights.map(n => `
+          <tr>
+            <td>${esc(n.night)}${n.note ? `<div class="trace-sub">${esc(n.note)}</div>` : ''}</td>
+            <td><span class="pill">${esc(n.status)}</span></td>
+            <td>${n.pr_sync ? esc([n.pr_sync.status, n.pr_sync.merged?.length && `${n.pr_sync.merged.length} merged`,
+              n.pr_sync.closed?.length && `${n.pr_sync.closed.length} closed`].filter(Boolean).join(' · ')) : '—'}</td>
+            <td>${n.variants.length ? n.variants.map(v => `
+              <div style="margin-bottom:6px">
+                <span class="pill">${esc(VARIANT_STATUS_LABEL[v.status] || v.status)}</span>
+                ${esc(v.cluster?.key || '')} — ${esc((v.diagnosis?.hypothesis || '').slice(0, 140))}
+                ${v.eval ? `<div class="trace-sub">thắng ${v.eval.wins} · thua ${v.eval.losses} · hoà ${v.eval.ties}
+                  ${v.eval.dropped?.length ? `· nhóm tụt: ${esc(v.eval.dropped.join(', '))}` : ''}</div>` : ''}
+                ${v.reason ? `<div class="trace-sub">${esc(v.reason)}</div>` : ''}
+                ${v.pr?.url ? `<div class="trace-sub"><a href="${esc(v.pr.url)}" target="_blank" rel="noopener">PR #${v.pr.number}</a></div>` : ''}
+              </div>`).join('') : '—'}</td>
+            <td>${fmtNum(n.gpu_s_propose)} / ${fmtNum(n.gpu_s_eval)}</td>
+          </tr>`).join('')}</tbody>
+      </table>` : '<div class="loading">Chưa có đêm nào.</div>'}
+    </div>`;
+}
+function wireNightSection(host) {
+  host.querySelectorAll('[data-si-switch]').forEach(btn => btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    const res = await api('/api/admin/ai-board/self-improve/switch', { method: 'POST',
+      body: JSON.stringify({ enabled: btn.dataset.siSwitch === '1' }) });
+    if (!res.ok) { toast('Lỗi: ' + (res.data?.message || res.data?.error || res.status), 'err'); btn.disabled = false; return; }
+    toast(res.data.enabled ? 'Đã bật vòng tự cải thiện đêm' : 'Đã tắt vòng tự cải thiện đêm');
+    loadSelfImprove();
+  }));
+}
+
 async function loadSelfImprove() {
-  const r = await api(`/api/admin/ai-board/eval-tasks?status=${evalStatus}`);
+  const [si, r] = await Promise.all([api('/api/admin/ai-board/self-improve'), api(`/api/admin/ai-board/eval-tasks?status=${evalStatus}`)]);
   const host = $('#tabbody');
   if (!r.ok) { host.innerHTML = `<div class="err">Lỗi: ${esc(r.data?.error || r.status)}</div>`; return; }
   const { tasks = [], counts = {} } = r.data;
   const editable = evalStatus !== 'retired';
   host.innerHTML = `
+    ${si.ok ? nightSection(si.data) : `<div class="err">Lỗi vòng đêm: ${esc(si.data?.error || si.status)}</div>`}
     <div class="toolbar">${Object.entries(EVAL_STATUS_LABEL).map(([k, l]) =>
       `<button class="btn${k === evalStatus ? ' primary' : ''}" data-eval-status="${k}">${l} (${counts[k] || 0})</button>`).join(' ')}</div>
     <p style="color:var(--muted);font-size:12.5px;margin:10px 0">Mỗi lần Ban hỏng ở production thành một task eval.
@@ -1825,6 +1875,7 @@ async function loadSelfImprove() {
             <button class="btn danger" data-eval-delete="${t.id}">Xoá</button></td>
         </tr>`).join('')}</tbody>
     </table>` : '<div class="loading">Không có task nào.</div>'}`;
+  wireNightSection(host);
   host.querySelectorAll('[data-eval-status]').forEach(b => b.addEventListener('click', () => {
     evalStatus = b.dataset.evalStatus; loadSelfImprove();
   }));

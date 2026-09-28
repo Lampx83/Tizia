@@ -56,6 +56,7 @@ import { grantSkillsForScenario, plugin as skillsPlugin } from './skills.js';
 import { securityHeaders, csrf, requireStrictCsrf, apiLimiter, sensitiveAuthLimiter, plugin as securityPlugin } from './contexts/security/index.js';
 import { createAiBoardStore } from './ai-board/store.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from './ai-board/routes.js';
+import { selfWinNotifier } from './ai-board/self-improve.js';
 import { draftNotifier } from './ai-board/drafts.js';
 import { attachAiBoardIntake, clarifyNotifier } from './contexts/ai-board-intake/index.js';
 import { attachAiBoardReleases } from './contexts/ai-board-releases/index.js';
@@ -359,6 +360,7 @@ attachAiBoardRequestRoutes(r, {
 });
 attachAiBoardWorkerRoutes(r, {
   store: aiBoardStore, uploadsDir: REQUEST_UPLOADS_DIR, onVerdict: draftNotifier(createNotification),
+  onSelfWin: selfWinNotifier(db, createNotification),
 });
 // Cờ phát hành (ticket 10): có page gate /<slug>.html → phải trước route HTML + static bên dưới.
 attachAiBoardReleases(r, { db, requireAuth, requireAdmin, requireStrictCsrf });
