@@ -163,6 +163,8 @@ function describeAction(type, payload = {}) {
     payload.expiry && `hạn dùng ${payload.expiry}`,
   ].filter(Boolean);
   if (detail.length && /^(check_|inspect_)/.test(type)) s += ` · ${detail.join(', ')}`;
+  // req #231 mục 1.2 — hoá đơn 3D phải ghi rõ số tiền để đối chiếu với số dược sĩ báo/thu trong hội thoại.
+  if (type === 'pos_checkout' && payload.total != null) s += ` · tổng hoá đơn ${Number(payload.total).toLocaleString('vi-VN')} đ${payload.invoiceNo ? ` (HĐ ${payload.invoiceNo})` : ''}`;
   if (qty != null && qty !== '') s += ` (số lượng ${qty})`;
   return s.slice(0, 300);
 }
@@ -298,7 +300,24 @@ const OTC_ACTION_TYPES = {
 // req #230 mục 4 — 2 tiêu chí bị chấm quá tay, ghi rõ luật để AI bám đúng thay vì tự suy diễn.
 const OTC_CRITERION_NOTES = {
   C5: 'LƯU Ý CHẤM: nếu chỉ tư vấn tác dụng không mong muốn (ADR) mà KHÔNG đề cập tương tác thuốc/thức ăn, lối sống–sinh hoạt hay bảo quản thì tối đa 2 điểm dù ADR nói đúng.',
-  D2: 'LƯU Ý CHẤM: nếu trong TOÀN BỘ hội thoại không có bất kỳ câu nào của dược sĩ thể hiện đồng cảm/động viên với khách hàng thì cho 0 điểm, không được cho điểm cao hơn vì lý do khác.',
+  // req #231 mục 2.2 — thang OTC 1–5 không có mức 0; "không có câu đồng cảm" khớp đúng mức 2 của rubric
+  // ("Không phản hồi mà tiếp tục tư vấn"), KHÔNG phải mức thấp hơn. Các câu thủ tục (báo hoá đơn, hỏi
+  // hình thức thanh toán, "tôi trả tiền mặt"…) KHÔNG được tính là minh chứng đồng cảm.
+  D2: 'LƯU Ý CHẤM: nếu trong TOÀN BỘ hội thoại KHÔNG có câu nào của dược sĩ thể hiện đồng cảm/động viên với cảm xúc của khách hàng thì cho ĐÚNG 2 điểm (mức "Không phản hồi mà tiếp tục tư vấn"), không cho điểm cao hơn. Các câu thủ tục như "anh đợi em xuất hoá đơn", "anh trả tiền mặt hay chuyển khoản" KHÔNG được tính là minh chứng đồng cảm — chỉ tính câu ghi nhận cảm xúc của khách hàng (vd "em hiểu anh đang vội/khó chịu…").',
+  // req #231 mục 2.1
+  A3: 'LƯU Ý CHẤM: nếu dược sĩ KHÔNG nói câu nào giải thích lý do cần hỏi mà hỏi thẳng thông tin luôn thì cho ĐÚNG 1 điểm (mức thấp nhất), không cho 2 điểm chỉ vì mở đầu lịch sự.',
+  // req #231 mục 1.2 — đối chiếu số tiền hội thoại nói/thu với tổng hoá đơn thật ghi trong nhật ký 3D
+  // (nay đã có số tiền trong mô tả thao tác pos_checkout).
+  C3: 'LƯU Ý CHẤM: đối chiếu số tiền dược sĩ thông báo/thu trong hội thoại với "tổng hoá đơn" ghi trong nhật ký thao tác pos_checkout. Nếu hai số tiền KHÔNG khớp nhau thì tối đa 3 điểm dù đã thực hiện thao tác thanh toán.',
+  // req #231 mục 2.3 — chỉ 2 câu cụ thể mới tính là minh chứng, câu dặn dò không tính.
+  C7: 'LƯU Ý CHẤM: CHỈ tính là minh chứng khi dược sĩ có câu hỏi xác nhận hết thắc mắc (vd "anh/chị còn thắc mắc gì không ạ") hoặc câu yêu cầu khách hàng nhắc lại cách dùng (vd "anh/chị nhắc lại giúp em cách dùng"). Câu dặn dò như "nếu có thắc mắc gì cứ liên hệ" KHÔNG phải câu hỏi xác nhận, không tính. Nếu hội thoại không có câu nào trong hai loại trên, ghi evidence "không xuất hiện phần đánh giá hiểu biết trong hội thoại" và cho 1 điểm.',
+  // req #231 mục 2.4 — 4 nội dung bắt buộc, thiếu ≥2 thì hạ hẳn xuống mức trung bình.
+  C8: 'LƯU Ý CHẤM: đối chiếu đủ 4 nội dung khi giao thuốc — (1) nói rõ số lượng/hạn dùng, (2) cung cấp cách liên hệ khi có thắc mắc sau khi về nhà, (3) nhắc khi nào cần liên hệ dược sĩ/đi khám, (4) chào tạm biệt và cảm ơn. Thiếu từ 2 nội dung trở lên thì tối đa 3 điểm, dù đã giao đúng thuốc và nói số lượng/hạn dùng.',
+  // req #231 mục 2.5 — minh chứng phải cụ thể, không chung chung.
+  E1: 'LƯU Ý CHẤM: "evidence" phải trích đúng từ ngữ lễ phép ("ạ","dạ","vâng"), câu khuyến khích khách hàng đặt câu hỏi, và cách dược sĩ phản hồi khi khách hàng giục/khó chịu — không viết chung chung "dược sĩ tôn trọng khách hàng".',
+  // req #231 mục 2.6 — minh chứng trích đúng thuật ngữ, "improvement" gợi ý từ thay thế cụ thể.
+  E4: 'LƯU Ý CHẤM: "evidence" phải trích ĐÚNG từ ngữ chuyên môn (chỉ người trong ngành dược mới hiểu) mà dược sĩ dùng, vd "kê đơn", "kháng histamin", "NSAID". Nếu KHÔNG dùng từ chuyên môn nào thì ghi evidence "không dùng thuật ngữ chuyên môn" và cho điểm cao. "improvement" khi có dùng từ chuyên môn PHẢI gợi ý từ thay thế dễ hiểu cụ thể, vd "kê đơn" → "tư vấn", "kháng histamin" → "thuốc điều trị dị ứng".',
+  E5: 'LƯU Ý CHẤM: "evidence" phải trích đúng đoạn dược sĩ ngập ngừng/nói lắp/ngắt quãng/lặp từ (nếu có). "improvement" khi điểm chưa tối đa nên ghi "cần giao tiếp liên tục, lưu loát, không ngắt quãng".',
 };
 
 function buildOtcPrompt(sc, messages, actions, crits) {
@@ -407,8 +426,46 @@ function otcEvidenceCitesStudent(messages, evidence) {
   return nums.some((n) => messages[n - 1]?.speaker === 'student');
 }
 
+// req #232 — OTC-02 (bán Alaxan): B2/B3 phải đếm ĐÚNG số dữ kiện dược sĩ đã hỏi theo danh mục cố định
+// của giảng viên; AI tự đếm hay sai nên chấm TẤT ĐỊNH bằng cách so khớp câu hỏi của dược sĩ, điểm =
+// số dữ kiện đã hỏi + 1 (đúng công thức cô cho: 1/4→2, 2/4→3, 1/5→2, đủ→5), tối thiểu 1 tối đa 5.
+const OTC02_CHECKLISTS = {
+  B2: [
+    { id: 'reason', re: /((sao|vì sao|tại sao|làm sao|gì)[^.?!]{0,12}(dùng|cần|mua|uống)[^.?!]{0,8}alaxan|bị[ ]?(làm )?sao\b|triệu chứng (gì|nào)|cảm thấy (thế nào|ra sao)|gặp (phải )?(tình trạng|vấn đề) gì)/i,
+      ask: 'Anh gặp phải tình trạng gì mà cần dùng Alaxan ạ?' },
+    { id: 'duration', re: /(bao lâu|mấy ngày|từ bao giờ|từ khi nào|bị[^.?!]{0,12}(bao lâu|mấy ngày))/i,
+      ask: 'Anh bị đau nhức răng từ bao giờ?' },
+    { id: 'swelling', re: /(sưng|đau lợi|nướu)/i, ask: 'Ngoài đau nhức răng anh có bị sưng lợi, đau lợi không ạ?' },
+    { id: 'fever', re: /sốt/i, ask: 'Anh có sốt không ạ?' },
+  ],
+  B3: [
+    { id: 'usedBefore', re: /((dùng|uống)[^.?!]{0,12}alaxan[^.?!]{0,12}(bao giờ|chưa|trước đây)|alaxan[^.?!]{0,12}(bao giờ|chưa))/i,
+      ask: 'Anh đã dùng thuốc Alaxan bao giờ chưa ạ?' },
+    { id: 'gi', re: /(dạ dày|tá tràng|\bgan\b|\bthận\b)/i, ask: 'Anh có đang bị đau dạ dày, hay điều trị các bệnh lý gan thận không ạ?' },
+    { id: 'otherDrugs', re: /((thuốc|thực phẩm chức năng)[^.?!]{0,20}(khác|nào khác|gì khác)|đang[ ]?(dùng|uống)[^.?!]{0,10}(thuốc|gì))/i,
+      ask: 'Anh có đang dùng loại thuốc hay thực phẩm chức năng nào khác ở nhà không ạ?' },
+    { id: 'allergy', re: /dị ứng/i, ask: 'Anh đã bao giờ bị dị ứng với thuốc hay thực phẩm nào chưa ạ?' },
+    { id: 'alcohol', re: /(rượu|bia)/i, ask: 'Anh có hay uống rượu bia không ạ?' },
+  ],
+};
+function scoreOtc02Checklist(code, messages) {
+  const list = OTC02_CHECKLISTS[code];
+  const studentText = messages.filter((m) => m.speaker === 'student').map((m) => m.content).join(' \n ');
+  const hits = list.filter((item) => item.re.test(studentText));
+  const missing = list.filter((item) => !hits.includes(item));
+  const score = Math.max(1, Math.min(OTC_MAX_PER_CRITERION, hits.length + 1));
+  return {
+    status: 'scored',
+    score,
+    evidence: hits.length ? `Đã hỏi: ${hits.map((h) => h.ask).join(' / ')}` : 'Không tìm thấy câu hỏi nào khớp danh mục cần khai thác.',
+    comment: `Đã khai thác ${hits.length}/${list.length} thông tin cần thiết theo đáp án riêng OTC-02.`,
+    improvement: missing.length ? `Cần hỏi thêm: ${missing.map((h) => `"${h.ask}"`).join('; ')}` : '',
+  };
+}
+
 async function scoreOtc(sessionRow, messages, actions) {
   const sc = SCENARIOS[Object.keys(SCENARIOS).find((k) => (SCENARIOS[k].code || k) === sessionRow.scenario_code)] || null;
+  const isOtc02 = sc?.code === 'OTC-02';
   const aiCrits = OTC_RUBRIC.filter((c) => c.source !== 'audio');
   const out = new Map();
   let failed = 0;
@@ -442,14 +499,17 @@ async function scoreOtc(sessionRow, messages, actions) {
         const hits = actions.filter((a) => types.includes(a.action_type));
         const invalidHits = hits.filter((a) => a.action_result === 'invalid');
         if (!hits.length) {
-          r0 = { ...r0, score: 0, evidence: 'Không tìm thấy thao tác tương ứng trong nhật ký 3D.',
-            comment: 'Chưa thực hiện thao tác này trong môi trường mô phỏng — cho 0 điểm dù hội thoại có nhắc tới.' };
+          // req #231 mục 1.1: thang OTC là 1–5 (không có mức 0) — không có thao tác thì cho mức thấp nhất = 1.
+          r0 = { ...r0, score: 1, evidence: 'Không tìm thấy thao tác tương ứng trong nhật ký 3D.',
+            comment: 'Chưa thực hiện thao tác này trong môi trường mô phỏng — cho 1 điểm (mức thấp nhất) dù hội thoại có nhắc tới.' };
         } else if (invalidHits.length && r0.score > 2) {
           r0 = { ...r0, score: 2, comment: (r0.comment ? r0.comment + ' ' : '')
             + `Nhật ký 3D ghi nhận ${invalidHits.length} thao tác KHÔNG hợp lệ (${invalidHits.map((a) => a.description_vi || a.action_type).slice(0, 2).join('; ')}) nên tối đa 2 điểm.` };
         }
       }
       if (r0.status === 'scored' && !r0.evidence) r0 = { ...r0, evidence: '(AI chưa nêu trích dẫn cụ thể — giảng viên nên đối chiếu hội thoại)' };
+      // req #232 — B2/B3 của OTC-02: bỏ điểm AI tự đếm, thay bằng đếm TẤT ĐỊNH theo danh mục cố định.
+      if (isOtc02 && OTC02_CHECKLISTS[c.code]) r0 = scoreOtc02Checklist(c.code, messages);
       // req #230 mục 1 — evidence chỉ trích lời khách hàng (không có lượt của dược sĩ) → gắn cảnh báo.
       if (r0.status === 'scored' && c.source !== 'audio' && !otcEvidenceCitesStudent(messages, r0.evidence)) {
         r0 = { ...r0, comment: '⚠️ Minh chứng AI trích dẫn có thể là lời khách hàng, chưa phải lời dược sĩ — giảng viên nên đối chiếu lại hội thoại. ' + (r0.comment || '') };
