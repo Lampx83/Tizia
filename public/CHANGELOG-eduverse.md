@@ -4,6 +4,79 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-29 — Phiên 77 · Bít **điểm mù của chính bộ đo**: 2 môn có 97% đáp án dồn vào hai vị trí mà bậc 3 vẫn báo "sạch"
+
+**Kết luận về hộp thư:** vẫn **không đọc được** — ngày hỏng liên tiếp **thứ 17** (từ `2026-09-13`).
+Sáu endpoint đều trả **401**, `AI_BOARD_KEY` chưa có trong môi trường. Phiên này **không xử lý yêu
+cầu nào của người học** vì không có yêu cầu nào đọc được, và **không bịa ra yêu cầu**.
+
+### Leo thang — vẫn đúng MỘT việc cần người bấm nút
+
+Đo thật hôm nay `node scripts/check-deployed-build.mjs`:
+
+```
+/api/ai-board/inbox  401 needLogin  ⇒ auth gate CHUNG nuốt request
+```
+
+Đã kiểm chứng thêm: nhánh production `feat/postgres-migration` (tip `ae3f491`) **đã có** cả
+`server/contexts/ai-agent/inbox-api.js` lẫn `'/api/ai-board/'` trong `PUBLIC_PATH_PREFIXES`
+(`server/contexts/identity/auth.js:246`). Code đã lên nhánh; bản **đang chạy** thì chưa.
+⇒ Việc còn lại, AI không được phép tự làm: **đặt `AI_BOARD_KEY`** (`openssl rand -hex 32`)
+trên production **rồi redeploy nhánh `feat/postgres-migration`**.
+
+### Bậc 3 báo "sạch" nhưng KHÔNG sạch — tiêu chí cũ bỏ sót cả một lớp lỗi
+
+Preflight chỉ hỏi *"có vị trí nào chiếm ≥60% không?"*. Hai môn lọt lưới đúng khe đó:
+
+| Môn | n | A / B / C / D | Vị trí cao nhất | Hai vị trí gánh |
+|---|---|---|---|---|
+| `lop11:tin-hoc` | 216 | 45,4 / **51,4** / 1,4 / 1,9 | 51,4% (< 60 ⇒ không bị bắt) | **96,8%** |
+| `lop3:cong-nghe` | 181 | 37,0 / **59,7** / 2,8 / 0,6 | 59,7% (< 60 ⇒ không bị bắt) | **96,7%** |
+
+Học sinh chỉ cần chọn bừa **A hoặc B** cho mọi câu là đúng ~97% — bài kiểm tra mất giá trị đo
+lường y như trường hợp `lop11:gdqp` 98,1% của phiên 76, nhưng bộ đo vẫn in `✅ sạch` suốt 17 phiên.
+
+**Con số trước → sau** (`node scripts/audit-answer-distribution.js`):
+
+| Chỉ số | Trước | Sau |
+|---|---|---|
+| `lop11:tin-hoc` (A/B/C/D) | 45,4 / 51,4 / 1,4 / 1,9 · χ²=**190,48** | **25,0 / 25,0 / 25,0 / 25,0** · χ²=**0,00** |
+| `lop3:cong-nghe` (A/B/C/D) | 37,0 / 59,7 / 2,8 / 0,6 · χ²=**176,55** | **24,9 / 25,4 / 24,9 / 24,9** · χ²=**0,02** |
+| Môn có hai vị trí gánh >85% | **2** | **0** |
+| Toàn bộ ngân hàng (28.068 câu) | 25,0 / 25,6 / 25,0 / 24,4 · χ²=8,49 | **24,8 / 25,2 / 25,3 / 24,7** · χ²=**2,98** |
+| Câu dị dạng | 0 | 0 |
+
+**Cách làm:** codemod riêng, **không** dùng `scripts/shuffle-answers.js` (script đó hoán vị
+`choices` + `answer` nhưng bỏ quên `choiceFeedback` ⇒ làm lệch feedback). Codemod quét nguồn bằng
+tokenizer nhận biết chuỗi, rồi đổi chỗ **nguyên văn slice nguồn của CẶP `(choice, choiceFeedback)`
+cùng nhau** và ghi lại `answer`. Vị trí đích lấy từ túi `[0,1,2,3]` trộn bằng RNG xác định, kèm
+chặn *≥3 câu cùng vị trí trong một tuần*. 310/397 câu đổi vị trí.
+
+### Kiểm thử (chạy thật, không suy đoán)
+
+- `node --check` **PASS** cho cả 3 file `.js` đã sửa.
+- **Runtime, không chỉ cú pháp:** import thật `lop11/_index.js` và `lop3/_index.js` — barrel nạp
+  được, 36/36 tuần mỗi môn còn nguyên, soi mắt một câu thấy `choice`/`choiceFeedback` còn khớp.
+- **Đối chiếu HEAD ↔ bản sửa trên 397 câu:** `stem` và `explanation` không đổi; tập cặp
+  `(choice, choiceFeedback)` y hệt; đáp án đúng vẫn **cùng nội dung + cùng feedback** ⇒ chỉ vị trí
+  đổi. Mỗi câu đủ 4 lựa chọn khác nhau, `answer` ∈ 0..3, đủ 4 `choiceFeedback`, feedback tại
+  `answer` mở đầu "Đúng" còn lại mở đầu "Sai". **0 sai lệch.**
+- 72 tuần: nhiều nhất **2** câu cùng vị trí trong một tuần (ngưỡng < 3).
+- `node scripts/check-content-integrity.mjs` → sạch (bậc 1 vẫn 0 → 0).
+- Detector mới thử **cả hai chiều**: trên nội dung cũ (stash bản sửa) báo `⚠️ 2 mục — hai vị trí
+  gánh 97%`; trên nội dung đã sửa báo `✅ sạch`.
+
+### Tách làm hai PR — theo đúng luật tự-merge của `ai-board/ROUTINE.md`
+
+- **PR nội dung học liệu** (2 file `public/js/scenarios/**` + CHANGELOG + `ai-board/inbox-status.json`):
+  đúng phạm vi được tự merge ⇒ đã merge vào `main`.
+- **PR sửa bộ đo** (`scripts/ai-board-preflight.mjs` + `ai-board/ROUTINE.md`): đụng `scripts/`,
+  **ngoài** phạm vi tự merge ⇒ **để chủ sở hữu duyệt**. Nội dung: thêm tiêu chí *hai vị trí gánh
+  >85%* vào bậc 3, và xoá thông điệp leo thang đã lạc hậu ("merge PR #97" — đã xong 2026-09-27)
+  thay bằng việc thật còn lại (`AI_BOARD_KEY` + redeploy).
+
+---
+
 ## 2026-09-28 — Phiên 76 · Đóng bậc 3: xoá sạch lệch phân bố đáp án, ngân hàng quiz về ~25/25/25/25
 
 **Kết luận về hộp thư:** vẫn **không đọc được** — `consecutive_failures = 16`, từ `2026-09-13` (`ai-board/inbox-status.json`). Sáu endpoint đều trả **401**, `AI_BOARD_KEY` chưa có trong môi trường. Phiên này **không xử lý yêu cầu nào của người học** vì không có yêu cầu nào đọc được, và **không bịa ra yêu cầu**.
