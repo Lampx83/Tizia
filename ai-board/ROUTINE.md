@@ -52,8 +52,11 @@ mà không ai biết.
 > x-ai-board-key"` thì code đã lên, chỉ còn thiếu `AI_BOARD_KEY`. Nếu trả `404`
 > thì code đã lên nhưng `AI_BOARD_KEY` chưa đặt (route không được mount).
 >
-> ⚠️ Thông điệp leo thang in ra bởi `scripts/ai-board-preflight.mjs` vẫn hardcode
-> "merge PR #97" — **đã lạc hậu**. Tin file này, đừng tin dòng đó.
+> ✅ Thông điệp leo thang của `scripts/ai-board-preflight.mjs` **đã được sửa ở phiên 77**: nay
+> nêu đúng một việc còn lại (`AI_BOARD_KEY` + redeploy `feat/postgres-migration`), không còn
+> hardcode "merge PR #97". Kiểm chứng nhánh production đã có route: phiên 77 đo tip
+> `feat/postgres-migration` = `ae3f491` có `server/contexts/ai-agent/inbox-api.js` và
+> `'/api/ai-board/'` trong `PUBLIC_PATH_PREFIXES`.
 
 ### 2b. Bậc thang việc dự phòng
 
@@ -65,6 +68,13 @@ việc**, và **chỉ khi có lệnh chứng minh được vấn đề tồn t�
 | 1 | Bài lí thuyết mồ côi / lỗi toàn vẹn học liệu | `node scripts/check-content-integrity.mjs` |
 | 2 | Môn dừng ở 35 tuần — cần soạn **cả** bài lí thuyết lẫn quiz tuần 36 | `node scripts/ai-board-preflight.mjs` |
 | 3 | Lệch phân bố đáp án A/B/C/D, câu dị dạng | `node scripts/audit-answer-distribution.js` |
+
+> **Bậc 3 có HAI tiêu chí, không phải một** (sửa ở phiên 77): một vị trí chiếm **≥60%**,
+> **hoặc** hai vị trí gánh **>85%** (tức hai vị trí ít dùng nhất cộng lại <15%). Tiêu chí
+> thứ hai sinh ra vì tiêu chí đầu bỏ sót hẳn một lớp lỗi: `lop11:tin-hoc` (A 45,4% B 51,4%
+> C 1,4% D 1,9%) và `lop3:cong-nghe` (A 37,0% B 59,7% C 2,8% D 0,6%) — chọn bừa A hoặc B là
+> đúng ~97% mà bậc 3 vẫn in `✅ sạch` suốt 17 phiên. Đừng tin chữ "sạch" của một tiêu chí
+> hẹp: đọc thẳng bảng phân bố của `audit-answer-distribution.js` trước khi kết luận hết việc.
 
 **Nếu cả ba bậc đều sạch:** ghi 1 dòng kết luận, **KHÔNG tạo PR**, **KHÔNG bịa
 việc**, và báo cho chủ sở hữu rằng routine đã hết việc dự phòng đo được.
