@@ -420,6 +420,9 @@ async function detectOtcSafetyFlags(sc, messages, actions) {
 // req #230 mục 1 — kiểm tra "evidence" có trích đúng lời/thao tác của DƯỢC SĨ hay không (không
 // chỉ trích lời khách hàng). Đối chiếu mã L# trong evidence với vai (speaker) của đúng lượt đó;
 // không chặn điểm (LLM có thể đúng nhưng quên format L#) nhưng gắn cảnh báo để giảng viên soát.
+// req #231 mục 2.2 — chốt cứng D2 khi không có câu đồng cảm nào: nhắc trong prompt không đủ, LLM vẫn
+// thỉnh thoảng cho điểm cao hơn 2 dù không có câu đồng cảm thật. Kiểm tra bằng từ khoá làm trần chặn trên.
+const OTC_EMPATHY_RE = /(em hiểu|tôi hiểu|mình hiểu|em rất hiểu|em biết là|em thấu hiểu|thông cảm|chia sẻ|đồng cảm|đừng lo|yên tâm|em xin lỗi vì|em rất tiếc)/i;
 function otcEvidenceCitesStudent(messages, evidence) {
   const nums = [...String(evidence || '').matchAll(/L(\d+)/g)].map((m) => Number(m[1]));
   if (!nums.length) return true;   // không trích mã lượt nào — không đủ căn cứ để bắt lỗi, bỏ qua
@@ -510,6 +513,11 @@ async function scoreOtc(sessionRow, messages, actions) {
       if (r0.status === 'scored' && !r0.evidence) r0 = { ...r0, evidence: '(AI chưa nêu trích dẫn cụ thể — giảng viên nên đối chiếu hội thoại)' };
       // req #232 — B2/B3 của OTC-02: bỏ điểm AI tự đếm, thay bằng đếm TẤT ĐỊNH theo danh mục cố định.
       if (isOtc02 && OTC02_CHECKLISTS[c.code]) r0 = scoreOtc02Checklist(c.code, messages);
+      // req #231 mục 2.2 — D2 trần cứng 2 điểm khi không có câu đồng cảm nào trong lời dược sĩ.
+      if (c.code === 'D2' && r0.status === 'scored' && r0.score > 2
+          && !messages.some((m) => m.speaker === 'student' && OTC_EMPATHY_RE.test(m.content))) {
+        r0 = { ...r0, score: 2, comment: (r0.comment ? r0.comment + ' ' : '') + 'Không tìm thấy câu nào của dược sĩ thể hiện đồng cảm — hạ về 2 điểm.' };
+      }
       // req #230 mục 1 — evidence chỉ trích lời khách hàng (không có lượt của dược sĩ) → gắn cảnh báo.
       if (r0.status === 'scored' && c.source !== 'audio' && !otcEvidenceCitesStudent(messages, r0.evidence)) {
         r0 = { ...r0, comment: '⚠️ Minh chứng AI trích dẫn có thể là lời khách hàng, chưa phải lời dược sĩ — giảng viên nên đối chiếu lại hội thoại. ' + (r0.comment || '') };
