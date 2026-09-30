@@ -7,6 +7,11 @@ from gates import guard, intake_guard
 MESSAGES = guard.LEXICON["public_messages"]
 
 
+def test_explicit_admin_observation_does_not_hide_a_later_mutation():
+    assert 'privileged_area' not in intake_guard.deterministic('Admin chỉ đọc trang quản trị để theo dõi và duyệt bản nháp.')
+    assert 'privileged_area' in intake_guard.deterministic('Admin chỉ đọc trang quản trị rồi xóa tài khoản.')
+
+
 def test_readonly_admin_check_is_allowed_but_secret_read_is_blocked_before_model():
     deps = llm(['ok'])
     out = intake_guard.run('Kiểm tra trang quản trị', 'Chỉ quan sát trạng thái request.', deps, Budget())

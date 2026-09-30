@@ -18,6 +18,8 @@ from pathlib import Path
 import code_index
 import file_context
 import tools
+import functional
+from file_context import keywords
 
 HERE = Path(__file__).resolve().parent
 _MANUAL = (HERE / "prompts" / "AIBOARD.md").read_text(encoding="utf-8").strip() + "\n\n"
@@ -170,6 +172,15 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
     parts, used, targets = [], [], []
     if commit:
         targets = [file] if file else _mentioned_files(request_text, source, commit)
+        known = [] if file else sorted(functional.expected_targets({'request_title': request.get('subject'), 'request_detail': request.get('body')}))
+        known = [target for target in known if tools._show(source, commit, target) is not None]
+        if known:
+            targets = known
+            parts.append('EXISTING FEATURE TARGET: ' + ', '.join(known) + '. Modify this renderer; do not add a different page.')
+            for target in known:
+                parts.append(f'FILE {target}\n' + file_context.excerpt(tools._show(source, commit, target),
+                    ['queueline'] if functional.select({'request_title': request.get('subject'), 'request_detail': request.get('body')})
+                    else keywords(request.get('body'), request.get('subject')), budget=1500))
         if not file and request.get("owned_files"):  # L2 (ticket 06): file folder sở hữu lên đầu, lấy dàn ý
             targets = list(dict.fromkeys([*request["owned_files"], *targets]))
         # Chữ người dùng nhắc có thể không nằm ở trang trong dòng [Trang: …] mà ở module JS trang đó import:
@@ -177,7 +188,7 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
         pages = [t for t in targets if t.endswith(".html")]
         said = file_context.phrases(request.get("subject"), request.get("body"), thread)
         hits, users = tools.find_text(source, commit, said, pages)
-        render, render_words = ([], []) if file else tools.renderers(source, commit, said, pages)
+        render, render_words = ([], []) if file or known else tools.renderers(source, commit, said, pages)
         if render:  # trang không chứa chữ đó: bỏ trang khỏi target, budget dành cho module render
             targets = render
             parts.append(f"LƯU Ý: chữ người dùng nhắc KHÔNG nằm trong {', '.join(pages)}; trang hiển thị nó qua "

@@ -537,7 +537,7 @@ function openReplyModal(id) {
   $('#modal-replyReq').style.display = '';
   $('#modal-setRole').style.display = 'none';
   $('#modal-ctx').innerHTML = `<b>#${r.id}</b> · ${r.type === 'self' ? 'AI Board tự đề xuất' : `${esc(r.domain)}/${esc(r.type)} · gửi bởi <b>${esc(r.student)}</b>`}<br>${esc(r.title)}`;
-  $('#modal-status').value = r.status === 'rejected' ? 'rejected' : 'done';
+  $('#modal-status').value = r.status === 'rejected' ? 'rejected' : r.status === 'done' ? 'done' : 'pending';
   $('#modal-msg').value = '';
   $('#modal-bg').classList.add('show');
   $('#modal-bg').dataset.rid = id;

@@ -209,6 +209,20 @@ def test_run_blocks_without_plan_in_state():
     assert out["blocked"] is True
 
 
+def test_validator_uses_bounded_schema_and_never_accepts_truncated_output():
+    class Truncated(FakeModels):
+        def generate(self, *args, **kwargs):
+            body = super().generate(*args, **kwargs)
+            body['done_reason'] = 'length'
+            return body
+    plan = plan_with(['features'])
+    models = Truncated(plan)
+    result = plan_validate.run({'id': 'x'}, deps_with(models), Budget(), {'plan': plan})
+    assert result['blocked'] and 'truncated' in result['reason']
+    assert models.calls[0]['format']['properties']['grounding']['items']['properties']['quote']['maxLength'] == 320
+    assert models.calls[0]['num_predict'] == 3072
+
+
 def test_http_worker_leaves_complexity_to_the_server_tier():
     from conftest import FakeModels, deps_with
     from budget import Budget

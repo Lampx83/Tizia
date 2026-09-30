@@ -6,6 +6,13 @@ import assert from 'node:assert/strict';
 import { answersClear, checkClarity } from '../server/ai-board/clarity-rules.js';
 import { CLASSIFIER, classifyRequest } from '../server/ai-board/classifier.js';
 
+test('excluded actions do not turn a single ETA copy change into multiple tasks', () => {
+  const result = checkClarity('Thêm giải thích thời gian chờ worker',
+    'Ở tab Của bạn, thêm câu trên dòng hàng đợi. Không sửa quyền, không tạo trang mới, không cập nhật cấu hình.');
+  assert.equal(result.needed, false);
+  assert.equal(checkClarity('Thêm nút trên trang', 'Không sửa quyền, nhưng tạo trang và cập nhật ảnh.').mode, 'split');
+});
+
 test('vague requests trigger clarification without a model', () => {
   for (const [title, detail] of [
     ['Sửa cái trang', 'làm cho đẹp hơn'],

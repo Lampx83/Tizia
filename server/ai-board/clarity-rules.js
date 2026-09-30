@@ -22,10 +22,13 @@ const userText = (title, detail) => `${title ?? ''}\n${String(detail ?? '').spli
   .filter((line) => !/^\s*\[Trang:/.test(line)).join('\n')}`;
 
 function broadReasons(text, has) {
-  const reasons = RULES.broad_keywords.filter(has).map((k) => `rộng: "${k}"`);
-  const bullets = (text.match(/^\s*(?:[-*•+]|\d+[.)])\s+/gm) || []).length;
+  // Negated exclusions end at a contrast/new instruction; positive tasks still count.
+  const tasks = text.replace(/(?:không|khong|do not|don't)\s+(?:sửa|sua|tạo|tao|thêm|them|xóa|xoá|xoa|đổi|doi|cập nhật|cap nhat|merge|edit|create|delete)[^.!?;,\n]*?(?=[.!?;,\n]| +(?:nhưng|nhung|but|hãy|hay)\b|$)/giu, ' ');
+  const taskHas = matcher(tasks);
+  const reasons = RULES.broad_keywords.filter(taskHas).map((k) => `rộng: "${k}"`);
+  const bullets = (tasks.match(/^\s*(?:[-*•+]|\d+[.)])\s+/gm) || []).length;
   if (bullets >= RULES.max_tasks) reasons.push(`rộng: ${bullets} gạch đầu dòng`);
-  const verbs = new Set(RULES.task_verbs.filter(has).map((v) => v.replace('xoá', 'xóa')));
+  const verbs = new Set(RULES.task_verbs.filter(taskHas).map((v) => v.replace('xoá', 'xóa')));
   if (verbs.size >= RULES.max_tasks) reasons.push(`rộng: ${verbs.size} việc (${[...verbs].join(', ')})`);
   return reasons;
 }

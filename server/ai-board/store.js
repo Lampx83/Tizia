@@ -883,6 +883,8 @@ export function createAiBoardStore(db, hooks = {}) {
       note || null, `request status -> ${status}`, `status:${requestId}:${now}:${randomBytes(4).toString('hex')}`, now,
     );
     if (status === 'rejected') closeRootForAdmin(root, actorId, now);
+    else db.prepare('UPDATE ai_tickets SET public_note=?, updated_at=? WHERE id=?')
+      .run(note || null, now, root.id); // Root projection owns status; an admin reply does not complete a worker run.
     return true;
   });
 
@@ -2053,6 +2055,33 @@ export function createAiBoardStore(db, hooks = {}) {
     return invalidatePlanTransaction(requestId, reason, Date.now());
   }
 
+  const replanRequest = db.transaction((requestId, spec, adminUserId) => {
+    const root = db.prepare('SELECT * FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL').get(requestId);
+    if (!root || !['waiting', 'waiting_admin'].includes(root.status)
+        || !['clarification_limit', 'plan_blocked', 'precheck_blocked'].includes(root.phase)
+        || root.lease_owner || latestCandidate(root.id)) {
+      throw new WorkerContractError('request cannot be replanned in its current state', 409, 'not_replannable');
+    }
+    const now = Date.now();
+    invalidatePlanTransaction(requestId, 'admin clarified request', now);
+    db.prepare('UPDATE requests SET clarified_spec=?, updated_at=? WHERE id=?').run(spec, now, requestId);
+    db.prepare(`UPDATE ai_tickets SET status='queued', phase='needs_replan', plan_hash=NULL,
+      public_note='Quản trị viên đã làm rõ yêu cầu; đang chờ lập lại kế hoạch.', internal_reason=NULL,
+      lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE id=?`).run(now, root.id);
+    db.prepare(`INSERT INTO request_messages(request_id, role, author_name, body, created_at)
+      VALUES (?, 'admin', 'Quản trị viên', ?, ?)`).run(requestId, spec, now);
+    insertEvent.run(root.id, 'request_clarified', 'admin', String(adminUserId), `${root.status}->queued`,
+      'Quản trị viên đã làm rõ yêu cầu.', 'admin replan; all gates required',
+      `admin-replan:${root.id}:${now}:${randomBytes(4).toString('hex')}`, now);
+    return { ok: true, status: 'queued' };
+  });
+
+  function clarifyAndReplan(requestId, spec, adminUserId) {
+    const text = String(spec ?? '').trim();
+    if (text.length < 10 || text.length > 4000) throw new WorkerContractError('spec must be 10–4000 characters', 400, 'invalid_spec');
+    return replanRequest(Number(requestId), text, Number(adminUserId));
+  }
+
   return {
     db,
     createRequestWithRoot,
@@ -2101,5 +2130,6 @@ export function createAiBoardStore(db, hooks = {}) {
     resumeAuthorizedPlan,
     extendBudget,
     invalidatePlanForRequest,
+    clarifyAndReplan,
   };
 }

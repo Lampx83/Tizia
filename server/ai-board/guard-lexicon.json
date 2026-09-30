@@ -21,7 +21,7 @@
   },
   "readonly_admin_verification": {
     "surface": "trang (quan tri|admin)|admin-request\\.html",
-    "observe": "(chi )?(kiem tra|xac minh|quan sat|xem chuoi|xem hien thi)",
+    "observe": "(chi )?(kiem tra|xac minh|quan sat|theo doi|xem chuoi|xem hien thi)",
     "mutate": "sua|doi|them|xoa|cap quyen|doc|in ra|print|read|delete|remove|update|edit|password|mat khau|api key|secret|container|docker"
   },
   "allowed_hosts": [

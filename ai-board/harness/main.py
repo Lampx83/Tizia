@@ -73,7 +73,7 @@ class Unavailable:
 
 
 # Trần output theo cổng: Gate 3 ~43 s ở 72 tok/s, dưới timeout gateway ~60 s; cổng khác chỉ trả JSON ngắn.
-NUM_PREDICT = {3: 3072}
+NUM_PREDICT = {2.5: 3072, 3: 3072}
 NUM_PREDICT_DEFAULT = 1024
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 _PROMPT_LOCK = json.loads((PROMPTS_DIR / "prompts.lock.json").read_text(encoding="utf-8"))

@@ -54,6 +54,12 @@ def test_gate3_gets_a_bigger_output_cap():
     assert models.calls[0]["num_predict"] == 3072
 
 
+def test_grounded_validator_has_room_for_compact_evidence():
+    models = FakeModels(plan_with(["features"]))
+    deps_with(models).call_model("m", "p", gate=2.5, budget=Budget())
+    assert models.calls[0]["num_predict"] == 3072
+
+
 def test_failed_call_is_charged_by_wall_time_traced_and_reraised(tmp_path):
     class Down(FakeModels):
         def generate(self, *a, **k):

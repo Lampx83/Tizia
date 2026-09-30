@@ -25,6 +25,7 @@ from pathlib import Path
 
 import code_index
 import context
+import functional
 from gates.scope_check import load_capability_names
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -127,6 +128,9 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
         try:
             plan = parse_plan(body.get("response", ""))
             check_files(plan, source, commit)
+            required = functional.expected_targets({'request_title': request.get('subject'), 'request_detail': request.get('body')})
+            if required.intersection(ctx.get('targets') or []) and not required.intersection(task['file'] for task in plan['subtasks']):
+                raise ValueError('Use the existing feature renderer: ' + ', '.join(sorted(required)))
         except ValueError as e:
             reason = str(e)
             continue

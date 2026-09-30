@@ -9,6 +9,27 @@ import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from '../server
 import { CAPABILITY_POLICY_HASH } from '../server/ai-board/policy.js';
 
 const KEY = 'fixture-worker-key-32-characters-long';
+
+test('admin handoff requeues through all gates and reply preserves root status', () => {
+  const { db, store } = fixture();
+  const root = db.prepare('SELECT * FROM ai_tickets WHERE parent_id IS NULL').get();
+  db.prepare("UPDATE ai_tickets SET status='waiting_admin', phase='clarification_limit' WHERE id=?").run(root.id);
+  store.setRequestStatus(root.source_request_id, 'reviewing', 'Admin đang điều tra', 9);
+  assert.equal(db.prepare('SELECT status FROM requests WHERE id=?').get(root.source_request_id).status, 'pending');
+  assert.equal(db.prepare('SELECT status FROM ai_tickets WHERE id=?').get(root.id).status, 'waiting_admin');
+  assert.throws(() => store.clarifyAndReplan(root.source_request_id, 'short', 9));
+  store.clarifyAndReplan(root.source_request_id, 'Thêm câu giải thích trên dòng hàng đợi hiện có.', 9);
+  const queued = db.prepare('SELECT * FROM ai_tickets WHERE id=?').get(root.id);
+  assert.equal(queued.phase, 'needs_replan');
+  assert.equal(queued.status, 'queued');
+  assert.equal(queued.plan_hash, null);
+  assert.equal(db.prepare('SELECT clarified_spec FROM requests WHERE id=?').get(root.source_request_id).clarified_spec,
+    'Thêm câu giải thích trên dòng hàng đợi hiện có.');
+  assert.throws(() => store.clarifyAndReplan(root.source_request_id, 'Không lập lại khi đang chạy.', 9));
+  db.prepare("UPDATE ai_tickets SET status='cancelled', phase='admin_rejected' WHERE id=?").run(root.id);
+  assert.throws(() => store.clarifyAndReplan(root.source_request_id, 'Không mở lại yêu cầu bị hủy.', 9));
+  db.close();
+});
 const CANDIDATE = {
   branch: 'ai-board/2026-09-24-ticket-1', base_sha: 'a'.repeat(40), head_sha: 'b'.repeat(40),
   commits: [{ sha: 'b'.repeat(40), title: 'ai-board(ticket-1): 1/1 x', files: ['public/pharmacy/demo.html'] }],
@@ -59,6 +80,8 @@ async function serve(store, env = { AI_BOARD_WORKER_KEY: KEY }) {
       req.user = { id: 1, username: 'lan', display_name: 'Lan', role: 'student', enrolled_domain: 'pharmacy' };
     } else if (req.headers['x-test-user'] === '2') {
       req.user = { id: 2, username: 'other', display_name: 'Other', role: 'student', enrolled_domain: 'pharmacy' };
+    } else if (req.headers['x-test-user'] === '3') {
+      req.user = { id: 3, username: 'admin', role: 'admin' };
     }
     next();
   });
@@ -68,7 +91,7 @@ async function serve(store, env = { AI_BOARD_WORKER_KEY: KEY }) {
     requireEnrolled: (req, res, next) => req.user?.enrolled_domain
       ? next()
       : res.status(403).json({ error: 'enrollment_required' }),
-    requireAdmin: (_req, res) => res.status(403).json({ error: 'forbidden' }),
+    requireAdmin: (req, res, next) => req.user?.role === 'admin' ? next() : res.status(403).json({ error: 'forbidden' }),
     requireStrictCsrf: (req, res, next) => req.headers['x-csrf-token'] === 'ok'
       ? next()
       : res.status(403).json({ error: 'csrf_failed' }),
@@ -81,6 +104,24 @@ async function serve(store, env = { AI_BOARD_WORKER_KEY: KEY }) {
     close: () => new Promise((resolve, reject) => server.close((e) => e ? reject(e) : resolve())),
   };
 }
+
+test('admin replan API enforces role, CSRF, spec and current lifecycle', async () => {
+  const { db, store } = fixture();
+  const root = db.prepare('SELECT * FROM ai_tickets WHERE parent_id IS NULL').get();
+  db.prepare("UPDATE ai_tickets SET status='waiting_admin', phase='clarification_limit' WHERE id=?").run(root.id);
+  const { base, close } = await serve(store);
+  const submit = (user, csrf, spec) => fetch(`${base}/api/admin/ai-board/requests/${root.source_request_id}/replan`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-test-user': user, 'x-csrf-token': csrf },
+    body: JSON.stringify({ spec }),
+  });
+  try {
+    assert.equal((await submit('1', 'ok', 'Một mô tả đủ rõ để thực hiện.')).status, 403);
+    assert.equal((await submit('3', '', 'Một mô tả đủ rõ để thực hiện.')).status, 403);
+    assert.equal((await submit('3', 'ok', 'short')).status, 400);
+    assert.equal((await submit('3', 'ok', 'Một mô tả đủ rõ để thực hiện.')).status, 200);
+    assert.equal((await submit('3', 'ok', 'Không lặp khi đã vào hàng đợi.')).status, 409);
+  } finally { await close(); db.close(); }
+});
 
 test('D0 HTTP flow creates a root request, validates a plan, and creates child tickets', async () => {
   const { db, store } = fixture({ seedRequest: false });

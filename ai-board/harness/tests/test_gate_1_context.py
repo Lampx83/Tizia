@@ -6,6 +6,16 @@ from gates import brainstorm, plan_validate
 from test_code_index import _SeqModels, repo  # noqa: F401 — repo là fixture
 
 
+def test_requester_eta_context_names_existing_renderer_without_user_file_hint():
+    from pathlib import Path
+    source = Path(__file__).resolve().parents[3]
+    request = {"subject": "Bổ sung giải thích thời gian chờ khi worker chưa sẵn sàng",
+               "body": "[Trang: Trường CNTT] /school.html?domain=it\nỞ tab Của bạn, thêm câu sau chưa thể ước tính. Worker busy/ready vẫn có ETA."}
+    result = context.build_context(1, request, None, source, "HEAD")
+    assert "public/js/suggestion-fab.js" in result["targets"]
+    assert "chưa thể ước tính" in result["text"]
+
+
 # ── cổng 1: context vào prompt, màu chữ → file CSS trang liên kết ───────────
 
 COLOUR_REQUEST = {"id": "req-1", "domain": "primary", "type": "other", "votes": 1,

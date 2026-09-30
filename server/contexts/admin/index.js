@@ -17,6 +17,7 @@ import { attachBackup, scheduleAutoBackup } from './backup.js';
 import { attachAdminDb } from './db-admin.js';
 import { requireStrictCsrf } from '../security/index.js';
 import { getPageviewStats } from '../analytics/index.js';
+import { createAiBoardStore } from '../../ai-board/store.js';
 
 // Scrypt hash — đồng bộ format với contexts/identity/auth.js (scrypt$salt$hash)
 function hashPassword(password) {
@@ -70,6 +71,7 @@ function tableExists(name) {
 
 export function attachAdmin(r) {
   ensureAdminBootstrap();
+  const boardStore = createAiBoardStore(db);
 
   r.get('/api/admin/overview', requireAdmin, (_req, res) => {
     const base = Q.overview.get();
@@ -229,7 +231,7 @@ export function attachAdmin(r) {
   // Đóng góp ý + GỬI PHẢN HỒI cá nhân cho HS. Khác /status: bắt buộc message,
   // gửi notification vào hộp thư của HS (key theo display_name). Dùng khi đã xử
   // lý xong yêu cầu — UI bell ở HS sẽ kêu báo.
-  const getRequestForReply = db.prepare(`SELECT id, student, title, domain FROM requests WHERE id = ?`);
+  const getRequestForReply = db.prepare(`SELECT id, student, title, domain, status FROM requests WHERE id = ?`);
   // Ghi audit trail vào ai_decisions với decided_by='human' để admin override trùng
   // schema với AI auto-decision — bảng audit chỉ có 1 nguồn sự thật.
   const insertHumanDecision = db.prepare(`
@@ -241,19 +243,20 @@ export function attachAdmin(r) {
   r.post('/api/admin/requests/:id/reply', requireAdmin, requireStrictCsrf, (req, res) => {
     const id = Number(req.params.id);
     const status = String(req.body?.status || 'done');
-    if (!['done', 'rejected', 'reviewing'].includes(status)) return res.status(400).json({ error: 'invalid_status' });
+    if (!['pending', 'done', 'rejected', 'reviewing'].includes(status)) return res.status(400).json({ error: 'invalid_status' });
     const message = String(req.body?.message || '').trim();
     if (message.length < 4) return res.status(400).json({ error: 'message_too_short' });
 
     const reqRow = getRequestForReply.get(id);
     if (!reqRow) return res.status(404).json({ error: 'request_not_found' });
 
-    Q.setRequestStatus.run({ id, status, note: message.slice(0, 500), t: Date.now() });
+    boardStore.setRequestStatus(id, status, message, req.user.id);
+    const appliedStatus = getRequestForReply.get(id).status;
 
     insertHumanDecision.run({
       request_id: id,
-      action: ACTION_BY_STATUS[status],
-      status, reason: `[admin] ${req.user.username} → ${status}`,
+      action: ACTION_BY_STATUS[appliedStatus] || 'defer',
+      status: appliedStatus, reason: `[admin] ${req.user.username} → ${appliedStatus}`,
       public_note: message.slice(0, 500), t: Date.now(),
     });
 
@@ -267,16 +270,17 @@ export function attachAdmin(r) {
       done:      'Yêu cầu của bạn đã hoàn thành ✓',
       rejected:  'Phản hồi về yêu cầu của bạn',
       reviewing: 'Yêu cầu của bạn đang được xử lý',
+      pending: 'Phản hồi về yêu cầu của bạn',
     };
     const notif = createNotification({
       user_display_name: reqRow.student,
       request_id: id,
       kind: 'reply',
-      title: titleByStatus[status],
+      title: titleByStatus[appliedStatus] || 'Phản hồi về yêu cầu của bạn',
       body: `「${reqRow.title}」 — ${message}`,
       url: `/space.html?domain=${encodeURIComponent(reqRow.domain || '')}#requests`,
     });
-    res.json({ ok: true, status, notified: !!notif, notification_id: notif?.id || null });
+    res.json({ ok: true, status: appliedStatus, notified: !!notif, notification_id: notif?.id || null });
   });
 
   // Audit quyết định AI — xuyên tenant (minh bạch "AI điều hành")

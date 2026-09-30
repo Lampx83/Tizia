@@ -15,9 +15,10 @@ const fold = (text) => text.toLowerCase().normalize('NFD').replace(/\p{M}/gu, ''
 export function readOnlyVerificationText(text) {
   const rule = LEXICON.readonly_admin_verification;
   return String(text).split(/(?<=[.!?;])\s+|\n/u).map((clause) => {
-    const words = fold(clause);
-    if (!new RegExp(rule.observe, 'u').test(words) || new RegExp(`\\b(?:${rule.mutate})\\b`, 'u').test(words)) return clause;
-    return clause.replace(/trang (quản trị|quan tri|admin)|admin-request\.html/giu, 'giao diện chỉ đọc');
+    const observation = clause.replace(/chỉ đọc (?=trang (?:quản trị|admin))/giu, 'chỉ quan sát ');
+    const words = fold(observation);
+    if (!new RegExp(rule.observe, 'u').test(words) || new RegExp(`\\b(?:${rule.mutate})\\b`, 'u').test(words.replace(/\btheo doi\b/g, ''))) return clause;
+    return observation.replace(/trang (quản trị|quan tri|admin)|admin-request\.html|\badmin\b/giu, 'giao diện chỉ đọc');
   }).join('\n');
 }
 

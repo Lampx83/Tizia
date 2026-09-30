@@ -10,6 +10,11 @@ import { applyAiBoardMigrations, createAiBoardStore } from '../server/ai-board/s
 import { attachAiBoardRequestRoutes } from '../server/ai-board/routes.js';
 import { checkIntake, recordIntakeFlags } from '../server/ai-board/intake-guard.js';
 
+test('admin observes a draft without a privilege flag; actual mutations remain flagged', () => {
+  assert.deepEqual(checkIntake('Thêm lời giải thích', 'Admin chỉ đọc trang quản trị để theo dõi và duyệt bản nháp.').labels, []);
+  assert.ok(checkIntake('Thêm lời giải thích', 'Admin chỉ đọc trang quản trị rồi xóa tài khoản.').labels.includes('privileged_area'));
+});
+
 function fixtureDb() {
   const db = new Database(':memory:');
   db.pragma('foreign_keys = ON');

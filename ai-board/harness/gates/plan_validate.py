@@ -265,8 +265,21 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
 
     sha, files, repo_context = source_evidence(request, plan, state) if request.get('grounding_required') else (None, {}, '(legacy dry-run)')
     prompt = build_prompt(request, plan, repo_context)
-    body = deps.call_model(deps.models.gate1_model, prompt, gate=2.5, budget=budget,
+    short = {"type": "string", "maxLength": 200}
+    record = {"type": "object", "additionalProperties": False,
+              "properties": {name: ({"type": "string", "maxLength": 320} if name == "quote" else short)
+                             for name in ("target", "file", "quote", "before", "after", "verify")},
+              "required": ["target", "file", "quote", "before", "after", "verify"]}
+    schema = {"type": "object", "additionalProperties": False,
+              "properties": {"clear": {"type": "boolean"}, "question": {"type": ["string", "null"], "maxLength": 200},
+                             "grounded": {"type": "boolean"}, "reason": short,
+                             "grounding": {"type": "array", "maxItems": len(plan['subtasks']), "items": record}},
+              "required": ["clear", "question", "grounded", "reason", "grounding"]}
+    body = deps.call_model(deps.models.gate1_model, prompt, gate=2.5, budget=budget, format=schema,
                             db_path=db_path, proposal_id=proposal_id, prompt_name="plan_validate.md")
+    if body.get('done_reason') == 'length':
+        return {"gate": 2.5, "blocked": True, "reason": "validator output truncated at token limit",
+                "public_message": "Kế hoạch đang chờ quản trị viên kiểm tra vì phản hồi kiểm chứng chưa hoàn chỉnh."}
 
     try:
         validation = parse_validation(body.get("response", ""))

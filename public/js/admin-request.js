@@ -348,7 +348,9 @@ function renderActions(request, trace) {
   // Đã có thay đổi (candidate) → chỉ hoàn tác; chưa làm hoặc đang làm → chỉ hủy.
   const canCancel = !candidate && !['rejected', 'cancelled', 'done'].includes(request.status);
   const canRetryTransient = root?.phase === 'transient_blocked';
-  if (!canRollback && !canCancel && !canRetryTransient) return ui.flash ? `<div class="flash">${esc(ui.flash)}</div>` : '';
+  const canReplan = root && ['waiting', 'waiting_admin'].includes(root.status)
+    && ['clarification_limit', 'plan_blocked', 'precheck_blocked'].includes(root.phase) && !candidate;
+  if (!canRollback && !canCancel && !canRetryTransient && !canReplan) return ui.flash ? `<div class="flash">${esc(ui.flash)}</div>` : '';
   const busy = root?.live;
   return `<div class="actions">
       ${canRetryTransient ? `<button class="btn ok" data-action="retry-transient" data-root="${esc(root.id)}"
@@ -358,6 +360,9 @@ function renderActions(request, trace) {
       ${canCancel ? '<button class="btn danger-outline" data-action="cancel">Hủy yêu cầu</button>' : ''}
       ${ui.flash ? `<span class="flash">${esc(ui.flash)}</span>` : ''}
     </div>
+    ${canReplan ? `<label for="admin-replan-spec">Mô tả đã làm rõ (10–4000 ký tự)</label>
+      <textarea id="admin-replan-spec" maxlength="4000">${esc(request.clarified_spec || request.detail || '')}</textarea>
+      <button class="btn ok" data-action="replan">Lập lại kế hoạch qua các gate</button>` : ''}
     ${ui.confirm ? renderConfirm(request, candidate) : ''}`;
 }
 
@@ -519,7 +524,7 @@ function schedule() {
   timer = setTimeout(tick, active ? 2000 : 10000);
 }
 async function tick() {
-  if (!document.hidden && !ui.confirm) await refresh().catch(e => { if (e.message !== 'login') console.warn(e); });
+  if (!document.hidden && !ui.confirm && document.activeElement?.id !== 'admin-replan-spec') await refresh().catch(e => { if (e.message !== 'login') console.warn(e); });
   schedule();
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
@@ -536,6 +541,14 @@ document.addEventListener('click', e => {
   else if (action === 'authorize-close') { ui.authorizeConfirm = null; }
   else if (action === 'authorize-go') return authorizePlan(btn);
   else if (action === 'retry-transient') return retryTransient(btn);
+  else if (action === 'replan') {
+    const spec = $('#admin-replan-spec').value.trim();
+    btn.disabled = true;
+    post(`/api/admin/ai-board/requests/${REQUEST_ID}/replan`, { spec })
+      .then(() => { ui.flash = 'Đã đưa yêu cầu về hàng đợi lập kế hoạch.'; })
+      .catch(e => { ui.flash = e.message; }).finally(() => refresh());
+    return;
+  }
   render();
   if (action === 'confirm-next') $('#confirm-input')?.focus();
 });

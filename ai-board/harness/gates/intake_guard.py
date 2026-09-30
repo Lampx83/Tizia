@@ -63,9 +63,10 @@ def readonly_verification_text(text: str) -> str:
     rule = guard.LEXICON["readonly_admin_verification"]
     clauses = re.split(r"(?<=[.!?;])\s+|\n", text)
     for i, clause in enumerate(clauses):
+        clause = re.sub(r"chỉ đọc (?=trang (?:quản trị|admin))", "chỉ quan sát ", clause, flags=re.I)
         words = guard.fold(clause)
-        if re.search(rule["observe"], words) and not re.search(r"\b(?:" + rule["mutate"] + r")\b", words):
-            clauses[i] = re.sub(r"trang (quản trị|quan tri|admin)|admin-request\.html", "giao diện chỉ đọc", clause, flags=re.I)
+        if re.search(rule["observe"], words) and not re.search(r"\b(?:" + rule["mutate"] + r")\b", re.sub(r"\btheo doi\b", "", words)):
+            clauses[i] = re.sub(r"trang (quản trị|quan tri|admin)|admin-request\.html|\badmin\b", "giao diện chỉ đọc", clause, flags=re.I)
     return "\n".join(clauses)
 
 
