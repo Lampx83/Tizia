@@ -5,7 +5,7 @@
 // Dùng try/catch dynamic import — không crash nếu 1 môn chưa có.
 // ============================================================
 let m_toan = {}, m_nv = {}, m_ta = {}, m_ly = {}, m_hoa = {}, m_sinh = {};
-let m_su = {}, m_dia = {}, m_gdcd = {}, m_gdqp = {}, m_tin = {}, m_cn = {}, m_hdtn = {};
+let m_su = {}, m_dia = {}, m_gdcd = {}, m_gdqp = {}, m_tin = {}, m_cn = {}, m_hdtn = {}, m_gddp = {};
 
 try { ({ H10TOAN_LESSONS: m_toan } = await import('./toan.js')); } catch {}
 try { ({ H10NV_LESSONS:   m_nv   } = await import('./ngu-van.js')); } catch {}
@@ -20,9 +20,10 @@ try { ({ H10GDQP_LESSONS: m_gdqp } = await import('./gdqp.js')); } catch {}
 try { ({ H10TIN_LESSONS:  m_tin  } = await import('./tin-hoc.js')); } catch {}
 try { ({ H10CN_LESSONS:   m_cn   } = await import('./cong-nghe.js')); } catch {}
 try { ({ H10HDTN_LESSONS: m_hdtn } = await import('./hdtn.js')); } catch {}
+try { ({ H10GDDP_LESSONS: m_gddp } = await import('./gd-dia-phuong.js')); } catch {}
 
 export const LOP10_LESSONS = {
   ...(m_toan || {}), ...(m_nv || {}), ...(m_ta || {}), ...(m_ly || {}), ...(m_hoa || {}),
   ...(m_sinh || {}), ...(m_su || {}), ...(m_dia || {}), ...(m_gdcd || {}), ...(m_gdqp || {}),
-  ...(m_tin || {}), ...(m_cn || {}), ...(m_hdtn || {}),
+  ...(m_tin || {}), ...(m_cn || {}), ...(m_hdtn || {}), ...(m_gddp || {}),
 };

@@ -1354,6 +1354,38 @@ node --check public/js/domains/pharmacy/achievements.js → OK
 
 ---
 
+## 2026-09-01 — Phiên cải tiến (55) · THPT Lớp 10 — GD Địa phương (H10GDDP)
+
+**Chế độ:** Chủ động — hộp thư `ai-board/inbox.json` không có yêu cầu pending; DB production không truy cập được trong môi trường này (lỗi hạ tầng sync-inbox đã ghi nhận từ phiên 45).
+
+**Phạm vi:** Trường THPT — Lớp 10 · Môn Giáo dục địa phương.
+
+### Phân tích khoảng trống
+
+GDPT 2018 quy định môn **Giáo dục địa phương** là bắt buộc ở tất cả cấp học, gồm cả THPT (lớp 10–12). Các lớp THCS (lớp 6–9) đã có đầy đủ nội dung GD địa phương (`gd-dia-phuong.js` + `lessons/gd-dia-phuong.js`). Tuy nhiên, cả 3 lớp THPT **hoàn toàn thiếu** môn này. Phiên này bổ sung lớp 10; lớp 11 và 12 sẽ được thêm trong các phiên tiếp theo.
+
+Nội dung GD địa phương phiên này lấy bối cảnh **Hà Nội** — địa phương mẫu theo chương trình của Bộ GD&ĐT, bao gồm lịch sử nghìn năm, di sản văn hoá UNESCO, danh nhân, ẩm thực, nghệ thuật, phát triển kinh tế–xã hội và trách nhiệm thế hệ trẻ.
+
+### Thay đổi
+
+| File | Loại | Mô tả |
+|------|------|-------|
+| `public/js/scenarios/lop10/gd-dia-phuong.js` | Tạo mới | 35 tuần quiz H10GDDP (HK1: tuần 1–18, HK2: tuần 19–35) — lịch sử Thăng Long, di sản UNESCO, làng nghề, ẩm thực, kháng chiến, đổi mới, đô thị hiện đại |
+| `public/js/scenarios/lop10/lessons/gd-dia-phuong.js` | Tạo mới | 35 bài lí thuyết tuần H10GDDP với topic, intro, objectives, theory, examples |
+| `public/js/scenarios/lop10/_index.js` | Mở rộng | Thêm `m_gddp`, import `H10GDDP_SCENARIOS` từ `gd-dia-phuong.js`, spread vào `HIGHSCHOOL_LOP10_SCENARIOS` |
+| `public/js/scenarios/lop10/lessons/_index.js` | Mở rộng | Thêm `m_gddp`, import `H10GDDP_LESSONS` từ `gd-dia-phuong.js`, spread vào `LOP10_LESSONS` |
+| `public/js/domains/highschool/modules.js` | Mở rộng | Thêm 3 module `H10GDDP`, `H11GDDP`, `H12GDDP` vào catalog THPT (yearLevel 1/2/3, subject `gd-dia-phuong`) |
+
+**Kiểm tra:** `node --check` — 0 lỗi cú pháp trên tất cả 5 file.
+
+---
+
+> ⏳ **Merge muộn 2026-09-30.** Nhánh `ai-board/2026-09-01` (PR #83) đứng lại một tháng vì chưa ai duyệt;
+> chủ sở hữu yêu cầu merge nốt vào 2026-09-30. Nội dung giữ nguyên như khi soạn, chỉ chạy lại toàn bộ
+> kiểm thử trên cây hiện tại trước khi merge (xem mục 2026-09-30 ở đầu file).
+
+---
+
 ## 2026-08-31 — Phiên cải tiến (54) · THPT — HĐTN-HN Lesson Theory Files
 
 **Chế độ:** Chủ động — hộp thư `ai-board/inbox.json` không có yêu cầu pending; DB production không truy cập được trong môi trường này (lỗi hạ tầng sync-inbox đã ghi nhận từ phiên 45).
