@@ -67,11 +67,23 @@ nó nằm trên một nhánh treo. Bài học: **nội dung không được merg
 - ✅ `node scripts/check-content-integrity.mjs` → sạch. `node scripts/ai-board-preflight.mjs
   --no-net` → **cả ba bậc sạch**.
 
-### 4. Dọn nhánh
+### 4. Dọn nhánh — phân loại xong, nhưng **KHÔNG xoá được: GitHub trả 403**
 
-Xoá các nhánh đã gộp hết vào `main`. **Giữ lại** `feat/postgres-migration` (production đang chạy từ
-nhánh này) và các nhánh còn commit chưa có trên `main` — đã liệt kê lại cho chủ sở hữu quyết định,
-không tự xoá. Luật này đã được ghi vào `ROUTINE.md` để phiên sau không xoá nhầm.
+117 nhánh được phân loại bằng `git cherry` (so theo patch-id, không chỉ theo ancestry):
+
+| Nhóm | Số nhánh | Xử lí |
+|---|---|---|
+| Mọi commit **đã có trên `main`** | **61** | An toàn xoá — không mất gì. |
+| Còn commit **chưa có trên `main`** | 26 | **Giữ** — chờ chủ sở hữu quyết định. |
+| **Không chung gốc** với `main` (lịch sử trước lần viết lại repo) | 30 | **Giữ** — trong đó có `feat/postgres-migration`: **production đang chạy từ nhánh này, không được xoá.** |
+
+`git push origin --delete` **thất bại với HTTP 403**: token GitHub của phiên routine cho phép tạo và
+cập nhật ref nhưng **không** cho xoá ref. Tạo/push nhánh và merge PR trong cùng phiên đều thành công
+⇒ đây là giới hạn quyền của token, không phải lỗi mạng. Đã ghi lệnh xoá sẵn cho 61 nhánh an toàn để
+chủ sở hữu chạy ở máy có quyền; **không xoá bằng đường khác**.
+
+Luật mới trong `ROUTINE.md`: không xoá `feat/postgres-migration` hay bất cứ nhánh nào còn commit
+chưa có trên `main`, dù được yêu cầu "xoá hết nhánh" — liệt kê ra và hỏi lại.
 
 ## 2026-09-29 — Phiên 77 · Bít **điểm mù của chính bộ đo**: 2 môn có 97% đáp án dồn vào hai vị trí mà bậc 3 vẫn báo "sạch"
 
