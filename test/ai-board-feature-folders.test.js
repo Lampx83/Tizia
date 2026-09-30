@@ -101,7 +101,7 @@ test('a person can vote a classmate\'s folder once, not their own', () => {
   assert.throws(() => store.voteFolder(id, 1), (e) => e.code === 'own_folder');
 });
 
-test('feature grilling asks exactly the three topics, with no early stop', () => {
+test('feature grilling asks exactly two topics, with no early stop', () => {
   assert.deepEqual(nextStep({ asked: 1, rulesClear: true, mode: 'feature' }), { kind: 'question', mode: 'feature' });
   assert.deepEqual(nextStep({ asked: FEATURE_QUESTIONS, mode: 'feature' }), { kind: 'summary', complete: true });
   assert.deepEqual(nextStep({ asked: 1, rulesClear: true }), { kind: 'summary', complete: true }); // loose request unchanged
@@ -111,9 +111,9 @@ test('each feature turn names exactly its own topic', async () => {
   const { questionPrompt } = await import('../server/contexts/ai-board-intake/clarify.js');
   const request = { title: 'Trò đoán từ', detail: 'x' };
   const p1 = questionPrompt({ request, turns: [], techLevel: 'some', mode: 'feature', turn: 1 });
-  const p3 = questionPrompt({ request, turns: [], techLevel: 'some', mode: 'feature', turn: 3 });
+  const p2 = questionPrompt({ request, turns: [], techLevel: 'some', mode: 'feature', turn: 2 });
   assert.match(p1, /CHỈ hỏi về: chức năng này để làm gì/);
-  assert.match(p3, /CHỈ hỏi về: chức năng này giống chức năng nào/);
+  assert.match(p2, /CHỈ hỏi về: người dùng làm gì theo từng bước/);
 });
 
 // Feature-folders ticket 05: one branch + one draft PR per folder cycle.
@@ -134,7 +134,7 @@ test('a folder cycle keeps its branch head and PR; done then released starts a n
   const candidate = { branch, base_sha: 'a'.repeat(40), head_sha: 'b'.repeat(40),
     commits: [{ sha: 'b'.repeat(40), title: 'ai-board(ticket-1): 1/1 Trang mới', files: ['public/tro-doan-tu.html', 'test/t.test.js'] }] };
   const gates = [{ gate: 3, blocked: false, reason: null }, { gate: 4, blocked: false, reason: null, issues: [] },
-    { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true, runner: 'docker', retried: false },
+    { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true, functional: { probe_id: 'queue-worker-availability-v1', passed: true, coverage: { requester_api: true, mounted_ui: true, recovery: true } }, runner: 'docker', retried: false },
     { gate: 5.5, blocked: false, reason: null, risk_level: 'low', risk_signals: [] }];
   store.submitPrePrVerdict(ticket.id, { ...lease, runId: run.id, idempotencyKey: 'cycle-verdict-001', verdict: {
     outcome: 'ready_for_pr', gate_reached: 5.5, reason: null, budget_used: 20, failure_class: null, repairs: [], candidate, gates } });

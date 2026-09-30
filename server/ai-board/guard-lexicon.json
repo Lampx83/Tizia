@@ -19,6 +19,11 @@
       "^ai-board/harness/retrieval_weights\\.json$"
     ]
   },
+  "readonly_admin_verification": {
+    "surface": "trang (quan tri|admin)|admin-request\\.html",
+    "observe": "(chi )?(kiem tra|xac minh|quan sat|xem chuoi|xem hien thi)",
+    "mutate": "sua|doi|them|xoa|cap quyen|doc|in ra|print|read|delete|remove|update|edit|password|mat khau|api key|secret|container|docker"
+  },
   "allowed_hosts": [
     "tizia.vn", "gov.vn", "edu.vn", "localhost", "example.com",
     "unpkg.com", "cdn.jsdelivr.net", "cdnjs.cloudflare.com", "fonts.googleapis.com", "fonts.gstatic.com",
@@ -27,6 +32,7 @@
     "roadmap.sh", "freecodecamp.org", "git-scm.com", "orcid.org", "aframe.io"
   ],
   "public_messages": {
+    "prompt_injection": "Yêu cầu đòi truy cập dữ liệu bí mật hoặc thay đổi chỉ dẫn hệ thống nên vượt phạm vi xử lý của AI Board và chưa được tiếp nhận.",
     "reject": "Yêu cầu có nội dung chưa phù hợp với môi trường học tập nên chưa thể tiếp nhận. Bạn vui lòng viết lại lịch sự, tập trung vào tính năng hoặc bài học cần thay đổi nhé.",
     "critical": "Yêu cầu chưa thể xử lý tự động và đã được chuyển cho quản trị viên xem xét.",
     "human_review": "Yêu cầu đã được ghi nhận và sẽ được quản trị viên xem xét trước khi thực hiện.",
@@ -37,6 +43,7 @@
     "prompt_injection": {
       "intake": "critical", "diff": "critical",
       "terms": [
+        "(doc|read|in ra|print|show|reveal) (file |tep |noi dung |the )?(\\x2eenv|api key|secret key|private key)",
         "ignore (all )?(the |your )?(previous|prior|above|earlier) (instructions|rules|prompts?)",
         "disregard (all |the |your )?(previous|prior|above) (instructions|rules)",
         "forget (all |your )?(previous )?instructions",
@@ -123,6 +130,7 @@
     "privileged_area": {
       "intake": "human_review", "diff": null,
       "terms": [
+        "(xoa|delete|remove) (tai khoan|account|container|database)",
         "mật khẩu", "đăng nhập", "xác thực", "phân quyền", "quyền admin", "quyền quản trị", "trang quản trị",
         "thanh toán", "nạp tiền", "chuyển khoản", "hoàn tiền",
         "sửa điểm", "đổi điểm", "tăng điểm", "cộng điểm cho", "chấm điểm lại", "bảng điểm", "điểm thi",

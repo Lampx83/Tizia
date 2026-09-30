@@ -3,6 +3,7 @@ from dataclasses import replace
 from pathlib import Path
 import json
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 
@@ -14,6 +15,8 @@ from gates import verify
 def served(monkeypatch):
     """Default isolated container serves every fixture public file as checked out."""
     monkeypatch.setattr(verify, "probe_http", lambda _url: (200, b"<h1>changed</h1>\n// x\n"))
+    import functional
+    monkeypatch.setattr(functional, 'run', lambda *_: {'probe_id': functional.QUEUE_PROBE, 'passed': True})
 
 
 class FakeRunner:
@@ -33,7 +36,6 @@ class FakeRunner:
             config = {"services": {"tizia": {"environment": {"NODE_ENV": "production", "PORT": "8041",
                                                           "HOST": "0.0.0.0", "DATA_DIR": "/data", "BASE_PATH": ""},
                                                "image": f"{project}:latest",
-                                               "cpus": 1.0, "mem_limit": 1610612736, "pids_limit": 128,
                                                "ports": [{"target": 8041, "host_ip": "127.0.0.1"}],
                                                "volumes": [{"source": f"{project}-data", "target": "/data"}]}}}
             if action == "exec" and args[-1] == "env":
@@ -133,6 +135,7 @@ def test_up_failure_still_tears_down(tmp_path):
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
     assert out["failure_class"] == "transient"
+    assert "failed" in out["evidence"]["text"]
     assert runner.calls[-1][0][-2:] == ["down", "-v"]
 
 
@@ -341,7 +344,9 @@ def test_bash_is_git_bash_even_when_git_lives_in_mingw64(tmp_path, monkeypatch):
     for path in (git, bash):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("", encoding="utf-8")
-    monkeypatch.setattr(verify.os, "name", "nt")
+    # Replacing os.name mutates the shared os module, making pathlib pick
+    # WindowsPath on Linux. Mock only the module reference used by _bash.
+    monkeypatch.setattr(verify, "os", SimpleNamespace(name="nt"))
     monkeypatch.setattr(verify.shutil, "which", lambda name: str(git) if name == "git" else None)
     assert verify._bash() == str(bash)
 
@@ -437,10 +442,10 @@ def test_internal_network_mode_rejects_a_published_port_or_public_ip(tmp_path, m
     assert out["blocked"] and out["failure_class"] == "critical"
 
 
-def test_verify_container_gets_one_cpu_and_1536_mb(tmp_path):
+def test_verify_container_uses_outer_worker_resource_limit_for_dind_compatibility(tmp_path):
     runner = FakeRunner()
     verify.run(state(checkout(tmp_path)), runner=runner)
-    assert "cpus: 1.0" in runner.override and "mem_limit: 1536m" in runner.override
+    assert "cpus:" not in runner.override and "mem_limit:" not in runner.override and "pids_limit:" not in runner.override
 
 
 def _git(root, *args):

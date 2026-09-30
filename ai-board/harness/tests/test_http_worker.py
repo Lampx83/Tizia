@@ -29,6 +29,8 @@ class FakeTransport:
             return {'run': {'id': 11}}
         if path.endswith('/events'):
             return {'event': {'id': 12}}
+        if path.endswith('/clarifications'):
+            return {'status': 'clarifying'}
         if path.endswith('/plan'):
             return {'status': 'planned', 'tier': 'surface', 'children': [{'id': 13}],
                     'capability_policy_hash': POLICY['hash']}
@@ -55,6 +57,14 @@ def test_off_mode_makes_no_http_calls():
     worker = HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1')
     assert worker.run_once() == {'status': 'off'}
     assert transport.calls == []
+
+
+def test_real_change_runner_hands_off_legacy_unverified_plan_before_model_or_checkout(monkeypatch, tmp_path):
+    import worker
+    monkeypatch.setattr(worker, '_real_deps', lambda *_: object())
+    out = worker.harness_change_runner(checkout_source=tmp_path)({'steps':[]},7,200)
+    assert out['outcome'] == 'blocked' and out['gate_reached'] == 3
+    assert out['failure_class'] == 'plan' and out['budget_used'] == 0 and out['candidate'] is None
 
 
 def test_shadow_run_uses_only_the_worker_http_contract():
@@ -151,6 +161,27 @@ def test_planner_failure_records_block_and_releases_lease():
     ]
     assert transport.calls[-2][2]['event_type'] == 'plan_blocked'
     assert transport.calls[-1][2]['outcome'] == 'waiting'
+
+
+def test_gate_2_5_question_enters_requester_clarification_flow():
+    transport = FakeTransport()
+
+    def unclear_planner(_snapshot):
+        raise PlanBlockedError('gate 2.5 blocked: needs_clarification', {
+            'gate': 2.5, 'reason': 'needs_clarification',
+            'public_message': 'Bạn muốn thay đổi điều gì trên trang này?',
+        })
+
+    worker = HttpWorker(
+        WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1', mode='shadow',
+        planner=unclear_planner,
+    )
+    assert worker.run_once()['status'] == 'clarifying'
+    calls = [call for call in transport.calls if '/clarifications' in call[1]]
+    assert len(calls) == 1
+    assert calls[0][2]['question'] == 'Bạn muốn thay đổi điều gì trên trang này?'
+    assert not any(call[1].endswith('/release') for call in transport.calls)
+    assert [call for call in transport.calls if call[1].endswith('/events')][0][2]['event_type'] == 'shadow_precheck_passed'
 
 
 def test_long_planning_heartbeats_until_the_gates_finish():
@@ -290,7 +321,7 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
             assert state['checkout_source'] == str(tmp_path)
             state['full_checkout'] = str(tmp_path / 'checkout')
             return {'gate': 5, 'blocked': False, 'reason': None,
-                    'evidence': {'smoke_passed': True, 'http_observed': True, 'runner': 'docker',
+                    'evidence': {'smoke_passed': True, 'http_observed': True, 'functional': {'probe_id': 'queue-worker-availability-v1', 'passed': True}, 'runner': 'docker',
                                  'text': 'private log'}}
         return {'gate': 5.5, 'blocked': False, 'reason': None,
                 'risk_level': 'low', 'risk_signals': []}
@@ -317,7 +348,7 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
     assert out['pre_pr_verdict']['outcome'] == 'ready_for_pr'
     assert [gate for gate, _ in states] == [3, 4, 5, 5.5]
     assert states[0][1]['catalog'] == POLICY['capabilities']
-    assert states[0][1]['request_detail'] == '[Trang: X] /x.html'
+    assert states[0][1]['request_detail'] == 'fixture\n[Trang: X] /x.html'
     assert states[2][1]['plan']['subtasks'][0] == {
         **canonical_plan['steps'][0], 'file': 'public/x.html', 'verify': 'smoke; 200', 'size': 'small',
     }
@@ -332,7 +363,7 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
             {'gate': 3, 'blocked': False, 'reason': None},
             {'gate': 4, 'blocked': False, 'reason': None, 'issues': [], 'checks': []},
             {'gate': 5, 'blocked': False, 'reason': None,
-             'smoke_passed': True, 'http_observed': True, 'runner': 'docker', 'retried': False},
+             'smoke_passed': True, 'http_observed': True, 'functional': {'probe_id': 'queue-worker-availability-v1', 'passed': True}, 'runner': 'docker', 'evidence': {'text': 'private log'}, 'retried': False},
             {'gate': 5.5, 'blocked': False, 'reason': None,
              'risk_level': 'low', 'risk_signals': []},
         ],
@@ -431,7 +462,7 @@ def scripted_gates(script):
         if gate == 4:
             base['issues'] = []
         if gate == 5:
-            base['evidence'] = {'smoke_passed': True, 'http_observed': True}
+            base['evidence'] = {'smoke_passed': True, 'http_observed': True, 'functional': {'probe_id': 'queue-worker-availability-v1', 'passed': True}}
             state.update(branch='ai-board/2026-09-24-ticket-7', base_sha='a' * 40,
                          commits=[{'sha': 'b' * 40, 'title': 'ai-board(ticket-7): 1/1 x',
                                    'files': ['public/x.html', 'test/x.test.js']}])
@@ -1417,6 +1448,7 @@ def test_pr_sync_without_github_token_skips_quietly(capsys):
 
 
 def test_sync_prs_flag_without_token_exits_cleanly(monkeypatch, capsys):
+    monkeypatch.setenv('AI_BOARD_WORKER_MODE', 'off')
     monkeypatch.delenv('AI_BOARD_GITHUB_TOKEN', raising=False)
     monkeypatch.setenv('AI_BOARD_WORKER_KEY', 'k' * 32)
     monkeypatch.setattr('dotenv.load_dotenv', lambda *_a, **_k: False, raising=False)
@@ -1511,6 +1543,7 @@ def test_a_self_variant_that_loses_the_eval_is_blocked_without_a_repair(tmp_path
 
 
 def test_diagnose_flag_runs_one_diagnosis_with_traced_deps_then_exits(monkeypatch, capsys):
+    monkeypatch.setenv('AI_BOARD_WORKER_MODE', 'off')
     import diagnose
     monkeypatch.setenv('AI_BOARD_WORKER_KEY', 'k' * 32)
     monkeypatch.setattr('dotenv.load_dotenv', lambda *_a, **_k: False, raising=False)

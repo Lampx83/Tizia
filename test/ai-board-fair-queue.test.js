@@ -48,7 +48,31 @@ test('the requester sees a queue position that follows the claim order', () => {
   const pos = (owner) => store.listRequestsForOwner(owner, 'it').map((r) => r.queue?.position).sort();
   assert.deepEqual(pos(1), [1, 3]);
   assert.deepEqual(pos(2), [2]);
+  assert.equal(store.listRequestsForOwner(2, 'it')[0].queue.eta_s, null);
+});
+
+test('queue ETA is absent without an active fresh worker and returns while that worker is busy', () => {
+  const { db, store, submit } = fixture();
+  submit(1); submit(2);
+  assert.equal(store.listRequestsForOwner(2, 'it')[0].queue.worker_ready, false);
+  store.claimNext({ workerId: 'eta-worker', mode: 'active', intent: 'plan' });
+  assert.equal(store.listRequestsForOwner(2, 'it')[0].queue.worker_ready, true);
   assert.ok(store.listRequestsForOwner(2, 'it')[0].queue.eta_s >= 60);
+  db.prepare('UPDATE ai_workers SET last_seen_at=?').run(Date.now() - 121_000);
+  assert.equal(store.listRequestsForOwner(2, 'it')[0].queue.eta_s, null);
+});
+
+test('Gate 1 blocked requests have consistent saved/requester/admin waiting state', () => {
+  const { db, store, submit } = fixture();
+  const created = submit(1);
+  const ticket = store.claimNext({ workerId: 'blocked-worker', mode: 'active', intent: 'plan' });
+  store.releaseLease(ticket.id, { workerId: 'blocked-worker', leaseToken: ticket.lease_token,
+    outcome: 'waiting', idempotencyKey: 'status-blocked-001' });
+  const item = store.listRequestsForOwner(1, 'it')[0];
+  assert.equal(item.status, 'pending');
+  assert.match(item.status_label, /quản trị viên/);
+  assert.equal(store.getRequestTrace(created.request_id).root.phase, item.phase);
+  assert.equal(db.prepare('SELECT status FROM requests WHERE id=?').get(created.request_id).status, item.status);
 });
 
 test('over the daily GPU cap a new run waits; the cap counts the requester, not the ticket', () => {

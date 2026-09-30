@@ -48,6 +48,7 @@ def _worst(verdicts) -> str:
 
 def deterministic(text: str) -> dict[str, str]:
     """{nhãn: verdict} từ luật rẻ: lexicon, PII, link ngoài allowlist, vô nghĩa."""
+    text = readonly_verification_text(text)
     hits = {label: guard.LEXICON["labels"][label]["intake"] for label in guard.topic_hits(text)}
     if guard._pii(text, set()):
         hits["personal_data"] = "needs_info"
@@ -56,6 +57,16 @@ def deterministic(text: str) -> dict[str, str]:
     if len(_WORD.findall(text)) < 2 or re.search(r"(.)\1{7,}", text):
         hits["off_topic"] = "needs_info"
     return hits
+
+
+def readonly_verification_text(text: str) -> str:
+    rule = guard.LEXICON["readonly_admin_verification"]
+    clauses = re.split(r"(?<=[.!?;])\s+|\n", text)
+    for i, clause in enumerate(clauses):
+        words = guard.fold(clause)
+        if re.search(rule["observe"], words) and not re.search(r"\b(?:" + rule["mutate"] + r")\b", words):
+            clauses[i] = re.sub(r"trang (quản trị|quan tri|admin)|admin-request\.html", "giao diện chỉ đọc", clause, flags=re.I)
+    return "\n".join(clauses)
 
 
 def parse_labels(text: str, allowed=LABELS) -> list[str]:
@@ -118,14 +129,15 @@ def run(request_title: str, request_detail: str | None, deps, budget, *, db_path
     reasons = [f"tất định: {', '.join(hits)}"] if hits else []
     scored = None
     if verdict in ("allow", "needs_info"):
-        llm, why = classify(title, detail, deps, budget, db_path=db_path, proposal_id=proposal_id)
+        llm, why = classify(readonly_verification_text(title), readonly_verification_text(detail), deps, budget,
+                            db_path=db_path, proposal_id=proposal_id)
         llm_verdicts = ["allow" if x == "ok" else "needs_info" if x in _LLM_NEEDS_INFO else "human_review"
                         for x in llm]
         verdict = _worst([verdict, *llm_verdicts])
         hits.update({x: v for x, v in zip(llm, llm_verdicts) if x != "ok"})
         reasons.append(f"LLM: {', '.join(llm)}" + (f" ({why})" if why else ""))
         # Logprob classifier beside the JSON guard (ticket 04): only ever raises to human_review.
-        scored = classifier.danger(f"{title}\n{detail}", deps, budget, gate=1, db_path=db_path, proposal_id=proposal_id)
+        scored = classifier.danger(readonly_verification_text(f"{title}\n{detail}"), deps, budget, gate=1, db_path=db_path, proposal_id=proposal_id)
         if scored and scored["escalate"]:
             verdict = _worst([verdict, "human_review"])
             hits.update({f"model_{key}": "human_review" for key in scored["labels"]})
@@ -133,6 +145,8 @@ def run(request_title: str, request_detail: str | None, deps, budget, *, db_path
     messages = guard.LEXICON["public_messages"]
     if verdict == "allow":
         public = None
+    elif "prompt_injection" in hits:
+        public = messages["prompt_injection"]
     elif verdict == "needs_info" and "personal_data" in hits:
         public = messages["needs_info_pii"]
     else:
@@ -141,4 +155,6 @@ def run(request_title: str, request_detail: str | None, deps, budget, *, db_path
            "internal_reason": "; ".join(reasons)[:1000] or "không có tín hiệu"}
     if scored:
         out["classifier"] = scored  # model, probs, escalate, logged: compared with the JSON guard (ticket 01)
+    if readonly_verification_text(f"{title}\n{detail}") != f"{title}\n{detail}":
+        out["read_only_verification"] = True
     return out

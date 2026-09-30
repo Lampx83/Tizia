@@ -9,7 +9,7 @@
 // Cùng từ vựng users.role: pupil = học sinh, student = sinh viên.
 import { checkIntake } from '../../ai-board/intake-guard.js';
 import { classify, decideClarity, taskMode } from '../../ai-board/classifier.js';
-import { answersClear } from '../../ai-board/clarity-rules.js';
+import { answersClear, repeatedQuestion } from '../../ai-board/clarity-rules.js';
 import { beginChat } from '../../ai-board/chat-activity.js';
 import { RequestValidationError, WorkerContractError } from '../../ai-board/store.js';
 import { resolveAIModel } from '../../ai-model-router.js';
@@ -128,7 +128,8 @@ function attachClarify(router, { db, store, profiles, requireAuth, requireStrict
   router.get('/api/ai-board/requests/:id/clarify', requireAuth, (req, res) => {
     try {
       const { request, turns, asked } = store.getClarification(req.params.id, req.user.id);
-      res.json({ request: { id: request.id, title: request.title }, turns, asked, max: maxQuestions(initialMode(db, request.root_id)) });
+      res.json({ request: { id: request.id, title: request.title }, turns, asked,
+        max: Math.max(maxQuestions(initialMode(db, request.root_id)), asked) });
     } catch (error) { sendError(res, error); }
   });
 
@@ -161,10 +162,10 @@ function attachClarify(router, { db, store, profiles, requireAuth, requireStrict
       res.setHeader('X-Accel-Buffering', 'no');
       const send = (event) => res.write(`${JSON.stringify(event)}\n`);
       const startMode = initialMode(db, request.root_id);
-      const max = maxQuestions(startMode);
+      const max = Math.max(maxQuestions(startMode), asked);
       if (!hasAnswer && last && last.kind !== 'answer') {
         // Mở lại panel: gửi lại lượt đang chờ, không gọi model.
-        send({ t: 'done', kind: last.kind, text: last.text, asked, max, complete: asked < MAX_QUESTIONS });
+        send({ t: 'done', kind: last.kind, text: last.text, asked, max, complete: true });
         return res.end();
       }
       const feature = startMode === 'feature';
@@ -173,16 +174,36 @@ function attachClarify(router, { db, store, profiles, requireAuth, requireStrict
         ? await classifyClarity(conversationText(request, turns)).catch(() => null) : null;
       const step = asked === 0 ? { kind: 'question', mode: startMode } : nextStep({ asked, clarity, rulesClear, mode: startMode });
       const mode = step.mode || startMode;
+      if (step.kind === 'handoff') {
+        const handoff = store.handoffClarification(request.id, req.user.id, 'clarification_round_limit');
+        send({ t: 'done', kind: 'handoff', text: handoff.public_note, asked, max, complete: false });
+        return res.end();
+      }
       const profile = profiles.get(req.user.id);
       const isQuestion = step.kind === 'question';
       const prompt = isQuestion
         ? questionPrompt({ request, turns, techLevel: profile?.tech_level, mode, turn: asked + 1 })
         : specPrompt({ request, turns, mode });
       const model = isQuestion ? models.question : models.spec;
-      const out = await streamGuarded({ generate, model, prompt, kind: step.kind, mode, send,
+      const deltas = [];
+      const out = await streamGuarded({ generate, model, prompt, kind: step.kind, mode,
+        send: isQuestion ? (event) => deltas.push(event) : send,
         fallback: isQuestion ? null : plainSpec(request, turns) });
+      if (isQuestion && repeatedQuestion(out.text, turns.filter((t) => t.kind === 'question').map((t) => t.text))) {
+        const handoff = store.handoffClarification(request.id, req.user.id, 'repeated_answered_question');
+        send({ t: 'done', kind: 'handoff', text: handoff.public_note, asked, max, complete: false });
+        return res.end();
+      }
       if (out.replaced) console.warn(`[ai-board] clarify output replaced (${out.reason}) for request ${request.id}`);
-      store.addClarifyTurn(request.id, { kind: step.kind, text: out.text });
+      try {
+        store.addClarifyTurn(request.id, { kind: step.kind, text: out.text });
+      } catch (error) {
+        if (error.code !== 'clarification_limit') throw error;
+        const handoff = store.handoffClarification(request.id, req.user.id, 'clarification_limit');
+        send({ t: 'done', kind: 'handoff', text: handoff.public_note, asked: MAX_QUESTIONS, max, complete: false });
+        return res.end();
+      }
+      if (isQuestion && !out.replaced) deltas.forEach(send);
       recordUsage(req, { provider: 'ollama', model, status: out.replaced ? 'error' : 'ok' });
       send({ t: 'done', kind: step.kind, text: out.text, asked: asked + (isQuestion ? 1 : 0), max,
         complete: isQuestion ? null : step.complete });
@@ -201,10 +222,10 @@ function attachClarify(router, { db, store, profiles, requireAuth, requireStrict
     const intake = checkIntake('', spec);
     if (intake.block) return res.status(422).json({ error: 'request_rejected', message: intake.message });
     try {
-      // Server quyết "đã rõ": hỏi hết 5 câu mới tóm tắt = vẫn mơ hồ (cờ cho cổng 2.5), bất kể trình duyệt gửi gì.
+      // A summary exists only after a clarity decision; exhausting the cap hands off instead.
       const { request, turns, asked } = store.getClarification(req.params.id, req.user.id);
       const full = spec.trim().length >= 10 ? withUserWords(spec, request, turns) : spec; // ngắn quá: store báo 400
-      res.json(store.confirmClarification(req.params.id, req.user.id, { spec: full, complete: asked < MAX_QUESTIONS }));
+      res.json(store.confirmClarification(req.params.id, req.user.id, { spec: full, complete: true }));
     } catch (error) { sendError(res, error); }
   });
 }

@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import express from 'express';
 import { assertConfirmed, LEASE_MS, LIMITS, PlanGuardrailError, RequestValidationError, WorkerContractError } from './store.js';
 import { afterVerdict, retryRequest, retryState, saveDraftScreenshots, SHOTS_BODY_LIMIT, SHOTS_TYPE } from './drafts.js';
-import { checkIntake, recordIntakeFlags } from './intake-guard.js';
+import { checkIntake, readOnlyVerificationText, recordIntakeFlags, recordIntakeRejection } from './intake-guard.js';
 import { classifyRequest as classifyWithModel, recordClassification } from './classifier.js';
 import { checkClarity } from './clarity-rules.js';
 import { activeChats } from './chat-activity.js';
@@ -12,6 +12,7 @@ import { listNights, recordSelfVerdict, reportNight, setSelfImproveEnabled, star
 import { pendingFrozenMeasurements, recordFrozenMeasurement } from './frozen-benchmark.js';
 import { checkPostMergeWatch, pendingPostMergeWatch } from './post-merge-watch.js';
 import { listTransientBlocked, retryTransientTicket, setTransientRetryEnabled, transientRetryState } from './transient-retry.js';
+import { guardModelText, MAX_QUESTIONS } from '../contexts/ai-board-intake/clarify.js';
 
 // Không cấu hình model phân loại → không gọi gì (hành vi trước ticket 04).
 const defaultClassifyRequest = (title, detail) => (
@@ -44,7 +45,10 @@ export function attachAiBoardRequestRoutes(router, {
       ? String(body.domain || '').trim()
       : req.user.enrolled_domain;
     const intake = checkIntake(body.title, body.detail);
-    if (intake.block) return res.status(422).json({ error: 'request_rejected', message: intake.message });
+    if (intake.block) {
+      try { recordIntakeRejection(db, req.user.id, intake); } catch (error) { return next(error); }
+      return res.status(422).json({ error: 'request_rejected', message: intake.message });
+    }
     // Mỗi người tối đa N yêu cầu đang chờ (contract.json limits): 1 người không lấp hàng đợi cả trường.
     const pendingCap = LIMITS.pending_roots_per_user.value;
     if (req.user.role !== 'admin' && store.countPendingRoots(req.user.id, req.get('Idempotency-Key')) >= pendingCap) {
@@ -52,7 +56,7 @@ export function attachAiBoardRequestRoutes(router, {
         message: `Bạn đang có ${pendingCap} yêu cầu chờ Ban xử lý. Đợi một yêu cầu xong rồi gửi tiếp nhé!` });
     }
     // Luật cứng đã qua. Model chỉ thêm human_review / đòi làm rõ; lỗi model = hành vi cũ.
-    const classified = await classifyRequest(body.title, body.detail).catch((error) => {
+    const classified = await classifyRequest(readOnlyVerificationText(body.title || ''), readOnlyVerificationText(body.detail || '')).catch((error) => {
       console.warn('[ai-board] classifier unavailable:', error.message);
       return null;
     });
@@ -211,7 +215,9 @@ export function attachAiBoardRequestRoutes(router, {
   });
 
   router.get('/api/admin/ai-board/queue', requireAuth, requireAdmin, (req, res) => {
-    res.json({ tickets: store.listAdminQueue(req.query.limit), workers: store.listWorkers() });
+    res.json({ tickets: store.listAdminQueue(req.query.limit), workers: store.listWorkers(),
+      intake_rejections: store.db.prepare(`SELECT id, created_at, public_message, internal_detail FROM ai_alerts
+        WHERE category='intake_rejected' ORDER BY id DESC LIMIT 50`).all() });
   });
 
   router.get('/api/admin/ai-board/requests/:requestId/trace', requireAuth, requireAdmin, (req, res) => {
@@ -299,6 +305,7 @@ export function attachAiBoardWorkerRoutes(router, {
   uploadsDir = null, // thư mục /uploads/requests (ảnh bản nháp); thiếu → route ảnh trả 503
   onVerdict = null, // ({request_id, title, domain, student, kind}) sau mỗi verdict: chuông cho người gửi
   onSelfWin = null, // ({night, request_id}) biến thể tự cải thiện thắng eval: chuông cho admin
+  onClarify = null, // ({requestId, title, domain, student}) khi Gate 2.5 cần người gửi làm rõ
 }) {
   const key = String(env.AI_BOARD_WORKER_KEY || '').trim();
   if (key.length < 24) return false;
@@ -376,6 +383,20 @@ export function attachAiBoardWorkerRoutes(router, {
       idempotencyKey: req.body?.idempotency_key,
     });
     res.json({ event });
+  }));
+
+  router.post('/api/ai-board/worker/tickets/:id/clarifications', authenticate, handle((req, res) => {
+    const lease = leaseInput(req.body);
+    const guarded = guardModelText(req.body?.question, 'question', 'ask');
+    const result = store.requestWorkerClarification(req.params.id, {
+      ...lease, runId: req.body?.run_id, question: guarded.text,
+      escalateReason: guarded.replaced ? `unsafe_model_question:${guarded.reason}` : '',
+      maxQuestions: MAX_QUESTIONS, idempotencyKey: req.body?.idempotency_key,
+    });
+    res.json(result);
+    if (result.status === 'clarifying' && !result.duplicate && onClarify) {
+      try { onClarify(result); } catch (error) { console.warn('[ai-board] clarification notification failed:', error.message); }
+    }
   }));
 
   router.post('/api/ai-board/worker/tickets/:id/traces', authenticate, handle((req, res) => {

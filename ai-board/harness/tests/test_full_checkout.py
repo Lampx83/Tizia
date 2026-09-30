@@ -90,7 +90,7 @@ def test_out_of_scope_file_is_rejected_without_leaving_a_branch(tmp_path, source
         candidate.create(state, source)
     assert "full_checkout" not in state
     assert git(source, "branch", "--list", "ai-board/*") == ""
-    assert "ai-board" not in git(source, "worktree", "list")
+    assert len(git(source, "worktree", "list").splitlines()) == 1
 
 
 def test_generated_test_outside_test_dirs_is_rejected(tmp_path, source):

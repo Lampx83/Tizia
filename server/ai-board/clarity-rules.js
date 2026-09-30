@@ -52,3 +52,26 @@ export function answersClear(answers) {
   const has = matcher(text);
   return RULES.concrete_objects.some(has) && broadReasons(text, has).length === 0;
 }
+
+export function repeatedQuestion(question, previous) {
+  const normalize = (text) => fold(String(text).toLowerCase())
+    .replace(/tren man hinh|o trang|tren trang|man hinh/g, 'trang')
+    .replace(/\b(ban|muon|giup|cho|ban dieu hanh|minh|xin|vui long)\b/g, '')
+    .replace(/[^a-z0-9]+/g, ' ').trim();
+  const words = new Set(normalize(question).split(' ').filter(Boolean));
+  const point = (text) => {
+    const plain = fold(String(text).toLowerCase());
+    if (/mau thuan|khac voi cau tra loi|contradict/.test(plain)) return null;
+    if (/trang nao|man hinh nao|vi tri nao|o dau|cho nao/.test(plain)) return 'surface';
+    if (/ket qua|hien thi.*(gi|nao)|mong.*thay|sau khi/.test(plain)) return 'outcome';
+    if (/tung buoc|bam.*(gi|nao)|su dung.*(nao|ra sao)/.test(plain)) return 'actions';
+    return null;
+  };
+  const requestedPoint = point(question);
+  return previous.some((old) => {
+    if (requestedPoint && requestedPoint === point(old)) return true;
+    const other = new Set(normalize(old).split(' ').filter(Boolean));
+    const common = [...words].filter((word) => other.has(word)).length;
+    return common >= 2 && common / new Set([...words, ...other]).size >= 0.75;
+  });
+}

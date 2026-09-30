@@ -103,6 +103,9 @@ def _public_gate_result(result: dict) -> dict:
         out["smoke_passed"] = bool((result.get("evidence") or {}).get("smoke_passed"))
         out["http_observed"] = bool((result.get("evidence") or {}).get("http_observed"))
         out["runner"] = (result.get("evidence") or {}).get("runner")
+        out['functional'] = (result.get('evidence') or {}).get('functional')
+        if (result.get('evidence') or {}).get('text'):
+            out['evidence'] = {'text': result['evidence']['text'][-16000:]}
         if (result.get("evidence") or {}).get("eval"):  # yêu cầu self: kết quả eval 2 sha (self_eval.py)
             out["eval"] = result["evidence"]["eval"]
     elif result["gate"] == 5.5:
@@ -118,7 +121,8 @@ def _passed(gates: list[dict], kind: str | None) -> bool:
     """Qua hết: không lỗi, tới 5.5 không bị chặn, smoke qua và quan sát được qua HTTP (self: biến thể thắng eval)."""
     smoke = next((gate for gate in gates if gate["gate"] == 5), None)
     return bool(kind is None and gates and gates[-1]["gate"] == 5.5 and not gates[-1]["blocked"]
-                and smoke and ((smoke["smoke_passed"] and smoke["http_observed"])
+                and smoke and ((smoke["smoke_passed"] and smoke["http_observed"]
+                                and (smoke.get('functional') or {}).get('passed'))
                                or (smoke["runner"] == "eval" and (smoke.get("eval") or {}).get("accepted"))))
 
 
@@ -153,6 +157,13 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
     kind = None
     lease_lost = False
     try:
+        if plan.get('grounding'):
+            import code_index
+            if (code_index.git(checkout_source, 'rev-parse', 'HEAD').decode().strip() != plan['grounding']['sha']
+                    or state.get('base_sha', plan['grounding']['sha']) != plan['grounding']['sha']):
+                return ([{'gate': 3, 'blocked': True, 'reason': 'source changed since grounded plan'}],
+                        'plan', None, [], None)
+            state['base_sha'] = plan['grounding']['sha']
         for gate in PRE_PR_GATES:
             if should_stop and should_stop():  # lease revoked, e.g. the requester cancelled
                 raise LeaseLostError(f"lease revoked before gate {gate}")
@@ -183,6 +194,9 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
                     public["blocked"] = True
                     public["reason"] = "change has no HTTP-observable result"
                     result["failure_class"] = "plan"
+                if not public['blocked'] and public['runner'] != 'eval' and not (public.get('functional') or {}).get('passed'):
+                    public.update(blocked=True, reason='missing independent functional evidence')
+                    result['failure_class'] = 'plan'
             gates.append(public)
             if public["blocked"]:
                 kind = result.get("failure_class") or "ordinary"
@@ -738,8 +752,23 @@ class HttpWorker:
             except Exception as error:
                 if isinstance(error, LeaseLostError):
                     raise
+                detail_value = getattr(error, "detail", None) or {}
+                clarification_delivery_error = None
+                if (detail_value.get("gate") == 2.5 and detail_value.get("reason") == "needs_clarification"
+                        and detail_value.get("public_message")):
+                    try:
+                        clarification = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/clarifications", {
+                            **lease, "run_id": run["id"], "question": detail_value["public_message"],
+                            "idempotency_key": f"{prefix}:clarification",
+                        })
+                        if clarification.get("status") in ("clarifying", "waiting_admin", "duplicate"):
+                            return {"status": clarification["status"], "ticket_id": ticket_id, "run_id": run["id"]}
+                    except Exception as delivery_error:
+                        clarification_delivery_error = str(delivery_error)[:500]
                 # Same detail on the event and the root's internal_reason, so the admin queue API shows why.
-                detail = (json.dumps(error.detail, ensure_ascii=False) if isinstance(error, PlanBlockedError)
+                detail = (json.dumps({**error.detail, **({"clarification_delivery_error": clarification_delivery_error}
+                                                        if clarification_delivery_error else {})}, ensure_ascii=False)
+                          if isinstance(error, PlanBlockedError)
                           else str(error))
                 self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/events", {
                     **lease, "run_id": run["id"], "event_type": "plan_blocked",
@@ -769,7 +798,9 @@ class HttpWorker:
                         # {} when missing: fails the hash check closed instead of skipping the catalog.
                         policy=snapshot.get("capability_policy") or {},
                         accepted_policy_hash=planned.get("capability_policy_hash"),
-                        request_detail=(snapshot.get("request") or {}).get("detail"),
+                        request_detail=((snapshot.get('request') or {}).get('title', '') + '\n'
+                            + ((snapshot.get('request') or {}).get('clarified_spec')
+                               or (snapshot.get('request') or {}).get('detail') or '')),
                         should_stop=lost, **run_kwargs, **type_kwargs,
                     ), ticket_id, lease,
                     on_lease_lost=lambda lost_result: self.candidates.discard((lost_result or {}).get("candidate")),
@@ -833,6 +864,7 @@ class HarnessPlanner:
             "body": request.get("clarified_spec") or request.get("detail") or request.get("title"),
             "thread": snapshot.get("thread") or [], "votes": request.get("votes", 1),
             "complexity_by_server": True,
+            "grounding_required": request.get('type') != 'self',
             # Folder (ticket 06): L1 brief, L3 yêu cầu gần nhất, L2 file sở hữu — server tính, có trần.
             **({"folder_brief": brief["text"], "folder_recent": brief["recent"], "owned_files": brief["owned_files"]}
                if (brief := (snapshot.get("folder") or {}).get("brief")) else {}),
@@ -907,8 +939,13 @@ class HarnessPlanner:
                 })
         signals = list(state.get("complexity_signals") or [])
         if snapshot.get("clarification_incomplete"):
-            signals.append("requester_still_vague")  # 5 câu hỏi vẫn mơ hồ → risk high → admin cho phép plan
-        return self._canonical(request, state["plan"], signals), int(budget.units)
+            signals.append("requester_still_vague")  # legacy incomplete clarification → risk high → admin cho phép plan
+        plan = self._canonical(request, state["plan"], signals)
+        if state.get('grounding'):
+            plan['grounding'] = state['grounding']
+        if (state.get('intake') or {}).get('read_only_verification'):
+            plan['read_only_admin_verification'] = True
+        return plan, int(budget.units)
 
 
 def harness_change_runner(checkout_source=None, tracer=None, progress=None) -> Callable[..., dict]:
@@ -919,6 +956,11 @@ def harness_change_runner(checkout_source=None, tracer=None, progress=None) -> C
     deps = _real_deps(Deps, tracer, progress)
 
     def run(plan: dict, ticket_id: int, max_units: int, source=None, **kwargs) -> dict:
+        if kwargs.get('request_type') != 'self' and not plan.get('grounding'):
+            reason = 'accepted plan predates required source grounding; admin must request a new plan'
+            return {'outcome':'blocked','gate_reached':3,'reason':reason,'failure_class':'plan',
+                    'repairs':[],'candidate':None,'budget_used':0,
+                    'gates':[{'gate':3,'blocked':True,'reason':reason}]}
         budget = Budget.from_env()
         budget.max_units = max_units
         # Thời gian + số lần gọi model lớn theo số bước của plan (task lớn không chạm trần cố định 900 s / 40 lần).

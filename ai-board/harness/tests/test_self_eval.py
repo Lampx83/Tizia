@@ -156,12 +156,21 @@ def test_each_sha_is_measured_by_its_own_code_in_a_detached_worktree_removed_aft
     assert len(git(repo, "worktree", "list").splitlines()) == 1
 
 
-def test_the_tasks_job_plans_each_test_task_through_gates_1_to_2_5_with_the_model(monkeypatch):
+def test_the_tasks_job_plans_each_test_task_through_gates_1_to_2_5_with_the_model(monkeypatch, tmp_path):
     import main
     from conftest import FakeModels, deps_with
 
+    (tmp_path / 'public').mkdir()
+    (tmp_path / 'public' / 'flashcards.html').write_text('<button>Flip card</button>', encoding='utf8')
+    subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
+    subprocess.run(['git', '-C', str(tmp_path), 'add', '.'], check=True)
+    subprocess.run(['git', '-C', str(tmp_path), '-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'fixture'], check=True)
+    monkeypatch.setattr(self_eval, 'REPO', tmp_path)
     models = FakeModels({"summary_vi": "Sửa nút trang thẻ", "capabilities": ["features"], "subtasks": [
-        {"title": "Sửa nút", "file": "public/flashcards.html", "verify": "mở trang thấy nút", "size": "small"}]})
+        {"title": "Sửa nút", "file": "public/flashcards.html", "verify": "mở trang thấy nút", "size": "small"}]},
+        validation={'clear': True, 'grounded': True, 'grounding': [{'target':'public/flashcards.html',
+            'file':'public/flashcards.html','quote':'<button>Flip card</button>',
+            'before':'Button obscured','after':'Visible button','verify':'Mobile can flip card'}]})
     monkeypatch.setattr(main.Deps, "real", classmethod(lambda cls: deps_with(models)))
     tasks = [{"id": 1, "request_text": "Nút lật thẻ bị che\nTrên điện thoại", "expected_files": ["public/flashcards.html"],
               "must_contain": ["nút"]},

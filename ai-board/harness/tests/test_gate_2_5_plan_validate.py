@@ -96,6 +96,7 @@ def test_unclear_plan_blocks_before_gate_3_and_writes_clarification(db_file, req
 
     assert out["outcome"] == "needs_clarification"
     assert out["gate_reached"] == 2.5
+    assert out["public_message"] == "File nào chứa danh sách hoạt chất?"
     # cổng 3 không được gọi: chỉ có lời gọi cổng 1 + cổng 2.5, không có subtask nào.
     assert len(models.calls) == 3  # intake + cổng 1 + cổng 2.5
 

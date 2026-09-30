@@ -193,6 +193,8 @@ def _intake_and_plan(request, deps, budget, state, **trace) -> dict:
     # Worker clone at origin/<base> when set; else the repo holding the harness.
     out = brainstorm.run(request, deps, budget, source=state.get("checkout_source"), **trace)
     state["plan"] = out.get("plan")
+    state['planning_context'] = out.get('repo_context')
+    state['source_targets'] = out.get('source_targets') or []
     return out
 
 
@@ -283,6 +285,7 @@ def run_once(request: dict, *, db_path, deps: Deps, budget: Budget | None = None
     outcome = "ok"
     reason = None
     state: dict = {"skill_id": request.get("id") or ""}
+    result = {}
     if checkout_source is not None:
         state["checkout_source"] = checkout_source
     if full_checkout is not None:
@@ -326,6 +329,7 @@ def run_once(request: dict, *, db_path, deps: Deps, budget: Budget | None = None
         "gate_reached": reached,
         "outcome": outcome,
         "reason": reason,
+        **({'public_message': result['public_message']} if result.get('public_message') else {}),
         "plan": state.get("plan"),
         "budget": budget.snapshot(),
     }

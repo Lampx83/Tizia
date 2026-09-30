@@ -169,7 +169,7 @@ test('pre-PR verdict is persisted and observable through the request HTTP API', 
       gates: [
         { gate: 3, blocked: false, reason: null },
         { gate: 4, blocked: false, reason: null, issues: [] },
-        { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true, runner: 'docker' },
+        { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true, functional: { probe_id: 'queue-worker-availability-v1', passed: true, coverage: { requester_api: true, mounted_ui: true, recovery: true } }, runner: 'docker' },
         { gate: 5.5, blocked: false, reason: null, risk_level: 'low', risk_signals: [] },
       ],
     };
@@ -293,7 +293,7 @@ test('a root claimed under shadow cannot receive an active verdict via a same-wo
       gates: [
         { gate: 3, blocked: false, reason: null },
         { gate: 4, blocked: false, reason: null, issues: [] },
-        { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true, runner: 'docker' },
+        { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true, functional: { probe_id: 'queue-worker-availability-v1', passed: true, coverage: { requester_api: true, mounted_ui: true, recovery: true } }, runner: 'docker' },
         { gate: 5.5, blocked: false, reason: null, risk_level: 'low', risk_signals: [] },
       ],
     };

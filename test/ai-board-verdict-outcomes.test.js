@@ -61,7 +61,7 @@ function plannedRoot() {
 const gates = {
   3: { gate: 3, blocked: false, reason: null },
   4: { gate: 4, blocked: false, reason: null, issues: [] },
-  5: { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true, runner: 'docker', retried: false },
+  5: { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true, functional: { probe_id: 'queue-worker-availability-v1', passed: true, coverage: { requester_api: true, mounted_ui: true, recovery: true } }, runner: 'docker', retried: false },
   55: { gate: 5.5, blocked: false, reason: null, risk_level: 'medium', risk_signals: [] },
 };
 
@@ -123,6 +123,18 @@ test('admin rollback needs the typed request number, waits for a free lease, and
   const root = db.prepare('SELECT status, phase, lease_owner FROM ai_tickets WHERE id=?').get(ticket.id);
   assert.deepEqual({ ...root }, { status: 'cancelled', phase: 'rolled_back', lease_owner: null });
   assert.equal(store.getRequestTrace(1).runs.at(-1).rollback.outcome, 'discarded');
+  const requester = store.listRequestsForOwner(1, 'pharmacy')[0];
+  assert.equal(requester.status, 'cancelled');
+  assert.equal(requester.status_label, 'đã hoàn tác');
+  assert.equal(store.requestWorkflow(1).phase, 'rolled_back');
+  assert.equal(db.prepare('SELECT status FROM requests WHERE id=1').get().status, requester.status);
+});
+
+test('a passing verdict without an independent oracle is refused even with smoke and HTTP success', () => {
+  const { submit } = plannedRoot();
+  const verdict = passing();
+  verdict.gates = verdict.gates.map((gate) => gate.gate === 5 ? { ...gate, functional: undefined } : gate);
+  assert.throws(() => submit(verdict), /successful smoke/);
 });
 
 test('rollback without a kept change is refused', () => {
@@ -352,7 +364,8 @@ function openPr(store, ticket, pullRequest = PR, key = 'outcome-pr-001') {
 
 test('a passing verdict records its PR once; the requester sees reviewing, the admin sees the link', () => {
   const { db, store, submit, ticket } = plannedRoot();
-  submit(passing());
+  const gate5Evidence = 'docker compose up: exit 0';
+  submit(passing({ gates: [gates[3], gates[4], { ...gates[5], evidence: { text: gate5Evidence } }, gates[55]] }));
   assert.equal(openPr(store, ticket).number, 42);
   assert.equal(openPr(store, ticket).number, 42); // same PR again is idempotent
   const root = db.prepare('SELECT phase, public_note FROM ai_tickets WHERE id=?').get(ticket.id);
@@ -362,6 +375,7 @@ test('a passing verdict records its PR once; the requester sees reviewing, the a
   assert.ok(!JSON.stringify(own).includes('github.com'));
   const trace = store.getRequestTrace(1);
   assert.equal(trace.pull_request.url, PR.url);
+  assert.equal(trace.runs.at(-1).gates.find((g) => g.gate === 5).evidence.text, gate5Evidence);
   assert.equal(trace.runs.at(-1).gates.find((g) => g.gate === 5.5).evidence.risk_level, 'medium');
   assert.equal(store.getLeasedSnapshot(ticket.id, 'w1', ticket.lease_token).pull_request.number, 42);
 });

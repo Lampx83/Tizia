@@ -45,6 +45,8 @@ import time
 from pathlib import Path
 
 import context
+import code_index
+import file_context
 from dbconn import harness_db
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_validate.md").read_text(encoding="utf-8")
@@ -102,7 +104,7 @@ CREATE TABLE IF NOT EXISTS request_messages (
 """
 
 
-def build_prompt(request: dict, plan: dict) -> str:
+def build_prompt(request: dict, plan: dict, repo_context: str = '(không có)') -> str:
     """AIBOARD.md (context.manual) đứng đầu, trước prompt đã khoá — prefix KV giống hệt mọi lần gọi."""
     thread = " | ".join(
         f"{m.get('role')}: {m.get('body')}" for m in (request.get("thread") or [])
@@ -113,6 +115,7 @@ def build_prompt(request: dict, plan: dict) -> str:
         body=request.get("body", ""),
         thread=thread,
         plan_json=json.dumps(plan, ensure_ascii=False),
+        repo_context=repo_context,
     )
 
 
@@ -128,7 +131,52 @@ def parse_validation(text: str) -> dict:
     if question is not None and not isinstance(question, str):
         raise ValueError("'question' phải là string hoặc null")
     # clear=true thì câu hỏi (nếu model lỡ viết) bị bỏ; câu hỏi gửi thẳng học viên nên cắt 300 ký tự.
-    return {"clear": out["clear"], "question": None if out["clear"] else ((question or "").strip()[:300] or None)}
+    return {"clear": out["clear"], "question": None if out["clear"] else ((question or "").strip()[:300] or None),
+            "grounded": out.get("grounded") is True, "grounding": out.get("grounding"),
+            "reason": str(out.get("reason") or '')[:500]}
+
+
+def source_evidence(request: dict, plan: dict, state: dict) -> tuple[str | None, dict, str]:
+    source = state.get('checkout_source') or Path(__file__).resolve().parents[3]
+    try:
+        sha = code_index.git(source, 'rev-parse', 'HEAD').decode().strip()
+    except OSError:
+        return None, {}, '(không đọc được commit nguồn)'
+    files = {}
+    chunks = [state.get('planning_context') or '']
+    tasks = list(plan.get('subtasks') or []) + [{'file': path} for path in state.get('source_targets') or []]
+    for task in tasks:
+        path = str(task.get('file') or '')
+        if not path.startswith(('public/', 'server/contexts/_ai-generated/', 'ai-board/harness/skills/', 'ai-board/harness/prompts/')) or '..' in Path(path).parts:
+            continue
+        try:
+            text = code_index.git(source, 'show', f'{sha}:{path}').decode('utf8', 'replace')
+        except OSError:
+            continue
+        files[path] = text
+        chunks.append(f'FILE {path} at {sha}\n' + file_context.excerpt(text,
+            file_context.keywords(request.get('subject'), request.get('body'), task.get('title')), budget=3500))
+    return sha, files, '\n\n'.join(chunks)[:16000]
+
+
+def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict) -> dict:
+    records = validation.get('grounding')
+    if not sha or not validation['grounded'] or not isinstance(records, list) or len(records) != len(plan.get('subtasks') or []):
+        raise ValueError(validation.get('reason') or 'thiếu dẫn chứng hành vi từ code nguồn')
+    clean = []
+    for task, evidence in zip(plan['subtasks'], records):
+        if not isinstance(evidence, dict) or evidence.get('target') != task['file']:
+            raise ValueError('dẫn chứng không khớp file dự định sửa')
+        file = evidence.get('file')
+        quote = evidence.get('quote')
+        if task['file'] in files and file != task['file']:
+            raise ValueError('trích dẫn phải thuộc file hiện có dự định sửa')
+        if not isinstance(quote, str) or len(quote.strip()) < 8 or len(quote) > 1200 or quote not in files.get(file, ''):
+            raise ValueError(f'{task["file"]}: không tìm thấy trích dẫn hành vi trong code nguồn')
+        if any(not isinstance(evidence.get(key), str) or not evidence[key].strip() for key in ('before', 'after', 'verify')):
+            raise ValueError('thiếu hành vi trước/sau hoặc tiêu chí kiểm chứng')
+        clean.append({key: evidence[key][:1200] for key in ('target', 'file', 'quote', 'before', 'after', 'verify')})
+    return {'sha': sha, 'evidence': clean}
 
 
 def is_complex(plan: dict) -> bool:
@@ -215,7 +263,8 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
     if not plan:
         return {"gate": 2.5, "blocked": True, "reason": "không có plan từ cổng 1"}
 
-    prompt = build_prompt(request, plan)
+    sha, files, repo_context = source_evidence(request, plan, state) if request.get('grounding_required') else (None, {}, '(legacy dry-run)')
+    prompt = build_prompt(request, plan, repo_context)
     body = deps.call_model(deps.models.gate1_model, prompt, gate=2.5, budget=budget,
                             db_path=db_path, proposal_id=proposal_id, prompt_name="plan_validate.md")
 
@@ -228,7 +277,22 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
         question = validation["question"] or "Plan chưa đủ rõ — bạn mô tả thêm chi tiết được không?"
         if db_path is not None:
             write_clarification(db_path, request, question)
-        return {"gate": 2.5, "blocked": True, "reason": "needs_clarification", "outcome": "needs_clarification"}
+        return {"gate": 2.5, "blocked": True, "reason": "needs_clarification", "outcome": "needs_clarification",
+                "public_message": question}
+
+    if request.get('grounding_required'):
+        try:
+            import functional
+            targets = {task['file'] for task in plan['subtasks']}
+            required = functional.expected_targets({'request_title': request.get('subject'), 'request_detail': request.get('body')})
+            if required and not required.intersection(targets):
+                raise ValueError('plan cần sửa renderer hiện có: ' + ', '.join(sorted(required)))
+            if 'LƯU Ý: chữ người dùng nhắc KHÔNG nằm' in (state.get('planning_context') or '') and not targets.intersection(state.get('source_targets') or []):
+                raise ValueError('plan không sửa module đang render nội dung người dùng yêu cầu')
+            state['grounding'] = checked_grounding(validation, plan, sha, files)
+        except ValueError as error:
+            return {'gate': 2.5, 'blocked': True, 'reason': 'plan_ungrounded', 'outcome': 'plan_ungrounded',
+                    'signals': [str(error)], 'public_message': 'Kế hoạch cần quản trị viên kiểm tra vì chưa xác định đúng phần cần thay đổi.'}
 
     signals = complexity_signals(plan)
     if request.get("complexity_by_server"):

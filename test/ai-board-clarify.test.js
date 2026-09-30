@@ -6,10 +6,13 @@ import http from 'node:http';
 import express from 'express';
 import Database from 'better-sqlite3';
 
-import { applyAiBoardMigrations, createAiBoardStore } from '../server/ai-board/store.js';
-import { attachAiBoardRequestRoutes } from '../server/ai-board/routes.js';
+import { applyAiBoardMigrations, createAiBoardStore, CLARIFY_AUTHOR } from '../server/ai-board/store.js';
+import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
 import { attachAiBoardIntake, createProfileStore } from '../server/contexts/ai-board-intake/index.js';
 import { guardModelText, MAX_QUESTIONS } from '../server/contexts/ai-board-intake/clarify.js';
+import { repeatedQuestion } from '../server/ai-board/clarity-rules.js';
+
+const WORKER_KEY = 'clarification-test-worker-key-32chars';
 
 function fixtureDb() {
   const db = new Database(':memory:');
@@ -69,11 +72,16 @@ async function serve(db, { userId = 1, model, clarity = [], notify = () => {} } 
     classifyRequest: async () => ({ model: 'c', clarity: { probs: {}, needed: true, mode: 'ask' }, danger: null }),
     onClarify: notify,
   });
+  attachAiBoardWorkerRoutes(app, { store, env: { AI_BOARD_WORKER_KEY: WORKER_KEY }, onClarify: notify });
   const server = http.createServer(app);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
   const post = (path, body, headers = {}) => fetch(base + path, {
     method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body || {}),
+  });
+  const workerPost = (path, body) => fetch(base + path, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-ai-worker-key': WORKER_KEY },
+    body: JSON.stringify(body || {}),
   });
   // Clarify turn: returns the NDJSON events.
   const turn = async (requestId, answer) => {
@@ -82,7 +90,7 @@ async function serve(db, { userId = 1, model, clarity = [], notify = () => {} } 
     const events = (await res.text()).trim().split('\n').map((line) => JSON.parse(line));
     return { status: res.status, events, done: events.at(-1) };
   };
-  return { store, post, turn, base, close: () => new Promise((resolve) => server.close(resolve)) };
+  return { store, post, workerPost, turn, base, close: () => new Promise((resolve) => server.close(resolve)) };
 }
 
 async function vagueRequest(app, key = 'clarify-req-001') {
@@ -143,22 +151,119 @@ test('questions stream token by token in the requester tone, then a confirmed su
   }
 });
 
-test('after five questions a still-vague request is summarised anyway and flagged for gate 2.5', async () => {
+test('Gate 2.5 clarification reaches requester, answer is included on the next worker snapshot', async () => {
   const db = fixtureDb();
-  const app = await serve(db, { model: fakeModel([]) });
+  const notified = [];
+  const summary = 'Trang / chức năng: trang học\nThay đổi mong muốn: thêm bộ lọc\nKết quả mong đợi (cách kiểm): lọc đúng\nNgoài phạm vi: không sửa dữ liệu';
+  const app = await serve(db, { model: fakeModel([summary, summary]),
+    clarity: [{ needed: false, mode: null }, { needed: false, mode: null }],
+    notify: (notice) => notified.push(notice) });
   try {
-    const { request_id: id } = await vagueRequest(app);
-    let last = await app.turn(id);
-    for (let i = 0; i < MAX_QUESTIONS; i += 1) last = await app.turn(id, `trả lời ${i + 1}`);
-    assert.equal(last.done.kind, 'summary');
-    assert.equal(last.done.asked, MAX_QUESTIONS);
-    assert.equal(last.done.complete, false);
-    await app.post(`/api/ai-board/requests/${id}/clarify/confirm`, { spec: last.done.text, complete: false });
-    const claim = app.store.claimNext({ workerId: 'w1', mode: 'shadow', intent: 'precheck' });
-    assert.equal(app.store.getLeasedSnapshot(claim.id, 'w1', claim.lease_token).clarification_incomplete, true);
+    const created = await app.post('/api/requests', { title: 'Thêm bộ lọc', detail: 'Lọc danh sách theo nhóm' },
+      { 'idempotency-key': 'gate25-clarify-e2e-001' }).then((res) => res.json());
+    const leaseTicket = app.store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' });
+    const run = app.store.createRun(leaseTicket.id, { workerId: 'w1', leaseToken: leaseTicket.lease_token,
+      trigger: 'plan', idempotencyKey: 'gate25-clarify-run-001' });
+    const lease = { worker_id: 'w1', lease_token: leaseTicket.lease_token, run_id: run.id,
+      question: 'Bạn muốn bộ lọc hiển thị ở trang nào?', idempotency_key: 'gate25-clarify-question-001' };
+
+    const response = await app.workerPost(`/api/ai-board/worker/tickets/${leaseTicket.id}/clarifications`, lease);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).status, 'clarifying');
+    assert.equal(db.prepare('SELECT phase FROM ai_tickets WHERE id=?').get(leaseTicket.id).phase, 'clarifying');
+    assert.equal(app.store.listPendingClarifications(1)[0].id, created.request_id);
+    assert.equal(notified.at(-1).requestId, created.request_id);
+    const replay = await app.workerPost(`/api/ai-board/worker/tickets/${leaseTicket.id}/clarifications`, lease);
+    assert.equal((await replay.json()).status, 'duplicate');
+    assert.equal(app.store.getClarification(created.request_id, 1).asked, 1);
+
+    const thread = await fetch(`${app.base}/api/ai-board/requests/${created.request_id}/clarify`)
+      .then((res) => res.json());
+    assert.equal(thread.turns[0].kind, 'question');
+    const answer = await app.turn(created.request_id, 'Trong trang danh sách thuốc, phía trên danh sách.');
+    assert.equal(answer.done.kind, 'summary');
+    await app.post(`/api/ai-board/requests/${created.request_id}/clarify/confirm`,
+      { spec: answer.done.text, complete: true });
+
+    const reclaimed = app.store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' });
+    const snapshot = app.store.getLeasedSnapshot(reclaimed.id, 'w1', reclaimed.lease_token);
+    assert.equal(reclaimed.id, leaseTicket.id);
+    assert.match(snapshot.request.clarified_spec, /Trong trang danh sách thuốc, phía trên danh sách/);
+    assert.ok(snapshot.thread.some((turn) => turn.role === 'student'
+      && turn.body === 'Trong trang danh sách thuốc, phía trên danh sách.'));
+
+    const secondRun = app.store.createRun(reclaimed.id, { workerId: 'w1', leaseToken: reclaimed.lease_token,
+      trigger: 'plan', idempotencyKey: 'gate25-clarify-run-002' });
+    const secondQuestion = await app.workerPost(`/api/ai-board/worker/tickets/${reclaimed.id}/clarifications`, {
+      worker_id: 'w1', lease_token: reclaimed.lease_token, run_id: secondRun.id,
+      question: 'Bạn muốn lọc những thẻ nào?', idempotency_key: 'gate25-clarify-question-002',
+    });
+    assert.equal((await secondQuestion.json()).status, 'clarifying');
+    const secondAnswer = await app.turn(created.request_id, 'Tất cả thẻ đang hiển thị.');
+    assert.equal(secondAnswer.done.kind, 'summary');
+    const secondConfirm = await app.post(`/api/ai-board/requests/${created.request_id}/clarify/confirm`,
+      { spec: secondAnswer.done.text, complete: true });
+    assert.equal(secondConfirm.status, 200);
+    assert.equal(db.prepare("SELECT COUNT(*) n FROM ai_events WHERE ticket_id=? AND event_type='request_clarified'")
+      .get(reclaimed.id).n, 2);
   } finally {
     await app.close();
   }
+});
+
+test('Gate 2.5 escalates to admin instead of exceeding the two-question limit', async () => {
+  const db = fixtureDb();
+  const app = await serve(db, { model: fakeModel([]) });
+  try {
+    const created = await app.post('/api/requests', { title: 'Làm đẹp trang', detail: 'Chưa rõ' },
+      { 'idempotency-key': 'gate25-limit-req-001' }).then((res) => res.json());
+    const ticket = app.store.claimNext({ workerId: 'w-limit', mode: 'active', intent: 'plan' });
+    const run = app.store.createRun(ticket.id, { workerId: 'w-limit', leaseToken: ticket.lease_token,
+      trigger: 'plan', idempotencyKey: 'gate25-limit-run-001' });
+    const now = Date.now();
+    for (let i = 0; i < MAX_QUESTIONS; i += 1) {
+      app.store.addClarifyTurn(created.request_id, { kind: 'question', text: `Câu ${i + 1}`, now: now + i });
+    }
+    const response = await app.workerPost(`/api/ai-board/worker/tickets/${ticket.id}/clarifications`, {
+      worker_id: 'w-limit', lease_token: ticket.lease_token, run_id: run.id,
+      question: 'Câu hỏi thứ sáu?', idempotency_key: 'gate25-limit-question-001',
+    });
+    assert.equal((await response.json()).status, 'waiting_admin');
+    assert.equal(db.prepare('SELECT phase FROM ai_tickets WHERE id=?').get(ticket.id).phase, 'plan_blocked');
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM request_messages WHERE request_id=? AND author_name=?')
+      .get(created.request_id, CLARIFY_AUTHOR).n, MAX_QUESTIONS);
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM ai_gate_traces WHERE run_id=? AND gate=2.5').get(run.id).n, 1);
+  } finally {
+    await app.close();
+  }
+});
+
+test('after two automatic questions a still-vague request goes to admin without a third question', async () => {
+  const db = fixtureDb();
+  const app = await serve(db, { model: fakeModel(['Bạn muốn đổi ở trang nào?', 'Bạn muốn đổi phần màu hay bố cục?']) });
+  try {
+    const { request_id: id } = await vagueRequest(app);
+    await app.turn(id);
+    await app.turn(id, 'vẫn chưa rõ thứ nhất');
+    const last = await app.turn(id, 'vẫn chưa rõ thứ hai');
+    assert.equal(last.done.kind, 'handoff');
+    assert.equal(app.store.listRequestsForOwner(1, 'primary')[0].workflow_status, 'waiting_admin');
+    assert.equal(app.store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' }), null);
+  } finally {
+    await app.close();
+  }
+});
+
+test('an answered question is not delivered again when the model repeats it', async () => {
+  const db = fixtureDb();
+  const app = await serve(db, { model: fakeModel(['Bạn muốn đổi ở trang nào?', 'Bạn muốn đổi trên màn hình nào?']) });
+  try {
+    const { request_id: id } = await vagueRequest(app, 'repeat-question-001');
+    await app.turn(id);
+    const last = await app.turn(id, 'Trang học.');
+    assert.equal(last.done.kind, 'handoff');
+    assert.equal(app.store.listRequestsForOwner(1, 'primary')[0].workflow_status, 'waiting_admin');
+  } finally { await app.close(); db.close(); }
 });
 
 test('a forbidden answer is blocked like the hard rule, before any model call', async () => {
@@ -238,22 +343,25 @@ test('a legacy client never gets a stranded clarifying request; a retry reports 
   }
 });
 
-test('the server, not the browser, decides whether a summary was complete', async () => {
+test('an exhausted clarification cannot be confirmed into the queue by a client', async () => {
   const db = fixtureDb();
-  const app = await serve(db, { model: fakeModel([]) });
+  const app = await serve(db, { model: fakeModel(['Bạn muốn đổi ở trang nào?', 'Bạn muốn đổi màu hay bố cục?']) });
   try {
     const { request_id: id } = await vagueRequest(app);
     let last = await app.turn(id);
     for (let i = 0; i < MAX_QUESTIONS; i += 1) last = await app.turn(id, `trả lời ${i + 1}`);
-    await app.post(`/api/ai-board/requests/${id}/clarify/confirm`, { spec: last.done.text, complete: true });
-    const claim = app.store.claimNext({ workerId: 'w1', mode: 'shadow', intent: 'precheck' });
-    assert.equal(app.store.getLeasedSnapshot(claim.id, 'w1', claim.lease_token).clarification_incomplete, true);
+    assert.equal(last.done.kind, 'handoff');
+    const response = await app.post(`/api/ai-board/requests/${id}/clarify/confirm`, { spec: 'Client claims it is clear', complete: true });
+    assert.equal(response.status, 409);
+    assert.equal(app.store.claimNext({ workerId: 'w1', mode: 'shadow', intent: 'precheck' }), null);
   } finally {
     await app.close();
   }
 });
 
 test('ordinary questions, specs and numbers are not mistaken for claims or phone numbers', () => {
+  assert.equal(repeatedQuestion('Bạn đang thao tác ở màn hình nào?', ['Bạn muốn sửa trang nào?']), true);
+  assert.equal(repeatedQuestion('Sau khi sao chép bạn mong thấy gì?', ['Kết quả sao chép cần hiển thị thế nào?']), true);
   for (const ok of ['Bạn muốn chúng tôi sẽ thêm nút ở trang nào?', 'Bạn đã thử tải lại trang chưa?',
     'Thay đổi mong muốn: nút mà hệ thống đã tạo trước đó to hơn', 'Kết quả mong đợi: thứ tự 0 1 2 3 4 5 6 7 8 9',
     'Mã đơn 0123456789012 hiển thị đúng', 'Ai đã thêm bài này, bạn nhớ không?']) {

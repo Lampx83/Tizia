@@ -186,7 +186,7 @@ test('protected plan waits for explicit admin authorization; core plan is human-
         candidate: { branch: 'ai-board/2026-09-25-ticket-1-abc123', base_sha: sha('a'), head_sha: sha('b'),
           commits: [{ sha: sha('b'), title: 't', files: ['server/contexts/content/index.js'] }] },
         gates: [{ gate: 3, blocked: false }, { gate: 4, blocked: false, issues: [] },
-          { gate: 5, blocked: false, smoke_passed: true, http_observed: true, runner: 'docker' },
+          { gate: 5, blocked: false, smoke_passed: true, http_observed: true, functional: { probe_id: 'queue-worker-availability-v1', passed: true, coverage: { requester_api: true, mounted_ui: true, recovery: true } }, runner: 'docker' },
           { gate: 5.5, blocked: false, risk_level: 'medium', risk_signals: [] }],
       },
     });

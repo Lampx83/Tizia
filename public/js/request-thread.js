@@ -17,6 +17,7 @@ const STATUS = {
   reviewing: { label: 'Đang trao đổi', cls: 'reviewing' },
   done:      { label: 'Hoàn thành',  cls: 'done' },
   rejected:  { label: 'Chưa thực hiện', cls: 'rejected' },
+  cancelled: { label: 'Đã dừng', cls: 'rejected' },
 };
 
 const fmtTime = (t) => {
@@ -95,11 +96,11 @@ export async function renderRequestThread({ host, requestId, me = '', onChange }
   const msgs = Array.isArray(data.messages) ? data.messages : [];
   const sm = STATUS[req.status] || STATUS.pending;
   const isOwner = !!me && me === req.student;
-  const closed = req.status === 'done' || req.status === 'rejected';
+  const closed = ['done', 'rejected', 'cancelled'].includes(req.status);
 
   host.innerHTML = `
     <div class="rt-head">
-      <span class="rt-status ${sm.cls}">${sm.label}</span>
+      <span class="rt-status ${sm.cls}">${escapeHtml(req.status_label || sm.label)}</span>
       <span class="rt-count">${msgs.length} tin nhắn</span>
     </div>
     <div class="rt-list" id="rt-list-${requestId}">

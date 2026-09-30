@@ -482,12 +482,15 @@ function bind(root) {
     if (done.kind === 'question') {
       clarCount.textContent = `Câu ${done.asked}/${done.max}`;
       setTimeout(() => clarIn.focus(), 30);
-    } else {
+    } else if (done.kind === 'summary') {
       lastSummary = done;
       clarSpec.value = done.text;
       clarSpec.readOnly = true;
       // Nút "Đúng, gửi" nằm cuối panel: cuộn tới để người dùng thấy ngay trên màn hình thấp.
       setTimeout(() => clarSum.scrollIntoView({ block: 'end', behavior: 'smooth' }), 30);
+    } else {
+      clarCount.textContent = 'Chờ quản trị viên';
+      loadInbox();
     }
   }
 
@@ -656,6 +659,12 @@ function bind(root) {
     if (e.key === 'Escape' && !modal.hidden) close();
   });
   root.querySelector('#sgf-reload').addEventListener('click', loadInbox);
+  const inboxPoll = setInterval(() => {
+    if (!root.isConnected) { clearInterval(inboxPoll); return; }
+    if (!modal.hidden && !paneMine.hidden && !document.hidden
+      && !inbox.contains(document.activeElement) && !inbox.querySelector('[data-armed]')
+      && ![...inbox.querySelectorAll('textarea')].some(input => input.value.trim())) loadInbox(true);
+  }, 5000);
 
   let pendingRequestKey = null;
   form.addEventListener('submit', async (e) => {
@@ -873,10 +882,10 @@ function bind(root) {
     folderHint.hidden = true;
   });
 
-  async function loadInbox() {
-    loadFolders();
+  async function loadInbox(quiet = false) {
+    if (quiet !== true) loadFolders();
     clarSlot.appendChild(clarifyBox); // khỏi bị xoá theo innerHTML của danh sách
-    inbox.textContent = 'Đang tải…';
+    if (quiet !== true) inbox.textContent = 'Đang tải…';
     try {
       const dom = inferDomain();
       const r = await fetch(`api/requests?domain=${encodeURIComponent(dom)}&limit=50`);
@@ -963,14 +972,15 @@ function bind(root) {
 }
 
 // Vị trí trong hàng đợi công bằng (server tính theo đúng thứ tự worker nhận việc).
-function queueLine(q) {
+export function queueLine(q) {
   if (!q) return '';
   if (q.deferred) return '<div class="sgf-it-queue">Hôm nay Ban đã làm nhiều việc cho bạn rồi — yêu cầu này sẽ được làm tiếp vào ngày mai.</div>';
+  if (q.worker_ready !== true || !Number.isFinite(q.eta_s)) return '<div class="sgf-it-queue">Đang chờ Ban điều hành sẵn sàng — chưa thể ước tính thời gian.</div>';
   const min = Math.max(1, Math.round((q.eta_s || 0) / 60));
   return `<div class="sgf-it-queue">Đang xếp hàng: thứ ${Number(q.position)} · khoảng ${min} phút nữa tới lượt</div>`;
 }
 
-function renderItem(it, me = '') {
+export function renderItem(it, me = '') {
   const sm = STATUS[it.status] || STATUS.pending;
   const mine = me && it.student === me;
   const atts = Array.isArray(it.attachments) ? it.attachments : [];
@@ -990,7 +1000,7 @@ function renderItem(it, me = '') {
     <div class="sgf-it" data-item="${it.id}">
       <div class="sgf-it-line">
         <span class="sgf-it-title">${escapeHtml(it.title)}</span>
-        <span class="sgf-it-st ${sm.cls}">${it.phase === 'clarifying' ? 'Chờ bạn trả lời' : sm.label}</span>
+        <span class="sgf-it-st ${sm.cls}">${escapeHtml(it.phase === 'clarifying' ? 'Chờ bạn trả lời' : it.status_label || sm.label)}</span>
       </div>
       ${queueLine(it.queue)}
       ${attHtml}

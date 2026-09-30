@@ -14,6 +14,7 @@ from typing import Callable
 from urllib.parse import urlsplit
 
 from gates import visual
+from meter import redact
 
 _SECRET_NAME = re.compile(r"(?:SECRET|TOKEN|PASSWORD|API_KEY|SECKEY|PRIVATE_KEY)", re.I)
 _REQUIRED_ABSENT = {"SCOREUP_API_KEY", "CODELAB_API_KEY", "GA_API_SECRET",
@@ -41,9 +42,7 @@ def _override(project: str) -> str:
     container_name: !reset null
     image: {project}:latest
     restart: "no"
-    cpus: 1.0
-    mem_limit: 1536m
-    pids_limit: 128
+    # ponytail: candidate inherits worker's 2 CPU/4 GB/512 PID ceiling; restore nested limits when DinD cgroup v2 works.
     {ports}
     volumes: !override
       - {volume}:/data
@@ -265,7 +264,7 @@ def probe_http(url: str) -> tuple[int, bytes]:
 
 
 def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None = None,
-        runner=None, http_probe=None) -> dict:
+        runner=None, http_probe=None, functional_probe=None) -> dict:
     """Caller supplies a full checkout; a gate-3 scratch repo is never buildable."""
     checkout = checkout_dir if checkout_dir is not None else state.get("full_checkout")
     if not checkout:
@@ -301,6 +300,9 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     screenshot = None
     smoke_ok = False
     http_observed = False
+    import functional
+    probe_id = functional.select(state)
+    functional_result = {'probe_id': probe_id, 'passed': False, 'reason': 'Behavior has not been verified'}
 
     with tempfile.TemporaryDirectory(prefix="ai-verify-compose-") as temp:
         override = Path(temp) / "override.yml"
@@ -311,7 +313,10 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
         def command(args: list[str], *, env=None, log_output=True, timeout=None) -> subprocess.CompletedProcess:
             result = runner(args, cwd=checkout, env=env, text=True, encoding="utf-8", errors="replace", capture_output=True,
                             stdin=subprocess.DEVNULL, check=False, timeout=timeout)
-            output = f"{result.stdout or ''}{result.stderr or ''}" if log_output else "[output redacted]"
+            output = "[output redacted]"
+            if log_output:
+                output = f"{result.stdout or ''}{result.stderr or ''}"
+                output = (redact(output).strip()[-4000:] or "(không có chi tiết lỗi)") if result.returncode else f"exit {result.returncode}"
             logs.append(f"$ {' '.join(str(a) for a in args)}\n{output}")
             if result.returncode:
                 raise RuntimeError(f"{' '.join(str(a) for a in args[:4])} exit {result.returncode}")
@@ -333,9 +338,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             if (service.get("environment") != expected_env or service.get("env_file") or
                     service.get("secrets") or service.get("container_name") or
                     service.get("image") != f"{project}:latest" or
-                    float(service.get("cpus") or 0) != 1.0 or
-                    int(service.get("mem_limit") or 0) != 1536 * 1024 * 1024 or
-                    int(service.get("pids_limit") or 0) != 128 or not isolated_net or
+                    not isolated_net or
                     len(volumes) != 1 or volumes[0].get("source") != f"{project}-data" or
                     volumes[0].get("target") != "/data"):
                 raise RuntimeError("Compose config không cách ly port/network/volume/env/image")
@@ -409,6 +412,17 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     raise RuntimeError(f"changed page body does not match checkout: {page}")
                 logs.append(f"Changed page HTTP {status}: {page}")
             http_observed = True
+            kind = 'plan'
+            def fixture(stage):
+                if stage == 'seed':
+                    command([*compose, 'cp', str(Path(functional.__file__).with_name('queue_fixture.mjs')), 'tizia:/app/verify-queue.mjs'])
+                response = command([*compose, 'exec', '-T', 'tizia', 'node', '/app/verify-queue.mjs', stage], log_output=False, timeout=20)
+                return json.loads(response.stdout) if stage == 'seed' else None
+            functional_result = (functional_probe(base, probe_id) if functional_probe else functional.run(base, probe_id, fixture))
+            logs.append('Independent functional check: ' + json.dumps(functional_result, ensure_ascii=False))
+            if not functional_result.get('passed'):
+                raise RuntimeError(functional_result.get('reason') or 'Independent functional check failed')
+            kind = 'ordinary'
             # Changed HTML page, else the page the requester was on (CSS/JS change); none named = no shot.
             shot_pages = _shot_pages(checkout, pages, primary)
             if shot_pages:
@@ -440,7 +454,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
 
     evidence = {"text": "Smoke scripts/smoke-user-state.sh: một luồng user-state, không bao phủ toàn ứng dụng.\n"
                         + "\n".join(logs), "smoke_passed": smoke_ok, "http_observed": http_observed, "runner": runner_name,
-                "screenshot": str(screenshot) if screenshot else None, "screenshots": shots}
+                "screenshot": str(screenshot) if screenshot else None, "screenshots": shots,
+                "functional": functional_result}
     state["evidence"] = evidence
     return {"gate": 5, "blocked": bool(reason), "reason": reason, "evidence": evidence,
             "failure_class": kind if reason else None}

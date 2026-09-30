@@ -19,7 +19,7 @@ const PASSING = {
   candidate: { branch: 'ai-board/2026-09-26-ticket-1', base_sha: SHA_A, head_sha: SHA_B,
     commits: [{ sha: SHA_B, title: 'ai-board(ticket-1): 1/1 x', files: ['public/admin.html'] }] },
   gates: [{ gate: 3, blocked: false, reason: null }, { gate: 4, blocked: false, reason: null, issues: [] },
-    { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true, runner: 'docker', retried: false },
+    { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true, functional: { probe_id: 'queue-worker-availability-v1', passed: true, coverage: { requester_api: true, mounted_ui: true, recovery: true } }, runner: 'docker', retried: false },
     { gate: 5.5, blocked: false, reason: null, risk_level: 'medium', risk_signals: [] }],
 };
 

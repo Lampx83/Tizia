@@ -127,6 +127,17 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
     non_goals: stringList(plan.non_goals, 'non_goals', { allowEmpty: true }),
     steps: plan.steps,
   };
+  if (plan.grounding != null) {
+    if (typeof plan.grounding !== 'object' || Array.isArray(plan.grounding)) fail('malformed_plan', 'invalid source grounding');
+    if (!/^[0-9a-f]{40}$/.test(plan.grounding.sha) || !Array.isArray(plan.grounding.evidence)
+      || plan.grounding.evidence.length !== plan.steps?.length) fail('malformed_plan', 'invalid source grounding');
+    if (plan.grounding.evidence.some((e) => !e || typeof e !== 'object' || Array.isArray(e))) fail('malformed_plan', 'invalid source evidence');
+    normalized.grounding = { sha: plan.grounding.sha, evidence: plan.grounding.evidence.map((e) => ({
+      target: safePath(e.target, 'grounding.target'), file: safePath(e.file, 'grounding.file'),
+      ...Object.fromEntries(['quote', 'before', 'after', 'verify'].map((key) => [key, nonEmptyString(e[key], `grounding.${key}`).slice(0, 1200)])),
+    })) };
+  }
+  if (plan.read_only_admin_verification === true) normalized.read_only_admin_verification = true;
   if (!RISKS.has(normalized.risk)) fail('malformed_plan', `unknown risk '${normalized.risk}'`);
   if (!Array.isArray(normalized.steps) || normalized.steps.length === 0) fail('malformed_plan', 'steps must be non-empty');
   const topCapabilities = new Set(normalized.capabilities);
@@ -186,6 +197,9 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
     };
   });
 
+  if (normalized.grounding?.evidence.some((e, i) => !normalized.steps[i].allowed_scope.includes(e.target))) {
+    fail('malformed_plan', 'source evidence does not match step scope');
+  }
   const planJson = stablePlanJson(normalized);
   return {
     plan: normalized,

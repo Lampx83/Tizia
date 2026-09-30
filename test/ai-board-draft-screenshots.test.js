@@ -19,7 +19,7 @@ const SHA_B = 'b'.repeat(40);
 const G = {
   3: { gate: 3, blocked: false, reason: null },
   4: { gate: 4, blocked: false, reason: null, issues: [] },
-  5: { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true, runner: 'docker', retried: false },
+  5: { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true, functional: { probe_id: 'queue-worker-availability-v1', passed: true, coverage: { requester_api: true, mounted_ui: true, recovery: true } }, runner: 'docker', retried: false },
   55: { gate: 5.5, blocked: false, reason: null, risk_level: 'medium', risk_signals: [] },
 };
 const PASSING = {

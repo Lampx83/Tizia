@@ -389,6 +389,7 @@ function renderSystem(sys) {
 // ─────────── Tabs (legacy: Góp ý / Users / Schools / AI / Content / Billing) ───────────
 let reqCache = [];
 let aiTicketCache = [];
+let intakeRejections = [];
 let reqFilter = 'all';
 let userCache = [];
 let currentTab = 'dashboard';
@@ -400,6 +401,7 @@ async function loadRequests() {
   ]);
   reqCache = r.data.requests || [];
   aiTicketCache = ai.data.tickets || [];
+  intakeRejections = ai.data.intake_rejections || [];
   renderRequests();
 }
 // Loại = lựa chọn "Loại đề nghị" trong nút Góp ý (suggestion-fab.js) khi học sinh gửi.
@@ -487,6 +489,8 @@ function renderRequests() {
       </tbody>
     </table>
     ${filtered.length === 0 ? '<div class="empty">Không có yêu cầu nào trong bộ lọc.</div>' : ''}
+    ${intakeRejections.length ? `<details><summary>Yêu cầu bị chặn tại intake (${intakeRejections.length} gần nhất)</summary>
+      ${intakeRejections.map((r) => `<p>${esc(fmt(r.created_at))} · ${esc(r.public_message)}<br><small>${esc(r.internal_detail)}</small></p>`).join('')}</details>` : ''}
   `;
   $('#reqFilter').value = reqFilter;
   $('#reqFilter').addEventListener('change', e => { reqFilter = e.target.value; renderRequests(); });

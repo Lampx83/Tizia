@@ -1,4 +1,4 @@
-// Làm rõ yêu cầu mơ hồ (ticket 06): model hỏi tối đa 5 câu, stream từng token, rồi tóm tắt thành spec.
+// Làm rõ yêu cầu mơ hồ (ticket 06): model hỏi tối đa 2 câu, stream từng token, rồi tóm tắt thành spec.
 // Model chỉ được hỏi: không công cụ, lời người dùng nằm trong khối dữ liệu, đầu ra qua guard trước khi lưu.
 import fs from 'node:fs';
 import { checkIntake } from '../../ai-board/intake-guard.js';
@@ -6,7 +6,7 @@ import { checkContentSafety } from '../safety/profanity-vi.js';
 import { containsPromptDisclosure } from '../../ai-prompt-guardrails.js';
 import { CLASSIFIER } from '../../ai-board/classifier.js';
 
-export const MAX_QUESTIONS = 5;
+export const MAX_QUESTIONS = 2;
 export const DAILY_TURNS = 20;
 const PROMPTS = new URL('../../../ai-board/harness/prompts/', import.meta.url);
 const GRILL = fs.readFileSync(new URL('grill.md', PROMPTS), 'utf8');
@@ -27,7 +27,6 @@ const MODE_STYLE = {
 const FEATURE_TOPICS = [
   'chức năng này để làm gì và cho ai dùng',
   'người dùng làm gì theo từng bước trên màn hình (bấm gì, thấy gì)',
-  'chức năng này giống chức năng nào đã có trên Tizia, để Ban làm theo',
 ];
 export const FEATURE_QUESTIONS = FEATURE_TOPICS.length;
 const FALLBACK_QUESTION = {
@@ -186,7 +185,7 @@ export function nextStep({ asked, clarity, rulesClear = false, mode = null }) {
   // Chức năng mới: đủ 3 chủ đề rồi mới tóm tắt, không dừng sớm theo luật/model của yêu cầu lẻ.
   if (mode === 'feature') return asked >= FEATURE_QUESTIONS ? { kind: 'summary', complete: true } : { kind: 'question', mode };
   if (rulesClear || (clarity && !clarity.needed)) return { kind: 'summary', complete: true };
-  if (asked >= MAX_QUESTIONS) return { kind: 'summary', complete: false };
+  if (asked >= MAX_QUESTIONS) return { kind: 'handoff', complete: false };
   return { kind: 'question', mode: clarity?.mode || 'ask' };
 }
 

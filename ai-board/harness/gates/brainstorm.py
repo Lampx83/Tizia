@@ -131,6 +131,7 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             reason = str(e)
             continue
         return {"gate": 1, "blocked": False, "reason": None, "plan": plan,
-                "skill": ctx["skill"], "context_chars": ctx["chars"]}
+                "skill": ctx["skill"], "context_chars": ctx["chars"], "repo_context": ctx['text'],
+                'source_targets': ctx.get('targets') or []}
     return {"gate": 1, "blocked": True, "reason": f"plan không hợp lệ: {reason}", "plan": None,
             "skill": ctx["skill"]}

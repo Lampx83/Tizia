@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { CAPABILITY_CATALOG, isSelfEditable, PlanGuardrailError, validatePlan } from './policy.js';
 import { registerRelease } from './releases.js';
+import { repeatedQuestion } from './clarity-rules.js';
 
 export { PlanGuardrailError } from './policy.js';
 
@@ -21,7 +22,7 @@ const CLAIM_INTENTS = new Set(['precheck', 'plan']);
 const RUN_TRIGGERS = new Set(CONTRACT.run_triggers);
 const EVENT_TYPES = new Set([
   'shadow_precheck_passed', 'shadow_precheck_failed', 'plan_validated',
-  'plan_blocked', 'heartbeat', 'lease_released', 'gate_started',
+  'plan_blocked', 'request_clarification', 'heartbeat', 'lease_released', 'gate_started',
 ]);
 // Vòng đời root — nguồn duy nhất cho claim, nhãn admin và hoàn tác.
 // queue: intent nhận được khi status='queued' ('any' | 'plan'); active: chỉ worker 'active' được nhận (kể cả cứu
@@ -38,7 +39,8 @@ const PHASES = {
   planning: { label: 'đang lập kế hoạch', trigger: 'plan' },
   executing: { label: 'đang thực hiện kế hoạch đã duyệt', active: true, lease: 'executing', trigger: 'execute' },
   rolling_back: { label: 'đang hoàn tác', active: true, lease: 'rolling_back', trigger: 'rollback', rollback: true },
-  precheck_blocked: { label: 'chờ thêm thông tin' },
+  precheck_blocked: { label: 'chờ quản trị viên xem xét' },
+  clarification_limit: { label: 'cần quản trị viên làm rõ' },
   precheck_failed: { label: 'kiểm tra ban đầu chưa đạt' },
   plan_blocked: { label: 'kế hoạch bị chặn' },
   ticketized: { label: 'đã chia việc' },
@@ -235,8 +237,17 @@ function validatePrePrVerdict(value, selfRequest = false) {
     if (gate === 5) {
       clean.smoke_passed = item.smoke_passed === true;
       clean.http_observed = item.http_observed === true;
+      if (item.evidence?.text) clean.text = String(item.evidence.text).slice(-16000);
       clean.retried = item.retried === true;
       clean.runner = ['docker', 'fake', ...(selfRequest ? ['eval'] : [])].includes(item.runner) ? item.runner : null;
+      if (item.functional) clean.functional = {
+        probe_id: String(item.functional.probe_id || '').slice(0, 80), passed: item.functional.passed === true,
+        reason: String(item.functional.reason || '').slice(0, 500),
+        coverage: { requester_api: item.functional.coverage?.requester_api === true,
+          mounted_ui: item.functional.coverage?.mounted_ui === true, recovery: item.functional.coverage?.recovery === true },
+        observations: Object.fromEntries(Object.entries(item.functional.observations || {}).slice(0, 10)
+          .map(([key, text]) => [String(key).slice(0, 80), String(text).slice(0, 1500)])),
+      };
       if (selfRequest && item.eval) clean.eval = cleanEval(item.eval);
     }
     if (gate === 5.5) {
@@ -257,7 +268,9 @@ function validatePrePrVerdict(value, selfRequest = false) {
   const gate5 = gates.find((gate) => gate.gate === 5);
   const gate55 = gates.find((gate) => gate.gate === 5.5);
   const observed = selfRequest ? gate5?.runner === 'eval' && gate5.eval?.accepted === true
-    : gate5?.smoke_passed === true && gate5?.http_observed === true;
+    : gate5?.smoke_passed === true && gate5?.http_observed === true
+      && gate5.functional?.passed === true && gate5.functional.probe_id === 'queue-worker-availability-v1'
+      && gate5.functional.coverage.requester_api && gate5.functional.coverage.mounted_ui && gate5.functional.coverage.recovery;
   const passed = last.gate === 5.5 && !gates.some((gate) => gate.blocked) && observed;
   const passing = ['ready_for_pr', 'needs_review'].includes(value.outcome);
   if (passing && !passed) {
@@ -780,10 +793,19 @@ export function createAiBoardStore(db, hooks = {}) {
     `).all(Number(ownerUserId), String(domain || ''), Math.min(Math.max(Number(limit) || 50, 1), 200));
     const queue = queueInfo(ownerUserId);
     return rows.map((row) => ({ ...row, attachments: parseAttachments(row.attachments),
+      status_label: requestWorkflow(row.id)?.status_label ?? null,
       queue: row.workflow_status === 'queued' ? queue.get(row.root_ticket_id) ?? null : null }));
   }
 
   /** Map rootId → {position, eta_s, deferred} cho root đang chờ của 1 người, theo đúng thứ tự FAIR_ORDER của claim. */
+  function requestWorkflow(requestId) {
+    const root = db.prepare('SELECT status, phase, public_note FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL').get(Number(requestId));
+    if (!root) return null;
+    return { workflow_status: root.status, phase: root.phase, public_note: root.public_note,
+      status_label: root.status === 'waiting_authorization' ? 'chờ quản trị viên cho phép'
+        : PHASES[root.phase]?.label ?? root.public_note ?? null };
+  }
+
   function queueInfo(ownerUserId, now = Date.now()) {
     const waiting = db.prepare(`
       SELECT t.id, t.priority, t.created_at, r.owner_user_id,
@@ -814,9 +836,13 @@ export function createAiBoardStore(db, hooks = {}) {
     const runS = Math.max(Math.round((avg || 0) / 1000), 60);
     const used = db.prepare(`SELECT ${ownerGpuS('?')} AS s`).get(now - DAY_MS, Number(ownerUserId)).s;
     const deferred = used >= LIMITS.gpu_s_per_user_day.loose;
+    const workerReady = !!db.prepare(`SELECT 1 FROM ai_workers WHERE mode='active'
+      AND status IN ('idle', 'running') AND last_seen_at > ? LIMIT 1`).get(now - 120_000);
     const out = new Map();
     order.forEach((row, i) => {
-      if (row.owner_user_id === Number(ownerUserId)) out.set(row.id, { position: i + 1, eta_s: (i + 1) * runS, deferred });
+      if (row.owner_user_id === Number(ownerUserId)) out.set(row.id, {
+        position: i + 1, eta_s: workerReady ? (i + 1) * runS : null, deferred, worker_ready: workerReady,
+      });
     });
     return out;
   }
@@ -1012,6 +1038,12 @@ export function createAiBoardStore(db, hooks = {}) {
   }
 
   function addClarifyTurn(requestId, { kind, text, author, now = Date.now() }) {
+    if (kind === 'question') {
+      const previous = db.prepare('SELECT body FROM request_messages WHERE request_id=? AND author_name=?').all(Number(requestId), CLARIFY_AUTHOR);
+      if (previous.length >= 2 || repeatedQuestion(text, previous.map((m) => m.body))) {
+        throw new WorkerContractError('clarification limit reached', 409, 'clarification_limit');
+      }
+    }
     const name = kind === 'question' ? CLARIFY_AUTHOR : kind === 'summary' ? SPEC_AUTHOR : String(author || 'Học viên');
     db.prepare(`
       INSERT INTO request_messages(request_id, role, author_name, body, attachments, created_at)
@@ -1036,10 +1068,10 @@ export function createAiBoardStore(db, hooks = {}) {
     `).all(Number(ownerUserId));
   }
 
-  /** Người gửi xác nhận spec → root vào hàng đợi worker. complete=false: hết 5 câu vẫn mơ hồ, gắn cờ cho cổng 2.5. */
+  /** Người gửi xác nhận spec → root vào hàng đợi worker. complete=false: chưa đủ rõ, gắn cờ cho cổng 2.5. */
   const confirmClarificationTransaction = db.transaction((requestId, ownerUserId, spec, complete, now) => {
     const { request } = getClarification(requestId, ownerUserId);
-    const hasSummary = db.prepare('SELECT 1 FROM request_messages WHERE request_id=? AND author_name=?')
+    const hasSummary = db.prepare('SELECT id FROM request_messages WHERE request_id=? AND author_name=? ORDER BY id DESC LIMIT 1')
       .get(request.id, SPEC_AUTHOR);
     if (!hasSummary) throw new WorkerContractError('no summary to confirm yet', 409, 'no_summary');
     db.prepare('UPDATE requests SET clarified_spec=?, updated_at=? WHERE id=?').run(spec, now, request.id);
@@ -1047,7 +1079,7 @@ export function createAiBoardStore(db, hooks = {}) {
     db.prepare(`UPDATE ai_tickets SET phase='intake', public_note=?, updated_at=? WHERE id=?`).run(note, now, request.root_id);
     if (!complete) insertTag.run(request.root_id, 'needs_clarification');
     insertEvent.run(request.root_id, 'request_clarified', 'requester', String(ownerUserId), 'clarifying->intake',
-      note, JSON.stringify({ complete }), `request-clarified:${request.root_id}`, now);
+      note, JSON.stringify({ complete }), `request-clarified:${request.root_id}:${hasSummary.id}`, now);
     return { ok: true, status: 'queued', complete };
   });
 
@@ -1055,6 +1087,85 @@ export function createAiBoardStore(db, hooks = {}) {
     const text = String(spec ?? '').trim();
     if (text.length < 10 || text.length > 4000) throw new RequestValidationError('spec must be 10–4000 characters');
     return confirmClarificationTransaction(requestId, ownerUserId, text, complete !== false, Date.now());
+  }
+
+  const handoffClarification = db.transaction((requestId, ownerUserId, reason) => {
+    const { request } = getClarification(requestId, ownerUserId);
+    const root = db.prepare('SELECT * FROM ai_tickets WHERE id=?').get(request.root_id);
+    const note = 'Yêu cầu đã chuyển quản trị viên làm rõ; bạn không cần trả lời thêm câu hỏi tự động.';
+    closeRoot(root, { status: 'waiting_admin', phase: 'clarification_limit', note, reason, now: Date.now(),
+      event: { type: 'plan_blocked', actorType: 'system', actorId: 'clarification', idem: `clarification-limit:${root.id}` } });
+    return { status: 'waiting_admin', public_note: note };
+  });
+
+  // Gate 2.5 stores the question and releases its lease atomically into the existing requester flow.
+  const workerClarificationTransaction = db.transaction((ticketId, input) => {
+    const prior = db.prepare('SELECT actor_id, run_id FROM ai_events WHERE ticket_id=? AND idempotency_key=?')
+      .get(Number(ticketId), input.idempotencyKey);
+    if (prior) {
+      if (prior.actor_id !== input.workerId || Number(prior.run_id) !== Number(input.runId)) {
+        throw new WorkerContractError('idempotency key belongs to another run', 409, 'idempotency_conflict');
+      }
+      return { status: 'duplicate', duplicate: true };
+    }
+    const root = assertLease(ticketId, input.workerId, input.leaseToken, input.now);
+    const run = db.prepare('SELECT id FROM ai_runs WHERE id=? AND ticket_id=?').get(Number(input.runId), Number(ticketId));
+    if (!run) throw new WorkerContractError('run does not belong to ticket');
+    const request = db.prepare('SELECT id, title, domain, student FROM requests WHERE id=?').get(root.source_request_id);
+    const asked = db.prepare('SELECT COUNT(*) n FROM request_messages WHERE request_id=? AND author_name=?')
+      .get(request.id, CLARIFY_AUTHOR).n;
+    const questions = db.prepare('SELECT body FROM request_messages WHERE request_id=? AND author_name=?')
+      .all(request.id, CLARIFY_AUTHOR).map((m) => m.body);
+    const repeated = repeatedQuestion(input.question, questions);
+    const escalate = input.escalateReason || asked >= Math.min(2, input.maxQuestions) || repeated;
+    const now = input.now;
+    const status = escalate ? 'waiting_admin' : 'queued';
+    const phase = escalate ? 'plan_blocked' : 'clarifying';
+    const note = escalate ? 'Kế hoạch cần quản trị viên kiểm tra trước khi tiếp tục.' : CLARIFYING_NOTE;
+    const eventType = escalate ? 'plan_blocked' : 'request_clarification';
+    const detail = input.escalateReason || (repeated ? 'repeated_answered_question' : escalate ? 'requester_clarification_limit_reached'
+      : JSON.stringify({ gate: 2.5, asked: asked + 1 }));
+    if (escalate) {
+      db.prepare(`
+        INSERT INTO ai_gate_traces(run_id, gate, status, public_reason, internal_reason, created_at)
+        VALUES (?, 2.5, 'blocked', ?, ?, ?)
+      `).run(run.id, note, detail, now);
+    } else {
+      db.prepare(`
+        INSERT INTO request_messages(request_id, role, author_name, body, attachments, created_at)
+        VALUES (?, 'ai', ?, ?, NULL, ?)
+      `).run(request.id, CLARIFY_AUTHOR, input.question, now);
+      db.prepare('UPDATE requests SET updated_at=? WHERE id=?').run(now, request.id);
+    }
+    db.prepare(`
+      UPDATE ai_tickets SET status=?, phase=?, public_note=?, internal_reason=?,
+        lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE id=?
+    `).run(status, phase, note, detail, now, Number(ticketId));
+    db.prepare(`UPDATE ai_workers SET status='idle', current_ticket_id=NULL, last_seen_at=?, updated_at=? WHERE worker_id=?`)
+      .run(now, now, input.workerId);
+    db.prepare(`
+      INSERT INTO ai_events(ticket_id, run_id, event_type, actor_type, actor_id, transition,
+        public_message, internal_detail, idempotency_key, created_at)
+      VALUES (?, ?, ?, 'worker', ?, ?, ?, ?, ?, ?)
+    `).run(Number(ticketId), run.id, eventType, input.workerId,
+      `running->${status}${escalate ? '' : ':clarifying'}`, note, detail, input.idempotencyKey, now);
+    return { status: escalate ? status : phase, requestId: request.id, title: request.title,
+      domain: request.domain, student: request.student };
+  });
+
+  function requestWorkerClarification(ticketId, input) {
+    const idempotencyKey = String(input.idempotencyKey || '');
+    if (!KEY.test(idempotencyKey)) throw new WorkerContractError('invalid idempotency key');
+    if (!Number.isInteger(input.maxQuestions) || input.maxQuestions < 1 || input.maxQuestions > 10) {
+      throw new WorkerContractError('invalid clarification limit');
+    }
+    const question = String(input.question || '').trim();
+    const escalateReason = String(input.escalateReason || '').slice(0, 200);
+    if (!escalateReason && (!question || question.length > 500)) {
+      throw new WorkerContractError('invalid clarification question');
+    }
+    return workerClarificationTransaction(Number(ticketId), { ...input, question, escalateReason,
+      idempotencyKey, now: input.now ?? Date.now() });
   }
 
   // Onboarding (ticket 05) cho giọng văn của worker: không kèm tên hay id người gửi.
@@ -1135,7 +1246,7 @@ export function createAiBoardStore(db, hooks = {}) {
       ticket: { ...ticket, lease_token: undefined }, request: { ...request, attachments: parseAttachments(request.attachments) },
       thread, capability_policy: CAPABILITY_CATALOG, pull_request: latestPullRequest(ticket.id),
       requester_profile: requesterProfile(request.owner_user_id),
-      // Hết 5 câu vẫn mơ hồ (ticket 06): cổng 2.5 / tier xử lý kỹ hơn.
+      // Spec chưa đủ rõ (ticket 06): cổng 2.5 / tier xử lý kỹ hơn.
       clarification_incomplete: !!db.prepare("SELECT 1 FROM ai_ticket_tags WHERE ticket_id=? AND tag='needs_clarification'")
         .get(ticket.id),
       ...(ticket.phase === 'rolling_back' ? { rollback_candidate: latestCandidate(ticket.id) } : {}),
@@ -1216,7 +1327,7 @@ export function createAiBoardStore(db, hooks = {}) {
     const current = assertLease(ticketId, input.workerId, input.leaseToken, input.now);
     const states = {
       shadow_ok: ['queued', 'shadow_checked', 'Đã qua kiểm tra ban đầu; đang chờ lập kế hoạch.'],
-      waiting: ['waiting', 'precheck_blocked', 'Yêu cầu đang chờ thêm thông tin.'],
+      waiting: ['waiting', 'precheck_blocked', 'Yêu cầu đang chờ quản trị viên xem xét.'],
       failed: ['waiting', 'precheck_failed', 'Kiểm tra ban đầu chưa đạt.'],
     };
     const plannedStatuses = new Set(['planned', 'waiting_authorization', 'human_owned', 'waiting_admin']);
@@ -1980,9 +2091,12 @@ export function createAiBoardStore(db, hooks = {}) {
     recordPullRequest,
     getClarification,
     addClarifyTurn,
+    requestWorkflow,
     countClarifyTurns,
     listPendingClarifications,
     confirmClarification,
+    handoffClarification,
+    requestWorkerClarification,
     authorizePlan,
     resumeAuthorizedPlan,
     extendBudget,

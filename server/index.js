@@ -361,6 +361,7 @@ attachAiBoardRequestRoutes(r, {
 attachAiBoardWorkerRoutes(r, {
   store: aiBoardStore, uploadsDir: REQUEST_UPLOADS_DIR, onVerdict: draftNotifier(createNotification),
   onSelfWin: selfWinNotifier(db, createNotification),
+  onClarify: clarifyNotifier(createNotification),
 });
 // Cờ phát hành (ticket 10): có page gate /<slug>.html → phải trước route HTML + static bên dưới.
 attachAiBoardReleases(r, { db, requireAuth, requireAdmin, requireStrictCsrf });
@@ -1217,6 +1218,7 @@ r.get('/api/requests/:id/thread', requireAuth, (req, res) => {
     request: {
       id: reqRow.id, domain: reqRow.domain, type: reqRow.type, title: reqRow.title,
       status: reqRow.status, student: reqRow.student, votes: reqRow.votes,
+      ...aiBoardStore.requestWorkflow(reqRow.id),
       created_at: reqRow.created_at, updated_at: reqRow.updated_at,
     },
     messages: thread,

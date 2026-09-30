@@ -83,7 +83,7 @@ const gateName = (g) => gateNames[Number(g)] ? `${gatePos(g)} · ${esc(gateNames
 
 const ROOT_STATUS = {
   queued: ['idle', 'Chờ worker nhận'], running: ['run', 'Đang xử lý'], planned: ['ok', 'Đã có kế hoạch'],
-  waiting_authorization: ['warn', 'Chờ admin cho phép'], waiting_admin: ['warn', 'Chờ admin'], waiting: ['warn', 'Chờ thêm thông tin'],
+  waiting_authorization: ['warn', 'Chờ admin cho phép'], waiting_admin: ['warn', 'Chờ admin'], waiting: ['warn', 'Chờ xem xét'],
   human_owned: ['warn', 'Chuyển cho người làm'], cancelled: ['bad', 'Đã dừng'], done: ['ok', 'Xong'],
 };
 // Tiến độ do server tính (run.progress): cổng nào qua / chặn / đang chạy / chưa tới / không chạy.
@@ -139,10 +139,14 @@ function callStep(e) {
 
 function gateStep(g) {
   const state = GATE_STATE[g.status] || 'idle';
+  const evidence = g.evidence?.text;
+  const functional = g.evidence?.functional;
   return `<div class="step gate st-${state}"><div class="line1"><b>${gateName(g.gate)}</b>
       ${tag(state, g.status === 'passed' ? 'OK' : g.status === 'blocked' ? 'Blocked' : g.status)}</div>
     ${g.public_reason ? `<div style="margin-top:4px">${esc(g.public_reason)}</div>` : ''}
-    ${g.internal_reason ? `<div class="meta">${esc(g.internal_reason)}</div>` : ''}</div>`;
+    ${g.internal_reason ? `<div class="meta">${esc(g.internal_reason)}</div>` : ''}
+    ${functional ? `<details><summary>Kiểm chứng chức năng: ${esc(functional.probe_id || 'chưa có phép kiểm')} · ${functional.passed ? 'đạt' : 'chưa đạt'}</summary><pre>${esc(JSON.stringify(functional, null, 2))}</pre></details>` : ''}
+    ${evidence ? `<details><summary>Nhật ký chẩn đoán</summary><pre>${esc(evidence)}</pre></details>` : ''}</div>`;
 }
 
 function rollbackStep(run, live) {
@@ -290,12 +294,14 @@ function renderPlan(p, root, children) {
     <div class="blk plan">
       <div class="plan-head"><b>${esc(plan.goal || '')}</b>${tag(approvalState, approval)}</div>
       <dl class="kv">
+        ${plan.read_only_admin_verification ? '<dt>Kiểm tra trang admin</dt><dd>Chỉ quan sát giao diện; không cấp quyền sửa vùng đặc quyền.</dd>' : ''}
         <dt>Mức duyệt</dt><dd>${esc(TIER_TEXT[p.tier] || p.tier)}</dd>
         <dt>Rủi ro</dt><dd>${esc(RISK_TEXT[plan.risk] || plan.risk || '—')}</dd>
         <dt>File được sửa</dt><dd>${(plan.allowed_scope || []).map(code).join(', ') || '—'}</dd>
         <dt>Quyền</dt><dd>${(plan.capabilities || []).map(capText).join(', ') || '—'}</dd>
         <dt>Bản kế hoạch</dt><dd>${esc(p.revision)}</dd>
       </dl>
+      ${plan.grounding ? `<details><summary>Dẫn chứng code tại ${esc(plan.grounding.sha)}</summary>${plan.grounding.evidence.map(e => `<div class="blk"><b>${esc(e.target)}</b><pre>${esc(e.quote)}</pre><div>Trước: ${esc(e.before)}</div><div>Sau: ${esc(e.after)}</div><div>Kiểm chứng: ${esc(e.verify)}</div></div>`).join('')}</details>` : ''}
       <div class="sub">Các bước</div>
       <ol class="plan-steps">${steps.map(st => {
         const [state, label] = stepState(mine.find(c => Number(c.order) === Number(st.order)), root);
