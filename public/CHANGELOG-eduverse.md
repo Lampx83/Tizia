@@ -4,6 +4,75 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-30 — Phiên 78 · Dọn nợ tồn: merge nốt nội dung treo 1 tháng, **bỏ hẳn cơ chế nhánh + PR**
+
+**Chế độ:** chủ sở hữu yêu cầu trực tiếp (không phải phiên tự động): *"merge hết toàn bộ những gì
+bạn đã làm từ trước đến giờ"*, *"xoá toàn bộ các branch đi"*, *"lần sau thì đừng tạo branch mới,
+xử lý xong xuôi thì merge luôn → cập nhật routine"*.
+
+### 1. Luật Git đổi hẳn — không còn nhánh, không còn PR
+
+Luật cũ (nhánh `ai-board/<YYYY-MM-DD>` + PR + chờ duyệt) đã tích thành **6 PR treo** và **118
+nhánh**. Nặng nhất: **PR #83 đứng 1 tháng** với một môn học thật bên trong mà không ai thấy.
+`ai-board/ROUTINE.md` nay ghi: làm thẳng trên `main`, xong là commit + push. **Cổng kiểm thử không
+được nới** — không còn PR nghĩa là không còn ai soát hộ, nên mục "Kiểm thử bắt buộc trước khi
+commit" trở thành thứ duy nhất chặn lỗi. Phạm vi được tự quyết **không** mở rộng.
+
+### 2. Merge nốt việc còn treo — nhưng 2 trong 4 PR cũ KHÔNG merge được, và vì sao
+
+| PR | Nhánh | Kết quả | Lí do |
+|---|---|---|---|
+| **#110** | `ai-board/2026-09-29-preflight` | ✅ **đã merge** | Bộ đo bậc 3 của phiên 77, chủ sở hữu duyệt. |
+| **#83** | `ai-board/2026-09-01` | ✅ **đã merge kèm sửa lỗi** | GD Địa phương lớp 10 — xem mục 3. |
+| **#59** | `ai-board/2026-08-04` | ❌ **đóng, không merge** | Nội dung đã **lỗi thời**: `streak-14/30` và `star-60/90/100` mà PR này thêm thì `main` **đã có đủ** ở cả 5 domain (phiên 57–59 làm lại rồi). Merge chỉ tạo xung đột, không thêm giá trị. |
+| **#26**, **#9** | `ai-board/2026-06-27`, `ai-board/2026-06-25` | ❌ **đóng, không merge** | **Không chung gốc với `main`** (`no merge base`, 319 và 276 commit). Đây là lịch sử trước lần viết lại repo — merge là ghép hai cây code khác nhau, không phải merge nội dung. |
+
+### 3. Nội dung treo 1 tháng có lỗi thật — bộ đo mới (phiên 77) bắt ngay khi merge
+
+`public/js/scenarios/lop10/gd-dia-phuong.js` (PR #83) lấp một lỗ đúng nghĩa: GDPT 2018 quy định
+**GD Địa phương là môn bắt buộc ở cả THPT**, `main` đã có lớp 6/7/8/9 nhưng **lớp 10 trống**. Vấn
+đề là nội dung đó soạn trước khi có các luật chất lượng hiện hành:
+
+| Chỉ số | Khi merge vào | Sau khi sửa |
+|---|---|---|
+| Phân bố đáp án `lop10:gd-dia-phuong` (n=140) | **A=100,0% / B=0 / C=0 / D=0** · χ²=**420** | **25,0 / 25,0 / 25,0 / 25,0** · χ²=**0,00** |
+| Bậc 2 — môn dừng ở tuần 35 | **1 mục** (môn duy nhất của lớp 10 thiếu tuần 36) | **0** |
+| Bậc 3 — môn lệch phân bố | **1 mục** | **0** |
+| Toàn bộ ngân hàng | 28.068 câu · χ²=2,98 | **28.212 câu** · 24,8/25,2/25,3/24,7 · χ²=**2,96** |
+
+**100% đáp án đúng nằm ở A** — học sinh chọn A cho cả 140 câu là đạt 100%. Đây đúng là lớp lỗi mà
+tiêu chí `≥60% một vị trí` của bậc 3 **vẫn bắt được**, nhưng nội dung này chưa từng đi qua bộ đo vì
+nó nằm trên một nhánh treo. Bài học: **nội dung không được merge thì không được đo.**
+
+### Thay đổi từng file
+
+| File | Thay đổi |
+|---|---|
+| `public/js/scenarios/lop10/gd-dia-phuong.js` | Merge từ PR #83 (35 tuần) · **cân bằng 105/140 câu** về 25/25/25/25 · **thêm tuần 36** "Ôn tập cuối năm – Hà Nội: từ di sản nghìn năm đến Thành phố sáng tạo" (4 câu, có đủ `explanation` + 4 `choiceFeedback` — chuẩn hiện hành). |
+| `public/js/scenarios/lop10/lessons/gd-dia-phuong.js` | Merge từ PR #83 (35 bài) · **thêm bài lí thuyết tuần 36** (topic/intro/3 objectives/5 đoạn theory/3 examples): 4 lớp danh hiệu UNESCO của Hà Nội, phân biệt di sản vật thể / phi vật thể / tư liệu. |
+| `public/js/scenarios/lop10/_index.js`, `lessons/_index.js` | Merge từ PR #83 — nạp `H10GDDP` vào barrel lớp 10. |
+| `public/js/domains/highschool/modules.js` | Merge từ PR #83 — thêm `H10GDDP`, `H11GDDP`, `H12GDDP` vào catalog THPT. |
+| `ai-board/ROUTINE.md` | Luật Git mới (mục 1) + thêm vào danh sách "không bao giờ tự làm": **không xoá nhánh `feat/postgres-migration`** (production chạy từ đó) hay nhánh còn commit chưa có trên `main`, dù được yêu cầu "xoá hết nhánh" — phải liệt kê và hỏi lại. |
+| `public/CHANGELOG-eduverse.md` | Mục này, cộng mục **2026-09-01** của PR #83 được chèn lại đúng thứ tự thời gian kèm ghi chú "merge muộn". |
+
+### Kiểm thử (chạy thật)
+
+- ✅ `node --check` PASS cho cả **5** file `.js` liên quan.
+- ✅ Runtime: import thật `lop10/_index.js` + `lop10/lessons/_index.js` — **36/36 tuần** quiz, **36**
+  bài lí thuyết, **0 quiz thiếu lesson**, tuần 36 nạp đúng.
+- ✅ Đối chiếu bản gốc PR #83 ↔ bản đã cân bằng trên **140 câu**: `stem` không đổi, tập lựa chọn y
+  hệt, **đáp án đúng vẫn cùng nội dung**, không câu nào trùng lựa chọn. **0 sai lệch.**
+- ✅ Tuần 36 mới: 4 câu, vị trí đáp án `2,0,1,3` (nhiều nhất 1 câu/vị trí, ngưỡng <3), đủ 4
+  `choiceFeedback`, feedback tại `answer` mở đầu "Đúng" còn lại "Sai".
+- ✅ `node scripts/check-content-integrity.mjs` → sạch. `node scripts/ai-board-preflight.mjs
+  --no-net` → **cả ba bậc sạch**.
+
+### 4. Dọn nhánh
+
+Xoá các nhánh đã gộp hết vào `main`. **Giữ lại** `feat/postgres-migration` (production đang chạy từ
+nhánh này) và các nhánh còn commit chưa có trên `main` — đã liệt kê lại cho chủ sở hữu quyết định,
+không tự xoá. Luật này đã được ghi vào `ROUTINE.md` để phiên sau không xoá nhầm.
+
 ## 2026-09-29 — Phiên 77 · Bít **điểm mù của chính bộ đo**: 2 môn có 97% đáp án dồn vào hai vị trí mà bậc 3 vẫn báo "sạch"
 
 **Kết luận về hộp thư:** vẫn **không đọc được** — ngày hỏng liên tiếp **thứ 17** (từ `2026-09-13`).

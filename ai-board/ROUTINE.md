@@ -79,7 +79,7 @@ việc**, và **chỉ khi có lệnh chứng minh được vấn đề tồn t�
 **Nếu cả ba bậc đều sạch:** ghi 1 dòng kết luận, **KHÔNG tạo PR**, **KHÔNG bịa
 việc**, và báo cho chủ sở hữu rằng routine đã hết việc dự phòng đo được.
 
-Mọi việc dự phòng phải kèm **con số trước → sau** trong PR. Không có con số
+Mọi việc dự phòng phải kèm **con số trước → sau** trong CHANGELOG. Không có con số
 nghĩa là không chứng minh được giá trị — đừng làm.
 
 ---
@@ -106,29 +106,46 @@ nghĩa là không chứng minh được giá trị — đừng làm.
 
 ---
 
-## Git / PR
+## Git — làm thẳng trên `main`, KHÔNG tạo nhánh, KHÔNG mở PR
 
-- Nhánh: `ai-board/<YYYY-MM-DD>`. **Không commit thẳng vào `main`. Không force-push.**
-- **`gh` và `hub` KHÔNG tồn tại** trong môi trường routine. Dùng công cụ GitHub
-  sẵn có của phiên (MCP) để tạo PR.
+> **Chủ sở hữu quyết định 2026-09-30, thay hẳn luật cũ.** Luật cũ (nhánh
+> `ai-board/<YYYY-MM-DD>` + PR + chờ duyệt) đã tạo ra **6 PR treo hàng tháng**
+> và **118 nhánh** rác, trong đó có nội dung học liệu thật đứng lại một tháng
+> không ai thấy (PR #83: môn GD Địa phương lớp 10). Nguyên văn yêu cầu:
+> *"lần sau thì đừng tạo branch mới, xử lý xong xuôi thì merge luôn"*.
+
+- **Làm thẳng trên `main`.** Không tạo nhánh mới, không mở PR, không chờ duyệt.
+- **Nhưng cổng kiểm thử KHÔNG được nới:** chạy **đủ** mục "Kiểm thử bắt buộc
+  trước khi commit" bên trên **TRƯỚC** khi commit. Không có PR nghĩa là không
+  còn ai soát hộ — cổng kiểm thử là thứ duy nhất còn lại, nên nó là **bắt buộc**.
+  Kiểm thử fail ⇒ **không commit**, sửa cho xong hoặc hoàn lại (`git restore`).
+- **Không force-push. Không `git push --force-with-lease` lên `main`.** Sai thì
+  sửa bằng commit mới, không viết lại lịch sử.
+- `git push -u origin main`. Lỗi mạng thì thử lại tối đa 4 lần (2s, 4s, 8s, 16s).
+- Ghi 1 mục vào `public/CHANGELOG-eduverse.md` **trong cùng commit** với thay đổi.
+  Không có PR thì CHANGELOG là **bản ghi duy nhất** — mục phải nêu: ngày, trường,
+  request ID đã xử lý (hoặc "không có và vì sao"), thay đổi từng file, và **con
+  số trước → sau** của lệnh chứng minh.
 - Repo đã đổi tên: **`Lampx83/Tizia`** (`Lampx83/EduVerse` chỉ còn redirect).
-- Tiêu đề PR: `🏛️ Ban điều hành AI — cải tiến <YYYY-MM-DD>`.
-- Thân PR phải có: yêu cầu đã xử lý (ID + tiêu đề, hoặc nêu rõ "không có và vì
-  sao"), thay đổi từng file, ghi chú kiểm thử kèm **con số trước → sau**.
-- Ghi 1 mục vào `public/CHANGELOG-eduverse.md`.
-- **Tự merge chỉ khi cả ba điều kiện đúng:** diff chỉ đụng nội dung học liệu
-  (`public/js/scenarios/**`, `public/CHANGELOG-eduverse.md`, `ai-board/**`),
-  mọi lệnh kiểm thử đã pass, và không đụng `server/**` hay `public/js/engine/**`.
-  Ngoài phạm vi đó ⇒ **để chủ sở hữu duyệt**, không tự merge.
-
----
+- **`gh` và `hub` KHÔNG tồn tại** trong môi trường routine. Dùng công cụ GitHub
+  sẵn có của phiên (MCP) khi cần đọc/ghi trên GitHub.
+- **Phạm vi được tự quyết KHÔNG đổi** — vẫn đúng như trước: nội dung học liệu
+  (`public/js/scenarios/**`), `public/CHANGELOG-eduverse.md`, `ai-board/**`, và
+  công cụ chẩn đoán trong `scripts/`. Việc nằm **ngoài** phạm vi đó (xem mục
+  "Những gì KHÔNG bao giờ tự làm") thì **không làm**, kể cả khi không cần PR —
+  bỏ PR là bỏ bước chờ duyệt, **không phải** mở rộng quyền.
+- Nếu `main` bị bảo vệ (push bị từ chối): **đừng lách bằng cách tạo nhánh mới
+  rồi bỏ đó**. Báo ngay cho chủ sở hữu kèm nguyên văn thông báo từ chối.
 
 ## Những gì KHÔNG bao giờ tự làm
 
 - Sửa `server/**`, `public/js/engine/**`, schema DB, auth, routing.
 - Đặt hoặc đọc secret; commit bất cứ khoá nào vào repo.
 - Merge PR đụng nhánh production (`feat/postgres-migration`).
-- Tạo PR rỗng, hoặc bịa ra yêu cầu người dùng không có thật.
+- Commit rỗng / commit chỉ để "có việc", hoặc bịa ra yêu cầu người dùng không có thật.
+- Xoá nhánh `feat/postgres-migration` (production đang chạy từ đó) hay bất cứ
+  nhánh nào còn commit chưa có trên `main`, dù được yêu cầu "xoá hết nhánh":
+  liệt kê ra và hỏi lại, đừng xoá rồi báo sau.
 
 ---
 

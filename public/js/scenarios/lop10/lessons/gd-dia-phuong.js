@@ -459,4 +459,25 @@ export const H10GDDP_LESSONS = {
       'Dự án "Mural Art" trang trí tường bích hoạ ở phố cổ Hà Nội — ví dụ về sáng tạo trẻ góp phần làm đẹp Thủ đô.',
     ],
   },
+  'H10GDDP-w36-quiz': {
+    topic: 'Ôn tập cuối năm – Hà Nội: từ di sản nghìn năm đến Thành phố sáng tạo',
+    intro: 'Tuần cuối năm học hệ thống lại toàn bộ hành trình: Hà Nội vừa là kho di sản nghìn năm, vừa là một thành phố đang tự làm mới mình bằng sáng tạo và thiết kế.',
+    objectives: [
+      'Hệ thống hoá các danh hiệu UNESCO mà Hà Nội đang giữ và ý nghĩa của từng danh hiệu',
+      'Phân biệt được các loại di sản: văn hoá thế giới, phi vật thể, tư liệu thế giới',
+      'Xác định việc làm cụ thể của học sinh lớp 10 để gìn giữ và lan toả giá trị Thủ đô',
+    ],
+    theory: [
+      '**Bốn lớp danh hiệu UNESCO của Hà Nội** — nhìn cùng nhau mới thấy chiều sâu của Thủ đô: "Thành phố Vì hoà bình" (1999), Di sản văn hoá thế giới (Khu trung tâm Hoàng thành Thăng Long, 2010), Di sản văn hoá phi vật thể đại diện của nhân loại (Hội Gióng ở đền Phù Đổng và đền Sóc, 2010), và Thành phố sáng tạo lĩnh vực **Thiết kế** (2019).',
+      '**82 bia tiến sĩ ở Văn Miếu – Quốc Tử Giám** được UNESCO ghi danh là Di sản tư liệu thế giới — đây là loại di sản thứ tư, khác với di sản vật thể và phi vật thể: giá trị nằm ở **tư liệu** được ghi chép và lưu truyền.',
+      '**Di sản không phải là đồ vật trong tủ kính.** Hoàng thành Thăng Long là nơi khảo cổ vẫn đang làm việc; Hội Gióng là lễ hội dân làng vẫn tổ chức hằng năm; danh hiệu Thành phố sáng tạo là cam kết cho tương lai, không phải phần thưởng cho quá khứ.',
+      '**Từ di sản đến sáng tạo.** Danh hiệu Thiết kế 2019 đặt Hà Nội vào mạng lưới các thành phố lấy sáng tạo làm động lực phát triển: không gian đi bộ hồ Hoàn Kiếm, các làng nghề Bát Tràng – Vạn Phúc chuyển sang thiết kế sản phẩm, những dự án nghệ thuật công cộng ở phố cổ.',
+      '**Trách nhiệm của thế hệ trẻ** nằm ở những việc nhỏ đủ để làm mỗi ngày: hiểu đúng giá trị nơi mình sống, không xâm phạm di tích, giữ vệ sinh nơi công cộng, ứng xử văn minh, và lan toả điều mình biết cho người khác.',
+    ],
+    examples: [
+      'Bát Tràng và Vạn Phúc là hai làng nghề đang gắn nghề truyền thống với thiết kế hiện đại — minh chứng cho tinh thần "Thành phố sáng tạo lĩnh vực Thiết kế".',
+      'Không gian đi bộ quanh hồ Hoàn Kiếm cuối tuần: một quyết định về thiết kế đô thị đã đổi hẳn cách người Hà Nội dùng trung tâm thành phố.',
+      'Phân biệt nhanh: Hoàng thành Thăng Long = di sản **vật thể**; Hội Gióng = di sản **phi vật thể**; 82 bia tiến sĩ = di sản **tư liệu**.',
+    ],
+  },
 };
