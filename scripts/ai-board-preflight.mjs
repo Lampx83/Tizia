@@ -127,15 +127,31 @@ function tier3AnswerBias() {
   try { data = JSON.parse(r.out.slice(r.out.indexOf('{'))); } catch { /* ignore */ }
   if (!data) return { name: 'Lệch phân bố đáp án A/B/C/D', cmd: 'node scripts/audit-answer-distribution.js',
                       count: null, clean: false, note: 'không đọc được JSON' };
+  // HAI tiêu chí, không phải một. Tiêu chí "≥60% dồn vào MỘT vị trí" bỏ sót
+  // hẳn một lớp lỗi: đáp án dồn vào HAI vị trí. Đo thật 2026-09-29 —
+  // lop11:tin-hoc  A 45,4% B 51,4% C 1,4% D 1,9%  (không vị trí nào ≥60%)
+  // lop3:cong-nghe A 37,0% B 59,7% C 2,8% D 0,6%  (không vị trí nào ≥60%)
+  // ⇒ chọn bừa A hoặc B là đúng ~97%, bài kiểm tra mất giá trị đo lường, mà
+  // bậc 3 vẫn báo "✅ sạch" suốt 17 phiên. Thêm tiêu chí hai-vị-trí để bít.
+  const SHARE_ONE_MAX = 0.60;   // một vị trí chiếm ≥60%
+  const SHARE_BOTTOM2_MIN = 0.15; // hai vị trí ÍT dùng nhất cộng lại <15% ⇒ hai vị trí kia gánh >85%
   const skewed = [];
   for (const [subject, s] of Object.entries(data.bySubject || {})) {
     if (!s.total || s.total < 30) continue;
-    const top = Math.max(s.A, s.B, s.C, s.D) / s.total;
-    if (top >= 0.60) skewed.push({ subject, total: s.total, topShare: Math.round(top * 100) });
+    const shares = ['A', 'B', 'C', 'D'].map(k => (s[k] || 0) / s.total).sort((a, b) => a - b);
+    const top = shares[3];
+    const bottom2 = shares[0] + shares[1];
+    const reasons = [];
+    if (top >= SHARE_ONE_MAX) reasons.push(`một vị trí ${Math.round(top * 100)}%`);
+    if (bottom2 < SHARE_BOTTOM2_MIN) reasons.push(`hai vị trí gánh ${Math.round((1 - bottom2) * 100)}%`);
+    if (reasons.length) {
+      skewed.push({ subject, total: s.total, topShare: Math.round(top * 100),
+                    bottom2Share: Math.round(bottom2 * 100), reason: reasons.join(' + ') });
+    }
   }
   skewed.sort((a, b) => b.topShare - a.topShare);
   const anomalies = (data.total?.anomalies || []).length;
-  return { name: 'Lệch phân bố đáp án A/B/C/D (≥60% dồn vào một vị trí)',
+  return { name: 'Lệch phân bố đáp án A/B/C/D (một vị trí ≥60%, HOẶC hai vị trí gánh >85%)',
            cmd: 'node scripts/audit-answer-distribution.js',
            count: skewed.length, clean: skewed.length === 0 && anomalies === 0, skewed, anomalies };
 }
@@ -168,7 +184,7 @@ tiers.forEach((t, i) => {
 const t2 = tiers[1], t3 = tiers[2];
 if (!t2.clean) line(`            → ${t2.missing.join(', ')}`);
 if (!t3.clean && t3.skewed?.length) {
-  line(`            → nặng nhất: ${t3.skewed.slice(0, 5).map(s => `${s.subject} (${s.topShare}%)`).join(', ')}`);
+  line(`            → nặng nhất: ${t3.skewed.slice(0, 5).map(s => `${s.subject} (${s.reason})`).join(', ')}`);
   if (t3.anomalies) line(`            → ${t3.anomalies} câu dị dạng (không đủ 4 lựa chọn)`);
 }
 
@@ -179,10 +195,12 @@ if (probe.readable) {
 } else {
   if (!probe.skipped && st.consecutive_failures >= ESCALATE_AFTER_DAYS) {
     line(`   ⚠️  LEO THANG (đã ${st.consecutive_failures} ngày ≥ ngưỡng ${ESCALATE_AFTER_DAYS}):`);
-    line('      Việc ĐẦU TIÊN là gửi thông báo cho chủ sở hữu, nêu đúng 2 việc cần người bấm nút:');
-    line('        (a) merge PR #97 — route đọc-chỉ /api/ai-board/inbox vào nhánh production');
-    line('        (b) đặt AI_BOARD_KEY trên production rồi redeploy');
-    line('      Hai việc này KHÔNG được tự làm: chúng đụng auth/routing nhánh production và secret.');
+    line('      Việc ĐẦU TIÊN là gửi thông báo cho chủ sở hữu, nêu đúng việc cần người bấm nút:');
+    line('        → đặt AI_BOARD_KEY trên production (openssl rand -hex 32) RỒI redeploy nhánh');
+    line('          feat/postgres-migration. Route đọc-chỉ /api/ai-board/inbox đã nằm trên nhánh đó');
+    line('          (PR #97 merge 2026-09-27) nhưng bản đang chạy vẫn trả 401 needLogin ⇒ chưa redeploy.');
+    line('      KHÔNG được tự làm: AI_BOARD_KEY là secret, redeploy nhánh production vượt ngưỡng rủi ro thấp.');
+    line('      Kiểm chứng lại bất cứ lúc nào: node scripts/check-deployed-build.mjs');
   }
   const next = tiers.find(t => !t.clean);
   if (next) {
