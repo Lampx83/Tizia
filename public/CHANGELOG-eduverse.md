@@ -4,6 +4,65 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-09-30 — Phiên 79 · **Không có việc khả thi** — hộp thư chết ngày 18, cả 3 bậc dự phòng sạch
+
+**Kết luận một dòng:** không xử lý được yêu cầu nào của người dùng vì hộp thư production vẫn
+không đọc được (ngày hỏng liên tiếp **thứ 18**), và cả **3 bậc việc dự phòng đều sạch khi đo thật**
+⇒ theo `ai-board/ROUTINE.md` bước 2b: **không tạo PR, không bịa việc**, chỉ ghi mục này và leo thang.
+
+### Đã đo gì (không đoán)
+
+| Kênh có thể chứa yêu cầu người dùng | Kết quả đo hôm nay |
+|---|---|
+| `/api/ai-board/inbox` (route đọc-chỉ dành cho routine) | **401** `{"error":"unauthorized","needLogin":true}` |
+| `/api/requests`, `/api/public/requests`, `/api/board/inbox`, `/api/admin/requests`, `/api/ai-board/requests` | **401** (cả 5) |
+| `ai-board/inbox.json` (hộp thư local) | `items: []` — rỗng |
+| GitHub Issues `Lampx83/Tizia` | **0** issue đang mở |
+| GitHub PR đang mở | Chỉ **#32** (`feat/postgres-migration`) và **#7** (gỡ Limio) — đều của chủ sở hữu, đều là việc kiến trúc/production. #32 đụng nhánh production ⇒ ROUTINE cấm tự merge. Không có yêu cầu sinh viên nào. |
+
+Bậc thang dự phòng — đọc thẳng bảng số, không tin chữ "sạch":
+
+| Bậc | Lệnh chứng minh | Số đo |
+|---|---|---|
+| 1 — toàn vẹn học liệu | `check-content-integrity.mjs` | ✅ 0 vấn đề |
+| 2 — môn dừng ở tuần 35 | `ai-board-preflight.mjs` | ✅ 0 môn |
+| 3 — lệch phân bố đáp án | `audit-answer-distribution.js` | ✅ 28.212 câu · A 24,8% B 25,2% C 25,3% D 24,7% · χ²=**2,96** · **0 câu dị dạng**. Môn lệch nhất `lop3:toan` (A 31,9% / D 16,8%) — còn xa cả hai ngưỡng (một vị trí ≥60%, hoặc hai vị trí >85%). |
+
+### Leo thang cho chủ sở hữu (lặp lại lần thứ 18 — vẫn đúng một việc cần người bấm nút)
+
+Đo thêm hôm nay để **loại trừ** giả thuyết "đổi app": `https://tizia.vn/` do **Next.js** phục vụ
+(`x-powered-by: Next.js`, `openresty` đứng trước), nhưng `/api/ai-board/inbox` trả đúng body
+`{"error":"unauthorized","needLogin":true}` — **nguyên văn cổng auth Express của repo này**
+(`server/contexts/identity/auth.js:282`). Nghĩa là API vẫn do app trong repo phục vụ, và vì
+`'/api/ai-board/'` **đã có** trong `PUBLIC_PATH_PREFIXES` trên `main` mà bản đang chạy vẫn nuốt
+request ở cổng chung ⇒ **bản deploy chưa có code đó: chưa redeploy.** Chẩn đoán trong ROUTINE đúng.
+
+> **Việc cần người làm:** đặt `AI_BOARD_KEY` trên production (`openssl rand -hex 32`) **rồi
+> redeploy nhánh `feat/postgres-migration`**. AI board **không tự làm**: đây là secret ngang mật
+> khẩu admin, và redeploy nhánh production vượt ngưỡng "rủi ro thấp".
+
+Đã kiểm tra xem có đường đọc nào **không cần secret** để đỡ việc cho chủ sở hữu: **không có.**
+`/api/requests` không nằm trong `PUBLIC_PATH_PREFIXES`/`PUBLIC_PATH_EXACT`, và `makeAuthGate` chặn
+mọi path không-public **bất kể method** (kể cả `GET`) ⇒ chỉ `/api/ai-board/inbox` mở được, và nó
+cần **cả** redeploy **lẫn** key. Ghi chú `server/contexts/identity/auth.js:207` ("inbox
+`/api/requests` cũng công khai") **đã lỗi thời** so với hành vi thật của cổng auth — không sửa vì
+`server/**` ngoài phạm vi tự quyết của AI board.
+
+### Thay đổi từng file
+
+| File | Thay đổi |
+|---|---|
+| `ai-board/inbox-status.json` | `ai-board-preflight.mjs` tự ghi: `consecutive_failures` 17 → **18**, `last_checked` → `2026-09-30`. |
+| `public/CHANGELOG-eduverse.md` | Mục này (bản ghi duy nhất của phiên — không có PR). |
+
+### Kiểm thử
+
+**Không sửa file `.js` nào** ⇒ không có gì để `node --check`. Đã chạy lại cả 3 lệnh chứng minh
+của bậc thang dự phòng (số đo ở bảng trên) — không thay đổi nội dung nên **không có "trước → sau"**,
+đúng theo ROUTINE: không chứng minh được giá trị thì không làm.
+
+---
+
 ## 2026-09-30 — Phiên 78 · Dọn nợ tồn: merge nốt nội dung treo 1 tháng, **bỏ hẳn cơ chế nhánh + PR**
 
 **Chế độ:** chủ sở hữu yêu cầu trực tiếp (không phải phiên tự động): *"merge hết toàn bộ những gì
