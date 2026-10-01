@@ -149,15 +149,20 @@ def content_review(state: dict, deps, budget, *, db_path=None, proposal_id: int 
         return None
     labels = ["classifier_error"]
     why = "hết budget, không gọi được bộ soát nội dung"
+    outage = False  # the model could not be reached: nothing was judged, so this is retryable rather than a violation
     if budget.tick():
         prompt = CONTENT_PROMPT.format(content="\n".join(parts)[:MAX_CONTENT_CHARS])
         try:
             body = deps.call_model(deps.models.gate1_model, prompt, gate=4, budget=budget,
                                    db_path=db_path, proposal_id=proposal_id, prompt_name="content_guard.md",
                                    format=intake_guard.labels_format(CONTENT_LABELS))
-            labels, why = intake_guard.parse_labels(body.get("response", ""), CONTENT_LABELS), ""
-        except Exception as e:  # model sập/JSON sai — chuyển người soát, không cho qua im lặng
-            why = f"bộ soát nội dung lỗi: {str(e)[:200]}"
+        except Exception as e:  # model sập/timeout — chuyển người soát (chạy lại được), không cho qua im lặng
+            why, outage = f"bộ soát nội dung lỗi: {str(e)[:200]}", True
+        else:
+            try:
+                labels, why = intake_guard.parse_labels(body.get("response", ""), CONTENT_LABELS), ""
+            except Exception as e:  # trả lời không phải phán quyết hợp lệ — vẫn là chặn nghiêm trọng
+                why = f"bộ soát nội dung lỗi: {str(e)[:200]}"
     # Logprob classifier beside the JSON guard: may only add a "needs a human" block.
     scored = classifier.danger("\n".join(parts), deps, budget, gate=4, db_path=db_path, proposal_id=proposal_id)
     if scored and scored["escalate"]:
@@ -166,8 +171,8 @@ def content_review(state: dict, deps, budget, *, db_path=None, proposal_id: int 
     if labels == ["ok"]:
         return {"blocked": False, "labels": labels, **extra}
     reason = f"content_guard: {', '.join(labels)}" + (f" ({why})" if why else "") + " — cần người soát"
-    return {"blocked": True, "labels": labels, "reason": reason,
-            "failure_class": guard.SEVERITY_CLASS["high"], **extra}
+    failure_class = "transient" if outage and labels == ["classifier_error"] else guard.SEVERITY_CLASS["high"]
+    return {"blocked": True, "labels": labels, "reason": reason, "failure_class": failure_class, **extra}
 
 
 def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path=None,
