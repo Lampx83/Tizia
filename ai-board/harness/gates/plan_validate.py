@@ -158,6 +158,9 @@ def source_evidence(request: dict, plan: dict, state: dict) -> tuple[str | None,
     return sha, files, '\n\n'.join(chunks)[:16000]
 
 
+_LINE_MARKER = re.compile(r'^[ \t]*(?:[\w./-]+:)?L?\d+\|[ ]?', re.M)
+
+
 def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict) -> dict:
     records = validation.get('grounding')
     if not sha or not validation['grounded'] or not isinstance(records, list) or len(records) != len(plan.get('subtasks') or []):
@@ -168,6 +171,9 @@ def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict
             raise ValueError('dẫn chứng không khớp file dự định sửa')
         file = evidence.get('file')
         quote = evidence.get('quote')
+        if isinstance(quote, str):  # REPO DATA shows lines as `path:N| text` / `LN| text`; models copy the marker too
+            quote = _LINE_MARKER.sub('', quote)
+            evidence = {**evidence, 'quote': quote}
         if task['file'] in files and file != task['file']:
             raise ValueError('trích dẫn phải thuộc file hiện có dự định sửa')
         if not isinstance(quote, str) or len(quote.strip()) < 8 or len(quote) > 1200 or quote not in files.get(file, ''):

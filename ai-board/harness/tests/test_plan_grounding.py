@@ -43,6 +43,33 @@ def test_live_plan_needs_verified_source_quote_and_behavior(tmp_path):
     assert plan_validate.run(request, deps_with(FakeModels(plan, validation=forged)), Budget(), state)['reason'] == 'plan_ungrounded'
 
 
+def test_quote_copied_with_the_context_line_prefix_still_counts_as_grounding(tmp_path):
+    subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
+    file = tmp_path / 'public' / 'js' / 'suggestion-fab.js'
+    file.parent.mkdir(parents=True)
+    file.write_text('const a = 1;\n<label>Mô tả chi tiết <span id="sgf-detail-count">0 / 10000</span></label>\n', encoding='utf8')
+    subprocess.run(['git', '-C', str(tmp_path), 'add', '.'], check=True)
+    subprocess.run(['git', '-C', str(tmp_path), '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+                    'commit', '-qm', 'base'], check=True)
+    plan = {'capabilities': [], 'subtasks': [{'file': 'public/js/suggestion-fab.js', 'title': 'Title counter',
+                                              'verify': 'counter shown', 'size': 'small'}]}
+    request = {'subject': 'Bộ đếm ký tự', 'body': 'Thêm bộ đếm', 'grounding_required': True, 'complexity_by_server': True}
+    for prefix in ('public/js/suggestion-fab.js:2| ', 'L2| ', 'public/js/suggestion-fab.js:2|'):  # as REPO DATA shows lines
+        quote = prefix + '<label>Mô tả chi tiết <span id="sgf-detail-count">0 / 10000</span></label>'
+        validation = {'clear': True, 'question': None, 'grounded': True, 'grounding': [
+            {'target': 'public/js/suggestion-fab.js', 'file': 'public/js/suggestion-fab.js', 'quote': quote,
+             'before': 'no counter', 'after': 'counter', 'verify': 'counter shown'}]}
+        state = {'plan': plan, 'checkout_source': str(tmp_path)}
+        out = plan_validate.run(request, deps_with(FakeModels(plan, validation=validation)), Budget(), state)
+        assert not out['blocked'], prefix
+        assert state['grounding']['evidence'][0]['quote'].startswith('<label>')  # stored without the prefix
+    invented = {'clear': True, 'grounded': True, 'grounding': [{
+        'target': 'public/js/suggestion-fab.js', 'file': 'public/js/suggestion-fab.js', 'quote': 'L2| <label>không có thật</label>',
+        'before': 'x', 'after': 'y', 'verify': 'z'}]}
+    assert plan_validate.run(request, deps_with(FakeModels(plan, validation=invented)), Budget(),
+                             {'plan': plan, 'checkout_source': str(tmp_path)})['reason'] == 'plan_ungrounded'
+
+
 def test_located_existing_behavior_cannot_be_replaced_with_a_standalone_page(tmp_path):
     (tmp_path / 'public' / 'js').mkdir(parents=True)
     for name in ('school-explore.js', 'request-thread.js'):
