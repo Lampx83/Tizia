@@ -206,6 +206,19 @@ test('protected plan waits for explicit admin authorization; core plan is human-
   }
 });
 
+test('resubmitting an identical valid plan after a worker restart does not consume an automatic round', () => {
+  const { db, store, ticket, run } = fixture();
+  const first = submit(store, ticket, run, plan());
+  for (const key of ['resume-001', 'resume-002', 'resume-003']) {
+    const again = submit(store, ticket, run, plan(), { idempotencyKey: key });
+    assert.equal(again.status, 'planned');
+    assert.equal(again.plan_hash, first.plan_hash);
+  }
+  const root = db.prepare('SELECT status, phase, auto_rounds FROM ai_tickets WHERE id=?').get(ticket.id);
+  assert.deepEqual({ ...root }, { status: 'planned', phase: 'ticketized', auto_rounds: 1 });
+  db.close();
+});
+
 test('clarification invalidates the old plan and automatic planning stops after two rounds', () => {
   const { db, store, ticket, run } = fixture();
   const first = submit(store, ticket, run, plan());

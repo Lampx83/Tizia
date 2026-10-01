@@ -94,6 +94,30 @@ def _files_with(index: dict, gram: str) -> list[str]:
     return sorted(f for f in candidates if any(f" {gram} " in t for _, t in index["files"][f]["text"]))
 
 
+# Lesson/scenario data repeats everyday words ("ô tiêu đề", "gửi đề nghị") in prose; it is content, not app UI code.
+_CONTENT_DIRS = {"scenarios", "_data", "lessons"}
+
+
+def matching_files(source, sha: str, phrases: list[str], *, limit: int = 2, min_grams: int = 3) -> list[tuple[str, float, list[str]]]:
+    """[(file, điểm, cụm)] — file chứa nhiều cụm người dùng viết nhất, điểm = Σ số từ × IDF của cụm. Cụm nhiều từ phân
+    biệt được file khi từ đơn có mặt ở nửa repo. Cần ≥ min_grams cụm khác nhau; lỗi git → []."""
+    try:
+        commit = code_index.git(source, "rev-parse", "--verify", f"{sha}^{{commit}}").decode().strip()
+    except OSError:
+        return []
+    index = code_index.ui_index(str(source), commit)
+    total = max(len(index["files"]), 1)
+    score: dict[str, float] = {}
+    seen: dict[str, list[str]] = {}
+    for gram in dict.fromkeys(g for g in map(file_context.fold, phrases) if g):
+        holders = _files_with(index, gram)
+        for file in (f for f in holders if not _CONTENT_DIRS.intersection(f.split("/"))):
+            score[file] = score.get(file, 0.0) + (gram.count(" ") + 1) * math.log(1 + total / len(holders))
+            seen.setdefault(file, []).append(gram)
+    ranked = sorted((f for f in score if len(seen[f]) >= min_grams), key=lambda f: (-score[f], f))
+    return [(f, score[f], seen[f][:3]) for f in ranked[:limit]]
+
+
 def _reach(files: dict, pages: list[str]) -> dict[str, int]:
     """{file: số bước import từ trang} theo đồ thị import thật (script src, import, import('…') tĩnh, export … from)."""
     depth = {p: 0 for p in pages if p in files}

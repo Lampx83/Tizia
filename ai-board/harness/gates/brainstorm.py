@@ -131,11 +131,13 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             required = functional.expected_targets({'request_title': request.get('subject'), 'request_detail': request.get('body')})
             if required.intersection(ctx.get('targets') or []) and not required.intersection(task['file'] for task in plan['subtasks']):
                 raise ValueError('Use the existing feature renderer: ' + ', '.join(sorted(required)))
+            if ctx.get('best_match') and ctx['best_match'] not in (task['file'] for task in plan['subtasks']):
+                raise ValueError(f"Sửa file khớp nhiều cụm người dùng viết nhất: {ctx['best_match']}")
         except ValueError as e:
             reason = str(e)
             continue
         return {"gate": 1, "blocked": False, "reason": None, "plan": plan,
                 "skill": ctx["skill"], "context_chars": ctx["chars"], "repo_context": ctx['text'],
-                'source_targets': ctx.get('targets') or []}
+                'source_targets': ctx.get('targets') or [], 'best_match': ctx.get('best_match')}
     return {"gate": 1, "blocked": True, "reason": f"plan không hợp lệ: {reason}", "plan": None,
             "skill": ctx["skill"]}

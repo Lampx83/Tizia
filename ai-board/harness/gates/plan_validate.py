@@ -301,6 +301,8 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                 raise ValueError('plan cần sửa renderer hiện có: ' + ', '.join(sorted(required)))
             if 'LƯU Ý: chữ người dùng nhắc KHÔNG nằm' in (state.get('planning_context') or '') and not targets.intersection(state.get('source_targets') or []):
                 raise ValueError('plan không sửa module đang render nội dung người dùng yêu cầu')
+            if state.get('best_match') and state['best_match'] not in targets:
+                raise ValueError(f"plan không sửa file khớp nhiều cụm người dùng viết nhất: {state['best_match']}")
             state['grounding'] = checked_grounding(validation, plan, sha, files)
         except ValueError as error:
             return {'gate': 2.5, 'blocked': True, 'reason': 'plan_ungrounded', 'outcome': 'plan_ungrounded',

@@ -1422,7 +1422,7 @@ export function createAiBoardStore(db, hooks = {}) {
         : existing.tier === 'protected' && authorized ? 'planned'
           : existing.tier === 'protected' ? 'waiting_authorization' : 'human_owned';
       if (!sameSubmission) {
-        const rounds = root.auto_rounds + 1;
+        const rounds = root.auto_rounds; // resuming an identical valid plan (worker restart) is not a new automatic round
         const budget = root.cumulative_budget + input.budgetUsed;
         if (rounds > 2 || input.budgetUsed > root.budget_limit) { // budget_limit là trần MỖI lượt, không phải cả ticket
           const reason = rounds > 2 ? 'automatic_round_limit' : 'run_budget_exhausted';

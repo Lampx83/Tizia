@@ -16,7 +16,9 @@ def _no_repomap(monkeypatch):
     """repomap.related dựng chỉ mục cả public/ (~20 s/process): mọi test mặc định nhận [] — test của repomap
     tự monkeypatch lại khi cần kiểm tra hành vi có gợi ý."""
     import repomap
+    import tools
     monkeypatch.setattr(repomap, "related", lambda *a, **kw: [])
+    monkeypatch.setattr(tools, "matching_files", lambda *a, **kw: [])  # same index build, same reason
 
 
 @pytest.fixture
