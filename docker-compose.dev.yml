@@ -76,8 +76,14 @@ services:
     logging:
       driver: json-file
       options: { max-size: 10m, max-file: "3" }
+    networks: [default, sandbox-api]
     volumes:
       - sandbox-runner-state:/home/node/.microsandbox
+      - ./ai-board/sandbox-runner/sandbox-policy.dev.yaml:/etc/sandbox/sandbox-policy.yaml:ro
+      - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
+
+networks:
+  sandbox-api: {}
 
 volumes:
   tizia-dev-data:

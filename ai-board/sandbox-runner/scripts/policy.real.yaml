@@ -1,0 +1,10 @@
+version: 1
+vm: { cpus: 1, memory_mib: 1024, disk_mib: 10240, ttl_s: 300, lease_s: 10 }
+concurrency: 1
+guest_image: alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+egress:
+  - { host: registry.npmjs.org, port: 443 }
+guest_env: { CI: "1" }
+archive: { max_bytes: 1048576, max_expanded_bytes: 4194304, max_files: 100 }
+exec: { timeout_s: 5, max_stdout_bytes: 2000, max_stderr_bytes: 2000, workdir: /workspace }
+artifacts: { max_file_bytes: 64, max_total_bytes: 128 }

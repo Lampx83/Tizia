@@ -1,0 +1,11 @@
+# Reviewed deployment policy for the dev runner. Strict schema (src/policy.js); change only via reviewed deploy + restart.
+version: 1
+vm: { cpus: 1, memory_mib: 2048, disk_mib: 10240, ttl_s: 1200, lease_s: 120 }
+concurrency: 1
+guest_image: alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+egress:
+  - { host: registry.npmjs.org, port: 443 }
+guest_env: { CI: "1" }
+archive: { max_bytes: 52428800, max_expanded_bytes: 262144000, max_files: 20000 }
+exec: { timeout_s: 600, max_stdout_bytes: 1048576, max_stderr_bytes: 1048576, workdir: /workspace }
+artifacts: { max_file_bytes: 5242880, max_total_bytes: 26214400 }
