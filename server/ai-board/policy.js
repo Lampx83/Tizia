@@ -30,7 +30,7 @@ export const CAPABILITY_POLICY = Object.freeze({
   'content.write': capability('protected', ['server/contexts/content/', 'public/'], 'Changes the shared content service.'),
   'integration.write': capability('protected', ['server/contexts/integration/'], 'Changes external service integrations.'),
   'core.server': capability('core', ['server/', 'scripts/'], 'Core server or operational code always needs a human.'),
-  // Board tự sửa (self-improve ticket 04): prefix thô cho catalog cổng 4/5.5; file chính xác do isSelfEditable + guard.
+  // Board tự sửa: prefix thô cho catalog cổng 4/5.5; file chính xác do isSelfEditable + guard.
   [SELF_CAPABILITY]: capability('protected',
     ['ai-board/harness/skills/', 'ai-board/harness/prompts/', 'ai-board/harness/retrieval_weights.json'],
     'The board edits its own skills, gate prompts or retrieval weights; an admin approves every plan.', {

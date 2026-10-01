@@ -1,7 +1,7 @@
 """Cổng 3 — plan (cổng 1) → code thật, mỗi subtask 1 lần gọi model riêng, context
 mới hoàn toàn (chỉ subtask đó, không lịch sử các subtask trước — spec
-subagent-driven-development). Routing theo `size` (ticket 10): "small" →
-model nhẹ (GATE3_MODEL_LIGHT), "large" → GATE3_MODEL_HEAVY. Cổng 4 (ticket 12) mới
+subagent-driven-development). Routing theo `size`: "small" →
+model nhẹ (GATE3_MODEL_LIGHT), "large" → GATE3_MODEL_HEAVY. Cổng 4 mới
 lint/kiểm tra 2x ponytail/caveman — cổng này chỉ sinh code + test (TDD) và ghi
 diff thật, không tự chấm.
 """
@@ -177,12 +177,12 @@ def check_output(out: dict, current: str | None, done_reason: str | None) -> dic
 
 
 def check_file_path(subtask_file: str) -> None:
-    """Ticket 21: TRƯỚC khi sinh code, xác nhận subtask.file khớp (hoặc gần
+    """TRƯỚC khi sinh code, xác nhận subtask.file khớp (hoặc gần
     khớp) thứ gì đó thật trong codebase — KHÔNG BAO GIỜ tự thay path, chỉ in
     cảnh báo cho người soát. File thật (mới tạo) CHƯA tồn tại trên đĩa là
     chuyện bình thường (đa số skill AI sinh là file _ai-generated hoàn toàn
     mới) — hàm này chỉ cảnh báo khi repomap tìm ra 1 file thật KHÁC path plan
-    chọn (gợi ý lệch extension/folder — đúng ví dụ ticket 21 nêu), không
+    chọn (gợi ý lệch extension/folder), không
     cảnh báo khi không có file nào đủ gần (trường hợp file mới, không phải typo).
     """
     if (ROOT / subtask_file).exists():

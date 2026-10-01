@@ -1,4 +1,4 @@
-"""Cổng ảnh (ticket 13): selector bị đổi từ diff, so lỗi mới, và 3 diff thật chạy qua Chromium."""
+"""Cổng ảnh: selector bị đổi từ diff, so lỗi mới, và 3 diff thật chạy qua Chromium."""
 import http.server
 import subprocess
 import threading
@@ -75,7 +75,7 @@ CASES = [("ai-board/2026-09-26-ticket-18-3ec392", True), ("ai-board/2026-09-26-t
 
 @pytest.mark.parametrize("branch,blocked", CASES)
 def test_real_ticket_diffs(branch, blocked):
-    """Chấp nhận ticket 13: diff ticket 18/19 bị chặn, diff footer ticket 11 qua. Nhánh chỉ có ở máy dev."""
+    """Chấp nhận: diff lỗi thị giác thật bị chặn, diff footer qua. Nhánh chỉ có ở máy dev."""
     try:
         mb = _git("merge-base", branch, "HEAD").decode().strip()
     except subprocess.CalledProcessError:

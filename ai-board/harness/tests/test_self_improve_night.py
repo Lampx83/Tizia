@@ -1,4 +1,4 @@
-"""Vòng tự cải thiện ban đêm (self-improve ticket 07): đồng hồ giả + server giả + model giả,
+"""Vòng tự cải thiện ban đêm: đồng hồ giả + server giả + model giả,
 không Ollama, không mạng, không cron thật. run_self_improve_night làm 1 BƯỚC/lần gọi (đồng bộ PR, hoặc 1
 lần chẩn đoán) — main() gọi lại mỗi lượt poll khi rảnh việc thật, nên test cũng gọi lặp lại như vậy."""
 from __future__ import annotations
@@ -55,10 +55,10 @@ class FakeNightServer:
         self.self_replies = list(self_replies) if self_replies is not None else None  # None → dựng tự động
         self.calls = []
         self._next_request_id = 900
-        self.frozen_pending = list(frozen_pending or [])  # [{pr_number, sha}], self-improve ticket 08
+        self.frozen_pending = list(frozen_pending or [])  # [{pr_number, sha}]
         self.frozen_tasks = list(frozen_tasks or [])
         self.frozen_reports = []
-        self.watch_pending = list(watch_pending or [])  # [{pr_number, sha, closed_at}], self-improve ticket 09
+        self.watch_pending = list(watch_pending or [])  # [{pr_number, sha, closed_at}]
         self.watch_checked = []
 
     def post(self, path, payload):
@@ -214,7 +214,7 @@ def test_the_window_ending_between_polls_stops_the_night_with_no_extra_calls():
     assert len(server.calls) == calls_before_window_end  # ngoài cửa sổ: không gọi server thêm gì cả
 
 
-# ---- bộ đánh giá đóng băng (ticket 08): 1 self PR vừa merge → đo đúng 1 lần trước khi chẩn đoán tiếp tục ----
+# ---- bộ đánh giá đóng băng: 1 self PR vừa merge → đo đúng 1 lần trước khi chẩn đoán tiếp tục ----
 
 def test_a_merged_self_pr_is_measured_once_before_diagnosis_resumes(monkeypatch):
     import self_eval
@@ -255,7 +255,7 @@ def test_no_pending_frozen_measurement_falls_straight_through_to_diagnosis():
     assert calls_to(server, "/frozen-benchmark/report") == []
 
 
-# ---- theo dõi production sau merge + tự revert (ticket 09): 1 self PR đã merge có cửa sổ "sau" đã trôi qua,
+# ---- theo dõi production sau merge + tự revert: 1 self PR đã merge có cửa sổ "sau" đã trôi qua,
 # chưa kết luận → server tự tính (không cần model/GPU), worker chỉ báo đúng pr_number cần kiểm, trước chẩn đoán ----
 
 def test_a_pending_post_merge_watch_is_checked_once_before_diagnosis_resumes():

@@ -1,8 +1,8 @@
 // ============================================================
-// Task eval từ production (self-improve ticket 02)
+// Task eval từ production
 // ============================================================
 // Lần hỏng (verdict blocked, "Thử cách khác", admin hoàn tác, PR đóng không merge) → 1 task ứng viên / lượt;
-// PR merged → 1 task win đã có nhãn = file của PR (ticket 03, worker hỏi GitHub rồi báo);
+// PR merged → 1 task win đã có nhãn = file của PR (worker hỏi GitHub rồi báo);
 // admin gắn nhãn (file mong đợi, chuỗi phải có / không được có); worker lấy phần học /
 // phần kiểm tra chia theo thời gian. Không lưu tên hay mã người gửi.
 // Retire lúc đọc: quá retire_days, hoặc mọi file mong đợi không còn trong cây làm việc.
@@ -40,7 +40,7 @@ function insertTask(db, run, verdict, { source = 'miss', trigger, gate = null, f
 /** Ghi lần hỏng của run thành task ứng viên. Lặp lại / đã có (kể cả đã xoá) → bỏ qua. Lỗi môi trường không tính. */
 export function recordMiss(db, runId, trigger, now = Date.now()) {
   const run = db.prepare(RUN).get(Number(runId));
-  if (!run || run.type === 'self') return; // lượt board tự sửa: cổng eval của self tự chấm (ticket 05), không phải lần hỏng production
+  if (!run || run.type === 'self') return; // lượt board tự sửa: cổng eval của self tự chấm, không phải lần hỏng production
   const verdict = parse(run.evidence_json, {}).verdict ?? {};
   if (verdict.failure_class === 'transient') return; // hạ tầng hỏng, không phải lỗi của board
   const undo = trigger === 'undo';
@@ -73,7 +73,7 @@ function retire(db, now) {
   }
 }
 
-// ── Bộ đánh giá đóng băng (self-improve ticket 08): chụp lúc bật vòng lần đầu (frozen_at, self-improve.js) +
+// ── Bộ đánh giá đóng băng: chụp lúc bật vòng lần đầu (frozen_at, self-improve.js) +
 // mọi task gắn nhãn trong frozen_window_days ngày sau đó. Task đóng băng không bao giờ vào evalTaskSplit (hard
 // exclusion). Gọi lúc đọc (như retire): tất định, không cần cron; đã đóng băng thì không bao giờ bỏ cờ lại. ──
 function freeze(db, now) {
@@ -84,7 +84,7 @@ function freeze(db, now) {
     .run(deadline);
 }
 
-/** Worker (self-improve ticket 08): task đóng băng đang labelled — dùng để đo lại sau mỗi lần merge self,
+/** Worker: task đóng băng đang labelled — dùng để đo lại sau mỗi lần merge self,
  * không bao giờ đưa cho người đề xuất hay dùng để chọn biến thể. */
 export function frozenTasks(db, now = Date.now()) {
   freeze(db, now);
@@ -138,7 +138,7 @@ export function deleteEvalTask(db, id, now = Date.now()) {
 }
 
 /** Worker: task đã gắn nhãn chia theo thời gian — cũ nhất (split) để học, mới nhất để kiểm tra. Task đóng băng
- * (ticket 08) không bao giờ lọt vào đây — hard exclusion, kể cả khi đã labelled. */
+ * không bao giờ lọt vào đây — hard exclusion, kể cả khi đã labelled. */
 export function evalTaskSplit(db, now = Date.now()) {
   freeze(db, now);
   retire(db, now);
@@ -150,7 +150,7 @@ export function evalTaskSplit(db, now = Date.now()) {
     learning: labelled.slice(0, cut), test: labelled.slice(cut) };
 }
 
-// ── Trạng thái PR (ticket 03): worker hỏi GitHub các PR server còn coi là mở, báo lại khi đã đóng ──
+// ── Trạng thái PR: worker hỏi GitHub các PR server còn coi là mở, báo lại khi đã đóng ──
 const PR_NUMBER = "json_extract(r.evidence_json, '$.pull_request.number')";
 const PR_STATES = new Set(['merged', 'closed']);
 

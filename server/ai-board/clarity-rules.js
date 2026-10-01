@@ -1,4 +1,4 @@
-// Luật cứng độ rõ (ticket 08): quyết định có cần làm rõ yêu cầu mà không cần model.
+// Luật cứng độ rõ: quyết định có cần làm rõ yêu cầu mà không cần model.
 // Danh sách từ ở clarity-rules.json; bộ phân loại logprobs chỉ bổ sung khi ở mode 'active'.
 import fs from 'node:fs';
 

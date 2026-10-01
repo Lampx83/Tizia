@@ -1,6 +1,6 @@
-"""Chẩn đoán → yêu cầu self (self-improve ticket 06). Lấy phần học của task eval, gom lần hỏng thành cụm
+"""Chẩn đoán → yêu cầu self. Lấy phần học của task eval, gom lần hỏng thành cụm
 (cổng, lớp lỗi, skill) bằng code, chọn 1 cụm, model 14B viết chẩn đoán theo khuôn, tạo tối đa 1 yêu cầu self.
-Phần kiểm tra bỏ ngay khi nhận: không bao giờ vào prompt. Vòng đêm (ticket 07) gọi diagnose_to_self_request().
+Phần kiểm tra bỏ ngay khi nhận: không bao giờ vào prompt. Vòng đêm gọi diagnose_to_self_request().
 """
 from __future__ import annotations
 

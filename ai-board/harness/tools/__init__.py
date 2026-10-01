@@ -227,7 +227,7 @@ EXEMPLARS = file_context.WEIGHTS["exemplars"]
 
 
 def exemplar(source, sha: str, *, words: list[str], budget: int = 2500) -> str:
-    """Trang mẫu cho chức năng mới (ticket 08): xếp trang public/*.html theo tổng IDF các từ (đã bỏ dấu) của yêu cầu
+    """Trang mẫu cho chức năng mới: xếp trang public/*.html theo tổng IDF các từ (đã bỏ dấu) của yêu cầu
     có trong chữ hiển thị của trang — truy xuất trên chỉ mục tự sinh, không danh sách tay. Trả dàn ý + đầu trang
     (head/theme tới </style>) của trang gần nhất để làm khung."""
     commit = code_index.git(source, "rev-parse", "--verify", f"{sha}^{{commit}}").decode().strip()

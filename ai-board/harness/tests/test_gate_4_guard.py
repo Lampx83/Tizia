@@ -1,4 +1,4 @@
-"""Ticket 05 AC2: mandatory secret/PII/injection/content/test-removal checks on the real
+"""AC2: mandatory secret/PII/injection/content/test-removal checks on the real
 base..HEAD diff, plus changed-path rules. Pure text in, findings out — no subprocess."""
 from dataclasses import replace
 
@@ -84,7 +84,7 @@ SELF_AREA = ["ai-board/harness/skills/edit-html-text/SKILL.md", "ai-board/harnes
 
 
 def test_only_a_self_request_may_edit_skills_gate_prompts_and_retrieval_weights():
-    """Self-improve ticket 04: same diff passes for type self, stays protected_path for every other type."""
+    """Same diff passes for type self, stays protected_path for every other type."""
     for path in SELF_AREA:
         text = diff(path, added=["match: đổi tên, sửa chữ"], removed=["match: sửa chữ"])
         assert guard.scan(text, request_type="self")["findings"] == [], path
@@ -134,7 +134,7 @@ def test_money_files_need_a_human_but_lesson_prices_do_not():
 
 
 def test_only_the_feature_module_script_line_is_allowed_in_public():
-    """Feature-folders ticket 08: one exact form of <script>, local module under js/features/<slug>/."""
+    """One exact form of <script>, local module under js/features/<slug>/."""
     ok = '<script type="module" src="./js/features/tro-doan-tu/index.js"></script>'
     assert ("injection", "critical") not in kinds(diff("public/tro-doan-tu.html", added=[ok], new=True))
     for bad in ['<script type="module" src="./js/features/x/index.js">alert(1)</script>',

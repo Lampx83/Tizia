@@ -1,4 +1,4 @@
-"""Cổng 2.5 (plan_validate.py, ticket 22) — soát plan (Q1) + phân quyền độ
+"""Cổng 2.5 (plan_validate.py) — soát plan (Q1) + phân quyền độ
 phức tạp (Q2) trước khi cổng 3 tiêu ngân sách."""
 import sqlite3
 import time

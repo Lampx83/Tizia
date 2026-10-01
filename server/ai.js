@@ -6,7 +6,7 @@
 //   POST /api/ai/patient-turn      — 1 lượt đối thoại với AI patient
 //   POST /api/ai/evaluate-roleplay — chấm toàn bộ phiên role-play
 //
-// Cấu hình env — KHÔNG có fallback cứng trong code (trước đây có, đã bỏ: một
+// Cấu hình env — KHÔNG có fallback cứng trong code (một
 // endpoint dev-tunnel + shared secret nằm thẳng trong source là rò rỉ, và mỗi
 // nơi đọc biến này lại tự chép một bản default riêng, chưa kể phải sync tay
 // với ai-board/harness/models.py). Nguồn sự thật DUY NHẤT là `.env` — thiếu

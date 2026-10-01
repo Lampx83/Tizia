@@ -1,4 +1,4 @@
--- Cờ phát hành chức năng (feature-folders ticket 10): ai thấy trang /<slug>.html của folder.
+-- Cờ phát hành chức năng: ai thấy trang /<slug>.html của folder.
 -- owner_only = chỉ người tạo; school = cả trường của folder; off = chỉ admin. Admin luôn thấy.
 CREATE TABLE ai_feature_releases (
   slug           TEXT PRIMARY KEY,

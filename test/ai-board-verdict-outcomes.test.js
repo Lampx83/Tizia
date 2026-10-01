@@ -1,4 +1,4 @@
-// Ticket 05: blocked-verdict consequences (repair child, critical alert, budget
+// Blocked-verdict consequences (repair child, critical alert, budget
 // exhaustion + reasoned admin extension) and the kept candidate branch.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -352,7 +352,7 @@ test('gate 4 records which mandatory checks ran', () => {
   assert.deepEqual(verdict.gates[1].checks, checks);
 });
 
-// Ticket 03 (e2e/06): one PR into dev per root, recorded under the lease, safe state for the requester.
+// (e2e/06): one PR into dev per root, recorded under the lease, safe state for the requester.
 const PR = { number: 42, url: 'https://github.com/Lampx83/Tizia/pull/42', branch: candidate.branch,
   base: 'dev', base_sha: SHA_A, head_sha: SHA_B };
 
@@ -397,7 +397,7 @@ test('a blocked verdict never gets a PR', () => {
   assert.throws(() => openPr(store, ticket), /passing verdict/);
 });
 
-// Feature-folders ticket 01: branch · commit · PR for tracing, admin APIs only.
+// Branch · commit · PR for tracing, admin APIs only.
 test('the trace ref (branch, commit, PR) reaches admin views but never the requester', () => {
   const { store, submit, ticket } = plannedRoot();
   const [before] = store.listAdminQueue();

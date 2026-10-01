@@ -148,7 +148,7 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
         state["request_type"] = request_type  # 'self': cổng 4 nới vùng tự sửa + tính lại file khoá
     if eval_tasks is not None:
         state["eval_tasks"] = eval_tasks  # self: phần kiểm tra, chỉ cổng 5 (eval) đọc
-    state.update(candidate_opts or {})  # folder (ticket 05): branch_name + branch_restore cho candidate.create
+    state.update(candidate_opts or {})  # folder: branch_name + branch_restore cho candidate.create
     if memory_path:
         state["memory_path"] = str(memory_path)
     if repair_reason:
@@ -401,7 +401,7 @@ class WorkerClient:
 
 
 def sync_pull_requests(client: WorkerClient, github) -> dict:
-    """Ask GitHub about the PRs the server still thinks are open; report merged/closed ones (self-improve ticket 03).
+    """Ask GitHub about the PRs the server still thinks are open; report merged/closed ones.
     github None (no token) → skip with a log line. One PR's GitHub/HTTP error → listed in errors, retried next sync."""
     if github is None:
         print(json.dumps({"pr_sync": "skipped", "reason": "AI_BOARD_GITHUB_TOKEN not set"}))
@@ -436,7 +436,7 @@ def _local_night(now_ms: int, window: dict) -> tuple[str, bool]:
 
 
 def run_self_improve_night(client: WorkerClient, deps, *, clock: Callable[[], int], github=None) -> dict:
-    """MỘT BƯỚC của vòng tự cải thiện đêm (self-improve ticket 07): đồng bộ PR, hoặc 1 lần chẩn đoán. Gọi lại
+    """MỘT BƯỚC của vòng tự cải thiện đêm: đồng bộ PR, hoặc 1 lần chẩn đoán. Gọi lại
     mỗi lượt poll khi worker rảnh việc thật (idle/gpu_paused) — chính cách gọi này là cách nhường việc thật:
     lượt poll sau luôn thử claim thật trước (yield_to_chat hiện có) rồi mới gọi lại đây, nên tối đa 1 bước
     trôi qua trước khi có thể nhường; không cần seam nào khác để "dừng giữa chừng".
@@ -461,7 +461,7 @@ def run_self_improve_night(client: WorkerClient, deps, *, clock: Callable[[], in
     if state.get("pr_sync") is None:
         report({"pr_sync": sync_pull_requests(client, github)})
         return {"status": "progress", "step": "pr_sync"}
-    # Bộ đánh giá đóng băng (ticket 08): 1 self PR vừa merge (đã báo ở bước pr_sync, có thể của đêm trước) chưa
+    # Bộ đánh giá đóng băng: 1 self PR vừa merge (đã báo ở bước pr_sync, có thể của đêm trước) chưa
     # đo → đo đúng 1 lần trong cùng ngân sách đêm, trước khi tiếp tục chẩn đoán. Không chọn biến thể, chỉ ghi lại.
     pending = client.post("/api/ai-board/worker/self-improve/frozen-benchmark/pending", {})
     if pending.get("pending"):
@@ -470,7 +470,7 @@ def run_self_improve_night(client: WorkerClient, deps, *, clock: Callable[[], in
                                         checkout_repo=REPO_ROOT)
         client.post("/api/ai-board/worker/self-improve/frozen-benchmark/report", {"pr_number": item["pr_number"], **measured})
         return {"status": "progress", "step": "frozen_measured", "pr_number": item["pr_number"]}
-    # Theo dõi production sau merge + tự revert (ticket 09): 1 self PR đã merge có cửa sổ "sau" vừa trôi qua
+    # Theo dõi production sau merge + tự revert: 1 self PR đã merge có cửa sổ "sau" vừa trôi qua
     # chưa kết luận → server tự tính (không cần model/GPU), có thể tự tạo yêu cầu self revert. Trước chẩn đoán.
     watch_pending = client.post("/api/ai-board/worker/self-improve/post-merge-watch/pending", {})
     if watch_pending.get("pending"):
@@ -720,7 +720,7 @@ class HttpWorker:
 
     def _run_leased(self, ticket_id: int, lease: dict, prefix: str, snapshot: dict, run: dict,
                     trigger: str, folder_src: dict | None = None) -> dict:
-        # Folder (ticket 05): planner + cổng đọc từ đỉnh nhánh chu kỳ; candidate commit nối tiếp chính nhánh đó.
+        # Folder: planner + cổng đọc từ đỉnh nhánh chu kỳ; candidate commit nối tiếp chính nhánh đó.
         plan_kwargs = {"source": folder_src["path"]} if folder_src else {}
         brief = (snapshot.get("folder") or {}).get("brief") or {}
         run_kwargs = {"source": folder_src["path"], "candidate_opts": {
@@ -860,12 +860,12 @@ class HarnessPlanner:
             "id": f"req-{request['id']}", "db_id": request["id"],
             "from": request.get("student"), "domain": request.get("domain"),
             "type": request.get("type"), "subject": request.get("title"),
-            # Spec đã làm rõ với người gửi (ticket 06) thay mô tả gốc; không có thì như cũ.
+            # Spec đã làm rõ với người gửi thay mô tả gốc; không có thì như cũ.
             "body": request.get("clarified_spec") or request.get("detail") or request.get("title"),
             "thread": snapshot.get("thread") or [], "votes": request.get("votes", 1),
             "complexity_by_server": True,
             "grounding_required": request.get('type') != 'self',
-            # Folder (ticket 06): L1 brief, L3 yêu cầu gần nhất, L2 file sở hữu — server tính, có trần.
+            # Folder: L1 brief, L3 yêu cầu gần nhất, L2 file sở hữu — server tính, có trần.
             **({"folder_brief": brief["text"], "folder_recent": brief["recent"], "owned_files": brief["owned_files"]}
                if (brief := (snapshot.get("folder") or {}).get("brief")) else {}),
         }
@@ -912,7 +912,7 @@ class HarnessPlanner:
         self.last_skill = None
         request = self._request(snapshot)
         if request.get("folder_brief"):
-            # Lách guard qua nhiều lượt nhỏ (ticket 06): soát lexicon trên cả bản mô tả gộp của folder.
+            # Lách guard qua nhiều lượt nhỏ: soát lexicon trên cả bản mô tả gộp của folder.
             from gates import guard
             hits = {label: guard.LEXICON["labels"][label]["intake"]
                     for label in guard.topic_hits(f"{request['folder_brief']}\n{request.get('folder_recent') or ''}")}
@@ -925,7 +925,7 @@ class HarnessPlanner:
         budget.max_model_calls = min(budget.max_model_calls, 5)
         ticket = snapshot.get("ticket") or {}
         budget.max_units = int(ticket.get("budget_limit") or DEFAULT_BUDGET_LIMIT)  # trần mỗi lượt, không trừ các lượt trước
-        source = source or self.source  # folder (ticket 05): đỉnh nhánh chu kỳ thay cho checkout chung
+        source = source or self.source  # folder: đỉnh nhánh chu kỳ thay cho checkout chung
         state = {"checkout_source": str(source)} if source else {}
         for gate in PLAN_GATES:
             result = self.run_gate(gate, request, self.deps, budget, state)
@@ -1000,7 +1000,7 @@ def main(argv: list[str] | None = None) -> int:
     if (args.mode != "off" or args.sync_prs or args.diagnose) and len(key) < 24:
         parser.error("AI_BOARD_WORKER_KEY must be at least 24 characters")
     _, Deps, _ = _load_harness()
-    if args.diagnose:  # self-improve ticket 06: chạy tay; vòng đêm (ticket 07) gọi cùng hàm
+    if args.diagnose:  # chạy tay; vòng đêm gọi cùng hàm
         import diagnose
         import meter
         deps = _real_deps(Deps, meter.Tracer(diagnose.TRACES_PATH), None)
@@ -1045,7 +1045,7 @@ def main(argv: list[str] | None = None) -> int:
                   if github_token else None)
         worker.candidates = candidate.Candidates(repo, github=github)
         worker.open_prs = github is not None  # no token: verdicts stop at ready_for_pr, as before
-    # Vòng tự cải thiện đêm (ticket 07): chỉ worker có thể execute mới đề xuất được biến thể. Việc thật
+    # Vòng tự cải thiện đêm: chỉ worker có thể execute mới đề xuất được biến thể. Việc thật
     # luôn đi trước — chỉ thử đêm khi lượt claim vừa rồi rảnh (idle/gpu_paused), never khi đang giữ ticket.
     night_deps = None
     if args.execute:

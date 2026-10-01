@@ -1141,7 +1141,7 @@ if (!window.isSecureContext && location.hostname !== 'localhost' && location.hos
         ? ' <span class="sc-pill locked">🔐 Cần đăng nhập</span>' : '';
       // Mỗi tài khoản 1 trường: badge "🎓 Đang học" cho trường mình + "👀 Tham
       // quan" cho mọi trường khác (vẫn vào xem được nhưng không tương tác —
-      // Phase 4 sẽ disable nút submit/play khi vào). Admin bỏ qua (NULL).
+      // nút submit/play bị disable khi vào). Admin bỏ qua (NULL).
       let enrollTag = '';
       if (me && !isGuest && me.enrolled_domain && !isComingSoon) {
         if (me.enrolled_domain === d.id) {

@@ -1,4 +1,4 @@
--- Vòng tự cải thiện ban đêm (self-improve ticket 07): công tắc admin + 1 dòng mỗi đêm.
+-- Vòng tự cải thiện ban đêm: công tắc admin + 1 dòng mỗi đêm.
 -- Công tắc: 1 dòng duy nhất; chưa có dòng = contract limits.self_improve.enabled. enabled_at: mốc đếm tự dừng
 -- (bật lại = đếm lại từ đầu).
 CREATE TABLE ai_self_improve_state (

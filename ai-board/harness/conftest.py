@@ -67,14 +67,14 @@ class FakeModels:
 
     def __init__(self, plan, codegen=None, validation=None):
         self.plan = plan
-        # Response mặc định cho cổng 3 (ticket 11) — generate() tự chọn theo
+        # Response mặc định cho cổng 3 — generate() tự chọn theo
         # TÊN MODEL được gọi (gate1_model → plan, gate3_model*/… → codegen),
         # nên mọi fixture cũ gọi deps_with(plan_with(...)) vẫn tự đi hết tới
         # cổng 7 mà không cần biết gì về cổng 3.
         self.codegen = codegen or {
             "code": "// fixture code\n", "test_file": "test/fixture.test.js", "test": "import test from 'node:test';\n// fixture test\n",
         }
-        # Response mặc định cho cổng 2.5 (ticket 22) — clear=True nghĩa là "plan
+        # Response mặc định cho cổng 2.5 — clear=True nghĩa là "plan
         # ổn, đi tiếp", nên fixture cũ (không biết gì về cổng 2.5) tự qua trót
         # lọt tới cổng 7 mà không cần đổi gì. Cổng 2.5 dùng CHUNG gate1_model
         # với cổng 1 (đúng thiết kế thật — vai validator, không phải model

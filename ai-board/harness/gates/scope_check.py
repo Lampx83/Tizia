@@ -40,7 +40,7 @@ def check(plan: dict, names: dict[str, frozenset[str]] | None = None) -> dict:
     core, raw ws/sse, hay tên lạ model bịa ra, cùng một kết cục.
 
     Chỉ soi `capabilities` model TỰ khai — plan bỏ trống key này thì qua. Chốt
-    thật là cổng 4 (ticket 12) lint import trong code sinh ra; cổng này là
+    thật là cổng 4 lint import trong code sinh ra; cổng này là
     lớp rẻ chặn sớm, không phải lớp duy nhất."""
     names = names or load_capability_names()
     for cap in plan.get("capabilities") or []:

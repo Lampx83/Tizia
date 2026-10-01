@@ -83,7 +83,7 @@ def test_loop_blocks_ws_plan_at_gate_2(request_item, db_file):
 
 def test_loop_surface_plan_reaches_gate_7_with_plan_attached(request_item, db_file):
     # 1 capability, không phải ["features", "quiz"] -- 2 capability riêng biệt
-    # giờ là 1 trong 3 tín hiệu "phức tạp" của cổng 2.5 (ticket 22), requester
+    # giờ là 1 trong 3 tín hiệu "phức tạp" của cổng 2.5, requester
     # thường (không admin/grant) sẽ bị complexity_gated -- đúng hành vi MỚI,
     # không phải regression. Test này chỉ muốn khẳng định 1 surface cap khác
     # 'features' cũng qua được cổng 2 bình thường.

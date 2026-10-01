@@ -13,7 +13,7 @@ const MIGRATIONS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '
 export const CONTRACT = JSON.parse(fs.readFileSync(new URL('./contract.json', import.meta.url), 'utf8'));
 const KEY = new RegExp(CONTRACT.idempotency_key_pattern);
 const REQUEST_TYPES = new Set(['game', 'theory', 'lab', 'skill', 'other', 'feature']);
-// Yêu cầu board tự sửa (self-improve ticket 04): chỉ createSelfRequest tạo, chủ là người dùng hệ thống này.
+// Yêu cầu board tự sửa: chỉ createSelfRequest tạo, chủ là người dùng hệ thống này.
 const SELF_USER = 'ai-board';
 const SELF_TAG = 'self_target:';
 const WORKER_MODES = new Set(['off', 'shadow', 'active']);
@@ -198,7 +198,7 @@ const smallMap = (m, keep) => Object.fromEntries(Object.entries(m && typeof m ==
 const isScore = (v) => typeof v === 'number' && Number.isFinite(v);
 const isHash = (v) => typeof v === 'string';
 
-/** Kết quả cổng eval của yêu cầu self (self-improve ticket 05) — whitelist + trần; accepted phải khớp thắng > thua. */
+/** Kết quả cổng eval của yêu cầu self — whitelist + trần; accepted phải khớp thắng > thua. */
 function cleanEval(e) {
   if (!e || typeof e !== 'object') return null;
   const out = {
@@ -286,7 +286,7 @@ function validatePrePrVerdict(value, selfRequest = false) {
   if (value.outcome === 'blocked' && !last.blocked) throw new WorkerContractError('blocked verdict requires a blocked gate');
   const budgetUsed = Number(value.budget_used ?? 0);
   if (!Number.isInteger(budgetUsed) || budgetUsed < 0) throw new WorkerContractError('invalid verdict budget');
-  // Workers predating ticket 05 omit failure_class; their blocks are treated as ordinary.
+  // Workers that omit failure_class: their blocks are treated as ordinary.
   const failureClass = value.outcome === 'blocked' ? (value.failure_class ?? 'ordinary') : (value.failure_class ?? null);
   if (value.outcome === 'blocked' ? !FAILURE_CLASSES.has(failureClass) || (failureClass === 'eval' && !selfRequest)
     : failureClass !== null) {
@@ -304,7 +304,7 @@ function validatePrePrVerdict(value, selfRequest = false) {
     budget_used: budgetUsed, failure_class: failureClass,
     repairs: repairs.map((r) => ({ gate: Number(r.gate), reason: String(r.reason || '').slice(0, 1000) })),
     candidate, gates,
-    // Tuỳ chọn (self-improve ticket 02): sha gốc + skill cổng 1 của lượt, để task eval từ lần hỏng chạy lại được.
+    // Tuỳ chọn: sha gốc + skill cổng 1 của lượt, để task eval từ lần hỏng chạy lại được.
     ...(SHA.test(String(value.base_sha)) ? { base_sha: value.base_sha } : {}),
     ...(/^[a-z0-9-]{1,80}$/.test(String(value.skill)) ? { skill: value.skill } : {}) };
 }
@@ -479,7 +479,7 @@ export function createAiBoardStore(db, hooks = {}) {
     });
     const requestId = Number(info.lastInsertRowid);
     hooks.afterRequestInserted?.({ requestId, input });
-    // clarifying: chưa vào hàng đợi worker cho tới khi người gửi xác nhận spec (ticket 06).
+    // clarifying: chưa vào hàng đợi worker cho tới khi người gửi xác nhận spec.
     const root = insertRoot.run({
       request_id: requestId, title: input.title, description: input.detail || null, now,
       phase: input.clarifying ? 'clarifying' : 'intake',
@@ -498,7 +498,7 @@ export function createAiBoardStore(db, hooks = {}) {
     return { request_id: requestId, root_ticket_id: rootTicketId, folder_id: folderId, created: true };
   });
 
-  // ── Folder chức năng (feature-folders ticket 04) ──
+  // ── Folder chức năng ──
   const OPEN_FOLDER_STATES = "('draft', 'active', 'awaiting_merge')";
 
   /** Folder của yêu cầu mới: gắn vào folder của chính người gửi, hoặc loại 'feature' thì tạo folder mới. */
@@ -598,7 +598,7 @@ export function createAiBoardStore(db, hooks = {}) {
     if (!folder) throw new WorkerContractError('folder not found', 404, 'folder_not_found');
     db.prepare(`UPDATE ai_feature_folders SET approved_by=?, approved_at=?, updated_at=?,
       state=CASE WHEN state='draft' THEN 'active' ELSE state END WHERE id=?`).run(Number(adminUserId), now, now, folder.id);
-    registerRelease(db, folder, adminUserId, now); // ticket 10: cờ phát hành, mặc định chỉ người tạo
+    registerRelease(db, folder, adminUserId, now); // cờ phát hành, mặc định chỉ người tạo
     const waiting = db.prepare(`
       SELECT t.id, t.plan_hash FROM ai_tickets t JOIN requests q ON q.id = t.source_request_id
       WHERE q.folder_id = ? AND t.parent_id IS NULL AND t.status = 'waiting_authorization'
@@ -612,7 +612,7 @@ export function createAiBoardStore(db, hooks = {}) {
     return approveFolderTransaction(folderId, adminUserId, Date.now());
   }
 
-  /** Bản mô tả chức năng (ticket 06) tính lúc đọc từ DB, không lưu riêng nên không lệch thực tế:
+  /** Bản mô tả chức năng tính lúc đọc từ DB, không lưu riêng nên không lệch thực tế:
       L1 = mục đích/luồng (2 câu trả lời đầu của lượt làm rõ đầu tiên), Đã làm (lượt đạt), Đang yêu cầu (còn mở),
       file sở hữu (file trong candidate đạt); L3 = 2 yêu cầu gần nhất nguyên văn. Trần: contract.json limits.context.
       ponytail: vượt trần thì bỏ mục cũ nhất (tất định); gộp bằng model nhỏ khi folder dài thật sự. */
@@ -645,7 +645,7 @@ export function createAiBoardStore(db, hooks = {}) {
         }
       } else if (!['cancelled', 'done'].includes(row.status)) requested.push(clip(row.title, 120));
     }
-    // Trang = slug folder: cờ phát hành (ticket 10) mở/ẩn đúng /<slug>.html, module ở js/features/<slug>/.
+    // Trang = slug folder: cờ phát hành mở/ẩn đúng /<slug>.html, module ở js/features/<slug>/.
     const lines = [`Chức năng: ${clip(folder.title, 120)} · trang: public/${folder.slug}.html · module: public/js/features/${folder.slug}/index.js`];
     if (answers[0]) lines.push(`Mục đích: ${clip(answers[0], 300)}`);
     if (answers[1]) lines.push(`Luồng người dùng: ${clip(answers[1], 300)}`);
@@ -668,7 +668,7 @@ export function createAiBoardStore(db, hooks = {}) {
     return { text: text.slice(0, cap.brief_chars), recent, owned_files: owned };
   }
 
-  // ── Vòng đời folder (ticket 11): draft → active → awaiting_merge → released → archived; mở lại → chu kỳ mới ──
+  // ── Vòng đời folder: draft → active → awaiting_merge → released → archived; mở lại → chu kỳ mới ──
   /** Đóng chu kỳ + lưu trữ; nhánh chưa merge ghi vào event để dọn trên GitHub.
       ponytail: xoá nhánh remote do người/cron làm theo event folder_archived; worker chưa có job dọn. */
   function archiveFolderRow(folder, reason, actorId, now) {
@@ -970,7 +970,7 @@ export function createAiBoardStore(db, hooks = {}) {
           WHERE ar.id = (SELECT MAX(id) FROM ai_runs WHERE ticket_id = t.id AND trigger <> 'shadow_precheck')
             AND ar.worker_id <> ? AND aw.last_seen_at > ?))
         -- Trần GPU-s/người/24h: lượt mới chờ; lease đang chạy hết hạn vẫn được cứu (không cắt việc đang làm).
-        -- Việc tự sửa của board không tính trần học viên (ngân sách đêm riêng, ticket 07).
+        -- Việc tự sửa của board không tính trần học viên (ngân sách đêm riêng).
         AND (t.status <> 'queued' OR r.type = 'self' OR ${OWNER_GPU_S} < ?)
         ORDER BY ${FAIR_ORDER} LIMIT 1
     `).get(now, intent, now, intent, now, mode, workerId, now - leaseMs, now - DAY_MS, LIMITS.gpu_s_per_user_day.loose);
@@ -1020,7 +1020,7 @@ export function createAiBoardStore(db, hooks = {}) {
       pr_number: pr?.number ?? null, pr_url: pr?.url ?? null };
   }
 
-  // ── Làm rõ yêu cầu với người gửi (ticket 06) ──
+  // ── Làm rõ yêu cầu với người gửi ──
   // Yêu cầu của chính người gửi đang ở phase clarifying + các lượt hỏi đáp. Không phải của mình → 404 (không lộ tồn tại).
   function getClarification(requestId, ownerUserId) {
     const request = db.prepare(`
@@ -1170,7 +1170,7 @@ export function createAiBoardStore(db, hooks = {}) {
       idempotencyKey, now: input.now ?? Date.now() });
   }
 
-  // Onboarding (ticket 05) cho giọng văn của worker: không kèm tên hay id người gửi.
+  // Onboarding cho giọng văn của worker: không kèm tên hay id người gửi.
   function requesterProfile(userId) {
     const row = db.prepare('SELECT role, tech_level, domain_expertise FROM ai_board_profile WHERE user_id=?').get(userId);
     return row ? { role: row.role, tech_level: row.tech_level, domain_expertise: parseJson(row.domain_expertise) ?? [] } : null;
@@ -1247,11 +1247,11 @@ export function createAiBoardStore(db, hooks = {}) {
       ticket: { ...ticket, lease_token: undefined }, request: { ...request, attachments: parseAttachments(request.attachments) },
       thread, capability_policy: CAPABILITY_CATALOG, pull_request: latestPullRequest(ticket.id),
       requester_profile: requesterProfile(request.owner_user_id),
-      // Spec chưa đủ rõ (ticket 06): cổng 2.5 / tier xử lý kỹ hơn.
+      // Spec chưa đủ rõ: cổng 2.5 / tier xử lý kỹ hơn.
       clarification_incomplete: !!db.prepare("SELECT 1 FROM ai_ticket_tags WHERE ticket_id=? AND tag='needs_clarification'")
         .get(ticket.id),
       ...(ticket.phase === 'rolling_back' ? { rollback_candidate: latestCandidate(ticket.id) } : {}),
-      // Folder (ticket 05): worker dựng code từ đỉnh nhánh chu kỳ này thay cho dev; brief = tầng L1/L3 (ticket 06).
+      // Folder: worker dựng code từ đỉnh nhánh chu kỳ này thay cho dev; brief = tầng L1/L3.
       folder: withBrief(db.prepare(`SELECT f.id, f.slug, f.title, f.branch, f.head_sha, f.pr_number, f.pr_url, f.cycle
         FROM requests q JOIN ai_feature_folders f ON f.id = q.folder_id WHERE q.id = ?`).get(ticket.source_request_id)),
     };
@@ -1487,7 +1487,7 @@ export function createAiBoardStore(db, hooks = {}) {
       return { plan_hash: checked.planHash, tier: checked.tier, status: 'waiting_admin', reason, children: [] };
     }
 
-    // Folder chức năng chưa được admin duyệt: plan mặt bằng cũng phải chờ (ticket 04). Đã duyệt → tier như thường.
+    // Folder chức năng chưa được admin duyệt: plan mặt bằng cũng phải chờ. Đã duyệt → tier như thường.
     const folder = db.prepare(`SELECT f.approved_at FROM requests q JOIN ai_feature_folders f ON f.id = q.folder_id
       WHERE q.id = ?`).get(root.source_request_id);
     const folderGate = !!folder && !folder.approved_at && checked.tier === 'surface';
@@ -1641,7 +1641,7 @@ export function createAiBoardStore(db, hooks = {}) {
     const evidence = JSON.stringify({ ...runEvidence, verdict });
     db.prepare(`UPDATE ai_runs SET outcome=?, gate=?, cumulative_budget=?, evidence_json=?, failure_reason=?, updated_at=? WHERE id=?`)
       .run(verdict.outcome, verdict.gate_reached, cumulativeBudget, evidence, verdict.reason, input.now, run.id);
-    // Folder chức năng (ticket 05): lượt đạt → đỉnh nhánh chu kỳ tiến lên commit vừa kiểm; lượt sau nối tiếp từ đó.
+    // Folder chức năng: lượt đạt → đỉnh nhánh chu kỳ tiến lên commit vừa kiểm; lượt sau nối tiếp từ đó.
     if (verdict.candidate) {
       db.prepare(`UPDATE ai_feature_folders SET branch=?, head_sha=?, last_activity_at=?, updated_at=?
         WHERE id=(SELECT folder_id FROM requests WHERE id=?)`)

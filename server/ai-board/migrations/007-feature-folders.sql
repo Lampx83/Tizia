@@ -1,4 +1,4 @@
--- Folder chức năng (feature-folders ticket 04): gom các yêu cầu của 1 chức năng mới.
+-- Folder chức năng: gom các yêu cầu của 1 chức năng mới.
 -- Duyệt 1 lần cho cả folder; chưa duyệt thì mọi plan trong folder chờ admin.
 CREATE TABLE ai_feature_folders (
   id                INTEGER PRIMARY KEY AUTOINCREMENT,

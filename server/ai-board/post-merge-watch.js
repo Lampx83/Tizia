@@ -1,5 +1,5 @@
 // ============================================================
-// Theo dõi production sau merge + tự revert (self-improve ticket 09)
+// Theo dõi production sau merge + tự revert
 // ============================================================
 // Sau khi 1 thay đổi self merge (ai_pull_requests.state='merged', request gốc type='self'), so tỉ lệ
 // ready_for_pr và tỉ lệ merge trên production (request type <> 'self') limits.self_improve.post_merge_watch.days
@@ -7,8 +7,8 @@
 // ghi 'waiting' (không kết luận), kiểm lại đêm sau — before/after đều mở, dữ liệu cũ có thể được ghi bổ sung.
 // Tụt quá max_drop_pts điểm ở ready_for_pr hoặc merge → tạo đúng 1 yêu cầu self revert (tier protected, đi
 // pipeline thường, không tự merge); idempotency_key theo pr_number nên báo lại không tạo trùng
-// (createRequestWithRoot đã dedupe theo (ownerUserId, idempotency_key) — ticket 04 có sẵn, không cần tự canh ở đây).
-// Đã kết luận (status != 'waiting') thì không kiểm lại — giống ai_frozen_benchmark_scores (ticket 08).
+// (createRequestWithRoot đã dedupe theo (ownerUserId, idempotency_key) — có sẵn, không cần tự canh ở đây).
+// Đã kết luận (status != 'waiting') thì không kiểm lại — giống ai_frozen_benchmark_scores.
 // ============================================================
 import { LIMITS, WorkerContractError } from './store.js';
 

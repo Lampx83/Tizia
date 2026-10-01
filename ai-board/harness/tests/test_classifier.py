@@ -1,4 +1,4 @@
-"""Ticket 04, harness side: same logprob classifier as server/ai-board/classifier.js, next to the JSON
+""", harness side: same logprob classifier as server/ai-board/classifier.js, next to the JSON
 guardrails of gate 1 (intake_guard) and gate 4 (content_review). It may only raise severity."""
 import json
 import math
@@ -105,7 +105,7 @@ def test_shared_config_is_the_server_file():
 
 
 def test_shadow_danger_is_logged_but_never_escalates_and_off_skips_the_call(monkeypatch):
-    """Ticket 08: per-task mode from the shared config."""
+    """Per-task mode from the shared config."""
     sure = [["F", math.log(0.9)], ["A", math.log(0.1)]]
     monkeypatch.setitem(classifier.CLASSIFIER["tasks"]["danger"], "mode", "shadow")
     out = intake_guard.run("Thêm bài", "một bài lịch sử", deps_with(Classifying(sure)), Budget())

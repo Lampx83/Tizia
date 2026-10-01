@@ -1,4 +1,4 @@
-"""Cổng 4 (static_check.py, ticket 12) — node --check + lint import +
+"""Cổng 4 (static_check.py) — node --check + lint import +
 minimalism guard (vượt ước lượng/file ngoài plan -> flag, không block)."""
 from pathlib import Path
 
@@ -141,7 +141,7 @@ def test_missing_plan_or_diffs_blocks():
     assert static_check.run({"plan": _plan([])})["blocked"] is True
 
 
-# ── code-review round: dynamic import cũng bị chặn (không chỉ static import) ─
+# ── dynamic import cũng bị chặn (không chỉ static import) ─
 
 def test_dynamic_import_of_db_js_fails_gate_4(tmp_path):
     plan = _plan([{"title": "t", "file": "server/contexts/_ai-generated/x/index.js", "verify": "v", "size": "small"}])
@@ -155,7 +155,7 @@ def test_dynamic_import_of_db_js_fails_gate_4(tmp_path):
     assert "db.js" in out["reason"]
 
 
-# ── code-review round: file NGOÀI plan vẫn phải qua lint/node-check thật ────
+# ── file NGOÀI plan vẫn phải qua lint/node-check thật ────
 
 def test_file_outside_plan_still_gets_import_lint_not_just_flagged(tmp_path):
     """Trước fix: file ngoài plan chỉ bị needs_careful_review, KHÔNG bao giờ
@@ -185,7 +185,7 @@ def test_file_outside_plan_with_clean_code_only_flags_not_blocks(tmp_path):
     assert any("không có trong plan" in i for i in out["issues"])
 
 
-# ── code-review round: size đo ĐÚNG file implementation, không tính lẫn test ─
+# ── size đo ĐÚNG file implementation, không tính lẫn test ─
 
 def test_oversize_only_counts_the_implementation_files_own_diff_section():
     plan = _plan([{"title": "t", "file": "a.js", "verify": "v", "size": "small"}])  # ước lượng 30, limit=60
@@ -229,7 +229,7 @@ def test_oversize_still_flags_when_the_implementation_file_itself_is_big():
     assert any("vượt" in i for i in out["issues"])
 
 
-# ── code-review round: backslash path (Windows-style) vẫn bị chuẩn hoá ──────
+# ── backslash path (Windows-style) vẫn bị chuẩn hoá ──────
 
 def test_backslash_path_is_normalized_before_import_lint(tmp_path):
     plan = _plan([{"title": "t", "file": "server/contexts/_ai-generated/x/index.js", "verify": "v", "size": "small"}])

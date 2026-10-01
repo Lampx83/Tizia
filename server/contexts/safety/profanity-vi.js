@@ -8,7 +8,7 @@
 //     có thuần whitespace-tokenize → dùng substring + một số heuristic).
 //   - Trả về reason để admin xem log biết lý do block.
 //   - KHÔNG cố che teen-slang biến tấu (đ.m, dm, dmm, …) — false positive cao
-//     lại lọt sạch một số biến tấu mới. Phase 1 thay bằng model classify
+//     lại lọt sạch một số biến tấu mới. Thay bằng model classify
 //     (vd Anthropic Haiku) chạy off-path nếu cần.
 
 const PROFANITY_LIST = [

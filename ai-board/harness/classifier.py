@@ -1,4 +1,4 @@
-"""Logprob classifier (ticket 04), harness side of server/ai-board/classifier.js: same labels, prompt and
+"""Logprob classifier, harness side of server/ai-board/classifier.js: same labels, prompt and
 thresholds (server/ai-board/classifier-calibration.json). One token from AI_BOARD_CLASSIFIER_MODEL, softmax over
 the task's letters only. It runs next to the JSON guardrails and may only raise severity."""
 from __future__ import annotations
@@ -12,7 +12,7 @@ CONFIG_PATH = Path(__file__).resolve().parents[2] / "server" / "ai-board" / "cla
 CLASSIFIER = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
 MAX_TEXT = 2000
 _LETTER = re.compile(r"^([A-Z])[.):]?$")
-# keep_alive: model nhỏ dùng chung với chat làm rõ, giữ nạp sẵn (feature-folders ticket 03).
+# keep_alive: model nhỏ dùng chung với chat làm rõ, giữ nạp sẵn.
 LOGPROB_FIELDS = {"think": False, "logprobs": True, "top_logprobs": 20, "keep_alive": CLASSIFIER["keep_alive"]}
 
 
@@ -59,7 +59,7 @@ def decide_clarity(probs: dict, t: dict | None = None) -> dict:
 
 
 def decide_danger(probs: dict, t: dict | None = None) -> dict:
-    """escalate → human review, never a block on its own. logged = unsafe labels worth keeping (ticket 01)."""
+    """escalate → human review, never a block on its own. logged = unsafe labels worth keeping."""
     t = t or CLASSIFIER["thresholds"]["danger"]
     unsafe = [(key, p) for key, p in probs.items() if key != "safe"]
     return {"escalate": any(p >= t["escalate_min"] for _, p in unsafe),
@@ -84,7 +84,7 @@ def classify(task: str, text: str, deps, budget, *, gate: float, db_path=None, p
 
 
 def task_mode(task: str) -> str:
-    """active acts, shadow only logs, off skips the call (ticket 08)."""
+    """active acts, shadow only logs, off skips the call."""
     return CLASSIFIER["tasks"][task].get("mode", "active")
 
 

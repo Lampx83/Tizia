@@ -325,7 +325,7 @@ export async function getCurriculumWeek(grade, subjectCode, weekNo, opts = {}) {
 }
 
 /**
- * Helper: thử Phase 4 trước, fallback Phase 1-3 cũ nếu ScoreUp chưa upgrade.
+ * Helper: thử curriculum API trước, fallback random quiz nếu ScoreUp chưa upgrade.
  * Caller pattern khuyến nghị cho Tizia FE/loader.
  */
 export async function getQuizForWeek({ grade, subjectCode, week, limit = 10, fallbackSubjectId }) {
@@ -333,7 +333,7 @@ export async function getQuizForWeek({ grade, subjectCode, week, limit = 10, fal
     return await getCurriculumWeek(grade, subjectCode, week, { limit });
   } catch (e) {
     if (e.status === 404 && fallbackSubjectId) {
-      // ScoreUp chưa có Phase 4 → fallback random
+      // ScoreUp chưa có curriculum API → fallback random
       return getWeeklyQuiz({ subjectId: fallbackSubjectId, week, limit });
     }
     throw e;

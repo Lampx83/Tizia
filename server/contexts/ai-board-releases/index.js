@@ -1,5 +1,5 @@
 // ============================================================
-// AI Board — cờ phát hành chức năng (feature-folders ticket 10)
+// AI Board — cờ phát hành chức năng
 // ============================================================
 // Folder đã duyệt → release (mặc định owner_only). Chặn trang /<slug>.html khi người xem
 // không được thấy; trả danh sách tile cho school.html; admin đổi status ở tab "Chức năng".

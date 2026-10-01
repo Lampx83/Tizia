@@ -1,4 +1,4 @@
-// PosTerminal — port từ Pharmacy-AI/src/components/pos/PosTerminal.tsx (Phase 1).
+// PosTerminal — port từ Pharmacy-AI/src/components/pos/PosTerminal.tsx.
 // MVP fidelity: cart, customer, payment, totals, invoice no, Rx warning, action log.
 import { ALL_DRUGS, getDrug, PHARMACY_INFO, VAT_RATE } from './catalog.js?v=ph0682';
 

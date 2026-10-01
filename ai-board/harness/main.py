@@ -1,7 +1,6 @@
 """Ratchet loop: đọc snapshot inbox, đi 7 cổng, ghi kết quả vào skill_proposals.
 
-Cổng 1 (plan) + 2 (scope-check) thật từ ticket 10; cổng 3 (implement) thật từ
-ticket 11; 4-7 còn là stub, vào ở ticket 12-13. Chỉ chạy nhánh DRY_RUN=1 —
+Cổng 1-5 (+2.5, 5.5) thật; cổng 6-7 còn là stub cho qua. Chỉ chạy nhánh DRY_RUN=1 —
 không git thật (repo Tizia), không GitHub, không Telegram ở bất kỳ đâu trong
 file này (Ollama thì gọi thật ở cổng 1 + 3; cổng 3 có git cục bộ riêng vào 1
 repo scratch tạm, xem gates/implement.py; nhánh candidate do candidate.py lo).
@@ -34,7 +33,7 @@ import self_eval                   # noqa: E402
 ROOT = Path(__file__).resolve().parents[2]
 ENV_FILE = ROOT / ".env"
 
-# 7 cổng + cổng 2.5 (plan-validate/complexity, ticket 22) + cổng 5.5
+# 7 cổng + cổng 2.5 (plan-validate/complexity) + cổng 5.5
 # (risk-triage). Thứ tự này là hợp đồng: gate_reached ghi lại đúng phần tử
 # cuối cùng chạy xong, resume bắt đầu từ đó chứ không từ cổng 1.
 GATES: tuple[float, ...] = (1, 2, 2.5, 3, 4, 5, 5.5, 6, 7)
@@ -61,14 +60,14 @@ CREATE TABLE IF NOT EXISTS skill_proposals (
 
 
 class Unavailable:
-    """Chỗ giữ chỗ cho Telegram. Chạm vào là nổ — ticket 04 không được gọi."""
+    """Chỗ giữ chỗ cho Telegram. Chạm vào là nổ — không được gọi."""
 
     def __init__(self, label: str):
         self._label = label
 
     def __getattr__(self, name: str):
         raise NotImplementedError(
-            f"{self._label}.{name}() chưa có ở ticket 04 (DRY_RUN=1, không side effect ngoài)"
+            f"{self._label}.{name}() chưa có (DRY_RUN=1, không side effect ngoài)"
         )
 
 
@@ -223,7 +222,7 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
              *, db_path=None, proposal_id: int | None = None) -> dict:
     """Điểm thay duy nhất khi 1 cổng có logic thật. `state` mang plan/artifact
     giữa các cổng trong cùng 1 lượt (cổng 1 ghi plan, cổng 2 đọc). db_path/
-    proposal_id (ticket 23) chỉ để gate_trace ghi trace. Báo deps.progress trước khi chạy."""
+    proposal_id chỉ để gate_trace ghi trace. Báo deps.progress trước khi chạy."""
     deps.progress(number)
     fn = _GATE_FNS.get(number)
     if fn is None:
@@ -233,7 +232,7 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
 
 def create_proposal(db_path, *, request: dict) -> int:
     """INSERT khung skill_proposals TRƯỚC khi chạy cổng nào (gate_reached=0,
-    outcome=NULL) — ticket 23: gate_trace cần id thật này ngay từ cổng 1, và
+    outcome=NULL) — gate_trace cần id thật này ngay từ cổng 1, và
     spec.md's cơ chế resume (gate_reached đọc lại giữa các lần chạy) cũng cần
     dòng tồn tại trong lúc đang chạy, không chỉ sau khi xong. update_proposal()
     ghi lại kết quả cuối vào ĐÚNG dòng này (UPDATE, không INSERT thêm)."""
@@ -271,7 +270,7 @@ def record_proposal(db_path, *, request: dict, gate_reached: float, outcome: str
     """Tiện ích tạo+cập nhật 1 dòng skill_proposals trong 1 lần gọi — dùng để
     seed lịch sử trong test (xem tests/test_prescreen.py). run_once() tự dùng
     create_proposal()/update_proposal() tách rời vì cần proposal_id TRƯỚC khi
-    cổng nào chạy (ticket 23: gate_trace cần id đó ngay từ cổng 1)."""
+    cổng nào chạy (gate_trace cần id đó ngay từ cổng 1)."""
     proposal_id = create_proposal(db_path, request=request)
     update_proposal(db_path, proposal_id, gate_reached=gate_reached, outcome=outcome, budget=budget)
     return proposal_id
@@ -293,9 +292,8 @@ def run_once(request: dict, *, db_path, deps: Deps, budget: Budget | None = None
 
     proposal_id = create_proposal(db_path, request=request)
 
-    # try/finally (code-review round): create_proposal() ghi dòng NGAY từ đầu
-    # (ticket 23), khác bản cũ ghi 1 lần DUY NHẤT ở cuối sau khi mọi cổng đã
-    # chạy xong — nếu 1 cổng raise (lỗi Ollama, bug gate...) mà không có
+    # try/finally: create_proposal() ghi dòng NGAY từ đầu (không chỉ 1 lần ở cuối
+    # sau khi mọi cổng đã chạy xong) — nếu 1 cổng raise (lỗi Ollama, bug gate...) mà không có
     # finally ở đây, dòng vừa tạo kẹt lại mãi mãi với gate_reached=0/
     # outcome=NULL, không ai cập nhật. finally đảm bảo LUÔN ghi lại trạng thái
     # cuối cùng — kể cả khi lỗi — rồi mới để exception tiếp tục bay lên
@@ -308,7 +306,7 @@ def run_once(request: dict, *, db_path, deps: Deps, budget: Budget | None = None
             result = run_gate(gate, request, deps, budget, state, db_path=db_path, proposal_id=proposal_id)
             reached = gate
             if result.get("blocked"):
-                # Cổng 2.5 (ticket 22) tự đặt outcome cụ thể (needs_clarification/
+                # Cổng 2.5 tự đặt outcome cụ thể (needs_clarification/
                 # complexity_gated) thay vì generic blocked_gate_N — mọi cổng khác
                 # không set key này nên hành vi cũ giữ nguyên.
                 outcome = result.get("outcome") or f"blocked_gate_{gate}"
@@ -362,7 +360,7 @@ def main(argv: list[str] | None = None, deps: Deps | None = None) -> int:
         print(f"[harness] hộp thư trống: {inbox_path}")
         return 0
 
-    # Ticket 17: gom trùng + chấm ưu tiên TRƯỚC cổng 1. PRESCREEN=0 → bỏ qua,
+    # Gom trùng + chấm ưu tiên TRƯỚC cổng 1. PRESCREEN=0 → bỏ qua,
     # loop chạy y như walking skeleton (không embed, không ghi ai_decisions).
     if os.environ.get("PRESCREEN", "1") != "0":
         items = prescreen.run(items, models=deps.models, db_path=db_path)

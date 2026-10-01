@@ -1,5 +1,5 @@
 /**
- * Seam JS cho ticket 08 (capability catalog) — tái dùng đúng seam registry.js,
+ * Seam JS cho capability catalog — tái dùng đúng seam registry.js,
  * không seam mới. Fixture plugin, không import context thật (tránh kéo db.js).
  */
 import test from 'node:test';

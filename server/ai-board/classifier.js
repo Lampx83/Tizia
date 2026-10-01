@@ -1,4 +1,4 @@
-// Logprob classifier (ticket 04): one token from AI_BOARD_CLASSIFIER_MODEL, softmax over the task's letters
+// Logprob classifier: one token from AI_BOARD_CLASSIFIER_MODEL, softmax over the task's letters
 // only. Same labels, prompt and thresholds as ai-board/harness/classifier.py (classifier-calibration.json).
 // Clarity decides whether the FAB clarifies the request first; danger may only ADD human review, never block —
 // the deterministic intake-guard stays the only thing that returns 422.
@@ -45,7 +45,7 @@ export function decideClarity(probs, t = CLASSIFIER.thresholds.clarity) {
   return { needed: false, mode: null };
 }
 
-/** escalate → human review (never a block). logged = every unsafe label worth keeping for ticket 01. */
+/** escalate → human review (never a block). logged = every unsafe label worth keeping for calibration. */
 export function decideDanger(probs, t = CLASSIFIER.thresholds.danger) {
   const unsafe = Object.entries(probs).filter(([key]) => key !== 'safe');
   const labels = unsafe.filter(([, p]) => p >= t.escalate_min).map(([key]) => key);
@@ -72,7 +72,7 @@ export async function classify(task, text, { env = process.env, fetchImpl = fetc
   return { model, probs: labelProbs(await res.json(), task) };
 }
 
-/** Per-task mode (ticket 08): active acts, shadow is logged only (shadow: true), off skips the call. */
+/** Per-task mode: active acts, shadow is logged only (shadow: true), off skips the call. */
 export const taskMode = (task, modes) => modes?.[task] ?? CLASSIFIER.tasks[task].mode ?? 'active';
 
 /** Both tasks for a new request. A side is null when off or its call failed (old behaviour for that side). */
@@ -90,7 +90,7 @@ export async function classifyRequest(title, detail, { modes, ...options } = {})
   };
 }
 
-/** Trace for the admin view and ticket 01: model, probabilities, decisions. Never throws. */
+/** Trace for the admin view and calibration: model, probabilities, decisions. Never throws. */
 export function recordClassification(db, rootTicketId, result) {
   if (!db || !rootTicketId || !result) return;
   try {

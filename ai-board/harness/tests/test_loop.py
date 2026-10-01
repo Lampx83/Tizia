@@ -50,7 +50,7 @@ def test_dry_run_never_calls_telegram(inbox_file, db_file, fake_deps):
     run_once(item, db_path=db_file, deps=fake_deps)
 
     assert fake_deps.notify.mock_calls == []
-    # Cổng 1 (1 lần) + cổng 2.5 (1 lần, ticket 22) + cổng 3 (1 lần/subtask,
+    # Cổng 1 (1 lần) + cổng 2.5 (1 lần) + cổng 3 (1 lần/subtask,
     # plan_with có 2) — tất cả qua fake, không mạng.
     assert len(fake_deps.models.calls) == 4 + len(fake_deps.models.plan["subtasks"])
 
@@ -88,9 +88,8 @@ def test_gate_sequence_includes_plan_validate_2_5_and_risk_triage_5_5():
 
 
 def test_gate_exception_still_finalizes_the_skill_proposals_row(inbox_file, db_file, fake_deps, monkeypatch):
-    """code-review round: trước fix, create_proposal() ghi khung ngay đầu
-    run_once() nhưng KHÔNG có finally — 1 cổng raise giữa chừng để lại dòng
-    gate_reached=0/outcome=NULL vĩnh viễn, không ai cập nhật. Giờ phải luôn
+    """create_proposal() ghi khung ngay đầu run_once(); 1 cổng raise giữa chừng
+    không được để lại dòng gate_reached=0/outcome=NULL vĩnh viễn. Phải luôn
     ghi lại trạng thái cuối (outcome bắt đầu bằng 'error_gate_'), và exception
     vẫn phải bay lên (không nuốt lỗi)."""
     (item,) = load_inbox(inbox_file)

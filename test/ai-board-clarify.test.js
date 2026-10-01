@@ -1,4 +1,4 @@
-// Ticket 06: a vague request is clarified in the FAB (streamed questions, at most 5), summarised, confirmed by
+// A vague request is clarified in the FAB (streamed questions, at most 5), summarised, confirmed by
 // the requester, then queued for the worker with clarified_spec. The model only asks and never claims it did work.
 import test from 'node:test';
 import assert from 'node:assert/strict';

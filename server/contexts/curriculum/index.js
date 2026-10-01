@@ -1,9 +1,8 @@
 // ============================================================
 // Curriculum context — content học (quiz + lý thuyết) lưu trong DB.
 // ============================================================
-// Trước đây toàn bộ scenario (đề quiz + bài lý thuyết tuần) hardcode trong
-// public/js/scenarios/lop*/*.js và FE import trực tiếp. Context này đưa content
-// vào bảng curriculum_content để:
+// Scenario (đề quiz + bài lý thuyết tuần) gốc nằm trong public/js/scenarios/lop*/*.js.
+// Context này đưa content vào bảng curriculum_content để:
 //   - Sửa nóng 1 câu sai mà KHÔNG cần deploy lại code.
 //   - GV/admin CRUD content qua API/UI.
 //   - Query xuyên hệ thống (vd "mọi câu về hàm số bậc 2").
@@ -13,7 +12,7 @@
 //   - 'admin' : GV/admin sửa qua UI. Re-seed KHÔNG ghi đè (giữ bản sửa tay).
 //   - 'ai'    : sinh thêm bởi AI lúc chạy (tương lai).
 //
-// FE đọc qua /api/curriculum/* (Phase 3) nhưng vẫn fallback import JS nếu API
+// FE đọc qua /api/curriculum/* nhưng vẫn fallback import JS nếu API
 // lỗi/chưa seed → app không bao giờ vỡ.
 // ============================================================
 

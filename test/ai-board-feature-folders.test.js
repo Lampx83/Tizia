@@ -1,4 +1,4 @@
-// Feature-folders ticket 04: a "new feature" request opens a folder; follow-ups go into it; the admin approves
+// A "new feature" request opens a folder; follow-ups go into it; the admin approves
 // the folder once, after which its surface plans run without waiting.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -116,7 +116,7 @@ test('each feature turn names exactly its own topic', async () => {
   assert.match(p2, /CHỈ hỏi về: người dùng làm gì theo từng bước/);
 });
 
-// Feature-folders ticket 05: one branch + one draft PR per folder cycle.
+// One branch + one draft PR per folder cycle.
 test('a folder cycle keeps its branch head and PR; done then released starts a new cycle', () => {
   const { db, store, submit } = fixture();
   const first = submit(1, { type: 'feature' });
@@ -155,7 +155,7 @@ test('a folder cycle keeps its branch head and PR; done then released starts a n
   assert.throws(() => store.markFolderReleased(first.folder_id), (e) => e.code === 'nothing_to_release');
 });
 
-// Feature-folders ticket 06: the brief is derived from the DB at read time and capped.
+// The brief is derived from the DB at read time and capped.
 test('folder brief: purpose, flow, done, requested, owned files and recent requests, within caps', () => {
   const { db, store, submit } = fixture();
   const first = submit(1, { type: 'feature', title: 'Trò đoán từ khoá' });
@@ -193,7 +193,7 @@ test('folder brief: purpose, flow, done, requested, owned files and recent reque
   assert.match(big.text, /việc cũ hơn đã làm/);
 });
 
-// Feature-folders ticket 11: lifecycle.
+// Lifecycle.
 test('an idle folder is archived after the configured days; the owner can reopen it into a new cycle', () => {
   const { db, store, submit } = fixture();
   const { folder_id: id } = submit(1, { type: 'feature' });

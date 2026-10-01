@@ -1,5 +1,5 @@
 /**
- * Seam JS cho ticket 19 — tái dùng đúng seam node:test của ws-safety.test.js,
+ * Seam JS cho ws-heartbeat — tái dùng đúng seam node:test của ws-safety.test.js,
  * không seam mới. Fake `ws` object (chỉ cần .readyState).
  */
 import test from 'node:test';

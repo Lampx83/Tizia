@@ -1,4 +1,4 @@
-"""Cổng 3 (implement.py, ticket 11) — routing theo size, parse codegen, diff thật."""
+"""Cổng 3 (implement.py) — routing theo size, parse codegen, diff thật."""
 import shutil
 import subprocess
 from pathlib import Path
@@ -190,7 +190,7 @@ def test_run_spends_budget_once_per_subtask(tmp_path):
     assert budget.model_calls == len(plan["subtasks"])
 
 
-# ── code-review round: model không được ghi ra NGOÀI scratch repo ──────────
+# ── model không được ghi ra NGOÀI scratch repo ──────────
 
 def test_absolute_path_from_model_is_rejected_not_written(tmp_path):
     codegen = {"code": "evil", "test_file": "/etc/passwd", "test": "import test from 'node:test';\ny"}

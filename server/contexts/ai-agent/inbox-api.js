@@ -8,7 +8,7 @@
 //   GET /api/requests        → 401 (và chỉ trả yêu cầu của CHÍNH tài khoản đó)
 //   GET /api/admin/requests  → 401 + requireAdmin
 // Hệ quả: các phiên hàng ngày từ 2026-07 tới nay không đọc được yêu cầu thật của
-// sinh viên (xem public/CHANGELOG-eduverse.md, phiên 45/58/62). Route này là
+// sinh viên. Route này là
 // đường đọc còn thiếu.
 //
 // BẢO MẬT

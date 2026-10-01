@@ -1,4 +1,4 @@
-// Ticket 04: logprob classifier (clarity + danger). Softmax only over the task's letters, model may only
+// Logprob classifier (clarity + danger). Softmax only over the task's letters, model may only
 // raise severity, missing logprobs falls back to the old behaviour (no extra block, hard rules unchanged).
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -158,7 +158,7 @@ test('the model adds human review but never blocks; hard rules still block; outa
     assert.ok(tags.includes('guard:human_review') && tags.includes('guard:model_politics_religion'));
     const blocked = await app.post('classifier-req-004', { title: 'x', detail: 'dit me cai trang' });
     assert.equal(blocked.status, 422);
-    // Clear by the hard rules too (ticket 08): long enough, names a concrete object.
+    // Clear by the hard rules too: long enough, names a concrete object.
     const outage = await app.post('classifier-req-005', { title: 'Đổi màu nút Gửi', detail: 'trang giới thiệu, nút xanh hơn' });
     assert.equal(outage.status, 200);
     assert.equal(outage.json.clarify.needed, false);
@@ -167,7 +167,7 @@ test('the model adds human review but never blocks; hard rules still block; outa
   }
 });
 
-test('ticket 08: hard rules clarify without a model; shadow model results are logged but never act', async () => {
+test('hard rules clarify without a model; shadow model results are logged but never act', async () => {
   const db = fixtureDb();
   const shadowVague = { probs: { clear: 0.1, vague: 0.9 }, ...decideClarity({ clear: 0.1, vague: 0.9, too_broad: 0 }), shadow: true };
   const shadowRisky = { probs: { safe: 0.1, sexual: 0.9 }, ...decideDanger({ safe: 0.1, sexual: 0.9 }), shadow: true };
@@ -183,7 +183,7 @@ test('ticket 08: hard rules clarify without a model; shadow model results are lo
     const events = db.prepare("SELECT internal_detail FROM ai_events WHERE event_type='request_classified' ORDER BY id")
       .all().map((r) => JSON.parse(r.internal_detail));
     assert.deepEqual(events[0].clarify.source, ['rules']);
-    assert.equal(events[1].clarity.shadow, true); // kept for ticket 01
+    assert.equal(events[1].clarity.shadow, true); // kept for calibration
     assert.deepEqual(events[1].clarify.source, []);
   } finally {
     await app.close();

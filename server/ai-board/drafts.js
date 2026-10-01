@@ -1,5 +1,5 @@
 // ============================================================
-// Bản nháp sau mỗi lượt (feature-folders ticket 09)
+// Bản nháp sau mỗi lượt
 // ============================================================
 // Worker đăng ảnh chụp cổng 5 (trước/sau × 375/1280 px) → lưu như đính kèm FAB
 // (/uploads/requests/<ngày>/…png) + 1 tin AI trong thread yêu cầu. Verdict xong

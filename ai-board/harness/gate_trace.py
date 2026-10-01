@@ -1,4 +1,4 @@
-"""gate_trace (ticket 23) — 1 dòng mỗi lần harness gọi Ollama THẬT ở bất kỳ
+"""gate_trace — 1 dòng mỗi lần harness gọi Ollama THẬT ở bất kỳ
 cổng nào (1, 2.5, 3, validator). Nguồn thật của schema là server/db.js; DDL ở
 đây chỉ để test chạy trên DB tạm, đúng pattern SKILL_PROPOSALS_DDL/
 AI_DECISIONS_DDL đã có (main.py/prescreen.py) — 2 bản DDL là giá phải trả cho

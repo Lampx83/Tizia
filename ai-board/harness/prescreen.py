@@ -1,7 +1,7 @@
-"""Pre-screen trước cổng 1 (ticket 17): gom request trùng bằng embedding
+"""Pre-screen trước cổng 1: gom request trùng bằng embedding
 (bge-m3) theo domain, rồi chấm ưu tiên 0-100 từ 4 đầu vào đo được để harness
 làm hàng đợi giá trị nhất trước. Không phải cổng — không chặn gì, chỉ định
-hình cái cổng 1 nhìn thấy. PRESCREEN=0 tắt hẳn, loop chạy y như ticket 04.
+hình cái cổng 1 nhìn thấy. PRESCREEN=0 tắt hẳn, loop chạy như không có prescreen.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from dbconn import harness_db
 
 # cosine ≥ DUP → "cùng một yêu cầu"; RELATED ≤ cos < DUP → liên quan nhưng khác
-# (đầu vào `dependencies`). Ngưỡng cho bge-m3; chỉnh khi có gold set (ticket 16).
+# (đầu vào `dependencies`). Ngưỡng cho bge-m3; chỉnh khi có gold set.
 DUP_THRESHOLD = 0.85
 RELATED_THRESHOLD = 0.6
 RECENT_DAYS = 7
@@ -115,7 +115,7 @@ def score(cands: list[dict], vecs: list, k: int, *, db_path, now: datetime) -> t
     cutoff = (now - timedelta(days=RECENT_DAYS)).timestamp()
     recent = sum(1 for m in cand["members"] if _ts(m.get("created_at")) >= cutoff)
     # "dependencies" — không có field depends-on ở đâu cả; proxy = request cùng
-    # domain liên quan nhưng chưa tới mức trùng. Xem lại khi có gold set (ticket 16).
+    # domain liên quan nhưng chưa tới mức trùng. Xem lại khi có gold set.
     related = sum(
         1 for j, o in enumerate(cands)
         if j != k and o.get("domain") == cand.get("domain")

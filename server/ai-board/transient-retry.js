@@ -1,5 +1,5 @@
 // ============================================================
-// Tự chạy lại yêu cầu bị chặn do lỗi hạ tầng thoáng qua (self-improve ticket độc lập, không riêng self)
+// Tự chạy lại yêu cầu bị chặn do lỗi hạ tầng thoáng qua (áp mọi loại yêu cầu, không riêng self)
 // ============================================================
 // Cổng eval (self) và cổng 5 (mọi loại) đều có thể trả verdict blocked, failure_class='transient' sau khi
 // backoff gọi model (main.py MODEL_RETRY_BACKOFF_S) đã hết. submitPrePrVerdictTransaction (store.js) đọc công

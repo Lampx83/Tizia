@@ -1,4 +1,4 @@
-// Làm rõ yêu cầu mơ hồ (ticket 06): model hỏi tối đa 2 câu, stream từng token, rồi tóm tắt thành spec.
+// Làm rõ yêu cầu mơ hồ: model hỏi tối đa 2 câu, stream từng token, rồi tóm tắt thành spec.
 // Model chỉ được hỏi: không công cụ, lời người dùng nằm trong khối dữ liệu, đầu ra qua guard trước khi lưu.
 import fs from 'node:fs';
 import { checkIntake } from '../../ai-board/intake-guard.js';
@@ -20,7 +20,7 @@ const TECH_STYLE = {
 const MODE_STYLE = {
   ask: 'Yêu cầu còn mơ hồ: hỏi điều quan trọng nhất còn thiếu.',
   split: 'Yêu cầu quá rộng: đề nghị tách thành các yêu cầu nhỏ, hỏi người dùng muốn làm phần nào trước.',
-  // Chức năng mới (feature-folders ticket 04): chủ đề của lượt được ghép tất định ở questionPrompt.
+  // Chức năng mới: chủ đề của lượt được ghép tất định ở questionPrompt.
   feature: 'Đây là ý tưởng chức năng mới.',
 };
 // Mỗi lượt đúng 1 chủ đề (model nhỏ không tự theo thứ tự nếu chỉ liệt kê cả 3).

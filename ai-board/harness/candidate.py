@@ -143,7 +143,7 @@ class FolderConflict(RuntimeError):
 
 
 def folder_branch(folder_slug: str, cycle: int = 1) -> str:
-    """Nhánh chu kỳ folder (ticket 05): ai-board/<date>-feature-<slug>[-c<n>], cùng tên cho mọi lượt của chu kỳ."""
+    """Nhánh chu kỳ folder: ai-board/<date>-feature-<slug>[-c<n>], cùng tên cho mọi lượt của chu kỳ."""
     head = f"feature-{slug(folder_slug)}"[:BRANCH_SLUG_MAX - 4].rstrip("-") + (f"-c{int(cycle)}" if int(cycle) > 1 else "")
     branch = f"{BRANCH_PREFIX}{time.strftime('%Y-%m-%d')}-{head}"
     if not BRANCH_PATTERN.fullmatch(branch):
@@ -202,7 +202,7 @@ def create(state: dict, source_repo: str | os.PathLike, *, base_ref: str = "HEAD
     if len(subtasks) != len(diffs):
         raise ValueError(f"cổng 3 chưa xong: {len(diffs)}/{len(subtasks)} child có diff")
     base = _git_out(["rev-parse", "--verify", f"{base_ref}^{{commit}}"], source_repo).strip()
-    # Folder (ticket 05): nối tiếp nhánh chu kỳ; base đã chứa đỉnh cũ nên -B không làm mất commit nào.
+    # Folder: nối tiếp nhánh chu kỳ; base đã chứa đỉnh cũ nên -B không làm mất commit nào.
     branch = state.get("branch_name") or branch_name(label)
     checkout = Path(tempfile.mkdtemp(prefix="ai-board-worktree-"))
     try:

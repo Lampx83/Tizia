@@ -1,4 +1,4 @@
--- Onboarding của người gửi yêu cầu (ticket 05): trả lời 1 lần, admin miễn. Harness đọc qua snapshot để chọn giọng văn.
+-- Onboarding của người gửi yêu cầu: trả lời 1 lần, admin miễn. Harness đọc qua snapshot để chọn giọng văn.
 CREATE TABLE IF NOT EXISTS ai_board_profile (
   user_id          INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   role             TEXT    NOT NULL,

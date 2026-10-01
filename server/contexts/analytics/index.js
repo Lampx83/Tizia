@@ -4,7 +4,7 @@
 // Không đo được thì không tối ưu được. Đây là pipeline sự kiện nội bộ:
 //   app/client → track() → bảng analytics_events → funnel/overview query.
 //
-// Ở scale lớn (Phase 2+), bảng này được CDC/stream sang ClickHouse/PostHog (WARM
+// Ở scale lớn, bảng này được CDC/stream sang ClickHouse/PostHog (WARM
 // tier) + archive Parquet (COLD); pipeline hiện tại là điểm THU + truy vấn nhanh.
 //
 // Funnel mặc định (đo chuyển đổi lợi nhuận):

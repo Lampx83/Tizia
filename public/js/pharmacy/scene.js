@@ -1,5 +1,5 @@
 // GPP 3D Pharmacy scene — full port từ Pharmacy-AI/src/components/scenes/GppScene.tsx.
-// Bao gồm: 4 tủ sau + 3 tủ bên + quầy + POS + label tray + pick tray (Phase 1-3) ·
+// Bao gồm: 4 tủ sau + 3 tủ bên + quầy + POS + label tray + pick tray ·
 // Fridge 5-ngăn + 13 stocks + door hinge animation · Consult desk · Pharmacist/Patient GLB
 // với idle animation · Ceiling fan + AC + 2 plants sway · Tool tray (scissors/tape/pen/notepad)
 // · barcode_scanner + receipt_printer · WaitingChair · 11 camera presets với 700ms lerp.
@@ -916,8 +916,7 @@ function buildBottlePackage(drug, style, pkg, bodyHex, accentHex, detailed) {
 function buildSingleDrugBox(drug, style, detailed = true, backLabel = false, withSides = true) {
   const colors = getDrugColors(drug);
   // Body + ACCENT theo brand thật (DRUG_PLACEMENT.brandColor) để hộp trên kệ
-  // và hộp zoom inspector ĐỒNG MÀU (trước đây stripe mesh dùng hash-based →
-  // shelf khoe màu khác hẳn label inspector → user phản ánh nhầm lẫn).
+  // và hộp zoom inspector ĐỒNG MÀU (shelf không lệch màu so với label inspector).
   // Fallback hash-based khi placement không inject brandColor.
   const bodyHex = drug.bodyColor || colors.body;
   const accentHex = drug.groupAccent || colors.accent;
@@ -944,8 +943,8 @@ function buildSingleDrugBox(drug, style, detailed = true, backLabel = false, wit
   sub.add(box);
   if (!detailed) return sub; // hộp phía sau (bị che) chỉ cần thân — tối ưu hiệu năng
 
-  // Trang trí dải accent 3D đã BỎ — trước đây stripe/flag mesh nhô ra trước mặt
-  // body có thể đè LÊN vùng tên thuốc. Trang trí giờ nằm hoàn toàn TRONG texture
+  // Không có mesh stripe/flag 3D (nhô ra trước mặt body sẽ đè LÊN vùng tên thuốc).
+  // Trang trí nằm hoàn toàn TRONG texture
   // nhãn (drawLabelDecoration + accent fills), luôn ở DƯỚI lớp chữ → tên thuốc
   // (text) luôn hiển thị trên cùng.
   const variant = style.variant || 'banner';
@@ -1988,8 +1987,7 @@ export function buildScene(canvas, opts = {}) {
     { type: 'pink',   color: 0xfbcfe8, hex: '#fbcfe8', outline: 0xbe185d, special: 'KIỂM SOÁT ĐẶC BIỆT' },
     { type: 'zip',    color: 0xcffafe, hex: '#cffafe', outline: 0x0891b2, airtight: true }
   ];
-  // Yêu cầu thầy #7: trước đây tray bao bì ra lẻ nằm NGAY TRƯỚC "HỘP RA LẺ"
-  // (cùng x=-1.5) → che mất. Dời sang BÊN CẠNH (lệch phải, sát mép trước quầy)
+  // Tray bao bì ra lẻ đặt BÊN CẠNH "HỘP RA LẺ" (lệch phải, sát mép trước quầy)
   // để không che hộp ra lẻ.
   const PKG_TRAY_X = -1.02, PKG_TRAY_Z = COUNTER_Z + 0.30;
   const pkgTray = new THREE.Mesh(

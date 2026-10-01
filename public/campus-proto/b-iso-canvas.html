@@ -2216,7 +2216,7 @@ if(EDIT){
     if(m.type==='campus-cmd-set'){
       const i=m.idx; if(i==null || !BUILDINGS[i]) return;
       const b=BUILDINGS[i];
-      // chỉ cho sửa các field an toàn — không cho đổi url/model qua đây (Phase 2.2 dùng palette)
+      // chỉ cho sửa các field an toàn — không cho đổi url/model qua đây (dùng palette)
       const allowed=new Set(['name','emoji','pin','s','rot','flag','gx','gy']);
       if(m.key==='rot-delta'){
         b.rot=(((b.rot||0)+(m.value||90))%360+360)%360;

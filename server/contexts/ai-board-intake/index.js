@@ -1,5 +1,5 @@
 // ============================================================
-// AI Board intake — phía người gửi yêu cầu (ticket 05, 06)
+// AI Board intake — phía người gửi yêu cầu
 // ============================================================
 // Onboarding 3 câu (vai trò, lĩnh vực am hiểu, mức kỹ thuật): trả lời 1 lần
 // trước yêu cầu đầu tiên, admin miễn. Lưu bảng ai_board_profile (migration
@@ -53,7 +53,7 @@ export function createProfileStore(db) {
 
 export function attachAiBoardIntake(router, {
   db, requireAuth, requireStrictCsrf,
-  store = null, // ai-board store: clarification needs it (ticket 06); absent = profile routes only
+  store = null, // ai-board store: clarification needs it; absent = profile routes only
   quotaGate = (_req, _res, next) => next(), // aiQuotaGate('ai_board_grill') in the app
   recordUsage = () => {}, // recordAiCall(req, {...}) in the app
   generate = ollamaStreamer(),
@@ -80,7 +80,7 @@ export function attachAiBoardIntake(router, {
 }
 
 // Chat làm rõ dùng model nhỏ nạp sẵn (model của classifier) thay cho model mặc định chung, để không tranh
-// GPU với 14B của worker (feature-folders ticket 03). Biến TIZIA_MODEL_<ROUTE> riêng vẫn thắng.
+// GPU với 14B của worker. Biến TIZIA_MODEL_<ROUTE> riêng vẫn thắng.
 export const chatModel = (endpoint, env = process.env) => resolveAIModel(endpoint,
   { ...env, TIZIA_MODEL_DEFAULT: env.AI_BOARD_CLASSIFIER_MODEL || env.TIZIA_MODEL_DEFAULT });
 
@@ -95,7 +95,7 @@ export function clarifyNotifier(createNotification) {
 
 const maxQuestions = (mode) => (mode === 'feature' ? FEATURE_QUESTIONS : MAX_QUESTIONS);
 
-// Clarity mode lúc gửi (ask | split | feature) từ event phân loại (luật + model, ticket 08); thiếu thì hỏi thường.
+// Clarity mode lúc gửi (ask | split | feature) từ event phân loại (luật + model); thiếu thì hỏi thường.
 function initialMode(db, rootId) {
   const row = db.prepare(`SELECT internal_detail FROM ai_events WHERE ticket_id=? AND event_type='request_classified'`).get(rootId);
   try {
@@ -149,7 +149,7 @@ function attachClarify(router, { db, store, profiles, requireAuth, requireStrict
       return res.status(429).json({ error: 'clarify_limit',
         message: 'Hôm nay Ban đã trao đổi nhiều với bạn rồi. Bạn quay lại vào ngày mai để làm rõ tiếp nhé!' });
     }
-    // Phiên chat đang chờ token: worker tạm không nhận ticket mới (feature-folders ticket 03).
+    // Phiên chat đang chờ token: worker tạm không nhận ticket mới.
     const endChat = beginChat();
     res.on('close', endChat);
     try {

@@ -1259,7 +1259,7 @@ def test_planner_reads_the_clarified_spec_and_flags_a_still_vague_request():
 
 
 def test_per_run_caps_scale_with_the_plan_and_come_from_the_shared_contract():
-    """Feature-folders ticket 02: same formula as store.js scaledLimit; worker hourly cap fits the biggest run."""
+    """Same formula as store.js scaledLimit; worker hourly cap fits the biggest run."""
     import meter
     from worker import LIMITS, scaled_limit
     units = LIMITS["per_run"]["units"]
@@ -1270,7 +1270,7 @@ def test_per_run_caps_scale_with_the_plan_and_come_from_the_shared_contract():
 
 
 class FolderTransport(FakeTransport):
-    """Snapshot of a root inside a feature folder (feature-folders ticket 05)."""
+    """Snapshot of a root inside a feature folder."""
 
     def __call__(self, method, path, payload, headers):
         out = super().__call__(method, path, payload, headers)
@@ -1325,7 +1325,7 @@ def test_folder_conflict_with_dev_waits_for_a_human(monkeypatch):
 
 
 def test_folder_brief_reaches_gate_1_and_a_brief_crossing_a_hard_rule_stops_the_plan():
-    """Feature-folders ticket 06: L1 brief + L3 recent + L2 owned files go to gate 1; lexicon runs on the whole brief."""
+    """L1 brief + L3 recent + L2 owned files go to gate 1; lexicon runs on the whole brief."""
     brief = {'text': 'Chức năng: Trò đoán từ\nĐã làm (mới nhất trước):\n- Trang chơi', 'recent': '[#3] Thêm điểm: x',
              'owned_files': ['public/tro-doan-tu.html']}
     request = HarnessPlanner._request({'request': {'id': 3, 'title': 't', 'detail': 'd'}, 'folder': {'brief': brief}})
@@ -1341,7 +1341,7 @@ def test_folder_brief_reaches_gate_1_and_a_brief_crossing_a_hard_rule_stops_the_
 
 
 def test_a_self_request_plan_asks_only_for_self_config():
-    """Self-improve ticket 04: server gives self.config (tier protected) only to self requests."""
+    """Server gives self.config (tier protected) only to self requests."""
     old = {'summary_vi': 'x', 'capabilities': ['features'],
            'subtasks': [{'title': 't', 'file': 'ai-board/harness/skills/default/SKILL.md', 'verify': 'v', 'size': 'small'}]}
     plan = HarnessPlanner._canonical({'domain': 'ai-board', 'type': 'self'}, old)
@@ -1392,7 +1392,7 @@ def test_a_self_request_reaches_the_gates_as_self_and_its_verdict_names_base_sha
     assert (verdict['base_sha'], verdict['skill']) == ('a' * 40, 'edit-html-text')
 
 
-# Self-improve ticket 03: worker hỏi GitHub các PR server còn coi là mở, báo PR đã đóng.
+# Worker hỏi GitHub các PR server còn coi là mở, báo PR đã đóng.
 class FakePrServer:
     def __init__(self, numbers):
         self.numbers, self.calls = numbers, []
@@ -1456,7 +1456,7 @@ def test_sync_prs_flag_without_token_exits_cleanly(monkeypatch, capsys):
     assert '"skipped"' in capsys.readouterr().out
 
 
-# Self-improve ticket 05: cổng 5 của yêu cầu self là eval 2 sha trên phần kiểm tra, không phải Docker/HTTP.
+# Cổng 5 của yêu cầu self là eval 2 sha trên phần kiểm tra, không phải Docker/HTTP.
 LEARNING = [{'id': 1, 'request_text': 'cũ', 'expected_files': ['public/1.html']}]
 TEST_PART = [{'id': i, 'request_text': f'mới {i}', 'expected_files': [f'public/{i}.html']} for i in (2, 3, 4)]
 

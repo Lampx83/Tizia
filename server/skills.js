@@ -1,5 +1,5 @@
 // ============================================================
-// Skills context (Phase 2) — grant skills cho user khi đạt mốc, đọc cây năng lực.
+// Skills context — grant skills cho user khi đạt mốc, đọc cây năng lực.
 //
 // Catalog (competencies + skills) seed bởi server/db.js + scripts/migrate-skills-catalog.js.
 // Mapping `space_id → [skill_codes]` đọc từ server/skills-mapping.json (sinh bởi script).
@@ -52,7 +52,7 @@ try {
 } catch (e) { console.warn(`[skills] scenario map load failed: ${e.message}`); }
 
 // Reload mapping at runtime (admin hook nếu cần). Hiện chưa expose route, để
-// dành Phase 4 khi có admin UI quản lý catalog.
+// dành cho khi có admin UI quản lý catalog.
 export function reloadSkillsMapping() {
   try {
     SPACE_SKILLS = JSON.parse(fs.readFileSync(MAPPING_PATH, 'utf8'));
@@ -147,8 +147,8 @@ export function grantSkillsForSpace({ user_id, domain, space_id, score, source_t
   const newly = [];
   const already = [];
   // Skill được gắn cùng bucket = trường HS đang theo học. Vì grantSkillsForSpace
-  // luôn nhận `domain` (trường của space) và Phase 2 sẽ chặn cross-domain ở
-  // middleware → bucket grant chắc chắn khớp với enrolled_domain.
+  // luôn nhận `domain` (trường của space) và middleware chặn cross-domain
+  // trước đó → bucket grant chắc chắn khớp với enrolled_domain.
   const skillDomain = String(domain);
   const tx = db.transaction(() => {
     for (const r of rows) {
@@ -265,7 +265,7 @@ export function grantSkillsForScenario({ user_id, family_id, score, stars, domai
   if (rows.length === 0) return { granted_count: 0, skipped_reason: 'skill codes not found in DB' };
 
   // Bucket trường: caller có thể không truyền domain (scenario chung) → fallback
-  // enrolled_domain của user. Middleware Phase 2 đã chặn cross-domain trước khi
+  // enrolled_domain của user. Middleware đã chặn cross-domain trước khi
   // tới đây nên bucket luôn khớp với trường HS đang theo học.
   const skillDomain = _resolveSkillDomain(user_id, domain);
   const now = Date.now();

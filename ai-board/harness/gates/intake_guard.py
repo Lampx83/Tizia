@@ -137,7 +137,7 @@ def run(request_title: str, request_detail: str | None, deps, budget, *, db_path
         verdict = _worst([verdict, *llm_verdicts])
         hits.update({x: v for x, v in zip(llm, llm_verdicts) if x != "ok"})
         reasons.append(f"LLM: {', '.join(llm)}" + (f" ({why})" if why else ""))
-        # Logprob classifier beside the JSON guard (ticket 04): only ever raises to human_review.
+        # Logprob classifier beside the JSON guard: only ever raises to human_review.
         scored = classifier.danger(readonly_verification_text(f"{title}\n{detail}"), deps, budget, gate=1, db_path=db_path, proposal_id=proposal_id)
         if scored and scored["escalate"]:
             verdict = _worst([verdict, "human_review"])
@@ -155,7 +155,7 @@ def run(request_title: str, request_detail: str | None, deps, budget, *, db_path
     out = {"verdict": verdict, "labels": list(hits) or ["ok"], "public_message": public,
            "internal_reason": "; ".join(reasons)[:1000] or "không có tín hiệu"}
     if scored:
-        out["classifier"] = scored  # model, probs, escalate, logged: compared with the JSON guard (ticket 01)
+        out["classifier"] = scored  # model, probs, escalate, logged: compared with the JSON guard
     if readonly_verification_text(f"{title}\n{detail}") != f"{title}\n{detail}":
         out["read_only_verification"] = True
     return out

@@ -1,4 +1,4 @@
-// Feature-folders ticket 10: an approved folder gets a release flag (owner_only | school | off) that decides who
+// An approved folder gets a release flag (owner_only | school | off) that decides who
 // sees its tile on the school page and who can open /<slug>.html; admins always see, and change it with CSRF.
 import test from 'node:test';
 import assert from 'node:assert/strict';

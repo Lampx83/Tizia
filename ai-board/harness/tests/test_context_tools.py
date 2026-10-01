@@ -200,7 +200,7 @@ def test_locate_finds_text_in_a_data_module_and_the_page_importing_its_renderer(
 
 
 def test_folder_brief_leads_the_context_so_runs_of_a_folder_share_a_prefix(repo, tmp_path):
-    """Feature-folders ticket 06: L1 first (byte-identical across runs), L3 before REPO DATA, tier sizes reported."""
+    """L1 first (byte-identical across runs), L3 before REPO DATA, tier sizes reported."""
     src, sha = repo
     brief = "Chức năng: Trò đoán từ\nĐã làm (mới nhất trước):\n- Trang chơi"
     a = context.build_context(1, {"subject": "Thêm bảng điểm", "body": "x", "folder_brief": brief, "folder_recent": "[#2] a"},
@@ -215,7 +215,7 @@ def test_folder_brief_leads_the_context_so_runs_of_a_folder_share_a_prefix(repo,
 
 
 def test_exemplar_retrieves_the_most_similar_existing_page_and_its_head(repo, tmp_path):
-    """Feature-folders ticket 08: exemplar = IDF over the visible-text index, no hand-written list."""
+    """Exemplar = IDF over the visible-text index, no hand-written list."""
     src, _ = repo
     sha = _commit(src, {
         "public/doan-mat-ma.html": "<html><head><style>body{background:#0f172a}</style></head><body>"

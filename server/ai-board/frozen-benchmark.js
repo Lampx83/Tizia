@@ -1,7 +1,7 @@
 // ============================================================
-// Bộ đánh giá đóng băng + đường cong học (self-improve ticket 08)
+// Bộ đánh giá đóng băng + đường cong học
 // ============================================================
-// Sau mỗi lần merge 1 thay đổi self (ticket 03 báo state='merged' cho PR loại self vào ai_pull_requests), worker
+// Sau mỗi lần merge 1 thay đổi self (PR loại self được báo state='merged' vào ai_pull_requests), worker
 // đo lại bộ đóng băng đúng 1 lần: bộ đo tất định hiện tại + gold cổng 3 + task đóng băng (eval-tasks.js
 // frozenTasks), ở sha vừa merge. Không bao giờ dùng để chọn biến thể — chỉ vẽ đường cong học cho hội đồng.
 // Cờ frozen trên ai_eval_tasks và frozen_at trên ai_self_improve_state sống ở eval-tasks.js / self-improve.js.

@@ -1,4 +1,4 @@
-"""Ticket 03 (e2e/06): push the verified candidate, open one PR into dev, never merge or approve.
+"""(e2e/06): push the verified candidate, open one PR into dev, never merge or approve.
 GitHub is faked at the transport; git runs for real against a local bare remote."""
 import subprocess
 import sys
@@ -210,7 +210,7 @@ def test_review_refuses_a_pr_into_another_base_or_branch():
 
 
 def test_review_of_a_self_pr_uses_the_self_edit_rules(tmp_path):
-    """Self-improve ticket 05: PR gắn nhãn ai-board:self → guard theo luật self, không Docker smoke (bằng chứng là eval)."""
+    """PR gắn nhãn ai-board:self → guard theo luật self, không Docker smoke (bằng chứng là eval)."""
     import review_pr
 
     repo = tmp_path / 'r'

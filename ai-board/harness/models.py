@@ -1,5 +1,4 @@
-"""Client Ollama. Ticket 04 chưa gọi model thật — cổng còn là stub — nhưng
-client phải tồn tại và thay được bằng fake trong test."""
+"""Client Ollama; thay được bằng fake trong test."""
 from __future__ import annotations
 
 import json
@@ -22,7 +21,7 @@ class OllamaClient:
     base_url: str = ""
     gate1_model: str = ""
     gate3_model: str = ""
-    # Ticket 11: subtask "small" (1 file, theo mẫu) đi model nhẹ hơn — cùng lý do
+    # Subtask "small" (1 file, theo mẫu) đi model nhẹ hơn — cùng lý do
     # "không hardcode default" ở trên, .env là nguồn thật duy nhất.
     gate3_model_light: str = ""
     embed_model: str = ""

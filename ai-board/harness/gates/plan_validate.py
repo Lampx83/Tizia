@@ -1,4 +1,4 @@
-"""Cổng 2.5 (ticket 22) — soát plan (Q1) + phân quyền độ phức tạp (Q2) TRƯỚC
+"""Cổng 2.5 — soát plan (Q1) + phân quyền độ phức tạp (Q2) TRƯỚC
 khi cổng 3 tiêu ngân sách. Một checkpoint (không phải 2 gate riêng) vì cả hai
 là quyết định "dừng trước cổng 3" trên cùng 1 plan tại cùng 1 điểm trong loop.
 
@@ -10,19 +10,18 @@ POST /api/requests/:id/messages đã có, tái dùng — harness INSERT trực t
 đúng cách scripts/admin-reply.js đã làm), outcome='needs_clarification'.
 
 Q2 — plan có "phức tạp" không? Tính THUẦN BẰNG CODE (không hỏi model), 3/5
-tín hiệu gate 5.5 (ticket 13) đã định nghĩa nhưng tính SỚM từ plan, trước khi
+tín hiệu gate 5.5 đã định nghĩa nhưng tính SỚM từ plan, trước khi
 có diff:
   - >=2 capability riêng biệt trong plan.capabilities — proxy sớm nhất cho
     "chạm >=2 domain" khi schema plan (gates/brainstorm.py) chưa gắn domain
-    vào từng capability, chỉ có 1 danh sách phẳng; ticket 22 chỉ đích danh
-    field này ("...trong plan.capabilities").
+    vào từng capability, chỉ có 1 danh sách phẳng ("...trong plan.capabilities").
   - Bất kỳ subtask nào có `file` NẰM NGOÀI 2 vùng an toàn chuẩn
     (`server/contexts/_ai-generated/**`, `public/**`) — đây mới thật sự là
     "route/middleware mới" đáng cảnh giác. Một plugin `_ai-generated` MỚI
     KHÔNG tính vào tín hiệu này dù nó cũng "mount 1 router mới": đó là
     trường hợp THƯỜNG NGÀY, an toàn-theo-kiến-trúc (registry.js +
     capabilities.js dựng sẵn đúng để việc này rẻ/an toàn — mục đích toàn bộ
-    ticket 04/06/08), và prompts/brainstorm.md đã tự giới hạn model CHỈ
+    ), và prompts/brainstorm.md đã tự giới hạn model CHỈ
     được nhắm 2 vùng này. Tính "route mới" bằng "có plugin _ai-generated
     hay không" sẽ trúng ~100% request (mọi domain-synthesized skill đều tạo
     plugin mới) — mâu thuẫn thẳng với chính Scope của ticket này ("Đường
@@ -35,7 +34,7 @@ có diff:
 Phức tạp + requester KHÔNG thuộc {role='admin'} hoặc {user_domain_grants đúng
 domain} -> dừng, outcome='complexity_gated'. Request không map được sang
 user thật (guest) -> fail-closed, coi như không được phép (giống nguyên tắc
-guardrail nội dung ticket 14).
+guardrail nội dung).
 """
 from __future__ import annotations
 
@@ -180,8 +179,8 @@ def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict
 
 
 def is_complex(plan: dict) -> bool:
-    """3/5 tín hiệu gate 5.5 (ticket 13), tính sớm từ plan — xem docstring module.
-    Lưu ý cho người xây gate 5.5 thật (code-review round): tín hiệu "route/
+    """3/5 tín hiệu gate 5.5, tính sớm từ plan — xem docstring module.
+    Lưu ý cho người xây gate 5.5 thật: tín hiệu "route/
     middleware mới" ở ĐÂY đo vị trí file (ngoài _ai-generated/public hay
     không) — KHÔNG PHẢI cùng phép đo với "route/middleware mới=high" gate 5.5
     dự định làm trên DIFF thật (spec.md mục 09). Cùng tên, khác đối tượng đo
@@ -231,7 +230,7 @@ def _has_domain_grant(db_path, user_id: int, domain: str | None) -> bool:
 def is_authorized_for_complex(db_path, request: dict) -> bool:
     """Anh + Lampx (role='admin') hoặc domain expert có user_domain_grants
     đúng domain request. Request không map được sang user thật -> False
-    (fail-closed), giống nguyên tắc guardrail nội dung ticket 14."""
+    (fail-closed), giống nguyên tắc guardrail nội dung."""
     user = _lookup_requester(db_path, request.get("from") or request.get("student"))
     if not user:
         return False

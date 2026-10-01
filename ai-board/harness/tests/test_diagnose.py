@@ -1,4 +1,4 @@
-"""Chẩn đoán → yêu cầu self (self-improve ticket 06): server giả + model giả, không Ollama, không mạng."""
+"""Chẩn đoán → yêu cầu self: server giả + model giả, không Ollama, không mạng."""
 from __future__ import annotations
 
 import json

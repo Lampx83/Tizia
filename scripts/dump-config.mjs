@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// scripts/dump-config.mjs — tương đương `dsh --dump-config` (ticket 08).
+// scripts/dump-config.mjs — tương đương `dsh --dump-config`.
 // Boot server thật (đúng 1 lần mount, tái dùng nguyên server/index.js — không
 // nhân bản logic wiring ra 1 bản thứ hai), rồi in registry.dumpConfig() và
 // thoát. Không chạy song song với `npm run dev`/container thật — PORT=0 (OS tự

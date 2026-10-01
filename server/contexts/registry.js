@@ -21,7 +21,7 @@ import express from 'express';
 
 // Module dev-owned — plugin nào tự nhận diện qua `sourceModule` trùng list này
 // PHẢI khai `origin: 'dev-owned'` mới được mount. AI-generated proposal không
-// bao giờ tự khai 'dev-owned' (cổng 4/ticket 12 chặn ở bước lint import), nên
+// bao giờ tự khai 'dev-owned' (cổng 4 chặn ở bước lint import), nên
 // đây là lớp phòng vệ runtime thứ hai: registry từ chối mount thẳng, kể cả nếu
 // lint bị bỏ qua. capabilities.js re-export list này làm CORE_MODULES.
 export const CORE_MODULES = Object.freeze([
@@ -37,7 +37,7 @@ export const CORE_MODULES = Object.freeze([
   'server/contexts/portal-apps/index.js',
 ]);
 
-// Capability không đi qua mount (ticket 08): ScoreUp/Codelab là hàm gọi thẳng
+// Capability không đi qua mount: ScoreUp/Codelab là hàm gọi thẳng
 // từ surface.quiz/core.integrations (xem capabilities.js), không phải
 // registry.mount*Plugins — nên không bao giờ xuất hiện trong `mounted`/
 // `catalogs` bên dưới. Khai tĩnh ở đây để listAvailableCapabilities() vẫn
@@ -64,7 +64,7 @@ export const STATIC_CAPABILITIES = Object.freeze([
 // name → dispose. Gỡ một skill = gọi một hàm.
 const mounted = new Map();
 // name → catalog entry, chỉ cho plugin ĐANG mount VÀ có khai `catalog`
-// (ticket 08). Sống/chết theo đúng vòng đời mounted — dispose() gỡ cả hai.
+// Sống/chết theo đúng vòng đời mounted — dispose() gỡ cả hai.
 const catalogs = new Map();
 
 // Plugin khai `sourceModule` trùng CORE_MODULES mà không tự nhận `origin:
@@ -183,7 +183,7 @@ export function mountedPlugins() {
   return [...mounted.keys()];
 }
 
-// Ticket 08 — danh mục năng lực: catalog của mọi plugin ĐANG mount có khai
+// Danh mục năng lực: catalog của mọi plugin ĐANG mount có khai
 // `catalog`, cộng STATIC_CAPABILITIES (ScoreUp/Codelab, không đi qua mount).
 // AI board đọc trước khi đề xuất skill mới, để không phát minh lại cái đã có.
 export function listAvailableCapabilities() {

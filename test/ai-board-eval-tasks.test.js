@@ -1,4 +1,4 @@
-// Self-improve ticket 02: mỗi lần hỏng ở production → 1 task eval ứng viên; admin gắn nhãn; worker lấy phần học/kiểm tra.
+// Mỗi lần hỏng ở production → 1 task eval ứng viên; admin gắn nhãn; worker lấy phần học/kiểm tra.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -250,7 +250,7 @@ test('the worker gets labelled tasks split by time: oldest 70% to learn from, ne
   } finally { f.close(); }
 });
 
-// Self-improve ticket 03: worker hỏi GitHub trạng thái PR server còn coi là mở, báo merged / closed.
+// Worker hỏi GitHub trạng thái PR server còn coi là mở, báo merged / closed.
 const openPrs = async (f) => (await f.worker('/api/ai-board/worker/pull-requests/open')).body.pull_requests;
 const reportPr = (f, number, state, files = ['public/admin.html', 'public/js/admin-dashboard.js']) => f.worker(
   '/api/ai-board/worker/pull-requests/state', { number, state, closed_at: '2026-09-28T01:00:00Z', files });
@@ -314,7 +314,7 @@ test('a self PR records its state but never becomes an eval task', async () => {
   const f = await fixture();
   try {
     const { requestId } = await f.miss(PASSING, { pr: 45 });
-    f.db.prepare("UPDATE requests SET type='self' WHERE id=?").run(requestId); // lối tắt: luồng self đủ (duyệt plan) ở test ticket 04
+    f.db.prepare("UPDATE requests SET type='self' WHERE id=?").run(requestId); // lối tắt: luồng self đủ (duyệt plan) ở test
     assert.deepEqual((await openPrs(f)).map((p) => p.number), [45]);
     const res = await reportPr(f, 45, 'merged', ['ai-board/harness/skills/edit-html-text/SKILL.md']);
     assert.equal(res.status, 200);

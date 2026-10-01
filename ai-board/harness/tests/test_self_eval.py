@@ -1,4 +1,4 @@
-"""Cổng eval của yêu cầu self (self-improve ticket 05): bộ đo tất định ở 2 sha, cổng 1–2.5 trên phần kiểm tra,
+"""Cổng eval của yêu cầu self: bộ đo tất định ở 2 sha, cổng 1–2.5 trên phần kiểm tra,
 thắng/thua từng task, ngân sách eval. Model giả; sha giả qua run_at (không Ollama)."""
 import json
 import subprocess
@@ -197,7 +197,7 @@ def test_no_test_tasks_means_no_accept():
     assert out["blocked"] is True and out["failure_class"] == "eval" and "task kiểm tra" in out["reason"]
 
 
-# ---- giám khảo shadow (ticket 10): chỉ ghi, không bao giờ đổi verdict ----
+# ---- giám khảo shadow: chỉ ghi, không bao giờ đổi verdict ----
 
 class Judge:
     """deps giả: giám khảo luôn chọn `pick`, mỗi lời gọi tốn `gpu` GPU-s vào budget truyền vào."""
@@ -262,7 +262,7 @@ def test_the_tasks_child_returns_the_plan_text_for_the_judge():
     assert out["results"] == [{"id": 1, "passed": True, "plan": "plan text"}]
 
 
-# ---- bộ đánh giá đóng băng (ticket 08): đo 1 sha, không so 2 bên, không bao giờ chọn biến thể ----
+# ---- bộ đánh giá đóng băng: đo 1 sha, không so 2 bên, không bao giờ chọn biến thể ----
 
 class FrozenSha:
     """1 sha giả: strata tất định + gold + task đóng băng, giống Shas nhưng chỉ 1 bên."""

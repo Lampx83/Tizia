@@ -1,4 +1,4 @@
-// Self-improve ticket 07: công tắc admin, điều kiện chạy đêm, 1 dòng mỗi đêm, tự dừng, bỏ cụm, chuông khi thắng.
+// Công tắc admin, điều kiện chạy đêm, 1 dòng mỗi đêm, tự dừng, bỏ cụm, chuông khi thắng.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';

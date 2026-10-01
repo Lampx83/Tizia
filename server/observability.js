@@ -7,7 +7,7 @@
 //   2) captureException + init     — đẩy lỗi lên Sentry NẾU đặt SENTRY_DSN
 //                                     (dynamic import, không cài thì vẫn chạy).
 //   3) installProcessGuards        — lưới an toàn cho unhandledRejection /
-//                                     uncaughtException (trước đây KHÔNG có → crash
+//                                     uncaughtException (tránh crash
 //                                     âm thầm, không log).
 //   4) requestContext / requestLogger / expressErrorHandler
 //                                   — req.id để nối log, log request opt-in, và

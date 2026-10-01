@@ -187,8 +187,8 @@ export async function fetchMe() {
 }
 
 // Đồng bộ sang storage để code cũ (api.js: getPlayerName) đọc được mà không cần await.
-// Đồng thời kéo ví (XP/coin/streak) từ server về — trước đây ví chỉ ở localStorage
-// nên đổi máy / clear cache = mất level. Kéo bất đồng bộ, không block UI.
+// Đồng thời kéo ví (XP/coin/streak) từ server về (ví chỉ ở localStorage thì đổi máy / clear cache = mất level).
+// Kéo bất đồng bộ, không block UI.
 function syncToLocal(user) {
   if (!user) return;
   // Phát hiện đổi tài khoản trên cùng browser: nếu `tizia:me.id` trước đó
@@ -203,8 +203,8 @@ function syncToLocal(user) {
       clearAccountScopedKeys();
     }
   } catch {}
-  // Set `tizia:me` để wallet.js (_currentUid) biết user hiện tại — trước đây
-  // chưa từng được set, khiến `_applySessionGuard` thấy curUid=null hoài.
+  // Set `tizia:me` để wallet.js (_currentUid) biết user hiện tại; thiếu thì
+  // `_applySessionGuard` thấy curUid=null.
   try {
     localStorage.setItem('tizia:me', JSON.stringify({
       id: user.id, username: user.username, role: user.role,

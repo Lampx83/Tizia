@@ -1,11 +1,11 @@
-"""Cổng 4 — static-check + minimalism guard (ticket 12). Nửa CƠ HỌC của
-ponytail/caveman minimalism (nửa kia là prompt cố định của cổng 3, ticket 11):
+"""Cổng 4 — static-check + minimalism guard. Nửa CƠ HỌC của
+ponytail/caveman minimalism (nửa kia là prompt cố định của cổng 3):
 `node --check` trên JS sinh ra, lint import (code AI sinh chỉ được chạm
 `ctx.surface.*`, không bao giờ import `db.js` hay context khác trực tiếp), và
 so kích thước diff với ước lượng size khai trong plan (`small`/`large`, xem
 gates/brainstorm.py). Import cấm / lỗi cú pháp → BLOCK thật (không có gì chạy
 được thì không có gì để review). Vượt ~2x ước lượng hoặc chạm file ngoài plan
-→ KHÔNG block, chỉ gắn cờ `needs_careful_review=True` (cổng 5.5/ticket 13 đọc
+→ KHÔNG block, chỉ gắn cờ `needs_careful_review=True` (cổng 5.5 đọc
 cờ này khi có) — "flagged, not silently passed", không phải "rejected".
 """
 from __future__ import annotations
@@ -25,7 +25,7 @@ CONTENT_LABELS = tuple(x for x in intake_guard.LABELS
 MAX_CONTENT_CHARS = 3500  # prompt ~1.2k token + chữ tiếng Việt, vừa num_ctx 8192
 
 # ponytail: hằng số ước lượng dòng/size, không đo thật từ template — đủ cho
-# ngưỡng "vượt xa" (2x). Cần chính xác hơn thì hiệu chuẩn qua ticket 16 (gold set).
+# ngưỡng "vượt xa" (2x). Cần chính xác hơn thì hiệu chuẩn qua gold set.
 SIZE_ESTIMATE_LINES = {"small": 30, "large": 80}
 OVERSIZE_MULTIPLIER = 2
 
@@ -158,7 +158,7 @@ def content_review(state: dict, deps, budget, *, db_path=None, proposal_id: int 
             labels, why = intake_guard.parse_labels(body.get("response", ""), CONTENT_LABELS), ""
         except Exception as e:  # model sập/JSON sai — chuyển người soát, không cho qua im lặng
             why = f"bộ soát nội dung lỗi: {str(e)[:200]}"
-    # Logprob classifier beside the JSON guard (ticket 04): may only add a "needs a human" block.
+    # Logprob classifier beside the JSON guard: may only add a "needs a human" block.
     scored = classifier.danger("\n".join(parts), deps, budget, gate=4, db_path=db_path, proposal_id=proposal_id)
     if scored and scored["escalate"]:
         labels = [x for x in labels if x != "ok"] + [f"model_{key}" for key in scored["labels"]]

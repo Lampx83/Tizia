@@ -235,7 +235,7 @@ function checkAndUnlockBadges(playerName, attempt, role = 'student') {
 }
 
 // Lưới an toàn process-level: bắt unhandledRejection/uncaughtException → log +
-// report (trước đây không có → lỗi async làm crash âm thầm, không dấu vết).
+// report (tránh lỗi async làm crash âm thầm, không dấu vết).
 installProcessGuards();
 
 const app = express();
@@ -254,7 +254,7 @@ if (process.env.LOG_REQUESTS === '1') app.use(requestLogger());
 // → Core Web Vitals tốt. Skip nếu client gửi x-no-compression hoặc đã có CE.
 app.use(compression({ threshold: 1024 }));
 
-// Security headers (R6) — an toàn áp mọi response. Rate-limit auth (pre-auth, theo IP).
+// Security headers — an toàn áp mọi response. Rate-limit auth (pre-auth, theo IP).
 app.use(securityHeaders);
 app.use(['/api/auth/login', '/api/auth/register'], sensitiveAuthLimiter);
 
@@ -285,7 +285,7 @@ app.use(makeAuthGate({ basePath: BASE_PATH }));
 // (để chỉ áp dụng cho user đã login) và TRƯỚC attachAppProxies (để app anh em cũng
 // bị chặn nếu user chưa hoàn tất profile).
 app.use(makeProfileGate({ basePath: BASE_PATH }));
-// Rate-limit CHỈ /api/* (không tính static asset) + key theo user (R5) — SAU attachUser.
+// Rate-limit CHỈ /api/* (không tính static asset) + key theo user — SAU attachUser.
 app.use('/api', apiLimiter);
 
 // App-level plugin (registry.js): mount TRƯỚC express.json() — proxy/webhook
@@ -298,7 +298,7 @@ app.use('/api', apiLimiter);
 mountAppPlugins(app, [appProxyPlugin, scoreUpWebhookPlugin, codelabWebhookPlugin], { surface });
 
 app.use(express.json({ limit: '64kb' }));
-// CSRF double-submit (R4) — sau express.json (cần req.body cho fallback _csrf).
+// CSRF double-submit — sau express.json (cần req.body cho fallback _csrf).
 // Log-only mặc định; CSRF_ENFORCE=1 để chặn (khi FE đã gửi header X-CSRF-Token).
 app.use(csrf);
 
@@ -363,7 +363,7 @@ attachAiBoardWorkerRoutes(r, {
   onSelfWin: selfWinNotifier(db, createNotification),
   onClarify: clarifyNotifier(createNotification),
 });
-// Cờ phát hành (ticket 10): có page gate /<slug>.html → phải trước route HTML + static bên dưới.
+// Cờ phát hành: có page gate /<slug>.html → phải trước route HTML + static bên dưới.
 attachAiBoardReleases(r, { db, requireAuth, requireAdmin, requireStrictCsrf });
 
 
@@ -436,7 +436,7 @@ r.get('/api/confusion', (req, res) => {
   res.json(getConfusion(version));
 });
 
-// Ví XP/coin/streak per-user. Trước đây ví chỉ ở localStorage → mất khi đổi máy.
+// Ví XP/coin/streak per-user (không chỉ localStorage để không mất khi đổi máy).
 // GET trả ví hiện tại (rỗng nếu chưa có row); PUT ghi đè bằng payload client gửi
 // lên. Last-write-wins — chấp nhận vì 1 user thường chỉ chơi 1 tab tại 1 thời điểm,
 // và FE merge với local trước khi PUT (lấy MAX để tránh tab cũ ghi đè ngược).
@@ -445,7 +445,7 @@ r.get('/api/wallet', requireAuth, (req, res) => {
 });
 // PUT ghi ví → bắt phải đã chọn trường (requireEnrolled). Ví ghi vào bucket của
 // trường HS đang theo học (helper tự đọc enrolled_domain). FE submit thử ở trường
-// khác sẽ bị 403 view_only (FE Phase 4 đã ẩn nút submit từ trước, đây là lớp 2).
+// khác sẽ bị 403 view_only (FE đã ẩn nút submit; đây là lớp 2).
 r.put('/api/wallet', requireAuth, requireEnrolled, (req, res) => {
   const w = upsertUserWallet(req.user.id, req.body || {});
   res.json(w);

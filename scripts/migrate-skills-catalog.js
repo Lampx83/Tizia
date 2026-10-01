@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // ============================================================
-// Phase 1 — Skills catalog migration
+// Skills catalog migration
 // Parse public/space.html → trích `skills:[...]` của từng space (5 domain) →
-// INSERT vào bảng `skills` (+ ghi file `server/skills-mapping.json` để Phase 2
-// dùng wire grant-logic). Heuristic gán competency_id theo từ khóa.
+// INSERT vào bảng `skills` (+ ghi file `server/skills-mapping.json` để
+// skills.js wire grant-logic). Heuristic gán competency_id theo từ khóa.
 //
 // Idempotent: skill.code = `${domain}__${space_id}__${slug(name)}`, dùng
 // INSERT OR IGNORE. Chạy lại = chỉ thêm row mới.

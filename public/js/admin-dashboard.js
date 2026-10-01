@@ -1755,7 +1755,7 @@ const TABS = {
   config:     { label:'Cấu hình', load: loadConfig },
 };
 
-// ─────────── Chức năng (folder chức năng mới, feature-folders ticket 04) ───────────
+// ─────────── Chức năng (folder chức năng mới) ───────────
 const FOLDER_STATE_LABEL = { draft: 'chờ duyệt', active: 'đang làm', awaiting_merge: 'chờ merge', released: 'đã phát hành', archived: 'lưu trữ' };
 const RELEASE_LABEL = { owner_only: 'chỉ người tạo', school: 'cả trường', off: 'tắt' };
 const releaseSelect = (slug, status) => status
@@ -1805,7 +1805,7 @@ async function loadFeatureFolders() {
   }));
 }
 
-// ─────────── Tự cải thiện (self-improve ticket 02: task eval từ lần hỏng, gắn nhãn 1 click) ───────────
+// ─────────── Tự cải thiện (task eval từ lần hỏng, gắn nhãn 1 click) ───────────
 const EVAL_STATUS_LABEL = { candidate: 'Chờ gắn nhãn', labelled: 'Đã gắn nhãn', retired: 'Đã loại' };
 const EVAL_TRIGGER_LABEL = { verdict_blocked: 'bị chặn', retry: 'Thử cách khác', undo: 'admin hoàn tác',
   pr_closed: 'PR bị đóng', pr_merged: 'PR đã merge' };
@@ -1815,11 +1815,11 @@ const evalBox = (field, id, list, rows, ph) => `<textarea data-eval-${field}="${
   style="width:100%;min-width:180px;box-sizing:border-box;background:var(--bg);color:var(--txt);border:1px solid var(--border);border-radius:6px;padding:5px 7px;font:12px/1.4 ui-monospace,monospace"
   >${esc((list || []).join('\n'))}</textarea>`;
 
-// ── Vòng tự cải thiện ban đêm (self-improve ticket 07): công tắc + bảng các đêm. Ticket 08 thêm đồ thị bộ
-// đóng băng vào cùng khối #si-nights; giữ dữ liệu đêm (biến thể, eval, PR) dễ mở rộng thêm cột. ──
+// ── Vòng tự cải thiện ban đêm: công tắc + bảng các đêm, kèm đồ thị bộ
+// đóng băng trong khối #si-nights; giữ dữ liệu đêm (biến thể, eval, PR) dễ mở rộng thêm cột. ──
 const VARIANT_STATUS_LABEL = { waiting: 'chờ admin duyệt', accepted: 'thắng', rejected: 'thua', dropped: 'bỏ cụm' };
 
-// Đường cong học (self-improve ticket 08): điểm bộ đóng băng theo nhóm qua thời gian; mỗi điểm/PR = 1 lần đo,
+// Đường cong học: điểm bộ đóng băng theo nhóm qua thời gian; mỗi điểm/PR = 1 lần đo,
 // đúng lúc 1 thay đổi self vừa merge. Chưa bao giờ đưa cho board, chỉ vẽ cho hội đồng xem — không thư viện mới.
 const FROZEN_PALETTE = ['#60a5fa', '#fbbf24', '#a78bfa', '#22d3ee', '#f472b6', '#86efac', '#fcd34d', '#fb923c'];
 function frozenChart(scores) {
@@ -1855,7 +1855,7 @@ function frozenChart(scores) {
     <div style="font-size:11px;color:var(--muted);margin-top:4px">${legend}</div>`;
 }
 
-// Theo dõi sau merge + tự revert (self-improve ticket 09): kết quả theo self PR đã merge.
+// Theo dõi sau merge + tự revert: kết quả theo self PR đã merge.
 const WATCH_STATUS_LABEL = { waiting: 'chưa đủ dữ liệu', ok: 'không tụt', dropped: 'tụt — đã tạo yêu cầu revert' };
 function pct(v) { return v == null ? '—' : `${v}%`; }
 function watchSection(rows) {
@@ -2373,7 +2373,7 @@ async function showTab(key, { silent = false } = {}) {
       morph(host, fresh);
     }
     // Badge "Góp ý" lấy từ reqCache chỉ khi tab Góp ý vừa tải lại; tab khác (vd dashboard) tự cập nhật
-    // bằng số của server — trước đây ghi đè bằng reqCache rỗng nên badge hiện 0.
+    // bằng số của server, không ghi đè bằng reqCache rỗng.
     if (key === 'requests') updateRequestBadge(TABS.requests.badge());
   } catch(e) {
     $('#tabbody').innerHTML = `<div class="err">Lỗi: ${e.message}</div>`;

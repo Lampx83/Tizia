@@ -1,4 +1,4 @@
-// Feature-folders ticket 09: ảnh bản nháp vào thread, chuông sau verdict, "Thử cách khác" (≤ 2 lượt hỏng).
+// Ảnh bản nháp vào thread, chuông sau verdict, "Thử cách khác" (≤ 2 lượt hỏng).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

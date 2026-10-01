@@ -1,4 +1,4 @@
-// Feature-folders ticket 02: fair queue across requesters, per-user caps, and per-run caps that scale with the plan.
+// Fair queue across requesters, per-user caps, and per-run caps that scale with the plan.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
@@ -107,7 +107,7 @@ test('per-run caps grow with the plan size and stop at the configured max', () =
   assert.ok(LIMITS.gpu_s_per_worker_hour.value > max, 'one worker hour must fit the biggest run');
 });
 
-// Feature-folders ticket 03: a student's clarification chat gets the GPU before background work.
+// A student's clarification chat gets the GPU before background work.
 test('while a chat streams, a worker keeps its current ticket but takes no new one', async () => {
   const { beginChat, activeChats } = await import('../server/ai-board/chat-activity.js');
   const { store, submit } = fixture();

@@ -1,5 +1,5 @@
 // ============================================================
-// Security context — vá R4/R5/R6 của NO-FRAMEWORK-REVIEW (không lib ngoài)
+// Security context — CSRF, rate limit, security headers (không lib ngoài)
 // ============================================================
 // Những thứ một framework "tặng kèm" mà Express thuần thiếu:
 //   - rate limit (chống brute-force/DoS/spam AI)
@@ -16,7 +16,7 @@ function clientIp(req) {
   return (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || 'unknown';
 }
 
-// ── R6: Security headers ──
+// ── Security headers ──
 export function securityHeaders(_req, res, next) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');              // khớp thiết kế iframe same-origin (apps.html)
@@ -34,8 +34,8 @@ export function securityHeaders(_req, res, next) {
   next();
 }
 
-// ── R5: Rate limit (in-memory sliding window theo IP+bucket) ──
-// Bộ nhớ đủ cho 1 instance; multi-instance (Phase 2) chuyển sang Redis.
+// ── Rate limit (in-memory sliding window theo IP+bucket) ──
+// Bộ nhớ đủ cho 1 instance; multi-instance chuyển sang Redis.
 const buckets = new Map(); // key → number[] (timestamps)
 function hit(key, windowMs, max) {
   const now = Date.now();
@@ -69,7 +69,7 @@ export function rateLimit({ windowMs = 60000, max = 120, bucket = 'g', keyFn = n
   };
 }
 
-// ── R4: CSRF double-submit ──
+// ── CSRF double-submit ──
 const CSRF_COOKIE = 'tizia_csrf';
 const CSRF_SECRET = process.env.CSRF_SECRET || 'dev-csrf-secret-change-me';
 const CSRF_ENFORCE = process.env.CSRF_ENFORCE === '1';

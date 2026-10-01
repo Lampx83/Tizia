@@ -1,4 +1,4 @@
-// Self-improve ticket 08: bộ đánh giá đóng băng (chụp lúc bật lần đầu + 2 tuần sau) không bao giờ lọt vào phần
+// Bộ đánh giá đóng băng (chụp lúc bật lần đầu + 2 tuần sau) không bao giờ lọt vào phần
 // học/kiểm tra; sau mỗi lần merge 1 thay đổi self, đo lại đúng 1 lần và lưu điểm theo nhóm + sha + mã cấu hình.
 import test from 'node:test';
 import assert from 'node:assert/strict';

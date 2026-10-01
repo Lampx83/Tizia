@@ -1,4 +1,4 @@
-"""Cổng ảnh tất định (feature-folders ticket 13), chạy trong gate 5 cùng lần chụp ảnh.
+"""Cổng ảnh tất định, chạy trong gate 5 cùng lần chụp ảnh.
 
 audit(page, selectors) đo trên trang đang mở:
 - tương phản chữ thật (màu + opacity tích luỹ của cả nhóm + nền, nền gradient lấy trung bình điểm màu);

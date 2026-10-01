@@ -60,7 +60,7 @@ export const core = Object.freeze({
   integrations: Object.freeze({ scoreup, codelab }),
 });
 
-// Tên module cấm import trực tiếp từ plugin AI sinh. Cổng 4 (ticket 12) đọc
+// Tên module cấm import trực tiếp từ plugin AI sinh. Cổng 4 đọc
 // danh sách này thay vì tự chép lại một bản thứ hai. Nguồn thật ở registry.js
 // (nó cũng dùng chính list này để từ chối mount runtime — xem
 // assertOriginAllowed) — re-export ở đây để chỗ import cũ khỏi phải đổi.

@@ -1,4 +1,4 @@
-// Ticket 05: 3-question onboarding before the first request (admin exempt), stored per user, sent to the worker.
+// 3-question onboarding before the first request (admin exempt), stored per user, sent to the worker.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';

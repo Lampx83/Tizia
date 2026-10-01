@@ -1,4 +1,4 @@
-"""Cổng 4 (AC2 ticket 05) — check bắt buộc trên diff thật base..HEAD của full checkout:
+"""Cổng 4 (AC2) — check bắt buộc trên diff thật base..HEAD của full checkout:
 secret, PII, injection, nội dung, xoá/sửa test có sẵn, path được bảo vệ, cộng luật
 theo path đổi (Python phải parse được; public/ → cờ UI để cổng 5 bắt buộc screenshot).
 Thuần text + ast.parse — không chạy code candidate trên host.
@@ -244,12 +244,12 @@ _INJECTION = [re.compile(p, re.I) for p in (
     r"ignore\s+(?:all\s+)?(?:previous|prior|above)\s+instructions", r"system\s+prompt",
     r"bỏ\s+qua\s+(?:mọi|tất\s+cả|các)\s+(?:chỉ\s+dẫn|hướng\s+dẫn)",
 )]
-# Ngoại lệ hẹp duy nhất cho "<script" (feature-folders ticket 08): trang chức năng mới nạp module của chính nó,
+# Ngoại lệ hẹp duy nhất cho "<script": trang chức năng mới nạp module của chính nó,
 # đúng 1 dạng dòng, đường dẫn nội bộ public/js/features/<slug>/<tên>.js, không nội dung inline.
 _FEATURE_MODULE = re.compile(
     r'^\s*<script\s+type="module"\s+src="(?:\./)?js/features/[a-z0-9]+(?:-[a-z0-9]+)*/[a-z0-9]+(?:-[a-z0-9]+)*\.js">'
     r'\s*</script>\s*$')
-# ponytail: danh sách từ ngắn, đủ cho nội dung giáo dục D0; bộ lọc nội dung thật (ticket 14) thay sau.
+# ponytail: danh sách từ ngắn, đủ cho nội dung giáo dục D0; bộ lọc nội dung thật thay sau.
 _UNSAFE = re.compile(r"(?i)(?<!\w)(?:fuck|shit|bitch|đụ|địt|đĩ|lồn|cặc|đồ\s+ngu|óc\s+chó)(?!\w)")
 _TEST_PATH = re.compile(r"(?:^|/)(?:tests?|__tests__)/|(?:\.|_)(?:test|spec)\.[^/]+$|(?:^|/)test_[^/]+\.py$")
 _PROTECTED = re.compile(

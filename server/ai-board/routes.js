@@ -14,7 +14,7 @@ import { checkPostMergeWatch, pendingPostMergeWatch } from './post-merge-watch.j
 import { listTransientBlocked, retryTransientTicket, setTransientRetryEnabled, transientRetryState } from './transient-retry.js';
 import { guardModelText, MAX_QUESTIONS } from '../contexts/ai-board-intake/clarify.js';
 
-// Không cấu hình model phân loại → không gọi gì (hành vi trước ticket 04).
+// Không cấu hình model phân loại → không gọi gì (không phân loại).
 const defaultClassifyRequest = (title, detail) => (
   process.env.OLLAMA_URL && process.env.AI_BOARD_CLASSIFIER_MODEL
     ? classifyWithModel(title, detail) : Promise.resolve(null));
@@ -60,10 +60,10 @@ export function attachAiBoardRequestRoutes(router, {
       console.warn('[ai-board] classifier unavailable:', error.message);
       return null;
     });
-    // Ticket 08: kết quả model ở mode 'shadow' chỉ ghi log, không hành động.
+    // Kết quả model ở mode 'shadow' chỉ ghi log, không hành động.
     const danger = classified?.danger?.shadow ? null : classified?.danger;
     const modelLabels = (danger?.labels || []).map((key) => `model_${key}`);
-    // Làm rõ = luật cứng HOẶC model clarity 'active'; ghi lại nguồn để ticket 01 so sánh.
+    // Làm rõ = luật cứng HOẶC model clarity 'active'; ghi lại nguồn để so sánh luật vs model.
     const decision = resolveClarify({
       title: body.title, detail: body.detail, classified, enabled: features.has('clarify'),
       isFeature: body.type === 'feature' && !body.folder_id, // chức năng mới: luôn hỏi 3 câu, không áp luật "quá rộng"
@@ -142,7 +142,7 @@ export function attachAiBoardRequestRoutes(router, {
     }
   });
 
-  // "Thử cách khác" (ticket 09): lượt hỏng của chính mình → lập plan mới; hỏng 2 lượt liền thì chờ admin.
+  // "Thử cách khác": lượt hỏng của chính mình → lập plan mới; hỏng 2 lượt liền thì chờ admin.
   router.post('/api/requests/:id/retry', requireAuth, requireStrictCsrf, (req, res) => {
     const pendingCap = LIMITS.pending_roots_per_user.value;
     if (req.user.role !== 'admin' && store.countPendingRoots(req.user.id) >= pendingCap) {
@@ -175,7 +175,7 @@ export function attachAiBoardRequestRoutes(router, {
     res.json({ ok: true });
   });
 
-  // ── Folder chức năng (feature-folders ticket 04) ──
+  // ── Folder chức năng ──
   const folderError = (res, error) => {
     if (error instanceof WorkerContractError) return res.status(error.status).json({ error: error.code, message: error.message });
     throw error;
@@ -251,7 +251,7 @@ export function attachAiBoardRequestRoutes(router, {
     }
   });
 
-  // ── Task eval từ lần hỏng (self-improve ticket 02) ──
+  // ── Task eval từ lần hỏng ──
   router.get('/api/admin/ai-board/eval-tasks', requireAuth, requireAdmin, (req, res) => {
     try { res.json(listEvalTasks(store.db, req.query.status || undefined)); } catch (error) { folderError(res, error); }
   });
@@ -262,7 +262,7 @@ export function attachAiBoardRequestRoutes(router, {
     try { res.json(deleteEvalTask(store.db, req.params.id)); } catch (error) { folderError(res, error); }
   });
 
-  // ── Vòng tự cải thiện ban đêm (self-improve ticket 07): công tắc + bảng các đêm, chỉ admin ──
+  // ── Vòng tự cải thiện ban đêm: công tắc + bảng các đêm, chỉ admin ──
   router.get('/api/admin/ai-board/self-improve', requireAuth, requireAdmin, (_req, res) => {
     res.json(listNights(store.db));
   });
@@ -451,12 +451,12 @@ export function attachAiBoardWorkerRoutes(router, {
     }
   }));
 
-  // Task eval đã gắn nhãn (self-improve ticket 02): server chia học / kiểm tra theo thời gian, worker không tự chia.
+  // Task eval đã gắn nhãn: server chia học / kiểm tra theo thời gian, worker không tự chia.
   router.post('/api/ai-board/worker/eval-tasks', authenticate, handle((_req, res) => {
     res.json(evalTaskSplit(store.db));
   }));
 
-  // Board tự sửa (self-improve ticket 04): yêu cầu self, chủ là người dùng hệ thống ai-board; file ngoài vùng → 422.
+  // Board tự sửa: yêu cầu self, chủ là người dùng hệ thống ai-board; file ngoài vùng → 422.
   router.post('/api/ai-board/worker/self-requests', authenticate, handle((req, res) => {
     try {
       res.json({ ok: true, ...store.createSelfRequest({ title: req.body?.title, detail: req.body?.detail,
@@ -467,7 +467,7 @@ export function attachAiBoardWorkerRoutes(router, {
     }
   }));
 
-  // Vòng đêm (self-improve ticket 07): worker hỏi được chạy không (tạo dòng đêm), rồi ghi từng bước vào dòng đó.
+  // Vòng đêm: worker hỏi được chạy không (tạo dòng đêm), rồi ghi từng bước vào dòng đó.
   router.post('/api/ai-board/worker/self-improve/night', authenticate, handle((req, res) => {
     res.json(startNight(store.db, req.body?.night));
   }));
@@ -475,7 +475,7 @@ export function attachAiBoardWorkerRoutes(router, {
     res.json({ night: reportNight(store.db, req.body) });
   }));
 
-  // Bộ đánh giá đóng băng (self-improve ticket 08): self PR đã merge còn cần đo, đo cùng bộ task đóng băng hiện
+  // Bộ đánh giá đóng băng: self PR đã merge còn cần đo, đo cùng bộ task đóng băng hiện
   // có; ghi lại đúng 1 lần điểm đo được (idempotent theo pr_number).
   router.post('/api/ai-board/worker/self-improve/frozen-benchmark/pending', authenticate, handle((_req, res) => {
     res.json(pendingFrozenMeasurements(store.db));
@@ -484,7 +484,7 @@ export function attachAiBoardWorkerRoutes(router, {
     res.json({ score: recordFrozenMeasurement(store.db, req.body) });
   }));
 
-  // Theo dõi production sau merge + tự revert (self-improve ticket 09): self PR đã merge, cửa sổ sau đã trôi
+  // Theo dõi production sau merge + tự revert: self PR đã merge, cửa sổ sau đã trôi
   // qua, chưa kết luận → worker gọi check đúng PR đó; server tự đọc closed_at/sha, tính tỉ lệ, ghi kết luận,
   // tự tạo đúng 1 yêu cầu self revert nếu tụt quá ngưỡng (không tự merge).
   router.post('/api/ai-board/worker/self-improve/post-merge-watch/pending', authenticate, handle((_req, res) => {
@@ -494,7 +494,7 @@ export function attachAiBoardWorkerRoutes(router, {
     res.json({ watch: checkPostMergeWatch(store.db, req.body?.pr_number, store.createSelfRequest) });
   }));
 
-  // Trạng thái PR (self-improve ticket 03): worker hỏi GitHub các PR này rồi báo PR đã đóng; không webhook.
+  // Trạng thái PR: worker hỏi GitHub các PR này rồi báo PR đã đóng; không webhook.
   router.post('/api/ai-board/worker/pull-requests/open', authenticate, handle((_req, res) => {
     res.json({ pull_requests: openPullRequests(store.db) });
   }));
@@ -502,7 +502,7 @@ export function attachAiBoardWorkerRoutes(router, {
     res.json({ pull_request: reportPullRequest(store.db, req.body) });
   }));
 
-  // Ảnh bản nháp (ticket 09): auth trước rồi mới parse body lớn; content-type riêng để express.json chung bỏ qua.
+  // Ảnh bản nháp: auth trước rồi mới parse body lớn; content-type riêng để express.json chung bỏ qua.
   router.post('/api/ai-board/worker/tickets/:id/screenshots', authenticate,
     express.json({ type: SHOTS_TYPE, limit: SHOTS_BODY_LIMIT }), async (req, res, next) => {
       if (!uploadsDir) return res.status(503).json({ error: 'uploads_unavailable' });

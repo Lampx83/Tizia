@@ -1340,7 +1340,7 @@ export function setEnrolledDomain(user_id, domain) {
 
 console.log(`[db] SQLite open at ${dbPath}`);
 
-// --- Scenario runs (cross-device sync — added during phase rollback) ---
+// --- Scenario runs (cross-device sync) ---
 db.exec(`
   CREATE TABLE IF NOT EXISTS scenario_runs (
     user_id     INTEGER NOT NULL,
@@ -1807,7 +1807,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_portal_apps_owner ON portal_apps(owner_id);
   CREATE INDEX IF NOT EXISTS idx_portal_apps_public ON portal_apps(is_public) WHERE is_public = 1;
 `);
-// Phase 1.5: mở rộng cho "builtin app" (đăng ký URL nội bộ thay vì zip user upload).
+// Mở rộng cho "builtin app" (đăng ký URL nội bộ thay vì zip user upload).
 // Cách dùng: kind='builtin' → target_url chứa /xxx.html, không cần thư mục data/portal-apps.
 // Phân nhóm cho campus map: category + domain để filter mặc định theo cấp/trường.
 try { db.exec(`ALTER TABLE portal_apps ADD COLUMN kind TEXT NOT NULL DEFAULT 'embedded'`); } catch {}
@@ -1973,7 +1973,7 @@ export function listAllDomainGrants() {
 // ─────────────────────────────────────────────────────────────────────────────
 // SCHOOL ADMINS — phân quyền QUẢN LÝ (manage) 1 trường cụ thể cho user. Khác
 // với user_domain_grants (chỉ ACCESS). School admin có thể: xem HS trường mình,
-// cấu hình campus map, quản lý apps gắn vào toà nhà (sẽ build trong Phase 2 UI).
+// cấu hình campus map, quản lý apps gắn vào toà nhà (UI chưa có).
 //
 // Quyết định KHÔNG thêm role mới vào users.role (giữ enum cũ: pupil/student/
 // teacher/admin) — thay vào đó bảng riêng để 1 user có thể quản lý NHIỀU trường,
@@ -2122,7 +2122,7 @@ db.exec(`
     gate_reached  REAL    NOT NULL,   -- 1..7, có cổng 5.5 (risk-triage)
     outcome       TEXT,
     request_ids   TEXT,               -- JSON array
-    template_key  TEXT,               -- đếm N=10 rollback-sạch liên tiếp (ticket 13)
+    template_key  TEXT,               -- đếm N=10 rollback-sạch liên tiếp
     budget_json   TEXT,
     pr_url        TEXT,
     created_at    INTEGER NOT NULL,
@@ -2132,7 +2132,7 @@ db.exec(`
 `);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GATE TRACE — ticket 23. 1 dòng mỗi lần harness gọi Ollama THẬT ở bất kỳ cổng
+// GATE TRACE. 1 dòng mỗi lần harness gọi Ollama THẬT ở bất kỳ cổng
 // nào (1, 2.5, 3, validator) — prompt/response thật, cộng 4 field
 // prompt_eval_count/eval_count/prompt_eval_duration/eval_duration Ollama trả
 // về (bằng chứng cache-hit, xem spec.md "kỷ luật cache" rule 5). Join với

@@ -1,4 +1,4 @@
-"""Ticket 16 — calibrate.py: so model ứng viên với quyết định Opus lịch sử."""
+"""Calibrate.py: so model ứng viên với quyết định Opus lịch sử."""
 import json
 import sqlite3
 import time

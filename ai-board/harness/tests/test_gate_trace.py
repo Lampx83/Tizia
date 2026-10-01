@@ -1,4 +1,4 @@
-"""gate_trace (ticket 23) — 1 dòng mỗi lần gọi Ollama thật, join được với
+"""gate_trace — 1 dòng mỗi lần gọi Ollama thật, join được với
 skill_proposals, best-effort khi DB lỗi."""
 import sqlite3
 

@@ -174,8 +174,8 @@ function bind(root) {
   const ctxBox = root.querySelector('#sgf-ctx');
   const inbox = root.querySelector('#sgf-inbox');
 
-  // Live counter cho detail textarea (req #3 bị cụt ở 2000 chars trước đây →
-  // giờ giới hạn 10000, hiển thị bộ đếm để SV biết khi nào sắp đầy).
+  // Live counter cho detail textarea (giới hạn 10000, hiển thị bộ đếm
+  // để SV biết khi nào sắp đầy).
   const detailInput = root.querySelector('#sgf-detail');
   const detailCount = root.querySelector('#sgf-detail-count');
   if (detailInput && detailCount) {
@@ -422,7 +422,7 @@ function bind(root) {
     }
   }
 
-  // ── Làm rõ yêu cầu mơ hồ (ticket 06): Ban hỏi tối đa 5 câu, chữ hiện dần theo stream ──
+  // ── Làm rõ yêu cầu mơ hồ: Ban hỏi tối đa 5 câu, chữ hiện dần theo stream ──
   const clarifyBox = root.querySelector('#sgf-clarify');
   const clarLog = root.querySelector('#sgf-clar-log');
   const clarReply = root.querySelector('#sgf-clar-reply');
@@ -767,7 +767,7 @@ function bind(root) {
     }
   });
 
-  // ── Folder chức năng (feature-folders ticket 04) ──
+  // ── Folder chức năng ──
   const folderBox = root.querySelector('#sgf-folders');
   const folderRow = root.querySelector('#sgf-folder-row');
   const folderSel = root.querySelector('#sgf-folder');

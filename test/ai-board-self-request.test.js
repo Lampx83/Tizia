@@ -1,4 +1,4 @@
-// Self-improve ticket 04: yêu cầu loại `self` (board sửa chính nó) — chỉ hệ thống tạo, vùng sửa hẹp, luôn chờ admin.
+// Yêu cầu loại `self` (board sửa chính nó) — chỉ hệ thống tạo, vùng sửa hẹp, luôn chờ admin.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -198,7 +198,7 @@ test('the board spending a day of GPU does not hold back its next self request',
   } finally { f.close(); }
 });
 
-// Self-improve ticket 05: cổng 5 của yêu cầu self là eval 2 sha (không có trang để smoke Docker/HTTP).
+// Cổng 5 của yêu cầu self là eval 2 sha (không có trang để smoke Docker/HTTP).
 const SHA = (c) => c.repeat(40);
 const EVAL = { accepted: true, base_sha: SHA('a'), variant_sha: SHA('b'), tasks: 6, wins: 3, losses: 1, ties: 2,
   gpu_s: 812, gpu_s_limit: 2400, gold: false, dropped: [],

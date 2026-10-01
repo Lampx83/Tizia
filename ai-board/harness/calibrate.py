@@ -1,4 +1,4 @@
-"""Ticket 16 — hiệu chuẩn model nội bộ cho cổng 1-2.
+"""Hiệu chuẩn model nội bộ cho cổng 1-2.
 
 So gemma4:26b (hoặc model khác truyền qua --model) với quyết định Opus lịch sử
 (ai_decisions.decided_by='ai', ghi bởi Routine "Ban điều hành AI" ngoài repo —
@@ -11,9 +11,9 @@ của cổng 1-2 — approve/priority coi là "đi tiếp" (go=True), reject là
 (go=False), defer không có tín hiệu go/no-go rõ ràng nên bị loại khỏi so sánh
 (đếm riêng ở excluded_no_signal, không tính vào agreement_rate).
 
-Chỉ scope phán đoán/plan (cổng 1-2) — KHÔNG đụng cổng 3 (codegen, ticket 11)
+Chỉ scope phán đoán/plan (cổng 1-2) — KHÔNG đụng cổng 3 (codegen)
 và KHÔNG tự chỉnh DUP_THRESHOLD/history_factor của prescreen.py (những chỗ đó
-tự ghi chú "chờ gold set ticket 16" — để lại cho vòng sau, không phải đây).
+tự ghi chú "chờ gold set" — để lại cho vòng sau, không phải đây).
 
 Quyết định gemma có thay Opus mặc định ở cổng 1-2 hay không LÀ JUDGMENT CALL
 của người — script này chỉ ra số liệu, không tự kết luận (xem ticket
@@ -133,7 +133,7 @@ def run(db_path, *, deps) -> dict:
 
 def summarize(run_result: dict) -> dict:
     """agreement_rate + đếm theo loại — KHÔNG chỉ 1 con số pass/fail (acceptance
-    criteria ticket 16)."""
+    criteria)."""
     results = run_result["results"]
     n = len(results)
     counts = {"agrees": 0, "gemma_stricter": 0, "gemma_looser": 0}

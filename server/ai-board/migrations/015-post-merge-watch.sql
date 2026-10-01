@@ -1,4 +1,4 @@
--- Theo dõi production sau merge + tự revert (self-improve ticket 09). Mỗi self PR đã merge có tối đa 1 dòng:
+-- Theo dõi production sau merge + tự revert. Mỗi self PR đã merge có tối đa 1 dòng:
 -- 'waiting' = cửa sổ sau merge chưa đủ 10 lượt production mỗi bên, chưa kết luận, kiểm lại đêm sau;
 -- 'ok' / 'dropped' = đã kết luận, không kiểm lại (idempotent theo pr_number, như ai_frozen_benchmark_scores).
 -- 'dropped' kèm đúng 1 yêu cầu self revert (revert_request_id) — tạo qua createSelfRequest, tier protected,

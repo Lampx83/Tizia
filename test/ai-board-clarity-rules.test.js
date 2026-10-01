@@ -1,5 +1,5 @@
-// Ticket 08: deterministic clarity rules decide clarification without any model; the logprob classifier
-// only acts in mode 'active' (clarity ships in 'shadow' until ticket 01 calibrates it).
+// Deterministic clarity rules decide clarification without any model; the logprob classifier
+// only acts in mode 'active' (clarity ships in 'shadow' until calibrated).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 

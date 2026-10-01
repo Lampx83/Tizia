@@ -211,7 +211,7 @@ export function attachAdaptive(r) {
 
   /**
    * GET /api/adaptive/learner/:name — tổng quan tiến độ học của 1 learner.
-   * Dùng cho dashboard Wave 2.
+   * Dùng cho dashboard.
    */
   r.get('/api/adaptive/learner/:name', (req, res) => {
     const learner = String(req.params.name || '').trim();

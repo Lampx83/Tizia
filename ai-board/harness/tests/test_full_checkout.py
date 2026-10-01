@@ -1,4 +1,4 @@
-"""Ticket 04: AI Board worktree/branch with one commit per ordered child.
+"""AI Board worktree/branch with one commit per ordered child.
 
 Git runs for real, but only inside tmp_path repos — never the Tizia checkout.
 """
@@ -235,7 +235,7 @@ def test_long_skill_id_still_yields_a_contract_branch_name():
         candidate.branch_name("!!!")
 
 
-# ── Feature-folders ticket 05: every run of a folder cycle commits onto one branch ──
+# ── Every run of a folder cycle commits onto one branch ──
 
 def _commit_file(repo, rel, text, msg):
     (Path(repo) / rel).parent.mkdir(parents=True, exist_ok=True)

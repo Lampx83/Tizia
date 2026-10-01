@@ -140,7 +140,7 @@ MAX_SHOT_HEIGHT = 2000     # cắt trang dài: PNG vừa trần upload của ser
 
 
 def capture_screenshot(url: str, path: Path, width: int = 1280, *, selectors: list[str] = ()) -> dict:
-    """Một lần chụp Chromium + đo cổng ảnh (ticket 13) trên cùng trang đó. Trả kết quả visual.audit."""
+    """Một lần chụp Chromium + đo cổng ảnh trên cùng trang đó. Trả kết quả visual.audit."""
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as playwright:

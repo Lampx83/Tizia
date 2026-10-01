@@ -1,6 +1,6 @@
-// Self-improve ticket 09: sau khi 1 thay đổi self merge, so tỉ lệ ready_for_pr và tỉ lệ merge trên production
+// Sau khi 1 thay đổi self merge, so tỉ lệ ready_for_pr và tỉ lệ merge trên production
 // 7 ngày sau với 7 ngày trước (chỉ khi đủ ≥10 lượt mỗi bên); tụt quá ngưỡng → tự tạo đúng 1 yêu cầu self
-// revert (không tự merge). Dữ liệu lượt production được chèn thẳng (giống insertLabelled của ticket 08) vì
+// revert (không tự merge). Dữ liệu lượt production được chèn thẳng (giống insertLabelled) vì
 // chỉ cần kiểm soát created_at/outcome/số PR, không cần chạy hết pipeline cho hàng chục lượt.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -77,7 +77,7 @@ async function fixture() {
   const check = (prNumber) => worker('/api/ai-board/worker/self-improve/post-merge-watch/check', { pr_number: prNumber });
 
   let n = 0;
-  /** Tạo + admin duyệt plan + thực hiện 1 yêu cầu self trọn vẹn (như ticket 04/05), trả lease đang giữ + verdict. */
+  /** Tạo + admin duyệt plan + thực hiện 1 yêu cầu self trọn vẹn, trả lease đang giữ + verdict. */
   function selfRun(targetFile = SKILL) {
     n += 1;
     const created = store.createSelfRequest({ title: `Sửa skill ${n}`, detail: 'Chẩn đoán.', targetFile,
@@ -101,7 +101,7 @@ async function fixture() {
     store.submitPrePrVerdict(id, { ...lease, runId: run.id, verdict: VERDICT, idempotencyKey: `pmw-verdict-${n}` });
     return { id, run, lease };
   }
-  /** Mở PR cho 1 self run vừa qua verdict rồi báo merged qua HTTP worker (giống ticket 03), closed_at tuỳ chọn. */
+  /** Mở PR cho 1 self run vừa qua verdict rồi báo merged qua HTTP worker, closed_at tuỳ chọn. */
   async function mergeSelfPr({ id, run, lease }, prNumber, { closedAt = Date.now(), files = [SKILL] } = {}) {
     store.recordPullRequest(id, { ...lease, runId: run.id, idempotencyKey: `pmw-pr-${prNumber}`,
       pullRequest: { number: prNumber, url: `https://github.com/Lampx83/Tizia/pull/${prNumber}`, base: 'dev',

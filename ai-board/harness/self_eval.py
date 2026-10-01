@@ -1,4 +1,4 @@
-"""Cổng eval của yêu cầu self (self-improve ticket 05), chạy thay Docker smoke ở cổng 5.
+"""Cổng eval của yêu cầu self, chạy thay Docker smoke ở cổng 5.
 
 Đo sha gốc và sha biến thể, mỗi sha trong 1 worktree + process riêng (trọng số truy xuất, skill, prompt nạp lúc
 import: đo đúng code production sẽ chạy). Thứ tự: bộ đo tất định (eval_strata, không GPU) → tụt quá ngưỡng thì
@@ -23,7 +23,7 @@ LIMITS = json.loads((REPO / "server" / "ai-board" / "contract.json").read_text(e
 EVAL_GPU_S = LIMITS["night_gpu_s"]["eval"]
 MAX_DROP = LIMITS["max_stratum_drop_pts"]
 GATE3_PROMPTS = {"ai-board/harness/prompts/implement.md"}  # biến thể sửa file này → chạy thêm gold set cổng 3
-JUDGE = LIMITS["shadow_judge"]  # giám khảo model shadow (ticket 10): chỉ ghi, không đổi verdict
+JUDGE = LIMITS["shadow_judge"]  # giám khảo model shadow: chỉ ghi, không đổi verdict
 JUDGE_PROMPT_NAME = "judge.md"
 JUDGE_SCHEMA = {"type": "object", "required": ["better", "reason"],
                 "properties": {"better": {"type": "string", "enum": ["A", "B", "tie"]}, "reason": {"type": "string"}}}
@@ -142,7 +142,7 @@ def _checkouts(repo, shas):
 
 
 def run_frozen(sha: str, tasks: list[dict], budget: float, *, checkout_repo=None, run_at=None) -> dict:
-    """Đo bộ đánh giá đóng băng 1 lần ở `sha` (self-improve ticket 08, gọi sau khi 1 thay đổi self vừa merge):
+    """Đo bộ đánh giá đóng băng 1 lần ở `sha` (gọi sau khi 1 thay đổi self vừa merge):
     bộ đo tất định hiện tại (eval_strata) + gold cổng 3 (eval_gold) + task đóng băng đã gắn nhãn (server lọc qua
     eval-tasks.js frozenTasks) — cùng process con job strata/gold/tasks self_eval.py đã có cho cổng eval của
     yêu cầu self, không chạy lại logic riêng, trong 1 worktree tách rời của đúng sha đó (run_at tiêm được cho

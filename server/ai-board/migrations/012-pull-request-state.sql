@@ -1,4 +1,4 @@
--- Trạng thái PR ai-board/* worker hỏi GitHub rồi báo về (self-improve ticket 03). Không webhook.
+-- Trạng thái PR ai-board/* worker hỏi GitHub rồi báo về. Không webhook.
 -- Có dòng = PR đã đóng (merged | closed); PR đang mở không có dòng. Nối về lượt qua
 -- json_extract(ai_runs.evidence_json, '$.pull_request.number') — 1 PR folder có thể gom nhiều lượt.
 CREATE TABLE ai_pull_requests (

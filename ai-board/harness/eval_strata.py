@@ -1,4 +1,4 @@
-"""Bộ đo theo nhóm (feature-folders ticket 12): loại (ui | logic | feature) × trường (it | pharmacy) ×
+"""Bộ đo theo nhóm: loại (ui | logic | feature) × trường (it | pharmacy) ×
 cách mô tả (named: có tên riêng/ngoặc | plain: lời thường). Chỉ số tất định chạy trong CI: cổng 1 có nhắm
 đúng file không (targets, hoặc trang mẫu với loại feature); lượt sửa tiếp trong folder (type=followup) phải nhắm
 file folder sở hữu và không bị coi là chức năng mới; luật độ rõ (clarity-rules.json) không được bắt yêu cầu đã rõ
@@ -87,7 +87,7 @@ def _folder(school: str, title: str, purpose: str, flow: str, owned: str, turns:
     return out
 
 
-# 5 folder chức năng × 3–4 lượt sửa viết sẵn (ticket 12). File sở hữu là trang draft chưa có ở HEAD.
+# 5 folder chức năng × 3–4 lượt sửa viết sẵn. File sở hữu là trang draft chưa có ở HEAD.
 FOLLOWUPS = [
     *_folder("it", "Trò đoán từ khoá lập trình", "ôn từ khoá khi học lập trình", "xem gợi ý, gõ từ, được chấm điểm",
              "public/it-tu-khoa.html", [("named", "đổi màu nút Đoán sang xanh lá"),

@@ -12,7 +12,7 @@ import { requireAuth } from '../identity/auth.js';
 import { attachLeague, addLeagueWeekXp } from './league.js';
 import { attachParentDashboard } from './parent.js';
 import { attachPet, addPetXp } from './pet.js';
-// Battle Pass XP — added per engagement claim (cộng song song league XP)
+// Battle Pass XP — mỗi engagement claim (cộng song song league XP)
 function bpHook(uid, xp) {
   try { import('../economy/index.js').then(m => m.addBpXp(uid, xp)); } catch {}
 }

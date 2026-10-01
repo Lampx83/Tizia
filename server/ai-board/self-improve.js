@@ -1,5 +1,5 @@
 // ============================================================
-// Vòng tự cải thiện ban đêm (self-improve ticket 07)
+// Vòng tự cải thiện ban đêm
 // ============================================================
 // Worker tự kiểm đồng hồ; server giữ công tắc admin, điều kiện chạy (bật, đủ task có nhãn, không PR self
 // đang mở, chưa tự dừng), cụm bị bỏ qua, và 1 dòng mỗi đêm. Verdict của lượt self cập nhật biến thể.
@@ -126,13 +126,13 @@ export function listNights(db, limit = 30) {
     .map((n) => ({ ...n, variants: n.variants.map((v) => ({ ...v, pr: v.request_id ? pr.get(v.request_id) ?? null : null })) }));
   const empty = emptyNights(db);
   return { ...state(db), paused: empty >= SI.pause_after_empty_nights, empty_nights: empty, limits: SI, nights,
-    // Ticket 08: đường cong học — không phụ thuộc đêm nào, gộp vào cùng response cho tab admin.
+    // Đường cong học — không phụ thuộc đêm nào, gộp vào cùng response cho tab admin.
     frozen: listFrozenScores(db),
-    // Ticket 09: kết quả theo dõi production sau mỗi lần merge self, cùng response cho tab admin.
+    // Kết quả theo dõi production sau mỗi lần merge self, cùng response cho tab admin.
     post_merge_watch: listPostMergeWatch(db) };
 }
 
-// frozen_at (ticket 08): mốc chụp bộ đánh giá đóng băng — chỉ ghi lần bật đầu tiên (COALESCE giữ giá trị cũ),
+// frozen_at: mốc chụp bộ đánh giá đóng băng — chỉ ghi lần bật đầu tiên (COALESCE giữ giá trị cũ),
 // khác enabled_at vốn đếm lại mỗi lần bật/tắt.
 export function setSelfImproveEnabled(db, enabled, adminUserId, now = Date.now()) {
   if (typeof enabled !== 'boolean') throw new WorkerContractError('enabled must be boolean');
