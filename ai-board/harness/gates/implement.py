@@ -55,6 +55,12 @@ RETRY_SUFFIX = (
 )
 
 
+def _retry_sampling(iteration: int) -> dict | None:
+    """First attempt: deterministic (repeatable, KV-cache friendly). Retries: a small, growing temperature and a fresh
+    seed, because the same prompt at temperature 0 gives the same wrong answer every time (seen 8x on one request)."""
+    return {"temperature": min(0.3 * iteration, 0.9), "seed": 1000 + iteration} if iteration else None
+
+
 def retry_hint(error: str, iteration: int) -> str:
     """Gợi ý theo loại lỗi; lần sau cùng đẩy về dạng chèn theo số dòng (model nhỏ chép lệch nhiều)."""
     if "Dòng gần giống nhất" in error:  # a near miss: the file line is quoted in the error, so copy it exactly
@@ -314,7 +320,7 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
             # Phản hồi nối SAU prompt cố định + ngữ cảnh: prefix giữ nguyên byte, Ollama tái dùng KV cache.
             body = deps.call_model(model, prompt + feedback, gate=3, budget=budget, db_path=db_path,
                                    proposal_id=proposal_id, prompt_name="implement.md", child=child,
-                                   iteration=iteration)
+                                   iteration=iteration, options=_retry_sampling(iteration))
             raw = body.get("response", "")
             try:
                 out = parse_codegen(raw, existing=current is not None)

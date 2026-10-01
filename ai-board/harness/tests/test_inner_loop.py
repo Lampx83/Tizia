@@ -171,3 +171,13 @@ def test_syntax_retry_hint_says_to_copy_the_whole_line():
 def test_near_miss_retry_hint_says_to_copy_the_quoted_line_exactly():
     hint = implement.retry_hint("edit 1: search không khớp đoạn nào trong file: 'x'\nDòng gần giống nhất trong file (chép nguyên văn từ đây):\nL2| y", 0)
     assert "NGUYÊN VĂN" in hint
+
+
+def test_inner_retries_vary_the_sampling_so_a_deterministic_loop_can_break(tmp_path):
+    models = SeqModels([BAD_SEARCH, BAD_SEARCH, GOOD])
+    out, _ = _run(tmp_path, models)
+    assert out["blocked"] is False and len(models.calls) == 3
+    temperatures = [call["temperature"] for call in models.calls]
+    assert temperatures[0] == 0                        # the first attempt stays deterministic (KV cache, repeatability)
+    assert 0 < temperatures[1] < temperatures[2]       # identical prompt + temperature 0 would give the identical answer
+    assert len({call.get("seed") for call in models.calls[1:]}) == 2
