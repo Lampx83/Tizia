@@ -6,7 +6,7 @@ services:
     container_name: tizia-dev
     restart: unless-stopped
     ports:
-      - "${PORT:-8041}:8041"  # host port follows PORT so the host worker reaches 127.0.0.1:$PORT
+      - "${PORT:-8041}:8041"
     env_file:
       - .env
     environment:
@@ -14,9 +14,51 @@ services:
       PORT: 8041
       HOST: 0.0.0.0
       DATA_DIR: /data
+      AI_BOARD_WORKER_KEY: ${AI_BOARD_WORKER_KEY:-}
+      OLLAMA_URL: ${OLLAMA_URL:-}
+      OLLAMA_SECKEY: ${OLLAMA_SECKEY:-}
+      AI_BOARD_CLASSIFIER_MODEL: ${AI_BOARD_CLASSIFIER_MODEL:-qwen3.5:4b}
+      TIZIA_MODEL_AI_BOARD_GRILL: ${TIZIA_MODEL_AI_BOARD_GRILL:-qwen3.5:4b}
+      TIZIA_MODEL_AI_BOARD_SPEC: ${TIZIA_MODEL_AI_BOARD_SPEC:-qwen3:8b}
     volumes:
       - tizia-dev-data:/data
+
+  ai-board-worker:
+    build:
+      context: .
+      dockerfile: ai-board/worker.Dockerfile
+    image: tizia-ai-board-worker:latest
+    profiles: [ai-board]
+    depends_on: [tizia-dev]
+    restart: on-failure
+    privileged: true
+    cpus: 2
+    mem_limit: 4g
+    pids_limit: 512
+    environment:
+      AI_BOARD_SERVER_URL: http://tizia-dev:8041
+      AI_BOARD_WORKER_KEY: ${AI_BOARD_WORKER_KEY:?AI_BOARD_WORKER_KEY is required}
+      AI_BOARD_WORKER_MODE: ${AI_BOARD_WORKER_MODE:-off}
+      AI_BOARD_REPO_DIR: /repo
+      AI_BOARD_VERIFY_NETWORK: internal
+      AI_BOARD_GITHUB_TOKEN: ${AI_BOARD_GITHUB_TOKEN:-}
+      PR_BASE_BRANCH: dev
+      OLLAMA_URL: ${OLLAMA_URL:?OLLAMA_URL is required}
+      OLLAMA_SECKEY: ${OLLAMA_SECKEY:-}
+      GATE1_MODEL: ${GATE1_MODEL:-qwen3:8b}
+      GATE3_MODEL_HEAVY: ${GATE3_MODEL_HEAVY:-qwen2.5-coder:14b}
+      GATE3_MODEL_LIGHT: ${GATE3_MODEL_LIGHT:-qwen2.5-coder:14b}
+      EMBED_MODEL: ${EMBED_MODEL:-bge-m3}
+      AI_BOARD_CLASSIFIER_MODEL: ${AI_BOARD_CLASSIFIER_MODEL:-qwen3.5:4b}
+      BUDGET_MAX_WALL_CLOCK_S: "1200"
+    volumes:
+      - ai-board-repo:/repo
+      - ai-board-docker:/var/lib/docker
+      - ai-board-memory:/opt/ai-board/ai-board/memory
 
 volumes:
   tizia-dev-data:
     driver: local
+  ai-board-repo:
+  ai-board-docker:
+  ai-board-memory:

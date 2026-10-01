@@ -20,5 +20,6 @@ data
 README.md
 .scratch
 docs/agents
+docs/local
 graphify-out
 .smoketest-data

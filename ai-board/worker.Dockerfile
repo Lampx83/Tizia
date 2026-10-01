@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # AI Board worker: Python harness + git + Node 20 (gate 4 `node --check`) + Chromium (gate 5 screenshot)
 # + its own Docker daemon (gate 5 builds the candidate in Docker-in-Docker, never the host socket).
-# Build from the repo root: docker compose -f docker-compose.yml -f docker-compose.ai-board.yml build
+# Build from the repo root: docker compose -f docker-compose.dev.yml build ai-board-worker
 
 FROM docker:27-dind AS docker
 FROM node:20-bookworm-slim AS node
