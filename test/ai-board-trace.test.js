@@ -274,7 +274,7 @@ test('admin reject cancels the root, open children, lease, worker and alerts, id
       const res = await api.setStatus(requestId, 'rejected');
       assert.equal(res.status, 200);
       assert.equal((await api.setStatus(requestId, 'rejected')).status, 200, 'second reject is a no-op success');
-      assert.equal(store.setRequestStatus(requestId, 'rejected', null, 9), true);
+      assert.equal(store.rejectRequest(requestId, null, 9), true);
 
       const root = db.prepare('SELECT * FROM ai_tickets WHERE id=?').get(rootId);
       assert.deepEqual([root.status, root.phase, root.internal_reason], ['cancelled', 'admin_rejected', 'admin_rejected']);
@@ -298,10 +298,22 @@ test('admin reject cancels the root, open children, lease, worker and alerts, id
   }
 });
 
+test('admin note keeps requests.status in step with the root, rejection closes it', () => {
+  const { db, store } = fixture();
+  const { request_id: requestId } = newRequest(store, 'note-request-001');
+  const row = () => ({ ...db.prepare('SELECT status, admin_note FROM requests WHERE id=?').get(requestId) });
+  assert.equal(store.noteRequest(requestId, 'Đã xong rồi', 9), true);
+  assert.deepEqual(row(), { status: 'pending', admin_note: 'Đã xong rồi' }, 'a "done" note cannot outrun the root');
+  assert.equal(store.rejectRequest(requestId, 'Không phù hợp', 9), true);
+  assert.equal(row().status, 'rejected');
+  assert.equal(store.noteRequest(999, 'x', 9), false, 'unknown request');
+  db.close();
+});
+
 test('admin done leaves the root untouched', () => {
   const { db, store } = fixture();
   const { request_id: requestId, root_ticket_id: rootId } = newRequest(store, 'done-request-001');
-  assert.equal(store.setRequestStatus(requestId, 'done', null, 9), true);
+  assert.equal(store.noteRequest(requestId, null, 9), true);
   assert.equal(db.prepare('SELECT status FROM ai_tickets WHERE id=?').get(rootId).status, 'queued');
   db.close();
 });

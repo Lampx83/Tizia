@@ -62,7 +62,6 @@ const Q = {
   setUserRole: db.prepare(`UPDATE users SET role=@role WHERE id=@id`),
   requests: db.prepare(`SELECT id, domain, type, title, detail, status, votes, student, admin_note, created_at, updated_at
     FROM requests ORDER BY created_at DESC LIMIT @limit`),
-  setRequestStatus: db.prepare(`UPDATE requests SET status=@status, admin_note=@note, updated_at=@t WHERE id=@id`),
 };
 
 function tableExists(name) {
@@ -72,6 +71,8 @@ function tableExists(name) {
 export function attachAdmin(r) {
   ensureAdminBootstrap();
   const boardStore = createAiBoardStore(db);
+  const applyAdminStatus = (id, status, note, actorId) =>
+    (status === 'rejected' ? boardStore.rejectRequest : boardStore.noteRequest)(id, note, actorId);
 
   r.get('/api/admin/overview', requireAdmin, (_req, res) => {
     const base = Q.overview.get();
@@ -224,7 +225,7 @@ export function attachAdmin(r) {
   r.post('/api/admin/requests/:id/status', requireAdmin, requireStrictCsrf, (req, res) => {
     const status = String(req.body?.status || '');
     if (!['pending', 'reviewing', 'done', 'rejected'].includes(status)) return res.status(400).json({ error: 'invalid_status' });
-    Q.setRequestStatus.run({ id: Number(req.params.id), status, note: req.body?.note ? String(req.body.note).slice(0, 500) : null, t: Date.now() });
+    if (!applyAdminStatus(req.params.id, status, req.body?.note, req.user.id)) return res.status(404).json({ error: 'request_not_found' });
     res.json({ ok: true });
   });
 
@@ -250,7 +251,7 @@ export function attachAdmin(r) {
     const reqRow = getRequestForReply.get(id);
     if (!reqRow) return res.status(404).json({ error: 'request_not_found' });
 
-    boardStore.setRequestStatus(id, status, message, req.user.id);
+    applyAdminStatus(id, status, message, req.user.id);
     const appliedStatus = getRequestForReply.get(id).status;
 
     insertHumanDecision.run({

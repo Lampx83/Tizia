@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { answersClear, checkClarity } from '../server/ai-board/clarity-rules.js';
+import { answersClear, checkClarity, clarifyFromPhase, resolveClarify } from '../server/ai-board/clarity-rules.js';
 import { CLASSIFIER, classifyRequest } from '../server/ai-board/classifier.js';
 
 test('excluded actions do not turn a single ETA copy change into multiple tasks', () => {
@@ -66,4 +66,27 @@ test('clarity ships in shadow, danger active; shadow results never act', async (
   const off = await classifyRequest('x', 'y', { env, fetchImpl, modes: { clarity: 'off', danger: 'shadow' } });
   assert.equal(off.clarity, null);
   assert.equal(off.danger.shadow, true);
+});
+
+test('resolveClarify merges rules, model, feature override and client support', () => {
+  const clear = ['Sửa màu nút gửi trong hộp chat', 'Đổi màu nút gửi ở hộp chat FAB sang xanh lá, chỉ ở trang pharmacy.'];
+  const vague = ['Sửa cái này', 'làm đẹp hơn'];
+  const decide = (over) => { const { rules, ...out } = resolveClarify({ title: clear[0], detail: clear[1], ...over }); return out; };
+
+  assert.deepEqual(decide({}), { needed: false, mode: null, source: [] });
+  assert.deepEqual(decide({ title: vague[0], detail: vague[1] }), { needed: true, mode: 'ask', source: ['rules'] });
+  assert.deepEqual(decide({ title: vague[0], detail: vague[1], enabled: false }), { needed: false, mode: null, source: ['rules'] },
+    'old clients are never put in clarifying');
+  assert.deepEqual(decide({ classified: { clarity: { needed: true, mode: 'ask' } } }), { needed: true, mode: 'ask', source: ['model'] });
+  assert.deepEqual(decide({ classified: { clarity: { needed: true, mode: 'ask', shadow: true } } }), { needed: false, mode: null, source: [] },
+    'shadow-mode model verdict is log-only');
+  assert.equal(decide({ title: vague[0], detail: vague[1], classified: { clarity: { needed: true, mode: 'split' } } }).mode, 'split',
+    'split from the model beats ask from the rules');
+  assert.deepEqual(decide({ isFeature: true, classified: { clarity: { needed: true, mode: 'split' } } }),
+    { needed: true, mode: 'feature', source: ['rules'] }, 'feature override ignores the model');
+});
+
+test('clarifyFromPhase reports the stored phase of an idempotent replay', () => {
+  assert.deepEqual(clarifyFromPhase('clarifying'), { needed: true, mode: 'ask' });
+  assert.deepEqual(clarifyFromPhase('queued'), { needed: false, mode: null });
 });

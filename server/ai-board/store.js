@@ -16,7 +16,6 @@ const REQUEST_TYPES = new Set(['game', 'theory', 'lab', 'skill', 'other', 'featu
 // Yêu cầu board tự sửa (self-improve ticket 04): chỉ createSelfRequest tạo, chủ là người dùng hệ thống này.
 const SELF_USER = 'ai-board';
 const SELF_TAG = 'self_target:';
-const REQUEST_STATUSES = new Set(['pending', 'reviewing', 'done', 'rejected']);
 const WORKER_MODES = new Set(['off', 'shadow', 'active']);
 const CLAIM_INTENTS = new Set(['precheck', 'plan']);
 const RUN_TRIGGERS = new Set(CONTRACT.run_triggers);
@@ -409,6 +408,8 @@ export function runProgress(run, events, live) {
     since: started.get(current) ?? null,
   };
 }
+
+export const ADMIN_REQUEST_STATUSES = new Set(['pending', 'reviewing', 'done', 'rejected']);
 
 export function createAiBoardStore(db, hooks = {}) {
   const findRetry = db.prepare(`
@@ -871,27 +872,26 @@ export function createAiBoardStore(db, hooks = {}) {
     db.prepare(`UPDATE ai_alerts SET status='resolved', updated_at=? WHERE ticket_id=? AND status='open'`).run(now, root.id);
   }
 
-  const setStatusTransaction = db.transaction((requestId, status, note, actorId) => {
+  // requests.status/admin_note are derived by trigger ai_root_request_status (migration 017)
+  // from the root ticket, so an admin action only writes the root and its audit event.
+  const adminRequestTransaction = db.transaction((requestId, rejecting, note, actorId) => {
     const root = db.prepare('SELECT id, status FROM ai_tickets WHERE source_request_id = ? AND parent_id IS NULL').get(requestId);
+    if (!root) return false;
     const now = Date.now();
-    const result = db.prepare('UPDATE requests SET status = ?, admin_note = ?, updated_at = ? WHERE id = ?')
-      .run(status, note || null, now, requestId);
-    if (!result.changes || !root) return false;
-    // Random suffix: two status posts in the same millisecond must not collide on the unique key.
+    // Random suffix: two admin posts in the same millisecond must not collide on the unique key.
     insertEvent.run(
       root.id, 'request_status_changed', 'admin', String(actorId), null,
-      note || null, `request status -> ${status}`, `status:${requestId}:${now}:${randomBytes(4).toString('hex')}`, now,
+      note, rejecting ? 'request rejected' : 'request noted', `status:${requestId}:${now}:${randomBytes(4).toString('hex')}`, now,
     );
-    if (status === 'rejected') closeRootForAdmin(root, actorId, now);
+    if (rejecting) closeRootForAdmin(root, actorId, now);
     else db.prepare('UPDATE ai_tickets SET public_note=?, updated_at=? WHERE id=?')
-      .run(note || null, now, root.id); // Root projection owns status; an admin reply does not complete a worker run.
+      .run(note, now, root.id); // An admin note does not complete a worker run.
     return true;
   });
 
-  function setRequestStatus(requestId, status, note, actorId) {
-    if (!REQUEST_STATUSES.has(status)) return false;
-    return setStatusTransaction(Number(requestId), status, note ? String(note).slice(0, 500) : null, actorId);
-  }
+  const adminNote = (note) => (note ? String(note).slice(0, 500) : null);
+  const rejectRequest = (requestId, note, actorId) => adminRequestTransaction(Number(requestId), true, adminNote(note), actorId);
+  const noteRequest = (requestId, note, actorId) => adminRequestTransaction(Number(requestId), false, adminNote(note), actorId);
 
   function listAdminQueue(limit = 100) {
     return db.prepare(`
@@ -1205,7 +1205,6 @@ export function createAiBoardStore(db, hooks = {}) {
     const note = 'Thay đổi đang chờ người duyệt.';
     db.prepare(`UPDATE ai_tickets SET phase='pr_open', public_note=?, updated_at=? WHERE id=?`)
       .run(note, input.now, root.id);
-    db.prepare(`UPDATE requests SET status='reviewing', updated_at=? WHERE id=?`).run(input.now, root.source_request_id);
     // 1 PR draft cho cả chu kỳ folder: các lượt sau đẩy tiếp lên cùng nhánh, GitHub cập nhật PR đó.
     db.prepare('UPDATE ai_feature_folders SET pr_number=?, pr_url=?, updated_at=? WHERE id=(SELECT folder_id FROM requests WHERE id=?)')
       .run(pr.number, pr.url, input.now, root.source_request_id);
@@ -1770,11 +1769,7 @@ export function createAiBoardStore(db, hooks = {}) {
     }
     const liftedLimit = root.internal_reason === 'automatic_round_limit' ? 'automatic_round_limit' : 'run_budget_exhausted';
     // The admin grants one more automatic round with the extra budget; the limits stay enforced.
-    db.prepare(`
-      UPDATE ai_tickets SET status='queued', phase='needs_replan', budget_limit=?,
-        auto_rounds=MAX(auto_rounds - 1, 0), public_note='Quản trị viên đã gia hạn ngân sách; yêu cầu sẽ được xử lý tiếp.',
-        internal_reason=NULL, updated_at=? WHERE id=?
-    `).run(limit, now, root.id);
+    requeueForReplan(root.id, { publicNote: 'Quản trị viên đã gia hạn ngân sách; yêu cầu sẽ được xử lý tiếp.', budgetLimit: limit }, now);
     insertEvent.run(
       root.id, 'budget_extended', 'admin', String(adminUserId), 'waiting_admin->queued',
       'Quản trị viên đã gia hạn ngân sách.', JSON.stringify({ amount, reason, relaxed: liftedLimit }),
@@ -1803,7 +1798,6 @@ export function createAiBoardStore(db, hooks = {}) {
     if (['done', 'rejected'].includes(request.status)) {
       throw new WorkerContractError('request is already closed', 409, 'request_closed');
     }
-    db.prepare(`UPDATE requests SET status='cancelled', updated_at=? WHERE id=?`).run(now, request.id);
     const root = db.prepare('SELECT * FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL').get(request.id);
     if (root) {
       closeRoot(root, {
@@ -2035,19 +2029,31 @@ export function createAiBoardStore(db, hooks = {}) {
     return authorizePlanTransaction(rootTicketId, planHash, adminUserId, Date.now());
   }
 
-  const invalidatePlanTransaction = db.transaction((requestId, reason, now) => {
-    const root = db.prepare(`SELECT * FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL`).get(Number(requestId));
-    if (!root || !root.plan_hash || PHASES[root.phase]?.terminal) return false;
+  // The one writer of the needs_replan transition: drops plan and lease, optionally grants budget.
+  function requeueForReplan(rootId, { publicNote, internalReason = null, budgetLimit = null }, now) {
+    db.prepare(`
+      UPDATE ai_tickets SET status='queued', phase='needs_replan', public_note=?, internal_reason=?,
+        plan_hash=NULL, lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL,
+        budget_limit=COALESCE(?, budget_limit), auto_rounds=CASE WHEN ? IS NULL THEN auto_rounds ELSE MAX(auto_rounds - 1, 0) END,
+        updated_at=? WHERE id=?
+    `).run(publicNote, internalReason, budgetLimit, budgetLimit, now, rootId);
+  }
+
+  function invalidateCurrentPlan(root, now) {
     db.prepare(`UPDATE ai_plans SET status='invalidated', invalidated_at=? WHERE root_ticket_id=? AND plan_hash=? AND status='valid'`)
       .run(now, root.id, root.plan_hash);
     db.prepare(`UPDATE ai_tickets SET status='invalidated', phase='clarification_received', updated_at=? WHERE parent_id=? AND plan_revision=?`)
       .run(now, root.id, root.plan_revision);
-    db.prepare(`
-      UPDATE ai_tickets SET status='queued', phase='needs_replan',
-        public_note='Thông tin mới đã được ghi nhận; kế hoạch sẽ được làm lại.',
-        internal_reason=?, plan_hash=NULL, lease_owner=NULL, lease_token=NULL,
-        lease_expires_at=NULL, updated_at=? WHERE id=?
-    `).run(String(reason || 'requester clarification').slice(0, 500), now, root.id);
+  }
+
+  const invalidatePlanTransaction = db.transaction((requestId, reason, now) => {
+    const root = db.prepare(`SELECT * FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL`).get(Number(requestId));
+    if (!root || !root.plan_hash || PHASES[root.phase]?.terminal) return false;
+    invalidateCurrentPlan(root, now);
+    requeueForReplan(root.id, {
+      publicNote: 'Thông tin mới đã được ghi nhận; kế hoạch sẽ được làm lại.',
+      internalReason: String(reason || 'requester clarification').slice(0, 500),
+    }, now);
     return true;
   });
 
@@ -2063,11 +2069,9 @@ export function createAiBoardStore(db, hooks = {}) {
       throw new WorkerContractError('request cannot be replanned in its current state', 409, 'not_replannable');
     }
     const now = Date.now();
-    invalidatePlanTransaction(requestId, 'admin clarified request', now);
+    if (root.plan_hash) invalidateCurrentPlan(root, now);
     db.prepare('UPDATE requests SET clarified_spec=?, updated_at=? WHERE id=?').run(spec, now, requestId);
-    db.prepare(`UPDATE ai_tickets SET status='queued', phase='needs_replan', plan_hash=NULL,
-      public_note='Quản trị viên đã làm rõ yêu cầu; đang chờ lập lại kế hoạch.', internal_reason=NULL,
-      lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE id=?`).run(now, root.id);
+    requeueForReplan(root.id, { publicNote: 'Quản trị viên đã làm rõ yêu cầu; đang chờ lập lại kế hoạch.' }, now);
     db.prepare(`INSERT INTO request_messages(request_id, role, author_name, body, created_at)
       VALUES (?, 'admin', 'Quản trị viên', ?, ?)`).run(requestId, spec, now);
     insertEvent.run(root.id, 'request_clarified', 'admin', String(adminUserId), `${root.status}->queued`,
@@ -2088,7 +2092,8 @@ export function createAiBoardStore(db, hooks = {}) {
     createSelfRequest,
     listRequestsForOwner,
     countPendingRoots,
-    setRequestStatus,
+    rejectRequest,
+    noteRequest,
     listAdminQueue,
     listFolders,
     voteFolder,

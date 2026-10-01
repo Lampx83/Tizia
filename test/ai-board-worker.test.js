@@ -10,11 +10,38 @@ import { CAPABILITY_POLICY_HASH } from '../server/ai-board/policy.js';
 
 const KEY = 'fixture-worker-key-32-characters-long';
 
+test('every path into needs_replan drops plan and lease the same way', () => {
+  const paths = {
+    'budget extension': (store, root) => {
+      store.db.prepare("UPDATE ai_tickets SET status='waiting_admin', phase='budget_exhausted' WHERE id=?").run(root.id);
+      store.extendBudget(root.id, { amount: 10, reason: 'Fixture cần thêm ngân sách.', adminUserId: 9 });
+    },
+    'requester clarification': (store, root) => {
+      assert.equal(store.invalidatePlanForRequest(root.source_request_id, 'thêm chi tiết'), true);
+    },
+    'admin replan': (store, root) => {
+      store.db.prepare("UPDATE ai_tickets SET status='waiting_admin', phase='plan_blocked' WHERE id=?").run(root.id);
+      store.clarifyAndReplan(root.source_request_id, 'Làm rõ yêu cầu để lập lại kế hoạch.', 9);
+    },
+  };
+  for (const [name, enter] of Object.entries(paths)) {
+    const { db, store } = fixture();
+    const root = db.prepare('SELECT * FROM ai_tickets WHERE parent_id IS NULL').get();
+    db.prepare(`UPDATE ai_tickets SET plan_hash=?, lease_owner='w', lease_token='t', lease_expires_at=? WHERE id=?`)
+      .run('h'.repeat(64), Date.now() + 1000, root.id);
+    if (name === 'admin replan') db.prepare('UPDATE ai_tickets SET lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL WHERE id=?').run(root.id);
+    enter(store, root);
+    const after = db.prepare('SELECT status, phase, plan_hash, lease_owner, lease_token, lease_expires_at FROM ai_tickets WHERE id=?').get(root.id);
+    assert.deepEqual({ ...after }, { status: 'queued', phase: 'needs_replan', plan_hash: null, lease_owner: null, lease_token: null, lease_expires_at: null }, name);
+    db.close();
+  }
+});
+
 test('admin handoff requeues through all gates and reply preserves root status', () => {
   const { db, store } = fixture();
   const root = db.prepare('SELECT * FROM ai_tickets WHERE parent_id IS NULL').get();
   db.prepare("UPDATE ai_tickets SET status='waiting_admin', phase='clarification_limit' WHERE id=?").run(root.id);
-  store.setRequestStatus(root.source_request_id, 'reviewing', 'Admin đang điều tra', 9);
+  store.noteRequest(root.source_request_id, 'Admin đang điều tra', 9);
   assert.equal(db.prepare('SELECT status FROM requests WHERE id=?').get(root.source_request_id).status, 'pending');
   assert.equal(db.prepare('SELECT status FROM ai_tickets WHERE id=?').get(root.id).status, 'waiting_admin');
   assert.throws(() => store.clarifyAndReplan(root.source_request_id, 'short', 9));

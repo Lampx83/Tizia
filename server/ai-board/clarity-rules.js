@@ -49,6 +49,23 @@ export function checkClarity(title, detail) {
   return { needed: false, mode: null, reasons: [] };
 }
 
+/** Final clarify decision from hard rules + model signal: {needed, mode, source, rules}.
+    Feature requests always ask the 3 'feature' questions; a shadow-mode model verdict is ignored by the caller;
+    `enabled` = client understands clarifying. Split (from rules or model) wins over ask. */
+export function resolveClarify({ title, detail, classified = null, isFeature = false, enabled = true }) {
+  const rules = isFeature ? { needed: true, mode: 'feature', reasons: ['chức năng mới'] } : checkClarity(title, detail);
+  const model = classified?.clarity?.shadow || isFeature ? null : classified?.clarity;
+  const source = [rules.needed && 'rules', model?.needed && 'model'].filter(Boolean);
+  if (!enabled || !source.length) return { needed: false, mode: null, source, rules };
+  const mode = isFeature ? 'feature' : [rules.mode, model?.mode].includes('split') ? 'split' : 'ask';
+  return { needed: true, mode, source, rules };
+}
+
+/** Replay of an idempotent submit: report what the first submit stored, not a fresh classification. */
+export function clarifyFromPhase(phase) {
+  return { needed: phase === 'clarifying', mode: phase === 'clarifying' ? 'ask' : null };
+}
+
 /** Grilling dừng theo luật: câu trả lời đã nêu đối tượng cụ thể và không còn quá rộng. */
 export function answersClear(answers) {
   const text = answers.join('\n');

@@ -192,7 +192,8 @@ test('request list is owner-scoped and status mutation needs admin plus strict C
       body: JSON.stringify({ status: 'reviewing', note: 'Bắt đầu xem' }),
     });
     assert.equal(ok.status, 200);
-    assert.equal(db.prepare('SELECT status FROM requests WHERE id = 1').get().status, 'reviewing');
+    assert.deepEqual({ ...db.prepare('SELECT status, admin_note FROM requests WHERE id = 1').get() },
+      { status: 'pending', admin_note: 'Bắt đầu xem' }, 'admin "reviewing" is a note; status follows the root ticket');
 
     store.claimNext({ workerId: 'visible-worker', version: 'd0', mode: 'shadow' });
     const queue = await fetch(`${base}/api/admin/ai-board/queue`, { headers: { 'x-test-user': '9' } });

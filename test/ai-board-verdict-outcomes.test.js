@@ -253,7 +253,7 @@ test('a third extension hands the root to a human permanently', () => {
   assert.deepEqual({ ...root }, { status: 'human_owned', phase: 'budget_ceiling', budget_limit: RUN + 400 });
   // A requester clarification cannot reopen it; a later attempt needs a new request.
   assert.equal(store.invalidatePlanForRequest(1, 'thêm chi tiết'), false);
-  const { plan_hash: planHash } = db.prepare('SELECT plan_hash FROM ai_tickets WHERE id=?').get(ticket.id);
+  const { plan_hash: planHash } = db.prepare('SELECT plan_hash FROM ai_plans WHERE root_ticket_id=?').get(ticket.id);
   assert.throws(() => store.authorizePlan(ticket.id, planHash, 9), (error) => error.code === 'budget_ceiling');
   assert.equal(db.prepare('SELECT status FROM ai_tickets WHERE id=?').get(ticket.id).status, 'human_owned');
 });

@@ -1,10 +1,10 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import express from 'express';
-import { assertConfirmed, LEASE_MS, LIMITS, PlanGuardrailError, RequestValidationError, WorkerContractError } from './store.js';
+import { ADMIN_REQUEST_STATUSES, assertConfirmed, LEASE_MS, LIMITS, PlanGuardrailError, RequestValidationError, WorkerContractError } from './store.js';
 import { afterVerdict, retryRequest, retryState, saveDraftScreenshots, SHOTS_BODY_LIMIT, SHOTS_TYPE } from './drafts.js';
 import { checkIntake, readOnlyVerificationText, recordIntakeFlags, recordIntakeRejection } from './intake-guard.js';
 import { classifyRequest as classifyWithModel, recordClassification } from './classifier.js';
-import { checkClarity } from './clarity-rules.js';
+import { clarifyFromPhase, resolveClarify } from './clarity-rules.js';
 import { activeChats } from './chat-activity.js';
 import { deleteEvalTask, evalTaskSplit, labelEvalTask, listEvalTasks, openPullRequests, recordMiss, recordRequestMiss,
   reportPullRequest } from './eval-tasks.js';
@@ -64,15 +64,13 @@ export function attachAiBoardRequestRoutes(router, {
     const danger = classified?.danger?.shadow ? null : classified?.danger;
     const modelLabels = (danger?.labels || []).map((key) => `model_${key}`);
     // Làm rõ = luật cứng HOẶC model clarity 'active'; ghi lại nguồn để ticket 01 so sánh.
-    // Chức năng mới (ticket 04 feature-folders): luôn hỏi đúng 3 câu chế độ 'feature', không áp luật "quá rộng".
-    const isFeature = body.type === 'feature' && !body.folder_id;
-    const rules = isFeature ? { needed: true, mode: 'feature', reasons: ['chức năng mới'] } : checkClarity(body.title, body.detail);
-    const model = classified?.clarity?.shadow || isFeature ? null : classified?.clarity;
-    const source = [rules.needed && 'rules', model?.needed && 'model'].filter(Boolean);
-    let clarify = features.has('clarify') && source.length
-      ? { needed: true, mode: isFeature ? 'feature' : [rules.mode, model?.mode].includes('split') ? 'split' : 'ask' }
-      : { needed: false, mode: null };
-    const trace = classified || rules.needed ? { ...classified, rules, clarify: { ...clarify, source } } : null;
+    const decision = resolveClarify({
+      title: body.title, detail: body.detail, classified, enabled: features.has('clarify'),
+      isFeature: body.type === 'feature' && !body.folder_id, // chức năng mới: luôn hỏi 3 câu, không áp luật "quá rộng"
+    });
+    let clarify = { needed: decision.needed, mode: decision.mode };
+    const { rules } = decision;
+    const trace = classified || rules.needed ? { ...classified, rules, clarify: { ...clarify, source: decision.source } } : null;
     try {
       const result = store.createRequestWithRoot({
         ownerUserId: req.user.id,
@@ -100,7 +98,7 @@ export function attachAiBoardRequestRoutes(router, {
       } else {
         // Gửi lại cùng Idempotency-Key: trả đúng trạng thái đã tạo lần đầu, không theo lần phân loại này.
         const phase = store.db.prepare('SELECT phase FROM ai_tickets WHERE id=?').get(result.root_ticket_id)?.phase;
-        clarify = { needed: phase === 'clarifying', mode: phase === 'clarifying' ? 'ask' : null };
+        clarify = clarifyFromPhase(phase);
       }
       res.json({ ok: true, ...result, id: result.request_id, createdAt: Date.now(), clarify });
       if (result.created && onCreated) {
@@ -171,7 +169,8 @@ export function attachAiBoardRequestRoutes(router, {
         return res.status(error.status).json({ error: error.code, message: error.message });
       }
     }
-    const ok = store.setRequestStatus(req.params.id, status, req.body?.note, req.user.id);
+    const ok = ADMIN_REQUEST_STATUSES.has(status)
+      && (status === 'rejected' ? store.rejectRequest : store.noteRequest)(req.params.id, req.body?.note, req.user.id);
     if (!ok) return res.status(400).json({ error: 'invalid_status_or_request' });
     res.json({ ok: true });
   });
