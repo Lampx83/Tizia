@@ -70,6 +70,31 @@ def test_quote_copied_with_the_context_line_prefix_still_counts_as_grounding(tmp
                              {'plan': plan, 'checkout_source': str(tmp_path)})['reason'] == 'plan_ungrounded'
 
 
+def test_evidence_matches_its_subtask_by_file_even_when_target_holds_the_title(tmp_path):
+    subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
+    (tmp_path / 'public' / 'js').mkdir(parents=True)
+    (tmp_path / 'public' / 'js' / 'suggestion-fab.js').write_text('const label = "Mô tả chi tiết";\n', encoding='utf8')
+    (tmp_path / 'public' / 'js' / 'other.js').write_text('const label = "Mô tả chi tiết";\n', encoding='utf8')
+    subprocess.run(['git', '-C', str(tmp_path), 'add', '.'], check=True)
+    subprocess.run(['git', '-C', str(tmp_path), '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+                    'commit', '-qm', 'base'], check=True)
+    plan = {'capabilities': [], 'subtasks': [{'file': 'public/js/suggestion-fab.js', 'title': 'Title counter',
+                                              'verify': 'counter shown', 'size': 'small'}]}
+    request = {'subject': 'Bộ đếm', 'body': 'Thêm bộ đếm', 'grounding_required': True, 'complexity_by_server': True}
+
+    def run(target, file):
+        validation = {'clear': True, 'question': None, 'grounded': True, 'grounding': [
+            {'target': target, 'file': file, 'quote': 'const label = "Mô tả chi tiết";',
+             'before': 'none', 'after': 'counter', 'verify': 'counter shown'}]}
+        return plan_validate.run(request, deps_with(FakeModels(plan, validation=validation)), Budget(),
+                                 {'plan': plan, 'checkout_source': str(tmp_path)})
+
+    assert not run('Title counter', 'public/js/suggestion-fab.js')['blocked']          # target = subtask title
+    assert not run('public/js/suggestion-fab.js', 'public/js/suggestion-fab.js')['blocked']
+    wrong = run('Title counter', 'public/js/other.js')                                  # evidence from another file
+    assert wrong['blocked'] and wrong['reason'] == 'plan_ungrounded'
+
+
 def test_located_existing_behavior_cannot_be_replaced_with_a_standalone_page(tmp_path):
     (tmp_path / 'public' / 'js').mkdir(parents=True)
     for name in ('school-explore.js', 'request-thread.js'):

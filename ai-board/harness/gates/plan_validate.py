@@ -167,7 +167,8 @@ def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict
         raise ValueError(validation.get('reason') or 'thiếu dẫn chứng hành vi từ code nguồn')
     clean = []
     for task, evidence in zip(plan['subtasks'], records):
-        if not isinstance(evidence, dict) or evidence.get('target') != task['file']:
+        # `target` is free text for the model (often the subtask title); the file it quotes is what identifies the evidence
+        if not isinstance(evidence, dict) or task['file'] not in (evidence.get('target'), evidence.get('file')):
             raise ValueError('dẫn chứng không khớp file dự định sửa')
         file = evidence.get('file')
         quote = evidence.get('quote')
