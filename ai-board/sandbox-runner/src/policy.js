@@ -30,7 +30,7 @@ const SCHEMA = object({
   }),
   concurrency: int(1, 1), // ponytail: one active sandbox is the agreed ceiling; raise with the spec, not by config
   guest_image: (v, p) => {
-    if (typeof v !== 'string' || !/^[a-z0-9][a-z0-9./_-]*(:[\w.-]+)?@sha256:[0-9a-f]{64}$/.test(v)) {
+    if (typeof v !== 'string' || !/^[a-z0-9][a-z0-9._-]*(:\d{1,5})?(\/[a-z0-9._-]+)*@sha256:[0-9a-f]{64}$/.test(v)) {
       throw new PolicyError(`${p}: image must be pinned by sha256 digest`);
     }
     return v;

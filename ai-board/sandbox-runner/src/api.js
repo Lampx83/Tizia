@@ -25,9 +25,10 @@ async function readBody(req, limit) {
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > limit) throw new RunnerError(413, 'body_too_large', 'upload');
-    chunks.push(chunk);
+    if (size <= limit) chunks.push(chunk);
+    else if (size > limit * 4) break; // keep draining a little so the client sees the 413 instead of a reset
   }
+  if (size > limit) throw new RunnerError(413, 'body_too_large', 'upload');
   return Buffer.concat(chunks);
 }
 

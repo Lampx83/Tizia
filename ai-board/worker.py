@@ -148,6 +148,7 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
         state["request_type"] = request_type  # 'self': cổng 4 nới vùng tự sửa + tính lại file khoá
     if eval_tasks is not None:
         state["eval_tasks"] = eval_tasks  # self: phần kiểm tra, chỉ cổng 5 (eval) đọc
+    state["should_stop"] = should_stop  # sandbox Gate 5 renews its VM lease only while this is false
     state.update(candidate_opts or {})  # folder: branch_name + branch_restore cho candidate.create
     if memory_path:
         state["memory_path"] = str(memory_path)

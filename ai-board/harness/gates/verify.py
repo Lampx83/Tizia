@@ -59,6 +59,20 @@ def _override(project: str) -> str:
 """
 
 
+_ESCAPE_KEYS = ("privileged", "network_mode", "pid", "ipc", "userns_mode", "cgroup_parent", "devices", "cap_add", "security_opt", "sysctls")
+
+
+def _escape_hatch(config: dict) -> str | None:
+    """First `service.setting` in any service that reaches past the app container (host namespaces, devices, bind mounts)."""
+    for name, service in (config.get("services") or {}).items():
+        for key in _ESCAPE_KEYS:
+            if service.get(key):
+                return f"{name}.{key}"
+        if any(volume.get("type") == "bind" for volume in service.get("volumes") or []):
+            return f"{name}.bind mount"
+    return None
+
+
 def _bash() -> str:
     """Git Bash on Windows. Bare "bash" lets CreateProcess pick System32's WSL bash first."""
     if os.name == "nt":
@@ -198,11 +212,12 @@ def _restore_base(state: dict, checkout: Path, pages: list[str], cp: Callable[[P
     base_sha = state.get("base_sha")
     if not base_sha:
         return None
+    base_dir = state.get("base_pages_dir")  # sandbox run: the worker staged base pages, the upload has no .git
     new: set[str] = set()
     with tempfile.TemporaryDirectory(prefix="ai-verify-base-") as temp:
         for index, page in enumerate(pages):
             try:
-                blob = code_index.git(checkout, "show", f"{base_sha}:public{page}")
+                blob = (Path(base_dir) / page.lstrip("/")).read_bytes() if base_dir else code_index.git(checkout, "show", f"{base_sha}:public{page}")
             except OSError:
                 new.add(page)
                 continue
@@ -330,6 +345,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             expected_env = {"NODE_ENV": "production", "PORT": "8041", "HOST": "0.0.0.0",
                             "DATA_DIR": "/data", "BASE_PATH": ""}
             kind = "critical"
+            if escape := _escape_hatch(config):
+                raise RuntimeError(f"Compose config mở đường ra ngoài cách ly: {escape}")
             internal = _internal()
             network = (config.get("networks") or {}).get("default") or {}
             isolated_net = (not ports and network.get("internal") is True if internal else

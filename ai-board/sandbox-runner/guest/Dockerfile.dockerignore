@@ -1,0 +1,8 @@
+*
+!ai-board/harness/
+!ai-board/sandbox-runner/guest/
+!server/ai-board/
+!scripts/smoke-user-state.sh
+ai-board/harness/.venv/
+**/__pycache__/
+**/.pytest_cache/

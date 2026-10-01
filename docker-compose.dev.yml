@@ -24,14 +24,16 @@ services:
       - tizia-dev-data:/data
 
   ai-board-worker:
+    container_name: tizia-ai-board-worker
     build:
       context: .
       dockerfile: ai-board/worker.Dockerfile
     image: tizia-ai-board-worker:latest
     profiles: [ai-board]
-    depends_on: [tizia-dev]
+    depends_on: [tizia-dev, sandbox-runner]
     restart: on-failure
-    privileged: true
+    cap_add: [NET_ADMIN]  # egress lock only; Gate 5 runs in the sandbox microVM, so no privileged mode or Docker daemon
+    networks: [default, sandbox-api]
     cpus: 2
     mem_limit: 4g
     pids_limit: 512
@@ -40,7 +42,7 @@ services:
       AI_BOARD_WORKER_KEY: ${AI_BOARD_WORKER_KEY:?AI_BOARD_WORKER_KEY is required}
       AI_BOARD_WORKER_MODE: ${AI_BOARD_WORKER_MODE:-off}
       AI_BOARD_REPO_DIR: /repo
-      AI_BOARD_VERIFY_NETWORK: internal
+      AI_BOARD_SANDBOX_URL: http://sandbox-runner:8090
       AI_BOARD_GITHUB_TOKEN: ${AI_BOARD_GITHUB_TOKEN:-}
       PR_BASE_BRANCH: dev
       OLLAMA_URL: ${OLLAMA_URL:?OLLAMA_URL is required}
@@ -53,10 +55,21 @@ services:
       BUDGET_MAX_WALL_CLOCK_S: "1200"
     volumes:
       - ai-board-repo:/repo
-      - ai-board-docker:/var/lib/docker
       - ai-board-memory:/opt/ai-board/ai-board/memory
+      - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
+
+  image-registry:
+    container_name: tizia-image-registry
+    image: registry:2
+    profiles: [ai-board]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5000:5000"  # loopback only: push the pinned guest image from this machine
+    volumes:
+      - sandbox-registry:/var/lib/registry
 
   sandbox-runner:
+    container_name: tizia-sandbox-runner
     build:
       context: ai-board/sandbox-runner
     image: tizia-sandbox-runner:dev
@@ -89,6 +102,6 @@ volumes:
   tizia-dev-data:
     driver: local
   ai-board-repo:
-  ai-board-docker:
   ai-board-memory:
   sandbox-runner-state:
+  sandbox-registry:

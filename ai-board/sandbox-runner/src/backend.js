@@ -67,7 +67,9 @@ export function createMicrosandboxBackend() {
     async create({ name, image, vm, egress, env, ttl_s, workdir, labels }) {
       const sandbox = await Sandbox.builder(name).image(image).cpus(vm.cpus).memory(vm.memory_mib).rootDisk(vm.disk_mib)
         .maxDuration(ttl_s).envs(env).labels(labels)
-        .network((n) => n.policy(egressPolicy(egress))).create();
+        .registry((r) => (/^image-registry[:/]/.test(image) ? r.insecure() : r)) // the in-compose registry speaks plain http
+        // tls(): host-enforced domain rules need the TLS-aware path; without it every HTTPS handshake to an allowed host is reset
+        .network((n) => n.policy(egressPolicy(egress)).tls((t) => t)).create();
       live.set(name, sandbox);
       await sandbox.exec('mkdir', ['-p', workdir]);
     },

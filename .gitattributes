@@ -5,3 +5,6 @@ ai-board/harness/prompts/*.md text eol=lf
 ai-board/harness/skills/*/SKILL.md text eol=lf
 scripts/smoke-user-state.sh text eol=lf
 ai-board/worker-entrypoint.sh text eol=lf
+# Shell scripts and guest build files run on Linux (containers, microVM); CRLF breaks the shebang line.
+*.sh text eol=lf
+ai-board/sandbox-runner/guest/Dockerfile* text eol=lf

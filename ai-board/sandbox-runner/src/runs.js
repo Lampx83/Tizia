@@ -116,6 +116,10 @@ export function createRuns({ policy, backend, store, now = Date.now, alert = () 
       await close(run, 'failed');
       throw new RunnerError(502, 'create_failed', 'provision');
     }
+    // the lease and TTL start when the VM is up, not before: the first create can spend a minute pulling the image
+    const booted = now();
+    run.lease_expires_at = booted + policy.vm.lease_s * 1000;
+    run.expires_at = booted + policy.vm.ttl_s * 1000;
     run.state = 'ready';
     save();
     return view(run);
@@ -123,7 +127,12 @@ export function createRuns({ policy, backend, store, now = Date.now, alert = () 
 
   async function upload(runId, bytes) {
     const run = live(runId, 'upload');
-    try { validateArchive(bytes, policy.archive); } catch (error) { throw new RunnerError(400, error.code || 'archive_rejected', 'upload', error.message); }
+    try {
+      validateArchive(bytes, policy.archive);
+    } catch (error) {
+      report('archive_rejected', runId, error);
+      throw new RunnerError(400, error.code || 'archive_rejected', 'upload', error.message);
+    }
     try { await backend.putArchive(run.sandbox, bytes, policy.exec.workdir); } catch (error) {
       report('upload_failed', runId, error);
       await close(run, 'indeterminate');

@@ -1,24 +1,27 @@
 #!/bin/sh
-# AI Board worker container entrypoint. Runs as root only to start dockerd and lock egress,
-# then drops to user aiboard (no app data volume; talks to the app over HTTP with AI_BOARD_WORKER_KEY).
+# AI Board worker container entrypoint. Runs as root only to lock egress (and, without a sandbox runner,
+# start dockerd), then drops to user aiboard (no app data volume; talks to the app over HTTP with AI_BOARD_WORKER_KEY).
 set -eu
 
 REPO_DIR=${AI_BOARD_REPO_DIR:-/repo}
 REPO_URL=${AI_BOARD_REPO_URL:-https://github.com/Lampx83/Tizia.git}
 
 # 1. Docker-in-Docker for gate 5. A restarted container keeps the old pid file.
-rm -f /var/run/docker.pid
-dockerd --host=unix:///var/run/docker.sock >/var/log/dockerd.log 2>&1 &
-i=0
-until docker info >/dev/null 2>&1; do
-  i=$((i + 1))
-  [ "$i" -lt 60 ] || { echo "dockerd did not start"; tail -20 /var/log/dockerd.log; exit 1; }
-  sleep 1
-done
+# With AI_BOARD_SANDBOX_URL, gate 5 runs in the sandbox runner's microVM and this container needs no daemon.
+if [ -z "${AI_BOARD_SANDBOX_URL:-}" ]; then
+  rm -f /var/run/docker.pid
+  dockerd --host=unix:///var/run/docker.sock >/var/log/dockerd.log 2>&1 &
+  i=0
+  until docker info >/dev/null 2>&1; do
+    i=$((i + 1))
+    [ "$i" -lt 60 ] || { echo "dockerd did not start"; tail -20 /var/log/dockerd.log; exit 1; }
+    sleep 1
+  done
+fi
 
-# 2. Egress for processes of user aiboard: private networks (app, Ollama, gate 5 containers), DNS,
-# the Ollama host and GitHub. dockerd (root) keeps general egress to pull images and npm packages for
-# the gate 5 build; the candidate container itself runs on an internal network (no egress).
+# 2. Egress for processes of user aiboard: private networks (app, Ollama, sandbox runner), DNS,
+# the Ollama host and GitHub. Without a sandbox runner, dockerd (root) keeps general egress to pull images and
+# npm packages for the gate 5 build; the candidate container itself runs on an internal network (no egress).
 # ponytail: all of RFC1918 is allowed, not just the app/Ollama hosts; pin addresses if the LAN matters.
 uid=$(id -u aiboard)
 iptables -N AIBOARD_OUT 2>/dev/null || iptables -F AIBOARD_OUT

@@ -203,6 +203,9 @@ def _smoke(request, deps, budget, state, **_) -> dict:
         return candidate.ensure(state, 5) or self_eval.run(state, deps, budget)
     if deps.verify is not None:
         return deps.verify.run(state, deps, budget)
+    if os.getenv("AI_BOARD_SANDBOX_URL"):  # Gate 5 inside a Microsandbox microVM instead of worker-side Docker
+        import sandbox_verify
+        return candidate.ensure(state, 5) or sandbox_verify.run(state, deps, budget)
     return candidate.ensure(state, 5) or verify.run(state, deps, budget)
 
 

@@ -47,6 +47,17 @@ test('create boots one sandbox with policy-owned settings and is idempotent per 
   assert.equal(spec.labels.runner_id, 'r1');
 });
 
+test('lease and ttl start when the VM is up, not when create was requested', async () => {
+  const { runs, backend, clock } = setup();
+  const create = backend.create;
+  backend.create = async (spec) => { clock.t += 90_000; return create(spec); }; // slow first image pull
+  const view = await runs.create({ run_id: 'run-0001', manifest: MANIFEST });
+  assert.equal(view.lease_expires_at, clock.t + 120_000);
+  assert.equal(view.expires_at, clock.t + 1_200_000);
+  await runs.sweep();
+  assert.equal((await runs.status('run-0001')).state, 'ready', 'a slow boot must not eat the lease');
+});
+
 test('worker-supplied policy and bad ids are refused', async () => {
   const { runs } = setup();
   assert.equal(await code(runs.create({ run_id: 'x' })), 'invalid_run_id');

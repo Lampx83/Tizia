@@ -158,6 +158,26 @@ def test_unsafe_compose_config_blocks_before_up(tmp_path):
     assert runner.calls[-1][0][-2:] == ["down", "-v"]
 
 
+@pytest.mark.parametrize("service, setting", [
+    ("tizia", {"privileged": True}), ("tizia", {"network_mode": "host"}), ("tizia", {"devices": ["/dev/kvm"]}),
+    ("tizia", {"cap_add": ["SYS_ADMIN"]}), ("sidecar", {"pid": "host"}),
+    ("sidecar", {"volumes": [{"type": "bind", "source": "/", "target": "/host"}]})])
+def test_compose_escape_hatches_block_before_up(tmp_path, service, setting):
+    class EscapeRunner(FakeRunner):
+        def __call__(self, args, **kwargs):
+            result = super().__call__(args, **kwargs)
+            if "config" in args:
+                config = json.loads(result.stdout)
+                config["services"].setdefault(service, {}).update(setting)
+                result.stdout = json.dumps(config)
+            return result
+
+    runner = EscapeRunner()
+    out = verify.run(state(checkout(tmp_path)), runner=runner)
+    assert out["blocked"] and out["failure_class"] == "critical" and f"{service}." in out["reason"]
+    assert not any("up" in args for args, _ in runner.calls)
+
+
 def test_container_secret_blocks_without_leaking_value_to_evidence(tmp_path):
     runner = FakeRunner(container_env="NODE_ENV=production\nOLLAMA_SECKEY=do-not-log\n")
     out = verify.run(state(checkout(tmp_path)), runner=runner)
