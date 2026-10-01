@@ -4,6 +4,7 @@ Output ngắn → không vượt timeout gateway; file lớn không còn là gi�
 """
 from __future__ import annotations
 
+import difflib
 import json
 import logging
 import re
@@ -184,6 +185,16 @@ def _stripped_match(text: str, search: str) -> tuple[int, int] | None:
     return (found[0], found[0] + len(want)) if found else None
 
 
+def _closest(text: str, search: str) -> str:
+    """Real file lines most like the first line of a search that matched nothing (models drop a quote or a `;`)."""
+    first = next((line.strip() for line in _LINE_NO.sub("", search).split("\n") if line.strip()), "")
+    lines = text.split("\n")
+    stripped = [line.strip() for line in lines]
+    near = difflib.get_close_matches(first, [s for s in stripped if s], n=2, cutoff=0.75)
+    shown = [f"L{stripped.index(s) + 1}| {lines[stripped.index(s)][:300]}" for s in near]
+    return "\nDòng gần giống nhất trong file (chép nguyên văn từ đây):\n" + "\n".join(shown) if shown else ""
+
+
 def _search_edit(text: str, search: str, replace: str, index: int) -> str:
     for candidate, new in ((search, replace), (_LINE_NO.sub("", search), _LINE_NO.sub("", replace))):
         count = text.count(candidate) if candidate else 0
@@ -200,7 +211,7 @@ def _search_edit(text: str, search: str, replace: str, index: int) -> str:
     except ValueError as e:
         raise ValueError(f"edit {index}: search {e}, cần đoạn dài hơn") from None
     if span is None:
-        raise ValueError(f"edit {index}: search không khớp đoạn nào trong file: {search[:200]!r}")
+        raise ValueError(f"edit {index}: search không khớp đoạn nào trong file: {search[:200]!r}{_closest(text, search)}")
     lines = text.split("\n")
     return "\n".join(lines[:span[0]] + _LINE_NO.sub("", replace).split("\n") + lines[span[1]:])
 

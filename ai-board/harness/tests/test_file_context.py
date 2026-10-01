@@ -78,3 +78,15 @@ def test_ambiguous_search_hint_tells_the_model_to_extend_search_with_the_listed_
     for iteration in (0, 1):
         hint = implement.retry_hint(error, iteration)
         assert "liền kề" in hint and "after_line" in hint
+
+
+def test_search_that_matches_nothing_points_at_the_closest_real_line():
+    content = "a\nif (ok) return '<div>Xin chào</div>';\nz\n"
+    with pytest.raises(ValueError) as error:  # the model dropped the closing quote
+        file_context.apply_edits(content, [{"search": "if (ok) return '<div>Xin chào</div>;", "replace": "x"}])
+    message = str(error.value)
+    assert "không khớp" in message and "gần giống nhất" in message
+    assert "L2| if (ok) return '<div>Xin chào</div>';" in message
+    with pytest.raises(ValueError) as unrelated:  # nothing resembles it: no misleading suggestion
+        file_context.apply_edits(content, [{"search": "completely different text here", "replace": "x"}])
+    assert "gần giống nhất" not in str(unrelated.value)

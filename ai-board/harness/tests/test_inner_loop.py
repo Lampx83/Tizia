@@ -166,3 +166,8 @@ def test_a_file_that_was_already_broken_is_not_blamed_on_the_edit(tmp_path):
 def test_syntax_retry_hint_says_to_copy_the_whole_line():
     hint = implement.retry_hint("cú pháp JS lỗi sau khi áp edit: SyntaxError", 0)
     assert "CẢ dòng" in hint
+
+
+def test_near_miss_retry_hint_says_to_copy_the_quoted_line_exactly():
+    hint = implement.retry_hint("edit 1: search không khớp đoạn nào trong file: 'x'\nDòng gần giống nhất trong file (chép nguyên văn từ đây):\nL2| y", 0)
+    assert "NGUYÊN VĂN" in hint

@@ -57,6 +57,9 @@ RETRY_SUFFIX = (
 
 def retry_hint(error: str, iteration: int) -> str:
     """Gợi ý theo loại lỗi; lần sau cùng đẩy về dạng chèn theo số dòng (model nhỏ chép lệch nhiều)."""
+    if "Dòng gần giống nhất" in error:  # a near miss: the file line is quoted in the error, so copy it exactly
+        return ("Chép NGUYÊN VĂN dòng gần giống nhất ở trên vào search (đủ dấu nháy, `;`, ngoặc đến hết dòng); "
+                "hoặc dùng {\"after_line\": N, \"insert\": ...} nếu chỉ chèn thêm.")
     if "cú pháp JS lỗi" in error:  # usual cause: replace repeats text the search left untouched (a closing `';`)
         return ("Chép CẢ dòng cần sửa vào search (đến hết dòng, gồm `';` hay `);`) để replace không lặp lại phần "
                 "đuôi dòng; kiểm lại dấu nháy/ngoặc.")
