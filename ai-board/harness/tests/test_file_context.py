@@ -82,11 +82,26 @@ def test_ambiguous_search_hint_tells_the_model_to_extend_search_with_the_listed_
 
 def test_search_that_matches_nothing_points_at_the_closest_real_line():
     content = "a\nif (ok) return '<div>Xin chào</div>';\nz\n"
-    with pytest.raises(ValueError) as error:  # the model dropped the closing quote
-        file_context.apply_edits(content, [{"search": "if (ok) return '<div>Xin chào</div>;", "replace": "x"}])
+    with pytest.raises(ValueError) as error:  # a typo in the middle of the line cannot be healed, only pointed at
+        file_context.apply_edits(content, [{"search": "if (ok) retrun '<div>Xin chào</div>';", "replace": "x"}])
     message = str(error.value)
     assert "không khớp" in message and "gần giống nhất" in message
     assert "L2| if (ok) return '<div>Xin chào</div>';" in message
     with pytest.raises(ValueError) as unrelated:  # nothing resembles it: no misleading suggestion
         file_context.apply_edits(content, [{"search": "completely different text here", "replace": "x"}])
     assert "gần giống nhất" not in str(unrelated.value)
+
+
+def test_search_with_a_garbled_line_tail_is_applied_to_the_unambiguous_head():
+    content = "a\nif (ok) return '<div>Xin chào</div>';\nz\n"
+    edit = {"search": "if (ok) return '<div>Xin chào</div>;'", "replace": "if (!ok) return '<div>Chưa</div>\';'"}
+    assert file_context.apply_edits(content, [edit]) == "a\nif (!ok) return '<div>Chưa</div>';\nz\n"  # real tail kept
+
+
+def test_garbled_tail_fallback_never_guesses():
+    twice = "if (a) go();\nif (a) go();\n"  # the head is not unique
+    with pytest.raises(ValueError):
+        file_context.apply_edits(twice, [{"search": "if (a) go;'", "replace": "if (b) go;'"}])
+    only_punctuation = "x = 1;\n"  # nothing but the tail differs: not an edit we can infer
+    with pytest.raises(ValueError):
+        file_context.apply_edits(only_punctuation, [{"search": "x = 1;'", "replace": "x = 1,'"}])

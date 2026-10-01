@@ -185,6 +185,20 @@ def _stripped_match(text: str, search: str) -> tuple[int, int] | None:
     return (found[0], found[0] + len(want)) if found else None
 
 
+_TAIL_PUNCT = " \t;,'\"`)}]\\"
+
+
+def _tail_tolerant(text: str, search: str, replace: str) -> str | None:
+    """Small models copy the start of a line right and garble its tail (`';` -> `;'`, a dropped quote, a stray
+    backslash). Drop that trailing punctuation from search AND replace and apply to the head when it matches exactly
+    once, so the file's real tail stays. None when nothing was trimmed, the head is not unique or the edit was only
+    punctuation."""
+    head, new = search.rstrip(_TAIL_PUNCT), replace.rstrip(_TAIL_PUNCT)
+    if not head or len(head) == len(search) or head == new or text.count(head) != 1:
+        return None
+    return text.replace(head, new, 1)
+
+
 def _closest(text: str, search: str) -> str:
     """Real file lines most like the first line of a search that matched nothing (models drop a quote or a `;`)."""
     first = next((line.strip() for line in _LINE_NO.sub("", search).split("\n") if line.strip()), "")
@@ -211,6 +225,9 @@ def _search_edit(text: str, search: str, replace: str, index: int) -> str:
     except ValueError as e:
         raise ValueError(f"edit {index}: search {e}, cần đoạn dài hơn") from None
     if span is None:
+        healed = _tail_tolerant(text, _LINE_NO.sub("", search), _LINE_NO.sub("", replace))
+        if healed is not None:
+            return healed
         raise ValueError(f"edit {index}: search không khớp đoạn nào trong file: {search[:200]!r}{_closest(text, search)}")
     lines = text.split("\n")
     return "\n".join(lines[:span[0]] + _LINE_NO.sub("", replace).split("\n") + lines[span[1]:])
