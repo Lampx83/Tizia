@@ -35,6 +35,7 @@ const PATHS = [
   '/api/board/inbox', '/api/admin/requests', '/api/ai-board/requests',
 ];
 const ESCALATE_AFTER_DAYS = 3;
+const INBOX_UNKNOWN = 'KHÔNG kết luận được từ số đo này (5xx/lỗi mạng) — chạy lại node scripts/check-deployed-build.mjs rồi mới báo việc.';
 
 const line = (s = '') => console.log(s);
 const rule = () => line('─'.repeat(62));
@@ -83,6 +84,36 @@ function updateState(readable, skipped) {
   fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
   fs.writeFileSync(STATE_FILE, JSON.stringify(st, null, 2) + '\n');
   return st;
+}
+
+// ── 2b. Chẩn đoán trạng thái deploy từ SỐ ĐO THẬT ────────────
+// Bản cũ hardcode "vẫn trả 401 needLogin ⇒ chưa redeploy" vào thông điệp leo
+// thang, bất kể đo được gì. Phiên 79 bắt tận tay: hôm đó /api/ai-board/inbox
+// trả 503 mà thông điệp vẫn khẳng định 401 — tự mâu thuẫn ngay trong một bản
+// in. Nguy hiểm thật sự không phải chữ sai: ROUTINE.md §2a map BA status sang
+// BA việc KHÁC NHAU cho chủ sở hữu, nên đoán cứng một cái ⇒ có ngày bảo chủ
+// sở hữu bấm nút sai. Nay suy ra từ chính status + body vừa đo.
+function diagnoseDeploy(results) {
+  const r = (results || []).find(x => x.path === '/api/ai-board/inbox');
+  if (!r) return { measured: 'không đo được', action: INBOX_UNKNOWN };
+  const status = String(r.status);
+  const body = String(r.body || '');
+  const measured = `${status}${body ? ` ${body.slice(0, 60)}` : ''}`;
+
+  // Thiếu header key ⇒ code ĐÃ lên, chỉ còn đặt AI_BOARD_KEY.
+  if (status === '401' && /x-ai-board-key|Thiếu header/i.test(body)) {
+    return { measured, action: 'code PR #97 ĐÃ lên production; chỉ còn ĐẶT AI_BOARD_KEY rồi redeploy.' };
+  }
+  // Gate chung nuốt request ⇒ bản đang chạy CHƯA có code PR #97.
+  if (status === '401' && /needLogin/i.test(body)) {
+    return { measured, action: 'gate chung nuốt request ⇒ bản đang chạy CHƯA có code PR #97 ⇒ cần REDEPLOY feat/postgres-migration.' };
+  }
+  // Route không mount ⇒ code đã lên nhưng AI_BOARD_KEY chưa đặt.
+  if (status === '404') {
+    return { measured, action: 'route không được mount ⇒ code đã lên nhưng AI_BOARD_KEY CHƯA đặt.' };
+  }
+  // 5xx / lỗi mạng: KHÔNG kết luận gì — đo lại trước khi báo việc cho người.
+  return { measured, action: INBOX_UNKNOWN };
 }
 
 // ── 3. Bậc thang việc dự phòng — mỗi bậc phải ĐO ĐƯỢC ────────
@@ -198,7 +229,10 @@ if (probe.readable) {
     line('      Việc ĐẦU TIÊN là gửi thông báo cho chủ sở hữu, nêu đúng việc cần người bấm nút:');
     line('        → đặt AI_BOARD_KEY trên production (openssl rand -hex 32) RỒI redeploy nhánh');
     line('          feat/postgres-migration. Route đọc-chỉ /api/ai-board/inbox đã nằm trên nhánh đó');
-    line('          (PR #97 merge 2026-09-27) nhưng bản đang chạy vẫn trả 401 needLogin ⇒ chưa redeploy.');
+    line('          (PR #97 merge 2026-09-27).');
+    const dx = diagnoseDeploy(probe.results);
+    line(`      ĐO ĐƯỢC hôm nay (/api/ai-board/inbox): ${dx.measured}`);
+    line(`      ⇒ ${dx.action}`);
     line('      KHÔNG được tự làm: AI_BOARD_KEY là secret, redeploy nhánh production vượt ngưỡng rủi ro thấp.');
     line('      Kiểm chứng lại bất cứ lúc nào: node scripts/check-deployed-build.mjs');
   }
