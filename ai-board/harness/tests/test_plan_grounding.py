@@ -70,6 +70,30 @@ def test_quote_copied_with_the_context_line_prefix_still_counts_as_grounding(tmp
                              {'plan': plan, 'checkout_source': str(tmp_path)})['reason'] == 'plan_ungrounded'
 
 
+def test_quote_that_joins_source_lines_still_counts_but_changed_words_do_not(tmp_path):
+    subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
+    (tmp_path / 'public' / 'js').mkdir(parents=True)
+    (tmp_path / 'public' / 'js' / 'suggestion-fab.js').write_text(
+        '<label class="sgf-lab">Tiêu đề\n  <input id="sgf-title-in" maxlength="200"\n\t\t placeholder="VD: một ví dụ" />\n</label>\n', encoding='utf8')
+    subprocess.run(['git', '-C', str(tmp_path), 'add', '.'], check=True)
+    subprocess.run(['git', '-C', str(tmp_path), '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+                    'commit', '-qm', 'base'], check=True)
+    plan = {'capabilities': [], 'subtasks': [{'file': 'public/js/suggestion-fab.js', 'title': 'Counter',
+                                              'verify': 'counter shown', 'size': 'small'}]}
+    request = {'subject': 'Bộ đếm', 'body': 'Thêm bộ đếm', 'grounding_required': True, 'complexity_by_server': True}
+
+    def run(quote):
+        validation = {'clear': True, 'question': None, 'grounded': True, 'grounding': [
+            {'target': 'public/js/suggestion-fab.js', 'file': 'public/js/suggestion-fab.js', 'quote': quote,
+             'before': 'none', 'after': 'counter', 'verify': 'counter shown'}]}
+        return plan_validate.run(request, deps_with(FakeModels(plan, validation=validation)), Budget(),
+                                 {'plan': plan, 'checkout_source': str(tmp_path)})
+
+    joined = '<label class="sgf-lab">Tiêu đề <input id="sgf-title-in" maxlength="200" placeholder="VD: một ví dụ" />'
+    assert not run(joined)['blocked']
+    assert run(joined.replace('maxlength="200"', 'maxlength="300"'))['reason'] == 'plan_ungrounded'
+
+
 def test_evidence_matches_its_subtask_by_file_even_when_target_holds_the_title(tmp_path):
     subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
     (tmp_path / 'public' / 'js').mkdir(parents=True)
