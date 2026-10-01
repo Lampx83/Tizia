@@ -278,7 +278,8 @@ def run_gate(state: dict, deps, budget, *, db_path=None, proposal_id: int | None
             found = [{"check": "content_guard", "failure_class": review["failure_class"],
                       "detail": review["reason"][:300]}]
     if found:
-        worst = "critical" if any(f["failure_class"] == "critical" for f in found) else "ordinary"
+        classes = {f["failure_class"] for f in found}  # an outage alone is retryable; any real finding outranks it
+        worst = "critical" if "critical" in classes else "transient" if classes == {"transient"} else "ordinary"
         reason = "; ".join(f"{f['check']}: {f['detail']}" for f in found)[:1000]
         out.update(blocked=True, reason=reason, failure_class=worst,
                    issues=[*out.get("issues", []), *(f"{f['check']}: {f['detail']}" for f in found)])

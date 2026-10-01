@@ -188,6 +188,25 @@ def test_gate_4_blocks_a_path_outside_the_catalog_before_docker(tmp_path, source
     assert "public/a.html" in out["reason"] and "catalog" in out["checks"]
 
 
+def test_gate_4_model_outage_stays_transient_so_it_is_retried_instead_of_repaired(tmp_path, source, fake_deps):
+    from budget import Budget
+
+    class Down:
+        def generate(self, *args, **kwargs):
+            raise TimeoutError("HTTP Error 500: Internal Server Error")
+
+    scratch = implement._ensure_scratch_repo(tmp_path / "scratch")
+    state = state_for(tmp_path, [child(scratch, "x", "public/a.html", "<p>Bài học mới</p>\n")])
+    state["checkout_source"] = str(source)
+    try:
+        out = main.run_gate(4, {}, replace(fake_deps, models=Down()), Budget(), state)
+    finally:
+        candidate.cleanup(state, keep_branch=False)
+
+    assert out["blocked"] is True and "cần người soát" in out["reason"]
+    assert out["failure_class"] == "transient"
+
+
 def test_gate_4_size_flag_counts_the_real_base_diff_not_the_scratch_rewrite(tmp_path, source, fake_deps):
     page = "".join(f"<p>line {i}</p>\n" for i in range(100))
     (source / "public" / "big.html").write_text(page, encoding="utf-8")
