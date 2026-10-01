@@ -4,6 +4,82 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-10-01 — Phiên 79 · Hộp thư chết ngày 18 · **không có yêu cầu nào xử lý được** · sửa chẩn đoán tự mâu thuẫn của preflight
+
+**Kết luận một dòng:** hộp thư production **không đọc được ngày thứ 18 liên tiếp**, `ai-board/inbox.json`
+rỗng (`items: []`) ⇒ **không xử lý yêu cầu nào của người dùng**, **không tạo PR**, **không bịa việc**;
+cả 3 bậc dự phòng đều sạch (đã đọc thẳng bảng số, không tin chữ "sạch").
+
+### 1. Vì sao không có yêu cầu nào — đo thật, không đoán
+
+| Lệnh | Kết quả |
+|---|---|
+| `node scripts/ai-board-preflight.mjs` | ❌ hộp thư chết, ngày hỏng liên tiếp **thứ 18** (từ 2026-09-13) |
+| `curl https://tizia.vn/api/ai-board/inbox` (3 lần) | `401 {"error":"unauthorized","needLogin":true}` |
+| `node scripts/check-deployed-build.mjs` | `401 needLogin ⇒ auth gate chung nuốt request` — bản deploy **chưa có** `/api/ai-board/` trong `PUBLIC_PATH_PREFIXES` |
+
+Theo đúng bảng chẩn đoán ở `ai-board/ROUTINE.md` §2a, `401 needLogin` là thông điệp của **gate
+chung** ⇒ bản đang chạy **chưa có code PR #97**, tức **chưa redeploy**. Việc cần người bấm nút vẫn
+là **đặt `AI_BOARD_KEY`** (`openssl rand -hex 32`) **rồi redeploy `feat/postgres-migration`** —
+phiên tự động **không được** tự làm (secret + redeploy nhánh production vượt ngưỡng rủi ro thấp).
+
+### 2. Ba bậc dự phòng — sạch thật, có số
+
+| Bậc | Lệnh chứng minh | Số đo |
+|---|---|---|
+| 1 — học liệu mồ côi | `node scripts/check-content-integrity.mjs` | ✅ **0** vấn đề |
+| 2 — môn dừng ở tuần 35 | `node scripts/ai-board-preflight.mjs` | ✅ **0** môn |
+| 3 — lệch đáp án A/B/C/D | `node scripts/audit-answer-distribution.js` | ✅ toàn bộ **28.212** câu · A 24,8% B 25,2% C 25,3% D 24,7% · χ²=**2,96**; môn lệch nhất `lop3:toan` A=**31,9%** — xa cả hai ngưỡng (một vị trí ≥60%, hoặc hai vị trí >85%) · **0** câu dị dạng |
+
+### 3. Lỗi thật bắt được trong phiên: preflight **tự mâu thuẫn** trong cùng một bản in
+
+Lần chạy đầu, mục ① in `503 /api/ai-board/inbox`, nhưng thông điệp leo thang ở mục ③ vẫn khẳng định
+*"bản đang chạy vẫn trả 401 needLogin"* — câu đó **hardcode**, không đọc số vừa đo. (`503` hôm nay
+là blip mạng tạm thời: đo lại 3 lần ra `401`, một lần `HTTP 000`.)
+
+Nguy hiểm không nằm ở chữ sai mà ở **việc báo cho người**: `ROUTINE.md` §2a map **ba** status sang
+**ba việc KHÁC NHAU** (`401 needLogin` ⇒ cần redeploy · `401 Thiếu header x-ai-board-key` ⇒ code đã
+lên, chỉ còn đặt key · `404` ⇒ route chưa mount). Đoán cứng một cái nghĩa là đúng ngày production
+đổi trạng thái — đúng ngày mọi người đang chờ — thông điệp sẽ **bảo chủ sở hữu bấm nút sai**, trong
+khi bế tắc đã sang ngày 18.
+
+**Sửa:** thêm `diagnoseDeploy(results)` suy diễn từ chính `status` + `body` vừa đo; nhánh `5xx`/lỗi
+mạng **không kết luận gì** mà yêu cầu đo lại — vì một blip mạng không phải bằng chứng về deploy.
+
+| Chỉ số | Trước | Sau |
+|---|---|---|
+| Trạng thái production mà thông điệp leo thang phân biệt được | **1** (hardcode `401 needLogin`) | **4** (`401 needLogin` · `401` thiếu header · `404` · `5xx`/lỗi mạng) |
+| Trong 4 trạng thái đó, số lần báo việc **sai** cho chủ sở hữu | **3/4** | **0/4** |
+
+### Thay đổi từng file
+
+| File | Thay đổi |
+|---|---|
+| `scripts/ai-board-preflight.mjs` | Thêm hằng `INBOX_UNKNOWN` + hàm `diagnoseDeploy(results)`; thông điệp leo thang nay in **`ĐO ĐƯỢC hôm nay`** (status + body thật) rồi mới kết luận việc cần làm, thay cho câu 401 hardcode. Không đụng logic đo hộp thư, không đụng bậc thang. |
+| `ai-board/inbox-status.json` | Do preflight tự ghi: `consecutive_failures: 18`, thêm mục lịch sử `2026-10-01`. |
+| `public/CHANGELOG-eduverse.md` | Mục này. |
+
+### Kiểm thử (chạy thật)
+
+- ✅ `node --check scripts/ai-board-preflight.mjs` — PASS (file `.js`/`.mjs` duy nhất đã sửa).
+- ✅ **Kiểm tra runtime, không chỉ cú pháp:** dựng server giả, chạy preflight thật với
+  `TIZIA_BASE_URL` trỏ vào nó, xác nhận **cả 4** nhánh in đúng chẩn đoán riêng:
+  `401 needLogin` → "CHƯA có code PR #97 ⇒ cần REDEPLOY" · `401 Thiếu header x-ai-board-key` →
+  "code ĐÃ lên; chỉ còn ĐẶT AI_BOARD_KEY" · `404` → "route không được mount" · `503` →
+  "KHÔNG kết luận được … chạy lại".
+- ✅ Chạy lại preflight trên production thật: mục ③ nay **tự nhất quán** với mục ①.
+- ✅ `ai-board/inbox-status.json` không bị nhiễm bởi các lần chạy thử (`consecutive_failures` vẫn
+  **18**, đúng **1** mục lịch sử cho `2026-10-01` — chốt `last_checked === TODAY` hoạt động).
+
+### Không làm (và vì sao)
+
+- **Không soạn thêm học liệu / không "cải tiến" trường nào**: cả 3 bậc dự phòng sạch, hộp thư chết ⇒
+  mọi nội dung thêm vào lúc này là **bịa việc**, đúng thứ `ROUTINE.md` cấm.
+- **Không đặt `AI_BOARD_KEY`, không redeploy production**: secret + nhánh production, nằm trong
+  "những gì KHÔNG bao giờ tự làm".
+
+---
+
 ## 2026-09-30 — Phiên 78 · Dọn nợ tồn: merge nốt nội dung treo 1 tháng, **bỏ hẳn cơ chế nhánh + PR**
 
 **Chế độ:** chủ sở hữu yêu cầu trực tiếp (không phải phiên tự động): *"merge hết toàn bộ những gì
