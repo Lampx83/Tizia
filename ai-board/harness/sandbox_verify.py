@@ -19,6 +19,7 @@ from typing import Callable
 from gates import verify
 
 PROTOCOL = "1"
+CREATE_TIMEOUT_S = 600.0  # first boot after a cache wipe imports a multi-GB guest image
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", ".pytest_cache", ".cache", ".scratch"}
 GUEST_STATE = "state.json"
 GUEST_OUT = "out"
@@ -74,7 +75,7 @@ class RunnerClient:
         return json.loads(raw or b"{}")
 
     def create(self, run_id: str, manifest: list[dict]) -> dict:
-        return self._json("POST", "/v1/runs", "provision", {"run_id": run_id, "manifest": manifest})
+        return self._json("POST", "/v1/runs", "provision", {"run_id": run_id, "manifest": manifest}, timeout=CREATE_TIMEOUT_S)
 
     def upload(self, run_id: str, archive: bytes) -> dict:
         raw, _ = self._call("PUT", f"/v1/runs/{run_id}/workspace", "upload", archive, content_type="application/gzip", timeout=300)

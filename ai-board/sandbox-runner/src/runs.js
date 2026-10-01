@@ -116,6 +116,10 @@ export function createRuns({ policy, backend, store, now = Date.now, alert = () 
       await close(run, 'failed');
       throw new RunnerError(502, 'create_failed', 'provision');
     }
+    if (run.state !== 'creating') { // destroyed (or expired) while booting: the VM that just came up must not outlive that
+      if (!(await cleanup(run))) markUnhealthy('cleanup_unconfirmed', runId);
+      throw new RunnerError(409, 'run_closed', 'provision');
+    }
     // the lease and TTL start when the VM is up, not before: the first create can spend a minute pulling the image
     const booted = now();
     run.lease_expires_at = booted + policy.vm.lease_s * 1000;

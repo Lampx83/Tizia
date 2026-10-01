@@ -214,6 +214,14 @@ def test_malformed_or_oversize_guest_output_is_a_sanitized_block(tmp_path, guest
     assert result["blocked"] and result["failure_class"] == "transient" and result["reason"] == "sandbox trả kết quả không hợp lệ"
 
 
+def test_create_waits_long_enough_for_a_cold_image_import(monkeypatch):
+    client = sandbox_verify.RunnerClient("http://runner", "token")
+    seen = {}
+    monkeypatch.setattr(client, "_call", lambda method, path, phase, body=None, **kw: (seen.update(kw) or (b"{}", {})))
+    client.create("g5-x", [])
+    assert seen["timeout"] >= 300  # the first boot after a cache wipe imports a multi-GB image; giving up mid-boot orphans the VM
+
+
 def test_lease_loss_stops_renewal_and_destroys_the_vm():
     renewed, destroyed = [], []
 

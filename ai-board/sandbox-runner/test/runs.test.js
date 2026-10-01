@@ -58,6 +58,22 @@ test('lease and ttl start when the VM is up, not when create was requested', asy
   assert.equal((await runs.status('run-0001')).state, 'ready', 'a slow boot must not eat the lease');
 });
 
+test('a destroy that lands while the VM is still booting leaves no VM behind and frees the slot', async () => {
+  const { runs, backend } = setup();
+  const create = backend.create;
+  let finishBoot;
+  backend.create = (spec) => new Promise((resolve) => { finishBoot = () => resolve(create(spec)); }); // client gave up mid-boot
+  const creating = runs.create({ run_id: 'run-0001', manifest: MANIFEST });
+  await new Promise((resolve) => setImmediate(resolve));
+  await runs.destroy('run-0001');
+  finishBoot();
+  assert.equal(await code(creating), 'run_closed', 'the late boot is refused, not published as ready');
+  assert.notEqual((await runs.status('run-0001')).state, 'ready');
+  assert.equal(backend.vms.size, 0, 'the sandbox that finished booting is destroyed');
+  backend.create = create;
+  await runs.create({ run_id: 'run-0002', manifest: MANIFEST }); // slot is free again
+});
+
 test('worker-supplied policy and bad ids are refused', async () => {
   const { runs } = setup();
   assert.equal(await code(runs.create({ run_id: 'x' })), 'invalid_run_id');
