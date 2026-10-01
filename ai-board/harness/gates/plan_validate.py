@@ -159,7 +159,8 @@ def source_evidence(request: dict, plan: dict, state: dict) -> tuple[str | None,
 
 
 def _squash(text: str) -> str:
-    return re.sub(r'\s+', ' ', text).strip()
+    """Text without any whitespace: models join source lines with or without a space, so layout carries no evidence."""
+    return re.sub(r'\s+', '', text)
 
 
 _LINE_MARKER = re.compile(r'^[ \t]*(?:[\w./-]+:)?L?\d+\|[ ]?', re.M)
@@ -182,7 +183,7 @@ def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict
         if task['file'] in files and file != task['file']:
             raise ValueError('trích dẫn phải thuộc file hiện có dự định sửa')
         if (not isinstance(quote, str) or len(quote.strip()) < 8 or len(quote) > 1200
-                or _squash(quote) not in _squash(files.get(file, ''))):  # models join source lines: compare words, not layout
+                or _squash(quote) not in _squash(files.get(file, ''))):  # models join source lines: compare content, not layout
             raise ValueError(f'{task["file"]}: không tìm thấy trích dẫn hành vi trong code nguồn')
         if any(not isinstance(evidence.get(key), str) or not evidence[key].strip() for key in ('before', 'after', 'verify')):
             raise ValueError('thiếu hành vi trước/sau hoặc tiêu chí kiểm chứng')

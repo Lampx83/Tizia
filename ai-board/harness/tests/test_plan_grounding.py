@@ -91,6 +91,7 @@ def test_quote_that_joins_source_lines_still_counts_but_changed_words_do_not(tmp
 
     joined = '<label class="sgf-lab">Tiêu đề <input id="sgf-title-in" maxlength="200" placeholder="VD: một ví dụ" />'
     assert not run(joined)['blocked']
+    assert not run('<label class="sgf-lab">Tiêu đề<input id="sgf-title-in" maxlength="200"placeholder="VD: một ví dụ" />')['blocked']  # lines glued with no space
     assert run(joined.replace('maxlength="200"', 'maxlength="300"'))['reason'] == 'plan_ungrounded'
 
 
