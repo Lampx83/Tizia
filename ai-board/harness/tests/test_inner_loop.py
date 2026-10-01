@@ -134,3 +134,35 @@ def test_node_check_handles_vietnamese_source(tmp_path):
     assert static_check.node_check(f) is None
     f.write_text("const x = ;\n// chữ Việt\n", encoding="utf-8")
     assert static_check.node_check(f)
+
+
+def test_js_edit_that_breaks_syntax_is_retried_inside_gate_3_with_the_node_error(tmp_path):
+    repo = tmp_path / "source"
+    (repo / "public").mkdir(parents=True)
+    (repo / "public/app.js").write_text("const msg = 'hello';\nexport default msg;\n", encoding="utf-8")
+    for args in (["init", "-q"], ["add", "-A"], ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "b"]):
+        subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, stdin=subprocess.DEVNULL)
+    plan = {"summary_vi": "Đổi lời chào", "capabilities": ["features"],
+            "subtasks": [{"title": "Đổi lời chào", "file": "public/app.js", "verify": "msg đổi", "size": "small"}]}
+    broken = {"edits": [{"search": "'hello'", "replace": "'bye';'"}], "test_file": "test/app.test.js", "test": ESM_TEST}
+    fixed = {"edits": [{"search": "'hello'", "replace": "'bye'"}], "test_file": "test/app.test.js", "test": ESM_TEST}
+    models = SeqModels([broken, fixed])
+    out = implement.run({"plan": plan, "checkout_source": str(repo)}, deps_with(models), Budget(max_wall_clock_s=999),
+                        repo_dir=tmp_path / "scratch")
+    prompts = [c["prompt"] for c in models.calls]
+    assert out["blocked"] is False and len(prompts) == 2
+    retry = prompts[1][len(prompts[0]):]
+    assert "cú pháp" in retry and "SyntaxError" in retry   # node's own message reaches the model
+    assert (tmp_path / "scratch/public/app.js").read_text(encoding="utf-8").startswith("const msg = 'bye';")
+
+
+def test_a_file_that_was_already_broken_is_not_blamed_on_the_edit(tmp_path):
+    broken_base = "const msg = ;\n"
+    out = {"edits": [{"search": "msg", "replace": "text"}], "test_file": "test/x.test.js", "test": ESM_TEST}
+    checked = implement.check_output(dict(out), broken_base, "stop", file="public/app.js")
+    assert checked["code"] == "const text = ;\n"
+
+
+def test_syntax_retry_hint_says_to_copy_the_whole_line():
+    hint = implement.retry_hint("cú pháp JS lỗi sau khi áp edit: SyntaxError", 0)
+    assert "CẢ dòng" in hint

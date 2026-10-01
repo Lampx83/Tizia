@@ -57,6 +57,9 @@ RETRY_SUFFIX = (
 
 def retry_hint(error: str, iteration: int) -> str:
     """Gợi ý theo loại lỗi; lần sau cùng đẩy về dạng chèn theo số dòng (model nhỏ chép lệch nhiều)."""
+    if "cú pháp JS lỗi" in error:  # usual cause: replace repeats text the search left untouched (a closing `';`)
+        return ("Chép CẢ dòng cần sửa vào search (đến hết dòng, gồm `';` hay `);`) để replace không lặp lại phần "
+                "đuôi dòng; kiểm lại dấu nháy/ngoặc.")
     if "Các chỗ khớp" in error:  # ambiguous search: the error already lists every match with its neighbours
         return ("Chọn MỘT chỗ khớp ở trên và thêm dòng liền kề của nó (đã liệt kê) vào search để chỉ khớp 1 chỗ; "
                 "hoặc dùng {\"after_line\": N, \"insert\": ...} nếu chỉ chèn thêm.")
@@ -160,13 +163,17 @@ def parse_codegen(text: str, *, existing: bool = False) -> dict:
 _COMMONJS = re.compile(r"\brequire\s*\(|\bmodule\.exports\b")
 
 
-def check_output(out: dict, current: str | None, done_reason: str | None) -> dict:
+def check_output(out: dict, current: str | None, done_reason: str | None, file: str | None = None) -> dict:
     """Kiểm output đã parse như cổng 4/5 sẽ kiểm, để hỏi lại ngay trong cổng 3. Trả out đã có `code`
     (edits đã áp) + test_file chuẩn hoá. Raise ValueError (lỗi sửa được) — path thoát repo KHÔNG ở đây."""
     if done_reason == "length":
         raise ValueError("output bị cắt vì quá dài; chỉ trả các edit cần thiết, test ngắn")
     if current is not None:
         out["code"] = file_context.apply_edits(current, out["edits"])
+        if file and file.endswith((".js", ".mjs")):  # Gate 4 would catch this one round later; ask now, while it is cheap
+            from gates import static_check
+            if static_check.syntax_error(current) is None and (broken := static_check.syntax_error(out["code"])):
+                raise ValueError(f"cú pháp JS lỗi sau khi áp edit: {broken[-600:]}")
         if "</body>" in current and out["code"].rsplit("</body>", 1)[-1] != current.rsplit("</body>", 1)[-1]:
             line = current[:current.rindex("</body>")].count("\n") + 1
             raise ValueError(f"nội dung bị chèn sau </body> (dòng L{line}); chèn trước nó: after_line {line - 1}")
@@ -319,7 +326,7 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
                             "diffs": diffs, "failure_class": "critical"}
                 try:
                     out = check_output(out, current, (body.get("_metrics") or {}).get("done_reason")
-                                       or body.get("done_reason"))
+                                       or body.get("done_reason"), subtask.get("file"))
                     break
                 except ValueError as e:
                     error = e
