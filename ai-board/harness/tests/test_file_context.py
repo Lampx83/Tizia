@@ -38,6 +38,17 @@ def test_apply_edits_rejects_missing_or_ambiguous_search(edit, message):
         file_context.apply_edits("a\na\n", [edit])
 
 
+def test_ambiguous_search_error_shows_where_each_match_is_so_the_model_can_extend_it():
+    content = "x\nfoo();\ny\nbar\nfoo();\nz\n"
+    with pytest.raises(ValueError) as exact:
+        file_context.apply_edits(content, [{"search": "foo();", "replace": "baz();"}])
+    for needle in ("L1| x", "L2| foo();", "L3| y", "L4| bar", "L5| foo();", "L6| z"):
+        assert needle in str(exact.value)
+    with pytest.raises(ValueError) as loose:  # same duplicate once indentation is ignored
+        file_context.apply_edits("  foo();\ny\n\tfoo();\nz\n", [{"search": "foo();", "replace": "baz();"}, ])
+    assert "L1|" in str(loose.value) and "L3|" in str(loose.value)
+
+
 def test_retrieval_weights_fall_back_to_defaults_with_warning(tmp_path, caplog):
     """File hỏng → toàn bộ mặc định; khoá thiếu/sai kiểu → mặc định cho khoá đó, khoá hợp lệ vẫn dùng. Luôn cảnh báo."""
     bad = tmp_path / "w.json"
@@ -59,3 +70,11 @@ def test_retrieval_weights_fall_back_to_defaults_with_warning(tmp_path, caplog):
 def test_committed_retrieval_weights_load_without_warning(caplog):
     file_context.load_weights(file_context.WEIGHTS_PATH)
     assert caplog.text == ""
+
+
+def test_ambiguous_search_hint_tells_the_model_to_extend_search_with_the_listed_neighbour_lines():
+    from gates import implement
+    error = "edit 1: search khớp 2 chỗ, cần đoạn dài hơn để chỉ khớp 1 chỗ. Các chỗ khớp:\nL1| x\nL2| foo();\nL3| y"
+    for iteration in (0, 1):
+        hint = implement.retry_hint(error, iteration)
+        assert "liền kề" in hint and "after_line" in hint

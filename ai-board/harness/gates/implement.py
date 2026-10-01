@@ -57,6 +57,9 @@ RETRY_SUFFIX = (
 
 def retry_hint(error: str, iteration: int) -> str:
     """Gợi ý theo loại lỗi; lần sau cùng đẩy về dạng chèn theo số dòng (model nhỏ chép lệch nhiều)."""
+    if "Các chỗ khớp" in error:  # ambiguous search: the error already lists every match with its neighbours
+        return ("Chọn MỘT chỗ khớp ở trên và thêm dòng liền kề của nó (đã liệt kê) vào search để chỉ khớp 1 chỗ; "
+                "hoặc dùng {\"after_line\": N, \"insert\": ...} nếu chỉ chèn thêm.")
     if "search" in error:
         return ("Dùng dạng {\"after_line\": N, \"insert\": ...} nếu chỉ chèn thêm." if iteration >= 1 else
                 "Chép search nguyên văn 1-3 dòng từ NGỮ CẢNH FILE, bỏ tiền tố `LN| `; hoặc dùng after_line.")

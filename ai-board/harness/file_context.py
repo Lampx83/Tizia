@@ -157,6 +157,15 @@ def excerpt(content: str, words: list[str], *, budget: int = CONTEXT_BUDGET) -> 
     return "\n".join(out)
 
 
+def _where(lines: list[str], starts: list[int], width: int) -> str:
+    """Each ambiguous match as `Lnn| ` lines with one line of context either side, so the model can lengthen `search`."""
+    shown = []
+    for start in starts[:4]:
+        low, high = max(start - 1, 0), min(start + width + 1, len(lines))
+        shown.append("\n".join(f"L{i + 1}| {lines[i][:200]}" for i in range(low, high)))
+    return "\n---\n".join(shown)
+
+
 def _stripped_match(text: str, search: str) -> tuple[int, int] | None:
     """Khớp theo dòng, bỏ khoảng trắng đầu/cuối mỗi dòng (model hay lệch thụt lề).
     (dòng đầu, dòng cuối+1) nếu đúng 1 chỗ; None nếu 0 chỗ. Raise ValueError nếu nhiều chỗ."""
@@ -170,7 +179,8 @@ def _stripped_match(text: str, search: str) -> tuple[int, int] | None:
     have = [line.strip() for line in text.split("\n")]
     found = [i for i in range(len(have) - len(want) + 1) if have[i:i + len(want)] == want]
     if len(found) > 1:
-        raise ValueError(f"khớp {len(found)} chỗ (bỏ qua thụt lề)")
+        raise ValueError(f"khớp {len(found)} chỗ (bỏ qua thụt lề). Các chỗ khớp:\n"
+                         + _where(text.split("\n"), found, len(want)))
     return (found[0], found[0] + len(want)) if found else None
 
 
@@ -180,7 +190,11 @@ def _search_edit(text: str, search: str, replace: str, index: int) -> str:
         if count == 1:
             return text.replace(candidate, new, 1)
         if count > 1:
-            raise ValueError(f"edit {index}: search khớp {count} chỗ, cần đoạn dài hơn để chỉ khớp 1 chỗ")
+            starts, at = [], -1
+            while len(starts) < count and (at := text.find(candidate, at + 1)) >= 0:
+                starts.append(text.count("\n", 0, at))
+            raise ValueError(f"edit {index}: search khớp {count} chỗ, cần đoạn dài hơn để chỉ khớp 1 chỗ. Các chỗ khớp:\n"
+                             + _where(text.split("\n"), starts, candidate.count("\n") + 1))
     try:
         span = _stripped_match(text, _LINE_NO.sub("", search))
     except ValueError as e:
