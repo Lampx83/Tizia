@@ -48,6 +48,8 @@ ip6tables -C OUTPUT -m owner --uid-owner "$uid" ! -o lo -j REJECT 2>/dev/null \
 
 # 3. The worker's own clone; worker.py resets it to origin/$PR_BASE_BRANCH before every ticket.
 chown aiboard:aiboard "$REPO_DIR" /opt/ai-board/ai-board/memory
+# An operator running git in the volume as root leaves objects aiboard cannot write; heal them instead of failing every ticket.
+find "$REPO_DIR" ! -user aiboard -exec chown aiboard:aiboard {} +
 as_worker() { setpriv --reuid=aiboard --regid=aiboard --init-groups env HOME=/home/aiboard "$@"; }
 [ -d "$REPO_DIR/.git" ] || as_worker git clone -q "$REPO_URL" "$REPO_DIR"
 
