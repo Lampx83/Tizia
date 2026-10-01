@@ -56,9 +56,33 @@ services:
       - ai-board-docker:/var/lib/docker
       - ai-board-memory:/opt/ai-board/ai-board/memory
 
+  sandbox-runner:
+    build:
+      context: ai-board/sandbox-runner
+    image: tizia-sandbox-runner:dev
+    profiles: [ai-board]
+    restart: on-failure
+    user: node
+    devices:
+      - /dev/kvm
+    group_add:
+      - "${KVM_GID:-109}"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    cpus: 2
+    mem_limit: 3g
+    pids_limit: 512
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: "3" }
+    volumes:
+      - sandbox-runner-state:/home/node/.microsandbox
+
 volumes:
   tizia-dev-data:
     driver: local
   ai-board-repo:
   ai-board-docker:
   ai-board-memory:
+  sandbox-runner-state:

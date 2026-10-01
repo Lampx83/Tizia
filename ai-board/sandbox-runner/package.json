@@ -1,0 +1,11 @@
+{
+  "name": "sandbox-runner",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "microsandbox": "0.7.5"
+  }
+}
