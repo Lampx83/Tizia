@@ -251,7 +251,8 @@ export function attachAdmin(r) {
     const reqRow = getRequestForReply.get(id);
     if (!reqRow) return res.status(404).json({ error: 'request_not_found' });
 
-    applyAdminStatus(id, status, message, req.user.id);
+    // No AI Board root (legacy request): nothing was applied, so no decision/thread/notification either.
+    if (!applyAdminStatus(id, status, message, req.user.id)) return res.status(404).json({ error: 'request_not_found' });
     const appliedStatus = getRequestForReply.get(id).status;
 
     insertHumanDecision.run({

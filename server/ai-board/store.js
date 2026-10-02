@@ -879,9 +879,9 @@ export function createAiBoardStore(db, hooks = {}) {
   }
 
   // Admin reject = cancel the whole root, like cancelRequestTransaction; every statement is a no-op on repeat.
-  function closeRootForAdmin(root, actorId, now) {
+  function closeRootForAdmin(root, actorId, note, now) {
     closeRoot(root, {
-      status: 'cancelled', phase: 'admin_rejected', note: 'Quản trị viên đã từ chối yêu cầu.', reason: 'admin_rejected',
+      status: 'cancelled', phase: 'admin_rejected', note: note || 'Quản trị viên đã từ chối yêu cầu.', reason: 'admin_rejected',
       onlyOpen: true, now,
       event: { type: 'request_rejected', actorType: 'admin', actorId, detail: 'admin_rejected', idem: `request-rejected:${root.id}` },
     });
@@ -903,8 +903,8 @@ export function createAiBoardStore(db, hooks = {}) {
       root.id, 'request_status_changed', 'admin', String(actorId), null,
       note, rejecting ? 'request rejected' : 'request noted', `status:${requestId}:${now}:${randomBytes(4).toString('hex')}`, now,
     );
-    if (rejecting) closeRootForAdmin(root, actorId, now);
-    else db.prepare('UPDATE ai_tickets SET public_note=?, updated_at=? WHERE id=?')
+    if (rejecting) closeRootForAdmin(root, actorId, note, now);
+    else db.prepare('UPDATE ai_tickets SET public_note=COALESCE(?, public_note), updated_at=? WHERE id=?')
       .run(note, now, root.id); // An admin note does not complete a worker run.
     return true;
   });
@@ -1840,6 +1840,8 @@ export function createAiBoardStore(db, hooks = {}) {
         UPDATE ai_tickets SET status='cancelled', updated_at=?
         WHERE parent_id=? AND status NOT IN ('done', 'failed', 'invalidated', 'cancelled')
       `).run(now, root.id);
+    } else { // Legacy request, no root: the status trigger has nothing to derive from, write the row itself.
+      db.prepare(`UPDATE requests SET status='cancelled', updated_at=? WHERE id=?`).run(now, request.id);
     }
     return { ok: true, request_id: request.id, status: 'cancelled' };
   });
