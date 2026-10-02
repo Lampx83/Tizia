@@ -555,3 +555,27 @@ def test_oracle_gets_the_request_and_the_pages_to_look_at(tmp_path, monkeypatch)
     js = {**state(tmp_path), "request_detail": "[Trang: Trường] /school.html\nThêm 'Xin chào' vào đầu trang"}
     verify.run(js, runner=FakeRunner())
     assert seen[0][2] == ["/school.html"]
+
+
+def _oracle_state(tmp_path):
+    """A request the harness has an oracle for: the quoted words decide what must show."""
+    return {**state(checkout(tmp_path)), "request_detail": "Thêm 'Xin chào' vào đầu trang"}
+
+
+def test_failing_generated_test_is_advisory_when_a_harness_oracle_decides(tmp_path):
+    out = verify.run(_oracle_state(tmp_path), runner=FakeRunner(fail="generated_test"))
+    assert out["blocked"] is False
+    assert "advisory" in out["evidence"]["text"] and "generated tests failed" in out["evidence"]["text"]
+
+
+def test_oracle_failure_still_blocks_even_when_the_generated_test_also_failed(tmp_path, monkeypatch):
+    import functional
+    monkeypatch.setattr(functional, "run", lambda *_, **__: {"probe_id": functional.TEXT_PROBE, "passed": False,
+                                                              "reason": "Chữ người dùng yêu cầu không hiển thị trên trang: 'Xin chào'"})
+    out = verify.run(_oracle_state(tmp_path), runner=FakeRunner(fail="generated_test"))
+    assert out["blocked"] is True and "không hiển thị" in out["reason"]
+
+
+def test_generated_test_timeout_is_advisory_too_with_an_oracle(tmp_path):
+    out = verify.run(_oracle_state(tmp_path), runner=FakeRunner(fail="generated_timeout"))
+    assert out["blocked"] is False and "timed out" in out["evidence"]["text"]
