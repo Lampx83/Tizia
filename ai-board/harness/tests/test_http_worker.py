@@ -1553,3 +1553,31 @@ def test_diagnose_flag_runs_one_diagnosis_with_traced_deps_then_exits(monkeypatc
     assert main(['--diagnose']) == 0
     assert '"no_cluster"' in capsys.readouterr().out
     assert isinstance(seen['client'], WorkerClient) and seen['deps'].trace is not None and seen['now_ms'] > 0
+
+
+def test_a_poll_that_cannot_reach_the_server_is_a_status_not_a_crash():
+    import urllib.error
+    from worker import poll
+
+    class Down:
+        def run_once(self):
+            raise urllib.error.URLError(OSError(-2, 'Name or service not known'))
+
+    result = poll(Down())
+    assert result['status'] == 'server_unreachable'
+    assert 'Name or service not known' in result['reason']
+
+
+def test_poll_passes_results_and_plan_blocks_through():
+    from worker import poll
+
+    class Ok:
+        def run_once(self):
+            return {'status': 'idle'}
+
+    class Blocked:
+        def run_once(self):
+            raise PlanBlockedError('x', {'gate': 2.5, 'reason': 'plan_ungrounded'})
+
+    assert poll(Ok()) == {'status': 'idle'}
+    assert poll(Blocked()) == {'status': 'plan_blocked', 'gate': 2.5, 'reason': 'plan_ungrounded'}

@@ -1001,6 +1001,19 @@ def harness_change_runner(checkout_source=None, tracer=None, progress=None) -> C
     return run
 
 
+def poll(worker) -> dict:
+    """One poll. Plan block = expected outcome. Server down/restarting (DNS, refused, reset, 5xx) = a status, retried next tick:
+    crashing instead would burn the container's restart budget during a normal redeploy. 4xx (bad key) still raises."""
+    try:
+        return worker.run_once()
+    except PlanBlockedError as error:
+        return {"status": "plan_blocked", **error.detail}
+    except OSError as error:  # urllib URLError/HTTPError are OSError
+        if isinstance(error, urllib.error.HTTPError) and error.code < 500:
+            raise
+        return {"status": "server_unreachable", "reason": str(getattr(error, "reason", error))}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Tizia AI Board HTTP worker")
     parser.add_argument("--mode", choices=("off", "shadow", "active"), default=os.getenv("AI_BOARD_WORKER_MODE", "off"))
@@ -1082,10 +1095,7 @@ def main(argv: list[str] | None = None) -> int:
         import diagnose as _diagnose
         night_deps = _real_deps(Deps, meter.Tracer(_diagnose.TRACES_PATH), worker.gate_started)
     while True:
-        try:
-            result = worker.run_once()
-        except PlanBlockedError as error:  # an expected outcome, not a crash: show why
-            result = {"status": "plan_blocked", **error.detail}
+        result = poll(worker)
         print(json.dumps(result, ensure_ascii=False))
         # 1 bước/tick, chỉ khi lượt claim vừa rồi rảnh việc thật: lượt poll tiếp theo tự ưu tiên claim thật
         # trước (yield_to_chat hiện có), nên đêm không bao giờ giữ worker quá 1 bước trước khi nhường.
