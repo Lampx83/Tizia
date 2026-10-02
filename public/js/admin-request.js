@@ -71,7 +71,7 @@ const ROLLBACK_STATE = { discarded: ['ok', 'đã xóa nhánh'], revert_ready: ['
 // 1 bộ tag trạng thái xuyên suốt, tiếng Anh, không phân biệt "ok" (lần gọi model) với "qua" (cổng đạt) — cùng 1 nghĩa.
 const STATE_LABEL = { ok: 'OK', bad: 'Blocked', run: 'Running', wait: 'Pending', skip: 'Skipped' };
 const CALL_LABEL = { ok: 'OK', retry: 'Retry', error: 'Error', http_error: 'HTTP error', timeout: 'Timeout' };
-const TRIGGER_LABEL = { plan: 'lập kế hoạch và thực hiện', execute: 'thực hiện kế hoạch đã duyệt', rollback: 'hoàn tác',
+const TRIGGER_LABEL = { plan: 'lượt xử lý', execute: 'thực hiện kế hoạch đã duyệt', rollback: 'hoàn tác',
   shadow_precheck: 'kiểm tra ban đầu' };
 const tag = (state, text) => `<span class="tag st-${state}">${esc(text)}</span>`;
 const cap = (s) => s ? s[0].toUpperCase() + s.slice(1) : s;
@@ -136,14 +136,14 @@ function explain(e) {
   </div>`;
 }
 
-function callStep(e) {
+function callStep(e, rerunGate = null) {
   const m = e.metrics || {};
   const cut = (flag) => flag ? ' (đã cắt)' : '';
   const state = CALL_STATE[e.result] || 'idle';
   const where = [e.child != null ? `bước ${esc(e.child)}` : '', e.attempt ? `lượt sửa ${esc(e.attempt)}` : '',
     e.iteration ? `lần hỏi lại ${esc(e.iteration)}` : ''].filter(Boolean).join(' · ');
   return `<div class="step call st-${state}"><div class="line1">
-      <span>Gọi ${esc(e.model)}</span>${tag(state, CALL_LABEL[e.result] || e.result || '—')}${where ? `<span>${where}</span>` : ''}</div>
+      <span>Gọi ${esc(e.model)}</span>${tag(state, CALL_LABEL[e.result] || e.result || '—')}${where ? `<span>${where}</span>` : ''}${rerunGate != null ? rerunBtn(rerunGate) : ''}</div>
     ${e.error ? `<div style="color:var(--c);margin-top:4px">${esc(e.error)}</div>` : ''}
     <div class="metrics"><span>wall ${secs(m.wall_ms)} s</span><span>GPU ${secs(m.gpu_ms)} s</span>
       <span>nạp ${secs(m.load_ms)} s</span><span>chờ ${secs(m.queue_ms)} s</span>
@@ -162,13 +162,15 @@ function callStep(e) {
 const gateStage = (g) => ([1, 2, 2.5].includes(Number(g)) ? 'plan' : 'execute');
 const rerunTitle = (g) => (gateStage(g) === 'plan' ? 'Lập kế hoạch chạy liền các bước 1 → 2.5; chạy lại sẽ bắt đầu từ bước 1'
   : 'Các bước kiểm tra trước PR chạy liền trên kế hoạch đã duyệt; chạy lại sẽ bắt đầu từ bước 3');
+const rerunBtn = (gate, text = 'Chạy lại bước này') =>
+  `<button type="button" class="btn rerun" data-action="rerun-gate" data-gate="${esc(gate)}" title="${esc(rerunTitle(gate))}">${esc(text)}</button>`;
 function gateStep(g, rerun = false) {
   const state = GATE_STATE[g.status] || 'idle';
   const evidence = g.evidence?.text;
   const functional = g.evidence?.functional;
   return `<div class="step gate${subClass(g.gate)} st-${state}" data-pos="${gatePos(g.gate)}"><div class="line1"><b>${gateName(g.gate)}</b>
       ${tag(state, g.status === 'passed' ? 'OK' : g.status === 'blocked' ? 'Blocked' : g.status)}
-      ${rerun ? `<button type="button" class="btn rerun" data-action="rerun-gate" data-gate="${esc(g.gate)}" title="${esc(rerunTitle(g.gate))}">Chạy lại bước này</button>` : ''}</div>
+      ${rerun ? rerunBtn(g.gate) : ''}</div>
     ${g.public_reason ? `<div style="margin-top:4px">${esc(g.public_reason)}</div>` : ''}
     ${g.internal_reason ? `<div class="meta">${esc(g.internal_reason)}</div>` : ''}
     ${functional ? `<details><summary>Kiểm chứng chức năng: ${esc(functional.probe_id || 'chưa có phép kiểm')} · ${functional.passed ? 'đạt' : 'chưa đạt'}</summary><pre>${esc(JSON.stringify(functional, null, 2))}</pre></details>` : ''}
@@ -193,16 +195,35 @@ function trimUnreached(p, showFull) {
 }
 
 // Thứ tự: theo cổng; trong 1 cổng các lần gọi model trước, kết luận của cổng sau cùng.
+// Một lượt chia 2 phần riêng: "Lập kế hoạch" (cổng 1–2.5) và "Thực hiện" (cổng 3–5.5), mỗi phần có nút chạy lại riêng.
+const STAGES = { plan: { label: 'Lập kế hoạch', first: 1 }, execute: { label: 'Thực hiện', first: 3 } };
+const FAILED_CALL = new Set(['error', 'http_error', 'timeout']);
+
+function renderStage(stage, items, { run, root, latest, p, lastBlocked }) {
+  const canRerun = latest && root.rerun_stage === stage;
+  const live = root.live && latest && p?.current != null && gateStage(p.current) === stage;
+  const state = live ? 'run' : canRerun || items.some(i => i.blocked) ? 'bad' : items.some(i => i.kind === 1) ? 'ok' : 'idle';
+  const label = { run: 'Running', bad: 'Blocked', ok: 'OK', idle: '—' }[state];
+  const rerun = canRerun ? rerunBtn(lastBlocked[stage] ?? STAGES[stage].first, `Chạy lại ${STAGES[stage].label.toLowerCase()}`) : '';
+  return `<div class="stage-head st-${state}"><b>${STAGES[stage].label}</b>${tag(state, label)}${rerun}</div>
+    <div class="timeline">${items.map(i => i.html).join('')}</div>`;
+}
+
 function renderRun(run, root, latest) {
   const showFull = latest && root.live;
   const p = trimUnreached(run.progress, showFull);
-  // Nút chạy lại chỉ ở bước hỏng cuối của lượt mới nhất, và chỉ khi server cho phép chạy lại giai đoạn đó.
-  const rerunId = latest && root.rerun_stage
-    ? [...run.gates].filter(g => g.status === 'blocked' && gateStage(g.gate) === root.rerun_stage).sort((a, b) => Number(b.gate) - Number(a.gate))[0]?.id
-    : undefined;
+  // Nút chạy lại ở: đầu mỗi phần, mỗi lần gọi model hỏng, và cổng bị chặn cuối — chỉ ở lượt mới nhất và khi server cho phép chạy lại phần đó.
+  const allowed = (gate) => latest && root.rerun_stage === gateStage(gate);
+  const blockedRows = run.gates.filter(g => g.status === 'blocked');
+  const lastBlocked = {};
+  for (const g of [...blockedRows].sort((a, b) => Number(a.gate) - Number(b.gate))) lastBlocked[gateStage(g.gate)] = Number(g.gate);
   const items = [
-    ...run.calls.map(c => ({ gate: Number(c.evidence?.gate ?? c.gate), kind: 0, at: c.created_at, id: c.id, html: callStep(c.evidence || {}) })),
-    ...run.gates.map(g => ({ gate: Number(g.gate), kind: 1, at: g.created_at, id: g.id, html: gateStep(g, g.id === rerunId) })),
+    ...run.calls.map(c => {
+      const gate = Number(c.evidence?.gate ?? c.gate);
+      return { gate, kind: 0, at: c.created_at, id: c.id, html: callStep(c.evidence || {}, allowed(gate) && FAILED_CALL.has(c.evidence?.result) ? gate : null) };
+    }),
+    ...run.gates.map(g => ({ gate: Number(g.gate), kind: 1, at: g.created_at, id: g.id, blocked: g.status === 'blocked',
+      html: gateStep(g, allowed(g.gate) && Number(g.gate) === lastBlocked[gateStage(g.gate)]) })),
   ];
   if (p?.current != null) {
     items.push({ gate: p.current, kind: 1, at: 0, id: 0, html: `<div class="step gate${subClass(p.current)} st-run" data-pos="${gatePos(p.current)}"><div class="line1">
@@ -210,8 +231,12 @@ function renderRun(run, root, latest) {
   }
   items.sort((a, b) => a.gate - b.gate || a.kind - b.kind || a.at - b.at || a.id - b.id);
   const [state, label] = runState(run, showFull);
+  const stages = ['plan', 'execute'].filter(s => run.trigger !== 'execute' || s === 'execute')
+    .map(s => [s, items.filter(i => gateStage(i.gate) === s)])
+    .filter(([s, list]) => list.length || (s === 'plan' && run.trigger !== 'execute'));
   const body = run.trigger === 'rollback' ? rollbackStep(run, showFull)
-    : items.length ? `<div class="timeline">${items.map(i => i.html).join('')}</div>` : '<div class="blk meta">Lượt này chưa có dữ liệu cổng.</div>';
+    : stages.length ? stages.map(([s, list]) => renderStage(s, list, { run, root, latest, p, lastBlocked })).join('')
+      : '<div class="blk meta">Lượt này chưa có dữ liệu cổng.</div>';
   return `<div class="run-head st-${state}"><b>${esc(runTitle(run))}</b>${tag(state, label)}
       <span class="meta">worker ${esc(run.worker_id || '—')} · ${fmt(run.created_at)}</span>
       ${run.commit?.head_sha ? `<button type="button" class="trace-copy" data-copy="${esc(run.commit.head_sha)}" title="Commit của lượt này, bấm để copy">${esc(run.commit.head_sha.slice(0, 7))}</button>` : ''}

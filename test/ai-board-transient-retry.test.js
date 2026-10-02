@@ -254,6 +254,9 @@ test('an intake block at gate 1 leaves a blocked gate row, so the admin has a st
   const second = store.claimNext({ workerId: 'w2', version: 'test', mode: 'active', intent: 'plan' });
   assert.ok(second, 'second root claimed');
   const run = store.createRun(second.id, { workerId: 'w2', leaseToken: second.lease_token, trigger: 'plan', idempotencyKey: 'tr-run-002' });
+  store.recordModelCalls(second.id, { workerId: 'w2', leaseToken: second.lease_token, runId: run.id, calls: [{
+    call_id: 'tr-call-1', gate: 1, provider: 'ollama', model: 'qwen3:8b', prompt_name: 'intake_guard.md', prompt_var: 'p', output: '',
+    metrics: {}, budget_units: 1, result: 'http_error', error: 'HTTP Error 500', at: Date.now() }] }); // the model call is a gate-1 row too
   store.releaseLease(second.id, { workerId: 'w2', leaseToken: second.lease_token, outcome: 'waiting', idempotencyKey: 'tr-release-002',
     internalDetail: JSON.stringify({ gate: 1, reason: 'intake_human_review: classifier_error (HTTP Error 500)', signals: ['classifier_error'] }) });
   const requestId = db.prepare('SELECT source_request_id AS id FROM ai_tickets WHERE id=?').get(second.id).id;

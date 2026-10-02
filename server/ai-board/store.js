@@ -1369,7 +1369,7 @@ export function createAiBoardStore(db, hooks = {}) {
       const gate = Number(detail?.gate);
       const run = db.prepare('SELECT id FROM ai_runs WHERE ticket_id=? ORDER BY id DESC LIMIT 1').get(Number(ticketId));
       if (run && CONTRACT.gates.plan.includes(gate)
-          && !db.prepare('SELECT 1 FROM ai_gate_traces WHERE run_id=? AND gate=?').get(run.id, gate)) {
+          && !db.prepare(`SELECT 1 FROM ai_gate_traces WHERE run_id=? AND gate=? AND status IN ('passed', 'blocked')`).get(run.id, gate)) {
         db.prepare(`INSERT INTO ai_gate_traces(run_id, gate, status, public_reason, internal_reason, created_at)
           VALUES (?, ?, 'blocked', ?, ?, ?)`).run(run.id, gate, next[2], String(detail?.reason ?? input.internalDetail).slice(0, 1000), input.now);
       }
