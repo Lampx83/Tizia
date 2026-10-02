@@ -173,12 +173,33 @@ _TAG_SEARCH = r"""() => {
 }"""
 
 
+# Gate 5 reaches the candidate by container IP over plain http, where navigator.clipboard does not exist (and a
+# headless-shell Chromium ignores --unsafely-treat-insecure-origin-as-secure). Give such a page the API an https page
+# has, backed by a variable, and also record text copied through execCommand('copy'). A secure origin keeps the real API.
+_CLIPBOARD_SPY = r"""(() => {
+  window.__oracleClip = null;
+  const record = (text) => { window.__oracleClip = String(text); };
+  if (!navigator.clipboard) {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+      writeText: (text) => { record(text); return Promise.resolve(); },
+      readText: () => Promise.resolve(window.__oracleClip == null ? '' : window.__oracleClip),
+    } });
+    document.addEventListener('copy', () => {
+      const el = document.activeElement;
+      const typed = el && typeof el.value === 'string' && el.selectionEnd > el.selectionStart ? el.value.slice(el.selectionStart, el.selectionEnd) : '';
+      record(typed || String(getSelection()));
+    }, true);
+  }
+})();"""
+
+
 def _open(p, base, token, clipboard=False):
     from gates.verify import _launch
     browser = _launch(p)
     context = browser.new_context()
     if clipboard:
         context.grant_permissions(['clipboard-read', 'clipboard-write'], origin=base)
+        context.add_init_script(_CLIPBOARD_SPY)
     context.add_cookies([{'name': 'tizia_sid', 'value': token, 'url': base, 'httpOnly': True}])
     return browser, context.new_page()
 

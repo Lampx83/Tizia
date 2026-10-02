@@ -20,10 +20,17 @@ export function staleGuestRefs(lsOutput, pinned) {
     .filter((ref) => GUEST_REF.test(ref) && GUEST_REF.exec(ref)[1] !== pinned);
 }
 
-/** Hex digests of the registry's gate5 manifests + pinned digest -> sha256:... digests to delete. */
-export function staleManifests(hexDigests, pinned) {
+/** Digests a manifest list / OCI index points at (platform image, attestation); a plain image manifest has none. */
+export function childDigests(manifest) {
+  return (Array.isArray(manifest?.manifests) ? manifest.manifests : []).map((m) => m.digest).filter((d) => DIGEST.test(d || ''));
+}
+
+/** Hex digests of the registry's gate5 manifests + pinned digest (+ its children) -> sha256:... digests to delete.
+ *  docker push of a BuildKit image uploads an index whose children are separate manifests; deleting one breaks the pin. */
+export function staleManifests(hexDigests, pinned, keep = []) {
   requirePinned(pinned);
-  return hexDigests.map((hex) => `sha256:${hex}`).filter((digest) => digest !== pinned);
+  const kept = new Set([pinned, ...keep]);
+  return hexDigests.map((hex) => `sha256:${hex}`).filter((digest) => !kept.has(digest));
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
@@ -41,7 +48,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const registry = 'tizia-image-registry';
   const revisions = '/var/lib/registry/docker/registry/v2/repositories/gate5/_manifests/revisions/sha256';
   const hex = docker('exec', registry, 'ls', revisions).split(/\s+/).filter(Boolean);
-  for (const digest of staleManifests(hex, pinned)) {
+  const accept = 'application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json';
+  const pinnedManifest = JSON.parse(docker('exec', runner, 'node', '-e', `fetch('http://image-registry:5000/v2/gate5/manifests/${pinned}', { headers: { accept: ${JSON.stringify(accept)} } })
+    .then((r) => { if (!r.ok) throw new Error('registry answered ' + r.status + ' for the pinned manifest'); return r.text(); })
+    .then((t) => process.stdout.write(t)).catch((e) => { console.error(e.message); process.exit(1); })`));
+  for (const digest of staleManifests(hex, pinned, childDigests(pinnedManifest))) {
     console.log(`${dry ? 'would delete' : 'delete'} registry manifest ${digest}`);
     // the registry image has no curl and its wget cannot send DELETE: use the runner's node (same compose network)
     if (!dry) docker('exec', runner, 'node', '-e', `fetch('http://image-registry:5000/v2/gate5/manifests/${digest}', { method: 'DELETE' })

@@ -167,6 +167,7 @@ COPY_BUTTONS = {
     'ok': "navigator.clipboard.writeText(b.parentElement.querySelector('.rt-body').textContent)",
     'noop': '',
     'whole_thread': "navigator.clipboard.writeText(host.innerText)",
+    'exec': "const t = document.createElement('textarea'); t.value = b.parentElement.querySelector('.rt-body').textContent; document.body.append(t); t.select(); document.execCommand('copy'); t.remove();",
 }
 
 
@@ -193,6 +194,8 @@ def test_copy_oracle_passes_only_when_the_button_puts_the_response_on_the_clipbo
     copy_site(site, 'ok')
     result = copy_probe(site)
     assert result['passed'] and result['probe_id'] == functional.COPY_PROBE and result['coverage'] == {'clipboard': True}
+    copy_site(site, 'exec')
+    assert copy_probe(site)['passed']              # the old execCommand('copy') route counts too
     copy_site(site, 'noop')
     noop = copy_probe(site)
     assert not noop['passed'] and 'clipboard' in noop['reason']  # the button exists but copies nothing
@@ -241,3 +244,40 @@ def test_search_oracle_passes_only_when_typing_narrows_the_activities_and_cleari
         search_site(site, mode)
         out = search_probe(site)
         assert not out['passed'] and word in out['reason'], (mode, out)
+
+
+def _lan_ip():
+    import socket
+    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        probe.connect(('10.255.255.255', 1))  # no packet is sent; picks the interface a LAN peer would use
+        ip = probe.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        probe.close()
+    return None if ip.startswith('127.') else ip
+
+
+def test_copy_oracle_also_works_when_the_app_is_reached_by_a_container_ip(tmp_path):
+    """Gate 5 opens the candidate by its container IP: plain http on a non-loopback host has no navigator.clipboard,
+    so the browser must be started treating that origin as secure."""
+    import functools, http.server, threading
+    pytest.importorskip('playwright.sync_api')
+    ip = _lan_ip()
+    if ip is None:
+        pytest.skip('no non-loopback address on this machine')
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(tmp_path))
+    handler.log_message = lambda *a: None
+    server = http.server.ThreadingHTTPServer(('0.0.0.0', 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        state = ASK('Thêm nút sao chép phản hồi')
+        thread = lambda stage: {'token': 't', 'request_id': 1, 'student': 'Queue Verify', 'student_body': 'Cho em hỏi',
+                                'ai_body': THREAD['messages'][1]['body']} if stage == 'thread' else None
+        for button in ('ok', 'exec', 'noop', 'whole_thread'):
+            copy_site((tmp_path, None), button)
+            result = functional.run(f'http://{ip}:{server.server_port}', functional.select(state), thread, state=state, pages=['/school.html'])
+            assert result['passed'] is (button in ('ok', 'exec')), (button, result)
+    finally:
+        server.shutdown()

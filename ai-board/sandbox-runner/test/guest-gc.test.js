@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { staleGuestRefs, staleManifests } from '../scripts/gc-guest-images.mjs';
+import { childDigests, staleGuestRefs, staleManifests } from '../scripts/gc-guest-images.mjs';
 
 const A = `sha256:${'a'.repeat(64)}`;
 const B = `sha256:${'b'.repeat(64)}`;
@@ -27,4 +27,11 @@ test('registry: only manifests other than the pinned digest are stale', () => {
 test('refuses to treat anything as stale without a well-formed pinned digest', () => {
   assert.throws(() => staleGuestRefs(LS, 'latest'), /pinned digest/);
   assert.throws(() => staleManifests([B.slice(7)], ''), /pinned digest/);
+});
+
+test('registry: manifests the pinned index points at (platform image, attestation) are kept', () => {
+  const index = { mediaType: 'application/vnd.oci.image.index.v1+json', manifests: [{ digest: B }, { digest: C }] };
+  assert.deepEqual(childDigests(index), [B, C]);
+  assert.deepEqual(childDigests({ mediaType: 'application/vnd.oci.image.manifest.v1+json', layers: [{ digest: B }] }), []);
+  assert.deepEqual(staleManifests([A.slice(7), B.slice(7), C.slice(7), 'd'.repeat(64)], A, childDigests(index)), [`sha256:${'d'.repeat(64)}`]);
 });

@@ -3,8 +3,15 @@ from __future__ import annotations
 
 import json
 import os
+import time
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
+
+# Gateway dùng chung thỉnh thoảng trả 5xx (đổi model, thiếu VRAM): thử lại 3 lần, nghỉ 3 s rồi 8 s. Lỗi 4xx và timeout không thử lại.
+RETRY_STATUS = (500, 502, 503, 504)
+RETRY_PAUSES_S = (3.0, 8.0)
+_sleep = time.sleep
 
 # num_ctx khai tường minh (spec: 1 model nóng, ctx là giới hạn cứng). 8K: prompt ≤ ~4.5K + output ≤ 3K
 # token vừa đủ; bớt ~1.5 GiB KV so với 16K trên GPU dùng chung đã sát trần 75% (42,500 MiB).
@@ -80,5 +87,14 @@ class OllamaClient:
             # Cùng tên header server/ai.js dùng để gọi cùng reverse-proxy nội bộ
             # (KHÔNG phải "Authorization: Bearer" — gateway đó không hiểu header đó).
             req.add_header("x-ollama-seckey", self.seckey)
-        with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+        for pause in (*RETRY_PAUSES_S, None):
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
+                    return json.loads(resp.read().decode("utf-8"))
+            except urllib.error.HTTPError as error:
+                if error.code not in RETRY_STATUS or pause is None:
+                    raise
+            except urllib.error.URLError as error:  # connection refused/reset; a read timeout is TimeoutError, not retried
+                if isinstance(error.reason, TimeoutError) or pause is None:
+                    raise
+            _sleep(pause)
