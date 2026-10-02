@@ -21,15 +21,15 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import eval_corpus  # noqa: E402
 import eval_git  # noqa: E402
 import eval_recall  # noqa: E402
+from eval_corpus import WORDS, sentence as _sentence  # noqa: E402
 from eval_gold import run_case  # noqa: E402
 from eval_strata import MAX_DROP  # noqa: E402
 from main import ROOT, Deps  # noqa: E402
 
 DEFAULT_ROOT = ROOT / ".scratch" / "ai-board-eval"
-WORDS = ("học tập bài giảng ôn luyện kiểm tra thuốc đơn liều lượng cân pha chế mã nguồn biến hàm trang nút bảng điểm "
-         "thẻ ghi nhớ lộ trình thành tựu sao xu chuỗi ngày").split()
 PAGE = """<!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -47,13 +47,6 @@ PAGE = """<!DOCTYPE html>
 GIT_ENV = {"GIT_AUTHOR_NAME": "eval", "GIT_AUTHOR_EMAIL": "eval@tizia.local", "GIT_COMMITTER_NAME": "eval",
            "GIT_COMMITTER_EMAIL": "eval@tizia.local", "GIT_AUTHOR_DATE": "2026-01-01T00:00:00",
            "GIT_COMMITTER_DATE": "2026-01-01T00:00:00"}  # commit hash tất định theo nội dung
-
-
-def _sentence(rng: random.Random, used: set) -> str:
-    while (text := " ".join(rng.sample(WORDS, 5)).capitalize() + ".") in used:
-        pass
-    used.add(text)
-    return text
 
 
 def generate(seed: int, n_cases: int, pages: int = 3) -> tuple[dict, list[dict]]:
@@ -236,15 +229,16 @@ def render(rep: dict) -> str:
 
 def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.monotonic) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--seed", type=int, required=True)
+    common.add_argument("--repeats", type=int, default=3)
+    common.add_argument("--budget-minutes", type=float, help="dừng sạch khi hết ngân sách; chạy lại để tiếp tục")
+    common.add_argument("--baseline", help="report.json của run mốc (cùng tier + nguồn) để ra kết luận hồi quy")
+    common.add_argument("--model", help="mặc định: model cổng 3 đang cấu hình")
+    common.add_argument("--root", default=os.environ.get("AI_BOARD_EVAL_DIR") or str(DEFAULT_ROOT))
     subs = parser.add_subparsers(dest="tier", required=True)
-    tier = subs.add_parser("quick", help="fast tier, seed → vài case")
-    tier.add_argument("--seed", type=int, required=True)
-    tier.add_argument("--cases", type=int, default=8)
-    tier.add_argument("--repeats", type=int, default=3)
-    tier.add_argument("--budget-minutes", type=float, help="dừng sạch khi hết ngân sách; chạy lại để tiếp tục")
-    tier.add_argument("--baseline", help="report.json của run mốc (cùng tier + nguồn) để ra kết luận hồi quy")
-    tier.add_argument("--model", help="mặc định: model cổng 3 đang cấu hình")
-    tier.add_argument("--root", default=os.environ.get("AI_BOARD_EVAL_DIR") or str(DEFAULT_ROOT))
+    subs.add_parser("quick", parents=[common], help="fast tier, seed → vài case").add_argument("--cases", type=int, default=8)
+    subs.add_parser("full", parents=[common], help="corpus trang thật ~60 case")
     eval_recall.register(subs)
     eval_git.register(subs)
     args = parser.parse_args(argv)
@@ -267,11 +261,16 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
     baseline = json.loads(Path(args.baseline).read_text(encoding="utf-8")) if args.baseline else None
     model = args.model or deps.models.gate3_model
     root = Path(args.root)
-    repo, cases = write_corpus(root, args.seed, args.cases)
-    run_dir = root / "runs" / f"quick-s{args.seed}"
+    if args.tier == "quick":
+        repo, cases = write_corpus(root, args.seed, args.cases)
+        name, record = f"quick-s{args.seed}", lambda case: case_record(case, repo)
+    else:
+        cases = eval_corpus.write_corpus(root, args.seed, ROOT)
+        name, record = f"full-s{args.seed}", lambda case: eval_corpus.case_record(case, root, ROOT)
+    run_dir = root / "runs" / name
     run_dir.mkdir(parents=True, exist_ok=True)
-    meta = {"tier": "quick", "source": source, "seed": args.seed, "repeats": args.repeats, "model": model,
-            "corpus_sha": hashlib.sha256((root / "corpus" / f"quick-s{args.seed}" / "cases.json").read_bytes()).hexdigest()}
+    meta = {"tier": args.tier, "source": source, "seed": args.seed, "repeats": args.repeats, "model": model,
+            "corpus_sha": hashlib.sha256(json.dumps(cases, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()}
     meta_path = run_dir / "run.json"
     if meta_path.exists() and {k: json.loads(meta_path.read_text(encoding="utf-8")).get(k) for k in meta} != meta:
         print(f"[eval] {run_dir} đã có run khác cấu hình (corpus/repeats/model); đổi seed hoặc --root", file=sys.stderr)
@@ -287,7 +286,7 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
                 if args.budget_minutes is not None and clock() - started >= args.budget_minutes * 60:
                     cut_short = True
                     break
-                row = {**run_case(case["id"], case_record(case, repo), model, deps), "kind": case["kind"], "repeat": repeat}
+                row = {**run_case(case["id"], record(case), model, deps), "kind": case["kind"], "repeat": repeat}
                 done[(case["id"], repeat)] = row
                 out.write(json.dumps(row, ensure_ascii=False) + "\n")
                 out.flush()
