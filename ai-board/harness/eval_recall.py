@@ -120,7 +120,7 @@ def _stats(rows: list[dict]) -> dict:
         k = sum(r[key]["hit"] for r in rows)
         lo, hi = eval_run.wilson(k, n)
         out[name] = {"hit": k, "rate": round(100 * k / n, 1), "lo": lo, "hi": hi,
-                     "mean_chars": {s: round(sum(r[key]["chars"].get(s, 0) for r in rows) / n) for s in rows[0][key]["chars"]}}
+                     "mean_chars": {s: round(sum(r[key]["chars"].get(s, 0) for r in rows) / n) for s in sorted({s for r in rows for s in r[key]["chars"]})}}
     gold = sum(r["gate3"]["gold_lines"] for r in rows)
     out["gate3"]["line_coverage"] = round(100 * sum(r["gate3"]["covered"] for r in rows) / gold, 1) if gold else None
     return out
@@ -170,7 +170,7 @@ def weights_id(path: str | None = None) -> dict:
     return {"path": str(path or file_context.WEIGHTS_PATH), "sha": hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()[:10]}
 
 
-def _alt_rows(args, cases: list[dict]) -> list[dict]:
+def _alt_rows(args) -> list[dict]:
     """Rows với retrieval_weights khác: tiến trình con (trọng số nạp lúc import), cùng corpus."""
     import eval_run
     out = Path(args.root) / "recall" / f"{args.label}-alt-rows.json"
@@ -225,7 +225,7 @@ def run(args, deps=None, source=None) -> int:
         return 0
     rep = {"cases": len(rows), "weights": weights_id(), "rows": rows, "groups": _groups(rows)}
     if args.weights_alt:
-        rep |= {"weights_alt": weights_id(args.weights_alt), "delta": deltas(rows, _alt_rows(args, cases))}
+        rep |= {"weights_alt": weights_id(args.weights_alt), "delta": deltas(rows, _alt_rows(args))}
     text = render(rep)
     out = Path(args.root) / "recall"
     out.mkdir(parents=True, exist_ok=True)

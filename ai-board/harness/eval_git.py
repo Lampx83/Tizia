@@ -26,6 +26,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import eval_judge  # noqa: E402
 import eval_recall  # noqa: E402
 from gates import static_check  # noqa: E402
 from main import ROOT  # noqa: E402
@@ -121,7 +122,7 @@ def classify(repo, commit: dict, seen: dict) -> tuple[str, str, list[str]]:
         return "duplicate-patch", f"cùng patch với {seen[pid][:9]}", []
     seen[pid] = sha
     note = f"; bỏ file phụ: {', '.join(sorted(aux))}" if aux else ""
-    return "kept", f"{len(paths)} file, {lines} dòng đổi{note}", paths
+    return "kept", f"{len(paths)} file gold, {lines} dòng public/ đổi{note}", paths
 
 
 def _show(repo, sha: str, path: str) -> str:
@@ -249,6 +250,8 @@ def register(subs) -> None:
     parser.add_argument("--budget-minutes", type=float)
     parser.add_argument("--baseline", help="report.json của run mốc (cùng tier + nguồn)")
     parser.add_argument("--model", help="mặc định: model cổng 3 đang cấu hình")
+    parser.add_argument("--judge", action="store_true", help="thêm lớp 3: giám khảo mềm so candidate với gold diff (báo riêng)")
+    parser.add_argument("--judge-model", default=eval_judge.JUDGE_MODEL, help="ghim; phải khác họ với model sinh")
     parser.add_argument("--root", default=root)
     parser.set_defaults(handler=run)
 
@@ -266,6 +269,9 @@ def run(args, deps, source) -> int:
         return 2
     baseline = json.loads(Path(args.baseline).read_text(encoding="utf-8")) if args.baseline else None
     model = args.model or deps.models.gate3_model
+    if args.judge and eval_judge.family(args.judge_model) == eval_judge.family(model):
+        print(f"[git] giám khảo {args.judge_model} cùng họ với model sinh {model}: chọn model khác họ", file=sys.stderr)
+        return 2
     run_dir = root / "runs" / "git"
     run_dir.mkdir(parents=True, exist_ok=True)
     info = {"tier": "git-b", "source": source, "seed": DIR, "repeats": args.repeats, "model": model,
@@ -298,6 +304,15 @@ def run(args, deps, source) -> int:
     meta_path.write_text(json.dumps({**info, "status": "cut_short" if cut_short else "complete"}, indent=2), encoding="utf-8")
     rep = report(info, cases, rows, total, cut_short, baseline)
     text = eval_run.render(rep) + "\n" + "\n".join(f"{k}: {v}" for k, v in LAYERS.items())
+    if args.judge:  # lớp 3: kết quả mềm báo riêng, không đụng funnel/groups/verdict của lớp 1
+        try:
+            judged = eval_judge.judge_all(deps, args.judge_model, cases, rows, run_dir / "judge.jsonl")
+        except ValueError as error:
+            print(f"[git] {error}", file=sys.stderr)
+            return 2
+        rep["soft_judge"] = eval_judge.summarize(args.judge_model, cases, rows, judged, eval_run.wilson)
+        eval_judge.write_disagreements(rep["soft_judge"], run_dir / "disagreements.txt")
+        text += "\n" + "\n".join(eval_judge.lines(rep["soft_judge"]))
     (run_dir / "report.json").write_text(json.dumps(rep, ensure_ascii=False, indent=2), encoding="utf-8")
     (run_dir / "report.txt").write_text(text + "\n", encoding="utf-8")
     print(text)

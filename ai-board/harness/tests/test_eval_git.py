@@ -79,6 +79,11 @@ class EditModels:
 
     def generate(self, model, prompt, **kw):
         self.calls.append(model)
+        if model == "judge-fake":  # giám khảo giả: equivalent khi mọi dòng thêm của gold có trong candidate
+            gold, cand = re.search(r"GOLD DIFF:\n(.*)\n\nCANDIDATE DIFF:\n(.*)", prompt, re.S).groups()
+            added = lambda diff: {x for x in diff.splitlines() if x.startswith("+") and not x.startswith("+++")}  # noqa: E731
+            verdict = "equivalent" if added(gold) <= added(cand) else "different"
+            return {"response": json.dumps({"verdict": verdict, "reason": "giả: so dòng thêm"})}
         old, new = re.search(r"- title: Đổi (.+) thành (.+)", prompt).groups()
         if old == "'tam biet'":
             new = "'hen gap lai'"
@@ -172,3 +177,32 @@ def test_recall_runs_on_the_git_tier_without_a_model_and_reports_per_group(tmp_p
     assert {"all", "kind=html", "kind=js", "style=named", "style=plain"} <= set(rep["groups"])
     assert all(r["gate3"]["hit"] and r["gate3"]["gold_lines"] > 0 for r in rep["rows"])  # file đích cho sẵn: trích có dòng gold
     assert all({"skill", "excerpt", "total"} <= set(r["gate1"]["chars"]) for r in rep["rows"])
+
+
+def test_soft_judge_is_reported_apart_pinned_and_lists_where_it_disagrees_with_layer_one(tmp_path, history, capsys):
+    shas = built(tmp_path, history)
+    models = EditModels()
+    assert run_git(tmp_path, "--judge", "--judge-model", "judge-fake", models=models) == 0
+    rep = report(tmp_path)
+    soft = rep["soft_judge"]
+    assert models.calls.count("judge-fake") == 4 and "soft" in soft["label"] and soft["judge_model"] == "judge-fake"
+    assert (soft["judged"], soft["equivalent"], soft["rate"]) == (4, 3, 75.0) and re.fullmatch(r"[0-9a-f]{12}", soft["rubric_sha"])
+    assert [(f["stage"], f["passed"]) for f in rep["funnel"]] == [("gate3", 4), ("layer1", 3)] and rep["official_ship_rate"] is None  # lớp 1 giữ nguyên
+    stored = [json.loads(x) for x in (tmp_path / "data" / "runs" / "git" / "judge.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert {(r["judge_model"], r["rubric_sha"]) for r in stored} == {("judge-fake", soft["rubric_sha"])}  # ghim kèm từng kết quả
+    # farewell: lớp 1 đạt nhưng giám khảo bảo khác gold; tail: lớp 1 rớt (script nội tuyến hỏng) nhưng chữ đúng gold
+    assert {(d["commit"], d["layer1"], d["judge"]) for d in soft["disagreements"]} == {(shas["farewell"][:9], True, "different"), (shas["tail"][:9], False, "equivalent")}
+    listed = (tmp_path / "data" / "runs" / "git" / "disagreements.txt").read_text(encoding="utf-8").splitlines()
+    assert len(listed) == 2 and any(f"commit {shas['tail'][:9]}" in line and "lớp 1 RỚT" in line for line in listed)
+    assert "giám khảo mềm (soft" in capsys.readouterr().out
+
+    again = EditModels()  # chạy lại: không gọi lại giám khảo (resume theo judge.jsonl)
+    assert run_git(tmp_path, "--judge", "--judge-model", "judge-fake", models=again) == 0 and again.calls == []
+    assert run_git(tmp_path, "--judge", "--judge-model", "other-judge", models=EditModels()) == 2  # khác giám khảo: không trộn kết quả
+
+
+def test_judge_of_the_same_family_as_the_generator_is_refused(tmp_path, history, capsys):
+    built(tmp_path, history)
+    models = EditModels()
+    assert run_git(tmp_path, "--judge", "--judge-model", "fake-bigger", models=models) == 2
+    assert "cùng họ" in capsys.readouterr().err and models.calls == []  # từ chối trước khi tốn lượt nào
