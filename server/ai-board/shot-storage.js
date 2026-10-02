@@ -51,8 +51,9 @@ export function createLocalBackend(dir) {
 const sha256 = (data) => createHash('sha256').update(data).digest('hex');
 const hmac = (key, data) => createHmac('sha256', key).update(data).digest();
 
-/** S3-compatible qua fetch + SigV4. `local` (tuỳ chọn): remove xoá luôn bản local cũ từ trước khi bật S3. */
-export function createS3Backend({ endpoint, bucket, accessKey, secretKey, region = 'us-east-1', fetchImpl = fetch, local = null }) {
+/** S3-compatible qua fetch + SigV4. `local` (tuỳ chọn): remove xoá luôn bản local cũ từ trước khi bật S3.
+ *  `createBucket` (mặc định tắt): bucket thiếu → tạo; production nên tạo bucket sẵn với quyền/chính sách riêng. */
+export function createS3Backend({ endpoint, bucket, accessKey, secretKey, region = 'us-east-1', fetchImpl = fetch, local = null, createBucket = false }) {
   const base = endpoint.replace(/\/+$/, '');
   async function call(method, pathname, body = Buffer.alloc(0), contentType = null) {
     const url = new URL(base + pathname);
@@ -77,11 +78,12 @@ export function createS3Backend({ endpoint, bucket, accessKey, secretKey, region
     async put(key, buf) {
       if (!KEY_RE.test(key)) throw new Error('invalid screenshot key');
       let res = await call('PUT', objectPath(key), buf, 'image/png');
-      if (res.status === 404) { // bucket chưa có → tạo (idempotent) rồi thử lại 1 lần
+      if (res.status === 404 && createBucket) { // bucket chưa có → tạo (idempotent) rồi thử lại 1 lần
         const made = await call('PUT', `/${bucket}`);
         if (!made.ok && made.status !== 409) await fail('create bucket', made);
         res = await call('PUT', objectPath(key), buf, 'image/png');
       }
+      if (res.status === 404) throw new Error(`s3 put 404: bucket "${bucket}" không tồn tại — tạo bucket trước hoặc đặt AI_BOARD_SHOTS_S3_CREATE_BUCKET=1`);
       if (!res.ok) await fail('put', res);
     },
     async get(key) {
@@ -100,13 +102,14 @@ export function createS3Backend({ endpoint, bucket, accessKey, secretKey, region
   };
 }
 
-/** S3 khi đủ 4 biến AI_BOARD_SHOTS_S3_{ENDPOINT,BUCKET,ACCESS_KEY,SECRET_KEY}; không thì local. */
+/** S3 khi đủ 4 biến AI_BOARD_SHOTS_S3_{ENDPOINT,BUCKET,ACCESS_KEY,SECRET_KEY}; không thì local. CREATE_BUCKET=1 → tự tạo bucket thiếu. */
 export function shotBackendFromEnv(env, uploadsDir) {
   const local = createLocalBackend(uploadsDir);
   const [endpoint, bucket, accessKey, secretKey] = ['ENDPOINT', 'BUCKET', 'ACCESS_KEY', 'SECRET_KEY']
     .map((k) => String(env[`AI_BOARD_SHOTS_S3_${k}`] || '').trim());
   if (!(endpoint && bucket && accessKey && secretKey)) return local;
-  return createS3Backend({ endpoint, bucket, accessKey, secretKey, region: env.AI_BOARD_SHOTS_S3_REGION || undefined, local });
+  return createS3Backend({ endpoint, bucket, accessKey, secretKey, region: env.AI_BOARD_SHOTS_S3_REGION || undefined, local,
+    createBucket: String(env.AI_BOARD_SHOTS_S3_CREATE_BUCKET || '').trim() === '1' });
 }
 
 /** Xoá ảnh nháp quá `days` ngày + gỡ khỏi attachments (tin nhắn giữ). days<=0 → null (tắt). Lỗi backend → giữ attachment, lần sau thử lại. */

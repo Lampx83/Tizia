@@ -6,10 +6,14 @@ import unicodedata
 
 QUEUE_PROBE = 'queue-worker-availability-v1'
 TEXT_PROBE = 'text-visible-v1'
+COPY_PROBE = 'copy-response-v1'
+SEARCH_PROBE = 'search-activity-v1'
+SEARCH_PAGE = '/school.html?domain=it'
 READY_TEXT = re.compile('phút nữa', re.IGNORECASE)  # ETA line shown while a worker is ready or busy
 OFFLINE_TEXT = re.compile('chưa thể ước tính', re.IGNORECASE)  # the requester's own words; a sentence-initial capital is the same text
 # Oracle -> coverage flags it must report true. Keep in sync with ORACLE_COVERAGE in server/ai-board/store.js.
-ORACLES = {QUEUE_PROBE: ('requester_api', 'mounted_ui', 'recovery'), TEXT_PROBE: ('rendered_text',)}
+ORACLES = {QUEUE_PROBE: ('requester_api', 'mounted_ui', 'recovery'), TEXT_PROBE: ('rendered_text',),
+           COPY_PROBE: ('clipboard',), SEARCH_PROBE: ('filtering',)}
 
 _QUOTED = re.compile(r"""(?<!\w)(?:'([^'\n]{2,120})'|"([^"\n]{2,120})"|“([^”\n]{2,120})”|‘([^’\n]{2,120})’|«([^»\n]{2,120})»)""")
 _PAGE_LINE = re.compile(r'^\[Trang: .*\] \S+[ \t]*$', re.M)
@@ -50,24 +54,34 @@ def text_expectation(state):
     return {'present': [], 'absent': quotes} if remove else none
 
 
+def behaviour_probe(text):
+    """Oracle named by the request's own words (text = request_text); None when it names neither surface."""
+    if re.search(r'copy|sao chep', text) and re.search(r'response|phan hoi', text):
+        return COPY_PROBE
+    if re.search(r'search|tim kiem', text) and re.search(r'activity|activities|hoat dong', text):
+        return SEARCH_PROBE
+    return None
+
+
 def select(state):
     text = request_text(state)
     if 'worker' in text and re.search(r'\beta\b|uoc tinh|phut|estimate', text):
         return QUEUE_PROBE
     expected = text_expectation(state)
+    if not expected['absent']:  # a rename or removal of a label is only text; otherwise the behaviour is what counts
+        probe = behaviour_probe(text)
+        if probe:
+            return probe
     return TEXT_PROBE if expected['present'] or expected['absent'] else None
+
+
+SURFACES = {QUEUE_PROBE: {'public/js/suggestion-fab.js'}, COPY_PROBE: {'public/js/request-thread.js'},
+            SEARCH_PROBE: {'public/js/school-explore.js'}}
 
 
 def expected_targets(state):
     """Verified existing surfaces for the three reported regressions, not model-selected files."""
-    text = request_text(state)
-    if select(state) == QUEUE_PROBE:
-        return {'public/js/suggestion-fab.js'}
-    if re.search(r'copy|sao chep', text) and re.search(r'response|phan hoi', text):
-        return {'public/js/request-thread.js'}
-    if re.search(r'search|tim kiem', text) and re.search(r'activity|activities|hoat dong', text):
-        return {'public/js/school-explore.js'}
-    return set()
+    return SURFACES.get(select(state)) or SURFACES.get(behaviour_probe(request_text(state)), set())
 
 
 def _norm(text):
@@ -130,9 +144,162 @@ def run_text(base, state, fixture, pages):
                              **{f'page {path}': text[:1000] for path, text in shown.items()}}}
 
 
+_MOUNT = """async ([id, me]) => {
+  const { renderRequestThread } = await import('/js/request-thread.js?oracle=' + Date.now());
+  const host = document.createElement('div');
+  host.id = 'oracle-thread';
+  document.body.appendChild(host);
+  await renderRequestThread({ host, requestId: id, me });
+}"""
+_TAG_COPY = r"""() => {
+  const host = document.getElementById('oracle-thread');
+  const label = (e) => [e.innerText, e.getAttribute('aria-label'), e.getAttribute('title')].filter(Boolean).join(' ');
+  const hits = [...host.querySelectorAll('button, [role=button], a')].filter((e) => /copy|sao ch[eé]p|chép/i.test(label(e)));
+  const target = hits.find((e) => e.closest('.rt-board')) || hits[0];
+  if (target) target.setAttribute('data-oracle-copy', '1');
+  return !!target;
+}"""
+_CARDS = r"""() => [...document.querySelectorAll('.tz-se-card')].map((c) => ({
+  name: ((c.querySelector('.nm') || c).textContent || '').trim(),
+  shown: c.checkVisibility ? c.checkVisibility({ checkVisibilityCSS: true }) : !!(c.offsetWidth || c.offsetHeight) }))"""
+_TAG_SEARCH = r"""() => {
+  const shown = (e) => (e.checkVisibility ? e.checkVisibility() : !!(e.offsetWidth || e.offsetHeight));
+  const all = [...document.querySelectorAll('input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]), [role=searchbox], [contenteditable=true]')].filter(shown);
+  const score = (e) => (e.closest('#school-explore-host') ? 2 : 0)
+    + (/tìm|tim kiem|search/i.test([e.placeholder, e.getAttribute('aria-label'), e.name, e.id, e.type].join(' ')) ? 1 : 0);
+  all.sort((a, b) => score(b) - score(a));
+  if (all[0]) all[0].setAttribute('data-oracle-search', '1');
+  return !!all[0];
+}"""
+
+
+def _open(p, base, token, clipboard=False):
+    from gates.verify import _launch
+    browser = _launch(p)
+    context = browser.new_context()
+    if clipboard:
+        context.grant_permissions(['clipboard-read', 'clipboard-write'], origin=base)
+    context.add_cookies([{'name': 'tizia_sid', 'value': token, 'url': base, 'httpOnly': True}])
+    return browser, context.new_page()
+
+
+def run_copy(base, fixture):
+    """The AI response's copy control must put that response, and only it, on the clipboard."""
+    result = lambda reason, **extra: {'probe_id': COPY_PROBE, 'passed': reason is None, 'reason': reason,
+                                      'coverage': {'clipboard': True}, **extra}
+    if fixture is None:
+        return {'probe_id': COPY_PROBE, 'passed': False, 'reason': 'Session fixture unavailable'}
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        browser = None
+        try:
+            seeded = fixture('thread')
+            browser, page = _open(p, base, seeded['token'], clipboard=True)
+            page.goto(base + '/school.html', wait_until='domcontentloaded', timeout=20000)
+            page.evaluate(_MOUNT, [seeded['request_id'], seeded['student']])
+            page.wait_for_selector('#oracle-thread .rt-board', timeout=8000)
+            if not page.evaluate(_TAG_COPY):
+                return result('Không có nút sao chép phản hồi trong phiên trao đổi')
+            sentinel = '__oracle_untouched__'
+            page.evaluate('(s) => navigator.clipboard.writeText(s)', sentinel)
+            page.click('[data-oracle-copy]', timeout=5000)
+            copied = sentinel
+            for _ in range(10):  # the copy may finish after an await
+                copied = page.evaluate('() => navigator.clipboard.readText()')
+                if copied != sentinel:
+                    break
+                page.wait_for_timeout(300)
+            if copied == sentinel:
+                return result('Bấm nút sao chép nhưng clipboard không đổi')
+            got = _norm(copied)
+            if _norm(seeded['ai_body']) not in got:
+                return result('Clipboard không chứa trọn nội dung phản hồi: ' + copied[:200])
+            if _norm(seeded['student_body']) in got:
+                return result('Clipboard chứa cả tin nhắn của người dùng, chỉ cần phản hồi: ' + copied[:200])
+            return result(None, observations={'clipboard': copied[:1000]})
+        except Exception as error:
+            return {'probe_id': COPY_PROBE, 'passed': False, 'reason': str(error)[:1000]}
+        finally:
+            if browser:
+                browser.close()
+
+
+def _query(names):
+    """A word (or 4-letter prefix) that matches some cards but not all; the rarest, then the longest."""
+    words = {w for name in names for w in re.findall(r'\w{4,}', _norm(name))} | {_norm(n)[:4] for n in names}
+    hits = {w: sum(w in _norm(n) for n in names) for w in words if len(w) >= 3}
+    fit = [w for w, n in hits.items() if 0 < n < len(names)]
+    return min(fit, key=lambda w: (hits[w], -len(w), w)) if fit else None
+
+
+def run_search(base, fixture):
+    """Typing narrows the activity cards to those matching; clearing the box restores them all."""
+    result = lambda reason, **extra: {'probe_id': SEARCH_PROBE, 'passed': reason is None, 'reason': reason,
+                                      'coverage': {'filtering': True}, **extra}
+    if fixture is None:
+        return {'probe_id': SEARCH_PROBE, 'passed': False, 'reason': 'Session fixture unavailable'}
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        browser = None
+        try:
+            browser, page = _open(p, base, fixture('seed')['token'])
+            page.goto(base + SEARCH_PAGE, wait_until='domcontentloaded', timeout=20000)
+            cards = []
+            for _ in range(16):
+                cards = page.evaluate(_CARDS)
+                if len(cards) >= 2:
+                    break
+                page.wait_for_timeout(500)
+            if len(cards) < 2:
+                return result('Không thấy danh sách hoạt động trên trang')
+            names = [c['name'] for c in cards]
+            query = _query(names)
+            if query is None:
+                return result('Không chọn được từ khóa thử trong ' + ', '.join(names)[:200])
+            found = False
+            for _ in range(6):  # the box may be added after the cards
+                if page.evaluate(_TAG_SEARCH):
+                    found = True
+                    break
+                page.wait_for_timeout(500)
+            if not found:
+                return result('Không thấy ô tìm kiếm hoạt động trên trang')
+            page.fill('[data-oracle-search]', query)
+            problem = None
+            for _ in range(8):  # debounce
+                page.wait_for_timeout(300)
+                now = page.evaluate(_CARDS)
+                shown = [c['name'] for c in now if c['shown']]
+                matching = [n for n in names if query in _norm(n)]
+                if any(query not in _norm(n) for n in shown) or len(shown) == len(names):
+                    problem = f'Gõ {query!r} nhưng danh sách không lọc: còn hiện ' + ', '.join(shown)[:300]
+                elif any(n not in shown for n in matching):
+                    problem = f'Hoạt động khớp {query!r} bị ẩn mất, đang hiện: ' + ', '.join(shown)[:300]
+                else:
+                    problem = None
+                    break
+            if problem:
+                return result(problem)
+            page.fill('[data-oracle-search]', '')
+            for _ in range(8):
+                page.wait_for_timeout(300)
+                if all(c['shown'] for c in page.evaluate(_CARDS)):
+                    return result(None, observations={'query': query, 'cards': ', '.join(names)[:500]})
+            return result('Xóa ô tìm kiếm nhưng danh sách hoạt động không hiện lại đủ')
+        except Exception as error:
+            return {'probe_id': SEARCH_PROBE, 'passed': False, 'reason': str(error)[:1000]}
+        finally:
+            if browser:
+                browser.close()
+
+
 def run(base, probe_id, fixture=None, state=None, pages=()):
     if probe_id == TEXT_PROBE:
         return run_text(base, state or {}, fixture, list(pages))
+    if probe_id == COPY_PROBE:
+        return run_copy(base, fixture)
+    if probe_id == SEARCH_PROBE:
+        return run_search(base, fixture)
     if probe_id != QUEUE_PROBE:
         return {'probe_id': None, 'passed': False, 'reason': 'No trusted behavioral oracle for this request'}
     if fixture is None:

@@ -118,7 +118,7 @@ def test_real_ticket_diffs(branch, blocked):
             for width in (375, 1280):
                 page = browser.new_page(viewport={"width": width, "height": 812 if width < 768 else 800})
                 page.goto(f"http://127.0.0.1:{server.server_port}/school.html?domain=it", wait_until="domcontentloaded")
-                page.wait_for_timeout(800)
+                visual.settle(page)
                 audits[(phase, width)] = visual.audit(page, selectors)
                 page.close()
         for width in (375, 1280):
@@ -128,3 +128,43 @@ def test_real_ticket_diffs(branch, blocked):
         manager.stop()
         server.shutdown()
     assert bool(issues) is blocked, issues
+
+
+def test_settle_waits_for_the_load_event_before_the_audit_measures():
+    """A slow image delays `load`; the page builds the covering element on load. Measuring at DOMContentLoaded misses it."""
+    import time
+
+    page_html = (
+        "<style>body{margin:0;background:#0f0c29}button{position:absolute;top:10px;left:10px;width:80px;height:36px}"
+        ".late{position:fixed;top:0;left:0;width:200px;height:80px;background:#f97316}</style>"
+        "<button>Gửi</button><img src='/slow.png'>"
+        "<script>addEventListener('load', () => { const d = document.createElement('div'); d.className = 'late'; document.body.append(d); })</script>"
+    ).encode()
+
+    class Slow(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            if self.path == "/slow.png":
+                time.sleep(1.2)
+            body, kind = (page_html, "text/html; charset=utf-8") if self.path == "/" else (b"", "image/png")
+            self.send_response(200)
+            self.send_header("Content-Type", kind)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_):
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Slow)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    manager, browser = _browser()
+    try:
+        page = browser.new_page(viewport={"width": 800, "height": 600})
+        page.goto(f"http://127.0.0.1:{server.server_port}/", wait_until="domcontentloaded")
+        assert visual.audit(page, [])["covered"] == []            # measured while the image was still loading
+        visual.settle(page)
+        assert any("Gửi" in c for c in visual.audit(page, [])["covered"])
+    finally:
+        browser.close()
+        manager.stop()
+        server.shutdown()

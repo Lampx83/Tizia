@@ -1449,7 +1449,7 @@ setInterval(() => {
   }
 }, 6 * 3600 * 1000).unref?.();
 
-// Retention ảnh bản nháp AI Board (AI_BOARD_SHOT_RETENTION_DAYS, mặc định 30; 0 = tắt).
+// Retention ảnh bản nháp AI Board (AI_BOARD_SHOT_RETENTION_DAYS; chưa đặt hoặc 0 = tắt).
 startShotRetention({ db, backend: aiBoardShotBackend, log });
 
 // Bật error tracking (Sentry nếu có SENTRY_DSN) trước khi nhận traffic.

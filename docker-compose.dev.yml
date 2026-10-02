@@ -9,18 +9,11 @@ services:
       - "${PORT:-8041}:8041"
     env_file:
       - .env
-    environment:
+    environment:  # chỉ nối dây trong container; mọi cấu hình (khóa, model, retention) nằm trong file .env
       NODE_ENV: development
       PORT: 8041
       HOST: 0.0.0.0
       DATA_DIR: /data
-      AI_BOARD_WORKER_KEY: ${AI_BOARD_WORKER_KEY:-}
-      OLLAMA_URL: ${OLLAMA_URL:-}
-      OLLAMA_SECKEY: ${OLLAMA_SECKEY:-}
-      AI_BOARD_CLASSIFIER_MODEL: ${AI_BOARD_CLASSIFIER_MODEL:-qwen3.5:4b}
-      TIZIA_MODEL_AI_BOARD_GRILL: ${TIZIA_MODEL_AI_BOARD_GRILL:-qwen3.5:4b}
-      TIZIA_MODEL_AI_BOARD_SPEC: ${TIZIA_MODEL_AI_BOARD_SPEC:-qwen3:8b}
-      AI_BOARD_SHOT_RETENTION_DAYS: ${AI_BOARD_SHOT_RETENTION_DAYS:-30}  # dev only; production keeps screenshots unless this is set
     volumes:
       - tizia-dev-data:/data
 
@@ -32,28 +25,28 @@ services:
     image: tizia-ai-board-worker:latest
     profiles: [ai-board]
     depends_on: [tizia-dev, sandbox-runner]
-    restart: on-failure
+    restart: on-failure:10  # fast crash loops (e.g. missing AI_BOARD_WORKER_KEY) stop after 10 tries
     cap_add: [NET_ADMIN]  # egress lock only; Gate 5 runs in the sandbox microVM, so no privileged mode or Docker daemon
     networks: [default, sandbox-api]
     cpus: 2
     mem_limit: 4g
     pids_limit: 512
-    environment:
+    environment:  # dòng có giá trị = nối dây trong container; dòng trần = lấy từ file .env (khóa, model, nhánh gốc, ngân sách)
       AI_BOARD_SERVER_URL: http://tizia-dev:8041
-      AI_BOARD_WORKER_KEY: ${AI_BOARD_WORKER_KEY:?AI_BOARD_WORKER_KEY is required}
-      AI_BOARD_WORKER_MODE: ${AI_BOARD_WORKER_MODE:-off}
       AI_BOARD_REPO_DIR: /repo
       AI_BOARD_SANDBOX_URL: http://sandbox-runner:8090
-      AI_BOARD_GITHUB_TOKEN: ${AI_BOARD_GITHUB_TOKEN:-}
-      PR_BASE_BRANCH: dev
-      OLLAMA_URL: ${OLLAMA_URL:?OLLAMA_URL is required}
-      OLLAMA_SECKEY: ${OLLAMA_SECKEY:-}
-      GATE1_MODEL: ${GATE1_MODEL:-qwen3:8b}
-      GATE3_MODEL_HEAVY: ${GATE3_MODEL_HEAVY:-qwen2.5-coder:14b}
-      GATE3_MODEL_LIGHT: ${GATE3_MODEL_LIGHT:-qwen2.5-coder:14b}
-      EMBED_MODEL: ${EMBED_MODEL:-bge-m3}
-      AI_BOARD_CLASSIFIER_MODEL: ${AI_BOARD_CLASSIFIER_MODEL:-qwen3.5:4b}
-      BUDGET_MAX_WALL_CLOCK_S: "1200"
+      AI_BOARD_WORKER_KEY:
+      AI_BOARD_WORKER_MODE:
+      AI_BOARD_GITHUB_TOKEN:
+      PR_BASE_BRANCH:
+      OLLAMA_URL:
+      OLLAMA_SECKEY:
+      GATE1_MODEL:
+      GATE3_MODEL_HEAVY:
+      GATE3_MODEL_LIGHT:
+      EMBED_MODEL:
+      AI_BOARD_CLASSIFIER_MODEL:
+      BUDGET_MAX_WALL_CLOCK_S:
     volumes:
       - ai-board-repo:/repo
       - ai-board-memory:/opt/ai-board/ai-board/memory
@@ -64,6 +57,8 @@ services:
     image: registry:2
     profiles: [ai-board]
     restart: unless-stopped
+    environment:
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"  # scripts/gc-guest-images.mjs drops guest manifests the policy no longer pins
     ports:
       - "127.0.0.1:5000:5000"  # loopback only: push the pinned guest image from this machine
     volumes:
@@ -96,20 +91,19 @@ services:
       - ./ai-board/sandbox-runner/sandbox-policy.dev.yaml:/etc/sandbox/sandbox-policy.yaml:ro
       - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
 
-  # Tùy chọn: kho ảnh bản nháp AI Board trên SeaweedFS (S3 gateway). `docker compose --profile storage up -d seaweedfs`,
-  # rồi đặt cho tizia-dev (trong file env của nó): AI_BOARD_SHOTS_S3_ENDPOINT=http://seaweedfs:8333
-  # AI_BOARD_SHOTS_S3_BUCKET=ai-board-shots AI_BOARD_SHOTS_S3_ACCESS_KEY / _SECRET_KEY = SEAWEED_S3_ACCESS_KEY / _SECRET_KEY
-  # (bucket tự tạo ở lần ghi đầu). Mặc định dưới đây CHỈ cho dev cục bộ — đặt SEAWEED_S3_* thật nếu máy có người khác truy cập.
-  # Đã chạy thật: put/get/miss/remove qua chữ ký SigV4 của shot-storage.js (seaweedfs 4.48).
+  # Tùy chọn: kho ảnh bản nháp AI Board trên SeaweedFS (S3 gateway). `docker compose --profile storage up -d seaweedfs`.
+  # Trong file .env: AI_BOARD_SHOTS_S3_ENDPOINT=http://seaweedfs:8333, AI_BOARD_SHOTS_S3_BUCKET, AI_BOARD_SHOTS_S3_ACCESS_KEY / _SECRET_KEY,
+  # AI_BOARD_SHOTS_S3_CREATE_BUCKET=1 (dev: tự tạo bucket ở lần ghi đầu; production tạo bucket sẵn) và AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+  # bằng đúng cặp khóa đó. Thiếu cặp khóa thì SeaweedFS không đòi chữ ký (cổng chỉ mở ở 127.0.0.1).
   seaweedfs:
     container_name: tizia-seaweedfs
     image: chrislusf/seaweedfs@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d  # 4.48
     profiles: [storage]
     restart: unless-stopped
     command: server -s3 -dir=/data  # master + volume + filer + S3 trong 1 container
-    environment:
-      AWS_ACCESS_KEY_ID: ${SEAWEED_S3_ACCESS_KEY:-tizia-dev-only}
-      AWS_SECRET_ACCESS_KEY: ${SEAWEED_S3_SECRET_KEY:-tizia-dev-only-secret}
+    environment:  # lấy từ file .env: đặt AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY bằng đúng giá trị AI_BOARD_SHOTS_S3_ACCESS_KEY / _SECRET_KEY
+      AWS_ACCESS_KEY_ID:
+      AWS_SECRET_ACCESS_KEY:
     ports:
       - "127.0.0.1:8333:8333"  # loopback only; tizia-dev gọi qua mạng compose http://seaweedfs:8333
     volumes:

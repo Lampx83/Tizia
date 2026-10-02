@@ -22,6 +22,8 @@ PROTOCOL = "1"
 CREATE_TIMEOUT_S = 600.0  # first boot after a cache wipe imports a multi-GB guest image
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", ".pytest_cache", ".cache", ".scratch"}
 GUEST_STATE = "state.json"
+# What gates.verify.run / functional read from `state` inside the guest; nothing else of the worker's state is uploaded.
+GUEST_STATE_KEYS = ("skill_id", "diffs", "full_diff", "request_title", "request_detail", "base_sha")
 GUEST_OUT = "out"
 MANIFEST = [{"name": "result", "path": f"{GUEST_OUT}/result.json"}, {"name": "shots", "path": f"{GUEST_OUT}/shots.tgz"}]
 GUEST_ENTRY = ("mkdir -p /workspace/out && chmod 777 /workspace/out && cd /opt/ai-board/ai-board/harness && "
@@ -30,6 +32,21 @@ GUEST_ENTRY = ("mkdir -p /workspace/out && chmod 777 /workspace/out && cd /opt/a
 RENEW_EVERY_S = 30.0
 BACKOFF_S = (1, 2, 4, 8)
 LEASE_S = 120.0
+CALL_ATTEMPTS = 3
+_sleep = time.sleep
+
+
+def _retry(call: Callable[[], dict], retry_on: Callable[[SandboxError], bool]) -> dict:
+    """Run call, repeating up to CALL_ATTEMPTS times (exponential backoff + jitter) while retry_on says the error is transient."""
+    delay = iter(BACKOFF_S)
+    for attempt in range(CALL_ATTEMPTS):
+        try:
+            return call()
+        except SandboxError as error:
+            if attempt == CALL_ATTEMPTS - 1 or not retry_on(error):
+                raise
+            _sleep(next(delay) + random.uniform(0, 0.25))
+    raise AssertionError("unreachable")
 
 
 class SandboxError(Exception):
@@ -132,7 +149,8 @@ def package(checkout: Path, state: dict, base_pages: dict[str, bytes]) -> bytes:
             archive.addfile(info)
         for file, parts in files:
             archive.add(file, arcname="checkout/" + "/".join(parts), recursive=False, filter=_normalise(file))
-        add_bytes(GUEST_STATE, json.dumps(state, ensure_ascii=False, default=lambda _value: None).encode("utf-8"))
+        guest_state = {key: state[key] for key in GUEST_STATE_KEYS if key in state}
+        add_bytes(GUEST_STATE, json.dumps(guest_state, ensure_ascii=False, default=lambda _value: None).encode("utf-8"))
         for page, blob in base_pages.items():
             add_bytes("base/" + page.lstrip("/"), blob)
     return buffer.getvalue()
@@ -223,7 +241,9 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
 
     run_id = f"g5-{uuid.uuid4().hex[:24]}"  # one id per Gate 5 invocation; a retry is a new invocation
     try:
-        created = client.create(run_id, MANIFEST)
+        # same run_id: the runner answers a repeated create for a live run with that run's view, so a lost reply is safe
+        # to repeat. 429 (busy) = a previous VM is still tearing down. A 5xx burns the id (run 'failed'), so it is not retried.
+        created = _retry(lambda: client.create(run_id, MANIFEST), lambda error: error.status in (0, 429))
         lease = _Lease(client, run_id, lease_ok)
 
         def live() -> None:
@@ -255,7 +275,7 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
         return _blocked("sandbox trả kết quả không hợp lệ")
     finally:
         try:
-            client.destroy(run_id)
+            _retry(lambda: client.destroy(run_id), lambda error: error.status == 0 or error.status >= 500)
         except SandboxError:
             pass  # runner expires the lease and keeps itself unhealthy if teardown stays unconfirmed
 

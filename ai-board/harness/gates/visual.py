@@ -140,6 +140,29 @@ def changed_selectors(full_diff: list[dict] | None) -> list[str]:
     return list(dict.fromkeys(s for s in found if s.strip()))[:MAX_SELECTORS]
 
 
+SETTLE_JS = """([quiet, cap]) => new Promise((done) => {
+  let timer;
+  const finish = () => { observer.disconnect(); clearTimeout(timer); done(); };
+  const arm = () => { clearTimeout(timer); timer = setTimeout(finish, quiet); };
+  const observer = new MutationObserver(arm);
+  observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, characterData: true });
+  arm();
+  setTimeout(finish, cap);
+})"""
+
+
+def settle(page, quiet_ms: int = 1200, load_ms: int = 15000, idle_ms: int = 3000, cap_ms: int = 10000) -> None:
+    """Đợi trang dựng xong trước khi đo: sự kiện load (ảnh/iframe, tối đa load_ms), mạng yên (module/fetch JS dựng UI,
+    tối đa idle_ms; trang polling không bao giờ yên thì chỉ mất idle_ms), rồi DOM yên quiet_ms (tối đa cap_ms).
+    Máy bận thì UI dựng muộn; đo sớm làm lỗi thị giác biến mất ngẫu nhiên."""
+    for state, timeout in (("load", load_ms), ("networkidle", idle_ms)):
+        try:
+            page.wait_for_load_state(state, timeout=timeout)
+        except Exception:  # noqa: BLE001 — quá chậm/không yên: vẫn đo trạng thái hiện có
+            pass
+    page.evaluate(SETTLE_JS, [quiet_ms, cap_ms])
+
+
 def audit(page, selectors: list[str]) -> dict:
     return page.evaluate(AUDIT_JS, list(selectors))
 

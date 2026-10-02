@@ -8,3 +8,4 @@ ai-board/worker-entrypoint.sh text eol=lf
 # Shell scripts and guest build files run on Linux (containers, microVM); CRLF breaks the shebang line.
 *.sh text eol=lf
 ai-board/sandbox-runner/guest/Dockerfile* text eol=lf
+ai-board/sandbox-runner/sandbox-policy*.yaml text eol=lf

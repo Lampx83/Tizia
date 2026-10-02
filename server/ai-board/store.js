@@ -88,6 +88,8 @@ const PRE_PR_SEQUENCE = CONTRACT.gates.pre_pr;
 const ORACLE_COVERAGE = {
   'queue-worker-availability-v1': ['requester_api', 'mounted_ui', 'recovery'],
   'text-visible-v1': ['rendered_text'],
+  'copy-response-v1': ['clipboard'],
+  'search-activity-v1': ['filtering'],
 };
 const FAILURE_CLASSES = new Set(CONTRACT.failure_classes);
 const MAX_REPAIRS = CONTRACT.max_repairs;
@@ -2096,31 +2098,6 @@ export function createAiBoardStore(db, hooks = {}) {
     return invalidatePlanTransaction(requestId, reason, Date.now());
   }
 
-  const replanRequest = db.transaction((requestId, spec, adminUserId) => {
-    const root = db.prepare('SELECT * FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL').get(requestId);
-    if (!root || !['waiting', 'waiting_admin'].includes(root.status)
-        || !['clarification_limit', 'plan_blocked', 'precheck_blocked'].includes(root.phase)
-        || root.lease_owner || latestCandidate(root.id)) {
-      throw new WorkerContractError('request cannot be replanned in its current state', 409, 'not_replannable');
-    }
-    const now = Date.now();
-    if (root.plan_hash) invalidateCurrentPlan(root, now);
-    db.prepare('UPDATE requests SET clarified_spec=?, updated_at=? WHERE id=?').run(spec, now, requestId);
-    requeueForReplan(root.id, { publicNote: 'Quản trị viên đã làm rõ yêu cầu; đang chờ lập lại kế hoạch.' }, now);
-    db.prepare(`INSERT INTO request_messages(request_id, role, author_name, body, created_at)
-      VALUES (?, 'admin', 'Quản trị viên', ?, ?)`).run(requestId, spec, now);
-    insertEvent.run(root.id, 'request_clarified', 'admin', String(adminUserId), `${root.status}->queued`,
-      'Quản trị viên đã làm rõ yêu cầu.', 'admin replan; all gates required',
-      `admin-replan:${root.id}:${now}:${randomBytes(4).toString('hex')}`, now);
-    return { ok: true, status: 'queued' };
-  });
-
-  function clarifyAndReplan(requestId, spec, adminUserId) {
-    const text = String(spec ?? '').trim();
-    if (text.length < 10 || text.length > 4000) throw new WorkerContractError('spec must be 10–4000 characters', 400, 'invalid_spec');
-    return replanRequest(Number(requestId), text, Number(adminUserId));
-  }
-
   // Admin reruns the gate that failed, from that gate's own row. Planning (gates 1-2.5) is one unit and restarts from
   // gate 1; the pre-PR gates (3-5.5) are one unit on the approved plan and restart from gate 3.
   const PLAN_BLOCKED_PHASES = ['clarification_limit', 'plan_blocked', 'precheck_blocked'];
@@ -2216,6 +2193,5 @@ export function createAiBoardStore(db, hooks = {}) {
     resumeAuthorizedPlan,
     extendBudget,
     invalidatePlanForRequest,
-    clarifyAndReplan,
   };
 }

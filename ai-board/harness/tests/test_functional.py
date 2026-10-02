@@ -134,3 +134,110 @@ def test_queue_oracle_text_patterns_ignore_case_so_a_capitalised_sentence_counts
     assert functional.OFFLINE_TEXT.search('Đang chờ Ban điều hành — chưa thể ước tính thời gian.')
     assert functional.READY_TEXT.search('khoảng 3 Phút nữa tới lượt')
     assert not functional.OFFLINE_TEXT.search('Đang xếp hàng: thứ 1')
+
+
+# ---- copy-response-v1 / search-activity-v1: behaviour oracles for the two other reported regressions ----
+def test_behaviour_oracles_are_selected_from_the_request_and_server_trusts_them():
+    assert functional.select(ASK('Thêm nút sao chép phản hồi của Ban điều hành')) == functional.COPY_PROBE
+    assert functional.select(ASK('Add a copy button to every AI response')) == functional.COPY_PROBE
+    assert functional.select(ASK('Thêm ô tìm kiếm hoạt động trong trang trường')) == functional.SEARCH_PROBE
+    assert functional.select(ASK('Search activities by name')) == functional.SEARCH_PROBE
+    assert functional.select(ASK("Thêm nút 'Sao chép' vào phản hồi")) == functional.COPY_PROBE  # behaviour beats the quoted label
+    assert functional.select(ASK("Đổi chữ 'Sao chép phản hồi' thành 'Copy'")) == functional.TEXT_PROBE  # a rename is only text
+    assert functional.select(ASK('Sao chép bài viết')) is None
+    assert functional.ORACLES[functional.COPY_PROBE] == ('clipboard',)
+    assert functional.ORACLES[functional.SEARCH_PROBE] == ('filtering',)
+
+
+THREAD = {'request': {'id': 1, 'status': 'reviewing', 'student': 'Queue Verify'}, 'messages': [
+    {'role': 'student', 'author_name': 'Queue Verify', 'body': 'Cho em hỏi', 'created_at': 1},
+    {'role': 'ai', 'author_name': 'Ban điều hành AI', 'body': 'Chào bạn,\nĐã xem & sẽ <làm> sớm.', 'created_at': 2}]}
+
+
+def thread_module(button):
+    return """export async function renderRequestThread({host, requestId}) {
+  const d = await (await fetch(`api/requests/${requestId}/thread`)).json();
+  host.innerHTML = d.messages.map(m => `<div class="rt-msg ${m.role === 'ai' ? 'rt-board' : 'rt-student'}"><div class="rt-body"></div>${m.role === 'ai' ? '<button class="cp">Sao chép</button>' : ''}</div>`).join('');
+  [...host.querySelectorAll('.rt-body')].forEach((el, i) => { el.textContent = d.messages[i].body; });
+  host.querySelectorAll('.cp').forEach(b => { b.onclick = () => { %s }; });
+}""" % button
+
+
+COPY_BUTTONS = {
+    'ok': "navigator.clipboard.writeText(b.parentElement.querySelector('.rt-body').textContent)",
+    'noop': '',
+    'whole_thread': "navigator.clipboard.writeText(host.innerText)",
+}
+
+
+def copy_site(site_, button):
+    import json
+    root, _ = site_
+    (root / 'js').mkdir(exist_ok=True)
+    (root / 'js' / 'request-thread.js').write_text(thread_module(COPY_BUTTONS[button]), encoding='utf-8')
+    (root / 'api' / 'requests' / '1').mkdir(parents=True, exist_ok=True)
+    (root / 'api' / 'requests' / '1' / 'thread').write_text(json.dumps(THREAD), encoding='utf-8')
+    (root / 'school.html').write_text('<meta charset=utf-8><body></body>', encoding='utf-8')
+
+
+def copy_probe(site_):
+    pytest.importorskip('playwright.sync_api')
+    _, base = site_
+    state = ASK('Thêm nút sao chép phản hồi')
+    thread = lambda stage: {'token': 't', 'request_id': 1, 'student': 'Queue Verify', 'student_body': 'Cho em hỏi',
+                            'ai_body': THREAD['messages'][1]['body']} if stage == 'thread' else None
+    return functional.run(base, functional.select(state), thread, state=state, pages=['/school.html'])
+
+
+def test_copy_oracle_passes_only_when_the_button_puts_the_response_on_the_clipboard(site):
+    copy_site(site, 'ok')
+    result = copy_probe(site)
+    assert result['passed'] and result['probe_id'] == functional.COPY_PROBE and result['coverage'] == {'clipboard': True}
+    copy_site(site, 'noop')
+    noop = copy_probe(site)
+    assert not noop['passed'] and 'clipboard' in noop['reason']  # the button exists but copies nothing
+    copy_site(site, 'whole_thread')
+    assert not copy_probe(site)['passed']          # copied the student's message too: not "the response"
+
+
+def test_copy_oracle_fails_when_there_is_no_copy_button(site):
+    copy_site(site, 'ok')
+    (site[0] / 'js' / 'request-thread.js').write_text(thread_module('').replace('Sao chép', 'Gửi'), encoding='utf-8')
+    result = copy_probe(site)
+    assert not result['passed'] and 'nút' in result['reason']
+
+
+CARDS = ['Quiz nhanh', 'Lab dược lý', 'Bản đồ trường', 'Thử thách streak']
+
+
+def search_site(site_, mode):
+    root, _ = site_
+    script = {
+        'filter': "q.oninput = () => cards.forEach(c => { c.hidden = !c.textContent.toLowerCase().includes(q.value.toLowerCase()); });",
+        'noop': '',
+        'nobox': '',
+        'hide_all': "q.oninput = () => cards.forEach(c => { c.hidden = !!q.value; });",
+    }[mode]
+    box = '' if mode == 'nobox' else '<input type="search" id="q" placeholder="Tìm hoạt động">'
+    cards = ''.join(f'<a class="tz-se-card" href="#"><div class="nm">{name}</div></a>' for name in CARDS)
+    (root / 'school.html').write_text(f"""<meta charset=utf-8><body><div id="school-explore-host">{box}<div>{cards}</div></div>
+<script>const q = document.getElementById('q'), cards = [...document.querySelectorAll('.tz-se-card')]; if (q) {{ {script} }}</script></body>""",
+                                      encoding='utf-8')
+
+
+def search_probe(site_):
+    pytest.importorskip('playwright.sync_api')
+    _, base = site_
+    state = ASK('Thêm ô tìm kiếm hoạt động')
+    return functional.run(base, functional.select(state), lambda stage: {'token': 't', 'request_id': 1} if stage == 'seed' else None,
+                          state=state, pages=['/school.html?domain=it'])
+
+
+def test_search_oracle_passes_only_when_typing_narrows_the_activities_and_clearing_restores_them(site):
+    search_site(site, 'filter')
+    result = search_probe(site)
+    assert result['passed'] and result['probe_id'] == functional.SEARCH_PROBE and result['coverage'] == {'filtering': True}
+    for mode, word in [('nobox', 'ô tìm'), ('noop', 'lọc'), ('hide_all', 'khớp')]:
+        search_site(site, mode)
+        out = search_probe(site)
+        assert not out['passed'] and word in out['reason'], (mode, out)

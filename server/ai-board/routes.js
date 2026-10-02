@@ -295,10 +295,6 @@ export function attachAiBoardRequestRoutes(router, {
     try { res.json(store.rerunGate(req.params.id, req.body?.gate, req.user.id)); }
     catch (error) { folderError(res, error); }
   });
-  router.post('/api/admin/ai-board/requests/:id/replan', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
-    try { res.json(store.clarifyAndReplan(req.params.id, req.body?.spec, req.user.id)); }
-    catch (error) { folderError(res, error); }
-  });
 }
 
 function digest(value) {

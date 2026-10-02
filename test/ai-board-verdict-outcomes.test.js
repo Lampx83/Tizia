@@ -427,3 +427,11 @@ test('a passing verdict needs a known harness oracle with every coverage flag th
     { ...text, passed: false },
   ]) assert.throws(() => plannedRoot().submit(withProbe(bad)), /passing verdict requires successful smoke/);
 });
+
+test('the copy and search oracles are trusted only with their own coverage flag', () => {
+  for (const [probe_id, flag] of [['copy-response-v1', 'clipboard'], ['search-activity-v1', 'filtering']]) {
+    const ok = { probe_id, passed: true, coverage: { [flag]: true } };
+    assert.equal(plannedRoot().submit(withProbe(ok)).outcome, 'ready_for_pr', probe_id);
+    assert.throws(() => plannedRoot().submit(withProbe({ ...ok, coverage: { rendered_text: true } })), /passing verdict requires successful smoke/);
+  }
+});

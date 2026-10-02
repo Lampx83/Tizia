@@ -19,9 +19,9 @@ test('every path into needs_replan drops plan and lease the same way', () => {
     'requester clarification': (store, root) => {
       assert.equal(store.invalidatePlanForRequest(root.source_request_id, 'thêm chi tiết'), true);
     },
-    'admin replan': (store, root) => {
+    'admin rerun from gate 1': (store, root) => {
       store.db.prepare("UPDATE ai_tickets SET status='waiting_admin', phase='plan_blocked' WHERE id=?").run(root.id);
-      store.clarifyAndReplan(root.source_request_id, 'Làm rõ yêu cầu để lập lại kế hoạch.', 9);
+      store.rerunGate(root.source_request_id, 1, 9);
     },
   };
   for (const [name, enter] of Object.entries(paths)) {
@@ -29,7 +29,7 @@ test('every path into needs_replan drops plan and lease the same way', () => {
     const root = db.prepare('SELECT * FROM ai_tickets WHERE parent_id IS NULL').get();
     db.prepare(`UPDATE ai_tickets SET plan_hash=?, lease_owner='w', lease_token='t', lease_expires_at=? WHERE id=?`)
       .run('h'.repeat(64), Date.now() + 1000, root.id);
-    if (name === 'admin replan') db.prepare('UPDATE ai_tickets SET lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL WHERE id=?').run(root.id);
+    if (name === 'admin rerun from gate 1') db.prepare('UPDATE ai_tickets SET lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL WHERE id=?').run(root.id);
     enter(store, root);
     const after = db.prepare('SELECT status, phase, plan_hash, lease_owner, lease_token, lease_expires_at FROM ai_tickets WHERE id=?').get(root.id);
     assert.deepEqual({ ...after }, { status: 'queued', phase: 'needs_replan', plan_hash: null, lease_owner: null, lease_token: null, lease_expires_at: null }, name);
@@ -44,17 +44,15 @@ test('admin handoff requeues through all gates and reply preserves root status',
   store.noteRequest(root.source_request_id, 'Admin đang điều tra', 9);
   assert.equal(db.prepare('SELECT status FROM requests WHERE id=?').get(root.source_request_id).status, 'pending');
   assert.equal(db.prepare('SELECT status FROM ai_tickets WHERE id=?').get(root.id).status, 'waiting_admin');
-  assert.throws(() => store.clarifyAndReplan(root.source_request_id, 'short', 9));
-  store.clarifyAndReplan(root.source_request_id, 'Thêm câu giải thích trên dòng hàng đợi hiện có.', 9);
+  assert.throws(() => store.rerunGate(root.source_request_id, 9, 9));
+  store.rerunGate(root.source_request_id, 1, 9);
   const queued = db.prepare('SELECT * FROM ai_tickets WHERE id=?').get(root.id);
   assert.equal(queued.phase, 'needs_replan');
   assert.equal(queued.status, 'queued');
   assert.equal(queued.plan_hash, null);
-  assert.equal(db.prepare('SELECT clarified_spec FROM requests WHERE id=?').get(root.source_request_id).clarified_spec,
-    'Thêm câu giải thích trên dòng hàng đợi hiện có.');
-  assert.throws(() => store.clarifyAndReplan(root.source_request_id, 'Không lập lại khi đang chạy.', 9));
+  assert.throws(() => store.rerunGate(root.source_request_id, 1, 9), 'nothing to rerun while queued');
   db.prepare("UPDATE ai_tickets SET status='cancelled', phase='admin_rejected' WHERE id=?").run(root.id);
-  assert.throws(() => store.clarifyAndReplan(root.source_request_id, 'Không mở lại yêu cầu bị hủy.', 9));
+  assert.throws(() => store.rerunGate(root.source_request_id, 1, 9), 'a cancelled request is not reopened');
   db.close();
 });
 const CANDIDATE = {
@@ -131,24 +129,6 @@ async function serve(store, env = { AI_BOARD_WORKER_KEY: KEY }) {
     close: () => new Promise((resolve, reject) => server.close((e) => e ? reject(e) : resolve())),
   };
 }
-
-test('admin replan API enforces role, CSRF, spec and current lifecycle', async () => {
-  const { db, store } = fixture();
-  const root = db.prepare('SELECT * FROM ai_tickets WHERE parent_id IS NULL').get();
-  db.prepare("UPDATE ai_tickets SET status='waiting_admin', phase='clarification_limit' WHERE id=?").run(root.id);
-  const { base, close } = await serve(store);
-  const submit = (user, csrf, spec) => fetch(`${base}/api/admin/ai-board/requests/${root.source_request_id}/replan`, {
-    method: 'POST', headers: { 'content-type': 'application/json', 'x-test-user': user, 'x-csrf-token': csrf },
-    body: JSON.stringify({ spec }),
-  });
-  try {
-    assert.equal((await submit('1', 'ok', 'Một mô tả đủ rõ để thực hiện.')).status, 403);
-    assert.equal((await submit('3', '', 'Một mô tả đủ rõ để thực hiện.')).status, 403);
-    assert.equal((await submit('3', 'ok', 'short')).status, 400);
-    assert.equal((await submit('3', 'ok', 'Một mô tả đủ rõ để thực hiện.')).status, 200);
-    assert.equal((await submit('3', 'ok', 'Không lặp khi đã vào hàng đợi.')).status, 409);
-  } finally { await close(); db.close(); }
-});
 
 test('D0 HTTP flow creates a root request, validates a plan, and creates child tickets', async () => {
   const { db, store } = fixture({ seedRequest: false });

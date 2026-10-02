@@ -102,12 +102,31 @@ test('S3 backend: chữ ký khớp botocore S3SigV4Auth (known-answer, giờ c�
     '0632ae2ccd5cd05fa80d815c86d7685df4de9f94f71db75d1ab3c5360d30cc8b']);
 });
 
-test('S3 backend: bucket chưa có → tạo rồi thử lại 1 lần', async () => {
+test('S3 backend: bucket chưa có → mặc định KHÔNG tự tạo, báo lỗi nói rõ cách xử lý', async () => {
   const s = await fakeS3({ missingBucket: true });
   try {
-    await createS3Backend(s3conf(s.endpoint)).put('2026-01-02/1-abcdef012345.png', PNG);
+    await assert.rejects(createS3Backend(s3conf(s.endpoint)).put('2026-01-02/1-abcdef012345.png', PNG),
+      /bucket "shots".*AI_BOARD_SHOTS_S3_CREATE_BUCKET/);
+    assert.deepEqual(s.seen.map((x) => [x.method, x.url]), [['PUT', '/shots/2026-01-02/1-abcdef012345.png']]);
+  } finally { s.server.close(); }
+});
+
+test('S3 backend: createBucket bật → tạo bucket rồi thử lại 1 lần', async () => {
+  const s = await fakeS3({ missingBucket: true });
+  try {
+    await createS3Backend({ ...s3conf(s.endpoint), createBucket: true }).put('2026-01-02/1-abcdef012345.png', PNG);
     assert.deepEqual(s.seen.map((x) => [x.method, x.url]),
       [['PUT', '/shots/2026-01-02/1-abcdef012345.png'], ['PUT', '/shots'], ['PUT', '/shots/2026-01-02/1-abcdef012345.png']]);
+  } finally { s.server.close(); }
+});
+
+test('shotBackendFromEnv: tự tạo bucket chỉ khi AI_BOARD_SHOTS_S3_CREATE_BUCKET=1', async () => {
+  const s = await fakeS3({ missingBucket: true });
+  const vars = { AI_BOARD_SHOTS_S3_ENDPOINT: s.endpoint, AI_BOARD_SHOTS_S3_BUCKET: 'shots',
+    AI_BOARD_SHOTS_S3_ACCESS_KEY: 'a', AI_BOARD_SHOTS_S3_SECRET_KEY: 's' };
+  try {
+    await assert.rejects(shotBackendFromEnv(vars, tmp()).put('2026-01-02/1-abcdef012345.png', PNG), /CREATE_BUCKET/);
+    await shotBackendFromEnv({ ...vars, AI_BOARD_SHOTS_S3_CREATE_BUCKET: '1' }, tmp()).put('2026-01-02/1-abcdef012345.png', PNG);
   } finally { s.server.close(); }
 });
 

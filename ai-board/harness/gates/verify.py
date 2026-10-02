@@ -163,6 +163,7 @@ def capture_screenshot(url: str, path: Path, width: int = 1280, *, selectors: li
             page = browser.new_page(viewport={"width": width, "height": 812 if width < 768 else 800})
             response = page.goto(url, wait_until="domcontentloaded", timeout=15000)
             check_landing(url, page.url, response.status if response else None)
+            visual.settle(page)
             height = min(max(int(page.evaluate("document.documentElement.scrollHeight") or 1), 1), MAX_SHOT_HEIGHT)
             page.screenshot(path=str(path), full_page=True, clip={"x": 0, "y": 0, "width": width, "height": height})
             return visual.audit(page, list(selectors))
@@ -438,10 +439,10 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             http_observed = True
             kind = 'plan'
             def fixture(stage):
-                if stage == 'seed':
+                if stage in ('seed', 'thread'):
                     command([*compose, 'cp', str(Path(functional.__file__).with_name('queue_fixture.mjs')), 'tizia:/app/verify-queue.mjs'])
                 response = command([*compose, 'exec', '-T', 'tizia', 'node', '/app/verify-queue.mjs', stage], log_output=False, timeout=20)
-                return json.loads(response.stdout) if stage == 'seed' else None
+                return json.loads(response.stdout) if stage in ('seed', 'thread') else None
             observed_pages = html or ([primary] if primary else [])
             functional_result = (functional_probe(base, probe_id) if functional_probe
                                  else functional.run(base, probe_id, fixture, state=state, pages=observed_pages))

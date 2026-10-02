@@ -115,7 +115,7 @@ def test_state_json_carries_no_callable_and_matches_what_the_gate_reads(tmp_path
     st = {**state(root), "should_stop": lambda: False}
     with tarfile.open(fileobj=io.BytesIO(sandbox_verify.package(root, st, {})), mode="r:gz") as tar:
         data = json.loads(tar.extractfile("state.json").read())
-    assert data["skill_id"] == "skill-1" and data["should_stop"] is None
+    assert data["skill_id"] == "skill-1" and "should_stop" not in data
 
 
 def test_pass_runs_boot_then_gate_in_a_fresh_vm_and_always_destroys(tmp_path):
@@ -281,3 +281,77 @@ def test_guest_entry_makes_screenshot_paths_relative_and_writes_the_bundle(tmp_p
     assert json.loads((out / "result.json").read_text())["evidence"]["screenshot"] == "tmp-shot.png"
     assert names((out / "shots.tgz").read_bytes()) == {"tmp-shot.png"}
     assert seen["base"] == str(work / "base")
+
+
+class Flaky(FakeClient):
+    """create/destroy fail `times` times with the given status before they work."""
+
+    def __init__(self, *, create_status=None, destroy_status=None, times=2, **kwargs):
+        super().__init__(**kwargs)
+        self.create_status, self.destroy_status, self.left = create_status, destroy_status, {"create": times, "destroy": times}
+
+    def create(self, run_id, manifest):
+        if self.create_status is not None and self.left["create"] > 0:
+            self.left["create"] -= 1
+            self.calls.append("create")
+            raise SandboxError("runner_unreachable" if self.create_status == 0 else "busy", "provision", self.create_status)
+        return super().create(run_id, manifest)
+
+    def destroy(self, run_id):
+        self.calls.append("destroy")
+        if self.destroy_status is not None and self.left["destroy"] > 0:
+            self.left["destroy"] -= 1
+            raise SandboxError("cleanup_unconfirmed", "destroy", self.destroy_status)
+
+
+@pytest.fixture(autouse=True)
+def sleeps(monkeypatch):  # no real backoff in any test
+    waited = []
+    monkeypatch.setattr(sandbox_verify, "_sleep", waited.append)
+    return waited
+
+
+@pytest.mark.parametrize("status", [0, 429])
+def test_create_retries_a_transient_runner_error_with_the_same_run_id(tmp_path, sleeps, status):
+    client = Flaky(create_status=status, times=2)
+    result = sandbox_verify.run(state(checkout(tmp_path)), client=client)
+    assert result["blocked"] is False
+    assert client.calls.count("create") == 3 and len(sleeps) == 2 and sleeps[0] < sleeps[1]
+
+
+def test_create_gives_up_after_three_attempts_and_never_retries_a_terminal_error(tmp_path, sleeps):
+    busy = Flaky(create_status=429, times=99)
+    result = sandbox_verify.run(state(checkout(tmp_path)), client=busy)
+    assert result["blocked"] and result["failure_class"] == "transient" and busy.calls.count("create") == 3
+    sleeps.clear()
+    assert sandbox_verify.run(state(checkout(tmp_path)), client=FakeClient(fail="create"))["blocked"]  # 502 create_failed: id burned
+    assert sleeps == []
+
+
+def test_destroy_is_retried_until_the_runner_confirms_teardown(tmp_path, sleeps):
+    client = Flaky(destroy_status=502, times=2)
+    assert sandbox_verify.run(state(checkout(tmp_path)), client=client)["blocked"] is False
+    assert client.calls.count("destroy") == 3
+    stuck = Flaky(destroy_status=502, times=99)
+    assert sandbox_verify.run(state(checkout(tmp_path)), client=stuck)["blocked"] is False  # the verdict stands; the lease expiry cleans up
+    assert stuck.calls.count("destroy") == 3
+
+
+def test_state_json_ships_only_the_keys_the_guest_gate_reads(tmp_path):
+    root = checkout(tmp_path)
+    st = {**state(root), "request_title": "t", "request_detail": "d", "full_diff": [{"diff": "+x"}], "base_sha": "a" * 40,
+          "plan": {"goal": "private planning"}, "memory": "x", "github_token": "never", "evidence": {"x": 1}}
+    with tarfile.open(fileobj=io.BytesIO(sandbox_verify.package(root, st, {})), mode="r:gz") as tar:
+        data = json.loads(tar.extractfile("state.json").read())
+    assert set(data) == {"skill_id", "diffs", "request_title", "request_detail", "full_diff", "base_sha"}
+
+
+def test_every_state_key_the_guest_gate_reads_is_uploaded():
+    """A new state.get('x') in the gate must be added to GUEST_STATE_KEYS, or the sandbox would silently see None."""
+    import re
+    root = Path(__file__).resolve().parents[1]
+    read = set()
+    for rel in ("gates/verify.py", "functional.py", "gates/visual.py"):
+        read |= set(re.findall(r"""state(?:\.get\(|\[)["']([a-z_]+)["']""", (root / rel).read_text(encoding="utf-8")))
+    written_or_guest_side = {"evidence", "base_pages_dir", "full_checkout"}  # gate output / set by gate5_guest / replaced by checkout_dir
+    assert read - written_or_guest_side <= set(sandbox_verify.GUEST_STATE_KEYS), read
