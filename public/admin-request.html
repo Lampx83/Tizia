@@ -42,6 +42,13 @@
   .step::before { content:counter(step); position:absolute; left:-34px; top:7px; width:22px; height:22px; border-radius:50%;
                   background:var(--c); color:#0b1220; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center; }
   .step.gate { background:var(--bg3); }
+  /* Cổng: vòng tròn mang số cổng thật; lần gọi model: chấm nhỏ không số. */
+  .step.gate[data-pos]::before { content:attr(data-pos); }
+  .step.call { counter-increment:none; }
+  .step.call::before { content:""; left:-27px; top:12px; width:10px; height:10px; }
+  /* Bước phụ 2.5 / 5.5: lùi vào, viền đứt, nhãn vuông — khác hẳn bước chính 1-5. */
+  .step.sub-step { margin-left:20px; background:transparent; border-style:dashed; border-left-style:solid; font-size:12.5px; }
+  .step.sub-step::before { left:-54px; width:auto; min-width:28px; padding:0 5px; box-sizing:border-box; border-radius:6px; }
   .step .line1 { display:flex; flex-wrap:wrap; gap:4px 12px; align-items:center; }
   .step { min-width:0; overflow-wrap:anywhere; }
   .trace-ref { font-size:12px; color:var(--muted); margin:-2px 0 6px; overflow-wrap:anywhere; }
@@ -62,6 +69,12 @@
   ::-webkit-scrollbar-track { background:transparent; }
   ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.18); border-radius:8px; border:2px solid transparent; background-clip:padding-box; }
   ::-webkit-scrollbar-thumb:hover { background:rgba(251,191,36,0.55); background-clip:padding-box; }
+  .expl { margin-top:8px; font-size:12.5px; }
+  .expl-h { margin:8px 0 2px; font-weight:700; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  .expl ul { margin:0; padding-left:18px; } .expl li { margin:2px 0; overflow-wrap:anywhere; }
+  .expl .diff { margin:4px 0 0; padding:8px; max-height:240px; overflow:auto; background:var(--bg); border:1px solid var(--border);
+                border-radius:6px; white-space:pre-wrap; overflow-wrap:anywhere; font:12px ui-monospace,Consolas,monospace; }
+  .expl .diff .add { color:var(--ok); } .expl .diff .del { color:var(--bad); }
   .step .metrics { color:var(--muted); font-size:12px; margin-top:4px; display:flex; flex-wrap:wrap; gap:2px 14px; }
   .run-head { display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center; margin:22px 0 8px; padding:8px 12px;
               border-radius:10px; background:var(--bg2); border:1px solid var(--border); border-left:4px solid var(--c); }
@@ -81,6 +94,7 @@
   .seg.ok { border-color:var(--ok); color:var(--ok); }
   .seg.bad { border-color:var(--bad); color:var(--bad); }
   .seg.skip { opacity:.45; border-style:dashed; }
+  .seg.sub-step { font-size:11px; padding:2px 8px; border-radius:6px; border-style:dashed; }
   .seg.run { border-color:var(--accent2); color:var(--txt); font-weight:700;
              background:linear-gradient(90deg, rgba(96,165,250,.08) 0%, rgba(96,165,250,.45) 50%, rgba(96,165,250,.08) 100%);
              background-size:200% 100%; animation:sweep 1.4s linear infinite; }

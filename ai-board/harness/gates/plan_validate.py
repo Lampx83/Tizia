@@ -277,6 +277,18 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
 
     sha, files, repo_context = source_evidence(request, plan, state) if request.get('grounding_required') else (None, {}, '(legacy dry-run)')
     prompt = build_prompt(request, plan, repo_context)
+    trace = getattr(deps, "trace", None)
+
+    def judge(check, ok, detail=""):
+        if trace:
+            trace.attach_last("evaluation", {"check": check, "ok": ok, "detail": detail})
+
+    if trace:
+        trace.note("knows", "plan đang soát", "; ".join(f"{t['file']} — {t['title']}" for t in plan["subtasks"]),
+                   [{"file": t["file"], "verify": t.get("verify")} for t in plan["subtasks"]])
+        if request.get("grounding_required"):
+            trace.note("tool", "git show", f"đọc {len(files)} file ở {str(sha)[:10]}: {', '.join(files) or '(không có)'}", {"sha": sha})
+            trace.note("knows", "bằng chứng nguồn", f"{len(repo_context)} ký tự trích từ code nguồn đưa cho validator")
     short = {"type": "string", "maxLength": 200}
     record = {"type": "object", "additionalProperties": False,
               "properties": {name: ({"type": "string", "maxLength": 320} if name == "quote" else short)
@@ -298,6 +310,8 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
     except ValueError as e:
         return {"gate": 2.5, "blocked": True, "reason": f"validator trả sai schema: {e}"}
 
+    judge("validator model", validation["clear"],
+          f"clear={validation['clear']}, grounded={validation.get('grounded')}: {validation.get('reason') or validation.get('question') or ''}")
     if not validation["clear"]:
         question = validation["question"] or "Plan chưa đủ rõ — bạn mô tả thêm chi tiết được không?"
         if db_path is not None:
@@ -317,7 +331,9 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
             if state.get('best_match') and state['best_match'] not in targets:
                 raise ValueError(f"plan không sửa file khớp nhiều cụm người dùng viết nhất: {state['best_match']}")
             state['grounding'] = checked_grounding(validation, plan, sha, files)
+            judge("neo vào code nguồn", True, f"{len(state['grounding']['evidence'])} trích dẫn khớp nguyên văn trong {', '.join(files)}")
         except ValueError as error:
+            judge("neo vào code nguồn", False, str(error))
             return {'gate': 2.5, 'blocked': True, 'reason': 'plan_ungrounded', 'outcome': 'plan_ungrounded',
                     'signals': [str(error)], 'public_message': 'Kế hoạch cần quản trị viên kiểm tra vì chưa xác định đúng phần cần thay đổi.'}
 

@@ -16,6 +16,8 @@ from pathlib import Path
 PROVIDERS = ("ollama", "api")
 TRACE_CAP = 8192  # ký tự mỗi phần prompt/output gửi server; JSONL cục bộ giữ đủ
 POST_BYTES = 56_000  # dưới express.json limit 64kb, chừa chỗ lease/run_id
+# Phần giải thích kèm mỗi lần gọi (AI biết gì / tool nào chạy / sửa gì / đánh giá ra sao): tổng ≲ 14 KB mỗi record.
+MAX_NOTES, NOTE_SUMMARY_CAP, NOTE_DATA_CAP, EDIT_CAP, EVAL_CAP = 30, 500, 1500, 4000, 800
 _MEMORY = json.loads((Path(__file__).resolve().parents[2] / "server" / "ai-board" / "contract.json")
                      .read_text(encoding="utf-8"))["limits"]["memory"]
 ROTATE_BYTES = _MEMORY["traces_mb"] * 1024 * 1024
@@ -72,6 +74,12 @@ def redact(text: str) -> str:
     return _SECRET.sub("[đã che]", text or "")
 
 
+def _clip(value, cap: int) -> str:
+    """Text (hoặc JSON của giá trị) đã che secret, cắt ở `cap` ký tự."""
+    text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, default=str)
+    return redact(text)[:cap]
+
+
 def _cap(text: str) -> tuple[str, bool]:
     return (text[:TRACE_CAP], True) if len(text) > TRACE_CAP else (text, False)
 
@@ -88,6 +96,7 @@ class Tracer:
         self.run_id = None
         self.attempt = 0
         self.pending: list[dict] = []
+        self._notes: list[dict] = []
         self._seq = 0
         self._gpu = deque()  # (monotonic s, giây GPU) trong 1 giờ gần nhất
 
@@ -95,12 +104,13 @@ class Tracer:
         """Gắn run mới; xả đệm của run cũ nếu còn."""
         self.flush()
         self.run_id, self.post, self.attempt, self._seq = run_id, post, 0, 0
+        self._notes = []
 
     def record(self, *, gate: float, model: str, prompt: str, prompt_name: str | None, prompt_hash: str | None,
                static_prefix: str, output: str, metrics: dict, budget_units: int, result: str,
                error: str | None = None, child: int | None = None, iteration: int = 0) -> dict:
-        if self.pending and self.pending[-1]["gate"] != gate:
-            self.flush()  # 1 lô mỗi cổng
+        if self.pending and (self.pending[-1]["gate"] != gate or len(self.pending) >= 20):
+            self.flush()  # 1 lô mỗi cổng; đầy lô thì xả trước khi thêm, để record cuối còn nhận được phần đánh giá
         self._seq += 1
         variable = prompt[len(static_prefix):] if static_prefix and prompt.startswith(static_prefix) else prompt
         variable, output = redact(variable), redact(output)
@@ -111,15 +121,36 @@ class Tracer:
             "prompt_len": len(prompt), "output_len": len(output), "metrics": metrics,
             "budget_units": budget_units, "result": result, "error": (error or None) and error[:300],
             "at": int(time.time() * 1000),
+            "notes": self._notes, "edits": None, "evaluation": [],
         }
+        self._notes = []
         self._write({**rec, "prompt_var": variable, "output": output})
         (pv, pt), (out, ot) = _cap(variable), _cap(output)
         self.pending.append({**rec, "prompt_var": pv, "output": out, "truncated": {"prompt": pt, "output": ot}})
         now = time.monotonic()
         self._gpu.append((now, (metrics.get("gpu_ms") or 0) / 1000))
-        if len(self.pending) >= 20:
-            self.flush()
         return rec
+
+    def note(self, kind: str, name: str, summary: str = "", data=None) -> None:
+        """Ghi 1 điều AI biết ("knows") hoặc 1 tool harness đã chạy cho AI ("tool"); đính vào lần gọi model KẾ TIẾP."""
+        if len(self._notes) < MAX_NOTES:
+            self._notes.append({"kind": kind, "name": _clip(name, 80), "summary": _clip(summary, NOTE_SUMMARY_CAP),
+                                "data": None if data is None else _clip(data, NOTE_DATA_CAP)})
+
+    def attach_last(self, section: str, value: dict) -> None:
+        """Đính kết quả vào lần gọi VỪA XONG: "edits" (AI sửa gì) ghi đè; "evaluation" (đánh giá) nối thêm từng phép."""
+        if not self.pending:
+            return
+        last = self.pending[-1]
+        if section == "edits":
+            last["edits"] = {"parsed": _clip(value.get("parsed", ""), EDIT_CAP), "diff": _clip(value.get("diff", ""), EDIT_CAP),
+                             "applied": value.get("applied") is True}
+        elif section == "evaluation":
+            last["evaluation"].append({"check": _clip(value.get("check", ""), 60), "ok": value.get("ok") is True,
+                                       "detail": _clip(value.get("detail", ""), EVAL_CAP)})
+        else:
+            raise ValueError(f"section lạ: {section}")
+        self._write({"call_id": last["call_id"], section: last[section]})
 
     def mark_last(self, result: str, error: str | None = None) -> None:
         """Cổng biết kết quả sau khi parse (vd retry vì search không khớp) — sửa record chưa gửi."""

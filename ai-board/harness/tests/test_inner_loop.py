@@ -181,3 +181,34 @@ def test_inner_retries_vary_the_sampling_so_a_deterministic_loop_can_break(tmp_p
     assert temperatures[0] == 0                        # the first attempt stays deterministic (KV cache, repeatability)
     assert 0 < temperatures[1] < temperatures[2]       # identical prompt + temperature 0 would give the identical answer
     assert len({call.get("seed") for call in models.calls[1:]}) == 2
+
+
+def _traced(tmp_path, models):
+    import dataclasses
+    import meter
+    tracer, batches = meter.Tracer(None), []
+    tracer.begin(1, batches.append)
+    state = {"plan": _one_file_plan(), "checkout_source": str(_source(tmp_path))}
+    deps = dataclasses.replace(deps_with(models), trace=tracer)
+    out = implement.run(state, deps, Budget(max_wall_clock_s=999), repo_dir=tmp_path / "scratch")
+    tracer.flush()
+    return out, [call for batch in batches for call in batch]
+
+
+def test_every_gate_3_call_says_what_the_ai_knew_which_tools_ran_what_it_changed_and_how_it_was_judged(tmp_path):
+    out, calls = _traced(tmp_path, SeqModels([BAD_SEARCH, GOOD]))
+    assert out["blocked"] is False and len(calls) == 2
+    bad, good = calls
+    knows = {n["name"]: n for n in bad["notes"] if n["kind"] == "knows"}
+    assert "public/tinh-nang.html" in knows["target file"]["summary"]
+    assert "L" in knows["excerpt shown"]["data"]  # which line numbers the model could see
+    tool_notes = [n for n in bad["notes"] if n["kind"] == "tool"]
+    assert tool_notes and all(n["name"] and n["summary"] for n in tool_notes)
+    assert "Không có" in bad["edits"]["parsed"] and bad["edits"]["applied"] is False
+    assert [(e["check"], e["ok"]) for e in bad["evaluation"]] == [("parse JSON/schema", True), ("apply edits", False)]
+    assert "không khớp" in bad["evaluation"][1]["detail"]
+    retry = {n["name"]: n for n in good["notes"] if n["kind"] == "knows"}
+    assert "không khớp" in retry["retry feedback"]["summary"]  # the AI was shown its previous mistake
+    assert good["edits"]["applied"] is True and "+    <p>Mới.</p>" in good["edits"]["diff"]
+    assert [e["check"] for e in good["evaluation"]] == ["parse JSON/schema", "apply edits", "output checks"]
+    assert all(e["ok"] for e in good["evaluation"])

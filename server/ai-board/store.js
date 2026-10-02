@@ -83,6 +83,12 @@ const ROLLBACK_OUTCOMES = {
 const PRE_PR_GATES = new Set(CONTRACT.gates.pre_pr);
 const ALL_GATES = [...CONTRACT.gates.plan, ...CONTRACT.gates.pre_pr];
 const PRE_PR_SEQUENCE = CONTRACT.gates.pre_pr;
+// Harness-owned behavioural oracles the server trusts, and the coverage flags each must report true.
+// Keep in sync with ai-board/harness/functional.py ORACLES.
+const ORACLE_COVERAGE = {
+  'queue-worker-availability-v1': ['requester_api', 'mounted_ui', 'recovery'],
+  'text-visible-v1': ['rendered_text'],
+};
 const FAILURE_CLASSES = new Set(CONTRACT.failure_classes);
 const MAX_REPAIRS = CONTRACT.max_repairs;
 const MAX_BUDGET_EXTENSION = 200;
@@ -242,8 +248,8 @@ function validatePrePrVerdict(value, selfRequest = false) {
       if (item.functional) clean.functional = {
         probe_id: String(item.functional.probe_id || '').slice(0, 80), passed: item.functional.passed === true,
         reason: String(item.functional.reason || '').slice(0, 500),
-        coverage: { requester_api: item.functional.coverage?.requester_api === true,
-          mounted_ui: item.functional.coverage?.mounted_ui === true, recovery: item.functional.coverage?.recovery === true },
+        coverage: Object.fromEntries(Object.entries(item.functional.coverage || {}).slice(0, 8)
+          .map(([key, flag]) => [String(key).slice(0, 40), flag === true])),
         observations: Object.fromEntries(Object.entries(item.functional.observations || {}).slice(0, 10)
           .map(([key, text]) => [String(key).slice(0, 80), String(text).slice(0, 1500)])),
       };
@@ -268,8 +274,9 @@ function validatePrePrVerdict(value, selfRequest = false) {
   const gate55 = gates.find((gate) => gate.gate === 5.5);
   const observed = selfRequest ? gate5?.runner === 'eval' && gate5.eval?.accepted === true
     : gate5?.smoke_passed === true && gate5?.http_observed === true
-      && gate5.functional?.passed === true && gate5.functional.probe_id === 'queue-worker-availability-v1'
-      && gate5.functional.coverage.requester_api && gate5.functional.coverage.mounted_ui && gate5.functional.coverage.recovery;
+      && gate5.functional?.passed === true
+      && Object.hasOwn(ORACLE_COVERAGE, gate5.functional.probe_id)
+      && ORACLE_COVERAGE[gate5.functional.probe_id].every((flag) => gate5.functional.coverage[flag] === true);
   const passed = last.gate === 5.5 && !gates.some((gate) => gate.blocked) && observed;
   const passing = ['ready_for_pr', 'needs_review'].includes(value.outcome);
   if (passing && !passed) {
@@ -315,6 +322,18 @@ const CALL_METRICS = ['wall_ms', 'tokens_in', 'tokens_out', 'tok_s', 'gpu_ms', '
 const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
 const str = (v, max) => (v == null ? null : String(v).slice(0, max));
 
+const NOTE_KINDS = new Set(['knows', 'tool']);
+/** What the model knew / which harness tool ran, what it changed, how that was judged: whitelist + cap. */
+function cleanExplanation(c) {
+  const notes = (Array.isArray(c.notes) ? c.notes : []).filter((n) => n && NOTE_KINDS.has(n.kind)).slice(0, 30)
+    .map((n) => ({ kind: n.kind, name: str(n.name, 80), summary: str(n.summary, 500), data: str(n.data, 1500) }));
+  const e = c.edits && typeof c.edits === 'object' ? c.edits : null;
+  const edits = e ? { parsed: str(e.parsed, 4000), diff: str(e.diff, 4000), applied: e.applied === true } : null;
+  const evaluation = (Array.isArray(c.evaluation) ? c.evaluation : []).filter((x) => x && typeof x === 'object').slice(0, 12)
+    .map((x) => ({ check: str(x.check, 60), ok: x.ok === true, detail: str(x.detail, 800) }));
+  return { notes, edits, evaluation };
+}
+
 /** Whitelist + cap one worker model-call record. Throw invalid_trace on bad call_id/gate. */
 function cleanModelCall(c) {
   const callId = typeof c?.call_id === 'string' ? c.call_id : '';
@@ -343,6 +362,7 @@ function cleanModelCall(c) {
     result: CALL_RESULTS.has(c.result) ? c.result : null,
     error: str(c.error, 300),
     at: num(c.at),
+    ...cleanExplanation(c),
   };
 }
 

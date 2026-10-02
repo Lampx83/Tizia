@@ -125,3 +125,48 @@ def test_post_failure_never_breaks_the_gate():
                   output="o", metrics={}, budget_units=1, result="ok")
     tracer.flush()  # không raise
     assert tracer.pending == []
+
+
+_COMMON = dict(model="m", prompt="p", prompt_name=None, prompt_hash=None, static_prefix="", output="o",
+               metrics={"gpu_ms": 1000}, budget_units=1, result="ok")
+
+
+def test_notes_ride_the_next_call_and_sections_the_last_one():
+    tracer, batches = meter.Tracer(None), []
+    tracer.begin(3, batches.append)
+    tracer.note("knows", "target file", "public/a.js, 120 dòng", {"lines": "L1-L40"})
+    tracer.note("tool", "grep", "2 hit", {"words": ["a"]})
+    tracer.record(gate=3, **_COMMON)
+    tracer.attach_last("edits", {"parsed": [{"search": "a", "replace": "b"}], "diff": "-a\n+b"})
+    tracer.attach_last("evaluation", {"check": "apply", "ok": False, "detail": "không khớp"})
+    tracer.attach_last("evaluation", {"check": "accepted", "ok": True, "detail": ""})
+    tracer.record(gate=3, **_COMMON)  # nothing noted in between: nothing leaks over
+    tracer.flush()
+    first, second = batches[0]
+    assert [(n["kind"], n["name"]) for n in first["notes"]] == [("knows", "target file"), ("tool", "grep")]
+    assert first["notes"][0]["data"] == '{"lines": "L1-L40"}'
+    assert first["edits"]["diff"] == "-a\n+b" and [e["ok"] for e in first["evaluation"]] == [False, True]
+    assert second["notes"] == [] and second["edits"] is None and second["evaluation"] == []
+
+
+def test_trace_sections_are_redacted_and_capped():
+    tracer, batches = meter.Tracer(None), []
+    tracer.begin(3, batches.append)
+    tracer.note("knows", "x", "k" * 5000, {"big": "y" * 9000})
+    tracer.record(gate=3, **_COMMON)
+    tracer.attach_last("edits", {"diff": "d" * 20000})
+    tracer.flush()
+    call = batches[0][0]
+    assert len(call["notes"][0]["summary"]) <= meter.NOTE_SUMMARY_CAP
+    assert len(call["notes"][0]["data"]) <= meter.NOTE_DATA_CAP
+    assert len(call["edits"]["diff"]) <= meter.EDIT_CAP
+
+
+def test_a_section_can_still_be_attached_to_the_call_that_filled_the_batch():
+    tracer, batches = meter.Tracer(None), []
+    tracer.begin(3, batches.append)
+    for _ in range(20):
+        tracer.record(gate=3, **_COMMON)
+    tracer.attach_last("evaluation", {"check": "apply", "ok": True, "detail": ""})
+    tracer.flush()
+    assert batches[-1][-1]["evaluation"][0]["check"] == "apply"

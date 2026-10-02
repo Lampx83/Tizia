@@ -170,6 +170,7 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
     skill = pick_skill(f"{request_text} {sub_text}", request.get("type"), file, exists)
 
     parts, used, targets, best = [], [], [], []
+    log = []  # every tool the harness ran for the model: what, with which inputs, how much came back
     if commit:
         targets = [file] if file else _mentioned_files(request_text, source, commit)
         known = [] if file else sorted(functional.expected_targets({'request_title': request.get('subject'), 'request_detail': request.get('body')}))
@@ -179,7 +180,7 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
             parts.append('EXISTING FEATURE TARGET: ' + ', '.join(known) + '. Modify this renderer; do not add a different page.')
             for target in known:
                 parts.append(f'FILE {target}\n' + file_context.excerpt(tools._show(source, commit, target),
-                    ['queueline'] if functional.select({'request_title': request.get('subject'), 'request_detail': request.get('body')})
+                    ['queueline'] if functional.select({'request_title': request.get('subject'), 'request_detail': request.get('body')}) == functional.QUEUE_PROBE
                     else keywords(request.get('body'), request.get('subject')), budget=1500))
         if not file and request.get("owned_files"):  # L2: file folder sở hữu lên đầu, lấy dàn ý
             targets = list(dict.fromkeys([*request["owned_files"], *targets]))
@@ -188,7 +189,12 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
         pages = [t for t in targets if t.endswith(".html")]
         said = file_context.phrases(request.get("subject"), request.get("body"), thread)
         hits, users = tools.find_text(source, commit, said, pages)
+        log.append({"tool": "find_text", "params": {"phrases": said[:6], "pages": pages}, "chars": 0,
+                    "result": f"{len(hits)} chỗ chứa chữ người dùng nhắc, {len(users)} nơi dùng"})
         render, render_words = ([], []) if file or known else tools.renderers(source, commit, said, pages)
+        if not (file or known):
+            log.append({"tool": "renderers", "params": {"pages": pages}, "chars": 0,
+                        "result": ", ".join(render) or "không có module render riêng"})
         if render:  # trang không chứa chữ đó: bỏ trang khỏi target, budget dành cho module render
             targets = render
             parts.append(f"LƯU Ý: chữ người dùng nhắc KHÔNG nằm trong {', '.join(pages)}; trang hiển thị nó qua "
@@ -196,6 +202,8 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
             used.append("locate")
         if not (file or known or render):  # chữ người dùng nhắc có thể nằm ở module dùng chung, không ở trang gửi yêu cầu
             best = [(f, grams) for f, _, grams in tools.matching_files(source, commit, said, limit=1) if f not in targets]
+            log.append({"tool": "matching_files", "params": {"phrases": said[:6]}, "chars": 0,
+                        "result": f"{best[0][0]} khớp: {'; '.join(best[0][1])[:200]}" if best else "không file nào khớp nhiều cụm"})
             if best:
                 targets = [best[0][0], *targets]
                 parts.append(f"LƯU Ý: {best[0][0]} chứa nhiều cụm bạn viết nhất ({'; '.join(best[0][1])}). "
@@ -225,6 +233,8 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
             # Tool đứng trước (quan trọng hơn theo thứ tự skill) lấy phần lớn; mỗi tool sau giữ RESERVE.
             share = min(remaining, max(remaining - RESERVE * (len(calls) - i - 1), RESERVE)) - 2
             out = tools.run(name, source, commit, params, share) if share > 0 else ""
+            log.append({"tool": name, "params": _brief(params), "chars": len(out),
+                        "result": out.splitlines()[0][:160] if out else "(không có kết quả hoặc hết budget)"})
             if out:
                 parts.append(out)
                 remaining -= len(out) + 2
@@ -239,4 +249,21 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
     return {"skill": skill.name, "text": text, "used_tools": list(dict.fromkeys(used)), "chars": len(text),
             "sha": commit, "tiers": {"brief": len(brief), "recent": len(recent), "repo": len(data)},
             "targets": targets,  # file cổng này nhắm tới (bộ đo chấm "đúng file")
-            "best_match": best[0][0] if best else None}
+            "best_match": best[0][0] if best else None, "tool_log": log}
+
+
+def _brief(params: dict) -> dict:
+    """Tham số tool gọn để trace: bỏ đường dẫn nội bộ, cắt chuỗi dài (thread, brief)."""
+    return {key: (value if isinstance(value, (int, bool)) else str(value)[:100])
+            for key, value in params.items() if key not in ("index_path", "path") or isinstance(value, str) and value.startswith("public")}
+
+
+def report(trace, ctx: dict, subject: str = "") -> None:
+    """Tường thuật bối cảnh + tool của `ctx` cho tracer (lần gọi model kế tiếp). trace=None: bỏ qua."""
+    if trace is None:
+        return
+    trace.note("knows", "skill + nguồn", f"skill {ctx['skill']}; repo ở {str(ctx.get('sha') or '?')[:10]}; {ctx['chars']} ký tự bối cảnh",
+               {"tiers": ctx.get("tiers"), "targets": ctx.get("targets"), "best_match": ctx.get("best_match")})
+    for entry in ctx.get("tool_log") or []:
+        trace.note("tool", entry["tool"], f"{entry['result']} ({entry['chars']} ký tự)" if entry["chars"] else entry["result"],
+                   entry["params"])

@@ -414,3 +414,16 @@ test('the trace ref (branch, commit, PR) reaches admin views but never the reque
   const own = JSON.stringify(store.listRequestsForOwner(1, 'pharmacy'));
   for (const secret of [candidate.branch, candidate.head_sha, PR.url]) assert.ok(!own.includes(secret), secret);
 });
+
+const withProbe = (functional) => passing({ gates: [gates[3], gates[4], { ...gates[5], functional }, gates[55]] });
+
+test('a passing verdict needs a known harness oracle with every coverage flag that oracle declares', () => {
+  const text = { probe_id: 'text-visible-v1', passed: true, coverage: { rendered_text: true } };
+  assert.equal(plannedRoot().submit(withProbe(text)).outcome, 'ready_for_pr');
+  for (const bad of [
+    { ...text, probe_id: 'made-up-by-the-model-v1' },
+    { ...text, coverage: { rendered_text: false } },
+    { ...text, coverage: { requester_api: true, mounted_ui: true, recovery: true } },
+    { ...text, passed: false },
+  ]) assert.throws(() => plannedRoot().submit(withProbe(bad)), /passing verdict requires successful smoke/);
+});

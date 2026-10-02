@@ -150,3 +150,38 @@ def test_validator_rejects_wrong_surface_without_asking_requester_about_code(tmp
     out = plan_validate.run(request, deps, Budget(), {'plan': plan, 'checkout_source': str(tmp_path)})
     assert out['blocked'] and out['reason'] == 'plan_ungrounded'
     assert out.get('public_message') and out.get('outcome') != 'needs_clarification'
+
+
+def test_gate_2_5_trace_shows_the_evidence_it_read_and_why_the_plan_was_or_was_not_grounded(tmp_path):
+    import dataclasses
+    import meter
+    subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
+    file = tmp_path / 'public' / 'js' / 'suggestion-fab.js'
+    file.parent.mkdir(parents=True)
+    file.write_text('export function queueLine(q) { return "2 phút nữa"; }', encoding='utf8')
+    subprocess.run(['git', '-C', str(tmp_path), 'add', '.'], check=True)
+    subprocess.run(['git', '-C', str(tmp_path), '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+                    'commit', '-qm', 'base'], check=True)
+    plan = {'capabilities': ['public.ui'], 'subtasks': [
+        {'file': 'public/js/suggestion-fab.js', 'title': 'Hide false ETA', 'verify': 'Offline has no ETA', 'size': 'small'}]}
+    request = {'subject': 'Không hiện ETA khi worker tắt', 'body': 'Chờ worker thay vì số phút',
+               'grounding_required': True, 'complexity_by_server': True}
+
+    def judged(quote):
+        validation = {'clear': True, 'question': None, 'grounded': True, 'grounding': [
+            {'target': 'public/js/suggestion-fab.js', 'file': 'public/js/suggestion-fab.js', 'quote': quote,
+             'before': 'False ETA', 'after': 'Waiting', 'verify': 'Offline has no minutes'}]}
+        tracer, batches = meter.Tracer(None), []
+        tracer.begin(1, batches.append)
+        deps = dataclasses.replace(deps_with(FakeModels(plan, validation=validation)), trace=tracer)
+        plan_validate.run(request, deps, Budget(), {'plan': plan, 'checkout_source': str(tmp_path)})
+        tracer.flush()
+        return batches[0][0]
+
+    wrong, right = judged('workerReady: false'), judged('return "2 phút nữa";')
+    knows = {n['name'] for n in wrong['notes'] if n['kind'] == 'knows'}
+    assert {'plan đang soát', 'bằng chứng nguồn'} <= knows
+    assert any(n['kind'] == 'tool' and n['name'] == 'git show' and 'suggestion-fab.js' in n['summary'] for n in wrong['notes'])
+    assert [(e['check'], e['ok']) for e in wrong['evaluation']] == [('validator model', True), ('neo vào code nguồn', False)]
+    assert 'không tìm thấy trích dẫn' in wrong['evaluation'][1]['detail']
+    assert [(e['check'], e['ok']) for e in right['evaluation']] == [('validator model', True), ('neo vào code nguồn', True)]

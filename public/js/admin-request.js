@@ -76,9 +76,10 @@ const TRIGGER_LABEL = { plan: 'lập kế hoạch và thực hiện', execute: '
 const tag = (state, text) => `<span class="tag st-${state}">${esc(text)}</span>`;
 const cap = (s) => s ? s[0].toUpperCase() + s.slice(1) : s;
 const runTitle = (run) => cap(TRIGGER_LABEL[run.trigger] || run.trigger);
-// Thứ tự hiển thị: bước tuần tự 1..7, không lộ số cổng nội bộ có phần thập phân (2.5/5.5 trông như substep).
-const GATE_ORDER = [1, 2, 2.5, 3, 4, 5, 5.5];
-const gatePos = (g) => { const i = GATE_ORDER.indexOf(Number(g)); return i < 0 ? esc(g) : i + 1; };
+// Cổng nguyên (1..5) là bước chính; 2.5 và 5.5 là bước phụ (kiểm tra xen giữa) nên có giao diện riêng, giữ nguyên số.
+const isSub = (g) => !Number.isInteger(Number(g));
+const gatePos = (g) => esc(Number(g));
+const subClass = (g) => (isSub(g) ? ' sub-step' : '');
 const gateName = (g) => gateNames[Number(g)] ? `${gatePos(g)} · ${esc(gateNames[Number(g)])}` : `Bước ${esc(g)}`;
 
 const ROOT_STATUS = {
@@ -90,7 +91,7 @@ const ROOT_STATUS = {
 function renderProgress(p) {
   if (!p?.gates.length) return '';
   return `<div class="prog" role="list">${p.gates.map(({ gate, name, state }) =>
-    `<span class="seg ${state}" role="listitem" title="${gateName(gate)}: ${STATE_LABEL[state]}"${state === 'run' ? ' aria-current="step"' : ''}>${gatePos(gate)} · ${esc(name)}</span>`).join('')}</div>
+    `<span class="seg ${state}${subClass(gate)}" role="listitem" title="${gateName(gate)}: ${STATE_LABEL[state]}"${state === 'run' ? ' aria-current="step"' : ''}>${gatePos(gate)} · ${esc(name)}</span>`).join('')}</div>
     ${p.current != null ? `<div class="live-line"><span class="pulse"></span>Đang chạy ${gateName(p.current)}${p.since ? ` · ${elapsed(p.since)}` : ''}</div>` : ''}`;
 }
 
@@ -116,19 +117,39 @@ function renderSessions(runs, root) {
   }).join('')}</div>`;
 }
 
+// Mỗi lần gọi model: AI biết gì · tool harness chạy hộ (AI không tự gọi tool) · AI sửa gì · đánh giá ra sao.
+const noteItem = (n) => `<li><b>${esc(n.name)}</b>${n.summary ? ` — ${esc(n.summary)}` : ''}${n.data
+  ? `<details class="raw"><summary>chi tiết</summary><pre>${esc(n.data)}</pre></details>` : ''}</li>`;
+const diffHtml = (diff) => esc(diff).split(/\r?\n/).map((l) => (l.startsWith('+') && !l.startsWith('+++') ? `<span class="add">${l}</span>`
+  : l.startsWith('-') && !l.startsWith('---') ? `<span class="del">${l}</span>` : l)).join('\n');
+function explain(e) {
+  const notes = e.notes || [], edits = e.edits, checks = e.evaluation || [];
+  const knows = notes.filter((n) => n.kind === 'knows'), used = notes.filter((n) => n.kind === 'tool');
+  if (!knows.length && !used.length && !edits && !checks.length) return '';
+  return `<div class="expl">
+    ${knows.length ? `<div class="expl-h">AI biết gì</div><ul>${knows.map(noteItem).join('')}</ul>` : ''}
+    ${used.length ? `<div class="expl-h">Tool harness chạy hộ AI</div><ul>${used.map(noteItem).join('')}</ul>` : ''}
+    ${edits ? `<div class="expl-h">AI sửa gì ${tag(edits.applied ? 'ok' : 'bad', edits.applied ? 'áp được' : 'chưa áp được')}</div>
+      ${edits.diff ? `<pre class="diff">${diffHtml(edits.diff)}</pre>` : ''}
+      ${edits.parsed ? `<details class="raw"><summary>edit AI trả về</summary><pre>${esc(edits.parsed)}</pre></details>` : ''}` : ''}
+    ${checks.length ? `<div class="expl-h">Đánh giá</div><ul>${checks.map((x) => `<li>${tag(x.ok ? 'ok' : 'bad', x.ok ? 'đạt' : 'không đạt')} <b>${esc(x.check)}</b>${x.detail ? ` — ${esc(x.detail)}` : ''}</li>`).join('')}</ul>` : ''}
+  </div>`;
+}
+
 function callStep(e) {
   const m = e.metrics || {};
   const cut = (flag) => flag ? ' (đã cắt)' : '';
   const state = CALL_STATE[e.result] || 'idle';
   const where = [e.child != null ? `bước ${esc(e.child)}` : '', e.attempt ? `lượt sửa ${esc(e.attempt)}` : '',
     e.iteration ? `lần hỏi lại ${esc(e.iteration)}` : ''].filter(Boolean).join(' · ');
-  return `<div class="step st-${state}"><div class="line1">
+  return `<div class="step call st-${state}"><div class="line1">
       <span>Gọi ${esc(e.model)}</span>${tag(state, CALL_LABEL[e.result] || e.result || '—')}${where ? `<span>${where}</span>` : ''}</div>
     ${e.error ? `<div style="color:var(--c);margin-top:4px">${esc(e.error)}</div>` : ''}
     <div class="metrics"><span>wall ${secs(m.wall_ms)} s</span><span>GPU ${secs(m.gpu_ms)} s</span>
       <span>nạp ${secs(m.load_ms)} s</span><span>chờ ${secs(m.queue_ms)} s</span>
       <span>token ${fmtNum(m.tokens_in)} / ${fmtNum(m.tokens_out)}</span><span>${esc(m.tok_s ?? '—')} tok/s</span>
       <span>dừng vì ${esc(m.done_reason ?? '—')}</span><span>${esc(e.budget_units ?? '—')} đơn vị</span></div>
+    ${explain(e)}
     <details><summary>${esc(e.call_id)} · ${esc(e.prompt_name ?? '')} · prompt và output</summary>
       <div class="meta">Prompt, phần thay đổi (${fmtNum(e.prompt_len)} ký tự)${cut(e.truncated?.prompt)}</div>
       <pre>${esc(e.prompt_var)}</pre>
@@ -141,7 +162,7 @@ function gateStep(g) {
   const state = GATE_STATE[g.status] || 'idle';
   const evidence = g.evidence?.text;
   const functional = g.evidence?.functional;
-  return `<div class="step gate st-${state}"><div class="line1"><b>${gateName(g.gate)}</b>
+  return `<div class="step gate${subClass(g.gate)} st-${state}" data-pos="${gatePos(g.gate)}"><div class="line1"><b>${gateName(g.gate)}</b>
       ${tag(state, g.status === 'passed' ? 'OK' : g.status === 'blocked' ? 'Blocked' : g.status)}</div>
     ${g.public_reason ? `<div style="margin-top:4px">${esc(g.public_reason)}</div>` : ''}
     ${g.internal_reason ? `<div class="meta">${esc(g.internal_reason)}</div>` : ''}
@@ -152,7 +173,7 @@ function gateStep(g) {
 function rollbackStep(run, live) {
   const r = run.rollback;
   const [state, label] = r ? ROLLBACK_STATE[r.outcome] || ['idle', r.outcome] : live ? ['run', 'đang hoàn tác'] : ['idle', 'chưa có kết quả'];
-  return `<div class="timeline"><div class="step gate st-${state}"><div class="line1"><b>Hoàn tác thay đổi</b>${tag(state, label)}</div>
+  return `<div class="timeline"><div class="step gate st-${state}" data-pos="1"><div class="line1"><b>Hoàn tác thay đổi</b>${tag(state, label)}</div>
     ${r?.revert ? `<div style="margin-top:4px">Nhánh revert: <code>${esc(r.revert.branch)}</code> (${esc(r.revert.commits?.length)} commit). Mở PR từ nhánh này để gỡ thay đổi khỏi web.</div>` : ''}
     ${r?.detail ? `<div class="meta">${esc(r.detail)}</div>` : ''}</div></div>`;
 }
@@ -175,7 +196,7 @@ function renderRun(run, root, latest) {
     ...run.gates.map(g => ({ gate: Number(g.gate), kind: 1, at: g.created_at, id: g.id, html: gateStep(g) })),
   ];
   if (p?.current != null) {
-    items.push({ gate: p.current, kind: 1, at: 0, id: 0, html: `<div class="step gate st-run"><div class="line1">
+    items.push({ gate: p.current, kind: 1, at: 0, id: 0, html: `<div class="step gate${subClass(p.current)} st-run" data-pos="${gatePos(p.current)}"><div class="line1">
       <b>${gateName(p.current)}</b>${tag('run', 'đang chạy')}${p.since ? `<span class="meta">${elapsed(p.since)}</span>` : ''}</div></div>` });
   }
   items.sort((a, b) => a.gate - b.gate || a.kind - b.kind || a.at - b.at || a.id - b.id);

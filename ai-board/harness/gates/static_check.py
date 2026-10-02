@@ -155,7 +155,13 @@ def content_review(state: dict, deps, budget, *, db_path=None, proposal_id: int 
     labels = ["classifier_error"]
     why = "hết budget, không gọi được bộ soát nội dung"
     outage = False  # the model could not be reached: nothing was judged, so this is retryable rather than a violation
+    trace = getattr(deps, "trace", None)
+    called = False
     if budget.tick():
+        called = True
+        if trace:
+            trace.note("knows", "chữ hiển thị được soát",
+                       f"{len(parts)} đoạn từ: {', '.join(part.split(']', 1)[0].lstrip('[') for part in parts)}")
         prompt = CONTENT_PROMPT.format(content="\n".join(parts)[:MAX_CONTENT_CHARS])
         try:
             body = deps.call_model(deps.models.gate1_model, prompt, gate=4, budget=budget,
@@ -168,6 +174,9 @@ def content_review(state: dict, deps, budget, *, db_path=None, proposal_id: int 
                 labels, why = intake_guard.parse_labels(body.get("response", ""), CONTENT_LABELS), ""
             except Exception as e:  # trả lời không phải phán quyết hợp lệ — vẫn là chặn nghiêm trọng
                 why = f"bộ soát nội dung lỗi: {str(e)[:200]}"
+    if trace and called:  # before the classifier call, which records its own model call
+        trace.attach_last("evaluation", {"check": "content guard", "ok": labels == ["ok"],
+                                         "detail": ", ".join(labels) + (f" ({why})" if why else "")})
     # Logprob classifier beside the JSON guard: may only add a "needs a human" block.
     scored = classifier.danger("\n".join(parts), deps, budget, gate=4, db_path=db_path, proposal_id=proposal_id)
     if scored and scored["escalate"]:

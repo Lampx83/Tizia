@@ -67,3 +67,24 @@ def test_gate1_and_2_5_prompts_start_with_aiboard_manual_and_fixed_prefix():
     assert a.startswith(context.manual()) and context.manual().startswith("# AIBOARD.md")
     assert a.split("CTX-A")[0] == b.split("CTX-B")[0]              # mọi thứ trước context giống hệt
     assert plan_validate.build_prompt({"subject": "x"}, {"subtasks": []}).startswith(context.manual())
+
+
+def test_gate1_trace_shows_what_the_planner_knew_which_tools_ran_and_how_each_plan_was_judged(repo):
+    import dataclasses
+    import meter
+    src, sha = repo
+    tracer, batches = meter.Tracer(None), []
+    tracer.begin(1, batches.append)
+    deps = dataclasses.replace(deps_with(_SeqModels([_plan("public/css/khong-co.css"), _plan("public/css/school.css")])), trace=tracer)
+    out = brainstorm.run(COLOUR_REQUEST, deps, Budget(max_wall_clock_s=999), source=src, sha=sha)
+    tracer.flush()
+    first, second = [call for batch in batches for call in batch]
+    assert out["blocked"] is False
+    names = {n["name"] for n in first["notes"] if n["kind"] == "knows"}
+    assert {"yêu cầu", "skill + nguồn"} <= names
+    assert any(n["kind"] == "tool" and n["name"] == "outline" for n in first["notes"])
+    assert [(e["check"], e["ok"]) for e in first["evaluation"]] == [("parse plan", True), ("file có trong repo", False)]
+    assert "khong-co.css" in first["evaluation"][1]["detail"]
+    retry = {n["name"]: n for n in second["notes"]}
+    assert "khong-co.css" in retry["retry feedback"]["summary"] and "skill + nguồn" not in retry
+    assert all(e["ok"] for e in second["evaluation"]) and len(second["evaluation"]) == 3

@@ -290,3 +290,19 @@ def test_content_review_fences_the_data_block():
     # Chữ học viên/model không mở/đóng thêm được khối dữ liệu nào ngoài khối của template.
     assert prompt.count("NOI_DUNG>>>") == static_check.CONTENT_PROMPT.count("NOI_DUNG>>>")
     assert prompt.count("<<<NOI_DUNG") == static_check.CONTENT_PROMPT.count("<<<NOI_DUNG")
+
+
+def test_content_review_trace_shows_the_text_judged_and_the_verdict():
+    import dataclasses
+    import meter
+    for labels, ok in ((["ok"], True), (["politics_sovereignty"], False)):
+        tracer, batches = meter.Tracer(None), []
+        tracer.begin(1, batches.append)
+        deps = dataclasses.replace(deps_with(FakeModels({"labels": labels, "reason": "x"})), trace=tracer)
+        static_check.run(_state("<p>Các đảo tranh chấp.</p>"), deps=deps, budget=Budget())
+        tracer.flush()
+        call = batches[0][0]
+        assert call["gate"] == 4
+        assert any(n["name"] == "chữ hiển thị được soát" and "public/a.html" in n["summary"] for n in call["notes"])
+        assert [(e["check"], e["ok"]) for e in call["evaluation"]] == [("content guard", ok)]
+        assert labels[0] in call["evaluation"][0]["detail"]

@@ -1,9 +1,19 @@
 """Harness-owned behavioral oracles. Candidate-authored tests are supplementary."""
+import json
 import re
 import unicodedata
 
 
 QUEUE_PROBE = 'queue-worker-availability-v1'
+TEXT_PROBE = 'text-visible-v1'
+# Oracle -> coverage flags it must report true. Keep in sync with ORACLE_COVERAGE in server/ai-board/store.js.
+ORACLES = {QUEUE_PROBE: ('requester_api', 'mounted_ui', 'recovery'), TEXT_PROBE: ('rendered_text',)}
+
+_QUOTED = re.compile(r"""(?<!\w)(?:'([^'\n]{2,120})'|"([^"\n]{2,120})"|“([^”\n]{2,120})”|‘([^’\n]{2,120})’|«([^»\n]{2,120})»)""")
+_PAGE_LINE = re.compile(r'^\[Trang: .*\] \S+[ \t]*$', re.M)
+_ADD = re.compile(r'\b(thêm|chèn|hiển thị|hiện|add|insert|show|display)\b')
+_REMOVE = re.compile(r'\b(bỏ|xóa|xoá|gỡ|remove|delete)\b')
+_REPLACE = re.compile(r'\b(đổi|thay|rename|change|replace)\b[^\n]*?(thành|bằng|→|->|\bto\b)')
 
 
 def request_text(state):
@@ -13,17 +23,36 @@ def request_text(state):
     return text
 
 
+def text_expectation(state):
+    """Words the requester quoted + what should happen to them: {'present': [...], 'absent': [...]}.
+    Empty when the request does not pin the text down (no quotes, no intent verb, add and remove at once)."""
+    raw = str(state.get('request_title') or '') + '\n' + str(state.get('request_detail') or '')
+    raw = _PAGE_LINE.sub('', raw)  # the requester's own page, not words they asked for
+    quotes = [next(g for g in m.groups() if g) for m in _QUOTED.finditer(raw)]
+    words = unicodedata.normalize('NFC', raw.lower())
+    add, remove, replace = _ADD.search(words), _REMOVE.search(words), _REPLACE.search(words)
+    none = {'present': [], 'absent': []}
+    if not quotes or (remove and (add or replace)):
+        return none
+    if replace and len(quotes) >= 2:
+        return {'present': [quotes[-1]], 'absent': [quotes[0]] if quotes[0] != quotes[-1] else []}
+    if add:
+        return {'present': quotes, 'absent': []}
+    return {'present': [], 'absent': quotes} if remove else none
+
+
 def select(state):
     text = request_text(state)
     if 'worker' in text and re.search(r'\beta\b|uoc tinh|phut|estimate', text):
         return QUEUE_PROBE
-    return None
+    expected = text_expectation(state)
+    return TEXT_PROBE if expected['present'] or expected['absent'] else None
 
 
 def expected_targets(state):
     """Verified existing surfaces for the three reported regressions, not model-selected files."""
     text = request_text(state)
-    if select(state):
+    if select(state) == QUEUE_PROBE:
         return {'public/js/suggestion-fab.js'}
     if re.search(r'copy|sao chep', text) and re.search(r'response|phan hoi', text):
         return {'public/js/request-thread.js'}
@@ -32,7 +61,61 @@ def expected_targets(state):
     return set()
 
 
-def run(base, probe_id, fixture=None):
+def _norm(text):
+    return ' '.join(unicodedata.normalize('NFC', text).split()).casefold()
+
+
+_SHOWN = r"""() => [document.title, document.body.innerText, ...[...document.querySelectorAll('[placeholder],[aria-label],[title],[alt]')]
+  .flatMap(e => ['placeholder', 'aria-label', 'title', 'alt'].map(a => e.getAttribute(a) || ''))].join('\n')"""
+
+
+def run_text(base, state, fixture, pages):
+    """Open the changed page(s) as a logged-in user; every quoted 'present' text must show, every 'absent' one must not."""
+    expected = text_expectation(state)
+    fail = lambda reason, **extra: {'probe_id': TEXT_PROBE, 'passed': False, 'reason': reason, **extra}
+    if not pages:
+        return fail('Không có trang nào để quan sát chữ hiển thị')
+    if fixture is None:
+        return fail('Session fixture unavailable')
+    from playwright.sync_api import sync_playwright
+    from gates.verify import _launch
+    present, absent = [_norm(t) for t in expected['present']], [_norm(t) for t in expected['absent']]
+    shown = {}
+    with sync_playwright() as p:
+        browser = _launch(p)
+        try:
+            context = browser.new_context()
+            context.add_cookies([{'name': 'tizia_sid', 'value': fixture('seed')['token'], 'url': base, 'httpOnly': True}])
+            for path in pages[:3]:
+                page = context.new_page()
+                page.goto(base + path, wait_until='domcontentloaded', timeout=20000)
+                text = ''
+                for _ in range(16):  # JS-rendered text can arrive late
+                    text = _norm(page.evaluate(_SHOWN))
+                    if all(t in text for t in present):
+                        break
+                    page.wait_for_timeout(500)
+                shown[path] = text
+        except Exception as error:
+            return fail(str(error)[:1000])
+        finally:
+            browser.close()
+    seen = ' '.join(shown.values())
+    missing = [t for t in expected['present'] if _norm(t) not in seen]
+    lingering = [t for t in expected['absent'] if _norm(t) in seen]
+    reason = None
+    if missing:
+        reason = 'Chữ người dùng yêu cầu không hiển thị trên trang: ' + ', '.join(repr(t) for t in missing)
+    elif lingering:
+        reason = 'Chữ cần bỏ vẫn còn trên trang: ' + ', '.join(repr(t) for t in lingering)
+    return {'probe_id': TEXT_PROBE, 'passed': reason is None, 'reason': reason, 'coverage': {'rendered_text': True},
+            'observations': {'expected': json.dumps(expected, ensure_ascii=False),
+                             **{f'page {path}': text[:1000] for path, text in shown.items()}}}
+
+
+def run(base, probe_id, fixture=None, state=None, pages=()):
+    if probe_id == TEXT_PROBE:
+        return run_text(base, state or {}, fixture, list(pages))
     if probe_id != QUEUE_PROBE:
         return {'probe_id': None, 'passed': False, 'reason': 'No trusted behavioral oracle for this request'}
     if fixture is None:

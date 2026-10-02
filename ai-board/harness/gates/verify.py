@@ -435,7 +435,9 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     command([*compose, 'cp', str(Path(functional.__file__).with_name('queue_fixture.mjs')), 'tizia:/app/verify-queue.mjs'])
                 response = command([*compose, 'exec', '-T', 'tizia', 'node', '/app/verify-queue.mjs', stage], log_output=False, timeout=20)
                 return json.loads(response.stdout) if stage == 'seed' else None
-            functional_result = (functional_probe(base, probe_id) if functional_probe else functional.run(base, probe_id, fixture))
+            observed_pages = html or ([primary] if primary else [])
+            functional_result = (functional_probe(base, probe_id) if functional_probe
+                                 else functional.run(base, probe_id, fixture, state=state, pages=observed_pages))
             logs.append('Independent functional check: ' + json.dumps(functional_result, ensure_ascii=False))
             if not functional_result.get('passed'):
                 raise RuntimeError(functional_result.get('reason') or 'Independent functional check failed')

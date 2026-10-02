@@ -370,3 +370,44 @@ test('run progress: active plan runs show exec gates, finished runs skip the res
   assert.deepEqual([live.current, live.since], [4, 10]);
   assert.deepEqual(runProgress({ ...run, trigger: 'rollback' }, [], true).gates, []);
 });
+
+test('trace ingest keeps what the model knew, which tools ran, what it changed and how that was judged — sanitized', async () => {
+  const { db, store } = fixture();
+  newRequest(store, 'trace-request-002');
+  const { ticket, lease, run } = leasedRun(store, 'trace-worker');
+  const api = await serve(store);
+  try {
+    const res = await api.postTraces(ticket.id, { ...lease, run_id: run.id, calls: [
+      call('run1:g3:c1:a0:i0:s0', {
+        notes: [
+          { kind: 'knows', name: 'target file', summary: 'public/a.js, 40 dòng', data: '{"lines":"L1-L10"}' },
+          { kind: 'tool', name: 'grep', summary: 's'.repeat(900), data: 'd'.repeat(3000), extra: 'dropped' },
+          { kind: 'hacker', name: 'x', summary: 'y' }, 'not an object', null,
+          ...Array.from({ length: 40 }, (_, i) => ({ kind: 'knows', name: `n${i}`, summary: 's' })),
+        ],
+        edits: { parsed: '[{"search":"a"}]', diff: 'f'.repeat(9000), applied: 'yes', extra: 1 },
+        evaluation: [{ check: 'apply edits', ok: false, detail: 'không khớp' }, { check: 'c'.repeat(100), ok: 'true', detail: 'x'.repeat(2000) }, 7],
+      }),
+      call('run1:g3:c1:a0:i1:s0', { notes: 'nope', edits: 'nope', evaluation: 'nope' }),
+      call('run1:g3:c1:a0:i2:s0'),
+    ] });
+    assert.equal(res.status, 200);
+    const [full, junk, absent] = modelRows(db).map((row) => JSON.parse(row.evidence_json));
+    assert.deepEqual(full.notes.slice(0, 2).map((n) => [n.kind, n.name]), [['knows', 'target file'], ['tool', 'grep']]);
+    assert.equal(full.notes[0].data, '{"lines":"L1-L10"}');
+    assert.equal(full.notes[1].summary.length, 500);
+    assert.equal(full.notes[1].data.length, 1500);
+    assert.equal(full.notes[1].extra, undefined);
+    assert.ok(full.notes.length <= 30 && full.notes.every((n) => ['knows', 'tool'].includes(n.kind)));
+    assert.equal(full.edits.parsed, '[{"search":"a"}]');
+    assert.equal(full.edits.diff.length, 4000);
+    assert.equal(full.edits.applied, false);
+    assert.equal(full.edits.extra, undefined);
+    assert.equal(full.evaluation.length, 2);
+    assert.deepEqual(full.evaluation[0], { check: 'apply edits', ok: false, detail: 'không khớp' });
+    assert.equal(full.evaluation[1].check.length, 60);
+    assert.equal(full.evaluation[1].ok, false);
+    assert.equal(full.evaluation[1].detail.length, 800);
+    for (const e of [junk, absent]) assert.deepEqual([e.notes, e.edits, e.evaluation], [[], null, []]);
+  } finally { await api.close(); }
+});

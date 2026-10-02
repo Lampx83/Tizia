@@ -119,21 +119,40 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
     commit = ctx["sha"]
     prompt = build_prompt(request, load_capability_names()["surface"], ctx["text"])
     reason = None
+    trace = getattr(deps, "trace", None)
+
+    def judge(check, ok, detail=""):
+        if trace:
+            trace.attach_last("evaluation", {"check": check, "ok": ok, "detail": detail})
+
     for attempt in range(2):
         if attempt and not budget.tick():
             break
+        if trace and not attempt:
+            trace.note("knows", "yêu cầu", f"{request.get('subject') or ''} — {str(request.get('body') or '')[:300]}",
+                       {"domain": request.get("domain"), "type": request.get("type")})
+            context.report(trace, ctx)
+        elif trace:
+            trace.note("knows", "retry feedback", reason)
         ask = prompt if not attempt else prompt + RETRY_SUFFIX.format(reason=reason)
         body = deps.call_model(deps.models.gate1_model, ask, gate=1, budget=budget,
                                db_path=db_path, proposal_id=proposal_id, prompt_name="brainstorm.md")
+        stage = "parse plan"
         try:
             plan = parse_plan(body.get("response", ""))
+            judge(stage, True, plan.get("summary_vi", ""))
+            stage = "file có trong repo"
             check_files(plan, source, commit)
+            judge(stage, True, ", ".join(task["file"] for task in plan["subtasks"]))
+            stage = "đúng file renderer / file khớp nhất"
             required = functional.expected_targets({'request_title': request.get('subject'), 'request_detail': request.get('body')})
             if required.intersection(ctx.get('targets') or []) and not required.intersection(task['file'] for task in plan['subtasks']):
                 raise ValueError('Use the existing feature renderer: ' + ', '.join(sorted(required)))
             if ctx.get('best_match') and ctx['best_match'] not in (task['file'] for task in plan['subtasks']):
                 raise ValueError(f"Sửa file khớp nhiều cụm người dùng viết nhất: {ctx['best_match']}")
+            judge(stage, True, f"file khớp nhất: {ctx.get('best_match') or '(không có)'}")
         except ValueError as e:
+            judge(stage, False, str(e))
             reason = str(e)
             continue
         return {"gate": 1, "blocked": False, "reason": None, "plan": plan,

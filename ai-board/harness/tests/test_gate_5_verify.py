@@ -16,7 +16,7 @@ def served(monkeypatch):
     """Default isolated container serves every fixture public file as checked out."""
     monkeypatch.setattr(verify, "probe_http", lambda _url: (200, b"<h1>changed</h1>\n// x\n"))
     import functional
-    monkeypatch.setattr(functional, 'run', lambda *_: {'probe_id': functional.QUEUE_PROBE, 'passed': True})
+    monkeypatch.setattr(functional, 'run', lambda *_, **__: {'probe_id': functional.QUEUE_PROBE, 'passed': True})
 
 
 class FakeRunner:
@@ -540,3 +540,18 @@ def test_js_change_shoots_the_pages_that_load_it(tmp_path):
     assert verify._shot_pages(root, ["/js/a.js"], "/school.html?domain=it") == ["/school.html?domain=it", "/q.html"]
     assert verify._shot_pages(root, ["/x.html", "/y.html", "/z.html"], None) == ["/x.html", "/y.html"]
     assert verify._shot_pages(root, ["/js/none.js"], None) == []
+
+
+def test_oracle_gets_the_request_and_the_pages_to_look_at(tmp_path, monkeypatch):
+    import functional
+    seen = []
+    monkeypatch.setattr(functional, 'run', lambda base, probe, fixture=None, state=None, pages=(): seen.append((probe, state, list(pages)))
+                        or {'probe_id': probe, 'passed': True})
+    monkeypatch.setattr(verify, "capture_screenshot", lambda url, path, width=1280, **_: path.write_bytes(b"png"))
+    page = {**state(checkout(tmp_path), visual=True), "request_detail": "Thêm 'Xin chào' vào đầu trang"}
+    assert verify.run(page, runner=FakeRunner())["blocked"] is False
+    assert seen == [(functional.TEXT_PROBE, page, ["/x.html"])]
+    seen.clear()  # JS-only change: look at the page the requester was on
+    js = {**state(tmp_path), "request_detail": "[Trang: Trường] /school.html\nThêm 'Xin chào' vào đầu trang"}
+    verify.run(js, runner=FakeRunner())
+    assert seen[0][2] == ["/school.html"]

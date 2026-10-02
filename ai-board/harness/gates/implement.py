@@ -7,6 +7,7 @@ diff thật, không tự chấm.
 """
 from __future__ import annotations
 
+import difflib
 import json
 import posixpath
 import re
@@ -172,13 +173,34 @@ def parse_codegen(text: str, *, existing: bool = False) -> dict:
 _COMMONJS = re.compile(r"\brequire\s*\(|\bmodule\.exports\b")
 
 
-def check_output(out: dict, current: str | None, done_reason: str | None, file: str | None = None) -> dict:
+def check_output(out: dict, current: str | None, done_reason: str | None, file: str | None = None,
+                 report=None) -> dict:
     """Kiểm output đã parse như cổng 4/5 sẽ kiểm, để hỏi lại ngay trong cổng 3. Trả out đã có `code`
-    (edits đã áp) + test_file chuẩn hoá. Raise ValueError (lỗi sửa được) — path thoát repo KHÔNG ở đây."""
+    (edits đã áp) + test_file chuẩn hoá. Raise ValueError (lỗi sửa được) — path thoát repo KHÔNG ở đây.
+    report(check, ok, detail): tường thuật từng phép kiểm cho trace."""
+    report = report or (lambda *_: None)
     if done_reason == "length":
-        raise ValueError("output bị cắt vì quá dài; chỉ trả các edit cần thiết, test ngắn")
+        message = "output bị cắt vì quá dài; chỉ trả các edit cần thiết, test ngắn"
+        report("output length", False, message)
+        raise ValueError(message)
     if current is not None:
-        out["code"] = file_context.apply_edits(current, out["edits"])
+        try:
+            out["code"] = file_context.apply_edits(current, out["edits"])
+        except ValueError as error:
+            report("apply edits", False, str(error))
+            raise
+        report("apply edits", True, f"{len(out['edits'])} edit áp được lên file gốc")
+    try:
+        _check_rest(out, current, file)
+    except ValueError as error:
+        report("output checks", False, str(error))
+        raise
+    report("output checks", True, "cú pháp JS, vị trí chèn và test ESM đều đạt")
+    return out
+
+
+def _check_rest(out: dict, current: str | None, file: str | None) -> None:
+    if current is not None:
         if file and file.endswith((".js", ".mjs")):  # Gate 4 would catch this one round later; ask now, while it is cheap
             from gates import static_check
             if static_check.syntax_error(current) is None and (broken := static_check.syntax_error(out["code"])):
@@ -192,7 +214,6 @@ def check_output(out: dict, current: str | None, done_reason: str | None, file: 
     if test_file.endswith((".js", ".mjs")) and (_COMMONJS.search(out["test"]) or "node:test" not in out["test"]):
         raise ValueError("test phải là ESM dùng node:test (import), không dùng require/module.exports")
     out["test_file"] = test_file
-    return out
 
 
 def check_file_path(subtask_file: str) -> None:
@@ -256,6 +277,42 @@ def _write_and_diff(repo_dir: Path, file_rel: str, code: str, test_file_rel: str
     return diff
 
 
+def _unified(old: str, new: str, file: str) -> str:
+    return "\n".join(difflib.unified_diff(old.splitlines(), new.splitlines(), f"a/{file}", f"b/{file}", lineterm="", n=2))
+
+
+def _line_ranges(text: str | None) -> str:
+    """'L12-L30, L45' from the `Lnn| ` markers of the excerpt the model was shown."""
+    ranges: list[list[int]] = []
+    for number in (int(n) for n in re.findall(r"^L(\d+)\| ", text or "", re.M)):
+        if ranges and number == ranges[-1][1] + 1:
+            ranges[-1][1] = number
+        else:
+            ranges.append([number, number])
+    return ", ".join(f"L{a}" if a == b else f"L{a}-L{b}" for a, b in ranges)
+
+
+def _note_inputs(trace, subtask, model, state, current, context, siblings, words, lessons, ctx) -> None:
+    """Tell the trace what the model is given for this subtask and which harness tools produced it."""
+    trace.note("knows", "subtask giao cho AI", f"{subtask['title']} | kiểm: {subtask['verify']} | model {model} (size {subtask.get('size')})")
+    if state.get("request_detail"):
+        trace.note("knows", "yêu cầu gốc", str(state["request_detail"])[:400])
+    if current is None:
+        trace.note("knows", "target file", f"{subtask['file']}: file mới, chưa có ở base — AI viết cả file")
+    else:
+        trace.note("knows", "target file", f"{subtask['file']} ({len(current.splitlines())} dòng, base {str(state.get('base_sha'))[:10]})")
+        trace.note("tool", "git ls-tree", f"{len(siblings)} file cùng thư mục", {"folder": posixpath.dirname(subtask["file"]) or "."})
+        ranges = _line_ranges(context)
+        trace.note("knows", "excerpt shown", f"AI chỉ thấy các dòng {ranges or '(không có dòng đánh số)'}, không thấy cả file",
+                   {"lines": ranges, "keywords": words[:12]})
+    if lessons:
+        trace.note("knows", "lessons", f"{len(lessons)} bài học từ lần trước", lessons)
+    if state.get("repair_reason"):
+        trace.note("knows", "lý do sửa lại", str(state["repair_reason"])[:500])
+    if ctx:
+        repo_context.report(trace, ctx)
+
+
 def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
         db_path=None, proposal_id: int | None = None) -> dict:
     """Điểm vào cho main.run_gate. Đọc state['plan'] do cổng 1 để lại, sinh code
@@ -299,9 +356,11 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
         model = model_for(subtask, deps.models)
         current = texts.get(subtask["file"])
         words = file_context.keywords(subtask["title"], subtask["verify"], state.get("request_detail"))
-        context = None if current is None else file_prompt_context(
-            subtask, current, _siblings(state["checkout_source"], state["base_sha"], subtask["file"]), words)
+        siblings = [] if current is None else _siblings(state["checkout_source"], state["base_sha"], subtask["file"])
+        context = None if current is None else file_prompt_context(subtask, current, siblings, words)
         lessons = memory.recall(state["memory_path"], subtask["file"], words) if state.get("memory_path") else []
+        trace = getattr(deps, "trace", None)
+        ctx = None
         if current is not None:
             # Skill chọn tool (grep `Lnn|`, dàn ý, bài học) trên base sha. Không có trích dòng → giữ excerpt cũ.
             ctx = repo_context.build_context(
@@ -315,8 +374,12 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
                 lessons = []  # skill đã kèm tool lessons
         prompt = build_prompt(subtask, state.get("repair_reason"), context, lessons)
         feedback = ""
-        trace = getattr(deps, "trace", None)
+        if trace:
+            _note_inputs(trace, subtask, model, state, current, context, siblings, words, lessons, ctx)
         for iteration in range(MAX_INNER_RETRIES + 1):
+            if trace and iteration:
+                trace.note("knows", "retry feedback", str(error), {"hint": retry_hint(str(error), iteration - 1),
+                                                                    "ai_output": raw[:SNIPPET_CHARS]})
             # Phản hồi nối SAU prompt cố định + ngữ cảnh: prefix giữ nguyên byte, Ollama tái dùng KV cache.
             body = deps.call_model(model, prompt + feedback, gate=3, budget=budget, db_path=db_path,
                                    proposal_id=proposal_id, prompt_name="implement.md", child=child,
@@ -326,19 +389,31 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
                 out = parse_codegen(raw, existing=current is not None)
             except ValueError as e:
                 error = e
+                if trace:
+                    trace.attach_last("edits", {"parsed": raw, "applied": False})
+                    trace.attach_last("evaluation", {"check": "parse JSON/schema", "ok": False, "detail": str(e)})
             else:
+                if trace:
+                    trace.attach_last("evaluation", {"check": "parse JSON/schema", "ok": True, "detail": "đúng schema edits + test"})
                 try:
                     _safe_join(repo, out["test_file"])
                 except ValueError as e:  # path tuyệt đối/thoát repo: chặn NGAY, không hỏi lại, không ghi gì
                     state["diffs"] = diffs
                     return {"gate": 3, "blocked": True, "reason": f"subtask '{subtask.get('title')}': {e}",
                             "diffs": diffs, "failure_class": "critical"}
+                report = (lambda check, ok, detail: trace.attach_last("evaluation", {"check": check, "ok": ok, "detail": detail})) if trace else None
+                parsed = json.dumps(out.get("edits") or {"code": "(file mới)"}, ensure_ascii=False)
                 try:
                     out = check_output(out, current, (body.get("_metrics") or {}).get("done_reason")
-                                       or body.get("done_reason"), subtask.get("file"))
+                                       or body.get("done_reason"), subtask.get("file"), report)
+                    if trace:
+                        trace.attach_last("edits", {"parsed": parsed, "applied": True,
+                                                    "diff": _unified(current or "", out["code"], subtask["file"])})
                     break
                 except ValueError as e:
                     error = e
+                    if trace:
+                        trace.attach_last("edits", {"parsed": parsed, "applied": False})
             if trace:
                 trace.mark_last("retry" if iteration < MAX_INNER_RETRIES else "error", str(error))
             spent = (body.get("_metrics") or {}).get("gpu_ms") or 0
