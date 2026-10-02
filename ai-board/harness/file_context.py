@@ -132,29 +132,223 @@ def phrases(*texts: str | None) -> list[str]:
     return list(dict.fromkeys(found))
 
 
-def excerpt(content: str, words: list[str], *, budget: int = CONTEXT_BUDGET) -> str:
-    """Các dòng `Lnn| …` theo ưu tiên: quanh dòng khớp từ khoá, cuối file, dàn ý; dừng khi hết budget."""
-    lines = content.splitlines()
-    lowered = [line.lower() for line in lines]
-    hits = [i for i, low in enumerate(lowered) if any(w in low for w in words)]
-    ranked = [j for i in hits for j in range(max(i - RADIUS, 0), min(i + RADIUS + 1, len(lines)))]
-    ranked += range(max(len(lines) - TAIL_LINES, 0), len(lines))
-    ranked += [i for i, line in enumerate(lines) if _OUTLINE.search(line)]
+# ── Bỏ comment trước khi đưa code cho model (repo không đổi; số dòng thật giữ nguyên) ──
+# ponytail: quét ký tự, không parse JS thật. Regex literal nhận theo ký tự đứng trước; gặp chỗ không chắc (chuỗi không
+# đóng trên dòng, /* không đóng) → GIỮ nguyên. Sót: `/` sau `)`/`}` coi là chia; template lồng sâu / JSX / HTML-trong-JS
+# có `<!--` không xử lý. Đổi sang tokenizer thật nếu thấy cắt nhầm.
+_BREAKS = "\n\r\x0b\x0c\x1c\x1d\x1e\x85  "  # ký tự str.splitlines() coi là xuống dòng
+_EOL = "\n\r  "  # hết comment `//`
+_PLAIN = re.compile(r"[^'\"`/{}]+")
+_TPL_CHUNK = re.compile(r"[^`\\$]+")
+_LAST_TOKEN = re.compile(r"([\w$]+|\S)\s*$")
+_REGEX_AFTER = {"return", "typeof", "case", "in", "of", "delete", "void", "throw", "new", "else", "do", "instanceof",
+                "yield", "await"}
+_REGEX_PREV = set("(,=:[!&|?{};+-*%<>~^")
+_CSS_TOKEN = re.compile(r"/\*.*?\*/|'(?:[^'\\\n]|\\.)*'|\"(?:[^\"\\\n]|\\.)*\"", re.S)
+_HTML_TOKEN = re.compile(r"<!--.*?-->|<script(?=[\s>])([^>]*)>(.*?)</script\s*>|<style(?=[\s>])[^>]*>(.*?)</style\s*>",
+                         re.S | re.I)
+_SCRIPT_TYPE = re.compile(r"""\btype\s*=\s*["']?([^"'\s>]*)""", re.I)
+_JS_HINT = re.compile(r"\b(?:const|let|var)\s+[\w$\[{]|\bfunction\b\s*[\w$(*]|=>|^[ \t]*(?:export|import)\b", re.M)
+_CSS_HINT = re.compile(r"^[ \t]*[^{}\n;]+\{[ \t]*$", re.M)
+_CSS_DECL = re.compile(r"^[ \t]*[\w-]+[ \t]*:[^;\n]+;", re.M)
+
+
+def _breaks(span: str) -> str:
+    """Chỉ phần xuống dòng của đoạn comment bị bỏ — số dòng không đổi."""
+    return "".join(c for c in span if c in _BREAKS)
+
+
+def _regex_end(text: str, i: int) -> int | None:
+    """Vị trí sau regex literal mở ở text[i] == '/' (kèm flag); None nếu không đóng trên cùng dòng."""
+    j, n, in_class = i + 1, len(text), False
+    while j < n and text[j] not in _EOL:
+        c = text[j]
+        if c == "\\":
+            j += 2
+            continue
+        if c == "[":
+            in_class = True
+        elif c == "]":
+            in_class = False
+        elif c == "/" and not in_class:
+            j += 1
+            while j < n and text[j].isalpha():
+                j += 1
+            return j
+        j += 1
+    return None
+
+
+def _strip_js(text: str) -> str:
+    out, i, n = [], 0, len(text)
+    prev, depth, stack, in_tpl = "", 0, [], False  # prev = token code cuối; stack/depth = ngoặc trong `${ }`
+    while i < n:
+        if in_tpl:
+            m = _TPL_CHUNK.match(text, i)
+            if m:
+                out.append(m.group())
+                i = m.end()
+                continue
+            if text[i] == "\\":
+                out.append(text[i:i + 2])
+                i += 2
+            elif text[i] == "`":
+                in_tpl, prev = False, "x"
+                out.append("`")
+                i += 1
+            elif text.startswith("${", i):
+                in_tpl, prev = False, "{"
+                stack.append(depth)
+                depth = 0
+                out.append("${")
+                i += 2
+            else:
+                out.append(text[i])
+                i += 1
+            continue
+        m = _PLAIN.match(text, i)
+        if m:
+            out.append(m.group())
+            i = m.end()
+            token = _LAST_TOKEN.search(m.group())
+            prev = token.group(1) if token else prev
+            continue
+        c = text[i]
+        if c in "'\"":
+            j = i + 1
+            while j < n and text[j] != c and text[j] not in _EOL:
+                j += 2 if text[j] == "\\" else 1
+            if j < n and text[j] == c:
+                out.append(text[i:j + 1])
+                i = j + 1
+            else:  # không đóng trên dòng: không chắc → giữ cả dòng
+                j = i
+                while j < n and text[j] not in _EOL:
+                    j += 1
+                out.append(text[i:j])
+                i = j
+            prev = "x"
+        elif c == "`":
+            in_tpl = True
+            out.append(c)
+            i += 1
+        elif c in "{}":
+            if c == "}" and stack and depth == 0:
+                depth = stack.pop()
+                in_tpl = True
+            else:
+                depth = depth + 1 if c == "{" else max(depth - 1, 0)
+            prev = c
+            out.append(c)
+            i += 1
+        elif text.startswith("//", i):
+            while i < n and text[i] not in _EOL:
+                i += 1
+        elif text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            if end < 0:  # không đóng → giữ
+                out.append(text[i:])
+                i = n
+            else:
+                out.append(_breaks(text[i:end + 2]))
+                i = end + 2
+        else:  # `/` đơn: regex literal hoặc chia
+            end = _regex_end(text, i) if prev == "" or prev in _REGEX_PREV or prev in _REGEX_AFTER else None
+            if end:
+                out.append(text[i:end])
+                i, prev = end, "x"
+            else:
+                out.append("/")
+                i, prev = i + 1, "/"
+    return "".join(out)
+
+
+def _strip_css(text: str) -> str:
+    return _CSS_TOKEN.sub(lambda m: _breaks(m.group()) if m.group().startswith("/*") else m.group(), text)
+
+
+def _strip_html(text: str) -> str:
+    def sub(m: re.Match) -> str:
+        whole = m.group()
+        if whole.startswith("<!--"):
+            return _breaks(whole)
+        style = m.group(3) is not None
+        group = 3 if style else 2
+        kind = _SCRIPT_TYPE.search(m.group(1) or "")
+        if not style and kind and kind.group(1).lower() not in ("module", "") and "javascript" not in kind.group(1).lower():
+            return whole  # template/json: không phải JS
+        body, at = m.group(group), m.start(group) - m.start()
+        return whole[:at] + (_strip_css if style else _strip_js)(body) + whole[at + len(body):]
+    return _HTML_TOKEN.sub(sub, text)
+
+
+def _kind(text: str, filename: str | None) -> str | None:
+    """js | css | html theo đuôi; không có tên → đoán từ nội dung; không chắc → None (giữ nguyên)."""
+    ext = Path(filename).suffix.lower() if filename else ""
+    if ext:
+        return {".js": "js", ".mjs": "js", ".cjs": "js", ".css": "css", ".html": "html", ".htm": "html"}.get(ext)
+    if text.lstrip()[:15].lower().startswith(("<!doctype", "<html", "<!--", "<head", "<body")):
+        return "html"
+    if _JS_HINT.search(text):
+        return "js"
+    return "css" if _CSS_HINT.search(text) and _CSS_DECL.search(text) else None
+
+
+def strip_comments(text: str, filename: str | None = None) -> str:
+    """Text không comment, CÙNG số dòng: comment-only → dòng rỗng, comment cuối dòng bỏ cùng khoảng trắng thừa.
+    JS/MJS `//` `/* */`, CSS `/* */`, HTML `<!-- -->` (+ nội dung <script>/<style>). Đuôi khác/đoán không ra → nguyên văn."""
+    kind = _kind(text, filename)
+    if kind is None or not text:
+        return text
+    new = {"js": _strip_js, "css": _strip_css, "html": _strip_html}[kind](text)
+    if new == text:
+        return text
+    lines = new.split("\n")
+    for k, (a, b) in enumerate(zip(text.split("\n"), lines)):
+        if a != b:
+            lines[k] = b.rstrip(" \t\r") + ("\r" if b.endswith("\r") else "")
+    return "\n".join(lines)
+
+
+def _view(text: str, filename: str | None = None) -> tuple[list[str], list[str]]:
+    """(dòng thật, dòng đã bỏ comment) cùng độ dài theo splitlines; lệch (ký tự lạ) → không bỏ gì."""
+    lines = text.splitlines()
+    shown = strip_comments(text, filename).splitlines()
+    return (lines, shown) if len(shown) == len(lines) else (lines, lines)
+
+
+def visible_source(text: str, filename: str | None = None) -> str:
+    """Như strip_comments nhưng bỏ hẳn dòng chỉ-comment (cho chỗ không đánh số dòng). Dòng trống gốc giữ."""
+    lines, shown = _view(text, filename)
+    return "\n".join(s for line, s in zip(lines, shown) if s.strip() or not line.strip())
+
+
+def excerpt(content: str, words: list[str], *, budget: int = CONTEXT_BUDGET, filename: str | None = None) -> str:
+    """Các dòng `Lnn| …` (đã bỏ comment, số dòng thật) theo ưu tiên: quanh dòng khớp từ khoá, cuối file, dàn ý; dừng
+    khi hết budget. Dòng chỉ-comment không hiện và không tốn budget/bán kính/đuôi."""
+    lines, shown = _view(content, filename)
+    live = [i for i, line in enumerate(lines) if shown[i].strip() or not line.strip()]
+    lowered = [shown[i].lower() for i in live]
+    hits = [p for p, low in enumerate(lowered) if any(w in low for w in words)]
+    ranked = [q for p in hits for q in range(max(p - RADIUS, 0), min(p + RADIUS + 1, len(live)))]
+    ranked += range(max(len(live) - TAIL_LINES, 0), len(live))
+    ranked += [p for p, i in enumerate(live) if _OUTLINE.search(shown[i])]
     chosen: set[int] = set()
     used = 0
-    for i in dict.fromkeys(ranked):
-        cost = min(len(lines[i]), MAX_LINE) + 8
+    for p in dict.fromkeys(ranked):
+        cost = min(len(shown[live[p]]), MAX_LINE) + 8
         if used + cost > budget:
             break
-        chosen.add(i)
+        chosen.add(p)
         used += cost
     out, previous = [], None
-    for i in sorted(chosen):
-        if previous is not None and i != previous + 1:
+    for p in sorted(chosen):
+        if previous is not None and p != previous + 1:
             out.append("…")
-        line = lines[i] if len(lines[i]) <= MAX_LINE else lines[i][:MAX_LINE] + " …(cắt, đừng dùng làm search)"
-        out.append(f"L{i + 1}| {line}")
-        previous = i
+        text = shown[live[p]]
+        line = text if len(text) <= MAX_LINE else text[:MAX_LINE] + " …(cắt, đừng dùng làm search)"
+        out.append(f"L{live[p] + 1}| {line}")
+        previous = p
     return "\n".join(out)
 
 
@@ -167,7 +361,13 @@ def _where(lines: list[str], starts: list[int], width: int) -> str:
     return "\n---\n".join(shown)
 
 
-def _stripped_match(text: str, search: str) -> tuple[int, int] | None:
+def _view_lines(text: str, filename: str | None = None) -> list[str]:
+    """Dòng (tách theo \\n) đã bỏ comment để hiện cho model trong thông báo lỗi; lệch số dòng → dòng thật."""
+    real, shown = text.split("\n"), strip_comments(text, filename).split("\n")
+    return shown if len(shown) == len(real) else real
+
+
+def _stripped_match(text: str, search: str, filename: str | None = None) -> tuple[int, int] | None:
     """Khớp theo dòng, bỏ khoảng trắng đầu/cuối mỗi dòng (model hay lệch thụt lề).
     (dòng đầu, dòng cuối+1) nếu đúng 1 chỗ; None nếu 0 chỗ. Raise ValueError nếu nhiều chỗ."""
     want = [line.strip() for line in search.split("\n")]
@@ -181,7 +381,7 @@ def _stripped_match(text: str, search: str) -> tuple[int, int] | None:
     found = [i for i in range(len(have) - len(want) + 1) if have[i:i + len(want)] == want]
     if len(found) > 1:
         raise ValueError(f"khớp {len(found)} chỗ (bỏ qua thụt lề). Các chỗ khớp:\n"
-                         + _where(text.split("\n"), found, len(want)))
+                         + _where(_view_lines(text, filename), found, len(want)))
     return (found[0], found[0] + len(want)) if found else None
 
 
@@ -199,17 +399,35 @@ def _tail_tolerant(text: str, search: str, replace: str) -> str | None:
     return text.replace(head, new, 1)
 
 
-def _closest(text: str, search: str) -> str:
-    """Real file lines most like the first line of a search that matched nothing (models drop a quote or a `;`)."""
+def _comment_free_match(text: str, search: str, filename: str | None = None) -> tuple[int, int] | None:
+    """Model thấy code không comment nên search có thể nối 2 dòng cách nhau bởi dòng chỉ-comment, hoặc thiếu comment
+    giữa dòng. Khớp theo dòng trên bản đã bỏ comment, bỏ qua dòng chỉ-comment. (dòng đầu, dòng cuối+1) thật nếu đúng
+    1 chỗ; không thì None. Dòng trong khoảng khớp bị thay hết (kể cả comment của chúng)."""
+    want = [line.strip() for line in search.split("\n")]
+    while want and not want[0]:
+        want.pop(0)
+    while want and not want[-1]:
+        want.pop()
+    real, shown = text.split("\n"), _view_lines(text, filename)
+    if not want or shown == real:
+        return None
+    keep = [i for i, (a, b) in enumerate(zip(real, shown)) if b.strip() or not a.strip()]
+    have = [shown[i].strip() for i in keep]
+    found = [k for k in range(len(have) - len(want) + 1) if have[k:k + len(want)] == want]
+    return (keep[found[0]], keep[found[0] + len(want) - 1] + 1) if len(found) == 1 else None
+
+
+def _closest(text: str, search: str, filename: str | None = None) -> str:
+    """File lines (comment-free view) most like the first line of a search that matched nothing (models drop a quote or a `;`)."""
     first = next((line.strip() for line in _LINE_NO.sub("", search).split("\n") if line.strip()), "")
-    lines = text.split("\n")
+    lines = _view_lines(text, filename)
     stripped = [line.strip() for line in lines]
     near = difflib.get_close_matches(first, [s for s in stripped if s], n=2, cutoff=0.75)
     shown = [f"L{stripped.index(s) + 1}| {lines[stripped.index(s)][:300]}" for s in near]
     return "\nDòng gần giống nhất trong file (chép nguyên văn từ đây):\n" + "\n".join(shown) if shown else ""
 
 
-def _search_edit(text: str, search: str, replace: str, index: int) -> str:
+def _search_edit(text: str, search: str, replace: str, index: int, filename: str | None = None) -> str:
     for candidate, new in ((search, replace), (_LINE_NO.sub("", search), _LINE_NO.sub("", replace))):
         count = text.count(candidate) if candidate else 0
         if count == 1:
@@ -219,24 +437,28 @@ def _search_edit(text: str, search: str, replace: str, index: int) -> str:
             while len(starts) < count and (at := text.find(candidate, at + 1)) >= 0:
                 starts.append(text.count("\n", 0, at))
             raise ValueError(f"edit {index}: search khớp {count} chỗ, cần đoạn dài hơn để chỉ khớp 1 chỗ. Các chỗ khớp:\n"
-                             + _where(text.split("\n"), starts, candidate.count("\n") + 1))
+                             + _where(_view_lines(text, filename), starts, candidate.count("\n") + 1))
     try:
-        span = _stripped_match(text, _LINE_NO.sub("", search))
+        span = _stripped_match(text, _LINE_NO.sub("", search), filename)
     except ValueError as e:
         raise ValueError(f"edit {index}: search {e}, cần đoạn dài hơn") from None
     if span is None:
         healed = _tail_tolerant(text, _LINE_NO.sub("", search), _LINE_NO.sub("", replace))
         if healed is not None:
             return healed
-        raise ValueError(f"edit {index}: search không khớp đoạn nào trong file: {search[:200]!r}{_closest(text, search)}")
+        span = _comment_free_match(text, _LINE_NO.sub("", search), filename)
+    if span is None:
+        raise ValueError(f"edit {index}: search không khớp đoạn nào trong file: {search[:200]!r}"
+                         f"{_closest(text, search, filename)}")
     lines = text.split("\n")
     return "\n".join(lines[:span[0]] + _LINE_NO.sub("", replace).split("\n") + lines[span[1]:])
 
 
-def apply_edits(content: str, edits: list[dict]) -> str:
+def apply_edits(content: str, edits: list[dict], filename: str | None = None) -> str:
     """Áp edits: `{after_line, insert}` (chèn sau dòng số N của file gốc, 0 = đầu file) trước, từ dưới lên;
     rồi lần lượt `{search, replace}` — search khớp đúng 1 chỗ: nguyên văn, bỏ tiền tố `Lnn| `, rồi bỏ
-    thụt lề. Raise ValueError (kèm đoạn lỗi) nếu không. Giữ nguyên kiểu xuống dòng CRLF của file."""
+    thụt lề, rồi bỏ qua comment (model chỉ thấy code không comment). Luôn sửa file THẬT (còn comment). Raise
+    ValueError (kèm đoạn lỗi không comment) nếu không. Giữ nguyên kiểu xuống dòng CRLF của file."""
     crlf = "\r\n" in content
     lines = content.replace("\r\n", "\n").split("\n")
     anchored = sorted(((i, e) for i, e in enumerate(edits, start=1) if "after_line" in e),
@@ -251,5 +473,5 @@ def apply_edits(content: str, edits: list[dict]) -> str:
     for index, edit in enumerate(edits, start=1):
         if "after_line" not in edit:
             text = _search_edit(text, edit["search"].replace("\r\n", "\n"),
-                                edit["replace"].replace("\r\n", "\n"), index)
+                                edit["replace"].replace("\r\n", "\n"), index, filename)
     return text.replace("\n", "\r\n") if crlf else text

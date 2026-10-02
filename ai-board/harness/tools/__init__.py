@@ -53,7 +53,7 @@ def outline(source, sha: str, *, file: str, index_path=None) -> str:
     text = _show(source, sha, file)
     if text is None:
         return f"{file}: (chưa tồn tại ở base)"
-    out = code_index.outline_text(file, code_index.parse(file, text))
+    out = code_index.outline_text(file, code_index.parse(file, file_context.strip_comments(text, file)))  # export trong comment không tính
     if index_path:
         note = _note(source, sha, file, index_path)
         if note:
@@ -76,7 +76,7 @@ def grep(source, sha: str, *, words: list[str], file: str | None = None, path: s
         return ""
     if file:
         text = _show(source, sha, file)
-        return f"{file} (trích):\n" + file_context.excerpt(text, words, budget=budget) if text else ""
+        return f"{file} (trích):\n" + file_context.excerpt(text, words, budget=budget, filename=file) if text else ""
     args = ["grep", "-c", "-i", "-F", "-I"] + [x for w in words for x in ("-e", w)] + [sha, "--", path]
     try:
         raw = code_index.git(source, *args).decode("utf-8", "replace")
@@ -169,11 +169,18 @@ def find_text(source, sha: str, phrases: list[str], pages: list[str] = ()) -> tu
         index, _, chosen = _rank(source, sha, phrases, pages)
     except OSError:
         return [], []
-    hits = list(dict.fromkeys((f, str(n), index["files"][f]["lines"][n - 1].strip()[:file_context.WEIGHTS["locate_line_max"]]) for g, files in chosen
+    views: dict[str, list[str]] = {}  # file → dòng đã bỏ comment (chỉ dựng cho file có hit)
+
+    def shown(f: str, n: int) -> str:
+        if f not in views:
+            views[f] = file_context.strip_comments("\n".join(index["files"][f]["lines"]), f).split("\n")
+        return views[f][n - 1].strip()[:file_context.WEIGHTS["locate_line_max"]]
+
+    hits = list(dict.fromkeys((f, str(n), shown(f, n)) for g, files in chosen
                               for f in files for n, t in index["files"][f]["text"] if f" {g} " in t))
     texts = {f for f, _, _ in hits}
     stems = _stems(texts)
-    users = [(f, str(n), raw) for f in sorted(index["files"]) if f not in texts
+    users = [(f, str(n), file_context.strip_comments(raw, "x.js").strip()) for f in sorted(index["files"]) if f not in texts
              for _, names, n, raw in index["files"][f]["uses"] if any(s in x.lower() for x in names for s in stems)]
     return hits, users
 
@@ -274,7 +281,7 @@ def exemplar(source, sha: str, *, words: list[str], budget: int = 2500) -> str:
     if not ranked:
         return ""
     best = ranked[0]
-    text = _show(source, commit, best) or ""
+    text = file_context.visible_source(_show(source, commit, best) or "", best)
     head = text.split("</style>", 1)[0] + "</style>" if "</style>" in text else "\n".join(text.splitlines()[:40])
     return (f"trang mẫu gần nhất (theo chữ hiển thị): {', '.join(ranked)}\n"
             f"{code_index.outline_text(best, code_index.parse(best, text))}\n"
