@@ -56,7 +56,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     console.log(`${dry ? 'would delete' : 'delete'} registry manifest ${digest}`);
     // the registry image has no curl and its wget cannot send DELETE: use the runner's node (same compose network)
     if (!dry) docker('exec', runner, 'node', '-e', `fetch('http://image-registry:5000/v2/gate5/manifests/${digest}', { method: 'DELETE' })
-      .then((r) => { if (r.status !== 202) throw new Error('registry answered ' + r.status + ' (is REGISTRY_STORAGE_DELETE_ENABLED set?)'); })
+      .then((r) => { if (r.status !== 202 && r.status !== 404) throw new Error('registry answered ' + r.status + ' (is REGISTRY_STORAGE_DELETE_ENABLED set?)'); })  // 404: a revision link left behind by an earlier delete, already gone
       .catch((e) => { console.error(e.message); process.exit(1); })`);
   }
   if (!dry) console.log(docker('exec', registry, 'registry', 'garbage-collect', '/etc/docker/registry/config.yml').split('\n').slice(-3).join('\n'));
