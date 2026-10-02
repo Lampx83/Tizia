@@ -8,11 +8,13 @@ chỉ user/scheduler khởi động. Dữ liệu ở --root (env AI_BOARD_EVAL_D
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import random
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -113,17 +115,33 @@ def case_record(case: dict, repo: Path) -> dict:
             "detail": case["detail"], "checkout": str(repo), "oracle": lambda html: _norm(html) == want}
 
 
-def report(rows: list[dict]) -> str:
-    return "\n".join(f"{r['case']} {r['kind']:7} lần {r['repeat']}: {'ĐẠT' if r['oracle'] else 'HỎNG'}"
-                     f"{'' if r['gate_passed'] else ' (cổng 3 chặn)'}" for r in rows)
+def load_done(path: Path) -> dict:
+    """{(case, lần lặp): row} đã xong. Dòng cuối dở dang do bị kill thì bỏ, file được ghi lại sạch."""
+    rows = []
+    for line in path.read_text(encoding="utf-8").splitlines() if path.exists() else []:
+        try:
+            rows.append(json.loads(line))
+        except ValueError:
+            break
+    if path.exists():
+        path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
+    return {(r["case"], r["repeat"]): r for r in rows}
 
 
-def main(argv: list[str] | None = None, deps: Deps | None = None) -> int:
+def report(rows: list[dict], total: int, cut_short: bool) -> str:
+    head = (f"CẮT NGANG do hết ngân sách thời gian: xong {len(rows)}/{total} lượt; chạy lại đúng lệnh này để tiếp tục"
+            if cut_short else f"xong {len(rows)}/{total} lượt")
+    return "\n".join([head] + [f"{r['case']} {r['kind']:7} lần {r['repeat']}: {'ĐẠT' if r['oracle'] else 'HỎNG'}"
+                               f"{'' if r['gate_passed'] else ' (cổng 3 chặn)'}" for r in rows])
+
+
+def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.monotonic) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     tier = parser.add_subparsers(dest="tier", required=True).add_parser("quick", help="fast tier, seed → vài case")
     tier.add_argument("--seed", type=int, required=True)
     tier.add_argument("--cases", type=int, default=8)
     tier.add_argument("--repeats", type=int, default=1)
+    tier.add_argument("--budget-minutes", type=float, help="dừng sạch khi hết ngân sách; chạy lại để tiếp tục")
     tier.add_argument("--model", help="mặc định: model cổng 3 đang cấu hình")
     tier.add_argument("--root", default=os.environ.get("AI_BOARD_EVAL_DIR") or str(DEFAULT_ROOT))
     args = parser.parse_args(argv)
@@ -140,15 +158,32 @@ def main(argv: list[str] | None = None, deps: Deps | None = None) -> int:
     repo, cases = write_corpus(root, args.seed, args.cases)
     run_dir = root / "runs" / f"quick-s{args.seed}"
     run_dir.mkdir(parents=True, exist_ok=True)
-    rows = []
-    with (run_dir / "results.jsonl").open("w", encoding="utf-8") as out:
+    meta = {"tier": "quick", "seed": args.seed, "repeats": args.repeats, "model": model,
+            "corpus_sha": hashlib.sha256((root / "corpus" / f"quick-s{args.seed}" / "cases.json").read_bytes()).hexdigest()}
+    meta_path = run_dir / "run.json"
+    if meta_path.exists() and {k: json.loads(meta_path.read_text(encoding="utf-8")).get(k) for k in meta} != meta:
+        print(f"[eval] {run_dir} đã có run khác cấu hình (corpus/repeats/model); đổi seed hoặc --root", file=sys.stderr)
+        return 2
+    done = load_done(run_dir / "results.jsonl")
+    started, total, cut_short = clock(), len(cases) * args.repeats, False
+    meta_path.write_text(json.dumps({**meta, "status": "running"}, indent=2), encoding="utf-8")
+    with (run_dir / "results.jsonl").open("a", encoding="utf-8") as out:
         for repeat in range(1, args.repeats + 1):
             for case in cases:
+                if (case["id"], repeat) in done:
+                    continue
+                if args.budget_minutes is not None and clock() - started >= args.budget_minutes * 60:
+                    cut_short = True
+                    break
                 row = {**run_case(case["id"], case_record(case, repo), model, deps), "kind": case["kind"], "repeat": repeat}
-                rows.append(row)
+                done[(case["id"], repeat)] = row
                 out.write(json.dumps(row, ensure_ascii=False) + "\n")
                 out.flush()
-    text = report(rows)
+            if cut_short:
+                break
+    rows = [done[(c["id"], r)] for r in range(1, args.repeats + 1) for c in cases if (c["id"], r) in done]
+    meta_path.write_text(json.dumps({**meta, "status": "cut_short" if cut_short else "complete"}, indent=2), encoding="utf-8")
+    text = report(rows, total, cut_short)
     (run_dir / "report.txt").write_text(text + "\n", encoding="utf-8")
     print(text)
     return 0

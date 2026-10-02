@@ -1,8 +1,11 @@
 """Seam duy nhất của eval runner: eval_run.main(argv, deps) chạy trọn vẹn với model giả trong thư mục tạm, seed cố định.
 Không test riêng bộ sinh hay thống kê: chỉ soi báo cáo và file run ghi ra."""
 import dataclasses
+import itertools
 import json
 import re
+
+import pytest
 
 import eval_run
 from main import Deps
@@ -18,8 +21,11 @@ class SiteModels:
     gate3_model: str = "fake"
     gate3_model_light: str = "fake"
     calls: list = dataclasses.field(default_factory=list)
+    die_after: int | None = None  # giả lập bị kill: KeyboardInterrupt sau chừng này lời gọi
 
     def generate(self, model, prompt, **kw):
+        if self.die_after is not None and len(self.calls) >= self.die_after:
+            raise KeyboardInterrupt
         self.calls.append(prompt)
         title = re.search(r"- title: (.*)", prompt).group(1)
         if swap := re.fullmatch(r"Đổi câu '(.*)' thành '(.*)'", title):
@@ -66,3 +72,47 @@ def test_fake_model_run_reports_every_case_with_its_result(tmp_path, capsys):
         mode = sum(map(ord, case["gold"]["new"])) % 4
         assert ("ĐẠT" in line) == (mode < 2) and ("cổng 3 chặn" in line) == (mode == 3)
     assert "ĐẠT" in saved and "HỎNG" in saved and "cổng 3 chặn" in saved  # seed 12 có đủ 3 kiểu
+
+
+def results(root, seed=12):
+    path = root / "runs" / f"quick-s{seed}" / "results.jsonl"
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    return [{k: v for k, v in row.items() if k != "wall_s"} for row in rows]  # wall_s = đồng hồ thật
+
+
+def run_text(root, seed=12):
+    return (root / "runs" / f"quick-s{seed}" / "report.txt").read_text(encoding="utf-8")
+
+
+def test_a_killed_run_resumes_without_redoing_finished_pairs_and_matches_an_uninterrupted_run(tmp_path):
+    full, resumed = tmp_path / "full", tmp_path / "resumed"
+    reference = SiteModels()
+    quick(full, "--repeats", "2", models=reference)
+
+    dying = SiteModels(die_after=len(reference.calls) // 2)  # chết giữa chừng, như bị kill
+    with pytest.raises(KeyboardInterrupt):
+        quick(resumed, "--repeats", "2", models=dying)
+    finished = results(resumed)
+    assert 0 < len(finished) < 8
+
+    relaunched = SiteModels()
+    assert quick(resumed, "--repeats", "2", models=relaunched) == 0
+    assert len(relaunched.calls) == len(reference.calls) - sum(row["calls"] for row in finished)
+    assert results(resumed) == results(full) and run_text(resumed) == run_text(full)
+    assert quick(resumed, "--repeats", "3") == 2  # cùng run, khác cấu hình: từ chối chứ không trộn
+
+
+def test_budget_minutes_cuts_the_run_cleanly_and_a_relaunch_finishes_it(tmp_path):
+    full, capped = tmp_path / "full", tmp_path / "capped"
+    quick(full, "--repeats", "2")
+    ticks = itertools.count(0, 30)  # đồng hồ giả: mỗi lần hỏi trôi 30 s
+    deps = Deps(models=SiteModels(), notify=None, sleep=lambda _s: None)
+    argv = ["quick", "--seed", "12", "--cases", "4", "--repeats", "2", "--root", str(capped)]
+
+    assert eval_run.main([*argv, "--budget-minutes", "1.5"], deps, clock=lambda: next(ticks)) == 0
+    assert len(results(capped)) == 2  # kiểm lúc 30 s, 60 s thì chạy; lúc 90 s thì dừng
+    assert "CẮT NGANG" in run_text(capped)
+    assert json.loads((capped / "runs" / "quick-s12" / "run.json").read_text(encoding="utf-8"))["status"] == "cut_short"
+
+    assert eval_run.main(argv, deps) == 0
+    assert "CẮT NGANG" not in run_text(capped) and run_text(capped) == run_text(full)
