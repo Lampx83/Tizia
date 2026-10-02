@@ -158,12 +158,17 @@ function callStep(e) {
     </details></div>`;
 }
 
-function gateStep(g) {
+// Bước hỏng có thể chạy lại ngay cạnh nó. Lập kế hoạch (1–2.5) và kiểm tra trước PR (3–5.5) mỗi nhóm chạy liền một lượt.
+const gateStage = (g) => ([1, 2, 2.5].includes(Number(g)) ? 'plan' : 'execute');
+const rerunTitle = (g) => (gateStage(g) === 'plan' ? 'Lập kế hoạch chạy liền các bước 1 → 2.5; chạy lại sẽ bắt đầu từ bước 1'
+  : 'Các bước kiểm tra trước PR chạy liền trên kế hoạch đã duyệt; chạy lại sẽ bắt đầu từ bước 3');
+function gateStep(g, rerun = false) {
   const state = GATE_STATE[g.status] || 'idle';
   const evidence = g.evidence?.text;
   const functional = g.evidence?.functional;
   return `<div class="step gate${subClass(g.gate)} st-${state}" data-pos="${gatePos(g.gate)}"><div class="line1"><b>${gateName(g.gate)}</b>
-      ${tag(state, g.status === 'passed' ? 'OK' : g.status === 'blocked' ? 'Blocked' : g.status)}</div>
+      ${tag(state, g.status === 'passed' ? 'OK' : g.status === 'blocked' ? 'Blocked' : g.status)}
+      ${rerun ? `<button type="button" class="btn rerun" data-action="rerun-gate" data-gate="${esc(g.gate)}" title="${esc(rerunTitle(g.gate))}">Chạy lại bước này</button>` : ''}</div>
     ${g.public_reason ? `<div style="margin-top:4px">${esc(g.public_reason)}</div>` : ''}
     ${g.internal_reason ? `<div class="meta">${esc(g.internal_reason)}</div>` : ''}
     ${functional ? `<details><summary>Kiểm chứng chức năng: ${esc(functional.probe_id || 'chưa có phép kiểm')} · ${functional.passed ? 'đạt' : 'chưa đạt'}</summary><pre>${esc(JSON.stringify(functional, null, 2))}</pre></details>` : ''}
@@ -191,9 +196,13 @@ function trimUnreached(p, showFull) {
 function renderRun(run, root, latest) {
   const showFull = latest && root.live;
   const p = trimUnreached(run.progress, showFull);
+  // Nút chạy lại chỉ ở bước hỏng cuối của lượt mới nhất, và chỉ khi server cho phép chạy lại giai đoạn đó.
+  const rerunId = latest && root.rerun_stage
+    ? [...run.gates].filter(g => g.status === 'blocked' && gateStage(g.gate) === root.rerun_stage).sort((a, b) => Number(b.gate) - Number(a.gate))[0]?.id
+    : undefined;
   const items = [
     ...run.calls.map(c => ({ gate: Number(c.evidence?.gate ?? c.gate), kind: 0, at: c.created_at, id: c.id, html: callStep(c.evidence || {}) })),
-    ...run.gates.map(g => ({ gate: Number(g.gate), kind: 1, at: g.created_at, id: g.id, html: gateStep(g) })),
+    ...run.gates.map(g => ({ gate: Number(g.gate), kind: 1, at: g.created_at, id: g.id, html: gateStep(g, g.id === rerunId) })),
   ];
   if (p?.current != null) {
     items.push({ gate: p.current, kind: 1, at: 0, id: 0, html: `<div class="step gate${subClass(p.current)} st-run" data-pos="${gatePos(p.current)}"><div class="line1">
@@ -369,9 +378,7 @@ function renderActions(request, trace) {
   // Đã có thay đổi (candidate) → chỉ hoàn tác; chưa làm hoặc đang làm → chỉ hủy.
   const canCancel = !candidate && !['rejected', 'cancelled', 'done'].includes(request.status);
   const canRetryTransient = root?.phase === 'transient_blocked';
-  const canReplan = root && ['waiting', 'waiting_admin'].includes(root.status)
-    && ['clarification_limit', 'plan_blocked', 'precheck_blocked'].includes(root.phase) && !candidate;
-  if (!canRollback && !canCancel && !canRetryTransient && !canReplan) return ui.flash ? `<div class="flash">${esc(ui.flash)}</div>` : '';
+  if (!canRollback && !canCancel && !canRetryTransient) return ui.flash ? `<div class="flash">${esc(ui.flash)}</div>` : '';
   const busy = root?.live;
   return `<div class="actions">
       ${canRetryTransient ? `<button class="btn ok" data-action="retry-transient" data-root="${esc(root.id)}"
@@ -381,9 +388,6 @@ function renderActions(request, trace) {
       ${canCancel ? '<button class="btn danger-outline" data-action="cancel">Hủy yêu cầu</button>' : ''}
       ${ui.flash ? `<span class="flash">${esc(ui.flash)}</span>` : ''}
     </div>
-    ${canReplan ? `<label for="admin-replan-spec">Mô tả đã làm rõ (10–4000 ký tự)</label>
-      <textarea id="admin-replan-spec" maxlength="4000">${esc(request.clarified_spec || request.detail || '')}</textarea>
-      <button class="btn ok" data-action="replan">Lập lại kế hoạch qua các gate</button>` : ''}
     ${ui.confirm ? renderConfirm(request, candidate) : ''}`;
 }
 
@@ -545,7 +549,7 @@ function schedule() {
   timer = setTimeout(tick, active ? 2000 : 10000);
 }
 async function tick() {
-  if (!document.hidden && !ui.confirm && document.activeElement?.id !== 'admin-replan-spec') await refresh().catch(e => { if (e.message !== 'login') console.warn(e); });
+  if (!document.hidden && !ui.confirm) await refresh().catch(e => { if (e.message !== 'login') console.warn(e); });
   schedule();
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
@@ -562,12 +566,11 @@ document.addEventListener('click', e => {
   else if (action === 'authorize-close') { ui.authorizeConfirm = null; }
   else if (action === 'authorize-go') return authorizePlan(btn);
   else if (action === 'retry-transient') return retryTransient(btn);
-  else if (action === 'replan') {
-    const spec = $('#admin-replan-spec').value.trim();
+  else if (action === 'rerun-gate') {
     btn.disabled = true;
-    post(`/api/admin/ai-board/requests/${REQUEST_ID}/replan`, { spec })
-      .then(() => { ui.flash = 'Đã đưa yêu cầu về hàng đợi lập kế hoạch.'; })
-      .catch(e => { ui.flash = e.message; }).finally(() => refresh());
+    post(`/api/admin/ai-board/requests/${REQUEST_ID}/rerun-gate`, { gate: Number(btn.dataset.gate) })
+      .then((r) => { ui.flash = `Đã đưa yêu cầu về hàng đợi; worker chạy lại từ bước ${r.from_gate}.`; })
+      .catch(e => { ui.flash = `Không chạy lại được: ${e.message}`; }).finally(() => refresh());
     return;
   }
   render();

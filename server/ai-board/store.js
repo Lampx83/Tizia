@@ -1362,6 +1362,18 @@ export function createAiBoardStore(db, hooks = {}) {
     `).run(next[0], next[1], next[2],
       // A planned release keeps the verdict's reason (e.g. the critical violation) unless the worker adds one.
       input.internalDetail || (input.outcome === 'planned' ? current.internal_reason : null), input.now, Number(ticketId));
+    if (input.outcome === 'waiting' || input.outcome === 'failed') {
+      // The precheck gate that stopped the run gets its own gate row: the admin sees the step and can rerun it.
+      let detail = null;
+      try { detail = JSON.parse(input.internalDetail || 'null'); } catch { /* plain-text reason */ }
+      const gate = Number(detail?.gate);
+      const run = db.prepare('SELECT id FROM ai_runs WHERE ticket_id=? ORDER BY id DESC LIMIT 1').get(Number(ticketId));
+      if (run && CONTRACT.gates.plan.includes(gate)
+          && !db.prepare('SELECT 1 FROM ai_gate_traces WHERE run_id=? AND gate=?').get(run.id, gate)) {
+        db.prepare(`INSERT INTO ai_gate_traces(run_id, gate, status, public_reason, internal_reason, created_at)
+          VALUES (?, ?, 'blocked', ?, ?, ?)`).run(run.id, gate, next[2], String(detail?.reason ?? input.internalDetail).slice(0, 1000), input.now);
+      }
+    }
     db.prepare(`UPDATE ai_workers SET status='idle', current_ticket_id=NULL, last_seen_at=?, updated_at=? WHERE worker_id=?`)
       .run(input.now, input.now, input.workerId);
     db.prepare(`INSERT INTO ai_release_receipts(ticket_id, idempotency_key, worker_id, status, phase, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
@@ -1979,6 +1991,7 @@ export function createAiBoardStore(db, hooks = {}) {
     } : null;
     const candidate = latestCandidate(root.id);
     root.can_rollback = !!candidate && !PHASES[root.phase]?.rollback;
+    root.rerun_stage = rerunStage(root); // 'plan' | 'execute' | null: which failed stage the admin may rerun now
     return {
       root, plan, children, runs, events, candidate, pull_request: latestPullRequest(root.id), trace_ref: traceRef(root.id),
       gate_names: CONTRACT.gates.names,
@@ -2106,8 +2119,51 @@ export function createAiBoardStore(db, hooks = {}) {
     return replanRequest(Number(requestId), text, Number(adminUserId));
   }
 
+  // Admin reruns the gate that failed, from that gate's own row. Planning (gates 1-2.5) is one unit and restarts from
+  // gate 1; the pre-PR gates (3-5.5) are one unit on the approved plan and restart from gate 3.
+  const PLAN_BLOCKED_PHASES = ['clarification_limit', 'plan_blocked', 'precheck_blocked'];
+  const EXEC_BLOCKED_PHASES = ['transient_blocked', 'pre_pr_blocked', 'plan_unfit'];
+  const gateStage = (gate) => ([1, 2, 2.5].includes(gate) ? 'plan' : [3, 4, 5, 5.5].includes(gate) ? 'execute' : null);
+
+  /** Which stage an admin may rerun right now: 'plan' | 'execute' | null (live, leased, terminal, or a change already exists). */
+  function rerunStage(root) {
+    if (!root || root.parent_id != null || root.lease_owner || latestCandidate(root.id)) return null;
+    if (PLAN_BLOCKED_PHASES.includes(root.phase)) return 'plan';
+    return EXEC_BLOCKED_PHASES.includes(root.phase) ? 'execute' : null;
+  }
+
+  const rerunGateTransaction = db.transaction((requestId, gate, adminUserId, now) => {
+    const stage = gateStage(gate);
+    if (!stage) throw new WorkerContractError('unknown gate', 400, 'invalid_gate');
+    const root = db.prepare('SELECT * FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL').get(requestId);
+    if (rerunStage(root) !== stage) {
+      throw new WorkerContractError('this gate cannot be rerun in the current state of the request', 409, 'not_rerunnable');
+    }
+    const key = `gate-rerun:${root.id}:${now}:${randomBytes(4).toString('hex')}`;
+    if (stage === 'plan') {
+      if (root.plan_hash) invalidateCurrentPlan(root, now);
+      // Passing the current limit makes requeueForReplan hand back one automatic round: a manual rerun is not an automatic one.
+      requeueForReplan(root.id, { publicNote: 'Quản trị viên chạy lại việc lập kế hoạch.', budgetLimit: root.budget_limit }, now);
+      insertEvent.run(root.id, 'gate_rerun', 'admin', String(adminUserId), `${root.status}->queued`,
+        'Quản trị viên chạy lại việc lập kế hoạch.', `admin rerun of gate ${gate}; planning restarts at gate 1`, key, now);
+      return { ok: true, status: 'queued', phase: 'needs_replan', from_gate: 1 };
+    }
+    db.prepare(`UPDATE ai_tickets SET status='queued', phase='authorized', public_note=?,
+        lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE id=?`)
+      .run('Quản trị viên chạy lại các bước kiểm tra trước PR.', now, root.id);
+    insertEvent.run(root.id, 'gate_rerun', 'admin', String(adminUserId), `${root.status}->queued`,
+      'Quản trị viên chạy lại các bước kiểm tra trước PR.', `admin rerun of gate ${gate}; pre-PR gates restart at gate 3`, key, now);
+    return { ok: true, status: 'queued', phase: 'authorized', from_gate: 3 };
+  });
+
+  function rerunGate(requestId, gate, adminUserId) {
+    return rerunGateTransaction(Number(requestId), Number(gate), Number(adminUserId), Date.now());
+  }
+
   return {
     db,
+    rerunGate,
+    rerunStage,
     createRequestWithRoot,
     createSelfRequest,
     listRequestsForOwner,

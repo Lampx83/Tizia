@@ -192,3 +192,89 @@ test('admin route: default off, only an admin can flip the switch', async () => 
     assert.equal(on.body.enabled, true);
   } finally { f.close(); }
 });
+
+// ---- admin reruns the step that failed, from the step itself ----
+const blockedAt = (gate, failureClass) => ({
+  outcome: 'blocked', gate_reached: gate, reason: 'fixture failure', budget_used: 3, failure_class: failureClass,
+  repairs: [], candidate: null,
+  gates: [...[3, 4, 5].filter((g) => g < gate).map((g) => ({ gate: g, blocked: false, reason: null, issues: [] })),
+    { gate, blocked: true, reason: 'fixture failure', issues: [] }],
+});
+const rootOf = (db, id) => db.prepare('SELECT status, phase, lease_owner, plan_hash, auto_rounds FROM ai_tickets WHERE id=?').get(id);
+
+test('rerunning a failed pre-PR gate requeues the approved plan from gate 3, whatever the failure class', () => {
+  for (const [gate, failureClass, phase] of [[3, 'ordinary', 'pre_pr_blocked'], [4, 'ordinary', 'pre_pr_blocked'],
+    [5, 'plan', 'plan_unfit'], [5, 'transient', 'transient_blocked']]) {
+    const { db, store, submit, ticket } = plannedRoot();
+    submit(blockedAt(gate, failureClass), Date.now());
+    db.prepare('UPDATE ai_tickets SET lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL WHERE id=?').run(ticket.id); // worker released it
+    assert.equal(rootOf(db, ticket.id).phase, phase);
+    const request = db.prepare('SELECT source_request_id AS id FROM ai_tickets WHERE id=?').get(ticket.id).id;
+    assert.deepEqual({ ...store.rerunGate(request, gate, 9) }, { ok: true, status: 'queued', phase: 'authorized', from_gate: 3 });
+    const after = rootOf(db, ticket.id);
+    assert.deepEqual([after.status, after.phase, after.lease_owner], ['queued', 'authorized', null]);
+    assert.ok(after.plan_hash, 'the approved plan is kept');
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM ai_events WHERE ticket_id=? AND event_type='gate_rerun'").get(ticket.id).n, 1);
+    assert.equal(store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' }).id, ticket.id);
+    db.close();
+  }
+});
+
+test('rerunning a failed planning gate drops the plan and replans from gate 1 without a new description', () => {
+  for (const gate of [1, 2, 2.5]) {
+    const { db, store, ticket } = plannedRoot();
+    db.prepare("UPDATE ai_tickets SET status='waiting', phase='precheck_blocked', lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL WHERE id=?").run(ticket.id);
+    const request = db.prepare('SELECT source_request_id AS id FROM ai_tickets WHERE id=?').get(ticket.id).id;
+    const before = rootOf(db, ticket.id).auto_rounds;
+    assert.deepEqual({ ...store.rerunGate(request, gate, 9) }, { ok: true, status: 'queued', phase: 'needs_replan', from_gate: 1 });
+    const after = rootOf(db, ticket.id);
+    assert.deepEqual([after.status, after.phase, after.plan_hash], ['queued', 'needs_replan', null]);
+    assert.equal(after.auto_rounds, Math.max(before - 1, 0), 'an admin rerun does not eat an automatic round');
+    db.close();
+  }
+});
+
+test('a gate can only be rerun from the stage that actually failed, never while live or after a change was made', () => {
+  const { db, store, submit, ticket } = plannedRoot();
+  const request = db.prepare('SELECT source_request_id AS id FROM ai_tickets WHERE id=?').get(ticket.id).id;
+  assert.throws(() => store.rerunGate(request, 3, 9), (e) => e.code === 'not_rerunnable'); // planned, nothing failed
+  submit(blockedAt(4, 'ordinary'), Date.now());
+  db.prepare('UPDATE ai_tickets SET lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL WHERE id=?').run(ticket.id);
+  assert.throws(() => store.rerunGate(request, 1, 9), (e) => e.code === 'not_rerunnable'); // planning did not fail
+  assert.throws(() => store.rerunGate(request, 7, 9), (e) => e.code === 'invalid_gate');
+  db.prepare("UPDATE ai_tickets SET lease_owner='w1' WHERE id=?").run(ticket.id);
+  assert.throws(() => store.rerunGate(request, 4, 9), (e) => e.code === 'not_rerunnable'); // someone holds it
+  db.close();
+});
+
+test('an intake block at gate 1 leaves a blocked gate row, so the admin has a step to rerun from', () => {
+  const { db, store } = plannedRoot();
+  store.createRequestWithRoot({ ownerUserId: 1, ownerDomain: 'pharmacy', ownerDisplayName: 'Lan',
+    idempotencyKey: 'tr-request-002', title: 'Yêu cầu thứ hai', detail: 'fixture' });
+  const second = store.claimNext({ workerId: 'w2', version: 'test', mode: 'active', intent: 'plan' });
+  assert.ok(second, 'second root claimed');
+  const run = store.createRun(second.id, { workerId: 'w2', leaseToken: second.lease_token, trigger: 'plan', idempotencyKey: 'tr-run-002' });
+  store.releaseLease(second.id, { workerId: 'w2', leaseToken: second.lease_token, outcome: 'waiting', idempotencyKey: 'tr-release-002',
+    internalDetail: JSON.stringify({ gate: 1, reason: 'intake_human_review: classifier_error (HTTP Error 500)', signals: ['classifier_error'] }) });
+  const requestId = db.prepare('SELECT source_request_id AS id FROM ai_tickets WHERE id=?').get(second.id).id;
+  const trace = store.getRequestTrace(requestId);
+  assert.deepEqual(trace.runs.at(-1).gates.map((g) => [Number(g.gate), g.status]), [[1, 'blocked']]);
+  assert.match(trace.runs.at(-1).gates[0].internal_reason, /classifier_error/);
+  assert.equal(trace.root.rerun_stage, 'plan');
+  assert.equal(trace.runs.at(-1).progress.gates.find((g) => g.gate === 1).state, 'bad');
+  assert.equal(run.id, trace.runs.at(-1).id);
+  assert.equal(store.rerunGate(requestId, 1, 9).phase, 'needs_replan');
+  db.close();
+});
+
+test('admin route rerun-gate: admins only, bad gate 400, nothing to rerun 409', async () => {
+  const f = await httpFixture();
+  try {
+    const url = '/api/admin/ai-board/requests/1/rerun-gate';
+    assert.equal((await f.call('POST', url, { user: 1, body: { gate: 3 } })).status, 403);
+    assert.equal((await f.call('POST', url, { user: 9, body: { gate: 9 } })).status, 400);
+    const none = await f.call('POST', url, { user: 9, body: { gate: 3 } });
+    assert.equal(none.status, 409);
+    assert.equal(none.body.error, 'not_rerunnable');
+  } finally { f.close(); }
+});
