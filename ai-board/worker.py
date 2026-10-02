@@ -1064,8 +1064,8 @@ def main(argv: list[str] | None = None) -> int:
     print(json.dumps({"memory_pruned": memory.prune(DEFAULT_PATH, source=repo)}))
     if args.plan or args.execute:  # shadow thuần không gọi model → không preflight
         from models import OllamaClient
-        worker.model_check = model_preflight(OllamaClient.from_env())
-        worker.planner =HarnessPlanner(tracer, progress=worker.gate_started, source=repo if repo_dir else None)
+        worker.model_check = model_preflight(dataclasses.replace(OllamaClient.from_env(), timeout_s=120.0))  # a hung model must not stall a poll for 5 min
+        worker.planner = HarnessPlanner(tracer, progress=worker.gate_started, source=repo if repo_dir else None)
     if args.execute:
         import candidate
         worker.change_runner = harness_change_runner(checkout_source=repo, tracer=tracer,
