@@ -12,6 +12,7 @@ import argparse
 import dataclasses
 import json
 import re
+import shutil
 import sys
 import tempfile
 import time
@@ -65,11 +66,12 @@ class Collect(meter.Tracer):
 
 
 def run_case(name: str, case: dict, model: str, base: Deps) -> dict:
+    """1 case cổng 3 → row kết quả. case: subtask, detail, oracle(nội dung)→bool, checkout (repo git base; mặc định Tizia)."""
     tracer = Collect()
     models = dataclasses.replace(base.models, gate3_model=model, gate3_model_light=model)
     deps = dataclasses.replace(base, models=models, trace=tracer)
     scratch = Path(tempfile.mkdtemp(prefix="ai-board-eval-"))
-    state = {"plan": {"subtasks": [case["subtask"]]}, "checkout_source": str(ROOT), "request_detail": case["detail"]}
+    state = {"plan": {"subtasks": [case["subtask"]]}, "checkout_source": str(case.get("checkout", ROOT)), "request_detail": case["detail"]}
     started = time.monotonic()
     try:
         out = implement.run(state, deps, Budget(max_wall_clock_s=900, max_units=600), repo_dir=scratch)
@@ -78,6 +80,7 @@ def run_case(name: str, case: dict, model: str, base: Deps) -> dict:
     tracer.flush()
     written = scratch / case["subtask"]["file"]
     content = written.read_text(encoding="utf-8") if written.exists() else ""
+    shutil.rmtree(scratch, ignore_errors=True)  # runner chạy hàng trăm lần: không để rác tạm
     calls = tracer.records
     total = lambda key: sum((c["metrics"].get(key) or 0) for c in calls)  # noqa: E731
     passed = bool(content) and not out.get("blocked") and case["oracle"](content)
