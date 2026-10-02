@@ -427,11 +427,24 @@ def _closest(text: str, search: str, filename: str | None = None) -> str:
     return "\nDòng gần giống nhất trong file (chép nguyên văn từ đây):\n" + "\n".join(shown) if shown else ""
 
 
+def _without_repeated_tail(text: str, search: str, replace: str) -> str:
+    """Replace the unique `search`. When it stops short of the line end and the rest of the line is only closing
+    punctuation (`';`, `);`) that `replace` already repeats, drop that rest: no doubled `';';`."""
+    start = text.index(search)
+    end = start + len(search)
+    line_end = text.find("\n", end)
+    tail = text[end:line_end if line_end >= 0 else len(text)]
+    rest = tail.strip()
+    if len(rest) >= 2 and not rest.strip(_TAIL_PUNCT) and replace.rstrip().endswith(rest):
+        end += len(tail)
+    return text[:start] + replace + text[end:]
+
+
 def _search_edit(text: str, search: str, replace: str, index: int, filename: str | None = None) -> str:
     for candidate, new in ((search, replace), (_LINE_NO.sub("", search), _LINE_NO.sub("", replace))):
         count = text.count(candidate) if candidate else 0
         if count == 1:
-            return text.replace(candidate, new, 1)
+            return _without_repeated_tail(text, candidate, new)
         if count > 1:
             starts, at = [], -1
             while len(starts) < count and (at := text.find(candidate, at + 1)) >= 0:

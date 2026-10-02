@@ -205,7 +205,8 @@ def _check_rest(out: dict, current: str | None, file: str | None) -> None:
         if file and file.endswith((".js", ".mjs")):  # Gate 4 would catch this one round later; ask now, while it is cheap
             from gates import static_check
             if static_check.syntax_error(current) is None and (broken := static_check.syntax_error(out["code"])):
-                raise ValueError(f"cú pháp JS lỗi sau khi áp edit: {broken[-600:]}")
+                raise ValueError(f"cú pháp JS lỗi sau khi áp edit: {broken[-600:]}\n"
+                                 f"Các dòng edit của bạn tạo ra (số dòng thật):\n{_produced_lines(current, out['code'])}")
         if "</body>" in current and out["code"].rsplit("</body>", 1)[-1] != current.rsplit("</body>", 1)[-1]:
             line = current[:current.rindex("</body>")].count("\n") + 1
             raise ValueError(f"nội dung bị chèn sau </body> (dòng L{line}); chèn trước nó: after_line {line - 1}")
@@ -276,6 +277,16 @@ def _write_and_diff(repo_dir: Path, file_rel: str, code: str, test_file_rel: str
     diff = _git(["diff", "--cached"], cwd=repo_dir, text=True, encoding="utf-8").stdout
     _git(["commit", "-q", "-m", f"gate3: {file_rel}"], cwd=repo_dir)
     return diff
+
+
+def _produced_lines(old: str, new: str, limit: int = 12) -> str:
+    """`Lnn| text` for the lines of `new` that differ from `old`: the model sees what its edit really wrote (e.g. a doubled `';`)."""
+    shown, matcher = [], difflib.SequenceMatcher(None, old.splitlines(), new.splitlines(), autojunk=False)
+    new_lines = new.splitlines()
+    for tag, _i1, _i2, j1, j2 in matcher.get_opcodes():
+        if tag in ("replace", "insert"):
+            shown += [f"L{j + 1}| {new_lines[j]}" for j in range(j1, j2)]
+    return "\n".join(shown[:limit]) or "(không có dòng nào đổi)"
 
 
 def _unified(old: str, new: str, file: str) -> str:

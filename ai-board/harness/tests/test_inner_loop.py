@@ -212,3 +212,16 @@ def test_every_gate_3_call_says_what_the_ai_knew_which_tools_ran_what_it_changed
     assert good["edits"]["applied"] is True and "+    <p>Mới.</p>" in good["edits"]["diff"]
     assert [e["check"] for e in good["evaluation"]] == ["parse output", "apply edits", "output checks"]
     assert all(e["ok"] for e in good["evaluation"])
+
+
+def test_syntax_error_feedback_shows_the_lines_the_edit_produced_so_the_model_can_see_its_stray_quote():
+    current = "function f(q) {\n  return '<b>old</b>';\n}\n"
+    out = {"edits": [{"search": "return '<b>old</b>';", "replace": "return '<b>new</b>';';"}],  # the model writes the closing quote twice
+           "test_file": "test/a.test.js", "test": ESM_TEST}
+    try:
+        implement.check_output(out, current, "stop", "public/js/a.js")
+    except ValueError as e:
+        message = str(e)
+    else:
+        raise AssertionError("a doubled quote must be a syntax error")
+    assert "L2| " in message and "return '<b>new</b>';';" in message  # the produced line, with its real number

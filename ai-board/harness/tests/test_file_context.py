@@ -105,3 +105,14 @@ def test_garbled_tail_fallback_never_guesses():
     only_punctuation = "x = 1;\n"  # nothing but the tail differs: not an edit we can infer
     with pytest.raises(ValueError):
         file_context.apply_edits(only_punctuation, [{"search": "x = 1;'", "replace": "x = 1,'"}])
+
+
+def test_replace_that_repeats_the_line_tail_the_search_left_behind_does_not_double_it():
+    content = "function f(q) {\n  return '<b>old</b>';\n}\n"
+    edit = {"search": "return '<b>old</b>", "replace": "return '<b>new</b>';"}  # search stops short of the closing quote
+    assert file_context.apply_edits(content, [edit]) == "function f(q) {\n  return '<b>new</b>';\n}\n"
+
+
+def test_tail_dedup_only_touches_punctuation_tails_the_replace_really_repeats():
+    assert file_context.apply_edits("foo(a);\n", [{"search": "foo(", "replace": "bar(x)"}]) == "bar(x)a);\n"  # tail is not punctuation-only
+    assert file_context.apply_edits("go('a');\n", [{"search": "go('a", "replace": "go('b"}]) == "go('b');\n"  # replace does not repeat it
