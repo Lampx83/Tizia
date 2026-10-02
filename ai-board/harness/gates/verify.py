@@ -153,14 +153,17 @@ MAX_SHOT_PAGES = 2         # ≤ 2 trang × 2 khổ × (trước, sau) = 8 ảnh
 MAX_SHOT_HEIGHT = 2000     # cắt trang dài: PNG vừa trần upload của server
 
 
-def capture_screenshot(url: str, path: Path, width: int = 1280, *, selectors: list[str] = ()) -> dict:
-    """Một lần chụp Chromium + đo cổng ảnh trên cùng trang đó. Trả kết quả visual.audit."""
+def capture_screenshot(url: str, path: Path, width: int = 1280, *, selectors: list[str] = (), token: str | None = None) -> dict:
+    """Một lần chụp Chromium + đo cổng ảnh trên cùng trang đó, như khách hoặc (có token) như học viên đăng nhập. Trả kết quả visual.audit."""
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as playwright:
         browser = _launch(playwright)
         try:
-            page = browser.new_page(viewport={"width": width, "height": 812 if width < 768 else 800})
+            context = browser.new_context(viewport={"width": width, "height": 812 if width < 768 else 800})
+            if token:
+                context.add_cookies([{"name": "tizia_sid", "value": token, "url": url, "httpOnly": True}])
+            page = context.new_page()
             response = page.goto(url, wait_until="domcontentloaded", timeout=15000)
             check_landing(url, page.url, response.status if response else None)
             visual.settle(page)
@@ -229,7 +232,7 @@ def _restore_base(state: dict, checkout: Path, pages: list[str], cp: Callable[[P
 
 
 def _capture_all(base: str, shot_pages: list[str], primary: str | None, restore: Callable[[], set[str] | None],
-                 logs: list[str], selectors: list[str] = ()) -> list[dict]:
+                 logs: list[str], selectors: list[str] = (), token: str | None = None) -> list[dict]:
     """AFTER rồi BEFORE, mỗi trang × SHOT_WIDTHS. Ảnh AFTER của trang chính bắt buộc: lỗi → raise lỗi gốc.
     Ảnh khác lỗi (trang cần đăng nhập, base hỏng) chỉ ghi log."""
     shot_dir = Path(tempfile.mkdtemp(prefix="ai-verify-shots-"))
@@ -250,7 +253,7 @@ def _capture_all(base: str, shot_pages: list[str], primary: str | None, restore:
             for width in SHOT_WIDTHS:
                 path = shot_dir / f"{phase}-{len(shots)}-{width}.png"
                 try:
-                    audit = capture_screenshot(base + page, path, width, selectors=selectors)
+                    audit = capture_screenshot(base + page, path, width, selectors=selectors, token=token)
                 except Exception as exc:
                     if phase == "after" and page == primary:
                         shutil.rmtree(shot_dir, ignore_errors=True)
@@ -439,10 +442,10 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             http_observed = True
             kind = 'plan'
             def fixture(stage):
-                if stage in ('seed', 'thread'):
+                if stage in ('seed', 'thread', 'session'):
                     command([*compose, 'cp', str(Path(functional.__file__).with_name('queue_fixture.mjs')), 'tizia:/app/verify-queue.mjs'])
                 response = command([*compose, 'exec', '-T', 'tizia', 'node', '/app/verify-queue.mjs', stage], log_output=False, timeout=20)
-                return json.loads(response.stdout) if stage in ('seed', 'thread') else None
+                return json.loads(response.stdout) if stage in ('seed', 'thread', 'session') else None
             observed_pages = html or ([primary] if primary else [])
             functional_result = (functional_probe(base, probe_id) if functional_probe
                                  else functional.run(base, probe_id, fixture, state=state, pages=observed_pages))
@@ -457,9 +460,14 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     command([*compose, "cp", str(local), f"tizia:{target}"])
 
                 try:
+                    try:
+                        shot_token = fixture('session')['token']
+                    except (OSError, RuntimeError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
+                        shot_token = None
+                        logs.append(f"Ảnh chụp như khách (không lấy được phiên học viên): {exc}")
                     shots = _capture_all(base, shot_pages, primary,
                                          lambda: _restore_base(state, checkout, pages, cp), logs,
-                                         visual.changed_selectors(state.get("full_diff")))
+                                         visual.changed_selectors(state.get("full_diff")), shot_token)
                 except Exception as exc:  # D0: UI evidence is mandatory; absent browser = environment
                     # Wrong landing page is not fixed by a retry or a repair; admin decides.
                     kind = "plan" if isinstance(exc, ScreenshotTargetError) else "transient"

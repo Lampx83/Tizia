@@ -11,10 +11,12 @@ function seedUser() {
     ON CONFLICT(username) DO UPDATE SET major='it',enrolled_domain='it'`).run(now);
   const {id} = db.prepare("SELECT id FROM users WHERE username='verify-queue'").get();
   const token = randomBytes(32).toString('hex');
-  db.prepare('INSERT INTO sessions(token,user_id,created_at,expires_at) VALUES (?,?,?,?)').run(token,id,now,now+120000);
+  db.prepare('INSERT INTO sessions(token,user_id,created_at,expires_at) VALUES (?,?,?,?)').run(token,id,now,now+900000);
   return {token, id};
 }
-if (stage === 'seed') {
+if (stage === 'session') {
+  console.log(JSON.stringify({token: seedUser().token}));
+} else if (stage === 'seed') {
   const {token, id} = seedUser();
   const request = createAiBoardStore(db).createRequestWithRoot({ownerUserId:Number(id),ownerDomain:'it',
     ownerDisplayName:'Queue Verify',title:'Ẩn ETA khi worker tắt',detail:'Functional probe',idempotencyKey:'verify-queue-request-001'});

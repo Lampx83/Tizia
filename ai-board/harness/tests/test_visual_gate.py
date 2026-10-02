@@ -168,3 +168,34 @@ def test_settle_waits_for_the_load_event_before_the_audit_measures():
         browser.close()
         manager.stop()
         server.shutdown()
+
+
+def test_capture_screenshot_sends_the_student_session_cookie(tmp_path):
+    pytest.importorskip("playwright.sync_api")
+    from gates import verify
+
+    seen = []
+
+    class Echo(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            seen.append(self.headers.get("Cookie"))
+            body = b"<h1>trang</h1>"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_):
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Echo)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        url = f"http://127.0.0.1:{server.server_port}/"
+        verify.capture_screenshot(url, tmp_path / "guest.png")
+        verify.capture_screenshot(url, tmp_path / "student.png", token="abc123")
+    finally:
+        server.shutdown()
+    assert seen[0] is None
+    assert seen[-1] == "tizia_sid=abc123"

@@ -589,3 +589,35 @@ def test_no_generated_test_is_fine_when_a_harness_oracle_decides_and_an_error_ot
     without = {**with_oracle, "request_detail": "Đổi màu nền"}
     out = verify.run(without, runner=FakeRunner())
     assert out["blocked"] is True and "generated test" in out["reason"]
+
+
+class SessionRunner(FakeRunner):
+    """The disposable app hands out a student session when the fixture asks for one."""
+    def __call__(self, args, **kwargs):
+        if args[0] == "docker" and args[-2:] == ["/app/verify-queue.mjs", "session"]:
+            self.calls.append((args, kwargs))
+            return subprocess.CompletedProcess(args, 0, '{"token":"student-session"}\n', "")
+        return super().__call__(args, **kwargs)
+
+
+def test_before_and_after_shots_are_taken_as_the_same_logged_in_student(tmp_path, monkeypatch):
+    tokens = []
+    monkeypatch.setattr(verify, "capture_screenshot",
+                        lambda url, path, width=1280, *, token=None, **_: (tokens.append((url, token)), path.write_bytes(b"png")))
+    s = state(checkout(tmp_path), visual=True)
+    body = (tmp_path / "public" / "x.html").read_bytes()
+    out = verify.run(s, runner=SessionRunner(), http_probe=lambda _url: (200, body))
+    assert out["blocked"] is False
+    assert tokens and {token for _, token in tokens} == {"student-session"}
+
+
+def test_without_a_student_session_the_shots_fall_back_to_a_guest_and_say_so(tmp_path, monkeypatch):
+    tokens = []
+    monkeypatch.setattr(verify, "capture_screenshot",
+                        lambda url, path, width=1280, *, token=None, **_: (tokens.append(token), path.write_bytes(b"png")))
+    s = state(checkout(tmp_path), visual=True)
+    body = (tmp_path / "public" / "x.html").read_bytes()
+    out = verify.run(s, runner=FakeRunner(), http_probe=lambda _url: (200, body))
+    assert out["blocked"] is False
+    assert tokens and set(tokens) == {None}
+    assert "khách" in out["evidence"]["text"]
