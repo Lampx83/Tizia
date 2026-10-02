@@ -47,7 +47,7 @@ class SiteModels:
 
 def quick(tmp_path, *extra, seed=12, models=None):
     deps = Deps(models=models or SiteModels(), notify=None, sleep=lambda _s: None)
-    return eval_run.main(["quick", "--seed", str(seed), "--cases", "4", "--root", str(tmp_path), *extra], deps)
+    return eval_run.main(["quick", "--seed", str(seed), "--cases", "4", "--repeats", "1", "--root", str(tmp_path), *extra], deps)
 
 
 def test_same_seed_gives_identical_corpus_and_a_different_seed_a_different_one(tmp_path):
@@ -64,14 +64,17 @@ def test_fake_model_run_reports_every_case_with_its_result(tmp_path, capsys):
     assert quick(tmp_path) == 0
     corpus = json.loads((tmp_path / "corpus" / "quick-s12" / "cases.json").read_text(encoding="utf-8"))
     printed = capsys.readouterr().out
-    saved = (tmp_path / "runs" / "quick-s12" / "report.txt").read_text(encoding="utf-8")
+    saved = run_text(tmp_path)
     assert saved.strip() in printed
-    for case in corpus:
-        (line,) = [row for row in saved.splitlines() if row.startswith(case["id"])]
-        assert case["kind"] in line
+    modes = []
+    for case, line in zip(corpus, report(tmp_path)["cases"]):
         mode = sum(map(ord, case["gold"]["new"])) % 4
-        assert ("ĐẠT" in line) == (mode < 2) and ("cổng 3 chặn" in line) == (mode == 3)
-    assert "ĐẠT" in saved and "HỎNG" in saved and "cổng 3 chặn" in saved  # seed 12 có đủ 3 kiểu
+        modes.append(mode)
+        assert line["id"] == case["id"] and line["kind"] == case["kind"]
+        assert line["passed"] == (mode < 2) and line["reached"] == {"gate3": 1, "gold_oracle": int(mode != 3)}
+        (text_line,) = [row for row in saved.splitlines() if row.startswith(case["id"])]
+        assert f"đạt {int(mode < 2)}/1" in text_line
+    assert sorted(modes) == [0, 1, 2, 3]  # seed 12 có đủ: đạt, đạt, oracle hỏng, cổng 3 chặn
 
 
 def results(root, seed=12):
@@ -82,6 +85,11 @@ def results(root, seed=12):
 
 def run_text(root, seed=12):
     return (root / "runs" / f"quick-s{seed}" / "report.txt").read_text(encoding="utf-8")
+
+
+def report(root, seed=12, *, stable=False):
+    rep = json.loads((root / "runs" / f"quick-s{seed}" / "report.json").read_text(encoding="utf-8"))
+    return {k: v for k, v in rep.items() if k != "cost"} if stable else rep  # cost chứa giây thực
 
 
 def test_a_killed_run_resumes_without_redoing_finished_pairs_and_matches_an_uninterrupted_run(tmp_path):
@@ -98,7 +106,7 @@ def test_a_killed_run_resumes_without_redoing_finished_pairs_and_matches_an_unin
     relaunched = SiteModels()
     assert quick(resumed, "--repeats", "2", models=relaunched) == 0
     assert len(relaunched.calls) == len(reference.calls) - sum(row["calls"] for row in finished)
-    assert results(resumed) == results(full) and run_text(resumed) == run_text(full)
+    assert results(resumed) == results(full) and report(resumed, stable=True) == report(full, stable=True)
     assert quick(resumed, "--repeats", "3") == 2  # cùng run, khác cấu hình: từ chối chứ không trộn
 
 
@@ -115,4 +123,51 @@ def test_budget_minutes_cuts_the_run_cleanly_and_a_relaunch_finishes_it(tmp_path
     assert json.loads((capped / "runs" / "quick-s12" / "run.json").read_text(encoding="utf-8"))["status"] == "cut_short"
 
     assert eval_run.main(argv, deps) == 0
-    assert "CẮT NGANG" not in run_text(capped) and run_text(capped) == run_text(full)
+    assert "CẮT NGANG" not in run_text(capped) and report(capped, stable=True) == report(full, stable=True)
+
+
+def baseline_file(tmp_path, rate, **label):
+    path = tmp_path / f"baseline-{rate}.json"
+    path.write_text(json.dumps({"tier": "quick", "source": "synthetic-candidate", **label,
+                                "groups": {"all": {"rate": rate}}}), encoding="utf-8")
+    return str(path)
+
+
+def test_report_has_intervals_funnel_cost_and_a_regression_verdict_against_the_baseline(tmp_path):
+    argv = ["quick", "--seed", "12", "--cases", "4", "--root", str(tmp_path)]  # mặc định 3 lần lặp
+    deps = Deps(models=SiteModels(), notify=None, sleep=lambda _s: None)
+    assert eval_run.main(argv, deps) == 0
+    rep = report(tmp_path)
+    assert rep["verdict"] == {"status": "no_baseline"}
+
+    # 4 case x 3 lần = 12 lượt; cổng 3 qua 9, oracle gold qua 6; mô hình giả trả lời cố định nên 3 lần giống nhau
+    assert rep["groups"]["all"] == {"trials": 12, "passed": 6, "rate": 50.0, "lo": 25.4, "hi": 74.6}  # Wilson 95% của 6/12
+    assert {g: rep["groups"][g]["trials"] for g in ("replace", "insert")} == {"replace": 6, "insert": 6}
+    assert [(f["stage"], f["reached"], f["passed"]) for f in rep["funnel"]] == [("gate3", 12, 9), ("gold_oracle", 9, 6)]
+    assert rep["failure_classes"] == {"invalid_output": 3, "wrong_result": 3}
+    assert rep["cost"]["gpu_s_per_success"] == 0.0 and rep["cost"]["wall_s_per_success"] > 0
+    assert all(c["trials"] == 3 for c in rep["cases"]) and len(results(tmp_path)) == 12
+    text = run_text(tmp_path)
+    assert "Wilson 95%: 25.4-74.6%" in text and "phễu gate3: 9/12" in text and "lớp lỗi: invalid_output=3, wrong_result=3" in text
+
+    # cận trên 74.6: mốc 90 tụt 15.4 điểm (> 10) bị từ chối; mốc 80 chỉ tụt 5.4 thì nhận
+    assert eval_run.main([*argv, "--baseline", baseline_file(tmp_path, 90.0)], deps) == 1
+    assert report(tmp_path)["verdict"]["groups"]["all"] == {"baseline": 90.0, "upper": 74.6, "drop": 15.4, "regressed": True}
+    assert "TỪ CHỐI" in run_text(tmp_path)
+    assert eval_run.main([*argv, "--baseline", baseline_file(tmp_path, 80.0)], deps) == 0
+    assert report(tmp_path)["verdict"]["status"] == "accept"
+
+
+def test_fast_tier_is_labelled_never_an_official_ship_rate_and_pure_ollama_is_kept_apart(tmp_path, monkeypatch, capsys):
+    assert quick(tmp_path) == 0  # deps bơm vào = hạ tầng, candidate tổng hợp
+    rep = report(tmp_path)
+    assert (rep["tier"], rep["source"], rep["official_ship_rate"]) == ("quick", "synthetic-candidate", None)
+    assert "[FAST TIER | synthetic-candidate]" in capsys.readouterr().out
+
+    real = tmp_path / "real"
+    monkeypatch.setattr(eval_run.Deps, "real", staticmethod(lambda: Deps(models=SiteModels(), notify=None, sleep=lambda _s: None)))
+    argv = ["quick", "--seed", "12", "--cases", "4", "--repeats", "1", "--root", str(real)]
+    assert eval_run.main(argv) == 0  # tự dựng Deps thật = chạy pure-Ollama
+    assert report(real)["source"] == "pure-ollama" and "[FAST TIER | pure-ollama]" in capsys.readouterr().out
+    assert eval_run.main([*argv, "--baseline", str(tmp_path / "runs" / "quick-s12" / "report.json")]) == 2  # khác nguồn: không so
+    assert report(real)["verdict"]["status"] == "incomparable"

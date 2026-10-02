@@ -1,17 +1,20 @@
 """Eval runner: corpus sinh theo seed → từng (case, lần lặp) qua eval_gold.run_case → báo cáo.
 
-    python eval_run.py quick --seed 7 [--cases 8] [--root DIR]
+    python eval_run.py quick --seed 7 [--cases 8] [--repeats 3] [--budget-minutes M] [--baseline report.json] [--root DIR]
 
-quick = fast tier: cổng 3 + oracle gold trên repo scratch, không microVM. Observer-only: không nhận input giữa chừng,
-chỉ user/scheduler khởi động. Dữ liệu ở --root (env AI_BOARD_EVAL_DIR; mặc định .scratch/ai-board-eval/, gitignored).
+quick = fast tier: cổng 3 + oracle gold trên repo scratch, không microVM; số liệu gắn nhãn fast tier, KHÔNG trộn vào ship
+rate chính thức. Observer-only: không nhận input giữa chừng, chỉ user/scheduler khởi động. Dữ liệu ở --root
+(env AI_BOARD_EVAL_DIR; mặc định .scratch/ai-board-eval/, gitignored). Exit: 0 ổn, 1 thay đổi bị từ chối (hồi quy), 2 lỗi cấu hình/mốc không so được.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import math
 import os
 import random
+import re
 import subprocess
 import sys
 import time
@@ -19,6 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from eval_gold import run_case  # noqa: E402
+from eval_strata import MAX_DROP  # noqa: E402
 from main import ROOT, Deps  # noqa: E402
 
 DEFAULT_ROOT = ROOT / ".scratch" / "ai-board-eval"
@@ -128,11 +132,104 @@ def load_done(path: Path) -> dict:
     return {(r["case"], r["repeat"]): r for r in rows}
 
 
-def report(rows: list[dict], total: int, cut_short: bool) -> str:
-    head = (f"CẮT NGANG do hết ngân sách thời gian: xong {len(rows)}/{total} lượt; chạy lại đúng lệnh này để tiếp tục"
-            if cut_short else f"xong {len(rows)}/{total} lượt")
-    return "\n".join([head] + [f"{r['case']} {r['kind']:7} lần {r['repeat']}: {'ĐẠT' if r['oracle'] else 'HỎNG'}"
-                               f"{'' if r['gate_passed'] else ' (cổng 3 chặn)'}" for r in rows])
+# Phễu: mỗi tầng chỉ tính trên lượt đã qua tầng trước (tỉ lệ có điều kiện).
+STAGES = (("gate3", lambda row: row["gate_passed"]), ("gold_oracle", lambda row: row["oracle"]))
+
+
+def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """Khoảng tin cậy Wilson 95% (%) cho k đạt / n lượt."""
+    p, scale = k / n, 1 + z * z / n
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / scale
+    centre = (p + z * z / (2 * n)) / scale
+    return round(100 * (centre - half), 1), round(100 * (centre + half), 1)
+
+
+def failure_class(row: dict) -> str | None:
+    """Lớp lỗi của 1 lượt (None = đạt); bảng lớp gọn của decisions Q17, mở rộng khi có thêm cổng."""
+    if row["oracle"]:
+        return None
+    if row["gate_passed"]:
+        return "wrong_result"
+    reason = row["reason"] or ""
+    if re.match(r"\w+(Error|Exception)\b", reason):
+        return "infra"
+    if "cú pháp" in reason:
+        return "syntax"
+    if "search" in reason or "after_line" in reason or "Dòng gần giống" in reason:
+        return "edit_not_applied"
+    return "invalid_output"
+
+
+def group_stats(rows: list[dict]) -> dict:
+    k, n = sum(r["oracle"] for r in rows), len(rows)
+    lo, hi = wilson(k, n)
+    return {"trials": n, "passed": k, "rate": round(100 * k / n, 1), "lo": lo, "hi": hi}
+
+
+def verdict(groups: dict, baseline: dict | None, meta: dict, cut_short: bool) -> dict:
+    """Từ chối khi cận trên của 1 nhóm thấp hơn điểm của mốc quá MAX_DROP điểm %."""
+    if baseline is None:
+        return {"status": "no_baseline"}
+    if (baseline.get("tier"), baseline.get("source")) != (meta["tier"], meta["source"]):
+        return {"status": "incomparable", "reason": f"mốc là {baseline.get('tier')}/{baseline.get('source')}, run này là {meta['tier']}/{meta['source']}"}
+    if cut_short:
+        return {"status": "not_computed", "reason": "run bị cắt ngang"}
+    detail = {}
+    for name, base in baseline["groups"].items():
+        if name in groups:
+            drop = round(base["rate"] - groups[name]["hi"], 1)
+            detail[name] = {"baseline": base["rate"], "upper": groups[name]["hi"], "drop": drop, "regressed": drop > MAX_DROP}
+    return {"status": "reject" if any(d["regressed"] for d in detail.values()) else "accept", "max_drop": MAX_DROP, "groups": detail}
+
+
+def build_report(meta: dict, cases: list[dict], rows: list[dict], total: int, cut_short: bool, baseline: dict | None) -> dict:
+    kinds = sorted({c["kind"] for c in cases})
+    alive, funnel = rows, []
+    for name, passes in STAGES:
+        passed = [r for r in alive if passes(r)]
+        funnel.append({"stage": name, "reached": len(alive), "passed": len(passed),
+                       "rate": round(100 * len(passed) / len(alive), 1) if alive else None})
+        alive = passed
+    per_case = []
+    for case in cases:
+        mine = [r for r in rows if r["case"] == case["id"]]
+        per_case.append({"id": case["id"], "kind": case["kind"], "trials": len(mine), "passed": sum(r["oracle"] for r in mine),
+                         "reached": {"gate3": len(mine), "gold_oracle": sum(r["gate_passed"] for r in mine)}})
+    wins = sum(r["oracle"] for r in rows)
+    classes: dict[str, int] = {}
+    for row in rows:
+        if cls := failure_class(row):
+            classes[cls] = classes.get(cls, 0) + 1
+    groups = {name: group_stats(sub) for name, sub in
+              [("all", rows)] + [(k, [r for r in rows if r["kind"] == k]) for k in kinds] if sub}
+    return {**meta, "tier_label": "fast tier: không trộn vào ship rate chính thức", "official_ship_rate": None,
+            "trials_done": len(rows), "trials_total": total, "cut_short": cut_short,
+            "cases": per_case, "groups": groups, "funnel": funnel, "failure_classes": classes,
+            "cost": {"gpu_s_per_success": round(sum(r["gpu_s"] for r in rows) / wins, 1) if wins else None,
+                     "wall_s_per_success": round(sum(r["wall_s"] for r in rows) / wins, 1) if wins else None},
+            "verdict": verdict(groups, baseline, meta, cut_short)}
+
+
+def render(rep: dict) -> str:
+    """Báo cáo dạng chữ từ build_report."""
+    lines = [f"[FAST TIER | {rep['source']}] seed {rep['seed']}, model {rep['model']}: {rep['tier_label']}",
+             (f"CẮT NGANG do hết ngân sách thời gian: xong {rep['trials_done']}/{rep['trials_total']} lượt; chạy lại đúng lệnh này để tiếp tục"
+              if rep["cut_short"] else f"xong {rep['trials_done']}/{rep['trials_total']} lượt")]
+    for c in rep["cases"]:
+        lines.append(f"{c['id']} {c['kind']:7} đạt {c['passed']}/{c['trials']}  cổng 3 qua {c['reached']['gold_oracle']}/{c['reached']['gate3']}"
+                     f" → oracle gold qua {c['passed']}/{c['reached']['gold_oracle']}")
+    lines += [f"nhóm {name:8} {g['passed']}/{g['trials']} = {g['rate']}% (Wilson 95%: {g['lo']}-{g['hi']}%)" for name, g in rep["groups"].items()]
+    lines += [f"phễu {f['stage']}: {f['passed']}/{f['reached']} ({f['rate']}%)" for f in rep["funnel"]]
+    cost = rep["cost"]
+    lines.append("chi phí mỗi lượt đạt (tổng mọi lượt / số lượt đạt): "
+                 + (f"{cost['gpu_s_per_success']} GPU-s, {cost['wall_s_per_success']} s thực" if cost["gpu_s_per_success"] is not None
+                    else "chưa có lượt đạt"))
+    lines.append("lớp lỗi: " + (", ".join(f"{k}={v}" for k, v in sorted(rep["failure_classes"].items())) or "không có"))
+    v = rep["verdict"]
+    lines.append(f"kết luận hồi quy: {v['status'].upper()}" + (f" ({v['reason']})" if v.get("reason") else ""))
+    lines += [f"  {name}: mốc {d['baseline']}%, cận trên {d['upper']}%, tụt {d['drop']} điểm" + (f" > {v['max_drop']} → TỪ CHỐI" if d["regressed"] else "")
+              for name, d in v.get("groups", {}).items()]
+    return "\n".join(lines)
 
 
 def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.monotonic) -> int:
@@ -140,25 +237,31 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
     tier = parser.add_subparsers(dest="tier", required=True).add_parser("quick", help="fast tier, seed → vài case")
     tier.add_argument("--seed", type=int, required=True)
     tier.add_argument("--cases", type=int, default=8)
-    tier.add_argument("--repeats", type=int, default=1)
+    tier.add_argument("--repeats", type=int, default=3)
     tier.add_argument("--budget-minutes", type=float, help="dừng sạch khi hết ngân sách; chạy lại để tiếp tục")
+    tier.add_argument("--baseline", help="report.json của run mốc (cùng tier + nguồn) để ra kết luận hồi quy")
     tier.add_argument("--model", help="mặc định: model cổng 3 đang cấu hình")
     tier.add_argument("--root", default=os.environ.get("AI_BOARD_EVAL_DIR") or str(DEFAULT_ROOT))
     args = parser.parse_args(argv)
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
+    source = "synthetic-candidate" if deps is not None else "pure-ollama"  # deps bơm vào = hạ tầng/candidate tổng hợp
     if deps is None:
         from dotenv import load_dotenv
         from main import ENV_FILE
         load_dotenv(ENV_FILE)  # như worker; không in giá trị nào
         deps = Deps.real()
+    if args.baseline and not Path(args.baseline).is_file():
+        print(f"[eval] không thấy mốc {args.baseline}", file=sys.stderr)
+        return 2
+    baseline = json.loads(Path(args.baseline).read_text(encoding="utf-8")) if args.baseline else None
     model = args.model or deps.models.gate3_model
     root = Path(args.root)
     repo, cases = write_corpus(root, args.seed, args.cases)
     run_dir = root / "runs" / f"quick-s{args.seed}"
     run_dir.mkdir(parents=True, exist_ok=True)
-    meta = {"tier": "quick", "seed": args.seed, "repeats": args.repeats, "model": model,
+    meta = {"tier": "quick", "source": source, "seed": args.seed, "repeats": args.repeats, "model": model,
             "corpus_sha": hashlib.sha256((root / "corpus" / f"quick-s{args.seed}" / "cases.json").read_bytes()).hexdigest()}
     meta_path = run_dir / "run.json"
     if meta_path.exists() and {k: json.loads(meta_path.read_text(encoding="utf-8")).get(k) for k in meta} != meta:
@@ -183,10 +286,12 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
                 break
     rows = [done[(c["id"], r)] for r in range(1, args.repeats + 1) for c in cases if (c["id"], r) in done]
     meta_path.write_text(json.dumps({**meta, "status": "cut_short" if cut_short else "complete"}, indent=2), encoding="utf-8")
-    text = report(rows, total, cut_short)
+    rep = build_report(meta, cases, rows, total, cut_short, baseline)
+    text = render(rep)
+    (run_dir / "report.json").write_text(json.dumps(rep, ensure_ascii=False, indent=2), encoding="utf-8")
     (run_dir / "report.txt").write_text(text + "\n", encoding="utf-8")
     print(text)
-    return 0
+    return {"reject": 1, "incomparable": 2}.get(rep["verdict"]["status"], 0)
 
 
 if __name__ == "__main__":
