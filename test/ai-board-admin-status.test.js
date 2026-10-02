@@ -108,3 +108,12 @@ test('cancelling a request without a root ticket closes the request row, nothing
   db.close();
 });
 
+
+test('hasRoot tells a legacy request (no root ticket) from a board request, so only legacy ones may be reopened by a reply', () => {
+  const { db, store } = fixture();
+  const { request_id: id } = newRequest(store, 'has-root-001');
+  assert.equal(store.hasRoot(id), true);
+  assert.equal(store.hasRoot(legacyRequest(db)), false);
+  assert.equal(store.hasRoot(9999), false);
+  db.close();
+});

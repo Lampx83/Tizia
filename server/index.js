@@ -59,6 +59,7 @@ import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from './ai-boar
 import { selfWinNotifier } from './ai-board/self-improve.js';
 import { draftNotifier } from './ai-board/drafts.js';
 import { shotBackendFromEnv, shotProxy, startShotRetention } from './ai-board/shot-storage.js';
+import { staticCacheControl } from './static-cache.js';
 import { attachAiBoardIntake, clarifyNotifier } from './contexts/ai-board-intake/index.js';
 import { attachAiBoardReleases } from './contexts/ai-board-releases/index.js';
 import { aiQuotaGate, recordAiCall } from './ai-quota.js';
@@ -75,7 +76,7 @@ const MEDIAPIPE_DIR = path.resolve(ROOT_DIR, 'node_modules', '@mediapipe', 'task
 // Thư mục lưu ảnh/file đính kèm cho "Ban điều hành AI". Tạo lười khi cần.
 // File phục vụ qua /uploads/requests/... (mount express.static phía dưới).
 const REQUEST_UPLOADS_DIR = path.resolve(ROOT_DIR, 'data', 'uploads', 'requests');
-const aiBoardShotBackend = shotBackendFromEnv(process.env, REQUEST_UPLOADS_DIR); // ảnh bản nháp: local | S3/MinIO
+const aiBoardShotBackend = shotBackendFromEnv(process.env, REQUEST_UPLOADS_DIR); // ảnh bản nháp: local | S3-compatible
 const PORT = Number(process.env.PORT) || 8041;
 const HOST = process.env.HOST || '0.0.0.0';
 // Optional path prefix when deployed behind a reverse proxy at a sub-path
@@ -1243,7 +1244,9 @@ r.post('/api/requests/:id/messages', requireAuth, (req, res) => {
   const role = isOwner ? 'student' : 'admin';
   const msg = addRequestMessage({ request_id: reqRow.id, role, author_name: me, body, attachments });
   if (role === 'student') aiBoardStore.invalidatePlanForRequest(reqRow.id, 'requester clarification');
-  const reopened = role === 'student' ? reopenRequestIfClosed(reqRow.id) : false;
+  // Board requests keep the status of their root ticket (a terminal root is never reopened by a reply — a new
+  // request is needed), so only a legacy request without a root may be reopened here.
+  const reopened = role === 'student' && !aiBoardStore.hasRoot(reqRow.id) ? reopenRequestIfClosed(reqRow.id) : false;
   res.json({ ok: true, message_id: msg.id, reopened });
 });
 // Bảng quyết định AI gần đây của trường (cho dashboard "Ban điều hành AI").
@@ -1366,7 +1369,7 @@ const setRequestUploadHeaders = (res, filePath) => {
   const ext = path.extname(filePath).toLowerCase();
   if (!REQUEST_INLINE_SAFE_EXT.has(ext)) res.setHeader('Content-Disposition', 'attachment');
 };
-// Ảnh bản nháp ở S3/MinIO: proxy GET trước static (miss → static, nên FAB upload local vẫn chạy).
+// Ảnh bản nháp ở S3-compatible: proxy GET trước static (miss → static, nên FAB upload local vẫn chạy).
 if (aiBoardShotBackend.kind === 's3') r.use('/uploads/requests', shotProxy(aiBoardShotBackend, setRequestUploadHeaders));
 r.use('/uploads/requests', express.static(REQUEST_UPLOADS_DIR, {
   fallthrough: false,
@@ -1387,13 +1390,8 @@ r.use('/vendor/mediapipe', express.static(MEDIAPIPE_DIR, {
 r.use(express.static(PUBLIC_DIR, {
   extensions: ['html'],
   setHeaders: (res, filePath) => {
-    if (/\.(?:js|css|woff2?|ttf|otf|eot)$/i.test(filePath)) {
-      res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
-    } else if (/\.(?:png|jpg|jpeg|gif|webp|avif|svg|ico|glb|gltf|hdr|exr|mp3|ogg|wav|mp4|webm)$/i.test(filePath)) {
-      res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=2592000');
-    } else if (/\.(?:webmanifest|json)$/i.test(filePath)) {
-      res.setHeader('Cache-Control', 'public, max-age=3600');
-    }
+    const cacheControl = staticCacheControl(filePath);
+    if (cacheControl) res.setHeader('Cache-Control', cacheControl);
   },
 }));
 

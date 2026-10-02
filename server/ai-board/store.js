@@ -2167,6 +2167,8 @@ export function createAiBoardStore(db, hooks = {}) {
     db,
     rerunGate,
     rerunStage,
+    // A request with a root ticket takes its status from the root (trigger 017): only a legacy request may be reopened directly.
+    hasRoot: (requestId) => !!db.prepare('SELECT 1 FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL').get(Number(requestId)),
     createRequestWithRoot,
     createSelfRequest,
     listRequestsForOwner,

@@ -1,5 +1,5 @@
 // ============================================================
-// Kho ảnh bản nháp (drafts.js): backend local | S3-compatible (MinIO) + retention
+// Kho ảnh bản nháp (drafts.js): backend local | S3-compatible (SeaweedFS, MinIO, AWS) + retention
 // ============================================================
 // Backend {kind, put(key, buf), get(key) → Buffer|null, remove(key)}; key = "<ngày>/<ts>-<hex12>.png".
 // Chỉ stdlib: SigV4 viết tay (PUT/GET/DELETE object, path-style). URL attachment luôn là
