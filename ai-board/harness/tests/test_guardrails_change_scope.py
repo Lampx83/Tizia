@@ -303,6 +303,6 @@ def test_content_review_trace_shows_the_text_judged_and_the_verdict():
         tracer.flush()
         call = batches[0][0]
         assert call["gate"] == 4
-        assert any(n["name"] == "chữ hiển thị được soát" and "public/a.html" in n["summary"] for n in call["notes"])
+        assert any(n["name"] == "rendered text" and "public/a.html" in n["summary"] for n in call["notes"])
         assert [(e["check"], e["ok"]) for e in call["evaluation"]] == [("content guard", ok)]
         assert labels[0] in call["evaluation"][0]["detail"]

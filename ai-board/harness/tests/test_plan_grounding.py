@@ -180,8 +180,8 @@ def test_gate_2_5_trace_shows_the_evidence_it_read_and_why_the_plan_was_or_was_n
 
     wrong, right = judged('workerReady: false'), judged('return "2 phút nữa";')
     knows = {n['name'] for n in wrong['notes'] if n['kind'] == 'knows'}
-    assert {'plan đang soát', 'bằng chứng nguồn'} <= knows
+    assert {'plan under review', 'source evidence'} <= knows
     assert any(n['kind'] == 'tool' and n['name'] == 'git show' and 'suggestion-fab.js' in n['summary'] for n in wrong['notes'])
-    assert [(e['check'], e['ok']) for e in wrong['evaluation']] == [('validator model', True), ('neo vào code nguồn', False)]
+    assert [(e['check'], e['ok']) for e in wrong['evaluation']] == [('validator', True), ('source grounding', False)]
     assert 'không tìm thấy trích dẫn' in wrong['evaluation'][1]['detail']
-    assert [(e['check'], e['ok']) for e in right['evaluation']] == [('validator model', True), ('neo vào code nguồn', True)]
+    assert [(e['check'], e['ok']) for e in right['evaluation']] == [('validator', True), ('source grounding', True)]

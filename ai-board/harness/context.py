@@ -190,11 +190,11 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
         said = file_context.phrases(request.get("subject"), request.get("body"), thread)
         hits, users = tools.find_text(source, commit, said, pages)
         log.append({"tool": "find_text", "params": {"phrases": said[:6], "pages": pages}, "chars": 0,
-                    "result": f"{len(hits)} chỗ chứa chữ người dùng nhắc, {len(users)} nơi dùng"})
+                    "result": f"{len(hits)} hits for the quoted phrases, {len(users)} usages"})
         render, render_words = ([], []) if file or known else tools.renderers(source, commit, said, pages)
         if not (file or known):
             log.append({"tool": "renderers", "params": {"pages": pages}, "chars": 0,
-                        "result": ", ".join(render) or "không có module render riêng"})
+                        "result": ", ".join(render) or "no dedicated render module"})
         if render:  # trang không chứa chữ đó: bỏ trang khỏi target, budget dành cho module render
             targets = render
             parts.append(f"LƯU Ý: chữ người dùng nhắc KHÔNG nằm trong {', '.join(pages)}; trang hiển thị nó qua "
@@ -203,7 +203,7 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
         if not (file or known or render):  # chữ người dùng nhắc có thể nằm ở module dùng chung, không ở trang gửi yêu cầu
             best = [(f, grams) for f, _, grams in tools.matching_files(source, commit, said, limit=1) if f not in targets]
             log.append({"tool": "matching_files", "params": {"phrases": said[:6]}, "chars": 0,
-                        "result": f"{best[0][0]} khớp: {'; '.join(best[0][1])[:200]}" if best else "không file nào khớp nhiều cụm"})
+                        "result": f"{best[0][0]} matches: {'; '.join(best[0][1])[:200]}" if best else "no file matches several phrases"})
             if best:
                 targets = [best[0][0], *targets]
                 parts.append(f"LƯU Ý: {best[0][0]} chứa nhiều cụm bạn viết nhất ({'; '.join(best[0][1])}). "
@@ -234,7 +234,7 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
             share = min(remaining, max(remaining - RESERVE * (len(calls) - i - 1), RESERVE)) - 2
             out = tools.run(name, source, commit, params, share) if share > 0 else ""
             log.append({"tool": name, "params": _brief(params), "chars": len(out),
-                        "result": out.splitlines()[0][:160] if out else "(không có kết quả hoặc hết budget)"})
+                        "result": out.splitlines()[0][:160] if out else "(no output or budget exhausted)"})
             if out:
                 parts.append(out)
                 remaining -= len(out) + 2
@@ -262,8 +262,8 @@ def report(trace, ctx: dict, subject: str = "") -> None:
     """Tường thuật bối cảnh + tool của `ctx` cho tracer (lần gọi model kế tiếp). trace=None: bỏ qua."""
     if trace is None:
         return
-    trace.note("knows", "skill + nguồn", f"skill {ctx['skill']}; repo ở {str(ctx.get('sha') or '?')[:10]}; {ctx['chars']} ký tự bối cảnh",
+    trace.note("knows", "skill", f"skill {ctx['skill']} · repo {str(ctx.get('sha') or '?')[:7]} · {ctx['chars']} chars",
                {"tiers": ctx.get("tiers"), "targets": ctx.get("targets"), "best_match": ctx.get("best_match")})
     for entry in ctx.get("tool_log") or []:
-        trace.note("tool", entry["tool"], f"{entry['result']} ({entry['chars']} ký tự)" if entry["chars"] else entry["result"],
+        trace.note("tool", entry["tool"], f"{entry['result']} ({entry['chars']} chars)" if entry["chars"] else entry["result"],
                    entry["params"])

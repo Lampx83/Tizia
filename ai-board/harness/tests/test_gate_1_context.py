@@ -81,10 +81,10 @@ def test_gate1_trace_shows_what_the_planner_knew_which_tools_ran_and_how_each_pl
     first, second = [call for batch in batches for call in batch]
     assert out["blocked"] is False
     names = {n["name"] for n in first["notes"] if n["kind"] == "knows"}
-    assert {"yêu cầu", "skill + nguồn"} <= names
+    assert {"request", "skill"} <= names
     assert any(n["kind"] == "tool" and n["name"] == "outline" for n in first["notes"])
-    assert [(e["check"], e["ok"]) for e in first["evaluation"]] == [("parse plan", True), ("file có trong repo", False)]
+    assert [(e["check"], e["ok"]) for e in first["evaluation"]] == [("plan parse", True), ("files exist", False)]
     assert "khong-co.css" in first["evaluation"][1]["detail"]
     retry = {n["name"]: n for n in second["notes"]}
-    assert "khong-co.css" in retry["retry feedback"]["summary"] and "skill + nguồn" not in retry
+    assert "khong-co.css" in retry["retry feedback"]["summary"] and "skill" not in retry
     assert all(e["ok"] for e in second["evaluation"]) and len(second["evaluation"]) == 3

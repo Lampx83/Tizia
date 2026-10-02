@@ -201,14 +201,14 @@ def test_every_gate_3_call_says_what_the_ai_knew_which_tools_ran_what_it_changed
     bad, good = calls
     knows = {n["name"]: n for n in bad["notes"] if n["kind"] == "knows"}
     assert "public/tinh-nang.html" in knows["target file"]["summary"]
-    assert "L" in knows["excerpt shown"]["data"]  # which line numbers the model could see
+    assert "L" in knows["excerpt"]["data"]  # which line numbers the model could see
     tool_notes = [n for n in bad["notes"] if n["kind"] == "tool"]
     assert tool_notes and all(n["name"] and n["summary"] for n in tool_notes)
     assert "Không có" in bad["edits"]["parsed"] and bad["edits"]["applied"] is False
-    assert [(e["check"], e["ok"]) for e in bad["evaluation"]] == [("parse JSON/schema", True), ("apply edits", False)]
+    assert [(e["check"], e["ok"]) for e in bad["evaluation"]] == [("parse output", True), ("apply edits", False)]
     assert "không khớp" in bad["evaluation"][1]["detail"]
     retry = {n["name"]: n for n in good["notes"] if n["kind"] == "knows"}
     assert "không khớp" in retry["retry feedback"]["summary"]  # the AI was shown its previous mistake
     assert good["edits"]["applied"] is True and "+    <p>Mới.</p>" in good["edits"]["diff"]
-    assert [e["check"] for e in good["evaluation"]] == ["parse JSON/schema", "apply edits", "output checks"]
+    assert [e["check"] for e in good["evaluation"]] == ["parse output", "apply edits", "output checks"]
     assert all(e["ok"] for e in good["evaluation"])

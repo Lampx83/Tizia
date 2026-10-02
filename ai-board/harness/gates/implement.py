@@ -189,13 +189,14 @@ def check_output(out: dict, current: str | None, done_reason: str | None, file: 
         except ValueError as error:
             report("apply edits", False, str(error))
             raise
-        report("apply edits", True, f"{len(out['edits'])} edit áp được lên file gốc")
+        n = len(out["edits"])
+        report("apply edits", True, f"{n} edit{'s' if n != 1 else ''} applied to the original file")
     try:
         _check_rest(out, current, file)
     except ValueError as error:
         report("output checks", False, str(error))
         raise
-    report("output checks", True, "cú pháp JS, vị trí chèn và test ESM đều đạt")
+    report("output checks", True, "JS syntax, insert position and ESM test all pass")
     return out
 
 
@@ -294,21 +295,22 @@ def _line_ranges(text: str | None) -> str:
 
 def _note_inputs(trace, subtask, model, state, current, context, siblings, words, lessons, ctx) -> None:
     """Tell the trace what the model is given for this subtask and which harness tools produced it."""
-    trace.note("knows", "subtask giao cho AI", f"{subtask['title']} | kiểm: {subtask['verify']} | model {model} (size {subtask.get('size')})")
+    trace.note("knows", "subtask", f"{subtask['title']} | verify: {subtask['verify']} | model {model} (size {subtask.get('size')})")
     if state.get("request_detail"):
-        trace.note("knows", "yêu cầu gốc", str(state["request_detail"])[:400])
+        trace.note("knows", "request", str(state["request_detail"])[:400])
     if current is None:
-        trace.note("knows", "target file", f"{subtask['file']}: file mới, chưa có ở base — AI viết cả file")
+        trace.note("knows", "target file", f"{subtask['file']}: new file, absent at base; AI writes the whole file")
     else:
-        trace.note("knows", "target file", f"{subtask['file']} ({len(current.splitlines())} dòng, base {str(state.get('base_sha'))[:10]})")
-        trace.note("tool", "git ls-tree", f"{len(siblings)} file cùng thư mục", {"folder": posixpath.dirname(subtask["file"]) or "."})
+        lines = len(current.splitlines())
+        trace.note("knows", "target file", f"{subtask['file']} ({lines} lines, base {str(state.get('base_sha'))[:7]})")
+        trace.note("tool", "git ls-tree", f"{len(siblings)} sibling files", {"folder": posixpath.dirname(subtask["file"]) or "."})
         ranges = _line_ranges(context)
-        trace.note("knows", "excerpt shown", f"AI chỉ thấy các dòng {ranges or '(không có dòng đánh số)'}, không thấy cả file",
+        trace.note("knows", "excerpt", f"{ranges} (of {lines} lines)" if ranges else "no numbered lines; AI sees only part of the file",
                    {"lines": ranges, "keywords": words[:12]})
     if lessons:
-        trace.note("knows", "lessons", f"{len(lessons)} bài học từ lần trước", lessons)
+        trace.note("knows", "lessons", f"{len(lessons)} lessons from earlier runs", lessons)
     if state.get("repair_reason"):
-        trace.note("knows", "lý do sửa lại", str(state["repair_reason"])[:500])
+        trace.note("knows", "repair reason", str(state["repair_reason"])[:500])
     if ctx:
         repo_context.report(trace, ctx)
 
@@ -391,10 +393,10 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
                 error = e
                 if trace:
                     trace.attach_last("edits", {"parsed": raw, "applied": False})
-                    trace.attach_last("evaluation", {"check": "parse JSON/schema", "ok": False, "detail": str(e)})
+                    trace.attach_last("evaluation", {"check": "parse output", "ok": False, "detail": str(e)})
             else:
                 if trace:
-                    trace.attach_last("evaluation", {"check": "parse JSON/schema", "ok": True, "detail": "đúng schema edits + test"})
+                    trace.attach_last("evaluation", {"check": "parse output", "ok": True, "detail": "valid edits + test schema"})
                 try:
                     _safe_join(repo, out["test_file"])
                 except ValueError as e:  # path tuyệt đối/thoát repo: chặn NGAY, không hỏi lại, không ghi gì
