@@ -530,6 +530,27 @@ def screenshot_payload(shots: list[dict]) -> list[dict]:
     return images
 
 
+def model_preflight(ollama, *, clock: Callable[[], float] = time.monotonic, ttl: float = 60.0) -> Callable[[], dict | None]:
+    """Generate 1 token per configured model. None = tất cả load được, else model_unavailable. Chỉ cache thành công."""
+    ok_at: dict[str, float] = {}
+
+    def check() -> dict | None:
+        models = dict.fromkeys(m for m in (ollama.gate1_model, ollama.gate3_model, ollama.gate3_model_light,
+                                           ollama.classifier_model) if m)
+        for model in models:
+            if model in ok_at and clock() - ok_at[model] < ttl:
+                continue
+            try:
+                ollama.generate(model, "ok", num_predict=1)
+            except Exception as error:  # noqa: BLE001 — mọi lỗi = chưa dùng được
+                body = error.read().decode("utf-8", "replace") if isinstance(error, urllib.error.HTTPError) else ""
+                ok_at.pop(model, None)
+                return {"status": "model_unavailable", "model": model, "error": f"{error} {body}".strip()[:200]}
+            ok_at[model] = clock()
+        return None
+    return check
+
+
 @dataclass
 class HttpWorker:
     client: WorkerClient
@@ -545,6 +566,7 @@ class HttpWorker:
     sync: Callable[[], Any] | None = None  # dedicated clone → origin/<base>, once per claimed ticket
     open_prs: bool = False  # candidates.publish after a passing verdict (needs AI_BOARD_GITHUB_TOKEN)
     folder_base_ref: str = "HEAD"  # nhánh folder gộp ref này mỗi lượt: clone riêng → origin/<base>, checkout dev → HEAD
+    model_check: Callable[[], dict | None] | None = None  # model_preflight(): lỗi → không claim
     _report_gate: Callable[[float], None] | None = dataclasses.field(default=None, init=False, repr=False)
 
     def gate_started(self, gate: float) -> None:
@@ -594,6 +616,10 @@ class HttpWorker:
         if self.tracer and self.tracer.over_hourly_cap():
             # GPU dùng chung: hết trần giờ thì không nhận ticket mới; ticket đang chạy không bị phạt.
             return {"status": "gpu_paused", "gpu_s_last_hour": round(self.tracer.gpu_s_last_hour(), 1)}
+        if self.model_check and (blocked := self.model_check()):
+            # Gateway không load nổi model (GPU tranh chấp): claim lúc này chỉ đẩy request vào 500 → precheck_blocked.
+            print(f"[worker] model {blocked['model']} chưa load được, không claim: {blocked['error']}")
+            return blocked
 
         claim = self.client.post("/api/ai-board/worker/claim", {
             "worker_id": self.worker_id, "version": self.version, "mode": self.mode,
@@ -1036,8 +1062,10 @@ def main(argv: list[str] | None = None) -> int:
         worker.folder_base_ref = f"origin/{base}"
     import memory
     print(json.dumps({"memory_pruned": memory.prune(DEFAULT_PATH, source=repo)}))
-    if args.plan or args.execute:
-        worker.planner = HarnessPlanner(tracer, progress=worker.gate_started, source=repo if repo_dir else None)
+    if args.plan or args.execute:  # shadow thuần không gọi model → không preflight
+        from models import OllamaClient
+        worker.model_check = model_preflight(OllamaClient.from_env())
+        worker.planner =HarnessPlanner(tracer, progress=worker.gate_started, source=repo if repo_dir else None)
     if args.execute:
         import candidate
         worker.change_runner = harness_change_runner(checkout_source=repo, tracer=tracer,
