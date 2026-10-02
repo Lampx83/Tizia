@@ -6,6 +6,8 @@ import unicodedata
 
 QUEUE_PROBE = 'queue-worker-availability-v1'
 TEXT_PROBE = 'text-visible-v1'
+READY_TEXT = re.compile('phút nữa', re.IGNORECASE)  # ETA line shown while a worker is ready or busy
+OFFLINE_TEXT = re.compile('chưa thể ước tính', re.IGNORECASE)  # the requester's own words; a sentence-initial capital is the same text
 # Oracle -> coverage flags it must report true. Keep in sync with ORACLE_COVERAGE in server/ai-board/store.js.
 ORACLES = {QUEUE_PROBE: ('requester_api', 'mounted_ui', 'recovery'), TEXT_PROBE: ('rendered_text',)}
 
@@ -160,10 +162,10 @@ def run(base, probe_id, fixture=None, state=None, pages=()):
                     raise RuntimeError('Requester API reports incorrect worker availability: ' + stage)
                 # Wait on the already open inbox, without reload or calling the renderer ourselves.
                 if ready:
-                    item.get_by_text(re.compile('phút nữa')).wait_for(timeout=12000)
+                    item.get_by_text(READY_TEXT).wait_for(timeout=12000)
                 else:
-                    item.get_by_text(re.compile('chưa thể ước tính')).wait_for(timeout=12000)
-                    if 'phút nữa' in item.inner_text():
+                    item.get_by_text(OFFLINE_TEXT).wait_for(timeout=12000)
+                    if READY_TEXT.search(item.inner_text()):
                         raise RuntimeError('Offline worker still has a queue ETA')
                 observations[stage] = item.inner_text()[:1000]
             return {'probe_id':probe_id,'passed':True,'observations':observations,

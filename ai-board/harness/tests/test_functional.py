@@ -126,3 +126,11 @@ def test_removing_a_short_word_is_not_fooled_by_longer_text_that_contains_it(sit
     assert not still['passed'] and 'vẫn còn' in still['reason']
     (root / 'long.html').write_text('<meta charset=utf-8><body><p>Hết hạn dùng thử, mời nâng cấp</p></body>', encoding='utf-8')
     assert not probe(site, "Bỏ dòng 'Hết hạn dùng thử'", '/long.html')['passed']  # long phrases still match inside a line
+
+
+def test_queue_oracle_text_patterns_ignore_case_so_a_capitalised_sentence_counts():
+    # the requester quoted 'chưa thể ước tính thời gian' mid-sentence; a sentence-initial capital is the same words
+    assert functional.OFFLINE_TEXT.search('Chưa thể ước tính thời gian')
+    assert functional.OFFLINE_TEXT.search('Đang chờ Ban điều hành — chưa thể ước tính thời gian.')
+    assert functional.READY_TEXT.search('khoảng 3 Phút nữa tới lượt')
+    assert not functional.OFFLINE_TEXT.search('Đang xếp hàng: thứ 1')
