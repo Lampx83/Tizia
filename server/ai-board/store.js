@@ -2124,7 +2124,8 @@ export function createAiBoardStore(db, hooks = {}) {
   // Admin reruns the gate that failed, from that gate's own row. Planning (gates 1-2.5) is one unit and restarts from
   // gate 1; the pre-PR gates (3-5.5) are one unit on the approved plan and restart from gate 3.
   const PLAN_BLOCKED_PHASES = ['clarification_limit', 'plan_blocked', 'precheck_blocked'];
-  const EXEC_BLOCKED_PHASES = ['transient_blocked', 'pre_pr_blocked', 'plan_unfit'];
+  // plan_unfit is not rerunnable: the plan cannot be carried out as written, repeating gates 3-5 fails the same way.
+  const EXEC_BLOCKED_PHASES = ['transient_blocked', 'pre_pr_blocked'];
   const gateStage = (gate) => ([1, 2, 2.5].includes(gate) ? 'plan' : [3, 4, 5, 5.5].includes(gate) ? 'execute' : null);
 
   /** Which stage an admin may rerun right now: 'plan' | 'execute' | null (live, leased, terminal, or a change already exists). */

@@ -220,7 +220,7 @@ function renderRun(run, root, latest) {
   const items = [
     ...run.calls.map(c => {
       const gate = Number(c.evidence?.gate ?? c.gate);
-      return { gate, kind: 0, at: c.created_at, id: c.id, html: callStep(c.evidence || {}, allowed(gate) && FAILED_CALL.has(c.evidence?.result) ? gate : null) };
+      return { gate, kind: 0, at: c.created_at, id: c.id, html: callStep(c.evidence || {}, Number.isFinite(gate) && allowed(gate) && FAILED_CALL.has(c.evidence?.result) ? gate : null) };
     }),
     ...run.gates.map(g => ({ gate: Number(g.gate), kind: 1, at: g.created_at, id: g.id, blocked: g.status === 'blocked',
       html: gateStep(g, allowed(g.gate) && Number(g.gate) === lastBlocked[gateStage(g.gate)]) })),

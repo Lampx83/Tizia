@@ -133,11 +133,10 @@ export async function purgeExpiredScreenshots(db, backend, { days, now = Date.no
   return { messages, files };
 }
 
-/** Chạy lúc khởi động rồi mỗi 6 h. AI_BOARD_SHOT_RETENTION_DAYS (mặc định 30; 0 = tắt). Trả timer hoặc null. */
+/** Chạy lúc khởi động rồi mỗi 6 h. AI_BOARD_SHOT_RETENTION_DAYS: số ngày giữ ảnh; chưa đặt hoặc 0 = tắt (xoá file là không hoàn tác nên phải chủ động bật). Trả timer hoặc null. */
 export function startShotRetention({ db, backend, env = process.env, log = console }) {
-  const raw = Number(env.AI_BOARD_SHOT_RETENTION_DAYS ?? 30);
-  const days = Number.isFinite(raw) && raw >= 0 ? raw : 30;
-  if (!days) return null;
+  const days = Number(env.AI_BOARD_SHOT_RETENTION_DAYS);
+  if (!(days > 0)) return null;
   const sweep = () => purgeExpiredScreenshots(db, backend, { days })
     .then((out) => { if (out?.files) log.info?.(`[ai-board] shot retention: ${out.files} files, ${out.messages} messages`); })
     .catch((e) => log.warn?.(`[ai-board] shot retention error: ${e.message}`));

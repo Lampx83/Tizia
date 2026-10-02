@@ -13,6 +13,7 @@ _QUOTED = re.compile(r"""(?<!\w)(?:'([^'\n]{2,120})'|"([^"\n]{2,120})"|“([^”
 _PAGE_LINE = re.compile(r'^\[Trang: .*\] \S+[ \t]*$', re.M)
 _ADD = re.compile(r'\b(thêm|chèn|hiển thị|hiện|add|insert|show|display)\b')
 _REMOVE = re.compile(r'\b(bỏ|xóa|xoá|gỡ|remove|delete)\b')
+_INSTEAD = re.compile(r'\b(thay vì|thay vào đó|instead of|rather than)\b')
 _REPLACE = re.compile(r'\b(đổi|thay|rename|change|replace)\b[^\n]*?(thành|bằng|→|->|\bto\b)')
 
 
@@ -34,6 +35,12 @@ def text_expectation(state):
     none = {'present': [], 'absent': []}
     if not quotes or (remove and (add or replace)):
         return none
+    cut = _INSTEAD.search(raw.lower())  # "show 'X' instead of 'Y'": Y must go, not show
+    if cut and not remove:
+        head = [next(g for g in m.groups() if g) for m in _QUOTED.finditer(raw[:cut.start()])]
+        tail = [next(g for g in m.groups() if g) for m in _QUOTED.finditer(raw[cut.end():])]
+        if head and tail:
+            return {'present': head, 'absent': tail}
     if replace and len(quotes) >= 2:
         return {'present': [quotes[-1]], 'absent': [quotes[0]] if quotes[0] != quotes[-1] else []}
     if add:
@@ -69,6 +76,13 @@ _SHOWN = r"""() => [document.title, document.body.innerText, ...[...document.que
   .flatMap(e => ['placeholder', 'aria-label', 'title', 'alt'].map(a => e.getAttribute(a) || ''))].join('\n')"""
 
 
+def _still_shown(text, lines):
+    """A short word counts as shown only when a visible line IS that word (a button label holding it as a word does not);
+    a long phrase also counts inside a line."""
+    t = _norm(text)
+    return any(line == t or (len(t) >= 12 and t in line) for line in lines)
+
+
 def run_text(base, state, fixture, pages):
     """Open the changed page(s) as a logged-in user; every quoted 'present' text must show, every 'absent' one must not."""
     expected = text_expectation(state)
@@ -80,7 +94,7 @@ def run_text(base, state, fixture, pages):
     from playwright.sync_api import sync_playwright
     from gates.verify import _launch
     present, absent = [_norm(t) for t in expected['present']], [_norm(t) for t in expected['absent']]
-    shown = {}
+    shown, lines = {}, []
     with sync_playwright() as p:
         browser = _launch(p)
         try:
@@ -96,13 +110,14 @@ def run_text(base, state, fixture, pages):
                         break
                     page.wait_for_timeout(500)
                 shown[path] = text
+                lines += [_norm(line) for line in page.evaluate('() => document.body.innerText').splitlines() if line.strip()]
         except Exception as error:
             return fail(str(error)[:1000])
         finally:
             browser.close()
     seen = ' '.join(shown.values())
     missing = [t for t in expected['present'] if _norm(t) not in seen]
-    lingering = [t for t in expected['absent'] if _norm(t) in seen]
+    lingering = [t for t in expected['absent'] if _still_shown(t, lines)]
     reason = None
     if missing:
         reason = 'Chữ người dùng yêu cầu không hiển thị trên trang: ' + ', '.join(repr(t) for t in missing)

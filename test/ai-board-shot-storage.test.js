@@ -9,7 +9,7 @@ import express from 'express';
 import Database from 'better-sqlite3';
 
 import {
-  createLocalBackend, createS3Backend, shotBackendFromEnv, purgeExpiredScreenshots, shotProxy, shotKey,
+  createLocalBackend, createS3Backend, shotBackendFromEnv, purgeExpiredScreenshots, shotProxy, shotKey, startShotRetention,
 } from '../server/ai-board/shot-storage.js';
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('x')]);
@@ -230,4 +230,16 @@ test('proxy GET: image/png + header như static, miss → next, không liệt k�
     const post = await fetch(`${base}/2026-01-02/1-abcdef012345.png`, { method: 'POST' });
     assert.equal(await post.text(), 'static-fallthrough');
   } finally { server.close(); s.server.close(); }
+});
+
+test('retention deletes nothing unless the operator opts in with AI_BOARD_SHOT_RETENTION_DAYS', () => {
+  const db = { prepare() { throw new Error('the sweep must not touch the database when retention is off'); } };
+  const backend = { remove() { throw new Error('nothing may be removed when retention is off'); } };
+  for (const env of [{}, { AI_BOARD_SHOT_RETENTION_DAYS: '0' }, { AI_BOARD_SHOT_RETENTION_DAYS: 'abc' }]) {
+    assert.equal(startShotRetention({ db, backend, env, log: {} }), null);
+  }
+  const rows = { all: () => [], run() {} };
+  const timer = startShotRetention({ db: { prepare: () => rows }, backend, env: { AI_BOARD_SHOT_RETENTION_DAYS: '30' }, log: {} });
+  assert.ok(timer, 'explicit days start the sweep');
+  clearInterval(timer);
 });

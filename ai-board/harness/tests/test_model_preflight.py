@@ -33,20 +33,18 @@ def worker_with(ollama, clock):
 
 
 def test_unloadable_model_blocks_the_claim():
-    worker, transport = worker_with(FakeOllama(broken={'heavy'}), lambda: 0.0)
+    worker, transport = worker_with(FakeOllama(broken={'clf'}), lambda: 0.0)
     out = worker.run_once()
-    assert out['status'] == 'model_unavailable' and out['model'] == 'heavy'
+    assert out['status'] == 'model_unavailable' and out['model'] == 'clf'
     assert 'HTTP Error 500' in out['error'] and 'failed to load' in out['error']
     assert not any(call[1].endswith('/claim') for call in transport.calls)
 
 
-def test_checks_each_distinct_model_once_with_a_tiny_generate():
-    ollama = FakeOllama()
-    ollama.gate3_model_light = 'heavy'  # trùng → 1 lần
-    ollama.classifier_model = ''  # không cấu hình → bỏ qua
+def test_checks_only_the_intake_models_once_each_with_a_tiny_generate():
+    ollama = FakeOllama()  # Gate 3 models are NOT loaded early: that would pin a 20 GB model in the shared GPU
     worker, transport = worker_with(ollama, lambda: 0.0)
     assert worker.run_once()['status'] != 'model_unavailable'
-    assert [call[0] for call in ollama.calls] == ['g1', 'heavy']
+    assert [call[0] for call in ollama.calls] == ['g1', 'clf']
     assert ollama.calls[0][1:] == ('ok', {'num_predict': 1})
     assert any(call[1].endswith('/claim') for call in transport.calls)
 
@@ -58,10 +56,10 @@ def test_success_is_cached_for_60s_and_failure_is_retried_every_poll():
     worker.run_once()
     now[0] = 59.0
     worker.run_once()
-    assert len(ollama.calls) == 4  # chỉ lượt đầu gọi model
+    assert len(ollama.calls) == 2  # chỉ lượt đầu gọi model
     now[0] = 61.0
     worker.run_once()
-    assert len(ollama.calls) == 8
+    assert len(ollama.calls) == 4
 
     ollama.broken = {'g1'}
     now[0] = 200.0

@@ -108,3 +108,21 @@ def test_text_oracle_without_a_page_to_look_at_does_not_pass(site):
 def test_text_oracle_does_not_pin_the_plan_to_the_queue_files():
     assert functional.expected_targets(ASK("Thêm dòng 'Tizia cập nhật' vào chân trang")) == set()
     assert functional.expected_targets(ASK('Ẩn ETA khi worker tắt')) == {'public/js/suggestion-fab.js'}
+
+
+def test_instead_of_marks_the_text_that_must_go_not_the_text_to_show():
+    expect = functional.text_expectation
+    assert expect(ASK("Hãy hiện 'Chưa có dữ liệu' thay vì 'Đang tải'")) == {'present': ['Chưa có dữ liệu'], 'absent': ['Đang tải']}
+    assert expect(ASK("Show 'Empty list' instead of 'Loading'")) == {'present': ['Empty list'], 'absent': ['Loading']}
+
+
+def test_removing_a_short_word_is_not_fooled_by_longer_text_that_contains_it(site):
+    root, _ = site
+    # the suggestion button's own label contains 'Gửi'; only a line that IS the word counts as still showing it
+    (root / 'fab.html').write_text('<meta charset=utf-8><body><button aria-label="Gửi đề nghị tới Ban">Gửi đề nghị tới Ban</button><p>Nộp bài</p></body>', encoding='utf-8')
+    (root / 'still.html').write_text('<meta charset=utf-8><body><button>Gửi</button><p>Nộp bài</p></body>', encoding='utf-8')
+    assert probe(site, "Đổi 'Gửi' thành 'Nộp bài'", '/fab.html')['passed']
+    still = probe(site, "Đổi 'Gửi' thành 'Nộp bài'", '/still.html')
+    assert not still['passed'] and 'vẫn còn' in still['reason']
+    (root / 'long.html').write_text('<meta charset=utf-8><body><p>Hết hạn dùng thử, mời nâng cấp</p></body>', encoding='utf-8')
+    assert not probe(site, "Bỏ dòng 'Hết hạn dùng thử'", '/long.html')['passed']  # long phrases still match inside a line

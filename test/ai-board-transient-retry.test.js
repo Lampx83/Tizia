@@ -204,7 +204,7 @@ const rootOf = (db, id) => db.prepare('SELECT status, phase, lease_owner, plan_h
 
 test('rerunning a failed pre-PR gate requeues the approved plan from gate 3, whatever the failure class', () => {
   for (const [gate, failureClass, phase] of [[3, 'ordinary', 'pre_pr_blocked'], [4, 'ordinary', 'pre_pr_blocked'],
-    [5, 'plan', 'plan_unfit'], [5, 'transient', 'transient_blocked']]) {
+    [5, 'transient', 'transient_blocked']]) {
     const { db, store, submit, ticket } = plannedRoot();
     submit(blockedAt(gate, failureClass), Date.now());
     db.prepare('UPDATE ai_tickets SET lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL WHERE id=?').run(ticket.id); // worker released it
@@ -242,6 +242,10 @@ test('a gate can only be rerun from the stage that actually failed, never while 
   db.prepare('UPDATE ai_tickets SET lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL WHERE id=?').run(ticket.id);
   assert.throws(() => store.rerunGate(request, 1, 9), (e) => e.code === 'not_rerunnable'); // planning did not fail
   assert.throws(() => store.rerunGate(request, 7, 9), (e) => e.code === 'invalid_gate');
+  // plan_unfit means the plan cannot be carried out as written: repeating gates 3-5 would only fail the same way
+  db.prepare("UPDATE ai_tickets SET phase='plan_unfit' WHERE id=?").run(ticket.id);
+  assert.throws(() => store.rerunGate(request, 5, 9), (e) => e.code === 'not_rerunnable');
+  db.prepare("UPDATE ai_tickets SET phase='pre_pr_blocked' WHERE id=?").run(ticket.id);
   db.prepare("UPDATE ai_tickets SET lease_owner='w1' WHERE id=?").run(ticket.id);
   assert.throws(() => store.rerunGate(request, 4, 9), (e) => e.code === 'not_rerunnable'); // someone holds it
   db.close();

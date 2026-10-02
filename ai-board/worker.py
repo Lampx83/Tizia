@@ -531,12 +531,13 @@ def screenshot_payload(shots: list[dict]) -> list[dict]:
 
 
 def model_preflight(ollama, *, clock: Callable[[], float] = time.monotonic, ttl: float = 60.0) -> Callable[[], dict | None]:
-    """Generate 1 token per configured model. None = tất cả load được, else model_unavailable. Chỉ cache thành công."""
+    """Generate 1 token on each intake model. None = load được hết, else model_unavailable. Chỉ cache thành công."""
     ok_at: dict[str, float] = {}
 
     def check() -> dict | None:
-        models = dict.fromkeys(m for m in (ollama.gate1_model, ollama.gate3_model, ollama.gate3_model_light,
-                                           ollama.classifier_model) if m)
+        # Only what every request needs at intake. Gate 3 models are loaded when Gate 3 runs: probing them here
+        # would keep a 20 GB model pinned in the shared GPU while idle.
+        models = dict.fromkeys(m for m in (ollama.gate1_model, ollama.classifier_model) if m)
         for model in models:
             if model in ok_at and clock() - ok_at[model] < ttl:
                 continue

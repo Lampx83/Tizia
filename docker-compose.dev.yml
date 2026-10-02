@@ -20,6 +20,7 @@ services:
       AI_BOARD_CLASSIFIER_MODEL: ${AI_BOARD_CLASSIFIER_MODEL:-qwen3.5:4b}
       TIZIA_MODEL_AI_BOARD_GRILL: ${TIZIA_MODEL_AI_BOARD_GRILL:-qwen3.5:4b}
       TIZIA_MODEL_AI_BOARD_SPEC: ${TIZIA_MODEL_AI_BOARD_SPEC:-qwen3:8b}
+      AI_BOARD_SHOT_RETENTION_DAYS: ${AI_BOARD_SHOT_RETENTION_DAYS:-30}  # dev only; production keeps screenshots unless this is set
     volumes:
       - tizia-dev-data:/data
 
