@@ -6,10 +6,9 @@
 // → chuông cho người gửi. Lượt hỏng → nút "Thử cách khác" (lập plan mới), hỏng
 // 2 lượt liền → chuyển quản trị viên.
 // ============================================================
-import fs from 'node:fs/promises';
-import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { WorkerContractError } from './store.js';
+import { createLocalBackend } from './shot-storage.js';
 
 // Khớp ai-board/worker.py (SHOTS_TYPE, MAX_SHOT_BYTES, MAX_SHOTS).
 export const SHOTS_TYPE = 'application/vnd.tizia.screenshots+json'; // tránh express.json 64kb chung
@@ -43,7 +42,7 @@ const label = (image) => {
 };
 
 /** Lưu ảnh bản nháp của lượt runId + 1 tin AI trong thread. Lặp lại cùng run → trả tin cũ, không ghi thêm. */
-export async function saveDraftScreenshots(store, ticketId, { workerId, leaseToken, runId, images, uploadsDir, now = Date.now() }) {
+export async function saveDraftScreenshots(store, ticketId, { workerId, leaseToken, runId, images, uploadsDir, backend = createLocalBackend(uploadsDir), now = Date.now() }) {
   const { db } = store;
   const root = store.assertLease(ticketId, workerId, leaseToken, now);
   const run = db.prepare('SELECT id FROM ai_runs WHERE id=? AND ticket_id=?').get(Number(runId), root.id);
@@ -56,11 +55,10 @@ export async function saveDraftScreenshots(store, ticketId, { workerId, leaseTok
   }
   const pngs = images.map(decodePng); // kiểm hết trước khi ghi file nào
   const day = new Date(now).toISOString().slice(0, 10);
-  await fs.mkdir(path.join(uploadsDir, day), { recursive: true });
   const attachments = [];
   for (const [i, buf] of pngs.entries()) {
     const fname = `${now}-${randomBytes(6).toString('hex')}.png`;
-    await fs.writeFile(path.join(uploadsDir, day, fname), buf);
+    await backend.put(`${day}/${fname}`, buf);
     attachments.push({ url: `/uploads/requests/${day}/${fname}`, name: label(images[i]), mime: 'image/png',
       size: buf.length, kind: 'screenshot' });
   }

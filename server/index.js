@@ -58,6 +58,7 @@ import { createAiBoardStore } from './ai-board/store.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from './ai-board/routes.js';
 import { selfWinNotifier } from './ai-board/self-improve.js';
 import { draftNotifier } from './ai-board/drafts.js';
+import { shotBackendFromEnv, shotProxy, startShotRetention } from './ai-board/shot-storage.js';
 import { attachAiBoardIntake, clarifyNotifier } from './contexts/ai-board-intake/index.js';
 import { attachAiBoardReleases } from './contexts/ai-board-releases/index.js';
 import { aiQuotaGate, recordAiCall } from './ai-quota.js';
@@ -74,6 +75,7 @@ const MEDIAPIPE_DIR = path.resolve(ROOT_DIR, 'node_modules', '@mediapipe', 'task
 // Thư mục lưu ảnh/file đính kèm cho "Ban điều hành AI". Tạo lười khi cần.
 // File phục vụ qua /uploads/requests/... (mount express.static phía dưới).
 const REQUEST_UPLOADS_DIR = path.resolve(ROOT_DIR, 'data', 'uploads', 'requests');
+const aiBoardShotBackend = shotBackendFromEnv(process.env, REQUEST_UPLOADS_DIR); // ảnh bản nháp: local | S3/MinIO
 const PORT = Number(process.env.PORT) || 8041;
 const HOST = process.env.HOST || '0.0.0.0';
 // Optional path prefix when deployed behind a reverse proxy at a sub-path
@@ -359,7 +361,7 @@ attachAiBoardRequestRoutes(r, {
   onClarify: clarifyNotifier(createNotification),
 });
 attachAiBoardWorkerRoutes(r, {
-  store: aiBoardStore, uploadsDir: REQUEST_UPLOADS_DIR, onVerdict: draftNotifier(createNotification),
+  store: aiBoardStore, uploadsDir: REQUEST_UPLOADS_DIR, shotBackend: aiBoardShotBackend, onVerdict: draftNotifier(createNotification),
   onSelfWin: selfWinNotifier(db, createNotification),
   onClarify: clarifyNotifier(createNotification),
 });
@@ -1351,22 +1353,25 @@ r.get(/.*/, async (req, res, next) => {
 // Đính kèm "Ban điều hành AI" — ảnh chụp màn hình + file của HS gửi kèm yêu cầu.
 // Read-only (POST đi qua /api/requests/attachments có gate). Cache vài giờ vì
 // asset bất biến (tên file random, ghi đè bất khả thi). NO directory listing.
+const setRequestUploadHeaders = (res, filePath) => {
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  // Phòng thủ nhiều lớp cho nội dung do người dùng tải lên:
+  //  • nosniff: trình duyệt không tự đoán lại Content-Type.
+  //  • CSP sandbox + default-src 'none': kể cả file HTML/SVG lọt vào cũng KHÔNG
+  //    chạy được script khi mở thẳng.
+  //  • Content-Disposition: ép tải về với mọi định dạng trừ ảnh raster an toàn —
+  //    SVG/PDF/Office… không bao giờ render inline trong origin.
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+  const ext = path.extname(filePath).toLowerCase();
+  if (!REQUEST_INLINE_SAFE_EXT.has(ext)) res.setHeader('Content-Disposition', 'attachment');
+};
+// Ảnh bản nháp ở S3/MinIO: proxy GET trước static (miss → static, nên FAB upload local vẫn chạy).
+if (aiBoardShotBackend.kind === 's3') r.use('/uploads/requests', shotProxy(aiBoardShotBackend, setRequestUploadHeaders));
 r.use('/uploads/requests', express.static(REQUEST_UPLOADS_DIR, {
   fallthrough: false,
   index: false,
-  setHeaders: (res, filePath) => {
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    // Phòng thủ nhiều lớp cho nội dung do người dùng tải lên:
-    //  • nosniff: trình duyệt không tự đoán lại Content-Type.
-    //  • CSP sandbox + default-src 'none': kể cả file HTML/SVG lọt vào cũng KHÔNG
-    //    chạy được script khi mở thẳng.
-    //  • Content-Disposition: ép tải về với mọi định dạng trừ ảnh raster an toàn —
-    //    SVG/PDF/Office… không bao giờ render inline trong origin.
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
-    const ext = path.extname(filePath).toLowerCase();
-    if (!REQUEST_INLINE_SAFE_EXT.has(ext)) res.setHeader('Content-Disposition', 'attachment');
-  },
+  setHeaders: setRequestUploadHeaders,
 }));
 r.use('/vendor/mediapipe', express.static(MEDIAPIPE_DIR, {
   maxAge: '7d',
@@ -1445,6 +1450,9 @@ setInterval(() => {
     console.warn('[scoreup-webhook] prune error:', e.message);
   }
 }, 6 * 3600 * 1000).unref?.();
+
+// Retention ảnh bản nháp AI Board (AI_BOARD_SHOT_RETENTION_DAYS, mặc định 30; 0 = tắt).
+startShotRetention({ db, backend: aiBoardShotBackend, log });
 
 // Bật error tracking (Sentry nếu có SENTRY_DSN) trước khi nhận traffic.
 await initErrorTracking();

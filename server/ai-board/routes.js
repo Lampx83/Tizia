@@ -310,6 +310,7 @@ export function attachAiBoardWorkerRoutes(router, {
   env = process.env,
   leaseMs = LEASE_MS,
   uploadsDir = null, // thư mục /uploads/requests (ảnh bản nháp); thiếu → route ảnh trả 503
+  shotBackend = undefined, // backend lưu ảnh (shot-storage.js); mặc định local trong uploadsDir
   onVerdict = null, // ({request_id, title, domain, student, kind}) sau mỗi verdict: chuông cho người gửi
   onSelfWin = null, // ({night, request_id}) biến thể tự cải thiện thắng eval: chuông cho admin
   onClarify = null, // ({requestId, title, domain, student}) khi Gate 2.5 cần người gửi làm rõ
@@ -514,7 +515,7 @@ export function attachAiBoardWorkerRoutes(router, {
       try {
         const lease = leaseInput(req.body);
         res.json(await saveDraftScreenshots(store, req.params.id, {
-          ...lease, runId: req.body?.run_id, images: req.body?.images, uploadsDir,
+          ...lease, runId: req.body?.run_id, images: req.body?.images, uploadsDir, backend: shotBackend,
         }));
       } catch (error) {
         if (error instanceof WorkerContractError) return res.status(error.status).json({ error: error.code, message: error.message });
