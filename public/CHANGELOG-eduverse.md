@@ -4,6 +4,72 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-10-02 — Phiên 79 · **Kết luận: không có việc nào đo được** — hộp thư chết ngày thứ 18, cả ba bậc dự phòng sạch
+
+**Kết luận một dòng (theo `ai-board/ROUTINE.md` §2b):** hộp thư yêu cầu **không đọc được** (ngày hỏng
+liên tiếp **thứ 18**, từ `2026-09-13`) và **cả ba bậc việc dự phòng đều sạch** ⇒ phiên này **không xử
+lý yêu cầu nào**, **không tạo PR**, **không sửa học liệu**, **không bịa việc**.
+
+### Hộp thư — request ID đã xử lý: **không có, và vì sao**
+
+`node scripts/ai-board-preflight.mjs` đo 6 endpoint trên `https://tizia.vn`:
+
+| Endpoint | Mã trả về |
+|---|---|
+| `/api/ai-board/inbox` | **401** `{"error":"unauthorized","needLogin":true}` |
+| `/api/requests`, `/api/public/requests`, `/api/board/inbox`, `/api/admin/requests`, `/api/ai-board/requests` | **401** (cùng thân phản hồi) |
+
+`AI_BOARD_KEY` trong môi trường: **chưa có**. Không có yêu cầu nào của sinh viên/học sinh đọc được
+⇒ không có request ID nào để xử lý hay phản hồi.
+
+> Ghi chú đo lường: lần probe đầu của phiên nhận **503** ở `/api/ai-board/inbox`, nhưng ba lần đo lại
+> ngay sau đó (`curl` trực tiếp + `check-deployed-build.mjs`) đều trả **401 needLogin**. 503 là nhiễu
+> nhất thời của lớp proxy, **không** phải dấu hiệu route đã lên.
+
+### Leo thang (ngày thứ 18 ≥ ngưỡng 3) — vẫn đúng MỘT việc cần người bấm nút
+
+Theo bảng phân biệt trong `ROUTINE.md`: **401 `needLogin`** = thông điệp của **gate auth chung** ⇒ bản
+**đang chạy** chưa có code PR #97, tức **chưa redeploy**. Kiểm chứng rằng code đã nằm trên nhánh
+production:
+
+```
+origin/feat/postgres-migration  tip = ae3f491
+  ├─ server/contexts/ai-agent/inbox-api.js            ✅ có
+  └─ server/contexts/identity/auth.js:246  '/api/ai-board/'  ✅ có trong PUBLIC_PATH_PREFIXES
+```
+
+⇒ Việc còn lại, **AI không được phép tự làm** (secret + redeploy nhánh production vượt ngưỡng rủi ro
+thấp): **đặt `AI_BOARD_KEY`** (`openssl rand -hex 32`) trên production **rồi redeploy nhánh
+`feat/postgres-migration`**.
+
+### Bậc thang dự phòng — con số đo thật, cả ba sạch
+
+| Bậc | Lệnh chứng minh | Kết quả hôm nay |
+|---|---|---|
+| 1 — Bài lí thuyết mồ côi / toàn vẹn học liệu | `node scripts/check-content-integrity.mjs` | **0 vấn đề** — "✅ Toàn vẹn học liệu: không phát hiện vấn đề." |
+| 2 — Môn dừng ở tuần 35 | `node scripts/ai-board-preflight.mjs` | **0 môn**. Quét lại độc lập (không chỉ mẫu 35/36): **141/141** file môn có `M(36,…)`, không file nào dừng sớm. |
+| 3 — Lệch phân bố đáp án | `node scripts/audit-answer-distribution.js` | **0 môn lệch**, **0 câu dị dạng**. Toàn bộ **28.212** câu: A 24,8% · B 25,2% · C 25,3% · D 24,7% · χ²=**2,96**. |
+
+**Đọc thẳng bảng phân bố** (đúng cảnh báo của `ROUTINE.md` §2b — không tin chữ "sạch" của tiêu chí
+hẹp): môn lệch nhất là `lop3:toan` (n=226) A 31,9 / B 29,2 / C 22,1 / D 16,8 — vị trí cao nhất
+**31,9%** (ngưỡng 60%), hai vị trí cao nhất gánh **61,1%** (ngưỡng 85%). Cách cả hai ngưỡng rất xa
+⇒ **sạch thật**, không phải sạch vì bộ đo hẹp.
+
+**Con số trước → sau: không có, vì không có thay đổi nào.** Theo `ROUTINE.md`, không chứng minh được
+giá trị thì không làm.
+
+### Thay đổi từng file
+
+| File | Thay đổi |
+|---|---|
+| `ai-board/inbox-status.json` | Bộ đếm ngày hỏng liên tiếp 17 → **18**, `last_checked` → `2026-10-02` (do `ai-board-preflight.mjs` ghi tự động). |
+| `public/CHANGELOG-eduverse.md` | Mục này. |
+
+**Không file `.js` nào bị sửa** ⇒ không có `node --check` nào phải chạy (không có đầu vào), và không
+có nội dung mới để kiểm tra runtime. Bốn lệnh chẩn đoán ở trên đều chạy thật và đã ghi kết quả.
+
+---
+
 ## 2026-09-30 — Phiên 78 · Dọn nợ tồn: merge nốt nội dung treo 1 tháng, **bỏ hẳn cơ chế nhánh + PR**
 
 **Chế độ:** chủ sở hữu yêu cầu trực tiếp (không phải phiên tự động): *"merge hết toàn bộ những gì
