@@ -38,12 +38,21 @@ async function post(path, body) {
   return data;
 }
 
+function renderAtts(list) {
+  const items = (Array.isArray(list) ? list : []).filter(a => a && a.url);
+  if (!items.length) return '';
+  return `<div class="atts">${items.map(a => /^image\//.test(a.mime || '')
+    ? `<a href="${esc(a.url)}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(a.url)}" alt="${esc(a.name)}"><span>${esc(a.name)}</span></a>`
+    : `<a href="${esc(a.url)}" target="_blank" rel="noopener"><span>${esc(a.name)}</span></a>`).join('')}</div>`;
+}
+
 function renderThread(messages) {
   return messages.map(m => {
     const board = m.role === 'ai' || m.role === 'admin';
     return `<div class="blk ${board ? 'board' : 'student'}">
       <div class="who">${esc(m.author_name || (board ? 'Ban điều hành AI' : 'Học sinh'))} · ${fmt(m.created_at)}</div>
       <div style="white-space:pre-wrap">${esc(m.body)}</div>
+      ${renderAtts(m.attachments)}
     </div>`;
   }).join('') || '<div class="blk meta">Chưa có trao đổi nào.</div>';
 }
