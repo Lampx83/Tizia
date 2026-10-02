@@ -154,7 +154,7 @@ def source_evidence(request: dict, plan: dict, state: dict) -> tuple[str | None,
             continue
         files[path] = text
         chunks.append(f'FILE {path} at {sha}\n' + file_context.excerpt(text,
-            file_context.keywords(request.get('subject'), request.get('body'), task.get('title')), budget=3500))
+            file_context.keywords(request.get('subject'), request.get('body'), task.get('title')), budget=3500, filename=path))
     return sha, files, '\n\n'.join(chunks)[:16000]
 
 

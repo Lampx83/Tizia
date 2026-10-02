@@ -105,7 +105,7 @@ def file_prompt_context(subtask: dict, content: str, siblings: list[str], words:
     """Trích dòng liên quan + danh sách file cùng thư mục (cây codebase thu gọn)."""
     folder = posixpath.dirname(subtask["file"]) or "."
     return (f"(file {len(content.splitlines())} dòng; cùng thư mục {folder}/: {', '.join(siblings[:40]) or '—'})\n"
-            + file_context.excerpt(content, words))
+            + file_context.excerpt(content, words, filename=subtask["file"]))
 
 
 def _siblings(source, sha: str, file: str) -> list[str]:
@@ -185,7 +185,7 @@ def check_output(out: dict, current: str | None, done_reason: str | None, file: 
         raise ValueError(message)
     if current is not None:
         try:
-            out["code"] = file_context.apply_edits(current, out["edits"])
+            out["code"] = file_context.apply_edits(current, out["edits"], filename=file)
         except ValueError as error:
             report("apply edits", False, str(error))
             raise

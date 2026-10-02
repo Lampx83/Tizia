@@ -216,3 +216,10 @@ def test_build_context_known_target_excerpt_has_no_comments(repo, tmp_path):
     sub = {"title": "Đổi nhãn Gửi góp ý", "file": "public/js/fab.js", "verify": "label"}
     ctx = context.build_context(3, {"subject": "Đổi nhãn Gửi góp ý"}, sub, src, sha, memory_path=tmp_path / "l.jsonl")
     assert "Gửi góp ý" in ctx["text"] and "nhãn)" not in ctx["text"] and "mô tả dài" not in ctx["text"]
+
+
+def test_context_builders_pass_the_file_name_so_a_snippet_with_no_js_hints_is_still_stripped():
+    from gates import implement
+    content = "// ghi chú dài về dòng dưới\nx = 1\n"  # nothing in it says "this is JavaScript"
+    shown = implement.file_prompt_context({"file": "public/js/a.js"}, content, [], ["x"])
+    assert "ghi chú" not in shown and "L2|" in shown
