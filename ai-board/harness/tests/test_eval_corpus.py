@@ -72,8 +72,8 @@ def full(root, *extra, seed=5, models=None):
     return eval_run.main(["full", "--seed", str(seed), "--repeats", "1", "--root", str(root), *extra], deps)
 
 
-def report(root, seed=5):
-    return json.loads((root / "runs" / f"full-s{seed}" / "report.json").read_text(encoding="utf-8"))
+def report(root, seed=5, split="dev"):
+    return json.loads((root / "runs" / f"full-s{seed}-{split}" / "report.json").read_text(encoding="utf-8"))
 
 
 def test_corpus_has_sixty_ladder_cases_reproducible_from_a_seed_and_frozen_text_never_changes_silently(root, capsys):
@@ -97,6 +97,13 @@ def test_corpus_has_sixty_ladder_cases_reproducible_from_a_seed_and_frozen_text_
     assert all(c["base_sha"] == eval_run.eval_corpus.PIN and c["file"].startswith("public/") for c in cases)
     assert len({c["key"] for c in cases}) == 60
 
+    manifest = json.loads((root / "corpus" / "full-s5" / "manifest.json").read_text(encoding="utf-8"))
+    dev, held = manifest["split"]["dev"], manifest["split"]["heldout"]
+    assert (dev["cases"], held["cases"]) == (42, 18)  # 70/30
+    assert not set(dev["pages"]) & set(held["pages"]) and not set(dev["types"]) & set(held["types"])  # trang và loại rời nhau
+    assert {c["split"] for c in cases} == {"dev", "heldout"} and {r["split"] for r in manifest["cases"]} == {"dev", "heldout"}
+    assert all(c["file"] in dev["pages"] for c in cases if c["split"] == "dev") and all(t in dev["types"] for c in cases if c["split"] == "dev" for t in c["types"])
+
     texts_path = root / "corpus" / "texts.json"
     texts = json.loads(texts_path.read_text(encoding="utf-8"))
     texts[cases[0]["key"]]["detail"] += " (sửa lén)"
@@ -115,12 +122,15 @@ def test_corpus_has_sixty_ladder_cases_reproducible_from_a_seed_and_frozen_text_
 
 def test_every_transformation_type_gets_an_exact_gold_that_its_own_check_accepts_and_rejects_damage(root):
     freeze(root, 7)
-    assert full(root, seed=7) == 0
-    rep = report(root, 7)
+    assert full(root, "--split", "all", seed=7) == 0
+    rep = report(root, 7, "all")
     corpus7 = cases_of(root, 7)
     assert len(rep["cases"]) == 60 and {c["kind"] for c in rep["cases"]} == {c["kind"] for c in corpus7} and len({c["kind"] for c in corpus7}) == 8
     by_id = {c["id"]: c for c in corpus7}
     for line in rep["cases"]:
         level = by_id[line["id"]]["level"]  # gold qua; hỏng chỗ khác (mức 5) thì check chặn; rác (mức 3) dừng ở cổng 3
         assert (line["passed"], line["reached"]["gold_oracle"]) == ((0, 0) if level == 3 else (0, 1) if level == 5 else (1, 1)), line["id"]
+    repo = root / "checkouts" / eval_run.eval_corpus.PIN[:12]  # mỗi case chạy trên checkout ở base_sha: HEAD ghim, không working tree
+    assert (repo / "HEAD").read_text().strip() == eval_run.eval_corpus.PIN and not (repo / "public").exists()
+    assert (rep["groups"]["split=dev"]["trials"], rep["groups"]["split=heldout"]["trials"]) == (42, 18)
     assert rep["groups"]["level=1"]["rate"] == 100.0 and rep["groups"]["level=5"]["rate"] == 0.0 and rep["groups"]["style=named"]["trials"] > 0

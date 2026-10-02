@@ -11,6 +11,7 @@ import random
 import re
 import shutil
 import subprocess
+from collections import Counter
 from pathlib import Path
 
 PIN = "1e8683704f7f27b7b57793896c9f2472811e56bc"  # đầu main 2026-09-25; trang public/*.html lấy ở đây, không bao giờ ở HEAD
@@ -21,6 +22,8 @@ WORDS = ("học tập bài giảng ôn luyện kiểm tra thuốc đơn liều l
 CELLS = {"replace_text": (1, 2, 3, 4, 5), "insert_text": (1, 2, 3, 5), "css_color": (1, 2, 3, 5), "size_hide": (1, 2, 5),
          "remove_element": (1, 2, 3, 5), "add_block": (1, 3, 4, 5), "change_link": (1, 2, 5), "new_page": (1, 5)}
 EXTRA = (("replace_text", 1), ("css_color", 1))
+# held-out ~30% (18/60): loại + trang rời hẳn dev (không loại nào, trang nào xuất hiện ở cả hai); trang held-out = 30% số trang theo seed
+HELDOUT_TYPES = ("add_block", "change_link", "new_page")
 PALETTE = {"đỏ": "#dc2626", "xanh dương": "#1d4ed8", "xanh lá": "#16a34a", "cam": "#ea580c", "tím": "#7c3aed",
            "hồng": "#db2777", "nâu": "#92400e"}
 SLUGS = "cam-on-gop-y gioi-thieu lien-he huong-dan hoi-dap thong-bao ve-chung-toi lich-hoc tai-lieu quy-dinh".split()
@@ -205,10 +208,22 @@ def change_case(kind: str, file: str, base: str, cands: list[dict], rng: random.
 
 
 def plan(seed: int, pages: dict[str, str], base_sha: str = PIN) -> list[dict]:
-    """Case tất định theo seed: mỗi (loại, mức) vài mẫu trên trang thật hợp mức đó, mỗi đích dùng tối đa 1 lần."""
-    rng, used, names, n_size_hide = random.Random(seed), set(), sorted(pages), 0
+    """Case tất định theo seed. Cách chia trang dev/held-out nào không đủ trang hợp mọi ô thì thử cách chia kế (cũng tất định)."""
+    for attempt in range(50):
+        try:
+            return _plan(random.Random(f"{seed}/{attempt}"), pages, base_sha)
+        except RuntimeError as error:
+            failure = error
+    raise failure
+
+
+def _plan(rng: random.Random, pages: dict[str, str], base_sha: str) -> list[dict]:
+    """Mỗi (loại, mức) vài mẫu trên trang thật hợp mức đó, mỗi đích dùng tối đa 1 lần."""
+    used, names, n_size_hide = set(), sorted(pages), 0
     found, taken, lines, cases = {n: scan(pages[n]) for n in names}, set(), set(), []
+    heldout_pages = set(rng.sample(names, round(0.3 * len(names))))
     for kind, levels in CELLS.items():
+        split = "heldout" if kind in HELDOUT_TYPES else "dev"
         for level in levels:
             files = set()
             for sample in range(3 if (kind, level) in EXTRA else 2):
@@ -219,7 +234,7 @@ def plan(seed: int, pages: dict[str, str], base_sha: str = PIN) -> list[dict]:
                 else:
                     need = 2 if level == 4 or (kind == "change_link" and level == 2) else 6 if level == 2 else 1
                     left = {n: [c for c in candidates(found[n], kind, variant) if (n, c["line"]) not in lines]
-                            for n in names if SIZE_OK[level](len(pages[n].encode("utf-8")))}
+                            for n in names if (n in heldout_pages) == (split == "heldout") and SIZE_OK[level](len(pages[n].encode("utf-8")))}
                     pool = [n for n, cands in left.items() if len(cands) >= need]
                     if not pool:
                         raise RuntimeError(f"không có trang hợp {kind} mức {level} ở {base_sha[:10]}")
@@ -228,7 +243,7 @@ def plan(seed: int, pages: dict[str, str], base_sha: str = PIN) -> list[dict]:
                     files.add(file)
                     lines |= {(file, change["line"]) for change in body["spec"]}
                 style = "plain" if level == 5 or sample == 1 else "named"
-                case = {"kind": kind, "types": [kind], "level": level, "style": style, "base_sha": base_sha, **body}
+                case = {"kind": kind, "types": [kind], "level": level, "style": style, "split": split, "base_sha": base_sha, **body}
                 case["key"] = hashlib.sha1(json.dumps([case["file"], kind, level, style, case["gold"], base_sha], ensure_ascii=False,
                                                       sort_keys=True).encode("utf-8")).hexdigest()[:10]
                 case["id"] = f"{kind}-l{level}-{case['key'][:6]}"
@@ -272,9 +287,13 @@ def write_corpus(root: Path, seed: int, source) -> list[dict]:
         (corpus / "texts-todo.json").write_bytes(json.dumps(todo, ensure_ascii=False, indent=2).encode("utf-8"))
         raise CorpusError(f"{len(missing)}/{len(cases)} case chưa có chữ đóng băng: viết vào {corpus / 'texts.json'} theo texts-todo.json")
     cases = [{**c, **texts[c["key"]]} for c in cases]
-    rows = [{**{k: c[k] for k in ("id", "key", "file", "types", "level", "style", "page_bytes") if k in c},
+    rows = [{**{k: c[k] for k in ("id", "key", "file", "types", "level", "style", "split", "page_bytes") if k in c},
              "text_sha": text_sha(texts[c["key"]])} for c in cases]
-    manifest = {"seed": seed, "base_sha": PIN, "cases": rows}
+    sides = {side: [r for r in rows if r["split"] == side] for side in ("dev", "heldout")}
+    manifest = {"seed": seed, "base_sha": PIN,
+                "split": {side: {"cases": len(part), "pages": sorted({r["file"] for r in part}), "types": sorted({t for r in part for t in r["types"]})}
+                          for side, part in sides.items()},
+                "cases": rows}
     if (dest / "manifest.json").exists():
         before = {r["key"]: r["text_sha"] for r in json.loads((dest / "manifest.json").read_text(encoding="utf-8"))["cases"]}
         if changed := [r["id"] for r in rows if before.get(r["key"], r["text_sha"]) != r["text_sha"]]:
@@ -286,13 +305,14 @@ def write_corpus(root: Path, seed: int, source) -> list[dict]:
 
 
 def summary(cases: list[dict]) -> str:
-    """Số case mỗi ô (loại, mức), tách theo kiểu câu."""
+    """Số case mỗi split và mỗi ô (loại, mức), tách theo kiểu câu."""
     cells: dict = {}
     for c in cases:
-        styles = cells.setdefault((c["kind"], c["level"]), {})
+        styles = cells.setdefault((c["split"], c["kind"], c["level"]), {})
         styles[c["style"]] = styles.get(c["style"], 0) + 1
-    return chr(10).join([f"{len(cases)} case"] + [f"  {kind} L{level}: {sum(s.values())} ({', '.join(f'{k} {v}' for k, v in sorted(s.items()))})"
-                                                  for (kind, level), s in cells.items()])
+    totals = Counter(c["split"] for c in cases)
+    return chr(10).join([f"{len(cases)} case (dev {totals['dev']}, heldout {totals['heldout']})"] + [
+        f"  {split} {kind} L{level}: {sum(s.values())} ({', '.join(f'{k} {v}' for k, v in sorted(s.items()))})" for (split, kind, level), s in cells.items()])
 
 
 def case_record(case: dict, root: Path, source) -> dict:

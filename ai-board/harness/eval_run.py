@@ -127,7 +127,7 @@ def load_done(path: Path) -> dict:
     return {(r["case"], r["repeat"]): r for r in rows}
 
 
-CELL = ("kind", "level", "style")  # trường ô của case, chép vào mỗi dòng kết quả và dùng để gom nhóm báo cáo
+CELL = ("kind", "level", "style", "split")  # trường ô của case, chép vào mỗi dòng kết quả và dùng để gom nhóm báo cáo
 # Phễu: mỗi tầng chỉ tính trên lượt đã qua tầng trước (tỉ lệ có điều kiện).
 STAGES = (("gate3", lambda row: row["gate_passed"]), ("gold_oracle", lambda row: row["oracle"]))
 
@@ -240,8 +240,9 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
     common.add_argument("--model", help="mặc định: model cổng 3 đang cấu hình")
     subs = parser.add_subparsers(dest="tier", required=True)
     subs.add_parser("quick", parents=[common], help="fast tier, seed → vài case").add_argument("--cases", type=int, default=8)
-    subs.add_parser("full", parents=[common], help="corpus trang thật ~60 case").add_argument(
-        "--cases", type=int, help="chỉ chạy N case lấy mẫu theo seed (mặc định: tất cả)")
+    full = subs.add_parser("full", parents=[common], help="corpus trang thật ~60 case")
+    full.add_argument("--cases", type=int, help="chỉ chạy N case mỗi split, lấy mẫu theo seed (mặc định: tất cả)")
+    full.add_argument("--split", choices=("dev", "heldout", "all"), default="dev", help="held-out chỉ chạy khi chọn rõ")
     subs.add_parser("corpus", parents=[seeded], help="chỉ sinh corpus + manifest, in số case mỗi ô")
     eval_recall.register(subs)
     eval_git.register(subs)
@@ -281,10 +282,12 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
         except eval_corpus.CorpusError as error:
             print(f"[eval] {error}", file=sys.stderr)
             return 2
+        cases = [c for c in cases if args.split in ("all", c["split"])]
         if args.cases:
-            chosen = set(random.Random(args.seed).sample(range(len(cases)), min(args.cases, len(cases))))
-            cases = [c for i, c in enumerate(cases) if i in chosen]
-        name, record = f"full-s{args.seed}", lambda case: eval_corpus.case_record(case, root, ROOT)
+            chosen = {i for side in ("dev", "heldout") for i in random.Random(args.seed).sample(
+                [c["id"] for c in cases if c["split"] == side], min(args.cases, sum(c["split"] == side for c in cases)))}
+            cases = [c for c in cases if c["id"] in chosen]
+        name, record = f"full-s{args.seed}-{args.split}", lambda case: eval_corpus.case_record(case, root, ROOT)
     run_dir = root / "runs" / name
     run_dir.mkdir(parents=True, exist_ok=True)
     meta = {"tier": args.tier, "source": source, "seed": args.seed, "repeats": args.repeats, "model": model,
