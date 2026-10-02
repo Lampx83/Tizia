@@ -388,3 +388,18 @@ def test_the_same_skill_edit_is_a_protected_path_for_any_other_request(tmp_path,
             SKILL, "tests/test_demo_skill.py"]  # không tính lại khoá
     finally:
         candidate.cleanup(state, keep_branch=False)
+
+
+def test_a_child_whose_generated_test_was_dropped_commits_only_its_file(tmp_path, source):
+    scratch = implement._ensure_scratch_repo(tmp_path / "scratch")
+    children = [child(scratch, "Sửa trang A", "public/a.html", "<p>new a</p>\n", "test/a.test.js")]
+    children[0]["test_file"] = None  # gate 4 dropped the unparseable model-written test; a harness oracle verifies
+    state = state_for(tmp_path, children)
+    candidate.create(state, source)
+    try:
+        assert [c["files"] for c in state["commits"]] == [["public/a.html"]]
+        checkout = Path(state["full_checkout"])
+        assert (checkout / "public" / "a.html").read_text(encoding="utf-8").strip() == "<p>new a</p>"
+        assert not (checkout / "test" / "a.test.js").exists()
+    finally:
+        candidate.cleanup(state, keep_branch=False)

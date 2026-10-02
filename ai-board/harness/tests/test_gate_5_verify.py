@@ -579,3 +579,13 @@ def test_oracle_failure_still_blocks_even_when_the_generated_test_also_failed(tm
 def test_generated_test_timeout_is_advisory_too_with_an_oracle(tmp_path):
     out = verify.run(_oracle_state(tmp_path), runner=FakeRunner(fail="generated_timeout"))
     assert out["blocked"] is False and "timed out" in out["evidence"]["text"]
+
+
+def test_no_generated_test_is_fine_when_a_harness_oracle_decides_and_an_error_otherwise(tmp_path):
+    root = checkout(tmp_path)
+    with_oracle = {"skill_id": "skill-42", "full_checkout": str(root), "request_detail": "Thêm 'Xin chào' vào đầu trang",
+                   "diffs": [{"file": "public/x.js", "test_file": None, "diff": "+x"}]}
+    assert verify.run(with_oracle, runner=FakeRunner())["blocked"] is False
+    without = {**with_oracle, "request_detail": "Đổi màu nền"}
+    out = verify.run(without, runner=FakeRunner())
+    assert out["blocked"] is True and "generated test" in out["reason"]

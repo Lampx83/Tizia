@@ -240,3 +240,38 @@ def test_backslash_path_is_normalized_before_import_lint(tmp_path):
 
     assert out["blocked"] is True
     assert "db.js" in out["reason"]
+
+
+# ── a model-written test that cannot even be parsed: dropped, never shipped, when a harness oracle decides ──
+
+ORACLE_REQUEST = "Thêm 'Xin chào' vào đầu trang"  # the quoted words give the harness a text oracle
+
+
+def _broken_test_case(tmp_path):
+    plan = _plan([{"title": "t", "file": "public/x.js", "verify": "v", "size": "small"}])
+    _write(tmp_path, "public/x.js", "export const x = 1;\n")
+    _write(tmp_path, "test/x.test.js", "assert.ok(js.includes('<div class='a'>'));\n")  # unbalanced quotes
+    return plan, [{"title": "t", "file": "public/x.js", "test_file": "test/x.test.js", "diff": "+x\n"}]
+
+
+def test_unparseable_generated_test_is_dropped_when_a_harness_oracle_decides(tmp_path):
+    plan, diffs = _broken_test_case(tmp_path)
+    out = static_check.run({"plan": plan, "diffs": diffs, "scratch_repo": str(tmp_path), "request_detail": ORACLE_REQUEST})
+    assert out["blocked"] is False
+    assert diffs[0]["test_file"] is None and not (tmp_path / "test/x.test.js").exists()
+    assert any("dropped" in issue and "oracle" in issue for issue in out["issues"])
+
+
+def test_unparseable_generated_test_still_blocks_without_an_oracle(tmp_path):
+    plan, diffs = _broken_test_case(tmp_path)
+    out = static_check.run({"plan": plan, "diffs": diffs, "scratch_repo": str(tmp_path), "request_detail": "Đổi màu nền"})
+    assert out["blocked"] is True and "test/x.test.js" in out["reason"] and "node --check" in out["reason"]
+
+
+def test_forbidden_import_in_a_generated_test_still_blocks_even_with_an_oracle(tmp_path):
+    plan = _plan([{"title": "t", "file": "public/x.js", "verify": "v", "size": "small"}])
+    _write(tmp_path, "public/x.js", "export const x = 1;\n")
+    _write(tmp_path, "test/x.test.js", "import { db } from '../server/db.js';\n")
+    diffs = [{"title": "t", "file": "public/x.js", "test_file": "test/x.test.js", "diff": "+x\n"}]
+    out = static_check.run({"plan": plan, "diffs": diffs, "scratch_repo": str(tmp_path), "request_detail": ORACLE_REQUEST})
+    assert out["blocked"] is True and out["failure_class"] == "critical"

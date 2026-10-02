@@ -17,6 +17,7 @@ from pathlib import Path
 
 import candidate
 import classifier
+import functional
 from gates import guard, intake_guard, risk_triage
 
 CONTENT_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "content_guard.md").read_text(encoding="utf-8")
@@ -231,6 +232,12 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
                 return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
                         "issues": [*issues, reason], "failure_class": "critical"}
             err = node_check(path)
+            if err and candidate != file_path and functional.select(state):
+                # The harness oracle verifies this request; a model-written test that cannot even be parsed is dropped, never shipped.
+                path.unlink()
+                d["test_file"] = None
+                issues.append(f"generated test '{candidate}' dropped (syntax error; the harness oracle verifies this request): {err[:200]}")
+                continue
             if err:
                 reason = f"'{candidate}' node --check: {err}"
                 return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,

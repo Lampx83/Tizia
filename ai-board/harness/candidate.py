@@ -220,12 +220,13 @@ def create(state: dict, source_repo: str | os.PathLike, *, base_ref: str = "HEAD
             allowed = {posixpath.normpath(p.replace("\\", "/"))
                        for p in subtask.get("allowed_scope") or [subtask["file"]]}
             file = posixpath.normpath(item["file"].replace("\\", "/"))
-            test_file = posixpath.normpath(item["test_file"].replace("\\", "/"))
+            test_file = posixpath.normpath(item["test_file"].replace("\\", "/")) if item.get("test_file") else None  # None: dropped, an oracle verifies
             if file not in allowed:
                 raise ScopeViolation(f"child {index} ghi '{file}' ngoài allowed_scope {sorted(allowed)}")
-            if not test_file.startswith(("test/", "tests/")):
+            if test_file and not test_file.startswith(("test/", "tests/")):
                 raise ScopeViolation(f"child {index} ghi test '{test_file}' ngoài test/ hoặc tests/")
-            for rel in (file, test_file):
+            written = [rel for rel in (file, test_file) if rel]
+            for rel in written:
                 dst = implement._safe_join(checkout, rel)
                 if rel == test_file and dst.exists() and rel not in created:
                     raise ScopeViolation(f"test_file đã tồn tại trong checkout: {rel}")
@@ -235,10 +236,10 @@ def create(state: dict, source_repo: str | os.PathLike, *, base_ref: str = "HEAD
                 dst.write_bytes(content)
                 created.add(rel)
             title = f"ai-board({label}): {index}/{len(diffs)} {subtask['title']}"
-            _git_out(["add", "--", file, test_file], checkout)
+            _git_out(["add", "--", *written], checkout)
             _git_out([*_AUTHOR, "commit", "-q", "-m", title], checkout)
             commits.append({"sha": _git_out(["rev-parse", "HEAD"], checkout).strip(), "title": title,
-                            "files": [file, test_file]})
+                            "files": written})
         diff = _git_out(["diff", "--no-ext-diff", base, "HEAD"], checkout)
     except BaseException:
         cleanup(owned, keep_branch=False)

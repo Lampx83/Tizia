@@ -395,15 +395,18 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
 
             test_files = sorted({item.get("test_file") for item in state.get("diffs") or []
                                  if item.get("test_file")})
-            if not test_files:
+            if not test_files and not probe_id:
                 raise RuntimeError("không có generated test để chạy")
+            if not test_files:
+                logs.append(f"No generated test (advisory: the harness oracle '{probe_id}' decides)")
             for test_file in test_files:
                 parent = str(Path("/app", test_file).parent).replace("\\", "/")
                 command([*compose, "exec", "-T", "tizia", "mkdir", "-p", parent])
                 command([*compose, "cp", test_file, f"tizia:/app/{test_file}"])
             try:
-                command([*compose, "exec", "-T", "tizia", "node", "--test",
-                         *(f"/app/{test_file}" for test_file in test_files)], timeout=60)
+                if test_files:  # `node --test` with no file would run the whole suite
+                    command([*compose, "exec", "-T", "tizia", "node", "--test",
+                             *(f"/app/{test_file}" for test_file in test_files)], timeout=60)
             except (subprocess.TimeoutExpired, RuntimeError) as exc:
                 failure = "generated tests timed out" if isinstance(exc, subprocess.TimeoutExpired) else "generated tests failed"
                 if not probe_id:
@@ -411,7 +414,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 # A harness oracle judges this request; a model-written test is supplementary and often mangles quotes/escapes.
                 logs.append(f"{failure} (advisory: the harness oracle '{probe_id}' decides): {', '.join(test_files)}")
             else:
-                logs.append(f"Generated tests passed: {', '.join(test_files)}")
+                if test_files:
+                    logs.append(f"Generated tests passed: {', '.join(test_files)}")
 
             env = os.environ.copy()
             env["BASE"] = base
