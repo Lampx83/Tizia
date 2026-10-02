@@ -127,6 +127,7 @@ def load_done(path: Path) -> dict:
     return {(r["case"], r["repeat"]): r for r in rows}
 
 
+CELL = ("kind", "level", "style")  # trường ô của case, chép vào mỗi dòng kết quả và dùng để gom nhóm báo cáo
 # Phễu: mỗi tầng chỉ tính trên lượt đã qua tầng trước (tỉ lệ có điều kiện).
 STAGES = (("gate3", lambda row: row["gate_passed"]), ("gold_oracle", lambda row: row["oracle"]))
 
@@ -195,8 +196,8 @@ def build_report(meta: dict, cases: list[dict], rows: list[dict], total: int, cu
     for row in rows:
         if cls := failure_class(row):
             classes[cls] = classes.get(cls, 0) + 1
-    groups = {name: group_stats(sub) for name, sub in
-              [("all", rows)] + [(k, [r for r in rows if r["kind"] == k]) for k in kinds] if sub}
+    cells = [(v if k == "kind" else f"{k}={v}", [r for r in rows if r.get(k) == v]) for k in CELL for v in sorted({r[k] for r in rows if k in r})]
+    groups = {name: group_stats(sub) for name, sub in [("all", rows)] + cells if sub}
     return {**meta, "tier_label": "fast tier: không trộn vào ship rate chính thức", "official_ship_rate": None,
             "trials_done": len(rows), "trials_total": total, "cut_short": cut_short,
             "cases": per_case, "groups": groups, "funnel": funnel, "failure_classes": classes,
@@ -229,16 +230,19 @@ def render(rep: dict) -> str:
 
 def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.monotonic) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--seed", type=int, required=True)
+    seeded = argparse.ArgumentParser(add_help=False)
+    seeded.add_argument("--seed", type=int, required=True)
+    seeded.add_argument("--root", default=os.environ.get("AI_BOARD_EVAL_DIR") or str(DEFAULT_ROOT))
+    common = argparse.ArgumentParser(add_help=False, parents=[seeded])
     common.add_argument("--repeats", type=int, default=3)
     common.add_argument("--budget-minutes", type=float, help="dừng sạch khi hết ngân sách; chạy lại để tiếp tục")
     common.add_argument("--baseline", help="report.json của run mốc (cùng tier + nguồn) để ra kết luận hồi quy")
     common.add_argument("--model", help="mặc định: model cổng 3 đang cấu hình")
-    common.add_argument("--root", default=os.environ.get("AI_BOARD_EVAL_DIR") or str(DEFAULT_ROOT))
     subs = parser.add_subparsers(dest="tier", required=True)
     subs.add_parser("quick", parents=[common], help="fast tier, seed → vài case").add_argument("--cases", type=int, default=8)
-    subs.add_parser("full", parents=[common], help="corpus trang thật ~60 case")
+    subs.add_parser("full", parents=[common], help="corpus trang thật ~60 case").add_argument(
+        "--cases", type=int, help="chỉ chạy N case lấy mẫu theo seed (mặc định: tất cả)")
+    subs.add_parser("corpus", parents=[seeded], help="chỉ sinh corpus + manifest, in số case mỗi ô")
     eval_recall.register(subs)
     eval_git.register(subs)
     args = parser.parse_args(argv)
@@ -247,6 +251,13 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
             stream.reconfigure(encoding="utf-8", errors="replace")
     if getattr(args, "no_model", False):  # lệnh không gọi model: không dựng Deps, không đọc env
         return args.handler(args)
+    if args.tier == "corpus":
+        try:
+            print(eval_corpus.summary(eval_corpus.write_corpus(Path(args.root), args.seed, ROOT)))
+        except eval_corpus.CorpusError as error:
+            print(f"[eval] {error}", file=sys.stderr)
+            return 2
+        return 0
     source = "synthetic-candidate" if deps is not None else "pure-ollama"  # deps bơm vào = hạ tầng/candidate tổng hợp
     if deps is None:
         from dotenv import load_dotenv
@@ -265,7 +276,14 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
         repo, cases = write_corpus(root, args.seed, args.cases)
         name, record = f"quick-s{args.seed}", lambda case: case_record(case, repo)
     else:
-        cases = eval_corpus.write_corpus(root, args.seed, ROOT)
+        try:
+            cases = eval_corpus.write_corpus(root, args.seed, ROOT)
+        except eval_corpus.CorpusError as error:
+            print(f"[eval] {error}", file=sys.stderr)
+            return 2
+        if args.cases:
+            chosen = set(random.Random(args.seed).sample(range(len(cases)), min(args.cases, len(cases))))
+            cases = [c for i, c in enumerate(cases) if i in chosen]
         name, record = f"full-s{args.seed}", lambda case: eval_corpus.case_record(case, root, ROOT)
     run_dir = root / "runs" / name
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -286,7 +304,7 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
                 if args.budget_minutes is not None and clock() - started >= args.budget_minutes * 60:
                     cut_short = True
                     break
-                row = {**run_case(case["id"], record(case), model, deps), "kind": case["kind"], "repeat": repeat}
+                row = {**run_case(case["id"], record(case), model, deps), **{k: case[k] for k in CELL if k in case}, "repeat": repeat}
                 done[(case["id"], repeat)] = row
                 out.write(json.dumps(row, ensure_ascii=False) + "\n")
                 out.flush()

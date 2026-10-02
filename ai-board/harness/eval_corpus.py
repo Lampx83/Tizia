@@ -16,9 +16,11 @@ from pathlib import Path
 PIN = "1e8683704f7f27b7b57793896c9f2472811e56bc"  # đầu main 2026-09-25; trang public/*.html lấy ở đây, không bao giờ ở HEAD
 WORDS = ("học tập bài giảng ôn luyện kiểm tra thuốc đơn liều lượng cân pha chế mã nguồn biến hàm trang nút bảng điểm "
          "thẻ ghi nhớ lộ trình thành tựu sao xu chuỗi ngày").split()
-# loại → các mức khó dùng (mỗi ô 2 mẫu)
-CELLS = {"replace_text": (1,), "insert_text": (1,), "css_color": (1,), "size_hide": (1,), "remove_element": (1,),
-         "add_block": (1,), "change_link": (1,), "new_page": (1,)}
+# loại → các mức khó dùng; mỗi ô (loại, mức) 2 mẫu (mẫu 1 named, mẫu 2 plain; mức 5 luôn plain), ô EXTRA 3 mẫu → 60 case
+# mức: 1 đích duy nhất trên trang nhỏ, 2 nhiều phần tử giống nhau, 3 trang > 20 KB, 4 hai thay đổi một request, 5 lời thường
+CELLS = {"replace_text": (1, 2, 3, 4, 5), "insert_text": (1, 2, 3, 5), "css_color": (1, 2, 3, 5), "size_hide": (1, 2, 5),
+         "remove_element": (1, 2, 3, 5), "add_block": (1, 3, 4, 5), "change_link": (1, 2, 5), "new_page": (1, 5)}
+EXTRA = (("replace_text", 1), ("css_color", 1))
 PALETTE = {"đỏ": "#dc2626", "xanh dương": "#1d4ed8", "xanh lá": "#16a34a", "cam": "#ea580c", "tím": "#7c3aed",
            "hồng": "#db2777", "nâu": "#92400e"}
 SLUGS = "cam-on-gop-y gioi-thieu lien-he huong-dan hoi-dap thong-bao ve-chung-toi lich-hoc tai-lieu quy-dinh".split()
@@ -118,7 +120,7 @@ def make_change(kind: str, c: dict, rng: random.Random, used: set, names: list[s
         search, replace, facts = line, SIZE.sub(f"font-size:{new}px", line, 1), {"selector": c["sel"], "old": old, "new": new, "variant": "size"}
     else:
         search, replace, facts = line, line.replace("{", "{ display:none;", 1), {"selector": c["sel"], "variant": "hide"}
-    return {"type": kind, "search": search, "replace": replace, "required": required, "facts": facts}
+    return {"type": kind, "line": line, "search": search, "replace": replace, "required": required, "facts": facts}
 
 
 def _decls(body: str) -> str:
@@ -188,50 +190,50 @@ def new_page_case(rng: random.Random, used: set, names: list[str], taken: set) -
             "check": {"mode": "page", "title": page["title"], "body": page["body"], "href": page["href"]}}
 
 
-def change_case(kind: str, file: str, base: str, found: dict, rng: random.Random, used: set, names: list[str], level: int, variant) -> dict:
+def change_case(kind: str, file: str, base: str, cands: list[dict], rng: random.Random, used: set, names: list[str], level: int,
+                variant) -> dict:
     """Case sửa trang có sẵn: 1 thay đổi (2 ở mức 4, hai đích khác nhau, thứ tự theo trang)."""
-    picks = rng.sample(candidates(found, kind, variant), 2 if level == 4 else 1)
+    picks = rng.sample(cands, 2 if level == 4 else 1)
     picks.sort(key=lambda c: base.index(c["line"]))
     changes = [make_change(kind, c, rng, used, names, variant) for c in picks]
     edits = [{"search": c["search"], "replace": c["replace"]} for c in changes]
     apply_gold(base, edits)  # sớm raise nếu gold không áp được
-    similar = [c["line"].strip()[:100] for c in candidates(found, kind, variant) if c not in picks][:4]
-    return {"file": file, "gold": {"edits": edits}, "check": {"mode": "surgery" if kind in ("insert_text", "add_block") else "equal",
-                                                              "required": [c["required"] for c in changes]},
+    similar = [c["line"].strip()[:100] for c in cands if c not in picks][:4]
+    return {"file": file, "page_bytes": len(base.encode("utf-8")), "gold": {"edits": edits},
+            "check": {"mode": "surgery" if kind in ("insert_text", "add_block") else "equal", "required": [c["required"] for c in changes]},
             "spec": [{"type": kind, **c, "context": context(base, c["search"]), "similar": similar} for c in changes]}
 
 
 def plan(seed: int, pages: dict[str, str], base_sha: str = PIN) -> list[dict]:
-    """Case tất định theo seed: mỗi (loại, mức) một nhóm mẫu trên trang thật hợp mức đó."""
+    """Case tất định theo seed: mỗi (loại, mức) vài mẫu trên trang thật hợp mức đó, mỗi đích dùng tối đa 1 lần."""
     rng, used, names, n_size_hide = random.Random(seed), set(), sorted(pages), 0
-    found, taken, cases = {n: scan(pages[n]) for n in names}, set(), []
+    found, taken, lines, cases = {n: scan(pages[n]) for n in names}, set(), set(), []
     for kind, levels in CELLS.items():
         for level in levels:
-            variant = ("size", "hide")[n_size_hide % 2] if kind == "size_hide" else None
-            n_size_hide += kind == "size_hide"
-            if kind == "new_page":
-                body = new_page_case(rng, used, names, taken)
-            else:
-                need = 2 if level == 4 or (kind == "change_link" and level == 2) else 6 if level == 2 else 1
-                pool = [n for n in names if SIZE_OK[level](len(pages[n])) and len(candidates(found[n], kind, variant)) >= need]
-                if not pool:
-                    raise RuntimeError(f"không có trang hợp {kind} mức {level} ở {base_sha[:10]}")
-                file = rng.choice(pool)
-                body = change_case(kind, file, pages[file], found[file], rng, used, names, level, variant)
-            style = "plain" if level == 5 else "named"
-            case = {"kind": kind, "types": [kind], "level": level, "style": style, "base_sha": base_sha, **body}
-            case["key"] = hashlib.sha1(json.dumps([case["file"], kind, level, style, case["gold"], base_sha], ensure_ascii=False,
-                                                  sort_keys=True).encode("utf-8")).hexdigest()[:10]
-            case["id"] = f"{kind}-l{level}-{case['key'][:6]}"
-            cases.append(case)
+            files = set()
+            for sample in range(3 if (kind, level) in EXTRA else 2):
+                variant = ("size", "hide")[n_size_hide % 2] if kind == "size_hide" else None
+                n_size_hide += kind == "size_hide"
+                if kind == "new_page":
+                    body = new_page_case(rng, used, names, taken)
+                else:
+                    need = 2 if level == 4 or (kind == "change_link" and level == 2) else 6 if level == 2 else 1
+                    left = {n: [c for c in candidates(found[n], kind, variant) if (n, c["line"]) not in lines]
+                            for n in names if SIZE_OK[level](len(pages[n].encode("utf-8")))}
+                    pool = [n for n, cands in left.items() if len(cands) >= need]
+                    if not pool:
+                        raise RuntimeError(f"không có trang hợp {kind} mức {level} ở {base_sha[:10]}")
+                    file = rng.choice([n for n in pool if n not in files] or pool)
+                    body = change_case(kind, file, pages[file], left[file], rng, used, names, level, variant)
+                    files.add(file)
+                    lines |= {(file, change["line"]) for change in body["spec"]}
+                style = "plain" if level == 5 or sample == 1 else "named"
+                case = {"kind": kind, "types": [kind], "level": level, "style": style, "base_sha": base_sha, **body}
+                case["key"] = hashlib.sha1(json.dumps([case["file"], kind, level, style, case["gold"], base_sha], ensure_ascii=False,
+                                                      sort_keys=True).encode("utf-8")).hexdigest()[:10]
+                case["id"] = f"{kind}-l{level}-{case['key'][:6]}"
+                cases.append(case)
     return cases
-
-
-def draft_text(case: dict) -> dict:
-    """Câu request tạm theo khuôn (bước 1; bước 2 thay bằng chữ đóng băng)."""
-    facts = case["spec"][0]["facts"]
-    title = f"[{case['key']}] {case['kind']} {json.dumps(facts, ensure_ascii=False)}"
-    return {"title": title, "verify": f"Trang {case['file']} đã đổi đúng: {title}", "detail": f"Trên trang {case['file']}: {title}."}
 
 
 def checkout_at(root: Path, sha: str, source) -> Path:
@@ -248,13 +250,49 @@ def checkout_at(root: Path, sha: str, source) -> Path:
     return dest
 
 
+class CorpusError(RuntimeError):
+    """Corpus không dùng được: thiếu chữ đóng băng hoặc chữ đã đóng băng bị sửa."""
+
+
+def text_sha(text: dict) -> str:
+    return hashlib.sha1(json.dumps(text, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:12]
+
+
 def write_corpus(root: Path, seed: int, source) -> list[dict]:
-    """<root>/corpus/full-s<seed>/cases.json (byte-identical với cùng seed + commit ghim) → danh sách case có chữ request."""
-    cases = [{**case, **draft_text(case)} for case in plan(seed, real_pages(source))]
-    dest = Path(root) / "corpus" / f"full-s{seed}"
+    """Corpus theo seed + commit ghim → <root>/corpus/full-s<seed>/{cases,manifest}.json (byte-identical khi sinh lại).
+    Chữ request (title/verify/detail) do người viết một lần trong corpus/texts.json theo key của case; code không bao giờ sinh hay
+    ghi đè chúng. Thiếu chữ → ghi texts-todo.json, raise. Chữ đổi so với manifest lần trước → raise (đổi cố ý: xóa manifest)."""
+    corpus = Path(root) / "corpus"
+    dest = corpus / f"full-s{seed}"
+    cases = plan(seed, real_pages(source))
+    texts = json.loads((corpus / "texts.json").read_text(encoding="utf-8")) if (corpus / "texts.json").exists() else {}
+    if missing := [c for c in cases if c["key"] not in texts]:
+        corpus.mkdir(parents=True, exist_ok=True)
+        todo = [{k: c[k] for k in ("key", "level", "style", "types", "file", "spec")} for c in missing]
+        (corpus / "texts-todo.json").write_bytes(json.dumps(todo, ensure_ascii=False, indent=2).encode("utf-8"))
+        raise CorpusError(f"{len(missing)}/{len(cases)} case chưa có chữ đóng băng: viết vào {corpus / 'texts.json'} theo texts-todo.json")
+    cases = [{**c, **texts[c["key"]]} for c in cases]
+    rows = [{**{k: c[k] for k in ("id", "key", "file", "types", "level", "style", "page_bytes") if k in c},
+             "text_sha": text_sha(texts[c["key"]])} for c in cases]
+    manifest = {"seed": seed, "base_sha": PIN, "cases": rows}
+    if (dest / "manifest.json").exists():
+        before = {r["key"]: r["text_sha"] for r in json.loads((dest / "manifest.json").read_text(encoding="utf-8"))["cases"]}
+        if changed := [r["id"] for r in rows if before.get(r["key"], r["text_sha"]) != r["text_sha"]]:
+            raise CorpusError(f"chữ đóng băng đã bị sửa ở {changed}; muốn đổi cố ý thì xóa {dest / 'manifest.json'}")
     dest.mkdir(parents=True, exist_ok=True)
     (dest / "cases.json").write_bytes(json.dumps(cases, ensure_ascii=False, indent=2).encode("utf-8"))
+    (dest / "manifest.json").write_bytes(json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8"))
     return cases
+
+
+def summary(cases: list[dict]) -> str:
+    """Số case mỗi ô (loại, mức), tách theo kiểu câu."""
+    cells: dict = {}
+    for c in cases:
+        styles = cells.setdefault((c["kind"], c["level"]), {})
+        styles[c["style"]] = styles.get(c["style"], 0) + 1
+    return chr(10).join([f"{len(cases)} case"] + [f"  {kind} L{level}: {sum(s.values())} ({', '.join(f'{k} {v}' for k, v in sorted(s.items()))})"
+                                                  for (kind, level), s in cells.items()])
 
 
 def case_record(case: dict, root: Path, source) -> dict:

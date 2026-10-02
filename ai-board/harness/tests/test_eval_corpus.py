@@ -1,8 +1,9 @@
-"""Seam duy nhất: eval_run.main(['full', ...], deps) chạy trọn vẹn trên trang thật của repo ở commit ghim, model giả trong thư mục tạm,
-seed cố định. Không test riêng bộ sinh hay hàm kiểm: soi báo cáo và file run ghi ra."""
+"""Seam duy nhất: eval_run.main(['corpus'|'full', ...], deps) chạy trọn vẹn trên trang thật của repo ở commit ghim, model giả trong thư mục
+tạm, seed cố định. Không test riêng bộ sinh hay hàm kiểm: soi báo cáo và file run ghi ra."""
 import dataclasses
 import json
 import re
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -16,34 +17,28 @@ FILLER = {"test_file": "test/x.test.js", "test": "import test from 'node:test';\
 @dataclasses.dataclass
 class GoldModels:
     """Model giả đọc [key] trong title của prompt, tra gold trong corpus đã ghi và trả đúng gold (dataclass: run_case dùng replace).
-    wrong: loại phép biến đổi bị làm hỏng nơi khác (cổng 3 qua, check hỏng); garbage: loại bị trả rác (cổng 3 chặn)."""
+    Cách làm theo mức khó của case: wrong_level = gold + hỏng chỗ khác (cổng 3 qua, check chặn), garbage_level = trả rác (cổng 3 chặn)."""
 
     root: Path
     seed: int
-    wrong: tuple = ()
-    garbage: tuple = ()
+    wrong_level: int = 5
+    garbage_level: int = 3
     gate3_model: str = "fake"
     gate3_model_light: str = "fake"
     calls: list = dataclasses.field(default_factory=list)
 
-    def corpus(self):
-        base = self.root / "corpus" / f"full-s{self.seed}"
-        return {c["key"]: c for c in json.loads((base / "cases.json").read_text(encoding="utf-8"))}
-
     def generate(self, model, prompt, **kw):
         key = re.search(r"- title: \[(\w+)\]", prompt).group(1)
-        case = self.corpus()[key]
+        path = self.root / "corpus" / f"full-s{self.seed}" / "cases.json"
+        case = next(c for c in json.loads(path.read_text(encoding="utf-8")) if c["key"] == key)
         self.calls.append(key)
-        if case["kind"] in self.garbage:
+        if case["level"] == self.garbage_level:
             return {"response": "không phải json", "prompt_eval_count": 120, "eval_count": 80}
+        broken = case["level"] == self.wrong_level
         if "code" in case["gold"]:
-            code = case["gold"]["code"]
-            body = {"code": code.replace(case["check"]["body"], "") if case["kind"] in self.wrong else code}
+            body = {"code": case["gold"]["code"].replace(case["check"]["body"], "") if broken else case["gold"]["code"]}
         else:
-            edits = list(case["gold"]["edits"])
-            if case["kind"] in self.wrong:
-                edits.append({"search": "<html", "replace": '<html data-x="1"'})
-            body = {"edits": edits}
+            body = {"edits": case["gold"]["edits"] + ([{"search": "<html", "replace": '<html data-x="1"'}] if broken else [])}
         return {"response": json.dumps({**body, **FILLER}, ensure_ascii=False), "prompt_eval_count": 120, "eval_count": 80}
 
 
@@ -53,23 +48,79 @@ def root(tmp_path_factory):
     return tmp_path_factory.mktemp("eval")
 
 
-def full(tmp_path, *extra, models=None, seed=5):
-    deps = Deps(models=models or GoldModels(tmp_path, seed), notify=None, sleep=lambda _s: None)
-    return eval_run.main(["full", "--seed", str(seed), "--repeats", "1", "--root", str(tmp_path), *extra], deps)
+def corpus(root, seed):
+    return eval_run.main(["corpus", "--seed", str(seed), "--root", str(root)])
+
+
+def freeze(root, seed):
+    """Vai người viết chữ request: đọc texts-todo.json, ghi texts.json (title mở đầu bằng [key] để model giả tra gold), rồi sinh corpus."""
+    assert corpus(root, seed) == 2
+    path = root / "corpus" / "texts.json"
+    texts = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    for todo in json.loads((root / "corpus" / "texts-todo.json").read_text(encoding="utf-8")):
+        texts[todo["key"]] = {"title": f"[{todo['key']}] {todo['types'][0]}", "verify": f"kiểm {todo['file']}", "detail": f"sửa {todo['file']}"}
+    path.write_text(json.dumps(texts, ensure_ascii=False), encoding="utf-8")
+    assert corpus(root, seed) == 0
+
+
+def cases_of(root, seed):
+    return json.loads((root / "corpus" / f"full-s{seed}" / "cases.json").read_text(encoding="utf-8"))
+
+
+def full(root, *extra, seed=5, models=None):
+    deps = Deps(models=models or GoldModels(root, seed), notify=None, sleep=lambda _s: None)
+    return eval_run.main(["full", "--seed", str(seed), "--repeats", "1", "--root", str(root), *extra], deps)
 
 
 def report(root, seed=5):
     return json.loads((root / "runs" / f"full-s{seed}" / "report.json").read_text(encoding="utf-8"))
 
 
+def test_corpus_has_sixty_ladder_cases_reproducible_from_a_seed_and_frozen_text_never_changes_silently(root, capsys):
+    assert corpus(root, 5) == 2  # chưa có chữ đóng băng: không sinh corpus, chỉ ghi danh sách cần viết
+    assert len(json.loads((root / "corpus" / "texts-todo.json").read_text(encoding="utf-8"))) == 60
+    freeze(root, 5)
+    first = {name: (root / "corpus" / "full-s5" / name).read_bytes() for name in ("cases.json", "manifest.json")}
+    assert corpus(root, 5) == 0 and first == {name: (root / "corpus" / "full-s5" / name).read_bytes() for name in first}
+
+    cases = cases_of(root, 5)
+    assert len(cases) == 60
+    cells = Counter((c["kind"], c["level"]) for c in cases)
+    assert len(cells) == 29 and min(cells.values()) >= 2 and {level for _, level in cells} == {1, 2, 3, 4, 5}
+    for cell in cells:  # mức 1-4 đủ cả hai kiểu câu; mức 5 luôn lời thường
+        styles = {c["style"] for c in cases if (c["kind"], c["level"]) == cell}
+        assert styles == ({"plain"} if cell[1] == 5 else {"named", "plain"})
+    by_level = lambda n: [c for c in cases if c["level"] == n and c["kind"] != "new_page"]  # noqa: E731
+    assert all(c["page_bytes"] < 9000 for c in by_level(1)) and all(c["page_bytes"] > 20000 for c in by_level(3))
+    assert all(len(c["gold"]["edits"]) == 2 for c in by_level(4)) and all(len(c["gold"]["edits"]) == 1 for c in by_level(2))
+    assert all(len(c["spec"][0]["similar"]) >= 1 for c in by_level(2))  # ô mơ hồ: còn phần tử giống đích
+    assert all(c["base_sha"] == eval_run.eval_corpus.PIN and c["file"].startswith("public/") for c in cases)
+    assert len({c["key"] for c in cases}) == 60
+
+    texts_path = root / "corpus" / "texts.json"
+    texts = json.loads(texts_path.read_text(encoding="utf-8"))
+    texts[cases[0]["key"]]["detail"] += " (sửa lén)"
+    texts_path.write_text(json.dumps(texts, ensure_ascii=False), encoding="utf-8")
+    capsys.readouterr()
+    assert corpus(root, 5) == 2 and "đóng băng" in capsys.readouterr().err
+    assert (root / "corpus" / "full-s5" / "cases.json").read_bytes() == first["cases.json"]  # bị từ chối: không ghi đè
+
+    freeze(root, 6)  # seed khác: corpus khác, chữ cũ không bị đụng
+    assert {c["key"] for c in cases_of(root, 6)} != {c["key"] for c in cases}
+    assert corpus(root, 5) == 2  # chữ sửa lén vẫn bị chặn sau khi sinh seed khác
+    texts[cases[0]["key"]]["detail"] = texts[cases[0]["key"]]["detail"].removesuffix(" (sửa lén)")
+    texts_path.write_text(json.dumps(texts, ensure_ascii=False), encoding="utf-8")
+    assert corpus(root, 5) == 0
+
+
 def test_every_transformation_type_gets_an_exact_gold_that_its_own_check_accepts_and_rejects_damage(root):
-    models = GoldModels(root, 5, wrong=("replace_text", "insert_text", "css_color", "add_block", "new_page"), garbage=("remove_element",))
-    assert full(root, models=models) == 0
-    rep = report(root)
-    kinds = {c["kind"]: c for c in rep["cases"]}
-    assert set(kinds) == {"replace_text", "insert_text", "css_color", "size_hide", "remove_element", "add_block", "change_link", "new_page"}
-    assert {k for k, c in kinds.items() if c["passed"]} == {"size_hide", "change_link"}  # đúng gold qua; hỏng chỗ khác thì check chặn
-    assert {k for k, c in kinds.items() if not c["reached"]["gold_oracle"]} == {"remove_element"}  # rác: dừng ở cổng 3
-    corpus = json.loads((root / "corpus" / "full-s5" / "cases.json").read_text(encoding="utf-8"))
-    assert all(c["base_sha"] == eval_run.eval_corpus.PIN and c["file"].startswith("public/") for c in corpus)
-    assert full(root, seed=6) == 0 and all(c["passed"] == 1 for c in report(root, 6)["cases"])  # gold đúng → đạt cả 8
+    freeze(root, 7)
+    assert full(root, seed=7) == 0
+    rep = report(root, 7)
+    corpus7 = cases_of(root, 7)
+    assert len(rep["cases"]) == 60 and {c["kind"] for c in rep["cases"]} == {c["kind"] for c in corpus7} and len({c["kind"] for c in corpus7}) == 8
+    by_id = {c["id"]: c for c in corpus7}
+    for line in rep["cases"]:
+        level = by_id[line["id"]]["level"]  # gold qua; hỏng chỗ khác (mức 5) thì check chặn; rác (mức 3) dừng ở cổng 3
+        assert (line["passed"], line["reached"]["gold_oracle"]) == ((0, 0) if level == 3 else (0, 1) if level == 5 else (1, 1)), line["id"]
+    assert rep["groups"]["level=1"]["rate"] == 100.0 and rep["groups"]["level=5"]["rate"] == 0.0 and rep["groups"]["style=named"]["trials"] > 0
