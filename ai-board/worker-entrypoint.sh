@@ -34,28 +34,40 @@ ollama_host=$(python -c 'import os, urllib.parse; print(urllib.parse.urlsplit(os
 if [ -n "$ollama_host" ]; then
   for ip in $(getent ahostsv4 "$ollama_host" | awk '{print $1}' | sort -u); do iptables -A AIBOARD_OUT -d "$ip" -j ACCEPT; done
 fi
-# api.github.com/meta allows 60 unauthenticated calls/hour per IP: a few restarts exhaust it and the worker then
-# crash-loops (each retry makes it worse). Keep the last good answer in the memory volume and fall back to it.
-ranges_cache=/opt/ai-board/ai-board/memory/github-ranges.txt
-if [ -n "${AI_BOARD_GITHUB_TOKEN:-}" ]; then
-  meta=$(curl -fsS --max-time 20 -H "Authorization: Bearer $AI_BOARD_GITHUB_TOKEN" https://api.github.com/meta) || meta=""
-else
-  meta=$(curl -fsS --max-time 20 https://api.github.com/meta) || meta=""
+# GitHub is only needed when something talks to it: a remote origin (clone/fetch) or a token (PRs). A local origin
+# (e.g. the e2e mirror) needs no ranges, and then no call to api.github.com at all.
+origin=$REPO_URL
+if [ -d "$REPO_DIR/.git" ]; then
+  origin=$(git -c safe.directory='*' -C "$REPO_DIR" remote get-url origin 2>/dev/null || echo "$REPO_URL")
 fi
-github=$(printf '%s' "$meta" | python -c '
+need_github=0
+case "$origin" in http://*|https://*|git@*|ssh://*) need_github=1 ;; esac
+if [ -n "${AI_BOARD_GITHUB_TOKEN:-}" ]; then need_github=1; fi
+github=""
+if [ "$need_github" = 1 ]; then
+  # api.github.com/meta allows 60 unauthenticated calls/hour per IP: a few restarts exhaust it and the worker then
+  # crash-loops (each retry makes it worse). Keep the last good answer in the memory volume and fall back to it.
+  ranges_cache=/opt/ai-board/ai-board/memory/github-ranges.txt
+  if [ -n "${AI_BOARD_GITHUB_TOKEN:-}" ]; then
+    meta=$(curl -fsS --max-time 20 -H "Authorization: Bearer $AI_BOARD_GITHUB_TOKEN" https://api.github.com/meta) || meta=""
+  else
+    meta=$(curl -fsS --max-time 20 https://api.github.com/meta) || meta=""
+  fi
+  github=$(printf '%s' "$meta" | python -c '
 import json, sys
 try:
     meta = json.load(sys.stdin)
 except ValueError:
     sys.exit(0)
 print("\n".join(sorted({n for k in ("git", "web", "api") for n in meta.get(k, []) if ":" not in n})))')
-if [ -n "$github" ]; then
-  printf '%s\n' "$github" > "$ranges_cache"
-elif [ -s "$ranges_cache" ]; then
-  echo "GitHub address ranges unavailable; using the cached list"
-  github=$(cat "$ranges_cache")
+  if [ -n "$github" ]; then
+    printf '%s\n' "$github" > "$ranges_cache"
+  elif [ -s "$ranges_cache" ]; then
+    echo "GitHub address ranges unavailable; using the cached list"
+    github=$(cat "$ranges_cache")
+  fi
+  [ -n "$github" ] || { echo "could not read GitHub address ranges (no cache yet)"; exit 1; }
 fi
-[ -n "$github" ] || { echo "could not read GitHub address ranges (no cache yet)"; exit 1; }
 for net in $github; do iptables -A AIBOARD_OUT -d "$net" -j ACCEPT; done
 iptables -A AIBOARD_OUT -j REJECT
 iptables -C OUTPUT -m owner --uid-owner "$uid" -j AIBOARD_OUT 2>/dev/null \
