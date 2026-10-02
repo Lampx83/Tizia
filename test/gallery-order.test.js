@@ -19,3 +19,13 @@ test('already ordered, unrelated or mixed attachments are left exactly as they a
   assert.deepEqual(pairBeforeAfter(mixed), mixed);
   assert.deepEqual(pairBeforeAfter(undefined), []);
 });
+
+test('zoom steps by 1.5x and stays between fit (1) and 6x', async () => {
+  const { zoomStep, ZOOM_MIN, ZOOM_MAX } = await import('../public/js/lightbox.js');
+  assert.equal(zoomStep(1, 1), 1.5);
+  assert.equal(zoomStep(1.5, 1), 2.25);
+  assert.equal(zoomStep(2.25, -1), 1.5);
+  assert.equal(zoomStep(1, -1), ZOOM_MIN);
+  assert.equal(zoomStep(5, 1), ZOOM_MAX);
+  assert.equal(zoomStep(ZOOM_MAX, 1), ZOOM_MAX);
+});
