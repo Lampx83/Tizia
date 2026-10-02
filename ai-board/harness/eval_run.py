@@ -21,6 +21,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import eval_git  # noqa: E402
 import eval_recall  # noqa: E402
 from eval_gold import run_case  # noqa: E402
 from eval_strata import MAX_DROP  # noqa: E402
@@ -213,7 +214,7 @@ def build_report(meta: dict, cases: list[dict], rows: list[dict], total: int, cu
 
 def render(rep: dict) -> str:
     """Báo cáo dạng chữ từ build_report."""
-    lines = [f"[FAST TIER | {rep['source']}] seed {rep['seed']}, model {rep['model']}: {rep['tier_label']}",
+    lines = [f"[{rep.get('label', 'FAST TIER')} | {rep['source']}] seed {rep['seed']}, model {rep['model']}: {rep['tier_label']}",
              (f"CẮT NGANG do hết ngân sách thời gian: xong {rep['trials_done']}/{rep['trials_total']} lượt; chạy lại đúng lệnh này để tiếp tục"
               if rep["cut_short"] else f"xong {rep['trials_done']}/{rep['trials_total']} lượt")]
     for c in rep["cases"]:
@@ -245,6 +246,7 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
     tier.add_argument("--model", help="mặc định: model cổng 3 đang cấu hình")
     tier.add_argument("--root", default=os.environ.get("AI_BOARD_EVAL_DIR") or str(DEFAULT_ROOT))
     eval_recall.register(subs)
+    eval_git.register(subs)
     args = parser.parse_args(argv)
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
@@ -257,6 +259,8 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
         from main import ENV_FILE
         load_dotenv(ENV_FILE)  # như worker; không in giá trị nào
         deps = Deps.real()
+    if hasattr(args, "handler"):  # lệnh của eval_git (cần model)
+        return args.handler(args, deps, source)
     if args.baseline and not Path(args.baseline).is_file():
         print(f"[eval] không thấy mốc {args.baseline}", file=sys.stderr)
         return 2

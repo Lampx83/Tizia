@@ -61,7 +61,8 @@ def synthetic(root: Path) -> list[dict]:
 
 
 def load_cases(root: Path, names: list[str] | None) -> list[dict]:
-    cases = synthetic(root)
+    import eval_git
+    cases = synthetic(root) + eval_git.recall_cases(root)
     return [c for c in cases if not names or c["corpus"] in names]
 
 

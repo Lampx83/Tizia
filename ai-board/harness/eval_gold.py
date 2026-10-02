@@ -66,25 +66,27 @@ class Collect(meter.Tracer):
 
 
 def run_case(name: str, case: dict, model: str, base: Deps) -> dict:
-    """1 case cổng 3 → row kết quả. case: subtask, detail, oracle(nội dung)→bool, checkout (repo git base; mặc định Tizia)."""
+    """1 case cổng 3 → row kết quả. case: subtask, detail, oracle(nội dung)→bool, checkout (repo git base; mặc định Tizia).
+    Nhiều file: `subtasks` (list) thay `subtask`, oracle nhận {file: nội dung} và row có thêm `diff` (candidate so với base)."""
     tracer = Collect()
     models = dataclasses.replace(base.models, gate3_model=model, gate3_model_light=model)
     deps = dataclasses.replace(base, models=models, trace=tracer)
     scratch = Path(tempfile.mkdtemp(prefix="ai-board-eval-"))
-    state = {"plan": {"subtasks": [case["subtask"]]}, "checkout_source": str(case.get("checkout", ROOT)), "request_detail": case["detail"]}
+    subtasks = case.get("subtasks") or [case["subtask"]]
+    state = {"plan": {"subtasks": subtasks}, "checkout_source": str(case.get("checkout", ROOT)), "request_detail": case["detail"]}
     started = time.monotonic()
     try:
         out = implement.run(state, deps, Budget(max_wall_clock_s=900, max_units=600), repo_dir=scratch)
     except Exception as error:  # noqa: BLE001 — 504/timeout vẫn là 1 kết quả eval
         out = {"blocked": True, "reason": f"{type(error).__name__}: {error}"[:300]}
     tracer.flush()
-    written = scratch / case["subtask"]["file"]
-    content = written.read_text(encoding="utf-8") if written.exists() else ""
+    files = {t["file"]: (scratch / t["file"]).read_text(encoding="utf-8") if (scratch / t["file"]).exists() else "" for t in subtasks}
     shutil.rmtree(scratch, ignore_errors=True)  # runner chạy hàng trăm lần: không để rác tạm
     calls = tracer.records
     total = lambda key: sum((c["metrics"].get(key) or 0) for c in calls)  # noqa: E731
-    passed = bool(content) and not out.get("blocked") and case["oracle"](content)
-    return {
+    multi = "subtasks" in case
+    passed = all(files.values()) and not out.get("blocked") and case["oracle"](files if multi else files[subtasks[0]["file"]])
+    row = {
         "case": name, "model": model, "gate_passed": not out.get("blocked"), "oracle": passed,
         "last_output": None if passed or not calls else calls[-1]["output"][:1500],
         "reason": out.get("reason"), "calls": len(calls),
@@ -95,6 +97,10 @@ def run_case(name: str, case: dict, model: str, base: Deps) -> dict:
         "model_loads": sum((c["metrics"].get("load_ms") or 0) > 500 for c in calls),
         "done_reasons": [c["metrics"].get("done_reason") for c in calls],
     }
+    if multi:
+        before = implement._existing_files(state["checkout_source"], subtasks)[1]
+        row["diff"] = "\n".join(implement._unified(before[f].decode("utf-8") if f in before else "", text, f) for f, text in files.items() if text)
+    return row
 
 
 def main(argv=None) -> int:
