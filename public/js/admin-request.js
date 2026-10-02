@@ -2,6 +2,7 @@
 // vết AI Board — phiên xử lý (worker) theo từng lượt, cổng, từng lần gọi model, sự kiện. Tự cập nhật bằng cách
 // vá DOM (không vẽ lại cả trang). Mọi giá trị từ học sinh/model là dữ liệu không tin cậy → luôn qua esc().
 import { patchHtml } from './dom-morph.js';
+import { installLightbox, pairBeforeAfter } from './lightbox.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -39,10 +40,10 @@ async function post(path, body) {
 }
 
 function renderAtts(list) {
-  const items = (Array.isArray(list) ? list : []).filter(a => a && a.url);
+  const items = pairBeforeAfter((Array.isArray(list) ? list : []).filter(a => a && a.url));
   if (!items.length) return '';
   return `<div class="atts">${items.map(a => /^image\//.test(a.mime || '')
-    ? `<a href="${esc(a.url)}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(a.url)}" alt="${esc(a.name)}"><span>${esc(a.name)}</span></a>`
+    ? `<a href="${esc(a.url)}" data-gallery data-name="${esc(a.name)}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(a.url)}" alt="${esc(a.name)}"><span>${esc(a.name)}</span></a>`
     : `<a href="${esc(a.url)}" target="_blank" rel="noopener"><span>${esc(a.name)}</span></a>`).join('')}</div>`;
 }
 
@@ -654,6 +655,8 @@ if (window.top !== window) {
     window.parent.document.getElementById('req-dialog')?.close();
   });
 }
+
+installLightbox();
 
 (async () => {
   if (!REQUEST_ID) { $('#app').innerHTML = '<p class="err">Thiếu id yêu cầu.</p>'; return; }
