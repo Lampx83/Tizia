@@ -7,13 +7,14 @@ from __future__ import annotations
 import difflib
 import json
 import logging
+import os
 import re
 import unicodedata
 from pathlib import Path
 
 # Mọi núm truy xuất context (trích file, locate, exemplar, repomap, chia budget tool) nằm ở retrieval_weights.json,
 # mỗi khoá kèm _why. Dưới đây chỉ là giá trị dự phòng khi file hỏng/thiếu khoá.
-WEIGHTS_PATH = Path(__file__).resolve().parent / "retrieval_weights.json"
+WEIGHTS_PATH = Path(os.environ.get("AI_BOARD_RETRIEVAL_WEIGHTS") or Path(__file__).resolve().parent / "retrieval_weights.json")  # env: bộ đo recall thử trọng số khác
 DEFAULT_WEIGHTS = {
     "context_budget": 6000, "radius": 3, "tail_lines": 8, "max_keywords": 12, "max_line": 400, "ngram": [2, 5],
     "max_phrases": 6, "text_max": 200, "max_renderers": 2, "min_stem": 4, "users_share": 1 / 3,

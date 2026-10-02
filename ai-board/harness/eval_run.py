@@ -21,6 +21,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import eval_recall  # noqa: E402
 from eval_gold import run_case  # noqa: E402
 from eval_strata import MAX_DROP  # noqa: E402
 from main import ROOT, Deps  # noqa: E402
@@ -234,7 +235,8 @@ def render(rep: dict) -> str:
 
 def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.monotonic) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    tier = parser.add_subparsers(dest="tier", required=True).add_parser("quick", help="fast tier, seed → vài case")
+    subs = parser.add_subparsers(dest="tier", required=True)
+    tier = subs.add_parser("quick", help="fast tier, seed → vài case")
     tier.add_argument("--seed", type=int, required=True)
     tier.add_argument("--cases", type=int, default=8)
     tier.add_argument("--repeats", type=int, default=3)
@@ -242,10 +244,13 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
     tier.add_argument("--baseline", help="report.json của run mốc (cùng tier + nguồn) để ra kết luận hồi quy")
     tier.add_argument("--model", help="mặc định: model cổng 3 đang cấu hình")
     tier.add_argument("--root", default=os.environ.get("AI_BOARD_EVAL_DIR") or str(DEFAULT_ROOT))
+    eval_recall.register(subs)
     args = parser.parse_args(argv)
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
+    if getattr(args, "no_model", False):  # lệnh không gọi model: không dựng Deps, không đọc env
+        return args.handler(args)
     source = "synthetic-candidate" if deps is not None else "pure-ollama"  # deps bơm vào = hạ tầng/candidate tổng hợp
     if deps is None:
         from dotenv import load_dotenv

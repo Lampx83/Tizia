@@ -108,6 +108,25 @@ def file_prompt_context(subtask: dict, content: str, siblings: list[str], words:
             + file_context.excerpt(content, words, filename=subtask["file"]))
 
 
+def gate3_context(subtask: dict, state: dict, current: str | None, siblings: list[str], words: list[str]) -> tuple:
+    """(context, lessons, ctx): trích file model thấy ở cổng 3 + bài học + kết quả build_context. Bộ đo recall dùng chung."""
+    context = None if current is None else file_prompt_context(subtask, current, siblings, words)
+    lessons = memory.recall(state["memory_path"], subtask["file"], words) if state.get("memory_path") else []
+    ctx = None
+    if current is not None:
+        # Skill chọn tool (grep `Lnn|`, dàn ý, bài học) trên base sha. Không có trích dòng → giữ excerpt cũ.
+        ctx = repo_context.build_context(
+            3, {"subject": subtask["title"], "body": state.get("request_detail") or subtask["verify"],
+                "folder_brief": state.get("folder_brief"),
+                # Folder chức năng: trang/module mới chọn skill new-feature (có dòng script module được phép).
+                "type": "feature" if state.get("folder_brief") else None},
+            subtask, state["checkout_source"], state["base_sha"], memory_path=state.get("memory_path"))
+        if _EXCERPT_LINE.search(ctx["text"]):
+            context = context.split("\n", 1)[0] + "\n" + ctx["text"]
+            lessons = []  # skill đã kèm tool lessons
+    return context, lessons, ctx
+
+
 def _siblings(source, sha: str, file: str) -> list[str]:
     """Tên file cùng thư mục với `file` ở base sha (rỗng nếu lỗi)."""
     folder = posixpath.dirname(file)
@@ -370,21 +389,8 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
         current = texts.get(subtask["file"])
         words = file_context.keywords(subtask["title"], subtask["verify"], state.get("request_detail"))
         siblings = [] if current is None else _siblings(state["checkout_source"], state["base_sha"], subtask["file"])
-        context = None if current is None else file_prompt_context(subtask, current, siblings, words)
-        lessons = memory.recall(state["memory_path"], subtask["file"], words) if state.get("memory_path") else []
+        context, lessons, ctx = gate3_context(subtask, state, current, siblings, words)
         trace = getattr(deps, "trace", None)
-        ctx = None
-        if current is not None:
-            # Skill chọn tool (grep `Lnn|`, dàn ý, bài học) trên base sha. Không có trích dòng → giữ excerpt cũ.
-            ctx = repo_context.build_context(
-                3, {"subject": subtask["title"], "body": state.get("request_detail") or subtask["verify"],
-                    "folder_brief": state.get("folder_brief"),
-                    # Folder chức năng: trang/module mới chọn skill new-feature (có dòng script module được phép).
-                    "type": "feature" if state.get("folder_brief") else None},
-                subtask, state["checkout_source"], state["base_sha"], memory_path=state.get("memory_path"))
-            if _EXCERPT_LINE.search(ctx["text"]):
-                context = context.split("\n", 1)[0] + "\n" + ctx["text"]
-                lessons = []  # skill đã kèm tool lessons
         prompt = build_prompt(subtask, state.get("repair_reason"), context, lessons)
         feedback = ""
         if trace:
