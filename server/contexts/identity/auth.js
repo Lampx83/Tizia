@@ -65,11 +65,11 @@ function clearSessionCookie(res) {
 }
 
 // ── Lấy user hiện tại từ cookie ──
-export function getCurrentUser(req) {
+export async function getCurrentUser(req) {
   const cookies = parseCookies(req);
   const token = cookies[COOKIE_NAME];
   if (!token) return null;
-  const sess = getSession(token);
+  const sess = await getSession(token);
   if (!sess) return null;
   return {
     id: sess.user_id,
@@ -86,14 +86,14 @@ export function getCurrentUser(req) {
 }
 
 // ── Middleware: gắn req.user (nullable) ──
-export function attachUser(req, _res, next) {
-  req.user = getCurrentUser(req);
+export async function attachUser(req, _res, next) {
+  req.user = await getCurrentUser(req);
   next();
 }
 
 // ── Middleware: bắt buộc đăng nhập cho API ──
-export function requireAuth(req, res, next) {
-  if (!req.user) req.user = getCurrentUser(req);
+export async function requireAuth(req, res, next) {
+  if (!req.user) req.user = await getCurrentUser(req);
   if (!req.user) return res.status(401).json({ error: 'unauthorized', needLogin: true });
   next();
 }
@@ -109,8 +109,8 @@ export function requireAuth(req, res, next) {
 // Admin (role='admin'): bypass cả 2/3 — có quyền thao tác trên mọi trường để
 // chấm/duyệt. Giáo viên/phụ huynh: vẫn enforce (sẽ exempt sau khi xử lý xong
 // luồng riêng cho 2 role này).
-export function requireEnrolled(req, res, next) {
-  if (!req.user) req.user = getCurrentUser(req);
+export async function requireEnrolled(req, res, next) {
+  if (!req.user) req.user = await getCurrentUser(req);
   if (!req.user) return res.status(401).json({ error: 'unauthorized', needLogin: true });
   if (req.user.role === 'admin') return next();
   const enrolled = req.user.enrolled_domain || null;
@@ -139,8 +139,8 @@ export function requireEnrolled(req, res, next) {
 // Dùng cho route premium (vd /api/ai/grade-essay yêu cầu 'pro'). Trả 402 Payment
 // Required + meta để FE bật paywall modal. requireAuth phải chạy trước để có req.user.
 export function requirePlan(minPlan) {
-  return (req, res, next) => {
-    if (!req.user) req.user = getCurrentUser(req);
+  return async (req, res, next) => {
+    if (!req.user) req.user = await getCurrentUser(req);
     if (!req.user) return res.status(401).json({ error: 'unauthorized', needLogin: true });
     const eff = effectivePlan(req.user);
     if (!meetsPlan(eff.id, minPlan)) {
@@ -279,9 +279,9 @@ function isPublicPath(p) {
 }
 
 export function makeAuthGate({ basePath = '' } = {}) {
-  return function authGate(req, res, next) {
+  return async function authGate(req, res, next) {
     if (isPublicPath(req.path)) return next();
-    if (!req.user) req.user = getCurrentUser(req);
+    if (!req.user) req.user = await getCurrentUser(req);
     if (req.user) return next();
 
     // API → 401 JSON; trang HTML → redirect login.
@@ -348,7 +348,7 @@ const USERNAME_RE = /^[a-z0-9_.-]{3,32}$/i;
 
 export function attachAuth(r) {
   // POST /api/auth/register
-  r.post('/api/auth/register', (req, res) => {
+  r.post('/api/auth/register', async (req, res) => {
     const b = req.body ?? {};
     const username = String(b.username || '').trim();
     const password = String(b.password || '');
@@ -378,7 +378,7 @@ export function attachAuth(r) {
     if (age == null || age < 3 || age > 100) {
       return res.status(400).json({ error: 'tuổi phải từ 3 đến 100' });
     }
-    if (getUserByUsername(username)) {
+    if (await getUserByUsername(username)) {
       return res.status(409).json({ error: 'username đã tồn tại' });
     }
 
@@ -391,15 +391,15 @@ export function attachAuth(r) {
       return res.status(400).json({ error: 'ngành học không hợp lệ' });
     }
 
-    const { id } = createUser({
+    const { id } = await createUser({
       username, display_name,
       password_hash: hashPassword(password),
       role, age,
       grade, major, cohort, school_name,
     });
     const token = randomBytes(32).toString('hex');
-    const { expires_at } = createSession({ token, user_id: id, ttlMs: SESSION_TTL_MS });
-    touchLogin(id);
+    const { expires_at } = await createSession({ token, user_id: id, ttlMs: SESSION_TTL_MS });
+    await touchLogin(id);
     setSessionCookie(res, token, expires_at);
     // Gợi ý FE redirect: nếu profile đủ → vào trường phù hợp; thiếu → /complete-profile.
     const userObj = { id, username, display_name, role, age, grade, major, cohort, school_name };
@@ -408,17 +408,17 @@ export function attachAuth(r) {
   });
 
   // POST /api/auth/login
-  r.post('/api/auth/login', (req, res) => {
+  r.post('/api/auth/login', async (req, res) => {
     const b = req.body ?? {};
     const username = String(b.username || '').trim();
     const password = String(b.password || '');
-    const user = getUserByUsername(username);
+    const user = await getUserByUsername(username);
     if (!user || !verifyPassword(password, user.password_hash)) {
       return res.status(401).json({ error: 'tài khoản hoặc mật khẩu không đúng' });
     }
     const token = randomBytes(32).toString('hex');
-    const { expires_at } = createSession({ token, user_id: user.id, ttlMs: SESSION_TTL_MS });
-    touchLogin(user.id);
+    const { expires_at } = await createSession({ token, user_id: user.id, ttlMs: SESSION_TTL_MS });
+    await touchLogin(user.id);
     setSessionCookie(res, token, expires_at);
     const userObj = {
       id: user.id, username: user.username, display_name: user.display_name,
@@ -430,26 +430,26 @@ export function attachAuth(r) {
   });
 
   // POST /api/auth/logout
-  r.post('/api/auth/logout', (req, res) => {
+  r.post('/api/auth/logout', async (req, res) => {
     const cookies = parseCookies(req);
     const token = cookies[COOKIE_NAME];
-    if (token) deleteSession(token);
+    if (token) await deleteSession(token);
     clearSessionCookie(res);
     res.json({ ok: true });
   });
 
   // GET /api/auth/me
-  r.get('/api/auth/me', (req, res) => {
-    const u = req.user || getCurrentUser(req);
+  r.get('/api/auth/me', async (req, res) => {
+    const u = req.user || await getCurrentUser(req);
     if (!u) return res.status(401).json({ error: 'unauthorized' });
-    const full = getUserById(u.id);
+    const full = await getUserById(u.id);
     const eff = full ? effectivePlan(full) : null;
     // Trục 4: nếu HS có PH linked với gói cao hơn → kế thừa. Báo cờ inherited_plan
     // để UI hiển thị "Bạn được PH chia sẻ gói Plus" thay vì cho mua nâng cấp.
     let effFamily = eff;
     let inheritedFromParent = false;
     if (full && full.role === 'pupil') {
-      const parent = getBestParentPlanForChild(full.id);
+      const parent = await getBestParentPlanForChild(full.id);
       if (parent) {
         // Map field name: SQL trả parent_plan/parent_plan_expires_at, helper cần plan/plan_expires_at.
         effFamily = effectivePlanWithFamily(full, { plan: parent.parent_plan, plan_expires_at: parent.parent_plan_expires_at });
@@ -476,11 +476,11 @@ export function attachAuth(r) {
         enrolled_domain: full.enrolled_domain || null,
         // Per-user grants — admin đã mở thêm trường nào cho user này (kể cả
         // trường khoá). FE dùng để bỏ qua isDomainOpen/plan check.
-        granted_domains: listUserDomainGrants(full.id),
+        granted_domains: await listUserDomainGrants(full.id),
         // Per-user school-admin role: user có quyền QUẢN LÝ trường nào (xem HS,
         // cấu hình campus, gán app vào toà nhà…). Khác với granted_domains
         // (chỉ ACCESS). 1 user có thể quản lý nhiều trường.
-        managed_domains: listManagedDomains(full.id),
+        managed_domains: await listManagedDomains(full.id),
         profile_complete: isProfileComplete(full),
         default_route: defaultRouteForUser(full),
       } : null,
@@ -488,8 +488,8 @@ export function attachAuth(r) {
   });
 
   // POST /api/auth/me — người dùng tự sửa hồ sơ (tên hiển thị + tuổi + email)
-  r.post('/api/auth/me', (req, res) => {
-    if (!req.user) req.user = getCurrentUser(req);
+  r.post('/api/auth/me', async (req, res) => {
+    if (!req.user) req.user = await getCurrentUser(req);
     if (!req.user) return res.status(401).json({ error: 'unauthorized' });
     const b = req.body ?? {};
     const name = String(b.displayName || '').trim().slice(0, 60);
@@ -510,7 +510,7 @@ export function attachAuth(r) {
 
     // Trục 1: cho phép sửa thêm grade/major/cohort/school_name. Giữ giá trị cũ nếu
     // body không gửi (undefined) — chỉ ghi đè khi key có trong b.
-    const cur = getUserById(req.user.id) || {};
+    const cur = await getUserById(req.user.id) || {};
     const grade = b.grade === undefined ? cur.grade
       : (Number.isFinite(Number(b.grade)) ? Math.floor(Number(b.grade)) : null);
     const major = b.major === undefined ? cur.major
@@ -527,8 +527,8 @@ export function attachAuth(r) {
       return res.status(400).json({ error: 'ngành học không hợp lệ' });
     }
 
-    updateUserEditable(req.user.id, { display_name: name, age, email, grade, major, cohort, school_name });
-    const full = getUserById(req.user.id);
+    await updateUserEditable(req.user.id, { display_name: name, age, email, grade, major, cohort, school_name });
+    const full = await getUserById(req.user.id);
     res.json({
       ok: true,
       user: full ? {
@@ -544,10 +544,10 @@ export function attachAuth(r) {
   // POST /api/auth/complete-profile — endpoint riêng cho modal khai bổ sung (user
   // cũ trước migration). Chỉ cập nhật 4 trường HS/SV, không đụng display_name/age/email.
   // Trả redirectTo để FE bay thẳng tới trường phù hợp.
-  r.post('/api/auth/complete-profile', (req, res) => {
-    if (!req.user) req.user = getCurrentUser(req);
+  r.post('/api/auth/complete-profile', async (req, res) => {
+    if (!req.user) req.user = await getCurrentUser(req);
     if (!req.user) return res.status(401).json({ error: 'unauthorized' });
-    const cur = getUserById(req.user.id);
+    const cur = await getUserById(req.user.id);
     if (!cur) return res.status(404).json({ error: 'user not found' });
 
     const b = req.body ?? {};
@@ -568,11 +568,11 @@ export function attachAuth(r) {
     }
     // teacher: cho qua, không bắt buộc.
 
-    updateUserEditable(cur.id, {
+    await updateUserEditable(cur.id, {
       display_name: cur.display_name, age: cur.age, email: cur.email,
       grade, major, cohort, school_name,
     });
-    const full = getUserById(cur.id);
+    const full = await getUserById(cur.id);
     res.json({
       ok: true,
       user: full,
@@ -585,14 +585,14 @@ export function attachAuth(r) {
   // chưa có enrolled_domain (tránh dùng để bypass switch-school). Sau khi gọi,
   // mọi route ghi (wallet, scenario-runs, skills/grant, requests…) đi qua bucket
   // mới. Bucket cũ (domain='') vẫn lưu → admin có thể truy xuất nếu cần audit.
-  r.post('/api/me/enroll', (req, res) => {
-    if (!req.user) req.user = getCurrentUser(req);
+  r.post('/api/me/enroll', async (req, res) => {
+    if (!req.user) req.user = await getCurrentUser(req);
     if (!req.user) return res.status(401).json({ error: 'unauthorized' });
     const domain = String(req.body?.domain || '').trim().slice(0, 40);
     if (!ENROLLABLE_DOMAINS.has(domain)) {
       return res.status(400).json({ error: 'invalid domain', valid: [...ENROLLABLE_DOMAINS] });
     }
-    const cur = getEnrolledDomain(req.user.id);
+    const cur = await getEnrolledDomain(req.user.id);
     if (cur) {
       return res.status(409).json({
         error: 'already_enrolled',
@@ -600,7 +600,7 @@ export function attachAuth(r) {
         message: 'Bạn đã chọn trường rồi. Nếu muốn đổi trường, dùng /api/me/switch-school.',
       });
     }
-    setEnrolledDomain(req.user.id, domain);
+    await setEnrolledDomain(req.user.id, domain);
     res.json({ ok: true, enrolled_domain: domain });
   });
 
@@ -609,18 +609,18 @@ export function attachAuth(r) {
   // hiện tại. Quay lại trường cũ → bucket cũ tự hiện lại đúng tiến trình. FE phải
   // hiện cảnh báo "đổi trường = bắt đầu lại XP/coin/level/skill ở trường mới"
   // trước khi gọi (anh Lâm xác nhận giữ ẩn, không xoá).
-  r.post('/api/me/switch-school', (req, res) => {
-    if (!req.user) req.user = getCurrentUser(req);
+  r.post('/api/me/switch-school', async (req, res) => {
+    if (!req.user) req.user = await getCurrentUser(req);
     if (!req.user) return res.status(401).json({ error: 'unauthorized' });
     const domain = String(req.body?.domain || '').trim().slice(0, 40);
     if (!ENROLLABLE_DOMAINS.has(domain)) {
       return res.status(400).json({ error: 'invalid domain', valid: [...ENROLLABLE_DOMAINS] });
     }
-    const previous = getEnrolledDomain(req.user.id);
+    const previous = await getEnrolledDomain(req.user.id);
     if (previous === domain) {
       return res.json({ ok: true, enrolled_domain: domain, unchanged: true });
     }
-    setEnrolledDomain(req.user.id, domain);
+    await setEnrolledDomain(req.user.id, domain);
     res.json({ ok: true, enrolled_domain: domain, previous_domain: previous });
   });
 }
@@ -642,11 +642,11 @@ function isProfileGateExempt(p) {
   return false;
 }
 export function makeProfileGate({ basePath = '' } = {}) {
-  return function profileGate(req, res, next) {
+  return async function profileGate(req, res, next) {
     if (!req.user) return next();                       // guest → để authGate lo
     if (isProfileGateExempt(req.path)) return next();
     // Đọc full user 1 lần để check profile (req.user chỉ có vài field từ session).
-    const full = getUserById(req.user.id);
+    const full = await getUserById(req.user.id);
     if (!full || isProfileComplete(full)) return next();
     if (req.path.startsWith('/api/')) {
       return res.status(409).json({ error: 'profile_incomplete', complete_profile_url: '/complete-profile.html' });
