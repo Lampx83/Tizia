@@ -9,6 +9,8 @@ services:
     image: tizia:dev
     container_name: tizia-dev
     restart: unless-stopped
+    depends_on:  # AI_BOARD_DB=postgres needs the database up at boot; harmless while the board still runs on SQLite
+      tizia-postgres: { condition: service_healthy, required: false }
     ports:
       - "${PORT:-8041}:8041"
     env_file:
