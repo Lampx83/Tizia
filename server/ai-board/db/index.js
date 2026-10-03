@@ -1,6 +1,6 @@
 // Async DB contract for the AI board: one interface, two backends (SQLite stays default, PostgreSQL is opt-in).
 // SQL is written once with `?` placeholders and portable syntax (ON CONFLICT DO NOTHING, COALESCE, CAST); the few
-// dialect gaps go through `d.jsonNum` / `d.forUpdate`. `t` inside tx() has the same methods as `d`.
+// dialect gaps go through `d.jsonNum` / `d.lockRow` / `d.lockQueue(alias)`. `t` inside tx() has the same methods as `d`.
 //
 // Backend switch: AI_BOARD_DB=sqlite|postgres (default sqlite) + AI_BOARD_DATABASE_URL for postgres.
 // ROLLBACK: unset AI_BOARD_DB (or set sqlite) and restart. The SQLite file is not written while postgres is selected
@@ -45,7 +45,8 @@ const withInsertId = (sql) => `${sql.trim().replace(/;$/, '')} RETURNING id`;
 function sqliteOps(raw) {
   return {
     dialect: 'sqlite',
-    forUpdate: '',
+    lockRow: '',
+    lockQueue: () => '',
     jsonNum: (col, key) => `json_extract(${col}, '$.${key}')`,
     async get(sql, p = []) { return raw.prepare(sql).get(...p); },
     async all(sql, p = []) { return raw.prepare(sql).all(...p); },
@@ -86,7 +87,8 @@ function pgOps(q) {
   const call = (sql, p) => q.query(toPgPlaceholders(sql), p);
   return {
     dialect: 'postgres',
-    forUpdate: ' FOR UPDATE',
+    lockRow: ' FOR UPDATE',
+    lockQueue: (alias) => ` FOR UPDATE OF ${alias} SKIP LOCKED`,
     jsonNum: (col, key) => `(${col}::jsonb ->> '${key}')::numeric`,
     async get(sql, p = []) { return (await call(sql, p)).rows[0]; },
     async all(sql, p = []) { return (await call(sql, p)).rows; },

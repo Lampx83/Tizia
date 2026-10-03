@@ -2195,3 +2195,9 @@ export function createAiBoardStore(db, hooks = {}) {
     invalidatePlanForRequest,
   };
 }
+
+// Pure pieces shared with the async store (store-async.js); the sync store above stays the default until the port is finished.
+export {
+  validatePrePrVerdict, cleanAttachments, PHASES, triggerFor, ANY_QUEUE, PLAN_QUEUE, ACTIVE_ONLY, REQUEST_TYPES,
+  WORKER_MODES, CLAIM_INTENTS, RUN_TRIGGERS, CLARIFYING_NOTE, DAY_MS, KEY as IDEMPOTENCY_KEY, parseJson,
+};
