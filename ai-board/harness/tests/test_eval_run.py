@@ -58,6 +58,9 @@ class GoldModels:
     calls: list = dataclasses.field(default_factory=list)
     die_after: int | None = None  # giả lập bị kill: KeyboardInterrupt sau chừng này lời gọi
 
+    def digest(self, model):
+        return f"sha256:fake-{model}"
+
     def generate(self, model, prompt, **kw):
         if self.die_after is not None and len(self.calls) >= self.die_after:
             raise KeyboardInterrupt
@@ -379,3 +382,20 @@ def test_held_out_detail_from_the_fast_tier_never_leaves_its_vault_and_the_repor
     rep = report(root, name)
     assert rep["groups"]["split=heldout"]["trials"] == 6 and "split=heldout" in rep["ship"] and "split=heldout" in rep["coverage_gap"]
     assert not {line["id"] for line in rep["cases"]} & {row["case"] for row in vault_rows}
+
+
+def test_the_run_records_the_pinned_config_next_to_the_numbers_and_refuses_to_resume_under_a_changed_pin(root, monkeypatch, capsys):
+    assert run(root, "--cases", "2", "--repeats", "1") == 0
+    rep = report(root, f"quick-s{SEED}")
+    harness = Path(eval_run.__file__).parent
+    sha = lambda path: eval_run.hashlib.sha256(Path(path).read_text(encoding="utf-8").encode("utf-8")).hexdigest()[:16]  # noqa: E731 — read_text gộp CRLF
+    assert rep["pins"] == {"model_digest": "sha256:fake-fake", "prompt_lock": sha(harness / "prompts" / "prompts.lock.json"),
+                           "skill_lock": sha(harness / "skills" / "skills.lock.json"), "retrieval_weights": sha(harness / "retrieval_weights.json"),
+                           "contract_hash": sha(harness.parents[1] / "server" / "ai-board" / "contract.json"),
+                           "guest_image": rep["pins"]["guest_image"]}
+    assert re.fullmatch(r"\S+@sha256:[0-9a-f]{64}", rep["pins"]["guest_image"])
+    assert f"model_digest=sha256:fake-fake" in (run_dir(root, f"quick-s{SEED}") / "report.txt").read_text(encoding="utf-8")
+    capsys.readouterr()
+    monkeypatch.setattr(GoldModels, "digest", lambda self, model: "sha256:other")  # model đổi bản sau khi run dở: số cũ không còn so được
+    assert run(root, "--cases", "2", "--repeats", "1") == 2
+    assert "đã có run khác cấu hình" in capsys.readouterr().err

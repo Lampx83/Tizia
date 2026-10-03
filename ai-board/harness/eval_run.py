@@ -3,6 +3,7 @@
     python eval_run.py quick --seed 7 [--cases 8] [--repeats 3] [--budget-minutes M] [--baseline report.json] [--root DIR]
     python eval_run.py corpus --seed 7 [--root DIR]    # sinh corpus trang thật + manifest (cần chữ request đóng băng, xem eval_corpus)
     python eval_run.py full --seed 7 [--split dev|heldout|all] [--cases N] [--fast-tier] [...như quick]
+    baseline = full --seed 20261003 --split all --fast-tier --model qwen2.5-coder:14b (3 lần/case); cấu hình ghim (`pins`) nằm trong run.json + báo cáo
 
 full: held-out = dòng kết quả thô, case, chữ request chỉ nằm dưới <root>/heldout/ (rule deny Read của project); báo cáo chỉ có điểm
 tổng hợp split=heldout. Mặc định --split dev: held-out chỉ chạy khi chọn rõ, và chỉ mở chi tiết khi tuyên bố kết quả cuối chu kỳ.
@@ -31,6 +32,7 @@ import eval_corpus  # noqa: E402
 import eval_fast  # noqa: E402
 import eval_git  # noqa: E402
 import eval_recall  # noqa: E402
+import file_context  # noqa: E402
 from eval_corpus import WORDS, sentence as _sentence  # noqa: E402
 from eval_gold import run_case  # noqa: E402
 from eval_strata import MAX_DROP  # noqa: E402
@@ -54,6 +56,20 @@ PAGE = """<!DOCTYPE html>
 GIT_ENV = {"GIT_AUTHOR_NAME": "eval", "GIT_AUTHOR_EMAIL": "eval@tizia.local", "GIT_COMMITTER_NAME": "eval",
            "GIT_COMMITTER_EMAIL": "eval@tizia.local", "GIT_AUTHOR_DATE": "2026-01-01T00:00:00",
            "GIT_COMMITTER_DATE": "2026-01-01T00:00:00"}  # commit hash tất định theo nội dung
+
+
+def pins(model: str, deps: Deps) -> dict:
+    """Cấu hình ghim ghi cạnh số liệu: digest model, hash prompt/skill lock, trọng số truy xuất, contract, guest image của Gate 5 (None nếu thiếu)."""
+    sha = lambda path: hashlib.sha256(Path(path).read_bytes().replace(b"\r\n", b"\n")).hexdigest()[:16]  # noqa: E731 — CRLF của Windows không đổi hash
+    policy = (ROOT / "ai-board" / "sandbox-runner" / "sandbox-policy.dev.yaml").read_text(encoding="utf-8")
+    image = re.search(r"^guest_image: (\S+)", policy, re.M)
+    digest = getattr(deps.models, "digest", None)
+    return {"model_digest": digest(model) if digest else None,
+            "prompt_lock": sha(ROOT / "ai-board" / "harness" / "prompts" / "prompts.lock.json"),
+            "skill_lock": sha(ROOT / "ai-board" / "harness" / "skills" / "skills.lock.json"),
+            "retrieval_weights": sha(file_context.WEIGHTS_PATH),
+            "contract_hash": sha(ROOT / "server" / "ai-board" / "contract.json"),
+            "guest_image": image.group(1) if image else None}
 
 
 def generate(seed: int, n_cases: int, pages: int = 3) -> tuple[dict, list[dict]]:
@@ -229,6 +245,7 @@ def build_report(meta: dict, cases: list[dict], rows: list[dict], total: int, cu
 def render(rep: dict) -> str:
     """Báo cáo dạng chữ từ build_report."""
     lines = [f"[{rep.get('label', 'FAST TIER')} | {rep['source']}] seed {rep['seed']}, model {rep['model']}: {rep['tier_label']}",
+             *(["cấu hình ghim: " + ", ".join(f"{k}={v}" for k, v in rep["pins"].items())] if "pins" in rep else []),  # run git-b chưa ghim
              (f"CẮT NGANG do hết ngân sách thời gian: xong {rep['trials_done']}/{rep['trials_total']} lượt; chạy lại đúng lệnh này để tiếp tục"
               if rep["cut_short"] else f"xong {rep['trials_done']}/{rep['trials_total']} lượt")]
     for c in rep["cases"]:
@@ -319,7 +336,7 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
     use_fast = args.tier == "quick" or getattr(args, "fast_tier", False)
     run_dir = root / "runs" / name
     run_dir.mkdir(parents=True, exist_ok=True)
-    meta = {"tier": args.tier, "source": source, "seed": args.seed, "repeats": args.repeats, "model": model, "fast_tier": use_fast,
+    meta = {"tier": args.tier, "source": source, "seed": args.seed, "repeats": args.repeats, "model": model, "fast_tier": use_fast, "pins": pins(model, deps),
             "corpus_sha": hashlib.sha256(json.dumps(cases, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()}
     meta_path = run_dir / "run.json"
     if meta_path.exists() and {k: json.loads(meta_path.read_text(encoding="utf-8")).get(k) for k in meta} != meta:
