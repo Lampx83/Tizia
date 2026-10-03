@@ -1,4 +1,5 @@
 import express from 'express';
+import './express-async.js'; // Express 4: async handlers forward rejections to next()
 import compression from 'compression';
 import http from 'node:http';
 import path from 'node:path';
@@ -154,86 +155,86 @@ function consecutiveDays(days) {
 // Trục 3: nhận thêm `role` để gate badge audience. Nếu role không khớp audience,
 // silent skip (vd HS không trigger 'hard-perfect' dù chạy mode khó). Caller (route
 // /api/attempts) phải truyền role; default 'student' để backward-compat.
-function checkAndUnlockBadges(playerName, attempt, role = 'student') {
+async function checkAndUnlockBadges(playerName, attempt, role = 'student') {
   const newly = [];
-  const tryUnlock = (badgeId) => {
+  const tryUnlock = async (badgeId) => {
     const b = BADGES.find(x => x.id === badgeId);
     if (!b || !badgeApplies(b, role)) return;       // skip nếu badge không cho role này
-    if (unlockAchievement(playerName, badgeId)) newly.push(b);
+    if (await unlockAchievement(playerName, badgeId)) newly.push(b);
   };
-  tryUnlock('first-play');
+  await tryUnlock('first-play');
   if (attempt.correct === attempt.total && attempt.total > 0) {
-    tryUnlock('perfect-1');
-    const allPerfect = db.prepare(`
+    await tryUnlock('perfect-1');
+    const allPerfect = await db.prepare(`
       SELECT COUNT(*) AS c FROM attempts
       WHERE player_name = ? AND correct = total AND total > 0
     `).get(playerName);
-    if ((allPerfect?.c ?? 0) >= 5) tryUnlock('perfect-5');
-    if (attempt.total >= 8) tryUnlock('hard-perfect');
+    if ((allPerfect?.c ?? 0) >= 5) await tryUnlock('perfect-5');
+    if (attempt.total >= 8) await tryUnlock('hard-perfect');
   }
-  if (attempt.durationMs && attempt.durationMs < 20000) tryUnlock('speed-demon');
-  const distinct = db.prepare(`
+  if (attempt.durationMs && attempt.durationMs < 20000) await tryUnlock('speed-demon');
+  const distinct = await db.prepare(`
     SELECT COUNT(DISTINCT version) AS c FROM attempts WHERE player_name = ?
   `).get(playerName);
-  if ((distinct?.c ?? 0) >= 4) tryUnlock('all-modes');
-  if (attempt.version === 'metaverse') tryUnlock('metaverse-host');
+  if ((distinct?.c ?? 0) >= 4) await tryUnlock('all-modes');
+  if (attempt.version === 'metaverse') await tryUnlock('metaverse-host');
 
   // ── HS-specific (Trục 3) ──
   if (role === 'pupil') {
-    const totalAttempts = db.prepare(`SELECT COUNT(*) AS c FROM attempts WHERE player_name = ?`).get(playerName)?.c || 0;
-    if (totalAttempts >= 3) tryUnlock('sticker-collector');
+    const totalAttempts = (await db.prepare(`SELECT COUNT(*) AS c FROM attempts WHERE player_name = ?`).get(playerName))?.c || 0;
+    if (totalAttempts >= 3) await tryUnlock('sticker-collector');
     // Streak ngày: dùng DATE(created_at/1000, 'unixepoch') để gom theo ngày.
-    const days = db.prepare(`
+    const days = (await db.prepare(`
       SELECT DISTINCT date(created_at/1000, 'unixepoch') AS d FROM attempts
       WHERE player_name = ? ORDER BY d DESC LIMIT 10
-    `).all(playerName).map(r => r.d);
+    `).all(playerName)).map(r => r.d);
     const streak = consecutiveDays(days);
-    if (streak >= 3) tryUnlock('streak-3');
-    if (streak >= 7) tryUnlock('streak-7');
+    if (streak >= 3) await tryUnlock('streak-3');
+    if (streak >= 7) await tryUnlock('streak-7');
     // Math hero: 3 bài Toán liên tiếp perfect — phát hiện qua version chứa 'toan' hoặc subject='Toán'
     if (attempt.correct === attempt.total && attempt.total > 0
         && (String(attempt.version || '').toLowerCase().includes('toan')
             || String(attempt.subject || '').toLowerCase().includes('toán'))) {
-      const last3 = db.prepare(`
+      const last3 = await db.prepare(`
         SELECT correct, total, version FROM attempts
         WHERE player_name = ? AND (lower(version) LIKE '%toan%' OR lower(version) LIKE '%math%')
         ORDER BY created_at DESC LIMIT 3
       `).all(playerName);
-      if (last3.length >= 3 && last3.every(a => a.correct === a.total && a.total > 0)) tryUnlock('math-hero');
+      if (last3.length >= 3 && last3.every(a => a.correct === a.total && a.total > 0)) await tryUnlock('math-hero');
     }
     // Reading hero: 5 lượt môn Tiếng Việt
-    const tvCount = db.prepare(`
+    const tvCount = (await db.prepare(`
       SELECT COUNT(*) AS c FROM attempts
       WHERE player_name = ? AND (lower(version) LIKE '%tieng-viet%' OR lower(version) LIKE '%tv-%')
-    `).get(playerName)?.c || 0;
-    if (tvCount >= 5) tryUnlock('reading-hero');
+    `).get(playerName))?.c || 0;
+    if (tvCount >= 5) await tryUnlock('reading-hero');
   }
 
   // === Sắc ký TLC badges ===
   const SACKY_VERSIONS = ['sac-ky-2d', 'sac-ky-3d', 'sac-ky-vr-web', 'sac-ky-quiz', 'sac-ky-meta'];
   if (SACKY_VERSIONS.includes(attempt.version)) {
-    tryUnlock('tlc-first');
-    if (attempt.version === 'sac-ky-meta') tryUnlock('tlc-meta-host');
+    await tryUnlock('tlc-first');
+    if (attempt.version === 'sac-ky-meta') await tryUnlock('tlc-meta-host');
     // Perfect Rf: parse details — at least 3 measurements within ±0.05
     try {
-      const lastRow = db.prepare(`SELECT details FROM attempts WHERE id = last_insert_rowid()`).get();
+      const lastRow = await db.prepare(`SELECT details FROM attempts WHERE id = ?`).get(attempt.id);
       if (lastRow?.details) {
         const d = JSON.parse(lastRow.details);
         if (Array.isArray(d.samples)) {
           const allClose = d.samples.length >= 3 && d.samples.every(s =>
             s.measuredRf != null && Math.abs(s.measuredRf - s.trueRf) <= 0.05
           );
-          if (allClose) tryUnlock('tlc-perfect-rf');
+          if (allClose) await tryUnlock('tlc-perfect-rf');
         }
       }
     } catch {}
-    if (attempt.durationMs && attempt.durationMs < 60000) tryUnlock('tlc-speed');
+    if (attempt.durationMs && attempt.durationMs < 60000) await tryUnlock('tlc-speed');
     // All 5 sắc ký versions
-    const sackyDistinct = db.prepare(`
+    const sackyDistinct = await db.prepare(`
       SELECT COUNT(DISTINCT version) AS c FROM attempts
       WHERE player_name = ? AND version IN ('sac-ky-2d', 'sac-ky-3d', 'sac-ky-vr-web', 'sac-ky-quiz', 'sac-ky-meta')
     `).get(playerName);
-    if ((sackyDistinct?.c ?? 0) >= 5) tryUnlock('tlc-all-modes');
+    if ((sackyDistinct?.c ?? 0) >= 5) await tryUnlock('tlc-all-modes');
   }
   return newly;
 }
@@ -283,7 +284,7 @@ app.use((req, res, next) => {
 // attachUser luôn gắn req.user (nullable). makeAuthGate redirect HTML chưa login về /login.html
 // và trả 401 cho /api/* (trừ /api/auth/*, /api/health). Phải nằm TRƯỚC attachAppProxies để
 // các app anh em (/scoreup, /codelab, …) cũng được gate trên cùng origin.
-app.use((req, _res, next) => { attachUser(req, _res, next); });
+app.use(async (req, _res, next) => { await attachUser(req, _res, next); });
 app.use(makeAuthGate({ basePath: BASE_PATH }));
 // Trục 1: ép user (đã login) khai bổ sung profile HS/SV nếu thiếu. SAU makeAuthGate
 // (để chỉ áp dụng cho user đã login) và TRƯỚC attachAppProxies (để app anh em cũng
@@ -299,7 +300,7 @@ app.use('/api', apiLimiter);
 //     chạy degrade về trang "chưa chạy" (public/apps.html).
 //   - scoreup-webhook / codelab-webhook: nhận webhook (HMAC verify cần raw bytes).
 //     Auth gate đã whitelist '/api/webhooks/' để webhook không có session vẫn qua.
-mountAppPlugins(app, [appProxyPlugin, scoreUpWebhookPlugin, codelabWebhookPlugin], { surface });
+await mountAppPlugins(app, [appProxyPlugin, scoreUpWebhookPlugin, codelabWebhookPlugin], { surface });
 
 app.use(express.json({ limit: '64kb' }));
 // CSRF double-submit — sau express.json (cần req.body cho fallback _csrf).
@@ -314,7 +315,7 @@ const route = asyncRoutes(r);
 
 // AI board stack, chosen by AI_BOARD_DB (default sqlite = the original sync stack on `db`). With postgres the board, its
 // requests / request_messages and a users projection live in PostgreSQL (see ai-board/services.js); every consumer awaits.
-const aiBoard = await createAiBoardServices({ env: process.env, sqlite: db });
+const aiBoard = await createAiBoardServices({ env: process.env, sqlite: db.raw, appDb: db });
 setAiBoardServices(aiBoard);
 if (aiBoard.projectUser) r.use(projectUserMiddleware(aiBoard.projectUser)); // before any route that can write a user id into the board
 
@@ -342,7 +343,7 @@ r.get('/api/health', (_req, res) => {
 const paymentPlugin = PAYMENT_ENABLED
   ? (await import('./contexts/payment/index.js')).plugin
   : null;
-mountRouterPlugins(r, [
+await mountRouterPlugins(r, [
   seoPlugin, authPlugin, oauthPlugin, analyticsPlugin, billingPlugin, integrationPlugin,
   securityPlugin, adminPlugin, adminDbPlugin, aiBoardInboxPlugin, campusLayoutPlugin,
   portalAppsPlugin, skillsPlugin, engagementPlugin, learningPlugin, curriculumPlugin,
@@ -379,7 +380,7 @@ attachAiBoardWorkerRoutes(r, {
 attachAiBoardReleases(r, { db: aiBoard.db, releases: aiBoard.releases, requireAuth, requireAdmin, requireStrictCsrf });
 
 
-r.post('/api/attempts', requireAuth, requireEnrolled, (req, res) => {
+r.post('/api/attempts', requireAuth, requireEnrolled, async (req, res) => {
   const b = req.body ?? {};
   const version = String(b.version || '');
   if (!isValidVersion(version)) {
@@ -398,12 +399,12 @@ r.post('/api/attempts', requireAuth, requireEnrolled, (req, res) => {
   const classCode = (typeof b.classCode === 'string' && b.classCode.trim())
     ? b.classCode.trim().slice(0, 16) : null;
   const levelN = Number.isFinite(b.level) ? Math.floor(b.level) : null;
-  const result = insertAttempt({
+  const result = await insertAttempt({
     version, player_name: playerName, score, correct, total,
     duration_ms: durationMs, details, created_at: Date.now(),
     class_code: classCode, level_n: levelN,
   });
-  const newBadges = checkAndUnlockBadges(playerName, { version, score, correct, total, durationMs }, req.user.role);
+  const newBadges = await checkAndUnlockBadges(playerName, { id: result.id, version, score, correct, total, durationMs }, req.user.role);
   // GA4: bắn quiz_submit từ server (nguồn chân lý — client không can thiệp được
   // vào score). + 1 event badge_unlock cho mỗi huy hiệu mới mở.
   sendGA4Event(req, 'quiz_submit', {
@@ -418,48 +419,48 @@ r.post('/api/attempts', requireAuth, requireEnrolled, (req, res) => {
   res.json({ ...result, newBadges });
 });
 
-r.get('/api/leaderboard', (req, res) => {
+r.get('/api/leaderboard', async (req, res) => {
   const version = String(req.query.version || '');
   if (!isValidVersion(version)) return res.status(400).json({ error: 'invalid version' });
   const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
-  res.json(getLeaderboard(version, limit));
+  res.json(await getLeaderboard(version, limit));
 });
 
-r.get('/api/stats', (req, res) => {
+r.get('/api/stats', async (req, res) => {
   const version = String(req.query.version || '');
   if (!isValidVersion(version)) return res.status(400).json({ error: 'invalid version' });
-  res.json(getStats(version));
+  res.json(await getStats(version));
 });
 
-r.get('/api/recent', (req, res) => {
+r.get('/api/recent', async (req, res) => {
   const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
-  res.json(getRecent(limit));
+  res.json(await getRecent(limit));
 });
 
-r.get('/api/histogram', (req, res) => {
+r.get('/api/histogram', async (req, res) => {
   const version = String(req.query.version || '');
   if (!isValidVersion(version)) return res.status(400).json({ error: 'invalid version' });
-  res.json(getHistogram(version));
+  res.json(await getHistogram(version));
 });
 
-r.get('/api/confusion', (req, res) => {
+r.get('/api/confusion', async (req, res) => {
   const version = String(req.query.version || '');
   if (!isValidVersion(version)) return res.status(400).json({ error: 'invalid version' });
-  res.json(getConfusion(version));
+  res.json(await getConfusion(version));
 });
 
 // Ví XP/coin/streak per-user (không chỉ localStorage để không mất khi đổi máy).
 // GET trả ví hiện tại (rỗng nếu chưa có row); PUT ghi đè bằng payload client gửi
 // lên. Last-write-wins — chấp nhận vì 1 user thường chỉ chơi 1 tab tại 1 thời điểm,
 // và FE merge với local trước khi PUT (lấy MAX để tránh tab cũ ghi đè ngược).
-r.get('/api/wallet', requireAuth, (req, res) => {
-  res.json(getUserWallet(req.user.id) || null);
+r.get('/api/wallet', requireAuth, async (req, res) => {
+  res.json(await getUserWallet(req.user.id) || null);
 });
 // PUT ghi ví → bắt phải đã chọn trường (requireEnrolled). Ví ghi vào bucket của
 // trường HS đang theo học (helper tự đọc enrolled_domain). FE submit thử ở trường
 // khác sẽ bị 403 view_only (FE đã ẩn nút submit; đây là lớp 2).
-r.put('/api/wallet', requireAuth, requireEnrolled, (req, res) => {
-  const w = upsertUserWallet(req.user.id, req.body || {});
+r.put('/api/wallet', requireAuth, requireEnrolled, async (req, res) => {
+  const w = await upsertUserWallet(req.user.id, req.body || {});
   res.json(w);
 });
 
@@ -487,7 +488,7 @@ r.post('/api/scenario-runs', requireAuth, requireEnrolled, async (req, res) => {
     // block response của scenario-runs. UNIQUE đảm bảo idempotent.
     let skillsGranted = null;
     try {
-      const g = grantSkillsForScenario({
+      const g = await grantSkillsForScenario({
         user_id: req.user.id,
         family_id: familyId,
         score: row?.best_score ?? score,
@@ -496,8 +497,8 @@ r.post('/api/scenario-runs', requireAuth, requireEnrolled, async (req, res) => {
       if (g.granted_count > 0) skillsGranted = g;
     } catch (e) { console.warn('[scenario-runs] grant skills failed', e?.message); }
     // Engagement: mỗi scenario hoàn thành (bất kể điểm) = 1 lượt minigame.
-    try { trackEngagementProgress(req.user.id, 'minigame', 1); } catch {}
-    try { addLeagueWeekXp(req.user.id, Math.max(5, Math.floor(score / 10))); } catch {}
+    try { await trackEngagementProgress(req.user.id, 'minigame', 1); } catch {}
+    try { await addLeagueWeekXp(req.user.id, Math.max(5, Math.floor(score / 10))); } catch {}
     res.json({ familyId, ...(row || {}), skillsGranted });
   } catch (e) {
     console.warn('[scenario-runs] POST failed', e?.message);
@@ -512,15 +513,15 @@ r.post('/api/scenario-runs', requireAuth, requireEnrolled, async (req, res) => {
 //
 // GET /api/user-state                   → { key: { value, updatedAt } }
 // PUT /api/user-state  body: { key:val }  upsert (value rỗng = xoá)
-r.get('/api/user-state', requireAuth, (req, res) => {
+r.get('/api/user-state', requireAuth, async (req, res) => {
   try {
-    res.json(getUserState(req.user.id));
+    res.json(await getUserState(req.user.id));
   } catch (e) {
     console.warn('[user-state] GET failed', e?.message);
     res.status(500).json({ error: 'db_error' });
   }
 });
-function _putUserStateHandler(req, res) {
+async function _putUserStateHandler(req, res) {
   const body = req.body || {};
   if (typeof body !== 'object' || Array.isArray(body)) {
     return res.status(400).json({ error: 'body must be object {key: value}' });
@@ -530,7 +531,7 @@ function _putUserStateHandler(req, res) {
     return res.status(413).json({ error: 'too many keys in one request (max 100)' });
   }
   try {
-    const n = putUserState(req.user.id, body);
+    const n = await putUserState(req.user.id, body);
     res.json({ ok: true, written: n });
   } catch (e) {
     // Value > 32KB: trả 413 + key + max để client biết phải chunk/nén thay vì
@@ -645,7 +646,7 @@ r.post('/api/quiz/attempt', requireAuth, requireEnrolled, async (req, res) => {
         : (userArr.length === 1 && correctSet.has(userArr[0]));
     }
 
-    const attempt = recordQuestionAttempt({
+    const attempt = await recordQuestionAttempt({
       user_id: req.user.id,
       scoreup_question_id: q.id, question_external_id: q.external_id,
       subject_id: q.subject_id, chapter_id: q.chapter_id,
@@ -654,12 +655,12 @@ r.post('/api/quiz/attempt', requireAuth, requireEnrolled, async (req, res) => {
 
     // Tracking engagement: chỉ cộng tiến triển quest "quiz" khi câu đúng.
     if (correct) {
-      try { trackEngagementProgress(req.user.id, 'quiz', 1); } catch {}
-      try { addLeagueWeekXp(req.user.id, 5); } catch {}    // 5 XP / câu đúng
+      try { await trackEngagementProgress(req.user.id, 'quiz', 1); } catch {}
+      try { await addLeagueWeekXp(req.user.id, 5); } catch {}    // 5 XP / câu đúng
     }
     // Update IRT θ user + b câu hỏi (cho cả đúng/sai).
     try {
-      updateIrt({
+      await updateIrt({
         user_id: req.user.id,
         question_id: q.id,
         subject_id: q.subject_id || '',
@@ -678,9 +679,9 @@ r.post('/api/quiz/attempt', requireAuth, requireEnrolled, async (req, res) => {
   }
 });
 
-r.get('/api/quiz/recent', requireAuth, (req, res) => {
+r.get('/api/quiz/recent', requireAuth, async (req, res) => {
   const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 500);
-  res.json({ items: getRecentQuestionAttempts(req.user.id, limit) });
+  res.json({ items: await getRecentQuestionAttempts(req.user.id, limit) });
 });
 
 // ── Code qua Codelab (NEU Online Judge) ─────────────────────────────
@@ -896,7 +897,7 @@ r.post('/api/codelab/me/claim/:submissionId', requireAuth, requireEnrolled, asyn
       // Hậu quả: codelab_submissions.problem_slug = null khi missing.
     }
 
-    const { firstSeen, userId } = recordCodelabSubmission({
+    const { firstSeen, userId } = await recordCodelabSubmission({
       submissionId, status: statusName, problemSlug,
       externalUserRef: actualRef || expectedRef,
       score: sub.score, passedCases: sub.passedCases || sub.passed_test_cases,
@@ -908,9 +909,9 @@ r.post('/api/codelab/me/claim/:submissionId', requireAuth, requireEnrolled, asyn
     if (firstSeen && statusName === 'accepted' && userId && problemSlug) {
       // Exclude row VỪA INSERT khỏi check — nếu không, hasAcceptedCodelabProblem
       // sẽ thấy chính row mới này và luôn return true → never reward.
-      if (!hasAcceptedCodelabProblem(userId, problemSlug, submissionId)) {
-        const cur = gw(userId) || {};
-        uw(userId, {
+      if (!await hasAcceptedCodelabProblem(userId, problemSlug, submissionId)) {
+        const cur = await gw(userId) || {};
+        await uw(userId, {
           xp: (cur.xp || 0) + 20,
           coins: (cur.coins || 0) + 5,
           quizzesPassed: (cur.quizzesPassed || 0) + 1,
@@ -950,9 +951,9 @@ r.get('/api/codelab/submissions/latest/problem/:slug', requireAuth, async (req, 
 // THỐNG KÊ Codelab của user — đếm số bài accepted, dùng cho dashboard học sinh
 // và quest "giải N bài Codelab". Chỉ đọc DB Tizia (codelab_submissions), không
 // gọi Codelab → trả nhanh.
-r.get('/api/codelab/me/stats', requireAuth, (req, res) => {
+r.get('/api/codelab/me/stats', requireAuth, async (req, res) => {
   res.json({
-    acceptedProblems: countCodelabAcceptedProblems(req.user.id),
+    acceptedProblems: await countCodelabAcceptedProblems(req.user.id),
     externalUserRef:  refOf(req),
   });
 });
@@ -961,11 +962,11 @@ r.get('/api/codelab/me/stats', requireAuth, (req, res) => {
 // Cá nhân hoá "Củng cố kiến thức": GET state theo prefix (vd space:mam:),
 // POST mỗi review → server cập nhật ease/interval/due_at, trả về state mới.
 // Guest 401 → FE tự fallback localStorage (xem public/js/engine/spaced-quiz.js).
-r.get('/api/srs/state', requireAuth, (req, res) => {
+r.get('/api/srs/state', requireAuth, async (req, res) => {
   const prefix = String(req.query.prefix || '').slice(0, 64);
   if (!prefix) return res.status(400).json({ error: 'prefix_required' });
   try {
-    res.json({ items: getSrsStateByPrefix(req.user.id, prefix) });
+    res.json({ items: await getSrsStateByPrefix(req.user.id, prefix) });
   } catch (e) {
     console.warn('[srs/state]', e?.message);
     res.status(500).json({ error: 'db_error' });
@@ -993,45 +994,45 @@ function genCode(len = 6) {
   return s;
 }
 
-r.post('/api/classes', (req, res) => {
+r.post('/api/classes', async (req, res) => {
   const name = String(req.body?.name || '').trim().slice(0, 60);
   const teacherName = String(req.body?.teacherName || 'GV').trim().slice(0, 40);
   if (!name) return res.status(400).json({ error: 'name required' });
   let code = null;
   for (let i = 0; i < 8; i++) {
     const c = genCode(6);
-    if (!getClassByCode(c)) { code = c; break; }
+    if (!await getClassByCode(c)) { code = c; break; }
   }
   if (!code) return res.status(500).json({ error: 'could not generate code' });
-  const result = createClass({ code, name, teacher_name: teacherName });
+  const result = await createClass({ code, name, teacher_name: teacherName });
   res.json({ id: result.id, code, name, teacherName });
 });
 
-r.get('/api/classes', (_req, res) => res.json(listClasses()));
+r.get('/api/classes', async (_req, res) => res.json(await listClasses()));
 
-r.get('/api/classes/:code', (req, res) => {
-  const cls = getClassByCode(req.params.code);
+r.get('/api/classes/:code', async (req, res) => {
+  const cls = await getClassByCode(req.params.code);
   if (!cls) return res.status(404).json({ error: 'class not found' });
   res.json(cls);
 });
 
-r.get('/api/classes/:code/members', (req, res) => {
-  const cls = getClassByCode(req.params.code);
+r.get('/api/classes/:code/members', async (req, res) => {
+  const cls = await getClassByCode(req.params.code);
   if (!cls) return res.status(404).json({ error: 'class not found' });
-  res.json(getClassMembers(req.params.code));
+  res.json(await getClassMembers(req.params.code));
 });
 
-r.get('/api/classes/:code/attempts', (req, res) => {
-  const cls = getClassByCode(req.params.code);
+r.get('/api/classes/:code/attempts', async (req, res) => {
+  const cls = await getClassByCode(req.params.code);
   if (!cls) return res.status(404).json({ error: 'class not found' });
   const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
-  res.json(getClassAttempts(req.params.code, limit));
+  res.json(await getClassAttempts(req.params.code, limit));
 });
 
-r.get('/api/classes/:code/export.csv', (req, res) => {
-  const cls = getClassByCode(req.params.code);
+r.get('/api/classes/:code/export.csv', async (req, res) => {
+  const cls = await getClassByCode(req.params.code);
   if (!cls) return res.status(404).send('class not found');
-  const rows = getClassAttempts(req.params.code, 5000);
+  const rows = await getClassAttempts(req.params.code, 5000);
   const esc = v => v == null ? '' : (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g,'""')}"` : String(v));
   const lines = ['id,version,level,player_name,score,correct,total,duration_ms,created_at_iso'];
   for (const row of rows) {
@@ -1042,17 +1043,17 @@ r.get('/api/classes/:code/export.csv', (req, res) => {
   res.send('﻿' + lines.join('\n'));
 });
 
-r.get('/api/players/:name/attempts', (req, res) => {
+r.get('/api/players/:name/attempts', async (req, res) => {
   const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
-  res.json(getPlayerAttempts(req.params.name, limit));
+  res.json(await getPlayerAttempts(req.params.name, limit));
 });
 
-r.get('/api/achievements', (req, res) => {
+r.get('/api/achievements', async (req, res) => {
   // Mặc định trả huy hiệu của user đang đăng nhập; cho phép override ?player=
   // (giáo viên xem học sinh — sau có thể gate theo role).
   const player = String(req.query.player || req.user?.display_name || '').trim();
   if (!player) return res.status(400).json({ error: 'player required' });
-  const rows = getAchievements(player);
+  const rows = await getAchievements(player);
   res.json(rows.map(row => ({ ...row, badge: BADGES.find(b => b.id === row.badge_id) })));
 });
 
@@ -1192,8 +1193,8 @@ route.post('/api/requests/:id/vote', async (req, res) => {
 });
 
 // Audit trail quyết định của AI Agent cho 1 góp ý (minh bạch + cho phép xem lại).
-r.get('/api/requests/:id/decisions', (req, res) => {
-  res.json({ decisions: getDecisionsForRequest(req.params.id) });
+r.get('/api/requests/:id/decisions', async (req, res) => {
+  res.json({ decisions: await getDecisionsForRequest(req.params.id) });
 });
 
 // ── Phiên trao đổi (thread) của 1 yêu cầu ──────────────────────────────────
@@ -1259,36 +1260,36 @@ route.post('/api/requests/:id/messages', requireAuth, async (req, res) => {
   res.json({ ok: true, message_id: msg.id, reopened });
 });
 // Bảng quyết định AI gần đây của trường (cho dashboard "Ban điều hành AI").
-r.get('/api/ai-decisions', (req, res) => {
+r.get('/api/ai-decisions', async (req, res) => {
   const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
-  res.json({ decisions: getRecentDecisions(limit) });
+  res.json({ decisions: await getRecentDecisions(limit) });
 });
 
 // ── Notifications — hộp thư cá nhân của HS (phản hồi từ Ban điều hành AI) ──
 // Key theo display_name (vì requests lưu tên HS, có cả guest gửi → user_id chưa
 // có lúc tạo). Guest chưa đăng nhập → trả 401 mượt để FE ẩn bell.
-r.get('/api/notifications', (req, res) => {
+r.get('/api/notifications', async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'unauthorized', items: [], unread: 0 });
   const u = req.user.display_name;
   const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
   res.json({
-    items: listNotifications(u, limit),
-    unread: countUnreadNotifications(u),
+    items: await listNotifications(u, limit),
+    unread: await countUnreadNotifications(u),
   });
 });
-r.post('/api/notifications/:id/read', (req, res) => {
+r.post('/api/notifications/:id/read', async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'unauthorized' });
-  const ok = markNotificationRead(req.params.id, req.user.display_name);
+  const ok = await markNotificationRead(req.params.id, req.user.display_name);
   res.json({ ok });
 });
-r.post('/api/notifications/read-all', (req, res) => {
+r.post('/api/notifications/read-all', async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'unauthorized' });
-  const n = markAllNotificationsRead(req.user.display_name);
+  const n = await markAllNotificationsRead(req.user.display_name);
   res.json({ ok: true, marked: n });
 });
 
-r.get('/api/export.csv', (_req, res) => {
-  const rows = getAllAttempts();
+r.get('/api/export.csv', async (_req, res) => {
+  const rows = await getAllAttempts();
   const esc = v => {
     if (v == null) return '';
     const s = String(v);
@@ -1432,7 +1433,7 @@ const httpServer = http.createServer(app);
 // = 'prepend'); mount THEO ĐÚNG THỨ TỰ room → presence → live-quiz để danh sách
 // listener 'upgrade' cuối cùng giống hệt trước refactor (xem ghi chú wsPriority
 // ngay tại attachRoom/attachPresence/attachLiveQuizWs).
-mountWsPlugins(httpServer, [
+await mountWsPlugins(httpServer, [
   {
     name: 'ws-room', wsPriority: 'append', mount: () => attachRoom(httpServer, BASE_PATH),
     catalog: { kind: 'ws', tier: 'dev-owned', provides: ['/ws', '/ws-race', '/ws-sacky', '/ws-lab', '/ws-orchestrate'], description: 'Metaverse room + race/sacky/lab minigame + teacher orchestration — raw WS, dev-owned.' },
@@ -1449,9 +1450,9 @@ mountWsPlugins(httpServer, [
 // Prune scoreup_webhook_events_seen mỗi 6h, giữ 7 ngày. Bảng nhỏ nhưng dedup
 // theo event_id sẽ tích luỹ nếu ScoreUp gửi vài nghìn event/ngày — cleanup để
 // tránh phình index. Không cần block startup.
-setInterval(() => {
+setInterval(async () => {
   try {
-    const n = pruneScoreUpEventsSeen();
+    const n = await pruneScoreUpEventsSeen();
     if (n > 0) console.log(`[scoreup-webhook] pruned ${n} old event rows`);
   } catch (e) {
     console.warn('[scoreup-webhook] prune error:', e.message);

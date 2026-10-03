@@ -154,7 +154,7 @@ export async function setSelfImproveEnabled(db, enabled, adminUserId, now = Date
 export function selfWinNotifier(db, createNotification) {
   return async ({ night, request_id: requestId }) => {
     for (const a of await db.all("SELECT display_name, username FROM users WHERE role='admin'")) {
-      createNotification({ user_display_name: a.display_name || a.username, kind: 'reply',
+      await createNotification({ user_display_name: a.display_name || a.username, kind: 'reply',
         title: '🏛️ Ban tự cải thiện: có biến thể thắng',
         body: `Đêm ${night}: yêu cầu tự sửa #${requestId} thắng eval — xem PR nháp.`, url: '/admin.html#selfimprove' });
     }

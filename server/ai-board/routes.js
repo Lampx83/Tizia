@@ -87,7 +87,7 @@ export function attachAiBoardRequestRoutes(router, {
         await aux.recordClassification(db, result.root_ticket_id, trace);
         if (clarify.needed && onClarify) {
           try {
-            onClarify({ requestId: result.request_id, domain: ownerDomain, title: String(body.title || '').trim(),
+            await onClarify({ requestId: result.request_id, domain: ownerDomain, title: String(body.title || '').trim(),
               student: req.user.display_name || req.user.username });
           } catch (error) {
             console.warn('[ai-board] clarify notification failed:', error.message);
@@ -401,7 +401,7 @@ export function attachAiBoardWorkerRoutes(router, {
     });
     res.json(result);
     if (result.status === 'clarifying' && !result.duplicate && onClarify) {
-      try { onClarify(result); } catch (error) { console.warn('[ai-board] clarification notification failed:', error.message); }
+      try { await onClarify(result); } catch (error) { console.warn('[ai-board] clarification notification failed:', error.message); }
     }
   }));
 
@@ -447,10 +447,10 @@ export function attachAiBoardWorkerRoutes(router, {
     const won = await aux.recordSelfVerdict(store.db, req.params.id, verdict);
     res.json({ verdict });
     if (won && onSelfWin) {
-      try { onSelfWin(won); } catch (error) { console.warn('[ai-board] self win notification failed:', error.message); }
+      try { await onSelfWin(won); } catch (error) { console.warn('[ai-board] self win notification failed:', error.message); }
     }
     if (notice && onVerdict) {
-      try { onVerdict(notice); } catch (error) { console.warn('[ai-board] verdict notification failed:', error.message); }
+      try { await onVerdict(notice); } catch (error) { console.warn('[ai-board] verdict notification failed:', error.message); }
     }
   }));
 

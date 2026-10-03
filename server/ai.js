@@ -116,7 +116,7 @@ function wrapAi(endpoint, handler) {
       try {
         const result = await runWithAIModel(model, () => handler(req.body || {}, req));
         const u = result?._usage || {};
-        recordAiCall(req, {
+        await recordAiCall(req, {
           provider: 'ollama', model,
           prompt_tokens:     u.prompt_tokens     || 0,
           completion_tokens: u.completion_tokens || 0,
@@ -133,7 +133,7 @@ function wrapAi(endpoint, handler) {
         if (result && '_usage' in result) delete result._usage;
         res.json(result);
       } catch (e) {
-        recordAiCall(req, { provider: 'ollama', model, status: 'error' });
+        await recordAiCall(req, { provider: 'ollama', model, status: 'error' });
         sendGA4Event(req, 'ai_chat', {
           endpoint, model,
           duration_ms: Date.now() - t0, status: 'error',
@@ -1184,7 +1184,7 @@ async function handlePracticeMore({ grade = 2, subjectLabel = '', topic = '', sa
   const n = Math.max(3, Math.min(8, Number(numQuestions) || 5));
   const levelHint = GRADE_LEVEL_VN[grade] || `học sinh lớp ${grade}`;
   // Tránh trùng: gộp stem mẫu (quiz lõi) + stem AI đã tích luỹ trong kho của tuần này.
-  const bankStems = weekId ? getAiQuestions(weekId, 40).map(q => q.stem) : [];
+  const bankStems = weekId ? (await getAiQuestions(weekId, 40)).map(q => q.stem) : [];
   const avoidList = [...(Array.isArray(sampleStems) ? sampleStems : []), ...bankStems];
   const avoid = avoidList.slice(0, 16).map(s => `- ${s}`).join('\n');
 
@@ -1261,7 +1261,7 @@ Soạn ${n} câu hỏi MỚI. CHỈ JSON.`;
   let saved = 0;
   if (weekId && questions.length) {
     try {
-      ({ saved } = saveAiQuestions({
+      ({ saved } = await saveAiQuestions({
         week_id: weekId, subject: subjectLabel, topic,
         student: req?.user?.display_name || null, questions,
       }));
@@ -1310,7 +1310,7 @@ QUY TẮC:
   let saved = 0;
   if (ok && weekId) {
     try {
-      ({ saved } = saveAiQa({
+      ({ saved } = await saveAiQa({
         week_id: weekId, subject: subjectLabel, topic,
         student: req?.user?.display_name || null,
         question: message, answer: reply,
@@ -1327,12 +1327,12 @@ QUY TẮC:
 async function handleLessonBank(_body, req) {
   const weekId = String(req?.query?.weekId || '').trim();
   if (!weekId) throw new Error('weekId required');
-  const counts = getAiContentCounts(weekId);
+  const counts = await getAiContentCounts(weekId);
   return {
     weekId,
     counts,
-    questions: getAiQuestions(weekId, 50),  // để luyện lại không cần gọi Ollama
-    qa: getAiQa(weekId, 30),                // hỏi-đáp đã có để ôn lại
+    questions: await getAiQuestions(weekId, 50),  // để luyện lại không cần gọi Ollama
+    qa: await getAiQa(weekId, 30),                // hỏi-đáp đã có để ôn lại
   };
 }
 
