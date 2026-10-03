@@ -101,7 +101,7 @@ export function attachAiBoardRequestRoutes(router, {
       res.json({ ok: true, ...result, id: result.request_id, createdAt: Date.now(), clarify });
       if (result.created && onCreated) {
         try {
-          onCreated({
+          await onCreated({
             requestId: result.request_id,
             domain: ownerDomain,
             title: String(body.title || '').trim(),

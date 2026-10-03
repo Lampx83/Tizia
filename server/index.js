@@ -54,10 +54,10 @@ import { plugin as campusLayoutPlugin } from './contexts/campus/layout.js';
 import { plugin as portalAppsPlugin } from './contexts/portal-apps/index.js';
 import { grantSkillsForScenario, plugin as skillsPlugin } from './skills.js';
 import { securityHeaders, csrf, requireStrictCsrf, apiLimiter, sensitiveAuthLimiter, plugin as securityPlugin } from './contexts/security/index.js';
-import { createAiBoardStore } from './ai-board/store.js';
-import { aiBoardBackend } from './ai-board/db/index.js';
+import { createAiBoardServices, projectUserMiddleware } from './ai-board/services.js';
+import { setAiBoardServices } from './ai-board/runtime.js';
+import { asyncRoutes } from './ai-board/async-routes.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from './ai-board/routes.js';
-import { selfWinNotifier } from './ai-board/self-improve.js';
 import { draftNotifier } from './ai-board/drafts.js';
 import { shotBackendFromEnv, shotProxy, startShotRetention } from './ai-board/shot-storage.js';
 import { staticCacheControl } from './static-cache.js';
@@ -310,6 +310,13 @@ app.use(csrf);
 // BASE_PATH (defaults to '/') so the same code serves either at root
 // or under a sub-path like /ps.
 const r = express.Router();
+const route = asyncRoutes(r);
+
+// AI board stack, chosen by AI_BOARD_DB (default sqlite = the original sync stack on `db`). With postgres the board, its
+// requests / request_messages and a users projection live in PostgreSQL (see ai-board/services.js); every consumer awaits.
+const aiBoard = await createAiBoardServices({ env: process.env, sqlite: db });
+setAiBoardServices(aiBoard);
+if (aiBoard.projectUser) r.use(projectUserMiddleware(aiBoard.projectUser)); // before any route that can write a user id into the board
 
 r.get('/api/health', (_req, res) => {
   // ok:true giữ nguyên để Docker HEALTHCHECK (wget /api/health) vẫn pass; bổ sung
@@ -346,17 +353,15 @@ mountRouterPlugins(r, [
   assetsPlugin, adaptivePlugin, lessonsPlugin,
 ], { surface });
 
-// AI_BOARD_DB=postgres selects the async store (ai-board/store-async.js), which covers only part of the board so far:
-// refuse to start rather than run the sync store on SQLite while the operator believes the board is on PostgreSQL.
-if (aiBoardBackend(process.env) !== 'sqlite') throw new Error('AI_BOARD_DB=postgres: routes and the rest of the store are not ported yet; unset it to roll back to SQLite');
-const aiBoardStore = createAiBoardStore(db);
+const aiBoardStore = aiBoard.store;
 const aiBoardProfiles = attachAiBoardIntake(r, {
-  db, store: aiBoardStore, requireAuth, requireStrictCsrf,
+  db: aiBoard.db, store: aiBoardStore, requireAuth, requireStrictCsrf,
   quotaGate: aiQuotaGate('ai_board_grill'), recordUsage: recordAiCall,
 });
 attachAiBoardRequestRoutes(r, {
   store: aiBoardStore,
-  db,
+  aux: aiBoard.aux,
+  db: aiBoard.db,
   requireAuth,
   requireEnrolled,
   requireAdmin,
@@ -366,12 +371,12 @@ attachAiBoardRequestRoutes(r, {
   onClarify: clarifyNotifier(createNotification),
 });
 attachAiBoardWorkerRoutes(r, {
-  store: aiBoardStore, uploadsDir: REQUEST_UPLOADS_DIR, shotBackend: aiBoardShotBackend, onVerdict: draftNotifier(createNotification),
-  onSelfWin: selfWinNotifier(db, createNotification),
+  store: aiBoardStore, aux: aiBoard.aux, uploadsDir: REQUEST_UPLOADS_DIR, shotBackend: aiBoardShotBackend, onVerdict: draftNotifier(createNotification),
+  onSelfWin: aiBoard.aux.selfWinNotifier(aiBoard.db, createNotification),
   onClarify: clarifyNotifier(createNotification),
 });
 // Cờ phát hành: có page gate /<slug>.html → phải trước route HTML + static bên dưới.
-attachAiBoardReleases(r, { db, requireAuth, requireAdmin, requireStrictCsrf });
+attachAiBoardReleases(r, { db: aiBoard.db, releases: aiBoard.releases, requireAuth, requireAdmin, requireStrictCsrf });
 
 
 r.post('/api/attempts', requireAuth, requireEnrolled, (req, res) => {
@@ -1181,8 +1186,8 @@ r.post('/api/requests/attachments',
     }
   });
 
-r.post('/api/requests/:id/vote', (req, res) => {
-  const ok = voteRequest(req.params.id);
+route.post('/api/requests/:id/vote', async (req, res) => {
+  const ok = await aiBoard.requests.voteRequest(req.params.id);
   res.json({ ok });
 });
 
@@ -1198,13 +1203,13 @@ r.get('/api/requests/:id/decisions', (req, res) => {
 // GET trả { request, messages }. messages[0] = tin mở đầu dựng từ chính nội dung
 // yêu cầu (head, không lưu lặp ở request_messages). Yêu cầu cũ (trước tính năng
 // này) có admin_note nhưng chưa có message → bù 1 tin AI ảo để không mất phản hồi.
-r.get('/api/requests/:id/thread', requireAuth, (req, res) => {
-  const reqRow = getRequestById(req.params.id);
+route.get('/api/requests/:id/thread', requireAuth, async (req, res) => {
+  const reqRow = await aiBoard.requests.getRequestById(req.params.id);
   if (!reqRow) return res.status(404).json({ error: 'not_found' });
   if (req.user.role !== 'admin' && reqRow.owner_user_id !== req.user.id) {
     return res.status(403).json({ error: 'forbidden' });
   }
-  const msgs = listRequestMessages(reqRow.id);
+  const msgs = await aiBoard.requests.listRequestMessages(reqRow.id);
   const hasBoardMsg = msgs.some(m => m.role === 'ai' || m.role === 'admin');
   const thread = [{
     id: 0, request_id: reqRow.id, role: 'student', author_name: reqRow.student,
@@ -1225,7 +1230,7 @@ r.get('/api/requests/:id/thread', requireAuth, (req, res) => {
     request: {
       id: reqRow.id, domain: reqRow.domain, type: reqRow.type, title: reqRow.title,
       status: reqRow.status, student: reqRow.student, votes: reqRow.votes,
-      ...aiBoardStore.requestWorkflow(reqRow.id),
+      ...(await aiBoardStore.requestWorkflow(reqRow.id)),
       created_at: reqRow.created_at, updated_at: reqRow.updated_at,
     },
     messages: thread,
@@ -1235,8 +1240,8 @@ r.get('/api/requests/:id/thread', requireAuth, (req, res) => {
 // HS (chủ yêu cầu) hoặc admin gửi tin nhắn tiếp theo vào thread. Yêu cầu đã đóng
 // (done/rejected) tự mở lại 'reviewing' để Ban điều hành xem tiếp. KHÔNG gọi LLM
 // — Ban điều hành AI (Routine Claude Opus) trả lời bất đồng bộ qua /admin/.../reply.
-r.post('/api/requests/:id/messages', requireAuth, (req, res) => {
-  const reqRow = getRequestById(req.params.id);
+route.post('/api/requests/:id/messages', requireAuth, async (req, res) => {
+  const reqRow = await aiBoard.requests.getRequestById(req.params.id);
   if (!reqRow) return res.status(404).json({ error: 'not_found' });
   const me = req.user.display_name;
   const isAdmin = req.user.role === 'admin';
@@ -1246,11 +1251,11 @@ r.post('/api/requests/:id/messages', requireAuth, (req, res) => {
   if (!body) return res.status(400).json({ error: 'empty' });
   const attachments = Array.isArray(req.body?.attachments) ? req.body.attachments : null;
   const role = isOwner ? 'student' : 'admin';
-  const msg = addRequestMessage({ request_id: reqRow.id, role, author_name: me, body, attachments });
-  if (role === 'student') aiBoardStore.invalidatePlanForRequest(reqRow.id, 'requester clarification');
+  const msg = await aiBoard.requests.addRequestMessage({ request_id: reqRow.id, role, author_name: me, body, attachments });
+  if (role === 'student') await aiBoardStore.invalidatePlanForRequest(reqRow.id, 'requester clarification');
   // Board requests keep the status of their root ticket (a terminal root is never reopened by a reply — a new
   // request is needed), so only a legacy request without a root may be reopened here.
-  const reopened = role === 'student' && !aiBoardStore.hasRoot(reqRow.id) ? reopenRequestIfClosed(reqRow.id) : false;
+  const reopened = role === 'student' && !(await aiBoardStore.hasRoot(reqRow.id)) ? await aiBoard.requests.reopenRequestIfClosed(reqRow.id) : false;
   res.json({ ok: true, message_id: msg.id, reopened });
 });
 // Bảng quyết định AI gần đây của trường (cho dashboard "Ban điều hành AI").
@@ -1454,7 +1459,7 @@ setInterval(() => {
 }, 6 * 3600 * 1000).unref?.();
 
 // Retention ảnh bản nháp AI Board (AI_BOARD_SHOT_RETENTION_DAYS; chưa đặt hoặc 0 = tắt).
-startShotRetention({ db, backend: aiBoardShotBackend, log });
+startShotRetention({ db: aiBoard.db, backend: aiBoardShotBackend, log });
 
 // Bật error tracking (Sentry nếu có SENTRY_DSN) trước khi nhận traffic.
 await initErrorTracking();

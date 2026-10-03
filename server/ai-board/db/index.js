@@ -2,9 +2,17 @@
 // SQL is written once with `?` placeholders and portable syntax (ON CONFLICT DO NOTHING, COALESCE, CAST); the few
 // dialect gaps go through `d.jsonNum` / `d.lockRow` / `d.lockQueue(alias)`. `t` inside tx() has the same methods as `d`.
 //
-// Backend switch: AI_BOARD_DB=sqlite|postgres (default sqlite) + AI_BOARD_DATABASE_URL for postgres.
-// ROLLBACK: unset AI_BOARD_DB (or set sqlite) and restart. The SQLite file is not written while postgres is selected
-// and PostgreSQL rows are not copied back, so rows created on PostgreSQL after the flip stay there.
+// Backend switch: AI_BOARD_DB=sqlite|postgres (default sqlite) + AI_BOARD_DATABASE_URL for postgres (see services.js).
+//
+// DECISION (shared tables): with postgres the board database owns `requests` and `request_messages` (they are the board's intake
+// and thread data; trigger 017 keeps requests.status in step with the root ticket) and holds a `users` PROJECTION (id, username,
+// display_name, role, enrolled_domain) upserted whenever a signed-in user touches a board route. SQLite stays authoritative for
+// accounts, sessions, notifications, ai_decisions and everything else. Every non-board reader/writer of requests/request_messages
+// goes through requests-port.js. Board-created users (the 'ai-board' system user) get ids from 1_000_000_000 so they never
+// collide with an SQLite id. Two copies of `requests` never run at once: the other backend's rows are simply not read.
+//
+// ROLLBACK: unset AI_BOARD_DB (or set sqlite) and restart. The SQLite file is not written by the board while postgres is
+// selected and PostgreSQL rows are not copied back, so requests created on PostgreSQL after the flip stay there.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

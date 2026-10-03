@@ -17,7 +17,8 @@ import { attachBackup, scheduleAutoBackup } from './backup.js';
 import { attachAdminDb } from './db-admin.js';
 import { requireStrictCsrf } from '../security/index.js';
 import { getPageviewStats } from '../analytics/index.js';
-import { createAiBoardStore } from '../../ai-board/store.js';
+import { aiBoardServices } from '../../ai-board/runtime.js';
+import { asyncRoutes } from '../../ai-board/async-routes.js';
 
 // Scrypt hash — đồng bộ format với contexts/identity/auth.js (scrypt$salt$hash)
 function hashPassword(password) {
@@ -70,12 +71,16 @@ function tableExists(name) {
 
 export function attachAdmin(r) {
   ensureAdminBootstrap();
-  const boardStore = createAiBoardStore(db);
-  const applyAdminStatus = (id, status, note, actorId) =>
-    (status === 'rejected' ? boardStore.rejectRequest : boardStore.noteRequest)(id, note, actorId);
+  // The AI board stack (sync SQLite or async PostgreSQL) is chosen once at startup (ai-board/services.js); read lazily.
+  const board = () => aiBoardServices(db);
+  const route = asyncRoutes(r);
+  const applyAdminStatus = async (id, status, note, actorId) => {
+    const { store } = board();
+    return (status === 'rejected' ? store.rejectRequest : store.noteRequest)(id, note, actorId);
+  };
 
-  r.get('/api/admin/overview', requireAdmin, (_req, res) => {
-    const base = Q.overview.get();
+  route.get('/api/admin/overview', requireAdmin, async (_req, res) => {
+    const base = { ...Q.overview.get(), ...(await board().requests.requestCounts()) };
     // số liệu từ context có-thể-chưa-tạo-bảng (analytics/billing/ai_decisions)
     const extra = {};
     if (tableExists('ai_decisions')) extra.ai_decisions = db.prepare(`SELECT COUNT(*) c FROM ai_decisions`).get().c;
@@ -209,30 +214,27 @@ export function attachAdmin(r) {
   });
 
   // Góp ý — xuyên tenant (giám sát Ban điều hành AI) + can thiệp status
-  r.get('/api/admin/requests', requireAdmin, (req, res) => {
+  route.get('/api/admin/requests', requireAdmin, async (req, res) => {
     const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
     let rows;
     try {
-      rows = db.prepare(`SELECT r.id, r.domain, r.type, r.title, r.detail, r.status, r.votes, r.student, r.admin_note,
-          r.created_at, r.updated_at, u.role AS requester_role
-        FROM requests r LEFT JOIN users u ON u.id = r.owner_user_id
-        ORDER BY r.created_at DESC LIMIT @limit`).all({ limit });
-    } catch {
+      rows = await board().requests.adminListRequests(limit);
+    } catch (e) {
+      if (board().backend !== 'sqlite') throw e;
       rows = Q.requests.all({ limit });
     }
     res.json({ requests: rows });
   });
-  r.post('/api/admin/requests/:id/status', requireAdmin, requireStrictCsrf, (req, res) => {
+  route.post('/api/admin/requests/:id/status', requireAdmin, requireStrictCsrf, async (req, res) => {
     const status = String(req.body?.status || '');
     if (!['pending', 'reviewing', 'done', 'rejected'].includes(status)) return res.status(400).json({ error: 'invalid_status' });
-    if (!applyAdminStatus(req.params.id, status, req.body?.note, req.user.id)) return res.status(404).json({ error: 'request_not_found' });
+    if (!await applyAdminStatus(req.params.id, status, req.body?.note, req.user.id)) return res.status(404).json({ error: 'request_not_found' });
     res.json({ ok: true });
   });
 
   // Đóng góp ý + GỬI PHẢN HỒI cá nhân cho HS. Khác /status: bắt buộc message,
   // gửi notification vào hộp thư của HS (key theo display_name). Dùng khi đã xử
   // lý xong yêu cầu — UI bell ở HS sẽ kêu báo.
-  const getRequestForReply = db.prepare(`SELECT id, student, title, domain, status FROM requests WHERE id = ?`);
   // Ghi audit trail vào ai_decisions với decided_by='human' để admin override trùng
   // schema với AI auto-decision — bảng audit chỉ có 1 nguồn sự thật.
   const insertHumanDecision = db.prepare(`
@@ -241,19 +243,19 @@ export function attachAdmin(r) {
   `);
   const ACTION_BY_STATUS = { done: 'approve', rejected: 'reject', reviewing: 'approve' };
 
-  r.post('/api/admin/requests/:id/reply', requireAdmin, requireStrictCsrf, (req, res) => {
+  route.post('/api/admin/requests/:id/reply', requireAdmin, requireStrictCsrf, async (req, res) => {
     const id = Number(req.params.id);
     const status = String(req.body?.status || 'done');
     if (!['pending', 'done', 'rejected', 'reviewing'].includes(status)) return res.status(400).json({ error: 'invalid_status' });
     const message = String(req.body?.message || '').trim();
     if (message.length < 4) return res.status(400).json({ error: 'message_too_short' });
 
-    const reqRow = getRequestForReply.get(id);
+    const reqRow = await board().requests.getRequestForReply(id);
     if (!reqRow) return res.status(404).json({ error: 'request_not_found' });
 
     // No AI Board root (legacy request): nothing was applied, so no decision/thread/notification either.
-    if (!applyAdminStatus(id, status, message, req.user.id)) return res.status(404).json({ error: 'request_not_found' });
-    const appliedStatus = getRequestForReply.get(id).status;
+    if (!await applyAdminStatus(id, status, message, req.user.id)) return res.status(404).json({ error: 'request_not_found' });
+    const appliedStatus = (await board().requests.getRequestForReply(id)).status;
 
     insertHumanDecision.run({
       request_id: id,
@@ -265,7 +267,7 @@ export function attachAdmin(r) {
     // Ghi tin vào thread để giữ luồng trao đổi nhiều lượt (HS có thể nhắn lại).
     // Hiển thị dưới danh nghĩa "Ban điều hành AI" — trường do AI điều hành.
     try {
-      addRequestMessage({ request_id: id, role: 'ai', author_name: 'Ban điều hành AI', body: message });
+      await board().requests.addRequestMessage({ request_id: id, role: 'ai', author_name: 'Ban điều hành AI', body: message });
     } catch (e) { console.warn('[admin/reply] thread append failed:', e?.message || e); }
 
     const titleByStatus = {
@@ -413,7 +415,7 @@ export function attachAdmin(r) {
   });
 
   // GET /api/admin/activity?limit=50 — feed gom new users, attempts, requests, analytics events
-  r.get('/api/admin/activity', requireAdmin, (req, res) => {
+  route.get('/api/admin/activity', requireAdmin, async (req, res) => {
     const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
     const items = [];
     db.prepare(`SELECT id, username, display_name, role, created_at AS t
@@ -426,8 +428,7 @@ export function attachAdmin(r) {
       items.push({ kind: 'attempt', t: a.t,
                    label: `${a.player_name} · ${a.version} · ${a.score}đ (${a.correct}/${a.total})` });
     });
-    db.prepare(`SELECT id, student, title, status, domain, created_at AS t
-                FROM requests ORDER BY created_at DESC LIMIT ?`).all(limit).forEach(r => {
+    (await board().requests.recentRequests(limit)).forEach(r => {
       items.push({ kind: 'request', t: r.t,
                    label: `${r.student} · ${r.domain} · ${r.title}`.slice(0, 120), meta: { status: r.status } });
     });
@@ -443,8 +444,8 @@ export function attachAdmin(r) {
   });
 
   // GET /api/admin/overview2 — extend overview với delta 24h (không break /overview cũ)
-  r.get('/api/admin/overview2', requireAdmin, (_req, res) => {
-    const base = Q.overview.get();
+  route.get('/api/admin/overview2', requireAdmin, async (_req, res) => {
+    const base = { ...Q.overview.get(), ...(await board().requests.requestCounts()) };
     const now = Date.now();
     const t24 = now - 86400_000;
     const t48 = now - 2 * 86400_000;
@@ -454,8 +455,8 @@ export function attachAdmin(r) {
       users_prev_24h: count(`SELECT COUNT(*) c FROM users WHERE created_at >= ? AND created_at < ?`, t48, t24),
       attempts_24h: count(`SELECT COUNT(*) c FROM attempts WHERE created_at >= ?`, t24),
       attempts_prev_24h: count(`SELECT COUNT(*) c FROM attempts WHERE created_at >= ? AND created_at < ?`, t48, t24),
-      requests_24h: count(`SELECT COUNT(*) c FROM requests WHERE created_at >= ?`, t24),
-      requests_prev_24h: count(`SELECT COUNT(*) c FROM requests WHERE created_at >= ? AND created_at < ?`, t48, t24),
+      requests_24h: await board().requests.requestsCreatedBetween(t24),
+      requests_prev_24h: await board().requests.requestsCreatedBetween(t48, t24),
     };
     const extra = {};
     if (tableExists('ai_decisions')) extra.ai_decisions = count(`SELECT COUNT(*) c FROM ai_decisions`);
@@ -558,7 +559,7 @@ export function attachAdmin(r) {
 
   // DELETE /api/admin/users/:id — xoá user (cascade sessions + oauth_identities)
   // Bảo vệ: không cho admin tự xoá; không cho xoá admin cuối cùng.
-  r.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
+  route.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
     const id = Number(req.params.id);
     const u = getUserById(id);
     if (!u) return res.status(404).json({ error: 'user_not_found' });
@@ -577,13 +578,17 @@ export function attachAdmin(r) {
       // subscriptions là user-level — xoá theo user.
       if (tableExists('subscriptions')) db.prepare(`DELETE FROM subscriptions WHERE user_id = ?`).run(uid);
       // Folder chức năng của người bị xoá chuyển cho admin đang xoá: giữ lịch sử, không mất bản nháp.
-      if (tableExists('ai_feature_folders')) {
+      if (board().backend === 'sqlite' && tableExists('ai_feature_folders')) {
         db.prepare(`UPDATE ai_feature_folders SET owner_user_id = ? WHERE owner_user_id = ?`).run(req.user.id, uid);
       }
       // attempts/achievements link bằng player_name=display_name, để lại làm thống kê lịch sử.
       db.prepare(`DELETE FROM users WHERE id = ?`).run(uid);
     });
-    try { tx(id, u.display_name); res.json({ ok: true, deleted: u.username }); }
+    try {
+      if (board().backend !== 'sqlite') await board().requests.reassignFolderOwner(id, req.user.id);
+      tx(id, u.display_name);
+      res.json({ ok: true, deleted: u.username });
+    }
     catch (e) { res.status(500).json({ error: 'delete_failed', detail: String(e.message) }); }
   });
 
@@ -591,19 +596,16 @@ export function attachAdmin(r) {
   // CRUD: Requests + Content — chỉ thêm DELETE (status/reply đã có)
   // ─────────────────────────────────────────────────────────────
 
-  r.delete('/api/admin/requests/:id', requireAdmin, requireStrictCsrf, (req, res) => {
+  route.delete('/api/admin/requests/:id', requireAdmin, requireStrictCsrf, async (req, res) => {
     const id = Number(req.params.id);
-    const cur = db.prepare(`SELECT id FROM requests WHERE id = ?`).get(id);
-    if (!cur) return res.status(404).json({ error: 'request_not_found' });
-    if (tableExists('ai_tickets') && db.prepare(`SELECT 1 FROM ai_tickets WHERE source_request_id = ? LIMIT 1`).get(id)) {
-      return res.status(409).json({ error: 'request_has_ai_board_history' });
-    }
-    const tx = db.transaction((rid) => {
-      if (tableExists('ai_decisions')) db.prepare(`DELETE FROM ai_decisions WHERE request_id = ?`).run(rid);
-      db.prepare(`DELETE FROM requests WHERE id = ?`).run(rid);
-    });
-    try { tx(id); res.json({ ok: true, deleted: id }); }
-    catch (e) { res.status(500).json({ error: 'delete_failed', detail: String(e.message) }); }
+    try {
+      const outcome = await board().requests.deleteRequestUnlessBoardHistory(id);
+      if (outcome === 'not_found') return res.status(404).json({ error: 'request_not_found' });
+      if (outcome === 'has_board_history') return res.status(409).json({ error: 'request_has_ai_board_history' });
+      // ai_decisions (audit of the daily AI session) stays in SQLite in every mode.
+      if (tableExists('ai_decisions')) db.prepare(`DELETE FROM ai_decisions WHERE request_id = ?`).run(id);
+      res.json({ ok: true, deleted: id });
+    } catch (e) { res.status(500).json({ error: 'delete_failed', detail: String(e.message) }); }
   });
 
   r.delete('/api/admin/content/:id', requireAdmin, (req, res) => {
