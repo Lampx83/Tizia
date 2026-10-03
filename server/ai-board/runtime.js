@@ -10,6 +10,6 @@ export const setAiBoardServices = (services) => { current = services; };
 /** The running services, or (tests / scripts that mount a context alone) the sync SQLite stack on `sqlite`, built once. */
 export function aiBoardServices(sqlite) {
   if (current) return current;
-  if (!fallbacks.has(sqlite)) fallbacks.set(sqlite, createSqliteServices(sqlite));
+  if (!fallbacks.has(sqlite)) fallbacks.set(sqlite, createSqliteServices(sqlite.raw ?? sqlite));
   return fallbacks.get(sqlite);
 }

@@ -152,7 +152,7 @@ try {
 const html = src + '\n' + hsSrc;
 
 const compStmt = db.prepare(`SELECT code, id FROM competencies`);
-const COMP_BY_CODE = Object.fromEntries(compStmt.all().map(r => [r.code, r.id]));
+const COMP_BY_CODE = Object.fromEntries((await compStmt.all()).map(r => [r.code, r.id]));
 if (Object.keys(COMP_BY_CODE).length === 0) {
   console.error('[fatal] bảng competencies chưa được seed — chạy server lần đầu để init schema trước.');
   process.exit(1);
@@ -174,8 +174,8 @@ try {
 } catch (e) { console.warn(`[overrides] failed to load: ${e.message}`); }
 
 const insertSkill = db.prepare(`
-  INSERT OR IGNORE INTO skills (code, name, competency_id, domain, grade_min, grade_max, description, created_at)
-  VALUES (@code, @name, @competency_id, @domain, @grade_min, @grade_max, @description, @created_at)
+  INSERT INTO skills (code, name, competency_id, domain, grade_min, grade_max, description, created_at)
+  VALUES (@code, @name, @competency_id, @domain, @grade_min, @grade_max, @description, @created_at) ON CONFLICT DO NOTHING
 `);
 // UPDATE để áp override lên row đã insert lần trước (idempotent — nếu
 // competency_id đã đúng thì UPDATE no-op về mặt logic).
@@ -184,8 +184,8 @@ const updateCompetency = db.prepare(`UPDATE skills SET competency_id = ? WHERE c
 const mapping = {}; // { 'pharmacy/admin': ['code1','code2',...], ... }
 const stats = { domains: 0, spaces: 0, skills: 0, byCompetency: {} };
 
-const runTx = db.transaction((rows) => {
-  for (const r of rows) insertSkill.run(r);
+const runTx = db.transaction(async (rows) => {
+  for (const r of rows) await insertSkill.run(r);
 });
 
 const allRows = [];
@@ -223,19 +223,19 @@ for (const blk of DOMAIN_BLOCKS) {
 }
 
 if (!DRY) {
-  runTx(allRows);
+  await runTx(allRows);
   // Áp override LẦN HAI cho row đã tồn tại từ migration lần trước (UPDATE).
   // INSERT OR IGNORE phía trên không update row có code đã tồn tại.
   let updated = 0;
-  const updateTx = db.transaction(() => {
+  const updateTx = db.transaction(async () => {
     for (const [code, compCode] of Object.entries(OVERRIDES)) {
       const compId = COMP_BY_CODE[compCode];
       if (!compId) continue;
-      const r = updateCompetency.run(compId, code);
+      const r = await updateCompetency.run(compId, code);
       if (r.changes > 0) updated++;
     }
   });
-  updateTx();
+  await updateTx();
   console.log(`[overrides] applied ${updated} UPDATE qua catalog cũ`);
   fs.writeFileSync(MAPPING_OUT, JSON.stringify(mapping, null, 2) + '\n');
   console.log(`[ok] đã ghi mapping → ${path.relative(process.cwd(), MAPPING_OUT)}`);

@@ -49,7 +49,19 @@ export const projectUserMiddleware = (projectUser) => (req, _res, next) => {
   Promise.resolve(req.user ? projectUser(req.user) : null).then(() => next(), next);
 };
 
-export async function createAiBoardServices({ env = process.env, sqlite, hooks = {} } = {}) {
+export async function createAiBoardServices({ env = process.env, sqlite, appDb, hooks = {} } = {}) {
+  if (appDb?.dialect === 'postgres') { // whole app on PostgreSQL: same pool, real users/requests tables, migrations ran in db.js
+    return {
+      backend: 'postgres',
+      store: createAsyncAiBoardStore(appDb.d, hooks),
+      aux: asyncAux,
+      releases: asyncReleases,
+      requests: createRequestsPort(appDb.d),
+      db: appDb.d,
+      projectUser: null,
+      close: async () => {},
+    };
+  }
   if (aiBoardBackend(env) === 'sqlite') return createSqliteServices(sqlite, hooks);
   const pg = openAiBoardDb({ env });
   await applyPgBaseSchema(pg);
