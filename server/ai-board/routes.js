@@ -3,6 +3,7 @@ import express from 'express';
 import { ADMIN_REQUEST_STATUSES, assertConfirmed, LEASE_MS, LIMITS, PlanGuardrailError, RequestValidationError, WorkerContractError } from './store.js';
 import { SHOTS_BODY_LIMIT, SHOTS_TYPE } from './drafts.js';
 import * as syncAux from './aux-sync.js';
+import { asyncRoutes } from './async-routes.js';
 import { checkIntake, readOnlyVerificationText } from './intake-guard.js';
 import { classifyRequest as classifyWithModel } from './classifier.js';
 import { clarifyFromPhase, resolveClarify } from './clarity-rules.js';
@@ -35,7 +36,7 @@ export function attachAiBoardRequestRoutes(router, {
     // Onboarding / làm rõ chỉ bật cho client có giao diện cho chúng (FAB public/ gửi header này). Client cũ
     // (FAB React web-next trên prod) vẫn gửi như trước: không 428, không kẹt ở phase clarifying.
     const features = new Set(String(req.get('X-AI-Board-Features') || '').split(',').map((f) => f.trim()));
-    if (features.has('onboarding') && needsProfile(req.user)) {
+    if (features.has('onboarding') && await needsProfile(req.user)) {
       return res.status(428).json({ error: 'profile_required', message: 'Trả lời 3 câu giới thiệu trước khi gửi yêu cầu.' });
     }
     const ownerDomain = req.user.role === 'admin'
@@ -538,12 +539,4 @@ export function attachAiBoardWorkerRoutes(router, {
     res.json({ ok: true, ticket });
   }));
   return true;
-}
-/** Express 4 does not catch a rejected promise from an async handler: forward it to next(). */
-function asyncRoutes(router) {
-  const wrap = (method) => (path, ...handlers) => {
-    const last = handlers.pop();
-    return router[method](path, ...handlers, (req, res, next) => Promise.resolve(last(req, res, next)).catch(next));
-  };
-  return { get: wrap('get'), post: wrap('post'), delete: wrap('delete') };
 }
