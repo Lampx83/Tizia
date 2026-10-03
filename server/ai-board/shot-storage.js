@@ -115,9 +115,12 @@ export function shotBackendFromEnv(env, uploadsDir) {
 /** Xoá ảnh nháp quá `days` ngày + gỡ khỏi attachments (tin nhắn giữ). days<=0 → null (tắt). Lỗi backend → giữ attachment, lần sau thử lại. */
 export async function purgeExpiredScreenshots(db, backend, { days, now = Date.now() }) {
   if (!(days > 0)) return null;
-  const rows = db.prepare(`SELECT id, attachments FROM request_messages
-    WHERE role='ai' AND created_at < ? AND attachments LIKE '%"screenshot"%'`).all(now - days * DAY_MS);
-  const update = db.prepare('UPDATE request_messages SET attachments=? WHERE id=?');
+  // db: better-sqlite3 handle (default backend) or the async contract (PostgreSQL): same two statements either way.
+  const q = typeof db.prepare === 'function'
+    ? { all: (sql, p) => db.prepare(sql).all(...p), run: (sql, p) => db.prepare(sql).run(...p) }
+    : db;
+  const rows = await q.all(`SELECT id, attachments FROM request_messages
+    WHERE role='ai' AND created_at < ? AND attachments LIKE '%"screenshot"%'`, [now - days * DAY_MS]);
   let messages = 0; let files = 0;
   for (const row of rows) {
     let list;
@@ -131,7 +134,7 @@ export async function purgeExpiredScreenshots(db, backend, { days, now = Date.no
       }
       keep.push(att);
     }
-    if (removed) { update.run(JSON.stringify(keep), row.id); messages++; files += removed; }
+    if (removed) { await q.run('UPDATE request_messages SET attachments=? WHERE id=?', [JSON.stringify(keep), row.id]); messages++; files += removed; }
   }
   return { messages, files };
 }
