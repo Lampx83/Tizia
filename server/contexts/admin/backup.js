@@ -39,7 +39,8 @@ function stamp() {
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 }
 
-function safeBackupName(name) {
+export { BACKUP_DIR };
+export function safeBackupName(name) {
   if (!/^tizia-\d{8}-\d{6}(?:-[a-z0-9]+)?\.dump$/i.test(name)) return null;
   const full = path.join(BACKUP_DIR, name);
   if (!full.startsWith(BACKUP_DIR + path.sep)) return null;

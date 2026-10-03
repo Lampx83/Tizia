@@ -17,7 +17,7 @@ import { db, createNotification } from '../../db.js';
 import { aiBoardServices } from '../../ai-board/runtime.js';
 
 // ── Schema (audit trail) — Routine ghi quyết định vào đây, dashboard đọc ra ──
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS ai_decisions (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     request_id     INTEGER NOT NULL,
@@ -61,7 +61,7 @@ export async function acknowledgeNewRequest({ requestId, domain, title, student 
   // theo votes/created_at nên updated_at đổi không ảnh hưởng thứ tự.
   await aiBoardServices(db).requests.setRequestStatus(requestId, 'pending', note);
   try {
-    createNotification({
+    await createNotification({
       user_display_name: student,
       request_id: requestId,
       kind: 'reply',
@@ -73,9 +73,9 @@ export async function acknowledgeNewRequest({ requestId, domain, title, student 
   return { status: 'pending', acknowledged: true };
 }
 
-export function getDecisionsForRequest(requestId) {
-  return decisionsForRequestStmt.all(Number(requestId));
+export async function getDecisionsForRequest(requestId) {
+  return await decisionsForRequestStmt.all(Number(requestId));
 }
-export function getRecentDecisions(limit = 50) {
-  return recentDecisionsStmt.all({ limit });
+export async function getRecentDecisions(limit = 50) {
+  return await recentDecisionsStmt.all({ limit });
 }

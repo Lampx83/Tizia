@@ -29,11 +29,11 @@ function hashPassword(password) {
 const USERNAME_RE = /^[a-z0-9_.-]{3,32}$/i;
 
 // ── Bootstrap admin từ env (an toàn: chỉ promote user đã tồn tại) ──
-export function ensureAdminBootstrap() {
+export async function ensureAdminBootstrap() {
   const uname = process.env.ADMIN_PROMOTE_USERNAME;
   if (!uname) return;
   try {
-    const info = db.prepare(`UPDATE users SET role='admin' WHERE username = ? COLLATE NOCASE`).run(String(uname));
+    const info = await db.prepare(`UPDATE users SET role='admin' WHERE lower(username) = lower(?)`).run(String(uname));
     if (info.changes > 0) console.log(`[admin] promoted '${uname}' → admin`);
     else console.log(`[admin] ADMIN_PROMOTE_USERNAME='${uname}' chưa tồn tại (đăng ký trước rồi restart)`);
   } catch (e) { console.warn('[admin] bootstrap lỗi:', e?.message); }
@@ -65,12 +65,12 @@ const Q = {
     FROM requests ORDER BY created_at DESC LIMIT @limit`),
 };
 
-function tableExists(name) {
-  return !!db.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`).get(name);
+async function tableExists(name) {
+  return await db.tableExists(name);
 }
 
-export function attachAdmin(r) {
-  ensureAdminBootstrap();
+export async function attachAdmin(r) {
+  await ensureAdminBootstrap();
   // The AI board stack (sync SQLite or async PostgreSQL) is chosen once at startup (ai-board/services.js); read lazily.
   const board = () => aiBoardServices(db);
   const route = asyncRoutes(r);
@@ -80,25 +80,25 @@ export function attachAdmin(r) {
   };
 
   route.get('/api/admin/overview', requireAdmin, async (_req, res) => {
-    const base = { ...Q.overview.get(), ...(await board().requests.requestCounts()) };
+    const base = { ...await Q.overview.get(), ...(await board().requests.requestCounts()) };
     // số liệu từ context có-thể-chưa-tạo-bảng (analytics/billing/ai_decisions)
     const extra = {};
-    if (tableExists('ai_decisions')) extra.ai_decisions = db.prepare(`SELECT COUNT(*) c FROM ai_decisions`).get().c;
-    if (tableExists('analytics_events')) extra.events = db.prepare(`SELECT COUNT(*) c FROM analytics_events`).get().c;
-    if (tableExists('subscriptions')) extra.paid_users = db.prepare(`SELECT COUNT(*) c FROM subscriptions WHERE plan<>'free' AND status='active'`).get().c;
-    if (tableExists('ai_lesson_content')) extra.ai_content = db.prepare(`SELECT COUNT(*) c FROM ai_lesson_content`).get().c;
+    if (await tableExists('ai_decisions')) extra.ai_decisions = (await db.prepare(`SELECT COUNT(*) c FROM ai_decisions`).get()).c;
+    if (await tableExists('analytics_events')) extra.events = (await db.prepare(`SELECT COUNT(*) c FROM analytics_events`).get()).c;
+    if (await tableExists('subscriptions')) extra.paid_users = (await db.prepare(`SELECT COUNT(*) c FROM subscriptions WHERE plan<>'free' AND status='active'`).get()).c;
+    if (await tableExists('ai_lesson_content')) extra.ai_content = (await db.prepare(`SELECT COUNT(*) c FROM ai_lesson_content`).get()).c;
     res.json({ ...base, ...extra });
   });
 
   // Người dùng — toàn hệ thống; đổi vai trò
-  r.get('/api/admin/users', requireAdmin, (req, res) => {
+  r.get('/api/admin/users', requireAdmin, async (req, res) => {
     const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
-    res.json({ users: Q.users.all({ limit }) });
+    res.json({ users: await Q.users.all({ limit }) });
   });
-  r.post('/api/admin/users/:id/role', requireAdmin, (req, res) => {
+  r.post('/api/admin/users/:id/role', requireAdmin, async (req, res) => {
     const role = String(req.body?.role || '');
     if (!['pupil', 'student', 'teacher', 'admin'].includes(role)) return res.status(400).json({ error: 'invalid_role' });
-    Q.setUserRole.run({ id: Number(req.params.id), role });
+    await Q.setUserRole.run({ id: Number(req.params.id), role });
     res.json({ ok: true });
   });
 
@@ -109,13 +109,13 @@ export function attachAdmin(r) {
   // GET /api/admin/domain-grants — list tất cả grants gần đây (500 mới nhất)
   r.get('/api/admin/domain-grants', requireAdmin, async (_req, res) => {
     const { listAllDomainGrants } = await import('../../db.js');
-    res.json({ grants: listAllDomainGrants() });
+    res.json({ grants: await listAllDomainGrants() });
   });
 
   // GET /api/admin/users/:id/grants — list grants của 1 user
   r.get('/api/admin/users/:id/grants', requireAdmin, async (req, res) => {
     const { listUserDomainGrantsFull } = await import('../../db.js');
-    res.json({ grants: listUserDomainGrantsFull(Number(req.params.id)) });
+    res.json({ grants: await listUserDomainGrantsFull(Number(req.params.id)) });
   });
 
   // POST /api/admin/users/:id/grant-domain — { domain_id, expires_at?, note? }
@@ -129,7 +129,7 @@ export function attachAdmin(r) {
     if (expires_at != null && (!Number.isFinite(expires_at) || expires_at < Date.now())) {
       return res.status(400).json({ error: 'invalid_expires_at', message: 'expires_at phải > now (epoch ms)' });
     }
-    grantUserDomain({
+    await grantUserDomain({
       userId: Number(req.params.id),
       domainId: domain_id,
       grantedBy: req.user.id,
@@ -142,7 +142,7 @@ export function attachAdmin(r) {
   // DELETE /api/admin/users/:id/grant-domain/:domain_id
   r.delete('/api/admin/users/:id/grant-domain/:domain_id', requireAdmin, async (req, res) => {
     const { revokeUserDomain } = await import('../../db.js');
-    const changes = revokeUserDomain(Number(req.params.id), String(req.params.domain_id));
+    const changes = await revokeUserDomain(Number(req.params.id), String(req.params.domain_id));
     res.json({ ok: true, removed: changes });
   });
 
@@ -150,13 +150,13 @@ export function attachAdmin(r) {
   // GET /api/admin/school-admins → list tất cả school admin
   r.get('/api/admin/school-admins', requireAdmin, async (_req, res) => {
     const { listAllSchoolAdmins } = await import('../../db.js');
-    res.json({ admins: listAllSchoolAdmins() });
+    res.json({ admins: await listAllSchoolAdmins() });
   });
 
   // GET /api/admin/schools/:domain_id/admins → list admin của 1 trường cụ thể
   r.get('/api/admin/schools/:domain_id/admins', requireAdmin, async (req, res) => {
     const { listSchoolAdminsByDomain } = await import('../../db.js');
-    res.json({ admins: listSchoolAdminsByDomain(String(req.params.domain_id)) });
+    res.json({ admins: await listSchoolAdminsByDomain(String(req.params.domain_id)) });
   });
 
   // POST /api/admin/users/:id/school-admin → { domain_id, note? }
@@ -166,7 +166,7 @@ export function attachAdmin(r) {
     if (!domain_id || !/^[a-z][a-z0-9-]+$/.test(domain_id)) {
       return res.status(400).json({ error: 'invalid_domain_id' });
     }
-    setSchoolAdmin({
+    await setSchoolAdmin({
       userId: Number(req.params.id),
       domainId: domain_id,
       grantedBy: req.user.id,
@@ -178,7 +178,7 @@ export function attachAdmin(r) {
   // DELETE /api/admin/users/:id/school-admin/:domain_id
   r.delete('/api/admin/users/:id/school-admin/:domain_id', requireAdmin, async (req, res) => {
     const { revokeSchoolAdmin } = await import('../../db.js');
-    const changes = revokeSchoolAdmin(Number(req.params.id), String(req.params.domain_id));
+    const changes = await revokeSchoolAdmin(Number(req.params.id), String(req.params.domain_id));
     res.json({ ok: true, removed: changes });
   });
 
@@ -192,13 +192,13 @@ export function attachAdmin(r) {
     if (target != null && !ENROLLABLE_DOMAINS.has(target)) {
       return res.status(400).json({ error: 'invalid_domain', valid: [...ENROLLABLE_DOMAINS] });
     }
-    setEnrolledDomain(Number(req.params.id), target);
+    await setEnrolledDomain(Number(req.params.id), target);
     res.json({ ok: true, enrolled_domain: target });
   });
 
   // Admin set gói cước thủ công (cấp/gia hạn/huỷ). cycle 'month'|'year'|null;
   // null + plan 'free' → vĩnh viễn. days override để cấp thử (vd trial 7 ngày).
-  r.post('/api/admin/users/:id/plan', requireAdmin, (req, res) => {
+  r.post('/api/admin/users/:id/plan', requireAdmin, async (req, res) => {
     const plan = String(req.body?.plan || '').toLowerCase();
     if (!VALID_USER_PLANS.has(plan)) return res.status(400).json({ error: 'invalid_plan' });
     const cycle = ['month', 'year'].includes(req.body?.cycle) ? req.body.cycle : null;
@@ -209,7 +209,7 @@ export function attachAdmin(r) {
       else if (cycle) expires_at = expiresAtFor(cycle);
       else expires_at = expiresAtFor('month');
     }
-    setUserPlan(Number(req.params.id), { plan, expires_at, cycle });
+    await setUserPlan(Number(req.params.id), { plan, expires_at, cycle });
     res.json({ ok: true, plan, expires_at, cycle });
   });
 
@@ -221,7 +221,7 @@ export function attachAdmin(r) {
       rows = await board().requests.adminListRequests(limit);
     } catch (e) {
       if (board().backend !== 'sqlite') throw e;
-      rows = Q.requests.all({ limit });
+      rows = await Q.requests.all({ limit });
     }
     res.json({ requests: rows });
   });
@@ -257,7 +257,7 @@ export function attachAdmin(r) {
     if (!await applyAdminStatus(id, status, message, req.user.id)) return res.status(404).json({ error: 'request_not_found' });
     const appliedStatus = (await board().requests.getRequestForReply(id)).status;
 
-    insertHumanDecision.run({
+    await insertHumanDecision.run({
       request_id: id,
       action: ACTION_BY_STATUS[appliedStatus] || 'defer',
       status: appliedStatus, reason: `[admin] ${req.user.username} → ${appliedStatus}`,
@@ -276,7 +276,7 @@ export function attachAdmin(r) {
       reviewing: 'Yêu cầu của bạn đang được xử lý',
       pending: 'Phản hồi về yêu cầu của bạn',
     };
-    const notif = createNotification({
+    const notif = await createNotification({
       user_display_name: reqRow.student,
       request_id: id,
       kind: 'reply',
@@ -288,29 +288,29 @@ export function attachAdmin(r) {
   });
 
   // Audit quyết định AI — xuyên tenant (minh bạch "AI điều hành")
-  r.get('/api/admin/ai-decisions', requireAdmin, (req, res) => {
-    if (!tableExists('ai_decisions')) return res.json({ decisions: [] });
+  r.get('/api/admin/ai-decisions', requireAdmin, async (req, res) => {
+    if (!await tableExists('ai_decisions')) return res.json({ decisions: [] });
     const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
-    res.json({ decisions: db.prepare(`SELECT id, request_id, decided_by, action, status_applied, confidence, reason, created_at FROM ai_decisions ORDER BY created_at DESC LIMIT ?`).all(limit) });
+    res.json({ decisions: await db.prepare(`SELECT id, request_id, decided_by, action, status_applied, confidence, reason, created_at FROM ai_decisions ORDER BY created_at DESC LIMIT ?`).all(limit) });
   });
 
   // Kiểm duyệt học liệu AI sinh — gắn/bỏ cờ nội dung sai
-  r.get('/api/admin/content', requireAdmin, (req, res) => {
-    if (!tableExists('ai_lesson_content')) return res.json({ content: [] });
+  r.get('/api/admin/content', requireAdmin, async (req, res) => {
+    if (!await tableExists('ai_lesson_content')) return res.json({ content: [] });
     const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
-    res.json({ content: db.prepare(`SELECT id, week_id, subject, kind, stem, flagged, created_at FROM ai_lesson_content ORDER BY created_at DESC LIMIT ?`).all(limit) });
+    res.json({ content: await db.prepare(`SELECT id, week_id, subject, kind, stem, flagged, created_at FROM ai_lesson_content ORDER BY created_at DESC LIMIT ?`).all(limit) });
   });
-  r.post('/api/admin/content/:id/flag', requireAdmin, (req, res) => {
-    if (!tableExists('ai_lesson_content')) return res.status(404).json({ error: 'no_content_table' });
+  r.post('/api/admin/content/:id/flag', requireAdmin, async (req, res) => {
+    if (!await tableExists('ai_lesson_content')) return res.status(404).json({ error: 'no_content_table' });
     const flagged = req.body?.flagged ? 1 : 0;
-    db.prepare(`UPDATE ai_lesson_content SET flagged=? WHERE id=?`).run(flagged, Number(req.params.id));
+    await db.prepare(`UPDATE ai_lesson_content SET flagged=? WHERE id=?`).run(flagged, Number(req.params.id));
     res.json({ ok: true, flagged: !!flagged });
   });
 
   // Gói cước — toàn hệ thống
-  r.get('/api/admin/billing', requireAdmin, (_req, res) => {
-    if (!tableExists('subscriptions')) return res.json({ subscriptions: [] });
-    res.json({ subscriptions: db.prepare(`SELECT s.* FROM subscriptions s ORDER BY s.id`).all() });
+  r.get('/api/admin/billing', requireAdmin, async (_req, res) => {
+    if (!await tableExists('subscriptions')) return res.json({ subscriptions: [] });
+    res.json({ subscriptions: await db.prepare(`SELECT s.* FROM subscriptions s ORDER BY s.id`).all() });
   });
 
   // ─────────────────────────────────────────────────────────────
@@ -320,22 +320,22 @@ export function attachAdmin(r) {
   // GET /api/admin/timeseries?days=30
   // Trả về [{date:'2026-05-31', attempts, users, requests, ai_tokens}] cho dashboard line/bar charts.
   // Lấp ngày trống = 0 để chart không gãy.
-  r.get('/api/admin/timeseries', requireAdmin, (req, res) => {
+  r.get('/api/admin/timeseries', requireAdmin, async (req, res) => {
     const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
     const now = Date.now();
     const startMs = now - days * 86400_000;
-    const bucket = (tbl, col = 'created_at') => {
-      if (!tableExists(tbl)) return new Map();
-      const rows = db.prepare(`SELECT date(${col}/1000,'unixepoch','+7 hours') AS d, COUNT(*) AS n
+    const bucket = async (tbl, col = 'created_at') => {
+      if (!await tableExists(tbl)) return new Map();
+      const rows = await db.prepare(`SELECT date(${col}/1000,'unixepoch','+7 hours') AS d, COUNT(*) AS n
                                FROM ${tbl} WHERE ${col} >= ? GROUP BY d`).all(startMs);
       return new Map(rows.map(r => [r.d, r.n]));
     };
-    const attempts = bucket('attempts');
-    const users = bucket('users');
-    const requests = bucket('requests');
+    const attempts = await bucket('attempts');
+    const users = await bucket('users');
+    const requests = await bucket('requests');
     let aiTokens = new Map();
-    if (tableExists('ai_token_usage')) {
-      const rows = db.prepare(`SELECT date(created_at/1000,'unixepoch','+7 hours') AS d,
+    if (await tableExists('ai_token_usage')) {
+      const rows = await db.prepare(`SELECT date(created_at/1000,'unixepoch','+7 hours') AS d,
                                       SUM(prompt_tokens + completion_tokens) AS n
                                FROM ai_token_usage WHERE created_at >= ? GROUP BY d`).all(startMs);
       aiTokens = new Map(rows.map(r => [r.d, r.n || 0]));
@@ -357,24 +357,24 @@ export function attachAdmin(r) {
   });
 
   // GET /api/admin/ai-tokens-by-model?days=30 — breakdown tokens by model (bar/donut chart)
-  r.get('/api/admin/ai-tokens-by-model', requireAdmin, (req, res) => {
-    if (!tableExists('ai_token_usage')) return res.json({ models: [] });
+  r.get('/api/admin/ai-tokens-by-model', requireAdmin, async (req, res) => {
+    if (!await tableExists('ai_token_usage')) return res.json({ models: [] });
     const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
     const startMs = Date.now() - days * 86400_000;
-    const rows = db.prepare(`SELECT model, provider,
+    const rows = await db.prepare(`SELECT model, provider,
         SUM(prompt_tokens) AS pin, SUM(completion_tokens) AS pout,
         COUNT(*) AS calls, SUM(cost_usd_micros) AS cost_micros
-      FROM ai_token_usage WHERE created_at >= ? GROUP BY model, provider ORDER BY (pin+pout) DESC`).all(startMs);
+      FROM ai_token_usage WHERE created_at >= ? GROUP BY model, provider ORDER BY SUM(prompt_tokens) + SUM(completion_tokens) DESC`).all(startMs);
     res.json({ days, models: rows });
   });
 
   // GET /api/admin/top?metric=students&limit=10
-  r.get('/api/admin/top', requireAdmin, (req, res) => {
+  r.get('/api/admin/top', requireAdmin, async (req, res) => {
     const metric = String(req.query.metric || 'students');
     const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 50);
     if (metric === 'students') {
       // Top theo lượt học (link attempts ↔ users qua player_name = display_name)
-      const rows = db.prepare(`SELECT u.id, u.username, u.display_name, u.role,
+      const rows = await db.prepare(`SELECT u.id, u.username, u.display_name, u.role,
           COUNT(a.id) AS attempts, COALESCE(SUM(a.score), 0) AS total_score, MAX(a.created_at) AS last_played
         FROM users u LEFT JOIN attempts a ON a.player_name = u.display_name
         WHERE u.role IN ('pupil','student')
@@ -405,12 +405,12 @@ export function attachAdmin(r) {
 
   // GET /api/admin/pageviews?days=30 — thống kê page_view cho dashboard
   // Bảng analytics_events có thể chưa tồn tại trên môi trường mới → fallback rỗng.
-  r.get('/api/admin/pageviews', requireAdmin, (req, res) => {
+  r.get('/api/admin/pageviews', requireAdmin, async (req, res) => {
     const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
-    if (!tableExists('analytics_events')) {
+    if (!await tableExists('analytics_events')) {
       return res.json({ days, totals: { last_24h:0, last_7d:0, last_30d:0, unique_24h:0, unique_7d:0, unique_30d:0 }, by_day: [], top_paths: [], by_role: [] });
     }
-    try { res.json(getPageviewStats(days)); }
+    try { res.json(await getPageviewStats(days)); }
     catch (e) { res.status(500).json({ error: 'pageview_stats_failed', detail: String(e.message) }); }
   });
 
@@ -418,13 +418,13 @@ export function attachAdmin(r) {
   route.get('/api/admin/activity', requireAdmin, async (req, res) => {
     const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
     const items = [];
-    db.prepare(`SELECT id, username, display_name, role, created_at AS t
-                FROM users ORDER BY created_at DESC LIMIT ?`).all(limit).forEach(u => {
+    (await db.prepare(`SELECT id, username, display_name, role, created_at AS t
+                FROM users ORDER BY created_at DESC LIMIT ?`).all(limit)).forEach(u => {
       items.push({ kind: 'user_register', t: u.t, user_id: u.id,
                    label: `@${u.username} (${u.display_name}) · ${u.role}` });
     });
-    db.prepare(`SELECT id, player_name, version, score, total, correct, created_at AS t
-                FROM attempts ORDER BY created_at DESC LIMIT ?`).all(limit).forEach(a => {
+    (await db.prepare(`SELECT id, player_name, version, score, total, correct, created_at AS t
+                FROM attempts ORDER BY created_at DESC LIMIT ?`).all(limit)).forEach(a => {
       items.push({ kind: 'attempt', t: a.t,
                    label: `${a.player_name} · ${a.version} · ${a.score}đ (${a.correct}/${a.total})` });
     });
@@ -432,9 +432,9 @@ export function attachAdmin(r) {
       items.push({ kind: 'request', t: r.t,
                    label: `${r.student} · ${r.domain} · ${r.title}`.slice(0, 120), meta: { status: r.status } });
     });
-    if (tableExists('analytics_events')) {
-      db.prepare(`SELECT id, name, user_id, path, ts AS t
-                  FROM analytics_events ORDER BY ts DESC LIMIT ?`).all(limit).forEach(e => {
+    if (await tableExists('analytics_events')) {
+      (await db.prepare(`SELECT id, name, user_id, path, ts AS t
+                  FROM analytics_events ORDER BY ts DESC LIMIT ?`).all(limit)).forEach(e => {
         items.push({ kind: 'event', t: e.t, user_id: e.user_id,
                      label: `${e.name}${e.path ? ' · ' + e.path : ''}` });
       });
@@ -445,39 +445,39 @@ export function attachAdmin(r) {
 
   // GET /api/admin/overview2 — extend overview với delta 24h (không break /overview cũ)
   route.get('/api/admin/overview2', requireAdmin, async (_req, res) => {
-    const base = { ...Q.overview.get(), ...(await board().requests.requestCounts()) };
+    const base = { ...await Q.overview.get(), ...(await board().requests.requestCounts()) };
     const now = Date.now();
     const t24 = now - 86400_000;
     const t48 = now - 2 * 86400_000;
-    const count = (sql, ...args) => { try { return db.prepare(sql).get(...args)?.c || 0; } catch { return 0; } };
+    const count = async (sql, ...args) => { try { return (await db.prepare(sql).get(...args))?.c || 0; } catch { return 0; } };
     const delta = {
-      users_24h: count(`SELECT COUNT(*) c FROM users WHERE created_at >= ?`, t24),
-      users_prev_24h: count(`SELECT COUNT(*) c FROM users WHERE created_at >= ? AND created_at < ?`, t48, t24),
-      attempts_24h: count(`SELECT COUNT(*) c FROM attempts WHERE created_at >= ?`, t24),
-      attempts_prev_24h: count(`SELECT COUNT(*) c FROM attempts WHERE created_at >= ? AND created_at < ?`, t48, t24),
+      users_24h: await count(`SELECT COUNT(*) c FROM users WHERE created_at >= ?`, t24),
+      users_prev_24h: await count(`SELECT COUNT(*) c FROM users WHERE created_at >= ? AND created_at < ?`, t48, t24),
+      attempts_24h: await count(`SELECT COUNT(*) c FROM attempts WHERE created_at >= ?`, t24),
+      attempts_prev_24h: await count(`SELECT COUNT(*) c FROM attempts WHERE created_at >= ? AND created_at < ?`, t48, t24),
       requests_24h: await board().requests.requestsCreatedBetween(t24),
       requests_prev_24h: await board().requests.requestsCreatedBetween(t48, t24),
     };
     const extra = {};
-    if (tableExists('ai_decisions')) extra.ai_decisions = count(`SELECT COUNT(*) c FROM ai_decisions`);
-    if (tableExists('analytics_events')) {
-      extra.events = count(`SELECT COUNT(*) c FROM analytics_events`);
-      extra.pageviews_24h = count(`SELECT COUNT(*) c FROM analytics_events WHERE name='page_view' AND ts >= ?`, t24);
-      extra.pageviews_7d = count(`SELECT COUNT(*) c FROM analytics_events WHERE name='page_view' AND ts >= ?`, now - 7 * 86400_000);
-      extra.pageviews_total = count(`SELECT COUNT(*) c FROM analytics_events WHERE name='page_view'`);
+    if (await tableExists('ai_decisions')) extra.ai_decisions = await count(`SELECT COUNT(*) c FROM ai_decisions`);
+    if (await tableExists('analytics_events')) {
+      extra.events = await count(`SELECT COUNT(*) c FROM analytics_events`);
+      extra.pageviews_24h = await count(`SELECT COUNT(*) c FROM analytics_events WHERE name='page_view' AND ts >= ?`, t24);
+      extra.pageviews_7d = await count(`SELECT COUNT(*) c FROM analytics_events WHERE name='page_view' AND ts >= ?`, now - 7 * 86400_000);
+      extra.pageviews_total = await count(`SELECT COUNT(*) c FROM analytics_events WHERE name='page_view'`);
     }
-    if (tableExists('subscriptions')) extra.paid_users = count(`SELECT COUNT(*) c FROM subscriptions WHERE plan<>'free' AND status='active'`);
-    if (tableExists('ai_lesson_content')) extra.ai_content = count(`SELECT COUNT(*) c FROM ai_lesson_content`);
-    if (tableExists('ai_token_usage')) {
-      extra.ai_tokens_total = count(`SELECT SUM(prompt_tokens + completion_tokens) c FROM ai_token_usage`);
-      extra.ai_tokens_24h = count(`SELECT SUM(prompt_tokens + completion_tokens) c FROM ai_token_usage WHERE created_at >= ?`, t24);
+    if (await tableExists('subscriptions')) extra.paid_users = await count(`SELECT COUNT(*) c FROM subscriptions WHERE plan<>'free' AND status='active'`);
+    if (await tableExists('ai_lesson_content')) extra.ai_content = await count(`SELECT COUNT(*) c FROM ai_lesson_content`);
+    if (await tableExists('ai_token_usage')) {
+      extra.ai_tokens_total = await count(`SELECT SUM(prompt_tokens + completion_tokens) c FROM ai_token_usage`);
+      extra.ai_tokens_24h = await count(`SELECT SUM(prompt_tokens + completion_tokens) c FROM ai_token_usage WHERE created_at >= ?`, t24);
     }
     // "Đang online" = số user phân biệt còn session hợp lệ. DISTINCT user_id
     // (không COUNT(*): 1 user x N tab/device = N row session, vượt cả tổng user)
     // phản ánh đúng "ai đang có session". Lưu ý: cookie session 30 ngày nên đây vẫn là "có thể vào
     // không cần đăng nhập lại", không phải realtime — để realtime cần track
     // last_seen riêng (chưa có cột này trong schema).
-    extra.active_sessions = count(`SELECT COUNT(DISTINCT user_id) c FROM sessions WHERE expires_at > ?`, now);
+    extra.active_sessions = await count(`SELECT COUNT(DISTINCT user_id) c FROM sessions WHERE expires_at > ?`, now);
     res.json({ ...base, ...extra, delta });
   });
 
@@ -486,7 +486,7 @@ export function attachAdmin(r) {
   // ─────────────────────────────────────────────────────────────
 
   // POST /api/admin/users — tạo user mới (admin có thể chọn mọi role kể cả admin)
-  r.post('/api/admin/users', requireAdmin, (req, res) => {
+  r.post('/api/admin/users', requireAdmin, async (req, res) => {
     const b = req.body ?? {};
     const username = String(b.username || '').trim();
     const password = String(b.password || '');
@@ -498,27 +498,27 @@ export function attachAdmin(r) {
     if (!USERNAME_RE.test(username)) return res.status(400).json({ error: 'invalid_username', message: 'username 3–32 ký tự a-z0-9_.- (case-insensitive)' });
     if (password.length < 6) return res.status(400).json({ error: 'weak_password', message: 'password tối thiểu 6 ký tự' });
     if (!display_name) return res.status(400).json({ error: 'missing_display_name' });
-    if (getUserByUsername(username)) return res.status(409).json({ error: 'username_exists' });
+    if (await getUserByUsername(username)) return res.status(409).json({ error: 'username_exists' });
     if (age != null && (age < 3 || age > 100)) return res.status(400).json({ error: 'invalid_age', message: 'tuổi 3–100' });
 
     try {
       // createUser() chỉ cho role pupil/student/teacher → tạo trước rồi promote nếu cần admin.
       const safeRole = ['pupil','student','teacher'].includes(role) ? role : 'student';
-      const { id } = createUser({
+      const { id } = await createUser({
         username, display_name, password_hash: hashPassword(password),
         role: safeRole, age,
       });
-      if (role === 'admin') db.prepare(`UPDATE users SET role='admin' WHERE id=?`).run(id);
-      if (email) db.prepare(`UPDATE users SET email=? WHERE id=?`).run(email, id);
+      if (role === 'admin') await db.prepare(`UPDATE users SET role='admin' WHERE id=?`).run(id);
+      if (email) await db.prepare(`UPDATE users SET email=? WHERE id=?`).run(email, id);
       res.json({ ok: true, id, username, display_name, role });
     } catch (e) { res.status(500).json({ error: 'create_failed', detail: String(e.message) }); }
   });
 
   // PATCH /api/admin/users/:id — sửa thông tin partial (display_name/email/age)
   // Dùng dynamic SQL thay vì updateUserEditable() vì cái kia yêu cầu nguyên trường profile.
-  r.patch('/api/admin/users/:id', requireAdmin, (req, res) => {
+  r.patch('/api/admin/users/:id', requireAdmin, async (req, res) => {
     const id = Number(req.params.id);
-    const u = getUserById(id);
+    const u = await getUserById(id);
     if (!u) return res.status(404).json({ error: 'user_not_found' });
     const sets = [], vals = {};
     if (req.body?.display_name != null) {
@@ -539,21 +539,21 @@ export function attachAdmin(r) {
     if (!sets.length) return res.status(400).json({ error: 'no_changes' });
     vals.id = id;
     try {
-      db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = @id`).run(vals);
-      res.json({ ok: true, user: getUserById(id) });
+      await db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = @id`).run(vals);
+      res.json({ ok: true, user: await getUserById(id) });
     } catch (e) { res.status(500).json({ error: 'update_failed', detail: String(e.message) }); }
   });
 
   // POST /api/admin/users/:id/password — reset mật khẩu (admin override)
-  r.post('/api/admin/users/:id/password', requireAdmin, (req, res) => {
+  r.post('/api/admin/users/:id/password', requireAdmin, async (req, res) => {
     const id = Number(req.params.id);
     const password = String(req.body?.password || '');
     if (password.length < 6) return res.status(400).json({ error: 'weak_password', message: 'password tối thiểu 6 ký tự' });
-    const u = getUserById(id);
+    const u = await getUserById(id);
     if (!u) return res.status(404).json({ error: 'user_not_found' });
-    db.prepare(`UPDATE users SET password_hash = ? WHERE id = ?`).run(hashPassword(password), id);
+    await db.prepare(`UPDATE users SET password_hash = ? WHERE id = ?`).run(hashPassword(password), id);
     // Invalidate mọi session hiện tại của user → buộc login lại
-    db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(id);
+    await db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(id);
     res.json({ ok: true, message: 'password đã đổi, đã invalidate mọi session' });
   });
 
@@ -561,32 +561,32 @@ export function attachAdmin(r) {
   // Bảo vệ: không cho admin tự xoá; không cho xoá admin cuối cùng.
   route.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
     const id = Number(req.params.id);
-    const u = getUserById(id);
+    const u = await getUserById(id);
     if (!u) return res.status(404).json({ error: 'user_not_found' });
     if (id === req.user.id) return res.status(400).json({ error: 'cannot_delete_self', message: 'không thể xoá chính mình' });
     if (u.role === 'admin') {
-      const adminCount = db.prepare(`SELECT COUNT(*) c FROM users WHERE role='admin'`).get().c;
+      const adminCount = (await db.prepare(`SELECT COUNT(*) c FROM users WHERE role='admin'`).get()).c;
       if (adminCount <= 1) return res.status(400).json({ error: 'last_admin', message: 'không thể xoá admin cuối cùng' });
     }
-    const tx = db.transaction((uid, displayName) => {
-      db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(uid);
-      if (tableExists('oauth_identities')) db.prepare(`DELETE FROM oauth_identities WHERE user_id = ?`).run(uid);
+    const tx = db.transaction(async (uid, displayName) => {
+      await db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(uid);
+      if (await tableExists('oauth_identities')) await db.prepare(`DELETE FROM oauth_identities WHERE user_id = ?`).run(uid);
       // notifications dùng user_display_name (chuỗi), không user_id — xoá theo display_name
-      if (tableExists('notifications') && displayName) {
-        db.prepare(`DELETE FROM notifications WHERE user_display_name = ?`).run(displayName);
+      if (await tableExists('notifications') && displayName) {
+        await db.prepare(`DELETE FROM notifications WHERE user_display_name = ?`).run(displayName);
       }
       // subscriptions là user-level — xoá theo user.
-      if (tableExists('subscriptions')) db.prepare(`DELETE FROM subscriptions WHERE user_id = ?`).run(uid);
+      if (await tableExists('subscriptions')) await db.prepare(`DELETE FROM subscriptions WHERE user_id = ?`).run(uid);
       // Folder chức năng của người bị xoá chuyển cho admin đang xoá: giữ lịch sử, không mất bản nháp.
-      if (board().backend === 'sqlite' && tableExists('ai_feature_folders')) {
-        db.prepare(`UPDATE ai_feature_folders SET owner_user_id = ? WHERE owner_user_id = ?`).run(req.user.id, uid);
+      if (board().backend === 'sqlite' && await tableExists('ai_feature_folders')) {
+        await db.prepare(`UPDATE ai_feature_folders SET owner_user_id = ? WHERE owner_user_id = ?`).run(req.user.id, uid);
       }
       // attempts/achievements link bằng player_name=display_name, để lại làm thống kê lịch sử.
-      db.prepare(`DELETE FROM users WHERE id = ?`).run(uid);
+      await db.prepare(`DELETE FROM users WHERE id = ?`).run(uid);
     });
     try {
       if (board().backend !== 'sqlite') await board().requests.reassignFolderOwner(id, req.user.id);
-      tx(id, u.display_name);
+      await tx(id, u.display_name);
       res.json({ ok: true, deleted: u.username });
     }
     catch (e) { res.status(500).json({ error: 'delete_failed', detail: String(e.message) }); }
@@ -603,42 +603,42 @@ export function attachAdmin(r) {
       if (outcome === 'not_found') return res.status(404).json({ error: 'request_not_found' });
       if (outcome === 'has_board_history') return res.status(409).json({ error: 'request_has_ai_board_history' });
       // ai_decisions (audit of the daily AI session) stays in SQLite in every mode.
-      if (tableExists('ai_decisions')) db.prepare(`DELETE FROM ai_decisions WHERE request_id = ?`).run(id);
+      if (await tableExists('ai_decisions')) await db.prepare(`DELETE FROM ai_decisions WHERE request_id = ?`).run(id);
       res.json({ ok: true, deleted: id });
     } catch (e) { res.status(500).json({ error: 'delete_failed', detail: String(e.message) }); }
   });
 
-  r.delete('/api/admin/content/:id', requireAdmin, (req, res) => {
-    if (!tableExists('ai_lesson_content')) return res.status(404).json({ error: 'no_content_table' });
+  r.delete('/api/admin/content/:id', requireAdmin, async (req, res) => {
+    if (!await tableExists('ai_lesson_content')) return res.status(404).json({ error: 'no_content_table' });
     const id = Number(req.params.id);
-    const info = db.prepare(`DELETE FROM ai_lesson_content WHERE id = ?`).run(id);
+    const info = await db.prepare(`DELETE FROM ai_lesson_content WHERE id = ?`).run(id);
     if (info.changes === 0) return res.status(404).json({ error: 'content_not_found' });
     res.json({ ok: true, deleted: id });
   });
 
   // Trục 2: log prompt AI của HS — GV/admin xem được. ?blocked=1 lọc prompt đã bị filter chặn.
-  r.get('/api/teacher/ai-prompts', (req, res) => {
+  r.get('/api/teacher/ai-prompts', async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'unauthorized' });
     if (!['teacher', 'admin'].includes(req.user.role)) {
       return res.status(403).json({ error: 'forbidden', message: 'Chỉ giảng viên hoặc admin xem được' });
     }
     const blockedOnly = req.query.blocked === '1' || req.query.blocked === 'true';
     const limit = Number(req.query.limit) || 50;
-    res.json({ logs: listAiPrompts({ blockedOnly, limit }) });
+    res.json({ logs: await listAiPrompts({ blockedOnly, limit }) });
   });
 
-  r.get('/api/admin/ai-prompts', requireAdmin, (req, res) => {
+  r.get('/api/admin/ai-prompts', requireAdmin, async (req, res) => {
     const blockedOnly = req.query.blocked === '1';
     const limit = Number(req.query.limit) || 100;
-    res.json({ logs: listAiPrompts({ blockedOnly, limit }) });
+    res.json({ logs: await listAiPrompts({ blockedOnly, limit }) });
   });
 
   // GET /api/me/ai-prompts — chính user xem log của mình (HS xem lại câu mình hỏi
   // hôm qua, hoặc cùng PH coi). Không có phân quyền chéo.
-  r.get('/api/me/ai-prompts', (req, res) => {
+  r.get('/api/me/ai-prompts', async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'unauthorized' });
     const limit = Number(req.query.limit) || 50;
-    res.json({ logs: listAiPromptsForUser(req.user.id, limit) });
+    res.json({ logs: await listAiPromptsForUser(req.user.id, limit) });
   });
 
   // Backup/restore (xuất nhập file SQLite + auto snapshot hàng ngày)
@@ -660,7 +660,7 @@ export const plugin = {
     provides: ['/api/admin/* (role=admin)', 'dashboard/CRUD/ai-prompt logs/backup/db-admin'],
     description: 'Bảng điều khiển admin — quản trị người dùng, nội dung, backup, db-admin.',
   },
-  mount(router) {
-    attachAdmin(router);
+  async mount(router) {
+    await attachAdmin(router);
   },
 };

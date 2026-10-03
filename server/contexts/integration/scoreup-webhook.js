@@ -92,7 +92,7 @@ export function attachScoreUpWebhook(app) {
   app.post(
     '/api/webhooks/scoreup',
     express.raw({ type: 'application/json', limit: '256kb' }),
-    (req, res) => {
+    async (req, res) => {
       const raw = req.body; // Buffer
       const sig = req.get('X-ScoreUp-Signature');
       if (!verifySignature(raw, sig)) {
@@ -114,7 +114,7 @@ export function attachScoreUpWebhook(app) {
       }
 
       // Dedup theo event_id
-      const seen = markScoreUpEventSeen(event_id, event, Number(new Date(occurred_at || 0)) || null);
+      const seen = await markScoreUpEventSeen(event_id, event, Number(new Date(occurred_at || 0)) || null);
       if (seen) {
         return res.status(200).json({ ok: true, deduped: true });
       }
