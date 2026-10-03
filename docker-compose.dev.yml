@@ -22,6 +22,27 @@ services:
     volumes:
       - tizia-dev-data:/data
 
+  # PostgreSQL cho AI Board (ticket 10). Chỉ trên mạng compose nội bộ: KHÔNG publish cổng ra host; tizia-dev và worker
+  # gọi qua tizia-postgres:5432. Dòng trần = lấy từ file env của compose (POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB); không đặt giá trị ở đây.
+  # Lên bản major mới = dump/restore (không đổi tag tại chỗ). AI Board chỉ dùng DB này khi AI_BOARD_DB=postgres.
+  tizia-postgres:
+    container_name: tizia-postgres
+    image: postgres:17-alpine
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_USER:
+      POSTGRES_PASSWORD:
+      POSTGRES_DB:
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - tizia-postgres-data:/var/lib/postgresql/data
+
   ai-board-worker:
     container_name: tizia-ai-board-worker
     build:
@@ -123,6 +144,7 @@ networks:
 volumes:
   tizia-dev-data:
     driver: local
+  tizia-postgres-data:
   ai-board-repo:
   ai-board-memory:
   sandbox-runner-state:
