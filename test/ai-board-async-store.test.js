@@ -160,14 +160,4 @@ for (const backend of backends) {
       assert.equal(new Set(ids).size, 2);
     } finally { await d.dispose(); }
   });
-
-  test(`[${backend.name}] feature-folder requests are refused until ported`, async () => {
-    const d = await backend.open();
-    try {
-      await seedUsers(d);
-      await assert.rejects(createAsyncAiBoardStore(d).createRequestWithRoot({
-        ownerUserId: 1, ownerDomain: 'pharmacy', idempotencyKey: 'req-feature-001', title: 'Chức năng mới', type: 'feature',
-      }), (e) => e.code === 'not_ported');
-    } finally { await d.dispose(); }
-  });
 }

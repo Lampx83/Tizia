@@ -8,6 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import pg from 'pg';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -56,31 +57,60 @@ function sqliteOps(raw) {
   };
 }
 
+/** Ambient transaction: code inside tx() may call d.get/run/... directly, they join the open transaction
+ * (AsyncLocalStorage), and a nested tx() becomes a SAVEPOINT, like better-sqlite3 nested transactions. */
+const ambient = new AsyncLocalStorage();
+let savepointSeq = 0;
+async function runTx(ops, exec, fn) {
+  if (ambient.getStore()?.ops === ops) {
+    const name = `sp_${++savepointSeq}`;
+    await exec(`SAVEPOINT ${name}`);
+    try {
+      const value = await fn(ops);
+      await exec(`RELEASE ${name}`);
+      return value;
+    } catch (error) {
+      await exec(`ROLLBACK TO ${name}`);
+      await exec(`RELEASE ${name}`);
+      throw error;
+    }
+  }
+  return null;
+}
+const joined = (base) => {
+  const cur = () => ambient.getStore()?.base === base ? ambient.getStore().ops : base;
+  return new Proxy(base, {
+    get: (target, key) => (typeof target[key] === 'function' && ['get', 'all', 'run', 'insert', 'exec'].includes(key)
+      ? (...a) => cur()[key](...a) : target[key]),
+  });
+};
+
 /** raw: a better-sqlite3 Database. One connection: tx() calls are serialised; a plain call from another task
  * while a tx is open joins it (ponytail: fine while the board is the only async caller). */
 export function createSqliteDb(raw) {
   const ops = sqliteOps(raw);
+  const base = { ...ops, raw, async close() { raw.close(); } };
   let chain = Promise.resolve();
-  return {
-    ...ops,
-    raw,
-    tx(fn) {
-      const result = chain.then(async () => {
-        raw.exec('BEGIN IMMEDIATE');
-        try {
-          const value = await fn(ops);
-          raw.exec('COMMIT');
-          return value;
-        } catch (error) {
-          raw.exec('ROLLBACK');
-          throw error;
-        }
-      });
-      chain = result.catch(() => {});
-      return result;
-    },
-    async close() { raw.close(); },
+  base.tx = (fn) => {
+    const store = ambient.getStore();
+    if (store?.base === base) {
+      return runTx(store.ops, (sql) => raw.exec(sql), fn);
+    }
+    const result = chain.then(() => ambient.run({ base, ops }, async () => {
+      raw.exec('BEGIN IMMEDIATE');
+      try {
+        const value = await fn(ops);
+        raw.exec('COMMIT');
+        return value;
+      } catch (error) {
+        raw.exec('ROLLBACK');
+        throw error;
+      }
+    }));
+    chain = result.catch(() => {});
+    return result;
   };
+  return joined(base);
 }
 
 function pgOps(q) {
@@ -104,25 +134,25 @@ export function createPgDb({ url, max = 10 }) {
     connectionString: url, max,
     types: { getTypeParser: (oid, fmt) => (oid === 20 || oid === 1700 ? Number : pg.types.getTypeParser(oid, fmt)) },
   });
-  return {
-    ...pgOps(pool),
-    pool,
-    async tx(fn) {
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        const value = await fn(pgOps(client));
-        await client.query('COMMIT');
-        return value;
-      } catch (error) {
-        await client.query('ROLLBACK').catch(() => {});
-        throw error;
-      } finally {
-        client.release();
-      }
-    },
-    async close() { await pool.end(); },
+  const base = { ...pgOps(pool), pool, async close() { await pool.end(); } };
+  base.tx = async (fn) => {
+    const store = ambient.getStore();
+    if (store?.base === base) return runTx(store.ops, (sql) => store.ops.exec(sql), fn);
+    const client = await pool.connect();
+    const ops = pgOps(client);
+    try {
+      await client.query('BEGIN');
+      const value = await ambient.run({ base, ops }, () => fn(ops));
+      await client.query('COMMIT');
+      return value;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
   };
+  return joined(base);
 }
 
 /** Env -> db. SQLite needs the open better-sqlite3 handle (the app's existing one). */

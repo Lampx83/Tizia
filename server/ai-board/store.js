@@ -2200,4 +2200,6 @@ export function createAiBoardStore(db, hooks = {}) {
 export {
   validatePrePrVerdict, cleanAttachments, PHASES, triggerFor, ANY_QUEUE, PLAN_QUEUE, ACTIVE_ONLY, REQUEST_TYPES,
   WORKER_MODES, CLAIM_INTENTS, RUN_TRIGGERS, CLARIFYING_NOTE, DAY_MS, KEY as IDEMPOTENCY_KEY, parseJson,
+  AI_BRANCH, EVENT_TYPES, MAX_BUDGET_EXTENSION, MAX_BUDGET_EXTENSIONS, MAX_BUDGET_LIMIT, MAX_TRACE_BATCH, PR_BASE, PR_URL,
+  ROLLBACK_OUTCOMES, SELF_TAG, SELF_USER, SHA, cleanModelCall, parseAttachments, progressDetail, summarizeCalls, validateCandidate,
 };

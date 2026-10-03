@@ -67,4 +67,20 @@ for (const backend of backends) {
       assert.equal((await d.get('SELECT status FROM requests WHERE id = ?', [rid])).status, 'reviewing');
     } finally { await d.dispose(); }
   });
+
+  test(`[${backend.name}] ambient tx: plain calls join it, nested tx is a savepoint`, async () => {
+    const d = await backend.open();
+    try {
+      const now = Date.now();
+      const add = (title) => d.insert('INSERT INTO requests(domain, title, created_at, updated_at) VALUES (?, ?, ?, ?)', ['x', title, now, now]);
+      await d.tx(async () => {
+        await add('outer');
+        await assert.rejects(d.tx(async () => { await add('inner'); throw new Error('inner fails'); }), /inner fails/);
+        await d.tx(async () => { await add('inner-ok'); });
+      });
+      assert.deepEqual((await d.all('SELECT title FROM requests ORDER BY id')).map((r) => r.title), ['outer', 'inner-ok']);
+      await assert.rejects(d.tx(async () => { await add('lost'); throw new Error('boom'); }), /boom/);
+      assert.equal((await d.get('SELECT COUNT(*) AS n FROM requests')).n, 2);
+    } finally { await d.dispose(); }
+  });
 }
