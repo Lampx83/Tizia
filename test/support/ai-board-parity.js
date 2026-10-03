@@ -38,6 +38,8 @@ export async function seedBase(d) {
   await d.run(`INSERT INTO users(id, username, display_name, role, enrolled_domain) VALUES (1, 'lan', 'Lan', 'student', 'pharmacy')`);
   await d.run(`INSERT INTO users(id, username, display_name, role, enrolled_domain) VALUES (2, 'minh', 'Minh', 'student', 'pharmacy')`);
   await d.run(`INSERT INTO users(id, username, display_name, role, enrolled_domain) VALUES (9, 'admin', 'Admin', 'admin', NULL)`);
+  // PostgreSQL identity does not follow explicit ids; the real data copy must do the same resync.
+  if (d.dialect === 'postgres') await d.get(`SELECT setval(pg_get_serial_sequence('users', 'id'), 9)`);
 }
 
 async function runOne(label, make, scenario, d) {

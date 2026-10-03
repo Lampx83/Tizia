@@ -6,7 +6,11 @@ import pg from 'pg';
 import { applyMigrations, applyPgBaseSchema, createPgDb, createSqliteDb } from '../../server/ai-board/db/index.js';
 
 const SQLITE_BASE = `
-  CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, display_name TEXT, role TEXT, enrolled_domain TEXT);
+  CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, display_name TEXT NOT NULL,
+    password_hash TEXT NOT NULL DEFAULT '', role TEXT NOT NULL DEFAULT 'student', enrolled_domain TEXT,
+    created_at INTEGER NOT NULL DEFAULT 0, last_login INTEGER
+  );
   CREATE TABLE requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'other',
     title TEXT NOT NULL, detail TEXT, student TEXT NOT NULL DEFAULT 'Ẩn danh',
