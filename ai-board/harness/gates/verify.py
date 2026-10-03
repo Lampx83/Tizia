@@ -152,7 +152,7 @@ SHOT_WIDTHS = (375, 1280)  # điện thoại, máy tính
 MAX_SHOT_PAGES = 3         # ≤ 3 trang; ≤ 2 trang chụp cả 2 khổ, 3 trang chỉ khổ máy tính (xem _shot_widths)
 MAX_SHOT_HEIGHT = 2000     # cắt trang dài: PNG vừa trần upload của server
 FOCUS_PAD = 40             # lề quanh vùng thay đổi trong ảnh cận cảnh
-FOCUS_MIN = (360, 160)     # vùng cận cảnh không nhỏ hơn cỡ này (rộng, cao)
+FOCUS_MIN = (640, 200)     # vùng cận cảnh không nhỏ hơn cỡ này (rộng, cao)
 FOCUS_MAX_HEIGHT = 1200
 # Phiên học viên mới: không để popup chào mừng che trang (điểm danh hằng ngày, hướng dẫn 60 giây).
 QUIET_POPUPS_JS = """try {
