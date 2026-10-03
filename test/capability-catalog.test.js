@@ -12,7 +12,7 @@ import {
 
 test.afterEach(() => { disposeAll(); });
 
-test('listAvailableCapabilities() luôn gồm ScoreUp/Codelab, tagged dev-owned, không có path file', () => {
+test('listAvailableCapabilities() luôn gồm ScoreUp/Codelab, tagged dev-owned, không có path file', async () => {
   const caps = listAvailableCapabilities();
   const scoreup = caps.find((c) => c.id === 'scoreup');
   const codelab = caps.find((c) => c.id === 'codelab');
@@ -28,9 +28,9 @@ test('listAvailableCapabilities() luôn gồm ScoreUp/Codelab, tagged dev-owned,
   assert.equal(STATIC_CAPABILITIES.length >= 2, true);
 });
 
-test('plugin có khai catalog → xuất hiện trong listAvailableCapabilities() sau khi mount, biến mất sau dispose', () => {
+test('plugin có khai catalog → xuất hiện trong listAvailableCapabilities() sau khi mount, biến mất sau dispose', async () => {
   const app = express();
-  mountRouterPlugins(app, [{
+  await mountRouterPlugins(app, [{
     name: 'fixture-catalog',
     catalog: { kind: 'context', tier: 'surface', provides: ['fixture.read'], description: 'fixture cho test' },
     mount() { return () => {}; },
@@ -45,16 +45,16 @@ test('plugin có khai catalog → xuất hiện trong listAvailableCapabilities(
   assert.equal(listAvailableCapabilities().find((c) => c.name === 'fixture-catalog'), undefined);
 });
 
-test('plugin không khai catalog → không xuất hiện trong listAvailableCapabilities() (không crash)', () => {
+test('plugin không khai catalog → không xuất hiện trong listAvailableCapabilities() (không crash)', async () => {
   const app = express();
-  mountRouterPlugins(app, [{ name: 'fixture-no-catalog', mount() { return () => {}; } }], { surface: {} });
+  await mountRouterPlugins(app, [{ name: 'fixture-no-catalog', mount() { return () => {}; } }], { surface: {} });
 
   assert.equal(listAvailableCapabilities().find((c) => c.name === 'fixture-no-catalog'), undefined);
 });
 
-test('dump-config: in được mounted + capabilities của trạng thái hiện tại, không crash', () => {
+test('dump-config: in được mounted + capabilities của trạng thái hiện tại, không crash', async () => {
   const app = express();
-  mountRouterPlugins(app, [{
+  await mountRouterPlugins(app, [{
     name: 'fixture-dump',
     catalog: { kind: 'context', tier: 'core', provides: ['x'], description: 'y' },
     mount() { return () => {}; },
@@ -66,9 +66,9 @@ test('dump-config: in được mounted + capabilities của trạng thái hiện
   assert.ok(out.capabilities.find((c) => c.id === 'scoreup'));
 });
 
-test('trùng tên: plugin dev-owned mount trước → sau đó bất kỳ ai (kể cả domain-synthesized) khai cùng tên đều bị từ chối, catalog dev-owned vẫn nguyên', () => {
+test('trùng tên: plugin dev-owned mount trước → sau đó bất kỳ ai (kể cả domain-synthesized) khai cùng tên đều bị từ chối, catalog dev-owned vẫn nguyên', async () => {
   const app = express();
-  mountRouterPlugins(app, [{
+  await mountRouterPlugins(app, [{
     name: 'shared-name',
     origin: 'dev-owned',
     catalog: { kind: 'context', tier: 'dev-owned', provides: ['real'], description: 'bản dev thật' },
@@ -80,7 +80,7 @@ test('trùng tên: plugin dev-owned mount trước → sau đó bất kỳ ai (k
     catalog: { kind: 'context', tier: 'surface', provides: ['fake'], description: 'bản AI sinh mạo danh' },
     mount() { return () => {}; },
   };
-  assert.throws(() => mountRouterPlugins(app, [synthesized], { surface: {} }), /trùng tên/);
+  await assert.rejects(async () => mountRouterPlugins(app, [synthesized], { surface: {} }), /trùng tên/);
 
   // Bản dev-owned vẫn là bản duy nhất trong catalog — resolution = dev thắng.
   const entry = listAvailableCapabilities().find((c) => c.name === 'shared-name');
