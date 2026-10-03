@@ -1,13 +1,20 @@
 // Access-layer contract, run on every available backend (sqlite always, postgres when TEST_PG_URL is set).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { aiBoardBackend, toPgDdl, toPgPlaceholders, applyMigrations } from '../server/ai-board/db/index.js';
+import { aiBoardBackend, openAiBoardDb, toPgDdl, toPgPlaceholders, applyMigrations } from '../server/ai-board/db/index.js';
 import { backends } from './support/ai-board-db.js';
 
 test('backend switch defaults to sqlite and rejects junk', () => {
   assert.equal(aiBoardBackend({}), 'sqlite');
   assert.equal(aiBoardBackend({ AI_BOARD_DB: ' Postgres ' }), 'postgres');
   assert.throws(() => aiBoardBackend({ AI_BOARD_DB: 'mysql' }), /sqlite or postgres/);
+});
+
+test('openAiBoardDb needs a url for postgres and wraps the handle for sqlite', async () => {
+  assert.throws(() => openAiBoardDb({ env: { AI_BOARD_DB: 'postgres' } }), /AI_BOARD_DATABASE_URL/);
+  const d = openAiBoardDb({ env: {}, sqlite: { prepare: () => ({ get: () => ({ v: 1 }) }) } });
+  assert.equal(d.dialect, 'sqlite');
+  assert.equal((await d.get('SELECT 1 AS v')).v, 1);
 });
 
 test('placeholders skip quoted literals; ddl widens ints', () => {

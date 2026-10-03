@@ -55,6 +55,7 @@ import { plugin as portalAppsPlugin } from './contexts/portal-apps/index.js';
 import { grantSkillsForScenario, plugin as skillsPlugin } from './skills.js';
 import { securityHeaders, csrf, requireStrictCsrf, apiLimiter, sensitiveAuthLimiter, plugin as securityPlugin } from './contexts/security/index.js';
 import { createAiBoardStore } from './ai-board/store.js';
+import { aiBoardBackend } from './ai-board/db/index.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from './ai-board/routes.js';
 import { selfWinNotifier } from './ai-board/self-improve.js';
 import { draftNotifier } from './ai-board/drafts.js';
@@ -345,6 +346,9 @@ mountRouterPlugins(r, [
   assetsPlugin, adaptivePlugin, lessonsPlugin,
 ], { surface });
 
+// AI_BOARD_DB=postgres selects the async store (ai-board/store-async.js), which covers only part of the board so far:
+// refuse to start rather than run the sync store on SQLite while the operator believes the board is on PostgreSQL.
+if (aiBoardBackend(process.env) !== 'sqlite') throw new Error('AI_BOARD_DB=postgres: routes and the rest of the store are not ported yet; unset it to roll back to SQLite');
 const aiBoardStore = createAiBoardStore(db);
 const aiBoardProfiles = attachAiBoardIntake(r, {
   db, store: aiBoardStore, requireAuth, requireStrictCsrf,
