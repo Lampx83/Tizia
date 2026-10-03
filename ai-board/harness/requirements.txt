@@ -2,3 +2,4 @@ python-dotenv>=1.0
 pytest>=8.0
 tzdata>=2026.1  # zoneinfo("Asia/Ho_Chi_Minh") has no OS tz database fallback on Windows
 playwright>=1.40  # gate 5: screenshot bắt buộc cho thay đổi UI (sau pip: python -m playwright install chromium)
+psycopg[binary]>=3.2  # PostgreSQL: skill_proposals/gate_trace/ai_decisions/users (DATABASE_URL); lazy import, guest không có DB không cần

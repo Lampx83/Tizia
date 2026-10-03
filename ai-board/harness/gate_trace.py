@@ -15,17 +15,17 @@ from dbconn import harness_db
 
 DDL = """
 CREATE TABLE IF NOT EXISTS gate_trace (
-  id                   INTEGER PRIMARY KEY AUTOINCREMENT,
-  skill_proposal_id    INTEGER NOT NULL,
-  gate                 REAL    NOT NULL,
+  id                   BIGSERIAL PRIMARY KEY,
+  skill_proposal_id    BIGINT NOT NULL,
+  gate                 DOUBLE PRECISION    NOT NULL,
   model                TEXT,
   prompt               TEXT,
   raw_response         TEXT,
-  prompt_eval_count    INTEGER,
-  eval_count           INTEGER,
-  prompt_eval_duration INTEGER,
-  eval_duration        INTEGER,
-  created_at           INTEGER NOT NULL
+  prompt_eval_count    BIGINT,
+  eval_count           BIGINT,
+  prompt_eval_duration BIGINT,
+  eval_duration        BIGINT,
+  created_at           BIGINT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_gate_trace_proposal
   ON gate_trace(skill_proposal_id, created_at);
@@ -42,7 +42,7 @@ def record(db_path, *, skill_proposal_id: int, gate: float, model: str | None, p
                 """INSERT INTO gate_trace
                      (skill_proposal_id, gate, model, prompt, raw_response,
                       prompt_eval_count, eval_count, prompt_eval_duration, eval_duration, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 (
                     skill_proposal_id, float(gate), model, prompt, body.get("response"),
                     body.get("prompt_eval_count"), body.get("eval_count"),

@@ -25,7 +25,6 @@ import argparse
 import dataclasses
 import json
 import os
-import sqlite3
 import sys
 from pathlib import Path
 
@@ -35,6 +34,7 @@ from gates import brainstorm, scope_check  # noqa: E402
 from budget import Budget  # noqa: E402
 from main import Deps, Unavailable  # noqa: E402
 from models import OllamaClient  # noqa: E402
+from dbconn import harness_db  # noqa: E402
 from prescreen import AI_DECISIONS_DDL  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -47,18 +47,12 @@ ACTION_TO_GO = {"approve": True, "priority": True, "reject": False}
 
 def load_opus_decisions(db_path) -> list[dict]:
     """ai_decisions WHERE decided_by='ai' — quyết định Opus lịch sử, có input_snapshot."""
-    con = sqlite3.connect(str(db_path))
-    con.row_factory = sqlite3.Row
-    try:
-        con.execute(AI_DECISIONS_DDL)  # DB test/tạm chưa có bảng — DDL là IF NOT EXISTS, vô hại trên DB thật
-        rows = con.execute(
+    with harness_db(db_path, ddl=AI_DECISIONS_DDL, dict_rows=True) as con:  # DDL IF NOT EXISTS: DB tạm chưa có bảng
+        return con.execute(
             """SELECT id, request_id, action, reason, priority_score, confidence,
                       input_snapshot, raw_output, created_at
                FROM ai_decisions WHERE decided_by = 'ai' ORDER BY created_at"""
         ).fetchall()
-        return [dict(r) for r in rows]
-    finally:
-        con.close()
 
 
 def request_from_snapshot(row: dict) -> dict | None:
@@ -162,7 +156,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", default=os.environ.get("CALIBRATION_MODEL", "gemma4:26b"),
                          help="Model ứng viên chạy cổng 1 (mặc định gemma4:26b, hoặc env CALIBRATION_MODEL)")
-    parser.add_argument("--db", default=os.environ.get("TIZIA_DB_PATH") or str(ROOT / "data" / "tizia.db"))
+    parser.add_argument("--db", default=os.environ.get("DATABASE_URL"), help="PostgreSQL DSN (mặc định env DATABASE_URL)")
     parser.add_argument("--out", default=None, help="Ghi thêm report JSON ra file này (tuỳ chọn)")
     args = parser.parse_args(argv)
 
