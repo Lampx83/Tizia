@@ -10,7 +10,7 @@
 import { db } from '../../db.js';
 import { requireAuth } from '../identity/auth.js';
 
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS feature_flags (
     key             TEXT PRIMARY KEY,         -- 'pet-evolve-confetti', 'shop-rare-flash'
     enabled         INTEGER NOT NULL DEFAULT 0,
@@ -48,8 +48,8 @@ db.exec(`
 `);
 
 // Seed events catalog
-function seedEvents() {
-  const cnt = db.prepare(`SELECT COUNT(*) AS n FROM event_registry`).get().n;
+async function seedEvents() {
+  const cnt = (await db.prepare(`SELECT COUNT(*) AS n FROM event_registry`).get()).n;
   if (cnt > 0) return;
   const events = [
     { name:'engagement.streak_keep', desc:'User vào app giữ streak hôm nay' },
@@ -80,18 +80,18 @@ function seedEvents() {
     { name:'teacher.team_quest_complete',desc:'Cả lớp đạt target team quest' },
   ];
   const ins = db.prepare(`INSERT INTO event_registry (name, description, added_at) VALUES (?, ?, ?)`);
-  const tx = db.transaction(() => {
+  const tx = db.transaction(async () => {
     const now = Date.now();
-    for (const e of events) ins.run(e.name, e.desc, now);
+    for (const e of events) await ins.run(e.name, e.desc, now);
   });
-  tx();
+  await tx();
   console.log(`[experiments] seeded ${events.length} event registry entries`);
 }
-seedEvents();
+await seedEvents();
 
 // Seed default experiments
-function seedExperiments() {
-  const cnt = db.prepare(`SELECT COUNT(*) AS n FROM experiments`).get().n;
+async function seedExperiments() {
+  const cnt = (await db.prepare(`SELECT COUNT(*) AS n FROM experiments`).get()).n;
   if (cnt > 0) return;
   const exps = [
     {
@@ -111,14 +111,14 @@ function seedExperiments() {
     },
   ];
   const ins = db.prepare(`INSERT INTO experiments (key, variants, description, started_at) VALUES (?, ?, ?, ?)`);
-  const tx = db.transaction(() => {
+  const tx = db.transaction(async () => {
     const now = Date.now();
-    for (const e of exps) ins.run(e.key, e.variants, e.desc, now);
+    for (const e of exps) await ins.run(e.key, e.variants, e.desc, now);
   });
-  tx();
+  await tx();
   console.log(`[experiments] seeded ${exps.length} default experiments`);
 }
-seedExperiments();
+await seedExperiments();
 
 // FNV-1a hash để chọn variant ổn định per (user, exp_key)
 function hash(s) {
@@ -147,11 +147,11 @@ const _getExposureStmt = db.prepare(`SELECT * FROM exposures WHERE user_id = ? A
 const _upsertExposureStmt = db.prepare(`
   INSERT INTO exposures (user_id, exp_key, variant, first_seen_at, seen_count)
   VALUES (?, ?, ?, ?, 1)
-  ON CONFLICT(user_id, exp_key) DO UPDATE SET seen_count = seen_count + 1
+  ON CONFLICT(user_id, exp_key) DO UPDATE SET seen_count = exposures.seen_count + 1
 `);
 
-export function checkFlag(userId, key) {
-  const f = _getFlagStmt.get(key);
+export async function checkFlag(userId, key) {
+  const f = await _getFlagStmt.get(key);
   if (!f || !f.enabled) return false;
   if (f.rollout_pct >= 100) return true;
   const h = hash(`flag:${userId}:${key}`);
@@ -159,47 +159,47 @@ export function checkFlag(userId, key) {
   return r < f.rollout_pct;
 }
 
-export function getVariant(userId, expKey) {
-  const exp = _getExpStmt.get(expKey);
+export async function getVariant(userId, expKey) {
+  const exp = await _getExpStmt.get(expKey);
   if (!exp) return null;
   // Đã có exposure? Trả về variant cũ (sticky)
-  const existing = _getExposureStmt.get(userId, expKey);
+  const existing = await _getExposureStmt.get(userId, expKey);
   if (existing) {
-    _upsertExposureStmt.run(userId, expKey, existing.variant, existing.first_seen_at);
+    await _upsertExposureStmt.run(userId, expKey, existing.variant, existing.first_seen_at);
     return existing.variant;
   }
   // Mới — assign + log
   let variants = [];
   try { variants = JSON.parse(exp.variants); } catch {}
   const variant = assignVariant(userId, expKey, variants);
-  _upsertExposureStmt.run(userId, expKey, variant, Date.now());
+  await _upsertExposureStmt.run(userId, expKey, variant, Date.now());
   return variant;
 }
 
 export function attachExperiments(router) {
   // List features + experiments (client side để FE biết gọi getVariant)
-  router.get('/api/experiments/me', requireAuth, (req, res) => {
-    const flags = db.prepare(`SELECT key FROM feature_flags`).all();
-    const exps = db.prepare(`SELECT key FROM experiments WHERE status = 'running'`).all();
+  router.get('/api/experiments/me', requireAuth, async (req, res) => {
+    const flags = await db.prepare(`SELECT key FROM feature_flags`).all();
+    const exps = await db.prepare(`SELECT key FROM experiments WHERE status = 'running'`).all();
     const flagMap = {};
-    for (const f of flags) flagMap[f.key] = checkFlag(req.user.id, f.key);
+    for (const f of flags) flagMap[f.key] = await checkFlag(req.user.id, f.key);
     const expMap = {};
-    for (const e of exps) expMap[e.key] = getVariant(req.user.id, e.key);
+    for (const e of exps) expMap[e.key] = await getVariant(req.user.id, e.key);
     res.json({ flags: flagMap, experiments: expMap });
   });
 
   // Admin: list + edit flags
-  router.get('/api/admin/flags', requireAuth, (req, res) => {
+  router.get('/api/admin/flags', requireAuth, async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'admin_only' });
-    res.json({ flags: db.prepare(`SELECT * FROM feature_flags ORDER BY key`).all() });
+    res.json({ flags: await db.prepare(`SELECT * FROM feature_flags ORDER BY key`).all() });
   });
-  router.post('/api/admin/flags/:key', requireAuth, (req, res) => {
+  router.post('/api/admin/flags/:key', requireAuth, async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'admin_only' });
     const key = String(req.params.key).slice(0, 60);
     const enabled = req.body?.enabled ? 1 : 0;
     const rollout = Math.max(0, Math.min(100, Number(req.body?.rollout_pct) ?? 100));
     const desc = String(req.body?.description || '').slice(0, 200);
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO feature_flags (key, enabled, rollout_pct, description, updated_at)
       VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(key) DO UPDATE SET
@@ -212,21 +212,21 @@ export function attachExperiments(router) {
   });
 
   // Admin: list experiments + exposure stats
-  router.get('/api/admin/experiments', requireAuth, (req, res) => {
+  router.get('/api/admin/experiments', requireAuth, async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'admin_only' });
-    const exps = db.prepare(`SELECT * FROM experiments`).all().map(e => {
-      const split = db.prepare(`
+    const exps = await Promise.all((await db.prepare(`SELECT * FROM experiments`).all()).map(async e => {
+      const split = await db.prepare(`
         SELECT variant, COUNT(*) AS n FROM exposures WHERE exp_key = ? GROUP BY variant
       `).all(e.key);
       return { ...e, exposure_split: split };
-    });
+    }));
     res.json({ experiments: exps });
   });
 
   // Event registry (admin xem catalog)
-  router.get('/api/admin/events/registry', requireAuth, (req, res) => {
+  router.get('/api/admin/events/registry', requireAuth, async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'admin_only' });
-    res.json({ events: db.prepare(`SELECT * FROM event_registry WHERE deprecated = 0 ORDER BY name`).all() });
+    res.json({ events: await db.prepare(`SELECT * FROM event_registry WHERE deprecated = 0 ORDER BY name`).all() });
   });
 }
 

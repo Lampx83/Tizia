@@ -20,7 +20,7 @@ import { db } from '../../db.js';
 import { requireAuth } from '../identity/auth.js';
 import { requireAdmin } from '../admin/index.js';
 
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS curriculum_content (
     id          TEXT PRIMARY KEY,            -- scenario id, vd 'H10TOAN-w01-quiz'
     subject     TEXT,                        -- subject key, vd 'toan'
@@ -41,9 +41,9 @@ db.exec(`
 // domain + grade TUYỆT ĐỐI (derive từ prefix id) — year_level trong scenario là
 // TƯƠNG ĐỐI theo cấp (lop10/11/12 đều yearLevel 1/2/3) nên không phân biệt được
 // lớp. Hai cột này cho phép FE load đúng theo (domain, grade) — vd primary/2.
-try { db.exec(`ALTER TABLE curriculum_content ADD COLUMN domain TEXT`); } catch {}
-try { db.exec(`ALTER TABLE curriculum_content ADD COLUMN grade INTEGER`); } catch {}
-try { db.exec(`CREATE INDEX IF NOT EXISTS idx_curriculum_grade ON curriculum_content(domain, grade, active)`); } catch {}
+try { await db.exec(`ALTER TABLE curriculum_content ADD COLUMN domain TEXT`); } catch {}
+try { await db.exec(`ALTER TABLE curriculum_content ADD COLUMN grade INTEGER`); } catch {}
+try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_curriculum_grade ON curriculum_content(domain, grade, active)`); } catch {}
 
 // Suy ra (domain, grade) TUYỆT ĐỐI từ prefix id scenario.
 //   H10/H11/H12 → highschool 10/11/12 · P1..P5 → primary 1..5
@@ -98,19 +98,19 @@ function rowFromScenario(sc, source = 'seed', active = 1) {
 }
 
 /** Upsert 1 scenario. source='seed' giữ nguyên bản admin đã sửa. */
-export function upsertContent(scenario, source = 'seed') {
+export async function upsertContent(scenario, source = 'seed') {
   if (!scenario?.id) return { ok: false, reason: 'no_id' };
   const row = rowFromScenario(scenario, source);
-  if (source === 'seed') upsertSeedStmt.run(row);
-  else upsertEditStmt.run(row);
+  if (source === 'seed') await upsertSeedStmt.run(row);
+  else await upsertEditStmt.run(row);
   return { ok: true, id: scenario.id };
 }
 
 /** Seed nhiều scenario trong 1 transaction. Trả số bản ghi xử lý. */
-export const seedMany = db.transaction((scenarios, source = 'seed') => {
+export const seedMany = db.transaction(async (scenarios, source = 'seed') => {
   let n = 0;
   for (const sc of scenarios) {
-    if (upsertContent(sc, source).ok) n++;
+    if ((await upsertContent(sc, source)).ok) n++;
   }
   return n;
 });
@@ -130,13 +130,13 @@ function likePrefix(moduleId) {
   return esc + '-%';
 }
 
-export function getContentById(id) {
-  const row = getByIdStmt.get(id);
+export async function getContentById(id) {
+  const row = await getByIdStmt.get(id);
   return row ? JSON.parse(row.body) : null;
 }
 
-export function getContentForModule(moduleId) {
-  return getByModuleStmt.all(likePrefix(moduleId)).map(r => JSON.parse(r.body));
+export async function getContentForModule(moduleId) {
+  return (await getByModuleStmt.all(likePrefix(moduleId))).map(r => JSON.parse(r.body));
 }
 
 const getByGradeStmt = db.prepare(`
@@ -144,65 +144,65 @@ const getByGradeStmt = db.prepare(`
    WHERE active = 1 AND domain = ? AND grade = ?
    ORDER BY id ASC
 `);
-export function getContentForGrade(domain, grade) {
-  return getByGradeStmt.all(domain, grade).map(r => JSON.parse(r.body));
+export async function getContentForGrade(domain, grade) {
+  return (await getByGradeStmt.all(domain, grade)).map(r => JSON.parse(r.body));
 }
 
-export function curriculumCount() {
-  return countStmt.get().c;
+export async function curriculumCount() {
+  return (await countStmt.get()).c;
 }
 
 // ── API ──
-export function attachCurriculum(router) {
+export async function attachCurriculum(router) {
   // FE đọc danh sách scenario của 1 module (thay getScenariosForModule).
-  router.get('/api/curriculum/module/:moduleId', (req, res) => {
-    const items = getContentForModule(req.params.moduleId);
+  router.get('/api/curriculum/module/:moduleId', async (req, res) => {
+    const items = await getContentForModule(req.params.moduleId);
     res.json({ ok: true, items, source: 'db' });
   });
 
   // FE đọc toàn bộ content của 1 (domain, grade) — thay import('/js/scenarios/lopN').
-  router.get('/api/curriculum/grade/:domain/:grade', (req, res) => {
+  router.get('/api/curriculum/grade/:domain/:grade', async (req, res) => {
     const grade = Number(req.params.grade);
     if (!Number.isFinite(grade)) return res.status(400).json({ error: 'bad_grade' });
-    const items = getContentForGrade(req.params.domain, grade);
+    const items = await getContentForGrade(req.params.domain, grade);
     res.json({ ok: true, items, source: 'db' });
   });
 
   // FE đọc 1 scenario theo id.
-  router.get('/api/curriculum/:id', (req, res) => {
-    const sc = getContentById(req.params.id);
+  router.get('/api/curriculum/:id', async (req, res) => {
+    const sc = await getContentById(req.params.id);
     if (!sc) return res.status(404).json({ error: 'not_found' });
     res.json({ ok: true, item: sc });
   });
 
   // ── Admin CRUD ──
   // Sửa nóng 1 scenario (đề + lesson). Body = scenario JSON đầy đủ.
-  router.put('/api/curriculum/:id', requireAdmin, (req, res) => {
+  router.put('/api/curriculum/:id', requireAdmin, async (req, res) => {
     const sc = req.body?.scenario || req.body;
     if (!sc || sc.id !== req.params.id) {
       return res.status(400).json({ error: 'id_mismatch', message: 'scenario.id phải khớp :id' });
     }
-    upsertContent(sc, 'admin');
+    await upsertContent(sc, 'admin');
     res.json({ ok: true, id: sc.id, source: 'admin' });
   });
 
   // Tạo mới (admin).
-  router.post('/api/curriculum', requireAdmin, (req, res) => {
+  router.post('/api/curriculum', requireAdmin, async (req, res) => {
     const sc = req.body?.scenario || req.body;
     if (!sc?.id) return res.status(400).json({ error: 'no_id' });
-    upsertContent(sc, 'admin');
+    await upsertContent(sc, 'admin');
     res.json({ ok: true, id: sc.id, source: 'admin' });
   });
 
   // Soft-delete (admin) — ẩn khỏi FE, không xoá hẳn để khôi phục được.
-  router.delete('/api/curriculum/:id', requireAdmin, (req, res) => {
-    const info = db.prepare(`UPDATE curriculum_content SET active = 0, updated_at = ? WHERE id = ?`)
+  router.delete('/api/curriculum/:id', requireAdmin, async (req, res) => {
+    const info = await db.prepare(`UPDATE curriculum_content SET active = 0, updated_at = ? WHERE id = ?`)
       .run(Date.now(), req.params.id);
     if (info.changes === 0) return res.status(404).json({ error: 'not_found' });
     res.json({ ok: true, id: req.params.id });
   });
 
-  console.log(`[curriculum] routes mounted: /api/curriculum/* (đang có ${curriculumCount()} content trong DB)`);
+  console.log(`[curriculum] routes mounted: /api/curriculum/* (đang có ${await curriculumCount()} content trong DB)`);
 }
 
 export const plugin = {
@@ -212,7 +212,7 @@ export const plugin = {
     provides: ['/api/curriculum/*'],
     description: 'Kịch bản tuần (quiz + lý thuyết) theo domain/khối lớp.',
   },
-  mount(router) {
-    attachCurriculum(router);
+  async mount(router) {
+    await attachCurriculum(router);
   },
 };
