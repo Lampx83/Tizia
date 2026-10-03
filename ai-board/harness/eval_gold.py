@@ -65,9 +65,10 @@ class Collect(meter.Tracer):
         self.begin(0, self.records.extend)
 
 
-def run_case(name: str, case: dict, model: str, base: Deps) -> dict:
+def run_case(name: str, case: dict, model: str, base: Deps, after=None) -> dict:
     """1 case cổng 3 → row kết quả. case: subtask, detail, oracle(nội dung)→bool, checkout (repo git base; mặc định Tizia).
-    Nhiều file: `subtasks` (list) thay `subtask`, oracle nhận {file: nội dung} và row có thêm `diff` (candidate so với base)."""
+    Nhiều file: `subtasks` (list) thay `subtask`, oracle nhận {file: nội dung} và row có thêm `diff` (candidate so với base).
+    after(state, scratch, files) → dict gộp vào row: chạy khi cổng 3 qua, trước khi xóa scratch (fast tier: cổng 4 + oracle sản xuất)."""
     tracer = Collect()
     models = dataclasses.replace(base.models, gate3_model=model, gate3_model_light=model)
     deps = dataclasses.replace(base, models=models, trace=tracer)
@@ -81,6 +82,7 @@ def run_case(name: str, case: dict, model: str, base: Deps) -> dict:
         out = {"blocked": True, "reason": f"{type(error).__name__}: {error}"[:300]}
     tracer.flush()
     files = {t["file"]: (scratch / t["file"]).read_text(encoding="utf-8") if (scratch / t["file"]).exists() else "" for t in subtasks}
+    extra = after(state, scratch, files) if after and not out.get("blocked") else {}
     shutil.rmtree(scratch, ignore_errors=True)  # runner chạy hàng trăm lần: không để rác tạm
     calls = tracer.records
     total = lambda key: sum((c["metrics"].get(key) or 0) for c in calls)  # noqa: E731
@@ -95,7 +97,7 @@ def run_case(name: str, case: dict, model: str, base: Deps) -> dict:
         "wall_s": round(time.monotonic() - started, 1),
         "tokens_in": total("tokens_in"), "tokens_out": total("tokens_out"),
         "model_loads": sum((c["metrics"].get("load_ms") or 0) > 500 for c in calls),
-        "done_reasons": [c["metrics"].get("done_reason") for c in calls],
+        "done_reasons": [c["metrics"].get("done_reason") for c in calls], **extra,
     }
     if multi:
         before = implement._existing_files(state["checkout_source"], subtasks)[1]

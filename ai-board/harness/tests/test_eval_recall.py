@@ -1,15 +1,13 @@
 """Seam: eval_run.main(["recall", ...]) trên corpus có sẵn dưới --root (không model, không mạng), thư mục tạm, seed cố định.
-Corpus synthetic do `quick` (model giả) dựng; không test riêng hàm đo, chỉ soi báo cáo và file ghi ra."""
+Corpus synthetic 3 trang do eval_run.write_corpus dựng (quick đã chuyển sang corpus trang thật); không test riêng hàm đo, chỉ soi báo cáo và file ghi ra."""
 import json
+from pathlib import Path
 
 import eval_run
-from main import Deps
-from test_eval_run import SiteModels
 
 
 def make_corpus(root, cases=4):
-    deps = Deps(models=SiteModels(), notify=None, sleep=lambda _s: None)
-    assert eval_run.main(["quick", "--seed", "12", "--cases", str(cases), "--repeats", "1", "--root", str(root)], deps) == 0
+    eval_run.write_corpus(Path(root), 12, cases)
 
 
 def recall(root, *extra):
