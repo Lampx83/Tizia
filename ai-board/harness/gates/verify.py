@@ -149,12 +149,68 @@ def _launch(playwright):
 
 
 SHOT_WIDTHS = (375, 1280)  # điện thoại, máy tính
-MAX_SHOT_PAGES = 2         # ≤ 2 trang × 2 khổ × (trước, sau) = 8 ảnh
+MAX_SHOT_PAGES = 3         # ≤ 3 trang; ≤ 2 trang chụp cả 2 khổ, 3 trang chỉ khổ máy tính (xem _shot_widths)
 MAX_SHOT_HEIGHT = 2000     # cắt trang dài: PNG vừa trần upload của server
+FOCUS_PAD = 40             # lề quanh vùng thay đổi trong ảnh cận cảnh
+FOCUS_MIN = (360, 160)     # vùng cận cảnh không nhỏ hơn cỡ này (rộng, cao)
+FOCUS_MAX_HEIGHT = 1200
+# Phiên học viên mới: không để popup chào mừng che trang (điểm danh hằng ngày, hướng dẫn 60 giây).
+QUIET_POPUPS_JS = """try {
+  localStorage.setItem('tizia:daily:shown', new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10));  // ngày giờ Việt Nam, như daily-login.js
+  localStorage.setItem('tizia:onboarding:v1:done', '1');
+} catch (e) {}"""
+# Tìm tối đa 3 phần tử đổi: theo selector, rồi theo chữ (nút lá chứa đoạn chữ đó); giữ lại trong window.__tzFocus cho FOCUS_MARK_JS.
+FOCUS_RECTS_JS = """([selectors, texts]) => {
+  const els = [];
+  const add = (el) => {
+    if (!el || els.includes(el) || els.length >= 3) return;
+    const r = el.getBoundingClientRect();
+    const style = getComputedStyle(el);
+    if (r.width < 2 || r.height < 2 || style.display === 'none' || style.visibility === 'hidden') return;
+    els.push(el);
+  };
+  for (const selector of selectors) { try { add(document.querySelector(selector)); } catch (e) {} }
+  const norm = (t) => t.replace(/\\s+/g, ' ').trim().toLowerCase();
+  for (const text of texts) {
+    const want = norm(text);
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (norm(node.textContent).includes(want)) { add(node.parentElement); break; }
+    }
+  }
+  window.__tzFocus = els;
+  return els.map((el) => { const r = el.getBoundingClientRect(); return { x: r.left + scrollX, y: r.top + scrollY, w: r.width, h: r.height }; });
+}"""
+FOCUS_MARK_JS = """(on) => (window.__tzFocus || []).forEach((el) => {
+  if (on) { el.dataset.tzOutline = el.style.outline; el.style.outline = '3px solid #f97316'; el.style.outlineOffset = '3px'; }
+  else { el.style.outline = el.dataset.tzOutline || ''; el.style.outlineOffset = ''; delete el.dataset.tzOutline; }
+})"""
 
 
-def capture_screenshot(url: str, path: Path, width: int = 1280, *, selectors: list[str] = (), token: str | None = None) -> dict:
-    """Một lần chụp Chromium + đo cổng ảnh trên cùng trang đó, như khách hoặc (có token) như học viên đăng nhập. Trả kết quả visual.audit."""
+def _shot_widths(page_count: int) -> tuple[int, ...]:
+    """Ngân sách ảnh: ≤ 2 trang chụp điện thoại + máy tính; nhiều trang hơn thì chỉ máy tính."""
+    return SHOT_WIDTHS if page_count <= 2 else SHOT_WIDTHS[-1:]
+
+
+def _focus_clip(page, selectors: list[str], texts: list[str], width: int) -> dict | None:
+    """Khung cận cảnh quanh phần tử đổi (hợp ≤ 3 phần tử khớp đầu tiên), kẹp trong trang; None nếu không selector/chữ nào thấy được."""
+    rects = page.evaluate(FOCUS_RECTS_JS, [list(selectors), list(texts)])
+    if not rects:
+        return None
+    left, top = min(r["x"] for r in rects), min(r["y"] for r in rects)
+    right, bottom = max(r["x"] + r["w"] for r in rects), max(r["y"] + r["h"] for r in rects)
+    page_height = int(page.evaluate("document.documentElement.scrollHeight") or 1)
+    box_w = max(right - left + 2 * FOCUS_PAD, FOCUS_MIN[0])
+    box_h = min(max(bottom - top + 2 * FOCUS_PAD, FOCUS_MIN[1]), FOCUS_MAX_HEIGHT)
+    x = min(max(left - (box_w - (right - left)) / 2, 0), max(width - box_w, 0))
+    y = min(max(top - (box_h - (bottom - top)) / 2, 0), max(page_height - box_h, 0))
+    return {"x": x, "y": y, "width": min(box_w, width), "height": min(box_h, page_height)}
+
+
+def capture_screenshot(url: str, path: Path, width: int = 1280, *, selectors: list[str] = (), token: str | None = None,
+                       focus: Path | None = None, focus_texts: list[str] = ()) -> dict:
+    """Một lần chụp Chromium + đo cổng ảnh trên cùng trang đó, như khách hoặc (có token) như học viên đăng nhập. Trả kết quả visual.audit.
+    `focus` + (selector hoặc chữ đổi) nhìn thấy được → thêm ảnh cận cảnh quanh phần tử đó (viền cam) ở `focus`; không thấy thì không ghi file."""
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as playwright:
@@ -163,13 +219,22 @@ def capture_screenshot(url: str, path: Path, width: int = 1280, *, selectors: li
             context = browser.new_context(viewport={"width": width, "height": 812 if width < 768 else 800})
             if token:
                 context.add_cookies([{"name": "tizia_sid", "value": token, "url": url, "httpOnly": True}])
+                context.add_init_script(QUIET_POPUPS_JS)
             page = context.new_page()
             response = page.goto(url, wait_until="domcontentloaded", timeout=15000)
             check_landing(url, page.url, response.status if response else None)
             visual.settle(page)
             height = min(max(int(page.evaluate("document.documentElement.scrollHeight") or 1), 1), MAX_SHOT_HEIGHT)
             page.screenshot(path=str(path), full_page=True, clip={"x": 0, "y": 0, "width": width, "height": height})
-            return visual.audit(page, list(selectors))
+            audit = visual.audit(page, list(selectors))
+            clip = _focus_clip(page, list(selectors), list(focus_texts), width) if focus is not None else None
+            if clip:
+                page.evaluate(FOCUS_MARK_JS, True)
+                try:
+                    page.screenshot(path=str(focus), full_page=True, clip=clip)
+                finally:
+                    page.evaluate(FOCUS_MARK_JS, False)
+            return audit
         finally:
             browser.close()
 
@@ -232,7 +297,7 @@ def _restore_base(state: dict, checkout: Path, pages: list[str], cp: Callable[[P
 
 
 def _capture_all(base: str, shot_pages: list[str], primary: str | None, restore: Callable[[], set[str] | None],
-                 logs: list[str], selectors: list[str] = (), token: str | None = None) -> list[dict]:
+                 logs: list[str], selectors: list[str] = (), token: str | None = None, texts: dict | None = None) -> list[dict]:
     """AFTER rồi BEFORE, mỗi trang × SHOT_WIDTHS. Ảnh AFTER của trang chính bắt buộc: lỗi → raise lỗi gốc.
     Ảnh khác lỗi (trang cần đăng nhập, base hỏng) chỉ ghi log."""
     shot_dir = Path(tempfile.mkdtemp(prefix="ai-verify-shots-"))
@@ -250,10 +315,13 @@ def _capture_all(base: str, shot_pages: list[str], primary: str | None, restore:
                 break
             targets = [page for page in shot_pages if page.split("?")[0] not in new]
         for page in targets:
-            for width in SHOT_WIDTHS:
+            for width in _shot_widths(len(shot_pages)):
                 path = shot_dir / f"{phase}-{len(shots)}-{width}.png"
+                phase_texts = list((texts or {}).get(phase) or [])
+                focus = shot_dir / f"{phase}-{len(shots)}-{width}-focus.png" if (selectors or phase_texts) and width == SHOT_WIDTHS[-1] else None
                 try:
-                    audit = capture_screenshot(base + page, path, width, selectors=selectors, token=token)
+                    audit = capture_screenshot(base + page, path, width, selectors=selectors, token=token,
+                                               **({"focus": focus, "focus_texts": phase_texts} if focus else {}))
                 except Exception as exc:
                     if phase == "after" and page == primary:
                         shutil.rmtree(shot_dir, ignore_errors=True)
@@ -263,12 +331,15 @@ def _capture_all(base: str, shot_pages: list[str], primary: str | None, restore:
                 shots.append({"phase": phase, "page": page, "width": width, "path": str(path),
                               **({"audit": audit} if isinstance(audit, dict) else {})})
                 logs.append(f"Screenshot {phase} {page} {width}px: {path}")
+                if focus and focus.exists():
+                    shots.append({"phase": phase, "page": page, "width": width, "path": str(focus), "focus": True})
+                    logs.append(f"Screenshot {phase} {page} vùng thay đổi: {focus}")
     return shots
 
 
 def visual_regressions(shots: list[dict]) -> list[str]:
     """So ảnh AFTER với BEFORE cùng trang + khổ; chỉ lỗi mới. Không đo được (ảnh không có audit) → bỏ qua."""
-    before = {(s["page"], s["width"]): s.get("audit") for s in shots if s["phase"] == "before"}
+    before = {(s["page"], s["width"]): s["audit"] for s in shots if s["phase"] == "before" and s.get("audit")}  # ảnh cận cảnh không có số đo
     out = []
     for shot in shots:
         if shot["phase"] == "after" and shot.get("audit"):
@@ -455,6 +526,9 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             kind = 'ordinary'
             # Changed HTML page, else the page the requester was on (CSS/JS change); none named = no shot.
             shot_pages = _shot_pages(checkout, pages, primary)
+            skipped = [page for page in html if page not in shot_pages]
+            if skipped:
+                logs.append(f"Chỉ chụp {len(shot_pages)} trong {len(html)} trang đổi; không chụp: {', '.join(skipped)}")
             if shot_pages:
                 def cp(local: Path, target: str) -> None:
                     command([*compose, "cp", str(local), f"tizia:{target}"])
@@ -467,7 +541,9 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                         logs.append(f"Ảnh chụp như khách (không lấy được phiên học viên): {exc}")
                     shots = _capture_all(base, shot_pages, primary,
                                          lambda: _restore_base(state, checkout, pages, cp), logs,
-                                         visual.changed_selectors(state.get("full_diff")), shot_token)
+                                         visual.changed_selectors(state.get("full_diff")), shot_token,
+                                         {"after": visual.changed_texts(state.get("full_diff"), "+"),
+                                          "before": visual.changed_texts(state.get("full_diff"), "-")})
                 except Exception as exc:  # D0: UI evidence is mandatory; absent browser = environment
                     # Wrong landing page is not fixed by a retry or a repair; admin decides.
                     kind = "plan" if isinstance(exc, ScreenshotTargetError) else "transient"

@@ -507,10 +507,10 @@ def run_self_improve_night(client: WorkerClient, deps, *, clock: Callable[[], in
     return {"status": "progress", "step": "created", "variants": len(created) + 1}
 
 
-# Khớp server/ai-board/drafts.js: PNG, ≤ 8 ảnh, mỗi ảnh ≤ 2 MB.
+# Khớp server/ai-board/drafts.js: PNG, ≤ 16 ảnh, mỗi ảnh ≤ 2 MB.
 SHOTS_TYPE = "application/vnd.tizia.screenshots+json"
 MAX_SHOT_BYTES = 2 * 1024 * 1024
-MAX_SHOTS = 8
+MAX_SHOTS = 16
 
 
 def screenshot_payload(shots: list[dict]) -> list[dict]:
@@ -526,7 +526,7 @@ def screenshot_payload(shots: list[dict]) -> list[dict]:
         if not data or len(data) > MAX_SHOT_BYTES:
             continue
         images.append({"phase": shot.get("phase"), "page": shot.get("page"), "width": shot.get("width"),
-                       "png_base64": base64.b64encode(data).decode("ascii")})
+                       **({"focus": True} if shot.get("focus") else {}), "png_base64": base64.b64encode(data).decode("ascii")})
     return images
 
 
@@ -1008,7 +1008,7 @@ def poll(worker) -> dict:
         return worker.run_once()
     except PlanBlockedError as error:
         return {"status": "plan_blocked", **error.detail}
-    except OSError as error:  # urllib URLError/HTTPError are OSError
+    except (urllib.error.URLError, ConnectionError, TimeoutError) as error:  # HTTPError is a URLError
         if isinstance(error, urllib.error.HTTPError) and error.code < 500:
             raise
         return {"status": "server_unreachable", "reason": str(getattr(error, "reason", error))}

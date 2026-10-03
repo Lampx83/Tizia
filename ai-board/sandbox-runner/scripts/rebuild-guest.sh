@@ -22,6 +22,8 @@ COPY server/ai-board/guard-lexicon.json /opt/ai-board/server/ai-board/guard-lexi
 COPY scripts/smoke-user-state.sh /opt/ai-board/scripts/smoke-user-state.sh
 COPY ai-board/sandbox-runner/guest/guest-boot.sh /usr/local/bin/guest-boot.sh
 RUN chmod +x /usr/local/bin/guest-boot.sh
+# The pages name Inter first; without it Chromium mixes fallback fonts and Vietnamese diacritics look broken in the shots.
+RUN ls /usr/share/fonts/opentype/inter > /dev/null 2>&1 || (apt-get update && apt-get install -y --no-install-recommends fonts-inter && fc-cache -f && apt-get clean && find /var/lib/apt/lists -type f -delete)
 EOF
 docker build -t "$registry/gate5:overlay" "$stage"
 digest=$(docker push "$registry/gate5:overlay" | sed -n 's/.*digest: \(sha256:[0-9a-f]*\).*/\1/p' | tail -1)

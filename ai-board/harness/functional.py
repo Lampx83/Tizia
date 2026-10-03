@@ -108,6 +108,7 @@ def run_text(base, state, fixture, pages):
     if fixture is None:
         return fail('Session fixture unavailable')
     from playwright.sync_api import sync_playwright
+    from gates import visual
     from gates.verify import _launch
     present, absent = [_norm(t) for t in expected['present']], [_norm(t) for t in expected['absent']]
     shown, lines = {}, []
@@ -119,6 +120,7 @@ def run_text(base, state, fixture, pages):
             for path in pages[:3]:
                 page = context.new_page()
                 page.goto(base + path, wait_until='domcontentloaded', timeout=20000)
+                visual.settle(page)  # judge the page the user ends up with, not the static HTML a script is about to rewrite
                 text = ''
                 for _ in range(16):  # JS-rendered text can arrive late
                     text = _norm(page.evaluate(_SHOWN))

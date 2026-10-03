@@ -1581,3 +1581,22 @@ def test_poll_passes_results_and_plan_blocks_through():
 
     assert poll(Ok()) == {'status': 'idle'}
     assert poll(Blocked()) == {'status': 'plan_blocked', 'gate': 2.5, 'reason': 'plan_ungrounded'}
+
+
+def test_poll_only_swallows_connection_trouble_other_failures_still_stop_the_worker():
+    import urllib.error
+    import pytest
+    from worker import poll
+
+    def failing(error):
+        class W:
+            def run_once(self):
+                raise error
+        return W()
+
+    assert poll(failing(ConnectionResetError('reset')))['status'] == 'server_unreachable'
+    assert poll(failing(TimeoutError('slow')))['status'] == 'server_unreachable'
+    assert poll(failing(urllib.error.HTTPError('http://x', 502, 'bad gateway', {}, None)))['status'] == 'server_unreachable'
+    for error in (urllib.error.HTTPError('http://x', 401, 'no', {}, None), OSError('git fetch: fatal: not a repository')):
+        with pytest.raises(OSError):
+            poll(failing(error))

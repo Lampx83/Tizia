@@ -11,6 +11,7 @@ regressions(before, after): chỉ lỗi MỚI của bản sau — lỗi có sẵ
 """
 from __future__ import annotations
 
+import html
 import re
 
 # ponytail: nền ảnh (url) không đo được — coi như nền màu gần nhất; lấy mẫu pixel từ ảnh chụp nếu gặp sai.
@@ -167,14 +168,50 @@ def audit(page, selectors: list[str]) -> dict:
     return page.evaluate(AUDIT_JS, list(selectors))
 
 
+_TAG = re.compile(r"<[^>]*>")
+_CODEISH = re.compile(r"[{};]|=>|\bconst\b|\blet\b|\bfunction\b")
+MAX_TEXTS = 3
+
+
+def changed_texts(full_diff: list[dict] | None, side: str) -> list[str]:
+    """Chữ nhìn thấy trong dòng HTML thêm (side '+', bản sau) hoặc bớt ('-', bản trước): để tìm phần tử đổi khi diff không có #id/.class.
+    Chỉ file .html; dòng giống mã (JS/CSS trong <script>/<style>) bỏ; dài nhất trước, tối đa MAX_TEXTS."""
+    found: list[str] = []
+    for item in full_diff or []:
+        current = str(item.get("file", ""))  # pipeline gives one combined git diff with file "": follow its "+++ b/<path>" lines
+        for line in str(item.get("diff", "")).splitlines():
+            if line.startswith("+++ "):
+                current = line[4:].removeprefix("b/")
+            if not current.endswith(".html") or not line.startswith(side) or line.startswith(side * 3):
+                continue
+            text = " ".join(html.unescape(_TAG.sub(" ", line[1:])).split())
+            if len(text) >= 3 and any(ch.isalpha() for ch in text) and not _CODEISH.search(text):
+                found.append(text)
+    return sorted(dict.fromkeys(found), key=len, reverse=True)[:MAX_TEXTS]
+
+
+def _new_contrast(before: list[str], after: list[str]) -> list[str]:
+    """Phần tử chữ mờ mới: so theo thẻ/id/class, không theo chữ và tỉ số. Chữ vốn mờ mà vẫn mờ (kể cả khi đổi chữ) không phải lỗi mới;
+    thêm một phần tử mờ cùng loại thì đếm dư ra là lỗi mới."""
+    from collections import Counter
+
+    kind = lambda entry: entry.split(' "', 1)[0]
+    pool = Counter(kind(entry) for entry in before)
+    new = []
+    for entry in after:
+        if pool[kind(entry)] > 0:
+            pool[kind(entry)] -= 1
+        else:
+            new.append(entry)
+    return new
+
+
 def regressions(before: dict | None, after: dict) -> list[str]:
     """Lỗi mới của bản sau so với bản trước (before None = trang mới: mọi lỗi đều mới)."""
     before = before or {}
     out = ["trang tràn ngang"] if after.get("overflow") and not before.get("overflow") else []
-    # Tương phản so theo phần tử (bỏ tỉ số ở cuối): chữ vốn mờ mà vẫn mờ không tính là lỗi mới.
-    old = {c.rsplit(" ", 1)[0] for c in before.get("contrast", [])}
     for label, new in (
-            ("chữ tương phản thấp (< 4.5)", [c for c in after.get("contrast", []) if c.rsplit(" ", 1)[0] not in old]),
+            ("chữ tương phản thấp (< 4.5)", _new_contrast(before.get("contrast", []), after.get("contrast", []))),
             ("nút bấm bị phần tử khác đè", [c for c in after.get("covered", []) if c not in before.get("covered", [])]),
             ("phần tử bị đổi nằm ngoài màn hình", [c for c in after.get("offscreen", []) if c not in before.get("offscreen", [])]),
             ("khối nền trắng/đen lệch tông trang", [c for c in after.get("patch", []) if c not in before.get("patch", [])])):

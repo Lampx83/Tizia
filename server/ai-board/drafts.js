@@ -13,8 +13,8 @@ import { createLocalBackend } from './shot-storage.js';
 // Khớp ai-board/worker.py (SHOTS_TYPE, MAX_SHOT_BYTES, MAX_SHOTS).
 export const SHOTS_TYPE = 'application/vnd.tizia.screenshots+json'; // tránh express.json 64kb chung
 export const MAX_SHOT_BYTES = 2 * 1024 * 1024;
-export const MAX_SHOTS = 8;
-export const SHOTS_BODY_LIMIT = '24mb'; // 8 × 2 MB base64 + lề
+export const MAX_SHOTS = 16; // ≤ 3 trang đổi: 2 trang × (2 khổ + cận cảnh) × (trước, sau) = 12; 3 trang chỉ máy tính = 12
+export const SHOTS_BODY_LIMIT = '48mb'; // 16 × 2 MB base64 + lề
 export const DRAFT_AUTHOR = 'Ban điều hành AI · bản nháp';
 export const HANDOFF_NOTE = 'Đã chuyển quản trị viên xem giúp.';
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -37,7 +37,7 @@ function decodePng(image) {
 
 const label = (image) => {
   const page = String(image?.page || '').replace(/[^\w./?=&-]/g, '').slice(0, 80) || 'trang';
-  const width = Number(image?.width) > 0 ? `${Math.round(Number(image.width))}px` : '';
+  const width = image?.focus ? 'vùng thay đổi' : Number(image?.width) > 0 ? `${Math.round(Number(image.width))}px` : '';
   return [image?.phase === 'before' ? 'Trước' : 'Sau', width, page].filter(Boolean).join(' · ');
 };
 
@@ -68,7 +68,7 @@ export async function saveDraftScreenshots(store, ticketId, { workerId, leaseTok
     const message = db.prepare(`
       INSERT INTO request_messages(request_id, role, author_name, body, attachments, created_at) VALUES (?, 'ai', ?, ?, ?, ?)
     `).run(root.source_request_id, DRAFT_AUTHOR,
-      'Bản nháp sau lượt này (ảnh điện thoại 375px và máy tính 1280px; "Trước" là bản đang chạy).',
+      'Bản nháp sau lượt này (ảnh điện thoại 375px và máy tính 1280px; "Trước" là bản đang chạy; "vùng thay đổi" là ảnh cận cảnh phần đã sửa).',
       JSON.stringify(attachments), now);
     db.prepare('UPDATE requests SET updated_at=? WHERE id=?').run(now, root.source_request_id);
     const out = { message_id: Number(message.lastInsertRowid), stored: attachments.length };

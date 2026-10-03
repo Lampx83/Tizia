@@ -281,3 +281,13 @@ def test_copy_oracle_also_works_when_the_app_is_reached_by_a_container_ip(tmp_pa
             assert result['passed'] is (button in ('ok', 'exec')), (button, result)
     finally:
         server.shutdown()
+
+
+def test_text_oracle_judges_the_settled_page_not_a_moment_before_a_script_rewrites_it(site):
+    """school.html: the static <h2> holds the requested words, then a script replaces them (request #9)."""
+    root, _ = site
+    (root / 'rewritten.html').write_text(
+        "<meta charset=utf-8><body><h2 id=t>Tiến độ học tập</h2>"
+        "<script>setTimeout(() => { document.getElementById('t').textContent = 'Tiến độ · Trường' }, 300)</script></body>", encoding='utf-8')
+    result = probe(site, "Đổi 'Tiến độ của bạn' thành 'Tiến độ học tập'", '/rewritten.html')
+    assert not result['passed'] and 'Tiến độ học tập' in result['reason']

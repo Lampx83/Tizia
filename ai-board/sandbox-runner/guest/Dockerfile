@@ -8,7 +8,7 @@ FROM node:20-bookworm-slim AS node
 
 FROM python:3.12-slim-bookworm
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      bash ca-certificates curl git iptables tini procps \
+      bash ca-certificates curl git iptables tini procps fonts-inter \
     && apt-get clean && find /var/lib/apt/lists -type f -delete
 COPY --from=docker /usr/local/bin/ /usr/local/bin/
 COPY --from=docker /usr/local/libexec/docker/ /usr/local/libexec/docker/

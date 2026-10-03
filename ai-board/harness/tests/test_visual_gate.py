@@ -199,3 +199,133 @@ def test_capture_screenshot_sends_the_student_session_cookie(tmp_path):
         server.shutdown()
     assert seen[0] is None
     assert seen[-1] == "tizia_sid=abc123"
+
+
+def _serve(handler):
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, f"http://127.0.0.1:{server.server_port}/"
+
+
+def _png_size(path):
+    import struct
+    data = path.read_bytes()
+    return struct.unpack(">II", data[16:24])
+
+
+def test_capture_screenshot_frames_the_changed_element_far_below_the_fold(tmp_path):
+    pytest.importorskip("playwright.sync_api")
+    from gates import verify
+
+    html = ("<meta charset=utf-8><style>body{margin:0}</style><div style='height:2500px'></div>"
+            "<h2 id=t style='margin:0;padding:10px;background:#fc0'>Tiến độ học tập</h2><div style='height:600px'></div>").encode()
+
+    class Page(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(html)))
+            self.end_headers()
+            self.wfile.write(html)
+
+        def log_message(self, *_):
+            pass
+
+    server, url = _serve(Page)
+    try:
+        full, focus, none = tmp_path / "full.png", tmp_path / "focus.png", tmp_path / "none.png"
+        verify.capture_screenshot(url, full, 1280, selectors=["#t"], focus=focus)
+        verify.capture_screenshot(url, tmp_path / "x.png", 1280, selectors=["#absent"], focus=none)
+    finally:
+        server.shutdown()
+    width, height = _png_size(focus)
+    assert 300 <= width <= 1280 and 100 <= height <= 400   # a crop around the heading, not the 3000px page
+    assert _png_size(full)[1] == 2000                      # the full shot still stops at the cap, below the heading
+    assert not none.exists()                               # nothing matched: no focus shot
+
+
+def test_logged_in_shots_do_not_open_the_welcome_popups(tmp_path):
+    pytest.importorskip("playwright.sync_api")
+    import datetime
+    from gates import verify
+
+    seen = []
+
+    class Page(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            if self.path.startswith("/seen"):
+                seen.append(self.path)
+                body, kind = b"ok", "text/plain"
+            else:
+                body = (b"<body><script>fetch('/seen?daily=' + localStorage.getItem('tizia:daily:shown')"
+                        b" + '&onboarding=' + localStorage.getItem('tizia:onboarding:v1:done'))</script>hi</body>")
+                kind = "text/html"
+            self.send_response(200)
+            self.send_header("Content-Type", kind)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_):
+            pass
+
+    server, url = _serve(Page)
+    try:
+        verify.capture_screenshot(url, tmp_path / "guest.png")
+        verify.capture_screenshot(url, tmp_path / "student.png", token="abc")
+    finally:
+        server.shutdown()
+    today = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=7)).date().isoformat()  # Vietnam day, as daily-login.js
+    assert seen[0] == "/seen?daily=null&onboarding=null"
+    assert seen[-1] == f"/seen?daily={today}&onboarding=1"
+
+
+def test_renaming_a_dim_element_is_not_a_new_contrast_problem():
+    """Request #11: the footer link was already 3.68; changing its words must not read as a new low-contrast element."""
+    before = {"contrast": ['a "← Quay lại chọn trường" 3.68']}
+    renamed = {"contrast": ['a "← Về trang chọn trường" 3.68']}
+    assert visual.regressions(before, renamed) == []
+    added = {"contrast": ['a "← Về trang chọn trường" 3.68', 'a "Liên kết mới" 2.10']}
+    assert visual.regressions(before, added) == ['chữ tương phản thấp (< 4.5): a "Liên kết mới" 2.10']
+
+
+def test_changed_texts_are_the_visible_words_of_the_html_lines_added_or_removed():
+    diff = [{"file": "", "diff": (
+        "--- a/public/school.html\n+++ b/public/school.html\n@@ -1,3 +1,3 @@\n"
+        '-  <a href="index.html" style="color:var(--accent)">← Quay lại chọn trường</a>\n'
+        '+  <a href="index.html" style="color:var(--accent)">← Về trang chọn trường</a>\n'
+        "+  <div class=\"x\" id=\"y\"></div>\n"
+        "+const a = () => { return 1; };\n")}, {"file": "public/js/a.js", "diff": "+  el.textContent = 'Không đọc JS';\n"}]
+    assert visual.changed_texts(diff, "+") == ["← Về trang chọn trường"]
+    assert visual.changed_texts(diff, "-") == ["← Quay lại chọn trường"]
+    assert visual.changed_texts(None, "+") == []
+
+
+def test_capture_screenshot_frames_a_text_edit_that_has_no_id_or_class(tmp_path):
+    pytest.importorskip("playwright.sync_api")
+    from gates import verify
+
+    html = ("<meta charset=utf-8><style>body{margin:0}</style><div style='height:2500px'></div>"
+            "<p>Vũ trụ giáo dục · <a href='#'>← Về trang chọn trường</a></p><div style='height:600px'></div>").encode()
+
+    class Page(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(html)))
+            self.end_headers()
+            self.wfile.write(html)
+
+        def log_message(self, *_):
+            pass
+
+    server, url = _serve(Page)
+    try:
+        focus, none = tmp_path / "focus.png", tmp_path / "none.png"
+        verify.capture_screenshot(url, tmp_path / "full.png", 1280, focus=focus, focus_texts=["← Về trang chọn trường"])
+        verify.capture_screenshot(url, tmp_path / "x.png", 1280, focus=none, focus_texts=["không có trên trang"])
+    finally:
+        server.shutdown()
+    width, height = _png_size(focus)
+    assert 300 <= width <= 1280 and height <= 400
+    assert not none.exists()

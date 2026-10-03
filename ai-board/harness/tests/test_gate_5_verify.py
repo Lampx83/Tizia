@@ -474,7 +474,7 @@ def _git(root, *args):
 
 
 def test_changed_pages_get_after_and_before_shots_at_two_widths(tmp_path, monkeypatch):
-    """≤ 2 trang × 375/1280 × sau/trước; BEFORE = bản base chép vào container đang chạy; trang mới không có BEFORE."""
+    """≤ 2 trang × 375/1280 × sau/trước (3 trang: chỉ 1280); BEFORE = bản base chép vào container đang chạy; trang mới không có BEFORE."""
     root = checkout(tmp_path)
     for name in ("x", "y"):
         (root / "public" / f"{name}.html").write_text(f"<h1>old {name}</h1>\n", encoding="utf-8")
@@ -500,14 +500,13 @@ def test_changed_pages_get_after_and_before_shots_at_two_widths(tmp_path, monkey
     out = verify.run(s, runner=Runner())
 
     assert out["blocked"] is False, out["reason"]
-    # z.html mới + x.html (2 trang đầu của diff); z không có ở base → chỉ x có BEFORE.
-    assert shots == [("z.html", 375), ("z.html", 1280), ("x.html", 375), ("x.html", 1280),
-                     ("x.html", 375), ("x.html", 1280)]
+    # 3 trang đổi (z mới, x, y) → chỉ khổ máy tính cho vừa ngân sách ảnh; z không có ở base → không có BEFORE.
+    assert shots == [("z.html", 1280), ("x.html", 1280), ("y.html", 1280), ("x.html", 1280), ("y.html", 1280)]
     assert [(i["phase"], i["page"], i["width"]) for i in out["evidence"]["screenshots"]] == [
-        ("after", "/z.html", 375), ("after", "/z.html", 1280), ("after", "/x.html", 375), ("after", "/x.html", 1280),
-        ("before", "/x.html", 375), ("before", "/x.html", 1280)]
+        ("after", "/z.html", 1280), ("after", "/x.html", 1280), ("after", "/y.html", 1280),
+        ("before", "/x.html", 1280), ("before", "/y.html", 1280)]
     assert all(Path(i["path"]).read_bytes() == b"png" for i in out["evidence"]["screenshots"])
-    assert out["evidence"]["screenshot"] == out["evidence"]["screenshots"][1]["path"]  # trang chính, 1280
+    assert out["evidence"]["screenshot"] == out["evidence"]["screenshots"][0]["path"]  # trang chính, 1280
     assert copied == {"tizia:/app/public/x.html": "<h1>old x</h1>\n", "tizia:/app/public/y.html": "<h1>old y</h1>\n"}
 
     # 2 trang đều có ở base → đủ 8 ảnh.
@@ -537,8 +536,8 @@ def test_js_change_shoots_the_pages_that_load_it(tmp_path):
     (root / "public" / "r.html").write_text("<p>không liên quan</p>\n", encoding="utf-8")
 
     assert verify._shot_pages(root, ["/js/a.js"], None) == ["/q.html", "/p.html"]  # trực tiếp trước, qua import sau
-    assert verify._shot_pages(root, ["/js/a.js"], "/school.html?domain=it") == ["/school.html?domain=it", "/q.html"]
-    assert verify._shot_pages(root, ["/x.html", "/y.html", "/z.html"], None) == ["/x.html", "/y.html"]
+    assert verify._shot_pages(root, ["/js/a.js"], "/school.html?domain=it") == ["/school.html?domain=it", "/q.html", "/p.html"]
+    assert verify._shot_pages(root, ["/x.html", "/y.html", "/z.html", "/w.html"], None) == ["/x.html", "/y.html", "/z.html"]
     assert verify._shot_pages(root, ["/js/none.js"], None) == []
 
 
@@ -621,3 +620,62 @@ def test_without_a_student_session_the_shots_fall_back_to_a_guest_and_say_so(tmp
     assert out["blocked"] is False
     assert tokens and set(tokens) == {None}
     assert "khách" in out["evidence"]["text"]
+
+
+def test_shot_budget_follows_the_number_of_changed_pages(tmp_path):
+    root = tmp_path
+    (root / "public").mkdir()
+    pages = ["/a.html", "/b.html", "/c.html", "/d.html"]
+    assert verify._shot_pages(root, pages, None) == ["/a.html", "/b.html", "/c.html"]   # three pages, the rest is said in the log
+    assert verify._shot_widths(1) == verify._shot_widths(2) == (375, 1280)
+    assert verify._shot_widths(3) == (1280,)                                           # more pages: desktop only, same image budget
+
+
+def test_focus_shot_is_kept_for_desktop_and_listed_next_to_the_page_shot(tmp_path, monkeypatch):
+    calls = []
+
+    def capture(url, path, width=1280, *, selectors=(), token=None, focus=None, focus_texts=()):
+        calls.append((url, width, focus is not None))
+        path.write_bytes(b"png")
+        if focus is not None and (selectors or focus_texts):
+            focus.write_bytes(b"focus")
+        return {}
+
+    monkeypatch.setattr(verify, "capture_screenshot", capture)
+    logs = []
+    shots = verify._capture_all("http://x", ["/a.html"], "/a.html", lambda: set(), logs, ["#t"], "tok")
+    assert [(s["phase"], s["width"], bool(s.get("focus"))) for s in shots] == [
+        ("after", 375, False), ("after", 1280, False), ("after", 1280, True),
+        ("before", 375, False), ("before", 1280, False), ("before", 1280, True)]
+    assert [width for _, width, wants_focus in calls if wants_focus] == [1280, 1280]   # phones are not asked for a crop
+    only = verify._capture_all("http://x", ["/a.html"], "/a.html", lambda: set(), logs, [], "tok")
+    assert not any(s.get("focus") for s in only)                                       # no selector, no crop
+
+
+def test_a_text_edit_without_selectors_still_gets_a_close_up_with_the_right_words_per_phase(tmp_path, monkeypatch):
+    asked = []
+
+    def capture(url, path, width=1280, *, selectors=(), token=None, focus=None, focus_texts=()):
+        path.write_bytes(b"png")
+        if focus is not None:
+            asked.append((width, list(focus_texts)))
+            focus.write_bytes(b"focus")
+        return {}
+
+    monkeypatch.setattr(verify, "capture_screenshot", capture)
+    shots = verify._capture_all("http://x", ["/a.html"], "/a.html", lambda: set(), [], [], "tok",
+                                {"after": ["← Về trang chọn trường"], "before": ["← Quay lại chọn trường"]})
+    assert asked == [(1280, ["← Về trang chọn trường"]), (1280, ["← Quay lại chọn trường"])]
+    assert sum(1 for s in shots if s.get("focus")) == 2
+
+
+def test_a_close_up_shot_does_not_hide_the_measured_before_audit():
+    """Request #15: the focus entry shares (page, width) with the full shot; it must not replace the BEFORE audit with None."""
+    dim = {"contrast": ['a "x" 3.00'], "covered": [], "offscreen": [], "patch": []}
+    shots = [
+        {"phase": "after", "page": "/a.html", "width": 1280, "path": "a", "audit": dim},
+        {"phase": "after", "page": "/a.html", "width": 1280, "path": "af", "focus": True},
+        {"phase": "before", "page": "/a.html", "width": 1280, "path": "b", "audit": dim},
+        {"phase": "before", "page": "/a.html", "width": 1280, "path": "bf", "focus": True},
+    ]
+    assert verify.visual_regressions(shots) == []

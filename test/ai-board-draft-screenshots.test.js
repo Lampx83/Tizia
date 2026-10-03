@@ -117,7 +117,7 @@ test('screenshot route: worker key + live lease, PNG only, per-image cap', async
     const big = Buffer.concat([PNG, Buffer.alloc(MAX_SHOT_BYTES)]);
     const tooBig = await f.worker(url, { ...body, images: [shot({ png_base64: big.toString('base64') })] }, SHOTS_TYPE);
     assert.equal(tooBig.status, 413);
-    assert.equal((await f.worker(url, { ...body, images: Array(9).fill(shot()) }, SHOTS_TYPE)).status, 400);
+    assert.equal((await f.worker(url, { ...body, images: Array(17).fill(shot()) }, SHOTS_TYPE)).status, 400);
     assert.equal((await f.worker(url, payload)).status, 415); // application/json: sai loại, không nhận
     assert.equal(fs.readdirSync(f.uploadsDir).length, 0, 'không ghi file nào khi bị từ chối');
     assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM request_messages').get().n, 0);
@@ -205,5 +205,23 @@ test('the request list offers "Thử cách khác" after one failed run; the pend
     }
     const capped = await f.post('/api/requests/1/retry', {}, { 'x-test-user': '1' });
     assert.equal(capped.status, 429);
+  } finally { f.close(); }
+});
+
+test('several changed pages: up to 16 images, and a close-up of the changed element is named as such', async () => {
+  const f = await fixture();
+  try {
+    const { ticket, body } = await f.cycle(null, 1);
+    const url = `/api/ai-board/worker/tickets/${ticket.id}/screenshots`;
+    const images = [
+      shot({ page: '/a.html', phase: 'before', focus: true }), shot({ page: '/a.html' }),
+      ...Array.from({ length: 10 }, (_, i) => shot({ page: `/p${i}.html`, width: 1280 })),
+    ];
+    const res = await f.worker(url, { ...body, images }, SHOTS_TYPE);
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).stored, 12);
+    const atts = JSON.parse(f.db.prepare('SELECT attachments FROM request_messages').get().attachments);
+    assert.equal(atts[0].name, 'Trước · vùng thay đổi · /a.html');
+    assert.equal(atts[1].name, 'Sau · 1280px · /a.html');
   } finally { f.close(); }
 });
