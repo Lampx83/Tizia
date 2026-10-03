@@ -48,18 +48,18 @@ Phiên này thử `git merge` để land việc tồn vào `main` và **bị mô
 > `Permission for this action was denied by the Claude Code auto mode classifier.`
 > `Reason: [Merge Without Review].`
 
-Hệ quả đã xảy ra thật — **hai phiên liền** đã làm xong, đã kiểm thử, nhưng **đứng lại trên nhánh**:
+Hệ quả đã xảy ra thật. Đo lúc đầu phiên (`origin/main` = `2c67f77`) có **hai** phiên làm xong, kiểm
+thử xong nhưng **đứng lại trên nhánh**; đo lại cuối phiên (`origin/main` = `a1d7704`) còn **một**:
 
-| Phiên | Nhánh | Nội dung đang treo |
-|---|---|---|
-| 2026-10-01 (79) | `origin/claude/brave-keller-u5jlz4` · **PR #111 còn mở** | Sửa chẩn đoán **tự mâu thuẫn** của preflight (`diagnoseDeploy`) |
-| 2026-10-02 (80) | `origin/claude/brave-keller-iwlmi6` | Mục CHANGELOG phiên 80 |
+| Phiên | Nhánh | Nội dung | Trạng thái cuối phiên |
+|---|---|---|---|
+| 2026-10-01 (79) | `origin/claude/brave-keller-u5jlz4` · **PR #111 còn mở** | Sửa chẩn đoán **tự mâu thuẫn** của preflight (`diagnoseDeploy`) | ❌ **vẫn treo** |
+| 2026-10-02 (80) | `origin/claude/brave-keller-iwlmi6` | Mục CHANGELOG phiên 80 | ✅ đã lên `main` (`a1d7704`) |
 
 Đây đúng cái bệnh `ROUTINE.md` §Git được viết lại để diệt ("6 PR treo hàng tháng"; PR #83 treo 1
 tháng với nội dung học liệu thật). **Nhưng không lệnh nào trong routine đo nó** — nên nó **vô hình**:
-preflight hôm qua và hôm nay vẫn in `✅ sạch / hết việc dự phòng` trong khi hai phiên việc nằm đó
-không ai thấy. Phiên hôm nay sửa đúng chỗ đó: thêm **mục ③ `VIỆC PHIÊN TRƯỚC — ĐÃ LÊN origin/main
-CHƯA?`** vào preflight.
+preflight vẫn in `✅ sạch / hết việc dự phòng` trong khi việc nằm đó không ai thấy. Phiên hôm nay sửa
+đúng chỗ đó: thêm **mục ③ `VIỆC PHIÊN TRƯỚC — ĐÃ LÊN origin/main CHƯA?`** vào preflight.
 
 Đo bằng **CHANGELOG, không bằng số commit**: `ROUTINE.md` §Git nói CHANGELOG là "bản ghi **duy
 nhất**" ⇒ một phiên coi là đã lên khi **mục ngày** của nó có trên `origin/main`. Khoá theo **ngày**
@@ -69,10 +69,20 @@ remote khác**, vì việc treo thường nằm ở nhánh của phiên đó ch�
 
 | Chỉ số | Trước | Sau |
 |---|---|---|
-| Phiên treo mà preflight **báo được** | **0** / 2 đang treo | **2** / 2 (`2026-10-01`, `2026-10-02`) |
-| Nhánh giữ việc treo được **nêu tên** | **0** | **2** (`…u5jlz4`, `…iwlmi6`) |
+| Phiên treo mà preflight **báo được** | **0** (không có bậc đo) | **đúng số thật** — 2/2 lúc đầu phiên, 1/1 cuối phiên |
+| Nhánh giữ việc treo được **nêu tên** | **0** | **có** (`origin/claude/brave-keller-u5jlz4`) |
 | Trạng thái mục ③ phân biệt được | **0** (không có mục ③) | **4** (sạch · treo+tên nhánh · không đo được · bỏ qua mục của chính hôm nay) |
+| Độ mới của `origin/main` khi kết luận | *không kiểm* | **fetch lại trước khi đo**, và nói rõ `vừa fetch mới` / `ref cục bộ, có thể cũ` |
 | Kết luận "hết việc" có nêu việc cần người bấm nút | **không** | **có** |
+
+#### Chính bộ đo mới tự bắt lỗi của mình — ngay trong phiên
+
+Bản đầu chỉ đọc ref `origin/main` **cục bộ**. Ref đó là ảnh chụp lúc fetch lần cuối và **cũ đi trong
+lúc phiên đang chạy**: đầu phiên `origin/main` = `2c67f77` ⇒ mục ③ báo `2026-10-02` đang treo; giữa
+phiên `main` nhảy lên `a1d7704` (đã có `2026-10-02`) ⇒ **báo cáo thành sai mà không ai biết**. Một bộ
+đo chuyên bắt việc treo thì **không được tự báo treo nhầm**. Đã sửa: `unlandedWork()` nhận cờ
+`allowNet`, **fetch lại `origin/main` trước khi đo** (tôn trọng `--no-net`), và **in ra** ref vừa mới
+hay có thể cũ. Con số trong mục này là số **sau** khi sửa, đo lại cuối phiên.
 
 ### Sửa trùng số phiên
 
@@ -84,7 +94,7 @@ Mục `2026-10-02` đang mang **Phiên 79**, nhưng `2026-10-01` (PR #111, chưa
 
 | File | Thay đổi |
 |---|---|
-| `scripts/ai-board-preflight.mjs` | Thêm hàm `unlandedWork()` (chỉ đọc git, nuốt mọi lỗi) + mục in **③ `VIỆC PHIÊN TRƯỚC — ĐÃ LÊN origin/main CHƯA?`**; kết luận cũ `③` → `④`, và nhánh "cả ba bậc đều sạch" nay nhắc luôn số phiên đang treo. **Không** đụng logic đo hộp thư, **không** đụng bậc thang 1/2/3. |
+| `scripts/ai-board-preflight.mjs` | Thêm hàm `unlandedWork(allowNet)` (chỉ đọc git + `fetch origin main`, nuốt mọi lỗi) + mục in **③ `VIỆC PHIÊN TRƯỚC — ĐÃ LÊN origin/main CHƯA?`**; kết luận cũ `③` → `④`, và nhánh "cả ba bậc đều sạch" nay nhắc luôn số phiên đang treo. **Không** đụng logic đo hộp thư, **không** đụng bậc thang 1/2/3. |
 | `public/CHANGELOG-eduverse.md` | Mục này; đánh lại `2026-10-02` từ Phiên 79 → **80**. |
 | `ai-board/inbox-status.json` | Do preflight tự ghi: `consecutive_failures` 18 → **19**, `last_checked` → `2026-10-03`. |
 
@@ -102,6 +112,8 @@ Không sửa `server/**`, `public/js/engine/**`, schema, auth, routing. Không c
     ngày khác chưa lên main (`2026-10-05` giả định) → **bị báo** ⇒ guard `d !== TODAY` đúng;
   - **xoá ref `origin/main`** → in `(không đo được) … chạy git fetch origin main rồi đo lại`, **không
     đoán bừa**.
+- ✅ Hai đường làm mới ref: có mạng → in `(vừa fetch mới)`; `--no-net` → in `(ref cục bộ, có thể cũ…)`
+  và **không** gọi mạng.
 - ✅ Chạy lại preflight thật trên production: mục ①②④ in **không đổi** so với trước khi sửa (chỉ thêm
   mục ③) ⇒ không làm hỏng phần đang chạy đúng.
 - ✅ `ai-board/inbox-status.json` **không bị nhiễm** bởi các lần chạy thử (chạy thử trong clone riêng
@@ -114,9 +126,10 @@ Không sửa `server/**`, `public/js/engine/**`, schema, auth, routing. Không c
 1. **Đặt `AI_BOARD_KEY`** (`openssl rand -hex 32`) trên production **rồi redeploy nhánh
    `feat/postgres-migration`** — bế tắc **19 ngày**. Không tự làm: secret + redeploy nhánh production
    vượt ngưỡng "rủi ro thấp".
-2. **Merge PR #111** (phiên 79) và nhánh `claude/brave-keller-iwlmi6` (phiên 80 + 81) vào `main` —
+2. **Merge PR #111** (phiên 79, treo từ 2026-10-01) **và PR #112** (phiên 81, phiên này) vào `main` —
    routine **không merge được**: `git merge` bị chặn `[Merge Without Review]`. Không lách, báo đúng
-   nguyên văn theo `ROUTINE.md` §Git.
+   nguyên văn theo `ROUTINE.md` §Git. Hai PR đụng cùng `scripts/ai-board-preflight.mjs` nhưng **khác
+   hunk** (PR #111 sửa trong khối leo thang; PR #112 thêm hàm + mục in mới).
 
 ---
 

@@ -171,7 +171,7 @@ function tier3AnswerBias() {
 //
 // Chỉ đọc; mọi lỗi git đều nuốt và báo "không đo được" — đây là công cụ chẩn
 // đoán, không phải cổng CI.
-function unlandedWork() {
+function unlandedWork(allowNet) {
   const git = (args) => {
     try {
       return execFileSync('git', args, {
@@ -180,6 +180,19 @@ function unlandedWork() {
       }).trim();
     } catch { return null; }
   };
+
+  // Làm mới ref TRƯỚC khi đo. BẮT BUỘC, không phải tối ưu: ref `origin/main`
+  // trong clone là ảnh chụp lúc fetch lần cuối, và nó CŨ ĐI trong lúc phiên
+  // đang chạy. Đo thật phiên 81 — chính phiên thêm bậc đo này: đầu phiên
+  // origin/main = 2c67f77 nên mục ③ báo 2026-10-02 đang treo; giữa phiên
+  // main nhảy lên a1d7704 (đã có 2026-10-02) ⇒ báo cáo thành SAI mà không ai
+  // biết. Một bộ đo chuyên bắt việc treo thì không được tự báo treo nhầm.
+  let refState = 'ref cục bộ, có thể cũ — chạy `git fetch origin main` rồi đo lại';
+  if (allowNet) {
+    refState = git(['fetch', '--quiet', 'origin', 'main']) === null
+      ? 'KHÔNG fetch được (lỗi mạng) ⇒ đang dùng ref cục bộ, có thể cũ'
+      : 'vừa fetch mới';
+  }
 
   if (git(['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main']) === null) {
     return { measurable: false, note: 'clone này không có ref origin/main — chạy `git fetch origin main` rồi đo lại.' };
@@ -225,6 +238,7 @@ function unlandedWork() {
   return {
     measurable: true,
     mainSha: git(['rev-parse', '--short', 'origin/main']),
+    refState,
     head: git(['rev-parse', '--abbrev-ref', 'HEAD']) || 'HEAD',
     ahead: aheadRaw === null ? null : Number(aheadRaw),
     stranded,
@@ -264,12 +278,12 @@ if (!t3.clean && t3.skewed?.length) {
   if (t3.anomalies) line(`            → ${t3.anomalies} câu dị dạng (không đủ 4 lựa chọn)`);
 }
 
-const landed = unlandedWork();
+const landed = unlandedWork(!NO_NET);
 line('\n③ VIỆC PHIÊN TRƯỚC — ĐÃ LÊN origin/main CHƯA?');
 if (!landed.measurable) {
   line(`   (không đo được) ${landed.note}`);
 } else {
-  line(`   origin/main = ${landed.mainSha} · nhánh đang làm = ${landed.head}` +
+  line(`   origin/main = ${landed.mainSha} (${landed.refState}) · nhánh đang làm = ${landed.head}` +
        (landed.ahead === null ? '' : ` (+${landed.ahead} commit chưa lên main)`));
   if (landed.stranded.length === 0) {
     line('   ✅ sạch — mọi phiên trước đã có mục CHANGELOG trên origin/main.');
