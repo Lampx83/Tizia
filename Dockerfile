@@ -9,11 +9,14 @@ RUN npm install --omit=dev --no-audit --no-fund
 
 # ---- Runtime: slim image ----
 FROM node:20-alpine
+# pg_dump / pg_restore for the admin backups. Major version = the postgres image major (compose: postgres:17).
+RUN apk add --no-cache postgresql17-client
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=8041 \
     HOST=0.0.0.0 \
-    DATA_DIR=/data
+    DATA_DIR=/data \
+    BACKUP_DIR=/data/backups
 
 # Tizia (Express + SQLite + WebSocket)
 COPY --from=tizia-deps /app/node_modules ./node_modules
