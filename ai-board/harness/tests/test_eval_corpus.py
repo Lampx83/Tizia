@@ -153,6 +153,7 @@ def test_held_out_per_case_detail_never_leaves_its_protected_folder_and_reports_
 
     models = GoldModels(root, 8, wrong_level=1, garbage_level=2)  # có lượt đạt, lượt hỏng, lượt bị chặn ở cả hai split
     assert full(root, "--split", "all", "--cases", "6", seed=8, models=models) == 0
+    assert eval_run.main(["recall", "--root", str(root), "--label", "leakcheck"]) in (0, 2)  # recall quét corpus dưới root: không được kéo held-out ra
     held = cases_of(root, 8, "heldout")
     secrets = {c[k] for c in held for k in ("id", "key", "title", "detail")}  # chi tiết riêng từng case held-out: định danh, chữ request, gold
     secrets |= {part for c in held for need in c["check"].get("required", []) for part in need if len(part) >= 20}  # câu thân khối, không phải tiêu đề 2 từ
