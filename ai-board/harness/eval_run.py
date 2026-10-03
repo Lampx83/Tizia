@@ -1,7 +1,11 @@
 """Eval runner: corpus sinh theo seed → từng (case, lần lặp) qua eval_gold.run_case → báo cáo.
 
     python eval_run.py quick --seed 7 [--cases 8] [--repeats 3] [--budget-minutes M] [--baseline report.json] [--root DIR]
+    python eval_run.py corpus --seed 7 [--root DIR]    # sinh corpus trang thật + manifest (cần chữ request đóng băng, xem eval_corpus)
+    python eval_run.py full --seed 7 [--split dev|heldout|all] [--cases N] [...như quick]
 
+full: held-out = dòng kết quả thô, case, chữ request chỉ nằm dưới <root>/heldout/ (rule deny Read của project); báo cáo chỉ có điểm
+tổng hợp split=heldout. Mặc định --split dev: held-out chỉ chạy khi chọn rõ, và chỉ mở chi tiết khi tuyên bố kết quả cuối chu kỳ.
 quick = fast tier: cổng 3 + oracle gold trên repo scratch, không microVM; số liệu gắn nhãn fast tier, KHÔNG trộn vào ship
 rate chính thức. Observer-only: không nhận input giữa chừng, chỉ user/scheduler khởi động. Dữ liệu ở --root
 (env AI_BOARD_EVAL_DIR; mặc định .scratch/ai-board-eval/, gitignored). Exit: 0 ổn, 1 thay đổi bị từ chối (hồi quy), 2 lỗi cấu hình/mốc không so được.
@@ -179,7 +183,8 @@ def verdict(groups: dict, baseline: dict | None, meta: dict, cut_short: bool) ->
 
 
 def build_report(meta: dict, cases: list[dict], rows: list[dict], total: int, cut_short: bool, baseline: dict | None) -> dict:
-    kinds = sorted({c["kind"] for c in cases})
+    held = [r for r in rows if r.get("split") == "heldout"]
+    rows_all, rows = rows, [r for r in rows if r.get("split") != "heldout"]  # held-out chỉ góp điểm tổng hợp, không có chi tiết nào
     alive, funnel = rows, []
     for name, passes in STAGES:
         passed = [r for r in alive if passes(r)]
@@ -187,7 +192,7 @@ def build_report(meta: dict, cases: list[dict], rows: list[dict], total: int, cu
                        "rate": round(100 * len(passed) / len(alive), 1) if alive else None})
         alive = passed
     per_case = []
-    for case in cases:
+    for case in (c for c in cases if c.get("split") != "heldout"):
         mine = [r for r in rows if r["case"] == case["id"]]
         per_case.append({"id": case["id"], "kind": case["kind"], "trials": len(mine), "passed": sum(r["oracle"] for r in mine),
                          "reached": {"gate3": len(mine), "gold_oracle": sum(r["gate_passed"] for r in mine)}})
@@ -197,9 +202,9 @@ def build_report(meta: dict, cases: list[dict], rows: list[dict], total: int, cu
         if cls := failure_class(row):
             classes[cls] = classes.get(cls, 0) + 1
     cells = [(v if k == "kind" else f"{k}={v}", [r for r in rows if r.get(k) == v]) for k in CELL for v in sorted({r[k] for r in rows if k in r})]
-    groups = {name: group_stats(sub) for name, sub in [("all", rows)] + cells if sub}
+    groups = {name: group_stats(sub) for name, sub in [("all", rows_all)] + cells + [("split=heldout", held)] if sub}
     return {**meta, "tier_label": "fast tier: không trộn vào ship rate chính thức", "official_ship_rate": None,
-            "trials_done": len(rows), "trials_total": total, "cut_short": cut_short,
+            "trials_done": len(rows_all), "trials_total": total, "cut_short": cut_short,
             "cases": per_case, "groups": groups, "funnel": funnel, "failure_classes": classes,
             "cost": {"gpu_s_per_success": round(sum(r["gpu_s"] for r in rows) / wins, 1) if wins else None,
                      "wall_s_per_success": round(sum(r["wall_s"] for r in rows) / wins, 1) if wins else None},
@@ -215,12 +220,13 @@ def render(rep: dict) -> str:
         lines.append(f"{c['id']} {c['kind']:7} đạt {c['passed']}/{c['trials']}  cổng 3 qua {c['reached']['gold_oracle']}/{c['reached']['gate3']}"
                      f" → oracle gold qua {c['passed']}/{c['reached']['gold_oracle']}")
     lines += [f"nhóm {name:8} {g['passed']}/{g['trials']} = {g['rate']}% (Wilson 95%: {g['lo']}-{g['hi']}%)" for name, g in rep["groups"].items()]
-    lines += [f"phễu {f['stage']}: {f['passed']}/{f['reached']} ({f['rate']}%)" for f in rep["funnel"]]
-    cost = rep["cost"]
-    lines.append("chi phí mỗi lượt đạt (tổng mọi lượt / số lượt đạt): "
-                 + (f"{cost['gpu_s_per_success']} GPU-s, {cost['wall_s_per_success']} s thực" if cost["gpu_s_per_success"] is not None
-                    else "chưa có lượt đạt"))
-    lines.append("lớp lỗi: " + (", ".join(f"{k}={v}" for k, v in sorted(rep["failure_classes"].items())) or "không có"))
+    if rep["funnel"][0]["reached"]:  # run chỉ có held-out thì không có chi tiết để in
+        lines += [f"phễu {f['stage']}: {f['passed']}/{f['reached']} ({f['rate']}%)" for f in rep["funnel"]]
+        cost = rep["cost"]
+        lines.append("chi phí mỗi lượt đạt (tổng mọi lượt / số lượt đạt): "
+                     + (f"{cost['gpu_s_per_success']} GPU-s, {cost['wall_s_per_success']} s thực" if cost["gpu_s_per_success"] is not None
+                        else "chưa có lượt đạt"))
+        lines.append("lớp lỗi: " + (", ".join(f"{k}={v}" for k, v in sorted(rep["failure_classes"].items())) or "không có"))
     v = rep["verdict"]
     lines.append(f"kết luận hồi quy: {v['status'].upper()}" + (f" ({v['reason']})" if v.get("reason") else ""))
     lines += [f"  {name}: mốc {d['baseline']}%, cận trên {d['upper']}%, tụt {d['drop']} điểm" + (f" > {v['max_drop']} → TỪ CHỐI" if d["regressed"] else "")
@@ -296,23 +302,25 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
     if meta_path.exists() and {k: json.loads(meta_path.read_text(encoding="utf-8")).get(k) for k in meta} != meta:
         print(f"[eval] {run_dir} đã có run khác cấu hình (corpus/repeats/model); đổi seed hoặc --root", file=sys.stderr)
         return 2
-    done = load_done(run_dir / "results.jsonl")
+    sink = {"dev": run_dir / "results.jsonl", "heldout": root / eval_corpus.VAULT / "runs" / name / "results.jsonl"}  # held-out: chỉ ở vault
+    done = {**load_done(sink["dev"]), **load_done(sink["heldout"])}
     started, total, cut_short = clock(), len(cases) * args.repeats, False
     meta_path.write_text(json.dumps({**meta, "status": "running"}, indent=2), encoding="utf-8")
-    with (run_dir / "results.jsonl").open("a", encoding="utf-8") as out:
-        for repeat in range(1, args.repeats + 1):
-            for case in cases:
-                if (case["id"], repeat) in done:
-                    continue
-                if args.budget_minutes is not None and clock() - started >= args.budget_minutes * 60:
-                    cut_short = True
-                    break
-                row = {**run_case(case["id"], record(case), model, deps), **{k: case[k] for k in CELL if k in case}, "repeat": repeat}
-                done[(case["id"], repeat)] = row
-                out.write(json.dumps(row, ensure_ascii=False) + "\n")
-                out.flush()
-            if cut_short:
+    for repeat in range(1, args.repeats + 1):
+        for case in cases:
+            if (case["id"], repeat) in done:
+                continue
+            if args.budget_minutes is not None and clock() - started >= args.budget_minutes * 60:
+                cut_short = True
                 break
+            row = {**run_case(case["id"], record(case), model, deps), **{k: case[k] for k in CELL if k in case}, "repeat": repeat}
+            done[(case["id"], repeat)] = row
+            path = sink[row.get("split", "dev")]
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as out:
+                out.write(json.dumps(row, ensure_ascii=False) + "\n")
+        if cut_short:
+            break
     rows = [done[(c["id"], r)] for r in range(1, args.repeats + 1) for c in cases if (c["id"], r) in done]
     meta_path.write_text(json.dumps({**meta, "status": "cut_short" if cut_short else "complete"}, indent=2), encoding="utf-8")
     rep = build_report(meta, cases, rows, total, cut_short, baseline)

@@ -24,6 +24,7 @@ CELLS = {"replace_text": (1, 2, 3, 4, 5), "insert_text": (1, 2, 3, 5), "css_colo
 EXTRA = (("replace_text", 1), ("css_color", 1))
 # held-out ~30% (18/60): loại + trang rời hẳn dev (không loại nào, trang nào xuất hiện ở cả hai); trang held-out = 30% số trang theo seed
 HELDOUT_TYPES = ("add_block", "change_link", "new_page")
+VAULT = "heldout"  # thư mục con của --root giữ mọi chi tiết từng case held-out (rule deny Read(/.scratch/ai-board-eval/heldout/**))
 PALETTE = {"đỏ": "#dc2626", "xanh dương": "#1d4ed8", "xanh lá": "#16a34a", "cam": "#ea580c", "tím": "#7c3aed",
            "hồng": "#db2777", "nâu": "#92400e"}
 SLUGS = "cam-on-gop-y gioi-thieu lien-he huong-dan hoi-dap thong-bao ve-chung-toi lich-hoc tai-lieu quy-dinh".split()
@@ -274,33 +275,44 @@ def text_sha(text: dict) -> str:
 
 
 def write_corpus(root: Path, seed: int, source) -> list[dict]:
-    """Corpus theo seed + commit ghim → <root>/corpus/full-s<seed>/{cases,manifest}.json (byte-identical khi sinh lại).
-    Chữ request (title/verify/detail) do người viết một lần trong corpus/texts.json theo key của case; code không bao giờ sinh hay
-    ghi đè chúng. Thiếu chữ → ghi texts-todo.json, raise. Chữ đổi so với manifest lần trước → raise (đổi cố ý: xóa manifest)."""
-    corpus = Path(root) / "corpus"
-    dest = corpus / f"full-s{seed}"
+    """Corpus theo seed + commit ghim → file ghi dưới <root>, byte-identical khi sinh lại; trả mọi case (dev + held-out) có chữ request.
+    Dev: corpus/{texts,texts-todo}.json, corpus/full-s<seed>/{cases,manifest}.json. Held-out: cùng cấu trúc dưới <root>/heldout/ (VAULT);
+    manifest công khai chỉ có số case, trang, loại của held-out.
+    Chữ request (title/verify/detail) do người viết một lần trong texts.json theo key của case; code không bao giờ sinh hay ghi đè chúng.
+    Thiếu chữ → ghi texts-todo.json, raise. Chữ đổi so với manifest lần trước → raise (đổi cố ý: xóa manifest)."""
+    root = Path(root)
+    base = {"dev": root / "corpus", "heldout": root / VAULT / "corpus"}
+    out = {side: base[side] / f"full-s{seed}" for side in base}
     cases = plan(seed, real_pages(source))
-    texts = json.loads((corpus / "texts.json").read_text(encoding="utf-8")) if (corpus / "texts.json").exists() else {}
-    if missing := [c for c in cases if c["key"] not in texts]:
-        corpus.mkdir(parents=True, exist_ok=True)
-        todo = [{k: c[k] for k in ("key", "level", "style", "types", "file", "spec")} for c in missing]
-        (corpus / "texts-todo.json").write_bytes(json.dumps(todo, ensure_ascii=False, indent=2).encode("utf-8"))
-        raise CorpusError(f"{len(missing)}/{len(cases)} case chưa có chữ đóng băng: viết vào {corpus / 'texts.json'} theo texts-todo.json")
-    cases = [{**c, **texts[c["key"]]} for c in cases]
+    home = {"dev": base["dev"], "heldout": root / VAULT}  # texts*.json: dev ở corpus/, held-out ở vault
+    texts = {side: json.loads((home[side] / "texts.json").read_text(encoding="utf-8")) if (home[side] / "texts.json").exists() else {}
+             for side in home}
+    missing = {side: [c for c in cases if c["split"] == side and c["key"] not in texts[side]] for side in home}
+    if any(missing.values()):
+        for side, part in missing.items():
+            home[side].mkdir(parents=True, exist_ok=True)
+            todo = [{k: c[k] for k in ("key", "level", "style", "types", "file", "spec")} for c in part]
+            (home[side] / "texts-todo.json").write_bytes(json.dumps(todo, ensure_ascii=False, indent=2).encode("utf-8"))
+        raise CorpusError(f"{sum(map(len, missing.values()))}/{len(cases)} case chưa có chữ đóng băng: viết vào texts.json theo "
+                          f"texts-todo.json (dev ở {home['dev']}, held-out ở {home['heldout']})")
+    cases = [{**c, **texts[c["split"]][c["key"]]} for c in cases]
     rows = [{**{k: c[k] for k in ("id", "key", "file", "types", "level", "style", "split", "page_bytes") if k in c},
-             "text_sha": text_sha(texts[c["key"]])} for c in cases]
-    sides = {side: [r for r in rows if r["split"] == side] for side in ("dev", "heldout")}
-    manifest = {"seed": seed, "base_sha": PIN,
-                "split": {side: {"cases": len(part), "pages": sorted({r["file"] for r in part}), "types": sorted({t for r in part for t in r["types"]})}
-                          for side, part in sides.items()},
-                "cases": rows}
-    if (dest / "manifest.json").exists():
-        before = {r["key"]: r["text_sha"] for r in json.loads((dest / "manifest.json").read_text(encoding="utf-8"))["cases"]}
-        if changed := [r["id"] for r in rows if before.get(r["key"], r["text_sha"]) != r["text_sha"]]:
-            raise CorpusError(f"chữ đóng băng đã bị sửa ở {changed}; muốn đổi cố ý thì xóa {dest / 'manifest.json'}")
-    dest.mkdir(parents=True, exist_ok=True)
-    (dest / "cases.json").write_bytes(json.dumps(cases, ensure_ascii=False, indent=2).encode("utf-8"))
-    (dest / "manifest.json").write_bytes(json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8"))
+             "text_sha": text_sha(texts[c["split"]][c["key"]])} for c in cases]
+    sides = {side: [r for r in rows if r["split"] == side] for side in home}
+    public = {"seed": seed, "base_sha": PIN, "cases": sides["dev"], "split": {
+        side: {"cases": len(part), "pages": sorted({r["file"] for r in part}), "types": sorted({t for r in part for t in r["types"]})}
+        for side, part in sides.items()}}
+    for side in home:
+        manifest = out[side] / "manifest.json"
+        if manifest.exists():
+            before = {r["key"]: r["text_sha"] for r in json.loads(manifest.read_text(encoding="utf-8"))["cases"]}
+            if changed := [r["id"] for r in sides[side] if before.get(r["key"], r["text_sha"]) != r["text_sha"]]:
+                raise CorpusError(f"chữ đóng băng đã bị sửa ở {changed}; muốn đổi cố ý thì xóa {manifest}")
+    for side in home:
+        out[side].mkdir(parents=True, exist_ok=True)
+        dump = lambda obj: json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")  # noqa: E731
+        (out[side] / "cases.json").write_bytes(dump([c for c in cases if c["split"] == side]))
+        (out[side] / "manifest.json").write_bytes(dump(public if side == "dev" else {"seed": seed, "cases": sides["heldout"]}))
     return cases
 
 
