@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 import { createAiBoardStore } from '../../server/ai-board/store.js';
 import { createAsyncAiBoardStore } from '../../server/ai-board/store-async.js';
 import { backends } from './ai-board-db.js';
-import * as syncAux from './aux-modules-sync.js';
-import * as asyncAux from './aux-modules-async.js';
+import * as syncAux from '../../server/ai-board/aux-sync.js';
+import * as asyncAux from '../../server/ai-board/aux-async.js';
 import { resetSeq } from './ai-board-scenarios.js';
 
 const TABLES = [

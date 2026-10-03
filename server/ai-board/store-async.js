@@ -1670,6 +1670,8 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
 
   return {
     db,
+    queryGet: (sql, params = []) => db.get(sql, params),
+    queryAll: (sql, params = []) => db.all(sql, params),
     rerunGate,
     rerunStage,
     // A request with a root ticket takes its status from the root (trigger 017): only a legacy request may be reopened directly.

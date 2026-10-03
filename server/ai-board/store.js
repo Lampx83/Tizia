@@ -2142,6 +2142,9 @@ export function createAiBoardStore(db, hooks = {}) {
 
   return {
     db,
+    // read helpers shared with store-async.js, so routes need no knowledge of the backend
+    queryGet: (sql, params = []) => db.prepare(sql).get(...params),
+    queryAll: (sql, params = []) => db.prepare(sql).all(...params),
     rerunGate,
     rerunStage,
     // A request with a root ticket takes its status from the root (trigger 017): only a legacy request may be reopened directly.
