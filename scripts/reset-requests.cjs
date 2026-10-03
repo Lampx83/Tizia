@@ -3,6 +3,12 @@
 //   docker cp scripts/reset-requests.cjs tizia-dev:/app/reset-requests.cjs
 //   docker exec tizia-dev node /app/reset-requests.cjs        (dry run)
 //   docker exec tizia-dev node /app/reset-requests.cjs --yes  (deletes)
+// AI_BOARD_DB=postgres: requests / board tables live in PostgreSQL, this SQLite file no longer holds them. Stop instead of
+// silently reading or deleting stale rows.
+if (String(process.env.AI_BOARD_DB || '').trim().toLowerCase() === 'postgres') {
+  console.error('[reset-requests] AI_BOARD_DB=postgres: clear the board in PostgreSQL (TRUNCATE requests, request_messages and the ai_* tables) instead; this script only knows the SQLite file.');
+  process.exit(2);
+}
 const Database = require('better-sqlite3');
 const confirmed = process.argv.includes('--yes');
 const db = new Database(process.argv.find(a => a.endsWith('.db')) || '/data/tizia.db', {

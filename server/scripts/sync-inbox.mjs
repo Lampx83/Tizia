@@ -8,6 +8,13 @@
  * Yêu cầu 'done'/'rejected' bị bỏ qua.
  */
 
+// AI_BOARD_DB=postgres: requests / board tables live in PostgreSQL, this SQLite file no longer holds them. Stop instead of
+// silently reading or deleting stale rows.
+if (String(process.env.AI_BOARD_DB || '').trim().toLowerCase() === 'postgres') {
+  console.error('[sync-inbox] AI_BOARD_DB=postgres: read the inbox from GET /api/ai-board/inbox (x-ai-board-key) instead; this script only knows the SQLite file.');
+  process.exit(2);
+}
+
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
