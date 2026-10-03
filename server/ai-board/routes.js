@@ -3,6 +3,7 @@ import express from 'express';
 import { ADMIN_REQUEST_STATUSES, assertConfirmed, LEASE_MS, LIMITS, PlanGuardrailError, RequestValidationError, WorkerContractError } from './store.js';
 import { afterVerdict, retryRequest, retryState, saveDraftScreenshots, SHOTS_BODY_LIMIT, SHOTS_TYPE } from './drafts.js';
 import { checkIntake, readOnlyVerificationText, recordIntakeFlags, recordIntakeRejection } from './intake-guard.js';
+import { checkLanguage } from './language-guard.js';
 import { classifyRequest as classifyWithModel, recordClassification } from './classifier.js';
 import { clarifyFromPhase, resolveClarify } from './clarity-rules.js';
 import { activeChats } from './chat-activity.js';
@@ -44,6 +45,8 @@ export function attachAiBoardRequestRoutes(router, {
     const ownerDomain = req.user.role === 'admin'
       ? String(body.domain || '').trim()
       : req.user.enrolled_domain;
+    const language = checkLanguage(body.title, body.detail);
+    if (language.block) return res.status(422).json({ error: 'unsupported_language', message: language.message });
     const intake = checkIntake(body.title, body.detail);
     if (intake.block) {
       try { recordIntakeRejection(db, req.user.id, intake); } catch (error) { return next(error); }

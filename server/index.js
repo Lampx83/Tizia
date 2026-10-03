@@ -56,6 +56,7 @@ import { grantSkillsForScenario, plugin as skillsPlugin } from './skills.js';
 import { securityHeaders, csrf, requireStrictCsrf, apiLimiter, sensitiveAuthLimiter, plugin as securityPlugin } from './contexts/security/index.js';
 import { createAiBoardStore } from './ai-board/store.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from './ai-board/routes.js';
+import { checkLanguage } from './ai-board/language-guard.js';
 import { selfWinNotifier } from './ai-board/self-improve.js';
 import { draftNotifier } from './ai-board/drafts.js';
 import { shotBackendFromEnv, shotProxy, startShotRetention } from './ai-board/shot-storage.js';
@@ -1242,6 +1243,8 @@ r.post('/api/requests/:id/messages', requireAuth, (req, res) => {
   if (!body) return res.status(400).json({ error: 'empty' });
   const attachments = Array.isArray(req.body?.attachments) ? req.body.attachments : null;
   const role = isOwner ? 'student' : 'admin';
+  const language = role === 'student' ? checkLanguage(body) : { block: false };
+  if (language.block) return res.status(422).json({ error: 'unsupported_language', message: language.message });
   const msg = addRequestMessage({ request_id: reqRow.id, role, author_name: me, body, attachments });
   if (role === 'student') aiBoardStore.invalidatePlanForRequest(reqRow.id, 'requester clarification');
   // Board requests keep the status of their root ticket (a terminal root is never reopened by a reply — a new
