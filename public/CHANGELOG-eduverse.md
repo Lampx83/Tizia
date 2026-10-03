@@ -4,7 +4,123 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
-## 2026-10-02 — Phiên 79 · **Kết luận: không có việc nào đo được** — hộp thư chết ngày thứ 18, cả ba bậc dự phòng sạch
+## 2026-10-03 — Phiên 81 · Hộp thư chết ngày thứ **19** · **không có yêu cầu nào để xử lý** · bít điểm mù: routine không đo được việc của chính nó có lên `main` hay chưa
+
+**Kết luận một dòng (theo `ai-board/ROUTINE.md` §2b):** hộp thư yêu cầu **không đọc được** (ngày hỏng
+liên tiếp **thứ 19**, từ `2026-09-13`), `ai-board/inbox.json` **rỗng** (`items: []`), **0 issue** mở
+trên GitHub ⇒ **không có yêu cầu nào của sinh viên/học sinh để xử lý hay phản hồi**, và **không bịa
+việc**. Cả ba bậc dự phòng sạch thật. Việc duy nhất của phiên là **một sửa lỗi chẩn đoán đo được
+trước khi sửa**.
+
+### Hộp thư — request ID đã xử lý: **không có, và vì sao**
+
+`node scripts/ai-board-preflight.mjs` đo 6 endpoint trên `https://tizia.vn`:
+
+| Endpoint | Mã trả về |
+|---|---|
+| `/api/ai-board/inbox` | **401** `{"error":"unauthorized","needLogin":true}` |
+| `/api/requests`, `/api/public/requests`, `/api/board/inbox`, `/api/admin/requests`, `/api/ai-board/requests` | **401** (cùng thân phản hồi) |
+
+Đo lại **độc lập** bằng `curl` trực tiếp (3 endpoint đầu): cả ba **401 needLogin**, khớp preflight.
+`AI_BOARD_KEY` trong môi trường: **chưa có**. `node scripts/check-deployed-build.mjs`:
+`401 needLogin ⇒ auth gate chung nuốt request` — bản deploy **chưa có** `/api/ai-board/` trong
+`PUBLIC_PATH_PREFIXES`. Theo bảng chẩn đoán `ROUTINE.md` §2a ⇒ bản đang chạy **chưa có code PR #97**,
+tức **chưa redeploy**.
+
+Kênh yêu cầu thay thế cũng đã kiểm: **0** issue mở, không có yêu cầu người dùng nào ở đó.
+
+### Bậc thang dự phòng — con số đo thật, cả ba sạch
+
+| Bậc | Lệnh chứng minh | Kết quả hôm nay |
+|---|---|---|
+| 1 — Bài lí thuyết mồ côi / toàn vẹn học liệu | `node scripts/check-content-integrity.mjs` | **0 vấn đề** |
+| 2 — Môn dừng ở tuần 35 | `node scripts/ai-board-preflight.mjs` | **0 môn**. Quét lại độc lập: **141/141** file môn có `M(36,…)` |
+| 3 — Lệch phân bố đáp án | `node scripts/audit-answer-distribution.js` | **0 môn lệch**, **0 câu dị dạng**. **28.212** câu: A 24,8% · B 25,2% · C 25,3% · D 24,7% · χ²=**2,96** |
+
+**Đọc thẳng bảng phân bố** (đúng cảnh báo `ROUTINE.md` §2b — không tin chữ "sạch" của tiêu chí hẹp):
+môn lệch nhất `lop3:toan` (n=226) A 31,9 / B 29,2 / C 22,1 / D 16,8 — vị trí cao nhất **31,9%**
+(ngưỡng 60%), hai vị trí cao nhất gánh **61,1%** (ngưỡng 85%). Xa cả hai ngưỡng ⇒ **sạch thật**.
+
+### Lỗi thật bắt được trong phiên: routine không đo được việc của CHÍNH NÓ có lên `main` hay chưa
+
+Phiên này thử `git merge` để land việc tồn vào `main` và **bị môi trường routine CHẶN**, nguyên văn:
+
+> `Permission for this action was denied by the Claude Code auto mode classifier.`
+> `Reason: [Merge Without Review].`
+
+Hệ quả đã xảy ra thật — **hai phiên liền** đã làm xong, đã kiểm thử, nhưng **đứng lại trên nhánh**:
+
+| Phiên | Nhánh | Nội dung đang treo |
+|---|---|---|
+| 2026-10-01 (79) | `origin/claude/brave-keller-u5jlz4` · **PR #111 còn mở** | Sửa chẩn đoán **tự mâu thuẫn** của preflight (`diagnoseDeploy`) |
+| 2026-10-02 (80) | `origin/claude/brave-keller-iwlmi6` | Mục CHANGELOG phiên 80 |
+
+Đây đúng cái bệnh `ROUTINE.md` §Git được viết lại để diệt ("6 PR treo hàng tháng"; PR #83 treo 1
+tháng với nội dung học liệu thật). **Nhưng không lệnh nào trong routine đo nó** — nên nó **vô hình**:
+preflight hôm qua và hôm nay vẫn in `✅ sạch / hết việc dự phòng` trong khi hai phiên việc nằm đó
+không ai thấy. Phiên hôm nay sửa đúng chỗ đó: thêm **mục ③ `VIỆC PHIÊN TRƯỚC — ĐÃ LÊN origin/main
+CHƯA?`** vào preflight.
+
+Đo bằng **CHANGELOG, không bằng số commit**: `ROUTINE.md` §Git nói CHANGELOG là "bản ghi **duy
+nhất**" ⇒ một phiên coi là đã lên khi **mục ngày** của nó có trên `origin/main`. Khoá theo **ngày**
+(không theo cả dòng tiêu đề) để việc đánh lại số phiên không bị báo nhầm là treo. Quét **cả các nhánh
+remote khác**, vì việc treo thường nằm ở nhánh của phiên đó chứ không phải nhánh đang checkout
+(chính PR #111).
+
+| Chỉ số | Trước | Sau |
+|---|---|---|
+| Phiên treo mà preflight **báo được** | **0** / 2 đang treo | **2** / 2 (`2026-10-01`, `2026-10-02`) |
+| Nhánh giữ việc treo được **nêu tên** | **0** | **2** (`…u5jlz4`, `…iwlmi6`) |
+| Trạng thái mục ③ phân biệt được | **0** (không có mục ③) | **4** (sạch · treo+tên nhánh · không đo được · bỏ qua mục của chính hôm nay) |
+| Kết luận "hết việc" có nêu việc cần người bấm nút | **không** | **có** |
+
+### Sửa trùng số phiên
+
+Mục `2026-10-02` đang mang **Phiên 79**, nhưng `2026-10-01` (PR #111, chưa land) **cũng** mang
+**Phiên 79** — hai phiên cùng số vì cả hai đều không lên `main` nên không phiên nào thấy phiên kia.
+Đánh lại theo ngày: `10-01` = **79**, `10-02` = **80**, hôm nay = **81**.
+
+### Thay đổi từng file
+
+| File | Thay đổi |
+|---|---|
+| `scripts/ai-board-preflight.mjs` | Thêm hàm `unlandedWork()` (chỉ đọc git, nuốt mọi lỗi) + mục in **③ `VIỆC PHIÊN TRƯỚC — ĐÃ LÊN origin/main CHƯA?`**; kết luận cũ `③` → `④`, và nhánh "cả ba bậc đều sạch" nay nhắc luôn số phiên đang treo. **Không** đụng logic đo hộp thư, **không** đụng bậc thang 1/2/3. |
+| `public/CHANGELOG-eduverse.md` | Mục này; đánh lại `2026-10-02` từ Phiên 79 → **80**. |
+| `ai-board/inbox-status.json` | Do preflight tự ghi: `consecutive_failures` 18 → **19**, `last_checked` → `2026-10-03`. |
+
+Không sửa `server/**`, `public/js/engine/**`, schema, auth, routing. Không commit secret. Không
+`shuffle-answers.js`. Không force-push.
+
+### Ghi chú kiểm thử
+
+- ✅ `node --check scripts/ai-board-preflight.mjs` — **PASS** (file `.js`/`.mjs` **duy nhất** đã sửa).
+- ✅ **Kiểm tra runtime, không chỉ cú pháp** (`ROUTINE.md` §Kiểm thử #3) — dựng clone cô lập trong
+  scratchpad, chạy preflight thật, xác nhận **cả 4** nhánh của mục ③:
+  - treo thật → báo đúng **2** phiên + **tên 2 nhánh** giữ chúng;
+  - không treo (working tree = `origin/main`) → `✅ sạch`, **không báo động giả**;
+  - mục của **chính hôm nay** (`2026-10-03`) trong CHANGELOG → **không** bị báo treo, trong khi mục
+    ngày khác chưa lên main (`2026-10-05` giả định) → **bị báo** ⇒ guard `d !== TODAY` đúng;
+  - **xoá ref `origin/main`** → in `(không đo được) … chạy git fetch origin main rồi đo lại`, **không
+    đoán bừa**.
+- ✅ Chạy lại preflight thật trên production: mục ①②④ in **không đổi** so với trước khi sửa (chỉ thêm
+  mục ③) ⇒ không làm hỏng phần đang chạy đúng.
+- ✅ `ai-board/inbox-status.json` **không bị nhiễm** bởi các lần chạy thử (chạy thử trong clone riêng
+  + guard `last_checked === TODAY`): `consecutive_failures` đúng **19**, đúng **1** mục lịch sử cho
+  `2026-10-03`.
+- Không có quiz/bài lí thuyết mới ⇒ không có mục kiểm thử nội dung nào phải chạy.
+
+### ⚠️ Việc cần người bấm nút — phiên tự động KHÔNG được tự làm
+
+1. **Đặt `AI_BOARD_KEY`** (`openssl rand -hex 32`) trên production **rồi redeploy nhánh
+   `feat/postgres-migration`** — bế tắc **19 ngày**. Không tự làm: secret + redeploy nhánh production
+   vượt ngưỡng "rủi ro thấp".
+2. **Merge PR #111** (phiên 79) và nhánh `claude/brave-keller-iwlmi6` (phiên 80 + 81) vào `main` —
+   routine **không merge được**: `git merge` bị chặn `[Merge Without Review]`. Không lách, báo đúng
+   nguyên văn theo `ROUTINE.md` §Git.
+
+---
+
+## 2026-10-02 — Phiên 80 · **Kết luận: không có việc nào đo được** — hộp thư chết ngày thứ 18, cả ba bậc dự phòng sạch
 
 **Kết luận một dòng (theo `ai-board/ROUTINE.md` §2b):** hộp thư yêu cầu **không đọc được** (ngày hỏng
 liên tiếp **thứ 18**, từ `2026-09-13`) và **cả ba bậc việc dự phòng đều sạch** ⇒ phiên này **không xử

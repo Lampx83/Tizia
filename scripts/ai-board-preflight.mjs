@@ -156,6 +156,82 @@ function tier3AnswerBias() {
            count: skewed.length, clean: skewed.length === 0 && anomalies === 0, skewed, anomalies };
 }
 
+// ── 4. Việc của các phiên TRƯỚC đã lên origin/main chưa? ─────
+// VÌ SAO CÓ BẬC ĐO NÀY — đo thật phiên 81 (2026-10-03): `git merge` vào `main`
+// bị môi trường routine CHẶN ('Merge Without Review'), nên việc đã làm xong và
+// đã kiểm thử của HAI phiên liền (2026-10-01 → PR #111, 2026-10-02) đứng lại
+// trên nhánh mà không ai thấy. Đúng cái bệnh ROUTINE.md §Git được viết lại để
+// diệt ("6 PR treo hàng tháng", PR #83 treo 1 tháng) — nhưng KHÔNG lệnh nào
+// trong routine đo nó, nên nó vô hình: preflight vẫn in "✅ sạch / hết việc".
+//
+// Đo bằng CHANGELOG, không bằng số commit: ROUTINE.md §Git nói CHANGELOG là
+// "bản ghi DUY NHẤT" của routine ⇒ một phiên coi là ĐÃ LÊN khi mục ngày của nó
+// có mặt trong CHANGELOG trên origin/main. Khoá theo NGÀY (không theo cả dòng
+// tiêu đề) để việc đánh lại số phiên không bị báo nhầm là treo.
+//
+// Chỉ đọc; mọi lỗi git đều nuốt và báo "không đo được" — đây là công cụ chẩn
+// đoán, không phải cổng CI.
+function unlandedWork() {
+  const git = (args) => {
+    try {
+      return execFileSync('git', args, {
+        cwd: ROOT, encoding: 'utf8', timeout: 30_000,
+        maxBuffer: 16 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+    } catch { return null; }
+  };
+
+  if (git(['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main']) === null) {
+    return { measurable: false, note: 'clone này không có ref origin/main — chạy `git fetch origin main` rồi đo lại.' };
+  }
+
+  const datesOf = (src) => new Set(
+    String(src || '').split('\n')
+      .map(l => (l.match(/^## (\d{4}-\d{2}-\d{2})/) || [])[1])
+      .filter(Boolean)
+  );
+
+  const onMain = datesOf(git(['show', 'origin/main:public/CHANGELOG-eduverse.md']));
+  if (onMain.size === 0) {
+    return { measurable: false, note: 'không đọc được CHANGELOG trên origin/main — không kết luận.' };
+  }
+
+  let localSrc = '';
+  try { localSrc = fs.readFileSync(path.join(ROOT, 'public', 'CHANGELOG-eduverse.md'), 'utf8'); } catch { /* ignore */ }
+
+  // Bỏ TODAY: mục của chính phiên đang chạy chưa lên main là chuyện đương nhiên,
+  // báo nó lên thì mỗi lần chạy lại preflight sau khi ghi CHANGELOG đều báo động giả.
+  const strandedHere = [...datesOf(localSrc)].filter(d => !onMain.has(d) && d !== TODAY).sort();
+
+  // Quét luôn các nhánh remote KHÁC: việc treo của phiên trước thường nằm ở
+  // nhánh của phiên ĐÓ, không phải nhánh đang checkout (đo thật: PR #111 =
+  // phiên 2026-10-01 nằm ở origin/claude/brave-keller-u5jlz4). Chỉ thấy được
+  // ref đã fetch về — `git fetch origin --prune` trước khi đo cho đủ.
+  // Loại feat/postgres-migration: nhánh production, lịch sử không chung gốc với
+  // main và KHÔNG bao giờ dự định land vào main (ROUTINE.md §Bối cảnh).
+  const SKIP_REFS = /^origin\/(main|HEAD|feat\/postgres-migration)$/;
+  const strandedRefs = [];
+  for (const ref of String(git(['for-each-ref', '--format=%(refname:short)', 'refs/remotes/origin']) || '')
+                      .split('\n').map(s => s.trim()).filter(Boolean)) {
+    if (SKIP_REFS.test(ref)) continue;
+    const dates = [...datesOf(git(['show', `${ref}:public/CHANGELOG-eduverse.md`]))]
+                    .filter(d => !onMain.has(d) && d !== TODAY);
+    if (dates.length) strandedRefs.push({ ref, dates: dates.sort() });
+  }
+
+  const stranded = [...new Set([...strandedHere, ...strandedRefs.flatMap(r => r.dates)])].sort();
+
+  const aheadRaw = git(['rev-list', '--count', 'origin/main..HEAD']);
+  return {
+    measurable: true,
+    mainSha: git(['rev-parse', '--short', 'origin/main']),
+    head: git(['rev-parse', '--abbrev-ref', 'HEAD']) || 'HEAD',
+    ahead: aheadRaw === null ? null : Number(aheadRaw),
+    stranded,
+    strandedRefs,
+  };
+}
+
 // ── Chạy ─────────────────────────────────────────────────────
 rule();
 line(`  PREFLIGHT BAN ĐIỀU HÀNH AI — ${TODAY}`);
@@ -188,7 +264,24 @@ if (!t3.clean && t3.skewed?.length) {
   if (t3.anomalies) line(`            → ${t3.anomalies} câu dị dạng (không đủ 4 lựa chọn)`);
 }
 
-line('\n③ KẾT LUẬN — phiên hôm nay PHẢI làm gì');
+const landed = unlandedWork();
+line('\n③ VIỆC PHIÊN TRƯỚC — ĐÃ LÊN origin/main CHƯA?');
+if (!landed.measurable) {
+  line(`   (không đo được) ${landed.note}`);
+} else {
+  line(`   origin/main = ${landed.mainSha} · nhánh đang làm = ${landed.head}` +
+       (landed.ahead === null ? '' : ` (+${landed.ahead} commit chưa lên main)`));
+  if (landed.stranded.length === 0) {
+    line('   ✅ sạch — mọi phiên trước đã có mục CHANGELOG trên origin/main.');
+  } else {
+    line(`   ⚠️  ${landed.stranded.length} phiên CHƯA lên main: ${landed.stranded.join(', ')}`);
+    for (const r of landed.strandedRefs) line(`      • ${r.ref} giữ: ${r.dates.join(', ')}`);
+    line('      ⇒ Việc đã làm xong đang đứng lại, không ai thấy. ROUTINE.md §Git: KHÔNG lách bằng');
+    line('        cách tạo nhánh mới rồi bỏ đó — báo cho chủ sở hữu kèm NGUYÊN VĂN thông báo từ chối.');
+  }
+}
+
+line('\n④ KẾT LUẬN — phiên hôm nay PHẢI làm gì');
 rule();
 if (probe.readable) {
   line('   ▶ Xử lý yêu cầu THẬT trong hộp thư. Bậc thang dự phòng KHÔNG dùng đến.');
@@ -210,6 +303,11 @@ if (probe.readable) {
     line('   ▶ CẢ BA BẬC ĐỀU SẠCH và hộp thư chết.');
     line('     ⇒ Ghi 1 dòng kết luận. KHÔNG tạo PR. KHÔNG bịa việc.');
     line('     ⇒ Báo cho chủ sở hữu rằng routine đã hết việc dự phòng đo được.');
+    if (landed.measurable && landed.stranded.length) {
+      line(`     ⚠️  NHƯNG mục ③ đo được ${landed.stranded.length} phiên chưa lên origin/main`);
+      line('        (' + landed.stranded.join(', ') + '). "Hết việc dự phòng" KHÔNG đồng nghĩa');
+      line('        "không còn gì cần người bấm nút": nêu luôn việc merge trong thông báo.');
+    }
   }
 }
 rule();
