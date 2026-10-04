@@ -4062,6 +4062,43 @@ function m2RenderPrice(){
     pmZoneLabel.textContent = '📒 Bước 8: đến Quầy thu ngân, mở máy tính → tab Thực nhập để ghi sổ kiểm nhập.';
   });
 }
+// req #224 (bước 8): người học không thể nhớ hết thông tin để điền sổ → cho xem lại hình hộp thuốc + nhãn + hoá đơn + số thực nhận.
+function m2RefData(it, x){
+  const d = new Date(), rec = allRecords.find(r => r['Tên hoạt chất'] === it.name) || {};
+  return { name: it.name, strength: rec['Hoạt chất, hàm lượng/nồng độ'] || '', maker: rec['Nơi sản xuất'] || 'Công ty SX (minh hoạ)',
+    reg: `VD-${10000 + m1HashNum(it.key+'dk',0,89999)}-24`, lot: `LO${m1HashNum(it.key+'lo',1000,9999)}`,
+    exp: `${String(m1HashNum(it.key+'hd',1,12)).padStart(2,'0')}/${d.getFullYear()+2}`,
+    store: it.cold ? 'Bảo quản trong tủ lạnh 2–8°C' : 'Bảo quản nơi khô, nhiệt độ dưới 30°C, tránh ánh sáng', spec: it.pack.spec };
+}
+function m2RenderRef(idx){
+  const x = getM2State(), pass = x.items.filter(it => !m2Reasons(it).length);
+  let ov = document.getElementById('m2RefOverlay');
+  if(!ov){
+    ov = document.createElement('div'); ov.className = 'overlay'; ov.id = 'm2RefOverlay'; ov.style.zIndex = 97;
+    ov.innerHTML = '<div class="modal pos-modal"><div class="modal-head"><div><h2>🔎 Xem lại hình ảnh để điền sổ</h2><div class="sub">Hộp thuốc · nhãn · hoá đơn · số lượng thực nhận</div></div><button type="button" id="m2RefClose">✕</button></div><div class="modal-body pos-body" id="m2RefBody"></div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', e => { if(e.target === ov) ov.style.display = 'none'; });
+    ov.querySelector('#m2RefClose').addEventListener('click', () => { ov.style.display = 'none'; });
+  }
+  const it = pass[idx], r = m2RefData(it, x), photo = m2PhotoUrl(it.name);
+  const tabs = pass.map((p,i) => `<button type="button" class="pos-btn" data-r="${i}" style="${i === idx ? '' : 'background:#9aa89f'};margin:0 6px 6px 0">${esc(p.name)}</button>`).join('');
+  const row = (k, v) => `<tr><th style="text-align:left;white-space:nowrap;padding:3px 8px 3px 0">${k}</th><td style="padding:3px 0">${v}</td></tr>`;
+  const body = ov.querySelector('#m2RefBody');
+  body.innerHTML = `<div>${tabs}</div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">
+      <div style="flex:1 1 320px;min-width:0">
+        <div style="font:800 .8rem Nunito,sans-serif;margin-bottom:4px">📦 Hộp thuốc</div>
+        <div style="text-align:center">${photo ? `<img src="${photo}" alt="Hộp ${esc(it.name)}" style="max-width:100%;max-height:200px;object-fit:contain;background:#fff;border:1px solid #d8c9a3;border-radius:8px">` : `<div class="ph">📦 ${esc(it.name)}</div>`}</div>
+        <div style="font:800 .8rem Nunito,sans-serif;margin:10px 0 4px">🏷️ Thông tin trên nhãn / bao bì</div>
+        <table style="font-size:.78rem;border:1px solid #d8c9a3;border-radius:8px;background:#fffdf6;padding:6px;width:100%"><tbody>
+          ${row('Tên thuốc', esc(r.name) + (r.strength ? '<br>' + esc(r.strength) : ''))}${row('Số ĐK/GPNK', r.reg + ' <small>(số minh hoạ)</small>')}
+          ${row('Số lô', r.lot)}${row('Hạn dùng', r.exp)}${row('Nhà sản xuất', esc(r.maker))}${row('Điều kiện bảo quản', r.store)}${row('Quy cách đóng gói', r.spec)}
+          ${row('Số lượng thực nhận', `<b>${it.recv} ${it.unit}</b> <small>(đã đếm ở bước kiểm tra số lượng)</small>`)}${row('Đơn giá trên hoá đơn (chưa VAT)', `<b>${m1PkgPrice(it).toLocaleString('vi-VN')} đ</b> / ${it.unit}`)}
+        </tbody></table></div>
+      <div style="flex:1 1 380px;min-width:0"><div style="font:800 .8rem Nunito,sans-serif;margin-bottom:4px">🧾 Hoá đơn</div>${m2InvoiceHtml(x)}</div></div>`;
+  body.querySelectorAll('[data-r]').forEach(b => b.addEventListener('click', () => m2RenderRef(Number(b.dataset.r))));
+  ov.style.display = 'flex';
+}
 // Bước 8: sổ kiểm nhập (tab "Thực nhập" của phần mềm bán hàng) theo biểu mẫu cô gửi.
 function renderThucNhapTab(){
   const x = getM2State();
@@ -4073,9 +4110,9 @@ function renderThucNhapTab(){
   const sel = (nm, opts) => `<select data-f="${nm}" style="padding:3px;border:1px solid #caa25a;border-radius:6px;max-width:130px"><option value="">— chọn —</option>${opts.map(o => `<option>${esc(o)}</option>`).join('')}</select>`;
   const th = ['Ngày/tháng/năm','Tên thuốc, hàm lượng nồng độ','Số ĐK/GPNK','Số lô, hạn dùng','Nhà SX/nhập khẩu','Cơ sở cung cấp','Số hóa đơn/chứng từ','Điều kiện bảo quản','Quy cách đóng gói','Số lượng','Đơn vị tính','Đơn giá (đ, chưa VAT)'];
   posPanel.innerHTML = `
-    <p class="pos-note">📒 <b>Sổ kiểm nhập thuốc</b> (mẫu). Các cột thông tin đã điền từ hoá đơn và nhãn; điền nốt <b>điều kiện bảo quản, quy cách đóng gói, số lượng, đơn vị tính, đơn giá</b> cho các sản phẩm đạt.</p>
+    <p class="pos-note">📒 <b>Sổ kiểm nhập thuốc</b> (mẫu). Các cột thông tin đã điền từ hoá đơn và nhãn; điền nốt <b>điều kiện bảo quản, quy cách đóng gói, số lượng, đơn vị tính, đơn giá</b> cho các sản phẩm đạt. Không nhớ thông tin? Bấm <b>🔎 Xem lại hình</b> ở từng dòng để xem lại hộp thuốc, nhãn, hoá đơn và số lượng thực nhận.</p>
     <div style="overflow-x:auto"><table class="pos-table" style="font-size:.72rem;min-width:900px"><thead><tr>${th.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>
-      ${pass.map((it,i) => { const r = rec(it); return `<tr data-i="${i}"><td>${dt}</td><td>${esc(it.name)}${r['Hoạt chất, hàm lượng/nồng độ'] ? '<br>' + esc(r['Hoạt chất, hàm lượng/nồng độ']) : ''}</td>
+      ${pass.map((it,i) => { const r = rec(it); return `<tr data-i="${i}"><td>${dt}<br><button type="button" class="pos-btn m2-ref" data-r="${i}" style="padding:3px 8px;font-size:.7rem;margin-top:4px">🔎 Xem lại hình</button></td><td>${esc(it.name)}${r['Hoạt chất, hàm lượng/nồng độ'] ? '<br>' + esc(r['Hoạt chất, hàm lượng/nồng độ']) : ''}</td>
         <td>VD-${10000 + m1HashNum(it.key+'dk',0,89999)}-24 <small>(số minh hoạ)</small></td><td>LO${m1HashNum(it.key+'lo',1000,9999)} / ${String(m1HashNum(it.key+'hd',1,12)).padStart(2,'0')}/${d.getFullYear()+2}</td>
         <td>${esc(r['Nơi sản xuất'] || 'Công ty SX (minh hoạ)')}</td><td>${esc(x.supplierName)}</td><td>00000014</td>
         <td>${sel('cold', ['Nhiệt độ thường, dưới 30°C, tránh ánh sáng','Tủ lạnh 2–8°C'])}</td><td>${sel('spec', specs())}</td>
@@ -4084,6 +4121,7 @@ function renderThucNhapTab(){
         <td><input type="number" min="0" data-f="price" style="width:84px;padding:3px;border:1px solid #caa25a;border-radius:6px"></td></tr>`; }).join('')}
     </tbody></table></div>
     <button type="button" class="pos-btn" id="m2LedgerOk">📝 Ghi sổ</button><div class="pos-err" id="m2LedErr"></div>`;
+  posPanel.querySelectorAll('.m2-ref').forEach(b => b.addEventListener('click', () => m2RenderRef(Number(b.dataset.r))));
   document.getElementById('m2LedgerOk').addEventListener('click', () => {
     const err = document.getElementById('m2LedErr');
     for(const tr of posPanel.querySelectorAll('tbody tr')){
