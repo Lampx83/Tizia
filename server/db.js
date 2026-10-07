@@ -11,32 +11,13 @@ const DATA_DIR = process.env.DATA_DIR
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-// DATABASE_URL -> PostgreSQL. Otherwise the SQLite file (transition only, removed with better-sqlite3).
-async function openDb() {
-  if (process.env.DATABASE_URL) return { db: createAppDb({ url: process.env.DATABASE_URL }), dbPath: null };
-  const { default: Database } = await import('better-sqlite3');
-  // Đổi tên 2026-05-31: pharmacy.db → tizia.db (rebrand). Nếu file mới chưa có
-  // nhưng pharmacy.db legacy còn → rename atomic để giữ data.
-  const dbPath = path.join(DATA_DIR, 'tizia.db');
-  try {
-    const legacy = path.join(DATA_DIR, 'pharmacy.db');
-    if (!fs.existsSync(dbPath) && fs.existsSync(legacy)) {
-      fs.renameSync(legacy, dbPath);
-      for (const ext of ['-wal', '-shm']) {
-        const oldF = legacy + ext, newF = dbPath + ext;
-        if (fs.existsSync(oldF)) fs.renameSync(oldF, newF);
-      }
-      console.log(`[db] migrated ${legacy} → ${dbPath}`);
-    }
-  } catch (e) { console.warn('[db] legacy rename failed', e.message); }
-  const raw = new Database(dbPath);
-  raw.pragma('journal_mode = WAL');
-  raw.pragma('foreign_keys = ON');
-  return { db: createAppDb({ raw }), dbPath };
+// PostgreSQL only (DATABASE_URL). SQLite support was removed in ticket 11; `scripts/copy-sqlite-to-postgres.mjs` moves old data.
+function openDb() {
+  if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL (PostgreSQL connection string) is required');
+  return { db: createAppDb({ url: process.env.DATABASE_URL }) };
 }
-const opened = await openDb();
+const opened = openDb();
 export const db = opened.db;
-export const dbPath = opened.dbPath;
 export { DATA_DIR };
 
 // Step 1: create tables (without indexes that reference v5 columns)
@@ -314,48 +295,6 @@ await db.exec(`
 // skill cũ giữ ở bucket domain cũ (ẩn khỏi /nang-luc.html trường mới) — quay lại
 // trường cũ sẽ tự hiện lại nhờ cùng (user_id, domain). Idempotent: chỉ migrate khi
 // chưa có cột `domain`.
-{
-  // PostgreSQL starts from the final shape: no legacy rebuild.
-  const cols = db.dialect === 'sqlite' ? await db.prepare(`PRAGMA table_info('user_skills')`).all() : [{ name: 'domain' }];
-  if (cols.length > 0 && !cols.some(c => c.name === 'domain')) {
-    await db.exec('BEGIN');
-    try {
-      await db.exec(`
-        CREATE TABLE user_skills_new (
-          id           INTEGER PRIMARY KEY AUTOINCREMENT,
-          user_id      INTEGER NOT NULL,
-          skill_id     INTEGER NOT NULL,
-          domain       TEXT    NOT NULL DEFAULT '',
-          earned_at    INTEGER NOT NULL,
-          source_type  TEXT,
-          source_id    TEXT,
-          score        INTEGER,
-          UNIQUE(user_id, skill_id, domain),
-          FOREIGN KEY (user_id)  REFERENCES users(id)  ON DELETE CASCADE,
-          FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE CASCADE
-        );
-        INSERT INTO user_skills_new
-          (id, user_id, skill_id, domain, earned_at, source_type, source_id, score)
-        SELECT id, user_id, skill_id, '', earned_at, source_type, source_id, score
-        FROM user_skills;
-        DROP TABLE user_skills;
-        ALTER TABLE user_skills_new RENAME TO user_skills;
-        CREATE INDEX idx_user_skills_user   ON user_skills(user_id, earned_at DESC);
-        CREATE INDEX idx_user_skills_skill  ON user_skills(skill_id, earned_at DESC);
-        CREATE INDEX idx_user_skills_domain ON user_skills(user_id, domain, earned_at DESC);
-      `);
-      await db.exec('COMMIT');
-      console.log('[db] migrated user_skills → per-domain');
-    } catch (e) { await db.exec('ROLLBACK'); console.warn('[db] user_skills migration failed', e.message); throw e; }
-  } else if (cols.length === 0) {
-    // chưa migrate qua schema cũ — nhánh này không xảy ra vì CREATE TABLE phía trên
-    // đã chạy. Để an toàn nếu file db mới hoàn toàn, tạo index domain riêng.
-    try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_user_skills_domain ON user_skills(user_id, domain, earned_at DESC)`); } catch {}
-  } else {
-    // đã có cột domain → đảm bảo index tồn tại
-    try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_user_skills_domain ON user_skills(user_id, domain, earned_at DESC)`); } catch {}
-  }
-}
 
 // Seed 15 competencies GDPT 2018 — idempotent qua INSERT OR IGNORE theo code.
 // Nguồn: Thông tư 32/2018/TT-BGDĐT (Chương trình GDPT tổng thể).
@@ -1150,50 +1089,6 @@ await db.exec(`
 // cột domain) thì recreate với composite PK. Toàn bộ row cũ vào bucket '' để FE
 // tự "khớp" sau lần đầu gọi /api/me/enroll (lúc đó BE merge bucket '' → bucket
 // domain user chọn). Idempotent: chỉ migrate khi thiếu cột domain.
-{
-  // PostgreSQL starts from the final shape: no legacy rebuild.
-  const cols = db.dialect === 'sqlite' ? await db.prepare(`PRAGMA table_info('user_wallets')`).all() : [{ name: 'domain' }];
-  if (cols.length > 0 && !cols.some(c => c.name === 'domain')) {
-    await db.exec('BEGIN');
-    try {
-      await db.exec(`
-        CREATE TABLE user_wallets_new (
-          user_id          INTEGER NOT NULL,
-          domain           TEXT    NOT NULL DEFAULT '',
-          coins            INTEGER NOT NULL DEFAULT 0,
-          xp               INTEGER NOT NULL DEFAULT 0,
-          streak           INTEGER NOT NULL DEFAULT 0,
-          longest_streak   INTEGER NOT NULL DEFAULT 0,
-          streak_shields   INTEGER NOT NULL DEFAULT 0,
-          last_visit_day   TEXT    NOT NULL DEFAULT '',
-          achievements     TEXT    NOT NULL DEFAULT '[]',
-          vr_sessions      INTEGER NOT NULL DEFAULT 0,
-          meta_sessions    INTEGER NOT NULL DEFAULT 0,
-          quizzes_passed   INTEGER NOT NULL DEFAULT 0,
-          modules_by_day   TEXT    NOT NULL DEFAULT '{}',
-          daily            TEXT    NOT NULL DEFAULT '{}',
-          quests_claimed   TEXT    NOT NULL DEFAULT '{}',
-          updated_at       INTEGER NOT NULL,
-          PRIMARY KEY (user_id, domain),
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        INSERT INTO user_wallets_new
-          (user_id, domain, coins, xp, streak, longest_streak, streak_shields,
-           last_visit_day, achievements, vr_sessions, meta_sessions,
-           quizzes_passed, modules_by_day, daily, quests_claimed, updated_at)
-        SELECT
-          user_id, '', coins, xp, streak, longest_streak, streak_shields,
-          last_visit_day, achievements, vr_sessions, meta_sessions,
-          quizzes_passed, modules_by_day, daily, quests_claimed, updated_at
-        FROM user_wallets;
-        DROP TABLE user_wallets;
-        ALTER TABLE user_wallets_new RENAME TO user_wallets;
-      `);
-      await db.exec('COMMIT');
-      console.log('[db] migrated user_wallets → per-domain');
-    } catch (e) { await db.exec('ROLLBACK'); console.warn('[db] user_wallets migration failed', e.message); throw e; }
-  }
-}
 
 const getUserWalletStmt = db.prepare(`SELECT * FROM user_wallets WHERE user_id = ? AND domain = ?`);
 // Khi caller không truyền domain → fallback: enrolled_domain của user (đọc users
@@ -1348,7 +1243,7 @@ export async function setEnrolledDomain(user_id, domain) {
   return d;
 }
 
-console.log(`[db] ${db.dialect} open${dbPath ? " at " + dbPath : ""}`);
+console.log(`[db] ${db.dialect} open`);
 
 // --- Scenario runs (cross-device sync) ---
 await db.exec(`

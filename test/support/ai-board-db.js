@@ -1,63 +1,52 @@
-// Backends for dual-backend AI board tests. SQLite always; PostgreSQL only when TEST_PG_URL is set (throwaway container).
-// Each fixture gets its own schema (search_path via connection options), so test files can run in parallel.
+// PostgreSQL fixture: one isolated schema per fixture, disposed idempotently.
+// TEST_PG_URL points at a throwaway PostgreSQL; no SQLite test backend exists.
+import { after } from 'node:test';
+import fs from 'node:fs';
 import { randomBytes } from 'node:crypto';
-import Database from 'better-sqlite3';
 import pg from 'pg';
-import { applyMigrations, applyPgBaseSchema, createPgDb, createSqliteDb } from '../../server/ai-board/db/index.js';
-
-const SQLITE_BASE = `
-  CREATE TABLE users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, display_name TEXT NOT NULL,
-    password_hash TEXT NOT NULL DEFAULT '', role TEXT NOT NULL DEFAULT 'student', enrolled_domain TEXT,
-    created_at INTEGER NOT NULL DEFAULT 0, last_login INTEGER
-  );
-  CREATE TABLE requests (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'other',
-    title TEXT NOT NULL, detail TEXT, student TEXT NOT NULL DEFAULT 'Ẩn danh',
-    status TEXT NOT NULL DEFAULT 'pending', votes INTEGER NOT NULL DEFAULT 1,
-    admin_note TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, attachments TEXT
-  );
-  CREATE TABLE request_messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, request_id INTEGER NOT NULL, role TEXT NOT NULL,
-    author_name TEXT, body TEXT NOT NULL, attachments TEXT, created_at INTEGER NOT NULL
-  );`;
+import { createAppDb } from '../../server/db-core.js';
+import { applyMigrations } from '../../server/ai-board/db/index.js';
 
 export const PG_URL = process.env.TEST_PG_URL || '';
 
-/** [{ name, open(migrate = true) -> Promise<db with .dispose()> }] */
-export const backends = [
-  {
-    name: 'sqlite',
-    async open(migrate = true) {
-      const raw = new Database(':memory:');
-      raw.pragma('foreign_keys = ON');
-      raw.exec(SQLITE_BASE);
-      const d = createSqliteDb(raw);
-      if (migrate) await applyMigrations(d);
-      return Object.assign(d, { dispose: () => d.close() });
-    },
-  },
-  ...(PG_URL ? [{
-    name: 'postgres',
-    async open(migrate = true) {
-      const schema = `t_${randomBytes(6).toString('hex')}`;
-      const admin = new pg.Client({ connectionString: PG_URL });
-      await admin.connect();
-      await admin.query(`CREATE SCHEMA ${schema}`);
-      const url = new URL(PG_URL);
-      url.searchParams.set('options', `-c search_path=${schema}`);
-      const d = createPgDb({ url: url.toString(), max: 4 });
-      if (migrate) {
-        await applyPgBaseSchema(d);
-        await applyMigrations(d);
-      }
-      return Object.assign(d, {
-        async dispose() {
-          await d.close();
-          await admin.query(`DROP SCHEMA ${schema} CASCADE`);
-          await admin.end();
-        },
-      });
-    },
-  }] : []),
-];
+const BASE_SQL = fs.readFileSync(new URL('./ai-board-base.sql', import.meta.url), 'utf8');
+const opened = [];
+
+/** New schema (search_path via connection options), base tables, board migrations. Returns the app db handle (`.d` = contract). */
+export async function createBoardSchema({ migrate = true } = {}) {
+  if (!PG_URL) throw new Error('TEST_PG_URL is required: the test suite runs on a throwaway PostgreSQL');
+  const schema = `t_${randomBytes(6).toString('hex')}`;
+  const admin = new pg.Client({ connectionString: PG_URL });
+  await admin.connect();
+  await admin.query(`CREATE SCHEMA ${schema}`);
+  const url = new URL(PG_URL);
+  url.searchParams.set('options', `-c search_path=${schema}`);
+  const db = createAppDb({ url: url.toString() });
+  if (migrate) {
+    await db.d.exec(BASE_SQL);
+    await applyMigrations(db.d);
+  }
+  db.url = url.toString();
+  const closePool = db.close.bind(db);
+  let disposed = false;
+  db.dispose = async () => { if (disposed) return; disposed = true; await closePool(); await admin.query(`DROP SCHEMA ${schema} CASCADE`); await admin.end(); };
+  db.close = db.dispose;
+  opened.push(db);
+  return db;
+}
+
+after(async () => { for (const db of opened.splice(0)) await db.dispose(); });
+
+/**
+ * Empty board database. `users`: rows [id, username, display_name, role, enrolled_domain].
+ * A caller may close its handle without affecting later fixtures.
+ */
+export async function openBoard({ users = [], fresh = false, migrate = true } = {}) {
+  const db = await createBoardSchema({ migrate });
+  for (const [id, username, displayName, role, domain] of users) {
+    await db.d.run('INSERT INTO users(id, username, display_name, role, enrolled_domain) VALUES (?, ?, ?, ?, ?)', [id, username, displayName, role, domain ?? null]);
+  }
+  return db;
+}
+
+export const backends = [{ name: 'postgres', async open() { const app = await createBoardSchema(); app.d.dispose = () => app.dispose(); return app.d; } }];

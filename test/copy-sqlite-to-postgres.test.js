@@ -75,13 +75,66 @@ test('copy: refuses non-empty target without --replace; --replace overwrites see
   } finally { await f.dispose(); }
 });
 
-test('copy: a source table without a target table is refused unless --skip-missing', opts, async () => {
+test('copy: unmapped tables fail dry-run and writes; skip-missing cannot bypass preflight', opts, async () => {
   const f = await fixture();
   try {
     f.sqlite.exec(`CREATE TABLE legacy_only (id INTEGER PRIMARY KEY, v TEXT); INSERT INTO legacy_only VALUES (1, 'x')`);
     await assert.rejects(copySqliteToPostgres({ sqlite: f.sqlite, pg: f.target }), /legacy_only/);
-    const r = await copySqliteToPostgres({ sqlite: f.sqlite, pg: f.target, skipMissing: true });
-    assert.deepEqual(r.skipped, ['legacy_only']);
+    await assert.rejects(copySqliteToPostgres({ sqlite: f.sqlite, pg: f.target, dryRun: true }), /legacy_only/);
+    await assert.rejects(copySqliteToPostgres({ sqlite: f.sqlite, pg: f.target, skipMissing: true }), /disabled/);
+    assert.equal((await f.target.get('SELECT COUNT(*) AS n FROM users')).n, 0);
+  } finally { await f.dispose(); }
+});
+
+test('copy: unmapped user fields fail before dry-run or replacement deletes', opts, async () => {
+  const f = await fixture();
+  try {
+    f.sqlite.exec('ALTER TABLE users ADD COLUMN private_history TEXT');
+    await f.target.run("INSERT INTO skills(id, name) VALUES (100, 'keep')");
+    for (const dryRun of [true, false]) await assert.rejects(copySqliteToPostgres({ sqlite: f.sqlite, pg: f.target, dryRun, replace: true }), /users.private_history/);
+    assert.equal((await f.target.get('SELECT COUNT(*) AS n FROM skills')).n, 1);
+  } finally { await f.dispose(); }
+});
+
+test('copy: content corruption with matching row counts rolls back and redacts values', opts, async () => {
+  const f = await fixture({ extraTarget: `CREATE FUNCTION corrupt_user() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.password_hash := 'CORRUPTED-SECRET'; RETURN NEW; END $$; CREATE TRIGGER corrupt BEFORE INSERT ON users FOR EACH ROW EXECUTE FUNCTION corrupt_user();` });
+  try {
+    await assert.rejects(copySqliteToPostgres({ sqlite: f.sqlite, pg: f.target }), (e) => {
+      assert.match(e.message, /users: content verification failed/);
+      assert.ok(!e.message.includes('SECRET') && !e.message.includes(HASH));
+      return true;
+    });
+    assert.equal((await f.target.get('SELECT COUNT(*) AS n FROM users')).n, 0);
+    assert.equal((await f.target.get('SELECT COUNT(*) AS n FROM skills')).n, 0);
+  } finally { await f.dispose(); }
+});
+
+test('copy: migration bookkeeping is checked instead of implicitly discarded', opts, async () => {
+  const f = await fixture();
+  try {
+    f.sqlite.exec('CREATE TABLE schema_migrations (version TEXT)');
+    await assert.rejects(copySqliteToPostgres({ sqlite: f.sqlite, pg: f.target, dryRun: true }), /schema_migrations/);
+  } finally { await f.dispose(); }
+});
+
+test('copy: broken source foreign key rolls back and reports only constraint metadata', opts, async () => {
+  const f = await fixture();
+  try {
+    f.sqlite.pragma('foreign_keys = OFF');
+    f.sqlite.exec('UPDATE sessions SET user_id = 999');
+    await assert.rejects(copySqliteToPostgres({ sqlite: f.sqlite, pg: f.target }), /source foreign key verification failed: sessions/);
+    assert.equal((await f.target.get('SELECT COUNT(*) AS n FROM users')).n, 0);
+  } finally { await f.dispose(); }
+});
+
+test('copy: incompatible migration receipt identities fail preflight without deleting target-only receipts', opts, async () => {
+  const f = await fixture();
+  try {
+    f.sqlite.exec("CREATE TABLE schema_migrations(scope TEXT, version TEXT, applied_at INTEGER); INSERT INTO schema_migrations VALUES ('ai-board', '001.sql', 1)");
+    await f.target.exec("CREATE TABLE schema_migrations(scope TEXT, version TEXT, applied_at BIGINT); INSERT INTO schema_migrations VALUES ('ai-board', '001.sql', 2), ('ai-board', '002.sql', 3)");
+    for (const dryRun of [true, false]) await assert.rejects(copySqliteToPostgres({ sqlite: f.sqlite, pg: f.target, dryRun, replace: true }), /receipt identities differ/);
+    assert.equal((await f.target.get('SELECT COUNT(*) AS n FROM schema_migrations')).n, 2);
+    assert.equal((await f.target.get('SELECT COUNT(*) AS n FROM users')).n, 0);
   } finally { await f.dispose(); }
 });
 
@@ -95,4 +148,15 @@ test('copy: a failing insert rolls everything back and the error carries no row 
     });
     assert.equal((await f.target.get('SELECT COUNT(*) AS n FROM skills')).n, 0, 'all-or-nothing');
   } finally { await f.dispose(); }
+});
+
+test('copy: deleted source ids and empty AUTOINCREMENT tables retain allocation high-water marks', opts, async () => {
+  const f = await fixture();
+  try {
+    f.sqlite.exec("INSERT INTO users(id,username,display_name,password_hash,created_at) VALUES(100,'deleted','D','h',1); DELETE FROM users WHERE id=100; INSERT INTO skills(id,name) VALUES(200,'deleted'); DELETE FROM skills");
+    const result=await copySqliteToPostgres({sqlite:f.sqlite,pg:f.target});
+    assert.equal(await f.target.insert("INSERT INTO users(username,display_name,password_hash,created_at) VALUES('next','N','h',1)"),101);
+    assert.equal(await f.target.insert("INSERT INTO skills(name) VALUES('next')"),201);
+    assert.equal(result.sequences['skills.id'].sourceHighWaterPreserved,true);
+  } finally {await f.dispose();}
 });

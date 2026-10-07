@@ -11,17 +11,6 @@ import { db, recordSrsReview } from '../../db.js';
 import { requireAuth } from '../identity/auth.js';
 
 await db.exec(`
-  CREATE TABLE IF NOT EXISTS srs_card_content (
-    card_key      TEXT PRIMARY KEY,           -- 'deck:<deck_id>:c<idx>' hoặc 'vocab:<word>'
-    deck_id       INTEGER,                     -- null nếu standalone
-    front         TEXT NOT NULL,
-    back          TEXT NOT NULL,
-    hint          TEXT,
-    media_url     TEXT,
-    created_at    INTEGER NOT NULL,
-    FOREIGN KEY (deck_id) REFERENCES srs_decks(id) ON DELETE CASCADE
-  );
-
   CREATE TABLE IF NOT EXISTS srs_decks (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     creator_id    INTEGER NOT NULL,
@@ -32,6 +21,17 @@ await db.exec(`
     is_public     INTEGER NOT NULL DEFAULT 1,
     created_at    INTEGER NOT NULL,
     FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS srs_card_content (
+    card_key      TEXT PRIMARY KEY,           -- 'deck:<deck_id>:c<idx>' hoặc 'vocab:<word>'
+    deck_id       INTEGER,                     -- null nếu standalone
+    front         TEXT NOT NULL,
+    back          TEXT NOT NULL,
+    hint          TEXT,
+    media_url     TEXT,
+    created_at    INTEGER NOT NULL,
+    FOREIGN KEY (deck_id) REFERENCES srs_decks(id) ON DELETE CASCADE
   );
 `);
 

@@ -1,5 +1,6 @@
 import express from 'express';
 import './express-async.js'; // Express 4: async handlers forward rejections to next()
+import { DATA_DIR } from './db.js';
 import compression from 'compression';
 import http from 'node:http';
 import path from 'node:path';
@@ -55,11 +56,18 @@ import { plugin as campusLayoutPlugin } from './contexts/campus/layout.js';
 import { plugin as portalAppsPlugin } from './contexts/portal-apps/index.js';
 import { grantSkillsForScenario, plugin as skillsPlugin } from './skills.js';
 import { securityHeaders, csrf, requireStrictCsrf, apiLimiter, sensitiveAuthLimiter, plugin as securityPlugin } from './contexts/security/index.js';
-import { createAiBoardServices, projectUserMiddleware } from './ai-board/services.js';
+import { createAiBoardServices } from './ai-board/services.js';
 import { setAiBoardServices } from './ai-board/runtime.js';
 import { asyncRoutes } from './ai-board/async-routes.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from './ai-board/routes.js';
-import { draftNotifier } from './ai-board/drafts.js';
+import { attachScopedCrudRoutes } from './ai-board/api/scoped-crud.js';
+import { attachOnlineRoutes } from './ai-board/online/routes.js';
+import { createBroker } from './ai-board/online/broker.js';
+import { createReleaseGate } from './ai-board/online/release-gate.js';
+import { createOnlineRegistry } from './ai-board/online/registry.js';
+import { createBackendRunner } from './ai-board/online/backend-run.js';
+import { adaptersFromEnv, runnerFromEnv, backendScriptsEnabled } from './ai-board/online/config.js';
+import { draftNotifier } from './ai-board/drafts-async.js';
 import { shotBackendFromEnv, shotProxy, startShotRetention } from './ai-board/shot-storage.js';
 import { staticCacheControl } from './static-cache.js';
 import { attachAiBoardIntake, clarifyNotifier } from './contexts/ai-board-intake/index.js';
@@ -77,7 +85,7 @@ const PUBLIC_DIR = path.resolve(ROOT_DIR, 'public');
 const MEDIAPIPE_DIR = path.resolve(ROOT_DIR, 'node_modules', '@mediapipe', 'tasks-vision');
 // Thư mục lưu ảnh/file đính kèm cho "Ban điều hành AI". Tạo lười khi cần.
 // File phục vụ qua /uploads/requests/... (mount express.static phía dưới).
-const REQUEST_UPLOADS_DIR = path.resolve(ROOT_DIR, 'data', 'uploads', 'requests');
+const REQUEST_UPLOADS_DIR = path.join(DATA_DIR, 'uploads', 'requests');
 const aiBoardShotBackend = shotBackendFromEnv(process.env, REQUEST_UPLOADS_DIR); // ảnh bản nháp: local | S3-compatible
 const PORT = Number(process.env.PORT) || 8041;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -302,6 +310,8 @@ app.use('/api', apiLimiter);
 //     Auth gate đã whitelist '/api/webhooks/' để webhook không có session vẫn qua.
 await mountAppPlugins(app, [appProxyPlugin, scoreUpWebhookPlugin, codelabWebhookPlugin], { surface });
 
+// Online backend scripts (flag-gated, admin route only) may reach 100000 chars: widen just that path, before the global 64kb parser.
+if (backendScriptsEnabled()) app.use(/^\/api\/admin\/ai-board\/features\/\d+\/online$/, express.json({ limit: '256kb' }));
 app.use(express.json({ limit: '64kb' }));
 // CSRF double-submit — sau express.json (cần req.body cho fallback _csrf).
 // Log-only mặc định; CSRF_ENFORCE=1 để chặn (khi FE đã gửi header X-CSRF-Token).
@@ -313,11 +323,9 @@ app.use(csrf);
 const r = express.Router();
 const route = asyncRoutes(r);
 
-// AI board stack, chosen by AI_BOARD_DB (default sqlite = the original sync stack on `db`). With postgres the board, its
-// requests / request_messages and a users projection live in PostgreSQL (see ai-board/services.js); every consumer awaits.
-const aiBoard = await createAiBoardServices({ env: process.env, sqlite: db.raw, appDb: db });
+// AI board stack on the app's PostgreSQL (see ai-board/services.js); every consumer awaits.
+const aiBoard = createAiBoardServices({ appDb: db });
 setAiBoardServices(aiBoard);
-if (aiBoard.projectUser) r.use(projectUserMiddleware(aiBoard.projectUser)); // before any route that can write a user id into the board
 
 r.get('/api/health', (_req, res) => {
   // ok:true giữ nguyên để Docker HEALTHCHECK (wget /api/health) vẫn pass; bổ sung
@@ -354,6 +362,8 @@ await mountRouterPlugins(r, [
   assetsPlugin, adaptivePlugin, lessonsPlugin,
 ], { surface });
 
+import { startPrivatePreviews } from './ai-board/api/preview-startup.js';
+const privatePreviews = await startPrivatePreviews(r, { db:aiBoard.db, requireAuth, requireStrictCsrf, dataDir:path.join(ROOT_DIR,'data') });
 const aiBoardStore = aiBoard.store;
 const aiBoardProfiles = attachAiBoardIntake(r, {
   db: aiBoard.db, store: aiBoardStore, requireAuth, requireStrictCsrf,
@@ -368,6 +378,7 @@ attachAiBoardRequestRoutes(r, {
   requireAdmin,
   requireStrictCsrf,
   onCreated: acknowledgeNewRequest,
+  onCancelled: privatePreviews ? (id,user)=>privatePreviews.previews.cancelRequest(id,user) : null,
   needsProfile: aiBoardProfiles.needed,
   onClarify: clarifyNotifier(createNotification),
 });
@@ -378,6 +389,16 @@ attachAiBoardWorkerRoutes(r, {
 });
 // Cờ phát hành: có page gate /<slug>.html → phải trước route HTML + static bên dưới.
 attachAiBoardReleases(r, { db: aiBoard.db, releases: aiBoard.releases, requireAuth, requireAdmin, requireStrictCsrf });
+const scopedCrud = attachScopedCrudRoutes(r, { db: aiBoard.db, requireAuth, requireStrictCsrf, sessionToken: (req) => req.user.token });
+// Ticket 24: online egress control. Nothing registered (DB) or configured (env) = every operation denied.
+const onlineRegistry = createOnlineRegistry(aiBoard.db, { backendScripts: backendScriptsEnabled() });
+const onlineAdapters = adaptersFromEnv();
+const onlineReleaseGate = createReleaseGate(aiBoard.db);
+const onlineBroker = createBroker({ crud: scopedCrud, operations: onlineRegistry.operations, adapters: onlineAdapters, releaseAllowed: onlineReleaseGate, audit: onlineRegistry.audit });
+attachOnlineRoutes(r, { requireAuth, requireAdmin, requireStrictCsrf, sessionToken: (req) => req.user.token, broker: onlineBroker, registry: onlineRegistry,
+  adapterNames: Object.keys(onlineAdapters), releaseAllowed: onlineReleaseGate,
+  backend: createBackendRunner({ registry: onlineRegistry, runner: backendScriptsEnabled() ? runnerFromEnv() : null, enabled: backendScriptsEnabled(), broker: onlineBroker, releaseAllowed: onlineReleaseGate, audit: onlineRegistry.audit }) });
+setInterval(() => onlineRegistry.prune().catch(() => {}), 3600000).unref();
 
 
 r.post('/api/attempts', requireAuth, requireEnrolled, async (req, res) => {

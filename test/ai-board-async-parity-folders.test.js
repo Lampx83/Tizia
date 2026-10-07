@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import { assertParity, failure } from './support/ai-board-parity.js';
 import { backends } from './support/ai-board-db.js';
 import { claimAndRun, newRequest, passing, planOf, step, submit, verdict } from './support/ai-board-scenarios.js';
-import * as syncReleases from '../server/ai-board/releases.js';
 import * as asyncReleases from '../server/ai-board/releases-async.js';
 
 const DAY = 24 * 3600_000;
@@ -103,17 +102,13 @@ test('release flags: async module behaves like the sync module on every backend'
     out.push(await failure(() => r.setReleaseStatus(db, 'bai-tap', 'weird', 9)));
     return JSON.parse(JSON.stringify(out));
   };
-  // The sync module takes a better-sqlite3 handle; the async one takes the contract.
   const ref = await backends[0].open();
   await seed(ref);
-  const syncDb = new Proxy(ref.raw, {});
-  const expected = await probe(syncReleases, syncDb);
+  const expected = await probe(asyncReleases, ref);
   await ref.dispose();
   for (const backend of backends) {
     const d = await backend.open();
-    try {
-      await seed(d);
-      assert.deepEqual(await probe(asyncReleases, d), expected, `${backend.name} release flags`);
-    } finally { await d.dispose(); }
+    try { await seed(d); assert.deepEqual(await probe(asyncReleases, d), expected, 'independent PG release flags'); }
+    finally { await d.dispose(); }
   }
 });

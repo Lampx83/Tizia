@@ -8,12 +8,15 @@ import re
 import shutil
 import subprocess
 import tempfile
+import uuid
+import secrets
 import urllib.request
 from pathlib import Path
 from typing import Callable
 from urllib.parse import urlsplit
 
 from gates import visual
+from verification import functional
 from meter import redact
 
 _SECRET_NAME = re.compile(r"(?:SECRET|TOKEN|PASSWORD|API_KEY|SECKEY|PRIVATE_KEY)", re.I)
@@ -28,35 +31,59 @@ def _internal() -> bool:
     return os.getenv("AI_BOARD_VERIFY_NETWORK", "published") == "internal"
 
 
-def _override(project: str) -> str:
-    """!override replaces Compose lists; ordinary merge would retain prod port/volume."""
-    volume = f"{project}-data"
-    ports = "ports: !reset []" if _internal() else 'ports: !override\n      - "127.0.0.1::8041"'
-    network = f"""networks:
-  default:
-    name: {project}-net
-    internal: true
-""" if _internal() else ""
-    return f"""services:
-  tizia:
-    container_name: !reset null
-    image: {project}:latest
-    restart: "no"
-    # ponytail: candidate inherits worker's 2 CPU/4 GB/512 PID ceiling; restore nested limits when DinD cgroup v2 works.
-    {ports}
-    volumes: !override
-      - {volume}:/data
-    environment: !override
-      NODE_ENV: production
-      PORT: "8041"
-      HOST: 0.0.0.0
-      DATA_DIR: /data
-      BASE_PATH: ""
-{network}volumes:
-  pharmacysim-data: !reset null
-  {volume}:
-    name: {volume}
-"""
+def _app_env(password: str) -> dict:
+    return {"NODE_ENV": "production", "PORT": "8041", "HOST": "0.0.0.0",
+            "DATA_DIR": "/data", "BASE_PATH": "",
+            "DATABASE_URL": f"postgresql://gate5:{password}@postgres:5432/gate5"}
+
+
+def _override(project: str, password: str | None = None, checkout: Path | None = None) -> str:
+    """Owned Compose, never merge candidate services or interpolate production credentials."""
+    password = password or secrets.token_hex(24)
+    config = {
+        "services": {
+            "tizia": {"build": {"context": str((checkout or Path.cwd()).resolve())},
+                      "image": f"{project}:latest", "restart": "no",
+                      "depends_on": {"postgres": {"condition": "service_healthy"}},
+                      "ports": [] if _internal() else ["127.0.0.1::8041"],
+                      "volumes": [f"{project}-data:/data"], "environment": _app_env(password)},
+            "postgres": {"image": "postgres:17-alpine", "restart": "no",
+                         "environment": {"POSTGRES_USER": "gate5", "POSTGRES_DB": "gate5", "POSTGRES_PASSWORD": password},
+                         "healthcheck": {"test": ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U gate5 -d gate5"],
+                                         "interval": "2s", "timeout": "3s", "retries": 30},
+                         "volumes": [f"{project}-pg:/var/lib/postgresql/data"]}},
+        "networks": {"default": {"name": f"{project}-net", "internal": True}},
+        "volumes": {name: {"name": name} for name in (f"{project}-data", f"{project}-pg")}}
+    return json.dumps(config, indent=2)
+
+
+def _validate_config(config: dict, project: str, password: str) -> None:
+    """Fail closed on any resource or DSN outside this invocation."""
+    if escape := _escape_hatch(config):
+        raise RuntimeError(f"Compose config mở đường ra ngoài cách ly: {escape}")
+    services = config.get("services") or {}
+    app, pg = services.get("tizia") or {}, services.get("postgres") or {}
+    network = (config.get("networks") or {}).get("default") or {}
+    ports = app.get("ports") or []
+    port_ok = not ports if _internal() else (len(ports) == 1 and ports[0].get("target") == 8041
+                                            and ports[0].get("host_ip") == "127.0.0.1"
+                                            and not ports[0].get("published"))
+    if (set(services) != {"tizia", "postgres"} or app.get("environment") != _app_env(password)
+            or pg.get("environment") != {"POSTGRES_USER": "gate5", "POSTGRES_DB": "gate5", "POSTGRES_PASSWORD": password}
+            or app.get("image") != f"{project}:latest" or pg.get("image") != "postgres:17-alpine"
+            or pg.get("ports") or not port_ok or network.get("internal") is not True
+            or network.get("name") != f"{project}-net" or network.get("external")
+            or set(config.get("networks") or {}) != {"default"}
+            or set(config.get("volumes") or {}) != {f"{project}-data", f"{project}-pg"}):
+        raise RuntimeError("Compose config không cách ly port/network/volume/env/image/DSN")
+    for name, service, target in ((f"{project}-data", app, "/data"), (f"{project}-pg", pg, "/var/lib/postgresql/data")):
+        volumes = service.get("volumes") or []
+        declared = config["volumes"][name]
+        if (service.get("env_file") or service.get("secrets") or service.get("container_name")
+                or set(service.get("networks") or {}) != {"default"}
+                or len(volumes) != 1 or volumes[0].get("source") != name or volumes[0].get("target") != target
+                or declared.get("name") != name or declared.get("external")):
+            raise RuntimeError("Compose config không cách ly port/network/volume/env/image/DSN")
 
 
 _ESCAPE_KEYS = ("privileged", "network_mode", "pid", "ipc", "userns_mode", "cgroup_parent", "devices", "cap_add", "security_opt", "sysctls")
@@ -348,8 +375,20 @@ def visual_regressions(shots: list[dict]) -> list[str]:
     return out
 
 
-def probe_http(url: str) -> tuple[int, bytes]:
-    with urllib.request.urlopen(url, timeout=15) as response:
+class LoginRequired(RuntimeError):
+    """The disposable app redirected a protected student page to login."""
+
+
+def probe_http(url: str, *, token: str | None = None) -> tuple[int, bytes]:
+    request = urllib.request.Request(url)
+    if token:
+        request.add_unredirected_header("Cookie", "tizia_sid=" + token)
+    with urllib.request.urlopen(request, timeout=15) as response:
+        landing, target = urllib.parse.urlsplit(response.url), urllib.parse.urlsplit(url)
+        if (landing.scheme, landing.netloc) != (target.scheme, target.netloc):
+            raise RuntimeError('changed page redirected outside disposable app origin')
+        if landing.path == '/login.html' and target.path != '/login.html':
+            raise LoginRequired('changed page requires a disposable student session')
         return response.status, response.read()
 
 
@@ -369,7 +408,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     if not skill_id:
         return {"gate": 5, "blocked": True, "reason": "thiếu skill_id cho Docker verify", "evidence": None,
                 "failure_class": "transient"}
-    project = f"ai-verify-{skill_id}"
+    project = f"ai-verify-{skill_id[:24]}-{uuid.uuid4().hex[:12]}"
+    password = secrets.token_hex(24)
     pages = _public_paths(state.get("diffs") or [])
     if not pages:
         # Nothing the isolated server serves can show the change; a repair cannot fix that, the plan must.
@@ -390,15 +430,16 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     screenshot = None
     smoke_ok = False
     http_observed = False
-    import functional
     probe_id = functional.select(state)
     functional_result = {'probe_id': probe_id, 'passed': False, 'reason': 'Behavior has not been verified'}
+    teardown_confirmed = False
 
     with tempfile.TemporaryDirectory(prefix="ai-verify-compose-") as temp:
         override = Path(temp) / "override.yml"
-        override.write_text(_override(project), encoding="utf-8")
-        compose = ["docker", "compose", "-p", project, "-f", str(checkout / "docker-compose.yml"),
-                   "-f", str(override)]
+        override.write_text(_override(project, password, checkout), encoding="utf-8")
+        empty_env = Path(temp) / "empty-env"
+        empty_env.write_text("", encoding="utf-8")
+        compose = ["docker", "compose", "--env-file", str(empty_env), "-p", project, "-f", str(override)]
 
         def command(args: list[str], *, env=None, log_output=True, timeout=None) -> subprocess.CompletedProcess:
             result = runner(args, cwd=checkout, env=env, text=True, encoding="utf-8", errors="replace", capture_output=True,
@@ -406,7 +447,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             output = "[output redacted]"
             if log_output:
                 output = f"{result.stdout or ''}{result.stderr or ''}"
-                output = (redact(output).strip()[-4000:] or "(không có chi tiết lỗi)") if result.returncode else f"exit {result.returncode}"
+                output = (redact(output.replace(password, "[synthetic credential]")).strip()[-4000:] or "(không có chi tiết lỗi)") if result.returncode else f"exit {result.returncode}"
             logs.append(f"$ {' '.join(str(a) for a in args)}\n{output}")
             if result.returncode:
                 raise RuntimeError(f"{' '.join(str(a) for a in args[:4])} exit {result.returncode}")
@@ -414,26 +455,9 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
 
         try:
             config = json.loads(command([*compose, "config", "--format", "json"]).stdout)
-            service = config["services"]["tizia"]
-            ports = service.get("ports") or []
-            volumes = service.get("volumes") or []
-            expected_env = {"NODE_ENV": "production", "PORT": "8041", "HOST": "0.0.0.0",
-                            "DATA_DIR": "/data", "BASE_PATH": ""}
             kind = "critical"
-            if escape := _escape_hatch(config):
-                raise RuntimeError(f"Compose config mở đường ra ngoài cách ly: {escape}")
+            _validate_config(config, project, password)
             internal = _internal()
-            network = (config.get("networks") or {}).get("default") or {}
-            isolated_net = (not ports and network.get("internal") is True if internal else
-                            len(ports) == 1 and ports[0].get("target") == 8041 and
-                            ports[0].get("host_ip") == "127.0.0.1" and not ports[0].get("published"))
-            if (service.get("environment") != expected_env or service.get("env_file") or
-                    service.get("secrets") or service.get("container_name") or
-                    service.get("image") != f"{project}:latest" or
-                    not isolated_net or
-                    len(volumes) != 1 or volumes[0].get("source") != f"{project}-data" or
-                    volumes[0].get("target") != "/data"):
-                raise RuntimeError("Compose config không cách ly port/network/volume/env/image")
             kind = "transient"
             command([*compose, "up", "--build", "-d", "--wait", "--wait-timeout", "120"])
             if internal:
@@ -463,9 +487,11 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             container_env = dict(line.split("=", 1) for line in env_output.splitlines() if "=" in line)
             leaked = sorted(name for name, value in container_env.items()
                             if value and (name in _REQUIRED_ABSENT or _SECRET_NAME.search(name)))
+            if container_env.get("DATABASE_URL") != _app_env(password)["DATABASE_URL"]:
+                raise RuntimeError("container DATABASE_URL is not this run disposable PostgreSQL DSN")
             if leaked:
                 raise RuntimeError(f"container có biến bí mật: {', '.join(leaked)}")
-            logs.append("Container env: 5 biến ứng dụng cho phép; các key/secret/token đều vắng mặt hoặc rỗng.")
+            logs.append("Container env: 6 biến ứng dụng cho phép; DATABASE_URL chỉ trỏ PostgreSQL disposable; các key/secret/token đều vắng mặt hoặc rỗng.")
             kind = "ordinary"
 
             test_files = sorted({item.get("test_file") for item in state.get("diffs") or []
@@ -498,8 +524,21 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             smoke = command([_bash(), SMOKE_SCRIPT.as_posix()], env=env)
             smoke_ok = smoke.returncode == 0
 
+            def fixture(stage):
+                if stage in ('seed', 'thread', 'session'):
+                    command([*compose, 'cp', str(Path(__file__).resolve().parents[1] / 'queue_fixture.mjs'), 'tizia:/app/verify-queue.mjs'])
+                response = command([*compose, 'exec', '-T', 'tizia', 'node', '/app/verify-queue.mjs', stage], log_output=False, timeout=20)
+                return json.loads(response.stdout) if stage in ('seed', 'thread', 'session') else None
             for page in pages:
-                status, body = http_probe(base + page)
+                try:
+                    status, body = http_probe(base + page)
+                except LoginRequired:
+                    if http_probe is not probe_http:
+                        raise
+                    # Retry protected pages as a synthetic student in this run's
+                    # disposable database. Anonymous public pages stay anonymous.
+                    status, body = probe_http(base + page, token=fixture('session')['token'])
+                    logs.append(f"Changed page HTTP authenticated disposable student: {page}")
                 if not 200 <= status < 300:
                     smoke_ok = False
                     raise RuntimeError(f"changed page returned HTTP {status}: {page}")
@@ -512,11 +551,6 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 logs.append(f"Changed page HTTP {status}: {page}")
             http_observed = True
             kind = 'plan'
-            def fixture(stage):
-                if stage in ('seed', 'thread', 'session'):
-                    command([*compose, 'cp', str(Path(functional.__file__).with_name('queue_fixture.mjs')), 'tizia:/app/verify-queue.mjs'])
-                response = command([*compose, 'exec', '-T', 'tizia', 'node', '/app/verify-queue.mjs', stage], log_output=False, timeout=20)
-                return json.loads(response.stdout) if stage in ('seed', 'thread', 'session') else None
             observed_pages = html or ([primary] if primary else [])
             functional_result = (functional_probe(base, probe_id) if functional_probe
                                  else functional.run(base, probe_id, fixture, state=state, pages=observed_pages))
@@ -554,19 +588,32 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 logs += [f"Cổng ảnh: {issue}" for issue in visual_issues] or ["Cổng ảnh: không có lỗi hiển thị mới."]
                 if visual_issues:  # bản sau tệ hơn bản trước: sửa được bằng lượt sửa, như test hỏng
                     raise RuntimeError("giao diện tệ hơn bản trước — " + " | ".join(visual_issues))
-        except (OSError, RuntimeError, ValueError, KeyError, TypeError) as exc:
-            reason = str(exc)
+        except (OSError, RuntimeError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
+            reason = (str(exc) or type(exc).__name__).replace(password, "[synthetic credential]")
         finally:
             try:
+                diagnostic = command([*compose, "logs", "--no-color"], log_output=False)
+                logs.append("Container logs before teardown:\n" + redact((diagnostic.stdout or "").replace(password, "[synthetic credential]"))[-8000:])
+            except (OSError, RuntimeError, subprocess.TimeoutExpired):
+                pass
+            try:
                 command([*compose, "down", "-v"])
-            except (OSError, RuntimeError) as exc:
+                remaining = [command(["docker", resource, "ls", "--all", "--filter", f"{key}={value}", "--format", "{{.ID}}"], log_output=False).stdout.strip()
+                             for resource, key, value in (("container", "label", f"com.docker.compose.project={project}"),)]
+                remaining += [command(["docker", resource, "ls", "--filter", "name=" + project, "--format", "{{.Name}}"], log_output=False).stdout.strip()
+                              for resource in ("volume", "network")]
+                if any(remaining):
+                    raise RuntimeError("run resources remain after Compose down")
+                teardown_confirmed = True
+            except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
                 reason = f"{reason or 'verify'}; teardown thất bại: {exc}"
                 kind = "transient"  # leaked containers are the environment's problem, not the candidate's
 
     evidence = {"text": "Smoke scripts/smoke-user-state.sh: một luồng user-state, không bao phủ toàn ứng dụng.\n"
                         + "\n".join(logs), "smoke_passed": smoke_ok, "http_observed": http_observed, "runner": runner_name,
                 "screenshot": str(screenshot) if screenshot else None, "screenshots": shots,
-                "functional": functional_result}
+                "functional": functional_result, "postgres": {"project": project, "network": f"{project}-net",
+                "data_volume": f"{project}-pg", "disposable": True}, "teardown_confirmed": teardown_confirmed}
     state["evidence"] = evidence
     return {"gate": 5, "blocked": bool(reason), "reason": reason, "evidence": evidence,
             "failure_class": kind if reason else None}

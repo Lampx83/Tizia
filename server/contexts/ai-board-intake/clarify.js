@@ -1,7 +1,8 @@
 // Làm rõ yêu cầu mơ hồ: model hỏi tối đa 2 câu, stream từng token, rồi tóm tắt thành spec.
 // Model chỉ được hỏi: không công cụ, lời người dùng nằm trong khối dữ liệu, đầu ra qua guard trước khi lưu.
+import { appLlm, vllmHeaders, vllmChatUrl, vllmBody, parseSse } from '../../ai-llm.js';
 import fs from 'node:fs';
-import { checkIntake } from '../../ai-board/intake-guard.js';
+import { checkIntake } from '../../ai-board/intake-guard-async.js';
 import { checkContentSafety } from '../safety/profanity-vi.js';
 import { containsPromptDisclosure } from '../../ai-prompt-guardrails.js';
 import { CLASSIFIER } from '../../ai-board/classifier.js';
@@ -139,8 +140,10 @@ export async function streamGuarded({ generate, model, prompt, kind, mode, send,
   return guardModelText(broken ? '' : text, kind, mode, fallback);
 }
 
-/** Real streaming call to Ollama /api/generate (NDJSON). onToken returning false aborts the upstream request. */
-export function ollamaStreamer({ env = process.env, fetchImpl = fetch, timeoutMs = 60_000 } = {}) {
+/** Real streaming call: vLLM chat SSE when VLLM_URL is set, else Ollama /api/generate (NDJSON). onToken returning false aborts the upstream request. */
+export function ollamaStreamer({ env = process['env'], fetchImpl = fetch, timeoutMs = 60_000 } = {}) {
+  const llm = appLlm(env);
+  if (llm.provider === 'vllm') return vllmStreamer({ llm, fetchImpl, timeoutMs });
   return async ({ model, prompt, kind, onToken }) => {
     const url = String(env.OLLAMA_URL || '').replace(/\/+$/, '');
     if (!url || !model) throw new Error('OLLAMA_URL or model not set');
@@ -172,6 +175,38 @@ export function ollamaStreamer({ env = process.env, fetchImpl = fetch, timeoutMs
           }
           if (data.done) return text;
         }
+      }
+      return text;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+}
+
+/** vLLM streaming (OpenAI SSE). The model is fixed by the vLLM endpoint config, not by the Ollama-style route names. */
+function vllmStreamer({ llm, fetchImpl, timeoutMs }) {
+  return async ({ prompt, kind, onToken }) => {
+    if (!llm.url || !llm.model) throw new Error('VLLM_URL or model not set');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetchImpl(vllmChatUrl(llm.url), {
+        method: 'POST', headers: vllmHeaders(llm.secret), signal: controller.signal, redirect: 'error',
+        body: JSON.stringify(vllmBody({ model: llm.model, messages: [{ role: 'user', content: prompt }], temperature: 0.3,
+          maxTokens: kind === 'summary' ? 600 : 160, stream: true })),
+      });
+      if (!res.ok) throw new Error(`vLLM HTTP ${res.status}`);
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let text = '';
+      for await (const chunk of res.body) {
+        const parsed = parseSse(buffer + decoder.decode(chunk, { stream: true }));
+        buffer = parsed.rest;
+        for (const token of parsed.tokens) {
+          text += token;
+          if (onToken(token) === false) { controller.abort(); return text; }
+        }
+        if (parsed.done) return text;
       }
       return text;
     } finally {

@@ -2251,53 +2251,14 @@ async function loadConfig() {
     };
   });
 
-  $$('button[data-restore]').forEach(btn => {
-    btn.onclick = () => {
-      const name = btn.dataset.restore;
-      openConfirm({
-        title:'Phục hồi từ snapshot?',
-        msg:'pg_restore --clean sẽ chạy ngay trên DB đang sống — mọi bảng bị DROP rồi tạo lại từ snapshot. Server tự lưu safety snapshot pre-restore trước khi restore. Có chắc chắn?',
-        ctx: name,
-        onConfirm: async () => {
-          const fr = await fetch(`/api/admin/backups/${encodeURIComponent(name)}`, { credentials:'same-origin' });
-          if (!fr.ok) return toast('Không tải được snapshot', 'err');
-          const buf = await fr.arrayBuffer();
-          const rr = await fetch('/api/admin/restore', {
-            method:'POST', credentials:'same-origin',
-            headers:{'Content-Type':'application/octet-stream','X-Confirm-Restore':'YES'},
-            body: buf,
-          });
-          const j = await rr.json().catch(()=>({}));
-          if (!rr.ok) return toast('Lỗi: ' + (j.detail || j.error || rr.status), 'err');
-          toast('Đã phục hồi · safety=' + (j.safety_backup || '—')); closeModal(); await loadConfig();
-        },
-      });
-    };
-  });
-
+  const recoveryMessage = 'Khôi phục phải thực hiện ở môi trường riêng và kiểm chứng trước khi chuyển sang sử dụng, để giữ dữ liệu mới. Bản sao PostgreSQL không chứa ảnh và tệp đính kèm; các tệp này cần được sao lưu riêng.';
+  const recoveryNotice = document.createElement('p');
+  recoveryNotice.textContent = recoveryMessage;
+  $('#tabbody').append(recoveryNotice);
+  $$('button[data-restore]').forEach(btn => { btn.disabled = true; btn.title = recoveryMessage; });
   const fileInput = $('#restore-file');
-  if (fileInput) {
-    fileInput.onchange = async (e) => {
-      const file = e.target.files?.[0]; if (!file) return;
-      if (!/\.dump$/i.test(file.name)) { toast('Chỉ nhận file .dump (pg_dump -Fc)', 'err'); fileInput.value=''; return; }
-      openConfirm({
-        title:'Phục hồi từ file upload?',
-        msg:'pg_restore --clean sẽ chạy ngay — bảng hiện tại bị DROP rồi tạo lại từ file upload. Server tự lưu safety snapshot pre-restore. Có chắc chắn?',
-        ctx: `${file.name} · ${fmtBytes(file.size)}`,
-        onConfirm: async () => {
-          const buf = await file.arrayBuffer();
-          const rr = await fetch('/api/admin/restore', {
-            method:'POST', credentials:'same-origin',
-            headers:{'Content-Type':'application/octet-stream','X-Confirm-Restore':'YES'},
-            body: buf,
-          });
-          const j = await rr.json().catch(()=>({}));
-          if (!rr.ok) return toast('Lỗi: ' + (j.message || j.detail || j.error || rr.status), 'err');
-          toast('Đã phục hồi · safety=' + (j.safety_backup || '—')); closeModal(); fileInput.value=''; await loadConfig();
-        },
-      });
-    };
-  }
+  if (fileInput) { fileInput.disabled = true; fileInput.title = recoveryMessage; }
+
 }
 
 // loadSimple variant có cột "Xoá" cuối row (dùng cho content)

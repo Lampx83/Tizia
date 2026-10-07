@@ -65,7 +65,7 @@ export function reloadSkillsMapping() {
 
 // ---- Prepared statements ----
 const lookupSkillIdsByCodes = db.prepare(`
-  SELECT id, code FROM skills WHERE code IN (SELECT value FROM json_each(?))
+  SELECT id, code FROM skills WHERE code IN (SELECT jsonb_array_elements_text(?::jsonb))
 `);
 
 const insertUserSkill = db.prepare(`
@@ -172,7 +172,7 @@ export async function grantSkillsForSpace({ user_id, domain, space_id, score, so
     ? await db.prepare(`
         SELECT s.code, s.name, c.code AS comp_code, c.name AS comp_name
         FROM skills s JOIN competencies c ON c.id = s.competency_id
-        WHERE s.code IN (SELECT value FROM json_each(?))
+        WHERE s.code IN (SELECT jsonb_array_elements_text(?::jsonb))
       `).all(JSON.stringify(newly))
     : [];
 
@@ -333,7 +333,7 @@ export function attachSkills(router, { requireAuth, requireEnrolled }) {
         EXISTS(SELECT 1 FROM user_skills us
                WHERE us.user_id = ? AND us.skill_id = s.id AND us.domain = ?) AS earned
       FROM skills s JOIN competencies c ON c.id = s.competency_id
-      WHERE s.code IN (SELECT value FROM json_each(?))
+      WHERE s.code IN (SELECT jsonb_array_elements_text(?::jsonb))
       ORDER BY c.sort_order, s.name
     `).all(req.user.id, userDomain, JSON.stringify(codes));
     res.json({ skills: rows.map(r => ({ ...r, earned: !!r.earned })) });

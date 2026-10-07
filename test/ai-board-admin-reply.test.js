@@ -7,6 +7,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import express from 'express';
+import { createBoardSchema } from './support/ai-board-db.js';
+const appFixture = await createBoardSchema({ migrate: false });
+process['env'].DATABASE_URL = appFixture.url;
 
 const dir = mkdtempSync(path.join(tmpdir(), 'tizia-admin-reply-'));
 process.env.DATA_DIR = dir;
@@ -14,10 +17,12 @@ delete process.env.CSRF_SECRET;
 const { db } = await import('../server/db.js');
 const { attachAdmin } = await import('../server/contexts/admin/index.js');
 const { createAiBoardStore } = await import('../server/ai-board/store.js');
+const { applyMigrations } = await import('../server/ai-board/db/index.js');
+await applyMigrations(db.d);
 
 // Owned by the ai-agent context, not mounted here.
-await db.exec(`CREATE TABLE IF NOT EXISTS ai_decisions (id INTEGER PRIMARY KEY AUTOINCREMENT, request_id INTEGER, decided_by TEXT,
-  action TEXT, status_applied TEXT, reason TEXT, public_note TEXT, priority_score REAL, confidence REAL, created_at INTEGER)`);
+await db.exec(`CREATE TABLE IF NOT EXISTS ai_decisions (id BIGSERIAL PRIMARY KEY, request_id BIGINT, decided_by TEXT,
+  action TEXT, status_applied TEXT, reason TEXT, public_note TEXT, priority_score REAL, confidence REAL, created_at BIGINT)`);
 
 const raw = 'a'.repeat(40);
 const CSRF = `${raw}.${createHmac('sha256', 'dev-csrf-secret-change-me').update(raw).digest('hex').slice(0, 16)}`;
@@ -61,8 +66,8 @@ test('admin reply: no root ticket is 404 with no decision, thread message or not
     // With a root the same call still succeeds.
     const owner = Number((await db.prepare(`INSERT INTO users (username, display_name, password_hash, created_at)
       VALUES ('lan', 'Lan', 'x', 1)`).run()).lastInsertRowid);
-    const store = createAiBoardStore(db.raw);
-    const { request_id: id } = store.createRequestWithRoot({
+    const store = createAiBoardStore(db.d);
+    const { request_id: id } = await store.createRequestWithRoot({
       ownerUserId: owner, ownerDomain: 'pharmacy', ownerDisplayName: 'Lan',
       idempotencyKey: 'admin-reply-root-001', title: 'Thêm bộ thẻ thuốc', detail: 'Nội dung fixture',
     });
@@ -75,8 +80,9 @@ test('admin reply: no root ticket is 404 with no decision, thread message or not
   }
 });
 
-test.after(() => {
-  db.close();
+test.after(async () => {
+  await db.close();
+  await appFixture.dispose();
   rmSync(dir, { recursive: true, force: true });
   // Importing the admin/analytics modules starts non-unref'd timers; without this the file never exits.
   setTimeout(() => process.exit(0), 200).unref();

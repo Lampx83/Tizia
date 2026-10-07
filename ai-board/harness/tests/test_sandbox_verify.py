@@ -125,7 +125,7 @@ def test_pass_runs_boot_then_gate_in_a_fresh_vm_and_always_destroys(tmp_path):
     assert result["blocked"] is False and result["evidence"]["runner"] == "docker"
     assert client.calls == ["create", "upload", "exec", "guest-boot.sh", "exec", "sh", "download", "download", "destroy"]
     assert client.run_id.startswith("g5-") and client.manifest[0]["name"] == "result"
-    assert result["evidence"]["sandbox"] == {"run_id": client.run_id, "policy_hash": "h" * 64}
+    assert result["evidence"]["sandbox"] == {"run_id": client.run_id, "policy_hash": "h" * 64, "teardown_confirmed": True}
     assert st["evidence"] is result["evidence"]
 
 
@@ -333,7 +333,7 @@ def test_destroy_is_retried_until_the_runner_confirms_teardown(tmp_path, sleeps)
     assert sandbox_verify.run(state(checkout(tmp_path)), client=client)["blocked"] is False
     assert client.calls.count("destroy") == 3
     stuck = Flaky(destroy_status=502, times=99)
-    assert sandbox_verify.run(state(checkout(tmp_path)), client=stuck)["blocked"] is False  # the verdict stands; the lease expiry cleans up
+    assert sandbox_verify.run(state(checkout(tmp_path)), client=stuck)["blocked"] is True  # unconfirmed teardown invalidates success
     assert stuck.calls.count("destroy") == 3
 
 

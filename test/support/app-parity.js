@@ -1,6 +1,5 @@
-// Boots the real server (server/index.js) on SQLite and on PostgreSQL and replays one scripted HTTP scenario against
-// both, so a behaviour change between the two backends shows up as a diff. Volatile values (timestamps, tokens, random
-// codes) are normalised before comparing. PostgreSQL needs TEST_PG_URL (throwaway container); each run gets its own schema.
+// Boots the real PostgreSQL server in two isolated schemas and replays a scripted HTTP scenario.
+// Volatile timestamps, tokens and codes are normalised before comparing.
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -9,7 +8,6 @@ import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
-import Database from 'better-sqlite3';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -30,13 +28,14 @@ async function waitHealthy(base, child, log) {
 
 /** backend: 'sqlite' | 'postgres'. Returns { base, backend, logs, stop, promoteAdmin } */
 export async function startApp(backend, extraEnv = {}) {
+  if (!backend.startsWith('postgres') || !process.env.TEST_PG_URL) throw new Error('PG fixture URL required');
   const dataDir = mkdtempSync(path.join(tmpdir(), `tizia-parity-${backend}-`));
   const port = await freePort();
   const env = { ...process.env, PORT: String(port), HOST: '127.0.0.1', DATA_DIR: dataDir, NODE_ENV: 'test', ...extraEnv };
   delete env.DATABASE_URL;
   let schema = null;
   let admin = null;
-  if (backend === 'postgres') {
+  if (backend.startsWith('postgres')) {
     schema = `p_${randomBytes(6).toString('hex')}`;
     admin = new pg.Client({ connectionString: process.env.TEST_PG_URL });
     await admin.connect();
@@ -60,9 +59,8 @@ export async function startApp(backend, extraEnv = {}) {
       rmSync(dataDir, { recursive: true, force: true });
     },
     async promoteAdmin(username) {
-      if (backend === 'postgres') { await admin.query(`UPDATE ${schema}.users SET role='admin' WHERE username=$1`, [username]); return; }
-      const raw = new Database(path.join(dataDir, 'tizia.db'));
-      try { raw.prepare(`UPDATE users SET role='admin' WHERE username=?`).run(username); } finally { raw.close(); }
+      if (backend.startsWith('postgres')) { await admin.query(`UPDATE ${schema}.users SET role='admin' WHERE username=$1`, [username]); return; }
+      throw new Error('Only PostgreSQL fixture backends supported');
     },
   };
 }

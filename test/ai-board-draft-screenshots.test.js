@@ -6,11 +6,12 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import express from 'express';
-import Database from 'better-sqlite3';
 
-import { applyAiBoardMigrations, createAiBoardStore, LIMITS } from '../server/ai-board/store.js';
+import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
+import { openBoard } from './support/ai-board-db.js';
+import { LIMITS } from '../server/ai-board/store.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
-import { DRAFT_AUTHOR, draftNotifier, MAX_SHOT_BYTES, SHOTS_TYPE } from '../server/ai-board/drafts.js';
+import { DRAFT_AUTHOR, draftNotifier, MAX_SHOT_BYTES, SHOTS_TYPE } from '../server/ai-board/drafts-async.js';
 
 const KEY = 'fixture-worker-key-32-characters-long';
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('IHDR fixture')]);
@@ -34,25 +35,12 @@ const BLOCKED = {
 };
 
 async function fixture() {
-  const db = new Database(':memory:');
-  db.pragma('foreign_keys = ON');
-  db.exec(`
-    CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, display_name TEXT, role TEXT, enrolled_domain TEXT);
-    CREATE TABLE requests (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'other',
-      title TEXT NOT NULL, detail TEXT, student TEXT NOT NULL DEFAULT 'x',
-      status TEXT NOT NULL DEFAULT 'pending', votes INTEGER NOT NULL DEFAULT 1,
-      admin_note TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, attachments TEXT
-    );
-    CREATE TABLE request_messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, request_id INTEGER NOT NULL, role TEXT NOT NULL,
-      author_name TEXT, body TEXT NOT NULL, attachments TEXT, created_at INTEGER NOT NULL
-    );
-    INSERT INTO users VALUES (1, 'lan', 'Lan', 'student', 'pharmacy'), (2, 'minh', 'Minh', 'student', 'pharmacy');
-  `);
-  applyAiBoardMigrations(db);
-  const store = createAiBoardStore(db);
-  store.createRequestWithRoot({ ownerUserId: 1, ownerDomain: 'pharmacy', ownerDisplayName: 'Lan',
+  const db = await openBoard({ users: [
+    [1, 'lan', 'Lan', 'student', 'pharmacy'],
+    [2, 'minh', 'Minh', 'student', 'pharmacy'],
+  ] });
+  const store = createAsyncAiBoardStore(db.d);
+  await store.createRequestWithRoot({ ownerUserId: 1, ownerDomain: 'pharmacy', ownerDisplayName: 'Lan',
     idempotencyKey: 'draft-request-001', title: 'Sửa trang giới thiệu', detail: 'fixture' });
   const uploadsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-board-shots-'));
   const notices = [];
@@ -79,12 +67,12 @@ async function fixture() {
 
   /** 1 lượt: claim → run → plan → verdict (qua HTTP để chạy hook). Trả lease/run để gọi tiếp. */
   async function cycle(verdict, n) {
-    const ticket = store.claimNext({ workerId: 'w1', version: 't', mode: 'active', intent: 'plan' });
+    const ticket = await store.claimNext({ workerId: 'w1', version: 't', mode: 'active', intent: 'plan' });
     const lease = { workerId: 'w1', leaseToken: ticket.lease_token };
-    const run = store.createRun(ticket.id, { ...lease, trigger: 'plan', idempotencyKey: `draft-run-00${n}` });
+    const run = await store.createRun(ticket.id, { ...lease, trigger: 'plan', idempotencyKey: `draft-run-00${n}` });
     const step = { order: 1, title: `Sửa lần ${n}`, description: 'x', allowed_scope: ['public/gioi-thieu.html'],
       acceptance: ['đổi'], tests: ['node --test'], capability: 'public.ui', risk: 'low', non_goals: ['x'] };
-    store.submitPlan(ticket.id, { ...lease, runId: run.id, budgetUsed: 1, idempotencyKey: `draft-plan-00${n}`,
+    await store.submitPlan(ticket.id, { ...lease, runId: run.id, budgetUsed: 1, idempotencyKey: `draft-plan-00${n}`,
       plan: { domain: 'pharmacy', goal: `Sửa lần ${n}.`, allowed_scope: step.allowed_scope, acceptance: step.acceptance,
         tests: step.tests, capabilities: ['public.ui'], risk: 'low', non_goals: ['x'], steps: [step] } });
     const body = { worker_id: 'w1', lease_token: ticket.lease_token, run_id: run.id };
@@ -93,7 +81,7 @@ async function fixture() {
       response = await worker(`/api/ai-board/worker/tickets/${ticket.id}/verdict`,
         { ...body, verdict, idempotency_key: `draft-verdict-00${n}` });
     }
-    const release = () => store.releaseLease(ticket.id, { ...lease, outcome: 'planned', idempotencyKey: `draft-release-00${n}` });
+    const release = async () => store.releaseLease(ticket.id, { ...lease, outcome: 'planned', idempotencyKey: `draft-release-00${n}` });
     return { ticket, body, response, release };
   }
   const requests = async (user) => (await (await fetch(`${base}/api/requests?domain=pharmacy`,
@@ -120,7 +108,7 @@ test('screenshot route: worker key + live lease, PNG only, per-image cap', async
     assert.equal((await f.worker(url, { ...body, images: Array(17).fill(shot()) }, SHOTS_TYPE)).status, 400);
     assert.equal((await f.worker(url, payload)).status, 415); // application/json: sai loại, không nhận
     assert.equal(fs.readdirSync(f.uploadsDir).length, 0, 'không ghi file nào khi bị từ chối');
-    assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM request_messages').get().n, 0);
+    assert.equal((await f.db.prepare('SELECT COUNT(*) AS n FROM request_messages').get()).n, 0);
   } finally { f.close(); }
 });
 
@@ -134,7 +122,7 @@ test('screenshots are stored and appended as one AI thread message, once per run
     assert.equal(first.status, 200);
     assert.equal((await first.json()).stored, 4);
     assert.equal((await (await f.worker(url, { ...body, images }, SHOTS_TYPE)).json()).duplicate, true);
-    const messages = f.db.prepare('SELECT * FROM request_messages').all();
+    const messages = (await f.db.prepare('SELECT * FROM request_messages').all());
     assert.equal(messages.length, 1);
     assert.equal(messages[0].role, 'ai');
     assert.equal(messages[0].author_name, DRAFT_AUTHOR);
@@ -172,20 +160,20 @@ test('"Thử cách khác" requeues only the caller\'s own failed root, and stops
     assert.equal(f.notices.at(-1).body.includes('Thử cách khác'), true);
     // Lease còn sống (worker chưa trả): chưa cho thử lại.
     assert.equal((await f.post('/api/requests/1/retry', {}, { 'x-test-user': '1' })).status, 409);
-    first.release();
+    await first.release();
     // Hỏng không tính vào trần yêu cầu đang chờ.
-    assert.equal(f.store.countPendingRoots(1), 0);
+    assert.equal((await f.store.countPendingRoots(1)), 0);
     assert.equal((await f.post('/api/requests/1/retry', {}, { 'x-test-user': '2' })).status, 404); // không phải của mình
     const mine = await f.post('/api/requests/1/retry', {}, { 'x-test-user': '1' });
     assert.equal(mine.status, 200);
-    const root = f.db.prepare("SELECT status, phase FROM ai_tickets WHERE kind='root'").get();
+    const root = (await f.db.prepare("SELECT status, phase FROM ai_tickets WHERE kind='root'").get());
     assert.deepEqual({ ...root }, { status: 'queued', phase: 'needs_replan' });
     assert.equal((await f.post('/api/requests/1/retry', {}, { 'x-test-user': '1' })).status, 409); // đang chờ, không hỏng
 
     const second = await f.cycle(BLOCKED, 2);
-    second.release();
+    await second.release();
     assert.match(f.notices.at(-1).body, /chuyển quản trị viên/);
-    const handed = f.db.prepare("SELECT status, public_note FROM ai_tickets WHERE kind='root'").get();
+    const handed = (await f.db.prepare("SELECT status, public_note FROM ai_tickets WHERE kind='root'").get());
     assert.equal(handed.status, 'waiting_admin');
     const refused = await f.post('/api/requests/1/retry', {}, { 'x-test-user': '1' });
     assert.equal(refused.status, 409);
@@ -197,10 +185,10 @@ test('"Thử cách khác" requeues only the caller\'s own failed root, and stops
 test('the request list offers "Thử cách khác" after one failed run; the pending cap still applies', async () => {
   const f = await fixture();
   try {
-    (await f.cycle(BLOCKED, 1)).release();
+    await (await f.cycle(BLOCKED, 1)).release();
     assert.equal((await f.requests(1))[0].retry, 'retry');
     for (let i = 0; i < LIMITS.pending_roots_per_user.value; i += 1) {
-      f.store.createRequestWithRoot({ ownerUserId: 1, ownerDomain: 'pharmacy', ownerDisplayName: 'Lan',
+      await f.store.createRequestWithRoot({ ownerUserId: 1, ownerDomain: 'pharmacy', ownerDisplayName: 'Lan',
         idempotencyKey: `draft-request-cap-${i}`, title: `Yêu cầu khác ${i}` });
     }
     const capped = await f.post('/api/requests/1/retry', {}, { 'x-test-user': '1' });
@@ -220,7 +208,7 @@ test('several changed pages: up to 16 images, and a close-up of the changed elem
     const res = await f.worker(url, { ...body, images }, SHOTS_TYPE);
     assert.equal(res.status, 200);
     assert.equal((await res.json()).stored, 12);
-    const atts = JSON.parse(f.db.prepare('SELECT attachments FROM request_messages').get().attachments);
+    const atts = JSON.parse((await f.db.prepare('SELECT attachments FROM request_messages').get()).attachments);
     assert.equal(atts[0].name, 'Trước · vùng thay đổi · /a.html');
     assert.equal(atts[1].name, 'Sau · 1280px · /a.html');
   } finally { f.close(); }

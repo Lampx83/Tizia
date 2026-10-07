@@ -19,7 +19,6 @@
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.21",
     "adm-zip": "^0.5.17",
-    "better-sqlite3": "^11.5.0",
     "compression": "^1.8.1",
     "express": "^4.21.1",
     "pg": "^8.21.0",

@@ -1,18 +1,7 @@
-// Async DB contract for the AI board: one interface, two backends (SQLite stays default, PostgreSQL is opt-in).
+// Async PostgreSQL contract (pool, ambient transactions, savepoints) shared by the app db handle and the AI board.
 // SQL is written once with `?` placeholders and portable syntax (ON CONFLICT DO NOTHING, COALESCE, CAST); the few
 // dialect gaps go through `d.jsonNum` / `d.lockRow` / `d.lockQueue(alias)`. `t` inside tx() has the same methods as `d`.
-//
-// Backend switch: AI_BOARD_DB=sqlite|postgres (default sqlite) + AI_BOARD_DATABASE_URL for postgres (see services.js).
-//
-// DECISION (shared tables): with postgres the board database owns `requests` and `request_messages` (they are the board's intake
-// and thread data; trigger 017 keeps requests.status in step with the root ticket) and holds a `users` PROJECTION (id, username,
-// display_name, role, enrolled_domain) upserted whenever a signed-in user touches a board route. SQLite stays authoritative for
-// accounts, sessions, notifications, ai_decisions and everything else. Every non-board reader/writer of requests/request_messages
-// goes through requests-port.js. Board-created users (the 'ai-board' system user) get ids from 1_000_000_000 so they never
-// collide with an SQLite id. Two copies of `requests` never run at once: the other backend's rows are simply not read.
-//
-// ROLLBACK: unset AI_BOARD_DB (or set sqlite) and restart. The SQLite file is not written by the board while postgres is
-// selected and PostgreSQL rows are not copied back, so requests created on PostgreSQL after the flip stay there.
+// Board schema migrations (server/ai-board/migrations, PostgreSQL overrides in ./pg) run from db.js at boot.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,12 +11,6 @@ import pg from 'pg';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = path.join(HERE, '..', 'migrations');
 const MIGRATION_LOCK = 7_000_101; // pg_advisory_xact_lock key: two app instances must not migrate at once
-
-export function aiBoardBackend(env = process.env) {
-  const v = String(env.AI_BOARD_DB || 'sqlite').trim().toLowerCase();
-  if (v !== 'sqlite' && v !== 'postgres') throw new Error(`AI_BOARD_DB must be sqlite or postgres, got "${v}"`);
-  return v;
-}
 
 /** `?` -> `$n`, skipping quoted literals. */
 export function toPgPlaceholders(sql) {
@@ -50,21 +33,6 @@ export function toPgDdl(sql) {
 }
 
 const withInsertId = (sql) => `${sql.trim().replace(/;$/, '')} RETURNING id`;
-
-function sqliteOps(raw) {
-  return {
-    dialect: 'sqlite',
-    lockRow: '',
-    lockQueue: () => '',
-    jsonNum: (col, path) => `json_extract(${col}, '$.${path}')`,
-    jsonText: (col, path) => `json_extract(${col}, '$.${path}')`,
-    async get(sql, p = []) { return raw.prepare(sql).get(...p); },
-    async all(sql, p = []) { return raw.prepare(sql).all(...p); },
-    async run(sql, p = []) { return { changes: raw.prepare(sql).run(...p).changes }; },
-    async insert(sql, p = []) { return Number(raw.prepare(sql).run(...p).lastInsertRowid); },
-    async exec(sql) { raw.exec(sql); },
-  };
-}
 
 /** Ambient transaction: code inside tx() may call d.get/run/... directly, they join the open transaction
  * (AsyncLocalStorage), and a nested tx() becomes a SAVEPOINT, like better-sqlite3 nested transactions. */
@@ -94,34 +62,6 @@ const joined = (base) => {
   });
 };
 
-/** raw: a better-sqlite3 Database. One connection: tx() calls are serialised; a plain call from another task
- * while a tx is open joins it (ponytail: fine while the board is the only async caller). */
-export function createSqliteDb(raw) {
-  const ops = sqliteOps(raw);
-  const base = { ...ops, raw, async close() { raw.close(); } };
-  let chain = Promise.resolve();
-  base.tx = (fn) => {
-    const store = ambient.getStore();
-    if (store?.base === base) {
-      return runTx(store.ops, (sql) => raw.exec(sql), fn);
-    }
-    const result = chain.then(() => ambient.run({ base, ops }, async () => {
-      raw.exec('BEGIN IMMEDIATE');
-      try {
-        const value = await fn(ops);
-        raw.exec('COMMIT');
-        return value;
-      } catch (error) {
-        raw.exec('ROLLBACK');
-        throw error;
-      }
-    }));
-    chain = result.catch(() => {});
-    return result;
-  };
-  return joined(base);
-}
-
 function pgOps(q) {
   const call = (sql, p) => q.query(toPgPlaceholders(sql), p);
   return {
@@ -145,6 +85,8 @@ export function createPgDb({ url, max = 10 }) {
     connectionString: url, max,
     types: { getTypeParser: (oid, fmt) => (oid === 20 || oid === 1700 ? Number : pg.types.getTypeParser(oid, fmt)) },
   });
+  // PG restart bắn 'error' trên client rảnh trong pool; không có listener thì process chết. Pool tự mở client mới ở query sau.
+  pool.on('error', (error) => console.error(`[ai-board/db] pg pool idle client error: ${error.message}`));
   const base = { ...pgOps(pool), pool, async close() { await pool.end(); } };
   base.tx = async (fn) => {
     const store = ambient.getStore();
@@ -164,18 +106,6 @@ export function createPgDb({ url, max = 10 }) {
     }
   };
   return joined(base);
-}
-
-/** Env -> db. SQLite needs the open better-sqlite3 handle (the app's existing one). */
-export function openAiBoardDb({ env = process.env, sqlite } = {}) {
-  if (aiBoardBackend(env) === 'sqlite') return createSqliteDb(sqlite);
-  if (!env.AI_BOARD_DATABASE_URL) throw new Error('AI_BOARD_DATABASE_URL is required when AI_BOARD_DB=postgres');
-  return createPgDb({ url: env.AI_BOARD_DATABASE_URL });
-}
-
-/** Stand-in for tables db.js owns (users, requests, request_messages) on a fresh PostgreSQL. Idempotent. */
-export async function applyPgBaseSchema(d) {
-  await d.exec(fs.readFileSync(path.join(HERE, 'pg', 'base.sql'), 'utf8'));
 }
 
 /** Ordered, re-runnable: each file runs once in its own transaction with its schema_migrations row. */

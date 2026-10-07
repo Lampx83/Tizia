@@ -16,21 +16,21 @@ function firstDiff(a, b, at = '$') {
       if (d) return d;
     }
   }
-  return `${at}: sqlite ${JSON.stringify(a)} vs postgres ${JSON.stringify(b)}`;
+  return `${at}: PG-A ${JSON.stringify(a)} vs PG-B ${JSON.stringify(b)}`;
 }
 
-run('app parity: SQLite and PostgreSQL answer the same scenario the same way', { timeout: 300_000 }, async () => {
-  const apps = [await startApp('sqlite'), await startApp('postgres')];
+run('app parity: Independent PostgreSQL runs answer the same scenario the same way', { timeout: 300_000 }, async () => {
+  const apps = [await startApp('postgres-a'), await startApp('postgres-b')];
   try {
     const mk = (app) => ({ anon: makeClient(app.base), student: makeClient(app.base), teacher: makeClient(app.base), pupil: makeClient(app.base), admin: makeClient(app.base) });
     const results = await runScenario(apps, SCENARIO(apps), mk);
     const problems = [];
     for (const { step, byBackend } of results) {
-      const a = byBackend.sqlite; const b = byBackend.postgres;
+      const a = byBackend['postgres-a']; const b = byBackend['postgres-b'];
       const label = `${step.as || 'anon'} ${step.method || 'GET'} ${typeof step.path === 'function' ? '(fn)' : step.path}`;
       if (process.env.PARITY_VERBOSE === '1') console.log(`${a.status}/${b.status} ${label}${b.status >= 400 ? ' ' + JSON.stringify(b.json ?? b.text).slice(0, 160) : ''}`);
       if (b.status >= 500 && !step.allow5xx) problems.push(`PG 5xx ${label}: ${JSON.stringify(b.json ?? b.text).slice(0, 300)}`);
-      if (a.status !== b.status) { problems.push(`STATUS ${label}: sqlite ${a.status} vs postgres ${b.status} ${JSON.stringify(b.json ?? b.text).slice(0, 200)}`); continue; }
+      if (a.status !== b.status) { problems.push(`STATUS ${label}: PG-A ${a.status} vs PG-B ${b.status} ${JSON.stringify(b.json ?? b.text).slice(0, 200)}`); continue; }
       if (step.skipBody) continue;
       const c = step.canon || ((x) => x);
       const na = JSON.stringify(normalize(c(a.json ?? a.text))); const nb = JSON.stringify(normalize(c(b.json ?? b.text)));
@@ -38,7 +38,7 @@ run('app parity: SQLite and PostgreSQL answer the same scenario the same way', {
     }
     if (problems.length) {
       console.log(`--- ${problems.length} parity problems ---\n${problems.join('\n')}`);
-      for (const a of apps) if (a.backend === 'postgres') console.log('--- postgres server log tail ---\n' + a.logs().split('\n').filter((l) => /error|ERR|failed|warn/i.test(l)).slice(-40).join('\n'));
+      for (const a of apps) if (a.backend === 'postgres') console.log('--- PG-B server log tail ---\n' + a.logs().split('\n').filter((l) => /error|ERR|failed|warn/i.test(l)).slice(-40).join('\n'));
     }
     assert.equal(problems.length, 0, `${problems.length} parity problems (listed above)`);
   } finally {

@@ -1,5 +1,4 @@
-// Boots the real app (server/index.js) once per AI_BOARD_DB mode and drives the board through HTTP: requester, worker (key
-// auth) and admin. sqlite always; postgres (throwaway database, SQLite must stay free of board rows) only when TEST_PG_URL is set.
+// Boots the real app on a fresh PostgreSQL schema and drives requester, worker (key auth) and admin through HTTP.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -7,7 +6,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
-import Database from 'better-sqlite3';
 import pg from 'pg';
 import { PG_URL } from './support/ai-board-db.js';
 
@@ -33,7 +31,8 @@ function client(base) {
   return Object.assign(call, { async refreshCsrf() { csrf = (await call('GET', '/api/csrf')).json?.token ?? null; return csrf; } });
 }
 
-for (const mode of ['sqlite', ...(PG_URL ? ['postgres'] : [])]) {
+if (!PG_URL) throw new Error('PG fixture URL required');
+for (const mode of ['postgres']) {
 test(`[${mode}] the whole app runs the AI board (requester, worker, admin)`, { timeout: 120_000 }, async (t) => {
   const postgres = mode === 'postgres';
   const schema = `e2e_${randomBytes(5).toString('hex')}`;
@@ -48,7 +47,7 @@ test(`[${mode}] the whole app runs the AI board (requester, worker, admin)`, { t
   const port = 20000 + Math.floor(Math.random() * 20000);
   const child = spawn(process.execPath, ['server/index.js'], {
     env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', DATA_DIR: dataDir, NODE_ENV: 'development', AI_BOARD_WORKER_KEY: WORKER_KEY,
-      ...(postgres ? { AI_BOARD_DB: 'postgres', AI_BOARD_DATABASE_URL: url.toString() } : { AI_BOARD_DB: '' }) },
+      DATABASE_URL: url.toString() },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let log = '';
@@ -73,8 +72,7 @@ test(`[${mode}] the whole app runs the AI board (requester, worker, admin)`, { t
   if (postgres) await admin.query(`SET search_path TO ${schema}`);
   const q = async (sql, params = []) => {
     if (postgres) return (await admin.query(sql, params)).rows;
-    const sq = new Database(path.join(dataDir, 'tizia.db'));
-    try { return sq.prepare(sql).all(...params); } finally { sq.close(); }
+    throw new Error('Only PostgreSQL queries supported');
   };
   const worker = async (route, body) => {
     const res = await fetch(`${base}/api/ai-board/worker/${route}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-ai-worker-key': WORKER_KEY }, body: JSON.stringify(body) });
@@ -87,10 +85,16 @@ test(`[${mode}] the whole app runs the AI board (requester, worker, admin)`, { t
   const reg = await lan('POST', '/api/auth/register', { username: 'lan_e2e', password: 'secret-pw-1', displayName: 'Lan', role: 'teacher', age: 30, schoolName: 'THPT' });
   assert.ok(reg.status < 300, `register: ${reg.text}`);
   await lan.refreshCsrf();
+  // Cold initialization must provide both the SRS parent table and its card-content child.
+  const deck = await lan('POST', '/api/srs/decks', {
+    name: 'Cold PostgreSQL fixture', cards: [{ front: 'Câu hỏi', back: 'Đáp án' }],
+  });
+  assert.equal(deck.status, 200, deck.text);
+  const decks = await lan('GET', '/api/srs/decks/mine');
+  assert.equal(decks.status, 200, decks.text);
+  assert.equal(decks.json.items.find((item) => item.id === deck.json.deck_id)?.card_count, 1);
   const domain = 'pharmacy';
-  const sq0 = new Database(path.join(dataDir, 'tizia.db'));
-  sq0.prepare(`UPDATE users SET enrolled_domain = ?, grade = 10, major = 'Dược', cohort = 'K1', school_name = 'THPT', age = 16 WHERE username = 'lan_e2e'`).run(domain);
-  sq0.close();
+  await admin.query(`UPDATE users SET enrolled_domain = $1, grade = 10, major = 'Dược', cohort = 'K1', school_name = 'THPT', age = 16 WHERE username = 'lan_e2e'`, [domain]);
   const created = await lan('POST', '/api/requests', { title: 'Thêm bộ lọc thuốc', detail: 'Lọc theo nhóm thuốc', type: 'feature' }, { 'idempotency-key': 'e2e-request-0001' });
   assert.equal(created.status, 200, created.text);
   assert.equal(created.json.created, true);
@@ -118,13 +122,8 @@ test(`[${mode}] the whole app runs the AI board (requester, worker, admin)`, { t
     plan: { domain, goal: 'Thêm bộ lọc', allowed_scope: step.allowed_scope, acceptance: step.acceptance, tests: step.tests, capabilities: ['public.ui'], risk: 'low', non_goals: ['z'], steps: [step] } });
   assert.equal(plan.status, 200, JSON.stringify(plan.json));
 
-  // admin (SQLite role flip, the app reads it per request) sees the board and acts on it
-  const sq = new Database(path.join(dataDir, 'tizia.db'));
-  sq.prepare(`UPDATE users SET role = 'admin' WHERE username = 'lan_e2e'`).run();
-  const sqliteBoardRows = [sq.prepare('SELECT COUNT(*) n FROM requests').get().n, sq.prepare('SELECT COUNT(*) n FROM ai_tickets').get().n];
-  sq.close();
-  if (postgres) assert.deepEqual(sqliteBoardRows, [0, 0], 'SQLite holds no board rows while PostgreSQL is selected');
-  else assert.deepEqual(sqliteBoardRows, [1, 2]);
+  // Identity and board use PostgreSQL.
+  await admin.query(`UPDATE users SET role = 'admin' WHERE username = 'lan_e2e'`);
   await lan.refreshCsrf();
   const queue = await lan('GET', '/api/admin/ai-board/queue');
   assert.equal(queue.status, 200, queue.text);

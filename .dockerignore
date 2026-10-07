@@ -12,6 +12,7 @@ npm-debug.log
 .env*
 ai-board/
 !ai-board/harness/prompts/
+!ai-board/harness/verification/preview_guest.py
 data
 *.db
 *.db-journal
@@ -23,3 +24,6 @@ docs/agents
 docs/local
 graphify-out
 .smoketest-data
+
+# Local design metadata
+.impeccable

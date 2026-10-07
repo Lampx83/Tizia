@@ -32,6 +32,34 @@ function setup(over = {}) {
 }
 const code = (promise) => promise.then(() => null, (error) => error.code);
 
+test('preview HTTP is bounded, fixed-destination and unavailable after lease or restart', async () => {
+  const { runs, backend, clock, store } = setup();
+  let forwarded;
+  backend.http = async (_name, request) => {
+    forwarded = request;
+    return { status: 200, headers: [['content-type', 'image/png']], body: Buffer.from([0, 255, 128]).toString('base64') };
+  };
+  await runs.create({ run_id: 'preview-001' });
+  const result = await runs.http('preview-001', { method: 'GET', path: '/asset.png?version=1' });
+  assert.equal(result.body, 'AP+A');
+  assert.deepEqual(forwarded.headers, {});
+  for (const request of [
+    { method: 'GET', path: 'http://metadata/' }, { method: 'GET', path: '//metadata/' },
+    { method: 'CONNECT', path: '/' }, { method: 'GET', path: '/\\metadata/' },
+    { method: 'GET', path: '/', headers: { host: 'metadata' } },
+    { method: 'GET', path: '/', headers: { authorization: 'Bearer serving-token' } },
+    { method: 'GET', path: '/', headers: { cookie: 'x=1\r\nHost: metadata' } },
+    { method: 'POST', path: '/', body: 'a'.repeat(65536) },
+  ]) assert.equal(await code(runs.http('preview-001', request)), 'invalid_request');
+  backend.http = async () => ({ status: 200, headers: [['x-unsafe', 'yes']], body: '' });
+  assert.equal(await code(runs.http('preview-001', { method: 'GET', path: '/' })), 'preview_unavailable');
+  backend.http = async () => { clock.t += 121000; return result; };
+  assert.equal(await code(runs.http('preview-001', { method: 'GET', path: '/' })), 'run_closed');
+  const restarted = createRuns({ policy: POLICY, backend, store, now: () => clock.t, runnerId: 'r1' });
+  await restarted.reconcile();
+  assert.equal(await code(restarted.http('preview-001', { method: 'GET', path: '/' })), 'run_closed');
+});
+
 test('create boots one sandbox with policy-owned settings and is idempotent per run id', async () => {
   const { runs, backend } = setup();
   const first = await runs.create({ run_id: 'run-0001', manifest: MANIFEST });
@@ -235,4 +263,17 @@ test('reconcile leaves the runner unhealthy when an orphan cannot be removed', a
   const fresh = createRuns({ policy: POLICY, backend, store, now: () => 1, alert: () => {}, runnerId: 'r1' });
   await fresh.reconcile();
   assert.equal(fresh.health().healthy, false);
+});
+
+
+test('caller deadline may only narrow the policy execution timeout', async () => {
+  const { runs, backend } = setup();
+  await runs.create({ run_id: 'deadline-001' });
+  await runs.exec('deadline-001', { argv: ['true'], timeout_s: 0.05 });
+  assert.equal(backend.calls.at(-1).request.timeout_s, 0.05);
+  for (const timeout_s of [0, -1, 601, Infinity, NaN, '5', true, null]) {
+    assert.equal(await code(runs.exec('deadline-001', { argv: ['true'], timeout_s })), 'invalid_request');
+  }
+  await runs.exec('deadline-001', { argv: ['true'] });
+  assert.equal(backend.calls.at(-1).request.timeout_s, 600);
 });

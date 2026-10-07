@@ -1,11 +1,8 @@
-// Parity harness: one scenario runs against the sync SQLite store (reference) and the async store on every backend;
-// returned values and the final board state must match. Clock is deterministic (Date.now counter), tokens/random suffixes
-// are normalised, so the same call order yields the same rows.
+// Replay a scenario on two isolated PostgreSQL schemas; returned values and persisted state must match.
+// Clock is deterministic; tokens and random suffixes are normalised.
 import assert from 'node:assert/strict';
-import { createAiBoardStore } from '../../server/ai-board/store.js';
 import { createAsyncAiBoardStore } from '../../server/ai-board/store-async.js';
 import { backends } from './ai-board-db.js';
-import * as syncAux from '../../server/ai-board/aux-sync.js';
 import * as asyncAux from '../../server/ai-board/aux-async.js';
 import { resetSeq } from './ai-board-scenarios.js';
 
@@ -60,21 +57,17 @@ async function runOne(label, make, scenario, d) {
   } finally { Date.now = realNow; }
 }
 
-/** scenario(store, d) -> serialisable results. Asserts sync-reference == async on sqlite and postgres. */
+/** Compare identical deterministic scenarios on two isolated PostgreSQL schemas. */
 export async function assertParity(scenario, { hooks = {} } = {}) {
-  const [sqlite] = backends;
-  const ref = await sqlite.open();
   let expected;
-  try {
-    expected = await runOne('sync', (d) => ({ store: createAiBoardStore(d.raw, hooks), api: { m: syncAux, db: d.raw } }), scenario, ref);
-  } finally { await ref.dispose(); }
-  for (const backend of backends) {
-    const d = await backend.open();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const d = await backends[0].open();
     try {
-      const got = await runOne(backend.name, (db) => ({ store: createAsyncAiBoardStore(db, hooks), api: { m: asyncAux, db } }), scenario, d);
-      assert.deepEqual(got.result, expected.result, `${backend.name}: returned values differ from the sync store`);
-      for (const table of Object.keys(expected.state)) {
-        assert.deepEqual(got.state[table], expected.state[table], `${backend.name}: table ${table} differs from the sync store`);
+      const got = await runOne('postgres', (db) => ({ store: createAsyncAiBoardStore(db, hooks), api: { m: asyncAux, db } }), scenario, d);
+      if (!expected) expected = got;
+      else {
+        assert.deepEqual(got.result, expected.result, 'PG replay returned values differ');
+        for (const table of Object.getOwnPropertyNames(expected.state)) assert.deepEqual(got.state[table], expected.state[table], `PG replay table ${table} differs`);
       }
     } finally { await d.dispose(); }
   }

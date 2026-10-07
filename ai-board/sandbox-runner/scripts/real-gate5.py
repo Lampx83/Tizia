@@ -3,6 +3,7 @@
 docker run --rm --network tizia_sandbox-api -v <repo>/ai-board:/opt/ai-board/ai-board:ro -v <repo>/server:/opt/ai-board/server:ro -v <checkout>:/ck -v <token file>:/token:ro \
   -v <this script>:/real-gate5.py:ro python:3.12-slim-bookworm python /real-gate5.py <base_sha>
 """
+import os
 import json
 import sys
 import time
@@ -17,7 +18,7 @@ state = {
     "request_detail": "[Trang: Trường IT] /school.html?domain=it\nThêm ước tính phút chờ worker (ETA) trên dòng hàng đợi.",
     "diffs": [{"file": "public/js/suggestion-fab.js", "test_file": "test/e2e-probe.test.js", "diff": "+// e2e probe: harmless change"}],
 }
-client = sandbox_verify.RunnerClient("http://sandbox-runner:8090", Path("/token").read_text().strip(), timeout=900)  # first create pulls the guest image
+client = sandbox_verify.RunnerClient(os.environ.get("AI_BOARD_SANDBOX_URL") or "http://sandbox-runner:8090", Path("/token").read_text().strip(), timeout=900)  # first create pulls the guest image
 started = time.time()
 result = sandbox_verify.run(state, client=client)
 print(f"\n== gate 5 finished in {time.time() - started:.0f}s")

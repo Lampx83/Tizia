@@ -7,7 +7,7 @@
 // ============================================================
 
 // Cùng từ vựng users.role: pupil = học sinh, student = sinh viên.
-import { checkIntake } from '../../ai-board/intake-guard.js';
+import { checkIntake } from '../../ai-board/intake-guard-async.js';
 import { classify, decideClarity, taskMode } from '../../ai-board/classifier.js';
 import { answersClear, repeatedQuestion } from '../../ai-board/clarity-rules.js';
 import { beginChat } from '../../ai-board/chat-activity.js';
@@ -84,7 +84,7 @@ export function attachAiBoardIntake(router, {
   classifyClarity = defaultClarity,
   models = { question: chatModel('ai_board_grill'), spec: chatModel('ai_board_spec') },
 }) {
-  // db: better-sqlite3 handle (default) or the async contract (PostgreSQL); routes await either.
+  // db: the async PostgreSQL contract.
   const profiles = typeof db.prepare === 'function' ? createProfileStore(db) : createAsyncProfileStore(db);
   const route = asyncRoutes(router);
 
@@ -132,7 +132,7 @@ async function initialMode(store, rootId) {
 
 // Model clarity chỉ quyết định dừng sớm khi ở mode 'active'; shadow/off không tốn GPU cho mỗi lượt.
 const defaultClarity = async (text) => {
-  if (!process.env.OLLAMA_URL || !process.env.AI_BOARD_CLASSIFIER_MODEL || taskMode('clarity') !== 'active') return null;
+  if (!(process['env'].OLLAMA_URL || process['env'].VLLM_URL) || !process['env'].AI_BOARD_CLASSIFIER_MODEL || taskMode('clarity') !== 'active') return null;
   const { probs } = await classify('clarity', text);
   return decideClarity(probs);
 };

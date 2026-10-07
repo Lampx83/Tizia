@@ -9,6 +9,7 @@ const ROUTES = [
   ['DELETE', /^\/v1\/runs\/([\w-]+)$/, 'destroy'],
   ['PUT', /^\/v1\/runs\/([\w-]+)\/workspace$/, 'upload'],
   ['POST', /^\/v1\/runs\/([\w-]+)\/exec$/, 'exec'],
+  ['POST', /^\/v1\/runs\/([\w-]+)\/http$/, 'http'],
   ['POST', /^\/v1\/runs\/([\w-]+)\/renew$/, 'renew'],
   ['GET', /^\/v1\/runs\/([\w-]+)\/artifacts\/([\w.-]+)$/, 'download'],
 ];
@@ -45,6 +46,7 @@ export function createApi({ runs, readiness, policy, token }) {
     destroy: async (_req, id) => runs.destroy(id),
     renew: async (_req, id) => runs.renew(id),
     exec: async (req, id) => runs.exec(id, JSON.parse((await readBody(req, JSON_LIMIT)).toString() || '{}')),
+    http: async (req, id) => runs.http(id, JSON.parse((await readBody(req, JSON_LIMIT)).toString() || '{}')),
     upload: async (req, id) => runs.upload(id, await readBody(req, policy.archive.max_bytes)),
     download: (_req, id, name) => runs.download(id, name),
   };

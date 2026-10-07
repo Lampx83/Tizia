@@ -1,20 +1,21 @@
 // Access-layer contract, run on every available backend (sqlite always, postgres when TEST_PG_URL is set).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { aiBoardBackend, openAiBoardDb, toPgDdl, toPgPlaceholders, applyMigrations } from '../server/ai-board/db/index.js';
+import fs from 'node:fs';
+import { toPgDdl, toPgPlaceholders, applyMigrations } from '../server/ai-board/db/index.js';
+import { createAppDb } from '../server/db-core.js';
 import { backends } from './support/ai-board-db.js';
 
-test('backend switch defaults to sqlite and rejects junk', () => {
-  assert.equal(aiBoardBackend({}), 'sqlite');
-  assert.equal(aiBoardBackend({ AI_BOARD_DB: ' Postgres ' }), 'postgres');
-  assert.throws(() => aiBoardBackend({ AI_BOARD_DB: 'mysql' }), /sqlite or postgres/);
+test('app contract requires a PostgreSQL target', () => {
+  assert.throws(() => createAppDb({ url: '' }), /DATABASE_URL/);
 });
 
-test('openAiBoardDb needs a url for postgres and wraps the handle for sqlite', async () => {
-  assert.throws(() => openAiBoardDb({ env: { AI_BOARD_DB: 'postgres' } }), /AI_BOARD_DATABASE_URL/);
-  const d = openAiBoardDb({ env: {}, sqlite: { prepare: () => ({ get: () => ({ v: 1 }) }) } });
-  assert.equal(d.dialect, 'sqlite');
-  assert.equal((await d.get('SELECT 1 AS v')).v, 1);
+test('board contract uses a real PostgreSQL connection', async () => {
+  const d = await backends[0].open();
+  try {
+    assert.equal(d.dialect, 'postgres');
+    assert.equal((await d.get('SELECT 1 AS v')).v, 1);
+  } finally { await d.dispose(); }
 });
 
 test('placeholders skip quoted literals; ddl widens ints', () => {
@@ -28,7 +29,9 @@ for (const backend of backends) {
     const d = await backend.open();
     try {
       const before = (await d.get('SELECT COUNT(*) AS n FROM schema_migrations')).n;
-      assert.equal(before, 16);
+      const versions = fs.readdirSync(new URL('../server/ai-board/migrations/', import.meta.url)).filter((name) => /^\d+.*\.sql$/.test(name)).sort();
+      const receipts = await d.all("SELECT version FROM schema_migrations WHERE scope='ai-board' ORDER BY version");
+      assert.deepEqual(receipts.map((row) => row.version), versions);
       await applyMigrations(d);
       assert.equal((await d.get('SELECT COUNT(*) AS n FROM schema_migrations')).n, before);
       await d.get('SELECT * FROM ai_tickets LIMIT 1');

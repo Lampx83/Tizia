@@ -3,7 +3,7 @@
 // Mount qua attachAdminDb(router) trong server/contexts/admin/index.js.
 import fs from 'node:fs';
 import path from 'node:path';
-import { db, dbPath, DATA_DIR } from '../../db.js';
+import { db } from '../../db.js';
 import { requireAdmin } from './index.js';
 import { BACKUP_DIR, createBackup, listBackups, safeBackupName } from './backup.js';
 
@@ -27,8 +27,8 @@ const _auditInsert = db.prepare(
    VALUES (@user_id, @username, @sql, @changes, @last_id, @error, @t)`
 );
 
-const SELECT_RE = db.dialect === 'sqlite' ? /^\s*(SELECT|WITH|EXPLAIN|PRAGMA)\b/i : /^\s*(SELECT|WITH|EXPLAIN|SHOW)\b/i;
-const FORBIDDEN_TABLES = new Set(['sqlite_sequence']);
+const SELECT_RE = /^\s*(SELECT|WITH|EXPLAIN|SHOW)\b/i;
+const FORBIDDEN_TABLES = new Set();
 
 function isReadOnly(sql) { return SELECT_RE.test(sql); }
 const tableExists = (name) => db.tableExists(name);
@@ -44,7 +44,7 @@ export function attachAdminDb(r) {
       catch (e) { rowCount = -1; }
       return { name, rowCount };
     }));
-    res.json({ tables: out, dbPath });
+    res.json({ tables: out });
   });
 
   // ─── Schema + indices của 1 bảng ─────────────────────────────────────────
@@ -152,7 +152,7 @@ export function attachAdminDb(r) {
   });
 
   // ─── SQL Console — chạy SQL tự do ────────────────────────────────────────
-  // Read-only (SELECT/WITH/EXPLAIN/PRAGMA) chạy thẳng → trả rows.
+  // Read-only (SELECT/WITH/EXPLAIN/SHOW) chạy thẳng → trả rows.
   // Write phải set allow_write=true, audit + run + trả changes/lastInsertRowid.
   // FE cần confirm 2 lần trước khi gửi allow_write.
   r.post('/api/admin/db/query', requireAdmin, async (req, res) => {
@@ -166,7 +166,6 @@ export function attachAdminDb(r) {
     try {
       if (readOnly) {
         const stmt = db.prepare(sql);
-        // better-sqlite3 .raw() unavailable on PRAGMA — fall back to .all()
         const rows = await stmt.all();
         const cols = rows.length ? Object.keys(rows[0]) : [];
         return res.json({ ok: true, mode: 'read', columns: cols, rows, row_count: rows.length });
@@ -194,73 +193,27 @@ export function attachAdminDb(r) {
     res.json({ audit: rows });
   });
 
-  // ─── Backup operations ───────────────────────────────────────────────────
-  // List file *.bak / *.bak-* trong DATA_DIR (cùng folder với tizia.db)
+  // ─── Backup operations (pg_dump snapshots, see backup.js) ─────────────────
   r.get('/api/admin/db/backups', requireAdmin, (_req, res) => {
-    if (db.dialect === 'postgres') { // pg_dump snapshots (see backup.js)
-      return res.json({ backups: listBackups().map((b) => ({ name: b.name, size: b.size, mtime: b.created_at })), data_dir: BACKUP_DIR });
-    }
-    try {
-      const files = fs.readdirSync(DATA_DIR)
-        .filter(f => f.startsWith('tizia.db') && f !== 'tizia.db' && !f.endsWith('-wal') && !f.endsWith('-shm'))
-        .map(f => {
-          const st = fs.statSync(path.join(DATA_DIR, f));
-          return { name: f, size: st.size, mtime: st.mtimeMs };
-        })
-        .sort((a, b) => b.mtime - a.mtime);
-      res.json({ backups: files, data_dir: DATA_DIR });
-    } catch (e) {
-      res.status(500).json({ error: 'list_failed', message: String(e.message) });
-    }
+    res.json({ backups: listBackups().map((b) => ({ name: b.name, size: b.size, mtime: b.created_at })), data_dir: BACKUP_DIR });
   });
 
-  // Tạo backup snapshot mới (dùng better-sqlite3 db.backup() — an toàn với WAL)
   r.post('/api/admin/db/backup', requireAdmin, async (req, res) => {
-    if (db.dialect === 'postgres') {
-      try {
-        const item = await createBackup('admin');
-        console.log(`[admin-db] backup by @${req.user.username}: ${item.name} (${item.size} bytes)`);
-        return res.json({ ok: true, name: item.name, size: item.size });
-      } catch (e) { return res.status(500).json({ error: 'backup_failed', message: String(e.message) }); }
-    }
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const fname = `tizia.db.bak-admin-${stamp}`;
-    const target = path.join(DATA_DIR, fname);
     try {
-      await db.backup(target);
-      const st = fs.statSync(target);
-      console.log(`[admin-db] backup by @${req.user.username}: ${fname} (${st.size} bytes)`);
-      res.json({ ok: true, name: fname, size: st.size });
-    } catch (e) {
-      res.status(500).json({ error: 'backup_failed', message: String(e.message) });
-    }
+      const item = await createBackup('admin');
+      console.log(`[admin-db] backup by @${req.user.username}: ${item.name} (${item.size} bytes)`);
+      return res.json({ ok: true, name: item.name, size: item.size });
+    } catch (e) { return res.status(500).json({ error: 'backup_failed', message: String(e.message) }); }
   });
 
-  // Stream download 1 backup file (hoặc tizia.db hiện tại nếu name=current)
+  // Stream download 1 backup file (name=current: fresh dump first)
   r.get('/api/admin/db/backup/download', requireAdmin, async (req, res) => {
     const name = String(req.query.name || 'current');
-    if (db.dialect === 'postgres') {
-      try {
-        const file = name === 'current' ? path.join(BACKUP_DIR, (await createBackup('download')).name) : safeBackupName(name);
-        if (!file || !fs.existsSync(file)) return res.status(404).json({ error: 'not_found' });
-        return res.download(file, path.basename(file));
-      } catch (e) { return res.status(500).json({ error: 'backup_failed', message: String(e.message) }); }
-    }
-    let filePath, fileName;
-    if (name === 'current') {
-      filePath = dbPath;
-      fileName = `tizia.db.live-${Date.now()}`;
-    } else {
-      if (!/^tizia\.db[a-zA-Z0-9._\-]*$/.test(name) || name.includes('/')) {
-        return res.status(400).json({ error: 'invalid_name' });
-      }
-      filePath = path.join(DATA_DIR, name);
-      fileName = name;
-    }
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'not_found' });
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-    fs.createReadStream(filePath).pipe(res);
+    try {
+      const file = name === 'current' ? path.join(BACKUP_DIR, (await createBackup('download')).name) : safeBackupName(name);
+      if (!file || !fs.existsSync(file)) return res.status(404).json({ error: 'not_found' });
+      return res.download(file, path.basename(file));
+    } catch (e) { return res.status(500).json({ error: 'backup_failed', message: String(e.message) }); }
   });
 }
 

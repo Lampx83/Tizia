@@ -5,6 +5,7 @@ import argparse
 import dataclasses
 import json
 import os
+import posixpath
 import re
 import shutil
 import socket
@@ -126,13 +127,23 @@ def _passed(gates: list[dict], kind: str | None) -> bool:
                                or (smoke["runner"] == "eval" and (smoke.get("eval") or {}).get("accepted"))))
 
 
+def _preview_eligible(gates: list[dict], kind: str | None) -> bool:
+    gate4 = next((gate for gate in gates if gate["gate"] == 4), {})
+    gate5 = next((gate for gate in gates if gate["gate"] == 5), {})
+    oracle = gate5.get("functional") or {}
+    return (kind == "plan" and gate4.get("blocked") is False and gate5.get("runner") == "docker"
+            and gate5.get("smoke_passed") is True and gate5.get("http_observed") is True
+            and gate5.get("blocked") is True and oracle.get("passed") is False
+            and not oracle.get("probe_id") and oracle.get("reason") == "No trusted behavioral oracle for this request")
+
+
 def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate, cleanup,
              repair_reason: str | None, catalog: dict | None,
              request_detail: str | None, memory_path,
              should_stop: Callable[[], bool] | None,
              candidate_opts: dict | None = None,
              request_type: str | None = None,
-             eval_tasks: list[dict] | None = None) -> tuple[list[dict], str | None, dict | None, list[dict], str | None]:
+             eval_tasks: list[dict] | None = None, preview_capture=None) -> tuple[list[dict], str | None, dict | None, list[dict], str | None]:
     """One pass of Gates 3→5.5 on fresh scratch + worktree. Return (public gates, failure kind, candidate,
     ảnh chụp cổng 5 — file tạm cục bộ, base sha các cổng đã dùng | None)."""
     scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
@@ -206,6 +217,11 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
         import candidate as candidates
 
         lease_lost = bool(should_stop and should_stop())
+        if preview_capture and not lease_lost and request_type != "self" and _preview_eligible(gates, kind):
+            private_candidate = candidates.record(state)
+            if private_candidate:
+                try: preview_capture(state, private_candidate)
+                except Exception: pass  # optional artifact must never change verdict or prevent cleanup
         candidate = candidates.record(state) if _passed(gates, kind) and not lease_lost else None
         cleanup(state, keep_branch=candidate is not None)
         if candidate and should_stop and should_stop():
@@ -237,7 +253,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
                    cleanup: Callable, policy: dict | None = None, accepted_policy_hash: str | None = None,
                    request_detail: str | None = None, memory_path=None,
                    should_stop: Callable[[], bool] | None = None, candidate_opts: dict | None = None,
-                   request_type: str | None = None, eval_tasks: list[dict] | None = None) -> dict:
+                   request_type: str | None = None, eval_tasks: list[dict] | None = None, preview_capture=None) -> dict:
     """Run Gates 3→5.5, repairing an ordinary failure at most MAX_REPAIRS times. Return a redacted verdict.
 
     policy = snapshot catalog {hash, capabilities}; None only outside the HTTP worker (no catalog check).
@@ -265,7 +281,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
             plan, ticket_id=ticket_id, checkout_source=checkout_source, deps=deps, budget=budget,
             run_gate=run_gate, cleanup=cleanup, repair_reason=repair_reason, catalog=catalog,
             request_detail=request_detail, memory_path=memory_path, should_stop=should_stop,
-            candidate_opts=candidate_opts, request_type=request_type, eval_tasks=eval_tasks,
+            candidate_opts=candidate_opts, request_type=request_type, eval_tasks=eval_tasks, preview_capture=preview_capture,
         )
         last = gates[-1]
         if kind != "ordinary" or len(repairs) >= MAX_REPAIRS:
@@ -433,6 +449,8 @@ def _local_night(now_ms: int, window: dict) -> tuple[str, bool]:
     from zoneinfo import ZoneInfo
 
     dt = datetime.fromtimestamp(now_ms / 1000, ZoneInfo(window["tz"]))
+    if os.getenv("AI_BOARD_NIGHT_WINDOW_OVERRIDE") == "always":  # chỉ dev: luôn trong cửa sổ, giới hạn khác giữ nguyên
+        return dt.strftime("%Y-%m-%d"), True
     return dt.strftime("%Y-%m-%d"), window["start"] <= dt.strftime("%H:%M") < window["end"]
 
 
@@ -535,6 +553,22 @@ def model_preflight(ollama, *, clock: Callable[[], float] = time.monotonic, ttl:
     ok_at: dict[str, float] = {}
 
     def check() -> dict | None:
+        if getattr(ollama, 'routing', None):
+            from budget import Budget
+            from main import Deps
+            # Follow the same policy; a failed primary must not hide a usable secondary.
+            for role in ('gate1', 'classifier'):
+                if role in ok_at and clock() - ok_at[role] < ttl:
+                    continue
+                try:
+                    Deps(models=ollama, notify=None).call_model(ollama.gate1_model, 'ok', gate=1,
+                        role=role, budget=Budget(max_model_calls=6, max_units=120), format=None,
+                        options={'num_predict': 1})
+                except Exception as error:
+                    ok_at.pop(role, None)
+                    return {'status': 'model_unavailable', 'model': role, 'error': str(error)[:200]}
+                ok_at[role] = clock()
+            return None
         # Only what every request needs at intake. Gate 3 models are loaded when Gate 3 runs: probing them here
         # would keep a 20 GB model pinned in the shared GPU while idle.
         models = dict.fromkeys(m for m in (ollama.gate1_model, ollama.classifier_model) if m)
@@ -566,6 +600,7 @@ class HttpWorker:
     tracer: Any = None  # meter.Tracer chung với planner/change runner
     sync: Callable[[], Any] | None = None  # dedicated clone → origin/<base>, once per claimed ticket
     open_prs: bool = False  # candidates.publish after a passing verdict (needs AI_BOARD_GITHUB_TOKEN)
+    preview_publisher: Any = None  # optional local private preview; never changes the release verdict
     folder_base_ref: str = "HEAD"  # nhánh folder gộp ref này mỗi lượt: clone riêng → origin/<base>, checkout dev → HEAD
     model_check: Callable[[], dict | None] | None = None  # model_preflight(): lỗi → không claim
     _report_gate: Callable[[float], None] | None = dataclasses.field(default=None, init=False, repr=False)
@@ -812,6 +847,7 @@ class HttpWorker:
                 raise
         if self.planner:
             verdict = None
+            preview_artifact = None
             # Chỉ yêu cầu self mới gửi loại (change runner cũ không nhận tham số này).
             type_kwargs = {"request_type": "self"} if (snapshot.get("request") or {}).get("type") == "self" else {}
             # Skill cổng 1 của lượt lập plan này; lượt 'execute' (plan đã duyệt từ lease trước) không biết skill.
@@ -833,6 +869,7 @@ class HttpWorker:
                     ), ticket_id, lease,
                     on_lease_lost=lambda lost_result: self.candidates.discard((lost_result or {}).get("candidate")),
                 )
+                preview_artifact = result.pop("_preview_artifact", None) if isinstance(result, dict) else None
                 shots = (result.pop("screenshots", None) if isinstance(result, dict) else None) or []
                 try:
                     # Ảnh trước verdict: chuông "xem ảnh" của verdict đạt mở ra thread đã có ảnh.
@@ -849,6 +886,18 @@ class HttpWorker:
                     if _is_stale_lease(error):
                         self.candidates.discard(result.get("candidate"))
                     raise
+            preview_result = None
+            if self.preview_publisher and verdict and (verdict.get("candidate") or preview_artifact):
+                try:
+                    def publish_private(_stop):
+                        if preview_artifact:
+                            return self.preview_publisher.publish_archive(snapshot["request"]["id"],run["id"],self.worker_id,
+                                                                          preview_artifact["candidate_sha"],preview_artifact["archive"])
+                        return self.preview_publisher.publish(snapshot["request"]["id"], run["id"], self.worker_id,
+                                                              verdict["candidate"], self.candidates.repo)
+                    preview_result = self._with_heartbeat(publish_private, ticket_id, lease)
+                except Exception:
+                    preview_result = {"state": "unavailable"}  # serving verdict/candidate remain unchanged
             pr_problem = None
             if self.open_prs and verdict and verdict.get("outcome") in ("ready_for_pr", "needs_review"):
                 pr_problem = self._open_pr(ticket_id, lease, prefix, snapshot, run, plan, planned.get("tier"), verdict)
@@ -862,6 +911,8 @@ class HttpWorker:
             }
             if verdict is not None:
                 result["pre_pr_verdict"] = verdict
+            if preview_result is not None:
+                result["preview"] = preview_result
             return result
         self._release(ticket_id, {
             **lease, "outcome": "shadow_ok", "idempotency_key": f"{prefix}:release",
@@ -899,17 +950,20 @@ class HarnessPlanner:
         }
 
     @staticmethod
-    def _canonical(request: dict, old: dict, signals: list[str] | None = None) -> dict:
+    def _canonical(request: dict, old: dict, signals: list[str] | None = None, catalog: dict | None = None) -> dict:
         """Plan cổng 1 → schema D0 của server. Có tín hiệu phức tạp → risk high → tier protected (admin cho phép).
         Yêu cầu self (board tự sửa): luôn self.config — server chỉ cấp năng lực này cho self, tier protected."""
         old_caps = (["self.config"] if request.get("type") == "self"
                     else list(dict.fromkeys(old.get("capabilities") or [])))
         steps = []
         for index, subtask in enumerate(old.get("subtasks") or [], start=1):
-            file = subtask["file"].replace("\\", "/")
-            capability = old_caps[0] if old_caps else (
+            file = posixpath.normpath(subtask["file"].replace("\\", "/"))
+            capability = next((cap for cap in old_caps
+                               if any(file.startswith(prefix) for prefix in (catalog or {}).get(cap, {}).get('allow', []))
+                               and not any(file.startswith(prefix) for prefix in (catalog or {}).get(cap, {}).get('deny', []))),
+                              old_caps[0] if old_caps else (
                 "public.ui" if file.startswith("public/") else "generated.context"
-            )
+            ))
             steps.append({
                 "order": index,
                 "title": subtask["title"],
@@ -954,7 +1008,9 @@ class HarnessPlanner:
         ticket = snapshot.get("ticket") or {}
         budget.max_units = int(ticket.get("budget_limit") or DEFAULT_BUDGET_LIMIT)  # trần mỗi lượt, không trừ các lượt trước
         source = source or self.source  # folder: đỉnh nhánh chu kỳ thay cho checkout chung
-        state = {"checkout_source": str(source)} if source else {}
+        state = {'catalog': (snapshot.get('capability_policy') or {}).get('capabilities', {})}
+        if source:
+            state['checkout_source'] = str(source)
         for gate in PLAN_GATES:
             result = self.run_gate(gate, request, self.deps, budget, state)
             if gate == 1:
@@ -968,7 +1024,7 @@ class HarnessPlanner:
         signals = list(state.get("complexity_signals") or [])
         if snapshot.get("clarification_incomplete"):
             signals.append("requester_still_vague")  # legacy incomplete clarification → risk high → admin cho phép plan
-        plan = self._canonical(request, state["plan"], signals)
+        plan = self._canonical(request, state["plan"], signals, state['catalog'])
         if state.get('grounding'):
             plan['grounding'] = state['grounding']
         if (state.get('intake') or {}).get('read_only_verification'):
@@ -995,9 +1051,17 @@ def harness_change_runner(checkout_source=None, tracer=None, progress=None) -> C
         steps = len(plan.get("steps") or [])
         budget.max_wall_clock_s = float(scaled_limit("wall_clock_s", steps))
         budget.max_model_calls = scaled_limit("model_calls", steps)
-        return execute_pre_pr(plan, ticket_id=ticket_id, checkout_source=source or checkout_source or REPO_ROOT, deps=deps,
+        artifact = {}
+        def capture(state, private_candidate):
+            from preview import commit_archive
+            artifact.update(candidate_sha=private_candidate["head_sha"], reason="oracle_unavailable",
+                            archive=commit_archive(state["full_checkout"], private_candidate["head_sha"]))
+        result = execute_pre_pr(plan, ticket_id=ticket_id, checkout_source=source or checkout_source or REPO_ROOT, deps=deps,
                               budget=budget, run_gate=run_gate, cleanup=candidate.cleanup,
-                              memory_path=DEFAULT_PATH, **kwargs)
+                              memory_path=DEFAULT_PATH,
+                              preview_capture=capture if os.getenv("AI_BOARD_PRIVATE_PREVIEW_ENABLED") == "true" else None, **kwargs)
+        if artifact: result["_preview_artifact"] = artifact
+        return result
     return run
 
 
@@ -1080,6 +1144,19 @@ def main(argv: list[str] | None = None) -> int:
         from models import OllamaClient
         worker.model_check = model_preflight(dataclasses.replace(OllamaClient.from_env(), timeout_s=120.0))  # a hung model must not stall a poll for 5 min
         worker.planner = HarnessPlanner(tracer, progress=worker.gate_started, source=repo if repo_dir else None)
+        if engine_url := os.getenv("AI_BOARD_ENGINE_URL"):
+            from api.client import RemotePlanner
+            try:
+                worker.planner = RemotePlanner(
+                    engine_url, take_secret("AI_BOARD_INTERNAL_KEY"),
+                    project=os.getenv("AI_BOARD_PROJECT", "tizia"),
+                    fallback=worker.planner, tracer=tracer,
+                )
+            except ValueError as error:
+                parser.error(str(error))
+            # Plan-only callers do not need a local GPU; execution still uses its local model preflight.
+            if not args.execute:
+                worker.model_check = worker.planner.preflight
     if args.execute:
         import candidate
         worker.change_runner = harness_change_runner(checkout_source=repo, tracer=tracer,
@@ -1087,11 +1164,16 @@ def main(argv: list[str] | None = None) -> int:
         github = (candidate.GitHub(os.getenv("AI_BOARD_GITHUB_REPO", "Lampx83/Tizia"), github_token)
                   if github_token else None)
         worker.candidates = candidate.Candidates(repo, github=github)
+        if os.getenv("AI_BOARD_PRIVATE_PREVIEW_ENABLED") == "true":
+            from preview import PreviewPublisher
+            worker.preview_publisher = PreviewPublisher(base_url, key)
         worker.open_prs = github is not None  # no token: verdicts stop at ready_for_pr, as before
     # Vòng tự cải thiện đêm: chỉ worker có thể execute mới đề xuất được biến thể. Việc thật
     # luôn đi trước — chỉ thử đêm khi lượt claim vừa rồi rảnh (idle/gpu_paused), never khi đang giữ ticket.
     night_deps = None
     if args.execute:
+        if os.getenv("AI_BOARD_NIGHT_WINDOW_OVERRIDE") == "always":
+            print("WARNING: AI_BOARD_NIGHT_WINDOW_OVERRIDE=always - self-improve night window bypassed (dev only)")
         import diagnose as _diagnose
         night_deps = _real_deps(Deps, meter.Tracer(_diagnose.TRACES_PATH), worker.gate_started)
     while True:

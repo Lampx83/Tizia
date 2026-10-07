@@ -61,8 +61,6 @@ const Q = {
     ORDER BY u.created_at DESC LIMIT @limit
   `),
   setUserRole: db.prepare(`UPDATE users SET role=@role WHERE id=@id`),
-  requests: db.prepare(`SELECT id, domain, type, title, detail, status, votes, student, admin_note, created_at, updated_at
-    FROM requests ORDER BY created_at DESC LIMIT @limit`),
 };
 
 async function tableExists(name) {
@@ -71,7 +69,7 @@ async function tableExists(name) {
 
 export async function attachAdmin(r) {
   await ensureAdminBootstrap();
-  // The AI board stack (sync SQLite or async PostgreSQL) is chosen once at startup (ai-board/services.js); read lazily.
+  // The AI board services are set once at startup (ai-board/services.js); read lazily.
   const board = () => aiBoardServices(db);
   const route = asyncRoutes(r);
   const applyAdminStatus = async (id, status, note, actorId) => {
@@ -216,14 +214,7 @@ export async function attachAdmin(r) {
   // Góp ý — xuyên tenant (giám sát Ban điều hành AI) + can thiệp status
   route.get('/api/admin/requests', requireAdmin, async (req, res) => {
     const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
-    let rows;
-    try {
-      rows = await board().requests.adminListRequests(limit);
-    } catch (e) {
-      if (board().backend !== 'sqlite') throw e;
-      rows = await Q.requests.all({ limit });
-    }
-    res.json({ requests: rows });
+    res.json({ requests: await board().requests.adminListRequests(limit) });
   });
   route.post('/api/admin/requests/:id/status', requireAdmin, requireStrictCsrf, async (req, res) => {
     const status = String(req.body?.status || '');
@@ -388,11 +379,7 @@ export async function attachAdmin(r) {
   r.get('/api/admin/system', requireAdmin, async (_req, res) => {
     const mem = process.memoryUsage();
     let dbSize = null;
-    try {
-      const { statSync } = await import('node:fs');
-      const dbPath = process.env.DATA_DIR ? `${process.env.DATA_DIR}/tizia.db` : null;
-      if (dbPath) dbSize = statSync(dbPath).size;
-    } catch {}
+    try { dbSize = Number((await db.prepare('SELECT pg_database_size(current_database()) AS n').get()).n); } catch {}
     res.json({
       uptime_seconds: Math.floor(process.uptime()),
       memory: { rss: mem.rss, heap_used: mem.heapUsed, heap_total: mem.heapTotal },
@@ -578,14 +565,11 @@ export async function attachAdmin(r) {
       // subscriptions là user-level — xoá theo user.
       if (await tableExists('subscriptions')) await db.prepare(`DELETE FROM subscriptions WHERE user_id = ?`).run(uid);
       // Folder chức năng của người bị xoá chuyển cho admin đang xoá: giữ lịch sử, không mất bản nháp.
-      if (board().backend === 'sqlite' && await tableExists('ai_feature_folders')) {
-        await db.prepare(`UPDATE ai_feature_folders SET owner_user_id = ? WHERE owner_user_id = ?`).run(req.user.id, uid);
-      }
       // attempts/achievements link bằng player_name=display_name, để lại làm thống kê lịch sử.
       await db.prepare(`DELETE FROM users WHERE id = ?`).run(uid);
     });
     try {
-      if (board().backend !== 'sqlite') await board().requests.reassignFolderOwner(id, req.user.id);
+      await board().requests.reassignFolderOwner(id, req.user.id);
       await tx(id, u.display_name);
       res.json({ ok: true, deleted: u.username });
     }
@@ -602,7 +586,6 @@ export async function attachAdmin(r) {
       const outcome = await board().requests.deleteRequestUnlessBoardHistory(id);
       if (outcome === 'not_found') return res.status(404).json({ error: 'request_not_found' });
       if (outcome === 'has_board_history') return res.status(409).json({ error: 'request_has_ai_board_history' });
-      // ai_decisions (audit of the daily AI session) stays in SQLite in every mode.
       if (await tableExists('ai_decisions')) await db.prepare(`DELETE FROM ai_decisions WHERE request_id = ?`).run(id);
       res.json({ ok: true, deleted: id });
     } catch (e) { res.status(500).json({ error: 'delete_failed', detail: String(e.message) }); }
@@ -641,7 +624,7 @@ export async function attachAdmin(r) {
     res.json({ logs: await listAiPromptsForUser(req.user.id, limit) });
   });
 
-  // Backup/restore (xuất nhập file SQLite + auto snapshot hàng ngày)
+  // Backup/restore (pg_dump / pg_restore + auto snapshot hàng ngày)
   attachBackup(r);
   scheduleAutoBackup();
 

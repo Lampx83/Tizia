@@ -5,10 +5,10 @@
 // không được thấy; trả danh sách tile cho school.html; admin đổi status ở tab "Chức năng".
 // PHẢI attach TRƯỚC route HTML + express.static trong server/index.js.
 // ============================================================
-import * as syncReleases from '../../ai-board/releases.js';
+import * as asyncReleases from '../../ai-board/releases-async.js';
 import { asyncRoutes } from '../../ai-board/async-routes.js';
 
-const { RELEASE_STATUSES, canSee } = syncReleases;
+const { RELEASE_STATUSES, canSee } = asyncReleases;
 
 const PAGE = /^\/([a-z0-9-]+)(?:\.html)?$/;
 const HIDDEN_HTML = `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="robots" content="noindex">
@@ -17,8 +17,8 @@ const HIDDEN_HTML = `<!doctype html><html lang="vi"><head><meta charset="utf-8">
 <h1>Chức năng này chưa phát hành</h1><p>Chức năng đang được hoàn thiện, bạn quay lại sau nhé.</p>
 <p><a href="/school.html">← Về trường</a></p></body></html>`;
 
-// releases: releases.js (default, db = better-sqlite3 handle) or releases-async.js (db = async contract); must match db.
-export function attachAiBoardReleases(router, { db, requireAuth, requireAdmin, requireStrictCsrf, releases = syncReleases }) {
+// releases: releases-async.js (db = async PostgreSQL contract).
+export function attachAiBoardReleases(router, { db, requireAuth, requireAdmin, requireStrictCsrf, releases = asyncReleases }) {
   const { getRelease, listReleases, setReleaseStatus } = releases;
   const route = asyncRoutes(router);
   // Page gate: chỉ slug đã đăng ký release; trang thường đi tiếp như cũ.

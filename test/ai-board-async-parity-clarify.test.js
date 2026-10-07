@@ -8,7 +8,7 @@ test('parity: clarification turns, limits, confirm (complete and incomplete), ha
     const out = {};
     const a = await newRequest(store, { tag: 'a', clarifying: true, title: 'Làm trang đẹp hơn' });
     const id = a.request_id;
-    out.notClarifyingOwner = await failure(() => store.getClarification(id, 2));
+    out.notClarifyingOwner = await failure(async () => (await store.getClarification(id, 2)));
     await store.addClarifyTurn(id, { kind: 'question', text: 'Bạn muốn sửa trang nào?' });
     await store.addClarifyTurn(id, { kind: 'answer', text: 'Trang chủ tiểu học', author: 'Lan' });
     out.repeated = await failure(() => store.addClarifyTurn(id, { kind: 'question', text: 'Bạn muốn sửa trang nào?' }));

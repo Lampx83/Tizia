@@ -115,13 +115,13 @@ async function happyAndCritical(store, d) {
   };
 }
 
-test('async store matches the sync store on the request -> plan -> verdict slice', async () => {
-  const [sqlite] = backends;
-  const ref = await sqlite.open();
+test('PostgreSQL replay preserves request -> plan -> verdict results and state', async () => {
+  const [postgres] = backends;
+  const ref = await postgres.open();
   let expected;
   let expectedState;
   try {
-    expected = await happyAndCritical(createAiBoardStore(ref.raw), ref);
+    expected = await happyAndCritical(createAsyncAiBoardStore(ref), ref);
     expectedState = await snapshot(ref);
   } finally { await ref.dispose(); }
   assert.equal(expected.seen.created, true);

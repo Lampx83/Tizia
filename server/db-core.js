@@ -1,14 +1,10 @@
 // App-wide database handle with the shape the app has always used (`prepare().get/all/run`, `exec`, `transaction`),
-// backed by SQLite (transition only) or PostgreSQL. Callers `await` every call: with PostgreSQL they are promises,
-// with SQLite they are plain values (await on a plain value is fine), so one code path serves both backends.
-//
-//   DATABASE_URL set  -> PostgreSQL (pool, ambient transactions, savepoints; see ai-board/db/index.js)
-//   otherwise         -> better-sqlite3 file (transition; removed with the SQLite dependency)
+// backed by PostgreSQL (pool, ambient transactions, savepoints; see ai-board/db/index.js). Callers `await` every call.
 //
 // SQL is written once, SQLite-flavoured but portable: `?`, `@name` (named or mixed with `?`), ON CONFLICT, COALESCE.
 // PostgreSQL gets: placeholders -> $n, `ADD COLUMN IF NOT EXISTS`, INTEGER->BIGINT, REAL->DOUBLE PRECISION in DDL,
 // `lastInsertRowid` via RETURNING id for tables that have an id column.
-import { createPgDb, createSqliteDb, toPgDdl } from './ai-board/db/index.js';
+import { createPgDb, toPgDdl } from './ai-board/db/index.js';
 
 const TX_LOCK = 7_000_102; // legacy transactions run one at a time, like SQLite's single writer
 
@@ -97,7 +93,7 @@ export function pgDateUnixepoch(sql) {
 /** All SQLite -> PostgreSQL rewrites applied to DML text. */
 export function pgDialect(sql) { return pgScalarMinMax(pgDateUnixepoch(sql)); }
 
-/** better-sqlite3 call style (positional values, arrays, one named-object, or both) -> positional list for `slots`. */
+/** Legacy call style (positional values, arrays, one named-object, or both) -> positional list for `slots`. */
 export function bindParams(slots, args) {
   const flat = args.flat();
   const obj = flat.find((a) => a && typeof a === 'object' && !Buffer.isBuffer(a) && !(a instanceof Date));
@@ -109,7 +105,7 @@ export function bindParams(slots, args) {
   });
 }
 
-/** SQLite DDL -> PostgreSQL DDL. */
+/** SQLite-flavoured DDL (as written in db.js) -> PostgreSQL DDL. */
 export function pgDdl(sql) {
   return toPgDdl(sql).replace(/\bADD COLUMN (?!IF NOT EXISTS)/gi, 'ADD COLUMN IF NOT EXISTS ');
 }
@@ -215,30 +211,9 @@ function pgHandle(d) {
   };
 }
 
-function sqliteHandle(raw, d) {
-  return {
-    dialect: 'sqlite',
-    prepare: (sql) => raw.prepare(sql),
-    tableExists: (name) => !!raw.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`).get(String(name)),
-    listTables: () => raw.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`).all(),
-    describeTable: (t) => ({
-      columns: raw.prepare(`PRAGMA table_info("${t}")`).all(),
-      indexes: raw.prepare(`PRAGMA index_list("${t}")`).all(),
-      foreign_keys: raw.prepare(`PRAGMA foreign_key_list("${t}")`).all(),
-      ddl: raw.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name=?`).get(t)?.sql || null,
-    }),
-    exec: (sql) => raw.exec(sql),
-    transaction: (fn) => (...args) => d.tx(() => fn(...args)),
-  };
-}
-
-/** raw: open better-sqlite3 Database (transition). url: PostgreSQL connection string. Exactly one is used (url wins). */
-export function createAppDb({ url, raw } = {}) {
-  if (url) {
-    const d = createPgDb({ url, max: Number(process.env.PG_POOL_MAX) || 10 });
-    return { ...pgHandle(d), d, close: () => d.close() };
-  }
-  if (!raw) throw new Error('createAppDb: DATABASE_URL or a SQLite handle is required');
-  const d = createSqliteDb(raw);
-  return { ...sqliteHandle(raw, d), d, raw, close: async () => raw.close() };
+/** url: PostgreSQL connection string. */
+export function createAppDb({ url } = {}) {
+  if (!url) throw new Error('createAppDb: DATABASE_URL is required');
+  const d = createPgDb({ url, max: Number(process.env.PG_POOL_MAX) || 10 });
+  return { ...pgHandle(d), d, close: () => d.close() };
 }

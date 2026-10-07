@@ -10,6 +10,25 @@ if str(AI_BOARD_DIR) not in sys.path:
 from worker import HarnessPlanner, HttpWorker, PlanBlockedError, WorkerClient, _execution_plan, execute_pre_pr, main
 
 
+def test_canonical_steps_use_the_requested_catalog_scope_without_granting_unknown_caps():
+    catalog = {
+        'public.ui': {'allow': ['public/'], 'deny': []},
+        'generated.context': {'allow': ['server/contexts/_ai-generated/'], 'deny': []},
+    }
+    old = {'summary_vi': 'fixture', 'capabilities': ['public.ui', 'generated.context'], 'subtasks': [
+        {'title': 'UI', 'file': 'public/x.html', 'verify': '200', 'size': 'small'},
+        {'title': 'Plugin', 'file': 'server/contexts/_ai-generated/it/x/index.js', 'verify': '200', 'size': 'small'}]}
+    plan = HarnessPlanner._canonical({'domain': 'it', 'type': 'other'}, old, catalog=catalog)
+    assert [step['capability'] for step in plan['steps']] == ['public.ui', 'generated.context']
+    old['capabilities'] = ['unknown.capability']
+    assert HarnessPlanner._canonical({'domain': 'it', 'type': 'other'}, old, catalog=catalog)['capabilities'] == ['unknown.capability']
+    old['capabilities'] = ['public.ui']
+    old['subtasks'] = [{'title': 'escape', 'file': 'public/../server/index.js', 'verify': '200', 'size': 'small'}]
+    escaped = HarnessPlanner._canonical({'domain': 'it', 'type': 'other'}, old, catalog=catalog)
+    assert escaped['steps'][0]['allowed_scope'] == ['server/index.js']
+    assert escaped['steps'][0]['capability'] == 'public.ui'  # server rejects this scope; no core grant
+
+
 POLICY = {'version': 'd0-v2', 'hash': 'c' * 64,
           'capabilities': {'public.ui': {'tier': 'surface', 'allow': ['public/'], 'deny': []}}}
 

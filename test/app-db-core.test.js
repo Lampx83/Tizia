@@ -2,7 +2,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
-import Database from 'better-sqlite3';
 import pg from 'pg';
 import { bindParams, compileParams, createAppDb, pgDdl } from '../server/db-core.js';
 
@@ -11,8 +10,8 @@ const DDL = `
   CREATE TABLE IF NOT EXISTS kv (k TEXT NOT NULL, v TEXT, PRIMARY KEY (k));`;
 
 const PG_URL = process.env.TEST_PG_URL || '';
+if (!PG_URL) throw new Error('TEST_PG_URL required for PG-only tests');
 const backends = [
-  { name: 'sqlite', async open() { return createAppDb({ raw: new Database(':memory:') }); }, async done(db) { await db.close(); } },
   ...(PG_URL ? [{
     name: 'postgres',
     async open() {

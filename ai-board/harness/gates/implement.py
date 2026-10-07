@@ -134,6 +134,9 @@ def _existing_files(source, subtasks: list[dict]) -> tuple[str, dict[str, bytes]
 
 
 def model_for(subtask: dict, models) -> str:
+    if getattr(models, 'routing', None):
+        role = 'gate3_heavy' if subtask.get('size') == 'large' else 'gate3_light'
+        return models.routing.first(role)['model']
     """size → tên model trên `models` (OllamaClient hoặc FakeModels). Route lộ ra
     ở đây, không chôn trong nhánh if/else của run() — test gọi thẳng hàm này."""
     attr = SIZE_MODEL_ATTR.get(subtask.get("size"))
@@ -387,17 +390,30 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
                 lessons = []  # skill đã kèm tool lessons
         prompt = build_prompt(subtask, state.get("repair_reason"), context, lessons)
         feedback = ""
+        routing = getattr(deps.models, 'routing', None)
+        role = 'gate3_heavy' if subtask.get('size') == 'large' else 'gate3_light'
+        failed_candidates = set()
         if trace:
             _note_inputs(trace, subtask, model, state, current, context, siblings, words, lessons, ctx)
         for iteration in range(MAX_INNER_RETRIES + 1):
+            routing_options = {'role': role}
+            if routing:
+                # One quality switch uses the final existing repair attempt, never a fresh budget.
+                if (iteration == MAX_INNER_RETRIES and not getattr(budget, 'quality_switches', 0)
+                        and routing.candidates(role, exclude=failed_candidates)):
+                    routing_options.update(exclude_candidates=failed_candidates, route_reason='quality_switch')
+                    budget.quality_switches = 1
             if trace and iteration:
                 trace.note("knows", "retry feedback", str(error), {"hint": retry_hint(str(error), iteration - 1),
                                                                     "ai_output": raw[:SNIPPET_CHARS]})
             # Phản hồi nối SAU prompt cố định + ngữ cảnh: prefix giữ nguyên byte, Ollama tái dùng KV cache.
             body = deps.call_model(model, prompt + feedback, gate=3, budget=budget, db_path=db_path,
                                    proposal_id=proposal_id, prompt_name="implement.md", child=child,
-                                   iteration=iteration, options=_retry_sampling(iteration))
+                                   iteration=iteration, options=_retry_sampling(iteration), **routing_options)
             raw = body.get("response", "")
+            if body.get('_route'):
+                failed_candidates.add(body['_route']['candidate'])
+                model = routing.catalog['candidates'][body['_route']['candidate']]['model']
             try:
                 out = parse_codegen(raw, existing=current is not None)
             except ValueError as e:
