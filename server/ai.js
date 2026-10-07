@@ -38,13 +38,16 @@ import {
 } from './ai-prompt-guardrails.js';
 import { currentAIModel, resolveAIModel, runWithAIModel } from './ai-model-router.js';
 
-const OLLAMA_URL = (process.env.OLLAMA_URL || '').replace(/\/+$/, '');
-const OLLAMA_SECKEY = process.env.OLLAMA_SECKEY || '';
-const OLLAMA_MODEL = resolveAIModel('default');
+import { appLlm, vllmHeaders, vllmChatUrl, vllmBody, vllmText } from './ai-llm.js';
+
+const LLM = appLlm(); // vLLM when VLLM_URL is set (AI_BOARD_APP_LLM overrides), else Ollama
+const OLLAMA_URL = LLM.url;
+const OLLAMA_SECKEY = LLM.secret;
+const OLLAMA_MODEL = LLM.provider === 'vllm' ? LLM.model : resolveAIModel('default');
 const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS) || 60_000;
 
 if (OLLAMA_URL) {
-  console.log(`[ai] Ollama backend = ${OLLAMA_URL} (default model=${OLLAMA_MODEL || 'per-route'})`);
+  console.log(`[ai] ${LLM.provider} backend = ${OLLAMA_URL} (default model=${OLLAMA_MODEL || 'per-route'})`);
 } else {
   console.warn('[ai] OLLAMA_URL chưa set trong .env — /api/ai/* sẽ trả 503 cho mọi call.');
 }
@@ -108,7 +111,7 @@ function wrapAi(endpoint, handler) {
   return [
     aiQuotaGate(endpoint),
     async (req, res) => {
-      const model = resolveAIModel(endpoint);
+      const model = LLM.provider === 'vllm' ? LLM.model : resolveAIModel(endpoint);
       if (!OLLAMA_URL || !model) {
         return res.status(503).json({ error: 'AI backend chưa cấu hình (thiếu OLLAMA_URL hoặc model cho route)' });
       }
@@ -117,7 +120,7 @@ function wrapAi(endpoint, handler) {
         const result = await runWithAIModel(model, () => handler(req.body || {}, req));
         const u = result?._usage || {};
         recordAiCall(req, {
-          provider: 'ollama', model,
+          provider: LLM.provider, model,
           prompt_tokens:     u.prompt_tokens     || 0,
           completion_tokens: u.completion_tokens || 0,
           status: 'ok',
@@ -133,7 +136,7 @@ function wrapAi(endpoint, handler) {
         if (result && '_usage' in result) delete result._usage;
         res.json(result);
       } catch (e) {
-        recordAiCall(req, { provider: 'ollama', model, status: 'error' });
+        recordAiCall(req, { provider: LLM.provider, model, status: 'error' });
         sendGA4Event(req, 'ai_chat', {
           endpoint, model,
           duration_ms: Date.now() - t0, status: 'error',
@@ -164,6 +167,15 @@ export async function ollamaGenerate({ prompt, system, temperature = 0.3, json =
   const tid = setTimeout(() => ctrl.abort(), OLLAMA_TIMEOUT_MS);
   try {
     const protectedSystem = addSecurityGuardrails([{ role: 'system', content: system || '' }])[0].content;
+    if (LLM.provider === 'vllm') {
+      const messages = [{ role: 'system', content: protectedSystem }, { role: 'user', content: wrapUntrustedInput(prompt) }];
+      const res = await fetch(vllmChatUrl(OLLAMA_URL), { method: 'POST', headers: vllmHeaders(OLLAMA_SECKEY), signal: ctrl.signal,
+        body: JSON.stringify(vllmBody({ model: LLM.model, messages, temperature, maxTokens, json })) });
+      if (!res.ok) throw new Error(`vLLM HTTP ${res.status}: ${await res.text().catch(() => '')}`);
+      const reply = vllmText(await res.json());
+      if (containsPromptDisclosure(reply, protectedSystem)) throw new Error('AI response blocked by prompt-disclosure guard');
+      return reply;
+    }
     const body = {
       model: currentAIModel(OLLAMA_MODEL),
       prompt: wrapUntrustedInput(prompt),
@@ -207,6 +219,13 @@ async function ollamaChat({ messages, temperature = 0.7, json = false, maxTokens
     if (isPromptExtractionRequest(latestUserMessage)) return PROMPT_DISCLOSURE_REFUSAL;
     const protectedMessages = addSecurityGuardrails(messages);
     const protectedSystem = protectedMessages[0].content;
+    if (LLM.provider === 'vllm') {
+      const res = await fetch(vllmChatUrl(OLLAMA_URL), { method: 'POST', headers: vllmHeaders(OLLAMA_SECKEY), signal: ctrl.signal,
+        body: JSON.stringify(vllmBody({ model: LLM.model, messages: protectedMessages, temperature, maxTokens, json })) });
+      if (!res.ok) throw new Error(`vLLM HTTP ${res.status}: ${await res.text().catch(() => '')}`);
+      const reply = vllmText(await res.json());
+      return containsPromptDisclosure(reply, protectedSystem) ? PROMPT_DISCLOSURE_REFUSAL : reply;
+    }
     const body = {
       model: currentAIModel(OLLAMA_MODEL),
       messages: protectedMessages,
@@ -237,7 +256,7 @@ async function ollamaChat({ messages, temperature = 0.7, json = false, maxTokens
 // ─────────────────────────────────────────────────────────────
 
 async function handleHealth() {
-  const model = resolveAIModel('health');
+  const model = LLM.provider === 'vllm' ? LLM.model : resolveAIModel('health');
   if (!OLLAMA_URL || !model) return { ok: false, error: 'AI backend chưa cấu hình (thiếu OLLAMA_URL hoặc model)' };
   try {
     const reply = await runWithAIModel(model, () => ollamaGenerate({ prompt: 'Trả lời gọn: OK', maxTokens: 20 }));

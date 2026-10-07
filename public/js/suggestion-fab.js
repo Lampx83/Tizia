@@ -13,6 +13,7 @@
 
 import { getPlayerName } from './api.js';
 import { renderRequestThread } from './request-thread.js?v=no-icons';
+import { boardIcon } from './ai-board-icons.js';
 
 const TYPES = [
   { v: 'game',   label: 'Thêm trò chơi / mini-game' },
@@ -62,30 +63,30 @@ function autoMount() {
   root.id = 'sgf-root';
   root.innerHTML = `
     <button id="sgf-fab" type="button" aria-label="Gửi đề nghị tới Ban điều hành AI"
-            title="Gửi đề nghị cho Ban điều hành AI">
-      <span class="sgf-fab-ico">🏛️</span>
+            title="Gửi đề nghị cho Ban điều hành AI" aria-haspopup="dialog" aria-expanded="false" aria-controls="sgf-modal">
+      <span class="sgf-fab-ico">${boardIcon('board')}</span>
       <span class="sgf-fab-lbl">Đề nghị</span>
     </button>
     <div id="sgf-modal" class="sgf-modal" hidden>
       <div class="sgf-backdrop" data-close></div>
       <div class="sgf-dialog" role="dialog" aria-modal="true" aria-labelledby="sgf-title">
         <div class="sgf-head">
-          <div class="sgf-head-ico">🏛️</div>
+          <div class="sgf-head-ico">${boardIcon('board')}</div>
           <div class="sgf-head-text">
             <h3 id="sgf-title">Ban điều hành AI</h3>
             <p>Trường do <b>AI điều hành</b> — gửi đề nghị, AI sẽ xem xét &amp;
                phản hồi. Yêu cầu được làm xong sẽ đánh dấu hoàn thành kèm lời nhắn.</p>
           </div>
-          <button type="button" class="sgf-x" data-close aria-label="Đóng">✕</button>
+          <button type="button" class="sgf-x" data-close aria-label="Đóng">${boardIcon('close')}</button>
         </div>
 
         <div id="sgf-pending" class="sgf-clar-banner" hidden role="status"></div>
-        <div class="sgf-tabs" role="tablist">
-          <button type="button" class="sgf-tab" role="tab" data-tab="new" aria-selected="true">Gửi đề nghị mới</button>
-          <button type="button" class="sgf-tab" role="tab" data-tab="mine" aria-selected="false">Của bạn
+        <div class="sgf-tabs" role="tablist" aria-label="Đề nghị của bạn">
+          <button type="button" class="sgf-tab" role="tab" id="sgf-tab-new" data-tab="new" aria-selected="true" aria-controls="sgf-pane-new" tabindex="0">Gửi đề nghị mới</button>
+          <button type="button" class="sgf-tab" role="tab" id="sgf-tab-mine" data-tab="mine" aria-selected="false" aria-controls="sgf-pane-mine" tabindex="-1">Của bạn
             <span class="sgf-tab-badge" id="sgf-tab-badge" hidden></span></button>
         </div>
-        <div class="sgf-pane" id="sgf-pane-new" role="tabpanel">
+        <div class="sgf-pane" id="sgf-pane-new" role="tabpanel" aria-labelledby="sgf-tab-new">
         <section id="sgf-onboard" class="sgf-onboard" hidden aria-live="polite"></section>
         <form id="sgf-form" class="sgf-form">
           <label class="sgf-lab">Loại đề nghị
@@ -96,17 +97,18 @@ function autoMount() {
           <label class="sgf-lab" id="sgf-folder-row" hidden>Gắn vào chức năng
             <select id="sgf-folder" class="sgf-in"><option value="">— Yêu cầu lẻ —</option></select>
           </label>
-          <label class="sgf-lab">Tiêu đề <span class="sgf-req">*</span>
-            <input id="sgf-title-in" class="sgf-in" maxlength="200"
+          <label class="sgf-lab"><span>Tiêu đề <span class="sgf-req">*</span></span>
+            <input id="sgf-title-in" class="sgf-in" maxlength="200" required minlength="4" aria-describedby="sgf-msg"
                    placeholder="VD: Thêm dạng bài Toán có nhiều cách giải" />
           </label>
           <div class="sgf-folder-hint" id="sgf-folder-hint" hidden></div>
-          <label class="sgf-lab">Mô tả chi tiết (tuỳ chọn) <span id="sgf-detail-count" style="opacity:.55;font-size:11px;float:right">0 / 10000</span>
+          <label class="sgf-lab"><span class="sgf-label-line">Mô tả chi tiết (tuỳ chọn) <span id="sgf-detail-count">0 / 10000</span></span>
             <textarea id="sgf-detail" class="sgf-in" rows="3" maxlength="10000"
                       placeholder="Càng cụ thể, AI càng dễ hiểu &amp; phản hồi đúng nhu cầu của bạn."></textarea>
           </label>
 
-          <div class="sgf-attach">
+          <details class="sgf-attach">
+            <summary>Ảnh và tệp đính kèm <span>(tuỳ chọn)</span></summary>
             <label class="sgf-attach-row">
               <input type="checkbox" id="sgf-shot-check" />
               <span>Đính kèm ảnh chụp <b>màn hình hiện tại</b> (Ban điều hành xem trực tiếp giao diện anh/chị đang gặp)</span>
@@ -117,17 +119,17 @@ function autoMount() {
             </label>
             <div class="sgf-attach-hint">Có thể <b>kéo-thả</b> file vào khung này hoặc <b>dán ảnh</b> trực tiếp (Ctrl/⌘+V).</div>
             <div class="sgf-attach-list" id="sgf-attach-list"></div>
-          </div>
+          </details>
 
           <div class="sgf-ctx" id="sgf-ctx"></div>
           <div class="sgf-bar">
-            <span class="sgf-msg" id="sgf-msg"></span>
+            <span class="sgf-msg" id="sgf-msg" role="status" aria-live="polite"></span>
             <button type="submit" class="sgf-send" id="sgf-send">Gửi tới Ban điều hành</button>
           </div>
         </form>
         </div>
 
-        <div class="sgf-pane" id="sgf-pane-mine" role="tabpanel" hidden>
+        <div class="sgf-pane" id="sgf-pane-mine" role="tabpanel" aria-labelledby="sgf-tab-mine" hidden>
         <div class="sgf-folders" id="sgf-folders" hidden></div>
         <div id="sgf-clar-slot">
         <section id="sgf-clarify" class="sgf-clarify" hidden>
@@ -136,24 +138,25 @@ function autoMount() {
           <div class="sgf-clar-log" id="sgf-clar-log" aria-live="polite"></div>
           <div class="sgf-clar-reply" id="sgf-clar-reply" hidden>
             <textarea id="sgf-clar-in" class="sgf-in" rows="2" maxlength="2000"
+                      aria-label="Trả lời Ban điều hành"
                       placeholder="Trả lời Ban điều hành… (Enter để gửi, Shift+Enter xuống dòng)"></textarea>
             <div class="sgf-bar"><span class="sgf-msg" id="sgf-clar-count"></span>
               <button type="button" class="sgf-send" id="sgf-clar-send">Trả lời</button></div>
           </div>
           <div class="sgf-clar-sum" id="sgf-clar-sum" hidden>
             <div class="sgf-ob-q">Ban hiểu yêu cầu của bạn như sau — đúng chưa?</div>
-            <textarea id="sgf-clar-spec" class="sgf-in" rows="7" maxlength="4000" readonly></textarea>
+            <textarea id="sgf-clar-spec" class="sgf-in" rows="7" maxlength="4000" readonly aria-label="Bản tóm tắt yêu cầu"></textarea>
             <div class="sgf-bar"><button type="button" class="sgf-chip" id="sgf-clar-edit">Sửa</button>
               <button type="button" class="sgf-send" id="sgf-clar-ok">Đúng, gửi</button></div>
           </div>
-          <div class="sgf-msg" id="sgf-clar-msg"></div>
+          <div class="sgf-msg" id="sgf-clar-msg" role="status" aria-live="polite"></div>
         </section>
         </div>
 
         <div class="sgf-inbox">
           <div class="sgf-inbox-head">
             <span>Yêu cầu gần đây của bạn</span>
-            <button type="button" class="sgf-reload" id="sgf-reload" title="Tải lại">↻</button>
+            <button type="button" class="sgf-reload" id="sgf-reload" title="Tải lại" aria-label="Tải lại yêu cầu">${boardIcon('reload')}</button>
           </div>
           <div class="sgf-inbox-list" id="sgf-inbox">Đang tải…</div>
         </div>
@@ -173,6 +176,10 @@ function bind(root) {
   const sendBtn = root.querySelector('#sgf-send');
   const ctxBox = root.querySelector('#sgf-ctx');
   const inbox = root.querySelector('#sgf-inbox');
+  const dialog = root.querySelector('.sgf-dialog');
+  let returnFocus = null;
+  let priorOverflow = '';
+  const backgroundState = new Map();
 
   // Live counter cho detail textarea (giới hạn 10000, hiển thị bộ đếm
   // để SV biết khi nào sắp đầy).
@@ -182,7 +189,7 @@ function bind(root) {
     const updateCount = () => {
       const n = detailInput.value.length;
       detailCount.textContent = `${n.toLocaleString('vi-VN')} / 10.000`;
-      detailCount.style.color = n > 9000 ? '#dc2626' : n > 7000 ? '#f59e0b' : '';
+      detailCount.dataset.level = n > 9000 ? 'error' : n > 7000 ? 'warning' : 'normal';
     };
     detailInput.addEventListener('input', updateCount);
     updateCount();
@@ -441,7 +448,11 @@ function bind(root) {
   const tabBadge = root.querySelector('#sgf-tab-badge');
 
   function showTab(name) {
-    root.querySelectorAll('[data-tab]').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === name)));
+    root.querySelectorAll('[data-tab]').forEach(t => {
+      const selected = t.dataset.tab === name;
+      t.setAttribute('aria-selected', String(selected));
+      t.tabIndex = selected ? 0 : -1;
+    });
     paneNew.hidden = name !== 'new';
     paneMine.hidden = name !== 'mine';
   }
@@ -451,6 +462,15 @@ function bind(root) {
   });
 
   // Phần trao đổi là phần mở rộng của đúng yêu cầu đó trong "Của bạn"; chưa có item thì đứng đầu danh sách.
+  root.querySelector('.sgf-tabs').addEventListener('keydown', (e) => {
+    const { key, target } = e;
+    if (!target.matches('[data-tab]') || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return;
+    e.preventDefault();
+    const name = key === 'Home' ? 'new' : key === 'End' ? 'mine' : target.dataset.tab === 'new' ? 'mine' : 'new';
+    showTab(name);
+    root.querySelector(`[data-tab="${name}"]`).focus();
+  });
+
   function mountClarify() {
     const host = clarifyId && inbox.querySelector(`[data-item="${clarifyId}"]`);
     (host || clarSlot).appendChild(clarifyBox);
@@ -630,10 +650,20 @@ function bind(root) {
   if (typeof getPlayerName === 'function' && getPlayerName()) refreshPending();
 
   const open = () => {
+    if (modal.hidden) {
+      returnFocus = document.activeElement;
+      priorOverflow = document.body.style.overflow;
+      for (const sibling of document.body.children) {
+        if (sibling !== root) { backgroundState.set(sibling, sibling.inert); sibling.inert = true; }
+      }
+      document.body.style.overflow = 'hidden';
+    }
     modal.hidden = false;
+    fab.setAttribute('aria-expanded', 'true');
     // Đang có câu Ban chờ trả lời → mở "Của bạn"; không thì mở form gửi mới.
     showTab(fab.classList.contains('sgf-fab-ask') ? 'mine' : 'new');
-    if (!paneNew.hidden) setTimeout(() => root.querySelector('#sgf-title-in')?.focus(), 50);
+    root.querySelector('[data-tab][aria-selected="true"]').focus();
+    if (!paneNew.hidden) root.querySelector('#sgf-title-in')?.focus();
     ensureOnboarding();
     refreshPending();
     loadInbox();
@@ -649,13 +679,33 @@ function bind(root) {
     if (hashed[1] === 'clarify') startClarify(hashed[2]);
     history.replaceState(null, '', location.pathname + location.search);
   }
-  const close = () => { modal.hidden = true; msg.textContent = ''; };
+  const close = () => {
+    modal.hidden = true;
+    fab.setAttribute('aria-expanded', 'false');
+    msg.textContent = '';
+    for (const [sibling, wasInert] of backgroundState) sibling.inert = wasInert;
+    backgroundState.clear();
+    document.body.style.overflow = priorOverflow;
+    if (returnFocus?.isConnected) returnFocus.focus();
+    else fab.focus();
+  };
 
   fab.addEventListener('click', open);
   modal.addEventListener('click', e => {
     if (e.target?.dataset?.close !== undefined) close();
   });
   document.addEventListener('keydown', e => {
+    if (modal.hidden) return;
+    const { key, shiftKey } = e;
+    if (key === 'Tab') {
+      const focusable = [...dialog.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]')]
+        .filter(el => el.tabIndex >= 0 && el.getClientRects().length);
+      const first = focusable[0], last = focusable.at(-1);
+      if (first && (shiftKey && document.activeElement === first || !shiftKey && document.activeElement === last || !dialog.contains(document.activeElement))) {
+        e.preventDefault();
+        (shiftKey ? last : first).focus();
+      }
+    }
     if (e.key === 'Escape' && !modal.hidden) close();
   });
   root.querySelector('#sgf-reload').addEventListener('click', loadInbox);
@@ -669,6 +719,7 @@ function bind(root) {
   let pendingRequestKey = null;
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (sendBtn.disabled) return;
     const type = root.querySelector('#sgf-type').value;
     const title = root.querySelector('#sgf-title-in').value.trim();
     const userDetail = root.querySelector('#sgf-detail').value.trim();
@@ -753,7 +804,7 @@ function bind(root) {
       root.querySelector('#sgf-title-in').value = '';
       root.querySelector('#sgf-detail').value = '';
       folderHint.hidden = true;
-      if (detailCount) detailCount.textContent = '0 / 10.000';
+      if (detailCount) { detailCount.textContent = '0 / 10.000'; detailCount.dataset.level = 'normal'; }
       // Reset đính kèm để lần gửi sau bắt đầu sạch (revoke object URL tránh rò rỉ).
       clearAttachments();
       loadInbox();
@@ -1032,57 +1083,68 @@ function injectStyles() {
   if (stylesInjected) return;
   stylesInjected = true;
   const css = `
+    #sgf-root { --sgf-focus: #4f46e5; color-scheme: light; }
+    #sgf-root, #sgf-root * { box-sizing: border-box; }
+    #sgf-root [hidden] { display: none !important; }
+    #sgf-root .ai-board-icon { vertical-align: middle; flex-shrink: 0; }
+    #sgf-root :is(button, a, input, select, textarea, summary):focus-visible { outline: 3px solid var(--sgf-focus); outline-offset: 3px; }
+    #sgf-root ::selection { background: #c7d2fe; color: #1e1b4b; }
+    #sgf-root input, #sgf-root textarea { caret-color: var(--sgf-focus); }
+    #sgf-root :is(button, input, select, textarea) { font-family: inherit; }
+    #sgf-root input::placeholder, #sgf-root textarea::placeholder { color: #64748b; opacity: 1; }
     #sgf-fab {
       position: fixed; left: 18px; bottom: 18px; z-index: 2147483000;
-      width: 60px; height: 60px; border-radius: 50%;
-      display: inline-flex; align-items: center; justify-content: center;
-      padding: 0; border: 0; cursor: pointer;
-      background: linear-gradient(135deg,#7c3aed,#4f46e5); color: #fff;
+      min-width: 124px; height: 48px; border-radius: 12px;
+      display: inline-flex; gap: 10px; align-items: center; justify-content: center;
+      padding: 0 16px; border: 0; cursor: pointer;
+      background: #4f46e5; color: #fff;
       font: 600 14px/1 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
-      box-shadow: 0 8px 24px rgba(79,70,229,.45), 0 2px 6px rgba(0,0,0,.18);
+      box-shadow: 0 8px 24px rgba(0,0,0,.25);
       transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
     }
-    #sgf-fab:hover { transform: scale(1.08); filter: brightness(1.05); box-shadow: 0 14px 30px rgba(79,70,229,.55); }
+    #sgf-fab:hover { background: #4338ca; }
     #sgf-fab:active { transform: scale(1); }
-    .sgf-fab-ico { font-size: 28px; line-height: 1; }
-    .sgf-fab-lbl { display: none; }
+    .sgf-fab-ico { display: flex; }
+    .sgf-fab-ico svg { width: 22px; height: 22px; }
+    .sgf-fab-lbl { display: inline; }
     @media (max-width: 540px) {
-      #sgf-fab { left: 12px; bottom: 12px; width: 54px; height: 54px; }
-      .sgf-fab-ico { font-size: 24px; }
+      #sgf-fab { left: 12px; bottom: max(12px, env(safe-area-inset-bottom)); }
     }
 
     .sgf-modal { position: fixed; inset: 0; z-index: 2147483001; display: grid; place-items: center; }
     .sgf-modal[hidden] { display: none !important; }
-    .sgf-backdrop { position: absolute; inset: 0; background: rgba(15,23,42,.55); backdrop-filter: blur(3px); }
+    .sgf-backdrop { position: absolute; inset: 0; background: rgba(15,23,42,.65); }
     .sgf-dialog {
-      position: relative; width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 36px);
-      overflow: auto; background: #fff; color: #1f2937; border-radius: 16px;
+      position: relative; width: min(640px, calc(100vw - 24px)); max-height: calc(100dvh - 32px);
+      display: flex; flex-direction: column; overflow: hidden; background: #fff; color: #1f2937; border-radius: 16px;
       box-shadow: 0 30px 80px rgba(15,23,42,.45);
-      font: 14px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+      font: 14px/1.6 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+      scrollbar-color: #94a3b8 transparent; scrollbar-width: thin;
     }
-    .sgf-head { display: flex; gap: 12px; align-items: flex-start; padding: 18px 20px 8px; }
-    .sgf-head-ico { font-size: 30px; line-height: 1; }
-    .sgf-head-text { flex: 1; }
-    .sgf-head-text h3 { margin: 0 0 4px; font-size: 17px; color: #1f1147; }
-    .sgf-head-text p { margin: 0; font-size: 12.5px; color: #4b5563; }
+    .sgf-head { display: flex; flex-shrink: 0; gap: 14px; align-items: flex-start; padding: 24px 24px 18px; }
+    .sgf-head-ico { color: #4f46e5; padding-top: 3px; }
+    .sgf-head-ico svg { width: 26px; height: 26px; }
+    .sgf-head-text { flex: 1; min-width: 0; }
+    .sgf-head-text h3 { margin: 0 0 6px; font-size: 20px; line-height: 1.3; color: #1f1147; }
+    .sgf-head-text p { margin: 0; font-size: 13px; color: #475569; }
     .sgf-x {
-      border: 0; background: rgba(0,0,0,.05); color: #475569; width: 30px; height: 30px;
+      display: grid; place-items: center; flex-shrink: 0; border: 0; background: #f1f5f9; color: #475569; width: 44px; height: 44px;
       border-radius: 8px; cursor: pointer; font-size: 14px;
     }
     .sgf-x:hover { background: rgba(0,0,0,.1); }
 
-    .sgf-tabs { display: flex; gap: 4px; padding: 0 20px; border-bottom: 1px solid #e5e7eb; }
+    .sgf-tabs { display: flex; flex-shrink: 0; gap: 4px; padding: 0 24px; border-bottom: 1px solid #e5e7eb; }
     .sgf-tab { flex: 1; padding: 9px 6px; border: 0; border-bottom: 2px solid transparent; background: none;
-      font: inherit; font-size: 13px; color: #64748b; cursor: pointer; }
+      font: inherit; min-height: 44px; font-size: 14px; color: #475569; cursor: pointer; }
     .sgf-tab[aria-selected="true"] { border-bottom-color: #6366f1; color: #4338ca; font-weight: 700; }
     .sgf-tab-badge { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px; background: #f59e0b;
-      color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; }
-    .sgf-pane { padding-top: 8px; }
+      color: #451a03; font-size: 12px; font-weight: 700; line-height: 18px; }
+    .sgf-pane { padding-top: 8px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
     .sgf-pane[hidden], .sgf-tab-badge[hidden] { display: none; }
     .sgf-it .sgf-clarify { padding: 8px 0 0; margin-top: 8px; border-top: 1px dashed #c7d2fe; }
     .sgf-it .sgf-clar-live { display: none; } /* nằm trong đúng yêu cầu rồi: khỏi nhắc lại tiêu đề */
     #sgf-clar-slot > .sgf-clarify { padding: 0 20px 12px; }
-    .sgf-form { display: flex; flex-direction: column; gap: 10px; padding: 8px 20px 14px; }
+    .sgf-form { display: flex; flex-direction: column; gap: 18px; padding: 16px 24px 24px; }
     .sgf-form[hidden], .sgf-onboard[hidden] { display: none; }
     .sgf-onboard { display: flex; flex-direction: column; gap: 8px; padding: 8px 20px 16px; }
     .sgf-ob-intro { padding: 10px 12px; border-radius: 10px; background: #eef2ff; color: #3730a3; font-size: 13px; }
@@ -1091,18 +1153,18 @@ function injectStyles() {
     .sgf-chips { display: flex; flex-wrap: wrap; gap: 6px; }
     .sgf-chip {
       border: 1px solid #c7d2fe; background: #fff; color: #3730a3; border-radius: 999px;
-      padding: 6px 12px; font: 600 12.5px/1.2 inherit; cursor: pointer; min-height: 32px;
+      padding: 8px 12px; font: inherit; font-weight: 600; cursor: pointer; min-height: 44px;
       transition: background .15s ease, transform .1s ease;
     }
     .sgf-chip:hover { background: #eef2ff; }
     .sgf-chip:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
-    .sgf-chip[aria-pressed="true"] { background: linear-gradient(135deg,#7c3aed,#4f46e5); color: #fff; border-color: transparent; }
+    .sgf-chip[aria-pressed="true"] { background: #4f46e5; color: #fff; border-color: transparent; }
     .sgf-ob-status { min-height: 18px; font-size: 12.5px; color: #4338ca; }
     .sgf-clarify[hidden], .sgf-clar-banner[hidden], .sgf-clar-reply[hidden], .sgf-clar-sum[hidden] { display: none; }
     .sgf-clarify { display: flex; flex-direction: column; gap: 10px; padding: 8px 20px 16px; }
     .sgf-clar-banner {
       display: flex; align-items: center; gap: 10px; margin: 0 20px 8px; padding: 10px 12px; border-radius: 12px;
-      background: linear-gradient(135deg,#fef3c7,#fde68a); color: #78350f; font-size: 13px;
+      background: #fef3c7; color: #78350f; font-size: 13px;
       border: 1px solid #f59e0b; animation: sgf-slide-in .45s ease-out both, sgf-glow 2.4s ease-in-out 0.45s 3;
     }
     .sgf-clarify .sgf-clar-banner { margin: 0; }
@@ -1114,11 +1176,11 @@ function injectStyles() {
     .sgf-clar-msg { max-width: 88%; padding: 8px 12px; border-radius: 14px; white-space: pre-wrap; font-size: 13.5px;
       animation: sgf-pop .25s ease-out both; }
     .sgf-clar-ai { align-self: flex-start; background: #eef2ff; color: #1e1b4b; border-bottom-left-radius: 4px; }
-    .sgf-clar-me { align-self: flex-end; background: linear-gradient(135deg,#7c3aed,#4f46e5); color: #fff; border-bottom-right-radius: 4px; }
+    .sgf-clar-me { align-self: flex-end; background: #4f46e5; color: #fff; border-bottom-right-radius: 4px; }
     .sgf-typing::after { content: '● ● ●'; letter-spacing: 2px; opacity: .6; animation: sgf-blink 1s steps(3, end) infinite; }
     .sgf-clar-reply, .sgf-clar-sum { display: flex; flex-direction: column; gap: 6px; }
     .sgf-it-thread-btn.sgf-it-ask {
-      background: linear-gradient(135deg,#fbbf24,#f97316); color: #451a03; border-color: #f59e0b; font-weight: 700;
+      background: #fbbf24; color: #451a03; border-color: #f59e0b; font-weight: 700;
       animation: sgf-ring 1.6s ease-out infinite;
     }
     .sgf-it-thread-btn.sgf-it-ask:hover { filter: brightness(1.05); }
@@ -1138,23 +1200,32 @@ function injectStyles() {
       .sgf-chip { transition: none; }
       .sgf-clar-banner, .sgf-clar-msg, .sgf-typing::after, #sgf-fab.sgf-fab-ask, .sgf-it-ask { animation: none; }
     }
-    .sgf-lab { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: #475569; font-weight: 600; }
+    .sgf-lab { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: #334155; font-weight: 600; }
+    .sgf-label-line { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
+    #sgf-detail-count { color: #64748b; font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
+    #sgf-detail-count[data-level="warning"] { color: #92400e; }
+    #sgf-detail-count[data-level="error"] { color: #b91c1c; }
     .sgf-req { color: #ef4444; }
     .sgf-in {
-      width: 100%; box-sizing: border-box; padding: 9px 11px; border-radius: 9px;
-      border: 1px solid #d1d5db; background: #fff; color: #1f2937; font: inherit;
+      width: 100%; min-height: 44px; box-sizing: border-box; padding: 10px 12px; border-radius: 8px;
+      border: 1px solid #94a3b8; background: #fff; color: #1f2937; font: inherit; font-weight: 400;
     }
     .sgf-in:focus { outline: 2px solid #c7d2fe; border-color: #6366f1; }
     textarea.sgf-in { resize: vertical; min-height: 60px; }
 
     /* Attachments: ảnh chụp màn hình + file đính kèm */
-    .sgf-attach { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 9px; font-size: 12.5px; color: #475569; }
+    .sgf-attach { padding: 12px; background: #f8fafc; border: 1px dashed #94a3b8; border-radius: 8px; font-size: 13px; color: #475569; }
+    .sgf-attach > summary { min-height: 24px; cursor: pointer; font-weight: 600; color: inherit; }
+    .sgf-attach > summary span { font-weight: 400; }
+    .sgf-attach[open] > summary { margin-bottom: 14px; }
+    .sgf-attach[open] .sgf-attach-row { margin-bottom: 12px; }
     .sgf-attach-row { display: flex; align-items: center; gap: 8px; cursor: pointer; line-height: 1.4; }
     .sgf-attach-row input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
     .sgf-attach-row b { color: #1f1147; }
     .sgf-file-row { flex-wrap: wrap; cursor: default; }
     .sgf-attach-lbl { font-weight: 600; }
-    .sgf-file-row input[type="file"] { font-size: 12px; }
+    .sgf-file-row input[type="file"] { font-size: 13px; max-width: 100%; }
+    .sgf-file-row input::file-selector-button { min-height: 44px; font: inherit; padding: 8px 12px; margin-right: 8px; border: 1px solid #94a3b8; border-radius: 6px; background: #fff; color: #334155; cursor: pointer; }
     .sgf-attach-hint { font-size: 11px; color: #64748b; padding: 0 2px; }
     .sgf-attach-hint b { color: #4338ca; font-weight: 700; }
     .sgf-attach.sgf-drag { border-color: #6366f1; border-style: solid; background: #eef2ff; box-shadow: 0 0 0 3px rgba(99,102,241,.15); }
@@ -1165,7 +1236,7 @@ function injectStyles() {
     .sgf-attach-thumb { width: 34px; height: 34px; object-fit: cover; border-radius: 5px; flex-shrink: 0; border: 1px solid #e5e7eb; }
     .sgf-attach-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .sgf-attach-size { opacity: .6; margin-left: 4px; }
-    .sgf-attach-rm { margin-left: auto; border: 0; background: transparent; cursor: pointer; color: #ef4444; font-weight: 700; font-size: 13px; padding: 0 4px; flex-shrink: 0; }
+    .sgf-attach-rm { margin-left: auto; min-width: 44px; min-height: 44px; border: 0; background: transparent; cursor: pointer; color: #b91c1c; font-weight: 700; font-size: 13px; padding: 0 4px; flex-shrink: 0; }
     .sgf-attach-rm:hover { color: #b91c1c; }
     /* Hiển thị attachments trong inbox */
     .sgf-it-att { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
@@ -1180,29 +1251,29 @@ function injectStyles() {
     }
     .sgf-ctx-url { display: block; opacity: .65; font-family: ui-monospace,SFMono-Regular,Menlo,monospace; font-size: 11px; margin-top: 2px; word-break: break-all; }
 
-    .sgf-bar { display: flex; align-items: center; gap: 10px; }
+    .sgf-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
     .sgf-msg { font-size: 12.5px; color: #475569; margin-right: auto; }
     .sgf-send {
-      padding: 9px 16px; border: 0; border-radius: 10px; cursor: pointer; font: 700 13.5px/1 inherit;
-      background: linear-gradient(135deg,#fbbf24,#f97316); color: #1f1147;
+      min-height: 44px; padding: 11px 16px; border: 0; border-radius: 8px; cursor: pointer; font: inherit; font-weight: 700;
+      background: #fbbf24; color: #1f1147;
     }
     .sgf-send:hover { filter: brightness(1.06); }
     .sgf-send:disabled { opacity: .55; cursor: wait; }
 
     .sgf-inbox { border-top: 1px solid #e5e7eb; padding: 12px 20px 18px; background: #f8fafc; border-radius: 0 0 16px 16px; }
     .sgf-inbox-head { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: #475569; font-weight: 700; margin-bottom: 8px; }
-    .sgf-reload { border: 0; background: transparent; cursor: pointer; color: #6366f1; font-size: 15px; }
+    .sgf-reload { display: grid; place-items: center; min-width: 44px; min-height: 44px; border: 0; background: transparent; cursor: pointer; color: #4f46e5; }
     .sgf-inbox-list { display: flex; flex-direction: column; gap: 7px; }
     .sgf-empty { font-size: 12.5px; color: #6b7280; text-align: center; padding: 10px 0; font-style: italic; }
     .sgf-it { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 9px 11px; }
-    .sgf-it-line { display: flex; align-items: center; gap: 8px; }
+    .sgf-it-line { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px; }
     .sgf-it-queue { font-size: 12px; color: #6b7280; margin: 4px 0 2px; }
     .sgf-folders { padding: 0 20px 8px; }
     .sgf-folder { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(148,163,184,.25); font-size: 13px; }
     .sgf-folder-t { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
     .sgf-folder-m { font-size: 12px; color: #6b7280; white-space: nowrap; }
     .sgf-folder-hint { font-size: 12.5px; color: #92400e; background: #fef3c7; border-radius: 8px; padding: 6px 10px; margin: -4px 0 8px; }
-    .sgf-it-title { flex: 1; font-size: 13px; font-weight: 600; color: #1f2937; }
+    .sgf-it-title { flex: 1 1 180px; min-width: 0; font-size: 15px; font-weight: 650; color: #1f2937; overflow-wrap: anywhere; }
     .sgf-it-st { font-size: 11px; padding: 2px 8px; border-radius: 7px; font-weight: 700; white-space: nowrap; }
     .sgf-it-st.pending   { background: #e2e8f0; color: #475569; }
     .sgf-it-st.reviewing { background: #fde68a; color: #92400e; }
@@ -1211,16 +1282,16 @@ function injectStyles() {
     .sgf-it-st.cancelled { background: #e5e7eb; color: #6b7280; text-decoration: line-through; }
     .sgf-it-note {
       font-size: 12px; color: #1f2937; margin-top: 6px; padding: 6px 9px; border-radius: 8px;
-      background: #fef3c7; border-left: 3px solid #f59e0b;
+      background: #fef3c7; overflow-wrap: anywhere;
     }
     .sgf-it-thread-btn {
       margin-top: 7px; border: 1px solid #c7d2fe; background: #eef2ff; color: #4338ca;
-      cursor: pointer; font: 700 11.5px/1 inherit; padding: 5px 10px; border-radius: 7px;
+      cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; min-height: 44px; padding: 8px 10px; border-radius: 8px;
     }
     .sgf-it-thread-btn:hover { background: #e0e7ff; }
     .sgf-it-cancel {
       margin: 7px 0 0 6px; border: 1px solid #fecaca; background: #fff; color: #b91c1c;
-      cursor: pointer; font: 700 11.5px/1 inherit; padding: 5px 10px; border-radius: 7px;
+      cursor: pointer; font: inherit; font-size: 13px; min-height: 44px; padding: 8px 10px; border-radius: 8px;
     }
     .sgf-it-cancel:hover, .sgf-it-cancel[data-armed] { background: #fee2e2; }
     .sgf-it-cancel:focus-visible, .sgf-it-thread-btn:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
@@ -1228,6 +1299,12 @@ function injectStyles() {
     .sgf-it-thread[hidden] { display: none; }
 
     @media (prefers-color-scheme: dark) {
+      #sgf-root { --sgf-focus: #a5b4fc; color-scheme: dark; }
+      #sgf-root input::placeholder, #sgf-root textarea::placeholder { color: #b8c5d8; }
+      #sgf-detail-count { color: #b8c5d8; }
+      #sgf-detail-count[data-level="warning"] { color: #fdba74; }
+      #sgf-detail-count[data-level="error"] { color: #fca5a5; }
+      .sgf-head-ico, .sgf-reload { color: #a5b4fc; }
       .sgf-dialog { background: #1e1b4b; color: #e5e7eb; }
       .sgf-head-text h3 { color: #fff; }
       .sgf-tabs { border-bottom-color: #312e81; }
@@ -1244,7 +1321,7 @@ function injectStyles() {
       .sgf-chip:hover { background: #312e81; }
       .sgf-ob-status { color: #c7d2fe; }
       .sgf-clar-ai { background: #312e81; color: #e0e7ff; }
-      .sgf-clar-banner { background: linear-gradient(135deg,#422006,#78350f); color: #fde68a; border-color: #b45309; }
+      .sgf-clar-banner { background: #422006; color: #fde68a; border-color: #b45309; }
       .sgf-in { background: #312e81; color: #f1f5f9; border-color: #4338ca; }
       .sgf-in:focus { outline-color: #818cf8; border-color: #a5b4fc; }
       .sgf-ctx { background: #312e81; color: #c7d2fe; }
@@ -1252,7 +1329,7 @@ function injectStyles() {
       .sgf-inbox-head { color: #cbd5e1; }
       .sgf-it { background: #312e81; border-color: #4338ca; }
       .sgf-it-title { color: #f1f5f9; }
-      .sgf-it-note { background: #422006; color: #fde68a; border-left-color: #f59e0b; }
+      .sgf-it-note { background: #422006; color: #fde68a; }
       .sgf-msg { color: #cbd5e1; }
       .sgf-attach { background: #1a1740; border-color: #4338ca; color: #cbd5e1; }
       .sgf-attach-row b { color: #fef3c7; }
@@ -1268,6 +1345,20 @@ function injectStyles() {
       .sgf-it-thread-btn:hover { background: #4338ca; }
       .sgf-it-cancel { background: #1e1b4b; color: #fca5a5; border-color: #7f1d1d; }
       .sgf-it-cancel:hover, .sgf-it-cancel[data-armed] { background: #450a0a; }
+      .sgf-it-queue, .sgf-folder-m, .sgf-empty { color: #b8c5d8; }
+      .sgf-file-row input::file-selector-button { background: #312e81; color: #e0e7ff; border-color: #818cf8; }
+    }
+    @media (max-width: 540px) {
+      .sgf-dialog { max-height: calc(100dvh - 16px); width: calc(100vw - 16px); }
+      .sgf-head { gap: 10px; padding: 20px 16px 14px; }
+      .sgf-head-ico { display: none; }
+      .sgf-tabs { padding: 0 16px; }
+      .sgf-form { padding: 16px; }
+      .sgf-in { font-size: 16px; }
+      .sgf-bar .sgf-send { width: 100%; }
+      .sgf-folder { flex-wrap: wrap; }
+      .sgf-clar-msg { max-width: 95%; }
+      .sgf-clar-banner { flex-wrap: wrap; }
     }
   `;
   const st = document.createElement('style');

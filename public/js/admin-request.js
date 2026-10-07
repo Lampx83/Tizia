@@ -2,7 +2,9 @@
 // vết AI Board — phiên xử lý (worker) theo từng lượt, cổng, từng lần gọi model, sự kiện. Tự cập nhật bằng cách
 // vá DOM (không vẽ lại cả trang). Mọi giá trị từ học sinh/model là dữ liệu không tin cậy → luôn qua esc().
 import { patchHtml } from './dom-morph.js';
+import { mountPrivatePreview } from './private-preview.js';
 import { installLightbox, pairBeforeAfter } from './lightbox.js';
+import { projectPipeline, describeModelCall, describeEvent, TECHNICAL_EVENTS, TRACE_STEPS } from './ai-board-trace.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -18,8 +20,8 @@ const ui = { confirm: null, step: 1, msg: '', flash: '', authorizeConfirm: null,
 let view = null;
 let gateNames = {}; // tên cổng lấy từ trace (contract.gates.names của server)
 
-async function api(path) {
-  const r = await fetch(path, { credentials:'same-origin' });
+async function api(path, options = {}) {
+  const r = await fetch(path, { credentials:'same-origin', ...options, signal: options.signal ?? AbortSignal.timeout(10000) });
   if (r.status === 401) {
     location.href = '/login.html?return=' + encodeURIComponent(location.pathname + location.search);
     throw new Error('login');
@@ -77,12 +79,12 @@ function budgetCell(used, limit) {
 const RUN_STATE = { ready_for_pr: 'ok', needs_review: 'warn', blocked: 'bad' };
 const CALL_STATE = { ok: 'ok', retry: 'warn', error: 'bad', http_error: 'bad', timeout: 'bad' };
 const GATE_STATE = { passed: 'ok', blocked: 'bad' };
-const RUN_LABEL = { ready_for_pr: 'ready for PR', needs_review: 'needs review', blocked: 'blocked' };
+const RUN_LABEL = { ready_for_pr: 'Có thể tạo PR', needs_review: 'Cần người xem xét', blocked: 'Bị chặn' };
 const ROLLBACK_STATE = { discarded: ['ok', 'branch deleted'], revert_ready: ['warn', 'revert branch ready'], failed: ['bad', 'rollback failed'] };
-// 1 bộ tag trạng thái xuyên suốt, tiếng Anh, không phân biệt "ok" (lần gọi model) với "qua" (cổng đạt) — cùng 1 nghĩa.
-const STATE_LABEL = { ok: 'OK', bad: 'Blocked', run: 'Running', wait: 'Pending', skip: 'Skipped' };
-const CALL_LABEL = { ok: 'OK', retry: 'Retry', error: 'Error', http_error: 'HTTP error', timeout: 'Timeout' };
-const TRIGGER_LABEL = { plan: 'Run', execute: 'Run · execute', rollback: 'Rollback', shadow_precheck: 'Precheck' };
+// Kết quả một call và kết luận kiểm chứng của bước là hai trạng thái khác nhau.
+const STATE_LABEL = { ok: 'Đạt kiểm tra', bad: 'Chưa đạt', run: 'Đang xử lý', wait: 'Chưa thực hiện', skip: 'Không thực hiện' };
+const CALL_LABEL = { ok: 'Đã nhận kết quả AI', retry: 'Cần thử lại', error: 'Gọi AI thất bại', http_error: 'Lỗi kết nối AI', timeout: 'AI hết thời gian trả lời' };
+const TRIGGER_LABEL = { plan: 'Lập kế hoạch và xử lý yêu cầu', execute: 'Thực hiện kế hoạch đã duyệt', rollback: 'Hoàn tác', shadow_precheck: 'Kiểm tra sơ bộ' };
 const tag = (state, text) => `<span class="tag st-${state}">${esc(text)}</span>`;
 const cap = (s) => s ? s[0].toUpperCase() + s.slice(1) : s;
 const runTitle = (run) => cap(TRIGGER_LABEL[run.trigger] || run.trigger);
@@ -90,7 +92,7 @@ const runTitle = (run) => cap(TRIGGER_LABEL[run.trigger] || run.trigger);
 const isSub = (g) => !Number.isInteger(Number(g));
 const gatePos = (g) => esc(Number(g));
 const subClass = (g) => (isSub(g) ? ' sub-step' : '');
-const gateName = (g) => gateNames[Number(g)] ? `${gatePos(g)} · ${esc(gateNames[Number(g)])}` : `Gate ${esc(g)}`;
+const gateName = (g) => `${gatePos(g)} · ${esc(TRACE_STEPS.find(s => s.gate === Number(g))?.title || gateNames[Number(g)] || 'Bước xử lý')}`;
 
 const ROOT_STATUS = {
   queued: ['idle', 'Chờ worker nhận'], running: ['run', 'Đang xử lý'], planned: ['ok', 'Đã có kế hoạch'],
@@ -98,33 +100,14 @@ const ROOT_STATUS = {
   human_owned: ['warn', 'Chuyển cho người làm'], cancelled: ['bad', 'Đã dừng'], done: ['ok', 'Xong'],
 };
 // Tiến độ do server tính (run.progress): cổng nào qua / chặn / đang chạy / chưa tới / không chạy.
-function renderProgress(p) {
-  if (!p?.gates.length) return '';
-  return `<div class="prog" role="list">${p.gates.map(({ gate, name, state }) =>
-    `<span class="seg ${state}${subClass(gate)}" role="listitem" title="${gateName(gate)}: ${STATE_LABEL[state]}"${state === 'run' ? ' aria-current="step"' : ''}>${gatePos(gate)} · ${esc(name)}</span>`).join('')}</div>
-    ${p.current != null ? `<div class="live-line"><span class="pulse"></span>Running ${gateName(p.current)}${p.since ? ` · ${elapsed(p.since)}` : ''}</div>` : ''}`;
-}
-
 // 1 lượt = 1 lease của 1 worker (phiên): lập plan và/hoặc chạy các cổng; ngân sách GPU-s tính theo lượt.
 function runState(run, live) {
   if (run.rollback) return ROLLBACK_STATE[run.rollback.outcome] || ['idle', run.rollback.outcome];
   if (run.status) return [RUN_STATE[run.status] || 'idle', RUN_LABEL[run.status] || run.status];
-  return live ? ['run', 'running'] : ['idle', 'no verdict'];
-}
-
-function renderSessions(runs, root) {
-  if (!runs.length) return '<div class="blk meta">No runs yet.</div>';
-  return `<div class="timeline">${runs.map((run, i) => {
-    const [state, label] = runState(run, i === runs.length - 1 && root.live);
-    return `<div class="step st-${state}"><div class="line1">
-      <b>${esc(runTitle(run))}</b> ${tag(state, label)}
-      ${run.gate != null ? `<span>stopped at gate ${gatePos(run.gate)}</span>` : ''}
-      <span class="meta">worker ${esc(run.worker_id || '—')} (${esc(run.worker_mode || '—')})</span></div>
-      <div class="metrics"><span>${fmt(run.created_at)} → ${fmt(run.updated_at)}</span>
-        <span>GPU-s used / cap: ${budgetCell(run.budget_used, run.budget_limit)}</span>
-        <span>${esc(run.totals?.calls)} calls</span><span>worker last seen ${fmt(run.worker_last_seen)}</span></div>
-    </div>`;
-  }).join('')}</div>`;
+  if (live) return ['run', 'Đang xử lý'];
+  if (run.gates?.some(g => g.status === 'blocked')) return ['bad', 'Dừng vì bước kiểm tra chưa đạt'];
+  if (run.gates?.some(g => Number(g.gate) === 2.5 && g.status === 'passed')) return ['ok', 'Đã lập kế hoạch; chưa có kết luận cuối'];
+  return ['idle', 'Lượt đã kết thúc; chưa có kết luận cuối'];
 }
 
 // <details> có khóa: mở/đóng giữ trong ui.open qua các lần vẽ lại (syncOpen). `open` mặc định = data-dopen, không phải attr `open`.
@@ -149,14 +132,14 @@ function explain(e) {
   const list = (rows) => `<ul>${rows.map(([n, i]) => noteItem(id, n, i)).join('')}</ul>`;
   const passed = checks.filter((x) => x.ok).length, failed = !!(edits && !edits.applied) || passed < checks.length;
   return `<div class="secs">
-    ${knows.length ? det(`${id}:ctx`, sum('Context', plural(knows.length, 'item')), list(knows), { cls: 'sec' }) : ''}
-    ${used.length ? det(`${id}:tools`, sum('Tools', `${used.length} run`), list(used), { cls: 'sec' }) : ''}
-    ${edits ? det(`${id}:edit`, sum('Edit', ok(edits.applied ? 'ok' : 'bad', edits.applied ? 'applied' : 'not applied'),
+    ${knows.length ? det(`${id}:ctx`, sum('Thông tin cung cấp cho AI', `${knows.length} mục`), list(knows), { cls: 'sec' }) : ''}
+    ${used.length ? det(`${id}:tools`, sum('Công cụ đã chạy', `${used.length} lần`), list(used), { cls: 'sec' }) : ''}
+    ${edits ? det(`${id}:edit`, sum('Thay đổi code', ok(edits.applied ? 'ok' : 'bad', edits.applied ? 'đã áp dụng' : 'chưa áp dụng'),
         edits.diff ? diffCount(edits.diff) : ''),
       `${edits.diff ? `<pre class="diff">${diffHtml(edits.diff)}</pre>` : ''}
        ${edits.parsed ? det(`${id}:edit-raw`, 'edits (raw)', `<pre>${esc(edits.parsed)}</pre>`, { cls: 'raw' }) : ''}`,
       { cls: 'sec', dopen: !!edits.diff && failed }) : ''}
-    ${checks.length ? det(`${id}:eval`, sum('Evaluation', ok(passed === checks.length ? 'ok' : 'bad', `${passed}/${checks.length} passed`)),
+    ${checks.length ? det(`${id}:eval`, sum('Kiểm tra kết quả AI', ok(passed === checks.length ? 'ok' : 'bad', `${passed}/${checks.length} đạt`)),
       `<ul>${checks.map((x) => `<li>${tag(x.ok ? 'ok' : 'bad', x.ok ? 'pass' : 'fail')} <b>${esc(x.check)}</b>${x.detail ? `: ${esc(x.detail)}` : ''}</li>`).join('')}</ul>`,
       { cls: 'sec' }) : ''}
   </div>`;
@@ -164,30 +147,34 @@ function explain(e) {
 
 function callStep(e, rerunGate = null) {
   const m = e.metrics || {};
+  const purpose = describeModelCall(e);
   const cut = (flag) => flag ? ' (truncated)' : '';
   const state = CALL_STATE[e.result] || 'idle';
-  const where = [e.child != null ? `subtask ${esc(e.child)}` : '', e.attempt ? `repair ${esc(e.attempt)}` : '',
-    e.iteration ? `retry ${esc(e.iteration)}` : ''].filter(Boolean).join(' · ');
-  return `<div class="step call st-${state}"><div class="line1">
-      <span>Call ${esc(e.model)}</span>${tag(state, CALL_LABEL[e.result] || e.result || '—')}${where ? `<span>${where}</span>` : ''}${rerunGate != null ? rerunBtn(rerunGate) : ''}</div>
+  const where = [e.child != null ? `công việc ${esc(e.child)}` : '', e.attempt ? `vòng sửa ${esc(e.attempt)}` : '',
+    e.iteration ? `lần thử lại ${esc(e.iteration)}` : ''].filter(Boolean).join(' · ');
+  return `<article class="call-row st-${state}" data-call-purpose="${esc(purpose.id)}"><div class="line1">
+      <b>${esc(purpose.title)}</b>${tag(state, CALL_LABEL[e.result] || 'Chưa có kết quả')}${where ? `<span>${where}</span>` : ''}${rerunGate != null ? rerunBtn(rerunGate) : ''}</div>
+    <p class="meta call-purpose">${esc(purpose.detail)}</p>
     ${e.error ? `<div style="color:var(--c);margin-top:4px">${esc(e.error)}</div>` : ''}
-    <div class="metrics"><span>wall ${secs(m.wall_ms)} s</span><span>GPU ${secs(m.gpu_ms)} s</span>
+    <div class="metrics"><span>Model: ${esc(e.model || 'chưa ghi nhận')}</span><span>Thời gian: ${secs(m.wall_ms)} giây</span><span>Token vào / ra: ${fmtNum(m.tokens_in)} / ${fmtNum(m.tokens_out)}</span></div>
+    ${det(`${e.call_id}:metrics`, 'Chi phí và thông số kỹ thuật', `<div class="metrics"><span>GPU ${secs(m.gpu_ms)} s</span>
       <span>load ${secs(m.load_ms)} s</span><span>queue ${secs(m.queue_ms)} s</span>
       <span>tokens ${fmtNum(m.tokens_in)} / ${fmtNum(m.tokens_out)}</span><span>${esc(m.tok_s ?? '—')} tok/s</span>
-      <span>stop ${esc(m.done_reason ?? '—')}</span><span>${esc(e.budget_units ?? '—')} units</span></div>
+      <span>stop ${esc(m.done_reason ?? '—')}</span><span>${esc(e.budget_units ?? '—')} units</span></div>`, { cls: 'raw' })}
     ${explain(e)}
-    ${det(`${e.call_id}:io`, `${esc(e.call_id)} · ${esc(e.prompt_name ?? '')} · prompt / output`,
-      `<div class="meta">Prompt (variable part, ${fmtNum(e.prompt_len)} chars)${cut(e.truncated?.prompt)}</div>
+    ${det(`${e.call_id}:io`, 'Xem đầu vào và kết quả của nhiệm vụ này',
+      `<div class="meta">Mã bản ghi: ${esc(e.call_id)} · ${esc(e.prompt_name || 'bản ghi cũ chưa có nhãn')}</div>
+      <div class="meta">Đầu vào (${fmtNum(e.prompt_len)} ký tự)${cut(e.truncated?.prompt)}</div>
       <pre>${esc(e.prompt_var)}</pre>
-      <div class="meta">Output (${fmtNum(e.output_len)} chars)${cut(e.truncated?.output)}</div>
-      <pre>${esc(e.output)}</pre>`)}</div>`;
+      <div class="meta">Kết quả AI (${fmtNum(e.output_len)} ký tự)${cut(e.truncated?.output)}</div>
+      <pre>${esc(e.output)}</pre>`)}</article>`;
 }
 
 // Bước hỏng có thể chạy lại ngay cạnh nó. Lập kế hoạch (1–2.5) và kiểm tra trước PR (3–5.5) mỗi nhóm chạy liền một lượt.
 const gateStage = (g) => ([1, 2, 2.5].includes(Number(g)) ? 'plan' : 'execute');
-const rerunTitle = (g) => (gateStage(g) === 'plan' ? 'Plan runs gates 1 → 2.5 in one pass; rerun restarts at gate 1'
-  : 'Execute runs the pre-PR gates on the approved plan in one pass; rerun restarts at gate 3');
-const rerunBtn = (gate, text = 'Rerun step') =>
+const rerunTitle = (g) => (gateStage(g) === 'plan' ? 'Chạy lại cả phần lập kế hoạch từ bước 1; kết quả mới cập nhật các bước hiện tại.'
+  : 'Chạy lại cả phần thực hiện và kiểm chứng từ bước 3 trên kế hoạch được duyệt; kết quả mới cập nhật các bước hiện tại.');
+const rerunBtn = (gate, text = gateStage(gate) === 'plan' ? 'Lập kế hoạch lại từ bước 1' : 'Thực hiện lại từ bước 3') =>
   `<button type="button" class="btn rerun" data-action="rerun-gate" data-gate="${esc(gate)}" title="${esc(rerunTitle(gate))}">${esc(text)}</button>`;
 function gateStep(g, rerun = false) {
   const state = GATE_STATE[g.status] || 'idle';
@@ -210,64 +197,57 @@ function rollbackStep(run, live) {
     ${r?.detail ? `<div class="meta">${esc(r.detail)}</div>` : ''}</div></div>`;
 }
 
-// Bước chưa từng chạy tới (state 'skip') ở cuối progress bar của 1 lượt đã xong: lượt sau sẽ tự có bảng riêng
-// cho các bước đó, giữ lại chỉ làm trùng lặp — chỉ lượt đang chạy thật (live) mới cần xem trước các bước tới.
-function trimUnreached(p, showFull) {
-  if (!p || showFull) return p;
-  let end = p.gates.length;
-  while (end > 0 && p.gates[end - 1].state === 'skip') end -= 1;
-  return { ...p, gates: p.gates.slice(0, end) };
+function renderPipeline(trace) {
+  const projection = projectPipeline(trace);
+  const root = trace.root;
+  const last = projection.runs.at(-1);
+  if (last?.trigger === 'rollback') return `<h2>Tiến trình hiện tại · hoàn tác</h2>
+    <p class="meta">Kết quả xử lý trước khi hoàn tác được giữ trong lịch sử bên dưới.</p>${rollbackStep(last, root.live)}`;
+  const labels = { ok: 'Đạt kiểm tra', bad: 'Chưa đạt · cần xử lý', run: 'Đang xử lý', queued: 'Đang chờ worker chạy lại', unfinished: 'Chưa có kết luận của bước', wait: 'Chưa thực hiện' };
+  const current = projection.steps.find(s => s.state === 'run' || s.state === 'queued')
+    || projection.steps.find(s => s.state === 'bad');
+  const status = current ? `${current.title}: ${labels[current.state]}.` : root.status === 'waiting_authorization'
+    ? 'Kế hoạch chờ được cho phép trước khi thực hiện.' : 'Xem kết luận ở từng bước và trạng thái yêu cầu bên trên.';
+  const shortNames = { 1: 'Yêu cầu', 2: 'Phạm vi', 2.5: 'Soát kế hoạch', 3: 'Sửa code', 4: 'Kiểm tra code', 5: 'Kiểm chứng', 5.5: 'Rủi ro' };
+  return `<h2>Tiến trình hiện tại</h2><p class="flow-summary" role="status">${esc(status)}</p>
+    <p class="meta">${projection.runs.length} lượt xử lý đã ghi nhận. Chạy lại sẽ cập nhật kết quả tại các bước dưới; các lần thử cũ được giữ trong lịch sử.</p>
+    <nav class="prog pipeline-nav" aria-label="Các bước xử lý">${projection.steps.map(s => `<a class="seg ${s.state === 'queued' ? 'wait' : s.state}" href="#pipeline-title-${s.gate}" title="${esc(s.title)}: ${esc(labels[s.state])}"${s.state === 'run' ? ' aria-current="step"' : ''}>${gatePos(s.gate)} · ${shortNames[s.gate]}</a>`).join('')}</nav>
+    <div class="pipeline">${projection.steps.map(s => {
+      const latest = s.calls.map(group => callStep(group.current.evidence || {})).join('');
+      const previous = s.calls.flatMap(group => group.previous);
+      const prior = [...s.previousResults.map(g => gateStep(g)), ...previous.map(c => callStep(c.evidence || {}))].join('');
+      const g = s.result;
+      const rerun = s.state === 'bad' && root.rerun_stage === s.stage ? rerunBtn(s.gate) : '';
+      const state = s.state === 'queued' ? 'warn' : ['unfinished', 'wait'].includes(s.state) ? 'idle' : s.state;
+      const activity = s.state === 'run' ? `<div class="activity-task st-run" data-live-task="${s.gate}" role="status">
+        <div class="line1"><b>Nhiệm vụ đang thực hiện</b>${tag('run', 'Đang xử lý')}</div>
+        <p class="meta">Đang chờ worker gửi kết quả của bước này.</p></div>` : '';
+      return `<section class="pipeline-step st-${state}" data-step="${s.gate}" aria-labelledby="pipeline-title-${s.gate}"${s.state === 'run' ? ' aria-current="step"' : ''}>
+        <div class="line1"><h3 id="pipeline-title-${s.gate}">${gateName(s.gate)}</h3>${tag(state, labels[s.state])}${rerun}</div>
+        <p class="meta step-purpose">${esc(s.detail)}</p>
+        ${s.run ? `<div class="meta">Kết quả từ lượt #${esc(s.run.id)} · ${fmt(s.run.created_at)}</div>` : ''}
+        ${g?.public_reason ? `<p class="step-reason">${esc(g.public_reason)}</p>` : ''}
+        ${s.state === 'queued' ? `<p class="step-reason">Kết quả lần trước nằm trong lịch sử. Worker chưa nhận lượt chạy mới.</p>` : ''}
+        ${latest || activity ? `<div class="step-tasks">${latest}${activity}</div>` : s.state === 'ok' ? '<p class="meta">Bước này đã có kết luận; không có lượt gọi AI nào được ghi nhận.</p>' : ''}
+        ${g?.evidence?.functional ? det(`step-${s.gate}:functional`, 'Bằng chứng kiểm chứng hành vi', `<pre>${esc(JSON.stringify(g.evidence.functional, null, 2))}</pre>`) : ''}
+        ${g?.internal_reason || g?.evidence?.text ? det(`step-${s.gate}:diagnostic`, 'Chi tiết chẩn đoán của bước', `<pre>${esc(g.internal_reason || '')}\n${esc(g.evidence?.text || '')}</pre>`) : ''}
+        ${prior ? det(`step-${s.gate}:previous`, `Các lần thử trước trong bước này (${s.previousResults.length + previous.length} bản ghi)`, prior, { cls: 'attempt-history' }) : ''}
+      </section>`;
+    }).join('')}</div>`;
 }
 
-// Thứ tự: theo cổng; trong 1 cổng các lần gọi model trước, kết luận của cổng sau cùng.
-// Một lượt chia 2 phần riêng: "Lập kế hoạch" (cổng 1–2.5) và "Thực hiện" (cổng 3–5.5), mỗi phần có nút chạy lại riêng.
-const STAGES = { plan: { label: 'Plan', first: 1 }, execute: { label: 'Execute', first: 3 } };
-const FAILED_CALL = new Set(['error', 'http_error', 'timeout']);
-
-function renderStage(stage, items, { run, root, latest, p, lastBlocked }) {
-  const canRerun = latest && root.rerun_stage === stage;
-  const live = root.live && latest && p?.current != null && gateStage(p.current) === stage;
-  const state = live ? 'run' : canRerun || items.some(i => i.blocked) ? 'bad' : items.some(i => i.kind === 1) ? 'ok' : 'idle';
-  const label = { run: 'Running', bad: 'Blocked', ok: 'OK', idle: '—' }[state];
-  const rerun = canRerun ? rerunBtn(lastBlocked[stage] ?? STAGES[stage].first, `Rerun ${STAGES[stage].label.toLowerCase()}`) : '';
-  return `<div class="stage-head st-${state}"><b>${STAGES[stage].label}</b>${tag(state, label)}${rerun}</div>
-    <div class="timeline">${items.map(i => i.html).join('')}</div>`;
-}
-
-function renderRun(run, root, latest) {
-  const showFull = latest && root.live;
-  const p = trimUnreached(run.progress, showFull);
-  // Nút chạy lại ở: đầu mỗi phần, mỗi lần gọi model hỏng, và cổng bị chặn cuối — chỉ ở lượt mới nhất và khi server cho phép chạy lại phần đó.
-  const allowed = (gate) => latest && root.rerun_stage === gateStage(gate);
-  const blockedRows = run.gates.filter(g => g.status === 'blocked');
-  const lastBlocked = {};
-  for (const g of [...blockedRows].sort((a, b) => Number(a.gate) - Number(b.gate))) lastBlocked[gateStage(g.gate)] = Number(g.gate);
-  const items = [
-    ...run.calls.map(c => {
-      const gate = Number(c.evidence?.gate ?? c.gate);
-      return { gate, kind: 0, at: c.created_at, id: c.id, html: callStep(c.evidence || {}, Number.isFinite(gate) && allowed(gate) && FAILED_CALL.has(c.evidence?.result) ? gate : null) };
-    }),
-    ...run.gates.map(g => ({ gate: Number(g.gate), kind: 1, at: g.created_at, id: g.id, blocked: g.status === 'blocked',
-      html: gateStep(g, allowed(g.gate) && Number(g.gate) === lastBlocked[gateStage(g.gate)]) })),
-  ];
-  if (p?.current != null) {
-    items.push({ gate: p.current, kind: 1, at: 0, id: 0, html: `<div class="step gate${subClass(p.current)} st-run" data-pos="${gatePos(p.current)}"><div class="line1">
-      <b>${gateName(p.current)}</b>${tag('run', 'Running')}${p.since ? `<span class="meta">${elapsed(p.since)}</span>` : ''}</div></div>` });
-  }
-  items.sort((a, b) => a.gate - b.gate || a.kind - b.kind || a.at - b.at || a.id - b.id);
-  const [state, label] = runState(run, showFull);
-  const stages = ['plan', 'execute'].filter(s => run.trigger !== 'execute' || s === 'execute')
-    .map(s => [s, items.filter(i => gateStage(i.gate) === s)])
-    .filter(([s, list]) => list.length || (s === 'plan' && run.trigger !== 'execute'));
-  const body = run.trigger === 'rollback' ? rollbackStep(run, showFull)
-    : stages.length ? stages.map(([s, list]) => renderStage(s, list, { run, root, latest, p, lastBlocked })).join('')
-      : '<div class="blk meta">No gate data for this run.</div>';
-  return `<div class="run-head st-${state}"><b>${esc(runTitle(run))}</b>${tag(state, label)}
-      <span class="meta">worker ${esc(run.worker_id || '—')} · ${fmt(run.created_at)}</span>
-      ${run.commit?.head_sha ? `<button type="button" class="trace-copy" data-copy="${esc(run.commit.head_sha)}" title="Commit of this run, click to copy">${esc(run.commit.head_sha.slice(0, 7))}</button>` : ''}
-      <span>GPU-s ${budgetCell(run.budget_used, run.budget_limit)}</span></div>
-    ${renderProgress(p)}
-    ${body}`;
+function renderAttemptHistory(trace) {
+  const runs = projectPipeline(trace).runs;
+  if (!runs.length) return '';
+  const body = runs.map((run, i) => {
+    const [state, label] = runState(run, i === runs.length - 1 && trace.root.live);
+    const gates = run.gates || [], calls = run.calls || [];
+    const content = `<p class="meta">${fmt(run.created_at)} → ${fmt(run.updated_at)} · worker ${esc(run.worker_id || '—')} · ngân sách lượt này: ${budgetCell(run.budget_used, run.budget_limit)}</p>
+      ${gates.map(g => gateStep(g)).join('')}${calls.map(c => callStep(c.evidence || {})).join('')}
+      ${run.trigger === 'rollback' ? rollbackStep(run, trace.root.live && i === runs.length - 1) : ''}`;
+    return det(`run-${run.id}:history`, `<b>Lượt #${esc(run.id)} · ${esc(runTitle(run))}</b> ${tag(state, label)} · ${calls.length} lượt gọi AI`, content);
+  }).join('');
+  return det('all-attempts', `<b>Lịch sử các lần xử lý (${runs.length})</b>`, `<p class="meta">Đây là bằng chứng của các lần thử, không phải nhiều tiến trình đang chạy song song. Chi phí tích lũy vẫn gồm cả các lần thử cũ.</p>${body}`, { cls: 'trace-history' });
 }
 
 function eventState(e) {
@@ -314,16 +294,20 @@ function eventDetail(e) {
 }
 
 function renderEvents(events) {
-  const shown = events.filter(e => e.event_type !== 'gate_started'); // đã thể hiện ở thanh tiến độ
-  if (!shown.length) return '<div class="blk meta">Chưa có sự kiện.</div>';
-  return `<div class="timeline">${shown.map(e => {
+  const shown = events.filter(e => !TECHNICAL_EVENTS.has(e.event_type));
+  if (!events.length) return '<p class="meta">Chưa có diễn biến xử lý.</p>';
+  const row = (e, i) => {
     const state = eventState(e);
-    return `<div class="step st-${state}"><div class="line1"><b>${esc(e.event_type)}</b>
-        ${e.transition ? tag(state, e.transition) : ''}<span class="meta">${fmt(e.created_at)} · ticket #${esc(e.ticket_id)}
-        · ${esc(e.actor_type)}${e.actor_id ? ` ${esc(e.actor_id)}` : ''}</span></div>
+    const actor = { admin: 'Quản trị viên', worker: 'Worker', system: 'Hệ thống', requester: 'Người gửi' }[e.actor_type] || 'Hệ thống';
+    return `<li class="event-row st-${state}"><div class="line1"><b>${esc(describeEvent(e))}</b>
+        <span class="meta">${fmt(e.created_at)} · ${esc(actor)}</span></div>
       ${e.public_message ? `<div style="margin-top:4px">${esc(e.public_message)}</div>` : ''}
-      ${e.internal_detail ? eventDetail(e) : ''}</div>`;
-  }).join('')}</div>`;
+      ${det(`event-${e.run_id ?? ''}-${e.created_at}-${e.event_type}-${i}`, 'Thông tin kỹ thuật của sự kiện', `<div class="meta">${esc(e.event_type)} · ${esc(e.transition || 'không đổi trạng thái')} · ticket #${esc(e.ticket_id)} · ${esc(e.actor_id || '—')}</div>${e.internal_detail ? eventDetail(e) : ''}`)}</li>`;
+  };
+  const recent = shown.slice(-6), earlier = shown.slice(0, -6), technical = events.filter(e => TECHNICAL_EVENTS.has(e.event_type));
+  return `<ol class="event-list">${recent.map(row).join('')}</ol>
+    ${earlier.length ? det('earlier-events', `Diễn biến trước đó (${earlier.length})`, `<ol class="event-list">${earlier.map(row).join('')}</ol>`) : ''}
+    ${technical.length ? det('technical-events', `Nhật ký worker và bước xử lý (${technical.length})`, `<ol class="event-list">${technical.map(row).join('')}</ol>`, { cls: 'raw' }) : ''}`;
 }
 
 // ─── Kế hoạch ───
@@ -355,36 +339,39 @@ function planApproval(p, root) {
   return root.status === 'waiting_authorization' ? ['warn', 'chờ admin cho phép'] : ['idle', 'chưa được cho phép'];
 }
 
-function stepState(child, root) {
+function stepState(child, root, execution, order) {
   if (['pre_pr_ready', 'pre_pr_review', 'rolled_back', 'revert_ready', 'rollback', 'rolling_back'].includes(root.phase)
     && child?.status !== 'failed') return root.phase.startsWith('pre_pr') ? ['ok', 'đã làm, qua kiểm tra'] : ['idle', 'đã hoàn tác'];
-  if (root.live && root.phase === 'executing') return ['run', 'đang làm'];
-  return CHILD_STATE[child?.status] || ['idle', child?.status || '—'];
+  const task = execution?.calls.find(g => Number(g.current.evidence?.child) === Number(order))?.current;
+  // A completed model call cannot identify which child the worker is executing now.
+  if (root.live && task && (task.evidence?.edits?.applied || execution?.state === 'ok')) return ['warn', 'đã sửa code; chờ kết luận kiểm chứng'];
+  return CHILD_STATE[child?.status] || ['idle', child?.status || 'chưa thực hiện'];
 }
 
-function renderPlan(p, root, children) {
-  if (!p) return '';
+function renderPlan(p, root, children, trace) {
+  if (!p) return `<section id="current-plan"><h2>Kế hoạch hiện hành</h2><p class="meta">${root.status === 'queued' && root.phase === 'needs_replan' ? 'Đang chờ lập kế hoạch mới; kế hoạch trước đã hết hiệu lực.' : 'Chưa có kế hoạch hiện hành.'}</p></section>`;
   const plan = p.plan || {};
   const [approvalState, approval] = planApproval(p, root);
   const waiting = root.status === 'waiting_authorization' && !p.authorized && p.tier === 'protected';
   const mine = children.filter(c => Number(c.plan_revision) === Number(p.revision));
   const steps = (plan.steps || []).slice().sort((a, b) => a.order - b.order);
   const extra = mine.filter(c => !steps.some(st => Number(st.order) === Number(c.order)));
-  return `<h2>Kế hoạch</h2>
+  const execution = projectPipeline(trace).steps.find(s => s.gate === 3);
+  return `<section id="current-plan"><h2>Kế hoạch hiện hành</h2>
     <div class="blk plan">
       <div class="plan-head"><b>${esc(plan.goal || '')}</b>${tag(approvalState, approval)}</div>
       <dl class="kv">
         ${plan.read_only_admin_verification ? '<dt>Kiểm tra trang admin</dt><dd>Chỉ quan sát giao diện; không cấp quyền sửa vùng đặc quyền.</dd>' : ''}
         <dt>Mức duyệt</dt><dd>${esc(TIER_TEXT[p.tier] || p.tier)}</dd>
-        <dt>Rủi ro</dt><dd>${esc(RISK_TEXT[plan.risk] || plan.risk || '—')}</dd>
-        <dt>File được sửa</dt><dd>${(plan.allowed_scope || []).map(code).join(', ') || '—'}</dd>
-        <dt>Quyền</dt><dd>${(plan.capabilities || []).map(capText).join(', ') || '—'}</dd>
+        <dt>Rủi ro</dt><dd>${esc(RISK_TEXT[plan.risk || p.risk] || plan.risk || p.risk || '—')}</dd>
+        <dt>File được sửa</dt><dd>${(plan.allowed_scope || p.allowed_scope || []).map(code).join(', ') || '—'}</dd>
+        <dt>Quyền</dt><dd>${(plan.capabilities || p.capabilities || []).map(capText).join(', ') || '—'}</dd>
         <dt>Bản kế hoạch</dt><dd>${esc(p.revision)}</dd>
       </dl>
       ${plan.grounding ? `<details><summary>Dẫn chứng code tại ${esc(plan.grounding.sha)}</summary>${plan.grounding.evidence.map(e => `<div class="blk"><b>${esc(e.target)}</b><pre>${esc(e.quote)}</pre><div>Trước: ${esc(e.before)}</div><div>Sau: ${esc(e.after)}</div><div>Kiểm chứng: ${esc(e.verify)}</div></div>`).join('')}</details>` : ''}
       <div class="sub">Các bước</div>
       <ol class="plan-steps">${steps.map(st => {
-        const [state, label] = stepState(mine.find(c => Number(c.order) === Number(st.order)), root);
+        const [state, label] = stepState(mine.find(c => Number(c.order) === Number(st.order)), root, execution, st.order);
         return `<li class="st-${state}"><div class="line1"><b>${esc(st.title)}</b>${tag(state, label)}</div>
           <div class="meta">Sửa ${(st.allowed_scope || []).map(code).join(', ')} · quyền ${capText(st.capability)} · rủi ro ${esc(RISK_TEXT[st.risk] || st.risk)}</div>
           ${st.acceptance?.length ? `<div class="meta">Đạt khi: ${st.acceptance.map(esc).join('; ')}</div>` : ''}</li>`;
@@ -404,7 +391,7 @@ function renderPlan(p, root, children) {
            </div>`
         : `<button class="btn ok" data-action="authorize-ask" data-hash="${esc(p.plan_hash)}">Cho phép thực hiện kế hoạch</button>`) : ''}
         <span class="meta">${esc(ui.authorizeMsg || '')}</span>
-    </div>`;
+    </div></section>`;
 }
 
 async function authorizePlan(btn) {
@@ -511,7 +498,7 @@ function renderAiBoard(t) {
   const shownState = root.live ? 'run' : state;
   return `
     <h2>AI Board</h2>
-    <div class="blk status st-${shownState}"><div class="line1"><b>Root #${esc(root.id)}</b>${tag(shownState, root.live ? 'Đang xử lý' : label)}
+    <div class="blk status st-${shownState}"><div class="line1"><b>Xử lý yêu cầu</b>${tag(shownState, root.live ? 'Đang xử lý' : label)}
         <span>${esc(root.phase_label)}</span>${root.live ? '<span class="pulse" title="Worker đang giữ yêu cầu này"></span>' : ''}</div>
       ${root.public_note ? `<div style="margin-top:4px">${esc(root.public_note)}</div>` : ''}
       ${root.internal_reason ? `<div class="meta">${esc(root.internal_reason)}</div>` : ''}
@@ -520,19 +507,18 @@ function renderAiBoard(t) {
         <a href="${esc(t.pull_request.url)}" target="_blank" rel="noopener noreferrer">#${esc(t.pull_request.number)}</a>
         · head ${code(String(t.pull_request.head_sha).slice(0, 10))}${riskOf(runs) ? ` · rủi ro ${code(riskOf(runs))}` : ''}</div>` : ''}</div>
     <div class="blk strip">
-      <span>Cap per run: <b>${fmtNum(x.budget_limit)}</b> ${unit}</span>
-      <span>Used, all runs: <b>${fmtNum(x.budget_used)}</b></span>
-      <span>GPU-s measured: <b>${esc(x.gpu_s)}</b></span>
-      <span>Tokens in/out: <b>${fmtNum(x.tokens_in)} / ${fmtNum(x.tokens_out)}</b></span>
-      <span>Calls: <b>${esc(x.calls)}</b></span>
-      <span>Model loads: <b>${esc(x.model_loads)}</b></span>
-      <span>Retries: <b>${esc(x.retries)}</b></span>
+      <span>Giới hạn mỗi lượt xử lý: <b>${fmtNum(x.budget_limit)}</b> ${unit}</span>
+      <span>Đã dùng qua mọi lượt: <b>${fmtNum(x.budget_used)}</b> ${unit}</span>
+      <span>GPU đã đo: <b>${esc(x.gpu_s)}</b> giây</span>
+      <span>Token vào / ra: <b>${fmtNum(x.tokens_in)} / ${fmtNum(x.tokens_out)}</b></span>
+      <span>Gọi AI qua mọi lượt: <b>${esc(x.calls)}</b></span>
+      <span>Lần nạp model: <b>${esc(x.model_loads)}</b></span>
+      <span>Lần gọi lại model: <b>${esc(x.retries)}</b></span>
     </div>
-    ${renderPlan(t.plan, root, t.children || [])}
-    <h2>Runs</h2>
-    ${renderSessions(runs, root)}
-    ${runs.map((run, i) => renderRun(run, root, i === runs.length - 1)).join('')}
-    <h2>Events</h2>
+    ${renderPlan(t.plan, root, t.children || [], t)}
+    ${renderPipeline(t)}
+    ${renderAttemptHistory(t)}
+    <h2>Diễn biến xử lý</h2>
     ${renderEvents(t.events || [])}
   `;
 }
@@ -552,12 +538,14 @@ document.addEventListener('click', async (e) => {
 });
 
 function render() {
+  const previewNodes = [...(document.querySelector('#private-preview')?.childNodes || [])];
   if (!view) return;
   const { thread, decisions, trace } = view;
   const r = thread.request;
   const live = trace?.root?.live;
   document.title = `Yêu cầu #${r.id} · Tizia`;
   patchHtml($('#app'), `
+    <header class="request-head">
     <a class="back" href="/admin.html#requests">Về trang quản trị</a>
     <h1>Yêu cầu #${esc(r.id)}: ${esc(r.title)}</h1>
     ${traceLine(trace?.trace_ref)}
@@ -565,12 +553,17 @@ function render() {
       · <span class="pill">${esc(r.status)}</span> · tạo ${fmt(r.created_at)}
       ${live ? '· <span class="auto live">tự cập nhật mỗi 2 giây</span>' : ''}</div>
     ${renderActions(r, trace)}
+    </header>
+    <section id="private-preview" class="blk private-preview" aria-label="Bản xem riêng của yêu cầu"></section>
     <h2>Trao đổi</h2>
     ${renderThread(thread.messages || [])}
     ${renderDecisions(decisions)}
     ${trace ? renderAiBoard(trace) : '<h2>AI Board</h2><div class="blk meta">Yêu cầu này chưa có ticket AI Board.</div>'}
   `);
   syncOpen();
+  const previewHost = $('#private-preview');
+  previewHost?.append(...previewNodes); // keep a prepared link through the trace's routine refresh
+  mountPrivatePreview(previewHost, REQUEST_ID);
   const go = $('#confirm-go');
   if (go) go.disabled = !confirmed(); // chữ đã gõ còn nguyên sau khi vá DOM
 }
@@ -589,19 +582,41 @@ document.addEventListener('click', (e) => {
 });
 
 async function refresh() {
+  try {
   const [thread, decisions, trace] = await Promise.all([
     api(`/api/requests/${REQUEST_ID}/thread`),
     api(`/api/requests/${REQUEST_ID}/decisions`),
     api(`/api/admin/ai-board/requests/${REQUEST_ID}/trace`),
   ]);
   if (!thread.ok) {
+    stopLiveTrace();
     $('#app').innerHTML = `<p class="err">Không tải được yêu cầu #${REQUEST_ID} (${esc(thread.data?.error || thread.status)}).</p>`;
     return false;
   }
-  view = { thread: thread.data, decisions: decisions.data?.decisions || [], trace: trace.ok ? trace.data : null };
+  // Never retain privileged trace data after a role/auth denial.
+  const retainedTrace = trace.status >= 500 ? view?.trace : null;
+  view = { thread: thread.data, decisions: decisions.data?.decisions || [], trace: trace.ok ? trace.data : retainedTrace };
+  if (!trace.ok && retainedTrace) stopLiveTrace();
+  if (ui.flash === ui.traceError) ui.flash = '';
+  ui.traceError = trace.ok ? '' : `Không tải được tiến trình (${trace.status}). Đã dừng hiệu ứng; đang chờ kết nối lại.`;
+  if (ui.traceError) ui.flash = ui.traceError;
+  if (view.trace?.root?.live && Number(view.trace.root.lease_expires_at) <= Date.now()) view.trace.root.live = false;
   gateNames = view.trace?.gate_names || {};
   render();
   return true;
+  } catch (e) {
+    stopLiveTrace();
+    if (e.message !== 'login') {
+      ui.traceError = 'Mất kết nối cập nhật. Đã dừng hiệu ứng; kết quả cuối cùng được giữ để đối chiếu.';
+      ui.flash = ui.traceError;
+      if (view) render();
+    }
+    throw e;
+  }
+}
+
+function stopLiveTrace() {
+  if (view?.trace?.root) view.trace.root.live = false;
 }
 
 // Đang có worker xử lý thì hỏi 2 giây/lần, còn lại 10 giây; tạm dừng khi tab ẩn hoặc admin đang xác nhận.
@@ -613,6 +628,10 @@ function schedule() {
   timer = setTimeout(tick, active ? 2000 : 10000);
 }
 async function tick() {
+  if (view?.trace?.root?.live && Number(view.trace.root.lease_expires_at) <= Date.now()) {
+    stopLiveTrace();
+    render();
+  }
   if (!document.hidden && !ui.confirm) await refresh().catch(e => { if (e.message !== 'login') console.warn(e); });
   schedule();
 }
@@ -633,8 +652,8 @@ document.addEventListener('click', e => {
   else if (action === 'rerun-gate') {
     btn.disabled = true;
     post(`/api/admin/ai-board/requests/${REQUEST_ID}/rerun-gate`, { gate: Number(btn.dataset.gate) })
-      .then((r) => { ui.flash = `Đã đưa yêu cầu về hàng đợi; worker chạy lại từ bước ${r.from_gate}.`; })
-      .catch(e => { ui.flash = `Không chạy lại được: ${e.message}`; }).finally(() => refresh());
+      .then((r) => { ui.flash = `Đã xếp hàng chạy lại ${r.from_gate === 1 ? 'phần lập kế hoạch từ bước 1' : 'phần thực hiện và kiểm chứng từ bước 3'}. Kết quả mới sẽ cập nhật tại các bước hiện tại.`; })
+      .catch(e => { ui.flash = `Không chạy lại được: ${e.message}`; }).finally(async () => { await refresh(); schedule(); });
     return;
   }
   render();

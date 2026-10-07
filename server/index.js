@@ -56,6 +56,7 @@ import { grantSkillsForScenario, plugin as skillsPlugin } from './skills.js';
 import { securityHeaders, csrf, requireStrictCsrf, apiLimiter, sensitiveAuthLimiter, plugin as securityPlugin } from './contexts/security/index.js';
 import { createAiBoardStore } from './ai-board/store.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from './ai-board/routes.js';
+import { startPrivatePreviews } from './ai-board/api/preview-startup.js';
 import { selfWinNotifier } from './ai-board/self-improve.js';
 import { draftNotifier } from './ai-board/drafts.js';
 import { shotBackendFromEnv, shotProxy, startShotRetention } from './ai-board/shot-storage.js';
@@ -350,6 +351,7 @@ const aiBoardProfiles = attachAiBoardIntake(r, {
   db, store: aiBoardStore, requireAuth, requireStrictCsrf,
   quotaGate: aiQuotaGate('ai_board_grill'), recordUsage: recordAiCall,
 });
+const privatePreviews = await startPrivatePreviews(r, { db, requireAuth, requireStrictCsrf, dataDir: path.join(ROOT_DIR, 'data') });
 attachAiBoardRequestRoutes(r, {
   store: aiBoardStore,
   db,
@@ -358,6 +360,7 @@ attachAiBoardRequestRoutes(r, {
   requireAdmin,
   requireStrictCsrf,
   onCreated: acknowledgeNewRequest,
+  onCancelled: privatePreviews ? (id, user) => privatePreviews.previews.cancelRequest(id, user) : null,
   needsProfile: aiBoardProfiles.needed,
   onClarify: clarifyNotifier(createNotification),
 });

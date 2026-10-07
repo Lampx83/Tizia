@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { validateArchive } from './archive.js';
+import { validPreviewRequest, PREVIEW_BODY_LIMIT } from './preview-http.js';
 
 export class RunnerError extends Error {
   constructor(status, code, phase, message = code) {
@@ -147,8 +148,12 @@ export function createRuns({ policy, backend, store, now = Date.now, alert = () 
 
   async function exec(runId, request) {
     const run = live(runId, 'exec');
-    exactKeys(request, ['argv'], 'exec');
+    exactKeys(request, ['argv', 'timeout_s'], 'exec');
     const { argv } = request;
+    const timeout = request.timeout_s === undefined ? policy.exec.timeout_s : request.timeout_s;
+    if (typeof timeout !== 'number' || !Number.isFinite(timeout) || timeout <= 0 || timeout > policy.exec.timeout_s) {
+      throw new RunnerError(400, 'invalid_request', 'exec');
+    }
     if (!Array.isArray(argv) || argv.length < 1 || argv.length > 64
       || argv.some((arg) => typeof arg !== 'string' || arg.length > 4096 || arg.includes('\0'))) {
       throw new RunnerError(400, 'invalid_request', 'exec');
@@ -157,7 +162,7 @@ export function createRuns({ policy, backend, store, now = Date.now, alert = () 
     running.add(runId);
     try {
       return await backend.exec(run.sandbox, {
-        argv, cwd: policy.exec.workdir, env: policy.guest_env, timeout_s: policy.exec.timeout_s,
+        argv, cwd: policy.exec.workdir, env: policy.guest_env, timeout_s: timeout,
         max_stdout_bytes: policy.exec.max_stdout_bytes, max_stderr_bytes: policy.exec.max_stderr_bytes,
       });
     } catch (error) {
@@ -186,6 +191,30 @@ export function createRuns({ policy, backend, store, now = Date.now, alert = () 
     run.artifacts[name] = { size: bytes.length, sha256 };
     save();
     return { bytes, sha256, size: bytes.length };
+  }
+
+  async function http(runId, request) {
+    const run = live(runId, 'http');
+    if (!validPreviewRequest(request)) throw new RunnerError(400, 'invalid_request', 'http');
+    if (running.has(runId)) throw new RunnerError(409, 'exec_in_progress', 'http');
+    running.add(runId);
+    try {
+      const result = await backend.http(run.sandbox, { ...request, headers: request.headers ?? {} });
+      live(runId, 'http'); // expired/revoked while waiting: do not expose a stale response
+      if (!result || !Number.isInteger(result.status) || result.status < 200 || result.status > 599
+          || !Array.isArray(result.headers) || result.headers.length > 64
+          || result.headers.some((entry) => !Array.isArray(entry) || entry.length !== 2
+            || !['content-type', 'location', 'set-cookie'].includes(entry[0]) || typeof entry[1] !== 'string'
+            || entry[1].length > 8192 || /[\r\n\x00]/.test(entry[1]))
+          || typeof result.body !== 'string' || result.body.length > Math.ceil(PREVIEW_BODY_LIMIT / 3) * 4
+          || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(result.body)) {
+        throw new Error('invalid preview response');
+      }
+      return result;
+    } catch (error) {
+      if (error instanceof RunnerError) throw error;
+      throw new RunnerError(502, 'preview_unavailable', 'http');
+    } finally { running.delete(runId); }
   }
 
   async function renew(runId) {
@@ -229,7 +258,7 @@ export function createRuns({ policy, backend, store, now = Date.now, alert = () 
   }
 
   return {
-    create, upload, exec, download, renew, destroy, sweep, reconcile,
+    create, upload, exec, download, http, renew, destroy, sweep, reconcile,
     status: async (runId) => view(find(runId, 'status')),
     health: () => ({ healthy: !unhealthy, reason: unhealthy }),
     active,

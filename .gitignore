@@ -14,6 +14,7 @@ npm-debug.log*
 dist/
 .claude/
 .scratch/
+.impeccable/
 docs/agents/
 docs/local/
 

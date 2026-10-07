@@ -125,7 +125,7 @@ def test_pass_runs_boot_then_gate_in_a_fresh_vm_and_always_destroys(tmp_path):
     assert result["blocked"] is False and result["evidence"]["runner"] == "docker"
     assert client.calls == ["create", "upload", "exec", "guest-boot.sh", "exec", "sh", "download", "download", "destroy"]
     assert client.run_id.startswith("g5-") and client.manifest[0]["name"] == "result"
-    assert result["evidence"]["sandbox"] == {"run_id": client.run_id, "policy_hash": "h" * 64}
+    assert result["evidence"]["sandbox"] == {"run_id": client.run_id, "policy_hash": "h" * 64, "teardown_confirmed": True}
     assert st["evidence"] is result["evidence"]
 
 
@@ -333,7 +333,7 @@ def test_destroy_is_retried_until_the_runner_confirms_teardown(tmp_path, sleeps)
     assert sandbox_verify.run(state(checkout(tmp_path)), client=client)["blocked"] is False
     assert client.calls.count("destroy") == 3
     stuck = Flaky(destroy_status=502, times=99)
-    assert sandbox_verify.run(state(checkout(tmp_path)), client=stuck)["blocked"] is False  # the verdict stands; the lease expiry cleans up
+    assert sandbox_verify.run(state(checkout(tmp_path)), client=stuck)["blocked"] is True  # unconfirmed teardown invalidates success
     assert stuck.calls.count("destroy") == 3
 
 
@@ -351,7 +351,7 @@ def test_every_state_key_the_guest_gate_reads_is_uploaded():
     import re
     root = Path(__file__).resolve().parents[1]
     read = set()
-    for rel in ("gates/verify.py", "functional.py", "gates/visual.py"):
+    for rel in ("gates/verify.py", "verification/functional.py", "gates/visual.py"):
         read |= set(re.findall(r"""state(?:\.get\(|\[)["']([a-z_]+)["']""", (root / rel).read_text(encoding="utf-8")))
     written_or_guest_side = {"evidence", "base_pages_dir", "full_checkout"}  # gate output / set by gate5_guest / replaced by checkout_dir
     assert read - written_or_guest_side <= set(sandbox_verify.GUEST_STATE_KEYS), read

@@ -106,7 +106,7 @@ function initialMode(db, rootId) {
 
 // Model clarity chỉ quyết định dừng sớm khi ở mode 'active'; shadow/off không tốn GPU cho mỗi lượt.
 const defaultClarity = async (text) => {
-  if (!process.env.OLLAMA_URL || !process.env.AI_BOARD_CLASSIFIER_MODEL || taskMode('clarity') !== 'active') return null;
+  if (!(process['env'].OLLAMA_URL || process['env'].VLLM_URL) || !process['env'].AI_BOARD_CLASSIFIER_MODEL || taskMode('clarity') !== 'active') return null;
   const { probs } = await classify('clarity', text);
   return decideClarity(probs);
 };

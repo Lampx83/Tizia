@@ -1,4 +1,5 @@
 import { Sandbox } from 'microsandbox';
+import { PREVIEW_HTTP_SCRIPT, PREVIEW_BODY_LIMIT } from './preview-http.js';
 
 const GROUPS_DENIED = ['loopback', 'private', 'link-local', 'metadata', 'multicast', 'host'];
 const stripNul = (text) => text.split('\0').join('');
@@ -83,6 +84,15 @@ export function createMicrosandboxBackend() {
     },
 
     exec,
+
+    async http(name, request) {
+      const result = await exec(name, {
+        argv: ['python3', '-c', PREVIEW_HTTP_SCRIPT, JSON.stringify(request)], cwd: '/workspace', env: {},
+        timeout_s: 12, max_stdout_bytes: PREVIEW_BODY_LIMIT * 2, max_stderr_bytes: 1024,
+      });
+      if (result.code !== 0 || result.timed_out || result.truncated) throw new Error('preview transport failed');
+      return JSON.parse(result.stdout);
+    },
 
     async readFile(name, path, maxBytes, root) {
       const sandbox = get(name);

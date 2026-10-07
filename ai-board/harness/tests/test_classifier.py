@@ -104,6 +104,22 @@ def test_shared_config_is_the_server_file():
     assert classifier.CLASSIFIER == server and not server["calibrated"]
 
 
+def test_classifier_task_name_is_traced_without_changing_inference():
+    from types import SimpleNamespace
+    recorded = {}
+
+    def call_model(model, prompt, **kwargs):
+        recorded.update(model=model, prompt=prompt, **kwargs)
+        return body([["A", 0.0]])
+
+    deps = SimpleNamespace(models=SimpleNamespace(classifier_model="fixture-model"), call_model=call_model)
+    result = classifier.classify("danger", "Đổi chữ", deps, Budget(), gate=1)
+    assert result["probs"]["safe"] == 1.0
+    assert recorded["prompt_name"] == "classifier_danger"
+    assert recorded["options"] == {"num_predict": 1}
+    assert recorded["extra"]["think"] is False
+
+
 def test_shadow_danger_is_logged_but_never_escalates_and_off_skips_the_call(monkeypatch):
     """Per-task mode from the shared config."""
     sure = [["F", math.log(0.9)], ["A", math.log(0.1)]]

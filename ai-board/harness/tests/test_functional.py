@@ -57,7 +57,7 @@ def test_text_oracle_is_selected_and_the_queue_oracle_keeps_priority():
 
 
 def test_server_and_harness_trust_the_same_oracles():
-    source = (Path(__file__).resolve().parents[3] / 'server/ai-board/store.js').read_text(encoding='utf-8')
+    source = (Path(__file__).resolve().parents[3] / 'server/ai-board/repositories/store.js').read_text(encoding='utf-8')
     block = re.search(r'const ORACLE_COVERAGE = \{(.*?)\n\};', source, re.S).group(1)
     server = {m[0]: re.findall(r"'(\w+)'", m[1]) for m in re.findall(r"'([\w-]+)': \[(.*?)\]", block)}
     assert server == {probe: list(flags) for probe, flags in functional.ORACLES.items()}

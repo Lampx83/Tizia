@@ -514,7 +514,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             kind = 'plan'
             def fixture(stage):
                 if stage in ('seed', 'thread', 'session'):
-                    command([*compose, 'cp', str(Path(functional.__file__).with_name('queue_fixture.mjs')), 'tizia:/app/verify-queue.mjs'])
+                    command([*compose, 'cp', str(Path(__file__).resolve().parent.parent / 'queue_fixture.mjs'), 'tizia:/app/verify-queue.mjs'])
                 response = command([*compose, 'exec', '-T', 'tizia', 'node', '/app/verify-queue.mjs', stage], log_output=False, timeout=20)
                 return json.loads(response.stdout) if stage in ('seed', 'thread', 'session') else None
             observed_pages = html or ([primary] if primary else [])

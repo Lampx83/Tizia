@@ -19,6 +19,7 @@ data
 *.db-shm
 README.md
 .scratch
+.impeccable
 docs/agents
 docs/local
 graphify-out

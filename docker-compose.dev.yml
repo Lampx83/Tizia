@@ -11,6 +11,7 @@ services:
     restart: unless-stopped
     ports:
       - "${PORT:-8041}:8041"
+      - "127.0.0.1:8042:8042"  # private preview only on this computer
     env_file:
       - .env
     environment:  # chỉ nối dây trong container; mọi cấu hình (khóa, model, retention) nằm trong file .env
@@ -18,9 +19,14 @@ services:
       PORT: 8041
       HOST: 0.0.0.0
       DATA_DIR: /data
+      AI_BOARD_PREVIEW_BIND_HOST: 0.0.0.0  # container listener; published host port remains loopback-only
+      AI_BOARD_SANDBOX_URL: http://sandbox-runner:8090
+      AI_BOARD_SANDBOX_TOKEN_FILE: /run/secrets/sandbox-runner-token
+    networks: [default, sandbox-api]
     logging: *logging
     volumes:
       - tizia-dev-data:/data
+      - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
 
   ai-board-worker:
     container_name: tizia-ai-board-worker
@@ -47,12 +53,21 @@ services:
       PR_BASE_BRANCH:
       OLLAMA_URL:
       OLLAMA_SECKEY:
+      FALLBACK_OLLAMA_URL:
+      FALLBACK_OLLAMA_SECKEY:
+      VLLM_URL:
+      VLLM_SECKEY:
+      AI_BOARD_ENGINE_URL:
+      AI_BOARD_INTERNAL_KEY:
+      AI_BOARD_PROJECT:
+      AI_BOARD_MODEL_ROUTING:
       GATE1_MODEL:
       GATE3_MODEL_HEAVY:
       GATE3_MODEL_LIGHT:
       EMBED_MODEL:
       AI_BOARD_CLASSIFIER_MODEL:
       BUDGET_MAX_WALL_CLOCK_S:
+      AI_BOARD_PRIVATE_PREVIEW_ENABLED:
     volumes:
       - ai-board-repo:/repo
       - ai-board-memory:/opt/ai-board/ai-board/memory
