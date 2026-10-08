@@ -103,6 +103,9 @@ def integrity(meta: dict, rows: list[dict], current: dict | None = None) -> list
         problems.append("a model call left vLLM (failover or legacy route)")
     if any(set(r.get("served") or []) - {meta.get("model")} for r in rows):
         problems.append("a different served model id answered")
+    infra = sum(bool(r.get("infra_error")) for r in rows)
+    if rows and infra / len(rows) > 0.1:
+        problems.append(f"{infra}/{len(rows)} trials ended in infrastructure errors")
     gate1_rows = [r for r in rows if r["mode"].startswith("e2e") and r["plan"]["attempts"]]
     if meta.get("reasoning", {}).get("gate1") and gate1_rows and not any(r.get("reasoning_chars") for r in gate1_rows):
         problems.append("reasoning is configured for gate1 but no reasoning text ever came back")
@@ -150,6 +153,8 @@ def cmd_run(args, deps=None) -> int:
                 print(f"[suite] needs AI_BOARD_MODEL_ROUTING=true and a vLLM candidate first for {role}", file=sys.stderr)
                 return 2
         model = router.candidates("gate3_light")[0]["model"]
+        for role in filter(None, args.reasoning_off.split(",")):  # ablation: one setting per run, recorded in provenance
+            router.catalog.setdefault("reasoning", {})[role] = False
     else:
         router, model = None, deps.models.gate3_model
     prov = provenance(ROOT, model, router)
@@ -166,7 +171,8 @@ def cmd_run(args, deps=None) -> int:
     if args.cases:
         tasks = tasks[: args.cases]
     modes = args.modes.split(",")
-    name = f"s{args.seed}-{args.split}-{prov['ref'][:12]}" + ("-dirty" if prov["dirty"] else "")
+    name = (f"s{args.seed}-{args.split}-{prov['ref'][:12]}" + ("-dirty" if prov["dirty"] else "")
+            + (f"-think0-{args.reasoning_off.replace(',', '+')}" if args.reasoning_off else ""))
     run_dir = root / "suite" / name
     run_dir.mkdir(parents=True, exist_ok=True)
     meta = {"seed": args.seed, "split": args.split, "repeats": args.repeats, "modes": modes, "fast_tier": args.fast_tier, **prov,
@@ -271,6 +277,7 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--fast-tier", action="store_true", help="gate 4 + production text oracle on a locally started corpus app")
     run.add_argument("--max-minutes", type=float)
     run.add_argument("--allow-dirty", action="store_true")
+    run.add_argument("--reasoning-off", default="", help="comma list of roles to run with thinking off (ablation), e.g. gate1,gate25")
     run.set_defaults(handler=cmd_run)
     rep = sub.add_parser("report")
     rep.add_argument("--root", required=True)

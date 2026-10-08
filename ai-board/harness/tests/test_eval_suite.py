@@ -193,3 +193,10 @@ def test_integrity_flags_failover_foreign_model_and_silent_reasoning():
     assert any("different served model" in p for p in runner.integrity(meta, [{**ok, "served": ["other"]}]))
     assert any("no reasoning text" in p for p in runner.integrity(meta, [{**ok, "reasoning_chars": 0}]))
     assert any("ref changed" in p for p in runner.integrity(meta, [ok], {"ref": "b", "model": "m"}))
+
+
+def test_integrity_flags_a_run_dominated_by_infra_errors():
+    meta = {"model": "m", "reasoning": {}}
+    rows = [{"mode": "gold", "providers": ["vllm"], "served": ["m"], "infra_error": i < 3} for i in range(10)]
+    assert any("infrastructure errors" in p for p in runner.integrity(meta, rows))
+    assert runner.integrity(meta, [{**r, "infra_error": False} for r in rows]) == []

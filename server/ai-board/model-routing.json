@@ -101,5 +101,5 @@
     "calibration": true,
     "eval_judge": true
   },
-  "reasoning_extra_tokens": 4096
+  "reasoning_extra_tokens": 8192
 }

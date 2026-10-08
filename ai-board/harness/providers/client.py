@@ -112,6 +112,8 @@ class OllamaClient:
             try:
                 choice = body['choices'][0]
                 content = choice['message']['content']
+                if content is None and choice.get('finish_reason') == 'length':
+                    content = ''  # thinking used the whole token budget: a truncated answer, not a protocol error
                 if not isinstance(content, str):
                     raise ValueError()
                 usage = body.get('usage') or {}

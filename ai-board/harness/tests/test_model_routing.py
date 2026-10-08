@@ -306,6 +306,17 @@ def test_classifier_routes_to_vllm_chat_logprobs(monkeypatch):
     assert result['route']['provider'] == 'vllm' and result['probs']['clear'] > result['probs']['vague']
 
 
+def test_vllm_content_null_after_length_is_a_truncated_answer_not_a_protocol_error():
+    reply = {'choices': [{'message': {'content': None, 'reasoning': 'x' * 40}, 'finish_reason': 'length'}], 'usage': {'prompt_tokens': 5, 'completion_tokens': 9}}
+    client_ = OllamaClient(base_url='http://vllm', protocol='vllm')
+    client_._post = lambda *_a, **_k: reply
+    body = client_.generate('m', 'p')
+    assert body['response'] == '' and body['done_reason'] == 'length' and body['_reasoning_chars'] == 40
+    reply['choices'][0]['finish_reason'] = 'stop'
+    with pytest.raises(ValueError, match='Invalid vLLM chat response'):
+        client_.generate('m', 'p')
+
+
 def test_vllm_classifier_response_without_logprobs_is_rejected():
     reply = {'choices': [{'message': {'content': 'A'}}], 'usage': {}}
     client_ = OllamaClient(base_url='http://vllm', protocol='vllm')
