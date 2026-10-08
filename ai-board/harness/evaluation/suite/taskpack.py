@@ -8,13 +8,29 @@ and the candidate diff may not be much larger than the merged one.
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
+import stat
 import subprocess
+import threading
 from pathlib import Path
 
 import eval_corpus
 
 MAX_FILES, MAX_GOLD_LINES = 4, 60
+_CHECKOUT_LOCK = threading.Lock()
+
+
+def prepare_checkout(root: Path, sha: str, source) -> Path:
+    """eval_corpus.checkout_at is not safe for two workers asking for the same commit (one deletes the other's half-built clone): serialize it,
+    and rebuild a directory a killed or failed clone left without a usable HEAD."""
+    dest = Path(root) / "checkouts" / sha[:12]
+    with _CHECKOUT_LOCK:
+        head = dest / "HEAD"
+        if dest.exists() and (not head.exists() or head.read_text().strip() != sha):
+            shutil.rmtree(dest, onexc=lambda fn, path, _e: (os.chmod(path, stat.S_IWRITE), fn(path)))
+        return eval_corpus.checkout_at(root, sha, source)
 TRIVIAL = re.compile(r"^[\s{}()\[\];,<>/*]*$")
 
 
@@ -72,7 +88,7 @@ def make_oracle(repo, task: dict):
 
 
 def case_record(task: dict, root: Path, source) -> dict:
-    repo = eval_corpus.checkout_at(root, task["base_sha"], source)
+    repo = prepare_checkout(root, task["base_sha"], source)
     subtasks = [{"title": s["title"], "file": s["file"], "size": "small", "verify": s["verify"]} for s in task["subtasks"]]
     return {"subtasks": subtasks, "detail": task["detail"], "checkout": str(repo), "oracle": make_oracle(repo, task)}
 

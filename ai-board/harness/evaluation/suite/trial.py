@@ -129,6 +129,7 @@ def run_trial(task: dict, mode: str, base_deps: Deps, root: Path, source, fast: 
     """Never raises for model/infra outcomes (they are result rows). eval_fast.FastTierError propagates: the environment is broken, not the model."""
     deps = recording(base_deps)
     kind, _, variant = mode.partition(":")
+    taskpack.prepare_checkout(root, task["base_sha"], source)
     rec = taskpack.case_record(task, root, source) if task.get("pack") else eval_corpus.case_record(task, root, source)
     repo, gold, started = Path(rec["checkout"]), golds(task), time.monotonic()
     plan_facts, plan, plan_records, error = None, None, [], None

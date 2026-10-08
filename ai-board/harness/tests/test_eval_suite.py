@@ -283,3 +283,21 @@ def test_gate1_block_reason_is_kept_in_the_row(world):
                 notify=None, sleep=lambda _s: None)
     row = trial.run_trial(pick(tasks, 1), "e2e", deps, root, ROOT)
     assert row["plan"]["blocked"] and "plan" in row["plan"]["reason"]
+
+
+def test_concurrent_workers_can_ask_for_the_same_checkout_and_a_broken_one_is_rebuilt(tmp_path):
+    from evaluation.suite import taskpack
+    sha = eval_corpus.PIN
+    results, errors = [], []
+
+    def go():
+        try:
+            results.append(taskpack.prepare_checkout(tmp_path, sha, ROOT))
+        except Exception as error:  # noqa: BLE001
+            errors.append(error)
+    threads = [threading.Thread(target=go) for _ in range(4)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert not errors and len(set(results)) == 1 and (results[0] / "HEAD").read_text().strip() == sha
+    (results[0] / "HEAD").unlink()  # a clone killed half-way
+    assert (taskpack.prepare_checkout(tmp_path, sha, ROOT) / "HEAD").read_text().strip() == sha
