@@ -1,2 +1,2 @@
-// Compatibility export; implementation: repositories/shot-storage.js.
+// Compatibility export; canonical PostgreSQL ownership.
 export * from './repositories/shot-storage.js';

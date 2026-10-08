@@ -1,2 +1,2 @@
-// Compatibility export; implementation: services/clarity-rules.js.
+// Compatibility export; canonical PostgreSQL ownership.
 export * from './services/clarity-rules.js';

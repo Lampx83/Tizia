@@ -9,9 +9,11 @@ services:
     image: tizia:dev
     container_name: tizia-dev
     restart: unless-stopped
+    depends_on:  # the app needs PostgreSQL at boot
+      tizia-postgres: { condition: service_healthy }
     ports:
       - "${PORT:-8041}:8041"
-      - "127.0.0.1:8042:8042"  # private preview only on this computer
+      - "127.0.0.1:8042:8042"  # private preview host remains loopback-only
     env_file:
       - .env
     environment:  # chỉ nối dây trong container; mọi cấu hình (khóa, model, retention) nằm trong file .env
@@ -19,14 +21,36 @@ services:
       PORT: 8041
       HOST: 0.0.0.0
       DATA_DIR: /data
-      AI_BOARD_PREVIEW_BIND_HOST: 0.0.0.0  # container listener; published host port remains loopback-only
+      AI_BOARD_PREVIEW_BIND_HOST: 0.0.0.0
       AI_BOARD_SANDBOX_URL: http://sandbox-runner:8090
       AI_BOARD_SANDBOX_TOKEN_FILE: /run/secrets/sandbox-runner-token
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@tizia-postgres:5432/${POSTGRES_DB}  # ghi đè DATABASE_URL trong .env (dành cho chạy ngoài container)
     networks: [default, sandbox-api]
     logging: *logging
     volumes:
-      - tizia-dev-data:/data
+      - tizia-dev-data:/data  # sao lưu pg_dump + file tải lên; dữ liệu chính nằm trong PostgreSQL
       - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
+
+  # PostgreSQL cho cả ứng dụng (ticket 11). Chỉ trên mạng compose nội bộ: KHÔNG publish cổng ra host; tizia-dev
+  # gọi qua tizia-postgres:5432. Dòng trần = lấy từ file env của compose (POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB); không đặt giá trị ở đây.
+  # Lên bản major mới = dump/restore (không đổi tag tại chỗ); postgresql17-client trong image tizia phải cùng major.
+  tizia-postgres:
+    container_name: tizia-postgres
+    image: postgres:17-alpine
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_USER:
+      POSTGRES_PASSWORD:
+      POSTGRES_DB:
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - tizia-postgres-data:/var/lib/postgresql/data
 
   ai-board-worker:
     container_name: tizia-ai-board-worker
@@ -45,6 +69,7 @@ services:
     logging: *logging
     environment:  # dòng có giá trị = nối dây trong container; dòng trần = lấy từ file .env (khóa, model, nhánh gốc, ngân sách)
       AI_BOARD_SERVER_URL: http://tizia-dev:8041
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@tizia-postgres:5432/${POSTGRES_DB}
       AI_BOARD_REPO_DIR: /repo
       AI_BOARD_SANDBOX_URL: http://sandbox-runner:8090
       AI_BOARD_WORKER_KEY:
@@ -58,12 +83,21 @@ services:
       AI_BOARD_ENGINE_URL:
       AI_BOARD_INTERNAL_KEY:
       AI_BOARD_PROJECT:
+      API_MODEL_PROVIDER:
+      API_KEY:
       AI_BOARD_MODEL_ROUTING:
+      AI_BOARD_AUTO_FALLBACK:
+      AI_BOARD_API_ENABLED:
       GATE1_MODEL:
       GATE3_MODEL_HEAVY:
       GATE3_MODEL_LIGHT:
       EMBED_MODEL:
       AI_BOARD_CLASSIFIER_MODEL:
+      CALIBRATION_MODEL:
+      BUDGET_MAX_MODEL_CALLS:
+      BUDGET_MAX_TOOL_CALLS:
+      BUDGET_MAX_TOKENS:
+      BUDGET_MAX_RETRIES:
       BUDGET_MAX_WALL_CLOCK_S:
       AI_BOARD_PRIVATE_PREVIEW_ENABLED:
     volumes:
@@ -136,6 +170,7 @@ networks:
 volumes:
   tizia-dev-data:
     driver: local
+  tizia-postgres-data:
   ai-board-repo:
   ai-board-memory:
   sandbox-runner-state:

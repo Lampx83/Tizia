@@ -44,17 +44,17 @@ GATES: tuple[float, ...] = (1, 2, 2.5, 3, 4, 5, 5.5, 6, 7)
 # thêm cột thì sửa cả hai, hoặc tách DDL ra 1 file .sql chung cho cả hai bên đọc.
 SKILL_PROPOSALS_DDL = """
 CREATE TABLE IF NOT EXISTS skill_proposals (
-  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  id            BIGSERIAL PRIMARY KEY,
   origin        TEXT    NOT NULL,
   domain        TEXT,
-  gate_reached  REAL    NOT NULL,
+  gate_reached  DOUBLE PRECISION    NOT NULL,
   outcome       TEXT,
   request_ids   TEXT,
   template_key  TEXT,
   budget_json   TEXT,
   pr_url        TEXT,
-  created_at    INTEGER NOT NULL,
-  updated_at    INTEGER NOT NULL
+  created_at    BIGINT NOT NULL,
+  updated_at    BIGINT NOT NULL
 );
 """
 
@@ -288,7 +288,7 @@ def _smoke(request, deps, budget, state, **_) -> dict:
     if deps.verify is not None:
         return deps.verify.run(state, deps, budget)
     if os.getenv("AI_BOARD_SANDBOX_URL"):  # Gate 5 inside a Microsandbox microVM instead of worker-side Docker
-        from verification import sandbox as sandbox_verify
+        import sandbox_verify
         return candidate.ensure(state, 5) or sandbox_verify.run(state, deps, budget)
     return candidate.ensure(state, 5) or verify.run(state, deps, budget)
 
@@ -330,7 +330,8 @@ def create_proposal(db_path, *, request: dict) -> int:
             """INSERT INTO skill_proposals
                  (origin, domain, gate_reached, outcome, request_ids,
                   template_key, budget_json, pr_url, created_at, updated_at)
-               VALUES (?, ?, 0, NULL, ?, ?, NULL, NULL, ?, ?)""",
+               VALUES (%s, %s, 0, NULL, %s, %s, NULL, NULL, %s, %s)
+               RETURNING id""",
             (
                 origin,
                 request.get("domain"),
@@ -340,7 +341,7 @@ def create_proposal(db_path, *, request: dict) -> int:
                 now,
             ),
         )
-        return cur.lastrowid
+        return cur.fetchone()[0]
 
 
 def update_proposal(db_path, proposal_id: int, *, gate_reached: float, outcome: str, budget: Budget) -> None:
@@ -348,7 +349,7 @@ def update_proposal(db_path, proposal_id: int, *, gate_reached: float, outcome: 
     cuối cùng của lượt chạy."""
     with harness_db(db_path, ddl=SKILL_PROPOSALS_DDL) as con:
         con.execute(
-            "UPDATE skill_proposals SET gate_reached=?, outcome=?, budget_json=?, updated_at=? WHERE id=?",
+            "UPDATE skill_proposals SET gate_reached=%s, outcome=%s, budget_json=%s, updated_at=%s WHERE id=%s",
             (float(gate_reached), outcome, json.dumps(budget.snapshot()), int(time.time() * 1000), proposal_id),
         )
 
@@ -439,7 +440,10 @@ def main(argv: list[str] | None = None, deps: Deps | None = None) -> int:
         return 2
 
     inbox_path = os.environ.get("TIZIA_INBOX_PATH") or (ROOT / "ai-board" / "inbox.json")
-    db_path = os.environ.get("TIZIA_DB_PATH") or (ROOT / "data" / "tizia.db")
+    db_path = os.environ.get("DATABASE_URL")  # PostgreSQL DSN
+    if not db_path:
+        print("[harness] DATABASE_URL chưa đặt (PostgreSQL DSN)", file=sys.stderr)
+        return 2
     deps = deps or Deps.real()
 
     items = [it for it in load_inbox(inbox_path) if it.get("status") != "done"]

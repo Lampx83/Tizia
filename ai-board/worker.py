@@ -5,6 +5,7 @@ import argparse
 import dataclasses
 import json
 import os
+import posixpath
 import re
 import shutil
 import socket
@@ -448,6 +449,8 @@ def _local_night(now_ms: int, window: dict) -> tuple[str, bool]:
     from zoneinfo import ZoneInfo
 
     dt = datetime.fromtimestamp(now_ms / 1000, ZoneInfo(window["tz"]))
+    if os.getenv("AI_BOARD_NIGHT_WINDOW_OVERRIDE") == "always":  # chỉ dev: luôn trong cửa sổ, giới hạn khác giữ nguyên
+        return dt.strftime("%Y-%m-%d"), True
     return dt.strftime("%Y-%m-%d"), window["start"] <= dt.strftime("%H:%M") < window["end"]
 
 
@@ -947,17 +950,20 @@ class HarnessPlanner:
         }
 
     @staticmethod
-    def _canonical(request: dict, old: dict, signals: list[str] | None = None) -> dict:
+    def _canonical(request: dict, old: dict, signals: list[str] | None = None, catalog: dict | None = None) -> dict:
         """Plan cổng 1 → schema D0 của server. Có tín hiệu phức tạp → risk high → tier protected (admin cho phép).
         Yêu cầu self (board tự sửa): luôn self.config — server chỉ cấp năng lực này cho self, tier protected."""
         old_caps = (["self.config"] if request.get("type") == "self"
                     else list(dict.fromkeys(old.get("capabilities") or [])))
         steps = []
         for index, subtask in enumerate(old.get("subtasks") or [], start=1):
-            file = subtask["file"].replace("\\", "/")
-            capability = old_caps[0] if old_caps else (
+            file = posixpath.normpath(subtask["file"].replace("\\", "/"))
+            capability = next((cap for cap in old_caps
+                               if any(file.startswith(prefix) for prefix in (catalog or {}).get(cap, {}).get('allow', []))
+                               and not any(file.startswith(prefix) for prefix in (catalog or {}).get(cap, {}).get('deny', []))),
+                              old_caps[0] if old_caps else (
                 "public.ui" if file.startswith("public/") else "generated.context"
-            )
+            ))
             steps.append({
                 "order": index,
                 "title": subtask["title"],
@@ -1002,7 +1008,9 @@ class HarnessPlanner:
         ticket = snapshot.get("ticket") or {}
         budget.max_units = int(ticket.get("budget_limit") or DEFAULT_BUDGET_LIMIT)  # trần mỗi lượt, không trừ các lượt trước
         source = source or self.source  # folder: đỉnh nhánh chu kỳ thay cho checkout chung
-        state = {"checkout_source": str(source)} if source else {}
+        state = {'catalog': (snapshot.get('capability_policy') or {}).get('capabilities', {})}
+        if source:
+            state['checkout_source'] = str(source)
         for gate in PLAN_GATES:
             result = self.run_gate(gate, request, self.deps, budget, state)
             if gate == 1:
@@ -1016,7 +1024,7 @@ class HarnessPlanner:
         signals = list(state.get("complexity_signals") or [])
         if snapshot.get("clarification_incomplete"):
             signals.append("requester_still_vague")  # legacy incomplete clarification → risk high → admin cho phép plan
-        plan = self._canonical(request, state["plan"], signals)
+        plan = self._canonical(request, state["plan"], signals, state['catalog'])
         if state.get('grounding'):
             plan['grounding'] = state['grounding']
         if (state.get('intake') or {}).get('read_only_verification'):
@@ -1164,6 +1172,8 @@ def main(argv: list[str] | None = None) -> int:
     # luôn đi trước — chỉ thử đêm khi lượt claim vừa rồi rảnh (idle/gpu_paused), never khi đang giữ ticket.
     night_deps = None
     if args.execute:
+        if os.getenv("AI_BOARD_NIGHT_WINDOW_OVERRIDE") == "always":
+            print("WARNING: AI_BOARD_NIGHT_WINDOW_OVERRIDE=always - self-improve night window bypassed (dev only)")
         import diagnose as _diagnose
         night_deps = _real_deps(Deps, meter.Tracer(_diagnose.TRACES_PATH), worker.gate_started)
     while True:

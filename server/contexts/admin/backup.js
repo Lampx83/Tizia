@@ -1,10 +1,9 @@
 // ============================================================
 // Admin backup/restore — Postgres pg_dump / pg_restore
 // ============================================================
-// Dùng `pg_dump -Fc` (custom format, nén sẵn) để snapshot, `pg_restore
-// --clean --if-exists` để phục hồi. Không cần restart server — restore
-// chạy thẳng trên connection pool đang sống. File backup dạng .dump nằm
-// ở BACKUP_DIR/ (mặc định <cwd>/data/backups).
+// pg_dump -Fc snapshots PostgreSQL only; uploads/object storage need their own backup.
+// Restore into a separate database with writers stopped, then verify before routing traffic.
+// HTTP restore never overwrites the serving pool. Dumps live in BACKUP_DIR or DATA_DIR/backups.
 //
 // Yêu cầu: binary `pg_dump` / `pg_restore` cùng major version với server
 // Postgres trong PATH. Local dev có sẵn Homebrew, prod cần cài
@@ -14,22 +13,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import express from 'express';
 import { requireAdmin } from './index.js';
+import { DATA_DIR } from '../../db.js';
 
 const BACKUP_DIR = process.env.BACKUP_DIR
   ? path.resolve(process.env.BACKUP_DIR)
-  : path.resolve(process.cwd(), 'data', 'backups');
+  : path.resolve(DATA_DIR, 'backups');
 
-// Magic header pg_dump custom format: bytes "PGDMP" tại offset 0.
-const PGDMP_MAGIC = Buffer.from('PGDMP', 'utf8');
 const KEEP_DEFAULT = Number(process.env.BACKUP_KEEP || 7);
 const AUTO_HOUR = Number(process.env.BACKUP_HOUR || 3); // 03:00 server time
-const MAX_RESTORE_BYTES = Number(process.env.BACKUP_MAX_BYTES || 500 * 1024 * 1024);
 // pg_dump/pg_restore phải cùng major version với server. Local dev có thể
 // có pg14 trong PATH trong khi server là pg16 → cho override qua env.
 const PG_DUMP_BIN = process.env.PG_DUMP_BIN || 'pg_dump';
-const PG_RESTORE_BIN = process.env.PG_RESTORE_BIN || 'pg_restore';
 
 fs.mkdirSync(BACKUP_DIR, { recursive: true });
 
@@ -39,7 +34,8 @@ function stamp() {
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 }
 
-function safeBackupName(name) {
+export { BACKUP_DIR };
+export function safeBackupName(name) {
   if (!/^tizia-\d{8}-\d{6}(?:-[a-z0-9]+)?\.dump$/i.test(name)) return null;
   const full = path.join(BACKUP_DIR, name);
   if (!full.startsWith(BACKUP_DIR + path.sep)) return null;
@@ -125,18 +121,6 @@ export function scheduleAutoBackup() {
   console.log(`[backup] auto-backup scheduled at ${String(AUTO_HOUR).padStart(2, '0')}:00, keep ${KEEP_DEFAULT}, dir=${BACKUP_DIR}`);
 }
 
-// Restore: chạy pg_restore --clean --if-exists -1 (single transaction → rollback
-// trọn nếu lỗi giữa chừng → DB không bị half-state). --no-owner để không cố set
-// owner sang role không tồn tại trên cluster đích.
-async function pgRestore(filePath) {
-  await runPg(PG_RESTORE_BIN, [
-    '--clean', '--if-exists',
-    '--no-owner', '--no-acl',
-    '-d', process.env.DATABASE_URL,
-    filePath,
-  ]);
-}
-
 export function attachBackup(r) {
   r.get('/api/admin/backups', requireAdmin, (_req, res) => {
     const items = listBackups();
@@ -173,58 +157,18 @@ export function attachBackup(r) {
     catch (e) { res.status(500).json({ error: 'delete_failed', detail: String(e.message) }); }
   });
 
-  // POST /api/admin/restore — upload .dump (pg_dump custom format) → ghi
-  // tạm, validate magic PGDMP, gọi pg_restore. KHÔNG cần restart server. Yêu
-  // cầu X-Confirm-Restore=YES để chống nhấn nhầm. Lỗi giữa chừng → -1 single
-  // transaction rollback, DB về trạng thái cũ.
-  r.post('/api/admin/restore',
-    requireAdmin,
-    express.raw({ type: 'application/octet-stream', limit: MAX_RESTORE_BYTES }),
-    async (req, res) => {
-      if (req.get('X-Confirm-Restore') !== 'YES') {
-        return res.status(400).json({ error: 'missing_confirm', message: 'Thiếu xác nhận X-Confirm-Restore=YES.' });
-      }
-      const buf = req.body;
-      if (!Buffer.isBuffer(buf) || buf.length < 100) {
-        return res.status(400).json({ error: 'empty_body', message: 'File rỗng hoặc quá nhỏ.' });
-      }
-      if (!buf.slice(0, 5).equals(PGDMP_MAGIC)) {
-        return res.status(400).json({ error: 'not_pgdump', message: 'File upload không phải pg_dump custom format (-Fc). Header phải bắt đầu bằng "PGDMP".' });
-      }
-      // Trước khi restore, tự snapshot file hiện tại làm pre-restore để rollback
-      // nhanh nếu file upload tuy đúng định dạng nhưng schema không tương thích.
-      let safety = null;
-      try {
-        safety = await createBackup('prerestore');
-      } catch (e) {
-        return res.status(500).json({ error: 'safety_snapshot_failed', detail: String(e.message) });
-      }
-      const tmp = path.join(BACKUP_DIR, `.restore-${Date.now()}.dump`);
-      try {
-        fs.writeFileSync(tmp, buf);
-        await pgRestore(tmp);
-        fs.unlinkSync(tmp);
-        res.json({
-          ok: true,
-          size: buf.length,
-          safety_backup: safety.name,
-          message: 'Phục hồi xong. File hiện tại đã được snapshot làm pre-restore trước khi restore.',
-        });
-      } catch (e) {
-        try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch {}
-        res.status(500).json({
-          error: 'restore_failed',
-          detail: String(e.message),
-          safety_backup: safety?.name,
-          message: 'pg_restore lỗi. DB rollback về trạng thái trước restore (single-transaction). Snapshot pre-restore vẫn được lưu để khôi phục tay nếu cần.',
-        });
-      }
+  // Never overwrite the serving database: accepted writes after the backup would be lost.
+  r.post('/api/admin/restore', requireAdmin, (_req, res) => {
+    res.status(409).json({
+      error: 'restore_requires_isolated_target',
+      message: 'Khôi phục vào database riêng và kiểm chứng dữ liệu trước khi chuyển lưu lượng. Không ghi đè database đang phục vụ.',
     });
+  });
 
   // GET /api/admin/restore/status — backwards-compat với UI cũ. Postgres
-  // restore là instant nên luôn không có pending → giữ field cho FE.
+  // restore qua HTTP bị chặn; giữ field pending cho FE.
   r.get('/api/admin/restore/status', requireAdmin, (_req, res) => {
-    res.json({ pending: false });
+    res.json({ pending: false, blocked: true, reason: 'restore_requires_isolated_target' });
   });
 
   console.log('[backup] routes mounted: /api/admin/backups, /api/admin/restore (pg_dump)');

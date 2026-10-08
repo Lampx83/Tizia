@@ -304,3 +304,12 @@ def test_skip_clusters_from_the_server_are_passed_to_diagnosis():
     assert steps[-1] == {"status": "done", "variants": 1}
     [variant] = variant_reports(server)
     assert variant["cluster"]["key"] == "1|plan|edit-css-style"  # cụm fix-js-behavior bị bỏ qua
+
+
+def test_night_window_override_always(monkeypatch):
+    noon = 1_790_571_600_000  # 2026-09-28T12:00:00+07:00
+    monkeypatch.delenv("AI_BOARD_NIGHT_WINDOW_OVERRIDE", raising=False)
+    assert _local_night(noon, WINDOW) == ("2026-09-28", False)
+    assert _local_night(IN_WINDOW_MS, WINDOW) == ("2026-09-28", True)
+    monkeypatch.setenv("AI_BOARD_NIGHT_WINDOW_OVERRIDE", "always")
+    assert _local_night(noon, WINDOW) == ("2026-09-28", True)

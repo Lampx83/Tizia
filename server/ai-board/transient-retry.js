@@ -1,2 +1,2 @@
-// Compatibility export; implementation: services/transient-retry.js.
+// Compatibility export; async PostgreSQL.
 export * from './services/transient-retry.js';

@@ -3,31 +3,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import express from 'express';
-import Database from 'better-sqlite3';
 
-import { applyAiBoardMigrations, createAiBoardStore } from '../server/ai-board/store.js';
+import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
+import { openBoard } from './support/ai-board-db.js';
 import { attachAiBoardRequestRoutes } from '../server/ai-board/routes.js';
-import { attachAiBoardIntake, createProfileStore } from '../server/contexts/ai-board-intake/index.js';
+import { attachAiBoardIntake, createAsyncProfileStore } from '../server/contexts/ai-board-intake/index.js';
 
-function fixtureDb() {
-  const db = new Database(':memory:');
-  db.pragma('foreign_keys = ON');
-  db.exec(`
-    CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, display_name TEXT, role TEXT, enrolled_domain TEXT);
-    INSERT INTO users VALUES (1, 'lan', 'Lan', 'student', 'pharmacy'), (2, 'thu', 'Thu', 'teacher', 'pharmacy'),
-      (9, 'admin', 'Admin', 'admin', NULL);
-    CREATE TABLE requests (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'other',
-      title TEXT NOT NULL, detail TEXT, student TEXT NOT NULL DEFAULT 'x',
-      status TEXT NOT NULL DEFAULT 'pending', votes INTEGER NOT NULL DEFAULT 1, admin_note TEXT,
-      created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, attachments TEXT
-    );
-    CREATE TABLE request_messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, request_id INTEGER NOT NULL, role TEXT NOT NULL,
-      author_name TEXT, body TEXT NOT NULL, attachments TEXT, created_at INTEGER NOT NULL
-    );
-  `);
-  applyAiBoardMigrations(db);
+async function fixtureDb() {
+  const db = await openBoard({ users: [
+    [1, 'lan', 'Lan', 'student', 'pharmacy'],
+    [2, 'thu', 'Thu', 'teacher', 'pharmacy'],
+    [9, 'admin', 'Admin', 'admin', null],
+  ] });
   return db;
 }
 
@@ -41,10 +28,10 @@ async function serve(db, userId) {
     next();
   });
   const pass = (_req, _res, next) => next();
-  const profiles = createProfileStore(db);
-  attachAiBoardIntake(app, { db, requireAuth: pass, requireStrictCsrf: pass });
+  const profiles = createAsyncProfileStore(db.d);
+  attachAiBoardIntake(app, { db: db.d, requireAuth: pass, requireStrictCsrf: pass });
   attachAiBoardRequestRoutes(app, {
-    store: createAiBoardStore(db), db, classifyRequest: async () => null,
+    store: createAsyncAiBoardStore(db.d), db: db.d, classifyRequest: async () => null,
     needsProfile: (user) => profiles.needed(user),
     requireAuth: pass, requireEnrolled: pass, requireAdmin: pass, requireStrictCsrf: pass,
   });
@@ -60,7 +47,7 @@ async function serve(db, userId) {
 const ANSWERS = { role: 'student', domain_expertise: ['pharmacy', 'it'], tech_level: 'some' };
 
 test('a new non-admin user must answer before the first request; the answer sticks across devices', async () => {
-  const db = fixtureDb();
+  const db = await fixtureDb();
   const app = await serve(db, 1);
   try {
     assert.deepEqual((await app.call('GET', '/api/ai-board/profile')).json, { needed: true, profile: null });
@@ -82,7 +69,7 @@ test('a new non-admin user must answer before the first request; the answer stic
 });
 
 test('admin never sees onboarding; a teacher still answers', async () => {
-  const db = fixtureDb();
+  const db = await fixtureDb();
   const admin = await serve(db, 9);
   const teacher = await serve(db, 2);
   try {
@@ -95,7 +82,7 @@ test('admin never sees onboarding; a teacher still answers', async () => {
 });
 
 test('answers are validated against the chip sets', async () => {
-  const db = fixtureDb();
+  const db = await fixtureDb();
   const app = await serve(db, 1);
   try {
     for (const bad of [{ ...ANSWERS, role: 'hacker' }, { ...ANSWERS, tech_level: 'guru' },
@@ -108,19 +95,19 @@ test('answers are validated against the chip sets', async () => {
   }
 });
 
-test('the worker snapshot carries the requester tone inputs, not their identity', () => {
-  const db = fixtureDb();
-  createProfileStore(db).save(1, ANSWERS);
-  const store = createAiBoardStore(db);
-  store.createRequestWithRoot({ ownerUserId: 1, ownerDomain: 'pharmacy', ownerDisplayName: 'Lan',
+test('the worker snapshot carries the requester tone inputs, not their identity', async () => {
+  const db = await fixtureDb();
+  await createAsyncProfileStore(db.d).save(1, ANSWERS);
+  const store = createAsyncAiBoardStore(db.d);
+  await store.createRequestWithRoot({ ownerUserId: 1, ownerDomain: 'pharmacy', ownerDisplayName: 'Lan',
     idempotencyKey: 'profile-req-003', title: 'Đổi màu nút', detail: 'x' });
-  const ticket = store.claimNext({ workerId: 'w1', version: 't', mode: 'shadow', intent: 'precheck' });
-  const snapshot = store.getLeasedSnapshot(ticket.id, 'w1', ticket.lease_token);
+  const ticket = await store.claimNext({ workerId: 'w1', version: 't', mode: 'shadow', intent: 'precheck' });
+  const snapshot = await store.getLeasedSnapshot(ticket.id, 'w1', ticket.lease_token);
   assert.deepEqual(snapshot.requester_profile, { role: 'student', tech_level: 'some', domain_expertise: ['pharmacy', 'it'] });
 });
 
 test('a client without the onboarding UI (prod web-next FAB) is not blocked by the unanswered profile', async () => {
-  const db = fixtureDb();
+  const db = await fixtureDb();
   const app = await serve(db, 1);
   try {
     const legacy = await app.call('POST', '/api/requests', { title: 'Đổi màu nút', detail: 'x' },

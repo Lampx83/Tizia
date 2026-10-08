@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import express from 'express';
-import Database from 'better-sqlite3';
+import { createBoardSchema } from './support/ai-board-db.js';
 
 import {
   createLocalBackend, createS3Backend, shotBackendFromEnv, purgeExpiredScreenshots, shotProxy, shotKey, startShotRetention,
@@ -156,51 +156,51 @@ test('shotBackendFromEnv: S3 chỉ bật khi đủ 4 biến', () => {
 });
 
 // --- retention ---
-function retentionFixture() {
-  const db = new Database(':memory:');
-  db.exec(`CREATE TABLE request_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, request_id INTEGER NOT NULL, role TEXT NOT NULL,
-    author_name TEXT, body TEXT NOT NULL, attachments TEXT, created_at INTEGER NOT NULL)`);
+async function retentionFixture() {
+  const appDb = await createBoardSchema({ migrate: false });
+  const db = appDb.d;
+  await db.exec(`CREATE TABLE request_messages (id BIGSERIAL PRIMARY KEY, request_id INTEGER NOT NULL, role TEXT NOT NULL,
+    author_name TEXT, body TEXT NOT NULL, attachments TEXT, created_at BIGINT NOT NULL)`);
   const dir = tmp(); const backend = createLocalBackend(dir);
   const now = Date.UTC(2026, 5, 30);
   const add = async (role, ageDays, atts, extraFile) => {
     for (const a of atts) { const k = shotKey(a.url); if (k) await backend.put(k, PNG); }
-    return db.prepare(`INSERT INTO request_messages(request_id, role, author_name, body, attachments, created_at) VALUES (1, ?, 'x', 'b', ?, ?)`)
-      .run(role, JSON.stringify(atts), now - ageDays * DAY).lastInsertRowid;
+    return db.insert(`INSERT INTO request_messages(request_id, role, author_name, body, attachments, created_at) VALUES (1, ?, 'x', 'b', ?, ?)` , [role, JSON.stringify(atts), now - ageDays * DAY]);
   };
   const shot = (n) => ({ url: `/uploads/requests/2026-05-01/${n}-abcdef012345.png`, name: 'n', mime: 'image/png', size: 1, kind: 'screenshot' });
-  const row = (id) => db.prepare('SELECT * FROM request_messages WHERE id=?').get(id);
+  const row = (id) => db.get('SELECT * FROM request_messages WHERE id=?', [id]);
   return { db, dir, backend, now, add, shot, row };
 }
 const exists = (dir, url) => fs.existsSync(path.join(dir, shotKey(url)));
 
 test('retention: ảnh quá hạn bị xoá + gỡ khỏi attachments, tin nhắn giữ, ảnh mới giữ', async () => {
-  const f = retentionFixture();
+  const f = await retentionFixture();
   const old = await f.add('ai', 40, [f.shot(1), f.shot(2)]);
   const fresh = await f.add('ai', 5, [f.shot(3)]);
   const out = await purgeExpiredScreenshots(f.db, f.backend, { days: 30, now: f.now });
   assert.deepEqual(out, { messages: 1, files: 2 });
-  assert.equal(f.row(old).body, 'b');
-  assert.deepEqual(JSON.parse(f.row(old).attachments), []);
+  assert.equal((await f.row(old)).body, 'b');
+  assert.deepEqual(JSON.parse((await f.row(old)).attachments), []);
   assert.equal(exists(f.dir, f.shot(1).url), false);
   assert.equal(exists(f.dir, f.shot(2).url), false);
-  assert.equal(JSON.parse(f.row(fresh).attachments).length, 1);
+  assert.equal(JSON.parse((await f.row(fresh)).attachments).length, 1);
   assert.equal(exists(f.dir, f.shot(3).url), true);
   assert.deepEqual(await purgeExpiredScreenshots(f.db, f.backend, { days: 30, now: f.now }), { messages: 0, files: 0 }); // idempotent
 });
 
 test('retention: chỉ đụng kind=screenshot của tin role=ai; file khác giữ', async () => {
-  const f = retentionFixture();
+  const f = await retentionFixture();
   const student = await f.add('student', 60, [f.shot(1)]);
   const mixed = await f.add('ai', 60, [f.shot(2), { url: '/uploads/requests/2026-05-01/9-abc.pdf', name: 'a.pdf', mime: 'application/pdf', size: 1, kind: 'file' }]);
   await purgeExpiredScreenshots(f.db, f.backend, { days: 30, now: f.now });
-  assert.equal(JSON.parse(f.row(student).attachments).length, 1);
+  assert.equal(JSON.parse((await f.row(student)).attachments).length, 1);
   assert.equal(exists(f.dir, f.shot(1).url), true);
-  assert.deepEqual(JSON.parse(f.row(mixed).attachments).map((a) => a.kind), ['file']);
+  assert.deepEqual(JSON.parse((await f.row(mixed)).attachments).map((a) => a.kind), ['file']);
   assert.equal(exists(f.dir, f.shot(2).url), false);
 });
 
 test('retention: đường dẫn traversal bị bỏ qua, file ngoài uploads còn nguyên', async () => {
-  const f = retentionFixture();
+  const f = await retentionFixture();
   const outside = path.join(path.dirname(f.dir), `victim-${Date.now()}.png`);
   fs.writeFileSync(outside, PNG);
   try {
@@ -208,21 +208,21 @@ test('retention: đường dẫn traversal bị bỏ qua, file ngoài uploads c�
     const id = await f.add('ai', 60, [evil, { ...evil, url: '/uploads/requests/2026-05-01/../../x.png' }]);
     await purgeExpiredScreenshots(f.db, f.backend, { days: 30, now: f.now });
     assert.equal(fs.existsSync(outside), true);
-    assert.equal(JSON.parse(f.row(id).attachments).length, 2);
+    assert.equal(JSON.parse((await f.row(id)).attachments).length, 2);
   } finally { fs.rmSync(outside, { force: true }); }
 });
 
 test('retention: file đã mất vẫn gỡ attachment; days=0 tắt; backend lỗi → giữ attachment', async () => {
-  const f = retentionFixture();
+  const f = await retentionFixture();
   const id = await f.add('ai', 60, [f.shot(1)]);
   fs.rmSync(path.join(f.dir, shotKey(f.shot(1).url)));
   assert.equal(await purgeExpiredScreenshots(f.db, f.backend, { days: 0, now: f.now }), null);
-  assert.equal(JSON.parse(f.row(id).attachments).length, 1);
+  assert.equal(JSON.parse((await f.row(id)).attachments).length, 1);
   const failing = { ...f.backend, remove: async () => { throw new Error('s3 down'); } };
   assert.deepEqual(await purgeExpiredScreenshots(f.db, failing, { days: 30, now: f.now }), { messages: 0, files: 0 });
-  assert.equal(JSON.parse(f.row(id).attachments).length, 1);
+  assert.equal(JSON.parse((await f.row(id)).attachments).length, 1);
   assert.deepEqual(await purgeExpiredScreenshots(f.db, f.backend, { days: 30, now: f.now }), { messages: 1, files: 1 });
-  assert.deepEqual(JSON.parse(f.row(id).attachments), []);
+  assert.deepEqual(JSON.parse((await f.row(id)).attachments), []);
 });
 
 // --- proxy ---

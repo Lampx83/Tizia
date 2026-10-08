@@ -14,7 +14,7 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import { db } from '../../db.js';
 
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS webhook_endpoints (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     url         TEXT    NOT NULL,
@@ -70,9 +70,9 @@ function sign(payload, secret) {
 }
 
 /** Đăng ký 1 webhook endpoint. Trả secret để vendor xác minh chữ ký. */
-export function registerEndpoint({ url, event_types = null }) {
+export async function registerEndpoint({ url, event_types = null }) {
   const secret = 'whsec_' + randomBytes(24).toString('hex');
-  const info = insertEndpointStmt.run({
+  const info = await insertEndpointStmt.run({
     url: String(url), secret,
     event_types: event_types ? String(event_types) : null, t: Date.now(),
   });
@@ -80,13 +80,13 @@ export function registerEndpoint({ url, event_types = null }) {
 }
 
 /** Phát 1 event tới MỌI endpoint đang active (fan-out vào outbox). */
-export function enqueueEvent(event_type, payloadObj) {
-  const endpoints = listEndpointsStmt.all();
+export async function enqueueEvent(event_type, payloadObj) {
+  const endpoints = await listEndpointsStmt.all();
   const payload = JSON.stringify({ type: event_type, data: payloadObj, ts: Date.now() });
   let queued = 0;
   for (const ep of endpoints) {
     if (ep.event_types && !ep.event_types.split(',').map((s) => s.trim()).includes(event_type)) continue;
-    insertOutboxStmt.run({
+    await insertOutboxStmt.run({
       event_type, payload,
       endpoint_url: ep.url, endpoint_secret: ep.secret, max_attempts: 6, t: Date.now(),
     });
@@ -104,7 +104,7 @@ export async function dispatchOutboxOnce(limit = 20, fetchImpl = fetch) {
   _dispatching = true;
   let delivered = 0, retried = 0, dead = 0;
   try {
-    const due = dueStmt.all({ now: Date.now(), limit });
+    const due = await dueStmt.all({ now: Date.now(), limit });
     for (const ev of due) {
       const sig = sign(ev.payload, ev.endpoint_secret);
       try {
@@ -120,16 +120,16 @@ export async function dispatchOutboxOnce(limit = 20, fetchImpl = fetch) {
           },
           body: ev.payload, signal: ctrl.signal,
         }).finally(() => clearTimeout(tid));
-        if (res.ok) { markDeliveredStmt.run({ id: ev.id, t: Date.now() }); delivered++; }
+        if (res.ok) { await markDeliveredStmt.run({ id: ev.id, t: Date.now() }); delivered++; }
         else throw new Error(`HTTP ${res.status}`);
       } catch (e) {
         const nextAttempt = ev.attempts + 1;
         if (nextAttempt >= ev.max_attempts) {
-          markDeadStmt.run({ id: ev.id, err: String(e.message).slice(0, 300), t: Date.now() });
+          await markDeadStmt.run({ id: ev.id, err: String(e.message).slice(0, 300), t: Date.now() });
           dead++;
         } else {
           const backoff = BACKOFF_MS[Math.min(nextAttempt, BACKOFF_MS.length - 1)];
-          markRetryStmt.run({ id: ev.id, next: Date.now() + backoff, err: String(e.message).slice(0, 300), t: Date.now() });
+          await markRetryStmt.run({ id: ev.id, next: Date.now() + backoff, err: String(e.message).slice(0, 300), t: Date.now() });
           retried++;
         }
       }
@@ -149,25 +149,25 @@ export function startDispatcher(intervalMs = Number(process.env.OUTBOX_DISPATCH_
 // ── Routes ──
 export function attachIntegration(r) {
   // Đăng ký webhook endpoint (chỉ admin). Trả secret 1 lần.
-  r.post('/api/integrations/endpoints', (req, res) => {
+  r.post('/api/integrations/endpoints', async (req, res) => {
     if (req.user?.role !== 'admin') return res.status(403).json({ error: 'forbidden' });
     const url = String(req.body?.url || '').trim();
     if (!/^https?:\/\//.test(url)) return res.status(400).json({ error: 'invalid_url' });
-    const { id, secret } = registerEndpoint({ url, event_types: req.body?.eventTypes || null });
+    const { id, secret } = await registerEndpoint({ url, event_types: req.body?.eventTypes || null });
     res.json({ ok: true, id, secret, note: 'Lưu secret để xác minh X-Tizia-Signature (HMAC-SHA256).' });
   });
-  r.get('/api/integrations/endpoints', (_req, res) => {
-    res.json({ endpoints: listEndpointsAllStmt.all() });
+  r.get('/api/integrations/endpoints', async (_req, res) => {
+    res.json({ endpoints: await listEndpointsAllStmt.all() });
   });
-  r.get('/api/integrations/outbox', (req, res) => {
+  r.get('/api/integrations/outbox', async (req, res) => {
     const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
-    res.json({ events: recentOutboxStmt.all({ limit }) });
+    res.json({ events: await recentOutboxStmt.all({ limit }) });
   });
   // Phát thử 1 event (demo/test tích hợp).
-  r.post('/api/integrations/emit', (req, res) => {
+  r.post('/api/integrations/emit', async (req, res) => {
     if (req.user?.role !== 'admin') return res.status(403).json({ error: 'forbidden' });
     const type = String(req.body?.type || 'test.ping').trim();
-    const r2 = enqueueEvent(type, req.body?.data ?? { hello: 'world' });
+    const r2 = await enqueueEvent(type, req.body?.data ?? { hello: 'world' });
     res.json({ ok: true, ...r2 });
   });
 

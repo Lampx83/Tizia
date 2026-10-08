@@ -62,43 +62,43 @@ _SAFE_FILE_PREFIX = re.compile(r"^(server/contexts/_ai-generated/|public/)")
 # SKILL_PROPOSALS_DDL/AI_DECISIONS_DDL/gate_trace.DDL đã có.
 _SCHEMA_DDL = """
 CREATE TABLE IF NOT EXISTS users (
-  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  id            BIGSERIAL PRIMARY KEY,
   username      TEXT    NOT NULL UNIQUE,
   display_name  TEXT    NOT NULL,
   password_hash TEXT    NOT NULL,
   role          TEXT    NOT NULL DEFAULT 'student',
-  created_at    INTEGER NOT NULL
+  created_at    BIGINT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS user_domain_grants (
-  id           INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id      INTEGER NOT NULL,
+  id           BIGSERIAL PRIMARY KEY,
+  user_id      BIGINT NOT NULL,
   domain_id    TEXT    NOT NULL,
-  granted_at   INTEGER NOT NULL,
-  granted_by   INTEGER,
-  expires_at   INTEGER,
+  granted_at   BIGINT NOT NULL,
+  granted_by   BIGINT,
+  expires_at   BIGINT,
   note         TEXT
 );
 CREATE TABLE IF NOT EXISTS requests (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  id          BIGSERIAL PRIMARY KEY,
   domain      TEXT    NOT NULL,
   type        TEXT    NOT NULL DEFAULT 'other',
   title       TEXT    NOT NULL,
   detail      TEXT,
   student     TEXT    NOT NULL DEFAULT 'Ẩn danh',
   status      TEXT    NOT NULL DEFAULT 'pending',
-  votes       INTEGER NOT NULL DEFAULT 1,
+  votes       BIGINT NOT NULL DEFAULT 1,
   admin_note  TEXT,
-  created_at  INTEGER NOT NULL,
-  updated_at  INTEGER NOT NULL
+  created_at  BIGINT NOT NULL,
+  updated_at  BIGINT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS request_messages (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  request_id  INTEGER NOT NULL,
+  id          BIGSERIAL PRIMARY KEY,
+  request_id  BIGINT NOT NULL,
   role        TEXT    NOT NULL,
   author_name TEXT,
   body        TEXT    NOT NULL,
   attachments TEXT,
-  created_at  INTEGER NOT NULL
+  created_at  BIGINT NOT NULL
 );
 """
 
@@ -223,7 +223,7 @@ def _lookup_requester(db_path, display_name: str | None) -> dict | None:
         return None
     with harness_db(db_path, ddl=_SCHEMA_DDL) as con:
         row = con.execute(
-            "SELECT id, role FROM users WHERE display_name = ? LIMIT 1", (display_name,)
+            "SELECT id, role FROM users WHERE display_name = %s LIMIT 1", (display_name,)
         ).fetchone()
     return {"id": row[0], "role": row[1]} if row else None
 
@@ -234,7 +234,7 @@ def _has_domain_grant(db_path, user_id: int, domain: str | None) -> bool:
     with harness_db(db_path, ddl=_SCHEMA_DDL) as con:
         row = con.execute(
             """SELECT 1 FROM user_domain_grants
-               WHERE user_id = ? AND domain_id = ? AND (expires_at IS NULL OR expires_at > ?) LIMIT 1""",
+               WHERE user_id = %s AND domain_id = %s AND (expires_at IS NULL OR expires_at > %s) LIMIT 1""",
             (user_id, domain, int(time.time() * 1000)),
         ).fetchone()
     return row is not None
@@ -263,10 +263,10 @@ def write_clarification(db_path, request: dict, question: str) -> None:
     with harness_db(db_path, ddl=_SCHEMA_DDL) as con:
         con.execute(
             """INSERT INTO request_messages (request_id, role, author_name, body, attachments, created_at)
-               VALUES (?, 'admin', 'AI Board', ?, NULL, ?)""",
+               VALUES (%s, 'admin', 'AI Board', %s, NULL, %s)""",
             (db_id, question, now),
         )
-        con.execute("UPDATE requests SET updated_at = ? WHERE id = ?", (now, db_id))
+        con.execute("UPDATE requests SET updated_at = %s WHERE id = %s", (now, db_id))
 
 
 def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: int | None = None) -> dict:

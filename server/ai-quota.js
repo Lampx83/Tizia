@@ -14,7 +14,7 @@ import { effectivePlan, effectivePlanWithFamily, dailyAiQuota } from './contexts
 import { checkContentSafety, extractPromptText } from './contexts/safety/profanity-vi.js';
 
 // ─────────────── Schema ───────────────
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS ai_token_usage (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id           INTEGER,                -- NULL nếu chưa login (caller phải gate)
@@ -87,12 +87,12 @@ const insertUsageStmt = db.prepare(`
   )
 `);
 
-export function logAiUsage({
+export async function logAiUsage({
   user_id, provider, model, endpoint,
   prompt_tokens = 0, completion_tokens = 0,
   duration_ms = null, status = 'ok',
 }) {
-  insertUsageStmt.run({
+  await insertUsageStmt.run({
     user_id:   user_id ? Number(user_id) : null,
     provider:  String(provider || ''),
     model:     String(model || ''),
@@ -137,10 +137,10 @@ export function dailyAiQuotaForUser(user) {
 // Per-user quota theo PLAN (window 24h, đếm ai_calls_day). Global vẫn dùng
 // hour window để chống burst nghẽn Ollama. Guest (rank 0) → chặn cứng.
 // Trục 2: cap theo role thêm bên trên plan — xem dailyAiQuotaForUser.
-export function checkAiQuota({ user_id, user_plan, user_role }) {
+export async function checkAiQuota({ user_id, user_plan, user_role }) {
   const now = Date.now();
-  const userU   = user_id ? userUsageStmt.get(Number(user_id), now - DAY_MS) : { req: 0, tokens: 0 };
-  const globalU =           globalUsageStmt.get(now - HOUR_MS);
+  const userU   = user_id ? await userUsageStmt.get(Number(user_id), now - DAY_MS) : { req: 0, tokens: 0 };
+  const globalU =           await globalUsageStmt.get(now - HOUR_MS);
 
   if (user_id) {
     const dayCap = dailyAiQuotaForUser({ plan: user_plan, role: user_role });
@@ -167,13 +167,13 @@ export function checkAiQuota({ user_id, user_plan, user_role }) {
 // Dùng trước handler AI: chặn 429 nếu vượt quota, log lý do.
 // Yêu cầu attachUser middleware đã chạy trước → req.user có id + plan.
 export function aiQuotaGate(endpoint) {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     const user_id   = req.user?.id || null;
     const user_role = req.user?.role || 'guest';
     // Trục 4: nếu HS → check PH có gói cao hơn không, dùng plan tốt hơn.
     let userPlanEff = req.user ? effectivePlan(req.user) : null;
     if (req.user && user_role === 'pupil') {
-      const parent = getBestParentPlanForChild(req.user.id);
+      const parent = await getBestParentPlanForChild(req.user.id);
       if (parent) {
         userPlanEff = effectivePlanWithFamily(req.user,
           { plan: parent.parent_plan, plan_expires_at: parent.parent_plan_expires_at });
@@ -187,14 +187,14 @@ export function aiQuotaGate(endpoint) {
     const promptText = extractPromptText(req.body);
     if (user_role === 'pupil' && promptText) {
       const verdict = checkContentSafety(promptText);
-      logPromptForUser({
+      await logPromptForUser({
         user_id, role: user_role, endpoint,
         prompt_text: promptText,
         blocked: !verdict.safe, block_reason: verdict.reason, block_category: verdict.category,
       });
       if (!verdict.safe) {
         // Cũng ghi vào ai_token_usage để rate-limit dashboard thấy
-        logAiUsage({ user_id, provider: 'safety-gate', model: '-', endpoint, status: 'blocked' });
+        await logAiUsage({ user_id, provider: 'safety-gate', model: '-', endpoint, status: 'blocked' });
         return res.status(400).json({
           error: 'content_unsafe',
           reason: verdict.reason,
@@ -206,9 +206,9 @@ export function aiQuotaGate(endpoint) {
       }
     }
 
-    const verdict = checkAiQuota({ user_id, user_plan, user_role });
+    const verdict = await checkAiQuota({ user_id, user_plan, user_role });
     if (!verdict.allowed) {
-      logAiUsage({
+      await logAiUsage({
         user_id,
         provider: 'quota-gate', model: '-', endpoint,
         status: 'blocked',
@@ -230,10 +230,10 @@ export function aiQuotaGate(endpoint) {
 
 // Gọi sau khi handler hoàn tất để log token thật. Nếu Ollama không trả token count,
 // có thể truyền 0 — vẫn ghi request count để rate limit hoạt động.
-export function recordAiCall(req, { provider = 'ollama', model = '-', prompt_tokens = 0, completion_tokens = 0, status = 'ok' } = {}) {
+export async function recordAiCall(req, { provider = 'ollama', model = '-', prompt_tokens = 0, completion_tokens = 0, status = 'ok' } = {}) {
   const ctx = req._aiContext;
   if (!ctx) return;  // không qua aiQuotaGate → silent skip
-  logAiUsage({
+  await logAiUsage({
     user_id: ctx.user_id,
     provider, model, endpoint: ctx.endpoint,
     prompt_tokens, completion_tokens,
@@ -254,8 +254,8 @@ const globalUsageRangeStmt = db.prepare(`
   WHERE created_at > ?
 `);
 
-export function getGlobalUsage(sinceMs = 24 * HOUR_MS) {
-  return globalUsageRangeStmt.get(Date.now() - sinceMs);
+export async function getGlobalUsage(sinceMs = 24 * HOUR_MS) {
+  return await globalUsageRangeStmt.get(Date.now() - sinceMs);
 }
 export function getQuotaConfig() {
   return { ...QUOTA, pupilDayCap: PUPIL_DAY_CAP, teacherMultiplier: TEACHER_MULTIPLIER };
@@ -269,9 +269,9 @@ const insertPromptLogStmt = db.prepare(`
           @blocked, @block_reason, @block_category, @created_at)
 `);
 
-export function logPromptForUser({ user_id, role, endpoint, prompt_text,
+export async function logPromptForUser({ user_id, role, endpoint, prompt_text,
                                    blocked = false, block_reason = null, block_category = null }) {
-  insertPromptLogStmt.run({
+  await insertPromptLogStmt.run({
     user_id: user_id ? Number(user_id) : null,
     role: role ? String(role).slice(0, 20) : null,
     endpoint: String(endpoint || ''),
@@ -293,8 +293,8 @@ const listPromptsStmt = db.prepare(`
   WHERE (@blocked_only = 0 OR l.blocked = 1)
   ORDER BY l.created_at DESC LIMIT @limit
 `);
-export function listAiPrompts({ blockedOnly = false, limit = 50 } = {}) {
-  return listPromptsStmt.all({
+export async function listAiPrompts({ blockedOnly = false, limit = 50 } = {}) {
+  return await listPromptsStmt.all({
     blocked_only: blockedOnly ? 1 : 0,
     limit: Math.min(Math.max(Number(limit) || 50, 1), 500),
   });
@@ -304,6 +304,6 @@ const listPromptsByUserStmt = db.prepare(`
   SELECT id, endpoint, prompt_text, blocked, block_reason, block_category, created_at
   FROM ai_prompt_log WHERE user_id = ? ORDER BY created_at DESC LIMIT ?
 `);
-export function listAiPromptsForUser(user_id, limit = 50) {
-  return listPromptsByUserStmt.all(Number(user_id), Math.min(Math.max(Number(limit) || 50, 1), 500));
+export async function listAiPromptsForUser(user_id, limit = 50) {
+  return await listPromptsByUserStmt.all(Number(user_id), Math.min(Math.max(Number(limit) || 50, 1), 500));
 }

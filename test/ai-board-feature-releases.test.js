@@ -4,10 +4,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import express from 'express';
-import Database from 'better-sqlite3';
 
-import { applyAiBoardMigrations, createAiBoardStore } from '../server/ai-board/store.js';
-import { setReleaseStatus } from '../server/ai-board/releases.js';
+import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
+import { openBoard } from './support/ai-board-db.js';
+import { setReleaseStatus } from '../server/ai-board/releases-async.js';
 import { attachAiBoardReleases } from '../server/contexts/ai-board-releases/index.js';
 import { csrf, requireStrictCsrf } from '../server/contexts/security/index.js';
 
@@ -19,38 +19,26 @@ const USERS = {
 };
 
 async function fixture() {
-  const db = new Database(':memory:');
-  db.pragma('foreign_keys = ON');
-  db.exec(`
-    CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, display_name TEXT, role TEXT, enrolled_domain TEXT);
-    CREATE TABLE requests (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'other',
-      title TEXT NOT NULL, detail TEXT, student TEXT NOT NULL DEFAULT 'x',
-      status TEXT NOT NULL DEFAULT 'pending', votes INTEGER NOT NULL DEFAULT 1,
-      admin_note TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, attachments TEXT
-    );
-    CREATE TABLE request_messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, request_id INTEGER NOT NULL, role TEXT NOT NULL,
-      author_name TEXT, body TEXT NOT NULL, attachments TEXT, created_at INTEGER NOT NULL
-    );
-    INSERT INTO users VALUES (1, 'an', 'An', 'student', 'it'), (2, 'binh', 'Bình', 'student', 'it'),
-      (3, 'lan', 'Lan', 'student', 'pharmacy'), (9, 'ad', 'Ad', 'admin', NULL);
-  `);
-  applyAiBoardMigrations(db);
-  const store = createAiBoardStore(db);
-  const { folder_id: folderId } = store.createRequestWithRoot({
+  const db = await openBoard({ users: [
+    [1, 'an', 'An', 'student', 'it'],
+    [2, 'binh', 'Bình', 'student', 'it'],
+    [3, 'lan', 'Lan', 'student', 'pharmacy'],
+    [9, 'ad', 'Ad', 'admin', null],
+  ] });
+  const store = createAsyncAiBoardStore(db.d);
+  const { folder_id: folderId } = await store.createRequestWithRoot({
     ownerUserId: 1, ownerDomain: 'it', ownerDisplayName: 'An', idempotencyKey: 'release-request-001',
     title: 'Trò đoán từ khoá', detail: 'x', type: 'feature',
   });
-  store.approveFolder(folderId, 9);
-  const slug = db.prepare('SELECT slug FROM ai_feature_folders WHERE id=?').get(folderId).slug;
+  await store.approveFolder(folderId, 9);
+  const slug = (await db.prepare('SELECT slug FROM ai_feature_folders WHERE id=?').get(folderId)).slug;
 
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => { req.user = USERS[req.headers['x-user']] || null; next(); });
   app.use(csrf);
   const requireAdmin = (req, res, next) => (req.user?.role === 'admin' ? next() : res.status(403).json({ error: 'forbidden' }));
-  attachAiBoardReleases(app, { db, requireAuth: (_q, _s, next) => next(), requireAdmin, requireStrictCsrf });
+  attachAiBoardReleases(app, { db: db.d, requireAuth: (_q, _s, next) => next(), requireAdmin, requireStrictCsrf });
   app.use((_req, res) => res.send('PAGE OK')); // như express.static phía sau
   const server = http.createServer(app);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -83,8 +71,8 @@ test('approval registers owner_only once: owner and admin see it, a classmate do
     assert.equal((await f.page(1)).text, 'PAGE OK');
     assert.equal((await f.page(2, '/other.html')).text, 'PAGE OK', 'unregistered pages untouched');
 
-    setReleaseStatus(f.db, f.slug, 'school', 9);
-    f.store.approveFolder(f.folderId, 9); // duyệt lại: không reset status
+    await setReleaseStatus(f.db.d, f.slug, 'school', 9);
+    await f.store.approveFolder(f.folderId, 9); // duyệt lại: không reset status
     assert.equal((await f.list(1))[0].status, 'school');
   } finally { await f.close(); }
 });
@@ -92,7 +80,7 @@ test('approval registers owner_only once: owner and admin see it, a classmate do
 test('school release: everyone enrolled in that school sees it, other schools do not', async () => {
   const f = await fixture();
   try {
-    setReleaseStatus(f.db, f.slug, 'school', 9);
+    await setReleaseStatus(f.db.d, f.slug, 'school', 9);
     assert.equal((await f.list(2)).length, 1);
     assert.deepEqual(await f.list(3, '?domain=it'), []);
     assert.equal((await f.page(2)).text, 'PAGE OK');
@@ -103,7 +91,7 @@ test('school release: everyone enrolled in that school sees it, other schools do
 test('off hides it even from the owner; the admin still sees and opens it', async () => {
   const f = await fixture();
   try {
-    setReleaseStatus(f.db, f.slug, 'off', 9);
+    await setReleaseStatus(f.db.d, f.slug, 'off', 9);
     assert.deepEqual(await f.list(1), []);
     assert.equal((await f.page(1)).status, 403);
     assert.equal((await f.list(9, '?domain=it'))[0].status, 'off');

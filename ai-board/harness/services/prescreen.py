@@ -23,19 +23,19 @@ WEIGHTS = {"urgency": 25, "importance": 25, "dependencies": 25, "cost_benefit": 
 # ponytail: 2 bản DDL như skill_proposals ở main.py — thêm cột thì sửa cả hai.
 AI_DECISIONS_DDL = """
 CREATE TABLE IF NOT EXISTS ai_decisions (
-  id             INTEGER PRIMARY KEY AUTOINCREMENT,
-  request_id     INTEGER NOT NULL,
+  id             BIGSERIAL PRIMARY KEY,
+  request_id     BIGINT NOT NULL,
   decided_by     TEXT    NOT NULL,
   model          TEXT,
   action         TEXT    NOT NULL,
   status_applied TEXT,
   reason         TEXT,
   public_note    TEXT,
-  priority_score INTEGER,
-  confidence     REAL,
+  priority_score BIGINT,
+  confidence     DOUBLE PRECISION,
   input_snapshot TEXT,
   raw_output     TEXT,
-  created_at     INTEGER NOT NULL
+  created_at     BIGINT NOT NULL
 );
 """
 
@@ -91,10 +91,10 @@ def history_factor(db_path, cand: dict) -> float:
     tiên) hoặc cùng domain. Chưa thử → 0.5; chặn ở cổng 2 (scope) → 0 (không
     làm được); chặn cổng sau → 0.25 (làm được nhưng khó); ok → 1."""
     with harness_db(db_path) as con:
-        if not con.execute("SELECT name FROM sqlite_master WHERE name='skill_proposals'").fetchone():
+        if con.execute("SELECT to_regclass('skill_proposals')").fetchone()[0] is None:
             return 0.5
         rows = con.execute(
-            "SELECT request_ids, gate_reached, outcome FROM skill_proposals WHERE domain IS ? ORDER BY id DESC",
+            "SELECT request_ids, gate_reached, outcome FROM skill_proposals WHERE domain IS NOT DISTINCT FROM %s ORDER BY id DESC",
             (cand.get("domain"),),
         ).fetchall()
     if not rows:
@@ -135,10 +135,10 @@ def record(db_path, cand: dict, model: str | None) -> None:
     """1 dòng ai_decisions (decided_by='rule', action='priority') cho MỖI request trong cụm."""
     now = int(time.time() * 1000)
     with harness_db(db_path, ddl=AI_DECISIONS_DDL) as con:
-        con.executemany(
+        con.cursor().executemany(
             """INSERT INTO ai_decisions
                  (request_id, decided_by, model, action, reason, priority_score, input_snapshot, created_at)
-               VALUES (?, 'rule', ?, 'priority', ?, ?, ?, ?)""",
+               VALUES (%s, 'rule', %s, 'priority', %s, %s, %s, %s)""",
             [
                 (m.get("db_id"), model, json.dumps(cand["priority_inputs"]), cand["priority_score"],
                  json.dumps({"request_ids": cand["request_ids"], "representative": cand.get("id")}), now)

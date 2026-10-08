@@ -1,2 +1,2 @@
-// Compatibility export; implementation: services/chat-activity.js.
+// Compatibility export; canonical PostgreSQL ownership.
 export * from './services/chat-activity.js';

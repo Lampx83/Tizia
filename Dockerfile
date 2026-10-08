@@ -1,21 +1,23 @@
 # syntax=docker/dockerfile:1.7
 
-# ---- Stage 1: Tizia prod deps (compiles better-sqlite3 native binding) ----
+# ---- Stage 1: Tizia prod deps (pure JS, no native build) ----
 FROM node:20-alpine AS tizia-deps
-RUN apk add --no-cache python3 make g++
 WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev --no-audit --no-fund
 
 # ---- Runtime: slim image ----
 FROM node:20-alpine
+# pg_dump / pg_restore for the admin backups. Major version = the postgres image major (compose: postgres:17).
+RUN apk add --no-cache postgresql17-client
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=8041 \
     HOST=0.0.0.0 \
-    DATA_DIR=/data
+    DATA_DIR=/data \
+    BACKUP_DIR=/data/backups
 
-# Tizia (Express + SQLite + WebSocket)
+# Tizia (Express + PostgreSQL + WebSocket)
 COPY --from=tizia-deps /app/node_modules ./node_modules
 COPY package*.json ./
 COPY server/ ./server/
@@ -26,6 +28,8 @@ COPY public/ ./public/
 COPY scripts/ ./scripts/
 # Prompt làm rõ yêu cầu (server/contexts/ai-board-intake) dùng chung file khoá hash với harness.
 COPY ai-board/harness/prompts/ ./ai-board/harness/prompts/
+# Trusted preview startup is read as source by the serving broker; it runs inside the pinned guest.
+COPY ai-board/harness/verification/preview_guest.py ./ai-board/harness/verification/preview_guest.py
 
 RUN mkdir -p /data && chown -R node:node /data /app
 USER node

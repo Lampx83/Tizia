@@ -1,3 +1,3 @@
-"""Compatibility entry point; implementation: evaluation/gold.py."""
+"""Compatibility canonical module."""
 from _compat import redirect
 redirect(__name__, 'evaluation.gold', cli=True)

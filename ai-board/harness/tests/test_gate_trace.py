@@ -1,21 +1,16 @@
 """gate_trace — 1 dòng mỗi lần gọi Ollama thật, join được với
 skill_proposals, best-effort khi DB lỗi."""
-import sqlite3
-
 import pytest
 
 import gate_trace
-from conftest import deps_with, plan_with
+from dbconn import harness_db
+from conftest import connect, deps_with, plan_with
 from main import run_once
 
 
 def rows(db_file, table):
-    con = sqlite3.connect(str(db_file))
-    try:
-        con.row_factory = sqlite3.Row
-        return [dict(r) for r in con.execute(f"SELECT * FROM {table} ORDER BY id")]
-    finally:
-        con.close()
+    with harness_db(db_file, dict_rows=True) as con:
+        return con.execute(f"SELECT * FROM {table} ORDER BY id").fetchall()
 
 
 def test_full_loop_writes_one_gate_trace_row_per_model_call(inbox_file, db_file, fake_deps):
@@ -39,12 +34,12 @@ def test_gate_trace_joins_to_its_skill_proposal(inbox_file, db_file, fake_deps):
 
     out = run_once(item, db_path=db_file, deps=fake_deps)
 
-    con = sqlite3.connect(str(db_file))
+    con = connect(db_file)
     try:
         joined = con.execute(
             """SELECT gt.id, sp.id AS sp_id FROM gate_trace gt
                JOIN skill_proposals sp ON sp.id = gt.skill_proposal_id
-               WHERE sp.id = ?""",
+               WHERE sp.id = %s""",
             (out["proposal_id"],),
         ).fetchall()
     finally:
@@ -80,10 +75,10 @@ def test_blocked_at_gate_2_writes_only_gate_1_trace(inbox_file, db_file):
     assert traces[0]["gate"] == 1.0
 
 
-def test_gate_trace_record_best_effort_swallows_db_error(tmp_path, capsys):
-    """DB path trỏ vào 1 thư mục (không phải file) -> sqlite3 lỗi thật. Không
-    được raise ra ngoài — best-effort, chỉ log rồi bỏ qua."""
-    bad_db_path = tmp_path  # là directory, không phải file .db
+def test_gate_trace_record_best_effort_swallows_db_error(capsys):
+    """DSN trỏ vào cổng không ai nghe -> psycopg lỗi thật. Không được raise ra
+    ngoài — best-effort, chỉ log rồi bỏ qua."""
+    bad_db_path = "postgresql://nobody@127.0.0.1:1/none"
 
     gate_trace.record(
         bad_db_path, skill_proposal_id=1, gate=1, model="m", prompt="p",
@@ -103,4 +98,8 @@ def test_gate_trace_record_noop_without_db_path_or_proposal_id(inbox_file, db_fi
     out = brainstorm.run({"id": "req-x", "subject": "s", "body": "b"}, fake_deps, Budget(max_wall_clock_s=999))
 
     assert out["blocked"] is False
-    assert not db_file.exists()  # chưa ai tạo DB — chứng minh không có ghi nào xảy ra
+    con = connect(db_file)
+    try:
+        assert con.execute("SELECT to_regclass('gate_trace')").fetchone()[0] is None  # chưa ai tạo bảng — không có ghi nào
+    finally:
+        con.close()

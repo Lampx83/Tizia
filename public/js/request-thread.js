@@ -1,3 +1,4 @@
+import { mountPrivatePreview } from './private-preview.js';
 // ============================================================
 // Request thread — phiên trao đổi của 1 yêu cầu gửi Ban điều hành AI
 // ============================================================
@@ -12,7 +13,6 @@
 //   renderRequestThread({ host, requestId, me, onChange });
 // ============================================================
 
-import { mountPrivatePreview } from './private-preview.js';
 
 const STATUS = {
   pending:   { label: 'Chờ duyệt',    cls: 'pending' },
@@ -124,8 +124,8 @@ export async function renderRequestThread({ host, requestId, me = '', onChange }
     ` : (me ? '' : `<div class="rt-login-hint">Đăng nhập để trao đổi với Ban điều hành AI.</div>`)}
   `;
 
+  mountPrivatePreview(host.querySelector('[data-private-preview]'),requestId);
   const listEl = host.querySelector(`#rt-list-${requestId}`);
-  mountPrivatePreview(host.querySelector('[data-private-preview]'), requestId);
   if (listEl) listEl.scrollTop = listEl.scrollHeight;
 
   if (!isOwner) return;

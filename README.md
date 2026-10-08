@@ -31,7 +31,7 @@ docker compose up --build -d
 # → http://localhost:8041
 ```
 
-Dữ liệu SQLite lưu trong named volume `tizia-data` (mount `/data`).
+Dữ liệu chính nằm trong PostgreSQL (service `postgres`, volume `tizia-postgres-data`); named volume `pharmacysim-data` (mount `/data`) giữ sao lưu pg_dump và file tải lên. Cần đặt `POSTGRES_PASSWORD` trong file env cạnh compose. Dữ liệu SQLite cũ: `server/scripts/copy-sqlite-to-postgres.mjs`.
 
 ---
 
@@ -209,7 +209,8 @@ lại với volume hiện tại là an toàn.
 |---|---|---|
 | `PORT` | `8041` | Cổng HTTP |
 | `HOST` | `0.0.0.0` | Bind address |
-| `DATA_DIR` | `./data` (host) / `/data` (Docker) | Thư mục SQLite |
+| `DATA_DIR` | `./data` (host) / `/data` (Docker) | Thư mục file tải lên + sao lưu |
+| `DATABASE_URL` | *(bắt buộc)* | Chuỗi kết nối PostgreSQL |
 | `BASE_PATH` | `` | Path prefix (vd `/ps` cho `tizia.vn/ps`) |
 | `OLLAMA_URL` | dev tunnel | Endpoint Ollama |
 | `OLLAMA_SECKEY` | `pharmasim` | Header `x-ollama-seckey` (shared secret nội bộ) |
@@ -224,10 +225,9 @@ cookie session và cũng không có volume production. Hai đường đọc hộ
 
 | Script | Đọc từ | Chạy được ở đâu |
 |---|---|---|
-| `server/scripts/sync-inbox.mjs` | file SQLite trực tiếp | **chỉ trên máy production** |
 | `scripts/fetch-inbox.mjs` | HTTP `/api/ai-board/inbox` | bất kỳ đâu (không cần `npm install`) |
 
-Cả hai ghi ra `ai-board/inbox.json` với cùng một định dạng.
+Script ghi ra `ai-board/inbox.json`. (`sync-inbox.mjs` đọc file SQLite đã bị gỡ cùng SQLite.)
 
 ```bash
 # trên server: sinh key rồi thêm vào .env và khởi động lại
@@ -243,7 +243,7 @@ hoặc `node scripts/admin-reply.js` chạy trên máy có DB.
 
 ### Worker D0 qua HTTP
 
-Worker host không mount/mở SQLite. `off` là mặc định và không claim việc;
+Worker host không mount/mở cơ sở dữ liệu. `off` là mặc định và không claim việc;
 `shadow` chỉ precheck/lập plan/tạo child tickets và không sinh code. Mode
 `active` cùng `--execute` mới được tạo thay đổi trong scratch repo, ghép vào
 full checkout tạm, chạy Gate 4/5/5.5 và ghi verdict trước PR qua HTTP; worker
@@ -320,9 +320,8 @@ Hoặc dùng [Caddyfile](Caddyfile) Pattern 2 (auto Let's Encrypt) — có thể
 ## 📊 Truy vấn dữ liệu trực tiếp
 
 ```bash
-docker exec -it tizia sh
-sqlite3 /data/pharmacy.db \
-  "SELECT version, player_name, score, correct||'/'||total AS r FROM attempts ORDER BY score DESC LIMIT 10;"
+docker exec -it tizia-postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -c "SELECT version, player_name, score, correct||'"'"'/'"'"'||total AS r FROM attempts ORDER BY score DESC LIMIT 10;"'
 
 # Hoặc tải CSV
 curl -O http://localhost:8041/api/export.csv

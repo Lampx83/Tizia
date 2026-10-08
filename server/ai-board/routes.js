@@ -1,2 +1,2 @@
-// Compatibility export; implementation: api/routes.js.
+// Compatibility export; canonical PostgreSQL ownership.
 export * from './api/routes.js';

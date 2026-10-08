@@ -214,6 +214,12 @@
 </style>
 </head>
 <body data-no-auth-header data-no-suggestion-fab data-no-notifications-bell data-no-gamify>
+<aside class="blk" aria-label="Giữ dữ liệu khi quay về code cũ" data-schema-compatibility-notice>
+  <details><summary>Quay về code cũ có làm mất dữ liệu không?</summary>
+    <p>Quay về phiên bản code trước giữ nguyên schema đã mở rộng và mọi dữ liệu đã ghi. Code cũ chỉ sửa các trường nó biết.</p>
+    <p>Hoàn tác dữ liệu là thao tác riêng theo revision. Xóa trường, đổi kiểu hoặc sửa schema dùng chung phải dừng để duyệt migration; Git revert không tự hoàn tác database.</p>
+  </details>
+</aside>
 <main id="app"><p class="meta" role="status">Đang tải yêu cầu…</p></main>
 <script type="module" src="/js/admin-request.js"></script>
 </body>

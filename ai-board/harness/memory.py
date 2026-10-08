@@ -1,3 +1,3 @@
-"""Compatibility entry point; implementation: repositories/memory.py."""
+"""Compatibility canonical module."""
 from _compat import redirect
 redirect(__name__, 'repositories.memory', cli=False)

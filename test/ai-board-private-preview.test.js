@@ -9,7 +9,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 
-test('trusted startup compiles separately from its import-path preamble', async () => {
+test('trusted startup compiles separately from its import-path preamble', async (t) => {
   const directory=await fs.mkdtemp(path.join(os.tmpdir(),'preview-startup-'));
   let startup;
   const runtime=createPreviewRuntime({url:'http://runner.invalid',token:'synthetic',archiveDir:directory,
@@ -26,6 +26,7 @@ test('trusted startup compiles separately from its import-path preamble', async 
     await runtime.create({id:'fixture',runtime_id:'fixture'},Buffer.from('fixture'));
     const python=process.platform==='win32'?path.resolve('ai-board/harness/.venv/Scripts/python.exe'):'python3';
     const checked=spawnSync(python,['-c',"import ast,sys; tree=ast.parse(sys.stdin.read()); source=tree.body[2].value.args[0].args[0].value; compile(source,'preview_guest.py','exec')"],{input:startup,encoding:'utf8'});
+    if(checked.error?.code==='ENOENT')return t.skip('python3 not installed');
     assert.equal(checked.status,0,checked.stderr);
   } finally {await fs.rm(directory,{recursive:true,force:true});}
 });

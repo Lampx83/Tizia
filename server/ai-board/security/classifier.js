@@ -100,15 +100,20 @@ export async function classifyRequest(title, detail, { modes, ...options } = {})
 }
 
 /** Trace for the admin view and calibration: model, probabilities, decisions. Never throws. */
-export function recordClassification(db, rootTicketId, result) {
+export async function recordClassification(db, rootTicketId, result) {
   if (!db || !rootTicketId || !result) return;
   try {
-    db.prepare(`
-      INSERT OR IGNORE INTO ai_events (
+    const sql = `
+      INSERT INTO ai_events (
         ticket_id, event_type, actor_type, actor_id, transition,
         public_message, internal_detail, idempotency_key, created_at
       ) VALUES (?, 'request_classified', 'system', 'classifier', NULL, NULL, ?, ?, ?)
-    `).run(rootTicketId, JSON.stringify(result), `classifier:${rootTicketId}`, Date.now());
+      ON CONFLICT DO NOTHING
+    `;
+    const params = [rootTicketId, JSON.stringify(result), `classifier:${rootTicketId}`, Date.now()];
+    // db: better-sqlite3 handle (default backend, runs synchronously) or the async contract (PostgreSQL).
+    if (typeof db.prepare === 'function') db.prepare(sql).run(...params);
+    else await db.run(sql, params);
   } catch (error) {
     console.warn('[ai-board] classification trace failed:', error.message);
   }

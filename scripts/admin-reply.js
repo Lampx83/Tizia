@@ -7,6 +7,8 @@
 //   2. ai_decisions (decided_by='human', audit trail)
 //   3. notifications (gửi tin cho HS — bỏ qua nếu student='Ẩn danh')
 //
+// Cần DATABASE_URL (PostgreSQL).
+//
 // Cách dùng:
 //   node scripts/admin-reply.js <id> <status> "<message>"
 //   Status: done | rejected | reviewing
@@ -28,13 +30,13 @@ if (!id || !['done', 'rejected', 'reviewing'].includes(status) || message.length
   process.exit(1);
 }
 
-const reqRow = db.prepare(`SELECT id, student, title, domain FROM requests WHERE id = ?`).get(id);
+const reqRow = await db.prepare(`SELECT id, student, title, domain FROM requests WHERE id = ?`).get(id);
 if (!reqRow) {
   console.error(`✖ Không tìm thấy request #${id}`);
   process.exit(1);
 }
 
-const ok = setRequestStatus(id, status, message);
+const ok = await setRequestStatus(id, status, message);
 if (!ok) { console.error('✖ setRequestStatus thất bại'); process.exit(1); }
 
 const titleByStatus = {
@@ -42,7 +44,7 @@ const titleByStatus = {
   rejected:  'Phản hồi về yêu cầu của bạn',
   reviewing: 'Yêu cầu của bạn đang được xử lý',
 };
-const notif = createNotification({
+const notif = await createNotification({
   user_display_name: reqRow.student,
   request_id: id,
   kind: 'reply',
@@ -52,7 +54,7 @@ const notif = createNotification({
 });
 
 const actionByStatus = { done: 'approve', rejected: 'reject', reviewing: 'approve' };
-db.prepare(`
+await db.prepare(`
   INSERT INTO ai_decisions (request_id, decided_by, action, status_applied, reason, public_note, priority_score, confidence, created_at)
   VALUES (?, 'human', ?, ?, ?, ?, 100, 1.0, ?)
 `).run(id, actionByStatus[status], status, `[admin CLI] ${status}`, message.slice(0, 500), Date.now());

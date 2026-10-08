@@ -1,2 +1,2 @@
-// Compatibility export; implementation: services/drafts.js.
+// Compatibility export; async PostgreSQL.
 export * from './services/drafts.js';
