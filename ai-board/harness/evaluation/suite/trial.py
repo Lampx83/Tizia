@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import json
 import posixpath
 import subprocess
 import threading
@@ -81,6 +82,28 @@ def _tokens(records: list[dict]) -> tuple[int, int]:
     return sum(m.get("tokens_in") or 0 for m in metrics), sum(m.get("tokens_out") or 0 for m in metrics)
 
 
+def _quote_diag(response: str, repo, sha: str) -> list[dict]:
+    """What the gate 2.5 validator quoted when grounding failed, and how much of it is really in the file."""
+    try:
+        records = json.loads(response).get("grounding") or []
+    except (TypeError, ValueError, AttributeError):
+        return []
+    out = []
+    for rec in records[:3]:
+        if not isinstance(rec, dict) or not isinstance(rec.get("quote"), str):
+            continue
+        file = rec.get("file") or ""
+        shown = subprocess.run(["git", "--git-dir", str(repo), "show", f"{sha}:{file}"], capture_output=True, text=True, encoding="utf-8",
+                               errors="replace", stdin=subprocess.DEVNULL)
+        text = plan_validate._squash(shown.stdout) if not shown.returncode else ""
+        quote = plan_validate._LINE_MARKER.sub("", rec["quote"])
+        lines = [l for l in quote.splitlines() if len(l.strip()) >= 4]
+        found = sum(plan_validate._squash(l) in text for l in lines)
+        out.append({"file": file, "quote": quote[:200], "whole_in_file": plan_validate._squash(quote) in text, "lines_found": f"{found}/{len(lines)}",
+                    "has_ellipsis": "..." in quote or "…" in quote})
+    return out
+
+
 def _plan_stage(task: dict, repo, deps: RecordingDeps, wall_s: int, variant: str | None = None) -> tuple[dict, dict | None, list[dict]]:
     """Gates 1 -> 2 -> 2.5 the way the worker runs them. Returns (plan facts, plan or None, tracer records)."""
     tracer = gold_eval.Collect()
@@ -107,7 +130,9 @@ def _plan_stage(task: dict, repo, deps: RecordingDeps, wall_s: int, variant: str
     for step in (scope_check.run(state), plan_validate.run(request, deps, budget, state)):
         if step.get("blocked"):
             facts.update(validator_blocked=True, validator_reason=facts["validator_reason"] or str(step.get("reason"))[:120],
-                         validator_signals=facts.get("validator_signals") or [str(s)[:300] for s in (step.get("signals") or [])][:3])
+                         validator_signals=facts.get("validator_signals") or [str(s)[:300] for s in (step.get("signals") or [])][:3],
+                         validator_quotes=facts.get("validator_quotes") or (_quote_diag(str(deps.ledger[-1].get("response", "")), repo, sha)
+                                                                            if step.get("reason") == "plan_ungrounded" and deps.ledger else []))
             if not facts["approved"]:
                 tracer.flush()
                 return facts, None, tracer.records

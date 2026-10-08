@@ -333,3 +333,20 @@ def test_ref_errors_counts_references_to_files_missing_at_base_and_not_planned(t
     diff = '+++ b/public/index.html\n+<a href="real.html">a</a>\n+<a href="ghost.html">b</a>\n+<a href="new.html">c</a>\n'
     plan = {"subtasks": [{"file": "public/new.html"}]}
     assert trial.ref_errors(diff, repo / ".git", sha, plan) == 1
+
+
+def test_quote_diag_reports_how_much_of_a_failed_grounding_quote_is_in_the_file(tmp_path):
+    import json
+    import subprocess
+    from evaluation.suite import trial
+    repo = tmp_path / "r"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    for cmd in (["config", "user.email", "t@t"], ["config", "user.name", "t"]):
+        subprocess.run(["git", "-C", str(repo), *cmd], check=True)
+    (repo / "a.html").write_text("alpha beta gamma delta\nsecond real line here\n")
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", "i"], check=True)
+    sha = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    quote = "L1| alpha beta gamma delta\nL2| invented line that is absent ..."
+    diag = trial._quote_diag(json.dumps({"grounding": [{"file": "a.html", "quote": quote}]}), repo / ".git", sha)
+    assert diag[0]["lines_found"] == "1/2" and diag[0]["whole_in_file"] is False and diag[0]["has_ellipsis"] is True
