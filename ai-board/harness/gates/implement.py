@@ -17,6 +17,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import context as repo_context
 import file_context
+from gates import gate3_guards
 import memory
 import repomap
 
@@ -125,6 +126,18 @@ def gate3_context(subtask: dict, state: dict, current: str | None, siblings: lis
             context = context.split("\n", 1)[0] + "\n" + ctx["text"]
             lessons = []  # skill đã kèm tool lessons
     return context, lessons, ctx
+
+
+_TREES: dict[tuple, frozenset] = {}
+
+
+def _base_tree(state: dict) -> set[str]:
+    key = (str(state.get("checkout_source")), state.get("base_sha"))
+    if key not in _TREES:
+        listed = subprocess.run(["git", "ls-tree", "-r", "--name-only", str(key[1])], cwd=key[0], capture_output=True,
+                                text=True, encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL) if key[1] else None
+        _TREES[key] = frozenset(listed.stdout.splitlines()) if listed is not None and not listed.returncode else frozenset()
+    return set(_TREES[key])
 
 
 def _siblings(source, sha: str, file: str) -> list[str]:
@@ -396,6 +409,7 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
         trace = getattr(deps, "trace", None)
         prompt = build_prompt(subtask, state.get("repair_reason"), context, lessons)
         feedback = ""
+        known = _base_tree(state) | {st["file"] for st in subtasks} if gate3_guards.enabled("refs") else set()
         routing = getattr(deps.models, 'routing', None)
         role = 'gate3_heavy' if subtask.get('size') == 'large' else 'gate3_light'
         failed_candidates = set()
@@ -413,9 +427,16 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
                 trace.note("knows", "retry feedback", str(error), {"hint": retry_hint(str(error), iteration - 1),
                                                                     "ai_output": raw[:SNIPPET_CHARS]})
             # Phản hồi nối SAU prompt cố định + ngữ cảnh: prefix giữ nguyên byte, Ollama tái dùng KV cache.
-            body = deps.call_model(model, prompt + feedback, gate=3, budget=budget, db_path=db_path,
-                                   proposal_id=proposal_id, prompt_name="implement.md", child=child,
-                                   iteration=iteration, options=_retry_sampling(iteration), **routing_options)
+            call = dict(gate=3, budget=budget, db_path=db_path, proposal_id=proposal_id, prompt_name="implement.md", child=child,
+                        iteration=iteration, options=_retry_sampling(iteration), **routing_options)
+            if gate3_guards.enabled("schema"):
+                try:
+                    body = deps.call_model(model, prompt + feedback, format=gate3_guards.edit_schema(current is not None), **call)
+                except Exception:  # noqa: BLE001 - server refused the schema: ask once the old way, and count it
+                    gate3_guards.note_fallback()
+                    body = deps.call_model(model, prompt + feedback, **call)
+            else:
+                body = deps.call_model(model, prompt + feedback, **call)
             raw = body.get("response", "")
             if body.get('_route'):
                 failed_candidates.add(body['_route']['candidate'])
@@ -441,6 +462,7 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
                 try:
                     out = check_output(out, current, (body.get("_metrics") or {}).get("done_reason")
                                        or body.get("done_reason"), subtask.get("file"), report)
+                    gate3_guards.check(out, current, subtask["file"], known)
                     if trace:
                         trace.attach_last("edits", {"parsed": parsed, "applied": True,
                                                     "diff": _unified(current or "", out["code"], subtask["file"])})
