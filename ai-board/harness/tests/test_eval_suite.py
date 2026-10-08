@@ -316,3 +316,20 @@ def test_context_arms_change_what_gate3_shows_and_default_restores_it():
     finally:
         ablation.apply("default")
     assert implement.gate3_context.__name__ == "gate3_context" and implement._siblings.__name__ == "_siblings"
+
+
+def test_ref_errors_counts_references_to_files_missing_at_base_and_not_planned(tmp_path):
+    import subprocess
+    from evaluation.suite import trial
+    repo = tmp_path / "r"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    for cmd in (["config", "user.email", "t@t"], ["config", "user.name", "t"]):
+        subprocess.run(["git", "-C", str(repo), *cmd], check=True)
+    (repo / "public").mkdir()
+    (repo / "public/real.html").write_text("x\n")
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", "i"], check=True)
+    sha = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    diff = '+++ b/public/index.html\n+<a href="real.html">a</a>\n+<a href="ghost.html">b</a>\n+<a href="new.html">c</a>\n'
+    plan = {"subtasks": [{"file": "public/new.html"}]}
+    assert trial.ref_errors(diff, repo / ".git", sha, plan) == 1

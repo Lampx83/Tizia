@@ -99,7 +99,7 @@ def run_case(name: str, case: dict, model: str, base: Deps, after=None) -> dict:
         "model_loads": sum((c["metrics"].get("load_ms") or 0) > 500 for c in calls),
         "done_reasons": [c["metrics"].get("done_reason") for c in calls], **extra,
     }
-    if multi:
+    if True:
         before = implement._existing_files(state["checkout_source"], subtasks)[1]
         row["diff"] = "\n".join(implement._unified(before[f].decode("utf-8") if f in before else "", text, f) for f, text in files.items() if text)
     return row

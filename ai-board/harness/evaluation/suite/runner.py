@@ -11,6 +11,7 @@ import argparse
 import concurrent.futures as futures
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -19,6 +20,7 @@ from pathlib import Path
 
 import eval_corpus
 import eval_fast
+from gates import gate3_guards
 from evaluation.suite import ablation, metrics, taskpack, trial
 from evaluation.suite.launcher import sqlite_launcher
 
@@ -87,6 +89,7 @@ def render(rep: dict) -> str:
                          f"pass@any {g['pass_any']['rate']}% pass@all {g['pass_all']['rate']}% | bất ổn {g['flaky_tasks']} task | ship {g['shipped']['rate']}% | "
                          + (f"kế hoạch đúng ngay {plan['first_hit']['rate']}% (sau hỏi lại {plan['final_hit']['rate']}%, trang mới {plan['first_plans_new_page']['rate']}%) | " if plan else "")
                          + (f"cổng 4 chặn nhầm {review['k']}/{review['n']} = {review['rate']}% | " if review else "")
+                         + f"tham chiếu bịa {g['references']['with_missing_ref']['rate']}%" + (f" (lùi schema {g['references']['schema_fallbacks']})" if g['references']['schema_fallbacks'] else "") + " | "
                          + f"{c['model_calls_mean']} lượt gọi, kẹt {c['stuck']['rate']}%, cắt cụt {c['truncated']['rate']}%, {c['wall_s_mean']} s/lượt")
         if "all" in groups and groups["all"].get("failure"):
             lines.append("  lớp lỗi: " + ", ".join(f"{k}={v}" for k, v in sorted(groups["all"]["failure"].items())))
@@ -161,7 +164,13 @@ def cmd_run(args, deps=None) -> int:
     else:
         router, model = None, deps.models.gate3_model
     ablation.apply(args.context_arm)
-    prov = {**provenance(ROOT, model, router), "context_arm": args.context_arm}
+    guards = ",".join(sorted(g for g in args.guards.split(",") if g))
+    bad = set(guards.split(",")) - {""} - set(gate3_guards.FLAGS)
+    if bad:
+        print(f"[suite] unknown guard {', '.join(sorted(bad))}", file=sys.stderr)
+        return 2
+    os.environ["AI_BOARD_GATE3_GUARDS"] = guards
+    prov = {**provenance(ROOT, model, router), "context_arm": args.context_arm, "gate3_guards": guards}
     if prov["dirty"] and not args.allow_dirty:
         print("[suite] working tree has uncommitted changes: commit them (or --allow-dirty for a throwaway run)", file=sys.stderr)
         return 2
@@ -184,7 +193,8 @@ def cmd_run(args, deps=None) -> int:
     name = (f"s{args.seed}-{args.split}-{prov['ref'][:12]}" + ("-dirty" if prov["dirty"] else "")
             + (f"-think0-{args.reasoning_off.replace(',', '+')}" if args.reasoning_off else "")
             + (f"-think1-{args.reasoning_on.replace(',', '+')}" if args.reasoning_on else "")
-            + (f"-ctx-{args.context_arm}" if args.context_arm != "default" else ""))
+            + (f"-ctx-{args.context_arm}" if args.context_arm != "default" else "")
+            + (f"-g-{guards.replace(',', '+')}" if guards else ""))
     run_dir = root / "suite" / name
     run_dir.mkdir(parents=True, exist_ok=True)
     meta = {"seed": args.seed, "split": args.split, "repeats": args.repeats, "modes": modes, "fast_tier": args.fast_tier, "review": args.review, "packs": [_sha(Path(p)) for p in args.pack or []], **prov,
@@ -299,6 +309,7 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--review", action="store_true", help="also run the gate 4 model content review on gold-mode candidates (false-block rate)")
     run.add_argument("--pack", action="append", help="task pack JSON (merged-history tasks); repeatable")
     run.add_argument("--context-arm", choices=ablation.ARMS, default="default", help="gate 3 context ablation: fullfile = whole numbered file instead of excerpt; nosiblings = no folder listing")
+    run.add_argument("--guards", default="", help="gate 3 guards to switch on (comma list of noop, refs, schema); default none")
     run.add_argument("--reasoning-on", default="", help="comma list of roles to run with thinking on (ablation), e.g. gate1,gate25")
     run.add_argument("--reasoning-off", default="", help="comma list of roles to run with thinking off (ablation), e.g. gate1,gate25")
     run.set_defaults(handler=cmd_run)

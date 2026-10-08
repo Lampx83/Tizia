@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import posixpath
+import subprocess
 import threading
 import time
 import unicodedata
@@ -15,7 +16,7 @@ import eval_corpus
 import eval_fast
 from evaluation import gold as gold_eval
 from evaluation.suite import taskpack
-from gates import brainstorm, plan_validate, scope_check, static_check
+from gates import brainstorm, gate3_guards, plan_validate, scope_check, static_check
 from runtime.budget import Budget
 from runtime.pipeline import Deps
 
@@ -125,9 +126,24 @@ def review_candidate(state: dict, deps) -> dict:
     return {"ran": out.get("failure_class") != "transient", "blocked": bool(out["blocked"]), "labels": out.get("labels")}
 
 
+def ref_errors(diff: str, repo: Path, sha: str, plan: dict | None) -> int:
+    """References the candidate's added lines make to files that exist neither at base nor in the plan."""
+    listed = subprocess.run(["git", "--git-dir", str(repo), "ls-tree", "-r", "--name-only", sha], capture_output=True, text=True,
+                            encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL)
+    known = set(listed.stdout.splitlines()) | {t["file"] for t in (plan or {}).get("subtasks", [])}
+    total, current = 0, ""
+    for line in diff.splitlines():
+        if line.startswith("+++ b/"):
+            current = line[6:]
+        elif line.startswith("+") and not line.startswith("+++"):
+            total += len(gate3_guards.missing_refs(current, "", line[1:], known))
+    return total
+
+
 def run_trial(task: dict, mode: str, base_deps: Deps, root: Path, source, fast: eval_fast.FastTier | None = None,
               fast_lock: threading.Lock | None = None, *, wall_s: int = 900, review: bool = False) -> dict:
     """Never raises for model/infra outcomes (they are result rows). eval_fast.FastTierError propagates: the environment is broken, not the model."""
+    gate3_guards.fallbacks(reset=True)
     deps = recording(base_deps)
     kind, _, variant = mode.partition(":")
     taskpack.prepare_checkout(root, task["base_sha"], source)
@@ -199,4 +215,5 @@ def run_trial(task: dict, mode: str, base_deps: Deps, root: Path, source, fast: 
         "served": sorted({b.get("model") for b in deps.ledger if isinstance(b.get("model"), str)}),
         "reasoning_chars": sum(b.get("_reasoning_chars") or 0 for b in deps.ledger),
         "diff": (row.get("diff") or "")[:6000] or None, "recall": (rec.get("seen") or {}).get("recall"),
+        "ref_errors": ref_errors(row.get("diff") or "", repo, task["base_sha"], plan), "schema_fallbacks": gate3_guards.fallbacks(reset=True),
     }

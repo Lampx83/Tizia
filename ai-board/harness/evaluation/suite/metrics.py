@@ -83,6 +83,8 @@ def summarize(rows: list[dict]) -> dict:
         "tokens_per_resolved": round(sum(r["tokens_in"] + r["tokens_out"] for r in rows) / len(resolved)) if resolved else None,
         "reasoning_chars_mean": round(sum(r.get("reasoning_chars", 0) for r in rows) / n),
     }
+    out["references"] = {"with_missing_ref": rate(sum(bool(r.get("ref_errors")) for r in rows), n),
+                         "schema_fallbacks": sum(r.get("schema_fallbacks", 0) for r in rows)}
     if rows[0]["mode"].startswith("e2e"):
         plans = [r["plan"] for r in rows]
         out["planning"] = {
