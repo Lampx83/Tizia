@@ -65,10 +65,17 @@ def _exists(repo, sha: str, file: str) -> bool:
     return subprocess.run(["git", "--git-dir", str(repo), "cat-file", "-e", f"{sha}:{file}"], capture_output=True, stdin=subprocess.DEVNULL).returncode == 0
 
 
-def make_oracle(repo, task: dict):
+def make_oracle(repo, task: dict, seen: dict | None = None):
     sections = gold_sections(repo, task)
 
     def oracle(files: dict) -> bool:
+        if seen is not None:
+            want = hit = 0
+            for file, (added, removed, _b, _m) in sections.items():
+                have = {l.strip() for l in (files.get(file) or "").splitlines()}
+                want += len(added)
+                hit += sum(a in have for a in added)
+            seen["recall"] = round(hit / want, 3) if want else None
         for file, (added, removed, base, merged) in sections.items():
             text = files.get(file)
             if not text:
@@ -90,7 +97,8 @@ def make_oracle(repo, task: dict):
 def case_record(task: dict, root: Path, source) -> dict:
     repo = prepare_checkout(root, task["base_sha"], source)
     subtasks = [{"title": s["title"], "file": s["file"], "size": "small", "verify": s["verify"]} for s in task["subtasks"]]
-    return {"subtasks": subtasks, "detail": task["detail"], "checkout": str(repo), "oracle": make_oracle(repo, task)}
+    seen: dict = {}
+    return {"subtasks": subtasks, "detail": task["detail"], "checkout": str(repo), "oracle": make_oracle(repo, task, seen), "seen": seen}
 
 
 def validate(entries: list[dict], source) -> list[str]:
