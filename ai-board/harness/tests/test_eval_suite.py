@@ -263,3 +263,23 @@ def test_review_stage_counts_a_block_on_a_benign_candidate_as_false_block(world,
     g = metrics.summarize([{**r, "repeat": 1, "split": "dev"} for r in rows])
     assert (g["review_false_block"]["k"], g["review_false_block"]["n"]) == (1, 2)
     assert trial.run_trial(pick(tasks, 1), "gold", deps, root, ROOT)["review"] is None  # off by default
+
+
+def test_approved_variant_continues_past_a_validator_block_and_keeps_the_block_on_record(world, monkeypatch):
+    root, tasks = world
+    monkeypatch.setattr(trial.plan_validate, "run", lambda *a, **k: {"gate": 2.5, "blocked": True, "reason": "plan_ungrounded"})
+    deps, models = deps_for(world)
+    strict = trial.run_trial(pick(tasks, 1), "e2e", deps, root, ROOT)
+    approved = trial.run_trial(pick(tasks, 1), "e2e:approved", deps, root, ROOT)
+    assert not strict["resolved"] and metrics.failure_class(strict) == "validator_blocked"
+    assert approved["resolved"] and approved["plan"]["validator_blocked"] and approved["plan"]["validator_reason"] == "plan_ungrounded"
+    assert metrics.failure_class(approved) is None
+
+
+def test_gate1_block_reason_is_kept_in_the_row(world):
+    root, tasks = world
+    deps = Deps(models=type("M", (), {"gate1_model": "f", "gate3_model": "f", "gate3_model_light": "f",
+                                       "generate": lambda self, *a, **k: {"response": "not json", "prompt_eval_count": 1, "eval_count": 1}})(),
+                notify=None, sleep=lambda _s: None)
+    row = trial.run_trial(pick(tasks, 1), "e2e", deps, root, ROOT)
+    assert row["plan"]["blocked"] and "plan" in row["plan"]["reason"]

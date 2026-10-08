@@ -19,7 +19,7 @@ from gates import brainstorm, plan_validate, scope_check, static_check
 from runtime.budget import Budget
 from runtime.pipeline import Deps
 
-MODES = ("e2e", "gold", "e2e:nodia")  # e2e:nodia = e2e with the request typed without Vietnamese diacritics (robustness variant)
+MODES = ("e2e", "gold", "e2e:nodia", "e2e:approved")  # e2e:nodia = request typed without diacritics; e2e:approved = a gate 1/2/2.5 block is treated as admin-approved and gate 3 still runs
 
 
 def strip_diacritics(text: str) -> str:
@@ -43,7 +43,7 @@ def recording(base: Deps) -> RecordingDeps:
 
 def request_of(task: dict, variant: str | None = None) -> dict:
     """What a requester wrote: title + detail. `verify` and the gold are never shown to the planner."""
-    text = strip_diacritics if variant == "nodia" else (lambda t: t)
+    text = strip_diacritics if "nodia" in (variant or "").split("+") else (lambda t: t)
     return {"id": task["id"], "domain": "", "type": "feature", "subject": text(task["title"]), "body": text(task["detail"]), "thread": [], "votes": 0,
             "grounding_required": True}
 
@@ -87,7 +87,7 @@ def _plan_stage(task: dict, repo, deps: RecordingDeps, wall_s: int, variant: str
     sha, gold = task["base_sha"], golds(task)
     facts = {"attempts": 0, "first_parse_ok": False, "first_hit": False, "first_exact": False, "first_nonexistent": False,
              "first_plans_new_page": False, "first_extra": 0, "blocked": False, "validator_blocked": False, "validator_reason": None,
-             "final_hit": False, "final_exact": False, "final_files": []}
+             "final_hit": False, "final_exact": False, "final_files": [], "reason": None, "approved": "approved" in (variant or "").split("+")}
     request, budget = request_of(task, variant), Budget(max_wall_clock_s=wall_s, max_units=600)
     out = brainstorm.run(request, deps, budget, source=repo, sha=sha)
     tracer.flush()
@@ -95,7 +95,7 @@ def _plan_stage(task: dict, repo, deps: RecordingDeps, wall_s: int, variant: str
     first = attempts[0] if attempts else {"parse_ok": False, "files": [], "missing": False, "new_files": [], "hit": False, "exact": False}
     facts.update(attempts=len(attempts), first_parse_ok=first["parse_ok"], first_hit=first["hit"], first_exact=first["exact"],
                  first_nonexistent=bool(first["missing"] or first["new_files"]), first_plans_new_page=bool(first["new_files"]),
-                 first_extra=len(set(first["files"]) - set(gold)), blocked=bool(out.get("blocked")))
+                 first_extra=len(set(first["files"]) - set(gold)), blocked=bool(out.get("blocked")), reason=str(out.get("reason"))[:160] if out.get("blocked") else None)
     plan = out.get("plan")
     if out.get("blocked") or not plan:
         return facts, None, tracer.records
@@ -105,9 +105,10 @@ def _plan_stage(task: dict, repo, deps: RecordingDeps, wall_s: int, variant: str
              "source_targets": out.get("source_targets") or [], "best_match": out.get("best_match")}
     for step in (scope_check.run(state), plan_validate.run(request, deps, budget, state)):
         if step.get("blocked"):
-            facts.update(validator_blocked=True, validator_reason=str(step.get("reason"))[:120])
-            tracer.flush()
-            return facts, None, tracer.records
+            facts.update(validator_blocked=True, validator_reason=facts["validator_reason"] or str(step.get("reason"))[:120])
+            if not facts["approved"]:
+                tracer.flush()
+                return facts, None, tracer.records
     tracer.flush()
     return facts, plan, tracer.records
 

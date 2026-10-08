@@ -284,10 +284,10 @@ def main(argv=None, deps=None) -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
     run = sub.add_parser("run")
     run.add_argument("--seed", type=int, required=True)
-    run.add_argument("--split", choices=("dev", "heldout", "all"), default="dev")
+    run.add_argument("--split", choices=("dev", "heldout", "all", "none"), default="dev", help="none = only the --pack tasks")
     run.add_argument("--repeats", type=int, default=3)
-    run.add_argument("--modes", default="e2e,gold,e2e:nodia",
-                    help="e2e = own plan from the request text; gold = gold subtask (gate 3 only); e2e:nodia = e2e typed without diacritics")
+    run.add_argument("--modes", default="e2e,e2e:approved,gold,e2e:nodia",
+                    help="e2e = own plan from the request text; gold = gold subtask (gate 3 only); e2e:nodia = e2e typed without diacritics; e2e:approved = e2e where a plan block counts as admin-approved")
     run.add_argument("--workers", type=int, default=2, help="parallel trials against the shared GPU")
     run.add_argument("--root", required=True)
     run.add_argument("--cases", type=int)

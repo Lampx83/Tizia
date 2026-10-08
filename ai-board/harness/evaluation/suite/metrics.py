@@ -32,7 +32,7 @@ def failure_class(row: dict) -> str | None:
     if row["mode"].startswith("e2e"):
         if row["plan"]["blocked"]:
             return "plan_blocked"
-        if row["plan"].get("validator_blocked"):
+        if row["plan"].get("validator_blocked") and not row["plan"].get("approved"):
             return "validator_blocked"
         if not row["plan"]["final_hit"]:
             return "plan_miss"
