@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="robots" content="noindex,nofollow" />
-<title>🏛️ Ban điều hành · Tizia</title>
+<title>Ban điều hành · Tizia</title>
 <style>
   :root {
     --bg:#0b1220; --bg2:#111a2e; --bg3:#16213d; --accent:#fbbf24; --accent2:#60a5fa;
@@ -98,8 +98,16 @@
 
   /* ============ ACTIVITY FEED ============ */
   .feed { display:flex; flex-direction:column; gap:7px; max-height:340px; overflow-y:auto; padding-right:4px; }
-  .feed::-webkit-scrollbar { width:6px; }
-  .feed::-webkit-scrollbar-thumb { background:var(--border-strong); border-radius:3px; }
+  .trace-sub { font-size:11px; color:var(--dim); margin-top:3px; overflow-wrap:anywhere; }
+  .trace-copy { font-family:ui-monospace,Consolas,monospace; cursor:pointer; }
+  .trace-copy:hover { color:var(--txt); text-decoration:underline; }
+  .trace-copy.copied::after { content:" ✓"; color:var(--ok); }
+  /* Scrollbar mảnh theo theme tối cho cả trang (Firefox + Chromium) */
+  * { scrollbar-width:thin; scrollbar-color:var(--border-strong) transparent; }
+  ::-webkit-scrollbar { width:8px; height:8px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--border-strong); border-radius:8px; border:2px solid transparent; background-clip:padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background:rgba(251,191,36,0.55); background-clip:padding-box; }
   .feed .item { display:flex; gap:9px; padding:7px 8px; border-radius:7px; align-items:flex-start; font-size:12.5px; }
   .feed .item:hover { background:rgba(255,255,255,0.03); }
   .feed .kind { font-size:14px; line-height:1.2; margin-top:1px; }
@@ -134,7 +142,6 @@
   th,td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); vertical-align:top; }
   th { opacity:0.6; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.4px; background:rgba(0,0,0,0.15); }
   tbody tr:hover { background:rgba(255,255,255,0.025); }
-  tr.expanded { background:rgba(251,191,36,0.05); }
   td.actions { white-space:nowrap; }
 
   /* ============ PILLS ============ */
@@ -162,12 +169,6 @@
   .err { padding:30px; text-align:center; opacity:0.7; font-size:13px; }
   .loading { padding:24px; text-align:center; opacity:0.5; font-size:13px; }
   .empty { padding:20px; text-align:center; opacity:0.5; font-size:12.5px; }
-  .detail-row { background:rgba(0,0,0,0.18); }
-  .detail-row td { padding:14px 16px; }
-  .detail-box { font-size:12.5px; line-height:1.55; }
-  .detail-box h4 { margin:0 0 6px; font-size:11.5px; text-transform:uppercase; letter-spacing:.5px; opacity:.6; }
-  .detail-box .blk { background:rgba(0,0,0,0.25); border:1px solid var(--border); border-radius:8px; padding:9px 11px; margin:6px 0; }
-  .detail-box .blk.note { background:rgba(251,191,36,0.06); border-color:rgba(251,191,36,0.25); }
 
   /* Modal (giữ legacy) */
   .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:50; display:none; align-items:flex-start; justify-content:center; padding-top:60px; backdrop-filter:blur(4px); }
@@ -185,25 +186,53 @@
   .toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px); background:var(--ok); color:#04210f; font-weight:700; padding:11px 22px; border-radius:11px; opacity:0; transition:.25s; z-index:60; box-shadow:var(--shadow); }
   .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
   .toast.err { background:var(--bad); color:#fff; }
+  /* Cửa sổ con xem chi tiết 1 yêu cầu (iframe admin-request.html), nằm trong trang admin */
+  .req-dialog { width:min(1200px,94vw); height:88vh; padding:0; border:1px solid var(--border-strong);
+                border-radius:14px; background:var(--bg); color:var(--txt); box-shadow:var(--shadow); overflow:hidden; }
+  .req-dialog::backdrop { background:rgba(0,0,0,.6); }
+  .req-dialog .dlg-head { display:flex; align-items:center; gap:10px; padding:10px 14px;
+                          border-bottom:1px solid var(--border); background:var(--bg2); }
+  .req-dialog .dlg-head b { flex:1; }
+  .req-dialog .dlg-x { width:32px; height:32px; border-radius:8px; border:1px solid var(--border); background:transparent;
+                        color:var(--txt); font-size:22px; line-height:1; cursor:pointer; }
+  .req-dialog .dlg-x:hover { background:var(--bg3); }
+  /* Trạng thái góp ý: màu theo nghĩa */
+  .pill.st-pending   { background:rgba(251,146,60,0.18); color:#fdba74; }
+  .pill.st-reviewing { background:rgba(96,165,250,0.18); color:#93c5fd; }
+  .pill.st-done      { background:rgba(34,197,94,0.18);  color:#86efac; }
+  .pill.st-rejected  { background:rgba(239,68,68,0.18);  color:#fca5a5; }
+  .pill.st-cancelled { background:rgba(148,163,184,0.16); color:#94a3b8; }
+  .pill.ai-ok   { background:rgba(34,197,94,0.18);  color:#86efac; }
+  .pill.ai-warn { background:rgba(251,146,60,0.18); color:#fdba74; }
+  .pill.ai-bad  { background:rgba(239,68,68,0.18);  color:#fca5a5; }
+  .req-detail { max-width:320px; font-size:12px; color:var(--muted); display:-webkit-box; -webkit-line-clamp:2;
+                -webkit-box-orient:vertical; overflow:hidden; }
+  .req-dialog iframe { width:100%; height:calc(100% - 49px); border:0; display:block; background:var(--bg); }
 </style>
 </head>
-<body data-no-suggestion-fab data-page-title="Ban điều hành">
+<body data-no-suggestion-fab data-no-gamify data-page-title="Ban điều hành">
 <header id="auth-header"></header>
-<script type="module" src="/js/auth-header.js"></script>
-<main id="app"><div class="loading">⏳ Đang tải dashboard…</div></main>
+<script type="module" src="/js/auth-header.js?v=admin-role"></script>
+<main id="app"><div class="loading">Đang tải dashboard…</div></main>
+<dialog class="req-dialog" id="req-dialog">
+  <div class="dlg-head"><b id="req-dialog-title">Chi tiết yêu cầu</b>
+    <button class="dlg-x" id="req-dialog-close" type="button" aria-label="Đóng" title="Đóng">&times;</button></div>
+  <iframe id="req-dialog-frame" title="Chi tiết yêu cầu"></iframe>
+</dialog>
 
 <!-- Modals -->
 <div class="modal-bg" id="modal-bg">
   <div class="modal" id="modal-replyReq">
-    <h3>💬 Trả lời yêu cầu HS</h3>
-    <p class="sub">Lời nhắn sẽ được gửi qua 🔔 thông báo + lưu audit trail.</p>
+    <h3>Trả lời yêu cầu HS</h3>
+    <p class="sub">Lời nhắn sẽ được gửi qua thông báo + lưu audit trail.</p>
     <div class="ctx" id="modal-ctx"></div>
     <div class="grp">
       <label>Trạng thái</label>
       <select id="modal-status">
-        <option value="done">✓ Hoàn thành</option>
-        <option value="reviewing">🔧 Đang xử lý</option>
-        <option value="rejected">✗ Từ chối</option>
+        <option value="pending">Giữ trạng thái chờ xử lý</option>
+        <option value="done">Hoàn thành</option>
+        <option value="reviewing">Đang xử lý</option>
+        <option value="rejected">Từ chối</option>
       </select>
     </div>
     <div class="grp">
@@ -212,12 +241,12 @@
     </div>
     <div class="actions">
       <button class="btn" id="modal-cancel">Huỷ</button>
-      <button class="btn primary" id="modal-submit">📨 Gửi phản hồi</button>
+      <button class="btn primary" id="modal-submit">Gửi phản hồi</button>
     </div>
   </div>
 
   <div class="modal" id="modal-setRole" style="display:none">
-    <h3>👥 Đổi vai trò người dùng</h3>
+    <h3>Đổi vai trò người dùng</h3>
     <p class="sub" id="modal-role-sub"></p>
     <div class="grp">
       <label>Vai trò mới</label>
@@ -236,7 +265,7 @@
 
   <!-- Create user -->
   <div class="modal" id="modal-createUser" style="display:none">
-    <h3>➕ Tạo người dùng mới</h3>
+    <h3>Tạo người dùng mới</h3>
     <p class="sub">Admin có thể tạo trực tiếp account với mọi role (kể cả admin).</p>
     <div class="grp"><label>Username (3-32 ký tự a-z0-9_.-)</label><input id="cu-username" placeholder="vd: thanha"></div>
     <div class="grp"><label>Mật khẩu (≥6 ký tự)</label><input id="cu-password" type="text" placeholder="vd: 125678"></div>
@@ -255,13 +284,13 @@
     <div class="grp"><label>Email (tuỳ chọn)</label><input id="cu-email" type="email" placeholder="…@…"></div>
     <div class="actions">
       <button class="btn" id="cu-cancel">Huỷ</button>
-      <button class="btn primary" id="cu-submit">➕ Tạo</button>
+      <button class="btn primary" id="cu-submit">Tạo</button>
     </div>
   </div>
 
   <!-- Edit user -->
   <div class="modal" id="modal-editUser" style="display:none">
-    <h3>✏️ Sửa thông tin người dùng</h3>
+    <h3>Sửa thông tin người dùng</h3>
     <p class="sub" id="eu-sub"></p>
     <div class="grp"><label>Tên hiển thị</label><input id="eu-display"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -270,55 +299,32 @@
     </div>
     <div class="actions">
       <button class="btn" id="eu-cancel">Huỷ</button>
-      <button class="btn primary" id="eu-submit">💾 Lưu</button>
+      <button class="btn primary" id="eu-submit">Lưu</button>
     </div>
   </div>
 
   <!-- Reset password -->
   <div class="modal" id="modal-resetPwd" style="display:none">
-    <h3>🔑 Đặt lại mật khẩu</h3>
+    <h3>Đặt lại mật khẩu</h3>
     <p class="sub" id="rp-sub"></p>
-    <div class="ctx" style="background:rgba(239,68,68,0.08);border-left-color:var(--bad)">⚠️ Mọi session hiện tại của user sẽ bị huỷ, buộc login lại.</div>
+    <div class="ctx" style="background:rgba(239,68,68,0.08);border-left-color:var(--bad)">Mọi session hiện tại của user sẽ bị huỷ, buộc login lại.</div>
     <div class="grp"><label>Mật khẩu mới (≥6 ký tự)</label><input id="rp-password" type="text" placeholder="paste hoặc gõ"></div>
     <div class="actions">
-      <button class="btn" id="rp-gen">🎲 Sinh ngẫu nhiên 16 ký tự</button>
+      <button class="btn" id="rp-gen">Sinh ngẫu nhiên 16 ký tự</button>
       <div style="flex:1"></div>
       <button class="btn" id="rp-cancel">Huỷ</button>
-      <button class="btn primary" id="rp-submit">🔑 Đổi</button>
-    </div>
-  </div>
-
-  <!-- View / edit wallet (XP / coin / streak / achievements / modules) -->
-  <div class="modal" id="modal-wallet" style="display:none;max-width:640px">
-    <h3>🎮 Ví game của HS/SV</h3>
-    <p class="sub" id="ew-sub"></p>
-    <div id="ew-summary" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div class="grp"><label>XP</label><input id="ew-xp" type="number" min="0"></div>
-      <div class="grp"><label>Coin</label><input id="ew-coins" type="number" min="0"></div>
-      <div class="grp"><label>Streak (chuỗi ngày)</label><input id="ew-streak" type="number" min="0"></div>
-      <div class="grp"><label>Streak shields (khiên)</label><input id="ew-shields" type="number" min="0"></div>
-    </div>
-    <div class="ctx" style="font-size:12px;background:rgba(59,130,246,0.08);border-left-color:#3b82f6">
-      ℹ️ Sửa XP/coin trực tiếp ghi đè ví của user. Achievements + modules đã hoàn thành chỉ xem, không sửa qua form này.
-    </div>
-    <details style="margin-top:10px;font-size:13px"><summary>Chi tiết achievements / modules theo ngày / quest</summary>
-      <pre id="ew-raw" style="background:#0f1729;padding:10px;border-radius:6px;max-height:240px;overflow:auto;font-size:11px"></pre>
-    </details>
-    <div class="actions">
-      <button class="btn" id="ew-cancel">Đóng</button>
-      <button class="btn primary" id="ew-submit">💾 Lưu ví</button>
+      <button class="btn primary" id="rp-submit">Đổi</button>
     </div>
   </div>
 
   <!-- Confirm delete (chung cho mọi entity) -->
   <div class="modal" id="modal-confirm" style="display:none;border-color:rgba(239,68,68,0.4)">
-    <h3 id="cf-title">⚠️ Xác nhận xoá</h3>
+    <h3 id="cf-title">Xác nhận xoá</h3>
     <p class="sub" id="cf-msg"></p>
     <div class="ctx" id="cf-ctx" style="border-left-color:var(--bad);background:rgba(239,68,68,0.08)"></div>
     <div class="actions">
       <button class="btn" id="cf-cancel">Huỷ</button>
-      <button class="btn danger" id="cf-submit">🗑 Xoá</button>
+      <button class="btn danger" id="cf-submit">Xoá</button>
     </div>
   </div>
 
@@ -332,9 +338,9 @@
   <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0">
     <span id="school-overlay-title" style="font-weight:700;font-size:15px;flex:1"></span>
     <span id="campus-dirty-badge" style="display:none;background:var(--warn);color:#000;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px">● Chưa lưu</span>
-    <button class="btn primary" id="campus-save-btn" style="min-width:90px;display:none">💾 Lưu campus</button>
+    <button class="btn primary" id="campus-save-btn" style="min-width:90px;display:none">Lưu campus</button>
     <button class="btn" id="campus-reset-btn" style="background:rgba(239,68,68,.15);border-color:var(--bad);color:var(--bad);display:none">↺ Reset mặc định</button>
-    <button class="btn" id="school-close-btn">✕ Đóng</button>
+    <button class="btn" id="school-close-btn">Đóng</button>
   </div>
   <div style="display:flex;flex:1;min-height:0">
     <nav id="school-tabs" style="width:200px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);padding:12px 8px;display:flex;flex-direction:column;gap:4px;overflow-y:auto"></nav>
@@ -348,10 +354,6 @@
 <div class="toast" id="toast"></div>
 <div class="chart-tooltip" id="ctt"></div>
 
-<script type="module" src="/js/admin-dashboard.js?v=pageview1"></script>
-<script type="module" src="./js/engagement-hud.js?v=2026-06-05-r2"></script>
-<script type="module" src="./js/onboarding-60s.js?v=2026-06-08-r8"></script>
-<script type="module" src="./js/pet-widget.js?v=2026-06-10-tl1"></script>
-<script type="module" src="./js/daily-login.js?v=2026-06-07b"></script>
+<script type="module" src="/js/admin-dashboard.js?v=no-icons"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 // ============================================================
-// Trường Lái xe — Barrel stub (Phase 1 preview)
+// Trường Lái xe — Barrel stub (preview)
 // ============================================================
-// 3 module preview cho bằng lái B1/B2. Phase 2 sẽ thêm C/D/E + sa hình 3D.
+// 3 module preview cho bằng lái B1/B2. Chưa có C/D/E + sa hình 3D.
 
 /** @type {import('../../engine/types.js').CourseModule[]} */
 export const MODULES = [

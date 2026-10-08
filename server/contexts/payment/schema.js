@@ -17,7 +17,7 @@
 
 import { db } from '../../db.js';
 
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS invoices (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id     INTEGER,
@@ -37,8 +37,8 @@ db.exec(`
 `);
 // metadata JSON: gắn payload tuỳ ý vào invoice (vd {plan,cycle} cho upgrade gói B2C).
 // IPN parse để biết phải kích hoạt gì sau khi settled. Lazy add column.
-try { db.exec(`ALTER TABLE invoices ADD COLUMN metadata TEXT`); } catch {}
-db.exec(`
+try { await db.exec(`ALTER TABLE invoices ADD COLUMN metadata TEXT`); } catch {}
+await db.exec(`
 
   CREATE TABLE IF NOT EXISTS payments (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,

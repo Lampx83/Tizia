@@ -5,7 +5,7 @@
 //
 // Interface bọc chặt (đăng ký listener hộ, không chỉ đưa util rời) để agent
 // phát triển các file WS về sau khó viết sai hơn. Heartbeat / auth / routing
-// upgrade KHÔNG nằm ở đây — mỗi site một kiểu, xem ticket 05/19.
+// upgrade KHÔNG nằm ở đây — mỗi site một kiểu.
 
 import { log } from './observability.js';
 

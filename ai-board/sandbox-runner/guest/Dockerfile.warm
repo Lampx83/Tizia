@@ -1,0 +1,5 @@
+# Warm Gate 5 guest: the base guest image plus a pre-built Docker data dir (see scripts/warm-guest.mjs).
+# Build context must contain docker-data.tar.gz. The cache is part of the pinned image digest, never written by a run.
+ARG BASE=tizia-gate5-guest:dev
+FROM ${BASE}
+ADD docker-data.tar.gz /var/lib/docker/

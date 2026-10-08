@@ -1,0 +1,13 @@
+{
+  "name": "sandbox-runner",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "test:real": "node scripts/real-e2e.mjs"
+  },
+  "dependencies": {
+    "microsandbox": "0.7.5",
+    "yaml": "2.9.1"
+  }
+}

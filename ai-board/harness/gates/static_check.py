@@ -1,11 +1,11 @@
-"""Cổng 4 — static-check + minimalism guard (ticket 12). Nửa CƠ HỌC của
-ponytail/caveman minimalism (nửa kia là prompt cố định của cổng 3, ticket 11):
+"""Cổng 4 — static-check + minimalism guard. Nửa CƠ HỌC của
+ponytail/caveman minimalism (nửa kia là prompt cố định của cổng 3):
 `node --check` trên JS sinh ra, lint import (code AI sinh chỉ được chạm
 `ctx.surface.*`, không bao giờ import `db.js` hay context khác trực tiếp), và
 so kích thước diff với ước lượng size khai trong plan (`small`/`large`, xem
 gates/brainstorm.py). Import cấm / lỗi cú pháp → BLOCK thật (không có gì chạy
 được thì không có gì để review). Vượt ~2x ước lượng hoặc chạm file ngoài plan
-→ KHÔNG block, chỉ gắn cờ `needs_careful_review=True` (cổng 5.5/ticket 13 đọc
+→ KHÔNG block, chỉ gắn cờ `needs_careful_review=True` (cổng 5.5 đọc
 cờ này khi có) — "flagged, not silently passed", không phải "rejected".
 """
 from __future__ import annotations
@@ -15,8 +15,18 @@ import re
 import subprocess
 from pathlib import Path
 
+import candidate
+import classifier
+import functional
+from gates import guard, intake_guard, risk_triage
+
+CONTENT_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "content_guard.md").read_text(encoding="utf-8")
+CONTENT_LABELS = tuple(x for x in intake_guard.LABELS
+                       if x not in ("privileged_area", "money", "personal_data", "copyright", "off_topic"))
+MAX_CONTENT_CHARS = 3500  # prompt ~1.2k token + chữ tiếng Việt, vừa num_ctx 8192
+
 # ponytail: hằng số ước lượng dòng/size, không đo thật từ template — đủ cho
-# ngưỡng "vượt xa" (2x). Cần chính xác hơn thì hiệu chuẩn qua ticket 16 (gold set).
+# ngưỡng "vượt xa" (2x). Cần chính xác hơn thì hiệu chuẩn qua gold set.
 SIZE_ESTIMATE_LINES = {"small": 30, "large": 80}
 OVERSIZE_MULTIPLIER = 2
 
@@ -91,10 +101,21 @@ def node_check(path: Path) -> str | None:
     <path>` rơi vào suy đoán CommonJS/ESM không đáng tin (tự kiểm chứng: 1 file
     ESM cú pháp hỏng vẫn exit 0 khi thiếu ngữ cảnh "type":"module" xác nhận
     module-ness). None nếu sạch, string lỗi nếu không."""
-    result = subprocess.run(
-        ["node", "--input-type=module", "--check"],
-        input=path.read_text(encoding="utf-8"), capture_output=True, text=True,
-    )
+    return syntax_error(path.read_text(encoding="utf-8"))
+
+
+def syntax_error(code: str) -> str | None:
+    """`node --check` trên chuỗi mã ES module. None nếu sạch, string lỗi nếu không."""
+    # encoding tường minh: mặc định Windows là cp1252, chữ Việt làm luồng ghi stdin vỡ, stdin không đóng
+    # và node chờ mãi (demo 2026-09-25 treo ở đây). timeout chặn mọi trường hợp treo khác.
+    try:
+        result = subprocess.run(
+            ["node", "--input-type=module", "--check"],
+            input=code, capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        return "node --check quá 60 giây"
     return None if result.returncode == 0 else (result.stderr.strip() or "node --check thất bại")
 
 
@@ -116,9 +137,64 @@ def oversize_issues(state: dict) -> list[str]:
     return issues
 
 
-def run(state: dict, *, check_size: bool = True) -> dict:
+def content_review(state: dict, deps, budget, *, db_path=None, proposal_id: int | None = None) -> dict | None:
+    """LLM soát chữ hiển thị mới (prompts/content_guard.md). None nếu diff không đổi chữ hiển thị.
+    Nhãn ≠ ok, model lỗi, JSON sai hay hết budget → blocked cần người (fail closed, không bao giờ tự duyệt).
+    Dùng full_diff (base..HEAD) khi có; diff scratch coi file sẵn có như viết lại toàn bộ."""
+    diffs = state.get("full_diff") or state.get("diffs") or []
+    parts = []
+    for item in diffs:
+        text = item.get("diff", "")
+        if not text.startswith("diff --git "):  # diff scratch 1 file thô, không header
+            text = f"diff --git a/{item.get('file', '')} b/{item.get('file', '')}\n{text}"
+        for path, deleted, added, *_ in guard._sections(text):
+            visible = "" if deleted or guard._TEST_PATH.search(path) else guard.visible_text(path, added)
+            if visible.strip():
+                parts.append(f"[{path}] {intake_guard._fence(visible, MAX_CONTENT_CHARS)}")
+    if not parts:
+        return None
+    labels = ["classifier_error"]
+    why = "hết budget, không gọi được bộ soát nội dung"
+    outage = False  # the model could not be reached: nothing was judged, so this is retryable rather than a violation
+    trace = getattr(deps, "trace", None)
+    called = False
+    if budget.tick():
+        called = True
+        if trace:
+            trace.note("knows", "rendered text",
+                       f"{len(parts)} segments from:{', '.join(part.split(']', 1)[0].lstrip('[') for part in parts)}")
+        prompt = CONTENT_PROMPT.format(content="\n".join(parts)[:MAX_CONTENT_CHARS])
+        try:
+            body = deps.call_model(deps.models.gate1_model, prompt, gate=4, budget=budget,
+                                   db_path=db_path, proposal_id=proposal_id, prompt_name="content_guard.md",
+                                   format=intake_guard.labels_format(CONTENT_LABELS))
+        except Exception as e:  # model sập/timeout — chuyển người soát (chạy lại được), không cho qua im lặng
+            why, outage = f"bộ soát nội dung lỗi: {str(e)[:200]}", True
+        else:
+            try:
+                labels, why = intake_guard.parse_labels(body.get("response", ""), CONTENT_LABELS), ""
+            except Exception as e:  # trả lời không phải phán quyết hợp lệ — vẫn là chặn nghiêm trọng
+                why = f"bộ soát nội dung lỗi: {str(e)[:200]}"
+    if trace and called:  # before the classifier call, which records its own model call
+        trace.attach_last("evaluation", {"check": "content guard", "ok": labels == ["ok"],
+                                         "detail": ", ".join(labels) + (f" ({why})" if why else "")})
+    # Logprob classifier beside the JSON guard: may only add a "needs a human" block.
+    scored = classifier.danger("\n".join(parts), deps, budget, gate=4, db_path=db_path, proposal_id=proposal_id)
+    if scored and scored["escalate"]:
+        labels = [x for x in labels if x != "ok"] + [f"model_{key}" for key in scored["labels"]]
+    extra = {"classifier": scored} if scored else {}
+    if labels == ["ok"]:
+        return {"blocked": False, "labels": labels, **extra}
+    reason = f"content_guard: {', '.join(labels)}" + (f" ({why})" if why else "") + " — cần người soát"
+    failure_class = "transient" if outage and labels == ["classifier_error"] else guard.SEVERITY_CLASS["high"]
+    return {"blocked": True, "labels": labels, "reason": reason, "failure_class": failure_class, **extra}
+
+
+def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path=None,
+        proposal_id: int | None = None) -> dict:
     """Điểm vào cho main.run_gate. Đọc state['plan'] (cổng 1) + state['diffs']/
-    state['scratch_repo'] (cổng 3). Không gọi model — cổng thuần code.
+    state['scratch_repo'] (cổng 3). Không gọi model — trừ khi có cả deps.models lẫn budget: khi đó
+    chữ hiển thị mới đi qua content_review (1 lời gọi gate1_model, gate=4).
     check_size=False: bỏ cờ size để caller tính lại trên full_diff (oversize_issues)."""
     plan = state.get("plan")
     diffs = state.get("diffs")
@@ -156,9 +232,81 @@ def run(state: dict, *, check_size: bool = True) -> dict:
                 return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
                         "issues": [*issues, reason], "failure_class": "critical"}
             err = node_check(path)
+            if err and candidate != file_path and functional.select(state):
+                # The harness oracle verifies this request; a model-written test that cannot even be parsed is dropped, never shipped.
+                path.unlink()
+                d["test_file"] = None
+                issues.append(f"generated test '{candidate}' dropped (syntax error; the harness oracle verifies this request): {err[:200]}")
+                continue
             if err:
                 reason = f"'{candidate}' node --check: {err}"
                 return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
                         "issues": [*issues, reason], "failure_class": "ordinary"}
 
+    if deps is not None and budget is not None and getattr(deps, "models", None) is not None:
+        review = content_review(state, deps, budget, db_path=db_path, proposal_id=proposal_id)
+        if review and review["blocked"]:
+            return {"gate": 4, "blocked": True, "reason": review["reason"], "needs_careful_review": True,
+                    "issues": [*issues, review["reason"]], "failure_class": review["failure_class"],
+                    "content_labels": review["labels"]}
     return {"gate": 4, "blocked": False, "reason": None, "needs_careful_review": needs_careful_review, "issues": issues}
+
+
+def _base_public_contacts(state: dict) -> set[str]:
+    """Contacts already in public/ at the base commit; empty without a worktree (nothing allowlisted)."""
+    checkout, base = state.get("full_checkout"), state.get("base_sha")
+    if not checkout or not base:
+        return set()
+    # ponytail: crude "@ or 9 digits" line prefilter, exact matching is contacts_in; fine while public/ stays small.
+    found = subprocess.run(["git", "grep", "-I", "-h", "-E", "@|[0-9]{9}", base, "--", "public"], cwd=checkout,
+                           capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           stdin=subprocess.DEVNULL)
+    return guard.contacts_in(found.stdout)  # exit 1 = no match, stdout empty
+
+
+def run_gate(state: dict, deps, budget, *, db_path=None, proposal_id: int | None = None) -> dict:
+    """Cổng 4 đầy đủ cho main.run_gate: lint/node --check rẻ trước; qua thì dựng candidate (diff thật
+    base..HEAD) rồi size, guard, catalog, soát nội dung LLM. Mọi finding gộp thành 1 kết quả blocked."""
+    out = run(state, check_size=False)
+    if out.get("blocked"):
+        return out
+    failed = candidate.ensure(state, 4)
+    if failed:
+        return failed
+    size = oversize_issues(state)
+    out = {**out, "issues": [*size, *out.get("issues", [])],
+           "needs_careful_review": out.get("needs_careful_review") or bool(size)}
+    diffs = state.get("full_diff") or state.get("diffs") or []
+    text = "".join(item.get("diff", "") for item in diffs)
+    scanned = guard.scan(text, state.get("full_checkout"), allowed_contacts=_base_public_contacts(state),
+                         request_text=state.get("request_detail"), request_type=state.get("request_type"))
+    state["ui_changed"] = scanned["ui_changed"]
+    state["guard_flags"] = scanned["flags"]
+    state["review_required"] = scanned["review_required"]
+    out = {**out, "checks": scanned["checks"]}
+    found = scanned["findings"]
+    if state.get("catalog") is not None:
+        # Catalog boundary is a pure diff check: stop here, before Gate 5 runs the code in Docker.
+        out["checks"] = [*out["checks"], "catalog"]
+        outside = risk_triage.outside_catalog(diffs, state["catalog"])
+        if outside:
+            found = [*found, {"check": "catalog", "failure_class": "critical",
+                              "detail": f"path ngoài catalog capability: {', '.join(outside)}"[:300]}]
+    if not found and budget is not None and getattr(deps, "models", None) is not None:
+        # Chữ hiển thị mới trên diff thật (base..HEAD) qua LLM soát nội dung; lỗi/không chắc → người soát.
+        review = content_review(state, deps, budget, db_path=db_path, proposal_id=proposal_id)
+        if review and review["blocked"]:
+            found = [{"check": "content_guard", "failure_class": review["failure_class"],
+                      "detail": review["reason"][:300]}]
+    if found:
+        classes = {f["failure_class"] for f in found}  # an outage alone is retryable; any real finding outranks it
+        worst = "critical" if "critical" in classes else "transient" if classes == {"transient"} else "ordinary"
+        reason = "; ".join(f"{f['check']}: {f['detail']}" for f in found)[:1000]
+        out.update(blocked=True, reason=reason, failure_class=worst,
+                   issues=[*out.get("issues", []), *(f"{f['check']}: {f['detail']}" for f in found)])
+    elif state.get("request_type") == "self":
+        try:  # board tự sửa: file khoá skill/prompt do pipeline tính lại, cùng commit, sau khi guard đã qua
+            candidate.relock(state)
+        except (OSError, ValueError) as e:
+            out.update(blocked=True, reason=f"không tính lại được file khoá: {e}"[:1000], failure_class="transient")
+    return out

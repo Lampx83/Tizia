@@ -1,8 +1,8 @@
-import Database from 'better-sqlite3';
 import path from 'node:path';
 import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { applyAiBoardMigrations } from './ai-board/store.js';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createAppDb } from './db-core.js';
+import { applyMigrations } from './ai-board/db/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR
@@ -11,29 +11,17 @@ const DATA_DIR = process.env.DATA_DIR
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-// Đổi tên 2026-05-31: pharmacy.db → tizia.db (rebrand). Nếu file mới chưa có
-// nhưng pharmacy.db legacy còn → rename atomic để giữ data. Cả prod & local
-// đều rename trước khi deploy code này.
-const dbPath = path.join(DATA_DIR, 'tizia.db');
-try {
-  const legacy = path.join(DATA_DIR, 'pharmacy.db');
-  if (!fs.existsSync(dbPath) && fs.existsSync(legacy)) {
-    fs.renameSync(legacy, dbPath);
-    // Đổi tên cả WAL/SHM file để SQLite không lock vào file cũ.
-    for (const ext of ['-wal', '-shm']) {
-      const oldF = legacy + ext, newF = dbPath + ext;
-      if (fs.existsSync(oldF)) fs.renameSync(oldF, newF);
-    }
-    console.log(`[db] migrated ${legacy} → ${dbPath}`);
-  }
-} catch (e) { console.warn('[db] legacy rename failed', e.message); }
-export const db = new Database(dbPath);
-export { dbPath, DATA_DIR };
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+// PostgreSQL only (DATABASE_URL). SQLite support was removed in ticket 11; `scripts/copy-sqlite-to-postgres.mjs` moves old data.
+function openDb() {
+  if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL (PostgreSQL connection string) is required');
+  return { db: createAppDb({ url: process.env.DATABASE_URL }) };
+}
+const opened = openDb();
+export const db = opened.db;
+export { DATA_DIR };
 
 // Step 1: create tables (without indexes that reference v5 columns)
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS attempts (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     version      TEXT    NOT NULL,
@@ -89,7 +77,7 @@ db.exec(`
   -- Tài khoản người dùng (SV + GV). password_hash dạng scrypt$salt$hash.
   CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    username      TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+    username      TEXT    NOT NULL,
     display_name  TEXT    NOT NULL,
     password_hash TEXT    NOT NULL,
     role          TEXT    NOT NULL DEFAULT 'student',
@@ -97,6 +85,7 @@ db.exec(`
     last_login    INTEGER
   );
   CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+  CREATE UNIQUE INDEX IF NOT EXISTS ux_users_username_ci ON users(lower(username));
 
   -- Phiên đăng nhập. Token là chuỗi ngẫu nhiên 32 byte hex (server cấp).
   CREATE TABLE IF NOT EXISTS sessions (
@@ -124,47 +113,47 @@ db.exec(`
 `);
 
 // Step 4: upgrade `users` cho OAuth — email/avatar có thể đến sau khi đã có DB cũ.
-try { db.exec(`ALTER TABLE users ADD COLUMN email TEXT`); } catch {}
-try { db.exec(`ALTER TABLE users ADD COLUMN avatar_url TEXT`); } catch {}
-try { db.exec(`ALTER TABLE users ADD COLUMN age INTEGER`); } catch {}
+try { await db.exec(`ALTER TABLE users ADD COLUMN email TEXT`); } catch {}
+try { await db.exec(`ALTER TABLE users ADD COLUMN avatar_url TEXT`); } catch {}
+try { await db.exec(`ALTER TABLE users ADD COLUMN age INTEGER`); } catch {}
 // Cho phép password_hash NULL cho user thuần SSO. SQLite không drop được NOT NULL,
 // nhưng ta vẫn cài giá trị '' (empty) khi tạo user SSO — verifyPassword luôn trả false.
 
 // Step 2: add v5 columns to attempts if upgrading from older DB
-try { db.exec(`ALTER TABLE attempts ADD COLUMN class_code TEXT`); } catch {}
-try { db.exec(`ALTER TABLE attempts ADD COLUMN level_n INTEGER`); } catch {}
+try { await db.exec(`ALTER TABLE attempts ADD COLUMN class_code TEXT`); } catch {}
+try { await db.exec(`ALTER TABLE attempts ADD COLUMN level_n INTEGER`); } catch {}
 
 // Step 3: create indexes that depend on the v5 columns (now guaranteed to exist)
-try { db.exec(`CREATE INDEX IF NOT EXISTS idx_attempts_class ON attempts(class_code, created_at DESC)`); } catch {}
+try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_attempts_class ON attempts(class_code, created_at DESC)`); } catch {}
 
 // Đính kèm: JSON array [{url, name, mime, size, kind}]. kind = 'screenshot' | 'file'
-try { db.exec(`ALTER TABLE requests ADD COLUMN attachments TEXT`); } catch {}
+try { await db.exec(`ALTER TABLE requests ADD COLUMN attachments TEXT`); } catch {}
 
 // Hồ sơ học sinh / sinh viên (Trục 1 phân biệt HS vs SV). Các cột này NULL cho
 // user cũ → trigger modal /complete-profile.html ở lần login kế. Không có FK ràng
 // buộc — major/grade là enum mềm để FE tự đối chiếu DOMAIN_META; cohort là free
 // text (K65/K2024…); school_name là tên trường HS/PH/THPT/ĐH user đang theo học.
-try { db.exec(`ALTER TABLE users ADD COLUMN grade INTEGER`); } catch {}
-try { db.exec(`ALTER TABLE users ADD COLUMN major TEXT`); } catch {}
-try { db.exec(`ALTER TABLE users ADD COLUMN cohort TEXT`); } catch {}
-try { db.exec(`ALTER TABLE users ADD COLUMN school_name TEXT`); } catch {}
+try { await db.exec(`ALTER TABLE users ADD COLUMN grade INTEGER`); } catch {}
+try { await db.exec(`ALTER TABLE users ADD COLUMN major TEXT`); } catch {}
+try { await db.exec(`ALTER TABLE users ADD COLUMN cohort TEXT`); } catch {}
+try { await db.exec(`ALTER TABLE users ADD COLUMN school_name TEXT`); } catch {}
 
 // enrolled_domain = trường HS/SV đang theo học (1 trong DOMAIN_META). NULL = chưa
 // chọn (FE bắt mở modal). Mỗi tài khoản tại 1 thời điểm chỉ THAM GIA 1 trường:
 // ví/xp/coin/level/skill đều theo (user_id, domain). Đổi trường = tạo bucket mới,
 // bucket cũ vẫn còn trong DB (ẩn) nên nếu quay lại trường cũ thì khôi phục.
 // Admin: NULL (không gắn trường, có quyền tương tác mọi trường — bypass gate).
-try { db.exec(`ALTER TABLE users ADD COLUMN enrolled_domain TEXT`); } catch {}
-try { db.exec(`CREATE INDEX IF NOT EXISTS idx_users_enrolled_domain ON users(enrolled_domain)`); } catch {}
+try { await db.exec(`ALTER TABLE users ADD COLUMN enrolled_domain TEXT`); } catch {}
+try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_users_enrolled_domain ON users(enrolled_domain)`); } catch {}
 
 // D0 AI Board: một nguồn migration có số thứ tự, dùng chung với test store.
-applyAiBoardMigrations(db);
+await applyMigrations(db.d);
 
 // Trục 4: family plan. family_links cho phép 1 PH link n con HS
 // (parent_user_id phải là role='teacher' hoặc 'student' tuổi >=18 — kiểm ở app
 // layer, không hard-enforce DB). Plan của parent được kế thừa xuống con khi
 // con role='pupil'.
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS family_links (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     parent_user_id  INTEGER NOT NULL,
@@ -183,15 +172,15 @@ db.exec(`
 // đến khi mua. billing_cycle = month|year (lưu để render đúng "hết hạn dd/mm/yyyy"
 // và để gia hạn). Hết hạn → app degrade về free nhưng KHÔNG xoá cột → khôi phục
 // lịch sử nếu user gia hạn lại. Default 'free' cho user cũ.
-try { db.exec(`ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'`); } catch {}
-try { db.exec(`ALTER TABLE users ADD COLUMN plan_expires_at INTEGER`); } catch {}
-try { db.exec(`ALTER TABLE users ADD COLUMN billing_cycle TEXT`); } catch {}
-try { db.exec(`CREATE INDEX IF NOT EXISTS idx_users_plan ON users(plan, plan_expires_at)`); } catch {}
+try { await db.exec(`ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'`); } catch {}
+try { await db.exec(`ALTER TABLE users ADD COLUMN plan_expires_at INTEGER`); } catch {}
+try { await db.exec(`ALTER TABLE users ADD COLUMN billing_cycle TEXT`); } catch {}
+try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_users_plan ON users(plan, plan_expires_at)`); } catch {}
 
 // Kho học liệu do AI sinh thêm (nút "Học thêm" + "Hỏi cô giáo AI" ở Tiểu học).
 // Mỗi lần Ollama sinh nội dung mới → lưu lại để bài học giàu dần, tái sử dụng
 // (không phải gọi AI lại) và để GV duyệt. kind='question' (quiz) | 'qa' (hỏi-đáp).
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS ai_lesson_content (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     week_id     TEXT    NOT NULL,            -- scenario id, vd 'P2-w07-quiz'
@@ -212,7 +201,7 @@ db.exec(`
 // Thông báo cá nhân cho HS — kênh phản hồi từ Ban điều hành AI khi xử lý xong
 // 1 yêu cầu (request). Key theo display_name vì requests.student lưu tên hiển
 // thị (không có user_id ở thời điểm tạo, có cả guest). Read receipt: read_at.
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS notifications (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     user_display_name TEXT    NOT NULL,         -- người nhận, khớp users.display_name
@@ -235,7 +224,7 @@ db.exec(`
 // admin_note đơn lẻ. Tin mở đầu (head) = chính nội dung request, không lưu lặp
 // ở đây; bảng này chỉ chứa các lượt trao đổi tiếp theo. role: 'student' (HS) |
 // 'ai' (Ban điều hành) | 'admin' (người vận hành) | 'system'.
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS request_messages (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     request_id  INTEGER NOT NULL,
@@ -254,7 +243,7 @@ db.exec(`
 // thuộc 1 competency cha → cho phép roll-up báo cáo theo khung quốc gia.
 // `user_skills` là bảng earned (theo user_id, per-domain bucket cấp học).
 // kind: pham_chat (5) | nang_luc_chung (3) | nang_luc_chuyen_mon (7).
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS competencies (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     code        TEXT    NOT NULL UNIQUE,        -- vd 'PC_CHAM_CHI', 'NL_TIN_HOC'
@@ -306,54 +295,13 @@ db.exec(`
 // skill cũ giữ ở bucket domain cũ (ẩn khỏi /nang-luc.html trường mới) — quay lại
 // trường cũ sẽ tự hiện lại nhờ cùng (user_id, domain). Idempotent: chỉ migrate khi
 // chưa có cột `domain`.
-{
-  const cols = db.prepare(`PRAGMA table_info('user_skills')`).all();
-  if (cols.length > 0 && !cols.some(c => c.name === 'domain')) {
-    db.exec('BEGIN');
-    try {
-      db.exec(`
-        CREATE TABLE user_skills_new (
-          id           INTEGER PRIMARY KEY AUTOINCREMENT,
-          user_id      INTEGER NOT NULL,
-          skill_id     INTEGER NOT NULL,
-          domain       TEXT    NOT NULL DEFAULT '',
-          earned_at    INTEGER NOT NULL,
-          source_type  TEXT,
-          source_id    TEXT,
-          score        INTEGER,
-          UNIQUE(user_id, skill_id, domain),
-          FOREIGN KEY (user_id)  REFERENCES users(id)  ON DELETE CASCADE,
-          FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE CASCADE
-        );
-        INSERT INTO user_skills_new
-          (id, user_id, skill_id, domain, earned_at, source_type, source_id, score)
-        SELECT id, user_id, skill_id, '', earned_at, source_type, source_id, score
-        FROM user_skills;
-        DROP TABLE user_skills;
-        ALTER TABLE user_skills_new RENAME TO user_skills;
-        CREATE INDEX idx_user_skills_user   ON user_skills(user_id, earned_at DESC);
-        CREATE INDEX idx_user_skills_skill  ON user_skills(skill_id, earned_at DESC);
-        CREATE INDEX idx_user_skills_domain ON user_skills(user_id, domain, earned_at DESC);
-      `);
-      db.exec('COMMIT');
-      console.log('[db] migrated user_skills → per-domain');
-    } catch (e) { db.exec('ROLLBACK'); console.warn('[db] user_skills migration failed', e.message); throw e; }
-  } else if (cols.length === 0) {
-    // chưa migrate qua schema cũ — nhánh này không xảy ra vì CREATE TABLE phía trên
-    // đã chạy. Để an toàn nếu file db mới hoàn toàn, tạo index domain riêng.
-    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_user_skills_domain ON user_skills(user_id, domain, earned_at DESC)`); } catch {}
-  } else {
-    // đã có cột domain → đảm bảo index tồn tại
-    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_user_skills_domain ON user_skills(user_id, domain, earned_at DESC)`); } catch {}
-  }
-}
 
 // Seed 15 competencies GDPT 2018 — idempotent qua INSERT OR IGNORE theo code.
 // Nguồn: Thông tư 32/2018/TT-BGDĐT (Chương trình GDPT tổng thể).
-const _seedCompetencies = db.transaction(() => {
+const _seedCompetencies = db.transaction(async () => {
   const ins = db.prepare(`
-    INSERT OR IGNORE INTO competencies (code, kind, name, description, sort_order, created_at)
-    VALUES (@code, @kind, @name, @description, @sort_order, @created_at)
+    INSERT INTO competencies (code, kind, name, description, sort_order, created_at)
+    VALUES (@code, @kind, @name, @description, @sort_order, @created_at) ON CONFLICT DO NOTHING
   `);
   const now = Date.now();
   const rows = [
@@ -376,9 +324,9 @@ const _seedCompetencies = db.transaction(() => {
     { code: 'NL_THAM_MY',     kind: 'nang_luc_chuyen_mon', name: 'Thẩm mỹ',           description: 'Cảm thụ, sáng tạo nghệ thuật (Âm nhạc, Mỹ thuật).', sort_order: 25 },
     { code: 'NL_THE_CHAT',    kind: 'nang_luc_chuyen_mon', name: 'Thể chất',          description: 'Vận động, rèn luyện sức khoẻ, dinh dưỡng và an toàn.', sort_order: 26 },
   ];
-  for (const r of rows) ins.run({ ...r, created_at: now });
+  for (const r of rows) await ins.run({ ...r, created_at: now });
 });
-try { _seedCompetencies(); } catch (e) { console.warn('[db] seed competencies failed', e.message); }
+try { await _seedCompetencies(); } catch (e) { console.warn('[db] seed competencies failed', e.message); }
 
 // Auto-migrate skills catalog: nếu competencies đã seed nhưng bảng skills rỗng
 // (DB cũ vừa upgrade, hoặc volume mới) → tự chạy script catalog migration để
@@ -386,14 +334,14 @@ try { _seedCompetencies(); } catch (e) { console.warn('[db] seed competencies fa
 // Idempotent qua INSERT OR IGNORE trong script. Skip nếu skills > 0 hoặc
 // scripts/ không tồn tại trong image (dev local trước khi build Docker).
 try {
-  const _skillCount = db.prepare(`SELECT COUNT(*) AS n FROM skills`).get().n;
+  const _skillCount = (await db.prepare(`SELECT COUNT(*) AS n FROM skills`).get()).n;
   if (_skillCount === 0) {
     const _scriptPath = path.resolve(__dirname, '..', 'scripts', 'migrate-skills-catalog.js');
     if (fs.existsSync(_scriptPath)) {
       console.log('[db] skills empty — auto-running catalog migration…');
       // Dynamic import async — không block init. Lỗi → log, server vẫn boot.
-      import(_scriptPath).then(() => {
-        const n = db.prepare(`SELECT COUNT(*) AS n FROM skills`).get().n;
+      import(pathToFileURL(_scriptPath).href).then(async () => {
+        const n = (await db.prepare(`SELECT COUNT(*) AS n FROM skills`).get()).n;
         console.log(`[db] skills catalog auto-seeded: ${n} rows`);
       }).catch(e => console.warn('[db] auto-migrate skills failed:', e.message));
     } else {
@@ -448,21 +396,21 @@ const histogramStmt = db.prepare(`
   ORDER BY bucket
 `);
 
-export function insertAttempt(row) {
-  const info = insertAttemptStmt.run(row);
+export async function insertAttempt(row) {
+  const info = await insertAttemptStmt.run(row);
   return { id: info.lastInsertRowid, createdAt: row.created_at };
 }
 
-export function getLeaderboard(version, limit = 10) {
-  return leaderboardStmt.all({ version, limit });
+export async function getLeaderboard(version, limit = 10) {
+  return await leaderboardStmt.all({ version, limit });
 }
 
-export function getStats(version) {
-  return statsStmt.get({ version }) || { total_attempts: 0, avg_score: 0, best_score: 0, perfect_count: 0 };
+export async function getStats(version) {
+  return await statsStmt.get({ version }) || { total_attempts: 0, avg_score: 0, best_score: 0, perfect_count: 0 };
 }
 
-export function getRecent(limit = 20) {
-  return recentStmt.all({ limit });
+export async function getRecent(limit = 20) {
+  return await recentStmt.all({ limit });
 }
 
 // --- Class management ---
@@ -498,44 +446,44 @@ const playerAttemptsStmt = db.prepare(`
   FROM attempts WHERE player_name = @player ORDER BY created_at DESC LIMIT @limit
 `);
 
-export function createClass({ code, name, teacher_name }) {
-  const info = createClassStmt.run({ code, name, teacher_name, created_at: Date.now() });
+export async function createClass({ code, name, teacher_name }) {
+  const info = await createClassStmt.run({ code, name, teacher_name, created_at: Date.now() });
   return { id: info.lastInsertRowid, code };
 }
-export function getClassByCode(code) { return getClassByCodeStmt.get(code) || null; }
-export function listClasses() { return listClassesStmt.all(); }
-export function getClassMembers(code) { return classMembersStmt.all(code); }
-export function getClassAttempts(code, limit = 100) { return classAttemptsStmt.all(code, { limit }); }
-export function getPlayerAttempts(player, limit = 50) { return playerAttemptsStmt.all({ player, limit }); }
+export async function getClassByCode(code) { return await getClassByCodeStmt.get(code) || null; }
+export async function listClasses() { return await listClassesStmt.all(); }
+export async function getClassMembers(code) { return await classMembersStmt.all(code); }
+export async function getClassAttempts(code, limit = 100) { return await classAttemptsStmt.all(code, { limit }); }
+export async function getPlayerAttempts(player, limit = 50) { return await playerAttemptsStmt.all({ player, limit }); }
 
-export function getAllAttempts() {
-  return allAttemptsStmt.all();
+export async function getAllAttempts() {
+  return await allAttemptsStmt.all();
 }
 
-export function getHistogram(version) {
-  return histogramStmt.all({ version });
+export async function getHistogram(version) {
+  return await histogramStmt.all({ version });
 }
 
 const achievementsForStmt = db.prepare(`
   SELECT badge_id, unlocked_at FROM achievements
-  WHERE player_name = @player ORDER BY unlocked_at DESC
+  WHERE player_name = @player ORDER BY unlocked_at DESC, id ASC
 `);
 const allAchievementsStmt = db.prepare(`
   SELECT player_name, badge_id, unlocked_at FROM achievements
-  ORDER BY unlocked_at DESC LIMIT 50
+  ORDER BY unlocked_at DESC, id ASC LIMIT 50
 `);
 const unlockAchievementStmt = db.prepare(`
-  INSERT OR IGNORE INTO achievements (player_name, badge_id, unlocked_at)
-  VALUES (@player, @badge, @t)
+  INSERT INTO achievements (player_name, badge_id, unlocked_at)
+  VALUES (@player, @badge, @t) ON CONFLICT DO NOTHING
 `);
-export function getAchievements(player) {
-  return achievementsForStmt.all({ player });
+export async function getAchievements(player) {
+  return await achievementsForStmt.all({ player });
 }
-export function getAllRecentAchievements() {
-  return allAchievementsStmt.all();
+export async function getAllRecentAchievements() {
+  return await allAchievementsStmt.all();
 }
-export function unlockAchievement(player, badge) {
-  const info = unlockAchievementStmt.run({ player, badge, t: Date.now() });
+export async function unlockAchievement(player, badge) {
+  const info = await unlockAchievementStmt.run({ player, badge, t: Date.now() });
   return info.changes > 0;
 }
 
@@ -561,7 +509,7 @@ const requestStatsStmt = db.prepare(`
   SELECT status, COUNT(*) AS n FROM requests WHERE domain = @domain GROUP BY status
 `);
 
-export function createRequest({ domain, type, title, detail, student, attachments = null }) {
+export async function createRequest({ domain, type, title, detail, student, attachments = null }) {
   const t = Date.now();
   const safeType = VALID_REQ_TYPES.has(type) ? type : 'other';
   // Chuẩn hoá attachments: chấp nhận mảng object {url,name,mime,size,kind}; lưu JSON.
@@ -577,7 +525,7 @@ export function createRequest({ domain, type, title, detail, student, attachment
     })).filter(a => a.url);
     if (safe.length) attachJson = JSON.stringify(safe);
   }
-  const info = insertRequestStmt.run({
+  const info = await insertRequestStmt.run({
     domain: String(domain || '').slice(0, 40),
     type: safeType,
     title: String(title || '').slice(0, 200),
@@ -592,8 +540,8 @@ export function createRequest({ domain, type, title, detail, student, attachment
   });
   return { id: info.lastInsertRowid, createdAt: t };
 }
-export function listRequests(domain, limit = 50) {
-  const rows = listRequestsStmt.all({ domain: String(domain || ''), limit });
+export async function listRequests(domain, limit = 50) {
+  const rows = await listRequestsStmt.all({ domain: String(domain || ''), limit });
   // Parse JSON attachments cho FE; sai/cũ → trả mảng rỗng (tolerant).
   for (const r of rows) {
     if (r.attachments) {
@@ -605,17 +553,17 @@ export function listRequests(domain, limit = 50) {
   }
   return rows;
 }
-export function voteRequest(id) {
-  const info = voteRequestStmt.run({ id: Number(id), t: Date.now() });
+export async function voteRequest(id) {
+  const info = await voteRequestStmt.run({ id: Number(id), t: Date.now() });
   return info.changes > 0;
 }
-export function setRequestStatus(id, status, note) {
+export async function setRequestStatus(id, status, note) {
   if (!VALID_REQ_STATUS.has(status)) return false;
-  const info = setRequestStatusStmt.run({ id: Number(id), status, note: note ? String(note).slice(0, 500) : null, t: Date.now() });
+  const info = await setRequestStatusStmt.run({ id: Number(id), status, note: note ? String(note).slice(0, 500) : null, t: Date.now() });
   return info.changes > 0;
 }
-export function getRequestStats(domain) {
-  const rows = requestStatsStmt.all({ domain: String(domain || '') });
+export async function getRequestStats(domain) {
+  const rows = await requestStatsStmt.all({ domain: String(domain || '') });
   const out = { pending: 0, reviewing: 0, done: 0, rejected: 0 };
   for (const r of rows) out[r.status] = r.n;
   return out;
@@ -649,11 +597,11 @@ const markAllReadStmt = db.prepare(`
 `);
 
 /** Bỏ qua nếu thiếu display_name hợp lệ (vd 'Ẩn danh' / rỗng) — tránh broadcast. */
-export function createNotification({ user_display_name, request_id = null, kind = 'reply', title, body = null, url = null }) {
+export async function createNotification({ user_display_name, request_id = null, kind = 'reply', title, body = null, url = null }) {
   const u = String(user_display_name || '').trim();
   if (!u || u === 'Ẩn danh') return null;
   if (!VALID_NOTIF_KINDS.has(kind)) kind = 'reply';
-  const info = insertNotificationStmt.run({
+  const info = await insertNotificationStmt.run({
     user_display_name: u.slice(0, 60),
     request_id: request_id ? Number(request_id) : null,
     kind,
@@ -664,25 +612,25 @@ export function createNotification({ user_display_name, request_id = null, kind 
   });
   return { id: info.lastInsertRowid };
 }
-export function listNotifications(user_display_name, limit = 30) {
+export async function listNotifications(user_display_name, limit = 30) {
   const u = String(user_display_name || '').trim();
   if (!u) return [];
-  return listNotificationsStmt.all({ user: u, limit });
+  return await listNotificationsStmt.all({ user: u, limit });
 }
-export function countUnreadNotifications(user_display_name) {
+export async function countUnreadNotifications(user_display_name) {
   const u = String(user_display_name || '').trim();
   if (!u) return 0;
-  return countUnreadStmt.get({ user: u })?.n || 0;
+  return (await countUnreadStmt.get({ user: u }))?.n || 0;
 }
-export function markNotificationRead(id, user_display_name) {
+export async function markNotificationRead(id, user_display_name) {
   const u = String(user_display_name || '').trim();
   if (!u) return false;
-  return markReadStmt.run({ id: Number(id), user: u, t: Date.now() }).changes > 0;
+  return (await markReadStmt.run({ id: Number(id), user: u, t: Date.now() })).changes > 0;
 }
-export function markAllNotificationsRead(user_display_name) {
+export async function markAllNotificationsRead(user_display_name) {
   const u = String(user_display_name || '').trim();
   if (!u) return 0;
-  return markAllReadStmt.run({ user: u, t: Date.now() }).changes;
+  return (await markAllReadStmt.run({ user: u, t: Date.now() })).changes;
 }
 
 // --- Request thread (phiên trao đổi của 1 yêu cầu) ---
@@ -724,17 +672,17 @@ function normAttachments(attachments) {
   return safe.length ? JSON.stringify(safe) : null;
 }
 
-export function getRequestById(id) {
-  const row = getRequestByIdStmt.get(Number(id));
+export async function getRequestById(id) {
+  const row = await getRequestByIdStmt.get(Number(id));
   if (!row) return null;
   row.attachments = safeParseAtts(row.attachments);
   return row;
 }
 
-export function addRequestMessage({ request_id, role, author_name = null, body, attachments = null }) {
+export async function addRequestMessage({ request_id, role, author_name = null, body, attachments = null }) {
   if (!VALID_MSG_ROLES.has(role)) role = 'system';
   const t = Date.now();
-  const info = insertReqMsgStmt.run({
+  const info = await insertReqMsgStmt.run({
     request_id: Number(request_id),
     role,
     author_name: author_name ? String(author_name).slice(0, 60) : null,
@@ -743,18 +691,18 @@ export function addRequestMessage({ request_id, role, author_name = null, body, 
     created_at: t,
   });
   // Đụng updated_at để yêu cầu nổi lên trong dashboard khi có lượt trao đổi mới.
-  touchRequestStmt.run({ id: Number(request_id), t });
+  await touchRequestStmt.run({ id: Number(request_id), t });
   return { id: info.lastInsertRowid, created_at: t };
 }
 
-export function listRequestMessages(request_id) {
-  const rows = listReqMsgStmt.all(Number(request_id));
+export async function listRequestMessages(request_id) {
+  const rows = await listReqMsgStmt.all(Number(request_id));
   for (const r of rows) r.attachments = safeParseAtts(r.attachments);
   return rows;
 }
 
-export function reopenRequestIfClosed(id) {
-  return reopenRequestStmt.run({ id: Number(id), t: Date.now() }).changes > 0;
+export async function reopenRequestIfClosed(id) {
+  return (await reopenRequestStmt.run({ id: Number(id), t: Date.now() })).changes > 0;
 }
 
 // --- Hộp thư Ban điều hành AI (đọc-chỉ, xuyên mọi trường) ---
@@ -776,10 +724,10 @@ const boardInboxStmt = db.prepare(`
   LIMIT @limit
 `);
 
-export function listBoardInbox(limit = 200) {
+export async function listBoardInbox(limit = 200) {
   const cap = Math.min(Math.max(Number(limit) || 200, 1), 500);
-  const rows = boardInboxStmt.all({ limit: cap });
-  return rows.map(r => ({
+  const rows = await boardInboxStmt.all({ limit: cap });
+  return Promise.all(rows.map(async r => ({
     id: `req-${r.id}`,
     db_id: r.id,
     from: r.student,
@@ -791,7 +739,7 @@ export function listBoardInbox(limit = 200) {
     votes: r.votes,
     admin_note: r.admin_note || null,
     attachments: safeParseAtts(r.attachments),
-    thread: listRequestMessages(r.id).map(m => ({
+    thread: (await listRequestMessages(r.id)).map(m => ({
       role: m.role,
       author: m.author_name || null,
       body: m.body,
@@ -799,7 +747,7 @@ export function listBoardInbox(limit = 200) {
     })),
     created_at: new Date(r.created_at).toISOString(),
     updated_at: new Date(r.updated_at).toISOString(),
-  }));
+  })));
 }
 
 // --- Kho học liệu AI sinh thêm ---
@@ -826,16 +774,16 @@ const countAiContentStmt = db.prepare(`
 `);
 
 /** Lưu 1 mảng câu hỏi AI vừa sinh. Bỏ qua câu trùng stem trong cùng tuần. */
-export function saveAiQuestions({ week_id, subject, topic, student, questions = [] }) {
+export async function saveAiQuestions({ week_id, subject, topic, student, questions = [] }) {
   if (!week_id || !Array.isArray(questions) || !questions.length) return { saved: 0 };
   const t = Date.now();
   let saved = 0;
-  const tx = db.transaction(() => {
+  const tx = db.transaction(async () => {
     for (const q of questions) {
       const stem = String(q.stem || '').trim();
       if (!stem) continue;
-      if (existsAiStemStmt.get({ week_id, kind: 'question', stem })) continue;  // dedupe
-      insertAiContentStmt.run({
+      if (await existsAiStemStmt.get({ week_id, kind: 'question', stem })) continue;  // dedupe
+      await insertAiContentStmt.run({
         week_id,
         subject: subject ? String(subject).slice(0, 60) : null,
         topic: topic ? String(topic).slice(0, 160) : null,
@@ -847,16 +795,16 @@ export function saveAiQuestions({ week_id, subject, topic, student, questions = 
       saved++;
     }
   });
-  tx();
+  await tx();
   return { saved };
 }
 
 /** Lưu 1 cặp hỏi-đáp với "cô giáo AI". */
-export function saveAiQa({ week_id, subject, topic, student, question, answer }) {
+export async function saveAiQa({ week_id, subject, topic, student, question, answer }) {
   if (!week_id || !question || !answer) return { saved: 0 };
   const stem = String(question).trim().slice(0, 500);
-  if (existsAiStemStmt.get({ week_id, kind: 'qa', stem })) return { saved: 0 };  // dedupe câu hỏi y hệt
-  insertAiContentStmt.run({
+  if (await existsAiStemStmt.get({ week_id, kind: 'qa', stem })) return { saved: 0 };  // dedupe câu hỏi y hệt
+  await insertAiContentStmt.run({
     week_id,
     subject: subject ? String(subject).slice(0, 60) : null,
     topic: topic ? String(topic).slice(0, 160) : null,
@@ -869,27 +817,27 @@ export function saveAiQa({ week_id, subject, topic, student, question, answer })
 }
 
 /** Lấy câu hỏi AI đã tích luỹ của 1 tuần (để luyện lại không cần gọi Ollama). */
-export function getAiQuestions(week_id, limit = 50) {
-  return getAiQuestionsStmt.all({ week_id: String(week_id), limit })
+export async function getAiQuestions(week_id, limit = 50) {
+  return (await getAiQuestionsStmt.all({ week_id: String(week_id), limit }))
     .map(r => { try { const p = JSON.parse(r.payload); return { stem: r.stem, ...p }; } catch { return null; } })
     .filter(Boolean);
 }
 /** Lấy hỏi-đáp đã tích luỹ của 1 tuần. */
-export function getAiQa(week_id, limit = 50) {
-  return getAiQaStmt.all({ week_id: String(week_id), limit })
+export async function getAiQa(week_id, limit = 50) {
+  return (await getAiQaStmt.all({ week_id: String(week_id), limit }))
     .map(r => { try { const p = JSON.parse(r.payload); return { question: r.stem, answer: p.answer, created_at: r.created_at }; } catch { return null; } })
     .filter(Boolean);
 }
 /** Đếm số học liệu AI đã tích luỹ theo tuần → { question, qa }. */
-export function getAiContentCounts(week_id) {
-  const rows = countAiContentStmt.all({ week_id: String(week_id) });
+export async function getAiContentCounts(week_id) {
+  const rows = await countAiContentStmt.all({ week_id: String(week_id) });
   const out = { question: 0, qa: 0 };
   for (const r of rows) out[r.kind] = r.n;
   return out;
 }
 
-export function getConfusion(version) {
-  const rows = db.prepare(`SELECT details FROM attempts WHERE version = ? AND details IS NOT NULL`).all(version);
+export async function getConfusion(version) {
+  const rows = await db.prepare(`SELECT details FROM attempts WHERE version = ? AND details IS NOT NULL`).all(version);
   const matrix = {};
   const categories = new Set();
   for (const r of rows) {
@@ -920,7 +868,7 @@ const insertUserStmt = db.prepare(`
 const getUserByUsernameStmt = db.prepare(`
   SELECT id, username, display_name, password_hash, role, age, email, avatar_url, created_at, last_login,
          grade, major, cohort, school_name
-  FROM users WHERE username = ? COLLATE NOCASE
+  FROM users WHERE lower(username) = lower(?)
 `);
 const getUserByIdStmt = db.prepare(`
   SELECT id, username, display_name, role, age, email, avatar_url, created_at, last_login,
@@ -949,9 +897,9 @@ const deleteSessionStmt = db.prepare(`DELETE FROM sessions WHERE token = ?`);
 const purgeExpiredSessionsStmt = db.prepare(`DELETE FROM sessions WHERE expires_at <= ?`);
 
 const ALLOWED_ROLES = new Set(['pupil', 'student', 'teacher']);
-export function createUser({ username, display_name, password_hash, role, age,
+export async function createUser({ username, display_name, password_hash, role, age,
                              grade = null, major = null, cohort = null, school_name = null }) {
-  const info = insertUserStmt.run({
+  const info = await insertUserStmt.run({
     username, display_name, password_hash,
     role: ALLOWED_ROLES.has(role) ? role : 'student',
     age: Number.isFinite(age) ? Math.floor(age) : null,
@@ -963,42 +911,42 @@ export function createUser({ username, display_name, password_hash, role, age,
   });
   return { id: info.lastInsertRowid };
 }
-export function getUserByUsername(username) {
-  return getUserByUsernameStmt.get(String(username || '').trim()) || null;
+export async function getUserByUsername(username) {
+  return await getUserByUsernameStmt.get(String(username || '').trim()) || null;
 }
-export function getUserById(id) {
-  return getUserByIdStmt.get(Number(id)) || null;
+export async function getUserById(id) {
+  return await getUserByIdStmt.get(Number(id)) || null;
 }
-export function touchLogin(id) {
-  touchLoginStmt.run({ id: Number(id), t: Date.now() });
+export async function touchLogin(id) {
+  await touchLoginStmt.run({ id: Number(id), t: Date.now() });
 }
-export function updateDisplayName(id, name) {
-  updateDisplayNameStmt.run({ id: Number(id), name: String(name).slice(0, 60) });
+export async function updateDisplayName(id, name) {
+  await updateDisplayNameStmt.run({ id: Number(id), name: String(name).slice(0, 60) });
 }
 // Set gói cước. expires_at=null = vĩnh viễn (chỉ áp dụng cho 'free'); với plus/pro
 // caller phải truyền timestamp ms. cycle='month'|'year'|null.
-export function setUserPlan(id, { plan, expires_at = null, cycle = null }) {
-  setUserPlanStmt.run({
+export async function setUserPlan(id, { plan, expires_at = null, cycle = null }) {
+  await setUserPlanStmt.run({
     id: Number(id),
     plan: String(plan || 'free'),
     expires: expires_at ? Number(expires_at) : null,
     cycle: cycle ? String(cycle) : null,
   });
 }
-export function createSession({ token, user_id, ttlMs }) {
+export async function createSession({ token, user_id, ttlMs }) {
   const now = Date.now();
-  insertSessionStmt.run({ token, user_id, created_at: now, expires_at: now + ttlMs });
+  await insertSessionStmt.run({ token, user_id, created_at: now, expires_at: now + ttlMs });
   return { token, expires_at: now + ttlMs };
 }
-export function getSession(token) {
+export async function getSession(token) {
   if (!token) return null;
-  return getSessionStmt.get(String(token), { now: Date.now() }) || null;
+  return await getSessionStmt.get(String(token), { now: Date.now() }) || null;
 }
-export function deleteSession(token) {
-  deleteSessionStmt.run(String(token || ''));
+export async function deleteSession(token) {
+  await deleteSessionStmt.run(String(token || ''));
 }
-export function purgeExpiredSessions() {
-  purgeExpiredSessionsStmt.run(Date.now());
+export async function purgeExpiredSessions() {
+  await purgeExpiredSessionsStmt.run(Date.now());
 }
 // Quét rác phiên hết hạn mỗi giờ (nhẹ nhàng — bảng nhỏ).
 setInterval(purgeExpiredSessions, 60 * 60 * 1000).unref?.();
@@ -1021,20 +969,20 @@ const updateUserProfileStmt = db.prepare(`
     avatar_url   = COALESCE(@avatar_url, avatar_url)
   WHERE id = @id
 `);
-const countUsernameStmt = db.prepare(`SELECT COUNT(*) AS n FROM users WHERE username = ? COLLATE NOCASE`);
+const countUsernameStmt = db.prepare(`SELECT COUNT(*) AS n FROM users WHERE lower(username) = lower(?)`);
 
-export function findUserByOAuth(provider, subject) {
-  return findOAuthStmt.get(String(provider), String(subject)) || null;
+export async function findUserByOAuth(provider, subject) {
+  return await findOAuthStmt.get(String(provider), String(subject)) || null;
 }
-export function linkOAuth({ user_id, provider, subject, email }) {
-  insertOAuthStmt.run({
+export async function linkOAuth({ user_id, provider, subject, email }) {
+  await insertOAuthStmt.run({
     user_id, provider, subject,
     email: email ? String(email).slice(0, 120) : null,
     created_at: Date.now(),
   });
 }
-export function updateUserProfile(id, { display_name, email, avatar_url } = {}) {
-  updateUserProfileStmt.run({
+export async function updateUserProfile(id, { display_name, email, avatar_url } = {}) {
+  await updateUserProfileStmt.run({
     id, display_name: display_name || null,
     email: email || null, avatar_url: avatar_url || null,
   });
@@ -1048,9 +996,9 @@ const updateEditableStmt = db.prepare(`
     grade = @grade, major = @major, cohort = @cohort, school_name = @school_name
   WHERE id = @id
 `);
-export function updateUserEditable(id, { display_name, age, email,
+export async function updateUserEditable(id, { display_name, age, email,
                                           grade = null, major = null, cohort = null, school_name = null }) {
-  updateEditableStmt.run({
+  await updateEditableStmt.run({
     id: Number(id),
     display_name: String(display_name).slice(0, 60),
     age: Number.isFinite(age) ? Math.floor(age) : null,
@@ -1061,14 +1009,14 @@ export function updateUserEditable(id, { display_name, age, email,
     school_name: school_name ? String(school_name).slice(0, 120) : null,
   });
 }
-export function isUsernameTaken(username) {
-  return (countUsernameStmt.get(String(username))?.n || 0) > 0;
+export async function isUsernameTaken(username) {
+  return ((await countUsernameStmt.get(String(username)))?.n || 0) > 0;
 }
 
 // ── Family links (Trục 4) ──
 const insertFamilyStmt = db.prepare(`
-  INSERT OR IGNORE INTO family_links (parent_user_id, child_user_id, created_at)
-  VALUES (@parent_user_id, @child_user_id, @created_at)
+  INSERT INTO family_links (parent_user_id, child_user_id, created_at)
+  VALUES (@parent_user_id, @child_user_id, @created_at) ON CONFLICT DO NOTHING
 `);
 const deleteFamilyStmt = db.prepare(`
   DELETE FROM family_links WHERE parent_user_id = @parent AND child_user_id = @child
@@ -1086,24 +1034,24 @@ const getParentPlanStmt = db.prepare(`
   LIMIT 1
 `);
 
-export function linkChildToParent({ parent_user_id, child_user_id }) {
-  const info = insertFamilyStmt.run({
+export async function linkChildToParent({ parent_user_id, child_user_id }) {
+  const info = await insertFamilyStmt.run({
     parent_user_id: Number(parent_user_id),
     child_user_id: Number(child_user_id),
     created_at: Date.now(),
   });
   return { linked: info.changes > 0 };
 }
-export function unlinkChildFromParent({ parent_user_id, child_user_id }) {
-  const info = deleteFamilyStmt.run({ parent: Number(parent_user_id), child: Number(child_user_id) });
+export async function unlinkChildFromParent({ parent_user_id, child_user_id }) {
+  const info = await deleteFamilyStmt.run({ parent: Number(parent_user_id), child: Number(child_user_id) });
   return { unlinked: info.changes > 0 };
 }
-export function listChildrenOfParent(parent_user_id) {
-  return listChildrenStmt.all(Number(parent_user_id));
+export async function listChildrenOfParent(parent_user_id) {
+  return await listChildrenStmt.all(Number(parent_user_id));
 }
 /** Trả về parent có plan cao nhất (để con kế thừa). null nếu không có/không link. */
-export function getBestParentPlanForChild(child_user_id) {
-  return getParentPlanStmt.get(Number(child_user_id)) || null;
+export async function getBestParentPlanForChild(child_user_id) {
+  return await getParentPlanStmt.get(Number(child_user_id)) || null;
 }
 
 // ── User wallets (per-domain) ──
@@ -1114,7 +1062,7 @@ export function getBestParentPlanForChild(child_user_id) {
 //
 // domain '' (rỗng) = legacy bucket: ví của user CHƯA chọn trường (tài khoản cũ
 // trước khi triển khai per-school) hoặc admin (admin không bound vào trường).
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS user_wallets (
     user_id          INTEGER NOT NULL,
     domain           TEXT    NOT NULL DEFAULT '',
@@ -1141,58 +1089,15 @@ db.exec(`
 // cột domain) thì recreate với composite PK. Toàn bộ row cũ vào bucket '' để FE
 // tự "khớp" sau lần đầu gọi /api/me/enroll (lúc đó BE merge bucket '' → bucket
 // domain user chọn). Idempotent: chỉ migrate khi thiếu cột domain.
-{
-  const cols = db.prepare(`PRAGMA table_info('user_wallets')`).all();
-  if (cols.length > 0 && !cols.some(c => c.name === 'domain')) {
-    db.exec('BEGIN');
-    try {
-      db.exec(`
-        CREATE TABLE user_wallets_new (
-          user_id          INTEGER NOT NULL,
-          domain           TEXT    NOT NULL DEFAULT '',
-          coins            INTEGER NOT NULL DEFAULT 0,
-          xp               INTEGER NOT NULL DEFAULT 0,
-          streak           INTEGER NOT NULL DEFAULT 0,
-          longest_streak   INTEGER NOT NULL DEFAULT 0,
-          streak_shields   INTEGER NOT NULL DEFAULT 0,
-          last_visit_day   TEXT    NOT NULL DEFAULT '',
-          achievements     TEXT    NOT NULL DEFAULT '[]',
-          vr_sessions      INTEGER NOT NULL DEFAULT 0,
-          meta_sessions    INTEGER NOT NULL DEFAULT 0,
-          quizzes_passed   INTEGER NOT NULL DEFAULT 0,
-          modules_by_day   TEXT    NOT NULL DEFAULT '{}',
-          daily            TEXT    NOT NULL DEFAULT '{}',
-          quests_claimed   TEXT    NOT NULL DEFAULT '{}',
-          updated_at       INTEGER NOT NULL,
-          PRIMARY KEY (user_id, domain),
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        INSERT INTO user_wallets_new
-          (user_id, domain, coins, xp, streak, longest_streak, streak_shields,
-           last_visit_day, achievements, vr_sessions, meta_sessions,
-           quizzes_passed, modules_by_day, daily, quests_claimed, updated_at)
-        SELECT
-          user_id, '', coins, xp, streak, longest_streak, streak_shields,
-          last_visit_day, achievements, vr_sessions, meta_sessions,
-          quizzes_passed, modules_by_day, daily, quests_claimed, updated_at
-        FROM user_wallets;
-        DROP TABLE user_wallets;
-        ALTER TABLE user_wallets_new RENAME TO user_wallets;
-      `);
-      db.exec('COMMIT');
-      console.log('[db] migrated user_wallets → per-domain');
-    } catch (e) { db.exec('ROLLBACK'); console.warn('[db] user_wallets migration failed', e.message); throw e; }
-  }
-}
 
 const getUserWalletStmt = db.prepare(`SELECT * FROM user_wallets WHERE user_id = ? AND domain = ?`);
 // Khi caller không truyền domain → fallback: enrolled_domain của user (đọc users
 // table). User chưa enroll → '' (legacy bucket). Admin (enrolled_domain NULL) cũng
 // rơi vào '' — phù hợp vì admin không bound vào trường nào.
 const _getEnrolledDomainStmt = db.prepare(`SELECT enrolled_domain FROM users WHERE id = ?`);
-function _resolveDomain(user_id, domain) {
+async function _resolveDomain(user_id, domain) {
   if (typeof domain === 'string') return domain;
-  const row = _getEnrolledDomainStmt.get(Number(user_id));
+  const row = await _getEnrolledDomainStmt.get(Number(user_id));
   return row?.enrolled_domain || '';
 }
 const upsertUserWalletStmt = db.prepare(`
@@ -1225,9 +1130,9 @@ const upsertUserWalletStmt = db.prepare(`
  * có row ở bucket đó → FE fallback ví rỗng (đúng yêu cầu "sang trường mới = làm
  * lại"). Bucket cũ vẫn còn trong DB, không bị mất.
  */
-export function getUserWallet(user_id, domain) {
-  const d = _resolveDomain(user_id, domain);
-  const row = getUserWalletStmt.get(Number(user_id), d);
+export async function getUserWallet(user_id, domain) {
+  const d = await _resolveDomain(user_id, domain);
+  const row = await getUserWalletStmt.get(Number(user_id), d);
   if (!row) return null;
   // Parse các trường JSON; lỗi parse → giá trị mặc định an toàn.
   const parse = (s, fallback) => { try { return JSON.parse(s); } catch { return fallback; } };
@@ -1284,9 +1189,9 @@ function _mergeModulesByDay(cur = {}, inc = {}) {
  * @param {object} opts
  * @param {boolean} [opts.monotonic=true] - false để ghi đè cứng (admin chỉnh tay).
  */
-export function upsertUserWallet(user_id, w = {}, { monotonic = true, domain } = {}) {
-  const d = _resolveDomain(user_id, domain);
-  const cur = getUserWallet(user_id, d) || {};
+export async function upsertUserWallet(user_id, w = {}, { monotonic = true, domain } = {}) {
+  const d = await _resolveDomain(user_id, domain);
+  const cur = await getUserWallet(user_id, d) || {};
   const pick = (k, def = 0) => (w[k] !== undefined ? w[k] : (cur[k] ?? def));
   // Monotonic ↑ : lấy max(server, client). Không monotonic → lấy client (last-write).
   const up = (k, max = 1e9) => {
@@ -1300,7 +1205,7 @@ export function upsertUserWallet(user_id, w = {}, { monotonic = true, domain } =
   const incMods = (typeof pick('modulesByDay', {}) === 'object') ? pick('modulesByDay', {}) : {};
   const modulesByDay = monotonic ? _mergeModulesByDay(cur.modulesByDay, incMods) : incMods;
 
-  upsertUserWalletStmt.run({
+  await upsertUserWalletStmt.run({
     user_id:        Number(user_id),
     domain:         d,
     coins:          up('coins', 1e12),
@@ -1319,29 +1224,29 @@ export function upsertUserWallet(user_id, w = {}, { monotonic = true, domain } =
     quests_claimed: _toJson(pick('questsClaimed', {}), {}),
     updated_at:     Date.now(),
   });
-  return getUserWallet(user_id, d);
+  return await getUserWallet(user_id, d);
 }
 
 // ─── Enrollment helpers (mỗi tài khoản 1 trường tại 1 thời điểm) ───
 // Đọc enrolled_domain của user. Trả null nếu chưa chọn (FE bắt mở modal).
-export function getEnrolledDomain(user_id) {
-  const row = _getEnrolledDomainStmt.get(Number(user_id));
+export async function getEnrolledDomain(user_id) {
+  const row = await _getEnrolledDomainStmt.get(Number(user_id));
   return row?.enrolled_domain || null;
 }
 const _setEnrolledDomainStmt = db.prepare(`UPDATE users SET enrolled_domain = ? WHERE id = ?`);
 // Set/đổi trường. domain=null cho phép admin reset. KHÔNG đụng tới user_wallets /
 // user_skills bucket cũ — chúng vẫn lưu (ẩn vì query luôn lọc theo domain hiện
 // tại). User quay lại trường cũ → bucket cũ tự hiện lại đúng tiến trình.
-export function setEnrolledDomain(user_id, domain) {
+export async function setEnrolledDomain(user_id, domain) {
   const d = (domain == null || domain === '') ? null : String(domain).slice(0, 40);
-  _setEnrolledDomainStmt.run(d, Number(user_id));
+  await _setEnrolledDomainStmt.run(d, Number(user_id));
   return d;
 }
 
-console.log(`[db] SQLite open at ${dbPath}`);
+console.log(`[db] ${db.dialect} open`);
 
-// --- Scenario runs (cross-device sync — added during phase rollback) ---
-db.exec(`
+// --- Scenario runs (cross-device sync) ---
+await db.exec(`
   CREATE TABLE IF NOT EXISTS scenario_runs (
     user_id     INTEGER NOT NULL,
     family_id   TEXT    NOT NULL,
@@ -1355,8 +1260,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_scn_runs_user ON scenario_runs(user_id);
 `);
 
-export function getScenarioRunsForUser(user_id) {
-  const rows = db.prepare(
+export async function getScenarioRunsForUser(user_id) {
+  const rows = await db.prepare(
     `SELECT family_id, runs, best_stars, best_score, last_ts
      FROM scenario_runs WHERE user_id = ?`
   ).all(Number(user_id));
@@ -1372,12 +1277,12 @@ export function getScenarioRunsForUser(user_id) {
   return out;
 }
 
-export function recordScenarioRunDb(user_id, family_id, stars = 0, score = 0) {
+export async function recordScenarioRunDb(user_id, family_id, stars = 0, score = 0) {
   const fid = String(family_id || '').slice(0, 64);
   if (!fid) return null;
   const s = Math.max(0, Math.min(3, Math.floor(Number(stars) || 0)));
   const sc = Math.max(0, Math.min(1000, Math.floor(Number(score) || 0)));
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO scenario_runs (user_id, family_id, runs, best_stars, best_score, last_ts)
     VALUES (?, ?, 1, ?, ?, ?)
     ON CONFLICT(user_id, family_id) DO UPDATE SET
@@ -1386,7 +1291,7 @@ export function recordScenarioRunDb(user_id, family_id, stars = 0, score = 0) {
       best_score = MAX(scenario_runs.best_score, excluded.best_score),
       last_ts    = excluded.last_ts
   `).run(Number(user_id), fid, s, sc, Date.now());
-  const row = db.prepare(
+  const row = await db.prepare(
     `SELECT runs, best_stars, best_score, last_ts FROM scenario_runs
      WHERE user_id = ? AND family_id = ?`
   ).get(Number(user_id), fid);
@@ -1405,7 +1310,7 @@ export function recordScenarioRunDb(user_id, family_id, stars = 0, score = 0) {
 //   webhook_events_seen  — dedup theo event_id khi ScoreUp POST webhook (xem
 //                          server/contexts/integration/scoreup-webhook.js)
 // ============================================================
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS question_attempts (
     id                     INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id                INTEGER NOT NULL,
@@ -1465,12 +1370,12 @@ const insertQAStmt = db.prepare(`
 `);
 
 /** Lưu 1 attempt câu hỏi (gọi từ route /api/quiz/attempt). */
-export function recordQuestionAttempt({
+export async function recordQuestionAttempt({
   user_id, scoreup_question_id = null, question_external_id = null,
   subject_id = null, chapter_id = null, answers = null,
   correct = false, score = 0, duration_ms = null,
 }) {
-  const info = insertQAStmt.run({
+  const info = await insertQAStmt.run({
     user_id: Number(user_id),
     scoreup_question_id: scoreup_question_id ? String(scoreup_question_id) : null,
     question_external_id: question_external_id ? String(question_external_id) : null,
@@ -1486,8 +1391,8 @@ export function recordQuestionAttempt({
 }
 
 /** Trả N attempt gần nhất của 1 user (cho dashboard học sinh / phụ huynh). */
-export function getRecentQuestionAttempts(user_id, limit = 50) {
-  return db.prepare(`
+export async function getRecentQuestionAttempts(user_id, limit = 50) {
+  return await db.prepare(`
     SELECT id, scoreup_question_id, subject_id, chapter_id, correct, score, duration_ms, created_at
     FROM question_attempts WHERE user_id = ?
     ORDER BY created_at DESC LIMIT ?
@@ -1496,31 +1401,31 @@ export function getRecentQuestionAttempts(user_id, limit = 50) {
 
 // ── ScoreUp webhook dedup helpers (xem scoreup-webhook.js) ──
 const insertSeenStmt = db.prepare(`
-  INSERT OR IGNORE INTO scoreup_webhook_events_seen (event_id, event_type, occurred_at, processed_at)
-  VALUES (?, ?, ?, ?)
+  INSERT INTO scoreup_webhook_events_seen (event_id, event_type, occurred_at, processed_at)
+  VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING
 `);
 /** Return true nếu event đã thấy rồi (dedup); false nếu mới insert. */
-export function markScoreUpEventSeen(eventId, eventType, occurredAt) {
+export async function markScoreUpEventSeen(eventId, eventType, occurredAt) {
   if (!eventId) return false;
-  const info = insertSeenStmt.run(
+  const info = await insertSeenStmt.run(
     String(eventId), eventType ? String(eventType) : null,
     Number(occurredAt) || null, Date.now(),
   );
   return info.changes === 0; // 0 = đã tồn tại (duplicate)
 }
 /** Xoá event > 7 ngày — gọi từ cron nhẹ (không bắt buộc, table không quá nặng). */
-export function pruneScoreUpEventsSeen(olderThanMs = 7 * 24 * 3600 * 1000) {
+export async function pruneScoreUpEventsSeen(olderThanMs = 7 * 24 * 3600 * 1000) {
   const cutoff = Date.now() - olderThanMs;
-  return db.prepare(`DELETE FROM scoreup_webhook_events_seen WHERE processed_at < ?`).run(cutoff).changes;
+  return (await db.prepare(`DELETE FROM scoreup_webhook_events_seen WHERE processed_at < ?`).run(cutoff)).changes;
 }
 
 // ── Codelab submissions dedup + tracking (xem contexts/integration/codelab-webhook.js) ──
 const insertCodelabSubStmt = db.prepare(`
-  INSERT OR IGNORE INTO codelab_submissions
+  INSERT INTO codelab_submissions
     (submission_id, status, problem_slug, external_user_ref, user_id,
      score, passed_cases, total_cases, language_id, completed_at, processed_at)
   VALUES (@submission_id, @status, @problem_slug, @external_user_ref, @user_id,
-          @score, @passed_cases, @total_cases, @language_id, @completed_at, @processed_at)
+          @score, @passed_cases, @total_cases, @language_id, @completed_at, @processed_at) ON CONFLICT DO NOTHING
 `);
 
 /**
@@ -1528,7 +1433,7 @@ const insertCodelabSubStmt = db.prepare(`
  * - firstSeen=false → cặp (submissionId, status) đã tồn tại → caller skip side-effects.
  * - userId parse từ external_user_ref ("tizia:user:42" → 42) — null nếu format khác.
  */
-export function recordCodelabSubmission({
+export async function recordCodelabSubmission({
   submissionId, status, problemSlug = null, externalUserRef = null,
   score = null, passedCases = null, totalCases = null, languageId = null,
   completedAt = null,
@@ -1539,7 +1444,7 @@ export function recordCodelabSubmission({
     const m = /^tizia:user:(\d+)$/.exec(externalUserRef);
     if (m) userId = Number(m[1]);
   }
-  const info = insertCodelabSubStmt.run({
+  const info = await insertCodelabSubStmt.run({
     submission_id: String(submissionId),
     status: String(status),
     problem_slug: problemSlug ? String(problemSlug) : null,
@@ -1556,9 +1461,9 @@ export function recordCodelabSubmission({
 }
 
 /** User đã ACCEPTED bài này lần nào trước đó chưa? Để cộng XP một-lần duy nhất. */
-export function hasAcceptedCodelabProblem(userId, problemSlug, excludeSubmissionId = null) {
+export async function hasAcceptedCodelabProblem(userId, problemSlug, excludeSubmissionId = null) {
   if (!userId || !problemSlug) return false;
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT 1 FROM codelab_submissions
     WHERE user_id = ? AND problem_slug = ? AND status = 'accepted'
       ${excludeSubmissionId ? 'AND submission_id != ?' : ''}
@@ -1568,9 +1473,9 @@ export function hasAcceptedCodelabProblem(userId, problemSlug, excludeSubmission
 }
 
 /** Bao nhiêu bài Codelab đã accepted của user (dùng cho badge / dashboard). */
-export function countCodelabAcceptedProblems(userId) {
+export async function countCodelabAcceptedProblems(userId) {
   if (!userId) return 0;
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT COUNT(DISTINCT problem_slug) AS n
     FROM codelab_submissions WHERE user_id = ? AND status = 'accepted'
   `).get(userId);
@@ -1584,7 +1489,7 @@ export function countCodelabAcceptedProblems(userId) {
 // ease/interval/due_at để picker FE quyết câu nào tới hạn ôn. Tách khỏi
 // question_attempts vì attempts là log append-only, còn srs_cards là state
 // hiện tại (upsert mỗi lần review).
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS srs_cards (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id       INTEGER NOT NULL,
@@ -1655,14 +1560,14 @@ function sm2Step(prev, correct) {
 }
 
 /** Trả về SRS state cho mọi card_key bắt đầu bằng prefix (vd 'space:mam:'). */
-export function getSrsStateByPrefix(user_id, prefix) {
+export async function getSrsStateByPrefix(user_id, prefix) {
   const safe = String(prefix).replace(/[\\%_]/g, (c) => '\\' + c) + '%';
-  return getSrsByPrefixStmt.all(Number(user_id), safe);
+  return await getSrsByPrefixStmt.all(Number(user_id), safe);
 }
 
 /** Ghi 1 lần review. Tự upsert + cập nhật SM-2 từ state cũ. */
-export function recordSrsReview({ user_id, card_key, correct }) {
-  const prev = getSrsCardStmt.get(Number(user_id), String(card_key)) || null;
+export async function recordSrsReview({ user_id, card_key, correct }) {
+  const prev = await getSrsCardStmt.get(Number(user_id), String(card_key)) || null;
   const next = sm2Step(prev, !!correct);
   const now = Date.now();
   const row = {
@@ -1677,7 +1582,7 @@ export function recordSrsReview({ user_id, card_key, correct }) {
     last_correct: correct ? 1 : 0,
     last_seen: now,
   };
-  upsertSrsStmt.run(row);
+  await upsertSrsStmt.run(row);
   return {
     card_key: row.card_key,
     ease: row.ease,
@@ -1700,7 +1605,7 @@ export function recordSrsReview({ user_id, card_key, correct }) {
 // Key có whitelist phía client (tránh đẩy mọi key tạp lên DB) + có cap size.
 // Value lưu nguyên text (client tự stringify) — server không parse.
 // ============================================================
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS user_state (
     user_id    INTEGER NOT NULL,
     key        TEXT    NOT NULL,
@@ -1727,8 +1632,8 @@ const _deleteUserStateStmt = db.prepare(
 );
 
 /** Lấy toàn bộ KV của 1 user. Trả { key: { value, updatedAt } }. */
-export function getUserState(user_id) {
-  const rows = _getUserStateAllStmt.all(Number(user_id));
+export async function getUserState(user_id) {
+  const rows = await _getUserStateAllStmt.all(Number(user_id));
   const out = {};
   for (const r of rows) {
     out[r.key] = { value: r.value, updatedAt: Number(r.updated_at) || 0 };
@@ -1759,27 +1664,27 @@ export class UserStateValueTooLargeError extends Error {
  * Trả số key đã ghi để client biết quota còn lại.
  * Throw UserStateValueTooLargeError nếu bất kỳ value nào > 32KB.
  */
-export function putUserState(user_id, entries) {
+export async function putUserState(user_id, entries) {
   if (!entries || typeof entries !== 'object') return 0;
   const now = Date.now();
   let written = 0;
-  const tx = db.transaction((items) => {
+  const tx = db.transaction(async (items) => {
     for (const [k, v] of items) {
       const key = String(k || '').slice(0, 128);
       if (!key) continue;
       if (v == null || v === '') {
-        _deleteUserStateStmt.run(Number(user_id), key);
+        await _deleteUserStateStmt.run(Number(user_id), key);
       } else {
         const value = String(v);
         if (value.length > MAX_VALUE_BYTES) {
           throw new UserStateValueTooLargeError(key, value.length);
         }
-        _upsertUserStateStmt.run(Number(user_id), key, value, now);
+        await _upsertUserStateStmt.run(Number(user_id), key, value, now);
       }
       written += 1;
     }
   });
-  tx(Object.entries(entries));
+  await tx(Object.entries(entries));
   return written;
 }
 
@@ -1787,7 +1692,7 @@ export function putUserState(user_id, entries) {
 // PORTAL APPS — Developer cài app theo chuẩn AI Portal (manifest.json + zip)
 // vào sandbox cá nhân (per-user alias). Admin có thể promote thành public.
 // ─────────────────────────────────────────────────────────────────────────────
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS portal_apps (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     owner_id      INTEGER NOT NULL,
@@ -1807,14 +1712,14 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_portal_apps_owner ON portal_apps(owner_id);
   CREATE INDEX IF NOT EXISTS idx_portal_apps_public ON portal_apps(is_public) WHERE is_public = 1;
 `);
-// Phase 1.5: mở rộng cho "builtin app" (đăng ký URL nội bộ thay vì zip user upload).
+// Mở rộng cho "builtin app" (đăng ký URL nội bộ thay vì zip user upload).
 // Cách dùng: kind='builtin' → target_url chứa /xxx.html, không cần thư mục data/portal-apps.
 // Phân nhóm cho campus map: category + domain để filter mặc định theo cấp/trường.
-try { db.exec(`ALTER TABLE portal_apps ADD COLUMN kind TEXT NOT NULL DEFAULT 'embedded'`); } catch {}
-try { db.exec(`ALTER TABLE portal_apps ADD COLUMN target_url TEXT`); } catch {}
-try { db.exec(`ALTER TABLE portal_apps ADD COLUMN category TEXT`); } catch {}
-try { db.exec(`ALTER TABLE portal_apps ADD COLUMN domain TEXT`); } catch {}
-try { db.exec(`CREATE INDEX IF NOT EXISTS idx_portal_apps_kind_domain ON portal_apps(kind, domain)`); } catch {}
+try { await db.exec(`ALTER TABLE portal_apps ADD COLUMN kind TEXT NOT NULL DEFAULT 'embedded'`); } catch {}
+try { await db.exec(`ALTER TABLE portal_apps ADD COLUMN target_url TEXT`); } catch {}
+try { await db.exec(`ALTER TABLE portal_apps ADD COLUMN category TEXT`); } catch {}
+try { await db.exec(`ALTER TABLE portal_apps ADD COLUMN domain TEXT`); } catch {}
+try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_portal_apps_kind_domain ON portal_apps(kind, domain)`); } catch {}
 
 const _insertPortalAppStmt = db.prepare(`
   INSERT INTO portal_apps (owner_id, alias, name, description, icon, version,
@@ -1859,11 +1764,11 @@ const _setPortalAppPublicStmt = db.prepare(
   `UPDATE portal_apps SET is_public = ?, updated_at = ? WHERE id = ?`
 );
 
-export function upsertPortalApp({
+export async function upsertPortalApp({
   ownerId, alias, name, description, icon, version, manifestJson, sizeBytes,
 }) {
   const now = Date.now();
-  const info = _insertPortalAppStmt.run(
+  const info = await _insertPortalAppStmt.run(
     Number(ownerId), String(alias), String(name),
     description ? String(description) : null,
     icon ? String(icon) : null,
@@ -1872,25 +1777,25 @@ export function upsertPortalApp({
     Number(sizeBytes) | 0, now, now
   );
   // Trả về row vừa upsert (id ổn định kể cả lúc UPDATE)
-  return _getPortalAppByOwnerAliasStmt.get(Number(ownerId), String(alias));
+  return await _getPortalAppByOwnerAliasStmt.get(Number(ownerId), String(alias));
 }
-export function listPortalAppsByOwner(ownerId) {
-  return _listPortalAppsByOwnerStmt.all(Number(ownerId));
+export async function listPortalAppsByOwner(ownerId) {
+  return await _listPortalAppsByOwnerStmt.all(Number(ownerId));
 }
-export function listPortalAppsPublic() {
-  return _listPortalAppsPublicStmt.all();
+export async function listPortalAppsPublic() {
+  return await _listPortalAppsPublicStmt.all();
 }
-export function getPortalAppById(id) {
-  return _getPortalAppByIdStmt.get(Number(id)) || null;
+export async function getPortalAppById(id) {
+  return await _getPortalAppByIdStmt.get(Number(id)) || null;
 }
-export function getPortalAppByOwnerAlias(ownerId, alias) {
-  return _getPortalAppByOwnerAliasStmt.get(Number(ownerId), String(alias)) || null;
+export async function getPortalAppByOwnerAlias(ownerId, alias) {
+  return await _getPortalAppByOwnerAliasStmt.get(Number(ownerId), String(alias)) || null;
 }
-export function deletePortalApp(id) {
-  return _deletePortalAppStmt.run(Number(id)).changes;
+export async function deletePortalApp(id) {
+  return (await _deletePortalAppStmt.run(Number(id))).changes;
 }
-export function setPortalAppPublic(id, isPublic) {
-  return _setPortalAppPublicStmt.run(isPublic ? 1 : 0, Date.now(), Number(id)).changes;
+export async function setPortalAppPublic(id, isPublic) {
+  return (await _setPortalAppPublicStmt.run(isPublic ? 1 : 0, Date.now(), Number(id))).changes;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1898,7 +1803,7 @@ export function setPortalAppPublic(id, isPublic) {
 // 1 user cụ thể. Override status check + plan check. Hết hạn (expires_at < now)
 // → grant tự degrade (FE/BE đều check). expires_at NULL = không hết hạn.
 // ─────────────────────────────────────────────────────────────────────────────
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS user_domain_grants (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id      INTEGER NOT NULL,
@@ -1946,40 +1851,40 @@ const _listAllGrantsStmt = db.prepare(
    ORDER BY g.granted_at DESC LIMIT 500`
 );
 
-export function grantUserDomain({ userId, domainId, grantedBy, expiresAt = null, note = null }) {
-  return _grantDomainStmt.run(
+export async function grantUserDomain({ userId, domainId, grantedBy, expiresAt = null, note = null }) {
+  return (await _grantDomainStmt.run(
     Number(userId), String(domainId), Date.now(),
     grantedBy ? Number(grantedBy) : null,
     expiresAt ? Number(expiresAt) : null,
     note ? String(note).slice(0, 200) : null
-  ).changes;
+  )).changes;
 }
-export function revokeUserDomain(userId, domainId) {
-  return _revokeDomainStmt.run(Number(userId), String(domainId)).changes;
+export async function revokeUserDomain(userId, domainId) {
+  return (await _revokeDomainStmt.run(Number(userId), String(domainId))).changes;
 }
-export function hasUserDomainGrant(userId, domainId) {
-  return !!_hasGrantStmt.get(Number(userId), String(domainId), Date.now());
+export async function hasUserDomainGrant(userId, domainId) {
+  return !!await _hasGrantStmt.get(Number(userId), String(domainId), Date.now());
 }
-export function listUserDomainGrants(userId) {
-  return _listGrantsByUserStmt.all(Number(userId), Date.now()).map(r => r.domain_id);
+export async function listUserDomainGrants(userId) {
+  return (await _listGrantsByUserStmt.all(Number(userId), Date.now())).map(r => r.domain_id);
 }
-export function listUserDomainGrantsFull(userId) {
-  return _listGrantsByUserStmt.all(Number(userId), Date.now());
+export async function listUserDomainGrantsFull(userId) {
+  return await _listGrantsByUserStmt.all(Number(userId), Date.now());
 }
-export function listAllDomainGrants() {
-  return _listAllGrantsStmt.all();
+export async function listAllDomainGrants() {
+  return await _listAllGrantsStmt.all();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SCHOOL ADMINS — phân quyền QUẢN LÝ (manage) 1 trường cụ thể cho user. Khác
 // với user_domain_grants (chỉ ACCESS). School admin có thể: xem HS trường mình,
-// cấu hình campus map, quản lý apps gắn vào toà nhà (sẽ build trong Phase 2 UI).
+// cấu hình campus map, quản lý apps gắn vào toà nhà (UI chưa có).
 //
 // Quyết định KHÔNG thêm role mới vào users.role (giữ enum cũ: pupil/student/
 // teacher/admin) — thay vào đó bảng riêng để 1 user có thể quản lý NHIỀU trường,
 // và phân quyền không vĩnh viễn (revoke dễ).
 // ─────────────────────────────────────────────────────────────────────────────
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS school_admins (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id      INTEGER NOT NULL,
@@ -2030,27 +1935,27 @@ const _listSchoolAdminsByDomainStmt = db.prepare(
    ORDER BY sa.granted_at DESC`
 );
 
-export function setSchoolAdmin({ userId, domainId, grantedBy, note = null }) {
-  return _setSchoolAdminStmt.run(
+export async function setSchoolAdmin({ userId, domainId, grantedBy, note = null }) {
+  return (await _setSchoolAdminStmt.run(
     Number(userId), String(domainId), Date.now(),
     grantedBy ? Number(grantedBy) : null,
     note ? String(note).slice(0, 200) : null
-  ).changes;
+  )).changes;
 }
-export function revokeSchoolAdmin(userId, domainId) {
-  return _revokeSchoolAdminStmt.run(Number(userId), String(domainId)).changes;
+export async function revokeSchoolAdmin(userId, domainId) {
+  return (await _revokeSchoolAdminStmt.run(Number(userId), String(domainId))).changes;
 }
-export function listManagedDomains(userId) {
-  return _listSchoolAdminDomainsByUserStmt.all(Number(userId)).map(r => r.domain_id);
+export async function listManagedDomains(userId) {
+  return (await _listSchoolAdminDomainsByUserStmt.all(Number(userId))).map(r => r.domain_id);
 }
-export function isSchoolAdmin(userId, domainId) {
-  return !!_isSchoolAdminStmt.get(Number(userId), String(domainId));
+export async function isSchoolAdmin(userId, domainId) {
+  return !!await _isSchoolAdminStmt.get(Number(userId), String(domainId));
 }
-export function listAllSchoolAdmins() {
-  return _listAllSchoolAdminsStmt.all();
+export async function listAllSchoolAdmins() {
+  return await _listAllSchoolAdminsStmt.all();
 }
-export function listSchoolAdminsByDomain(domainId) {
-  return _listSchoolAdminsByDomainStmt.all(String(domainId));
+export async function listSchoolAdminsByDomain(domainId) {
+  return await _listSchoolAdminsByDomainStmt.all(String(domainId));
 }
 
 // Builtin app seeding — upsert theo alias trong namespace builtin (owner_id = 0 sentinel
@@ -2079,34 +1984,34 @@ const _listBuiltinStmt = db.prepare(
    FROM portal_apps WHERE kind='builtin' ORDER BY domain, category, name`
 );
 
-export function upsertBuiltinApp(systemOwnerId, app) {
+export async function upsertBuiltinApp(systemOwnerId, app) {
   const { alias, name, description, icon, version, target_url, category, domain } = app;
   const manifest = JSON.stringify({ ...app, type: 'embedded', hasFrontendOnly: false, isBuiltin: true });
   const now = Date.now();
-  const existing = _findBuiltinByAliasStmt.get(String(alias));
+  const existing = await _findBuiltinByAliasStmt.get(String(alias));
   if (existing) {
-    _updateBuiltinStmt.run(
+    await _updateBuiltinStmt.run(
       String(name), description || null, icon || null, version || '1.0.0',
       manifest, String(target_url), category || null, domain || null, now, existing.id
     );
     return { id: existing.id, action: 'updated' };
   }
-  const info = _insertBuiltinStmt.run(
+  const info = await _insertBuiltinStmt.run(
     Number(systemOwnerId), String(alias), String(name),
     description || null, icon || null, version || '1.0.0', manifest,
     now, now, String(target_url), category || null, domain || null
   );
   return { id: info.lastInsertRowid, action: 'inserted' };
 }
-export function listBuiltinApps() { return _listBuiltinStmt.all(); }
+export async function listBuiltinApps() { return await _listBuiltinStmt.all(); }
 
 // Lấy user id cho "system owner" của các builtin app. Ưu tiên admin đầu tiên có sẵn.
 // Nếu chưa có admin nào → trả null (seeder sẽ defer đến khi admin login đầu tiên).
 const _getSystemOwnerStmt = db.prepare(
   `SELECT id FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1`
 );
-export function getSystemOwnerId() {
-  return _getSystemOwnerStmt.get()?.id || null;
+export async function getSystemOwnerId() {
+  return (await _getSystemOwnerStmt.get())?.id || null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2114,7 +2019,7 @@ export function getSystemOwnerId() {
 // qua 1 cổng của harness 7-cổng (xem .scratch/ai-board-plugin-registry/spec.md).
 // Chỉ để đo/truy vết — không có code nào khác phụ thuộc bảng này để chạy.
 // ─────────────────────────────────────────────────────────────────────────────
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS skill_proposals (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     origin        TEXT    NOT NULL,   -- 'core-skill' | 'domain-synthesized'
@@ -2122,7 +2027,7 @@ db.exec(`
     gate_reached  REAL    NOT NULL,   -- 1..7, có cổng 5.5 (risk-triage)
     outcome       TEXT,
     request_ids   TEXT,               -- JSON array
-    template_key  TEXT,               -- đếm N=10 rollback-sạch liên tiếp (ticket 13)
+    template_key  TEXT,               -- đếm N=10 rollback-sạch liên tiếp
     budget_json   TEXT,
     pr_url        TEXT,
     created_at    INTEGER NOT NULL,
@@ -2132,7 +2037,7 @@ db.exec(`
 `);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GATE TRACE — ticket 23. 1 dòng mỗi lần harness gọi Ollama THẬT ở bất kỳ cổng
+// GATE TRACE. 1 dòng mỗi lần harness gọi Ollama THẬT ở bất kỳ cổng
 // nào (1, 2.5, 3, validator) — prompt/response thật, cộng 4 field
 // prompt_eval_count/eval_count/prompt_eval_duration/eval_duration Ollama trả
 // về (bằng chứng cache-hit, xem spec.md "kỷ luật cache" rule 5). Join với
@@ -2140,7 +2045,7 @@ db.exec(`
 // nào khác phụ thuộc bảng này để chạy. Harness ghi qua sqlite3 thô, DDL này
 // là nguồn sự thật (ai-board/harness/gate_trace.py chỉ mirror cho test).
 // ─────────────────────────────────────────────────────────────────────────────
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS gate_trace (
     id                   INTEGER PRIMARY KEY AUTOINCREMENT,
     skill_proposal_id    INTEGER NOT NULL,

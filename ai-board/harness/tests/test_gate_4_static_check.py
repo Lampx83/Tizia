@@ -1,4 +1,4 @@
-"""Cổng 4 (static_check.py, ticket 12) — node --check + lint import +
+"""Cổng 4 (static_check.py) — node --check + lint import +
 minimalism guard (vượt ước lượng/file ngoài plan -> flag, không block)."""
 from pathlib import Path
 
@@ -141,7 +141,7 @@ def test_missing_plan_or_diffs_blocks():
     assert static_check.run({"plan": _plan([])})["blocked"] is True
 
 
-# ── code-review round: dynamic import cũng bị chặn (không chỉ static import) ─
+# ── dynamic import cũng bị chặn (không chỉ static import) ─
 
 def test_dynamic_import_of_db_js_fails_gate_4(tmp_path):
     plan = _plan([{"title": "t", "file": "server/contexts/_ai-generated/x/index.js", "verify": "v", "size": "small"}])
@@ -155,7 +155,7 @@ def test_dynamic_import_of_db_js_fails_gate_4(tmp_path):
     assert "db.js" in out["reason"]
 
 
-# ── code-review round: file NGOÀI plan vẫn phải qua lint/node-check thật ────
+# ── file NGOÀI plan vẫn phải qua lint/node-check thật ────
 
 def test_file_outside_plan_still_gets_import_lint_not_just_flagged(tmp_path):
     """Trước fix: file ngoài plan chỉ bị needs_careful_review, KHÔNG bao giờ
@@ -185,7 +185,7 @@ def test_file_outside_plan_with_clean_code_only_flags_not_blocks(tmp_path):
     assert any("không có trong plan" in i for i in out["issues"])
 
 
-# ── code-review round: size đo ĐÚNG file implementation, không tính lẫn test ─
+# ── size đo ĐÚNG file implementation, không tính lẫn test ─
 
 def test_oversize_only_counts_the_implementation_files_own_diff_section():
     plan = _plan([{"title": "t", "file": "a.js", "verify": "v", "size": "small"}])  # ước lượng 30, limit=60
@@ -229,7 +229,7 @@ def test_oversize_still_flags_when_the_implementation_file_itself_is_big():
     assert any("vượt" in i for i in out["issues"])
 
 
-# ── code-review round: backslash path (Windows-style) vẫn bị chuẩn hoá ──────
+# ── backslash path (Windows-style) vẫn bị chuẩn hoá ──────
 
 def test_backslash_path_is_normalized_before_import_lint(tmp_path):
     plan = _plan([{"title": "t", "file": "server/contexts/_ai-generated/x/index.js", "verify": "v", "size": "small"}])
@@ -240,3 +240,38 @@ def test_backslash_path_is_normalized_before_import_lint(tmp_path):
 
     assert out["blocked"] is True
     assert "db.js" in out["reason"]
+
+
+# ── a model-written test that cannot even be parsed: dropped, never shipped, when a harness oracle decides ──
+
+ORACLE_REQUEST = "Thêm 'Xin chào' vào đầu trang"  # the quoted words give the harness a text oracle
+
+
+def _broken_test_case(tmp_path):
+    plan = _plan([{"title": "t", "file": "public/x.js", "verify": "v", "size": "small"}])
+    _write(tmp_path, "public/x.js", "export const x = 1;\n")
+    _write(tmp_path, "test/x.test.js", "assert.ok(js.includes('<div class='a'>'));\n")  # unbalanced quotes
+    return plan, [{"title": "t", "file": "public/x.js", "test_file": "test/x.test.js", "diff": "+x\n"}]
+
+
+def test_unparseable_generated_test_is_dropped_when_a_harness_oracle_decides(tmp_path):
+    plan, diffs = _broken_test_case(tmp_path)
+    out = static_check.run({"plan": plan, "diffs": diffs, "scratch_repo": str(tmp_path), "request_detail": ORACLE_REQUEST})
+    assert out["blocked"] is False
+    assert diffs[0]["test_file"] is None and not (tmp_path / "test/x.test.js").exists()
+    assert any("dropped" in issue and "oracle" in issue for issue in out["issues"])
+
+
+def test_unparseable_generated_test_still_blocks_without_an_oracle(tmp_path):
+    plan, diffs = _broken_test_case(tmp_path)
+    out = static_check.run({"plan": plan, "diffs": diffs, "scratch_repo": str(tmp_path), "request_detail": "Đổi màu nền"})
+    assert out["blocked"] is True and "test/x.test.js" in out["reason"] and "node --check" in out["reason"]
+
+
+def test_forbidden_import_in_a_generated_test_still_blocks_even_with_an_oracle(tmp_path):
+    plan = _plan([{"title": "t", "file": "public/x.js", "verify": "v", "size": "small"}])
+    _write(tmp_path, "public/x.js", "export const x = 1;\n")
+    _write(tmp_path, "test/x.test.js", "import { db } from '../server/db.js';\n")
+    diffs = [{"title": "t", "file": "public/x.js", "test_file": "test/x.test.js", "diff": "+x\n"}]
+    out = static_check.run({"plan": plan, "diffs": diffs, "scratch_repo": str(tmp_path), "request_detail": ORACLE_REQUEST})
+    assert out["blocked"] is True and out["failure_class"] == "critical"

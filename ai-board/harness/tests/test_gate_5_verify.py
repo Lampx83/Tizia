@@ -3,17 +3,21 @@ from dataclasses import replace
 from pathlib import Path
 import json
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 
 import main
 from gates import verify
+REAL_HTTP_PROBE = verify.probe_http
 
 
 @pytest.fixture(autouse=True)
 def served(monkeypatch):
     """Default isolated container serves every fixture public file as checked out."""
     monkeypatch.setattr(verify, "probe_http", lambda _url: (200, b"<h1>changed</h1>\n// x\n"))
+    import functional
+    monkeypatch.setattr(functional, 'run', lambda *_, **__: {'probe_id': functional.QUEUE_PROBE, 'passed': True})
 
 
 class FakeRunner:
@@ -25,22 +29,22 @@ class FakeRunner:
 
     def __call__(self, args, **kwargs):
         self.calls.append((args, kwargs))
+        if args[0] == "docker" and args[1] in ("container", "volume", "network"):
+            return subprocess.CompletedProcess(args, 0, "", "")
         if args[0] == "docker":
-            action = next(x for x in ("config", "up", "port", "exec", "cp", "down") if x in args)
-            if action == "up":
-                self.override = Path(args[args.index("-f") + 3]).read_text(encoding="utf-8")
+            action = next(x for x in ("config", "up", "port", "exec", "cp", "down", "logs") if x in args)
+            self.override = Path(args[args.index("-f") + 1]).read_text(encoding="utf-8")
             project = args[args.index("-p") + 1]
-            config = {"services": {"tizia": {"environment": {"NODE_ENV": "production", "PORT": "8041",
-                                                          "HOST": "0.0.0.0", "DATA_DIR": "/data", "BASE_PATH": ""},
-                                               "image": f"{project}:latest",
-                                               "cpus": 1.0, "mem_limit": 536870912, "pids_limit": 128,
-                                               "ports": [{"target": 8041, "host_ip": "127.0.0.1"}],
-                                               "volumes": [{"source": f"{project}-data", "target": "/data"}]}}}
+            config = json.loads(self.override)
+            for name, service in config['services'].items():
+                service['networks'] = {'default': None}
+                service['volumes'] = [{'source': v.split(':')[0], 'target': v.split(':')[1], 'type': 'volume'} for v in service['volumes']]
+            config['services']['tizia']['ports'] = [{'target': 8041, 'host_ip': '127.0.0.1'}]
             if action == "exec" and args[-1] == "env":
-                stdout = self.container_env
+                stdout = self.container_env + "DATABASE_URL=" + config["services"]["tizia"]["environment"]["DATABASE_URL"] + "\n"
             else:
                 stdout = {"config": json.dumps(config), "up": "started", "port": "127.0.0.1:49152\n",
-                          "exec": "generated tests passed", "cp": "copied", "down": "removed"}[action]
+                          "exec": "generated tests passed", "cp": "copied", "down": "removed", "logs": "synthetic log"}[action]
         else:
             action = "smoke"
             stdout = "user-state smoke PASS"
@@ -81,15 +85,10 @@ def test_pass_uses_isolated_compose_smoke_and_down(tmp_path):
     assert out["evidence"]["http_observed"] is True
     assert out["evidence"]["screenshot"] is None  # JS change, no request page named
     assert "một luồng user-state" in out["evidence"]["text"]
-    assert "pharmacysim-data:/data" not in runner.override
-    assert "127.0.0.1::8041" in runner.override
-    assert "name: ai-verify-skill-42-data" in runner.override
-    assert "image: ai-verify-skill-42:latest" in runner.override
-    assert "!override" in runner.override
-    assert ["config", "up", "port", "exec", "exec", "cp", "exec", "down"] == [
-        next(x for x in ("config", "up", "port", "exec", "cp", "down") if x in args)
-        for args, _ in runner.calls if args[0] == "docker"]
-    assert runner.calls[-1][0][-2:] == ["down", "-v"]
+    config = json.loads(runner.override)
+    assert config['services']['tizia']['ports'] == ['127.0.0.1::8041']
+    assert out['evidence']['teardown_confirmed'] is True
+    assert any(args[-2:] == ['down', '-v'] for args, _ in runner.calls)
     smoke_args, smoke_kw = next((args, kw) for args, kw in runner.calls if args[0] != "docker")
     assert Path(smoke_args[-1]) == verify.SMOKE_SCRIPT
     assert smoke_kw["env"]["BASE"] == "http://127.0.0.1:49152"
@@ -100,7 +99,7 @@ def test_smoke_failure_still_tears_down(tmp_path):
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
     assert out["evidence"]["smoke_passed"] is False
-    assert runner.calls[-1][0][-2:] == ["down", "-v"]
+    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
 
 
 def test_generated_test_failure_blocks_before_smoke(tmp_path):
@@ -110,7 +109,7 @@ def test_generated_test_failure_blocks_before_smoke(tmp_path):
     assert out["reason"] == "generated tests failed"
     assert out["failure_class"] == "ordinary"
     assert not any(args[0] != "docker" for args, _ in runner.calls)
-    assert runner.calls[-1][0][-2:] == ["down", "-v"]
+    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
 
 
 def test_generated_test_timeout_blocks_and_tears_down(tmp_path):
@@ -118,7 +117,7 @@ def test_generated_test_timeout_blocks_and_tears_down(tmp_path):
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
     assert out["reason"] == "generated tests timed out"
-    assert runner.calls[-1][0][-2:] == ["down", "-v"]
+    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
 
 
 def test_teardown_failure_is_environmental_not_repairable(tmp_path):
@@ -133,7 +132,8 @@ def test_up_failure_still_tears_down(tmp_path):
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
     assert out["failure_class"] == "transient"
-    assert runner.calls[-1][0][-2:] == ["down", "-v"]
+    assert "failed" in out["evidence"]["text"]
+    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
 
 
 def test_unsafe_compose_config_blocks_before_up(tmp_path):
@@ -152,7 +152,27 @@ def test_unsafe_compose_config_blocks_before_up(tmp_path):
     assert "không cách ly" in out["reason"]
     assert out["failure_class"] == "critical"
     assert not any("up" in args for args, _ in runner.calls)
-    assert runner.calls[-1][0][-2:] == ["down", "-v"]
+    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
+
+
+@pytest.mark.parametrize("service, setting", [
+    ("tizia", {"privileged": True}), ("tizia", {"network_mode": "host"}), ("tizia", {"devices": ["/dev/kvm"]}),
+    ("tizia", {"cap_add": ["SYS_ADMIN"]}), ("sidecar", {"pid": "host"}),
+    ("sidecar", {"volumes": [{"type": "bind", "source": "/", "target": "/host"}]})])
+def test_compose_escape_hatches_block_before_up(tmp_path, service, setting):
+    class EscapeRunner(FakeRunner):
+        def __call__(self, args, **kwargs):
+            result = super().__call__(args, **kwargs)
+            if "config" in args:
+                config = json.loads(result.stdout)
+                config["services"].setdefault(service, {}).update(setting)
+                result.stdout = json.dumps(config)
+            return result
+
+    runner = EscapeRunner()
+    out = verify.run(state(checkout(tmp_path)), runner=runner)
+    assert out["blocked"] and out["failure_class"] == "critical" and f"{service}." in out["reason"]
+    assert not any("up" in args for args, _ in runner.calls)
 
 
 def test_container_secret_blocks_without_leaking_value_to_evidence(tmp_path):
@@ -162,13 +182,13 @@ def test_container_secret_blocks_without_leaking_value_to_evidence(tmp_path):
     assert "OLLAMA_SECKEY" in out["reason"]
     assert out["failure_class"] == "critical"
     assert "do-not-log" not in out["evidence"]["text"]
-    assert runner.calls[-1][0][-2:] == ["down", "-v"]
+    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
 
 
 def test_html_screenshot_artifact_is_mandatory_for_ui_changes(tmp_path, monkeypatch):
     s = state(checkout(tmp_path), visual=True)
 
-    def capture(url, path):
+    def capture(url, path, width=1280, **_):
         assert url == "http://127.0.0.1:49152/x.html"
         path.write_bytes(b"png")
 
@@ -179,14 +199,14 @@ def test_html_screenshot_artifact_is_mandatory_for_ui_changes(tmp_path, monkeypa
     assert out["evidence"]["http_observed"] is True
     assert Path(out["evidence"]["screenshot"]).read_bytes() == b"png"
 
-    monkeypatch.setattr(verify, "capture_screenshot", lambda *_: (_ for _ in ()).throw(ImportError("playwright absent")))
+    monkeypatch.setattr(verify, "capture_screenshot", lambda *_, **__: (_ for _ in ()).throw(ImportError("playwright absent")))
     runner = FakeRunner()
     out = verify.run(s, runner=runner, http_probe=lambda _url: (200, body))
     assert out["blocked"] is True
     assert "screenshot" in out["reason"] and "playwright absent" in out["reason"]
     assert out["failure_class"] == "transient"  # missing browser is the environment, not the candidate
     assert out["evidence"]["screenshot"] is None
-    assert runner.calls[-1][0][-2:] == ["down", "-v"]
+    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
 
 
 def test_changed_html_must_return_success_over_http(tmp_path):
@@ -215,7 +235,7 @@ def test_css_change_is_observed_over_http_and_screenshots_the_request_page(tmp_p
          "request_detail": "[Trang: Trường IT] /school.html?domain=it\nđổi màu chữ thành vàng",
          "diffs": [{"file": "public/css/school.css", "test_file": "test/generated.test.js", "diff": "+x"}]}
     probed, shots = [], []
-    monkeypatch.setattr(verify, "capture_screenshot", lambda url, path: (shots.append(url), path.write_bytes(b"png")))
+    monkeypatch.setattr(verify, "capture_screenshot", lambda url, path, width=1280, **_: (shots.append(url), path.write_bytes(b"png")))
 
     def probe(url):
         probed.append(url)
@@ -225,7 +245,7 @@ def test_css_change_is_observed_over_http_and_screenshots_the_request_page(tmp_p
     assert out["blocked"] is False
     assert out["evidence"]["http_observed"] is True
     assert probed == ["http://127.0.0.1:49152/css/school.css"]
-    assert shots == ["http://127.0.0.1:49152/school.html?domain=it"]
+    assert shots == ["http://127.0.0.1:49152/school.html?domain=it"] * 2  # 375 + 1280, không biết base → không BEFORE
     assert Path(out["evidence"]["screenshot"]).read_bytes() == b"png"
 
     out = verify.run(s, runner=FakeRunner(), http_probe=lambda _url: (200, b".title { color: red; }"))
@@ -235,7 +255,7 @@ def test_css_change_is_observed_over_http_and_screenshots_the_request_page(tmp_p
 
 def test_screenshot_target_from_the_request_must_be_an_internal_path(tmp_path, monkeypatch):
     shots = []
-    monkeypatch.setattr(verify, "capture_screenshot", lambda url, path: shots.append(url))
+    monkeypatch.setattr(verify, "capture_screenshot", lambda url, path, width=1280, **_: shots.append(url))
     details = ("[Trang: x] https://evil.example/", "[Trang: x] //evil.example/a", "[Trang: x] /\\evil.example",
                "không có dòng trang")
     for index, detail in enumerate(details):
@@ -259,7 +279,7 @@ def test_screenshot_must_land_on_the_requested_page_with_success():
 
 
 def test_wrong_screenshot_landing_is_a_plan_failure(tmp_path, monkeypatch):
-    def capture(_url, _path):
+    def capture(_url, _path, _width=1280, **_):
         raise verify.ScreenshotTargetError("trang chụp bị chuyển hướng sang /login.html")
 
     monkeypatch.setattr(verify, "capture_screenshot", capture)
@@ -329,7 +349,7 @@ def test_main_prepares_checkout_at_gate_5_then_calls_verify(monkeypatch, fake_de
         calls.append(("verify", state["full_checkout"]))
         return {"gate": 5, "blocked": False, "reason": None}
 
-    monkeypatch.setattr(main, "prepare_full_checkout", prepare)
+    monkeypatch.setattr(main.candidate, "create", prepare)
     monkeypatch.setattr(main.verify, "run", run)
     assert main.run_gate(5, {}, deps, None, s)["blocked"] is False
     assert calls == [("prepare", str(tmp_path)), ("verify", str(tmp_path))]
@@ -341,7 +361,9 @@ def test_bash_is_git_bash_even_when_git_lives_in_mingw64(tmp_path, monkeypatch):
     for path in (git, bash):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("", encoding="utf-8")
-    monkeypatch.setattr(verify.os, "name", "nt")
+    # Replacing os.name mutates the shared os module, making pathlib pick
+    # WindowsPath on Linux. Mock only the module reference used by _bash.
+    monkeypatch.setattr(verify, "os", SimpleNamespace(name="nt"))
     monkeypatch.setattr(verify.shutil, "which", lambda name: str(git) if name == "git" else None)
     assert verify._bash() == str(bash)
 
@@ -354,7 +376,7 @@ def test_smoke_script_path_is_posix_for_git_bash(tmp_path):
 
 
 def test_changed_lines_must_be_served_even_when_the_server_injects_tags(tmp_path, monkeypatch):
-    monkeypatch.setattr(verify, "capture_screenshot", lambda _url, path: path.write_bytes(b"png"))
+    monkeypatch.setattr(verify, "capture_screenshot", lambda _url, path, _width=1280, **_: path.write_bytes(b"png"))
     """Tizia injects analytics/SEO tags into every HTML page, so bytes never match the file."""
     root = checkout(tmp_path)
     (root / "public" / "x.html").write_text("<head></head><body>\n<h1>old</h1>\n<p>new line</p>\n</body>\n",
@@ -379,3 +401,338 @@ def test_evidence_names_the_runner_so_a_fake_run_is_never_presented_as_real(tmp_
     monkeypatch.setattr(verify.subprocess, "run", FakeRunner())
     (tmp_path / "real").mkdir()
     assert verify.run(state(checkout(tmp_path / "real")))["evidence"]["runner"] == "docker"
+
+
+class InternalRunner(FakeRunner):
+    """Worker-in-Docker mode: no published port, container reached on its internal network IP."""
+
+    def __init__(self, ip="172.28.0.2", **kwargs):
+        super().__init__(**kwargs)
+        self.ip = ip
+
+    def __call__(self, args, **kwargs):
+        if args[0] == "docker" and "ps" in args:
+            self.calls.append((args, kwargs))
+            return subprocess.CompletedProcess(args, 0, "cid123\n", "")
+        if args[:2] == ["docker", "inspect"]:
+            self.calls.append((args, kwargs))
+            return subprocess.CompletedProcess(args, 0, f"{self.ip} \n", "")
+        out = super().__call__(args, **kwargs)
+        if args[0] == "docker" and "config" in args:
+            config = json.loads(out.stdout)
+            config["services"]["tizia"]["ports"] = []
+            config["networks"] = {"default": {"name": f"{args[args.index('-p') + 1]}-net", "internal": True}}
+            out = subprocess.CompletedProcess(args, 0, json.dumps(config), "")
+        return out
+
+
+def test_internal_network_mode_has_no_egress_and_probes_the_container_ip(tmp_path, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_VERIFY_NETWORK", "internal")
+    urls = []
+    monkeypatch.setattr(verify, "probe_http", lambda url: urls.append(url) or (200, b"<h1>changed</h1>\n// x\n"))
+    runner = InternalRunner()
+
+    out = verify.run(state(checkout(tmp_path)), runner=runner)
+
+    assert out["blocked"] is False, out["reason"]
+    assert json.loads(runner.override)["networks"]["default"]["internal"] is True and "127.0.0.1::8041" not in runner.override
+    assert urls == ["http://172.28.0.2:8041/x.js"]
+    assert not any("port" in args for args, _ in runner.calls if args[0] == "docker")
+
+
+def test_internal_network_mode_rejects_a_published_port_or_public_ip(tmp_path, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_VERIFY_NETWORK", "internal")
+
+    class Published(InternalRunner):
+        def __call__(self, args, **kwargs):
+            out = super().__call__(args, **kwargs)
+            if args[0] == "docker" and "config" in args:
+                config = json.loads(out.stdout)
+                config["services"]["tizia"]["ports"] = [{"target": 8041, "host_ip": "127.0.0.1"}]
+                out = subprocess.CompletedProcess(args, 0, json.dumps(config), "")
+            return out
+
+    s = state(checkout(tmp_path))
+    out = verify.run(s, runner=Published())
+    assert out["blocked"] and out["failure_class"] == "critical"
+    out = verify.run(s, runner=InternalRunner(ip="8.8.8.8"))
+    assert out["blocked"] and out["failure_class"] == "critical"
+
+
+def test_verify_container_uses_outer_worker_resource_limit_for_dind_compatibility(tmp_path):
+    runner = FakeRunner()
+    verify.run(state(checkout(tmp_path)), runner=runner)
+    assert "cpus:" not in runner.override and "mem_limit:" not in runner.override and "pids_limit:" not in runner.override
+
+
+def _git(root, *args):
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], cwd=root, check=True,
+                   capture_output=True)
+
+
+def test_changed_pages_get_after_and_before_shots_at_two_widths(tmp_path, monkeypatch):
+    """≤ 2 trang × 375/1280 × sau/trước (3 trang: chỉ 1280); BEFORE = bản base chép vào container đang chạy; trang mới không có BEFORE."""
+    root = checkout(tmp_path)
+    for name in ("x", "y"):
+        (root / "public" / f"{name}.html").write_text(f"<h1>old {name}</h1>\n", encoding="utf-8")
+    _git(root, "init", "-q")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-qm", "base")
+    base_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True).stdout.strip()
+    for name in ("x", "y", "z"):
+        (root / "public" / f"{name}.html").write_text("<h1>changed</h1>\n", encoding="utf-8")
+    shots, copied = [], {}
+    monkeypatch.setattr(verify, "capture_screenshot",
+                        lambda url, path, width, **_: (shots.append((url.rsplit("/", 1)[-1], width)), path.write_bytes(b"png")))
+
+    class Runner(FakeRunner):
+        def __call__(self, args, **kwargs):
+            if args[0] == "docker" and "cp" in args and args[-1].startswith("tizia:/app/public/"):
+                copied[args[-1]] = Path(args[-2]).read_text(encoding="utf-8")
+            return super().__call__(args, **kwargs)
+
+    s = {"skill_id": "skill-42", "full_checkout": str(root), "base_sha": base_sha,
+         "diffs": [{"file": f"public/{n}.html", "test_file": "test/generated.test.js", "diff": "+x"}
+                   for n in ("z", "x", "y")]}
+    out = verify.run(s, runner=Runner())
+
+    assert out["blocked"] is False, out["reason"]
+    # 3 trang đổi (z mới, x, y) → chỉ khổ máy tính cho vừa ngân sách ảnh; z không có ở base → không có BEFORE.
+    assert shots == [("z.html", 1280), ("x.html", 1280), ("y.html", 1280), ("x.html", 1280), ("y.html", 1280)]
+    assert [(i["phase"], i["page"], i["width"]) for i in out["evidence"]["screenshots"]] == [
+        ("after", "/z.html", 1280), ("after", "/x.html", 1280), ("after", "/y.html", 1280),
+        ("before", "/x.html", 1280), ("before", "/y.html", 1280)]
+    assert all(Path(i["path"]).read_bytes() == b"png" for i in out["evidence"]["screenshots"])
+    assert out["evidence"]["screenshot"] == out["evidence"]["screenshots"][0]["path"]  # trang chính, 1280
+    assert copied == {"tizia:/app/public/x.html": "<h1>old x</h1>\n", "tizia:/app/public/y.html": "<h1>old y</h1>\n"}
+
+    # 2 trang đều có ở base → đủ 8 ảnh.
+    s["diffs"] = s["diffs"][1:]
+    shots.clear()
+    out = verify.run(s, runner=Runner())
+    assert len(out["evidence"]["screenshots"]) == 8 and len(shots) == 8
+
+
+def test_before_shot_failure_never_blocks_the_gate(tmp_path, monkeypatch):
+    s = state(checkout(tmp_path), visual=True)
+    s["base_sha"] = "0" * 40  # không phải repo git: không lấy được base → bỏ BEFORE, gate vẫn qua
+    monkeypatch.setattr(verify, "capture_screenshot", lambda _u, path, _w, **_: path.write_bytes(b"png"))
+    out = verify.run(s, runner=FakeRunner(), http_probe=lambda _url: (200, b"<h1>changed</h1>\n"))
+    assert out["blocked"] is False, out["reason"]
+    assert {i["phase"] for i in out["evidence"]["screenshots"]} == {"after"}
+
+
+def test_js_change_shoots_the_pages_that_load_it(tmp_path):
+    root = checkout(tmp_path)
+    js = root / "public" / "js"
+    js.mkdir()
+    (js / "a.js").write_text("export const a = 1;\n", encoding="utf-8")
+    (js / "b.js").write_text("import { a } from './a.js';\n", encoding="utf-8")
+    (root / "public" / "p.html").write_text('<script type="module" src="js/b.js"></script>\n', encoding="utf-8")
+    (root / "public" / "q.html").write_text('<script src="js/a.js"></script>\n', encoding="utf-8")
+    (root / "public" / "r.html").write_text("<p>không liên quan</p>\n", encoding="utf-8")
+
+    assert verify._shot_pages(root, ["/js/a.js"], None) == ["/q.html", "/p.html"]  # trực tiếp trước, qua import sau
+    assert verify._shot_pages(root, ["/js/a.js"], "/school.html?domain=it") == ["/school.html?domain=it", "/q.html", "/p.html"]
+    assert verify._shot_pages(root, ["/x.html", "/y.html", "/z.html", "/w.html"], None) == ["/x.html", "/y.html", "/z.html"]
+    assert verify._shot_pages(root, ["/js/none.js"], None) == []
+
+
+def test_oracle_gets_the_request_and_the_pages_to_look_at(tmp_path, monkeypatch):
+    import functional
+    seen = []
+    monkeypatch.setattr(functional, 'run', lambda base, probe, fixture=None, state=None, pages=(): seen.append((probe, state, list(pages)))
+                        or {'probe_id': probe, 'passed': True})
+    monkeypatch.setattr(verify, "capture_screenshot", lambda url, path, width=1280, **_: path.write_bytes(b"png"))
+    page = {**state(checkout(tmp_path), visual=True), "request_detail": "Thêm 'Xin chào' vào đầu trang"}
+    assert verify.run(page, runner=FakeRunner())["blocked"] is False
+    assert seen == [(functional.TEXT_PROBE, page, ["/x.html"])]
+    seen.clear()  # JS-only change: look at the page the requester was on
+    js = {**state(tmp_path), "request_detail": "[Trang: Trường] /school.html\nThêm 'Xin chào' vào đầu trang"}
+    verify.run(js, runner=FakeRunner())
+    assert seen[0][2] == ["/school.html"]
+
+
+def _oracle_state(tmp_path):
+    """A request the harness has an oracle for: the quoted words decide what must show."""
+    return {**state(checkout(tmp_path)), "request_detail": "Thêm 'Xin chào' vào đầu trang"}
+
+
+def test_failing_generated_test_is_advisory_when_a_harness_oracle_decides(tmp_path):
+    out = verify.run(_oracle_state(tmp_path), runner=FakeRunner(fail="generated_test"))
+    assert out["blocked"] is False
+    assert "advisory" in out["evidence"]["text"] and "generated tests failed" in out["evidence"]["text"]
+
+
+def test_oracle_failure_still_blocks_even_when_the_generated_test_also_failed(tmp_path, monkeypatch):
+    import functional
+    monkeypatch.setattr(functional, "run", lambda *_, **__: {"probe_id": functional.TEXT_PROBE, "passed": False,
+                                                              "reason": "Chữ người dùng yêu cầu không hiển thị trên trang: 'Xin chào'"})
+    out = verify.run(_oracle_state(tmp_path), runner=FakeRunner(fail="generated_test"))
+    assert out["blocked"] is True and "không hiển thị" in out["reason"]
+
+
+def test_generated_test_timeout_is_advisory_too_with_an_oracle(tmp_path):
+    out = verify.run(_oracle_state(tmp_path), runner=FakeRunner(fail="generated_timeout"))
+    assert out["blocked"] is False and "timed out" in out["evidence"]["text"]
+
+
+def test_no_generated_test_is_fine_when_a_harness_oracle_decides_and_an_error_otherwise(tmp_path):
+    root = checkout(tmp_path)
+    with_oracle = {"skill_id": "skill-42", "full_checkout": str(root), "request_detail": "Thêm 'Xin chào' vào đầu trang",
+                   "diffs": [{"file": "public/x.js", "test_file": None, "diff": "+x"}]}
+    assert verify.run(with_oracle, runner=FakeRunner())["blocked"] is False
+    without = {**with_oracle, "request_detail": "Đổi màu nền"}
+    out = verify.run(without, runner=FakeRunner())
+    assert out["blocked"] is True and "generated test" in out["reason"]
+
+
+class SessionRunner(FakeRunner):
+    """The disposable app hands out a student session when the fixture asks for one."""
+    def __call__(self, args, **kwargs):
+        if args[0] == "docker" and args[-2:] == ["/app/verify-queue.mjs", "session"]:
+            self.calls.append((args, kwargs))
+            return subprocess.CompletedProcess(args, 0, '{"token":"student-session"}\n', "")
+        return super().__call__(args, **kwargs)
+
+
+def test_before_and_after_shots_are_taken_as_the_same_logged_in_student(tmp_path, monkeypatch):
+    tokens = []
+    monkeypatch.setattr(verify, "capture_screenshot",
+                        lambda url, path, width=1280, *, token=None, **_: (tokens.append((url, token)), path.write_bytes(b"png")))
+    s = state(checkout(tmp_path), visual=True)
+    body = (tmp_path / "public" / "x.html").read_bytes()
+    out = verify.run(s, runner=SessionRunner(), http_probe=lambda _url: (200, body))
+    assert out["blocked"] is False
+    assert tokens and {token for _, token in tokens} == {"student-session"}
+
+
+def test_without_a_student_session_the_shots_fall_back_to_a_guest_and_say_so(tmp_path, monkeypatch):
+    tokens = []
+    monkeypatch.setattr(verify, "capture_screenshot",
+                        lambda url, path, width=1280, *, token=None, **_: (tokens.append(token), path.write_bytes(b"png")))
+    s = state(checkout(tmp_path), visual=True)
+    body = (tmp_path / "public" / "x.html").read_bytes()
+    out = verify.run(s, runner=FakeRunner(), http_probe=lambda _url: (200, body))
+    assert out["blocked"] is False
+    assert tokens and set(tokens) == {None}
+    assert "khách" in out["evidence"]["text"]
+
+
+def test_shot_budget_follows_the_number_of_changed_pages(tmp_path):
+    root = tmp_path
+    (root / "public").mkdir()
+    pages = ["/a.html", "/b.html", "/c.html", "/d.html"]
+    assert verify._shot_pages(root, pages, None) == ["/a.html", "/b.html", "/c.html"]   # three pages, the rest is said in the log
+    assert verify._shot_widths(1) == verify._shot_widths(2) == (375, 1280)
+    assert verify._shot_widths(3) == (1280,)                                           # more pages: desktop only, same image budget
+
+
+def test_focus_shot_is_kept_for_desktop_and_listed_next_to_the_page_shot(tmp_path, monkeypatch):
+    calls = []
+
+    def capture(url, path, width=1280, *, selectors=(), token=None, focus=None, focus_texts=()):
+        calls.append((url, width, focus is not None))
+        path.write_bytes(b"png")
+        if focus is not None and (selectors or focus_texts):
+            focus.write_bytes(b"focus")
+        return {}
+
+    monkeypatch.setattr(verify, "capture_screenshot", capture)
+    logs = []
+    shots = verify._capture_all("http://x", ["/a.html"], "/a.html", lambda: set(), logs, ["#t"], "tok")
+    assert [(s["phase"], s["width"], bool(s.get("focus"))) for s in shots] == [
+        ("after", 375, False), ("after", 1280, False), ("after", 1280, True),
+        ("before", 375, False), ("before", 1280, False), ("before", 1280, True)]
+    assert [width for _, width, wants_focus in calls if wants_focus] == [1280, 1280]   # phones are not asked for a crop
+    only = verify._capture_all("http://x", ["/a.html"], "/a.html", lambda: set(), logs, [], "tok")
+    assert not any(s.get("focus") for s in only)                                       # no selector, no crop
+
+
+def test_a_text_edit_without_selectors_still_gets_a_close_up_with_the_right_words_per_phase(tmp_path, monkeypatch):
+    asked = []
+
+    def capture(url, path, width=1280, *, selectors=(), token=None, focus=None, focus_texts=()):
+        path.write_bytes(b"png")
+        if focus is not None:
+            asked.append((width, list(focus_texts)))
+            focus.write_bytes(b"focus")
+        return {}
+
+    monkeypatch.setattr(verify, "capture_screenshot", capture)
+    shots = verify._capture_all("http://x", ["/a.html"], "/a.html", lambda: set(), [], [], "tok",
+                                {"after": ["← Về trang chọn trường"], "before": ["← Quay lại chọn trường"]})
+    assert asked == [(1280, ["← Về trang chọn trường"]), (1280, ["← Quay lại chọn trường"])]
+    assert sum(1 for s in shots if s.get("focus")) == 2
+
+
+def test_a_close_up_shot_does_not_hide_the_measured_before_audit():
+    """Request #15: the focus entry shares (page, width) with the full shot; it must not replace the BEFORE audit with None."""
+    dim = {"contrast": ['a "x" 3.00'], "covered": [], "offscreen": [], "patch": []}
+    shots = [
+        {"phase": "after", "page": "/a.html", "width": 1280, "path": "a", "audit": dim},
+        {"phase": "after", "page": "/a.html", "width": 1280, "path": "af", "focus": True},
+        {"phase": "before", "page": "/a.html", "width": 1280, "path": "b", "audit": dim},
+        {"phase": "before", "page": "/a.html", "width": 1280, "path": "bf", "focus": True},
+    ]
+    assert verify.visual_regressions(shots) == []
+
+
+def test_same_skill_gets_unique_postgres_resources_and_credentials(tmp_path):
+    runners = [FakeRunner(), FakeRunner()]
+    results = []
+    for i, runner in enumerate(runners):
+        root = tmp_path / str(i)
+        root.mkdir()
+        results.append(verify.run(state(checkout(root)), runner=runner))
+    assert all(not out['blocked'] and out['evidence']['teardown_confirmed'] for out in results)
+    configs = [json.loads(r.override) for r in runners]
+    assert configs[0]['services']['tizia']['environment']['DATABASE_URL'] != configs[1]['services']['tizia']['environment']['DATABASE_URL']
+    assert set(configs[0]['volumes']).isdisjoint(configs[1]['volumes'])
+
+
+def test_production_dsn_is_rejected_before_boot(tmp_path):
+    class ProductionDsn(FakeRunner):
+        def __call__(self, args, **kwargs):
+            result = super().__call__(args, **kwargs)
+            if 'config' in args:
+                config = json.loads(result.stdout)
+                config['services']['tizia']['environment']['DATABASE_URL'] = 'postgresql://production.example/live'
+                result.stdout = json.dumps(config)
+            return result
+    runner = ProductionDsn()
+    result = verify.run(state(checkout(tmp_path)), runner=runner)
+    assert result['blocked'] and result['failure_class'] == 'critical'
+    assert not any('up' in args for args, _ in runner.calls)
+    assert result['evidence']['teardown_confirmed']
+
+
+def test_empty_runtime_error_cannot_be_a_pass(tmp_path):
+    fake = FakeRunner()
+    def runner(args, **kwargs):
+        if 'up' in args:
+            raise RuntimeError('')
+        return fake(args, **kwargs)
+    result = verify.run(state(checkout(tmp_path)), runner=runner)
+    assert result['blocked'] and result['reason'] == 'RuntimeError'
+    assert result['evidence']['teardown_confirmed']
+def test_http_probe_login_retry_cannot_forward_student_cookie_to_redirects(monkeypatch):
+    class Response:
+        status = 200
+        url = 'http://candidate/404.html'
+        def __enter__(self): return self
+        def __exit__(self, *_): pass
+        def read(self): return b'actual page'
+    response = Response()
+    def open_request(request, **_):
+        assert 'Cookie' not in request.headers
+        assert request.unredirected_hdrs == {'Cookie': 'tizia_sid=synthetic-student'}
+        return response
+    monkeypatch.setattr(verify.urllib.request, 'urlopen', open_request)
+    assert REAL_HTTP_PROBE('http://candidate/404.html', token='synthetic-student') == (200, b'actual page')
+    response.url = 'http://candidate/login.html'
+    with pytest.raises(verify.LoginRequired):
+        REAL_HTTP_PROBE('http://candidate/404.html', token='synthetic-student')
+    response.url = 'http://outside/login.html'
+    with pytest.raises(RuntimeError, match='outside disposable app origin'):
+        REAL_HTTP_PROBE('http://candidate/404.html', token='synthetic-student')

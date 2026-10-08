@@ -1,9 +1,9 @@
 // ============================================================
-// Trường Ngoại ngữ — Barrel stub (Phase 1 preview)
+// Trường Ngoại ngữ — Barrel stub (preview)
 // ============================================================
 // 4 module preview, chưa có curriculum đầy đủ. Mỗi module trỏ 1 portal-app
 // chuyên ngành đã build sẵn (xem builtin-catalog.js).
-// Phase 2: thêm SUBJECTS + ACHIEVEMENTS + EXPERIENCES per language (EN/JP/KR/CN).
+// TODO: thêm SUBJECTS + ACHIEVEMENTS + EXPERIENCES per language (EN/JP/KR/CN).
 
 /** @type {import('../../engine/types.js').CourseModule[]} */
 export const MODULES = [

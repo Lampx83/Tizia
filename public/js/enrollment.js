@@ -2,8 +2,8 @@
 // 1 trường. Module này:
 //   - Đọc enrolled_domain của user hiện tại từ /api/auth/me (cached).
 //   - Cung cấp modal "Chọn trường" (lần đầu) + "Đổi trường" (có cảnh báo reset).
-//   - Helper canInteract(me, domain) cho Phase 4 — gate UI ở trường khác.
-// FE Phase 3 dùng module này; BE Phase 2 đã chặn /api/* ghi nếu cross-domain.
+//   - Helper canInteract(me, domain) — gate UI ở trường khác.
+// BE chặn /api/* ghi nếu cross-domain.
 
 import { DOMAIN_META } from './engine/domain.js';
 
@@ -48,7 +48,7 @@ export async function switchSchool(domain) {
 }
 
 // Đồng bộ — user có được tương tác (làm bài, chơi game, lưu XP) tại `domain`?
-// Admin bypass; user khác phải enrolled_domain == domain. Dùng cho Phase 4 để
+// Admin bypass; user khác phải enrolled_domain == domain. Dùng để
 // vô hiệu hoá nút submit/play khi ở trường không phải của mình.
 export function canInteract(me, domain) {
   if (!me) return false;
@@ -155,13 +155,13 @@ export function showEnrollmentModal({ mode = 'enroll', current = null } = {}) {
   });
 }
 
-// ── View-only mode (Phase 4) ───────────────────────────────────────────
+// ── View-only mode ───────────────────────────────────────────
 // Khi user vào trường KHÔNG phải của mình:
 //   - Banner đỏ ở giữa đầu trang nhắc "chỉ tham quan".
 //   - CSS dim + chặn pointer-event mọi button/form/input KHÔNG có attr
 //     `data-tizia-view-allowed` (cho phép nav back, đăng xuất, link).
 //   - Override fetch(): mọi POST/PUT/DELETE/PATCH tới /api/* trả 403 view_only
-//     ngay tại FE (BE Phase 2 đã chặn rồi — đây là lớp 2 tăng UX phản hồi).
+//     ngay tại FE (BE đã chặn rồi — đây là lớp 2 tăng UX phản hồi).
 // Admin & guest bypass. Element muốn loại trừ: thêm `data-tizia-view-allowed`.
 //
 // Trả Promise<{ canInteract: bool, mode: 'admin'|'home'|'view-only'|'guest' }>.
@@ -212,7 +212,7 @@ export async function applyViewOnlyGate(domain) {
     document.body.appendChild(b);
   }
 
-  // Lớp 2: chặn FE fetch tới /api/* (POST/PUT/DELETE/PATCH). BE Phase 2 cũng
+  // Lớp 2: chặn FE fetch tới /api/* (POST/PUT/DELETE/PATCH). BE cũng
   // 403 nhưng FE intercept trả lỗi tức thì, không ping mạng.
   if (!window.__tiziaViewFetchPatched) {
     window.__tiziaViewFetchPatched = true;

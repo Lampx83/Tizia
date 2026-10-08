@@ -1,0 +1,21 @@
+# Reviewed deployment policy for the dev runner. Strict schema (src/policy.js); change only via reviewed deploy + restart.
+version: 1
+vm: { cpus: 1, memory_mib: 2048, disk_mib: 10240, ttl_s: 1200, lease_s: 120 }
+concurrency: 1
+# guest-inputs: c29e19002eafba8a78182905db66e12e0549a5f8bddee261939ed1e76c2c6832
+guest_image: image-registry:5000/gate5@sha256:dd8adc6d777c8b12f235b7606d1e2c6a9c44b9211643a362588f7fd92c8ed79a
+egress:
+  - { host: registry-1.docker.io, port: 443 }
+  - { host: auth.docker.io, port: 443 }
+  - { host: production.cloudflare.docker.com, port: 443 }
+  - { host: production.cloudfront.docker.com, port: 443 }
+  - { host: dl-cdn.alpinelinux.org, port: 443 }
+  - { host: registry.npmjs.org, port: 443 }
+  - { host: github.com, port: 443 }
+  - { host: objects.githubusercontent.com, port: 443 }
+  - { host: release-assets.githubusercontent.com, port: 443 }
+  - { host: nodejs.org, port: 443 }
+guest_env: { CI: "1" }
+archive: { max_bytes: 104857600, max_expanded_bytes: 536870912, max_files: 20000 }
+exec: { timeout_s: 1200, max_stdout_bytes: 1048576, max_stderr_bytes: 1048576, workdir: /workspace }
+artifacts: { max_file_bytes: 26214400, max_total_bytes: 52428800 }

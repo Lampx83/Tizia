@@ -42,7 +42,9 @@ def test_d0_fixture_reaches_docker_http_on_an_ai_board_branch(tmp_path):
                    check=True, stdin=subprocess.DEVNULL)
     page = (source / PAGE).read_text(encoding="utf-8")
     assert "</body>" in page
-    codegen = {"code": page.replace("</body>", MARKER + "\n</body>", 1),
+    assert page.count("</body>") == 1
+    # Existing file: Gate 3 only accepts search/replace edits, never a whole-file rewrite.
+    codegen = {"edits": [{"search": "</body>", "replace": MARKER + "\n</body>"}],
                "test_file": "test/ai-board-d0-fixture.test.js", "test": TEST}
     deps = replace(deps_with(FakeModels(plan=None, codegen=codegen)), verify=None)  # real Gate 5
     plan = {"capabilities": ["public.ui"], "steps": [{
@@ -63,7 +65,7 @@ def test_d0_fixture_reaches_docker_http_on_an_ai_board_branch(tmp_path):
         cwd=REPO, check=True, capture_output=True, text=True, encoding="utf-8").stdout)
     verdict = execute_pre_pr(plan, ticket_id=4, checkout_source=source, deps=deps,
                              budget=Budget(max_wall_clock_s=1800), run_gate=run_gate,
-                             cleanup=main.cleanup_full_checkout, policy=policy,
+                             cleanup=main.candidate.cleanup, policy=policy,
                              accepted_policy_hash=policy["hash"],
                              request_detail="[Trang: Tính năng] /tinh-nang.html\nThêm dòng cập nhật")
     print(json.dumps(verdict, ensure_ascii=False, indent=2))

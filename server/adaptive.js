@@ -31,8 +31,8 @@ const PARAMS = {
   remedialFailStreak: 2, // 2 fail liên tiếp → đề xuất nội dung cứu trợ
 };
 
-function ensureSchema() {
-  db.exec(`
+async function ensureSchema() {
+  await db.exec(`
     CREATE TABLE IF NOT EXISTS adaptive_state (
       learner TEXT NOT NULL,
       skill   TEXT NOT NULL,
@@ -60,10 +60,10 @@ function ensureSchema() {
     CREATE INDEX IF NOT EXISTS idx_le_skill   ON learning_events(skill);
   `);
 }
-ensureSchema();
+await ensureSchema();
 
-function getState(learner, skill) {
-  let row = db.prepare(
+async function getState(learner, skill) {
+  let row = await db.prepare(
     'SELECT * FROM adaptive_state WHERE learner = ? AND skill = ?'
   ).get(learner, skill);
   if (!row) {
@@ -79,8 +79,8 @@ function getState(learner, skill) {
   return row;
 }
 
-function upsertState(s) {
-  db.prepare(`
+async function upsertState(s) {
+  await db.prepare(`
     INSERT INTO adaptive_state (learner, skill, p_known, attempts, correct_streak, fail_streak, last_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(learner, skill) DO UPDATE SET
@@ -115,16 +115,16 @@ function bktUpdate(pKnown, correct) {
  * - Nếu fail_streak >= remedialFailStreak: suggest remedial content
  * - Còn lại: tiếp tục practice skill cùng cấp
  */
-function suggestNext(state, availableSkills = []) {
+async function suggestNext(state, availableSkills = []) {
   const { threshold, remedialFailStreak } = PARAMS;
   if (state.fail_streak >= remedialFailStreak) {
     return { mode: 'remedial', skill: state.skill, hint: 'Học sinh đang sai liên tiếp — đề xuất xem lại lý thuyết / video ngắn trước khi làm tiếp.' };
   }
   if (state.p_known >= threshold) {
     // Chọn skill khác có p_known thấp nhất từ list
-    const others = availableSkills
+    const others = (await Promise.all(availableSkills
       .filter(s => s !== state.skill)
-      .map(s => ({ s, st: getState(state.learner, s) }))
+      .map(async s => ({ s, st: await getState(state.learner, s) }))))
       .sort((a, b) => a.st.p_known - b.st.p_known);
     if (others.length) {
       return { mode: 'next_skill', skill: others[0].s, hint: 'Đã thông thạo skill hiện tại — chuyển sang skill yếu hơn.' };
@@ -140,7 +140,7 @@ export function attachAdaptive(r) {
    * Body: { learner, skill, correct, questionId?, durationMs?, domain?, context? }
    * Returns: { ok, pKnown, mastered, suggestion }
    */
-  r.post('/api/adaptive/event', (req, res) => {
+  r.post('/api/adaptive/event', async (req, res) => {
     const b = req.body || {};
     const learner = String(b.learner || '').trim().slice(0, 40);
     const skill = String(b.skill || '').trim().slice(0, 80);
@@ -149,7 +149,7 @@ export function attachAdaptive(r) {
       return res.status(400).json({ error: 'learner and skill required' });
     }
     const now = Date.now();
-    const state = getState(learner, skill);
+    const state = await getState(learner, skill);
     const pNext = bktUpdate(state.p_known, correct);
 
     const updated = {
@@ -160,10 +160,10 @@ export function attachAdaptive(r) {
       fail_streak: correct ? 0 : state.fail_streak + 1,
       last_at: now,
     };
-    upsertState(updated);
+    await upsertState(updated);
 
     // Lưu event
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO learning_events (learner, skill, question_id, correct, duration_ms, created_at, domain, context)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
@@ -176,7 +176,7 @@ export function attachAdaptive(r) {
       b.context ? String(b.context).slice(0, 80) : null,
     );
 
-    const suggestion = suggestNext(updated, Array.isArray(b.availableSkills) ? b.availableSkills : []);
+    const suggestion = await suggestNext(updated, Array.isArray(b.availableSkills) ? b.availableSkills : []);
     res.json({
       ok: true,
       pKnown: Number(pNext.toFixed(4)),
@@ -191,13 +191,13 @@ export function attachAdaptive(r) {
    * GET /api/adaptive/next?learner=X&skill=Y&skills=a,b,c
    * Trả về suggest cho câu tiếp theo (không update state).
    */
-  r.get('/api/adaptive/next', (req, res) => {
+  r.get('/api/adaptive/next', async (req, res) => {
     const learner = String(req.query.learner || '').trim();
     const skill = String(req.query.skill || '').trim();
     if (!learner || !skill) return res.status(400).json({ error: 'learner and skill required' });
     const skills = String(req.query.skills || '').split(',').map(s => s.trim()).filter(Boolean);
-    const state = getState(learner, skill);
-    const suggestion = suggestNext(state, skills.length ? skills : [skill]);
+    const state = await getState(learner, skill);
+    const suggestion = await suggestNext(state, skills.length ? skills : [skill]);
     res.json({
       learner, skill,
       pKnown: Number(state.p_known.toFixed(4)),
@@ -211,12 +211,12 @@ export function attachAdaptive(r) {
 
   /**
    * GET /api/adaptive/learner/:name — tổng quan tiến độ học của 1 learner.
-   * Dùng cho dashboard Wave 2.
+   * Dùng cho dashboard.
    */
-  r.get('/api/adaptive/learner/:name', (req, res) => {
+  r.get('/api/adaptive/learner/:name', async (req, res) => {
     const learner = String(req.params.name || '').trim();
     if (!learner) return res.status(400).json({ error: 'learner required' });
-    const states = db.prepare(`
+    const states = await db.prepare(`
       SELECT skill, p_known, attempts, correct_streak, fail_streak, last_at
       FROM adaptive_state WHERE learner = ? ORDER BY p_known ASC
     `).all(learner);

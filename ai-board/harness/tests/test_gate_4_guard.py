@@ -1,4 +1,4 @@
-"""Ticket 05 AC2: mandatory secret/PII/injection/content/test-removal checks on the real
+"""AC2: mandatory secret/PII/injection/content/test-removal checks on the real
 base..HEAD diff, plus changed-path rules. Pure text in, findings out — no subprocess."""
 from dataclasses import replace
 
@@ -18,7 +18,7 @@ def kinds(text, checkout=None):
 
 
 def test_clean_content_change_passes_and_lists_what_ran():
-    out = guard.scan(diff("public/pricing.html", added=["<p>Bảng giá mới</p>"]))
+    out = guard.scan(diff("public/gioi-thieu.html", added=["<p>Lời giới thiệu mới</p>"]))
     assert out["findings"] == []
     assert {"secret", "pii", "injection", "content", "test_removal", "protected_path"} <= set(out["checks"])
     assert out["ui_changed"] is True
@@ -79,6 +79,33 @@ def test_protected_paths_need_a_human():
         assert ("protected_path", "critical") in kinds(diff(path, added=["x"])), path
 
 
+SELF_AREA = ["ai-board/harness/skills/edit-html-text/SKILL.md", "ai-board/harness/prompts/brainstorm.md",
+             "ai-board/harness/retrieval_weights.json"]
+
+
+def test_only_a_self_request_may_edit_skills_gate_prompts_and_retrieval_weights():
+    """Same diff passes for type self, stays protected_path for every other type."""
+    for path in SELF_AREA:
+        text = diff(path, added=["match: đổi tên, sửa chữ"], removed=["match: sửa chữ"])
+        assert guard.scan(text, request_type="self")["findings"] == [], path
+        for other in (None, "feature", "other"):
+            found = {(f["check"], f["failure_class"]) for f in guard.scan(text, request_type=other)["findings"]}
+            assert ("protected_path", "critical") in found, (path, other)
+
+
+def test_a_self_request_still_cannot_touch_gate_code_lexicon_policy_contract_or_locks():
+    for path in ["ai-board/harness/gates/guard.py", "ai-board/harness/main.py", "ai-board/worker.py",
+                 "server/ai-board/guard-lexicon.json", "server/ai-board/policy.js", "server/ai-board/contract.json",
+                 "ai-board/harness/skills/skills.lock.json", "ai-board/harness/prompts/prompts.lock.json",
+                 "ai-board/harness/prompts/AIBOARD.md", "ai-board/harness/skills/edit-html-text/tools.py",
+                 "ai-board/harness/eval/strata-baseline.json", "package.json"]:
+        found = {(f["check"], f["failure_class"]) for f in guard.scan(diff(path, added=["x"]), request_type="self")["findings"]}
+        assert ("protected_path", "critical") in found, path
+    gone = ("diff --git a/ai-board/harness/skills/default/SKILL.md b/ai-board/harness/skills/default/SKILL.md\n"
+            "deleted file mode 100644\n--- a/ai-board/harness/skills/default/SKILL.md\n+++ /dev/null\n-x\n")
+    assert "protected_path" in {f["check"] for f in guard.scan(gone, request_type="self")["findings"]}
+
+
 def test_changed_python_must_parse(tmp_path):
     (tmp_path / "server").mkdir()
     (tmp_path / "server" / "tool.py").write_text("def broken(:\n", encoding="utf-8")
@@ -96,3 +123,24 @@ def test_gate_4_blocks_on_guard_findings_with_the_worst_kind(monkeypatch, fake_d
     assert "injection" in out["reason"]
     assert "secret" in out["checks"]
     assert state["ui_changed"] is True
+
+
+def test_money_files_need_a_human_but_lesson_prices_do_not():
+    """guard-lexicon.json money_paths: any diff on them is critical; prices inside a lesson page are not flagged."""
+    for path in sorted(guard.MONEY_PATHS):
+        assert ("protected_path", "critical") in kinds(diff(path, added=["<p>x</p>"])), path
+    lesson = guard.scan(diff("public/js/scenarios/economics-practice.js", added=["  q: 'Giá bán 25.000đ, lãi bao nhiêu?',"]))
+    assert not [f for f in lesson["findings"] if f["check"] in ("protected_path", "content")]
+
+
+def test_only_the_feature_module_script_line_is_allowed_in_public():
+    """One exact form of <script>, local module under js/features/<slug>/."""
+    ok = '<script type="module" src="./js/features/tro-doan-tu/index.js"></script>'
+    assert ("injection", "critical") not in kinds(diff("public/tro-doan-tu.html", added=[ok], new=True))
+    for bad in ['<script type="module" src="./js/features/x/index.js">alert(1)</script>',
+                '<script type="module" src="https://evil.example/x.js"></script>',
+                '<script type="module" src="./js/engine/wallet.js"></script>',
+                '<script src="./js/features/x/index.js"></script>',
+                '<script type="module" src="./js/features/../engine/x.js"></script>',
+                '<script>alert(1)</script>']:
+        assert ("injection", "critical") in kinds(diff("public/tro-doan-tu.html", added=[bad], new=True)), bad

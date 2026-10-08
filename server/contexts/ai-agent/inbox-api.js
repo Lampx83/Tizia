@@ -8,7 +8,7 @@
 //   GET /api/requests        → 401 (và chỉ trả yêu cầu của CHÍNH tài khoản đó)
 //   GET /api/admin/requests  → 401 + requireAdmin
 // Hệ quả: các phiên hàng ngày từ 2026-07 tới nay không đọc được yêu cầu thật của
-// sinh viên (xem public/CHANGELOG-eduverse.md, phiên 45/58/62). Route này là
+// sinh viên. Route này là
 // đường đọc còn thiếu.
 //
 // BẢO MẬT
@@ -34,7 +34,9 @@
 // ============================================================
 
 import crypto from 'node:crypto';
-import { listBoardInbox } from '../../db.js';
+import { db } from '../../db.js';
+import { aiBoardServices } from '../../ai-board/runtime.js';
+import { asyncRoutes } from '../../ai-board/async-routes.js';
 
 const MIN_KEY_LEN = 24;
 
@@ -63,7 +65,7 @@ export function attachAiBoardInbox(r, { env = process.env } = {}) {
 
   const expected = digest(key);
 
-  r.get('/api/ai-board/inbox', (req, res) => {
+  asyncRoutes(r).get('/api/ai-board/inbox', async (req, res) => {
     const sent = req.headers['x-ai-board-key'];
     // Header vắng / lặp (mảng) → chặn trước khi đụng tới so khớp.
     if (typeof sent !== 'string' || !sent) {
@@ -73,7 +75,7 @@ export function attachAiBoardInbox(r, { env = process.env } = {}) {
       return res.status(403).json({ error: 'forbidden', message: 'Key không hợp lệ.' });
     }
 
-    const items = listBoardInbox(req.query.limit);
+    const items = await aiBoardServices(db).requests.listBoardInbox(req.query.limit);
     const stats = { pending: 0, reviewing: 0 };
     const by_domain = {};
     for (const it of items) {

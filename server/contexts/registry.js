@@ -21,7 +21,7 @@ import express from 'express';
 
 // Module dev-owned — plugin nào tự nhận diện qua `sourceModule` trùng list này
 // PHẢI khai `origin: 'dev-owned'` mới được mount. AI-generated proposal không
-// bao giờ tự khai 'dev-owned' (cổng 4/ticket 12 chặn ở bước lint import), nên
+// bao giờ tự khai 'dev-owned' (cổng 4 chặn ở bước lint import), nên
 // đây là lớp phòng vệ runtime thứ hai: registry từ chối mount thẳng, kể cả nếu
 // lint bị bỏ qua. capabilities.js re-export list này làm CORE_MODULES.
 export const CORE_MODULES = Object.freeze([
@@ -37,7 +37,7 @@ export const CORE_MODULES = Object.freeze([
   'server/contexts/portal-apps/index.js',
 ]);
 
-// Capability không đi qua mount (ticket 08): ScoreUp/Codelab là hàm gọi thẳng
+// Capability không đi qua mount: ScoreUp/Codelab là hàm gọi thẳng
 // từ surface.quiz/core.integrations (xem capabilities.js), không phải
 // registry.mount*Plugins — nên không bao giờ xuất hiện trong `mounted`/
 // `catalogs` bên dưới. Khai tĩnh ở đây để listAvailableCapabilities() vẫn
@@ -64,7 +64,7 @@ export const STATIC_CAPABILITIES = Object.freeze([
 // name → dispose. Gỡ một skill = gọi một hàm.
 const mounted = new Map();
 // name → catalog entry, chỉ cho plugin ĐANG mount VÀ có khai `catalog`
-// (ticket 08). Sống/chết theo đúng vòng đời mounted — dispose() gỡ cả hai.
+// Sống/chết theo đúng vòng đời mounted — dispose() gỡ cả hai.
 const catalogs = new Map();
 
 // Plugin khai `sourceModule` trùng CORE_MODULES mà không tự nhận `origin:
@@ -115,7 +115,7 @@ function assertNamesFree(plugins) {
 // Không đụng app._router.stack (internal của Express, vỡ khi lên v5).
 // ponytail: middleware no-op còn lại sau dispose là rác nhỏ (1 closure/plugin đã gỡ);
 // nếu về sau mount/dispose chạy hàng nghìn lần thì mới cần gỡ hẳn khỏi stack.
-function mountHttp(target, plugins, ctx) {
+async function mountHttp(target, plugins, ctx) {
   assertNamesFree(plugins);
   // pluginCtx() làm 1 lượt deepFreeze — `ctx` giống hệt nhau cho cả lô, tính
   // 1 lần thay vì 1 lần/plugin (mountRouterPlugins gọi 1 lần với ~30 plugin).
@@ -123,7 +123,7 @@ function mountHttp(target, plugins, ctx) {
   for (const p of plugins) {
     let inner = express.Router();
     target.use((req, res, next) => (inner ? inner(req, res, next) : next()));
-    const disposePlugin = p.mount(inner, frozenCtx);
+    const disposePlugin = await p.mount(inner, frozenCtx);
     mounted.set(p.name, () => {
       inner = null;
       disposePlugin?.();
@@ -133,22 +133,22 @@ function mountHttp(target, plugins, ctx) {
   return plugins.map((p) => p.name);
 }
 
-export function mountAppPlugins(app, plugins, ctx) {
-  return mountHttp(app, plugins, ctx);
+export async function mountAppPlugins(app, plugins, ctx) {
+  return await mountHttp(app, plugins, ctx);
 }
 
-export function mountRouterPlugins(router, plugins, ctx) {
-  return mountHttp(router, plugins, ctx);
+export async function mountRouterPlugins(router, plugins, ctx) {
+  return await mountHttp(router, plugins, ctx);
 }
 
-export function mountWsPlugins(httpServer, plugins, ctx) {
+export async function mountWsPlugins(httpServer, plugins, ctx) {
   assertNamesFree(plugins);
   const frozenCtx = pluginCtx(ctx);
   for (const p of plugins) {
     if (p.wsPriority !== 'prepend' && p.wsPriority !== 'append') {
       throw new Error(`[registry] plugin WS ${p.name} phải khai báo wsPriority: 'prepend' | 'append'`);
     }
-    const handle = p.mount(frozenCtx);
+    const handle = await p.mount(frozenCtx);
     if (typeof handle?.onUpgrade !== 'function') {
       throw new Error(`[registry] plugin WS ${p.name} phải trả { onUpgrade }`);
     }
@@ -183,7 +183,7 @@ export function mountedPlugins() {
   return [...mounted.keys()];
 }
 
-// Ticket 08 — danh mục năng lực: catalog của mọi plugin ĐANG mount có khai
+// Danh mục năng lực: catalog của mọi plugin ĐANG mount có khai
 // `catalog`, cộng STATIC_CAPABILITIES (ScoreUp/Codelab, không đi qua mount).
 // AI board đọc trước khi đề xuất skill mới, để không phát minh lại cái đã có.
 export function listAvailableCapabilities() {

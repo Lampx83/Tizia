@@ -84,8 +84,8 @@ export const CABINETS = [
     ]
   },
   // 3 tủ bên phải quầy: 1 tủ kiểm soát đặc biệt (thấp, cửa kính, 4 ngăn) +
-  // 2 tủ "Sản phẩm này không phải là thuốc". Giữ id cũ để Phase 1 không vỡ
-  // mapping thuốc; Phase 2 sẽ remap drugs sang ngăn đúng.
+  // 2 tủ "Sản phẩm này không phải là thuốc". Giữ id cũ để không vỡ
+  // mapping thuốc; TODO remap drugs sang ngăn đúng.
   {
     "id": "side_herbal",
     "label": "THUỐC KIỂM SOÁT ĐẶC BIỆT",

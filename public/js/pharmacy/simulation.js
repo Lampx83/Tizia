@@ -851,8 +851,8 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
     const scene2 = new THREE.Scene();
     scene2.background = new THREE.Color(0x0f172a);
     const camera2 = new THREE.PerspectiveCamera(35, 1, 0.01, 10);
-    // Distance trước đây fixed 0.62m cho box 0.27m cao. Nay box đổi theo dạng,
-    // distance tỷ lệ với chiều cao + chiều rộng để box luôn lọt khung.
+    // Box đổi theo dạng nên distance tỷ lệ với chiều cao + chiều rộng
+    // để box luôn lọt khung.
     // Tính sau khi build box (xem dưới).
     camera2.position.set(0.0, 0.05, 0.62);
     // Lighting sáng hơn (ambient 0.9 + 2 dir 1.1 / 0.5) để màu accent đỏ/cam

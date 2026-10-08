@@ -2,50 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import express from 'express';
-import Database from 'better-sqlite3';
 
-import { applyAiBoardMigrations, createAiBoardStore, RequestValidationError } from '../server/ai-board/store.js';
+import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
+import { openBoard } from './support/ai-board-db.js';
+import { RequestValidationError } from '../server/ai-board/store.js';
 import { attachAiBoardRequestRoutes } from '../server/ai-board/routes.js';
 
-function fixtureDb() {
-  const db = new Database(':memory:');
-  db.pragma('foreign_keys = ON');
-  db.exec(`
-    CREATE TABLE users (
-      id INTEGER PRIMARY KEY,
-      username TEXT NOT NULL UNIQUE,
-      display_name TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'student',
-      enrolled_domain TEXT
-    );
-    CREATE TABLE requests (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      domain TEXT NOT NULL,
-      type TEXT NOT NULL DEFAULT 'other',
-      title TEXT NOT NULL,
-      detail TEXT,
-      student TEXT NOT NULL DEFAULT 'Ẩn danh',
-      status TEXT NOT NULL DEFAULT 'pending',
-      votes INTEGER NOT NULL DEFAULT 1,
-      admin_note TEXT,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
-      attachments TEXT
-    );
-    CREATE TABLE request_messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      request_id INTEGER NOT NULL,
-      role TEXT NOT NULL,
-      author_name TEXT,
-      body TEXT NOT NULL,
-      attachments TEXT,
-      created_at INTEGER NOT NULL
-    );
-  `);
-  db.prepare('INSERT INTO users VALUES (?, ?, ?, ?, ?)').run(1, 'lan', 'Lan thật', 'student', 'pharmacy');
-  db.prepare('INSERT INTO users VALUES (?, ?, ?, ?, ?)').run(2, 'minh', 'Minh', 'student', 'it');
-  db.prepare('INSERT INTO users VALUES (?, ?, ?, ?, ?)').run(9, 'admin', 'Admin', 'admin', null);
-  applyAiBoardMigrations(db);
+async function fixtureDb() {
+  const db = await openBoard({ users: [
+    [1, 'lan', 'Lan thật', 'student', 'pharmacy'],
+    [2, 'minh', 'Minh', 'student', 'it'],
+    [9, 'admin', 'Admin', 'admin', null],
+  ] });
   return db;
 }
 
@@ -73,7 +41,9 @@ async function serve(store) {
   const requireStrictCsrf = (req, res, next) => req.headers['x-csrf-token'] === 'ok'
     ? next()
     : res.status(403).json({ error: 'csrf_failed' });
-  attachAiBoardRequestRoutes(app, { store, requireAuth, requireEnrolled, requireAdmin, requireStrictCsrf });
+  // Fake stores only stub what a test needs; the pending-cap check is not under test here.
+  attachAiBoardRequestRoutes(app, { store: { countPendingRoots: () => 0, ...store }, requireAuth, requireEnrolled,
+    requireAdmin, requireStrictCsrf });
   app.use((error, _req, res, _next) => res.status(500).json({ error: 'internal_error', message: error.message }));
   const server = http.createServer(app);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -85,8 +55,8 @@ async function serve(store) {
 }
 
 test('authenticated request uses enrolled identity and retry returns the same root', async () => {
-  const db = fixtureDb();
-  const store = createAiBoardStore(db);
+  const db = await fixtureDb();
+  const store = createAsyncAiBoardStore(db.d);
   const { base, close } = await serve(store);
   try {
     const send = () => fetch(`${base}/api/requests`, {
@@ -107,9 +77,9 @@ test('authenticated request uses enrolled identity and retry returns the same ro
     assert.equal(b.root_ticket_id, a.root_ticket_id);
     assert.equal(b.created, false);
 
-    const row = db.prepare('SELECT owner_user_id, owner_domain, student, owner_state FROM requests').get();
+    const row = await db.prepare('SELECT owner_user_id, owner_domain, student, owner_state FROM requests').get();
     assert.deepEqual(row, { owner_user_id: 1, owner_domain: 'pharmacy', student: 'Lan thật', owner_state: 'verified' });
-    assert.equal(db.prepare('SELECT COUNT(*) n FROM ai_tickets WHERE kind = ?').get('root').n, 1);
+    assert.equal((await db.prepare('SELECT COUNT(*) n FROM ai_tickets WHERE kind = ?').get('root')).n, 1);
   } finally {
     await close();
     db.close();
@@ -146,25 +116,25 @@ test('unexpected request store failure reaches Express error handling', async ()
   }
 });
 
-test('request and root ticket roll back together', () => {
-  const db = fixtureDb();
-  const store = createAiBoardStore(db, { afterRequestInserted: () => { throw new Error('fixture failure'); } });
-  assert.throws(() => store.createRequestWithRoot({
+test('request and root ticket roll back together', async () => {
+  const db = await fixtureDb();
+  const store = createAsyncAiBoardStore(db.d, { afterRequestInserted: () => { throw new Error('fixture failure'); } });
+  await assert.rejects(async () => store.createRequestWithRoot({
     ownerUserId: 1,
     ownerDomain: 'pharmacy',
     ownerDisplayName: 'Lan thật',
     idempotencyKey: 'rollback-001',
     title: 'Yêu cầu rollback',
   }), /fixture failure/);
-  assert.equal(db.prepare('SELECT COUNT(*) n FROM requests').get().n, 0);
-  assert.equal(db.prepare('SELECT COUNT(*) n FROM ai_tickets').get().n, 0);
+  assert.equal((await db.prepare('SELECT COUNT(*) n FROM requests').get()).n, 0);
+  assert.equal((await db.prepare('SELECT COUNT(*) n FROM ai_tickets').get()).n, 0);
   db.close();
 });
 
 test('request list is owner-scoped and status mutation needs admin plus strict CSRF', async () => {
-  const db = fixtureDb();
-  const store = createAiBoardStore(db);
-  store.createRequestWithRoot({
+  const db = await fixtureDb();
+  const store = createAsyncAiBoardStore(db.d);
+  await store.createRequestWithRoot({
     ownerUserId: 1, ownerDomain: 'pharmacy', ownerDisplayName: 'Lan thật',
     idempotencyKey: 'owner-001', title: 'Yêu cầu của Lan',
   });
@@ -190,9 +160,10 @@ test('request list is owner-scoped and status mutation needs admin plus strict C
       body: JSON.stringify({ status: 'reviewing', note: 'Bắt đầu xem' }),
     });
     assert.equal(ok.status, 200);
-    assert.equal(db.prepare('SELECT status FROM requests WHERE id = 1').get().status, 'reviewing');
+    assert.deepEqual({ ...await db.prepare('SELECT status, admin_note FROM requests WHERE id = 1').get() },
+      { status: 'pending', admin_note: 'Bắt đầu xem' }, 'admin "reviewing" is a note; status follows the root ticket');
 
-    store.claimNext({ workerId: 'visible-worker', version: 'd0', mode: 'shadow' });
+    await store.claimNext({ workerId: 'visible-worker', version: 'd0', mode: 'shadow' });
     const queue = await fetch(`${base}/api/admin/ai-board/queue`, { headers: { 'x-test-user': '9' } });
     assert.equal(queue.status, 200);
     const queueData = await queue.json();

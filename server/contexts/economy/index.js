@@ -19,7 +19,7 @@ const XP_PER_TIER = 500;
 const TIERS = 30;
 const PREMIUM_COST_COIN = 5000;
 
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS bp_seasons (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     code            TEXT NOT NULL UNIQUE,         -- 'S1-2026', 'S2-2026'
@@ -75,19 +75,19 @@ db.exec(`
 `);
 
 // Seed default season + shop items nếu trống
-function maybeSeedSeason() {
-  const cnt = db.prepare(`SELECT COUNT(*) AS n FROM bp_seasons WHERE is_active = 1`).get().n;
+async function maybeSeedSeason() {
+  const cnt = (await db.prepare(`SELECT COUNT(*) AS n FROM bp_seasons WHERE is_active = 1`).get()).n;
   if (cnt > 0) return;
   const now = Date.now();
-  db.prepare(`INSERT INTO bp_seasons (code, name, theme, started_at, ends_at, is_active)
+  await db.prepare(`INSERT INTO bp_seasons (code, name, theme, started_at, ends_at, is_active)
               VALUES (?, ?, ?, ?, ?, 1)`)
     .run('S1-2026', 'Mùa 1: Tinh Vân Tri Thức', 'cosmic', now, now + SEASON_DAYS * 86400_000);
   console.log('[economy] seeded BP Season 1');
 }
-maybeSeedSeason();
+await maybeSeedSeason();
 
-function maybeSeedShop() {
-  const cnt = db.prepare(`SELECT COUNT(*) AS n FROM shop_items`).get().n;
+async function maybeSeedShop() {
+  const cnt = (await db.prepare(`SELECT COUNT(*) AS n FROM shop_items`).get()).n;
   if (cnt > 0) return;
   const items = [
     { id:'frame-vang',    type:'avatar-frame', name:'Khung Vàng',     desc:'Khung avatar vàng kim sang trọng',          price:300, icon:'🟡', rarity:'common' },
@@ -105,25 +105,25 @@ function maybeSeedShop() {
   ];
   const ins = db.prepare(`INSERT INTO shop_items (id, type, name, description, price_coin, icon, rarity)
                           VALUES (?, ?, ?, ?, ?, ?, ?)`);
-  const tx = db.transaction(() => {
-    for (const it of items) ins.run(it.id, it.type, it.name, it.desc, it.price, it.icon, it.rarity);
+  const tx = db.transaction(async () => {
+    for (const it of items) await ins.run(it.id, it.type, it.name, it.desc, it.price, it.icon, it.rarity);
   });
-  tx();
+  await tx();
   console.log(`[economy] seeded ${items.length} shop items`);
 }
-maybeSeedShop();
+await maybeSeedShop();
 
 // ─── Helpers ────────────────────────────────────────────────
-function getCurrentSeason() {
-  return db.prepare(`SELECT * FROM bp_seasons WHERE is_active = 1 ORDER BY id DESC LIMIT 1`).get();
+async function getCurrentSeason() {
+  return await db.prepare(`SELECT * FROM bp_seasons WHERE is_active = 1 ORDER BY id DESC LIMIT 1`).get();
 }
 
-function ensureBpProgress(userId, seasonId) {
-  let row = db.prepare(`SELECT * FROM bp_progress WHERE user_id = ? AND season_id = ?`).get(userId, seasonId);
+async function ensureBpProgress(userId, seasonId) {
+  let row = await db.prepare(`SELECT * FROM bp_progress WHERE user_id = ? AND season_id = ?`).get(userId, seasonId);
   if (!row) {
-    db.prepare(`INSERT INTO bp_progress (user_id, season_id, updated_at) VALUES (?, ?, ?)`)
+    await db.prepare(`INSERT INTO bp_progress (user_id, season_id, updated_at) VALUES (?, ?, ?)`)
       .run(userId, seasonId, Date.now());
-    row = db.prepare(`SELECT * FROM bp_progress WHERE user_id = ? AND season_id = ?`).get(userId, seasonId);
+    row = await db.prepare(`SELECT * FROM bp_progress WHERE user_id = ? AND season_id = ?`).get(userId, seasonId);
   }
   return row;
 }
@@ -148,13 +148,13 @@ function tierRewards(tier) {
 /**
  * Cộng XP season cho user (hook khi grant XP từ engagement claim, codelab, …)
  */
-export function addBpXp(userId, xp) {
+export async function addBpXp(userId, xp) {
   if (!userId || !Number.isFinite(xp) || xp <= 0) return null;
-  const season = getCurrentSeason();
+  const season = await getCurrentSeason();
   if (!season) return null;
-  const row = ensureBpProgress(userId, season.id);
+  const row = await ensureBpProgress(userId, season.id);
   const newXp = row.season_xp + Math.floor(xp);
-  db.prepare(`UPDATE bp_progress SET season_xp = ?, updated_at = ? WHERE user_id = ? AND season_id = ?`)
+  await db.prepare(`UPDATE bp_progress SET season_xp = ?, updated_at = ? WHERE user_id = ? AND season_id = ?`)
     .run(newXp, Date.now(), userId, season.id);
   return { season_xp: newXp, tier: Math.floor(newXp / XP_PER_TIER) };
 }
@@ -178,11 +178,11 @@ const DAILY_REWARDS = [
   { day: 7, coin: 300, xp: 150, bonus: 'frame-vang', label: 'Jackpot tuần!' },
 ];
 
-function getDailyState(userId) {
-  let row = db.prepare(`SELECT * FROM daily_login WHERE user_id = ?`).get(userId);
+async function getDailyState(userId) {
+  let row = await db.prepare(`SELECT * FROM daily_login WHERE user_id = ?`).get(userId);
   if (!row) {
-    db.prepare(`INSERT INTO daily_login (user_id, streak, last_date, total_claims) VALUES (?, 0, '', 0)`).run(userId);
-    row = db.prepare(`SELECT * FROM daily_login WHERE user_id = ?`).get(userId);
+    await db.prepare(`INSERT INTO daily_login (user_id, streak, last_date, total_claims) VALUES (?, 0, '', 0)`).run(userId);
+    row = await db.prepare(`SELECT * FROM daily_login WHERE user_id = ?`).get(userId);
   }
   const today = vnToday();
   const canClaim = row.last_date !== today;
@@ -206,32 +206,32 @@ function getDailyState(userId) {
   };
 }
 
-function claimDaily(userId) {
-  const state = getDailyState(userId);
+async function claimDaily(userId) {
+  const state = await getDailyState(userId);
   if (!state.can_claim) return { ok: false, error: 'already_claimed_today' };
   const reward = state.next_reward;
-  const w = getUserWallet(userId) || { coins: 0, xp: 0 };
-  upsertUserWallet(userId, {
+  const w = await getUserWallet(userId) || { coins: 0, xp: 0 };
+  await upsertUserWallet(userId, {
     coins: (w.coins || 0) + reward.coin,
     xp:    (w.xp    || 0) + reward.xp,
   }, { monotonic: false });
   // Bonus item
   if (reward.bonus) {
-    db.prepare(`INSERT OR IGNORE INTO user_inventory (user_id, item_id, acquired_at) VALUES (?, ?, ?)`)
+    await db.prepare(`INSERT INTO user_inventory (user_id, item_id, acquired_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`)
       .run(userId, reward.bonus, Date.now());
   }
-  db.prepare(`UPDATE daily_login SET streak = ?, last_date = ?, total_claims = total_claims + 1 WHERE user_id = ?`)
+  await db.prepare(`UPDATE daily_login SET streak = ?, last_date = ?, total_claims = total_claims + 1 WHERE user_id = ?`)
     .run(state.next_streak, state.today, userId);
   return { ok: true, reward, new_streak: state.next_streak };
 }
 
 // ─── Shop ───────────────────────────────────────────────────
-function listShop() {
-  return db.prepare(`SELECT * FROM shop_items WHERE available = 1 ORDER BY type, price_coin`).all();
+async function listShop() {
+  return await db.prepare(`SELECT * FROM shop_items WHERE available = 1 ORDER BY type, price_coin`).all();
 }
 
-function userInventory(userId) {
-  return db.prepare(`
+async function userInventory(userId) {
+  return await db.prepare(`
     SELECT i.*, s.name, s.type, s.icon, s.description, s.rarity
       FROM user_inventory i
       JOIN shop_items s ON s.id = i.item_id
@@ -240,43 +240,43 @@ function userInventory(userId) {
   `).all(userId);
 }
 
-function buyItem(userId, itemId) {
-  const item = db.prepare(`SELECT * FROM shop_items WHERE id = ? AND available = 1`).get(itemId);
+async function buyItem(userId, itemId) {
+  const item = await db.prepare(`SELECT * FROM shop_items WHERE id = ? AND available = 1`).get(itemId);
   if (!item) return { ok: false, error: 'not_found' };
-  const owned = db.prepare(`SELECT 1 FROM user_inventory WHERE user_id = ? AND item_id = ?`).get(userId, itemId);
+  const owned = await db.prepare(`SELECT 1 FROM user_inventory WHERE user_id = ? AND item_id = ?`).get(userId, itemId);
   if (owned) return { ok: false, error: 'already_owned' };
-  const w = getUserWallet(userId) || { coins: 0 };
+  const w = await getUserWallet(userId) || { coins: 0 };
   if ((w.coins || 0) < item.price_coin) {
     return { ok: false, error: 'no_coins', need: item.price_coin, have: w.coins || 0 };
   }
-  upsertUserWallet(userId, { coins: (w.coins || 0) - item.price_coin }, { monotonic: false });
-  db.prepare(`INSERT INTO user_inventory (user_id, item_id, acquired_at) VALUES (?, ?, ?)`)
+  await upsertUserWallet(userId, { coins: (w.coins || 0) - item.price_coin }, { monotonic: false });
+  await db.prepare(`INSERT INTO user_inventory (user_id, item_id, acquired_at) VALUES (?, ?, ?)`)
     .run(userId, itemId, Date.now());
   return { ok: true, item };
 }
 
-function equipItem(userId, itemId) {
-  const item = db.prepare(`SELECT * FROM shop_items WHERE id = ?`).get(itemId);
+async function equipItem(userId, itemId) {
+  const item = await db.prepare(`SELECT * FROM shop_items WHERE id = ?`).get(itemId);
   if (!item) return { ok: false, error: 'not_found' };
-  const owned = db.prepare(`SELECT 1 FROM user_inventory WHERE user_id = ? AND item_id = ?`).get(userId, itemId);
+  const owned = await db.prepare(`SELECT 1 FROM user_inventory WHERE user_id = ? AND item_id = ?`).get(userId, itemId);
   if (!owned) return { ok: false, error: 'not_owned' };
   // Unequip same-type items, equip this
-  const tx = db.transaction(() => {
-    db.prepare(`UPDATE user_inventory SET equipped = 0 WHERE user_id = ?
+  const tx = db.transaction(async () => {
+    await db.prepare(`UPDATE user_inventory SET equipped = 0 WHERE user_id = ?
                  AND item_id IN (SELECT id FROM shop_items WHERE type = ?)`).run(userId, item.type);
-    db.prepare(`UPDATE user_inventory SET equipped = 1 WHERE user_id = ? AND item_id = ?`).run(userId, itemId);
+    await db.prepare(`UPDATE user_inventory SET equipped = 1 WHERE user_id = ? AND item_id = ?`).run(userId, itemId);
   });
-  tx();
+  await tx();
   return { ok: true };
 }
 
 // ─── Routes ──────────────────────────────────────────────────
 export function attachEconomy(router) {
   // BP overview
-  router.get('/api/bp/me', requireAuth, (req, res) => {
-    const season = getCurrentSeason();
+  router.get('/api/bp/me', requireAuth, async (req, res) => {
+    const season = await getCurrentSeason();
     if (!season) return res.json({ ok: false, error: 'no_active_season' });
-    const row = ensureBpProgress(req.user.id, season.id);
+    const row = await ensureBpProgress(req.user.id, season.id);
     const tier = Math.min(TIERS, Math.floor(row.season_xp / XP_PER_TIER));
     const claimedFree    = JSON.parse(row.claimed_free    || '[]');
     const claimedPremium = JSON.parse(row.claimed_premium || '[]');
@@ -302,15 +302,15 @@ export function attachEconomy(router) {
     });
   });
 
-  router.post('/api/bp/claim', requireAuth, (req, res) => {
+  router.post('/api/bp/claim', requireAuth, async (req, res) => {
     const tier = Number(req.body?.tier);
     const track = String(req.body?.track || 'free');
     if (!Number.isInteger(tier) || tier < 1 || tier > TIERS) {
       return res.status(400).json({ error: 'bad_tier' });
     }
-    const season = getCurrentSeason();
+    const season = await getCurrentSeason();
     if (!season) return res.status(400).json({ error: 'no_season' });
-    const row = ensureBpProgress(req.user.id, season.id);
+    const row = await ensureBpProgress(req.user.id, season.id);
     const currentTier = Math.floor(row.season_xp / XP_PER_TIER);
     if (tier > currentTier) return res.status(400).json({ error: 'tier_not_unlocked' });
     if (track === 'premium' && !row.has_premium) return res.status(402).json({ error: 'premium_required' });
@@ -319,60 +319,60 @@ export function attachEconomy(router) {
     if (claimed.includes(tier - 1)) return res.status(400).json({ error: 'already_claimed' });
     const r = tierRewards(tier - 1)[track];
     // Apply reward
-    const w = getUserWallet(req.user.id) || { coins:0, xp:0 };
-    upsertUserWallet(req.user.id, {
+    const w = await getUserWallet(req.user.id) || { coins:0, xp:0 };
+    await upsertUserWallet(req.user.id, {
       coins: (w.coins || 0) + (r.coin || 0),
       xp:    (w.xp    || 0) + (r.xp   || 0),
     }, { monotonic: false });
     if (r.item) {
-      db.prepare(`INSERT OR IGNORE INTO user_inventory (user_id, item_id, acquired_at) VALUES (?, ?, ?)`)
+      await db.prepare(`INSERT INTO user_inventory (user_id, item_id, acquired_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`)
         .run(req.user.id, r.item, Date.now());
     }
     claimed.push(tier - 1);
-    db.prepare(`UPDATE bp_progress SET ${key} = ?, updated_at = ? WHERE user_id = ? AND season_id = ?`)
+    await db.prepare(`UPDATE bp_progress SET ${key} = ?, updated_at = ? WHERE user_id = ? AND season_id = ?`)
       .run(JSON.stringify(claimed), Date.now(), req.user.id, season.id);
     res.json({ ok: true, reward: r });
   });
 
-  router.post('/api/bp/buy-premium', requireAuth, (req, res) => {
-    const season = getCurrentSeason();
+  router.post('/api/bp/buy-premium', requireAuth, async (req, res) => {
+    const season = await getCurrentSeason();
     if (!season) return res.status(400).json({ error: 'no_season' });
-    const row = ensureBpProgress(req.user.id, season.id);
+    const row = await ensureBpProgress(req.user.id, season.id);
     if (row.has_premium) return res.status(400).json({ error: 'already_premium' });
-    const w = getUserWallet(req.user.id) || { coins: 0 };
+    const w = await getUserWallet(req.user.id) || { coins: 0 };
     if ((w.coins || 0) < PREMIUM_COST_COIN) {
       return res.status(400).json({ error: 'no_coins', need: PREMIUM_COST_COIN, have: w.coins || 0 });
     }
-    upsertUserWallet(req.user.id, { coins: (w.coins || 0) - PREMIUM_COST_COIN }, { monotonic: false });
-    db.prepare(`UPDATE bp_progress SET has_premium = 1, updated_at = ? WHERE user_id = ? AND season_id = ?`)
+    await upsertUserWallet(req.user.id, { coins: (w.coins || 0) - PREMIUM_COST_COIN }, { monotonic: false });
+    await db.prepare(`UPDATE bp_progress SET has_premium = 1, updated_at = ? WHERE user_id = ? AND season_id = ?`)
       .run(Date.now(), req.user.id, season.id);
     res.json({ ok: true });
   });
 
   // Shop
-  router.get('/api/shop/items', (_req, res) => {
-    res.json({ items: listShop() });
+  router.get('/api/shop/items', async (_req, res) => {
+    res.json({ items: await listShop() });
   });
-  router.get('/api/shop/me', requireAuth, (req, res) => {
-    res.json({ inventory: userInventory(req.user.id) });
+  router.get('/api/shop/me', requireAuth, async (req, res) => {
+    res.json({ inventory: await userInventory(req.user.id) });
   });
-  router.post('/api/shop/buy', requireAuth, (req, res) => {
-    const result = buyItem(req.user.id, String(req.body?.item_id || ''));
+  router.post('/api/shop/buy', requireAuth, async (req, res) => {
+    const result = await buyItem(req.user.id, String(req.body?.item_id || ''));
     if (!result.ok) return res.status(400).json(result);
     res.json(result);
   });
-  router.post('/api/shop/equip', requireAuth, (req, res) => {
-    const result = equipItem(req.user.id, String(req.body?.item_id || ''));
+  router.post('/api/shop/equip', requireAuth, async (req, res) => {
+    const result = await equipItem(req.user.id, String(req.body?.item_id || ''));
     if (!result.ok) return res.status(400).json(result);
     res.json(result);
   });
 
   // Daily Login
-  router.get('/api/daily/me', requireAuth, (req, res) => {
-    res.json({ ok: true, ...getDailyState(req.user.id) });
+  router.get('/api/daily/me', requireAuth, async (req, res) => {
+    res.json({ ok: true, ...await getDailyState(req.user.id) });
   });
-  router.post('/api/daily/claim', requireAuth, (req, res) => {
-    const result = claimDaily(req.user.id);
+  router.post('/api/daily/claim', requireAuth, async (req, res) => {
+    const result = await claimDaily(req.user.id);
     if (!result.ok) return res.status(400).json(result);
     res.json(result);
   });

@@ -398,6 +398,6 @@
     close() { document.getElementById('edututor-panel')?.classList.remove('open'); },
     reset() { history = []; saveHistory(); document.getElementById('edututor-msgs').innerHTML = ''; restoreHistory(); },
     pulse() { document.getElementById('edututor-fab')?.classList.add('pulse'); },
-    setDomain(d) { /* TODO Wave 2: re-mount with new domain */ },
+    setDomain(d) { /* TODO: re-mount with new domain */ },
   };
 })();

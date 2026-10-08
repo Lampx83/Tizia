@@ -4,15 +4,14 @@
 
 import { bootstrapMe, currentUser, logout, updateProfile } from './auth.js';
 import { PLAN_BADGES, USER_PLANS, effectivePlanId } from './plans.js';
-// Engagement HUD (Streak · Hearts · Daily Quest) — tự mount cho user đã login.
-// Side-effect import: chỉ cần load là HUD xuất hiện top-right.
-import './engagement-hud.js';
-// Onboarding 60s cho user mới — modal 4 bước, tự bypass nếu đã hoàn thành.
-import './onboarding-60s.js';
-// Pet đồng hành (Prodigy-style) — bubble góc dưới trái.
-import './pet-widget.js';
-// Daily Login Bonus — popup 1 lần/ngày khi chưa claim.
-import './daily-login.js';
+// Gamify dành cho người học: Engagement HUD (Streak · Hearts · Daily Quest), onboarding 60s, pet đồng
+// hành, điểm danh hằng ngày. Trang quản trị gắn <body data-no-gamify> để không nạp các module này.
+if (document.body?.dataset?.noGamify === undefined) {
+  import('./engagement-hud.js');
+  import('./onboarding-60s.js');
+  import('./pet-widget.js');
+  import('./daily-login.js');
+}
 // i18n — auto-load bundle theo locale (vi/en/id).
 import './i18n.js';
 // TTS Reader — toggle 🔊 đọc to bài cho tiểu học.
@@ -21,6 +20,7 @@ import './tts-reader.js';
 import './feature-gate.js';
 
 const ROLE_LABEL = {
+  admin:   { ico: '🛡️', label: 'Quản trị' },
   pupil:   { ico: '🎒', label: 'Học sinh' },
   student: { ico: '🎓', label: 'Sinh viên' },
   teacher: { ico: '👨‍🏫', label: 'Giảng viên' },
@@ -467,6 +467,9 @@ function render(host, user) {
           ${planCta}
           ${user.role === 'student'
             ? `<a class="ev-plan-cta" href="cv.html" style="background:linear-gradient(135deg,#0ea5e9,#22c55e);margin-top:10px">🪪 Xuất CV / Portfolio</a>`
+            : ''}
+          ${user.role === 'admin'
+            ? `<a class="ev-plan-cta" href="admin.html" style="background:linear-gradient(135deg,#6366f1,#a855f7);margin-top:10px">Trang quản trị</a>`
             : ''}
           <div class="pf-divider" style="margin-top:14px"></div>
           <div class="pf-actions">

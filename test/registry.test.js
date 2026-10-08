@@ -27,7 +27,7 @@ test.afterEach(() => { disposeAll(); });
 
 test('router plugin: mount trả response, dispose xong trả 404', async () => {
   const app = express();
-  mountRouterPlugins(app, [{
+  await mountRouterPlugins(app, [{
     name: 'fixture-hello',
     mount(router) {
       router.get('/api/fixture/hello', (_req, res) => res.json({ ok: true, from: 'fixture' }));
@@ -52,7 +52,7 @@ test('router plugin: mount trả response, dispose xong trả 404', async () => 
 
 test('app plugin: mount được trước express.json, giữ raw body', async () => {
   const app = express();
-  mountAppPlugins(app, [{
+  await mountAppPlugins(app, [{
     name: 'fixture-raw',
     mount(router) {
       router.post('/api/fixture/raw', express.raw({ type: '*/*' }), (req, res) => {
@@ -80,7 +80,7 @@ test('app plugin: mount được trước express.json, giữ raw body', async (
 test('plugin chỉ thấy ctx.surface — ctx.core là undefined trong closure', async () => {
   let seen = null;
   const app = express();
-  mountRouterPlugins(app, [{
+  await mountRouterPlugins(app, [{
     name: 'fixture-ctx',
     mount(_router, ctx) {
       seen = ctx;
@@ -95,10 +95,10 @@ test('plugin chỉ thấy ctx.surface — ctx.core là undefined trong closure',
   assert.throws(() => { 'use strict'; seen.core = { db: 1 }; }, TypeError);
 });
 
-test('dispose plugin gọi dispose() của chính plugin', () => {
+test('dispose plugin gọi dispose() của chính plugin', async () => {
   let disposed = 0;
   const app = express();
-  mountRouterPlugins(app, [{
+  await mountRouterPlugins(app, [{
     name: 'fixture-dispose',
     mount() { return () => { disposed += 1; }; },
   }], { surface: {} });
@@ -109,17 +109,17 @@ test('dispose plugin gọi dispose() của chính plugin', () => {
   assert.deepEqual(mountedPlugins(), []);
 });
 
-test('trùng name bị từ chối', () => {
+test('trùng name bị từ chối', async () => {
   const app = express();
   const p = { name: 'dup', mount() { return () => {}; } };
-  mountRouterPlugins(app, [p], { surface: {} });
-  assert.throws(() => mountRouterPlugins(app, [p], { surface: {} }), /trùng tên/);
+  await mountRouterPlugins(app, [p], { surface: {} });
+  await assert.rejects(async () => mountRouterPlugins(app, [p], { surface: {} }), /trùng tên/);
 });
 
-test('WS plugin: dispose gỡ đúng listener upgrade', () => {
+test('WS plugin: dispose gỡ đúng listener upgrade', async () => {
   const server = http.createServer();
   let disposed = false;
-  mountWsPlugins(server, [{
+  await mountWsPlugins(server, [{
     name: 'fixture-ws',
     wsPriority: 'append',
     mount() {
@@ -133,11 +133,11 @@ test('WS plugin: dispose gỡ đúng listener upgrade', () => {
   assert.equal(disposed, true);
 });
 
-test('WS plugin: wsPriority quyết định thứ tự, không phải thứ tự gọi mount', () => {
+test('WS plugin: wsPriority quyết định thứ tự, không phải thứ tự gọi mount', async () => {
   const server = http.createServer();
   const first = () => {};
   const second = () => {};
-  mountWsPlugins(server, [
+  await mountWsPlugins(server, [
     { name: 'ws-append', wsPriority: 'append', mount: () => ({ onUpgrade: first }) },
     { name: 'ws-prepend', wsPriority: 'prepend', mount: () => ({ onUpgrade: second }) },
   ], { surface: {} });
@@ -146,21 +146,21 @@ test('WS plugin: wsPriority quyết định thứ tự, không phải thứ tự
   assert.deepEqual(server.listeners('upgrade'), [second, first]);
 });
 
-test('WS plugin thiếu wsPriority bị từ chối', () => {
+test('WS plugin thiếu wsPriority bị từ chối', async () => {
   const server = http.createServer();
-  assert.throws(
-    () => mountWsPlugins(server, [{ name: 'ws-no-prio', mount: () => ({ onUpgrade: () => {} }) }], { surface: {} }),
+  await assert.rejects(
+    async () => mountWsPlugins(server, [{ name: 'ws-no-prio', mount: () => ({ onUpgrade: () => {} }) }], { surface: {} }),
     /wsPriority/,
   );
 });
 
-test('surface đưa cho plugin bị freeze SÂU — không ghi ngược vào state dùng chung', () => {
+test('surface đưa cho plugin bị freeze SÂU — không ghi ngược vào state dùng chung', async () => {
   // FEATURES là object thật feature-gate đọc lại mỗi request. freeze nông chỉ
   // khoá cái vỏ, plugin vẫn hạ tier xuống 0 và mở khoá cho toàn bộ user được.
   const FEATURES = { 'lesson-builder': { tier: 5 } };
   let seen = null;
   const app = express();
-  mountRouterPlugins(app, [{
+  await mountRouterPlugins(app, [{
     name: 'fixture-freeze',
     mount(_router, ctx) { seen = ctx; return () => {}; },
   }], { surface: { features: { FEATURES } } });
@@ -170,7 +170,7 @@ test('surface đưa cho plugin bị freeze SÂU — không ghi ngược vào sta
   assert.equal(FEATURES['lesson-builder'].tier, 5);
 });
 
-test('deepFreeze chịu được tham chiếu vòng', () => {
+test('deepFreeze chịu được tham chiếu vòng', async () => {
   const a = { name: 'a' };
   a.self = a;
   assert.doesNotThrow(() => deepFreeze(a));
@@ -179,7 +179,7 @@ test('deepFreeze chịu được tham chiếu vòng', () => {
 
 test('trùng tên bị chặn TRƯỚC khi mount — không để lại route mồ côi', async () => {
   const app = express();
-  mountRouterPlugins(app, [{
+  await mountRouterPlugins(app, [{
     name: 'first',
     mount(router) {
       router.get('/api/fixture/first', (_req, res) => res.json({ ok: true }));
@@ -189,7 +189,7 @@ test('trùng tên bị chặn TRƯỚC khi mount — không để lại route m�
 
   // Lô thứ hai có 1 plugin tên mới + 1 plugin trùng tên. Cả lô phải bị từ chối,
   // plugin tên mới KHÔNG được mount dở dang.
-  assert.throws(() => mountRouterPlugins(app, [
+  await assert.rejects(async () => mountRouterPlugins(app, [
     {
       name: 'second',
       mount(router) {
@@ -212,32 +212,32 @@ test('trùng tên bị chặn TRƯỚC khi mount — không để lại route m�
   }
 });
 
-test('trùng tên ngay trong cùng một lô cũng bị chặn', () => {
+test('trùng tên ngay trong cùng một lô cũng bị chặn', async () => {
   const app = express();
-  assert.throws(() => mountRouterPlugins(app, [
+  await assert.rejects(async () => mountRouterPlugins(app, [
     { name: 'same', mount() { return () => {}; } },
     { name: 'same', mount() { return () => {}; } },
   ], { surface: {} }), /trùng tên/);
   assert.deepEqual(mountedPlugins(), []);
 });
 
-test('proposal AI mạo danh module dev-owned (vd app-proxy.js) bị từ chối mount', () => {
+test('proposal AI mạo danh module dev-owned (vd app-proxy.js) bị từ chối mount', async () => {
   const app = express();
   const fixtureProposal = {
     name: 'ai-proposal-hijack-app-proxy',
     sourceModule: CORE_MODULES[1], // 'server/app-proxy.js'
     mount() { return () => {}; },
   };
-  assert.throws(
-    () => mountRouterPlugins(app, [fixtureProposal], { surface: {} }),
+  await assert.rejects(
+    async () => mountRouterPlugins(app, [fixtureProposal], { surface: {} }),
     /dev-owned/,
   );
   assert.deepEqual(mountedPlugins(), []);
 });
 
-test('plugin dev-owned tự nhận origin: dev-owned thì mount bình thường', () => {
+test('plugin dev-owned tự nhận origin: dev-owned thì mount bình thường', async () => {
   const app = express();
-  mountRouterPlugins(app, [{
+  await mountRouterPlugins(app, [{
     name: 'app-proxy',
     origin: 'dev-owned',
     sourceModule: 'server/app-proxy.js',
@@ -246,10 +246,10 @@ test('plugin dev-owned tự nhận origin: dev-owned thì mount bình thường'
   assert.deepEqual(mountedPlugins(), ['app-proxy']);
 });
 
-test('WS plugin trả về undefined báo lỗi rõ ràng, không TypeError trần', () => {
+test('WS plugin trả về undefined báo lỗi rõ ràng, không TypeError trần', async () => {
   const server = http.createServer();
-  assert.throws(
-    () => mountWsPlugins(server, [{ name: 'ws-rong', wsPriority: 'append', mount: () => undefined }], { surface: {} }),
+  await assert.rejects(
+    async () => mountWsPlugins(server, [{ name: 'ws-rong', wsPriority: 'append', mount: () => undefined }], { surface: {} }),
     /phải trả \{ onUpgrade \}/,
   );
   assert.equal(server.listenerCount('upgrade'), 0);

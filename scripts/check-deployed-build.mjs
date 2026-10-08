@@ -3,12 +3,11 @@
 // check-deployed-build.mjs — Production đang chạy CHÍNH XÁC commit nào, nhánh nào?
 // ============================================================
 // VÌ SAO CÓ FILE NÀY
-// Suốt các phiên 62→67, Ban điều hành AI không đọc được hộp thư và mỗi phiên lại
-// chẩn đoán ra một nguyên nhân khác ("chưa deploy", "sai key", "domain do app khác
-// phục vụ"). Phiên 67 đo được tuổi bản build nhưng CHỈ dò trong lịch sử của `main`
-// nên kết luận cụt: "2/5 file không khớp bản nào trong lịch sử".
+// Ban điều hành AI không đọc được hộp thư và dễ chẩn đoán sai nguyên nhân ("chưa
+// deploy", "sai key", "domain do app khác phục vụ"). Chỉ dò trong lịch sử của `main`
+// thì kết luận cụt: "2/5 file không khớp bản nào trong lịch sử".
 //
-// Phiên 68 (2026-09-21) dò lại trên TOÀN BỘ nhánh và ra đáp án thật:
+// Dò trên TOÀN BỘ nhánh mới ra đáp án thật (tại thời điểm viết, 2026-09-21):
 //   Production chạy `feat/postgres-migration` @ 40fd384 (2026-07-24) — một nhánh
 //   KHÔNG CHUNG GỐC LỊCH SỬ với `main` (`git merge-base` rỗng). `main` là một
 //   lịch sử được gieo lại từ 7632aaf (2026-07-14). Vì thế mọi phép dò "trong lịch

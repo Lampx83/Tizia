@@ -1,29 +1,28 @@
-"""Cổng 2.5 (plan_validate.py, ticket 22) — soát plan (Q1) + phân quyền độ
+"""Cổng 2.5 (plan_validate.py) — soát plan (Q1) + phân quyền độ
 phức tạp (Q2) trước khi cổng 3 tiêu ngân sách."""
-import sqlite3
 import time
 
 import pytest
 
 from budget import Budget
-from conftest import FakeModels, deps_with, plan_with
+from conftest import FakeModels, connect, deps_with, plan_with
 from gates import plan_validate
 from main import load_inbox, run_once
 
 
 def _seed_user(db_path, *, display_name, role="student", domain_grant=None):
-    con = sqlite3.connect(str(db_path))
+    con = connect(db_path)
     try:
-        con.executescript(plan_validate._SCHEMA_DDL)
+        con.execute(plan_validate._SCHEMA_DDL)
         now = int(time.time() * 1000)
         cur = con.execute(
-            "INSERT INTO users (username, display_name, password_hash, role, created_at) VALUES (?, ?, 'x', ?, ?)",
+            "INSERT INTO users (username, display_name, password_hash, role, created_at) VALUES (%s, %s, 'x', %s, %s) RETURNING id",
             (display_name.lower().replace(" ", "."), display_name, role, now),
         )
-        user_id = cur.lastrowid
+        user_id = cur.fetchone()[0]
         if domain_grant:
             con.execute(
-                "INSERT INTO user_domain_grants (user_id, domain_id, granted_at) VALUES (?, ?, ?)",
+                "INSERT INTO user_domain_grants (user_id, domain_id, granted_at) VALUES (%s, %s, %s)",
                 (user_id, domain_grant, now),
             )
         con.commit()
@@ -35,13 +34,13 @@ def _seed_user(db_path, *, display_name, role="student", domain_grant=None):
 def _seed_request_row(db_path, *, req_id, domain, student):
     """requests.id thật (khác id string của inbox item) — cần cho
     write_clarification()/request_messages join đúng bảng."""
-    con = sqlite3.connect(str(db_path))
+    con = connect(db_path)
     try:
-        con.executescript(plan_validate._SCHEMA_DDL)
+        con.execute(plan_validate._SCHEMA_DDL)
         now = int(time.time() * 1000)
         con.execute(
             """INSERT INTO requests (id, domain, title, student, created_at, updated_at)
-               VALUES (?, ?, 'x', ?, ?, ?)""",
+               VALUES (%s, %s, 'x', %s, %s, %s)""",
             (req_id, domain, student, now, now),
         )
         con.commit()
@@ -96,13 +95,14 @@ def test_unclear_plan_blocks_before_gate_3_and_writes_clarification(db_file, req
 
     assert out["outcome"] == "needs_clarification"
     assert out["gate_reached"] == 2.5
+    assert out["public_message"] == "File nào chứa danh sách hoạt chất?"
     # cổng 3 không được gọi: chỉ có lời gọi cổng 1 + cổng 2.5, không có subtask nào.
-    assert len(models.calls) == 2
+    assert len(models.calls) == 3  # intake + cổng 1 + cổng 2.5
 
-    con = sqlite3.connect(str(db_file))
+    con = connect(db_file)
     try:
         rows = con.execute(
-            "SELECT role, body FROM request_messages WHERE request_id = ?", (request_item["db_id"],)
+            "SELECT role, body FROM request_messages WHERE request_id = %s", (request_item["db_id"],)
         ).fetchall()
     finally:
         con.close()
@@ -120,7 +120,7 @@ def test_complex_plan_from_ordinary_user_is_gated(db_file, request_item):
 
     assert out["outcome"] == "complexity_gated"
     assert out["gate_reached"] == 2.5
-    assert len(models.calls) == 2  # cổng 1 + cổng 2.5, cổng 3 không chạy
+    assert len(models.calls) == 3  # intake + cổng 1 + cổng 2.5, cổng 3 không chạy
 
 
 def test_complexity_gate_names_the_signals_that_fired():
@@ -182,10 +182,10 @@ def test_clarification_message_targets_correct_request_id(db_file, request_item)
 
     plan_validate.write_clarification(db_file, request_item, "Câu hỏi làm rõ")
 
-    con = sqlite3.connect(str(db_file))
+    con = connect(db_file)
     try:
-        mine = con.execute("SELECT body FROM request_messages WHERE request_id = ?", (request_item["db_id"],)).fetchall()
-        others = con.execute("SELECT body FROM request_messages WHERE request_id = ?", (other_id,)).fetchall()
+        mine = con.execute("SELECT body FROM request_messages WHERE request_id = %s", (request_item["db_id"],)).fetchall()
+        others = con.execute("SELECT body FROM request_messages WHERE request_id = %s", (other_id,)).fetchall()
     finally:
         con.close()
     assert mine == [("Câu hỏi làm rõ",)]
@@ -206,3 +206,37 @@ def test_run_blocks_without_plan_in_state():
     deps = deps_with(plan_with(["features"]))
     out = plan_validate.run({"id": "x"}, deps, Budget(max_wall_clock_s=999), {})
     assert out["blocked"] is True
+
+
+def test_validator_uses_bounded_schema_and_never_accepts_truncated_output():
+    class Truncated(FakeModels):
+        def generate(self, *args, **kwargs):
+            body = super().generate(*args, **kwargs)
+            body['done_reason'] = 'length'
+            return body
+    plan = plan_with(['features'])
+    models = Truncated(plan)
+    result = plan_validate.run({'id': 'x'}, deps_with(models), Budget(), {'plan': plan})
+    assert result['blocked'] and 'truncated' in result['reason']
+    assert models.calls[0]['format']['properties']['grounding']['items']['properties']['quote']['maxLength'] == 320
+    assert models.calls[0]['num_predict'] == 3072
+
+
+def test_http_worker_leaves_complexity_to_the_server_tier():
+    from conftest import FakeModels, deps_with
+    from budget import Budget
+    plan = plan_with(["features", "quiz"])  # 2 capabilities: complex
+    state = {"plan": plan}
+    out = plan_validate.run({"id": "req-1", "complexity_by_server": True}, deps_with(FakeModels(plan)), Budget(), state)
+    assert out["blocked"] is False and out["signals"] and state["complexity_signals"] == out["signals"]
+
+
+def test_complex_http_plan_is_submitted_as_high_risk():
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from worker import HarnessPlanner
+    old = {"summary_vi": "x", "capabilities": ["features"],
+           "subtasks": [{"title": "t", "file": "public/a.html", "verify": "v", "size": "small"}]}
+    assert HarnessPlanner._canonical({"domain": "it"}, old, ["subtasks: 4"])["risk"] == "high"
+    assert HarnessPlanner._canonical({"domain": "it"}, old)["risk"] == "low"

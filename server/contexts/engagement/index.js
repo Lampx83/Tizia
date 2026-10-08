@@ -12,9 +12,9 @@ import { requireAuth } from '../identity/auth.js';
 import { attachLeague, addLeagueWeekXp } from './league.js';
 import { attachParentDashboard } from './parent.js';
 import { attachPet, addPetXp } from './pet.js';
-// Battle Pass XP — added per engagement claim (cộng song song league XP)
+// Battle Pass XP — mỗi engagement claim (cộng song song league XP)
 function bpHook(uid, xp) {
-  try { import('../economy/index.js').then(m => m.addBpXp(uid, xp)); } catch {}
+  try { import('../economy/index.js').then(async m => await m.addBpXp(uid, xp)); } catch {}
 }
 
 // ── Hằng số cấu hình ─────────────────────────────────────────
@@ -35,7 +35,7 @@ const QUEST_POOL = [
 ];
 
 // ── Schema (SQLite, idempotent) ──────────────────────────────
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS engagement_state (
     user_id              INTEGER PRIMARY KEY,
     streak               INTEGER NOT NULL DEFAULT 0,
@@ -129,8 +129,8 @@ const bumpQuestProgressStmt = db.prepare(`
 `);
 
 // ── Core API ────────────────────────────────────────────────
-function ensureState(userId) {
-  let row = getStateStmt.get(userId);
+async function ensureState(userId) {
+  let row = await getStateStmt.get(userId);
   if (!row) {
     row = {
       user_id: userId,
@@ -141,7 +141,7 @@ function ensureState(userId) {
       hearts_refill_at: 0,
       updated_at: Date.now(),
     };
-    upsertStateStmt.run(row);
+    await upsertStateStmt.run(row);
   }
   return row;
 }
@@ -184,8 +184,8 @@ function bumpStreak(row) {
   return row;
 }
 
-function genDailyQuests(userId, date) {
-  const existing = listQuestsStmt.all(userId, date);
+async function genDailyQuests(userId, date) {
+  const existing = await listQuestsStmt.all(userId, date);
   if (existing.length > 0) return existing;
   const rng = mulberry32(hashSeed(userId, date));
   // Lấy 3 quest distinct theo kind nếu được; fallback: cứ 3 cái khác slot.
@@ -199,23 +199,23 @@ function genDailyQuests(userId, date) {
     if (picked.length >= 3) break;
   }
   while (picked.length < 3) picked.push(shuffled[picked.length]);
-  picked.forEach((q, slot) => {
-    upsertQuestStmt.run({
+  for (const [slot, q] of picked.entries()) {
+    await upsertQuestStmt.run({
       user_id: userId, quest_date: date, slot,
       kind: q.kind, target: q.target, progress: 0, claimed: 0,
       reward_coin: QUEST_COIN[q.kind] || 20,
       reward_xp:   QUEST_XP[q.kind]   || 30,
       label: q.label,
     });
-  });
-  return listQuestsStmt.all(userId, date);
+  }
+  return await listQuestsStmt.all(userId, date);
 }
 
 // Lightweight snapshot CHỈ ĐỌC cho parent dashboard — không tự bump streak
 // (tránh "parent xem → con coi như đã active hôm nay").
-export function getEngagementReadOnly(userId) {
+export async function getEngagementReadOnly(userId) {
   if (!userId) return null;
-  let row = getStateStmt.get(userId);
+  let row = await getStateStmt.get(userId);
   if (!row) return null;
   // Refill hearts side-effect-free: tính ra giá trị hiển thị nhưng không persist.
   let hearts = row.hearts;
@@ -224,7 +224,7 @@ export function getEngagementReadOnly(userId) {
     hearts = Math.min(HEART_MAX, hearts + 1 + Math.floor(elapsed / HEART_REFILL_MS));
   }
   const today = vnToday();
-  const quests = listQuestsStmt.all(userId, today);
+  const quests = await listQuestsStmt.all(userId, today);
   return {
     streak: row.streak,
     longestStreak: row.longest_streak,
@@ -241,14 +241,14 @@ export function getEngagementReadOnly(userId) {
 }
 
 // Trả ảnh chụp state đầy đủ cho FE (state + quests hôm nay)
-function snapshot(userId) {
-  let row = ensureState(userId);
+async function snapshot(userId) {
+  let row = await ensureState(userId);
   row = bumpStreak(row);
   row = refillHearts(row);
   row.updated_at = Date.now();
-  upsertStateStmt.run(row);
+  await upsertStateStmt.run(row);
   const today = vnToday();
-  const quests = genDailyQuests(userId, today);
+  const quests = await genDailyQuests(userId, today);
   return {
     streak: row.streak,
     longestStreak: row.longest_streak,
@@ -267,48 +267,48 @@ function snapshot(userId) {
 
 // Tăng progress quest theo kind. Gọi từ chỗ khác (quiz attempt, lesson complete…).
 // Không throw, không yêu cầu auth — caller chịu trách nhiệm userId hợp lệ.
-export function trackEngagementProgress(userId, kind, amount = 1) {
+export async function trackEngagementProgress(userId, kind, amount = 1) {
   if (!userId || !kind) return;
   const today = vnToday();
-  genDailyQuests(userId, today);
-  bumpQuestProgressStmt.run(amount | 0 || 1, userId, today, kind);
+  await genDailyQuests(userId, today);
+  await bumpQuestProgressStmt.run(amount | 0 || 1, userId, today, kind);
 }
 
 // Spend 1 heart. Trả false nếu hết.
-function spendHeart(userId) {
-  let row = ensureState(userId);
+async function spendHeart(userId) {
+  let row = await ensureState(userId);
   row = refillHearts(row);
   if (row.hearts <= 0) {
-    upsertStateStmt.run({ ...row, updated_at: Date.now() });
+    await upsertStateStmt.run({ ...row, updated_at: Date.now() });
     return { ok: false, hearts: 0, heartsRefillAt: row.hearts_refill_at };
   }
   row.hearts -= 1;
   if (!row.hearts_refill_at) row.hearts_refill_at = Date.now() + HEART_REFILL_MS;
   row.updated_at = Date.now();
-  upsertStateStmt.run(row);
+  await upsertStateStmt.run(row);
   return { ok: true, hearts: row.hearts, heartsRefillAt: row.hearts_refill_at };
 }
 
 // Claim 1 quest đã đạt target → cộng coin/XP vào wallet (per-domain).
-function claimQuest(userId, slot, domain) {
+async function claimQuest(userId, slot, domain) {
   const today = vnToday();
-  const all = listQuestsStmt.all(userId, today);
+  const all = await listQuestsStmt.all(userId, today);
   const q = all.find(x => x.slot === slot);
   if (!q) return { ok: false, reason: 'not_found' };
   if (q.claimed) return { ok: false, reason: 'already_claimed' };
   if (q.progress < q.target) return { ok: false, reason: 'not_completed', progress: q.progress, target: q.target };
-  upsertQuestStmt.run({ ...q, claimed: 1 });
+  await upsertQuestStmt.run({ ...q, claimed: 1 });
   // Cộng reward vào wallet hiện hành (theo enrolled_domain nếu không truyền).
-  const cur = getUserWallet(userId, domain) || { coins: 0, xp: 0 };
-  upsertUserWallet(userId, {
+  const cur = await getUserWallet(userId, domain) || { coins: 0, xp: 0 };
+  await upsertUserWallet(userId, {
     coins: (cur.coins || 0) + q.reward_coin,
     xp:    (cur.xp    || 0) + q.reward_xp,
   }, { monotonic: false, domain });
   // League: XP claim quest cũng đẩy vào bảng tuần.
-  try { addLeagueWeekXp(userId, q.reward_xp); } catch {}
+  try { await addLeagueWeekXp(userId, q.reward_xp); } catch {}
   // Pet đồng hành: nuôi pet bằng XP nhiệm vụ (Prodigy-style).
   let petEvolution = null;
-  try { petEvolution = addPetXp(userId, Math.floor(q.reward_xp / 2)); } catch {}
+  try { petEvolution = await addPetXp(userId, Math.floor(q.reward_xp / 2)); } catch {}
   // Battle Pass season XP — engagement claim cũng cộng vào BP.
   bpHook(userId, q.reward_xp);
   return { ok: true, rewardCoin: q.reward_coin, rewardXp: q.reward_xp, petEvolution };
@@ -317,9 +317,9 @@ function claimQuest(userId, slot, domain) {
 // ── Route binding ───────────────────────────────────────────
 export function attachEngagement(app) {
   // Snapshot — gọi mỗi khi vào app/page chính. Idempotent.
-  app.get('/api/engagement/state', requireAuth, (req, res) => {
+  app.get('/api/engagement/state', requireAuth, async (req, res) => {
     try {
-      const data = snapshot(req.user.id);
+      const data = await snapshot(req.user.id);
       res.json({ ok: true, ...data });
     } catch (e) {
       console.error('[engagement] state error', e);
@@ -328,9 +328,9 @@ export function attachEngagement(app) {
   });
 
   // Alias rõ ràng cho FE để "đánh dấu hoạt động hôm nay" — cùng logic snapshot.
-  app.post('/api/engagement/ping', requireAuth, (req, res) => {
+  app.post('/api/engagement/ping', requireAuth, async (req, res) => {
     try {
-      const data = snapshot(req.user.id);
+      const data = await snapshot(req.user.id);
       res.json({ ok: true, ...data });
     } catch (e) {
       console.error('[engagement] ping error', e);
@@ -339,20 +339,20 @@ export function attachEngagement(app) {
   });
 
   // Spend 1 heart. FE gọi khi HS sai quiz nặng (tuỳ chính sách từng feature).
-  app.post('/api/engagement/spend-heart', requireAuth, (req, res) => {
-    const result = spendHeart(req.user.id);
+  app.post('/api/engagement/spend-heart', requireAuth, async (req, res) => {
+    const result = await spendHeart(req.user.id);
     res.json(result);
   });
 
   // Tăng progress quest (FE chỉ gọi cho mini-game/lesson đã có endpoint riêng,
   // còn quiz/code tự gọi từ server). Body: { kind: 'lesson'|'minigame', amount?: number }
-  app.post('/api/engagement/track', requireAuth, (req, res) => {
+  app.post('/api/engagement/track', requireAuth, async (req, res) => {
     const kind = String(req.body?.kind || '').toLowerCase();
     if (!['lesson', 'minigame', 'quiz', 'code'].includes(kind)) {
       return res.status(400).json({ ok: false, error: 'bad_kind' });
     }
     const amount = Math.max(1, Math.min(20, Number(req.body?.amount) | 0 || 1));
-    trackEngagementProgress(req.user.id, kind, amount);
+    await trackEngagementProgress(req.user.id, kind, amount);
     res.json({ ok: true });
   });
 
@@ -364,13 +364,13 @@ export function attachEngagement(app) {
   attachPet(app);
 
   // Claim quest. Body: { slot: 0|1|2 }
-  app.post('/api/engagement/claim', requireAuth, (req, res) => {
+  app.post('/api/engagement/claim', requireAuth, async (req, res) => {
     const slot = Number(req.body?.slot);
     if (![0, 1, 2].includes(slot)) return res.status(400).json({ ok: false, error: 'bad_slot' });
-    const result = claimQuest(req.user.id, slot, req.user.enrolled_domain || '');
+    const result = await claimQuest(req.user.id, slot, req.user.enrolled_domain || '');
     if (!result.ok) return res.status(400).json(result);
     // Sau khi claim, trả luôn snapshot để FE đỡ phải fetch lại.
-    res.json({ ok: true, ...result, state: snapshot(req.user.id) });
+    res.json({ ok: true, ...result, state: await snapshot(req.user.id) });
   });
 }
 

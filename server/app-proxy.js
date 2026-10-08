@@ -84,9 +84,8 @@ export function attachAppProxies(app, configs) {
   for (const cfg of configs) attachAppProxy(app, cfg);
 }
 
-// Danh sách app anh em của Tizia (ScoreUp/Codelab/Smartdoc/FeedBackMe) — chuyển
-// từ server/index.js sang đây nguyên vẹn (ticket 06) để plugin tự đứng một
-// mình, không cần index.js truyền configs vào qua ctx (registry chỉ cho
+// Danh sách app anh em của Tizia (ScoreUp/Codelab/Smartdoc/FeedBackMe) — nằm ở đây
+// để plugin tự đứng một mình, không cần index.js truyền configs vào qua ctx (registry chỉ cho
 // mount(app, ctx) với ctx = { surface }, không có chỗ cho tham số riêng).
 function tiziaAppProxyConfigs() {
   return [

@@ -2,13 +2,59 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import express from 'express';
-import Database from 'better-sqlite3';
 
-import { applyAiBoardMigrations, createAiBoardStore } from '../server/ai-board/store.js';
+import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
+import { openBoard } from './support/ai-board-db.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
 import { CAPABILITY_POLICY_HASH } from '../server/ai-board/policy.js';
 
 const KEY = 'fixture-worker-key-32-characters-long';
+
+test('every path into needs_replan drops plan and lease the same way', async () => {
+  const paths = {
+    'budget extension': async (store, root) => {
+      await store.db.run("UPDATE ai_tickets SET status='waiting_admin', phase='budget_exhausted' WHERE id=?", [root.id]);
+      await store.extendBudget(root.id, { amount: 10, reason: 'Fixture cần thêm ngân sách.', adminUserId: 9 });
+    },
+    'requester clarification': async (store, root) => {
+      assert.equal(await store.invalidatePlanForRequest(root.source_request_id, 'thêm chi tiết'), true);
+    },
+    'admin rerun from gate 1': async (store, root) => {
+      await store.db.run("UPDATE ai_tickets SET status='waiting_admin', phase='plan_blocked' WHERE id=?", [root.id]);
+      await store.rerunGate(root.source_request_id, 1, 9);
+    },
+  };
+  for (const [name, enter] of Object.entries(paths)) {
+    const { db, store } = await fixture();
+    const root = await db.prepare('SELECT * FROM ai_tickets WHERE parent_id IS NULL').get();
+    await db.prepare(`UPDATE ai_tickets SET plan_hash=?, lease_owner='w', lease_token='t', lease_expires_at=? WHERE id=?`)
+      .run('h'.repeat(64), Date.now() + 1000, root.id);
+    if (name === 'admin rerun from gate 1') await db.prepare('UPDATE ai_tickets SET lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL WHERE id=?').run(root.id);
+    await enter(store, root);
+    const after = await db.prepare('SELECT status, phase, plan_hash, lease_owner, lease_token, lease_expires_at FROM ai_tickets WHERE id=?').get(root.id);
+    assert.deepEqual({ ...after }, { status: 'queued', phase: 'needs_replan', plan_hash: null, lease_owner: null, lease_token: null, lease_expires_at: null }, name);
+    db.close();
+  }
+});
+
+test('admin handoff requeues through all gates and reply preserves root status', async () => {
+  const { db, store } = await fixture();
+  const root = await db.prepare('SELECT * FROM ai_tickets WHERE parent_id IS NULL').get();
+  await db.prepare("UPDATE ai_tickets SET status='waiting_admin', phase='clarification_limit' WHERE id=?").run(root.id);
+  await store.noteRequest(root.source_request_id, 'Admin đang điều tra', 9);
+  assert.equal((await db.prepare('SELECT status FROM requests WHERE id=?').get(root.source_request_id)).status, 'pending');
+  assert.equal((await db.prepare('SELECT status FROM ai_tickets WHERE id=?').get(root.id)).status, 'waiting_admin');
+  await assert.rejects(async () => store.rerunGate(root.source_request_id, 9, 9));
+  await store.rerunGate(root.source_request_id, 1, 9);
+  const queued = await db.prepare('SELECT * FROM ai_tickets WHERE id=?').get(root.id);
+  assert.equal(queued.phase, 'needs_replan');
+  assert.equal(queued.status, 'queued');
+  assert.equal(queued.plan_hash, null);
+  await assert.rejects(async () => store.rerunGate(root.source_request_id, 1, 9), 'nothing to rerun while queued');
+  await db.prepare("UPDATE ai_tickets SET status='cancelled', phase='admin_rejected' WHERE id=?").run(root.id);
+  await assert.rejects(async () => store.rerunGate(root.source_request_id, 1, 9), 'a cancelled request is not reopened');
+  db.close();
+});
 const CANDIDATE = {
   branch: 'ai-board/2026-09-24-ticket-1', base_sha: 'a'.repeat(40), head_sha: 'b'.repeat(40),
   commits: [{ sha: 'b'.repeat(40), title: 'ai-board(ticket-1): 1/1 x', files: ['public/pharmacy/demo.html'] }],
@@ -25,26 +71,12 @@ function surfacePlan() {
   };
 }
 
-function fixture({ seedRequest = true } = {}) {
-  const db = new Database(':memory:');
-  db.pragma('foreign_keys = ON');
-  db.exec(`
-    CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, display_name TEXT, role TEXT, enrolled_domain TEXT);
-    CREATE TABLE requests (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'other',
-      title TEXT NOT NULL, detail TEXT, student TEXT NOT NULL DEFAULT 'Ẩn danh',
-      status TEXT NOT NULL DEFAULT 'pending', votes INTEGER NOT NULL DEFAULT 1,
-      admin_note TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, attachments TEXT
-    );
-    CREATE TABLE request_messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, request_id INTEGER NOT NULL, role TEXT NOT NULL,
-      author_name TEXT, body TEXT NOT NULL, attachments TEXT, created_at INTEGER NOT NULL
-    );
-    INSERT INTO users VALUES (1, 'lan', 'Lan', 'student', 'pharmacy');
-  `);
-  applyAiBoardMigrations(db);
-  const store = createAiBoardStore(db);
-  if (seedRequest) store.createRequestWithRoot({
+async function fixture({ seedRequest = true } = {}) {
+  const db = await openBoard({ users: [
+    [1, 'lan', 'Lan', 'student', 'pharmacy'],
+  ] });
+  const store = createAsyncAiBoardStore(db.d);
+  if (seedRequest) await store.createRequestWithRoot({
     ownerUserId: 1, ownerDomain: 'pharmacy', ownerDisplayName: 'Lan',
     idempotencyKey: 'worker-request-001', title: 'Thêm bộ thẻ thuốc', detail: 'Nội dung fixture',
   });
@@ -57,6 +89,10 @@ async function serve(store, env = { AI_BOARD_WORKER_KEY: KEY }) {
   app.use((req, _res, next) => {
     if (req.headers['x-test-user'] === '1') {
       req.user = { id: 1, username: 'lan', display_name: 'Lan', role: 'student', enrolled_domain: 'pharmacy' };
+    } else if (req.headers['x-test-user'] === '2') {
+      req.user = { id: 2, username: 'other', display_name: 'Other', role: 'student', enrolled_domain: 'pharmacy' };
+    } else if (req.headers['x-test-user'] === '3') {
+      req.user = { id: 3, username: 'admin', role: 'admin' };
     }
     next();
   });
@@ -66,8 +102,10 @@ async function serve(store, env = { AI_BOARD_WORKER_KEY: KEY }) {
     requireEnrolled: (req, res, next) => req.user?.enrolled_domain
       ? next()
       : res.status(403).json({ error: 'enrollment_required' }),
-    requireAdmin: (_req, res) => res.status(403).json({ error: 'forbidden' }),
-    requireStrictCsrf: (_req, res) => res.status(403).json({ error: 'csrf_failed' }),
+    requireAdmin: (req, res, next) => req.user?.role === 'admin' ? next() : res.status(403).json({ error: 'forbidden' }),
+    requireStrictCsrf: (req, res, next) => req.headers['x-csrf-token'] === 'ok'
+      ? next()
+      : res.status(403).json({ error: 'csrf_failed' }),
   });
   attachAiBoardWorkerRoutes(app, { store, env, leaseMs: 120_000 });
   const server = http.createServer(app);
@@ -79,7 +117,7 @@ async function serve(store, env = { AI_BOARD_WORKER_KEY: KEY }) {
 }
 
 test('D0 HTTP flow creates a root request, validates a plan, and creates child tickets', async () => {
-  const { db, store } = fixture({ seedRequest: false });
+  const { db, store } = await fixture({ seedRequest: false });
   const { base, close } = await serve(store, { AI_BOARD_WORKER_KEY: KEY });
   try {
     const created = await fetch(`${base}/api/requests`, {
@@ -142,7 +180,7 @@ test('D0 HTTP flow creates a root request, validates a plan, and creates child t
     });
     assert.equal(rejected.status, 422);
     assert.equal((await rejected.json()).error, 'domain_mismatch');
-    assert.equal(db.prepare('SELECT COUNT(*) n FROM ai_tickets WHERE parent_id=?').get(rejectedTicket.id).n, 0);
+    assert.equal((await db.prepare('SELECT COUNT(*) n FROM ai_tickets WHERE parent_id=?').get(rejectedTicket.id)).n, 0);
   } finally {
     await close();
     db.close();
@@ -150,7 +188,7 @@ test('D0 HTTP flow creates a root request, validates a plan, and creates child t
 });
 
 test('pre-PR verdict is persisted and observable through the request HTTP API', async () => {
-  const { db, store } = fixture();
+  const { db, store } = await fixture();
   const { base, close } = await serve(store);
   try {
     const { ticket } = await (await post(base, '/api/ai-board/worker/claim', {
@@ -165,7 +203,7 @@ test('pre-PR verdict is persisted and observable through the request HTTP API', 
       gates: [
         { gate: 3, blocked: false, reason: null },
         { gate: 4, blocked: false, reason: null, issues: [] },
-        { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true, runner: 'docker' },
+        { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true, functional: { probe_id: 'queue-worker-availability-v1', passed: true, coverage: { requester_api: true, mounted_ui: true, recovery: true } }, runner: 'docker' },
         { gate: 5.5, blocked: false, reason: null, risk_level: 'low', risk_signals: [] },
       ],
     };
@@ -177,23 +215,23 @@ test('pre-PR verdict is persisted and observable through the request HTTP API', 
     await post(base, `/api/ai-board/worker/tickets/${ticket.id}/plan`, {
       ...lease, run_id: run.id, plan, budget_used: 1, idempotency_key: 'verdict-plan-001',
     });
-    const bound = db.prepare('SELECT plan_hash, plan_revision FROM ai_runs WHERE id=?').get(run.id);
-    assert.equal(bound.plan_hash, db.prepare('SELECT plan_hash FROM ai_tickets WHERE id=?').get(ticket.id).plan_hash);
+    const bound = await db.prepare('SELECT plan_hash, plan_revision FROM ai_runs WHERE id=?').get(run.id);
+    assert.equal(bound.plan_hash, (await db.prepare('SELECT plan_hash FROM ai_tickets WHERE id=?').get(ticket.id)).plan_hash);
     assert.equal(bound.plan_revision, 1);
-    db.prepare('UPDATE ai_runs SET plan_revision=? WHERE id=?').run(2, run.id);
+    await db.prepare('UPDATE ai_runs SET plan_revision=? WHERE id=?').run(2, run.id);
     const mismatchedRun = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, {
       ...lease, run_id: run.id, verdict: passingVerdict, idempotency_key: 'pre-pr-wrong-plan-001',
     });
     assert.equal(mismatchedRun.status, 409);
     assert.equal((await mismatchedRun.json()).error, 'plan_run_mismatch');
-    db.prepare('UPDATE ai_runs SET plan_revision=? WHERE id=?').run(1, run.id);
-    db.prepare(`UPDATE ai_tickets SET lease_mode='shadow' WHERE id=?`).run(ticket.id);
+    await db.prepare('UPDATE ai_runs SET plan_revision=? WHERE id=?').run(1, run.id);
+    await db.prepare(`UPDATE ai_tickets SET lease_mode='shadow' WHERE id=?`).run(ticket.id);
     const shadowVerdict = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/verdict`, {
       ...lease, run_id: run.id, verdict: passingVerdict, idempotency_key: 'pre-pr-shadow-001',
     });
     assert.equal(shadowVerdict.status, 409);
     assert.equal((await shadowVerdict.json()).error, 'active_worker_required');
-    db.prepare(`UPDATE ai_tickets SET lease_mode='active' WHERE id=?`).run(ticket.id);
+    await db.prepare(`UPDATE ai_tickets SET lease_mode='active' WHERE id=?`).run(ticket.id);
     const body = {
       ...lease, run_id: run.id, idempotency_key: 'pre-pr-verdict-001',
       verdict: passingVerdict,
@@ -232,10 +270,10 @@ test('pre-PR verdict is persisted and observable through the request HTTP API', 
     const listed = await visible.json();
     assert.equal(listed.items[0].pre_pr_verdict, 'ready_for_pr');
     assert.equal(listed.items[0].pre_pr_gate, 5.5);
-    assert.deepEqual(db.prepare('SELECT outcome, gate FROM ai_runs WHERE id=?').get(run.id),
+    assert.deepEqual(await db.prepare('SELECT outcome, gate FROM ai_runs WHERE id=?').get(run.id),
       { outcome: 'ready_for_pr', gate: 5.5 });
-    assert.equal(db.prepare('SELECT cumulative_budget FROM ai_tickets WHERE id=?').get(ticket.id).cumulative_budget, 41);
-    assert.deepEqual(db.prepare('SELECT gate, status FROM ai_gate_traces WHERE run_id=? ORDER BY gate').all(run.id), [
+    assert.equal((await db.prepare('SELECT cumulative_budget FROM ai_tickets WHERE id=?').get(ticket.id)).cumulative_budget, 41);
+    assert.deepEqual(await db.prepare('SELECT gate, status FROM ai_gate_traces WHERE run_id=? ORDER BY gate').all(run.id), [
       { gate: 1, status: 'passed' }, { gate: 2, status: 'passed' }, { gate: 2.5, status: 'passed' },
       { gate: 3, status: 'passed' }, { gate: 4, status: 'passed' },
       { gate: 5, status: 'passed' }, { gate: 5.5, status: 'passed' },
@@ -247,7 +285,7 @@ test('pre-PR verdict is persisted and observable through the request HTTP API', 
 });
 
 test('AI_BOARD_KEY cannot authenticate or mount the worker API', async () => {
-  const { db, store } = fixture();
+  const { db, store } = await fixture();
   const { base, close } = await serve(store, { AI_BOARD_KEY: KEY });
   try {
     const response = await post(base, '/api/ai-board/worker/claim', {
@@ -261,7 +299,7 @@ test('AI_BOARD_KEY cannot authenticate or mount the worker API', async () => {
 });
 
 test('a root claimed under shadow cannot receive an active verdict via a same-worker reclaim', async () => {
-  const { db, store } = fixture();
+  const { db, store } = await fixture();
   const { base, close } = await serve(store);
   try {
     const { ticket } = await (await post(base, '/api/ai-board/worker/claim', {
@@ -289,7 +327,7 @@ test('a root claimed under shadow cannot receive an active verdict via a same-wo
       gates: [
         { gate: 3, blocked: false, reason: null },
         { gate: 4, blocked: false, reason: null, issues: [] },
-        { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true, runner: 'docker' },
+        { gate: 5, blocked: false, reason: null, smoke_passed: true, http_observed: true, functional: { probe_id: 'queue-worker-availability-v1', passed: true, coverage: { requester_api: true, mounted_ui: true, recovery: true } }, runner: 'docker' },
         { gate: 5.5, blocked: false, reason: null, risk_level: 'low', risk_signals: [] },
       ],
     };
@@ -315,7 +353,7 @@ function post(base, path, body, { key = KEY } = {}) {
 }
 
 test('off mode claims nothing; shadow claim is idempotent and exposes only leased snapshot', async () => {
-  const { db, store } = fixture();
+  const { db, store } = await fixture();
   const { base, close } = await serve(store);
   try {
     const off = await post(base, '/api/ai-board/worker/claim', { worker_id: 'w1', version: 'test', mode: 'off' });
@@ -356,7 +394,7 @@ test('off mode claims nothing; shadow claim is idempotent and exposes only lease
 });
 
 test('heartbeat, typed run/event and release enforce lease and idempotency', async () => {
-  const { db, store } = fixture();
+  const { db, store } = await fixture();
   const { base, close } = await serve(store);
   try {
     const claim = await post(base, '/api/ai-board/worker/claim', { worker_id: 'w2', version: 'test', mode: 'shadow' });
@@ -393,7 +431,7 @@ test('heartbeat, typed run/event and release enforce lease and idempotency', asy
     });
     assert.equal(releaseRetry.status, 200);
     assert.equal((await releaseRetry.json()).ticket.duplicate, true);
-    const row = db.prepare('SELECT status, phase, lease_owner FROM ai_tickets WHERE id = ?').get(ticket.id);
+    const row = await db.prepare('SELECT status, phase, lease_owner FROM ai_tickets WHERE id = ?').get(ticket.id);
     assert.deepEqual(row, { status: 'queued', phase: 'shadow_checked', lease_owner: null });
 
     const reclaimer = await post(base, '/api/ai-board/worker/claim', {
@@ -417,11 +455,11 @@ test('heartbeat, typed run/event and release enforce lease and idempotency', asy
 });
 
 test('expired lease fails closed and another worker can reclaim it', async () => {
-  const { db, store } = fixture();
+  const { db, store } = await fixture();
   const { base, close } = await serve(store);
   try {
     const first = await (await post(base, '/api/ai-board/worker/claim', { worker_id: 'old', version: 'test', mode: 'shadow' })).json();
-    db.prepare('UPDATE ai_tickets SET lease_expires_at = ? WHERE id = ?').run(Date.now() - 1, first.ticket.id);
+    await db.prepare('UPDATE ai_tickets SET lease_expires_at = ? WHERE id = ?').run(Date.now() - 1, first.ticket.id);
     const expired = await post(base, `/api/ai-board/worker/tickets/${first.ticket.id}/heartbeat`, {
       worker_id: 'old', lease_token: first.ticket.lease_token,
     });
@@ -437,7 +475,7 @@ test('expired lease fails closed and another worker can reclaim it', async () =>
 });
 
 test('expired lease after plan submission can resume the pre-PR pipeline', async () => {
-  const { db, store } = fixture();
+  const { db, store } = await fixture();
   const { base, close } = await serve(store);
   try {
     const first = await (await post(base, '/api/ai-board/worker/claim', {
@@ -451,7 +489,7 @@ test('expired lease after plan submission can resume the pre-PR pipeline', async
       ...lease, run_id: run.id, plan: surfacePlan(), budget_used: 1,
       idempotency_key: 'crashed-plan-001',
     });
-    db.prepare('UPDATE ai_tickets SET lease_expires_at=? WHERE id=?').run(Date.now() - 1, first.ticket.id);
+    await db.prepare('UPDATE ai_tickets SET lease_expires_at=? WHERE id=?').run(Date.now() - 1, first.ticket.id);
 
     const resumed = await (await post(base, '/api/ai-board/worker/claim', {
       worker_id: 'resumer', version: 'test', mode: 'shadow', intent: 'plan',
@@ -469,12 +507,12 @@ test('expired lease after plan submission can resume the pre-PR pipeline', async
     assert.equal(duplicate.status, 'planned');
     assert.equal(duplicate.duplicate, true);
     assert.equal(duplicate.capability_policy_hash, CAPABILITY_POLICY_HASH);
-    assert.equal(db.prepare('SELECT cumulative_budget FROM ai_tickets WHERE id=?').get(first.ticket.id).cumulative_budget, 41);
+    assert.equal((await db.prepare('SELECT cumulative_budget FROM ai_tickets WHERE id=?').get(first.ticket.id)).cumulative_budget, 41);
     const released = await post(base, `/api/ai-board/worker/tickets/${resumed.ticket.id}/release`, {
       ...resumedLease, outcome: 'planned', idempotency_key: 'resumed-release-001',
     });
     assert.equal(released.status, 200);
-    assert.equal(db.prepare('SELECT lease_owner FROM ai_tickets WHERE id=?').get(first.ticket.id).lease_owner, null);
+    assert.equal((await db.prepare('SELECT lease_owner FROM ai_tickets WHERE id=?').get(first.ticket.id)).lease_owner, null);
   } finally {
     await close();
     db.close();
@@ -482,8 +520,8 @@ test('expired lease after plan submission can resume the pre-PR pipeline', async
 });
 
 test('shadow-checked roots stop reclaiming the queue and later roots can run', async () => {
-  const { db, store } = fixture();
-  store.createRequestWithRoot({
+  const { db, store } = await fixture();
+  await store.createRequestWithRoot({
     ownerUserId: 1, ownerDomain: 'pharmacy', ownerDisplayName: 'Lan',
     idempotencyKey: 'worker-request-002', title: 'Thêm mục học mới',
   });
@@ -509,7 +547,7 @@ test('shadow-checked roots stop reclaiming the queue and later roots can run', a
     });
     const idle = await (await post(base, '/api/ai-board/worker/claim', { worker_id: 'w1', version: 'test', mode: 'shadow' })).json();
     assert.equal(idle.ticket, null);
-    assert.equal(db.prepare(`SELECT COUNT(*) n FROM ai_tickets WHERE status='queued' AND phase='shadow_checked'`).get().n, 1);
+    assert.equal((await db.prepare(`SELECT COUNT(*) n FROM ai_tickets WHERE status='queued' AND phase='shadow_checked'`).get()).n, 1);
   } finally {
     await close();
     db.close();
@@ -517,7 +555,7 @@ test('shadow-checked roots stop reclaiming the queue and later roots can run', a
 });
 
 test('server rejects an unknown worker mode', async () => {
-  const { db, store } = fixture();
+  const { db, store } = await fixture();
   const { base, close } = await serve(store);
   try {
     const response = await post(base, '/api/ai-board/worker/claim', {
@@ -530,10 +568,89 @@ test('server rejects an unknown worker mode', async () => {
   }
 });
 
-test('a running worker silent for longer than the lease lists as stale, read-time only', () => {
-  const { db, store } = fixture();
-  store.claimNext({ workerId: 'w1', version: 'test', mode: 'shadow', now: 1_000 });
-  assert.equal(store.listWorkers({ now: 1_000 + 120_000 })[0].status, 'running');
-  assert.equal(store.listWorkers({ now: 1_000 + 120_001 })[0].status, 'stale');
-  assert.equal(db.prepare('SELECT status FROM ai_workers').get().status, 'running');
+test('a running worker silent for longer than the lease lists as stale, read-time only', async () => {
+  const { db, store } = await fixture();
+  await store.claimNext({ workerId: 'w1', version: 'test', mode: 'shadow', now: 1_000 });
+  assert.equal((await store.listWorkers({ now: 1_000 + 120_000 }))[0].status, 'running');
+  assert.equal((await store.listWorkers({ now: 1_000 + 120_001 }))[0].status, 'stale');
+  assert.equal((await db.prepare('SELECT status FROM ai_workers').get()).status, 'running');
+});
+
+test('requester cancels a queued request: root and request close, the worker never claims it', async () => {
+  const { db, store } = await fixture();
+  const out = await store.cancelRequest(1, { ownerUserId: 1, now: 5_000 });
+  assert.deepEqual(out, { ok: true, request_id: 1, status: 'cancelled' });
+  assert.equal((await db.prepare('SELECT status FROM requests WHERE id=1').get()).status, 'cancelled');
+  const root = await db.prepare('SELECT status, phase, lease_token FROM ai_tickets WHERE parent_id IS NULL').get();
+  assert.deepEqual({ ...root }, { status: 'cancelled', phase: 'requester_cancelled', lease_token: null });
+  const event = await db.prepare(`SELECT actor_type, actor_id FROM ai_events WHERE event_type='request_cancelled'`).get();
+  assert.deepEqual({ ...event }, { actor_type: 'requester', actor_id: '1' });
+  assert.equal(await store.claimNext({ workerId: 'w1', mode: 'shadow', intent: 'plan' }), null);
+  // Idempotent; a clarification afterwards does not reopen it.
+  assert.equal((await store.cancelRequest(1, { ownerUserId: 1 })).duplicate, true);
+  assert.equal(await store.invalidatePlanForRequest(1, 'thêm chi tiết'), false);
+});
+
+test('cancelling while a worker holds the lease revokes it and closes planned children', async () => {
+  const { db, store } = await fixture();
+  const ticket = await store.claimNext({ workerId: 'w1', version: 'test', mode: 'active', intent: 'plan' });
+  const lease = { workerId: 'w1', leaseToken: ticket.lease_token };
+  const run = await store.createRun(ticket.id, { ...lease, trigger: 'plan', idempotencyKey: 'cancel-run-0001' });
+  await store.submitPlan(ticket.id, { ...lease, runId: run.id, plan: surfacePlan(), budgetUsed: 40, idempotencyKey: 'cancel-plan-001' });
+
+  await store.cancelRequest(1, { ownerUserId: 1 });
+
+  await assert.rejects(async () => store.heartbeat(ticket.id, 'w1', ticket.lease_token), (error) => error.code === 'stale_lease');
+  const children = await db.prepare('SELECT status FROM ai_tickets WHERE parent_id=?').all(ticket.id);
+  assert.ok(children.length && children.every((c) => c.status === 'cancelled'));
+  assert.deepEqual({ ...await db.prepare('SELECT status, current_ticket_id FROM ai_workers').get() },
+    { status: 'idle', current_ticket_id: null });
+});
+
+test('only the owner can cancel, and never after the request is closed', async () => {
+  const { db, store } = await fixture();
+  await assert.rejects(async () => store.cancelRequest(1, { ownerUserId: 2 }), (error) => error.status === 404);
+  await db.prepare(`UPDATE requests SET status='done' WHERE id=1`).run();
+  await assert.rejects(async () => store.cancelRequest(1, { ownerUserId: 1 }), (error) => error.code === 'request_closed');
+});
+
+test('student cancels through POST /api/requests/:id/cancel', async () => {
+  const { db, store } = await fixture();
+  const { base, close } = await serve(store);
+  try {
+    const url = `${base}/api/requests/1/cancel`;
+    assert.equal((await fetch(url, { method: 'POST' })).status, 401);
+    const noToken = await fetch(url, { method: 'POST', headers: { 'x-test-user': '1' } });
+    assert.equal(noToken.status, 403);
+    assert.equal((await noToken.json()).error, 'csrf_failed');
+    assert.equal((await db.prepare('SELECT status FROM requests WHERE id=1').get()).status, 'pending');
+    assert.equal((await fetch(url, { method: 'POST', headers: { 'x-test-user': '2', 'x-csrf-token': 'ok' } })).status, 404);
+    const ok = await fetch(url, { method: 'POST', headers: { 'x-test-user': '1', 'x-csrf-token': 'ok' } });
+    assert.equal(ok.status, 200);
+    assert.equal((await ok.json()).status, 'cancelled');
+    assert.equal((await fetch(`${base}/api/requests/999/cancel`, { method: 'POST', headers: { 'x-test-user': '1', 'x-csrf-token': 'ok' } })).status, 404);
+  } finally {
+    await close();
+    db.close();
+  }
+});
+
+test('a request stays with the worker that ran it until that worker goes stale', async () => {
+  const { db, store } = await fixture();
+  const t0 = 1_000_000;
+  const first = await store.claimNext({ workerId: 'worker-a', mode: 'shadow', intent: 'plan', now: t0 });
+  await store.createRun(first.id, { workerId: 'worker-a', leaseToken: first.lease_token, trigger: 'plan',
+    idempotencyKey: 'affinity-run-001', now: t0 });
+  // The root comes back (e.g. a clarification) while worker-a is still polling.
+  await db.prepare(`UPDATE ai_tickets SET status='queued', phase='needs_replan', lease_owner=NULL, lease_token=NULL,
+    lease_expires_at=NULL WHERE id=?`).run(first.id);
+  assert.equal(await store.claimNext({ workerId: 'worker-b', mode: 'shadow', intent: 'plan', now: t0 + 6_000 }), null);
+  const again = await store.claimNext({ workerId: 'worker-a', mode: 'shadow', intent: 'plan', now: t0 + 7_000 });
+  assert.equal(again.id, first.id);
+  await db.prepare(`UPDATE ai_tickets SET status='queued', phase='needs_replan', lease_owner=NULL, lease_token=NULL,
+    lease_expires_at=NULL WHERE id=?`).run(first.id);
+  // worker-a stopped polling: after one lease period another worker may take over.
+  const takeover = await store.claimNext({ workerId: 'worker-b', mode: 'shadow', intent: 'plan', now: t0 + 7_000 + 121_000 });
+  assert.equal(takeover.id, first.id);
+  db.close();
 });

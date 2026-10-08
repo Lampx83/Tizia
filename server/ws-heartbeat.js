@@ -4,9 +4,8 @@
 // gọi onStale cho từng cái để site tự broadcast 'leave' theo đúng shape tin
 // nhắn của nó (khác nhau giữa các site — không ép chung 1 format broadcast).
 //
-// Không dùng cho: attachRaceWS/attachLiveQuizWs (không có heartbeat, ticket
-// 19 không ép thêm), presence.js (idle-timeout chủ động + rate-limit — khác
-// khuôn hẳn, xem ticket 19 Comments).
+// Không dùng cho: attachRaceWS/attachLiveQuizWs (không có heartbeat),
+// presence.js (idle-timeout chủ động + rate-limit — khác khuôn hẳn).
 
 export const HEARTBEAT_INTERVAL_MS = 15000;
 

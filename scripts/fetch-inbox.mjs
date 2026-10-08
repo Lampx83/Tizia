@@ -8,7 +8,7 @@
 //
 // Script này tồn tại để phiên "Ban điều hành AI" hàng ngày (chạy trong môi
 // trường agent/CI, không có volume production) đọc được yêu cầu thật của sinh
-// viên. Xem public/CHANGELOG-eduverse.md phiên 62 để biết vì sao.
+// viên.
 //
 // CHỦ Ý: KHÔNG dùng dependency nào — chỉ `fetch` sẵn có của Node ≥18 và
 // node:fs/path. Môi trường agent thường chưa `npm install`, script phải chạy

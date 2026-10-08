@@ -24,7 +24,7 @@ const TIER_META = {
 const GROUP_SIZE = 30;
 const TZ_OFFSET_MIN = 7 * 60;
 
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS league_seasons (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     week_start      TEXT    NOT NULL UNIQUE,   -- 'YYYY-MM-DD' (thứ 2 VN)
@@ -137,37 +137,37 @@ const upsertUserTierStmt = db.prepare(`
 `);
 
 // ── Core ────────────────────────────────────────────────────
-function ensureCurrentSeason() {
-  const cur = getCurrentSeasonStmt.get();
+async function ensureCurrentSeason() {
+  const cur = await getCurrentSeasonStmt.get();
   const thisMon = startOfWeekMonVN();
   if (cur && cur.week_start === thisMon) return cur;
   // Có season cũ đang mở mà week_start != tuần này → đã quá hạn, đóng + reset.
   if (cur) {
-    rotateSeason(cur.id);                    // chốt xếp hạng + promote/relegate
+    await rotateSeason(cur.id);                    // chốt xếp hạng + promote/relegate
   }
   const now = Date.now();
-  const info = insertSeasonStmt.run(thisMon, now, now);
+  const info = await insertSeasonStmt.run(thisMon, now, now);
   return { id: info.lastInsertRowid, week_start: thisMon, started_at: now, ended_at: null };
 }
 
-function getOrCreateGroup(seasonId, tier) {
-  const open = findOpenGroupStmt.get(seasonId, tier, GROUP_SIZE);
+async function getOrCreateGroup(seasonId, tier) {
+  const open = await findOpenGroupStmt.get(seasonId, tier, GROUP_SIZE);
   if (open) return open;
-  const maxSeq = (maxGroupSeqStmt.get(seasonId, tier)?.s) || 0;
-  const info = insertGroupStmt.run(seasonId, tier, maxSeq + 1);
+  const maxSeq = ((await maxGroupSeqStmt.get(seasonId, tier))?.s) || 0;
+  const info = await insertGroupStmt.run(seasonId, tier, maxSeq + 1);
   return { id: info.lastInsertRowid, season_id: seasonId, tier, seq: maxSeq + 1, member_count: 0 };
 }
 
-function ensureMembership(userId) {
-  const season = ensureCurrentSeason();
-  let m = getMembershipStmt.get(season.id, userId);
+async function ensureMembership(userId) {
+  const season = await ensureCurrentSeason();
+  let m = await getMembershipStmt.get(season.id, userId);
   if (m) return { season, membership: m };
-  const tier = (getUserTierStmt.get(userId)?.tier) || 'bronze';
-  const group = getOrCreateGroup(season.id, tier);
-  insertMembershipStmt.run(season.id, userId, group.id, tier);
-  incGroupCountStmt.run(group.id);
-  upsertUserTierStmt.run(userId, tier, Date.now());
-  m = getMembershipStmt.get(season.id, userId);
+  const tier = ((await getUserTierStmt.get(userId))?.tier) || 'bronze';
+  const group = await getOrCreateGroup(season.id, tier);
+  await insertMembershipStmt.run(season.id, userId, group.id, tier);
+  await incGroupCountStmt.run(group.id);
+  await upsertUserTierStmt.run(userId, tier, Date.now());
+  m = await getMembershipStmt.get(season.id, userId);
   return { season, membership: m };
 }
 
@@ -175,18 +175,18 @@ function ensureMembership(userId) {
  * Cộng XP tuần cho user (gọi từ chỗ grant XP: claim quest, codelab accepted,
  * quiz correct... cộng lại đây). Idempotent theo nguồn — caller chịu dedup.
  */
-export function addLeagueWeekXp(userId, xp) {
+export async function addLeagueWeekXp(userId, xp) {
   if (!userId || !Number.isFinite(xp) || xp <= 0) return;
-  const { season } = ensureMembership(userId);
-  addWeekXpStmt.run(Math.floor(xp), season.id, userId);
+  const { season } = await ensureMembership(userId);
+  await addWeekXpStmt.run(Math.floor(xp), season.id, userId);
 }
 
 /**
  * Lấy bảng xếp hạng group hiện tại của user.
  */
-export function getLeagueBoardForUser(userId) {
-  const { season, membership } = ensureMembership(userId);
-  const board = groupBoardStmt.all(membership.group_id);
+export async function getLeagueBoardForUser(userId) {
+  const { season, membership } = await ensureMembership(userId);
+  const board = await groupBoardStmt.all(membership.group_id);
   // Thêm rank
   let rank = 0;
   const enriched = board.map((row, i) => {
@@ -217,18 +217,18 @@ export function getLeagueBoardForUser(userId) {
  * Khoá 1 season: tính rank, promote/relegate, set ended_at. Idempotent — gọi
  * 2 lần cùng 1 season chỉ xử lý lần đầu.
  */
-export function rotateSeason(seasonId) {
-  const season = db.prepare(`SELECT * FROM league_seasons WHERE id = ?`).get(seasonId);
+export async function rotateSeason(seasonId) {
+  const season = await db.prepare(`SELECT * FROM league_seasons WHERE id = ?`).get(seasonId);
   if (!season || season.ended_at) return { ok: false, reason: 'already_ended_or_missing' };
-  const groups = db.prepare(`SELECT * FROM league_groups WHERE season_id = ?`).all(seasonId);
+  const groups = await db.prepare(`SELECT * FROM league_groups WHERE season_id = ?`).all(seasonId);
   let promoted = 0, relegated = 0;
-  const tx = db.transaction(() => {
+  const tx = db.transaction(async () => {
     for (const g of groups) {
-      const members = db.prepare(
+      const members = await db.prepare(
         `SELECT user_id, tier, week_xp FROM league_memberships
           WHERE group_id = ? ORDER BY week_xp DESC, user_id ASC`
       ).all(g.id);
-      members.forEach((m, idx) => {
+      for (const [idx, m] of members.entries()) {
         const rank = idx + 1;
         let newTier = m.tier;
         let isPromoted = 0, isRelegated = 0;
@@ -237,26 +237,26 @@ export function rotateSeason(seasonId) {
           // Chỉ relegate khi group đủ đông (≥20) — tránh phạt oan group nhỏ.
           newTier = prevTier(m.tier); if (newTier !== m.tier) isRelegated = 1;
         }
-        db.prepare(`
+        await db.prepare(`
           UPDATE league_memberships
              SET final_rank = ?, promoted = ?, relegated = ?
            WHERE season_id = ? AND user_id = ?
         `).run(rank, isPromoted, isRelegated, seasonId, m.user_id);
-        upsertUserTierStmt.run(m.user_id, newTier, Date.now());
+        await upsertUserTierStmt.run(m.user_id, newTier, Date.now());
         if (isPromoted) promoted++;
         if (isRelegated) relegated++;
-      });
+      }
     }
-    endSeasonStmt.run(Date.now(), seasonId);
+    await endSeasonStmt.run(Date.now(), seasonId);
   });
-  tx();
+  await tx();
   return { ok: true, promoted, relegated };
 }
 
 export function attachLeague(router, requireAuth) {
-  router.get('/api/league/me', requireAuth, (req, res) => {
+  router.get('/api/league/me', requireAuth, async (req, res) => {
     try {
-      const data = getLeagueBoardForUser(req.user.id);
+      const data = await getLeagueBoardForUser(req.user.id);
       res.json({ ok: true, ...data });
     } catch (e) {
       console.error('[league] me error', e);
@@ -265,8 +265,8 @@ export function attachLeague(router, requireAuth) {
   });
 
   // Lấy lịch sử các season trước của user (hiển thị badge promoted/relegated)
-  router.get('/api/league/history', requireAuth, (req, res) => {
-    const rows = db.prepare(`
+  router.get('/api/league/history', requireAuth, async (req, res) => {
+    const rows = await db.prepare(`
       SELECT m.season_id, m.tier, m.week_xp, m.final_rank, m.promoted, m.relegated,
              s.week_start, s.ended_at
         FROM league_memberships m
@@ -286,17 +286,17 @@ export function attachLeague(router, requireAuth) {
 // Cron-lite: mỗi lần module load tự kiểm tra & rotate nếu cần. Cộng thêm
 // setInterval mỗi 30 phút để rotate ngay sau khi sang tuần mới (00:00 thứ 2 VN)
 // — không cần OS cron. Idempotent.
-function maybeRotate() {
+async function maybeRotate() {
   try {
-    const cur = getCurrentSeasonStmt.get();
+    const cur = await getCurrentSeasonStmt.get();
     const thisMon = startOfWeekMonVN();
-    if (cur && cur.week_start !== thisMon) rotateSeason(cur.id);
-    ensureCurrentSeason();
+    if (cur && cur.week_start !== thisMon) await rotateSeason(cur.id);
+    await ensureCurrentSeason();
   } catch (e) {
     console.warn('[league] rotate check failed', e.message);
   }
 }
-maybeRotate();
+await maybeRotate();
 setInterval(maybeRotate, 30 * 60 * 1000);
 
 export { TIERS, TIER_META };

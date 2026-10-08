@@ -12,15 +12,13 @@ if str(HARNESS_DIR) not in sys.path:
 
 
 @pytest.fixture(autouse=True)
-def _no_real_codegraph(monkeypatch):
-    """Ticket 21: gates/brainstorm.py + gates/implement.py gọi codegraph.query()
-    thật -> subprocess ra ngoài (graphify CLI), chậm và phụ thuộc máy có cài +
-    graph.json đã build. Autouse fake trả [] cho MỌI test (đúng fallback
-    "graphify chưa cài" — seam Python đã chốt: mọi biên I/O thật đều fake,
-    xem main.py's Deps cho Ollama/git/Telegram). Test riêng của ticket 21 tự
-    monkeypatch lại codegraph.query khi cần kiểm tra hành vi có gợi ý graph."""
-    import codegraph
-    monkeypatch.setattr(codegraph, "query", lambda *a, **kw: [])
+def _no_repomap(monkeypatch):
+    """repomap.related dựng chỉ mục cả public/ (~20 s/process): mọi test mặc định nhận [] — test của repomap
+    tự monkeypatch lại khi cần kiểm tra hành vi có gợi ý."""
+    import repomap
+    import tools
+    monkeypatch.setattr(repomap, "related", lambda *a, **kw: [])
+    monkeypatch.setattr(tools, "matching_files", lambda *a, **kw: [])  # same index build, same reason
 
 
 @pytest.fixture
@@ -54,10 +52,29 @@ def inbox_file(tmp_path, request_item):
     return p
 
 
+def connect(dsn, dict_rows=False):
+    """Kết nối psycopg thẳng cho test seed/đọc (caller tự close)."""
+    import psycopg
+    from psycopg.rows import dict_row
+    return psycopg.connect(dsn, **({"row_factory": dict_row} if dict_rows else {}))
+
+
 @pytest.fixture
-def db_file(tmp_path):
-    """DB tạm — không bao giờ chạm data/tizia.db thật."""
-    return tmp_path / "tizia-test.db"
+def db_file():
+    """DSN PostgreSQL tạm: schema riêng mỗi test trên TEST_PG_URL (container vứt đi), drop sau test.
+    Không có TEST_PG_URL → skip. Tên `db_file` giữ từ thời SQLite."""
+    import os
+    import secrets
+    import psycopg
+    from psycopg.conninfo import make_conninfo
+    base = os.environ.get("TEST_PG_URL")
+    if not base:
+        pytest.skip("TEST_PG_URL chưa đặt (cần PostgreSQL vứt đi)")
+    schema = f"h_{secrets.token_hex(6)}"
+    with psycopg.connect(base, autocommit=True) as admin:
+        admin.execute(f"CREATE SCHEMA {schema}")
+        yield make_conninfo(base, options=f"-c search_path={schema}")
+        admin.execute(f"DROP SCHEMA {schema} CASCADE")
 
 
 class FakeModels:
@@ -71,14 +88,14 @@ class FakeModels:
 
     def __init__(self, plan, codegen=None, validation=None):
         self.plan = plan
-        # Response mặc định cho cổng 3 (ticket 11) — generate() tự chọn theo
+        # Response mặc định cho cổng 3 — generate() tự chọn theo
         # TÊN MODEL được gọi (gate1_model → plan, gate3_model*/… → codegen),
         # nên mọi fixture cũ gọi deps_with(plan_with(...)) vẫn tự đi hết tới
         # cổng 7 mà không cần biết gì về cổng 3.
         self.codegen = codegen or {
-            "code": "// fixture code\n", "test_file": "test/fixture.test.js", "test": "// fixture test\n",
+            "code": "// fixture code\n", "test_file": "test/fixture.test.js", "test": "import test from 'node:test';\n// fixture test\n",
         }
-        # Response mặc định cho cổng 2.5 (ticket 22) — clear=True nghĩa là "plan
+        # Response mặc định cho cổng 2.5 — clear=True nghĩa là "plan
         # ổn, đi tiếp", nên fixture cũ (không biết gì về cổng 2.5) tự qua trót
         # lọt tới cổng 7 mà không cần đổi gì. Cổng 2.5 dùng CHUNG gate1_model
         # với cổng 1 (đúng thiết kế thật — vai validator, không phải model
@@ -103,7 +120,11 @@ class FakeModels:
 
     def generate(self, model, prompt, **kw):
         self.calls.append({"model": model, "prompt": prompt, **kw})
-        if model in (self.gate3_model, self.gate3_model_light):
+        if "<<<YEU_CAU" in prompt or "<<<NOI_DUNG" in prompt:  # guardrail yêu cầu/nội dung
+            # Test guardrail truyền nhãn qua `plan`; plan thật (có subtasks) → mặc định cho qua.
+            guard_reply = isinstance(self.plan, str) or "labels" in self.plan
+            payload = self.plan if guard_reply else {"labels": ["ok"], "reason": "fixture"}
+        elif model in (self.gate3_model, self.gate3_model_light):
             payload = self.codegen
         elif "PLAN CẦN SOÁT" in prompt:  # cổng 2.5 — xem docstring __init__
             payload = self.validation
@@ -137,14 +158,14 @@ def plan_with(caps):
 
 
 def deps_with(models):
-    """Deps với model fake (FakeModels hoặc plan cho FakeModels); git/telegram là
+    """Deps với model fake (FakeModels hoặc plan cho FakeModels); telegram là
     MagicMock để khẳng định không bao giờ bị gọi."""
     from unittest.mock import MagicMock
     from main import Deps
     if not isinstance(models, FakeModels):
         models = FakeModels(models)
-    return Deps(models=models, git=MagicMock(name="git"), notify=MagicMock(name="telegram"),
-                verify=FakeVerify())
+    return Deps(models=models, notify=MagicMock(name="telegram"),
+                verify=FakeVerify(), sleep=lambda _s: None)
 
 
 @pytest.fixture

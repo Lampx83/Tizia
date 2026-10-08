@@ -1,22 +1,18 @@
 """Seam Python duy nhất: chạy nguyên ratchet loop 1 lượt trên fixture, mọi biên
 I/O (Ollama, git, Telegram) đều fake. Không test chi tiết nội bộ từng cổng."""
 import json
-import sqlite3
 
 import pytest
 
 import main
 from budget import Budget
+from dbconn import harness_db
 from main import Deps, Unavailable, load_inbox, run_once
 
 
 def rows(db_file):
-    con = sqlite3.connect(str(db_file))
-    try:
-        con.row_factory = sqlite3.Row
-        return [dict(r) for r in con.execute("SELECT * FROM skill_proposals ORDER BY id")]
-    finally:
-        con.close()
+    with harness_db(db_file, dict_rows=True) as con:
+        return con.execute("SELECT * FROM skill_proposals ORDER BY id").fetchall()
 
 
 def test_load_inbox_doc_snapshot(inbox_file, request_item):
@@ -44,25 +40,22 @@ def test_full_loop_reaches_gate_7_and_writes_one_row(inbox_file, db_file, fake_d
     assert row["id"] == out["proposal_id"]
 
 
-def test_dry_run_never_calls_git_or_telegram(inbox_file, db_file, fake_deps):
+def test_dry_run_never_calls_telegram(inbox_file, db_file, fake_deps):
     (item,) = load_inbox(inbox_file)
 
     run_once(item, db_path=db_file, deps=fake_deps)
 
-    assert fake_deps.git.mock_calls == []
     assert fake_deps.notify.mock_calls == []
-    # Cổng 1 (1 lần) + cổng 2.5 (1 lần, ticket 22) + cổng 3 (1 lần/subtask,
+    # Cổng 1 (1 lần) + cổng 2.5 (1 lần) + cổng 3 (1 lần/subtask,
     # plan_with có 2) — tất cả qua fake, không mạng.
-    assert len(fake_deps.models.calls) == 2 + len(fake_deps.models.plan["subtasks"])
+    assert len(fake_deps.models.calls) == 4 + len(fake_deps.models.plan["subtasks"])
 
 
-def test_real_deps_make_git_and_telegram_explode_if_touched():
+def test_real_deps_make_telegram_explode_if_touched():
     deps = Deps.real()
     with pytest.raises(NotImplementedError):
-        deps.git.push("nhanh-nao-do")
-    with pytest.raises(NotImplementedError):
         deps.notify.send("canh bao")
-    assert isinstance(deps.git, Unavailable)
+    assert isinstance(deps.notify, Unavailable)
 
 
 def test_budget_exhausted_stops_loop_and_is_recorded(inbox_file, db_file, fake_deps):
@@ -91,9 +84,8 @@ def test_gate_sequence_includes_plan_validate_2_5_and_risk_triage_5_5():
 
 
 def test_gate_exception_still_finalizes_the_skill_proposals_row(inbox_file, db_file, fake_deps, monkeypatch):
-    """code-review round: trước fix, create_proposal() ghi khung ngay đầu
-    run_once() nhưng KHÔNG có finally — 1 cổng raise giữa chừng để lại dòng
-    gate_reached=0/outcome=NULL vĩnh viễn, không ai cập nhật. Giờ phải luôn
+    """create_proposal() ghi khung ngay đầu run_once(); 1 cổng raise giữa chừng
+    không được để lại dòng gate_reached=0/outcome=NULL vĩnh viễn. Phải luôn
     ghi lại trạng thái cuối (outcome bắt đầu bằng 'error_gate_'), và exception
     vẫn phải bay lên (không nuốt lỗi)."""
     (item,) = load_inbox(inbox_file)
@@ -114,20 +106,19 @@ def test_gate_exception_still_finalizes_the_skill_proposals_row(inbox_file, db_f
 def test_cli_refuses_to_run_without_dry_run(monkeypatch, inbox_file, db_file, tmp_path, capsys):
     monkeypatch.delenv("DRY_RUN", raising=False)
     monkeypatch.setenv("TIZIA_INBOX_PATH", str(inbox_file))
-    monkeypatch.setenv("TIZIA_DB_PATH", str(db_file))
+    monkeypatch.setenv("DATABASE_URL", db_file)
     # .env thật repo có thể chứa placeholder (ví dụ OLLAMA_URL) làm nổ code
     # sau nhánh DRY_RUN nếu lỡ chạy tới — trỏ ENV_FILE sang file không
     # tồn tại để load_dotenv là no-op, cô lập test khỏi .env thật.
     monkeypatch.setattr(main, "ENV_FILE", tmp_path / "no-such.env")
 
     assert main.main([]) == 2
-    assert not db_file.exists()
 
 
 def test_cli_full_run_writes_one_row_per_pending_item(monkeypatch, inbox_file, db_file, fake_deps):
     monkeypatch.setenv("DRY_RUN", "1")
     monkeypatch.setenv("TIZIA_INBOX_PATH", str(inbox_file))
-    monkeypatch.setenv("TIZIA_DB_PATH", str(db_file))
+    monkeypatch.setenv("DATABASE_URL", db_file)
 
     assert main.main([], deps=fake_deps) == 0
 

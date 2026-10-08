@@ -14,7 +14,9 @@ npm-debug.log*
 dist/
 .claude/
 .scratch/
+.impeccable/
 docs/agents/
+docs/local/
 
 # Chỉ mục đồ thị codebase (AST, sinh bởi `npm run graphify:update` / cron —
 # xem .scratch/ai-board-plugin-registry/issues/17-graph-context-cron.md).
@@ -34,3 +36,9 @@ ai-board/harness/.venv/
 # Nhật ký vòng triển khai của Claude Code — local-only, KHÔNG push
 # (repo này clone thẳng ra production, xem CLAUDE.md)
 ai-board/ai-log.md
+# Long-term memory của worker (bài học từ verdict), chỉ nằm trên máy worker.
+ai-board/memory/
+ai-board/sandbox-runner/secrets/
+
+# Local design metadata
+.impeccable

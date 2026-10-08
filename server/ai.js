@@ -6,7 +6,7 @@
 //   POST /api/ai/patient-turn      — 1 lượt đối thoại với AI patient
 //   POST /api/ai/evaluate-roleplay — chấm toàn bộ phiên role-play
 //
-// Cấu hình env — KHÔNG có fallback cứng trong code (trước đây có, đã bỏ: một
+// Cấu hình env — KHÔNG có fallback cứng trong code (một
 // endpoint dev-tunnel + shared secret nằm thẳng trong source là rò rỉ, và mỗi
 // nơi đọc biến này lại tự chép một bản default riêng, chưa kể phải sync tay
 // với ai-board/harness/models.py). Nguồn sự thật DUY NHẤT là `.env` — thiếu
@@ -38,13 +38,16 @@ import {
 } from './ai-prompt-guardrails.js';
 import { currentAIModel, resolveAIModel, runWithAIModel } from './ai-model-router.js';
 
-const OLLAMA_URL = (process.env.OLLAMA_URL || '').replace(/\/+$/, '');
-const OLLAMA_SECKEY = process.env.OLLAMA_SECKEY || '';
-const OLLAMA_MODEL = resolveAIModel('default');
+import { appLlm, vllmHeaders, vllmChatUrl, vllmBody, vllmText } from './ai-llm.js';
+
+const LLM = appLlm(); // vLLM when VLLM_URL is set (AI_BOARD_APP_LLM overrides), else Ollama
+const OLLAMA_URL = LLM.url;
+const OLLAMA_SECKEY = LLM.secret;
+const OLLAMA_MODEL = LLM.provider === 'vllm' ? LLM.model : resolveAIModel('default');
 const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS) || 60_000;
 
 if (OLLAMA_URL) {
-  console.log(`[ai] Ollama backend = ${OLLAMA_URL} (default model=${OLLAMA_MODEL || 'per-route'})`);
+  console.log(`[ai] ${LLM.provider} backend = ${OLLAMA_URL} (default model=${OLLAMA_MODEL || 'per-route'})`);
 } else {
   console.warn('[ai] OLLAMA_URL chưa set trong .env — /api/ai/* sẽ trả 503 cho mọi call.');
 }
@@ -108,7 +111,7 @@ function wrapAi(endpoint, handler) {
   return [
     aiQuotaGate(endpoint),
     async (req, res) => {
-      const model = resolveAIModel(endpoint);
+      const model = LLM.provider === 'vllm' ? LLM.model : resolveAIModel(endpoint);
       if (!OLLAMA_URL || !model) {
         return res.status(503).json({ error: 'AI backend chưa cấu hình (thiếu OLLAMA_URL hoặc model cho route)' });
       }
@@ -116,8 +119,8 @@ function wrapAi(endpoint, handler) {
       try {
         const result = await runWithAIModel(model, () => handler(req.body || {}, req));
         const u = result?._usage || {};
-        recordAiCall(req, {
-          provider: 'ollama', model,
+        await recordAiCall(req, {
+          provider: LLM.provider, model,
           prompt_tokens:     u.prompt_tokens     || 0,
           completion_tokens: u.completion_tokens || 0,
           status: 'ok',
@@ -133,7 +136,7 @@ function wrapAi(endpoint, handler) {
         if (result && '_usage' in result) delete result._usage;
         res.json(result);
       } catch (e) {
-        recordAiCall(req, { provider: 'ollama', model, status: 'error' });
+        await recordAiCall(req, { provider: LLM.provider, model, status: 'error' });
         sendGA4Event(req, 'ai_chat', {
           endpoint, model,
           duration_ms: Date.now() - t0, status: 'error',
@@ -164,6 +167,15 @@ export async function ollamaGenerate({ prompt, system, temperature = 0.3, json =
   const tid = setTimeout(() => ctrl.abort(), OLLAMA_TIMEOUT_MS);
   try {
     const protectedSystem = addSecurityGuardrails([{ role: 'system', content: system || '' }])[0].content;
+    if (LLM.provider === 'vllm') {
+      const messages = [{ role: 'system', content: protectedSystem }, { role: 'user', content: wrapUntrustedInput(prompt) }];
+      const res = await fetch(vllmChatUrl(OLLAMA_URL), { method: 'POST', headers: vllmHeaders(OLLAMA_SECKEY), signal: ctrl.signal,
+        body: JSON.stringify(vllmBody({ model: LLM.model, messages, temperature, maxTokens, json })) });
+      if (!res.ok) throw new Error(`vLLM HTTP ${res.status}: ${await res.text().catch(() => '')}`);
+      const reply = vllmText(await res.json());
+      if (containsPromptDisclosure(reply, protectedSystem)) throw new Error('AI response blocked by prompt-disclosure guard');
+      return reply;
+    }
     const body = {
       model: currentAIModel(OLLAMA_MODEL),
       prompt: wrapUntrustedInput(prompt),
@@ -207,6 +219,13 @@ async function ollamaChat({ messages, temperature = 0.7, json = false, maxTokens
     if (isPromptExtractionRequest(latestUserMessage)) return PROMPT_DISCLOSURE_REFUSAL;
     const protectedMessages = addSecurityGuardrails(messages);
     const protectedSystem = protectedMessages[0].content;
+    if (LLM.provider === 'vllm') {
+      const res = await fetch(vllmChatUrl(OLLAMA_URL), { method: 'POST', headers: vllmHeaders(OLLAMA_SECKEY), signal: ctrl.signal,
+        body: JSON.stringify(vllmBody({ model: LLM.model, messages: protectedMessages, temperature, maxTokens, json })) });
+      if (!res.ok) throw new Error(`vLLM HTTP ${res.status}: ${await res.text().catch(() => '')}`);
+      const reply = vllmText(await res.json());
+      return containsPromptDisclosure(reply, protectedSystem) ? PROMPT_DISCLOSURE_REFUSAL : reply;
+    }
     const body = {
       model: currentAIModel(OLLAMA_MODEL),
       messages: protectedMessages,
@@ -237,7 +256,7 @@ async function ollamaChat({ messages, temperature = 0.7, json = false, maxTokens
 // ─────────────────────────────────────────────────────────────
 
 async function handleHealth() {
-  const model = resolveAIModel('health');
+  const model = LLM.provider === 'vllm' ? LLM.model : resolveAIModel('health');
   if (!OLLAMA_URL || !model) return { ok: false, error: 'AI backend chưa cấu hình (thiếu OLLAMA_URL hoặc model)' };
   try {
     const reply = await runWithAIModel(model, () => ollamaGenerate({ prompt: 'Trả lời gọn: OK', maxTokens: 20 }));
@@ -1184,7 +1203,7 @@ async function handlePracticeMore({ grade = 2, subjectLabel = '', topic = '', sa
   const n = Math.max(3, Math.min(8, Number(numQuestions) || 5));
   const levelHint = GRADE_LEVEL_VN[grade] || `học sinh lớp ${grade}`;
   // Tránh trùng: gộp stem mẫu (quiz lõi) + stem AI đã tích luỹ trong kho của tuần này.
-  const bankStems = weekId ? getAiQuestions(weekId, 40).map(q => q.stem) : [];
+  const bankStems = weekId ? (await getAiQuestions(weekId, 40)).map(q => q.stem) : [];
   const avoidList = [...(Array.isArray(sampleStems) ? sampleStems : []), ...bankStems];
   const avoid = avoidList.slice(0, 16).map(s => `- ${s}`).join('\n');
 
@@ -1261,7 +1280,7 @@ Soạn ${n} câu hỏi MỚI. CHỈ JSON.`;
   let saved = 0;
   if (weekId && questions.length) {
     try {
-      ({ saved } = saveAiQuestions({
+      ({ saved } = await saveAiQuestions({
         week_id: weekId, subject: subjectLabel, topic,
         student: req?.user?.display_name || null, questions,
       }));
@@ -1310,7 +1329,7 @@ QUY TẮC:
   let saved = 0;
   if (ok && weekId) {
     try {
-      ({ saved } = saveAiQa({
+      ({ saved } = await saveAiQa({
         week_id: weekId, subject: subjectLabel, topic,
         student: req?.user?.display_name || null,
         question: message, answer: reply,
@@ -1327,12 +1346,12 @@ QUY TẮC:
 async function handleLessonBank(_body, req) {
   const weekId = String(req?.query?.weekId || '').trim();
   if (!weekId) throw new Error('weekId required');
-  const counts = getAiContentCounts(weekId);
+  const counts = await getAiContentCounts(weekId);
   return {
     weekId,
     counts,
-    questions: getAiQuestions(weekId, 50),  // để luyện lại không cần gọi Ollama
-    qa: getAiQa(weekId, 30),                // hỏi-đáp đã có để ôn lại
+    questions: await getAiQuestions(weekId, 50),  // để luyện lại không cần gọi Ollama
+    qa: await getAiQa(weekId, 30),                // hỏi-đáp đã có để ôn lại
   };
 }
 

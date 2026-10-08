@@ -76,6 +76,9 @@ def run(state: dict) -> dict:
         add("multiple_domains", "high", ", ".join(domains))
     if any(existing for _, existing, _ in sections):
         add("existing_file", "medium", "diff sửa file đã tồn tại")
+    if state.get("review_required"):  # cờ high của guard (ảnh mới, form dữ liệu cá nhân, sửa đáp án…)
+        high = [f.get("detail", "") for f in state.get("guard_flags") or [] if f.get("severity") == "high"]
+        add("guard_review", "high", "; ".join(high)[:300] or "guard yêu cầu người soát")
     if not any(_TEST.search(path) for path in paths):
         add("missing_test", "bump", "diff không kèm file test")
 

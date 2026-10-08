@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "enabled": true,
+  "api_enabled": false,
+  "endpoint_cooldown_s": 60,
+  "embedding_space": "qwen3-embedding-8b-v1",
+  "classifier_calibration_id": "qwen35-4b-v1",
+  "roles": {
+    "gate1": [
+      "vllm-heavy-coder"
+    ],
+    "gate25": [
+      "vllm-heavy-coder"
+    ],
+    "gate3_light": [
+      "vllm-heavy-coder"
+    ],
+    "gate3_heavy": [
+      "vllm-heavy-coder"
+    ],
+    "gate4_review": [
+      "vllm-heavy-coder"
+    ],
+    "classifier": [
+      "vllm-qwen35-35b-classifier"
+    ],
+    "embed": [
+      "ollama-qwen3-embedding-8b",
+      "ollama-qwen3-embedding-8b-ctx16k"
+    ],
+    "calibration": [
+      "vllm-heavy-coder"
+    ],
+    "eval_judge": [
+      "vllm-heavy-coder"
+    ]
+  },
+  "candidates": {
+    "vllm-heavy-coder": {
+      "provider": "vllm",
+      "model": "qwen3.5-35b-a3b-int4",
+      "enabled": true,
+      "approved_roles": [
+        "gate1",
+        "gate25",
+        "gate3_light",
+        "gate3_heavy",
+        "gate4_review",
+        "calibration",
+        "eval_judge"
+      ],
+      "capabilities": [
+        "json"
+      ]
+    },
+    "vllm-qwen35-35b-classifier": {
+      "provider": "vllm",
+      "model": "qwen3.5-35b-a3b-int4",
+      "enabled": true,
+      "approved_roles": [
+        "classifier"
+      ],
+      "capabilities": [
+        "json",
+        "logprobs"
+      ],
+      "calibration_id": "qwen35-35b-a3b-int4-unfitted"
+    },
+    "ollama-qwen3-embedding-8b": {
+      "provider": "ollama",
+      "model": "qwen3-embedding:8b",
+      "enabled": true,
+      "approved_roles": [
+        "embed"
+      ],
+      "capabilities": [
+        "embedding"
+      ],
+      "embedding_space": "qwen3-embedding-8b-v1"
+    },
+    "ollama-qwen3-embedding-8b-ctx16k": {
+      "provider": "ollama",
+      "model": "qwen3-embedding:8b-ctx16k",
+      "enabled": true,
+      "approved_roles": [
+        "embed"
+      ],
+      "capabilities": [
+        "embedding"
+      ],
+      "embedding_space": "qwen3-embedding-8b-v1"
+    }
+  },
+  "reasoning": {
+    "gate1": true,
+    "gate25": true,
+    "gate3_light": false,
+    "gate3_heavy": true,
+    "gate4_review": true,
+    "classifier": false,
+    "calibration": true,
+    "eval_judge": true
+  },
+  "reasoning_extra_tokens": 4096
+}

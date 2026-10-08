@@ -1,0 +1,61 @@
+{
+  "_comment": "Worker <-> server contract. Read by server/ai-board/store.js and ai-board/worker.py; change here only.",
+  "gates": {
+    "plan": [1, 2, 2.5],
+    "pre_pr": [3, 4, 5, 5.5],
+    "names": { "1": "Lập plan", "2": "Phạm vi", "2.5": "Soát plan", "3": "Sinh code", "4": "Checks and guardrails", "5": "Chạy Docker", "5.5": "Đánh giá rủi ro" }
+  },
+  "verdict_outcomes": ["ready_for_pr", "needs_review", "blocked"],
+  "failure_classes": ["ordinary", "transient", "critical", "budget", "plan", "eval"],
+  "run_triggers": ["shadow_precheck", "plan", "execute", "rollback"],
+  "rollback_outcomes": ["discarded", "revert_ready", "failed"],
+  "max_repairs": 1,
+  "default_budget_limit": 200,
+  "limits": {
+    "_why": "All AI Board caps in one place (feature-folders ticket 02). Per-run caps scale with the plan's subtask count n: base + per_subtask * n, clamped to max. Numbers are starting points; retune from the stratified eval (ticket 12).",
+    "per_run": {
+      "units": { "base": 120, "per_subtask": 150, "max": 2400, "_why": "GPU-s per run; a feature draft of 3-10 subtasks needs ~450-1600" },
+      "wall_clock_s": { "base": 300, "per_subtask": 360, "max": 3600, "_why": "each subtask may retry up to 4 times at 14B speed" },
+      "model_calls": { "base": 10, "per_subtask": 12, "max": 150, "_why": "gate 1/2.5 calls + up to 4 attempts x (implement, repair) per subtask" }
+    },
+    "max_subtasks_per_run": 10,
+    "pending_roots_per_user": { "value": 3, "_why": "one person cannot fill the school's queue" },
+    "open_folders_per_user": { "value": 3, "_why": "feature folders not yet archived; keeps branches and context bounded" },
+    "folder_archive_days": { "value": 30, "_why": "a folder with no activity this long is archived: its cycle closes, history and brief stay" },
+    "context": {
+      "_why": "Feature-folder context tiers (ticket 06), chars. L1 brief + L3 recent requests are computed from the DB at read time; L2 owned-file outlines come from git. Full history never enters a prompt.",
+      "brief_chars": 1500, "recent_chars": 1000, "owned_files": 6
+    },
+    "gpu_s_per_user_day": { "loose": 1500, "folder": 4000, "_why": "rolling 24h; over it the request waits, a running run is never cut" },
+    "gpu_s_per_worker_hour": { "value": 2700, "_why": "must exceed one max run (2400) so big tasks are not starved" },
+    "memory": {
+      "_why": "Worker-local files under ai-board/memory/ (gitignored). Everything there is a rebuildable cache except lessons; the worker prunes at start. Folder memory lives in the DB, not here. With a second worker, lessons move to a server table.",
+      "lessons_max": 500, "traces_mb": 5, "traces_keep": 2, "eval_keep": 20
+    },
+    "self_improve": {
+      "_why": "Nightly self-improvement loop (.scratch/ai-board-self-improve spec). Off until an admin turns it on; never starts below min_labelled_tasks. Labelled eval tasks split by time: oldest learning_split to learn from, the rest to test on.",
+      "enabled": false,
+      "window": { "start": "03:00", "end": "05:30", "tz": "Asia/Ho_Chi_Minh" },
+      "night_gpu_s": { "total": 3600, "propose": 1200, "eval": 2400 },
+      "max_variants_per_night": 3,
+      "min_labelled_tasks": 20,
+      "learning_split": 0.7,
+      "max_stratum_drop_pts": 10,
+      "shadow_judge": true,
+      "pause_after_empty_nights": 5,
+      "cluster_skip": { "after_failed_nights": 3, "days": 7 },
+      "post_merge_watch": { "days": 7, "min_runs": 10, "max_drop_pts": 10 },
+      "retire_days": 180,
+      "frozen_window_days": 14
+    },
+    "transient_retry": {
+      "_why": "Yêu cầu (mọi loại, không riêng self) bị chặn ở cổng 5 vì lỗi hạ tầng thoáng qua (GPU dùng chung quá tải) sau khi backoff gọi model (main.py MODEL_RETRY_BACKOFF_S) đã hết mà vẫn hỏng. Mặc định tắt: admin tự xem Grafana rồi bấm 'Chạy lại ngay' lúc rảnh GPU. Bật: ticket tự về hàng đợi sau retry_after_ms, không cần admin theo dõi liên tục.",
+      "enabled": false,
+      "retry_after_ms": 300000
+    }
+  },
+  "branch_prefix": "ai-board/",
+  "branch_slug_max": 60,
+  "branch_pattern": "^ai-board/\\d{4}-\\d{2}-\\d{2}-[a-z0-9-]{1,60}$",
+  "idempotency_key_pattern": "^[A-Za-z0-9._:-]{8,128}$"
+}

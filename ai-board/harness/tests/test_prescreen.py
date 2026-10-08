@@ -1,11 +1,10 @@
 """Pre-screen trước cổng 1: gom request trùng (embedding fake) + chấm ưu tiên
 từ 4 đầu vào đo được, ghi ai_decisions.priority_score."""
 import json
-import sqlite3
 from datetime import datetime, timedelta, timezone
 
 import prescreen
-from conftest import FakeModels, deps_with, plan_with
+from conftest import FakeModels, connect, deps_with, plan_with
 from main import record_proposal, run_once
 from budget import Budget
 
@@ -27,9 +26,9 @@ def models_with(vectors):
 
 
 def decisions(db_file):
-    con = sqlite3.connect(str(db_file)); con.row_factory = sqlite3.Row
+    con = connect(db_file, dict_rows=True)
     try:
-        return [dict(r) for r in con.execute("SELECT * FROM ai_decisions ORDER BY request_id")]
+        return con.execute("SELECT * FROM ai_decisions ORDER BY request_id").fetchall()
     finally:
         con.close()
 
@@ -105,7 +104,7 @@ def test_merged_candidate_records_all_request_ids_in_skill_proposals(db_file):
 
     run_once(cand, db_path=db_file, deps=deps_with(models))
 
-    con = sqlite3.connect(str(db_file))
+    con = connect(db_file)
     (row,) = con.execute("SELECT request_ids FROM skill_proposals").fetchall()
     con.close()
     assert json.loads(row[0]) == ["req-1", "req-2"]
@@ -117,13 +116,13 @@ def test_prescreen_off_leaves_items_untouched(monkeypatch, inbox_file, db_file, 
     monkeypatch.setenv("DRY_RUN", "1")
     monkeypatch.setenv("PRESCREEN", "0")
     monkeypatch.setenv("TIZIA_INBOX_PATH", str(inbox_file))
-    monkeypatch.setenv("TIZIA_DB_PATH", str(db_file))
+    monkeypatch.setenv("DATABASE_URL", db_file)
 
     assert main.main([], deps=fake_deps) == 0
 
-    con = sqlite3.connect(str(db_file))
+    con = connect(db_file)
     assert con.execute("SELECT COUNT(*) FROM skill_proposals").fetchone()[0] == 1
-    assert con.execute("SELECT name FROM sqlite_master WHERE name='ai_decisions'").fetchone() is None
+    assert con.execute("SELECT to_regclass('ai_decisions')").fetchone()[0] is None
     con.close()
     assert not getattr(fake_deps.models, "embed_calls", [])
 
@@ -133,7 +132,7 @@ def test_prescreen_on_by_default_runs_before_gate_1(monkeypatch, inbox_file, db_
     monkeypatch.setenv("DRY_RUN", "1")
     monkeypatch.delenv("PRESCREEN", raising=False)
     monkeypatch.setenv("TIZIA_INBOX_PATH", str(inbox_file))
-    monkeypatch.setenv("TIZIA_DB_PATH", str(db_file))
+    monkeypatch.setenv("DATABASE_URL", db_file)
 
     assert main.main([], deps=fake_deps) == 0
 

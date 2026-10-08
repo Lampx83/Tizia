@@ -14,6 +14,7 @@
  */
 
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import express from 'express';
 import AdmZip from 'adm-zip';
@@ -35,9 +36,9 @@ import { requireAdmin } from '../admin/index.js';
 // Seed builtin catalog vào DB (upsert theo alias). Chỉ chạy 1 lần / catalog version.
 // Lưu marker version trong file để tránh re-seed mỗi khi server restart.
 let _seeded = false;
-export function seedBuiltinAppsOnce() {
+export async function seedBuiltinAppsOnce() {
   if (_seeded) return;
-  const sysOwner = getSystemOwnerId();
+  const sysOwner = await getSystemOwnerId();
   if (!sysOwner) {
     // Chưa có admin → defer; sẽ thử lại lần sau khi 1 request đi qua attachUser.
     return;
@@ -45,7 +46,7 @@ export function seedBuiltinAppsOnce() {
   try {
     let inserted = 0, updated = 0;
     for (const app of BUILTIN_APPS) {
-      const r = upsertBuiltinApp(sysOwner, app);
+      const r = await upsertBuiltinApp(sysOwner, app);
       if (r.action === 'inserted') inserted++;
       else updated++;
     }
@@ -65,7 +66,7 @@ const ALLOWED_TOP_DIRS     = new Set(['public', 'schema']); // schema chấp nh�
 const REQUIRED_INDEX       = 'public/index.html';
 
 function getPortalAppsDir() {
-  const ROOT_DIR = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..', '..');
+  const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
   const DATA_DIR = process.env.DATA_DIR
     ? path.resolve(process.env.DATA_DIR)
     : path.resolve(ROOT_DIR, 'data');
@@ -132,12 +133,12 @@ export function attachPortalApps(r, { requireAuth, requireAdmin }) {
   // ── LIST: own + public + builtin ──
   // builtin = trỏ target_url nội bộ (vd /bao-so-hoc.html); embedded = static folder.
   // Một lần cơ hội seed nếu chưa: gọi sau khi đã có session admin.
-  r.get('/api/portal-apps', requireAuth, (req, res) => {
-    seedBuiltinAppsOnce();
+  r.get('/api/portal-apps', requireAuth, async (req, res) => {
+    await seedBuiltinAppsOnce();
     const ownerId = req.user.id;
-    const own = listPortalAppsByOwner(ownerId).filter(a => !a.kind || a.kind === 'embedded');
-    const pub = listPortalAppsPublic().filter(a => a.owner_id !== ownerId && (!a.kind || a.kind === 'embedded'));
-    const builtins = listBuiltinApps();
+    const own = (await listPortalAppsByOwner(ownerId)).filter(a => !a.kind || a.kind === 'embedded');
+    const pub = (await listPortalAppsPublic()).filter(a => a.owner_id !== ownerId && (!a.kind || a.kind === 'embedded'));
+    const builtins = await listBuiltinApps();
     const decorate = (rows, kind = 'embedded') => rows.map(a => ({
       id: a.id,
       alias: a.alias,
@@ -165,9 +166,9 @@ export function attachPortalApps(r, { requireAuth, requireAdmin }) {
   });
 
   // Public list cho campus map / homepage — không cần login (guest mode).
-  r.get('/api/portal-apps/catalog', (req, res) => {
-    seedBuiltinAppsOnce();
-    const builtins = listBuiltinApps();
+  r.get('/api/portal-apps/catalog', async (req, res) => {
+    await seedBuiltinAppsOnce();
+    const builtins = await listBuiltinApps();
     res.json({
       builtin: builtins.map(a => ({
         id: a.id, alias: a.alias, name: a.name, description: a.description,
@@ -182,7 +183,7 @@ export function attachPortalApps(r, { requireAuth, requireAdmin }) {
   r.post('/api/portal-apps/install',
     requireAuth,
     express.raw({ type: () => true, limit: MAX_ZIP_BYTES }),
-    (req, res) => {
+    async (req, res) => {
       const ownerId = req.user.id;
       const buf = req.body;
       if (!Buffer.isBuffer(buf) || buf.length === 0) {
@@ -275,7 +276,7 @@ export function attachPortalApps(r, { requireAuth, requireAdmin }) {
       }
 
       // Ghi DB
-      const row = upsertPortalApp({
+      const row = await upsertPortalApp({
         ownerId,
         alias: v.alias,
         name: v.name,
@@ -300,9 +301,9 @@ export function attachPortalApps(r, { requireAuth, requireAdmin }) {
   );
 
   // ── UNINSTALL ──
-  r.delete('/api/portal-apps/:id', requireAuth, (req, res) => {
+  r.delete('/api/portal-apps/:id', requireAuth, async (req, res) => {
     const id = Number(req.params.id);
-    const row = getPortalAppById(id);
+    const row = await getPortalAppById(id);
     if (!row) return res.status(404).json({ error: 'not_found' });
     const isOwner = row.owner_id === req.user.id;
     const isAdmin = req.user.role === 'admin';
@@ -310,17 +311,17 @@ export function attachPortalApps(r, { requireAuth, requireAdmin }) {
     // Xoá thư mục trên disk
     const targetDir = path.join(PORTAL_APPS_DIR, String(row.owner_id), row.alias);
     try { fs.rmSync(targetDir, { recursive: true, force: true }); } catch {}
-    deletePortalApp(id);
+    await deletePortalApp(id);
     res.json({ ok: true });
   });
 
   // ── PUBLISH/UNPUBLISH (admin) ──
-  r.post('/api/portal-apps/:id/publish', requireAuth, requireAdmin, (req, res) => {
+  r.post('/api/portal-apps/:id/publish', requireAuth, requireAdmin, async (req, res) => {
     const id = Number(req.params.id);
-    const row = getPortalAppById(id);
+    const row = await getPortalAppById(id);
     if (!row) return res.status(404).json({ error: 'not_found' });
     const isPublic = req.body?.public !== false; // default true
-    setPortalAppPublic(id, isPublic);
+    await setPortalAppPublic(id, isPublic);
     res.json({ ok: true, isPublic });
   });
 }

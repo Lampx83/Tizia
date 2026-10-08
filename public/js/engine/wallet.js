@@ -20,22 +20,20 @@ import {
 const WALLET_KEY = KEYS.WALLET;
 const PROGRESS_KEY = KEYS.PROGRESS;
 
-// ── Anti-regression guard (fix bug #5 Enderboy: "đang làm bài thì bị giảm
-// xuống lv1") ─────────────────────────────────────────────────────────────
-// Bug: trong session, XP/coins/streak có thể TỤT về 0 nếu localStorage bị
-// đọc lúc chưa sync xong hoặc bị race condition với syncToLocal(). Hệ quả:
-// HUD hiển thị Lv 1 trong khi DB vẫn nguyên 10k+ XP. Data trên server không
-// mất; chỉ là display tearing.
+// ── Anti-regression guard ────────────────────────────────────────────────────
+// Trong session, XP/coins/streak có thể TỤT về 0 nếu localStorage bị
+// đọc lúc chưa sync xong hoặc bị race condition với syncToLocal(): HUD hiển
+// thị Lv 1 trong khi DB vẫn nguyên 10k+ XP. Data trên server không mất; chỉ
+// là display tearing.
 //
-// Fix: nhớ giá trị MAX đã thấy trong session, không bao giờ trả về thấp
-// hơn. Reset khi: (a) đăng xuất (page reload), (b) user_id thay đổi (cùng
+// Nhớ giá trị MAX đã thấy trong session, không bao giờ trả về thấp hơn. Reset khi: (a) đăng xuất (page reload), (b) user_id thay đổi (cùng
 // tab nhưng đổi tài khoản — đặt session.uid). Nếu phát hiện regression →
 // console.warn + (tuỳ chọn) tiziaTrack để debug sau.
 let _sessionMaxXp     = 0;
 let _sessionMaxCoins  = 0;
 let _sessionUid       = null;
 
-// ── Stale-tab guard (fix bug "capybara bị đẩy lên level 22 = enderman") ──────
+// ── Stale-tab guard ──────────────────────────────────────────────────────────
 // Cookie phiên + `tizia:me` dùng CHUNG cho mọi tab/cửa sổ của cùng browser,
 // nhưng mỗi tab giữ ví riêng trong bộ nhớ. Khi tab B đăng nhập user khác,
 // `tizia:me` đổi cho CẢ tab A — mà tab A không hề hay (không có storage
@@ -43,7 +41,7 @@ let _sessionUid       = null;
 // nhầm ví XP-cao của user A thành user B rồi PUT bằng cookie user B. Server
 // monotonic chỉ tăng → user B bị đẩy lên vĩnh viễn.
 //
-// Fix: chốt "chủ ví của tab" lúc đồng bộ ví cho 1 user đã xác thực
+// Chốt "chủ ví của tab" lúc đồng bộ ví cho 1 user đã xác thực
 // (loadWalletFromServer). Mọi save/push sau đó nếu `tizia:me` hiện tại khác
 // chủ tab → tab này đã "ôi", TỪ CHỐI ghi/đẩy (không mis-stamp). `_tabOwnerUid`
 // CHỈ đổi qua loadWalletFromServer (đăng nhập lại cùng tab) hoặc reset khi

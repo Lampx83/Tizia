@@ -1,15 +1,23 @@
 """Gate 5: run one user-state smoke flow in an isolated Docker Compose project."""
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import re
 import shutil
 import subprocess
 import tempfile
+import uuid
+import secrets
 import urllib.request
 from pathlib import Path
+from typing import Callable
 from urllib.parse import urlsplit
+
+from gates import visual
+from verification import functional
+from meter import redact
 
 _SECRET_NAME = re.compile(r"(?:SECRET|TOKEN|PASSWORD|API_KEY|SECKEY|PRIVATE_KEY)", re.I)
 _REQUIRED_ABSENT = {"SCOREUP_API_KEY", "CODELAB_API_KEY", "GA_API_SECRET",
@@ -17,32 +25,79 @@ _REQUIRED_ABSENT = {"SCOREUP_API_KEY", "CODELAB_API_KEY", "GA_API_SECRET",
 SMOKE_SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "smoke-user-state.sh"
 
 
-def _override(project: str) -> str:
-    """!override replaces Compose lists; ordinary merge would retain prod port/volume."""
-    volume = f"{project}-data"
-    return f"""services:
-  tizia:
-    container_name: !reset null
-    image: {project}:latest
-    restart: "no"
-    cpus: 1.0
-    mem_limit: 512m
-    pids_limit: 128
-    ports: !override
-      - "127.0.0.1::8041"
-    volumes: !override
-      - {volume}:/data
-    environment: !override
-      NODE_ENV: production
-      PORT: "8041"
-      HOST: 0.0.0.0
-      DATA_DIR: /data
-      BASE_PATH: ""
-volumes:
-  pharmacysim-data: !reset null
-  {volume}:
-    name: {volume}
-"""
+def _internal() -> bool:
+    """AI_BOARD_VERIFY_NETWORK=internal: worker runs Docker-in-Docker, so the candidate gets a network
+    with no egress and is reached on its container IP. Default publishes to 127.0.0.1 (local Docker Desktop)."""
+    return os.getenv("AI_BOARD_VERIFY_NETWORK", "published") == "internal"
+
+
+def _app_env(password: str) -> dict:
+    return {"NODE_ENV": "production", "PORT": "8041", "HOST": "0.0.0.0",
+            "DATA_DIR": "/data", "BASE_PATH": "",
+            "DATABASE_URL": f"postgresql://gate5:{password}@postgres:5432/gate5"}
+
+
+def _override(project: str, password: str | None = None, checkout: Path | None = None) -> str:
+    """Owned Compose, never merge candidate services or interpolate production credentials."""
+    password = password or secrets.token_hex(24)
+    config = {
+        "services": {
+            "tizia": {"build": {"context": str((checkout or Path.cwd()).resolve())},
+                      "image": f"{project}:latest", "restart": "no",
+                      "depends_on": {"postgres": {"condition": "service_healthy"}},
+                      "ports": [] if _internal() else ["127.0.0.1::8041"],
+                      "volumes": [f"{project}-data:/data"], "environment": _app_env(password)},
+            "postgres": {"image": "postgres:16-alpine", "restart": "no",
+                         "environment": {"POSTGRES_USER": "gate5", "POSTGRES_DB": "gate5", "POSTGRES_PASSWORD": password},
+                         "healthcheck": {"test": ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U gate5 -d gate5"],
+                                         "interval": "2s", "timeout": "3s", "retries": 30},
+                         "volumes": [f"{project}-pg:/var/lib/postgresql/data"]}},
+        "networks": {"default": {"name": f"{project}-net", "internal": True}},
+        "volumes": {name: {"name": name} for name in (f"{project}-data", f"{project}-pg")}}
+    return json.dumps(config, indent=2)
+
+
+def _validate_config(config: dict, project: str, password: str) -> None:
+    """Fail closed on any resource or DSN outside this invocation."""
+    if escape := _escape_hatch(config):
+        raise RuntimeError(f"Compose config mở đường ra ngoài cách ly: {escape}")
+    services = config.get("services") or {}
+    app, pg = services.get("tizia") or {}, services.get("postgres") or {}
+    network = (config.get("networks") or {}).get("default") or {}
+    ports = app.get("ports") or []
+    port_ok = not ports if _internal() else (len(ports) == 1 and ports[0].get("target") == 8041
+                                            and ports[0].get("host_ip") == "127.0.0.1"
+                                            and not ports[0].get("published"))
+    if (set(services) != {"tizia", "postgres"} or app.get("environment") != _app_env(password)
+            or pg.get("environment") != {"POSTGRES_USER": "gate5", "POSTGRES_DB": "gate5", "POSTGRES_PASSWORD": password}
+            or app.get("image") != f"{project}:latest" or pg.get("image") != "postgres:16-alpine"
+            or pg.get("ports") or not port_ok or network.get("internal") is not True
+            or network.get("name") != f"{project}-net" or network.get("external")
+            or set(config.get("networks") or {}) != {"default"}
+            or set(config.get("volumes") or {}) != {f"{project}-data", f"{project}-pg"}):
+        raise RuntimeError("Compose config không cách ly port/network/volume/env/image/DSN")
+    for name, service, target in ((f"{project}-data", app, "/data"), (f"{project}-pg", pg, "/var/lib/postgresql/data")):
+        volumes = service.get("volumes") or []
+        declared = config["volumes"][name]
+        if (service.get("env_file") or service.get("secrets") or service.get("container_name")
+                or set(service.get("networks") or {}) != {"default"}
+                or len(volumes) != 1 or volumes[0].get("source") != name or volumes[0].get("target") != target
+                or declared.get("name") != name or declared.get("external")):
+            raise RuntimeError("Compose config không cách ly port/network/volume/env/image/DSN")
+
+
+_ESCAPE_KEYS = ("privileged", "network_mode", "pid", "ipc", "userns_mode", "cgroup_parent", "devices", "cap_add", "security_opt", "sysctls")
+
+
+def _escape_hatch(config: dict) -> str | None:
+    """First `service.setting` in any service that reaches past the app container (host namespaces, devices, bind mounts)."""
+    for name, service in (config.get("services") or {}).items():
+        for key in _ESCAPE_KEYS:
+            if service.get(key):
+                return f"{name}.{key}"
+        if any(volume.get("type") == "bind" for volume in service.get("volumes") or []):
+            return f"{name}.bind mount"
+    return None
 
 
 def _bash() -> str:
@@ -104,28 +159,241 @@ def check_landing(requested: str, landed: str, status: int | None) -> None:
         raise ScreenshotTargetError(f"trang chụp bị chuyển hướng sang {urlsplit(landed).path}")
 
 
-def capture_screenshot(url: str, path: Path) -> None:
-    """Optional dependency: a single Chromium capture, with no visual diff engine."""
+def _launch(playwright):
+    """Chromium đi kèm Playwright; thiếu bản đúng phiên bản (chưa `playwright install`) thì dùng Chrome/Edge
+    đã cài trên máy worker. Không có trình duyệt nào → raise lỗi gốc."""
+    try:
+        return playwright.chromium.launch(headless=True)
+    except Exception as missing:
+        if "Executable doesn't exist" not in str(missing):
+            raise
+        for channel in ("chrome", "msedge"):
+            try:
+                return playwright.chromium.launch(headless=True, channel=channel)
+            except Exception:
+                continue
+        raise
+
+
+SHOT_WIDTHS = (375, 1280)  # điện thoại, máy tính
+MAX_SHOT_PAGES = 3         # ≤ 3 trang; ≤ 2 trang chụp cả 2 khổ, 3 trang chỉ khổ máy tính (xem _shot_widths)
+MAX_SHOT_HEIGHT = 2000     # cắt trang dài: PNG vừa trần upload của server
+FOCUS_PAD = 40             # lề quanh vùng thay đổi trong ảnh cận cảnh
+FOCUS_MIN = (640, 200)     # vùng cận cảnh không nhỏ hơn cỡ này (rộng, cao)
+FOCUS_MAX_HEIGHT = 1200
+# Phiên học viên mới: không để popup chào mừng che trang (điểm danh hằng ngày, hướng dẫn 60 giây).
+QUIET_POPUPS_JS = """try {
+  localStorage.setItem('tizia:daily:shown', new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10));  // ngày giờ Việt Nam, như daily-login.js
+  localStorage.setItem('tizia:onboarding:v1:done', '1');
+} catch (e) {}"""
+# Tìm tối đa 3 phần tử đổi: theo selector, rồi theo chữ (nút lá chứa đoạn chữ đó); giữ lại trong window.__tzFocus cho FOCUS_MARK_JS.
+FOCUS_RECTS_JS = """([selectors, texts]) => {
+  const els = [];
+  const add = (el) => {
+    if (!el || els.includes(el) || els.length >= 3) return;
+    const r = el.getBoundingClientRect();
+    const style = getComputedStyle(el);
+    if (r.width < 2 || r.height < 2 || style.display === 'none' || style.visibility === 'hidden') return;
+    els.push(el);
+  };
+  for (const selector of selectors) { try { add(document.querySelector(selector)); } catch (e) {} }
+  const norm = (t) => t.replace(/\\s+/g, ' ').trim().toLowerCase();
+  for (const text of texts) {
+    const want = norm(text);
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (norm(node.textContent).includes(want)) { add(node.parentElement); break; }
+    }
+  }
+  window.__tzFocus = els;
+  return els.map((el) => { const r = el.getBoundingClientRect(); return { x: r.left + scrollX, y: r.top + scrollY, w: r.width, h: r.height }; });
+}"""
+FOCUS_MARK_JS = """(on) => (window.__tzFocus || []).forEach((el) => {
+  if (on) { el.dataset.tzOutline = el.style.outline; el.style.outline = '3px solid #f97316'; el.style.outlineOffset = '3px'; }
+  else { el.style.outline = el.dataset.tzOutline || ''; el.style.outlineOffset = ''; delete el.dataset.tzOutline; }
+})"""
+
+
+def _shot_widths(page_count: int) -> tuple[int, ...]:
+    """Ngân sách ảnh: ≤ 2 trang chụp điện thoại + máy tính; nhiều trang hơn thì chỉ máy tính."""
+    return SHOT_WIDTHS if page_count <= 2 else SHOT_WIDTHS[-1:]
+
+
+def _focus_clip(page, selectors: list[str], texts: list[str], width: int) -> dict | None:
+    """Khung cận cảnh quanh phần tử đổi (hợp ≤ 3 phần tử khớp đầu tiên), kẹp trong trang; None nếu không selector/chữ nào thấy được."""
+    rects = page.evaluate(FOCUS_RECTS_JS, [list(selectors), list(texts)])
+    if not rects:
+        return None
+    left, top = min(r["x"] for r in rects), min(r["y"] for r in rects)
+    right, bottom = max(r["x"] + r["w"] for r in rects), max(r["y"] + r["h"] for r in rects)
+    page_height = int(page.evaluate("document.documentElement.scrollHeight") or 1)
+    box_w = max(right - left + 2 * FOCUS_PAD, FOCUS_MIN[0])
+    box_h = min(max(bottom - top + 2 * FOCUS_PAD, FOCUS_MIN[1]), FOCUS_MAX_HEIGHT)
+    x = min(max(left - (box_w - (right - left)) / 2, 0), max(width - box_w, 0))
+    y = min(max(top - (box_h - (bottom - top)) / 2, 0), max(page_height - box_h, 0))
+    return {"x": x, "y": y, "width": min(box_w, width), "height": min(box_h, page_height)}
+
+
+def capture_screenshot(url: str, path: Path, width: int = 1280, *, selectors: list[str] = (), token: str | None = None,
+                       focus: Path | None = None, focus_texts: list[str] = ()) -> dict:
+    """Một lần chụp Chromium + đo cổng ảnh trên cùng trang đó, như khách hoặc (có token) như học viên đăng nhập. Trả kết quả visual.audit.
+    `focus` + (selector hoặc chữ đổi) nhìn thấy được → thêm ảnh cận cảnh quanh phần tử đó (viền cam) ở `focus`; không thấy thì không ghi file."""
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
+        browser = _launch(playwright)
         try:
-            page = browser.new_page()
+            context = browser.new_context(viewport={"width": width, "height": 812 if width < 768 else 800})
+            if token:
+                context.add_cookies([{"name": "tizia_sid", "value": token, "url": url, "httpOnly": True}])
+                context.add_init_script(QUIET_POPUPS_JS)
+            page = context.new_page()
             response = page.goto(url, wait_until="domcontentloaded", timeout=15000)
             check_landing(url, page.url, response.status if response else None)
-            page.screenshot(path=str(path), full_page=True)
+            visual.settle(page)
+            height = min(max(int(page.evaluate("document.documentElement.scrollHeight") or 1), 1), MAX_SHOT_HEIGHT)
+            page.screenshot(path=str(path), full_page=True, clip={"x": 0, "y": 0, "width": width, "height": height})
+            audit = visual.audit(page, list(selectors))
+            clip = _focus_clip(page, list(selectors), list(focus_texts), width) if focus is not None else None
+            if clip:
+                page.evaluate(FOCUS_MARK_JS, True)
+                try:
+                    page.screenshot(path=str(focus), full_page=True, clip=clip)
+                finally:
+                    page.evaluate(FOCUS_MARK_JS, False)
+            return audit
         finally:
             browser.close()
 
 
-def probe_http(url: str) -> tuple[int, bytes]:
-    with urllib.request.urlopen(url, timeout=15) as response:
+def _loader_pages(checkout: Path, assets: list[str], depth: int = 3) -> list[str]:
+    """Trang HTML nạp file JS/CSS đã đổi (link/script trực tiếp hoặc qua import, ≤ depth bước), gần trước rồi theo tên.
+    ponytail: quét lại public/ mỗi lần (~600 file, dưới 1 s); dùng code_index.json lưu sẵn nếu chậm."""
+    import code_index
+
+    owners: dict[str, set[str]] = {}
+    for file in sorted((checkout / "public").rglob("*")):
+        rel = file.relative_to(checkout).as_posix()
+        if file.suffix not in (".html", ".js", ".mjs") or not file.is_file() or file.stat().st_size > code_index.MAX_BYTES:
+            continue
+        entry = code_index.parse(rel, file.read_text(encoding="utf-8", errors="replace"))
+        links = entry.get("links") or {}
+        for target in [*links.get("css", []), *links.get("js", []), *entry.get("imports", [])]:
+            owners.setdefault(target, set()).add(rel)
+    found, frontier, seen = [], list(assets), set(assets)
+    for _ in range(depth):
+        nxt = []
+        for owner in sorted({o for target in frontier for o in owners.get(target, ())} - seen):
+            seen.add(owner)
+            (found if owner.endswith(".html") else nxt).append(owner)
+        frontier = nxt
+    return found
+
+
+def _shot_pages(checkout: Path, pages: list[str], primary: str | None) -> list[str]:
+    """Trang chụp: HTML trong diff; không có thì trang người gửi đang xem + trang nạp JS/CSS đổi."""
+    html = [page for page in pages if page.endswith(".html")]
+    if html:
+        return html[:MAX_SHOT_PAGES]
+    loaders = ["/" + p.removeprefix("public/") for p in _loader_pages(checkout, ["public" + p for p in pages])]
+    return list(dict.fromkeys([*([primary] if primary else []), *loaders]))[:MAX_SHOT_PAGES]
+
+
+def _restore_base(state: dict, checkout: Path, pages: list[str], cp: Callable[[Path, str], None]) -> set[str] | None:
+    """Chép bản base của file public đã đổi vào container đang chạy (server đọc file mỗi request) để chụp BEFORE
+    không phải build base. Trả file mới ở candidate (base không có → không chụp BEFORE); None = không biết base.
+    ponytail: file mới vẫn nằm trong container; trang base không trỏ tới nên không ảnh hưởng ảnh."""
+    import code_index
+
+    base_sha = state.get("base_sha")
+    if not base_sha:
+        return None
+    base_dir = state.get("base_pages_dir")  # sandbox run: the worker staged base pages, the upload has no .git
+    new: set[str] = set()
+    with tempfile.TemporaryDirectory(prefix="ai-verify-base-") as temp:
+        for index, page in enumerate(pages):
+            try:
+                blob = (Path(base_dir) / page.lstrip("/")).read_bytes() if base_dir else code_index.git(checkout, "show", f"{base_sha}:public{page}")
+            except OSError:
+                new.add(page)
+                continue
+            local = Path(temp) / str(index)
+            local.write_bytes(blob)
+            cp(local, f"/app/public{page}")
+    return new
+
+
+def _capture_all(base: str, shot_pages: list[str], primary: str | None, restore: Callable[[], set[str] | None],
+                 logs: list[str], selectors: list[str] = (), token: str | None = None, texts: dict | None = None) -> list[dict]:
+    """AFTER rồi BEFORE, mỗi trang × SHOT_WIDTHS. Ảnh AFTER của trang chính bắt buộc: lỗi → raise lỗi gốc.
+    Ảnh khác lỗi (trang cần đăng nhập, base hỏng) chỉ ghi log."""
+    shot_dir = Path(tempfile.mkdtemp(prefix="ai-verify-shots-"))
+    shots: list[dict] = []
+    for phase in ("after", "before"):
+        targets = shot_pages
+        if phase == "before":
+            try:
+                new = restore()
+            except (OSError, RuntimeError) as exc:
+                logs.append(f"Bỏ ảnh BEFORE: {exc}")
+                break
+            if new is None:
+                logs.append("Bỏ ảnh BEFORE: không biết commit base")
+                break
+            targets = [page for page in shot_pages if page.split("?")[0] not in new]
+        for page in targets:
+            for width in _shot_widths(len(shot_pages)):
+                path = shot_dir / f"{phase}-{len(shots)}-{width}.png"
+                phase_texts = list((texts or {}).get(phase) or [])
+                focus = shot_dir / f"{phase}-{len(shots)}-{width}-focus.png" if (selectors or phase_texts) and width == SHOT_WIDTHS[-1] else None
+                try:
+                    audit = capture_screenshot(base + page, path, width, selectors=selectors, token=token,
+                                               **({"focus": focus, "focus_texts": phase_texts} if focus else {}))
+                except Exception as exc:
+                    if phase == "after" and page == primary:
+                        shutil.rmtree(shot_dir, ignore_errors=True)
+                        raise
+                    logs.append(f"Bỏ ảnh {phase} {page} {width}px: {exc}")
+                    continue
+                shots.append({"phase": phase, "page": page, "width": width, "path": str(path),
+                              **({"audit": audit} if isinstance(audit, dict) else {})})
+                logs.append(f"Screenshot {phase} {page} {width}px: {path}")
+                if focus and focus.exists():
+                    shots.append({"phase": phase, "page": page, "width": width, "path": str(focus), "focus": True})
+                    logs.append(f"Screenshot {phase} {page} vùng thay đổi: {focus}")
+    return shots
+
+
+def visual_regressions(shots: list[dict]) -> list[str]:
+    """So ảnh AFTER với BEFORE cùng trang + khổ; chỉ lỗi mới. Không đo được (ảnh không có audit) → bỏ qua."""
+    before = {(s["page"], s["width"]): s["audit"] for s in shots if s["phase"] == "before" and s.get("audit")}  # ảnh cận cảnh không có số đo
+    out = []
+    for shot in shots:
+        if shot["phase"] == "after" and shot.get("audit"):
+            out += [f"{shot['page']} {shot['width']}px: {issue}"
+                    for issue in visual.regressions(before.get((shot["page"], shot["width"])), shot["audit"])]
+    return out
+
+
+class LoginRequired(RuntimeError):
+    """The disposable app redirected a protected student page to login."""
+
+
+def probe_http(url: str, *, token: str | None = None) -> tuple[int, bytes]:
+    request = urllib.request.Request(url)
+    if token:
+        request.add_unredirected_header("Cookie", "tizia_sid=" + token)
+    with urllib.request.urlopen(request, timeout=15) as response:
+        landing, target = urllib.parse.urlsplit(response.url), urllib.parse.urlsplit(url)
+        if (landing.scheme, landing.netloc) != (target.scheme, target.netloc):
+            raise RuntimeError('changed page redirected outside disposable app origin')
+        if landing.path == '/login.html' and target.path != '/login.html':
+            raise LoginRequired('changed page requires a disposable student session')
         return response.status, response.read()
 
 
 def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None = None,
-        runner=None, http_probe=None) -> dict:
+        runner=None, http_probe=None, functional_probe=None) -> dict:
     """Caller supplies a full checkout; a gate-3 scratch repo is never buildable."""
     checkout = checkout_dir if checkout_dir is not None else state.get("full_checkout")
     if not checkout:
@@ -140,14 +408,17 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     if not skill_id:
         return {"gate": 5, "blocked": True, "reason": "thiếu skill_id cho Docker verify", "evidence": None,
                 "failure_class": "transient"}
-    project = f"ai-verify-{skill_id}"
+    project = f"ai-verify-{skill_id[:24]}-{uuid.uuid4().hex[:12]}"
+    password = secrets.token_hex(24)
     pages = _public_paths(state.get("diffs") or [])
     if not pages:
         # Nothing the isolated server serves can show the change; a repair cannot fix that, the plan must.
         return {"gate": 5, "blocked": True, "reason": "thay đổi không chạm file public nào để quan sát qua HTTP",
                 "evidence": None, "failure_class": "plan"}
     html = [page for page in pages if page.endswith(".html")]
-    shot_page = html[0] if html else _request_page(state.get("request_detail"))
+    # Trang chính: ảnh AFTER bắt buộc (D0). Các trang/khổ/ảnh BEFORE khác là best-effort.
+    primary = html[0] if html else _request_page(state.get("request_detail"))
+    shots: list[dict] = []
     runner_name = "fake" if runner else "docker"  # injected runner = test double, never real evidence
     runner = runner or subprocess.run
     http_probe = http_probe or probe_http
@@ -159,17 +430,24 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     screenshot = None
     smoke_ok = False
     http_observed = False
+    probe_id = functional.select(state)
+    functional_result = {'probe_id': probe_id, 'passed': False, 'reason': 'Behavior has not been verified'}
+    teardown_confirmed = False
 
     with tempfile.TemporaryDirectory(prefix="ai-verify-compose-") as temp:
         override = Path(temp) / "override.yml"
-        override.write_text(_override(project), encoding="utf-8")
-        compose = ["docker", "compose", "-p", project, "-f", str(checkout / "docker-compose.yml"),
-                   "-f", str(override)]
+        override.write_text(_override(project, password, checkout), encoding="utf-8")
+        empty_env = Path(temp) / "empty-env"
+        empty_env.write_text("", encoding="utf-8")
+        compose = ["docker", "compose", "--env-file", str(empty_env), "-p", project, "-f", str(override)]
 
         def command(args: list[str], *, env=None, log_output=True, timeout=None) -> subprocess.CompletedProcess:
             result = runner(args, cwd=checkout, env=env, text=True, encoding="utf-8", errors="replace", capture_output=True,
                             stdin=subprocess.DEVNULL, check=False, timeout=timeout)
-            output = f"{result.stdout or ''}{result.stderr or ''}" if log_output else "[output redacted]"
+            output = "[output redacted]"
+            if log_output:
+                output = f"{result.stdout or ''}{result.stderr or ''}"
+                output = (redact(output.replace(password, "[synthetic credential]")).strip()[-4000:] or "(không có chi tiết lỗi)") if result.returncode else f"exit {result.returncode}"
             logs.append(f"$ {' '.join(str(a) for a in args)}\n{output}")
             if result.returncode:
                 raise RuntimeError(f"{' '.join(str(a) for a in args[:4])} exit {result.returncode}")
@@ -177,31 +455,31 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
 
         try:
             config = json.loads(command([*compose, "config", "--format", "json"]).stdout)
-            service = config["services"]["tizia"]
-            ports = service.get("ports") or []
-            volumes = service.get("volumes") or []
-            expected_env = {"NODE_ENV": "production", "PORT": "8041", "HOST": "0.0.0.0",
-                            "DATA_DIR": "/data", "BASE_PATH": ""}
             kind = "critical"
-            if (service.get("environment") != expected_env or service.get("env_file") or
-                    service.get("secrets") or service.get("container_name") or
-                    service.get("image") != f"{project}:latest" or
-                    float(service.get("cpus") or 0) != 1.0 or
-                    int(service.get("mem_limit") or 0) != 536870912 or
-                    int(service.get("pids_limit") or 0) != 128 or
-                    len(ports) != 1 or ports[0].get("target") != 8041 or
-                    ports[0].get("host_ip") != "127.0.0.1" or ports[0].get("published") or
-                    len(volumes) != 1 or volumes[0].get("source") != f"{project}-data" or
-                    volumes[0].get("target") != "/data"):
-                raise RuntimeError("Compose config không cách ly port/volume/env/image")
+            _validate_config(config, project, password)
+            internal = _internal()
             kind = "transient"
             command([*compose, "up", "--build", "-d", "--wait", "--wait-timeout", "120"])
-            port_output = command([*compose, "port", "tizia", "8041"]).stdout.strip()
-            kind = "critical"
-            match = re.search(r":(\d+)\s*$", port_output)
-            if not match or int(match.group(1)) == 8041:
-                raise RuntimeError(f"Docker trả host port không an toàn: {port_output!r}")
-            port = int(match.group(1))
+            if internal:
+                # Address from the daemon, not from inside the candidate container.
+                cid = command([*compose, "ps", "-q", "tizia"]).stdout.strip()
+                ip_output = command(["docker", "inspect", "-f",
+                                     "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}", cid]).stdout
+                kind = "critical"
+                try:
+                    ip = ipaddress.ip_address((ip_output.split() or [""])[0])
+                except ValueError:
+                    ip = None
+                if ip is None or not ip.is_private or ip.is_loopback:
+                    raise RuntimeError(f"Docker trả địa chỉ container không an toàn: {ip_output.strip()!r}")
+                base = f"http://{ip}:8041"
+            else:
+                port_output = command([*compose, "port", "tizia", "8041"]).stdout.strip()
+                kind = "critical"
+                match = re.search(r":(\d+)\s*$", port_output)
+                if not match or int(match.group(1)) == 8041:
+                    raise RuntimeError(f"Docker trả host port không an toàn: {port_output!r}")
+                base = f"http://127.0.0.1:{int(match.group(1))}"
 
             kind = "transient"
             env_output = command([*compose, "exec", "-T", "tizia", "env"], log_output=False).stdout
@@ -209,37 +487,58 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             container_env = dict(line.split("=", 1) for line in env_output.splitlines() if "=" in line)
             leaked = sorted(name for name, value in container_env.items()
                             if value and (name in _REQUIRED_ABSENT or _SECRET_NAME.search(name)))
+            if container_env.get("DATABASE_URL") != _app_env(password)["DATABASE_URL"]:
+                raise RuntimeError("container DATABASE_URL is not this run disposable PostgreSQL DSN")
             if leaked:
                 raise RuntimeError(f"container có biến bí mật: {', '.join(leaked)}")
-            logs.append("Container env: 5 biến ứng dụng cho phép; các key/secret/token đều vắng mặt hoặc rỗng.")
+            logs.append("Container env: 6 biến ứng dụng cho phép; DATABASE_URL chỉ trỏ PostgreSQL disposable; các key/secret/token đều vắng mặt hoặc rỗng.")
             kind = "ordinary"
 
             test_files = sorted({item.get("test_file") for item in state.get("diffs") or []
                                  if item.get("test_file")})
-            if not test_files:
+            if not test_files and not probe_id:
                 raise RuntimeError("không có generated test để chạy")
+            if not test_files:
+                logs.append(f"No generated test (advisory: the harness oracle '{probe_id}' decides)")
             for test_file in test_files:
                 parent = str(Path("/app", test_file).parent).replace("\\", "/")
                 command([*compose, "exec", "-T", "tizia", "mkdir", "-p", parent])
                 command([*compose, "cp", test_file, f"tizia:/app/{test_file}"])
             try:
-                command([*compose, "exec", "-T", "tizia", "node", "--test",
-                         *(f"/app/{test_file}" for test_file in test_files)], timeout=60)
-            except subprocess.TimeoutExpired as exc:
-                raise RuntimeError("generated tests timed out") from exc
-            except RuntimeError as exc:
-                raise RuntimeError("generated tests failed") from exc
-            logs.append(f"Generated tests passed: {', '.join(test_files)}")
+                if test_files:  # `node --test` with no file would run the whole suite
+                    command([*compose, "exec", "-T", "tizia", "node", "--test",
+                             *(f"/app/{test_file}" for test_file in test_files)], timeout=60)
+            except (subprocess.TimeoutExpired, RuntimeError) as exc:
+                failure = "generated tests timed out" if isinstance(exc, subprocess.TimeoutExpired) else "generated tests failed"
+                if not probe_id:
+                    raise RuntimeError(failure) from exc
+                # A harness oracle judges this request; a model-written test is supplementary and often mangles quotes/escapes.
+                logs.append(f"{failure} (advisory: the harness oracle '{probe_id}' decides): {', '.join(test_files)}")
+            else:
+                if test_files:
+                    logs.append(f"Generated tests passed: {', '.join(test_files)}")
 
-            base = f"http://127.0.0.1:{port}"
             env = os.environ.copy()
             env["BASE"] = base
             # Use the harness owner's script, not a possibly modified copy in the proposal checkout.
             smoke = command([_bash(), SMOKE_SCRIPT.as_posix()], env=env)
             smoke_ok = smoke.returncode == 0
 
+            def fixture(stage):
+                if stage in ('seed', 'thread', 'session'):
+                    command([*compose, 'cp', str(Path(__file__).resolve().parents[1] / 'queue_fixture.mjs'), 'tizia:/app/verify-queue.mjs'])
+                response = command([*compose, 'exec', '-T', 'tizia', 'node', '/app/verify-queue.mjs', stage], log_output=False, timeout=20)
+                return json.loads(response.stdout) if stage in ('seed', 'thread', 'session') else None
             for page in pages:
-                status, body = http_probe(base + page)
+                try:
+                    status, body = http_probe(base + page)
+                except LoginRequired:
+                    if http_probe is not probe_http:
+                        raise
+                    # Retry protected pages as a synthetic student in this run's
+                    # disposable database. Anonymous public pages stay anonymous.
+                    status, body = probe_http(base + page, token=fixture('session')['token'])
+                    logs.append(f"Changed page HTTP authenticated disposable student: {page}")
                 if not 200 <= status < 300:
                     smoke_ok = False
                     raise RuntimeError(f"changed page returned HTTP {status}: {page}")
@@ -251,30 +550,70 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     raise RuntimeError(f"changed page body does not match checkout: {page}")
                 logs.append(f"Changed page HTTP {status}: {page}")
             http_observed = True
+            kind = 'plan'
+            observed_pages = html or ([primary] if primary else [])
+            functional_result = (functional_probe(base, probe_id) if functional_probe
+                                 else functional.run(base, probe_id, fixture, state=state, pages=observed_pages))
+            logs.append('Independent functional check: ' + json.dumps(functional_result, ensure_ascii=False))
+            if not functional_result.get('passed'):
+                raise RuntimeError(functional_result.get('reason') or 'Independent functional check failed')
+            kind = 'ordinary'
             # Changed HTML page, else the page the requester was on (CSS/JS change); none named = no shot.
-            if shot_page:
-                screenshot = Path(tempfile.mkdtemp(prefix=f"{project}-artifact-")) / "screenshot.png"
+            shot_pages = _shot_pages(checkout, pages, primary)
+            skipped = [page for page in html if page not in shot_pages]
+            if skipped:
+                logs.append(f"Chỉ chụp {len(shot_pages)} trong {len(html)} trang đổi; không chụp: {', '.join(skipped)}")
+            if shot_pages:
+                def cp(local: Path, target: str) -> None:
+                    command([*compose, "cp", str(local), f"tizia:{target}"])
+
                 try:
-                    capture_screenshot(base + shot_page, screenshot)
-                    logs.append(f"Screenshot {shot_page}: {screenshot}")
+                    try:
+                        shot_token = fixture('session')['token']
+                    except (OSError, RuntimeError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
+                        shot_token = None
+                        logs.append(f"Ảnh chụp như khách (không lấy được phiên học viên): {exc}")
+                    shots = _capture_all(base, shot_pages, primary,
+                                         lambda: _restore_base(state, checkout, pages, cp), logs,
+                                         visual.changed_selectors(state.get("full_diff")), shot_token,
+                                         {"after": visual.changed_texts(state.get("full_diff"), "+"),
+                                          "before": visual.changed_texts(state.get("full_diff"), "-")})
                 except Exception as exc:  # D0: UI evidence is mandatory; absent browser = environment
-                    shutil.rmtree(screenshot.parent, ignore_errors=True)
-                    screenshot = None
                     # Wrong landing page is not fixed by a retry or a repair; admin decides.
                     kind = "plan" if isinstance(exc, ScreenshotTargetError) else "transient"
                     raise RuntimeError(f"thiếu screenshot bắt buộc cho thay đổi UI: {exc}") from exc
-        except (OSError, RuntimeError, ValueError, KeyError, TypeError) as exc:
-            reason = str(exc)
+                screenshot = next((s["path"] for s in shots
+                                   if s["phase"] == "after" and s["page"] == primary and s["width"] == 1280), None)
+                visual_issues = visual_regressions(shots)
+                logs += [f"Cổng ảnh: {issue}" for issue in visual_issues] or ["Cổng ảnh: không có lỗi hiển thị mới."]
+                if visual_issues:  # bản sau tệ hơn bản trước: sửa được bằng lượt sửa, như test hỏng
+                    raise RuntimeError("giao diện tệ hơn bản trước — " + " | ".join(visual_issues))
+        except (OSError, RuntimeError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
+            reason = (str(exc) or type(exc).__name__).replace(password, "[synthetic credential]")
         finally:
             try:
+                diagnostic = command([*compose, "logs", "--no-color"], log_output=False)
+                logs.append("Container logs before teardown:\n" + redact((diagnostic.stdout or "").replace(password, "[synthetic credential]"))[-8000:])
+            except (OSError, RuntimeError, subprocess.TimeoutExpired):
+                pass
+            try:
                 command([*compose, "down", "-v"])
-            except (OSError, RuntimeError) as exc:
+                remaining = [command(["docker", resource, "ls", "--all", "--filter", f"{key}={value}", "--format", "{{.ID}}"], log_output=False).stdout.strip()
+                             for resource, key, value in (("container", "label", f"com.docker.compose.project={project}"),)]
+                remaining += [command(["docker", resource, "ls", "--filter", "name=" + project, "--format", "{{.Name}}"], log_output=False).stdout.strip()
+                              for resource in ("volume", "network")]
+                if any(remaining):
+                    raise RuntimeError("run resources remain after Compose down")
+                teardown_confirmed = True
+            except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
                 reason = f"{reason or 'verify'}; teardown thất bại: {exc}"
                 kind = "transient"  # leaked containers are the environment's problem, not the candidate's
 
     evidence = {"text": "Smoke scripts/smoke-user-state.sh: một luồng user-state, không bao phủ toàn ứng dụng.\n"
                         + "\n".join(logs), "smoke_passed": smoke_ok, "http_observed": http_observed, "runner": runner_name,
-                "screenshot": str(screenshot) if screenshot else None}
+                "screenshot": str(screenshot) if screenshot else None, "screenshots": shots,
+                "functional": functional_result, "postgres": {"project": project, "network": f"{project}-net",
+                "data_volume": f"{project}-pg", "disposable": True}, "teardown_confirmed": teardown_confirmed}
     state["evidence"] = evidence
     return {"gate": 5, "blocked": bool(reason), "reason": reason, "evidence": evidence,
             "failure_class": kind if reason else None}

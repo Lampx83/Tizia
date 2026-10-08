@@ -1,4 +1,4 @@
-"""Cổng 3 (implement.py, ticket 11) — routing theo size, parse codegen, diff thật."""
+"""Cổng 3 (implement.py) — routing theo size, parse codegen, diff thật."""
 import shutil
 import subprocess
 from pathlib import Path
@@ -38,6 +38,7 @@ def test_parse_codegen_valid():
 @pytest.mark.parametrize("bad", [
     "khong phai json",
     '{"code": "x"}',                                   # thiếu test_file/test
+    '{"test_file": "t.js", "test": "y"}',              # thiếu code cho file mới
     '{"code": "", "test_file": "t.js", "test": "y"}',  # code rỗng
     '[1, 2]',                                            # không phải object
 ])
@@ -76,7 +77,7 @@ def test_run_passes_repair_reason_to_every_subtask_prompt(tmp_path):
 def test_run_second_subtask_prompt_excludes_first_subtasks_content(tmp_path):
     """'Fresh context per subtask' là cơ chế (build_prompt chỉ nhận 1 subtask),
     không phải quy ước — test này khẳng định bằng cách soi prompt thật đã gửi."""
-    codegen = {"code": "// noop\n", "test_file": "test/noop.test.js", "test": "// noop test\n"}
+    codegen = {"code": "// noop\n", "test_file": "test/noop.test.js", "test": "import test from 'node:test';\n// noop test\n"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
     plan = plan_with(["features"])  # 2 subtask: "Tạo plugin" (small) + "Trang HTML" (large)
@@ -96,7 +97,7 @@ def test_run_second_subtask_prompt_excludes_first_subtasks_content(tmp_path):
 
 
 def test_run_routes_each_subtask_to_correct_model_by_size():
-    codegen = {"code": "// noop\n", "test_file": "test/noop.test.js", "test": "// noop test\n"}
+    codegen = {"code": "// noop\n", "test_file": "test/noop.test.js", "test": "import test from 'node:test';\n// noop test\n"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
     plan = plan_with(["features"])  # subtasks[0].size='small', subtasks[1].size='large'
@@ -110,7 +111,7 @@ def test_run_routes_each_subtask_to_correct_model_by_size():
 # ── run(): diff thật vào repo scratch, không phải Tizia thật ────────────────
 
 def test_run_produces_real_diff_against_scratch_repo(tmp_path):
-    codegen = {"code": "console.log('hi');\n", "test_file": "test/hi.test.js", "test": "// test hi\n"}
+    codegen = {"code": "console.log('hi');\n", "test_file": "test/hi.test.js", "test": "import test from 'node:test';\n// test hi\n"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
     plan = plan_with(["features"])
@@ -129,7 +130,7 @@ def test_run_produces_real_diff_against_scratch_repo(tmp_path):
 
 
 def test_run_uses_fresh_temp_repo_when_no_repo_dir_given():
-    codegen = {"code": "x", "test_file": "test/t.test.js", "test": "y"}
+    codegen = {"code": "x", "test_file": "test/t.test.js", "test": "import test from 'node:test';\ny"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
     plan = plan_with(["features"])
@@ -162,7 +163,7 @@ def test_run_blocks_on_malformed_model_response(tmp_path):
 def test_run_stops_mid_gate_when_budget_exhausted_between_subtasks(tmp_path):
     """max_model_calls=1: subtask đầu tiêu hết budget, subtask thứ hai (plan_with
     có 2) không được gọi model — không được âm thầm báo blocked=False."""
-    codegen = {"code": "x", "test_file": "test/t.test.js", "test": "y"}
+    codegen = {"code": "x", "test_file": "test/t.test.js", "test": "import test from 'node:test';\ny"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
     plan = plan_with(["features"])
@@ -178,7 +179,7 @@ def test_run_stops_mid_gate_when_budget_exhausted_between_subtasks(tmp_path):
 
 
 def test_run_spends_budget_once_per_subtask(tmp_path):
-    codegen = {"code": "x", "test_file": "test/t.test.js", "test": "y"}
+    codegen = {"code": "x", "test_file": "test/t.test.js", "test": "import test from 'node:test';\ny"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
     plan = plan_with(["features"])
@@ -189,10 +190,10 @@ def test_run_spends_budget_once_per_subtask(tmp_path):
     assert budget.model_calls == len(plan["subtasks"])
 
 
-# ── code-review round: model không được ghi ra NGOÀI scratch repo ──────────
+# ── model không được ghi ra NGOÀI scratch repo ──────────
 
 def test_absolute_path_from_model_is_rejected_not_written(tmp_path):
-    codegen = {"code": "evil", "test_file": "/etc/passwd", "test": "y"}
+    codegen = {"code": "evil", "test_file": "/etc/passwd", "test": "import test from 'node:test';\ny"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
     plan = plan_with(["features"])
@@ -205,7 +206,7 @@ def test_absolute_path_from_model_is_rejected_not_written(tmp_path):
 
 
 def test_windows_absolute_path_from_model_is_rejected(tmp_path):
-    codegen = {"code": "x", "test_file": "C:/Windows/Temp/evil.js", "test": "y"}
+    codegen = {"code": "x", "test_file": "C:/Windows/Temp/evil.js", "test": "import test from 'node:test';\ny"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
 
@@ -217,7 +218,7 @@ def test_windows_absolute_path_from_model_is_rejected(tmp_path):
 
 
 def test_path_traversal_via_dotdot_is_rejected(tmp_path):
-    codegen = {"code": "x", "test_file": "../../../outside.js", "test": "y"}
+    codegen = {"code": "x", "test_file": "../../../outside.js", "test": "import test from 'node:test';\ny"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
 
@@ -229,7 +230,7 @@ def test_path_traversal_via_dotdot_is_rejected(tmp_path):
 
 
 def test_model_test_file_cannot_overwrite_an_approved_source_path(tmp_path):
-    codegen = {"code": "x", "test_file": "test/../server/db.js", "test": "evil"}
+    codegen = {"code": "x", "test_file": "test/../server/db.js", "test": "import test from 'node:test';\nevil"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
 
@@ -243,7 +244,7 @@ def test_model_test_file_cannot_overwrite_an_approved_source_path(tmp_path):
 
 def test_normal_relative_paths_still_work_after_traversal_guard(tmp_path):
     """Guard mới không được chặn nhầm case bình thường."""
-    codegen = {"code": "x", "test_file": "test/nested/deep.test.js", "test": "y"}
+    codegen = {"code": "x", "test_file": "test/nested/deep.test.js", "test": "import test from 'node:test';\ny"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
 
@@ -255,7 +256,7 @@ def test_normal_relative_paths_still_work_after_traversal_guard(tmp_path):
 
 def test_ensure_scratch_repo_never_reuses_real_tizia_repo(tmp_path):
     """repo_dir=None → tempfile.mkdtemp(), KHÔNG bao giờ trỏ vào ROOT của Tizia
-    (ticket 04: deps.git vẫn Unavailable, git thật không được chạm)."""
+    (git thật chỉ candidate.py chạm, không phải cổng 3)."""
     repo = implement._ensure_scratch_repo(None)
     try:
         assert (repo / ".git").exists()
@@ -273,7 +274,7 @@ def test_heavy_gate3_model_reads_only_gate3_model_heavy():
     assert OllamaClient.from_env({"GATE3_MODEL": "old"}).gate3_model == ""
 
 
-# ── Existing target file: current content in view, 20 KB ceiling ────────────
+# ── Existing target file: grep excerpt in, search/replace edits out ─────────
 
 def _source_with(tmp_path, rel, content):
     repo = tmp_path / "source"
@@ -284,33 +285,85 @@ def _source_with(tmp_path, rel, content):
     return repo
 
 
-def test_existing_target_content_is_appended_after_the_locked_prefix(tmp_path):
-    source = _source_with(tmp_path, "public/flashcards.html", "<h1>Thẻ cũ</h1>\n<p>giữ nguyên</p>\n")
-    models = FakeModels(plan_with(["features"]))
+BIG_PAGE = "".join(f"<p>đoạn {i}</p>\n" for i in range(3000)) + '<footer id="chan-trang">Bản quyền</footer>\n</body>\n'
+EDITS = {"code": "// fixture code\n", "test_file": "test/fixture.test.js", "test": "import test from 'node:test';\n// fixture test\n",
+         "edits": [{"search": '<footer id="chan-trang">Bản quyền</footer>',
+                    "replace": '<p>Tizia được cập nhật liên tục.</p>\n<footer id="chan-trang">Bản quyền</footer>'}]}
+
+
+def _written(tmp_path, rel):
+    return (tmp_path / "scratch" / rel).read_text(encoding="utf-8")
+
+
+def test_large_existing_file_is_shown_as_an_excerpt_and_edited_in_place(tmp_path):
+    source = _source_with(tmp_path, "public/flashcards.html", BIG_PAGE)
+    models = FakeModels(plan_with(["features"]), codegen=EDITS)
     plan = plan_with(["features"])
-    state = {"plan": plan, "checkout_source": str(source)}
+    state = {"plan": plan, "checkout_source": str(source), "request_detail": "Thêm dòng ở chân trang"}
 
     out = implement.run(state, deps_with(models), Budget(max_wall_clock_s=999), repo_dir=tmp_path / "scratch")
 
     assert out["blocked"] is False
     new_file_prompt, existing_prompt = [call["prompt"] for call in models.calls]
     plain = implement.build_prompt(plan["subtasks"][1])
-    assert existing_prompt.startswith(plain)
-    assert "<p>giữ nguyên</p>" in existing_prompt[len(plain):]
-    assert "giữ nguyên" not in new_file_prompt
+    assert existing_prompt.startswith(plain)  # locked prefix unchanged
+    context = existing_prompt[len(plain):]
+    assert 'L3001| <footer id="chan-trang">Bản quyền</footer>' in context
+    assert "3002 dòng" in context and "flashcards.html" in context
+    assert len(context) < 8000 < len(BIG_PAGE)  # excerpt, not the 60 KB file
+    assert new_file_prompt == implement.build_prompt(plan["subtasks"][0])  # new file: prefix only
+    written = _written(tmp_path, "public/flashcards.html")
+    assert written == BIG_PAGE.replace('<footer id="chan-trang">', '<p>Tizia được cập nhật liên tục.</p>\n<footer id="chan-trang">')
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=source, capture_output=True, text=True,
                           stdin=subprocess.DEVNULL).stdout.strip()
     assert state["base_sha"] == head  # the worktree is cut from the same base the model saw
 
 
-def test_existing_target_over_20kb_stops_as_plan_failure_before_any_model_call(tmp_path):
-    source = _source_with(tmp_path, "public/flashcards.html", "x" * (20 * 1024 + 1))
-    models = FakeModels(plan_with(["features"]))
-
+def test_whole_file_rewrite_of_an_existing_file_is_refused(tmp_path):
+    source = _source_with(tmp_path, "public/flashcards.html", BIG_PAGE)
+    models = FakeModels(plan_with(["features"]))  # default codegen: `code` only
     out = implement.run({"plan": plan_with(["features"]), "checkout_source": str(source)},
                         deps_with(models), Budget(max_wall_clock_s=999), repo_dir=tmp_path / "scratch")
-
     assert out["blocked"] is True
-    assert out["failure_class"] == "plan"
-    assert "public/flashcards.html" in out["reason"] and "20 KB" in out["reason"]
-    assert models.calls == []
+    assert "edits" in out["reason"]
+    assert out.get("failure_class") in (None, "ordinary")  # model mistake: one repair pass may fix it
+
+
+def test_edit_whose_search_is_not_in_the_file_blocks_for_repair(tmp_path):
+    source = _source_with(tmp_path, "public/flashcards.html", BIG_PAGE)
+    bad = {**EDITS, "edits": [{"search": "<footer>không có</footer>", "replace": "x"}]}
+    out = implement.run({"plan": plan_with(["features"]), "checkout_source": str(source)},
+                        deps_with(FakeModels(plan_with(["features"]), codegen=bad)),
+                        Budget(max_wall_clock_s=999), repo_dir=tmp_path / "scratch")
+    assert out["blocked"] is True
+    assert "không khớp" in out["reason"]
+    assert out.get("failure_class") in (None, "ordinary")
+
+
+def test_lessons_from_past_verdicts_are_added_to_the_prompt(tmp_path):
+    import memory
+    source = _source_with(tmp_path, "public/flashcards.html", BIG_PAGE)
+    lessons = tmp_path / "lessons.jsonl"
+    memory.record(lessons, [{"files": ["public/flashcards.html"], "gate": 5, "failure_class": "ordinary",
+                             "reason": "changed page body does not match checkout", "outcome": "fixed"}])
+    models = FakeModels(plan_with(["features"]), codegen=EDITS)
+    implement.run({"plan": plan_with(["features"]), "checkout_source": str(source), "memory_path": str(lessons)},
+                  deps_with(models), Budget(max_wall_clock_s=999), repo_dir=tmp_path / "scratch")
+    existing_prompt = models.calls[1]["prompt"]
+    assert "does not match checkout" in existing_prompt  # qua tool lessons của skill
+    assert "does not match checkout" not in models.calls[0]["prompt"]  # other file, no keyword match
+
+
+def test_test_file_outside_test_dir_is_a_repairable_model_mistake(tmp_path):
+    """Nothing leaves the scratch repo yet, so it is ordinary (one repair), not a critical boundary alert."""
+    codegen = {"code": "// x\n", "test_file": "public/flashcards.test.js", "test": "import test from 'node:test';\n// t\n"}
+    out = implement.run({"plan": plan_with(["features"])}, deps_with(FakeModels(plan_with(["features"]), codegen=codegen)),
+                        Budget(max_wall_clock_s=999), repo_dir=tmp_path)
+    assert out["blocked"] is True
+    assert "test/" in out["reason"]
+    assert out["failure_class"] == "ordinary"
+
+
+def test_prompt_states_where_generated_tests_must_live():
+    prompt = implement.build_prompt({"title": "t", "file": "public/x.html", "verify": "v", "size": "small"})
+    assert "\"test_file\" nằm trong thư mục test/" in prompt and "node:test" in prompt

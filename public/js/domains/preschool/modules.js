@@ -3,7 +3,7 @@
 // ============================================================
 // 5 LĨNH VỰC PHÁT TRIỂN × 3 độ tuổi = 15 module track.
 // Lĩnh vực 2 (Nhận thức / N1-N3) GIỮ NGUYÊN — đã có scenarios đầy đủ.
-// Lĩnh vực 1,3,4,5 (TC/NN/TX/TM) — quiz content bổ sung phiên 11 (2026-07-08).
+// Lĩnh vực 1,3,4,5 (TC/NN/TX/TM) — có quiz content.
 // ============================================================
 
 /** @type {import('../../engine/types.js').CourseModule[]} */

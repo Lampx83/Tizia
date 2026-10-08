@@ -1,0 +1,172 @@
+"""Metering + trace: đo ollama/api, units theo nhà cung cấp, Deps.call_model tính phí và ghi trace."""
+import dataclasses
+import json
+
+import meter
+from budget import Budget
+from conftest import FakeModels, deps_with, plan_with
+
+OLLAMA_BODY = {"response": "{}", "total_duration": 21_000_000_000, "load_duration": 150_000_000,
+               "prompt_eval_duration": 900_000_000, "eval_duration": 8_900_000_000,
+               "prompt_eval_count": 3900, "eval_count": 640, "done_reason": "stop"}
+
+
+def test_ollama_metrics_charge_gpu_seconds_and_keep_tokens_as_baseline():
+    m = meter.measure("ollama", OLLAMA_BODY, wall_ms=22_500)
+    assert m["gpu_ms"] == 9950 and m["load_ms"] == 150 and m["eval_ms"] == 8900
+    assert m["queue_ms"] == 1500 and m["tokens_in"] == 3900 and m["tokens_out"] == 640
+    assert m["tok_s"] == 71.9 and m["done_reason"] == "stop"
+    assert meter.units("ollama", m) == 10
+
+
+def test_api_metrics_charge_per_thousand_tokens():
+    m = meter.measure("api", {"usage": {"input_tokens": 1500, "output_tokens": 700}, "stop_reason": "end_turn"}, 3000)
+    assert m["gpu_ms"] is None and m["done_reason"] == "end_turn"
+    assert meter.units("api", m) == 3
+
+
+def test_missing_durations_fall_back_to_wall_time():
+    assert meter.units("ollama", meter.measure("ollama", {}, 2400)) == 3
+
+
+def test_call_model_spends_units_and_records_a_redacted_capped_trace(tmp_path):
+    tracer = meter.Tracer(tmp_path / "traces.jsonl")
+    sent = []
+    tracer.begin(7, sent.extend)
+    models = FakeModels(plan_with(["features"]))
+    deps = dataclasses.replace(deps_with(models), trace=tracer)
+    budget = Budget()
+    secret = 'api_key = "abcdefghijk123"'
+    body = deps.call_model("m", "x" * 9000 + secret, gate=1, budget=budget, prompt_name=None)
+    assert budget.units == 1 and body["_metrics"]["tokens_in"] == 120
+    assert models.calls[0]["num_predict"] == 1024 and models.calls[0]["temperature"] == 0
+    tracer.flush()
+    (rec,) = sent
+    assert rec["call_id"] == "run7:g1:cNone:a0:i0:s1" and rec["result"] == "ok"
+    assert len(rec["prompt_var"]) == meter.TRACE_CAP and rec["truncated"] == {"prompt": True, "output": False}
+    local = json.loads((tmp_path / "traces.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    assert "abcdefghijk123" not in local["prompt_var"] and "[đã che]" in local["prompt_var"]
+
+
+def test_gate3_gets_a_bigger_output_cap():
+    models = FakeModels(plan_with(["features"]))
+    deps_with(models).call_model("m", "p", gate=3, budget=Budget())
+    assert models.calls[0]["num_predict"] == 3072
+
+
+def test_grounded_validator_has_room_for_compact_evidence():
+    models = FakeModels(plan_with(["features"]))
+    deps_with(models).call_model("m", "p", gate=2.5, budget=Budget())
+    assert models.calls[0]["num_predict"] == 3072
+
+
+def test_failed_call_is_charged_by_wall_time_traced_and_reraised(tmp_path):
+    class Down(FakeModels):
+        def generate(self, *a, **k):
+            raise TimeoutError("gateway 504")
+
+    tracer = meter.Tracer(None)
+    sent = []
+    tracer.begin(1, sent.extend)
+    base = deps_with(Down(plan_with(["features"])))
+    deps = dataclasses.replace(base, trace=tracer)
+    budget = Budget()
+    try:
+        deps.call_model("m", "p", gate=3, budget=budget)
+    except TimeoutError:
+        pass
+    else:
+        raise AssertionError("lỗi gọi model phải raise lại")
+    tracer.flush()
+    # Timeout thử lại 2 lần (MODEL_RETRY_BACKOFF_S) trước khi bỏ cuộc — 3 lượt gọi, 3 lượt tính phí,
+    # nhưng chỉ 1 dòng trace (trace ghi lúc bỏ cuộc hẳn, không ghi từng lần thử lại thoáng qua).
+    assert budget.units == 3 and budget.model_calls == 3 and sent[0]["result"] == "timeout" and len(sent) == 1
+
+
+def test_trace_batches_per_gate_and_marks_retries():
+    tracer = meter.Tracer(None)
+    batches = []
+    tracer.begin(3, batches.append)
+    common = dict(model="m", prompt="p", prompt_name=None, prompt_hash=None, static_prefix="", output="o",
+                  metrics={"gpu_ms": 1000}, budget_units=1, result="ok")
+    tracer.record(gate=3, **common)
+    tracer.mark_last("retry", "search không khớp")
+    tracer.record(gate=4, **common)
+    tracer.flush()
+    assert [len(b) for b in batches] == [1, 1]
+    assert batches[0][0]["result"] == "retry" and batches[1][0]["gate"] == 4
+
+
+def test_hourly_gpu_cap():
+    tracer = meter.Tracer(None)
+    # Cap comes from contract.json limits; two calls summing exactly to it trip it.
+    tracer._gpu.extend([(10**9, meter.HOURLY_GPU_S * 2 / 3), (10**9, meter.HOURLY_GPU_S / 3)])
+    assert tracer.over_hourly_cap()
+    assert not meter.Tracer(None).over_hourly_cap()
+
+
+def test_local_trace_rotates_keeping_three_files(tmp_path, monkeypatch):
+    monkeypatch.setattr(meter, "ROTATE_BYTES", 10)
+    monkeypatch.setattr(meter, "ROTATE_KEEP", 3)
+    tracer = meter.Tracer(tmp_path / "t.jsonl")
+    for _ in range(5):
+        tracer._write({"x": "y" * 20})
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["t.jsonl", "t.jsonl.1", "t.jsonl.2"]
+
+
+def test_post_failure_never_breaks_the_gate():
+    tracer = meter.Tracer(None)
+
+    def boom(_calls):
+        raise RuntimeError("409 stale_lease")
+
+    tracer.begin(1, boom)
+    tracer.record(gate=1, model="m", prompt="p", prompt_name=None, prompt_hash=None, static_prefix="",
+                  output="o", metrics={}, budget_units=1, result="ok")
+    tracer.flush()  # không raise
+    assert tracer.pending == []
+
+
+_COMMON = dict(model="m", prompt="p", prompt_name=None, prompt_hash=None, static_prefix="", output="o",
+               metrics={"gpu_ms": 1000}, budget_units=1, result="ok")
+
+
+def test_notes_ride_the_next_call_and_sections_the_last_one():
+    tracer, batches = meter.Tracer(None), []
+    tracer.begin(3, batches.append)
+    tracer.note("knows", "target file", "public/a.js, 120 dòng", {"lines": "L1-L40"})
+    tracer.note("tool", "grep", "2 hit", {"words": ["a"]})
+    tracer.record(gate=3, **_COMMON)
+    tracer.attach_last("edits", {"parsed": [{"search": "a", "replace": "b"}], "diff": "-a\n+b"})
+    tracer.attach_last("evaluation", {"check": "apply", "ok": False, "detail": "không khớp"})
+    tracer.attach_last("evaluation", {"check": "accepted", "ok": True, "detail": ""})
+    tracer.record(gate=3, **_COMMON)  # nothing noted in between: nothing leaks over
+    tracer.flush()
+    first, second = batches[0]
+    assert [(n["kind"], n["name"]) for n in first["notes"]] == [("knows", "target file"), ("tool", "grep")]
+    assert first["notes"][0]["data"] == '{"lines": "L1-L40"}'
+    assert first["edits"]["diff"] == "-a\n+b" and [e["ok"] for e in first["evaluation"]] == [False, True]
+    assert second["notes"] == [] and second["edits"] is None and second["evaluation"] == []
+
+
+def test_trace_sections_are_redacted_and_capped():
+    tracer, batches = meter.Tracer(None), []
+    tracer.begin(3, batches.append)
+    tracer.note("knows", "x", "k" * 5000, {"big": "y" * 9000})
+    tracer.record(gate=3, **_COMMON)
+    tracer.attach_last("edits", {"diff": "d" * 20000})
+    tracer.flush()
+    call = batches[0][0]
+    assert len(call["notes"][0]["summary"]) <= meter.NOTE_SUMMARY_CAP
+    assert len(call["notes"][0]["data"]) <= meter.NOTE_DATA_CAP
+    assert len(call["edits"]["diff"]) <= meter.EDIT_CAP
+
+
+def test_a_section_can_still_be_attached_to_the_call_that_filled_the_batch():
+    tracer, batches = meter.Tracer(None), []
+    tracer.begin(3, batches.append)
+    for _ in range(20):
+        tracer.record(gate=3, **_COMMON)
+    tracer.attach_last("evaluation", {"check": "apply", "ok": True, "detail": ""})
+    tracer.flush()
+    assert batches[-1][-1]["evaluation"][0]["check"] == "apply"
