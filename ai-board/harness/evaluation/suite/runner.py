@@ -19,7 +19,7 @@ from pathlib import Path
 
 import eval_corpus
 import eval_fast
-from evaluation.suite import metrics, trial
+from evaluation.suite import metrics, taskpack, trial
 from evaluation.suite.launcher import sqlite_launcher
 
 HERE = Path(__file__).resolve().parent
@@ -170,6 +170,12 @@ def cmd_run(args, deps=None) -> int:
     tasks = [t for t in tasks if args.split in ("all", t["split"])]
     if args.cases:
         tasks = tasks[: args.cases]
+    for pack in args.pack or []:
+        problems = taskpack.validate(json.loads(Path(pack).read_text(encoding="utf-8")), ROOT)
+        if problems:
+            print(f"[suite] pack {pack} invalid: {'; '.join(problems[:5])}", file=sys.stderr)
+            return 2
+        tasks += taskpack.load_pack(pack)
     modes = args.modes.split(",")
     name = (f"s{args.seed}-{args.split}-{prov['ref'][:12]}" + ("-dirty" if prov["dirty"] else "")
             + (f"-think0-{args.reasoning_off.replace(',', '+')}" if args.reasoning_off else ""))
@@ -242,6 +248,13 @@ def cmd_report(args) -> int:
     return 0
 
 
+def cmd_pack_check(args) -> int:
+    from main import ROOT
+    problems = taskpack.validate(json.loads(Path(args.pack).read_text(encoding="utf-8")), ROOT)
+    print(json.dumps({"entries": len(json.loads(Path(args.pack).read_text(encoding="utf-8"))), "problems": problems}, ensure_ascii=False, indent=1))
+    return 1 if problems else 0
+
+
 def cmd_check(args) -> int:
     from main import ROOT
     run_dir = Path(args.root) / "suite" / args.name
@@ -277,12 +290,16 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--fast-tier", action="store_true", help="gate 4 + production text oracle on a locally started corpus app")
     run.add_argument("--max-minutes", type=float)
     run.add_argument("--allow-dirty", action="store_true")
+    run.add_argument("--pack", action="append", help="task pack JSON (merged-history tasks); repeatable")
     run.add_argument("--reasoning-off", default="", help="comma list of roles to run with thinking off (ablation), e.g. gate1,gate25")
     run.set_defaults(handler=cmd_run)
     rep = sub.add_parser("report")
     rep.add_argument("--root", required=True)
     rep.add_argument("--name", required=True)
     rep.set_defaults(handler=cmd_report)
+    pk = sub.add_parser("pack-check", help="validate a task pack against git history")
+    pk.add_argument("pack")
+    pk.set_defaults(handler=cmd_pack_check)
     chk = sub.add_parser("check")
     chk.add_argument("--root", required=True)
     chk.add_argument("--name", required=True)

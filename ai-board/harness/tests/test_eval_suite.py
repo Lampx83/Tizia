@@ -200,3 +200,54 @@ def test_integrity_flags_a_run_dominated_by_infra_errors():
     rows = [{"mode": "gold", "providers": ["vllm"], "served": ["m"], "infra_error": i < 3} for i in range(10)]
     assert any("infrastructure errors" in p for p in runner.integrity(meta, rows))
     assert runner.integrity(meta, [{**r, "infra_error": False} for r in rows]) == []
+
+
+def _pack_entry():
+    """A real small commit of this repo as a pack entry (texts are test fixtures, not benchmark content)."""
+    import subprocess
+    sha = "5b737779"
+    full = subprocess.run(["git", "rev-parse", sha], capture_output=True, text=True, cwd=ROOT).stdout.strip()
+    base = subprocess.run(["git", "rev-parse", f"{sha}^"], capture_output=True, text=True, cwd=ROOT).stdout.strip()
+    files = [f for f in subprocess.run(["git", "diff", "--name-only", f"{sha}^", sha, "--", "public"], capture_output=True, text=True, cwd=ROOT).stdout.split() if f.endswith(".html")]
+    return {"id": "pr-fixture", "base_sha": base, "commit": full, "files": files, "title": "Mục có thể gập lại", "detail": "Cho các mục trên trang này gập lại được.",
+            "subtasks": [{"title": "gập mục", "file": f, "verify": "bấm tiêu đề mục thì nội dung ẩn"} for f in files]}
+
+
+def test_taskpack_gold_comes_from_git_and_the_oracle_separates_merged_from_base():
+    from evaluation.suite import taskpack
+    entry = _pack_entry()
+    assert taskpack.validate([entry], ROOT) == []
+    repo = eval_corpus.checkout_at(Path(__import__("tempfile").mkdtemp()), entry["base_sha"], ROOT)
+    sections = taskpack.gold_sections(repo, entry)
+    oracle = taskpack.make_oracle(repo, entry)
+    assert oracle({f: s[3] for f, s in sections.items()}) and not oracle({f: s[2] for f, s in sections.items()})
+    huge = {f: s[3] + "\n" + "\n".join(f"<p>extra {i}</p>" for i in range(200)) for f, s in sections.items()}
+    assert not oracle(huge)  # a superset that bloats the file is rejected
+    bad = {**entry, "title": "x", "subtasks": []}
+    assert any("subtasks" in p for p in taskpack.validate([bad], ROOT))
+    assert any("duplicate id" in p for p in taskpack.validate([entry, entry], ROOT))
+
+
+def test_pack_task_runs_through_e2e_and_gold(world, monkeypatch):
+    from evaluation.suite import taskpack
+    root, tasks = world
+    entry = taskpack.load_pack(_write_pack(root, _pack_entry()))[0]
+    merged = {f: s[3] for f, s in taskpack.gold_sections(eval_corpus.checkout_at(root, entry["base_sha"], ROOT), entry).items()}
+
+    @dataclasses.dataclass
+    class PackModels(SuiteModels):
+        def generate(self, model, prompt, **kw):
+            if "summary_vi" in prompt and "capabilities" in prompt:
+                plan = {"summary_vi": "x", "capabilities": [], "subtasks": [{"title": "t", "file": f, "verify": "v", "size": "small"} for f in entry["files"]]}
+                return {"response": json.dumps(plan), "prompt_eval_count": 1, "eval_count": 1}
+            return {"response": "bad", "prompt_eval_count": 1, "eval_count": 1}
+    deps = Deps(models=PackModels(root, {}), notify=None, sleep=lambda _s: None)
+    row = trial.run_trial(entry, "e2e", deps, root, ROOT)
+    assert row["plan"]["first_hit"] and row["plan"]["first_exact"] and not row["resolved"]  # right files, model produced nothing usable
+    assert merged  # the merged result is what the oracle accepts (covered above)
+
+
+def _write_pack(root, entry):
+    path = Path(root) / "pack-fixture.json"
+    path.write_text(json.dumps([entry], ensure_ascii=False), encoding="utf-8")
+    return path
