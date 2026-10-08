@@ -105,7 +105,8 @@ def _plan_stage(task: dict, repo, deps: RecordingDeps, wall_s: int, variant: str
              "source_targets": out.get("source_targets") or [], "best_match": out.get("best_match")}
     for step in (scope_check.run(state), plan_validate.run(request, deps, budget, state)):
         if step.get("blocked"):
-            facts.update(validator_blocked=True, validator_reason=facts["validator_reason"] or str(step.get("reason"))[:120])
+            facts.update(validator_blocked=True, validator_reason=facts["validator_reason"] or str(step.get("reason"))[:120],
+                         validator_signals=facts.get("validator_signals") or [str(s)[:300] for s in (step.get("signals") or [])][:3])
             if not facts["approved"]:
                 tracer.flush()
                 return facts, None, tracer.records
