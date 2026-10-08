@@ -1,4 +1,4 @@
-// Cờ phát hành chức năng — bảng ai_feature_releases (migration 010).
+// Cờ phát hành chức năng — bảng ai_feature_releases.
 export const RELEASE_STATUSES = ['owner_only', 'school', 'off'];
 
 /** Đăng ký release 'owner_only' cho folder vừa duyệt. Idempotent: duyệt lại không reset status. */

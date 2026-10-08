@@ -1,4 +1,4 @@
-// Full-chain integration runner for ticket 24 (explicit, not part of `node --test`).
+// Full-chain online-egress integration runner (explicit, not part of `node --test`).
 // Real serving process (server/index.js) + real session cookie/CSRF + disposable PostgreSQL + REAL sandbox runner
 // started with the zero-egress policy (network: none, real microsandbox SDK microVM) + localhost HTTP fixtures.
 // Env: DATABASE_URL, T24_RUNNER_URL, T24_RUNNER_TOKEN_FILE, T24_HOST_IP (host as seen from the guest, used only to try to reach the canary).

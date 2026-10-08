@@ -10,7 +10,7 @@ export function createBackendRunner({ registry, runner, broker, releaseAllowed, 
       const trace = { actor: Number(identity?.id) || null, feature: Number(featureId) || null, operation: 'backend', adapter: null };
       const fail = async (error) => { try { await audit({ ...trace, outcome: error.code ?? 'internal', at: Date.now() }); } catch { /* ignore */ } throw error; };
       try {
-        if (!enabled) throw new BrokerError('backend_disabled', 404); // plan D default: UI actions use /invoke, never a generated backend
+        if (!enabled) throw new BrokerError('backend_disabled', 404); // UI actions use /invoke; a generated backend is opt-in
         if (!input || typeof input !== 'object' || Object.keys(input).some((k) => k !== 'record_id') || !Number.isSafeInteger(input.record_id) || input.record_id < 1) {
           throw new BrokerError('invalid_input', 400);
         }

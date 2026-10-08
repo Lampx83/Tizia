@@ -1,6 +1,4 @@
-// Async AI board store on the db contract (db/index.js): one code path for SQLite and PostgreSQL.
-// Port of store.js (the sync store stays the default until AI_BOARD_DB=postgres is wired): same checks, errors,
-// events and state transitions; parity tests in test/ai-board-async-*.test.js compare final board state per feature.
+// Async AI board store on the db contract (db/index.js). Parity tests in test/ai-board-async-*.test.js compare final board state per feature.
 import { randomBytes } from 'node:crypto';
 import { CAPABILITY_CATALOG, isSelfEditable, PlanGuardrailError, validatePlan } from '../security/policy.js';
 import { registerRelease } from '../services/releases.js';
@@ -474,7 +472,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     await db.run(`UPDATE ai_alerts SET status='resolved', updated_at=? WHERE ticket_id=? AND status='open'`, [now, root.id]);
   }
 
-  // requests.status/admin_note are derived by trigger ai_root_request_status (migration 017)
+  // requests.status/admin_note are derived by trigger ai_root_request_status
   // from the root ticket, so an admin action only writes the root and its audit event.
   const adminRequestTransaction = (requestId, rejecting, note, actorId) => db.tx(async () => {
     const root = await db.get('SELECT id, status FROM ai_tickets WHERE source_request_id = ? AND parent_id IS NULL', [requestId]);
@@ -1674,7 +1672,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     queryAll: (sql, params = []) => db.all(sql, params),
     rerunGate,
     rerunStage,
-    // A request with a root ticket takes its status from the root (trigger 017): only a legacy request may be reopened directly.
+    // A request with a root ticket takes its status from the root (trigger ai_root_request_status): only a legacy request may be reopened directly.
     hasRoot: async (requestId) => !!await db.get('SELECT 1 FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL', [Number(requestId)]),
     createRequestWithRoot,
     createSelfRequest,

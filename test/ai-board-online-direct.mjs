@@ -1,4 +1,4 @@
-// Ticket 24 plan D runner (explicit, not part of `node --test`): NO generated backend by default.
+// Online-egress runner (explicit, not part of `node --test`): NO generated backend by default.
 // Real serving process (server/index.js) + real session cookie/strict CSRF + disposable PostgreSQL + localhost HTTP fixtures. No microVM, no runner.
 // Env: DATABASE_URL (disposable PostgreSQL). Spawns the server twice: flag unset (default), then AI_BOARD_ONLINE_BACKEND_SCRIPTS=true.
 import assert from 'node:assert/strict';

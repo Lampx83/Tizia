@@ -1,7 +1,5 @@
 // Everything outside the AI board that reads or writes the shared `requests` / `request_messages` tables, behind the
-// async db contract. On SQLite it runs over createSqliteDb(rawHandle) (single statements, no transactions, so it is safe next
-// to the sync store); on PostgreSQL it runs on the board's database, where those tables now live (decision: see db/index.js).
-// Semantics and SQL are copied from db.js (voteRequest, getRequestById, addRequestMessage, ...) and the admin context.
+// async db contract. Same semantics and SQL as db.js (voteRequest, getRequestById, addRequestMessage, ...) and the admin context.
 const VALID_REQ_STATUS = new Set(['pending', 'reviewing', 'done', 'rejected']);
 const VALID_MSG_ROLES = new Set(['student', 'ai', 'admin', 'system']);
 

@@ -1,5 +1,5 @@
 // Shared pieces of the AI board store: worker contract, limits, error types, validators, pure helpers. The store itself
-// (PostgreSQL) is store-async.js; the old synchronous SQLite store was removed with SQLite (ticket 11).
+// (PostgreSQL) is store-async.js.
 import fs from 'node:fs';
 
 export { PlanGuardrailError } from '../security/policy.js';

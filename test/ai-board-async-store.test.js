@@ -1,5 +1,4 @@
-// Async store vertical slice (request -> ticket -> plan -> verdict) on every backend, checked against the sync
-// SQLite store as reference: the same scenario must leave the same observable board state.
+// Async store vertical slice (request -> ticket -> plan -> verdict) on every backend: the same scenario must leave the same observable board state.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
