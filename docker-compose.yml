@@ -21,9 +21,9 @@ services:
       - pharmacysim-data:/data  # sao lưu pg_dump (/data/backups) + file tải lên; dữ liệu chính nằm trong PostgreSQL
 
   # PostgreSQL: chỉ trên mạng compose nội bộ, KHÔNG publish cổng. Lên bản major mới = dump/restore (không đổi tag tại chỗ);
-  # postgresql17-client trong image tizia phải cùng major với tag này.
+  # postgresql16-client trong image tizia phải cùng major với tag này.
   postgres:
-    image: postgres:17-alpine
+    image: postgres:16-alpine
     container_name: tizia-postgres
     restart: unless-stopped
     environment:
