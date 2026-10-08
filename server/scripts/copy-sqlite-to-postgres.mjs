@@ -56,7 +56,7 @@ export async function copySqliteToPostgres({ sqlite, pg, dryRun = false, replace
   const sourceTables = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((r) => r.name);
   const targetTables = new Set((await pg.all("SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'")).map((r) => r.table_name));
   const missing = sourceTables.filter((t) => !targetTables.has(t));
-  const plan = sourceTables.filter((t) => targetTables.has(t));
+  let plan = sourceTables.filter((t) => targetTables.has(t));
 
   // Inspect EVERY source field before either dry-run or writes (including migration bookkeeping).
   const mappings = {};
@@ -80,7 +80,11 @@ export async function copySqliteToPostgres({ sqlite, pg, dryRun = false, replace
     if (!['scope', 'version'].every((name) => mappings.schema_migrations.some((c) => c.name === name))) throw new Error('schema_migrations: receipt representation requires an approved mapping; no data was written');
     const sourceReceipts = sqlite.prepare('SELECT scope, version FROM schema_migrations ORDER BY scope, version').all();
     const targetReceipts = await pg.all('SELECT scope, version FROM schema_migrations ORDER BY scope, version');
-    if (JSON.stringify(sourceReceipts) !== JSON.stringify(targetReceipts)) throw new Error('schema_migrations: source/target receipt identities differ; approved mapping required; no data was written');
+    // Approved by the user (2026-10-08): the target may be newer. Every source receipt must exist in the target; the target keeps its
+    // own receipts and the table is not copied (the target schema is the newer one). A source receipt missing in the target still fails.
+    const targetKeys = new Set(targetReceipts.map((r) => `${r.scope}|${r.version}`));
+    if (sourceReceipts.some((r) => !targetKeys.has(`${r.scope}|${r.version}`))) throw new Error('schema_migrations: source/target receipt identities differ; approved mapping required; no data was written');
+    plan = plan.filter((t) => t !== 'schema_migrations');
   }
 
   const counts = {};

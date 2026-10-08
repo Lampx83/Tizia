@@ -127,14 +127,17 @@ test('copy: broken source foreign key rolls back and reports only constraint met
   } finally { await f.dispose(); }
 });
 
-test('copy: incompatible migration receipt identities fail preflight without deleting target-only receipts', opts, async () => {
+test('copy: a newer target keeps its own migration receipts; a source receipt unknown to the target fails preflight', opts, async () => {
   const f = await fixture();
   try {
     f.sqlite.exec("CREATE TABLE schema_migrations(scope TEXT, version TEXT, applied_at INTEGER); INSERT INTO schema_migrations VALUES ('ai-board', '001.sql', 1)");
     await f.target.exec("CREATE TABLE schema_migrations(scope TEXT, version TEXT, applied_at BIGINT); INSERT INTO schema_migrations VALUES ('ai-board', '001.sql', 2), ('ai-board', '002.sql', 3)");
+    const result = await copySqliteToPostgres({ sqlite: f.sqlite, pg: f.target, dryRun: false, replace: true });
+    assert.equal(result.counts.schema_migrations, undefined);
+    assert.equal((await f.target.get('SELECT COUNT(*) AS n FROM schema_migrations')).n, 2);
+    f.sqlite.exec("INSERT INTO schema_migrations VALUES ('ai-board', '009-unknown.sql', 4)");
     for (const dryRun of [true, false]) await assert.rejects(copySqliteToPostgres({ sqlite: f.sqlite, pg: f.target, dryRun, replace: true }), /receipt identities differ/);
     assert.equal((await f.target.get('SELECT COUNT(*) AS n FROM schema_migrations')).n, 2);
-    assert.equal((await f.target.get('SELECT COUNT(*) AS n FROM users')).n, 0);
   } finally { await f.dispose(); }
 });
 
