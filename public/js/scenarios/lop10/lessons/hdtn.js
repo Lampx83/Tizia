@@ -613,4 +613,38 @@ export const H10HDTN_LESSONS = {
       { q: 'Em đặt ra mục tiêu gì cho bản thân trong năm lớp 11?', a: 'Một mục tiêu tốt cho năm 11 nên: cụ thể hơn so với năm 10, dựa trên những gì đã khám phá được, bao gồm hành động hướng nghiệp và phát triển bản thân, đồng thời thực tế và khả thi.' },
     ]
   ),
+
+  'H10HDTN-w36-quiz': L(
+    'Kết thúc HĐTN-HN 10 — Hành trang vào lớp 11',
+    'Năm đầu THPT khép lại. Lớp 10 không đòi em phải chốt nghề — nó đòi em mở mắt ra thật rộng: hiểu mình là ai, thử nhiều lĩnh vực, tích luỹ bằng chứng về bản thân. Tuần cuối, ta nhìn lại toàn bộ năm học và chuẩn bị cho lớp 11 — năm trải nghiệm sâu và thu hẹp dần lựa chọn.',
+    ['Hệ thống hoá bốn mạch nội dung HĐTN-HN lớp 10.', 'Hiểu vị trí của lớp 10 trong lộ trình hướng nghiệp ba năm THPT.', 'Lập kế hoạch hè và đặt mục tiêu cụ thể cho năm lớp 11.'],
+    [
+      { h: 'Bức tranh toàn cảnh HĐTN-HN 10' },
+      { ul: [
+        'Hướng vào bản thân: tính cách và giá trị sống; quản lí cảm xúc và ứng phó căng thẳng; tự chủ trong học tập; quản lí tài chính cá nhân cơ bản.',
+        'Hướng đến xã hội: quan hệ gia đình và bạn bè; giao tiếp và hợp tác; trách nhiệm với cộng đồng; giữ gìn di sản văn hoá.',
+        'Hướng đến tự nhiên: bảo vệ môi trường sống; tiết kiệm tài nguyên; bảo tồn cảnh quan thiên nhiên.',
+        'Hướng nghiệp: thế giới nghề nghiệp; phẩm chất và năng lực nghề; tự đánh giá sự phù hợp; phác thảo kế hoạch nghề nghiệp.',
+      ] },
+      { h: 'Lộ trình hướng nghiệp ba năm THPT' },
+      { ul: [
+        'Lớp 10 — KHÁM PHÁ RỘNG: hiểu bản thân, thử nhiều lĩnh vực, chưa cần chốt gì cả.',
+        'Lớp 11 — TRẢI NGHIỆM SÂU: đi sâu vào vài hướng, kiểm chứng sự phù hợp bằng trải nghiệm thật, thu hẹp dần lựa chọn.',
+        'Lớp 12 — QUYẾT ĐỊNH: chốt định hướng, chuẩn bị hồ sơ và nguyện vọng, rèn kĩ năng cho giai đoạn sau THPT.',
+      ] },
+      { h: 'Kế hoạch hè sau lớp 10' },
+      { ul: [
+        'Thử ít nhất một trải nghiệm nghề nghiệp mới: tham quan nơi làm việc, phỏng vấn một người đang làm nghề em quan tâm, hoặc một khoá học ngắn trực tuyến.',
+        'Bổ sung hồ sơ năng lực (portfolio): lưu lại sản phẩm, chứng chỉ, ảnh hoạt động và một đoạn tự nhìn lại mình học được gì.',
+        'Rèn một kĩ năng mềm còn yếu — thuyết trình, làm việc nhóm hay quản lí thời gian — bằng một việc cụ thể, đo được.',
+        'Giữ nhịp sinh hoạt: ngủ đủ, vận động đều, không để hè phá vỡ thói quen tốt cả năm đã xây.',
+      ] },
+      { note: 'Lớp 10 chưa phải lúc trả lời câu hỏi "em sẽ làm nghề gì". Đây là lúc thu thập dữ liệu về chính mình — càng nhiều bằng chứng thật, quyết định ở lớp 12 càng vững.' },
+    ],
+    [
+      { q: 'Nhìn lại bốn mạch nội dung của lớp 10, mạch nào giúp em thay đổi nhiều nhất và thay đổi ở điểm gì?', a: 'Câu trả lời tuỳ cá nhân nhưng cần cụ thể: nêu rõ một hành vi hoặc quyết định thực tế đã khác đi. Ví dụ: "Sau chủ đề quản lí tài chính, em bắt đầu ghi chép chi tiêu và để dành được 300 000 đồng trong ba tháng" — đó là bằng chứng, khác hẳn với câu nói chung chung "em thấy trưởng thành hơn".' },
+      { q: 'Hãy đặt một mục tiêu hướng nghiệp SMART cho năm lớp 11 của em.', a: 'Ví dụ: "Trong học kì I lớp 11, em sẽ phỏng vấn ít nhất 3 người đang làm trong nhóm nghề Kĩ thuật – Công nghệ, mỗi người 30 phút, ghi lại yêu cầu công việc thực tế và so sánh với năng lực của mình, hoàn thành trước ngày 31/12." — Cụ thể, đo được (3 người), khả thi, liên quan tới hướng nghiệp và có hạn chót.' },
+      { q: 'Vì sao lớp 10 không nên chốt nghề nghiệp ngay?', a: 'Vì ở giai đoạn này em chưa có đủ bằng chứng về chính mình. Nhiều sở thích ở tuổi 15 chỉ dựa trên hình dung chứ chưa qua trải nghiệm thực tế — một bạn thích phim về bác sĩ chưa chắc hợp với áp lực trực đêm. Chốt sớm còn khiến em bỏ qua những lĩnh vực chưa từng thử. Lớp 10 nên giữ nhiều cửa mở, thu hẹp dần ở lớp 11 khi đã có trải nghiệm thật.' },
+    ]
+  ),
 };

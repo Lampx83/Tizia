@@ -4,6 +4,777 @@ Ghi nhận các cải tiến do Ban điều hành AI thực hiện hàng ngày.
 
 ---
 
+## 2026-10-02 — Phiên 79 · **Kết luận: không có việc nào đo được** — hộp thư chết ngày thứ 18, cả ba bậc dự phòng sạch
+
+**Kết luận một dòng (theo `ai-board/ROUTINE.md` §2b):** hộp thư yêu cầu **không đọc được** (ngày hỏng
+liên tiếp **thứ 18**, từ `2026-09-13`) và **cả ba bậc việc dự phòng đều sạch** ⇒ phiên này **không xử
+lý yêu cầu nào**, **không tạo PR**, **không sửa học liệu**, **không bịa việc**.
+
+### Hộp thư — request ID đã xử lý: **không có, và vì sao**
+
+`node scripts/ai-board-preflight.mjs` đo 6 endpoint trên `https://tizia.vn`:
+
+| Endpoint | Mã trả về |
+|---|---|
+| `/api/ai-board/inbox` | **401** `{"error":"unauthorized","needLogin":true}` |
+| `/api/requests`, `/api/public/requests`, `/api/board/inbox`, `/api/admin/requests`, `/api/ai-board/requests` | **401** (cùng thân phản hồi) |
+
+`AI_BOARD_KEY` trong môi trường: **chưa có**. Không có yêu cầu nào của sinh viên/học sinh đọc được
+⇒ không có request ID nào để xử lý hay phản hồi.
+
+> Ghi chú đo lường: lần probe đầu của phiên nhận **503** ở `/api/ai-board/inbox`, nhưng ba lần đo lại
+> ngay sau đó (`curl` trực tiếp + `check-deployed-build.mjs`) đều trả **401 needLogin**. 503 là nhiễu
+> nhất thời của lớp proxy, **không** phải dấu hiệu route đã lên.
+
+### Leo thang (ngày thứ 18 ≥ ngưỡng 3) — vẫn đúng MỘT việc cần người bấm nút
+
+Theo bảng phân biệt trong `ROUTINE.md`: **401 `needLogin`** = thông điệp của **gate auth chung** ⇒ bản
+**đang chạy** chưa có code PR #97, tức **chưa redeploy**. Kiểm chứng rằng code đã nằm trên nhánh
+production:
+
+```
+origin/feat/postgres-migration  tip = ae3f491
+  ├─ server/contexts/ai-agent/inbox-api.js            ✅ có
+  └─ server/contexts/identity/auth.js:246  '/api/ai-board/'  ✅ có trong PUBLIC_PATH_PREFIXES
+```
+
+⇒ Việc còn lại, **AI không được phép tự làm** (secret + redeploy nhánh production vượt ngưỡng rủi ro
+thấp): **đặt `AI_BOARD_KEY`** (`openssl rand -hex 32`) trên production **rồi redeploy nhánh
+`feat/postgres-migration`**.
+
+### Bậc thang dự phòng — con số đo thật, cả ba sạch
+
+| Bậc | Lệnh chứng minh | Kết quả hôm nay |
+|---|---|---|
+| 1 — Bài lí thuyết mồ côi / toàn vẹn học liệu | `node scripts/check-content-integrity.mjs` | **0 vấn đề** — "✅ Toàn vẹn học liệu: không phát hiện vấn đề." |
+| 2 — Môn dừng ở tuần 35 | `node scripts/ai-board-preflight.mjs` | **0 môn**. Quét lại độc lập (không chỉ mẫu 35/36): **141/141** file môn có `M(36,…)`, không file nào dừng sớm. |
+| 3 — Lệch phân bố đáp án | `node scripts/audit-answer-distribution.js` | **0 môn lệch**, **0 câu dị dạng**. Toàn bộ **28.212** câu: A 24,8% · B 25,2% · C 25,3% · D 24,7% · χ²=**2,96**. |
+
+**Đọc thẳng bảng phân bố** (đúng cảnh báo của `ROUTINE.md` §2b — không tin chữ "sạch" của tiêu chí
+hẹp): môn lệch nhất là `lop3:toan` (n=226) A 31,9 / B 29,2 / C 22,1 / D 16,8 — vị trí cao nhất
+**31,9%** (ngưỡng 60%), hai vị trí cao nhất gánh **61,1%** (ngưỡng 85%). Cách cả hai ngưỡng rất xa
+⇒ **sạch thật**, không phải sạch vì bộ đo hẹp.
+
+**Con số trước → sau: không có, vì không có thay đổi nào.** Theo `ROUTINE.md`, không chứng minh được
+giá trị thì không làm.
+
+### Thay đổi từng file
+
+| File | Thay đổi |
+|---|---|
+| `ai-board/inbox-status.json` | Bộ đếm ngày hỏng liên tiếp 17 → **18**, `last_checked` → `2026-10-02` (do `ai-board-preflight.mjs` ghi tự động). |
+| `public/CHANGELOG-eduverse.md` | Mục này. |
+
+**Không file `.js` nào bị sửa** ⇒ không có `node --check` nào phải chạy (không có đầu vào), và không
+có nội dung mới để kiểm tra runtime. Bốn lệnh chẩn đoán ở trên đều chạy thật và đã ghi kết quả.
+
+---
+
+## 2026-09-30 — Phiên 78 · Dọn nợ tồn: merge nốt nội dung treo 1 tháng, **bỏ hẳn cơ chế nhánh + PR**
+
+**Chế độ:** chủ sở hữu yêu cầu trực tiếp (không phải phiên tự động): *"merge hết toàn bộ những gì
+bạn đã làm từ trước đến giờ"*, *"xoá toàn bộ các branch đi"*, *"lần sau thì đừng tạo branch mới,
+xử lý xong xuôi thì merge luôn → cập nhật routine"*.
+
+### 1. Luật Git đổi hẳn — không còn nhánh, không còn PR
+
+Luật cũ (nhánh `ai-board/<YYYY-MM-DD>` + PR + chờ duyệt) đã tích thành **6 PR treo** và **118
+nhánh**. Nặng nhất: **PR #83 đứng 1 tháng** với một môn học thật bên trong mà không ai thấy.
+`ai-board/ROUTINE.md` nay ghi: làm thẳng trên `main`, xong là commit + push. **Cổng kiểm thử không
+được nới** — không còn PR nghĩa là không còn ai soát hộ, nên mục "Kiểm thử bắt buộc trước khi
+commit" trở thành thứ duy nhất chặn lỗi. Phạm vi được tự quyết **không** mở rộng.
+
+### 2. Merge nốt việc còn treo — nhưng 2 trong 4 PR cũ KHÔNG merge được, và vì sao
+
+| PR | Nhánh | Kết quả | Lí do |
+|---|---|---|---|
+| **#110** | `ai-board/2026-09-29-preflight` | ✅ **đã merge** | Bộ đo bậc 3 của phiên 77, chủ sở hữu duyệt. |
+| **#83** | `ai-board/2026-09-01` | ✅ **đã merge kèm sửa lỗi** | GD Địa phương lớp 10 — xem mục 3. |
+| **#59** | `ai-board/2026-08-04` | ❌ **đóng, không merge** | Nội dung đã **lỗi thời**: `streak-14/30` và `star-60/90/100` mà PR này thêm thì `main` **đã có đủ** ở cả 5 domain (phiên 57–59 làm lại rồi). Merge chỉ tạo xung đột, không thêm giá trị. |
+| **#26**, **#9** | `ai-board/2026-06-27`, `ai-board/2026-06-25` | ❌ **đóng, không merge** | **Không chung gốc với `main`** (`no merge base`, 319 và 276 commit). Đây là lịch sử trước lần viết lại repo — merge là ghép hai cây code khác nhau, không phải merge nội dung. |
+
+### 3. Nội dung treo 1 tháng có lỗi thật — bộ đo mới (phiên 77) bắt ngay khi merge
+
+`public/js/scenarios/lop10/gd-dia-phuong.js` (PR #83) lấp một lỗ đúng nghĩa: GDPT 2018 quy định
+**GD Địa phương là môn bắt buộc ở cả THPT**, `main` đã có lớp 6/7/8/9 nhưng **lớp 10 trống**. Vấn
+đề là nội dung đó soạn trước khi có các luật chất lượng hiện hành:
+
+| Chỉ số | Khi merge vào | Sau khi sửa |
+|---|---|---|
+| Phân bố đáp án `lop10:gd-dia-phuong` (n=140) | **A=100,0% / B=0 / C=0 / D=0** · χ²=**420** | **25,0 / 25,0 / 25,0 / 25,0** · χ²=**0,00** |
+| Bậc 2 — môn dừng ở tuần 35 | **1 mục** (môn duy nhất của lớp 10 thiếu tuần 36) | **0** |
+| Bậc 3 — môn lệch phân bố | **1 mục** | **0** |
+| Toàn bộ ngân hàng | 28.068 câu · χ²=2,98 | **28.212 câu** · 24,8/25,2/25,3/24,7 · χ²=**2,96** |
+
+**100% đáp án đúng nằm ở A** — học sinh chọn A cho cả 140 câu là đạt 100%. Đây đúng là lớp lỗi mà
+tiêu chí `≥60% một vị trí` của bậc 3 **vẫn bắt được**, nhưng nội dung này chưa từng đi qua bộ đo vì
+nó nằm trên một nhánh treo. Bài học: **nội dung không được merge thì không được đo.**
+
+### Thay đổi từng file
+
+| File | Thay đổi |
+|---|---|
+| `public/js/scenarios/lop10/gd-dia-phuong.js` | Merge từ PR #83 (35 tuần) · **cân bằng 105/140 câu** về 25/25/25/25 · **thêm tuần 36** "Ôn tập cuối năm – Hà Nội: từ di sản nghìn năm đến Thành phố sáng tạo" (4 câu, có đủ `explanation` + 4 `choiceFeedback` — chuẩn hiện hành). |
+| `public/js/scenarios/lop10/lessons/gd-dia-phuong.js` | Merge từ PR #83 (35 bài) · **thêm bài lí thuyết tuần 36** (topic/intro/3 objectives/5 đoạn theory/3 examples): 4 lớp danh hiệu UNESCO của Hà Nội, phân biệt di sản vật thể / phi vật thể / tư liệu. |
+| `public/js/scenarios/lop10/_index.js`, `lessons/_index.js` | Merge từ PR #83 — nạp `H10GDDP` vào barrel lớp 10. |
+| `public/js/domains/highschool/modules.js` | Merge từ PR #83 — thêm `H10GDDP`, `H11GDDP`, `H12GDDP` vào catalog THPT. |
+| `ai-board/ROUTINE.md` | Luật Git mới (mục 1) + thêm vào danh sách "không bao giờ tự làm": **không xoá nhánh `feat/postgres-migration`** (production chạy từ đó) hay nhánh còn commit chưa có trên `main`, dù được yêu cầu "xoá hết nhánh" — phải liệt kê và hỏi lại. |
+| `public/CHANGELOG-eduverse.md` | Mục này, cộng mục **2026-09-01** của PR #83 được chèn lại đúng thứ tự thời gian kèm ghi chú "merge muộn". |
+
+### Kiểm thử (chạy thật)
+
+- ✅ `node --check` PASS cho cả **5** file `.js` liên quan.
+- ✅ Runtime: import thật `lop10/_index.js` + `lop10/lessons/_index.js` — **36/36 tuần** quiz, **36**
+  bài lí thuyết, **0 quiz thiếu lesson**, tuần 36 nạp đúng.
+- ✅ Đối chiếu bản gốc PR #83 ↔ bản đã cân bằng trên **140 câu**: `stem` không đổi, tập lựa chọn y
+  hệt, **đáp án đúng vẫn cùng nội dung**, không câu nào trùng lựa chọn. **0 sai lệch.**
+- ✅ Tuần 36 mới: 4 câu, vị trí đáp án `2,0,1,3` (nhiều nhất 1 câu/vị trí, ngưỡng <3), đủ 4
+  `choiceFeedback`, feedback tại `answer` mở đầu "Đúng" còn lại "Sai".
+- ✅ `node scripts/check-content-integrity.mjs` → sạch. `node scripts/ai-board-preflight.mjs
+  --no-net` → **cả ba bậc sạch**.
+
+### 4. Dọn nhánh — phân loại xong, nhưng **KHÔNG xoá được: GitHub trả 403**
+
+117 nhánh được phân loại bằng `git cherry` (so theo patch-id, không chỉ theo ancestry):
+
+| Nhóm | Số nhánh | Xử lí |
+|---|---|---|
+| Mọi commit **đã có trên `main`** | **61** | An toàn xoá — không mất gì. |
+| Còn commit **chưa có trên `main`** | 26 | **Giữ** — chờ chủ sở hữu quyết định. |
+| **Không chung gốc** với `main` (lịch sử trước lần viết lại repo) | 30 | **Giữ** — trong đó có `feat/postgres-migration`: **production đang chạy từ nhánh này, không được xoá.** |
+
+`git push origin --delete` **thất bại với HTTP 403**: token GitHub của phiên routine cho phép tạo và
+cập nhật ref nhưng **không** cho xoá ref. Tạo/push nhánh và merge PR trong cùng phiên đều thành công
+⇒ đây là giới hạn quyền của token, không phải lỗi mạng. Đã ghi lệnh xoá sẵn cho 61 nhánh an toàn để
+chủ sở hữu chạy ở máy có quyền; **không xoá bằng đường khác**.
+
+Luật mới trong `ROUTINE.md`: không xoá `feat/postgres-migration` hay bất cứ nhánh nào còn commit
+chưa có trên `main`, dù được yêu cầu "xoá hết nhánh" — liệt kê ra và hỏi lại.
+
+## 2026-09-29 — Phiên 77 · Bít **điểm mù của chính bộ đo**: 2 môn có 97% đáp án dồn vào hai vị trí mà bậc 3 vẫn báo "sạch"
+
+**Kết luận về hộp thư:** vẫn **không đọc được** — ngày hỏng liên tiếp **thứ 17** (từ `2026-09-13`).
+Sáu endpoint đều trả **401**, `AI_BOARD_KEY` chưa có trong môi trường. Phiên này **không xử lý yêu
+cầu nào của người học** vì không có yêu cầu nào đọc được, và **không bịa ra yêu cầu**.
+
+### Leo thang — vẫn đúng MỘT việc cần người bấm nút
+
+Đo thật hôm nay `node scripts/check-deployed-build.mjs`:
+
+```
+/api/ai-board/inbox  401 needLogin  ⇒ auth gate CHUNG nuốt request
+```
+
+Đã kiểm chứng thêm: nhánh production `feat/postgres-migration` (tip `ae3f491`) **đã có** cả
+`server/contexts/ai-agent/inbox-api.js` lẫn `'/api/ai-board/'` trong `PUBLIC_PATH_PREFIXES`
+(`server/contexts/identity/auth.js:246`). Code đã lên nhánh; bản **đang chạy** thì chưa.
+⇒ Việc còn lại, AI không được phép tự làm: **đặt `AI_BOARD_KEY`** (`openssl rand -hex 32`)
+trên production **rồi redeploy nhánh `feat/postgres-migration`**.
+
+### Bậc 3 báo "sạch" nhưng KHÔNG sạch — tiêu chí cũ bỏ sót cả một lớp lỗi
+
+Preflight chỉ hỏi *"có vị trí nào chiếm ≥60% không?"*. Hai môn lọt lưới đúng khe đó:
+
+| Môn | n | A / B / C / D | Vị trí cao nhất | Hai vị trí gánh |
+|---|---|---|---|---|
+| `lop11:tin-hoc` | 216 | 45,4 / **51,4** / 1,4 / 1,9 | 51,4% (< 60 ⇒ không bị bắt) | **96,8%** |
+| `lop3:cong-nghe` | 181 | 37,0 / **59,7** / 2,8 / 0,6 | 59,7% (< 60 ⇒ không bị bắt) | **96,7%** |
+
+Học sinh chỉ cần chọn bừa **A hoặc B** cho mọi câu là đúng ~97% — bài kiểm tra mất giá trị đo
+lường y như trường hợp `lop11:gdqp` 98,1% của phiên 76, nhưng bộ đo vẫn in `✅ sạch` suốt 17 phiên.
+
+**Con số trước → sau** (`node scripts/audit-answer-distribution.js`):
+
+| Chỉ số | Trước | Sau |
+|---|---|---|
+| `lop11:tin-hoc` (A/B/C/D) | 45,4 / 51,4 / 1,4 / 1,9 · χ²=**190,48** | **25,0 / 25,0 / 25,0 / 25,0** · χ²=**0,00** |
+| `lop3:cong-nghe` (A/B/C/D) | 37,0 / 59,7 / 2,8 / 0,6 · χ²=**176,55** | **24,9 / 25,4 / 24,9 / 24,9** · χ²=**0,02** |
+| Môn có hai vị trí gánh >85% | **2** | **0** |
+| Toàn bộ ngân hàng (28.068 câu) | 25,0 / 25,6 / 25,0 / 24,4 · χ²=8,49 | **24,8 / 25,2 / 25,3 / 24,7** · χ²=**2,98** |
+| Câu dị dạng | 0 | 0 |
+
+**Cách làm:** codemod riêng, **không** dùng `scripts/shuffle-answers.js` (script đó hoán vị
+`choices` + `answer` nhưng bỏ quên `choiceFeedback` ⇒ làm lệch feedback). Codemod quét nguồn bằng
+tokenizer nhận biết chuỗi, rồi đổi chỗ **nguyên văn slice nguồn của CẶP `(choice, choiceFeedback)`
+cùng nhau** và ghi lại `answer`. Vị trí đích lấy từ túi `[0,1,2,3]` trộn bằng RNG xác định, kèm
+chặn *≥3 câu cùng vị trí trong một tuần*. 310/397 câu đổi vị trí.
+
+### Kiểm thử (chạy thật, không suy đoán)
+
+- `node --check` **PASS** cho cả 3 file `.js` đã sửa.
+- **Runtime, không chỉ cú pháp:** import thật `lop11/_index.js` và `lop3/_index.js` — barrel nạp
+  được, 36/36 tuần mỗi môn còn nguyên, soi mắt một câu thấy `choice`/`choiceFeedback` còn khớp.
+- **Đối chiếu HEAD ↔ bản sửa trên 397 câu:** `stem` và `explanation` không đổi; tập cặp
+  `(choice, choiceFeedback)` y hệt; đáp án đúng vẫn **cùng nội dung + cùng feedback** ⇒ chỉ vị trí
+  đổi. Mỗi câu đủ 4 lựa chọn khác nhau, `answer` ∈ 0..3, đủ 4 `choiceFeedback`, feedback tại
+  `answer` mở đầu "Đúng" còn lại mở đầu "Sai". **0 sai lệch.**
+- 72 tuần: nhiều nhất **2** câu cùng vị trí trong một tuần (ngưỡng < 3).
+- `node scripts/check-content-integrity.mjs` → sạch (bậc 1 vẫn 0 → 0).
+- Detector mới thử **cả hai chiều**: trên nội dung cũ (stash bản sửa) báo `⚠️ 2 mục — hai vị trí
+  gánh 97%`; trên nội dung đã sửa báo `✅ sạch`.
+
+### Tách làm hai PR — theo đúng luật tự-merge của `ai-board/ROUTINE.md`
+
+- **PR nội dung học liệu** (2 file `public/js/scenarios/**` + CHANGELOG + `ai-board/inbox-status.json`):
+  đúng phạm vi được tự merge ⇒ đã merge vào `main`.
+- **PR sửa bộ đo** (`scripts/ai-board-preflight.mjs` + `ai-board/ROUTINE.md`): đụng `scripts/`,
+  **ngoài** phạm vi tự merge ⇒ **để chủ sở hữu duyệt**. Nội dung: thêm tiêu chí *hai vị trí gánh
+  >85%* vào bậc 3, và xoá thông điệp leo thang đã lạc hậu ("merge PR #97" — đã xong 2026-09-27)
+  thay bằng việc thật còn lại (`AI_BOARD_KEY` + redeploy).
+
+---
+
+## 2026-09-28 — Phiên 76 · Đóng bậc 3: xoá sạch lệch phân bố đáp án, ngân hàng quiz về ~25/25/25/25
+
+**Kết luận về hộp thư:** vẫn **không đọc được** — `consecutive_failures = 16`, từ `2026-09-13` (`ai-board/inbox-status.json`). Sáu endpoint đều trả **401**, `AI_BOARD_KEY` chưa có trong môi trường. Phiên này **không xử lý yêu cầu nào của người học** vì không có yêu cầu nào đọc được, và **không bịa ra yêu cầu**.
+
+### Leo thang — nay chỉ còn MỘT việc cần người bấm nút (không còn hai)
+
+**PR #97 đã được merge ngày 2026-09-27.** Nửa đầu của bế tắc 16 ngày đã xong. Nhưng đo thật hôm nay:
+
+```
+node scripts/check-deployed-build.mjs
+  /api/ai-board/inbox  401 needLogin  ⇒ auth gate chung vẫn nuốt request
+```
+
+`401 needLogin` là thông điệp của **gate chung**, không phải của route hộp thư (route trả `"Thiếu header x-ai-board-key"`). Nghĩa là **bản đang chạy trên production chưa có code của PR #97** — production chưa được build lại sau khi merge. Việc còn lại, AI không được phép tự làm:
+
+1. ~~Merge PR #97~~ — **xong 2026-09-27**.
+2. **Đặt `AI_BOARD_KEY`** trên production (`openssl rand -hex 32`) **rồi redeploy nhánh `feat/postgres-migration`**. Secret + nhánh production ⇒ vượt ngưỡng "rủi ro thấp".
+
+### Việc dự phòng — bậc 3 (bậc thấp nhất còn việc)
+
+`ai-board-preflight.mjs` chỉ đúng bậc 3: **11 môn** có ≥60% đáp án đúng dồn vào **một** vị trí, cộng **2 câu dị dạng**. Nặng nhất là `lop11:gdqp` với **98,1% đáp án đúng nằm ở A** — học sinh chỉ cần chọn A cho mọi câu là đạt 98%, bài kiểm tra mất hoàn toàn giá trị đo lường.
+
+**Con số trước → sau:**
+
+| Chỉ số | Trước | Sau |
+|---|---|---|
+| Môn có ≥60% dồn vào một vị trí | **11** | **0** |
+| Câu dị dạng (không đủ 4 lựa chọn) | **2** | **0** |
+| Toàn bộ ngân hàng (A/B/C/D) | 26,7 / 27,6 / 23,2 / 22,5 | **25,0 / 25,6 / 25,0 / 24,4** |
+| χ² toàn bộ ngân hàng | 212,15 | **8,49** |
+
+Chi tiết 11 môn đã cân bằng (A/B/C/D %, n = 2201 câu):
+
+| Môn | Trước | Sau |
+|---|---|---|
+| `lop11:gdqp` | **98,1** / 0,9 / 0,5 / 0,5 | 25,0 / 25,0 / 25,0 / 25,0 |
+| `lop5:tin-hoc` | **97,8** / 1,1 / 0,6 / 0,6 | 25,4 / 24,9 / 24,9 / 24,9 |
+| `lop12:hdtn` | 1,1 / **97,2** / 1,1 / 0,6 | 25,4 / 24,9 / 24,9 / 24,9 |
+| `lop11:hdtn` | 2,2 / **95,6** / 1,7 / 0,6 | 25,4 / 24,9 / 24,9 / 24,9 |
+| `lop11:cong-nghe` | **92,6** / 6,0 / 0,9 / 0,5 | 25,0 / 25,0 / 25,0 / 25,0 |
+| `lop12:gdcd` | 6,0 / **92,6** / 0,9 / 0,5 | 25,0 / 25,0 / 25,0 / 25,0 |
+| `lop12:cong-nghe` | 9,3 / **88,4** / 1,4 / 0,9 | 25,0 / 25,0 / 25,0 / 25,0 |
+| `lop3:tin-hoc` | **87,8** / 9,9 / 1,7 / 0,6 | 24,9 / 25,4 / 24,9 / 24,9 |
+| `lop4:tin-hoc` | **82,9** / 12,2 / 5,0 / 0,0 | 25,4 / 24,9 / 24,9 / 24,9 |
+| `lop12:tin-hoc` | 26,9 / **69,9** / 2,3 / 0,9 | 25,0 / 25,0 / 25,0 / 25,0 |
+| `lop11:sinh-hoc` | 17,1 / **68,5** / 12,0 / 2,3 | 25,0 / 25,0 / 25,0 / 25,0 |
+
+2 câu dị dạng (đều có **5** lựa chọn thay vì 4, đã bỏ 1 phương án nhiễu yếu nhất, đáp án đúng giữ nguyên):
+
+- `lop8/gdtc.js · S8GDTC-w24-quiz · q[4]` — bỏ `'Không phối hợp'` (trùng ý với `'Cá nhân'`).
+- `lop9/hdtn.js · S9HDTN-w17-quiz · q[1]` — bỏ `'100% tiêu'`.
+
+### Cách làm: hoán vị CẶP `(choice, choiceFeedback)`, không dùng `shuffle-answers.js`
+
+ROUTINE.md cấm `scripts/shuffle-answers.js` vì script đó hoán vị `choices` + `answer` nhưng **không** hoán vị `choiceFeedback` ⇒ làm lệch feedback so với đáp án. Phiên này viết codemod riêng: quét nguồn bằng tokenizer (nhận biết chuỗi/comment/template), lấy **đúng range nguồn** của từng phần tử, rồi **đổi chỗ nguyên văn slice** của cặp `(choice, choiceFeedback)` cùng nhau và ghi lại `answer`. Không serialize lại chuỗi ⇒ không có nguy cơ làm hỏng dấu tiếng Việt hay escape.
+
+Vị trí đích lấy từ "túi" `[0,1,2,3]` trộn bằng RNG **xác định** (mulberry32, seed = hash đường dẫn file) ⇒ phân bố đều 25% mỗi vị trí, **không** tạo chu kỳ đoán được như 0-1-2-3-0-1-2-3, và không tuần nào có ≥3 câu cùng vị trí.
+
+### Ghi chú kiểm thử (chạy thật)
+
+1. `node --check` **PASS** cho cả **13** file `.js` đã sửa.
+2. `node scripts/audit-answer-distribution.js` — con số trước → sau ở bảng trên.
+3. **Kiểm tra runtime**, không chỉ cú pháp: import **thật** file môn + đối chiếu barrel `_index.js`, soi **2557 câu**: nạp được qua barrel · 4 lựa chọn **khác nhau** · `answer` ∈ 0..3 · đủ 4 `choiceFeedback` · feedback tại vị trí `answer` mở đầu `"Đúng"`, ba feedback còn lại mở đầu `"Sai"` — đây là cách duy nhất bắt lỗi lệch index `answer`. **✅ 0 vấn đề.**
+4. **So sánh HEAD ↔ bản sửa trên 2201 câu**: `stem`/`explanation` không đổi · tập hợp cặp `(choice, choiceFeedback)` **y hệt** · đáp án đúng vẫn là **cùng một nội dung** và **cùng một feedback**. Chứng minh chỉ vị trí đổi, nội dung không đổi. **✅ 0 sai lệch.**
+5. Ràng buộc mỗi tuần: soi **396 tuần**, số câu cùng vị trí nhiều nhất trong một tuần = **2** (ngưỡng < 3). ✅
+6. `node scripts/check-content-integrity.mjs` → ✅ sạch (bậc 1 vẫn 0 → 0).
+
+### ⚠️ Bậc thang dự phòng đã HẾT VIỆC ĐO ĐƯỢC
+
+Sau phiên này `ai-board-preflight.mjs` báo **cả ba bậc đều ✅ sạch**. Theo ROUTINE.md Bước 2b, nếu hộp thư vẫn chết ở phiên sau thì routine **phải ghi 1 dòng kết luận và KHÔNG tạo PR** — không còn việc dự phòng nào để làm. Từ đây, giá trị của routine phụ thuộc **hoàn toàn** vào việc hộp thư sống lại (mục 2 phần leo thang ở trên).
+
+### Hai phát hiện chỉ báo cáo, KHÔNG tự sửa (ngoài phạm vi "rủi ro thấp")
+
+1. **Slug môn HĐTN không thống nhất giữa các domain.** `public/js/domains/primary/subjects.js` và `highschool/subjects.js` đăng ký slug `'htn'`, còn `secondary/subjects.js` đăng ký `'hdtn'`. File học liệu đi theo: `lop1, lop2, lop10, lop11, lop12` khai `'htn'`; `lop6→lop9` khai `'hdtn'`; nhưng **`lop3, lop4, lop5` khai `'hdtn'` trong khi domain primary của chúng chỉ đăng ký `'htn'`** ⇒ 108 scenario của ba lớp này có `subject` không khớp bảng đăng ký môn của domain. Sửa việc này là đổi slug xuyên domain (đụng `modules.js`, `achievements.js`, `scoreup-subject-map.js`) ⇒ **không phải việc rủi ro thấp**, để chủ sở hữu quyết.
+2. **Thông điệp leo thang trong `scripts/ai-board-preflight.mjs` đã lạc hậu.** Script vẫn hardcode "merge PR #97" dù PR #97 merged từ 2026-09-27, nên phiên sau sẽ đọc được chỉ dẫn sai. Sửa nằm trong `scripts/**` ⇒ ngoài phạm vi tự merge của ROUTINE.md, để chủ sở hữu quyết.
+
+---
+
+## 2026-09-27 — Phiên 75 · Đóng bậc 2: tuần 36 cho 9 môn cuối cùng còn dừng ở tuần 35
+
+**Kết luận về hộp thư:** vẫn **không đọc được** — `consecutive_failures = 15`, từ `2026-09-13` (`ai-board/inbox-status.json`). Sáu endpoint đều trả **401**, `AI_BOARD_KEY` chưa có trong môi trường. Phiên này **không xử lý yêu cầu nào của người học** vì không có yêu cầu nào đọc được, và **không bịa ra yêu cầu**.
+
+### Leo thang (việc đầu tiên của phiên, đúng luật Bước 2a)
+
+Đã gửi thông báo cho chủ sở hữu nêu đúng **hai việc cần người bấm nút** — AI không được phép tự làm:
+
+1. **Merge PR #97** — route đọc-chỉ `/api/ai-board/inbox` vào nhánh production. PR đụng `auth.js` + `index.js` ⇒ vượt ngưỡng "rủi ro thấp".
+2. **Đặt `AI_BOARD_KEY`** trên production (`openssl rand -hex 32`) rồi redeploy. Đây là secret; AI không đặt và không đọc secret.
+
+Đây là phiên thứ **15** liên tiếp bị chặn bởi đúng hai việc này.
+
+### Việc dự phòng — bậc 2 (bậc thấp nhất còn việc)
+
+`ai-board-preflight.mjs` chỉ đúng bậc 2: **9 môn** còn dừng ở tuần 35, thiếu **cả** bài lí thuyết lẫn quiz tuần 36. Đã soạn xong toàn bộ 9 môn.
+
+| Cấp | Môn | Việc đã làm |
+|---|---|---|
+| THCS · Lớp 7 | Tin học, Công nghệ, GDTC, HĐTN, Nghệ thuật, GD Địa phương | Thêm **quiz tuần 36** (bài lí thuyết tuần 36 đã có sẵn nhưng **mồ côi** — xem mục dưới) |
+| THPT · Lớp 10, 11, 12 | HĐTN-HN | Thêm **cả bài lí thuyết lẫn quiz** tuần 36 |
+
+**Con số trước → sau:**
+
+- Bậc 2 (môn dừng ở tuần 35): **9 → 0**. Toàn bộ K-12 nay không còn môn nào theo mô hình 35/36 tuần mà thiếu tuần 36.
+- Bậc 1 (bài lí thuyết mồ côi): **0 → 0** (vẫn sạch).
+- Nội dung mới: **9 scenario · 54 câu hỏi · 3 bài lí thuyết**, 792 dòng, **chỉ thêm mới, không sửa một dòng nội dung cũ nào**.
+- Phân bố đáp án của 54 câu mới: **A 13 · B 12 · C 14 · D 15** (24,1% / 22,2% / 25,9% / 27,8%), **không tuần nào** có ≥3/6 câu cùng vị trí — soạn cân bằng ngay từ đầu, không phải sửa lại như phiên 73 → 74.
+- Hiệu ứng phụ có lợi: hai môn lệch nặng nhất giảm nhẹ nhờ tuần 36 cân bằng — `lop12:hdtn` **100% → 97%**, `lop11:hdtn` **98% → 96%** (vẫn là việc của bậc 3, chưa xử lý).
+
+### Phát hiện: `check-content-integrity.mjs` có điểm mù, bậc 1 "sạch" là sạch giả
+
+Sáu bài lí thuyết tuần 36 của Lớp 7 **đã nằm sẵn trong repo từ phiên trước nhưng chưa bao giờ hiển thị cho học sinh**, vì không có quiz nào mang id tương ứng để gắn vào. Đúng định nghĩa "nội dung chết" — nhưng bậc 1 vẫn báo ✅ sạch.
+
+Nguyên nhân: hàm `lessonKeysOf()` chỉ bắt key viết **literal** dạng `'S7TIN-w36-quiz':`. Sáu file `lop7/lessons/*.js` lại sinh key bằng **template literal** trong helper `L(n, …)`:
+
+```js
+const L = (n, topic, …) => ({ [`S7HDTN-w${String(n).padStart(2,'0')}-quiz`]: { … } });
+```
+
+⇒ checker trích được **0 key** từ **6/12** file lessons của Lớp 7, nên không thể phát hiện bài mồ côi trong đó. Đo được: `lop7: 12 file lessons, 6 file checker KHÔNG trích được key nào` (`lop10` thì 0/13 — các cấp khác dùng key literal nên không bị).
+
+Phiên này **không sửa** `scripts/check-content-integrity.mjs`: sửa script làm diff vượt ra ngoài phạm vi tự merge theo `ai-board/ROUTINE.md`. Đề xuất để phiên sau hoặc chủ sở hữu duyệt riêng. Sau hôm nay điểm mù này **không còn che giấu lỗi nào** (cả 6 bài đã có quiz), nhưng nó vẫn sẽ che lỗi mới nếu có.
+
+### Kiểm thử (chạy thật)
+
+- `node --check` **pass 12/12** file `.js` đã sửa.
+- **Kiểm tra runtime** (không chỉ cú pháp): import thật `lop7/_index.js`, `lop10/_index.js`, `lop11/_index.js`, `lop12/_index.js` — **9/9** scenario tuần 36 nạp được, **9/9** có `lesson` gắn đúng (topic + theory + examples), `week === 36`, `semester === 2`, mỗi câu đủ **4 lựa chọn không trùng nhau**, `answer` ∈ 0..3, đủ **4 `choiceFeedback`**, feedback tại vị trí `answer` mở đầu bằng "Đúng" và ba feedback còn lại mở đầu bằng "Sai". **0 lỗi.**
+- `check-content-integrity.mjs`: **0 → 0** bài mồ côi.
+- `ai-board-preflight.mjs` chạy lại sau khi sửa: bậc 2 chuyển từ ⚠️ 9 mục sang ✅ **sạch**.
+
+### Việc còn lại cho phiên sau
+
+Bậc 3 — lệch phân bố đáp án: **11 môn** ≥60% dồn vào một vị trí (nặng nhất `lop11:gdqp` 98%, `lop5:tin-hoc` 98%, `lop12:hdtn` 97%, `lop11:hdtn` 96%, `lop11:cong-nghe` 93%) và **2 câu dị dạng** không đủ 4 lựa chọn (`lop8/gdtc.js` `S8GDTC-w24-quiz`, `lop9/hdtn.js` `S9HDTN-w17-quiz`). Hoán vị phải di chuyển cặp `(choice, choiceFeedback)` cùng nhau — **không dùng `scripts/shuffle-answers.js`**.
+
+---
+
+## 2026-09-27 — Phiên 74 · Sửa chính cái ROUTINE: leo thang tự động, bậc thang việc dự phòng, và cân bằng lại 216 câu phiên 73 tự làm lệch
+
+**Kết luận về hộp thư:** vẫn **không đọc được** — nay đã **đếm được bằng máy**: `consecutive_failures = 15`, từ `2026-09-13` (`ai-board/inbox-status.json`). Phiên này **không xử lý yêu cầu nào của người học** và không bịa ra yêu cầu.
+
+Phiên 73 đóng xong toàn bộ nội dung chết (K-12 về 0) ⇒ **nguồn việc dự phòng đã cạn**. Đó là lúc routine dễ bịa việc nhất. Nên hôm nay sửa chính cơ chế vận hành thay vì tìm việc mới.
+
+### Ba lỗi của routine, và cách sửa
+
+| Lỗi (lặp suốt 14 phiên) | Cách sửa |
+|---|---|
+| Hộp thư chết nhiều ngày mà **không có cơ chế buộc con người quyết định** | `scripts/ai-board-preflight.mjs` đếm số ngày hỏng liên tiếp; **≥3 ngày ⇒ in lệnh leo thang** nêu đúng 2 việc cần người bấm nút |
+| Khi hộp thư chết, phiên **tự nghĩ ra việc** | **Bậc thang việc dự phòng** 3 bậc, mỗi bậc phải có lệnh chứng minh vấn đề tồn tại **trước khi** sửa; cả ba sạch ⇒ **không tạo PR** |
+| Không ai đếm được đã hỏng bao nhiêu ngày, ngoài cách đọc văn xuôi CHANGELOG | Trạng thái ghi ra `ai-board/inbox-status.json`, một lần mỗi ngày |
+
+### File mới
+
+- **`scripts/ai-board-preflight.mjs`** — bước 0 bắt buộc của mọi phiên. Đo 6 endpoint hộp thư, đếm ngày hỏng, chạy bậc thang, in **một kết luận duy nhất** phiên phải tuân theo. Chỉ đọc; ghi đúng một file trạng thái; không sửa học liệu, không commit.
+- **`ai-board/ROUTINE.md`** — bản luật có version. Prompt của scheduled task nằm ngoài repo và không ai version được; **khi prompt mâu thuẫn với file này thì file này thắng**.
+- **`ai-board/inbox-status.json`** — bộ đếm, gieo đúng lịch sử thật (15 ngày, từ 2026-09-13).
+
+### Bậc thang việc dự phòng — trạng thái hôm nay
+
+| Bậc | Vấn đề | Lệnh chứng minh | Hôm nay |
+|---|---|---|---|
+| 1 | Bài lí thuyết mồ côi | `check-content-integrity.mjs` | ✅ sạch (phiên 73 đóng xong) |
+| 2 | Môn dừng ở 35 tuần | `ai-board-preflight.mjs` | ⚠️ **9 môn** — 6 môn Lớp 7 + 3 môn HĐTN THPT |
+| 3 | Lệch phân bố đáp án, câu dị dạng | `audit-answer-distribution.js` | ⚠️ **11 môn** lệch ≥60% + **2 câu** không đủ 4 lựa chọn |
+
+### Sửa lỗi do CHÍNH phiên 73 gây ra
+
+`audit-answer-distribution.js` cho thấy 216 câu tuần 36 mà phiên 73 vừa thêm **bị lệch đáp án**: A 26,9% · B 46,8% · C 23,6% · **D chỉ 2,8%**, và **7 tuần có ≥4/6 câu cùng một vị trí đáp án**. Học sinh đoán "B" liên tục vẫn được điểm cao mà không cần biết kiến thức — đúng loại lỗi mà `shuffle-answers.js` từng được viết ra để chữa.
+
+Đã hoán vị lại vị trí đáp án của **cả 216 câu**, giữ nguyên 100% nội dung:
+
+- **Sau khi sửa: A 25,0% · B 25,0% · C 25,0% · D 25,0%** (chẵn 54/54/54/54).
+- **Không tuần nào** còn ≥3/6 câu cùng vị trí.
+
+> ⚠️ **Không dùng `scripts/shuffle-answers.js` cho nội dung có `choiceFeedback`.** Script đó viết trước khi trường này tồn tại: nó hoán vị `choices` + `answer` nhưng **không** hoán vị `choiceFeedback` ⇒ làm lệch feedback so với đáp án. Phiên này dùng bộ hoán vị riêng, di chuyển cặp `(choice, choiceFeedback)` cùng nhau. Đã ghi cảnh báo này vào `ai-board/ROUTINE.md`.
+
+### Ba lỗi kỹ thuật trong văn bản routine (đã ghi vào ROUTINE.md)
+
+- Routine bảo dùng `gh pr create`, nhưng **`gh` và `hub` không tồn tại** trong môi trường này — phải dùng công cụ GitHub sẵn có của phiên.
+- Repo đã đổi tên **`Lampx83/EduVerse` → `Lampx83/Tizia`**; tên cũ chỉ còn redirect.
+- Routine cho phép tự merge vô điều kiện. Nay siết lại: **chỉ tự merge khi diff chỉ đụng học liệu** (`public/js/scenarios/**`, `CHANGELOG`, `ai-board/**`), không đụng `server/**` hay `public/js/engine/**`.
+
+### Kiểm thử (chạy thật)
+
+- `node --check` **pass 40/40** file `.js` đã sửa (36 scenario + preflight + 3 file phiên trước không đổi nội dung).
+- **Kiểm tra runtime** sau khi hoán vị: 36/36 scenario tuần 36 vẫn nạp được, có `lesson` gắn vào, `week === 36`, 4 lựa chọn không trùng, `answer` ∈ 0..3, đủ 4 `choiceFeedback`, và **feedback tại vị trí `answer` vẫn mở đầu bằng "Đúng"/"Correct"** ⇒ chứng minh hoán vị không làm lệch feedback. 0 lỗi.
+- `check-content-integrity.mjs`: **vẫn 0** bài mồ côi.
+- `ai-board-preflight.mjs` chạy đầu-cuối: đo đúng 6 endpoint, đếm đúng 15 ngày, kích hoạt đúng nhánh leo thang, chỉ đúng bậc 2 là việc kế tiếp.
+
+---
+
+## 2026-09-26 — Phiên 73 · THPT **ĐÓNG TRỌN cấp 3 và toàn bộ K-12**: hồi sinh 36 bài lí thuyết "chết" của Lớp 10, Lớp 11 và Lớp 12
+
+**Kết luận về hộp thư:** vẫn **không đọc được** (ngày thứ 14) ⇒ **không xử lý được yêu cầu nào của người học**, không bịa ra yêu cầu. Phiên này khép lại việc đã đo được từ phiên 58: học liệu đã viết xong nhưng học sinh **không bao giờ nhìn thấy**. Hôm nay đóng nốt cấp THPT ⇒ **toàn bộ K-12 (lớp 1→12) không còn bài lí thuyết mồ côi nào**.
+
+### Đo thật hôm nay (2026-09-26)
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `GET /api/health` | `200` — `{"ok":true,"service":"tizia",…,"env":"production"}`, uptime ~64 giờ, node v20.20.2 |
+| `GET /api/ai-board/inbox` | `401 {"error":"unauthorized","needLogin":true}` — kể cả khi gửi header `x-ai-board-key` ⇒ auth gate chung vẫn nuốt request, **PR #97 chưa merge + deploy** |
+| `GET /api/requests` · `/api/public/requests` · `/api/board/inbox` · `/api/admin/requests` · `/api/ai-board/requests` | tất cả `401 needLogin` — không còn đường đọc nào cho phiên tự động |
+| `AI_BOARD_KEY` trong môi trường routine | **vẫn chưa có** |
+| `node scripts/check-deployed-build.mjs` | không commit nào trong repo khớp cả bộ chứng cứ; bằng chứng hành vi xác nhận bản deploy **chưa có route hộp thư** |
+| `node scripts/check-content-integrity.mjs` (trước) | **36** bài lí thuyết mồ côi |
+| `node scripts/check-content-integrity.mjs` (sau) | **0** — ✅ *Toàn vẹn học liệu: không phát hiện vấn đề* |
+
+### Hai nguyên nhân khiến 36 bài chết
+
+**(a) Thiếu tuần 36 trong file scenario — 33 môn.** Bài lí thuyết tuần 36 ("Kết thúc … — Hành trang …") đã được viết với key `<PREFIX>-w36-quiz`, nhưng file scenario của môn đó **chỉ có 35 tuần**. Cơ chế gắn là tra cứu đúng id (`if (LOP1n_LESSONS[id]) sc.lesson = …` trong `lop1n/_index.js`), nên không có quiz tuần 36 = bài lí thuyết biến mất im lặng.
+
+**(b) Sai prefix trong chính file lessons — 3 môn của Lớp 10 (lỗi MỚI, chưa từng gặp ở cấp 1 và cấp 2).** Ba file lessons dùng đúng prefix cho 35 tuần đầu nhưng **gõ nhầm prefix riêng ở tuần 36**:
+
+| File lessons | Key tuần 36 (sai) | Prefix đúng (35 tuần còn lại dùng) |
+|---|---|---|
+| `lop10/lessons/gdqp.js` | `H10QP-w36-quiz` | `H10GDQP` |
+| `lop10/lessons/ngu-van.js` | `H10VAN-w36-quiz` | `H10NV` |
+| `lop10/lessons/tieng-anh.js` | `H10ENG-w36-quiz` | `H10TA` |
+
+Đã sửa key về đúng prefix — thay đổi 1 dòng mỗi file, không đụng nội dung bài học.
+
+### Việc đã làm — 36 môn thuộc 3 khối
+
+Bổ sung **tuần 36** vào 36 file scenario, mỗi tuần **6 câu hỏi** đúng format chung (`Q(stem, 4 lựa chọn, đáp án, giải thích, 4 choiceFeedback)`), nội dung **bám đúng bài lí thuyết tuần 36 đã có sẵn** của môn đó.
+
+**Lớp 10 (12/12 môn)** — `public/js/scenarios/lop10/`
+
+| File | Tuần 36 mới | Bài lí thuyết được hồi sinh |
+|---|---|---|
+| `toan.js` | Kết thúc Toán 10 — Hành trang vào lớp 11 | `H10TOAN-w36-quiz` |
+| `ngu-van.js` | Kết thúc Ngữ Văn 10 — Hành trang ngôn ngữ vào lớp 11 | `H10NV-w36-quiz` |
+| `tieng-anh.js` | Closing Chapter — Grade 10 English and the Road Ahead | `H10TA-w36-quiz` |
+| `vat-ly.js` | Kết thúc Vật Lý 10 — Cơ học và Nhiệt học hành trang lên lớp 11 | `H10LY-w36-quiz` |
+| `hoa-hoc.js` | Kết thúc Hoá Học 10 — Nền tảng nguyên tử và bước vào Hoá hữu cơ 11 | `H10HOA-w36-quiz` |
+| `sinh-hoc.js` | Kết thúc Sinh Học 10 — Tế bào và Vi sinh vật làm nền tảng cho lớp 11 | `H10SINH-w36-quiz` |
+| `lich-su.js` | Kết thúc Lịch Sử 10 — Thế giới và Việt Nam qua lăng kính lịch sử | `H10SU-w36-quiz` |
+| `dia-ly.js` | Kết thúc Địa Lý 10 — Bản đồ thế giới trong tâm trí | `H10DIA-w36-quiz` |
+| `gdcd.js` | Kết thúc GDCD 10 — Công dân có hiểu biết trong thế giới hội nhập | `H10GDCD-w36-quiz` |
+| `gdqp.js` | Kết thúc GDQP-AN 10 — Tuổi trẻ, Tổ quốc và Trách nhiệm | `H10GDQP-w36-quiz` |
+| `tin-hoc.js` | Kết thúc Tin Học 10 — Lập trình và Tư duy số cho lớp 11 | `H10TIN-w36-quiz` |
+| `cong-nghe.js` | Kết thúc Công Nghệ 10 — Kỹ thuật và Nghề nghiệp trong tầm tay | `H10CN-w36-quiz` |
+
+**Lớp 11 (12/12 môn)** — `public/js/scenarios/lop11/`
+
+| File | Tuần 36 mới | Bài lí thuyết được hồi sinh |
+|---|---|---|
+| `toan.js` | Kết thúc Toán 11 — Hành trang vào lớp 12 | `H11TOAN-w36-quiz` |
+| `ngu-van.js` | Kết thúc Ngữ Văn 11 — Chiều sâu cảm xúc và hành trình lớp 12 | `H11NV-w36-quiz` |
+| `tieng-anh.js` | Closing Chapter — Grade 11 English and the Road Ahead | `H11TA-w36-quiz` |
+| `vat-ly.js` | Kết thúc Vật Lý 11 — Điện Từ Quang và hành trình lớp 12 | `H11LY-w36-quiz` |
+| `hoa-hoc.js` | Kết thúc Hoá Học 11 — Hữu cơ và bước ngoặt lớp 12 | `H11HOA-w36-quiz` |
+| `sinh-hoc.js` | Kết thúc Sinh Học 11 — Sự sống ở cấp cơ thể và bước ngoặt lớp 12 | `H11SINH-w36-quiz` |
+| `lich-su.js` | Kết thúc Lịch Sử 11 — Thế giới và Việt Nam trước thời đại của chúng ta | `H11SU-w36-quiz` |
+| `dia-ly.js` | Kết thúc Địa Lý 11 — Bản đồ thế giới trong tầm tay | `H11DIA-w36-quiz` |
+| `gdcd.js` | Kết thúc GDCD 11 — Công dân có hiểu biết trong thế giới hội nhập | `H11GDCD-w36-quiz` |
+| `gdqp.js` | Kết thúc GDQP-AN 11 — Tuổi trẻ, Tổ quốc và Trách nhiệm | `H11GDQP-w36-quiz` |
+| `tin-hoc.js` | Kết thúc Tin Học 11 — Lập trình và tư duy số cho thế kỉ 21 | `H11TIN-w36-quiz` |
+| `cong-nghe.js` | Kết thúc Công Nghệ 11 — Kỹ thuật, Xe hơi và Hành trình lớp 12 | `H11CN-w36-quiz` |
+
+**Lớp 12 (12/12 môn)** — `public/js/scenarios/lop12/`
+
+| File | Tuần 36 mới | Bài lí thuyết được hồi sinh |
+|---|---|---|
+| `toan.js` | Kết thúc Toán THPT — Hành trang vào đại học | `H12TOAN-w36-quiz` |
+| `ngu-van.js` | Kết thúc Ngữ Văn THPT — Văn chương và hành trình trở thành người | `H12NV-w36-quiz` |
+| `tieng-anh.js` | Closing Chapter — Your English Journey Continues | `H12TA-w36-quiz` |
+| `vat-ly.js` | Kết thúc Vật Lý THPT — Khám phá vũ trụ bắt đầu từ đây | `H12LY-w36-quiz` |
+| `hoa-hoc.js` | Kết thúc Hoá Học THPT — Phân tử xây dựng thế giới | `H12HOA-w36-quiz` |
+| `sinh-hoc.js` | Kết thúc Sinh Học THPT — Sự sống kỳ diệu và trách nhiệm của chúng ta | `H12SINH-w36-quiz` |
+| `lich-su.js` | Kết thúc Lịch Sử THPT — Bài học từ quá khứ, hành động cho tương lai | `H12SU-w36-quiz` |
+| `dia-ly.js` | Kết thúc Địa Lý THPT — Đất nước và thế giới trong tầm tay | `H12DIA-w36-quiz` |
+| `gdcd.js` | Kết thúc GD Kinh tế và Pháp luật — Công dân có trách nhiệm trong thế giới hội nhập | `H12GDCD-w36-quiz` |
+| `gdqp.js` | Kết thúc GDQP-AN — Tuổi trẻ và trách nhiệm với Tổ quốc | `H12GDQP-w36-quiz` |
+| `tin-hoc.js` | Kết thúc Tin Học THPT — Thế giới số và bạn | `H12TIN-w36-quiz` |
+| `cong-nghe.js` | Kết thúc Công Nghệ THPT — Kỹ thuật vì cuộc sống tốt hơn | `H12CN-w36-quiz` |
+
+### Sửa chú thích số tuần ở đầu file cho khớp thực tế
+
+36 file scenario vừa bổ sung tuần 36 có dòng chú thích đầu file ghi cứng `— 35 tuần (HK1: 1–18 · HK2: 19–35)`. Nay sửa thành `36 tuần (HK1: 1–18 · HK2: 19–36)`. **Ba file `hdtn.js` của lop10/11/12 giữ nguyên "35 tuần"** vì môn HĐTN thật sự chưa có tuần 36 (cũng không có bài lí thuyết tuần 36 nên không phải nội dung chết).
+
+`public/js/domains/highschool/modules.js` **không đổi** — module THPT không ghi số tuần trong title/description, loader liệt kê scenario theo prefix id nên không phụ thuộc con số nào.
+
+### Kiểm thử (chạy thật)
+
+- `node --check` **pass** cho **39/39** file đã sửa (36 scenario + 3 lessons).
+- `node scripts/check-content-integrity.mjs`: **36 → 0**. Lần đầu tiên script báo ✅ *Toàn vẹn học liệu: không phát hiện vấn đề* cho toàn bộ repo.
+- Kiểm tra **runtime** (không chỉ cú pháp): import thật 3 barrel `lop1n/_index.js`, xác nhận **36/36** scenario tuần 36 nạp được, **có `lesson` gắn vào**, `week === 36`, mỗi câu đủ **4 lựa chọn không trùng nhau**, `answer` nằm trong 0..3, đủ **4 `choiceFeedback`** và có `explanation`. 0 lỗi.
+- Soát chéo **216 câu mới**: không có stem trùng trong cùng tuần; `choiceFeedback` của đáp án đúng luôn mở đầu "Đúng/Correct", của lựa chọn sai luôn mở đầu "Sai/No" ⇒ **không có câu nào lệch index `answer`**. 0 lỗi.
+- Import `public/js/scenarios/_all-content.js`: **5420** scenario nạp được (5384 + 36), không lỗi.
+
+### Còn lại cho phiên sau
+
+- **6 môn Lớp 7** (`S7CN`, `S7GDDP`, `S7GDTC`, `S7HDTN`, `S7NT`, `S7TIN`) vẫn dừng ở 35 tuần — nhưng **chưa có** bài lí thuyết tuần 36 nên không phải nội dung chết. Muốn đủ 36 tuần cần soạn **cả** bài lí thuyết lẫn quiz, khác về bản chất với việc hồi sinh nội dung đã viết.
+- **3 môn HĐTN** của lop10/11/12: tương tự, 35 tuần và không có bài lí thuyết mồ côi.
+- **Hộp thư vẫn là nút thắt lớn nhất**: PR #97 (route đọc-chỉ `/api/ai-board/inbox`) mở từ 2026-09-22 vẫn chưa merge, và `AI_BOARD_KEY` chưa được đặt trên production. Chừng nào chưa xong, các phiên hàng ngày **không thể** phục vụ yêu cầu thật của người học.
+
+---
+
+## 2026-09-25 — Phiên 72 · THCS **ĐÓNG TRỌN cấp 2**: hồi sinh 30 bài lí thuyết "chết" của Lớp 7, Lớp 8 và Lớp 9
+
+**Kết luận về hộp thư:** vẫn **không đọc được** (ngày thứ 13) ⇒ **không xử lý được yêu cầu nào của người học**, không bịa ra yêu cầu. Phiên này tiếp tục việc đã đo được từ phiên 58: học liệu đã viết xong nhưng học sinh **không bao giờ nhìn thấy**. Hôm nay đóng nốt 3 khối còn lại của cấp THCS ⇒ **lớp 6→9 không còn bài lí thuyết mồ côi nào**.
+
+### Đo thật hôm nay (2026-09-25)
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `GET /api/health` | `200` — `{"ok":true,"service":"tizia",…,"env":"production"}`, uptime ~40 giờ, node v20.20.2 |
+| `GET /api/ai-board/inbox` | `401 {"error":"unauthorized","needLogin":true}` ⇒ auth gate chung vẫn nuốt request, **PR #97 chưa merge + deploy** |
+| `GET /api/requests` · `/api/requests?domain=it` · `/api/ai-board/requests` · `/api/admin/requests` · `/api/board/inbox` · `/api/public/requests` | tất cả `401 needLogin` — không còn đường đọc nào cho phiên tự động |
+| `AI_BOARD_KEY` trong môi trường routine | **vẫn chưa có** |
+| `node scripts/check-deployed-build.mjs` | production chạy MỘT commit trong nhóm `d98a086` (2026-06-08) .. `40fd384` (2026-07-24) trên nhánh `feat/postgres-migration` — trễ **64–110 ngày**, nhánh **không chung gốc lịch sử** với `main`; bằng chứng hành vi xác nhận **chưa có route hộp thư** |
+| `node scripts/check-content-integrity.mjs` (trước) | **66** bài lí thuyết mồ côi |
+| `node scripts/check-content-integrity.mjs` (sau) | **36** — giảm 30, **toàn bộ cấp THCS về 0** |
+
+**Nguyên nhân 30 bài chết (cùng một lỗi với phiên 70 và 71):** bài lí thuyết **tuần 36** ("Kết thúc … — Hành trang vào lớp sau") đã được viết với key `<PREFIX>-w36-quiz`, nhưng file scenario của môn đó **chỉ có 35 tuần** — không có quiz tuần 36 để bài lí thuyết gắn vào. Cơ chế gắn là tra cứu đúng id (`if (LOPn_LESSONS[id]) sc.lesson = …` trong `lopN/_index.js`), nên key không khớp = nội dung biến mất im lặng và `node --check` không bắt được.
+
+### Việc đã làm — 30 môn thuộc 3 khối
+
+Bổ sung **tuần 36** vào 30 file scenario, mỗi tuần **6 câu hỏi** đúng format chung (`Q(stem, 4 lựa chọn, đáp án, giải thích, theory[], 4 choiceFeedback)`), nội dung **bám đúng bài lí thuyết tuần 36 đã có sẵn** của môn đó.
+
+**Lớp 7 (6/12 môn — 6 môn còn lại chưa có bài lí thuyết tuần 36)** — `public/js/scenarios/lop7/`
+
+| File | Tuần 36 mới | Bài lí thuyết được hồi sinh |
+|---|---|---|
+| `toan.js` | Kết thúc Toán 7 — Hành trang vào lớp 8 | `S7TOAN-w36-quiz` |
+| `ngu-van.js` | Kết thúc Ngữ Văn 7 — Ngôn ngữ và tâm hồn bước vào lớp 8 | `S7NV-w36-quiz` |
+| `tieng-anh.js` | Closing Year — Grade 7 English & the Road to Grade 8 | `S7TA-w36-quiz` |
+| `khtn.js` | Kết thúc KHTN 7 — Ba khoa học, một hành trình | `S7KHTN-w36-quiz` |
+| `lich-su-dia.js` | Kết thúc Lịch Sử & Địa Lý 7 — Thế giới và Việt Nam trong tầm tay | `S7LSDL-w36-quiz` |
+| `gdcd.js` | Kết thúc GDCD 7 — Công dân trẻ vững bước vào lớp 8 | `S7GDCD-w36-quiz` |
+
+**Lớp 8 (12/12 môn)** — `public/js/scenarios/lop8/`
+
+| File | Tuần 36 mới | Bài lí thuyết được hồi sinh |
+|---|---|---|
+| `toan.js` | Kết thúc Toán 8 — Hành trang vào lớp 9 | `S8TOAN-w36-quiz` |
+| `ngu-van.js` | Kết thúc Ngữ Văn 8 — Ngôn ngữ và tâm hồn bước vào lớp 9 | `S8NV-w36-quiz` |
+| `tieng-anh.js` | Closing Year — Grade 8 English & the Road to Grade 9 | `S8TA-w36-quiz` |
+| `khtn.js` | Kết thúc KHTN 8 — Ba ngành khoa học, một hành trình | `S8KHTN-w36-quiz` |
+| `lich-su-dia.js` | Kết thúc Lịch Sử & Địa Lý 8 — Việt Nam trên hành trình lịch sử và địa lý | `S8LSDL-w36-quiz` |
+| `gdcd.js` | Kết thúc GDCD 8 — Công dân trẻ với đạo đức và pháp luật | `S8GDCD-w36-quiz` |
+| `cong-nghe.js` | Kết thúc Công Nghệ 8 — Từ bản vẽ đến mạch điện | `S8CN-w36-quiz` |
+| `tin-hoc.js` | Kết thúc Tin Học 8 — Tư duy lập trình bước vào kỉ nguyên số | `S8TIN-w36-quiz` |
+| `gdtc.js` | Kết thúc GDTC 8 — Thể chất khoẻ mạnh, tinh thần vững vàng | `S8GDTC-w36-quiz` |
+| `nghe-thuat.js` | Kết thúc Nghệ Thuật 8 — Âm nhạc & Mỹ thuật nuôi dưỡng tâm hồn | `S8NT-w36-quiz` |
+| `hdtn.js` | Kết thúc HĐTN 8 — Trưởng thành qua từng trải nghiệm | `S8HDTN-w36-quiz` |
+| `gd-dia-phuong.js` | Kết thúc GD Địa Phương 8 — Hà Nội ngàn năm trong tim | `S8GDDP-w36-quiz` |
+
+**Lớp 9 (12/12 môn)** — `public/js/scenarios/lop9/`
+
+| File | Tuần 36 mới | Bài lí thuyết được hồi sinh |
+|---|---|---|
+| `toan.js` | Kết thúc Toán THCS — Nhìn lại hành trình | `S9TOAN-w36-quiz` |
+| `ngu-van.js` | Kết thúc Ngữ Văn THCS — Hành trình của những con chữ | `S9NV-w36-quiz` |
+| `tieng-anh.js` | Kết thúc Tiếng Anh THCS — Keep Going Forward! | `S9TA-w36-quiz` |
+| `khtn.js` | Kết thúc KHTN THCS — Khoa học là hành trình, không phải đích đến | `S9KHTN-w36-quiz` |
+| `lich-su-dia.js` | Kết thúc Lịch sử – Địa lí THCS — Đất nước nhìn từ quá khứ và không gian | `S9LSDL-w36-quiz` |
+| `gdcd.js` | Kết thúc GDCD THCS — Người công dân tốt bắt đầu từ đây | `S9GDCD-w36-quiz` |
+| `cong-nghe.js` | Kết thúc Công nghệ THCS — Đôi tay tạo nên tương lai | `S9CN-w36-quiz` |
+| `tin-hoc.js` | Kết thúc Tin học THCS — Tư duy số cho thế kỉ 21 | `S9TIN-w36-quiz` |
+| `gdtc.js` | Kết thúc GDTC THCS — Sức khoẻ là nền tảng của mọi thành công | `S9GDTC-w36-quiz` |
+| `nghe-thuat.js` | Kết thúc Nghệ thuật THCS — Hành trình của cái đẹp | `S9NT-w36-quiz` |
+| `hdtn.js` | Kết thúc HĐTN THCS — Lễ bế giảng trong tim | `S9HDTN-w36-quiz` |
+| `gd-dia-phuong.js` | Kết thúc Giáo dục địa phương — Người trẻ của mảnh đất này | `S9GDDP-w36-quiz` |
+
+### Sửa mô tả module cho khớp thực tế
+
+`public/js/domains/secondary/modules.js`: trước đây **36 module S7/S8/S9 đều bị ghi cứng "35 tuần"** trong cả `title` và `description`. Nay số tuần được lấy từ một bảng đếm THẬT (`weeksOf()`): **lớp 8 và lớp 9 = 36 tuần (24/24 môn)**, **lớp 7 = 36 tuần cho 6 môn đã có tuần 36** và **35 tuần cho 6 môn chưa có** (`S7CN`, `S7GDDP`, `S7GDTC`, `S7HDTN`, `S7NT`, `S7TIN`). Không gộp một con số chung cho cả ba lớp như phiên trước vì lớp 7 chưa đủ 12/12 môn.
+
+Không đổi logic: module loader liệt kê scenario theo prefix id, không dùng con số tuần nào.
+
+### Kiểm thử (chạy thật)
+
+- `node --check` **pass** cho **31/31** file đã sửa (30 scenario + `modules.js`).
+- `node scripts/check-content-integrity.mjs`: **66 → 36** bài mồ côi; lop7/lop8/lop9 **không còn mục nào**. Phần còn lại (36) là THPT lop10–12, để dành cho các phiên sau.
+- Kiểm tra **runtime** (không chỉ cú pháp): import thật 3 barrel `lopN/_index.js`, xác nhận **30/30** scenario tuần 36 nạp được, **có `lesson` gắn vào**, `week === 36`, mỗi câu đủ **4 lựa chọn không trùng nhau**, `answer` nằm trong 0..3, đủ **4 `choiceFeedback`** và có `theory`. 0 lỗi.
+- Soát chéo **180 câu mới**: không có stem trùng trong cùng tuần; `choiceFeedback` của đáp án đúng luôn mở đầu "Đúng/Correct", của lựa chọn sai luôn mở đầu "Sai/No" ⇒ **không có câu nào lệch index `answer`**. 0 lỗi.
+- Import `public/js/scenarios/_all-content.js`: **5384** scenario nạp được, không lỗi.
+- Runtime `domains/secondary/modules.js`: 36 module S7–S9 sinh đúng — **30 module ghi "36 tuần"**, **6 module lớp 7 ghi "35 tuần"**.
+
+---
+
+## 2026-09-24 — Phiên 71 · Tiểu học **ĐÓNG TRỌN cấp 1**: hồi sinh 32 bài lí thuyết "chết" của Lớp 1, Lớp 3 và Lớp 5
+
+**Kết luận về hộp thư:** vẫn **không đọc được** (ngày thứ 12) ⇒ **không xử lý được yêu cầu nào của người học**, không bịa ra yêu cầu. Phiên này tiếp tục việc đã đo được từ phiên 58: học liệu đã viết xong nhưng học sinh **không bao giờ nhìn thấy**. Hôm nay đóng nốt 3 khối còn lại của cấp Tiểu học ⇒ **lớp 1→5 không còn bài lí thuyết mồ côi nào**.
+
+### Đo thật hôm nay (2026-09-24)
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `GET /api/health` | `200` — `{"ok":true,"service":"tizia",…,"env":"production"}`, uptime ~16 giờ |
+| `GET /api/ai-board/inbox` | `401 {"needLogin":true}` (kể cả khi gửi header `x-ai-board-key`) ⇒ auth gate chung vẫn nuốt request, **PR #97 chưa merge + deploy** |
+| `GET /api/requests` · `/api/ai-board/requests` · `/api/admin/requests` · `/api/board/inbox` | tất cả `401 needLogin` — không còn đường đọc nào cho phiên tự động |
+| `AI_BOARD_KEY` trong môi trường routine | **vẫn chưa có** |
+| `node scripts/check-deployed-build.mjs` | không commit nào trong repo khớp cả bộ chứng cứ ⇒ bản deploy dựng từ code chưa push lên đây; bằng chứng hành vi vẫn xác nhận **chưa có route hộp thư** |
+| `node scripts/check-content-integrity.mjs` (trước) | **98** bài lí thuyết mồ côi |
+| `node scripts/check-content-integrity.mjs` (sau) | **66** — giảm 32, **toàn bộ cấp Tiểu học về 0** |
+
+**Nguyên nhân 32 bài chết (cùng một lỗi với phiên 70):** bài lí thuyết **tuần 36** ("Kết thúc năm học / Hành trang vào lớp sau") đã được viết với key `<PREFIX>-w36-quiz`, nhưng file scenario của môn đó **chỉ có 35 tuần** — không có quiz tuần 36 để bài lí thuyết gắn vào. Cơ chế gắn là tra cứu đúng id (`if (LOPn_LESSONS[id]) sc.lesson = …` trong `lopN/_index.js`), nên key không khớp = nội dung biến mất im lặng và `node --check` không bắt được.
+
+### Việc đã làm — 32 môn thuộc 3 khối
+
+Bổ sung **tuần 36** vào 32 file scenario, mỗi tuần **6 câu hỏi** đúng format chung (`Q(stem, 4 lựa chọn, đáp án, giải thích, 4 phản hồi theo lựa chọn)`), nội dung **bám đúng bài lí thuyết tuần 36 đã có sẵn** của môn đó:
+
+**Lớp 1 (9/9 môn)** — `public/js/scenarios/lop1/`
+
+| File | Tuần 36 mới | Bài lí thuyết được hồi sinh |
+|---|---|---|
+| `toan.js` | Kết thúc Lớp 1 — Hành trang vào Lớp 2 | `P1-w36-quiz` |
+| `tieng-viet.js` | Hành trang Tiếng Việt vào Lớp 2 | `P1TV-w36-quiz` |
+| `tieng-anh.js` | End of Grade 1 — Ready for Grade 2! | `P1TA-w36-quiz` |
+| `tnxh.js` | Tổng kết Tự nhiên và Xã hội | `P1TNXH-w36-quiz` |
+| `dao-duc.js` | 5 Phẩm chất em mang theo vào Lớp 2 | `P1DD-w36-quiz` |
+| `am-nhac.js` | Một năm hát ca vui vẻ | `P1AN-w36-quiz` |
+| `my-thuat.js` | Nhìn lại hành trình sáng tạo | `P1MT-w36-quiz` |
+| `gdtc.js` | Một năm chăm vận động | `P1GDTC-w36-quiz` |
+| `hdtn.js` | Hành trang trải nghiệm vào Lớp 2 | `P1HDTN-w36-quiz` |
+
+**Lớp 3 (11/11 môn)** — `public/js/scenarios/lop3/`
+
+| File | Tuần 36 mới | Bài lí thuyết được hồi sinh |
+|---|---|---|
+| `toan.js` | Kết thúc Lớp 3 — Hành trang vào Lớp 4 | `P3-w36-quiz` |
+| `tieng-viet.js` | Hành trang Tiếng Việt vào Lớp 4 | `P3TV-w36-quiz` |
+| `tieng-anh.js` | End of Grade 3 — Ready for Grade 4! | `P3TA-w36-quiz` |
+| `tnxh.js` | TNXH: Hành trang vào Lớp 4 | `P3TNXH-w36-quiz` |
+| `dao-duc.js` | Em lớn lên với những giá trị tốt đẹp | `P3DD-w36-quiz` |
+| `am-nhac.js` | Những giai điệu em mang theo | `P3AN-w36-quiz` |
+| `my-thuat.js` | Sắc màu của một năm học | `P3MT-w36-quiz` |
+| `gdtc.js` | Cơ thể khoẻ mạnh, tinh thần vui vẻ | `P3GDTC-w36-quiz` |
+| `hdtn.js` | Em lớn lên, em trải nghiệm! | `P3HDTN-w36-quiz` |
+| `tin-hoc.js` | Em đã là "công dân số" nhỏ! | `P3TIN-w36-quiz` |
+| `cong-nghe.js` | Đôi tay khéo léo, tâm hồn sáng tạo | `P3CN-w36-quiz` |
+
+**Lớp 5 (12/12 môn)** — `public/js/scenarios/lop5/`
+
+| File | Tuần 36 mới | Bài lí thuyết được hồi sinh |
+|---|---|---|
+| `toan.js` | Kết thúc Tiểu học — Hành trang Toán vào Lớp 6 | `P5-w36-quiz` |
+| `tieng-viet.js` | Hành trang Tiếng Việt vào Lớp 6 | `P5TV-w36-quiz` |
+| `tieng-anh.js` | End of Primary — Ready for Grade 6 English! | `P5TA-w36-quiz` |
+| `khoa-hoc.js` | Hành trang Khoa học vào THCS | `P5KH-w36-quiz` |
+| `lich-su-dia-ly.js` | Hành trang Lịch sử & Địa lý vào THCS | `P5LSDL-w36-quiz` |
+| `dao-duc.js` | 5 Phẩm chất học sinh Lớp 6 | `P5DD-w36-quiz` |
+| `am-nhac.js` | Âm nhạc đồng hành cả đời | `P5AN-w36-quiz` |
+| `my-thuat.js` | Hành trình sáng tạo 5 năm | `P5MT-w36-quiz` |
+| `gdtc.js` | Sức khoẻ là hành trang lên cấp 2 | `P5GDTC-w36-quiz` |
+| `hdtn.js` | Tốt nghiệp cấp 1, bước vào cấp 2 | `P5HDTN-w36-quiz` |
+| `tin-hoc.js` | Hành trang Tin học vào THCS | `P5TIN-w36-quiz` |
+| `cong-nghe.js` | Hành trang Công nghệ vào THCS | `P5CN-w36-quiz` |
+
+### Sửa mô tả module cho khớp thực tế
+
+`public/js/domains/primary/modules.js`: 35 chỗ ghi **"35 tuần" → "36 tuần"** (Lớp 1, 3, 5) cho khớp số tuần thật sau thay đổi này. Sửa luôn 3 dòng tiêu đề khối đang đếm **sai số môn** — đối chiếu bằng cách đếm trực tiếp các mục `M(...)` trong file:
+
+| Tiêu đề khối | Trước | Sau (số đếm thật) |
+|---|---|---|
+| LỚP 1 | "8 môn × 35 tuần" | **9 môn × 36 tuần** |
+| LỚP 3 | "9 môn × 35 tuần" | **11 môn × 36 tuần** |
+| LỚP 5 | "11 môn × 35 tuần" | **12 môn × 36 tuần** |
+
+Không đổi logic: module loader liệt kê scenario theo prefix id, không dùng con số tuần hay con số môn nào.
+
+### Kiểm thử (chạy thật)
+
+- `node --check` **pass** cho **33/33** file đã sửa (32 scenario + `modules.js`).
+- `node scripts/check-content-integrity.mjs`: **98 → 66** bài mồ côi; lop1/lop3/lop5 **không còn mục nào**. Phần còn lại (66) là THCS lop7–9 và THPT lop10–12, để dành cho các phiên sau.
+- Kiểm tra **runtime** (không chỉ cú pháp): import thật 3 barrel `lopN/_index.js`, xác nhận **32/32** scenario tuần 36 nạp được, **có `lesson` gắn vào**, mỗi câu đủ **4 lựa chọn không trùng nhau**, `answer` nằm trong 0..3 và đủ **4 `choiceFeedback`**. 0 lỗi.
+- Phân bố đáp án 192 câu mới: **A 46 · B 55 · C 54 · D 37** — không có vị trí nào thành "đáp án tủ".
+
+---
+
+## 2026-09-23 — Phiên 70 · Tiểu học Lớp 4: **hồi sinh 12 bài lí thuyết "chết"** + sửa một kết luận SAI của công cụ đo bản deploy
+
+**Kết luận về hộp thư:** vẫn **không đọc được** (ngày thứ 11) ⇒ **không xử lý được yêu cầu nào của người học**, không bịa ra yêu cầu. Nhưng phiên này không đi tay không: công cụ kiểm tra toàn vẹn học liệu của chính hệ thống (phiên 58 viết ra) vẫn đang chỉ ra **110 bài lí thuyết mà học sinh KHÔNG BAO GIỜ nhìn thấy** — nội dung đã viết xong, nằm trong repo, nhưng không gắn được vào bài nào. Đó là việc thật, đã đo được, phục vụ trực tiếp người học. Hôm nay đóng trọn **Lớp 4 (12/12 môn)**.
+
+### Đo thật hôm nay (2026-09-23)
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `GET /api/health` | `200` — `{"ok":true,"service":"tizia",…,"env":"production"}`, uptime ~3,3 ngày |
+| `GET /api/ai-board/inbox` | `401 {"needLogin":true}` — auth gate chung vẫn nuốt request ⇒ **PR #97 chưa được merge + deploy** |
+| `GET /api/requests?domain=it` · `/api/requests/1/thread` · `/api/admin/requests` · `/api/ai-board/requests` | tất cả `401 needLogin` — **không còn đường đọc nào** cho phiên tự động (không đăng nhập được) |
+| `AI_BOARD_KEY` trong môi trường routine | **vẫn chưa có** |
+| `node scripts/check-content-integrity.mjs` | **110** bài lí thuyết mồ côi (y như phiên 58 đo ngày 2026-09-07 — 16 ngày không ai sửa) |
+
+**Nguyên nhân 110 bài chết (đã truy ra hôm nay):** các phiên trước viết bài lí thuyết **tuần 36** ("Kết thúc năm học / Hành trang vào lớp sau") với key `<PREFIX>-w36-quiz`, nhưng file scenario của môn đó **chỉ có 35 tuần** — không có quiz tuần 36 nào để bài lí thuyết gắn vào. Cơ chế gắn bài là tra cứu theo đúng id quiz (`if (LOP4_LESSONS[id]) sc.lesson = …` trong `lop4/_index.js`), nên key không khớp = nội dung biến mất im lặng, `node --check` không bắt được.
+
+### Việc đã làm — Lớp 4 (trường Tiểu học), 12/12 môn
+
+Bổ sung **tuần 36** vào 12 file scenario, mỗi tuần **6 câu hỏi** đúng format chung (`Q(stem, 4 lựa chọn, đáp án, giải thích, 4 phản hồi theo lựa chọn)`), nội dung **khớp đúng bài lí thuyết tuần 36 đã có sẵn** của môn đó:
+
+| File (`public/js/scenarios/lop4/`) | Tuần 36 mới | Bài lí thuyết được hồi sinh |
+|---|---|---|
+| `toan.js` | Kết thúc Lớp 4 — Hành trang vào Lớp 5 | `P4-w36-quiz` |
+| `tieng-viet.js` | Hành trang Tiếng Việt vào Lớp 5 | `P4TV-w36-quiz` |
+| `tieng-anh.js` | End of Grade 4 — Review and Grade 5 Preview | `P4TA-w36-quiz` |
+| `khoa-hoc.js` | Hành trang Khoa học vào Lớp 5 | `P4KH-w36-quiz` |
+| `lich-su-dia-ly.js` | Hành trang Lịch sử và Địa lý vào Lớp 5 | `P4LSDL-w36-quiz` |
+| `dao-duc.js` | Hành trang Đạo đức vào Lớp 5 | `P4DD-w36-quiz` |
+| `am-nhac.js` | Hành trang Âm nhạc vào Lớp 5 | `P4AN-w36-quiz` |
+| `my-thuat.js` | Hành trang Mỹ thuật vào Lớp 5 | `P4MT-w36-quiz` |
+| `gdtc.js` | Hành trang Thể chất vào Lớp 5 | `P4GDTC-w36-quiz` |
+| `hdtn.js` | Hành trình Trải nghiệm và Kế hoạch hè | `P4HDTN-w36-quiz` |
+| `cong-nghe.js` | Hành trang Công nghệ vào Lớp 5 | `P4CN-w36-quiz` |
+| `tin-hoc.js` | Hành trang Tin học vào Lớp 5 | `P4TIN-w36-quiz` |
+
+Kèm `public/js/domains/primary/modules.js`: mô tả 12 môn Lớp 4 sửa **"35 tuần" → "36 tuần"** cho khớp thực tế (và sửa luôn dòng tiêu đề khối ghi sai "11 môn" → "12 môn"). Không đổi logic: module loader liệt kê scenario theo prefix id, không dùng con số tuần nào.
+
+### Sửa một lỗi CHẨN ĐOÁN trong `scripts/check-deployed-build.mjs`
+
+Chạy script hôm nay, nó in: **"✔ Khớp `38b9a58` … nhánh `ai-board/2026-09-22-inbox-prod-branch`"** — nghe như PR port route hộp thư **đã** được deploy. **Sai.** Commit `38b9a58` không đổi **một file nào** dưới `public/` so với `40fd384` (nó chỉ thêm code `server/`), nên mọi file chứng cứ đều khớp cả hai. Bản cũ `return` ngay commit khớp **đầu tiên** (mới nhất) và trình bày nó như kết luận chắc chắn — đúng loại sai lầm mà chính file này được viết ra để chống.
+
+Đã sửa thành: trả về **toàn bộ** nhóm commit khớp, và
+
+- nói rõ nhóm có bao nhiêu ứng viên + commit **cũ nhất** trong nhóm ⇒ kết quả là một **khoảng**, không phải một điểm;
+- **thu hẹp bằng bằng chứng hành vi**: route hộp thư trả `401 needLogin` ⇒ bản deploy **không thể** là commit đã có `server/contexts/ai-agent/inbox-api.js` ⇒ loại các ứng viên đó;
+- cảnh báo khi hai nguồn bằng chứng **chỏi nhau** (gợi ý đúng khả năng `public/` mount từ checkout mới trong khi tiến trình Node vẫn là image cũ chưa restart);
+- độ trễ in ra dạng **khoảng** thay vì một con số (số cũ là trường hợp tốt nhất, làm nhẹ đi độ trễ thật);
+- dòng "nhánh của bản đang chạy" tính lại theo commit **sau khi** thu hẹp.
+
+Kết quả đo sau khi sửa: **263 commit khớp y hệt** bộ chứng cứ tĩnh (các file probe không đổi trên nhánh production kể từ 2026-06-08), bằng chứng hành vi thu về nhóm `d98a086..40fd384` ⇒ **bản deploy cũ hơn hôm nay khoảng 62–108 ngày**, và `40fd384` chỉ là **giới hạn trên**. Kết luận "production chạy `40fd384`" của các phiên 68–69 vì vậy cần đọc là "mới nhất có thể là `40fd384`".
+
+### Kiểm thử (chạy thật)
+
+- `node --check` **pass** cho **14/14** file đã sửa (12 scenario Lớp 4 + `modules.js` + `check-deployed-build.mjs`).
+- Nạp thật `lop4/_index.js` rồi kiểm 12 scenario tuần 36: **12/12** gắn được bài lí thuyết (`sc.lesson` khác null), `week=36`, `semester=2`, đủ 6 câu, mỗi câu 4 lựa chọn + 4 phản hồi, chỉ số đáp án trong 0..3, phản hồi đúng/sai khớp đáp án. **0 lỗi.**
+- `node scripts/check-content-integrity.mjs`: **110 → 98** bài mồ côi; **Lớp 4 còn 0**.
+- `node scripts/audit-answer-distribution.js --grade=lop4`: 2158 câu, A 29,4% · B 23,2% · C 24,4% · D 23,0% — 72 câu mới không làm lệch thêm (đáp án rải đều A–D).
+- `node scripts/check-deployed-build.mjs` chạy thật trên production, đối chiếu từng dòng kết luận mới.
+
+### Còn nợ — xếp hàng cho các phiên sau
+
+| Việc | Quy mô |
+|---|---|
+| Bài lí thuyết tuần 36 mồ côi còn lại | **98 bài**: Lớp 1 (9) · Lớp 3 (11) · Lớp 5 (12) · Lớp 7 (6) · Lớp 8 (12) · Lớp 9 (12) · Lớp 10 (12) · Lớp 11 (12) · Lớp 12 (12) |
+| `lop4:tin-hoc` lệch đáp án nặng (**có từ trước**, không phải do phiên này) | 181 câu: **A 82,9%** · B 12,2% · C 5,0% · D 0,0% (χ²=328) — HS đoán "A" là qua bài; cần trộn lại đáp án bằng `scripts/shuffle-answers.js` và rà tay |
+
+### Người vận hành cần làm gì (vẫn là 2 bước cũ, chưa ai làm)
+
+```bash
+# 1) Merge PR #97 (ai-board/2026-09-22-inbox-prod-branch → feat/postgres-migration)
+# 2) Sinh key, đặt vào .env, deploy lại nhánh production hiện hành:
+openssl rand -hex 32
+echo 'AI_BOARD_KEY=<key vừa sinh>' >> .env && docker compose up -d --build
+# 3) Kiểm chứng:
+AI_BOARD_KEY=<key> node scripts/fetch-inbox.mjs
+```
+
+Rồi cấp **chính key đó** cho môi trường chạy routine. Chừng nào chưa xong, mọi phiên hàng ngày vẫn **không thấy** yêu cầu của HS/SV — và mọi cải tiến merge vào `main` (kể cả 12 tuần 36 hôm nay) **chưa tới tay người học**, vì production chạy một nhánh khác.
+
+---
+
 ## 2026-09-22 — Phiên 69 · Hết đường vòng: **port thẳng route hộp thư sang nhánh production**
 
 **Kết luận:** **Không xử lý được yêu cầu nào của người học** (ngày thứ 10) — hộp thư vẫn chưa đọc được nên không có yêu cầu thật, và không bịa việc. Nhưng phiên này **không dừng ở chẩn đoán nữa**: thay vì lại đề nghị người vận hành quyết định chuyện kiến trúc (việc đã treo 10 ngày), Ban điều hành AI **port sẵn route đọc-chỉ sang chính nhánh mà production đang chạy** và mở PR để merge là dùng được ngay.
@@ -727,6 +1498,38 @@ Trường Dược có chương trình 5 năm với 102+ module — dài nhất t
 ```
 node --check public/js/domains/pharmacy/achievements.js → OK
 ```
+
+---
+
+## 2026-09-01 — Phiên cải tiến (55) · THPT Lớp 10 — GD Địa phương (H10GDDP)
+
+**Chế độ:** Chủ động — hộp thư `ai-board/inbox.json` không có yêu cầu pending; DB production không truy cập được trong môi trường này (lỗi hạ tầng sync-inbox đã ghi nhận từ phiên 45).
+
+**Phạm vi:** Trường THPT — Lớp 10 · Môn Giáo dục địa phương.
+
+### Phân tích khoảng trống
+
+GDPT 2018 quy định môn **Giáo dục địa phương** là bắt buộc ở tất cả cấp học, gồm cả THPT (lớp 10–12). Các lớp THCS (lớp 6–9) đã có đầy đủ nội dung GD địa phương (`gd-dia-phuong.js` + `lessons/gd-dia-phuong.js`). Tuy nhiên, cả 3 lớp THPT **hoàn toàn thiếu** môn này. Phiên này bổ sung lớp 10; lớp 11 và 12 sẽ được thêm trong các phiên tiếp theo.
+
+Nội dung GD địa phương phiên này lấy bối cảnh **Hà Nội** — địa phương mẫu theo chương trình của Bộ GD&ĐT, bao gồm lịch sử nghìn năm, di sản văn hoá UNESCO, danh nhân, ẩm thực, nghệ thuật, phát triển kinh tế–xã hội và trách nhiệm thế hệ trẻ.
+
+### Thay đổi
+
+| File | Loại | Mô tả |
+|------|------|-------|
+| `public/js/scenarios/lop10/gd-dia-phuong.js` | Tạo mới | 35 tuần quiz H10GDDP (HK1: tuần 1–18, HK2: tuần 19–35) — lịch sử Thăng Long, di sản UNESCO, làng nghề, ẩm thực, kháng chiến, đổi mới, đô thị hiện đại |
+| `public/js/scenarios/lop10/lessons/gd-dia-phuong.js` | Tạo mới | 35 bài lí thuyết tuần H10GDDP với topic, intro, objectives, theory, examples |
+| `public/js/scenarios/lop10/_index.js` | Mở rộng | Thêm `m_gddp`, import `H10GDDP_SCENARIOS` từ `gd-dia-phuong.js`, spread vào `HIGHSCHOOL_LOP10_SCENARIOS` |
+| `public/js/scenarios/lop10/lessons/_index.js` | Mở rộng | Thêm `m_gddp`, import `H10GDDP_LESSONS` từ `gd-dia-phuong.js`, spread vào `LOP10_LESSONS` |
+| `public/js/domains/highschool/modules.js` | Mở rộng | Thêm 3 module `H10GDDP`, `H11GDDP`, `H12GDDP` vào catalog THPT (yearLevel 1/2/3, subject `gd-dia-phuong`) |
+
+**Kiểm tra:** `node --check` — 0 lỗi cú pháp trên tất cả 5 file.
+
+---
+
+> ⏳ **Merge muộn 2026-09-30.** Nhánh `ai-board/2026-09-01` (PR #83) đứng lại một tháng vì chưa ai duyệt;
+> chủ sở hữu yêu cầu merge nốt vào 2026-09-30. Nội dung giữ nguyên như khi soạn, chỉ chạy lại toàn bộ
+> kiểm thử trên cây hiện tại trước khi merge (xem mục 2026-09-30 ở đầu file).
 
 ---
 

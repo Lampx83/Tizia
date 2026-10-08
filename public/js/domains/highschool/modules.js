@@ -115,6 +115,14 @@ export const MODULES = [
   M('H12GDQP', 'GD Quốc phòng - An ninh 12', 3, 'gdqp', 6, 'H11GDQP',
     'Truyền thống bảo vệ Tổ quốc · an ninh phi truyền thống (mạng, môi trường) · kỹ thuật chiến đấu bộ binh.'),
 
+  // ───────── GD Địa phương (bắt buộc theo GDPT 2018) ─────────
+  M('H10GDDP', 'GD Địa phương 10', 1, 'gd-dia-phuong', 0, null,
+    'Lịch sử–văn hoá–địa lí địa phương lớp 10: danh lam · di sản · danh nhân · lễ hội · phát triển kinh tế–xã hội của địa phương.'),
+  M('H11GDDP', 'GD Địa phương 11', 2, 'gd-dia-phuong', 3, 'H10GDDP',
+    'Lịch sử–văn hoá–địa lí địa phương lớp 11: tiếp nối nghiên cứu và thực hành về di sản và phát triển bền vững của địa phương.'),
+  M('H12GDDP', 'GD Địa phương 12', 3, 'gd-dia-phuong', 6, 'H11GDDP',
+    'Lịch sử–văn hoá–địa lí địa phương lớp 12: tổng hợp, dự án và định hướng đóng góp cho sự phát triển địa phương.'),
+
   // ───────── HĐ Trải nghiệm – Hướng nghiệp (bắt buộc) ─────────
   M('H10HDTN', 'HĐ Trải nghiệm 10', 1, 'htn', 0, null,
     'Khám phá bản thân · định hướng nghề · trải nghiệm xã hội · trách nhiệm công dân.'),

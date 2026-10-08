@@ -882,7 +882,7 @@ export const H10NV_LESSONS = {
     ],
   },
 
-  'H10VAN-w36-quiz': {
+  'H10NV-w36-quiz': {
     topic: 'Kết thúc Ngữ Văn 10 — Hành trang ngôn ngữ vào lớp 11',
     intro: 'Ngữ Văn 10 là năm đầu THPT — nơi em bắt đầu đọc văn học theo chiều sâu và rèn luyện tư duy viết độc lập. Hôm nay chúng ta nhìn lại hành trình đó, củng cố những kĩ năng cốt lõi và chuẩn bị cho những thách thức văn chương phong phú hơn ở lớp 11.',
     objectives: [

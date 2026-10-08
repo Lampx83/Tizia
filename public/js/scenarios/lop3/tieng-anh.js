@@ -333,6 +333,15 @@ export const P3TA_WEEKS = [
     Q('"What time is it?" – "It is 7 ___."', ['hour (giờ — danh từ thời lượng)', 'o\'clock', 'minute', 'half (rưỡi — dùng cho giờ rưỡi)'], 1, "It is 7 o'clock.", ['Sai — hour chỉ thời lượng, không dùng để nói giờ chẵn.', 'Đúng — It is 7 o\'clock (7 giờ).', 'Sai — minute là phút.', 'Sai — half dùng cho giờ rưỡi.']),
     Q('"My birthday is in ___." (tháng 9)', ['October', 'August', 'September', 'November'], 2, 'September = tháng 9.', ['Sai — October = tháng 10.', 'Sai — August = tháng 8.', 'Đúng — September = tháng 9.', 'Sai — November = tháng 11.']),
   ], { difficulty: 3 }),
+
+  M(36, 'End of Grade 3 — Ready for Grade 4!', [
+    Q('Câu nào giới thiệu tên mình ĐÚNG?', ['My name is An.', 'I name An.', 'My name An.', 'Name is me An.'], 0, 'Cấu trúc đúng: My name is + tên.', ['Đúng — "My name is An." là cách giới thiệu tên chuẩn.', 'Sai — thiếu động từ, phải là "My name is…".', 'Sai — thiếu động từ "is".', 'Sai — trật tự từ không đúng.']),
+    Q('"How old are you?" — câu trả lời đúng là?', ['I am from Hanoi.', 'I am nine years old.', 'My name is Nam.', 'I like rice.'], 1, 'How old…? hỏi về tuổi.', ['Sai — đó là câu trả lời cho "Where are you from?".', 'Đúng — câu hỏi về tuổi, trả lời "I am … years old."', 'Sai — đó là câu trả lời cho "What is your name?".', 'Sai — đó là câu nói về sở thích.']),
+    Q('Which word is a COLOUR?', ['ruler', 'desk', 'green', 'bread'], 2, 'Green = màu xanh lá.', ['Sai — ruler là cái thước (school things).', 'Sai — desk là cái bàn học (school things).', 'Đúng — green là màu xanh lá.', 'Sai — bread là bánh mì (food).']),
+    Q('"Where are you from?" nghĩa là gì?', ['Bạn bao nhiêu tuổi?', 'Bạn tên là gì?', 'Bạn thích gì?', 'Bạn đến từ đâu?'], 3, 'Where…from? hỏi về quê quán, nơi ở.', ['Sai — hỏi tuổi là "How old are you?".', 'Sai — hỏi tên là "What is your name?".', 'Sai — hỏi sở thích là "What do you like?".', 'Đúng — "Where are you from?" là hỏi bạn đến từ đâu.']),
+    Q('Câu nào nói rằng em KHÔNG thích sữa?', ['I like milk.', 'I don\'t like milk.', 'I am milk.', 'Milk is I.'], 1, 'Phủ định: I don\'t like + danh từ.', ['Sai — câu này nghĩa là em THÍCH sữa.', 'Đúng — "I don\'t like milk." là em không thích sữa.', 'Sai — câu này sai nghĩa hoàn toàn.', 'Sai — trật tự từ không đúng.']),
+    Q('Ở Lớp 4 em sẽ học thì hiện tại tiếp diễn, ví dụ:', ['I play football.', 'I played football.', 'I am playing football.', 'I will football.'], 2, 'Hiện tại tiếp diễn: am/is/are + V-ing.', ['Sai — đó là thì hiện tại đơn.', 'Sai — đó là thì quá khứ đơn.', 'Đúng — "I am playing football." là hiện tại tiếp diễn.', 'Sai — câu này thiếu động từ chính.']),
+  ]),
 ];
 
 export const P3TA_SCENARIOS = indexBy(P3TA_WEEKS);
