@@ -131,6 +131,8 @@ def _plan_stage(task: dict, repo, deps: RecordingDeps, wall_s: int, variant: str
         if step.get("blocked"):
             facts.update(validator_blocked=True, validator_reason=facts["validator_reason"] or str(step.get("reason"))[:120],
                          validator_signals=facts.get("validator_signals") or [str(s)[:300] for s in (step.get("signals") or [])][:3],
+                         validator_note=facts.get("validator_note") or (str(step.get("public_message") or "")[:200]
+                                                                       or str(deps.ledger[-1].get("response", "") if deps.ledger else "")[:300]),
                          validator_quotes=facts.get("validator_quotes") or (_quote_diag(str(deps.ledger[-1].get("response", "")), repo, sha)
                                                                             if step.get("reason") == "plan_ungrounded" and deps.ledger else []))
             if not facts["approved"]:
