@@ -1,2 +1,2 @@
-// Compatibility export; implementation: services/post-merge-watch.js.
+// Compatibility export; async PostgreSQL.
 export * from './services/post-merge-watch.js';

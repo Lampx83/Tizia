@@ -63,7 +63,8 @@ export function createS3Backend({ endpoint, bucket, accessKey, secretKey, region
     const headers = { host: url.host, 'x-amz-content-sha256': payloadHash, 'x-amz-date': amzDate };
     if (contentType) headers['content-type'] = contentType;
     const names = Object.keys(headers).sort();
-    const canonical = [method, url.pathname, '', names.map((n) => `${n}:${headers[n]}\n`).join(''), names.join(';'), payloadHash].join('\n');
+    const query = [...url.searchParams].map(([k, v]) => [encodeURIComponent(k), encodeURIComponent(v)]).sort().map((kv) => kv.join('=')).join('&'); // SigV4 canonical query (list/versions cho script audit)
+    const canonical = [method, url.pathname, query, names.map((n) => `${n}:${headers[n]}\n`).join(''), names.join(';'), payloadHash].join('\n');
     const scope = `${day}/${region}/s3/aws4_request`;
     const toSign = ['AWS4-HMAC-SHA256', amzDate, scope, sha256(canonical)].join('\n');
     const signingKey = [day, region, 's3', 'aws4_request'].reduce((k, part) => hmac(k, part), `AWS4${secretKey}`);
@@ -75,6 +76,7 @@ export function createS3Backend({ endpoint, bucket, accessKey, secretKey, region
   const fail = async (op, res) => { throw new Error(`s3 ${op} ${res.status}: ${(await res.text()).slice(0, 200)}`); };
   return {
     kind: 's3',
+    request: call, // ký sẵn SigV4; scripts/audit-s3-objects.mjs dùng cho ListObjectsV2 / ListObjectVersions
     async put(key, buf) {
       if (!KEY_RE.test(key)) throw new Error('invalid screenshot key');
       let res = await call('PUT', objectPath(key), buf, 'image/png');
@@ -115,9 +117,12 @@ export function shotBackendFromEnv(env, uploadsDir) {
 /** Xoá ảnh nháp quá `days` ngày + gỡ khỏi attachments (tin nhắn giữ). days<=0 → null (tắt). Lỗi backend → giữ attachment, lần sau thử lại. */
 export async function purgeExpiredScreenshots(db, backend, { days, now = Date.now() }) {
   if (!(days > 0)) return null;
-  const rows = db.prepare(`SELECT id, attachments FROM request_messages
-    WHERE role='ai' AND created_at < ? AND attachments LIKE '%"screenshot"%'`).all(now - days * DAY_MS);
-  const update = db.prepare('UPDATE request_messages SET attachments=? WHERE id=?');
+  // db: better-sqlite3 handle (default backend) or the async contract (PostgreSQL): same two statements either way.
+  const q = typeof db.prepare === 'function'
+    ? { all: (sql, p) => db.prepare(sql).all(...p), run: (sql, p) => db.prepare(sql).run(...p) }
+    : db;
+  const rows = await q.all(`SELECT id, attachments FROM request_messages
+    WHERE role='ai' AND created_at < ? AND attachments LIKE '%"screenshot"%'`, [now - days * DAY_MS]);
   let messages = 0; let files = 0;
   for (const row of rows) {
     let list;
@@ -131,7 +136,7 @@ export async function purgeExpiredScreenshots(db, backend, { days, now = Date.no
       }
       keep.push(att);
     }
-    if (removed) { update.run(JSON.stringify(keep), row.id); messages++; files += removed; }
+    if (removed) { await q.run('UPDATE request_messages SET attachments=? WHERE id=?', [JSON.stringify(keep), row.id]); messages++; files += removed; }
   }
   return { messages, files };
 }

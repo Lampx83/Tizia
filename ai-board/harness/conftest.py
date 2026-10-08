@@ -52,10 +52,29 @@ def inbox_file(tmp_path, request_item):
     return p
 
 
+def connect(dsn, dict_rows=False):
+    """Kết nối psycopg thẳng cho test seed/đọc (caller tự close)."""
+    import psycopg
+    from psycopg.rows import dict_row
+    return psycopg.connect(dsn, **({"row_factory": dict_row} if dict_rows else {}))
+
+
 @pytest.fixture
-def db_file(tmp_path):
-    """DB tạm — không bao giờ chạm data/tizia.db thật."""
-    return tmp_path / "tizia-test.db"
+def db_file():
+    """DSN PostgreSQL tạm: schema riêng mỗi test trên TEST_PG_URL (container vứt đi), drop sau test.
+    Không có TEST_PG_URL → skip. Tên `db_file` giữ từ thời SQLite."""
+    import os
+    import secrets
+    import psycopg
+    from psycopg.conninfo import make_conninfo
+    base = os.environ.get("TEST_PG_URL")
+    if not base:
+        pytest.skip("TEST_PG_URL chưa đặt (cần PostgreSQL vứt đi)")
+    schema = f"h_{secrets.token_hex(6)}"
+    with psycopg.connect(base, autocommit=True) as admin:
+        admin.execute(f"CREATE SCHEMA {schema}")
+        yield make_conninfo(base, options=f"-c search_path={schema}")
+        admin.execute(f"DROP SCHEMA {schema} CASCADE")
 
 
 class FakeModels:

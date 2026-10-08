@@ -1,29 +1,28 @@
 """Cổng 2.5 (plan_validate.py) — soát plan (Q1) + phân quyền độ
 phức tạp (Q2) trước khi cổng 3 tiêu ngân sách."""
-import sqlite3
 import time
 
 import pytest
 
 from budget import Budget
-from conftest import FakeModels, deps_with, plan_with
+from conftest import FakeModels, connect, deps_with, plan_with
 from gates import plan_validate
 from main import load_inbox, run_once
 
 
 def _seed_user(db_path, *, display_name, role="student", domain_grant=None):
-    con = sqlite3.connect(str(db_path))
+    con = connect(db_path)
     try:
-        con.executescript(plan_validate._SCHEMA_DDL)
+        con.execute(plan_validate._SCHEMA_DDL)
         now = int(time.time() * 1000)
         cur = con.execute(
-            "INSERT INTO users (username, display_name, password_hash, role, created_at) VALUES (?, ?, 'x', ?, ?)",
+            "INSERT INTO users (username, display_name, password_hash, role, created_at) VALUES (%s, %s, 'x', %s, %s) RETURNING id",
             (display_name.lower().replace(" ", "."), display_name, role, now),
         )
-        user_id = cur.lastrowid
+        user_id = cur.fetchone()[0]
         if domain_grant:
             con.execute(
-                "INSERT INTO user_domain_grants (user_id, domain_id, granted_at) VALUES (?, ?, ?)",
+                "INSERT INTO user_domain_grants (user_id, domain_id, granted_at) VALUES (%s, %s, %s)",
                 (user_id, domain_grant, now),
             )
         con.commit()
@@ -35,13 +34,13 @@ def _seed_user(db_path, *, display_name, role="student", domain_grant=None):
 def _seed_request_row(db_path, *, req_id, domain, student):
     """requests.id thật (khác id string của inbox item) — cần cho
     write_clarification()/request_messages join đúng bảng."""
-    con = sqlite3.connect(str(db_path))
+    con = connect(db_path)
     try:
-        con.executescript(plan_validate._SCHEMA_DDL)
+        con.execute(plan_validate._SCHEMA_DDL)
         now = int(time.time() * 1000)
         con.execute(
             """INSERT INTO requests (id, domain, title, student, created_at, updated_at)
-               VALUES (?, ?, 'x', ?, ?, ?)""",
+               VALUES (%s, %s, 'x', %s, %s, %s)""",
             (req_id, domain, student, now, now),
         )
         con.commit()
@@ -100,10 +99,10 @@ def test_unclear_plan_blocks_before_gate_3_and_writes_clarification(db_file, req
     # cổng 3 không được gọi: chỉ có lời gọi cổng 1 + cổng 2.5, không có subtask nào.
     assert len(models.calls) == 3  # intake + cổng 1 + cổng 2.5
 
-    con = sqlite3.connect(str(db_file))
+    con = connect(db_file)
     try:
         rows = con.execute(
-            "SELECT role, body FROM request_messages WHERE request_id = ?", (request_item["db_id"],)
+            "SELECT role, body FROM request_messages WHERE request_id = %s", (request_item["db_id"],)
         ).fetchall()
     finally:
         con.close()
@@ -183,10 +182,10 @@ def test_clarification_message_targets_correct_request_id(db_file, request_item)
 
     plan_validate.write_clarification(db_file, request_item, "Câu hỏi làm rõ")
 
-    con = sqlite3.connect(str(db_file))
+    con = connect(db_file)
     try:
-        mine = con.execute("SELECT body FROM request_messages WHERE request_id = ?", (request_item["db_id"],)).fetchall()
-        others = con.execute("SELECT body FROM request_messages WHERE request_id = ?", (other_id,)).fetchall()
+        mine = con.execute("SELECT body FROM request_messages WHERE request_id = %s", (request_item["db_id"],)).fetchall()
+        others = con.execute("SELECT body FROM request_messages WHERE request_id = %s", (other_id,)).fetchall()
     finally:
         con.close()
     assert mine == [("Câu hỏi làm rõ",)]

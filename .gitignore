@@ -39,3 +39,6 @@ ai-board/ai-log.md
 # Long-term memory của worker (bài học từ verdict), chỉ nằm trên máy worker.
 ai-board/memory/
 ai-board/sandbox-runner/secrets/
+
+# Local design metadata
+.impeccable

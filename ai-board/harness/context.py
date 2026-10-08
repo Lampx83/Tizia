@@ -1,3 +1,3 @@
-"""Compatibility entry point; implementation: services/context.py."""
+"""Compatibility canonical module."""
 from _compat import redirect
 redirect(__name__, 'services.context', cli=False)

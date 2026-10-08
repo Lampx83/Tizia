@@ -5,9 +5,9 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import fs from 'node:fs';
 import express from 'express';
-import Database from 'better-sqlite3';
 
-import { applyAiBoardMigrations, createAiBoardStore } from '../server/ai-board/store.js';
+import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
+import { openBoard } from './support/ai-board-db.js';
 import { attachAiBoardRequestRoutes } from '../server/ai-board/routes.js';
 import {
   CLASSIFIER, buildPrompt, classify, decideClarity, decideDanger, labelProbs,
@@ -77,24 +77,10 @@ test('student text cannot close the data fence', () => {
   assert.equal(prompt.split('NOI_DUNG>>>').length, 2);
 });
 
-function fixtureDb() {
-  const db = new Database(':memory:');
-  db.pragma('foreign_keys = ON');
-  db.exec(`
-    CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, display_name TEXT, role TEXT, enrolled_domain TEXT);
-    INSERT INTO users VALUES (1, 'lan', 'Lan', 'student', 'pharmacy');
-    CREATE TABLE requests (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'other',
-      title TEXT NOT NULL, detail TEXT, student TEXT NOT NULL DEFAULT 'x',
-      status TEXT NOT NULL DEFAULT 'pending', votes INTEGER NOT NULL DEFAULT 1, admin_note TEXT,
-      created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, attachments TEXT
-    );
-    CREATE TABLE request_messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, request_id INTEGER NOT NULL, role TEXT NOT NULL,
-      author_name TEXT, body TEXT NOT NULL, attachments TEXT, created_at INTEGER NOT NULL
-    );
-  `);
-  applyAiBoardMigrations(db);
+async function fixtureDb() {
+  const db = await openBoard({ users: [
+    [1, 'lan', 'Lan', 'student', 'pharmacy'],
+  ] });
   return db;
 }
 
@@ -107,7 +93,7 @@ async function serve(db, classifyRequest) {
   });
   const pass = (_req, _res, next) => next();
   attachAiBoardRequestRoutes(app, {
-    store: createAiBoardStore(db), db, classifyRequest,
+    store: createAsyncAiBoardStore(db.d), db: db.d, classifyRequest,
     requireAuth: pass, requireEnrolled: pass, requireAdmin: pass, requireStrictCsrf: pass,
   });
   const server = http.createServer(app);
@@ -122,7 +108,7 @@ async function serve(db, classifyRequest) {
 const result = (clarity, danger) => ({ model: 'qwen3.5:4b', clarity, danger });
 
 test('a vague request is marked for clarification; a safe clear one is not sent to review', async () => {
-  const db = fixtureDb();
+  const db = await fixtureDb();
   const replies = [
     result({ probs: { clear: 0.4, vague: 0.55, too_broad: 0.05 }, ...decideClarity({ clear: 0.4, vague: 0.55, too_broad: 0.05 }) },
       { probs: { safe: 0.95 }, ...decideDanger({ safe: 0.95 }) }),
@@ -136,9 +122,9 @@ test('a vague request is marked for clarification; a safe clear one is not sent 
     assert.deepEqual(vague.json.clarify, { needed: true, mode: 'ask' });
     const clear = await app.post('classifier-req-002', { title: 'Đổi màu nút Gửi', detail: 'trang giới thiệu, nút xanh' });
     assert.equal(clear.json.clarify.needed, false);
-    const tags = db.prepare("SELECT tag FROM ai_ticket_tags WHERE tag='guard:human_review'").all();
+    const tags = await db.prepare("SELECT tag FROM ai_ticket_tags WHERE tag='guard:human_review'").all();
     assert.equal(tags.length, 0);
-    const events = db.prepare("SELECT internal_detail FROM ai_events WHERE event_type='request_classified'").all();
+    const events = await db.prepare("SELECT internal_detail FROM ai_events WHERE event_type='request_classified'").all();
     assert.equal(events.length, 2);
     assert.equal(JSON.parse(events[0].internal_detail).model, 'qwen3.5:4b');
   } finally {
@@ -147,14 +133,14 @@ test('a vague request is marked for clarification; a safe clear one is not sent 
 });
 
 test('the model adds human review but never blocks; hard rules still block; outages change nothing', async () => {
-  const db = fixtureDb();
+  const db = await fixtureDb();
   const risky = decideDanger({ safe: 0.1, politics_religion: 0.8 });
   const replies = [result(null, { probs: { safe: 0.1, politics_religion: 0.8 }, ...risky }), null];
   const app = await serve(db, async () => replies.shift());
   try {
     const flagged = await app.post('classifier-req-003', { title: 'Thêm bài', detail: 'bài lịch sử' });
     assert.equal(flagged.status, 200);
-    const tags = db.prepare('SELECT tag FROM ai_ticket_tags ORDER BY tag').all().map((r) => r.tag);
+    const tags = (await db.prepare('SELECT tag FROM ai_ticket_tags ORDER BY tag').all()).map((r) => r.tag);
     assert.ok(tags.includes('guard:human_review') && tags.includes('guard:model_politics_religion'));
     const blocked = await app.post('classifier-req-004', { title: 'x', detail: 'dit me cai trang' });
     assert.equal(blocked.status, 422);
@@ -168,7 +154,7 @@ test('the model adds human review but never blocks; hard rules still block; outa
 });
 
 test('hard rules clarify without a model; shadow model results are logged but never act', async () => {
-  const db = fixtureDb();
+  const db = await fixtureDb();
   const shadowVague = { probs: { clear: 0.1, vague: 0.9 }, ...decideClarity({ clear: 0.1, vague: 0.9, too_broad: 0 }), shadow: true };
   const shadowRisky = { probs: { safe: 0.1, sexual: 0.9 }, ...decideDanger({ safe: 0.1, sexual: 0.9 }), shadow: true };
   const replies = [null, result(shadowVague, shadowRisky)];
@@ -178,10 +164,10 @@ test('hard rules clarify without a model; shadow model results are logged but ne
     assert.deepEqual(broad.json.clarify, { needed: true, mode: 'split' });
     const clear = await app.post('classifier-req-102', { title: 'Đổi màu nút Gửi trang giới thiệu sang xanh #2563eb', detail: '' });
     assert.equal(clear.json.clarify.needed, false);
-    const tags = db.prepare('SELECT tag FROM ai_ticket_tags').all().map((r) => r.tag);
+    const tags = (await db.prepare('SELECT tag FROM ai_ticket_tags').all()).map((r) => r.tag);
     assert.ok(!tags.includes('guard:human_review'));
-    const events = db.prepare("SELECT internal_detail FROM ai_events WHERE event_type='request_classified' ORDER BY id")
-      .all().map((r) => JSON.parse(r.internal_detail));
+    const events = (await db.prepare("SELECT internal_detail FROM ai_events WHERE event_type='request_classified' ORDER BY id")
+      .all()).map((r) => JSON.parse(r.internal_detail));
     assert.deepEqual(events[0].clarify.source, ['rules']);
     assert.equal(events[1].clarity.shadow, true); // kept for calibration
     assert.deepEqual(events[1].clarify.source, []);

@@ -188,7 +188,7 @@ def package(checkout: Path, state: dict, base_pages: dict[str, bytes]) -> bytes:
 
 def _base_pages(state: dict, checkout: Path) -> dict[str, bytes]:
     """Base versions of changed public pages, read worker-side (.git stays here)."""
-    from repositories import code_index
+    import code_index
 
     base_sha = state.get("base_sha")
     pages: dict[str, bytes] = {}

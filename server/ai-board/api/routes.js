@@ -1,17 +1,13 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import express from 'express';
-import { ADMIN_REQUEST_STATUSES, assertConfirmed, LEASE_MS, LIMITS, PlanGuardrailError, RequestValidationError, WorkerContractError } from '../repositories/store.js';
-import { afterVerdict, retryRequest, retryState, saveDraftScreenshots, SHOTS_BODY_LIMIT, SHOTS_TYPE } from '../services/drafts.js';
-import { checkIntake, readOnlyVerificationText, recordIntakeFlags, recordIntakeRejection } from '../security/intake-guard.js';
-import { classifyRequest as classifyWithModel, recordClassification } from '../security/classifier.js';
+import { ADMIN_REQUEST_STATUSES, assertConfirmed, LEASE_MS, LIMITS, PlanGuardrailError, RequestValidationError, WorkerContractError } from '../repositories/store-contract.js';
+import { SHOTS_BODY_LIMIT, SHOTS_TYPE } from '../services/drafts.js';
+import * as asyncAux from '../services/aux-service.js';
+import { asyncRoutes } from './async-routes.js';
+import { checkIntake, readOnlyVerificationText } from '../security/intake-guard.js';
+import { classifyRequest as classifyWithModel } from '../security/classifier.js';
 import { clarifyFromPhase, resolveClarify } from '../services/clarity-rules.js';
 import { activeChats } from '../services/chat-activity.js';
-import { deleteEvalTask, evalTaskSplit, labelEvalTask, listEvalTasks, openPullRequests, recordMiss, recordRequestMiss,
-  reportPullRequest } from '../services/eval-tasks.js';
-import { listNights, recordSelfVerdict, reportNight, setSelfImproveEnabled, startNight } from '../services/self-improve.js';
-import { pendingFrozenMeasurements, recordFrozenMeasurement } from '../services/frozen-benchmark.js';
-import { checkPostMergeWatch, pendingPostMergeWatch } from '../services/post-merge-watch.js';
-import { listTransientBlocked, retryTransientTicket, setTransientRetryEnabled, transientRetryState } from '../services/transient-retry.js';
 import { guardModelText, MAX_QUESTIONS } from '../../contexts/ai-board-intake/clarify.js';
 
 // Không cấu hình model phân loại → không gọi gì (không phân loại).
@@ -31,15 +27,17 @@ export function attachAiBoardRequestRoutes(router, {
   classifyRequest = defaultClassifyRequest, // (title, detail) → {model, clarity, danger} | null
   needsProfile = () => false, // (user) → true while the onboarding is unanswered (admin never)
   onClarify = null, // ({requestId, domain, title, student}) when a new request waits for clarification (bell)
+  aux = asyncAux, // helper modules (aux-async.js)
 }) {
-  router.post('/api/requests', requireAuth, requireEnrolled, async (req, res, next) => {
+  const route = asyncRoutes(router);
+  route.post('/api/requests', requireAuth, requireEnrolled, async (req, res, next) => {
     const body = req.body || {};
     // Yêu cầu board tự sửa chỉ hệ thống tạo (POST /api/ai-board/worker/self-requests), không bao giờ từ FAB.
     if (body.type === 'self') return res.status(400).json({ error: 'invalid_request', message: 'Loại yêu cầu không hợp lệ.' });
     // Onboarding / làm rõ chỉ bật cho client có giao diện cho chúng (FAB public/ gửi header này). Client cũ
     // (FAB React web-next trên prod) vẫn gửi như trước: không 428, không kẹt ở phase clarifying.
     const features = new Set(String(req.get('X-AI-Board-Features') || '').split(',').map((f) => f.trim()));
-    if (features.has('onboarding') && needsProfile(req.user)) {
+    if (features.has('onboarding') && await needsProfile(req.user)) {
       return res.status(428).json({ error: 'profile_required', message: 'Trả lời 3 câu giới thiệu trước khi gửi yêu cầu.' });
     }
     const ownerDomain = req.user.role === 'admin'
@@ -47,12 +45,12 @@ export function attachAiBoardRequestRoutes(router, {
       : req.user.enrolled_domain;
     const intake = checkIntake(body.title, body.detail);
     if (intake.block) {
-      try { recordIntakeRejection(db, req.user.id, intake); } catch (error) { return next(error); }
+      try { await aux.recordIntakeRejection(db, req.user.id, intake); } catch (error) { return next(error); }
       return res.status(422).json({ error: 'request_rejected', message: intake.message });
     }
     // Mỗi người tối đa N yêu cầu đang chờ (contract.json limits): 1 người không lấp hàng đợi cả trường.
     const pendingCap = LIMITS.pending_roots_per_user.value;
-    if (req.user.role !== 'admin' && store.countPendingRoots(req.user.id, req.get('Idempotency-Key')) >= pendingCap) {
+    if (req.user.role !== 'admin' && await store.countPendingRoots(req.user.id, req.get('Idempotency-Key')) >= pendingCap) {
       return res.status(429).json({ error: 'too_many_pending',
         message: `Bạn đang có ${pendingCap} yêu cầu chờ Ban xử lý. Đợi một yêu cầu xong rồi gửi tiếp nhé!` });
     }
@@ -73,7 +71,7 @@ export function attachAiBoardRequestRoutes(router, {
     const { rules } = decision;
     const trace = classified || rules.needed ? { ...classified, rules, clarify: { ...clarify, source: decision.source } } : null;
     try {
-      const result = store.createRequestWithRoot({
+      const result = await store.createRequestWithRoot({
         ownerUserId: req.user.id,
         ownerDomain,
         ownerDisplayName: req.user.display_name || req.user.username,
@@ -86,11 +84,11 @@ export function attachAiBoardRequestRoutes(router, {
         clarifying: clarify.needed,
       });
       if (result.created) {
-        recordIntakeFlags(db, result.root_ticket_id, [...intake.labels, ...modelLabels]);
-        recordClassification(db, result.root_ticket_id, trace);
+        await aux.recordIntakeFlags(db, result.root_ticket_id, [...intake.labels, ...modelLabels]);
+        await aux.recordClassification(db, result.root_ticket_id, trace);
         if (clarify.needed && onClarify) {
           try {
-            onClarify({ requestId: result.request_id, domain: ownerDomain, title: String(body.title || '').trim(),
+            await onClarify({ requestId: result.request_id, domain: ownerDomain, title: String(body.title || '').trim(),
               student: req.user.display_name || req.user.username });
           } catch (error) {
             console.warn('[ai-board] clarify notification failed:', error.message);
@@ -98,13 +96,13 @@ export function attachAiBoardRequestRoutes(router, {
         }
       } else {
         // Gửi lại cùng Idempotency-Key: trả đúng trạng thái đã tạo lần đầu, không theo lần phân loại này.
-        const phase = store.db.prepare('SELECT phase FROM ai_tickets WHERE id=?').get(result.root_ticket_id)?.phase;
+        const phase = (await store.queryGet('SELECT phase FROM ai_tickets WHERE id=?', [result.root_ticket_id]))?.phase;
         clarify = clarifyFromPhase(phase);
       }
       res.json({ ok: true, ...result, id: result.request_id, createdAt: Date.now(), clarify });
       if (result.created && onCreated) {
         try {
-          onCreated({
+          await onCreated({
             requestId: result.request_id,
             domain: ownerDomain,
             title: String(body.title || '').trim(),
@@ -122,43 +120,42 @@ export function attachAiBoardRequestRoutes(router, {
     }
   });
 
-  router.get('/api/requests', requireAuth, (req, res) => {
+  route.get('/api/requests', requireAuth, async (req, res) => {
     const domain = String(req.query.domain || req.user.enrolled_domain || '').trim();
     if (!domain) return res.status(400).json({ error: 'domain required' });
-    const items = store.listRequestsForOwner(req.user.id, domain, req.query.limit)
-      .map((item) => ({ ...item, retry: retryState(store.db, item.root_ticket_id, item.phase) }));
+    const items = [];
+    for (const item of await store.listRequestsForOwner(req.user.id, domain, req.query.limit)) {
+      items.push({ ...item, retry: await aux.retryState(store.db, item.root_ticket_id, item.phase) });
+    }
     const stats = {};
     for (const item of items) stats[item.status] = (stats[item.status] || 0) + 1;
     res.json({ items, stats });
   });
 
-  router.post('/api/requests/:id/cancel', requireAuth, requireStrictCsrf, async (req, res, next) => {
+  route.post('/api/requests/:id/cancel', requireAuth, requireStrictCsrf, async (req, res) => {
     try {
-      const cancelled = await store.cancelRequest(req.params.id, { ownerUserId: req.user.id });
+      const cancelled=await store.cancelRequest(req.params.id, { ownerUserId:req.user.id });
       let previewCleanup;
-      if (onCancelled) {
-        try { previewCleanup = await onCancelled(Number(req.params.id), req.user); }
-        catch { previewCleanup = { confirmed: false }; }
-      }
-      res.json({ ...cancelled, ...(previewCleanup ? { preview_cleanup: previewCleanup } : {}) });
+      if(onCancelled){try{previewCleanup=await onCancelled(Number(req.params.id),req.user);}catch{previewCleanup={confirmed:false};}}
+      res.json({...cancelled,...(previewCleanup?{preview_cleanup:previewCleanup}:{})});
     } catch (error) {
       if (error instanceof WorkerContractError) {
         return res.status(error.status).json({ error: error.code, message: error.message });
       }
-      next(error);
+      throw error;
     }
   });
 
   // "Thử cách khác": lượt hỏng của chính mình → lập plan mới; hỏng 2 lượt liền thì chờ admin.
-  router.post('/api/requests/:id/retry', requireAuth, requireStrictCsrf, (req, res) => {
+  route.post('/api/requests/:id/retry', requireAuth, requireStrictCsrf, async (req, res) => {
     const pendingCap = LIMITS.pending_roots_per_user.value;
-    if (req.user.role !== 'admin' && store.countPendingRoots(req.user.id) >= pendingCap) {
+    if (req.user.role !== 'admin' && await store.countPendingRoots(req.user.id) >= pendingCap) {
       return res.status(429).json({ error: 'too_many_pending',
         message: `Bạn đang có ${pendingCap} yêu cầu chờ Ban xử lý. Đợi một yêu cầu xong rồi thử lại nhé!` });
     }
     try {
-      const result = retryRequest(store, req.params.id, req.user.id);
-      recordRequestMiss(store.db, req.params.id, 'retry');
+      const result = await aux.retryRequest(store, req.params.id, req.user.id);
+      await aux.recordRequestMiss(store.db, req.params.id, 'retry');
       res.json(result);
     } catch (error) {
       if (error instanceof WorkerContractError) {
@@ -168,7 +165,7 @@ export function attachAiBoardRequestRoutes(router, {
     }
   });
 
-  router.post('/api/requests/:id/status', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
+  route.post('/api/requests/:id/status', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
     const status = String(req.body?.status || '');
     // Hủy = đóng root, không mở lại được: bắt gõ đúng số yêu cầu như hoàn tác.
     if (status === 'rejected') {
@@ -177,7 +174,7 @@ export function attachAiBoardRequestRoutes(router, {
       }
     }
     const ok = ADMIN_REQUEST_STATUSES.has(status)
-      && (status === 'rejected' ? store.rejectRequest : store.noteRequest)(req.params.id, req.body?.note, req.user.id);
+      && await (status === 'rejected' ? store.rejectRequest : store.noteRequest)(req.params.id, req.body?.note, req.user.id);
     if (!ok) return res.status(400).json({ error: 'invalid_status_or_request' });
     res.json({ ok: true });
   });
@@ -187,54 +184,54 @@ export function attachAiBoardRequestRoutes(router, {
     if (error instanceof WorkerContractError) return res.status(error.status).json({ error: error.code, message: error.message });
     throw error;
   };
-  router.get('/api/ai-board/folders', requireAuth, (req, res) => {
+  route.get('/api/ai-board/folders', requireAuth, async (req, res) => {
     const domain = String(req.query.domain || req.user.enrolled_domain || '').trim();
     if (!domain) return res.status(400).json({ error: 'domain required' });
-    res.json(store.listFolders(req.user.id, domain));
+    res.json(await store.listFolders(req.user.id, domain));
   });
-  router.post('/api/ai-board/folders/:id/vote', requireAuth, requireStrictCsrf, (req, res) => {
-    try { res.json(store.voteFolder(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
+  route.post('/api/ai-board/folders/:id/vote', requireAuth, requireStrictCsrf, async (req, res) => {
+    try { res.json(await store.voteFolder(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
   });
-  router.delete('/api/ai-board/folders/:id/vote', requireAuth, requireStrictCsrf, (req, res) => {
-    try { res.json(store.unvoteFolder(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
+  route.delete('/api/ai-board/folders/:id/vote', requireAuth, requireStrictCsrf, async (req, res) => {
+    try { res.json(await store.unvoteFolder(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
   });
-  router.post('/api/ai-board/folders/:id/archive', requireAuth, requireStrictCsrf, (req, res) => {
-    try { res.json(store.archiveFolder(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
+  route.post('/api/ai-board/folders/:id/archive', requireAuth, requireStrictCsrf, async (req, res) => {
+    try { res.json(await store.archiveFolder(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
   });
-  router.post('/api/ai-board/folders/:id/reopen', requireAuth, requireStrictCsrf, (req, res) => {
-    try { res.json(store.reopenFolder(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
+  route.post('/api/ai-board/folders/:id/reopen', requireAuth, requireStrictCsrf, async (req, res) => {
+    try { res.json(await store.reopenFolder(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
   });
-  router.post('/api/ai-board/folders/:id/done', requireAuth, requireStrictCsrf, (req, res) => {
-    try { res.json(store.markFolderDone(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
+  route.post('/api/ai-board/folders/:id/done', requireAuth, requireStrictCsrf, async (req, res) => {
+    try { res.json(await store.markFolderDone(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
   });
-  router.post('/api/admin/ai-board/folders/:id/released', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
-    try { res.json(store.markFolderReleased(req.params.id)); } catch (error) { folderError(res, error); }
+  route.post('/api/admin/ai-board/folders/:id/released', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
+    try { res.json(await store.markFolderReleased(req.params.id)); } catch (error) { folderError(res, error); }
   });
-  router.get('/api/admin/ai-board/folders', requireAuth, requireAdmin, (req, res) => {
-    res.json({ folders: store.listAdminFolders(req.query.limit) });
+  route.get('/api/admin/ai-board/folders', requireAuth, requireAdmin, async (req, res) => {
+    res.json({ folders: await store.listAdminFolders(req.query.limit) });
   });
-  router.post('/api/admin/ai-board/folders/:id/approve', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
-    try { res.json(store.approveFolder(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
+  route.post('/api/admin/ai-board/folders/:id/approve', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
+    try { res.json(await store.approveFolder(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
   });
-  router.post('/api/admin/ai-board/folders/:id/revoke', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
-    try { res.json(store.revokeFolder(req.params.id)); } catch (error) { folderError(res, error); }
-  });
-
-  router.get('/api/admin/ai-board/queue', requireAuth, requireAdmin, (req, res) => {
-    res.json({ tickets: store.listAdminQueue(req.query.limit), workers: store.listWorkers(),
-      intake_rejections: store.db.prepare(`SELECT id, created_at, public_message, internal_detail FROM ai_alerts
-        WHERE category='intake_rejected' ORDER BY id DESC LIMIT 50`).all() });
+  route.post('/api/admin/ai-board/folders/:id/revoke', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
+    try { res.json(await store.revokeFolder(req.params.id)); } catch (error) { folderError(res, error); }
   });
 
-  router.get('/api/admin/ai-board/requests/:requestId/trace', requireAuth, requireAdmin, (req, res) => {
-    const trace = store.getRequestTrace(req.params.requestId);
+  route.get('/api/admin/ai-board/queue', requireAuth, requireAdmin, async (req, res) => {
+    res.json({ tickets: await store.listAdminQueue(req.query.limit), workers: await store.listWorkers(),
+      intake_rejections: await store.queryAll(`SELECT id, created_at, public_message, internal_detail FROM ai_alerts
+        WHERE category='intake_rejected' ORDER BY id DESC LIMIT 50`) });
+  });
+
+  route.get('/api/admin/ai-board/requests/:requestId/trace', requireAuth, requireAdmin, async (req, res) => {
+    const trace = await store.getRequestTrace(req.params.requestId);
     if (!trace) return res.status(404).json({ error: 'ticket_not_found' });
     res.json(trace);
   });
 
-  router.post('/api/admin/ai-board/tickets/:id/extend-budget', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
+  route.post('/api/admin/ai-board/tickets/:id/extend-budget', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
     try {
-      res.json(store.extendBudget(req.params.id, {
+      res.json(await store.extendBudget(req.params.id, {
         amount: req.body?.amount, reason: req.body?.reason, adminUserId: req.user.id,
       }));
     } catch (error) {
@@ -245,10 +242,10 @@ export function attachAiBoardRequestRoutes(router, {
     }
   });
 
-  router.post('/api/admin/ai-board/requests/:requestId/rollback', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
+  route.post('/api/admin/ai-board/requests/:requestId/rollback', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
     try {
-      const result = store.requestRollback(req.params.requestId, { adminUserId: req.user.id, confirm: req.body?.confirm });
-      recordRequestMiss(store.db, req.params.requestId, 'undo');
+      const result = await store.requestRollback(req.params.requestId, { adminUserId: req.user.id, confirm: req.body?.confirm });
+      await aux.recordRequestMiss(store.db, req.params.requestId, 'undo');
       res.json(result);
     } catch (error) {
       if (error instanceof WorkerContractError) {
@@ -259,38 +256,38 @@ export function attachAiBoardRequestRoutes(router, {
   });
 
   // ── Task eval từ lần hỏng ──
-  router.get('/api/admin/ai-board/eval-tasks', requireAuth, requireAdmin, (req, res) => {
-    try { res.json(listEvalTasks(store.db, req.query.status || undefined)); } catch (error) { folderError(res, error); }
+  route.get('/api/admin/ai-board/eval-tasks', requireAuth, requireAdmin, async (req, res) => {
+    try { res.json(await aux.listEvalTasks(store.db, req.query.status || undefined)); } catch (error) { folderError(res, error); }
   });
-  router.post('/api/admin/ai-board/eval-tasks/:id/label', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
-    try { res.json({ task: labelEvalTask(store.db, req.params.id, req.body || {}) }); } catch (error) { folderError(res, error); }
+  route.post('/api/admin/ai-board/eval-tasks/:id/label', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
+    try { res.json({ task: await aux.labelEvalTask(store.db, req.params.id, req.body || {}) }); } catch (error) { folderError(res, error); }
   });
-  router.delete('/api/admin/ai-board/eval-tasks/:id', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
-    try { res.json(deleteEvalTask(store.db, req.params.id)); } catch (error) { folderError(res, error); }
+  route.delete('/api/admin/ai-board/eval-tasks/:id', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
+    try { res.json(await aux.deleteEvalTask(store.db, req.params.id)); } catch (error) { folderError(res, error); }
   });
 
   // ── Vòng tự cải thiện ban đêm: công tắc + bảng các đêm, chỉ admin ──
-  router.get('/api/admin/ai-board/self-improve', requireAuth, requireAdmin, (_req, res) => {
-    res.json(listNights(store.db));
+  route.get('/api/admin/ai-board/self-improve', requireAuth, requireAdmin, async (_req, res) => {
+    res.json(await aux.listNights(store.db));
   });
-  router.post('/api/admin/ai-board/self-improve/switch', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
-    try { res.json(setSelfImproveEnabled(store.db, req.body?.enabled, req.user.id)); } catch (error) { folderError(res, error); }
+  route.post('/api/admin/ai-board/self-improve/switch', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
+    try { res.json(await aux.setSelfImproveEnabled(store.db, req.body?.enabled, req.user.id)); } catch (error) { folderError(res, error); }
   });
 
   // ── Tự chạy lại yêu cầu bị chặn do lỗi hạ tầng thoáng qua (mọi loại yêu cầu, không riêng self) ──
-  router.get('/api/admin/ai-board/transient-retry', requireAuth, requireAdmin, (_req, res) => {
-    res.json({ ...transientRetryState(store.db), blocked: listTransientBlocked(store.db) });
+  route.get('/api/admin/ai-board/transient-retry', requireAuth, requireAdmin, async (_req, res) => {
+    res.json({ ...(await aux.transientRetryState(store.db)), blocked: await aux.listTransientBlocked(store.db) });
   });
-  router.post('/api/admin/ai-board/transient-retry/switch', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
-    try { res.json(setTransientRetryEnabled(store.db, req.body?.enabled, req.user.id)); } catch (error) { folderError(res, error); }
+  route.post('/api/admin/ai-board/transient-retry/switch', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
+    try { res.json(await aux.setTransientRetryEnabled(store.db, req.body?.enabled, req.user.id)); } catch (error) { folderError(res, error); }
   });
-  router.post('/api/admin/ai-board/tickets/:id/retry-transient', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
-    try { res.json(retryTransientTicket(store.db, req.params.id)); } catch (error) { folderError(res, error); }
+  route.post('/api/admin/ai-board/tickets/:id/retry-transient', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
+    try { res.json(await aux.retryTransientTicket(store.db, req.params.id)); } catch (error) { folderError(res, error); }
   });
 
-  router.post('/api/admin/ai-board/tickets/:id/authorize-plan', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
+  route.post('/api/admin/ai-board/tickets/:id/authorize-plan', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
     try {
-      res.json(store.authorizePlan(req.params.id, req.body?.plan_hash, req.user.id));
+      res.json(await store.authorizePlan(req.params.id, req.body?.plan_hash, req.user.id));
     } catch (error) {
       if (error instanceof WorkerContractError) {
         return res.status(error.status).json({ error: error.code, message: error.message });
@@ -298,8 +295,8 @@ export function attachAiBoardRequestRoutes(router, {
       throw error;
     }
   });
-  router.post('/api/admin/ai-board/requests/:id/rerun-gate', requireAuth, requireAdmin, requireStrictCsrf, (req, res) => {
-    try { res.json(store.rerunGate(req.params.id, req.body?.gate, req.user.id)); }
+  route.post('/api/admin/ai-board/requests/:id/rerun-gate', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
+    try { res.json(await store.rerunGate(req.params.id, req.body?.gate, req.user.id)); }
     catch (error) { folderError(res, error); }
   });
 }
@@ -317,7 +314,9 @@ export function attachAiBoardWorkerRoutes(router, {
   onVerdict = null, // ({request_id, title, domain, student, kind}) sau mỗi verdict: chuông cho người gửi
   onSelfWin = null, // ({night, request_id}) biến thể tự cải thiện thắng eval: chuông cho admin
   onClarify = null, // ({requestId, title, domain, student}) khi Gate 2.5 cần người gửi làm rõ
+  aux = asyncAux, // PostgreSQL helpers, as in attachAiBoardRequestRoutes
 }) {
+  const route = asyncRoutes(router);
   const key = String(env.AI_BOARD_WORKER_KEY || '').trim();
   if (key.length < 24) return false;
   const expected = digest(key);
@@ -327,9 +326,9 @@ export function attachAiBoardWorkerRoutes(router, {
     if (!timingSafeEqual(digest(sent), expected)) return res.status(403).json({ error: 'forbidden' });
     next();
   };
-  const handle = (fn) => (req, res) => {
+  const handle = (fn) => async (req, res, next) => {
     try {
-      fn(req, res);
+      await fn(req, res);
     } catch (error) {
       if (error instanceof WorkerContractError) {
         return res.status(error.status).json({ error: error.code, message: error.message });
@@ -341,7 +340,7 @@ export function attachAiBoardWorkerRoutes(router, {
           detail: error.internalReason,
         });
       }
-      throw error;
+      next(error);
     }
   };
   const leaseInput = (body = {}) => ({
@@ -349,8 +348,8 @@ export function attachAiBoardWorkerRoutes(router, {
     leaseToken: String(body.lease_token || ''),
   });
 
-  router.post('/api/ai-board/worker/claim', authenticate, handle((req, res) => {
-    const ticket = store.claimNext({
+  route.post('/api/ai-board/worker/claim', authenticate, handle(async (req, res) => {
+    const ticket = await store.claimNext({
       workerId: req.body?.worker_id,
       version: req.body?.version,
       mode: req.body?.mode,
@@ -361,19 +360,19 @@ export function attachAiBoardWorkerRoutes(router, {
     res.json({ ticket, ...(!ticket && activeChats() > 0 ? { reason: 'yield_to_chat' } : {}) });
   }));
 
-  router.post('/api/ai-board/worker/tickets/:id/snapshot', authenticate, handle((req, res) => {
+  route.post('/api/ai-board/worker/tickets/:id/snapshot', authenticate, handle(async (req, res) => {
     const lease = leaseInput(req.body);
-    res.json(store.getLeasedSnapshot(req.params.id, lease.workerId, lease.leaseToken));
+    res.json(await store.getLeasedSnapshot(req.params.id, lease.workerId, lease.leaseToken));
   }));
 
-  router.post('/api/ai-board/worker/tickets/:id/heartbeat', authenticate, handle((req, res) => {
+  route.post('/api/ai-board/worker/tickets/:id/heartbeat', authenticate, handle(async (req, res) => {
     const lease = leaseInput(req.body);
-    res.json({ ok: true, ...store.heartbeat(req.params.id, lease.workerId, lease.leaseToken, { leaseMs }) });
+    res.json({ ok: true, ...await store.heartbeat(req.params.id, lease.workerId, lease.leaseToken, { leaseMs }) });
   }));
 
-  router.post('/api/ai-board/worker/tickets/:id/runs', authenticate, handle((req, res) => {
+  route.post('/api/ai-board/worker/tickets/:id/runs', authenticate, handle(async (req, res) => {
     const lease = leaseInput(req.body);
-    const run = store.createRun(req.params.id, {
+    const run = await store.createRun(req.params.id, {
       ...lease,
       trigger: req.body?.trigger,
       idempotencyKey: req.body?.idempotency_key,
@@ -381,9 +380,9 @@ export function attachAiBoardWorkerRoutes(router, {
     res.json({ run });
   }));
 
-  router.post('/api/ai-board/worker/tickets/:id/events', authenticate, handle((req, res) => {
+  route.post('/api/ai-board/worker/tickets/:id/events', authenticate, handle(async (req, res) => {
     const lease = leaseInput(req.body);
-    const event = store.recordWorkerEvent(req.params.id, {
+    const event = await store.recordWorkerEvent(req.params.id, {
       ...lease,
       runId: req.body?.run_id,
       eventType: req.body?.event_type,
@@ -396,28 +395,28 @@ export function attachAiBoardWorkerRoutes(router, {
     res.json({ event });
   }));
 
-  router.post('/api/ai-board/worker/tickets/:id/clarifications', authenticate, handle((req, res) => {
+  route.post('/api/ai-board/worker/tickets/:id/clarifications', authenticate, handle(async (req, res) => {
     const lease = leaseInput(req.body);
     const guarded = guardModelText(req.body?.question, 'question', 'ask');
-    const result = store.requestWorkerClarification(req.params.id, {
+    const result = await store.requestWorkerClarification(req.params.id, {
       ...lease, runId: req.body?.run_id, question: guarded.text,
       escalateReason: guarded.replaced ? `unsafe_model_question:${guarded.reason}` : '',
       maxQuestions: MAX_QUESTIONS, idempotencyKey: req.body?.idempotency_key,
     });
     res.json(result);
     if (result.status === 'clarifying' && !result.duplicate && onClarify) {
-      try { onClarify(result); } catch (error) { console.warn('[ai-board] clarification notification failed:', error.message); }
+      try { await onClarify(result); } catch (error) { console.warn('[ai-board] clarification notification failed:', error.message); }
     }
   }));
 
-  router.post('/api/ai-board/worker/tickets/:id/traces', authenticate, handle((req, res) => {
+  route.post('/api/ai-board/worker/tickets/:id/traces', authenticate, handle(async (req, res) => {
     const lease = leaseInput(req.body);
-    res.json(store.recordModelCalls(req.params.id, { ...lease, runId: req.body?.run_id, calls: req.body?.calls }));
+    res.json(await store.recordModelCalls(req.params.id, { ...lease, runId: req.body?.run_id, calls: req.body?.calls }));
   }));
 
-  router.post('/api/ai-board/worker/tickets/:id/plan', authenticate, handle((req, res) => {
+  route.post('/api/ai-board/worker/tickets/:id/plan', authenticate, handle(async (req, res) => {
     const lease = leaseInput(req.body);
-    const result = store.submitPlan(req.params.id, {
+    const result = await store.submitPlan(req.params.id, {
       ...lease,
       runId: req.body?.run_id,
       plan: req.body?.plan,
@@ -427,47 +426,47 @@ export function attachAiBoardWorkerRoutes(router, {
     res.json(result);
   }));
 
-  router.post('/api/ai-board/worker/tickets/:id/resume-plan', authenticate, handle((req, res) => {
+  route.post('/api/ai-board/worker/tickets/:id/resume-plan', authenticate, handle(async (req, res) => {
     const lease = leaseInput(req.body);
-    res.json(store.resumeAuthorizedPlan(req.params.id, { ...lease, runId: req.body?.run_id }));
+    res.json(await store.resumeAuthorizedPlan(req.params.id, { ...lease, runId: req.body?.run_id }));
   }));
 
-  router.post('/api/ai-board/worker/tickets/:id/rollback', authenticate, handle((req, res) => {
+  route.post('/api/ai-board/worker/tickets/:id/rollback', authenticate, handle(async (req, res) => {
     const lease = leaseInput(req.body);
-    res.json(store.submitRollback(req.params.id, {
+    res.json(await store.submitRollback(req.params.id, {
       ...lease, runId: req.body?.run_id, outcome: req.body?.outcome, revert: req.body?.revert, detail: req.body?.detail,
     }));
   }));
 
-  router.post('/api/ai-board/worker/tickets/:id/verdict', authenticate, handle((req, res) => {
+  route.post('/api/ai-board/worker/tickets/:id/verdict', authenticate, handle(async (req, res) => {
     const lease = leaseInput(req.body);
-    const verdict = store.submitPrePrVerdict(req.params.id, {
+    const verdict = await store.submitPrePrVerdict(req.params.id, {
       ...lease,
       runId: req.body?.run_id,
       verdict: req.body?.verdict,
       idempotencyKey: req.body?.idempotency_key,
     });
-    const notice = afterVerdict(store.db, req.params.id, verdict);
-    if (verdict.outcome === 'blocked') recordMiss(store.db, req.body.run_id, 'verdict_blocked');
-    const won = recordSelfVerdict(store.db, req.params.id, verdict);
+    const notice = await aux.afterVerdict(store.db, req.params.id, verdict);
+    if (verdict.outcome === 'blocked') await aux.recordMiss(store.db, req.body.run_id, 'verdict_blocked');
+    const won = await aux.recordSelfVerdict(store.db, req.params.id, verdict);
     res.json({ verdict });
     if (won && onSelfWin) {
-      try { onSelfWin(won); } catch (error) { console.warn('[ai-board] self win notification failed:', error.message); }
+      try { await onSelfWin(won); } catch (error) { console.warn('[ai-board] self win notification failed:', error.message); }
     }
     if (notice && onVerdict) {
-      try { onVerdict(notice); } catch (error) { console.warn('[ai-board] verdict notification failed:', error.message); }
+      try { await onVerdict(notice); } catch (error) { console.warn('[ai-board] verdict notification failed:', error.message); }
     }
   }));
 
   // Task eval đã gắn nhãn: server chia học / kiểm tra theo thời gian, worker không tự chia.
-  router.post('/api/ai-board/worker/eval-tasks', authenticate, handle((_req, res) => {
-    res.json(evalTaskSplit(store.db));
+  route.post('/api/ai-board/worker/eval-tasks', authenticate, handle(async (_req, res) => {
+    res.json(await aux.evalTaskSplit(store.db));
   }));
 
   // Board tự sửa: yêu cầu self, chủ là người dùng hệ thống ai-board; file ngoài vùng → 422.
-  router.post('/api/ai-board/worker/self-requests', authenticate, handle((req, res) => {
+  route.post('/api/ai-board/worker/self-requests', authenticate, handle(async (req, res) => {
     try {
-      res.json({ ok: true, ...store.createSelfRequest({ title: req.body?.title, detail: req.body?.detail,
+      res.json({ ok: true, ...await store.createSelfRequest({ title: req.body?.title, detail: req.body?.detail,
         targetFile: req.body?.target_file, idempotencyKey: req.body?.idempotency_key }) });
     } catch (error) {
       if (error instanceof RequestValidationError) return res.status(400).json({ error: 'invalid_request', message: error.message });
@@ -476,48 +475,48 @@ export function attachAiBoardWorkerRoutes(router, {
   }));
 
   // Vòng đêm: worker hỏi được chạy không (tạo dòng đêm), rồi ghi từng bước vào dòng đó.
-  router.post('/api/ai-board/worker/self-improve/night', authenticate, handle((req, res) => {
-    res.json(startNight(store.db, req.body?.night));
+  route.post('/api/ai-board/worker/self-improve/night', authenticate, handle(async (req, res) => {
+    res.json(await aux.startNight(store.db, req.body?.night));
   }));
-  router.post('/api/ai-board/worker/self-improve/night/report', authenticate, handle((req, res) => {
-    res.json({ night: reportNight(store.db, req.body) });
+  route.post('/api/ai-board/worker/self-improve/night/report', authenticate, handle(async (req, res) => {
+    res.json({ night: await aux.reportNight(store.db, req.body) });
   }));
 
   // Bộ đánh giá đóng băng: self PR đã merge còn cần đo, đo cùng bộ task đóng băng hiện
   // có; ghi lại đúng 1 lần điểm đo được (idempotent theo pr_number).
-  router.post('/api/ai-board/worker/self-improve/frozen-benchmark/pending', authenticate, handle((_req, res) => {
-    res.json(pendingFrozenMeasurements(store.db));
+  route.post('/api/ai-board/worker/self-improve/frozen-benchmark/pending', authenticate, handle(async (_req, res) => {
+    res.json(await aux.pendingFrozenMeasurements(store.db));
   }));
-  router.post('/api/ai-board/worker/self-improve/frozen-benchmark/report', authenticate, handle((req, res) => {
-    res.json({ score: recordFrozenMeasurement(store.db, req.body) });
+  route.post('/api/ai-board/worker/self-improve/frozen-benchmark/report', authenticate, handle(async (req, res) => {
+    res.json({ score: await aux.recordFrozenMeasurement(store.db, req.body) });
   }));
 
   // Theo dõi production sau merge + tự revert: self PR đã merge, cửa sổ sau đã trôi
   // qua, chưa kết luận → worker gọi check đúng PR đó; server tự đọc closed_at/sha, tính tỉ lệ, ghi kết luận,
   // tự tạo đúng 1 yêu cầu self revert nếu tụt quá ngưỡng (không tự merge).
-  router.post('/api/ai-board/worker/self-improve/post-merge-watch/pending', authenticate, handle((_req, res) => {
-    res.json({ pending: pendingPostMergeWatch(store.db) });
+  route.post('/api/ai-board/worker/self-improve/post-merge-watch/pending', authenticate, handle(async (_req, res) => {
+    res.json({ pending: await aux.pendingPostMergeWatch(store.db) });
   }));
-  router.post('/api/ai-board/worker/self-improve/post-merge-watch/check', authenticate, handle((req, res) => {
-    res.json({ watch: checkPostMergeWatch(store.db, req.body?.pr_number, store.createSelfRequest) });
+  route.post('/api/ai-board/worker/self-improve/post-merge-watch/check', authenticate, handle(async (req, res) => {
+    res.json({ watch: await aux.checkPostMergeWatch(store.db, req.body?.pr_number, store.createSelfRequest) });
   }));
 
   // Trạng thái PR: worker hỏi GitHub các PR này rồi báo PR đã đóng; không webhook.
-  router.post('/api/ai-board/worker/pull-requests/open', authenticate, handle((_req, res) => {
-    res.json({ pull_requests: openPullRequests(store.db) });
+  route.post('/api/ai-board/worker/pull-requests/open', authenticate, handle(async (_req, res) => {
+    res.json({ pull_requests: await aux.openPullRequests(store.db) });
   }));
-  router.post('/api/ai-board/worker/pull-requests/state', authenticate, handle((req, res) => {
-    res.json({ pull_request: reportPullRequest(store.db, req.body) });
+  route.post('/api/ai-board/worker/pull-requests/state', authenticate, handle(async (req, res) => {
+    res.json({ pull_request: await aux.reportPullRequest(store.db, req.body) });
   }));
 
   // Ảnh bản nháp: auth trước rồi mới parse body lớn; content-type riêng để express.json chung bỏ qua.
-  router.post('/api/ai-board/worker/tickets/:id/screenshots', authenticate,
+  route.post('/api/ai-board/worker/tickets/:id/screenshots', authenticate,
     express.json({ type: SHOTS_TYPE, limit: SHOTS_BODY_LIMIT }), async (req, res, next) => {
       if (!uploadsDir) return res.status(503).json({ error: 'uploads_unavailable' });
       if (!req.is(SHOTS_TYPE)) return res.status(415).json({ error: 'unsupported_media_type' });
       try {
         const lease = leaseInput(req.body);
-        res.json(await saveDraftScreenshots(store, req.params.id, {
+        res.json(await aux.saveDraftScreenshots(store, req.params.id, {
           ...lease, runId: req.body?.run_id, images: req.body?.images, uploadsDir, backend: shotBackend,
         }));
       } catch (error) {
@@ -526,16 +525,16 @@ export function attachAiBoardWorkerRoutes(router, {
       }
     });
 
-  router.post('/api/ai-board/worker/tickets/:id/pull-request', authenticate, handle((req, res) => {
+  route.post('/api/ai-board/worker/tickets/:id/pull-request', authenticate, handle(async (req, res) => {
     const lease = leaseInput(req.body);
-    res.json({ pull_request: store.recordPullRequest(req.params.id, {
+    res.json({ pull_request: await store.recordPullRequest(req.params.id, {
       ...lease, runId: req.body?.run_id, pullRequest: req.body?.pull_request, idempotencyKey: req.body?.idempotency_key,
     }) });
   }));
 
-  router.post('/api/ai-board/worker/tickets/:id/release', authenticate, handle((req, res) => {
+  route.post('/api/ai-board/worker/tickets/:id/release', authenticate, handle(async (req, res) => {
     const lease = leaseInput(req.body);
-    const ticket = store.releaseLease(req.params.id, {
+    const ticket = await store.releaseLease(req.params.id, {
       ...lease,
       outcome: req.body?.outcome,
       internalDetail: req.body?.internal_detail,

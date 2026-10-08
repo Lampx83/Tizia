@@ -5,6 +5,8 @@ services:
     image: tizia:latest
     container_name: tizia
     restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
     ports:
       - "8041:8041"
     environment:
@@ -13,9 +15,31 @@ services:
       HOST: 0.0.0.0
       DATA_DIR: /data
       BASE_PATH: ${BASE_PATH:-}
+      # Dùng mật khẩu chỉ gồm chữ và số (hoặc mã hóa URL) vì nó nằm trong chuỗi kết nối.
+      DATABASE_URL: postgres://${POSTGRES_USER:-tizia}:${POSTGRES_PASSWORD:?đặt POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tizia}
     volumes:
-      - pharmacysim-data:/data
+      - pharmacysim-data:/data  # sao lưu pg_dump (/data/backups) + file tải lên; dữ liệu chính nằm trong PostgreSQL
+
+  # PostgreSQL: chỉ trên mạng compose nội bộ, KHÔNG publish cổng. Lên bản major mới = dump/restore (không đổi tag tại chỗ);
+  # postgresql17-client trong image tizia phải cùng major với tag này.
+  postgres:
+    image: postgres:17-alpine
+    container_name: tizia-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tizia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?đặt POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-tizia}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - tizia-postgres-data:/var/lib/postgresql/data
 
 volumes:
   pharmacysim-data:
     driver: local
+  tizia-postgres-data:

@@ -1,2 +1,2 @@
-// Compatibility export; implementation: security/intake-guard.js.
+// Compatibility export; async PostgreSQL.
 export * from './security/intake-guard.js';

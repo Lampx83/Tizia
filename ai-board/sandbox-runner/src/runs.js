@@ -109,7 +109,7 @@ export function createRuns({ policy, backend, store, now = Date.now, alert = () 
     try {
       await backend.create({
         name: run.sandbox, image: policy.guest_image, vm: { cpus: policy.vm.cpus, memory_mib: policy.vm.memory_mib, disk_mib: policy.vm.disk_mib },
-        egress: policy.egress, env: policy.guest_env, ttl_s: policy.vm.ttl_s, workdir: policy.exec.workdir,
+        egress: policy.egress, network: policy.network, env: policy.guest_env, ttl_s: policy.vm.ttl_s, workdir: policy.exec.workdir,
         labels: { run_id: runId, runner_id: runnerId, runner_version: runnerVersion },
       });
     } catch (error) {

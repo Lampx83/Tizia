@@ -1,2 +1,2 @@
-// Compatibility export; implementation: services/self-improve.js.
+// Compatibility export; async PostgreSQL.
 export * from './services/self-improve.js';

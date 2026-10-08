@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // ============================================================
 // Skills catalog migration
-// Parse public/space.html → trích `skills:[...]` của từng space (5 domain) →
+// Read the canonical SPACE_SETS_ITEMS data module for the six supported domains →
 // INSERT vào bảng `skills` (+ ghi file `server/skills-mapping.json` để
 // skills.js wire grant-logic). Heuristic gán competency_id theo từ khóa.
 //
@@ -17,13 +17,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db } from '../server/db.js';
+import { SPACE_SETS_ITEMS } from '../public/js/scenarios/_data/space-sets.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SPACE_HTML = path.resolve(__dirname, '..', 'public', 'space.html');
-// Highschool space defs nằm tách ra public/js/spaces-highschool.js (window-attached
-// để không phình space.html). Migrator nối nội dung 2 file rồi parse chung — cùng
-// định dạng `const SPACES_X = {...};` nên parser không cần đổi.
-const SPACES_HS  = path.resolve(__dirname, '..', 'public', 'js', 'spaces-highschool.js');
 const MAPPING_OUT = path.resolve(__dirname, '..', 'server', 'skills-mapping.json');
 
 const DRY = process.argv.includes('--dry');
@@ -32,12 +28,12 @@ const DRY = process.argv.includes('--dry');
 //   preschool = mầm non (grade 0), primary = 1-5, secondary = 6-9,
 //   highschool = 10-12, it/pharmacy = ĐH (NULL).
 const DOMAIN_BLOCKS = [
-  { var: 'SPACES_PHARMACY',   domain: 'pharmacy',   grade_min: null, grade_max: null },
-  { var: 'SPACES_SECONDARY',  domain: 'secondary',  grade_min: 6,    grade_max: 9    },
-  { var: 'SPACES_IT',         domain: 'it',         grade_min: null, grade_max: null },
-  { var: 'SPACES_PRIMARY',    domain: 'primary',    grade_min: 1,    grade_max: 5    },
-  { var: 'SPACES_PRESCHOOL',  domain: 'preschool',  grade_min: 0,    grade_max: 0    },
-  { var: 'SPACES_HIGHSCHOOL', domain: 'highschool', grade_min: 10,   grade_max: 12   },
+  { domain: 'pharmacy',   grade_min: null, grade_max: null },
+  { domain: 'secondary',  grade_min: 6,    grade_max: 9    },
+  { domain: 'it',         grade_min: null, grade_max: null },
+  { domain: 'primary',    grade_min: 1,    grade_max: 5    },
+  { domain: 'preschool',  grade_min: 0,    grade_max: 0    },
+  { domain: 'highschool', grade_min: 10,   grade_max: 12   },
 ];
 
 // ---- Heuristic: skill text → competency code ----
@@ -83,76 +79,22 @@ function slugify(s) {
     .slice(0, 60);
 }
 
-// Parse một block `const SPACES_X = { ... };` để lấy cặp (space_id, skills[]).
-// Cách parse: với mỗi domain block, tìm các pattern `<id>:{...skills:[...],...}`.
-// Chiến lược: chia file theo `^\s\s<id>:\{emoji:` (mỗi space bắt đầu bằng 2-space
-// indent + key + ':{emoji:'). Trong từng đoạn, tìm `skills:[...]` đầu tiên.
-function parseDomainBlock(src, varName) {
-  const startIdx = src.indexOf(`const ${varName} = {`);
-  if (startIdx < 0) {
-    console.warn(`[parse] không tìm thấy ${varName}`);
-    return [];
-  }
-  // Tìm dấu `};` đóng object (tìm cấp 1 vì regex không đủ; ta scan thủ công).
-  let depth = 0, i = startIdx + `const ${varName} = `.length, end = -1;
-  for (; i < src.length; i++) {
-    const ch = src[i];
-    if (ch === '{') depth++;
-    else if (ch === '}') {
-      depth--;
-      if (depth === 0) { end = i + 1; break; }
+// The same trusted data module feeds content seeding. Never infer catalog data from rendered HTML.
+// Validate the complete supported scope BEFORE any catalog writes or mapping replacement.
+const catalog = DOMAIN_BLOCKS.map(blk => {
+  const item = SPACE_SETS_ITEMS.find(item => item.domain === blk.domain);
+  if (!item?.spaces || !Object.entries(item.spaces).length) throw new Error(`Missing catalog domain: ${blk.domain}`);
+  const spaces = Object.entries(item.spaces).map(([space_id, space]) => {
+    if (!Array.isArray(space.skills) || !space.skills.length || space.skills.some(name => typeof name !== 'string' || !name.trim())) {
+      throw new Error(`Missing catalog skills: ${blk.domain}/${space_id}`);
     }
-  }
-  if (end < 0) {
-    console.warn(`[parse] không tìm thấy } đóng cho ${varName}`);
-    return [];
-  }
-  const block = src.slice(startIdx, end);
-
-  // Mỗi space bắt đầu bằng "  <id>:{emoji:" (2 space indent).
-  const SPACE_RE = /\n {2}([a-z][a-zA-Z0-9_-]*)\s*:\s*\{emoji:/g;
-  const matches = [];
-  let m;
-  while ((m = SPACE_RE.exec(block)) !== null) {
-    matches.push({ id: m[1], start: m.index });
-  }
-  // skills:[...] gần nhất sau mỗi vị trí
-  const SKILLS_RE = /skills\s*:\s*\[([^\]]+)\]/;
-  const out = [];
-  for (let k = 0; k < matches.length; k++) {
-    const s = matches[k].start;
-    const e = k + 1 < matches.length ? matches[k + 1].start : block.length;
-    const seg = block.slice(s, e);
-    const sm = SKILLS_RE.exec(seg);
-    if (!sm) {
-      console.warn(`[parse] ${varName}.${matches[k].id} không có skills:[]`);
-      continue;
-    }
-    // sm[1] = 'A','B','C' — tách bằng regex 'X' literal.
-    const skills = [];
-    const STR_RE = /'((?:[^'\\]|\\.)*)'/g;
-    let sm2;
-    while ((sm2 = STR_RE.exec(sm[1])) !== null) {
-      skills.push(sm2[1].replace(/\\'/g, "'"));
-    }
-    out.push({ space_id: matches[k].id, skills });
-  }
-  return out;
-}
-
-// ---- main ----
-const src = fs.readFileSync(SPACE_HTML, 'utf8');
-// spaces-highschool.js dùng `window.SPACES_HIGHSCHOOL = {...}` thay vì
-// `const SPACES_HIGHSCHOOL`. Normalise để parser cùng pattern.
-let hsSrc = '';
-try {
-  hsSrc = fs.readFileSync(SPACES_HS, 'utf8')
-    .replace(/window\.SPACES_HIGHSCHOOL\s*=\s*\{/, 'const SPACES_HIGHSCHOOL = {');
-} catch (e) { console.warn(`[parse] không đọc được ${SPACES_HS}: ${e.message}`); }
-const html = src + '\n' + hsSrc;
+    return { space_id, skills: space.skills };
+  });
+  return { ...blk, spaces };
+});
 
 const compStmt = db.prepare(`SELECT code, id FROM competencies`);
-const COMP_BY_CODE = Object.fromEntries(compStmt.all().map(r => [r.code, r.id]));
+const COMP_BY_CODE = Object.fromEntries((await compStmt.all()).map(r => [r.code, r.id]));
 if (Object.keys(COMP_BY_CODE).length === 0) {
   console.error('[fatal] bảng competencies chưa được seed — chạy server lần đầu để init schema trước.');
   process.exit(1);
@@ -174,8 +116,8 @@ try {
 } catch (e) { console.warn(`[overrides] failed to load: ${e.message}`); }
 
 const insertSkill = db.prepare(`
-  INSERT OR IGNORE INTO skills (code, name, competency_id, domain, grade_min, grade_max, description, created_at)
-  VALUES (@code, @name, @competency_id, @domain, @grade_min, @grade_max, @description, @created_at)
+  INSERT INTO skills (code, name, competency_id, domain, grade_min, grade_max, description, created_at)
+  VALUES (@code, @name, @competency_id, @domain, @grade_min, @grade_max, @description, @created_at) ON CONFLICT DO NOTHING
 `);
 // UPDATE để áp override lên row đã insert lần trước (idempotent — nếu
 // competency_id đã đúng thì UPDATE no-op về mặt logic).
@@ -184,14 +126,13 @@ const updateCompetency = db.prepare(`UPDATE skills SET competency_id = ? WHERE c
 const mapping = {}; // { 'pharmacy/admin': ['code1','code2',...], ... }
 const stats = { domains: 0, spaces: 0, skills: 0, byCompetency: {} };
 
-const runTx = db.transaction((rows) => {
-  for (const r of rows) insertSkill.run(r);
+const runTx = db.transaction(async (rows) => {
+  for (const r of rows) await insertSkill.run(r);
 });
 
 const allRows = [];
-for (const blk of DOMAIN_BLOCKS) {
-  const spaces = parseDomainBlock(html, blk.var);
-  if (spaces.length === 0) continue;
+for (const blk of catalog) {
+  const spaces = blk.spaces;
   stats.domains++;
   for (const sp of spaces) {
     stats.spaces++;
@@ -203,7 +144,7 @@ for (const blk of DOMAIN_BLOCKS) {
       const heuristicCode = mapToCompetency(skillName);
       const compCode = overrideCode && COMP_BY_CODE[overrideCode] ? overrideCode : heuristicCode;
       const compId = COMP_BY_CODE[compCode];
-      if (!compId) { console.warn(`[skip] không có competency ${compCode}`); continue; }
+      if (!compId) throw new Error(`Missing catalog competency: ${compCode}`);
       codes.push(skillCode);
       stats.byCompetency[compCode] = (stats.byCompetency[compCode] || 0) + 1;
       stats.skills++;
@@ -222,20 +163,24 @@ for (const blk of DOMAIN_BLOCKS) {
   }
 }
 
+if (!allRows.length || Object.entries(mapping).some(([, codes]) => !codes.length)) {
+  throw new Error('Incomplete catalog; existing mapping is preserved');
+}
+
 if (!DRY) {
-  runTx(allRows);
+  await runTx(allRows);
   // Áp override LẦN HAI cho row đã tồn tại từ migration lần trước (UPDATE).
   // INSERT OR IGNORE phía trên không update row có code đã tồn tại.
   let updated = 0;
-  const updateTx = db.transaction(() => {
+  const updateTx = db.transaction(async () => {
     for (const [code, compCode] of Object.entries(OVERRIDES)) {
       const compId = COMP_BY_CODE[compCode];
       if (!compId) continue;
-      const r = updateCompetency.run(compId, code);
+      const r = await updateCompetency.run(compId, code);
       if (r.changes > 0) updated++;
     }
   });
-  updateTx();
+  await updateTx();
   console.log(`[overrides] applied ${updated} UPDATE qua catalog cũ`);
   fs.writeFileSync(MAPPING_OUT, JSON.stringify(mapping, null, 2) + '\n');
   console.log(`[ok] đã ghi mapping → ${path.relative(process.cwd(), MAPPING_OUT)}`);

@@ -1,24 +1,23 @@
 """Calibrate.py: so model ứng viên với quyết định Opus lịch sử."""
 import json
-import sqlite3
 import time
 
 import pytest
 
 import calibrate
-from conftest import FakeModels, deps_with, plan_with
+from conftest import FakeModels, connect, deps_with, plan_with
 from main import Deps, Unavailable
 from prescreen import AI_DECISIONS_DDL
 
 
 def insert_decision(db_path, *, request_id, action, snapshot):
-    con = sqlite3.connect(str(db_path))
+    con = connect(db_path)
     try:
         con.execute(AI_DECISIONS_DDL)
         con.execute(
             """INSERT INTO ai_decisions
                  (request_id, decided_by, model, action, input_snapshot, created_at)
-               VALUES (?, 'ai', 'claude-opus', ?, ?, ?)""",
+               VALUES (%s, 'ai', 'claude-opus', %s, %s, %s)""",
             (request_id, action, json.dumps(snapshot), int(time.time() * 1000)),
         )
         con.commit()
@@ -72,11 +71,11 @@ def test_categorize(opus_go, candidate_go, expected):
 def test_run_reads_only_decided_by_ai_and_excludes_defer(db_file):
     insert_decision(db_file, request_id=1, action="approve", snapshot=snapshot_for(1))
     insert_decision(db_file, request_id=2, action="defer", snapshot=snapshot_for(2))
-    con = sqlite3.connect(str(db_file))
+    con = connect(db_file)
     con.execute(AI_DECISIONS_DDL)
     con.execute(
         """INSERT INTO ai_decisions (request_id, decided_by, action, input_snapshot, created_at)
-           VALUES (3, 'rule', 'priority', ?, ?)""",
+           VALUES (3, 'rule', 'priority', %s, %s)""",
         (json.dumps(snapshot_for(3)), int(time.time() * 1000)),
     )
     con.commit()

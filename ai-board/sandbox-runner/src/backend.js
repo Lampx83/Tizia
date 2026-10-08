@@ -21,6 +21,21 @@ export function egressPolicy(egress) {
   };
 }
 
+/**
+ * Online-feature policy: zero egress. Every group, every destination, TCP/UDP/ICMP, DNS included.
+ * No host-DNS exception (unlike egressPolicy): the guest cannot resolve names or reach host/gateway services.
+ */
+export function onlineEgressPolicy() {
+  return {
+    defaultEgress: 'deny',
+    defaultIngress: 'deny',
+    rules: [
+      ...GROUPS_DENIED.map((group) => ({ direction: 'any', destination: { kind: 'group', group }, protocols: [], ports: [], action: 'deny' })),
+      { direction: 'any', destination: { kind: 'any' }, protocols: [], ports: [], action: 'deny' },
+    ],
+  };
+}
+
 /** Real microsandbox adapter. Only src/server.js wires this in; tests use a fake with the same shape. */
 export function createMicrosandboxBackend() {
   const live = new Map();
@@ -65,12 +80,12 @@ export function createMicrosandboxBackend() {
   }
 
   return {
-    async create({ name, image, vm, egress, env, ttl_s, workdir, labels }) {
+    async create({ name, image, vm, egress, network, env, ttl_s, workdir, labels }) {
       const sandbox = await Sandbox.builder(name).image(image).cpus(vm.cpus).memory(vm.memory_mib).rootDisk(vm.disk_mib)
         .maxDuration(ttl_s).envs(env).labels(labels)
         .registry((r) => (/^image-registry[:/]/.test(image) ? r.insecure() : r)) // the in-compose registry speaks plain http
         // tls(): host-enforced domain rules need the TLS-aware path; without it every HTTPS handshake to an allowed host is reset
-        .network((n) => n.policy(egressPolicy(egress)).tls((t) => t)).create();
+        .network((n) => (network === 'none' ? n.policy(onlineEgressPolicy()) : n.policy(egressPolicy(egress)).tls((t) => t))).create();
       live.set(name, sandbox);
       await sandbox.exec('mkdir', ['-p', workdir]);
     },

@@ -2,7 +2,7 @@
 // Model chỉ được hỏi: không công cụ, lời người dùng nằm trong khối dữ liệu, đầu ra qua guard trước khi lưu.
 import { appLlm, vllmHeaders, vllmChatUrl, vllmBody, parseSse } from '../../ai-llm.js';
 import fs from 'node:fs';
-import { checkIntake } from '../../ai-board/intake-guard.js';
+import { checkIntake } from '../../ai-board/intake-guard-async.js';
 import { checkContentSafety } from '../safety/profanity-vi.js';
 import { containsPromptDisclosure } from '../../ai-prompt-guardrails.js';
 import { CLASSIFIER } from '../../ai-board/classifier.js';

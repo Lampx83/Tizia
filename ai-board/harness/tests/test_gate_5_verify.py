@@ -9,6 +9,7 @@ import pytest
 
 import main
 from gates import verify
+REAL_HTTP_PROBE = verify.probe_http
 
 
 @pytest.fixture(autouse=True)
@@ -28,21 +29,22 @@ class FakeRunner:
 
     def __call__(self, args, **kwargs):
         self.calls.append((args, kwargs))
+        if args[0] == "docker" and args[1] in ("container", "volume", "network"):
+            return subprocess.CompletedProcess(args, 0, "", "")
         if args[0] == "docker":
-            action = next(x for x in ("config", "up", "port", "exec", "cp", "down") if x in args)
-            if action == "up":
-                self.override = Path(args[args.index("-f") + 3]).read_text(encoding="utf-8")
+            action = next(x for x in ("config", "up", "port", "exec", "cp", "down", "logs") if x in args)
+            self.override = Path(args[args.index("-f") + 1]).read_text(encoding="utf-8")
             project = args[args.index("-p") + 1]
-            config = {"services": {"tizia": {"environment": {"NODE_ENV": "production", "PORT": "8041",
-                                                          "HOST": "0.0.0.0", "DATA_DIR": "/data", "BASE_PATH": ""},
-                                               "image": f"{project}:latest",
-                                               "ports": [{"target": 8041, "host_ip": "127.0.0.1"}],
-                                               "volumes": [{"source": f"{project}-data", "target": "/data"}]}}}
+            config = json.loads(self.override)
+            for name, service in config['services'].items():
+                service['networks'] = {'default': None}
+                service['volumes'] = [{'source': v.split(':')[0], 'target': v.split(':')[1], 'type': 'volume'} for v in service['volumes']]
+            config['services']['tizia']['ports'] = [{'target': 8041, 'host_ip': '127.0.0.1'}]
             if action == "exec" and args[-1] == "env":
-                stdout = self.container_env
+                stdout = self.container_env + "DATABASE_URL=" + config["services"]["tizia"]["environment"]["DATABASE_URL"] + "\n"
             else:
                 stdout = {"config": json.dumps(config), "up": "started", "port": "127.0.0.1:49152\n",
-                          "exec": "generated tests passed", "cp": "copied", "down": "removed"}[action]
+                          "exec": "generated tests passed", "cp": "copied", "down": "removed", "logs": "synthetic log"}[action]
         else:
             action = "smoke"
             stdout = "user-state smoke PASS"
@@ -83,15 +85,10 @@ def test_pass_uses_isolated_compose_smoke_and_down(tmp_path):
     assert out["evidence"]["http_observed"] is True
     assert out["evidence"]["screenshot"] is None  # JS change, no request page named
     assert "một luồng user-state" in out["evidence"]["text"]
-    assert "pharmacysim-data:/data" not in runner.override
-    assert "127.0.0.1::8041" in runner.override
-    assert "name: ai-verify-skill-42-data" in runner.override
-    assert "image: ai-verify-skill-42:latest" in runner.override
-    assert "!override" in runner.override
-    assert ["config", "up", "port", "exec", "exec", "cp", "exec", "down"] == [
-        next(x for x in ("config", "up", "port", "exec", "cp", "down") if x in args)
-        for args, _ in runner.calls if args[0] == "docker"]
-    assert runner.calls[-1][0][-2:] == ["down", "-v"]
+    config = json.loads(runner.override)
+    assert config['services']['tizia']['ports'] == ['127.0.0.1::8041']
+    assert out['evidence']['teardown_confirmed'] is True
+    assert any(args[-2:] == ['down', '-v'] for args, _ in runner.calls)
     smoke_args, smoke_kw = next((args, kw) for args, kw in runner.calls if args[0] != "docker")
     assert Path(smoke_args[-1]) == verify.SMOKE_SCRIPT
     assert smoke_kw["env"]["BASE"] == "http://127.0.0.1:49152"
@@ -102,7 +99,7 @@ def test_smoke_failure_still_tears_down(tmp_path):
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
     assert out["evidence"]["smoke_passed"] is False
-    assert runner.calls[-1][0][-2:] == ["down", "-v"]
+    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
 
 
 def test_generated_test_failure_blocks_before_smoke(tmp_path):
@@ -112,7 +109,7 @@ def test_generated_test_failure_blocks_before_smoke(tmp_path):
     assert out["reason"] == "generated tests failed"
     assert out["failure_class"] == "ordinary"
     assert not any(args[0] != "docker" for args, _ in runner.calls)
-    assert runner.calls[-1][0][-2:] == ["down", "-v"]
+    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
 
 
 def test_generated_test_timeout_blocks_and_tears_down(tmp_path):
@@ -120,7 +117,7 @@ def test_generated_test_timeout_blocks_and_tears_down(tmp_path):
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
     assert out["reason"] == "generated tests timed out"
-    assert runner.calls[-1][0][-2:] == ["down", "-v"]
+    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
 
 
 def test_teardown_failure_is_environmental_not_repairable(tmp_path):
@@ -136,7 +133,7 @@ def test_up_failure_still_tears_down(tmp_path):
     assert out["blocked"] is True
     assert out["failure_class"] == "transient"
     assert "failed" in out["evidence"]["text"]
-    assert runner.calls[-1][0][-2:] == ["down", "-v"]
+    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
 
 
 def test_unsafe_compose_config_blocks_before_up(tmp_path):
@@ -155,7 +152,7 @@ def test_unsafe_compose_config_blocks_before_up(tmp_path):
     assert "không cách ly" in out["reason"]
     assert out["failure_class"] == "critical"
     assert not any("up" in args for args, _ in runner.calls)
-    assert runner.calls[-1][0][-2:] == ["down", "-v"]
+    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
 
 
 @pytest.mark.parametrize("service, setting", [
@@ -185,7 +182,7 @@ def test_container_secret_blocks_without_leaking_value_to_evidence(tmp_path):
     assert "OLLAMA_SECKEY" in out["reason"]
     assert out["failure_class"] == "critical"
     assert "do-not-log" not in out["evidence"]["text"]
-    assert runner.calls[-1][0][-2:] == ["down", "-v"]
+    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
 
 
 def test_html_screenshot_artifact_is_mandatory_for_ui_changes(tmp_path, monkeypatch):
@@ -209,7 +206,7 @@ def test_html_screenshot_artifact_is_mandatory_for_ui_changes(tmp_path, monkeypa
     assert "screenshot" in out["reason"] and "playwright absent" in out["reason"]
     assert out["failure_class"] == "transient"  # missing browser is the environment, not the candidate
     assert out["evidence"]["screenshot"] is None
-    assert runner.calls[-1][0][-2:] == ["down", "-v"]
+    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
 
 
 def test_changed_html_must_return_success_over_http(tmp_path):
@@ -438,7 +435,7 @@ def test_internal_network_mode_has_no_egress_and_probes_the_container_ip(tmp_pat
     out = verify.run(state(checkout(tmp_path)), runner=runner)
 
     assert out["blocked"] is False, out["reason"]
-    assert "internal: true" in runner.override and "127.0.0.1::8041" not in runner.override
+    assert json.loads(runner.override)["networks"]["default"]["internal"] is True and "127.0.0.1::8041" not in runner.override
     assert urls == ["http://172.28.0.2:8041/x.js"]
     assert not any("port" in args for args, _ in runner.calls if args[0] == "docker")
 
@@ -679,3 +676,63 @@ def test_a_close_up_shot_does_not_hide_the_measured_before_audit():
         {"phase": "before", "page": "/a.html", "width": 1280, "path": "bf", "focus": True},
     ]
     assert verify.visual_regressions(shots) == []
+
+
+def test_same_skill_gets_unique_postgres_resources_and_credentials(tmp_path):
+    runners = [FakeRunner(), FakeRunner()]
+    results = []
+    for i, runner in enumerate(runners):
+        root = tmp_path / str(i)
+        root.mkdir()
+        results.append(verify.run(state(checkout(root)), runner=runner))
+    assert all(not out['blocked'] and out['evidence']['teardown_confirmed'] for out in results)
+    configs = [json.loads(r.override) for r in runners]
+    assert configs[0]['services']['tizia']['environment']['DATABASE_URL'] != configs[1]['services']['tizia']['environment']['DATABASE_URL']
+    assert set(configs[0]['volumes']).isdisjoint(configs[1]['volumes'])
+
+
+def test_production_dsn_is_rejected_before_boot(tmp_path):
+    class ProductionDsn(FakeRunner):
+        def __call__(self, args, **kwargs):
+            result = super().__call__(args, **kwargs)
+            if 'config' in args:
+                config = json.loads(result.stdout)
+                config['services']['tizia']['environment']['DATABASE_URL'] = 'postgresql://production.example/live'
+                result.stdout = json.dumps(config)
+            return result
+    runner = ProductionDsn()
+    result = verify.run(state(checkout(tmp_path)), runner=runner)
+    assert result['blocked'] and result['failure_class'] == 'critical'
+    assert not any('up' in args for args, _ in runner.calls)
+    assert result['evidence']['teardown_confirmed']
+
+
+def test_empty_runtime_error_cannot_be_a_pass(tmp_path):
+    fake = FakeRunner()
+    def runner(args, **kwargs):
+        if 'up' in args:
+            raise RuntimeError('')
+        return fake(args, **kwargs)
+    result = verify.run(state(checkout(tmp_path)), runner=runner)
+    assert result['blocked'] and result['reason'] == 'RuntimeError'
+    assert result['evidence']['teardown_confirmed']
+def test_http_probe_login_retry_cannot_forward_student_cookie_to_redirects(monkeypatch):
+    class Response:
+        status = 200
+        url = 'http://candidate/404.html'
+        def __enter__(self): return self
+        def __exit__(self, *_): pass
+        def read(self): return b'actual page'
+    response = Response()
+    def open_request(request, **_):
+        assert 'Cookie' not in request.headers
+        assert request.unredirected_hdrs == {'Cookie': 'tizia_sid=synthetic-student'}
+        return response
+    monkeypatch.setattr(verify.urllib.request, 'urlopen', open_request)
+    assert REAL_HTTP_PROBE('http://candidate/404.html', token='synthetic-student') == (200, b'actual page')
+    response.url = 'http://candidate/login.html'
+    with pytest.raises(verify.LoginRequired):
+        REAL_HTTP_PROBE('http://candidate/404.html', token='synthetic-student')
+    response.url = 'http://outside/login.html'
+    with pytest.raises(RuntimeError, match='outside disposable app origin'):
+        REAL_HTTP_PROBE('http://candidate/404.html', token='synthetic-student')

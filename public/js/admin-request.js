@@ -1,3 +1,4 @@
+import { mountPrivatePreview } from './private-preview.js';
 // Chi tiết 1 yêu cầu (cửa sổ con trên trang admin): nội dung, trao đổi, kế hoạch, tiến độ trực tiếp và toàn bộ
 // vết AI Board — phiên xử lý (worker) theo từng lượt, cổng, từng lần gọi model, sự kiện. Tự cập nhật bằng cách
 // vá DOM (không vẽ lại cả trang). Mọi giá trị từ học sinh/model là dữ liệu không tin cậy → luôn qua esc().
@@ -540,6 +541,7 @@ document.addEventListener('click', async (e) => {
 function render() {
   const previewNodes = [...(document.querySelector('#private-preview')?.childNodes || [])];
   if (!view) return;
+  const previewNodes=[...(document.querySelector('#private-preview')?.childNodes||[])];
   const { thread, decisions, trace } = view;
   const r = thread.request;
   const live = trace?.root?.live;
@@ -561,9 +563,9 @@ function render() {
     ${trace ? renderAiBoard(trace) : '<h2>AI Board</h2><div class="blk meta">Yêu cầu này chưa có ticket AI Board.</div>'}
   `);
   syncOpen();
-  const previewHost = $('#private-preview');
-  previewHost?.append(...previewNodes); // keep a prepared link through the trace's routine refresh
-  mountPrivatePreview(previewHost, REQUEST_ID);
+  const previewHost=document.querySelector('#private-preview');
+  previewHost?.append(...previewNodes);
+  mountPrivatePreview(previewHost,REQUEST_ID);
   const go = $('#confirm-go');
   if (go) go.disabled = !confirmed(); // chữ đã gõ còn nguyên sau khi vá DOM
 }

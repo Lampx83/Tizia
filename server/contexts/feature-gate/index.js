@@ -99,31 +99,31 @@ const FEATURES = {
 };
 
 // ── User progress checker ────────────────────────────────
-function getUserProgress(userId) {
-  const wallet = getUserWallet(userId) || {};
+async function getUserProgress(userId) {
+  const wallet = await getUserWallet(userId) || {};
   const streak = wallet.streak || 0;
   const longestStreak = wallet.longestStreak || 0;
   // Streak engagement riêng (cross-domain)
   let engStreak = 0;
   try {
-    const er = db.prepare(`SELECT streak FROM engagement_state WHERE user_id = ?`).get(userId);
+    const er = await db.prepare(`SELECT streak FROM engagement_state WHERE user_id = ?`).get(userId);
     engStreak = er?.streak || 0;
   } catch {}
   // Quiz đúng tổng (lifetime)
-  const quizCorrect = db.prepare(
+  const quizCorrect = (await db.prepare(
     `SELECT COUNT(*) AS n FROM question_attempts WHERE user_id = ? AND correct = 1`
-  ).get(userId)?.n || 0;
+  ).get(userId))?.n || 0;
   // Skills earned
-  const skillsEarned = db.prepare(
+  const skillsEarned = (await db.prepare(
     `SELECT COUNT(*) AS n FROM user_skills WHERE user_id = ?`
-  ).get(userId)?.n || 0;
+  ).get(userId))?.n || 0;
   // Số ngày active (distinct days từ user_activity hoặc engagement)
-  const activeDays = db.prepare(`
+  const activeDays = (await db.prepare(`
     SELECT COUNT(DISTINCT date(last_active_date)) AS n FROM engagement_state WHERE user_id = ?
-  `).get(userId)?.n || 0;
+  `).get(userId))?.n || 0;
 
   // User createdAt → days since signup
-  const u = db.prepare(`SELECT created_at FROM users WHERE id = ?`).get(userId);
+  const u = await db.prepare(`SELECT created_at FROM users WHERE id = ?`).get(userId);
   const daysSinceSignup = u ? Math.floor((Date.now() - u.created_at) / 86400_000) : 0;
 
   return {
@@ -168,8 +168,8 @@ function isFeatureRelevantToDomain(f, domain) {
 }
 
 export function attachFeatureGate(router) {
-  router.get('/api/features/me', requireAuth, (req, res) => {
-    const progress = getUserProgress(req.user.id);
+  router.get('/api/features/me', requireAuth, async (req, res) => {
+    const progress = await getUserProgress(req.user.id);
     const userTier = computeUserTier(progress, req.user.role);
     // Query filter:
     //   ?domain=primary  → chỉ feature relevant cho trường này

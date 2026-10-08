@@ -8,7 +8,7 @@
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
     "dev:prod": "node --watch server/dev-proxy.js",
-    "test": "node --test",
+    "test": "node scripts/run-tests.mjs",
     "check:content": "node scripts/check-content-integrity.mjs",
     "codegraph:update": "graphify update .",
     "dump-config": "node scripts/dump-config.mjs"
@@ -19,7 +19,6 @@
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.21",
     "adm-zip": "^0.5.17",
-    "better-sqlite3": "^11.5.0",
     "compression": "^1.8.1",
     "express": "^4.21.1",
     "pg": "^8.21.0",

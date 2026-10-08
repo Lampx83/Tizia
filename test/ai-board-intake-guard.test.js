@@ -4,38 +4,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import express from 'express';
-import Database from 'better-sqlite3';
 
-import { applyAiBoardMigrations, createAiBoardStore } from '../server/ai-board/store.js';
+import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
+import { openBoard } from './support/ai-board-db.js';
 import { attachAiBoardRequestRoutes } from '../server/ai-board/routes.js';
-import { checkIntake, recordIntakeFlags } from '../server/ai-board/intake-guard.js';
+import { checkIntake, recordIntakeFlags } from '../server/ai-board/intake-guard-async.js';
 
 test('admin observes a draft without a privilege flag; actual mutations remain flagged', () => {
   assert.deepEqual(checkIntake('Thêm lời giải thích', 'Admin chỉ đọc trang quản trị để theo dõi và duyệt bản nháp.').labels, []);
   assert.ok(checkIntake('Thêm lời giải thích', 'Admin chỉ đọc trang quản trị rồi xóa tài khoản.').labels.includes('privileged_area'));
 });
 
-function fixtureDb() {
-  const db = new Database(':memory:');
-  db.pragma('foreign_keys = ON');
-  db.exec(`
-    CREATE TABLE users (
-      id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE, display_name TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'student', enrolled_domain TEXT
-    );
-    INSERT INTO users VALUES (1, 'lan', 'Lan', 'student', 'pharmacy');
-    CREATE TABLE requests (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'other',
-      title TEXT NOT NULL, detail TEXT, student TEXT NOT NULL DEFAULT 'Ẩn danh',
-      status TEXT NOT NULL DEFAULT 'pending', votes INTEGER NOT NULL DEFAULT 1, admin_note TEXT,
-      created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, attachments TEXT
-    );
-    CREATE TABLE request_messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, request_id INTEGER NOT NULL, role TEXT NOT NULL,
-      author_name TEXT, body TEXT NOT NULL, attachments TEXT, created_at INTEGER NOT NULL
-    );
-  `);
-  applyAiBoardMigrations(db);
+async function fixtureDb() {
+  const db = await openBoard({ users: [
+    [1, 'lan', 'Lan', 'student', 'pharmacy'],
+  ] });
   return db;
 }
 
@@ -48,7 +31,7 @@ async function serve(db) {
   });
   const pass = (_req, _res, next) => next();
   attachAiBoardRequestRoutes(app, {
-    store: createAiBoardStore(db), db,
+    store: createAsyncAiBoardStore(db.d), db: db.d,
     requireAuth: pass, requireEnrolled: pass, requireAdmin: pass, requireStrictCsrf: pass,
   });
   const server = http.createServer(app);
@@ -87,7 +70,7 @@ test('read-only admin verification is distinguished from privileged edits and se
 });
 
 test('secret-reading injection is refused with a truthful safe reason and a persisted admin record', async () => {
-  const db = fixtureDb();
+  const db = await fixtureDb();
   const app = await serve(db);
   const secretFile = '.' + 'env';
   try {
@@ -97,7 +80,7 @@ test('secret-reading injection is refused with a truthful safe reason and a pers
     const body = await response.json();
     assert.match(body.message, /bí mật|phạm vi/);
     assert.doesNotMatch(body.message, /chuyển cho quản trị viên/);
-    const audit = db.prepare("SELECT * FROM ai_alerts WHERE category='intake_rejected'").get();
+    const audit = await db.prepare("SELECT * FROM ai_alerts WHERE category='intake_rejected'").get();
     assert.ok(audit);
     assert.doesNotMatch(audit.internal_detail, /api key|in ra/);
     assert.equal(checkIntake('Hướng dẫn cấu hình', 'Giải thích biến môi trường, không đọc dữ liệu bí mật.').block, false);
@@ -120,7 +103,7 @@ test('JS and Python share one lexicon and fold diacritics the same way', () => {
 });
 
 test('POST /api/requests rejects blocked text with 422 and creates nothing', async () => {
-  const db = fixtureDb();
+  const db = await fixtureDb();
   const { post, close } = await serve(db);
   try {
     const response = await post('intake-block-001', { title: 'Sửa trang', detail: 'đồ ngu, fuck you' });
@@ -129,8 +112,8 @@ test('POST /api/requests rejects blocked text with 422 and creates nothing', asy
     assert.equal(body.error, 'request_rejected');
     assert.match(body.message, /chưa phù hợp/);
     assert.ok(!body.message.includes('fuck'));
-    assert.equal(db.prepare('SELECT COUNT(*) n FROM requests').get().n, 0);
-    assert.equal(db.prepare('SELECT COUNT(*) n FROM ai_tickets').get().n, 0);
+    assert.equal((await db.prepare('SELECT COUNT(*) n FROM requests').get()).n, 0);
+    assert.equal((await db.prepare('SELECT COUNT(*) n FROM ai_tickets').get()).n, 0);
   } finally {
     await close();
     db.close();
@@ -138,18 +121,18 @@ test('POST /api/requests rejects blocked text with 422 and creates nothing', asy
 });
 
 test('POST /api/requests accepts sensitive text and records one flag event plus tags', async () => {
-  const db = fixtureDb();
+  const db = await fixtureDb();
   const { post, close } = await serve(db);
   try {
     const send = () => post('intake-flag-001', { title: 'Đổi màu web', detail: 'đổi theo cờ vàng, sửa điểm' });
     const first = await (await send()).json();
     await send(); // retry cùng idempotency key: không ghi cờ lần 2
-    const events = db.prepare("SELECT * FROM ai_events WHERE event_type='intake_flagged'").all();
+    const events = await db.prepare("SELECT * FROM ai_events WHERE event_type='intake_flagged'").all();
     assert.equal(events.length, 1);
     assert.equal(events[0].ticket_id, first.root_ticket_id);
     assert.equal(events[0].public_message, null);
     assert.match(events[0].internal_detail, /politics_sovereignty, privileged_area/);
-    const tags = db.prepare('SELECT tag FROM ai_ticket_tags WHERE ticket_id=? ORDER BY tag').all(first.root_ticket_id)
+    const tags = (await db.prepare('SELECT tag FROM ai_ticket_tags WHERE ticket_id=? ORDER BY tag').all(first.root_ticket_id))
       .map((row) => row.tag);
     assert.deepEqual(tags.filter((tag) => tag.startsWith('guard:')),
       ['guard:human_review', 'guard:politics_sovereignty', 'guard:privileged_area']);
@@ -160,13 +143,13 @@ test('POST /api/requests accepts sensitive text and records one flag event plus 
 });
 
 test('clean request records no flag and flag recording never throws', async () => {
-  const db = fixtureDb();
+  const db = await fixtureDb();
   const { post, close } = await serve(db);
   try {
     assert.equal((await post('intake-clean-001', { title: 'Thêm chế độ tối', detail: 'trang sáng quá' })).status, 200);
-    assert.equal(db.prepare("SELECT COUNT(*) n FROM ai_events WHERE event_type='intake_flagged'").get().n, 0);
-    recordIntakeFlags(null, 1, ['x']);
-    recordIntakeFlags({ transaction() { throw new Error('db down'); } }, 1, ['x']);
+    assert.equal((await db.prepare("SELECT COUNT(*) n FROM ai_events WHERE event_type='intake_flagged'").get()).n, 0);
+    await recordIntakeFlags(null, 1, ['x']);
+    await recordIntakeFlags({ transaction() { throw new Error('db down'); } }, 1, ['x']);
   } finally {
     await close();
     db.close();

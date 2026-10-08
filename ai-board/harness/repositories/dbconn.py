@@ -1,26 +1,23 @@
-"""connect()/DDL-replay/close — 8 copies across gate_trace.py, main.py,
-prescreen.py, plan_validate.py before this (flagged twice in ai-log
-2026-09-19 "7+ copies", grew to 8, never fixed). 1 context manager, callers
-keep only their own DDL constant + query/insert body."""
+"""PostgreSQL connect/DDL-replay/close, 1 context manager. `db_path` ở mọi chỗ gọi = DSN
+(DATABASE_URL), tên giữ nguyên cho khỏi đổi ~30 chữ ký. psycopg import lười: harness
+không có DB (guest Gate 5) vẫn chạy được."""
 from __future__ import annotations
 
-import sqlite3
 from contextlib import contextmanager
 
 
 @contextmanager
-def harness_db(db_path, *, ddl: str | None = None):
-    """Connect, replay `ddl` (executescript — handles multi-statement DDL like
-    gate_trace's CREATE TABLE + CREATE INDEX), yield the connection, commit on
-    clean exit, always close. An exception raised in the `with` body skips the
-    commit (same as every hand-rolled copy: query-then-commit sequentially, so
-    a failing query never reached commit either) but still closes the
-    connection. Read-only callers pass no `ddl` and never write, so the
-    unconditional commit() is a harmless no-op."""
-    con = sqlite3.connect(str(db_path))
+def harness_db(dsn, *, ddl: str | None = None, dict_rows: bool = False):
+    """Connect, replay `ddl` (IF NOT EXISTS, multi-statement ok), yield connection (`con.execute`
+    trả cursor, placeholder %s), commit khi thoát sạch, luôn close. Exception trong body → rollback."""
+    import psycopg
+    from psycopg.rows import dict_row
+
+    kw = {"row_factory": dict_row} if dict_rows else {}
+    con = psycopg.connect(str(dsn), connect_timeout=10, **kw)
     try:
         if ddl:
-            con.executescript(ddl)
+            con.execute(ddl)
         yield con
         con.commit()
     finally:

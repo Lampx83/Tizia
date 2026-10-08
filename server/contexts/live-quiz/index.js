@@ -24,7 +24,7 @@ const POINT_BASE = 1000;
 
 const rooms = new Map();          // pin → room state
 
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS live_rooms (
     pin           TEXT PRIMARY KEY,
     host_id       INTEGER NOT NULL,
@@ -70,9 +70,9 @@ function leaderboard(room) {
     .sort((a, b) => b.score - a.score);
 }
 
-function startQuestion(room) {
+async function startQuestion(room) {
   const q = room.questions[room.currentQ];
-  if (!q) return endRoom(room);
+  if (!q) return await endRoom(room);
   room.qStartedAt = Date.now();
   for (const p of room.players.values()) {
     p.answered = false; p.lastCorrect = false;
@@ -103,17 +103,17 @@ function closeQuestion(room) {
   room.currentQ += 1;
   // Host phải bấm next — nhưng auto-next sau 5s nếu host không bấm
   clearTimeout(room.timer);
-  room.timer = setTimeout(() => {
-    if (room.currentQ < room.questions.length) startQuestion(room);
-    else endRoom(room);
+  room.timer = setTimeout(async () => {
+    if (room.currentQ < room.questions.length) await startQuestion(room);
+    else await endRoom(room);
   }, 5000);
 }
 
-function endRoom(room) {
+async function endRoom(room) {
   room.status = 'ended';
   clearTimeout(room.timer);
   broadcast(room, { type: 'end', leaderboard: leaderboard(room) });
-  db.prepare(`UPDATE live_rooms SET status='ended', ended_at=? WHERE pin=?`)
+  await db.prepare(`UPDATE live_rooms SET status='ended', ended_at=? WHERE pin=?`)
     .run(Date.now(), room.pin);
   // Cleanup sau 5 phút
   setTimeout(() => rooms.delete(room.pin), 5 * 60_000);
@@ -148,7 +148,7 @@ function handleAnswer(room, playerId, optIndex) {
 
 // ── HTTP routes ─────────────────────────────────────────────
 export function attachLiveQuizHttp(router) {
-  router.post('/api/live-quiz/create', requireAuth, (req, res) => {
+  router.post('/api/live-quiz/create', requireAuth, async (req, res) => {
     if (!['teacher', 'admin'].includes(req.user.role)) {
       return res.status(403).json({ error: 'teacher_only' });
     }
@@ -156,7 +156,7 @@ export function attachLiveQuizHttp(router) {
     let questions = Array.isArray(b.questions) ? b.questions : null;
     // Hỗ trợ tạo từ UGC quest id
     if (!questions && b.ugc_quest_id) {
-      const row = db.prepare(`SELECT questions FROM ugc_quests WHERE id = ? AND status = 'published'`)
+      const row = await db.prepare(`SELECT questions FROM ugc_quests WHERE id = ? AND status = 'published'`)
         .get(Number(b.ugc_quest_id));
       if (row) try { questions = JSON.parse(row.questions); } catch {}
     }
@@ -180,7 +180,7 @@ export function attachLiveQuizHttp(router) {
       hostWs: null, qStartedAt: 0, timer: null,
     };
     rooms.set(pin, room);
-    db.prepare(`INSERT INTO live_rooms (pin, host_id, title, questions, status, created_at)
+    await db.prepare(`INSERT INTO live_rooms (pin, host_id, title, questions, status, created_at)
                 VALUES (?, ?, ?, ?, 'lobby', ?)`)
       .run(pin, req.user.id, title, JSON.stringify(questions), Date.now());
     res.json({ ok: true, pin, total: questions.length });
@@ -219,7 +219,7 @@ export function attachLiveQuizWs(basePath = '') {
     }
   };
 
-  wss.on('connection', (ws, req) => {
+  wss.on('connection', async (ws, req) => {
     const url = new URL(req.url, 'http://x');
     const pin = url.searchParams.get('pin');
     const role = url.searchParams.get('role');     // 'host' | 'player'
@@ -232,7 +232,7 @@ export function attachLiveQuizWs(basePath = '') {
     if (role === 'host') {
       // Host phải là người tạo phòng (hoặc admin) — verify session cookie trên
       // upgrade request, không tin query param. WS same-origin tự gửi cookie.
-      const u = getCurrentUser(req);
+      const u = await getCurrentUser(req);
       if (!u || (u.id !== room.hostId && u.role !== 'admin')) {
         guardedSend(ws, { type: 'error', error: 'host_unauthorized' });
         return ws.close();
@@ -249,17 +249,17 @@ export function attachLiveQuizWs(basePath = '') {
     }
     logSocketLifecycle(ws, 'live-quiz', { pin, role });
 
-    onMessageJSON(ws, (msg) => {
+    onMessageJSON(ws, async (msg) => {
       if (role === 'host') {
         if (msg.type === 'start' && room.status === 'lobby') {
           room.status = 'running';
-          db.prepare(`UPDATE live_rooms SET status='running' WHERE pin=?`).run(pin);
-          startQuestion(room);
+          await db.prepare(`UPDATE live_rooms SET status='running' WHERE pin=?`).run(pin);
+          await startQuestion(room);
         } else if (msg.type === 'next') {
-          if (room.currentQ < room.questions.length) startQuestion(room);
-          else endRoom(room);
+          if (room.currentQ < room.questions.length) await startQuestion(room);
+          else await endRoom(room);
         } else if (msg.type === 'end') {
-          endRoom(room);
+          await endRoom(room);
         }
       } else {
         if (msg.type === 'answer') {

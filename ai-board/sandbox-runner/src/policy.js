@@ -64,6 +64,17 @@ export function loadPolicy(text) {
   if (doc.errors.length || doc.warnings.length) throw new PolicyError(`yaml: ${(doc.errors[0] || doc.warnings[0]).message}`);
   let data;
   try { data = doc.toJS(); } catch (error) { throw new PolicyError(`yaml: ${error.message}`); }
+  // optional; absent keeps the existing shape and hash of pinned policies
+  const network = data && typeof data === 'object' ? data.network : undefined;
+  if (network !== undefined) {
+    if (network !== 'none') throw new PolicyError('policy.network: only none allowed');
+    data = { ...data };
+    delete data.network;
+  }
   const policy = SCHEMA(data, 'policy');
+  if (network === 'none') {
+    if (policy.egress.length) throw new PolicyError('policy.egress: must be empty when network is none');
+    policy.network = 'none';
+  }
   return { ...policy, hash: createHash('sha256').update(JSON.stringify(policy)).digest('hex') };
 }

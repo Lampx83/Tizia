@@ -9,7 +9,7 @@ function fixture() {
     roles: { classifier: ['primary', 'backup'], embed: ['embedding'] },
     candidates: {
       primary: { provider: 'ollama', model: 'qwen3.5:4b', enabled: true, approved_roles: ['classifier'], capabilities: ['logprobs'], calibration_id: 'qwen35-4b-v1' },
-      backup: { provider: 'fallback_ollama', model: 'qwen3.5:4b-copy', enabled: true, approved_roles: ['classifier'], capabilities: ['logprobs'], calibration_id: 'qwen35-4b-v1' },
+      backup: { provider: 'vllm', model: 'qwen3.5:4b-copy', enabled: true, approved_roles: ['classifier'], capabilities: ['logprobs'], calibration_id: 'qwen35-4b-v1' },
       embedding: { provider: 'ollama', model: 'bge-m3', enabled: true, approved_roles: ['embed'], capabilities: ['embedding'], embedding_space: 'bge-m3-v1' },
     },
   };
@@ -17,10 +17,11 @@ function fixture() {
 let serial = 0;
 function environment() {
   serial++;
-  return { AI_BOARD_MODEL_ROUTING: 'true', OLLAMA_URL: `http://primary-${serial}.test`, OLLAMA_SECKEY: 'test-secret', FALLBACK_OLLAMA_URL: `http://backup-${serial}.test`, FALLBACK_OLLAMA_SECKEY: 'backup-secret' };
+  return { AI_BOARD_MODEL_ROUTING: 'true', OLLAMA_URL: `http://primary-${serial}.test`, OLLAMA_SECKEY: 'test-secret', VLLM_URL: `http://backup-${serial}.test`, VLLM_SECKEY: 'backup-secret' };
 }
 const goodBody = { logprobs: [{ token: 'A', logprob: -0.2 }] };
-const ok = () => ({ ok: true, json: async () => goodBody });
+const chatBody = { choices: [{ message: { content: 'A' }, logprobs: { content: [{ token: 'A', logprob: -0.2, top_logprobs: [{ token: 'A', logprob: -0.2 }] }] } }] };
+const ok = (url = '') => ({ ok: true, json: async () => (url.includes('backup') ? chatBody : goodBody) });
 
 test('vLLM is eligible for classifier only with logprobs and a matching calibration_id; never for embed', () => {
   const catalog = fixture();
@@ -121,7 +122,7 @@ test('transient HTTP failure switches endpoint and cooldown persists across call
     seen.push(url);
     if (url.startsWith(env.OLLAMA_URL)) return { ok: false, status: 503 };
     assert.equal(request.headers['x-ollama-seckey'], 'backup-secret');
-    return ok();
+    return ok(url);
   };
   const first = await routedClassifyRequest({}, { env, catalog, fetchImpl });
   assert.equal(first.route.reason, 'infrastructure_failover');
@@ -133,7 +134,7 @@ test('transient HTTP failure switches endpoint and cooldown persists across call
 test('network and timeout failures permit fallback', async () => {
   for (const error of [new TypeError('private endpoint text'), Object.assign(new Error(), { name: 'TimeoutError' })]) {
     const env = environment(); let calls = 0;
-    const result = await routedClassifyRequest({}, { env, catalog: fixture(), fetchImpl: async () => { if (++calls === 1) throw error; return ok(); } });
+    const result = await routedClassifyRequest({}, { env, catalog: fixture(), fetchImpl: async (url) => { if (++calls === 1) throw error; return ok(url); } });
     assert.equal(result.route.candidate, 'backup');
     assert.equal(calls, 2);
   }

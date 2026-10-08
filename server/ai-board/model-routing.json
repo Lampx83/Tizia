@@ -22,9 +22,7 @@
       "vllm-heavy-coder"
     ],
     "classifier": [
-      "vllm-qwen35-35b-classifier",
-      "ollama-qwen35-9b",
-      "fallback-qwen35-4b"
+      "vllm-qwen35-35b-classifier"
     ],
     "embed": [
       "ollama-qwen3-embedding-8b",
@@ -38,31 +36,6 @@
     ]
   },
   "candidates": {
-    "ollama-qwen35-9b": {
-      "provider": "ollama",
-      "model": "qwen3.5:9b-ctx8k",
-      "enabled": true,
-      "approved_roles": [
-        "classifier"
-      ],
-      "capabilities": [
-        "json",
-        "logprobs"
-      ],
-      "calibration_id": "qwen35-9b-unfitted"
-    },
-    "fallback-qwen35-4b": {
-      "provider": "fallback_ollama",
-      "model": "qwen3.5:4b",
-      "enabled": true,
-      "approved_roles": [
-        "classifier"
-      ],
-      "capabilities": [
-        "logprobs"
-      ],
-      "calibration_id": "qwen35-4b-v1"
-    },
     "vllm-heavy-coder": {
       "provider": "vllm",
       "model": "qwen3.5-35b-a3b-int4",

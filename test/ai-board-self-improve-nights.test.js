@@ -3,9 +3,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import express from 'express';
-import Database from 'better-sqlite3';
 
-import { applyAiBoardMigrations, createAiBoardStore, LIMITS } from '../server/ai-board/store.js';
+import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
+import { openBoard } from './support/ai-board-db.js';
+import { LIMITS } from '../server/ai-board/store.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
 
 const KEY = 'fixture-worker-key-32-characters-long';
@@ -14,35 +15,20 @@ const SI = LIMITS.self_improve;
 const DAY = 24 * 3600_000;
 
 async function fixture({ labelled = SI.min_labelled_tasks } = {}) {
-  const db = new Database(':memory:');
-  db.pragma('foreign_keys = ON');
-  db.exec(`
-    CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
-      display_name TEXT NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'student',
-      created_at INTEGER NOT NULL, enrolled_domain TEXT);
-    CREATE TABLE requests (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'other',
-      title TEXT NOT NULL, detail TEXT, student TEXT NOT NULL DEFAULT 'x',
-      status TEXT NOT NULL DEFAULT 'pending', votes INTEGER NOT NULL DEFAULT 1,
-      admin_note TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, attachments TEXT
-    );
-    CREATE TABLE request_messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, request_id INTEGER NOT NULL, role TEXT NOT NULL,
-      author_name TEXT, body TEXT NOT NULL, attachments TEXT, created_at INTEGER NOT NULL
-    );
-    INSERT INTO users VALUES (1, 'lan', 'Lan', 'x', 'student', 0, 'it'), (9, 'boss', 'Boss', 'x', 'admin', 0, NULL);
-  `);
-  applyAiBoardMigrations(db);
+  const db = await openBoard({ users: [
+    [1, 'lan', 'Lan', 'student', 'it'],
+    [9, 'boss', 'Boss', 'admin', null],
+  ] });
   const insertTask = db.prepare(`INSERT INTO ai_eval_tasks(source, trigger, request_id, run_id, request_text,
     expected_files, status, created_at) VALUES ('miss', 'verdict_blocked', 1, ?, 'x', '["package.json"]', 'labelled', ?)`);
-  for (let i = 1; i <= labelled; i += 1) insertTask.run(i, Date.now() - i * 1000);
-  const store = createAiBoardStore(db);
+  for (let i = 1; i <= labelled; i += 1) await insertTask.run(i, Date.now() - i * 1000);
+  const store = createAsyncAiBoardStore(db.d);
   const bells = [];
   const app = express();
   app.use(express.json());
-  app.use((req, _res, next) => {
+  app.use(async (req, _res, next) => {
     const id = Number(req.headers['x-test-user']);
-    if (id) req.user = db.prepare('SELECT * FROM users WHERE id=?').get(id);
+    if (id) req.user = await db.prepare('SELECT * FROM users WHERE id=?').get(id);
     next();
   });
   const pass = (_req, _res, next) => next();
@@ -110,11 +96,11 @@ test('a night does not run while a self-improve PR is still open', async () => {
   try {
     await f.toggle(true);
     const { root_ticket_id: id } = await f.selfRequest();
-    const ticket = f.store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' });
+    const ticket = await f.store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' });
     const lease = { workerId: 'w1', leaseToken: ticket.lease_token };
-    const run = f.store.createRun(id, { ...lease, trigger: 'plan', idempotencyKey: 'night-pr-run-01' });
-    f.db.prepare('UPDATE ai_runs SET evidence_json=? WHERE id=?')
-      .run(JSON.stringify({ pull_request: { number: 77, url: 'https://github.com/x/y/pull/77' } }), run.id);
+    const run = await f.store.createRun(id, { ...lease, trigger: 'plan', idempotencyKey: 'night-pr-run-01' });
+    (await f.db.prepare('UPDATE ai_runs SET evidence_json=? WHERE id=?')
+      .run(JSON.stringify({ pull_request: { number: 77, url: 'https://github.com/x/y/pull/77' } }), run.id));
     assert.equal((await f.night('2026-09-28')).body.reason, 'self_pr_open');
     await f.worker('/api/ai-board/worker/pull-requests/state', { number: 77, state: 'closed', closed_at: Date.now(), files: [] });
     assert.equal((await f.night('2026-09-28')).body.run, true);
@@ -168,7 +154,7 @@ test('a cluster that failed three nights in a row is skipped for seven days', as
     for (let d = 1; d <= SI.cluster_skip.after_failed_nights; d += 1) await pastNight(f, `2026-09-0${d}`, [dropped(key)]);
     assert.deepEqual((await f.night('2026-09-05')).body.skip_clusters, [key]);
     const later = Date.now() + (SI.cluster_skip.days + 1) * DAY;
-    f.db.prepare('UPDATE ai_self_improve_nights SET started_at = started_at - ?').run(later - Date.now());
+    (await f.db.prepare('UPDATE ai_self_improve_nights SET started_at = started_at - ?').run(later - Date.now()));
     assert.deepEqual((await f.night('2026-09-20')).body.skip_clusters, []);
   } finally { f.close(); }
 });
@@ -190,19 +176,19 @@ async function variantVerdict(f, verdict) {
   await f.report({ night: '2026-09-28', variant: { cluster: { key: 'k' }, request_id: req.request_id,
     root_ticket_id: req.root_ticket_id, status: 'waiting' } });
   const id = req.root_ticket_id;
-  const held = f.store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' });
-  const run = f.store.createRun(id, { workerId: 'w1', leaseToken: held.lease_token, trigger: 'plan', idempotencyKey: 'night-v-run-1' });
+  const held = await f.store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' });
+  const run = await f.store.createRun(id, { workerId: 'w1', leaseToken: held.lease_token, trigger: 'plan', idempotencyKey: 'night-v-run-1' });
   const step = { order: 1, title: 'Sửa', description: 'x', allowed_scope: [SKILL], acceptance: ['đổi'], tests: ['pytest'],
     capability: 'self.config', risk: 'low', non_goals: [] };
-  const waiting = f.store.submitPlan(id, { workerId: 'w1', leaseToken: held.lease_token, runId: run.id, budgetUsed: 1,
+  const waiting = await f.store.submitPlan(id, { workerId: 'w1', leaseToken: held.lease_token, runId: run.id, budgetUsed: 1,
     idempotencyKey: 'night-v-plan-1', plan: { domain: 'ai-board', goal: 'Sửa.', allowed_scope: [SKILL], acceptance: ['đổi'],
       tests: ['pytest'], capabilities: ['self.config'], risk: 'low', non_goals: [], steps: [step] } });
-  f.store.releaseLease(id, { workerId: 'w1', leaseToken: held.lease_token, outcome: 'planned', idempotencyKey: 'night-v-rel-1' });
-  f.store.authorizePlan(id, waiting.plan_hash, 9);
-  const exec = f.store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' });
+  await f.store.releaseLease(id, { workerId: 'w1', leaseToken: held.lease_token, outcome: 'planned', idempotencyKey: 'night-v-rel-1' });
+  await f.store.authorizePlan(id, waiting.plan_hash, 9);
+  const exec = await f.store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' });
   const lease = { worker_id: 'w1', lease_token: exec.lease_token };
-  const run2 = f.store.createRun(id, { workerId: 'w1', leaseToken: exec.lease_token, trigger: 'execute', idempotencyKey: 'night-v-run-2' });
-  f.store.resumeAuthorizedPlan(id, { workerId: 'w1', leaseToken: exec.lease_token, runId: run2.id });
+  const run2 = await f.store.createRun(id, { workerId: 'w1', leaseToken: exec.lease_token, trigger: 'execute', idempotencyKey: 'night-v-run-2' });
+  await f.store.resumeAuthorizedPlan(id, { workerId: 'w1', leaseToken: exec.lease_token, runId: run2.id });
   const res = await f.worker(`/api/ai-board/worker/tickets/${id}/verdict`, { ...lease, run_id: run2.id, verdict,
     idempotency_key: 'night-v-verdict-1' });
   assert.equal(res.status, 200, JSON.stringify(res.body));

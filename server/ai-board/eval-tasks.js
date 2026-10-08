@@ -1,2 +1,2 @@
-// Compatibility export; implementation: services/eval-tasks.js.
+// Compatibility export; async PostgreSQL.
 export * from './services/eval-tasks.js';

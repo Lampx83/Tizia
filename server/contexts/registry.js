@@ -115,7 +115,7 @@ function assertNamesFree(plugins) {
 // Không đụng app._router.stack (internal của Express, vỡ khi lên v5).
 // ponytail: middleware no-op còn lại sau dispose là rác nhỏ (1 closure/plugin đã gỡ);
 // nếu về sau mount/dispose chạy hàng nghìn lần thì mới cần gỡ hẳn khỏi stack.
-function mountHttp(target, plugins, ctx) {
+async function mountHttp(target, plugins, ctx) {
   assertNamesFree(plugins);
   // pluginCtx() làm 1 lượt deepFreeze — `ctx` giống hệt nhau cho cả lô, tính
   // 1 lần thay vì 1 lần/plugin (mountRouterPlugins gọi 1 lần với ~30 plugin).
@@ -123,7 +123,7 @@ function mountHttp(target, plugins, ctx) {
   for (const p of plugins) {
     let inner = express.Router();
     target.use((req, res, next) => (inner ? inner(req, res, next) : next()));
-    const disposePlugin = p.mount(inner, frozenCtx);
+    const disposePlugin = await p.mount(inner, frozenCtx);
     mounted.set(p.name, () => {
       inner = null;
       disposePlugin?.();
@@ -133,22 +133,22 @@ function mountHttp(target, plugins, ctx) {
   return plugins.map((p) => p.name);
 }
 
-export function mountAppPlugins(app, plugins, ctx) {
-  return mountHttp(app, plugins, ctx);
+export async function mountAppPlugins(app, plugins, ctx) {
+  return await mountHttp(app, plugins, ctx);
 }
 
-export function mountRouterPlugins(router, plugins, ctx) {
-  return mountHttp(router, plugins, ctx);
+export async function mountRouterPlugins(router, plugins, ctx) {
+  return await mountHttp(router, plugins, ctx);
 }
 
-export function mountWsPlugins(httpServer, plugins, ctx) {
+export async function mountWsPlugins(httpServer, plugins, ctx) {
   assertNamesFree(plugins);
   const frozenCtx = pluginCtx(ctx);
   for (const p of plugins) {
     if (p.wsPriority !== 'prepend' && p.wsPriority !== 'append') {
       throw new Error(`[registry] plugin WS ${p.name} phải khai báo wsPriority: 'prepend' | 'append'`);
     }
-    const handle = p.mount(frozenCtx);
+    const handle = await p.mount(frozenCtx);
     if (typeof handle?.onUpgrade !== 'function') {
       throw new Error(`[registry] plugin WS ${p.name} phải trả { onUpgrade }`);
     }

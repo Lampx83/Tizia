@@ -19,6 +19,7 @@ FROM $registry/gate5@$base
 RUN rm -rf /opt/ai-board/ai-board/harness
 COPY ai-board/harness /opt/ai-board/ai-board/harness
 COPY server/ai-board/guard-lexicon.json /opt/ai-board/server/ai-board/guard-lexicon.json
+COPY server/ai-board/contract.json /opt/ai-board/server/ai-board/contract.json
 COPY scripts/smoke-user-state.sh /opt/ai-board/scripts/smoke-user-state.sh
 COPY ai-board/sandbox-runner/guest/guest-boot.sh /usr/local/bin/guest-boot.sh
 RUN chmod +x /usr/local/bin/guest-boot.sh

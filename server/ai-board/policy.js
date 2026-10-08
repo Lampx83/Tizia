@@ -1,2 +1,2 @@
-// Compatibility export; implementation: security/policy.js.
+// Compatibility export; canonical PostgreSQL ownership.
 export * from './security/policy.js';

@@ -60,7 +60,7 @@ function buildCatalogue() {
 }
 
 // Tạo bảng nếu chưa có — idempotent, chạy mỗi khi server start.
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS campus_layouts (
     domain      TEXT    PRIMARY KEY,
     layout      TEXT    NOT NULL,
@@ -97,8 +97,8 @@ function sanitize(input) {
   return Object.keys(out).length ? out : null;
 }
 
-function readLayout(domain) {
-  const row = stmtGet.get(domain);
+async function readLayout(domain) {
+  const row = await stmtGet.get(domain);
   if (!row) return null;
   try { return JSON.parse(row.layout); } catch { return null; }
 }
@@ -109,11 +109,11 @@ export function attachCampusLayout(r, requireAdmin) {
     res.json(buildCatalogue());
   });
   // GET public — view page fetch để override default
-  r.get('/api/campus-layout/:domain', (req, res) => {
+  r.get('/api/campus-layout/:domain', async (req, res) => {
     const domain = String(req.params.domain || '').toLowerCase();
     if (!ALLOWED_DOMAINS.has(domain)) return res.status(404).json({ error: 'unknown_domain' });
     try {
-      const layout = readLayout(domain);
+      const layout = await readLayout(domain);
       res.json({ domain, layout });
     } catch (e) {
       res.status(500).json({ error: 'read_failed', message: e.message });
@@ -121,13 +121,13 @@ export function attachCampusLayout(r, requireAdmin) {
   });
 
   // POST super-admin — lưu đè
-  r.post('/api/admin/campus-layout/:domain', requireAdmin, (req, res) => {
+  r.post('/api/admin/campus-layout/:domain', requireAdmin, async (req, res) => {
     const domain = String(req.params.domain || '').toLowerCase();
     if (!ALLOWED_DOMAINS.has(domain)) return res.status(400).json({ error: 'unknown_domain' });
     const clean = sanitize(req.body?.layout);
     if (!clean) return res.status(400).json({ error: 'invalid_body', message: 'Cần {layout:{...}}' });
     try {
-      stmtUpsert.run(domain, JSON.stringify(clean), Date.now());
+      await stmtUpsert.run(domain, JSON.stringify(clean), Date.now());
       res.json({ ok: true, domain });
     } catch (e) {
       res.status(500).json({ error: 'write_failed', message: e.message });
@@ -135,11 +135,11 @@ export function attachCampusLayout(r, requireAdmin) {
   });
 
   // DELETE super-admin — xoá override (về default hardcoded)
-  r.delete('/api/admin/campus-layout/:domain', requireAdmin, (req, res) => {
+  r.delete('/api/admin/campus-layout/:domain', requireAdmin, async (req, res) => {
     const domain = String(req.params.domain || '').toLowerCase();
     if (!ALLOWED_DOMAINS.has(domain)) return res.status(400).json({ error: 'unknown_domain' });
     try {
-      const info = stmtDelete.run(domain);
+      const info = await stmtDelete.run(domain);
       res.json({ ok: true, domain, deleted: info.changes > 0 });
     } catch (e) {
       res.status(500).json({ error: 'delete_failed', message: e.message });
@@ -147,8 +147,8 @@ export function attachCampusLayout(r, requireAdmin) {
   });
 
   // GET list (admin only) — xem tất cả override đang có
-  r.get('/api/admin/campus-layouts', requireAdmin, (_req, res) => {
-    const rows = db.prepare(`SELECT domain, updated_at FROM campus_layouts ORDER BY domain`).all();
+  r.get('/api/admin/campus-layouts', requireAdmin, async (_req, res) => {
+    const rows = await db.prepare(`SELECT domain, updated_at FROM campus_layouts ORDER BY domain`).all();
     res.json({ layouts: rows });
   });
 

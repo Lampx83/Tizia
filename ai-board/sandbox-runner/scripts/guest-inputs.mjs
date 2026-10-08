@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const HARNESS = 'ai-board/harness';
 const SKIP_DIRS = new Set(['tests', 'eval', '__pycache__', '.venv', '.pytest_cache']);
-const FILES = ['server/ai-board/guard-lexicon.json', 'scripts/smoke-user-state.sh', 'ai-board/sandbox-runner/guest/guest-boot.sh'];
+const FILES = ['server/ai-board/guard-lexicon.json', 'server/ai-board/contract.json', 'scripts/smoke-user-state.sh', 'ai-board/sandbox-runner/guest/guest-boot.sh'];
 const MARKER = /^# guest-inputs: ([0-9a-f]{64})\r?$/m;
 
 function walk(root, rel, out) {
