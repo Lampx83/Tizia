@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import path from 'node:path';
 import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { applyAiBoardMigrations } from './ai-board/store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -392,7 +392,7 @@ try {
     if (fs.existsSync(_scriptPath)) {
       console.log('[db] skills empty — auto-running catalog migration…');
       // Dynamic import async — không block init. Lỗi → log, server vẫn boot.
-      import(_scriptPath).then(() => {
+      import(pathToFileURL(_scriptPath).href).then(() => {
         const n = db.prepare(`SELECT COUNT(*) AS n FROM skills`).get().n;
         console.log(`[db] skills catalog auto-seeded: ${n} rows`);
       }).catch(e => console.warn('[db] auto-migrate skills failed:', e.message));
