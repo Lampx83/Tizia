@@ -301,3 +301,18 @@ def test_concurrent_workers_can_ask_for_the_same_checkout_and_a_broken_one_is_re
     assert not errors and len(set(results)) == 1 and (results[0] / "HEAD").read_text().strip() == sha
     (results[0] / "HEAD").unlink()  # a clone killed half-way
     assert (taskpack.prepare_checkout(tmp_path, sha, ROOT) / "HEAD").read_text().strip() == sha
+
+
+def test_context_arms_change_what_gate3_shows_and_default_restores_it():
+    from evaluation.suite import ablation
+    from gates import implement
+    sub, content = {"file": "a.js", "title": "t", "verify": "v"}, "x\ny\nz"
+    try:
+        ablation.apply("fullfile")
+        text, lessons, ctx = implement.gate3_context(sub, {}, content, ["b.js"], ["x"])
+        assert "L3| z" in text and lessons == [] and ctx is None
+        ablation.apply("nosiblings")
+        assert implement._siblings(".", "HEAD", "a.js") == []
+    finally:
+        ablation.apply("default")
+    assert implement.gate3_context.__name__ == "gate3_context" and implement._siblings.__name__ == "_siblings"

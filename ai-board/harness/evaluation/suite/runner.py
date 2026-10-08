@@ -19,7 +19,7 @@ from pathlib import Path
 
 import eval_corpus
 import eval_fast
-from evaluation.suite import metrics, taskpack, trial
+from evaluation.suite import ablation, metrics, taskpack, trial
 from evaluation.suite.launcher import sqlite_launcher
 
 HERE = Path(__file__).resolve().parent
@@ -160,7 +160,8 @@ def cmd_run(args, deps=None) -> int:
                 router.catalog.setdefault("reasoning", {})[role] = value
     else:
         router, model = None, deps.models.gate3_model
-    prov = provenance(ROOT, model, router)
+    ablation.apply(args.context_arm)
+    prov = {**provenance(ROOT, model, router), "context_arm": args.context_arm}
     if prov["dirty"] and not args.allow_dirty:
         print("[suite] working tree has uncommitted changes: commit them (or --allow-dirty for a throwaway run)", file=sys.stderr)
         return 2
@@ -182,7 +183,8 @@ def cmd_run(args, deps=None) -> int:
     modes = args.modes.split(",")
     name = (f"s{args.seed}-{args.split}-{prov['ref'][:12]}" + ("-dirty" if prov["dirty"] else "")
             + (f"-think0-{args.reasoning_off.replace(',', '+')}" if args.reasoning_off else "")
-            + (f"-think1-{args.reasoning_on.replace(',', '+')}" if args.reasoning_on else ""))
+            + (f"-think1-{args.reasoning_on.replace(',', '+')}" if args.reasoning_on else "")
+            + (f"-ctx-{args.context_arm}" if args.context_arm != "default" else ""))
     run_dir = root / "suite" / name
     run_dir.mkdir(parents=True, exist_ok=True)
     meta = {"seed": args.seed, "split": args.split, "repeats": args.repeats, "modes": modes, "fast_tier": args.fast_tier, "review": args.review, "packs": [_sha(Path(p)) for p in args.pack or []], **prov,
@@ -296,6 +298,7 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--allow-dirty", action="store_true")
     run.add_argument("--review", action="store_true", help="also run the gate 4 model content review on gold-mode candidates (false-block rate)")
     run.add_argument("--pack", action="append", help="task pack JSON (merged-history tasks); repeatable")
+    run.add_argument("--context-arm", choices=ablation.ARMS, default="default", help="gate 3 context ablation: fullfile = whole numbered file instead of excerpt; nosiblings = no folder listing")
     run.add_argument("--reasoning-on", default="", help="comma list of roles to run with thinking on (ablation), e.g. gate1,gate25")
     run.add_argument("--reasoning-off", default="", help="comma list of roles to run with thinking off (ablation), e.g. gate1,gate25")
     run.set_defaults(handler=cmd_run)
