@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createAppDb } from './db-core.js';
 import { applyMigrations } from './ai-board/db/index.js';
 
@@ -340,7 +340,7 @@ try {
     if (fs.existsSync(_scriptPath)) {
       console.log('[db] skills empty — auto-running catalog migration…');
       // Dynamic import async — không block init. Lỗi → log, server vẫn boot.
-      import(_scriptPath).then(async () => {
+      import(pathToFileURL(_scriptPath).href).then(async () => {
         const n = (await db.prepare(`SELECT COUNT(*) AS n FROM skills`).get()).n;
         console.log(`[db] skills catalog auto-seeded: ${n} rows`);
       }).catch(e => console.warn('[db] auto-migrate skills failed:', e.message));

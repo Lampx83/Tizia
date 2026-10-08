@@ -14,6 +14,7 @@
  */
 
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import express from 'express';
 import AdmZip from 'adm-zip';
@@ -65,7 +66,7 @@ const ALLOWED_TOP_DIRS     = new Set(['public', 'schema']); // schema cháº¥p nhá
 const REQUIRED_INDEX       = 'public/index.html';
 
 function getPortalAppsDir() {
-  const ROOT_DIR = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..', '..');
+  const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
   const DATA_DIR = process.env.DATA_DIR
     ? path.resolve(process.env.DATA_DIR)
     : path.resolve(ROOT_DIR, 'data');
