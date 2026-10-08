@@ -18,12 +18,12 @@ def catalog():
             'candidates': {name: {'provider': provider, 'model': name, 'enabled': True,
                 'approved_roles': ['gate1', 'gate3_heavy', 'gate3_light', 'classifier', 'embed'],
                 'capabilities': ['json', 'logprobs', 'embedding'], 'calibration_id': 'fit', 'embedding_space': 'space'}
-                for name, provider in [('a', 'ollama'), ('b', 'fallback_ollama')]}}
+                for name, provider in [('a', 'ollama'), ('b', 'vllm')]}}
 
 
 def client(config=None, clock=lambda: 0):
     settings = {'OLLAMA_URL': 'http://primary', 'OLLAMA_SECKEY': 'primary-key',
-                'FALLBACK_OLLAMA_URL': 'http://secondary', 'FALLBACK_OLLAMA_SECKEY': 'secondary-key'}
+                'VLLM_URL': 'http://secondary', 'VLLM_SECKEY': 'secondary-key'}
     return OllamaClient(base_url='http://primary', gate1_model='a', gate3_model='a', gate3_model_light='a',
                         routing=ModelRouter(settings, config or catalog(), clock=clock))
 
@@ -39,6 +39,18 @@ class Reply:
         return json.dumps(self.body).encode()
 
 
+def chat_shape(body):
+    """Ollama-shaped test step -> OpenAI chat reply, for the vLLM candidate."""
+    if not isinstance(body, dict) or 'response' not in body:
+        return body
+    choice = {'message': {'content': body['response']}, 'finish_reason': 'stop'}
+    if body.get('logprobs'):
+        choice['logprobs'] = {'content': [{'token': item['token'], 'logprob': item['logprob'],
+                                           'top_logprobs': item['top_logprobs']} for item in body['logprobs']]}
+    usage = {key: body[src] for key, src in (('prompt_tokens', 'prompt_eval_count'), ('completion_tokens', 'eval_count')) if src in body}
+    return {'choices': [choice], **({'usage': usage} if usage else {})}
+
+
 def mock_gateway(monkeypatch, steps):
     calls = []
     def send(request, **_):
@@ -46,8 +58,9 @@ def mock_gateway(monkeypatch, steps):
         step = steps.pop(0)
         if isinstance(step, Exception):
             raise step
-        return Reply(step)
+        return Reply(chat_shape(step) if request.full_url.startswith('http://secondary') else step)
     monkeypatch.setattr('urllib.request.urlopen', send)
+    monkeypatch.setattr('urllib.request.build_opener', lambda *_: type('Opener', (), {'open': staticmethod(send)}))
     return calls
 
 
@@ -99,10 +112,10 @@ def test_infrastructure_failover_charges_every_attempt_and_separates_credentials
     budget = Budget()
     result = deps.call_model('a', 'prompt', gate=1, budget=budget)
     assert budget.model_calls == 4 and budget.tokens == 5 and budget.units == 4
-    assert [c[0] for c in calls] == ['http://primary/api/generate'] * 3 + ['http://secondary/api/generate']
+    assert [c[0] for c in calls] == ['http://primary/api/generate'] * 3 + ['http://secondary/v1/chat/completions']
     assert calls[0][1]['X-ollama-seckey'] == 'primary-key'
     assert calls[-1][1]['X-ollama-seckey'] == 'secondary-key'
-    assert result['_route'] == {'role': 'gate1', 'candidate': 'b', 'provider': 'fallback_ollama', 'reason': 'infrastructure_failover'}
+    assert result['_route'] == {'role': 'gate1', 'candidate': 'b', 'provider': 'vllm', 'reason': 'infrastructure_failover'}
     assert len(trace.pending) == 4
     assert 'primary-key' not in json.dumps(trace.pending) and 'secondary-key' not in json.dumps(trace.pending)
     assert deps.models.routing.first('gate1')['id'] == 'b'
@@ -212,15 +225,11 @@ def test_critical_codegen_does_not_trigger_quality_switch(monkeypatch, tmp_path)
     assert result['failure_class'] == 'critical' and len(calls) == 1 and budget.quality_switches == 0
 
 
-def test_embedding_failover_pins_compatible_candidate(monkeypatch):
-    calls = mock_gateway(monkeypatch, [http_error(503), {'embedding': [0.1, 0.2]}, {'embedding': [0.3, 0.4]}])
-    instance = client()
-    first = instance.embed('one')
-    assert first['_model'] == 'b' and first['_route']['reason'] == 'infrastructure_failover'
-    instance.routing.cooldowns.clear()
-    second = instance.embed('two')
-    assert second['_route']['reason'] == 'pinned_candidate'
-    assert [c[2]['model'] for c in calls] == ['a', 'b', 'b']
+def test_embedding_never_fails_over_to_vllm(monkeypatch):
+    calls = mock_gateway(monkeypatch, [http_error(503)])
+    with pytest.raises(RuntimeError):
+        client().embed('one')
+    assert len(calls) == 1
 
 
 @pytest.mark.parametrize('response', [http_error(401), {'embedding': []}, {'embedding': [float('nan')]}])
@@ -257,7 +266,7 @@ def test_classifier_reports_actual_candidate_without_legacy_model_setting(monkey
     mock_gateway(monkeypatch, [http_error(503)] * 3 + [body])
     result = classifier.classify('clarity', 'request', Deps(models=client(), notify=None, sleep=lambda _: None),
                                  Budget(), gate=1)
-    assert result['model'] == 'b' and result['route']['provider'] == 'fallback_ollama'
+    assert result['model'] == 'b' and result['route']['provider'] == 'vllm'
 
 
 def test_vllm_classifier_needs_logprobs_and_matching_calibration_and_embed_stays_blocked():

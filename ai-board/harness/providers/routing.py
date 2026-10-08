@@ -12,6 +12,10 @@ ROLES = {'gate1', 'gate25', 'gate3_light', 'gate3_heavy', 'gate4_review', 'class
 CAPABILITIES = {'json', 'logprobs', 'embedding'}
 
 
+def _prefix(provider):
+    return 'VLLM' if provider == 'vllm' else 'OLLAMA'
+
+
 def _unique_strings(value, allowed=None):
     return (isinstance(value, list) and all(isinstance(item, str) for item in value)
             and len(value) == len(set(value)) and (allowed is None or not set(value) - allowed))
@@ -41,7 +45,7 @@ def validate_catalog(catalog):
     for name, candidate in catalog['candidates'].items():
         if (not _nonempty_string(name) or not isinstance(candidate, dict)
                 or not isinstance(candidate.get('provider'), str)
-                or candidate['provider'] not in {'ollama', 'fallback_ollama', 'vllm', 'api'}
+                or candidate['provider'] not in {'ollama', 'vllm', 'api'}
                 or not _nonempty_string(candidate.get('model'))
                 or not isinstance(candidate.get('enabled'), bool)
                 or not _unique_strings(candidate.get('approved_roles'), ROLES)
@@ -92,8 +96,7 @@ class ModelRouter:
             # No API prompts until the real provider has an explicit adapter.
             if provider == 'api':
                 continue
-            prefix = {'fallback_ollama': 'FALLBACK_OLLAMA', 'vllm': 'VLLM'}.get(provider, 'OLLAMA')
-            if not self.settings.get(prefix + '_URL') or self.cooldowns.get(provider, 0) > self.clock():
+            if not self.settings.get(_prefix(provider) + '_URL') or self.cooldowns.get(provider, 0) > self.clock():
                 continue
             self.endpoint(provider)
             capability = 'embedding' if role == 'embed' else 'logprobs' if role == 'classifier' else 'json'
@@ -108,8 +111,7 @@ class ModelRouter:
         return found
 
     def endpoint(self, provider):
-        prefix = {'fallback_ollama': 'FALLBACK_OLLAMA', 'vllm': 'VLLM'}.get(provider, 'OLLAMA')
-        url = str(self.settings.get(prefix + '_URL') or '').strip().rstrip('/')
+        url = str(self.settings.get(_prefix(provider) + '_URL') or '').strip().rstrip('/')
         return self.validate_endpoint(url)
 
     @staticmethod
@@ -146,9 +148,8 @@ class ModelRouter:
 
     def client(self, candidate, template):
         from dataclasses import replace
-        prefix = {'fallback_ollama': 'FALLBACK_OLLAMA', 'vllm': 'VLLM'}.get(candidate['provider'], 'OLLAMA')
         return replace(template, base_url=self.endpoint(candidate['provider']),
-                       seckey=self.settings.get(prefix + '_SECKEY') or None, routing=None,
+                       seckey=self.settings.get(_prefix(candidate['provider']) + '_SECKEY') or None, routing=None,
                        protocol='vllm' if candidate['provider'] == 'vllm' else 'ollama', vllm_url='')
 
     @staticmethod

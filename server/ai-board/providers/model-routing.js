@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
 const ROLES = new Set(['gate1', 'gate25', 'gate3_light', 'gate3_heavy', 'gate4_review', 'classifier', 'embed', 'calibration', 'eval_judge']);
-const PROVIDERS = new Set(['ollama', 'fallback_ollama', 'vllm', 'api']);
+const PROVIDERS = new Set(['ollama', 'vllm', 'api']);
 const CAPABILITIES = new Set(['json', 'logprobs', 'embedding']);
 const RETRYABLE_HTTP = new Set([500, 502, 503, 504]);
 const cooldowns = new Map();
@@ -47,7 +47,7 @@ function enabled(settings) {
 
 function endpoint(provider, settings) {
   if (provider === 'api') return null; // No API adapter is implemented yet.
-  const prefix = provider === 'fallback_ollama' ? 'FALLBACK_OLLAMA' : provider === 'vllm' ? 'VLLM' : 'OLLAMA';
+  const prefix = provider === 'vllm' ? 'VLLM' : 'OLLAMA';
   const url = String(settings[`${prefix}_URL`] || '').trim().replace(/\/+$/, '');
   if (!url) return null;
   let parsed;
