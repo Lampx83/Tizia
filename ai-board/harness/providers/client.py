@@ -182,6 +182,15 @@ class OllamaClient:
             raise RuntimeError('No compatible embedding candidate available')
         return self._post("/api/embeddings", {"model": self.embed_model, "prompt": text})
 
+    def digest(self, model: str) -> str | None:
+        """Digest model trên gateway Ollama (GET /api/tags). None nếu không thấy hoặc gateway vLLM (không có digest)."""
+        if self.protocol == 'vllm':
+            return None
+        req = urllib.request.Request(self.base_url + "/api/tags", headers={"x-ollama-seckey": self.seckey} if self.seckey else {})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            tags = json.loads(resp.read().decode("utf-8")).get("models", [])
+        return next((m.get("digest") for m in tags if model in (m.get("name"), m.get("model"))), None)
+
     def _post(self, path: str, payload: dict, *, retry=True) -> dict:
         if not self.base_url:
             raise RuntimeError("OLLAMA_URL chưa set trong .env — xem AI Board Harness section")
