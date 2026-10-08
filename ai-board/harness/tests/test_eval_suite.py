@@ -251,3 +251,15 @@ def _write_pack(root, entry):
     path = Path(root) / "pack-fixture.json"
     path.write_text(json.dumps([entry], ensure_ascii=False), encoding="utf-8")
     return path
+
+
+def test_review_stage_counts_a_block_on_a_benign_candidate_as_false_block(world, monkeypatch):
+    root, tasks = world
+    deps, _ = deps_for(world)
+    verdicts = iter([{"blocked": False, "labels": ["ok"]}, {"blocked": True, "labels": ["pii"], "failure_class": "ordinary"}])
+    monkeypatch.setattr(trial.static_check, "content_review", lambda state, d, b: next(verdicts))
+    rows = [trial.run_trial(pick(tasks, lv), "gold", deps, root, ROOT, review=True) for lv in (1, 2)]
+    assert [r["review"]["blocked"] for r in rows] == [False, True]
+    g = metrics.summarize([{**r, "repeat": 1, "split": "dev"} for r in rows])
+    assert (g["review_false_block"]["k"], g["review_false_block"]["n"]) == (1, 2)
+    assert trial.run_trial(pick(tasks, 1), "gold", deps, root, ROOT)["review"] is None  # off by default

@@ -82,9 +82,11 @@ def render(rep: dict) -> str:
                 continue
             r, c = g["resolved"], g["cost"]
             plan = g.get("planning")
+            review = g.get("review_false_block")
             lines.append(f"{name:<18} n={g['trials']:<4} giải đúng {r['k']}/{r['n']} = {r['rate']}% (Wilson {r['lo']}-{r['hi']}) | sạch {g['resolved_clean']['rate']}% | "
                          f"pass@any {g['pass_any']['rate']}% pass@all {g['pass_all']['rate']}% | bất ổn {g['flaky_tasks']} task | ship {g['shipped']['rate']}% | "
                          + (f"kế hoạch đúng ngay {plan['first_hit']['rate']}% (sau hỏi lại {plan['final_hit']['rate']}%, trang mới {plan['first_plans_new_page']['rate']}%) | " if plan else "")
+                         + (f"cổng 4 chặn nhầm {review['k']}/{review['n']} = {review['rate']}% | " if review else "")
                          + f"{c['model_calls_mean']} lượt gọi, kẹt {c['stuck']['rate']}%, cắt cụt {c['truncated']['rate']}%, {c['wall_s_mean']} s/lượt")
         if "all" in groups and groups["all"].get("failure"):
             lines.append("  lớp lỗi: " + ", ".join(f"{k}={v}" for k, v in sorted(groups["all"]["failure"].items())))
@@ -181,7 +183,7 @@ def cmd_run(args, deps=None) -> int:
             + (f"-think0-{args.reasoning_off.replace(',', '+')}" if args.reasoning_off else ""))
     run_dir = root / "suite" / name
     run_dir.mkdir(parents=True, exist_ok=True)
-    meta = {"seed": args.seed, "split": args.split, "repeats": args.repeats, "modes": modes, "fast_tier": args.fast_tier, **prov,
+    meta = {"seed": args.seed, "split": args.split, "repeats": args.repeats, "modes": modes, "fast_tier": args.fast_tier, "review": args.review, "packs": [_sha(Path(p)) for p in args.pack or []], **prov,
             "corpus_sha": hashlib.sha256(json.dumps(tasks, ensure_ascii=False, sort_keys=True).encode()).hexdigest()}
     meta_path = run_dir / "run.json"
     if meta_path.exists():
@@ -202,7 +204,7 @@ def cmd_run(args, deps=None) -> int:
         if stop.is_set() or (run_dir / "STOP").exists() or (deadline and time.monotonic() > deadline):
             return None
         try:
-            row = trial.run_trial(task, mode, deps, root, ROOT, fast, fast_lock)
+            row = trial.run_trial(task, mode, deps, root, ROOT, fast, fast_lock, review=args.review)
         except eval_fast.FastTierError as error:  # environment broken: keep finished work, stop the run
             abort.append(str(error)[:300])
             stop.set()
@@ -290,6 +292,7 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--fast-tier", action="store_true", help="gate 4 + production text oracle on a locally started corpus app")
     run.add_argument("--max-minutes", type=float)
     run.add_argument("--allow-dirty", action="store_true")
+    run.add_argument("--review", action="store_true", help="also run the gate 4 model content review on gold-mode candidates (false-block rate)")
     run.add_argument("--pack", action="append", help="task pack JSON (merged-history tasks); repeatable")
     run.add_argument("--reasoning-off", default="", help="comma list of roles to run with thinking off (ablation), e.g. gate1,gate25")
     run.set_defaults(handler=cmd_run)

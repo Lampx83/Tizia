@@ -15,7 +15,7 @@ import eval_corpus
 import eval_fast
 from evaluation import gold as gold_eval
 from evaluation.suite import taskpack
-from gates import brainstorm, plan_validate, scope_check
+from gates import brainstorm, plan_validate, scope_check, static_check
 from runtime.budget import Budget
 from runtime.pipeline import Deps
 
@@ -112,8 +112,19 @@ def _plan_stage(task: dict, repo, deps: RecordingDeps, wall_s: int, variant: str
     return facts, plan, tracer.records
 
 
+def review_candidate(state: dict, deps) -> dict:
+    """Gate 4 model content review on the candidate. Every corpus/pack request is benign, so a block here is a false positive."""
+    try:
+        out = static_check.content_review(state, deps, Budget(max_wall_clock_s=300, max_units=50))
+    except Exception as exc:  # noqa: BLE001 - outage is not a verdict
+        return {"ran": False, "error": f"{type(exc).__name__}: {exc}"[:150]}
+    if out is None:
+        return {"ran": False, "no_visible_text": True}
+    return {"ran": out.get("failure_class") != "transient", "blocked": bool(out["blocked"]), "labels": out.get("labels")}
+
+
 def run_trial(task: dict, mode: str, base_deps: Deps, root: Path, source, fast: eval_fast.FastTier | None = None,
-              fast_lock: threading.Lock | None = None, *, wall_s: int = 900) -> dict:
+              fast_lock: threading.Lock | None = None, *, wall_s: int = 900, review: bool = False) -> dict:
     """Never raises for model/infra outcomes (they are result rows). eval_fast.FastTierError propagates: the environment is broken, not the model."""
     deps = recording(base_deps)
     kind, _, variant = mode.partition(":")
@@ -143,13 +154,19 @@ def run_trial(task: dict, mode: str, base_deps: Deps, root: Path, source, fast: 
         case = {"subtasks": (plan or {}).get("subtasks") or [], "detail": task["detail"], "checkout": rec["checkout"], "oracle": oracle}
     else:
         case = rec
+    hook = None
+    if fast is not None and not task.get("pack") and (case.get("subtask") or case.get("subtasks")):
+        hook = fast.hook({"subtask": case["subtask"]} if "subtask" in case else {"subtasks": case["subtasks"]})
     after = None
-    if fast is not None and not task.get("pack"):
-        hook = fast.hook({"subtask": case["subtask"]} if "subtask" in case else {"subtasks": case["subtasks"]}) if case.get("subtask") or case.get("subtasks") else None
-
+    if hook or (review and kind == "gold"):
         def after(state, scratch, files):  # noqa: E306 - serialize the shared app
-            with fast_lock or threading.Lock():
-                return hook(state, scratch, files)
+            out = {}
+            if hook:
+                with fast_lock or threading.Lock():
+                    out = hook(state, scratch, files)
+            if review and kind == "gold" and out.get("gate4") != "blocked":
+                out["review"] = review_candidate({**state, "request_detail": task["detail"]}, deps)
+            return out
     if kind == "e2e" and not case["subtasks"]:
         row = {"case": task["id"], "gate_passed": False, "oracle": False, "reason": "no plan to implement", "calls": 0, "retries": 0, "tokens_in": 0,
                "tokens_out": 0, "done_reasons": [], "last_output": None}
@@ -169,7 +186,7 @@ def run_trial(task: dict, mode: str, base_deps: Deps, root: Path, source, fast: 
     return {
         "id": task["id"], "mode": mode, "resolved": resolved, "collateral": sorted(set(collateral)), "gate_passed": row["gate_passed"],
         "gate4": row.get("gate4"), "prod": row.get("prod"), "ended": row.get("ended"), "shipped": row.get("shipped", False),
-        "reason": row.get("reason"), "infra_error": bool(error), "error": error, "plan": plan_facts,
+        "review": row.get("review"), "reason": row.get("reason"), "infra_error": bool(error), "error": error, "plan": plan_facts,
         "model_calls": len(deps.ledger), "retries": row.get("retries", 0),
         "stuck": any(a == b for a, b in zip(texts, texts[1:])),
         "truncated": any(b.get("done_reason") == "length" for b in deps.ledger) or "length" in (row.get("done_reasons") or []),

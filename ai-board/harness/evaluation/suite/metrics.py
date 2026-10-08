@@ -92,6 +92,9 @@ def summarize(rows: list[dict]) -> dict:
             "first_plans_new_page": rate(sum(p["first_plans_new_page"] for p in plans), n),
             "blocked": rate(sum(p["blocked"] for p in plans), n), "extra_files_mean": round(sum(p["first_extra"] for p in plans) / n, 2),
         }
+    judged = [r for r in rows if (r.get("review") or {}).get("ran")]
+    if judged:  # corpus and pack requests are benign: every block is a false positive of the gate 4 content guard
+        out["review_false_block"] = rate(sum(bool(r["review"]["blocked"]) for r in judged), len(judged))
     funnel = [("planned", lambda r: not r["mode"].startswith("e2e") or r["plan"]["final_hit"]), ("gate3", lambda r: r["gate_passed"]),
               ("gate4", lambda r: r.get("gate4") == "passed"), ("resolved", lambda r: r["resolved"])]
     out["funnel"] = {name: sum(bool(f(r)) for r in rows) for name, f in funnel}
