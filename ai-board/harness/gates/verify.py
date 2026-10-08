@@ -47,7 +47,7 @@ def _override(project: str, password: str | None = None, checkout: Path | None =
                       "depends_on": {"postgres": {"condition": "service_healthy"}},
                       "ports": [] if _internal() else ["127.0.0.1::8041"],
                       "volumes": [f"{project}-data:/data"], "environment": _app_env(password)},
-            "postgres": {"image": "postgres:17-alpine", "restart": "no",
+            "postgres": {"image": "postgres:16-alpine", "restart": "no",
                          "environment": {"POSTGRES_USER": "gate5", "POSTGRES_DB": "gate5", "POSTGRES_PASSWORD": password},
                          "healthcheck": {"test": ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U gate5 -d gate5"],
                                          "interval": "2s", "timeout": "3s", "retries": 30},
@@ -70,7 +70,7 @@ def _validate_config(config: dict, project: str, password: str) -> None:
                                             and not ports[0].get("published"))
     if (set(services) != {"tizia", "postgres"} or app.get("environment") != _app_env(password)
             or pg.get("environment") != {"POSTGRES_USER": "gate5", "POSTGRES_DB": "gate5", "POSTGRES_PASSWORD": password}
-            or app.get("image") != f"{project}:latest" or pg.get("image") != "postgres:17-alpine"
+            or app.get("image") != f"{project}:latest" or pg.get("image") != "postgres:16-alpine"
             or pg.get("ports") or not port_ok or network.get("internal") is not True
             or network.get("name") != f"{project}-net" or network.get("external")
             or set(config.get("networks") or {}) != {"default"}

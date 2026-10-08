@@ -33,10 +33,10 @@ services:
 
   # PostgreSQL cho cả ứng dụng (ticket 11). Chỉ trên mạng compose nội bộ: KHÔNG publish cổng ra host; tizia-dev
   # gọi qua tizia-postgres:5432. Dòng trần = lấy từ file env của compose (POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB); không đặt giá trị ở đây.
-  # Lên bản major mới = dump/restore (không đổi tag tại chỗ); postgresql17-client trong image tizia phải cùng major.
+  # Lên bản major mới = dump/restore (không đổi tag tại chỗ); postgresql16-client trong image tizia phải cùng major.
   tizia-postgres:
     container_name: tizia-postgres
-    image: postgres:17-alpine
+    image: postgres:16-alpine
     restart: unless-stopped
     logging: *logging
     environment:

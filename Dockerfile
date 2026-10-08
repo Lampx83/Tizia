@@ -8,8 +8,8 @@ RUN npm install --omit=dev --no-audit --no-fund
 
 # ---- Runtime: slim image ----
 FROM node:20-alpine
-# pg_dump / pg_restore for the admin backups. Major version = the postgres image major (compose: postgres:17).
-RUN apk add --no-cache postgresql17-client
+# pg_dump / pg_restore for the admin backups. Major version = the postgres image major (compose: postgres:16).
+RUN apk add --no-cache postgresql16-client
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=8041 \
