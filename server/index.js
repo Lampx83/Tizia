@@ -369,7 +369,6 @@ const aiBoardProfiles = attachAiBoardIntake(r, {
   db: aiBoard.db, store: aiBoardStore, requireAuth, requireStrictCsrf,
   quotaGate: aiQuotaGate('ai_board_grill'), recordUsage: recordAiCall,
 });
-const privatePreviews = await startPrivatePreviews(r, { db, requireAuth, requireStrictCsrf, dataDir: path.join(ROOT_DIR, 'data') });
 attachAiBoardRequestRoutes(r, {
   store: aiBoardStore,
   aux: aiBoard.aux,
