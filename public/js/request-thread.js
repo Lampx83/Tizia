@@ -13,7 +13,6 @@ import { mountPrivatePreview } from './private-preview.js';
 //   renderRequestThread({ host, requestId, me, onChange });
 // ============================================================
 
-import { mountPrivatePreview } from './private-preview.js';
 
 const STATUS = {
   pending:   { label: 'Chờ duyệt',    cls: 'pending' },
@@ -127,7 +126,6 @@ export async function renderRequestThread({ host, requestId, me = '', onChange }
 
   mountPrivatePreview(host.querySelector('[data-private-preview]'),requestId);
   const listEl = host.querySelector(`#rt-list-${requestId}`);
-  mountPrivatePreview(host.querySelector('[data-private-preview]'), requestId);
   if (listEl) listEl.scrollTop = listEl.scrollHeight;
 
   if (!isOwner) return;
