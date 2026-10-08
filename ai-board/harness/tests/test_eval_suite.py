@@ -350,3 +350,22 @@ def test_quote_diag_reports_how_much_of_a_failed_grounding_quote_is_in_the_file(
     quote = "L1| alpha beta gamma delta\nL2| invented line that is absent ..."
     diag = trial._quote_diag(json.dumps({"grounding": [{"file": "a.html", "quote": quote}]}), repo / ".git", sha)
     assert diag[0]["lines_found"] == "1/2" and diag[0]["whole_in_file"] is False and diag[0]["has_ellipsis"] is True
+
+
+def test_gate25_quote_fix_accepts_single_quoted_copy_only_when_enabled(monkeypatch):
+    from gates import plan_validate as pv
+    files = {"a.html": '<a class="back" href="/i.html">Home</a>\n'}
+    plan = {"subtasks": [{"file": "a.html"}]}
+
+    def run(quote):
+        ev = {"target": "a.html", "file": "a.html", "quote": quote, "before": "b", "after": "a", "verify": "v"}
+        return pv.checked_grounding({"grounded": True, "grounding": [ev]}, plan, "sha", files)
+
+    monkeypatch.delenv("AI_BOARD_GATE25_FIXES", raising=False)
+    import pytest
+    with pytest.raises(ValueError, match="trích dẫn"):
+        run("<a class='back' href='/i.html'>Home</a>")
+    monkeypatch.setenv("AI_BOARD_GATE25_FIXES", "quotes")
+    assert run("<a class='back' href='/i.html'>Home</a>")["sha"] == "sha"
+    with pytest.raises(ValueError, match="trích dẫn"):
+        run("<a class='front' href='/i.html'>Home</a>")
