@@ -8,3 +8,4 @@ psycopg[binary]>=3.2  # PostgreSQL: skill_proposals/gate_trace/ai_decisions/user
 
 fastapi>=0.115,<1
 uvicorn>=0.30,<1
+tqdm>=4.66  # eval suite progress bar (optional: falls back to plain lines)
