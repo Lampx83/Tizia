@@ -68,6 +68,7 @@ import { createOnlineRegistry } from './ai-board/online/registry.js';
 import { createBackendRunner } from './ai-board/online/backend-run.js';
 import { adaptersFromEnv, runnerFromEnv, backendScriptsEnabled } from './ai-board/online/config.js';
 import { draftNotifier } from './ai-board/drafts-async.js';
+import { checkLanguage } from './ai-board/language-guard.js';
 import { shotBackendFromEnv, shotProxy, startShotRetention } from './ai-board/shot-storage.js';
 import { staticCacheControl } from './static-cache.js';
 import { attachAiBoardIntake, clarifyNotifier } from './contexts/ai-board-intake/index.js';
@@ -1273,6 +1274,8 @@ route.post('/api/requests/:id/messages', requireAuth, async (req, res) => {
   if (!body) return res.status(400).json({ error: 'empty' });
   const attachments = Array.isArray(req.body?.attachments) ? req.body.attachments : null;
   const role = isOwner ? 'student' : 'admin';
+  const language = role === 'student' ? checkLanguage(body) : { block: false };
+  if (language.block) return res.status(422).json({ error: 'unsupported_language', message: language.message });
   const msg = await aiBoard.requests.addRequestMessage({ request_id: reqRow.id, role, author_name: me, body, attachments });
   if (role === 'student') await aiBoardStore.invalidatePlanForRequest(reqRow.id, 'requester clarification');
   // Board requests keep the status of their root ticket (a terminal root is never reopened by a reply — a new

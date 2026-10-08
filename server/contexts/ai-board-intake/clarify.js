@@ -3,6 +3,7 @@
 import { appLlm, vllmHeaders, vllmChatUrl, vllmBody, parseSse } from '../../ai-llm.js';
 import fs from 'node:fs';
 import { checkIntake } from '../../ai-board/intake-guard-async.js';
+import { checkLanguage } from '../../ai-board/language-guard.js';
 import { checkContentSafety } from '../safety/profanity-vi.js';
 import { containsPromptDisclosure } from '../../ai-prompt-guardrails.js';
 import { CLASSIFIER } from '../../ai-board/classifier.js';
@@ -108,6 +109,8 @@ export function checkAnswer(answer) {
   const text = String(answer ?? '').trim();
   if (!text) return 'Bạn nhập câu trả lời giúp Ban nhé.';
   if (text.length > 2000) return 'Câu trả lời dài quá, bạn rút gọn dưới 2000 ký tự giúp Ban.';
+  const language = checkLanguage(text);
+  if (language.block) return language.message;
   const intake = checkIntake('', text);
   if (intake.block) return intake.message;
   if (checkContentSafety(text).safe === false) return 'Câu trả lời có nội dung không phù hợp hoặc thông tin cá nhân — bạn sửa lại giúp Ban.';

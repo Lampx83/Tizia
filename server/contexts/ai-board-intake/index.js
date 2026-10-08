@@ -8,6 +8,7 @@
 
 // Cùng từ vựng users.role: pupil = học sinh, student = sinh viên.
 import { checkIntake } from '../../ai-board/intake-guard-async.js';
+import { checkLanguage } from '../../ai-board/language-guard.js';
 import { classify, decideClarity, taskMode } from '../../ai-board/classifier.js';
 import { answersClear, repeatedQuestion } from '../../ai-board/clarity-rules.js';
 import { beginChat } from '../../ai-board/chat-activity.js';
@@ -246,6 +247,8 @@ function attachClarify(router, { store, profiles, requireAuth, requireStrictCsrf
   // Người gửi xác nhận (có thể đã sửa) bản tóm tắt → vào hàng đợi worker.
   route.post('/api/ai-board/requests/:id/clarify/confirm', requireAuth, requireStrictCsrf, async (req, res) => {
     const spec = String(req.body?.spec ?? '');
+    const language = checkLanguage(spec);
+    if (language.block) return res.status(422).json({ error: 'unsupported_language', message: language.message });
     const intake = checkIntake('', spec);
     if (intake.block) return res.status(422).json({ error: 'request_rejected', message: intake.message });
     try {

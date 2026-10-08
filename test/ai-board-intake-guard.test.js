@@ -9,6 +9,8 @@ import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
 import { openBoard } from './support/ai-board-db.js';
 import { attachAiBoardRequestRoutes } from '../server/ai-board/routes.js';
 import { checkIntake, recordIntakeFlags } from '../server/ai-board/intake-guard-async.js';
+import { checkLanguage } from '../server/ai-board/language-guard.js';
+import { checkAnswer } from '../server/contexts/ai-board-intake/clarify.js';
 
 test('admin observes a draft without a privilege flag; actual mutations remain flagged', () => {
   assert.deepEqual(checkIntake('Thêm lời giải thích', 'Admin chỉ đọc trang quản trị để theo dõi và duyệt bản nháp.').labels, []);
@@ -154,4 +156,57 @@ test('clean request records no flag and flag recording never throws', async () =
     await close();
     db.close();
   }
+});
+
+// Ngôn ngữ: chỉ tiếng Việt và tiếng Anh; chặn khi chắc chắn là ngôn ngữ khác, không ghi cảnh báo (không phải tấn công).
+const SUPPORTED = [
+  'Please change the button colour to blue',
+  'Sửa nút Quay lại trên trang IT cho to hơn',
+  'Doi mau nut bam sang mau xanh', // tiếng Việt gõ không dấu
+  'Thêm nút Get started vào hero section',
+  'Thêm dòng "你好, 世界" vào cuối trang', // chữ cần hiển thị nằm trong ngoặc kép
+  'Add the text “Здравствуйте” at the bottom of the page',
+  '😀 123',
+];
+const UNSUPPORTED = [
+  '把按钮颜色改成蓝色', 'Измени цвет кнопки на синий', 'ボタンの色を青に変更してください', '버튼 색상을 파란색으로 바꿔 주세요',
+  'غيّر لون الزر إلى الأزرق', 'เปลี่ยนสีปุ่มเป็นสีน้ำเงิน',
+  'Quiero cambiar el color del botón de la página', '¿Puedes cambiar el color?',
+  'Je veux changer la couleur du bouton sur la page', 'Ich möchte die Farbe der Schaltfläche ändern',
+  'Tolong ubah warna tombol di halaman ini dengan warna biru',
+];
+
+test('language: Vietnamese and English pass, other languages get a bilingual message', () => {
+  for (const text of SUPPORTED) assert.equal(checkLanguage('Yêu cầu', text).block, false, text);
+  for (const text of UNSUPPORTED) {
+    const out = checkLanguage('', text);
+    assert.equal(out.block, true, text);
+    assert.match(out.message, /tiếng Việt và tiếng Anh/);
+    assert.match(out.message, /Vietnamese and English/);
+  }
+});
+
+test('POST /api/requests rejects other languages with 422, creates nothing and raises no alert', async () => {
+  const db = await fixtureDb();
+  const { post, close } = await serve(db);
+  try {
+    const response = await post('lang-block-001', { title: '改按钮颜色', detail: '把按钮颜色改成蓝色' });
+    assert.equal(response.status, 422);
+    const body = await response.json();
+    assert.equal(body.error, 'unsupported_language');
+    assert.match(body.message, /Vietnamese and English/);
+    for (const table of ['requests', 'ai_tickets', 'ai_alerts']) {
+      assert.equal((await db.prepare(`SELECT COUNT(*) n FROM ${table}`).get()).n, 0, table);
+    }
+    const ok = await post('lang-ok-001', { title: 'Đổi màu nút', detail: 'Đổi màu nút Quay lại sang xanh' });
+    assert.equal(ok.status, 200);
+  } finally {
+    await close();
+    db.close();
+  }
+});
+
+test('clarify answers in another language are refused with the same message', () => {
+  assert.match(checkAnswer('把按钮颜色改成蓝色') ?? '', /Vietnamese and English/);
+  assert.equal(checkAnswer('Đổi sang màu xanh dương nhé'), null);
 });

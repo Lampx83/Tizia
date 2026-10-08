@@ -150,7 +150,8 @@ export async function renderRequestThread({ host, requestId, me = '', onChange }
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
-        msgEl.textContent = '' + (e.error === 'forbidden' ? 'Chỉ chủ yêu cầu mới trao đổi được'
+        msgEl.textContent = '' + (e.error === 'unsupported_language' ? e.message
+          : e.error === 'forbidden' ? 'Chỉ chủ yêu cầu mới trao đổi được'
           : e.error === 'empty' ? 'Nội dung trống' : (e.error || 'Không gửi được'));
         sendBtn.disabled = false;
         return;

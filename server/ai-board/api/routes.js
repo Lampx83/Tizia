@@ -5,6 +5,7 @@ import { SHOTS_BODY_LIMIT, SHOTS_TYPE } from '../services/drafts.js';
 import * as asyncAux from '../services/aux-service.js';
 import { asyncRoutes } from './async-routes.js';
 import { checkIntake, readOnlyVerificationText } from '../security/intake-guard.js';
+import { checkLanguage } from '../language-guard.js';
 import { classifyRequest as classifyWithModel } from '../security/classifier.js';
 import { clarifyFromPhase, resolveClarify } from '../services/clarity-rules.js';
 import { activeChats } from '../services/chat-activity.js';
@@ -43,6 +44,8 @@ export function attachAiBoardRequestRoutes(router, {
     const ownerDomain = req.user.role === 'admin'
       ? String(body.domain || '').trim()
       : req.user.enrolled_domain;
+    const language = checkLanguage(body.title, body.detail);
+    if (language.block) return res.status(422).json({ error: 'unsupported_language', message: language.message });
     const intake = checkIntake(body.title, body.detail);
     if (intake.block) {
       try { await aux.recordIntakeRejection(db, req.user.id, intake); } catch (error) { return next(error); }
