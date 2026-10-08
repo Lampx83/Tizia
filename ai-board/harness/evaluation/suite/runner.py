@@ -155,8 +155,9 @@ def cmd_run(args, deps=None) -> int:
                 print(f"[suite] needs AI_BOARD_MODEL_ROUTING=true and a vLLM candidate first for {role}", file=sys.stderr)
                 return 2
         model = router.candidates("gate3_light")[0]["model"]
-        for role in filter(None, args.reasoning_off.split(",")):  # ablation: one setting per run, recorded in provenance
-            router.catalog.setdefault("reasoning", {})[role] = False
+        for flag, value in (("reasoning_off", False), ("reasoning_on", True)):  # ablation: one setting per run, recorded in provenance
+            for role in filter(None, getattr(args, flag).split(",")):
+                router.catalog.setdefault("reasoning", {})[role] = value
     else:
         router, model = None, deps.models.gate3_model
     prov = provenance(ROOT, model, router)
@@ -180,7 +181,8 @@ def cmd_run(args, deps=None) -> int:
         tasks += taskpack.load_pack(pack)
     modes = args.modes.split(",")
     name = (f"s{args.seed}-{args.split}-{prov['ref'][:12]}" + ("-dirty" if prov["dirty"] else "")
-            + (f"-think0-{args.reasoning_off.replace(',', '+')}" if args.reasoning_off else ""))
+            + (f"-think0-{args.reasoning_off.replace(',', '+')}" if args.reasoning_off else "")
+            + (f"-think1-{args.reasoning_on.replace(',', '+')}" if args.reasoning_on else ""))
     run_dir = root / "suite" / name
     run_dir.mkdir(parents=True, exist_ok=True)
     meta = {"seed": args.seed, "split": args.split, "repeats": args.repeats, "modes": modes, "fast_tier": args.fast_tier, "review": args.review, "packs": [_sha(Path(p)) for p in args.pack or []], **prov,
@@ -294,6 +296,7 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--allow-dirty", action="store_true")
     run.add_argument("--review", action="store_true", help="also run the gate 4 model content review on gold-mode candidates (false-block rate)")
     run.add_argument("--pack", action="append", help="task pack JSON (merged-history tasks); repeatable")
+    run.add_argument("--reasoning-on", default="", help="comma list of roles to run with thinking on (ablation), e.g. gate1,gate25")
     run.add_argument("--reasoning-off", default="", help="comma list of roles to run with thinking off (ablation), e.g. gate1,gate25")
     run.set_defaults(handler=cmd_run)
     rep = sub.add_parser("report")
