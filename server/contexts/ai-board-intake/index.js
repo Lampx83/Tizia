@@ -2,8 +2,8 @@
 // AI Board intake — phía người gửi yêu cầu
 // ============================================================
 // Onboarding 3 câu (vai trò, lĩnh vực am hiểu, mức kỹ thuật): trả lời 1 lần
-// trước yêu cầu đầu tiên, admin miễn. Lưu bảng ai_board_profile (migration
-// 005); worker nhận qua snapshot để chọn giọng văn khi làm rõ yêu cầu.
+// trước yêu cầu đầu tiên, admin miễn. Lưu bảng ai_board_profile;
+// worker nhận qua snapshot để chọn giọng văn khi làm rõ yêu cầu.
 // ============================================================
 
 // Cùng từ vựng users.role: pupil = học sinh, student = sinh viên.

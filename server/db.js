@@ -11,7 +11,7 @@ const DATA_DIR = process.env.DATA_DIR
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-// PostgreSQL only (DATABASE_URL). SQLite support was removed in ticket 11; `scripts/copy-sqlite-to-postgres.mjs` moves old data.
+// PostgreSQL only (DATABASE_URL); `scripts/copy-sqlite-to-postgres.mjs` moves old SQLite data.
 function openDb() {
   if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL (PostgreSQL connection string) is required');
   return { db: createAppDb({ url: process.env.DATABASE_URL }) };
