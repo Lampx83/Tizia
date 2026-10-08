@@ -556,8 +556,8 @@ def model_preflight(ollama, *, clock: Callable[[], float] = time.monotonic, ttl:
         if getattr(ollama, 'routing', None):
             from budget import Budget
             from main import Deps
-            # Follow the same policy; a failed primary must not hide a usable secondary.
-            for role in ('gate1', 'classifier'):
+            # Classifier is fail-open: with no calibrated candidate it must not block intake.
+            for role in ('gate1', *(('classifier',) if ollama.routing.candidates('classifier') else ())):
                 if role in ok_at and clock() - ok_at[role] < ttl:
                     continue
                 try:
