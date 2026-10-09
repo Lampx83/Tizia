@@ -60,3 +60,18 @@ test('browser api: session cookie + CSRF header on writes, never on reads; sessi
   assert.equal(write.init.credentials, 'same-origin');
   assert.deepEqual(JSON.parse(write.init.body), { operation: 'send_note', record_id: 7 });
 });
+
+test('blank number field is omitted from the payload, a typed 0 is kept', async () => {
+  const numSchema = validateUiSchema({ version: 1, title: 'T', blocks: [
+    { type: 'form', title: 'Thêm', resource_id: 4, fields: [{ name: 'qty', label: 'Số lượng', kind: 'number' }, { name: 'text', label: 'Nội dung', kind: 'text' }], submit_label: 'Lưu' },
+  ] });
+  const calls = [];
+  const api = { list: async () => [], invoke: async () => {}, create: async (r, d) => calls.push(d) };
+  const nodes = walk(renderSchema(numSchema, { doc, api }));
+  const form = nodes.find((n) => n.tag === 'form');
+  const [qty, text] = nodes.filter((n) => n.tag === 'input');
+  text.value = 'a';
+  for (const blank of ['', '  ']) { qty.value = blank; await form.listeners.submit({ preventDefault() {} }); }
+  qty.value = '0'; await form.listeners.submit({ preventDefault() {} });
+  assert.deepEqual(calls, [{ text: 'a' }, { text: 'a' }, { qty: 0, text: 'a' }]);
+});

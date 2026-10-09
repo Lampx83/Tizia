@@ -115,6 +115,7 @@ function form(doc, block, api, reloadAll) {
     event.preventDefault();
     const data = {};
     for (const [field, input] of inputs) {
+      if (field.kind === 'number' && input.value.trim() === '') continue; // schema has no required flag: blank = absent, not 0
       data[field.name] = field.kind === 'checkbox' ? !!input.checked : field.kind === 'number' ? Number(input.value) : input.value;
     }
     submit.disabled = true;
