@@ -171,7 +171,7 @@ def cmd_run(args, deps=None) -> int:
         return 2
     os.environ["AI_BOARD_GATE3_GUARDS"] = guards
     fixes = ",".join(sorted(f for f in args.gate25_fixes.split(",") if f))
-    if set(fixes.split(",")) - {"", "quotes"}:
+    if set(fixes.split(",")) - {"", "quotes", "tokens"}:
         print("[suite] unknown gate 2.5 fix", file=sys.stderr)
         return 2
     os.environ["AI_BOARD_GATE25_FIXES"] = fixes
@@ -333,7 +333,7 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--pack", action="append", help="task pack JSON (merged-history tasks); repeatable")
     run.add_argument("--context-arm", choices=ablation.ARMS, default="default", help="gate 3 context ablation: fullfile = whole numbered file instead of excerpt; nosiblings = no folder listing")
     run.add_argument("--guards", default="", help="gate 3 guards to switch on (comma list of noop, refs, schema); default none")
-    run.add_argument("--gate25-fixes", default="", help="gate 2.5 patches to switch on (comma list: quotes); default none")
+    run.add_argument("--gate25-fixes", default="", help="gate 2.5 patches to switch on (comma list: quotes, tokens); default none")
     run.add_argument("--reasoning-on", default="", help="comma list of roles to run with thinking on (ablation), e.g. gate1,gate25")
     run.add_argument("--reasoning-off", default="", help="comma list of roles to run with thinking off (ablation), e.g. gate1,gate25")
     run.set_defaults(handler=cmd_run)

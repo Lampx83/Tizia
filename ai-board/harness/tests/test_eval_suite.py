@@ -405,3 +405,28 @@ def test_hybrid_arm_shows_the_whole_file_only_when_it_fits_the_context_window():
         assert "toàn bộ file" not in (text or "")
     finally:
         ablation.apply("default")
+
+
+def test_norepomap_arm_drops_the_repomap_tool_at_gate_1_only_and_default_restores_it():
+    import context
+    from evaluation.suite import ablation
+    calls = [("tree", {}), ("repomap", {"question": "q"}), ("lessons", {})]
+    original = dict(ablation._ORIGINAL)
+    try:
+        ablation._ORIGINAL["calls"] = lambda *a, **k: list(calls)
+        ablation._ORIGINAL["build"] = lambda gate, *a, **k: [c[0] for c in ablation._calls_without_repomap()]
+        ablation.apply("norepomap")
+        assert context.build_context(1) == ["tree", "lessons"]
+        assert context.build_context(3) == ["tree", "repomap", "lessons"]
+    finally:
+        ablation._ORIGINAL.update(original)
+        ablation.apply("default")
+    assert context._calls is original["calls"] and context.build_context is original["build"]
+
+
+def test_gate25_tokens_fix_raises_the_validator_output_budget_only_when_enabled(monkeypatch):
+    from gates import plan_validate as pv
+    monkeypatch.delenv("AI_BOARD_GATE25_FIXES", raising=False)
+    assert pv._validator_options() is None
+    monkeypatch.setenv("AI_BOARD_GATE25_FIXES", "quotes,tokens")
+    assert pv._validator_options() == {"num_predict": 6144}

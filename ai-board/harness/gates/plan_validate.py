@@ -279,6 +279,11 @@ def write_clarification(db_path, request: dict, question: str) -> None:
         con.execute("UPDATE requests SET updated_at = %s WHERE id = %s", (now, db_id))
 
 
+def _validator_options() -> dict | None:
+    """Larger output budget for multi-subtask plans when AI_BOARD_GATE25_FIXES lists `tokens`."""
+    return {"num_predict": 6144} if "tokens" in os.environ.get("AI_BOARD_GATE25_FIXES", "").split(",") else None
+
+
 def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: int | None = None) -> dict:
     """Điểm vào cho main.run_gate. Đọc state['plan'] do cổng 1 để lại."""
     plan = state.get("plan")
@@ -310,7 +315,8 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                              "grounding": {"type": "array", "maxItems": len(plan['subtasks']), "items": record}},
               "required": ["clear", "question", "grounded", "reason", "grounding"]}
     body = deps.call_model(deps.models.gate1_model, prompt, gate=2.5, budget=budget, format=schema,
-                            db_path=db_path, proposal_id=proposal_id, prompt_name="plan_validate.md")
+                            db_path=db_path, proposal_id=proposal_id, prompt_name="plan_validate.md",
+                            options=_validator_options())
     if body.get('done_reason') == 'length':
         return {"gate": 2.5, "blocked": True, "reason": "validator output truncated at token limit",
                 "public_message": "Kế hoạch đang chờ quản trị viên kiểm tra vì phản hồi kiểm chứng chưa hoàn chỉnh."}
