@@ -369,3 +369,24 @@ def test_gate25_quote_fix_accepts_single_quoted_copy_only_when_enabled(monkeypat
     assert run("<a class='back' href='/i.html'>Home</a>")["sha"] == "sha"
     with pytest.raises(ValueError, match="trích dẫn"):
         run("<a class='front' href='/i.html'>Home</a>")
+
+
+def test_blind_grading_hides_arms_and_scores_per_run_with_oracle_agreement(tmp_path):
+    import json
+    from evaluation.suite import grading
+    pack = [{"id": "t1", "title": "T", "detail": "D", "files": ["a.html"], "base_sha": "abc", "subtasks": [{"verify": "V"}]},
+            {"id": "t2", "title": "T2", "detail": "D2", "files": ["b.html"], "base_sha": "abc", "subtasks": [{"verify": "V2"}]}]
+    for run, rows in (("runA", [{"id": "t1", "mode": "gold", "resolved": True, "diff": "x"}, {"id": "t2", "mode": "gold", "resolved": False, "diff": "y"}]),
+                      ("runB", [{"id": "t1", "mode": "gold", "resolved": False, "diff": "x2"}, {"id": "t2", "mode": "gold", "resolved": False, "diff": None}])):
+        (tmp_path / run).mkdir()
+        (tmp_path / run / "results.jsonl").write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+    out = tmp_path / "out"
+    assert grading.collect([tmp_path / "runA", tmp_path / "runB"], pack, out)["items"] == 4
+    batch = json.loads((out / "batch.json").read_text(encoding="utf-8"))
+    assert "runA" not in json.dumps(batch) and "runB" not in json.dumps(batch)
+    blind_map = json.loads((out / "blindmap.json").read_text(encoding="utf-8"))
+    verdict = {("runA", "t1"): "correct", ("runA", "t2"): "wrong", ("runB", "t1"): "partial", ("runB", "t2"): "no_candidate"}
+    grades = [{"blind_id": b, "verdict": verdict[(m["run"], m["id"])], "reason": ""} for b, m in blind_map.items()]
+    report = grading.score(grades, blind_map)
+    assert report["runs"]["runA"]["oracle_agreement"] == "2/2" and report["runs"]["runB"]["correct_or_partial"] == 1
+    assert grading.paired(grades, blind_map, "runA", "runB") == {"tasks": 2, "gained_usable": 0, "lost_usable": 0, "net": 0}

@@ -21,7 +21,7 @@ from pathlib import Path
 import eval_corpus
 import eval_fast
 from gates import gate3_guards
-from evaluation.suite import ablation, metrics, taskpack, trial
+from evaluation.suite import ablation, grading, metrics, taskpack, trial
 from evaluation.suite.launcher import sqlite_launcher
 
 HERE = Path(__file__).resolve().parent
@@ -295,6 +295,23 @@ def cmd_compare(args) -> int:
     return 0
 
 
+def cmd_grade_collect(args) -> int:
+    root = Path(args.root) / "suite"
+    pack = json.loads(Path(args.pack).read_text(encoding="utf-8"))
+    print(json.dumps(grading.collect([root / name for name in args.runs.split(",")], pack, Path(args.out)), ensure_ascii=False))
+    return 0
+
+
+def cmd_grade_score(args) -> int:
+    grades = json.loads(Path(args.grades).read_text(encoding="utf-8"))
+    blind_map = json.loads(Path(args.blindmap).read_text(encoding="utf-8"))
+    out = grading.score(grades, blind_map)
+    if args.baseline and args.candidate:
+        out["paired"] = grading.paired(grades, blind_map, args.baseline, args.candidate)
+    print(json.dumps(out, ensure_ascii=False, indent=1))
+    return 0
+
+
 def main(argv=None, deps=None) -> int:
     for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(encoding="utf-8", errors="replace")
@@ -331,6 +348,18 @@ def main(argv=None, deps=None) -> int:
     chk.add_argument("--root", required=True)
     chk.add_argument("--name", required=True)
     chk.set_defaults(handler=cmd_check)
+    gc = sub.add_parser("grade-collect", help="mix the diffs of several runs into one blind batch for an independent grader")
+    gc.add_argument("--root", required=True)
+    gc.add_argument("--runs", required=True, help="comma list of run directory names under <root>/suite")
+    gc.add_argument("--pack", required=True)
+    gc.add_argument("--out", required=True)
+    gc.set_defaults(handler=cmd_grade_collect)
+    gs = sub.add_parser("grade-score", help="join the grader's verdicts with the blind map and report per run")
+    gs.add_argument("--grades", required=True)
+    gs.add_argument("--blindmap", required=True)
+    gs.add_argument("--baseline")
+    gs.add_argument("--candidate")
+    gs.set_defaults(handler=cmd_grade_score)
     cmp_ = sub.add_parser("compare")
     cmp_.add_argument("baseline")
     cmp_.add_argument("candidate")
