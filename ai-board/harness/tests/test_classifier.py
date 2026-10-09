@@ -58,7 +58,15 @@ def test_prompt_fences_student_text_like_node():
     assert prompt.count("NOI_DUNG>>>") == 1 and "H. Gian lận" in prompt
 
 
-def test_intake_escalates_to_human_review_when_the_model_is_sure_of_a_danger():
+def test_shadow_danger_keeps_the_probabilities_but_never_escalates():
+    deps = deps_with(Classifying([["F", math.log(0.8)], ["A", math.log(0.2)]]))
+    out = intake_guard.run("Thêm bài", "một bài lịch sử", deps, Budget())
+    assert out["verdict"] == "allow" and out["classifier"]["escalate"] is False and out["classifier"]["shadow"] is True
+    assert out["classifier"]["probs"]["politics_religion"] > 0.7
+
+
+def test_intake_escalates_to_human_review_when_the_model_is_sure_of_a_danger(monkeypatch):
+    monkeypatch.setitem(classifier.CLASSIFIER["tasks"]["danger"], "mode", "active")
     deps = deps_with(Classifying([["F", math.log(0.8)], ["A", math.log(0.2)]]))
     out = intake_guard.run("Thêm bài", "một bài lịch sử", deps, Budget())
     assert out["verdict"] == "human_review" and "model_politics_religion" in out["labels"]
@@ -74,12 +82,14 @@ def test_intake_stays_allow_when_safe_or_when_the_classifier_is_down():
         assert out["verdict"] == "allow", out
 
 
-def test_model_never_lowers_a_hard_rule():
+def test_model_never_lowers_a_hard_rule(monkeypatch):
+    monkeypatch.setitem(classifier.CLASSIFIER["tasks"]["danger"], "mode", "active")
     out = intake_guard.run("x", "dit me cai trang", deps_with(Classifying([["A", 0.0]])), Budget())
     assert out["verdict"] in ("reject", "critical")
 
 
-def test_content_review_escalates_on_a_sure_danger_even_if_the_json_guard_says_ok():
+def test_content_review_escalates_on_a_sure_danger_even_if_the_json_guard_says_ok(monkeypatch):
+    monkeypatch.setitem(classifier.CLASSIFIER["tasks"]["danger"], "mode", "active")
     state = {"full_diff": [{"file": "public/x.html", "diff": "diff --git a/public/x.html b/public/x.html\n"
                                                              "--- a/public/x.html\n+++ b/public/x.html\n"
                                                              "@@ -0,0 +1 @@\n+<p>Nội dung mới cho bài</p>\n"}]}

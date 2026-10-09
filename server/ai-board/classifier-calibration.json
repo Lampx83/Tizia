@@ -20,7 +20,7 @@
       ]
     },
     "danger": {
-      "mode": "active",
+      "mode": "shadow",
       "question": "Nội dung này thuộc nhóm nào?",
       "labels": [
         { "letter": "A", "key": "safe", "text": "An toàn: góp ý học tập hoặc giao diện bình thường.", "lexicon": [] },
