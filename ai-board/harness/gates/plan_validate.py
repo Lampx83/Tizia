@@ -50,6 +50,7 @@ import file_context
 from dbconn import harness_db
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_validate.md").read_text(encoding="utf-8")
+ANSWERABLE_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_answerable.md").read_text(encoding="utf-8")
 
 # 2 vùng an toàn chuẩn model được phép nhắm (đúng giới hạn trong
 # prompts/brainstorm.md) — file NGOÀI 2 vùng này mới tính là "route/
@@ -285,6 +286,50 @@ def write_clarification(db_path, request: dict, question: str) -> None:
         con.execute("UPDATE requests SET updated_at = %s WHERE id = %s", (now, db_id))
 
 
+def answered_on() -> bool:
+    """AI_BOARD_GATE25_ANSWERED truthy: a clarification answerable by a verbatim request/source quote is answered, validator reruns."""
+    return os.environ.get("AI_BOARD_GATE25_ANSWERED", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+_WORD = re.compile(r"\w{3,}")
+
+
+def verified_answer(text: str, question: str, haystacks: list[str]) -> str | None:
+    """Answer from answerable-call JSON when its quote is verbatim in a haystack and shares a word with the question, else None."""
+    try:
+        out = json.loads(text)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(out, dict) or out.get("answerable") is not True:
+        return None
+    answer, quote = out.get("answer"), out.get("quote")
+    if not isinstance(answer, str) or not answer.strip() or not isinstance(quote, str):
+        return None
+    quote = _LINE_MARKER.sub("", quote)
+    if len(quote.strip()) < 8 or not set(_WORD.findall(question.lower())) & set(_WORD.findall(quote.lower())):
+        return None
+    folded = _fold(quote)
+    return answer.strip()[:200] if any(folded in _fold(h) for h in haystacks) else None
+
+
+def settled_answer(request: dict, question: str, repo_context: str, files: dict, state: dict, deps, budget, *, db_path=None, proposal_id=None) -> str | None:
+    """One extra model call: answer to `question` iff request or source quotes it verbatim."""
+    thread = " | ".join(f"{m.get('role')}: {m.get('body')}" for m in (request.get("thread") or [])) or "(không có)"
+    prompt = context.manual() + ANSWERABLE_PROMPT.format(subject=request.get("subject", ""), body=request.get("body", ""),
+                                                          thread=thread, question=question, repo_context=repo_context)
+    schema = {"type": "object", "additionalProperties": False,
+              "properties": {"answerable": {"type": "boolean"}, "answer": {"type": "string", "maxLength": 200},
+                             "quote": {"type": "string", "maxLength": 320}},
+              "required": ["answerable", "answer", "quote"]}
+    body = deps.call_model(deps.models.gate1_model, prompt, gate=2.5, budget=budget, format=schema, db_path=db_path,
+                           proposal_id=proposal_id, prompt_name="plan_answerable.md", options={"num_predict": 1024})
+    if body.get("done_reason") == "length":
+        return None
+    haystacks = [str(request.get("subject") or ""), str(request.get("body") or ""), state.get("planning_context") or "",
+                 *(str(m.get("body") or "") for m in request.get("thread") or []), *files.values()]
+    return verified_answer(body.get("response", ""), question, haystacks)
+
+
 def _validator_options() -> dict | None:
     """Larger output budget for multi-subtask plans when AI_BOARD_GATE25_FIXES lists `tokens`."""
     return {"num_predict": 6144} if "tokens" in fixes() else None
@@ -320,20 +365,34 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                              "grounded": {"type": "boolean"}, "reason": short,
                              "grounding": {"type": "array", "maxItems": len(plan['subtasks']), "items": record}},
               "required": ["clear", "question", "grounded", "reason", "grounding"]}
-    body = deps.call_model(deps.models.gate1_model, prompt, gate=2.5, budget=budget, format=schema,
-                            db_path=db_path, proposal_id=proposal_id, prompt_name="plan_validate.md",
-                            options=_validator_options())
-    if body.get('done_reason') == 'length':
-        return {"gate": 2.5, "blocked": True, "reason": "validator output truncated at token limit",
-                "public_message": "Kế hoạch đang chờ quản trị viên kiểm tra vì phản hồi kiểm chứng chưa hoàn chỉnh."}
+    def validate(req):
+        body = deps.call_model(deps.models.gate1_model, prompt if req is request else build_prompt(req, plan, repo_context),
+                               gate=2.5, budget=budget, format=schema, db_path=db_path, proposal_id=proposal_id,
+                               prompt_name="plan_validate.md", options=_validator_options())
+        if body.get('done_reason') == 'length':
+            return None, {"gate": 2.5, "blocked": True, "reason": "validator output truncated at token limit",
+                          "public_message": "Kế hoạch đang chờ quản trị viên kiểm tra vì phản hồi kiểm chứng chưa hoàn chỉnh."}
+        try:
+            result = parse_validation(body.get("response", ""))
+        except ValueError as e:
+            return None, {"gate": 2.5, "blocked": True, "reason": f"validator trả sai schema: {e}"}
+        judge("validator", result["clear"],
+              f"clear={result['clear']}, grounded={result.get('grounded')}: {result.get('reason') or result.get('question') or ''}")
+        return result, None
 
-    try:
-        validation = parse_validation(body.get("response", ""))
-    except ValueError as e:
-        return {"gate": 2.5, "blocked": True, "reason": f"validator trả sai schema: {e}"}
-
-    judge("validator", validation["clear"],
-          f"clear={validation['clear']}, grounded={validation.get('grounded')}: {validation.get('reason') or validation.get('question') or ''}")
+    validation, stop = validate(request)
+    if stop:
+        return stop
+    if not validation["clear"] and validation["question"] and answered_on():
+        answer = settled_answer(request, validation["question"], repo_context, files, state, deps, budget,
+                                db_path=db_path, proposal_id=proposal_id)
+        judge("answered clarification", answer is not None, f"{validation['question']} -> {answer}")
+        if answer:
+            thread = [*(request.get("thread") or []), {"role": "admin", "body": validation["question"]},
+                      {"role": "answer found in request/source", "body": answer}]
+            validation, stop = validate({**request, "thread": thread})
+            if stop:
+                return stop
     if not validation["clear"]:
         question = validation["question"] or "Plan chưa đủ rõ — bạn mô tả thêm chi tiết được không?"
         if db_path is not None:
