@@ -111,3 +111,53 @@ class PgSteps:
                               (status, by, _now(), self.proposal_id, self.child, step)).rowcount
         if not hit:
             raise ValueError("bước không ở trạng thái unknown")
+
+
+def scope_key(*parts) -> int:
+    """Khoá BIGINT 60-bit ổn định từ các phần định danh (ticket, plan, lần, base sha)."""
+    return int(hashlib.sha256(":".join(str(p) for p in parts).encode("utf-8")).hexdigest()[:15], 16)
+
+
+class Checkpoint:
+    """Checkpoint 1 lượt worker: định danh ổn định (ticket + plan) qua crash/resume; nhớ mọi khoá đã dùng để purge."""
+
+    def __init__(self, dsn, run_scope: str, attempt: int = 0, keys: set | None = None):
+        self.dsn, self.run_scope, self.n = dsn, run_scope, attempt
+        self.keys = set() if keys is None else keys
+        self._pinned = False
+
+    def attempt(self, n: int) -> "Checkpoint":
+        """Cùng lượt, lần sửa n; dùng chung tập khoá."""
+        return Checkpoint(self.dsn, self.run_scope, n, self.keys)
+
+    def store(self, base_sha: str, child: int) -> PgSteps:
+        """PgSteps cho 1 subtask; base_sha đổi thì checkpoint mới."""
+        key = scope_key(self.run_scope, self.n, base_sha)
+        self.keys.add(key)
+        return PgSteps(self.dsn, key, child)
+
+    def _ledger(self) -> PgSteps:
+        key = scope_key(self.run_scope, "ledger")
+        self.keys.add(key)
+        return PgSteps(self.dsn, key, 0)
+
+    def restore(self, budget) -> None:
+        """Nạp ledger cấp worker đã lưu (absorb: max, không cộng đôi)."""
+        saved = self._ledger().load()["ledger"]
+        if saved:
+            budget.absorb(saved)
+
+    def save(self, budget) -> None:
+        store = self._ledger()
+        if not self._pinned:
+            store.save_pins({"kind": "worker_ledger"})
+            self._pinned = True
+        store.save_ledger(budget.snapshot())
+
+    def purge(self) -> None:
+        """Xoá step + ledger của lượt đã có kết luận cuối."""
+        keys = sorted(self.keys)
+        if keys:
+            with harness_db(self.dsn, ddl=DDL) as con:
+                con.execute("DELETE FROM tool_step WHERE proposal_id = ANY(%s)", (keys,))
+                con.execute("DELETE FROM tool_run WHERE proposal_id = ANY(%s)", (keys,))

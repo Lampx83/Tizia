@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import hashlib
 import json
 import os
 import posixpath
@@ -143,7 +144,8 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
              should_stop: Callable[[], bool] | None,
              candidate_opts: dict | None = None,
              request_type: str | None = None,
-             eval_tasks: list[dict] | None = None, preview_capture=None) -> tuple[list[dict], str | None, dict | None, list[dict], str | None]:
+             eval_tasks: list[dict] | None = None, preview_capture=None,
+             checkpoint=None) -> tuple[list[dict], str | None, dict | None, list[dict], str | None]:
     """One pass of Gates 3→5.5 on fresh scratch + worktree. Return (public gates, failure kind, candidate,
     ảnh chụp cổng 5 — file tạm cục bộ, base sha các cổng đã dùng | None)."""
     scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
@@ -159,6 +161,8 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
         state["request_type"] = request_type  # 'self': cổng 4 nới vùng tự sửa + tính lại file khoá
     if eval_tasks is not None:
         state["eval_tasks"] = eval_tasks  # self: phần kiểm tra, chỉ cổng 5 (eval) đọc
+    if checkpoint is not None:
+        state["checkpoint"] = checkpoint
     state["should_stop"] = should_stop  # sandbox Gate 5 renews its VM lease only while this is false
     state.update(candidate_opts or {})  # folder: branch_name + branch_restore cho candidate.create
     if memory_path:
@@ -189,6 +193,8 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
                     except Exception as error:  # model/network/tool outage, not the candidate's code
                         result = {"gate": gate, "blocked": True, "reason": str(error)[:1000],
                                   "failure_class": "transient"}
+                    if checkpoint is not None:
+                        checkpoint.save(budget)
                     if getattr(deps, "trace", None):
                         deps.trace.flush()  # 1 lô trace mỗi cổng
                 # Transient Docker/checkout trouble gets one mechanical retry, no model call. It spends the
@@ -249,11 +255,22 @@ def drop_screenshots(shots: list[dict]) -> None:
             pass
 
 
+def _worker_checkpoint(ticket_id: int, plan: dict):
+    """Checkpoint tool-loop theo ticket + plan (ổn định qua lease/run mới); None khi cờ tắt hoặc thiếu DATABASE_URL."""
+    dsn = os.getenv("DATABASE_URL")
+    if os.getenv("AI_BOARD_TOOL_LOOP") != "1" or not dsn:
+        return None
+    from repositories.tool_steps import Checkpoint
+    digest = hashlib.sha256(json.dumps(plan, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")).hexdigest()
+    return Checkpoint(dsn, f"ticket-{ticket_id}:{digest[:16]}")
+
+
 def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate,
                    cleanup: Callable, policy: dict | None = None, accepted_policy_hash: str | None = None,
                    request_detail: str | None = None, memory_path=None,
                    should_stop: Callable[[], bool] | None = None, candidate_opts: dict | None = None,
-                   request_type: str | None = None, eval_tasks: list[dict] | None = None, preview_capture=None) -> dict:
+                   request_type: str | None = None, eval_tasks: list[dict] | None = None, preview_capture=None,
+                   checkpoint=None) -> dict:
     """Run Gates 3→5.5, repairing an ordinary failure at most MAX_REPAIRS times. Return a redacted verdict.
 
     policy = snapshot catalog {hash, capabilities}; None only outside the HTTP worker (no catalog check).
@@ -273,6 +290,9 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
     repairs: list[dict] = []
     repair_reason = None
     shots: list[dict] = []
+    run_checkpoint = checkpoint if checkpoint is not None else _worker_checkpoint(ticket_id, plan)
+    if run_checkpoint is not None:
+        run_checkpoint.restore(budget)
     while True:
         if getattr(deps, "trace", None):
             deps.trace.attempt = len(repairs)
@@ -282,6 +302,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
             run_gate=run_gate, cleanup=cleanup, repair_reason=repair_reason, catalog=catalog,
             request_detail=request_detail, memory_path=memory_path, should_stop=should_stop,
             candidate_opts=candidate_opts, request_type=request_type, eval_tasks=eval_tasks, preview_capture=preview_capture,
+            checkpoint=run_checkpoint.attempt(len(repairs)) if run_checkpoint is not None else None,
         )
         last = gates[-1]
         if kind != "ordinary" or len(repairs) >= MAX_REPAIRS:
@@ -294,6 +315,8 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
         repairs.append({"gate": last["gate"], "reason": last["reason"]})
         repair_reason = f"cổng {last['gate']}: {last['reason']}"
     passed = _passed(gates, kind)
+    if run_checkpoint is not None and kind not in ("transient", "critical"):
+        run_checkpoint.purge()  # lượt có kết luận cuối; transient/critical giữ lại để resume hoặc đối chiếu
     needs_review = passed and last["risk_level"] in ("high", "critical")
     outcome = "needs_review" if needs_review else "ready_for_pr" if passed else "blocked"
     if memory_path:
