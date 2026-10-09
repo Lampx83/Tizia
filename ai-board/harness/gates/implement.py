@@ -18,6 +18,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 import context as repo_context
 import file_context
 from gates import gate3_guards
+from runtime import tool_loop
 import memory
 import repomap
 
@@ -415,7 +416,18 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
         failed_candidates = set()
         if trace:
             _note_inputs(trace, subtask, model, state, current, context, siblings, words, lessons, ctx)
-        for iteration in range(MAX_INNER_RETRIES + 1):
+        out = None
+        if current is not None and tool_loop.enabled():
+            looped = tool_loop.run_subtask(
+                subtask, current, deps=deps, budget=budget, model=model, source=state["checkout_source"], sha=state["base_sha"],
+                check=lambda o: (_check_rest(o, current, subtask["file"]), gate3_guards.check(o, current, subtask["file"], known)),
+                role=role, db_path=db_path, proposal_id=proposal_id, child=child)
+            if looped["status"] != "proposed":
+                state["diffs"] = diffs
+                return {"gate": 3, "blocked": True, "diffs": diffs, "failure_class": looped["failure_class"],
+                        "reason": f"subtask '{subtask.get('title')}': {looped['reason']}"}
+            out = looped["out"]
+        for iteration in range(0 if out is not None else MAX_INNER_RETRIES + 1):
             routing_options = {'role': role}
             if routing:
                 # One quality switch uses the final existing repair attempt, never a fresh budget.

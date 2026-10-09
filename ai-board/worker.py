@@ -289,6 +289,8 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
         if not budget.tick():
             kind = "budget"
             break
+        if os.getenv("AI_BOARD_TOOL_LOOP") == "1" and not budget.spend_repair():  # ledger sửa nội dung chung với loop
+            break
         repairs.append({"gate": last["gate"], "reason": last["reason"]})
         repair_reason = f"cổng {last['gate']}: {last['reason']}"
     passed = _passed(gates, kind)
@@ -1048,9 +1050,10 @@ def harness_change_runner(checkout_source=None, tracer=None, progress=None) -> C
         budget = Budget.from_env()
         budget.max_units = max_units
         # Thời gian + số lần gọi model lớn theo số bước của plan (task lớn không chạm trần cố định 900 s / 40 lần).
-        steps = len(plan.get("steps") or [])
-        budget.max_wall_clock_s = float(scaled_limit("wall_clock_s", steps))
-        budget.max_model_calls = scaled_limit("model_calls", steps)
+        if os.getenv("AI_BOARD_TOOL_LOOP") != "1":  # tool-loop: trần parent cố định từ BUDGET_MAX_*, không scale theo plan
+            steps = len(plan.get("steps") or [])
+            budget.max_wall_clock_s = float(scaled_limit("wall_clock_s", steps))
+            budget.max_model_calls = scaled_limit("model_calls", steps)
         artifact = {}
         def capture(state, private_candidate):
             from preview import commit_archive

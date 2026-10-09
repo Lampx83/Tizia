@@ -8,10 +8,13 @@ from dataclasses import dataclass, field
 
 # Cộng dồn qua các lần resume (skill_proposals.budget_json), không reset —
 # đây là cái chặn loop vô hạn ăn GPU máy dùng chung.
-CAPS = ("model_calls", "tool_calls", "tokens", "retries", "units")
+CAPS = ("model_calls", "tool_calls", "tokens", "retries", "units", "semantic_repairs")
 # retries chỉ chặn retry tiếp theo (worker tự kiểm), không kết thúc cả lượt chạy.
 # units = đơn vị budget theo nhà cung cấp (meter.py): giây GPU với ollama, 1K token với api.
 RUN_CAPS = ("model_calls", "tool_calls", "tokens", "units")
+# Ngân sách còn lại tối thiểu để chạy verification bắt buộc (cổng 4/5) trước một lượt sửa tiếp.
+# ponytail: chưa đo; đo theo cấu hình thực tế rồi chỉnh BUDGET_VERIFY_RESERVE.
+VERIFY_RESERVE = {"model_calls": 2, "tool_calls": 2, "tokens": 20_000, "wall_clock_s": 120.0}
 
 
 @dataclass
@@ -22,12 +25,14 @@ class Budget:
     max_retries: int = 3
     max_units: int = 600
     max_wall_clock_s: float = 900.0
+    max_semantic_repairs: int = 3
 
     model_calls: int = 0
     tool_calls: int = 0
     tokens: int = 0
     retries: int = 0
     units: int = 0
+    semantic_repairs: int = 0
     # Giây đã tiêu ở các lần chạy TRƯỚC. Wall-clock phải cộng dồn qua resume như
     # mọi cap khác — nếu reset mỗi lần thì một skill fail rồi resume 20 lần được
     # 20 × max_wall_clock_s GPU mà budget không bao giờ báo chạm trần.
@@ -51,6 +56,7 @@ class Budget:
             max_retries=num("retries", 3, int),
             max_units=num("units", 600, int),
             max_wall_clock_s=num("wall_clock_s", 900.0, float),
+            max_semantic_repairs=num("semantic_repairs", 3, int),
         )
 
     @classmethod
@@ -97,8 +103,57 @@ class Budget:
             max_retries=self.max_retries,
             max_units=self.max_units,
             max_wall_clock_s=self.max_wall_clock_s,
+            max_semantic_repairs=self.max_semantic_repairs,
             elapsed_s=round(self.elapsed_s, 3),
             exhausted=self.exhausted(),
             quality_switches=self.quality_switches,
         )
         return out
+
+    def can_afford(self, reserve: dict = VERIFY_RESERVE) -> bool:
+        """Còn đủ ngân sách cho `reserve` (model_calls, tool_calls, tokens, wall_clock_s) mà không chạm trần?"""
+        return (self.max_model_calls - self.model_calls >= reserve["model_calls"]
+                and self.max_tool_calls - self.tool_calls >= reserve["tool_calls"]
+                and self.max_tokens - self.tokens >= reserve["tokens"]
+                and self.max_wall_clock_s - self.elapsed_s >= reserve["wall_clock_s"]
+                and self.max_units > self.units)
+
+    def spend_repair(self) -> bool:
+        """Ghi 1 lượt sửa nội dung vào ledger toàn run. False nếu đã hết 3 lượt (không ghi thêm)."""
+        if self.semantic_repairs >= self.max_semantic_repairs:
+            return False
+        self.semantic_repairs += 1
+        return True
+
+
+class ChildBudget:
+    """Trần riêng của 1 loop (model/tool/giây), mọi khoản chi chuyển thẳng lên parent; chạm trần nào trước thì dừng."""
+
+    def __init__(self, parent: Budget, *, max_model_calls: int = 10, max_tool_calls: int = 30, max_wall_clock_s: float = 300.0):
+        object.__setattr__(self, "parent", parent)
+        object.__setattr__(self, "_own", {"model_calls": 0, "tool_calls": 0})
+        object.__setattr__(self, "_max", {"model_calls": max_model_calls, "tool_calls": max_tool_calls})
+        object.__setattr__(self, "_deadline", time.monotonic() + max_wall_clock_s)
+
+    def exhausted(self) -> str | None:
+        for cap, used in self._own.items():
+            if used >= self._max[cap]:
+                return f"loop_{cap}"
+        if time.monotonic() >= self._deadline:
+            return "loop_wall_clock_s"
+        return self.parent.exhausted()
+
+    def tick(self) -> bool:
+        return self.exhausted() is None
+
+    def spend(self, cap: str, n: int = 1) -> bool:
+        if cap in self._own:
+            self._own[cap] += n
+        self.parent.spend(cap, n)
+        return self.exhausted() is None
+
+    def __getattr__(self, name):
+        return getattr(self.parent, name)
+
+    def __setattr__(self, name, value):
+        setattr(self.parent, name, value)
