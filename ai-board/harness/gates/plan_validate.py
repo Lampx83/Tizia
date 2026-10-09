@@ -165,12 +165,18 @@ def _squash(text: str) -> str:
 
 
 _QUOTE_CHARS = re.compile('["`‘’“”]')
+DEFAULT_FIXES = "quotes"
+
+
+def fixes() -> set[str]:
+    """Gate 2.5 patches on: AI_BOARD_GATE25_FIXES comma list; unset = quotes, empty = none."""
+    return {f.strip() for f in os.environ.get("AI_BOARD_GATE25_FIXES", DEFAULT_FIXES).split(",") if f.strip()}
 
 
 def _fold(text: str) -> str:
-    """_squash plus one quote style when AI_BOARD_GATE25_FIXES lists `quotes`: models rewrite "x" as 'x' when they copy HTML."""
+    """_squash plus one quote style when `quotes` fix on: models rewrite "x" as 'x' when they copy HTML."""
     text = _squash(text)
-    return _QUOTE_CHARS.sub("'", text) if "quotes" in os.environ.get("AI_BOARD_GATE25_FIXES", "").split(",") else text
+    return _QUOTE_CHARS.sub("'", text) if "quotes" in fixes() else text
 
 
 _LINE_MARKER = re.compile(r'^[ \t]*(?:[\w./-]+:)?L?\d+\|[ ]?', re.M)
@@ -281,7 +287,7 @@ def write_clarification(db_path, request: dict, question: str) -> None:
 
 def _validator_options() -> dict | None:
     """Larger output budget for multi-subtask plans when AI_BOARD_GATE25_FIXES lists `tokens`."""
-    return {"num_predict": 6144} if "tokens" in os.environ.get("AI_BOARD_GATE25_FIXES", "").split(",") else None
+    return {"num_predict": 6144} if "tokens" in fixes() else None
 
 
 def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: int | None = None) -> dict:

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import os
 import posixpath
 import re
 import subprocess
@@ -109,7 +110,28 @@ def file_prompt_context(subtask: dict, content: str, siblings: list[str], words:
             + file_context.excerpt(content, words, filename=subtask["file"]))
 
 
+WHOLE_FILE_MAX_CHARS = 60_000
+
+
+def numbered(content: str) -> str:
+    return "\n".join(f"L{n}| {line}" for n, line in enumerate(content.splitlines(), 1))
+
+
+def whole_file_context(subtask: dict, state: dict, current: str | None, siblings: list[str], words: list[str]) -> tuple:
+    """(context, lessons, ctx) with the whole numbered file; None when the file is new."""
+    if current is None:
+        return None, [], None
+    return f"(file {len(current.splitlines())} dòng; toàn bộ file)\n{numbered(current)}", [], None
+
+
 def gate3_context(subtask: dict, state: dict, current: str | None, siblings: list[str], words: list[str]) -> tuple:
+    """Whole file when <= WHOLE_FILE_MAX_CHARS, else excerpt; AI_BOARD_GATE3_CONTEXT=excerpt forces excerpt."""
+    if (current is None or len(current) <= WHOLE_FILE_MAX_CHARS) and os.environ.get("AI_BOARD_GATE3_CONTEXT", "hybrid") != "excerpt":
+        return whole_file_context(subtask, state, current, siblings, words)
+    return excerpt_context(subtask, state, current, siblings, words)
+
+
+def excerpt_context(subtask: dict, state: dict, current: str | None, siblings: list[str], words: list[str]) -> tuple:
     """(context, lessons, ctx): trích file model thấy ở cổng 3 + bài học + kết quả build_context. Bộ đo recall dùng chung."""
     context = None if current is None else file_prompt_context(subtask, current, siblings, words)
     lessons = memory.recall(state["memory_path"], subtask["file"], words) if state.get("memory_path") else []

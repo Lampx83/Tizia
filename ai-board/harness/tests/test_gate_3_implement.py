@@ -285,7 +285,7 @@ def _source_with(tmp_path, rel, content):
     return repo
 
 
-BIG_PAGE = "".join(f"<p>đoạn {i}</p>\n" for i in range(3000)) + '<footer id="chan-trang">Bản quyền</footer>\n</body>\n'
+BIG_PAGE = "".join(f"<p>đoạn {i}</p>\n" for i in range(5000)) + '<footer id="chan-trang">Bản quyền</footer>\n</body>\n'
 EDITS = {"code": "// fixture code\n", "test_file": "test/fixture.test.js", "test": "import test from 'node:test';\n// fixture test\n",
          "edits": [{"search": '<footer id="chan-trang">Bản quyền</footer>',
                     "replace": '<p>Tizia được cập nhật liên tục.</p>\n<footer id="chan-trang">Bản quyền</footer>'}]}
@@ -308,9 +308,9 @@ def test_large_existing_file_is_shown_as_an_excerpt_and_edited_in_place(tmp_path
     plain = implement.build_prompt(plan["subtasks"][1])
     assert existing_prompt.startswith(plain)  # locked prefix unchanged
     context = existing_prompt[len(plain):]
-    assert 'L3001| <footer id="chan-trang">Bản quyền</footer>' in context
-    assert "3002 dòng" in context and "flashcards.html" in context
-    assert len(context) < 8000 < len(BIG_PAGE)  # excerpt, not the 60 KB file
+    assert 'L5001| <footer id="chan-trang">Bản quyền</footer>' in context
+    assert "5002 dòng" in context and "flashcards.html" in context
+    assert len(context) < 8000 < 60_000 < len(BIG_PAGE)  # over the whole-file limit: excerpt
     assert new_file_prompt == implement.build_prompt(plan["subtasks"][0])  # new file: prefix only
     written = _written(tmp_path, "public/flashcards.html")
     assert written == BIG_PAGE.replace('<footer id="chan-trang">', '<p>Tizia được cập nhật liên tục.</p>\n<footer id="chan-trang">')
