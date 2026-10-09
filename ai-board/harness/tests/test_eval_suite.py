@@ -390,3 +390,18 @@ def test_blind_grading_hides_arms_and_scores_per_run_with_oracle_agreement(tmp_p
     report = grading.score(grades, blind_map)
     assert report["runs"]["runA"]["oracle_agreement"] == "2/2" and report["runs"]["runB"]["correct_or_partial"] == 1
     assert grading.paired(grades, blind_map, "runA", "runB") == {"tasks": 2, "gained_usable": 0, "lost_usable": 0, "net": 0}
+
+
+def test_hybrid_arm_shows_the_whole_file_only_when_it_fits_the_context_window():
+    from evaluation.suite import ablation
+    from gates import implement
+    sub = {"file": "a.js", "title": "t", "verify": "v"}
+    small, big = "x\ny\nz", "line\n" * 20_000
+    try:
+        ablation.apply("hybrid")
+        text, _lessons, _ctx = implement.gate3_context(sub, {}, small, [], ["x"])
+        assert "L3| z" in text
+        text, _lessons, _ctx = implement.gate3_context(sub, {"checkout_source": ".", "base_sha": "x"}, big, [], ["line"])
+        assert "toàn bộ file" not in (text or "")
+    finally:
+        ablation.apply("default")
