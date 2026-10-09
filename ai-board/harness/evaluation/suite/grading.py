@@ -75,14 +75,15 @@ def score(grades: list[dict], key: dict) -> dict:
 
 
 def paired(grades: list[dict], key: dict, baseline: str, candidate: str) -> dict:
-    """Task-level change between two runs on the correct+partial scale: tasks gained, tasks lost."""
-    rank = {"correct": 2, "partial": 1, "wrong": 0, "no_candidate": 0}
-    seen: dict[str, dict[str, int]] = {}
+    """Task-level change between two runs on the usable (correct or partial) scale. Repeats of a task are summed, so a task counts as gained
+    when the candidate had more usable repeats than the baseline."""
+    usable: dict[str, dict[str, int]] = {}
     for grade in grades:
         meta = key.get(grade.get("blind_id"))
-        if meta and grade.get("verdict") in rank and meta["run"] in (baseline, candidate):
-            seen.setdefault(meta["id"], {})[meta["run"]] = rank[grade["verdict"]]
-    both = {t: v for t, v in seen.items() if baseline in v and candidate in v}
-    gained = sum(v[candidate] > 0 and v[baseline] == 0 for v in both.values())
-    lost = sum(v[baseline] > 0 and v[candidate] == 0 for v in both.values())
-    return {"tasks": len(both), "gained_usable": gained, "lost_usable": lost, "net": gained - lost}
+        if meta and grade.get("verdict") in VERDICTS and meta["run"] in (baseline, candidate):
+            bucket = usable.setdefault(meta["id"], {baseline: 0, candidate: 0})
+            bucket[meta["run"]] += grade["verdict"] in ("correct", "partial")
+    gained = sum(v[candidate] > v[baseline] for v in usable.values())
+    lost = sum(v[candidate] < v[baseline] for v in usable.values())
+    return {"tasks": len(usable), "gained_usable": gained, "lost_usable": lost, "net": gained - lost,
+            "usable_trials_delta": sum(v[candidate] - v[baseline] for v in usable.values())}

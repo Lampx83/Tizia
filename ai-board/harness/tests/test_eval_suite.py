@@ -389,7 +389,7 @@ def test_blind_grading_hides_arms_and_scores_per_run_with_oracle_agreement(tmp_p
     grades = [{"blind_id": b, "verdict": verdict[(m["run"], m["id"])], "reason": ""} for b, m in blind_map.items()]
     report = grading.score(grades, blind_map)
     assert report["runs"]["runA"]["oracle_agreement"] == "2/2" and report["runs"]["runB"]["correct_or_partial"] == 1
-    assert grading.paired(grades, blind_map, "runA", "runB") == {"tasks": 2, "gained_usable": 0, "lost_usable": 0, "net": 0}
+    assert grading.paired(grades, blind_map, "runA", "runB") == {"tasks": 2, "gained_usable": 0, "lost_usable": 0, "net": 0, "usable_trials_delta": 0}
 
 
 def test_hybrid_arm_shows_the_whole_file_only_when_it_fits_the_context_window():
