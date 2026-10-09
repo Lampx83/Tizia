@@ -103,6 +103,8 @@ class OllamaClient:
                     else {'type': 'json_object'})
             if extra and 'thinking' in extra:  # explicit per-role choice; absent = server default (legacy callers)
                 payload['chat_template_kwargs'] = {'enable_thinking': bool(extra['thinking'])}
+            if extra and extra.get('tools'):
+                payload['tools'] = extra['tools']
             logprobs = bool(extra and extra.get('logprobs'))
             if logprobs:  # classifier: one token + top-N logprobs, thinking off (Ollama `think: false`)
                 payload.update(logprobs=True, top_logprobs=extra.get('top_logprobs', 20),
@@ -112,8 +114,9 @@ class OllamaClient:
             try:
                 choice = body['choices'][0]
                 content = choice['message']['content']
-                if content is None and choice.get('finish_reason') == 'length':
-                    content = ''  # thinking used the whole token budget: a truncated answer, not a protocol error
+                tool_calls = choice['message'].get('tool_calls') or None
+                if content is None and (tool_calls or choice.get('finish_reason') == 'length'):
+                    content = ''  # tool call carries no text; length = thinking used the whole token budget
                 if not isinstance(content, str):
                     raise ValueError()
                 usage = body.get('usage') or {}
@@ -130,7 +133,7 @@ class OllamaClient:
             reasoning = choice['message'].get('reasoning') or choice['message'].get('reasoning_content') or ''
             return {**body, 'response': content, 'done_reason': choice.get('finish_reason'), '_reasoning_chars': len(reasoning),
                     'prompt_eval_count': usage.get('prompt_tokens'), 'eval_count': usage.get('completion_tokens'),
-                    '_provider': 'vllm'}
+                    '_provider': 'vllm', **({'tool_calls': tool_calls} if tool_calls else {})}
         payload = {
             "model": model,
             "prompt": prompt,

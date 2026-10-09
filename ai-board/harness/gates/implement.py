@@ -18,6 +18,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 import context as repo_context
 import file_context
 from gates import gate3_guards
+from repositories.tool_steps import PgSteps
 from runtime import tool_loop
 import memory
 import repomap
@@ -421,11 +422,14 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
             looped = tool_loop.run_subtask(
                 subtask, current, deps=deps, budget=budget, model=model, source=state["checkout_source"], sha=state["base_sha"],
                 check=lambda o: (_check_rest(o, current, subtask["file"]), gate3_guards.check(o, current, subtask["file"], known)),
-                role=role, db_path=db_path, proposal_id=proposal_id, child=child)
+                role=role, db_path=db_path, proposal_id=proposal_id, child=child,
+                store=PgSteps(db_path, proposal_id, child) if db_path is not None and proposal_id is not None else None,
+                pins={"role": role})
             if looped["status"] != "proposed":
                 state["diffs"] = diffs
                 return {"gate": 3, "blocked": True, "diffs": diffs, "failure_class": looped["failure_class"],
-                        "reason": f"subtask '{subtask.get('title')}': {looped['reason']}"}
+                        "reason": f"subtask '{subtask.get('title')}': {looped['reason']}",
+                        **({"unknown_outcome": looped["unknown_outcome"]} if looped.get("unknown_outcome") else {})}
             out = looped["out"]
         for iteration in range(0 if out is not None else MAX_INNER_RETRIES + 1):
             routing_options = {'role': role}

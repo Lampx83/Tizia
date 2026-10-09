@@ -1,0 +1,113 @@
+"""Checkpoint tool-step của loop cổng 3 trong PostgreSQL: pin tương thích, ledger, intent/result theo identity."""
+from __future__ import annotations
+
+import hashlib
+import json
+import time
+
+from repositories.dbconn import harness_db
+
+DDL = """
+CREATE TABLE IF NOT EXISTS tool_run (
+  proposal_id BIGINT NOT NULL,
+  child       INTEGER NOT NULL,
+  pins_json   TEXT NOT NULL,
+  ledger_json TEXT,
+  updated_at  BIGINT NOT NULL,
+  PRIMARY KEY (proposal_id, child)
+);
+CREATE TABLE IF NOT EXISTS tool_step (
+  proposal_id BIGINT NOT NULL,
+  child       INTEGER NOT NULL,
+  step        INTEGER NOT NULL,
+  identity    TEXT NOT NULL,
+  tool        TEXT NOT NULL,
+  args_json   TEXT NOT NULL,
+  status      TEXT NOT NULL,
+  kind        TEXT,
+  observation TEXT,
+  resolved_by TEXT,
+  updated_at  BIGINT NOT NULL,
+  PRIMARY KEY (proposal_id, child, step)
+);
+"""
+# status: intent (ghi trước khi chạy) | done | unknown (dừng chờ đối chiếu) | applied | void (kết quả đối chiếu)
+RESOLUTIONS = {"applied": "applied", "not_applied": "void"}
+
+
+def identity(proposal_id: int, child: int, step: int, tool: str, args: dict) -> str:
+    raw = json.dumps([proposal_id, child, step, tool, args], sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
+
+
+def _now() -> int:
+    return int(time.time() * 1000)
+
+
+class PgSteps:
+    """Checkpoint của 1 loop = (proposal_id, child). Lỗi DB raise: mất checkpoint thì không được đi tiếp."""
+
+    def __init__(self, dsn, proposal_id: int, child: int | None):
+        self.dsn, self.proposal_id, self.child = dsn, proposal_id, child or 0
+
+    def identity(self, step: int, tool: str, args: dict) -> str:
+        return identity(self.proposal_id, self.child, step, tool, args)
+
+    def load(self) -> dict:
+        """{pins, ledger, steps[]} đã lưu; pins None nếu chưa có checkpoint."""
+        where = (self.proposal_id, self.child)
+        with harness_db(self.dsn, ddl=DDL, dict_rows=True) as con:
+            run = con.execute("SELECT pins_json, ledger_json FROM tool_run WHERE proposal_id=%s AND child=%s",
+                              where).fetchone()
+            rows = con.execute("SELECT step, identity, tool, args_json, status, kind, observation FROM tool_step "
+                               "WHERE proposal_id=%s AND child=%s ORDER BY step", where).fetchall()
+        steps = [{**row, "args": json.loads(row["args_json"])} for row in rows]
+        return {"pins": json.loads(run["pins_json"]) if run else None,
+                "ledger": json.loads(run["ledger_json"]) if run and run["ledger_json"] else None, "steps": steps}
+
+    def save_pins(self, pins: dict) -> None:
+        with harness_db(self.dsn, ddl=DDL) as con:
+            con.execute("INSERT INTO tool_run (proposal_id, child, pins_json, updated_at) VALUES (%s, %s, %s, %s) "
+                        "ON CONFLICT DO NOTHING", (self.proposal_id, self.child, json.dumps(pins, sort_keys=True), _now()))
+
+    def save_ledger(self, snapshot: dict) -> None:
+        with harness_db(self.dsn, ddl=DDL) as con:
+            con.execute("UPDATE tool_run SET ledger_json=%s, updated_at=%s WHERE proposal_id=%s AND child=%s",
+                        (json.dumps(snapshot), _now(), self.proposal_id, self.child))
+
+    def intent(self, step: int, tool: str, args: dict) -> None:
+        """INSERT trước khi chạy; trùng khoá (2 worker cùng chạy 1 bước) raise."""
+        with harness_db(self.dsn, ddl=DDL) as con:
+            con.execute("INSERT INTO tool_step (proposal_id, child, step, identity, tool, args_json, status, updated_at) "
+                        "VALUES (%s, %s, %s, %s, %s, %s, 'intent', %s)",
+                        (self.proposal_id, self.child, step, self.identity(step, tool, args),
+                         tool, json.dumps(args, sort_keys=True), _now()))
+
+    def done(self, step: int, tool: str, args: dict, observation: str, kind: str) -> None:
+        with harness_db(self.dsn, ddl=DDL) as con:
+            con.execute("INSERT INTO tool_step (proposal_id, child, step, identity, tool, args_json, status, kind, "
+                        "observation, updated_at) VALUES (%s, %s, %s, %s, %s, %s, 'done', %s, %s, %s) "
+                        "ON CONFLICT (proposal_id, child, step) DO UPDATE SET status='done', kind=EXCLUDED.kind, "
+                        "observation=EXCLUDED.observation, updated_at=EXCLUDED.updated_at",
+                        (self.proposal_id, self.child, step, self.identity(step, tool, args), tool,
+                         json.dumps(args, sort_keys=True), kind, observation, _now()))
+
+    def mark(self, step: int, status: str) -> None:
+        with harness_db(self.dsn, ddl=DDL) as con:
+            con.execute("UPDATE tool_step SET status=%s, updated_at=%s WHERE proposal_id=%s AND child=%s AND step=%s",
+                        (status, _now(), self.proposal_id, self.child, step))
+
+    def drop(self, step: int) -> None:
+        with harness_db(self.dsn, ddl=DDL) as con:
+            con.execute("DELETE FROM tool_step WHERE proposal_id=%s AND child=%s AND step=%s",
+                        (self.proposal_id, self.child, step))
+
+    def reconcile(self, step: int, resolution: str, by: str) -> None:
+        """Người có quyền chốt bước `unknown` thành applied/not_applied; chỉ bước đang unknown mới đổi được."""
+        status = RESOLUTIONS[resolution]
+        with harness_db(self.dsn, ddl=DDL) as con:
+            hit = con.execute("UPDATE tool_step SET status=%s, resolved_by=%s, updated_at=%s WHERE proposal_id=%s "
+                              "AND child=%s AND step=%s AND status='unknown'",
+                              (status, by, _now(), self.proposal_id, self.child, step)).rowcount
+        if not hit:
+            raise ValueError("bước không ở trạng thái unknown")
