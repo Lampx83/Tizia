@@ -187,6 +187,27 @@ def _pins(subtask: dict, sha: str, ws: Workspace, extra: dict | None) -> dict:
             "tools": sha_of(json.dumps(SCHEMAS, sort_keys=True)), **(extra or {})}
 
 
+KNOWN_STATUSES = ("done", "applied", "void", "intent", "unknown", "compensate")
+RESOLUTION_STATUS = {"applied": "applied", "not_applied": "void"}
+PLATFORM_ACTOR = "platform:receipt"
+
+
+def _probe_draft(name: str, args: dict, ws: Workspace, row: dict) -> tuple[str, dict]:
+    """Ghi vào bản nháp trong bộ nhớ: chưa có receipt `done` thì hiệu ứng đã mất theo process → not_applied."""
+    return "not_applied", {"basis": "in_memory_draft", "identity": row["identity"], "receipt": None,
+                           "draft_hash": sha_of(ws.content)}
+
+
+# Tool ghi không có probe thì kết quả unknown luôn chờ người có quyền chốt.
+PROBES = {name: _probe_draft for name in WRITE_TOOLS}
+
+
+def probe_write(name: str, args: dict, ws: Workspace, row: dict) -> tuple[str, dict] | None:
+    """Platform tự đối chiếu bước ghi chưa rõ bằng dữ liệu đã lưu: (applied|not_applied, evidence) hoặc None khi không chắc."""
+    probe = PROBES.get(name)
+    return probe(name, args, ws, row) if probe else None
+
+
 def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check) -> tuple:
     """Nạp checkpoint: kiểm pin, nhận ledger cũ, dựng lại bản nháp. → (prompt, steps, rejected, kết quả dừng|None)."""
     saved = store.load()
@@ -203,14 +224,26 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check) -> tup
         n, name, args, status, kind = row["step"], row["tool"], row["args"], row["status"], row["kind"]
         if row["identity"] != store.identity(n, name, args):
             return prompt, steps, False, _result("blocked", f"identity bước {n} không khớp checkpoint", "critical")
+        if status not in KNOWN_STATUSES:
+            return prompt, steps, False, _result("blocked", f"bước {n} có trạng thái lạ: {status!r}", "critical", steps=steps)
+        if status == "compensate":
+            return prompt, steps, False, _result(
+                "blocked", f"bước {n} ({name}) cần bù trừ; chốt bù trừ xong mới resume", "critical",
+                steps=steps, unknown_outcome={"step": n, "tool": name, "status": status})
         if status in ("intent", "unknown"):
-            if name in WRITE_TOOLS:
+            if name not in WRITE_TOOLS:
+                store.drop(n)
+                break
+            found = probe_write(name, args, ws, row)
+            if not found:
                 store.mark(n, "unknown")
                 return prompt, steps, False, _result(
                     "blocked", f"kết quả bước {n} ({name}) chưa rõ; cần đối chiếu rồi mới resume", "critical",
-                    steps=steps, unknown_outcome={"step": n, "tool": name})
-            store.drop(n)
-            break
+                    steps=steps, unknown_outcome={"step": n, "tool": name, "status": "unknown"})
+            resolution, evidence = found
+            store.mark(n, "unknown")
+            store.reconcile(n, resolution, PLATFORM_ACTOR, "đối chiếu tự động theo dữ liệu đã lưu", evidence)
+            status = RESOLUTION_STATUS[resolution]
         observation = row["observation"] or ""
         if kind == "forbidden":
             return prompt, steps, False, _result("blocked", observation, "critical", steps=steps)

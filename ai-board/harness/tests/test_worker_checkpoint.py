@@ -10,7 +10,7 @@ if str(AI_BOARD_DIR) not in sys.path:
 
 import tools
 from conftest import connect
-from repositories.tool_steps import Checkpoint
+from repositories.tool_steps import Checkpoint, PgSteps
 from runtime import tool_loop
 from runtime.budget import Budget
 from test_tool_loop import EDIT, FINISH, PAGE, SUBTASK, TEST, Deps
@@ -128,6 +128,37 @@ def test_a_different_plan_does_not_resume_the_old_checkpoint(pg):
         execute([EDIT, TEST, FINISH], die, Budget())
     result, deps = execute([EDIT, TEST, FINISH], block("plan"), Budget(), plan={**PLAN, "capabilities": ["x"]})
     assert len(deps.prompts) == 3
+
+
+def test_operator_reconciled_unknown_write_resumes_the_same_checkpoint_and_ledger(pg, monkeypatch):
+    monkeypatch.setattr(tool_loop, "PROBES", {})
+    real_done = PgSteps.done
+
+    def crash_on_first_write(self, step, *args, **kw):
+        if step == 0:
+            raise Crash()
+        return real_done(self, step, *args, **kw)
+
+    monkeypatch.setattr(PgSteps, "done", crash_on_first_write)
+    with pytest.raises(Crash):
+        execute([EDIT, TEST, FINISH], block("plan"), Budget(), plan_hash="b2" * 32)
+    monkeypatch.setattr(PgSteps, "done", real_done)
+
+    stopped = Budget()
+    result, deps = execute([EDIT], block("plan"), stopped, plan_hash="b2" * 32)
+    assert result["failure_class"] == "critical" and deps.prompts == [] and stopped.model_calls == 1  # ledger subtask nạp lại
+    store = Checkpoint(pg, "ticket-7:" + "b2" * 8).store("abc", 1)
+    assert store.load()["steps"][0]["status"] == "unknown"
+
+    store.reconcile(0, "applied", "admin:9", "đã thấy dữ liệu", {"ref": "log"})
+    row = store.load()["steps"][0]
+    assert (row["status"], count(pg, "tool_run")) == ("applied", 2)
+
+    resumed = Budget()
+    result, deps = execute([TEST, FINISH], block("plan"), resumed, plan_hash="b2" * 32)
+    assert len(deps.prompts) == 2 and "đã áp 1 edit" in deps.prompts[0]  # bước đã đối chiếu được dựng lại, model không bị hỏi lại
+    assert resumed.model_calls == 3 and result["gate_reached"] == 4  # 1 lần cũ + 2 lần mới: ledger không reset
+    assert count(pg, "tool_step") == 0  # kết luận cuối → purge đúng khoá đã dùng
 
 
 def scopes(dsn):

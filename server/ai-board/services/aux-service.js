@@ -5,6 +5,7 @@ export * from './self-improve.js';
 export * from './post-merge-watch.js';
 export * from './frozen-benchmark.js';
 export * from './transient-retry.js';
+export * from './write-reconcile.js';
 export * from '../security/intake-guard.js';
 export { recordClassification } from '../security/classifier.js';
 export { purgeExpiredScreenshots, createLocalBackend } from '../repositories/shot-storage.js';
