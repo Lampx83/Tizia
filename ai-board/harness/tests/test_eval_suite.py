@@ -189,6 +189,18 @@ def test_best_match_flag_is_recorded_in_run_name_and_provenance(world, monkeypat
     assert {n.endswith("-bm-adv"): m["best_match"] for n, m in runs.items()} == {True: "advisory", False: "enforce"}
 
 
+def test_retrieval_literal_flag_is_recorded_in_provenance_and_run_name(world, monkeypatch):
+    root, _ = world
+    deps, _ = deps_for(world)
+    argv = ["run", "--seed", str(SEED), "--split", "dev", "--cases", "1", "--repeats", "1", "--modes", "gold", "--root", str(root), "--allow-dirty"]
+    monkeypatch.setenv("AI_BOARD_RETRIEVAL", "")
+    assert runner.main([*argv, "--retrieval", "literal"], deps) == 0
+    assert os.environ["AI_BOARD_RETRIEVAL"] == "literal"
+    runs = sorted((root / "suite").iterdir())
+    lit = [r for r in runs if r.name.endswith("-ret-lit")]
+    assert len(lit) == 1 and json.loads((lit[0] / "run.json").read_text(encoding="utf-8"))["retrieval"] == "literal"
+
+
 def test_nodia_variant_strips_diacritics_from_the_request_the_planner_sees(world):
     root, tasks = world
     assert trial.strip_diacritics("Đổi chữ nút 'Quay lại'") == "Doi chu nut 'Quay lai'"

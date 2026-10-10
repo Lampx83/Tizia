@@ -10,6 +10,7 @@ manual() = prompts/AIBOARD.md (luật repo cho model local, kiểu CLAUDE.md). K
 from __future__ import annotations
 
 import fnmatch
+import os
 import posixpath
 import re
 from dataclasses import dataclass
@@ -200,7 +201,14 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
             parts.append(f"LƯU Ý: chữ người dùng nhắc KHÔNG nằm trong {', '.join(pages)}; trang hiển thị nó qua "
                          f"{', '.join(render)}. Sửa ở file đó, không thêm phần tử mới vào trang.")
             used.append("locate")
-        if not (file or known or render):  # chữ người dùng nhắc có thể nằm ở module dùng chung, không ở trang gửi yêu cầu
+        literal = {}
+        if gate == 1 and not file and os.environ.get("AI_BOARD_RETRIEVAL") == "literal":
+            quoted = file_context.literals(request.get("subject"), request.get("body"), thread)
+            if quoted:
+                literal = tools.literal_candidates(source, commit, quoted, pages)
+                log.append({"tool": "literal", "params": {"literals": quoted, "pages": pages}, "chars": 0,
+                            "result": f"{len(literal['files'])} candidate files: " + ", ".join(r["file"] for r in literal["files"][:5])})
+        if not (file or known or render or literal.get("files")):  # chữ người dùng nhắc có thể nằm ở module dùng chung, không ở trang gửi yêu cầu
             best = [(f, grams) for f, _, grams in tools.matching_files(source, commit, said, limit=1) if f not in targets]
             log.append({"tool": "matching_files", "params": {"phrases": said[:6]}, "chars": 0,
                         "result": f"{best[0][0]} matches: {'; '.join(best[0][1])[:200]}" if best else "no file matches several phrases"})
@@ -209,6 +217,12 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
                 parts.append(f"LƯU Ý: {best[0][0]} chứa nhiều cụm bạn viết nhất ({'; '.join(best[0][1])}). "
                              "Nếu thay đổi nằm ở đó, sửa file đó, không thêm phần tử mới vào trang.")
                 used.append("locate")
+        if literal.get("files"):
+            only = literal["files"][0]["file"] if len(literal["files"]) == 1 else None
+            if only and not (known or render) and only not in targets:
+                targets = [only, *targets]
+            parts.append(tools.format_literals(literal, commit))
+            used.append("literal")
         css = _linked_css(source, commit, targets) if skill.follow_css else []
         words = [w for w in file_context.keywords(request.get("subject"), sub_text or request.get("body"),
                                                   request.get("body")) if not _PATH_REF.search(w)]
