@@ -31,11 +31,14 @@ def run(name, reply):
 
 
 def test_gold_eval_rows_are_unchanged_for_a_passing_and_a_blocked_case():
-    assert run("edit-text", GOOD) == {
+    good = run("edit-text", GOOD)
+    diff = good.pop("diff")
+    assert good == {
         "case": "edit-text", "model": "fake", "gate_passed": True, "oracle": True, "last_output": None,
         "reason": None, "calls": 1, "retries": 0, "gpu_s": 0.0, "units": 1, "tokens_in": 120, "tokens_out": 80,
         "model_loads": 0, "done_reasons": [None],
     }
+    assert "-  <h1>✨ Tính năng</h1>" in diff and "+  <h1>✨ Tính năng nổi bật</h1>" in diff
     blocked = run("edit-text", "không phải json")
     assert blocked["gate_passed"] is False and blocked["oracle"] is False
     assert blocked["calls"] == 4 and blocked["retries"] == 3  # 1 lần đầu + MAX_INNER_RETRIES
