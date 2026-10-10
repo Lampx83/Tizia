@@ -27,6 +27,7 @@ def run(name, reply):
     deps = Deps(models=EditModels(reply), notify=None, sleep=lambda _s: None)
     row = eval_gold.run_case(name, eval_gold.CASES[name], "fake", deps)
     row.pop("wall_s")  # đồng hồ thật
+    assert "tinh-nang.html" in (row.pop("diff") or "") or reply == "không phải json"
     return row
 
 
