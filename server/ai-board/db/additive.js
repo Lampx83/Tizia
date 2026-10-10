@@ -6,6 +6,8 @@ import { listMigrationVersions, loadMigrationSql, MIGRATION_LOCK } from './index
 
 export const EXPECTED_NEW_TABLES = 30;
 export const PROD_OWNED = new Set(['users', 'requests', 'schema_migrations', 'ai_decisions', 'ai_prompt_log', 'ai_token_usage', 'ai_lesson_content']);
+// AI Board tables the app creates at boot (db.js), outside the migration set. Kept apart from the 30: apply/rollback must not drop them.
+export const AI_BOARD_BOOT_TABLES = ['skill_proposals', 'gate_trace'];
 export const REQUESTS_ALLOW = {
   columns: ['owner_user_id', 'owner_domain', 'idempotency_key', 'owner_state', 'clarified_spec', 'folder_id'],
   indexes: ['ux_requests_owner_idempotency', 'idx_requests_owner'],
@@ -214,10 +216,10 @@ export async function schemaSnapshot(c) {
 }
 
 /** Differences between two snapshots that fall outside the additive allowlist. Empty array = clean. */
-export function unexpectedChanges(before, after, analysis, { createdSchemaMigrations = false } = {}) {
+export function unexpectedChanges(before, after, analysis, { createdSchemaMigrations = false, allowNew = [] } = {}) {
   const bad = [];
   const fresh = new Set([...analysis.newTables, ...(createdSchemaMigrations ? ['schema_migrations'] : [])]);
-  for (const t of after.tables.keys()) if (!before.tables.has(t) && !fresh.has(t)) bad.push(`unexpected new table ${t}`);
+  for (const t of after.tables.keys()) if (!before.tables.has(t) && !fresh.has(t) && !allowNew.includes(t)) bad.push(`unexpected new table ${t}`);
   for (const t of fresh) if (before.tables.has(t) && t !== 'schema_migrations') bad.push(`table ${t} existed before`);
   for (const [t, items] of before.tables) {
     const now = new Set(after.tables.get(t) ?? []);

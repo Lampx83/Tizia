@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { analyzeMigrations, assertAdditive, splitStatements, unexpectedChanges, EXPECTED_NEW_TABLES } from '../server/ai-board/db/additive.js';
+import { analyzeMigrations, assertAdditive, splitStatements, unexpectedChanges, EXPECTED_NEW_TABLES, AI_BOARD_BOOT_TABLES } from '../server/ai-board/db/additive.js';
 
 test('real migrations are additive-only and yield the expected set', () => {
   const a = assertAdditive(analyzeMigrations());
@@ -46,7 +46,12 @@ test('statements outside the AI Board set are refused', () => {
 test('prod-facts SQL lists every new table and index', () => {
   const a = analyzeMigrations();
   const sql = fs.readFileSync(path.join(import.meta.dirname, '..', 'server', 'scripts', 'ai-board-additive-prod-facts.sql'), 'utf8');
-  for (const n of [...a.newTables, ...a.indexes]) assert.ok(sql.includes(`'${n}'`), n);
+  for (const n of [...a.newTables, ...a.indexes, ...AI_BOARD_BOOT_TABLES]) assert.ok(sql.includes(`'${n}'`), n);
+});
+
+test('boot-created AI Board tables stay outside the migration set', () => {
+  const a = analyzeMigrations();
+  for (const t of AI_BOARD_BOOT_TABLES) assert.ok(!a.newTables.includes(t), t);
 });
 
 test('unexpectedChanges flags a touched existing table', () => {
