@@ -38,7 +38,7 @@ async function fixture({ tables = true } = {}) {
     order: 1, title: 'Sửa trang giới thiệu', description: 'Đổi 1 dòng.', allowed_scope: ['public/gioi-thieu.html'],
     acceptance: ['Trang đổi.'], tests: ['node --test'], capability: 'public.ui', risk: 'low', non_goals: ['x'],
   };
-  await store.submitPlan(ticket.id, {
+  const planned = await store.submitPlan(ticket.id, {
     ...lease, runId: run.id, budgetUsed: 40, idempotencyKey: 'uw-plan-001',
     plan: { domain: 'pharmacy', goal: 'Sửa.', allowed_scope: step.allowed_scope, acceptance: step.acceptance,
       tests: step.tests, capabilities: ['public.ui'], risk: 'low', non_goals: ['x'], steps: [step] },
@@ -55,7 +55,7 @@ async function fixture({ tables = true } = {}) {
     await db.d.run(`INSERT INTO tool_step(proposal_id, child, step, identity, tool, args_json, status, updated_at)
       VALUES (?, 1, ?, ?, 'edit_file', ?, ?, ?)`, [key, n, identity, JSON.stringify({ file: 'public/x.html' }), status, Date.now()]);
   };
-  return { db, store, ticket, seed };
+  return { db, store, ticket, seed, planHash: planned.plan_hash };
 }
 
 const admin = { id: 9 };
@@ -73,6 +73,16 @@ test('lists open unknown writes of the ticket only', async () => {
 
 test('no harness tables yet: empty lists, reconcile is 404', async () => {
   const { db, ticket } = await fixture({ tables: false });
+  assert.deepEqual(await listUnknownWrites(db.d, ticket.id), { open: [], resolved: [] });
+  await rejects(reconcileWrite(db.d, { ticketId: ticket.id, identity: ID_A, decision: 'applied', reason: 'r', evidence: EVIDENCE, user: admin }),
+    404, 'unknown_write_not_found');
+});
+
+test('tables from an older worker (no run_scope / resolved_at): empty lists, reconcile is 404, no 500', async () => {
+  const { db, ticket } = await fixture({ tables: false });
+  await db.d.exec(`CREATE TABLE tool_run (proposal_id BIGINT NOT NULL, child INTEGER NOT NULL, pins_json TEXT NOT NULL, ledger_json TEXT, updated_at BIGINT NOT NULL);
+    CREATE TABLE tool_step (proposal_id BIGINT NOT NULL, child INTEGER NOT NULL, step INTEGER NOT NULL, identity TEXT NOT NULL, tool TEXT NOT NULL,
+      args_json TEXT NOT NULL, status TEXT NOT NULL, kind TEXT, observation TEXT, resolved_by TEXT, updated_at BIGINT NOT NULL);`);
   assert.deepEqual(await listUnknownWrites(db.d, ticket.id), { open: [], resolved: [] });
   await rejects(reconcileWrite(db.d, { ticketId: ticket.id, identity: ID_A, decision: 'applied', reason: 'r', evidence: EVIDENCE, user: admin }),
     404, 'unknown_write_not_found');
@@ -144,7 +154,7 @@ test('revoke committing first wins: the waiting reconcile re-reads the role and 
 });
 
 test('compensate keeps the ticket blocked until closed; resume requeues the same ticket', async () => {
-  const { db, ticket, seed } = await fixture();
+  const { db, store, ticket, seed, planHash } = await fixture();
   await seed(ID_A);
   const args = { ticketId: ticket.id, identity: ID_A, reason: 'hoàn tác tay', evidence: EVIDENCE, user: admin, resume: true };
   const first = await reconcileWrite(db.d, { ...args, decision: 'compensate' });
@@ -158,6 +168,14 @@ test('compensate keeps the ticket blocked until closed; resume requeues the same
   assert.deepEqual([closed.status, closed.remaining_open, closed.resumed], ['void', 0, true]);
   assert.deepEqual({ ...await root() }, { status: 'queued', phase: 'authorized' });
   assert.equal((await stepRow(db, ID_A)).status, 'void');
+
+  const claimed = await store.claimNext({ workerId: 'w1', version: 'test', mode: 'active', intent: 'plan' });
+  assert.equal(claimed?.id, ticket.id);
+  assert.equal(claimed.trigger, 'execute');
+  const lease = { workerId: 'w1', leaseToken: claimed.lease_token };
+  const nextRun = await store.createRun(ticket.id, { ...lease, trigger: 'execute', idempotencyKey: 'uw-run-002' });
+  const resumed = await store.resumeAuthorizedPlan(ticket.id, { ...lease, runId: nextRun.id });
+  assert.deepEqual([resumed.status, resumed.plan_hash], ['planned', planHash]); // worker nhận lại đúng plan_hash để vào đúng checkpoint
 });
 
 test('resume stays off unless asked and while another step is still open', async () => {

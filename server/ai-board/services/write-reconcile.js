@@ -11,9 +11,13 @@ const MAX_EVIDENCE = 8000;
 
 const scopeLike = (ticketId) => `ticket-${Number(ticketId)}:%`;
 
+// Worker cũ tạo bảng thiếu cột run_scope/resolved_at: coi như chưa có dữ liệu để đối chiếu.
 const hasTables = async (db) => {
-  const row = await db.get(`SELECT to_regclass('tool_step') AS s, to_regclass('tool_run') AS r`);
-  return !!(row?.s && row?.r);
+  const row = await db.get(`
+    SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = current_schema()
+      AND ((table_name = 'tool_run' AND column_name = 'run_scope') OR (table_name = 'tool_step' AND column_name = 'resolved_at'))
+  `);
+  return Number(row?.n) === 2;
 };
 
 async function rootOrThrow(db, ticketId, lock = '') {

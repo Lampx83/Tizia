@@ -256,8 +256,7 @@ def drop_screenshots(shots: list[dict]) -> None:
 
 
 def _worker_checkpoint(ticket_id: int, plan: dict, plan_hash: str | None = None):
-    """Checkpoint tool-loop theo ticket + plan (ổn định qua lease/run mới); plan_hash do server cấp, thiếu thì băm cục bộ.
-    None khi cờ tắt hoặc thiếu DATABASE_URL."""
+    """Checkpoint theo ticket + plan_hash server (thiếu → băm plan cục bộ); None khi cờ tắt hoặc thiếu DATABASE_URL."""
     dsn = os.getenv("DATABASE_URL")
     if os.getenv("AI_BOARD_TOOL_LOOP") != "1" or not dsn:
         return None
