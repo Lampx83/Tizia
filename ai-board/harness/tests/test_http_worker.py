@@ -3,6 +3,8 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
 AI_BOARD_DIR = Path(__file__).resolve().parents[2]
 if str(AI_BOARD_DIR) not in sys.path:
     sys.path.insert(0, str(AI_BOARD_DIR))
@@ -34,8 +36,8 @@ POLICY = {'version': 'd0-v2', 'hash': 'c' * 64,
 
 
 class FakeTransport:
-    def __init__(self):
-        self.calls = []
+    def __init__(self, plan_hash=None):
+        self.calls, self.plan_hash = [], plan_hash
 
     def __call__(self, method, path, payload, headers):
         self.calls.append((method, path, payload, headers))
@@ -52,7 +54,7 @@ class FakeTransport:
             return {'status': 'clarifying'}
         if path.endswith('/plan'):
             return {'status': 'planned', 'tier': 'surface', 'children': [{'id': 13}],
-                    'capability_policy_hash': POLICY['hash']}
+                    'capability_policy_hash': POLICY['hash'], **({'plan_hash': self.plan_hash} if self.plan_hash else {})}
         if path.endswith('/verdict'):
             return {'verdict': payload['verdict']}
         return {'ok': True}
@@ -345,7 +347,9 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
         return {'gate': 5.5, 'blocked': False, 'reason': None,
                 'risk_level': 'low', 'risk_signals': []}
 
-    def change_runner(plan, ticket_id, max_units, *, policy, accepted_policy_hash, request_detail, should_stop):
+    def change_runner(plan, ticket_id, max_units, *, policy, accepted_policy_hash, request_detail, should_stop,
+                      plan_hash=None):
+        assert plan_hash is None  # server sent none: no kwarg at all would also pass the strict signature
         assert should_stop() is False  # lease healthy while the heartbeat succeeds
         assert max_units == 200 - 80  # per-run limit minus what planning spent
         assert (policy, accepted_policy_hash) == (POLICY, POLICY['hash'])
@@ -1409,6 +1413,21 @@ def test_a_self_request_reaches_the_gates_as_self_and_its_verdict_names_base_sha
     verdict = next(call[2]['verdict'] for call in transport.calls if call[1].endswith('/verdict'))
     assert verdict['outcome'] == 'blocked'
     assert (verdict['base_sha'], verdict['skill']) == ('a' * 40, 'edit-html-text')
+
+
+@pytest.mark.parametrize('server_hash,expected', [('f' * 64, {'plan_hash': 'f' * 64}), (None, {})])
+def test_server_plan_hash_reaches_the_change_runner_only_when_sent(server_hash, expected):
+    transport, got = FakeTransport(plan_hash=server_hash), {}
+
+    def change_runner(plan, ticket_id, max_units, **kwargs):
+        got.update(kwargs)
+        return {'outcome': 'blocked', 'gate_reached': 3, 'reason': 'stop', 'failure_class': 'plan', 'repairs': [],
+                'candidate': None, 'budget_used': 0, 'gates': [{'gate': 3, 'blocked': True, 'reason': 'stop'}]}
+
+    HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1', version='test', mode='active',
+               planner=lambda _snapshot: ({'goal': 'x', 'steps': []}, 80), change_runner=change_runner,
+               candidates=FakeCandidates()).run_once()
+    assert {k: v for k, v in got.items() if k == 'plan_hash'} == expected
 
 
 # Worker hỏi GitHub các PR server còn coi là mở, báo PR đã đóng.

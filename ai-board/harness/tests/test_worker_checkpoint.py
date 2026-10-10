@@ -40,7 +40,7 @@ def count(dsn, table):
         return con.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
 
 
-def execute(script, gate4, budget, plan=PLAN, seen=None):
+def execute(script, gate4, budget, plan=PLAN, seen=None, plan_hash=None):
     """execute_pre_pr với cổng 3 chạy tool_loop thật qua state['checkpoint']; cổng 4 do `gate4`."""
     deps = Deps(script)
 
@@ -56,7 +56,7 @@ def execute(script, gate4, budget, plan=PLAN, seen=None):
         return gate4(gate)
 
     result = execute_pre_pr(plan, ticket_id=7, checkout_source=".", deps=object(), budget=budget, run_gate=run_gate,
-                            cleanup=lambda *_a, **_k: None)
+                            cleanup=lambda *_a, **_k: None, **({"plan_hash": plan_hash} if plan_hash else {}))
     return result, deps
 
 
@@ -128,6 +128,26 @@ def test_a_different_plan_does_not_resume_the_old_checkpoint(pg):
         execute([EDIT, TEST, FINISH], die, Budget())
     result, deps = execute([EDIT, TEST, FINISH], block("plan"), Budget(), plan={**PLAN, "capabilities": ["x"]})
     assert len(deps.prompts) == 3
+
+
+def scopes(dsn):
+    with connect(dsn) as con:
+        return {r[0] for r in con.execute("SELECT run_scope FROM tool_run")}
+
+
+def test_server_plan_hash_names_the_checkpoint_scope_and_resumes_across_a_plan_edit(pg):
+    with pytest.raises(Crash):
+        execute([EDIT, TEST, FINISH], die, Budget(), plan_hash="a1" * 32)
+    assert scopes(pg) == {"ticket-7:" + "a1" * 8}
+    result, deps = execute([EDIT], block("plan"), Budget(), plan={**PLAN, "cosmetic": "x"}, plan_hash="a1" * 32)
+    assert deps.prompts == [] and result["failure_class"] == "plan"  # cùng plan_hash server → cùng checkpoint dù JSON plan lệch
+
+
+def test_missing_server_plan_hash_falls_back_to_local_digest(pg):
+    with pytest.raises(Crash):
+        execute([EDIT, TEST, FINISH], die, Budget())
+    (scope,) = scopes(pg)
+    assert scope.startswith("ticket-7:") and len(scope) == len("ticket-7:") + 16
 
 
 def test_attempts_and_base_shas_get_distinct_keys():

@@ -255,13 +255,15 @@ def drop_screenshots(shots: list[dict]) -> None:
             pass
 
 
-def _worker_checkpoint(ticket_id: int, plan: dict):
-    """Checkpoint tool-loop theo ticket + plan (ổn định qua lease/run mới); None khi cờ tắt hoặc thiếu DATABASE_URL."""
+def _worker_checkpoint(ticket_id: int, plan: dict, plan_hash: str | None = None):
+    """Checkpoint tool-loop theo ticket + plan (ổn định qua lease/run mới); plan_hash do server cấp, thiếu thì băm cục bộ.
+    None khi cờ tắt hoặc thiếu DATABASE_URL."""
     dsn = os.getenv("DATABASE_URL")
     if os.getenv("AI_BOARD_TOOL_LOOP") != "1" or not dsn:
         return None
     from repositories.tool_steps import Checkpoint
-    digest = hashlib.sha256(json.dumps(plan, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")).hexdigest()
+    digest = str(plan_hash) if plan_hash else hashlib.sha256(
+        json.dumps(plan, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")).hexdigest()
     return Checkpoint(dsn, f"ticket-{ticket_id}:{digest[:16]}")
 
 
@@ -270,7 +272,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
                    request_detail: str | None = None, memory_path=None,
                    should_stop: Callable[[], bool] | None = None, candidate_opts: dict | None = None,
                    request_type: str | None = None, eval_tasks: list[dict] | None = None, preview_capture=None,
-                   checkpoint=None) -> dict:
+                   checkpoint=None, plan_hash: str | None = None) -> dict:
     """Run Gates 3→5.5, repairing an ordinary failure at most MAX_REPAIRS times. Return a redacted verdict.
 
     policy = snapshot catalog {hash, capabilities}; None only outside the HTTP worker (no catalog check).
@@ -290,7 +292,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
     repairs: list[dict] = []
     repair_reason = None
     shots: list[dict] = []
-    run_checkpoint = checkpoint if checkpoint is not None else _worker_checkpoint(ticket_id, plan)
+    run_checkpoint = checkpoint if checkpoint is not None else _worker_checkpoint(ticket_id, plan, plan_hash)
     if run_checkpoint is not None:
         run_checkpoint.restore(budget)
     while True:
@@ -891,6 +893,7 @@ class HttpWorker:
                             + ((snapshot.get('request') or {}).get('clarified_spec')
                                or (snapshot.get('request') or {}).get('detail') or '')),
                         should_stop=lost, **run_kwargs, **type_kwargs,
+                        **({"plan_hash": planned["plan_hash"]} if planned.get("plan_hash") else {}),
                     ), ticket_id, lease,
                     on_lease_lost=lambda lost_result: self.candidates.discard((lost_result or {}).get("candidate")),
                 )
