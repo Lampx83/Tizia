@@ -105,6 +105,7 @@ function form(doc, block, api, reloadAll) {
     input.name = field.name;
     input.id = `ou-${block.resource_id}-${i}-${field.name}`;
     label.htmlFor = input.id;
+    if (field.required) input.setAttribute('aria-required', 'true');
     f.append(label, input);
     return [field, input];
   });
@@ -114,8 +115,19 @@ function form(doc, block, api, reloadAll) {
   f.addEventListener('submit', async (event) => {
     event.preventDefault();
     const data = {};
+    let missing = null;
     for (const [field, input] of inputs) {
-      if (field.kind === 'number' && input.value.trim() === '') continue; // schema has no required flag: blank = absent, not 0
+      const blank = field.kind !== 'checkbox' && (input.value ?? '').trim() === '';
+      input.setAttribute('aria-invalid', String(!!field.required && blank));
+      if (field.required && blank) missing ??= [field, input];
+    }
+    if (missing) {
+      say(note, `Vui lòng nhập "${missing[0].label}".`, true);
+      missing[1].focus?.();
+      return;
+    }
+    for (const [field, input] of inputs) {
+      if (field.kind === 'number' && input.value.trim() === '') continue; // blank = absent, not 0
       data[field.name] = field.kind === 'checkbox' ? !!input.checked : field.kind === 'number' ? Number(input.value) : input.value;
     }
     submit.disabled = true;
