@@ -111,7 +111,7 @@ def test_ollama_client_sends_top_level_logprob_fields(monkeypatch):
 
 def test_shared_config_is_the_server_file():
     server = json.loads((classifier.CONFIG_PATH).read_text(encoding="utf-8"))
-    assert classifier.CLASSIFIER == server and not server["calibrated"]
+    assert classifier.CLASSIFIER == server and server["calibrated"] is True
 
 
 def test_classifier_task_name_is_traced_without_changing_inference():

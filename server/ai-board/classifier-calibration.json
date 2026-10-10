@@ -1,6 +1,6 @@
 {
-  "_comment": "Logprob classifier shared by server/ai-board/classifier.js and ai-board/harness/classifier.py. Model = env AI_BOARD_CLASSIFIER_MODEL. danger scores the 8 label logits with a fitted logistic stacker (scoring); reject_min null disables auto-reject. calibrated stays false until the owner signs the thresholds. Per task mode: active acts, shadow only logs, off skips the call. Change labels or prompt only together with new calibration data.",
-  "calibrated": false,
+  "_comment": "Logprob classifier shared by server/ai-board/classifier.js and ai-board/harness/classifier.py. Model = env AI_BOARD_CLASSIFIER_MODEL. danger scores the 8 label logits with a fitted logistic stacker (scoring); reject_min null disables auto-reject. calibrated records the owner signing the thresholds (review_min 0.50, reject_min null); it does not enable the classifier. Per task mode: active acts, shadow only logs, off skips the call. Change labels or prompt only together with new calibration data.",
+  "calibrated": true,
   "keep_alive": "30m",
   "_keep_alive": "Classifier and clarification chat share this small model; keep it loaded so a student's chat never waits for a cold load behind the worker's 14B (feature-folders ticket 03).",
   "temperature": 1.0,
