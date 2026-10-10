@@ -36,11 +36,19 @@ def test_benign_request_is_allowed_after_one_metered_llm_call():
 
 def test_profanity_sexual_or_hate_is_rejected_without_calling_the_model():
     for title, detail in [("Sửa trang", "trang này như lồn"), ("Thêm phim", "thêm link phim sex"),
-                          ("Sửa", "bọn tàu khựa")]:
+                          ("Sửa", "bọn tàu khựa"),
+                          ("Sửa", "thằng ngu viết trang này"), ("Sửa", "thang cho nay"), ("Fix", "what a dickhead page"),
+                          ("Fix", "this is f u c k i n g slow")]:
         deps = llm(["ok"])
         out = intake_guard.run(title, detail, deps, Budget())
         assert out["verdict"] == "reject" and deps.models.calls == [], detail
         assert out["public_message"] == MESSAGES["reject"]
+
+
+def test_ambiguous_words_do_not_trigger_the_profanity_lexicon():
+    for detail in ["Thêm bài về con chó và con mèo", "Trang học sinh ngủ gật", "Stupid simple nút dark mode", "Fix dm button"]:
+        out = intake_guard.deterministic("Sửa trang " + detail)
+        assert "harassment_profanity" not in out, detail
 
 
 def test_prompt_injection_is_critical_without_calling_the_model():

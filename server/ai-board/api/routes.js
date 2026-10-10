@@ -4,7 +4,7 @@ import { ADMIN_REQUEST_STATUSES, assertConfirmed, LEASE_MS, LIMITS, PlanGuardrai
 import { SHOTS_BODY_LIMIT, SHOTS_TYPE } from '../services/drafts.js';
 import * as asyncAux from '../services/aux-service.js';
 import { asyncRoutes } from './async-routes.js';
-import { checkIntake, readOnlyVerificationText } from '../security/intake-guard.js';
+import { checkIntake, publicMessage, readOnlyVerificationText } from '../security/intake-guard.js';
 import { checkLanguage } from '../language-guard.js';
 import { classifyRequest as classifyWithModel } from '../security/classifier.js';
 import { clarifyFromPhase, resolveClarify } from '../services/clarity-rules.js';
@@ -65,6 +65,11 @@ export function attachAiBoardRequestRoutes(router, {
     // Kết quả model ở mode 'shadow' chỉ ghi log, không hành động.
     const danger = classified?.danger?.shadow ? null : classified?.danger;
     const modelLabels = (danger?.labels || []).map((key) => `model_${key}`);
+    if (danger?.reject) {
+      const rejection = { message: publicMessage('reject'), labels: modelLabels, reason: 'classifier score above reject_min before code generation' };
+      try { await aux.recordIntakeRejection(db, req.user.id, rejection); } catch (error) { return next(error); }
+      return res.status(422).json({ error: 'request_rejected', message: rejection.message });
+    }
     // Làm rõ = luật cứng HOẶC model clarity 'active'; ghi lại nguồn để so sánh luật vs model.
     const decision = resolveClarify({
       title: body.title, detail: body.detail, classified, enabled: features.has('clarify'),

@@ -1,7 +1,7 @@
 // Logprob classifier: one token from AI_BOARD_CLASSIFIER_MODEL, softmax over the task's letters
 // only. Same labels, prompt and thresholds as ai-board/harness/classifier.py (classifier-calibration.json).
-// Clarity decides whether the FAB clarifies the request first; danger may only ADD human review, never block —
-// the deterministic intake-guard stays the only thing that returns 422.
+// Clarity decides whether the FAB clarifies the request first; danger adds human review and, only when the
+// calibration sets scoring.reject_min, an automatic reject (422). The deterministic intake-guard always runs first.
 import fs from 'node:fs';
 import { routedClassifyRequest } from '../providers/model-routing.js';
 
@@ -13,7 +13,7 @@ const TIMEOUT_MS = 10_000;
 export function buildPrompt(task, text) {
   const spec = CLASSIFIER.tasks[task];
   const fenced = String(text ?? '').replace(/<{3,}|>{3,}/g, '').slice(0, MAX_TEXT);
-  return CLASSIFIER.prompt
+  return (spec.prompt ?? CLASSIFIER.prompt)
     .replace('{question}', spec.question)
     .replace('{options}', spec.labels.map((l) => `${l.letter}. ${l.text}`).join('\n'))
     .replace('{text}', () => fenced);
@@ -46,11 +46,30 @@ export function decideClarity(probs, t = CLASSIFIER.thresholds.clarity) {
   return { needed: false, mode: null };
 }
 
-/** escalate → human review (never a block). logged = every unsafe label worth keeping for calibration. */
-export function decideDanger(probs, t = CLASSIFIER.thresholds.danger) {
+const LOGIT_CLIP = 1e-6;
+
+/** Logistic score over the label logits (standardised, last weight is the bias); a key missing from probs counts as 0. */
+export function stackerScore(probs, { keys, mu, sd, b }) {
+  let z = b[keys.length];
+  keys.forEach((key, i) => {
+    const p = Math.min(1 - LOGIT_CLIP, Math.max(LOGIT_CLIP, Number(probs[key]) || 0));
+    z += (b[i] * (Math.log(p / (1 - p)) - mu[i])) / sd[i];
+  });
+  return 1 / (1 + Math.exp(-z));
+}
+
+/** escalate → human review; reject only when scoring.reject_min is set. logged = every unsafe label worth keeping for calibration. */
+export function decideDanger(probs, t = CLASSIFIER.thresholds.danger, scoring = null) {
   const unsafe = Object.entries(probs).filter(([key]) => key !== 'safe');
-  const labels = unsafe.filter(([, p]) => p >= t.escalate_min).map(([key]) => key);
   const logged = unsafe.filter(([, p]) => p >= t.log_min).map(([key, p]) => ({ key, p }));
+  if (scoring?.rule === 'stacker') {
+    const score = stackerScore(probs, scoring);
+    const escalate = score > scoring.review_min;
+    const top = unsafe.reduce((best, item) => (!best || item[1] > best[1] ? item : best), null);
+    return { escalate, reject: escalate && scoring.reject_min != null && score > scoring.reject_min, score,
+      labels: escalate && top ? [top[0]] : [], logged };
+  }
+  const labels = unsafe.filter(([, p]) => p >= t.escalate_min).map(([key]) => key);
   return { escalate: labels.length > 0, labels, logged };
 }
 
@@ -94,7 +113,7 @@ export async function classifyRequest(title, detail, { modes, ...options } = {})
     model,
     clarity: clarity.value ? { probs: clarity.value.probs, ...decideClarity(clarity.value.probs), shadow: shadow('clarity'),
       ...(clarity.value.route ? { route: clarity.value.route } : {}) } : null,
-    danger: danger.value ? { probs: danger.value.probs, ...decideDanger(danger.value.probs), shadow: shadow('danger'),
+    danger: danger.value ? { probs: danger.value.probs, ...decideDanger(danger.value.probs, undefined, CLASSIFIER.tasks.danger.scoring), shadow: shadow('danger'),
       ...(danger.value.route ? { route: danger.value.route } : {}) } : null,
   };
 }

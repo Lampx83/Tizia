@@ -1,6 +1,7 @@
 """Guard classifier, harness side of server/ai-board/classifier.js: same labels, prompt and
 thresholds (server/ai-board/classifier-calibration.json). One token from AI_BOARD_CLASSIFIER_MODEL, softmax over
-the task's letters only. It runs next to the JSON guardrails and may only raise severity."""
+the task's letters only. It runs next to the JSON guardrails and may only raise severity; scoring.reject_min is
+read by the intake route only."""
 from __future__ import annotations
 
 import json
@@ -21,7 +22,7 @@ def build_prompt(task: str, text: str) -> str:
     spec = CLASSIFIER["tasks"][task]
     fenced = re.sub(r"<{3,}|>{3,}", "", text or "")[:MAX_TEXT]
     options = "\n".join(f"{label['letter']}. {label['text']}" for label in spec["labels"])
-    return (CLASSIFIER["prompt"].replace("{question}", spec["question"], 1)
+    return (spec.get("prompt", CLASSIFIER["prompt"]).replace("{question}", spec["question"], 1)
             .replace("{options}", options, 1).replace("{text}", fenced, 1))
 
 
@@ -58,13 +59,32 @@ def decide_clarity(probs: dict, t: dict | None = None) -> dict:
     return {"needed": False, "mode": None}
 
 
-def decide_danger(probs: dict, t: dict | None = None) -> dict:
-    """escalate → human review, never a block on its own. logged = unsafe labels worth keeping."""
+LOGIT_CLIP = 1e-6
+
+
+def stacker_score(probs: dict, scoring: dict) -> float:
+    """Logistic score over the label logits (standardised, last weight is the bias); a missing key counts as 0."""
+    keys, z = scoring["keys"], scoring["b"][len(scoring["keys"])]
+    for i, key in enumerate(keys):
+        p = min(1 - LOGIT_CLIP, max(LOGIT_CLIP, float(probs.get(key) or 0)))
+        z += scoring["b"][i] * (math.log(p / (1 - p)) - scoring["mu"][i]) / scoring["sd"][i]
+    return 1 / (1 + math.exp(-z))
+
+
+def decide_danger(probs: dict, t: dict | None = None, scoring: dict | None = None) -> dict:
+    """escalate → human review; reject only when scoring.reject_min is set. logged = unsafe labels worth keeping."""
     t = t or CLASSIFIER["thresholds"]["danger"]
     unsafe = [(key, p) for key, p in probs.items() if key != "safe"]
+    logged = [{"key": key, "p": p} for key, p in unsafe if p >= t["log_min"]]
+    if scoring and scoring.get("rule") == "stacker":
+        score = stacker_score(probs, scoring)
+        escalate = score > scoring["review_min"]
+        top = max(unsafe, key=lambda item: item[1], default=None)
+        reject = escalate and scoring.get("reject_min") is not None and score > scoring["reject_min"]
+        return {"escalate": escalate, "reject": reject, "score": score,
+                "labels": [top[0]] if escalate and top else [], "logged": logged}
     return {"escalate": any(p >= t["escalate_min"] for _, p in unsafe),
-            "labels": [key for key, p in unsafe if p >= t["escalate_min"]],
-            "logged": [{"key": key, "p": p} for key, p in unsafe if p >= t["log_min"]]}
+            "labels": [key for key, p in unsafe if p >= t["escalate_min"]], "logged": logged}
 
 
 def classify(task: str, text: str, deps, budget, *, gate: float, db_path=None, proposal_id=None) -> dict | None:
@@ -94,7 +114,9 @@ def danger(text: str, deps, budget, **kwargs) -> dict | None:
     out = classify("danger", text, deps, budget, **kwargs)
     if not out:
         return None
-    decision = decide_danger(out["probs"])
+    decision = decide_danger(out["probs"], scoring=CLASSIFIER["tasks"]["danger"].get("scoring"))
     if task_mode("danger") == "shadow":
         decision.update(escalate=False, labels=[], shadow=True)
+        if "reject" in decision:
+            decision["reject"] = False
     return {**out, **decision}
