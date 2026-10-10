@@ -254,7 +254,8 @@ _UNSAFE = re.compile(r"(?i)(?<!\w)(?:fuck|shit|bitch|đụ|địt|đĩ|lồn|c�
 _TEST_PATH = re.compile(r"(?:^|/)(?:tests?|__tests__)/|(?:\.|_)(?:test|spec)\.[^/]+$|(?:^|/)test_[^/]+\.py$")
 _PROTECTED = re.compile(
     r"^(?:Dockerfile|docker-compose[^/]*\.ya?ml|package(?:-lock)?\.json|\.github/|ai-board/|server/ai-board/"
-    r"|server/contexts/registry\.js|server/index\.js|server/db\.js|\.dockerignore|\.gitignore)"
+    r"|server/contexts/registry\.js|server/index\.js|server/db\.js|\.dockerignore|\.gitignore"
+    r"|\.claude/|\.cursor/|\.vscode/|\.husky/|\.mcp\.json$|\.cursorrules$|CLAUDE\.md$|AGENTS\.md$|GEMINI\.md$)"
 )
 
 
