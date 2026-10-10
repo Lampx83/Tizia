@@ -254,11 +254,22 @@ def probe(call) -> dict:
 
 
 def main() -> int:
-    """`python -m runtime.tool_loop MODEL` → probe thật qua OllamaClient.from_env (tốn GPU, operator chạy)."""
+    """`python -m runtime.tool_loop [MODEL]` → probe thật qua OllamaClient.from_env (tốn GPU, operator chạy)."""
+    from dotenv import load_dotenv
     from providers.client import OllamaClient
-    client, model = OllamaClient.from_env(), sys.argv[1]
-    report = probe(lambda prompt: client.generate(model, prompt, format="json", temperature=0))
-    print(json.dumps({"model": model, **report}))
+    from runtime.pipeline import ENV_FILE
+    load_dotenv(ENV_FILE)  # như worker; không in giá trị nào
+    client = OllamaClient.from_env()
+    model = sys.argv[1] if len(sys.argv) > 1 else client.gate3_model
+    seen = []
+
+    def call(prompt):
+        body = client.generate(model, prompt, format="json", temperature=0, num_predict=512)
+        seen.append({"tokens": (body.get("prompt_eval_count") or 0) + (body.get("eval_count") or 0)})
+        return body
+
+    report = probe(call)
+    print(json.dumps({"model": model, "calls": len(seen), "tokens": sum(s["tokens"] for s in seen), **report}))
     return 0 if report["passed"] else 1
 
 
