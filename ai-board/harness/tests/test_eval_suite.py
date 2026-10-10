@@ -1,6 +1,7 @@
 """Eval suite seam: run_trial on the real frozen corpus at the pinned commit with a scripted model, plus the pure statistics."""
 import dataclasses
 import json
+import os
 import re
 import threading
 from pathlib import Path
@@ -174,6 +175,18 @@ def test_run_end_to_end_parallel_resume_and_report(world, capsys):
     calls = len(models.calls)
     assert runner.main(argv, deps) == 0 and len(models.calls) == calls  # resume: nothing re-run
     assert runner.main([*argv[:-1], "--allow-dirty", "--repeats", "3"], deps) == 2  # different config in the same dir is refused
+
+
+def test_best_match_flag_is_recorded_in_run_name_and_provenance(world, monkeypatch):
+    root, _ = world
+    deps, _ = deps_for(world)
+    monkeypatch.setenv("AI_BOARD_BEST_MATCH", "")
+    argv = ["run", "--seed", str(SEED), "--split", "dev", "--cases", "1", "--repeats", "1", "--modes", "gold", "--root", str(root), "--allow-dirty"]
+    assert runner.main([*argv, "--best-match", "advisory"], deps) == 0
+    assert os.environ["AI_BOARD_BEST_MATCH"] == "advisory"
+    assert runner.main([*argv, "--gate25-fixes", "none"], deps) == 0 and os.environ["AI_BOARD_BEST_MATCH"] == ""
+    runs = {p.name: json.loads((p / "run.json").read_text(encoding="utf-8")) for p in (root / "suite").iterdir()}
+    assert {n.endswith("-bm-adv"): m["best_match"] for n, m in runs.items()} == {True: "advisory", False: "enforce"}
 
 
 def test_nodia_variant_strips_diacritics_from_the_request_the_planner_sees(world):
