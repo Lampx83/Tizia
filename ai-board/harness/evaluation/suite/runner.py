@@ -176,7 +176,9 @@ def cmd_run(args, deps=None) -> int:
         print("[suite] unknown gate 2.5 fix", file=sys.stderr)
         return 2
     os.environ["AI_BOARD_GATE25_FIXES"] = fixes
-    prov = {**provenance(ROOT, model, router), "context_arm": args.context_arm, "gate3_guards": guards, "gate25_fixes": fixes}
+    os.environ["AI_BOARD_RETRIEVAL"] = "literal" if args.retrieval == "literal" else ""
+    prov = {**provenance(ROOT, model, router), "context_arm": args.context_arm, "gate3_guards": guards, "gate25_fixes": fixes,
+            "retrieval": args.retrieval}
     if prov["dirty"] and not args.allow_dirty:
         print("[suite] working tree has uncommitted changes: commit them (or --allow-dirty for a throwaway run)", file=sys.stderr)
         return 2
@@ -201,7 +203,8 @@ def cmd_run(args, deps=None) -> int:
             + (f"-think1-{args.reasoning_on.replace(',', '+')}" if args.reasoning_on else "")
             + (f"-ctx-{args.context_arm}" if args.context_arm != "default" else "")
             + (f"-g-{guards.replace(',', '+')}" if guards else "")
-            + (f"-f25-{fixes.replace(',', '+') or 'none'}" if fixes != plan_validate.DEFAULT_FIXES else ""))
+            + (f"-f25-{fixes.replace(',', '+') or 'none'}" if fixes != plan_validate.DEFAULT_FIXES else "")
+            + ("-ret-lit" if args.retrieval == "literal" else ""))
     run_dir = root / "suite" / name
     run_dir.mkdir(parents=True, exist_ok=True)
     meta = {"seed": args.seed, "split": args.split, "repeats": args.repeats, "modes": modes, "fast_tier": args.fast_tier, "review": args.review, "packs": [_sha(Path(p)) for p in args.pack or []], **prov,
@@ -335,6 +338,7 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--context-arm", choices=ablation.ARMS, default="default", help="gate 3 context ablation: fullfile = whole numbered file instead of excerpt; nosiblings = no folder listing")
     run.add_argument("--guards", default="", help="gate 3 guards to switch on (comma list of noop, refs, schema); default none")
     run.add_argument("--gate25-fixes", default=None, help="gate 2.5 patches on (comma list: quotes, tokens; none = off); default quotes")
+    run.add_argument("--retrieval", choices=("off", "literal"), default="off", help="gate 1 retrieval: literal = quoted strings in the request shortlist candidate files (git grep -F at the pinned sha)")
     run.add_argument("--reasoning-on", default="", help="comma list of roles to run with thinking on (ablation), e.g. gate1,gate25")
     run.add_argument("--reasoning-off", default="", help="comma list of roles to run with thinking off (ablation), e.g. gate1,gate25")
     run.set_defaults(handler=cmd_run)

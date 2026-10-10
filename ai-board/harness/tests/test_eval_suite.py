@@ -1,6 +1,7 @@
 """Eval suite seam: run_trial on the real frozen corpus at the pinned commit with a scripted model, plus the pure statistics."""
 import dataclasses
 import json
+import os
 import re
 import threading
 from pathlib import Path
@@ -174,6 +175,18 @@ def test_run_end_to_end_parallel_resume_and_report(world, capsys):
     calls = len(models.calls)
     assert runner.main(argv, deps) == 0 and len(models.calls) == calls  # resume: nothing re-run
     assert runner.main([*argv[:-1], "--allow-dirty", "--repeats", "3"], deps) == 2  # different config in the same dir is refused
+
+
+def test_retrieval_literal_flag_is_recorded_in_provenance_and_run_name(world, monkeypatch):
+    root, _ = world
+    deps, _ = deps_for(world)
+    argv = ["run", "--seed", str(SEED), "--split", "dev", "--cases", "1", "--repeats", "1", "--modes", "gold", "--root", str(root), "--allow-dirty"]
+    monkeypatch.setenv("AI_BOARD_RETRIEVAL", "")
+    assert runner.main([*argv, "--retrieval", "literal"], deps) == 0
+    assert os.environ["AI_BOARD_RETRIEVAL"] == "literal"
+    runs = sorted((root / "suite").iterdir())
+    lit = [r for r in runs if r.name.endswith("-ret-lit")]
+    assert len(lit) == 1 and json.loads((lit[0] / "run.json").read_text(encoding="utf-8"))["retrieval"] == "literal"
 
 
 def test_nodia_variant_strips_diacritics_from_the_request_the_planner_sees(world):
