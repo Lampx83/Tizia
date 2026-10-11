@@ -858,19 +858,28 @@ class HttpWorker:
                 if type_kwargs:  # phần kiểm tra chỉ lấy sau khi đã có plan: người lập plan không bao giờ thấy
                     type_kwargs["eval_tasks"] = self.client.post("/api/ai-board/worker/eval-tasks", {}).get("test") or []
                 limit = int((snapshot.get("ticket") or {}).get("budget_limit") or DEFAULT_BUDGET_LIMIT)
-                result = self._with_heartbeat(
-                    lambda lost: self.change_runner(
-                        plan, ticket_id, max(limit - budget_used, 0),  # giây GPU còn lại của lượt (trừ phần lập plan)
-                        # {} when missing: fails the hash check closed instead of skipping the catalog.
-                        policy=snapshot.get("capability_policy") or {},
-                        accepted_policy_hash=planned.get("capability_policy_hash"),
-                        request_detail=((snapshot.get('request') or {}).get('title', '') + '\n'
-                            + ((snapshot.get('request') or {}).get('clarified_spec')
-                               or (snapshot.get('request') or {}).get('detail') or '')),
-                        should_stop=lost, **run_kwargs, **type_kwargs,
-                    ), ticket_id, lease,
-                    on_lease_lost=lambda lost_result: self.candidates.discard((lost_result or {}).get("candidate")),
-                )
+                import memory
+                from repositories.server_memory import RemoteLessons
+
+                memory_api = RemoteLessons(self.client, ticket_id=ticket_id, run_id=run["id"],
+                                           worker_id=self.worker_id, lease_token=lease["lease_token"],
+                                           files=[file for step in plan.get("steps") or []
+                                                  for file in step.get("allowed_scope") or []],
+                                           enabled=snapshot.get("lessons_schema_version") == 1)
+                with memory.server_scope(memory_api):
+                    result = self._with_heartbeat(
+                        lambda lost: self.change_runner(
+                            plan, ticket_id, max(limit - budget_used, 0),  # giây GPU còn lại của lượt (trừ phần lập plan)
+                            # {} when missing: fails the hash check closed instead of skipping the catalog.
+                            policy=snapshot.get("capability_policy") or {},
+                            accepted_policy_hash=planned.get("capability_policy_hash"),
+                            request_detail=((snapshot.get('request') or {}).get('title', '') + '\n'
+                                + ((snapshot.get('request') or {}).get('clarified_spec')
+                                   or (snapshot.get('request') or {}).get('detail') or '')),
+                            should_stop=lost, **run_kwargs, **type_kwargs,
+                        ), ticket_id, lease,
+                        on_lease_lost=lambda lost_result: self.candidates.discard((lost_result or {}).get("candidate")),
+                    )
                 preview_artifact = result.pop("_preview_artifact", None) if isinstance(result, dict) else None
                 shots = (result.pop("screenshots", None) if isinstance(result, dict) else None) or []
                 try:
@@ -884,6 +893,7 @@ class HttpWorker:
                         **lease, "run_id": run["id"], "verdict": {**result, "skill": skill} if skill else result,
                         "idempotency_key": f"{prefix}:verdict",
                     })["verdict"]
+                    memory_api.flush(verdict)
                 except Exception as error:
                     if _is_stale_lease(error):
                         self.candidates.discard(result.get("candidate"))
