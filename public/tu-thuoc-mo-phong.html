@@ -4067,20 +4067,23 @@ function m2RenderPrice(){
   if(!pass.length){ x.step = 'done'; saveM2State(x); m2FinishDone(); return; }
   const cost = it => (m1PkgPrice(it) * 1.05) / it.pack.per;
   const sell = it => Math.max(100, Math.round(cost(it) * 1.2 / 100) * 100);
-  const fmt = v => v.toLocaleString('vi-VN');
+  const fmt = v => v.toLocaleString('vi-VN', { maximumFractionDigits: 1 });
+  // req #237: giá vốn đã được chia sẵn theo đơn vị nhỏ nhất — người học chỉ nhập giá bán
   const body = m2Modal('🏷️ Bước 7 — Niêm yết giá bán', `
-    <p class="pos-note">Ghi giá bán cho các sản phẩm <b>đạt</b>, tính theo <b>đơn vị đóng gói nhỏ nhất</b> (viên, ống, lọ, tuýp…). <b>Chính sách giá:</b> giá vốn = giá nhập + VAT 5%, chia cho số đơn vị nhỏ nhất trong 1 hộp; giá bán = giá vốn + 20% lãi gộp, làm tròn đến hàng trăm đồng.</p>
-    <table class="pos-table"><thead><tr><th>Sản phẩm</th><th>Quy cách</th><th>Giá nhập / hộp (chưa VAT)</th><th>Giá vốn / đơn vị nhỏ nhất (đ)</th><th>Giá bán niêm yết / đơn vị nhỏ nhất (đ)</th></tr></thead><tbody>
+    <p class="pos-note">Ghi giá bán cho các sản phẩm <b>đạt</b>, tính theo <b>đơn vị đóng gói nhỏ nhất</b> (viên, ống, lọ, tuýp…). <b>Giá vốn đã được tính sẵn</b>; bạn chỉ cần tính và nhập <b>giá bán</b> = giá vốn + 20% lãi gộp, làm tròn đến hàng trăm đồng.</p>
+    <div class="pos-note" style="background:#fff8d6;border:1px dashed #c98d3d;border-radius:8px;padding:8px 10px">
+      <b>Vì sao cộng VAT 5%?</b> Thuốc phòng bệnh, chữa bệnh thuộc nhóm hàng hoá chịu <b>thuế giá trị gia tăng (GTGT) 5%</b> theo Luật Thuế GTGT, nên hàng thuốc luôn tính VAT 5%. Nhà thuốc trả VAT khi mua nên thuế này được tính vào giá vốn:<br>
+      <b>Giá vốn = giá nhập × (1 + 5%) ÷ số đơn vị nhỏ nhất trong 1 hộp.</b></div>
+    <table class="pos-table"><thead><tr><th>Sản phẩm</th><th>Quy cách</th><th>Giá nhập / hộp (chưa VAT)</th><th>Giá vốn / đơn vị nhỏ nhất (đã tính sẵn)</th><th>Giá bán niêm yết / đơn vị nhỏ nhất (đ)</th></tr></thead><tbody>
       ${pass.map((it,i) => `<tr><td>${esc(it.name)}</td><td>${it.pack.spec}</td><td>${fmt(m1PkgPrice(it))} đ</td>
-        <td><input type="number" min="0" data-c="${i}" style="width:90px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px"> đ/${it.pack.unit}</td>
+        <td><b>${fmt(cost(it))} đ/${it.pack.unit}</b><br><small style="color:#6b7280">${fmt(m1PkgPrice(it))} × 1,05${it.pack.per > 1 ? ' ÷ ' + it.pack.per : ''}</small></td>
         <td><input type="number" min="0" data-s="${i}" style="width:90px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px"> đ/${it.pack.unit}</td></tr>`).join('')}
     </tbody></table><button type="button" class="pos-btn" id="m2PriceOk">✅ Niêm yết giá</button><div class="pos-err" id="m2Err"></div>`);
   body.querySelector('#m2PriceOk').addEventListener('click', () => {
     const err = body.querySelector('#m2Err');
     for(let i = 0; i < pass.length; i++){
-      const c = body.querySelector(`[data-c="${i}"]`).value, sv = body.querySelector(`[data-s="${i}"]`).value, it = pass[i];
-      if(c === '' || sv === ''){ err.textContent = '⚠️ Điền đủ giá vốn và giá bán cho tất cả sản phẩm.'; return; }
-      if(Math.abs(Number(c) - cost(it)) > Math.max(2, cost(it) * 0.02)){ err.textContent = `⚠️ Giá vốn của "${it.name}" chưa đúng — (giá nhập × 1,05) ÷ ${it.pack.per} ${it.pack.unit}.`; return; }
+      const sv = body.querySelector(`[data-s="${i}"]`).value, it = pass[i];
+      if(sv === ''){ err.textContent = '⚠️ Nhập giá bán cho tất cả sản phẩm.'; return; }
       if(Math.abs(Number(sv) - sell(it)) > 100){ err.textContent = `⚠️ Giá bán của "${it.name}" chưa đúng — giá vốn × 1,2, làm tròn đến 100 đồng.`; return; }
     }
     x.step = 'ledger'; saveM2State(x); m2CloseModal();
