@@ -229,6 +229,28 @@
   #m2Delivery.arrived .m2-say{opacity:1;}
   #m2Banner{position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:40;background:#ffd400;color:#3a2a00;font:800 .95rem 'Nunito',sans-serif;padding:8px 18px;border-radius:999px;box-shadow:0 4px 12px rgba(0,0,0,.3);}
   .m2-crate-map{position:absolute;z-index:8;font-size:46px;line-height:1;cursor:pointer;border:0;background:transparent;filter:drop-shadow(0 4px 3px rgba(0,0,0,.35));animation:carton-bob 1.6s ease-in-out infinite;}
+  /* req #224/#233/#234: xem bao bì nhiều mặt (trước / sau / bên) — người học tự đọc thông tin trên bao bì */
+  .pkg{border:1px solid #d8c9a3;border-radius:10px;background:#fffdf6;padding:8px;}
+  .pkg-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;}
+  .pkg-tabs button{border:1px solid #caa25a;background:#fff;border-radius:999px;padding:4px 12px;font:800 .78rem 'Nunito',sans-serif;cursor:pointer;color:#5c3a0a;}
+  .pkg-tabs button.on{background:#2e8256;border-color:#2e8256;color:#fff;}
+  .pkg-tabs button.zoom{margin-left:auto;background:#fff8d6;}
+  .pkg-face{min-height:230px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid #e3d6b0;border-radius:8px;padding:8px;overflow:hidden;}
+  .pkg-face[hidden]{display:none;}
+  .pkg-face img{max-width:100%;max-height:300px;object-fit:contain;}
+  .pkg-face img + .pkg-gen{display:none;}
+  .pkg-gen{width:100%;font:600 .9rem/1.5 'Nunito',sans-serif;color:#1d2b22;}
+  .pkg-gen .bn{display:inline-block;background:#b3261e;color:#fff;font-weight:800;padding:2px 10px;border-radius:4px;margin-bottom:6px;letter-spacing:.02em;}
+  .pkg-gen .bn.rx{background:#2f6fb5;}
+  .pkg-gen h4{margin:0 0 4px;font:800 1.1rem 'Nunito',sans-serif;}
+  .pkg-gen table{border-collapse:collapse;width:100%;font-size:.88rem;}
+  .pkg-gen th{text-align:left;white-space:nowrap;padding:3px 10px 3px 0;color:#5c3a0a;vertical-align:top;}
+  .pkg-gen td{padding:3px 0;}
+  .pkg-gen .fine{font-size:.74rem;color:#6b7280;margin-top:6px;}
+  #m2ZoomOverlay{z-index:99;}
+  #m2ZoomOverlay .pkg-face{min-height:0;width:min(92vw,820px);padding:16px;}
+  #m2ZoomOverlay .pkg-face img{max-height:78vh;}
+  #m2ZoomOverlay .pkg-gen{font-size:1.25rem;} #m2ZoomOverlay .pkg-gen table{font-size:1.15rem;} #m2ZoomOverlay .pkg-gen h4{font-size:1.5rem;}
   .m2-inv{border:1px solid #cdbb8a;border-radius:8px;background:#fffdf6;padding:10px 12px;position:relative;overflow:hidden;font-size:.82rem;}
   .m2-inv .wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;transform:rotate(-14deg);font:800 1.3rem 'Nunito',sans-serif;color:rgba(180,60,60,.12);pointer-events:none;text-align:center}
   .m2-pk{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:8px 0;}
@@ -3208,7 +3230,7 @@ function saveM1State(s){
 function applyM1Highlight(){
   document.querySelectorAll('.pm-zone.m1-next').forEach(z => z.classList.remove('m1-next'));
   const m3h = (typeof getM3State === 'function') ? getM3State() : { step:'idle' };
-  if(m3h.step === 'stored' || m3h.step === 'classify'){ document.querySelector('.pm-zone.z-receive')?.classList.add('m1-next'); return; }
+  if(m3CrateStep(m3h.step)){ document.querySelector('.pm-zone.z-receive')?.classList.add('m1-next'); return; }
   if(m3h.step === 'sort'){
     if(!(m3h.done && m3h.done.rx) && (m3h.roomItems||[]).some(it => it.cabinet === 'rx')) document.querySelector('.pm-zone.z-rx')?.classList.add('m1-next');
     if(!(m3h.done && m3h.done.otc) && (m3h.roomItems||[]).some(it => it.cabinet === 'otc')) document.querySelector('.pm-zone.z-otc')?.classList.add('m1-next');
@@ -3275,14 +3297,17 @@ function m1ClassPool(cls, nCab){
 function m1KeyOf(r){ return r['STT Buổi'] + '|' + r['Tên hoạt chất']; }
 function m1GenerateKeys(){
   const nCab = m1TierCabs()[m1SharedTier()];
-  const pick = cls => {
+  // req #236: mỗi lượt bốc ngẫu nhiên 2–4 thuốc (có cả thuốc kê đơn và không kê đơn)
+  const total = 2 + Math.floor(Math.random() * 3);
+  const nRx = total === 2 ? 1 : total === 4 ? 2 : (Math.random() < .5 ? 1 : 2), nOtc = total - nRx;
+  const pick = (cls, n) => {
     let pool = m1ClassPool(cls, nCab);
-    if(pool.length < 2) pool = allRecords.filter(r => r['Tên hoạt chất'] && drugClass(r) === cls);
+    if(pool.length < n) pool = allRecords.filter(r => r['Tên hoạt chất'] && drugClass(r) === cls);
     const out = [];
-    while(out.length < 2 && pool.length){ out.push(pool.splice(Math.floor(Math.random()*pool.length), 1)[0]); }
+    while(out.length < n && pool.length){ out.push(pool.splice(Math.floor(Math.random()*pool.length), 1)[0]); }
     return out.map(m1KeyOf);
   };
-  return [...pick('rx'), ...pick('otc')];
+  return [...pick('rx', nRx), ...pick('otc', nOtc)];
 }
 function m1ResetItems(){ try{ localStorage.removeItem(m1ItemsKey()); }catch(e){} M1_ITEMS = null; }
 function getM1Items(){
@@ -3290,7 +3315,7 @@ function getM1Items(){
   let keys = null;
   try{ keys = JSON.parse(localStorage.getItem(m1ItemsKey()) || 'null'); }catch(e){}
   const byKey = {}; allRecords.forEach(r => { if(r['Tên hoạt chất']) byKey[m1KeyOf(r)] = r; });
-  if(!Array.isArray(keys) || keys.length < 4 || keys.some(k => !byKey[k])){
+  if(!Array.isArray(keys) || keys.length < 2 || keys.some(k => !byKey[k])){
     // người chơi đang dở nhiệm vụ 1 từ trước → giữ bộ 4 thuốc cũ để không vỡ tiến độ
     if(localStorage.getItem('tu-thuoc-mo-phong:mission1')){
       const legacy = c => allRecords.filter(r => r['Tên hoạt chất'] && drugClass(r) === c).slice(0, 2).map(m1KeyOf);
@@ -3721,7 +3746,7 @@ function m2Sync(){
   const x = getM2State();
   document.body.classList.toggle('m2-enter', x.step === 'inbox');
   let crate = document.getElementById('m2CrateMap');
-  const m3 = getM3State(); const m3crate = m3.step === 'stored' || m3.step === 'classify';
+  const m3 = getM3State(); const m3crate = m3CrateStep(m3.step);
   const at = m3crate ? [175, 268] : (x.step === 'inbox' || x.step === 'packaging' || x.step === 'quality' || x.step === 'price' || x.step === 'ledger') ? [175, 268] : (x.step === 'toProcess' || x.step === 'mail') ? [160, 402] : null;
   if(at && typeof pMap !== 'undefined' && pMap){
     if(!crate){
@@ -3800,7 +3825,7 @@ const M2_CAR_SVG = `<svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg
 </svg>`;
 function m2OpenCrate(){
   const x = getM2State();
-  if(m3Active() && (getM3State().step === 'stored' || getM3State().step === 'classify')){ m3OpenCrate(); return; }
+  if(m3Active() && m3CrateStep(getM3State().step)){ m3OpenCrate(); return; }
   if(x.step === 'inbox' || x.step === 'packaging' || x.step === 'quality' || x.step === 'price') m2RenderInspect();
   else pmZoneLabel.textContent = m2Hint();
 }
@@ -4062,39 +4087,72 @@ function m2RenderPrice(){
     pmZoneLabel.textContent = '📒 Bước 8: đến Quầy thu ngân, mở máy tính → tab Thực nhập để ghi sổ kiểm nhập.';
   });
 }
-// req #224 (bước 8): người học không thể nhớ hết thông tin để điền sổ → cho xem lại hình hộp thuốc + nhãn + hoá đơn + số thực nhận.
-function m2RefData(it, x){
-  const d = new Date(), rec = allRecords.find(r => r['Tên hoạt chất'] === it.name) || {};
-  return { name: it.name, strength: rec['Hoạt chất, hàm lượng/nồng độ'] || '', maker: rec['Nơi sản xuất'] || 'Công ty SX (minh hoạ)',
-    reg: `VD-${10000 + m1HashNum(it.key+'dk',0,89999)}-24`, lot: `LO${m1HashNum(it.key+'lo',1000,9999)}`,
-    exp: `${String(m1HashNum(it.key+'hd',1,12)).padStart(2,'0')}/${d.getFullYear()+2}`,
-    store: it.cold ? 'Bảo quản trong tủ lạnh 2–8°C' : 'Bảo quản nơi khô, nhiệt độ dưới 30°C, tránh ánh sáng', spec: it.pack.spec };
+// req #224 (bước 8): người học không thể nhớ hết thông tin để điền sổ → cho xem lại bao bì nhiều mặt + hoá đơn.
+// Thông tin KHÔNG liệt kê sẵn: người học tự đọc trên các mặt bao bì (trước / sau / bên).
+const M3_SPECIAL = [
+  { name:'Morphin sulfat 10 mg/1 ml', kind:'narc', spec:'Hộp 10 ống × 1 ml' }, { name:'Pethidin 100 mg/2 ml', kind:'narc', spec:'Hộp 10 ống × 2 ml' },
+  { name:'Diazepam 5 mg', kind:'psy', spec:'Hộp 10 vỉ × 10 viên' }, { name:'Alprazolam 0,5 mg', kind:'psy', spec:'Hộp 3 vỉ × 10 viên' },
+  { name:'Phenobarbital 100 mg', kind:'psy', spec:'Hộp 10 vỉ × 10 viên' }, { name:'Ephedrin hydroclorid 30 mg/1 ml', kind:'pre', spec:'Hộp 10 ống × 1 ml' },
+  { name:'Pseudoephedrin 60 mg', kind:'pre', spec:'Hộp 10 vỉ × 10 viên' },
+];
+const M3_KIND = { narc:'Thuốc gây nghiện', psy:'Thuốc hướng thần', pre:'Tiền chất dùng làm thuốc' };
+function pkgData(it){
+  const rec = allRecords.find(r => r['Tên hoạt chất'] === it.name) || {}, sp = M3_SPECIAL.find(z => z.name === it.name);
+  const k = it.key || it.name, d = new Date();
+  const base = (typeof getM1Items === 'function' ? getM1Items().find(a => a.key === it.key) : null) || it;
+  const pack = it.pack || base.pack || m1PackInfo({ name: it.name, key: k });
+  const cold = it.cold != null ? !!it.cold : !!base.cold;
+  return { name: it.name, strength: sp ? sp.name : (rec['Hoạt chất, hàm lượng/nồng độ'] || ''), maker: sp ? 'Công ty SX (minh hoạ)' : (rec['Nơi sản xuất'] || 'Công ty SX (minh hoạ)'),
+    reg: `VD-${10000 + m1HashNum(k+'dk',0,89999)}-24`, lot: `LO${m1HashNum(k+'lo',1000,9999)}`, exp: `${String(m1HashNum(k+'hd',1,12)).padStart(2,'0')}/${d.getFullYear()+2}`,
+    store: cold ? 'Bảo quản trong tủ lạnh 2–8°C, tránh ánh sáng, không để đông băng.' : 'Bảo quản nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng.',
+    spec: sp ? sp.spec : pack.spec, kind: sp ? sp.kind : null, rx: sp ? true : (it.cabinet === 'rx' || base.cabinet === 'rx') };
 }
+// Bao bì 3 mặt: trước (ảnh thật nếu có) · sau (thành phần, số ĐK, lô, HSD, nhà SX) · bên (bảo quản, quy cách, lưu ý)
+function pkgViewer(it){
+  const dd = pkgData(it), photo = m2PhotoUrl(it.name), e = esc;
+  const banner = (dd.kind ? `<div class="bn">${M3_KIND[dd.kind].toUpperCase()}</div>` : (dd.rx ? '<div class="bn rx">Thuốc bán theo đơn</div>' : ''));
+  const front = `<div class="pkg-face" data-face="front">${photo ? `<img src="${photo}" alt="Mặt trước ${e(it.name)}" onerror="this.remove()">` : ''}<div class="pkg-gen">${banner}<h4>${e(it.name)}</h4><div>${e(dd.strength)}</div><div class="fine">Hộp thuốc — mặt trước (hình minh hoạ)</div></div></div>`;
+  const back = `<div class="pkg-face" data-face="back" hidden><div class="pkg-gen">${banner}<h4>${e(it.name)}</h4><table><tbody>
+      <tr><th>Thành phần / hàm lượng</th><td>${e(dd.strength || it.name)}</td></tr><tr><th>Số đăng ký (SĐK)</th><td>${dd.reg} <small>(số minh hoạ)</small></td></tr>
+      <tr><th>Số lô SX</th><td>${dd.lot}</td></tr><tr><th>Hạn dùng (HSD)</th><td>${dd.exp}</td></tr><tr><th>Nhà sản xuất</th><td>${e(dd.maker)}</td></tr></tbody></table></div></div>`;
+  const side = `<div class="pkg-face" data-face="side" hidden><div class="pkg-gen">${banner}<table><tbody>
+      <tr><th>Bảo quản</th><td>${dd.store}</td></tr><tr><th>Quy cách đóng gói</th><td>${e(dd.spec)}</td></tr></tbody></table>
+      <div class="fine">Đọc kỹ hướng dẫn sử dụng trước khi dùng. Để xa tầm tay trẻ em.</div></div></div>`;
+  return `<div class="pkg" data-pkg><div class="pkg-tabs"><button type="button" class="on" data-f="front">Mặt trước</button><button type="button" data-f="back">Mặt sau</button><button type="button" data-f="side">Mặt bên</button><button type="button" class="zoom" data-zoom>🔍 Phóng to</button></div>${front}${back}${side}</div>`;
+}
+document.addEventListener('click', ev => {
+  const b = ev.target.closest && ev.target.closest('[data-pkg] .pkg-tabs button');
+  if(!b) return;
+  const root = b.closest('[data-pkg]');
+  if(b.hasAttribute('data-zoom')){
+    const cur = root.querySelector('.pkg-face:not([hidden])'); if(!cur) return;
+    let ov = document.getElementById('m2ZoomOverlay');
+    if(!ov){ ov = document.createElement('div'); ov.className = 'overlay'; ov.id = 'm2ZoomOverlay'; document.body.appendChild(ov); ov.addEventListener('click', () => { ov.style.display = 'none'; }); }
+    ov.innerHTML = ''; const c = cur.cloneNode(true); c.hidden = false; ov.appendChild(c); ov.style.display = 'flex';
+    return;
+  }
+  root.querySelectorAll('.pkg-tabs button[data-f]').forEach(x => x.classList.toggle('on', x === b));
+  root.querySelectorAll('.pkg-face').forEach(f => { f.hidden = f.dataset.face !== b.dataset.f; });
+});
 function m2RenderRef(idx){
   const x = getM2State(), pass = x.items.filter(it => !m2Reasons(it).length);
   let ov = document.getElementById('m2RefOverlay');
   if(!ov){
     ov = document.createElement('div'); ov.className = 'overlay'; ov.id = 'm2RefOverlay'; ov.style.zIndex = 97;
-    ov.innerHTML = '<div class="modal pos-modal"><div class="modal-head"><div><h2>🔎 Xem lại hình ảnh để điền sổ</h2><div class="sub">Hộp thuốc · nhãn · hoá đơn · số lượng thực nhận</div></div><button type="button" id="m2RefClose">✕</button></div><div class="modal-body pos-body" id="m2RefBody"></div></div>';
+    ov.innerHTML = '<div class="modal pos-modal"><div class="modal-head"><div><h2>🔎 Xem lại bao bì và hoá đơn để điền sổ</h2><div class="sub">Bấm Mặt trước / Mặt sau / Mặt bên để đọc thông tin trên bao bì</div></div><button type="button" id="m2RefClose">✕</button></div><div class="modal-body pos-body" id="m2RefBody"></div></div>';
     document.body.appendChild(ov);
     ov.addEventListener('click', e => { if(e.target === ov) ov.style.display = 'none'; });
     ov.querySelector('#m2RefClose').addEventListener('click', () => { ov.style.display = 'none'; });
   }
-  const it = pass[idx], r = m2RefData(it, x), photo = m2PhotoUrl(it.name);
+  const it = pass[idx];
   const tabs = pass.map((p,i) => `<button type="button" class="pos-btn" data-r="${i}" style="${i === idx ? '' : 'background:#9aa89f'};margin:0 6px 6px 0">${esc(p.name)}</button>`).join('');
-  const row = (k, v) => `<tr><th style="text-align:left;white-space:nowrap;padding:3px 8px 3px 0">${k}</th><td style="padding:3px 0">${v}</td></tr>`;
   const body = ov.querySelector('#m2RefBody');
   body.innerHTML = `<div>${tabs}</div>
     <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">
-      <div style="flex:1 1 320px;min-width:0">
-        <div style="font:800 .8rem Nunito,sans-serif;margin-bottom:4px">📦 Hộp thuốc</div>
-        <div style="text-align:center">${photo ? `<img src="${photo}" alt="Hộp ${esc(it.name)}" style="max-width:100%;max-height:200px;object-fit:contain;background:#fff;border:1px solid #d8c9a3;border-radius:8px">` : `<div class="ph">📦 ${esc(it.name)}</div>`}</div>
-        <div style="font:800 .8rem Nunito,sans-serif;margin:10px 0 4px">🏷️ Thông tin trên nhãn / bao bì</div>
-        <table style="font-size:.78rem;border:1px solid #d8c9a3;border-radius:8px;background:#fffdf6;padding:6px;width:100%"><tbody>
-          ${row('Tên thuốc', esc(r.name) + (r.strength ? '<br>' + esc(r.strength) : ''))}${row('Số ĐK/GPNK', r.reg + ' <small>(số minh hoạ)</small>')}
-          ${row('Số lô', r.lot)}${row('Hạn dùng', r.exp)}${row('Nhà sản xuất', esc(r.maker))}${row('Điều kiện bảo quản', r.store)}${row('Quy cách đóng gói', r.spec)}
-          ${row('Số lượng thực nhận', `<b>${it.recv} ${it.unit}</b> <small>(đã đếm ở bước kiểm tra số lượng)</small>`)}${row('Đơn giá trên hoá đơn (chưa VAT)', `<b>${m1PkgPrice(it).toLocaleString('vi-VN')} đ</b> / ${it.unit}`)}
-        </tbody></table></div>
+      <div style="flex:1 1 360px;min-width:0">
+        <div style="font:800 .8rem Nunito,sans-serif;margin-bottom:4px">📦 Hộp thuốc: ${esc(it.name)}</div>
+        ${pkgViewer(it)}
+        <p class="pos-note" style="margin-top:8px">Số lượng thực nhận (đã đếm ở bước kiểm tra số lượng): <b>${it.recv} ${it.unit}</b>. Đơn giá, số lượng đặt: xem <b>hoá đơn</b> bên cạnh.</p></div>
       <div style="flex:1 1 380px;min-width:0"><div style="font:800 .8rem Nunito,sans-serif;margin-bottom:4px">🧾 Hoá đơn</div>${m2InvoiceHtml(x)}</div></div>`;
   body.querySelectorAll('[data-r]').forEach(b => b.addEventListener('click', () => m2RenderRef(Number(b.dataset.r))));
   ov.style.display = 'flex';
@@ -4159,7 +4217,8 @@ function saveM3State(x){
   try{ if(typeof renderM1Checklist === 'function') renderM1Checklist(); }catch(e){}
 }
 function m3Unlocked(){ return m2Count() >= 1; }
-function m3Active(){ const x = getM3State(); return x.step === 'stored' || x.step === 'classify' || x.step === 'sort'; }
+function m3CrateStep(st){ return st === 'stored' || st === 'fridge' || st === 'classify' || st === 'special'; }
+function m3Active(){ const x = getM3State(); return m3CrateStep(x.step) || x.step === 'sort'; }
 // Danh sách tên thuốc cần sắp xếp trong tủ `mode` (null nếu nhiệm vụ 3 không ở bước sắp xếp / tủ này đã xong)
 function m3SortItemsFor(mode){
   const x = getM3State();
@@ -4173,13 +4232,20 @@ function startM3(){
   const src = (m2.items && m2.items.length ? m2.items.filter(it => !m2Reasons(it).length) : []);
   const all = getM1Items();
   const list = (src.length ? src : all).map(it => { const base = all.find(a => a.key === it.key) || it; return { key: it.key, name: it.name, cold: !!base.cold, cabinet: base.cabinet }; });
-  saveM3State({ step:'stored', items:list, cls:{}, done:{}, roomItems:[] });
+  // req #235: từ mức Dễ trở lên, thùng hàng có thêm 1 thuốc kiểm soát đặc biệt (gây nghiện / hướng thần / tiền chất)
+  if(m1SharedTier() >= 1){
+    const sp = M3_SPECIAL[Math.floor(Math.random() * M3_SPECIAL.length)];
+    list.push({ key: 'sp:' + sp.name, name: sp.name, cold: false, cabinet: 'special', skind: sp.kind });
+  }
+  saveM3State({ step:'stored', items:list, cls:{}, done:{}, roomItems:[], fridge:{} });
 }
 function m3Hint(){
   const x = getM3State();
   if(!m3Unlocked()) return '🔒 Nhiệm vụ 3: hoàn thành tối thiểu 1 lần Nhiệm vụ 2 để mở khoá.';
   return x.step === 'stored' ? '📦 Nhiệm vụ 3: bấm vào thùng hàng có thẻ "Đã kiểm nhập, chờ sắp xếp" ở Khu vực chờ kiểm nhập để bắt đầu.'
+    : x.step === 'fridge' ? '🧊 Nhiệm vụ 3: bấm vào thùng hàng để xếp thuốc bảo quản lạnh vào tủ lạnh.'
     : x.step === 'classify' ? '📋 Nhiệm vụ 3 (bước 3): bấm vào thùng hàng ở Khu vực chờ kiểm nhập để phân loại theo ngành hàng.'
+    : x.step === 'special' ? '🔒 Nhiệm vụ 3: bấm vào thùng hàng để phân loại và xếp thuốc kiểm soát đặc biệt vào đúng ngăn.'
     : x.step === 'sort' ? '🗄️ Nhiệm vụ 3: thùng hàng đã tới tủ tương ứng — vào tủ thuốc kê đơn / không kê đơn, bấm thùng để sắp xếp.'
     : '✅ Nhiệm vụ 3 đã xong. Bấm để luyện tập lại.';
 }
@@ -4191,7 +4257,9 @@ function m3Click(){
 function m3OpenCrate(){
   const x = getM3State();
   if(x.step === 'stored') m3RenderStorage();
+  else if(x.step === 'fridge') m3RenderFridge();
   else if(x.step === 'classify') m3RenderClassify();
+  else if(x.step === 'special') m3RenderSpecial();
   else pmZoneLabel.textContent = m3Hint();
 }
 function m3Photo(name, w){ const u = m2PhotoUrl(name); return u ? `<img src="${u}" alt="" style="width:${w}px;height:${Math.round(w*.75)}px;object-fit:contain;background:#fff;border:1px solid #d8c9a3;border-radius:6px">` : `<div class="ph" style="width:${w}px">${esc(name)}</div>`; }
@@ -4201,44 +4269,88 @@ function m3Modal(title, html){
   const sub = document.querySelector('#m2Overlay .sub'); if(sub) sub.textContent = 'Nhiệm vụ 3 · Bảo quản thuốc và sắp xếp hàng hoá';
   return body;
 }
-// Bước 2: đọc nhãn → phân loại theo điều kiện bảo quản
+// Sau khi xếp xong tủ lạnh / phân loại: chuyển bước kế tiếp (đặc biệt → sắp xếp tủ → hoàn thành)
+function m3AfterClassify(x){
+  const sortItems = (x.roomItems || []).filter(it => it.cabinet === 'rx' || it.cabinet === 'otc');
+  const special = (x.roomItems || []).filter(it => it.cabinet === 'special');
+  if(special.length){ x.step = 'special'; saveM3State(x); return 'special'; }
+  if(sortItems.length){ x.step = 'sort'; x.done = {}; saveM3State(x); return 'sort'; }
+  x.step = 'done'; saveM3State(x); m3Finish(); return 'done';
+}
+// Bước 2: đọc nhãn → phân loại theo điều kiện bảo quản (người học tự đọc trên bao bì, không in sẵn)
 function m3RenderStorage(){
   const x = getM3State();
   const body = m3Modal('🌡️ Bước 2 — Phân loại theo điều kiện bảo quản', `
-    <p class="pos-note">Đọc <b>thông tin bảo quản trên nhãn</b> của từng sản phẩm rồi chọn nơi bảo quản phù hợp.</p>
-    ${x.items.map((it,i) => `<div class="m2-tile" data-i="${i}" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">${m3Photo(it.name, 110)}
-      <div style="flex:1;min-width:220px"><b>${esc(it.name)}</b>
-        <div style="font-size:.8rem;background:#fff8d6;border:1px dashed #c98d3d;border-radius:6px;padding:4px 8px;margin:4px 0">Nhãn: <i>${it.cold ? 'Bảo quản trong tủ lạnh 2–8°C, tránh ánh sáng, không để đông băng.' : 'Bảo quản nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng.'}</i></div>
-        <label style="margin-right:14px"><input type="radio" name="st${i}" value="room"> Nhiệt độ thường (dưới 30°C)</label>
-        <label><input type="radio" name="st${i}" value="cold"> Tủ lạnh (2–8°C)</label></div></div>`).join('')}
+    <p class="pos-note">Bấm <b>Mặt trước / Mặt sau / Mặt bên</b> để xem bao bì, tự đọc <b>điều kiện bảo quản</b> của từng sản phẩm rồi chọn nơi bảo quản phù hợp. Bấm <b>🔍 Phóng to</b> nếu chữ nhỏ.</p>
+    ${x.items.map((it,i) => `<div class="m2-tile" data-i="${i}" style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+      <div style="flex:1 1 380px;min-width:0"><b>${esc(it.name)}</b>${pkgViewer(it)}</div>
+      <div style="flex:1 1 220px"><div style="font-weight:800;margin-bottom:6px">Nơi bảo quản phù hợp:</div>
+        <label style="display:block;margin-bottom:6px"><input type="radio" name="st${i}" value="room"> Nhiệt độ thường (dưới 30°C)</label>
+        <label style="display:block"><input type="radio" name="st${i}" value="cold"> Tủ lạnh (2–8°C)</label></div></div>`).join('')}
     <button type="button" class="pos-btn" id="m3StOk">✅ Xác nhận phân loại</button><div class="pos-err" id="m2Err"></div>`);
   body.querySelector('#m3StOk').addEventListener('click', () => {
     const err = body.querySelector('#m2Err');
     for(let i = 0; i < x.items.length; i++){
       const v = body.querySelector(`input[name=st${i}]:checked`)?.value;
       if(!v){ err.textContent = '⚠️ Chọn nơi bảo quản cho tất cả sản phẩm.'; return; }
-      if((v === 'cold') !== x.items[i].cold){ err.textContent = `⚠️ "${x.items[i].name}" chưa đúng — đọc lại nhãn bảo quản.`; return; }
+      if((v === 'cold') !== x.items[i].cold){ err.textContent = `⚠️ "${x.items[i].name}" chưa đúng — đọc lại thông tin bảo quản trên bao bì (mặt bên).`; return; }
     }
     x.roomItems = x.items.filter(it => !it.cold);
-    if(!x.roomItems.length){ x.step = 'done'; saveM3State(x); m3Finish('Tất cả sản phẩm đều bảo quản tủ lạnh — đã chuyển vào tủ lạnh.'); return; }
+    if(x.items.some(it => it.cold)){
+      x.step = 'fridge'; saveM3State(x);
+      body.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đúng rồi!<br>Có ${x.items.filter(it => it.cold).length} sản phẩm bảo quản lạnh — hãy xếp vào tủ lạnh.</div><button type="button" class="pos-btn" id="m3Next">🧊 Xếp vào tủ lạnh</button>`;
+      body.querySelector('#m3Next').addEventListener('click', m3RenderFridge);
+      return;
+    }
+    if(m3AfterClassify2(x)) return;
     x.step = 'classify'; saveM3State(x);
-    body.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đúng rồi!${x.items.some(it => it.cold) ? ' Sản phẩm bảo quản lạnh đã được chuyển vào Tủ lạnh.' : ''}<br>Tiếp theo (bước 3): bấm thùng để phân loại theo ngành hàng.</div><button type="button" class="pos-btn" id="m3Next">➡️ Sang bước 3</button>`;
+    body.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đúng rồi!<br>Tiếp theo (bước 3): bấm thùng để phân loại theo ngành hàng.</div><button type="button" class="pos-btn" id="m3Next">➡️ Sang bước 3</button>`;
     body.querySelector('#m3Next').addEventListener('click', m3RenderClassify);
   });
+}
+// (không còn sản phẩm phải phân loại ngành hàng → chuyển thẳng)
+function m3AfterClassify2(x){
+  if((x.roomItems || []).length) return false;
+  x.step = 'done'; saveM3State(x); m3Finish('Tất cả sản phẩm đều bảo quản lạnh — đã xếp vào tủ lạnh.');
+  const b = document.getElementById('m2Body'); if(b) b.innerHTML = '<div class="pos-soon" style="color:#1f7a3d">🎉 Tất cả sản phẩm đã được xếp vào tủ lạnh — hoàn thành nhiệm vụ 3!</div>';
+  return true;
+}
+// Bước 2b: xếp thuốc bảo quản lạnh vào tủ lạnh
+function m3RenderFridge(){
+  const x = getM3State();
+  x.fridge = x.fridge || {};
+  const cold = x.items.filter(it => it.cold);
+  const draw = () => {
+    const placed = cold.filter(it => x.fridge[it.key]), left = cold.filter(it => !x.fridge[it.key]);
+    body.innerHTML = `<p class="pos-note">Thuốc cần <b>bảo quản lạnh 2–8°C</b>: xếp vào <b>tủ lạnh</b>, không để sát thành tủ / ngăn đá để tránh đông băng, tránh ánh sáng, theo dõi nhiệt độ tủ hằng ngày.</p>
+      <div style="display:flex;gap:14px;flex-wrap:wrap">
+        <div style="flex:1 1 280px"><div style="font-weight:800;margin-bottom:6px">📦 Chờ xếp</div>${left.map(it => `<button type="button" class="pos-btn" data-k="${esc(it.key)}" style="display:block;margin-bottom:6px">${esc(it.name)} → 🧊 Xếp vào tủ lạnh</button>`).join('') || '<i>Đã xếp hết.</i>'}</div>
+        <div style="flex:1 1 280px;border:3px solid #7fb6d9;border-radius:12px;background:#eaf6fd;padding:10px"><div style="font-weight:800;margin-bottom:6px">🧊 Tủ lạnh 2–8°C</div>${placed.map(it => `<div style="background:#fff;border:1px solid #bcd9ea;border-radius:8px;padding:6px 10px;margin-bottom:6px">✅ ${esc(it.name)}</div>`).join('') || '<i>Chưa có sản phẩm.</i>'}</div></div>`;
+    body.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => { x.fridge[b.dataset.k] = true; saveM3State(x); draw(); if(!cold.some(it => !x.fridge[it.key])) setTimeout(finishFridge, 400); }));
+  };
+  const finishFridge = () => {
+    if(m3AfterClassify2(x)) return;
+    x.step = 'classify'; saveM3State(x);
+    body.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đã xếp xong thuốc bảo quản lạnh vào tủ lạnh.<br>Tiếp theo (bước 3): phân loại các sản phẩm còn lại theo ngành hàng.</div><button type="button" class="pos-btn" id="m3Next">➡️ Sang bước 3</button>`;
+    body.querySelector('#m3Next').addEventListener('click', m3RenderClassify);
+  };
+  const body = m3Modal('🧊 Bước 2 — Xếp thuốc bảo quản lạnh vào tủ lạnh', '');
+  draw();
 }
 // Bước 3: phân loại ngành hàng (thuốc / không phải thuốc → kê đơn / không kê đơn / kiểm soát đặc biệt)
 function m3RenderClassify(){
   const x = getM3State();
   const body = m3Modal('🗂️ Bước 3 — Phân loại theo ngành hàng', `
-    <p class="pos-note">Xác định mỗi sản phẩm là <b>thuốc</b> hay <b>sản phẩm không phải thuốc</b> (mỹ phẩm, dụng cụ, vật tư y tế, thực phẩm bảo vệ sức khỏe). Nếu là thuốc, chọn tiếp: <b>kê đơn</b>, <b>không kê đơn</b> hay <b>kiểm soát đặc biệt</b>. Tick đúng thì thùng hàng sẽ chuyển tới tủ tương ứng.</p>
-    ${x.roomItems.map((it,i) => `<div class="m2-tile" data-i="${i}" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">${m3Photo(it.name, 110)}
-      <div style="flex:1;min-width:220px"><b>${esc(it.name)}</b><br>
+    <p class="pos-note">Xem bao bì (các mặt) để xác định mỗi sản phẩm là <b>thuốc</b> hay <b>sản phẩm không phải thuốc</b> (mỹ phẩm, dụng cụ, vật tư y tế, thực phẩm bảo vệ sức khỏe). Nếu là thuốc, chọn tiếp: <b>kê đơn</b>, <b>không kê đơn</b> hay <b>kiểm soát đặc biệt</b>. Tick đúng thì thùng hàng sẽ chuyển tới tủ tương ứng.</p>
+    ${x.roomItems.map((it,i) => `<div class="m2-tile" data-i="${i}" style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+      <div style="flex:1 1 380px;min-width:0"><b>${esc(it.name)}</b>${pkgViewer(it)}</div>
+      <div style="flex:1 1 240px">
         <label style="margin-right:14px"><input type="radio" name="k${i}" value="drug"> Thuốc</label>
         <label><input type="radio" name="k${i}" value="non"> Sản phẩm không phải thuốc</label>
-        <div class="sub" data-sub="${i}" hidden style="margin-top:4px">
-          <label style="margin-right:10px"><input type="radio" name="g${i}" value="rx"> Thuốc kê đơn</label>
-          <label style="margin-right:10px"><input type="radio" name="g${i}" value="otc"> Thuốc không kê đơn</label>
-          <label><input type="radio" name="g${i}" value="special"> Thuốc kiểm soát đặc biệt</label></div></div></div>`).join('')}
+        <div class="sub" data-sub="${i}" hidden style="margin-top:8px">
+          <label style="display:block;margin-bottom:4px"><input type="radio" name="g${i}" value="rx"> Thuốc kê đơn</label>
+          <label style="display:block;margin-bottom:4px"><input type="radio" name="g${i}" value="otc"> Thuốc không kê đơn</label>
+          <label style="display:block"><input type="radio" name="g${i}" value="special"> Thuốc kiểm soát đặc biệt</label></div></div></div>`).join('')}
     <button type="button" class="pos-btn" id="m3ClOk">✅ Xác nhận</button><div class="pos-err" id="m2Err"></div>`);
   body.querySelectorAll('input[name^=k]').forEach(r => r.addEventListener('change', () => {
     const i = r.name.slice(1); body.querySelector(`[data-sub="${i}"]`).hidden = r.value !== 'drug';
@@ -4251,10 +4363,55 @@ function m3RenderClassify(){
       if(k !== 'drug'){ err.textContent = `⚠️ "${it.name}" là thuốc — chọn "Thuốc" rồi phân nhóm.`; return; }
       const g = body.querySelector(`input[name=g${i}]:checked`)?.value;
       if(!g){ err.textContent = '⚠️ Chọn nhóm thuốc (kê đơn / không kê đơn / kiểm soát đặc biệt).'; return; }
-      if(g !== it.cabinet){ err.textContent = `⚠️ "${it.name}" chưa đúng nhóm — xem lại danh mục thuốc kê đơn / không kê đơn.`; return; }
+      if(g !== it.cabinet){ err.textContent = it.cabinet === 'special' ? `⚠️ "${it.name}" chưa đúng nhóm — xem lại thông tin trên bao bì: đây là thuốc phải kiểm soát đặc biệt.` : `⚠️ "${it.name}" chưa đúng nhóm — xem lại bao bì (thuốc bán theo đơn hay không).`; return; }
     }
-    x.step = 'sort'; x.done = {}; saveM3State(x); m2CloseModal();
-    pmZoneLabel.textContent = '🗄️ Đúng rồi! Thùng hàng đã chuyển tới các tủ tương ứng — vào tủ thuốc kê đơn / không kê đơn, bấm thùng để sắp xếp.';
+    const nxt = m3AfterClassify(x);
+    if(nxt === 'special'){
+      body.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đúng rồi!<br>Có thuốc kiểm soát đặc biệt — phân loại và xếp vào đúng ngăn theo quy định.</div><button type="button" class="pos-btn" id="m3Next">🔒 Phân loại thuốc kiểm soát đặc biệt</button>`;
+      body.querySelector('#m3Next').addEventListener('click', m3RenderSpecial);
+    } else if(nxt === 'sort'){
+      m2CloseModal();
+      pmZoneLabel.textContent = '🗄️ Đúng rồi! Thùng hàng đã chuyển tới các tủ tương ứng — vào tủ thuốc kê đơn / không kê đơn, bấm thùng để sắp xếp.';
+    } else {
+      body.innerHTML = '<div class="pos-soon" style="color:#1f7a3d">🎉 Hoàn thành nhiệm vụ 3!</div>';
+    }
+  });
+}
+// Bước 4: thuốc kiểm soát đặc biệt — phân loại (gây nghiện / hướng thần / tiền chất) rồi xếp vào đúng ngăn của tủ riêng có khoá
+// (Thông tư 18/2026/TT-BYT: bảo quản tại kho hoặc tủ riêng có khoá chắc chắn, không để lẫn với thuốc khác; ghi sổ theo dõi xuất – nhập – tồn)
+function m3RenderSpecial(){
+  const x = getM3State();
+  const sp = (x.roomItems || []).filter(it => it.cabinet === 'special');
+  const kinds = Object.keys(M3_KIND);
+  const body = m3Modal('🔒 Bước 4 — Thuốc kiểm soát đặc biệt', `
+    <p class="pos-note">Theo <b>Thông tư 18/2026/TT-BYT</b>, thuốc phải kiểm soát đặc biệt cất trong <b>tủ riêng có khoá chắc chắn</b>, <b>không để lẫn với thuốc khác</b> và phải <b>ghi sổ theo dõi xuất – nhập – tồn</b>. Đọc bao bì, <b>phân loại</b> rồi chọn <b>ngăn</b> phù hợp.</p>
+    ${sp.map((it,i) => `<div class="m2-tile" data-i="${i}" style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+      <div style="flex:1 1 380px;min-width:0"><b>${esc(it.name)}</b>${pkgViewer(it)}</div>
+      <div style="flex:1 1 260px">
+        <div style="font-weight:800;margin-bottom:4px">1. Phân loại:</div>
+        ${kinds.map(k => `<label style="display:block;margin-bottom:3px"><input type="radio" name="sk${i}" value="${k}"> ${M3_KIND[k]}</label>`).join('')}
+        <div style="font-weight:800;margin:8px 0 4px">2. Xếp vào ngăn (tủ riêng có khoá):</div>
+        ${kinds.map((k,n) => `<label style="display:block;margin-bottom:3px"><input type="radio" name="sn${i}" value="${k}"> Ngăn ${n+1} — ${M3_KIND[k].toLowerCase()}</label>`).join('')}
+        <label style="display:block;margin-top:8px"><input type="checkbox" name="sl${i}"> Đã ghi sổ theo dõi xuất – nhập – tồn</label></div></div>`).join('')}
+    <button type="button" class="pos-btn" id="m3SpOk">✅ Xác nhận</button><div class="pos-err" id="m2Err"></div>`);
+  body.querySelector('#m3SpOk').addEventListener('click', () => {
+    const err = body.querySelector('#m2Err');
+    for(let i = 0; i < sp.length; i++){
+      const it = sp[i], t = body.querySelector(`input[name=sk${i}]:checked`)?.value, n = body.querySelector(`input[name=sn${i}]:checked`)?.value;
+      if(!t || !n){ err.textContent = `⚠️ "${it.name}": chọn loại thuốc và ngăn.`; return; }
+      if(t !== it.skind){ err.textContent = `⚠️ "${it.name}" chưa đúng loại — đọc lại thông tin trên bao bì.`; return; }
+      if(n !== it.skind){ err.textContent = `⚠️ "${it.name}" xếp sai ngăn — mỗi loại thuốc kiểm soát đặc biệt có ngăn riêng, không để lẫn.`; return; }
+      if(!body.querySelector(`input[name=sl${i}]`).checked){ err.textContent = `⚠️ "${it.name}": phải ghi sổ theo dõi xuất – nhập – tồn riêng.`; return; }
+    }
+    x.specialDone = true;
+    const sortItems = (x.roomItems || []).filter(it => it.cabinet === 'rx' || it.cabinet === 'otc');
+    if(sortItems.length){
+      x.step = 'sort'; x.done = {}; saveM3State(x); m2CloseModal();
+      pmZoneLabel.textContent = '🗄️ Đã xếp thuốc kiểm soát đặc biệt vào đúng ngăn. Thùng hàng còn lại đã chuyển tới tủ thuốc kê đơn / không kê đơn — bấm thùng để sắp xếp.';
+    } else {
+      x.step = 'done'; saveM3State(x); m3Finish();
+      body.innerHTML = '<div class="pos-soon" style="color:#1f7a3d">🎉 Đã xếp thuốc kiểm soát đặc biệt vào đúng ngăn — hoàn thành nhiệm vụ 3!</div>';
+    }
   });
 }
 // Gọi từ màn tủ khi xếp xong lô của tủ `mode`
@@ -4262,7 +4419,7 @@ function m3ModeDone(mode){
   const x = getM3State();
   if(x.step !== 'sort') return '';
   x.done = x.done || {}; x.done[mode] = true;
-  const need = [...new Set((x.roomItems || []).map(it => it.cabinet))];
+  const need = [...new Set((x.roomItems || []).map(it => it.cabinet).filter(m => m === 'rx' || m === 'otc'))];
   if(need.every(m => x.done[m])){ x.step = 'done'; saveM3State(x); m3Finish(); return ' 🎉 Hoàn thành nhiệm vụ 3!'; }
   saveM3State(x);
   return ' ✅ Xong tủ này — sang tủ còn lại để sắp xếp nốt.';
@@ -4270,6 +4427,12 @@ function m3ModeDone(mode){
 function m3Finish(msg){
   try{ localStorage.setItem('tu-thuoc-mo-phong:m3count', String((Number(localStorage.getItem('tu-thuoc-mo-phong:m3count')) || 0) + 1)); }catch(e){}
   m2CountPlay();
+  // req #236: xong cả chuỗi nhiệm vụ = hết 1 lượt → lượt kế tiếp bốc 2–4 thuốc KHÁC
+  try{
+    m1ResetItems();
+    saveM1State({ step:'dutru', confirmed:{}, actual:{}, orders:{}, supplier:null, formulaOk:false, fmBlanks:null });
+    saveM2State({ step:'idle' });
+  }catch(e){}
   try{ window.refreshMissionsList?.(); }catch(e){}
   if(msg){ pmZoneLabel.textContent = msg; }
 }
@@ -4909,7 +5072,7 @@ function doZoneAction(zone){
     // nghiệp vụ riêng ở các nhiệm vụ sau.
     const m2s = getM2State();
     if(zone.id === 'zCashier' && typeof openPOS === 'function') openPOS();
-    else if(zone.classList.contains('z-receive') && (['inbox','packaging','quality','price'].includes(m2s.step) || ['stored','classify'].includes(getM3State().step))) m2OpenCrate();
+    else if(zone.classList.contains('z-receive') && (['inbox','packaging','quality','price'].includes(m2s.step) || m3CrateStep(getM3State().step))) m2OpenCrate();
     else if(zone.classList.contains('z-process') && m2s.step === 'toProcess'){
       m2s.step = 'mail'; saveM2State(m2s);
       pmZoneLabel.textContent = '✉️ Thùng hàng đã chuyển sang khu chờ xử lý — đến Quầy thu ngân, mở máy tính → Quản lý nhà cung ứng → Gửi thư cho nhà cung ứng.';
