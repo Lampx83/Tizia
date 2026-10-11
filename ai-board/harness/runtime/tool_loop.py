@@ -120,10 +120,10 @@ def _clean_path(path: str) -> str:
 class Workspace:
     """Bản nháp của file đích trong bộ nhớ + test; nguồn là git sha cố định."""
 
-    def __init__(self, source, sha: str, file: str, current: str):
+    def __init__(self, source, sha: str, file: str, current: str | None):
         self.source, self.sha, self.file, self.base = source, sha, file, current
-        self.base_hash = sha_of(current)
-        self.content = current
+        self.base_hash = None if current is None else sha_of(current)
+        self.content = current or ""
         self.test_file = self.test = None
 
     def _check_scope(self, path: str, *, test: bool = False) -> str:
@@ -136,7 +136,7 @@ class Workspace:
 
     def _fresh(self) -> None:
         now = tools._show(self.source, self.sha, self.file)
-        if now is None or sha_of(now) != self.base_hash:
+        if (None if now is None else sha_of(now)) != self.base_hash:
             raise Forbidden("stale: file đích ở base đã đổi so với bản loop đọc")
 
     def run(self, name: str, args: dict) -> str:
@@ -161,10 +161,11 @@ class Workspace:
         if name == "write_test":
             self.test_file, self.test = self._check_scope(args["test_file"], test=True), args["test"]
             return "đã nhận test"
+        self._fresh()
         return ""
 
     def proposal(self) -> dict:
-        if self.content == self.base:
+        if self.content == self.base or (self.base is None and not self.content):
             raise ValueError("chưa có thay đổi nào ở file đích")
         if not self.test_file:
             raise ValueError("thiếu test (write_test)")
@@ -180,16 +181,18 @@ def _result(status: str, reason: str | None = None, failure_class: str | None = 
     return {"status": status, "reason": reason, "failure_class": failure_class, **extra}
 
 
-def run_subtask(subtask: dict, current: str, *, deps, budget, model: str, source, sha: str, check,
+def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str, source, sha: str, check,
                 role: str | None = None, call_extra: dict | None = None, db_path=None, proposal_id=None,
                 child: int | None = None) -> dict:
-    """Loop tuần tự cho 1 subtask (file đã có) dưới parent `budget`. `check(out)` = kiểm nội dung (ValueError nếu hỏng).
+    """Loop tuần tự cho 1 subtask dưới parent `budget`. File mới bắt đầu rỗng, edit_file chèn tại after_line=0.
 
     status: proposed (out = {code,test_file,test}) | paused (hết ngân sách, failure_class budget)
     | blocked (ordinary: hết lượt sửa; critical: ngoài phạm vi/stale). Model báo finish chỉ kết thúc đề xuất."""
     loop_budget = ChildBudget(budget)
     ws = Workspace(source, sha, subtask["file"], current)
     prompt = PROMPT.format(tools=_tool_list(), title=subtask["title"], file=subtask["file"], verify=subtask["verify"])
+    if current is None:
+        prompt += "\nFile đích chưa tồn tại: dùng edit_file với after_line=0 để tạo nội dung trong bản nháp.\n"
     steps, rejected = [], False
     while True:
         if not loop_budget.tick():

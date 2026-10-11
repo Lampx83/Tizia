@@ -417,7 +417,7 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
         if trace:
             _note_inputs(trace, subtask, model, state, current, context, siblings, words, lessons, ctx)
         out = None
-        if current is not None and tool_loop.enabled():
+        if tool_loop.enabled():
             looped = tool_loop.run_subtask(
                 subtask, current, deps=deps, budget=budget, model=model, source=state["checkout_source"], sha=state["base_sha"],
                 check=lambda o: (_check_rest(o, current, subtask["file"]), gate3_guards.check(o, current, subtask["file"], known)),
