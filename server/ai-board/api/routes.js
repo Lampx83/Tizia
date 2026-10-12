@@ -364,6 +364,9 @@ export function attachAiBoardWorkerRoutes(router, {
   route.post('/api/ai-board/worker/tickets/:id/hsm/state', authenticate, handle(async (req,res) => {
     res.json(await hsm.readLeased(req.params.id,req.body || {}));
   }));
+  route.post('/api/ai-board/worker/tickets/:id/hsm/authority', authenticate, handle(async (req,res) => {
+    res.json(await hsm.authorizeAction(req.params.id,req.body || {}));
+  }));
 
   route.post('/api/ai-board/worker/claim', authenticate, handle(async (req, res) => {
     const ticket = await store.claimNext({

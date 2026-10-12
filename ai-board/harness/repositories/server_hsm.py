@@ -9,6 +9,16 @@ from typing import TypedDict
 
 _SERVER = ContextVar('gate4_hsm_server', default=None)
 
+class AuthorityError(ValueError):
+    def __init__(self,reason):
+        super().__init__(reason)
+        self.failure_class='budget' if reason=='action_budget_exhausted' else 'critical'
+
+def authorize_action(action):
+    backend=_SERVER.get()
+    if backend is not None and backend.authorize_action(action) is not True:
+        raise AuthorityError('current authority unavailable or revoked')
+
 class Gate4State(TypedDict, total=False):
     version: int
     result: dict
@@ -49,6 +59,21 @@ class RemoteGate4:
         self.path=f'/api/ai-board/worker/tickets/{ticket_id}/hsm'
         self.identity={'run_id':run_id,'worker_id':worker_id,'lease_token':lease_token,'contract_hash':contract['hash']}
         self.attempt=0
+
+    def authorize_action(self,action):
+        from urllib.error import HTTPError
+        import json
+        try:
+            answer=self.client.post(self.path+'/authority',{**self.identity,'action':action})
+        except HTTPError as error:
+            try:
+                reason=json.loads(error.read()).get('error','action_authority_unavailable')
+            except (ValueError,AttributeError):
+                reason='action_authority_unavailable'
+            raise AuthorityError(reason) from None
+        except Exception:
+            raise AuthorityError('action_authority_unavailable') from None
+        return answer.get('authorized') is True
 
     def execute(self,action):
         attempt=self.attempt

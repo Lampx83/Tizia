@@ -1,10 +1,10 @@
 {
-  "version": 1,
+  "version": 2,
   "scope": "Gate4 walking skeleton; other gates and folder lifecycle stay separate",
   "initial": "Ready",
   "parent": ["EXECUTION", "Gate4"],
   "states": ["Ready", "Running", "Passed", "Blocked"],
-  "guards": ["current_lease", "current_owner_scope", "accepted_plan", "contract_identity", "expected_version"],
+  "guards": ["current_lease", "current_owner_scope", "accepted_plan", "contract_identity", "expected_version", "parent_allowance_before_action"],
   "transitions": [
     {"from": "Ready", "event": "BEGIN", "to": "Running", "action": "static_check"},
     {"from": "Running", "event": "PASSED", "to": "Passed", "action": "record_result"},

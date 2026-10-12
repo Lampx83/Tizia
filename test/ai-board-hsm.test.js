@@ -11,6 +11,60 @@ import path from 'node:path';
 import { renderHsm } from '../public/js/ai-board-hsm.js';
 
 const KEY='hsm-disposable-fixture-worker-key-32';
+test('Gate4 records a granted action receipt at the budget limit but refuses another action',async()=>{
+  const f=await fixture();
+  try {
+    const input={run_id:f.run,contract_hash:(await f.post('snapshot',{})).body.hsm_contract.hash,attempt:0,event:'BEGIN',expected_version:0,idempotency_key:'budget-receipt-begin'};
+    assert.equal((await f.post('hsm',input)).status,200);
+    await f.db.run('UPDATE ai_tickets SET cumulative_budget=budget_limit WHERE id=?',[f.id]);
+    assert.equal((await f.post('hsm',{...input,event:'PASSED',expected_version:1,idempotency_key:'budget-receipt-pass',result:{gate:4,blocked:false}})).status,200);
+    assert.equal((await f.post('hsm',{...input,attempt:1,idempotency_key:'budget-receipt-next'})).status,409);
+  } finally {await f.close();}
+});
+test('live action guard rechecks owner scope without advancing the Gate4 state',async()=>{
+  const f=await fixture();
+  try {
+    await f.db.run('UPDATE ai_plans SET capability_policy_hash=? WHERE root_ticket_id=?',[CAPABILITY_CATALOG.hash,f.id]);
+    const input={run_id:f.run,contract_hash:(await f.post('snapshot',{})).body.hsm_contract.hash,action:'edit_file'};
+    const first=await f.post('hsm/authority',input);
+    assert.equal(first.status,200);assert.equal(first.body.authorized,true);
+    await f.db.run("UPDATE users SET enrolled_domain='other' WHERE id=1");
+    const revoked=await f.post('hsm/authority',input);
+    assert.equal(revoked.status,403);
+    assert.equal((await f.trace()).hsm.states.length,0);
+  } finally {await f.close();}
+});
+
+test('live action guard refuses stale plans, exhausted parent budgets and old leases',async()=>{
+  const f=await fixture();
+  try {
+    await f.db.run('UPDATE ai_plans SET capability_policy_hash=? WHERE root_ticket_id=?',[CAPABILITY_CATALOG.hash,f.id]);
+    const input={run_id:f.run,contract_hash:(await f.post('snapshot',{})).body.hsm_contract.hash,action:'model'};
+    assert.equal((await f.post('hsm/authority',input)).status,200);
+    await f.db.run("UPDATE ai_runs SET plan_hash='old-plan' WHERE id=?",[f.run]);
+    assert.equal((await f.post('hsm/authority',input)).status,409);
+    await f.db.run("UPDATE ai_runs SET plan_hash='plan-a' WHERE id=?",[f.run]);
+    await f.db.run('UPDATE ai_tickets SET cumulative_budget=budget_limit WHERE id=?',[f.id]);
+    assert.equal((await f.post('hsm/authority',input)).status,409);
+    assert.equal((await f.post('hsm',{...input,attempt:0,event:'BEGIN',expected_version:0,idempotency_key:'live-guard-budget-begin'})).status,409);
+    await f.db.run("UPDATE ai_tickets SET cumulative_budget=0,lease_token='new-lease',lease_owner='worker-b' WHERE id=?",[f.id]);
+    assert.equal((await f.post('hsm/authority',input)).status,409);
+  } finally {await f.close();}
+});
+
+test('live action guard stops an approved folder immediately after its approval is revoked',async()=>{
+  const f=await fixture();
+  try {
+    const now=Date.now();
+    const folder=await f.db.insert("INSERT INTO ai_feature_folders(slug,title,owner_user_id,domain,state,approved_at,created_at,updated_at,last_activity_at) VALUES ('live-guard-folder','Guard folder',1,'pharmacy','active',?,?,?,?)",[now,now,now,now]);
+    await f.db.run('UPDATE requests SET folder_id=? WHERE id=(SELECT source_request_id FROM ai_tickets WHERE id=?)',[folder,f.id]);
+    await f.db.run('UPDATE ai_plans SET capability_policy_hash=? WHERE root_ticket_id=?',[CAPABILITY_CATALOG.hash,f.id]);
+    const input={run_id:f.run,contract_hash:(await f.post('snapshot',{})).body.hsm_contract.hash,action:'write_candidate'};
+    assert.equal((await f.post('hsm/authority',input)).status,200);
+    await f.store.revokeFolder(folder);
+    assert.equal((await f.post('hsm/authority',input)).status,403);
+  } finally {await f.close();}
+});
 async function fixture() {
   const appDb=await openBoard({users:[[1,'lan','Lan','student','pharmacy']]});
   const db=appDb.d,store=createAsyncAiBoardStore(db);

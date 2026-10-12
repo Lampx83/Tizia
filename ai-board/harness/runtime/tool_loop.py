@@ -11,6 +11,7 @@ import sys
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from runtime.budget import ChildBudget
+from repositories import server_hsm
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import file_context  # noqa: E402
@@ -199,6 +200,10 @@ def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str,
             return _result("paused", f"loop dừng: {loop_budget.exhausted()}", "budget", steps=steps)
         if rejected and not budget.can_afford():
             return _result("paused", "không đủ ngân sách dự phòng cho verification trước lượt sửa tiếp", "budget", steps=steps)
+        try:
+            server_hsm.authorize_action('model')
+        except server_hsm.AuthorityError as error:
+            return _result('blocked', str(error), error.failure_class, steps=steps)
         body = deps.call_model(model, prompt, gate=3, budget=loop_budget, format="json", db_path=db_path,
                                proposal_id=proposal_id, prompt_name="tool_loop", child=child, iteration=len(steps),
                                role=role, **({"extra": call_extra} if call_extra else {}))
@@ -206,12 +211,15 @@ def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str,
         try:
             name, args = parse_request(body)
             validate(name, args)
+            server_hsm.authorize_action(name)
             loop_budget.spend("tool_calls")  # trần chạm thì tool này là lần cuối, vòng sau dừng
             observation = ws.run(name, args)
         except ToolError as error:
             name, observation = "lỗi", f"{error} (tham số/định dạng sai; thử lại, không tính lượt sửa nội dung)"
         except Forbidden as error:
             return _result("blocked", str(error), "critical", steps=steps)
+        except server_hsm.AuthorityError as error:
+            return _result('blocked', str(error), error.failure_class, steps=steps)
         steps.append(name)
         if name == "finish":
             try:

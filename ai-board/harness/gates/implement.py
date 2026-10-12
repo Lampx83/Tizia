@@ -19,6 +19,7 @@ import context as repo_context
 import file_context
 from gates import gate3_guards
 from runtime import tool_loop
+from repositories import server_hsm
 import memory
 import repomap
 
@@ -307,10 +308,13 @@ def _write_and_diff(repo_dir: Path, file_rel: str, code: str, test_file_rel: str
     commit để lần ghi kế tiếp (subtask sau) diff đúng phần MỚI thêm."""
     for rel, content in ((file_rel, code), (test_file_rel, test_code)):
         path = _safe_join(repo_dir, rel)
+        server_hsm.authorize_action('write_candidate')
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
+    server_hsm.authorize_action('stage_candidate')
     _git(["add", "-A"], cwd=repo_dir)
     diff = _git(["diff", "--cached"], cwd=repo_dir, text=True, encoding="utf-8").stdout
+    server_hsm.authorize_action('commit_candidate')
     _git(["commit", "-q", "-m", f"gate3: {file_rel}"], cwd=repo_dir)
     return diff
 
@@ -441,10 +445,20 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
             # Phản hồi nối SAU prompt cố định + ngữ cảnh: prefix giữ nguyên byte, Ollama tái dùng KV cache.
             call = dict(gate=3, budget=budget, db_path=db_path, proposal_id=proposal_id, prompt_name="implement.md", child=child,
                         iteration=iteration, options=_retry_sampling(iteration), **routing_options)
+            try:
+                server_hsm.authorize_action('model')
+            except server_hsm.AuthorityError as error:
+                state['diffs'] = diffs
+                return {'gate':3,'blocked':True,'diffs':diffs,'reason':str(error),'failure_class':error.failure_class}
             if gate3_guards.enabled("schema"):
                 try:
                     body = deps.call_model(model, prompt + feedback, format=gate3_guards.edit_schema(current is not None), **call)
                 except Exception:  # noqa: BLE001 - server refused the schema: ask once the old way, and count it
+                    try:
+                        server_hsm.authorize_action('model')
+                    except server_hsm.AuthorityError as error:
+                        state['diffs'] = diffs
+                        return {'gate':3,'blocked':True,'diffs':diffs,'reason':str(error),'failure_class':error.failure_class}
                     gate3_guards.note_fallback()
                     body = deps.call_model(model, prompt + feedback, **call)
             else:
@@ -502,7 +516,7 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
             # NGAY, không ghi 1 byte nào ra ngoài, không phải lỗi âm thầm bỏ qua.
             reason = f"subtask '{subtask.get('title')}': {e}"
             state["diffs"] = diffs
-            return {"gate": 3, "blocked": True, "reason": reason, "diffs": diffs, "failure_class": "critical"}
+            return {"gate": 3, "blocked": True, "reason": reason, "diffs": diffs, "failure_class": getattr(e,'failure_class','critical')}
         diffs.append({
             "title": subtask["title"], "file": subtask["file"], "test_file": out["test_file"],
             "model": model, "diff": diff_text,

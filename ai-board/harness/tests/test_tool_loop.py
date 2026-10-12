@@ -6,12 +6,39 @@ import pytest
 import tools
 from runtime import tool_loop
 from runtime.budget import Budget, ChildBudget
+from repositories import server_hsm
 
 PAGE = "<main>\n<h1>A</h1>\n</main>\n"
 SUBTASK = {"title": "Thêm dòng", "file": "public/a.html", "verify": "thấy B"}
 EDIT = {"tool": "edit_file", "arguments": {"file": "public/a.html", "edits": [{"after_line": 2, "insert": "<p>B</p>"}]}}
 TEST = {"tool": "write_test", "arguments": {"test_file": "test/a.test.js", "test": "import test from 'node:test';"}}
 FINISH = {"tool": "finish", "arguments": {}}
+
+def test_revoked_authority_during_model_call_blocks_tool_before_effect(monkeypatch):
+    class Authority:
+        allowed = True
+        def authorize_action(self, _action):
+            return self.allowed
+    authority = Authority()
+    deps = Deps([EDIT, TEST, FINISH])
+    original = deps.call_model
+    def revoke_then_reply(*args, **kwargs):
+        reply = original(*args, **kwargs)
+        authority.allowed = False
+        return reply
+    deps.call_model = revoke_then_reply
+    effects = []
+    original_tool = tool_loop.Workspace.run
+    def effect(self, name, args):
+        effects.append(name)
+        return original_tool(self, name, args)
+    monkeypatch.setattr(tool_loop.Workspace, 'run', effect)
+    budget = Budget()
+    with server_hsm.server_scope(authority):
+        result = tool_loop.run_subtask(SUBTASK, PAGE, deps=deps, budget=budget, model='m', source='.', sha='abc', check=lambda _out: None)
+    assert result['status'] == 'blocked' and result['failure_class'] == 'critical'
+    assert effects == [] and budget.tool_calls == 0
+    assert budget.model_calls == 1 and budget.semantic_repairs == 0
 
 
 class Deps:

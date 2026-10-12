@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { WorkerContractError, IDEMPOTENCY_KEY } from '../repositories/store-contract.js';
 import { CONTRACT, CONTRACT_HASH, diagram, statePath, publicContract } from './contract.js';
+import { CAPABILITY_CATALOG } from '../security/policy.js';
 
 const fail=(code,status=409)=>{throw new WorkerContractError(code,status,code);};
 const view=row=>({...row,path:statePath(row.state),result:JSON.parse(row.result_json || 'null'),result_json:undefined});
@@ -13,7 +14,7 @@ export function createHsmStore(store) {
       || ['cancelled','rejected'].includes(request.status)) fail('scope_denied',403);
     if (request.folder_id) {
       const folder=await t.get('SELECT * FROM ai_feature_folders WHERE id=? FOR SHARE',[request.folder_id]);
-      if (!folder || folder.state==='archived' || folder.owner_user_id!==request.owner_user_id || folder.domain!==request.owner_domain) fail('scope_denied',403);
+      if (!folder || folder.state==='archived' || !folder.approved_at || folder.owner_user_id!==request.owner_user_id || folder.domain!==request.owner_domain) fail('scope_denied',403);
     }
   }
   async function transition(ticketId,input) {
@@ -53,6 +54,10 @@ export function createHsmStore(store) {
       if (prior && !reason) return {...JSON.parse(prior.response_json),execute:false,duplicate:true};
       reason ||= version!==(row?.version || 0)?'hsm_stale_version':null;
       reason ||= !edge?'hsm_illegal_transition':null;
+      if (input.event==='BEGIN') {
+        const remaining=Number(root.budget_limit)-Number(root.cumulative_budget);
+        reason ||= !Number.isFinite(remaining) || remaining<=0?'hsm_budget_exhausted':null;
+      }
       if (!reason) {
         await t.run(`INSERT INTO ai_hsm_states(run_id,ticket_id,attempt,contract_hash,state,version,plan_hash,result_json,updated_at)
           VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(run_id,attempt) DO UPDATE SET state=excluded.state,version=excluded.version,result_json=excluded.result_json,updated_at=excluded.updated_at`,
@@ -84,5 +89,28 @@ export function createHsmStore(store) {
       return read(ticketId,input.run_id);
     });
   }
-  return {transition,read,readLeased};
+  async function authorizeAction(ticketId,input) {
+    const runId=Number(input.run_id);
+    if (!Number.isSafeInteger(runId) || runId<1 || !/^[a-z][a-z0-9_]{0,40}$/.test(String(input.action || ''))) fail('action_guard_invalid',400);
+    return db.tx(async t=>{
+      const root=await t.get('SELECT * FROM ai_tickets WHERE id=?'+t.lockRow,[Number(ticketId)]);
+      if (!root) fail('ticket_not_found',404);
+      await store.assertLease(ticketId,input.worker_id,input.lease_token);
+      await currentScope(t,root);
+      const run=await t.get('SELECT * FROM ai_runs WHERE id=? AND ticket_id=?',[runId,root.id]);
+      const latest=await t.get('SELECT id FROM ai_runs WHERE ticket_id=? ORDER BY id DESC LIMIT 1',[root.id]);
+      if (!run || run.worker_id!==input.worker_id || run.outcome!==null || !['plan','execute'].includes(run.trigger) || latest?.id!==run.id) fail('action_run_inactive');
+      if (input.contract_hash!==CONTRACT_HASH || run.plan_hash!==root.plan_hash || Number(run.plan_revision)!==Number(root.plan_revision)) fail('action_plan_changed');
+      const plan=await t.get("SELECT * FROM ai_plans WHERE root_ticket_id=? AND plan_hash=? AND revision=? AND status='valid'",[root.id,root.plan_hash,root.plan_revision]);
+      if (!plan || plan.tier==='core' || plan.capability_policy_hash!==CAPABILITY_CATALOG.hash || root.lease_mode!=='active'
+          || !((root.status==='planned' && root.phase==='ticketized') || (root.status==='running' && root.phase==='executing'))
+          || (plan.tier!=='surface' && !await t.get('SELECT 1 FROM ai_authorizations WHERE root_ticket_id=? AND plan_hash=? AND plan_revision=?',[root.id,plan.plan_hash,plan.revision]))) fail('action_not_authorized');
+      const remaining=Number(root.budget_limit)-Number(root.cumulative_budget);
+      if (!Number.isFinite(remaining) || remaining<=0) fail('action_budget_exhausted');
+      // A current authority check is not a workflow transition or an effect receipt.
+      // Mutating services still fence their own writes atomically.
+      return {authorized:true,run_id:run.id,plan_hash:plan.plan_hash,plan_revision:plan.revision,parent_remaining:remaining};
+    });
+  }
+  return {transition,read,readLeased,authorizeAction};
 }
