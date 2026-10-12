@@ -11,6 +11,8 @@ import { clarifyFromPhase, resolveClarify } from '../services/clarity-rules.js';
 import { activeChats } from '../services/chat-activity.js';
 import { guardModelText, MAX_QUESTIONS } from '../../contexts/ai-board-intake/clarify.js';
 import { attachWorkerLessonRoutes, attachLessonReviewRoutes } from './lessons.js';
+import { createHsmStore } from '../hsm/store.js';
+import { publicContract } from '../hsm/contract.js';
 
 // Không cấu hình model phân loại → không gọi gì (không phân loại).
 const defaultClassifyRequest = (title, detail) => (
@@ -231,6 +233,7 @@ export function attachAiBoardRequestRoutes(router, {
   route.get('/api/admin/ai-board/requests/:requestId/trace', requireAuth, requireAdmin, async (req, res) => {
     const trace = await store.getRequestTrace(req.params.requestId);
     if (!trace) return res.status(404).json({ error: 'ticket_not_found' });
+    if (store.db) trace.hsm = await createHsmStore(store).read(trace.root.id);
     res.json(trace);
   });
 
@@ -354,6 +357,13 @@ export function attachAiBoardWorkerRoutes(router, {
     leaseToken: String(body.lease_token || ''),
   });
   attachWorkerLessonRoutes(route, { store, authenticate, handle, lessonOptions });
+  const hsm = createHsmStore(store);
+  route.post('/api/ai-board/worker/tickets/:id/hsm', authenticate, handle(async (req,res) => {
+    res.json(await hsm.transition(req.params.id,req.body || {}));
+  }));
+  route.post('/api/ai-board/worker/tickets/:id/hsm/state', authenticate, handle(async (req,res) => {
+    res.json(await hsm.readLeased(req.params.id,req.body || {}));
+  }));
 
   route.post('/api/ai-board/worker/claim', authenticate, handle(async (req, res) => {
     const ticket = await store.claimNext({
@@ -369,7 +379,8 @@ export function attachAiBoardWorkerRoutes(router, {
 
   route.post('/api/ai-board/worker/tickets/:id/snapshot', authenticate, handle(async (req, res) => {
     const lease = leaseInput(req.body);
-    res.json({ ...await store.getLeasedSnapshot(req.params.id, lease.workerId, lease.leaseToken), lessons_schema_version: 1 });
+    res.json({ ...await store.getLeasedSnapshot(req.params.id, lease.workerId, lease.leaseToken), lessons_schema_version: 1,
+      hsm_contract:publicContract() });
   }));
 
   route.post('/api/ai-board/worker/tickets/:id/heartbeat', authenticate, handle(async (req, res) => {

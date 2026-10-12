@@ -185,7 +185,11 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
                     result = {"gate": gate, "blocked": True, "reason": "budget exhausted", "failure_class": "budget"}
                 else:
                     try:
-                        result = run_gate(gate, {}, deps, budget, state)
+                        if gate == 4:
+                            from repositories import server_hsm
+                            result = server_hsm.execute(lambda: run_gate(gate, {}, deps, budget, state))
+                        else:
+                            result = run_gate(gate, {}, deps, budget, state)
                     except Exception as error:  # model/network/tool outage, not the candidate's code
                         result = {"gate": gate, "blocked": True, "reason": str(error)[:1000],
                                   "failure_class": "transient"}
@@ -860,13 +864,17 @@ class HttpWorker:
                 limit = int((snapshot.get("ticket") or {}).get("budget_limit") or DEFAULT_BUDGET_LIMIT)
                 import memory
                 from repositories.server_memory import RemoteLessons
+                from repositories import server_hsm
 
                 memory_api = RemoteLessons(self.client, ticket_id=ticket_id, run_id=run["id"],
                                            worker_id=self.worker_id, lease_token=lease["lease_token"],
                                            files=[file for step in plan.get("steps") or []
                                                   for file in step.get("allowed_scope") or []],
                                            enabled=snapshot.get("lessons_schema_version") == 1)
-                with memory.server_scope(memory_api):
+                hsm_contract = snapshot.get('hsm_contract')
+                hsm_api = server_hsm.RemoteGate4(self.client,ticket_id=ticket_id,run_id=run['id'],
+                    worker_id=self.worker_id,lease_token=lease['lease_token'],contract=hsm_contract) if hsm_contract else None
+                with memory.server_scope(memory_api), server_hsm.server_scope(hsm_api):
                     result = self._with_heartbeat(
                         lambda lost: self.change_runner(
                             plan, ticket_id, max(limit - budget_used, 0),  # giây GPU còn lại của lượt (trừ phần lập plan)

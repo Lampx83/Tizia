@@ -11,6 +11,7 @@ if (!url) { console.error('DATABASE_URL (PostgreSQL) is required'); process.exit
 
 // Children before parents. Missing tables are normal on older dev databases.
 const ALL = [
+  'ai_hsm_events', 'ai_hsm_states',
   'ai_lesson_imports', 'ai_lesson_audit', 'ai_lesson_tombstones', 'ai_lessons',
   'ai_online_operations', 'ai_online_ui', 'ai_preview_grants', 'ai_private_previews', 'ai_record_revisions', 'ai_resource_audit',
   'ai_feature_records', 'ai_resource_grants', 'ai_feature_resources',
