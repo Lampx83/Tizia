@@ -2,8 +2,7 @@
 
 The adapter receives one scheduled trial as JSON on stdin and emits its existing
 suite result as JSON. This module never selects a model or enables candidate flags.
-Preparation is restricted to fake/single-process adapters: timeout kills only the
-direct process. A real adapter needs verified child-tree cleanup and ownership.
+Each adapter owns an isolated process tree, cleaned on timeout, cancel and exit.
 """
 from __future__ import annotations
 
@@ -13,6 +12,8 @@ import os
 import random
 import subprocess
 from pathlib import Path
+
+from .process_tree import run_owned
 
 ARMS = ("control", "B01", "B02", "B01+B02")
 PINS = ("source", "model", "corpus", "catalog", "prompt", "harness", "budget")
@@ -68,7 +69,7 @@ def execute(root: Path, command: list[str], *, timeout_s: float) -> list[dict]:
         finished = {e['attempt_id'] for e in events if e['event'] == 'result'}
         if intents - finished:
             raise ValueError('unresolved attempt: reconcile before resume; budget is not reset')
-        protocol = {'command': command, 'timeout_s': timeout_s}
+        protocol = {'command': command, 'timeout_s': timeout_s, 'containment': 'owned-tree-v1'}
         protocol_path = root / 'executor.json'
         if protocol_path.exists():
             if json.loads(protocol_path.read_text(encoding='utf-8')) != protocol:
@@ -94,8 +95,7 @@ def execute(root: Path, command: list[str], *, timeout_s: float) -> list[dict]:
             status, result = 'failure', None
             detail = {}
             try:
-                process = subprocess.run(command, input=json.dumps(row), capture_output=True,
-                                         text=True, timeout=timeout_s)
+                process = run_owned(command, input=json.dumps(row), timeout=timeout_s)
                 status = 'cancel' if process.returncode == 130 else ('success' if process.returncode == 0 else 'failure')
                 detail = {'returncode': process.returncode}
                 result = json.loads(process.stdout)
