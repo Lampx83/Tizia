@@ -1,8 +1,47 @@
-"""Gate4 adapter: the server grants the action and owns the state transition."""
+"""Compatibility adapter: LangGraph orders Gate4; the service fences all effects.
+
+The historical HTTP route and ledger stay stable. LF/07 adds durable orchestration
+checkpoints; until then an unknown action still requires reconciliation, never replay.
+"""
 from contextlib import contextmanager
 from contextvars import ContextVar
+from typing import TypedDict
 
 _SERVER = ContextVar('gate4_hsm_server', default=None)
+
+class Gate4State(TypedDict, total=False):
+    version: int
+    result: dict
+
+def gate4_graph(backend, identity, prefix, action):
+    # Lazy import keeps offline harness callers independent of the worker integration.
+    from langgraph.graph import END, START, StateGraph
+
+    def authorize(_state):
+        begun=backend.client.post(backend.path,{**identity,'event':'BEGIN','expected_version':0,'idempotency_key':prefix+':begin'})
+        if begun.get('execute') is not True:
+            raise RuntimeError('Gate4 action already granted; operator reconciliation required')
+        return {'version':begun['state']['version']}
+
+    def check(_state):
+        return {'result':action()}
+
+    def receipt(state):
+        result=state['result']
+        backend.client.post(backend.path,{**identity,'event':'BLOCKED' if result['blocked'] else 'PASSED',
+            'expected_version':state['version'],'idempotency_key':prefix+':result','result':result})
+        return {}
+
+    graph=StateGraph(Gate4State)
+    graph.add_node('authorize',authorize)
+    graph.add_node('static_check',check)
+    graph.add_node('receipt',receipt)
+    graph.add_edge(START,'authorize')
+    graph.add_edge('authorize','static_check')
+    graph.add_edge('static_check','receipt')
+    graph.add_edge('receipt',END)
+    # No retries: an unacknowledged action cannot safely be repeated.
+    return graph.compile()
 
 class RemoteGate4:
     def __init__(self,client,*,ticket_id,run_id,worker_id,lease_token,contract):
@@ -16,14 +55,11 @@ class RemoteGate4:
         self.attempt+=1
         identity={**self.identity,'attempt':attempt}
         prefix=f'hsm:{self.identity["run_id"]}:{attempt}'
-        begun=self.client.post(self.path,{**identity,'event':'BEGIN','expected_version':0,'idempotency_key':prefix+':begin'})
-        if begun.get('execute') is not True:
-            # shortcut: unresolved Running needs HSM deep recovery; never replay an unacknowledged action.
-            raise RuntimeError('Gate4 action already granted; operator reconciliation required')
-        result=action()
-        self.client.post(self.path,{**identity,'event':'BLOCKED' if result['blocked'] else 'PASSED',
-            'expected_version':begun['state']['version'],'idempotency_key':prefix+':result','result':result})
-        return result
+        from langsmith import tracing_context
+        # Graph state contains results; keep it local unless a separate tracing
+        # integration is explicitly configured and reviewed.
+        with tracing_context(enabled=False):
+            return gate4_graph(self,identity,prefix,action).invoke({},config={'recursion_limit':5})['result']
 
 @contextmanager
 def server_scope(backend):
