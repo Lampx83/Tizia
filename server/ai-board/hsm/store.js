@@ -5,8 +5,16 @@ import { CAPABILITY_CATALOG } from '../security/policy.js';
 
 const fail=(code,status=409)=>{throw new WorkerContractError(code,status,code);};
 const view=row=>({...row,path:statePath(row.state),result:JSON.parse(row.result_json || 'null'),result_json:undefined});
+const parentRemaining=root=>Number(root.budget_limit)-Number(root.cumulative_budget);
 export function createHsmStore(store) {
   const db=store.db;
+  async function executionPlan(t,root) {
+    const plan=await t.get("SELECT * FROM ai_plans WHERE root_ticket_id=? AND plan_hash=? AND revision=? AND status='valid'",[root.id,root.plan_hash,root.plan_revision]);
+    if (!plan || plan.tier==='core' || plan.capability_policy_hash!==CAPABILITY_CATALOG.hash || root.lease_mode!=='active'
+        || !((root.status==='planned' && root.phase==='ticketized') || (root.status==='running' && root.phase==='executing'))
+        || (plan.tier!=='surface' && !await t.get('SELECT 1 FROM ai_authorizations WHERE root_ticket_id=? AND plan_hash=? AND plan_revision=?',[root.id,plan.plan_hash,plan.revision]))) return null;
+    return plan;
+  }
   async function currentScope(t,root) {
     const request=await t.get('SELECT * FROM requests WHERE id=? FOR SHARE',[root.source_request_id]);
     const owner=await t.get('SELECT role,enrolled_domain FROM users WHERE id=? FOR SHARE',[request.owner_user_id]);
@@ -42,20 +50,18 @@ export function createHsmStore(store) {
       const row=await t.get('SELECT * FROM ai_hsm_states WHERE run_id=? AND attempt=?',[runId,attempt]);
       const current=row?.state || CONTRACT.initial;
       const edge=CONTRACT.transitions.find(x=>x.from===current && x.event===input.event);
-      const plan=await t.get("SELECT * FROM ai_plans WHERE root_ticket_id=? AND plan_hash=? AND status='valid' ORDER BY revision DESC LIMIT 1",[root.id,root.plan_hash]);
-      const authorized=plan && (plan.tier==='surface' || await t.get('SELECT 1 FROM ai_authorizations WHERE root_ticket_id=? AND plan_hash=? AND plan_revision=?',[root.id,plan.plan_hash,plan.revision]));
+      const plan=await executionPlan(t,root);
       reason ||= input.contract_hash!==CONTRACT_HASH || (row && row.contract_hash!==CONTRACT_HASH)?'hsm_contract_mismatch':null;
       reason ||= run.plan_hash!==root.plan_hash || Number(run.plan_revision)!==Number(root.plan_revision)?'hsm_run_plan_mismatch':null;
       const latestRun=await t.get('SELECT id FROM ai_runs WHERE ticket_id=? ORDER BY id DESC LIMIT 1',[root.id]);
       reason ||= run.outcome!==null || !['plan','execute'].includes(run.trigger) || latestRun.id!==run.id?'hsm_run_inactive':null;
-      reason ||= !authorized || plan.tier==='core' || root.lease_mode!=='active'
-        || !((root.status==='planned' && root.phase==='ticketized' && run.plan_hash===root.plan_hash) || (root.status==='running' && root.phase==='executing'))?'hsm_plan_not_executing':null;
+      reason ||= !plan?'hsm_plan_not_executing':null;
       reason ||= row && row.plan_hash!==root.plan_hash?'hsm_plan_changed':null;
       if (prior && !reason) return {...JSON.parse(prior.response_json),execute:false,duplicate:true};
       reason ||= version!==(row?.version || 0)?'hsm_stale_version':null;
       reason ||= !edge?'hsm_illegal_transition':null;
       if (input.event==='BEGIN') {
-        const remaining=Number(root.budget_limit)-Number(root.cumulative_budget);
+        const remaining=parentRemaining(root);
         reason ||= !Number.isFinite(remaining) || remaining<=0?'hsm_budget_exhausted':null;
       }
       if (!reason) {
@@ -101,13 +107,10 @@ export function createHsmStore(store) {
       const latest=await t.get('SELECT id FROM ai_runs WHERE ticket_id=? ORDER BY id DESC LIMIT 1',[root.id]);
       if (!run || run.worker_id!==input.worker_id || run.outcome!==null || !['plan','execute'].includes(run.trigger) || latest?.id!==run.id) fail('action_run_inactive');
       if (input.contract_hash!==CONTRACT_HASH || run.plan_hash!==root.plan_hash || Number(run.plan_revision)!==Number(root.plan_revision)) fail('action_plan_changed');
-      const plan=await t.get("SELECT * FROM ai_plans WHERE root_ticket_id=? AND plan_hash=? AND revision=? AND status='valid'",[root.id,root.plan_hash,root.plan_revision]);
-      if (!plan || plan.tier==='core' || plan.capability_policy_hash!==CAPABILITY_CATALOG.hash || root.lease_mode!=='active'
-          || !((root.status==='planned' && root.phase==='ticketized') || (root.status==='running' && root.phase==='executing'))
-          || (plan.tier!=='surface' && !await t.get('SELECT 1 FROM ai_authorizations WHERE root_ticket_id=? AND plan_hash=? AND plan_revision=?',[root.id,plan.plan_hash,plan.revision]))) fail('action_not_authorized');
-      const remaining=Number(root.budget_limit)-Number(root.cumulative_budget);
+      const plan=await executionPlan(t,root);
+      if (!plan) fail('action_not_authorized');
+      const remaining=parentRemaining(root);
       if (!Number.isFinite(remaining) || remaining<=0) fail('action_budget_exhausted');
-      // A current authority check is not a workflow transition or an effect receipt.
       // Mutating services still fence their own writes atomically.
       return {authorized:true,run_id:run.id,plan_hash:plan.plan_hash,plan_revision:plan.revision,parent_remaining:remaining};
     });

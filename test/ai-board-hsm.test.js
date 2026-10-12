@@ -72,7 +72,7 @@ async function fixture() {
   const id=request.root_ticket_id,now=Date.now();
   await db.run("UPDATE ai_tickets SET status='running',phase='executing',lease_mode='active',lease_owner='worker-a',lease_token='lease-a',lease_expires_at=?,plan_hash='plan-a',plan_revision=1 WHERE id=?",[now+3600000,id]);
   const run=await db.insert("INSERT INTO ai_runs(ticket_id,attempt,trigger,worker_id,idempotency_key,outcome,plan_hash,plan_revision,created_at,updated_at) VALUES (?,1,'execute','worker-a','hsm-run',NULL,'plan-a',1,?,?)",[id,now,now]);
-  await db.insert("INSERT INTO ai_plans(root_ticket_id,revision,plan_hash,plan_json,status,tier,capability_policy_hash,created_at) VALUES (?,1,'plan-a','{}','valid','surface','fixture',?)",[id,now]);
+  await db.insert("INSERT INTO ai_plans(root_ticket_id,revision,plan_hash,plan_json,status,tier,capability_policy_hash,created_at) VALUES (?,1,'plan-a','{}','valid','surface',?,?)",[id,CAPABILITY_CATALOG.hash,now]);
   const app=express();app.use(express.json());attachAiBoardWorkerRoutes(app,{store,env:{AI_BOARD_WORKER_KEY:KEY}});
   const auth=(req,res,next)=>req.headers['x-test-admin']==='yes'?next():res.status(403).json({error:'forbidden'});
   attachAiBoardRequestRoutes(app,{store,requireAuth:auth,requireAdmin:auth,requireEnrolled:auth,requireStrictCsrf:auth});
@@ -82,6 +82,30 @@ async function fixture() {
   const trace=async()=>{const res=await fetch(`${base}/api/admin/ai-board/requests/${request.request_id}/trace`,{headers:{'x-test-admin':'yes'}});assert.equal(res.status,200);return res.json();};
   return {db,store,id,run,base,post,trace,close:async()=>{await new Promise(resolve=>server.close(resolve));await appDb.dispose();}};
 }
+
+test('Gate4 and live actions share current plan eligibility and preserve rejection audits',async()=>{
+  for (const sql of [
+    "UPDATE ai_plans SET revision=2 WHERE root_ticket_id=?",
+    "UPDATE ai_plans SET capability_policy_hash='stale-policy' WHERE root_ticket_id=?",
+    "UPDATE ai_plans SET tier='core' WHERE root_ticket_id=?",
+    "UPDATE ai_plans SET tier='protected' WHERE root_ticket_id=?",
+    "UPDATE ai_tickets SET lease_mode='observe' WHERE id=?",
+    "UPDATE ai_tickets SET phase='ticketized' WHERE id=?",
+  ]) {
+    const f=await fixture();
+    try {
+      const input={run_id:f.run,contract_hash:(await f.post('snapshot',{})).body.hsm_contract.hash,action:'model'};
+      await f.db.run(sql,[f.id]);
+      const action=await f.post('hsm/authority',input);
+      assert.equal(action.status,409,sql);assert.equal(action.body.error,'action_not_authorized',sql);
+      const transition=await f.post('hsm',{...input,attempt:0,event:'BEGIN',expected_version:0,idempotency_key:'eligibility-begin'});
+      assert.equal(transition.status,409,sql);assert.equal(transition.body.error,'hsm_plan_not_executing',sql);
+      const trace=await f.trace();
+      assert.equal(trace.hsm.states.length,0,sql);
+      assert.deepEqual(trace.hsm.events.map(e=>e.reason),['hsm_plan_not_executing'],sql);
+    } finally {await f.close();}
+  }
+});
 
 test('Gate4 contract grants one action, persists actual state and audits illegal/conflicting events',async()=>{
   const f=await fixture();

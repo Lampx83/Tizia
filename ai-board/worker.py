@@ -873,7 +873,7 @@ class HttpWorker:
                                            enabled=snapshot.get("lessons_schema_version") == 1)
                 hsm_contract = snapshot.get('hsm_contract')
                 hsm_api = server_hsm.RemoteGate4(self.client,ticket_id=ticket_id,run_id=run['id'],
-                    worker_id=self.worker_id,lease_token=lease['lease_token'],contract=hsm_contract) if hsm_contract else None
+                    worker_id=self.worker_id,lease_token=lease['lease_token'],contract=hsm_contract)
                 with memory.server_scope(memory_api), server_hsm.server_scope(hsm_api):
                     result = self._with_heartbeat(
                         lambda lost: self.change_runner(

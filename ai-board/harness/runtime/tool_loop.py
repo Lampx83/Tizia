@@ -207,6 +207,8 @@ def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str,
         body = deps.call_model(model, prompt, gate=3, budget=loop_budget, format="json", db_path=db_path,
                                proposal_id=proposal_id, prompt_name="tool_loop", child=child, iteration=len(steps),
                                role=role, **({"extra": call_extra} if call_extra else {}))
+        if not loop_budget.tick():
+            return _result('paused', f'loop dừng: {loop_budget.exhausted()}', 'budget', steps=steps)
         rejected = False
         try:
             name, args = parse_request(body)

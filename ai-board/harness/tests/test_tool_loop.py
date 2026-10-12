@@ -54,6 +54,13 @@ class Deps:
         item = self.script.pop(0) if len(self.script) > 1 else self.script[0]
         return item if "response" in item or "tool_calls" in item else {"response": json.dumps(item)}
 
+def test_model_spending_parent_allowance_prevents_following_tool(monkeypatch):
+    effects=[]
+    monkeypatch.setattr(tool_loop.Workspace,'run',lambda *_args: effects.append('write') or 'done')
+    out,budget,_=run([EDIT],budget=Budget(max_model_calls=1))
+    assert out['status']=='paused' and out['failure_class']=='budget'
+    assert effects==[] and budget.tool_calls==0 and budget.model_calls==1
+
 
 @pytest.fixture(autouse=True)
 def base_file(monkeypatch):

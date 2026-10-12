@@ -19,6 +19,7 @@ import candidate
 import classifier
 import functional
 from gates import guard, intake_guard, risk_triage
+from repositories import server_hsm
 
 CONTENT_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "content_guard.md").read_text(encoding="utf-8")
 CONTENT_LABELS = tuple(x for x in intake_guard.LABELS
@@ -165,9 +166,12 @@ def content_review(state: dict, deps, budget, *, db_path=None, proposal_id: int 
                        f"{len(parts)} segments from:{', '.join(part.split(']', 1)[0].lstrip('[') for part in parts)}")
         prompt = CONTENT_PROMPT.format(content="\n".join(parts)[:MAX_CONTENT_CHARS])
         try:
+            server_hsm.authorize_action('model')
             body = deps.call_model(deps.models.gate1_model, prompt, gate=4, budget=budget,
                                    db_path=db_path, proposal_id=proposal_id, prompt_name="content_guard.md",
                                    format=intake_guard.labels_format(CONTENT_LABELS))
+        except server_hsm.AuthorityError as error:
+            return {"blocked": True, "labels": labels, "reason": str(error), "failure_class": error.failure_class}
         except Exception as e:  # model sập/timeout — chuyển người soát (chạy lại được), không cho qua im lặng
             why, outage = f"bộ soát nội dung lỗi: {str(e)[:200]}", True
         else:
@@ -179,6 +183,13 @@ def content_review(state: dict, deps, budget, *, db_path=None, proposal_id: int 
         trace.attach_last("evaluation", {"check": "content guard", "ok": labels == ["ok"],
                                          "detail": ", ".join(labels) + (f" ({why})" if why else "")})
     # Logprob classifier beside the JSON guard: may only add a "needs a human" block.
+    if (getattr(deps.models, "classifier_model", "") or getattr(deps.models, "routing", None)) and classifier.task_mode("danger") != "off":
+        if not budget.tick():
+            return {"blocked": True, "labels": labels, "reason": "content_guard: exhausted budget", "failure_class": "budget"}
+        try:
+            server_hsm.authorize_action('model')
+        except server_hsm.AuthorityError as error:
+            return {"blocked": True, "labels": labels, "reason": str(error), "failure_class": error.failure_class}
     scored = classifier.danger("\n".join(parts), deps, budget, gate=4, db_path=db_path, proposal_id=proposal_id)
     if scored and scored["escalate"]:
         labels = [x for x in labels if x != "ok"] + [f"model_{key}" for key in scored["labels"]]
@@ -186,7 +197,7 @@ def content_review(state: dict, deps, budget, *, db_path=None, proposal_id: int 
     if labels == ["ok"]:
         return {"blocked": False, "labels": labels, **extra}
     reason = f"content_guard: {', '.join(labels)}" + (f" ({why})" if why else "") + " — cần người soát"
-    failure_class = "transient" if outage and labels == ["classifier_error"] else guard.SEVERITY_CLASS["high"]
+    failure_class = "budget" if not called else "transient" if outage and labels == ["classifier_error"] else guard.SEVERITY_CLASS["high"]
     return {"blocked": True, "labels": labels, "reason": reason, "failure_class": failure_class, **extra}
 
 

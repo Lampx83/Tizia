@@ -1,6 +1,6 @@
 """Actual LangGraph execution preserves the server's one-action grant boundary."""
 import pytest
-from repositories.server_hsm import RemoteGate4
+from repositories.server_hsm import AuthorityError, RemoteGate4
 
 class Service:
     def __init__(self):
@@ -58,3 +58,15 @@ def test_action_crash_does_not_invent_pass_or_retry():
     with pytest.raises(ValueError,match='checker crashed'):
         backend(service).execute(crash)
     assert [e['event'] for e in service.events]==['BEGIN']
+
+@pytest.mark.parametrize('answer',[None, [], 'authorized', {'authorized':1}])
+def test_malformed_authority_response_blocks_with_classified_error(answer):
+    class Malformed:
+        def post(self,*_args): return answer
+    with pytest.raises(AuthorityError):
+        backend(Malformed()).authorize_action('model_request')
+
+@pytest.mark.parametrize('contract',[None, {}, {'hash':None}, {'hash':''}])
+def test_missing_contract_cannot_create_http_execution_backend(contract):
+    with pytest.raises(AuthorityError,match='contract'):
+        RemoteGate4(Service(),ticket_id=1,run_id=2,worker_id='test',lease_token='local',contract=contract)

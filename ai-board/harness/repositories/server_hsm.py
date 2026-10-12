@@ -1,8 +1,4 @@
-"""Compatibility adapter: LangGraph orders Gate4; the service fences all effects.
-
-The historical HTTP route and ledger stay stable. LF/07 adds durable orchestration
-checkpoints; until then an unknown action still requires reconciliation, never replay.
-"""
+"""Order Gate4 actions and enforce authority through the service adapter."""
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import TypedDict
@@ -55,6 +51,8 @@ def gate4_graph(backend, identity, prefix, action):
 
 class RemoteGate4:
     def __init__(self,client,*,ticket_id,run_id,worker_id,lease_token,contract):
+        if not isinstance(contract,dict) or not isinstance(contract.get('hash'),str) or not contract['hash']:
+            raise AuthorityError('action_contract_unavailable')
         self.client=client
         self.path=f'/api/ai-board/worker/tickets/{ticket_id}/hsm'
         self.identity={'run_id':run_id,'worker_id':worker_id,'lease_token':lease_token,'contract_hash':contract['hash']}
@@ -65,6 +63,8 @@ class RemoteGate4:
         import json
         try:
             answer=self.client.post(self.path+'/authority',{**self.identity,'action':action})
+            if not isinstance(answer,dict) or answer.get('authorized') is not True:
+                raise AuthorityError('action_authority_unavailable')
         except HTTPError as error:
             try:
                 reason=json.loads(error.read()).get('error','action_authority_unavailable')
@@ -73,7 +73,7 @@ class RemoteGate4:
             raise AuthorityError(reason) from None
         except Exception:
             raise AuthorityError('action_authority_unavailable') from None
-        return answer.get('authorized') is True
+        return True
 
     def execute(self,action):
         attempt=self.attempt
