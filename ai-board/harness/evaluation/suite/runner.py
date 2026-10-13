@@ -335,6 +335,20 @@ def cmd_grade_collect(args) -> int:
     return 0
 
 
+def cmd_plan_collect(args) -> int:
+    root = Path(args.root) / "suite"
+    print(json.dumps(grading.collect_plans([root / name for name in args.runs.split(",")], Path(args.out)), ensure_ascii=False))
+    return 0
+
+
+def cmd_plan_score(args) -> int:
+    root = Path(args.root) / "suite"
+    grades = json.loads(Path(args.grades).read_text(encoding="utf-8"))
+    blind_map = json.loads(Path(args.blindmap).read_text(encoding="utf-8"))
+    print(json.dumps(grading.score_plans(grades, blind_map, [root / name for name in args.runs.split(",")]), ensure_ascii=False, indent=1))
+    return 0
+
+
 def cmd_grade_score(args) -> int:
     grades = json.loads(Path(args.grades).read_text(encoding="utf-8"))
     blind_map = json.loads(Path(args.blindmap).read_text(encoding="utf-8"))
@@ -387,6 +401,17 @@ def main(argv=None, deps=None) -> int:
     gc.add_argument("--pack", required=True)
     gc.add_argument("--out", required=True)
     gc.set_defaults(handler=cmd_grade_collect)
+    pc = sub.add_parser("plan-collect", help="mix captured DEV e2e plans into matched blind review cards")
+    pc.add_argument("--root", required=True)
+    pc.add_argument("--runs", required=True, help="comma list of paired run directory names under <root>/suite")
+    pc.add_argument("--out", required=True)
+    pc.set_defaults(handler=cmd_plan_collect)
+    ps = sub.add_parser("plan-score", help="score independently reviewed plan cards against the paired trial outcomes")
+    ps.add_argument("--root", required=True)
+    ps.add_argument("--runs", required=True)
+    ps.add_argument("--grades", required=True)
+    ps.add_argument("--blindmap", required=True)
+    ps.set_defaults(handler=cmd_plan_score)
     gs = sub.add_parser("grade-score", help="join the grader's verdicts with the blind map and report per run")
     gs.add_argument("--grades", required=True)
     gs.add_argument("--blindmap", required=True)
