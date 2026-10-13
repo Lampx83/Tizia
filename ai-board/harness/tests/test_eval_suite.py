@@ -86,6 +86,7 @@ def test_e2e_wrong_page_is_a_plan_miss_not_an_implementation_failure(world):
     deps, models = deps_for(world)
     row = trial.run_trial(pick(tasks, 2), "e2e", deps, root, ROOT)
     assert not row["resolved"] and not row["plan"]["first_hit"] and row["plan"]["first_plans_new_page"]
+    assert row["capture"]["source"]["public/trang-khong-co.html"] == {"missing": True}
     assert metrics.failure_class(row) == "plan_miss"
 
 
@@ -103,6 +104,13 @@ def test_validator_block_stops_before_gate3(world, monkeypatch):
     row = trial.run_trial(pick(tasks, 1), "e2e", deps, root, ROOT)
     assert not row["resolved"] and row["plan"]["validator_blocked"] and "gate3" not in [c[0] for c in models.calls]
     assert metrics.failure_class(row) == "validator_blocked"
+    capture = row["capture"]
+    assert capture["initial_plan"] == capture["final_plan"]
+    assert capture["initial_plan"]["subtasks"]
+    assert capture["model_calls"][0]["phase"] == "planning"
+    assert capture["validator_results"][-1]["blocked"] is True
+    assert capture["request"]["subject"] and capture["request_sha256"]
+    assert capture["source"] and all("sha256" in value for value in capture["source"].values())
 
 
 def test_two_workers_do_not_mix_trials(world):
@@ -283,6 +291,9 @@ def test_gate1_block_reason_is_kept_in_the_row(world):
                 notify=None, sleep=lambda _s: None)
     row = trial.run_trial(pick(tasks, 1), "e2e", deps, root, ROOT)
     assert row["plan"]["blocked"] and "plan" in row["plan"]["reason"]
+    assert row["capture"]["planning_context"] and row["capture"]["source_targets"]
+    assert row["capture"]["initial_plan"] is None
+    assert len(row["capture"]["model_calls"]) == 2
 
 
 def test_concurrent_workers_can_ask_for_the_same_checkout_and_a_broken_one_is_rebuilt(tmp_path):
