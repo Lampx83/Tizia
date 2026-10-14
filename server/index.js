@@ -1489,6 +1489,7 @@ startShotRetention({ db: aiBoard.db, backend: aiBoardShotBackend, log });
 // Bật error tracking (Sentry nếu có SENTRY_DSN) trước khi nhận traffic.
 await initErrorTracking();
 
+if (db.bootFenced) { const s = db.endBoot(); log.info('[db] existing-schema boot done', { skippedDdl: s.skippedDdl, skippedWrites: s.skippedWrites, samples: s.samples }); }
 httpServer.listen(PORT, HOST, () => {
   log.info(`[tizia] listening on http://${HOST}:${PORT}`, { basePath: BASE_PATH || undefined });
   const oauthList = listEnabledProviders();

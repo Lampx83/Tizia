@@ -52,6 +52,7 @@ async function initVapid() {
     pub = (await getCfg.get('vapid_public'))?.v;
     priv = (await getCfg.get('vapid_private'))?.v;
     if (!pub || !priv) {
+      if (db.bootFenced) { console.warn('[smart-notif] no VAPID keys in env/notif_config and boot is write-fenced: push disabled'); return; }
       const keys = webpush.generateVAPIDKeys();
       const put = db.prepare(`INSERT INTO notif_config (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v`);
       await put.run('vapid_public', keys.publicKey);
