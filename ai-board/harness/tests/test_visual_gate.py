@@ -33,6 +33,14 @@ def test_regressions_ignore_existing_problems():
     assert visual.regressions(None, {"overflow": True}) == ["trang tràn ngang"]
 
 
+def test_covered_button_with_changed_cover_text_is_not_new():
+    old = 'a.go "Làm bài" dưới main.wrap "404 Không tìm thấy trang"'
+    new = 'a.go "Làm bài" dưới main.wrap "404 Tiêu đề mới"'
+    assert visual.regressions({"covered": [old]}, {"covered": [new]}) == []
+    other = 'a.go "Làm bài" dưới div.modal "x"'
+    assert visual.regressions({"covered": [old]}, {"covered": [new, other]}) == ['nút bấm bị phần tử khác đè: a.go "Làm bài" dưới div.modal "x"']
+
+
 def _browser():
     sync = pytest.importorskip("playwright.sync_api")
     manager = sync.sync_playwright().start()
