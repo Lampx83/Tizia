@@ -3,7 +3,13 @@ Corpus synthetic 3 trang do eval_run.write_corpus dựng (quick đã chuyển sa
 import json
 from pathlib import Path
 
+import pytest
 import eval_run
+
+
+@pytest.fixture(autouse=True)
+def _excerpt_context(monkeypatch):
+    monkeypatch.setenv("AI_BOARD_GATE3_CONTEXT", "excerpt")  # recall measures excerpt sections, not the whole-file default
 
 
 def make_corpus(root, cases=4):
