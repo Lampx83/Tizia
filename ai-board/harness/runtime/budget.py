@@ -70,6 +70,14 @@ class Budget:
         b.quality_switches = int(snapshot.get('quality_switches', 0))
         return b
 
+    def absorb(self, snapshot: dict) -> None:
+        """Nhận ledger đã lưu: mỗi counter lấy max(hiện tại, đã lưu) nên gọi lặp không cộng đôi."""
+        for cap in CAPS:
+            setattr(self, cap, max(getattr(self, cap), snapshot.get(cap, 0)))
+        self.quality_switches = max(self.quality_switches, int(snapshot.get("quality_switches", 0)))
+        ran = time.monotonic() - self.started_at
+        self.elapsed_before_s = max(self.elapsed_before_s, float(snapshot.get("elapsed_s", 0.0)) - ran)
+
     @property
     def elapsed_s(self) -> float:
         """Tổng giây đã tiêu, gồm cả các lần chạy trước."""

@@ -18,6 +18,7 @@ import file_context  # noqa: E402
 import tools  # noqa: E402
 
 READ_TOOLS = ("tree", "outline", "grep")
+WRITE_TOOLS = ("edit_file", "write_test")
 OUTPUT_CHARS = 2000
 FILE_CHARS = 12000
 _STR = {"type": "string"}
@@ -182,19 +183,111 @@ def _result(status: str, reason: str | None = None, failure_class: str | None = 
     return {"status": status, "reason": reason, "failure_class": failure_class, **extra}
 
 
+def _pins(subtask: dict, sha: str, ws: Workspace, extra: dict | None) -> dict:
+    return {"subtask": sha_of(json.dumps(subtask, sort_keys=True, ensure_ascii=False, default=str)), "base": sha,
+            "file": ws.base_hash, "prompt": sha_of(PROMPT + _tool_list()),
+            "tools": sha_of(json.dumps(SCHEMAS, sort_keys=True)), **(extra or {})}
+
+
+KNOWN_STATUSES = ("done", "applied", "void", "intent", "unknown", "compensate")
+RESOLUTION_STATUS = {"applied": "applied", "not_applied": "void"}
+PLATFORM_ACTOR = "platform:receipt"
+
+
+def _probe_draft(name: str, args: dict, ws: Workspace, row: dict) -> tuple[str, dict]:
+    """Ghi vào bản nháp trong bộ nhớ: chưa có receipt `done` thì hiệu ứng đã mất theo process → not_applied."""
+    return "not_applied", {"basis": "in_memory_draft", "identity": row["identity"], "receipt": None,
+                           "draft_hash": sha_of(ws.content)}
+
+
+# Tool ghi không có probe thì kết quả unknown luôn chờ người có quyền chốt.
+PROBES = {name: _probe_draft for name in WRITE_TOOLS}
+
+
+def probe_write(name: str, args: dict, ws: Workspace, row: dict) -> tuple[str, dict] | None:
+    """Platform tự đối chiếu bước ghi chưa rõ bằng dữ liệu đã lưu: (applied|not_applied, evidence) hoặc None khi không chắc."""
+    probe = PROBES.get(name)
+    return probe(name, args, ws, row) if probe else None
+
+
+def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check) -> tuple:
+    """Nạp checkpoint: kiểm pin, nhận ledger cũ, dựng lại bản nháp. → (prompt, steps, rejected, kết quả dừng|None)."""
+    saved = store.load()
+    if saved["pins"] is None:
+        store.save_pins(pins)
+        return prompt, [], False, None
+    drift = sorted(k for k in pins.keys() | saved["pins"].keys() if pins.get(k) != saved["pins"].get(k))
+    if drift:
+        return prompt, [], False, _result("blocked", f"checkpoint không tương thích: {', '.join(drift)}", "critical")
+    if saved["ledger"]:
+        budget.absorb(saved["ledger"])
+    steps, rejected = [], False
+    for row in saved["steps"]:
+        n, name, args, status, kind = row["step"], row["tool"], row["args"], row["status"], row["kind"]
+        if row["identity"] != store.identity(n, name, args):
+            return prompt, steps, False, _result("blocked", f"identity bước {n} không khớp checkpoint", "critical")
+        if status not in KNOWN_STATUSES:
+            return prompt, steps, False, _result("blocked", f"bước {n} có trạng thái lạ: {status!r}", "critical", steps=steps)
+        if status == "compensate":
+            return prompt, steps, False, _result(
+                "blocked", f"bước {n} ({name}) cần bù trừ; chốt bù trừ xong mới resume", "critical",
+                steps=steps, unknown_outcome={"step": n, "tool": name, "status": status})
+        if status in ("intent", "unknown"):
+            if name not in WRITE_TOOLS:
+                store.drop(n)
+                break
+            found = probe_write(name, args, ws, row)
+            if not found:
+                store.mark(n, "unknown")
+                return prompt, steps, False, _result(
+                    "blocked", f"kết quả bước {n} ({name}) chưa rõ; cần đối chiếu rồi mới resume", "critical",
+                    steps=steps, unknown_outcome={"step": n, "tool": name, "status": "unknown"})
+            resolution, evidence = found
+            store.mark(n, "unknown")
+            store.reconcile(n, resolution, PLATFORM_ACTOR, "đối chiếu tự động theo dữ liệu đã lưu", evidence)
+            status = RESOLUTION_STATUS[resolution]
+        observation = row["observation"] or ""
+        if kind == "forbidden":
+            return prompt, steps, False, _result("blocked", observation, "critical", steps=steps)
+        if status == "void":
+            observation = "bước này bị hủy khi đối chiếu; thử lại nếu cần"
+        elif name in WRITE_TOOLS and (status == "applied" or kind == "ok"):
+            try:
+                observation = ws.run(name, args)
+            except (ToolError, Forbidden) as error:
+                return prompt, steps, False, _result("blocked", f"replay bước {n} lệch: {error}", "critical", steps=steps)
+        elif kind == "finish_ok":
+            try:
+                out = ws.proposal()
+                check(out)
+                return prompt, steps + [name], False, _result("proposed", out=out, steps=steps + [name])
+            except ValueError as error:
+                return prompt, steps, False, _result("blocked", f"replay finish lệch: {error}", "critical", steps=steps)
+        steps.append(name)
+        rejected = kind == "finish_rejected"
+        prompt += OBSERVATION.format(tool=name, text=observation[:OUTPUT_CHARS])
+    return prompt, steps, rejected, None
+
+
 def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str, source, sha: str, check,
                 role: str | None = None, call_extra: dict | None = None, db_path=None, proposal_id=None,
-                child: int | None = None) -> dict:
+                child: int | None = None, store=None, pins: dict | None = None) -> dict:
     """Loop tuần tự cho 1 subtask dưới parent `budget`. File mới bắt đầu rỗng, edit_file chèn tại after_line=0.
+    `check(out)` = kiểm nội dung (ValueError nếu hỏng).
 
     status: proposed (out = {code,test_file,test}) | paused (hết ngân sách, failure_class budget)
-    | blocked (ordinary: hết lượt sửa; critical: ngoài phạm vi/stale). Model báo finish chỉ kết thúc đề xuất."""
+    | blocked (ordinary: hết lượt sửa; critical: ngoài phạm vi/stale/checkpoint lệch/kết quả ghi chưa rõ).
+    Model báo finish chỉ kết thúc đề xuất. `store` (repositories.tool_steps.PgSteps) bật checkpoint + resume."""
     loop_budget = ChildBudget(budget)
     ws = Workspace(source, sha, subtask["file"], current)
     prompt = PROMPT.format(tools=_tool_list(), title=subtask["title"], file=subtask["file"], verify=subtask["verify"])
     if current is None:
         prompt += "\nFile đích chưa tồn tại: dùng edit_file với after_line=0 để tạo nội dung trong bản nháp.\n"
     steps, rejected = [], False
+    if store:
+        prompt, steps, rejected, stop = _resume(store, ws, budget, _pins(subtask, sha, ws, pins), prompt, check)
+        if stop:
+            return stop
     while True:
         if not loop_budget.tick():
             return _result("paused", f"loop dừng: {loop_budget.exhausted()}", "budget", steps=steps)
@@ -207,32 +300,48 @@ def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str,
         body = deps.call_model(model, prompt, gate=3, budget=loop_budget, format="json", db_path=db_path,
                                proposal_id=proposal_id, prompt_name="tool_loop", child=child, iteration=len(steps),
                                role=role, **({"extra": call_extra} if call_extra else {}))
+        if store:
+            store.save_ledger(budget.snapshot())
         if not loop_budget.tick():
             return _result('paused', f'loop dừng: {loop_budget.exhausted()}', 'budget', steps=steps)
         rejected = False
+        n, args, kind = len(steps), {}, "ok"
         try:
             name, args = parse_request(body)
             validate(name, args)
             server_hsm.authorize_action(name)
             loop_budget.spend("tool_calls")  # trần chạm thì tool này là lần cuối, vòng sau dừng
+            if store and name in WRITE_TOOLS:
+                store.intent(n, name, args)
             observation = ws.run(name, args)
         except ToolError as error:
-            name, observation = "lỗi", f"{error} (tham số/định dạng sai; thử lại, không tính lượt sửa nội dung)"
+            name, kind = "lỗi", "error"
+            observation = f"{error} (tham số/định dạng sai; thử lại, không tính lượt sửa nội dung)"
         except Forbidden as error:
+            if store and name in WRITE_TOOLS:
+                store.done(n, name, args, str(error), "forbidden")
             return _result("blocked", str(error), "critical", steps=steps)
         except server_hsm.AuthorityError as error:
             return _result('blocked', str(error), error.failure_class, steps=steps)
-        steps.append(name)
         if name == "finish":
             try:
                 out = ws.proposal()
                 check(out)
-                return _result("proposed", out=out, steps=steps)
+                if store:
+                    store.done(n, name, args, "", "finish_ok")
+                    store.save_ledger(budget.snapshot())
+                return _result("proposed", out=out, steps=steps + [name])
             except ValueError as error:
                 if not budget.spend_repair():
                     return _result("blocked", f"hết {budget.max_semantic_repairs} lượt sửa nội dung: {error}",
-                                   "ordinary", steps=steps)
-                rejected, observation = True, f"BỊ LOẠI: {error}. Sửa đúng lỗi này rồi finish lại."
+                                   "ordinary", steps=steps + [name])
+                if store:
+                    store.save_ledger(budget.snapshot())
+                rejected, kind, observation = True, "finish_rejected", f"BỊ LOẠI: {error}. Sửa đúng lỗi này rồi finish lại."
+        if store:
+            store.done(n, name, args, observation, kind)
+            store.save_ledger(budget.snapshot())
+        steps.append(name)
         prompt += OBSERVATION.format(tool=name, text=observation[:OUTPUT_CHARS])
 
 

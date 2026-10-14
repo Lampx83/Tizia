@@ -19,6 +19,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 import context as repo_context
 import file_context
 from gates import gate3_guards
+from repositories.tool_steps import PgSteps
 from runtime import tool_loop
 from repositories import server_hsm
 import memory
@@ -388,6 +389,13 @@ def _note_inputs(trace, subtask, model, state, current, context, siblings, words
         repo_context.report(trace, ctx)
 
 
+def _checkpoint_store(state: dict, db_path, proposal_id, child: int):
+    """PgSteps theo state['checkpoint'] (worker) hoặc db_path+proposal_id (pipeline); None = không checkpoint."""
+    if state.get("checkpoint"):
+        return state["checkpoint"].store(state["base_sha"], child)
+    return PgSteps(db_path, proposal_id, child) if db_path is not None and proposal_id is not None else None
+
+
 def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
         db_path=None, proposal_id: int | None = None) -> dict:
     """Điểm vào cho main.run_gate. Đọc state['plan'] do cổng 1 để lại, sinh code
@@ -447,11 +455,14 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
             looped = tool_loop.run_subtask(
                 subtask, current, deps=deps, budget=budget, model=model, source=state["checkout_source"], sha=state["base_sha"],
                 check=lambda o: (_check_rest(o, current, subtask["file"]), gate3_guards.check(o, current, subtask["file"], known)),
-                role=role, db_path=db_path, proposal_id=proposal_id, child=child)
+                role=role, db_path=db_path, proposal_id=proposal_id, child=child,
+                store=_checkpoint_store(state, db_path, proposal_id, child),
+                pins={"role": role})
             if looped["status"] != "proposed":
                 state["diffs"] = diffs
                 return {"gate": 3, "blocked": True, "diffs": diffs, "failure_class": looped["failure_class"],
-                        "reason": f"subtask '{subtask.get('title')}': {looped['reason']}"}
+                        "reason": f"subtask '{subtask.get('title')}': {looped['reason']}",
+                        **({"unknown_outcome": looped["unknown_outcome"]} if looped.get("unknown_outcome") else {})}
             out = looped["out"]
         for iteration in range(0 if out is not None else MAX_INNER_RETRIES + 1):
             routing_options = {'role': role}
