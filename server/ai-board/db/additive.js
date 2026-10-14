@@ -4,7 +4,7 @@
 // production already owns ai_decisions, ai_prompt_log, ai_token_usage and ai_lesson_content.
 import { listMigrationVersions, loadMigrationSql, MIGRATION_LOCK } from './index.js';
 
-export const EXPECTED_NEW_TABLES = 30;
+export const EXPECTED_NEW_TABLES = 36;
 export const PROD_OWNED = new Set(['users', 'requests', 'schema_migrations', 'ai_decisions', 'ai_prompt_log', 'ai_token_usage', 'ai_lesson_content']);
 // AI Board tables the app creates at boot (db.js), outside the migration set. Kept apart from the 30: apply/rollback must not drop them.
 export const AI_BOARD_BOOT_TABLES = ['skill_proposals', 'gate_trace'];
