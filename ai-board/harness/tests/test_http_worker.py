@@ -44,7 +44,7 @@ class FakeTransport:
         if path.endswith('/claim'):
             return {'ticket': {'id': 7, 'lease_token': 'lease-7'}}
         if path.endswith('/snapshot'):
-            return {'ticket': {'cumulative_budget': 20}, 'capability_policy': POLICY,
+            return {'ticket': {'cumulative_budget': 20}, 'capability_policy': POLICY, 'hsm_contract': {'hash':'pin'},
                     'request': {'id': 3, 'title': 'fixture', 'detail': '[Trang: X] /x.html'}, 'thread': []}
         if path.endswith('/runs'):
             return {'run': {'id': 11}}
@@ -57,6 +57,10 @@ class FakeTransport:
                     'capability_policy_hash': POLICY['hash'], **({'plan_hash': self.plan_hash} if self.plan_hash else {})}
         if path.endswith('/verdict'):
             return {'verdict': payload['verdict']}
+        if path.endswith('/authority'):
+            return {'authorized':True}
+        if path.endswith('/hsm'):
+            return {'execute':payload['event']=='BEGIN','state':{'version':1 if payload['event']=='BEGIN' else 2}}
         return {'ok': True}
 
 
@@ -376,7 +380,7 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
         **canonical_plan['steps'][0], 'file': 'public/x.html', 'verify': 'smoke; 200', 'size': 'small',
     }
     assert [call[1].rsplit('/', 1)[-1] for call in transport.calls] == [
-        'claim', 'snapshot', 'heartbeat', 'runs', 'events', 'plan', 'verdict', 'release',
+        'claim', 'snapshot', 'heartbeat', 'runs', 'events', 'plan', 'hsm', 'hsm', 'verdict', 'release',
     ]
     posted = transport.calls[-2][2]['verdict']
     assert posted == {
@@ -857,7 +861,7 @@ def test_authorized_plan_is_executed_without_replanning():
             self.calls.append((method, path, payload, headers))
             if path.endswith('/snapshot'):
                 return {'ticket': {'phase': 'executing', 'cumulative_budget': 30, 'budget_limit': 200},
-                        'capability_policy': POLICY, 'request': {'id': 3, 'detail': 'x'}, 'thread': []}
+                        'capability_policy': POLICY, 'hsm_contract': {'hash':'pin'}, 'request': {'id': 3, 'detail': 'x'}, 'thread': []}
             if path.endswith('/resume-plan'):
                 return {'status': 'planned', 'tier': 'protected', 'plan': {'goal': 'approved'},
                         'capability_policy_hash': POLICY['hash'], 'children': [{'id': 13}]}
@@ -884,6 +888,24 @@ def test_authorized_plan_is_executed_without_replanning():
     assert runs[0]['trigger'] == 'execute'
     assert seen == {'plan': {'goal': 'approved'}, 'max_units': 200, 'policy_hash': POLICY['hash']}
     assert out['status'] == 'planned' and out['tier'] == 'protected'
+
+def test_http_execution_missing_contract_never_calls_change_runner():
+    import pytest
+    from repositories.server_hsm import AuthorityError
+    class MissingContract(FakeTransport):
+        def __call__(self,*args):
+            response=super().__call__(*args)
+            if args[1].endswith('/snapshot'):
+                response.pop('hsm_contract',None)
+            return response
+    effects=[]
+    transport=MissingContract()
+    worker=HttpWorker(WorkerClient('http://fixture','secret',transport=transport),worker_id='w1',
+        mode='active',planner=lambda _snapshot: ({'goal':'x'},0),
+        change_runner=lambda *_args,**_kwargs: effects.append('execute'),candidates=FakeCandidates())
+    with pytest.raises(AuthorityError,match='contract'):
+        worker.run_once()
+    assert effects==[]
 
 
 def test_gate_start_is_reported_as_an_idempotent_event():

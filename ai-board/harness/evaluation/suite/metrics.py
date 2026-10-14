@@ -66,25 +66,31 @@ def summarize(rows: list[dict]) -> dict:
         "resolved": rate(sum(r["resolved"] for r in rows), n),
         "resolved_clean": rate(sum(r["resolved"] and not r["collateral"] for r in rows), n),
         "shipped": rate(sum(bool(r.get("shipped")) for r in rows), n),
+        "clean_fixture_shipped": rate(sum(r["resolved"] and not r["collateral"] and bool(r.get("shipped")) for r in rows), n),
         "pass_any": rate(sum(any(v) for v in tasks.values()), len(tasks)),
         "pass_all": rate(sum(all(v) for v in tasks.values()), len(tasks)),
         "flaky_tasks": sum(0 < sum(v) < len(v) for v in tasks.values()),
         "failure": dict(Counter(failure_class(r) or "resolved" for r in rows)),
     }
     resolved = [r for r in rows if r["resolved"]]
+    telemetry = clean_cost(rows)
+    total = lambda name: telemetry[name]["total"]  # noqa: E731
+    average = lambda name, count, digits: round(total(name) / count, digits) if total(name) is not None and count else None  # noqa: E731
     out["cost"] = {
-        "model_calls_mean": round(sum(r["model_calls"] for r in rows) / n, 2),
+        "model_calls_mean": average("model_calls", n, 2),
         "retries_mean": round(sum(r["retries"] for r in rows) / n, 2),
         "stuck": rate(sum(bool(r["stuck"]) for r in rows), n),
         "truncated": rate(sum(bool(r["truncated"]) for r in rows), n),
-        "tokens_in_total": sum(r["tokens_in"] for r in rows), "tokens_out_total": sum(r["tokens_out"] for r in rows),
-        "wall_s_mean": round(sum(r["wall_s"] for r in rows) / n, 1),
-        "wall_s_per_resolved": round(sum(r["wall_s"] for r in rows) / len(resolved), 1) if resolved else None,
-        "tokens_per_resolved": round(sum(r["tokens_in"] + r["tokens_out"] for r in rows) / len(resolved)) if resolved else None,
+        "tokens_in_total": sum(r["tokens_in"] for r in rows) if total("tokens") is not None else None,
+        "tokens_out_total": sum(r["tokens_out"] for r in rows) if total("tokens") is not None else None,
+        "wall_s_mean": average("processing_s", n, 1),
+        "wall_s_per_resolved": average("processing_s", len(resolved), 1),
+        "tokens_per_resolved": round(total("tokens") / len(resolved)) if total("tokens") is not None and resolved else None,
         "reasoning_chars_mean": round(sum(r.get("reasoning_chars", 0) for r in rows) / n),
     }
     out["references"] = {"with_missing_ref": rate(sum(bool(r.get("ref_errors")) for r in rows), n),
                          "schema_fallbacks": sum(r.get("schema_fallbacks", 0) for r in rows)}
+    out["cost_per_resolved_clean"] = telemetry
     if rows[0]["mode"].startswith("e2e"):
         plans = [r["plan"] for r in rows]
         out["planning"] = {
@@ -100,6 +106,37 @@ def summarize(rows: list[dict]) -> dict:
     funnel = [("planned", lambda r: not r["mode"].startswith("e2e") or r["plan"]["final_hit"]), ("gate3", lambda r: r["gate_passed"]),
               ("gate4", lambda r: r.get("gate4") == "passed"), ("resolved", lambda r: r["resolved"])]
     out["funnel"] = {name: sum(bool(f(r)) for r in rows) for name, f in funnel}
+    return out
+
+
+def clean_cost(rows: list[dict]) -> dict:
+    """All attempts contribute; absent telemetry or zero clean successes stays unknown."""
+    clean = sum(bool(r.get("resolved")) and not r.get("collateral") for r in rows)
+    fields = {"model_calls": ("model_calls",), "tokens": ("tokens_in", "tokens_out"), "processing_s": ("wall_s",)}
+    out = {"version": 1, "denominator": clean, "attempts": len(rows)}
+    for name, keys in fields.items():
+        complete = bool(rows) and all(isinstance(r.get(k), (int, float)) and not isinstance(r[k], bool)
+                                    and math.isfinite(r[k]) and r[k] >= 0 for r in rows for k in keys)
+        total = sum(r[k] for r in rows for k in keys) if complete else None
+        out[name] = {"total": total, "per_resolved_clean": total / clean if total is not None and clean else None,
+                     "status": "available" if complete and clean else "missing_telemetry" if not complete else "zero_success"}
+    # shortcut: wall time is processing telemetry, not GPU usage; require matched operator conditions for its verdict.
+    out["timing_comparable"] = False
+    return out
+
+
+def compare_clean_cost(rows_a: list[dict], rows_b: list[dict], *, timing_comparable: bool = False) -> dict:
+    """Check the separate +10% limits; caller must establish protocol/pin comparability."""
+    a, b = clean_cost(rows_a), clean_cost(rows_b)
+    out = {}
+    for name in ("model_calls", "tokens", "processing_s"):
+        av, bv = a[name]["per_resolved_clean"], b[name]["per_resolved_clean"]
+        if av is None or bv is None or (name == "processing_s" and not timing_comparable):
+            out[name] = {"status": "pending", "baseline": av, "candidate": bv, "increase_percent": None}
+        else:
+            limit = av * 1.1
+            out[name] = {"status": "pass" if bv <= limit or math.isclose(bv, limit, rel_tol=1e-12, abs_tol=0) else "fail", "baseline": av,
+                         "candidate": bv, "increase_percent": round(100 * (bv / av - 1), 2) if av else None}
     return out
 
 
@@ -127,8 +164,14 @@ def _binom_two_sided(b: int, c: int) -> float:
 
 def compare(rows_a: list[dict], rows_b: list[dict], *, seed: int = 7, boot: int = 4000) -> dict:
     """Paired by task id (mean resolved over repeats). A = baseline, B = candidate. Verdict needs both the bootstrap CI and the sign test to agree."""
+    keys_a = [(r.get("id"), r.get("mode"), r.get("repeat")) for r in rows_a]
+    keys_b = [(r.get("id"), r.get("mode"), r.get("repeat")) for r in rows_b]
+    if any(None in key for key in keys_a + keys_b) or len(set(keys_a)) != len(keys_a) or len(set(keys_b)) != len(keys_b):
+        return {"verdict": "incomparable", "reason": "missing trial identity or duplicate task/mode/repeat"}
+    if set(keys_a) != set(keys_b):
+        return {"verdict": "incomparable", "reason": "task/mode/repeat cohorts differ"}
     ta, tb = per_task(rows_a), per_task(rows_b)
-    ids = sorted(set(ta) & set(tb))
+    ids = sorted(ta)
     if not ids:
         return {"verdict": "incomparable", "reason": "no common tasks"}
     mean = lambda v: sum(v) / len(v)  # noqa: E731

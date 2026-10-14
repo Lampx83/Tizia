@@ -1,6 +1,7 @@
 """Eval suite seam: run_trial on the real frozen corpus at the pinned commit with a scripted model, plus the pure statistics."""
 import dataclasses
 import json
+import os
 import re
 import threading
 from pathlib import Path
@@ -86,6 +87,7 @@ def test_e2e_wrong_page_is_a_plan_miss_not_an_implementation_failure(world):
     deps, models = deps_for(world)
     row = trial.run_trial(pick(tasks, 2), "e2e", deps, root, ROOT)
     assert not row["resolved"] and not row["plan"]["first_hit"] and row["plan"]["first_plans_new_page"]
+    assert row["capture"]["source"]["public/trang-khong-co.html"] == {"missing": True}
     assert metrics.failure_class(row) == "plan_miss"
 
 
@@ -103,6 +105,13 @@ def test_validator_block_stops_before_gate3(world, monkeypatch):
     row = trial.run_trial(pick(tasks, 1), "e2e", deps, root, ROOT)
     assert not row["resolved"] and row["plan"]["validator_blocked"] and "gate3" not in [c[0] for c in models.calls]
     assert metrics.failure_class(row) == "validator_blocked"
+    capture = row["capture"]
+    assert capture["initial_plan"] == capture["final_plan"]
+    assert capture["initial_plan"]["subtasks"]
+    assert capture["model_calls"][0]["phase"] == "planning"
+    assert capture["validator_results"][-1]["blocked"] is True
+    assert capture["request"]["subject"] and capture["request_sha256"]
+    assert capture["source"] and all("sha256" in value for value in capture["source"].values())
 
 
 def test_two_workers_do_not_mix_trials(world):
@@ -174,6 +183,30 @@ def test_run_end_to_end_parallel_resume_and_report(world, capsys):
     calls = len(models.calls)
     assert runner.main(argv, deps) == 0 and len(models.calls) == calls  # resume: nothing re-run
     assert runner.main([*argv[:-1], "--allow-dirty", "--repeats", "3"], deps) == 2  # different config in the same dir is refused
+
+
+def test_best_match_flag_is_recorded_in_run_name_and_provenance(world, monkeypatch):
+    root, _ = world
+    deps, _ = deps_for(world)
+    monkeypatch.setenv("AI_BOARD_BEST_MATCH", "")
+    argv = ["run", "--seed", str(SEED), "--split", "dev", "--cases", "1", "--repeats", "1", "--modes", "gold", "--root", str(root), "--allow-dirty"]
+    assert runner.main([*argv, "--best-match", "advisory"], deps) == 0
+    assert os.environ["AI_BOARD_BEST_MATCH"] == "advisory"
+    assert runner.main([*argv, "--gate25-fixes", "none"], deps) == 0 and os.environ["AI_BOARD_BEST_MATCH"] == ""
+    runs = {p.name: json.loads((p / "run.json").read_text(encoding="utf-8")) for p in (root / "suite").iterdir()}
+    assert {n.endswith("-bm-adv"): m["best_match"] for n, m in runs.items()} == {True: "advisory", False: "enforce"}
+
+
+def test_retrieval_literal_flag_is_recorded_in_provenance_and_run_name(world, monkeypatch):
+    root, _ = world
+    deps, _ = deps_for(world)
+    argv = ["run", "--seed", str(SEED), "--split", "dev", "--cases", "1", "--repeats", "1", "--modes", "gold", "--root", str(root), "--allow-dirty"]
+    monkeypatch.setenv("AI_BOARD_RETRIEVAL", "")
+    assert runner.main([*argv, "--retrieval", "literal"], deps) == 0
+    assert os.environ["AI_BOARD_RETRIEVAL"] == "literal"
+    runs = sorted((root / "suite").iterdir())
+    lit = [r for r in runs if r.name.endswith("-ret-lit")]
+    assert len(lit) == 1 and json.loads((lit[0] / "run.json").read_text(encoding="utf-8"))["retrieval"] == "literal"
 
 
 def test_nodia_variant_strips_diacritics_from_the_request_the_planner_sees(world):
@@ -283,6 +316,9 @@ def test_gate1_block_reason_is_kept_in_the_row(world):
                 notify=None, sleep=lambda _s: None)
     row = trial.run_trial(pick(tasks, 1), "e2e", deps, root, ROOT)
     assert row["plan"]["blocked"] and "plan" in row["plan"]["reason"]
+    assert row["capture"]["planning_context"] and row["capture"]["source_targets"]
+    assert row["capture"]["initial_plan"] is None
+    assert len(row["capture"]["model_calls"]) == 2
 
 
 def test_concurrent_workers_can_ask_for_the_same_checkout_and_a_broken_one_is_rebuilt(tmp_path):
@@ -361,10 +397,12 @@ def test_gate25_quote_fix_accepts_single_quoted_copy_only_when_enabled(monkeypat
         ev = {"target": "a.html", "file": "a.html", "quote": quote, "before": "b", "after": "a", "verify": "v"}
         return pv.checked_grounding({"grounded": True, "grounding": [ev]}, plan, "sha", files)
 
-    monkeypatch.delenv("AI_BOARD_GATE25_FIXES", raising=False)
+    monkeypatch.setenv("AI_BOARD_GATE25_FIXES", "")
     import pytest
     with pytest.raises(ValueError, match="trích dẫn"):
         run("<a class='back' href='/i.html'>Home</a>")
+    monkeypatch.delenv("AI_BOARD_GATE25_FIXES")
+    assert run("<a class='back' href='/i.html'>Home</a>")["sha"] == "sha"
     monkeypatch.setenv("AI_BOARD_GATE25_FIXES", "quotes")
     assert run("<a class='back' href='/i.html'>Home</a>")["sha"] == "sha"
     with pytest.raises(ValueError, match="trích dẫn"):
@@ -392,6 +430,51 @@ def test_blind_grading_hides_arms_and_scores_per_run_with_oracle_agreement(tmp_p
     assert grading.paired(grades, blind_map, "runA", "runB") == {"tasks": 2, "gained_usable": 0, "lost_usable": 0, "net": 0, "usable_trials_delta": 0}
 
 
+def test_plan_cards_are_matched_and_hide_arm_outcome_and_gold(tmp_path):
+    import json
+    import pytest
+    from evaluation.suite import grading
+
+    for name in ("off", "on"):
+        run = tmp_path / name
+        run.mkdir()
+        (run / "run.json").write_text(json.dumps({"status": "complete", "dirty": False, "integrity": [],
+            **{field: "same" for field in ("ref", "model", "corpus_sha", "seed", "repeats", "modes", "prompt_lock", "skill_lock", "contract_hash", "suite_hash", "pipeline_hash")}}), encoding="utf-8")
+        capture = {"version": 1, "request": {"subject": "Edit heading", "body": "Home"},
+                   "base_sha": "abc", "source": {"index.html": {"text": "Before"}},
+                   "initial_plan": {"subtasks": [{"file": "index.html"}]},
+                   "final_plan": {"subtasks": [{"file": "index.html"}]},
+                   "model_calls": [{"response": "private raw response"}], "planning_result": {"blocked": name == "off"}}
+        rows = [{"id": "t1", "mode": "e2e", "repeat": 1, "split": "dev", "resolved": name == "on", "capture": capture,
+                 "plan": {"blocked": name == "off", "validator_blocked": False}},
+                {"id": "sealed", "mode": "e2e", "repeat": 1, "split": "heldout", "capture": None}]
+        (run / "results.jsonl").write_text("\n".join(json.dumps(row) for row in rows), encoding="utf-8")
+    out = tmp_path / "cards"
+    assert grading.collect_plans([tmp_path / "off", tmp_path / "on"], out)["items"] == 2
+    cards = json.loads((out / "plan-batch.json").read_text(encoding="utf-8"))
+    key = json.loads((out / "plan-blindmap.json").read_text(encoding="utf-8"))
+    assert {v["run"] for v in key.values()} == {"off", "on"}
+    assert all(v["id"] == "t1" for v in key.values())
+    assert all("private raw response" not in json.dumps(card) and "blocked" not in json.dumps(card)
+               and "sealed" not in json.dumps(card) for card in cards["items"])
+    grades = [{"blind_id": blind, "initial_verdict": "correct", "final_verdict": "correct", "reason": "ok"} for blind in key]
+    report = grading.score_plans(grades, key, [tmp_path / "off", tmp_path / "on"])
+    assert report["runs"]["off"]["false_block"] == 1
+    assert report["runs"]["on"]["false_block"] == 0
+    assert all(arm["review_complete"] for arm in report["runs"].values())
+    wrong = [{**grade, "initial_verdict": "wrong", "final_verdict": "wrong"} for grade in grades]
+    wrong_report = grading.score_plans(wrong, key, [tmp_path / "off", tmp_path / "on"])
+    assert wrong_report["runs"]["off"]["wrong_plan_pass"] == 0
+    assert wrong_report["runs"]["on"]["wrong_plan_pass"] == 1
+    with pytest.raises(ValueError, match="exactly one"):
+        grading.score_plans(grades[:1], key, [tmp_path / "off", tmp_path / "on"])
+    rows = (tmp_path / "on" / "results.jsonl").read_text(encoding="utf-8").splitlines()
+    rows[0] = json.dumps({**json.loads(rows[0]), "capture": None})
+    (tmp_path / "on" / "results.jsonl").write_text("\n".join(rows), encoding="utf-8")
+    with pytest.raises(ValueError, match="uncaptured"):
+        grading.collect_plans([tmp_path / "off", tmp_path / "on"], out)
+
+
 def test_hybrid_arm_shows_the_whole_file_only_when_it_fits_the_context_window():
     from evaluation.suite import ablation
     from gates import implement
@@ -405,6 +488,18 @@ def test_hybrid_arm_shows_the_whole_file_only_when_it_fits_the_context_window():
         assert "toàn bộ file" not in (text or "")
     finally:
         ablation.apply("default")
+
+
+def test_gate3_context_defaults_to_whole_file_when_it_fits_and_env_restores_excerpt(monkeypatch):
+    from gates import implement
+    sub = {"file": "a.js", "title": "t", "verify": "v"}
+    small, big = "x\ny\nz", "line\n" * 20_000
+    state = {"checkout_source": ".", "base_sha": "x"}
+    monkeypatch.delenv("AI_BOARD_GATE3_CONTEXT", raising=False)
+    assert "L3| z" in implement.gate3_context(sub, {}, small, [], ["x"])[0]
+    assert "toàn bộ file" not in (implement.gate3_context(sub, state, big, [], ["line"])[0] or "")
+    monkeypatch.setenv("AI_BOARD_GATE3_CONTEXT", "excerpt")
+    assert "toàn bộ file" not in implement.gate3_context(sub, state, small, [], ["x"])[0]
 
 
 def test_norepomap_arm_drops_the_repomap_tool_at_gate_1_only_and_default_restores_it():
@@ -427,6 +522,6 @@ def test_norepomap_arm_drops_the_repomap_tool_at_gate_1_only_and_default_restore
 def test_gate25_tokens_fix_raises_the_validator_output_budget_only_when_enabled(monkeypatch):
     from gates import plan_validate as pv
     monkeypatch.delenv("AI_BOARD_GATE25_FIXES", raising=False)
-    assert pv._validator_options() is None
+    assert pv._validator_options() is None and pv.fixes() == {"quotes"}
     monkeypatch.setenv("AI_BOARD_GATE25_FIXES", "quotes,tokens")
     assert pv._validator_options() == {"num_predict": 6144}

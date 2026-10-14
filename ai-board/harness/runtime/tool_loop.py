@@ -11,6 +11,7 @@ import sys
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from runtime.budget import ChildBudget
+from repositories import server_hsm
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import file_context  # noqa: E402
@@ -121,10 +122,10 @@ def _clean_path(path: str) -> str:
 class Workspace:
     """Bản nháp của file đích trong bộ nhớ + test; nguồn là git sha cố định."""
 
-    def __init__(self, source, sha: str, file: str, current: str):
+    def __init__(self, source, sha: str, file: str, current: str | None):
         self.source, self.sha, self.file, self.base = source, sha, file, current
-        self.base_hash = sha_of(current)
-        self.content = current
+        self.base_hash = None if current is None else sha_of(current)
+        self.content = current or ""
         self.test_file = self.test = None
 
     def _check_scope(self, path: str, *, test: bool = False) -> str:
@@ -137,7 +138,7 @@ class Workspace:
 
     def _fresh(self) -> None:
         now = tools._show(self.source, self.sha, self.file)
-        if now is None or sha_of(now) != self.base_hash:
+        if (None if now is None else sha_of(now)) != self.base_hash:
             raise Forbidden("stale: file đích ở base đã đổi so với bản loop đọc")
 
     def run(self, name: str, args: dict) -> str:
@@ -162,10 +163,11 @@ class Workspace:
         if name == "write_test":
             self.test_file, self.test = self._check_scope(args["test_file"], test=True), args["test"]
             return "đã nhận test"
+        self._fresh()
         return ""
 
     def proposal(self) -> dict:
-        if self.content == self.base:
+        if self.content == self.base or (self.base is None and not self.content):
             raise ValueError("chưa có thay đổi nào ở file đích")
         if not self.test_file:
             raise ValueError("thiếu test (write_test)")
@@ -267,10 +269,11 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check) -> tup
     return prompt, steps, rejected, None
 
 
-def run_subtask(subtask: dict, current: str, *, deps, budget, model: str, source, sha: str, check,
+def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str, source, sha: str, check,
                 role: str | None = None, call_extra: dict | None = None, db_path=None, proposal_id=None,
                 child: int | None = None, store=None, pins: dict | None = None) -> dict:
-    """Loop tuần tự cho 1 subtask (file đã có) dưới parent `budget`. `check(out)` = kiểm nội dung (ValueError nếu hỏng).
+    """Loop tuần tự cho 1 subtask dưới parent `budget`. File mới bắt đầu rỗng, edit_file chèn tại after_line=0.
+    `check(out)` = kiểm nội dung (ValueError nếu hỏng).
 
     status: proposed (out = {code,test_file,test}) | paused (hết ngân sách, failure_class budget)
     | blocked (ordinary: hết lượt sửa; critical: ngoài phạm vi/stale/checkpoint lệch/kết quả ghi chưa rõ).
@@ -278,6 +281,8 @@ def run_subtask(subtask: dict, current: str, *, deps, budget, model: str, source
     loop_budget = ChildBudget(budget)
     ws = Workspace(source, sha, subtask["file"], current)
     prompt = PROMPT.format(tools=_tool_list(), title=subtask["title"], file=subtask["file"], verify=subtask["verify"])
+    if current is None:
+        prompt += "\nFile đích chưa tồn tại: dùng edit_file với after_line=0 để tạo nội dung trong bản nháp.\n"
     steps, rejected = [], False
     if store:
         prompt, steps, rejected, stop = _resume(store, ws, budget, _pins(subtask, sha, ws, pins), prompt, check)
@@ -288,16 +293,23 @@ def run_subtask(subtask: dict, current: str, *, deps, budget, model: str, source
             return _result("paused", f"loop dừng: {loop_budget.exhausted()}", "budget", steps=steps)
         if rejected and not budget.can_afford():
             return _result("paused", "không đủ ngân sách dự phòng cho verification trước lượt sửa tiếp", "budget", steps=steps)
+        try:
+            server_hsm.authorize_action('model')
+        except server_hsm.AuthorityError as error:
+            return _result('blocked', str(error), error.failure_class, steps=steps)
         body = deps.call_model(model, prompt, gate=3, budget=loop_budget, format="json", db_path=db_path,
                                proposal_id=proposal_id, prompt_name="tool_loop", child=child, iteration=len(steps),
                                role=role, **({"extra": call_extra} if call_extra else {}))
         if store:
             store.save_ledger(budget.snapshot())
+        if not loop_budget.tick():
+            return _result('paused', f'loop dừng: {loop_budget.exhausted()}', 'budget', steps=steps)
         rejected = False
         n, args, kind = len(steps), {}, "ok"
         try:
             name, args = parse_request(body)
             validate(name, args)
+            server_hsm.authorize_action(name)
             loop_budget.spend("tool_calls")  # trần chạm thì tool này là lần cuối, vòng sau dừng
             if store and name in WRITE_TOOLS:
                 store.intent(n, name, args)
@@ -309,6 +321,8 @@ def run_subtask(subtask: dict, current: str, *, deps, budget, model: str, source
             if store and name in WRITE_TOOLS:
                 store.done(n, name, args, str(error), "forbidden")
             return _result("blocked", str(error), "critical", steps=steps)
+        except server_hsm.AuthorityError as error:
+            return _result('blocked', str(error), error.failure_class, steps=steps)
         if name == "finish":
             try:
                 out = ws.proposal()
@@ -362,11 +376,22 @@ def probe(call) -> dict:
 
 
 def main() -> int:
-    """`python -m runtime.tool_loop MODEL` → probe thật qua OllamaClient.from_env (tốn GPU, operator chạy)."""
+    """`python -m runtime.tool_loop [MODEL]` → probe thật qua OllamaClient.from_env (tốn GPU, operator chạy)."""
+    from dotenv import load_dotenv
     from providers.client import OllamaClient
-    client, model = OllamaClient.from_env(), sys.argv[1]
-    report = probe(lambda prompt: client.generate(model, prompt, format="json", temperature=0))
-    print(json.dumps({"model": model, **report}))
+    from runtime.pipeline import ENV_FILE
+    load_dotenv(ENV_FILE)  # như worker; không in giá trị nào
+    client = OllamaClient.from_env()
+    model = sys.argv[1] if len(sys.argv) > 1 else client.gate3_model
+    seen = []
+
+    def call(prompt):
+        body = client.generate(model, prompt, format="json", temperature=0, num_predict=512)
+        seen.append({"tokens": (body.get("prompt_eval_count") or 0) + (body.get("eval_count") or 0)})
+        return body
+
+    report = probe(call)
+    print(json.dumps({"model": model, "calls": len(seen), "tokens": sum(s["tokens"] for s in seen), **report}))
     return 0 if report["passed"] else 1
 
 

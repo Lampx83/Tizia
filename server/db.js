@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createAppDb } from './db-core.js';
 import { applyMigrations } from './ai-board/db/index.js';
+import { resolveBootMode, assertRequiredSchema, ensureAiBoardAdditive } from './db-existing-schema.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR
@@ -11,14 +12,24 @@ const DATA_DIR = process.env.DATA_DIR
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-// PostgreSQL only (DATABASE_URL). SQLite support was removed in ticket 11; `scripts/copy-sqlite-to-postgres.mjs` moves old data.
+// PostgreSQL only (DATABASE_URL); `scripts/copy-sqlite-to-postgres.mjs` moves old SQLite data.
 function openDb() {
   if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL (PostgreSQL connection string) is required');
-  return { db: createAppDb({ url: process.env.DATABASE_URL }) };
+  return { db: createAppDb({ url: process.env.DATABASE_URL, existingSchema: EXISTING_SCHEMA }) };
 }
+// existing-schema: platform tables are owned by production; DDL/seed writes are fenced in db-core until db.endBoot().
+export const BOOT_MODE = resolveBootMode(process.env.DB_BOOT_MODE);
+export const EXISTING_SCHEMA = BOOT_MODE === 'existing-schema';
 const opened = openDb();
 export const db = opened.db;
 export { DATA_DIR };
+if (EXISTING_SCHEMA) await assertRequiredSchema(db.d);
+
+// AI Board tables created at boot even in existing-schema mode; skipped when present (CREATE IF NOT EXISTS still needs schema/owner rights).
+async function createAiBoardTable(name, ddl) {
+  if (EXISTING_SCHEMA && await db.tableExists(name)) return;
+  await db.execAllowed(ddl);
+}
 
 // Step 1: create tables (without indexes that reference v5 columns)
 await db.exec(`
@@ -147,7 +158,8 @@ try { await db.exec(`ALTER TABLE users ADD COLUMN enrolled_domain TEXT`); } catc
 try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_users_enrolled_domain ON users(enrolled_domain)`); } catch {}
 
 // D0 AI Board: một nguồn migration có số thứ tự, dùng chung với test store.
-await applyMigrations(db.d);
+if (EXISTING_SCHEMA) await ensureAiBoardAdditive(db.d);
+else await applyMigrations(db.d);
 
 // Trục 4: family plan. family_links cho phép 1 PH link n con HS
 // (parent_user_id phải là role='teacher' hoặc 'student' tuổi >=18 — kiểm ở app
@@ -335,7 +347,7 @@ try { await _seedCompetencies(); } catch (e) { console.warn('[db] seed competenc
 // scripts/ không tồn tại trong image (dev local trước khi build Docker).
 try {
   const _skillCount = (await db.prepare(`SELECT COUNT(*) AS n FROM skills`).get()).n;
-  if (_skillCount === 0) {
+  if (_skillCount === 0 && !EXISTING_SCHEMA) {
     const _scriptPath = path.resolve(__dirname, '..', 'scripts', 'migrate-skills-catalog.js');
     if (fs.existsSync(_scriptPath)) {
       console.log('[db] skills empty — auto-running catalog migration…');
@@ -2019,7 +2031,7 @@ export async function getSystemOwnerId() {
 // qua 1 cổng của harness 7-cổng (xem .scratch/ai-board-plugin-registry/spec.md).
 // Chỉ để đo/truy vết — không có code nào khác phụ thuộc bảng này để chạy.
 // ─────────────────────────────────────────────────────────────────────────────
-await db.exec(`
+await createAiBoardTable('skill_proposals', `
   CREATE TABLE IF NOT EXISTS skill_proposals (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     origin        TEXT    NOT NULL,   -- 'core-skill' | 'domain-synthesized'
@@ -2045,7 +2057,7 @@ await db.exec(`
 // nào khác phụ thuộc bảng này để chạy. Harness ghi qua sqlite3 thô, DDL này
 // là nguồn sự thật (ai-board/harness/gate_trace.py chỉ mirror cho test).
 // ─────────────────────────────────────────────────────────────────────────────
-await db.exec(`
+await createAiBoardTable('gate_trace', `
   CREATE TABLE IF NOT EXISTS gate_trace (
     id                   INTEGER PRIMARY KEY AUTOINCREMENT,
     skill_proposal_id    INTEGER NOT NULL,

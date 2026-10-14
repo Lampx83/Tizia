@@ -1,0 +1,74 @@
+# Mirror Git exclusions for Graphify versions that replace rather than merge them.
+node_modules/
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.DS_Store
+.env
+.env.local
+*.log
+npm-debug.log*
+.vscode/
+.idea/
+dist/
+.claude/
+.scratch/
+.impeccable/
+docs/agents/
+docs/local/
+
+# Chỉ mục đồ thị codebase (AST, sinh bởi `npm run graphify:update` / cron —
+# xem .scratch/ai-board-plugin-registry/issues/17-graph-context-cron.md).
+# Build artifact tái tạo được, không phải nguồn.
+graphify-out/
+
+# Postgres data export sinh bởi scripts/export-sqlite-to-pg.mjs — chứa dữ liệu
+# thật (session token, password hash). KHÔNG commit. Schema (001_*.sql) thì commit.
+migrations/postgres/data-export.sql
+
+# Python — harness AI board (ai-board/harness/, venv riêng trên host)
+__pycache__/
+*.py[cod]
+.pytest_cache/
+ai-board/harness/.venv/
+
+# Nhật ký vòng triển khai của Claude Code — local-only, KHÔNG push
+# (repo này clone thẳng ra production, xem CLAUDE.md)
+ai-board/ai-log.md
+# Long-term memory của worker (bài học từ verdict), chỉ nằm trên máy worker.
+ai-board/memory/
+ai-board/sandbox-runner/secrets/
+
+# Local design metadata
+.impeccable
+
+# Local agent instructions and generated fixture state
+[Aa][Gg][Ee][Nn][Tt][Ss].[Mm][Dd]
+[Cc][Ll][Aa][Uu][Dd][Ee].[Mm][Dd]
+.smoketest-data/
+ai-board/sandbox-runner/scratch/
+
+# Local instructions, documents and generated evidence
+.claude/
+.agents/
+.codex/
+.scratch/
+docs/local/
+docs/agents/
+[Aa][Gg][Ee][Nn][Tt][Ss].[Mm][Dd]
+[Cc][Ll][Aa][Uu][Dd][Ee].[Mm][Dd]
+**/[Aa][Gg][Ee][Nn][Tt][Ss].[Mm][Dd]
+**/[Cc][Ll][Aa][Uu][Dd][Ee].[Mm][Dd]
+node_modules/
+**/node_modules/
+data/
+graphify-out/
+.smoketest-data/
+ai-board/memory/
+ai-board/sandbox-runner/scratch/
+ai-board/sandbox-runner/secrets/
+ai-board/ai-log.md
+__pycache__/
+.pytest_cache/

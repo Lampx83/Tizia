@@ -12,9 +12,10 @@ CAPS = ("model_calls", "tool_calls", "tokens", "retries", "units", "semantic_rep
 # retries chỉ chặn retry tiếp theo (worker tự kiểm), không kết thúc cả lượt chạy.
 # units = đơn vị budget theo nhà cung cấp (meter.py): giây GPU với ollama, 1K token với api.
 RUN_CAPS = ("model_calls", "tool_calls", "tokens", "units")
-# Ngân sách còn lại tối thiểu để chạy verification bắt buộc (cổng 4/5) trước một lượt sửa tiếp.
-# ponytail: chưa đo; đo theo cấu hình thực tế rồi chỉnh BUDGET_VERIFY_RESERVE.
-VERIFY_RESERVE = {"model_calls": 2, "tool_calls": 2, "tokens": 20_000, "wall_clock_s": 120.0}
+# Ngân sách còn lại tối thiểu để chạy verification bắt buộc (cổng 4/5/5.5) trước một lượt sửa tiếp.
+# Đo: cổng 4 = 1 lần gọi model ~4K token (suite dev: p50 12K token / 3 lần gọi, p90 ~7K/lần); cổng 5 sandbox ~180 s
+# warm, không gọi model; cổng 5.5 không gọi model. ponytail: wall_clock_s theo máy warm, cold pull cần đo lại.
+VERIFY_RESERVE = {"model_calls": 2, "tool_calls": 0, "tokens": 20_000, "wall_clock_s": 240.0}
 
 
 @dataclass
