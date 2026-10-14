@@ -11,7 +11,7 @@ SEARCH_PROBE = 'search-activity-v1'
 SEARCH_PAGE = '/school.html?domain=it'
 READY_TEXT = re.compile('phút nữa', re.IGNORECASE)  # ETA line shown while a worker is ready or busy
 OFFLINE_TEXT = re.compile('chưa thể ước tính', re.IGNORECASE)  # the requester's own words; a sentence-initial capital is the same text
-# Oracle -> coverage flags it must report true. Keep in sync with ORACLE_COVERAGE in server/ai-board/store.js.
+# Oracle -> coverage flags it must report true. Keep in sync with ORACLE_COVERAGE in server/ai-board/repositories/store-contract.js.
 ORACLES = {QUEUE_PROBE: ('requester_api', 'mounted_ui', 'recovery'), TEXT_PROBE: ('rendered_text',),
            COPY_PROBE: ('clipboard',), SEARCH_PROBE: ('filtering',)}
 
@@ -200,7 +200,10 @@ def _open(p, base, token, clipboard=False):
     browser = _launch(p)
     context = browser.new_context()
     if clipboard:
-        context.grant_permissions(['clipboard-read', 'clipboard-write'], origin=base)
+        try:
+            context.grant_permissions(['clipboard-read', 'clipboard-write'], origin=base)
+        except Exception:
+            pass  # full Chrome refuses grants for an insecure origin; the spy supplies the clipboard there
         context.add_init_script(_CLIPBOARD_SPY)
     context.add_cookies([{'name': 'tizia_sid', 'value': token, 'url': base, 'httpOnly': True}])
     return browser, context.new_page()
