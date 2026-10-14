@@ -210,12 +210,9 @@ def _new_contrast(before: list[str], after: list[str]) -> list[str]:
     return _new_entries(before, after, lambda entry: entry.split(' "', 1)[0])
 
 
-_QUOTED = re.compile(r' "[^"]*"')
-
-
 def _new_covered(before: list[str], after: list[str]) -> list[str]:
-    """Nút bị đè mới: so theo selector của nút và phần tử đè, bỏ chữ trích (chữ đổi theo thay đổi không làm lỗi cũ thành mới)."""
-    return _new_entries(before, after, lambda entry: _QUOTED.sub("", entry))
+    """Nút mới bị đè: so theo nút (selector + chữ nút), không theo phần tử đè. Nút vốn đã bị đè thì đổi layout làm phần tử đè khác đi không phải lỗi mới."""
+    return _new_entries(before, after, lambda entry: entry.split(" dưới ", 1)[0])
 
 
 def regressions(before: dict | None, after: dict) -> list[str]:
