@@ -48,6 +48,7 @@ import context
 import code_index
 import file_context
 from dbconn import harness_db
+from gates import best_match
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_validate.md").read_text(encoding="utf-8")
 
@@ -165,12 +166,18 @@ def _squash(text: str) -> str:
 
 
 _QUOTE_CHARS = re.compile('["`‘’“”]')
+DEFAULT_FIXES = "quotes"
+
+
+def fixes() -> set[str]:
+    """Gate 2.5 patches on: AI_BOARD_GATE25_FIXES comma list; unset = quotes, empty = none."""
+    return {f.strip() for f in os.environ.get("AI_BOARD_GATE25_FIXES", DEFAULT_FIXES).split(",") if f.strip()}
 
 
 def _fold(text: str) -> str:
-    """_squash plus one quote style when AI_BOARD_GATE25_FIXES lists `quotes`: models rewrite "x" as 'x' when they copy HTML."""
+    """_squash plus one quote style when `quotes` fix on: models rewrite "x" as 'x' when they copy HTML."""
     text = _squash(text)
-    return _QUOTE_CHARS.sub("'", text) if "quotes" in os.environ.get("AI_BOARD_GATE25_FIXES", "").split(",") else text
+    return _QUOTE_CHARS.sub("'", text) if "quotes" in fixes() else text
 
 
 _LINE_MARKER = re.compile(r'^[ \t]*(?:[\w./-]+:)?L?\d+\|[ ]?', re.M)
@@ -281,7 +288,7 @@ def write_clarification(db_path, request: dict, question: str) -> None:
 
 def _validator_options() -> dict | None:
     """Larger output budget for multi-subtask plans when AI_BOARD_GATE25_FIXES lists `tokens`."""
-    return {"num_predict": 6144} if "tokens" in os.environ.get("AI_BOARD_GATE25_FIXES", "").split(",") else None
+    return {"num_predict": 6144} if "tokens" in fixes() else None
 
 
 def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: int | None = None) -> dict:
@@ -344,8 +351,8 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                 raise ValueError('plan cần sửa renderer hiện có: ' + ', '.join(sorted(required)))
             if 'LƯU Ý: chữ người dùng nhắc KHÔNG nằm' in (state.get('planning_context') or '') and not targets.intersection(state.get('source_targets') or []):
                 raise ValueError('plan không sửa module đang render nội dung người dùng yêu cầu')
-            if state.get('best_match') and state['best_match'] not in targets:
-                raise ValueError(f"plan không sửa file khớp nhiều cụm người dùng viết nhất: {state['best_match']}")
+            best_match.enforce(state.get('best_match'), targets,
+                               f"plan không sửa file khớp nhiều cụm người dùng viết nhất: {state.get('best_match')}", judge)
             state['grounding'] = checked_grounding(validation, plan, sha, files)
             judge("source grounding", True, f"{len(state['grounding']['evidence'])} quotes matched verbatim in {', '.join(files)}")
         except ValueError as error:

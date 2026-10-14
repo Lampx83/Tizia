@@ -26,6 +26,7 @@ from pathlib import Path
 import code_index
 import context
 import functional
+from gates import best_match
 from gates.scope_check import load_capability_names
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -148,8 +149,8 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             required = functional.expected_targets({'request_title': request.get('subject'), 'request_detail': request.get('body')})
             if required.intersection(ctx.get('targets') or []) and not required.intersection(task['file'] for task in plan['subtasks']):
                 raise ValueError('Use the existing feature renderer: ' + ', '.join(sorted(required)))
-            if ctx.get('best_match') and ctx['best_match'] not in (task['file'] for task in plan['subtasks']):
-                raise ValueError(f"Sửa file khớp nhiều cụm người dùng viết nhất: {ctx['best_match']}")
+            best_match.enforce(ctx.get('best_match'), {task['file'] for task in plan['subtasks']},
+                               f"Sửa file khớp nhiều cụm người dùng viết nhất: {ctx.get('best_match')}", judge)
             judge(stage, True, f"best-match file: {ctx.get('best_match') or '(none)'}")
         except ValueError as e:
             judge(stage, False, str(e))

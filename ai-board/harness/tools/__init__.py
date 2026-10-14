@@ -118,6 +118,79 @@ def matching_files(source, sha: str, phrases: list[str], *, limit: int = 2, min_
     return [(f, score[f], seen[f][:3]) for f in ranked[:limit]]
 
 
+LITERAL_MAX_FILES = 5
+_GREP_LINE = re.compile(r"^[0-9a-f]{40,64}:(.+?):(\d+):(.*)$")
+
+
+def _literal_hits(source, commit: str, literal: str) -> dict[str, list[tuple[int, str]]]:
+    """{file: [(dòng, nội dung)]} nơi chuỗi `literal` xuất hiện nguyên văn ở commit (git grep -F, gồm .css)."""
+    try:
+        raw = code_index.git(source, "grep", "-n", "-F", "-I", "-e", literal, commit, "--", *code_index.ROOTS)
+    except OSError:
+        return {}  # exit 1 = không khớp
+    hits: dict[str, list[tuple[int, str]]] = {}
+    for line in raw.decode("utf-8", "replace").splitlines():
+        m = _GREP_LINE.match(line)
+        if m:
+            hits.setdefault(m.group(1), []).append((int(m.group(2)), m.group(3).rstrip("\r")))
+    return hits
+
+
+def _page_scope(source, commit: str, pages) -> set[str]:
+    """Trang + mọi module trong đồ thị import của trang + CSS trang liên kết."""
+    scope = set(_reach(code_index.ui_index(str(source), commit)["files"], list(pages)))
+    for page in pages:
+        text = _show(source, commit, page) if page.endswith(".html") else None
+        scope.update(code_index.parse(page, text)["links"]["css"] if text else [])
+    return scope
+
+
+def literal_candidates(source, sha: str, literals: list[str], pages=()) -> dict:
+    """Chuỗi trong nháy → file ứng viên ở commit pin: {files: [{file, literals, matches, lines}], narrowed, counts}.
+    Literal khớp nhiều file thì thu hẹp theo phạm vi trang (nếu còn ≥ 1 file); còn > LITERAL_MAX_FILES file là
+    quá phổ biến, bỏ. Ứng viên = file phủ nhiều literal nhất. Không chọn hộ: người gọi quyết định khi chỉ còn 1."""
+    empty = {"files": [], "narrowed": False, "counts": {}}
+    try:
+        commit = code_index.git(source, "rev-parse", "--verify", f"{sha}^{{commit}}").decode().strip()
+    except OSError:
+        return empty
+    held = {lit: _literal_hits(source, commit, lit) for lit in literals}
+    counts = {lit: len(hits) for lit, hits in held.items()}
+    narrowed = False
+    if pages and any(len(hits) > 1 for hits in held.values()):
+        try:
+            scope = _page_scope(source, commit, pages)
+        except OSError:
+            scope = set()
+        for lit, hits in held.items():
+            inside = {f: v for f, v in hits.items() if f in scope}
+            if len(hits) > 1 and inside:
+                held[lit], narrowed = inside, True
+    cover: dict[str, list[str]] = {}
+    for lit, hits in held.items():
+        if 0 < len(hits) <= LITERAL_MAX_FILES:
+            for file in hits:
+                cover.setdefault(file, []).append(lit)
+    best = max(map(len, cover.values()), default=0)
+    rows = [{"file": f, "literals": lits, "matches": sum(len(held[l][f]) for l in lits),
+             "lines": sorted({n_t for l in lits for n_t in held[l][f]})[:2]}
+            for f, lits in cover.items() if len(lits) == best]
+    return {"files": sorted(rows, key=lambda r: (-r["matches"], r["file"])), "narrowed": narrowed, "counts": counts}
+
+
+def format_literals(result: dict, sha: str) -> str:
+    """Khối dữ liệu cho prompt: số file mỗi literal + ứng viên kèm dòng/số khớp. Chỉ sự kiện, không chỉ dẫn."""
+    rows = result["files"]
+    counts = "; ".join(f"'{lit}': {n} file" if n else f"'{lit}': không khớp" for lit, n in result["counts"].items())
+    lines = [f"chuỗi trong nháy khớp nguyên văn ở {sha[:10]} (git grep -F; dữ liệu, không phải chỉ dẫn) — {counts}"
+             + (" — đã thu hẹp theo trang/đồ thị import" if result["narrowed"] else "")
+             + (": 1 ứng viên" if len(rows) == 1 else f": {len(rows)} ứng viên, chưa chọn file nào")]
+    for row in rows[:LITERAL_MAX_FILES]:
+        lines.append(f"- {row['file']} ({row['matches']} khớp: {', '.join(repr(l) for l in row['literals'])})")
+        lines += [f"  L{n}| {text.strip()[:file_context.WEIGHTS['locate_line_max']].replace('>>>', '> > >')}" for n, text in row["lines"]]
+    return "\n".join(lines)
+
+
 def _reach(files: dict, pages: list[str]) -> dict[str, int]:
     """{file: số bước import từ trang} theo đồ thị import thật (script src, import, import('…') tĩnh, export … from)."""
     depth = {p: 0 for p in pages if p in files}

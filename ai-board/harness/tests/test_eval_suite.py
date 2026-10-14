@@ -1,6 +1,7 @@
 """Eval suite seam: run_trial on the real frozen corpus at the pinned commit with a scripted model, plus the pure statistics."""
 import dataclasses
 import json
+import os
 import re
 import threading
 from pathlib import Path
@@ -182,6 +183,30 @@ def test_run_end_to_end_parallel_resume_and_report(world, capsys):
     calls = len(models.calls)
     assert runner.main(argv, deps) == 0 and len(models.calls) == calls  # resume: nothing re-run
     assert runner.main([*argv[:-1], "--allow-dirty", "--repeats", "3"], deps) == 2  # different config in the same dir is refused
+
+
+def test_best_match_flag_is_recorded_in_run_name_and_provenance(world, monkeypatch):
+    root, _ = world
+    deps, _ = deps_for(world)
+    monkeypatch.setenv("AI_BOARD_BEST_MATCH", "")
+    argv = ["run", "--seed", str(SEED), "--split", "dev", "--cases", "1", "--repeats", "1", "--modes", "gold", "--root", str(root), "--allow-dirty"]
+    assert runner.main([*argv, "--best-match", "advisory"], deps) == 0
+    assert os.environ["AI_BOARD_BEST_MATCH"] == "advisory"
+    assert runner.main([*argv, "--gate25-fixes", "none"], deps) == 0 and os.environ["AI_BOARD_BEST_MATCH"] == ""
+    runs = {p.name: json.loads((p / "run.json").read_text(encoding="utf-8")) for p in (root / "suite").iterdir()}
+    assert {n.endswith("-bm-adv"): m["best_match"] for n, m in runs.items()} == {True: "advisory", False: "enforce"}
+
+
+def test_retrieval_literal_flag_is_recorded_in_provenance_and_run_name(world, monkeypatch):
+    root, _ = world
+    deps, _ = deps_for(world)
+    argv = ["run", "--seed", str(SEED), "--split", "dev", "--cases", "1", "--repeats", "1", "--modes", "gold", "--root", str(root), "--allow-dirty"]
+    monkeypatch.setenv("AI_BOARD_RETRIEVAL", "")
+    assert runner.main([*argv, "--retrieval", "literal"], deps) == 0
+    assert os.environ["AI_BOARD_RETRIEVAL"] == "literal"
+    runs = sorted((root / "suite").iterdir())
+    lit = [r for r in runs if r.name.endswith("-ret-lit")]
+    assert len(lit) == 1 and json.loads((lit[0] / "run.json").read_text(encoding="utf-8"))["retrieval"] == "literal"
 
 
 def test_nodia_variant_strips_diacritics_from_the_request_the_planner_sees(world):
@@ -372,10 +397,12 @@ def test_gate25_quote_fix_accepts_single_quoted_copy_only_when_enabled(monkeypat
         ev = {"target": "a.html", "file": "a.html", "quote": quote, "before": "b", "after": "a", "verify": "v"}
         return pv.checked_grounding({"grounded": True, "grounding": [ev]}, plan, "sha", files)
 
-    monkeypatch.delenv("AI_BOARD_GATE25_FIXES", raising=False)
+    monkeypatch.setenv("AI_BOARD_GATE25_FIXES", "")
     import pytest
     with pytest.raises(ValueError, match="trích dẫn"):
         run("<a class='back' href='/i.html'>Home</a>")
+    monkeypatch.delenv("AI_BOARD_GATE25_FIXES")
+    assert run("<a class='back' href='/i.html'>Home</a>")["sha"] == "sha"
     monkeypatch.setenv("AI_BOARD_GATE25_FIXES", "quotes")
     assert run("<a class='back' href='/i.html'>Home</a>")["sha"] == "sha"
     with pytest.raises(ValueError, match="trích dẫn"):
@@ -463,6 +490,18 @@ def test_hybrid_arm_shows_the_whole_file_only_when_it_fits_the_context_window():
         ablation.apply("default")
 
 
+def test_gate3_context_defaults_to_whole_file_when_it_fits_and_env_restores_excerpt(monkeypatch):
+    from gates import implement
+    sub = {"file": "a.js", "title": "t", "verify": "v"}
+    small, big = "x\ny\nz", "line\n" * 20_000
+    state = {"checkout_source": ".", "base_sha": "x"}
+    monkeypatch.delenv("AI_BOARD_GATE3_CONTEXT", raising=False)
+    assert "L3| z" in implement.gate3_context(sub, {}, small, [], ["x"])[0]
+    assert "toàn bộ file" not in (implement.gate3_context(sub, state, big, [], ["line"])[0] or "")
+    monkeypatch.setenv("AI_BOARD_GATE3_CONTEXT", "excerpt")
+    assert "toàn bộ file" not in implement.gate3_context(sub, state, small, [], ["x"])[0]
+
+
 def test_norepomap_arm_drops_the_repomap_tool_at_gate_1_only_and_default_restores_it():
     import context
     from evaluation.suite import ablation
@@ -483,6 +522,6 @@ def test_norepomap_arm_drops_the_repomap_tool_at_gate_1_only_and_default_restore
 def test_gate25_tokens_fix_raises_the_validator_output_budget_only_when_enabled(monkeypatch):
     from gates import plan_validate as pv
     monkeypatch.delenv("AI_BOARD_GATE25_FIXES", raising=False)
-    assert pv._validator_options() is None
+    assert pv._validator_options() is None and pv.fixes() == {"quotes"}
     monkeypatch.setenv("AI_BOARD_GATE25_FIXES", "quotes,tokens")
     assert pv._validator_options() == {"num_predict": 6144}
