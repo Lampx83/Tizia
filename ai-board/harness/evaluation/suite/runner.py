@@ -183,10 +183,12 @@ def cmd_run(args, deps=None) -> int:
         print("[suite] unknown gate 2.5 fix", file=sys.stderr)
         return 2
     os.environ["AI_BOARD_GATE25_FIXES"] = fixes
+    os.environ["AI_BOARD_GATE25_ANSWERED"] = "1" if args.gate25_answered else ""
     os.environ["AI_BOARD_BEST_MATCH"] = args.best_match
     os.environ["AI_BOARD_RETRIEVAL"] = "literal" if args.retrieval == "literal" else ""
     prov = {**provenance(ROOT, model, router), "context_arm": args.context_arm, "gate3_guards": guards, "gate25_fixes": fixes,
-            "best_match": args.best_match or "enforce", "retrieval": args.retrieval}
+            "best_match": args.best_match or "enforce", "retrieval": args.retrieval,
+            **({"gate25_answered": True} if args.gate25_answered else {})}
     if prov["dirty"] and not args.allow_dirty:
         print("[suite] working tree has uncommitted changes: commit them (or --allow-dirty for a throwaway run)", file=sys.stderr)
         return 2
@@ -212,6 +214,7 @@ def cmd_run(args, deps=None) -> int:
             + (f"-ctx-{args.context_arm}" if args.context_arm != "default" else "")
             + (f"-g-{guards.replace(',', '+')}" if guards else "")
             + (f"-f25-{fixes.replace(',', '+') or 'none'}" if fixes != plan_validate.DEFAULT_FIXES else "")
+            + ("-ans" if args.gate25_answered else "")
             + ("-bm-adv" if args.best_match else "")
             + ("-ret-lit" if args.retrieval == "literal" else ""))
     run_dir = root / "suite" / name
@@ -387,6 +390,7 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--context-arm", choices=ablation.ARMS, default="default", help="gate 3 context ablation: fullfile = whole numbered file instead of excerpt; nosiblings = no folder listing")
     run.add_argument("--guards", default="", help="gate 3 guards to switch on (comma list of noop, refs, schema); default none")
     run.add_argument("--gate25-fixes", default=None, help="gate 2.5 patches on (comma list: quotes, tokens; none = off); default quotes")
+    run.add_argument("--gate25-answered", action="store_true", help="gate 2.5 answers clarifications settled by a verbatim request/source quote and reruns the validator; default off")
     run.add_argument("--best-match", choices=["advisory"], default="", help="best_match mismatch recorded in trace instead of rejecting plan at gates 1 and 2.5; default off (reject)")
     run.add_argument("--retrieval", choices=("off", "literal"), default="off", help="gate 1 retrieval: literal = quoted strings in the request shortlist candidate files (git grep -F at the pinned sha)")
     run.add_argument("--reasoning-on", default="", help="comma list of roles to run with thinking on (ablation), e.g. gate1,gate25")
