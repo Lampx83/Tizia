@@ -3,6 +3,7 @@ mode `gold`: gate 3 on the corpus' gold subtask (isolates implementation from pl
 from __future__ import annotations
 
 import dataclasses
+import copy
 import hashlib
 import json
 import posixpath
@@ -32,10 +33,23 @@ def strip_diacritics(text: str) -> str:
 class RecordingDeps(Deps):
     """Deps that keeps every raw model body of the trial (route, finish reason, text hash) for provenance and loop detection."""
     ledger: list = dataclasses.field(default_factory=list)
+    capture: dict = dataclasses.field(default_factory=dict)
 
     def call_model(self, *args, **kwargs):
-        body = super().call_model(*args, **kwargs)
+        phase = self.capture.get("phase")
+        calls = self.capture.setdefault("model_calls", [])
+        event = {"attempt": len(calls) + 1, "phase": phase}
+        try:
+            body = super().call_model(*args, **kwargs)
+        except Exception as error:
+            if self.capture.get("enabled") and phase in ("planning", "validation"):
+                calls.append({**event, "state": "failed", "error_type": type(error).__name__})
+            raise
         self.ledger.append(body)
+        if self.capture.get("enabled") and phase in ("planning", "validation"):
+            # Capture responses, never model arguments, task gold, route headers or credentials.
+            fields = ("response", "model", "done_reason", "prompt_eval_count", "eval_count")
+            calls.append({**event, "state": "returned", **copy.deepcopy({k: body[k] for k in fields if k in body})})
         return body
 
 
@@ -104,6 +118,37 @@ def _quote_diag(response: str, repo, sha: str) -> list[dict]:
     return out
 
 
+def _capture_plan(capture: dict, final_plan: dict | None) -> None:
+    if not capture.get("enabled"):
+        return
+    plans = []
+    for call in capture.get("model_calls", []):
+        if call.get("phase") != "planning" or call.get("state") != "returned":
+            continue
+        try:
+            plans.append(brainstorm.parse_plan(call.get("response", "")))
+        except (ValueError, TypeError):
+            continue
+    capture["initial_plan"] = copy.deepcopy(plans[0]) if plans else None
+    capture["final_plan"] = copy.deepcopy(final_plan if final_plan is not None else (plans[-1] if plans else None))
+
+
+def _capture_source(capture: dict, repo, sha: str) -> dict:
+    files = {}
+    plans = [capture.get("initial_plan"), capture.get("final_plan")]
+    paths = [*capture.get("source_targets", [])]
+    paths.extend(subtask.get("file") for plan in plans if isinstance(plan, dict)
+                 for subtask in plan.get("subtasks", []) if isinstance(subtask, dict))
+    for path in dict.fromkeys(path for path in paths if isinstance(path, str) and path):
+        try:
+            raw = code_index.git(repo, "show", f"{sha}:{path}")
+        except OSError:
+            files[path] = {"missing": True}
+            continue
+        files[path] = {"sha256": hashlib.sha256(raw).hexdigest(), "text": raw.decode("utf-8", "replace")}
+    return files
+
+
 def _plan_stage(task: dict, repo, deps: RecordingDeps, wall_s: int, variant: str | None = None) -> tuple[dict, dict | None, list[dict]]:
     """Gates 1 -> 2 -> 2.5 the way the worker runs them. Returns (plan facts, plan or None, tracer records)."""
     tracer = gold_eval.Collect()
@@ -113,6 +158,7 @@ def _plan_stage(task: dict, repo, deps: RecordingDeps, wall_s: int, variant: str
              "first_plans_new_page": False, "first_extra": 0, "blocked": False, "validator_blocked": False, "validator_reason": None,
              "final_hit": False, "final_exact": False, "final_files": [], "reason": None, "approved": "approved" in (variant or "").split("+")}
     request, budget = request_of(task, variant), Budget(max_wall_clock_s=wall_s, max_units=600)
+    deps.capture["phase"] = "planning"
     out = brainstorm.run(request, deps, budget, source=repo, sha=sha)
     tracer.flush()
     attempts = [plan_attempt(b, gold, repo, sha) for b in deps.ledger]
@@ -121,13 +167,21 @@ def _plan_stage(task: dict, repo, deps: RecordingDeps, wall_s: int, variant: str
                  first_nonexistent=bool(first["missing"] or first["new_files"]), first_plans_new_page=bool(first["new_files"]),
                  first_extra=len(set(first["files"]) - set(gold)), blocked=bool(out.get("blocked")), reason=str(out.get("reason"))[:160] if out.get("blocked") else None)
     plan = out.get("plan")
+    _capture_plan(deps.capture, plan)
+    deps.capture["planning_result"] = copy.deepcopy({k: out[k] for k in ("blocked", "reason") if k in out})
+    if deps.capture.get("enabled"):
+        deps.capture["planning_context"] = out.get("repo_context")
+        deps.capture["source_targets"] = list(out.get("source_targets") or [])
+        deps.capture["best_match"] = out.get("best_match")
     if out.get("blocked") or not plan:
         return facts, None, tracer.records
     final = [t["file"] for t in plan["subtasks"]]
     facts.update(final_hit=set(gold) <= set(final), final_exact=set(final) == set(gold), final_files=final)
     state = {"plan": plan, "checkout_source": str(repo), "planning_context": out.get("repo_context"),
              "source_targets": out.get("source_targets") or [], "best_match": out.get("best_match")}
+    deps.capture["phase"] = "validation"
     for step in (scope_check.run(state), plan_validate.run(request, deps, budget, state)):
+        deps.capture.setdefault("validator_results", []).append(copy.deepcopy(step))
         if step.get("blocked"):
             facts.update(validator_blocked=True, validator_reason=facts["validator_reason"] or str(step.get("reason"))[:120],
                          validator_signals=facts.get("validator_signals") or [str(s)[:300] for s in (step.get("signals") or [])][:3],
@@ -172,6 +226,7 @@ def run_trial(task: dict, mode: str, base_deps: Deps, root: Path, source, fast: 
     """Never raises for model/infra outcomes (they are result rows). eval_fast.FastTierError propagates: the environment is broken, not the model."""
     gate3_guards.fallbacks(reset=True)
     deps = recording(base_deps)
+    deps.capture["enabled"] = task.get("split") == "dev"
     kind, _, variant = mode.partition(":")
     taskpack.prepare_checkout(root, task["base_sha"], source)
     rec = taskpack.case_record(task, root, source) if task.get("pack") else eval_corpus.case_record(task, root, source)
@@ -184,6 +239,7 @@ def run_trial(task: dict, mode: str, base_deps: Deps, root: Path, source, fast: 
         raise
     except Exception as exc:  # noqa: BLE001 - provider outage is a result
         error = f"{type(exc).__name__}: {exc}"[:300]
+    deps.capture["phase"] = "execution"
     collateral: list[str] = []
     if kind == "e2e":
         plan_facts = plan_facts or {"attempts": 0, "blocked": True, "validator_blocked": False, "first_hit": False, "first_exact": False,
@@ -226,13 +282,20 @@ def run_trial(task: dict, mode: str, base_deps: Deps, root: Path, source, fast: 
             row = {"case": task["id"], "gate_passed": False, "oracle": False, "reason": error, "calls": 0, "retries": 0, "tokens_in": 0,
                    "tokens_out": 0, "done_reasons": [], "last_output": None}
     row = eval_fast.finish({"gate4": None, "prod": "skipped", **row}) if fast is not None and not task.get("pack") else {**row, "gate4": row.get("gate4"), "shipped": False}
+    _capture_plan(deps.capture, plan)
+    request = request_of(task, variant or None)
+    request_text = {"subject": request["subject"], "body": request["body"]}
+    capture = {**deps.capture, "version": 1, "request": request_text,
+               "request_sha256": hashlib.sha256(json.dumps(request_text, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest(),
+               "base_sha": task["base_sha"], "source": _capture_source(deps.capture, repo, task["base_sha"]),
+               "full_diff": row.get("diff") or "", "trial_error": error} if deps.capture.get("enabled") else None
     p_in, p_out = _tokens(plan_records)
     texts = [hashlib.sha1(str(b.get("response", "")).encode("utf-8")).hexdigest() for b in deps.ledger]
     resolved = bool(row["oracle"]) and not error
     return {
         "id": task["id"], "mode": mode, "resolved": resolved, "collateral": sorted(set(collateral)), "gate_passed": row["gate_passed"],
         "gate4": row.get("gate4"), "prod": row.get("prod"), "ended": row.get("ended"), "shipped": row.get("shipped", False),
-        "review": row.get("review"), "reason": row.get("reason"), "infra_error": bool(error), "error": error, "plan": plan_facts,
+        "review": row.get("review"), "reason": row.get("reason"), "infra_error": bool(error), "error": error, "plan": plan_facts, "capture": capture,
         "model_calls": len(deps.ledger), "retries": row.get("retries", 0),
         "stuck": any(a == b for a, b in zip(texts, texts[1:])),
         "truncated": any(b.get("done_reason") == "length" for b in deps.ledger) or "length" in (row.get("done_reasons") or []),

@@ -25,7 +25,8 @@ export function createRunnerClient({ url, token, timeoutS = 20, fetchImpl = fetc
         out = await call('POST', `/v1/runs/${runId}/exec`, { argv, timeout_s: timeoutS }, (timeoutS + 30) * 1000);
       } catch (error) { failure = error.status === 429 ? new BrokerError('backend_busy', 503) : new BrokerError('backend_failed', 502); }
       let destroyed = false;
-      try { destroyed = (await call('DELETE', `/v1/runs/${runId}`, undefined, 120_000)).state === 'destroyed'; } catch { /* unconfirmed */ }
+      try { destroyed = (await call('DELETE', `/v1/runs/${runId}`, undefined, 120_000)).state === 'destroyed'; }
+      catch (error) { destroyed = error.status === 404; } // runner has no record of the run (rejected as busy before provisioning): no VM exists
       if (!destroyed) throw new BrokerError('backend_cleanup_unconfirmed', 503); // never expose output of a VM that may still be alive
       if (failure) throw failure;
       if (out.code !== 0 || out.timed_out || out.truncated) throw new BrokerError('backend_failed', 502);

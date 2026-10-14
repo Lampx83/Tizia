@@ -2,6 +2,7 @@
 guardrails of gate 1 (intake_guard) and gate 4 (content_review). It may only raise severity."""
 import json
 import math
+from types import SimpleNamespace
 
 import classifier
 from budget import Budget
@@ -34,6 +35,9 @@ class Classifying(FakeModels):
 
 
 def test_softmax_matches_the_node_fixture():
+    coverage = {}
+    classifier.label_probs(body([["A", 0.0]]), "clarity", 1, coverage)
+    assert coverage == {"observed_labels": ["clear"], "missing_labels": ["vague", "too_broad"], "status": "partial"}
     probs = classifier.label_probs(body([["A", math.log(0.5)], ["The", math.log(0.3)], [" B", math.log(0.1)],
                                          ["C.", math.log(0.1)]]), "clarity", 1)
     assert abs(probs["clear"] - 5 / 7) < 1e-9 and abs(probs["too_broad"] - 1 / 7) < 1e-9
@@ -43,6 +47,17 @@ def test_softmax_matches_the_node_fixture():
         assert "logprobs" in str(error)
     else:
         raise AssertionError("no label logprobs must raise")
+
+
+def test_parser_failure_is_counted_in_trace_without_acting():
+    events = []
+    trace = SimpleNamespace(attach_last=lambda section, value: events.append((section, value)))
+    deps = SimpleNamespace(models=SimpleNamespace(classifier_model="fake-classifier"), trace=trace,
+                           call_model=lambda *args, **kwargs: body([["not-a-label", 0.0]]))
+    assert classifier.classify("danger", "x", deps, Budget(), gate=1) is None
+    assert events[0][0] == "evaluation"
+    assert events[0][1]["check"] == "classifier_danger_coverage"
+    assert json.loads(events[0][1]["detail"])["status"] == "parser_failure"
 
 
 def test_decisions_use_the_shared_thresholds():
@@ -58,7 +73,15 @@ def test_prompt_fences_student_text_like_node():
     assert prompt.count("NOI_DUNG>>>") == 1 and "H. Gian lận" in prompt
 
 
-def test_intake_escalates_to_human_review_when_the_model_is_sure_of_a_danger():
+def test_shadow_danger_keeps_the_probabilities_but_never_escalates():
+    deps = deps_with(Classifying([["F", math.log(0.8)], ["A", math.log(0.2)]]))
+    out = intake_guard.run("Thêm bài", "một bài lịch sử", deps, Budget())
+    assert out["verdict"] == "allow" and out["classifier"]["escalate"] is False and out["classifier"]["shadow"] is True
+    assert out["classifier"]["probs"]["politics_religion"] > 0.7
+
+
+def test_intake_escalates_to_human_review_when_the_model_is_sure_of_a_danger(monkeypatch):
+    monkeypatch.setitem(classifier.CLASSIFIER["tasks"]["danger"], "mode", "active")
     deps = deps_with(Classifying([["F", math.log(0.8)], ["A", math.log(0.2)]]))
     out = intake_guard.run("Thêm bài", "một bài lịch sử", deps, Budget())
     assert out["verdict"] == "human_review" and "model_politics_religion" in out["labels"]
@@ -74,12 +97,14 @@ def test_intake_stays_allow_when_safe_or_when_the_classifier_is_down():
         assert out["verdict"] == "allow", out
 
 
-def test_model_never_lowers_a_hard_rule():
+def test_model_never_lowers_a_hard_rule(monkeypatch):
+    monkeypatch.setitem(classifier.CLASSIFIER["tasks"]["danger"], "mode", "active")
     out = intake_guard.run("x", "dit me cai trang", deps_with(Classifying([["A", 0.0]])), Budget())
     assert out["verdict"] in ("reject", "critical")
 
 
-def test_content_review_escalates_on_a_sure_danger_even_if_the_json_guard_says_ok():
+def test_content_review_escalates_on_a_sure_danger_even_if_the_json_guard_says_ok(monkeypatch):
+    monkeypatch.setitem(classifier.CLASSIFIER["tasks"]["danger"], "mode", "active")
     state = {"full_diff": [{"file": "public/x.html", "diff": "diff --git a/public/x.html b/public/x.html\n"
                                                              "--- a/public/x.html\n+++ b/public/x.html\n"
                                                              "@@ -0,0 +1 @@\n+<p>Nội dung mới cho bài</p>\n"}]}
@@ -101,7 +126,7 @@ def test_ollama_client_sends_top_level_logprob_fields(monkeypatch):
 
 def test_shared_config_is_the_server_file():
     server = json.loads((classifier.CONFIG_PATH).read_text(encoding="utf-8"))
-    assert classifier.CLASSIFIER == server and not server["calibrated"]
+    assert classifier.CLASSIFIER == server and server["calibrated"] is True
 
 
 def test_classifier_task_name_is_traced_without_changing_inference():
@@ -157,3 +182,41 @@ def test_money_requests_stop_the_worker_at_gate_1_for_a_human():
     lesson = intake_guard.run("Thêm bài tập tính doanh thu", "cho trường Kinh tế, có giá bán",
                               deps_with(Classifying([["A", 0.0]])), Budget())
     assert "money" not in lesson["labels"]
+
+
+GOLDEN = {
+    "clear_safe": ({"safe": 0.97, "system_attack": 0.01, "abuse_hate": 0.005, "sexual": 0.002, "violence_self_harm": 0.003,
+                    "politics_religion": 0.004, "drugs_advice": 0.003, "cheating_spam": 0.003}, 0.27124929729401437),
+    "clear_attack": ({"safe": 0.03, "system_attack": 0.9, "abuse_hate": 0.02, "sexual": 0.005, "violence_self_harm": 0.01,
+                      "politics_religion": 0.005, "drugs_advice": 0.01, "cheating_spam": 0.02}, 0.7410186233985),
+    "mixed": ({"safe": 0.45, "system_attack": 0.1, "abuse_hate": 0.25, "sexual": 0.02, "violence_self_harm": 0.03,
+               "politics_religion": 0.05, "drugs_advice": 0.05, "cheating_spam": 0.05}, 0.702980511400678),
+    "partial": ({"safe": 0.2, "sexual": 0.75}, 0.8945697942630529),
+}
+
+
+def test_stacker_score_matches_the_node_side_and_the_offline_fit():
+    scoring = classifier.CLASSIFIER["tasks"]["danger"]["scoring"]
+    for name, (probs, expected) in GOLDEN.items():
+        assert abs(classifier.stacker_score(probs, scoring) - expected) < 1e-9, name
+    assert scoring["keys"] == [label["key"] for label in classifier.CLASSIFIER["tasks"]["danger"]["labels"]]
+    assert scoring["reject_min"] is None
+
+
+def test_stacker_decision_rejects_only_when_reject_min_is_set():
+    scoring = classifier.CLASSIFIER["tasks"]["danger"]["scoring"]
+    calm = classifier.decide_danger(GOLDEN["clear_safe"][0], scoring=scoring)
+    assert (calm["escalate"], calm["reject"], calm["labels"]) == (False, False, [])
+    mixed = classifier.decide_danger(GOLDEN["mixed"][0], scoring=scoring)
+    assert (mixed["escalate"], mixed["reject"], mixed["labels"]) == (True, False, ["abuse_hate"])
+    assert classifier.decide_danger(GOLDEN["mixed"][0], scoring={**scoring, "reject_min": 0.7})["reject"] is True
+
+
+def test_shadow_mode_never_rejects(monkeypatch):
+    scoring = {**classifier.CLASSIFIER["tasks"]["danger"]["scoring"], "reject_min": 0.7}
+    monkeypatch.setitem(classifier.CLASSIFIER["tasks"]["danger"], "scoring", scoring)
+    monkeypatch.setattr(classifier, "classify", lambda *a, **k: {"model": "m", "probs": GOLDEN["mixed"][0]})
+    shadow = classifier.danger("x", None, None, gate=1)
+    assert (shadow["shadow"], shadow["escalate"], shadow["reject"]) == (True, False, False)
+    monkeypatch.setitem(classifier.CLASSIFIER["tasks"]["danger"], "mode", "active")
+    assert classifier.danger("x", None, None, gate=1)["reject"] is True

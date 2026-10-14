@@ -48,6 +48,7 @@ import context
 import code_index
 import file_context
 from dbconn import harness_db
+from gates import best_match
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_validate.md").read_text(encoding="utf-8")
 ANSWERABLE_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_answerable.md").read_text(encoding="utf-8")
@@ -409,8 +410,8 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                 raise ValueError('plan cần sửa renderer hiện có: ' + ', '.join(sorted(required)))
             if 'LƯU Ý: chữ người dùng nhắc KHÔNG nằm' in (state.get('planning_context') or '') and not targets.intersection(state.get('source_targets') or []):
                 raise ValueError('plan không sửa module đang render nội dung người dùng yêu cầu')
-            if state.get('best_match') and state['best_match'] not in targets:
-                raise ValueError(f"plan không sửa file khớp nhiều cụm người dùng viết nhất: {state['best_match']}")
+            best_match.enforce(state.get('best_match'), targets,
+                               f"plan không sửa file khớp nhiều cụm người dùng viết nhất: {state.get('best_match')}", judge)
             state['grounding'] = checked_grounding(validation, plan, sha, files)
             judge("source grounding", True, f"{len(state['grounding']['evidence'])} quotes matched verbatim in {', '.join(files)}")
         except ValueError as error:

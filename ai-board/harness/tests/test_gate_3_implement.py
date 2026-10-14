@@ -5,6 +5,17 @@ from pathlib import Path
 
 import pytest
 
+def test_revoked_authority_prevents_candidate_file_writes(tmp_path):
+    from repositories import server_hsm
+    class Revoked:
+        def authorize_action(self, _action):
+            return False
+    implement._ensure_scratch_repo(tmp_path)
+    with server_hsm.server_scope(Revoked()), pytest.raises(server_hsm.AuthorityError):
+        implement._write_and_diff(tmp_path, 'public/new.html', '<h1>New</h1>', 'test/new.test.js', "import test from 'node:test';")
+    assert not (tmp_path / 'public/new.html').exists()
+    assert not (tmp_path / 'test/new.test.js').exists()
+
 from budget import Budget
 from conftest import FakeModels, deps_with, plan_with
 from gates import implement
