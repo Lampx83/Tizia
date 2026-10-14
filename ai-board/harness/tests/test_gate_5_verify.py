@@ -39,6 +39,9 @@ class FakeRunner:
             for name, service in config['services'].items():
                 service['networks'] = {'default': None}
                 service['volumes'] = [{'source': v.split(':')[0], 'target': v.split(':')[1], 'type': 'volume'} for v in service['volumes']]
+            if 'secrets' in config:
+                config['services']['tizia']['build']['secrets'] = [
+                    {'source': name} for name in config['services']['tizia']['build']['secrets']]
             config['services']['tizia']['ports'] = [{'target': 8041, 'host_ip': '127.0.0.1'}]
             if action == "exec" and args[-1] == "env":
                 stdout = self.container_env + "DATABASE_URL=" + config["services"]["tizia"]["environment"]["DATABASE_URL"] + "\n"
@@ -92,6 +95,47 @@ def test_pass_uses_isolated_compose_smoke_and_down(tmp_path):
     smoke_args, smoke_kw = next((args, kw) for args, kw in runner.calls if args[0] != "docker")
     assert Path(smoke_args[-1]) == verify.SMOKE_SCRIPT
     assert smoke_kw["env"]["BASE"] == "http://127.0.0.1:49152"
+
+
+def test_guest_ca_only_reaches_build_and_source_is_immutable(tmp_path, monkeypatch):
+    ca = tmp_path / 'intercept-ca'
+    ca.write_text('public certificate fixture', encoding='utf-8')
+    monkeypatch.setattr(verify, '_guest_ca', lambda: ca)
+    runner = FakeRunner()
+    assert verify.run(state(checkout(tmp_path)), runner=runner)['blocked'] is False
+    owned = json.loads(runner.override)
+    assert owned['secrets'] == {'msb_ca': {'file': str(ca)}}
+    assert owned['services']['tizia']['build']['secrets'] == ['msb_ca']
+    assert 'secrets' not in owned['services']['tizia']
+
+    class Tampered(FakeRunner):
+        def __call__(self, args, **kwargs):
+            result = super().__call__(args, **kwargs)
+            if 'config' in args:
+                config = json.loads(result.stdout)
+                config['secrets']['msb_ca']['file'] = str(tmp_path / 'other')
+                result.stdout = json.dumps(config)
+            return result
+
+    tampered = Tampered()
+    out = verify.run(state(tmp_path), runner=tampered)
+    assert out['blocked'] is True and out['failure_class'] == 'critical'
+    assert not any('up' in args for args, _ in tampered.calls)
+
+
+def test_guest_ca_requires_the_runner_fingerprint(tmp_path, monkeypatch):
+    import hashlib
+    import pytest
+
+    body = b'-----BEGIN CERTIFICATE-----\npublic fixture\n-----END CERTIFICATE-----\n'
+    ca = tmp_path / 'microsandbox-ca.public'
+    ca.write_bytes(body)
+    monkeypatch.setattr(verify, 'CA_DIR', tmp_path)
+    monkeypatch.setenv('GATE5_CA_SHA256', hashlib.sha256(body).hexdigest())
+    assert verify._guest_ca() == ca
+    monkeypatch.setenv('GATE5_CA_SHA256', '0' * 64)
+    with pytest.raises(RuntimeError, match='fingerprint mismatch'):
+        verify._guest_ca()
 
 
 def test_smoke_failure_still_tears_down(tmp_path):

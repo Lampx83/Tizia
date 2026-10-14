@@ -2,8 +2,8 @@
 version: 1
 vm: { cpus: 1, memory_mib: 2048, disk_mib: 10240, ttl_s: 1200, lease_s: 120 }
 concurrency: 1
-# guest-inputs: fab0bc88cb98ace101ad69d6d6a0fea5ee48ec1b91dd5b54f8ae35937f7b567f
-guest_image: image-registry:5000/gate5@sha256:c96269beb8bb18d7f65d8a5de9216019c369c3bc1a86f33a2c8d1153a80fac75
+# guest-inputs: 0b481d78a44943526a932818998cdbf61ff4db6a02982acc8a125af4d0762327
+guest_image: image-registry:5000/gate5@sha256:702e947b8a254974eee8a28806c40260f5abee11200ed173d6a6fb27f4b9ae7c
 egress:
   - { host: registry-1.docker.io, port: 443 }
   - { host: auth.docker.io, port: 443 }
@@ -15,7 +15,7 @@ egress:
   - { host: objects.githubusercontent.com, port: 443 }
   - { host: release-assets.githubusercontent.com, port: 443 }
   - { host: nodejs.org, port: 443 }
-guest_env: { CI: "1" }
+guest_env: { CI: "1", GATE5_CA_SHA256: "4b386847e6e3fbd65e91086e284957d53d96c17916afc0c12ea8c58f01ac313a" }
 archive: { max_bytes: 104857600, max_expanded_bytes: 536870912, max_files: 20000 }
 exec: { timeout_s: 1200, max_stdout_bytes: 1048576, max_stderr_bytes: 1048576, workdir: /workspace }
 artifacts: { max_file_bytes: 26214400, max_total_bytes: 52428800 }
