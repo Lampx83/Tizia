@@ -85,6 +85,29 @@ test('validated surface plan creates ordered children once', async () => {
   db.close();
 });
 
+test('a surface plan released by a shadow worker is queued for active execution', async () => {
+  const { db, store, ticket, run } = await fixture();
+  const planned = await submit(store, ticket, run, plan());
+  const release = await store.releaseLease(ticket.id, {
+    workerId: 'planner', leaseToken: ticket.lease_token, outcome: 'planned', idempotencyKey: 'surface-release-001',
+  });
+  assert.deepEqual(release, { status: 'queued', phase: 'authorized' });
+  assert.deepEqual(await store.releaseLease(ticket.id, {
+    workerId: 'planner', leaseToken: ticket.lease_token, outcome: 'planned', idempotencyKey: 'surface-release-001',
+  }), { ...release, duplicate: true });
+  assert.equal(await store.claimNext({ workerId: 'planner', mode: 'shadow', intent: 'plan' }), null);
+  const exec = await store.claimNext({ workerId: 'planner', mode: 'active', intent: 'plan' });
+  assert.equal(exec.phase, 'executing');
+  const execRun = await store.createRun(ticket.id, {
+    workerId: 'planner', leaseToken: exec.lease_token, trigger: 'execute', idempotencyKey: 'surface-run-exec-001',
+  });
+  const resumed = await store.resumeAuthorizedPlan(ticket.id, {
+    workerId: 'planner', leaseToken: exec.lease_token, runId: execRun.id,
+  });
+  assert.equal(resumed.plan_hash, planned.plan_hash);
+  db.close();
+});
+
 test('policy identity includes enforced fields only and versions the persisted plan hash', () => {
   const metadataOnlyChanges = Object.fromEntries(Object.entries(CAPABILITY_POLICY).map(([name, entry]) => [name, {
     ...entry,

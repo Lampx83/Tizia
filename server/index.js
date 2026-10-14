@@ -391,7 +391,7 @@ attachAiBoardWorkerRoutes(r, {
 // Cờ phát hành: có page gate /<slug>.html → phải trước route HTML + static bên dưới.
 attachAiBoardReleases(r, { db: aiBoard.db, releases: aiBoard.releases, requireAuth, requireAdmin, requireStrictCsrf });
 const scopedCrud = attachScopedCrudRoutes(r, { db: aiBoard.db, requireAuth, requireStrictCsrf, sessionToken: (req) => req.user.token });
-// Ticket 24: online egress control. Nothing registered (DB) or configured (env) = every operation denied.
+// Online egress control. Nothing registered (DB) or configured (env) = every operation denied.
 const onlineRegistry = createOnlineRegistry(aiBoard.db, { backendScripts: backendScriptsEnabled() });
 const onlineAdapters = adaptersFromEnv();
 const onlineReleaseGate = createReleaseGate(aiBoard.db);
@@ -1489,6 +1489,7 @@ startShotRetention({ db: aiBoard.db, backend: aiBoardShotBackend, log });
 // Bật error tracking (Sentry nếu có SENTRY_DSN) trước khi nhận traffic.
 await initErrorTracking();
 
+if (db.bootFenced) { const s = db.endBoot(); log.info('[db] existing-schema boot done', { skippedDdl: s.skippedDdl, skippedWrites: s.skippedWrites, samples: s.samples }); }
 httpServer.listen(PORT, HOST, () => {
   log.info(`[tizia] listening on http://${HOST}:${PORT}`, { basePath: BASE_PATH || undefined });
   const oauthList = listEnabledProviders();

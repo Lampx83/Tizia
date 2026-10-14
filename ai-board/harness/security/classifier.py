@@ -1,7 +1,7 @@
 """Guard classifier, harness side of server/ai-board/classifier.js: same labels, prompt and
 thresholds (server/ai-board/classifier-calibration.json). One token from AI_BOARD_CLASSIFIER_MODEL, softmax over
-the task's letters only. It runs next to the JSON guardrails and may only raise severity; scoring.reject_min is
-read by the intake route only."""
+the task's letters only. It runs next to the JSON guardrails and may only raise severity; a scoring reject
+signal is observational until a separately approved runtime policy consumes it."""
 from __future__ import annotations
 
 import json
@@ -26,7 +26,7 @@ def build_prompt(task: str, text: str) -> str:
             .replace("{options}", options, 1).replace("{text}", fenced, 1))
 
 
-def label_probs(body: dict, task: str, temperature: float | None = None) -> dict[str, float]:
+def label_probs(body: dict, task: str, temperature: float | None = None, coverage: dict | None = None) -> dict[str, float]:
     """{key: p} over the task's letters. Raise ValueError when the response has no label logprobs."""
     temperature = temperature or CLASSIFIER["temperature"]
     first = (body.get("logprobs") or [None])[0] or {}
@@ -39,6 +39,10 @@ def label_probs(body: dict, task: str, temperature: float | None = None) -> dict
             by_letter[match.group(1)] = float(logprob)
     labels = CLASSIFIER["tasks"][task]["labels"]
     seen = [label for label in labels if label["letter"] in by_letter]
+    if coverage is not None:
+        coverage.update(observed_labels=[label["key"] for label in seen],
+                        missing_labels=[label["key"] for label in labels if label["letter"] not in by_letter],
+                        status="complete" if len(seen) == len(labels) else "partial" if seen else "parser_failure")
     if not seen:
         raise ValueError("classifier: no label logprobs in the response")
     scaled = [by_letter[label["letter"]] / temperature for label in seen]
@@ -93,13 +97,22 @@ def classify(task: str, text: str, deps, budget, *, gate: float, db_path=None, p
     model = getattr(deps.models, "classifier_model", "")
     if (not model and not getattr(deps.models, 'routing', None)) or task_mode(task) == "off" or not budget.tick():
         return None
+    body, coverage = None, {}
+    trace = getattr(deps, "trace", None)
     try:
         body = deps.call_model(model, build_prompt(task, text), gate=gate, budget=budget, db_path=db_path,
                                proposal_id=proposal_id, prompt_name=f"classifier_{task}", format=None, options={"num_predict": 1},
                                extra=LOGPROB_FIELDS)
-        return {"model": body.get('_model', model), "probs": label_probs(body, task),
+        probs = label_probs(body, task, coverage=coverage)
+        if trace and hasattr(trace, "attach_last"):
+            trace.attach_last("evaluation", {"check": f"classifier_{task}_coverage", "ok": coverage["status"] == "complete",
+                                             "detail": json.dumps(coverage, ensure_ascii=False)})
+        return {"model": body.get('_model', model), "probs": probs, "coverage": coverage,
                 **({'route': body['_route']} if body.get('_route') else {})}
     except Exception as error:  # noqa: BLE001 — outage/format: fall back, never fail the gate here
+        if body is not None and trace and hasattr(trace, "attach_last"):
+            trace.attach_last("evaluation", {"check": f"classifier_{task}_coverage", "ok": False,
+                                             "detail": json.dumps({**coverage, "status": "parser_failure"}, ensure_ascii=False)})
         print(f"[classifier] {task} lỗi: {str(error)[:200]}")
         return None
 

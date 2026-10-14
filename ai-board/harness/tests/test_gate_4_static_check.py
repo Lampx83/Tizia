@@ -3,6 +3,37 @@ minimalism guard (vượt ước lượng/file ngoài plan -> flag, không block
 from pathlib import Path
 
 from gates import static_check
+import pytest
+
+
+@pytest.mark.parametrize('stop', ['revoked', 'action_budget_exhausted', 'local_budget'])
+@pytest.mark.parametrize('after_json', [False, True])
+def test_content_review_stops_before_next_model(stop, after_json):
+    from types import SimpleNamespace
+    from repositories import server_hsm
+    from runtime.budget import Budget
+
+    calls = []
+    class Authority:
+        def authorize_action(self, _action):
+            if (calls or not after_json) and stop != 'local_budget':
+                raise server_hsm.AuthorityError(stop)
+            return True
+
+    budget = Budget(max_model_calls=int(after_json) if stop == 'local_budget' else 40)
+    def call_model(_model, _prompt, **kwargs):
+        calls.append(kwargs['prompt_name'])
+        budget.spend('model_calls')
+        return {'response': '{"labels": ["ok"]}'}
+
+    deps = SimpleNamespace(models=SimpleNamespace(gate1_model='guard', classifier_model='classifier'),
+                           call_model=call_model)
+    diffs = [{'file': 'public/x.html', 'diff': '+<h1>Study</h1>\n'}]
+    with server_hsm.server_scope(Authority()):
+        result = static_check.content_review({'diffs': diffs}, deps, budget)
+    assert result['blocked'] is True
+    assert result['failure_class'] == ('critical' if stop == 'revoked' else 'budget')
+    assert calls == (['content_guard.md'] if after_json else [])
 
 
 def _plan(subtasks):

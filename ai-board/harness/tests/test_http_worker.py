@@ -3,6 +3,8 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
 AI_BOARD_DIR = Path(__file__).resolve().parents[2]
 if str(AI_BOARD_DIR) not in sys.path:
     sys.path.insert(0, str(AI_BOARD_DIR))
@@ -34,15 +36,15 @@ POLICY = {'version': 'd0-v2', 'hash': 'c' * 64,
 
 
 class FakeTransport:
-    def __init__(self):
-        self.calls = []
+    def __init__(self, plan_hash=None):
+        self.calls, self.plan_hash = [], plan_hash
 
     def __call__(self, method, path, payload, headers):
         self.calls.append((method, path, payload, headers))
         if path.endswith('/claim'):
             return {'ticket': {'id': 7, 'lease_token': 'lease-7'}}
         if path.endswith('/snapshot'):
-            return {'ticket': {'cumulative_budget': 20}, 'capability_policy': POLICY,
+            return {'ticket': {'cumulative_budget': 20}, 'capability_policy': POLICY, 'hsm_contract': {'hash':'pin'},
                     'request': {'id': 3, 'title': 'fixture', 'detail': '[Trang: X] /x.html'}, 'thread': []}
         if path.endswith('/runs'):
             return {'run': {'id': 11}}
@@ -52,9 +54,13 @@ class FakeTransport:
             return {'status': 'clarifying'}
         if path.endswith('/plan'):
             return {'status': 'planned', 'tier': 'surface', 'children': [{'id': 13}],
-                    'capability_policy_hash': POLICY['hash']}
+                    'capability_policy_hash': POLICY['hash'], **({'plan_hash': self.plan_hash} if self.plan_hash else {})}
         if path.endswith('/verdict'):
             return {'verdict': payload['verdict']}
+        if path.endswith('/authority'):
+            return {'authorized':True}
+        if path.endswith('/hsm'):
+            return {'execute':payload['event']=='BEGIN','state':{'version':1 if payload['event']=='BEGIN' else 2}}
         return {'ok': True}
 
 
@@ -345,7 +351,9 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
         return {'gate': 5.5, 'blocked': False, 'reason': None,
                 'risk_level': 'low', 'risk_signals': []}
 
-    def change_runner(plan, ticket_id, max_units, *, policy, accepted_policy_hash, request_detail, should_stop):
+    def change_runner(plan, ticket_id, max_units, *, policy, accepted_policy_hash, request_detail, should_stop,
+                      plan_hash=None):
+        assert plan_hash is None  # server sent none: no kwarg at all would also pass the strict signature
         assert should_stop() is False  # lease healthy while the heartbeat succeeds
         assert max_units == 200 - 80  # per-run limit minus what planning spent
         assert (policy, accepted_policy_hash) == (POLICY, POLICY['hash'])
@@ -372,7 +380,7 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
         **canonical_plan['steps'][0], 'file': 'public/x.html', 'verify': 'smoke; 200', 'size': 'small',
     }
     assert [call[1].rsplit('/', 1)[-1] for call in transport.calls] == [
-        'claim', 'snapshot', 'heartbeat', 'runs', 'events', 'plan', 'verdict', 'release',
+        'claim', 'snapshot', 'heartbeat', 'runs', 'events', 'plan', 'hsm', 'hsm', 'verdict', 'release',
     ]
     posted = transport.calls[-2][2]['verdict']
     assert posted == {
@@ -853,7 +861,7 @@ def test_authorized_plan_is_executed_without_replanning():
             self.calls.append((method, path, payload, headers))
             if path.endswith('/snapshot'):
                 return {'ticket': {'phase': 'executing', 'cumulative_budget': 30, 'budget_limit': 200},
-                        'capability_policy': POLICY, 'request': {'id': 3, 'detail': 'x'}, 'thread': []}
+                        'capability_policy': POLICY, 'hsm_contract': {'hash':'pin'}, 'request': {'id': 3, 'detail': 'x'}, 'thread': []}
             if path.endswith('/resume-plan'):
                 return {'status': 'planned', 'tier': 'protected', 'plan': {'goal': 'approved'},
                         'capability_policy_hash': POLICY['hash'], 'children': [{'id': 13}]}
@@ -880,6 +888,24 @@ def test_authorized_plan_is_executed_without_replanning():
     assert runs[0]['trigger'] == 'execute'
     assert seen == {'plan': {'goal': 'approved'}, 'max_units': 200, 'policy_hash': POLICY['hash']}
     assert out['status'] == 'planned' and out['tier'] == 'protected'
+
+def test_http_execution_missing_contract_never_calls_change_runner():
+    import pytest
+    from repositories.server_hsm import AuthorityError
+    class MissingContract(FakeTransport):
+        def __call__(self,*args):
+            response=super().__call__(*args)
+            if args[1].endswith('/snapshot'):
+                response.pop('hsm_contract',None)
+            return response
+    effects=[]
+    transport=MissingContract()
+    worker=HttpWorker(WorkerClient('http://fixture','secret',transport=transport),worker_id='w1',
+        mode='active',planner=lambda _snapshot: ({'goal':'x'},0),
+        change_runner=lambda *_args,**_kwargs: effects.append('execute'),candidates=FakeCandidates())
+    with pytest.raises(AuthorityError,match='contract'):
+        worker.run_once()
+    assert effects==[]
 
 
 def test_gate_start_is_reported_as_an_idempotent_event():
@@ -1409,6 +1435,21 @@ def test_a_self_request_reaches_the_gates_as_self_and_its_verdict_names_base_sha
     verdict = next(call[2]['verdict'] for call in transport.calls if call[1].endswith('/verdict'))
     assert verdict['outcome'] == 'blocked'
     assert (verdict['base_sha'], verdict['skill']) == ('a' * 40, 'edit-html-text')
+
+
+@pytest.mark.parametrize('server_hash,expected', [('f' * 64, {'plan_hash': 'f' * 64}), (None, {})])
+def test_server_plan_hash_reaches_the_change_runner_only_when_sent(server_hash, expected):
+    transport, got = FakeTransport(plan_hash=server_hash), {}
+
+    def change_runner(plan, ticket_id, max_units, **kwargs):
+        got.update(kwargs)
+        return {'outcome': 'blocked', 'gate_reached': 3, 'reason': 'stop', 'failure_class': 'plan', 'repairs': [],
+                'candidate': None, 'budget_used': 0, 'gates': [{'gate': 3, 'blocked': True, 'reason': 'stop'}]}
+
+    HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1', version='test', mode='active',
+               planner=lambda _snapshot: ({'goal': 'x', 'steps': []}, 80), change_runner=change_runner,
+               candidates=FakeCandidates()).run_once()
+    assert {k: v for k, v in got.items() if k == 'plan_hash'} == expected
 
 
 # Worker hỏi GitHub các PR server còn coi là mở, báo PR đã đóng.

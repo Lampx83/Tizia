@@ -32,11 +32,18 @@ def run(name, reply):
 
 
 def test_gold_eval_rows_are_unchanged_for_a_passing_and_a_blocked_case():
-    assert run("edit-text", GOOD) == {
+    passed = run("edit-text", GOOD)
+    # Candidate diff was added for independent grading; preserve the older metrics contract.
+    diff = passed.pop("diff")
+    assert "--- a/public/tinh-nang.html" in diff
+    assert any(line.startswith("-") and line[1:].strip() == "<h1>✨ Tính năng</h1>" for line in diff.splitlines())
+    assert any(line.startswith("+") and line[1:].strip() == "<h1>✨ Tính năng nổi bật</h1>" for line in diff.splitlines())
+    assert passed == {
         "case": "edit-text", "model": "fake", "gate_passed": True, "oracle": True, "last_output": None,
         "reason": None, "calls": 1, "retries": 0, "gpu_s": 0.0, "units": 1, "tokens_in": 120, "tokens_out": 80,
         "model_loads": 0, "done_reasons": [None],
     }
+    assert "-  <h1>✨ Tính năng</h1>" in diff and "+  <h1>✨ Tính năng nổi bật</h1>" in diff
     blocked = run("edit-text", "không phải json")
     assert blocked["gate_passed"] is False and blocked["oracle"] is False
     assert blocked["calls"] == 4 and blocked["retries"] == 3  # 1 lần đầu + MAX_INNER_RETRIES

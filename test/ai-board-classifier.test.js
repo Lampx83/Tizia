@@ -10,7 +10,7 @@ import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
 import { openBoard } from './support/ai-board-db.js';
 import { attachAiBoardRequestRoutes } from '../server/ai-board/routes.js';
 import {
-  CLASSIFIER, buildPrompt, classify, decideClarity, decideDanger, labelProbs, stackerScore,
+  CLASSIFIER, buildPrompt, classify, classifyRequest, decideClarity, decideDanger, labelProbs, stackerScore,
 } from '../server/ai-board/classifier.js';
 
 const LEXICON = JSON.parse(fs.readFileSync(new URL('../server/ai-board/guard-lexicon.json', import.meta.url), 'utf8'));
@@ -26,6 +26,9 @@ test('every lexicon label belongs to exactly one danger group', () => {
 });
 
 test('softmax runs over the task letters only, divided by the temperature', () => {
+  const coverage = {};
+  labelProbs(body([['A', 0]]), 'clarity', 1, coverage);
+  assert.deepEqual(coverage, { observed_labels: ['clear'], missing_labels: ['vague', 'too_broad'], status: 'partial' });
   const probs = labelProbs(body([['A', Math.log(0.5)], ['The', Math.log(0.3)], [' B', Math.log(0.1)],
     ['C.', Math.log(0.1)]]), 'clarity', 1);
   assert.ok(Math.abs(probs.clear - 5 / 7) < 1e-9);
@@ -51,6 +54,53 @@ test('danger only escalates to human review at 0.7, logs from 0.3, never blocks'
   assert.deepEqual({ escalate: risky.escalate, labels: risky.labels }, { escalate: true, labels: ['politics_religion'] });
   assert.ok(!('block' in risky));
   assert.equal(decideDanger({ safe: 0.95 }).escalate, false);
+});
+
+test('signed stacker vectors match Python and SHADOW has no automatic rejection threshold', () => {
+  const scoring = CLASSIFIER.tasks.danger.scoring;
+  const vectors = [
+    [{ safe: 0.97, system_attack: 0.01, abuse_hate: 0.005, sexual: 0.002, violence_self_harm: 0.003,
+      politics_religion: 0.004, drugs_advice: 0.003, cheating_spam: 0.003 }, 0.27124929729401437],
+    [{ safe: 0.03, system_attack: 0.9, abuse_hate: 0.02, sexual: 0.005, violence_self_harm: 0.01,
+      politics_religion: 0.005, drugs_advice: 0.01, cheating_spam: 0.02 }, 0.7410186233985],
+    [{ safe: 0.45, system_attack: 0.1, abuse_hate: 0.25, sexual: 0.02, violence_self_harm: 0.03,
+      politics_religion: 0.05, drugs_advice: 0.05, cheating_spam: 0.05 }, 0.702980511400678],
+    [{ safe: 0.2, sexual: 0.75 }, 0.8945697942630529],
+  ];
+  for (const [probs, expected] of vectors) assert.ok(Math.abs(stackerScore(probs, scoring) - expected) < 1e-9);
+  assert.equal(CLASSIFIER.tasks.danger.mode, 'shadow');
+  assert.equal(scoring.review_min, 0.5);
+  assert.equal(scoring.reject_min, null);
+});
+
+test('classification model calls are serial even when both tasks are enabled', async () => {
+  let active = 0;
+  let peak = 0;
+  const fetchImpl = async () => {
+    peak = Math.max(peak, ++active);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    active -= 1;
+    return { ok: true, json: async () => body([['A', 0], ['B', -2]]) };
+  };
+  const classified = await classifyRequest('Đổi màu nút', 'Trang giới thiệu', {
+    env: { OLLAMA_URL: 'http://ollama.test', AI_BOARD_CLASSIFIER_MODEL: 'test-model' }, fetchImpl,
+  });
+  assert.equal(peak, 1);
+  assert.equal(classified.model, 'test-model');
+  assert.equal(classified.danger.shadow, true);
+  assert.equal(classified.danger.coverage.status, 'partial');
+});
+
+test('parser failure is recorded without acting on the request', async () => {
+  const classified = await classifyRequest('Đổi màu nút', 'Trang giới thiệu', {
+    env: { OLLAMA_URL: 'http://ollama.test', AI_BOARD_CLASSIFIER_MODEL: 'test-model' },
+    fetchImpl: async () => ({ ok: true, json: async () => body([['not-a-label', 0]]) }),
+  });
+  assert.equal(classified.model, null);
+  assert.equal(classified.clarity, null);
+  assert.equal(classified.danger, null);
+  assert.equal(classified.failures.clarity.status, 'parser_failure');
+  assert.equal(classified.failures.danger.status, 'parser_failure');
 });
 
 test('classify asks the model for one token with logprobs and no thinking', async () => {

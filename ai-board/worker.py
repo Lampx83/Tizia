@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import hashlib
 import json
 import os
 import posixpath
@@ -143,7 +144,8 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
              should_stop: Callable[[], bool] | None,
              candidate_opts: dict | None = None,
              request_type: str | None = None,
-             eval_tasks: list[dict] | None = None, preview_capture=None) -> tuple[list[dict], str | None, dict | None, list[dict], str | None]:
+             eval_tasks: list[dict] | None = None, preview_capture=None,
+             checkpoint=None) -> tuple[list[dict], str | None, dict | None, list[dict], str | None]:
     """One pass of Gates 3→5.5 on fresh scratch + worktree. Return (public gates, failure kind, candidate,
     ảnh chụp cổng 5 — file tạm cục bộ, base sha các cổng đã dùng | None)."""
     scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
@@ -159,6 +161,8 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
         state["request_type"] = request_type  # 'self': cổng 4 nới vùng tự sửa + tính lại file khoá
     if eval_tasks is not None:
         state["eval_tasks"] = eval_tasks  # self: phần kiểm tra, chỉ cổng 5 (eval) đọc
+    if checkpoint is not None:
+        state["checkpoint"] = checkpoint
     state["should_stop"] = should_stop  # sandbox Gate 5 renews its VM lease only while this is false
     state.update(candidate_opts or {})  # folder: branch_name + branch_restore cho candidate.create
     if memory_path:
@@ -185,10 +189,16 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
                     result = {"gate": gate, "blocked": True, "reason": "budget exhausted", "failure_class": "budget"}
                 else:
                     try:
-                        result = run_gate(gate, {}, deps, budget, state)
+                        if gate == 4:
+                            from repositories import server_hsm
+                            result = server_hsm.execute(lambda: run_gate(gate, {}, deps, budget, state))
+                        else:
+                            result = run_gate(gate, {}, deps, budget, state)
                     except Exception as error:  # model/network/tool outage, not the candidate's code
                         result = {"gate": gate, "blocked": True, "reason": str(error)[:1000],
                                   "failure_class": "transient"}
+                    if checkpoint is not None:
+                        checkpoint.save(budget)
                     if getattr(deps, "trace", None):
                         deps.trace.flush()  # 1 lô trace mỗi cổng
                 # Transient Docker/checkout trouble gets one mechanical retry, no model call. It spends the
@@ -249,11 +259,23 @@ def drop_screenshots(shots: list[dict]) -> None:
             pass
 
 
+def _worker_checkpoint(ticket_id: int, plan: dict, plan_hash: str | None = None):
+    """Checkpoint theo ticket + plan_hash server (thiếu → băm plan cục bộ); None khi cờ tắt hoặc thiếu DATABASE_URL."""
+    dsn = os.getenv("DATABASE_URL")
+    if os.getenv("AI_BOARD_TOOL_LOOP") != "1" or not dsn:
+        return None
+    from repositories.tool_steps import Checkpoint
+    digest = str(plan_hash) if plan_hash else hashlib.sha256(
+        json.dumps(plan, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")).hexdigest()
+    return Checkpoint(dsn, f"ticket-{ticket_id}:{digest[:16]}")
+
+
 def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate,
                    cleanup: Callable, policy: dict | None = None, accepted_policy_hash: str | None = None,
                    request_detail: str | None = None, memory_path=None,
                    should_stop: Callable[[], bool] | None = None, candidate_opts: dict | None = None,
-                   request_type: str | None = None, eval_tasks: list[dict] | None = None, preview_capture=None) -> dict:
+                   request_type: str | None = None, eval_tasks: list[dict] | None = None, preview_capture=None,
+                   checkpoint=None, plan_hash: str | None = None) -> dict:
     """Run Gates 3→5.5, repairing an ordinary failure at most MAX_REPAIRS times. Return a redacted verdict.
 
     policy = snapshot catalog {hash, capabilities}; None only outside the HTTP worker (no catalog check).
@@ -273,6 +295,9 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
     repairs: list[dict] = []
     repair_reason = None
     shots: list[dict] = []
+    run_checkpoint = checkpoint if checkpoint is not None else _worker_checkpoint(ticket_id, plan, plan_hash)
+    if run_checkpoint is not None:
+        run_checkpoint.restore(budget)
     while True:
         if getattr(deps, "trace", None):
             deps.trace.attempt = len(repairs)
@@ -282,6 +307,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
             run_gate=run_gate, cleanup=cleanup, repair_reason=repair_reason, catalog=catalog,
             request_detail=request_detail, memory_path=memory_path, should_stop=should_stop,
             candidate_opts=candidate_opts, request_type=request_type, eval_tasks=eval_tasks, preview_capture=preview_capture,
+            checkpoint=run_checkpoint.attempt(len(repairs)) if run_checkpoint is not None else None,
         )
         last = gates[-1]
         if kind != "ordinary" or len(repairs) >= MAX_REPAIRS:
@@ -294,6 +320,8 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
         repairs.append({"gate": last["gate"], "reason": last["reason"]})
         repair_reason = f"cổng {last['gate']}: {last['reason']}"
     passed = _passed(gates, kind)
+    if run_checkpoint is not None and kind not in ("transient", "critical"):
+        run_checkpoint.purge()  # lượt có kết luận cuối; transient/critical giữ lại để resume hoặc đối chiếu
     needs_review = passed and last["risk_level"] in ("high", "critical")
     outcome = "needs_review" if needs_review else "ready_for_pr" if passed else "blocked"
     if memory_path:
@@ -858,19 +886,33 @@ class HttpWorker:
                 if type_kwargs:  # phần kiểm tra chỉ lấy sau khi đã có plan: người lập plan không bao giờ thấy
                     type_kwargs["eval_tasks"] = self.client.post("/api/ai-board/worker/eval-tasks", {}).get("test") or []
                 limit = int((snapshot.get("ticket") or {}).get("budget_limit") or DEFAULT_BUDGET_LIMIT)
-                result = self._with_heartbeat(
-                    lambda lost: self.change_runner(
-                        plan, ticket_id, max(limit - budget_used, 0),  # giây GPU còn lại của lượt (trừ phần lập plan)
-                        # {} when missing: fails the hash check closed instead of skipping the catalog.
-                        policy=snapshot.get("capability_policy") or {},
-                        accepted_policy_hash=planned.get("capability_policy_hash"),
-                        request_detail=((snapshot.get('request') or {}).get('title', '') + '\n'
-                            + ((snapshot.get('request') or {}).get('clarified_spec')
-                               or (snapshot.get('request') or {}).get('detail') or '')),
-                        should_stop=lost, **run_kwargs, **type_kwargs,
-                    ), ticket_id, lease,
-                    on_lease_lost=lambda lost_result: self.candidates.discard((lost_result or {}).get("candidate")),
-                )
+                import memory
+                from repositories.server_memory import RemoteLessons
+                from repositories import server_hsm
+
+                memory_api = RemoteLessons(self.client, ticket_id=ticket_id, run_id=run["id"],
+                                           worker_id=self.worker_id, lease_token=lease["lease_token"],
+                                           files=[file for step in plan.get("steps") or []
+                                                  for file in step.get("allowed_scope") or []],
+                                           enabled=snapshot.get("lessons_schema_version") == 1)
+                hsm_contract = snapshot.get('hsm_contract')
+                hsm_api = server_hsm.RemoteGate4(self.client,ticket_id=ticket_id,run_id=run['id'],
+                    worker_id=self.worker_id,lease_token=lease['lease_token'],contract=hsm_contract)
+                with memory.server_scope(memory_api), server_hsm.server_scope(hsm_api):
+                    result = self._with_heartbeat(
+                        lambda lost: self.change_runner(
+                            plan, ticket_id, max(limit - budget_used, 0),  # giây GPU còn lại của lượt (trừ phần lập plan)
+                            # {} when missing: fails the hash check closed instead of skipping the catalog.
+                            policy=snapshot.get("capability_policy") or {},
+                            accepted_policy_hash=planned.get("capability_policy_hash"),
+                            request_detail=((snapshot.get('request') or {}).get('title', '') + '\n'
+                                + ((snapshot.get('request') or {}).get('clarified_spec')
+                                   or (snapshot.get('request') or {}).get('detail') or '')),
+                            should_stop=lost, **run_kwargs, **type_kwargs,
+                        **({"plan_hash": planned["plan_hash"]} if planned.get("plan_hash") else {}),
+                        ), ticket_id, lease,
+                        on_lease_lost=lambda lost_result: self.candidates.discard((lost_result or {}).get("candidate")),
+                    )
                 preview_artifact = result.pop("_preview_artifact", None) if isinstance(result, dict) else None
                 shots = (result.pop("screenshots", None) if isinstance(result, dict) else None) or []
                 try:
@@ -884,6 +926,7 @@ class HttpWorker:
                         **lease, "run_id": run["id"], "verdict": {**result, "skill": skill} if skill else result,
                         "idempotency_key": f"{prefix}:verdict",
                     })["verdict"]
+                    memory_api.flush(verdict)
                 except Exception as error:
                     if _is_stale_lease(error):
                         self.candidates.discard(result.get("candidate"))

@@ -57,7 +57,8 @@
         "(in ra|tiết lộ|cho xem) (lời nhắc hệ thống|system prompt)", "bật chế độ nhà phát triển",
         "failure_class", "allowed_scope", "\"?blocked\"?\\s*:\\s*false", "auto[- ]?approve this", "tự động duyệt yêu cầu này",
         "(gán|trả về|trả|chọn|cho) nhãn \"?ok", "(gan|tra ve|chon) nhan \"?ok", "(return|assign|output|give) (the )?label \"?ok",
-        "\"?labels?\"?\\s*:\\s*\\[?\\s*\"ok\""
+        "\"?labels?\"?\\s*:\\s*\\[?\\s*\"ok\"",
+        "(tach|chia|tong hop)[\\s\\S]{0,180}(?:2 request|hai request)[\\s\\S]{0,180}(?:lower\\s*case|chu thuong)[\\s\\S]{0,180}(?:upper\\s*case|chu hoa)[\\s\\S]{0,180}(?:thuc hien|execute)"
       ]
     },
     "harassment_profanity": {

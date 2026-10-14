@@ -2,6 +2,7 @@
 guardrails of gate 1 (intake_guard) and gate 4 (content_review). It may only raise severity."""
 import json
 import math
+from types import SimpleNamespace
 
 import classifier
 from budget import Budget
@@ -34,6 +35,9 @@ class Classifying(FakeModels):
 
 
 def test_softmax_matches_the_node_fixture():
+    coverage = {}
+    classifier.label_probs(body([["A", 0.0]]), "clarity", 1, coverage)
+    assert coverage == {"observed_labels": ["clear"], "missing_labels": ["vague", "too_broad"], "status": "partial"}
     probs = classifier.label_probs(body([["A", math.log(0.5)], ["The", math.log(0.3)], [" B", math.log(0.1)],
                                          ["C.", math.log(0.1)]]), "clarity", 1)
     assert abs(probs["clear"] - 5 / 7) < 1e-9 and abs(probs["too_broad"] - 1 / 7) < 1e-9
@@ -43,6 +47,17 @@ def test_softmax_matches_the_node_fixture():
         assert "logprobs" in str(error)
     else:
         raise AssertionError("no label logprobs must raise")
+
+
+def test_parser_failure_is_counted_in_trace_without_acting():
+    events = []
+    trace = SimpleNamespace(attach_last=lambda section, value: events.append((section, value)))
+    deps = SimpleNamespace(models=SimpleNamespace(classifier_model="fake-classifier"), trace=trace,
+                           call_model=lambda *args, **kwargs: body([["not-a-label", 0.0]]))
+    assert classifier.classify("danger", "x", deps, Budget(), gate=1) is None
+    assert events[0][0] == "evaluation"
+    assert events[0][1]["check"] == "classifier_danger_coverage"
+    assert json.loads(events[0][1]["detail"])["status"] == "parser_failure"
 
 
 def test_decisions_use_the_shared_thresholds():

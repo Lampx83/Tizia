@@ -1,7 +1,7 @@
 // Logprob classifier: one token from AI_BOARD_CLASSIFIER_MODEL, softmax over the task's letters
 // only. Same labels, prompt and thresholds as ai-board/harness/classifier.py (classifier-calibration.json).
-// Clarity decides whether the FAB clarifies the request first; danger adds human review and, only when the
-// calibration sets scoring.reject_min, an automatic reject (422). The deterministic intake-guard always runs first.
+// Clarity may request clarification; danger computes review/reject signals for calibration.
+// The intake route suppresses SHADOW actions, and its deterministic guard owns rejection.
 import fs from 'node:fs';
 import { routedClassifyRequest } from '../providers/model-routing.js';
 
@@ -20,7 +20,7 @@ export function buildPrompt(task, text) {
 }
 
 /** {key: p} from an Ollama body with logprobs. Tokens outside the letters are ignored; throws when none match. */
-export function labelProbs(body, task, temperature = CLASSIFIER.temperature) {
+export function labelProbs(body, task, temperature = CLASSIFIER.temperature, coverage = null) {
   const first = body?.logprobs?.[0];
   const top = first?.top_logprobs?.length ? first.top_logprobs : first ? [first] : [];
   const byLetter = new Map();
@@ -30,6 +30,11 @@ export function labelProbs(body, task, temperature = CLASSIFIER.temperature) {
   }
   const labels = CLASSIFIER.tasks[task].labels;
   const seen = labels.filter((l) => byLetter.has(l.letter));
+  if (coverage) {
+    coverage.observed_labels = seen.map((label) => label['key']);
+    coverage.missing_labels = labels.filter((label) => !byLetter.has(label.letter)).map((label) => label['key']);
+    coverage.status = seen.length ? (seen.length === labels.length ? 'complete' : 'partial') : 'parser_failure';
+  }
   if (!seen.length) throw new Error('classifier: no label logprobs in the response');
   const scaled = seen.map((l) => byLetter.get(l.letter) / temperature);
   const max = Math.max(...scaled);
@@ -80,7 +85,10 @@ export async function classify(task, text, { env = process.env, fetchImpl = fetc
     keep_alive: CLASSIFIER.keep_alive, options: { num_predict: 1, temperature: 0, num_ctx: 4096 },
   };
   const routed = await routedClassifyRequest(payload, { env, fetchImpl, timeoutMs });
-  if (routed) return { model: routed.model, probs: labelProbs(routed.body, task), route: routed.route };
+  if (routed) {
+    const coverage = {};
+    return { model: routed.model, probs: labelProbs(routed.body, task, undefined, coverage), coverage, route: routed.route };
+  }
   const url = String(env.OLLAMA_URL || '').replace(/\/+$/, '');
   const model = String(env.AI_BOARD_CLASSIFIER_MODEL || '').trim();
   if (!url || !model) throw new Error('classifier: OLLAMA_URL or AI_BOARD_CLASSIFIER_MODEL not set');
@@ -95,25 +103,36 @@ export async function classify(task, text, { env = process.env, fetchImpl = fetc
     }),
   });
   if (!res.ok) throw new Error(`classifier: Ollama HTTP ${res.status}`);
-  return { model, probs: labelProbs(await res.json(), task) };
+  const coverage = {};
+  return { model, probs: labelProbs(await res.json(), task, undefined, coverage), coverage };
 }
 
 /** Per-task mode: active acts, shadow is logged only (shadow: true), off skips the call. */
 export const taskMode = (task, modes) => modes?.[task] ?? CLASSIFIER.tasks[task].mode ?? 'active';
 
-/** Both tasks for a new request. A side is null when off or its call failed (old behaviour for that side). */
+/** Both tasks for a new request. Calls stay serial so the local model serves one workload at a time. */
 export async function classifyRequest(title, detail, { modes, ...options } = {}) {
   const text = `${title ?? ''}\n${detail ?? ''}`;
   const run = (task) => (taskMode(task, modes) === 'off' ? Promise.resolve(null) : classify(task, text, options));
-  const [clarity, danger] = await Promise.allSettled([run('clarity'), run('danger')]);
+  const settle = async (task) => {
+    try { return { value: await run(task) }; } catch (reason) { return { reason }; }
+  };
+  const clarity = await settle('clarity');
+  const danger = await settle('danger');
   const model = clarity.value?.model || danger.value?.model || null;
-  if (!model) return null;
+  const failure = (result) => result.reason ? {
+    status: String(result.reason.message || '').includes('no label logprobs') ? 'parser_failure' : 'call_failure',
+    error_type: result.reason.name || 'Error',
+  } : null;
+  const failures = { clarity: failure(clarity), danger: failure(danger) };
+  if (!model && !failures.clarity && !failures.danger) return null;
   const shadow = (task) => taskMode(task, modes) === 'shadow';
   return {
-    model,
-    clarity: clarity.value ? { probs: clarity.value.probs, ...decideClarity(clarity.value.probs), shadow: shadow('clarity'),
+    model, failures,
+    clarity: clarity.value ? { probs: clarity.value.probs, coverage: clarity.value.coverage, ...decideClarity(clarity.value.probs), shadow: shadow('clarity'),
       ...(clarity.value.route ? { route: clarity.value.route } : {}) } : null,
-    danger: danger.value ? { probs: danger.value.probs, ...decideDanger(danger.value.probs, undefined, CLASSIFIER.tasks.danger.scoring), shadow: shadow('danger'),
+    danger: danger.value ? { probs: danger.value.probs, coverage: danger.value.coverage,
+      ...decideDanger(danger.value.probs, undefined, CLASSIFIER.tasks.danger.scoring), shadow: shadow('danger'),
       ...(danger.value.route ? { route: danger.value.route } : {}) } : null,
   };
 }

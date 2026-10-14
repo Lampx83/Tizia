@@ -1,0 +1,54 @@
+# Overlay: zero-egress microVM runner for generated online backends. OFF by default.
+#   docker compose -f docker-compose.yml -f docker-compose.online.yml --profile online up -d online-runner
+# Without --profile online the runner never starts; with the overlay but AI_BOARD_ONLINE_BACKEND_SCRIPTS unset the app
+# still rejects backend_script registration and answers /backend 404. Prepare the token first:
+#   openssl rand -hex 32 > ai-board/sandbox-runner/secrets/online-runner-token
+# For the dev stack (service tizia-dev) set the same three variables in its env file instead of using this overlay.
+x-logging: &logging
+  driver: json-file
+  options: { max-size: 10m, max-file: "3" }
+
+services:
+  tizia:
+    environment:
+      AI_BOARD_ONLINE_BACKEND_SCRIPTS: ${AI_BOARD_ONLINE_BACKEND_SCRIPTS:-false}
+      ONLINE_RUNNER_URL: http://online-runner:8090
+      ONLINE_RUNNER_TOKEN_FILE: /run/secrets/online-runner-token
+    networks: [default, online-api]
+    volumes:
+      - ./ai-board/sandbox-runner/secrets/online-runner-token:/run/secrets/online-runner-token:ro
+
+  online-runner:
+    container_name: tizia-online-runner
+    build:
+      context: ai-board/sandbox-runner
+    image: tizia-sandbox-runner:dev
+    profiles: [online]
+    restart: on-failure
+    user: node
+    devices:
+      - /dev/kvm
+    group_add:
+      - "${KVM_GID:-109}"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    cpus: 1
+    mem_limit: 1g
+    pids_limit: 256
+    logging: *logging
+    networks: [online-api]  # the guest has no network; this one only carries app -> runner calls, no port is published
+    environment:
+      SANDBOX_POLICY_FILE: /etc/sandbox/sandbox-policy.yaml
+      SANDBOX_TOKEN_FILE: /run/secrets/online-runner-token
+      SANDBOX_RUNNER_ID: online-runner
+    volumes:
+      - online-runner-state:/home/node/.microsandbox
+      - ./ai-board/sandbox-runner/sandbox-policy.online.yaml:/etc/sandbox/sandbox-policy.yaml:ro
+      - ./ai-board/sandbox-runner/secrets/online-runner-token:/run/secrets/online-runner-token:ro
+
+networks:
+  online-api: {}
+
+volumes:
+  online-runner-state:

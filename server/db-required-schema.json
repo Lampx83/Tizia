@@ -1,0 +1,682 @@
+{
+ "tables": {
+  "achievements": [
+   "id",
+   "player_name",
+   "badge_id",
+   "unlocked_at"
+  ],
+  "adaptive_state": [
+   "learner",
+   "skill",
+   "p_known",
+   "attempts",
+   "correct_streak",
+   "fail_streak",
+   "last_at"
+  ],
+  "admin_db_audit": [
+   "id",
+   "user_id",
+   "username",
+   "sql",
+   "changes",
+   "last_id",
+   "error",
+   "created_at"
+  ],
+  "ai_decisions": [
+   "id",
+   "request_id",
+   "decided_by",
+   "model",
+   "action",
+   "status_applied",
+   "reason",
+   "public_note",
+   "priority_score",
+   "confidence",
+   "input_snapshot",
+   "raw_output",
+   "created_at"
+  ],
+  "ai_lesson_content": [
+   "id",
+   "week_id",
+   "subject",
+   "topic",
+   "kind",
+   "stem",
+   "payload",
+   "student",
+   "upvotes",
+   "flagged",
+   "created_at"
+  ],
+  "ai_prompt_log": [
+   "id",
+   "user_id",
+   "role",
+   "endpoint",
+   "prompt_text",
+   "blocked",
+   "block_reason",
+   "block_category",
+   "created_at"
+  ],
+  "ai_token_usage": [
+   "id",
+   "user_id",
+   "provider",
+   "model",
+   "endpoint",
+   "prompt_tokens",
+   "completion_tokens",
+   "cost_usd_micros",
+   "duration_ms",
+   "status",
+   "created_at"
+  ],
+  "analytics_events": [
+   "id",
+   "user_id",
+   "anon_id",
+   "name",
+   "props",
+   "session_id",
+   "path",
+   "ts"
+  ],
+  "attempts": [
+   "id",
+   "version",
+   "player_name",
+   "score",
+   "correct",
+   "total",
+   "duration_ms",
+   "details",
+   "created_at",
+   "class_code",
+   "level_n"
+  ],
+  "bp_progress": [
+   "user_id",
+   "season_id",
+   "season_xp",
+   "has_premium",
+   "claimed_free",
+   "claimed_premium",
+   "updated_at"
+  ],
+  "bp_seasons": [
+   "id",
+   "code",
+   "name",
+   "theme",
+   "started_at",
+   "ends_at",
+   "is_active"
+  ],
+  "campus_layouts": [
+   "domain",
+   "layout",
+   "updated_at"
+  ],
+  "classes": [
+   "id",
+   "code",
+   "name",
+   "teacher_name",
+   "created_at"
+  ],
+  "codelab_submissions": [
+   "submission_id",
+   "status",
+   "problem_slug",
+   "external_user_ref",
+   "user_id",
+   "score",
+   "passed_cases",
+   "total_cases",
+   "language_id",
+   "completed_at",
+   "processed_at"
+  ],
+  "competencies": [
+   "id",
+   "code",
+   "kind",
+   "name",
+   "description",
+   "sort_order",
+   "created_at"
+  ],
+  "content_datasets": [
+   "collection",
+   "item_key",
+   "body",
+   "ord",
+   "source",
+   "active",
+   "updated_at"
+  ],
+  "curriculum_content": [
+   "id",
+   "subject",
+   "year_level",
+   "semester",
+   "week",
+   "kind",
+   "title",
+   "body",
+   "source",
+   "active",
+   "updated_at",
+   "domain",
+   "grade"
+  ],
+  "daily_login": [
+   "user_id",
+   "streak",
+   "last_date",
+   "total_claims"
+  ],
+  "engagement_daily_quests": [
+   "user_id",
+   "quest_date",
+   "slot",
+   "kind",
+   "target",
+   "progress",
+   "claimed",
+   "reward_coin",
+   "reward_xp",
+   "label"
+  ],
+  "engagement_state": [
+   "user_id",
+   "streak",
+   "longest_streak",
+   "last_active_date",
+   "hearts",
+   "hearts_refill_at",
+   "updated_at"
+  ],
+  "event_registry": [
+   "name",
+   "description",
+   "schema_json",
+   "deprecated",
+   "added_at"
+  ],
+  "experiments": [
+   "key",
+   "status",
+   "variants",
+   "description",
+   "started_at",
+   "ended_at"
+  ],
+  "exposures": [
+   "user_id",
+   "exp_key",
+   "variant",
+   "first_seen_at",
+   "seen_count"
+  ],
+  "family_links": [
+   "id",
+   "parent_user_id",
+   "child_user_id",
+   "created_at"
+  ],
+  "feature_flags": [
+   "key",
+   "enabled",
+   "rollout_pct",
+   "description",
+   "updated_at"
+  ],
+  "league_groups": [
+   "id",
+   "season_id",
+   "tier",
+   "seq",
+   "member_count"
+  ],
+  "league_memberships": [
+   "season_id",
+   "user_id",
+   "group_id",
+   "tier",
+   "week_xp",
+   "final_rank",
+   "promoted",
+   "relegated"
+  ],
+  "league_seasons": [
+   "id",
+   "week_start",
+   "started_at",
+   "ended_at",
+   "created_at"
+  ],
+  "league_user_tier": [
+   "user_id",
+   "tier",
+   "updated_at"
+  ],
+  "learning_events": [
+   "id",
+   "learner",
+   "skill",
+   "question_id",
+   "correct",
+   "duration_ms",
+   "created_at",
+   "domain",
+   "context"
+  ],
+  "lesson_comments": [
+   "id",
+   "slug",
+   "author",
+   "text",
+   "created_at"
+  ],
+  "lesson_likes": [
+   "slug",
+   "user_key",
+   "created_at"
+  ],
+  "lessons": [
+   "id",
+   "slug",
+   "title",
+   "description",
+   "author",
+   "grade",
+   "subject",
+   "blocks_json",
+   "published",
+   "views",
+   "likes",
+   "created_at",
+   "updated_at"
+  ],
+  "live_rooms": [
+   "pin",
+   "host_id",
+   "title",
+   "questions",
+   "status",
+   "created_at",
+   "ended_at"
+  ],
+  "notif_config": [
+   "k",
+   "v"
+  ],
+  "notif_subscriptions": [
+   "user_id",
+   "endpoint",
+   "p256dh",
+   "auth",
+   "enabled",
+   "updated_at",
+   "last_push_at"
+  ],
+  "notifications": [
+   "id",
+   "user_display_name",
+   "request_id",
+   "kind",
+   "title",
+   "body",
+   "url",
+   "read_at",
+   "created_at"
+  ],
+  "oauth_identities": [
+   "id",
+   "user_id",
+   "provider",
+   "subject",
+   "email",
+   "created_at"
+  ],
+  "outbox_events": [
+   "id",
+   "event_type",
+   "payload",
+   "endpoint_url",
+   "endpoint_secret",
+   "status",
+   "attempts",
+   "max_attempts",
+   "next_attempt_at",
+   "last_error",
+   "created_at",
+   "updated_at"
+  ],
+  "portal_apps": [
+   "id",
+   "owner_id",
+   "alias",
+   "name",
+   "description",
+   "icon",
+   "version",
+   "manifest_json",
+   "is_public",
+   "size_bytes",
+   "installed_at",
+   "updated_at",
+   "kind",
+   "target_url",
+   "category",
+   "domain"
+  ],
+  "question_attempts": [
+   "id",
+   "user_id",
+   "scoreup_question_id",
+   "question_external_id",
+   "subject_id",
+   "chapter_id",
+   "answers_json",
+   "correct",
+   "score",
+   "duration_ms",
+   "created_at"
+  ],
+  "question_irt": [
+   "question_id",
+   "subject_id",
+   "b",
+   "a",
+   "n_attempts",
+   "n_correct",
+   "updated_at"
+  ],
+  "request_messages": [
+   "id",
+   "request_id",
+   "role",
+   "author_name",
+   "body",
+   "attachments",
+   "created_at"
+  ],
+  "requests": [
+   "id",
+   "domain",
+   "type",
+   "title",
+   "detail",
+   "student",
+   "status",
+   "votes",
+   "admin_note",
+   "created_at",
+   "updated_at",
+   "attachments"
+  ],
+  "scenario_runs": [
+   "user_id",
+   "family_id",
+   "runs",
+   "best_stars",
+   "best_score",
+   "last_ts"
+  ],
+  "school_admins": [
+   "id",
+   "user_id",
+   "domain_id",
+   "granted_at",
+   "granted_by",
+   "note"
+  ],
+  "scoreup_webhook_events_seen": [
+   "event_id",
+   "event_type",
+   "occurred_at",
+   "processed_at"
+  ],
+  "sessions": [
+   "token",
+   "user_id",
+   "created_at",
+   "expires_at"
+  ],
+  "shop_items": [
+   "id",
+   "type",
+   "name",
+   "description",
+   "price_coin",
+   "icon",
+   "payload",
+   "rarity",
+   "available"
+  ],
+  "skill_prereq": [
+   "skill_id",
+   "prereq_skill_id",
+   "weight"
+  ],
+  "skills": [
+   "id",
+   "code",
+   "name",
+   "competency_id",
+   "domain",
+   "grade_min",
+   "grade_max",
+   "description",
+   "created_at"
+  ],
+  "srs_card_content": [
+   "card_key",
+   "deck_id",
+   "front",
+   "back",
+   "hint",
+   "media_url",
+   "created_at"
+  ],
+  "srs_cards": [
+   "id",
+   "user_id",
+   "card_key",
+   "ease",
+   "interval_d",
+   "reps",
+   "lapses",
+   "total_reviews",
+   "due_at",
+   "last_correct",
+   "last_seen"
+  ],
+  "srs_decks": [
+   "id",
+   "creator_id",
+   "name",
+   "description",
+   "subject_tag",
+   "grade_tag",
+   "is_public",
+   "created_at"
+  ],
+  "subscriptions": [
+   "id",
+   "user_id",
+   "plan",
+   "status",
+   "seats",
+   "current_period_end",
+   "order_ref",
+   "created_at",
+   "updated_at"
+  ],
+  "team_quest_claims": [
+   "team_quest_id",
+   "user_id",
+   "claimed_at"
+  ],
+  "team_quest_contribs": [
+   "team_quest_id",
+   "user_id",
+   "xp_contributed",
+   "last_at"
+  ],
+  "team_quests": [
+   "id",
+   "class_code",
+   "creator_id",
+   "title",
+   "description",
+   "target_xp",
+   "reward_coin",
+   "reward_xp",
+   "reward_item",
+   "starts_at",
+   "ends_at",
+   "status",
+   "completed_at",
+   "created_at"
+  ],
+  "ugc_flags": [
+   "user_id",
+   "quest_id",
+   "reason",
+   "flagged_at"
+  ],
+  "ugc_likes": [
+   "user_id",
+   "quest_id"
+  ],
+  "ugc_plays": [
+   "user_id",
+   "quest_id",
+   "score",
+   "played_at"
+  ],
+  "ugc_quests": [
+   "id",
+   "creator_id",
+   "title",
+   "description",
+   "subject_tag",
+   "grade_tag",
+   "questions",
+   "plays",
+   "likes",
+   "flags",
+   "status",
+   "created_at",
+   "updated_at"
+  ],
+  "user_activity": [
+   "user_id",
+   "at",
+   "kind"
+  ],
+  "user_domain_grants": [
+   "id",
+   "user_id",
+   "domain_id",
+   "granted_at",
+   "granted_by",
+   "expires_at",
+   "note"
+  ],
+  "user_inventory": [
+   "user_id",
+   "item_id",
+   "acquired_at",
+   "equipped"
+  ],
+  "user_pet": [
+   "user_id",
+   "pet_id",
+   "nickname",
+   "stage",
+   "xp",
+   "last_fed_at",
+   "created_at",
+   "updated_at"
+  ],
+  "user_skills": [
+   "id",
+   "user_id",
+   "skill_id",
+   "domain",
+   "earned_at",
+   "source_type",
+   "source_id",
+   "score"
+  ],
+  "user_state": [
+   "user_id",
+   "key",
+   "value",
+   "updated_at"
+  ],
+  "user_theta": [
+   "user_id",
+   "subject_id",
+   "theta",
+   "n_attempts",
+   "updated_at"
+  ],
+  "user_wallets": [
+   "user_id",
+   "domain",
+   "coins",
+   "xp",
+   "streak",
+   "longest_streak",
+   "streak_shields",
+   "last_visit_day",
+   "achievements",
+   "vr_sessions",
+   "meta_sessions",
+   "quizzes_passed",
+   "modules_by_day",
+   "daily",
+   "quests_claimed",
+   "updated_at"
+  ],
+  "users": [
+   "id",
+   "username",
+   "display_name",
+   "password_hash",
+   "role",
+   "created_at",
+   "last_login",
+   "email",
+   "avatar_url",
+   "age",
+   "grade",
+   "major",
+   "cohort",
+   "school_name",
+   "enrolled_domain",
+   "plan",
+   "plan_expires_at",
+   "billing_cycle"
+  ],
+  "webhook_endpoints": [
+   "id",
+   "url",
+   "secret",
+   "event_types",
+   "active",
+   "created_at"
+  ]
+ }
+}

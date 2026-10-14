@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import os
 import posixpath
 import re
 import subprocess
@@ -18,7 +19,9 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 import context as repo_context
 import file_context
 from gates import gate3_guards
+from repositories.tool_steps import PgSteps
 from runtime import tool_loop
+from repositories import server_hsm
 import memory
 import repomap
 
@@ -110,7 +113,28 @@ def file_prompt_context(subtask: dict, content: str, siblings: list[str], words:
             + file_context.excerpt(content, words, filename=subtask["file"]))
 
 
+WHOLE_FILE_MAX_CHARS = 60_000
+
+
+def numbered(content: str) -> str:
+    return "\n".join(f"L{n}| {line}" for n, line in enumerate(content.splitlines(), 1))
+
+
+def whole_file_context(subtask: dict, state: dict, current: str | None, siblings: list[str], words: list[str]) -> tuple:
+    """(context, lessons, ctx) with the whole numbered file; None when the file is new."""
+    if current is None:
+        return None, [], None
+    return f"(file {len(current.splitlines())} dòng; toàn bộ file)\n{numbered(current)}", [], None
+
+
 def gate3_context(subtask: dict, state: dict, current: str | None, siblings: list[str], words: list[str]) -> tuple:
+    """Whole file when <= WHOLE_FILE_MAX_CHARS, else excerpt; AI_BOARD_GATE3_CONTEXT=excerpt forces excerpt."""
+    if (current is None or len(current) <= WHOLE_FILE_MAX_CHARS) and os.environ.get("AI_BOARD_GATE3_CONTEXT", "hybrid") != "excerpt":
+        return whole_file_context(subtask, state, current, siblings, words)
+    return excerpt_context(subtask, state, current, siblings, words)
+
+
+def excerpt_context(subtask: dict, state: dict, current: str | None, siblings: list[str], words: list[str]) -> tuple:
     """(context, lessons, ctx): trích file model thấy ở cổng 3 + bài học + kết quả build_context. Bộ đo recall dùng chung."""
     context = None if current is None else file_prompt_context(subtask, current, siblings, words)
     lessons = memory.recall(state["memory_path"], subtask["file"], words) if state.get("memory_path") else []
@@ -307,10 +331,13 @@ def _write_and_diff(repo_dir: Path, file_rel: str, code: str, test_file_rel: str
     commit để lần ghi kế tiếp (subtask sau) diff đúng phần MỚI thêm."""
     for rel, content in ((file_rel, code), (test_file_rel, test_code)):
         path = _safe_join(repo_dir, rel)
+        server_hsm.authorize_action('write_candidate')
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
+    server_hsm.authorize_action('stage_candidate')
     _git(["add", "-A"], cwd=repo_dir)
     diff = _git(["diff", "--cached"], cwd=repo_dir, text=True, encoding="utf-8").stdout
+    server_hsm.authorize_action('commit_candidate')
     _git(["commit", "-q", "-m", f"gate3: {file_rel}"], cwd=repo_dir)
     return diff
 
@@ -360,6 +387,13 @@ def _note_inputs(trace, subtask, model, state, current, context, siblings, words
         trace.note("knows", "repair reason", str(state["repair_reason"])[:500])
     if ctx:
         repo_context.report(trace, ctx)
+
+
+def _checkpoint_store(state: dict, db_path, proposal_id, child: int):
+    """PgSteps theo state['checkpoint'] (worker) hoặc db_path+proposal_id (pipeline); None = không checkpoint."""
+    if state.get("checkpoint"):
+        return state["checkpoint"].store(state["base_sha"], child)
+    return PgSteps(db_path, proposal_id, child) if db_path is not None and proposal_id is not None else None
 
 
 def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
@@ -417,15 +451,18 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
         if trace:
             _note_inputs(trace, subtask, model, state, current, context, siblings, words, lessons, ctx)
         out = None
-        if current is not None and tool_loop.enabled():
+        if tool_loop.enabled():
             looped = tool_loop.run_subtask(
                 subtask, current, deps=deps, budget=budget, model=model, source=state["checkout_source"], sha=state["base_sha"],
                 check=lambda o: (_check_rest(o, current, subtask["file"]), gate3_guards.check(o, current, subtask["file"], known)),
-                role=role, db_path=db_path, proposal_id=proposal_id, child=child)
+                role=role, db_path=db_path, proposal_id=proposal_id, child=child,
+                store=_checkpoint_store(state, db_path, proposal_id, child),
+                pins={"role": role})
             if looped["status"] != "proposed":
                 state["diffs"] = diffs
                 return {"gate": 3, "blocked": True, "diffs": diffs, "failure_class": looped["failure_class"],
-                        "reason": f"subtask '{subtask.get('title')}': {looped['reason']}"}
+                        "reason": f"subtask '{subtask.get('title')}': {looped['reason']}",
+                        **({"unknown_outcome": looped["unknown_outcome"]} if looped.get("unknown_outcome") else {})}
             out = looped["out"]
         for iteration in range(0 if out is not None else MAX_INNER_RETRIES + 1):
             routing_options = {'role': role}
@@ -441,10 +478,20 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
             # Phản hồi nối SAU prompt cố định + ngữ cảnh: prefix giữ nguyên byte, Ollama tái dùng KV cache.
             call = dict(gate=3, budget=budget, db_path=db_path, proposal_id=proposal_id, prompt_name="implement.md", child=child,
                         iteration=iteration, options=_retry_sampling(iteration), **routing_options)
+            try:
+                server_hsm.authorize_action('model')
+            except server_hsm.AuthorityError as error:
+                state['diffs'] = diffs
+                return {'gate':3,'blocked':True,'diffs':diffs,'reason':str(error),'failure_class':error.failure_class}
             if gate3_guards.enabled("schema"):
                 try:
                     body = deps.call_model(model, prompt + feedback, format=gate3_guards.edit_schema(current is not None), **call)
                 except Exception:  # noqa: BLE001 - server refused the schema: ask once the old way, and count it
+                    try:
+                        server_hsm.authorize_action('model')
+                    except server_hsm.AuthorityError as error:
+                        state['diffs'] = diffs
+                        return {'gate':3,'blocked':True,'diffs':diffs,'reason':str(error),'failure_class':error.failure_class}
                     gate3_guards.note_fallback()
                     body = deps.call_model(model, prompt + feedback, **call)
             else:
@@ -502,7 +549,7 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
             # NGAY, không ghi 1 byte nào ra ngoài, không phải lỗi âm thầm bỏ qua.
             reason = f"subtask '{subtask.get('title')}': {e}"
             state["diffs"] = diffs
-            return {"gate": 3, "blocked": True, "reason": reason, "diffs": diffs, "failure_class": "critical"}
+            return {"gate": 3, "blocked": True, "reason": reason, "diffs": diffs, "failure_class": getattr(e,'failure_class','critical')}
         diffs.append({
             "title": subtask["title"], "file": subtask["file"], "test_file": out["test_file"],
             "model": model, "diff": diff_text,
