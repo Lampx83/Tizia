@@ -10,11 +10,11 @@ const FORBID_KEY = /^(?:on.*|href|src|srcdoc|url|html|style|script|action|formac
 const LIMITS = { blocks: 30, fields: 16, actions: 8, text: 2000, label: 120 };
 const fail = (path, reason) => { throw new SchemaError(path, reason); };
 
-function exact(value, keys, path) {
+function exact(value, keys, path, optional = []) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) fail(path, 'mapping required');
   for (const key of Object.keys(value)) {
     if (FORBID_KEY.test(key)) fail(`${path}.${key}`, 'forbidden key');
-    if (!keys.includes(key)) fail(`${path}.${key}`, 'unknown key');
+    if (!keys.includes(key) && !optional.includes(key)) fail(`${path}.${key}`, 'unknown key');
   }
   for (const key of keys) if (!(key in value)) fail(`${path}.${key}`, 'required');
 }
@@ -58,9 +58,12 @@ export function validateUiSchema(input, { approvedOperations = [] } = {}) {
         return {
           type: b.type, title: str(b.title, `${p}.title`, LIMITS.label), resource_id: id(b.resource_id, `${p}.resource_id`),
           fields: list(b.fields, `${p}.fields`, LIMITS.fields, (f, fp) => {
-            exact(f, ['name', 'label', 'kind'], fp);
+            exact(f, ['name', 'label', 'kind'], fp, ['required']);
             if (!['text', 'number', 'checkbox'].includes(f.kind)) fail(`${fp}.kind`, 'text|number|checkbox');
-            return { ...column({ name: f.name, label: f.label }, fp), kind: f.kind };
+            const required = f.required ?? false;
+            if (typeof required !== 'boolean') fail(`${fp}.required`, 'boolean required');
+            if (required && f.kind === 'checkbox') fail(`${fp}.required`, 'only text and number fields can be required');
+            return { ...column({ name: f.name, label: f.label }, fp), kind: f.kind, required };
           }),
           submit_label: str(b.submit_label, `${p}.submit_label`, LIMITS.label),
         };

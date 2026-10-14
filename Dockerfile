@@ -1,15 +1,22 @@
 # syntax=docker/dockerfile:1.7
 
 # ---- Stage 1: Tizia prod deps (pure JS, no native build) ----
-FROM node:20-alpine AS tizia-deps
+FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS tizia-deps
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --omit=dev --no-audit --no-fund
+RUN --mount=type=secret,id=msb_ca \
+    if [ -s /run/secrets/msb_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/msb_ca; fi; \
+    npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 
 # ---- Runtime: slim image ----
-FROM node:20-alpine
+FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293
 # pg_dump / pg_restore for the admin backups. Major version = the postgres image major (compose: postgres:16).
-RUN apk add --no-cache postgresql16-client
+RUN --mount=type=secret,id=msb_ca \
+    if [ -s /run/secrets/msb_ca ]; then \
+      SSL_CERT_FILE=/run/secrets/msb_ca apk add --no-cache postgresql16-client=16.15-r0; \
+    else \
+      apk add --no-cache postgresql16-client=16.15-r0; \
+    fi
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=8041 \

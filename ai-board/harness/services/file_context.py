@@ -91,6 +91,15 @@ def keywords(*texts: str | None) -> list[str]:
     return list(dict.fromkeys(w for w in found if w not in _STOP and not w.isdigit()))[:MAX_KEYWORDS]
 
 
+_LITERAL = re.compile(r"""(?<!\w)(?:'([^'\n]{2,80})'|"([^"\n]{2,80})"|“([^”\n]{2,80})”|‘([^’\n]{2,80})’|`([^`\n]{2,80})`)(?!\w)""")
+
+
+def literals(*texts: str | None) -> list[str]:
+    """Chuỗi trong nháy người dùng viết, nguyên văn (giữ hoa/dấu); nháy phải đứng sát ranh giới từ nên dấu nháy lửng trong từ không tạo literal."""
+    found = [next(g for g in m.groups() if g).strip() for t in filter(None, texts) for m in _LITERAL.finditer(t)]
+    return list(dict.fromkeys(f for f in found if len(f) >= 2))[:MAX_PHRASES]
+
+
 _PAGE_LINE = re.compile(r"^\s*\[Trang:.*$", re.M)
 _SENTENCE = re.compile(r"[.!?,;:\n()]+")
 

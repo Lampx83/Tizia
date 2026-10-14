@@ -1,11 +1,13 @@
-"""Long-term memory: bài học từ các verdict trước, 1 dòng JSONL mỗi bài học, ở máy worker
-(ai-board/memory/, gitignored, không DB). Cổng 3 truy xuất lại bằng khớp path + từ khoá.
-prune() giữ thư mục này nhỏ theo limits.memory trong contract.json (worker gọi lúc khởi động).
+"""Lesson interface: HTTP workers use server-owned PostgreSQL through server_scope.
+Standalone/offline callers retain the legacy JSONL implementation for compatibility.
+HTTP recall never falls back to that file when current server authority is unavailable.
 """
 from __future__ import annotations
 
 import json
 import time
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 
 DEFAULT_PATH = Path(__file__).resolve().parents[2] / "memory" / "lessons.jsonl"
@@ -14,10 +16,23 @@ LIMITS = json.loads((Path(__file__).resolve().parents[3] / "server" / "ai-board"
 STALE_DAYS = 30
 MAX_SCAN = LIMITS["lessons_max"]  # ponytail: quét tuyến tính; prune() giữ file ≤ số dòng này
 _OUTCOME = {"fixed": "đã sửa được", "blocked": "vẫn bị chặn"}
+_SERVER = ContextVar("server_lessons", default=None)
+
+
+@contextmanager
+def server_scope(backend):
+    """HTTP worker scope prevents local JSONL from becoming an authority fallback."""
+    token = _SERVER.set(backend)
+    try:
+        yield backend
+    finally:
+        _SERVER.reset(token)
 
 
 def record(path: str | Path, lessons: list[dict]) -> None:
     """Append lessons {files, gate, failure_class, reason, outcome, ticket} kèm thời điểm."""
+    if (backend := _SERVER.get()) is not None:
+        return backend.record(lessons)
     if not lessons:
         return
     path = Path(path)
@@ -31,6 +46,8 @@ def record(path: str | Path, lessons: list[dict]) -> None:
 
 def recall(path: str | Path, file: str, words: list[str], *, limit: int = 3) -> list[str]:
     """Tối đa `limit` bài học liên quan, mới nhất trước: cùng file (điểm 2) hơn chỉ khớp từ khoá (điểm 1)."""
+    if (backend := _SERVER.get()) is not None:
+        return backend.recall(file, words, limit=limit)
     path = Path(path)
     if not path.is_file():
         return []

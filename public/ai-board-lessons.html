@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Bài học AI Board · Tizia</title>
+<style>
+  :root { color-scheme:dark; --bg:#0b1220; --surface:#111a2e; --text:#e2e8f0; --muted:#94a3b8; --link:#60a5fa; --border:rgba(255,255,255,.16); }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width:1000px; margin:auto; padding:32px 24px 80px; }
+  h1 { font-size:28px; line-height:1.3; } h2 { font-size:19px; margin:24px 0 8px; }
+  p { max-width:72ch; } a { color:var(--link); text-underline-offset:3px; }
+  button,input,textarea { font:inherit; color:var(--text); background:var(--surface); border:1px solid var(--border); border-radius:8px; }
+  button { min-height:44px; padding:8px 14px; cursor:pointer; } button:hover { border-color:var(--link); }
+  button:disabled { opacity:.5; cursor:wait; } input { min-height:44px; padding:8px; max-width:100%; }
+  textarea { width:100%; min-height:90px; padding:10px; resize:vertical; caret-color:var(--link); }
+  :is(a,button,input,textarea,summary):focus-visible { outline:3px solid var(--link); outline-offset:3px; }
+  ::selection { color:var(--bg); background:#fbbf24; }
+  .muted { color:var(--muted); } .toolbar,.actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+  .toolbar { justify-content:space-between; } .lesson { padding:24px 0; border-bottom:1px solid var(--border); overflow-wrap:anywhere; }
+  .lesson h2 { margin-top:0; } .meta { font-variant-numeric:tabular-nums; color:var(--muted); }
+  .eligible { color:#4ade80; } .ineligible { color:#fdba74; } .error { color:#fca5a5; }
+  .lesson-text { white-space:pre-wrap; } details { margin:16px 0; } summary { cursor:pointer; min-height:44px; padding:8px 0; }
+  label { display:block; margin:12px 0 4px; } form button { margin-top:12px; }
+  #status { min-height:26px; } #migration { padding-top:24px; border-top:1px solid var(--border); }
+  pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:300px; overflow:auto; }
+  @media(max-width:600px) { main { padding:24px 16px 60px; } input,textarea { font-size:16px; } }
+</style>
+</head>
+<body data-no-gamify>
+<main>
+  <nav aria-label="Điều hướng"><a href="/index.html">Trang chủ</a></nav>
+  <div class="toolbar"><h1>Bài học AI Board</h1><button id="reload" type="button">Tải lại</button></div>
+  <p class="muted">Bài học là dữ liệu tham khảo. Chỉ bài học đã được xác minh, còn hợp lệ và đúng quyền mới được dùng lại; bài học không cấp thêm quyền thực thi.</p>
+  <p id="status" role="status" aria-live="polite">Đang tải…</p>
+  <section id="lessons" aria-label="Bài học có quyền xem"></section>
+  <section id="migration" hidden>
+    <h2>Chuyển bài học từ file cũ</h2>
+    <p class="muted">Chọn file JSONL. File gốc được giữ nguyên. Server đối chiếu nguồn và quyền; bản không đối chiếu được sẽ cách ly, bản nhập được vẫn cần review.</p>
+    <form id="import-form"><label for="legacy-file">File JSONL</label><input id="legacy-file" type="file" accept=".jsonl,.ndjson,application/x-ndjson" required><br><button type="submit">Đối chiếu và nhập</button></form>
+    <p id="import-status" role="status" aria-live="polite"></p>
+    <div id="import-results"></div>
+    <details><summary>Hoàn tác một lô đã nhập</summary>
+      <p class="muted">Chỉ gỡ các bản chưa được sửa hoặc review sau khi nhập. Bản đã thay đổi được giữ lại.</p>
+      <form id="rollback-form"><label for="batch-key">Mã lô trong báo cáo nhập</label><input id="batch-key" required maxlength="120" pattern="[a-zA-Z0-9._:\-]+"><br><button type="submit">Hoàn tác lô</button></form>
+    </details>
+  </section>
+  <section id="maintenance" hidden><h2>Lưu trữ và dọn dữ liệu</h2>
+    <p class="muted">Đề xuất chưa xác minh hết hạn sau 30 ngày; bài học đã xác minh cần kiểm lại sau 90 ngày hoặc khi nguồn thay đổi. Bài học giữ dài hạn vẫn phải kiểm tính hợp lệ. Sau khi kết thúc, nội dung được xóa sau 30 ngày và metadata audit sau tối đa 90 ngày từ cùng mốc kết thúc; retention nguồn có thể ngắn hơn.</p>
+    <button id="sweep" type="button">Chạy kiểm tra thời hạn và dọn dữ liệu</button>
+  </section>
+</main>
+<script type="module" src="/js/ai-board-lessons.js"></script>
+</body>
+</html>

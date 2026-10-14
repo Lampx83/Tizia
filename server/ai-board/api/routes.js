@@ -10,6 +10,9 @@ import { classifyRequest as classifyWithModel } from '../security/classifier.js'
 import { clarifyFromPhase, resolveClarify } from '../services/clarity-rules.js';
 import { activeChats } from '../services/chat-activity.js';
 import { guardModelText, MAX_QUESTIONS } from '../../contexts/ai-board-intake/clarify.js';
+import { attachWorkerLessonRoutes, attachLessonReviewRoutes } from './lessons.js';
+import { createHsmStore } from '../hsm/store.js';
+import { publicContract } from '../hsm/contract.js';
 
 // Không cấu hình model phân loại → không gọi gì (không phân loại).
 const defaultClassifyRequest = (title, detail) => (
@@ -31,6 +34,7 @@ export function attachAiBoardRequestRoutes(router, {
   aux = asyncAux, // helper modules (aux-async.js)
 }) {
   const route = asyncRoutes(router);
+  if(store.db) attachLessonReviewRoutes(router,{db:store.db,requireAuth,requireStrictCsrf});
   route.post('/api/requests', requireAuth, requireEnrolled, async (req, res, next) => {
     const body = req.body || {};
     // Yêu cầu board tự sửa chỉ hệ thống tạo (POST /api/ai-board/worker/self-requests), không bao giờ từ FAB.
@@ -229,6 +233,7 @@ export function attachAiBoardRequestRoutes(router, {
   route.get('/api/admin/ai-board/requests/:requestId/trace', requireAuth, requireAdmin, async (req, res) => {
     const trace = await store.getRequestTrace(req.params.requestId);
     if (!trace) return res.status(404).json({ error: 'ticket_not_found' });
+    if (store.db) trace.hsm = await createHsmStore(store).read(trace.root.id);
     res.json(trace);
   });
 
@@ -318,6 +323,7 @@ export function attachAiBoardWorkerRoutes(router, {
   onSelfWin = null, // ({night, request_id}) biến thể tự cải thiện thắng eval: chuông cho admin
   onClarify = null, // ({requestId, title, domain, student}) khi Gate 2.5 cần người gửi làm rõ
   aux = asyncAux, // PostgreSQL helpers, as in attachAiBoardRequestRoutes
+  lessonOptions,
 }) {
   const route = asyncRoutes(router);
   const key = String(env.AI_BOARD_WORKER_KEY || '').trim();
@@ -350,6 +356,17 @@ export function attachAiBoardWorkerRoutes(router, {
     workerId: String(body.worker_id || ''),
     leaseToken: String(body.lease_token || ''),
   });
+  attachWorkerLessonRoutes(route, { store, authenticate, handle, lessonOptions });
+  const hsm = createHsmStore(store);
+  route.post('/api/ai-board/worker/tickets/:id/hsm', authenticate, handle(async (req,res) => {
+    res.json(await hsm.transition(req.params.id,req.body || {}));
+  }));
+  route.post('/api/ai-board/worker/tickets/:id/hsm/state', authenticate, handle(async (req,res) => {
+    res.json(await hsm.readLeased(req.params.id,req.body || {}));
+  }));
+  route.post('/api/ai-board/worker/tickets/:id/hsm/authority', authenticate, handle(async (req,res) => {
+    res.json(await hsm.authorizeAction(req.params.id,req.body || {}));
+  }));
 
   route.post('/api/ai-board/worker/claim', authenticate, handle(async (req, res) => {
     const ticket = await store.claimNext({
@@ -365,7 +382,8 @@ export function attachAiBoardWorkerRoutes(router, {
 
   route.post('/api/ai-board/worker/tickets/:id/snapshot', authenticate, handle(async (req, res) => {
     const lease = leaseInput(req.body);
-    res.json(await store.getLeasedSnapshot(req.params.id, lease.workerId, lease.leaseToken));
+    res.json({ ...await store.getLeasedSnapshot(req.params.id, lease.workerId, lease.leaseToken), lessons_schema_version: 1,
+      hsm_contract:publicContract() });
   }));
 
   route.post('/api/ai-board/worker/tickets/:id/heartbeat', authenticate, handle(async (req, res) => {
