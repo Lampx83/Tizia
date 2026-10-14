@@ -75,7 +75,9 @@ def test_model_cannot_remove_or_weaken_an_existing_test():
 
 def test_protected_paths_need_a_human():
     for path in ["Dockerfile", "docker-compose.yml", "package.json", "server/ai-board/policy.js",
-                 "ai-board/harness/main.py", ".github/workflows/ci.yml", "server/contexts/registry.js"]:
+                 "ai-board/harness/main.py", ".github/workflows/ci.yml", "server/contexts/registry.js",
+                 ".claude/settings.json", ".cursor/rules/x.mdc", ".vscode/tasks.json", ".mcp.json", "CLAUDE.md", ".husky/pre-commit",
+                 "public/.claude/hooks.json", "server/.vscode/tasks.json", "public/docs/AGENTS.md"]:
         assert ("protected_path", "critical") in kinds(diff(path, added=["x"])), path
 
 

@@ -4,7 +4,7 @@
   "api_enabled": false,
   "endpoint_cooldown_s": 60,
   "embedding_space": "qwen3-embedding-8b-v1",
-  "classifier_calibration_id": "qwen35-4b-v1",
+  "classifier_calibration_id": "qwen35-35b-a3b-int4-danger-stack-r1",
   "roles": {
     "gate1": [
       "vllm-heavy-coder"
@@ -64,7 +64,7 @@
         "json",
         "logprobs"
       ],
-      "calibration_id": "qwen35-35b-a3b-int4-unfitted"
+      "calibration_id": "qwen35-35b-a3b-int4-danger-stack-r1"
     },
     "ollama-qwen3-embedding-8b": {
       "provider": "ollama",

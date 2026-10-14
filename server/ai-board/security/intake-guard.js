@@ -32,6 +32,8 @@ const TOPICS = Object.entries(LEXICON.labels).map(([label, spec]) => ({
   })),
 }));
 
+export const publicMessage = (kind) => LEXICON.public_messages[kind];
+
 /** Nhãn trúng + có chặn không. message lịch sự, không nhắc lại nội dung, không lộ luật nào trúng. */
 export function checkIntake(title, detail) {
   const text = readOnlyVerificationText(`${title ?? ''}\n${detail ?? ''}`);
@@ -49,7 +51,7 @@ export async function recordIntakeRejection(db, userId, intake) {
   await db.run(`INSERT INTO ai_alerts(severity, category, public_message, internal_detail, created_at, updated_at)
     VALUES ('high', 'intake_rejected', ?, ?, ?, ?)`, [intake.message,
       JSON.stringify({ gate: 'intake', user_id: Number(userId), labels: intake.labels,
-        reason: 'deterministic request-content rule matched before model/code generation' }), now, now]);
+        reason: intake.reason || 'deterministic request-content rule matched before model/code generation' }), now, now]);
 }
 
 /** Ghi cờ human_review cho yêu cầu vừa tạo: 1 ai_events + tag guard:*. Không có db/nhãn → bỏ qua. Không bao giờ throw. */

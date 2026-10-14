@@ -256,6 +256,10 @@ _PROTECTED = re.compile(
     r"^(?:Dockerfile|docker-compose[^/]*\.ya?ml|package(?:-lock)?\.json|\.github/|ai-board/|server/ai-board/"
     r"|server/contexts/registry\.js|server/index\.js|server/db\.js|\.dockerignore|\.gitignore)"
 )
+# Cấu hình công cụ AI ở bất kỳ độ sâu nào: hook/lệnh trong đó chạy khi mở repo.
+_AI_TOOL_CONFIG = re.compile(
+    r"(?:^|/)(?:\.claude|\.cursor|\.vscode|\.husky)/|(?:^|/)(?:\.mcp\.json|\.cursorrules|CLAUDE\.md|AGENTS\.md|GEMINI\.md)$"
+)
 
 
 def _sections(text: str):
@@ -308,7 +312,7 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
         if path == ".env" or (path.startswith(".env.") and not path.endswith(".example")):
             add("secret", "critical", f"{path}: không được chạm file env")
         self_edit = request_type == "self" and not deleted and any(p.match(path) for p in SELF_EDIT)
-        if _PROTECTED.match(path) and not self_edit:
+        if (_PROTECTED.match(path) or _AI_TOOL_CONFIG.search(path)) and not self_edit:
             add("protected_path", "critical", f"{path}: path hạ tầng/registry cần con người")
         if path in MONEY_PATHS:
             add("protected_path", "critical", f"{path}: file tiền/thanh toán cần con người")

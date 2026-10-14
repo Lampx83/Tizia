@@ -225,3 +225,52 @@ test('hard rules clarify without a model; shadow model results are logged but ne
     await app.close();
   }
 });
+
+
+// Reference scores come from the offline fit (Tizia-eval stacker.py, frozen-v2-stacker.json); the Python test uses the same vectors.
+const GOLDEN = {
+  clear_safe: [{ safe: 0.97, system_attack: 0.01, abuse_hate: 0.005, sexual: 0.002, violence_self_harm: 0.003, politics_religion: 0.004, drugs_advice: 0.003, cheating_spam: 0.003 }, 0.27124929729401437],
+  clear_attack: [{ safe: 0.03, system_attack: 0.9, abuse_hate: 0.02, sexual: 0.005, violence_self_harm: 0.01, politics_religion: 0.005, drugs_advice: 0.01, cheating_spam: 0.02 }, 0.7410186233985],
+  mixed: [{ safe: 0.45, system_attack: 0.1, abuse_hate: 0.25, sexual: 0.02, violence_self_harm: 0.03, politics_religion: 0.05, drugs_advice: 0.05, cheating_spam: 0.05 }, 0.702980511400678],
+  partial: [{ safe: 0.2, sexual: 0.75 }, 0.8945697942630529],
+};
+
+test('stacker score matches the offline reference to 1e-9, missing keys count as zero', () => {
+  const scoring = CLASSIFIER.tasks.danger.scoring;
+  for (const [name, [probs, expected]] of Object.entries(GOLDEN)) {
+    assert.ok(Math.abs(stackerScore(probs, scoring) - expected) < 1e-9, name);
+  }
+  assert.deepEqual(scoring.keys, CLASSIFIER.tasks.danger.labels.map((label) => label.key));
+  assert.equal(scoring.reject_min, null); // auto-reject ships disabled until the owner sets it
+});
+
+test('stacker decision escalates above review_min, rejects only when reject_min is set, keeps the top unsafe label', () => {
+  const scoring = CLASSIFIER.tasks.danger.scoring;
+  const calm = decideDanger(GOLDEN.clear_safe[0], undefined, scoring);
+  assert.deepEqual([calm.escalate, calm.reject, calm.labels], [false, false, []]);
+  const mixed = decideDanger(GOLDEN.mixed[0], undefined, scoring);
+  assert.deepEqual([mixed.escalate, mixed.reject, mixed.labels], [true, false, ['abuse_hate']]);
+  const strict = decideDanger(GOLDEN.mixed[0], undefined, { ...scoring, reject_min: 0.7 });
+  assert.equal(strict.reject, true);
+  assert.equal(decideDanger(GOLDEN.clear_safe[0], undefined, { ...scoring, reject_min: 0.7 }).reject, false);
+});
+
+test('an active classifier reject returns 422 and records an alert; a shadow reject changes nothing', async () => {
+  const db = await fixtureDb();
+  const rejecting = (shadow) => result(null, { probs: GOLDEN.mixed[0], escalate: true, reject: true, labels: ['abuse_hate'], score: 0.71, shadow });
+  const replies = [rejecting(false), rejecting(true)];
+  const app = await serve(db, async () => replies.shift());
+  try {
+    const rejected = await app.post('classifier-req-201', { title: 'Đổi màu nút Gửi', detail: 'trang giới thiệu, nút xanh hơn' });
+    assert.equal(rejected.status, 422);
+    assert.equal(rejected.json.error, 'request_rejected');
+    const alerts = await db.prepare("SELECT internal_detail FROM ai_alerts WHERE category='intake_rejected'").all();
+    assert.equal(alerts.length, 1);
+    assert.match(JSON.parse(alerts[0].internal_detail).reason, /classifier score above reject_min/);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM ai_tickets').get()).n, 0);
+    const shadowed = await app.post('classifier-req-202', { title: 'Đổi màu nút Gửi', detail: 'trang giới thiệu, nút xanh hơn' });
+    assert.equal(shadowed.status, 200);
+  } finally {
+    await app.close();
+  }
+});

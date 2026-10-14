@@ -50,7 +50,7 @@
         "(reveal|show|print|leak) (the |your )?system prompt", "(enable|enter) developer mode",
         "do anything now", "from now on you are",
         "<\\|im_start\\|","\\[inst\\]", "<<sys>>", "### (system|instruction)",
-        "bỏ qua (mọi|tất cả|các|toàn bộ) (chỉ dẫn|hướng dẫn|lệnh|quy tắc)",
+        "bỏ qua (mọi|tất cả|các|toàn bộ) (chỉ dẫn|hướng dẫn|lệnh|quy tắc)", "bỏ qua (chỉ dẫn|hướng dẫn|lệnh|quy tắc) (trước|ở trên|phía trên)", "bo qua (chi dan|huong dan|lenh|quy tac) (truoc|o tren|phia tren)",
         "bo qua (moi|tat ca|cac|toan bo) (chi dan|huong dan|lenh|quy tac)",
         "quên (hết|mọi|tất cả) (chỉ dẫn|hướng dẫn|quy tắc)",
         "quen (het|moi|tat ca) (chi dan|huong dan|quy tac)",
@@ -66,7 +66,10 @@
       "terms": [
         "địt", "đụ", "đĩ", "lồn", "cặc", "buồi", "đéo", "óc chó", "đồ ngu", "đmm", "đcm", "đkm",
         "dit me", "dit con me", "du ma", "du me", "dcm", "dmm", "dkm", "vcl", "vkl", "clgt",
-        "fuck", "fucking", "motherfucker", "shit", "bitch", "asshole", "cunt", "bastard"
+        "fuck", "fucking", "motherfucker", "shit", "bitch", "asshole", "cunt", "bastard",
+        "thằng ngu", "thang ngu", "đồ khốn", "do khon", "khốn nạn", "khon nan", "thằng chó", "thang cho",
+        "con chó cái", "mẹ mày", "me may", "con điên", "đồ điên", "ngu như bò", "ngu nhu bo", "đm", "oc cho",
+        "dickhead", "dumbass", "whore", "slut", "retard", "retarded", "fck", "fcuk", "sh1t", "stfu", "f u c k"
       ]
     },
     "sexual": {
@@ -137,7 +140,7 @@
         "sửa điểm", "đổi điểm", "tăng điểm", "cộng điểm cho", "chấm điểm lại", "bảng điểm", "điểm thi",
         "cộng sao", "cộng xu", "tặng xu", "hack điểm", "hack xu",
         "dữ liệu của (bạn|người) khác", "thông tin (của )?(học sinh|sinh viên|người dùng) khác",
-        "danh sách (học sinh|sinh viên|người dùng)", "tắt (bảo mật|xác thực|captcha)",
+        "danh sách (học sinh|sinh viên|người dùng)", "tắt (bảo mật|xác thực|captcha)", "biến môi trường", "bien moi truong", "khóa bí mật", "khoa bi mat", "khóa api", "khoa api", "quyền (giáo viên|giảng viên)", "quyen (giao vien|giang vien)", "kiểm tra quyền", "kiem tra quyen", "tôi là (admin|quản trị viên)", "toi la (admin|quan tri vien)",
         "mat khau", "phan quyen", "thanh toan", "nap tien", "chuyen khoan", "sua diem", "hack diem",
         "password", "login", "oauth", "csrf", "session", "cookie", "admin", "payment", "hack",
         "rate limit", "captcha", "api key", "secret key", "\\.env"
