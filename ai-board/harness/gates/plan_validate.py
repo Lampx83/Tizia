@@ -39,6 +39,7 @@ guardrail nội dung).
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 from pathlib import Path
@@ -163,6 +164,15 @@ def _squash(text: str) -> str:
     return re.sub(r'\s+', '', text)
 
 
+_QUOTE_CHARS = re.compile('["`‘’“”]')
+
+
+def _fold(text: str) -> str:
+    """_squash plus one quote style when AI_BOARD_GATE25_FIXES lists `quotes`: models rewrite "x" as 'x' when they copy HTML."""
+    text = _squash(text)
+    return _QUOTE_CHARS.sub("'", text) if "quotes" in os.environ.get("AI_BOARD_GATE25_FIXES", "").split(",") else text
+
+
 _LINE_MARKER = re.compile(r'^[ \t]*(?:[\w./-]+:)?L?\d+\|[ ]?', re.M)
 
 
@@ -183,7 +193,7 @@ def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict
         if task['file'] in files and file != task['file']:
             raise ValueError('trích dẫn phải thuộc file hiện có dự định sửa')
         if (not isinstance(quote, str) or len(quote.strip()) < 8 or len(quote) > 1200
-                or _squash(quote) not in _squash(files.get(file, ''))):  # models join source lines: compare content, not layout
+                or _fold(quote) not in _fold(files.get(file, ''))):  # models join source lines: compare content, not layout
             raise ValueError(f'{task["file"]}: không tìm thấy trích dẫn hành vi trong code nguồn')
         if any(not isinstance(evidence.get(key), str) or not evidence[key].strip() for key in ('before', 'after', 'verify')):
             raise ValueError('thiếu hành vi trước/sau hoặc tiêu chí kiểm chứng')
@@ -269,6 +279,11 @@ def write_clarification(db_path, request: dict, question: str) -> None:
         con.execute("UPDATE requests SET updated_at = %s WHERE id = %s", (now, db_id))
 
 
+def _validator_options() -> dict | None:
+    """Larger output budget for multi-subtask plans when AI_BOARD_GATE25_FIXES lists `tokens`."""
+    return {"num_predict": 6144} if "tokens" in os.environ.get("AI_BOARD_GATE25_FIXES", "").split(",") else None
+
+
 def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: int | None = None) -> dict:
     """Điểm vào cho main.run_gate. Đọc state['plan'] do cổng 1 để lại."""
     plan = state.get("plan")
@@ -300,7 +315,8 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                              "grounding": {"type": "array", "maxItems": len(plan['subtasks']), "items": record}},
               "required": ["clear", "question", "grounded", "reason", "grounding"]}
     body = deps.call_model(deps.models.gate1_model, prompt, gate=2.5, budget=budget, format=schema,
-                            db_path=db_path, proposal_id=proposal_id, prompt_name="plan_validate.md")
+                            db_path=db_path, proposal_id=proposal_id, prompt_name="plan_validate.md",
+                            options=_validator_options())
     if body.get('done_reason') == 'length':
         return {"gate": 2.5, "blocked": True, "reason": "validator output truncated at token limit",
                 "public_message": "Kế hoạch đang chờ quản trị viên kiểm tra vì phản hồi kiểm chứng chưa hoàn chỉnh."}

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ipaddress
+import hashlib
 import json
 import os
 import re
@@ -23,12 +24,25 @@ _SECRET_NAME = re.compile(r"(?:SECRET|TOKEN|PASSWORD|API_KEY|SECKEY|PRIVATE_KEY)
 _REQUIRED_ABSENT = {"SCOREUP_API_KEY", "CODELAB_API_KEY", "GA_API_SECRET",
                     "OLLAMA_SECKEY", "AI_BOARD_KEY"}
 SMOKE_SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "smoke-user-state.sh"
+CA_DIR = Path('/usr/local/share/ca-certificates')
 
 
 def _internal() -> bool:
     """AI_BOARD_VERIFY_NETWORK=internal: worker runs Docker-in-Docker, so the candidate gets a network
     with no egress and is reached on its container IP. Default publishes to 127.0.0.1 (local Docker Desktop)."""
     return os.getenv("AI_BOARD_VERIFY_NETWORK", "published") == "internal"
+
+
+def _guest_ca() -> Path | None:
+    """Public interception CA supplied by Microsandbox to this guest, never from the candidate checkout."""
+    for path in sorted(CA_DIR.glob('microsandbox-ca.*')):
+        if path.is_file():
+            body = path.read_bytes()
+            if body.startswith(b'-----BEGIN CERTIFICATE-----'):
+                if hashlib.sha256(body).hexdigest() != os.getenv('GATE5_CA_SHA256'):
+                    raise RuntimeError('Microsandbox CA fingerprint mismatch or missing pin')
+                return path
+    return None
 
 
 def _app_env(password: str) -> dict:
@@ -54,6 +68,9 @@ def _override(project: str, password: str | None = None, checkout: Path | None =
                          "volumes": [f"{project}-pg:/var/lib/postgresql/data"]}},
         "networks": {"default": {"name": f"{project}-net", "internal": True}},
         "volumes": {name: {"name": name} for name in (f"{project}-data", f"{project}-pg")}}
+    if ca := _guest_ca():
+        config['secrets'] = {'msb_ca': {'file': str(ca)}}
+        config['services']['tizia']['build']['secrets'] = ['msb_ca']
     return json.dumps(config, indent=2)
 
 
@@ -61,6 +78,17 @@ def _validate_config(config: dict, project: str, password: str) -> None:
     """Fail closed on any resource or DSN outside this invocation."""
     if escape := _escape_hatch(config):
         raise RuntimeError(f"Compose config mở đường ra ngoài cách ly: {escape}")
+    ca = _guest_ca()
+    secrets = config.get('secrets') or {}
+    build_secrets = ((config.get('services') or {}).get('tizia') or {}).get('build', {}).get('secrets') or []
+    if ca:
+        source = secrets.get('msb_ca') or {}
+        if (set(secrets) != {'msb_ca'} or source.get('file') != str(ca)
+                or source.get('external') or source.get('environment')
+                or build_secrets != [{'source': 'msb_ca'}]):
+            raise RuntimeError('Compose build CA source changed')
+    elif secrets or build_secrets:
+        raise RuntimeError('Compose added an untrusted build secret')
     services = config.get("services") or {}
     app, pg = services.get("tizia") or {}, services.get("postgres") or {}
     network = (config.get("networks") or {}).get("default") or {}

@@ -221,6 +221,15 @@ export const P4MT_WEEKS = [
     Q('Cọ màu nước dùng?', ['Cọ sơn dầu cứng', 'Cứng, đầu nhọn như bút bi', 'Mềm', 'Bằng kim loại'], 2, 'Cọ mềm.', ['Sai — cọ sơn dầu cứng không hợp màu nước.', 'Sai — cọ cứng đầu nhọn không hợp màu nước.', 'Đúng — cọ màu nước nên mềm.', 'Sai — cọ bằng kim loại không dùng cho màu nước.']),
     Q('Tranh “Em yêu Việt Nam” thể hiện?', ['Cảnh thành phố nước ngoài', 'Chê quê', 'Tình yêu quê hương', 'Sự cô đơn, xa cách'], 2, 'Tình yêu, tự hào.', ['Sai — cảnh nước ngoài không hợp chủ đề yêu Việt Nam.', 'Sai — chê quê là thái độ sai.', 'Đúng — tranh thể hiện tình yêu quê hương.', 'Sai — cô đơn, xa cách không hợp chủ đề này.']),
   ]),
+
+  M(36, 'Kết thúc Lớp 4 — Hành trang Mỹ thuật vào Lớp 5', [
+    Q('Ba màu cơ bản (màu nguyên) là?', ['Đỏ – Cam – Vàng', 'Đỏ – Vàng – Lam', 'Lục – Tím – Cam', 'Trắng – Đen – Xám'], 1, 'Ba màu cơ bản là đỏ, vàng, lam; từ đó pha ra các màu khác.', ['Sai — cam là màu pha từ đỏ và vàng nên không phải màu cơ bản.', 'Đúng — đỏ, vàng, lam là ba màu cơ bản.', 'Sai — cả ba màu này đều là màu pha (nhị hợp).', 'Sai — trắng, đen, xám là các màu vô sắc.']),
+    Q('Pha màu đỏ với màu vàng được màu gì?', ['Tím', 'Xanh lá', 'Cam', 'Nâu'], 2, 'Đỏ + vàng = cam (màu nhị hợp).', ['Sai — tím pha từ đỏ và lam.', 'Sai — xanh lá pha từ vàng và lam.', 'Đúng — đỏ + vàng = cam.', 'Sai — nâu phải pha thêm nhiều màu khác.']),
+    Q('Nhóm nào gồm toàn màu lạnh?', ['Đỏ, cam, vàng', 'Lam, tím, xanh lá', 'Đỏ, nâu, vàng', 'Cam, hồng, đỏ'], 1, 'Màu lạnh gợi cảm giác mát mẻ, bình yên: lam, tím, xanh lá.', ['Sai — đây đều là màu nóng.', 'Đúng — lam, tím, xanh lá là nhóm màu lạnh.', 'Sai — đây đều là màu nóng.', 'Sai — đây đều là màu nóng.']),
+    Q('Tranh dân gian Đông Hồ được in trên loại giấy nào?', ['Giấy điệp', 'Giấy báo', 'Lụa tơ tằm', 'Giấy vẽ A4'], 0, 'Tranh Đông Hồ in trên giấy điệp, màu lấy từ thiên nhiên.', ['Đúng — tranh Đông Hồ in trên giấy điệp với màu từ thiên nhiên.', 'Sai — giấy báo không dùng để in tranh dân gian.', 'Sai — lụa tơ tằm là chất liệu của tranh lụa.', 'Sai — giấy A4 là giấy công nghiệp ngày nay.']),
+    Q('Màu bổ túc (tương phản) của màu vàng là màu nào?', ['Cam', 'Đỏ', 'Tím', 'Xanh lá'], 2, 'Các cặp màu bổ túc: đỏ – xanh lá, vàng – tím, cam – lam.', ['Sai — cam gần với vàng trên vòng màu nên không tương phản mạnh.', 'Sai — màu bổ túc của đỏ là xanh lá.', 'Đúng — vàng và tím là một cặp màu bổ túc.', 'Sai — xanh lá là màu bổ túc của đỏ.']),
+    Q('Lớp 5 Mỹ thuật em sẽ học vẽ nội dung mới nào?', ['Chỉ tô màu theo mẫu có sẵn', 'Vẽ chân dung theo tỉ lệ mặt người', 'Chỉ nặn đất sét', 'Không vẽ tranh nữa'], 1, 'Lớp 5 học vẽ chân dung, điêu khắc – kiến trúc, in nổi và mỹ thuật ứng dụng.', ['Sai — Lớp 5 khuyến khích sáng tạo, không chỉ tô theo mẫu.', 'Đúng — Lớp 5 học vẽ chân dung với tỉ lệ mặt người, ánh mắt, biểu cảm.', 'Sai — nặn hình khối em đã học ở Lớp 4.', 'Sai — Lớp 5 vẫn vẽ tranh, còn mở rộng thêm thể loại mới.']),
+  ], { difficulty: 3, description: 'Tổng kết bốn lĩnh vực Mỹ thuật Lớp 4 và kiến thức màu sắc, xem trước Lớp 5.' }),
 ];
 
 export const P4MT_SCENARIOS = indexBy(P4MT_WEEKS);

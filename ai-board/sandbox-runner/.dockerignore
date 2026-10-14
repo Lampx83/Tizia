@@ -2,3 +2,9 @@ node_modules
 scratch
 test
 secrets
+**/[Aa][Gg][Ee][Nn][Tt][Ss].[Mm][Dd]
+**/[Cc][Ll][Aa][Uu][Dd][Ee].[Mm][Dd]
+**/.claude/
+**/.scratch/
+**/docs/local/
+**/docs/agents/

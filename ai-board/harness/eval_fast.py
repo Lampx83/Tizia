@@ -64,7 +64,7 @@ def build_tree(checkout: Path, root: Path) -> Path:
         if git.wait():
             raise FastTierError(f"git archive {checkout} thất bại (mã {git.returncode})")
         (tree / ".ready").write_text("", encoding="utf-8")
-    link, source = tree / "node_modules", ROOT / "node_modules"
+    link, source = tree / "node_modules", Path(os.environ.get("AI_BOARD_EVAL_NODE_MODULES") or ROOT / "node_modules")
     if not link.exists():
         if not source.is_dir():
             raise FastTierError(f"thiếu {source}: chạy npm install ở gốc repo (app native dùng chung node_modules)")

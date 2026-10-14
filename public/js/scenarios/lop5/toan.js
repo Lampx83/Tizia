@@ -324,6 +324,15 @@ export const P5_TOAN_WEEKS = [
     Q('Một số tăng thêm 25% được 250. Số ban đầu?', ['187,5', '300', '200', '225'], 2, '250 : 125 × 100 = 200.', ['Sai — em lấy 75% thay vì làm ngược lại.', 'Sai — số ban đầu phải nhỏ hơn 250.', 'Đúng — 250 là 125% nên số ban đầu = 250 : 125 × 100 = 200.', 'Sai — em chỉ trừ đi 25 đơn vị, sai cách.']),
     Q('1 năm thường có?', ['365 ngày', '360 ngày', '366 ngày', '350 ngày'], 0, 'Năm thường 365, năm nhuận 366.', ['Đúng — năm thường có 365 ngày.', 'Sai — đó là số làm tròn, năm thường có 365 ngày.', 'Sai — đó là số ngày của năm nhuận.', 'Sai — không có năm nào chỉ 350 ngày.']),
   ]),
+
+  M(36, 'Kết thúc Tiểu học — Hành trang Toán vào Lớp 6', [
+    Q('Hình hộp chữ nhật dài 5cm, rộng 4cm, cao 3cm. Thể tích bằng bao nhiêu?', ['12 cm³', '60 cm³', '47 cm³', '120 cm³'], 1, 'V = dài × rộng × cao = 5 × 4 × 3 = 60 cm³.', ['Sai — 12 là tích của rộng và cao, còn thiếu chiều dài.', 'Đúng — 5 × 4 × 3 = 60 cm³.', 'Sai — đây là tổng chứ không phải tích ba kích thước.', 'Sai — 120 là gấp đôi kết quả đúng.']),
+    Q('25% của 200 là bao nhiêu?', ['50', '25', '40', '75'], 0, '200 × 25 : 100 = 50.', ['Đúng — 25% của 200 là 200 : 4 = 50.', 'Sai — 25 là tỉ số phần trăm, không phải kết quả.', 'Sai — 40 ứng với 20% của 200.', 'Sai — 75 ứng với 37,5% của 200.']),
+    Q('Phân số 3/4 viết dưới dạng số thập phân là?', ['0,34', '0,43', '0,75', '7,5'], 2, '3 : 4 = 0,75.', ['Sai — đây là ghép hai chữ số 3 và 4, không phải phép chia.', 'Sai — đây là ghép hai chữ số theo thứ tự ngược, không phải phép chia.', 'Đúng — 3 : 4 = 0,75.', 'Sai — 7,5 lớn hơn 1, trong khi 3/4 nhỏ hơn 1.']),
+    Q('Một ô tô đi 120km trong 2 giờ. Vận tốc trung bình là?', ['240 km/giờ', '120 km/giờ', '30 km/giờ', '60 km/giờ'], 3, 'v = s : t = 120 : 2 = 60 km/giờ.', ['Sai — đó là kết quả của phép nhân, không phải phép chia.', 'Sai — 120km là quãng đường, không phải vận tốc.', 'Sai — 30 km/giờ ứng với 4 giờ đi hết 120km.', 'Đúng — 120 : 2 = 60 km/giờ.']),
+    Q('Hình tam giác có đáy 8cm, chiều cao 5cm. Diện tích bằng?', ['40 cm²', '20 cm²', '13 cm²', '26 cm²'], 1, 'S = đáy × chiều cao : 2 = 8 × 5 : 2 = 20 cm².', ['Sai — quên chia cho 2.', 'Đúng — 8 × 5 : 2 = 20 cm².', 'Sai — 13 là tổng đáy và chiều cao.', 'Sai — 26 là chu vi của một hình khác, không liên quan công thức này.']),
+    Q('Lên Lớp 6 em sẽ bắt đầu học loại số nào mới?', ['Số nguyên âm', 'Phân số', 'Số thập phân', 'Số tự nhiên'], 0, 'Lớp 6 mở rộng sang số nguyên âm, tỉ lệ thức, biểu thức chứa chữ.', ['Đúng — Lớp 6 em sẽ học số nguyên âm và số nguyên dương.', 'Sai — phân số em đã học từ Lớp 4.', 'Sai — số thập phân em đã học ở Lớp 5.', 'Sai — số tự nhiên em học từ Lớp 1.']),
+  ]),
 ];
 
 export const P5_TOAN_SCENARIOS = indexBy(P5_TOAN_WEEKS);

@@ -49,6 +49,29 @@ test('line endings do not change the hash', () => {
   assert.equal(guestInputsHash(crlf), guestInputsHash(lf));
 });
 
+test('classifier and provider configuration changes invalidate the guest source pin', () => {
+  const root = fakeRepo({ ...BASE,
+    'server/ai-board/classifier-calibration.json': '{"calibrated":false}\n',
+    'server/ai-board/model-routing.json': '{"version":1}\n',
+  });
+  const original = guestInputsHash(root);
+  fs.writeFileSync(path.join(root, 'server/ai-board/classifier-calibration.json'), '{"calibrated":true}\n');
+  const classifierChanged = guestInputsHash(root);
+  assert.notEqual(classifierChanged, original, 'the guest imports classifier policy at startup');
+  fs.writeFileSync(path.join(root, 'server/ai-board/model-routing.json'), '{"version":2}\n');
+  assert.notEqual(guestInputsHash(root), classifierChanged, 'routing compatibility is a trusted guest input');
+});
+
+test('guest staging excludes evaluation answers and local agent instructions', () => {
+  const root = fakeRepo({ ...BASE,
+    'ai-board/harness/evaluation/private-gold.json': '{"answer":"held-out"}\n',
+    'ai-board/harness/AGENTS.md': 'local instructions\n',
+    'ai-board/harness/claude.md': 'local instructions\n',
+    'ai-board/harness/.scratch/notes.txt': 'local evidence\n',
+  });
+  assert.deepEqual(guestInputs(root).map(file => file.rel), Object.entries(BASE).map(pair => pair[0]).sort());
+});
+
 test('the dev policy pins a guest built from the current harness', () => {
   const policy = fs.readFileSync(path.join(REPO, 'ai-board/sandbox-runner/sandbox-policy.dev.yaml'), 'utf8');
   assert.equal(

@@ -76,3 +76,13 @@ def test_non_http_error_is_also_model_unavailable():
     worker, _ = worker_with(Down(), lambda: 0.0)
     out = worker.run_once()
     assert out['status'] == 'model_unavailable' and 'timed out' in out['error']
+
+
+def test_classifier_without_calibrated_candidate_does_not_block_intake(monkeypatch):
+    import main
+    roles = []
+    monkeypatch.setattr(main.Deps, 'call_model', lambda self, *a, role=None, **k: roles.append(role) or {})
+    routing = type('Router', (), {'candidates': staticmethod(lambda role: [] if role == 'classifier' else [{}])})()
+    ollama = type('Models', (), {'routing': routing, 'gate1_model': 'm'})()
+    assert model_preflight(ollama)() is None
+    assert roles == ['gate1']

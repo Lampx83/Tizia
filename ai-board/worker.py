@@ -185,7 +185,11 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
                     result = {"gate": gate, "blocked": True, "reason": "budget exhausted", "failure_class": "budget"}
                 else:
                     try:
-                        result = run_gate(gate, {}, deps, budget, state)
+                        if gate == 4:
+                            from repositories import server_hsm
+                            result = server_hsm.execute(lambda: run_gate(gate, {}, deps, budget, state))
+                        else:
+                            result = run_gate(gate, {}, deps, budget, state)
                     except Exception as error:  # model/network/tool outage, not the candidate's code
                         result = {"gate": gate, "blocked": True, "reason": str(error)[:1000],
                                   "failure_class": "transient"}
@@ -288,6 +292,8 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
             break
         if not budget.tick():
             kind = "budget"
+            break
+        if os.getenv("AI_BOARD_TOOL_LOOP") == "1" and not budget.spend_repair():  # ledger sửa nội dung chung với loop
             break
         repairs.append({"gate": last["gate"], "reason": last["reason"]})
         repair_reason = f"cổng {last['gate']}: {last['reason']}"
@@ -556,8 +562,8 @@ def model_preflight(ollama, *, clock: Callable[[], float] = time.monotonic, ttl:
         if getattr(ollama, 'routing', None):
             from budget import Budget
             from main import Deps
-            # Follow the same policy; a failed primary must not hide a usable secondary.
-            for role in ('gate1', 'classifier'):
+            # Classifier is fail-open: with no calibrated candidate it must not block intake.
+            for role in ('gate1', *(('classifier',) if ollama.routing.candidates('classifier') else ())):
                 if role in ok_at and clock() - ok_at[role] < ttl:
                     continue
                 try:
@@ -856,19 +862,32 @@ class HttpWorker:
                 if type_kwargs:  # phần kiểm tra chỉ lấy sau khi đã có plan: người lập plan không bao giờ thấy
                     type_kwargs["eval_tasks"] = self.client.post("/api/ai-board/worker/eval-tasks", {}).get("test") or []
                 limit = int((snapshot.get("ticket") or {}).get("budget_limit") or DEFAULT_BUDGET_LIMIT)
-                result = self._with_heartbeat(
-                    lambda lost: self.change_runner(
-                        plan, ticket_id, max(limit - budget_used, 0),  # giây GPU còn lại của lượt (trừ phần lập plan)
-                        # {} when missing: fails the hash check closed instead of skipping the catalog.
-                        policy=snapshot.get("capability_policy") or {},
-                        accepted_policy_hash=planned.get("capability_policy_hash"),
-                        request_detail=((snapshot.get('request') or {}).get('title', '') + '\n'
-                            + ((snapshot.get('request') or {}).get('clarified_spec')
-                               or (snapshot.get('request') or {}).get('detail') or '')),
-                        should_stop=lost, **run_kwargs, **type_kwargs,
-                    ), ticket_id, lease,
-                    on_lease_lost=lambda lost_result: self.candidates.discard((lost_result or {}).get("candidate")),
-                )
+                import memory
+                from repositories.server_memory import RemoteLessons
+                from repositories import server_hsm
+
+                memory_api = RemoteLessons(self.client, ticket_id=ticket_id, run_id=run["id"],
+                                           worker_id=self.worker_id, lease_token=lease["lease_token"],
+                                           files=[file for step in plan.get("steps") or []
+                                                  for file in step.get("allowed_scope") or []],
+                                           enabled=snapshot.get("lessons_schema_version") == 1)
+                hsm_contract = snapshot.get('hsm_contract')
+                hsm_api = server_hsm.RemoteGate4(self.client,ticket_id=ticket_id,run_id=run['id'],
+                    worker_id=self.worker_id,lease_token=lease['lease_token'],contract=hsm_contract)
+                with memory.server_scope(memory_api), server_hsm.server_scope(hsm_api):
+                    result = self._with_heartbeat(
+                        lambda lost: self.change_runner(
+                            plan, ticket_id, max(limit - budget_used, 0),  # giây GPU còn lại của lượt (trừ phần lập plan)
+                            # {} when missing: fails the hash check closed instead of skipping the catalog.
+                            policy=snapshot.get("capability_policy") or {},
+                            accepted_policy_hash=planned.get("capability_policy_hash"),
+                            request_detail=((snapshot.get('request') or {}).get('title', '') + '\n'
+                                + ((snapshot.get('request') or {}).get('clarified_spec')
+                                   or (snapshot.get('request') or {}).get('detail') or '')),
+                            should_stop=lost, **run_kwargs, **type_kwargs,
+                        ), ticket_id, lease,
+                        on_lease_lost=lambda lost_result: self.candidates.discard((lost_result or {}).get("candidate")),
+                    )
                 preview_artifact = result.pop("_preview_artifact", None) if isinstance(result, dict) else None
                 shots = (result.pop("screenshots", None) if isinstance(result, dict) else None) or []
                 try:
@@ -882,6 +901,7 @@ class HttpWorker:
                         **lease, "run_id": run["id"], "verdict": {**result, "skill": skill} if skill else result,
                         "idempotency_key": f"{prefix}:verdict",
                     })["verdict"]
+                    memory_api.flush(verdict)
                 except Exception as error:
                     if _is_stale_lease(error):
                         self.candidates.discard(result.get("candidate"))
@@ -1048,9 +1068,10 @@ def harness_change_runner(checkout_source=None, tracer=None, progress=None) -> C
         budget = Budget.from_env()
         budget.max_units = max_units
         # Thời gian + số lần gọi model lớn theo số bước của plan (task lớn không chạm trần cố định 900 s / 40 lần).
-        steps = len(plan.get("steps") or [])
-        budget.max_wall_clock_s = float(scaled_limit("wall_clock_s", steps))
-        budget.max_model_calls = scaled_limit("model_calls", steps)
+        if os.getenv("AI_BOARD_TOOL_LOOP") != "1":  # tool-loop: trần parent cố định từ BUDGET_MAX_*, không scale theo plan
+            steps = len(plan.get("steps") or [])
+            budget.max_wall_clock_s = float(scaled_limit("wall_clock_s", steps))
+            budget.max_model_calls = scaled_limit("model_calls", steps)
         artifact = {}
         def capture(state, private_candidate):
             from preview import commit_archive

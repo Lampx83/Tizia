@@ -92,14 +92,14 @@
     }
   },
   "reasoning": {
-    "gate1": true,
-    "gate25": true,
+    "gate1": false,
+    "gate25": false,
     "gate3_light": false,
     "gate3_heavy": true,
-    "gate4_review": true,
+    "gate4_review": false,
     "classifier": false,
     "calibration": true,
     "eval_judge": true
   },
-  "reasoning_extra_tokens": 4096
+  "reasoning_extra_tokens": 8192
 }

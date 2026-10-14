@@ -191,12 +191,12 @@ def test_malformed_vllm_is_charged_without_switching(body):
 
 
 def test_reasoning_is_per_role_with_extra_token_allowance():
-    """gate1 (plan) thinks and gets +4096 tokens; gate3_light does not; both send the choice explicitly."""
+    """gate3_heavy thinks and gets the catalog's extra tokens; gate3_light does not; both send the choice explicitly."""
     with gateway() as (vllm_url, calls):
         models = OllamaClient.from_env({'VLLM_URL': vllm_url, 'VLLM_SECKEY': 'k', 'AI_BOARD_MODEL_ROUTING': 'true'})
         deps = Deps(models=models, notify=None, sleep=lambda _: None)
-        deps.call_model('m', 'p', gate=1, role='gate1', budget=Budget(), options={'num_predict': 100})
+        deps.call_model('m', 'p', gate=3, role='gate3_heavy', budget=Budget(), options={'num_predict': 100})
         deps.call_model('m', 'p', gate=3, role='gate3_light', budget=Budget(), options={'num_predict': 100})
     plan, light = calls[0][2], calls[1][2]
-    assert plan['chat_template_kwargs'] == {'enable_thinking': True} and plan['max_tokens'] == 100 + 4096
+    assert plan['chat_template_kwargs'] == {'enable_thinking': True} and plan['max_tokens'] == 100 + models.routing.reasoning_tokens()
     assert light['chat_template_kwargs'] == {'enable_thinking': False} and light['max_tokens'] == 100
