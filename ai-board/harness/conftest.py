@@ -62,7 +62,7 @@ def connect(dsn, dict_rows=False):
 @pytest.fixture
 def db_file():
     """DSN PostgreSQL tạm: schema riêng mỗi test trên TEST_PG_URL (container vứt đi), drop sau test.
-    Không có TEST_PG_URL → skip. Tên `db_file` giữ từ thời SQLite."""
+    Không có TEST_PG_URL → skip."""
     import os
     import secrets
     import psycopg

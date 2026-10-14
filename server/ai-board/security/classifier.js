@@ -149,9 +149,7 @@ export async function recordClassification(db, rootTicketId, result) {
       ON CONFLICT DO NOTHING
     `;
     const params = [rootTicketId, JSON.stringify(result), `classifier:${rootTicketId}`, Date.now()];
-    // db: better-sqlite3 handle (default backend, runs synchronously) or the async contract (PostgreSQL).
-    if (typeof db.prepare === 'function') db.prepare(sql).run(...params);
-    else await db.run(sql, params);
+    await db.run(sql, params);
   } catch (error) {
     console.warn('[ai-board] classification trace failed:', error.message);
   }

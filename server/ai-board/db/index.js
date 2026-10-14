@@ -35,7 +35,7 @@ export function toPgDdl(sql) {
 const withInsertId = (sql) => `${sql.trim().replace(/;$/, '')} RETURNING id`;
 
 /** Ambient transaction: code inside tx() may call d.get/run/... directly, they join the open transaction
- * (AsyncLocalStorage), and a nested tx() becomes a SAVEPOINT, like better-sqlite3 nested transactions. */
+ * (AsyncLocalStorage), and a nested tx() becomes a SAVEPOINT. */
 const ambient = new AsyncLocalStorage();
 let savepointSeq = 0;
 async function runTx(ops, exec, fn) {

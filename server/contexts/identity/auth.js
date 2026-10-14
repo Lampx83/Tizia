@@ -1,5 +1,5 @@
 // Đăng nhập cho Tizia: scrypt password + opaque session token (cookie httpOnly).
-// Không thêm thư viện ngoài — dùng node:crypto + better-sqlite3 sẵn có.
+// Không thêm thư viện ngoài — dùng node:crypto sẵn có.
 
 import { scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
 import {
