@@ -87,16 +87,23 @@ def render(rep: dict) -> str:
             review = g.get("review_false_block")
             lines.append(f"{name:<18} n={g['trials']:<4} giải đúng {r['k']}/{r['n']} = {r['rate']}% (Wilson {r['lo']}-{r['hi']}) | sạch {g['resolved_clean']['rate']}% | "
                          f"pass@any {g['pass_any']['rate']}% pass@all {g['pass_all']['rate']}% | bất ổn {g['flaky_tasks']} task | ship {g['shipped']['rate']}% | "
+                         + (f"clean fixture-shipped {g['clean_fixture_shipped']['k']}/{g['trials']} | " if "clean_fixture_shipped" in g else "")
                          + (f"kế hoạch đúng ngay {plan['first_hit']['rate']}% (sau hỏi lại {plan['final_hit']['rate']}%, trang mới {plan['first_plans_new_page']['rate']}%) | " if plan else "")
                          + (f"cổng 4 chặn nhầm {review['k']}/{review['n']} = {review['rate']}% | " if review else "")
                          + f"tham chiếu bịa {g['references']['with_missing_ref']['rate']}%" + (f" (lùi schema {g['references']['schema_fallbacks']})" if g['references']['schema_fallbacks'] else "") + " | "
                          + f"{c['model_calls_mean']} lượt gọi, kẹt {c['stuck']['rate']}%, cắt cụt {c['truncated']['rate']}%, {c['wall_s_mean']} s/lượt")
+            if "cost_per_resolved_clean" in g:
+                clean_cost = g["cost_per_resolved_clean"]
+                lines.append("  chi phí / resolved_clean (mọi attempts): " + ", ".join(
+                    f"{unit}={clean_cost[unit]['per_resolved_clean']} ({clean_cost[unit]['status']})"
+                    for unit in ("model_calls", "tokens", "processing_s")) + "; timing verdict pending matched conditions")
         if "all" in groups and groups["all"].get("failure"):
             lines.append("  lớp lỗi: " + ", ".join(f"{k}={v}" for k, v in sorted(groups["all"]["failure"].items())))
     return "\n".join(lines)
 
 
 FIXED = ("ref", "dirty", "model", "routing_catalog", "prompt_lock", "skill_lock", "contract_hash", "suite_hash", "pipeline_hash")
+COMPARISON_PINS = FIXED + ("reasoning", "corpus_sha", "seed", "repeats", "modes", "fast_tier", "review", "packs", "budget")
 
 
 def integrity(meta: dict, rows: list[dict], current: dict | None = None) -> list[str]:
@@ -296,8 +303,34 @@ def cmd_check(args) -> int:
 def cmd_compare(args) -> int:
     load = lambda p: [json.loads(line) for line in Path(p).read_text(encoding="utf-8").splitlines() if line.strip()]  # noqa: E731
     a, b = load(args.baseline), load(args.candidate)
-    for mode in sorted({r["mode"] for r in a} & {r["mode"] for r in b}):
-        print(mode, json.dumps(metrics.compare([r for r in a if r["mode"] == mode], [r for r in b if r["mode"] == mode]), ensure_ascii=False))
+    manifests = []
+    for path in (args.baseline, args.candidate):
+        manifest = Path(path).with_name("run.json")
+        manifests.append(json.loads(manifest.read_text(encoding="utf-8")) if manifest.exists() else {})
+    ma, mb = manifests
+    problems = [f"missing or different pin: {key}" for key in COMPARISON_PINS
+                if ma.get(key) is None or mb.get(key) is None or ma[key] != mb[key]]
+    if any(not isinstance(meta.get("budget"), dict) or not meta["budget"] for meta in manifests):
+        problems.append("missing explicit budget pins")
+    if any(meta.get("dirty") is not False or meta.get("status") != "complete" or meta.get("integrity") != [] for meta in manifests):
+        problems.append("manifests must record clean complete runs and successful integrity checks")
+    timing = ma.get("timing_conditions")
+    timing_comparable = (isinstance(timing, dict) and timing == mb.get("timing_conditions")
+                         and timing.get("comparable") is True
+                         and all(timing.get(key) for key in ("gpu", "load", "warm_cold", "protocol")))
+    cohort = metrics.compare(a, b)
+    for mode in sorted({r["mode"] for r in a} | {r["mode"] for r in b}):
+        ra, rb = [r for r in a if r["mode"] == mode], [r for r in b if r["mode"] == mode]
+        result = metrics.compare(ra, rb)
+        reasons = problems + ([cohort["reason"]] if cohort["verdict"] == "incomparable" else [])
+        costs = metrics.compare_clean_cost(ra, rb, timing_comparable=timing_comparable)
+        if reasons or result["verdict"] == "incomparable":
+            reasons += [result["reason"]] if result["verdict"] == "incomparable" else []
+            result = {"verdict": "incomparable", "reasons": sorted(set(reasons))}
+            for check in costs.values():
+                check.update(status="pending", increase_percent=None)
+        result["cost_per_resolved_clean"] = costs
+        print(mode, json.dumps(result, ensure_ascii=False))
     return 0
 
 
@@ -305,6 +338,20 @@ def cmd_grade_collect(args) -> int:
     root = Path(args.root) / "suite"
     pack = json.loads(Path(args.pack).read_text(encoding="utf-8"))
     print(json.dumps(grading.collect([root / name for name in args.runs.split(",")], pack, Path(args.out)), ensure_ascii=False))
+    return 0
+
+
+def cmd_plan_collect(args) -> int:
+    root = Path(args.root) / "suite"
+    print(json.dumps(grading.collect_plans([root / name for name in args.runs.split(",")], Path(args.out)), ensure_ascii=False))
+    return 0
+
+
+def cmd_plan_score(args) -> int:
+    root = Path(args.root) / "suite"
+    grades = json.loads(Path(args.grades).read_text(encoding="utf-8"))
+    blind_map = json.loads(Path(args.blindmap).read_text(encoding="utf-8"))
+    print(json.dumps(grading.score_plans(grades, blind_map, [root / name for name in args.runs.split(",")]), ensure_ascii=False, indent=1))
     return 0
 
 
@@ -362,6 +409,17 @@ def main(argv=None, deps=None) -> int:
     gc.add_argument("--pack", required=True)
     gc.add_argument("--out", required=True)
     gc.set_defaults(handler=cmd_grade_collect)
+    pc = sub.add_parser("plan-collect", help="mix captured DEV e2e plans into matched blind review cards")
+    pc.add_argument("--root", required=True)
+    pc.add_argument("--runs", required=True, help="comma list of paired run directory names under <root>/suite")
+    pc.add_argument("--out", required=True)
+    pc.set_defaults(handler=cmd_plan_collect)
+    ps = sub.add_parser("plan-score", help="score independently reviewed plan cards against the paired trial outcomes")
+    ps.add_argument("--root", required=True)
+    ps.add_argument("--runs", required=True)
+    ps.add_argument("--grades", required=True)
+    ps.add_argument("--blindmap", required=True)
+    ps.set_defaults(handler=cmd_plan_score)
     gs = sub.add_parser("grade-score", help="join the grader's verdicts with the blind map and report per run")
     gs.add_argument("--grades", required=True)
     gs.add_argument("--blindmap", required=True)

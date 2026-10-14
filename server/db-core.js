@@ -145,7 +145,16 @@ async function execDdl(d, sql) {
 
 const INSERT_TABLE =/^\s*INSERT\s+INTO\s+"?([A-Za-z_][A-Za-z0-9_]*)"?/i;
 
-function pgHandle(d) {
+const DDL_STMT = /^\s*(?:--[^\n]*\n\s*)*(?:CREATE|ALTER|DROP)\b/i;
+const WRITE_STMT = /^\s*(?:--[^\n]*\n\s*)*(?:INSERT|UPDATE|DELETE|MERGE|TRUNCATE)\b/i;
+
+/** fenced: boot against an existing production schema; DDL via exec() and writes via prepare() are skipped until endBoot(). */
+function pgHandle(d, { fenced = false } = {}) {
+  const fence = { active: fenced, skippedDdl: 0, skippedWrites: 0, samples: [] };
+  const skip = (kind, sql) => {
+    fence[kind === 'ddl' ? 'skippedDdl' : 'skippedWrites']++;
+    if (fence.samples.length < 8) fence.samples.push(sql.replace(/\s+/g, ' ').trim().slice(0, 90));
+  };
   const compiled = new Map();
   const compile = (sql) => compiled.get(sql) ?? (compiled.set(sql, compileParams(pgDialect(sql))), compiled.get(sql));
   const hasId = new Map();
@@ -162,10 +171,12 @@ function pgHandle(d) {
     const { sql: text, slots } = compile(sql);
     const table = INSERT_TABLE.exec(sql)?.[1];
     const wantId = table && !/\bRETURNING\b/i.test(sql);
+    const isWrite = WRITE_STMT.test(sql);
     return {
-      get: (...a) => d.get(text, bindParams(slots, a)),
-      all: (...a) => d.all(text, bindParams(slots, a)),
+      get: (...a) => (isWrite && fence.active ? (skip('write', sql), undefined) : d.get(text, bindParams(slots, a))),
+      all: (...a) => (isWrite && fence.active ? (skip('write', sql), []) : d.all(text, bindParams(slots, a))),
       async run(...a) {
+        if (isWrite && fence.active) { skip('write', sql); return { changes: 0, lastInsertRowid: 0 }; }
         const params = bindParams(slots, a);
         if (wantId && await tableHasId(table)) {
           const rows = await d.all(`${text.trim().replace(/;$/, '')} RETURNING id`, params);
@@ -203,7 +214,20 @@ function pgHandle(d) {
       const ddl = [`CREATE TABLE ${t} (`, colDdl.join(',\n'), ');', ...indexes.map((i) => `${i.def};`)].join('\n');
       return { columns, indexes, foreign_keys, ddl };
     },
-    exec: (sql) => execDdl(d, pgDdl(sql)),
+    exec: (sql) => {
+      if (!fence.active) return execDdl(d, pgDdl(sql));
+      const keep = splitStatements(sql).filter((st) => !DDL_STMT.test(st) || (skip('ddl', st), false));
+      return keep.length ? execDdl(d, pgDdl(keep.join(';\n'))) : Promise.resolve();
+    },
+    /** DDL that stays allowed while fenced (AI Board tables only). */
+    execAllowed: (sql) => execDdl(d, pgDdl(sql)),
+    get bootFenced() { return fence.active; },
+    /** Lifts the fence; returns what it skipped. */
+    endBoot() {
+      const { skippedDdl, skippedWrites, samples } = fence;
+      fence.active = false;
+      return { skippedDdl, skippedWrites, samples };
+    },
     transaction: (fn) => (...args) => d.tx(async (t) => {
       await t.get('SELECT pg_advisory_xact_lock(?)', [TX_LOCK]);
       return fn(...args);
@@ -211,9 +235,12 @@ function pgHandle(d) {
   };
 }
 
-/** url: PostgreSQL connection string. */
-export function createAppDb({ url } = {}) {
+/** url: PostgreSQL connection string. existingSchema: boot must not create/alter/seed platform tables. */
+export function createAppDb({ url, existingSchema = false } = {}) {
   if (!url) throw new Error('createAppDb: DATABASE_URL is required');
   const d = createPgDb({ url, max: Number(process.env.PG_POOL_MAX) || 10 });
-  return { ...pgHandle(d), d, close: () => d.close() };
+  const handle = pgHandle(d, { fenced: existingSchema });
+  handle.d = d;
+  handle.close = () => d.close();
+  return handle;
 }

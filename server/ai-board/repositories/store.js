@@ -917,9 +917,12 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       failed: ['waiting', 'precheck_failed', 'Kiểm tra ban đầu chưa đạt.'],
     };
     const plannedStatuses = new Set(['planned', 'waiting_authorization', 'human_owned', 'waiting_admin']);
-    const next = input.outcome === 'planned' && plannedStatuses.has(current.status)
-      ? [current.status, current.phase, current.public_note]
-      : states[input.outcome];
+    const next = input.outcome === 'planned' && current.status === 'planned'
+      && current.phase === 'ticketized' && current.tier === 'surface' && current.lease_mode === 'shadow'
+      ? ['queued', 'authorized', 'Kế hoạch đã được kiểm tra; đang chờ thực hiện.']
+      : input.outcome === 'planned' && plannedStatuses.has(current.status)
+        ? [current.status, current.phase, current.public_note]
+        : states[input.outcome];
     if (!next) throw new WorkerContractError('invalid release outcome');
     await db.run(`
       UPDATE ai_tickets SET status=?, phase=?, public_note=?, internal_reason=?,

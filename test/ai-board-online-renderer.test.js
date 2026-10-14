@@ -60,3 +60,52 @@ test('browser api: session cookie + CSRF header on writes, never on reads; sessi
   assert.equal(write.init.credentials, 'same-origin');
   assert.deepEqual(JSON.parse(write.init.body), { operation: 'send_note', record_id: 7 });
 });
+
+test('blank number field is omitted from the payload, a typed 0 is kept', async () => {
+  const numSchema = validateUiSchema({ version: 1, title: 'T', blocks: [
+    { type: 'form', title: 'Thêm', resource_id: 4, fields: [{ name: 'qty', label: 'Số lượng', kind: 'number' }, { name: 'text', label: 'Nội dung', kind: 'text' }], submit_label: 'Lưu' },
+  ] });
+  const calls = [];
+  const api = { list: async () => [], invoke: async () => {}, create: async (r, d) => calls.push(d) };
+  const nodes = walk(renderSchema(numSchema, { doc, api }));
+  const form = nodes.find((n) => n.tag === 'form');
+  const [qty, text] = nodes.filter((n) => n.tag === 'input');
+  text.value = 'a';
+  for (const blank of ['', '  ']) { qty.value = blank; await form.listeners.submit({ preventDefault() {} }); }
+  qty.value = '0'; await form.listeners.submit({ preventDefault() {} });
+  assert.deepEqual(calls, [{ text: 'a' }, { text: 'a' }, { qty: 0, text: 'a' }]);
+});
+
+test('required flag defaults to false, rejects non-boolean and required checkbox', () => {
+  const ui = (field) => ({ version: 1, title: 'T', blocks: [{ type: 'form', title: 'F', resource_id: 4, fields: [field], submit_label: 'Lưu' }] });
+  const f = (extra) => ({ name: 'qty', label: 'Số lượng', kind: 'number', ...extra });
+  assert.equal(validateUiSchema(ui(f())).blocks[0].fields[0].required, false);
+  assert.equal(validateUiSchema(ui(f({ required: true }))).blocks[0].fields[0].required, true);
+  assert.throws(() => validateUiSchema(ui(f({ required: 'yes' }))), /boolean/);
+  assert.throws(() => validateUiSchema(ui({ name: 'done', label: 'Xong', kind: 'checkbox', required: true })), /only text and number/);
+});
+
+test('required blank field shows a Vietnamese alert and blocks submit; optional stays omitted', async () => {
+  const reqSchema = validateUiSchema({ version: 1, title: 'T', blocks: [
+    { type: 'form', title: 'Thêm', resource_id: 4, fields: [{ name: 'qty', label: 'Số lượng', kind: 'number', required: true }, { name: 'text', label: 'Nội dung', kind: 'text', required: true }, { name: 'note', label: 'Ghi chú', kind: 'number' }], submit_label: 'Lưu' },
+  ] });
+  const calls = [];
+  const api = { list: async () => [], invoke: async () => {}, create: async (r, d) => calls.push(d) };
+  const nodes = walk(renderSchema(reqSchema, { doc, api }));
+  const form = nodes.find((n) => n.tag === 'form');
+  const [qty, text, note] = nodes.filter((n) => n.tag === 'input');
+  const status = nodes.filter((n) => n.className === 'ou-status').at(-1);
+  qty.value = ''; text.value = 'a'; note.value = '';
+  await form.listeners.submit({ preventDefault() {} });
+  assert.equal(calls.length, 0);
+  assert.equal(status.attrs.role, 'alert');
+  assert.equal(status.textContent, 'Vui lòng nhập "Số lượng".');
+  assert.equal(qty.attrs['aria-invalid'], 'true');
+  qty.value = '0'; text.value = '  ';
+  await form.listeners.submit({ preventDefault() {} });
+  assert.equal(calls.length, 0);
+  assert.equal(status.textContent, 'Vui lòng nhập "Nội dung".');
+  text.value = 'a';
+  await form.listeners.submit({ preventDefault() {} });
+  assert.deepEqual(calls, [{ qty: 0, text: 'a' }]);
+});

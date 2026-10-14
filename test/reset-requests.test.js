@@ -37,7 +37,17 @@ for (const modern of [false,true]) test(`PostgreSQL reset (${modern ? 'board' : 
       INSERT INTO ai_tickets(id,source_request_id,kind,title,status,phase,created_at,updated_at) VALUES(1,7,'root','Root','queued','intake',1,1);
       INSERT INTO ai_runs(id,ticket_id,attempt,trigger,idempotency_key,created_at,updated_at) VALUES(1,1,1,'test','test',1,1);
       INSERT INTO ai_plans(root_ticket_id,revision,plan_hash,capability_policy_hash,plan_json,status,tier,created_at) VALUES(1,1,'hash','hash','{}','valid','small',1);
-      INSERT INTO ai_authorizations VALUES(1,'hash',1,1,1);`);
+      INSERT INTO ai_authorizations VALUES(1,'hash',1,1,1);
+      INSERT INTO ai_lessons(id,ticket_id,run_id,owner_user_id,domain,ingestion_key,input_hash,kind,state,payload_json,created_at)
+        VALUES(1,1,1,1,'it','reset-memory','hash','proposed','proposed','{}',1);
+      INSERT INTO ai_lesson_audit(lesson_id,version,operation,actor_user_id,created_at) VALUES(1,1,'record',1,1);
+      INSERT INTO ai_lesson_imports(batch_key,entry_key,input_hash,actor_user_id,lesson_id,disposition,created_at)
+        VALUES('reset-batch','reset-entry','hash',1,1,'legacy',1);
+      INSERT INTO ai_lesson_tombstones(identity_hash,expires_at) VALUES('opaque-reset-fixture',2);
+      INSERT INTO ai_hsm_states(run_id,ticket_id,attempt,contract_hash,state,version,plan_hash,updated_at)
+        VALUES(1,1,0,'fixture','Running',1,'hash',1);
+      INSERT INTO ai_hsm_events(ticket_id,run_id,attempt,worker_id,event,identity,input_hash,accepted,response_json,created_at)
+        VALUES(1,1,0,'fixture','BEGIN','reset-hsm','hash',1,'{}',1);`);
     const before = await snapshot(d);
     assert.match((await run()).stdout,/Dry run/); assert.deepEqual(await snapshot(d),before);
     await run('--yes'); const after = await snapshot(d);

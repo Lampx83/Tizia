@@ -160,4 +160,5 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                 "skill": ctx["skill"], "context_chars": ctx["chars"], "repo_context": ctx['text'],
                 'source_targets': ctx.get('targets') or [], 'best_match': ctx.get('best_match')}
     return {"gate": 1, "blocked": True, "reason": f"plan không hợp lệ: {reason}", "plan": None,
-            "skill": ctx["skill"]}
+            "skill": ctx["skill"], "context_chars": ctx["chars"], "repo_context": ctx["text"],
+            "source_targets": ctx.get("targets") or [], "best_match": ctx.get("best_match")}

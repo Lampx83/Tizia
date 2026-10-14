@@ -190,12 +190,10 @@ def changed_texts(full_diff: list[dict] | None, side: str) -> list[str]:
     return sorted(dict.fromkeys(found), key=len, reverse=True)[:MAX_TEXTS]
 
 
-def _new_contrast(before: list[str], after: list[str]) -> list[str]:
-    """Phần tử chữ mờ mới: so theo thẻ/id/class, không theo chữ và tỉ số. Chữ vốn mờ mà vẫn mờ (kể cả khi đổi chữ) không phải lỗi mới;
-    thêm một phần tử mờ cùng loại thì đếm dư ra là lỗi mới."""
+def _new_entries(before: list[str], after: list[str], kind) -> list[str]:
+    """Mục mới của bản sau: so theo kind(), đếm trùng; mục thừa so với bản trước là mới."""
     from collections import Counter
 
-    kind = lambda entry: entry.split(' "', 1)[0]
     pool = Counter(kind(entry) for entry in before)
     new = []
     for entry in after:
@@ -206,13 +204,24 @@ def _new_contrast(before: list[str], after: list[str]) -> list[str]:
     return new
 
 
+def _new_contrast(before: list[str], after: list[str]) -> list[str]:
+    """Phần tử chữ mờ mới: so theo thẻ/id/class, không theo chữ và tỉ số. Chữ vốn mờ mà vẫn mờ (kể cả khi đổi chữ) không phải lỗi mới;
+    thêm một phần tử mờ cùng loại thì đếm dư ra là lỗi mới."""
+    return _new_entries(before, after, lambda entry: entry.split(' "', 1)[0])
+
+
+def _new_covered(before: list[str], after: list[str]) -> list[str]:
+    """Nút mới bị đè: so theo nút (selector + chữ nút), không theo phần tử đè. Nút vốn đã bị đè thì đổi layout làm phần tử đè khác đi không phải lỗi mới."""
+    return _new_entries(before, after, lambda entry: entry.split(" dưới ", 1)[0])
+
+
 def regressions(before: dict | None, after: dict) -> list[str]:
     """Lỗi mới của bản sau so với bản trước (before None = trang mới: mọi lỗi đều mới)."""
     before = before or {}
     out = ["trang tràn ngang"] if after.get("overflow") and not before.get("overflow") else []
     for label, new in (
             ("chữ tương phản thấp (< 4.5)", _new_contrast(before.get("contrast", []), after.get("contrast", []))),
-            ("nút bấm bị phần tử khác đè", [c for c in after.get("covered", []) if c not in before.get("covered", [])]),
+            ("nút bấm bị phần tử khác đè", _new_covered(before.get("covered", []), after.get("covered", []))),
             ("phần tử bị đổi nằm ngoài màn hình", [c for c in after.get("offscreen", []) if c not in before.get("offscreen", [])]),
             ("khối nền trắng/đen lệch tông trang", [c for c in after.get("patch", []) if c not in before.get("patch", [])])):
         if new:

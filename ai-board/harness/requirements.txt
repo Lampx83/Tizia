@@ -1,4 +1,5 @@
 python-dotenv>=1.0
+langgraph==1.2.12  # local-first orchestration; authority and receipts remain server-owned
 fastapi>=0.115,<1
 uvicorn>=0.30,<1
 pytest>=8.0

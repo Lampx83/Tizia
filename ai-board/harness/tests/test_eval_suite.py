@@ -87,6 +87,7 @@ def test_e2e_wrong_page_is_a_plan_miss_not_an_implementation_failure(world):
     deps, models = deps_for(world)
     row = trial.run_trial(pick(tasks, 2), "e2e", deps, root, ROOT)
     assert not row["resolved"] and not row["plan"]["first_hit"] and row["plan"]["first_plans_new_page"]
+    assert row["capture"]["source"]["public/trang-khong-co.html"] == {"missing": True}
     assert metrics.failure_class(row) == "plan_miss"
 
 
@@ -104,6 +105,13 @@ def test_validator_block_stops_before_gate3(world, monkeypatch):
     row = trial.run_trial(pick(tasks, 1), "e2e", deps, root, ROOT)
     assert not row["resolved"] and row["plan"]["validator_blocked"] and "gate3" not in [c[0] for c in models.calls]
     assert metrics.failure_class(row) == "validator_blocked"
+    capture = row["capture"]
+    assert capture["initial_plan"] == capture["final_plan"]
+    assert capture["initial_plan"]["subtasks"]
+    assert capture["model_calls"][0]["phase"] == "planning"
+    assert capture["validator_results"][-1]["blocked"] is True
+    assert capture["request"]["subject"] and capture["request_sha256"]
+    assert capture["source"] and all("sha256" in value for value in capture["source"].values())
 
 
 def test_two_workers_do_not_mix_trials(world):
@@ -308,6 +316,9 @@ def test_gate1_block_reason_is_kept_in_the_row(world):
                 notify=None, sleep=lambda _s: None)
     row = trial.run_trial(pick(tasks, 1), "e2e", deps, root, ROOT)
     assert row["plan"]["blocked"] and "plan" in row["plan"]["reason"]
+    assert row["capture"]["planning_context"] and row["capture"]["source_targets"]
+    assert row["capture"]["initial_plan"] is None
+    assert len(row["capture"]["model_calls"]) == 2
 
 
 def test_concurrent_workers_can_ask_for_the_same_checkout_and_a_broken_one_is_rebuilt(tmp_path):
@@ -417,6 +428,51 @@ def test_blind_grading_hides_arms_and_scores_per_run_with_oracle_agreement(tmp_p
     report = grading.score(grades, blind_map)
     assert report["runs"]["runA"]["oracle_agreement"] == "2/2" and report["runs"]["runB"]["correct_or_partial"] == 1
     assert grading.paired(grades, blind_map, "runA", "runB") == {"tasks": 2, "gained_usable": 0, "lost_usable": 0, "net": 0, "usable_trials_delta": 0}
+
+
+def test_plan_cards_are_matched_and_hide_arm_outcome_and_gold(tmp_path):
+    import json
+    import pytest
+    from evaluation.suite import grading
+
+    for name in ("off", "on"):
+        run = tmp_path / name
+        run.mkdir()
+        (run / "run.json").write_text(json.dumps({"status": "complete", "dirty": False, "integrity": [],
+            **{field: "same" for field in ("ref", "model", "corpus_sha", "seed", "repeats", "modes", "prompt_lock", "skill_lock", "contract_hash", "suite_hash", "pipeline_hash")}}), encoding="utf-8")
+        capture = {"version": 1, "request": {"subject": "Edit heading", "body": "Home"},
+                   "base_sha": "abc", "source": {"index.html": {"text": "Before"}},
+                   "initial_plan": {"subtasks": [{"file": "index.html"}]},
+                   "final_plan": {"subtasks": [{"file": "index.html"}]},
+                   "model_calls": [{"response": "private raw response"}], "planning_result": {"blocked": name == "off"}}
+        rows = [{"id": "t1", "mode": "e2e", "repeat": 1, "split": "dev", "resolved": name == "on", "capture": capture,
+                 "plan": {"blocked": name == "off", "validator_blocked": False}},
+                {"id": "sealed", "mode": "e2e", "repeat": 1, "split": "heldout", "capture": None}]
+        (run / "results.jsonl").write_text("\n".join(json.dumps(row) for row in rows), encoding="utf-8")
+    out = tmp_path / "cards"
+    assert grading.collect_plans([tmp_path / "off", tmp_path / "on"], out)["items"] == 2
+    cards = json.loads((out / "plan-batch.json").read_text(encoding="utf-8"))
+    key = json.loads((out / "plan-blindmap.json").read_text(encoding="utf-8"))
+    assert {v["run"] for v in key.values()} == {"off", "on"}
+    assert all(v["id"] == "t1" for v in key.values())
+    assert all("private raw response" not in json.dumps(card) and "blocked" not in json.dumps(card)
+               and "sealed" not in json.dumps(card) for card in cards["items"])
+    grades = [{"blind_id": blind, "initial_verdict": "correct", "final_verdict": "correct", "reason": "ok"} for blind in key]
+    report = grading.score_plans(grades, key, [tmp_path / "off", tmp_path / "on"])
+    assert report["runs"]["off"]["false_block"] == 1
+    assert report["runs"]["on"]["false_block"] == 0
+    assert all(arm["review_complete"] for arm in report["runs"].values())
+    wrong = [{**grade, "initial_verdict": "wrong", "final_verdict": "wrong"} for grade in grades]
+    wrong_report = grading.score_plans(wrong, key, [tmp_path / "off", tmp_path / "on"])
+    assert wrong_report["runs"]["off"]["wrong_plan_pass"] == 0
+    assert wrong_report["runs"]["on"]["wrong_plan_pass"] == 1
+    with pytest.raises(ValueError, match="exactly one"):
+        grading.score_plans(grades[:1], key, [tmp_path / "off", tmp_path / "on"])
+    rows = (tmp_path / "on" / "results.jsonl").read_text(encoding="utf-8").splitlines()
+    rows[0] = json.dumps({**json.loads(rows[0]), "capture": None})
+    (tmp_path / "on" / "results.jsonl").write_text("\n".join(rows), encoding="utf-8")
+    with pytest.raises(ValueError, match="uncaptured"):
+        grading.collect_plans([tmp_path / "off", tmp_path / "on"], out)
 
 
 def test_hybrid_arm_shows_the_whole_file_only_when_it_fits_the_context_window():

@@ -36,3 +36,11 @@ test('online egress policy denies every destination and has no DNS exception', a
   assert.ok(p.rules.some((r) => r.destination.kind === 'any' && r.direction === 'any'));
   assert.ok(!p.rules.some((r) => r.ports.some((x) => x.start === 53)), 'DNS is not special-cased');
 });
+
+test('tracked online policy is zero-egress with a digest-pinned guest', async () => {
+  const { readFileSync } = await import('node:fs');
+  const p = loadPolicy(readFileSync(new URL('../sandbox-policy.online.yaml', import.meta.url), 'utf8'));
+  assert.equal(p.network, 'none');
+  assert.deepEqual(p.egress, []);
+  assert.match(p.guest_image, /@sha256:[0-9a-f]{64}$/);
+});

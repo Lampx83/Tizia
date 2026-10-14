@@ -1,4 +1,3 @@
-import { mountPrivatePreview } from './private-preview.js';
 // Chi tiết 1 yêu cầu (cửa sổ con trên trang admin): nội dung, trao đổi, kế hoạch, tiến độ trực tiếp và toàn bộ
 // vết AI Board — phiên xử lý (worker) theo từng lượt, cổng, từng lần gọi model, sự kiện. Tự cập nhật bằng cách
 // vá DOM (không vẽ lại cả trang). Mọi giá trị từ học sinh/model là dữ liệu không tin cậy → luôn qua esc().
@@ -6,6 +5,7 @@ import { patchHtml } from './dom-morph.js';
 import { mountPrivatePreview } from './private-preview.js';
 import { installLightbox, pairBeforeAfter } from './lightbox.js';
 import { projectPipeline, describeModelCall, describeEvent, TECHNICAL_EVENTS, TRACE_STEPS } from './ai-board-trace.js';
+import { renderHsm } from './ai-board-hsm.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -499,6 +499,7 @@ function renderAiBoard(t) {
   const shownState = root.live ? 'run' : state;
   return `
     <h2>AI Board</h2>
+    ${renderHsm(t.hsm)}
     <div class="blk status st-${shownState}"><div class="line1"><b>Xử lý yêu cầu</b>${tag(shownState, root.live ? 'Đang xử lý' : label)}
         <span>${esc(root.phase_label)}</span>${root.live ? '<span class="pulse" title="Worker đang giữ yêu cầu này"></span>' : ''}</div>
       ${root.public_note ? `<div style="margin-top:4px">${esc(root.public_note)}</div>` : ''}
@@ -539,7 +540,6 @@ document.addEventListener('click', async (e) => {
 });
 
 function render() {
-  const previewNodes = [...(document.querySelector('#private-preview')?.childNodes || [])];
   if (!view) return;
   const previewNodes=[...(document.querySelector('#private-preview')?.childNodes||[])];
   const { thread, decisions, trace } = view;

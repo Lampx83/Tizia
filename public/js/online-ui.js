@@ -28,14 +28,19 @@ export function renderSchema(schema, { doc = document, api }) {
   const reloadAll = () => reloads.forEach((fn) => fn());
   const root = el(doc, 'main', undefined, 'ou-root');
   root.append(el(doc, 'h1', schema.title));
-  for (const block of schema.blocks) {
+  schema.blocks.forEach((block, i) => {
     const section = el(doc, 'section', undefined, 'ou-block');
-    if (block.type === 'heading') section.append(el(doc, 'h2', block.text));
+    let heading;
+    if (block.type === 'heading') section.append(heading = el(doc, 'h2', block.text));
     else if (block.type === 'text') section.append(el(doc, 'p', block.text));
-    else if (block.type === 'record_list') section.append(...recordList(doc, block, api, reloads));
-    else if (block.type === 'form') section.append(...form(doc, block, api, reloadAll));
+    else {
+      const parts = block.type === 'record_list' ? recordList(doc, block, api, reloads) : form(doc, block, api, reloadAll);
+      heading = parts[0];
+      section.append(...parts);
+    }
+    if (heading) { heading.id = `ou-h-${i}`; section.setAttribute('aria-labelledby', heading.id); }
     root.append(section);
-  }
+  });
   return root;
 }
 
@@ -45,16 +50,22 @@ function status(doc) {
   return s;
 }
 
+// errors interrupt the screen reader; progress and success stay polite
+function say(note, text, isError = false) {
+  note.setAttribute('role', isError ? 'alert' : 'status');
+  note.textContent = text;
+}
+
 function recordList(doc, block, api, reloads) {
   const title = el(doc, 'h2', block.title);
   const note = status(doc);
   const body = el(doc, 'div', undefined, 'ou-list');
   const load = async () => {
     body.replaceChildren();
-    note.textContent = 'Đang tải…';
+    say(note, 'Đang tải…');
     try {
       const rows = await api.list(block.resource_id);
-      note.textContent = rows.length ? '' : 'Chưa có bản ghi nào.';
+      say(note, rows.length ? '' : 'Chưa có bản ghi nào.');
       for (const row of rows) {
         const item = el(doc, 'article', undefined, 'ou-row');
         const dl = el(doc, 'dl');
@@ -63,18 +74,20 @@ function recordList(doc, block, api, reloads) {
         for (const a of block.row_actions) {
           const b = el(doc, 'button', a.label, 'ou-btn');
           b.type = 'button';
+          // identical row buttons need the row's first value to be told apart
+          b.setAttribute('aria-label', `${a.label}: ${show(row.data?.[block.fields[0]?.name]).slice(0, 60)}`);
           b.addEventListener('click', async () => {
             b.disabled = true;
-            note.textContent = 'Đang gửi…';
-            try { await api.invoke(a.operation, row.id); note.textContent = 'Đã gửi thành công.'; }
-            catch (error) { note.textContent = message(error.code); }
+            say(note, 'Đang gửi…');
+            try { await api.invoke(a.operation, row.id); say(note, 'Đã gửi thành công.'); }
+            catch (error) { say(note, message(error.code), true); }
             finally { b.disabled = false; b.focus?.(); } // a disabled control drops keyboard focus
           });
           item.append(b);
         }
         body.append(item);
       }
-    } catch (error) { note.textContent = message(error.code); }
+    } catch (error) { say(note, message(error.code), true); }
   };
   reloads.push(load);
   load();
@@ -92,6 +105,7 @@ function form(doc, block, api, reloadAll) {
     input.name = field.name;
     input.id = `ou-${block.resource_id}-${i}-${field.name}`;
     label.htmlFor = input.id;
+    if (field.required) input.setAttribute('aria-required', 'true');
     f.append(label, input);
     return [field, input];
   });
@@ -101,12 +115,24 @@ function form(doc, block, api, reloadAll) {
   f.addEventListener('submit', async (event) => {
     event.preventDefault();
     const data = {};
+    let missing = null;
     for (const [field, input] of inputs) {
+      const blank = field.kind !== 'checkbox' && (input.value ?? '').trim() === '';
+      input.setAttribute('aria-invalid', String(!!field.required && blank));
+      if (field.required && blank) missing ??= [field, input];
+    }
+    if (missing) {
+      say(note, `Vui lòng nhập "${missing[0].label}".`, true);
+      missing[1].focus?.();
+      return;
+    }
+    for (const [field, input] of inputs) {
+      if (field.kind === 'number' && input.value.trim() === '') continue; // blank = absent, not 0
       data[field.name] = field.kind === 'checkbox' ? !!input.checked : field.kind === 'number' ? Number(input.value) : input.value;
     }
     submit.disabled = true;
-    try { await api.create(block.resource_id, data); note.textContent = 'Đã lưu.'; f.reset?.(); reloadAll(); }
-    catch (error) { note.textContent = message(error.code); }
+    try { await api.create(block.resource_id, data); say(note, 'Đã lưu.'); f.reset?.(); reloadAll(); }
+    catch (error) { say(note, message(error.code), true); }
     finally { submit.disabled = false; submit.focus?.(); }
   });
   return [title, f, note];
