@@ -2,8 +2,8 @@
 version: 1
 vm: { cpus: 1, memory_mib: 2048, disk_mib: 10240, ttl_s: 1200, lease_s: 120 }
 concurrency: 1
-# guest-inputs: 445b921eb6502f98eb98eadfdba85f702cedeabecfeb2fb3eb578d3bc69a452e
-guest_image: image-registry:5000/gate5@sha256:3878073a4eb75f39f9aa933634b2ede17908fcd748945344eccadd17557b2abe
+# guest-inputs: 77ac7cf03a8f648e51382a75fec1163da772018f0127e228d8f20c75f137cbb2
+guest_image: image-registry:5000/gate5@sha256:a51749ebf7baacb796fe0e49f1eb8fb76f7041e509e04e86f610f7b16b637682
 egress:
   - { host: registry-1.docker.io, port: 443 }
   - { host: auth.docker.io, port: 443 }
