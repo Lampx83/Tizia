@@ -448,6 +448,7 @@ function renderConfirm(request, candidate) {
     `AI Board kiểm tra nhánh ${code(candidate?.branch)} (${esc(candidate?.commits?.length)} commit, sửa ${files.map(code).join(', ') || '—'}).`,
     'Nếu nhánh chưa được merge: xóa nhánh. Web đang chạy không đổi vì thay đổi chưa từng lên web.',
     'Nếu đã merge vào dev/main: tạo nhánh revert mới. Cần người mở PR và merge nhánh đó để gỡ thay đổi khỏi web.',
+    'Revert chỉ gỡ code. Trường dữ liệu đã được mở rộng và bản ghi người dùng đã ghi vẫn được giữ, không bị hoàn tác theo.',
   ] : [
     'Yêu cầu chuyển sang "Từ chối", AI Board dừng mọi lượt đang chạy của yêu cầu này.',
     'AI Board chưa tạo thay đổi nào cho yêu cầu này nên không có gì phải gỡ.',
