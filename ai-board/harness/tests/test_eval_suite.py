@@ -192,7 +192,7 @@ def test_best_match_flag_is_recorded_in_run_name_and_provenance(world, monkeypat
     argv = ["run", "--seed", str(SEED), "--split", "dev", "--cases", "1", "--repeats", "1", "--modes", "gold", "--root", str(root), "--allow-dirty"]
     assert runner.main([*argv, "--best-match", "advisory"], deps) == 0
     assert os.environ["AI_BOARD_BEST_MATCH"] == "advisory"
-    assert runner.main([*argv, "--gate25-fixes", "none"], deps) == 0 and os.environ["AI_BOARD_BEST_MATCH"] == ""
+    assert runner.main([*argv, "--context-arm", "nosiblings"], deps) == 0 and os.environ["AI_BOARD_BEST_MATCH"] == ""
     runs = {p.name: json.loads((p / "run.json").read_text(encoding="utf-8")) for p in (root / "suite").iterdir()}
     assert {n.endswith("-bm-adv"): m["best_match"] for n, m in runs.items()} == {True: "advisory", False: "enforce"}
 
