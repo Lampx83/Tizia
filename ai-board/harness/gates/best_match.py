@@ -13,10 +13,10 @@ def mode() -> str:
     return ADVISORY if value == ADVISORY else ""
 
 
-def enforce(best_match, plan_files, message: str, judge) -> None:
-    """Raise ValueError(message) if plan misses best_match; advisory mode records mismatch via judge instead."""
+def enforce(best_match, plan_files, message: str, judge, *, contradicted: bool = False) -> None:
+    """Raise ValueError(message) if plan misses best_match; advisory mode records mismatch via judge instead unless contradicted."""
     if not best_match or best_match in plan_files:
         return
-    if mode() != ADVISORY:
+    if mode() != ADVISORY or contradicted:
         raise ValueError(message)
     judge("best_match", True, f"{REASON_CODE}: recommended {best_match}; plan edits {', '.join(sorted(plan_files)) or '(none)'}")

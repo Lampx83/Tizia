@@ -156,8 +156,10 @@ def source_evidence(request: dict, plan: dict, state: dict) -> tuple[str | None,
         except OSError:
             continue
         files[path] = text
+        wide = 'context' in fixes()
         chunks.append(f'FILE {path} at {sha}\n' + file_context.excerpt(text,
-            file_context.keywords(request.get('subject'), request.get('body'), task.get('title')), budget=3500, filename=path))
+            file_context.keywords(request.get('subject'), request.get('body'), task.get('title'), task.get('verify') if wide else None),
+            budget=6000 if wide else 3500, filename=path))
     return sha, files, '\n\n'.join(chunks)[:16000]
 
 
@@ -182,6 +184,18 @@ def _fold(text: str) -> str:
 
 
 _LINE_MARKER = re.compile(r'^[ \t]*(?:[\w./-]+:)?L?\d+\|[ ]?', re.M)
+
+
+def literal_contradicts(request: dict, best: str | None, files: dict, source, sha: str | None) -> bool:
+    """`literal` fix: a quoted user text exists in the best-match file but in none of the plan's files."""
+    if 'literal' not in fixes() or not best or not sha:
+        return False
+    try:
+        home = code_index.git(source, 'show', f'{sha}:{best}').decode('utf8', 'replace')
+    except OSError:
+        return False
+    return any(lit in home and not any(lit in text for text in files.values())
+               for lit in file_context.literals(request.get('subject'), request.get('body')))
 
 
 def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict) -> dict:
@@ -367,9 +381,12 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                              "grounding": {"type": "array", "maxItems": len(plan['subtasks']), "items": record}},
               "required": ["clear", "question", "grounded", "reason", "grounding"]}
     def validate(req):
-        body = deps.call_model(deps.models.gate1_model, prompt if req is request else build_prompt(req, plan, repo_context),
-                               gate=2.5, budget=budget, format=schema, db_path=db_path, proposal_id=proposal_id,
-                               prompt_name="plan_validate.md", options=_validator_options())
+        ask = lambda options: deps.call_model(deps.models.gate1_model, prompt if req is request else build_prompt(req, plan, repo_context),
+                                              gate=2.5, budget=budget, format=schema, db_path=db_path, proposal_id=proposal_id,
+                                              prompt_name="plan_validate.md", options=options)
+        body = ask(_validator_options())
+        if body.get('done_reason') == 'length' and 'retry' in fixes():  # degenerate whitespace runs: resample once
+            body = ask({**(_validator_options() or {}), 'temperature': 0.3})
         if body.get('done_reason') == 'length':
             return None, {"gate": 2.5, "blocked": True, "reason": "validator output truncated at token limit",
                           "public_message": "Kế hoạch đang chờ quản trị viên kiểm tra vì phản hồi kiểm chứng chưa hoàn chỉnh."}
@@ -411,7 +428,9 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
             if 'LƯU Ý: chữ người dùng nhắc KHÔNG nằm' in (state.get('planning_context') or '') and not targets.intersection(state.get('source_targets') or []):
                 raise ValueError('plan không sửa module đang render nội dung người dùng yêu cầu')
             best_match.enforce(state.get('best_match'), targets,
-                               f"plan không sửa file khớp nhiều cụm người dùng viết nhất: {state.get('best_match')}", judge)
+                               f"plan không sửa file khớp nhiều cụm người dùng viết nhất: {state.get('best_match')}", judge,
+                               contradicted=literal_contradicts(request, state.get('best_match'), files,
+                                                                state.get('checkout_source') or Path(__file__).resolve().parents[3], sha))
             state['grounding'] = checked_grounding(validation, plan, sha, files)
             judge("source grounding", True, f"{len(state['grounding']['evidence'])} quotes matched verbatim in {', '.join(files)}")
         except ValueError as error:

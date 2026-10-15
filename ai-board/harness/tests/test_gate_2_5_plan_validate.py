@@ -222,6 +222,34 @@ def test_validator_uses_bounded_schema_and_never_accepts_truncated_output():
     assert models.calls[0]['num_predict'] == 3072
 
 
+def test_retry_fix_resamples_a_truncated_validator_once(monkeypatch):
+    monkeypatch.setenv('AI_BOARD_GATE25_FIXES', 'retry')
+
+    class FirstTruncated(FakeModels):
+        def generate(self, *args, **kwargs):
+            body = super().generate(*args, **kwargs)
+            if len(self.calls) == 1:
+                body['done_reason'] = 'length'
+            return body
+    plan = plan_with(['features'])
+    models = FirstTruncated(plan)
+    result = plan_validate.run({'id': 'x'}, deps_with(models), Budget(), {'plan': plan})
+    assert 'truncated' not in (result.get('reason') or '') and len(models.calls) == 2
+    assert models.calls[1]['temperature'] == 0.3
+
+
+def test_context_fix_widens_the_excerpt_with_the_subtask_verify(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(plan_validate.file_context, 'excerpt', lambda text, words, *, budget, filename: seen.update(words=words, budget=budget) or '')
+    monkeypatch.setattr(plan_validate.code_index, 'git', lambda *a: b'abc' if a[1] == 'rev-parse' else b'x')
+    plan = {'subtasks': [{'file': 'public/a.html', 'title': 't', 'verify': 'chứa "Tất cả"'}]}
+    plan_validate.source_evidence({'subject': 's'}, plan, {'checkout_source': '.'})
+    assert seen['budget'] == 3500 and 'tất cả' not in seen['words']
+    monkeypatch.setenv('AI_BOARD_GATE25_FIXES', 'context')
+    plan_validate.source_evidence({'subject': 's'}, plan, {'checkout_source': '.'})
+    assert seen['budget'] == 6000 and 'tất cả' in seen['words']
+
+
 def test_http_worker_leaves_complexity_to_the_server_tier():
     from conftest import FakeModels, deps_with
     from budget import Budget
