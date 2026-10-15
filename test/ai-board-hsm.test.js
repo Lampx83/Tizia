@@ -81,6 +81,30 @@ test('revoking an approved folder releases the live lease so the worker stops at
     assert.equal((await f.store.revokeFolder(folder)).stopped,0);
   } finally {await f.close();}
 });
+test('revoke also stops a worker that runs the approved plan under its planning lease (status stays planned)',async()=>{
+  const f=await fixture();
+  try {
+    const now=Date.now();
+    const folder=await f.db.insert("INSERT INTO ai_feature_folders(slug,title,owner_user_id,domain,state,approved_at,created_at,updated_at,last_activity_at) VALUES ('revoke-planned-folder','Revoke planned',1,'pharmacy','active',?,?,?,?)",[now,now,now,now]);
+    await f.db.run('UPDATE requests SET folder_id=? WHERE id=(SELECT source_request_id FROM ai_tickets WHERE id=?)',[folder,f.id]);
+    await f.db.run("UPDATE ai_tickets SET status='planned',phase='ticketized' WHERE id=?",[f.id]);
+    assert.equal((await f.post('heartbeat',{})).status,200);
+    assert.equal((await f.store.revokeFolder(folder)).stopped,1);
+    assert.equal((await f.post('heartbeat',{})).status,409);
+    assert.equal((await f.db.get('SELECT status FROM ai_tickets WHERE id=?',[f.id])).status,'waiting_authorization');
+  } finally {await f.close();}
+});
+test('revoke leaves a root without a lease or an authorized plan alone',async()=>{
+  const f=await fixture();
+  try {
+    const now=Date.now();
+    const folder=await f.db.insert("INSERT INTO ai_feature_folders(slug,title,owner_user_id,domain,state,approved_at,created_at,updated_at,last_activity_at) VALUES ('revoke-idle-folder','Revoke idle',1,'pharmacy','active',?,?,?,?)",[now,now,now,now]);
+    await f.db.run('UPDATE requests SET folder_id=? WHERE id=(SELECT source_request_id FROM ai_tickets WHERE id=?)',[folder,f.id]);
+    await f.db.run("UPDATE ai_tickets SET status='planned',phase='ticketized',lease_owner=NULL,lease_token=NULL,lease_expires_at=NULL WHERE id=?",[f.id]);
+    assert.equal((await f.store.revokeFolder(folder)).stopped,0);
+    assert.equal((await f.db.get('SELECT status FROM ai_tickets WHERE id=?',[f.id])).status,'planned');
+  } finally {await f.close();}
+});
 async function fixture() {
   const appDb=await openBoard({users:[[1,'lan','Lan','student','pharmacy']]});
   const db=appDb.d,store=createAsyncAiBoardStore(db);

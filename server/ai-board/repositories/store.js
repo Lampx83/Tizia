@@ -336,10 +336,12 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   const revokeFolderTransaction = (folderId, now) => db.tx(async () => {
     const changed = (await db.run('UPDATE ai_feature_folders SET approved_by=NULL, approved_at=NULL, updated_at=? WHERE id=?', [now, Number(folderId)])).changes;
     if (!changed) throw new WorkerContractError('folder not found', 404, 'folder_not_found');
+    // Đang giữ lease (kể cả khi worker chạy plan đã duyệt dưới lease của lượt plan: status vẫn 'planned') hoặc đã được cho phép, chờ nhận.
     const live = await db.all(`
       SELECT t.* FROM ai_tickets t JOIN requests q ON q.id = t.source_request_id
-      WHERE q.folder_id = ? AND t.parent_id IS NULL AND t.status IN ('queued', 'running') AND t.phase IN ('authorized', 'executing')
-    `, [Number(folderId)]);
+      WHERE q.folder_id = ? AND t.parent_id IS NULL AND t.plan_hash IS NOT NULL
+        AND ((t.lease_owner IS NOT NULL AND t.lease_expires_at > ?) OR (t.status = 'queued' AND t.phase = 'authorized'))
+    `, [Number(folderId), now]);
     for (const root of live) {
       await closeRoot(root, {
         status: 'waiting_authorization', phase: 'ticketized', note: 'Quyền chạy của chức năng đã bị thu hồi; chờ quản trị viên duyệt lại.',
