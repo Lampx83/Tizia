@@ -713,4 +713,35 @@ export const P1_TOAN_LESSONS = {
       { q: 'Có 60 quả trứng, vỡ 12 quả. Còn mấy quả?', a: '60 − 12 = 48. Vậy còn 48 quả trứng.' },
     ],
   },
+
+  'P1-w36-quiz': {
+    topic: 'Kết thúc Lớp 1 — Hành trang vào Lớp 2',
+    intro: 'Ôi, cả năm học qua nhanh quá! Cô rất tự hào về các em. Mình cùng nhìn lại những điều đã học nhé!',
+    objectives: [
+      'Nhớ lại những kiến thức Toán quan trọng nhất của Lớp 1.',
+      'Hứng thú và sẵn sàng học Toán Lớp 2.',
+    ],
+    theory: [
+      { h: 'Em đã học được gì?' },
+      { ul: [
+        'Đếm và viết số từ 0 đến 100.',
+        'Cộng và trừ trong phạm vi 100.',
+        'Nhận biết hình vuông, hình tròn, hình tam giác, hình chữ nhật.',
+        'Đọc giờ đúng trên đồng hồ.',
+        'Giải bài toán có lời văn đơn giản.',
+      ] },
+      { h: 'Lên Lớp 2 em sẽ học gì?' },
+      { ul: [
+        'Số đến 1000.',
+        'Bảng nhân và bảng chia.',
+        'Đo độ dài bằng cm.',
+        'Xem lịch — ngày, tháng, tuần.',
+      ] },
+      { note: 'Cô chúc em một kì hè vui vẻ. Hãy nhớ ôn lại bảng cộng trừ mỗi ngày nhé!' },
+    ],
+    examples: [
+      { q: 'Em đã học đếm đến số mấy?', a: 'Đến số 100. Số lớn nhất 2 chữ số là 99, số tiếp theo là 100.' },
+      { q: '35 + 27 bằng mấy?', a: 'Đơn vị: 5 + 7 = 12, viết 2 nhớ 1. Chục: 3 + 2 + 1 = 6. Kết quả: 62.' },
+    ],
+  },
 };

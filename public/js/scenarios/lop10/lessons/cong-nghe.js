@@ -1005,4 +1005,43 @@ export const H10CN_LESSONS = {
       { q: 'Vì sao nói "an toàn là số một" trong cơ khí?', a: 'Vì máy móc cơ khí có lực lớn, vật sắc nhọn, nhiệt và điện — một sơ suất có thể gây thương tật vĩnh viễn hay tử vong. Không sản phẩm hay tiến độ nào đáng đánh đổi bằng sức khoẻ và tính mạng con người.' },
     ],
   },
+
+  'H10CN-w36-quiz': {
+    topic: 'Kết thúc Công Nghệ 10 — Kỹ thuật và Nghề nghiệp trong tầm tay',
+    intro: 'Công Nghệ 10 mở ra thế giới kỹ thuật cơ khí và điện tử — những ngành nghề xương sống của nền kinh tế công nghiệp. Hôm nay chúng ta tổng kết năm học và nhìn về lớp 11 với Công Nghệ điện.',
+    objectives: [
+      'Hệ thống hoá các kiến thức về cơ khí, vật liệu, quy trình chế tạo đã học.',
+      'Nhận biết mối liên hệ giữa Công Nghệ 10 (cơ khí) và Công Nghệ 11 (điện-điện tử).',
+      'Định hướng nghề nghiệp kỹ thuật phù hợp với năng lực và sở thích.',
+    ],
+    theory: [
+      { h: 'Bức tranh toàn cảnh Công Nghệ 10' },
+      { ul: [
+        'Vật liệu kỹ thuật: kim loại (sắt, nhôm, đồng), phi kim (nhựa, cao su, gỗ) — tính chất và ứng dụng.',
+        'Bản vẽ kỹ thuật: hình chiếu vuông góc, đọc và lập bản vẽ, ký hiệu tiêu chuẩn.',
+        'Gia công cơ khí: tiện, phay, khoan, mài, hàn — quy trình từ phôi đến sản phẩm.',
+        'Máy và cơ cấu: truyền động, bánh răng, xích đĩa, puli đai — nguyên lý hoạt động.',
+        'Tự động hoá: robot công nghiệp, CNC, PLC — công nghiệp 4.0 trong sản xuất.',
+      ] },
+      { h: 'Cầu nối sang Công Nghệ 11 (Điện)' },
+      { ul: [
+        'Cơ cấu cơ khí → Hệ thống điện-cơ: động cơ điện, máy phát, biến thế — điện và cơ luôn đi cùng nhau.',
+        'Vật liệu dẫn điện (đồng, nhôm) và cách điện (nhựa, cao su) — nền tảng từ lớp 10 được dùng ở lớp 11.',
+        'Tự động hoá → Vi điều khiển, Arduino, điện tử số — công nghệ hội tụ cơ và điện.',
+        'Bản vẽ kỹ thuật → Sơ đồ điện, ký hiệu linh kiện điện tử — cùng nguyên tắc đọc bản vẽ tiêu chuẩn.',
+      ] },
+      { h: 'Định hướng nghề nghiệp kỹ thuật' },
+      { ul: [
+        'Cơ khí chế tạo: thiết kế máy, sản xuất ô tô, hàng không vũ trụ — nhu cầu cao ở các khu công nghiệp.',
+        'Cơ điện tử (Mechatronics): kết hợp cơ khí + điện tử + lập trình — ngành hot nhất trong sản xuất thông minh.',
+        'Kỹ thuật ô tô: EV (xe điện) đang bùng nổ — cần kỹ sư hiểu cả cơ và điện.',
+        'Tự động hoá công nghiệp: lập trình robot, PLC, SCADA — lương cao, thiếu nhân lực.',
+      ] },
+      { note: 'Kỹ thuật không phải chỉ dành cho người "khéo tay" — mà dành cho người biết suy nghĩ có hệ thống, kiên nhẫn với chi tiết và không ngại bẩn tay. Đó là em không?' },
+    ],
+    examples: [
+      { q: 'Tại sao hiểu biết về vật liệu kỹ thuật từ lớp 10 lại quan trọng khi học điện ở lớp 11?', a: 'Vì linh kiện điện và dây điện đều làm từ vật liệu cụ thể: đồng dẫn điện tốt → dùng làm dây điện; nhựa PVC cách điện → dùng bọc dây; silicon bán dẫn → làm transistor và chip. Học sinh không hiểu vật liệu sẽ khó hiểu tại sao mạch điện được thiết kế như vậy — chỉ nhớ sơ đồ mà không hiểu bản chất.' },
+      { q: 'Em quan tâm đến cơ khí hay điện tử hơn? Làm thế nào để biết mình phù hợp với hướng nào?', a: 'Cách đơn giản nhất: quan sát sở thích của bản thân. Em thích tháo rã máy móc xem bên trong hoạt động thế nào → thiên về cơ khí. Em thích lắp mạch điện, lập trình vi điều khiển, đọc sơ đồ điện → thiên về điện tử. Em thích cả hai → Cơ điện tử (Mechatronics) là lựa chọn lý tưởng. Nhưng thực ra ranh giới ngày càng mờ — kỹ sư hiện đại cần cả hai, nên lớp 11 hãy học điện thật tốt để cộng thêm vào nền cơ khí đã có.' },
+    ],
+  },
 };

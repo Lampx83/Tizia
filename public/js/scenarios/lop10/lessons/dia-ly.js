@@ -1013,4 +1013,43 @@ export const H10DIA_LESSONS = {
       { q: 'Vì sao "phát triển bền vững" được đặt ở phần cuối chương trình như một thông điệp tổng kết?', a: 'Vì sau khi hiểu cả tự nhiên lẫn hoạt động kinh tế - xã hội, các em mới thấy rõ con người vừa dựa vào tự nhiên vừa tác động lên nó. Phát triển bền vững là cách hài hoà mối quan hệ đó: phát triển kinh tế, đảm bảo công bằng xã hội mà vẫn giữ gìn môi trường cho thế hệ sau — đích đến của toàn bộ kiến thức địa lý.' },
     ],
   },
+
+  'H10DIA-w36-quiz': {
+    topic: 'Kết thúc Địa Lý 10 — Bản đồ thế giới trong tâm trí',
+    intro: 'Địa Lý 10 là năm học đặc biệt: từ Trái Đất trong vũ trụ đến khí quyển, thuỷ quyển, địa quyển — và sau đó là con người trên Trái Đất với các vấn đề dân số, kinh tế và môi trường toàn cầu. Hôm nay chúng ta nhìn lại hành trình đó.',
+    objectives: [
+      'Hệ thống hoá các chủ đề địa lý tự nhiên và địa lý kinh tế - xã hội của năm học.',
+      'Nhận biết mối liên hệ giữa Địa Lý 10 (khái quát thế giới) và Địa Lý 11 (địa lý khu vực cụ thể).',
+      'Phát triển thói quen tư duy không gian và đọc bản đồ để học tốt hơn.',
+    ],
+    theory: [
+      { h: 'Bức tranh toàn cảnh Địa Lý 10' },
+      { ul: [
+        'Vũ trụ và Trái Đất: hệ Mặt Trời, chuyển động Trái Đất, hệ quả địa lý (ngày đêm, mùa, giờ giấc).',
+        'Thạch quyển: cấu trúc Trái Đất, kiến tạo mảng, núi lửa, động đất, địa hình.',
+        'Khí quyển: các tầng, nhiệt độ, áp suất, gió, mây mưa, các đới khí hậu.',
+        'Thuỷ quyển: đại dương, biển, sông, hồ, nước ngầm — phân bố và vòng tuần hoàn nước.',
+        'Dân số thế giới: phân bố, tỉ lệ tăng tự nhiên, đô thị hoá, di dân.',
+        'Kinh tế toàn cầu: nông nghiệp, công nghiệp, dịch vụ trong bối cảnh toàn cầu hoá.',
+      ] },
+      { h: 'Hành trang sang Địa Lý 11 (Khu vực)' },
+      { ul: [
+        'Địa lý tự nhiên → Lớp 11 áp dụng cho từng khu vực: Đông Nam Á, Mỹ La Tinh, châu Phi…',
+        'Kinh tế toàn cầu → Kinh tế từng nước/khu vực: Nhật Bản, Hoa Kỳ, EU, ASEAN.',
+        'Bản đồ kĩ năng: đọc bản đồ địa hình, bản đồ kinh tế — lớp 11 sẽ dùng rất nhiều.',
+        'Biến đổi khí hậu và môi trường → Lớp 11 phân tích tác động theo từng khu vực cụ thể.',
+      ] },
+      { h: 'Ôn hè cho Địa Lý' },
+      { ul: [
+        'Xem bản đồ thế giới mỗi tuần: nhận ra vị trí các châu lục, đại dương, biển lớn.',
+        'Theo dõi tin tức địa lý: động đất, bão, lũ lụt — liên hệ với kiến thức đã học.',
+        'Dùng Google Earth để "bay" qua các địa hình đã học: núi Himalaya, vùng bán khô hạn Sahel, đồng bằng châu thổ.',
+      ] },
+      { note: 'Địa lý học sống động nhất khi em nhìn ra cửa sổ và hỏi "Đây là địa hình gì? Tại sao?" — mỗi cảnh quan đều có câu chuyện địa lý phía sau.' },
+    ],
+    examples: [
+      { q: 'Kiến thức Địa Lý 10 nào sẽ được dùng nhiều nhất khi học các khu vực cụ thể ở lớp 11?', a: 'Ba khối kiến thức được tái sử dụng liên tục: (1) Các đới khí hậu và hệ quả (nhiệt đới, ôn đới, hàn đới) — giải thích tại sao Nhật Bản có mùa tuyết còn Singapore quanh năm nắng; (2) Kiến tạo mảng và địa hình — giải thích "Vành đai lửa Thái Bình Dương", động đất Nhật Bản; (3) Quá trình đô thị hoá và di dân — giải thích siêu đô thị Tokyo, Mumbai hay Lagos.' },
+      { q: 'Làm thế nào để đọc một bản đồ kinh tế chưa thấy bao giờ mà không bị mất phương hướng?', a: 'Trình tự 4 bước: (1) Đọc tên bản đồ — nó cho biết chủ đề (dân số? GDP? nông nghiệp?); (2) Đọc chú giải — màu sắc và ký hiệu tương ứng với ý nghĩa gì; (3) Xác định phạm vi không gian — bản đồ thế giới? châu lục? quốc gia?; (4) Nhận xét xu hướng chung trước khi đi vào chi tiết — vùng nào đậm màu nhất (cao nhất), vùng nào nhạt nhất (thấp nhất), có sự chênh lệch Bắc-Nam hay Đông-Tây không?' },
+    ],
+  },
 };

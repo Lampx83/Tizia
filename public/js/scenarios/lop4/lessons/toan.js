@@ -771,4 +771,43 @@ export const P4_TOAN_LESSONS = {
       { q: 'Hai số tổng 60, hiệu 20. Số lớn?', a: '(60 + 20) / 2 = 40.' },
     ],
   },
+
+  'P4-w36-quiz': {
+    topic: 'Kết thúc Lớp 4 — Hành trang vào Lớp 5',
+    intro: 'Chúc mừng các em đã hoàn thành năm học Lớp 4! Hôm nay cô và trò cùng nhìn lại chặng đường đã đi, gói ghém những kiến thức toán học quan trọng nhất làm hành trang bước sang Lớp 5 nhé!',
+    objectives: [
+      'Hệ thống toàn bộ kiến thức Toán Lớp 4 theo năm mảng lớn.',
+      'Biết những chủ đề mới thú vị đang chờ ở Lớp 5.',
+      'Xây dựng kế hoạch ôn tập trong hè để khởi đầu Lớp 5 tự tin.',
+    ],
+    theory: [
+      { h: 'Năm mảng lớn Toán Lớp 4 em đã chinh phục' },
+      { ul: [
+        'Số và tính toán: số đến lớp tỉ; bốn phép tính với số tự nhiên và phân số; dấu hiệu chia hết cho 2, 3, 5, 9; phân số — rút gọn, quy đồng, so sánh, cộng trừ nhân chia.',
+        'Đại lượng và đo lường: diện tích (cm², dm², m², km²); khối lượng (g, kg, tạ, tấn); thời gian (giây, phút, giờ, ngày, tuần, tháng, năm, thế kỷ).',
+        'Hình học: đường vuông góc, đường song song; góc nhọn – vuông – tù – bẹt; hình bình hành, hình thoi; diện tích hình chữ nhật và hình vuông.',
+        'Thống kê: trung bình cộng; đọc và vẽ biểu đồ cột.',
+        'Giải toán: tổng – hiệu, tổng – tỉ, hiệu – tỉ; các bài toán thực tiễn nhiều bước.',
+      ] },
+      { h: 'Lớp 5 sẽ có gì mới?' },
+      { ul: [
+        'Phân số nâng cao: phép chia phân số, phân số thập phân, số thập phân.',
+        'Diện tích: hình tam giác, hình thang, hình tròn.',
+        'Thể tích: hình hộp chữ nhật, hình lập phương.',
+        'Tỉ số phần trăm và ứng dụng thực tiễn.',
+        'Bài toán chuyển động đều (vận tốc, quãng đường, thời gian).',
+      ] },
+      { h: 'Kế hoạch ôn hè' },
+      { ul: [
+        'Ôn lại phân số: rút gọn, quy đồng, 4 phép tính (15 phút/ngày).',
+        'Luyện tính nhẩm nhân chia để chuẩn bị làm việc với số thập phân.',
+        'Giải 2–3 bài toán có lời văn mỗi ngày để duy trì tư duy logic.',
+      ] },
+      { note: 'Em đã vượt qua một năm học đầy thử thách! Hãy tự hào và tận hưởng kỳ nghỉ hè xứng đáng.' },
+    ],
+    examples: [
+      { q: 'Tính: 3/4 + 5/6.', a: 'Quy đồng: 9/12 + 10/12 = 19/12.' },
+      { q: 'Diện tích hình thang đáy lớn 10 cm, đáy nhỏ 6 cm, chiều cao 5 cm?', a: '(10 + 6) × 5 / 2 = 40 cm².' },
+    ],
+  },
 };

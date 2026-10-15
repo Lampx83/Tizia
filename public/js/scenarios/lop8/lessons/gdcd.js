@@ -1424,4 +1424,56 @@ export const S8GDCD_LESSONS = {
       { q: 'Tình huống tổng hợp: Em chứng kiến một nhóm bạn đang bắt nạt và trấn lột tiền của một bạn nhỏ hơn. Vận dụng các kiến thức đã học, em sẽ làm gì?', a: 'Em không hùa theo, không quay clip phát tán. Em tìm cách báo ngay thầy cô hoặc bác bảo vệ để can thiệp, bảo vệ bạn bị bắt nạt. Hành vi của nhóm bạn vừa là bạo lực học đường, vừa có dấu hiệu phạm pháp (trấn lột tài sản). Cách xử lí này thể hiện nhiều phẩm chất: tôn trọng lẽ phải, yêu thương con người, dũng cảm và biết sống đúng pháp luật.' },
     ],
   },
+
+  'S8GDCD-w36-quiz': {
+    topic: 'Kết thúc GDCD 8 — Công dân trẻ với đạo đức và pháp luật',
+    intro: 'Năm lớp 8 đã trang bị cho em hai hệ thống kiến thức song hành: đạo đức (những chuẩn mực sống) và pháp luật (những quy định bắt buộc). Người công dân trẻ cần cả hai — đạo đức giúp em sống tử tế từ trong trái tim, pháp luật giúp em sống đúng mực trong xã hội. Đây là tuần ôn tổng kết, cũng là lời nhắc nhở để em mang những bài học này vào cuộc sống lớp 9 và xa hơn.',
+    objectives: [
+      'Hệ thống hoá ba nhóm chủ đề lớn của GDCD 8: đạo đức cá nhân – xã hội, pháp luật và quyền công dân, phòng chống tệ nạn – an toàn.',
+      'Nhận ra mối liên hệ giữa đạo đức và pháp luật trong cuộc sống thực tiễn.',
+      'Biết áp dụng kiến thức GDCD 8 vào các tình huống thực tế và định hướng lớp 9.',
+    ],
+    theory: [
+      { h: 'Nhóm 1 — Đạo đức cá nhân và xã hội' },
+      { ul: [
+        'Tôn trọng lẽ phải: ủng hộ điều đúng, phê phán cái sai, dám nói sự thật dù khó khăn.',
+        'Liêm khiết: không vụ lợi, không tham nhũng; ví dụ: không nhận hối lộ, không gian lận.',
+        'Tôn trọng người khác: tôn trọng nhân phẩm, danh dự, quyền lợi của người xung quanh.',
+        'Giữ chữ tín: trọng lời hứa, thực hiện đúng cam kết — nền tảng của mọi mối quan hệ.',
+        'Pháp luật và kỉ luật: sự khác biệt giữa quy tắc đạo đức (tự nguyện) và quy phạm pháp luật (bắt buộc, có chế tài).',
+        'Quyền và nghĩa vụ trong gia đình: tôn trọng, yêu thương, chia sẻ trách nhiệm.',
+      ] },
+      { h: 'Nhóm 2 — Pháp luật và quyền công dân' },
+      { ul: [
+        'Hiến pháp nước CHXHCN Việt Nam: văn bản pháp lí cao nhất, mọi luật phải phù hợp Hiến pháp.',
+        'Bộ máy nhà nước: Quốc hội (lập pháp), Chính phủ (hành pháp), Toà án (tư pháp) và bộ máy cấp cơ sở (xã/phường/thị trấn).',
+        'Quyền công dân cơ bản: sở hữu tài sản; khiếu nại và tố cáo; tự do ngôn luận; tự do tín ngưỡng; tham gia quản lí nhà nước.',
+        'Nghĩa vụ song hành: nộp thuế, bảo vệ Tổ quốc, tuân thủ pháp luật — quyền và nghĩa vụ không thể tách rời.',
+      ] },
+      { h: 'Nhóm 3 — Phòng chống tệ nạn, an toàn và môi trường' },
+      { ul: [
+        'Tệ nạn xã hội (cờ bạc, ma túy, mại dâm): nguyên nhân, tác hại, cách phòng tránh — nói không với tệ nạn.',
+        'HIV/AIDS: con đường lây truyền, cách phòng ngừa, không kì thị người nhiễm HIV.',
+        'Bạo lực gia đình và bạo lực học đường: nhận biết, phòng tránh, tìm kiếm sự giúp đỡ đúng chỗ.',
+        'Tội phạm vị thành niên: nguyên nhân và hậu quả pháp lí; tuổi 14+ có thể chịu trách nhiệm hình sự.',
+        'An toàn giao thông: nghĩa vụ đội mũ bảo hiểm, không uống rượu bia khi lái xe, ưu tiên người đi bộ.',
+        'Bảo vệ môi trường và tài nguyên: trách nhiệm pháp lí và đạo đức với thiên nhiên.',
+      ] },
+      { h: 'Mối liên hệ xuyên suốt: Đạo đức + Pháp luật = Công dân tốt' },
+      { p: 'Đạo đức là nguồn gốc bên trong — giúp em chủ động làm điều tốt. Pháp luật là khuôn khổ bên ngoài — đảm bảo mọi người sống đúng dù không phải ai cũng tự nguyện. Một xã hội tốt cần cả hai: công dân có đạo đức và công dân hiểu pháp luật.' },
+      { h: 'Cầu nối sang lớp 9' },
+      { ul: [
+        'Vi phạm pháp luật và trách nhiệm pháp lí (hình sự, dân sự, hành chính, kỉ luật).',
+        'Quyền trẻ em theo Công ước Liên Hợp Quốc và pháp luật Việt Nam.',
+        'Quyền tự do kinh doanh, quyền lao động và quyền học tập.',
+        'Bảo vệ quyền trẻ em; phòng chống xâm hại và bạo lực nâng cao.',
+      ] },
+      { note: 'Học GDCD không chỉ để thi — đó là học cách làm người. Mỗi ngày em có hàng chục quyết định nhỏ liên quan đến đạo đức và pháp luật. Hãy để những bài học này thành kim chỉ nam.' },
+    ],
+    examples: [
+      { q: 'Tình huống: Bạn T. nhận được đề thi từ một "bạn tốt" trước ngày thi. Vận dụng GDCD, T. nên làm gì và vì sao?', a: 'T. không được sử dụng đề thi đó dù không phải T. tự lấy. Hành vi lấy và sử dụng đề thi trái phép vi phạm nguyên tắc liêm khiết, tôn trọng lẽ phải và vi phạm quy chế thi cử (có thể bị kỉ luật theo pháp luật). T. nên báo với thầy cô về việc đề bị lộ — đó là hành động dũng cảm, đúng đắn. Thành tích có được không bằng nỗ lực thật sự không mang lại giá trị thực sự.' },
+      { q: 'Phân biệt: Vi phạm đạo đức và vi phạm pháp luật — cho ví dụ cụ thể.', a: 'Vi phạm đạo đức là hành vi trái với chuẩn mực xã hội nhưng không có chế tài pháp lí, chỉ bị dư luận lên án. Ví dụ: không nhường ghế cho người già trên xe buýt. Vi phạm pháp luật là hành vi vi phạm quy định pháp luật, bị xử lí bằng chế tài (phạt tiền, giam giữ). Ví dụ: chạy đèn đỏ, trộm cắp. Lưu ý: một hành vi có thể vừa vi phạm đạo đức vừa vi phạm pháp luật, ví dụ bạo lực học đường.' },
+      { q: 'Hãy nêu ba điều em sẽ làm sau khi học xong GDCD 8 để trở thành công dân tốt hơn.', a: 'Ba hành động cụ thể: (1) Tuân thủ luật giao thông mọi lúc — đội mũ bảo hiểm, đi đúng phần đường, không vượt đèn đỏ — dù không có công an. (2) Dám lên tiếng khi chứng kiến bạo lực học đường hoặc hành vi sai trái, không im lặng vì sợ. (3) Chủ động tìm hiểu về quyền và nghĩa vụ của mình để biết mình được làm gì và không được làm gì theo pháp luật.' },
+    ],
+  },
 };

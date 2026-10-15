@@ -1078,4 +1078,47 @@ export const S7LSDL_LESSONS = {
     ],
   },
 
+  'S7LSDL-w36-quiz': {
+    topic: 'Kết thúc Lịch Sử & Địa Lý 7 — Thế giới và Việt Nam trong tầm tay — Hành trang vào lớp 8',
+    intro: 'Lịch sử và Địa lý lớp 7 đã cùng nhau đưa chúng ta đi qua biết bao thời đại và vùng đất — từ các đế chế thời trung đại đến những vùng khí hậu khác nhau trên thế giới, từ những trận chiến hào hùng của dân tộc đến những nền văn minh vĩ đại của nhân loại. Hôm nay, hãy nhìn lại toàn bộ hành trình ấy và chuẩn bị cho những trang sử và bản đồ mới ở lớp 8.',
+    objectives: [
+      'Hệ thống hoá kiến thức Lịch Sử (thế giới và Việt Nam thời trung đại) đã học.',
+      'Tổng kết kiến thức Địa Lý (đới khí hậu, địa hình, dân số và kinh tế thế giới).',
+      'Nhận biết mối liên hệ giữa điều kiện địa lý và sự phát triển lịch sử của các dân tộc.',
+    ],
+    theory: [
+      { h: 'Bức tranh Lịch Sử 7 — Thế giới' },
+      { ul: [
+        'Các quốc gia phong kiến châu Âu thời Trung đại (đặc trưng kinh tế trang trại, quan hệ lãnh chúa — nông nô, Giáo hội Thiên Chúa giáo).',
+        'Các cuộc phát kiến địa lý (C. Columbus, Magellan, Vasco da Gama — nối liền thế giới, mở thời đại thực dân).',
+        'Sự suy vong của chế độ phong kiến và mầm mống tư bản chủ nghĩa ở châu Âu.',
+        'Các nền văn minh Hồi giáo và Phong trào Văn hoá Phục hưng.',
+      ] },
+      { h: 'Bức tranh Lịch Sử 7 — Việt Nam' },
+      { ul: [
+        'Vương triều Lý, Trần, Lê (thế kỉ X–XV): xây dựng đất nước, ba lần kháng Nguyên, khởi nghĩa Lam Sơn.',
+        'Thời kỳ Trịnh — Nguyễn phân tranh (thế kỉ XVI–XVII): đất nước chia cắt, Đàng Trong phát triển về phía Nam.',
+        'Phong trào Tây Sơn và Quang Trung (cuối thế kỉ XVIII): thống nhất đất nước, đánh tan quân Thanh (1789).',
+      ] },
+      { h: 'Bức tranh Địa Lý 7 — Thế giới' },
+      { ul: [
+        'Các đới khí hậu: Xích đạo, Nhiệt đới, Cận nhiệt, Ôn đới, Hàn đới — vị trí, đặc trưng, cảnh quan và con người.',
+        'Địa hình: lục địa (núi, cao nguyên, đồng bằng) và đại dương (thềm lục địa, đáy đại dương, núi lửa ngầm).',
+        'Dân số thế giới: phân bố không đều, gia tăng dân số và sức ép môi trường.',
+        'Kinh tế: các nền kinh tế phát triển (Bắc Mỹ, Tây Âu, Nhật Bản) và đang phát triển (châu Á, châu Phi, Mỹ Latinh).',
+      ] },
+      { h: 'Cầu nối sang lớp 8' },
+      { ul: [
+        'Lịch Sử: cận đại (cách mạng tư sản Anh, Pháp, Mỹ; chủ nghĩa thực dân và phong trào giải phóng dân tộc; Việt Nam thế kỉ XIX — thực dân Pháp xâm lược).',
+        'Địa Lý: Địa lý Việt Nam chuyên sâu (vị trí, địa hình, khí hậu, sông ngòi, dân cư, vùng kinh tế Việt Nam).',
+      ] },
+      { note: 'Lịch sử dạy ta bài học; Địa lý cho ta cái nhìn toàn cảnh. Khi hiểu vì sao một vùng đất có điều kiện tự nhiên nhất định, ta sẽ hiểu vì sao lịch sử của nó lại diễn ra như vậy.' },
+    ],
+    examples: [
+      { q: 'Nối các sự kiện lịch sử với thời gian đúng: (a) Khởi nghĩa Lam Sơn thắng lợi; (b) Chiến thắng Bạch Đằng (Trần); (c) Chiến thắng Ngọc Hồi-Đống Đa.', a: '(a) 1427 — Lê Lợi đánh đuổi quân Minh, lập nhà Hậu Lê. (b) 1288 — Trần Quốc Tuấn đánh tan quân Nguyên lần 3. (c) 1789 — Quang Trung đánh tan quân Thanh xâm lược.' },
+      { q: 'Giải thích tại sao châu Phi có dân số tăng nhanh nhưng kinh tế còn kém phát triển.', a: 'Châu Phi có tỉ lệ sinh cao (trung bình 4–5 con/phụ nữ), tử vong giảm → dân số tăng nhanh. Nhưng điều kiện lịch sử (bị thực dân cai trị, bị bóc lột tài nguyên lâu dài), bất ổn chính trị, thiếu hạ tầng và giáo dục → kinh tế chậm phát triển. Dân số trẻ đông là lợi thế nhưng cần đầu tư giáo dục và việc làm mới phát huy được.' },
+      { q: 'Vì sao gọi chiến thắng Bạch Đằng 938 (Ngô Quyền) là mốc mở đầu kỷ nguyên độc lập?', a: 'Trước 938, Việt Nam bị Bắc thuộc hơn 1 000 năm (từ 111 TCN). Chiến thắng Bạch Đằng 938 do Ngô Quyền lãnh đạo — dùng cọc gỗ bịt đầu sắt đánh chìm thuyền quân Nam Hán — đã chấm dứt thời Bắc thuộc và mở ra thời kỳ độc lập, tự chủ lâu dài của dân tộc Việt Nam.' },
+    ],
+  },
+
 };

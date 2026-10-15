@@ -813,4 +813,37 @@ export const P3HDTN_LESSONS = {
       { q: 'Đầu lớp 4, em được xếp lớp khác bạn thân. Em nên làm gì?', a: 'Em giữ liên lạc với bạn cũ giờ ra chơi, đồng thời làm quen với các bạn mới trong lớp 4. Em cởi mở với mọi người và không tẩy chay bạn nào.' },
     ],
   },
+
+  'P3HDTN-w36-quiz': {
+    topic: 'Kết thúc Lớp 3 — HĐTN: Em lớn lên, em trải nghiệm!',
+    intro: 'Một năm Hoạt động Trải nghiệm Lớp 3 sắp kết thúc! Em đã tham gia bao nhiêu hoạt động thú vị — trong lớp, ngoài sân, trong cộng đồng. Hôm nay cùng nhìn lại và chuẩn bị những trải nghiệm mới nhé!',
+    objectives: [
+      'Nhìn lại những trải nghiệm nổi bật trong năm học.',
+      'Nhận ra mình đã phát triển về kĩ năng và tình cảm như thế nào.',
+      'Lên kế hoạch trải nghiệm thú vị trong kỳ hè.',
+    ],
+    theory: [
+      { h: 'Những trải nghiệm em đã có trong năm Lớp 3' },
+      { ul: [
+        'TỰ PHỤC VỤ: Tự soạn cặp sách, tự quản lý thời gian học và chơi, tự dọn phòng ngủ.',
+        'CỘNG ĐỒNG: Tham gia lễ chào cờ, văn nghệ, dã ngoại; giúp đỡ bạn và người thân.',
+        'SÁNG TẠO: Làm đồ thủ công, viết nhật ký, vẽ tranh chủ đề.',
+        'KHÁM PHÁ TỰ NHIÊN: Quan sát thực vật, côn trùng; tìm hiểu thiên nhiên địa phương.',
+        'KĨ NĂNG XÃ HỘI: Làm việc nhóm, giải quyết mâu thuẫn bằng lời nói, lắng nghe và chia sẻ.',
+      ] },
+      { h: 'Tôi đã trưởng thành hơn!' },
+      { p: 'So với hồi đầu năm Lớp 3, em đã trưởng thành hơn rất nhiều: tự lập hơn, biết cảm thông hơn, can đảm hơn khi thử thách mới. Đây là những điều không có trong sách giáo khoa nhưng rất quý giá!' },
+      { h: 'Dự án hè HĐTN' },
+      { ul: [
+        'Nhật ký hè: Viết hoặc vẽ mỗi ngày 1 điều thú vị em trải nghiệm.',
+        'Dự án gia đình: Giúp bố mẹ nấu 1 món ăn, tự mình làm từ đầu đến cuối.',
+        'Dự án cộng đồng nhỏ: Làm sạch một góc sân nhà, trồng cây nhỏ, tặng quà cho hàng xóm già.',
+      ] },
+      { note: 'Học từ sách vở là học một nửa — học từ trải nghiệm thực tế mới là học trọn vẹn. Hãy trải nghiệm thật nhiều trong hè nhé!' },
+    ],
+    examples: [
+      { q: 'Em tham gia hoạt động gì trong năm mà em thấy ý nghĩa nhất? Tại sao?', a: 'Ví dụ: "Em thấy hoạt động quyên góp sách cũ cho học sinh vùng khó là ý nghĩa nhất vì em giúp được các bạn có sách học mà không tốn tiền của bố mẹ."' },
+      { q: 'Kỹ năng nào em học được từ HĐTN mà em nghĩ sẽ dùng suốt cuộc đời?', a: 'Ví dụ: Kĩ năng lắng nghe — vì hiểu người khác giúp em kết bạn tốt hơn, làm việc nhóm tốt hơn và giải quyết xung đột hiệu quả hơn.' },
+    ],
+  },
 };

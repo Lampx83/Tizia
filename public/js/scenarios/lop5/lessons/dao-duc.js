@@ -1007,4 +1007,34 @@ export const P5DD_LESSONS = {
       { q: 'Em hứa gì với bản thân khi bước vào cấp 2?', a: 'Ví dụ: "Tôi sẽ không nói dối", "Tôi sẽ giúp 1 bạn yếu mỗi tuần", "Tôi sẽ tự lập hơn". Hứa với chính mình — và giữ lời.' },
     ],
   },
+
+  'P5DD-w36-quiz': {
+    topic: 'Kết thúc Tiểu học — 5 Phẩm chất học sinh Lớp 6',
+    intro: 'Em sắp trở thành học sinh cấp 2 — một chương mới, trách nhiệm mới. Cùng chuẩn bị hành trang đạo đức nhé!',
+    objectives: [
+      'Tổng kết các phẩm chất đạo đức đã học trong 5 năm.',
+      'Xây dựng lời hứa với bản thân khi bước vào THCS.',
+    ],
+    theory: [
+      { h: 'Nhìn lại 5 năm đạo đức tiểu học' },
+      { ul: [
+        '🤝 **Yêu thương:** yêu gia đình, bạn bè, biết chia sẻ và giúp đỡ.',
+        '✅ **Trách nhiệm:** tự giác học bài, giữ lời hứa, nhận lỗi khi sai.',
+        '💪 **Chăm chỉ:** kiên trì dù gặp khó khăn, không bỏ cuộc.',
+        '🌱 **Trung thực:** thật thà trong lời nói và hành động.',
+        '🌍 **Yêu quê hương:** tự hào về đất nước, bảo vệ môi trường, biết ơn thế hệ đi trước.',
+      ] },
+      { h: 'Thách thức ở cấp 2' },
+      { ul: [
+        'Môi trường mới — nhiều bạn hơn, áp lực học tập tăng.',
+        'Cần tự lập hơn: tự quản lý thời gian, không phụ thuộc hoàn toàn vào bố mẹ.',
+        'Biết nói "không" trước áp lực tiêu cực từ bạn bè.',
+      ] },
+      { note: 'Phẩm chất đạo đức không phải điểm số — đó là cách em đối xử với người khác mỗi ngày.' },
+    ],
+    examples: [
+      { q: 'Khi gặp bạn mới ở Lớp 6 bắt nạt em, em sẽ làm gì?', a: 'Giữ bình tĩnh, nói không chấp nhận bị bắt nạt, báo ngay thầy cô hoặc bố mẹ. Không im lặng chịu đựng.' },
+      { q: 'Trách nhiệm của em ở cấp 2 là gì?', a: 'Tự giác học và làm bài; tôn trọng thầy cô và bạn bè; tham gia hoạt động trường tích cực; không gây rắc rối.' },
+    ],
+  },
 };

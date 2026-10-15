@@ -935,4 +935,36 @@ export const P5TA_LESSONS = {
       { q: 'Mơ ước: bác sĩ.', a: '"In the future, I want to be a doctor to help people."' },
     ],
   },
+
+  'P5TA-w36-quiz': {
+    topic: 'End of Primary — Ready for Grade 6 English!',
+    intro: 'Congratulations! You have completed 5 years of English. Let\'s look back at how far you\'ve come! 🎓',
+    objectives: [
+      'Review key English skills from 5 years of primary school.',
+      'Feel confident stepping into Grade 6 English.',
+    ],
+    theory: [
+      { h: 'What you can do now' },
+      { ul: [
+        'Introduce yourself and talk about family, hobbies, school, daily routines.',
+        'Use simple present, simple past, future (will/going to).',
+        'Ask and answer WH-questions: Who, What, Where, When, Why, How.',
+        'Describe people, places, and things using adjectives.',
+        'Read short passages and answer comprehension questions.',
+        'Write short paragraphs and simple letters.',
+      ] },
+      { h: 'In Grade 6 you will learn …' },
+      { ul: [
+        'More tenses: present continuous, present perfect.',
+        'Reported speech and passive voice (introduction).',
+        'Longer reading texts and essay writing.',
+        'Vocabulary for wider topics: environment, technology, culture.',
+      ] },
+      { note: 'Keep reading English books or watching English videos this summer — even 15 minutes a day makes a big difference!' },
+    ],
+    examples: [
+      { q: 'Describe your best memory of primary school in 2 sentences:', a: 'E.g. "My best memory is the school trip to Ha Long Bay. We saw beautiful islands and played on the beach."' },
+      { q: 'What will you do in Grade 6?', a: '"I will study harder and make new friends. I will also try to read English books every week."' },
+    ],
+  },
 };

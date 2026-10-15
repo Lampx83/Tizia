@@ -815,4 +815,35 @@ export const P5TIN_LESSONS = {
       { q: 'Để an toàn trên mạng, em nên làm gì?', a: 'Bảo vệ thông tin cá nhân và cảnh giác với lừa đảo.' },
     ],
   },
+
+  'P5TIN-w36-quiz': {
+    topic: 'Kết thúc Tiểu học — Hành trang Tin học vào THCS',
+    intro: 'Chúc mừng! Em đã hoàn thành hành trình Tin học tiểu học. Thế giới số đang chờ em khám phá!',
+    objectives: [
+      'Tổng kết kĩ năng tin học đã học trong 5 năm.',
+      'Sẵn sàng học Tin học THCS với tư duy lập trình.',
+    ],
+    theory: [
+      { h: '5 trụ cột Tin học tiểu học em đã học' },
+      { ul: [
+        '💻 **Thiết bị số:** máy tính, chuột, bàn phím, màn hình, tai nghe; cách bật/tắt và chăm sóc thiết bị.',
+        '⌨️ **Kĩ năng cơ bản:** gõ bàn phím 10 ngón, sử dụng chuột, tạo và lưu file.',
+        '📊 **Phần mềm:** soạn thảo văn bản, bảng tính (công thức =), trình chiếu, phần mềm học tập.',
+        '🔒 **An toàn số:** bảo vệ thông tin cá nhân, không chia sẻ mật khẩu, cảnh giác lừa đảo trực tuyến.',
+        '🧠 **Tư duy thuật toán:** bước tuần tự, rẽ nhánh, lặp — nền tảng của lập trình.',
+      ] },
+      { h: 'Lên THCS em sẽ học gì?' },
+      { ul: [
+        'Lập trình với Scratch → Python cơ bản.',
+        'Xử lý dữ liệu và bảng tính nâng cao.',
+        'Thiết kế đồ hoạ và media cơ bản.',
+        'Mạng internet và bảo mật thông tin sâu hơn.',
+      ] },
+      { note: 'Tư duy thuật toán — biết chia vấn đề thành các bước nhỏ — giúp ích không chỉ trong Tin học mà cả Toán, Khoa học và cuộc sống.' },
+    ],
+    examples: [
+      { q: 'Nêu 3 cấu trúc cơ bản trong thuật toán?', a: 'Tuần tự (từng bước), Rẽ nhánh (nếu-thì), Lặp (lặp lại nhiều lần).' },
+      { q: 'Em muốn làm gì với Tin học trong hè?', a: 'Ví dụ: học Scratch trên code.org, tạo trang web đơn giản, hoặc tự học thêm các phím tắt máy tính.' },
+    ],
+  },
 };

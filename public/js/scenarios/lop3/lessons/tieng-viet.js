@@ -814,4 +814,40 @@ export const P3TV_LESSONS = {
       { q: 'Tìm hình ảnh so sánh trong "Trăng tròn như mâm xôi".', a: 'So sánh "trăng" với "mâm xôi" qua từ "như".' },
     ],
   },
+
+  'P3TV-w36-quiz': {
+    topic: 'Kết thúc Lớp 3 — Hành trang Tiếng Việt vào Lớp 4',
+    intro: 'Một năm học Tiếng Việt Lớp 3 đầy ắp chữ và câu chuyện đã gần kết thúc! Hôm nay cô và trò cùng nhìn lại những gì đã học và chuẩn bị hành trang ngôn ngữ bước sang Lớp 4 nhé.',
+    objectives: [
+      'Hệ thống kiến thức Tiếng Việt Lớp 3 theo bốn kĩ năng: Đọc, Viết, Nghe, Nói.',
+      'Nhận biết những điểm mới thú vị sẽ học ở Lớp 4.',
+      'Vui vẻ và tự tin kết thúc năm học.',
+    ],
+    theory: [
+      { h: 'Bốn kĩ năng em đã rèn luyện trong năm' },
+      { ul: [
+        'ĐỌC: Đọc to, rõ ràng, lưu loát; đọc hiểu nội dung chính; tìm chi tiết trong đoạn; nhận biết nhân vật, diễn biến câu chuyện.',
+        'VIẾT: Chép đúng chính tả; viết đoạn văn ngắn (5–7 câu) về gia đình, trường lớp, thiên nhiên; dùng dấu câu (. , !) đúng vị trí.',
+        'NGHE: Nghe hiểu hướng dẫn và câu chuyện; ghi nhớ chi tiết quan trọng; nhận ra lời nhân vật.',
+        'NÓI: Kể lại câu chuyện theo tranh; giới thiệu bản thân, gia đình, bạn bè; nêu ý kiến đơn giản rõ ràng.',
+      ] },
+      { h: 'Kiến thức ngôn ngữ đã học' },
+      { ul: [
+        'Từ loại: danh từ, động từ, tính từ; câu mẫu Ai – là gì?, Ai – làm gì?, Ai – thế nào?',
+        'Biện pháp tu từ: so sánh (như, tựa, giống), nhân hoá (đặt tên, nói chuyện với vật).',
+        'Chính tả: phân biệt l/n, s/x, ch/tr, r/d/gi; dấu thanh hỏi/ngã.',
+      ] },
+      { h: 'Lớp 4 sẽ học gì?' },
+      { ul: [
+        'Đọc các văn bản dài và phức tạp hơn; tóm tắt nội dung; đọc diễn cảm.',
+        'Viết đoạn văn và bài văn hoàn chỉnh (mở bài, thân bài, kết bài).',
+        'Học thêm về câu ghép; nối câu bằng quan hệ từ (vì…nên, tuy…nhưng).',
+      ] },
+      { note: 'Hãy đọc sách mỗi ngày trong hè — đây là cách tốt nhất để giữ vốn từ và chuẩn bị cho Lớp 4!' },
+    ],
+    examples: [
+      { q: 'Đặt câu mẫu Ai – làm gì? có hình ảnh so sánh.', a: 'Ví dụ: "Bạn Lan chạy nhanh như cơn gió." (Ai = Bạn Lan; làm gì = chạy; hình ảnh so sánh = như cơn gió.)' },
+      { q: 'Viết 2–3 câu giới thiệu bản thân em.', a: 'Ví dụ: "Em tên là An, học sinh lớp 3A trường Tiểu học Nguyễn Du. Em thích đọc sách và vẽ tranh. Năm nay em lên Lớp 4 rồi!"' },
+    ],
+  },
 };

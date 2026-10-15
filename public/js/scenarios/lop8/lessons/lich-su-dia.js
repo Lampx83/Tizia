@@ -1691,4 +1691,58 @@ export const S8LSDL_LESSONS = {
       { q: 'Từ những phong trào yêu nước đã học, em rút ra trách nhiệm gì của bản thân đối với đất nước hôm nay?', a: 'Từ tinh thần yêu nước bất khuất của cha ông qua các phong trào Cần Vương, Yên Thế, Đông Du, Duy tân và hành trình tìm đường cứu nước của Nguyễn Tất Thành, em thấy mình cần trân trọng nền độc lập, biết ơn các thế hệ đi trước; ra sức học tập, rèn luyện; có ý thức bảo vệ chủ quyền lãnh thổ, tài nguyên và môi trường; góp phần xây dựng đất nước ngày càng giàu mạnh.' },
     ]
   ),
+
+  'S8LSDL-w36-quiz': L(
+    'Kết thúc Lịch Sử & Địa Lý 8 — Việt Nam trên hành trình lịch sử và địa lý',
+    'Năm lớp 8 đã đưa em ngược dòng thời gian về thế kỉ XIX — đầu thế kỉ XX, chứng kiến Việt Nam bị thực dân Pháp xâm lược và nhân dân ta anh dũng đứng lên kháng chiến. Đồng thời, em đã hiểu sâu hơn về địa lí tự nhiên và kinh tế xã hội của đất nước. Đây là hành trang không thể thiếu để bước vào lịch sử và địa lí lớp 9.',
+    [
+      'Hệ thống lại Lịch sử Việt Nam cận đại từ 1858 đến đầu thế kỉ XX.',
+      'Tổng hợp Địa lí Việt Nam — tự nhiên và các miền địa lí.',
+      'Nhận diện cầu nối sang lớp 9: lịch sử hiện đại và địa lí kinh tế-xã hội.',
+    ],
+    [
+      { h: 'Lịch sử — Việt Nam bị xâm lược và kháng chiến (1858–1884)' },
+      { ul: [
+        '1858: Pháp nổ súng xâm lược tại Đà Nẵng; sau đó chiếm Gia Định (1859), lần lượt mở rộng ra Nam Kì và Bắc Kì.',
+        'Các hiệp ước không bình đẳng: Nhâm Tuất (1862), Giáp Tuất (1874), Quý Mùi (1883), Patenôtre (1884) — Việt Nam mất hoàn toàn chủ quyền.',
+        'Phong trào kháng chiến nhân dân: Trương Định, Nguyễn Trung Trực, Hoàng Hoa Thám (khởi nghĩa Yên Thế).',
+        'Triều đình Nguyễn từng bước đầu hàng — bài học về sự cần thiết của đường lối đúng đắn trong chống ngoại xâm.',
+      ] },
+      { h: 'Lịch sử — Phong trào yêu nước cuối thế kỉ XIX – đầu thế kỉ XX' },
+      { ul: [
+        'Phong trào Cần Vương (1885–1895): Tôn Thất Thuyết, vua Hàm Nghi kêu gọi "cần vương" chống Pháp; tiêu biểu — khởi nghĩa Bãi Sậy, Ba Đình, Hương Khê.',
+        'Xu hướng bạo động: Phan Bội Châu với phong trào Đông Du (1905–1909), Việt Nam Quang phục hội.',
+        'Xu hướng cải cách duy tân: Phan Châu Trinh với chủ trương "khai dân trí, chấn dân khí, hậu dân sinh", phong trào Duy Tân.',
+        'Hành trình cứu nước của Nguyễn Tất Thành (1911): xuất phát từ bến Nhà Rồng, ra đi tìm con đường mới — sự kiện mở ra trang sử mới cho cách mạng Việt Nam.',
+      ] },
+      { h: 'Địa lý Việt Nam — Tự nhiên' },
+      { ul: [
+        'Vị trí và hình dạng: tiếp giáp Trung Quốc, Lào, Campuchia, Biển Đông; đường bờ biển 3.260 km; dạng hình chữ S thuận lợi giao thương.',
+        'Địa hình: ¾ đồi núi (hướng TB-ĐN, vòng cung); đồng bằng (sông Hồng, sông Cửu Long, duyên hải miền Trung).',
+        'Khí hậu: nhiệt đới ẩm gió mùa; miền Bắc có 4 mùa; miền Nam 2 mùa mưa-khô; Tây Nguyên cao nguyên.',
+        'Sông ngòi: dày đặc; sông Hồng và sông Mê Công là hai hệ thống lớn nhất.',
+        'Tài nguyên: khoáng sản (than đá Quảng Ninh, dầu khí Biển Đông, bô-xít Tây Nguyên), rừng, biển.',
+      ] },
+      { h: 'Địa lý Việt Nam — Các vùng kinh tế' },
+      { ul: [
+        'Đồng bằng sông Hồng: vùng kinh tế trọng điểm phía Bắc; lúa nước, công nghiệp, Hà Nội là trung tâm.',
+        'Trung du và miền núi Bắc Bộ: cây công nghiệp (chè, cà phê), thuỷ điện (Hoà Bình, Sơn La).',
+        'Duyên hải Nam Trung Bộ và Tây Nguyên: du lịch biển, cà phê, hồ tiêu, bô-xít.',
+        'Đồng bằng sông Cửu Long (ĐBSCL): vựa lúa, trái cây, thuỷ sản của cả nước; thách thức xâm nhập mặn và biến đổi khí hậu.',
+      ] },
+      { h: 'Biển Đảo Việt Nam' },
+      { p: 'Việt Nam có hơn 3.000 đảo; hai quần đảo lớn là Hoàng Sa và Trường Sa thuộc chủ quyền Việt Nam. Biển Đông giàu hải sản, dầu mỏ, là tuyến đường biển quốc tế huyết mạch. Bảo vệ chủ quyền biển đảo là nhiệm vụ thiêng liêng của mỗi công dân.' },
+      { h: 'Cầu nối sang lớp 9' },
+      { ul: [
+        'Lịch sử: Cách mạng Tháng Tám 1945, kháng chiến chống Pháp, kháng chiến chống Mỹ, thống nhất đất nước và đổi mới 1986.',
+        'Địa lý: địa lí kinh tế-xã hội Việt Nam chi tiết (dân số, lao động, nông nghiệp, công nghiệp, dịch vụ); địa lí các vùng kinh tế.',
+      ] },
+      { note: 'Mỗi trang lịch sử là một bài học quý — hãy tự hỏi "Tại sao?" thay vì chỉ nhớ "Cái gì?". Hiểu lí do sẽ giúp em ghi nhớ sự kiện lâu hơn và rút ra bài học cho cuộc sống hôm nay.' },
+    ],
+    [
+      { q: 'Trình bày nguyên nhân và kết quả của phong trào Cần Vương (1885–1895).', a: 'Nguyên nhân: Pháp áp đặt Hiệp ước Patenôtre (1884), biến Việt Nam thành thuộc địa; phe chủ chiến do Tôn Thất Thuyết lãnh đạo phản công Pháp đêm 4/7/1885, thất bại; vua Hàm Nghi ban chiếu Cần Vương kêu gọi nhân dân kháng chiến. Kết quả: phong trào nổ ra sôi nổi ở Bắc và Trung Kì với nhiều cuộc khởi nghĩa tiêu biểu (Bãi Sậy, Ba Đình, Hương Khê); cuối cùng thất bại do thiếu đường lối thống nhất và Pháp đàn áp dã man. Bài học: cần có tổ chức và đường lối cách mạng đúng đắn.' },
+      { q: 'So sánh xu hướng bạo động của Phan Bội Châu và xu hướng cải cách của Phan Châu Trinh.', a: 'Phan Bội Châu (bạo động): chủ trương dùng vũ lực đánh đuổi Pháp; cầu viện Nhật Bản qua phong trào Đông Du (1905–1909); thành lập Việt Nam Quang phục hội. Phan Châu Trinh (cải cách-duy tân): chủ trương không dùng bạo lực mà "khai dân trí, chấn dân khí, hậu dân sinh"; hợp tác có điều kiện với Pháp để canh tân đất nước từng bước. Cả hai đều yêu nước sâu sắc nhưng khác nhau về phương pháp và định hướng, phản ánh hai xu hướng cứu nước phổ biến đầu thế kỉ XX.' },
+      { q: 'Phân tích tầm quan trọng của sự kiện Nguyễn Tất Thành xuất dương tìm đường cứu nước năm 1911.', a: 'Ngày 5/6/1911, Nguyễn Tất Thành rời bến cảng Nhà Rồng (Sài Gòn) sang Pháp trên tàu Đô đốc La-tu-sơ Tờ-rê-vi-lơ — sự kiện mang ý nghĩa lịch sử trọng đại. Khác với các nhà yêu nước đi trước (cầu Nhật, cầu Pháp), Người chọn đến chính nước Pháp để tìm hiểu và học hỏi. Sau nhiều năm bôn ba khắp các châu lục, Người tiếp thu chủ nghĩa Mác-Lênin và tìm ra con đường cứu nước đúng đắn: cách mạng vô sản theo định hướng độc lập dân tộc gắn liền với chủ nghĩa xã hội. Đây là bước ngoặt quyết định, mở ra trang sử mới cho cách mạng Việt Nam.' },
+    ]
+  ),
 };

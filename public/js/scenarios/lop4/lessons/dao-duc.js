@@ -774,4 +774,46 @@ export const P4DD_LESSONS = {
       { q: 'Em làm xong sớm. Em có nên ra ngoài chơi không?', a: 'Em ngồi im, soát lại bài lần nữa. Còn thời gian là còn cơ hội phát hiện lỗi. Không nên ồn ào ảnh hưởng các bạn.' },
     ],
   },
+
+  'P4DD-w36-quiz': {
+    topic: 'Kết thúc Lớp 4 — Hành trang Đạo đức vào Lớp 5',
+    intro: 'Chúc mừng các em đã trải qua một năm học Đạo đức đầy ý nghĩa! Hôm nay cô và trò cùng nhìn lại những giá trị lớn đã học và suy nghĩ về người học sinh tốt của Lớp 5.',
+    objectives: [
+      'Hệ thống 10 phẩm chất đạo đức lớn đã học trong năm Lớp 4.',
+      'Liên hệ các giá trị đạo đức vào cuộc sống hàng ngày.',
+      'Đặt mục tiêu sống đẹp hơn trong năm học tới.',
+    ],
+    theory: [
+      { h: 'Mười phẩm chất Đạo đức Lớp 4 đã chinh phục' },
+      { ul: [
+        'Trung thực: nói thật, không gian lận, dám nhận lỗi. Câu nói cần nhớ: "Một lần nói dối, mất cả trăm lần tin cậy."',
+        'Tự trọng: giữ phẩm giá, không làm việc xấu dù không ai nhìn thấy.',
+        'Biết ơn: cảm ơn cha mẹ, thầy cô, người đã giúp mình — hành động cụ thể, không chỉ lời nói.',
+        'Vượt khó: không bỏ cuộc khi gặp khó khăn; xem thất bại là bài học.',
+        'Tiết kiệm: không lãng phí tiền bạc, thời gian, điện nước, lương thực.',
+        'Bảo vệ môi trường: giữ gìn sạch đẹp; không xả rác; trồng và chăm sóc cây xanh.',
+        'Tôn trọng phụ nữ: đối xử bình đẳng, lịch sự; không phân biệt giới tính.',
+        'Yêu hoà bình: không bạo lực; giải quyết mâu thuẫn bằng đối thoại, không bằng đánh nhau.',
+        'Tích cực tham gia hoạt động nhân đạo: quyên góp, giúp đỡ người khó khăn — từ việc nhỏ nhất.',
+        'Kính trọng người già: nhường chỗ, giúp đỡ, nói chuyện lịch sự — thể hiện văn hoá dân tộc.',
+      ] },
+      { h: 'Người học sinh Đạo đức Lớp 5 là ai?' },
+      { ul: [
+        'Tự giác, trách nhiệm: không cần nhắc nhở vẫn hoàn thành bài tập, việc nhà.',
+        'Biết hợp tác: làm việc nhóm hiệu quả, lắng nghe ý kiến bạn bè.',
+        'Công dân nhỏ: tôn trọng pháp luật, tham gia hoạt động cộng đồng.',
+      ] },
+      { h: 'Mục tiêu hè của em' },
+      { ul: [
+        'Chọn 1 việc tốt làm mỗi ngày cho gia đình (dọn nhà, nấu cơm cùng bố mẹ).',
+        'Đọc 1 cuốn sách về gương người tốt – việc tốt.',
+        'Ghi nhật ký: mỗi ngày một điều em tự hào về bản thân.',
+      ] },
+      { note: 'Đạo đức không chỉ học ở trường — nó được rèn luyện trong từng hành động nhỏ hàng ngày của em!' },
+    ],
+    examples: [
+      { q: 'Bạn gặp một cụ già đứng chờ xe buýt dưới trời mưa, em làm gì?', a: 'Mời cụ đứng vào chỗ có mái che; nhường ô nếu có; khi xe đến nhường cụ lên trước — thể hiện kính trọng người già và lòng nhân ái.' },
+      { q: 'Em vô tình làm vỡ lọ hoa của mẹ. Em nên làm gì?', a: 'Nhận lỗi ngay với mẹ; xin lỗi chân thành; cùng dọn dẹp; hứa cẩn thận hơn — thể hiện trung thực và trách nhiệm.' },
+    ],
+  },
 };

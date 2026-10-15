@@ -1062,4 +1062,42 @@ export const H10HOA_LESSONS = {
       { q: 'Trong các phản ứng sau, phản ứng nào toả nhiệt: đốt cháy than, điện phân nước, quang hợp?', a: 'Đốt cháy than (C + O2 -> CO2) là phản ứng toả nhiệt (delta H < 0). Điện phân nước cần cung cấp điện năng (thu nhiệt/thu năng lượng); quang hợp cần năng lượng ánh sáng (thu nhiệt). Vậy chỉ đốt cháy than là toả nhiệt.' },
     ],
   },
+
+  'H10HOA-w36-quiz': {
+    topic: 'Kết thúc Hoá Học 10 — Nền tảng nguyên tử và bước vào Hoá hữu cơ 11',
+    intro: 'Hoá Học 10 đặt nền móng cho toàn bộ chương trình THPT: từ cấu tạo nguyên tử đến liên kết hoá học, từ phản ứng oxy hoá khử đến tốc độ phản ứng. Hãy cùng nhìn lại và chuẩn bị cho Hoá hữu cơ đầy thú vị ở lớp 11.',
+    objectives: [
+      'Hệ thống hoá các khái niệm cốt lõi: cấu tạo nguyên tử, liên kết, phản ứng, nhiệt hoá học.',
+      'Nhận biết những kiến thức Hoá 10 nào là tiền đề trực tiếp cho Hoá hữu cơ lớp 11.',
+      'Xây dựng kế hoạch ôn tập hè để không bị đứt mạch khi bước vào hoá hữu cơ.',
+    ],
+    theory: [
+      { h: 'Bức tranh toàn cảnh Hoá Học 10' },
+      { ul: [
+        'Nguyên tử & BTH: cấu hình electron, xu hướng biến đổi tuần hoàn, nhóm và chu kì.',
+        'Liên kết hoá học: ion, cộng hoá trị (phân cực/không phân cực), kim loại — quyết định tính chất chất.',
+        'Phản ứng oxy hoá khử: xác định số oxy hoá, cân bằng phương trình, điện hoá cơ bản.',
+        'Nhiệt hoá học & Tốc độ phản ứng: ΔH, phản ứng toả/thu nhiệt, các yếu tố ảnh hưởng tốc độ.',
+        'Các nguyên tố phi kim tiêu biểu: halogen, oxy, lưu huỳnh — phản ứng và ứng dụng.',
+      ] },
+      { h: 'Cầu nối sang Hoá Học 11 (Hữu cơ)' },
+      { ul: [
+        'Cấu hình electron → Cấu tạo phân tử hữu cơ: liên kết C–C, C=C, C≡C, và vòng benzene.',
+        'Liên kết cộng hoá trị → Đặc điểm liên kết trong hydrocarbon, alcohol, acid carboxylic.',
+        'Phản ứng oxy hoá khử → Phản ứng đốt cháy hydrocarbon, alcohol bị oxy hoá thành acid.',
+        'Tốc độ phản ứng → Lên men, xúc tác sinh học (enzyme), tổng hợp hữu cơ trong phòng thí nghiệm.',
+      ] },
+      { h: 'Ôn hè hiệu quả' },
+      { ul: [
+        'Luyện thành thạo xác định số oxy hoá và cân bằng phương trình oxy hoá khử — kĩ năng xuất hiện xuyên suốt lớp 11.',
+        'Xem lại bảng tính tan và quy tắc hoà tan để không bị lẫn khi gặp muối hữu cơ ở lớp 11.',
+        'Ôn lại cách viết cấu hình electron — đặc biệt cho C, H, O, N — nền tảng viết CTCT hữu cơ.',
+      ] },
+      { note: 'Hoá hữu cơ ở lớp 11 phong phú và thực tiễn hơn hoá vô cơ — từ xăng dầu đến thuốc, từ nhựa đến đường. Nền tảng nguyên tử vững từ lớp 10 sẽ giúp em hiểu CẤU TRÚC thay vì học thuộc lòng phản ứng.' },
+    ],
+    examples: [
+      { q: 'Tại sao cần nắm vững liên kết cộng hoá trị từ Hoá 10 trước khi học Hoá hữu cơ 11?', a: 'Toàn bộ hoá học hữu cơ dựa trên liên kết cộng hoá trị của carbon: liên kết đơn C–C, đôi C=C, ba C≡C và liên kết thơm trong vòng benzene đều là biến thể của liên kết cộng hoá trị. Độ phân cực của liên kết quyết định tính chất hoá học (phản ứng cộng, thế, tách). Học sinh không hiểu liên kết sẽ phải học thuộc lòng từng phản ứng hữu cơ — rất nặng và hay quên.' },
+      { q: 'Những phần nào của Hoá 10 hay bị bỏ quên nhưng lại xuất hiện nhiều trong đề thi lớp 11?', a: 'Ba vùng hay bị bỏ quên: (1) Cân bằng phương trình bằng phương pháp thăng bằng electron — xuất hiện trong phản ứng hữu cơ có oxy hoá; (2) Bảng tính tan và điều kiện kết tủa — cần khi viết phương trình ion thu gọn; (3) Nhiệt hoá học (ΔH) — lớp 11 gặp lại khi tính nhiệt đốt cháy hydrocarbon. Dành 1 tuần ôn lại 3 vùng này sẽ tiết kiệm nhiều thời gian học kì sau.' },
+    ],
+  },
 };

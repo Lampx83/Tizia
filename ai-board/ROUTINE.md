@@ -1,0 +1,158 @@
+# Luật vận hành — Ban điều hành AI (Tizia / EduVerse)
+
+> **Đọc file này TRƯỚC KHI làm bất cứ việc gì trong phiên hàng ngày.**
+> Prompt của scheduled task nằm ngoài repo và không ai version được nó. File này
+> là bản luật có version. **Khi prompt và file này mâu thuẫn, file này thắng** —
+> trừ khi chủ sở hữu nói ngược lại ngay trong phiên.
+
+---
+
+## Bước 0 — Chạy preflight (bắt buộc, không có ngoại lệ)
+
+```bash
+node scripts/ai-board-preflight.mjs
+```
+
+Script đo hộp thư production, đếm số ngày hỏng liên tiếp (lưu ở
+`ai-board/inbox-status.json`), chạy bậc thang việc dự phòng và in ra **kết luận
+duy nhất** mà phiên phải tuân theo. Không đoán, không bỏ qua bước này.
+
+---
+
+## Bước 1 — Nếu hộp thư ĐỌC ĐƯỢC
+
+Xử lý yêu cầu thật. Bậc thang dự phòng bên dưới **không dùng đến**.
+
+- Chọn yêu cầu **rủi ro thấp**: bổ sung nội dung, cải tiến chức năng của một trường.
+- **Từ chối kèm giải thích** với: viết lại core-engine, đổi schema, đổi auth,
+  thay đổi kiến trúc, hoặc bất cứ việc gì không kiểm chứng được trong một phiên.
+- Mỗi yêu cầu đã xử lý **phải** được phản hồi lại cho đúng người gửi.
+
+## Bước 2 — Nếu hộp thư KHÔNG đọc được
+
+### 2a. Leo thang khi hỏng ≥ 3 ngày liên tiếp
+
+Việc **đầu tiên** của phiên là gửi thông báo cho chủ sở hữu, nêu đúng hai việc
+cần người bấm nút — rồi mới làm việc dự phòng:
+
+1. ~~**Merge PR #97**~~ — **ĐÃ XONG 2026-09-27.** Route đọc-chỉ
+   `/api/ai-board/inbox` đã nằm trên nhánh production `feat/postgres-migration`.
+2. **Đặt `AI_BOARD_KEY`** trên production (`openssl rand -hex 32`) **rồi
+   redeploy nhánh `feat/postgres-migration`.**
+
+Việc (2) **KHÔNG được tự làm**: `AI_BOARD_KEY` là secret nhạy cảm ngang mật khẩu
+admin, và redeploy nhánh production vượt ngưỡng "rủi ro thấp". Lặp lại thông báo
+mỗi phiên cho tới khi xong — im lặng chịu đựng đã khiến bế tắc kéo dài 14 ngày
+mà không ai biết.
+
+> **Cách phân biệt "chưa merge" với "đã merge nhưng chưa redeploy"** (đo bằng
+> `node scripts/check-deployed-build.mjs`): nếu `/api/ai-board/inbox` trả
+> `401 {"needLogin":true}` thì đó là thông điệp của **gate chung** ⇒ bản đang
+> chạy **chưa có code PR #97**, tức chưa redeploy. Nếu trả `401 "Thiếu header
+> x-ai-board-key"` thì code đã lên, chỉ còn thiếu `AI_BOARD_KEY`. Nếu trả `404`
+> thì code đã lên nhưng `AI_BOARD_KEY` chưa đặt (route không được mount).
+>
+> ✅ Thông điệp leo thang của `scripts/ai-board-preflight.mjs` **đã được sửa ở phiên 77**: nay
+> nêu đúng một việc còn lại (`AI_BOARD_KEY` + redeploy `feat/postgres-migration`), không còn
+> hardcode "merge PR #97". Kiểm chứng nhánh production đã có route: phiên 77 đo tip
+> `feat/postgres-migration` = `ae3f491` có `server/contexts/ai-agent/inbox-api.js` và
+> `'/api/ai-board/'` trong `PUBLIC_PATH_PREFIXES`.
+
+### 2b. Bậc thang việc dự phòng
+
+Chỉ được làm việc thuộc danh sách này, **theo đúng thứ tự từ bậc thấp nhất còn
+việc**, và **chỉ khi có lệnh chứng minh được vấn đề tồn tại TRƯỚC khi sửa**:
+
+| Bậc | Vấn đề | Lệnh chứng minh trước-và-sau |
+|---|---|---|
+| 1 | Bài lí thuyết mồ côi / lỗi toàn vẹn học liệu | `node scripts/check-content-integrity.mjs` |
+| 2 | Môn dừng ở 35 tuần — cần soạn **cả** bài lí thuyết lẫn quiz tuần 36 | `node scripts/ai-board-preflight.mjs` |
+| 3 | Lệch phân bố đáp án A/B/C/D, câu dị dạng | `node scripts/audit-answer-distribution.js` |
+
+> **Bậc 3 có HAI tiêu chí, không phải một** (sửa ở phiên 77): một vị trí chiếm **≥60%**,
+> **hoặc** hai vị trí gánh **>85%** (tức hai vị trí ít dùng nhất cộng lại <15%). Tiêu chí
+> thứ hai sinh ra vì tiêu chí đầu bỏ sót hẳn một lớp lỗi: `lop11:tin-hoc` (A 45,4% B 51,4%
+> C 1,4% D 1,9%) và `lop3:cong-nghe` (A 37,0% B 59,7% C 2,8% D 0,6%) — chọn bừa A hoặc B là
+> đúng ~97% mà bậc 3 vẫn in `✅ sạch` suốt 17 phiên. Đừng tin chữ "sạch" của một tiêu chí
+> hẹp: đọc thẳng bảng phân bố của `audit-answer-distribution.js` trước khi kết luận hết việc.
+
+**Nếu cả ba bậc đều sạch:** ghi 1 dòng kết luận, **KHÔNG tạo PR**, **KHÔNG bịa
+việc**, và báo cho chủ sở hữu rằng routine đã hết việc dự phòng đo được.
+
+Mọi việc dự phòng phải kèm **con số trước → sau** trong CHANGELOG. Không có con số
+nghĩa là không chứng minh được giá trị — đừng làm.
+
+---
+
+## Kiểm thử bắt buộc trước khi commit
+
+1. `node --check <file>` cho **mọi** file `.js` đã sửa. Không được để lỗi cú pháp.
+2. Chạy lại lệnh chứng minh của bậc đang làm, ghi con số **trước → sau**.
+3. **Kiểm tra runtime, không chỉ cú pháp.** `node --check` không bắt được lỗi
+   nội dung chết — đó chính là cách 110 bài lí thuyết lọt lưới suốt nhiều tháng.
+   Import thật barrel `_index.js` và xác nhận nội dung mới nạp được, gắn đúng chỗ.
+4. Với quiz mới: mỗi câu đủ **4 lựa chọn không trùng nhau**, `answer` ∈ 0..3, đủ
+   **4 `choiceFeedback`**, và feedback tại vị trí `answer` mở đầu bằng
+   "Đúng"/"Correct" còn lại mở đầu bằng "Sai"/"No" — đây là cách duy nhất bắt
+   được lỗi lệch index `answer`.
+5. **Cân bằng đáp án ngay khi soạn**: không để một vị trí chiếm ≥60% trong một
+   môn, và không tuần nào có ≥3/6 câu cùng vị trí. Phiên 73 đã mắc đúng lỗi này
+   (D chỉ 2,8% trên 216 câu mới) và phải sửa lại ở phiên sau.
+
+> ⚠️ **Không dùng `scripts/shuffle-answers.js` cho nội dung có `choiceFeedback`.**
+> Script đó viết trước khi trường này tồn tại, nó hoán vị `choices` + `answer`
+> nhưng **không** hoán vị `choiceFeedback` ⇒ làm lệch feedback so với đáp án.
+> Cần hoán vị thì phải di chuyển cặp `(choice, choiceFeedback)` cùng nhau.
+
+---
+
+## Git — làm thẳng trên `main`, KHÔNG tạo nhánh, KHÔNG mở PR
+
+> **Chủ sở hữu quyết định 2026-09-30, thay hẳn luật cũ.** Luật cũ (nhánh
+> `ai-board/<YYYY-MM-DD>` + PR + chờ duyệt) đã tạo ra **6 PR treo hàng tháng**
+> và **118 nhánh** rác, trong đó có nội dung học liệu thật đứng lại một tháng
+> không ai thấy (PR #83: môn GD Địa phương lớp 10). Nguyên văn yêu cầu:
+> *"lần sau thì đừng tạo branch mới, xử lý xong xuôi thì merge luôn"*.
+
+- **Làm thẳng trên `main`.** Không tạo nhánh mới, không mở PR, không chờ duyệt.
+- **Nhưng cổng kiểm thử KHÔNG được nới:** chạy **đủ** mục "Kiểm thử bắt buộc
+  trước khi commit" bên trên **TRƯỚC** khi commit. Không có PR nghĩa là không
+  còn ai soát hộ — cổng kiểm thử là thứ duy nhất còn lại, nên nó là **bắt buộc**.
+  Kiểm thử fail ⇒ **không commit**, sửa cho xong hoặc hoàn lại (`git restore`).
+- **Không force-push. Không `git push --force-with-lease` lên `main`.** Sai thì
+  sửa bằng commit mới, không viết lại lịch sử.
+- `git push -u origin main`. Lỗi mạng thì thử lại tối đa 4 lần (2s, 4s, 8s, 16s).
+- Ghi 1 mục vào `public/CHANGELOG-eduverse.md` **trong cùng commit** với thay đổi.
+  Không có PR thì CHANGELOG là **bản ghi duy nhất** — mục phải nêu: ngày, trường,
+  request ID đã xử lý (hoặc "không có và vì sao"), thay đổi từng file, và **con
+  số trước → sau** của lệnh chứng minh.
+- Repo đã đổi tên: **`Lampx83/Tizia`** (`Lampx83/EduVerse` chỉ còn redirect).
+- **`gh` và `hub` KHÔNG tồn tại** trong môi trường routine. Dùng công cụ GitHub
+  sẵn có của phiên (MCP) khi cần đọc/ghi trên GitHub.
+- **Phạm vi được tự quyết KHÔNG đổi** — vẫn đúng như trước: nội dung học liệu
+  (`public/js/scenarios/**`), `public/CHANGELOG-eduverse.md`, `ai-board/**`, và
+  công cụ chẩn đoán trong `scripts/`. Việc nằm **ngoài** phạm vi đó (xem mục
+  "Những gì KHÔNG bao giờ tự làm") thì **không làm**, kể cả khi không cần PR —
+  bỏ PR là bỏ bước chờ duyệt, **không phải** mở rộng quyền.
+- Nếu `main` bị bảo vệ (push bị từ chối): **đừng lách bằng cách tạo nhánh mới
+  rồi bỏ đó**. Báo ngay cho chủ sở hữu kèm nguyên văn thông báo từ chối.
+
+## Những gì KHÔNG bao giờ tự làm
+
+- Sửa `server/**`, `public/js/engine/**`, schema DB, auth, routing.
+- Đặt hoặc đọc secret; commit bất cứ khoá nào vào repo.
+- Merge PR đụng nhánh production (`feat/postgres-migration`).
+- Commit rỗng / commit chỉ để "có việc", hoặc bịa ra yêu cầu người dùng không có thật.
+- Xoá nhánh `feat/postgres-migration` (production đang chạy từ đó) hay bất cứ
+  nhánh nào còn commit chưa có trên `main`, dù được yêu cầu "xoá hết nhánh":
+  liệt kê ra và hỏi lại, đừng xoá rồi báo sau.
+
+---
+
+## Bối cảnh cần biết
+
+- Production **không chạy `main`** mà chạy một bản build trên nhánh
+  `feat/postgres-migration`, lịch sử không chung gốc với `main`. Kiểm tra bằng
+  `node scripts/check-deployed-build.mjs`. Vì vậy merge vào `main` **không** tự
+  động lên production.
+- Lịch sử đầy đủ từng phiên: `public/CHANGELOG-eduverse.md`.

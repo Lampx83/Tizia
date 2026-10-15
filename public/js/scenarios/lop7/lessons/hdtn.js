@@ -1824,6 +1824,42 @@ export const S7HDTN_LESSONS = Object.assign({},
       { q: 'Một tình huống tổng hợp: em đang căng thẳng vì thi cuối kì, lại bị bạn nhắn tin khích bác trên mạng. Em vận dụng các bài đã học để xử lí thế nào?', a: 'Em kết hợp nhiều bài học: Về cảm xúc, em áp dụng STOP để bình tĩnh, không phản ứng nóng vội. Về bắt nạt mạng, em không đối đáp thô tục, chụp màn hình làm bằng chứng, chặn và báo người lớn nếu cần. Về quản lý áp lực thi cử, em chia nhỏ việc ôn, dành thời gian nghỉ ngơi, tâm sự với bố mẹ. Cách xử lí bình tĩnh, đúng nguyên tắc cho thấy em đã thật sự trưởng thành qua một năm học HĐTN.' },
     ],
   ),
+  L(36, 'Kết thúc HĐTN 7 — Trưởng thành qua từng trải nghiệm — Hành trang vào lớp 8',
+    'Hoạt động Trải nghiệm lớp 7 không dạy kiến thức từ sách giáo khoa — nó dạy em cách SỐNG: cách hiểu chính mình, cách chăm sóc cơ thể và tâm trí, cách làm việc cùng người khác và cách đóng góp cho cộng đồng. Đây là những kỹ năng mà không môn học nào khác có thể thay thế được. Tuần cuối, hãy cùng nhìn lại một năm trải nghiệm và chuẩn bị tâm thế trưởng thành hơn cho lớp 8!',
+    [
+      'Hệ thống hoá các chủ đề HĐTN đã học: bản thân, sức khoẻ, cộng đồng, hướng nghiệp.',
+      'Nhìn lại sự trưởng thành của bản thân qua các trải nghiệm trong năm học.',
+      'Đặt ra 3 mục tiêu phát triển bản thân cho năm lớp 8.',
+    ],
+    [
+      { h: 'Bức tranh toàn cảnh HĐTN 7' },
+      { ul: [
+        'Hiểu bản thân: Tư duy cố định vs. tư duy phát triển; điểm mạnh – điểm yếu; phong cách học tập; quản lý cảm xúc bằng kỹ thuật STOP; xây dựng lòng tự trọng lành mạnh.',
+        'Sức khoẻ thể chất và tinh thần: Vệ sinh cá nhân và sinh lý tuổi dậy thì; dinh dưỡng cân bằng; vận động đều đặn; giấc ngủ đủ giờ; nhận biết và phòng tránh stress; sức khoẻ tâm thần.',
+        'Kỹ năng xã hội: Giao tiếp tích cực; lắng nghe chủ động; làm việc nhóm hiệu quả; giải quyết xung đột; tôn trọng sự khác biệt; phòng chống bắt nạt.',
+        'Cộng đồng và môi trường: Trách nhiệm với cộng đồng; hoạt động tình nguyện; tiêu dùng thông minh; bảo vệ môi trường; an toàn giao thông.',
+        'Hướng nghiệp cơ bản: Khám phá sở thích và năng lực bản thân; tìm hiểu các ngành nghề phổ biến; lập kế hoạch học tập ngắn hạn.',
+      ] },
+      { h: 'Ba bài học lớn nhất của HĐTN 7' },
+      { ul: [
+        '"Tôi có thể phát triển" — Không ai bị giới hạn bởi tài năng bẩm sinh. Nỗ lực và thực hành đúng cách có thể thay đổi mọi thứ.',
+        '"Mọi người đều quan trọng" — Mỗi người trong cộng đồng đều có giá trị. Sự tôn trọng, đồng cảm và hợp tác tạo nên cộng đồng mạnh.',
+        '"Hành động nhỏ tạo thay đổi lớn" — Nhặt rác, mỉm cười với bạn bè, nói cảm ơn... những hành động nhỏ tích luỹ tạo nên con người ta và thế giới ta muốn sống.',
+      ] },
+      { h: 'Cầu nối sang HĐTN lớp 8' },
+      { ul: [
+        'Kỹ năng sống nâng cao: Đàm phán và thuyết phục; lãnh đạo tích cực; quản lý tài chính cá nhân.',
+        'Hướng nghiệp: Tìm hiểu sâu hơn về các ngành nghề; kỹ năng viết CV và phỏng vấn đơn giản; thực tế nghề nghiệp.',
+        'Cộng đồng: Dự án cộng đồng quy mô lớn hơn; lãnh đạo nhóm tình nguyện.',
+      ] },
+      { note: 'Trưởng thành không xảy ra trong một đêm — nó là tập hợp của hàng nghìn khoảnh khắc chọn lựa đúng đắn mỗi ngày. Em đã bắt đầu hành trình đó từ lớp 7 rồi!' },
+    ],
+    [
+      { q: 'Hãy áp dụng mô hình mục tiêu SMART để đặt một mục tiêu học tập cụ thể cho lớp 8.', a: 'Ví dụ: "Em sẽ đạt điểm trung bình môn Toán từ 7,5 trở lên trong học kỳ 1 lớp 8, bằng cách ôn bài 30 phút mỗi tối từ thứ Hai đến thứ Sáu, tự làm ít nhất 3 bài tập mỗi ngày, và nhờ bạn giỏi giải thích những dạng em chưa hiểu trong tuần." — Đây là mục tiêu SMART: Specific (cụ thể), Measurable (đo được), Achievable (khả thi), Relevant (liên quan), Time-bound (có thời hạn).' },
+      { q: 'Điều gì khiến em tự hào nhất về sự trưởng thành của bản thân trong năm lớp 7?', a: 'Câu hỏi tự do — không có đáp án sai. Gợi ý hướng suy nghĩ: Đó có thể là lần em đứng lên bảo vệ bạn bị bắt nạt; lần em tự giải quyết xung đột mà không nhờ đến người lớn; lần em hoàn thành một dự án nhóm dù gặp nhiều khó khăn; hay đơn giản là em đã duy trì được một thói quen tốt (vận động, đọc sách, giúp việc nhà) suốt cả năm. Điều quan trọng là em NHẬN RA sự tiến bộ của chính mình.' },
+      { q: 'Một người bạn nói: "Học kỹ năng sống không cần thiết vì trường không thi môn đó." Em phản biện thế nào?', a: 'Em không đồng ý. Kỹ năng sống là thứ em dùng HÀNG NGÀY — quản lý cảm xúc khi bị điểm thấp, làm việc nhóm trong mọi dự án, giao tiếp lịch sự với thầy cô và bạn bè, ra quyết định đúng khi bị cám dỗ. Điểm số đánh giá kiến thức, nhưng nhà tuyển dụng và cuộc sống đánh giá kỹ năng. Hơn nữa, người có kỹ năng sống tốt thường có sức khoẻ tâm thần tốt hơn, mối quan hệ tốt hơn — và thường học TỐT HƠN vì họ biết cách quản lý bản thân.' },
+    ],
+  ),
 );
 
 

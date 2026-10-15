@@ -1480,4 +1480,36 @@ export const S7KHTN_LESSONS = {
       { q: 'Một xe máy đi 36 km trong 45 phút. Tính tốc độ của xe ra km/h và m/s.', a: 'Đổi t = 45 phút = 0,75 h. Tốc độ v = s/t = 36 / 0,75 = 48 km/h. Đổi ra m/s: 48 / 3,6 ≈ 13,3 m/s.' },
     ],
   },
+
+  'S7KHTN-w36-quiz': {
+    topic: 'Kết thúc KHTN 7 — Ba khoa học, một hành trình — Hành trang vào lớp 8',
+    intro: 'Năm học lớp 7 kết thúc với môn KHTN đã dẫn chúng ta qua ba thế giới: thế giới vật lý của âm thanh và ánh sáng, thế giới hóa học của nguyên tử và phân tử, và thế giới sinh học của tế bào và sinh vật sống. Tuần cuối này, hãy nhìn lại bức tranh toàn cảnh và chuẩn bị cho KHTN lớp 8 hứa hẹn nhiều điều thú vị hơn nữa.',
+    objectives: [
+      'Hệ thống hoá kiến thức ba phân môn Vật Lý, Hoá Học, Sinh Học đã học trong năm.',
+      'Nhận biết mối liên hệ giữa ba phân môn và ứng dụng thực tiễn.',
+      'Xác định những chủ đề sẽ được mở rộng ở lớp 8.',
+    ],
+    theory: [
+      { h: 'Bức tranh toàn cảnh KHTN 7' },
+      { ul: [
+        'Vật Lý: Âm thanh (nguồn âm, tần số, biên độ, truyền âm); Ánh sáng (nguồn sáng, phản xạ, khúc xạ, gương phẳng/cầu lõm/cầu lồi, lăng kính và màu sắc); Điện (điện tích, định luật Ôm: I = U/R, mạch nối tiếp và song song).',
+        'Hoá Học: Nguyên tử (cấu tạo: hạt nhân + electron); Nguyên tố hoá học và bảng tuần hoàn cơ bản; Phân tử và hợp chất; Hoá trị và công thức hoá học; Phân loại oxit, axit, bazơ, muối; Phản ứng hoá học và phương trình hoá học.',
+        'Sinh Học: Tế bào (cấu trúc, chức năng, phân chia); Thực vật (phân loại, quang hợp, hô hấp, thoát hơi nước, sinh sản); Động vật (phân loại, hệ vận động, tiêu hoá, hô hấp, bài tiết, thần kinh); Vi sinh vật (vi khuẩn, virus, nấm — vai trò và phòng bệnh).',
+      ] },
+      { h: 'Ba phân môn kết nối với nhau như thế nào?' },
+      { p: 'Ba phân môn tưởng riêng biệt nhưng thực ra bổ trợ nhau: Hoá học giải thích bản chất nguyên tử của vật chất mà Vật lý nghiên cứu (điện tử, dẫn điện/cách điện); Sinh học ứng dụng Hoá học để hiểu quang hợp, hô hấp tế bào (phản ứng hoá học trong cơ thể sống). Khoa học tự nhiên là một tổng thể!' },
+      { h: 'Cầu nối sang KHTN lớp 8' },
+      { ul: [
+        'Vật Lý: lực (lực đàn hồi, áp suất, lực nổi), nhiệt học (nhiệt độ, nhiệt dung riêng, truyền nhiệt).',
+        'Hoá Học: phản ứng hoá học (oxi hoá, phân huỷ, thế), tính chất của oxi, hidro, nước; axit và bazơ nâng cao.',
+        'Sinh Học: Cơ thể người (hệ vận động, tuần hoàn, hô hấp, tiêu hoá, bài tiết, thần kinh, sinh sản).',
+      ] },
+      { note: 'Gợi ý ôn hè: ôn lại công thức Vật Lý (v = s/t, I = U/R), cân bằng phương trình hoá học đơn giản, và đọc thêm về hệ cơ quan của cơ thể người để chuẩn bị cho lớp 8.' },
+    ],
+    examples: [
+      { q: 'Giải thích vì sao khi bơi lội, ta nghe tiếng động dưới nước rõ hơn ngoài không khí.', a: 'Âm thanh truyền trong chất lỏng nhanh hơn và ít bị hấp thụ hơn so với không khí. Tốc độ âm trong nước ≈ 1 500 m/s, trong không khí ≈ 340 m/s. Vì vậy âm truyền dưới nước hiệu quả hơn, ta nghe rõ hơn.' },
+      { q: 'Lập công thức hoá học của hợp chất tạo bởi Fe (III) và nhóm SO₄ (II).', a: 'Hoá trị Fe là III, nhóm SO₄ là II. Áp dụng quy tắc hoá trị: III × x = II × y → x = 2, y = 3. Công thức: Fe₂(SO₄)₃ — đây là sắt(III) sulfate.' },
+      { q: 'Vì sao quang hợp ở thực vật lại quan trọng đối với toàn bộ sự sống trên Trái Đất?', a: 'Quang hợp chuyển hoá CO₂ và H₂O thành glucose và O₂. Hai vai trò chủ chốt: (1) Tạo O₂ — cung cấp khí thở cho tất cả sinh vật hiếu khí (kể cả con người). (2) Tạo chất hữu cơ — nền tảng của chuỗi thức ăn; mọi sinh vật đều trực tiếp hoặc gián tiếp sống nhờ chất hữu cơ do thực vật tạo ra qua quang hợp.' },
+    ],
+  },
 };

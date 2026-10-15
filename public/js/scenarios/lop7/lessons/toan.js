@@ -1006,4 +1006,43 @@ export const S7TOAN_LESSONS = {
       { q: 'Cho P(x) = x^2 − 5x + 6. Kiểm tra x = 2 và x = 3 có phải nghiệm không.', a: 'P(2) = 4 − 10 + 6 = 0 ⇒ x = 2 là nghiệm. P(3) = 9 − 15 + 6 = 0 ⇒ x = 3 cũng là nghiệm. Vậy đa thức có hai nghiệm 2 và 3.' },
     ],
   },
+
+  'S7TOAN-w36-quiz': {
+    topic: 'Kết thúc Toán 7 — Hành trang vào lớp 8',
+    intro: 'Một năm học lớp 7 sắp khép lại! Hôm nay chúng ta dừng lại nhìn lại toàn bộ hành trình Toán 7 — từ thế giới số đến hình học phẳng — và chuẩn bị tâm thế tự tin bước vào lớp 8 với nhiều điều thú vị hơn đang chờ phía trước.',
+    objectives: [
+      'Hệ thống hoá toàn bộ chương trình Toán 7 theo bốn mảng lớn: Số và đại số, Hình học, Thống kê, Đa thức.',
+      'Nhận biết mối liên hệ giữa kiến thức lớp 7 và những gì sẽ học ở lớp 8.',
+      'Xây dựng kế hoạch ôn tập hè hiệu quả để bước vào lớp 8 vững vàng.',
+    ],
+    theory: [
+      { h: 'Bức tranh toàn cảnh Toán 7' },
+      { ul: [
+        'Số và Đại số: Số hữu tỉ Q (cộng, trừ, nhân, chia, luỹ thừa, giá trị tuyệt đối); Số vô tỉ và số thực R; Tỉ lệ thức, dãy tỉ số bằng nhau; Tỉ lệ thuận và tỉ lệ nghịch.',
+        'Đại số: Biểu thức đại số, đơn thức, đa thức một biến; Cộng, trừ, nhân, chia đa thức; Nghiệm của đa thức.',
+        'Hình học: Hai đường thẳng song song và tiên đề Ơ-clit; Tam giác (ba trường hợp bằng nhau: c-c-c, c-g-c, g-c-g; tam giác cân và đều; tổng ba góc = 180°; định lý Py-ta-go); Bốn điểm đặc biệt của tam giác (trọng tâm G, trực tâm H, tâm nội tiếp I, tâm ngoại tiếp O).',
+        'Thống kê: Bảng tần số, biểu đồ cột/đoạn thẳng; Số trung bình cộng, mốt, trung vị.',
+      ] },
+      { h: 'Những viên đá nền cho lớp 8' },
+      { ul: [
+        'Đại số lớp 7 → Lớp 8 sẽ mở rộng sang HĐT đáng nhớ (a±b)², (a+b)(a-b), nhân tử, phân thức đại số.',
+        'Phương trình và nghiệm đa thức → Lớp 8 học giải phương trình bậc nhất một ẩn và hệ phương trình.',
+        'Hình học tam giác → Lớp 8 học tứ giác (hình bình hành, hình thoi, hình chữ nhật, hình vuông, hình thang); Diện tích; Định lý Py-ta-go nâng cao.',
+        'Thống kê cơ bản → Lớp 8 tiếp tục nâng cao về phân tích số liệu và xác suất.',
+      ] },
+      { h: 'Lộ trình ôn hè thông minh' },
+      { ul: [
+        'Tuần 1: Ôn lại số hữu tỉ, tỉ lệ thức — nền tảng cho đại số lớp 8.',
+        'Tuần 2: Luyện đa thức và nghiệm — chuẩn bị cho phân tích nhân tử lớp 8.',
+        'Tuần 3: Ôn hình học tam giác — các trường hợp bằng nhau và Py-ta-go.',
+        'Tuần 4: Giải đề tổng hợp, chuẩn bị tâm thế cho tuần đầu lớp 8.',
+      ] },
+      { note: 'Toán 8 sẽ thú vị hơn vì em sẽ được khám phá hằng đẳng thức đáng nhớ, phương trình và diện tích hình học phẳng — tất cả đều có nền từ những gì em đã học ở lớp 7!' },
+    ],
+    examples: [
+      { q: 'Em hãy hệ thống 4 điểm đặc biệt của tam giác và nêu tính chất của từng điểm.', a: 'Trọng tâm G: giao ba đường trung tuyến, chia mỗi trung tuyến theo tỉ số 2:1 tính từ đỉnh. Trực tâm H: giao ba đường cao. Tâm nội tiếp I: giao ba đường phân giác trong, cách đều ba cạnh. Tâm ngoại tiếp O: giao ba đường trung trực, cách đều ba đỉnh. Với tam giác cân, G, H, I, O đều nằm trên trục đối xứng của tam giác.' },
+      { q: 'Một cửa hàng giảm giá, giá ban đầu là 500 000 đồng, giảm 15%. Tính giá sau giảm.', a: 'Số tiền giảm = 500 000 × 15% = 75 000 đồng. Giá sau giảm = 500 000 − 75 000 = 425 000 đồng. (Cũng có thể tính: 500 000 × 85% = 425 000 đồng.)' },
+      { q: 'Định nghĩa nghiệm của đa thức và tìm nghiệm của Q(x) = 2x − 6.', a: 'Nghiệm của đa thức P(x) là giá trị x₀ sao cho P(x₀) = 0. Với Q(x) = 2x − 6: đặt Q(x) = 0 → 2x − 6 = 0 → x = 3. Vậy x = 3 là nghiệm duy nhất của Q(x).' },
+    ],
+  },
 };

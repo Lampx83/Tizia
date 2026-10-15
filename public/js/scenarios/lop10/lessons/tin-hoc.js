@@ -879,4 +879,43 @@ export const H10TIN_LESSONS = {
       { q: 'Viết chương trình nhập danh sách điểm rồi in điểm cao nhất.', a: 'so = int(input(\'So hoc sinh: \'))\ndiem = []\nfor i in range(so):\n    diem.append(float(input(\'Nhap diem: \')))\nprint(\'Cao nhat:\', max(diem))' },
     ],
   },
+
+  'H10TIN-w36-quiz': {
+    topic: 'Kết thúc Tin Học 10 — Lập trình và Tư duy số cho lớp 11',
+    intro: 'Tin Học 10 là bước đầu tiên trong hành trình lập trình: từ cơ sở dữ liệu đến Python cơ bản, từ thuật toán sắp xếp đến xử lý danh sách. Hôm nay chúng ta nhìn lại và chuẩn bị cho những thách thức thú vị hơn ở lớp 11.',
+    objectives: [
+      'Hệ thống hoá các kĩ năng lập trình và tư duy thuật toán đã học trong năm.',
+      'Nhận biết những nền tảng Python lớp 10 nào cần củng cố trước khi học lớp 11.',
+      'Xây dựng kế hoạch luyện code trong hè để tiếp tục phát triển kĩ năng.',
+    ],
+    theory: [
+      { h: 'Bức tranh toàn cảnh Tin Học 10' },
+      { ul: [
+        'Cơ sở dữ liệu: mô hình quan hệ, SQL cơ bản (SELECT, WHERE, GROUP BY, JOIN).',
+        'Lập trình Python: kiểu dữ liệu, điều kiện, vòng lặp, hàm, list, dict, file I/O.',
+        'Thuật toán: sắp xếp (bubble sort, selection sort), tìm kiếm (tuyến tính, nhị phân), độ phức tạp O(n).',
+        'Mạng máy tính và internet: giao thức TCP/IP, HTTP, bảo mật mạng cơ bản.',
+        'Đạo đức số: bản quyền phần mềm, an toàn thông tin cá nhân.',
+      ] },
+      { h: 'Cầu nối sang Tin Học 11' },
+      { ul: [
+        'Python cơ bản → OOP (lập trình hướng đối tượng): class, object, kế thừa, đa hình.',
+        'List và dict → Cấu trúc dữ liệu nâng cao: stack, queue, linked list, tree (tư duy).',
+        'Thuật toán cơ bản → Đệ quy, quy hoạch động, đồ thị (graph).',
+        'SQL cơ bản → Thiết kế CSDL phức tạp hơn, tối ưu truy vấn, kết nối Python-CSDL.',
+      ] },
+      { h: 'Kế hoạch code hè' },
+      { ul: [
+        'Làm 2–3 mini project Python: máy tính, quản lý danh sách, game đơn giản.',
+        'Luyện 10–15 bài LeetCode Easy bằng Python — rèn tư duy thuật toán.',
+        'Hoàn thiện SQL: làm thêm bài tập trên w3schools.com/sql hoặc sqlzoo.net.',
+        'Đọc cuốn "Automate the Boring Stuff with Python" (miễn phí online) — ứng dụng thực tế.',
+      ] },
+      { note: 'Code là kĩ năng tích luỹ — mỗi dòng code em viết hôm nay làm tăng khả năng giải quyết vấn đề của em ngày mai. Đừng dừng code trong kì hè.' },
+    ],
+    examples: [
+      { q: 'Những lỗi lập trình phổ biến nhất ở học sinh lớp 10 mà cần sửa trước khi học lớp 11?', a: 'Ba lỗi thường gặp nhất: (1) Không dùng hàm (def) — viết code lặp đi lặp lại thay vì tách thành hàm tái sử dụng; lớp 11 sẽ học OOP, không quen hàm sẽ khó học class; (2) Không kiểm tra đầu vào — code chạy được nhưng crash khi nhập sai kiểu dữ liệu; (3) Biến đặt tên tuỳ tiện (x, y, a, b) — khi code dài 50 dòng trở lên, tên không mô tả gây nhầm lẫn nghiêm trọng. Sửa 3 thói quen này trong hè sẽ tiết kiệm rất nhiều thời gian debug ở lớp 11.' },
+      { q: 'Em nên học thêm gì trong hè để chuẩn bị tốt cho Tin Học 11 mà không bị quá tải?', a: 'Một lộ trình vừa đủ: (1) Tuần 1–2: ôn lại hàm Python và tạo 2 mini project từ đầu (không copy); (2) Tuần 3–4: tìm hiểu cơ bản về class và object trong Python — YouTube "Python OOP for beginners" khoảng 2 giờ; (3) Tuần 5–6: làm 5 bài SQL JOIN trên sqlzoo.net. Không cần học mọi thứ trước — chỉ cần nền hàm vững và biết OOP là gì là đủ để học lớp 11 nhẹ nhàng.' },
+    ],
+  },
 };

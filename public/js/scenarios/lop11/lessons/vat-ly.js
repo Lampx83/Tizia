@@ -1033,4 +1033,47 @@ export const H11LY_LESSONS = {
       { q: 'Tụ C = 4 μF nối vào nguồn U = 50 V. Tính năng lượng tích trữ trong tụ. Năng lượng này thuộc dạng nào?', a: 'W = ½·C·U² = ½·4·10⁻⁶·50² = ½·4·10⁻⁶·2500 = 5·10⁻³ J = 5 mJ. Đây là năng lượng điện trường tích trữ giữa hai bản tụ.' },
     ],
   },
+
+  'H11LY-w36-quiz': {
+    topic: 'Kết thúc Vật Lý 11 — Điện Từ Quang và hành trình lớp 12',
+    intro: 'Vật Lý 11 đã đưa chúng ta khám phá ba trụ cột lớn: điện học, từ học và quang học. Hôm nay chúng ta nhìn lại toàn bộ bức tranh, kết nối các chủ đề với nhau và chuẩn bị tâm thế vững chắc cho lớp 12 — năm học vật lý cuối cùng của THPT.',
+    objectives: [
+      'Hệ thống hoá các chương học Vật Lý 11 theo ba mảng: điện học, từ học, quang học.',
+      'Nhận diện những công thức cốt lõi nhất cần nhớ cho kì thi tốt nghiệp THPT Quốc gia.',
+      'Hiểu các chủ đề lớp 12 sẽ kế thừa và ứng dụng từ nền tảng lớp 11.',
+    ],
+    theory: [
+      { h: 'Điện học — trụ cột thứ nhất' },
+      { ul: [
+        'Điện tích và lực Coulomb: F = k·q₁q₂/r² (k = 9·10⁹ N·m²/C²).',
+        'Điện trường: E = F/q; điện thế U = A/q; tụ điện Q = CU, W = ½CU².',
+        'Dòng điện không đổi: định luật Ohm, mạch nối tiếp/song song, công suất P = UI = I²R = U²/R.',
+        'Dòng điện trong các môi trường: kim loại, chất điện phân (định luật Faraday), chân không, chất khí.',
+      ] },
+      { h: 'Từ học — trụ cột thứ hai' },
+      { ul: [
+        'Từ trường: lực từ F = B·I·l·sinα; lực Lorentz f = q·v·B·sinα.',
+        'Cảm ứng điện từ: suất điện động e = −N·dΦ/dt (định luật Faraday); Lenz → chiều dòng cảm ứng.',
+        'Tự cảm: e_L = −L·dI/dt; năng lượng W = ½LI².',
+      ] },
+      { h: 'Quang học — trụ cột thứ ba' },
+      { ul: [
+        'Khúc xạ ánh sáng: n₁·sinθ₁ = n₂·sinθ₂ (định luật Snell); góc giới hạn phản xạ toàn phần.',
+        'Lăng kính và thấu kính: tiêu cực/tiêu điểm, công thức thấu kính 1/f = 1/d + 1/d\'.',
+        'Mắt và dụng cụ quang học: mắt cận/viễn/lão, kính lúp, kính hiển vi, kính thiên văn.',
+      ] },
+      { h: 'Vật Lý 12 — nối tiếp ra sao?' },
+      { ul: [
+        'Dao động và sóng cơ học: từ dao động điện từ (mạch LC) → sóng điện từ.',
+        'Dòng điện xoay chiều (AC): mạch RLC, cộng hưởng, máy biến áp — ứng dụng điện học lớp 11.',
+        'Vật lý hạt nhân: phóng xạ, phản ứng hạt nhân — chương mới nhất và quan trọng nhất trong đề thi.',
+        'Vật lý lượng tử: ánh sáng lưỡng tính, hiệu ứng quang điện, mô hình Bohr của nguyên tử.',
+      ] },
+      { note: 'Vật lý không phải môn học công thức — là môn học tư duy. Khi gặp bài tập khó, hãy vẽ hình và xác định "cái gì đang xảy ra trong vật lý" trước khi chọn công thức. Năng lực này sẽ theo em suốt cuộc đời, không chỉ trong phòng thi.' },
+    ],
+    examples: [
+      { q: 'Công thức nào của Vật Lý 11 xuất hiện nhiều nhất trong đề thi tốt nghiệp THPT Quốc gia?', a: 'Ba công thức quan trọng nhất từ lớp 11 hay gặp trong đề thi: (1) Công thức thấu kính 1/f = 1/d + 1/d\' và số phóng đại k = −d\'/d — thường kết hợp bài toán về mắt/kính cận; (2) Định luật Faraday về cảm ứng điện từ e = −N·ΔΦ/Δt — nền cho chương dòng xoay chiều lớp 12; (3) Định luật Ohm đầy đủ I = ε/(R + r) — nền cho mạch điện xoay chiều. Học kỹ 3 công thức này là học xong "cầu nối" quan trọng nhất.' },
+      { q: 'Khi gặp một bài toán vật lý mới chưa biết giải, em nên bắt đầu từ đâu?', a: 'Quy trình 4 bước: (1) VẼ HÌNH — sơ đồ mạch điện, đường đi của ánh sáng, hướng lực... Vẽ giúp não hình dung và thấy cấu trúc bài. (2) XÁC ĐỊNH dữ kiện đã cho và cần tìm gì. (3) CHỌN định luật/công thức phù hợp với hiện tượng vật lý (không "nhồi" công thức ngẫu nhiên). (4) TÍNH toán và KIỂM TRA đơn vị — sai đơn vị là dấu hiệu chọn sai công thức hoặc thiếu bước đổi. Bình tĩnh, từng bước — đây là cách học vật lý đúng nhất.' },
+    ],
+  },
 };

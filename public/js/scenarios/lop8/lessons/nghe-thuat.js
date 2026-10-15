@@ -1381,6 +1381,64 @@ export const S8NT_LESSONS = {
       { q: 'Theo em, mục đích sâu xa của việc học môn Nghệ thuật là gì?', a: 'Không phải để học thuộc lòng hay thi cho qua, mà để nuôi dưỡng tâm hồn: biết rung động trước cái đẹp, biết cảm thụ âm nhạc và hội hoạ, và biết biểu đạt cảm xúc, ý tưởng của bản thân. Nghệ thuật là hành trình cả đời, giúp cuộc sống của mỗi người phong phú và ý nghĩa hơn.' },
     ]
   ),
+
+  'S8NT-w36-quiz': L(
+    'Kết thúc Nghệ Thuật 8 — Âm nhạc & Mỹ thuật nuôi dưỡng tâm hồn',
+    'Năm lớp 8 đã mở ra những cánh cửa nghệ thuật rộng lớn: em biết lắng nghe Bach, Beethoven, Chopin; biết nhìn bức tranh và nhận ra luật xa gần; biết về lịch sử mĩ thuật Việt Nam qua bốn triều đại và Trường Mĩ thuật Đông Dương. Đây là tuần ôn tập, nhưng cũng là lúc để em tự hỏi: Nghệ thuật đã thay đổi mình như thế nào?',
+    [
+      'Hệ thống lại toàn bộ kiến thức Âm nhạc lớp 8: nhạc lí, âm nhạc cổ điển phương Tây.',
+      'Tổng hợp Mĩ thuật lớp 8: kĩ thuật vẽ, lịch sử mĩ thuật Việt Nam và thế giới, mĩ thuật ứng dụng.',
+      'Tự đánh giá sự tiến bộ và định hướng giữ gìn tình yêu nghệ thuật suốt đời.',
+    ],
+    [
+      { h: 'Âm nhạc — Nhạc lí và Hát' },
+      { ul: [
+        'Nhịp phức: 6/8 (2 phách mạnh nhẹ nhẹ, nhẹ nhẹ nhẹ mỗi nhịp), 9/8; cảm nhận trọng âm phức hợp.',
+        'Đảo phách (syncope): âm thanh bắt đầu ở phách nhẹ kéo qua phách mạnh — tạo cảm giác "trễ nhịp" đặc trưng trong nhạc jazz và pop.',
+        'Hợp âm 7: gồm 4 nốt (nền + quãng 3 + quãng 5 + quãng 7); hợp âm 7 át (dominant 7th) tạo sức căng giải quyết về chủ âm.',
+        'Bài hát trong chương trình: các ca khúc dân ca Việt Nam và bài hát nước ngoài lựa chọn; kĩ thuật hát (hơi thở, phát âm, cảm xúc).',
+        'Thưởng thức âm nhạc: tập nghe có ý thức — phân biệt nhạc cụ, cấu trúc bài, sắc thái to nhỏ (dynamics).',
+      ] },
+      { h: 'Âm nhạc — Lịch sử âm nhạc cổ điển phương Tây' },
+      { ul: [
+        'Thời kì Baroque (1600–1750): J.S. Bach — đỉnh cao đối âm (counterpoint); cấu trúc rõ ràng, tinh xảo; nhạc khí và Thanh nhạc.',
+        'Thời kì Cổ điển (1750–1820): W.A. Mozart — giai điệu trong sáng, cân đối hoàn hảo; L. van Beethoven — cầu nối Cổ điển – Lãng mạn, phong cách mãnh liệt, cá nhân.',
+        'Thời kì Lãng mạn (1820–1900): Frédéric Chopin — thơ ca của piano, nocturne và ballade; Franz Schubert — ca khúc (Lied) giàu cảm xúc; Robert Schumann — nhạc piano lãng mạn và văn học âm nhạc.',
+      ] },
+      { h: 'Mĩ thuật — Kĩ năng tạo hình' },
+      { ul: [
+        'Luật xa gần (phối cảnh): điểm tụ, đường chân trời; vật xa nhỏ và mờ hơn vật gần.',
+        'Kí hoạ chân dung: tỉ lệ khuôn mặt (mắt ở giữa chiều cao đầu; các đặc điểm cân đối); diễn tả thần sắc.',
+        'Vẽ tranh đề tài: phác thảo bố cục, chọn mảng sáng-tối, lên màu có chủ đích.',
+        'Chất liệu: tranh sơn dầu (màu sắc bền, biểu cảm mạnh), tranh lụa (trong sáng, nhẹ nhàng).',
+      ] },
+      { h: 'Mĩ thuật — Lịch sử mĩ thuật Việt Nam' },
+      { ul: [
+        'Thời Lý (1010–1225): nghệ thuật Phật giáo — chùa Một Cột, tượng Phật, hoa sen và rồng uốn lượn.',
+        'Thời Trần (1225–1400): nghệ thuật hào hùng — điêu khắc khoẻ mạnh; gốm Thiên Trường.',
+        'Thời Lê (1428–1788): nghệ thuật dân gian phong phú — tranh Đông Hồ; đình làng với chạm khắc gỗ sống động.',
+        'Thời Nguyễn (1802–1945): kiến trúc Huế — Đại Nội, lăng tẩm; ảnh hưởng Trung Hoa và bắt đầu tiếp xúc phương Tây.',
+        'Thời kì Pháp thuộc — Trường Mĩ thuật Đông Dương (1925): đặt nền mĩ thuật hiện đại Việt Nam; các danh hoạ Tô Ngọc Vân, Nguyễn Phan Chánh, Nguyễn Gia Trí.',
+      ] },
+      { h: 'Mĩ thuật ứng dụng và hiện đại' },
+      { ul: [
+        'Thiết kế áp phích (poster): nguyên tắc bố cục (điểm nhìn, tỉ lệ vàng, cân bằng); vai trò màu sắc và kiểu chữ.',
+        'Thiết kế đồ hoạ và công thái học (ergonomics): thiết kế phải phù hợp với người dùng.',
+        'Nghệ thuật sắp đặt (installation art) và nhiếp ảnh nghệ thuật.',
+      ] },
+      { h: 'Cầu nối sang lớp 9' },
+      { ul: [
+        'Âm nhạc lớp 9: nhạc lí nâng cao; âm nhạc thế giới ngoài truyền thống phương Tây (nhạc jazz, nhạc châu Phi, nhạc châu Á).',
+        'Mĩ thuật lớp 9: nghệ thuật hiện đại và đương đại Việt Nam; nghệ thuật kĩ thuật số và phương tiện hỗn hợp (mixed media); dự án nghệ thuật cộng đồng.',
+      ] },
+      { note: 'Nghệ thuật không bao giờ kết thúc. Mỗi bản nhạc em nghe, mỗi bức tranh em thấy, mỗi bức ảnh em chụp đều là một cuộc đối thoại giữa tâm hồn em và thế giới. Hãy tiếp tục cảm nhận, sáng tạo và yêu cái đẹp!' },
+    ],
+    [
+      { q: 'Phân biệt đảo phách và phách mạnh thông thường trong âm nhạc. Cho ví dụ.', a: 'Phách mạnh thông thường: âm thanh rơi vào đúng phách được nhấn mạnh theo nhịp (ví dụ: phách 1 của nhịp 4/4). Đảo phách (syncope): âm thanh bắt đầu ở phách YẾU hoặc sau phách mạnh rồi kéo qua phách mạnh tiếp theo — tạo cảm giác "lỡ nhịp" hoặc "trễ nhịp" rất đặc trưng. Ví dụ: nốt nhạc bắt đầu ở phách 2 (nhẹ) của nhịp 4/4, được nối (ligature) qua phách 3 (mạnh nhẹ) — âm thanh ngân qua phách mạnh nhưng không bắt đầu từ phách mạnh. Đảo phách thường gặp trong nhạc jazz, funk, và nhiều thể loại nhạc hiện đại.' },
+      { q: 'Nêu điểm khác nhau cơ bản giữa phong cách âm nhạc thời Baroque (J.S. Bach) và thời Lãng mạn (Chopin).', a: 'Âm nhạc Baroque (Bach): có cấu trúc đối xứng, chặt chẽ và tinh xảo; kĩ thuật đối âm (nhiều giai điệu song song nhau); cảm xúc được biểu hiện qua hình thức âm nhạc nghiêm ngặt, khách quan; nhạc cụ thời kì này chủ yếu là đàn phím (harpsichord) và ensemble. Âm nhạc Lãng mạn (Chopin): tình cảm cá nhân là trung tâm — âm nhạc tự do, bộc phát, đầy cảm xúc chủ quan; sử dụng rubato (tự do về nhịp độ); khai thác tối đa màu sắc và kĩ thuật piano; nội dung thường gắn với thơ ca, thiên nhiên và cảm xúc nội tâm.' },
+      { q: 'Trường Mĩ thuật Đông Dương (1925) có ý nghĩa gì đối với nền mĩ thuật Việt Nam?', a: 'Trường Mĩ thuật Đông Dương (École des Beaux-Arts de l\'Indochine) thành lập năm 1925 là dấu mốc quan trọng nhất trong lịch sử mĩ thuật Việt Nam hiện đại. Nhà trường đã đưa các kĩ thuật và phong cách phương Tây (sơn dầu, phối cảnh, tỉ lệ giải phẫu) vào Việt Nam, kết hợp với chất liệu và chủ đề truyền thống (tranh lụa, sơn mài). Từ đây xuất hiện thế hệ danh hoạ đầu tiên: Tô Ngọc Vân, Nguyễn Phan Chánh (tranh lụa), Nguyễn Gia Trí (tranh sơn mài). Họ đặt nền móng cho một nền mĩ thuật dân tộc hiện đại, độc đáo, có bản sắc riêng — vừa mang giá trị truyền thống vừa đạt chuẩn mực quốc tế.' },
+    ]
+  ),
 };
 
 

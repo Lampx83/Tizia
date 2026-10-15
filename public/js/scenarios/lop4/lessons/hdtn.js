@@ -887,4 +887,45 @@ export const P4HDTN_LESSONS = {
       { q: 'Một mục tiêu hè cụ thể?', a: 'Ví dụ: "Đọc xong 5 cuốn truyện thiếu nhi" hoặc "Học bơi và bơi được 25m liên tục". Cụ thể để dễ đo lường.' },
     ],
   },
+
+  'P4HDTN-w36-quiz': {
+    topic: 'Kết thúc Lớp 4 — Hành trình Trải nghiệm và Kế hoạch hè',
+    intro: 'Chúc mừng các em đã hoàn thành năm học Hoạt động Trải nghiệm Lớp 4! Đây là môn học của những câu chuyện thật, những kỹ năng thật — hôm nay cô và trò cùng nhìn lại và lên kế hoạch để hè này thực sự có ý nghĩa!',
+    objectives: [
+      'Hệ thống các trải nghiệm và kỹ năng sống đã học trong Lớp 4.',
+      'Đặt kế hoạch hè cụ thể và có ý nghĩa.',
+      'Chuẩn bị tinh thần học sinh Lớp 5 — tự giác, trách nhiệm hơn.',
+    ],
+    theory: [
+      { h: 'Hành trình Trải nghiệm Lớp 4 — Những kỹ năng lớn' },
+      { ul: [
+        'Kỹ năng tự phục vụ: tự giặt quần áo nhẹ, sắp xếp góc học tập, tự chuẩn bị ba lô và đồ dùng học tập.',
+        'Kỹ năng ứng xử: lịch sự trong gia đình, lớp học, nơi công cộng; giải quyết mâu thuẫn không bạo lực.',
+        'Kỹ năng hợp tác nhóm: phân công việc, tôn trọng ý kiến nhau, hoàn thành mục tiêu chung.',
+        'Kỹ năng an toàn: an toàn giao thông (xe đạp, đi bộ); an toàn khi dùng điện; phòng tránh đuối nước; nhận biết người lạ.',
+        'Kỹ năng quản lý thời gian: lập thời khóa biểu; ưu tiên việc quan trọng; không trì hoãn.',
+        'Hoạt động cộng đồng: tham gia dọn dẹp trường lớp; thăm người già neo đơn; quyên góp sách vở cũ.',
+        'Kỹ năng tài chính cơ bản: phân biệt cần/muốn; tiết kiệm tiền mừng tuổi; không đòi đồ chơi đắt tiền vô lý.',
+      ] },
+      { h: 'Lớp 5 HĐTN sẽ có gì?' },
+      { ul: [
+        'Kỹ năng lãnh đạo nhóm nhỏ: điều phối, ra quyết định, chịu trách nhiệm.',
+        'Tư duy thiết kế: phát hiện vấn đề → đặt câu hỏi → thử nghiệm giải pháp.',
+        'Hướng nghiệp bước đầu: tìm hiểu nghề nghiệp trong cộng đồng, giá trị lao động.',
+        'Hoạt động xã hội: dự án môi trường, hoạt động nhân đạo có kế hoạch cụ thể.',
+      ] },
+      { h: 'Kế hoạch hè 8 tuần — Thử thách "Học sinh Lớp 5"' },
+      { ul: [
+        'Tuần 1–2: Tự lập — 7 ngày tự mình dọn phòng, giặt tất và cất đồ không cần nhắc.',
+        'Tuần 3–4: Đọc sách — đọc ít nhất 2 cuốn sách thiếu nhi, viết cảm nhận ngắn.',
+        'Tuần 5–6: Học kỹ năng mới — bơi, đạp xe, nấu 1 món ăn đơn giản cùng bố mẹ.',
+        'Tuần 7–8: Hoạt động cộng đồng — làm 1 việc tốt cho hàng xóm hoặc cộng đồng địa phương.',
+      ] },
+      { note: 'Hè không chỉ là nghỉ ngơi — hè là thời gian em lớn lên thêm một chút!' },
+    ],
+    examples: [
+      { q: 'Bạn em muốn mua đồ chơi đắt tiền nhưng không có đủ tiền. Em tư vấn gì?', a: 'Phân biệt "cần" và "muốn": đồ chơi đắt tiền là "muốn", không phải "cần". Gợi ý: tiết kiệm tiền tiêu vặt trong 2–3 tuần, hoặc chọn đồ chơi rẻ hơn có cùng giá trị vui chơi.' },
+      { q: 'Khi đi xe đạp trên đường, em cần nhớ những quy tắc nào?', a: 'Đi bên phải đường; nhường đường cho xe ô tô; không đi hàng ngang; quan sát cả hai bên trước khi qua ngã tư; đội mũ bảo hiểm nếu đường có xe tải; không đèo người quá quy định.' },
+    ],
+  },
 };

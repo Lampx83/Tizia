@@ -1293,6 +1293,369 @@ export const SC15_QUIZ_01 = {
   ]
 };
 
+export const SC09_QUIZ_01 = {
+  id: 'SC09-quiz-01',
+  title: 'SC09 · Tư vấn giảm cân — Béo phì',
+  kind: 'quiz',
+  subject: 'Tư vấn béo phì và kiểm soát cân nặng',
+  difficulty: 3,
+  skillsTrained: ['obesity-counseling', 'pharmacotherapy-obesity', 'lifestyle-modification', 'bmi-assessment'],
+  questions: [
+    {
+      stem: 'Bệnh nhân nữ 35 tuổi, cân 80 kg, cao 1.60 m. BMI của bệnh nhân là bao nhiêu và phân loại theo WHO cho người châu Á?',
+      choices: [
+        'BMI 31.25 — thừa cân nhẹ',
+        'BMI 31.25 — béo phì độ I (theo ngưỡng WHO châu Á: BMI ≥ 27.5 = béo phì)',
+        'BMI 28.0 — thừa cân',
+        'BMI 31.25 — trong giới hạn bình thường'
+      ],
+      answer: 1,
+      explanation: 'BMI = 80 / (1.60)² = 31.25 kg/m². Ngưỡng WHO châu Á (IOTF 2000): thừa cân ≥ 23, béo phì ≥ 27.5. BMI 31.25 > 27.5 = béo phì độ I. Ngưỡng này thấp hơn ngưỡng Caucasian (béo phì ≥ 30) vì người châu Á có % mỡ nội tạng cao hơn ở cùng BMI. BYT VN sử dụng ngưỡng châu Á.'
+    },
+    {
+      stem: 'Bệnh nhân hỏi về orlistat (thuốc giảm cân OTC 60 mg). Cơ chế và tác dụng phụ chính là gì?',
+      choices: [
+        'Ức chế tái hấp thu serotonin, tác dụng phụ: khô miệng',
+        'Ức chế lipase tụy → giảm hấp thu mỡ 30%; tác dụng phụ: tiêu chảy dầu, phân mỡ, tiêu không tự chủ — giảm khi hạn chế mỡ < 30% tổng calorie; uống trong bữa ăn hoặc trong 1 giờ sau',
+        'Ức chế hấp thu glucose, tác dụng phụ: hạ đường huyết',
+        'Tăng nhiệt độ cơ thể để đốt mỡ, tác dụng phụ: sốt'
+      ],
+      answer: 1,
+      explanation: 'Orlistat (Xenical 120 mg Rx, Alli 60 mg OTC): ức chế lipase tụy và dạ dày → giảm phân giải và hấp thu triglyceride 30%. Hiệu quả: giảm ~3 kg so với giả dược sau 12 tháng. Tác dụng phụ tiêu hóa do mỡ không tiêu hóa trong ruột: phân dầu/nhờn, tiêu chảy, tiêu không kiểm soát — giảm đáng kể khi ăn ít mỡ. Uống ngay trong bữa hoặc trong 1 giờ sau ăn; bỏ qua nếu bữa không có mỡ. Bổ sung vitamin tan trong dầu (A, D, E, K) cách 2 giờ.'
+    },
+    {
+      stem: 'Bệnh nhân hỏi: "Tôi có thể dùng sibutramine giảm cân không?" Câu trả lời đúng?',
+      choices: [
+        'Được, sibutramine rất hiệu quả và an toàn',
+        'Sibutramine đã bị thu hồi toàn cầu từ 2010 vì tăng nguy cơ nhồi máu cơ tim và đột quỵ (nghiên cứu SCOUT); bất hợp pháp để mua bán tại VN và hầu hết thế giới; cảnh báo nhiều thực phẩm chức năng giảm cân chứa sibutramine ẩn',
+        'Được nhưng chỉ dùng ngắn hạn 1 tháng',
+        'Sibutramine chỉ cần kê đơn, có thể mua ở nhà thuốc'
+      ],
+      answer: 1,
+      explanation: 'Sibutramine thu hồi thị trường toàn cầu năm 2010 sau nghiên cứu SCOUT (n=9804 bệnh nhân tim mạch): tăng 16% biến cố tim mạch chính (MACE). Bị cấm ở EU, Mỹ, Úc, VN. Tuy nhiên, Cục An toàn thực phẩm VN liên tục phát hiện thực phẩm chức năng/sản phẩm giảm cân chứa sibutramine không khai báo. Cảnh báo người dùng tránh xa sản phẩm "giảm cân thần kỳ" không rõ nguồn gốc.'
+    },
+    {
+      stem: 'Phụ nữ 40 tuổi BMI 33, đái tháo đường type 2, HbA1c 8.5%. Thuốc nào vừa kiểm soát đường huyết vừa giảm cân?',
+      choices: [
+        'Glibenclamide — hạ đường huyết tốt và giảm cân',
+        'GLP-1 receptor agonist (semaglutide, liraglutide) hoặc SGLT2 inhibitor (empagliflozin, dapagliflozin) — vừa giảm HbA1c vừa giảm cân, có lợi tim mạch/thận',
+        'Insulin glargine — kiểm soát đường huyết và trung tính với cân nặng',
+        'Pioglitazone — ổn định đường huyết và giảm cân'
+      ],
+      answer: 1,
+      explanation: 'ADA 2024 / EASD 2023: bệnh nhân ĐTĐ type 2 + béo phì + ASCVD/HF/CKD → ưu tiên GLP-1 RA hoặc SGLT2i. Semaglutide 1 mg/tuần tiêm: giảm HbA1c ~1.5%, giảm ~4–6 kg. Oral semaglutide (Rybelsus) hiệu quả tương tự. Liraglutide (Saxenda): chỉ định chính thức giảm cân ở BMI ≥ 27 + bệnh đồng mắc. SGLT2i: giảm 2–4 kg. Glibenclamide tăng cân, pioglitazone tăng cân và giữ nước.'
+    },
+    {
+      stem: 'Bệnh nhân hỏi về thực phẩm chức năng giảm cân có CLA (Conjugated Linoleic Acid). Có bằng chứng không?',
+      choices: [
+        'CLA là chất thiên nhiên an toàn và hiệu quả cao, nên dùng',
+        'Bằng chứng lâm sàng CLA rất yếu: meta-analysis cho thấy giảm khoảng 0.5–1 kg so với giả dược; không có dữ liệu an toàn dài hạn; một số nghiên cứu lo ngại tăng đề kháng insulin; không thay thế được can thiệp lối sống',
+        'CLA chỉ hiệu quả kết hợp với caffeine',
+        'CLA giảm mỡ nội tạng mạnh hơn mỡ dưới da'
+      ],
+      answer: 1,
+      explanation: 'CLA (Conjugated Linoleic Acid): tổng hợp từ axit linoleic, thường từ dầu safflower hoặc hoa hướng dương. Meta-analysis 18 RCT (Whigham et al, 2007): giảm 0.09 kg/tuần (khoảng 0.5–1 kg tổng thể so với placebo). Hiệu quả lâm sàng không đáng kể. Một số nghiên cứu ghi nhận CLA t10c12 isomer có thể tăng kháng insulin ở người đái tháo đường. EFSA 2010: không đủ bằng chứng cho health claim. Hiệu quả/chi phí kém.'
+    },
+    {
+      stem: 'Nguyên tắc cơ bản nhất để giảm cân bền vững là gì?',
+      choices: [
+        'Nhịn ăn hoàn toàn 3 ngày mỗi tuần',
+        'Thâm hụt năng lượng 500–750 kcal/ngày so với nhu cầu duy trì, đạt được qua phối hợp giảm ăn và tăng vận động; mục tiêu thực tế: 0.5–1 kg/tuần; duy trì thâm hụt lâu dài quan trọng hơn tốc độ giảm',
+        'Loại bỏ hoàn toàn carbohydrate khỏi khẩu phần',
+        'Chỉ cần tập thể dục 1 giờ/ngày, không cần kiêng ăn'
+      ],
+      answer: 1,
+      explanation: '1 kg mỡ = ~7700 kcal. Thâm hụt 500 kcal/ngày × 7 ngày = 3500 kcal ≈ 0.45 kg mỡ/tuần. Thực tế: cơ thể bù trừ bằng cách giảm chuyển hóa cơ bản khoảng 10–15% khi giảm cân → tốc độ thực thấp hơn tính lý thuyết. Kết hợp ăn kiêng + vận động thể lực (aerobic + resistance) duy trì cơ bắp và chuyển hóa. Very low calorie diet (< 800 kcal/ngày) phải có giám sát y tế. WHO/ADA/Obesity Society.'
+    },
+    {
+      stem: 'Bệnh nhân hỏi: "Chế độ keto (ketogenic diet) có an toàn và hiệu quả dài hạn không?"',
+      choices: [
+        'Keto là phương pháp giảm cân an toàn nhất và nên duy trì vĩnh viễn',
+        'Keto hiệu quả ngắn hạn (3–6 tháng) hơn low-fat diet nhưng lợi thế không còn sau 12 tháng; tác dụng phụ: mệt mỏi đầu (keto flu), táo bón, tăng cholesterol LDL ở một số người; dài hạn thiếu dữ liệu; không phù hợp: suy thận, bệnh gan, tiền sử sỏi thận, đái tháo đường type 1 dùng insulin',
+        'Keto hoàn toàn không hiệu quả, không có bằng chứng nào',
+        'Keto chỉ hiệu quả khi dùng cùng exogenous ketone supplements'
+      ],
+      answer: 1,
+      explanation: 'Keto (carb < 50 g/ngày hoặc < 10% tổng calorie): NEJM 2020 meta-analysis: giảm nhiều hơn low-fat diet sau 6 tháng (~1–2 kg), nhưng không khác biệt ở 12–24 tháng. Tác dụng phụ ngắn hạn: keto flu (mệt, đau đầu, táo bón do mất muối). Dài hạn: nguy cơ tăng LDL (đặc biệt LDL-P), sỏi thận (tăng urate và calci), thiếu vi chất (kali, magie, vitamin C). Không phù hợp CKD (tải protein), bệnh gan. Cần giám sát bởi chuyên gia dinh dưỡng.'
+    },
+    {
+      stem: 'Khi nào cần giới thiệu bệnh nhân béo phì đến phẫu thuật bariatric (giảm béo)?',
+      choices: [
+        'Khi BMI > 25 và thất bại với mọi chế độ ăn',
+        'BMI ≥ 40 (hoặc ≥ 35 kèm bệnh đồng mắc như ĐTĐ, THA, ngưng thở khi ngủ) sau khi thất bại ≥ 6 tháng điều trị bảo tồn có kiểm soát; có thể xem xét BMI ≥ 30 kèm ĐTĐ type 2 khó kiểm soát (ADA 2022)',
+        'Chỉ khi BMI > 50 hoặc đe dọa tính mạng trực tiếp',
+        'Phẫu thuật bariatric luôn là lựa chọn đầu tay ở bất kỳ BMI nào'
+      ],
+      answer: 1,
+      explanation: 'ASMBS/IFSO 2022 guidelines: bariatric phẫu thuật được cân nhắc khi: (1) BMI ≥ 40 bất kể bệnh đồng mắc; (2) BMI 35–39.9 kèm ≥ 1 bệnh đồng mắc nặng liên quan béo phì (ĐTĐ type 2, THA, hội chứng chuyển hóa, ngưng thở khi ngủ, bệnh khớp nặng); (3) BMI 30–34.9 với ĐTĐ type 2 không kiểm soát bằng nội khoa. Phải thất bại ≥ 6 tháng điều trị bảo tồn tích cực. Đánh giá toàn diện tâm lý, nội tiết trước mổ.'
+    },
+    {
+      stem: 'Bệnh nhân béo phì hỏi về naltrexone/bupropion (Contrave). Cơ chế và ai không được dùng?',
+      choices: [
+        'Cơ chế ức chế lipase; chống chỉ định: người dùng PPI',
+        'Naltrexone ức chế opioid receptor + bupropion ức chế tái hấp thu dopamine/noradrenalin → giảm cảm giác thèm ăn và tăng tiêu hao năng lượng; CCĐ: động kinh, bulimia, đang dùng MAOI, đang dùng opioid, THA không kiểm soát, mang thai',
+        'Ức chế GLP-1 receptor; chống chỉ định: tiểu đường',
+        'Cơ chế thẩm thấu tăng đào thải mỡ qua thận'
+      ],
+      answer: 1,
+      explanation: 'Naltrexone/bupropion (Contrave, FDA 2014): tác động vào hai trục thần kinh điều hòa thèm ăn. Bupropion kích thích POMC neurons giảm thèm ăn, naltrexone ức chế feedback âm. Giảm trung bình ~4–5% cân nặng so với placebo. Chống chỉ định quan trọng nhất: (1) Động kinh/hạ ngưỡng co giật (bupropion liều cao); (2) Bulimia/anorexia nervosa; (3) Đang dùng opioid (naltrexone block); (4) MAOI trong 14 ngày; (5) THA không kiểm soát. FDA phải cảnh báo black box về ý nghĩ tự tử (bupropion).'
+    },
+    {
+      stem: 'Bệnh nhân hỏi: "Tôi muốn giảm cân nhanh 10 kg trong 1 tháng. Có thực hiện được và an toàn không?"',
+      choices: [
+        'Hoàn toàn khả thi nếu dùng thuốc giảm cân mạnh',
+        'Mục tiêu 10 kg/tháng là không thực tế và nguy hiểm: đòi hỏi thâm hụt ~2.500 kcal/ngày — không bền vững, mất cơ nhiều hơn mỡ, thiếu dinh dưỡng nghiêm trọng; mục tiêu an toàn và bền vững là 0.5–1 kg/tuần (thâm hụt 500–750 kcal/ngày); giảm 5–10% cân nặng ban đầu trong 6 tháng đã cải thiện rõ các chỉ số chuyển hóa',
+        'Được, nhịn ăn hoàn toàn 30 ngày sẽ đạt mục tiêu',
+        'Chỉ cần tập cardio 3 giờ/ngày là đủ'
+      ],
+      answer: 1,
+      explanation: 'Giảm cân quá nhanh > 1 kg/tuần gây: (1) mất cơ bắp (cơ thể phân giải protein cơ khi thiếu hụt calorie lớn); (2) thiếu vi chất (vitamin, khoáng chất); (3) tăng nguy cơ sỏi mật; (4) tỷ lệ tái tăng cân cao hơn. Nghiên cứu cho thấy giảm cân chậm bền hơn dài hạn. Mục tiêu thực tế AHA/ACC/TOS: 5–10% cân nặng ban đầu trong 6 tháng đã cải thiện rõ ĐH, HA, mỡ máu. Nhịn ăn hoàn toàn: nguy cơ tụt đường huyết, rối loạn điện giải, ngất.'
+    }
+  ]
+};
+
+export const SC10_QUIZ_01 = {
+  id: 'SC10-quiz-01',
+  title: 'SC10 · Tư vấn dinh dưỡng đặc biệt',
+  kind: 'quiz',
+  subject: 'Dinh dưỡng lâm sàng và các trường hợp đặc biệt',
+  difficulty: 4,
+  skillsTrained: ['clinical-nutrition', 'enteral-nutrition', 'disease-specific-diet', 'supplement-counseling'],
+  questions: [
+    {
+      stem: 'Bệnh nhân CKD giai đoạn 4 (eGFR 22) hỏi về chế độ ăn protein. Khuyến cáo đúng?',
+      choices: [
+        'Ăn nhiều protein để bù mất albumin',
+        'Hạn chế protein 0.6–0.8 g/kg/ngày (protein chất lượng cao, giá trị sinh học cao) để giảm tải ure và phosphorus; tránh protein thực vật nhiều phosphorus hữu cơ (đậu, hạt); khi lọc thận thì tăng lên 1.0–1.2 g/kg',
+        'Không cần hạn chế protein ở CKD giai đoạn 4',
+        'Chỉ ăn protein từ thực vật vì ít hại thận hơn'
+      ],
+      answer: 1,
+      explanation: 'KDOQI/KDIGO: CKD không lọc máu: protein 0.6–0.8 g/kg/ngày. Protein cao đẩy nhanh giảm eGFR qua tăng áp lực cầu thận và tăng sản xuất ure/acid. Ưu tiên protein giá trị sinh học cao (thịt, trứng, cá) vì amino acid thiết yếu đầy đủ, ít ure sinh ra. Protein thực vật: ít phosphorus hữu cơ được hấp thu hơn (NEJM 2012); nhưng đậu lăng, đậu xanh vẫn chứa nhiều K và P. Khi lọc máu (HD/PD): tăng 1.0–1.2 g/kg để bù mất trong lọc.'
+    },
+    {
+      stem: 'Bệnh nhân xơ gan (Child-Pugh B), hỏi về chế độ ăn tốt nhất. Lưu ý quan trọng nhất là gì?',
+      choices: [
+        'Hạn chế hoàn toàn protein vì gây bệnh não gan',
+        'Không hạn chế protein — nguy cơ suy dinh dưỡng ở xơ gan rất cao; nên ăn 1.2–1.5 g protein/kg/ngày; chia nhiều bữa nhỏ (4–6 bữa) kể cả bữa tối muộn; ưu tiên BCAA (branched-chain amino acids); hạn chế muối nếu có báng bụng',
+        'Nhịn ăn hoàn toàn để gan nghỉ ngơi',
+        'Chỉ ăn thực phẩm detox và nước ép rau củ'
+      ],
+      answer: 1,
+      explanation: 'Quan niệm cũ hạn chế protein xơ gan gây bệnh não = SAI. EASL 2019: xơ gan cần protein cao hơn người bình thường (1.2–1.5 g/kg/ngày) do dị hóa protein tăng. Hạn chế protein dẫn đến sarcopenia (teo cơ) — yếu tố tiên lượng xấu độc lập. Hội chứng Hy-Lạp (hyperammonemia) liên quan rối loạn chu trình ure, không phải lượng protein. Bữa tối muộn và bữa sáng sớm: ngăn nhịn đói kéo dài → giảm phân giải cơ ban đêm. BCAA hỗ trợ chuyển hóa amoniac.'
+    },
+    {
+      stem: 'Bệnh nhân đang nuôi dưỡng qua ống thông dạ dày (enteral), bắt đầu có tiêu chảy. Nguyên nhân phổ biến nhất cần loại trừ đầu tiên?',
+      choices: [
+        'Ngay lập tức ngưng nuôi ăn và chuyển sang nuôi tĩnh mạch',
+        'Kiểm tra: tốc độ truyền quá nhanh, nhiễm bẩn công thức, dung tích thẩm thấu quá cao, đang dùng sorbitol trong thuốc lỏng, C. difficile nếu dùng kháng sinh; điều chỉnh từng yếu tố trước khi ngưng nuôi ăn ruột',
+        'Tăng lượng nước vào để bù dịch',
+        'Tiêu chảy là phản ứng bình thường của nuôi ăn ruột, không cần xử lý'
+      ],
+      answer: 1,
+      explanation: 'Tiêu chảy trong nuôi ăn ruột (30–40% bệnh nhân) — nguyên nhân thường không phải do công thức mà do: (1) Tốc độ quá nhanh → giảm tốc độ; (2) Nhiệt độ công thức lạnh; (3) Thẩm thấu cao (> 400 mOsm/kg); (4) Sorbitol trong thuốc lỏng (magnesium hydroxide, acetaminophen suspension); (5) C. difficile nếu dùng KS; (6) Dùng thuốc prokinetic quá liều (metoclopramide). Không vội chuyển sang TPN — nuôi ăn ruột có lợi hơn, duy trì hàng rào ruột.'
+    },
+    {
+      stem: 'Phụ nữ mang thai 12 tuần hỏi về bổ sung sắt. Nhu cầu và cách bổ sung đúng?',
+      choices: [
+        'Không cần bổ sung sắt nếu không thiếu máu',
+        'WHO khuyến cáo: 30–60 mg sắt nguyên tố/ngày suốt thai kỳ; uống khi đói hoặc cách bữa ăn; tránh cùng canxi, trà, cà phê (giảm hấp thu); vitamin C tăng hấp thu sắt non-heme; phân đen và táo bón là bình thường',
+        'Chỉ cần 10 mg/ngày trong 3 tháng đầu',
+        'Uống sắt cùng với canxi buổi sáng để tiện'
+      ],
+      answer: 1,
+      explanation: 'WHO 2016: bổ sung sắt 30–60 mg/ngày + acid folic 0.4 mg/ngày cho tất cả phụ nữ mang thai từ tuần đầu đến 3 tháng sau sinh. Sắt hấp thu tốt nhất lúc đói hoặc giữa các bữa ăn. Canxi, phytate (ngũ cốc nguyên hạt), polyphenol (trà, cà phê) cạnh tranh hấp thu → tránh cùng bữa. Vitamin C 200 mg uống cùng sắt tăng hấp thu 2–3 lần. Phân đen do sắt chưa hấp thu hoàn toàn là bình thường. Táo bón: tăng nước, chất xơ.'
+    },
+    {
+      stem: 'Bệnh nhân sau phẫu thuật cắt dạ dày, mắc hội chứng dumping. Lời khuyên dinh dưỡng?',
+      choices: [
+        'Uống nhiều nước trong bữa ăn để thức ăn dễ tiêu',
+        'Ăn nhiều bữa nhỏ (6 lần/ngày), không uống nước trong 30 phút quanh bữa ăn, hạn chế đường đơn (mono/disaccharides), nằm nghỉ 30 phút sau ăn, tăng dần độ đặc thức ăn',
+        'Ăn ít protein và nhiều tinh bột đơn giản',
+        'Uống sữa đặc có đường ngay sau bữa ăn'
+      ],
+      answer: 1,
+      explanation: 'Hội chứng dumping (sau cắt dạ dày/bypass): thức ăn đổ nhanh vào ruột non → early dumping (30 phút sau ăn: đau bụng, tiêu chảy, buồn nôn, nhịp nhanh do dịch ruột ứ đọng) và late dumping (1–3 giờ sau: hạ đường huyết phản ứng). Nguyên tắc: nhỏ-thường xuyên, không pha loãng với nước trong bữa (làm thức ăn chảy nhanh hơn), tránh đường đơn (kích thích GIP → insulin → hạ đường muộn), nằm sau ăn giảm tốc độ tháo dạ dày. Pectin/guar gum làm đặc dịch có thể giúp.'
+    },
+    {
+      stem: 'Bệnh nhân ung thư đang hóa trị, chán ăn nặng. Bổ sung nào có bằng chứng tốt nhất để hỗ trợ?',
+      choices: [
+        'Vitamin C liều cao 10 g/ngày để chống oxy hóa và tăng cảm giác ngon miệng',
+        'Omega-3 fatty acids (EPA/DHA 2–3 g/ngày) — có bằng chứng giảm cachexia, tăng khẩu phần; kết hợp nutritional counseling và oral nutritional supplements (ONS) giàu calorie-protein; xem xét megestrol acetate hoặc corticoid ngắn hạn nếu nặng',
+        'Multivitamin liều gấp 5 lần thông thường',
+        'Enzyme tiêu hóa vì hóa trị làm giảm enzyme'
+      ],
+      answer: 1,
+      explanation: 'Cachexia ung thư (sụt cân, mất cơ, viêm mạn): omega-3 EPA giảm viêm (IL-6, TNF-alpha), có RCT dương tính. ESPEN 2021: ONS (Oral Nutritional Supplements) tăng 400–600 kcal/ngày, protein 1.5 g/kg/ngày; omega-3 2–3 g EPA+DHA/ngày có thể hỗ trợ. Vitamin C liều cao: không có bằng chứng rõ ràng và có thể tương tác với hóa trị. Corticoid (dexamethasone, methylprednisolone): kích thích ăn ngắn hạn nhưng không cải thiện cân nặng. Megestrol: tăng cảm giác ngon miệng nhưng chủ yếu tăng mỡ, không cơ.'
+    },
+    {
+      stem: 'Bệnh nhân tiểu đường type 2 hỏi về "chỉ số đường huyết" (glycemic index) của thực phẩm. Ứng dụng thực tế?',
+      choices: [
+        'Chỉ số GI không hữu ích vì mỗi người phản ứng khác nhau',
+        'GI thấp (< 55) giúp giảm đỉnh đường huyết sau ăn; nhưng quan trọng hơn là Glycemic Load (GL = GI × lượng carb/100) và tổng lượng carb trong bữa; ăn kết hợp protein, chất béo, chất xơ làm giảm GI của bữa ăn; không cần ám ảnh từng loại thực phẩm nếu kiểm soát tổng lượng carb',
+        'GI cao là tốt vì cung cấp năng lượng nhanh',
+        'Chỉ cần ăn thực phẩm GI = 0 (thịt, trứng) để tránh tăng đường huyết'
+      ],
+      answer: 1,
+      explanation: 'GI đo tốc độ tăng đường huyết của 50 g carb so với glucose chuẩn (GI 100). GI thấp < 55 (yến mạch, đậu, táo); cao > 70 (bánh mì trắng, cơm trắng, khoai tây chiên). Glycemic Load = GI × (carb/portion/100): quan trọng hơn GI thuần vì tính cả lượng. Bối cảnh bữa ăn: protein và chất béo làm chậm hấp thu carb → giảm GI thực tế. ADA 2024: không tập trung một chế độ ăn đơn độc — monitoring tổng carb và hậu quả đường huyết là thực tiễn nhất.'
+    },
+    {
+      stem: 'Người cao tuổi 75 tuổi, sống một mình, ăn uống kém, hỏi về bổ sung vitamin D. Liều phù hợp?',
+      choices: [
+        '100 IU/ngày vì liều cao có thể gây ngộ độc',
+        'Người cao tuổi: khuyến cáo 800–2000 IU vitamin D3/ngày; nếu 25(OH)D < 30 nmol/L (thiếu nặng): có thể cần 50.000 IU/tuần × 8 tuần để bù, sau đó duy trì; kết hợp canxi 1000–1200 mg/ngày từ thực phẩm hoặc bổ sung để phòng loãng xương và ngã',
+        'Vitamin D hoàn toàn không cần bổ sung nếu ra nắng',
+        'Chỉ cần bổ sung nếu xét nghiệm máu cho thấy thiếu'
+      ],
+      answer: 1,
+      explanation: 'Người cao tuổi > 65: tổng hợp vitamin D qua da giảm 75% so với người trẻ; ít ra nắng; hấp thu và chuyển hóa kém. USPSTF/Endocrine Society: người cao tuổi nguy cơ cao → 800–2000 IU D3/ngày. Nếu thiếu nặng (< 30 nmol/L = 12 ng/mL): liều bù cao hơn theo hướng dẫn. Toxicity vitamin D (> 100.000 IU tích lũy/ngày kéo dài): hypercalcemia, sỏi thận. Canxi 1000 mg/ngày hỗ trợ phòng gãy xương. Đo 25(OH)D để tối ưu hóa liều nếu điều kiện cho phép.'
+    },
+    {
+      stem: 'Vận động viên thể thao hỏi về whey protein và BCAA supplement. Khuyến cáo nào chính xác?',
+      choices: [
+        'BCAA là thiết yếu và phải bổ sung, không thể thiếu từ thực phẩm',
+        'Whey protein hữu ích nếu không đủ protein từ thực phẩm (mục tiêu 1.6–2.2 g/kg/ngày với vận động viên sức mạnh); BCAA trong whey đã đủ nhu cầu — BCAA supplement riêng biệt ít có lợi thêm nếu protein tổng đã đủ; thời điểm uống protein sau tập (trong 2h) có thể tối ưu hóa tổng hợp cơ',
+        'Protein 5 g/kg/ngày sẽ tăng cơ nhanh nhất',
+        'Whey protein gây hại thận ở người khỏe mạnh'
+      ],
+      answer: 1,
+      explanation: 'ISSN 2017/ACSM: vận động viên sức mạnh: 1.6–2.2 g protein/kg/ngày; sức bền: 1.2–1.6 g/kg/ngày. Whey protein hữu ích khi khó đủ qua thực phẩm. BCAA supplement (leucine, isoleucine, valine): meta-analysis cho thấy lợi ích tổng hợp cơ khi dùng thêm là không đáng kể nếu protein tổng đã đạt mục tiêu (whey đã giàu BCAA tự nhiên). "Anabolic window" sau tập: dữ liệu không đồng nhất, nhưng ưu tiên total protein/ngày hơn timing. Protein liều cao không hại thận ở người khỏe (bằng chứng sạch).'
+    },
+    {
+      stem: 'Bệnh nhân phenylketonuria (PKU) trưởng thành, ngừng chế độ ăn từ tuổi 10, nay có thai. Vấn đề dinh dưỡng khẩn cấp?',
+      choices: [
+        'Không có vấn đề, PKU không ảnh hưởng thai kỳ ở người lớn',
+        'Maternal PKU syndrome: Phe máu cao trong thai kỳ gây dị tật thai nặng (tim bẩm sinh, microcephaly, chậm phát triển trí tuệ) ngay cả khi thai nhi không có PKU; cần khởi động lại chế độ ăn Phe-restricted NGAY + Phe-free amino acid formula ĐỂ đạt Phe < 120–360 mcmol/L trước và trong suốt thai kỳ; chuyển trung tâm chuyên khoa ngay',
+        'Chỉ cần uống sapropterin (BH4) là đủ',
+        'Chế độ ăn PKU không cần thiết sau 10 tuổi, không có ảnh hưởng'
+      ],
+      answer: 1,
+      explanation: 'Maternal PKU (MPKU): nguy cơ thai nhi cao nhất ở người không điều trị PKU khi mang thai. Phe cao (> 900 mcmol/L) qua nhau thai gây: tim bẩm sinh (>10% nếu Phe > 1200), microcephaly, IUGR, dị tật não (99% nếu không kiểm soát). Phòng ngừa: Phe < 120–360 mcmol/L từ ít nhất 3 tháng trước thụ thai và suốt thai kỳ. Sapropterin (BH4): chỉ hiệu quả ở PKU mild, không đủ trong MPKU nặng. Đây là tình huống khẩn cấp — chuyển chuyên khoa chuyển hóa bẩm sinh ngay.'
+    }
+  ]
+};
+
+export const SC12_QUIZ_01 = {
+  id: 'SC12-quiz-01',
+  title: 'SC12 · Tư vấn tránh thai toàn diện',
+  kind: 'quiz',
+  subject: 'Tư vấn kế hoạch hóa gia đình và tránh thai',
+  difficulty: 3,
+  skillsTrained: ['contraception-counseling', 'hormonal-contraception', 'drug-interactions', 'emergency-contraception'],
+  questions: [
+    {
+      stem: 'Phụ nữ 30 tuổi, hút thuốc (15 điếu/ngày), muốn dùng thuốc tránh thai kết hợp COC. Rủi ro chính là gì?',
+      choices: [
+        'Không có rủi ro vì hút thuốc không ảnh hưởng đến tránh thai',
+        'Hút thuốc + estrogen trong COC tăng nguy cơ huyết khối tĩnh mạch (VTE), nhồi máu cơ tim, đột quỵ đáng kể; WHO MEC 4 (CCĐ tuyệt đối) cho phụ nữ > 35 tuổi hút thuốc; < 35 tuổi hút thuốc nhiều là MEC 3; khuyến cáo phương pháp progestin-only (POP, DMPA, implant) hoặc IUD',
+        'Chỉ tăng nguy cơ nhẹ, có thể dùng với theo dõi',
+        'Hút thuốc làm giảm hiệu quả tránh thai của COC'
+      ],
+      answer: 1,
+      explanation: 'WHO MEC 2015: Hút thuốc + COC. Phụ nữ < 35 tuổi, hút > 15 điếu/ngày: MEC 3 (nguy cơ > lợi ích). > 35 tuổi bất kể số điếu: MEC 4 (CCĐ tuyệt đối). Cơ chế: estrogen tăng đông máu (fibrinogen, yếu tố VII, X, XII), hút thuốc gây co mạch + tổn thương nội mạc → synergy với VTE và MACE. Progestin-only an toàn hơn nhiều với hút thuốc. Cơ hội khuyến cáo bỏ thuốc!'
+    },
+    {
+      stem: 'IUD đồng (Copper IUD) hoạt động như thế nào và ưu điểm so với IUD hormone?',
+      choices: [
+        'Giải phóng progesterone ngăn rụng trứng; ưu điểm: không ảnh hưởng kinh nguyệt',
+        'Ion đồng gây độc tinh trùng (giảm di động, phá vỡ màng); có thể dùng là tránh thai khẩn cấp trong 5 ngày đầu; không có hormone; kinh nguyệt thường nhiều hơn; dùng được 10–12 năm; lý tưởng cho người không muốn hormone',
+        'Tạo hàng rào vật lý ngăn tinh trùng xâm nhập cổ tử cung',
+        'Ức chế estrogen gây teo nội mạc tử cung'
+      ],
+      answer: 1,
+      explanation: 'IUD đồng (Paragard): ion Cu²⁺ độc với tinh trùng (ức chế di động, phá vỡ DNA, ngăn thụ tinh) + phản ứng viêm nội mạc ngăn làm tổ. Không có hormone → phù hợp phụ nữ không thể dùng hormone (VTE, migraine với aura, ung thư vú, THA không kiểm soát). Tác dụng phụ: kinh nhiều hơn và đau hơn (30–40%). Dùng 10–12 năm. Emergency contraception: đặt trong 5 ngày sau quan hệ không bảo vệ → hiệu quả > 99%. IUD LNG (Mirena): giải phóng levonorgestrel cục bộ → đặc dịch cổ TC, teo nội mạc.'
+    },
+    {
+      stem: 'Phụ nữ đang dùng topiramate điều trị động kinh, muốn dùng COC tránh thai. Vấn đề gì?',
+      choices: [
+        'Không có tương tác vì topiramate tác dụng lên não, không ảnh hưởng hormone',
+        'Topiramate là chất cảm ứng CYP3A4 (yếu-trung) làm giảm nồng độ ethinylestradiol trong COC → giảm hiệu quả tránh thai; WHO MEC 3 cho COC kết hợp với enzyme inducers; khuyến cáo: dùng COC liều estrogen cao hơn (≥ 30 mcg EE) + barrier method, hoặc DMPA/IUD không phụ thuộc CYP',
+        'Topiramate tăng nồng độ hormone trong COC, cần giảm liều',
+        'An toàn khi dùng cùng, không cần điều chỉnh'
+      ],
+      answer: 1,
+      explanation: 'Enzyme inducers với COC (WHO MEC 3 cho enzyme inducers): Phenytoin, carbamazepine, phenobarbital, rifampicin, oxcarbazepine, topiramate (yếu) → tăng chuyển hóa EE và progestin. Giải pháp: (1) Chuyển sang phương pháp không hormone-phụ thuộc CYP: IUD đồng, IUD LNG, DMPA; (2) COC: không đủ tin cậy ngay cả với ≥ 30 mcg EE khi dùng enzyme inducer mạnh (rifampicin); (3) Topiramate yếu hơn: EE ≥ 30 mcg + barrier. NICE 2023 UK MEC phân biệt enzyme inducer mạnh vs yếu.'
+    },
+    {
+      stem: 'Phụ nữ sau sinh, đang cho con bú 100%, hỏi về tránh thai. Phương pháp nào phù hợp nhất?',
+      choices: [
+        'COC là an toàn nhất vì estrogen tăng sữa',
+        'LAM (Lactational Amenorrhea Method) hiệu quả > 98% khi cho bú hoàn toàn + chưa có kinh + < 6 tháng sau sinh; nếu LAM không đủ điều kiện: progestin-only (POP, DMPA, implant) an toàn với cho bú; COC CCĐ < 6 tuần sau sinh (estrogen giảm sữa, tăng nguy cơ VTE)',
+        'Dùng condom duy nhất trong 6 tháng đầu',
+        'Không cần tránh thai khi cho bú vì tự nhiên vô sinh'
+      ],
+      answer: 1,
+      explanation: 'WHO MEC sau sinh + cho bú: COC: MEC 4 (CCĐ) trong 6 tuần đầu (estrogen giảm tiết sữa, nguy cơ VTE cao sau sinh). 6 tuần–6 tháng + cho bú: MEC 2 (lợi > nguy cơ nhỏ). LAM điều kiện: cho bú hoàn toàn (cách < 4h ban ngày, < 6h ban đêm), chưa có kinh, < 6 tháng sau sinh → > 98% hiệu quả. POP/DMPA/implant: an toàn từ 6 tuần (không ảnh hưởng sữa, không ảnh hưởng phát triển trẻ). IUD đồng: từ 4 tuần sau sinh.'
+    },
+    {
+      stem: 'Phụ nữ migraine có aura hỏi về phương pháp tránh thai. Phương pháp nào an toàn nhất?',
+      choices: [
+        'COC liều thấp (20 mcg EE) là an toàn',
+        'Migraine với aura: CCĐ tuyệt đối với estrogen (COC, patch, ring) — tăng nguy cơ đột quỵ 5–6 lần; phương pháp an toàn: POP, IUD (đồng hoặc LNG), DMPA, implant, barrier; progestin-only không tăng nguy cơ đột quỵ',
+        'Migraine với aura không ảnh hưởng lựa chọn tránh thai',
+        'Tất cả phương pháp nội tiết đều CCĐ với migraine'
+      ],
+      answer: 1,
+      explanation: 'WHO MEC 4 (CCĐ tuyệt đối): migraine với aura + estrogen-containing contraceptives (COC, patch, ring). Aura là dấu hiệu rối loạn vi mạch não; estrogen thêm tác dụng procoagulant và vasoactive → nguy cơ đột quỵ thiếu máu tăng 5–6 lần (Lancet, BMJ data). Migraine không aura: MEC 2 (cho phép với thận trọng). POP (desogestrel, norethindrone), DMPA, implant (etonogestrel), IUD: không tăng nguy cơ đột quỵ. An toàn với migraine có hoặc không có aura.'
+    },
+    {
+      stem: 'Nam giới hỏi về biện pháp tránh thai phía nam. Thông tin đầy đủ nhất?',
+      choices: [
+        'Chỉ có condom và triệt sản',
+        'Condom (99.8% nếu dùng đúng, 85% thực tế) + coitus interruptus (78% thực tế, không bảo vệ STI) + triệt sản nam (vasectomy, hiệu quả 99.9%, khó phục hồi); tránh thai nội tiết cho nam đang nghiên cứu lâm sàng (testosterone + progestin) — chưa phê duyệt thương mại; vai trò nam trong kế hoạch hóa gia đình rất quan trọng',
+        'Nam giới không có trách nhiệm tránh thai',
+        'Condom duy nhất là phương pháp dành cho nam'
+      ],
+      answer: 1,
+      explanation: 'Phương pháp tránh thai phía nam hiện có: (1) Condom: duy nhất bảo vệ đồng thời STI + thai; pearl index với sử dụng đúng (perfect use) 0.2/100 phụ nữ-năm, thực tế 13-15. (2) Xuất tinh ngoài (withdrawal): perfect use ~4%, typical use ~22% thất bại. (3) Vasectomy: permanent, 0.1-0.15% failure rate dài hạn, phục hồi khó. (4) Tránh thai nam nội tiết: testosterone + dimedroxyprogesterone (WHO trial 2016 dừng vì tác dụng phụ tâm lý); vẫn trong nghiên cứu. Tư vấn trách nhiệm chung cặp đôi.'
+    },
+    {
+      stem: 'Phụ nữ 38 tuổi, 3 con, không muốn sinh thêm, hỏi về triệt sản vĩnh viễn. Cần tư vấn gì?',
+      choices: [
+        'Triệt sản đảm bảo 100% không có thai',
+        'Triệt sản phụ (tubal ligation): hiệu quả 99.5% (thất bại 0.5/100 trong 10 năm — nguy cơ thai ngoài tử cung nếu thất bại); thủ thuật không thể hoàn toàn đảo ngược (đảo ngược thành công 40–70%); tư vấn cặp đôi về vasectomy (đơn giản hơn, an toàn hơn, hiệu quả tương đương); lựa chọn vĩnh viễn — đảm bảo bệnh nhân không tiếc sau này',
+        'Không cần tư vấn gì nếu bệnh nhân đã quyết định',
+        'Triệt sản nữ hoàn toàn có thể đảo ngược bất cứ lúc nào'
+      ],
+      answer: 1,
+      explanation: 'Tubal ligation: hiệu quả cao nhưng không tuyệt đối (10 năm cumulative failure rate 1.85% CREST study). Nếu thất bại: nguy cơ thai ngoài tử cung cao hơn bình thường (50% trong số thất bại). Đảo ngược: phụ thuộc phương pháp cắt (clip = đảo ngược tốt hơn, coagulation = khó đảo ngược), tuổi, tình trạng buồng trứng; tỉ lệ thành công 40–70%. Vasectomy: đơn giản hơn về mặt kỹ thuật, gây tê tại chỗ, ít biến chứng, hiệu quả tương đương. Tư vấn cả hai phương án. Informed consent kỹ lưỡng.'
+    },
+    {
+      stem: 'Phụ nữ 25 tuổi hỏi về que cấy tránh thai (etonogestrel implant). Thời gian hiệu quả và các vấn đề thường gặp?',
+      choices: [
+        'Hiệu quả 1 năm, sau đó phải tháo ra',
+        'Hiệu quả 3 năm (có thể đến 5 năm theo nghiên cứu mới); hiệu quả > 99%; đặt cánh tay trong; rối loạn kinh nguyệt là tác dụng phụ chính (chảy máu không đều 20%, vô kinh 20%, kinh nhiều 6%); không ảnh hưởng xương; có thể dùng khi cho bú; tháo ra là khả năng mang thai phục hồi ngay',
+        'Hiệu quả 10 năm, tốt nhất cho phụ nữ đã có con',
+        'Chỉ dành cho phụ nữ chưa sinh'
+      ],
+      answer: 1,
+      explanation: 'Implant (Nexplanon/Implanon): que 4 cm × 2 mm đặt dưới da cánh tay trên trong, giải phóng etonogestrel 60–70 mcg/ngày ban đầu → 25–30 mcg/ngày năm 3. FDA approved 3 năm; nghiên cứu gần đây (Grunloh et al 2013, McNicholas et al 2017): vẫn hiệu quả đến năm 5 ở phụ nữ BMI thấp-trung bình. Pearl index: 0.05/100 phụ nữ-năm — hiệu quả nhất mọi biện pháp (gần như triệt sản). Rối loạn kinh nguyệt: nguyên nhân ngừng phổ biến nhất (tư vấn trước đặt). Hồi phục sinh sản ngay sau tháo.'
+    },
+    {
+      stem: 'Bệnh nhân lupus đang dùng hydroxychloroquine và prednisone, muốn biết phương pháp tránh thai phù hợp nhất. Cân nhắc nào quan trọng?',
+      choices: [
+        'COC là an toàn và ổn định nhất với lupus',
+        'Lupus + antiphospholipid antibody (APL): CCĐ estrogen (MEC 4) vì tăng nguy cơ VTE/đột quỵ nghiêm trọng. Lupus không APL và bệnh ổn định: COC có thể MEC 2–3 tùy từng case. An toàn nhất cho mọi trường hợp lupus: IUD đồng, POP, DMPA (thận trọng ảnh hưởng xương nếu dùng corticoid dài hạn). Hydroxychloroquine không tương tác. Prednisone kéo dài: nguy cơ loãng xương → DMPA thêm mất xương là vấn đề',
+        'Không được dùng bất kỳ phương pháp nào khi có bệnh lupus',
+        'DMPA là lựa chọn duy nhất an toàn cho tất cả bệnh nhân lupus'
+      ],
+      answer: 1,
+      explanation: 'Lupus và tránh thai phức tạp: (1) Lupus + APL positive (antiphospholipid antibodies): CCĐ tuyệt đối estrogen → nguy cơ VTE/đột quỵ cực cao. (2) Lupus không APL, bệnh ổn định, không biến chứng: COC có thể dùng (MEC 2–3). (3) Lupus hoạt động: MEC 3–4 với estrogen (bệnh viêm có thể bị kích hoạt). IUD đồng an toàn cho tất cả nhóm lupus. DMPA + corticoid kéo dài: cả hai làm giảm mật độ xương → cân nhắc kỹ, tư vấn bổ sung Ca/vitamin D. Phối hợp với bác sĩ thấp khớp.'
+    },
+    {
+      stem: 'Cặp vợ chồng mong con nhưng gặp khó khăn. Vợ hỏi về axit folic và chuẩn bị mang thai. Tư vấn đúng?',
+      choices: [
+        'Acid folic chỉ cần bắt đầu khi biết có thai',
+        'Acid folic 0.4–0.8 mg/ngày bắt đầu ít nhất 1 tháng trước khi cố gắng có thai và tiếp tục đến hết 3 tháng đầu; phụ nữ tiền sử thai dị tật ống thần kinh: tăng liều 4–5 mg/ngày; đảm bảo vaccine (rubella, varicella nếu chưa có miễn dịch); kiểm soát bệnh mạn tính (THA, ĐTĐ); ngưng uống rượu, thuốc lá',
+        'Acid folic 5 mg/ngày cho tất cả phụ nữ chuẩn bị có thai',
+        'Bắt đầu bổ sung sắt và canxi ngay khi biết có thai là đủ'
+      ],
+      answer: 1,
+      explanation: 'Preconception care (chăm sóc trước thai kỳ): Acid folic giảm 50–70% nguy cơ dị tật ống thần kinh (spina bifida, anencephaly). Ống thần kinh đóng ngày 28 sau thụ tinh — trước khi biết có thai → BẮT BUỘC bắt đầu sớm. Liều chuẩn 0.4 mg/ngày (một số RCT 0.8 mg); tiền sử NTD: 4–5 mg/ngày. Vaccine rubella (sống giảm độc): cần trước thai ≥ 4 tuần. Kiểm soát ĐTĐ, THA, chuẩn bị ngưng thuốc teratogen (retinoids, MTX, warfarin). ACOG 2019/BYT 2022.'
+    }
+  ]
+};
+
 export const SKILL_QUIZZES = {
   'SC03_QUIZ_01': SC03_QUIZ_01,
   'SC04_QUIZ_01': SC04_QUIZ_01,
@@ -1300,7 +1663,10 @@ export const SKILL_QUIZZES = {
   'SC06_QUIZ_01': SC06_QUIZ_01,
   'SC07_QUIZ_01': SC07_QUIZ_01,
   'SC08_QUIZ_01': SC08_QUIZ_01,
+  'SC09_QUIZ_01': SC09_QUIZ_01,
+  'SC10_QUIZ_01': SC10_QUIZ_01,
   'SC11_QUIZ_01': SC11_QUIZ_01,
+  'SC12_QUIZ_01': SC12_QUIZ_01,
   'SC13_QUIZ_01': SC13_QUIZ_01,
   'SC14_QUIZ_01': SC14_QUIZ_01,
   'SC15_QUIZ_01': SC15_QUIZ_01,

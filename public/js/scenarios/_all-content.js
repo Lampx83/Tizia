@@ -12,13 +12,31 @@
 // ============================================================
 
 import { YEAR12_SCENARIOS } from './year1-2.js';
+import { ECONOMICS_YEAR1_SCENARIOS } from './economics-year1.js';
+import { ECONOMICS_YEAR1B_SCENARIOS } from './economics-year1b.js';
+import { ECONOMICS_YEAR2_SCENARIOS } from './economics-year2.js';
+import { ECONOMICS_YEAR3_SCENARIOS } from './economics-year3.js';
+import { ECONOMICS_YEAR4_SCENARIOS } from './economics-year4.js';
+import { IT_YEAR1_SCENARIOS } from './it-year1.js';
+import { IT_YEAR2_SCENARIOS } from './it-year2.js';
+import { IT_YEAR3_SCENARIOS } from './it-year3.js';
+import { IT_YEAR4_SCENARIOS } from './it-year4.js';
+import { IT_GAMES_SCENARIOS } from './it-games.js';
+import { IT_CAREERS_SCENARIOS } from './it-careers.js';
+import { ECONOMICS_GAMES_SCENARIOS } from './economics-games.js';
+import { ECONOMICS_CAREERS_SCENARIOS } from './economics-careers.js';
+import { ECONOMICS_PRACTICE_SCENARIOS } from './economics-practice.js';
 import { L33_SCENARIOS, SCENARIO_L33_QUIZ, SCENARIO_L33_DRAG }
   from './L3.3-tuong-tac-warfarin-clarithromycin.js';
 import { YEAR34_SCENARIOS } from './year3-4.js';
 import { YEAR5_ADAPTED_SCENARIOS } from './year5-adapted.js';
 import { PRACTICE_QUIZZES } from './practice-quizzes.js';
 import { SKILL_QUIZZES } from './skill-quizzes.js';
+import { PHARMACY_COMMUNITY_SCENARIOS } from './pharmacy-community.js';
+import { PHARMACY_INDUSTRY_SCENARIOS } from './pharmacy-industry.js';
 import { LIBRARY_CAREER_GAMES_SCENARIOS } from './library-career-games.js';
+import { PHARMACY_ADVANCED_SCENARIOS } from './pharmacy-advanced.js';
+import { PHARMACY_CAREER_GAMES_SCENARIOS } from './pharmacy-career-games.js';
 import { BAO_CHE_LAB_SCENARIOS } from './bao-che-labs.js';
 import { PRIMARY_MATH_SCENARIOS } from './primary-math.js';
 import { PRIMARY_LOP2_SCENARIOS } from './lop2/_index.js';
@@ -47,13 +65,31 @@ try { ({ PRESCHOOL_WEEKS_SCENARIOS } = await import('./preschool-weeks.js')); } 
 // Phẳng hoá tất cả scenarios thành 1 object {id → scenario}
 export const ALL_SCENARIOS = {
   ...YEAR12_SCENARIOS,
+  ...ECONOMICS_YEAR1_SCENARIOS,
+  ...ECONOMICS_YEAR1B_SCENARIOS,
+  ...ECONOMICS_YEAR2_SCENARIOS,
+  ...ECONOMICS_YEAR3_SCENARIOS,
+  ...ECONOMICS_YEAR4_SCENARIOS,
+  ...IT_YEAR1_SCENARIOS,
+  ...IT_YEAR2_SCENARIOS,
+  ...IT_YEAR3_SCENARIOS,
+  ...IT_YEAR4_SCENARIOS,
+  ...IT_GAMES_SCENARIOS,
+  ...IT_CAREERS_SCENARIOS,
+  ...ECONOMICS_GAMES_SCENARIOS,
+  ...ECONOMICS_CAREERS_SCENARIOS,
+  ...ECONOMICS_PRACTICE_SCENARIOS,
   [SCENARIO_L33_QUIZ.id]: SCENARIO_L33_QUIZ,
   [SCENARIO_L33_DRAG.id]: SCENARIO_L33_DRAG,
   ...YEAR34_SCENARIOS,
   ...YEAR5_ADAPTED_SCENARIOS,
   ...PRACTICE_QUIZZES,
   ...SKILL_QUIZZES,
+  ...PHARMACY_COMMUNITY_SCENARIOS,
+  ...PHARMACY_INDUSTRY_SCENARIOS,
   ...LIBRARY_CAREER_GAMES_SCENARIOS,
+  ...PHARMACY_ADVANCED_SCENARIOS,
+  ...PHARMACY_CAREER_GAMES_SCENARIOS,
   ...BAO_CHE_LAB_SCENARIOS,
   ...PRIMARY_MATH_SCENARIOS,
   ...PRIMARY_LOP1_SCENARIOS,

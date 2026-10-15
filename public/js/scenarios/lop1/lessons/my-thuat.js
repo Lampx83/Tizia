@@ -676,4 +676,30 @@ export const P1MT_LESSONS = {
       { q: 'Bạn em chán không muốn vẽ nữa, em nói gì?', a: 'Em động viên bạn: "Vẽ là vui chứ không cần đẹp nhất lớp. Bạn vẽ điều bạn yêu, sẽ thấy thích ngay thôi!"' },
     ],
   },
+
+  'P1MT-w36-quiz': {
+    topic: 'Kết thúc Lớp 1 — Nhìn lại hành trình sáng tạo',
+    intro: 'Chúc mừng em đã hoàn thành năm học Mĩ thuật Lớp 1! Mình cùng nhớ lại những điều đẹp đẽ đã làm nhé.',
+    objectives: [
+      'Nhớ lại các kĩ năng mĩ thuật đã học trong năm.',
+      'Tự hào về các tác phẩm của mình và tiếp tục sáng tạo.',
+    ],
+    theory: [
+      { h: 'Em đã học được gì?' },
+      { ul: [
+        'Màu sắc: nhận biết màu cơ bản, pha màu đơn giản, tô màu đều và gọn.',
+        'Hình dạng: vẽ hình tròn, vuông, tam giác, chữ nhật.',
+        'Vẽ tranh: tranh gia đình, tranh thiên nhiên, tranh về trường học.',
+        'Xé dán, nặn đất sét: tạo hình thú vị từ vật liệu đơn giản.',
+        'Cảm thụ tranh: biết nói điều mình thích khi xem tranh.',
+      ] },
+      { h: 'Lên Lớp 2 em sẽ học thêm' },
+      { ul: ['Vẽ phối cảnh đơn giản: gần-xa.', 'Nhiều kĩ thuật tạo hình hơn.', 'Tiếp tục vẽ và sáng tạo theo chủ đề.'] },
+      { note: 'Hè này hãy mang bút chì và vẽ bất cứ điều gì em thích. Một ngày một bức vẽ nho nhỏ là đủ!' },
+    ],
+    examples: [
+      { q: '3 màu cơ bản là gì?', a: 'Đỏ, vàng, xanh lam — pha 2 màu cơ bản tạo ra màu thứ cấp.' },
+      { q: 'Em sẽ vẽ gì trong hè?', a: 'Ví dụ: vẽ gia đình, con vật yêu thích, cảnh thiên nhiên quê hương.' },
+    ],
+  },
 };

@@ -1504,4 +1504,46 @@ export const S9TA_LESSONS = {
       { q: 'Một việc quan trọng cần làm vào đêm trước ngày thi là gì?', a: 'Ngủ đủ giấc và chuẩn bị đầy đủ dụng cụ/giấy tờ; chỉ ôn nhẹ các chủ điểm chính, không học dồn kiến thức mới gây căng thẳng.' },
     ]
   ),
+
+  'S9TA-w36-quiz': L(
+    'Kết thúc Tiếng Anh THCS — Keep Going Forward!',
+    'Tuần cuối năm — thay vì ôn thêm ngữ pháp, cô muốn cùng các em nhìn lại hành trình tiếng Anh THCS và chuẩn bị tâm thế cho chặng tiếp theo.',
+    [
+      'Hệ thống hoá các điểm ngữ pháp và kĩ năng đã học trong chương trình lớp 9.',
+      'Nhận ra giá trị của tiếng Anh trong cuộc sống và tương lai.',
+      'Xây dựng kế hoạch học tiếng Anh tự chủ sau kì thi.',
+    ],
+    [
+      { h: 'Grammar map — Bản đồ ngữ pháp lớp 9' },
+      { ul: [
+        'Thì: Simple/Continuous/Perfect Past + Future forms (will, going to, Present Continuous for future).',
+        'Modal verbs: can/could, should/ought to, must/have to, may/might.',
+        'Câu điều kiện loại 1, 2 và mệnh đề quan hệ (who/which/that/where).',
+        'Câu bị động, câu gián tiếp (reported speech), câu hỏi đuôi (tag questions).',
+        'Liên từ và cụm từ nối: although, however, therefore, in addition...',
+      ] },
+      { h: 'Skills — Bốn kĩ năng đã rèn' },
+      { ul: [
+        'Reading: tìm main idea, skim & scan, suy nghĩa từ trong ngữ cảnh.',
+        'Listening: bắt từ khoá, chú ý số, ngày, tên riêng.',
+        'Speaking: dùng fillers (well, I think, Let me see...) và linking words.',
+        'Writing: topic sentence → supporting details → concluding sentence.',
+      ] },
+      { h: 'Tiếng Anh sau cánh cổng trường THCS' },
+      { p: 'Tiếng Anh không phải môn học — tiếng Anh là công cụ. Những bạn giỏi nhất tiếng Anh không học thêm grammar từ sách giáo khoa, họ xem phim, nghe podcast, chat với người nước ngoài, đọc bài báo tiếng Anh. Kĩ năng của em sẽ tụt nhanh nếu không dùng, và tăng nhanh nếu dùng mỗi ngày.' },
+      { h: 'Gợi ý tự học sau kì thi' },
+      { ul: [
+        'Xem YouTube hoặc phim với phụ đề tiếng Anh (sau đó tắt phụ đề dần).',
+        'Dùng Duolingo hoặc Anki học 10 từ/ngày — đều quan trọng hơn dồn 100 từ/tuần.',
+        'Đọc BBC Learning English hoặc VOA Learning English để nghe người thật, ngữ cảnh thật.',
+        'Viết nhật ký ngắn bằng tiếng Anh — 3–5 câu/ngày là đủ.',
+      ] },
+      { note: 'Remember: Fluency comes from frequency, not intensity. Học đều mỗi ngày dù chỉ 15 phút tốt hơn học 3 giờ mỗi tuần. Keep going!' },
+    ],
+    [
+      { q: 'What is the most useful grammar point from Grade 9 for real-life communication?', a: 'Modal verbs (can, should, must, might) — vì chúng xuất hiện trong mọi tình huống giao tiếp: xin phép (Can I?), gợi ý (Should we?), bắt buộc (You must), khả năng (It might). Nắm chắc modal verbs là chìa khoá để nói tự nhiên hơn ngay lập tức.' },
+      { q: 'How can you keep improving your English after finishing Grade 9?', a: 'The key is daily exposure: watch English videos with subtitles (then without), listen to simple podcasts (VOA Learning English), read short articles on topics you enjoy, write 3–5 sentences in English daily, and find a language partner to chat with. Consistency beats intensity — 15 minutes daily is better than 3 hours once a week.' },
+      { q: 'What advice would you give to a Grade 7 student who wants to do well in English at THCS?', a: 'Three things: (1) Do not fear mistakes — mistakes are how you learn, not proof that you are bad. (2) Build vocabulary every day — use a notebook or flashcard app; 5–10 words per day adds up to 1,000+ words per year. (3) Use English outside class — watch shows, listen to music, change your phone language. The students who excel are those who practice outside the classroom.' },
+    ]
+  ),
 };

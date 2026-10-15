@@ -777,4 +777,36 @@ export const P3AN_LESSONS = {
       { q: 'Em muốn học thêm sáo recorder. Tập thế nào?', a: 'Em ôn 3 nốt cơ bản (Si, La, Sol). Sau đó học thêm nốt Đô, Rê. Mỗi ngày tập 15 phút sẽ tiến bộ nhanh.' },
     ],
   },
+
+  'P3AN-w36-quiz': {
+    topic: 'Kết thúc Lớp 3 — Âm nhạc: Những giai điệu em mang theo',
+    intro: 'Một năm Âm nhạc Lớp 3 đầy âm thanh và giai điệu đã gần kết thúc! Cùng nhìn lại những bài hát và kiến thức âm nhạc đã gắn bó với em suốt năm học, và chuẩn bị đón những giai điệu mới ở Lớp 4 nhé!',
+    objectives: [
+      'Nhớ lại các bài hát, giai điệu, và kiến thức âm nhạc đã học.',
+      'Hiểu vai trò của âm nhạc trong cuộc sống hàng ngày.',
+      'Tự tin hát và thể hiện cảm xúc qua âm nhạc.',
+    ],
+    theory: [
+      { h: 'Hành trang âm nhạc Lớp 3 em đã tích lũy' },
+      { ul: [
+        'BÀI HÁT: Các em đã học và thuộc nhiều bài hát thiếu nhi về gia đình, trường học, thiên nhiên, đất nước — những giai điệu sẽ theo em mãi.',
+        'ĐỌC NHẠC: Nốt nhạc trên khuông: Đô, Rê, Mi, Fa, Sol, La, Si; trường độ: nốt đen, nốt trắng, nốt móc đơn.',
+        'NHỊP ĐIỆU: Nhịp 2/4, 3/4, 4/4; phách mạnh và phách nhẹ; giữ nhịp khi hát.',
+        'NHẠC CỤ GÕ: Trống, phách, thanh gõ — nhạc cụ đệm khi hát tập thể.',
+      ] },
+      { h: 'Âm nhạc nuôi dưỡng tâm hồn' },
+      { p: 'Âm nhạc không chỉ là môn học — nó là ngôn ngữ của cảm xúc. Khi vui thì hát to, khi buồn thì nghe nhạc êm, khi mệt thì ca bài quen. Âm nhạc sẽ luôn là người bạn đồng hành của em.' },
+      { h: 'Lớp 4 sẽ có gì mới?' },
+      { ul: [
+        'Học thêm nhiều bài hát mới có nội dung phong phú hơn.',
+        'Đọc nhạc và hát có nền thành thục hơn.',
+        'Tìm hiểu về các loại nhạc cụ dân tộc và âm nhạc dân gian Việt Nam.',
+      ] },
+      { note: 'Hè này hãy hát thật nhiều — hát khi tắm, khi chơi, khi đi bộ. Âm nhạc vui lắm!' },
+    ],
+    examples: [
+      { q: 'Hãy nêu tên 3 bài hát em nhớ nhất trong năm học lớp 3.', a: 'Tự kể theo trải nghiệm của em — điều quan trọng là em cảm nhận được giai điệu và lời ca của bài hát đó.' },
+      { q: 'Nốt nhạc nào có cao độ cao nhất trong thang âm Đô trưởng: Đô, Rê, Mi, Sol, La?', a: 'La có cao độ cao nhất trong số các nốt đã kể (thứ tự từ thấp đến cao: Đô - Rê - Mi - Sol - La).' },
+    ],
+  },
 };

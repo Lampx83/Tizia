@@ -705,4 +705,35 @@ export const P5MT_LESSONS = {
       { q: 'Lên cấp 2 sẽ học thêm gì?', a: 'Hình hoạ, kí hoạ, thiết kế, lịch sử mĩ thuật chuyên sâu hơn.' },
     ],
   },
+
+  'P5MT-w36-quiz': {
+    topic: 'Kết thúc Tiểu học — Hành trình sáng tạo 5 năm',
+    intro: 'Chúc mừng! Em đã vẽ, nặn, in và sáng tạo suốt 5 năm. Hãy tự hào về mỗi tác phẩm em đã làm!',
+    objectives: [
+      'Tổng kết hành trình Mĩ thuật tiểu học.',
+      'Tự tin mang tư duy sáng tạo vào THCS và cuộc sống.',
+    ],
+    theory: [
+      { h: 'Hành trình sáng tạo 5 năm' },
+      { ul: [
+        'Lớp 1-2: Nhận biết màu sắc, vẽ hình đơn giản, tô màu.',
+        'Lớp 3-4: Phối màu, bố cục tranh, xé dán, nặn đất sét.',
+        'Lớp 5: Phối cảnh đơn giản, trang trí, thưởng thức tác phẩm nghệ thuật.',
+      ] },
+      { h: '4 kĩ năng em đã có' },
+      { ul: [
+        '🖌️ Vẽ tranh theo chủ đề với bố cục và màu sắc hợp lý.',
+        '🏺 Tạo hình 3D: nặn, xé dán, in ấn sáng tạo.',
+        '👁️ Cảm thụ: biết nhận xét về màu sắc, đường nét, bố cục.',
+        '💡 Sáng tạo: tự do biểu đạt cảm xúc qua hình vẽ.',
+      ] },
+      { h: 'Lên THCS và xa hơn' },
+      { ul: ['Học Mĩ thuật chuyên sâu: hình hoạ, kí hoạ, thiết kế đồ hoạ.', 'Tư duy sáng tạo ứng dụng trong nhiều lĩnh vực: công nghệ, kiến trúc, thời trang…'] },
+      { note: 'Sáng tạo không có câu trả lời sai. Hãy tiếp tục vẽ và thể hiện bản thân!' },
+    ],
+    examples: [
+      { q: 'Ba màu cơ bản và ba màu thứ cấp là gì?', a: 'Cơ bản: đỏ, vàng, xanh lam. Thứ cấp: cam (đỏ+vàng), xanh lá (vàng+xanh lam), tím (đỏ+xanh lam).' },
+      { q: 'Em muốn vẽ gì trong hè?', a: 'Ví dụ: nhật ký tranh về chuyến du lịch gia đình, hoặc cuốn sách tranh về những ngày Lớp 5.' },
+    ],
+  },
 };

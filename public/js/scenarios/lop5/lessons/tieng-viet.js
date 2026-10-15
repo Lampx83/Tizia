@@ -645,4 +645,24 @@ export const P5TV_LESSONS = {
       { title: 'Lời nhắn', body: 'Hãy duy trì thói quen đọc sách — đó là chìa khoá học giỏi Văn.' },
     ]
   ),
+
+  'P5TV-w36-quiz': L(
+    'Kết thúc Tiểu học — Hành trang Tiếng Việt vào Lớp 6',
+    'Chúc mừng! Em đã hoàn thành 5 năm học Tiếng Việt. Nhìn lại hành trình ngôn ngữ tuyệt vời này nhé.',
+    [
+      'Tổng kết 4 kỹ năng ngôn ngữ sau 5 năm học.',
+      'Tự hào và tự tin bước vào Ngữ văn THCS.',
+    ],
+    [
+      '**Đọc:** từ đánh vần chữ cái đến đọc diễn cảm, đọc hiểu và cảm thụ văn học.',
+      '**Viết:** từ tập tô đến viết bài văn miêu tả, kể chuyện, đơn từ, biên bản.',
+      '**Nói và nghe:** tự giới thiệu, kể chuyện, thuyết trình ngắn, lắng nghe và nhận xét.',
+      '**Kiến thức ngôn ngữ:** từ loại (danh/động/tính từ), câu đơn-ghép, so sánh-nhân hoá-điệp ngữ.',
+      '**Lớp 6 sẽ học:** Ngữ văn — truyện dân gian, thơ, kịch, văn nghị luận và tiếng Việt nâng cao.',
+    ],
+    [
+      { title: 'Bí quyết học Ngữ văn tốt ở cấp 2', body: 'Đọc nhiều sách — ít nhất 1 cuốn mỗi tháng. Ghi nhật ký để luyện viết mỗi ngày.' },
+      { title: 'Lời nhắn', body: 'Tiếng Việt không chỉ là môn học — đó là ngôn ngữ em sẽ dùng cả đời để yêu, sáng tạo và trưởng thành.' },
+    ]
+  ),
 };

@@ -1084,4 +1084,46 @@ export const H12TOAN_LESSONS = {
       { q: 'Cho A(1;2;3), B(3;4;5). Viết phương trình mặt phẳng trung trực của AB.', a: 'Trung điểm I(2;3;4). Pháp tuyến AB = (2;2;2). PT: 2(x − 2) + 2(y − 3) + 2(z − 4) = 0 ⇔ x + y + z − 9 = 0.' },
     ],
   },
+
+  'H12TOAN-w36-quiz': {
+    topic: 'Kết thúc Toán THPT — Hành trang vào đại học',
+    intro: 'Tuần cuối cùng của hành trình Toán THPT — thầy cô và các em cùng nhìn lại 3 năm số học, không để ôn thêm, mà để thấy mình đã đi xa đến đâu và sẵn sàng bước qua cánh cổng đại học hay vào đời với hành trang vững chắc.',
+    objectives: [
+      'Hệ thống hoá bức tranh toàn cảnh kiến thức Toán 3 năm THPT (lớp 10–12).',
+      'Nhận ra sự kết nối giữa Toán học THPT với các ngành học ở đại học và cuộc sống.',
+      'Xây dựng tâm thế tự tin và kế hoạch học tập tiếp theo sau tốt nghiệp.',
+    ],
+    theory: [
+      { h: 'Bản đồ kiến thức Toán 3 năm THPT' },
+      { ul: [
+        'Lớp 10: Mệnh đề – tập hợp, hàm số bậc hai, đường thẳng – vị trí tương đối, vectơ, lượng giác, thống kê – xác suất cơ bản.',
+        'Lớp 11: Giới hạn, đạo hàm và ứng dụng, hàm lượng giác, dãy số, tổ hợp – xác suất nâng cao, hình học không gian.',
+        'Lớp 12: Hàm số và ứng dụng đạo hàm, hàm mũ–lôgarit, tích phân, số phức, hình học toạ độ Oxyz.',
+      ] },
+      { h: 'Toán học ứng dụng ở đâu trong cuộc sống?' },
+      { p: 'Toán không chỉ là các bài thi — nó là ngôn ngữ của kỹ thuật, kinh tế, y khoa và khoa học máy tính. Đạo hàm mô tả tốc độ thay đổi trong y sinh; tích phân tính diện tích cắt siêu âm; xác suất là nền tảng AI và thống kê dữ liệu; hàm số mô hình hoá mọi hiện tượng tự nhiên.' },
+      { h: 'Toán ở đại học — những gì chờ đón' },
+      { ul: [
+        'Giải tích (Calculus): Đạo hàm và tích phân bậc cao, phương trình vi phân — bước tiếp từ Toán 12.',
+        'Đại số tuyến tính: Ma trận, hệ phương trình tuyến tính, không gian vectơ — nền tảng AI và đồ hoạ máy tính.',
+        'Xác suất & Thống kê: Ứng dụng trực tiếp trong kinh tế, y khoa, kỹ thuật điện.',
+        'Rời rạc & Thuật toán: Toán nền tảng của Khoa học máy tính.',
+      ] },
+      { h: 'Lời khuyên cuối cho kì thi tốt nghiệp' },
+      { ul: [
+        'Câu 1–3 (nhận biết, thông hiểu): làm nhanh, chắc điểm — đây là 60–70% điểm bài thi.',
+        'Câu khó: không dừng lại quá lâu, đánh dấu và quay lại sau.',
+        'Kiểm tra điều kiện: xác định, ẩn phụ t > 0, góc phải trong khoảng cho phép.',
+        'Trình bày gọn: mỗi bước một dòng, kết luận rõ ràng.',
+      ] },
+      { h: 'Tư duy Toán học — hành trang suốt đời' },
+      { p: '3 năm học Toán THPT không chỉ cho em các công thức — mà rèn tư duy logic, thói quen lập luận có căn cứ, khả năng tư duy trừu tượng và kiên nhẫn trước bài toán khó. Đây là hành trang quý giá cho mọi con đường em chọn sau tốt nghiệp.' },
+      { note: 'Dù điểm thi cao hay thấp, điều quan trọng nhất là em đã cố gắng hết sức trong suốt 12 năm học. Hành trình phía trước còn dài và đầy cơ hội — hãy tự tin bước tiếp.' },
+    ],
+    examples: [
+      { q: 'Hãy liệt kê 3 khái niệm Toán THPT mà em thấy quan trọng nhất và giải thích tại sao.', a: 'Gợi ý: (1) Đạo hàm — công cụ mô tả sự thay đổi, nền tảng giải tích ĐH; (2) Xác suất — ứng dụng trực tiếp trong đời sống và AI; (3) Tích phân — tính diện tích, thể tích, cơ sở mọi tính toán vật lý. Câu trả lời của em có thể khác — điều quan trọng là giải thích được "tại sao".' },
+      { q: 'Tại sao Toán học lại quan trọng kể cả khi em không học ngành kỹ thuật hay khoa học?', a: 'Toán rèn tư duy logic — giúp em lập luận có căn cứ trong mọi lĩnh vực, từ phân tích dữ liệu kinh doanh, lập luận pháp lý, đến ra quyết định y khoa. Toán thống kê giúp đọc hiểu báo cáo và tránh bị lừa dối bởi con số. Quan trọng hơn, Toán rèn tính kiên nhẫn và thói quen tìm kiếm giải pháp thay vì bỏ cuộc.' },
+      { q: 'Em đặt mục tiêu gì cho việc học Toán (hoặc môn học liên quan) ở bậc học tiếp theo?', a: 'Đây là câu hỏi mở — không có đáp án duy nhất. Điều quan trọng là em biết mình muốn đi đâu: học ĐH ngành gì, Toán sẽ hỗ trợ ra sao, hoặc nếu không học ĐH thì kỹ năng số học nào cần thiết cho nghề nghiệp. Lập một mục tiêu SMART: cụ thể, đo được, khả thi, thực tế, có thời hạn.' },
+    ],
+  },
 };

@@ -907,4 +907,35 @@ export const S9HDTN_LESSONS = {
       { q: 'Nhớ lại năm lớp 8, Hậu từng đặt cho một bạn cùng lớp biệt danh chế giễu khiến bạn ấy buồn; giờ sắp chia tay, Hậu áy náy nhưng ngại "chuyện qua lâu rồi, nói ra kì lắm". Theo gợi ý "mang gì theo, để gì lại", Hậu nên làm gì?', a: 'Đây đúng là thứ nên "để lại" chứ không vác theo lên cấp 3: những biệt danh từng làm ai đó buồn, những hiềm khích vụn vặt. Và bài học chỉ rõ — một lời xin lỗi muộn vẫn đẹp hơn im lặng. Hậu nên chủ động gặp riêng bạn, nói lời xin lỗi cụ thể và chân thành: "Hồi lớp 8 mình đặt biệt danh trêu cậu, mình biết đã làm cậu buồn, mình thực sự xin lỗi." Không cần dài dòng hay biện minh. Tuần cuối cấp là dịp hiếm hoi mọi lời chân thành đều tự nhiên; nói ra giúp cả hai nhẹ lòng bước tiếp, còn giữ trong lòng thì sự áy náy mới là thứ đeo bám dai dẳng. Mang theo lòng biết ơn và những tình bạn quý, để lại các lỗi lầm cũ đã hoàn thành nhiệm vụ dạy dỗ.' },
     ]
   ),
+
+  'S9HDTN-w36-quiz': L(
+    'Kết thúc HĐTN THCS — Lễ bế giảng trong tim',
+    'Đây là tuần học cuối cùng — không phải tuần học theo nghĩa thông thường. Đây là tuần các em ngồi lại với chính mình, nhìn vào cuốn sổ hành trình 4 năm, và viết những dòng cuối trước khi lật sang trang mới.',
+    [
+      'Viết thư gửi bản thân tương lai — kết tinh những gì đã trưởng thành.',
+      'Thực hành nghi lễ chia tay có ý nghĩa với bạn bè và thầy cô.',
+      'Bước vào THPT với nhận thức rõ ràng về điểm xuất phát và hướng đi.',
+    ],
+    [
+      { h: 'Bốn năm — Bốn phiên bản của em' },
+      { p: 'Em lớp 6 và em lớp 9 hôm nay là hai người rất khác nhau — dù cùng một tên, một khuôn mặt. Lớp 6: tất cả đều mới lạ, bỡ ngỡ, hào hứng. Lớp 7: bắt đầu tìm thấy nhóm bạn thật sự. Lớp 8: thách thức lớn hơn, bắt đầu thấy mình có thể làm được những điều mình tưởng không thể. Lớp 9: đứng ở ngưỡng cửa trưởng thành, biết mình là ai và muốn đi đâu.' },
+      { h: 'Thư gửi bản thân — Hoạt động cuối năm' },
+      { p: 'Dành 15 phút viết một lá thư cho bản thân 3 năm tới (em năm lớp 12). Viết về: (1) Những điều em tự hào nhất ở bản thân lớp 9. (2) Điều khó khăn nhất em đã vượt qua. (3) Ước mơ và mục tiêu gửi gắm cho em tương lai. (4) Lời nhắc nhở quan trọng nhất em muốn bản thân không quên. Giao lá thư cho người em tin tưởng giữ hộ.' },
+      { h: 'Nghi lễ chia tay có ý nghĩa' },
+      { ul: [
+        'Nói lời cảm ơn cụ thể — không phải "cảm ơn thầy cô" chung chung, mà "cảm ơn cô vì buổi đó cô đã...".',
+        'Chia sẻ kỉ niệm thật — không cần hoàn hảo, chỉ cần thật.',
+        'Chụp ảnh kỉ niệm — nhưng cũng có những khoảnh khắc chỉ nhìn bằng mắt, không qua điện thoại.',
+        'Hẹn gặp lại có lịch cụ thể — "gặp lại nhé" mơ hồ thường không bao giờ xảy ra.',
+      ] },
+      { h: 'Bước vào THPT — Em là ai?' },
+      { p: 'THPT là sân khấu mới — không có ai biết "câu chuyện cũ" của em. Đây là cơ hội: em có thể quyết định trở thành phiên bản nào của chính mình. Người nhút nhát ở THCS có thể trở thành người tự tin ở THPT nếu dũng cảm thử một điều mới từ tuần đầu tiên.' },
+      { note: 'Trang này đang khép lại. Trang tiếp theo trắng tinh, chờ em viết — và em có toàn quyền quyết định sẽ viết gì trên đó.' },
+    ],
+    [
+      { q: 'Hãy viết vài dòng trong thư gửi bản thân năm lớp 12 của em.', a: 'Ví dụ mẫu (em hãy viết của riêng mình): "Bạn ơi, năm lớp 9 tôi đã rất sợ kì thi vào 10. Nhưng tôi đã vượt qua — dù kết quả thế nào thì việc chuẩn bị và đứng dậy sau mỗi lần vấp đã dạy tôi nhiều hơn bất kì bài học nào. Tôi hi vọng năm lớp 12, bạn vẫn giữ được sự tò mò và lòng tử tế với bạn bè như tôi đã cố gắng duy trì. Đừng quên: học giỏi quan trọng, nhưng làm người tốt còn quan trọng hơn. Chúc bạn đủ dũng cảm để là chính mình".' },
+      { q: 'Điều gì thay đổi lớn nhất ở em từ lớp 6 đến lớp 9?', a: 'Câu trả lời của mỗi người khác nhau — đó chính là điều làm cho câu hỏi này có giá trị. Ví dụ: "Tôi đã thay đổi từ người luôn chờ người khác quyết định thay mình thành người dám lên tiếng và có chính kiến riêng. Hành trình đó không phải một bước mà là hàng trăm khoảnh khắc nhỏ: lần đầu phát biểu ý kiến dù tay run, lần đầu từ chối việc sai dù bạn bè thuyết phục, lần đầu tự quyết định hướng học tập mà không hoàn toàn phụ thuộc vào bố mẹ".' },
+      { q: 'Nếu được nói một câu với em lớp 6 của chính mình, em sẽ nói gì?', a: 'Ví dụ: "Đừng sợ khác biệt — những điều khiến em khác người hôm nay sẽ là điểm mạnh của em mai sau. Cứ tử tế với bạn bè, học hết sức, và đừng nghiêm túc bản thân quá mức — em vẫn đang học cách trưởng thành và điều đó hoàn toàn ổn". Câu trả lời của em mới là đúng nhất.' },
+    ]
+  ),
 };

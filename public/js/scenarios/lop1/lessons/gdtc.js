@@ -682,4 +682,34 @@ export const P1GDTC_LESSONS = {
       { q: 'Đội em thua trong trò chơi cuối năm?', a: 'Em vẫn vui vẻ chúc mừng đội bạn. Cả năm chơi rất nhiều rồi, hôm nay chỉ là một ngày vui chung. Cảm ơn cô và các bạn.' },
     ],
   },
+
+  'P1GDTC-w36-quiz': {
+    topic: 'Kết thúc Lớp 1 — Một năm chăm vận động',
+    intro: 'Năm học sắp kết thúc. Em đã lớn hơn và khoẻ hơn rất nhiều! Cô cùng em nhìn lại hành trình nhé.',
+    objectives: [
+      'Nhớ lại các kĩ năng vận động đã học.',
+      'Lập kế hoạch vận động trong kì hè.',
+    ],
+    theory: [
+      { h: 'Em đã học được gì?' },
+      { ul: [
+        'Đi thẳng người, chạy đúng tư thế, nhảy hai chân.',
+        'Tung và bắt bóng, ném bóng vào đích.',
+        'Trò chơi đồng đội: bịt mắt bắt dê, kéo co, rồng rắn.',
+        'Bài thể dục tay không 8 động tác cơ bản.',
+        'Tinh thần đoàn kết, chơi fair-play, không trêu bạn.',
+      ] },
+      { h: 'Kế hoạch hè khoẻ mạnh' },
+      { ul: [
+        'Vận động ít nhất 30 phút mỗi ngày: chạy, nhảy dây, đá cầu.',
+        'Uống đủ nước, ăn nhiều rau quả.',
+        'Ngủ sớm để có năng lượng cho ngày mới.',
+      ] },
+      { note: 'Cô chúc em một mùa hè vui và khoẻ! Hẹn gặp lại khi vào Lớp 2!' },
+    ],
+    examples: [
+      { q: 'Bài thể dục buổi sáng giúp ích gì?', a: 'Giúp cơ thể tỉnh táo, dẻo dai, tập trung học tốt hơn.' },
+      { q: 'Hè em muốn học môn thể thao nào?', a: 'Ví dụ: bơi lội, cầu lông, đá bóng, nhảy dây — tuỳ em thích và điều kiện gia đình.' },
+    ],
+  },
 };

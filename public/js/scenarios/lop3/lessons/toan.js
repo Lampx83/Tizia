@@ -811,4 +811,41 @@ export const P3_TOAN_LESSONS = {
       { q: 'Một hình chữ nhật có chiều dài 12 cm, chiều rộng 8 cm. Chu vi bằng?', a: '(12 + 8) × 2 = 40 (cm). Đáp số: 40 cm.' },
     ],
   },
+
+  'P3-w36-quiz': {
+    topic: 'Kết thúc Lớp 3 — Hành trang vào Lớp 4',
+    intro: 'Chúc mừng các em đã hoàn thành năm học Lớp 3! Hôm nay cô và trò cùng nhìn lại chặng đường đã đi, gói ghém những kiến thức quan trọng nhất làm hành trang bước sang Lớp 4 nhé!',
+    objectives: [
+      'Hệ thống toàn bộ kiến thức Toán Lớp 3 theo bốn mảng chính.',
+      'Biết những gì thú vị đang chờ ở Lớp 4.',
+      'Tự tin và vui vẻ kết thúc năm học.',
+    ],
+    theory: [
+      { h: 'Bốn mảng lớn Toán Lớp 3 em đã chinh phục' },
+      { ul: [
+        'Số và tính toán: Số đến 10 000; cộng trừ số có 3–4 chữ số; bảng nhân và chia 2–9; nhân chia số có hai chữ số với số có một chữ số.',
+        'Đại lượng và đo lường: kilôgam, gam, lít, mililit, kilômét, mét, xentimét, milimét; giờ, phút; tiền Việt Nam.',
+        'Hình học: điểm, đoạn thẳng, đường thẳng, góc vuông; tam giác, tứ giác, hình chữ nhật, hình vuông, hình tròn; chu vi; hình hộp chữ nhật, hình lập phương.',
+        'Giải toán: bài toán có lời văn 1–2 bước tính về gộp, tìm phần còn lại, so sánh, mua bán.',
+      ] },
+      { h: 'Lớp 4 sẽ có gì mới?' },
+      { ul: [
+        'Số và tính toán nâng lên đến triệu; học phân số; nhân chia số có nhiều chữ số.',
+        'Đại lượng: tìm hiểu diện tích (cm², m²), giây, thế kỷ.',
+        'Hình học: học diện tích hình chữ nhật và hình vuông.',
+        'Giải toán phức tạp hơn, nhiều bước tính hơn — nhưng nền tảng Lớp 3 sẽ giúp em tự tin!',
+      ] },
+      { h: 'Kế hoạch ôn hè' },
+      { ul: [
+        'Ôn bảng nhân chia 2–9 mỗi ngày (5 phút/ngày là đủ).',
+        'Giải 2–3 bài toán có lời văn để giữ "cảm giác số".',
+        'Làm quen với phép nhân có nhớ để không bỡ ngỡ khi vào Lớp 4.',
+      ] },
+      { note: 'Em đã học được rất nhiều thứ trong năm nay! Hãy tự hào và tận hưởng kỳ nghỉ hè xứng đáng nhé!' },
+    ],
+    examples: [
+      { q: 'Tính: 3456 + 2789.', a: '3456 + 2789 = 6245.' },
+      { q: 'Tìm x biết: x × 6 = 54.', a: 'x = 54 : 6 = 9.' },
+    ],
+  },
 };

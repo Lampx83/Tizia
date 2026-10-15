@@ -1307,4 +1307,62 @@ export const S8NV_LESSONS = {
       { q: 'Trong chương trình Ngữ văn 8, em đã học những kiểu câu nào chia theo mục đích nói? Cho ví dụ mỗi loại.', a: 'Chia theo mục đích nói, em đã học năm kiểu câu. (1) Câu nghi vấn — để hỏi: "Bạn đã làm bài chưa?". (2) Câu cầu khiến — để yêu cầu, ra lệnh, khuyên bảo: "Em hãy giữ trật tự!". (3) Câu cảm thán — để bộc lộ cảm xúc: "Ôi, đẹp quá!". (4) Câu trần thuật — để kể, tả, thông báo, nhận định: "Hôm nay trời nắng đẹp." (5) Câu phủ định — để thông báo sự vắng mặt hoặc bác bỏ: "Tôi không đi học muộn." Mỗi kiểu câu có đặc điểm hình thức (từ ngữ, dấu câu) và chức năng riêng, nhưng trong giao tiếp thực tế, một kiểu câu cũng có thể được dùng để thực hiện chức năng của kiểu câu khác (cách dùng gián tiếp).' },
     ]
   ),
+
+  'S8NV-w36-quiz': L(
+    'Kết thúc Ngữ Văn 8 — Ngôn ngữ và tâm hồn bước vào lớp 9',
+    'Năm lớp 8 đã đưa các em đến với những áng thơ chứa chan tình cảm, những áng văn nghị luận hào hùng, những trang truyện đặc sắc và kho tiếng Việt phong phú. Tuần này, hãy nhìn lại hành trình đó, ghi nhớ những điểm tựa quan trọng để tự tin bước vào Ngữ Văn lớp 9 — nơi chờ đón em những tác phẩm lớn hơn và những bài nghị luận sâu sắc hơn.',
+    [
+      'Hệ thống hoá văn học lớp 8 theo ba thể loại: thơ, truyện, văn nghị luận.',
+      'Nắm vững kiến thức Tiếng Việt trọng tâm: câu ghép, các kiểu câu, hành động nói, hội thoại.',
+      'Tự đánh giá kĩ năng tập làm văn (thuyết minh, nghị luận) và định hướng học lớp 9.',
+    ],
+    [
+      { h: 'Văn học — Thơ' },
+      { ul: [
+        'Thơ Hồ Chí Minh: "Tức cảnh Pác Bó", "Ngắm trăng", "Đi đường" — tinh thần lạc quan, yêu thiên nhiên, bản lĩnh chiến sĩ.',
+        'Thơ lãng mạn và thơ cách mạng HK I: "Nhớ rừng" (Thế Lữ), "Ông đồ" (Vũ Đình Liên), "Quê hương" (Tế Hanh).',
+        'Đặc điểm thể thơ tám chữ và thơ thất ngôn tứ tuyệt Đường luật.',
+      ] },
+      { h: 'Văn học — Truyện và kí' },
+      { ul: [
+        '"Trong lòng mẹ" (Nguyên Hồng) — hồi kí, tình mẫu tử thắm thiết.',
+        '"Tức nước vỡ bờ" (Ngô Tất Tố), "Lão Hạc" (Nam Cao) — truyện hiện thực phê phán trước 1945.',
+        'Truyện nước ngoài: "Cô bé bán diêm" (Andersen), "Đánh nhau với cối xay gió" (Cervantes), "Chiếc lá cuối cùng" (O. Henry).',
+      ] },
+      { h: 'Văn học — Nghị luận trung đại (văn xuôi chữ Hán/Nôm)' },
+      { ul: [
+        '"Chiếu dời đô" (Lý Công Uẩn): lập luận về sự cần thiết dời đô về Đại La, khát vọng xây dựng đất nước hùng cường.',
+        '"Hịch tướng sĩ" (Trần Quốc Tuấn): lòng yêu nước, căm thù giặc, kêu gọi ý chí quyết tâm chống giặc.',
+        '"Bàn luận về phép học" (Nguyễn Thiếp): tư tưởng giáo dục tiến bộ — học thực chất để phục vụ đất nước.',
+        'Điểm chung: lập luận chặt chẽ, dẫn chứng thuyết phục, kết hợp lí trí và cảm xúc, ngôn ngữ trang trọng.',
+      ] },
+      { h: 'Tiếng Việt trọng tâm' },
+      { ul: [
+        'Từ vựng: trường từ vựng, từ tượng hình – tượng thanh.',
+        'Từ loại: trợ từ, thán từ, tình thái từ.',
+        'Câu ghép: cách nối (dùng từ nối, dùng dấu câu); quan hệ ý nghĩa (nhân quả, tương phản, điều kiện...).',
+        'Năm kiểu câu chia theo mục đích nói: nghi vấn, cầu khiến, cảm thán, trần thuật, phủ định.',
+        'Hành động nói; hội thoại (vai xã hội, lượt lời); các dấu câu nâng cao.',
+      ] },
+      { h: 'Tập làm văn' },
+      { ul: [
+        'Văn thuyết minh (HK I): phương pháp (nêu định nghĩa, số liệu, ví dụ, so sánh), cấu trúc bài thuyết minh về đồ vật/di tích/danh nhân.',
+        'Văn nghị luận (HK II): luận điểm, luận cứ, lập luận; văn bản nghị luận về sự việc/hiện tượng và nghị luận về vấn đề tư tưởng đạo lí.',
+        'Kĩ năng viết đoạn văn diễn dịch – quy nạp – tổng – phân – hợp.',
+      ] },
+      { h: 'Cầu nối sang lớp 9' },
+      { ul: [
+        'Truyện ngắn hiện đại Việt Nam: "Làng" (Kim Lân), "Chiếc lược ngà" (Nguyễn Quang Sáng), "Lặng lẽ Sa Pa" (Nguyễn Thành Long).',
+        'Thơ hiện đại và thơ lãng mạn 1930–1945 đặc sắc hơn.',
+        'Nghị luận xã hội (về hiện tượng đời sống) và nghị luận văn học (phân tích nhân vật, đoạn thơ) ở mức độ sâu sắc hơn.',
+        'Tiếng Việt: khởi ngữ, thành phần biệt lập, liên kết câu trong đoạn và bài.',
+      ] },
+      { note: 'Cách ôn hiệu quả: lập bảng tổng hợp theo cột Tác giả – Tác phẩm – Thể loại – Nội dung – Nghệ thuật; luyện đề văn hằng ngày; đọc to và ghi nhớ những câu thơ, đoạn văn hay nhất của năm.' },
+    ],
+    [
+      { q: 'Phân tích tâm trạng của nhân vật bé Hồng trong đoạn trích "Trong lòng mẹ" (Nguyên Hồng).', a: 'Bé Hồng trong đoạn trích thể hiện tâm trạng phức tạp và sâu sắc. Trước những lời nói cay độc của người cô về mẹ, Hồng vừa đau đớn, tủi cực, vừa căm tức "những cổ tục" đã áp bức mẹ mình. Em bướng bỉnh bảo vệ hình ảnh mẹ trong lòng, không để những lời độc ác làm lung lay tình yêu thiêng liêng đó. Khi gặp lại mẹ, Hồng trào dâng niềm hạnh phúc, sung sướng tột cùng — được ôm vào lòng mẹ là "thiên đường" của đứa trẻ khao khát tình mẫu tử. Nguyên Hồng đã thể hiện tình cảm chân thật, mãnh liệt qua ngòi bút đặm chất trữ tình.' },
+      { q: 'Nêu chủ đề và nghệ thuật đặc sắc của truyện ngắn "Lão Hạc" (Nam Cao).', a: 'Chủ đề: tác phẩm phản ánh số phận bi thảm của người nông dân nghèo trước Cách mạng; đồng thời ngợi ca vẻ đẹp tâm hồn của họ — lòng tự trọng cao quý, tình phụ tử sâu nặng và ý thức giữ gìn danh dự đến hơi thở cuối cùng. Nghệ thuật: xây dựng nhân vật chân thực, tâm lí sâu sắc (lão Hạc, nhân vật "tôi"); đan xen ngôn ngữ người kể chuyện và ngôn ngữ nhân vật; kết thúc đột ngột gây xúc động mạnh; ngôn ngữ mộc mạc, giàu chất đời thường.' },
+      { q: 'Hãy viết một đoạn văn ngắn (5–7 câu) nghị luận về ý kiến: "Đọc sách là hành trình làm giàu tâm hồn."', a: 'Đọc sách là một hành trình làm giàu tâm hồn không có điểm cuối. Qua từng trang sách, người đọc được sống nhiều cuộc đời, đặt chân đến những vùng đất xa lạ và hiểu thêm về bản chất con người. Sách mang đến tri thức, mở rộng nhận thức và trau dồi ngôn ngữ — những điều không thể có được nếu chỉ dựa vào kinh nghiệm sống đơn thuần. Hơn thế, những tác phẩm văn học lớn còn bồi đắp cảm xúc, lòng trắc ẩn và trí tưởng tượng, giúp chúng ta sống nhân văn hơn. Vì vậy, dù thế giới số phát triển đến đâu, thói quen đọc sách vẫn là tài sản quý giá nhất mà mỗi người cần nuôi dưỡng suốt đời.' },
+    ]
+  ),
 };

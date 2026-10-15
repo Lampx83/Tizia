@@ -674,4 +674,37 @@ export const P3TIN_LESSONS = {
       { q: 'Thuật toán đời thường là gì?', a: 'Là các bước làm một việc theo thứ tự, ví dụ các bước rửa tay hay đánh răng.' },
     ],
   },
+
+  'P3TIN-w36-quiz': {
+    topic: 'Kết thúc Lớp 3 — Tin học: Em đã là "công dân số" nhỏ!',
+    intro: 'Một năm Tin học Lớp 3 đầy thú vị và khám phá đã gần kết thúc! Em đã học cách dùng máy tính, vẽ tranh số, gõ phím và suy nghĩ như lập trình viên. Hôm nay cùng nhìn lại và chuẩn bị cho hành trình số hoá tiếp theo!',
+    objectives: [
+      'Tổng kết kiến thức và kĩ năng Tin học Lớp 3 đã học.',
+      'Hiểu vai trò của công nghệ trong cuộc sống hiện đại.',
+      'Chuẩn bị tinh thần học tập Tin học nâng cao ở Lớp 4.',
+    ],
+    theory: [
+      { h: 'Hành trình số của em trong năm Lớp 3' },
+      { ul: [
+        'MÁY TÍNH CƠ BẢN: Bộ phận máy tính (CPU, màn hình, bàn phím, chuột); bật tắt an toàn; màn hình desktop và cửa sổ ứng dụng.',
+        'GÕ PHÍM: Ngón tay đặt đúng vị trí; phím hàng chủ (ASDF JKL;); luyện tập gõ không nhìn bàn phím.',
+        'PHẦN MỀM: Dùng Paint vẽ tranh số; dùng Word/Writer gõ văn bản ngắn; lưu file và tìm lại.',
+        'AN TOÀN SỐ: Bảo mật thông tin cá nhân; không cho người lạ biết tên, địa chỉ, số điện thoại; nhờ người lớn khi gặp nội dung lạ.',
+        'TƯ DUY THUẬT TOÁN: Hiểu thuật toán là dãy các bước tuần tự; viết thuật toán đơn giản bằng lời.',
+      ] },
+      { h: 'Công nghệ thay đổi thế giới như thế nào?' },
+      { p: 'Ngày nay, công nghệ có mặt khắp nơi: từ điện thoại bố mẹ dùng đến máy ATM, từ đèn giao thông thông minh đến robot nhà máy. Người hiểu công nghệ sẽ có nhiều cơ hội hơn trong tương lai!' },
+      { h: 'Lớp 4 sẽ học gì?' },
+      { ul: [
+        'Lập trình trực quan cơ bản bằng Scratch hoặc block coding.',
+        'Tìm kiếm thông tin trên internet một cách an toàn.',
+        'Tạo bài trình chiếu PowerPoint đơn giản.',
+      ] },
+      { note: 'Hè này hãy tập gõ 10 ngón hàng ngày — chỉ 10 phút/ngày, đến lớp 4 em sẽ gõ nhanh hơn cả thầy cô!' },
+    ],
+    examples: [
+      { q: 'Viết thuật toán 5 bước để gửi tin nhắn chúc mừng sinh nhật bạn qua điện thoại.', a: '1. Mở ứng dụng nhắn tin. 2. Tìm tên bạn trong danh bạ. 3. Nhấn vào cuộc trò chuyện. 4. Gõ "Chúc mừng sinh nhật bạn nhé!". 5. Nhấn Gửi.' },
+      { q: 'Có 3 việc em KHÔNG nên làm khi dùng máy tính ở lớp. Hãy kể.', a: '1. Vào trang web không liên quan đến bài học. 2. Mở file của bạn khác khi chưa được phép. 3. Tắt máy tính đột ngột mà không lưu bài.' },
+    ],
+  },
 };

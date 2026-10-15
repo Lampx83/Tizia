@@ -1105,4 +1105,44 @@ export const H12SU_LESSONS = {
       { q: 'Khi gặp câu hỏi có từ khoá "quyết định", em nên lưu ý điều gì?', a: 'Cần đọc kỹ ngữ cảnh: "quyết định nhất", "quyết định trực tiếp" hay "có ý nghĩa quyết định" mang sắc thái khác nhau. Phải xác định đúng sự kiện hoặc nhân tố giữ vai trò then chốt trong tình huống cụ thể mà câu hỏi nêu, tránh chọn đáp án theo cảm tính.' },
     ],
   },
+
+  'H12SU-w36-quiz': {
+    topic: 'Kết thúc Lịch Sử THPT — Bài học từ quá khứ, hành động cho tương lai',
+    intro: 'Tuần cuối năm học Lịch Sử — không phải để ôn thêm sự kiện, mà để hỏi: tại sao chúng ta cần học Lịch Sử và những gì đã xảy ra trong quá khứ dạy chúng ta điều gì cho tương lai của chính mình?',
+    objectives: [
+      'Hệ thống hoá chương trình Lịch Sử 3 năm THPT theo các giai đoạn lịch sử lớn.',
+      'Nhận ra ý nghĩa của tư duy lịch sử đối với hiểu biết thế giới hiện tại.',
+      'Kết nối lịch sử với trách nhiệm công dân và định hướng tương lai của bản thân.',
+    ],
+    theory: [
+      { h: 'Bản đồ Lịch Sử 3 năm THPT' },
+      { ul: [
+        'Lớp 10: Lịch sử thế giới từ cổ đại đến cận đại (Ai Cập, Hy Lạp, La Mã; phong kiến Châu Âu và Châu Á; Cách mạng tư sản; Chiến tranh thế giới I và II).',
+        'Lớp 11: Việt Nam từ thế kỉ XIX đến 1945 (thực dân Pháp xâm lược, phong trào yêu nước, Cách mạng tháng Tám).',
+        'Lớp 12: Trật tự thế giới sau 1945 (Chiến tranh Lạnh, Liên Xô tan rã, đa cực hoá); Việt Nam 1945–1975 (kháng chiến chống Pháp, chống Mỹ); Đổi mới 1986 và hội nhập quốc tế.',
+      ] },
+      { h: 'Tại sao phải học Lịch Sử?' },
+      { ul: [
+        'Hiểu hiện tại: Mọi vấn đề hôm nay — xung đột lãnh thổ, bất bình đẳng, di cư — đều có gốc rễ lịch sử.',
+        'Tránh lặp lại sai lầm: "Những ai không nhớ quá khứ bị buộc phải lặp lại nó" (George Santayana).',
+        'Tư duy phê phán: Lịch Sử dạy đặt câu hỏi về nguồn, đánh giá bằng chứng và suy nghĩ đa chiều.',
+        'Bản sắc quốc gia: Hiểu hành trình dựng nước và giữ nước tạo niềm tự hào và trách nhiệm.',
+      ] },
+      { h: 'Bài học lịch sử cho thế hệ trẻ hôm nay' },
+      { ul: [
+        'Thế chiến II: Chủ nghĩa cực đoan và dân tộc chủ nghĩa hẹp hòi dẫn đến thảm hoạ — đa dạng và đối thoại là sức mạnh.',
+        'Chiến tranh Lạnh: Ý thức hệ đối đầu có thể khiến cả thế giới sống trong sợ hãi — ngoại giao và hợp tác cần thiết hơn vũ khí.',
+        'Đổi Mới 1986: Không có thay đổi nào không có rủi ro, nhưng mạnh dạn cải cách đúng lúc có thể thay đổi vận mệnh cả một quốc gia.',
+        'Hội nhập quốc tế: Việt Nam từ bị cô lập thành đối tác chiến lược với 170+ quốc gia — minh chứng của kiên nhẫn và khéo léo ngoại giao.',
+      ] },
+      { h: 'Lịch Sử ở đại học và nghề nghiệp' },
+      { p: 'Ngành học liên quan: Lịch sử, Quan hệ quốc tế, Khoa học chính trị, Luật, Báo chí, Ngoại giao, Du lịch. Dù học ngành gì, tư duy lịch sử — đặt sự kiện trong bối cảnh, tìm nguyên nhân sâu xa, đánh giá đa chiều — là kỹ năng quý giá trong mọi nghề nghiệp.' },
+      { note: 'Lịch Sử không phải là danh sách ngày tháng cần thuộc — đó là câu chuyện về con người: những quyết định, hy vọng, sai lầm và chiến thắng. Hiểu Lịch Sử là hiểu bản chất con người. Và điều đó, không bao giờ lỗi thời.' },
+    ],
+    examples: [
+      { q: 'Sự kiện lịch sử nào trong chương trình THPT theo em có ý nghĩa quan trọng nhất với Việt Nam hôm nay và tại sao?', a: 'Câu hỏi mở — không có đáp án duy nhất. Gợi ý: Cách mạng tháng Tám 1945 (khai sinh nước Việt Nam Dân chủ Cộng hoà, mở ra kỉ nguyên độc lập); Đại thắng mùa Xuân 1975 (thống nhất đất nước, kết thúc 30 năm chiến tranh); Đổi mới 1986 (chuyển sang kinh tế thị trường, hội nhập quốc tế — tạo ra Việt Nam của hôm nay). Quan trọng là em giải thích được "tại sao" và liên hệ với hiện tại.' },
+      { q: 'Trong Chiến tranh Lạnh, tại sao thế giới không rơi vào Thế chiến III dù Mỹ và Liên Xô đều có vũ khí hạt nhân?', a: 'Học thuyết "Bảo đảm tiêu diệt lẫn nhau" (MAD — Mutually Assured Destruction): nếu bên nào tấn công hạt nhân trước, bên kia sẽ trả đũa và cả hai cùng bị tiêu diệt. Không ai dám "bắn phát đầu tiên". Khủng hoảng tên lửa Cuba 1962 là lúc nhân loại gần nhất với Thế chiến III — kết thúc nhờ đường dây nóng ngoại giao và nhượng bộ của cả hai phía. Bài học: ngay cả kẻ thù đối đầu cũng có thể chọn đối thoại thay vì chiến tranh khi cái giá quá lớn.' },
+      { q: 'Nếu có thể thay đổi một quyết định lịch sử quan trọng, em sẽ chọn quyết định nào và kết quả sẽ thay đổi thế nào?', a: 'Đây là câu hỏi tư duy lịch sử sáng tạo ("counterfactual history"). Không có đáp án sai — điều quan trọng là em lập luận có căn cứ: ví dụ "Nếu Hiệp định Genève 1954 tổ chức tổng tuyển cử đúng hạn, Việt Nam có thể thống nhất hoà bình sớm hơn" — nhưng điều đó đòi hỏi giải thích bối cảnh Chiến tranh Lạnh. Tư duy "what if" giúp hiểu sâu hơn tại sao lịch sử đã xảy ra như vậy.' },
+    ],
+  },
 };

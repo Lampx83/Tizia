@@ -339,6 +339,15 @@ export const P3TNXH_WEEKS = [
     Q('Để tránh đuối nước, trẻ em phải?', ['Tắm khi trời tối', 'Nhảy vào chỗ sâu', 'Có người lớn đi cùng khi xuống nước', 'Đi một mình ra sông'], 2, 'An toàn nước = có người lớn giám sát.', ['Sai — tắm khi trời tối khó quan sát, dễ tai nạn.', 'Sai — nhảy vào chỗ sâu rất nguy hiểm.', 'Đúng — phải có người lớn đi cùng khi xuống nước.', 'Sai — đi một mình ra sông rất dễ đuối nước.']),
     Q('Để tim mạch khoẻ, em nên?', ['Ngồi cả ngày', 'Tập thể dục, ăn uống lành mạnh', 'Thức khuya', 'Ăn nhiều mỡ'], 1, 'Vận động + dinh dưỡng tốt cho tim.', ['Sai — ngồi cả ngày không tốt cho tim.', 'Đúng — tập thể dục và ăn uống lành mạnh giúp tim khoẻ.', 'Sai — thức khuya làm cơ thể mệt, hại tim.', 'Sai — ăn nhiều mỡ hại cho tim mạch.']),
   ], { difficulty: 3 }),
+
+  M(36, 'Kết thúc Lớp 3 — Tự nhiên và Xã hội: Hành trang vào Lớp 4', [
+    Q('Cơ quan nào giúp em thở?', ['Cơ quan hô hấp', 'Cơ quan tuần hoàn', 'Cơ quan tiêu hoá', 'Cơ quan thần kinh'], 0, 'Mũi, khí quản, phổi thuộc cơ quan hô hấp.', ['Đúng — cơ quan hô hấp (mũi, khí quản, phổi) giúp em thở.', 'Sai — cơ quan tuần hoàn vận chuyển máu.', 'Sai — cơ quan tiêu hoá xử lí thức ăn.', 'Sai — cơ quan thần kinh điều khiển hoạt động cơ thể.']),
+    Q('Cơ quan tuần hoàn gồm tim và bộ phận nào?', ['Phổi', 'Mạch máu', 'Dạ dày', 'Não'], 1, 'Cơ quan tuần hoàn = tim + mạch máu.', ['Sai — phổi thuộc cơ quan hô hấp.', 'Đúng — cơ quan tuần hoàn gồm tim và các mạch máu.', 'Sai — dạ dày thuộc cơ quan tiêu hoá.', 'Sai — não thuộc cơ quan thần kinh.']),
+    Q('Việc nào giúp bảo vệ cơ quan hô hấp?', ['Hút thuốc lá', 'Ngồi cạnh người đang hút thuốc', 'Đeo khẩu trang ở nơi nhiều bụi', 'Không vệ sinh mũi họng'], 2, 'Tránh khói bụi, đeo khẩu trang, vệ sinh mũi họng.', ['Sai — hút thuốc lá gây hại nghiêm trọng cho phổi.', 'Sai — hít khói thuốc của người khác cũng rất hại.', 'Đúng — đeo khẩu trang nơi nhiều bụi giúp bảo vệ đường thở.', 'Sai — không vệ sinh mũi họng dễ gây viêm nhiễm.']),
+    Q('Loài nào sau đây là CÔN TRÙNG?', ['Chó', 'Mèo', 'Cá', 'Bướm'], 3, 'Côn trùng: bướm, ong, kiến, muỗi…', ['Sai — chó là động vật có vú.', 'Sai — mèo là động vật có vú.', 'Sai — cá sống dưới nước, thở bằng mang, không phải côn trùng.', 'Đúng — bướm là côn trùng.']),
+    Q('Ban đêm, trên bầu trời em thường nhìn thấy gì?', ['Mặt Trời', 'Mặt Trăng và các vì sao', 'Cầu vồng', 'Mây trắng rõ nét'], 1, 'Ban ngày có Mặt Trời; ban đêm có Mặt Trăng và các vì sao.', ['Sai — Mặt Trời chỉ nhìn thấy vào ban ngày.', 'Đúng — ban đêm em nhìn thấy Mặt Trăng và các vì sao.', 'Sai — cầu vồng xuất hiện ban ngày sau mưa, khi có nắng.', 'Sai — ban đêm trời tối nên khó thấy rõ mây trắng.']),
+    Q('Lên Lớp 4, môn Tự nhiên và Xã hội sẽ tách thành hai môn nào?', ['Toán và Tiếng Việt', 'Âm nhạc và Mĩ thuật', 'Tin học và Công nghệ', 'Khoa học và Lịch sử – Địa lý'], 3, 'Từ Lớp 4, TNXH tách thành Khoa học và Lịch sử – Địa lý.', ['Sai — đó là hai môn đã có riêng từ Lớp 1.', 'Sai — đó là hai môn nghệ thuật, đã có riêng.', 'Sai — đó là hai môn khác, không tách ra từ TNXH.', 'Đúng — TNXH tách thành Khoa học và Lịch sử – Địa lý.']),
+  ]),
 ];
 
 export const P3TNXH_SCENARIOS = indexBy(P3TNXH_WEEKS);

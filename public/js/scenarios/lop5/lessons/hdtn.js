@@ -705,4 +705,37 @@ export const P5HDTN_LESSONS = {
       { q: 'Hè trước khi lên cấp 2 nên làm gì?', a: 'Nghỉ ngơi vừa đủ, đọc sách, gặp bạn cũ, chuẩn bị tâm thế.' },
     ],
   },
+
+  'P5HDTN-w36-quiz': {
+    topic: 'Kết thúc Tiểu học — Tốt nghiệp cấp 1, bước vào cấp 2',
+    intro: 'Đây là bài học cuối cùng của tiểu học. Em đã trải qua 5 năm đầy ý nghĩa. Cô/thầy rất tự hào về em!',
+    objectives: [
+      'Nhìn lại hành trình trải nghiệm 5 năm tiểu học.',
+      'Tự tin và hứng khởi bước vào THCS.',
+    ],
+    theory: [
+      { h: 'Hành trình 5 năm đầy ý nghĩa' },
+      { ul: [
+        'Từ "bé" nhút nhát đến học sinh tự tin đứng trước lớp.',
+        'Học cách kết bạn, giải quyết mâu thuẫn, làm việc nhóm.',
+        'Tham gia hoạt động trường: lễ hội, tình nguyện, câu lạc bộ.',
+        'Rèn kĩ năng tự lập: tự chuẩn bị đồ dùng, quản lý thời gian.',
+        'Khám phá bản thân: em yêu thích điều gì, giỏi ở lĩnh vực nào.',
+      ] },
+      { h: 'Cấp 2 — Hành trình mới' },
+      { ul: [
+        'Môi trường lớn hơn: trường THCS có nhiều lớp và thầy cô hơn.',
+        'Bạn bè mới từ nhiều trường tiểu học — cơ hội kết bạn rộng hơn.',
+        'Tự lập hơn: nhiều bài tập về nhà, cần tự quản lý tốt hơn.',
+        'Nhiều hoạt động ngoại khoá và câu lạc bộ thú vị.',
+      ] },
+      { h: 'Lời nhắn từ 5 năm tiểu học' },
+      { p: '"Em đã học cách học. Ở cấp 2, hãy áp dụng điều đó vào mọi thử thách. Không có gì quá khó khi em kiên nhẫn và dũng cảm."' },
+      { note: 'Chúc em một mùa hè tươi đẹp và một năm học Lớp 6 thật xuất sắc!' },
+    ],
+    examples: [
+      { q: 'Điều nào em tự hào nhất trong 5 năm tiểu học?', a: 'Em tự kể — mỗi người có câu trả lời riêng. Đó là thành tích thật sự của em.' },
+      { q: 'Em lo nhất điều gì khi lên THCS và sẽ làm gì?', a: 'Ví dụ lo "không quen bạn mới" → Em sẽ chủ động giới thiệu bản thân, mỉm cười và giúp đỡ bạn khi có thể.' },
+    ],
+  },
 };

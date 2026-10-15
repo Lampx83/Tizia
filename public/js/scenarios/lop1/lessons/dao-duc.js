@@ -904,4 +904,30 @@ export const P1DD_LESSONS = {
       { q: 'Lên lớp 2 em sẽ cố gắng điều gì?', a: 'Ví dụ: "Em sẽ tự giác làm bài tập" hoặc "Em sẽ giúp bố mẹ nhiều hơn".' },
     ],
   },
+
+  'P1DD-w36-quiz': {
+    topic: 'Kết thúc Lớp 1 — 5 Phẩm chất em mang theo vào Lớp 2',
+    intro: 'Năm học Lớp 1 khép lại. Em đã lớn hơn, ngoan hơn và giỏi hơn. Cô rất tự hào! Mình cùng ôn 5 phẩm chất tốt nhé.',
+    objectives: [
+      'Nhớ lại các phẩm chất đạo đức đã học trong năm.',
+      'Hứa giữ những phẩm chất tốt khi lên Lớp 2.',
+    ],
+    theory: [
+      { h: '5 phẩm chất em đã học' },
+      { ul: [
+        '❶ Thật thà — không nói dối, nhận lỗi khi sai.',
+        '❷ Yêu thương — yêu gia đình, thầy cô, bạn bè.',
+        '❸ Chăm chỉ — cố gắng làm bài, không bỏ cuộc.',
+        '❹ Sạch sẽ — giữ vệ sinh bản thân và lớp học.',
+        '❺ An toàn — biết tự bảo vệ mình và không làm hại bạn.',
+      ] },
+      { h: 'Lời hứa vào Lớp 2' },
+      { p: 'Em sẽ mang 5 phẩm chất này vào Lớp 2. Mỗi ngày cố gắng thêm một chút là đã giỏi lắm rồi!' },
+      { note: 'Chúc em một mùa hè vui vẻ và bình an. Đến năm học mới nhớ vẫn là bạn nhỏ ngoan nhé!' },
+    ],
+    examples: [
+      { q: 'Em kể 1 điều em đã làm thật thà trong năm học?', a: 'Ví dụ: "Em báo cô khi quên bài tập" — thật thà dù biết có thể bị nhắc nhở.' },
+      { q: 'Chăm chỉ là gì?', a: 'Mỗi ngày làm bài đầy đủ, không lười, cố gắng dù bài khó.' },
+    ],
+  },
 };

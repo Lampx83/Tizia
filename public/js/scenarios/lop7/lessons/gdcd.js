@@ -1803,4 +1803,40 @@ export const S7GDCD_LESSONS = {
       { q: 'Tình huống tổng hợp: Bạn thân của em đang căng thẳng vì bị bắt nạt, lại bị một nhóm rủ rê hút thuốc lá điện tử để "quên buồn". Em sẽ giúp bạn thế nào?', a: 'Em vận dụng nhiều bài đã học: (1) Lắng nghe, cảm thông để bạn không thấy cô đơn. (2) Khuyên bạn ứng phó căng thẳng lành mạnh (chia sẻ với người tin cậy, vận động) thay vì tìm đến tệ nạn. (3) Chỉ rõ tác hại của thuốc lá điện tử và giúp bạn "nói không". (4) Cùng bạn báo thầy cô về việc bị bắt nạt và việc bị rủ rê, gọi 111 nếu cần. Như vậy em vừa bảo vệ bạn, vừa giúp bạn tránh xa tệ nạn.' },
     ],
   },
+
+  'S7GDCD-w36-quiz': {
+    topic: 'Kết thúc GDCD 7 — Công dân trẻ vững bước vào lớp 8',
+    intro: 'Môn GDCD lớp 7 đã dẫn chúng ta qua những bài học quan trọng về đạo đức, pháp luật và kỹ năng sống. Không chỉ là kiến thức trong sách vở — đây là hành trang để em sống tốt hơn, có trách nhiệm hơn trong gia đình, nhà trường và xã hội. Hôm nay, hãy nhìn lại cả năm học và chuẩn bị bước vào lớp 8 với tâm thế công dân trẻ đầy tự tin và trách nhiệm.',
+    objectives: [
+      'Hệ thống hoá các chủ đề đạo đức, pháp luật và kỹ năng sống đã học trong năm.',
+      'Vận dụng kiến thức đã học để phân tích các tình huống thực tiễn.',
+      'Xác định những giá trị cốt lõi cần giữ vững khi bước vào lớp 8.',
+    ],
+    theory: [
+      { h: 'Bức tranh toàn cảnh GDCD 7' },
+      { ul: [
+        'Đạo đức trong gia đình: Kính trọng, biết ơn ông bà cha mẹ; yêu thương, quan tâm anh chị em; trách nhiệm với việc nhà.',
+        'Đạo đức trong nhà trường và xã hội: Quan tâm, giúp đỡ bạn bè; đoàn kết; trung thực; tôn trọng sự khác biệt; không tham gia bạo lực học đường.',
+        'Pháp luật và quyền công dân: Quyền và bổn phận của trẻ em; quyền bình đẳng giới; pháp luật về bảo vệ môi trường; phòng chống tệ nạn xã hội (ma tuý, rượu bia, cờ bạc).',
+        'Kỹ năng sống: Quản lý cảm xúc; ứng phó với áp lực và căng thẳng; an toàn trên mạng; sử dụng tiền hợp lý.',
+      ] },
+      { h: 'Thông điệp xuyên suốt của GDCD 7' },
+      { ul: [
+        '"Mỗi hành động nhỏ đều có ý nghĩa" — một lời nói tử tế, một việc làm giúp đỡ, một lần từ chối cám dỗ.',
+        '"Quyền đi kèm với trách nhiệm" — em có quyền được học tập, vui chơi, được bảo vệ; nhưng đồng thời phải có trách nhiệm với gia đình, bạn bè, cộng đồng.',
+        '"Sống tốt là một hành trình" — không ai hoàn hảo, nhưng ai cũng có thể cố gắng mỗi ngày một hơn.',
+      ] },
+      { h: 'Cầu nối sang GDCD lớp 8' },
+      { ul: [
+        'Lớp 8 sẽ mở rộng về: Quyền và nghĩa vụ công dân; Vi phạm pháp luật và trách nhiệm pháp lý; Pháp luật dân sự cơ bản; Kinh tế gia đình và tiêu dùng thông minh.',
+        'Kỹ năng mới: Giải quyết xung đột; Tư duy phản biện; Bảo vệ quyền lợi bản thân đúng pháp luật.',
+      ] },
+      { note: 'GDCD không chỉ học để thi — hãy mang từng bài học ra áp dụng trong cuộc sống. Khi gặp tình huống khó, hãy tự hỏi: "Mình nên làm gì để vừa đúng pháp luật, vừa có đạo đức, vừa tốt cho bản thân và mọi người?"' },
+    ],
+    examples: [
+      { q: 'Hãy đặt ra 3 "cam kết cá nhân" cho năm học lớp 8 dựa trên những điều đã học ở GDCD 7.', a: 'Gợi ý: (1) "Em sẽ chủ động giúp đỡ một bạn mới chưa hoà nhập được với lớp." (2) "Em sẽ kiên quyết nói không với bất kỳ hành vi bạo lực học đường nào, dù là tham gia hay im lặng cổ vũ." (3) "Mỗi tối em sẽ dành 15 phút trò chuyện cùng gia đình thay vì chỉ dùng điện thoại." — Cam kết cần cụ thể, có thể đo lường được và thực tế với cuộc sống của em.' },
+      { q: 'Tình huống: Em biết bạn cùng bàn đang thường xuyên bị bạn lớp khác bắt nạt lấy tiền, nhưng bạn sợ không dám nói với thầy cô. Em sẽ làm gì?', a: 'Em sẽ: (1) Hỏi thăm, lắng nghe để bạn cảm thấy có chỗ dựa. (2) Giải thích cho bạn rằng im lặng không giải quyết được vấn đề và có thể khiến tình huống tệ hơn. (3) Đề nghị cùng bạn đến gặp thầy cô hoặc ban giám hiệu để báo cáo — em có thể đồng hành để bạn bớt sợ. (4) Nếu bạn không đồng ý, em có thể tự mình thông báo với người lớn tin cậy vì đây là việc liên quan đến an toàn. Bảo vệ bạn là trách nhiệm đạo đức, không phải "mách lẻo".' },
+      { q: 'Giải thích: Bình đẳng giới không có nghĩa là nam và nữ phải giống nhau hoàn toàn. Em đồng ý không? Vì sao?', a: 'Em đồng ý. Bình đẳng giới nghĩa là nam và nữ có cơ hội, quyền lợi và sự tôn trọng như nhau — không phải giống nhau về thể chất hay vai trò. Nam và nữ có thể có những đặc điểm và sở trường khác nhau, điều đó bình thường và đáng trân trọng. Quan trọng là không ai bị giới hạn cơ hội, bị phân biệt đối xử hay bị áp đặt vai trò cứng nhắc chỉ vì giới tính.' },
+    ],
+  },
 };

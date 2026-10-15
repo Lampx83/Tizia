@@ -705,4 +705,30 @@ export const P5AN_LESSONS = {
       { q: 'Năm tiêu chí đánh giá là gì?', a: 'Giai điệu, nhịp, sắc thái, phong thái, sáng tạo.' },
     ],
   },
+
+  'P5AN-w36-quiz': {
+    topic: 'Kết thúc Tiểu học — Âm nhạc đồng hành cả đời',
+    intro: 'Chúc mừng! Em đã hoàn thành 5 năm học Âm nhạc tiểu học. Âm nhạc sẽ là người bạn suốt cuộc đời!',
+    objectives: [
+      'Tổng kết hành trình học âm nhạc 5 năm.',
+      'Kết nối âm nhạc với cuộc sống và học tập ở cấp 2.',
+    ],
+    theory: [
+      { h: 'Hành trình 5 năm Âm nhạc' },
+      { ul: [
+        'Lớp 1-2: Học hát, phân biệt âm thanh to-nhỏ, nhanh-chậm, cao-thấp.',
+        'Lớp 3-4: Nhạc cụ gõ, TĐN, nhịp 2/4 và 3/4, nhạc lý cơ bản.',
+        'Lớp 5: Ký xướng âm, recorder, sắc thái (forte/piano), biểu diễn tổng hợp.',
+      ] },
+      { h: 'Bộ "nhạc cụ" em mang theo mãi mãi' },
+      { ul: ['Giọng hát — nhạc cụ tự nhiên và luôn sẵn có.', 'Cảm thụ âm nhạc — biết lắng nghe và cảm nhận.', 'Nhịp điệu trong người — giúp em phối hợp và sáng tạo.'] },
+      { h: 'Ở THCS và suốt cuộc đời' },
+      { p: 'Âm nhạc không chỉ là môn học — nó giúp em giải toả stress, tăng sự tập trung, kết bạn và tìm thấy niềm vui.' },
+      { note: 'Hãy tiếp tục hát mỗi ngày. Một bài hát yêu thích mỗi buổi sáng là khởi đầu tuyệt vời!' },
+    ],
+    examples: [
+      { q: 'Bài hát nào em nhớ nhất sau 5 năm học Âm nhạc?', a: 'Em tự kể — đó là bài hát riêng của em, không có câu trả lời sai.' },
+      { q: 'Âm nhạc giúp ích gì cho việc học các môn khác?', a: 'Giúp não thư giãn, tăng trí nhớ (học bài theo nhịp điệu), rèn tập trung và kiên nhẫn.' },
+    ],
+  },
 };

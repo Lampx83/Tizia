@@ -881,4 +881,42 @@ export const H11SINH_LESSONS = {
       { q: 'Vì sao có thể nói cân bằng nội môi là điều kiện để mọi quá trình sống khác diễn ra bình thường?', a: 'Cân bằng nội môi giữ ổn định nồng độ chất, pH, nhiệt độ của môi trường trong. Nhờ đó enzyme và tế bào hoạt động bình thường, làm nền cho chuyển hoá, cảm ứng, sinh trưởng và sinh sản. Mất cân bằng nội môi, mọi quá trình sống đều rối loạn.' },
     ],
   },
+
+  'H11SINH-w36-quiz': {
+    topic: 'Kết thúc Sinh Học 11 — Sự sống ở cấp cơ thể và bước ngoặt lớp 12',
+    intro: 'Sinh Học 11 đã dẫn chúng ta đi sâu vào sự sống ở cấp độ cơ thể — từ cách thực vật hấp thu ánh sáng đến cách hệ thần kinh động vật xử lý thông tin. Hôm nay chúng ta nhìn lại toàn bộ hành trình và chuẩn bị cho chương trình lớp 12 đầy thú vị về di truyền và tiến hoá.',
+    objectives: [
+      'Hệ thống hoá 4 chủ đề lớn của Sinh Học 11: chuyển hoá, cảm ứng, sinh trưởng-phát triển, sinh sản.',
+      'Kết nối kiến thức sinh học cơ thể với ứng dụng thực tiễn trong y học và nông nghiệp.',
+      'Nắm định hướng học tập cho Sinh Học 12 — di truyền học và tiến hoá sinh học.',
+    ],
+    theory: [
+      { h: 'Bốn chủ đề lớn của năm học' },
+      { ul: [
+        'Chuyển hoá vật chất và năng lượng: quang hợp (thực vật), hô hấp tế bào, tiêu hoá, hô hấp, tuần hoàn, bài tiết (động vật), cân bằng nội môi.',
+        'Cảm ứng: hướng động/ứng động (thực vật); phản xạ, điện thế hoạt động, synap, tập tính (động vật).',
+        'Sinh trưởng và phát triển: hormone thực vật (auxin, gibberellin, cytokinin, ABA, ethylene); biến thái hoàn toàn/không hoàn toàn, hormone sinh trưởng động vật.',
+        'Sinh sản: vô tính (nảy chồi, phân mảnh, sinh sản sinh dưỡng) và hữu tính — ưu thế từng dạng.',
+      ] },
+      { h: 'Ứng dụng sinh học 11 trong cuộc sống' },
+      { ul: [
+        'Quang hợp → nông nghiệp: chọn giống cây trồng quang hợp hiệu quả cao; kĩ thuật trồng cây trong nhà kính.',
+        'Hormone thực vật → công nghệ sau thu hoạch: ethylene kích chín trái cây; gibberellin kéo dài thời gian tươi của rau.',
+        'Cảm ứng thần kinh → y học: hiểu cơ chế bệnh Parkinson, Alzheimer; thuốc tác động lên synap.',
+        'Sinh sản vô tính → nhân giống: nuôi cấy mô tế bào thực vật — nhân giống cây quý hiếm hàng loạt.',
+      ] },
+      { h: 'Sinh Học 12 — hành trình kế tiếp' },
+      { ul: [
+        'Di truyền phân tử: AND, ARN, protein; nhân đôi, phiên mã, dịch mã — "trái tim" của sinh học hiện đại.',
+        'Di truyền Mendel và biến dị: quy luật Mendel, liên kết gen, hoán vị gen, di truyền giới tính.',
+        'Tiến hoá: chứng cứ tiến hoá, cơ chế tiến hoá Darwin, thuyết tiến hoá tổng hợp hiện đại.',
+        'Sinh thái học: quần thể, quần xã, hệ sinh thái, chu trình vật chất và năng lượng, bảo vệ môi trường.',
+      ] },
+      { note: 'Sinh học là môn khoa học của sự sống — và sự sống thật sự hấp dẫn hơn bất kỳ cuốn sách nào. Hè này hãy quan sát cây cối quanh nhà: chúng đang quang hợp, vận chuyển nước, ra hoa và kết quả — tất cả đều là Sinh Học 11 đang diễn ra trước mắt em.' },
+    ],
+    examples: [
+      { q: 'Làm thế nào để phân biệt hormone thực vật kích thích và ức chế khi ôn thi?', a: 'Cách nhớ đơn giản: Hai hormone KÍCH THÍCH tăng trưởng là auxin (kéo dài tế bào) và gibberellin (kéo dài chồi, phá miên trạng). Cytokinin kích thích phân chia tế bào. Hai hormone ỨC CHẾ là ABA (đóng khẩu, gây ngủ đông) và ethylene (kích chín, rụng lá). Để nhớ: "A và E ức chế, G và Aux kích thích, C là nhân đôi". Áp dụng: khi gặp đề hỏi về "rau tươi lâu hơn" → cần ức chế ethylene, tức bảo quản lạnh hoặc dùng 1-MCP.' },
+      { q: 'Vì sao Sinh Học 12 lại được coi là quan trọng hơn Sinh Học 11 trong đề thi tốt nghiệp?', a: 'Đề thi tốt nghiệp THPT Quốc gia môn Sinh thường có cấu trúc: khoảng 60% câu hỏi về di truyền và tiến hoá (chương trình lớp 12) và 40% về sinh học cơ thể (lớp 11). Lý do di truyền chiếm tỉ trọng lớn hơn: nó có nhiều dạng bài toán phức tạp (xác suất di truyền, hoán vị gen, di truyền giới tính) đòi hỏi kỹ năng tính toán và suy luận cao. Tuy nhiên, không thể bỏ lớp 11 vì các câu lý thuyết về cơ thể thường không khó và giúp đảm bảo điểm nền tốt.' },
+    ],
+  },
 };

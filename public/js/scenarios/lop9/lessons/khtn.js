@@ -1592,4 +1592,43 @@ export const S9KHTN_LESSONS = {
       { q: 'Nêu một số việc cần làm vào buổi tối trước ngày thi để có trạng thái tốt nhất.', a: 'Soạn đủ dụng cụ và giấy tờ; xem nhẹ lại các công thức, sơ đồ tư duy chứ không nhồi nhét kiến thức mới; ăn uống nhẹ nhàng, tránh đồ lạ; đi ngủ sớm để ngủ đủ giấc; giữ tinh thần thoải mái, tự tin vào những gì mình đã ôn.' },
     ]
   ),
+
+  'S9KHTN-w36-quiz': L(
+    'Kết thúc KHTN THCS — Khoa học là hành trình, không phải đích đến',
+    'Tuần cuối năm, cô trò mình cùng nhìn lại ba mạch kiến thức lớn của KHTN 9 (Vật lí, Hoá học, Sinh học) — không để ôn thi mà để thấy chúng kết nối với nhau và với thế giới thực như thế nào.',
+    [
+      'Nhận ra sự liên kết giữa ba phân môn Vật lí, Hoá học, Sinh học trong KHTN.',
+      'Hiểu ứng dụng thực tế của kiến thức KHTN trong đời sống hiện đại.',
+      'Định hướng học THPT: lựa chọn tổ hợp môn thi phù hợp năng lực và ước mơ.',
+    ],
+    [
+      { h: 'Ba mạch kiến thức KHTN 9 — Kết nối bức tranh lớn' },
+      { ul: [
+        'Vật lí: điện — từ — ánh sáng — năng lượng. Giải thích mọi thứ từ bóng đèn, động cơ đến viễn thông.',
+        'Hoá học: nguyên tố, phản ứng, chất hữu cơ. Nền tảng của vật liệu, dược phẩm, thực phẩm.',
+        'Sinh học: di truyền, tiến hoá, hệ sinh thái. Giải mã sự sống và mối quan hệ giữa sinh vật.',
+      ] },
+      { h: 'KHTN trong thế giới thực' },
+      { p: 'Pin điện thoại em dùng hàng ngày = điện hoá học (Hoá). Tiếng nhạc từ loa = sóng âm (Vật lí). Kháng sinh trị bệnh = ứng dụng sinh học phân tử (Sinh). Mọi công nghệ đều có KHTN ở bên trong.' },
+      { h: 'Từ THCS lên THPT — KHTN tách ra như thế nào?' },
+      { ul: [
+        'Lớp 10–12: Vật lí, Hoá học, Sinh học thành ba môn độc lập với nội dung sâu hơn nhiều.',
+        'Tổ hợp A00 (Toán-Lí-Hoá) → ngành kĩ thuật, công nghệ, y dược (một phần).',
+        'Tổ hợp B00 (Toán-Hoá-Sinh) → ngành y dược, nông lâm, môi trường.',
+        'Tổ hợp A01 (Toán-Lí-Anh) → IT, điện tử, kinh tế kĩ thuật.',
+      ] },
+      { h: 'Lời khuyên cho năm THPT đầu tiên' },
+      { ul: [
+        'Đừng học thuộc lòng công thức — hiểu nguyên lí để suy ra công thức khi quên.',
+        'Luyện bài tập nhiều hơn đọc lí thuyết: KHTN là môn thực hành tư duy.',
+        'Kết nối kiến thức giữa ba môn — bài thi tổng hợp ở đại học sẽ yêu cầu điều này.',
+      ] },
+      { note: 'Khoa học không phải để học thuộc — khoa học là cách nhìn thế giới. Mỗi khi thắc mắc "Tại sao thế này?", đó là lúc em đang làm khoa học. Hãy giữ mãi sự tò mò đó.' },
+    ],
+    [
+      { q: 'Vật lí, Hoá học và Sinh học kết nối với nhau như thế nào trong thực tế?', a: 'Ví dụ quang hợp: Ánh sáng (Vật lí) cung cấp năng lượng → phản ứng hoá học chuyển CO₂ và H₂O thành glucose và O₂ (Hoá học) → cây dùng glucose để sống và sinh trưởng (Sinh học). Hay trong y học: thuốc (Hoá học) tác động lên tế bào (Sinh học) thông qua các tín hiệu điện và hoá học (Vật lí + Hoá). Ba môn không tách rời mà là ba góc nhìn về cùng một thế giới.' },
+      { q: 'Làm sao biết mình hợp với tổ hợp KHTN nào ở THPT?', a: 'Hãy tự hỏi: Em thích giải bài toán cơ học và điện (Vật lí)? Hay thích thí nghiệm, phản ứng màu sắc và phân tử (Hoá học)? Hay thích tìm hiểu về cơ thể người, gen và môi trường (Sinh học)? Đam mê và sự tò mò tự nhiên với một lĩnh vực thường dẫn đến thành công hơn là chọn theo điểm số hay xu hướng xã hội.' },
+      { q: 'Kiến thức KHTN nào em thấy ứng dụng nhiều nhất trong cuộc sống hàng ngày?', a: 'Điện học (Vật lí): hiểu sao không nên sạc điện thoại qua đêm, cách đấu nối thiết bị điện an toàn. Hoá học: biết không trộn thuốc tẩy và giấm, hiểu vì sao thực phẩm lên men. Sinh học: biết vi khuẩn và kháng sinh hoạt động thế nào để dùng thuốc đúng cách. KHTN luôn hiện diện trong từng quyết định hàng ngày của chúng ta.' },
+    ]
+  ),
 };

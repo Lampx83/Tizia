@@ -1043,4 +1043,32 @@ export const P5KH_LESSONS = {
       { q: 'Em sẽ làm gì để tiếp tục yêu khoa học?', a: 'Đọc sách khoa học cho thiếu nhi, xem video tài liệu, làm thí nghiệm an toàn tại nhà với bố mẹ.' },
     ],
   },
+
+  'P5KH-w36-quiz': {
+    topic: 'Kết thúc Tiểu học — Hành trang Khoa học vào THCS',
+    intro: 'Em đã hoàn thành chương trình Khoa học tiểu học! Cùng tổng kết những khám phá trong 5 năm nhé.',
+    objectives: [
+      'Hệ thống hoá kiến thức khoa học đã học qua 5 năm.',
+      'Kết nối với các môn KHTN (Vật Lý, Hoá Học, Sinh Học) ở THCS.',
+    ],
+    theory: [
+      { h: '3 chủ đề lớn em đã khám phá' },
+      { ul: [
+        '🌿 **Sự sống:** cơ thể người (giác quan, hệ tiêu hoá, hô hấp), động thực vật, chuỗi thức ăn, sinh sản.',
+        '⚡ **Vật chất và năng lượng:** ánh sáng, âm thanh, điện, nhiệt, hỗn hợp và dung dịch.',
+        '🌍 **Môi trường:** đất, nước, không khí; ô nhiễm và bảo vệ môi trường; tài nguyên thiên nhiên.',
+      ] },
+      { h: 'Lên THCS em sẽ học gì?' },
+      { ul: [
+        'Vật Lý: lực, chuyển động, quang học, điện học chuyên sâu.',
+        'Hoá Học: nguyên tố, phân tử, phản ứng hoá học.',
+        'Sinh Học: tế bào, vi sinh vật, cơ thể thực vật và động vật chuyên sâu.',
+      ] },
+      { note: 'Tò mò là động lực lớn nhất của nhà khoa học. Hãy luôn đặt câu hỏi "Tại sao?" và "Như thế nào?"!' },
+    ],
+    examples: [
+      { q: 'Nêu 1 ví dụ về chuỗi thức ăn em đã học?', a: 'Cỏ → châu chấu → ếch → rắn → đại bàng. Mỗi mắt xích đều quan trọng để giữ cân bằng sinh thái.' },
+      { q: 'Tại sao cần bảo vệ rừng?', a: 'Rừng giữ nước, ngăn lũ, cung cấp oxy, là nhà của nhiều loài động vật và nguồn tài nguyên cho con người.' },
+    ],
+  },
 };

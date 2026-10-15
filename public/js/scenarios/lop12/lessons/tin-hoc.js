@@ -1064,4 +1064,45 @@ export const H12TIN_LESSONS = {
       { q: 'Một website được đánh giá là "tốt" dựa trên những tiêu chí nào?', a: 'Nội dung đầy đủ và đúng yêu cầu, dễ sử dụng, giao diện đẹp, tải nhanh, an toàn (HTTPS, chống XSS) và có khả năng tiếp cận.' },
     ],
   },
+
+  'H12TIN-w36-quiz': {
+    topic: 'Kết thúc Tin Học THPT — Thế giới số và bạn',
+    intro: 'Tuần cuối năm học Tin Học — hãy nhìn lại hành trình từ AI đến web: bạn đã học cách máy tính "nghĩ", cách mạng lưới kết nối, cách xây dựng trang web. Nhưng quan trọng hơn — bạn đã hiểu mình là ai trong thế giới số và trách nhiệm đi kèm với điều đó.',
+    objectives: [
+      'Hệ thống hoá kiến thức Tin Học 3 năm THPT: từ cơ bản đến ứng dụng thực tế.',
+      'Nhận ra vai trò của Tin Học và công nghệ số trong sự phát triển cá nhân và xã hội.',
+      'Xây dựng tư duy công dân số có trách nhiệm và định hướng nghề nghiệp liên quan đến CNTT.',
+    ],
+    theory: [
+      { h: 'Bản đồ Tin Học 3 năm THPT' },
+      { ul: [
+        'Lớp 10: Nhập môn CNTT, mạng máy tính, An toàn thông tin, hướng nghiệp CNTT, lập trình cơ bản (Python/Scratch).',
+        'Lớp 11: Cơ sở dữ liệu, SQL cơ bản, thiết kế dữ liệu, ứng dụng văn phòng nâng cao, đạo đức số.',
+        'Lớp 12 (ICT): AI cơ bản, mạng xã hội và bảo vệ dữ liệu cá nhân, HTML/CSS cơ bản, dự án web hoàn chỉnh, hướng nghiệp CNTT.',
+      ] },
+      { h: 'Kỹ năng số em đã có sau THPT' },
+      { ul: [
+        'Tư duy thuật toán: Phân tích vấn đề → chia nhỏ → giải từng bước — áp dụng được trong mọi lĩnh vực.',
+        'Bảo mật cơ bản: Biết dùng mật khẩu mạnh, nhận diện phishing, không chia sẻ thông tin cá nhân tuỳ tiện.',
+        'Tạo nội dung số: Thiết kế web HTML/CSS, trình bày dữ liệu, làm báo cáo có hình ảnh chuyên nghiệp.',
+        'Đọc hiểu AI: Biết AI hoạt động dựa trên dữ liệu và thuật toán, không có "ma thuật" — hiểu giúp dùng AI đúng cách.',
+      ] },
+      { h: 'CNTT — ngành nghề của thế kỉ 21' },
+      { ul: [
+        'Kỹ sư phần mềm, Developer: Xây dựng ứng dụng — nhu cầu tuyển dụng cao nhất toàn cầu đến 2030.',
+        'Khoa học dữ liệu / AI: Phân tích dữ liệu lớn, xây dựng mô hình ML — lương cao nhất trong CNTT.',
+        'An ninh mạng / Cybersecurity: Bảo vệ hệ thống khỏi tấn công — thiếu hụt nhân lực trầm trọng toàn cầu.',
+        'UX/UI Design: Thiết kế giao diện người dùng — giao điểm giữa công nghệ và nghệ thuật.',
+        'Quản lý dự án CNTT, Phân tích nghiệp vụ: Không cần code giỏi nhưng cần hiểu cả hai thế giới công nghệ và kinh doanh.',
+      ] },
+      { h: 'Công dân số có trách nhiệm' },
+      { p: 'Trong thế giới số, mọi hành động đều để lại dấu vết. Chia sẻ thông tin sai có thể gây hại cho người khác; bình luận tiêu cực có thể phá hoại tinh thần ai đó; dùng AI để tạo nội dung giả mạo là vi phạm đạo đức và pháp luật. Hiểu công nghệ là bước đầu — sử dụng nó một cách có đạo đức mới là điều quan trọng hơn.' },
+      { note: 'Tin Học không chỉ là học lập trình hay sửa máy tính — đó là học cách tư duy có hệ thống, giải quyết vấn đề sáng tạo và sống có trách nhiệm trong thế giới kết nối. Những kỹ năng đó không bao giờ lỗi thời.' },
+    ],
+    examples: [
+      { q: 'Trí tuệ nhân tạo (AI) hiện tại làm được gì và chưa làm được gì? Tại sao AI không thể thay thế hoàn toàn con người?', a: 'AI hiện tại (2026) làm được: nhận dạng hình ảnh/giọng nói, dịch ngôn ngữ, tạo văn bản/hình ảnh, chơi cờ vua/Go tốt hơn con người, phát hiện ung thư từ ảnh X-quang. Chưa làm được: suy luận nhân quả thực sự (hiểu "tại sao"), sáng tạo có ý thức và cảm xúc thật, thích ứng linh hoạt với tình huống chưa từng gặp, giao tiếp với hiểu biết về bối cảnh văn hoá sâu. AI không thể thay thế hoàn toàn vì: thiếu ý thức và đạo đức tự phát, cần dữ liệu lớn để học (con người có thể học từ 1 ví dụ), không chịu trách nhiệm pháp lý và đạo đức.' },
+      { q: 'Một trang web bạn muốn tạo — đề xuất cấu trúc HTML/CSS cơ bản cho trang chủ của nó.', a: 'Cấu trúc HTML cơ bản: <header> chứa logo + navigation bar (<nav>); <main> chia thành các <section> (hero/banner, features, testimonials, CTA); <footer> chứa links và copyright. CSS: Dùng Flexbox hoặc Grid để layout; CSS custom properties (--color-primary) cho màu sắc nhất quán; media query @media (max-width: 768px) cho responsive mobile. Nội dung phụ thuộc mục đích: portfolio cá nhân, cửa hàng online hay blog đều có cấu trúc riêng phù hợp.' },
+      { q: 'Em muốn học CNTT sâu hơn sau tốt nghiệp. Nên bắt đầu từ đâu ngoài chương trình đại học?', a: 'Lộ trình tự học song song đại học: (1) Chọn ngôn ngữ đầu tiên: Python (dễ nhất, dùng nhiều nhất trong AI/Data) hoặc JavaScript (web + mobile). (2) Học qua dự án thực tế: xây blog cá nhân, tạo chatbot đơn giản, phân tích dữ liệu CSV. (3) Nền tảng học: CS50 Harvard (miễn phí, nền tảng vững nhất), freeCodeCamp (web), Kaggle (data). (4) GitHub: đưa tất cả dự án lên GitHub — đó là portfolio thực sự với nhà tuyển dụng. (5) Tham gia cộng đồng: hackathon, câu lạc bộ lập trình, Discord tech community.' },
+    ],
+  },
 };

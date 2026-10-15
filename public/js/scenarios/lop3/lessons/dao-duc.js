@@ -773,4 +773,37 @@ export const P3DD_LESSONS = {
       { q: 'Em chưa làm được gì nổi bật trong 5 phẩm chất. Em làm gì?', a: 'Em chọn 1 việc đơn giản: "Mỗi ngày làm 1 việc tốt nhỏ — nhặt rác, giúp bạn, mời ông bà nước". Bắt đầu từ nhỏ rồi lớn dần.' },
     ],
   },
+
+  'P3DD-w36-quiz': {
+    topic: 'Kết thúc Lớp 3 — Em lớn lên với những giá trị tốt đẹp',
+    intro: 'Một năm học Đạo đức đầy ý nghĩa sắp khép lại! Em đã học được rất nhiều điều về cách sống tốt, quan tâm đến mọi người và bảo vệ môi trường. Hôm nay cùng nhìn lại hành trình trưởng thành của em nhé!',
+    objectives: [
+      'Tổng kết các giá trị đạo đức đã học trong năm.',
+      'Nhận ra mình đã trưởng thành hơn như thế nào.',
+      'Đặt mục tiêu sống tốt hơn khi lên Lớp 4.',
+    ],
+    theory: [
+      { h: 'Những giá trị em đã học và thực hành' },
+      { ul: [
+        'YÊU THƯƠNG GIA ĐÌNH: Kính trọng ông bà, cha mẹ; giúp đỡ việc nhà; quan tâm anh chị em.',
+        'TÌNH BẠN ĐẸP: Trung thực với bạn; chia sẻ và giúp đỡ; giải quyết xung đột bằng lời nói ôn hoà.',
+        'TRÁCH NHIỆM HỌC SINH: Chăm chỉ học tập; giữ gìn đồ dùng học tập; tôn trọng thầy cô.',
+        'CÔNG DÂN TỐT: Tuân thủ luật giao thông; giữ gìn vệ sinh nơi công cộng; yêu quê hương đất nước.',
+        'BẢO VỆ MÔI TRƯỜNG: Không vứt rác bừa bãi; tiết kiệm nước và điện; yêu quý thiên nhiên.',
+      ] },
+      { h: 'Em đã làm được những gì?' },
+      { p: 'Hãy tự hỏi: Trong năm nay, em đã làm được gì tốt? Em giúp bạn vượt qua khó khăn chưa? Em có thể kể cho bố mẹ nghe 3 điều tốt em đã làm không?' },
+      { h: 'Mục tiêu đạo đức cho Lớp 4' },
+      { ul: [
+        'Biết lắng nghe và thấu hiểu cảm xúc của người khác.',
+        'Dũng cảm nói lên sự thật, ngay cả khi khó khăn.',
+        'Tự lập hơn trong học tập và cuộc sống hàng ngày.',
+      ] },
+      { note: 'Người tốt không phải người không bao giờ sai, mà là người biết nhận lỗi và cố gắng làm tốt hơn mỗi ngày!' },
+    ],
+    examples: [
+      { q: 'Em thấy bạn khóc vì bị mất cặp sách. Em sẽ làm gì?', a: 'Em hỏi thăm và an ủi bạn; cùng bạn tìm kiếm; báo cô giáo; nếu không tìm được thì chia sẻ đồ dùng với bạn.' },
+      { q: 'Kể 3 điều tốt em đã làm trong năm học lớp 3.', a: 'Ví dụ: Giúp bà rửa bát mỗi tối; nhặt rác trong sân trường; chia sách giáo khoa cho bạn quên sách.' },
+    ],
+  },
 };

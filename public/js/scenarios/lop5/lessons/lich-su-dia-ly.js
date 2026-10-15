@@ -1067,4 +1067,38 @@ export const P5LSDL_LESSONS = {
       { q: 'Em làm gì để góp phần xây dựng đất nước?', a: 'Học giỏi, sống tử tế, bảo vệ môi trường, tiếp tục yêu Tổ quốc, hiếu thảo với cha mẹ, biết ơn thầy cô.' },
     ],
   },
+
+  'P5LSDL-w36-quiz': {
+    topic: 'Kết thúc Tiểu học — Hành trang Lịch Sử & Địa Lý vào THCS',
+    intro: 'Em đã du hành qua lịch sử hàng nghìn năm và khám phá địa lý Việt Nam trong 5 năm. Cùng nhìn lại nhé!',
+    objectives: [
+      'Hệ thống hoá kiến thức lịch sử và địa lý tiểu học.',
+      'Tự hào về đất nước và sẵn sàng học sâu hơn ở THCS.',
+    ],
+    theory: [
+      { h: 'Hành trình Lịch sử em đã đi qua' },
+      { ul: [
+        'Thời Hùng Vương và buổi đầu dựng nước.',
+        'Các triều đại phong kiến: Ngô, Đinh, Lý, Trần, Lê — đấu tranh giữ nước.',
+        'Nhà Nguyễn và thời Pháp thuộc — 80 năm đấu tranh giành độc lập.',
+        'Cách mạng Tháng Tám 1945 — Bác Hồ đọc Tuyên ngôn Độc lập.',
+        'Kháng chiến chống Pháp (1946–1954) và chống Mỹ (1954–1975) — thống nhất đất nước.',
+        'Công cuộc Đổi mới từ 1986 — Việt Nam hội nhập thế giới.',
+      ] },
+      { h: 'Địa lý Việt Nam em đã khám phá' },
+      { ul: [
+        'Vị trí địa lý: bán đảo Đông Dương, tiếp giáp Biển Đông.',
+        'Các vùng kinh tế: Bắc, Trung, Nam — đặc điểm tự nhiên và con người.',
+        'Tài nguyên: đất, rừng, biển, khoáng sản.',
+        'Dân số, dân tộc: 54 dân tộc anh em.',
+      ] },
+      { h: 'Lên THCS sẽ học thêm' },
+      { ul: ['Lịch sử thế giới và Lịch sử Việt Nam chuyên sâu hơn.', 'Địa lý tự nhiên và kinh tế-xã hội nâng cao.'] },
+      { note: 'Yêu nước bắt đầu từ hiểu biết về lịch sử và địa lý của Tổ quốc mình.' },
+    ],
+    examples: [
+      { q: 'Chiến thắng Điện Biên Phủ năm 1954 có ý nghĩa gì?', a: 'Kết thúc cuộc kháng chiến chống Pháp, buộc Pháp ký Hiệp định Genève, miền Bắc được giải phóng.' },
+      { q: 'Việt Nam có bao nhiêu vùng kinh tế?', a: '8 vùng kinh tế: Trung du và miền núi Bắc Bộ, Đồng bằng sông Hồng, Bắc Trung Bộ, Duyên hải Nam Trung Bộ, Tây Nguyên, Đông Nam Bộ, Đồng bằng sông Cửu Long — và Hà Nội/TP.HCM là 2 vùng đặc biệt.' },
+    ],
+  },
 };

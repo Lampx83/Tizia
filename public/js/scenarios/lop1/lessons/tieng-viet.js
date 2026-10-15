@@ -693,4 +693,34 @@ export const P1TV_LESSONS = {
       { q: 'Sắp xếp thành câu đúng: "yêu / em / cô"', a: 'Em yêu cô. (hoặc Cô yêu em. – tuỳ ý nghĩa)' },
     ],
   },
+
+  'P1TV-w36-quiz': {
+    topic: 'Kết thúc Lớp 1 — Hành trang Tiếng Việt vào Lớp 2',
+    intro: 'Chúc mừng! Cả năm học em đã làm rất tốt! Mình cùng nhìn lại hành trình chữ và tiếng nhé.',
+    objectives: [
+      'Nhớ lại các âm, vần, từ và câu đã học.',
+      'Tự hào về sự tiến bộ và sẵn sàng học Lớp 2.',
+    ],
+    theory: [
+      { h: 'Em đã học được gì?' },
+      { ul: [
+        '29 chữ cái tiếng Việt và các âm ghép: ch, nh, kh, ph, th, tr, gi, qu…',
+        'Các vần phổ biến: an, ăn, ân, en, in, on, ơn, un… và vần khó: uôi, ươi, iên…',
+        '6 dấu thanh: ngang, huyền, sắc, hỏi, ngã, nặng.',
+        'Từ chỉ người, vật, hoạt động, màu sắc.',
+        'Câu kể, câu hỏi; dấu chấm, dấu hỏi.',
+      ] },
+      { h: 'Lên Lớp 2 em sẽ học gì?' },
+      { ul: [
+        'Đọc bài dài hơn, hiểu nội dung sâu hơn.',
+        'Viết đoạn văn ngắn.',
+        'Học thêm nhiều từ và kiểu câu mới.',
+      ] },
+      { note: 'Hè này hãy đọc sách mỗi ngày — dù chỉ 10 phút thôi. Đó là cách tốt nhất để yêu tiếng Việt!' },
+    ],
+    examples: [
+      { q: '"Con trâu" — "trâu" có âm đầu và vần gì?', a: 'Âm đầu "tr", vần "âu".' },
+      { q: 'Đặt câu hỏi với từ "ai": "_____ đang học bài?"', a: 'Ai đang học bài? (Dùng dấu hỏi cuối câu.)' },
+    ],
+  },
 };

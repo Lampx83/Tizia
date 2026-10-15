@@ -1208,4 +1208,46 @@ export const H12NV_LESSONS = {
       { q: 'Vì sao cần dành thời gian đọc soát bài trước khi nộp?', a: 'Trong lúc viết, người làm bài dễ mắc lỗi chính tả, dùng từ, dấu câu hoặc bỏ sót ý mà không nhận ra. Dành khoảng 5 phút cuối đọc soát lại giúp phát hiện và sửa kịp những lỗi đó, kiểm tra xem mạch lập luận có chặt chẽ, có lạc đề chỗ nào không, có thiếu phần nào không. Một bài sạch lỗi, mạch lạc sẽ tạo ấn tượng tốt và tránh mất những điểm đáng tiếc. Đây là thói quen nhỏ nhưng rất quan trọng khi làm bài thi.' },
     ],
   },
+
+  'H12NV-w36-quiz': {
+    topic: 'Kết thúc Ngữ Văn THPT — Văn chương và hành trình trở thành người',
+    intro: 'Tuần cuối năm học — thay vì ôn thêm tác phẩm, hãy cùng nhìn lại hành trình Ngữ Văn THPT: những gì chúng ta đã đọc, những gì đã cảm nhận, và văn chương đã thay đổi cách em nhìn thế giới như thế nào.',
+    objectives: [
+      'Hệ thống hoá các tác phẩm và thể loại văn học đã học trong chương trình THPT.',
+      'Nhận ra giá trị của văn học đối với đời sống tâm hồn, tư duy và nhân cách.',
+      'Tự tin bước vào giai đoạn mới với hành trang ngôn ngữ và tư duy phản biện.',
+    ],
+    theory: [
+      { h: 'Những tác phẩm đồng hành 3 năm THPT' },
+      { p: 'Từ lớp 10 đến lớp 12, em đã gặp hàng chục tác phẩm từ nhiều thời đại và thể loại: sử thi dân gian (Đăm Săn, Ramayana), thơ Đường (Lý Bạch, Đỗ Phủ), truyện thơ Nôm (Truyện Kiều, Lục Vân Tiên), văn học lãng mạn (Thơ Mới 1932–1945), văn học kháng chiến (Tây Tiến, Việt Bắc, Đất nước) đến hiện đại (Rừng xà nu, Những đứa con trong gia đình, Người lái đò sông Đà).' },
+      { h: 'Văn học THPT đã dạy gì ngoài bài thi?' },
+      { ul: [
+        'Đồng cảm — biết đặt mình vào vị trí nhân vật, người khác; nền tảng của mọi mối quan hệ tốt đẹp.',
+        'Tư duy phản biện — đọc văn không chỉ để "thuộc" mà để "hiểu tại sao tác giả viết vậy".',
+        'Biểu đạt chính xác — chọn từ đúng, câu gọn, lập luận chặt — kỹ năng cần trong mọi nghề nghiệp.',
+        'Ký ức văn hoá — hiểu nguồn gốc và giá trị dân tộc qua văn học là một phần của bản sắc.',
+      ] },
+      { h: 'Văn học ở đại học và cuộc sống sau tốt nghiệp' },
+      { ul: [
+        'Nếu học Văn/Ngôn ngữ/Báo chí/Luật: Ngữ văn THPT là nền tảng quan trọng nhất.',
+        'Nếu học ngành khác: kỹ năng viết và trình bày ý tưởng rõ ràng luôn được đánh giá cao.',
+        'Đọc sách vẫn là thói quen tốt nhất để phát triển tư duy và ngôn ngữ — dù ở bất kì ngành nghề nào.',
+      ] },
+      { h: 'Lời khuyên cuối cho bài thi Ngữ Văn tốt nghiệp' },
+      { ul: [
+        'Phần Đọc hiểu: đọc kĩ văn bản trước khi trả lời; bám sát câu hỏi, không lan man.',
+        'Nghị luận xã hội: mở bài ngắn, thân bài 2–3 luận điểm rõ ràng có dẫn chứng thực tế, kết bài tự nhiên.',
+        'Nghị luận văn học: hiểu tác phẩm thật kĩ; trích dẫn chính xác; phân tích thay vì kể lại.',
+        'Dành 5 phút cuối soát lỗi chính tả và trình bày.',
+      ] },
+      { h: 'Một cuốn sách — một thế giới' },
+      { p: 'Hành trình văn chương không kết thúc ở ngày thi. Mỗi cuốn sách là cánh cửa mở ra một thế giới khác — quan điểm khác, cuộc đời khác, thời đại khác. Người đọc sách nhiều không chỉ biết nhiều — họ sống nhiều hơn, hiểu sâu hơn và biết yêu thương rộng hơn.' },
+      { note: 'Xin chúc mừng em đã hoàn thành chương trình Ngữ Văn THPT. Dù con đường phía trước dẫn đến đâu, hãy mang theo tình yêu ngôn ngữ và thói quen đọc sách — đó là người bạn đồng hành trọn đời.' },
+    ],
+    examples: [
+      { q: 'Trong số những tác phẩm đã học ở THPT, tác phẩm nào để lại ấn tượng sâu sắc nhất với em và vì sao?', a: 'Đây là câu hỏi mở. Quan trọng là em có lý giải chân thật: có thể là Truyện Kiều vì sự tinh tế của ngôn ngữ; Rừng xà nu vì sức mạnh tập thể; Người lái đò sông Đà vì vẻ đẹp ngôn từ của Nguyễn Tuân; Vợ nhặt vì tình người trong cảnh đói khổ. Bất kì tác phẩm nào, miễn em phân tích được "vì sao" thì đó là câu trả lời đúng.' },
+      { q: 'Kĩ năng viết có quan trọng trong ngành em dự định học ở đại học không? Giải thích.', a: 'Hầu hết các ngành đều cần viết tốt: Kỹ thuật cần viết báo cáo kỹ thuật và tài liệu; Kinh tế cần phân tích thị trường và trình bày kế hoạch; Y khoa cần hồ sơ bệnh án và nghiên cứu khoa học; Luật cần văn bản pháp lý chặt chẽ; Khoa học máy tính cần documentation và email chuyên nghiệp. Kỹ năng viết rõ ràng, logic từ môn Văn là nền tảng cho tất cả.' },
+      { q: 'Nếu chỉ được giữ lại một bài học từ 3 năm học Ngữ Văn THPT, em sẽ giữ bài học gì?', a: 'Gợi ý: "Mỗi câu chuyện đều có nhiều cách đọc" — bài học về sự đa chiều trong tư duy; hoặc "Ngôn từ có sức mạnh thay đổi người nghe" — bài học về giá trị của giao tiếp; hoặc đơn giản là "Đọc sách là sống thêm nhiều cuộc đời". Câu trả lời của em thể hiện hành trình học tập và trưởng thành riêng của em.' },
+    ],
+  },
 };

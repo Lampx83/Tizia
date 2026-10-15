@@ -1350,4 +1350,59 @@ export const S8GDDP_LESSONS = {
       { q: 'Sau khi học xong Giáo dục địa phương lớp 8, em rút ra trách nhiệm gì cho bản thân?', a: 'Em hiểu và tự hào về lịch sử, văn hoá Thủ đô; có trách nhiệm giữ gìn di sản và môi trường, ứng xử văn minh thanh lịch và học tập thật tốt để góp phần xây dựng Hà Nội "Văn hiến — Văn minh — Hiện đại". Tự hào luôn đi liền với trách nhiệm.' },
     ]
   ),
+
+  'S8GDDP-w36-quiz': L(
+    'Kết thúc GD Địa Phương 8 — Hà Nội ngàn năm trong tim',
+    'Hai năm học Giáo dục địa phương (lớp 7 và 8) đã dẫn em qua lịch sử Thăng Long ngàn năm — từ kinh đô thời Lý-Trần-Lê đến Hà Nội thời cận-hiện đại với những thăng trầm bi hùng và những danh hiệu UNESCO đáng tự hào. Đây là tuần ôn tập tổng kết để em khắc sâu tình yêu và trách nhiệm với Thủ đô trước khi bước vào năm lớp 9.',
+    [
+      'Hệ thống lại lịch sử và văn hoá Hà Nội đã học trong hai năm lớp 7–8.',
+      'Nắm vững các di sản, danh hiệu UNESCO và bài học lịch sử cận-hiện đại.',
+      'Xác định trách nhiệm của học sinh đối với Thủ đô và định hướng học lớp 9.',
+    ],
+    [
+      { h: 'Nhìn lại lớp 7 — Thăng Long lịch sử và văn hoá truyền thống' },
+      { ul: [
+        'Lịch sử Thăng Long: Lý Công Uẩn dời đô (1010), trận chiến Đống Đa (1789), các triều đại Lý-Trần-Lê.',
+        'Di sản văn hoá vật thể: Hồ Gươm và Tháp Rùa, Văn Miếu-Quốc Tử Giám, Hoàng thành Thăng Long, chùa Hương, Đền Hùng (trong vùng ảnh hưởng).',
+        'Văn hoá phi vật thể: ca trù, hát chèo, quan họ, lễ hội đặc trưng Hà Nội, ẩm thực (phở, bún chả, chả cá Lã Vọng).',
+        'Thiên nhiên và làng nghề: 36 phố phường; làng nghề truyền thống (gốm Bát Tràng, lụa Vạn Phúc, mây tre đan Phú Vinh).',
+      ] },
+      { h: 'Lớp 8 — Hà Nội cận và hiện đại' },
+      { ul: [
+        '1873 & 1882 — Pháp xâm chiếm Hà Nội: Nguyễn Tri Phương (1873) và Hoàng Diệu (1882) — hai vị tướng anh dũng hi sinh bảo vệ Thành Hà Nội.',
+        '19/8/1945 — Cách mạng Tháng Tám: nhân dân Hà Nội vùng lên giành chính quyền; Hà Nội là một trong những nơi Cách mạng thắng lợi sớm nhất.',
+        'Toàn quốc kháng chiến (19/12/1946): Hà Nội và "60 ngày đêm" — quân dân Thủ đô cầm chân địch để cả nước chuẩn bị kháng chiến lâu dài.',
+        'Tháng 12/1972 — "Điện Biên Phủ trên không": quân dân Hà Nội bắn rơi hàng chục B-52 của Mỹ, buộc Mỹ ngồi vào bàn đàm phán ký Hiệp định Paris (1/1973).',
+        'Hà Nội sau 1975: thủ đô nước Việt Nam thống nhất; Đổi Mới 1986 biến đổi bộ mặt kinh tế-xã hội.',
+      ] },
+      { h: 'Danh hiệu và di sản UNESCO của Hà Nội' },
+      { ul: [
+        'Hoàng thành Thăng Long — Di sản Văn hoá Thế giới (2010): 13 thế kỉ lịch sử kinh đô.',
+        '82 bia Tiến sĩ tại Văn Miếu — Di sản tư liệu thế giới (2010): tôn vinh học vấn và truyền thống hiếu học.',
+        '"Thành phố vì hoà bình" (UNESCO, 1999): ghi nhận nỗ lực tái thiết và phát triển hoà bình.',
+        '"Thành phố sáng tạo" trong lĩnh vực Thiết kế (UNESCO Creative Cities Network, 2019): công nhận tiềm năng sáng tạo và kinh tế văn hoá.',
+        'Ca trù — Di sản văn hoá phi vật thể cần bảo vệ khẩn cấp (UNESCO, 2009).',
+      ] },
+      { h: 'Hà Nội hôm nay — Cơ hội và thách thức' },
+      { ul: [
+        'Cơ hội: tăng trưởng kinh tế mạnh; nhiều khu công nghệ cao (Khu CNC Hoà Lạc); thu hút đầu tư nước ngoài; hội nhập quốc tế sâu rộng.',
+        'Thách thức: ô nhiễm không khí (AQI thường ở mức không tốt cho sức khoẻ vào mùa đông); ùn tắc giao thông; áp lực đô thị hoá và quản lí di sản đô thị.',
+        'Định hướng: Hà Nội hướng tới "Thành phố thông minh" với giao thông công cộng xanh (metro), năng lượng tái tạo và quản lí đô thị bằng công nghệ.',
+      ] },
+      { h: 'Trách nhiệm của học sinh' },
+      { ul: [
+        'Tìm hiểu và tự hào về lịch sử, văn hoá Thăng Long-Hà Nội.',
+        'Giữ gìn di sản: không viết vẽ bậy, không xả rác tại di tích; phản đối hành vi phá hoại.',
+        'Ứng xử văn minh thanh lịch: đúng giờ, trật tự, nhường đường, thân thiện.',
+        'Bảo vệ môi trường: đi xe đạp/xe máy điện thay xe xăng; phân loại rác; không đốt rơm rạ.',
+        'Học tập tốt để trở thành chủ nhân của Thủ đô "Văn hiến — Văn minh — Hiện đại".',
+      ] },
+      { note: '"Dù có đi bốn phương trời, lòng vẫn nhớ về Hà Nội." Hà Nội không chỉ là nơi em sinh ra và lớn lên — đó là di sản ngàn năm mà các thế hệ đi trước đã gìn giữ và trao lại. Hãy trân trọng, tiếp nối và làm Thủ đô ngày càng đẹp hơn!' },
+    ],
+    [
+      { q: 'Phân tích tinh thần của tướng Hoàng Diệu trong sự kiện Pháp chiếm thành Hà Nội năm 1882.', a: 'Năm 1882, quân Pháp tấn công thành Hà Nội. Tổng đốc Hoàng Diệu chỉ huy quân dân chống cự quyết liệt nhưng lực lượng quá chênh lệch, thành bị phá vỡ. Thay vì đầu hàng, Hoàng Diệu đã tự vẫn trước Võ Miếu để giữ khí tiết và thể hiện trách nhiệm đối với Thủ đô. Hành động đó biểu trưng cho tinh thần "thành mất, tướng chết theo thành" — một phẩm chất anh hùng khiến hậu thế mãi kính trọng. Ngày nay tên ông được đặt cho nhiều con phố và trường học ở Hà Nội và cả nước.' },
+      { q: 'Ý nghĩa lịch sử của 12 ngày đêm "Điện Biên Phủ trên không" (tháng 12/1972) đối với Hà Nội và Việt Nam.', a: 'Trong 12 ngày đêm (18–29/12/1972), Mỹ mở chiến dịch Linebacker II ném bom huỷ diệt Hà Nội và các thành phố miền Bắc nhằm khuất phục Việt Nam. Quân dân Thủ đô đã chiến đấu kiên cường, bắn hạ 81 máy bay (trong đó có 34 B-52 — "siêu pháo đài bay" vốn được xem là bất khả chiến bại). Chiến thắng vang dội này buộc Mỹ phải quay lại bàn đàm phán và kí Hiệp định Paris (27/1/1973) — kết thúc sự can dự trực tiếp của Mỹ vào cuộc chiến. Chiến thắng được mệnh danh là "Điện Biên Phủ trên không" vì tầm vóc lịch sử tương đương chiến thắng Điện Biên Phủ 1954.' },
+      { q: 'Em có thể làm gì cụ thể để góp phần giải quyết vấn đề ô nhiễm không khí ở Hà Nội?', a: 'Ô nhiễm không khí Hà Nội có nhiều nguyên nhân: khí thải xe máy/ô tô, khói đốt rơm rạ, bụi xây dựng và công nghiệp. Là học sinh, em có thể đóng góp bằng nhiều cách: (1) Đi xe đạp hoặc đi bộ đến trường nếu trong bán kính 2–3km — tiết kiệm tiền, tốt cho sức khoẻ và giảm khí thải. (2) Nhắc nhở gia đình không đốt rác, không đốt rơm rạ ngoài đồng. (3) Trồng cây xanh trong nhà và xung quanh nhà — cây hấp thụ CO₂ và bụi mịn. (4) Theo dõi chỉ số AQI và đeo khẩu trang N95 vào những ngày ô nhiễm cao. (5) Tuyên truyền cho bạn bè và gia đình về tác hại của ô nhiễm và các giải pháp giảm thiểu.' },
+    ]
+  ),
 };

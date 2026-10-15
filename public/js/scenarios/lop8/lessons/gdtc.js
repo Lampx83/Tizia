@@ -1401,4 +1401,53 @@ export const S8GDTC_LESSONS = {
       { q: 'Định hướng học GDTC ở lớp 9 có gì khác so với lớp 8?', a: 'Lớp 9 thường học CHUYÊN SÂU hơn và có thể theo CHUYÊN ĐỀ một môn thể thao yêu thích, đồng thời có yêu cầu cao hơn về thể lực. Vì vậy ngay từ bây giờ em nên xác định môn mình giỏi/thích nhất để theo đuổi sâu hơn và đặt mục tiêu thể lực cho năm cuối THCS.' },
     ]
   ),
+
+  'S8GDTC-w36-quiz': L(
+    'Kết thúc GDTC 8 — Thể chất khoẻ mạnh, tinh thần vững vàng',
+    'Năm lớp 8 là năm em phát triển thể chất và kĩ năng vận động toàn diện nhất: từ điền kinh, các môn bóng, võ thuật đến aerobic và lí thuyết sức khoẻ. Hãy nhìn lại những tiến bộ đó — mỗi lần chạy nhanh hơn, mỗi pha bóng chuẩn hơn, mỗi bài quyền hoàn chỉnh hơn đều là thành quả của em. Và bây giờ, hãy chuẩn bị tinh thần bước vào năm lớp 9 khoẻ mạnh!',
+    [
+      'Tổng hợp các nội dung GDTC 8 đã học: điền kinh, bóng đá/rổ/chuyền, võ thuật, aerobic.',
+      'Nhớ lại các quy tắc kĩ thuật, chiến thuật và yêu cầu an toàn quan trọng.',
+      'Xây dựng kế hoạch vận động cá nhân cho mùa hè trước khi vào lớp 9.',
+    ],
+    [
+      { h: 'Điền kinh' },
+      { ul: [
+        'Chạy ngắn (100m): kĩ thuật xuất phát thấp, tăng tốc, về đích; thở bụng.',
+        'Chạy bền (800m/1500m): nhịp thở đều (thở vào 3 bước, thở ra 3 bước), tư thế ngả người nhẹ về trước.',
+        'Nhảy xa: đà – giậm nhảy – trên không – tiếp đất (kĩ thuật ưỡn thân hoặc ngồi).',
+        'Ném bóng/đẩy tạ: kĩ thuật cầm, động tác đẩy/ném và vòng tay thoát.',
+      ] },
+      { h: 'Các môn bóng' },
+      { ul: [
+        'Bóng đá: dẫn bóng, chuyền và nhận bóng, sút cầu môn; chiến thuật tấn công – phòng thủ cơ bản.',
+        'Bóng rổ: dẫn bóng, chuyền (ngực, trên đầu, nảy đất), ném rổ (lay-up, ném tại chỗ); luật cơ bản (3 giây, 5 giây, di chuyển cùng bóng).',
+        'Bóng chuyền: tư thế sẵn sàng, đệm bóng (pass), chuyền bóng cao tay; phát bóng; xoay vị trí.',
+      ] },
+      { h: 'Võ thuật và thể dục' },
+      { ul: [
+        'Võ thuật cổ truyền/bài quyền: yêu cầu đúng kĩ thuật (thế đứng, hướng đi, độ mở chân), động tác mạnh-dứt khoát, khí thế (ánh mắt, tinh thần).',
+        'Aerobic/thể dục nhịp điệu: phối hợp tay-chân đồng thời với nhịp nhạc; đòi hỏi sự đồng đều khi biểu diễn nhóm.',
+        'Thể dục tay không: các bài tập phát triển sức mạnh, dẻo dai và phối hợp vận động.',
+      ] },
+      { h: 'Lí thuyết sức khoẻ' },
+      { ul: [
+        'Các tố chất thể lực: sức mạnh, sức bền, tốc độ, khéo léo, dẻo dai — cách phát triển từng tố chất.',
+        'Dinh dưỡng thể thao: carbohydrate (năng lượng), protein (phục hồi cơ), chất béo tốt, vitamin-khoáng chất và nước.',
+        'BMI = cân nặng (kg) / [chiều cao (m)]²: <18,5 thiếu cân; 18,5–24,9 bình thường; 25–29,9 thừa cân; ≥30 béo phì.',
+        'Chấn thương thể thao: phương pháp R-I-C-E (Rest-Ice-Compression-Elevation); khi nào cần đến bác sĩ.',
+        'Khởi động và hồi tĩnh: bắt buộc trước và sau mỗi buổi tập để phòng chấn thương và phục hồi nhanh.',
+      ] },
+      { h: 'Kế hoạch mùa hè' },
+      { p: 'Trước khi vào lớp 9, hãy lập kế hoạch vận động mùa hè: mỗi ngày ít nhất 60 phút (WHO), kết hợp môn yêu thích và chạy bộ/bơi lội. Điều này giúp duy trì thể lực và tinh thần sảng khoái cho năm học quan trọng nhất bậc THCS.' },
+      { h: 'Định hướng lớp 9' },
+      { p: 'Lớp 9 tập trung vào chuyên đề thể thao (em chọn một môn yêu thích để học sâu hơn) và yêu cầu thể lực cao hơn. Đây cũng là năm thi chuyển cấp, nên giữ sức khoẻ tốt sẽ là lợi thế lớn trong ôn thi.' },
+      { note: 'GDTC không kết thúc sau khi chuông trường reng — đó là hành trình cả đời. Mỗi ngày vận động là một ngày đầu tư cho sức khoẻ tương lai. Hãy tìm một môn thể thao mà em yêu thích và theo đuổi nó suốt đời!' },
+    ],
+    [
+      { q: 'Hãy giải thích kĩ thuật "xuất phát thấp" trong chạy ngắn và tại sao nó giúp tăng tốc độ.', a: 'Xuất phát thấp (sử dụng bàn đạp/khởi động): tư thế quỳ một gối, hai tay chống thẳng sau vạch, trọng tâm thấp. Khi nghe lệnh "Chạy!", đẩy mạnh bằng cả hai chân, người ngả về trước ở góc 45–50° và tăng bước nhanh. Ưu điểm: lực đẩy mạnh hơn so với xuất phát đứng do góc nghiêng tối ưu hoá lực tác dụng; giúp đạt tốc độ tối đa nhanh hơn trong 30–40m đầu tiên.' },
+      { q: 'Áp dụng phương pháp R-I-C-E: bạn em bị bong gân cổ chân khi chơi bóng. Em nên xử lí thế nào?', a: 'R – Rest (Nghỉ ngơi): dừng hoạt động ngay, tránh đặt trọng lực lên cổ chân bị thương. I – Ice (Chườm lạnh): chườm đá (bọc trong khăn, không đặt thẳng lên da) 15–20 phút mỗi 2 giờ trong 48h đầu để giảm sưng và đau. C – Compression (Băng ép): băng cố định cổ chân vừa đủ chặt để giảm sưng, không quá chặt. E – Elevation (Nâng cao): gác cổ chân lên cao hơn tim khi nằm/ngồi để giảm dồn máu. Nếu đau dữ dội hoặc không thể đi lại sau 24h, cần đến bác sĩ chụp X-quang kiểm tra gãy xương.' },
+      { q: 'Vì sao việc khởi động trước khi tập thể thao là bắt buộc, không thể bỏ qua?', a: 'Khởi động (5–10 phút) tăng dần cường độ vận động, giúp: (1) Tăng nhiệt độ cơ thể và cơ bắp — cơ ấm co duỗi linh hoạt hơn, giảm nguy cơ rách/căng cơ. (2) Tăng lưu lượng máu đến cơ — cung cấp O₂ và dưỡng chất kịp thời. (3) Tăng tần số tim và hô hấp từ từ — tránh sốc tim đột ngột. (4) Chuẩn bị tâm lí — tập trung, hưng phấn và phối hợp thần kinh-cơ tốt hơn. Bỏ qua khởi động là nguyên nhân số 1 gây chấn thương thể thao.' },
+    ]
+  ),
 };

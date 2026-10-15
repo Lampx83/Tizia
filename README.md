@@ -155,6 +155,7 @@ Mở `http://<host>:8041`.
 | `GET`  | `/api/badges` | Danh sách tất cả huy hiệu |
 | `GET`  | `/api/achievements?player=` | Huy hiệu đã mở khoá của 1 SV |
 | `POST` | `/api/ai/grade-soap`, `/patient-turn`, `/evaluate-roleplay` | AI tutor (Ollama) |
+| `GET`  | `/api/ai-board/inbox` | Hộp thư Ban điều hành AI — yêu cầu pending/reviewing toàn hệ thống. **Đọc-chỉ**, auth bằng header `x-ai-board-key`, chỉ tồn tại khi đặt `AI_BOARD_KEY` (xem dưới) |
 | `WS`   | `/ws` | Multiplayer cho Metaverse |
 | `WS`   | `/ws-lab` | Multiplayer cho Phòng bào chế |
 | `WS`   | `/ws-race` | Race 1v1 (sắp có) |
@@ -170,6 +171,31 @@ Mở `http://<host>:8041`.
 | `OLLAMA_URL` | dev tunnel | Endpoint Ollama |
 | `OLLAMA_SECKEY` | `pharmasim` | Header `x-ollama-seckey` (shared secret nội bộ) |
 | `OLLAMA_MODEL` | `qwen2.5:14b-instruct-ctx16k` | Tên model |
+| `AI_BOARD_KEY` | *(trống)* | Bật `/api/ai-board/inbox`. ≥24 ký tự (`openssl rand -hex 32`); trống = route 404 |
+
+### 🏛️ Hộp thư cho Ban điều hành AI
+
+Routine "Ban điều hành AI" chạy ngoài server (môi trường agent/CI) nên không có
+cookie session và cũng không có volume production. Hai đường đọc hộp thư:
+
+| Script | Đọc từ | Chạy được ở đâu |
+|---|---|---|
+| `server/scripts/sync-inbox.mjs` | file SQLite trực tiếp | **chỉ trên máy production** |
+| `scripts/fetch-inbox.mjs` | HTTP `/api/ai-board/inbox` | bất kỳ đâu (không cần `npm install`) |
+
+Cả hai ghi ra `ai-board/inbox.json` với cùng một định dạng.
+
+```bash
+# trên server: sinh key rồi thêm vào .env và khởi động lại
+openssl rand -hex 32
+
+# từ môi trường agent:
+AI_BOARD_KEY=<key> node scripts/fetch-inbox.mjs
+```
+
+Route là **đọc-chỉ** — không đổi được trạng thái yêu cầu qua key này. Phản hồi HS
+vẫn đi qua admin (`POST /api/admin/requests/:id/reply`, cần cookie + `role=admin`)
+hoặc `node scripts/admin-reply.js` chạy trên máy có DB.
 
 ---
 

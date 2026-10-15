@@ -1102,4 +1102,46 @@ export const H12LY_LESSONS = {
       { q: 'Một câu cho T₁/₂ = 8 ngày, hỏi sau 24 ngày còn lại bao nhiêu phần?', a: 'n = 24/8 = 3 → N/N₀ = (1/2)³ = 1/8. Dùng công thức N₀/2^n để tính tức thì.' },
     ],
   },
+
+  'H12LY-w36-quiz': {
+    topic: 'Kết thúc Vật Lý THPT — Khám phá vũ trụ bắt đầu từ đây',
+    intro: 'Tuần cuối của hành trình Vật Lý THPT — không phải để ôn thêm công thức, mà để nhìn lại cả một bầu trời kiến thức đã mở ra: từ dao động chiếc lắc đến sóng điện từ, từ quang phổ ánh sáng đến phân rã hạt nhân. Vũ trụ rộng lớn hơn bất kì bài thi nào.',
+    objectives: [
+      'Hệ thống hoá toàn bộ chương trình Vật Lý 3 năm THPT theo các lĩnh vực lớn.',
+      'Nhận ra sự kết nối giữa Vật Lý THPT với khoa học, công nghệ và đời sống.',
+      'Xây dựng tình yêu khoa học và định hướng học tập tiếp theo.',
+    ],
+    theory: [
+      { h: 'Bản đồ Vật Lý 3 năm THPT' },
+      { ul: [
+        'Lớp 10: Động học, động lực học, tĩnh học, các định luật bảo toàn (năng lượng, động lượng), nhiệt động lực học.',
+        'Lớp 11: Điện trường, mạch điện, từ trường, cảm ứng điện từ, dao động cơ và sóng cơ.',
+        'Lớp 12: Dao động/sóng điện từ, điện xoay chiều, ánh sáng (giao thoa, quang phổ), lượng tử ánh sáng, vật lý hạt nhân nguyên tử.',
+      ] },
+      { h: 'Vật Lý ở khắp nơi trong cuộc sống' },
+      { ul: [
+        'Điện thoại thông minh: sóng điện từ (4G/5G/WiFi), màn hình LCD (phân cực ánh sáng), cảm biến gia tốc (quán tính).',
+        'Y tế: MRI (từ trường cực mạnh), X-quang (tia X), siêu âm (sóng âm), xạ trị (phóng xạ).',
+        'Năng lượng: Pin mặt trời (hiệu ứng quang điện), điện hạt nhân (phân rã), turbin gió (cảm ứng điện từ).',
+        'Vũ trụ học: Vụ nổ lớn, sóng hấp dẫn, lỗ đen — Vật Lý là ngôn ngữ của vũ trụ.',
+      ] },
+      { h: 'Vật Lý ở đại học — những gì chờ đón' },
+      { p: 'Nếu em học các ngành kỹ thuật, Vật Lý, hoặc Y khoa: Cơ học lượng tử, Điện tử học, Quang học hiện đại và Vật lý hạt nhân sẽ đi sâu hơn nhiều. Nếu em học ngành khác: Vật Lý THPT đã cho em tư duy hệ thống — nhìn thấy nguyên nhân–kết quả, xây dựng mô hình và kiểm chứng bằng thực nghiệm.' },
+      { h: 'Lời khuyên cho kì thi tốt nghiệp' },
+      { ul: [
+        'Câu trắc nghiệm nhanh: nhận dạng công thức, thay số, kiểm tra đơn vị.',
+        'Câu khó tổng hợp: vẽ sơ đồ mạch điện / đường đi của ánh sáng / sơ đồ phân rã trước khi tính.',
+        'Công thức lượng giác và dao động: sin²ω t + cos²ω t = 1, công thức cộng pha — học thuộc để không mất điểm cơ bản.',
+        'Kiểm tra số liệu và đơn vị: sai đơn vị là sai hoàn toàn dù phép tính đúng.',
+      ] },
+      { h: 'Một câu hỏi mở cho em' },
+      { p: 'Richard Feynman — nhà vật lý đoạt giải Nobel — từng nói: "Vật Lý giống như tình dục: có thể có kết quả thực tế, nhưng đó không phải lý do chúng tôi theo đuổi nó." Vật Lý cuốn hút vì nó hỏi những câu hỏi sâu nhất về thực tại. Điều gì trong Vật Lý THPT khiến em tò mò nhất?' },
+      { note: 'Chúc mừng em đã hoàn thành hành trình Vật Lý THPT. Dù đi theo con đường nào, tư duy khoa học em có được — quan sát, đặt câu hỏi, kiểm chứng — sẽ là công cụ vô giá suốt cuộc đời.' },
+    ],
+    examples: [
+      { q: 'Nêu 3 ứng dụng thực tế của Vật Lý mà em gặp trong cuộc sống hàng ngày và chỉ ra nguyên lý Vật Lý liên quan.', a: 'Ví dụ: (1) Lò vi sóng — sóng điện từ vi sóng (GHz) làm dao động phân tử nước, sinh nhiệt; (2) Mạng WiFi — sóng điện từ dải 2.4 GHz hoặc 5 GHz truyền dữ liệu; (3) Tai nghe chống ồn — sóng âm nghịch pha triệt tiêu tiếng ồn (giao thoa triệt tiêu). Em có thể liệt kê bất kì ứng dụng nào em biết, kèm nguyên lý.' },
+      { q: 'Hiện tượng quang điện ngoài ý nghĩa thực tiễn gì? Tại sao Einstein được trao giải Nobel cho khám phá này?', a: 'Hiện tượng quang điện: ánh sáng chiếu lên kim loại bứt electron ra nếu tần số ≥ giới hạn quang điện. Ý nghĩa thực tiễn: tế bào quang điện (cảm biến ánh sáng), pin mặt trời (photovoltaic), camera kỹ thuật số (CCD/CMOS). Einstein nhận giải Nobel 1921 vì giải thích được tại sao hiệu ứng phụ thuộc tần số (không phải cường độ) ánh sáng — dùng lý thuyết photon, đặt nền tảng cho Cơ học lượng tử.' },
+      { q: 'Nếu em tiếp tục nghiên cứu Vật Lý hoặc ngành liên quan ở bậc đại học, em tò mò nhất về lĩnh vực nào và tại sao?', a: 'Câu hỏi mở, không có đáp án duy nhất. Gợi ý: Vật lý hạt nhân & năng lượng (lò phản ứng tổng hợp hạt nhân, ITER); Vật lý thiên văn (lỗ đen, sóng hấp dẫn LIGO); Vật lý chất rắn (siêu dẫn, vật liệu mới); Quang tử học & máy tính lượng tử. Tò mò đích thực là động lực mạnh nhất của mọi nhà khoa học.' },
+    ],
+  },
 };

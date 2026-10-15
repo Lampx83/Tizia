@@ -967,4 +967,48 @@ export const H11SU_LESSONS = {
       { q: 'Vì sao cải cách Minh Mạng để lại di sản hành chính đến ngày nay?', a: 'Phân tích: Cải cách Minh Mạng năm 1831-1832 chia cả nước thành các tỉnh trực thuộc trung ương, tạo ra mô hình hành chính thống nhất, gọn nhẹ và dễ quản lý. Mô hình tỉnh này được kế thừa qua nhiều giai đoạn và là nền tảng cho hệ thống hành chính cấp tỉnh của Việt Nam hiện đại — đó là di sản lâu bền của cuộc cải cách.' },
     ],
   },
+
+  'H11SU-w36-quiz': {
+    topic: 'Kết thúc Lịch Sử 11 — Thế giới và Việt Nam trước thời đại của chúng ta',
+    intro: 'Lịch Sử 11 đã mang chúng ta du hành qua những biến động lớn nhất của thế giới và Việt Nam từ thế kỉ XIX đến đầu thế kỉ XX. Hôm nay chúng ta nhìn lại những bài học lịch sử quan trọng nhất và chuẩn bị cho lớp 12 — nơi lịch sử tiếp tục kể chuyện về đấu tranh giành độc lập và xây dựng đất nước.',
+    objectives: [
+      'Hệ thống hoá các chủ đề lịch sử thế giới và Việt Nam đã học trong năm lớp 11.',
+      'Nhận biết những bài học lịch sử có giá trị bền vững đối với cuộc sống hiện đại.',
+      'Chuẩn bị tâm thế và phương pháp học Lịch Sử lớp 12 — môn thi tốt nghiệp quan trọng.',
+    ],
+    theory: [
+      { h: 'Lịch sử thế giới lớp 11 — những chuyển biến lớn' },
+      { ul: [
+        'Thế giới cuối TK XIX – đầu TK XX: chủ nghĩa tư bản độc quyền, xâm lược thuộc địa, mâu thuẫn đế quốc.',
+        'Các cuộc cách mạng: Cách mạng tư sản Pháp (1789), Cách mạng Nga (1917) — sự kiện làm thay đổi bản đồ chính trị thế giới.',
+        'Chiến tranh thế giới thứ nhất (1914–1918): nguyên nhân sâu xa (tranh giành thuộc địa) và nguyên nhân trực tiếp; hậu quả và trật tự Versailles.',
+        'Sự nổi lên của phong trào giải phóng dân tộc ở châu Á, châu Phi.',
+      ] },
+      { h: 'Lịch sử Việt Nam lớp 11 — đấu tranh và thức tỉnh' },
+      { ul: [
+        'Pháp xâm lược (1858–1884): từ Đà Nẵng đến hiệp ước Patenôtre — mất độc lập dân tộc.',
+        'Phong trào yêu nước cuối TK XIX: Văn thân, Cần Vương, Hoàng Hoa Thám — khởi nghĩa vũ trang chống Pháp.',
+        'Đầu TK XX — tìm con đường mới: Phan Bội Châu (bạo động), Phan Châu Trinh (cải lương), Nguyễn Ái Quốc.',
+        'Phong trào yêu nước 1919–1930: phong trào công nhân, hội Việt Nam Cách mạng Thanh niên, Đảng Cộng sản Việt Nam ra đời (3/2/1930).',
+      ] },
+      { h: 'Bài học lịch sử có giá trị hôm nay' },
+      { ul: [
+        'Độc lập dân tộc là điều kiện tiên quyết để phát triển — không có độc lập, không có tương lai.',
+        'Mỗi cuộc cách mạng thành công đều có sự chuẩn bị kỹ lưỡng và lực lượng quần chúng rộng rãi.',
+        'Lịch sử lặp lại theo chu kỳ — hiểu quá khứ giúp ta dự đoán và ứng phó với hiện tại.',
+      ] },
+      { h: 'Lịch Sử 12 — câu chuyện tiếp theo' },
+      { ul: [
+        'Cách mạng tháng Tám 1945: Hồ Chí Minh và sự ra đời của nước Việt Nam Dân chủ Cộng hoà.',
+        'Kháng chiến chống Pháp (1946–1954): Điện Biên Phủ — chiến thắng vĩ đại nhất TK XX.',
+        'Kháng chiến chống Mỹ (1954–1975): thống nhất đất nước 30/4/1975.',
+        'Đổi mới 1986 và Việt Nam hội nhập thế giới — lịch sử đương đại gần nhất với cuộc sống của em.',
+      ] },
+      { note: 'Học lịch sử không phải học thuộc ngày tháng mà là hiểu TẠI SAO sự kiện xảy ra và để lại bài học gì. Khi đọc tin tức hôm nay — xung đột, thương mại, ngoại giao — em sẽ thấy những quy luật lịch sử cũ đang lặp lại. Đó là lúc lịch sử thực sự sống trong em.' },
+    ],
+    examples: [
+      { q: 'Hãy giải thích ngắn gọn tại sao tất cả các phong trào chống Pháp ở Việt Nam cuối TK XIX đều thất bại.', a: 'Phân tích: Các phong trào Cần Vương, Văn thân... thất bại vì: (1) Thiếu đường lối cách mạng tiên tiến — vẫn theo tư tưởng phong kiến, không có giai cấp lãnh đạo phù hợp với thời đại; (2) Lực lượng phân tán, thiếu sự phối hợp thống nhất; (3) Vũ khí, trang bị kém hơn quân Pháp rất nhiều; (4) Không có hậu thuẫn quốc tế. Bài học: cần có đường lối đúng, lực lượng mạnh và thời cơ phù hợp để cách mạng thành công.' },
+      { q: 'Sự kiện lịch sử nào của lớp 11 có ảnh hưởng sâu sắc nhất đến tình hình Việt Nam ngày nay? Tại sao?', a: 'Sự kiện quan trọng nhất là Nguyễn Ái Quốc tìm ra con đường cứu nước và thành lập Đảng Cộng sản Việt Nam (3/2/1930). Sự kiện này quyết định toàn bộ lịch sử 100 năm tiếp theo: có tổ chức lãnh đạo với đường lối đúng đắn, phong trào giải phóng dân tộc mới đủ sức đánh bại cả Pháp lẫn Mỹ, thống nhất đất nước năm 1975 và tiến hành Đổi mới 1986 đưa Việt Nam ra thế giới. Nếu không có sự kiện 1930, lịch sử Việt Nam có thể đi theo hướng hoàn toàn khác.' },
+    ],
+  },
 };

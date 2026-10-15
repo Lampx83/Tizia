@@ -1,0 +1,4 @@
+{
+  "_doc": "Hộp thư yêu cầu của Ban điều hành AI. Thêm item vào mảng items[] để AI board xử lý trong phiên tiếp theo. Sau khi xử lý, AI board cập nhật status → 'done' và ghi pr_url.",
+  "items": []
+}

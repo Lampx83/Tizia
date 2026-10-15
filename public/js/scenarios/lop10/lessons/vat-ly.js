@@ -994,4 +994,41 @@ export const H10LY_LESSONS = {
       { q: '2 mol khí lí tưởng ở 300 K, thể tích 0,05 m³. Tính áp suất (R = 8,31 J/(mol·K)).', a: 'p = n·R·T/V = 2 × 8,31 × 300 / 0,05 = 4986 / 0,05 = 99720 Pa ≈ 10⁵ Pa (xấp xỉ 1 atm).' },
     ],
   },
+
+  'H10LY-w36-quiz': {
+    topic: 'Kết thúc Vật Lý 10 — Cơ học và Nhiệt học hành trang lên lớp 11',
+    intro: 'Vật Lý 10 đưa em vào thế giới vật lí học cổ điển: từ chuyển động cơ học đến nhiệt học và khí lí tưởng. Hôm nay chúng ta hệ thống lại toàn bộ kiến thức và xem lớp 11 sẽ mở ra những chân trời mới nào.',
+    objectives: [
+      'Hệ thống hoá các định luật và công thức cốt lõi của Vật Lý 10.',
+      'Nhận biết mối liên hệ giữa Cơ học – Nhiệt học và chương trình Vật Lý 11 (Điện – Từ – Sóng).',
+      'Xây dựng kế hoạch ôn tập hè để không bị hổng kiến thức nền.',
+    ],
+    theory: [
+      { h: 'Bức tranh toàn cảnh Vật Lý 10' },
+      { ul: [
+        'Động học: chuyển động thẳng đều, thẳng biến đổi đều, rơi tự do, ném ngang.',
+        'Động lực học: 3 định luật Newton, lực ma sát, lực hướng tâm, lực kéo dãn lò xo.',
+        'Các định luật bảo toàn: động lượng, năng lượng, cơ năng — nền tảng của vật lí học.',
+        'Nhiệt học: nội năng, các quá trình nhiệt động lực học, phương trình trạng thái khí lí tưởng.',
+      ] },
+      { h: 'Cầu nối sang Vật Lý 11' },
+      { ul: [
+        'Lực điện (Coulomb) → tương tự lực hấp dẫn (Newton) — cùng mô hình tương tác từ xa.',
+        'Công và năng lượng → Công của lực điện, thế năng điện, điện trường.',
+        'Chuyển động tròn đều → Chuyển động của điện tích trong từ trường (lực Lorentz).',
+        'Sóng cơ (âm thanh) → Sóng điện từ — cùng phương trình sóng, chỉ khác bản chất.',
+      ] },
+      { h: 'Ôn hè hiệu quả cho Vật Lý' },
+      { ul: [
+        'Hệ thống lại công thức theo chủ đề — không học thuộc lòng mà hiểu ý nghĩa vật lí.',
+        'Luyện bài tập định lượng: mỗi dạng làm 3–5 bài để nhớ phương pháp giải.',
+        'Xem video thí nghiệm thực (YouTube: "Vật lí thực tế") để kết nối lý thuyết với cuộc sống.',
+      ] },
+      { note: 'Điện và Từ ở lớp 11 sẽ thú vị hơn Cơ học rất nhiều — nhưng nếu định luật Newton và năng lượng chưa vững, em sẽ khó hình dung điện trường và từ trường. Hè này là thời điểm vàng để lấp khoảng trống.' },
+    ],
+    examples: [
+      { q: 'Tại sao cần phân biệt rõ "vận tốc" và "tốc độ" trong Vật Lý, và điều này ảnh hưởng như thế nào khi học Vật Lý 11?', a: 'Vận tốc là đại lượng vectơ (có phương, chiều và độ lớn); tốc độ là đại lượng vô hướng (chỉ có độ lớn). Khi học điện từ ở lớp 11, vận tốc của điện tích trong từ trường quyết định phương và chiều lực Lorentz — nhầm vectơ với vô hướng sẽ dẫn đến sai kết quả. Nắm rõ tính vectơ từ lớp 10 là nền tảng thiết yếu.' },
+      { q: 'Định luật bảo toàn năng lượng học ở lớp 10 sẽ xuất hiện lại ở lớp 11 dưới hình thức nào?', a: 'Ở lớp 11, định luật bảo toàn năng lượng mở rộng sang: (1) Mạch điện: công của nguồn điện = nhiệt lượng tổng cộng (định luật Joule-Lenz); (2) Mạch dao động LC: năng lượng điện trường ⇌ năng lượng từ trường; (3) Sóng điện từ: năng lượng sóng truyền đi mà không "mất". Đây là định luật phổ quát nhất trong vật lí học.' },
+    ],
+  },
 };

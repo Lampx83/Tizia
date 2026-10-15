@@ -1116,4 +1116,42 @@ export const H10TA_LESSONS = {
       { q: 'Chia: "I look forward to ___ (see) you soon."', a: 'seeing. "look forward to" là cụm cố định, sau "to" dùng V-ing: look forward to seeing you.' },
     ],
   },
+
+  'H10TA-w36-quiz': {
+    topic: 'Closing Chapter — Grade 10 English & the Road Ahead',
+    intro: 'Grade 10 English has taken you from foundational grammar to rich vocabulary and meaningful communication skills. Let\'s look back at the journey, celebrate your progress, and set clear goals for Grade 11.',
+    objectives: [
+      'Review and consolidate the key grammar structures and vocabulary from Grade 10.',
+      'Identify which skills to strengthen over the summer for a confident start in Grade 11.',
+      'Build a personal study plan to maintain and improve English independently.',
+    ],
+    theory: [
+      { h: 'What You\'ve Learned in Grade 10' },
+      { ul: [
+        'Grammar: tenses (present/past/future), conditionals (types 1 & 2), passives, reported speech, modals, relative clauses.',
+        'Vocabulary: topics including technology, environment, culture, health, career, and global issues.',
+        'Skills: reading comprehension strategies, paragraph writing, listening for gist and detail, speaking fluently about familiar topics.',
+        'Word forms: noun/verb/adjective/adverb transformations — a key skill for the national exam.',
+      ] },
+      { h: 'What Awaits in Grade 11' },
+      { ul: [
+        'Conditional type 3 and mixed conditionals — more nuance in "what if" scenarios.',
+        'Inversion, cleft sentences, and emphasis structures for academic writing.',
+        'Complex reading texts: articles, essays, and opinion pieces.',
+        'More advanced vocabulary from science, society, and global affairs.',
+      ] },
+      { h: 'Summer English Plan' },
+      { ul: [
+        'Weeks 1–2: Review conditionals (types 1 & 2) and perfect tenses — these appear constantly in Grade 11.',
+        'Weeks 3–4: Expand vocabulary with 10 new words/day using Anki or Quizlet.',
+        'Weeks 5–6: Watch 2 English-subtitled films and write a short review for each in English.',
+        'Daily habit: read one short English article from BBC Learning English or VOA Learning English.',
+      ] },
+      { note: 'English is a skill, not a subject — the more you use it, the faster you improve. A summer of consistent small steps beats a cramming sprint before the school year starts.' },
+    ],
+    examples: [
+      { q: 'Which grammar structures from Grade 10 should I review most carefully before Grade 11?', a: 'Prioritise: (1) Reported speech — Grade 11 extends this to reporting questions and commands; (2) Relative clauses — complex sentences require confident use of who/which/that/where; (3) Passive voice — academic reading and writing rely heavily on it. Also review time expressions that go with each tense, since tense choice errors are the most common in Vietnamese learners.' },
+      { q: 'How can I maintain my English level over the summer without expensive classes?', a: 'Three free strategies that work: (1) YouTube — search "BBC 6 Minute English" for daily listening practice with transcripts; (2) Duolingo/Quizlet — 10 minutes vocabulary review daily keeps words fresh; (3) English journaling — write 3–5 sentences in English about your day each night. This costs nothing and delivers consistent practice across all four skills.' },
+    ],
+  },
 };
