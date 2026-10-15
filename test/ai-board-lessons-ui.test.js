@@ -78,3 +78,19 @@ test('legacy import maps old JSONL fields and retries with identical batch ident
   assert.deepEqual(imports[0].entries,[{entry_key:'1',ticket_id:4,gate:4,text:'Known issue',files:['public/test.js']}]);
   assert.ok(ids['#import-results'].querySelector('a').download.endsWith('.json'));
 });
+
+test('validity state shows usable, needs revalidation and expired without offering review on ended lessons',async()=>{
+  const {ids}=await page({lessons:[
+    {...lesson,id:1,state:'verified',eligibility_reason:null},
+    {...lesson,id:2,state:'verified',eligibility_reason:'revalidation_due'},
+    {...lesson,id:3,state:'curated',eligibility_reason:'dependency_changed'},
+    {...lesson,id:4,state:'expired',eligibility_reason:'expired',text:undefined}]});
+  const cards=ids['#lessons'].children.map(card=>flatten(card));
+  const status=nodes=>nodes.find(node=>node.className==='eligible'||node.className==='ineligible').textContent;
+  assert.match(status(cards[0]),/Đủ điều kiện dùng lại/);
+  assert.match(status(cards[1]),/Đến hạn kiểm lại/);
+  assert.match(status(cards[2]),/file nguồn đã thay đổi/);
+  assert.match(status(cards[3]),/Đã hết hạn/);
+  assert.equal(cards[3].some(node=>node.textContent==='Xóa bài học'),false);
+  assert.ok(cards[3].some(node=>node.textContent==='Nội dung đã được xóa theo thời hạn lưu trữ.'));
+});
