@@ -62,7 +62,23 @@ test('live action guard stops an approved folder immediately after its approval 
     const input={run_id:f.run,contract_hash:(await f.post('snapshot',{})).body.hsm_contract.hash,action:'write_candidate'};
     assert.equal((await f.post('hsm/authority',input)).status,200);
     await f.store.revokeFolder(folder);
-    assert.equal((await f.post('hsm/authority',input)).status,403);
+    assert.equal((await f.post('hsm/authority',input)).status,409); // revoke releases the live lease, so the old lease is stale
+  } finally {await f.close();}
+});
+test('revoking an approved folder releases the live lease so the worker stops at its next heartbeat',async()=>{
+  const f=await fixture();
+  try {
+    const now=Date.now();
+    const folder=await f.db.insert("INSERT INTO ai_feature_folders(slug,title,owner_user_id,domain,state,approved_at,created_at,updated_at,last_activity_at) VALUES ('revoke-stop-folder','Revoke folder',1,'pharmacy','active',?,?,?,?)",[now,now,now,now]);
+    await f.db.run('UPDATE requests SET folder_id=? WHERE id=(SELECT source_request_id FROM ai_tickets WHERE id=?)',[folder,f.id]);
+    assert.equal((await f.post('heartbeat',{})).status,200);
+    const revoked=await f.store.revokeFolder(folder);
+    assert.equal(revoked.stopped,1);
+    assert.equal((await f.post('heartbeat',{})).status,409);
+    const root=await f.db.get('SELECT status,phase,lease_owner,lease_token,internal_reason FROM ai_tickets WHERE id=?',[f.id]);
+    assert.deepEqual({...root},{status:'waiting_authorization',phase:'ticketized',lease_owner:null,lease_token:null,internal_reason:'folder_not_approved'});
+    assert.equal((await f.db.get("SELECT COUNT(*) n FROM ai_events WHERE ticket_id=? AND event_type='folder_revoked'",[f.id])).n,1);
+    assert.equal((await f.store.revokeFolder(folder)).stopped,0);
   } finally {await f.close();}
 });
 async function fixture() {

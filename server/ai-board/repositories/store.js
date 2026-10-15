@@ -331,10 +331,31 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   }
 
   /** Thu hồi: các plan sau của folder lại chờ admin. Việc đang chạy không bị cắt. */
-  async function revokeFolder(folderId, now = Date.now()) {
+  /** Thu hồi duyệt folder: root đã được cho phép và đang chờ/chạy bị nhả lease và quay về chờ duyệt (như đường duyệt lại),
+      nên worker gặp stale_lease ở heartbeat/verdict kế tiếp và dừng, kể cả khi Gate 5 đang giữ microVM. */
+  const revokeFolderTransaction = (folderId, now) => db.tx(async () => {
     const changed = (await db.run('UPDATE ai_feature_folders SET approved_by=NULL, approved_at=NULL, updated_at=? WHERE id=?', [now, Number(folderId)])).changes;
     if (!changed) throw new WorkerContractError('folder not found', 404, 'folder_not_found');
-    return { ok: true };
+    const live = await db.all(`
+      SELECT t.* FROM ai_tickets t JOIN requests q ON q.id = t.source_request_id
+      WHERE q.folder_id = ? AND t.parent_id IS NULL AND t.status IN ('queued', 'running') AND t.phase IN ('authorized', 'executing')
+    `, [Number(folderId)]);
+    for (const root of live) {
+      await closeRoot(root, {
+        status: 'waiting_authorization', phase: 'ticketized', note: 'Quyền chạy của chức năng đã bị thu hồi; chờ quản trị viên duyệt lại.',
+        reason: 'folder_not_approved', now,
+        event: { type: 'folder_revoked', actorType: 'admin', actorId: 'folder-revoke', idem: `folder-revoked:${root.id}:${now}` },
+      });
+      await db.run(`
+        UPDATE ai_tickets SET status='waiting_authorization', updated_at=?
+        WHERE parent_id=? AND status NOT IN ('done', 'failed', 'invalidated', 'cancelled')
+      `, [now, root.id]);
+    }
+    return { ok: true, stopped: live.length };
+  });
+
+  async function revokeFolder(folderId, now = Date.now()) {
+    return await revokeFolderTransaction(folderId, now);
   }
 
   async function createRequestWithRoot(input) {
