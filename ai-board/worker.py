@@ -98,7 +98,9 @@ def _public_gate_result(result: dict) -> dict:
         "gate": result["gate"], "blocked": bool(result.get("blocked")),
         "reason": result.get("reason"),
     }
-    if result["gate"] == 4:
+    if result["gate"] == 3 and result.get("tool_manifest"):
+        out["tool_manifest"] = result["tool_manifest"]
+    elif result["gate"] == 4:
         out["issues"] = list(result.get("issues") or [])
         out["checks"] = list(result.get("checks") or [])
     elif result["gate"] == 5:

@@ -1,0 +1,152 @@
+{
+  "version": 1,
+  "tools": [
+    {
+      "name": "tree",
+      "description": "Liệt kê file/thư mục con trực tiếp của 1 thư mục ở base sha.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "effect": "read",
+      "max_arg_bytes": 1000,
+      "max_output_chars": 2000,
+      "max_seconds": 10
+    },
+    {
+      "name": "outline",
+      "description": "Dàn ý 1 file: thẻ/id/class, selector CSS, export/import JS, css/js trang liên kết.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ]
+      },
+      "effect": "read",
+      "max_arg_bytes": 1000,
+      "max_output_chars": 2000,
+      "max_seconds": 10
+    },
+    {
+      "name": "grep",
+      "description": "Cửa sổ dòng quanh từ khoá trong 1 file; không có file thì liệt kê file khớp trong path.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "words": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "file": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "words"
+        ]
+      },
+      "effect": "read",
+      "max_arg_bytes": 2000,
+      "max_output_chars": 2000,
+      "max_seconds": 10
+    },
+    {
+      "name": "read_file",
+      "description": "Đọc file đích (có tiền tố `Lnn| `).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ]
+      },
+      "effect": "read",
+      "max_arg_bytes": 500,
+      "max_output_chars": 2000,
+      "max_seconds": 5
+    },
+    {
+      "name": "edit_file",
+      "description": "Áp edits {after_line, insert} hoặc {search, replace} lên file đích; số dòng theo bản đang giữ.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "edits": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "file",
+          "edits"
+        ]
+      },
+      "effect": "draft_write",
+      "max_arg_bytes": 60000,
+      "max_output_chars": 500,
+      "max_seconds": 5
+    },
+    {
+      "name": "write_test",
+      "description": "Đặt test (ESM node:test) trong test/.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "test_file": {
+            "type": "string"
+          },
+          "test": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "test_file",
+          "test"
+        ]
+      },
+      "effect": "draft_write",
+      "max_arg_bytes": 60000,
+      "max_output_chars": 500,
+      "max_seconds": 5
+    },
+    {
+      "name": "finish",
+      "description": "Đề xuất kết thúc; harness kiểm rồi mới chuyển sang các cổng sau.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "effect": "control",
+      "max_arg_bytes": 100,
+      "max_output_chars": 500,
+      "max_seconds": 5
+    }
+  ]
+}

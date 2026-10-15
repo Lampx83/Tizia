@@ -462,7 +462,8 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
                 state["diffs"] = diffs
                 return {"gate": 3, "blocked": True, "diffs": diffs, "failure_class": looped["failure_class"],
                         "reason": f"subtask '{subtask.get('title')}': {looped['reason']}",
-                        **({"unknown_outcome": looped["unknown_outcome"]} if looped.get("unknown_outcome") else {})}
+                        **({"unknown_outcome": looped["unknown_outcome"]} if looped.get("unknown_outcome") else {}),
+                        "tool_manifest": tool_loop.MANIFEST.hash}
             out = looped["out"]
         for iteration in range(0 if out is not None else MAX_INNER_RETRIES + 1):
             routing_options = {'role': role}
@@ -558,4 +559,5 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
 
     state["diffs"] = diffs
     state["scratch_repo"] = str(repo)
-    return {"gate": 3, "blocked": False, "reason": None, "diffs": diffs}
+    return {"gate": 3, "blocked": False, "reason": None, "diffs": diffs,
+            **({"tool_manifest": tool_loop.MANIFEST.hash} if tool_loop.enabled() else {})}

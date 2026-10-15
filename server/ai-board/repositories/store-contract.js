@@ -214,6 +214,7 @@ function validatePrePrVerdict(value, selfRequest = false) {
     }
     previous = gate;
     const clean = { gate, blocked: item.blocked, reason: item.reason ? String(item.reason).slice(0, 1000) : null };
+    if (gate === 3 && /^[0-9a-f]{64}$/.test(String(item.tool_manifest))) clean.tool_manifest = item.tool_manifest;
     if (gate === 4) clean.issues = Array.isArray(item.issues) ? item.issues.slice(0, 20).map((x) => String(x).slice(0, 500)) : [];
     if (gate === 4) clean.checks = Array.isArray(item.checks) ? item.checks.slice(0, 20).map((x) => String(x).slice(0, 40)) : [];
     if (gate === 5) {

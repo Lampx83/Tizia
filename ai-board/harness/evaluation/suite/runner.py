@@ -21,6 +21,7 @@ from pathlib import Path
 import eval_corpus
 import eval_fast
 from gates import gate3_guards, plan_validate
+from runtime import tool_manifest
 from evaluation.suite import ablation, grading, metrics, taskpack, trial
 from evaluation.suite.launcher import sqlite_launcher
 
@@ -43,6 +44,7 @@ def provenance(root_repo: Path, model: str, router) -> dict:  # router None = in
         "reasoning": {role: router.reasoning(role) for role in ("gate1", "gate25", "gate3_light", "gate3_heavy")} if router else {},
         "prompt_lock": _sha(harness / "prompts" / "prompts.lock.json"), "skill_lock": _sha(harness / "skills" / "skills.lock.json"),
         "contract_hash": _sha(root_repo / "server" / "ai-board" / "contract.json"),
+        "tool_manifest": tool_manifest.canonical_hash(json.loads((harness / "runtime" / "tool_manifest.json").read_text(encoding="utf-8"))),
         "suite_hash": hashlib.sha256("".join(_sha(p) for p in suite_files).encode()).hexdigest()[:16],
         "pipeline_hash": hashlib.sha256("".join(_sha(p) for p in gates).encode()).hexdigest()[:16],
     }
@@ -102,7 +104,7 @@ def render(rep: dict) -> str:
     return "\n".join(lines)
 
 
-FIXED = ("ref", "dirty", "model", "routing_catalog", "prompt_lock", "skill_lock", "contract_hash", "suite_hash", "pipeline_hash")
+FIXED = ("ref", "dirty", "model", "routing_catalog", "prompt_lock", "skill_lock", "contract_hash", "tool_manifest", "suite_hash", "pipeline_hash")
 COMPARISON_PINS = FIXED + ("reasoning", "corpus_sha", "seed", "repeats", "modes", "fast_tier", "review", "packs", "budget")
 
 
