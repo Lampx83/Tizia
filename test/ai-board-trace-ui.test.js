@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { projectPipeline, describeModelCall, describeEvent } from '../public/js/ai-board-trace.js';
+import { projectPipeline, describeModelCall, describeEvent, loopActions } from '../public/js/ai-board-trace.js';
 const gate = (id, number, status, at = id) => ({ id, gate: number, status, created_at: at });
 const call = (id, gate, name, child = null) => ({ id, gate, created_at: id, evidence: { gate, prompt_name: name, child, call_id: `call-${id}` } });
 const run = (id, trigger, gates = [], calls = []) => ({ id, trigger, created_at: id, gates, calls });
@@ -84,4 +84,16 @@ test('expired cached lease stops motion, preserving completed evidence and all h
   assert.equal(p.steps.filter(s => s.state === 'run').length, 0);
   assert.equal(byGate(p, 4).state, 'ok');
   assert.deepEqual(p.runs, [active]);
+});
+
+test('loop actions read the tool and target from each model output, tolerating non-JSON', () => {
+  const acts = loopActions([
+    { output: '{"tool":"read_file","arguments":{"file":"public/a.html"}}', result: 'ok', metrics: { wall_ms: 300 } },
+    { output: 'không phải json', result: 'error', error: 'x' },
+  ]);
+  assert.deepEqual(acts.map(a => [a.tool, a.target, a.result]), [['read_file', 'public/a.html', 'ok'], ['?', '', 'error']]);
+});
+
+test('transient blocks and resumed plans have readable labels', () => {
+  assert.equal(describeEvent({ event_type: 'plan_resumed' }), 'Tiếp tục thực hiện kế hoạch');
 });

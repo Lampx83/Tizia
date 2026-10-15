@@ -65,7 +65,6 @@ function autoMount() {
     <button id="sgf-fab" type="button" aria-label="Gửi đề nghị tới Ban điều hành AI"
             title="Gửi đề nghị cho Ban điều hành AI" aria-haspopup="dialog" aria-expanded="false" aria-controls="sgf-modal">
       <span class="sgf-fab-ico">${boardIcon('board')}</span>
-      <span class="sgf-fab-lbl">Đề nghị</span>
     </button>
     <div id="sgf-modal" class="sgf-modal" hidden>
       <div class="sgf-backdrop" data-close></div>
@@ -1094,9 +1093,9 @@ function injectStyles() {
     #sgf-root input::placeholder, #sgf-root textarea::placeholder { color: #64748b; opacity: 1; }
     #sgf-fab {
       position: fixed; left: 18px; bottom: 18px; z-index: 2147483000;
-      min-width: 124px; height: 48px; border-radius: 12px;
+      width: 48px; height: 48px; border-radius: 12px;
       display: inline-flex; gap: 10px; align-items: center; justify-content: center;
-      padding: 0 16px; border: 0; cursor: pointer;
+      padding: 0; border: 0; cursor: pointer;
       background: #4f46e5; color: #fff;
       font: 600 14px/1 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
       box-shadow: 0 8px 24px rgba(0,0,0,.25);
@@ -1106,7 +1105,6 @@ function injectStyles() {
     #sgf-fab:active { transform: scale(1); }
     .sgf-fab-ico { display: flex; }
     .sgf-fab-ico svg { width: 22px; height: 22px; }
-    .sgf-fab-lbl { display: inline; }
     @media (max-width: 540px) {
       #sgf-fab { left: 12px; bottom: max(12px, env(safe-area-inset-bottom)); }
     }

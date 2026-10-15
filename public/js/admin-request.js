@@ -4,7 +4,7 @@
 import { patchHtml } from './dom-morph.js';
 import { mountPrivatePreview } from './private-preview.js';
 import { installLightbox, pairBeforeAfter } from './lightbox.js';
-import { projectPipeline, describeModelCall, describeEvent, TECHNICAL_EVENTS, TRACE_STEPS } from './ai-board-trace.js';
+import { projectPipeline, describeModelCall, describeEvent, loopActions, stepTotals, TECHNICAL_EVENTS, TRACE_STEPS } from './ai-board-trace.js';
 import { renderHsm } from './ai-board-hsm.js';
 
 const $ = (s) => document.querySelector(s);
@@ -198,6 +198,26 @@ function rollbackStep(run, live) {
     ${r?.detail ? `<div class="meta">${esc(r.detail)}</div>` : ''}</div></div>`;
 }
 
+function loopTimeline(group) {
+  const acts = loopActions([...group.previous, group.current].map(c => ({ ...(c.evidence || {}) })));
+  if (acts.length < 2 && group.current.evidence?.prompt_name !== 'tool_loop.md') return '';
+  return det(`${group.current.evidence?.call_id}:loop`, `<b>Chuỗi hành động của vòng công cụ</b> · ${acts.length} lượt`,
+    `<ol class="loop-acts">${acts.map(a => `<li class="st-${CALL_STATE[a.result] || 'idle'}"><span class="n">${a.n}</span><b>${esc(a.tool)}</b>${a.target ? `<code>${esc(a.target)}</code>` : ''}
+      ${tag(CALL_STATE[a.result] || 'idle', CALL_LABEL[a.result] || 'chưa có kết quả')}<span class="meta">${secs(a.ms)} s</span>${a.error ? `<div class="meta">${esc(a.error)}</div>` : ''}</li>`).join('')}</ol>`, { dopen: true });
+}
+
+function attention(steps, events) {
+  const items = [];
+  for (const s of steps) {
+    if (s.state === 'bad') items.push(['bad', `${gateName(s.gate)}: chưa đạt${s.result?.public_reason ? ` — ${esc(s.result.public_reason)}` : ''}`, `#pipeline-title-${s.gate}`]);
+    for (const c of stepTotals(s).failed) items.push(['warn', `${gateName(s.gate)}: lượt gọi AI ${esc(CALL_LABEL[c.result] || c.result)}${c.error ? ` — ${esc(c.error)}` : ''}`, `#pipeline-title-${s.gate}`]);
+  }
+  const ev = events.filter(e => !TECHNICAL_EVENTS.has(e.event_type) && eventState(e) !== 'ok').slice(-3);
+  for (const e of ev) items.push([eventState(e), `${esc(describeEvent(e))}${e.public_message ? ` — ${esc(e.public_message)}` : ''} · ${fmt(e.created_at)}`, '#events']);
+  if (!items.length) return '';
+  return `<aside class="attention" aria-label="Điểm cần chú ý"><b>Điểm cần chú ý (${items.length})</b><ul>${items.map(([st, text, href]) => `<li class="st-${st}"><a href="${href}">${text}</a></li>`).join('')}</ul></aside>`;
+}
+
 function renderPipeline(trace) {
   const projection = projectPipeline(trace);
   const root = trace.root;
@@ -211,10 +231,11 @@ function renderPipeline(trace) {
     ? 'Kế hoạch chờ được cho phép trước khi thực hiện.' : 'Xem kết luận ở từng bước và trạng thái yêu cầu bên trên.';
   const shortNames = { 1: 'Yêu cầu', 2: 'Phạm vi', 2.5: 'Soát kế hoạch', 3: 'Sửa code', 4: 'Kiểm tra code', 5: 'Kiểm chứng', 5.5: 'Rủi ro' };
   return `<h2>Tiến trình hiện tại</h2><p class="flow-summary" role="status">${esc(status)}</p>
-    <p class="meta">${projection.runs.length} lượt xử lý đã ghi nhận. Chạy lại sẽ cập nhật kết quả tại các bước dưới; các lần thử cũ được giữ trong lịch sử.</p>
+    ${attention(projection.steps, trace.events || [])}<p class="meta">${projection.runs.length} lượt xử lý đã ghi nhận. Chạy lại sẽ cập nhật kết quả tại các bước dưới; các lần thử cũ được giữ trong lịch sử.</p>
     <nav class="prog pipeline-nav" aria-label="Các bước xử lý">${projection.steps.map(s => `<a class="seg ${s.state === 'queued' ? 'wait' : s.state}" href="#pipeline-title-${s.gate}" title="${esc(s.title)}: ${esc(labels[s.state])}"${s.state === 'run' ? ' aria-current="step"' : ''}>${gatePos(s.gate)} · ${shortNames[s.gate]}</a>`).join('')}</nav>
     <div class="pipeline">${projection.steps.map(s => {
-      const latest = s.calls.map(group => callStep(group.current.evidence || {})).join('');
+      const latest = s.calls.map(group => callStep(group.current.evidence || {}) + loopTimeline(group)).join('');
+      const totals = stepTotals(s);
       const previous = s.calls.flatMap(group => group.previous);
       const prior = [...s.previousResults.map(g => gateStep(g)), ...previous.map(c => callStep(c.evidence || {}))].join('');
       const g = s.result;
@@ -224,7 +245,7 @@ function renderPipeline(trace) {
         <div class="line1"><b>Nhiệm vụ đang thực hiện</b>${tag('run', 'Đang xử lý')}</div>
         <p class="meta">Đang chờ worker gửi kết quả của bước này.</p></div>` : '';
       return `<section class="pipeline-step st-${state}" data-step="${s.gate}" aria-labelledby="pipeline-title-${s.gate}"${s.state === 'run' ? ' aria-current="step"' : ''}>
-        <div class="line1"><h3 id="pipeline-title-${s.gate}">${gateName(s.gate)}</h3>${tag(state, labels[s.state])}${rerun}</div>
+        <div class="line1"><h3 id="pipeline-title-${s.gate}">${gateName(s.gate)}</h3>${tag(state, labels[s.state])}${totals.calls ? `<span class="meta">${totals.calls} lượt gọi AI · ${secs(totals.ms)} s${totals.failed.length ? ` · ${totals.failed.length} lỗi` : ''}</span>` : ''}${rerun}</div>
         <p class="meta step-purpose">${esc(s.detail)}</p>
         ${s.run ? `<div class="meta">Kết quả từ lượt #${esc(s.run.id)} · ${fmt(s.run.created_at)}</div>` : ''}
         ${g?.public_reason ? `<p class="step-reason">${esc(g.public_reason)}</p>` : ''}
@@ -253,6 +274,7 @@ function renderAttemptHistory(trace) {
 
 function eventState(e) {
   const t = `${e.event_type} ${e.transition || ''}`;
+  if (/transient/.test(t)) return 'warn';
   if (/blocked|critical|rejected|cancel|budget_exhausted|waiting_admin|rollback_failed/.test(t)) return 'bad';
   if (/waiting|review|clarif|rollback/.test(t)) return 'warn';
   return 'ok';
@@ -521,7 +543,7 @@ function renderAiBoard(t) {
     ${renderPlan(t.plan, root, t.children || [], t)}
     ${renderPipeline(t)}
     ${renderAttemptHistory(t)}
-    <h2>Diễn biến xử lý</h2>
+    <h2 id="events">Diễn biến xử lý</h2>
     ${renderEvents(t.events || [])}
   `;
 }

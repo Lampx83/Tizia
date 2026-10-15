@@ -15,6 +15,7 @@ const PURPOSES = {
   'brainstorm.md': ['plan', 'Lập kế hoạch thay đổi', 'Đọc ngữ cảnh code và đề xuất các công việc, file và tiêu chí nghiệm thu.'],
   'plan_validate.md': ['validate', 'Soát kế hoạch theo code', 'Đối chiếu kế hoạch với code hiện tại để tìm sai lệch trước khi thực hiện.'],
   'implement.md': ['implement', 'Viết code cho công việc', 'Đề xuất các sửa đổi trong phạm vi của công việc đã được duyệt.'],
+  'tool_loop.md': ['loop', 'Vòng công cụ sửa code', 'Mỗi lượt AI chọn một công cụ (đọc, tìm, sửa, viết test); worker chạy và trả kết quả cho lượt sau.'],
   'content_guard.md': ['content', 'Soát nội dung sau thay đổi', 'Đánh giá phần nội dung được tạo hoặc sửa; không phải bước sinh code.'],
 };
 export function describeModelCall(call = {}) {
@@ -29,6 +30,19 @@ export function describeModelCall(call = {}) {
   const purpose = PURPOSES[name];
   return purpose ? { id: purpose[0], title: purpose[1], detail: purpose[2] }
     : { id: name || 'unlabelled', title: name ? `Xử lý bằng AI · ${name}` : 'Xử lý bằng AI · chưa có nhãn mục đích', detail: 'Bản ghi cũ chưa xác định được nhiệm vụ cụ thể; xem đầu vào và kết quả để đối chiếu.' };
+}
+export function loopActions(rows = []) {
+  return rows.map((call, i) => {
+    let act = {};
+    try { act = JSON.parse(String(call.output || '').trim()); } catch { /* output không phải JSON */ }
+    const args = act.arguments && typeof act.arguments === 'object' ? act.arguments : {};
+    const target = args.file || args.test_file || args.query || args.pattern || '';
+    return { n: i + 1, tool: typeof act.tool === 'string' ? act.tool : '?', target: String(target), result: call.result, ms: call.metrics?.wall_ms ?? null, error: call.error || '' };
+  });
+}
+export function stepTotals(step) {
+  const rows = step.calls.flatMap(g => [...g.previous, g.current]).map(c => c.evidence || {});
+  return { calls: rows.length, ms: rows.reduce((a, r) => a + (r.metrics?.wall_ms || 0), 0), failed: rows.filter(r => r.result && r.result !== 'ok') };
 }
 const numberGate = row => Number(row.evidence?.gate ?? row.gate);
 const ordered = rows => [...(rows || [])].sort((a, b) => Number(a.created_at) - Number(b.created_at) || Number(a.id) - Number(b.id));
@@ -86,6 +100,7 @@ const EVENT_LABELS = {
   rollback_requested: 'Đã yêu cầu hoàn tác', rollback_completed: 'Đã hoàn tất xử lý hoàn tác',
   budget_extended: 'Đã gia hạn ngân sách', budget_exhausted: 'Đã hết ngân sách xử lý',
   budget_ceiling: 'Đã đạt giới hạn ngân sách', plan_invalidated: 'Kế hoạch cũ đã hết hiệu lực',
+  plan_resumed: 'Tiếp tục thực hiện kế hoạch', draft_screenshots: 'Đã chụp ảnh bản nháp',
   transient_retry: 'Đã xếp hàng thử lại sau lỗi hạ tầng',
 };
 export function describeEvent(event = {}) {
