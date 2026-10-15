@@ -18,7 +18,7 @@ FINISH = {"tool": "finish", "arguments": {}}
 def test_revoked_authority_during_model_call_blocks_tool_before_effect(monkeypatch):
     class Authority:
         allowed = True
-        def authorize_action(self, _action):
+        def authorize_action(self, _action, **_extra):
             return self.allowed
     authority = Authority()
     deps = Deps([EDIT, TEST, FINISH])
@@ -248,3 +248,49 @@ def test_loop_prompt_is_a_locked_prompt_file_the_pipeline_can_resolve():
     assert pipeline._static_prefix("tool_loop.md")
     assert pipeline._PROMPT_LOCK["tool_loop.md"] == hashlib.sha256(path.read_bytes()).hexdigest()
     assert 'prompt_name="tool_loop.md"' in Path(tool_loop.__file__).read_text(encoding="utf-8")
+
+
+def test_loop_reports_its_manifest_and_every_action_carries_the_hash():
+    seen, registered = [], []
+
+    class Authority:
+        def authorize_action(self, action, **extra):
+            seen.append((action, extra))
+            return True
+
+        def register_tool_manifest(self, manifest):
+            registered.append(manifest)
+
+    with server_hsm.server_scope(Authority()):
+        result = tool_loop.run_subtask(SUBTASK, PAGE, deps=Deps([EDIT, TEST, FINISH]), budget=Budget(), model='m', source='.', sha='abc', check=lambda _out: None)
+    assert result['status'] == 'proposed'
+    assert registered == [tool_loop.MANIFEST.data]
+    assert {action for action, _ in seen} >= {'model', 'edit_file', 'write_test', 'finish'}
+    assert all(extra == {'tool_manifest': tool_loop.MANIFEST.hash} for _, extra in seen)
+
+
+def test_unapproved_manifest_stops_the_loop_as_transient_not_critical():
+    class Authority:
+        def authorize_action(self, action, **_extra):
+            raise server_hsm.AuthorityError('tool_manifest_not_approved')
+
+    with server_hsm.server_scope(Authority()):
+        result = tool_loop.run_subtask(SUBTASK, PAGE, deps=Deps([EDIT]), budget=Budget(), model='m', source='.', sha='abc', check=lambda _out: None)
+    assert result['status'] == 'blocked' and result['failure_class'] == 'transient' and 'tool_manifest_not_approved' in result['reason']
+
+
+def test_manifest_registration_failure_blocks_before_any_model_call():
+    calls = []
+
+    class Authority:
+        def authorize_action(self, action, **_extra):
+            return True
+
+        def register_tool_manifest(self, manifest):
+            raise server_hsm.AuthorityError('tool_manifest_unavailable')
+
+    deps = Deps([EDIT])
+    deps.call_model = lambda *a, **k: calls.append(1)
+    with server_hsm.server_scope(Authority()):
+        result = tool_loop.run_subtask(SUBTASK, PAGE, deps=deps, budget=Budget(), model='m', source='.', sha='abc', check=lambda _out: None)
+    assert result['status'] == 'blocked' and not calls

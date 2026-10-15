@@ -31,6 +31,7 @@ class Manifest:
     version: int
     tools: dict[str, ToolSpec]
     hash: str
+    data: dict
 
     def names(self, effect: str) -> tuple[str, ...]:
         return tuple(name for name, spec in self.tools.items() if spec.effect == effect)
@@ -60,7 +61,7 @@ def parse(data: dict, *, known: set[str]) -> Manifest:
         if any(isinstance(v, bool) or not isinstance(v, (int, float)) or v <= 0 for v in caps.values()):
             raise ManifestError(f"{raw['name']}: trần phải là số dương")
         tools[raw["name"]] = ToolSpec(**raw)
-    return Manifest(data["version"], tools, canonical_hash(data))
+    return Manifest(data["version"], tools, canonical_hash(data), data)
 
 
 def load(path: Path = PATH, *, known: set[str]) -> Manifest:

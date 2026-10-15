@@ -279,6 +279,10 @@ def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str,
     | blocked (ordinary: hết lượt sửa; critical: ngoài phạm vi/stale/checkpoint lệch/kết quả ghi chưa rõ).
     Model báo finish chỉ kết thúc đề xuất. `store` (repositories.tool_steps.PgSteps) bật checkpoint + resume."""
     loop_budget = ChildBudget(budget)
+    try:
+        server_hsm.register_tool_manifest(MANIFEST.data)
+    except server_hsm.AuthorityError as error:
+        return _result('blocked', str(error), error.failure_class)
     ws = Workspace(source, sha, subtask["file"], current)
     prompt = PROMPT.format(tools=_tool_list(), title=subtask["title"], file=subtask["file"], verify=subtask["verify"])
     if current is None:
@@ -294,7 +298,7 @@ def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str,
         if rejected and not budget.can_afford():
             return _result("paused", "không đủ ngân sách dự phòng cho verification trước lượt sửa tiếp", "budget", steps=steps)
         try:
-            server_hsm.authorize_action('model')
+            server_hsm.authorize_action('model', tool_manifest=MANIFEST.hash)
         except server_hsm.AuthorityError as error:
             return _result('blocked', str(error), error.failure_class, steps=steps)
         body = deps.call_model(model, prompt, gate=3, budget=loop_budget, format="json", db_path=db_path,
@@ -309,7 +313,7 @@ def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str,
         try:
             name, args = parse_request(body)
             validate(name, args)
-            server_hsm.authorize_action(name)
+            server_hsm.authorize_action(name, tool_manifest=MANIFEST.hash)
             loop_budget.spend("tool_calls")  # trần chạm thì tool này là lần cuối, vòng sau dừng
             if store and name in WRITE_TOOLS:
                 store.intent(n, name, args)

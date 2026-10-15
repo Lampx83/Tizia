@@ -9,6 +9,8 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
 import { renderHsm } from '../public/js/ai-board-hsm.js';
+import fs from 'node:fs';
+import { canonicalHash } from '../server/ai-board/repositories/tool-manifests.js';
 
 const KEY='hsm-disposable-fixture-worker-key-32';
 test('Gate4 records a granted action receipt at the budget limit but refuses another action',async()=>{
@@ -25,7 +27,7 @@ test('live action guard rechecks owner scope without advancing the Gate4 state',
   const f=await fixture();
   try {
     await f.db.run('UPDATE ai_plans SET capability_policy_hash=? WHERE root_ticket_id=?',[CAPABILITY_CATALOG.hash,f.id]);
-    const input={run_id:f.run,contract_hash:(await f.post('snapshot',{})).body.hsm_contract.hash,action:'edit_file'};
+    const input={run_id:f.run,contract_hash:(await f.post('snapshot',{})).body.hsm_contract.hash,action:'write_candidate'};
     const first=await f.post('hsm/authority',input);
     assert.equal(first.status,200);assert.equal(first.body.authorized,true);
     await f.db.run("UPDATE users SET enrolled_domain='other' WHERE id=1");
@@ -114,7 +116,7 @@ async function fixture() {
   const run=await db.insert("INSERT INTO ai_runs(ticket_id,attempt,trigger,worker_id,idempotency_key,outcome,plan_hash,plan_revision,created_at,updated_at) VALUES (?,1,'execute','worker-a','hsm-run',NULL,'plan-a',1,?,?)",[id,now,now]);
   await db.insert("INSERT INTO ai_plans(root_ticket_id,revision,plan_hash,plan_json,status,tier,capability_policy_hash,created_at) VALUES (?,1,'plan-a','{}','valid','surface',?,?)",[id,CAPABILITY_CATALOG.hash,now]);
   const app=express();app.use(express.json());attachAiBoardWorkerRoutes(app,{store,env:{AI_BOARD_WORKER_KEY:KEY}});
-  const auth=(req,res,next)=>req.headers['x-test-admin']==='yes'?next():res.status(403).json({error:'forbidden'});
+  const auth=(req,res,next)=>{if(req.headers['x-test-admin']!=='yes')return res.status(403).json({error:'forbidden'});req.user={id:1};next();};
   attachAiBoardRequestRoutes(app,{store,requireAuth:auth,requireAdmin:auth,requireEnrolled:auth,requireStrictCsrf:auth});
   const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
   const base=`http://127.0.0.1:${server.address().port}`;
@@ -210,5 +212,79 @@ test('actual Python HttpWorker completes deterministic Gate4 through real HTTP a
     const snapshot=trace.hsm.states.find(s=>s.run_id===runId);
     assert.equal(snapshot.state,'Passed');assert.equal(snapshot.version,2);
     assert.equal(trace.runs.find(r=>r.id===runId).gates.find(g=>g.gate===4).status,'passed');
+  } finally {await f.close();}
+});
+
+const MANIFEST=JSON.parse(fs.readFileSync(new URL('../ai-board/harness/runtime/tool_manifest.json',import.meta.url),'utf8'));
+const MANIFEST_HASH=canonicalHash(MANIFEST);
+const adminDecide=(f,hash,action,admin=true)=>fetch(`${f.base}/api/admin/ai-board/tool-manifests/${hash}/${action}`,{method:'POST',headers:admin?{'x-test-admin':'yes'}:{}}).then(async r=>({status:r.status,body:await r.json()}));
+const adminList=async f=>(await fetch(`${f.base}/api/admin/ai-board/tool-manifests`,{headers:{'x-test-admin':'yes'}})).json();
+
+test('server hash of the real tool manifest equals the harness hash',async t=>{
+  const python=path.resolve('ai-board/harness/.venv/Scripts/python.exe');
+  if (!fs.existsSync(python)) return t.skip('harness venv missing');
+  const {stdout}=await promisify(execFile)(python,['-c','import sys;sys.path.insert(0,".");from runtime import tool_loop;print(tool_loop.MANIFEST.hash)'],{cwd:path.resolve('ai-board/harness')});
+  assert.equal(stdout.trim(),MANIFEST_HASH);
+});
+
+test('loop tools run only under an admin-approved manifest and revoke bites on the next action',async()=>{
+  const f=await fixture();
+  try {
+    await f.db.run('UPDATE ai_plans SET capability_policy_hash=? WHERE root_ticket_id=?',[CAPABILITY_CATALOG.hash,f.id]);
+    const base={run_id:f.run,contract_hash:(await f.post('snapshot',{})).body.hsm_contract.hash};
+    const tool=(manifest)=>f.post('hsm/authority',{...base,action:'edit_file',...(manifest===undefined?{}:{tool_manifest:manifest})});
+    assert.equal((await tool()).body.error,'tool_manifest_required');
+    assert.equal((await tool(MANIFEST_HASH)).body.error,'tool_manifest_unknown');
+    assert.equal((await f.post('hsm/authority',{...base,action:'model'})).status,200,'non-loop actions are unaffected');
+    const reported=await f.post('tool-manifest',{manifest:MANIFEST});
+    assert.deepEqual(reported.body,{manifest_hash:MANIFEST_HASH,status:'pending'});
+    assert.equal((await f.post('tool-manifest',{manifest:MANIFEST})).body.status,'pending','re-report is a no-op');
+    assert.equal((await tool(MANIFEST_HASH)).body.error,'tool_manifest_not_approved');
+    assert.equal((await f.post('hsm/authority',{...base,action:'model',tool_manifest:MANIFEST_HASH})).body.error,'tool_manifest_not_approved');
+    assert.equal((await adminDecide(f,MANIFEST_HASH,'approve',false)).status,403);
+    assert.equal((await adminDecide(f,MANIFEST_HASH,'revoke')).body.error,'tool_manifest_not_approved','pending cannot be revoked');
+    const approved=await adminDecide(f,MANIFEST_HASH,'approve');
+    assert.equal(approved.status,200);assert.equal(approved.body.status,'approved');
+    assert.deepEqual(approved.body.tools.map(x=>x.name),MANIFEST.tools.map(x=>x.name));
+    assert.equal((await tool(MANIFEST_HASH)).status,200);
+    assert.equal((await f.post('hsm/authority',{...base,action:'model',tool_manifest:MANIFEST_HASH})).status,200);
+    assert.equal((await adminDecide(f,MANIFEST_HASH,'revoke')).body.status,'revoked');
+    assert.equal((await tool(MANIFEST_HASH)).body.error,'tool_manifest_not_approved');
+    assert.equal((await adminDecide(f,MANIFEST_HASH,'approve')).body.error,'tool_manifest_revoked');
+    assert.equal((await adminDecide(f,'f'.repeat(64),'approve')).status,404);
+    assert.equal((await adminDecide(f,'zz','approve')).status,400);
+    const audit=(await f.db.all('SELECT action,actor FROM ai_tool_manifest_audit ORDER BY id')).map(x=>x.action);
+    assert.deepEqual(audit,['reported','approved','revoked']);
+  } finally {await f.close();}
+});
+
+test('changing a manifest creates a new pending version that needs its own approval',async()=>{
+  const f=await fixture();
+  try {
+    await f.db.run('UPDATE ai_plans SET capability_policy_hash=? WHERE root_ticket_id=?',[CAPABILITY_CATALOG.hash,f.id]);
+    const base={run_id:f.run,contract_hash:(await f.post('snapshot',{})).body.hsm_contract.hash};
+    await f.post('tool-manifest',{manifest:MANIFEST});assert.equal((await adminDecide(f,MANIFEST_HASH,'approve')).status,200);
+    const changed=structuredClone(MANIFEST);changed.tools[0].max_output_chars+=1;
+    const next=await f.post('tool-manifest',{manifest:changed});
+    assert.equal(next.body.status,'pending');assert.notEqual(next.body.manifest_hash,MANIFEST_HASH);
+    assert.equal((await f.post('hsm/authority',{...base,action:'tree',tool_manifest:next.body.manifest_hash})).body.error,'tool_manifest_not_approved');
+    assert.equal((await f.post('hsm/authority',{...base,action:'tree',tool_manifest:MANIFEST_HASH})).status,200);
+    const listed=(await adminList(f)).manifests;
+    assert.deepEqual(listed.map(x=>x.status).sort(),['approved','pending']);
+    assert.ok(!JSON.stringify(listed).includes('"parameters"'),'list carries caps, not schemas');
+  } finally {await f.close();}
+});
+
+test('malformed manifests and stale leases cannot register a version',async()=>{
+  const f=await fixture();
+  try {
+    const bad=[{},{version:1,tools:[]},{...structuredClone(MANIFEST),extra:1},
+      (m=>{m.tools[0].name='shell';return m;})(structuredClone(MANIFEST)),
+      (m=>{m.tools[0].effect='network';return m;})(structuredClone(MANIFEST)),
+      (m=>{m.tools[0].max_seconds=0;return m;})(structuredClone(MANIFEST)),
+      (m=>{m.tools.push(structuredClone(m.tools[0]));return m;})(structuredClone(MANIFEST))];
+    for (const manifest of bad) assert.equal((await f.post('tool-manifest',{manifest})).status,400,JSON.stringify(manifest).slice(0,60));
+    assert.equal((await f.post('tool-manifest',{manifest:MANIFEST,lease_token:'old'})).status,409);
+    assert.equal((await f.db.all('SELECT 1 FROM ai_tool_manifests')).length,0);
   } finally {await f.close();}
 });

@@ -12,6 +12,7 @@ import { activeChats } from '../services/chat-activity.js';
 import { guardModelText, MAX_QUESTIONS } from '../../contexts/ai-board-intake/clarify.js';
 import { attachWorkerLessonRoutes, attachLessonReviewRoutes } from './lessons.js';
 import { createHsmStore } from '../hsm/store.js';
+import { createToolManifestStore } from '../repositories/tool-manifests.js';
 import { publicContract } from '../hsm/contract.js';
 
 // Không cấu hình model phân loại → không gọi gì (không phân loại).
@@ -287,6 +288,15 @@ export function attachAiBoardRequestRoutes(router, {
     try { res.json(await aux.setSelfImproveEnabled(store.db, req.body?.enabled, req.user.id)); } catch (error) { folderError(res, error); }
   });
 
+  // ── Phiên bản manifest tool của tool-loop: admin duyệt hoặc thu hồi theo băm ──
+  const toolManifests = createToolManifestStore(store.db);
+  route.get('/api/admin/ai-board/tool-manifests', requireAuth, requireAdmin, async (_req, res) => {
+    res.json({ manifests: await toolManifests.list() });
+  });
+  route.post('/api/admin/ai-board/tool-manifests/:hash/:action', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
+    try { res.json(await toolManifests.decide(req.params.hash, req.params.action, req.user.id)); } catch (error) { folderError(res, error); }
+  });
+
   // ── Tự chạy lại yêu cầu bị chặn do lỗi hạ tầng thoáng qua (mọi loại yêu cầu, không riêng self) ──
   route.get('/api/admin/ai-board/transient-retry', requireAuth, requireAdmin, async (_req, res) => {
     res.json({ ...(await aux.transientRetryState(store.db)), blocked: await aux.listTransientBlocked(store.db) });
@@ -381,6 +391,9 @@ export function attachAiBoardWorkerRoutes(router, {
   }));
   route.post('/api/ai-board/worker/tickets/:id/hsm/state', authenticate, handle(async (req,res) => {
     res.json(await hsm.readLeased(req.params.id,req.body || {}));
+  }));
+  route.post('/api/ai-board/worker/tickets/:id/tool-manifest', authenticate, handle(async (req,res) => {
+    res.json(await hsm.reportToolManifest(req.params.id,req.body || {}));
   }));
   route.post('/api/ai-board/worker/tickets/:id/hsm/authority', authenticate, handle(async (req,res) => {
     res.json(await hsm.authorizeAction(req.params.id,req.body || {}));

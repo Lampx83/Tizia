@@ -1932,6 +1932,13 @@ function wireNightSection(host) {
     toast(res.data.enabled ? 'Đã bật tự chạy lại' : 'Đã tắt tự chạy lại');
     loadSelfImprove();
   }));
+  host.querySelectorAll('[data-tm-act]').forEach(btn => btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    const res = await api(`/api/admin/ai-board/tool-manifests/${btn.dataset.tmHash}/${btn.dataset.tmAct}`, { method: 'POST' });
+    if (!res.ok) { toast('Lỗi: ' + (res.data?.message || res.data?.error || res.status), 'err'); btn.disabled = false; return; }
+    toast(btn.dataset.tmAct === 'approve' ? 'Đã duyệt manifest' : 'Đã thu hồi manifest');
+    loadSelfImprove();
+  }));
   host.querySelectorAll('[data-tr-retry]').forEach(btn => btn.addEventListener('click', async () => {
     btn.disabled = true;
     const res = await api(`/api/admin/ai-board/tickets/${btn.dataset.trRetry}/retry-transient`, { method: 'POST' });
@@ -1967,14 +1974,36 @@ function transientRetrySection(tr) {
     </div>`;
 }
 
+const MANIFEST_STATUS = { pending: 'Chờ duyệt', approved: 'Đã duyệt', revoked: 'Đã thu hồi' };
+function toolManifestSection(list) {
+  if (!list) return '';
+  return `
+    <div id="tool-manifests" style="margin-bottom:22px">
+      <div class="trace-sub" style="margin-bottom:8px">Phiên bản bộ tool của vòng sửa code. Worker chỉ chạy tool khi băm manifest đã duyệt; đổi manifest là phiên bản mới và cần duyệt lại. Thu hồi có hiệu lực ở hành động kế tiếp của worker.</div>
+      ${list.length ? `<table>
+        <thead><tr><th>Băm</th><th>Phiên bản</th><th>Tool (loại, trần byte tham số / ký tự kết quả / giây)</th><th>Trạng thái</th><th></th></tr></thead>
+        <tbody>${list.map(m => `
+          <tr>
+            <td><code>${esc(m.manifest_hash.slice(0, 12))}</code><div class="trace-sub">báo bởi ${esc(m.reported_by)}</div></td>
+            <td>${esc(m.version)}</td>
+            <td>${m.tools.map(t => `${esc(t.name)} (${esc(t.effect)}, ${t.max_arg_bytes}/${t.max_output_chars}/${t.max_seconds})`).join('<br>')}</td>
+            <td>${MANIFEST_STATUS[m.status] || esc(m.status)}</td>
+            <td>${m.status === 'pending' ? `<button class="btn primary" data-tm-act="approve" data-tm-hash="${esc(m.manifest_hash)}">Duyệt</button>` : ''}
+              ${m.status === 'approved' ? `<button class="btn danger" data-tm-act="revoke" data-tm-hash="${esc(m.manifest_hash)}">Thu hồi</button>` : ''}</td>
+          </tr>`).join('')}</tbody>
+      </table>` : '<div class="loading">Chưa có phiên bản manifest nào được worker báo.</div>'}
+    </div>`;
+}
+
 async function loadSelfImprove() {
-  const [si, tr, r] = await Promise.all([api('/api/admin/ai-board/self-improve'), api('/api/admin/ai-board/transient-retry'),
-    api(`/api/admin/ai-board/eval-tasks?status=${evalStatus}`)]);
+  const [si, tr, tm, r] = await Promise.all([api('/api/admin/ai-board/self-improve'), api('/api/admin/ai-board/transient-retry'),
+    api('/api/admin/ai-board/tool-manifests'), api(`/api/admin/ai-board/eval-tasks?status=${evalStatus}`)]);
   const host = $('#tabbody');
   if (!r.ok) { host.innerHTML = `<div class="err">Lỗi: ${esc(r.data?.error || r.status)}</div>`; return; }
   const { tasks = [], counts = {} } = r.data;
   const editable = evalStatus !== 'retired';
   host.innerHTML = `
+    ${tm.ok ? toolManifestSection(tm.data.manifests) : `<div class="err">Lỗi manifest tool: ${esc(tm.data?.error || tm.status)}</div>`}
     ${tr.ok ? transientRetrySection(tr.data) : `<div class="err">Lỗi tự chạy lại: ${esc(tr.data?.error || tr.status)}</div>`}
     ${si.ok ? nightSection(si.data) : `<div class="err">Lỗi vòng đêm: ${esc(si.data?.error || si.status)}</div>`}
     <div class="toolbar">${Object.entries(EVAL_STATUS_LABEL).map(([k, l]) =>
