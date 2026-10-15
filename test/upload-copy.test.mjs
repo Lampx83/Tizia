@@ -25,11 +25,14 @@ test('frozen uploads preserve nested bytes, paths and empty folders; differences
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test('links cannot stand in for backed-up file bytes', async () => {
+test('links cannot stand in for backed-up file bytes', async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), 'tizia-upload-link-'));
   try {
     await writeFile(path.join(root, 'file'), 'public fixture');
-    await symlink('file', path.join(root, 'link'));
+    try { await symlink('file', path.join(root, 'link')); } catch (error) {
+      if (error.code === 'EPERM') return t.skip('creating symlinks needs a privilege this account lacks');
+      throw error;
+    }
     await assert.rejects(uploadManifest(root), /link_or_special/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

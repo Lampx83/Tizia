@@ -129,9 +129,10 @@ def test_cleanup_without_keep_deletes_the_branch(tmp_path, source):
     assert not Path(state["full_checkout"]).exists()
 
 
-def test_missing_git_checkout_blocks_gate_5_clearly(tmp_path, fake_deps):
+def test_missing_git_checkout_blocks_gate_5_clearly(tmp_path, fake_deps, monkeypatch):
     scratch = implement._ensure_scratch_repo(tmp_path / "scratch")
     state = state_for(tmp_path, [child(scratch, "x", "public/a.html", "<p>x</p>\n")])
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))  # a tmp dir inside a checkout must not turn not-a-repo into a repo
     state["checkout_source"] = str(tmp_path / "not-a-repo")
     (tmp_path / "not-a-repo").mkdir()
 

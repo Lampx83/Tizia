@@ -32,11 +32,14 @@ def endpoint():
             elif self.path.endswith("/snapshot"):
                 data = {"ticket": {"budget_limit": 200}, "lessons_schema_version": 1,
                         "request": {"id": 3, "title": "fixture", "detail": "edit"},
-                        "capability_policy": {"version": "fixture", "hash": "c" * 64, "capabilities": {}}}
+                        "capability_policy": {"version": "fixture", "hash": "c" * 64, "capabilities": {}},
+                        "hsm_contract": {"hash": "pin"}}
             elif self.path.endswith("/runs"):
                 data = {"run": {"id": 11}}
             elif self.path.endswith("/plan"):
                 data = {"status": "planned", "tier": "surface", "capability_policy_hash": "c" * 64}
+            elif self.path.endswith("/authority"):
+                data = {"authorized": True}
             elif self.path.endswith("/verdict"):
                 data = {"verdict": body["verdict"]}
             elif not self.path.endswith("/lessons"):
