@@ -1,5 +1,6 @@
 """Tool-loop tuần tự: adapter, trần 10/30/300 dưới parent, ledger sửa nội dung chung, forbidden/stale dừng trước side effect."""
 import json
+from pathlib import Path
 
 import pytest
 
@@ -238,3 +239,12 @@ def test_gate3_new_file_uses_loop_and_writes_only_to_scratch(tmp_path, monkeypat
     assert (tmp_path / "scratch" / target).read_text(encoding="utf-8") == PAGE
     assert not (source / target).exists()
     assert "+<h1>A</h1>" in out["diffs"][0]["diff"]
+
+
+def test_loop_prompt_is_a_locked_prompt_file_the_pipeline_can_resolve():
+    import hashlib
+    from runtime import pipeline
+    path = pipeline.PROMPTS_DIR / "tool_loop.md"
+    assert pipeline._static_prefix("tool_loop.md")
+    assert pipeline._PROMPT_LOCK["tool_loop.md"] == hashlib.sha256(path.read_bytes()).hexdigest()
+    assert 'prompt_name="tool_loop.md"' in Path(tool_loop.__file__).read_text(encoding="utf-8")
