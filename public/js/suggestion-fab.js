@@ -1093,7 +1093,7 @@ function injectStyles() {
     #sgf-root input::placeholder, #sgf-root textarea::placeholder { color: #64748b; opacity: 1; }
     #sgf-fab {
       position: fixed; left: 18px; bottom: 18px; z-index: 2147483000;
-      width: 48px; height: 48px; border-radius: 12px;
+      width: 48px; height: 48px; border-radius: 50%;
       display: inline-flex; gap: 10px; align-items: center; justify-content: center;
       padding: 0; border: 0; cursor: pointer;
       background: #4f46e5; color: #fff;

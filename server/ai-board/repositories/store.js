@@ -501,6 +501,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     const root = await db.get('SELECT id, status FROM ai_tickets WHERE source_request_id = ? AND parent_id IS NULL', [requestId]);
     if (!root) return false;
     const now = Date.now();
+    await touchAdmin(root.id, actorId, rejecting ? 'reject' : 'note', now);
     // Random suffix: two admin posts in the same millisecond must not collide on the unique key.
     await db.run(insertEvent, [root.id, 'request_status_changed', 'admin', String(actorId), null,
       note, rejecting ? 'request rejected' : 'request noted', `status:${requestId}:${now}:${randomBytes(4).toString('hex')}`, now,]);
@@ -513,14 +514,31 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   const rejectRequest = async (requestId, note, actorId) => await adminRequestTransaction(Number(requestId), true, adminNote(note), actorId);
   const noteRequest = async (requestId, note, actorId) => await adminRequestTransaction(Number(requestId), false, adminNote(note), actorId);
 
+  // First admin to act on a root claims it and keeps it; every later admin only updates the last-actor columns.
+  const touchAdmin = async (rootTicketId, adminId, action, now = Date.now()) => Number.isInteger(Number(adminId)) && db.run(`
+    INSERT INTO ai_ticket_admins(ticket_id, admin_user_id, claimed_at, last_admin_id, last_action, last_action_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(ticket_id) DO UPDATE SET last_admin_id = excluded.last_admin_id, last_action = excluded.last_action,
+                                         last_action_at = excluded.last_action_at`,
+    [Number(rootTicketId), Number(adminId), now, Number(adminId), String(action).slice(0, 40), now]);
+  async function recordAdminAction({ ticketId, requestId }, adminId, action) {
+    const root = ticketId != null ? { id: Number(ticketId) }
+      : await db.get('SELECT id FROM ai_tickets WHERE source_request_id = ? AND parent_id IS NULL', [Number(requestId)]);
+    if (root && Number.isInteger(Number(adminId))) await touchAdmin(root.id, adminId, action);
+  }
+
   async function listAdminQueue(limit = 100) {
     const queue = await db.all(`
       SELECT t.id, t.source_request_id, t.title, t.status, t.phase, t.priority,
              t.public_note, t.internal_reason, t.lease_owner, t.lease_expires_at,
              t.cumulative_budget, t.budget_limit,
              (SELECT COUNT(*) FROM ai_alerts a WHERE a.ticket_id=t.id AND a.status='open') AS open_alerts,
-             r.domain, r.owner_user_id, r.owner_state, r.created_at
+             r.domain, r.owner_user_id, r.owner_state, r.created_at,
+             m.admin_user_id AS managed_by, (SELECT username FROM users WHERE id = m.admin_user_id) AS managed_by_name,
+             m.claimed_at, m.last_admin_id, (SELECT username FROM users WHERE id = m.last_admin_id) AS last_admin_name,
+             m.last_action, m.last_action_at
       FROM ai_tickets t JOIN requests r ON r.id = t.source_request_id
+      LEFT JOIN ai_ticket_admins m ON m.ticket_id = t.id
       WHERE t.parent_id IS NULL
       ORDER BY t.priority DESC, t.created_at ASC LIMIT ?
     `, [Math.min(Math.max(Number(limit) || 100, 1), 500)]);
@@ -1380,7 +1398,9 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     }
     const why = String(reason || '').trim();
     if (why.length < 10) throw new WorkerContractError('a reason of at least 10 characters is required');
-    return await extendBudgetTransaction(rootTicketId, value, why.slice(0, 500), Number(adminUserId), Date.now());
+    const result = await extendBudgetTransaction(rootTicketId, value, why.slice(0, 500), Number(adminUserId), Date.now());
+    await recordAdminAction({ ticketId: rootTicketId }, adminUserId, 'extend_budget');
+    return result;
   }
 
   const cancelRequestTransaction = (requestId, ownerUserId, now) => db.tx(async () => {
@@ -1434,7 +1454,9 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
 
   async function requestRollback(requestId, { adminUserId, confirm, now = Date.now() }) {
     assertConfirmed(requestId, confirm);
-    return await requestRollbackTransaction(Number(requestId), adminUserId, now);
+    const result = await requestRollbackTransaction(Number(requestId), adminUserId, now);
+    await recordAdminAction({ requestId }, adminUserId, 'rollback');
+    return result;
   }
 
   const submitRollbackTransaction = (ticketId, input) => db.tx(async () => {
@@ -1495,6 +1517,10 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL
     `, [Number(requestId)]);
     if (!root) return null;
+    root.managed = await db.get(`
+      SELECT m.admin_user_id AS managed_by, (SELECT username FROM users WHERE id = m.admin_user_id) AS managed_by_name, m.claimed_at,
+             m.last_admin_id, (SELECT username FROM users WHERE id = m.last_admin_id) AS last_admin_name, m.last_action, m.last_action_at
+      FROM ai_ticket_admins m WHERE m.ticket_id = ?`, [root.id]) || null;
     root.live = !!root.lease_owner && root.lease_expires_at > Date.now(); // 1 worker đang giữ lease = đang xử lý
     root.phase_label = PHASES[root.phase]?.label ?? root.phase;
     const children = await db.all(`
@@ -1617,7 +1643,9 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   }
 
   async function authorizePlan(rootTicketId, planHash, adminUserId) {
-    return await authorizePlanTransaction(rootTicketId, planHash, adminUserId, Date.now());
+    const result = await authorizePlanTransaction(rootTicketId, planHash, adminUserId, Date.now());
+    await recordAdminAction({ ticketId: rootTicketId }, adminUserId, 'authorize_plan');
+    return result;
   }
 
   // The one writer of the needs_replan transition: drops plan and lease, optionally grants budget.
@@ -1689,7 +1717,9 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   });
 
   async function rerunGate(requestId, gate, adminUserId) {
-    return await rerunGateTransaction(Number(requestId), Number(gate), Number(adminUserId), Date.now());
+    const result = await rerunGateTransaction(Number(requestId), Number(gate), Number(adminUserId), Date.now());
+    await recordAdminAction({ requestId }, adminUserId, 'rerun_gate');
+    return result;
   }
 
   return {
@@ -1744,6 +1774,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     handoffClarification,
     requestWorkerClarification,
     authorizePlan,
+    recordAdminAction,
     resumeAuthorizedPlan,
     extendBudget,
     invalidatePlanForRequest,

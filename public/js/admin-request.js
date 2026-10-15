@@ -431,6 +431,11 @@ async function authorizePlan(btn) {
 }
 
 // ─── Hoàn tác / hủy: 2 bước xác nhận (đọc hậu quả → gõ số yêu cầu) ───
+const ADMIN_ACTION = { note: 'ghi chú', reject: 'từ chối', authorize_plan: 'cho phép kế hoạch', rerun_gate: 'chạy lại bước',
+  rollback: 'hoàn tác', extend_budget: 'gia hạn ngân sách', retry_transient: 'chạy lại sau lỗi hạ tầng' };
+const managedLine = (m) => `<div class="meta" data-managed>${m
+  ? `Phụ trách: <b>${esc(m.managed_by_name || '#' + m.managed_by)}</b> từ ${fmt(m.claimed_at)}${m.last_admin_id !== m.managed_by ? ` · gần nhất ${esc(m.last_admin_name || '#' + m.last_admin_id)}` : ''} · ${esc(ADMIN_ACTION[m.last_action] || m.last_action)} ${fmt(m.last_action_at)}`
+  : 'Chưa có admin nào phụ trách; admin đầu tiên thao tác sẽ nhận yêu cầu.'}</div>`;
 function renderActions(request, trace) {
   const root = trace?.root;
   const candidate = trace?.candidate;
@@ -577,6 +582,7 @@ function render() {
     <div class="meta">${r.type === 'self' ? 'AI Board tự đề xuất' : `${esc(r.domain)} · ${esc(r.type)} · ${esc(r.student)}`}
       · <span class="pill">${esc(r.status)}</span> · tạo ${fmt(r.created_at)}
       ${live ? '· <span class="auto live">tự cập nhật mỗi 2 giây</span>' : ''}</div>
+    ${managedLine(trace?.root?.managed)}
     ${renderActions(r, trace)}
     </header>
     <section id="private-preview" class="blk private-preview" aria-label="Bản xem riêng của yêu cầu"></section>

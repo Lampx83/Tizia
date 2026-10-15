@@ -305,7 +305,11 @@ export function attachAiBoardRequestRoutes(router, {
     try { res.json(await aux.setTransientRetryEnabled(store.db, req.body?.enabled, req.user.id)); } catch (error) { folderError(res, error); }
   });
   route.post('/api/admin/ai-board/tickets/:id/retry-transient', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
-    try { res.json(await aux.retryTransientTicket(store.db, req.params.id)); } catch (error) { folderError(res, error); }
+    try {
+      const result = await aux.retryTransientTicket(store.db, req.params.id);
+      await store.recordAdminAction({ ticketId: req.params.id }, req.user.id, 'retry_transient');
+      res.json(result);
+    } catch (error) { folderError(res, error); }
   });
 
   // ── Đối chiếu bước ghi chưa rõ của tool-loop (unknown write): người vận hành chốt, có lý do + evidence + audit ──

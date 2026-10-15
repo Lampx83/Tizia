@@ -391,6 +391,8 @@ let reqCache = [];
 let aiTicketCache = [];
 let intakeRejections = [];
 let reqFilter = 'all';
+let ownerFilter = 'all';
+let myAdminId = null;
 let userCache = [];
 let currentTab = 'dashboard';
 
@@ -433,10 +435,22 @@ document.addEventListener('click', async (e) => {
   try { await navigator.clipboard.writeText(el.dataset.copy); el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1200); } catch { /* clipboard bị chặn */ }
 }, true);
 
+const ACTION_LABEL = { note: 'ghi chú', reject: 'từ chối', authorize_plan: 'cho phép kế hoạch', rerun_gate: 'chạy lại bước',
+  rollback: 'hoàn tác', extend_budget: 'gia hạn ngân sách', retry_transient: 'chạy lại sau lỗi hạ tầng' };
+function ownerCell(ticket) {
+  if (!ticket?.managed_by) return '<span style="opacity:.45">Chưa ai nhận</span>';
+  const last = ticket.last_admin_id !== ticket.managed_by
+    ? `<div style="font-size:11px;opacity:.75">gần nhất: ${esc(ticket.last_admin_name || '#' + ticket.last_admin_id)} · ${esc(ACTION_LABEL[ticket.last_action] || ticket.last_action)}</div>` : '';
+  return `<b>${esc(ticket.managed_by_name || '#' + ticket.managed_by)}</b>${ticket.managed_by === myAdminId ? ' <span class="pill">tôi</span>' : ''}${last}`;
+}
+
 function renderRequests() {
-  const filtered = reqFilter === 'all' ? reqCache : reqCache.filter(r => r.status === reqFilter);
-  const counts = reqCache.reduce((m,r) => (m[r.status] = (m[r.status]||0)+1, m), {});
   const ticketByRequest = new Map(aiTicketCache.map(ticket => [ticket.source_request_id, ticket]));
+  const ownerOf = (r) => ticketByRequest.get(r.id)?.managed_by ?? null;
+  const ownerMatch = { all: () => true, mine: (r) => ownerOf(r) != null && ownerOf(r) === myAdminId,
+    none: (r) => ownerOf(r) == null, others: (r) => ownerOf(r) != null && ownerOf(r) !== myAdminId };
+  const filtered = reqCache.filter(r => (reqFilter === 'all' || r.status === reqFilter) && ownerMatch[ownerFilter](r));
+  const counts = reqCache.reduce((m,r) => (m[r.status] = (m[r.status]||0)+1, m), {});
   const host = $('#tabbody');
   host.innerHTML = `
     <div class="toolbar">
@@ -449,13 +463,19 @@ function renderRequests() {
         <option value="rejected">Từ chối (${counts.rejected||0})</option>
         <option value="cancelled">Học sinh đã hủy (${counts.cancelled||0})</option>
       </select>
+      <select id="ownerFilter" aria-label="Lọc theo admin phụ trách">
+        <option value="all">Mọi admin</option>
+        <option value="mine">Tôi phụ trách</option>
+        <option value="none">Chưa ai nhận</option>
+        <option value="others">Admin khác phụ trách</option>
+      </select>
       <div class="spacer"></div>
       <button class="btn" id="reqRefresh">Tải lại</button>
     </div>
     <table>
       <thead><tr>
         <th>#</th><th>Trường</th><th>Tiêu đề</th><th>Nội dung yêu cầu</th><th>Loại</th>
-        <th>Người yêu cầu</th><th>Vai trò</th><th>Trạng thái</th><th>AI Board</th><th>Vote</th><th>Tạo lúc</th><th></th>
+        <th>Người yêu cầu</th><th>Vai trò</th><th>Trạng thái</th><th>AI Board</th><th>Phụ trách</th><th>Vote</th><th>Tạo lúc</th><th></th>
       </tr></thead>
       <tbody>
       ${filtered.map(r => `
@@ -475,6 +495,7 @@ function renderRequests() {
           <td>${esc(ROLE_NAME[r.requester_role] || r.requester_role || '—')}</td>
           <td><span class="pill st-${esc(r.status)}">${esc(REQUEST_STATUS_LABEL[r.status] || r.status)}</span></td>
           <td>${ticketSummary}</td>
+          <td>${ownerCell(ticket)}</td>
           <td>${r.votes}</td>
           <td style="font-size:12px;opacity:.7">${fmt(r.created_at)}</td>
           <td class="actions" style="white-space:nowrap">
@@ -493,6 +514,8 @@ function renderRequests() {
       ${intakeRejections.map((r) => `<p>${esc(fmt(r.created_at))} · ${esc(r.public_message)}<br><small>${esc(r.internal_detail)}</small></p>`).join('')}</details>` : ''}
   `;
   $('#reqFilter').value = reqFilter;
+  $('#ownerFilter').value = ownerFilter;
+  $('#ownerFilter').addEventListener('change', e => { ownerFilter = e.target.value; renderRequests(); });
   $('#reqFilter').addEventListener('change', e => { reqFilter = e.target.value; renderRequests(); });
   $('#reqRefresh').addEventListener('click', loadRequests);
   host.querySelectorAll('[data-act]').forEach(b => {
@@ -2405,6 +2428,7 @@ document.addEventListener('ev-header-mounted', injectAdminBadge, { once: true })
 
 async function init() {
   const meR = await api('/api/auth/me');
+  myAdminId = meR.data?.user?.id ?? null;
 
   // Render shell một lần — tab bar lớn + container nội dung
   $('#app').innerHTML = `
