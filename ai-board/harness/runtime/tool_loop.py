@@ -222,8 +222,12 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check) -> tup
     if saved["ledger"]:
         budget.absorb(saved["ledger"])
     steps, rejected = [], False
-    for row in saved["steps"]:
+    for expected, row in enumerate(saved["steps"]):
         n, name, args, status, kind = row["step"], row["tool"], row["args"], row["status"], row["kind"]
+        if n != expected:
+            return prompt, steps, False, _result("blocked", f"checkpoint thiếu bước {expected} (có bước {n})", "critical", steps=steps)
+        if row.get("digest_ok") is False:
+            return prompt, steps, False, _result("blocked", f"kết quả đã lưu của bước {n} bị hỏng (digest không khớp)", "critical", steps=steps)
         if row["identity"] != store.identity(n, name, args):
             return prompt, steps, False, _result("blocked", f"identity bước {n} không khớp checkpoint", "critical")
         if status not in KNOWN_STATUSES:

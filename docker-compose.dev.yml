@@ -69,7 +69,6 @@ services:
     logging: *logging
     environment:  # dòng có giá trị = nối dây trong container; dòng trần = lấy từ file .env (khóa, model, nhánh gốc, ngân sách)
       AI_BOARD_SERVER_URL: http://tizia-dev:8041
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@tizia-postgres:5432/${POSTGRES_DB}
       AI_BOARD_REPO_DIR: /repo
       AI_BOARD_SANDBOX_URL: http://sandbox-runner:8090
       AI_BOARD_WORKER_KEY:

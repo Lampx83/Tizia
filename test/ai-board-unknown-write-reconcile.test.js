@@ -9,14 +9,6 @@ import { openBoard } from './support/ai-board-db.js';
 import { attachAiBoardRequestRoutes } from '../server/ai-board/routes.js';
 import { listUnknownWrites, reconcileWrite } from '../server/ai-board/services/write-reconcile.js';
 
-// Cùng hình dạng với DDL của ai-board/harness/repositories/tool_steps.py (worker Python sở hữu bảng).
-const TOOL_DDL = `
-CREATE TABLE tool_run (proposal_id BIGINT NOT NULL, child INTEGER NOT NULL, pins_json TEXT NOT NULL, ledger_json TEXT,
-  updated_at BIGINT NOT NULL, run_scope TEXT, PRIMARY KEY (proposal_id, child));
-CREATE TABLE tool_step (proposal_id BIGINT NOT NULL, child INTEGER NOT NULL, step INTEGER NOT NULL, identity TEXT NOT NULL,
-  tool TEXT NOT NULL, args_json TEXT NOT NULL, status TEXT NOT NULL, kind TEXT, observation TEXT, resolved_by TEXT,
-  updated_at BIGINT NOT NULL, resolution_reason TEXT, resolution_evidence TEXT, resolved_at BIGINT,
-  PRIMARY KEY (proposal_id, child, step));`;
 const ID_A = 'a'.repeat(32);
 const ID_B = 'b'.repeat(32);
 const EVIDENCE = { receipt: 'rcpt-1', checked: 'đã đối chiếu bản ghi' };
@@ -48,7 +40,7 @@ async function fixture({ tables = true } = {}) {
     verdict: { outcome: 'blocked', gate_reached: 3, reason: 'kết quả bước 0 chưa rõ', budget_used: 3, failure_class: 'critical',
       repairs: [], candidate: null, gates: [{ gate: 3, blocked: true, reason: 'kết quả bước 0 chưa rõ', issues: [] }] },
   });
-  if (tables) await db.d.exec(TOOL_DDL);
+  if (!tables) await db.d.exec('DROP TABLE tool_step; DROP TABLE tool_run;'); // tool_run/tool_step are created by migration 025
   const seed = async (identity, { status = 'unknown', scope = `ticket-${ticket.id}:abc`, key = 1, step: n = 0 } = {}) => {
     await db.d.run('INSERT INTO tool_run(proposal_id, child, pins_json, updated_at, run_scope) VALUES (?, 1, ?, ?, ?) ON CONFLICT DO NOTHING',
       [key, '{}', Date.now(), scope]);

@@ -1,5 +1,5 @@
 // Đối chiếu bước ghi chưa rõ (unknown write) của tool-loop: người có quyền chốt applied / not_applied / compensate.
-// Bảng tool_run/tool_step do worker Python sở hữu (ai-board/harness/repositories/tool_steps.py); cùng DATABASE_URL.
+// Bảng tool_run/tool_step do migration 025 tạo; worker Python ghi qua services/tool-checkpoint.js, không cần DB credential.
 // Platform tự đối chiếu bằng dữ liệu đã lưu ở worker; ở đây chỉ phần còn lại cần người, mọi quyết định có audit.
 import { WorkerContractError } from '../repositories/store-contract.js';
 

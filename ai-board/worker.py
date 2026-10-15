@@ -262,14 +262,23 @@ def drop_screenshots(shots: list[dict]) -> None:
 
 
 def _worker_checkpoint(ticket_id: int, plan: dict, plan_hash: str | None = None):
-    """Checkpoint theo ticket + plan_hash server (thiếu → băm plan cục bộ); None khi cờ tắt hoặc thiếu DATABASE_URL."""
-    dsn = os.getenv("DATABASE_URL")
-    if os.getenv("AI_BOARD_TOOL_LOOP") != "1" or not dsn:
+    """Checkpoint theo ticket + plan_hash server (thiếu → băm plan cục bộ): qua API server khi có lease, DATABASE_URL chỉ cho chạy ngoài worker HTTP; None khi cờ tắt."""
+    if os.getenv("AI_BOARD_TOOL_LOOP") != "1":
         return None
-    from repositories.tool_steps import Checkpoint
     digest = str(plan_hash) if plan_hash else hashlib.sha256(
         json.dumps(plan, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")).hexdigest()
-    return Checkpoint(dsn, f"ticket-{ticket_id}:{digest[:16]}")
+    scope = f"ticket-{ticket_id}:{digest[:16]}"
+    from repositories import server_hsm
+    backend = server_hsm._SERVER.get()
+    if backend is not None and getattr(backend, "client", None) is not None:
+        from repositories.server_checkpoint import HttpCheckpoint
+        lease = {key: backend.identity[key] for key in ("worker_id", "lease_token")}
+        return HttpCheckpoint(backend.client, ticket_id, lease, scope)
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        return None
+    from repositories.tool_steps import Checkpoint
+    return Checkpoint(dsn, scope)
 
 
 def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate,

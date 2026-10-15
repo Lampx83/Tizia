@@ -248,3 +248,23 @@ def test_pg_reconcile_records_actor_reason_evidence_and_allows_compensate_then_c
     assert json.loads(evidence) == {"ticket": "T-1"}
     with pytest.raises(ValueError):
         store.reconcile(0, "applied", "admin:9")  # đã chốt xong
+
+
+def test_corrupt_stored_result_stops_resume_before_any_model_call():
+    db = {"pins": None, "ledger": None, "steps": {}}
+    with pytest.raises(Crash):
+        loop([EDIT, TEST, FINISH], MemSteps(crash_on=("intent", 1), shared=db))
+    db["steps"][0]["digest_ok"] = False
+    out, _, deps = loop([TEST, FINISH], MemSteps(shared=db))
+    assert out["status"] == "blocked" and out["failure_class"] == "critical" and "digest" in out["reason"]
+    assert deps.prompts == []
+
+
+def test_missing_step_in_the_stored_sequence_stops_resume():
+    db = {"pins": None, "ledger": None, "steps": {}}
+    with pytest.raises(Crash):
+        loop([EDIT, TEST, FINISH], MemSteps(crash_on=("done", 2), shared=db))
+    del db["steps"][0]
+    out, _, deps = loop([TEST, FINISH], MemSteps(shared=db))
+    assert out["status"] == "blocked" and out["failure_class"] == "critical" and "thiếu bước" in out["reason"]
+    assert deps.prompts == []

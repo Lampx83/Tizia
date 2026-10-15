@@ -591,7 +591,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     if (yieldNew) return null; // có người đang chat: không nhận ticket mới, việc đang giữ vẫn trả về ở trên
 
     const candidate = await db.get(`
-      SELECT t.id, t.phase
+      SELECT t.id, t.phase, t.status, t.lease_token
       FROM ai_tickets t JOIN requests r ON r.id=t.source_request_id
       WHERE t.kind='root' AND r.owner_state='verified'
         -- lease_expires_at trên hàng 'queued' (bình thường NULL) đóng vai "không nhận trước giờ này": tự chạy
@@ -619,7 +619,12 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     const token = randomBytes(24).toString('hex');
     const expires = now + leaseMs;
     // 'executing': plan đã duyệt, bỏ qua lập plan. 'rolling_back': hoàn tác thay đổi đã giữ lại.
-    const phase = PHASES[candidate.phase]?.lease || (intent === 'plan' ? 'planning' : 'shadow_precheck');
+    // A lease lost while the approved plan was executing: the next active worker continues that plan (same plan_hash,
+    // so the tool-step checkpoint is found) instead of planning again.
+    const orphanedExecute = mode === 'active' && candidate.status !== 'queued' && !!candidate.lease_token && !!await db.get(`
+      SELECT 1 AS n FROM ai_runs WHERE id = (SELECT MAX(id) FROM ai_runs WHERE ticket_id = ? AND trigger <> 'shadow_precheck')
+        AND trigger = 'execute' AND outcome IS NULL`, [candidate.id]);
+    const phase = orphanedExecute ? 'executing' : PHASES[candidate.phase]?.lease || (intent === 'plan' ? 'planning' : 'shadow_precheck');
     await db.run(`
       UPDATE ai_tickets SET status='running', phase=?, lease_owner=?,
         lease_token=?, lease_expires_at=?, lease_mode=?, updated_at=? WHERE id=?

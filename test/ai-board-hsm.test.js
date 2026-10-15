@@ -215,6 +215,65 @@ test('actual Python HttpWorker completes deterministic Gate4 through real HTTP a
   } finally {await f.close();}
 });
 
+const probe=async(f,phase)=>{
+  const python=process['env'].TEST_PYTHON || path.resolve('ai-board/harness/.venv/Scripts/python.exe');
+  const child=await promisify(execFile)(python,[path.resolve('test/support/checkpoint-failover-probe.py'),f.base,KEY,String(f.id),phase],{cwd:process.cwd(),timeout:60000,maxBuffer:1000000});
+  return JSON.parse(child.stdout.trim().split('\n').at(-1));
+};
+
+test('checkpoint API is lease-fenced, scope-bound and detects a corrupted stored result',async()=>{
+  const f=await fixture();
+  try {
+    const scope=`ticket-${f.id}:p`,id='a'.repeat(32);
+    const call=(op,body,lease={})=>f.post(`checkpoint/${op}`,{proposal_id:'77',child:0,...body,...lease});
+    assert.deepEqual((await call('load',{})).body,{pins:null,ledger:null,steps:[]});
+    assert.equal((await call('pins',{pins:{a:1},run_scope:'ticket-999:x'})).body.error,'scope_mismatch');
+    assert.equal((await call('pins',{pins:{a:1},run_scope:scope})).status,200);
+    assert.equal((await call('intent',{step:0,tool:'edit_file',args:{x:1},identity:id})).status,200);
+    assert.equal((await call('intent',{step:0,tool:'edit_file',args:{x:1},identity:id})).body.error,'step_conflict');
+    assert.equal((await call('intent',{step:1,tool:'finish',args:{},identity:'bad'})).body.error,'invalid_identity');
+    assert.equal((await call('done',{step:0,tool:'edit_file',args:{x:1},identity:id,observation:'ok',kind:'ok'})).status,200);
+    assert.equal((await call('load',{})).body.steps[0].digest_ok,true);
+    await f.db.run("UPDATE tool_step SET observation='tampered' WHERE proposal_id=77");
+    assert.equal((await call('load',{})).body.steps[0].digest_ok,false);
+    await f.db.run("UPDATE tool_run SET run_scope='ticket-999:x' WHERE proposal_id=77");
+    assert.equal((await call('load',{})).body.error,'scope_mismatch');
+    await f.db.run("UPDATE tool_run SET run_scope=? WHERE proposal_id=77",[scope]);
+    await call('intent',{step:1,tool:'edit_file',args:{y:2},identity:'b'.repeat(32)});
+    await call('purge',{proposal_ids:['77']});
+    assert.equal((await call('load',{})).body.steps.length,2,'open intent is never purged');
+    await call('mark',{step:1,status:'void'});
+    await call('purge',{proposal_ids:['77']});
+    assert.deepEqual((await call('load',{})).body,{pins:null,ledger:null,steps:[]});
+    assert.equal((await call('load',{},{lease_token:'wrong'})).body.error,'stale_lease');
+  } finally {await f.close();}
+});
+
+test('worker A crashes mid-loop; worker B with a new lease resumes from the server checkpoint without double writes',async()=>{
+  const f=await fixture();
+  try {
+    assert.deepEqual(await probe(f,'a'),{crashed:true});
+    await f.db.run("UPDATE ai_tickets SET lease_owner='worker-b',lease_token='lease-b' WHERE id=?",[f.id]);
+    const b=await probe(f,'b');
+    assert.deepEqual([b.status,b.steps,b.edits,b.model_calls,b.prompts],['proposed',['edit_file','write_test','finish'],1,4,2]);
+    assert.deepEqual(await probe(f,'stale'),{rejected:409,error:'stale_lease'});
+  } finally {await f.close();}
+});
+
+test('a lease lost mid-execution is rescued by an active worker as the same plan, not replanned',async()=>{
+  const f=await fixture();
+  try {
+    await f.db.run("UPDATE ai_tickets SET status='planned',phase='ticketized',lease_expires_at=1 WHERE id=?",[f.id]);
+    const shadow=await f.store.claimNext({workerId:'worker-s',mode:'shadow',intent:'plan'});
+    assert.equal(shadow?.trigger==='execute',false,'a shadow worker never continues an approved plan');
+    await f.db.run("UPDATE ai_tickets SET status='planned',phase='ticketized',lease_owner='worker-a',lease_token='lease-a',lease_expires_at=1 WHERE id=?",[f.id]);
+    const claim=await f.store.claimNext({workerId:'worker-b',mode:'active',intent:'plan'});
+    assert.equal(claim.id,f.id);assert.equal(claim.trigger,'execute');assert.equal(claim.phase,'executing');
+    const row=await f.db.get('SELECT plan_hash,lease_owner FROM ai_tickets WHERE id=?',[f.id]);
+    assert.equal(row.lease_owner,'worker-b');assert.equal(row.plan_hash,'plan-a');
+  } finally {await f.close();}
+});
+
 const MANIFEST=JSON.parse(fs.readFileSync(new URL('../ai-board/harness/runtime/tool_manifest.json',import.meta.url),'utf8'));
 const MANIFEST_HASH=canonicalHash(MANIFEST);
 const adminDecide=(f,hash,action,admin=true)=>fetch(`${f.base}/api/admin/ai-board/tool-manifests/${hash}/${action}`,{method:'POST',headers:admin?{'x-test-admin':'yes'}:{}}).then(async r=>({status:r.status,body:await r.json()}));

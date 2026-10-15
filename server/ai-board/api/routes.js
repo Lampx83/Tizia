@@ -12,6 +12,7 @@ import { activeChats } from '../services/chat-activity.js';
 import { guardModelText, MAX_QUESTIONS } from '../../contexts/ai-board-intake/clarify.js';
 import { attachWorkerLessonRoutes, attachLessonReviewRoutes } from './lessons.js';
 import { createHsmStore } from '../hsm/store.js';
+import { createToolCheckpointService } from '../services/tool-checkpoint.js';
 import { createToolManifestStore } from '../repositories/tool-manifests.js';
 import { publicContract } from '../hsm/contract.js';
 
@@ -398,6 +399,10 @@ export function attachAiBoardWorkerRoutes(router, {
   }));
   route.post('/api/ai-board/worker/tickets/:id/tool-manifest', authenticate, handle(async (req,res) => {
     res.json(await hsm.reportToolManifest(req.params.id,req.body || {}));
+  }));
+  const toolCheckpoint = createToolCheckpointService(store);
+  route.post('/api/ai-board/worker/tickets/:id/checkpoint/:op', authenticate, handle(async (req,res) => {
+    res.json(await toolCheckpoint.apply(req.params.id, req.params.op, req.body || {}));
   }));
   route.post('/api/ai-board/worker/tickets/:id/hsm/authority', authenticate, handle(async (req,res) => {
     res.json(await hsm.authorizeAction(req.params.id,req.body || {}));
