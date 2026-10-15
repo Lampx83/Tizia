@@ -1,4 +1,4 @@
-"""Context ablation arms for gate 3 (default = production: hybrid, hybrid arm kept as its alias). Patches the running process only; one arm per run, recorded in the run name and run.json."""
+"""Context ablation arms for gate 3 (default = production: excerpt). Patches the running process only; one arm per run, recorded in the run name and run.json."""
 from __future__ import annotations
 
 import threading
@@ -24,6 +24,13 @@ def _calls_without_repomap(*args, **kwargs):
     return [c for c in calls if not (c[0] == "repomap" and getattr(_GATE, "number", None) == 1)]
 
 
+def _hybrid(subtask, state, current, siblings, words):
+    """Whole file when it fits WHOLE_FILE_MAX_CHARS, else excerpt, regardless of AI_BOARD_GATE3_CONTEXT."""
+    if current is None or len(current) <= implement.WHOLE_FILE_MAX_CHARS:
+        return implement.whole_file_context(subtask, state, current, siblings, words)
+    return implement.excerpt_context(subtask, state, current, siblings, words)
+
+
 def apply(arm: str) -> None:
     if arm not in ARMS:
         raise ValueError(f"unknown context arm {arm}")
@@ -35,6 +42,8 @@ def apply(arm: str) -> None:
         implement.gate3_context = implement.whole_file_context
     elif arm == "excerpt":
         implement.gate3_context = implement.excerpt_context
+    elif arm == "hybrid":
+        implement.gate3_context = _hybrid
     elif arm == "norepomap":
         context._calls = _calls_without_repomap
         context.build_context = _build_marked

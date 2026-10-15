@@ -128,8 +128,8 @@ def whole_file_context(subtask: dict, state: dict, current: str | None, siblings
 
 
 def gate3_context(subtask: dict, state: dict, current: str | None, siblings: list[str], words: list[str]) -> tuple:
-    """Whole file when <= WHOLE_FILE_MAX_CHARS, else excerpt; AI_BOARD_GATE3_CONTEXT=excerpt forces excerpt."""
-    if (current is None or len(current) <= WHOLE_FILE_MAX_CHARS) and os.environ.get("AI_BOARD_GATE3_CONTEXT", "hybrid") != "excerpt":
+    """Excerpt by default; AI_BOARD_GATE3_CONTEXT=hybrid sends the whole file when it is <= WHOLE_FILE_MAX_CHARS."""
+    if (current is None or len(current) <= WHOLE_FILE_MAX_CHARS) and os.environ.get("AI_BOARD_GATE3_CONTEXT", "excerpt") == "hybrid":
         return whole_file_context(subtask, state, current, siblings, words)
     return excerpt_context(subtask, state, current, siblings, words)
 

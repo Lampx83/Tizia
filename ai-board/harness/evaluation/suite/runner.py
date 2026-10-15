@@ -389,7 +389,7 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--pack", action="append", help="task pack JSON (merged-history tasks); repeatable")
     run.add_argument("--context-arm", choices=ablation.ARMS, default="default", help="gate 3 context ablation: fullfile = whole numbered file instead of excerpt; nosiblings = no folder listing")
     run.add_argument("--guards", default="", help="gate 3 guards to switch on (comma list of noop, refs, schema); default none")
-    run.add_argument("--gate25-fixes", default=None, help="gate 2.5 patches on (comma list: quotes, tokens; none = off); default quotes")
+    run.add_argument("--gate25-fixes", default=None, help="gate 2.5 patches on (comma list: quotes, tokens; none = off); default none")
     run.add_argument("--gate25-answered", action="store_true", help="gate 2.5 answers clarifications settled by a verbatim request/source quote and reruns the validator; default off")
     run.add_argument("--best-match", choices=["advisory"], default="", help="best_match mismatch recorded in trace instead of rejecting plan at gates 1 and 2.5; default off (reject)")
     run.add_argument("--retrieval", choices=("off", "literal"), default="off", help="gate 1 retrieval: literal = quoted strings in the request shortlist candidate files (git grep -F at the pinned sha)")

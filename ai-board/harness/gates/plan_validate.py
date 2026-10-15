@@ -167,11 +167,11 @@ def _squash(text: str) -> str:
 
 
 _QUOTE_CHARS = re.compile('["`‘’“”]')
-DEFAULT_FIXES = "quotes"
+DEFAULT_FIXES = ""
 
 
 def fixes() -> set[str]:
-    """Gate 2.5 patches on: AI_BOARD_GATE25_FIXES comma list; unset = quotes, empty = none."""
+    """Gate 2.5 patches on: AI_BOARD_GATE25_FIXES comma list; unset or empty = none."""
     return {f.strip() for f in os.environ.get("AI_BOARD_GATE25_FIXES", DEFAULT_FIXES).split(",") if f.strip()}
 
 
