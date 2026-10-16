@@ -221,6 +221,8 @@ def cmd_run(args, deps=None) -> int:
         print(f"[suite] {error}", file=sys.stderr)
         return 2
     tasks = [t for t in tasks if args.split in ("all", t["split"])]
+    if args.kinds:
+        tasks = [t for t in tasks if t.get("kind") in args.kinds.split(",")]
     if args.cases:
         tasks = tasks[: args.cases]
     for pack in args.pack or []:
@@ -432,6 +434,7 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--workers", type=int, default=2, help="parallel trials against the shared GPU")
     run.add_argument("--root", required=True)
     run.add_argument("--cases", type=int)
+    run.add_argument("--kinds", help="comma list of task kinds to keep (smoke runs)")
     run.add_argument("--fast-tier", action="store_true", help="gate 4 + production text oracle on a locally started corpus app")
     run.add_argument("--max-minutes", type=float)
     run.add_argument("--trial-timeout-s", type=int, default=1800, help="hard wall-clock cap per trial; an expired trial is an infra_error row")
