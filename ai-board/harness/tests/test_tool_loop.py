@@ -181,7 +181,8 @@ def test_no_verification_reserve_pauses_instead_of_repairing():
 
 
 def test_loop_caps_are_10_models_30_tools_under_the_parent():
-    out, budget, _ = run([{"tool": "read_file", "arguments": {"file": "public/a.html"}}])
+    alternating = [{"tool": "tree", "arguments": {"path": f"public{i % 2}"}} for i in range(2)]
+    out, budget, _ = run(alternating * 6)
     assert out["status"] == "paused" and "loop_model_calls" in out["reason"]
     assert budget.model_calls == 10 and budget.max_model_calls == 40
     child = ChildBudget(Budget())
@@ -346,3 +347,10 @@ def test_finish_rejected_by_the_content_check_still_spends_a_repair():
             raise ValueError("sai")
     out, budget, _ = run([EDIT, TEST, FINISH], check=check)
     assert out["status"] == "proposed" and budget.semantic_repairs == 1
+
+
+def test_repeating_the_same_request_gets_a_hint_then_stops_the_loop():
+    bad = {"tool": "edit_file", "arguments": {"file": "public/a.html", "edits": [{"search": "không có", "replace": "x"}]}}
+    out, _, deps = run([bad])
+    assert out["status"] == "blocked" and out["failure_class"] == "ordinary" and "lặp lại" in out["reason"]
+    assert "LẶP ĐÚNG" in deps.prompts[2] and "LẶP ĐÚNG" not in deps.prompts[1]
