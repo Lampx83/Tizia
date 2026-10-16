@@ -596,6 +596,16 @@ function renderWrites(t) {
   </section>`;
 }
 
+// internal_reason của một lần chặn là JSON {gate, reason, plan, ...}: hiện lý do đọc được, JSON gốc gập lại.
+function reasonBlock(raw) {
+  let data;
+  try { data = JSON.parse(raw); } catch { data = null; }
+  if (!data || typeof data !== 'object' || typeof data.reason !== 'string') return `<div class="meta">${esc(raw)}</div>`;
+  const review = data.reason.startsWith('validator_disagreement') ? ' <span class="pill">cần admin xem xét: hai lần soát không đồng ý</span>' : '';
+  return `<div class="meta">Cổng ${esc(data.gate)}: ${esc(data.reason)}${review}</div>
+    <details class="raw"><summary>raw JSON</summary><pre>${esc(JSON.stringify(data, null, 2))}</pre></details>`;
+}
+
 function renderAiBoard(t) {
   const x = t.totals || {};
   const unit = x.budget_unit === 'k_tokens' ? 'k tokens' : 'GPU-s';
@@ -610,7 +620,7 @@ function renderAiBoard(t) {
     <div class="blk status st-${shownState}"><div class="line1"><b>Xử lý yêu cầu</b>${tag(shownState, root.live ? 'Đang xử lý' : label)}
         <span>${esc(root.phase_label)}</span>${root.live ? '<span class="pulse" title="Worker đang giữ yêu cầu này"></span>' : ''}</div>
       ${root.public_note ? `<div style="margin-top:4px">${esc(root.public_note)}</div>` : ''}
-      ${root.internal_reason ? `<div class="meta">${esc(root.internal_reason)}</div>` : ''}
+      ${root.internal_reason ? reasonBlock(root.internal_reason) : ''}
       ${t.candidate ? `<div class="meta" style="margin-top:4px">Nhánh thay đổi: ${code(t.candidate.branch)} · ${esc(t.candidate.commits?.length)} commit</div>` : ''}
       ${t.pull_request && /^https:\/\/github\.com\//.test(t.pull_request.url) ? `<div class="meta" style="margin-top:4px">PR vào ${code(t.pull_request.base)}:
         <a href="${esc(t.pull_request.url)}" target="_blank" rel="noopener noreferrer">#${esc(t.pull_request.number)}</a>
