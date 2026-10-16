@@ -17,7 +17,7 @@ const elapsed = (t) => { const s = Math.max(0, Math.round((Date.now() - t) / 100
 const REQUEST_ID = Number(new URLSearchParams(location.search).get('id'));
 // Trạng thái giao diện riêng của admin (không phải dữ liệu server): bảng xác nhận đang mở ở bước nào.
 // `open`: khóa <details> (data-k) → đã mở/đóng, sống qua mọi lần vẽ lại do refresh().
-const ui = { confirm: null, step: 1, msg: '', flash: '', authorizeConfirm: null, open: {} };
+const ui = { confirm: null, step: 1, msg: '', flash: '', authorizeConfirm: null, open: {}, reconcile: null };
 let view = null;
 let gateNames = {}; // tên cổng lấy từ trace (contract.gates.names của server)
 
@@ -417,6 +417,24 @@ function renderPlan(p, root, children, trace) {
     </div></section>`;
 }
 
+async function submitReconcile(btn) {
+  const f = ui.reconcile, root = view?.trace?.root;
+  if (!f || !root) return;
+  if (!f.reason.trim() || !f.evidence.trim()) { f.msg = 'Cần nhập cả lý do và bằng chứng.'; render(); return; }
+  btn.disabled = true;
+  try {
+    const r = await post(`/api/admin/ai-board/tickets/${root.id}/unknown-writes/${encodeURIComponent(f.identity)}/reconcile`,
+      { decision: f.decision, reason: f.reason.trim(), evidence: { note: f.evidence.trim() }, resume: !!f.resume });
+    ui.reconcile = null;
+    ui.flash = r.resumed ? 'Đã chốt bước ghi; worker sẽ chạy tiếp ở lượt tới.'
+      : r.remaining_open ? `Đã chốt; còn ${r.remaining_open} bước chờ đối chiếu.` : 'Đã chốt bước ghi. Yêu cầu vẫn dừng đến khi bạn cho chạy tiếp.';
+  } catch (e) {
+    f.msg = `Không chốt được: ${e.message}`;
+  }
+  await refresh();
+  schedule();
+}
+
 async function authorizePlan(btn) {
   btn.disabled = true;
   try {
@@ -518,6 +536,50 @@ async function submitConfirm(btn) {
   await refresh();
 }
 
+const WRITE_DECISION = { applied: 'Đã áp dụng: kết quả ghi có thật', not_applied: 'Chưa áp dụng: không có tác dụng, được làm lại', compensate: 'Cần bù trừ: hoàn tác tác dụng đã xảy ra' };
+const WRITE_STATUS = { unknown: ['warn', 'chưa rõ kết quả'], compensate: ['warn', 'đang chờ bù trừ'], intent: ['warn', 'đã định ghi, chưa có kết quả'],
+  applied: ['ok', 'đã áp dụng'], void: ['idle', 'chưa áp dụng'] };
+const writeTag = (status) => tag(...(WRITE_STATUS[status] || ['idle', status]));
+const evidenceText = (value) => (value && typeof value === 'object' ? Object.entries(value).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('\n') : String(value ?? ''));
+
+function reconcileForm(write, writes) {
+  const f = ui.reconcile;
+  const lastOpen = writes.open.length === 1;
+  return `<form class="reconcile-form" data-identity="${esc(write.identity)}" aria-label="Đối chiếu bước ${esc(write.step)}">
+    <p class="meta">Quyết định dựa trên bằng chứng bạn đã kiểm tra bên ngoài. AI không tự quyết định bước này.</p>
+    <fieldset><legend>Kết quả thực tế của bước ghi</legend>
+    ${Object.entries(WRITE_DECISION).map(([k, label]) => `<label class="rf-opt"><input type="radio" name="decision" value="${k}" data-rf="decision"${f.decision === k ? ' checked' : ''}> ${esc(label)}</label>`).join('')}</fieldset>
+    <label class="rf-field">Lý do (bắt buộc)<textarea data-rf="reason" rows="2" maxlength="2000">${esc(f.reason)}</textarea></label>
+    <label class="rf-field">Bằng chứng đã kiểm tra, ví dụ mã biên nhận hoặc kết quả đối chiếu (bắt buộc)<textarea data-rf="evidence" rows="3" maxlength="4000">${esc(f.evidence)}</textarea></label>
+    ${lastOpen ? `<label class="rf-opt"><input type="checkbox" data-rf="resume"${f.resume ? ' checked' : ''}> Cho worker chạy tiếp ngay sau khi chốt (chỉ khi đây là bước mở cuối cùng)</label>` : ''}
+    ${f.msg ? `<p class="err" role="alert">${esc(f.msg)}</p>` : ''}
+    <div class="row"><button type="button" class="btn ok" data-action="reconcile-go">Chốt bước này</button>
+      <button type="button" class="btn" data-action="reconcile-close">Thôi</button></div></form>`;
+}
+
+function renderWrites(t) {
+  const writes = t.writes, root = t.root;
+  if (!writes) return '';
+  const open = writes.open || [], resolved = writes.resolved || [];
+  const violation = root.phase === 'critical_violation' && !open.length;
+  if (!open.length && !resolved.length && !violation) return '';
+  const head = open.length
+    ? `<div class="line1"><b>Ghi chưa rõ kết quả (UnknownWrite)</b>${tag('warn', `${open.length} bước đang chờ đối chiếu`)}</div>
+       <p class="meta">Worker đã dừng vì không chắc một bước ghi đã xảy ra hay chưa. Hệ thống không tự lặp lại bước này.</p>`
+    : violation ? `<div class="line1"><b>Vi phạm quyền hoặc ranh giới (PermissionViolation)</b>${tag('bad', 'cần xử lý theo lý do')}</div>
+       <p class="meta">Không có bước ghi nào cần đối chiếu: yêu cầu bị chặn vì hành động vượt quyền hiện hành. Đối chiếu không áp dụng; xem lý do ở bước bị chặn bên dưới.</p>` : '';
+  return `<section class="blk st-${open.length ? 'warn' : violation ? 'bad' : 'idle'}" id="unknown-writes" aria-label="Bước ghi chưa rõ">${head}
+    ${open.map((w) => `<div class="write-row"><div class="line1"><b>Bước ${esc(w.step)} · ${esc(w.tool)}</b>${writeTag(w.status)}
+        <span class="meta">công việc ${esc(w.child)} · mã ${esc(String(w.identity).slice(0, 8))}</span></div>
+      ${det(`write-${w.identity}:args`, 'Tham số của bước ghi', `<pre>${esc(w.args_preview)}</pre>`)}
+      ${ui.reconcile?.identity === w.identity ? reconcileForm(w, writes)
+        : `<button type="button" class="btn" data-action="reconcile-open" data-identity="${esc(w.identity)}">Đối chiếu bước này</button>`}</div>`).join('')}
+    ${resolved.length ? det('writes-resolved', `Đã đối chiếu (${resolved.length})`, resolved.map((w) => `<div class="write-row"><div class="line1">
+        <b>Bước ${esc(w.step)} · ${esc(w.tool)}</b>${writeTag(w.status)}<span class="meta">${esc(w.resolved_by || '—')} · ${fmt(w.resolved_at)}</span></div>
+      ${w.reason ? `<div class="meta">${esc(w.reason)}</div>` : ''}${w.evidence ? `<pre>${esc(evidenceText(w.evidence))}</pre>` : ''}</div>`).join('')) : ''}
+  </section>`;
+}
+
 function renderAiBoard(t) {
   const x = t.totals || {};
   const unit = x.budget_unit === 'k_tokens' ? 'k tokens' : 'GPU-s';
@@ -545,6 +607,7 @@ function renderAiBoard(t) {
       <span>Lần nạp model: <b>${esc(x.model_loads)}</b></span>
       <span>Lần gọi lại model: <b>${esc(x.retries)}</b></span>
     </div>
+    ${renderWrites(t)}
     ${renderPlan(t.plan, root, t.children || [], t)}
     ${renderPipeline(t)}
     ${renderAttemptHistory(t)}
@@ -627,6 +690,10 @@ async function refresh() {
   // Never retain privileged trace data after a role/auth denial.
   const retainedTrace = trace.status >= 500 ? view?.trace : null;
   view = { thread: thread.data, decisions: decisions.data?.decisions || [], trace: trace.ok ? trace.data : retainedTrace };
+  if (trace.ok && trace.data?.root?.id != null) {
+    const writes = await api(`/api/admin/ai-board/tickets/${trace.data.root.id}/unknown-writes`);
+    if (writes.ok) view.trace.writes = writes.data;
+  }
   if (!trace.ok && retainedTrace) stopLiveTrace();
   if (ui.flash === ui.traceError) ui.flash = '';
   ui.traceError = trace.ok ? '' : `Không tải được tiến trình (${trace.status}). Đã dừng hiệu ứng; đang chờ kết nối lại.`;
@@ -663,7 +730,7 @@ async function tick() {
     stopLiveTrace();
     render();
   }
-  if (!document.hidden && !ui.confirm) await refresh().catch(e => { if (e.message !== 'login') console.warn(e); });
+  if (!document.hidden && !ui.confirm && !ui.reconcile) await refresh().catch(e => { if (e.message !== 'login') console.warn(e); });
   schedule();
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
@@ -680,6 +747,9 @@ document.addEventListener('click', e => {
   else if (action === 'authorize-close') { ui.authorizeConfirm = null; }
   else if (action === 'authorize-go') return authorizePlan(btn);
   else if (action === 'retry-transient') return retryTransient(btn);
+  else if (action === 'reconcile-open') ui.reconcile = { identity: btn.dataset.identity, decision: 'applied', reason: '', evidence: '', resume: true, msg: '' };
+  else if (action === 'reconcile-close') ui.reconcile = null;
+  else if (action === 'reconcile-go') return submitReconcile(btn);
   else if (action === 'rerun-gate') {
     btn.disabled = true;
     post(`/api/admin/ai-board/requests/${REQUEST_ID}/rerun-gate`, { gate: Number(btn.dataset.gate) })
@@ -691,6 +761,8 @@ document.addEventListener('click', e => {
   if (action === 'confirm-next') $('#confirm-input')?.focus();
 });
 document.addEventListener('input', e => {
+  const field = e.target.dataset?.rf;
+  if (field && ui.reconcile) ui.reconcile[field] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
   if (e.target.id === 'confirm-input') $('#confirm-go').disabled = !confirmed();
 });
 document.addEventListener('keydown', e => {

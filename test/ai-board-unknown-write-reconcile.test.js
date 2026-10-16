@@ -80,6 +80,14 @@ test('tables from an older worker (no run_scope / resolved_at): empty lists, rec
     404, 'unknown_write_not_found');
 });
 
+test('a 60-bit proposal id (beyond Number precision) reconciles by step identity', async () => {
+  const { db, ticket, seed } = await fixture();
+  await seed(ID_A, { key: '410869396543484539' });
+  const out = await reconcileWrite(db.d, { ticketId: ticket.id, identity: ID_A, decision: 'applied', reason: 'bản ghi đã có', evidence: EVIDENCE, user: admin });
+  assert.equal(out.status, 'applied');
+  assert.equal((await stepRow(db, ID_A)).status, 'applied');
+});
+
 test('admin decision updates the step and leaves actor, reason, evidence in the step row and ai_events', async () => {
   const { db, ticket, seed } = await fixture();
   await seed(ID_A);

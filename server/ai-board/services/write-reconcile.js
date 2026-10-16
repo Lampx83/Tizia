@@ -67,7 +67,7 @@ export async function reconcileWrite(db, { ticketId, identity, decision, reason,
     const root = await rootOrThrow(t, ticketId, t.lockRow);
     if (!await hasTables(t)) throw new WorkerContractError('write not found', 404, 'unknown_write_not_found');
     const step = await t.get(`
-      SELECT s.proposal_id, s.child, s.step, s.status, s.tool FROM tool_step s
+      SELECT s.child, s.step, s.status, s.tool FROM tool_step s
       JOIN tool_run r ON r.proposal_id = s.proposal_id AND r.child = s.child
       WHERE s.identity = ? AND r.run_scope LIKE ? FOR UPDATE OF s
     `, [identity, scopeLike(ticketId)]);
@@ -79,8 +79,9 @@ export async function reconcileWrite(db, { ticketId, identity, decision, reason,
     const status = DECISIONS[decision];
     const changed = (await t.run(`
       UPDATE tool_step SET status=?, resolved_by=?, resolution_reason=?, resolution_evidence=?, resolved_at=?, updated_at=?
-      WHERE proposal_id=? AND child=? AND step=? AND status IN (${from.map(() => '?').join(',')})
-    `, [status, `admin:${user.id}`, text, json, now, now, step.proposal_id, step.child, step.step, ...from])).changes;
+      WHERE identity=? AND status IN (${from.map(() => '?').join(',')})
+        AND (proposal_id, child) IN (SELECT proposal_id, child FROM tool_run WHERE run_scope LIKE ?)
+    `, [status, `admin:${user.id}`, text, json, now, now, identity, ...from, scopeLike(ticketId)])).changes; // keyed by identity: 60-bit proposal_id does not survive the Number bigint parser
     if (!changed) throw new WorkerContractError('step changed concurrently', 409, 'not_reconcilable');
     await t.run(`
       INSERT INTO ai_events(ticket_id, event_type, actor_type, actor_id, transition, public_message, internal_detail, idempotency_key, created_at)
