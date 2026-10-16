@@ -534,10 +534,11 @@ def test_tool_loop_budget_and_timing_pins_are_recorded(world, monkeypatch):
     monkeypatch.setenv("AI_BOARD_TOOL_LOOP", "")
     argv = ["run", "--seed", str(SEED), "--split", "dev", "--cases", "1", "--repeats", "1", "--modes", "gold", "--root", str(root), "--allow-dirty"]
     timing = json.dumps({"gpu": "g", "load": "idle", "warm_cold": "warm", "protocol": "p", "comparable": True})
-    assert runner.main([*argv, "--tool-loop", "--timing-conditions", timing], deps) == 0 and os.environ["AI_BOARD_TOOL_LOOP"] == "1"
+    assert runner.main([*argv, "--tool-loop", "--timing-conditions", timing, "--winner-rule", "arm wins at +4 tasks"], deps) == 0 and os.environ["AI_BOARD_TOOL_LOOP"] == "1"
     assert runner.main([*argv, "--timing-conditions", "not json"], deps) == 2
     assert runner.main([*argv, "--context-arm", "nosiblings"], deps) == 0 and os.environ["AI_BOARD_TOOL_LOOP"] == ""
     runs = {p.name: json.loads((p / "run.json").read_text(encoding="utf-8")) for p in (root / "suite").iterdir()}
     assert {n.endswith("-loop"): m["tool_loop"] for n, m in runs.items()} == {True: True, False: False}
     assert all(m["budget"]["model_calls"] == 40 for m in runs.values())
+    assert [m["winner_rule"] for n, m in runs.items() if n.endswith("-loop")] == ["arm wins at +4 tasks"] and all(len(m.get("winner_rule_sha", "")) == 16 for n, m in runs.items() if n.endswith("-loop"))
     assert [m["timing_conditions"]["comparable"] for n, m in runs.items() if n.endswith("-loop")] == [True]

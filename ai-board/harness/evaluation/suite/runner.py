@@ -200,6 +200,7 @@ def cmd_run(args, deps=None) -> int:
             "budget": {"model_calls": Budget.max_model_calls, "tool_calls": Budget.max_tool_calls, "tokens": Budget.max_tokens,
                        "units": 600, "wall_clock_s": "per-task"},
             **({"timing_conditions": timing} if timing else {}),
+            **({"winner_rule": args.winner_rule, "winner_rule_sha": hashlib.sha256(args.winner_rule.encode("utf-8")).hexdigest()[:16]} if args.winner_rule else {}),
             **({"gate25_answered": True} if args.gate25_answered else {})}
     if prov["dirty"] and not args.allow_dirty:
         print("[suite] working tree has uncommitted changes: commit them (or --allow-dirty for a throwaway run)", file=sys.stderr)
@@ -407,6 +408,7 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--best-match", choices=["advisory"], default="", help="best_match mismatch recorded in trace instead of rejecting plan at gates 1 and 2.5; default off (reject)")
     run.add_argument("--retrieval", choices=("off", "literal"), default="off", help="gate 1 retrieval: literal = quoted strings in the request shortlist candidate files (git grep -F at the pinned sha)")
     run.add_argument("--tool-loop", action="store_true", help="gate 3 uses the bounded tool loop (AI_BOARD_TOOL_LOOP=1); recorded in the run manifest, default off")
+    run.add_argument("--winner-rule", default="", help="the decision rule, written before the run and stored in the manifest with its hash")
     run.add_argument("--timing-conditions", default="", help="JSON object {gpu, load, warm_cold, protocol, comparable} the operator vouches for; without it timing stays pending")
     run.add_argument("--reasoning-on", default="", help="comma list of roles to run with thinking on (ablation), e.g. gate1,gate25")
     run.add_argument("--reasoning-off", default="", help="comma list of roles to run with thinking off (ablation), e.g. gate1,gate25")
