@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="robots" content="noindex,nofollow" />
+<title>Kháng nghị yêu cầu · Tizia</title>
+<style>
+  :root { --bg:#0b1220; --bg2:#111a2e; --accent:#fbbf24; --accent2:#60a5fa; --ok:#4ade80; --bad:#fca5a5; --border:rgba(255,255,255,0.10); --txt:#e2e8f0; --muted:#94a3b8; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--txt); color-scheme:dark; }
+  main { max-width:760px; margin:0 auto; padding:32px 24px 80px; }
+  h1 { font-size:24px; margin:8px 0 4px; overflow-wrap:anywhere; } h2 { font-size:17px; margin:28px 0 10px; }
+  a { color:var(--accent2); } .muted { color:var(--muted); }
+  form { display:grid; gap:10px; max-width:640px; }
+  label { display:grid; gap:4px; color:var(--muted); font-size:12px; }
+  input, textarea, select, button { font:inherit; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg2); color:var(--txt); min-height:40px; }
+  textarea { min-height:90px; resize:vertical; }
+  button { cursor:pointer; background:var(--accent); color:#0b1220; border:0; font-weight:650; justify-self:start; }
+  ul { padding-left:18px; } li { margin:6px 0; }
+  .card { border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin:10px 0; background:var(--bg2); overflow-wrap:anywhere; }
+  #msg { min-height:24px; margin:12px 0; } .err { color:var(--bad); } .ok { color:var(--ok); }
+  :is(a,button,input,textarea,select):focus-visible { outline:3px solid var(--accent2); outline-offset:2px; }
+</style>
+</head>
+<body>
+<main>
+  <a href="javascript:history.back()">← Quay lại</a>
+  <h1 id="title">Kháng nghị yêu cầu</h1>
+  <div id="msg" role="status"></div>
+  <section id="owner" hidden>
+    <h2>Vì sao yêu cầu được giữ lại</h2>
+    <ul id="flags"></ul>
+    <p class="muted" id="unflagged" hidden>Yêu cầu này không bị gắn cờ.</p>
+    <section id="form-wrap" hidden>
+      <h2>Gửi kháng nghị</h2>
+      <form id="appeal">
+        <label>Lý do (10 đến 1000 ký tự)<textarea id="reason" required minlength="10" maxlength="1000"></textarea></label>
+        <label>Tiêu đề đề xuất sửa (tuỳ chọn)<input id="ptitle" maxlength="200"></label>
+        <label>Chi tiết đề xuất sửa (tuỳ chọn)<textarea id="pdetail" maxlength="4000"></textarea></label>
+        <button>Gửi kháng nghị</button>
+      </form>
+    </section>
+    <h2>Lịch sử kháng nghị</h2>
+    <div id="history"></div>
+  </section>
+  <section id="admin" hidden>
+    <h2>Kháng nghị đang chờ</h2>
+    <div id="queue"></div>
+  </section>
+</main>
+<script src="js/appeal.js" type="module"></script>
+</body>
+</html>

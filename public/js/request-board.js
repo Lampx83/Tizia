@@ -168,6 +168,7 @@ function renderList(host, items, reload) {
             <button type="button" class="rb-thread-toggle" data-thread="${it.id}" aria-expanded="false" aria-controls="rb-thread-${it.id}">
               ${boardIcon('chat')} ${mine ? 'Trao đổi với Ban điều hành' : 'Xem trao đổi'}
             </button>
+            ${mine ? `<a class="rb-thread-toggle" href="appeal.html?request=${it.id}">Xem cờ và kháng nghị</a>` : ''}
           </div>
           <div class="rb-thread" id="rb-thread-${it.id}" hidden></div>
         </div>

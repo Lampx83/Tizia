@@ -10,6 +10,7 @@ import { classifyRequest as classifyWithModel } from '../security/classifier.js'
 import { clarifyFromPhase, resolveClarify } from '../services/clarity-rules.js';
 import { activeChats } from '../services/chat-activity.js';
 import { guardModelText, MAX_QUESTIONS } from '../../contexts/ai-board-intake/clarify.js';
+import { attachAppealRoutes } from './appeals.js';
 import { attachWorkerLessonRoutes, attachLessonReviewRoutes } from './lessons.js';
 import { createHsmStore } from '../hsm/store.js';
 import { createToolCheckpointService } from '../services/tool-checkpoint.js';
@@ -38,6 +39,7 @@ export function attachAiBoardRequestRoutes(router, {
 }) {
   const route = asyncRoutes(router);
   if(store.db) attachLessonReviewRoutes(router,{db:store.db,requireAuth,requireStrictCsrf});
+  if(store.db) attachAppealRoutes(router,{store,requireAuth,requireAdmin,requireStrictCsrf});
   route.post('/api/requests', requireAuth, requireEnrolled, async (req, res, next) => {
     const body = req.body || {};
     // Yêu cầu board tự sửa chỉ hệ thống tạo (POST /api/ai-board/worker/self-requests), không bao giờ từ FAB.
