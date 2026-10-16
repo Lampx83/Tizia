@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="robots" content="noindex,nofollow" />
+<title>Cộng tác và quyền · Tizia</title>
+<style>
+  :root { --bg:#0b1220; --bg2:#111a2e; --accent:#fbbf24; --accent2:#60a5fa; --ok:#4ade80; --bad:#fca5a5; --border:rgba(255,255,255,0.10); --txt:#e2e8f0; --muted:#94a3b8; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--txt); color-scheme:dark; }
+  main { max-width:860px; margin:0 auto; padding:32px 24px 80px; }
+  h1 { font-size:24px; margin:0 0 16px; } h2 { font-size:17px; margin:28px 0 10px; }
+  form { display:flex; flex-wrap:wrap; gap:10px; align-items:end; }
+  label { display:grid; gap:4px; color:var(--muted); font-size:12px; }
+  input, select, button { font:inherit; min-height:40px; padding:6px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg2); color:var(--txt); }
+  button { cursor:pointer; background:var(--accent); color:#0b1220; border:0; font-weight:650; }
+  button.ghost { background:transparent; color:var(--bad); border:1px solid var(--border); }
+  table { width:100%; border-collapse:collapse; } th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--border); }
+  #msg { min-height:24px; margin:12px 0; } .err { color:var(--bad); } .ok { color:var(--ok); }
+  :is(button,input,select):focus-visible { outline:3px solid var(--accent2); outline-offset:2px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Cộng tác và quyền</h1>
+  <form id="scope">
+    <label>Mã tính năng<input id="feature" inputmode="numeric" required></label>
+    <label>Mã tài nguyên<input id="resource" inputmode="numeric" required></label>
+    <button>Tải</button>
+  </form>
+  <div id="msg" role="status"></div>
+  <div id="body" hidden>
+    <h2>Quyền hiện có</h2>
+    <table><thead><tr><th>Người dùng</th><th>Chủ dữ liệu</th><th>Quyền</th><th></th></tr></thead><tbody id="grants"></tbody></table>
+    <h2>Mời cộng tác</h2>
+    <form id="invite">
+      <label>Người dùng<input id="user" inputmode="numeric" required></label>
+      <label>Quyền<select id="perm"><option value="read">Đọc</option><option value="write">Ghi</option></select></label>
+      <button>Cấp quyền</button>
+    </form>
+    <h2>Yêu cầu mở rộng</h2>
+    <table><thead><tr><th>#</th><th>Người dùng</th><th>Quyền</th><th>Trạng thái</th><th></th></tr></thead><tbody id="reviews"></tbody></table>
+  </div>
+</main>
+<script src="js/ai-board-grants.js" type="module"></script>
+</body>
+</html>

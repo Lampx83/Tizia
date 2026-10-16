@@ -9,6 +9,11 @@ const integer = (value) => {
   if (!Number.isSafeInteger(n) || n < 1) fail('invalid_id', 400);
   return n;
 };
+const RANK = { read: 1, write: 2 };
+async function applyGrant(t, res, user, owner, permission) {
+  await t.run('DELETE FROM ai_resource_grants WHERE resource_id=? AND user_id=? AND owner_user_id=?', [res.id, user, owner]);
+  if (permission !== 'none') await t.run('INSERT INTO ai_resource_grants(resource_id, user_id, owner_user_id, permission) VALUES (?, ?, ?, ?)', [res.id, user, owner, permission]);
+}
 const PAYLOAD_RETENTION_MS = 30 * 86400000;
 const AUDIT_RETENTION_MS = 90 * 86400000;
 const object = (value) => value && typeof value === 'object' && !Array.isArray(value);
@@ -130,14 +135,48 @@ export function createScopedCrud(db) {
     async grant(identity, f, r, input) {
       envelope(input, ['user_id', 'owner_user_id', 'permission']);
       return operation(identity, f, r, async (t, a, res) => {
-        if (a.role !== 'admin') fail('admin_required');
-        const user = integer(input.user_id), owner = integer(input.owner_user_id);
+        const user = integer(input.user_id), owner = input.owner_user_id === undefined ? a.id : integer(input.owner_user_id);
         if (!['read', 'write', 'none'].includes(input.permission)) fail('invalid_permission', 400);
-        await t.run('DELETE FROM ai_resource_grants WHERE resource_id=? AND user_id=? AND owner_user_id=?', [res.id, user, owner]);
-        if (input.permission !== 'none') await t.run(`INSERT INTO ai_resource_grants(resource_id, user_id, owner_user_id, permission)
-          VALUES (?, ?, ?, ?)`, [res.id, user, owner, input.permission]);
-        await audit(t, res, a, 'grant_changed', { user_id: user, owner_user_id: owner, permission: input.permission });
-        return { ok: true };
+        if (a.role !== 'admin') {
+          // Owner shares only own scope; narrowing applies at once, widening beyond own right waits for an admin.
+          if (owner !== a.id || user === a.id) fail('scope_denied');
+          const mine = await t.get('SELECT permission FROM ai_resource_grants WHERE resource_id=? AND user_id=? AND owner_user_id=?', [res.id, a.id, a.id]);
+          if (!mine) fail('scope_denied');
+          if (input.permission !== 'none' && RANK[input.permission] > RANK[mine.permission]) {
+            const id = await t.insert(`INSERT INTO ai_resource_grant_reviews(resource_id, requested_by, user_id, owner_user_id, permission, created_at)
+              VALUES (?, ?, ?, ?, ?, ?)`, [res.id, a.id, user, owner, input.permission, Date.now()]);
+            await audit(t, res, a, 'grant_review_requested', { review_id: id, user_id: user, owner_user_id: owner, permission: input.permission });
+            return { ok: true, status: 'review_required', review_id: id };
+          }
+        }
+        await applyGrant(t, res, user, owner, input.permission);
+        await audit(t, res, a, input.permission === 'none' ? 'grant_revoked' : 'grant_changed', { user_id: user, owner_user_id: owner, permission: input.permission });
+        return { ok: true, status: 'applied' };
+      });
+    },
+    async reviewGrant(identity, f, r, reviewId, input) {
+      envelope(input, ['decision']);
+      return operation(identity, f, r, async (t, a, res) => {
+        if (a.role !== 'admin') fail('admin_required');
+        if (!['approve', 'reject'].includes(input.decision)) fail('invalid_decision', 400);
+        const review = await t.get(`SELECT * FROM ai_resource_grant_reviews WHERE id=? AND resource_id=?${t.lockRow}`, [integer(reviewId), res.id]);
+        if (!review) fail('review_not_found', 404);
+        if (review.status !== 'pending') fail('review_already_decided', 409);
+        const status = input.decision === 'approve' ? 'approved' : 'rejected';
+        await t.run('UPDATE ai_resource_grant_reviews SET status=?, decided_by=?, decided_at=? WHERE id=?', [status, a.id, Date.now(), review.id]);
+        if (status === 'approved') await applyGrant(t, res, review.user_id, review.owner_user_id, review.permission);
+        await audit(t, res, a, 'grant_reviewed', { review_id: review.id, decision: status, user_id: review.user_id, owner_user_id: review.owner_user_id, permission: review.permission });
+        return { ok: true, status };
+      });
+    },
+    async grants(identity, f, r) {
+      return operation(identity, f, r, async (t, a, res) => {
+        const all = a.role === 'admin' ? 1 : 0;
+        const grants = await t.all(`SELECT user_id, owner_user_id, permission FROM ai_resource_grants WHERE resource_id=?
+          AND (?=1 OR owner_user_id=? OR user_id=?) ORDER BY owner_user_id, user_id`, [res.id, all, a.id, a.id]);
+        const reviews = await t.all(`SELECT id, requested_by, user_id, owner_user_id, permission, status, decided_by, created_at, decided_at
+          FROM ai_resource_grant_reviews WHERE resource_id=? AND (?=1 OR requested_by=?) ORDER BY id DESC LIMIT 50`, [res.id, all, a.id]);
+        return { admin: !!all, grants, reviews };
       });
     },
     async create(identity, f, r, input) {

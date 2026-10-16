@@ -23,6 +23,8 @@ export function attachScopedCrudRoutes(router, { db, requireAuth, requireStrictC
   get('/:resourceId/schema', (a, p) => store.schema(a, p.featureId, p.resourceId));
   post('/:resourceId/schema/expand', (a, p, b) => store.expandSchema(a, p.featureId, p.resourceId, b));
   post('/:resourceId/grants', (a, p, b) => store.grant(a, p.featureId, p.resourceId, b));
+  get('/:resourceId/grants', (a, p) => store.grants(a, p.featureId, p.resourceId));
+  post('/:resourceId/grants/:reviewId/review', (a, p, b) => store.reviewGrant(a, p.featureId, p.resourceId, p.reviewId, b));
   post('/:resourceId/records', (a, p, b) => store.create(a, p.featureId, p.resourceId, b));
   get('/:resourceId/records', (a, p, b, q) => store.list(a, p.featureId, p.resourceId, q.owner_user_id));
   get('/:resourceId/records/:recordId', (a, p) => store.read(a, p.featureId, p.resourceId, p.recordId));
