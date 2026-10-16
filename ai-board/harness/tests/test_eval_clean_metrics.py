@@ -69,7 +69,7 @@ def test_compare_rejects_unmatched_repeats_and_duplicate_trials():
 def test_compare_cli_reports_separate_cost_checks_only_with_matching_pins(tmp_path, capsys):
     paths = [tmp_path / arm / "results.jsonl" for arm in ("control", "candidate")]
     meta = {"ref": "source", "dirty": False, "model": "model", "routing_catalog": "catalog",
-            "prompt_lock": "prompt", "skill_lock": "skill", "contract_hash": "contract",
+            "prompt_lock": "prompt", "skill_lock": "skill", "contract_hash": "contract", "tool_manifest": "tools",
             "suite_hash": "suite", "pipeline_hash": "pipeline", "reasoning": {}, "corpus_sha": "corpus",
             "seed": 7, "repeats": 1, "modes": ["gold"], "fast_tier": True, "review": False,
             "packs": [], "budget": {"model_calls": 40}, "status": "complete", "integrity": []}
