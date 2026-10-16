@@ -112,6 +112,7 @@ class Workspace:
         self.base_hash = None if current is None else sha_of(current)
         self.content = current or ""
         self.test_file = self.test = None
+        self.stale_reset = None
 
     def _check_scope(self, path: str, *, test: bool = False) -> str:
         path = _clean_path(path)
@@ -189,6 +190,7 @@ def _pins(subtask: dict, sha: str, ws: Workspace, extra: dict | None) -> dict:
             "tools": MANIFEST.hash[:16], **(extra or {})}
 
 
+STALE_DEPENDENCIES = {"file", "base", "subtask"}  # the rest of the pins identify the runtime and still pause
 KNOWN_STATUSES = ("done", "applied", "void", "intent", "unknown", "compensate")
 RESOLUTION_STATUS = {"applied": "applied", "not_applied": "void"}
 PLATFORM_ACTOR = "platform:receipt"
@@ -217,10 +219,15 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check) -> tup
         store.save_pins(pins)
         return prompt, [], False, None
     drift = sorted(k for k in pins.keys() | saved["pins"].keys() if pins.get(k) != saved["pins"].get(k))
-    if drift:
-        return prompt, [], False, _result("blocked", f"checkpoint không tương thích: {', '.join(drift)}", "critical")
     if saved["ledger"]:
         budget.absorb(saved["ledger"])
+    if drift and set(drift) <= STALE_DEPENDENCIES:
+        # An upstream artifact changed (an earlier subtask's output, the base): this child's steps are stale, check again.
+        store.reset(pins)
+        ws.stale_reset = drift
+        return prompt, [], False, None
+    if drift:
+        return prompt, [], False, _result("blocked", f"checkpoint không tương thích: {', '.join(drift)}", "critical")
     steps, rejected = [], False
     for expected, row in enumerate(saved["steps"]):
         n, name, args, status, kind = row["step"], row["tool"], row["args"], row["status"], row["kind"]
@@ -275,7 +282,7 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check) -> tup
 
 def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str, source, sha: str, check,
                 role: str | None = None, call_extra: dict | None = None, db_path=None, proposal_id=None,
-                child: int | None = None, store=None, pins: dict | None = None) -> dict:
+                child: int | None = None, store=None, pins: dict | None = None, repair_reason: str | None = None) -> dict:
     """Loop tuần tự cho 1 subtask dưới parent `budget`. File mới bắt đầu rỗng, edit_file chèn tại after_line=0.
     `check(out)` = kiểm nội dung (ValueError nếu hỏng).
 
@@ -291,6 +298,10 @@ def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str,
     prompt = PROMPT.format(tools=_tool_list(), title=subtask["title"], file=subtask["file"], verify=subtask["verify"])
     if current is None:
         prompt += "\nFile đích chưa tồn tại: dùng edit_file với after_line=0 để tạo nội dung trong bản nháp.\n"
+    if repair_reason:
+        prompt += (f"\nLần làm trước bị loại ở bước kiểm tra: {repair_reason}\nLàm lại đầy đủ từ đầu như yêu cầu ở trên "
+                   "(sửa file đích VÀ viết test bằng write_test trước khi finish), tránh đúng lỗi này.\n")
+        pins = {**(pins or {}), "repair": sha_of(repair_reason)}
     steps, rejected = [], False
     if store:
         prompt, steps, rejected, stop = _resume(store, ws, budget, _pins(subtask, sha, ws, pins), prompt, check)
@@ -338,7 +349,7 @@ def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str,
                 if store:
                     store.done(n, name, args, "", "finish_ok")
                     store.save_ledger(budget.snapshot())
-                return _result("proposed", out=out, steps=steps + [name])
+                return _result("proposed", out=out, steps=steps + [name], **({"stale_reset": ws.stale_reset} if ws.stale_reset else {}))
             except ValueError as error:
                 if not budget.spend_repair():
                     return _result("blocked", f"hết {budget.max_semantic_repairs} lượt sửa nội dung: {error}",

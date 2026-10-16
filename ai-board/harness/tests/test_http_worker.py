@@ -1685,3 +1685,68 @@ def test_sync_removes_worktrees_a_dead_job_left_on_the_candidate_branch(tmp_path
 
     assert not dead.exists() and other.exists()
     git(clone, 'worktree', 'add', '-q', '-B', 'ai-board/2026-10-16-feature-x', str(tmp_path / 'next'))  # no longer "already checked out"
+
+
+class MemCursorCheckpoint:
+    """In-memory stand-in for the server checkpoint: only the cursor and the attempt bookkeeping matter here."""
+
+    def __init__(self):
+        self.cursor = None
+
+    def attempt(self, n):
+        return self
+
+    def restore(self, budget):
+        pass
+
+    def save(self, budget):
+        pass
+
+    def purge(self):
+        pass
+
+    def load_cursor(self):
+        return self.cursor
+
+    def save_cursor(self, cursor):
+        self.cursor = dict(cursor)
+
+
+def test_a_worker_that_dies_in_a_repair_resumes_that_repair_not_the_failed_first_attempt():
+    class Crash(BaseException):
+        pass
+
+    checkpoint = MemCursorCheckpoint()
+    failed = {'blocked': True, 'reason': 'generated tests failed', 'failure_class': 'ordinary'}
+    inner, calls = scripted_gates({5: [failed, {}]})
+
+    def dying(gate, request, deps, budget, state):
+        if state.get('repair_reason') and gate == 3:
+            raise Crash  # the process dies as the repair starts
+        return inner(gate, request, deps, budget, state)
+
+    with pytest.raises(Crash):
+        execute_pre_pr(ONE_STEP_PLAN, ticket_id=7, checkout_source='unused', deps=object(), budget=TickBudget(),
+                       run_gate=dying, cleanup=lambda state, keep_branch: None, checkpoint=checkpoint)
+    assert checkpoint.cursor['repair_reason'] == 'cổng 5: generated tests failed'
+    assert checkpoint.cursor['graph'] == [{'child': 0, 'file': 'public/x.html', 'depends_on': []}]
+    first_calls = len(calls)
+
+    verdict = execute_pre_pr(ONE_STEP_PLAN, ticket_id=7, checkout_source='unused', deps=object(), budget=TickBudget(),
+                             run_gate=inner, cleanup=lambda state, keep_branch: None, checkpoint=checkpoint)
+    assert verdict['outcome'] == 'ready_for_pr'
+    assert [gate for gate, _ in calls[first_calls:]] == [3, 4, 5, 5.5]  # the failed attempt's gates are not run again
+    assert calls[first_calls][1] == 'cổng 5: generated tests failed'
+    assert verdict['repairs'] == [{'gate': 5, 'reason': 'generated tests failed'}]
+
+
+def test_a_cursor_from_another_base_is_ignored_and_the_work_starts_over(monkeypatch):
+    import code_index
+    monkeypatch.setattr(code_index, 'git', lambda *args: b'new-sha')
+    checkpoint = MemCursorCheckpoint()
+    checkpoint.cursor = {'base': 'old-sha', 'repairs': [{'gate': 5, 'reason': 'x'}], 'repair_reason': 'cổng 5: x'}
+    plan = {**ONE_STEP_PLAN, 'grounding': {'sha': 'new-sha'}}
+    run_gate, calls = scripted_gates({})
+    execute_pre_pr(plan, ticket_id=7, checkout_source='unused', deps=object(), budget=TickBudget(), run_gate=run_gate,
+                   cleanup=lambda state, keep_branch: None, checkpoint=checkpoint)
+    assert calls[0] == (3, None)

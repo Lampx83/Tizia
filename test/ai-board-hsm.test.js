@@ -300,6 +300,35 @@ test('a gate proof is reused only while every pin matches, and the verifier expl
   } finally {await f.close();}
 });
 
+test('reset forgets a stale child steps and re-pins it but keeps the ledger',async()=>{
+  const f=await fixture();
+  try {
+    const scope=`ticket-${f.id}:p`,id='a'.repeat(32);
+    const call=(op,body)=>f.post(`checkpoint/${op}`,{proposal_id:'88',child:2,...body});
+    await call('pins',{pins:{file:'old'},run_scope:scope});
+    await call('ledger',{snapshot:{model_calls:4}});
+    await call('intent',{step:0,tool:'edit_file',args:{x:1},identity:id});
+    await call('done',{step:0,tool:'edit_file',args:{x:1},identity:id,observation:'ok',kind:'ok'});
+    assert.equal((await call('reset',{pins:{file:'new'}})).status,200);
+    const after=(await call('load',{})).body;
+    assert.deepEqual([after.pins,after.ledger,after.steps],[{file:'new'},{model_calls:4},[]]);
+    assert.equal((await f.post('checkpoint/reset',{proposal_id:'88',child:2,pins:{},lease_token:'old'})).body.error,'stale_lease');
+  } finally {await f.close();}
+});
+
+test('purge by run scope also clears scopes another worker process created for the same run',async()=>{
+  const f=await fixture();
+  try {
+    const scope=`ticket-${f.id}:p`;
+    const pins=(id)=>f.post('checkpoint/pins',{proposal_id:id,child:0,pins:{a:1},run_scope:scope});
+    await pins('91');await pins('92');
+    await f.post('checkpoint/purge',{proposal_ids:['91'],run_scope:scope});
+    const left=await f.db.all("SELECT 1 FROM tool_run WHERE run_scope=?",[scope]);
+    assert.equal(left.length,0);
+    assert.equal((await f.post('checkpoint/purge',{run_scope:'ticket-999:p'})).status,200,'a foreign scope is ignored, not an error');
+  } finally {await f.close();}
+});
+
 const MANIFEST=JSON.parse(fs.readFileSync(new URL('../ai-board/harness/runtime/tool_manifest.json',import.meta.url),'utf8'));
 const MANIFEST_HASH=canonicalHash(MANIFEST);
 const adminDecide=(f,hash,action,admin=true)=>fetch(`${f.base}/api/admin/ai-board/tool-manifests/${hash}/${action}`,{method:'POST',headers:admin?{'x-test-admin':'yes'}:{}}).then(async r=>({status:r.status,body:await r.json()}));

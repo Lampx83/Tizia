@@ -102,6 +102,14 @@ export function createToolCheckpointService(store) {
         [body.status, Date.now(), k.proposalId, k.child, Number(body.step)]);
       return { ok: true };
     },
+    async reset(ticketId, body) {
+      // A stale dependency: forget the recorded steps and re-pin, but keep the ledger so accounting never goes back.
+      const k = key(body);
+      await needRun(ticketId, k);
+      await db.run('DELETE FROM tool_step WHERE proposal_id=? AND child=?', [k.proposalId, k.child]);
+      await db.run('UPDATE tool_run SET pins_json=?, updated_at=? WHERE proposal_id=? AND child=?', [json(body.pins, 'pins'), Date.now(), k.proposalId, k.child]);
+      return { ok: true };
+    },
     async drop(ticketId, body) {
       const k = key(body);
       if (await ownedRun(ticketId, k)) await db.run('DELETE FROM tool_step WHERE proposal_id=? AND child=? AND step=?', [k.proposalId, k.child, Number(body.step)]);
@@ -121,6 +129,10 @@ export function createToolCheckpointService(store) {
     },
     async purge(ticketId, body) {
       const ids = Array.isArray(body.proposal_ids) ? body.proposal_ids.map(String).filter((id) => /^\d{1,19}$/.test(id)) : [];
+      // Scopes an earlier worker created for this same run (another process, another attempt) are not in this worker's key set.
+      if (typeof body.run_scope === 'string' && body.run_scope.startsWith(scopeOf(ticketId))) {
+        for (const row of await db.all('SELECT DISTINCT CAST(proposal_id AS TEXT) AS id FROM tool_run WHERE run_scope=?', [body.run_scope])) ids.push(row.id);
+      }
       for (const id of ids) {
         const like = `${scopeOf(ticketId)}%`;
         const owned = await db.get('SELECT 1 AS n FROM tool_run WHERE proposal_id=? AND run_scope LIKE ? LIMIT 1', [id, like]);

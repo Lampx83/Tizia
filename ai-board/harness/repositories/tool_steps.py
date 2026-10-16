@@ -118,6 +118,13 @@ class PgSteps:
             con.execute("DELETE FROM tool_step WHERE proposal_id=%s AND child=%s AND step=%s",
                         (self.proposal_id, self.child, step))
 
+    def reset(self, pins: dict) -> None:
+        """Stale dependency: drop the recorded steps and re-pin; the ledger stays so accounting never goes back."""
+        with harness_db(self.dsn, ddl=DDL) as con:
+            con.execute("DELETE FROM tool_step WHERE proposal_id=%s AND child=%s", (self.proposal_id, self.child))
+            con.execute("UPDATE tool_run SET pins_json=%s, updated_at=%s WHERE proposal_id=%s AND child=%s",
+                        (json.dumps(pins, sort_keys=True), _now(), self.proposal_id, self.child))
+
     def reconcile(self, step: int, resolution: str, by: str, reason: str | None = None, evidence: dict | None = None) -> None:
         """Chốt bước unknown → applied/not_applied/compensate (compensate chốt tiếp được sau khi bù trừ); ghi người, lý do, evidence."""
         status = RESOLUTIONS[resolution]
@@ -173,11 +180,24 @@ class Checkpoint:
             self._pinned = True
         store.save_ledger(budget.snapshot())
 
+    def _cursor(self) -> PgSteps:
+        key = scope_key(self.run_scope, "cursor")
+        self.keys.add(key)
+        return PgSteps(self.dsn, key, 0, self.run_scope)
+
+    def load_cursor(self) -> dict | None:
+        return self._cursor().load()["ledger"]
+
+    def save_cursor(self, cursor: dict) -> None:
+        store = self._cursor()
+        store.save_pins({"kind": "cursor"})
+        store.save_ledger(cursor)
+
     def purge(self) -> None:
         """Xoá step + ledger của lượt đã có kết luận cuối."""
-        keys = sorted(self.keys)
-        if keys:
-            with harness_db(self.dsn, ddl=DDL) as con:
+        with harness_db(self.dsn, ddl=DDL) as con:
+            keys = sorted({*self.keys, *(r[0] for r in con.execute("SELECT proposal_id FROM tool_run WHERE run_scope=%s", (self.run_scope,)).fetchall())})
+            if keys:
                 con.execute("DELETE FROM tool_step WHERE proposal_id = ANY(%s)", (keys,))
                 con.execute("DELETE FROM tool_run WHERE proposal_id = ANY(%s)", (keys,))
 

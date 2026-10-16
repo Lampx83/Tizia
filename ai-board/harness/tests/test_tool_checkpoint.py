@@ -268,3 +268,53 @@ def test_missing_step_in_the_stored_sequence_stops_resume():
     out, _, deps = loop([TEST, FINISH], MemSteps(shared=db))
     assert out["status"] == "blocked" and out["failure_class"] == "critical" and "thiếu bước" in out["reason"]
     assert deps.prompts == []
+
+
+# ── deep resume: several subtasks and repairs ──
+
+class Store2(MemSteps):
+    def reset(self, pins):
+        self.db["steps"].clear()
+        self.db["pins"] = json.loads(json.dumps(pins))
+
+
+def child_loop(script, shared, *, crash_on=None, current=PAGE, repair_reason=None, budget=None):
+    deps = Deps(script)
+    budget = budget or Budget()
+    out = tool_loop.run_subtask(SUBTASK, current, deps=deps, budget=budget, model="m", source=".", sha="abc", check=lambda o: None,
+                                store=Store2(crash_on=crash_on, shared=shared), repair_reason=repair_reason)
+    return out, budget, deps
+
+
+def test_crash_in_the_second_subtask_replays_the_first_without_a_model_call():
+    first = {"pins": None, "ledger": None, "steps": {}}
+    second = {"pins": None, "ledger": None, "steps": {}}
+    out, _, _ = child_loop([EDIT, TEST, FINISH], first)
+    assert out["status"] == "proposed"
+    with pytest.raises(Crash):
+        child_loop([EDIT, TEST, FINISH], second, crash_on=("intent", 1))
+    replay, _, deps = child_loop([], first)  # no scripted reply: any model call would fail
+    assert replay["status"] == "proposed" and deps.prompts == [] and replay["out"] == out["out"]
+    out2, budget, deps2 = child_loop([TEST, FINISH], second)
+    assert out2["status"] == "proposed" and len(deps2.prompts) == 2 and budget.model_calls == 4  # the crashed attempt's calls are kept
+
+
+def test_a_changed_upstream_artifact_makes_the_dependent_subtask_stale_and_it_is_checked_again(monkeypatch):
+    shared = {"pins": None, "ledger": None, "steps": {}}
+    child_loop([EDIT, TEST, FINISH], shared)
+    changed = PAGE + "<p>upstream changed</p>\n"
+    monkeypatch.setattr(tools, "_show", lambda *a: changed)
+    out, budget, deps = child_loop([EDIT, TEST, FINISH], shared, current=changed)
+    assert out["status"] == "proposed" and out["stale_reset"] == ["file"]
+    assert len(deps.prompts) == 3  # redone, not replayed
+    assert budget.model_calls >= 6  # the first run's calls still count
+
+
+def test_repair_reason_is_part_of_the_prompt_and_pins_a_resumed_repair():
+    shared = {"pins": None, "ledger": None, "steps": {}}
+    with pytest.raises(Crash):
+        child_loop([EDIT, TEST, FINISH], shared, crash_on=("intent", 1), repair_reason="cổng 5: tests failed")
+    out, _, deps = child_loop([TEST, FINISH], shared, repair_reason="cổng 5: tests failed")
+    assert out["status"] == "proposed" and "cổng 5: tests failed" in deps.prompts[0]
+    other, _, deps = child_loop([], shared, repair_reason="cổng 4: khác")
+    assert other["status"] == "blocked" and "repair" in other["reason"] and deps.prompts == []

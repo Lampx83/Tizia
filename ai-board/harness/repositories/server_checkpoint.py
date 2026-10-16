@@ -39,6 +39,9 @@ class HttpSteps:
     def drop(self, step: int) -> None:
         self._call("drop", step=step)
 
+    def reset(self, pins: dict) -> None:
+        self._call("reset", pins=pins)
+
     def reconcile(self, step: int, resolution: str, by: str, reason: str | None = None, evidence: dict | None = None) -> None:
         self._call("reconcile", step=step, resolution=resolution, by=by, reason=reason, evidence=evidence or {})
 
@@ -77,6 +80,16 @@ class HttpCheckpoint:
             self._pinned = True
         store.save_ledger(budget.snapshot())
 
+    def _cursor(self) -> HttpSteps:
+        return self._steps(scope_key(self.run_scope, "cursor"), 0)
+
+    def load_cursor(self) -> dict | None:
+        return self._cursor().load()["ledger"]
+
+    def save_cursor(self, cursor: dict) -> None:
+        store = self._cursor()
+        store.save_pins({"kind": "cursor"})
+        store.save_ledger(cursor)
+
     def purge(self) -> None:
-        if self.keys:
-            self.client.post(f"{self.base}/purge", {**self.lease, "proposal_ids": [str(key) for key in sorted(self.keys)]})
+        self.client.post(f"{self.base}/purge", {**self.lease, "run_scope": self.run_scope, "proposal_ids": [str(key) for key in sorted(self.keys)]})

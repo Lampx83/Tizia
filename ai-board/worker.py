@@ -320,6 +320,12 @@ def _gate4_with_proof(run_gate, deps, budget, state, plan_hash):
     return result
 
 
+def _dependency_graph(plan: dict) -> list[dict]:
+    """Subtasks run in plan order and each sees the earlier ones' output, so child i depends on child i-1."""
+    steps = _execution_plan(plan).get("subtasks") or []
+    return [{"child": i, "file": st.get("file"), "depends_on": [i - 1] if i else []} for i, st in enumerate(steps)]
+
+
 def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate,
                    cleanup: Callable, policy: dict | None = None, accepted_policy_hash: str | None = None,
                    request_detail: str | None = None, memory_path=None,
@@ -346,8 +352,13 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
     repair_reason = None
     shots: list[dict] = []
     run_checkpoint = checkpoint if checkpoint is not None else _worker_checkpoint(ticket_id, plan, plan_hash)
+    grounded = (plan.get("grounding") or {}).get("sha")
     if run_checkpoint is not None:
         run_checkpoint.restore(budget)
+        # Deepest valid state: a worker that died during a repair continues that repair, not the failed first attempt.
+        cursor = run_checkpoint.load_cursor()
+        if cursor and cursor.get("base") == grounded and isinstance(cursor.get("repairs"), list):
+            repairs, repair_reason = list(cursor["repairs"]), cursor.get("repair_reason")
     while True:
         if getattr(deps, "trace", None):
             deps.trace.attempt = len(repairs)
@@ -369,6 +380,9 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
             break
         repairs.append({"gate": last["gate"], "reason": last["reason"]})
         repair_reason = f"cổng {last['gate']}: {last['reason']}"
+        if run_checkpoint is not None:
+            run_checkpoint.save_cursor({"base": grounded, "repairs": repairs, "repair_reason": repair_reason,
+                                        "graph": _dependency_graph(plan)})
     passed = _passed(gates, kind)
     if run_checkpoint is not None and kind not in ("transient", "critical"):
         run_checkpoint.purge()  # lượt có kết luận cuối; transient/critical giữ lại để resume hoặc đối chiếu
