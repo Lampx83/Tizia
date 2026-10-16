@@ -21,6 +21,7 @@ from evaluation import gold as gold_eval
 from evaluation.suite import taskpack
 from gates import brainstorm, gate3_guards, plan_validate, scope_check, static_check
 from runtime.budget import Budget
+from runtime import tool_loop
 from runtime.pipeline import Deps
 
 MODES = ("e2e", "gold", "e2e:nodia", "e2e:approved")  # e2e:nodia = request typed without diacritics; e2e:approved = a gate 1/2/2.5 block is treated as admin-approved and gate 3 still runs
@@ -47,6 +48,12 @@ class RecordingDeps(Deps):
                 calls.append({**event, "state": "failed", "error_type": type(error).__name__})
             raise
         self.ledger.append(body)
+        if kwargs.get("prompt_name") == "tool_loop.md":
+            try:
+                step = tool_loop.parse_request(body)[0]
+            except tool_loop.ToolError:
+                step = "!parse"
+            self.capture.setdefault("loop_tools", []).append(step)
         if self.capture.get("enabled") and phase in ("planning", "validation"):
             # Capture responses, never model arguments, task gold, route headers or credentials.
             fields = ("response", "model", "done_reason", "prompt_eval_count", "eval_count")
@@ -301,7 +308,7 @@ def run_trial(task: dict, mode: str, base_deps: Deps, root: Path, source, fast: 
         "id": task["id"], "mode": mode, "resolved": resolved, "collateral": sorted(set(collateral)), "gate_passed": row["gate_passed"],
         "gate4": row.get("gate4"), "prod": row.get("prod"), "ended": row.get("ended"), "shipped": row.get("shipped", False),
         "review": row.get("review"), "reason": row.get("reason"), "infra_error": bool(error), "error": error, "plan": plan_facts, "capture": capture,
-        "model_calls": len(deps.ledger), "retries": row.get("retries", 0),
+        "model_calls": len(deps.ledger), "loop_tools": list(deps.capture.get("loop_tools") or []), "retries": row.get("retries", 0),
         "stuck": any(a == b for a, b in zip(texts, texts[1:])),
         "truncated": any(b.get("done_reason") == "length" for b in deps.ledger) or "length" in (row.get("done_reasons") or []),
         "tokens_in": row.get("tokens_in", 0) + p_in, "tokens_out": row.get("tokens_out", 0) + p_out,

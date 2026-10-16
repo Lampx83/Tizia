@@ -322,3 +322,27 @@ def test_auto_mode_is_one_shot_first_and_the_loop_only_takes_over_after_the_one_
     assert out["blocked"] is False and len(prompts) == 7
     assert (tmp_path / "fallback/scratch/public/tinh-nang.html").read_text(encoding="utf-8").count("<p>Mới.</p>") == 1
     assert out["tool_manifest"]
+
+
+def test_prompt_carries_the_excerpt_and_the_edit_test_finish_order():
+    deps = Deps([EDIT, TEST, FINISH])
+    out = tool_loop.run_subtask(SUBTASK, PAGE, deps=deps, budget=Budget(), model="m", source=".", sha="abc", check=lambda o: None,
+                                context="L2| <h1>A</h1>")
+    assert out["status"] == "proposed"
+    assert "L2| <h1>A</h1>" in deps.prompts[0] and "edit_file" in deps.prompts[0].split("Thứ tự làm")[1]
+
+
+def test_finish_before_edit_and_test_is_a_cheap_nudge_not_a_content_repair():
+    out, budget, deps = run([FINISH, EDIT, TEST, FINISH])
+    assert out["status"] == "proposed" and budget.semantic_repairs == 0
+    assert "chưa finish được" in deps.prompts[1] and "BỊ LOẠI" not in deps.prompts[1]
+
+
+def test_finish_rejected_by_the_content_check_still_spends_a_repair():
+    seen = []
+    def check(o):
+        seen.append(1)
+        if len(seen) == 1:
+            raise ValueError("sai")
+    out, budget, _ = run([EDIT, TEST, FINISH], check=check)
+    assert out["status"] == "proposed" and budget.semantic_repairs == 1

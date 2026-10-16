@@ -563,3 +563,18 @@ def test_simulated_requester_environment_runs_through_the_trial_without_error(wo
     monkeypatch.setenv("AI_BOARD_GATE25_SIM_USER", "1")
     row = trial.run_trial(pick(tasks, 1), "e2e", deps, root, ROOT)
     assert row["error"] is None and row["resolved"]
+
+
+def test_bounded_returns_an_infra_row_when_the_trial_hangs_and_passes_results_and_errors_through():
+    import threading
+    from evaluation.suite import runner
+    task = {"id": "t1"}
+    hang = threading.Event()
+    row = runner.bounded(lambda t, m: hang.wait(30), 0.2, task, "gold")
+    hang.set()
+    assert row["infra_error"] and row["resolved"] is False and "trial_timeout" in row["error"]
+    assert runner.bounded(lambda t, m: {"ok": m}, 5, task, "gold") == {"ok": "gold"}
+    def boom(t, m):
+        raise KeyError("x")
+    with pytest.raises(KeyError):
+        runner.bounded(boom, 5, task, "gold")

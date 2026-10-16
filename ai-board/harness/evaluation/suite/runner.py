@@ -265,7 +265,7 @@ def cmd_run(args, deps=None) -> int:
         if stop.is_set() or (run_dir / "STOP").exists() or (deadline and time.monotonic() > deadline):
             return None
         try:
-            row = trial.run_trial(task, mode, deps, root, ROOT, fast, fast_lock, review=args.review)
+            row = bounded(trial.run_trial, args.trial_timeout_s, task, mode, deps, root, ROOT, fast, fast_lock, review=args.review)
         except eval_fast.FastTierError as error:  # environment broken: keep finished work, stop the run
             abort.append(str(error)[:300])
             stop.set()
@@ -302,6 +302,31 @@ def cmd_run(args, deps=None) -> int:
         print(render(write_report(run_dir, rows)))
     print(f"[suite] {status}; {run_dir}" + (f"; KHÔNG TIN SỐ LIỆU: {'; '.join(problems)}" if problems else "; integrity ok"))
     return 2 if abort else 0
+
+
+def bounded(fn, seconds, *args, **kwargs):
+    """Run fn on a daemon thread; after `seconds` give up and return a failed infra row. The abandoned thread cannot be killed (ponytail: needs a subprocess per trial)."""
+    box = {}
+    thread = threading.Thread(target=lambda: box.update(_run_guarded(fn, args, kwargs)), daemon=True)
+    thread.start()
+    thread.join(seconds or None)
+    if thread.is_alive():
+        task, mode = args[0], args[1]
+        error = f"trial_timeout: no result after {seconds}s"
+        return {"id": task["id"], "mode": mode, "resolved": False, "collateral": [], "gate_passed": False, "gate4": None, "prod": "skipped", "ended": None,
+                "shipped": False, "review": None, "reason": error, "infra_error": True, "error": error, "plan": None, "capture": None, "model_calls": 0,
+                "loop_tools": [], "retries": 0, "stuck": False, "truncated": False, "tokens_in": 0, "tokens_out": 0, "wall_s": float(seconds),
+                "providers": [], "served": [], "reasoning_chars": 0, "diff": None, "recall": None, "ref_errors": 0, "schema_fallbacks": 0}
+    if "raise" in box:
+        raise box["raise"]
+    return box["value"]
+
+
+def _run_guarded(fn, args, kwargs) -> dict:
+    try:
+        return {"value": fn(*args, **kwargs)}
+    except BaseException as error:  # noqa: BLE001 - re-raised on the caller's thread
+        return {"raise": error}
 
 
 def cmd_report(args) -> int:
@@ -409,6 +434,7 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--cases", type=int)
     run.add_argument("--fast-tier", action="store_true", help="gate 4 + production text oracle on a locally started corpus app")
     run.add_argument("--max-minutes", type=float)
+    run.add_argument("--trial-timeout-s", type=int, default=1800, help="hard wall-clock cap per trial; an expired trial is an infra_error row")
     run.add_argument("--allow-dirty", action="store_true")
     run.add_argument("--review", action="store_true", help="also run the gate 4 model content review on gold-mode candidates (false-block rate)")
     run.add_argument("--pack", action="append", help="task pack JSON (merged-history tasks); repeatable")

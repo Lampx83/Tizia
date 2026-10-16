@@ -459,7 +459,7 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
                 check=lambda o: (_check_rest(o, current, subtask["file"]), gate3_guards.check(o, current, subtask["file"], known)),
                 role=role, db_path=db_path, proposal_id=proposal_id, child=child,
                 store=_checkpoint_store(state, db_path, proposal_id, child),
-                pins={"role": role}, repair_reason=state.get("repair_reason"))
+                pins={"role": role}, repair_reason=state.get("repair_reason"), context=context)
             if looped.get("stale_reset") and trace:
                 trace.note("tool", "stale checkpoint", f"an upstream artifact changed ({', '.join(looped['stale_reset'])}); this subtask was checked again from scratch")
             if looped["status"] != "proposed":
