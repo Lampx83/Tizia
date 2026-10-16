@@ -1,5 +1,6 @@
 """Cổng 2.5 (plan_validate.py) — soát plan (Q1) + phân quyền độ
 phức tạp (Q2) trước khi cổng 3 tiêu ngân sách."""
+import json
 import time
 
 import pytest
@@ -268,3 +269,54 @@ def test_complex_http_plan_is_submitted_as_high_risk():
            "subtasks": [{"title": "t", "file": "public/a.html", "verify": "v", "size": "small"}]}
     assert HarnessPlanner._canonical({"domain": "it"}, old, ["subtasks: 4"])["risk"] == "high"
     assert HarnessPlanner._canonical({"domain": "it"}, old)["risk"] == "low"
+
+
+# ── conditional reasoning: one thinking pass on a hard case, never a pass on its own ──
+
+def _reasoning_run(monkeypatch, first, second, fixes='reasoning'):
+    monkeypatch.setenv('AI_BOARD_GATE25_FIXES', fixes)
+    plan = plan_with(['features'])
+    answers = [first, second]
+    seen = []
+
+    class Models(FakeModels):
+        def generate_for(self, role, model, prompt, **kw):
+            seen.append(kw.get('extra'))
+            return {'response': json.dumps(answers[min(len(seen) - 1, 1)]), 'done_reason': 'stop', 'prompt_eval_count': 1, 'eval_count': 1}
+
+        def generate(self, model, prompt, **kw):
+            return self.generate_for('gate1', model, prompt, **kw)
+    deps = deps_with(Models(plan))
+    state = {'plan': plan}
+    out = plan_validate.run({'id': 'x', 'domain': 'pharmacy'}, deps, Budget(max_wall_clock_s=999), state)
+    return out, state, seen
+
+
+UNSURE = {'clear': False, 'question': 'Tab nào?', 'grounded': False, 'reason': 'chưa rõ', 'grounding': []}
+SURE = {'clear': True, 'question': None, 'grounded': True, 'reason': 'ok', 'grounding': []}
+
+
+def test_reasoning_is_off_by_default_and_a_clear_plan_never_pays_for_it(monkeypatch):
+    out, state, seen = _reasoning_run(monkeypatch, UNSURE, SURE, fixes='')
+    assert len(seen) == 1 and 'reasoning' not in state
+    out, state, seen = _reasoning_run(monkeypatch, SURE, UNSURE)
+    assert len(seen) == 1 and 'reasoning' not in state
+
+
+def test_a_second_pass_that_confirms_the_block_keeps_the_original_outcome(monkeypatch):
+    out, state, seen = _reasoning_run(monkeypatch, UNSURE, UNSURE)
+    assert out['outcome'] == 'needs_clarification' and len(seen) == 2
+    assert seen[1] == {'force_thinking': True} and not seen[0]
+    assert state['reasoning']['first']['clear'] is False and state['reasoning']['second']['clear'] is False
+
+
+def test_a_disagreement_goes_to_review_and_is_never_a_pass(monkeypatch):
+    out, state, _ = _reasoning_run(monkeypatch, UNSURE, SURE)
+    assert out['blocked'] is True and out['outcome'] == 'validator_disagreement'
+    assert out['review']['first']['reason'] == 'chưa rõ' and out['review']['second']['clear'] is True
+    assert 'quản trị viên' in out['public_message']
+
+
+def test_an_unusable_second_pass_is_recorded_as_unknown_and_the_block_stands(monkeypatch):
+    out, state, _ = _reasoning_run(monkeypatch, UNSURE, {'not': 'a validation'})
+    assert out['outcome'] == 'needs_clarification' and 'unknown' in state['reasoning']['second']

@@ -350,6 +350,16 @@ def _validator_options() -> dict | None:
     return {"num_predict": 6144} if "tokens" in fixes() else None
 
 
+def _uncertain(validation: dict) -> bool:
+    """The non-thinking validator did not clear the plan: unclear request or no verified grounding."""
+    return not validation['clear'] or not validation.get('grounded')
+
+
+def _brief(validation: dict) -> dict:
+    return {'clear': validation['clear'], 'grounded': bool(validation.get('grounded')), 'reason': str(validation.get('reason') or '')[:200],
+            'question': str(validation.get('question') or '')[:200]}
+
+
 def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: int | None = None) -> dict:
     """Điểm vào cho main.run_gate. Đọc state['plan'] do cổng 1 để lại."""
     plan = state.get("plan")
@@ -380,12 +390,13 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                              "grounded": {"type": "boolean"}, "reason": short,
                              "grounding": {"type": "array", "maxItems": len(plan['subtasks']), "items": record}},
               "required": ["clear", "question", "grounded", "reason", "grounding"]}
-    def validate(req):
+    def validate(req, think=False):
         ask = lambda options: deps.call_model(deps.models.gate1_model, prompt if req is request else build_prompt(req, plan, repo_context),
                                               gate=2.5, budget=budget, format=schema, db_path=db_path, proposal_id=proposal_id,
-                                              prompt_name="plan_validate.md", options=options)
+                                              prompt_name="plan_validate.md", options=options,
+                                              **({"extra": {"force_thinking": True}} if think else {}))
         body = ask(_validator_options())
-        if body.get('done_reason') == 'length' and 'retry' in fixes():  # degenerate whitespace runs: resample once
+        if body.get('done_reason') == 'length' and 'retry' in fixes() and not think:  # degenerate whitespace runs: resample once
             body = ask({**(_validator_options() or {}), 'temperature': 0.3})
         if body.get('done_reason') == 'length':
             return None, {"gate": 2.5, "blocked": True, "reason": "validator output truncated at token limit",
@@ -401,6 +412,16 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
     validation, stop = validate(request)
     if stop:
         return stop
+    if 'reasoning' in fixes() and _uncertain(validation) and budget.can_afford():
+        # A hard case gets one more pass with thinking on. It can only confirm the block or open a review: it never passes a plan itself.
+        second, second_stop = validate(request, think=True)
+        state['reasoning'] = {'first': _brief(validation), 'second': _brief(second) if second else {'unknown': second_stop.get('reason')}}
+        judge('reasoning pass', second is not None and _uncertain(second), json.dumps(state['reasoning'], ensure_ascii=False)[:600])  # ok = the second pass confirms the block
+        if second and not _uncertain(second):
+            message = 'Hai lần soát kế hoạch không đồng ý với nhau; cần quản trị viên xem trước khi làm tiếp.'
+            return {'gate': 2.5, 'blocked': True, 'outcome': 'validator_disagreement', 'public_message': message,
+                    'reason': f"validator_disagreement: lần 1 {state['reasoning']['first']['reason']} | lần 2 (reasoning) ok",
+                    'review': state['reasoning']}
     if not validation["clear"] and validation["question"] and answered_on():
         answer = settled_answer(request, validation["question"], repo_context, files, state, deps, budget,
                                 db_path=db_path, proposal_id=proposal_id)

@@ -190,8 +190,10 @@ def _plan_stage(task: dict, repo, deps: RecordingDeps, wall_s: int, variant: str
                          validator_quotes=facts.get("validator_quotes") or (_quote_diag(str(deps.ledger[-1].get("response", "")), repo, sha)
                                                                             if step.get("reason") == "plan_ungrounded" and deps.ledger else []))
             if not facts["approved"]:
+                facts["reasoning"] = state.get("reasoning")
                 tracer.flush()
                 return facts, None, tracer.records
+    facts["reasoning"] = state.get("reasoning")
     tracer.flush()
     return facts, plan, tracer.records
 

@@ -209,8 +209,8 @@ class Deps:
                 try:
                     call_extra, call_options = extra, options
                     if candidate['provider'] == 'vllm' and not (extra or {}).get('logprobs'):
-                        think = router.reasoning(role)
-                        call_extra = {**(extra or {}), 'thinking': think}
+                        think = bool((extra or {}).get('force_thinking', router.reasoning(role)))  # one call can opt in without changing the role
+                        call_extra = {**{k: v for k, v in (extra or {}).items() if k != 'force_thinking'}, 'thinking': think}
                         if think:  # reasoning tokens count against max_tokens: leave room for the answer itself
                             call_options = {**options, 'num_predict': int(options.get('num_predict') or 0) + router.reasoning_tokens()}
                     body = client.generate(candidate['model'], prompt, format=format, extra=call_extra,

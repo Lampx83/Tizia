@@ -200,3 +200,15 @@ def test_reasoning_is_per_role_with_extra_token_allowance():
     plan, light = calls[0][2], calls[1][2]
     assert plan['chat_template_kwargs'] == {'enable_thinking': True} and plan['max_tokens'] == 100 + models.routing.reasoning_tokens()
     assert light['chat_template_kwargs'] == {'enable_thinking': False} and light['max_tokens'] == 100
+
+
+def test_one_call_can_force_thinking_without_changing_its_role():
+    """The conditional reasoning pass: same role, thinking on and the extra allowance for this call only."""
+    with gateway() as (vllm_url, calls):
+        models = OllamaClient.from_env({'VLLM_URL': vllm_url, 'VLLM_SECKEY': 'k', 'AI_BOARD_MODEL_ROUTING': 'true'})
+        deps = Deps(models=models, notify=None, sleep=lambda _: None)
+        deps.call_model('m', 'p', gate=3, role='gate3_light', budget=Budget(), options={'num_predict': 100}, extra={'force_thinking': True})
+        deps.call_model('m', 'p', gate=3, role='gate3_light', budget=Budget(), options={'num_predict': 100})
+    forced, plain = calls[0][2], calls[1][2]
+    assert forced['chat_template_kwargs'] == {'enable_thinking': True} and forced['max_tokens'] == 100 + models.routing.reasoning_tokens()
+    assert plain['chat_template_kwargs'] == {'enable_thinking': False} and plain['max_tokens'] == 100
