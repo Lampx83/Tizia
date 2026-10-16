@@ -354,3 +354,9 @@ def test_repeating_the_same_request_gets_a_hint_then_stops_the_loop():
     out, _, deps = run([bad])
     assert out["status"] == "blocked" and out["failure_class"] == "ordinary" and "lặp lại" in out["reason"]
     assert "LẶP ĐÚNG" in deps.prompts[2] and "LẶP ĐÚNG" not in deps.prompts[1]
+
+
+def test_search_miss_lists_real_lines_that_share_words_with_the_search():
+    out, _, deps = run([{"tool": "edit_file", "arguments": {"file": "public/a.html", "edits": [{"search": "<main>xyz</main> h1 A tiêu", "replace": "x"}]}}, EDIT, TEST, FINISH])
+    assert out["status"] == "proposed"
+    assert "Dòng thật có từ trong search" in deps.prompts[1] and "L1| <main>" in deps.prompts[1]

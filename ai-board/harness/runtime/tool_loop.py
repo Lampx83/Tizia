@@ -179,13 +179,23 @@ class Workspace:
             try:
                 self.content = file_context.apply_edits(self.content, args["edits"], filename=self.file)
             except ValueError as error:
-                raise ToolError(str(error)) from None
+                raise ToolError(str(error) + self._candidates(args["edits"], str(error))) from None
             return f"đã áp {len(args['edits'])} edit; file còn {len(self.content.splitlines())} dòng"
         if name == "write_test":
             self.test_file, self.test = self._check_scope(args["test_file"], test=True), args["test"]
             return "đã nhận test"
         self._fresh()
         return ""
+
+    def _candidates(self, edits: list, message: str) -> str:
+        """Khi search không khớp và không có dòng gần giống: liệt kê dòng thật chia sẻ nhiều từ nhất với search (model hay bịa chuỗi)."""
+        if "không khớp" not in message or "Dòng gần giống" in message:
+            return ""
+        words = {w.lower() for e in edits if isinstance(e, dict) for w in re.findall(r"\w{3,}", str(e.get("search", "")))}
+        scored = sorted(((len(words & {w.lower() for w in re.findall(r"\w{3,}", line)}), n, line)
+                         for n, line in enumerate(self.content.splitlines(), 1)), reverse=True)[:4]
+        shown = [f"L{n}| {line[:200]}" for score, n, line in scored if score]
+        return "\nDòng thật có từ trong search (chép nguyên văn hoặc dùng after_line):\n" + "\n".join(shown) if shown else ""
 
     def complete(self) -> bool:
         """Đã có thay đổi ở file đích và đã có test: finish bị loại lúc này là lỗi nội dung."""
