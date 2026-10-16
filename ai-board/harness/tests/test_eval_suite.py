@@ -526,3 +526,18 @@ def test_gate25_tokens_fix_raises_the_validator_output_budget_only_when_enabled(
     assert pv._validator_options() is None and pv.fixes() == set()
     monkeypatch.setenv("AI_BOARD_GATE25_FIXES", "quotes,tokens")
     assert pv._validator_options() == {"num_predict": 6144}
+
+
+def test_tool_loop_budget_and_timing_pins_are_recorded(world, monkeypatch):
+    root, _ = world
+    deps, _ = deps_for(world)
+    monkeypatch.setenv("AI_BOARD_TOOL_LOOP", "")
+    argv = ["run", "--seed", str(SEED), "--split", "dev", "--cases", "1", "--repeats", "1", "--modes", "gold", "--root", str(root), "--allow-dirty"]
+    timing = json.dumps({"gpu": "g", "load": "idle", "warm_cold": "warm", "protocol": "p", "comparable": True})
+    assert runner.main([*argv, "--tool-loop", "--timing-conditions", timing], deps) == 0 and os.environ["AI_BOARD_TOOL_LOOP"] == "1"
+    assert runner.main([*argv, "--timing-conditions", "not json"], deps) == 2
+    assert runner.main([*argv, "--context-arm", "nosiblings"], deps) == 0 and os.environ["AI_BOARD_TOOL_LOOP"] == ""
+    runs = {p.name: json.loads((p / "run.json").read_text(encoding="utf-8")) for p in (root / "suite").iterdir()}
+    assert {n.endswith("-loop"): m["tool_loop"] for n, m in runs.items()} == {True: True, False: False}
+    assert all(m["budget"]["model_calls"] == 40 for m in runs.values())
+    assert [m["timing_conditions"]["comparable"] for n, m in runs.items() if n.endswith("-loop")] == [True]

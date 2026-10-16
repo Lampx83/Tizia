@@ -22,6 +22,7 @@ import eval_corpus
 import eval_fast
 from gates import gate3_guards, plan_validate
 from runtime import tool_manifest
+from runtime.budget import Budget
 from evaluation.suite import ablation, grading, metrics, taskpack, trial
 from evaluation.suite.launcher import sqlite_launcher
 
@@ -188,8 +189,17 @@ def cmd_run(args, deps=None) -> int:
     os.environ["AI_BOARD_GATE25_ANSWERED"] = "1" if args.gate25_answered else ""
     os.environ["AI_BOARD_BEST_MATCH"] = args.best_match
     os.environ["AI_BOARD_RETRIEVAL"] = "literal" if args.retrieval == "literal" else ""
+    os.environ["AI_BOARD_TOOL_LOOP"] = "1" if args.tool_loop else ""
+    try:
+        timing = json.loads(args.timing_conditions) if args.timing_conditions else None
+    except ValueError:
+        print("[suite] --timing-conditions must be a JSON object", file=sys.stderr)
+        return 2
     prov = {**provenance(ROOT, model, router), "context_arm": args.context_arm, "gate3_guards": guards, "gate25_fixes": fixes,
-            "best_match": args.best_match or "enforce", "retrieval": args.retrieval,
+            "best_match": args.best_match or "enforce", "retrieval": args.retrieval, "tool_loop": bool(args.tool_loop),
+            "budget": {"model_calls": Budget.max_model_calls, "tool_calls": Budget.max_tool_calls, "tokens": Budget.max_tokens,
+                       "units": 600, "wall_clock_s": "per-task"},
+            **({"timing_conditions": timing} if timing else {}),
             **({"gate25_answered": True} if args.gate25_answered else {})}
     if prov["dirty"] and not args.allow_dirty:
         print("[suite] working tree has uncommitted changes: commit them (or --allow-dirty for a throwaway run)", file=sys.stderr)
@@ -218,7 +228,8 @@ def cmd_run(args, deps=None) -> int:
             + (f"-f25-{fixes.replace(',', '+') or 'none'}" if fixes != plan_validate.DEFAULT_FIXES else "")
             + ("-ans" if args.gate25_answered else "")
             + ("-bm-adv" if args.best_match else "")
-            + ("-ret-lit" if args.retrieval == "literal" else ""))
+            + ("-ret-lit" if args.retrieval == "literal" else "")
+            + ("-loop" if args.tool_loop else ""))
     run_dir = root / "suite" / name
     run_dir.mkdir(parents=True, exist_ok=True)
     meta = {"seed": args.seed, "split": args.split, "repeats": args.repeats, "modes": modes, "fast_tier": args.fast_tier, "review": args.review, "packs": [_sha(Path(p)) for p in args.pack or []], **prov,
@@ -395,6 +406,8 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--gate25-answered", action="store_true", help="gate 2.5 answers clarifications settled by a verbatim request/source quote and reruns the validator; default off")
     run.add_argument("--best-match", choices=["advisory"], default="", help="best_match mismatch recorded in trace instead of rejecting plan at gates 1 and 2.5; default off (reject)")
     run.add_argument("--retrieval", choices=("off", "literal"), default="off", help="gate 1 retrieval: literal = quoted strings in the request shortlist candidate files (git grep -F at the pinned sha)")
+    run.add_argument("--tool-loop", action="store_true", help="gate 3 uses the bounded tool loop (AI_BOARD_TOOL_LOOP=1); recorded in the run manifest, default off")
+    run.add_argument("--timing-conditions", default="", help="JSON object {gpu, load, warm_cold, protocol, comparable} the operator vouches for; without it timing stays pending")
     run.add_argument("--reasoning-on", default="", help="comma list of roles to run with thinking on (ablation), e.g. gate1,gate25")
     run.add_argument("--reasoning-off", default="", help="comma list of roles to run with thinking off (ablation), e.g. gate1,gate25")
     run.set_defaults(handler=cmd_run)
