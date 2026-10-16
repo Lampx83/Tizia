@@ -13,6 +13,7 @@ import { guardModelText, MAX_QUESTIONS } from '../../contexts/ai-board-intake/cl
 import { attachWorkerLessonRoutes, attachLessonReviewRoutes } from './lessons.js';
 import { createHsmStore } from '../hsm/store.js';
 import { createToolCheckpointService } from '../services/tool-checkpoint.js';
+import { createGateProofService } from '../services/gate-proofs.js';
 import { createToolManifestStore } from '../repositories/tool-manifests.js';
 import { publicContract } from '../hsm/contract.js';
 
@@ -399,6 +400,10 @@ export function attachAiBoardWorkerRoutes(router, {
   }));
   route.post('/api/ai-board/worker/tickets/:id/tool-manifest', authenticate, handle(async (req,res) => {
     res.json(await hsm.reportToolManifest(req.params.id,req.body || {}));
+  }));
+  const gateProofs = createGateProofService(store);
+  route.post('/api/ai-board/worker/tickets/:id/gate-proof/:op', authenticate, handle(async (req,res) => {
+    res.json(await gateProofs.apply(req.params.id, req.params.op, req.body || {}));
   }));
   const toolCheckpoint = createToolCheckpointService(store);
   route.post('/api/ai-board/worker/tickets/:id/checkpoint/:op', authenticate, handle(async (req,res) => {

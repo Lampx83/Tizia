@@ -147,7 +147,7 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
              candidate_opts: dict | None = None,
              request_type: str | None = None,
              eval_tasks: list[dict] | None = None, preview_capture=None,
-             checkpoint=None) -> tuple[list[dict], str | None, dict | None, list[dict], str | None]:
+             checkpoint=None, plan_hash: str | None = None) -> tuple[list[dict], str | None, dict | None, list[dict], str | None]:
     """One pass of Gates 3→5.5 on fresh scratch + worktree. Return (public gates, failure kind, candidate,
     ảnh chụp cổng 5 — file tạm cục bộ, base sha các cổng đã dùng | None)."""
     scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
@@ -193,7 +193,7 @@ def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_g
                     try:
                         if gate == 4:
                             from repositories import server_hsm
-                            result = server_hsm.execute(lambda: run_gate(gate, {}, deps, budget, state))
+                            result = server_hsm.execute(lambda: _gate4_with_proof(run_gate, deps, budget, state, plan_hash))
                         else:
                             result = run_gate(gate, {}, deps, budget, state)
                     except Exception as error:  # model/network/tool outage, not the candidate's code
@@ -281,6 +281,45 @@ def _worker_checkpoint(ticket_id: int, plan: dict, plan_hash: str | None = None)
     return Checkpoint(dsn, scope)
 
 
+def _gate_proofs():
+    """GateProofs của lease hiện tại (qua backend server_hsm); None khi chạy ngoài worker HTTP."""
+    from repositories import server_hsm
+    backend = server_hsm._SERVER.get()
+    if backend is None or getattr(backend, "client", None) is None:
+        return None
+    from repositories.server_gate_proof import GateProofs
+    ident = backend.identity
+    return GateProofs(backend.client, int(backend.path.split("/")[-2]), {k: ident[k] for k in ("worker_id", "lease_token")}, ident.get("run_id"))
+
+
+def _gate4_with_proof(run_gate, deps, budget, state, plan_hash):
+    """Gate 4: dùng lại bằng chứng đã qua khi server xác nhận mọi pin còn khớp, ngược lại chạy thật rồi ghi bằng chứng nếu qua."""
+    proofs = _gate_proofs()
+    if proofs is None:
+        return run_gate(4, {}, deps, budget, state)
+    from repositories.server_gate_proof import gate4_pins
+    from runtime import tool_loop
+    pins = gate4_pins(state, plan_hash=plan_hash, model=getattr(getattr(deps, "models", None), "gate1_model", None),
+                      tool_hash=tool_loop.MANIFEST.hash)
+    try:
+        verdict = proofs.check(4, pins)
+    except Exception:
+        verdict = {"reuse": False}  # verifier unreachable: verify for real
+    if verdict.get("reuse"):
+        import candidate
+        patch = verdict["result"].pop("_state", {})
+        state.update({key: patch[key] for key in ("ui_changed", "guard_flags", "review_required") if key in patch})
+        failed = candidate.ensure(state, 4)  # the worktree is rebuilt for real; only the scan and review are reused
+        return failed or verdict["result"]
+    result = run_gate(4, {}, deps, budget, state)
+    if not result.get("blocked"):
+        try:
+            proofs.record(4, pins, {**result, "_state": {key: state.get(key) for key in ("ui_changed", "guard_flags", "review_required")}})
+        except Exception:
+            pass  # a missing proof only costs a re-check later
+    return result
+
+
 def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate,
                    cleanup: Callable, policy: dict | None = None, accepted_policy_hash: str | None = None,
                    request_detail: str | None = None, memory_path=None,
@@ -318,7 +357,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
             run_gate=run_gate, cleanup=cleanup, repair_reason=repair_reason, catalog=catalog,
             request_detail=request_detail, memory_path=memory_path, should_stop=should_stop,
             candidate_opts=candidate_opts, request_type=request_type, eval_tasks=eval_tasks, preview_capture=preview_capture,
-            checkpoint=run_checkpoint.attempt(len(repairs)) if run_checkpoint is not None else None,
+            checkpoint=run_checkpoint.attempt(len(repairs)) if run_checkpoint is not None else None, plan_hash=plan_hash,
         )
         last = gates[-1]
         if kind != "ordinary" or len(repairs) >= MAX_REPAIRS:
@@ -746,7 +785,7 @@ class HttpWorker:
                 folder = snapshot["folder"]
                 branch = folder.get("branch") or candidate.folder_branch(folder["slug"], folder.get("cycle") or 1)
                 try:
-                    path, tip = candidate.folder_source(self.candidates.repo, branch, self.folder_base_ref)
+                    path, tip = candidate.folder_source(self.candidates.repo, branch, self.folder_base_ref, folder.get("head_sha"))
                 except candidate.FolderConflict as error:
                     # Không tự giải xung đột: báo admin, trả lease ở trạng thái chờ.
                     self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/events", {

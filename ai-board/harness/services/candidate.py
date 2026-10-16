@@ -156,11 +156,17 @@ def _ref_sha(repo, ref: str) -> str | None:
     return out.stdout.strip() if not out.returncode else None
 
 
-def folder_source(repo, branch: str, base_ref: str) -> tuple[str, str | None]:
+_ANY_TIP = object()
+
+
+def folder_source(repo, branch: str, base_ref: str, known_tip=_ANY_TIP) -> tuple[str, str | None]:
     """Worktree tạm tách tại đỉnh nhánh folder đã gộp base_ref, để lượt sau đọc/sửa trên code của lượt trước.
+    known_tip = đỉnh server đã thấy (head_sha của folder, None = chưa có): commit hơn đỉnh đó do worker chết để lại nên bị bỏ.
     Return (path, đỉnh cũ | None khi chu kỳ mới). Raise FolderConflict khi gộp xung đột (không để lại gì)."""
     base = _git_out(["rev-parse", "--verify", f"{base_ref}^{{commit}}"], repo).strip()
     tip = _ref_sha(repo, f"refs/heads/{branch}") or _ref_sha(repo, f"refs/remotes/origin/{branch}")
+    if tip and known_tip is not _ANY_TIP and tip != known_tip:
+        tip = _ref_sha(repo, known_tip) if known_tip else None
     path = tempfile.mkdtemp(prefix="ai-board-folder-")
     try:
         _git_out(["worktree", "add", "-q", "--detach", path, tip or base], repo)
@@ -183,10 +189,25 @@ def drop_source(repo, path) -> None:
     _git(repo, "worktree", "prune")
 
 
+_OWN_WORKTREES = ("ai-board-worktree-", "ai-board-folder-")
+
+
+def _drop_leftover_worktrees(repo) -> None:
+    """A dead job leaves its candidate/folder worktrees checked out on the candidate branch, which blocks the next job's -B."""
+    listed = _git_out(["worktree", "list", "--porcelain"], repo)
+    for line in listed.splitlines():
+        if line.startswith("worktree "):
+            path = line[len("worktree "):]
+            if Path(path).name.startswith(_OWN_WORKTREES):
+                drop_source(repo, path)
+    _git(repo, "worktree", "prune")
+
+
 def sync(repo, base: str) -> str:
     """Worker's dedicated clone only (never a dev checkout): fetch, detach at origin/<base>, drop
     leftovers of a crashed job. Kept candidate branches stay. Return the base sha. Raise OSError on git failure."""
     _git_out(["fetch", "-q", "--prune", "origin"], repo)
+    _drop_leftover_worktrees(repo)
     _git_out(["checkout", "-q", "-f", "--detach", f"origin/{base}"], repo)
     _git_out(["clean", "-q", "-fd"], repo)
     return _git_out(["rev-parse", "HEAD"], repo).strip()

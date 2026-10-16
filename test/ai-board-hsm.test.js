@@ -274,6 +274,32 @@ test('a lease lost mid-execution is rescued by an active worker as the same plan
   } finally {await f.close();}
 });
 
+const PINS={candidate:'c'.repeat(32),plan:'plan-a',base:'abc',harness:'h1',prompt:'p1',tool:'t1',model:'m1',oracle:'o1'};
+test('a gate proof is reused only while every pin matches, and the verifier explains each refusal',async()=>{
+  const f=await fixture();
+  try {
+    const call=(op,body,lease={})=>f.post(`gate-proof/${op}`,{gate:4,pins:PINS,...body,...lease});
+    const passed={gate:4,blocked:false,issues:[],_state:{ui_changed:true}};
+    assert.deepEqual((await call('check',{})).body,{reuse:false,reason:'no_proof',drift:[]});
+    assert.equal((await call('record',{result:{gate:4,blocked:true}})).body.error,'proof_requires_pass');
+    assert.equal((await call('record',{gate:5,result:passed})).body.error,'gate_not_reusable');
+    assert.equal((await call('record',{pins:{...PINS,model:''},result:passed})).body.error,'invalid_gate_proof');
+    assert.equal((await call('record',{run_id:f.run,result:passed})).status,200);
+    const hit=(await call('check',{})).body;
+    assert.deepEqual([hit.reuse,hit.result.gate,hit.result._state.ui_changed,hit.proof_run_id],[true,4,true,f.run]);
+    for (const key of Object.keys(PINS)) {
+      const miss=(await call('check',{pins:{...PINS,[key]:key==='candidate'?'d'.repeat(32):'changed'}})).body;
+      assert.deepEqual([miss.reuse,miss.reason,miss.drift],[false,'pin_drift',[key]],key);
+    }
+    await f.db.run("UPDATE ai_gate_proofs SET result_json='{\"gate\":4,\"blocked\":false,\"issues\":[\"forged\"]}' WHERE ticket_id=?",[f.id]);
+    assert.equal((await call('check',{})).body.reason,'proof_corrupt');
+    assert.equal((await call('check',{},{lease_token:'old'})).body.error,'stale_lease');
+    const events=await f.db.all("SELECT event_type FROM ai_events WHERE ticket_id=? AND event_type LIKE 'gate_proof_%' ORDER BY id",[f.id]);
+    assert.equal(events.filter(e=>e.event_type==='gate_proof_reused').length,1);
+    assert.equal(events.filter(e=>e.event_type==='gate_proof_invalidated').length,Object.keys(PINS).length+1);
+  } finally {await f.close();}
+});
+
 const MANIFEST=JSON.parse(fs.readFileSync(new URL('../ai-board/harness/runtime/tool_manifest.json',import.meta.url),'utf8'));
 const MANIFEST_HASH=canonicalHash(MANIFEST);
 const adminDecide=(f,hash,action,admin=true)=>fetch(`${f.base}/api/admin/ai-board/tool-manifests/${hash}/${action}`,{method:'POST',headers:admin?{'x-test-admin':'yes'}:{}}).then(async r=>({status:r.status,body:await r.json()}));

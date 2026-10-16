@@ -404,3 +404,26 @@ def test_a_child_whose_generated_test_was_dropped_commits_only_its_file(tmp_path
         assert not (checkout / "test" / "a.test.js").exists()
     finally:
         candidate.cleanup(state, keep_branch=False)
+
+
+def test_commits_a_dead_run_left_on_the_folder_branch_are_not_a_source_change(tmp_path, source):
+    branch = candidate.folder_branch("tro-doan-tu")
+    path, tip, first = _folder_run(tmp_path, source, branch, "trang", "public/game.html", "<p>v1</p>\n")
+    verified = first["commits"][-1]["sha"]
+    candidate.cleanup(first, keep_branch=True)
+    candidate.drop_source(source, path)
+    path, tip, second = _folder_run(tmp_path, source, branch, "diem", "public/game.js", "export const s = 1;\n")
+    candidate.cleanup(second, keep_branch=True)  # the worker died before the server saw this candidate
+    candidate.drop_source(source, path)
+    orphan = git(source, "rev-parse", f"refs/heads/{branch}")
+    assert orphan != verified
+    for known, expected in ((verified, verified), (None, None)):
+        path, tip = candidate.folder_source(source, branch, "HEAD", known)
+        try:
+            assert tip == expected
+            assert git(path, "rev-parse", "HEAD") != orphan
+        finally:
+            candidate.drop_source(source, path)
+    path, tip = candidate.folder_source(source, branch, "HEAD")
+    assert tip == orphan  # callers that pass no known tip keep the old behaviour
+    candidate.drop_source(source, path)

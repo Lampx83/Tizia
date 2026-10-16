@@ -380,7 +380,7 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
         **canonical_plan['steps'][0], 'file': 'public/x.html', 'verify': 'smoke; 200', 'size': 'small',
     }
     assert [call[1].rsplit('/', 1)[-1] for call in transport.calls] == [
-        'claim', 'snapshot', 'heartbeat', 'runs', 'events', 'plan', 'hsm', 'hsm', 'verdict', 'release',
+        'claim', 'snapshot', 'heartbeat', 'runs', 'events', 'plan', 'hsm', 'check', 'record', 'hsm', 'verdict', 'release',
     ]
     posted = transport.calls[-2][2]['verdict']
     assert posted == {
@@ -1328,7 +1328,7 @@ class FolderTransport(FakeTransport):
 def test_folder_root_plans_and_commits_on_the_folder_branch(monkeypatch):
     import candidate
     dropped, seen = [], {}
-    monkeypatch.setattr(candidate, 'folder_source', lambda repo, branch, base: ('/tmp/folder-src', 'c' * 40))
+    monkeypatch.setattr(candidate, 'folder_source', lambda repo, branch, base, *known: ('/tmp/folder-src', 'c' * 40))
     monkeypatch.setattr(candidate, 'drop_source', lambda repo, path: dropped.append(path))
     candidates = PublishingCandidates()
     candidates.repo = '/tmp/repo'
@@ -1353,7 +1353,7 @@ def test_folder_root_plans_and_commits_on_the_folder_branch(monkeypatch):
 def test_folder_conflict_with_dev_waits_for_a_human(monkeypatch):
     import candidate
 
-    def conflict(repo, branch, base):
+    def conflict(repo, branch, base, *known):
         raise candidate.FolderConflict('public/a.html')
 
     monkeypatch.setattr(candidate, 'folder_source', conflict)
@@ -1660,3 +1660,28 @@ def test_poll_only_swallows_connection_trouble_other_failures_still_stop_the_wor
     for error in (urllib.error.HTTPError('http://x', 401, 'no', {}, None), OSError('git fetch: fatal: not a repository')):
         with pytest.raises(OSError):
             poll(failing(error))
+
+
+def test_sync_removes_worktrees_a_dead_job_left_on_the_candidate_branch(tmp_path):
+    import subprocess
+    import candidate
+
+    def git(cwd, *args):
+        return subprocess.run(['git', '-c', 'user.name=T', '-c', 'user.email=t@example.invalid', *args], cwd=cwd,
+                              check=True, capture_output=True, text=True, stdin=subprocess.DEVNULL).stdout.strip()
+
+    upstream = tmp_path / 'upstream'
+    upstream.mkdir()
+    git(upstream, 'init', '-q', '-b', 'dev')
+    git(upstream, 'commit', '-q', '--allow-empty', '-m', 'base')
+    clone = tmp_path / 'clone'
+    git(tmp_path, 'clone', '-q', str(upstream), str(clone))
+    dead = tmp_path / 'ai-board-worktree-dead'
+    git(clone, 'worktree', 'add', '-q', '-b', 'ai-board/2026-10-16-feature-x', str(dead))
+    other = tmp_path / 'someone-elses-worktree'
+    git(clone, 'worktree', 'add', '-q', '--detach', str(other))
+
+    candidate.sync(clone, 'dev')
+
+    assert not dead.exists() and other.exists()
+    git(clone, 'worktree', 'add', '-q', '-B', 'ai-board/2026-10-16-feature-x', str(tmp_path / 'next'))  # no longer "already checked out"

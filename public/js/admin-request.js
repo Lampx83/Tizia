@@ -218,6 +218,21 @@ function attention(steps, events) {
   return `<aside class="attention" aria-label="Điểm cần chú ý"><b>Điểm cần chú ý (${items.length})</b><ul>${items.map(([st, text, href]) => `<li class="st-${st}"><a href="${href}">${text}</a></li>`).join('')}</ul></aside>`;
 }
 
+const PIN_LABEL = { candidate: 'mã thay đổi', plan: 'kế hoạch', base: 'commit gốc', harness: 'mã bộ kiểm tra', prompt: 'prompt soát nội dung',
+  tool: 'bộ công cụ', model: 'model', oracle: 'danh mục quyền' };
+// Bằng chứng cũ của cổng: dùng lại hay bị bác (server là verifier), lấy từ sự kiện mới nhất của cổng đó.
+function proofNote(gate, events = []) {
+  const last = [...events].reverse().map((e) => {
+    if (e.event_type !== 'gate_proof_reused' && e.event_type !== 'gate_proof_invalidated') return null;
+    try { return { type: e.event_type, ...JSON.parse(e.internal_detail) }; } catch { return null; }
+  }).find((d) => d && Number(d.gate) === Number(gate));
+  if (!last) return '';
+  if (last.type === 'gate_proof_reused') return `<p class="meta proof-note">Dùng lại bằng chứng đã qua của lượt #${esc(last.proof_run_id ?? '?')}: không gọi AI lại và không chạy lại phần kiểm tra; nhánh thay đổi vẫn dựng lại thật.</p>`;
+  const why = last.reason === 'proof_corrupt' ? 'bằng chứng cũ bị hỏng'
+    : `đã đổi: ${(last.drift || []).map((k) => PIN_LABEL[k] || k).join(', ') || 'không rõ'}`;
+  return `<p class="meta proof-note">Không dùng lại bằng chứng cũ (${esc(why)}); bước này được kiểm lại từ đầu.</p>`;
+}
+
 function renderPipeline(trace) {
   const projection = projectPipeline(trace);
   const root = trace.root;
@@ -247,6 +262,7 @@ function renderPipeline(trace) {
       return `<section class="pipeline-step st-${state}" data-step="${s.gate}" aria-labelledby="pipeline-title-${s.gate}"${s.state === 'run' ? ' aria-current="step"' : ''}>
         <div class="line1"><h3 id="pipeline-title-${s.gate}">${gateName(s.gate)}</h3>${tag(state, labels[s.state])}${totals.calls ? `<span class="meta">${totals.calls} lượt gọi AI · ${secs(totals.ms)} s${totals.failed.length ? ` · ${totals.failed.length} lỗi` : ''}</span>` : ''}${rerun}</div>
         <p class="meta step-purpose">${esc(s.detail)}</p>
+        ${proofNote(s.gate, trace.events)}
         ${s.run ? `<div class="meta">Kết quả từ lượt #${esc(s.run.id)} · ${fmt(s.run.created_at)}</div>` : ''}
         ${g?.public_reason ? `<p class="step-reason">${esc(g.public_reason)}</p>` : ''}
         ${s.state === 'queued' ? `<p class="step-reason">Kết quả lần trước nằm trong lịch sử. Worker chưa nhận lượt chạy mới.</p>` : ''}

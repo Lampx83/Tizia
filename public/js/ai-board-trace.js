@@ -101,6 +101,7 @@ const EVENT_LABELS = {
   budget_extended: 'Đã gia hạn ngân sách', budget_exhausted: 'Đã hết ngân sách xử lý',
   budget_ceiling: 'Đã đạt giới hạn ngân sách', plan_invalidated: 'Kế hoạch cũ đã hết hiệu lực',
   plan_resumed: 'Tiếp tục thực hiện kế hoạch', draft_screenshots: 'Đã chụp ảnh bản nháp',
+  gate_proof_reused: 'Dùng lại kết quả kiểm tra đã có', gate_proof_invalidated: 'Kết quả kiểm tra cũ không còn hợp lệ',
   transient_retry: 'Đã xếp hàng thử lại sau lỗi hạ tầng',
 };
 export function describeEvent(event = {}) {
