@@ -451,7 +451,9 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
         if trace:
             _note_inputs(trace, subtask, model, state, current, context, siblings, words, lessons, ctx)
         out = None
-        if tool_loop.enabled():
+
+        def run_loop():
+            """(proposal | None, blocked gate result | None)"""
             looped = tool_loop.run_subtask(
                 subtask, current, deps=deps, budget=budget, model=model, source=state["checkout_source"], sha=state["base_sha"],
                 check=lambda o: (_check_rest(o, current, subtask["file"]), gate3_guards.check(o, current, subtask["file"], known)),
@@ -462,11 +464,17 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
                 trace.note("tool", "stale checkpoint", f"an upstream artifact changed ({', '.join(looped['stale_reset'])}); this subtask was checked again from scratch")
             if looped["status"] != "proposed":
                 state["diffs"] = diffs
-                return {"gate": 3, "blocked": True, "diffs": diffs, "failure_class": looped["failure_class"],
-                        "reason": f"subtask '{subtask.get('title')}': {looped['reason']}",
-                        **({"unknown_outcome": looped["unknown_outcome"]} if looped.get("unknown_outcome") else {}),
-                        "tool_manifest": tool_loop.MANIFEST.hash}
-            out = looped["out"]
+                return None, {"gate": 3, "blocked": True, "diffs": diffs, "failure_class": looped["failure_class"],
+                              "reason": f"subtask '{subtask.get('title')}': {looped['reason']}",
+                              **({"unknown_outcome": looped["unknown_outcome"]} if looped.get("unknown_outcome") else {}),
+                              "tool_manifest": tool_loop.MANIFEST.hash}
+            return looped["out"], None
+
+        # auto: one-shot first; the loop repairs a gate-4 rejection (repair_reason) or an exhausted one-shot attempt.
+        if tool_loop.enabled() or (tool_loop.mode() == "auto" and state.get("repair_reason")):
+            out, stop = run_loop()
+            if stop:
+                return stop
         for iteration in range(0 if out is not None else MAX_INNER_RETRIES + 1):
             routing_options = {'role': role}
             if routing:
@@ -538,6 +546,11 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
             spent = (body.get("_metrics") or {}).get("gpu_ms") or 0
             room = getattr(budget, "max_units", None) is None or budget.units + spent / 1000 < budget.max_units
             if iteration == MAX_INNER_RETRIES or not budget.tick() or not room:
+                if tool_loop.mode() == "auto" and budget.tick() and not state.get("repair_reason"):
+                    out, stop = run_loop()
+                    if stop:
+                        return stop
+                    break
                 state["diffs"] = diffs
                 # Lý do kèm đoạn lỗi để lượt sửa sau Docker (REPAIR_SUFFIX) cũng dùng được.
                 return {"gate": 3, "blocked": True, "diffs": diffs, "failure_class": "ordinary",
@@ -562,4 +575,4 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
     state["diffs"] = diffs
     state["scratch_repo"] = str(repo)
     return {"gate": 3, "blocked": False, "reason": None, "diffs": diffs,
-            **({"tool_manifest": tool_loop.MANIFEST.hash} if tool_loop.enabled() else {})}
+            **({"tool_manifest": tool_loop.MANIFEST.hash} if tool_loop.mode() else {})}

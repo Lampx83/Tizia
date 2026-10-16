@@ -19,6 +19,7 @@ của trang ứng viên nên chọn đúng file. Plan có file không tồn tạ
 from __future__ import annotations
 
 import json
+import os
 import posixpath
 import re
 from pathlib import Path
@@ -110,12 +111,42 @@ def check_files(plan: dict, source, sha: str | None) -> None:
         raise ValueError(f"file '{missing[0]}' không có trong repo — chọn file có trong REPO DATA")
 
 
+SEARCH_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "search_terms.md").read_text(encoding="utf-8")
+
+
+def parse_search_terms(text: str) -> list[str]:
+    """Up to 4 literal strings from {"terms": [...]}; anything malformed gives no terms (the plan call still runs)."""
+    try:
+        terms = json.loads(text).get("terms")
+    except (TypeError, ValueError, AttributeError):
+        return []
+    if not isinstance(terms, list):
+        return []
+    clean = [t.strip() for t in terms if isinstance(t, str) and 3 <= len(t.strip()) <= 60 and chr(10) not in t]
+    return list(dict.fromkeys(clean))[:4]
+
+
+def ask_search_terms(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = None) -> list[str]:
+    schema = {"type": "object", "additionalProperties": False, "properties": {"terms": {"type": "array", "maxItems": 4,
+              "items": {"type": "string", "maxLength": 60}}}, "required": ["terms"]}
+    prompt = SEARCH_PROMPT.format(subject=request.get("subject", ""), body=re.sub(r"^\s*\[Trang:.*$", "", request.get("body") or "", flags=re.M))
+    body = deps.call_model(deps.models.gate1_model, prompt, gate=1, budget=budget, format=schema, db_path=db_path,
+                           proposal_id=proposal_id, prompt_name="search_terms.md", options={"num_predict": 256})
+    return [] if body.get("done_reason") == "length" else parse_search_terms(body.get("response", ""))
+
+
 def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = None,
         source=None, sha: str | None = None) -> dict:
     """1 lời gọi GATE1_MODEL (+1 lần hỏi lại nếu plan sai schema/file), tính phí budget.
     source/sha: repo + commit để đọc context (mặc định repo chứa harness, HEAD).
     db_path/proposal_id có cả hai thì ghi gate_trace — thiếu 1 thì bỏ qua, không phải lỗi."""
     source = source or ROOT
+    trace0 = getattr(deps, "trace", None)
+    if os.environ.get("AI_BOARD_RETRIEVAL") == "model" and budget.can_afford():
+        terms = ask_search_terms(request, deps, budget, db_path=db_path, proposal_id=proposal_id)
+        request = {**request, "_search_terms": terms}
+        if trace0:
+            trace0.note("tool", "search_terms", f"the model asked the harness to search for: {', '.join(terms) or '(nothing usable)'}")
     ctx = context.build_context(1, request, None, source, sha or "HEAD")
     commit = ctx["sha"]
     prompt = build_prompt(request, load_capability_names()["surface"], ctx["text"])

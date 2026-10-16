@@ -49,6 +49,8 @@ class OllamaClient:
     protocol: str = 'ollama'
     vllm_url: str = ''
     vllm_seckey: str | None = None
+    bearer_only: bool = False  # hosted API: the key goes only in Authorization, never in the internal gateway header
+    route_label: str = 'vllm'
     deadline: float | None = None
 
     def remaining_s(self):
@@ -133,7 +135,7 @@ class OllamaClient:
             reasoning = choice['message'].get('reasoning') or choice['message'].get('reasoning_content') or ''
             return {**body, 'response': content, 'done_reason': choice.get('finish_reason'), '_reasoning_chars': len(reasoning),
                     'prompt_eval_count': usage.get('prompt_tokens'), 'eval_count': usage.get('completion_tokens'),
-                    '_provider': 'vllm', **({'tool_calls': tool_calls} if tool_calls else {})}
+                    '_provider': self.route_label, **({'tool_calls': tool_calls} if tool_calls else {})}
         payload = {
             "model": model,
             "prompt": prompt,
@@ -211,7 +213,8 @@ class OllamaClient:
             if self.protocol == 'vllm':
                 # Gateway ở /vllm chỉ nhận x-ollama-seckey (Bearer trả 401); vLLM trần nhận Bearer: gửi cả hai tới đúng host vLLM.
                 req.add_header('Authorization', f'Bearer {self.seckey}')
-            req.add_header('x-ollama-seckey', self.seckey)
+            if not self.bearer_only:
+                req.add_header('x-ollama-seckey', self.seckey)
         for pause in ((*RETRY_PAUSES_S, None) if retry else (None,)):
             timeout = self.remaining_s()
             try:

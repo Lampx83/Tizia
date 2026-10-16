@@ -538,7 +538,28 @@ def test_tool_loop_budget_and_timing_pins_are_recorded(world, monkeypatch):
     assert runner.main([*argv, "--timing-conditions", "not json"], deps) == 2
     assert runner.main([*argv, "--context-arm", "nosiblings"], deps) == 0 and os.environ["AI_BOARD_TOOL_LOOP"] == ""
     runs = {p.name: json.loads((p / "run.json").read_text(encoding="utf-8")) for p in (root / "suite").iterdir()}
-    assert {n.endswith("-loop"): m["tool_loop"] for n, m in runs.items()} == {True: True, False: False}
+    assert {n.endswith("-loop"): m["tool_loop"] for n, m in runs.items()} == {True: "1", False: ""}
     assert all(m["budget"]["model_calls"] == 40 for m in runs.values())
     assert [m["winner_rule"] for n, m in runs.items() if n.endswith("-loop")] == ["arm wins at +4 tasks"] and all(len(m.get("winner_rule_sha", "")) == 16 for n, m in runs.items() if n.endswith("-loop"))
     assert [m["timing_conditions"]["comparable"] for n, m in runs.items() if n.endswith("-loop")] == [True]
+
+
+def test_loop_mode_and_caps_reach_the_environment_and_manifest(world, monkeypatch):
+    root, _ = world
+    deps, _ = deps_for(world)
+    for name in ("AI_BOARD_TOOL_LOOP", "AI_BOARD_LOOP_MODEL_CALLS", "AI_BOARD_LOOP_TOOL_CALLS"):
+        monkeypatch.setenv(name, "")  # restored on teardown; runner.main writes os.environ directly
+    argv = ["run", "--seed", str(SEED), "--split", "dev", "--cases", "1", "--repeats", "1", "--modes", "gold", "--root", str(root), "--allow-dirty"]
+    assert runner.main([*argv, "--tool-loop", "auto", "--loop-caps", "20,60"], deps) == 0
+    assert (os.environ["AI_BOARD_TOOL_LOOP"], os.environ["AI_BOARD_LOOP_MODEL_CALLS"], os.environ["AI_BOARD_LOOP_TOOL_CALLS"]) == ("auto", "20", "60")
+    assert runner.main([*argv, "--loop-caps", "0,5"], deps) == 2
+    meta = next(json.loads((p / "run.json").read_text(encoding="utf-8")) for p in (root / "suite").iterdir() if p.name.endswith("-loopauto-cap20x60"))
+    assert meta["tool_loop"] == "auto" and meta["loop_caps"] == [20, 60]
+
+
+def test_simulated_requester_environment_runs_through_the_trial_without_error(world, monkeypatch):
+    root, tasks = world
+    deps, _ = deps_for(world)
+    monkeypatch.setenv("AI_BOARD_GATE25_SIM_USER", "1")
+    row = trial.run_trial(pick(tasks, 1), "e2e", deps, root, ROOT)
+    assert row["error"] is None and row["resolved"]

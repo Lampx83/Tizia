@@ -145,3 +145,46 @@ def test_answer_run_keeps_later_grounding_check(monkeypatch):
     request = {"id": "x", "subject": case["subject"], "body": case["body"], "grounding_required": True}
     result = plan_validate.run(request, deps_with(models), Budget(), {"plan": plan, "planning_context": case["source"]})
     assert result["blocked"] and result["outcome"] == "plan_ungrounded"
+
+
+def test_simulated_requester_answer_reruns_the_validator_with_the_answer_in_the_thread(monkeypatch):
+    monkeypatch.setenv("AI_BOARD_GATE25_ANSWERED", "")
+    case = CASES["replace_text-l3-9b8997"]
+    plan = plan_with(["features"])
+    models = Scripted(plan, [unclear(case), CLEAR], found(case))
+    request = {"id": "x", "subject": case["subject"], "body": case["body"], "_simulated_answer": "Chỉ sửa public/luat.html."}
+    state = {"plan": plan, "planning_context": case["source"]}
+    result = plan_validate.run(request, deps_with(models), Budget(), state)
+    assert result["blocked"] is False and state["simulated_answer"] == case["question"]
+    assert [("PLAN CẦN SOÁT" in c["prompt"]) for c in models.calls] == [True, True] and "Chỉ sửa public/luat.html." in models.calls[1]["prompt"]
+
+
+def _assume(monkeypatch, validation, *, files=None, type_="bug", fixes="assume"):
+    monkeypatch.setenv("AI_BOARD_GATE25_ANSWERED", "")
+    monkeypatch.setenv("AI_BOARD_GATE25_FIXES", fixes)
+    case = CASES["replace_text-l3-9b8997"]
+    plan = plan_with(["features"])
+    plan["subtasks"] = [{**plan["subtasks"][1], "file": files or plan["subtasks"][1]["file"]}]
+    models = Scripted(plan, [validation], found(case))
+    state = {"plan": plan, "planning_context": case["source"]}
+    request = {"id": "x", "subject": case["subject"], "body": case["body"], "type": type_}
+    return plan_validate.run(request, deps_with(models), Budget(), state), state
+
+
+def test_assume_lets_a_grounded_single_static_page_plan_go_on_and_records_the_assumption(monkeypatch):
+    unsure = {"clear": False, "question": "Nút nào?", "grounded": True, "reason": "ok", "grounding": []}
+    result, state = _assume(monkeypatch, unsure, files="public/luat.html")
+    assert result["blocked"] is False, result
+    assert state["assumption"] == "Nút nào?"
+
+
+@pytest.mark.parametrize("over", [dict(files="public/js/app.js"), dict(files="public/luat.html", type_="feature"), dict(files="public/luat.html", fixes="")])
+def test_assume_does_not_apply_to_scripts_features_or_when_the_flag_is_off(monkeypatch, over):
+    unsure = {"clear": False, "question": "Nút nào?", "grounded": True, "reason": "ok", "grounding": []}
+    result, state = _assume(monkeypatch, unsure, **over)
+    assert result["outcome"] == "needs_clarification" and "assumption" not in state
+
+
+def test_assume_needs_the_validator_to_have_found_grounding(monkeypatch):
+    result, _ = _assume(monkeypatch, {"clear": False, "question": "Nút nào?", "grounded": False, "reason": "?", "grounding": []}, files="public/luat.html")
+    assert result["outcome"] == "needs_clarification"

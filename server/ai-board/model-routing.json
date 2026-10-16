@@ -89,6 +89,21 @@
         "embedding"
       ],
       "embedding_space": "qwen3-embedding-8b-v1"
+    },
+    "api-hosted-coder": {
+      "provider": "api",
+      "model": "set-by-API_MODEL",
+      "enabled": false,
+      "approved_roles": [
+        "gate1",
+        "gate25",
+        "gate3_light",
+        "gate3_heavy",
+        "gate4_review"
+      ],
+      "capabilities": [
+        "json"
+      ]
     }
   },
   "reasoning": {

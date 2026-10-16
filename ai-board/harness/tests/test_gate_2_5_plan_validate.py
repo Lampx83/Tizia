@@ -320,3 +320,10 @@ def test_a_disagreement_goes_to_review_and_is_never_a_pass(monkeypatch):
 def test_an_unusable_second_pass_is_recorded_as_unknown_and_the_block_stands(monkeypatch):
     out, state, _ = _reasoning_run(monkeypatch, UNSURE, {'not': 'a validation'})
     assert out['outcome'] == 'needs_clarification' and 'unknown' in state['reasoning']['second']
+
+
+def test_search_terms_parse_keeps_four_clean_strings_and_ignores_garbage():
+    from gates import brainstorm
+    assert brainstorm.parse_search_terms('{"terms": ["Câu hỏi mới", "x", "btn-new", "Câu hỏi mới", "a\\nb", 5, "một hai ba", "bốn năm"]}') == [
+        "Câu hỏi mới", "btn-new", "một hai ba", "bốn năm"]
+    assert brainstorm.parse_search_terms("không phải JSON") == [] and brainstorm.parse_search_terms('{"terms": "x"}') == []

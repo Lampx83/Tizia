@@ -323,3 +323,38 @@ def test_vllm_classifier_response_without_logprobs_is_rejected():
     client_._post = lambda *_a, **_k: reply
     with pytest.raises(ValueError, match='no logprobs'):
         client_.generate('m', 'p', extra={'logprobs': True})
+
+
+def api_catalog(**over):
+    base = catalog()
+    base['api_enabled'] = True
+    base['candidates']['h'] = {'provider': 'api', 'model': 'm', 'enabled': True, 'approved_roles': ['gate1', 'gate3_light'], 'capabilities': ['json']}
+    base['roles']['gate1'] = ['h']
+    base.update(over)
+    return base
+
+
+def hosted_settings(**over):
+    return {'API_URL': 'https://api.example.test', 'API_KEY': 'hosted-key', 'API_MODEL': 'hosted-model', **over}
+
+
+def test_hosted_api_candidate_is_off_without_the_catalog_switch_the_key_or_https():
+    assert ModelRouter(hosted_settings(), api_catalog(api_enabled=False)).candidates('gate1') == []
+    assert ModelRouter(hosted_settings(API_KEY=''), api_catalog()).candidates('gate1') == []
+    with pytest.raises(ValueError):
+        ModelRouter(hosted_settings(API_URL='http://api.example.test'), api_catalog()).candidates('gate1')
+    disabled = api_catalog()
+    disabled['candidates']['h']['enabled'] = False
+    assert ModelRouter(hosted_settings(), disabled).candidates('gate1') == []
+
+
+def test_hosted_api_call_uses_bearer_only_https_and_is_labelled_api(monkeypatch):
+    calls = mock_gateway(monkeypatch, [{'choices': [{'message': {'content': '{}'}, 'finish_reason': 'stop'}], 'usage': {'prompt_tokens': 2, 'completion_tokens': 3}}])
+    routing = ModelRouter(hosted_settings(), api_catalog())
+    template = OllamaClient(base_url='http://primary', gate1_model='a', gate3_model='a', gate3_model_light='a', routing=routing)
+    deps = Deps(models=template, notify=None, sleep=lambda _: None, trace=Tracer())
+    result = deps.call_model('a', 'prompt', gate=1, budget=Budget())
+    url, headers, body = calls[0]
+    assert url == 'https://api.example.test/v1/chat/completions'
+    assert headers['Authorization'] == 'Bearer hosted-key' and 'X-ollama-seckey' not in headers
+    assert body['model'] == 'hosted-model' and result['_provider'] == 'api'

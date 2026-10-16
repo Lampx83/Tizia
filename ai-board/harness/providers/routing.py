@@ -13,7 +13,7 @@ CAPABILITIES = {'json', 'logprobs', 'embedding'}
 
 
 def _prefix(provider):
-    return 'VLLM' if provider == 'vllm' else 'OLLAMA'
+    return {'vllm': 'VLLM', 'api': 'API'}.get(provider, 'OLLAMA')
 
 
 def _unique_strings(value, allowed=None):
@@ -93,8 +93,8 @@ class ModelRouter:
                 continue
             if provider == 'vllm' and role == 'embed':
                 continue  # vLLM classifier passes only via the logprobs + calibration_id locks below.
-            # No API prompts until the real provider has an explicit adapter.
-            if provider == 'api':
+            # Hosted API: off unless the catalog switch is on AND an endpoint and key are configured; the candidate itself must be enabled and approved.
+            if provider == 'api' and not (self.catalog['api_enabled'] and self.settings.get('API_KEY')):
                 continue
             if not self.settings.get(_prefix(provider) + '_URL') or self.cooldowns.get(provider, 0) > self.clock():
                 continue
@@ -106,12 +106,15 @@ class ModelRouter:
                 continue
             if role == 'classifier' and item.get('calibration_id') != self.catalog.get('classifier_calibration_id', 'qwen35-4b-v1'):
                 continue
-            model = self.settings.get('GATE3_MODEL_HEAVY') if provider == 'vllm' and role == 'gate3_heavy' else None
+            model = (self.settings.get('GATE3_MODEL_HEAVY') if provider == 'vllm' and role == 'gate3_heavy'
+                     else self.settings.get('API_MODEL') if provider == 'api' else None)
             found.append({**item, 'model': model or item['model'], 'id': name})
         return found
 
     def endpoint(self, provider):
         url = str(self.settings.get(_prefix(provider) + '_URL') or '').strip().rstrip('/')
+        if provider == 'api' and not url.startswith('https://'):
+            raise ValueError('Invalid model provider endpoint')  # prompts and code leave the machine: TLS only
         return self.validate_endpoint(url)
 
     @staticmethod
@@ -148,9 +151,12 @@ class ModelRouter:
 
     def client(self, candidate, template):
         from dataclasses import replace
-        return replace(template, base_url=self.endpoint(candidate['provider']),
-                       seckey=self.settings.get(_prefix(candidate['provider']) + '_SECKEY') or None, routing=None,
-                       protocol='vllm' if candidate['provider'] == 'vllm' else 'ollama', vllm_url='')
+        provider = candidate['provider']
+        hosted = provider == 'api'
+        return replace(template, base_url=self.endpoint(provider),
+                       seckey=(self.settings.get('API_KEY') if hosted else self.settings.get(_prefix(provider) + '_SECKEY')) or None, routing=None,
+                       protocol='vllm' if provider in ('vllm', 'api') else 'ollama', vllm_url='',
+                       bearer_only=hosted, route_label='api' if hosted else 'vllm')
 
     @staticmethod
     def role(gate, model, models, *, explicit=None, extra=None):

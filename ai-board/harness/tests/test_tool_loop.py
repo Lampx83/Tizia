@@ -294,3 +294,31 @@ def test_manifest_registration_failure_blocks_before_any_model_call():
     with server_hsm.server_scope(Authority()):
         result = tool_loop.run_subtask(SUBTASK, PAGE, deps=deps, budget=Budget(), model='m', source='.', sha='abc', check=lambda _out: None)
     assert result['status'] == 'blocked' and not calls
+
+
+def test_child_caps_follow_the_environment_and_stop_the_loop_at_the_raised_cap(monkeypatch):
+    monkeypatch.delenv("AI_BOARD_LOOP_MODEL_CALLS", raising=False)
+    monkeypatch.delenv("AI_BOARD_LOOP_TOOL_CALLS", raising=False)
+    assert tool_loop.child_caps() == {"max_model_calls": 10, "max_tool_calls": 30}
+    monkeypatch.setenv("AI_BOARD_LOOP_MODEL_CALLS", "20")
+    monkeypatch.setenv("AI_BOARD_LOOP_TOOL_CALLS", "oops")
+    assert tool_loop.child_caps() == {"max_model_calls": 20, "max_tool_calls": 30}
+    monkeypatch.setenv("AI_BOARD_LOOP_MODEL_CALLS", "3")
+    deps = Deps([{"tool": "tree", "arguments": {"path": "public"}}])
+    out = tool_loop.run_subtask(SUBTASK, PAGE, deps=deps, budget=Budget(), model="m", source=".", sha="abc", check=lambda _o: None)
+    assert out["status"] == "paused" and len(deps.prompts) == 3 and "loop_model_calls" in out["reason"]
+
+
+def test_auto_mode_is_one_shot_first_and_the_loop_only_takes_over_after_the_one_shot_fails(tmp_path, monkeypatch):
+    from test_inner_loop import ESM_TEST, GOOD, SeqModels, _run
+    monkeypatch.undo()
+    monkeypatch.setenv("AI_BOARD_TOOL_LOOP", "auto")
+    out, prompts = _run(tmp_path / "ok", SeqModels([GOOD]))
+    assert out["blocked"] is False and len(prompts) == 1 and "tool_loop" not in prompts[0].lower()[:200]
+    edit = {"tool": "edit_file", "arguments": {"file": "public/tinh-nang.html", "edits": [{"after_line": 4, "insert": "    <p>Mới.</p>"}]}}
+    test = {"tool": "write_test", "arguments": {"test_file": "test/moi.test.js", "test": ESM_TEST}}
+    models = SeqModels(["không phải JSON"] * 4 + [edit, test, FINISH])
+    out, prompts = _run(tmp_path / "fallback", models)
+    assert out["blocked"] is False and len(prompts) == 7
+    assert (tmp_path / "fallback/scratch/public/tinh-nang.html").read_text(encoding="utf-8").count("<p>Mới.</p>") == 1
+    assert out["tool_manifest"]

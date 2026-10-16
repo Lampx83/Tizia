@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import copy
+import os
 import hashlib
 import json
 import posixpath
@@ -158,6 +159,8 @@ def _plan_stage(task: dict, repo, deps: RecordingDeps, wall_s: int, variant: str
              "first_plans_new_page": False, "first_extra": 0, "blocked": False, "validator_blocked": False, "validator_reason": None,
              "final_hit": False, "final_exact": False, "final_files": [], "reason": None, "approved": "approved" in (variant or "").split("+")}
     request, budget = request_of(task, variant), Budget(max_wall_clock_s=wall_s, max_units=600)
+    if os.environ.get("AI_BOARD_GATE25_SIM_USER") == "1" and gold:  # ceiling run: the requester names the page when asked
+        request = {**request, "_simulated_answer": f"Chỉ sửa {gold[0]}, đúng như yêu cầu ở trên; không sửa trang nào khác."}
     deps.capture["phase"] = "planning"
     out = brainstorm.run(request, deps, budget, source=repo, sha=sha)
     tracer.flush()

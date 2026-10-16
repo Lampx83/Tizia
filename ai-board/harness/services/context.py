@@ -202,8 +202,10 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
                          f"{', '.join(render)}. Sửa ở file đó, không thêm phần tử mới vào trang.")
             used.append("locate")
         literal = {}
-        if gate == 1 and not file and os.environ.get("AI_BOARD_RETRIEVAL") == "literal":
+        if gate == 1 and not file and os.environ.get("AI_BOARD_RETRIEVAL") in ("literal", "model"):
             quoted = file_context.literals(request.get("subject"), request.get("body"), thread)
+            if os.environ.get("AI_BOARD_RETRIEVAL") == "model":  # strings the model chose to search for (brainstorm asked once)
+                quoted = list(dict.fromkeys([*quoted, *(request.get("_search_terms") or [])]))
             if quoted:
                 literal = tools.literal_candidates(source, commit, quoted, pages)
                 log.append({"tool": "literal", "params": {"literals": quoted, "pages": pages}, "chars": 0,

@@ -350,6 +350,16 @@ def _validator_options() -> dict | None:
     return {"num_predict": 6144} if "tokens" in fixes() else None
 
 
+LOW_RISK_FILES = (".html", ".css")
+
+
+def _assumable(plan: dict, validation: dict, request: dict) -> bool:
+    """One subtask on a static page/stylesheet, the validator found a verbatim grounding for it, and the request is not a feature or a guard case."""
+    tasks = plan.get("subtasks") or []
+    return (len(tasks) == 1 and tasks[0]["file"].endswith(LOW_RISK_FILES) and not plan.get("capabilities") == ["self.config"]
+            and bool(validation.get("grounded")) and request.get("type") != "feature" and not complexity_signals(plan))
+
+
 def _uncertain(validation: dict) -> bool:
     """The non-thinking validator did not clear the plan: unclear request or no verified grounding."""
     return not validation['clear'] or not validation.get('grounded')
@@ -432,6 +442,19 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
             validation, stop = validate({**request, "thread": thread})
             if stop:
                 return stop
+    if not validation["clear"] and validation["question"] and request.get("_simulated_answer"):
+        # Measurement only: the suite plays the requester who answers the question, to find the ceiling once clarification is solved.
+        thread = [*(request.get("thread") or []), {"role": "admin", "body": validation["question"]},
+                  {"role": "requester", "body": request["_simulated_answer"]}]
+        state["simulated_answer"] = validation["question"]
+        validation, stop = validate({**request, "thread": thread})
+        if stop:
+            return stop
+    if not validation["clear"] and 'assume' in fixes() and _assumable(plan, validation, request):
+        # A low-risk, single static file, grounded plan goes on with its most plausible reading; the admin sees the flagged assumption.
+        state["assumption"] = validation["question"] or validation.get("reason") or "yêu cầu chưa nêu rõ"
+        judge("assumed plan", True, state["assumption"])
+        validation = {**validation, "clear": True}
     if not validation["clear"]:
         question = validation["question"] or "Plan chưa đủ rõ — bạn mô tả thêm chi tiết được không?"
         if db_path is not None:
