@@ -54,6 +54,9 @@ class RecordingDeps(Deps):
             except tool_loop.ToolError:
                 step = "!parse"
             self.capture.setdefault("loop_tools", []).append(step)
+            seen = args[1].rsplit("KẾT QUẢ TOOL ", 1)[-1] if len(args) > 1 else ""
+            if seen.startswith("lỗi"):
+                self.capture.setdefault("loop_errors", []).append(seen[:240])
         if self.capture.get("enabled") and phase in ("planning", "validation"):
             # Capture responses, never model arguments, task gold, route headers or credentials.
             fields = ("response", "model", "done_reason", "prompt_eval_count", "eval_count")
@@ -308,7 +311,7 @@ def run_trial(task: dict, mode: str, base_deps: Deps, root: Path, source, fast: 
         "id": task["id"], "mode": mode, "resolved": resolved, "collateral": sorted(set(collateral)), "gate_passed": row["gate_passed"],
         "gate4": row.get("gate4"), "prod": row.get("prod"), "ended": row.get("ended"), "shipped": row.get("shipped", False),
         "review": row.get("review"), "reason": row.get("reason"), "infra_error": bool(error), "error": error, "plan": plan_facts, "capture": capture,
-        "model_calls": len(deps.ledger), "loop_tools": list(deps.capture.get("loop_tools") or []), "retries": row.get("retries", 0),
+        "model_calls": len(deps.ledger), "loop_tools": list(deps.capture.get("loop_tools") or []), "loop_errors": list(deps.capture.get("loop_errors") or []), "retries": row.get("retries", 0),
         "stuck": any(a == b for a, b in zip(texts, texts[1:])),
         "truncated": any(b.get("done_reason") == "length" for b in deps.ledger) or "length" in (row.get("done_reasons") or []),
         "tokens_in": row.get("tokens_in", 0) + p_in, "tokens_out": row.get("tokens_out", 0) + p_out,
