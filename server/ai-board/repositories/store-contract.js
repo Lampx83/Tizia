@@ -1,11 +1,14 @@
 // Shared pieces of the AI board store: worker contract, limits, error types, validators, pure helpers. The store itself
 // (PostgreSQL) is store-async.js.
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 
 export { PlanGuardrailError } from '../security/policy.js';
 
 // Worker <-> server contract, shared with ai-board/worker.py.
 export const CONTRACT = JSON.parse(fs.readFileSync(new URL('../contract.json', import.meta.url), 'utf8'));
+export const EXECUTION_GRAPH = { ...CONTRACT.execution_graph, names: CONTRACT.gates.names,
+  hash: createHash('sha256').update(JSON.stringify(CONTRACT.execution_graph)).digest('hex') };
 const KEY = new RegExp(CONTRACT.idempotency_key_pattern);
 const REQUEST_TYPES = new Set(['game', 'theory', 'lab', 'skill', 'other', 'feature']);
 // Yêu cầu board tự sửa: chỉ createSelfRequest tạo, chủ là người dùng hệ thống này.

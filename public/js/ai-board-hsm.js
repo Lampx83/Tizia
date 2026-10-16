@@ -13,6 +13,44 @@ export function contractDiagram(contract,active=null) {
   </svg>`;
 }
 
+// Nodes the events prove were reached; nothing is drawn as visited on the strength of the spec alone.
+export function visitedNodes(events = [], root = {}) {
+  const seen = new Set();
+  let attempts = 0;
+  for (const e of events) {
+    if (e.event_type === 'gate_started') {
+      try {
+        const d = JSON.parse(e.internal_detail);
+        seen.add(`gate_${String(d.gate).replace('.', '_')}`);
+        if (Number(d.gate) >= 3) seen.add('attempt_open');
+        attempts = Math.max(attempts, Number(d.attempt) || 0);
+      } catch { /* an unreadable event proves nothing */ }
+    }
+    if (e.event_type === 'plan_validated') seen.add('plan_ready');
+    if (e.event_type === 'plan_blocked') seen.add('plan_stopped');
+    if (e.event_type === 'pre_pr_verdict') { seen.add('attempt_close'); seen.add('repair_check'); seen.add('verdict'); }
+  }
+  if (attempts > 0) { seen.add('repair'); seen.add('repair_check'); }
+  return seen;
+}
+
+const NODE_LABEL = { attempt_open: 'Mở lượt làm', attempt_close: 'Đóng lượt (dọn nhánh tạm)', repair_check: 'Có sửa lại không?', repair: 'Ghi lý do sửa',
+  verdict: 'Kết luận', plan_ready: 'Plan sẵn sàng', plan_stopped: 'Plan bị dừng' };
+
+export function renderGraph(graph, events = [], root = {}) {
+  if (!graph?.nodes || !graph.edges) return '';
+  const seen = visitedNodes(events, root);
+  const label = (n) => NODE_LABEL[n.id] || (n.gate != null ? `Bước ${n.gate} · ${graph.names?.[n.gate] || ''}` : n.id);
+  const rows = [['Lập kế hoạch', ['gate_1', 'gate_2', 'gate_2_5', 'plan_ready', 'plan_stopped']],
+    ['Thực hiện', ['attempt_open', 'gate_3', 'gate_4', 'gate_5', 'gate_5_5', 'attempt_close']], ['Điều phối', ['repair_check', 'repair', 'verdict']]];
+  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+  return `<details class="blk" data-k="exec-graph"><summary><b>Đồ thị xử lý</b> · ${graph.nodes.length} nút · ${graph.edges.length} cạnh · ${esc(String(graph.hash).slice(0, 10))}</summary>
+    <p class="meta">Cùng một đồ thị với bộ điều phối của worker (đọc từ hợp đồng chung). Nút xanh là nút các sự kiện đã chứng minh được đi qua; nút xám chưa tới.</p>
+    ${rows.map(([title, ids]) => `<div class="graph-row"><span class="meta">${esc(title)}</span>${ids.filter((id) => byId.has(id)).map((id) => `<span class="graph-node ${seen.has(id) ? 'seen' : ''}" data-node="${esc(id)}">${esc(label(byId.get(id)))}</span>`).join('')}</div>`).join('')}
+    <ul class="graph-edges">${graph.edges.map((e) => `<li><code>${esc(e.from)}</code> —${esc(e.on)}→ <code>${esc(e.to)}</code></li>`).join('')}</ul>
+  </details>`;
+}
+
 export function renderHsm(hsm) {
   const states=hsm?.states || [];
   if (!states.length) return '<div class="blk meta">Lượt này chưa có state HSM Gate 4; tiến trình cũ vẫn hiển thị riêng.</div>';

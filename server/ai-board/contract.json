@@ -5,6 +5,30 @@
     "pre_pr": [3, 4, 5, 5.5],
     "names": { "1": "Lập plan", "2": "Phạm vi", "2.5": "Soát plan", "3": "Sinh code", "4": "Checks and guardrails", "5": "Chạy Docker", "5.5": "Đánh giá rủi ro" }
   },
+  "execution_graph": {
+    "_why": "The one graph the worker runs from intake to verdict. Read by ai-board/harness/runtime/exec_graph.py (LangGraph) and by the admin diagram; a node or edge exists only if the engine can take it. Pause (authorization) and resume are server states between the plan and execute entries.",
+    "entries": { "plan": "gate_1", "execute": "attempt_open" },
+    "nodes": [
+      { "id": "gate_1", "gate": 1 }, { "id": "gate_2", "gate": 2 }, { "id": "gate_2_5", "gate": 2.5 },
+      { "id": "plan_ready", "end": true }, { "id": "plan_stopped", "end": true },
+      { "id": "attempt_open" }, { "id": "gate_3", "gate": 3 }, { "id": "gate_4", "gate": 4 }, { "id": "gate_5", "gate": 5 }, { "id": "gate_5_5", "gate": 5.5 },
+      { "id": "attempt_close" }, { "id": "repair_check" }, { "id": "repair" }, { "id": "verdict", "end": true }
+    ],
+    "edges": [
+      { "from": "gate_1", "on": "passed", "to": "gate_2" }, { "from": "gate_1", "on": "blocked", "to": "plan_stopped" },
+      { "from": "gate_2", "on": "passed", "to": "gate_2_5" }, { "from": "gate_2", "on": "blocked", "to": "plan_stopped" },
+      { "from": "gate_2_5", "on": "passed", "to": "plan_ready" }, { "from": "gate_2_5", "on": "blocked", "to": "plan_stopped" },
+      { "from": "attempt_open", "on": "passed", "to": "gate_3" }, { "from": "attempt_open", "on": "blocked", "to": "attempt_close" },
+      { "from": "gate_3", "on": "passed", "to": "gate_4" }, { "from": "gate_3", "on": "blocked", "to": "attempt_close" },
+      { "from": "gate_4", "on": "passed", "to": "gate_5" }, { "from": "gate_4", "on": "blocked", "to": "attempt_close" },
+      { "from": "gate_5", "on": "passed", "to": "gate_5_5" }, { "from": "gate_5", "on": "blocked", "to": "attempt_close" },
+      { "from": "gate_5_5", "on": "passed", "to": "attempt_close" }, { "from": "gate_5_5", "on": "blocked", "to": "attempt_close" },
+      { "from": "attempt_close", "on": "passed", "to": "repair_check" },
+      { "from": "repair_check", "on": "repair", "to": "repair" }, { "from": "repair_check", "on": "done", "to": "verdict" },
+      { "from": "repair", "on": "passed", "to": "attempt_open" }
+    ],
+    "recursion_limit": 80
+  },
   "verdict_outcomes": ["ready_for_pr", "needs_review", "blocked"],
   "failure_classes": ["ordinary", "transient", "critical", "budget", "plan", "eval"],
   "run_triggers": ["shadow_precheck", "plan", "execute", "rollback"],

@@ -329,6 +329,16 @@ test('purge by run scope also clears scopes another worker process created for t
   } finally {await f.close();}
 });
 
+test('the request trace carries the execution graph from the shared contract',async()=>{
+  const f=await fixture();
+  try {
+    const {graph}=await f.trace();
+    const contract=JSON.parse(fs.readFileSync(new URL('../server/ai-board/contract.json',import.meta.url),'utf8')).execution_graph;
+    assert.deepEqual(graph.nodes,contract.nodes);assert.deepEqual(graph.edges,contract.edges);
+    assert.match(graph.hash,/^[0-9a-f]{64}$/);assert.equal(graph.names['3'],'Sinh code');
+  } finally {await f.close();}
+});
+
 const MANIFEST=JSON.parse(fs.readFileSync(new URL('../ai-board/harness/runtime/tool_manifest.json',import.meta.url),'utf8'));
 const MANIFEST_HASH=canonicalHash(MANIFEST);
 const adminDecide=(f,hash,action,admin=true)=>fetch(`${f.base}/api/admin/ai-board/tool-manifests/${hash}/${action}`,{method:'POST',headers:admin?{'x-test-admin':'yes'}:{}}).then(async r=>({status:r.status,body:await r.json()}));

@@ -5,7 +5,7 @@ import { patchHtml } from './dom-morph.js';
 import { mountPrivatePreview } from './private-preview.js';
 import { installLightbox, pairBeforeAfter } from './lightbox.js';
 import { projectPipeline, describeModelCall, describeEvent, loopActions, stepTotals, TECHNICAL_EVENTS, TRACE_STEPS } from './ai-board-trace.js';
-import { renderHsm } from './ai-board-hsm.js';
+import { renderHsm, renderGraph } from './ai-board-hsm.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -605,6 +605,7 @@ function renderAiBoard(t) {
   const shownState = root.live ? 'run' : state;
   return `
     <h2>AI Board</h2>
+    ${renderGraph(t.graph, t.events, root)}
     ${renderHsm(t.hsm)}
     <div class="blk status st-${shownState}"><div class="line1"><b>Xử lý yêu cầu</b>${tag(shownState, root.live ? 'Đang xử lý' : label)}
         <span>${esc(root.phase_label)}</span>${root.live ? '<span class="pulse" title="Worker đang giữ yêu cầu này"></span>' : ''}</div>

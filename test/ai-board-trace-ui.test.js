@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { projectPipeline, describeModelCall, describeEvent, loopActions } from '../public/js/ai-board-trace.js';
+import { visitedNodes, renderGraph } from '../public/js/ai-board-hsm.js';
 const gate = (id, number, status, at = id) => ({ id, gate: number, status, created_at: at });
 const call = (id, gate, name, child = null) => ({ id, gate, created_at: id, evidence: { gate, prompt_name: name, child, call_id: `call-${id}` } });
 const run = (id, trigger, gates = [], calls = []) => ({ id, trigger, created_at: id, gates, calls });
@@ -96,4 +97,18 @@ test('loop actions read the tool and target from each model output, tolerating n
 
 test('transient blocks and resumed plans have readable labels', () => {
   assert.equal(describeEvent({ event_type: 'plan_resumed' }), 'Tiếp tục thực hiện kế hoạch');
+});
+
+
+test('the graph diagram marks only nodes that events prove were reached', () => {
+  const started = (gate, attempt = 0) => ({ event_type: 'gate_started', internal_detail: JSON.stringify({ gate, attempt }) });
+  assert.deepEqual([...visitedNodes([started(1), started(2.5)])].sort(), ['gate_1', 'gate_2_5']);
+  const seen = visitedNodes([started(3), started(4), started(3, 1), { event_type: 'pre_pr_verdict' }, { event_type: 'gate_started', internal_detail: 'not json' }]);
+  for (const id of ['gate_3', 'gate_4', 'attempt_open', 'repair', 'verdict', 'attempt_close']) assert.ok(seen.has(id), id);
+  assert.equal(seen.has('gate_5'), false);
+  const graph = { nodes: [{ id: 'gate_3', gate: 3 }, { id: 'gate_5', gate: 5 }], edges: [{ from: 'gate_3', on: 'passed', to: 'gate_5' }], names: { 3: 'Sinh code', 5: 'Chạy Docker' }, hash: 'a'.repeat(64) };
+  const html = renderGraph(graph, [started(3)]);
+  assert.match(html, /data-node="gate_3"/);
+  assert.match(html, /graph-node seen" data-node="gate_3"/);
+  assert.doesNotMatch(html, /graph-node seen" data-node="gate_5"/);
 });

@@ -140,112 +140,204 @@ def _preview_eligible(gates: list[dict], kind: str | None) -> bool:
             and not oracle.get("probe_id") and oracle.get("reason") == "No trusted behavioral oracle for this request")
 
 
-def _attempt(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate, cleanup,
-             repair_reason: str | None, catalog: dict | None,
-             request_detail: str | None, memory_path,
-             should_stop: Callable[[], bool] | None,
-             candidate_opts: dict | None = None,
-             request_type: str | None = None,
-             eval_tasks: list[dict] | None = None, preview_capture=None,
-             checkpoint=None, plan_hash: str | None = None) -> tuple[list[dict], str | None, dict | None, list[dict], str | None]:
-    """One pass of Gates 3→5.5 on fresh scratch + worktree. Return (public gates, failure kind, candidate,
-    ảnh chụp cổng 5 — file tạm cục bộ, base sha các cổng đã dùng | None)."""
-    scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
-    state = {
-        "plan": _execution_plan(plan), "scratch_repo": str(scratch),
-        "checkout_source": str(checkout_source), "skill_id": f"ticket-{ticket_id}",
-    }
-    if catalog is not None:
-        state["catalog"] = catalog
-    if request_detail:
-        state["request_detail"] = request_detail
-    if request_type:
-        state["request_type"] = request_type  # 'self': cổng 4 nới vùng tự sửa + tính lại file khoá
-    if eval_tasks is not None:
-        state["eval_tasks"] = eval_tasks  # self: phần kiểm tra, chỉ cổng 5 (eval) đọc
-    if checkpoint is not None:
-        state["checkpoint"] = checkpoint
-    state["should_stop"] = should_stop  # sandbox Gate 5 renews its VM lease only while this is false
-    state.update(candidate_opts or {})  # folder: branch_name + branch_restore cho candidate.create
-    if memory_path:
-        state["memory_path"] = str(memory_path)
-    if repair_reason:
-        state["repair_reason"] = repair_reason
-    gates: list[dict] = []
-    kind = None
-    lease_lost = False
-    try:
-        if plan.get('grounding'):
+class _Execution:
+    """Gates 3→5.5 and the repair loop as one run of the execution graph (contract.json `execution_graph`).
+    Each node is a method; the graph owns the order and the termination, the node bodies own the work."""
+
+    def __init__(self, plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate, cleanup, catalog,
+                 request_detail, memory_path, should_stop, candidate_opts, request_type, eval_tasks, preview_capture,
+                 checkpoint, plan_hash):
+        self.plan, self.ticket_id, self.checkout_source = plan, ticket_id, checkout_source
+        self.deps, self.budget, self.run_gate, self.cleanup = deps, budget, run_gate, cleanup
+        self.catalog, self.request_detail, self.memory_path = catalog, request_detail, memory_path
+        self.should_stop, self.candidate_opts, self.request_type = should_stop, candidate_opts, request_type
+        self.eval_tasks, self.preview_capture, self.checkpoint, self.plan_hash = eval_tasks, preview_capture, checkpoint, plan_hash
+        self.grounded = (plan.get("grounding") or {}).get("sha")
+        self.repairs: list[dict] = []
+        self.repair_reason = None
+        self.shots: list[dict] = []
+        self.gates: list[dict] = []
+        self.kind = self.candidate = self.base_sha = self.state = self.scratch = None
+        self.attempt_checkpoint = None
+        self.open = self.lease_lost = False
+        self.result: dict | None = None
+        self.path: list[str] = []
+
+    def handlers(self) -> dict:
+        return {"attempt_open": self.attempt_open, "gate_3": lambda: self.gate(3), "gate_4": lambda: self.gate(4),
+                "gate_5": lambda: self.gate(5), "gate_5_5": lambda: self.gate(5.5), "attempt_close": self.attempt_close,
+                "repair_check": self.repair_check, "repair": self.repair, "verdict": self.verdict}
+
+    def run(self) -> dict:
+        from runtime import exec_graph
+
+        if self.checkpoint is not None:
+            self.checkpoint.restore(self.budget)
+            # Deepest valid state: a worker that died during a repair continues that repair, not the failed first attempt.
+            cursor = self.checkpoint.load_cursor()
+            if cursor and cursor.get("base") == self.grounded and isinstance(cursor.get("repairs"), list):
+                self.repairs, self.repair_reason = list(cursor["repairs"]), cursor.get("repair_reason")
+        try:
+            self.path = exec_graph.run(self.handlers(), exec_graph.spec()["entries"]["execute"])
+        finally:
+            self.close_attempt()  # a lease loss or crash inside a node still cleans the attempt up
+        return self.result
+
+    # ── nodes ──
+    def attempt_open(self) -> str:
+        if getattr(self.deps, "trace", None):
+            self.deps.trace.attempt = len(self.repairs)
+        drop_screenshots(self.shots)  # ảnh của lần trước lần sửa: bỏ
+        self.shots, self.gates, self.kind, self.candidate = [], [], None, None
+        self.attempt_checkpoint = self.checkpoint.attempt(len(self.repairs)) if self.checkpoint is not None else None
+        self.scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
+        state = self.state = {
+            "plan": _execution_plan(self.plan), "scratch_repo": str(self.scratch),
+            "checkout_source": str(self.checkout_source), "skill_id": f"ticket-{self.ticket_id}",
+        }
+        self.open = True
+        if self.catalog is not None:
+            state["catalog"] = self.catalog
+        if self.request_detail:
+            state["request_detail"] = self.request_detail
+        if self.request_type:
+            state["request_type"] = self.request_type  # 'self': cổng 4 nới vùng tự sửa + tính lại file khoá
+        if self.eval_tasks is not None:
+            state["eval_tasks"] = self.eval_tasks  # self: phần kiểm tra, chỉ cổng 5 (eval) đọc
+        if self.attempt_checkpoint is not None:
+            state["checkpoint"] = self.attempt_checkpoint
+        state["should_stop"] = self.should_stop  # sandbox Gate 5 renews its VM lease only while this is false
+        state.update(self.candidate_opts or {})  # folder: branch_name + branch_restore cho candidate.create
+        if self.memory_path:
+            state["memory_path"] = str(self.memory_path)
+        if self.repair_reason:
+            state["repair_reason"] = self.repair_reason
+        if self.plan.get("grounding"):
             import code_index
-            if (code_index.git(checkout_source, 'rev-parse', 'HEAD').decode().strip() != plan['grounding']['sha']
-                    or state.get('base_sha', plan['grounding']['sha']) != plan['grounding']['sha']):
-                return ([{'gate': 3, 'blocked': True, 'reason': 'source changed since grounded plan'}],
-                        'plan', None, [], None)
-            state['base_sha'] = plan['grounding']['sha']
-        for gate in PRE_PR_GATES:
-            if should_stop and should_stop():  # lease revoked, e.g. the requester cancelled
-                raise LeaseLostError(f"lease revoked before gate {gate}")
-            retried = False
-            while True:
-                if not budget.tick():
-                    result = {"gate": gate, "blocked": True, "reason": "budget exhausted", "failure_class": "budget"}
-                else:
-                    try:
-                        if gate == 4:
-                            from repositories import server_hsm
-                            result = server_hsm.execute(lambda: _gate4_with_proof(run_gate, deps, budget, state, plan_hash))
-                        else:
-                            result = run_gate(gate, {}, deps, budget, state)
-                    except Exception as error:  # model/network/tool outage, not the candidate's code
-                        result = {"gate": gate, "blocked": True, "reason": str(error)[:1000],
-                                  "failure_class": "transient"}
-                    if checkpoint is not None:
-                        checkpoint.save(budget)
-                    if getattr(deps, "trace", None):
-                        deps.trace.flush()  # 1 lô trace mỗi cổng
-                # Transient Docker/checkout trouble gets one mechanical retry, no model call. It spends the
-                # retry cap, never budget_used; no retry once the cap is reached.
-                if (gate == 5 and result.get("blocked") and result.get("failure_class") == "transient"
-                        and not retried and budget.retries < budget.max_retries):
-                    retried = True
-                    budget.spend("retries")
-                    continue
-                break
-            public = _public_gate_result(result)
-            if gate == 5:
-                public["retried"] = retried
-                if not public["blocked"] and not public["http_observed"] and public["runner"] != "eval":
-                    public["blocked"] = True
-                    public["reason"] = "change has no HTTP-observable result"
-                    result["failure_class"] = "plan"
-                if not public['blocked'] and public['runner'] != 'eval' and not (public.get('functional') or {}).get('passed'):
-                    public.update(blocked=True, reason='missing independent functional evidence')
-                    result['failure_class'] = 'plan'
-            gates.append(public)
-            if public["blocked"]:
-                kind = result.get("failure_class") or "ordinary"
-                break
-    finally:
+            if (code_index.git(self.checkout_source, "rev-parse", "HEAD").decode().strip() != self.plan["grounding"]["sha"]
+                    or state.get("base_sha", self.plan["grounding"]["sha"]) != self.plan["grounding"]["sha"]):
+                self.gates = [{"gate": 3, "blocked": True, "reason": "source changed since grounded plan"}]
+                self.kind = "plan"
+                return "blocked"
+            state["base_sha"] = self.plan["grounding"]["sha"]
+        return "passed"
+
+    def gate(self, gate) -> str:
+        budget, deps, state = self.budget, self.deps, self.state
+        if self.should_stop and self.should_stop():  # lease revoked, e.g. the requester cancelled
+            raise LeaseLostError(f"lease revoked before gate {gate}")
+        retried = False
+        while True:
+            if not budget.tick():
+                result = {"gate": gate, "blocked": True, "reason": "budget exhausted", "failure_class": "budget"}
+            else:
+                try:
+                    if gate == 4:
+                        from repositories import server_hsm
+                        result = server_hsm.execute(lambda: _gate4_with_proof(self.run_gate, deps, budget, state, self.plan_hash))
+                    else:
+                        result = self.run_gate(gate, {}, deps, budget, state)
+                except Exception as error:  # model/network/tool outage, not the candidate's code
+                    result = {"gate": gate, "blocked": True, "reason": str(error)[:1000], "failure_class": "transient"}
+                if self.attempt_checkpoint is not None:
+                    self.attempt_checkpoint.save(budget)
+                if getattr(deps, "trace", None):
+                    deps.trace.flush()  # 1 lô trace mỗi cổng
+            # Transient Docker/checkout trouble gets one mechanical retry, no model call. It spends the
+            # retry cap, never budget_used; no retry once the cap is reached.
+            if (gate == 5 and result.get("blocked") and result.get("failure_class") == "transient"
+                    and not retried and budget.retries < budget.max_retries):
+                retried = True
+                budget.spend("retries")
+                continue
+            break
+        public = _public_gate_result(result)
+        if gate == 5:
+            public["retried"] = retried
+            if not public["blocked"] and not public["http_observed"] and public["runner"] != "eval":
+                public["blocked"] = True
+                public["reason"] = "change has no HTTP-observable result"
+                result["failure_class"] = "plan"
+            if not public["blocked"] and public["runner"] != "eval" and not (public.get("functional") or {}).get("passed"):
+                public.update(blocked=True, reason="missing independent functional evidence")
+                result["failure_class"] = "plan"
+        self.gates.append(public)
+        if public["blocked"]:
+            self.kind = result.get("failure_class") or "ordinary"
+            return "blocked"
+        return "passed"
+
+    def close_attempt(self) -> None:
+        if not self.open:
+            return
+        self.open = False
         import candidate as candidates
 
-        lease_lost = bool(should_stop and should_stop())
-        if preview_capture and not lease_lost and request_type != "self" and _preview_eligible(gates, kind):
+        state = self.state
+        lease_lost = bool(self.should_stop and self.should_stop())
+        if self.preview_capture and not lease_lost and self.request_type != "self" and _preview_eligible(self.gates, self.kind):
             private_candidate = candidates.record(state)
             if private_candidate:
-                try: preview_capture(state, private_candidate)
-                except Exception: pass  # optional artifact must never change verdict or prevent cleanup
-        candidate = candidates.record(state) if _passed(gates, kind) and not lease_lost else None
-        cleanup(state, keep_branch=candidate is not None)
-        if candidate and should_stop and should_stop():
+                try:
+                    self.preview_capture(state, private_candidate)
+                except Exception:
+                    pass  # optional artifact must never change verdict or prevent cleanup
+        self.candidate = candidates.record(state) if _passed(self.gates, self.kind) and not lease_lost else None
+        self.cleanup(state, keep_branch=self.candidate is not None)
+        if self.candidate and self.should_stop and self.should_stop():
             # The heartbeat can fail while the passing worktree is being removed.
-            cleanup(state, keep_branch=False)
+            self.cleanup(state, keep_branch=False)
             lease_lost = True
-        shutil.rmtree(scratch, ignore_errors=True)
-    shots = list((state.get("evidence") or {}).get("screenshots") or [])
-    if lease_lost:
-        drop_screenshots(shots)
-        raise LeaseLostError("lease revoked during gate execution")
-    return gates, kind, candidate, shots, state.get("base_sha")
+        shutil.rmtree(self.scratch, ignore_errors=True)
+        self.shots = list((state.get("evidence") or {}).get("screenshots") or [])
+        self.base_sha = state.get("base_sha")
+        self.lease_lost = lease_lost
+
+    def attempt_close(self) -> str:
+        self.close_attempt()
+        if self.lease_lost:
+            drop_screenshots(self.shots)
+            raise LeaseLostError("lease revoked during gate execution")
+        return "passed"
+
+    def repair_check(self) -> str:
+        last = self.gates[-1]
+        if self.kind != "ordinary" or len(self.repairs) >= MAX_REPAIRS:
+            return "done"
+        if not self.budget.tick():
+            self.kind = "budget"
+            return "done"
+        if os.getenv("AI_BOARD_TOOL_LOOP") == "1" and not self.budget.spend_repair():  # ledger sửa nội dung chung với loop
+            return "done"
+        self.repairs.append({"gate": last["gate"], "reason": last["reason"]})
+        self.repair_reason = f"cổng {last['gate']}: {last['reason']}"
+        return "repair"
+
+    def repair(self) -> str:
+        if self.checkpoint is not None:
+            self.checkpoint.save_cursor({"base": self.grounded, "repairs": self.repairs, "repair_reason": self.repair_reason,
+                                         "graph": _dependency_graph(self.plan)})
+        return "passed"
+
+    def verdict(self) -> str:
+        gates, kind, last = self.gates, self.kind, self.gates[-1]
+        passed = _passed(gates, kind)
+        if self.checkpoint is not None and kind not in ("transient", "critical"):
+            self.checkpoint.purge()  # lượt có kết luận cuối; transient/critical giữ lại để resume hoặc đối chiếu
+        needs_review = passed and last["risk_level"] in ("high", "critical")
+        outcome = "needs_review" if needs_review else "ready_for_pr" if passed else "blocked"
+        if self.memory_path:
+            _remember(self.memory_path, self.plan, self.ticket_id, self.repairs, None if passed else kind, last, bool(passed))
+        reason = "risk triage requires human review" if needs_review else last["reason"]
+        self.result = {
+            "outcome": outcome, "gate_reached": last["gate"], "reason": reason,
+            "failure_class": None if passed else kind, "repairs": self.repairs,
+            "candidate": self.candidate if passed else None,
+            "budget_used": int(getattr(self.budget, "units", 0)), "gates": gates,
+            "screenshots": self.shots,  # chỉ cục bộ: HttpWorker lấy ra trước khi gửi verdict
+            **({"base_sha": self.base_sha} if self.base_sha else {}),  # task eval từ lần hỏng chạy lại đúng sha này
+        }
+        return "passed"
 
 
 def drop_screenshots(shots: list[dict]) -> None:
@@ -348,57 +440,12 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
                 "repairs": [], "candidate": None, "budget_used": 0,
                 "gates": [{"gate": 3, "blocked": True, "reason": reason}]}
     catalog = policy.get("capabilities") if policy is not None else None
-    repairs: list[dict] = []
-    repair_reason = None
-    shots: list[dict] = []
-    run_checkpoint = checkpoint if checkpoint is not None else _worker_checkpoint(ticket_id, plan, plan_hash)
-    grounded = (plan.get("grounding") or {}).get("sha")
-    if run_checkpoint is not None:
-        run_checkpoint.restore(budget)
-        # Deepest valid state: a worker that died during a repair continues that repair, not the failed first attempt.
-        cursor = run_checkpoint.load_cursor()
-        if cursor and cursor.get("base") == grounded and isinstance(cursor.get("repairs"), list):
-            repairs, repair_reason = list(cursor["repairs"]), cursor.get("repair_reason")
-    while True:
-        if getattr(deps, "trace", None):
-            deps.trace.attempt = len(repairs)
-        drop_screenshots(shots)  # ảnh của lần trước lần sửa: bỏ
-        gates, kind, candidate, shots, base_sha = _attempt(
-            plan, ticket_id=ticket_id, checkout_source=checkout_source, deps=deps, budget=budget,
-            run_gate=run_gate, cleanup=cleanup, repair_reason=repair_reason, catalog=catalog,
-            request_detail=request_detail, memory_path=memory_path, should_stop=should_stop,
-            candidate_opts=candidate_opts, request_type=request_type, eval_tasks=eval_tasks, preview_capture=preview_capture,
-            checkpoint=run_checkpoint.attempt(len(repairs)) if run_checkpoint is not None else None, plan_hash=plan_hash,
-        )
-        last = gates[-1]
-        if kind != "ordinary" or len(repairs) >= MAX_REPAIRS:
-            break
-        if not budget.tick():
-            kind = "budget"
-            break
-        if os.getenv("AI_BOARD_TOOL_LOOP") == "1" and not budget.spend_repair():  # ledger sửa nội dung chung với loop
-            break
-        repairs.append({"gate": last["gate"], "reason": last["reason"]})
-        repair_reason = f"cổng {last['gate']}: {last['reason']}"
-        if run_checkpoint is not None:
-            run_checkpoint.save_cursor({"base": grounded, "repairs": repairs, "repair_reason": repair_reason,
-                                        "graph": _dependency_graph(plan)})
-    passed = _passed(gates, kind)
-    if run_checkpoint is not None and kind not in ("transient", "critical"):
-        run_checkpoint.purge()  # lượt có kết luận cuối; transient/critical giữ lại để resume hoặc đối chiếu
-    needs_review = passed and last["risk_level"] in ("high", "critical")
-    outcome = "needs_review" if needs_review else "ready_for_pr" if passed else "blocked"
-    if memory_path:
-        _remember(memory_path, plan, ticket_id, repairs, None if passed else kind, last, bool(passed))
-    reason = "risk triage requires human review" if needs_review else last["reason"]
-    return {
-        "outcome": outcome, "gate_reached": last["gate"], "reason": reason,
-        "failure_class": None if passed else kind, "repairs": repairs,
-        "candidate": candidate if passed else None,
-        "budget_used": int(getattr(budget, "units", 0)), "gates": gates,
-        "screenshots": shots,  # chỉ cục bộ: HttpWorker lấy ra trước khi gửi verdict
-        **({"base_sha": base_sha} if base_sha else {}),  # task eval từ lần hỏng chạy lại đúng sha này
-    }
+    execution = _Execution(
+        plan, ticket_id=ticket_id, checkout_source=checkout_source, deps=deps, budget=budget, run_gate=run_gate, cleanup=cleanup,
+        catalog=catalog, request_detail=request_detail, memory_path=memory_path, should_stop=should_stop,
+        candidate_opts=candidate_opts, request_type=request_type, eval_tasks=eval_tasks, preview_capture=preview_capture,
+        checkpoint=checkpoint if checkpoint is not None else _worker_checkpoint(ticket_id, plan, plan_hash), plan_hash=plan_hash)
+    return execution.run()
 
 
 def _remember(memory_path, plan: dict, ticket_id: int, repairs: list[dict], kind: str | None,
@@ -1120,16 +1167,30 @@ class HarnessPlanner:
         state = {'catalog': (snapshot.get('capability_policy') or {}).get('capabilities', {})}
         if source:
             state['checkout_source'] = str(source)
-        for gate in PLAN_GATES:
-            result = self.run_gate(gate, request, self.deps, budget, state)
-            if gate == 1:
-                self.last_skill = result.get("skill")
-            if result.get("blocked"):
-                raise PlanBlockedError(f"gate {gate} blocked: {result.get('reason')}", {
-                    "gate": gate, "reason": result.get("reason"), "signals": list(result.get("signals") or []),
-                    "public_message": result.get("public_message"),
-                    "plan": json.dumps(state.get("plan"), ensure_ascii=False)[:2000],
-                })
+        from runtime import exec_graph
+
+        stopped = {}
+
+        def plan_gate(gate):
+            def node():
+                result = self.run_gate(gate, request, self.deps, budget, state)
+                if gate == 1:
+                    self.last_skill = result.get("skill")
+                if result.get("blocked"):
+                    stopped.update(gate=gate, result=result)
+                    return "blocked"
+                return "passed"
+            return node
+
+        handlers = {f"gate_{str(g).replace('.', '_')}": plan_gate(g) for g in PLAN_GATES}
+        exec_graph.run(handlers, exec_graph.spec()["entries"]["plan"])
+        if stopped:
+            gate, result = stopped["gate"], stopped["result"]
+            raise PlanBlockedError(f"gate {gate} blocked: {result.get('reason')}", {
+                "gate": gate, "reason": result.get("reason"), "signals": list(result.get("signals") or []),
+                "public_message": result.get("public_message"),
+                "plan": json.dumps(state.get("plan"), ensure_ascii=False)[:2000],
+            })
         signals = list(state.get("complexity_signals") or [])
         if snapshot.get("clarification_incomplete"):
             signals.append("requester_still_vague")  # legacy incomplete clarification → risk high → admin cho phép plan

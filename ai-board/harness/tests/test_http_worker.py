@@ -1750,3 +1750,21 @@ def test_a_cursor_from_another_base_is_ignored_and_the_work_starts_over(monkeypa
     execute_pre_pr(plan, ticket_id=7, checkout_source='unused', deps=object(), budget=TickBudget(), run_gate=run_gate,
                    cleanup=lambda state, keep_branch: None, checkpoint=checkpoint)
     assert calls[0] == (3, None)
+
+
+def test_a_lease_lost_between_gates_still_cleans_the_attempt_up_and_raises():
+    from worker import LeaseLostError
+    stop = {'now': False}
+    cleanups = []
+    inner, calls = scripted_gates({})
+
+    def run_gate(gate, request, deps, budget, state):
+        result = inner(gate, request, deps, budget, state)
+        if gate == 4:
+            stop['now'] = True  # the requester cancelled while gate 4 was finishing
+        return result
+
+    with pytest.raises(LeaseLostError):
+        execute_pre_pr(ONE_STEP_PLAN, ticket_id=7, checkout_source='unused', deps=object(), budget=TickBudget(), run_gate=run_gate,
+                       cleanup=lambda state, keep_branch: cleanups.append(keep_branch), should_stop=lambda: stop['now'])
+    assert [gate for gate, _ in calls] == [3, 4] and cleanups == [False]

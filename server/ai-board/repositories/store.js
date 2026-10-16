@@ -4,7 +4,7 @@ import { CAPABILITY_CATALOG, isSelfEditable, PlanGuardrailError, validatePlan } 
 import { registerRelease } from '../services/releases.js';
 import { repeatedQuestion } from '../services/clarity-rules.js';
 import {
-  ACTIVE_ONLY, AI_BRANCH, ANY_QUEUE, CLAIM_INTENTS, CLARIFYING_NOTE, CLARIFY_AUTHOR, CONTRACT, DAY_MS, EVENT_TYPES,
+  ACTIVE_ONLY, AI_BRANCH, ANY_QUEUE, CLAIM_INTENTS, CLARIFYING_NOTE, CLARIFY_AUTHOR, CONTRACT, DAY_MS, EVENT_TYPES, EXECUTION_GRAPH,
   IDEMPOTENCY_KEY as KEY, LEASE_MS, LIMITS, MAX_BUDGET_EXTENSION, MAX_BUDGET_EXTENSIONS, MAX_BUDGET_LIMIT, MAX_TRACE_BATCH,
   PHASES, PLAN_QUEUE, PR_BASE, PR_URL, REQUEST_TYPES, ROLLBACK_OUTCOMES, RUN_TRIGGERS, RequestValidationError, SELF_TAG,
   SELF_USER, SHA, SPEC_AUTHOR, WORKER_MODES, WorkerContractError, assertConfirmed, cleanAttachments, cleanModelCall,
@@ -1588,7 +1588,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     root.rerun_stage = await rerunStage(root); // 'plan' | 'execute' | null: which failed stage the admin may rerun now
     return {
       root, plan, children, runs, events, candidate, pull_request: await latestPullRequest(root.id), trace_ref: await traceRef(root.id),
-      gate_names: CONTRACT.gates.names,
+      gate_names: CONTRACT.gates.names, graph: EXECUTION_GRAPH,
       totals: {
         ...summarizeCalls(evidences),
         by_model: Object.fromEntries(Object.entries(byModel).map(([model, list]) => [model, summarizeCalls(list)])),
