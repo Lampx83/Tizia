@@ -11,7 +11,7 @@ import { registerRequest } from '@/lib/auth-client';
 import { UserPlus } from 'lucide-react';
 
 const ROLES = [
-  { id: 'pupil', label: '🎒 Học sinh (K-12)' },
+  { id: 'pupil', label: '🎒 Học sinh (THPT)' },
   { id: 'student', label: '🎓 Sinh viên' },
   { id: 'teacher', label: '👩‍🏫 Giáo viên' },
 ];
@@ -79,10 +79,15 @@ function RegisterForm() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Tuổi</label>
-                <Input type="number" required min={3} max={100} placeholder="3–100"
+                <Input type="number" required min={16} max={100} placeholder="16–100"
                        value={f.age} onChange={(e) => set('age', e.target.value)} />
               </div>
             </div>
+            {/* 17/10/2026: chưa có luồng đồng ý của cha mẹ/người giám hộ → tạm chặn dưới 16 tuổi. */}
+            <p className="text-xs text-muted-foreground">
+              Người dưới 16 tuổi tạm thời chưa tự đăng ký được: cần cha mẹ hoặc người giám hộ đăng ký
+              và đồng ý thay (đang hoàn thiện). Các em vẫn học được ở chế độ khách.
+            </p>
 
             {err && <p className="rounded-md bg-destructive/15 px-3 py-2 text-sm text-destructive">{err}</p>}
 

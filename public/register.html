@@ -164,10 +164,12 @@
     </div>
     <div>
       <label for="age">Tuổi</label>
-      <input id="age" name="age" type="number" required min="3" max="100" inputmode="numeric"
+      <input id="age" name="age" type="number" required min="16" max="100" inputmode="numeric"
              placeholder="ví dụ: 20" />
     </div>
   </div>
+  <!-- 17/10/2026: chưa có luồng đồng ý của cha mẹ/người giám hộ → tạm chặn dưới 16 tuổi. -->
+  <p style="font-size:12px;opacity:.75;margin:4px 0 8px">Người dưới 16 tuổi tạm thời chưa tự đăng ký được: cần cha mẹ hoặc người giám hộ đăng ký và đồng ý thay (đang hoàn thiện). Các em vẫn học được ở chế độ khách.</p>
 
   <label>Vai trò</label>
   <div class="role-row">

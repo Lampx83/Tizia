@@ -477,6 +477,26 @@ export function defaultRouteForUser(user) {
   return '/'; // fallback: trang chủ có school selector
 }
 
+// ── Trẻ em: chưa có luồng đồng ý của cha mẹ/người giám hộ (17/10/2026) ──
+// Luật Bảo vệ dữ liệu cá nhân 91/2025/QH15 Điều 24 (hiệu lực 01/01/2026): xử lý
+// dữ liệu cá nhân của trẻ em do người đại diện theo pháp luật thay mặt; trẻ từ
+// đủ 7 tuổi cần cả trẻ và người đại diện đồng ý. Tizia CHƯA có luồng ghi nhận
+// đồng ý đó (cũng chưa có hạ tầng gửi email), nên tạm CHẶN tự đăng ký với người
+// dưới 16 tuổi (ngưỡng "trẻ em" theo Luật Trẻ em 2016). Tài khoản cũ KHÔNG bị
+// xoá/khoá. Mở lại khi có luồng đồng ý — xem báo cáo an toàn dữ liệu 17/10/2026.
+export const MIN_SELF_SIGNUP_AGE = 16;
+const UNDER_16_REPLY = {
+  error: 'Người dưới 16 tuổi chưa tự đăng ký được. Tizia đang hoàn thiện luồng để cha mẹ hoặc người giám hộ đăng ký và đồng ý thay; trong lúc chờ, các em vẫn học được ở chế độ khách (không cần tài khoản).',
+  code: 'under_16_requires_guardian',
+};
+/** true nếu thông tin tự khai cho thấy người dưới 16 tuổi: tuổi < 16, hoặc học sinh
+ *  khai lớp 1–9 (THCS trở xuống luôn dưới 16). */
+export function isUnder16Signup({ age, role, grade }) {
+  if (Number.isFinite(age) && age < MIN_SELF_SIGNUP_AGE) return true;
+  if (role === 'pupil' && Number.isFinite(grade) && grade >= 1 && grade <= 9) return true;
+  return false;
+}
+
 // ── Routes ──
 const USERNAME_RE = /^[a-z0-9_.-]{3,32}$/i;
 
@@ -511,6 +531,10 @@ export function attachAuth(r) {
     }
     if (age == null || age < 3 || age > 100) {
       return res.status(400).json({ error: 'tuổi phải từ 3 đến 100' });
+    }
+    if (isUnder16Signup({ age, role, grade })) {
+      console.log(`[auth] chặn đăng ký dưới ${MIN_SELF_SIGNUP_AGE} tuổi (role=${role})`);
+      return res.status(403).json(UNDER_16_REPLY);
     }
     if (await getUserByUsername(username)) {
       return res.status(409).json({ error: 'username đã tồn tại' });
@@ -652,6 +676,12 @@ export function attachAuth(r) {
     const age = Number.isFinite(ageRaw) ? Math.floor(ageRaw) : null;
     if (age == null || age < 3 || age > 100) {
       return res.status(400).json({ error: 'tuổi phải từ 3 đến 100' });
+    }
+    // Tài khoản tự quản không được khai sang dưới 16 tuổi (cùng lý do với đăng ký).
+    // Tài khoản cũ đã khai dưới 16 vẫn lưu được hồ sơ nếu GIỮ NGUYÊN tuổi cũ.
+    const curAge = Number((await getUserById(req.user.id))?.age);
+    if (age < MIN_SELF_SIGNUP_AGE && age !== curAge) {
+      return res.status(403).json(UNDER_16_REPLY);
     }
 
     // email: tuỳ chọn; nếu có phải đúng định dạng cơ bản
