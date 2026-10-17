@@ -191,6 +191,7 @@ def cmd_run(args, deps=None) -> int:
     os.environ["AI_BOARD_BEST_MATCH"] = args.best_match
     os.environ["AI_BOARD_RETRIEVAL"] = args.retrieval if args.retrieval in ("literal", "model") else ""
     os.environ["AI_BOARD_TOOL_LOOP"] = args.tool_loop or ""
+    os.environ["AI_BOARD_SKILL_PAD_CHARS"] = str(args.skill_pad_chars or "")
     try:
         caps = [int(x) for x in args.loop_caps.split(",")] if args.loop_caps else []
         if caps and (len(caps) != 2 or min(caps) < 1):
@@ -205,7 +206,7 @@ def cmd_run(args, deps=None) -> int:
         print("[suite] --timing-conditions must be a JSON object", file=sys.stderr)
         return 2
     prov = {**provenance(ROOT, model, router), "context_arm": args.context_arm, "gate3_guards": guards, "gate25_fixes": fixes,
-            "best_match": args.best_match or "enforce", "retrieval": args.retrieval, "tool_loop": args.tool_loop or "", "loop_caps": caps or [10, 30],
+            "best_match": args.best_match or "enforce", "retrieval": args.retrieval, "tool_loop": args.tool_loop or "", "skill_pad_chars": args.skill_pad_chars, "loop_caps": caps or [10, 30],
             "budget": {"model_calls": Budget.max_model_calls, "tool_calls": Budget.max_tool_calls, "tokens": Budget.max_tokens,
                        "units": 600, "wall_clock_s": "per-task"},
             **({"timing_conditions": timing} if timing else {}),
@@ -243,7 +244,8 @@ def cmd_run(args, deps=None) -> int:
             + ("-bm-adv" if args.best_match else "")
             + ("-ret-lit" if args.retrieval == "literal" else "-ret-model" if args.retrieval == "model" else "")
             + (f"-loop{'' if args.tool_loop == '1' else args.tool_loop}" if args.tool_loop else "")
-            + (f"-cap{caps[0]}x{caps[1]}" if caps else ""))
+            + (f"-cap{caps[0]}x{caps[1]}" if caps else "")
+            + (f"-skill{args.skill_pad_chars}" if args.skill_pad_chars else ""))
     run_dir = root / "suite" / name
     run_dir.mkdir(parents=True, exist_ok=True)
     meta = {"seed": args.seed, "split": args.split, "repeats": args.repeats, "modes": modes, "fast_tier": args.fast_tier, "review": args.review, "packs": [_sha(Path(p)) for p in args.pack or []], **prov,
@@ -451,6 +453,7 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--tool-loop", nargs="?", const="1", choices=("1", "auto"), default="",
                      help="gate 3 tool loop: 1 = loop first, auto = one-shot first and the loop only repairs/falls back; recorded in the manifest, default off")
     run.add_argument("--loop-caps", default="", help="MODEL_CALLS,TOOL_CALLS per-subtask loop ceilings (default 10,30); recorded in the manifest")
+    run.add_argument("--skill-pad-chars", type=int, default=0, help="pad the picked skill section to N chars with other skills' sections (skill length ablation)")
     run.add_argument("--winner-rule", default="", help="the decision rule, written before the run and stored in the manifest with its hash")
     run.add_argument("--timing-conditions", default="", help="JSON object {gpu, load, warm_cold, protocol, comparable} the operator vouches for; without it timing stays pending")
     run.add_argument("--reasoning-on", default="", help="comma list of roles to run with thinking on (ablation), e.g. gate1,gate25")
