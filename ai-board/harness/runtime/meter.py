@@ -179,7 +179,8 @@ class Tracer:
                  "gen_ai.usage.input_tokens": metrics.get("tokens_in"), "gen_ai.usage.output_tokens": metrics.get("tokens_out"),
                  "gen_ai.response.finish_reasons": [done] if done else [], "tizia.gate": rec["gate"], "tizia.child": rec["child"],
                  "tizia.iteration": rec["iteration"], "tizia.call_id": rec["call_id"], "tizia.result": rec["result"],
-                 "tizia.thinking": request.get("thinking"), "tizia.reasoning_chars": request.get("reasoning_chars"), "tizia.prompt_name": rec["prompt_name"]}
+                 "tizia.thinking": request.get("thinking"), "tizia.reasoning_chars": request.get("reasoning_chars"), "tizia.prompt_name": rec["prompt_name"],
+                 "tizia.role": request.get("role"), "tizia.prompt_roles": request.get("prompt_roles")}
         if request.get("temperature") is not None:
             attrs["gen_ai.request.temperature"] = request["temperature"]
         if request.get("max_tokens") is not None:

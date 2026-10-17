@@ -23,7 +23,7 @@ from runtime.budget import Budget          # noqa: E402
 from repositories.dbconn import harness_db      # noqa: E402
 from services import candidate                   # noqa: E402
 from repositories import gate_trace                  # noqa: E402
-from runtime import meter                       # noqa: E402
+from runtime import meter, prompt_roles             # noqa: E402
 from services import context                     # noqa: E402
 from gates import brainstorm, implement, intake_guard, plan_validate, risk_triage, scope_check, static_check, verify  # noqa: E402
 from providers.client import OllamaClient    # noqa: E402
@@ -96,13 +96,23 @@ def _retryable_model_error(error: Exception) -> bool:
     return False
 
 
-def _request_attrs(options: dict, extra: dict | None, body: dict | None = None) -> dict:
-    """Sampling + thinking của 1 lời gọi cho span chat; thinking None = mặc định của server."""
+def _request_attrs(options: dict, extra: dict | None, body: dict | None = None, role: str | None = None) -> dict:
+    """Sampling + thinking + role của 1 lời gọi cho span chat; thinking None = mặc định của server."""
     extra = extra or {}
     thinking = False if extra.get('logprobs') else extra['thinking'] if 'thinking' in extra else extra.get('think')
     return {"temperature": options.get("temperature"), "max_tokens": options.get("num_predict"),
             "thinking": None if thinking is None else bool(thinking),
-            "reasoning_chars": (body or {}).get("_reasoning_chars")}
+            "reasoning_chars": (body or {}).get("_reasoning_chars"), "role": role,
+            "prompt_roles": "split" if extra.get("system") else "single"}
+
+
+def _split_call(prompt: str, role: str, routing, extra: dict | None, options: dict) -> tuple[str, dict | None, dict]:
+    """Split mode (AI_BOARD_PROMPT_ROLE_SPLIT=1): system message + user, per-role gate 3 params; logprobs calls stay as they were."""
+    if not prompt_roles.enabled() or (extra or {}).get('system') or (extra or {}).get('logprobs'):
+        return prompt, extra, options
+    system, user = prompt_roles.split(prompt)
+    role_extra, role_options = prompt_roles.call_params(role, routing)
+    return user, {**(extra or {}), **role_extra, 'system': system}, {**options, **role_options}
 
 
 @functools.lru_cache(maxsize=None)
@@ -151,6 +161,7 @@ class Deps:
                                      role=role or self.model_role, exclude=exclude_candidates, reason=route_reason)
         from providers.routing import ModelRouter
         resolved_role = ModelRouter.role(gate, model, self.models, explicit=role or self.model_role, extra=extra)
+        prompt, extra, options = _split_call(prompt, resolved_role, getattr(self.models, 'routing', None), extra, options)
         provider = ('vllm' if getattr(self.models, 'protocol', '') == 'vllm'
                     or getattr(self.models, 'vllm_url', '') and resolved_role == 'gate3_heavy'
                     else self.provider)
@@ -176,7 +187,7 @@ class Deps:
                 if last_attempt or not _retryable_model_error(error):
                     self._trace(gate, model, prompt, prompt_name, "", metrics, n,
                                 "timeout" if isinstance(error, TimeoutError) else "http_error", str(error),
-                                child, iteration, provider=provider, request=_request_attrs(options, extra))
+                                child, iteration, provider=provider, request=_request_attrs(options, extra, role=resolved_role))
                     raise
         metrics = meter.measure(provider, body, int((time.monotonic() - started) * 1000))
         n = meter.units(provider, metrics)
@@ -187,7 +198,7 @@ class Deps:
             gate_trace.record(db_path, skill_proposal_id=proposal_id, gate=gate,
                                model=model, prompt=prompt, body=body)
         self._trace(gate, model, prompt, prompt_name, body.get("response", ""), metrics, n, "ok", None, child, iteration,
-                    provider=provider, request=_request_attrs(options, extra, body))
+                    provider=provider, request=_request_attrs(options, extra, body, resolved_role))
         body["_metrics"] = metrics
         return body
 
@@ -195,6 +206,7 @@ class Deps:
                      prompt_name, child, iteration, options, extra, role, exclude, reason):
         router = self.models.routing
         role = router.role(gate, model, self.models, explicit=role, extra=extra)
+        prompt, extra, options = _split_call(prompt, role, router, extra, options)
         last_error = None
         for candidate in router.candidates(role, exclude=exclude):
             if self.model_candidate and role == self.model_role and candidate['id'] != self.model_candidate:
@@ -238,7 +250,7 @@ class Deps:
                 budget.spend('units', n)
                 self._trace(gate, candidate['model'], prompt, prompt_name, body.get('response', ''), metrics, n,
                             'http_error' if error else 'ok', str(error) if error else None, child, iteration,
-                            provider=provider, request=_request_attrs(call_options, call_extra, body))
+                            provider=provider, request=_request_attrs(call_options, call_extra, body, role))
                 if not error:
                     if db_path is not None and proposal_id is not None:
                         gate_trace.record(db_path, skill_proposal_id=proposal_id, gate=gate,
