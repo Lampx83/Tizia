@@ -1,13 +1,15 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import Link from 'next/link';
 import { tiziaFetch } from '@/lib/tizia';
 import DrivingQuiz, { type DrivingQuestion } from './DrivingQuiz';
 
-export const metadata: Metadata = {
-  title: '🚦 Lý thuyết Lái xe ô tô — Thi sát hạch theo hạng · Tizia',
+export const metadata: Metadata = pageMeta({
+  title: '🚦 Lý thuyết Lái xe ô tô — Thi sát hạch theo hạng',
   description:
     'Câu hỏi lý thuyết lái xe ô tô theo Luật TTATGT 2024 — luyện tập theo chủ đề + thi thử theo hạng GPLX (B, C1, C, D1, D2, D…), có câu điểm liệt phải trả lời đúng để qua.',
-};
+  path: '/luat-giao-thong-600',
+});
 
 type Res = { ok: boolean; collection: string; items: DrivingQuestion[] };
 

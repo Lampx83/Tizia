@@ -13,7 +13,7 @@
 // từ session (nếu đăng nhập Tizia) chỉ lưu để đối soát, không bắt buộc.
 // =====================================================================
 import { db } from './db.js';
-import { ollamaGenerate } from './ai.js';
+import { llmGenerate } from './ai.js';
 import { requireAdmin } from './contexts/admin/index.js';
 
 const now = () => Date.now();
@@ -231,7 +231,7 @@ export function attachGpp(r) {
       const prompt = `Soạn 1 tình huống ngắn (2-4 câu) cho sinh viên Cao đẳng Dược luyện kỹ năng: ${brief}. Kèm 1 câu hỏi trắc nghiệm 4 phương án (chỉ 1 đúng) và giải thích ngắn. JSON dạng: {"situation":"...","question":"...","options":["A","B","C","D"],"answer":0,"explain":"..."}`;
       let out;
       try {
-        const raw = await ollamaGenerate({ prompt, system, temperature: 0.5, json: true, maxTokens: 700 });
+        const raw = await llmGenerate({ prompt, system, temperature: 0.5, json: true, maxTokens: 700 });
         out = typeof raw === 'string' ? JSON.parse(raw) : raw;
       } catch (e) {
         return res.json({ ok: false, error: 'ai_unavailable', detail: e.message });

@@ -54,7 +54,7 @@ export const BAO_CHE: Topic = {
   modes: [
     {
       id: '3d', icon: '🥽', label: 'Phòng Lab 3D', tech: 'Three.js · MediaPipe · 2 tay',
-      url: '/compounding-lab.html',
+      url: '/compounding-lab',
       desc: 'Three.js full 3D scene với cân điện tử, ống đong, cốc thuỷ tinh. Free-form thao tác tự do, lỗi quy trình tổng kết cuối bài. 2 tay phối hợp rót ổn định hơn.',
       specs: ['ok:Sẵn sàng', 'ok:2 tay MediaPipe', 'Free-form', 'Desktop tốt nhất'],
       cta: '▶️ Vào phòng lab',

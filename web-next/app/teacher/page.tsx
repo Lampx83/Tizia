@@ -1,14 +1,16 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { privateMeta } from '@/lib/seo';
 import { tiziaFetch } from '@/lib/tizia';
 import TeacherClient, { type ClassSummary } from './teacher-client';
 
 // noindex — trang quản lý lớp riêng của giảng viên.
-export const metadata: Metadata = {
-  title: 'Tizia · Quản lý lớp · Giảng viên',
-  description: 'Tạo lớp, phát mã mời cho SV, theo dõi tiến độ.',
-  robots: { index: false, follow: false },
-};
+export const metadata: Metadata = privateMeta(
+  'Quản lý lớp · Giảng viên',
+  'Tạo lớp, phát mã mời cho sinh viên và theo dõi tiến độ học của cả lớp.',
+  '/teacher',
+);
+
 
 export default async function TeacherPage() {
   // SSR: fetch danh sách lớp lần đầu để có nội dung sẵn khi tải trang.

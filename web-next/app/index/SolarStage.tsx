@@ -5,7 +5,7 @@ import styles from './index.module.css';
 
 // Hệ mặt trời hero: mặt trời (không icon) + 6 quỹ đạo elip nghiêng. Kiến thức/môn
 // học bay quanh; 1 node là Trái đất–Mặt trăng, 1 là Sao Hỏa. Icon các quỹ đạo tự
-// đảo ngẫu nhiên (interval), pause khi tab ẩn — mirror public/index.html.
+// đảo ngẫu nhiên (interval), pause khi tab ẩn — mirror public/.
 const POOL = ['📚','📐','💊','💻','🧪','🎨','⚖️','🩺','🔬','🧬','🌱','🎼','🏛️','📜','🧮','🚀','🤖','🧠','🎭','⚗️','📊','🔭','🌐','✏️','🎯','🧩','🗺️','⚙️','🔢','🌟','🎲','📖','🖋️','🎤','🏥','💡','🪄','🧭'];
 
 type Orbit = { w: number; k: number; tilt: number; dur: number; delay: number; ringA: number; rev?: boolean; icon: string };

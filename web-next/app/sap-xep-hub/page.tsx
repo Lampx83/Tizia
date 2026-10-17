@@ -1,13 +1,15 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import { SAP_XEP } from './topic-data';
 import TopicCard from './TopicCard';
 import LevelGrid from './LevelGrid';
 
-export const metadata: Metadata = {
-  title: 'Hub Sắp xếp thuốc — Tizia',
+export const metadata: Metadata = pageMeta({
+  title: 'Hub Sắp xếp thuốc',
   description:
     'Mô phỏng phân loại thuốc theo nhóm điều trị (ATC classification) trong nhiều phiên bản công nghệ — từ Canvas 2D arcade nhẹ trên mobile đến WebXR hand tracking trên Meta Quest và phòng dược Metaverse multiplayer. 16 thuốc thông dụng · 10 cấp độ.',
-};
+  path: '/sap-xep-hub',
+});
 
 // Hub tĩnh "Sắp xếp thuốc" — Server Component: hero + intro (SSR, SEO).
 // Phần tương tác tách sang Client Component: <LevelGrid /> (lưới cấp độ + tiến độ
@@ -20,7 +22,7 @@ export default function SapXepHubPage() {
     <div className="sapxep-scope">
       <style>{scopedCss}</style>
 
-      <a className="sx-back" href="/index.html">← Quay lại Tizia</a>
+      <a className="sx-back" href="/">← Quay lại Tizia</a>
 
       <div className="sx-hero">
         <div className="sx-logo">💊</div>

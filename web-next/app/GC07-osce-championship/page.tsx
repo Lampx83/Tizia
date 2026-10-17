@@ -1,13 +1,15 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import Link from 'next/link';
 import { tiziaFetch } from '@/lib/tizia';
 import OsceChampionship, { type OsceExam } from './OsceChampionship';
 
-export const metadata: Metadata = {
-  title: 'OSCE Championship · Tizia',
+export const metadata: Metadata = pageMeta({
+  title: 'OSCE Championship',
   description:
     'Kỳ thi OSCE Composite tốt nghiệp Dược — 10 trạm nối tiếp (đọc đơn, tư vấn BN, tính liều, sắp xếp bước, viết SOAP, roleplay) có đồng hồ đếm ngược từng trạm và chứng chỉ.',
-};
+  path: '/GC07-osce-championship',
+});
 
 // Đề OSCE lấy từ DB qua /api/content/osce-exam (collection 'osce-exam', items[0]).
 type Res = { ok: boolean; collection: string; items: OsceExam[] };

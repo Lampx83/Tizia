@@ -175,7 +175,7 @@ export default function Lop2AnhMemoryClient() {
       <style>{CSS}</style>
 
       <div className="top">
-        <Link className="back" href="/space.html?b=g2&domain=primary">
+        <Link className="back" href="/space?b=g2&domain=primary">
           ← Lớp 2
         </Link>
         <div>
@@ -238,7 +238,7 @@ export default function Lop2AnhMemoryClient() {
               <button className="btn" onClick={build}>
                 🔁 Chơi lại
               </button>
-              <Link className="btn ghost" href="/space.html?b=g2&domain=primary">
+              <Link className="btn ghost" href="/space?b=g2&domain=primary">
                 ← Về Lớp 2
               </Link>
             </div>

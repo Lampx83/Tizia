@@ -1,9 +1,9 @@
 // ============================================================
 // AI usage quota & token log
 // ============================================================
-// Tizia dùng Ollama on-prem (qwen2.5:14b) → miễn phí token, nhưng
+// Tizia dùng LLM on-prem (vLLM, qwen3.5-35b-a3b-int4) → miễn phí token, nhưng
 // vẫn cần infrastructure này để:
-//   1. Tracking: capacity Ollama (GPU/CPU) đang dùng tới đâu
+//   1. Tracking: capacity LLM (GPU) đang dùng tới đâu
 //   2. Rate limit per-user theo plan, chặn spam
 //   3. Audit trail: mọi AI call gắn user_id + endpoint
 //   4. Sẵn schema cho cloud LLM tương lai (Anthropic/OpenAI cost = $/token)
@@ -24,9 +24,10 @@ const QUOTA = {
 };
 
 // Cost table (USD micros per token = $/M tokens × 1) — chỉ cho cloud provider.
-// Ollama on-prem = 0. Số dưới đây cập nhật theo bảng giá Anthropic/OpenAI 2026-01.
+// LLM on-prem (vLLM) = 0. Số dưới đây cập nhật theo bảng giá Anthropic/OpenAI 2026-01.
 const COST_TABLE = {
-  'ollama:default':                  { prompt: 0,    completion: 0    },
+  'vllm:default':                    { prompt: 0,    completion: 0    },
+  'ollama:default':                  { prompt: 0,    completion: 0    },  // dòng cũ trong ai_token_usage
   'anthropic:claude-haiku-4-5':      { prompt: 0.8,  completion: 4    },
   'anthropic:claude-sonnet-4-6':     { prompt: 3,    completion: 15   },
   'anthropic:claude-opus-4-7':       { prompt: 15,   completion: 75   },
@@ -192,9 +193,9 @@ export function aiQuotaGate(endpoint) {
   };
 }
 
-// Gọi sau khi handler hoàn tất để log token thật. Nếu Ollama không trả token count,
+// Gọi sau khi handler hoàn tất để log token thật. Nếu LLM không trả token count,
 // có thể truyền 0 — vẫn ghi request count để rate limit hoạt động.
-export async function recordAiCall(req, { provider = 'ollama', model = '-', prompt_tokens = 0, completion_tokens = 0, status = 'ok' } = {}) {
+export async function recordAiCall(req, { provider = 'vllm', model = '-', prompt_tokens = 0, completion_tokens = 0, status = 'ok' } = {}) {
   const ctx = req._aiContext;
   if (!ctx) return;  // không qua aiQuotaGate → silent skip
   await logAiUsage({

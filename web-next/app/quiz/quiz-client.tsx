@@ -341,10 +341,10 @@ export default function QuizClient() {
           )}
           {/* Đóng vòng feedback: link 2 trang trải nghiệm liên quan. */}
           <div className="feedback-links">
-            <a className="fl-gold" href="/bang-phong-than.html">
+            <a className="fl-gold" href="/bang-phong-than">
               🏆 Bảng Phong Thần
             </a>
-            <a className="fl-green" href="/cay-tri-thuc.html">
+            <a className="fl-green" href="/cay-tri-thuc">
               🌳 Cây Tri Thức
             </a>
           </div>

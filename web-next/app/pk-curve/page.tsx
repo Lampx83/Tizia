@@ -222,7 +222,7 @@ export default function PkCurve() {
       <style>{scopedCss}</style>
 
       <div className="topbar">
-        <a href="/space.html?b=clinpharm&domain=pharmacy">← Dược lý – Lâm sàng</a>
+        <a href="/space?b=clinpharm&domain=pharmacy">← Dược lý – Lâm sàng</a>
         <span className="title">📈 Đường cong Dược động học (PK/TDM)</span>
         <span className="spacer" />
         <span className={`verdict ${inWin ? 'ok' : 'bad'}`}>{verdictText}</span>

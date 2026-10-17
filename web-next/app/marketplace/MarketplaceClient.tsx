@@ -131,7 +131,7 @@ export default function MarketplaceClient({ initialItems }: { initialItems: Less
             <>
               <p>Chưa có bài giảng nào phù hợp.</p>
               <a
-                href="/lesson-builder.html"
+                href="/lesson-builder"
                 className="mt-4 inline-block rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 px-6 py-3 font-bold text-[#3e2723]"
               >
                 ✏️ Tạo bài giảng đầu tiên
@@ -145,7 +145,7 @@ export default function MarketplaceClient({ initialItems }: { initialItems: Less
             const desc = (l.description || '').slice(0, 140);
             const truncated = (l.description || '').length > 140;
             return (
-              <a key={l.slug} href={`/lesson.html?slug=${encodeURIComponent(l.slug)}`}>
+              <a key={l.slug} href={`/lesson?slug=${encodeURIComponent(l.slug)}`}>
                 <Card className="h-full transition-colors hover:border-primary">
                   <CardContent className="p-4">
                     <h3 className="mb-1.5 text-base font-semibold">{l.title}</h3>

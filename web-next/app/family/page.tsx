@@ -1,14 +1,15 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { privateMeta } from '@/lib/seo';
 import { tiziaFetch } from '@/lib/tizia';
 import FamilyClient, { type FamilyMe } from './FamilyClient';
 
-export const metadata: Metadata = {
-  title: 'Gia đình · Tizia',
-  description:
-    'Quản lý gia đình Tizia — liên kết tài khoản con, chia sẻ gói cước, theo dõi tiến độ học tập.',
-  robots: { index: false, follow: false },
-};
+export const metadata: Metadata = privateMeta(
+  'Gia đình',
+  'Quản lý gia đình Tizia — liên kết tài khoản con, chia sẻ gói cước, theo dõi tiến độ học tập.',
+  '/family',
+);
+
 
 export default async function FamilyPage() {
   const res = await tiziaFetch<FamilyMe>('/api/family/me');

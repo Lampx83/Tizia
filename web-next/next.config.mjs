@@ -21,11 +21,18 @@ const nextConfig = {
     // URL .html cũ → URL SẠCH (308, giữ query). Ai vào /school.html?domain=x sẽ tự
     // nhảy sang /school?domain=x. CHỈ áp cho trang đã migrate — KHÔNG đụng .html của
     // asset nhúng (campus-proto iframe…) vì chúng vẫn do Express phục vụ qua fallback.
-    return MIGRATED.map((p) => ({
-      source: `/${p}.html`,
-      destination: `/${p}`,
-      permanent: true,
-    }));
+    return [
+      // Trang chủ chỉ được có MỘT URL. Trước đây /index.html → /index, mà /index
+      // render y hệt "/" → Google thấy hai URL trùng nội dung (duplicate content).
+      // Nay cả hai đều gom về "/".
+      { source: '/index.html', destination: '/', permanent: true },
+      { source: '/index', destination: '/', permanent: true },
+      ...MIGRATED.filter((p) => p !== 'index').map((p) => ({
+        source: `/${p}.html`,
+        destination: `/${p}`,
+        permanent: true,
+      })),
+    ];
   },
   async rewrites() {
     return {

@@ -1,13 +1,15 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import Link from 'next/link';
 import { tiziaFetch } from '@/lib/tizia';
 import BienBaoCatalog, { type BienBaoItem } from './BienBaoCatalog';
 
-export const metadata: Metadata = {
-  title: '🚸 Tra cứu biển báo GPLX — Danh mục 235 biển · Tizia',
+export const metadata: Metadata = pageMeta({
+  title: '🚸 Tra cứu biển báo GPLX — Danh mục 235 biển',
   description:
     'Tra cứu đầy đủ biển báo giao thông theo QCVN 41:2019/BGTVT (cấm, hiệu lệnh, chỉ dẫn, phụ) — nhóm biển cấm kèm mức phạt theo Nghị định 168/2024/NĐ-CP.',
-};
+  path: '/tra-cuu-bien-bao-gplx',
+});
 
 type Res = { ok: boolean; collection: string; items: BienBaoItem[] };
 

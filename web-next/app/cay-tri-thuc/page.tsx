@@ -1,12 +1,15 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import { tiziaFetch } from '@/lib/tizia';
 import TreeClient, { type ScenarioRuns, type Wallet } from './tree-client';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: '🌳 Cây Tri Thức',
-  description: 'Mỗi tuần em hoàn thành = 1 chiếc lá lên Cây Tri Thức. Cùng nuôi cây xanh tốt nhé!',
-};
+  description:
+    'Mỗi tuần em hoàn thành = 1 chiếc lá lên Cây Tri Thức. Cùng nuôi cây xanh tốt nhé!',
+  path: '/cay-tri-thuc',
+});
 
 export default async function CayTriThuc() {
   // Cả /api/scenario-runs và /api/wallet đều requireAuth. Chưa đăng nhập → mời login.

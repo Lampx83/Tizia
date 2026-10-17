@@ -20,76 +20,76 @@ const SUBJ_LANDINGS: Record<string, Landing> = {
   preschool: {
     title: '🧸 Học thông minh · Mầm non',
     intro: 'Mầm non học bằng trò chơi tương tác — chọn 1 hoạt động bên dưới:',
-    back: { label: 'Quay về campus Mầm non', href: '/school.html?domain=preschool' },
+    back: { label: 'Quay về campus Mầm non', href: '/school?domain=preschool' },
     apps: [
-      { ic: '🗺️', name: 'Không gian học Mầm non', rd: 'Chọn lớp lá/chồi/mầm, học theo 5 lĩnh vực phát triển GDPT 2018.', href: '/space.html?domain=preschool' },
-      { ic: '🔢', name: 'Đếm quả & đếm ngón tay', rd: 'Trò chơi đếm số trực quan, phù hợp 3–5 tuổi.', href: '/dem-qua.html' },
-      { ic: '🔤', name: 'Ghép chữ cái', rd: 'Nhận mặt chữ, ghép vần qua trò chơi kéo thả.', href: '/ghep-chu-cai.html' },
+      { ic: '🗺️', name: 'Không gian học Mầm non', rd: 'Chọn lớp lá/chồi/mầm, học theo 5 lĩnh vực phát triển GDPT 2018.', href: '/space?domain=preschool' },
+      { ic: '🔢', name: 'Đếm quả & đếm ngón tay', rd: 'Trò chơi đếm số trực quan, phù hợp 3–5 tuổi.', href: '/dem-qua' },
+      { ic: '🔤', name: 'Ghép chữ cái', rd: 'Nhận mặt chữ, ghép vần qua trò chơi kéo thả.', href: '/ghep-chu-cai' },
     ],
   },
   primary: {
     title: '🎒 Học thông minh · Tiểu học',
     intro: 'Tiểu học (lớp 1–5) học theo tuần — chọn 1 cổng vào:',
-    back: { label: 'Quay về campus Tiểu học', href: '/school.html?domain=primary' },
+    back: { label: 'Quay về campus Tiểu học', href: '/school?domain=primary' },
     apps: [
-      { ic: '🗺️', name: 'Không gian học Tiểu học', rd: '9 môn × 36 tuần (KNTT/CTST/CD), có lý thuyết + quiz tuần.', href: '/space.html?domain=primary' },
-      { ic: '🎯', name: 'Năng lực của em', rd: '15 nhóm năng lực GDPT 2018 — xem em đã đạt skill nào.', href: '/nang-luc.html' },
-      { ic: '⛈️', name: 'Bão Số Học', rd: 'Mini-game luyện tính nhanh — thêm Cây Tri Thức, Bản đồ VN trong Không gian học.', href: '/bao-so-hoc.html' },
-      { ic: '🤖', name: 'AI sinh đề luyện tập', rd: 'AI tự sinh quiz theo chủ đề + lớp em chọn, kèm giải thích.', href: '/ai-quiz-gen.html?grade=3' },
+      { ic: '🗺️', name: 'Không gian học Tiểu học', rd: '9 môn × 36 tuần (KNTT/CTST/CD), có lý thuyết + quiz tuần.', href: '/space?domain=primary' },
+      { ic: '🎯', name: 'Năng lực của em', rd: '15 nhóm năng lực GDPT 2018 — xem em đã đạt skill nào.', href: '/nang-luc' },
+      { ic: '⛈️', name: 'Bão Số Học', rd: 'Mini-game luyện tính nhanh — thêm Cây Tri Thức, Bản đồ VN trong Không gian học.', href: '/bao-so-hoc' },
+      { ic: '🤖', name: 'AI sinh đề luyện tập', rd: 'AI tự sinh quiz theo chủ đề + lớp em chọn, kèm giải thích.', href: '/ai-quiz-gen?grade=3' },
     ],
   },
   secondary: {
     title: '📐 Học thông minh · THCS',
     intro: 'THCS (lớp 6–9) — Lớp 6 có 12 môn × 36 tuần, Lớp 7–9 hiện có Toán & Ngữ văn. Chọn 1 cổng vào:',
-    back: { label: 'Quay về campus THCS', href: '/school.html?domain=secondary' },
+    back: { label: 'Quay về campus THCS', href: '/school?domain=secondary' },
     apps: [
-      { ic: '🗺️', name: 'Không gian học THCS', rd: '12 môn lớp 6 + Toán/Ngữ văn 7–9 theo CT GDPT 2018.', href: '/space.html?domain=secondary' },
-      { ic: '🎯', name: 'Năng lực của em', rd: 'Skill THCS đã đạt + còn thiếu, lộ trình mở khóa kế tiếp.', href: '/nang-luc.html' },
-      { ic: '🗺️', name: 'Bản đồ Tri thức VN', rd: '34 tỉnh thành (sau sáp nhập 2025) — đặc sản, danh lam, quiz địa lý + lịch sử.', href: '/ban-do-vn.html' },
-      { ic: '📝', name: 'Luyện đề vào lớp 10', rd: 'Đề thi thử có bấm giờ + chấm điểm: Toán, Văn, Anh lớp 9.', href: '/luyen-de.html' },
-      { ic: '🤖', name: 'AI sinh đề luyện tập', rd: 'AI tự sinh quiz theo chủ đề + lớp em chọn, kèm giải thích.', href: '/ai-quiz-gen.html?grade=6' },
+      { ic: '🗺️', name: 'Không gian học THCS', rd: '12 môn lớp 6 + Toán/Ngữ văn 7–9 theo CT GDPT 2018.', href: '/space?domain=secondary' },
+      { ic: '🎯', name: 'Năng lực của em', rd: 'Skill THCS đã đạt + còn thiếu, lộ trình mở khóa kế tiếp.', href: '/nang-luc' },
+      { ic: '🗺️', name: 'Bản đồ Tri thức VN', rd: '34 tỉnh thành (sau sáp nhập 2025) — đặc sản, danh lam, quiz địa lý + lịch sử.', href: '/ban-do-vn' },
+      { ic: '📝', name: 'Luyện đề vào lớp 10', rd: 'Đề thi thử có bấm giờ + chấm điểm: Toán, Văn, Anh lớp 9.', href: '/luyen-de' },
+      { ic: '🤖', name: 'AI sinh đề luyện tập', rd: 'AI tự sinh quiz theo chủ đề + lớp em chọn, kèm giải thích.', href: '/ai-quiz-gen?grade=6' },
     ],
   },
   highschool: {
     title: '🎓 Học thông minh · THPT',
     intro: 'THPT (lớp 10–12) — chọn 1 cổng vào để ôn tập + luyện thi:',
-    back: { label: 'Quay về campus THPT', href: '/school.html?domain=highschool' },
+    back: { label: 'Quay về campus THPT', href: '/school?domain=highschool' },
     apps: [
-      { ic: '🗺️', name: 'Không gian học THPT', rd: 'Toán, Văn, Anh, Lý, Hoá, Sinh, Sử, Địa theo CT GDPT 2018.', href: '/space.html?domain=highschool' },
-      { ic: '🎯', name: 'Năng lực của em', rd: 'Skill THPT + lộ trình ôn thi tốt nghiệp.', href: '/nang-luc.html' },
-      { ic: '📝', name: 'Luyện đề thi TN THPT', rd: 'Đề thi thử có bấm giờ + chấm điểm: Toán, Anh, GDKT-PL.', href: '/luyen-de.html' },
-      { ic: '📚', name: '2000 từ vựng tiếng Anh', rd: '5 chủ đề: cơ bản, du lịch, kinh doanh, học thuật, IELTS.', href: '/tu-vung-tieng-anh.html' },
-      { ic: '🤖', name: 'AI sinh đề luyện thi', rd: 'AI tự sinh đề theo chuyên đề lớp 10–12, kèm lời giải.', href: '/ai-quiz-gen.html?grade=12' },
+      { ic: '🗺️', name: 'Không gian học THPT', rd: 'Toán, Văn, Anh, Lý, Hoá, Sinh, Sử, Địa theo CT GDPT 2018.', href: '/space?domain=highschool' },
+      { ic: '🎯', name: 'Năng lực của em', rd: 'Skill THPT + lộ trình ôn thi tốt nghiệp.', href: '/nang-luc' },
+      { ic: '📝', name: 'Luyện đề thi TN THPT', rd: 'Đề thi thử có bấm giờ + chấm điểm: Toán, Anh, GDKT-PL.', href: '/luyen-de' },
+      { ic: '📚', name: '2000 từ vựng tiếng Anh', rd: '5 chủ đề: cơ bản, du lịch, kinh doanh, học thuật, IELTS.', href: '/tu-vung-tieng-anh' },
+      { ic: '🤖', name: 'AI sinh đề luyện thi', rd: 'AI tự sinh đề theo chuyên đề lớp 10–12, kèm lời giải.', href: '/ai-quiz-gen?grade=12' },
     ],
   },
   language: {
     title: '🗣️ Học Ngoại ngữ thông minh',
     intro: 'Trường Ngoại ngữ dùng các app chuyên biệt thay vì quiz tổng quát. Chọn 1 hoạt động bên dưới để học:',
-    back: { label: 'Quay về campus Ngoại ngữ', href: '/school.html?domain=language' },
+    back: { label: 'Quay về campus Ngoại ngữ', href: '/school?domain=language' },
     apps: [
-      { ic: '📚', name: '2000 từ vựng tiếng Anh', rd: '5 chủ đề: cơ bản, du lịch, kinh doanh, học thuật, IELTS — spaced repetition + phát âm.', href: '/tu-vung-tieng-anh.html' },
-      { ic: '🎤', name: 'Luyện phát âm AI', rd: 'Đọc câu mẫu, AI chấm bằng Speech Recognition, score theo từng từ.', href: '/luyen-phat-am.html' },
+      { ic: '📚', name: '2000 từ vựng tiếng Anh', rd: '5 chủ đề: cơ bản, du lịch, kinh doanh, học thuật, IELTS — spaced repetition + phát âm.', href: '/tu-vung-tieng-anh' },
+      { ic: '🎤', name: 'Luyện phát âm AI', rd: 'Đọc câu mẫu, AI chấm bằng Speech Recognition, score theo từng từ.', href: '/luyen-phat-am' },
       { ic: '🃏', name: 'Flashcards đa ngôn ngữ', rd: 'Tự nhập bộ thẻ EN/JP/KR/CN, lưu localStorage cá nhân.', href: '/portal-apps/u/4/flashcards/' },
     ],
   },
   driving: {
     title: '🚗 Học Lái xe thông minh',
     intro: 'Trường Lái xe dùng bộ đề + biển báo chuyên biệt. Chọn 1 hoạt động bên dưới:',
-    back: { label: 'Quay về campus Lái xe', href: '/school.html?domain=driving' },
+    back: { label: 'Quay về campus Lái xe', href: '/school?domain=driving' },
     apps: [
-      { ic: '📖', name: '600 câu lý thuyết B1/B2', rd: 'Luyện theo chương + thi thử 25 câu/22 phút. Có CÂU LIỆT.', href: '/luat-giao-thong-600.html' },
-      { ic: '🚸', name: 'Biển báo Giao thông', rd: 'Học 4 nhóm QCVN 41:2019 + chế độ đố vui có streak.', href: '/bien-bao-giao-thong.html' },
+      { ic: '📖', name: '600 câu lý thuyết B1/B2', rd: 'Luyện theo chương + thi thử 25 câu/22 phút. Có CÂU LIỆT.', href: '/luat-giao-thong-600' },
+      { ic: '🚸', name: 'Biển báo Giao thông', rd: 'Học 4 nhóm QCVN 41:2019 + chế độ đố vui có streak.', href: '/bien-bao-giao-thong' },
       { ic: '📚', name: 'Tra cứu biển báo GPLX', rd: 'Danh mục đầy đủ 257 biển (cấm/nguy hiểm/hiệu lệnh/chỉ dẫn/phụ) — biển cấm có kèm mức phạt theo NĐ 168/2024.', href: '/tra-cuu-bien-bao-gplx' },
       { ic: '📷', name: 'Nhận diện biển báo bằng AI', rd: 'Chụp ảnh hoặc tải ảnh lên, AI nhận diện ngay trên trình duyệt — không gửi ảnh lên máy chủ.', href: '/nhan-dien-bien-bao' },
-      { ic: '🧠', name: 'AI Quiz tình huống', rd: 'AI sinh tình huống lái xe thực tế theo cấp B1/B2/C/D.', href: '/ai-quiz-gen.html?topic=driving' },
+      { ic: '🧠', name: 'AI Quiz tình huống', rd: 'AI sinh tình huống lái xe thực tế theo cấp B1/B2/C/D.', href: '/ai-quiz-gen?topic=driving' },
     ],
   },
   'driving-admin': {
     title: '📋 Thủ tục hành chính · Trường Lái xe',
     intro: 'AI tư vấn quy trình thi sát hạch, cấp đổi GPLX, đăng ký lệ phí. Hiện đang biên soạn — tạm thời tham khảo:',
-    back: { label: 'Quay về Văn phòng cấp GPLX', href: '/space.html?b=admin-drive&domain=driving' },
+    back: { label: 'Quay về Văn phòng cấp GPLX', href: '/space?b=admin-drive&domain=driving' },
     apps: [
-      { ic: '📖', name: '600 câu lý thuyết', rd: 'Phải đạt trước khi nộp hồ sơ thi.', href: '/luat-giao-thong-600.html' },
+      { ic: '📖', name: '600 câu lý thuyết', rd: 'Phải đạt trước khi nộp hồ sơ thi.', href: '/luat-giao-thong-600' },
     ],
   },
 };
@@ -203,7 +203,7 @@ export default function HocThongMinhClient() {
           return;
         }
         // Auto-landing cho K-12: ScoreUp chưa có câu hỏi cấp phổ thông → adaptive
-        // quiz sẽ trống. Đẩy thẳng sang landing /space.html?domain=<id>.
+        // quiz sẽ trống. Đẩy thẳng sang landing /space?domain=<id>.
         try {
           const me = (await meRes.clone().json())?.user;
           const dom: string | undefined = me?.enrolled_domain;

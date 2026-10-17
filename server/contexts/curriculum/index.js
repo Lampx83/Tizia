@@ -128,8 +128,53 @@ export async function curriculumCount() {
   return (await countStmt.get()).c;
 }
 
+// ── Chỉ mục nhẹ cho trang nội dung công khai (SEO) ──
+// Trang /on-tap chỉ cần tiêu đề + chương + số câu, KHÔNG cần cả `body`. Nếu bê
+// nguyên /api/curriculum/grade/:domain/:grade thì mỗi lượt xem kéo ~6MB JSON —
+// vừa chậm vừa vô nghĩa. Query này rút thẳng vài trường từ JSON trong Postgres.
+const getIndexForGradeStmt = db.prepare(`
+  SELECT id,
+         subject,
+         title,
+         year_level,
+         (body::json ->> 'chapter')                AS chapter,
+         (body::json ->> 'boss')                   AS boss,
+         -- Bài nào thiếu mảng questions thì trả 0 thay vì làm vỡ cả câu query.
+         CASE WHEN json_typeof(body::json -> 'questions') = 'array'
+              THEN json_array_length(body::json -> 'questions')
+              ELSE 0 END                           AS question_count
+    FROM curriculum_content
+   WHERE active = 1 AND domain = ? AND grade = ? AND kind = 'quiz'
+   ORDER BY subject ASC, id ASC
+`);
+
+/** Danh sách bài của một (cấp học, khối lớp) — chỉ metadata, không kèm câu hỏi. */
+export async function getCurriculumIndex(domain, grade) {
+  const rows = await getIndexForGradeStmt.all(domain, grade);
+  return rows.map((r) => ({
+    id: r.id,
+    subject: r.subject,
+    title: r.title,
+    chapter: r.chapter || null,
+    yearLevel: r.year_level ?? null,
+    boss: r.boss === 'true',
+    questionCount: Number(r.question_count) || 0,
+  }));
+}
+
 // ── API ──
 export async function attachCurriculum(router) {
+  // Chỉ mục nhẹ — dùng cho trang ôn tập công khai (crawlable). Public như các
+  // route GET khác của curriculum (xem PUBLIC_PATH_PREFIXES ở identity/auth.js).
+  router.get('/api/curriculum/index/:domain/:grade', async (req, res) => {
+    const grade = Number(req.params.grade);
+    if (!Number.isFinite(grade)) return res.status(400).json({ error: 'bad_grade' });
+    const items = await getCurriculumIndex(req.params.domain, grade);
+    // Content ít đổi → cho phép CDN/proxy cache 1 giờ, đỡ tải cho DB.
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.json({ ok: true, items, count: items.length });
+  });
+
   // FE đọc danh sách scenario của 1 module (thay getScenariosForModule).
   router.get('/api/curriculum/module/:moduleId', async (req, res) => {
     const items = await getContentForModule(req.params.moduleId);

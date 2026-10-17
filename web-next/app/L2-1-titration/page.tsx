@@ -150,7 +150,7 @@ const STYLE = `
 // the site root; under the /L2-1-titration/ route a bare "index.html" would
 // resolve wrong).
 const SKELETON = `
-<a class="back" href="/index.html">← Trang chủ</a>
+<a class="back" href="/">← Trang chủ</a>
 
 <div id="topbar">
   <span class="pill">L2.1</span>

@@ -313,7 +313,7 @@ export default function TeacherLive() {
       <style>{teacherLiveCss}</style>
       <div className="tl-wrap">
         <div className="tl-head">
-          <Link href="/teacher.html" className="tl-back">
+          <Link href="/teacher" className="tl-back">
             ← Lớp học
           </Link>
           <h1>🎛 Bảng điều khiển GV real-time</h1>

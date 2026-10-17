@@ -39,7 +39,7 @@ export default function Lop2PhanLoaiRac() {
   return (
     <div id="pl-rac-root">
       <div className="top">
-        <a className="back" href="/space.html?b=g2&domain=primary">
+        <a className="back" href="/space?b=g2&domain=primary">
           ← Lớp 2
         </a>
         <div>
@@ -108,7 +108,7 @@ export default function Lop2PhanLoaiRac() {
             <button className="btn" id="btn-restart">
               🔁 Chơi lại
             </button>
-            <a className="btn ghost" href="/space.html?b=g2&domain=primary">
+            <a className="btn ghost" href="/space?b=g2&domain=primary">
               ← Về Lớp 2
             </a>
           </div>

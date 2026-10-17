@@ -17,7 +17,7 @@
 import express from 'express';
 import { randomUUID } from 'node:crypto';
 import { db } from './db.js';
-import { ollamaGenerate } from './ai.js';
+import { llmGenerate, LLM_MODEL } from './ai.js';
 import { SCENARIOS, SCENARIO_CARDS } from '../public/js/pharmacy/scenarios.js';
 import {
   OTC_RUBRIC, OTC_RUBRIC_VERSION, OTC_GROUPS, OTC_MAX_PER_CRITERION, OTC_MAX_TOTAL,
@@ -236,12 +236,12 @@ CHỈ trả về JSON hợp lệ, không giải thích thêm, theo đúng dạng
 }
 
 async function scoreBatch(sessionRow, messages, actions, crits, out) {
-  const raw = await ollamaGenerate({
+  const raw = await llmGenerate({
     prompt: buildScoringPrompt(sessionRow, messages, actions, crits),
     system: 'Bạn là giảng viên dược chấm thực hành bán thuốc. Chỉ trả về JSON hợp lệ theo đúng cấu trúc được yêu cầu.',
     temperature: 0.2,
     maxTokens: 900,
-    json: true,   // Ollama format=json → bớt hẳn trường hợp model chèn lời dẫn quanh JSON
+    json: true,   // response_format json_object → bớt hẳn trường hợp model chèn lời dẫn quanh JSON
   });
   const m = String(raw || '').match(/\{[\s\S]*\}/);
   if (!m) throw new Error('AI không trả về JSON');
@@ -258,7 +258,7 @@ async function scoreBatch(sessionRow, messages, actions, crits, out) {
 }
 
 // Chấm THEO LÔ NHỎ (≤5 tiêu chí/lượt), TUẦN TỰ. Lý do: model 14B chấm cả 15
-// tiêu chí trong một lượt vượt quá timeout 60s của Ollama (đo trên prod 20/08 →
+// tiêu chí trong một lượt vượt quá timeout 60s của LLM (đo trên prod 20/08 →
 // hỏng toàn bộ phần hội thoại). Chia lô còn giúp lỗi một lô không kéo đổ cả bài
 // chấm — các lô khác vẫn có điểm. Trả về [map, sốLôLỗi].
 async function scoreWithAi(sessionRow, messages, actions, crits) {
@@ -370,7 +370,7 @@ CHỈ trả về JSON hợp lệ, đúng dạng:
 }
 
 async function scoreOtcBatch(sc, messages, actions, crits, out) {
-  const raw = await ollamaGenerate({
+  const raw = await llmGenerate({
     prompt: buildOtcPrompt(sc, messages, actions, crits),
     system: 'Bạn là giảng viên dược chấm kỹ năng giao tiếp bán thuốc. Bám sát mô tả từng mức của rubric, chỉ dựa vào bằng chứng có trong bản ghi. Chỉ trả về JSON hợp lệ.',
     temperature: 0.2,
@@ -398,7 +398,7 @@ async function scoreOtcBatch(sc, messages, actions, crits, out) {
 async function detectOtcSafetyFlags(sc, messages, actions) {
   const transcript = messages.map((m, i) => `L${i + 1} ${m.speaker === 'student' ? 'Dược sĩ (SV)' : 'Khách hàng'}: ${m.content}`).join('\n');
   const actionLog = actions.map((a) => `A${Number(a.action_order) + 1} ${a.description_vi || a.action_type} [${a.action_result}]`).join('\n') || '(không có)';
-  const raw = await ollamaGenerate({
+  const raw = await llmGenerate({
     prompt: `Hồ sơ tình huống:\n${String(sc?.npcPersona || sc?.setting || '').slice(0, 3500)}\n\nHội thoại:\n${transcript || '(không có)'}\n\nNhật ký thao tác:\n${actionLog}\n\nKiểm tra sinh viên có mắc LỖI AN TOÀN nào sau đây không (chỉ gắn cờ khi có bằng chứng rõ ràng trong bản ghi):\n${OTC_SAFETY_FLAGS.map((t, i) => `${i + 1}. ${t}`).join('\n')}\n\nCHỈ trả về JSON: {"flags":[{"n":1,"evidence":"L4: ... / A7 ..."}]} — "flags" rỗng nếu không có lỗi.`,
     system: 'Bạn là giảng viên dược kiểm tra an toàn thuốc. Chỉ trả về JSON hợp lệ.',
     temperature: 0.1, maxTokens: 500, json: true,
@@ -719,7 +719,7 @@ export function attachPharmacyPractice(r) {
           session_id: row.session_id, completed_at, duration_ms,
           status: o.aiOk ? 'completed' : 'scoring_failed',
           total_score: sum.percent,
-          ai_model_version: process.env.OLLAMA_MODEL || null, t,
+          ai_model_version: LLM_MODEL, t,
         });
         return;
       }
@@ -783,7 +783,7 @@ export function attachPharmacyPractice(r) {
         duration_ms,
         status: aiOk ? 'completed' : 'scoring_failed',
         total_score: sum.score,
-        ai_model_version: process.env.OLLAMA_MODEL || null,
+        ai_model_version: LLM_MODEL,
         t,
       });
 

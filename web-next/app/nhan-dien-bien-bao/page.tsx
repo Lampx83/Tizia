@@ -1,13 +1,15 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import Link from 'next/link';
 import { tiziaFetch } from '@/lib/tizia';
 import RecognizePanel, { type CatalogItem } from './RecognizePanel';
 
-export const metadata: Metadata = {
-  title: '📷 Nhận diện biển báo bằng AI — Camera/ảnh · Tizia',
+export const metadata: Metadata = pageMeta({
+  title: '📷 Nhận diện biển báo bằng AI — Camera/ảnh',
   description:
     'Chụp ảnh hoặc tải ảnh biển báo giao thông lên, AI (YOLOv8) nhận diện ngay trên trình duyệt — không gửi ảnh lên máy chủ.',
-};
+  path: '/nhan-dien-bien-bao',
+});
 
 type Res = { ok: boolean; collection: string; items: CatalogItem[] };
 

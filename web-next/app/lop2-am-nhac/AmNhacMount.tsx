@@ -25,7 +25,7 @@ export default function AmNhacMount() {
   return (
     <div id="am2-root" className="am2">
       <div className="am2-top">
-        <a className="am2-back" href="/space.html?b=g2&domain=primary">← Lớp 2</a>
+        <a className="am2-back" href="/space?b=g2&domain=primary">← Lớp 2</a>
         <div>
           <h1>🎵 Đô-Rê-Mi Bay</h1>
           <div className="am2-sub">Âm nhạc Lớp 2 — gõ nốt rơi đúng nhịp</div>
@@ -61,7 +61,7 @@ export default function AmNhacMount() {
           <p>Best: <b id="ov-best">—</b></p>
           <div className="row">
             <button className="btn" id="btn-restart">🔁 Chơi lại</button>
-            <a className="btn ghost" href="/space.html?b=g2&domain=primary">← Về Lớp 2</a>
+            <a className="btn ghost" href="/space?b=g2&domain=primary">← Về Lớp 2</a>
           </div>
         </div>
       </div>

@@ -171,7 +171,7 @@ export default function BaoSoHocClient() {
       try {
         const dom = new URLSearchParams(window.location.search).get('domain');
         if (dom === 'preschool') {
-          window.location.replace('/dem-qua.html');
+          window.location.replace('/dem-qua');
           return;
         }
       } catch {}
@@ -183,7 +183,7 @@ export default function BaoSoHocClient() {
       } catch {}
 
       if (grade === 'N' || grade === 0) {
-        window.location.replace('/dem-qua.html');
+        window.location.replace('/dem-qua');
         return;
       }
 

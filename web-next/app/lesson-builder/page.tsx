@@ -307,7 +307,7 @@ export default function LessonBuilder() {
       const data = await res.json();
       if (!res.ok) return showToast('⚠ ' + (data.error || 'Lỗi'), 'danger');
       setCurrentSlug(data.slug);
-      const url = location.origin + '/lesson.html?slug=' + data.slug;
+      const url = location.origin + '/lesson?slug=' + data.slug;
       setShareUrl(url);
       showToast(published ? '🚀 Đã publish! Link share cho HS đã sẵn sàng.' : '💾 Đã lưu draft.');
     } catch (e) {

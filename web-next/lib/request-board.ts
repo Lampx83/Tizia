@@ -95,14 +95,14 @@ function forgetSchool() {
 }
 
 const GLOBAL_PATHS = new Set([
-  '/', '/index.html',
-  '/kham-pha', '/kham-pha.html',
-  '/league', '/league.html',
+  '/', '/',
+  '/kham-pha', '/kham-pha',
+  '/league', '/league',
   '/leaderboard', '/leaderboard.html',
-  '/pricing', '/pricing.html',
-  '/login', '/login.html',
-  '/register', '/register.html',
-  '/complete-profile', '/complete-profile.html',
+  '/pricing', '/pricing',
+  '/login', '/login',
+  '/register', '/register',
+  '/complete-profile', '/complete-profile',
   '/dashboard', '/dashboard.html',
 ]);
 

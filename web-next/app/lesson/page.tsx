@@ -179,7 +179,7 @@ const LEGACY_CSS = `
 // để legacy/lesson.js querySelector trúng. Nội dung #content do engine render động.
 const SKELETON = `
 <div class="head">
-  <a href="./index.html" class="back">←</a>
+  <a href="./" class="back">←</a>
   <div class="title-area">
     <h1 id="title">Đang tải…</h1>
     <div class="meta" id="meta">—</div>
@@ -199,7 +199,7 @@ const SKELETON = `
   <h3>🎉 Bạn đã học hết bài!</h3>
   <p style="opacity:0.85;font-size:14px;line-height:1.5;">Cảm ơn em đã học. Chia sẻ phản hồi để giáo viên cải thiện bài giảng tốt hơn nhé.</p>
   <button onclick="document.getElementById('cmt-input').focus()">💬 Viết phản hồi</button>
-  <button onclick="location.href='./marketplace.html'">📚 Xem bài giảng khác</button>
+  <button onclick="location.href='./marketplace'">📚 Xem bài giảng khác</button>
 </div>
 
 <div class="comments" id="comments-box" style="display:none;">

@@ -56,7 +56,7 @@ const IMPORT_MAP = JSON.stringify({
 // querySelector trúng. <canvas> do engine tạo động rồi append vào document.body.
 const SKELETON = `
 <div class="topbar">
-  <a href="/space.html?b=garden&domain=pharmacy">← Vườn dược liệu</a>
+  <a href="/space?b=garden&domain=pharmacy">← Vườn dược liệu</a>
   <span class="title">🌿 Vườn dược liệu 3D</span>
   <span class="spacer"></span>
   <span id="score-wrap" style="display:none">🎯 <span class="score" id="score">0</span>/6</span>

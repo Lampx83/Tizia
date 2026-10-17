@@ -20,6 +20,7 @@
 export const LIGHT_THEME_ROUTES: RegExp[] = [
   /^\/(index\.html)?$/, // trang chủ
   /^\/kham-pha(\/|$)/,
+  /^\/on-tap(\/|$)/, // thư viện ôn tập — trang đọc, dùng token màu nên an toàn ở nền sáng
   /^\/pricing(\/|$)/,
   /^\/league(\/|$)/,
   /^\/leaderboard(\/|$)/,

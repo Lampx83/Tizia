@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { pageMeta, breadcrumbLd, courseLd } from '@/lib/seo';
+import JsonLd from '@/components/JsonLd';
 import { redirect } from 'next/navigation';
 import { tiziaFetch } from '@/lib/tizia';
 import {
@@ -37,11 +39,14 @@ export async function generateMetadata({
   const sp = await searchParams;
   const dom = pickDomain(sp);
   const meta = domainMeta(dom);
-  return {
-    title: `${meta.icon} ${meta.name} · Tizia`,
-    description:
-      'Chọn trường ảo Tizia theo cấp học: Mầm non, Tiểu học, THCS, THPT (theo GDPT 2018) và đại học (Dược, CNTT, Kinh tế). Bản đồ campus 2.5D tương tác, học bằng mô phỏng 3D/VR.',
-  };
+  // Trước đây title tự nối "· Tizia" trong khi template ở layout cũng nối →
+  // ra "… · Tizia · Tizia". Nay để template lo phần thương hiệu.
+  // canonical giữ nguyên ?domain= vì mỗi trường là một trang nội dung khác nhau.
+  return pageMeta({
+    title: `${meta.icon} ${meta.name} — Khuôn viên ảo và lộ trình học`,
+    description: `${meta.name} trên Tizia: bản đồ khuôn viên 2.5D bấm được, các phòng học và phòng thí nghiệm ảo, lộ trình môn học theo chương trình chuẩn. Học bằng mô phỏng 2D · 3D · VR.`,
+    path: `/school?domain=${dom}`,
+  });
 }
 
 export default async function School({ searchParams }: { searchParams: SearchParams }) {
@@ -49,7 +54,7 @@ export default async function School({ searchParams }: { searchParams: SearchPar
   const dom = pickDomain(sp);
 
   // Trường đang khoá / không tồn tại → quay về trang chọn trường (public/school.html:154).
-  if (!isDomainOpen(dom)) redirect('/index.html');
+  if (!isDomainOpen(dom)) redirect('/');
 
   const res = await tiziaFetch<MeRes>('/api/auth/me');
   const me: Me | null = res.ok && res.data ? res.data.user : null;
@@ -58,13 +63,13 @@ export default async function School({ searchParams }: { searchParams: SearchPar
   //   • chưa login + trường ≠ mở-cho-khách → redirect login (giữ return URL)
   //   • đã login nhưng gói chưa đủ → redirect /pricing
   if (!canEnterDomain(dom, me)) {
-    const ret = encodeURIComponent(`/school.html?domain=${dom}`);
+    const ret = encodeURIComponent(`/school?domain=${dom}`);
     if (!me) {
-      redirect(`/login.html?return=${ret}`);
+      redirect(`/login?return=${ret}`);
     } else {
       const required = getRequiredPlan(dom);
       redirect(
-        `/pricing.html?want=${encodeURIComponent(required)}&domain=${encodeURIComponent(dom)}&return=${ret}`,
+        `/pricing?want=${encodeURIComponent(required)}&domain=${encodeURIComponent(dom)}&return=${ret}`,
       );
     }
   }
@@ -77,6 +82,23 @@ export default async function School({ searchParams }: { searchParams: SearchPar
 
   return (
     <div className="mx-auto max-w-[1200px] space-y-4 py-5">
+      {/* Dữ liệu có cấu trúc: đường dẫn Trang chủ › Trường ảo › <tên trường> và
+          mô tả trường như một khoá học → Google hiện breadcrumb + rich result. */}
+      <JsonLd
+        data={[
+          breadcrumbLd([
+            { name: 'Trang chủ', path: '/' },
+            { name: 'Trường ảo', path: '/school' },
+            { name: meta.name, path: `/school?domain=${dom}` },
+          ]),
+          courseLd({
+            name: `${meta.name} — Tizia`,
+            description: `Lộ trình học tại ${meta.name} trên Tizia: khuôn viên ảo 2.5D, phòng học và phòng thí nghiệm mô phỏng, bài học và bài kiểm tra theo chương trình chuẩn.`,
+            path: `/school?domain=${dom}`,
+          }),
+        ]}
+      />
+
       {/* Nút quay lại trang chủ — điều hướng thoát khỏi campus một trường. */}
       <a
         href="/"

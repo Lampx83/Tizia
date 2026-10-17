@@ -203,13 +203,13 @@ export default function PortalAppsClient({
           Cài app SPA chuẩn <b>AI Portal</b> vào Tizia. Đóng gói{' '}
           <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">.zip</code> chứa{' '}
           <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">manifest.json</code> +{' '}
-          <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">public/index.html</code> rồi kéo thả vào đây.
+          <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">public/</code> rồi kéo thả vào đây.
           App của bạn được serve dưới{' '}
           <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">
             /portal-apps/u/&lt;id&gt;/&lt;alias&gt;/
           </code>{' '}
           và xuất hiện trong trang{' '}
-          <a href="/apps.html" className="text-primary hover:underline">
+          <a href="/apps" className="text-primary hover:underline">
             Ứng dụng
           </a>
           . Lần đầu làm app?{' '}

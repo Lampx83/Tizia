@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import { tiziaFetch } from '@/lib/tizia';
 import NangLucClient, {
   type MeUser,
@@ -8,11 +9,12 @@ import NangLucClient, {
   type SkillTreeResponse,
 } from './NangLucClient';
 
-export const metadata: Metadata = {
-  title: '🎯 Năng lực của em · Tizia',
+export const metadata: Metadata = pageMeta({
+  title: '🎯 Năng lực của em',
   description:
     'Cây năng lực của HS theo khung GDPT 2018 (Thông tư 32/2018): 5 phẩm chất + 10 năng lực. Theo dõi tiến độ kỹ năng đã đạt qua tất cả các trường.',
-};
+  path: '/nang-luc',
+});
 
 export default async function NangLucPage() {
   // 1) Info user hiện tại (auth gate).

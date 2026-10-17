@@ -1,15 +1,25 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import { tiziaFetch } from '@/lib/tizia';
 import styles from './index.module.css';
 import SolarStage from './SolarStage';
 import HeroTutorButton from './HeroTutorButton';
 
-export const metadata: Metadata = {
-  title: 'Tizia — Vũ trụ giáo dục ảo 3D · VR · AI | tizia.vn',
+// Trang chủ. absoluteTitle vì tiêu đề đã tự chứa thương hiệu — để template nối
+// thêm "· Tizia" sẽ thành "Tizia … · Tizia". canonical LUÔN là "/" (route /index
+// đã 301 về "/", xem next.config.mjs) để Google chỉ thấy một trang chủ duy nhất.
+export const metadata: Metadata = pageMeta({
+  absoluteTitle: 'Tizia — Vũ trụ giáo dục ảo 3D · VR · AI cho học sinh Việt Nam',
+  title: 'Trang chủ',
   description:
-    'Tizia — The Intelligent Zone for Interactive Academy. Vũ trụ giáo dục ảo do AI điều hành: trường Dược, CNTT, Kinh tế, phổ thông với 2D · 3D · VR · XR · Metaverse · gamification.',
-};
+    'Tizia (The Intelligent Zone for Interactive Academy) — vũ trụ giáo dục ảo do AI điều hành: trường Dược, CNTT, Kinh tế và phổ thông theo GDPT 2018, học bằng mô phỏng 2D · 3D · VR · Metaverse, có gia sư AI và bảng xếp hạng.',
+  path: '/',
+  keywords: [
+    'học trực tuyến', 'giáo dục ảo', 'GDPT 2018', 'luyện thi',
+    'mô phỏng 3D', 'VR giáo dục', 'gia sư AI', 'Tizia',
+  ],
+});
 
 // ───────────────────────── Types (mirror API thật) ─────────────────────────
 type Me = {
@@ -106,32 +116,32 @@ const STATUS_ORDER: Record<string, number> = { ready: 0, preview: 1, locked: 2 }
 // ───────────────────────── Feature marquee ─────────────────────────
 type Feat = { href: string; icon: string; label: string; tint?: string };
 const FEATURES: Feat[] = [
-  { href: '/assets.html', icon: '🧱', label: 'Thư viện Asset 3D' },
-  { href: '/cast.html', icon: '📺', label: 'Cast trình chiếu' },
-  { href: '/patient-sim.html', icon: '🩺', label: 'Mô phỏng bệnh nhân VN', tint: '220,38,38' },
-  { href: '/nha-thuoc-3d.html', icon: '💊', label: 'Nhà thuốc 3D GPP', tint: '13,148,136' },
-  { href: '/history-vn.html', icon: '👤', label: 'Gặp danh nhân VN', tint: '14,165,233' },
-  { href: '/negotiation.html', icon: '🤝', label: 'Đàm phán Game Theory', tint: '245,158,11' },
-  { href: '/teacher-live.html', icon: '🎛', label: 'GV điều khiển live', tint: '139,92,246' },
-  { href: '/pdf-tutor.html', icon: '📖', label: 'Học SGK bằng AI', tint: '99,102,241' },
-  { href: '/lesson-builder.html', icon: '✏️', label: 'Soạn bài no-code', tint: '16,185,129' },
-  { href: '/marketplace.html', icon: '📚', label: 'Chợ bài giảng', tint: '236,72,153' },
-  { href: '/voice-demo.html', icon: '🎙', label: 'Spatial VoIP', tint: '6,182,212' },
-  { href: '/math-fun.html', icon: '🎮', label: 'Toán vui (lớp 2 & 6)', tint: '251,191,36' },
-  { href: '/nang-luc.html', icon: '🎯', label: 'Năng lực của em', tint: '251,191,36' },
-  { href: '/cay-tri-thuc.html', icon: '🌳', label: 'Cây Tri Thức', tint: '34,197,94' },
-  { href: '/bao-so-hoc.html', icon: '⛈️', label: 'Bão Số Học', tint: '56,189,248' },
-  { href: '/ban-do-vn.html', icon: '🗺️', label: 'Bản đồ Tri thức VN', tint: '239,68,68' },
-  { href: '/lab-hoa-ao.html', icon: '🧪', label: 'Lab Hoá Học Ảo', tint: '124,58,237' },
-  { href: '/do-chu-ghep-van.html', icon: '🔤', label: 'Đố Chữ Ghép Vần', tint: '236,72,153' },
-  { href: '/pet-tri-thuc.html', icon: '🐣', label: 'Pet Tri Thức', tint: '250,204,21' },
-  { href: '/bang-phong-than.html', icon: '🏆', label: 'Bảng Phong Thần', tint: '253,224,71' },
-  { href: '/pixel-art-studio.html', icon: '🎨', label: 'Pixel Art Studio', tint: '139,92,246' },
-  { href: '/code-quest.html', icon: '🤖', label: 'Code Quest (kéo thả)', tint: '59,130,246' },
+  { href: '/assets', icon: '🧱', label: 'Thư viện Asset 3D' },
+  { href: '/cast', icon: '📺', label: 'Cast trình chiếu' },
+  { href: '/patient-sim', icon: '🩺', label: 'Mô phỏng bệnh nhân VN', tint: '220,38,38' },
+  { href: '/nha-thuoc-3d', icon: '💊', label: 'Nhà thuốc 3D GPP', tint: '13,148,136' },
+  { href: '/history-vn', icon: '👤', label: 'Gặp danh nhân VN', tint: '14,165,233' },
+  { href: '/negotiation', icon: '🤝', label: 'Đàm phán Game Theory', tint: '245,158,11' },
+  { href: '/teacher-live', icon: '🎛', label: 'GV điều khiển live', tint: '139,92,246' },
+  { href: '/pdf-tutor', icon: '📖', label: 'Học SGK bằng AI', tint: '99,102,241' },
+  { href: '/lesson-builder', icon: '✏️', label: 'Soạn bài no-code', tint: '16,185,129' },
+  { href: '/marketplace', icon: '📚', label: 'Chợ bài giảng', tint: '236,72,153' },
+  { href: '/voice-demo', icon: '🎙', label: 'Spatial VoIP', tint: '6,182,212' },
+  { href: '/math-fun', icon: '🎮', label: 'Toán vui (lớp 2 & 6)', tint: '251,191,36' },
+  { href: '/nang-luc', icon: '🎯', label: 'Năng lực của em', tint: '251,191,36' },
+  { href: '/cay-tri-thuc', icon: '🌳', label: 'Cây Tri Thức', tint: '34,197,94' },
+  { href: '/bao-so-hoc', icon: '⛈️', label: 'Bão Số Học', tint: '56,189,248' },
+  { href: '/ban-do-vn', icon: '🗺️', label: 'Bản đồ Tri thức VN', tint: '239,68,68' },
+  { href: '/lab-hoa-ao', icon: '🧪', label: 'Lab Hoá Học Ảo', tint: '124,58,237' },
+  { href: '/do-chu-ghep-van', icon: '🔤', label: 'Đố Chữ Ghép Vần', tint: '236,72,153' },
+  { href: '/pet-tri-thuc', icon: '🐣', label: 'Pet Tri Thức', tint: '250,204,21' },
+  { href: '/bang-phong-than', icon: '🏆', label: 'Bảng Phong Thần', tint: '253,224,71' },
+  { href: '/pixel-art-studio', icon: '🎨', label: 'Pixel Art Studio', tint: '139,92,246' },
+  { href: '/code-quest', icon: '🤖', label: 'Code Quest (kéo thả)', tint: '59,130,246' },
 ];
 
 const KIND_ICO: Record<string, string> = { lesson: '📘', quiz: '❓', minigame: '🎮', code: '💻' };
-const KIND_HREF: Record<string, string> = { lesson: '/space.html', quiz: '/space.html', minigame: '/space.html#mini-games', code: '/lap-trinh-game.html' };
+const KIND_HREF: Record<string, string> = { lesson: '/space', quiz: '/space', minigame: '/space#mini-games', code: '/lap-trinh-game' };
 const KIND_CTA: Record<string, string> = { lesson: 'Học bài →', quiz: 'Làm bài →', minigame: 'Chơi →', code: 'Code →' };
 
 // ───────────────────────── Page ─────────────────────────
@@ -280,7 +290,7 @@ export default async function IndexPage() {
                 {dash.engagement.quests.map((q, idx) => {
                   const pct = Math.min(100, Math.round((q.progress / q.target) * 100));
                   const done = q.progress >= q.target;
-                  const href = KIND_HREF[q.kind] || '/space.html';
+                  const href = KIND_HREF[q.kind] || '/space';
                   const cta = KIND_CTA[q.kind] || 'Đi học →';
                   return (
                     <a key={idx} href={href} className={styles.questRow}>
@@ -312,8 +322,8 @@ export default async function IndexPage() {
             <div className={styles.gbText}>
               <b>Bạn đang dùng thử ở chế độ khách.</b> Vào được trường <b>Mầm non</b> — các trường khác cần đăng nhập để mở khoá.
             </div>
-            <a className={styles.gbCta} href="/login.html?return=%2F">Đăng nhập</a>
-            <a className={styles.gbAlt} href="/register.html">Tạo tài khoản</a>
+            <a className={styles.gbCta} href="/login?return=%2F">Đăng nhập</a>
+            <a className={styles.gbAlt} href="/register">Tạo tài khoản</a>
           </div>
         </div>
       )}
@@ -397,15 +407,15 @@ function SchoolCard({ d, me, isGuest }: { d: Domain; me: Me | null; isGuest: boo
     cta = '🔒 Sắp mở'; href = null; cls.push(styles.locked);
   } else if (needLogin) {
     cta = '🔐 Đăng nhập để vào';
-    href = `/login.html?return=${encodeURIComponent('/school.html?domain=' + d.id)}`;
+    href = `/login?return=${encodeURIComponent('/school?domain=' + d.id)}`;
     cls.push(styles.locked, styles.guestLocked);
   } else if (needUpgrade || guestLocked) {
     cta = '🔒 Tạm chưa mở';
-    href = `/pricing.html?want=${encodeURIComponent(required)}&domain=${encodeURIComponent(d.id)}`;
+    href = `/pricing?want=${encodeURIComponent(required)}&domain=${encodeURIComponent(d.id)}`;
     cls.push(styles.locked, styles.planLocked);
   } else {
     cta = '→ Vào trường';
-    href = `/school.html?domain=${encodeURIComponent(d.id)}`;
+    href = `/school?domain=${encodeURIComponent(d.id)}`;
   }
 
   const inner = (

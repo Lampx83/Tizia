@@ -1,12 +1,14 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import { tiziaFetch } from '@/lib/tizia';
 import MarketplaceClient, { type Lesson } from './MarketplaceClient';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: 'Chợ bài giảng cộng đồng',
   description:
     'Bài giảng tương tác do giáo viên Việt Nam tự tạo bằng Lesson Builder no-code. Free để xem, free để clone về sửa.',
-};
+  path: '/marketplace',
+});
 
 type Res = { items: Lesson[]; total: number };
 
@@ -22,7 +24,7 @@ export default async function Marketplace() {
           📚 Chợ bài giảng cộng đồng
         </h1>
         <a
-          href="/lesson-builder.html"
+          href="/lesson-builder"
           className="ml-auto rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 px-4 py-2 text-sm font-bold text-[#3e2723]"
         >
           ✏️ Tạo bài giảng mới

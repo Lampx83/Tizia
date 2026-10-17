@@ -1,13 +1,15 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import { tiziaFetch } from '@/lib/tizia';
 import { cn } from '@/lib/utils';
 
-export const metadata: Metadata = {
-  title: '🏆 League tuần · Tizia',
+export const metadata: Metadata = pageMeta({
+  title: '🏆 League tuần',
   description:
     'Bảng xếp hạng tuần Tizia — Đồng → Kim cương. Top 5 lên hạng, bottom 5 xuống hạng vào Chủ nhật 23:59 hằng tuần.',
-};
+  path: '/league',
+});
 
 const TIER_ORDER = ['bronze', 'silver', 'gold', 'sapphire', 'ruby', 'diamond'] as const;
 

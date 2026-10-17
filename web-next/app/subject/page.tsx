@@ -1,12 +1,15 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import Link from 'next/link';
 import { tiziaFetch } from '@/lib/tizia';
 import SubjectPath, { type Chapter } from './SubjectPath';
 
-export const metadata: Metadata = {
-  title: 'Lộ trình môn học · Tizia',
-  description: 'Lộ trình Toán lớp 6 theo chương → bài học. Mỗi bài là một nhiệm vụ nhỏ, mở khoá tuần tự và đánh Boss cuối chương.',
-};
+export const metadata: Metadata = pageMeta({
+  title: 'Lộ trình môn học — Chương, bài và Boss cuối chương',
+  description:
+    'Lộ trình học từng môn theo chương → bài. Mỗi bài là một nhiệm vụ ngắn, mở khoá tuần tự và có Boss kiểm tra cuối chương.',
+  path: '/subject',
+});
 
 // /api/content/:collection → { ok, collection, items }. Public (guest xem được).
 type ContentRes = { ok: boolean; collection: string; items: Chapter[] };
@@ -21,7 +24,7 @@ export default async function SubjectPage({
   const grade = sp.grade || '6';
 
   // Trường dùng để nút "← Lộ trình trường" — giữ như trang gốc (secondary).
-  const backSchool = '/school.html?domain=secondary';
+  const backSchool = '/school?domain=secondary';
 
   // Hiện tại chỉ có lộ trình Toán 6 — giống trang gốc.
   if (!(subject === 'toan' && grade === '6')) {

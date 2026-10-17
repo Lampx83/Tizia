@@ -7,7 +7,7 @@
 // confetti, sync XP. Đủ điểm → lên cấp.
 //
 // Gate: mầm non (?domain=preschool hoặc grade N/0) → chuyển sang Ghép Chữ Cái
-// (/ghep-chu-cai.html), game này cần biết đọc + đánh vần nên chưa hợp 3-5 tuổi.
+// (/ghep-chu-cai), game này cần biết đọc + đánh vần nên chưa hợp 3-5 tuổi.
 //
 // Thao tác DOM của trang vanilla được chuyển sang React state (slotChars, bank) +
 // key re-render; hiệu ứng correct/wrong/confetti/level-up dùng state có id tự dọn.
@@ -236,7 +236,7 @@ export default function DoChuGhepVanClient() {
         const dom = new URLSearchParams(window.location.search).get('domain');
         if (dom === 'preschool') {
           gatedRef.current = true;
-          window.location.replace('/ghep-chu-cai.html');
+          window.location.replace('/ghep-chu-cai');
           return;
         }
         const r = await fetch('/api/auth/me', { credentials: 'same-origin' });
@@ -245,7 +245,7 @@ export default function DoChuGhepVanClient() {
           const g = d?.user?.grade;
           if (g === 'N' || g === 0) {
             gatedRef.current = true;
-            window.location.replace('/ghep-chu-cai.html');
+            window.location.replace('/ghep-chu-cai');
             return;
           }
         }

@@ -76,7 +76,7 @@ export default function Lop2GhepVanClient() {
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [finished, setFinished] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [backHref, setBackHref] = useState('/school.html?domain=primary#campus-hero');
+  const [backHref, setBackHref] = useState('/school?domain=primary#campus-hero');
 
   const startTimeRef = useRef(Date.now());
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -116,7 +116,7 @@ export default function Lop2GhepVanClient() {
   // Đường về theo ?domain.
   useEffect(() => {
     const d = new URLSearchParams(window.location.search).get('domain');
-    if (d) setBackHref('/space.html?domain=' + encodeURIComponent(d));
+    if (d) setBackHref('/space?domain=' + encodeURIComponent(d));
   }, []);
 
   // Nạp bộ vần từ DB (API) rồi bắt đầu ván.
@@ -382,7 +382,7 @@ export default function Lop2GhepVanClient() {
               <button className="btn ghost" onClick={playAgain}>
                 🔄 Chơi lại
               </button>
-              <a className="btn act" href="/space.html?domain=primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
+              <a className="btn act" href="/space?domain=primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
                 ← Về trường
               </a>
             </div>

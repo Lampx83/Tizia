@@ -20,6 +20,10 @@ const NOINDEX_EXACT = new Set([
   '/admin.html', '/dashboard.html', '/family.html', '/teacher.html',
   '/complete-profile.html', '/lesson-builder.html',
   '/cast.html', '/devices.html',
+  // Dạng URL sạch (Next là cửa trước) — cùng danh sách, tránh sót.
+  '/admin', '/dashboard', '/family', '/teacher', '/teacher-live',
+  '/complete-profile', '/lesson-builder', '/cast', '/devices',
+  '/pharmacomm-giang-vien.html', '/pharmacomm-ket-qua.html',
 ]);
 const NOINDEX_PREFIXES = ['/admin/', '/parent/', '/gv/', '/live-quiz/', '/api/', '/sim/'];
 
@@ -60,7 +64,9 @@ export function buildSeoHeadTags(html, { origin, urlPath, basePath = '' }) {
   const title = extractTitle(html);
   const desc = extractDesc(html);
   const canonical = origin + urlPath;
-  const ogImage = `${origin}/og-default.svg`;
+  // Ảnh chia sẻ: PNG do Next sinh (/opengraph-image). KHÔNG dùng .svg — Facebook,
+  // Zalo và Twitter không render og:image dạng SVG, link chia sẻ ra sẽ trống ảnh.
+  const ogImage = `${origin}/opengraph-image`;
 
   if (!hasTag(html, /<meta[^>]+name=["']description["']/i)) {
     tags.push(`<meta name="description" content="${htmlEscape(desc)}" />`);

@@ -1,11 +1,13 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import BossArena from './boss-arena';
 
-export const metadata: Metadata = {
-  title: '⚔ Trận đấu kiến thức · Tizia',
+export const metadata: Metadata = pageMeta({
+  title: '⚔ Trận đấu kiến thức',
   description:
     'Hạ boss bằng câu trả lời đúng — combat-by-quiz Tizia. Mỗi boss thử thách 1 chủ đề + drop coin/XP/skin.',
-};
+  path: '/tran-dau',
+});
 
 export default function TranDau() {
   return (

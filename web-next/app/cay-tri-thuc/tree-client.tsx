@@ -68,7 +68,7 @@ function moduleHref(fid: string): string {
     : fid.startsWith('H') ? 'highschool'
     : '';
   const qs = `module=${encodeURIComponent(fid)}${dom ? '&domain=' + dom : ''}`;
-  return `/module.html?${qs}`;
+  return `/module?${qs}`;
 }
 
 export default function TreeClient({ runs, wallet }: { runs: ScenarioRuns; wallet: Wallet }) {
@@ -379,7 +379,7 @@ export default function TreeClient({ runs, wallet }: { runs: ScenarioRuns; walle
           <div className="ic">🌱</div>
           <h3>Cây em chưa có lá nào!</h3>
           <p>Hãy hoàn thành các tuần học trong &quot;Không gian học&quot; để gieo những chiếc lá đầu tiên lên Cây Tri Thức nhé.</p>
-          <a href="/space.html">🌳 Đến không gian học</a>
+          <a href="/space">🌳 Đến không gian học</a>
         </div>
       )}
 

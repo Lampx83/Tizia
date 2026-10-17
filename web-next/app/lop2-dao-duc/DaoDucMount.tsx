@@ -24,7 +24,7 @@ export default function DaoDucMount() {
   return (
     <div id="dd2-root" className="dd2">
       <div className="dd2-top">
-        <a className="dd2-back" href="/space.html?b=g2&domain=primary">← Lớp 2</a>
+        <a className="dd2-back" href="/space?b=g2&domain=primary">← Lớp 2</a>
         <div>
           <h1>🤝 Đúng hay Sai?</h1>
           <div className="dd2-sub">Đạo đức Lớp 2 — chọn ✅ đúng hoặc ❌ sai cho từng tình huống</div>
@@ -58,7 +58,7 @@ export default function DaoDucMount() {
           <p>Best: <b id="dd2-ov-best">—</b></p>
           <div className="dd2-panel-row">
             <button className="dd2-btn" id="dd2-btn-restart">🔁 Chơi lại</button>
-            <a className="dd2-btn ghost" href="/space.html?b=g2&domain=primary">← Về Lớp 2</a>
+            <a className="dd2-btn ghost" href="/space?b=g2&domain=primary">← Về Lớp 2</a>
           </div>
         </div>
       </div>

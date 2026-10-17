@@ -1,11 +1,13 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import SignsMount from './SignsMount';
 
-export const metadata: Metadata = {
-  title: '🚸 Biển báo Giao thông · Tizia',
+export const metadata: Metadata = pageMeta({
+  title: '🚸 Biển báo Giao thông',
   description:
     'Học và đố biển báo giao thông Việt Nam: cấm, nguy hiểm, hiệu lệnh, chỉ dẫn. SVG vẽ tay, không cần ảnh.',
-};
+  path: '/bien-bao-giao-thong',
+});
 
 // Server Component: khung SEO tĩnh (tiêu đề) render sẵn. Phần tương tác (học/đố
 // vui, lọc nhóm, modal chi tiết, đếm điểm) nằm trong SignsMount ('use client'),

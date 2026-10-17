@@ -208,7 +208,7 @@ const SKELETON = `
 </div>
 
 <div class="topbar">
-  <a href="/sac-ky-vr.html">← Hub Sắc ký</a>
+  <a href="/sac-ky-vr">← Hub Sắc ký</a>
   <span class="step-pill" id="step-pill">Bước 2/6 · Chấm mẫu</span>
   <span class="stat">⏱️ <b id="timer">0s</b></span>
   <span class="stat">🎯 <b id="score">0</b></span>
@@ -244,8 +244,8 @@ const SKELETON = `
     <div id="modal-details"></div>
     <div class="modal-btns">
       <button class="primary" id="modal-replay">↺ Làm lại</button>
-      <a class="outline" href="/sac-ky-vr.html">← Hub</a>
-      <a class="outline" href="/index.html">🏠 Trang chính</a>
+      <a class="outline" href="/sac-ky-vr">← Hub</a>
+      <a class="outline" href="/">🏠 Trang chính</a>
     </div>
   </div>
 </div>

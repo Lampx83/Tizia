@@ -45,7 +45,7 @@ const STYLE = `
 
 const SKELETON = `
 <div class="top">
-  <a class="back" href="/space.html?b=g2&domain=primary">← Lớp 2</a>
+  <a class="back" href="/space?b=g2&domain=primary">← Lớp 2</a>
   <div><h1>⚽ Phản Xạ Cầu Thủ</h1><div class="sub">GDTC — bấm thật nhanh khi quả bóng/cầu xuất hiện</div></div>
   <div class="right">
     <div class="stat">⏱ <span class="v" id="time">30s</span></div>
@@ -70,7 +70,7 @@ const SKELETON = `
     <p>Best: <b id="ov-best">—</b></p>
     <div class="row">
       <button class="btn" id="btn-restart">🔁 Tập lại</button>
-      <a class="btn ghost" href="/space.html?b=g2&domain=primary">← Về Lớp 2</a>
+      <a class="btn ghost" href="/space?b=g2&domain=primary">← Về Lớp 2</a>
     </div>
   </div>
 </div>

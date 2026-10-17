@@ -1,12 +1,14 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import ScenarioMount from './ScenarioMount';
 
-export const metadata: Metadata = {
-  title: 'L3.3 · Tương tác thuốc — Tizia',
+export const metadata: Metadata = pageMeta({
+  title: 'L3.3 · Tương tác thuốc',
   description:
     'Phát hiện cặp tương tác nguy hiểm + hiểu cơ chế CYP450 — phục vụ môn Dược lý 3 và Dược lâm sàng 4.',
-};
+  path: '/L3-3-tuong-tac',
+});
 
 // Server Component: khung SEO tĩnh (tiêu đề, mô tả, mục tiêu module) render sẵn
 // từ server. Phần tương tác (picker scenario + ScenarioEngine + quiz + kết quả)

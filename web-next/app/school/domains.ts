@@ -94,7 +94,7 @@ export function canEnterDomain(id: string, me: SchoolUser | null): boolean {
   return meetsPlan(effectivePlanId(me), getRequiredPlan(id));
 }
 
-// public/js/school.html:104 — NAMES (tên + icon ngắn cho 8 trường đang mở).
+// public/school.html:104 — NAMES (tên + icon ngắn cho 8 trường đang mở).
 const NAMES: Record<string, { name: string; icon: string }> = {
   pharmacy: { name: 'Trường Dược', icon: '💊' },
   it: { name: 'Trường Công nghệ thông tin', icon: '💻' },

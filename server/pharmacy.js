@@ -1,7 +1,7 @@
 // Pharmacy AI port — session store + chat / action / score routes.
 // Logic ported 1-1 from github.com/Lampx83/Pharmacy-AI (src/lib/segue/*, src/lib/session/store.ts).
 import express from 'express';
-import { ollamaGenerate, ollamaGenerateStream } from './ai.js';
+import { llmGenerate, llmGenerateStream, openaiGenerate, openaiGenerateStream, isOpenAIConfigured } from './ai.js';
 import { SCENARIOS } from '../public/js/pharmacy/scenarios.js';
 import { computeScore } from '../public/js/pharmacy/score.js';
 
@@ -34,8 +34,8 @@ const _sweep = setInterval(() => {
 }, 30 * 60e3);
 _sweep.unref?.();
 
-// Build conversation prompt for Ollama. Matches the OpenAI persona pattern used in
-// upstream src/lib/llm/openai.ts but uses /generate (string prompt) for our local model.
+// Build conversation prompt for the LLM. Matches the OpenAI persona pattern used in
+// upstream src/lib/llm/openai.ts but uses a single prompt string (wrapped as one user message) for our local model.
 function buildPrompt(persona, history, userMessage) {
   const lines = [];
   for (const m of history.slice(-12)) {
@@ -47,7 +47,7 @@ function buildPrompt(persona, history, userMessage) {
   return lines.join('\n');
 }
 
-// Fallback NPC responses when Ollama unavailable — mirrors src/lib/llm/stub.ts.
+// Fallback NPC responses when the LLM is unavailable — mirrors src/lib/llm/stub.ts.
 function stubReply(moduleId) {
   if (moduleId === 'gpp') return 'Em vẫn cứ muốn xin ít kháng sinh thôi, khỏi nhanh em đi làm.';
   if (moduleId === 'hospital') return 'Dược sĩ, đơn của tôi có gì sai à? Bệnh nhân đang đợi.';
@@ -158,26 +158,40 @@ const TEACHBACK_HINT = `
 
 LƯU Ý RIÊNG LƯỢT NÀY: Dược sĩ vừa yêu cầu bạn NHẮC LẠI cách dùng thuốc. Hãy nhắc lại NGẮN GỌN nhưng ĐẦY ĐỦ cách dùng của TỪNG thuốc đúng như dược sĩ đã hướng dẫn trong hội thoại (liều, số lần, cách pha/lắc…), kết thúc bằng "đúng không dược sĩ?". TUYỆT ĐỐI KHÔNG đáp cụt "Vâng ạ".`;
 
-async function npcReply(scenario, history, userMessage) {
-  const prompt = buildPrompt(scenario.npcPersona, history, userMessage);
+// Gom cấu hình sinh câu trả lời (bộ luật/độ dài/token) — DÙNG CHUNG cho cả /chat
+// (npcReply, không stream) và /chat-stream, để 2 đường KHÔNG lệch nhau (trước đây
+// /chat-stream quên áp PROFESSIONAL_RULES cho bác sĩ/trưởng khoa — bug đã có từ
+// trước, tiện sửa luôn khi refactor cho việc chọn mô hình).
+function npcGenConfig(scenario, userMessage) {
   const isPro = scenario.npcKind === 'professional';
-  // Teach-back ("nhắc lại cách dùng…"): bơm chỉ dẫn riêng + cho phép trả lời dài hơn.
-  // Chỉ áp cho BỆNH NHÂN; NPC chuyên môn dùng PROFESSIONAL_RULES + cho phép 3 câu.
   const teachBack = !isPro && /(nhắc lại|nói lại|lặp lại|kể lại)/i.test(userMessage);
   const rules = isPro ? PROFESSIONAL_RULES : ROLEPLAY_RULES;
-  const maxSent = isPro ? 3 : (teachBack ? 3 : 2);
-  const maxCh = isPro ? 300 : (teachBack ? 330 : 200);
+  return {
+    isPro,
+    teachBack,
+    system: (scenario.npcPersona || '') + rules + (teachBack ? TEACHBACK_HINT : ''),
+    maxSent: isPro ? 3 : (teachBack ? 3 : 2),
+    maxCh: isPro ? 300 : (teachBack ? 330 : 200),
+    maxTokens: isPro ? 200 : (teachBack ? 200 : 120)
+  };
+}
+
+// useGpt=true → gọi OpenAI (GPT) thay Qwen (vLLM nội bộ); caller đã tự kiểm isOpenAIConfigured().
+async function npcReply(scenario, history, userMessage, useGpt = false) {
+  const prompt = buildPrompt(scenario.npcPersona, history, userMessage);
+  const cfg = npcGenConfig(scenario, userMessage);
   try {
-    const reply = await ollamaGenerate({
+    const gen = useGpt ? openaiGenerate : llmGenerate;
+    const reply = await gen({
       prompt,
-      system: (scenario.npcPersona || '') + rules + (teachBack ? TEACHBACK_HINT : ''),
+      system: cfg.system,
       temperature: 0.55,
-      maxTokens: isPro ? 200 : (teachBack ? 200 : 120)
+      maxTokens: cfg.maxTokens
     });
     const cleaned = cleanReply(reply);
-    return trimReply(cleaned, maxSent, maxCh) || stubReply(scenario.id);
+    return trimReply(cleaned, cfg.maxSent, cfg.maxCh) || stubReply(scenario.id);
   } catch (err) {
-    console.error('[pharmacy] ollama failed, using stub:', err.message);
+    console.error(`[pharmacy] ${useGpt ? 'openai' : 'llm'} failed, using stub:`, err.message);
     return stubReply(scenario.id);
   }
 }
@@ -435,6 +449,10 @@ export function attachPharmacy(r) {
     // triệu chứng chính) CHỈ áp cho NPC bệnh nhân. NPC chuyên môn (bác sĩ/trưởng khoa)
     // bỏ qua các guard này để không bị "bắt" nói giọng bệnh nhân. Mặc định = bệnh nhân.
     const isPatient = scenario.npcKind !== 'professional';
+    // Bộ chọn mô hình (chat UI): 'qwen' (mặc định, vLLM nội bộ) hoặc 'gpt' (OpenAI,
+    // chỉ dùng khi ĐÃ cấu hình OPENAI_API_KEY — thiếu key thì tự rơi về Qwen).
+    const provider = req.body?.provider === 'gpt' ? 'gpt' : 'qwen';
+    const useGpt = provider === 'gpt' && isOpenAIConfigured();
 
     const text = String(message || '').trim();
     if (!text) return res.status(400).json({ error: 'empty message' });
@@ -548,7 +566,7 @@ export function attachPharmacy(r) {
       s.context.pregnant = true;
     }
 
-    let reply = await npcReply(scenario, s.messages, text);
+    let reply = await npcReply(scenario, s.messages, text, useGpt);
     // Lưới CUỐI: model lỡ "nhắc bài" (câu dạng "Dược sĩ nên…") → thay câu né + ghi vi phạm.
     if (isPatient && LEAK_RE.test(reply)) {
       s.context.violations = (s.context.violations || 0) + 1;
@@ -566,7 +584,9 @@ export function attachPharmacy(r) {
     }
     reply = applyMood(scenario, s, reply, text);
     if (reassure && !reply.includes(reassure.line)) reply = `${reassure.line} ${reply}`.trim();
-    s.messages.push({ role: 'npc', content: reply, ts: Date.now() });
+    // provider chỉ gắn cho câu TỪ MODEL (không gắn cho các guard tất định phía trên,
+    // vì chúng không hỏi LLM) → client dùng field này để hiện badge "🐫 Qwen"/"✨ GPT".
+    s.messages.push({ role: 'npc', content: reply, ts: Date.now(), provider: useGpt ? 'gpt' : 'qwen' });
     saveSession(s);
     res.json({ session: s });
   });
@@ -582,6 +602,9 @@ export function attachPharmacy(r) {
     if (!s) return res.status(404).json({ error: 'session not found' });
     const scenario = SCENARIOS[s.moduleId];
     const isPatient = scenario.npcKind !== 'professional';
+    // Bộ chọn mô hình — xem chú thích tương tự ở /chat phía trên.
+    const provider = req.body?.provider === 'gpt' ? 'gpt' : 'qwen';
+    const useGpt = provider === 'gpt' && isOpenAIConfigured();
     const text = String(message || '').trim();
     if (!text) return res.status(400).json({ error: 'empty message' });
     s.messages.push({ role: 'user', content: text, ts: Date.now() });
@@ -595,10 +618,12 @@ export function attachPharmacy(r) {
       'X-Accel-Buffering': 'no'   // tắt buffering ở nginx/NPM để token trôi ngay
     });
     const sse = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+    // extra.provider (nếu có) → gửi cả cho client qua SSE để hiện badge model; các
+    // guard tất định gọi finish() KHÔNG truyền provider (không phải câu từ LLM).
     const finish = (reply, extra = {}) => {
       s.messages.push({ role: 'npc', content: reply, ts: Date.now(), ...extra });
       saveSession(s);
-      sse({ done: true, reply });
+      sse({ done: true, reply, provider: extra.provider || null });
       res.end();
     };
 
@@ -653,20 +678,22 @@ export function attachPharmacy(r) {
     }
     if (/(có thai|mang thai)/i.test(s.messages.map(m => m.content).join(' '))) s.context.pregnant = true;
 
-    const teachBack = /(nhắc lại|nói lại|lặp lại|kể lại)/i.test(text);
-    const maxSent = teachBack ? 3 : 2;
-    const maxCh = teachBack ? 330 : 200;
-    // Client rời trang giữa chừng → ngắt upstream Ollama. 🪤 KHÔNG dùng req.on('close'):
+    // cfg gom bộ luật/độ dài — DÙNG CHUNG với npcReply (npcGenConfig) → 2 đường
+    // /chat và /chat-stream không còn lệch nhau (bug cũ: stream quên PROFESSIONAL_RULES).
+    const cfg = npcGenConfig(scenario, text);
+    const { maxSent, maxCh } = cfg;
+    // Client rời trang giữa chừng → ngắt upstream. 🪤 KHÔNG dùng req.on('close'):
     // Node 20 bắn 'close' NGAY khi request body đọc xong (stream request kết thúc) chứ
     // không phải khi client rời — từng làm MỌI reply stream bị cắt còn 1 token → stub.
     // res.destroyed chỉ true khi socket thật sự chết → mới là "client đã đi".
     try {
       let started = false, pending = '', emitted = '';
-      const full = await ollamaGenerateStream({
+      const streamFn = useGpt ? openaiGenerateStream : llmGenerateStream;
+      const full = await streamFn({
         prompt: buildPrompt(scenario.npcPersona, s.messages, text),
-        system: (scenario.npcPersona || '') + ROLEPLAY_RULES + (teachBack ? TEACHBACK_HINT : ''),
+        system: cfg.system,
         temperature: 0.55,
-        maxTokens: teachBack ? 200 : 120,
+        maxTokens: cfg.maxTokens,
         onToken: (t) => {
           if (res.destroyed) return false;
           pending += t;
@@ -686,7 +713,7 @@ export function attachPharmacy(r) {
           if (isPatient && (LEAK_RE.test(emitted) || LEAD_RE.test(emitted))) return false;
           // #117: chớm tuôn dữ kiện CHƯA được hỏi → ngắt luôn, bản final sẽ bị cắt sạch.
           if (isPatient && guardedLeakHit(scenario, emitted, text)) return false;
-          // Cắt sớm khi đã đủ câu/ký tự (khớp trimReply) → trả false để abort Ollama.
+          // Cắt sớm khi đã đủ câu/ký tự (khớp trimReply) → trả false để abort upstream.
           const sentences = (emitted.match(/[.!?…]/g) || []).length;
           if (sentences >= maxSent || emitted.length >= maxCh) return false;
         }
@@ -708,9 +735,9 @@ export function attachPharmacy(r) {
       }
       let moody = applyMood(scenario, s, finalReply, text);
       if (reassure && !moody.includes(reassure.line)) moody = `${reassure.line} ${moody}`.trim();
-      finish(moody);
+      finish(moody, { provider: useGpt ? 'gpt' : 'qwen' });
     } catch (err) {
-      console.error('[pharmacy] ollama stream failed, using stub:', err.message);
+      console.error(`[pharmacy] ${useGpt ? 'openai' : 'llm'} stream failed, using stub:`, err.message);
       finish(stubReply(scenario.id));
     }
   });

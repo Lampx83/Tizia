@@ -11,8 +11,8 @@ import { pickVoice } from '@/lib/tts';
 //  seed: public/js/scenarios/_data/vocab-en.js (node server/scripts/seed-content.mjs).
 //
 //  LỊCH SỬ LỖI (2026-07-16): bản đầu scrape object VOCAB từ inline script của
-//  trang HTML cũ (/tu-vung-tieng-anh.html). Khi trang này vào danh sách MIGRATED
-//  thì Next 308 /tu-vung-tieng-anh.html → /tu-vung-tieng-anh, tức fetch quay về
+//  trang HTML cũ (/tu-vung-tieng-anh). Khi trang này vào danh sách MIGRATED
+//  thì Next 308 /tu-vung-tieng-anh → /tu-vung-tieng-anh, tức fetch quay về
 //  CHÍNH TRANG NÀY — không còn VOCAB để trích → mất sạch flashcard + các tác vụ.
 //  Đừng dựng lại fallback trỏ vào URL .html của trang đã migrate.
 //
@@ -126,7 +126,7 @@ export default function TuVungTiengAnhClient() {
   const customRef = useRef<Custom>({ words: {}, labels: {} });
   const vocabRef = useRef<Vocab>({});
   const dbOrderRef = useRef<string[]>([]);
-  const backHref = useRef('/school.html?domain=language');
+  const backHref = useRef('/school?domain=language');
 
   useEffect(() => { vocabRef.current = vocab; }, [vocab]);
 
@@ -136,7 +136,7 @@ export default function TuVungTiengAnhClient() {
     customRef.current = loadCustom();
     const params = new URLSearchParams(location.search);
     const dom = params.get('domain');
-    if (dom) backHref.current = '/school.html?domain=' + encodeURIComponent(dom);
+    if (dom) backHref.current = '/school?domain=' + encodeURIComponent(dom);
 
     (async () => {
       let loaded: LoadedVocab | null = null;

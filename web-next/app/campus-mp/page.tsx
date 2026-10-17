@@ -30,7 +30,7 @@ export default function CampusMpPage() {
   return (
     <div className="campus-root">
       <div className="top">
-        <a className="back" href="/index.html">
+        <a className="back" href="/">
           ←
         </a>
         <h1>

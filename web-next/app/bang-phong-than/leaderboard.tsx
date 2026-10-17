@@ -212,10 +212,10 @@ export default function Leaderboard() {
         <Link className="back" href="/">
           ← Tizia
         </Link>
-        <a className="back" href="/cay-tri-thuc.html">
+        <a className="back" href="/cay-tri-thuc">
           🌳 Cây Tri Thức
         </a>
-        <a className="back" href="/pet-tri-thuc.html">
+        <a className="back" href="/pet-tri-thuc">
           🐣 Pet Tri Thức
         </a>
       </div>
@@ -294,7 +294,7 @@ export default function Leaderboard() {
         <div className="foot">
           Bảng cập nhật mỗi 5 phút · điểm = tổng best_score × stars trên các tuần đã hoàn thành.
           <br />
-          Muốn lọt top? Hãy chinh phục thêm tuần học ở <a href="/space.html">Không gian học</a>!
+          Muốn lọt top? Hãy chinh phục thêm tuần học ở <a href="/space">Không gian học</a>!
         </div>
       </main>
     </div>

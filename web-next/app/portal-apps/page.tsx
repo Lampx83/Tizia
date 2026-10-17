@@ -1,13 +1,15 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import { tiziaFetch } from '@/lib/tizia';
 import PortalAppsClient, { type PortalApp } from './PortalAppsClient';
 
-export const metadata: Metadata = {
-  title: 'Portal Apps · Cài app cho dev — Tizia',
+export const metadata: Metadata = pageMeta({
+  title: 'Portal Apps · Cài app cho dev',
   description:
     'Developer dashboard: cài app SPA chuẩn AI Portal (manifest.json + .zip) vào Tizia. Quản lý, gỡ, public app của bạn.',
-};
+  path: '/portal-apps',
+});
 
 type Res = { own?: PortalApp[]; public?: PortalApp[]; builtin?: PortalApp[] };
 

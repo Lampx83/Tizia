@@ -14,7 +14,7 @@
  * Nếu thêm/sửa entry, bump CATALOG_VERSION để force re-seed.
  */
 
-export const CATALOG_VERSION = '2026-08-15-v4-gplx-bien-bao';
+export const CATALOG_VERSION = '2026-08-16-v5-tu-thuoc-mo-phong';
 
 export const BUILTIN_APPS = [
   // ─────── Mầm non / Lớp 2 ───────
@@ -158,6 +158,9 @@ export const BUILTIN_APPS = [
   { alias: '3d-shelf', name: 'Kệ thuốc 3D', icon: '📦',
     description: 'Khám phá kệ thuốc 3D — tìm thuốc theo nhóm điều trị, đường dùng.',
     target_url: '/3d-shelf.html', category: 'sim', domain: 'pharmacy' },
+  { alias: 'tu-thuoc-mo-phong', name: 'Tủ thuốc mô phỏng', icon: '🗄️',
+    description: 'Luyện nhận diện & sắp xếp thuốc theo tủ Rx/OTC/kiểm soát đặc biệt — tìm nhanh theo tên hoạt chất, ảnh hộp thuốc thật, bài tập kéo-thả cất hàng mới về.',
+    target_url: '/tu-thuoc-mo-phong.html', category: 'sim', domain: 'pharmacy' },
 
   // ─────── Trường NGOẠI NGỮ (language) ───────
   { alias: 'tu-vung-tieng-anh', name: 'Từ vựng Tiếng Anh', icon: '📚',

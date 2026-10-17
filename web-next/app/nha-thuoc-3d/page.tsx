@@ -369,7 +369,8 @@ const LEGACY_CSS = `
   .scenario-box .setting { font-size: 12px; opacity: 0.85; line-height: 1.5; }
 
   .chat {
-    flex: 1; min-height: 220px; max-height: 360px; overflow-y: auto;
+    /* 22/07: nới khung hội thoại — chat là thao tác chính của bài thực hành */
+    flex: 1; min-height: 400px; max-height: 64vh; overflow-y: auto;
     display: flex; flex-direction: column; gap: 6px;
     background: rgba(15,23,42,0.6); border: 1px solid var(--border);
     border-radius: 10px; padding: 10px;
@@ -380,6 +381,13 @@ const LEGACY_CSS = `
   }
   .bubble.user { background: var(--accent); color: #0f172a; align-self: flex-end; border-bottom-right-radius: 4px; }
   .bubble.npc { background: var(--card-h); color: var(--text); align-self: flex-start; border-bottom-left-radius: 4px; }
+  /* Bộ chọn mô hình AI (Qwen/GPT) + nhãn model dưới mỗi câu trả lời của AI. */
+  .model-select-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
+  .model-select-row select {
+    background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 3px 6px; font-size: 12px; font-family: inherit;
+  }
+  .bubble-model-tag { font-size: 10px; color: var(--muted); align-self: flex-start; margin: -4px 0 2px 4px; }
 
   .chat-input { display: flex; gap: 6px; }
   .chat-input textarea {
@@ -406,6 +414,10 @@ const LEGACY_CSS = `
   .rx-line { display: flex; align-items: center; gap: 6px; font-size: 12px; }
   .rx-line input { width: 16px; height: 16px; }
 
+  /* 22/07: hàng dụng cụ gọn 1 dòng */
+  .quick-tools.tools-onerow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .quick-tools.tools-onerow .btn { padding: 6px 9px; font-size: 12px; }
+  .quick-tools.tools-onerow .rx-line { font-size: 11.5px; margin: 0; }
   .hints { padding-left: 18px; margin: 4px 0; font-size: 12px; color: var(--muted); }
   .hints li { margin: 3px 0; }
   .hints b { color: var(--text); }
@@ -433,7 +445,7 @@ const LEGACY_CSS = `
   .pos-modal {
     width: min(960px, 96vw); max-height: 92vh; overflow: hidden;
     background: var(--card); border-radius: 14px; border: 1px solid var(--border);
-    display: flex; flex-direction: column;
+    color: var(--text); display: flex; flex-direction: column;
   }
   .pos-head { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
   .pos-title { font-weight: 700; }
@@ -443,13 +455,16 @@ const LEGACY_CSS = `
   .pos-search { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: rgba(255,255,255,0.05); color: var(--text); font-size: 13px; }
   .pos-catalog { overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 4px; }
   .cat-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; padding: 6px 8px; background: var(--card-h); border-radius: 6px; font-size: 12px; }
+  .cat-name { color: var(--text); }
   .cat-name small { color: var(--muted); }
+  .cat-price { color: var(--text); font-weight: 600; }
   .cat-add { padding: 4px 8px; background: var(--accent); border: none; color: #0f172a; border-radius: 4px; cursor: pointer; font-size: 11px; }
   .cat-add:disabled { background: var(--border-h); cursor: not-allowed; color: var(--muted); }
   .pos-right { display: flex; flex-direction: column; gap: 10px; }
   .pos-rx-warn { background: rgba(239,68,68,0.15); border-left: 3px solid var(--red); padding: 8px 12px; font-size: 12px; border-radius: 6px; }
   .pos-cart { width: 100%; border-collapse: collapse; font-size: 12px; }
-  .pos-cart th, .pos-cart td { padding: 6px 4px; border-bottom: 1px solid var(--border); text-align: left; }
+  .pos-cart th, .pos-cart td { padding: 6px 4px; border-bottom: 1px solid var(--border); text-align: left; color: var(--text); }
+  .pos-cart th { color: var(--muted); font-weight: 600; }
   .pos-cart input { width: 60px; padding: 4px; background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 4px; color: var(--text); }
   .pos-cart .empty { text-align: center; color: var(--muted); padding: 16px; }
   .pos-cart .del { background: transparent; border: 1px solid var(--border); color: var(--red); padding: 2px 8px; border-radius: 4px; cursor: pointer; }
@@ -1244,34 +1259,31 @@ export default function NhaThuoc3DPage() {
         </div>
 
         <h3>💬 Hội thoại</h3>
+        <div className="model-select-row">
+          <span>🤖 Mô hình:</span>
+          <select id="model-select" title="Chọn mô hình AI cho bệnh nhân/NPC">
+            <option value="qwen">🐫 Qwen (mặc định)</option>
+            <option value="gpt">✨ GPT</option>
+          </select>
+        </div>
         <div className="chat" id="chat"></div>
         <div className="chat-input">
           <textarea id="ta" placeholder="Nhập câu trả lời… (Enter để gửi)" rows={2}></textarea>
           <button className="btn primary" id="send">Gửi</button>
         </div>
 
-        <h3>🏷️ Khay dụng cụ & nhãn HDSD</h3>
-        <div className="quick-tools">
-          <button className="btn" id="btn-label" type="button">🧾 Soạn nhãn mới</button>
+        {/* 22/07: gom toàn bộ dụng cụ 1 HÀNG (bỏ 2 heading + dòng trạng thái nhãn)
+            → nhường tối đa chỗ cho khung hội thoại. */}
+        <div className="quick-tools tools-onerow">
+          <button className="btn" id="btn-label" type="button" title="Soạn nhãn HDSD mới">🧾 Nhãn HDSD</button>
+          <button className="btn" id="btn-pos" type="button" title="Mở phần mềm bán hàng">💳 Bán hàng</button>
+          <button className="btn" id="btn-rx" type="button" title="Xem đơn thuốc">📋 Đơn thuốc</button>
+          <button className="btn" id="btn-doctor" type="button" title="Gọi bác sĩ">📞 Bác sĩ</button>
+          <label className="rx-line" style={{ margin: 0 }}><input type="checkbox" id="rx-toggle" /> Có đơn hợp lệ</label>
         </div>
-        <div id="labels-status" className="rx-line" style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>
-          Chưa có nhãn nào được dán. Mở khay dụng cụ trên quầy hoặc nút "Soạn nhãn mới".
-        </div>
-
-        <h3>💳 Phần mềm POS</h3>
-        <div className="quick-tools">
-          <button className="btn" id="btn-pos" type="button">💻 Mở phần mềm bán hàng</button>
-          <button className="btn" id="btn-rx" type="button">📋 Xem đơn thuốc</button>
-          <button className="btn" id="btn-doctor" type="button">📞 Gọi bác sĩ</button>
-        </div>
-        <label className="rx-line"><input type="checkbox" id="rx-toggle" /> Khách có đơn thuốc hợp lệ</label>
 
         <button className="btn success" id="finish" type="button">🏁 Kết thúc và chấm điểm</button>
         <div id="score-panel" hidden></div>
-        <div id="stats-bar" style={{ display: 'flex', gap: '10px', fontSize: '11px', color: 'var(--muted)', paddingTop: '6px', borderTop: '1px solid var(--border)' }}>
-          <span>Đã chọn: <b id="stat-picked">0</b></span>
-          <span>Đã dán nhãn: <b id="stat-labeled">0/—</b></span>
-        </div>
       </aside>
     </div>
   );

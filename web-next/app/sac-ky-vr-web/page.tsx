@@ -103,7 +103,7 @@ const STYLE = `
 // /sac-ky-vr-web/ route instead of relative to it.
 const SKELETON = `
 <div class="topbar">
-  <a href="/sac-ky-vr.html">← Hub</a>
+  <a href="/sac-ky-vr">← Hub</a>
   <span class="step-pill" id="step-pill">Bước 2/6 · Chấm mẫu</span>
   <span class="badge">🥽 WebXR</span>
   <span class="stat">⏱️ <b id="timer">0s</b></span>
@@ -265,8 +265,8 @@ const SKELETON = `
     <div id="modal-details"></div>
     <div class="modal-btns">
       <button class="primary" id="modal-replay">↺ Chơi lại</button>
-      <a class="outline" href="/sac-ky-vr.html">← Hub</a>
-      <a class="outline" href="/index.html">🏠 Trang chính</a>
+      <a class="outline" href="/sac-ky-vr">← Hub</a>
+      <a class="outline" href="/">🏠 Trang chính</a>
     </div>
   </div>
 </div>

@@ -132,7 +132,7 @@ export default function SubjectPath({ chapters }: { chapters: Chapter[] }) {
       </div>
 
       {activeLessonId ? (
-        <a className="jh-cta" href={`/module.html?module=${activeLessonId}&back=${backUrl}`}>
+        <a className="jh-cta" href={`/module?module=${activeLessonId}&back=${backUrl}`}>
           <span className="jh-cta-ic">▶</span>
           <span className="jh-cta-txt">
             <b>Tiếp tục học</b>
@@ -219,7 +219,7 @@ function LessonNode({
     return <div className={cls.join(' ')}>{inner}</div>;
   }
   return (
-    <a className={cls.join(' ')} href={`/module.html?module=${l.id}&back=${backUrl}`}>
+    <a className={cls.join(' ')} href={`/module?module=${l.id}&back=${backUrl}`}>
       {inner}
     </a>
   );

@@ -1,12 +1,15 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import Link from 'next/link';
 import { tiziaFetch } from '@/lib/tizia';
 import SrsClient, { type Deck, type Stats } from './srs-client';
 
-export const metadata: Metadata = {
-  title: '🃏 Flashcards SRS · Tizia',
-  description: 'Ôn từ vựng, công thức, ngày tháng theo phương pháp Spaced Repetition — học hiệu quả như Anki.',
-};
+export const metadata: Metadata = pageMeta({
+  title: '🃏 Flashcards SRS',
+  description:
+    'Ôn từ vựng, công thức, ngày tháng theo phương pháp Spaced Repetition — học hiệu quả như Anki.',
+  path: '/srs',
+});
 
 type StatsRes = { ok: boolean } & Partial<Stats>;
 type DecksRes = { items?: Deck[] };

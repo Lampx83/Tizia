@@ -1,5 +1,5 @@
 // ============================================================
-// AITutor backend — Ollama (qwen2.5:14b-instruct-ctx16k)
+// AITutor backend — vLLM (qwen3.5-35b-a3b-int4), giao thức OpenAI Chat Completions
 // ============================================================
 // 3 endpoints:
 //   POST /api/ai/grade-soap        — chấm SOAP note theo rubric
@@ -7,31 +7,188 @@
 //   POST /api/ai/evaluate-roleplay — chấm toàn bộ phiên role-play
 //
 // Cấu hình env:
-//   OLLAMA_URL     — endpoint Ollama (mặc định = dev tunnel)
-//                    Dev:  http://101.96.66.232:8037/ollama/api
-//                    Prod: http://10.2.13.58/ollama/api  (LAN — khi app chạy
-//                          trên cùng host 232, đi qua nginx nội bộ)
-//   OLLAMA_SECKEY  — Header x-ollama-seckey (mặc định "pharmasim" — shared
-//                    secret với Ollama server nội bộ; KHÔNG đổi tuỳ ý).
-//   OLLAMA_MODEL   — Tên model (mặc định qwen2.5:14b-instruct-ctx16k)
-//   OLLAMA_TIMEOUT_MS — Timeout 1 yêu cầu (mặc định 60s)
+//   LLM_URL        — endpoint vLLM (OpenAI-compatible), mặc định = dev tunnel
+//                    http://101.96.66.232:8037/vllm/v1
+//   LLM_SECKEY     — Header x-ollama-seckey (shared secret với gateway nội bộ;
+//                    tên header giữ nguyên "ollama" vì gateway kiểm theo tên này).
+//   LLM_MODEL      — Tên model (mặc định qwen3.5-35b-a3b-int4)
+//   LLM_TIMEOUT_MS — Timeout 1 yêu cầu (mặc định 60s)
 //
-// Ưu điểm khi dùng Ollama nội bộ:
+// Qwen3.5 mặc định bật "thinking" → luôn gửi chat_template_kwargs.enable_thinking=false
+// để trả lời ngay (nhanh, không lẫn <think> vào output chấm JSON / hội thoại).
+//
+// Ưu điểm khi dùng LLM nội bộ:
 //   - Miễn phí token (chạy on-prem, không gọi cloud)
 //   - Dữ liệu BN/SOAP KHÔNG ra ngoài → tốt cho privacy giáo dục y dược
-//   - Tiếng Việt chuẩn (qwen2.5 multilingual mạnh)
+//   - Tiếng Việt chuẩn (Qwen multilingual mạnh)
 // ============================================================
 
 import { aiQuotaGate, recordAiCall } from './ai-quota.js';
 import { saveAiQuestions, saveAiQa, getAiQuestions, getAiQa, getAiContentCounts } from './db.js';
 import { sendGA4Event } from './contexts/analytics/ga4-mp.js';
 
-const OLLAMA_URL = (process.env.OLLAMA_URL || 'http://101.96.66.232:8037/ollama/api').replace(/\/+$/, '');
-const OLLAMA_SECKEY = process.env.OLLAMA_SECKEY || 'pharmasim';
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:14b-instruct-ctx16k';
-const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS) || 60_000;
+const LLM_URL = (process.env.LLM_URL || 'http://101.96.66.232:8037/vllm/v1').replace(/\/+$/, '');
+const LLM_SECKEY = process.env.LLM_SECKEY || 'tizia';
+export const LLM_MODEL = process.env.LLM_MODEL || 'qwen3.5-35b-a3b-int4';
+const LLM_TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS) || 60_000;
 
-console.log(`[ai] Ollama backend = ${OLLAMA_URL} (model=${OLLAMA_MODEL})`);
+const LLM_CFG = {
+  url: `${LLM_URL}/chat/completions`,
+  headers: { 'x-ollama-seckey': LLM_SECKEY },
+  model: LLM_MODEL,
+  timeoutMs: LLM_TIMEOUT_MS,
+  label: 'LLM',
+  extraBody: { chat_template_kwargs: { enable_thinking: false } },
+};
+
+console.log(`[ai] LLM backend = ${LLM_URL} (model=${LLM_MODEL})`);
+
+// ── OpenAI (tuỳ chọn — chỉ dùng khi người dùng CHỌN "GPT" trong bộ chọn mô hình
+// ở nhà thuốc 3D). KHÔNG bắt buộc: thiếu OPENAI_API_KEY thì các hàm dưới ném lỗi,
+// caller (pharmacy.js) tự fallback về Qwen/stub — không ảnh hưởng luồng Qwen mặc định.
+// KHÔNG log giá trị OPENAI_API_KEY ra console dưới bất kỳ hình thức nào.
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS) || 30_000;
+const openaiCfg = () => ({
+  url: 'https://api.openai.com/v1/chat/completions',
+  headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
+  model: OPENAI_MODEL,
+  timeoutMs: OPENAI_TIMEOUT_MS,
+  label: 'OpenAI',
+});
+
+console.log(`[ai] OpenAI ${OPENAI_API_KEY ? 'đã cấu hình' : 'CHƯA cấu hình'} (model=${OPENAI_MODEL})`);
+
+export function isOpenAIConfigured() { return !!OPENAI_API_KEY; }
+
+// ─────────────────────────────────────────────────────────────
+// Low-level: Chat Completions (dùng chung cho vLLM nội bộ và OpenAI)
+// cfg = { url, headers, model, timeoutMs, label, extraBody? }
+// ─────────────────────────────────────────────────────────────
+
+function buildMessages(system, prompt) {
+  return [
+    ...(system ? [{ role: 'system', content: system }] : []),
+    { role: 'user', content: prompt },
+  ];
+}
+
+// Phòng khi model vẫn lọt khối <think>…</think> (vd. server bật thinking) → bỏ đi.
+function stripThink(s) {
+  return String(s || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+}
+
+async function chatOnce(cfg, { messages, temperature, maxTokens, json }) {
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), cfg.timeoutMs);
+  try {
+    const body = { ...cfg.extraBody, model: cfg.model, messages, temperature, max_tokens: maxTokens };
+    if (json) body.response_format = { type: 'json_object' };
+    const res = await fetch(cfg.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cfg.headers },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) throw new Error(`${cfg.label} HTTP ${res.status}: ${await res.text().catch(() => '')}`);
+    const data = await res.json();
+    return stripThink(data.choices?.[0]?.message?.content);
+  } finally {
+    clearTimeout(tid);
+  }
+}
+
+// stream:true (SSE) — token về đến đâu gọi onToken(token, fullSoFar) đến đó.
+// onToken trả false → DỪNG SỚM (abort upstream, tiết kiệm GPU). Trả về text đã sinh.
+async function chatStream(cfg, { messages, temperature, maxTokens, onToken }) {
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), cfg.timeoutMs);
+  let full = '';
+  try {
+    const body = { ...cfg.extraBody, model: cfg.model, messages, temperature, max_tokens: maxTokens, stream: true };
+    const res = await fetch(cfg.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cfg.headers },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) throw new Error(`${cfg.label} HTTP ${res.status}: ${await res.text().catch(() => '')}`);
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line || !line.startsWith('data:')) continue;
+        const payload = line.slice(5).trim();
+        if (payload === '[DONE]') return full;
+        let j; try { j = JSON.parse(payload); } catch { continue; }
+        const delta = j.choices?.[0]?.delta?.content;
+        if (delta) {
+          full += delta;
+          if (onToken && onToken(delta, full) === false) { ctrl.abort(); return full; }
+        }
+      }
+    }
+    return full;
+  } catch (e) {
+    if (e.name === 'AbortError' && full) return full;   // dừng sớm chủ động → không phải lỗi
+    throw e;
+  } finally {
+    clearTimeout(tid);
+  }
+}
+
+/**
+ * Gọi OpenAI Chat Completions (không stream) — cùng shape {prompt,system,
+ * temperature,maxTokens} như llmGenerate để caller dùng chung code path.
+ */
+export async function openaiGenerate({ prompt, system, temperature = 0.55, maxTokens = 200 }) {
+  if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY chưa cấu hình');
+  return chatOnce(openaiCfg(), { messages: buildMessages(system, prompt), temperature, maxTokens });
+}
+
+/**
+ * Gọi OpenAI Chat Completions với stream:true — cùng giao thức onToken(token,
+ * fullSoFar) như llmGenerateStream (trả false → dừng sớm, abort upstream).
+ */
+export async function openaiGenerateStream({ prompt, system, temperature = 0.55, maxTokens = 200, onToken }) {
+  if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY chưa cấu hình');
+  return chatStream(openaiCfg(), { messages: buildMessages(system, prompt), temperature, maxTokens, onToken });
+}
+
+/**
+ * Single-turn (prompt thuần + system tuỳ chọn) lên LLM nội bộ.
+ * @param {Object} opt
+ * @param {string} opt.prompt
+ * @param {string} [opt.system]
+ * @param {number} [opt.temperature] - Default 0.3 (để output ổn định)
+ * @param {boolean} [opt.json]  - Yêu cầu output JSON (response_format json_object)
+ * @param {number}  [opt.maxTokens]
+ * @returns {Promise<string>}
+ */
+export async function llmGenerate({ prompt, system, temperature = 0.3, json = false, maxTokens = 1500 }) {
+  return chatOnce(LLM_CFG, { messages: buildMessages(system, prompt), temperature, maxTokens, json });
+}
+
+/** Như llmGenerate nhưng stream — onToken(token, fullSoFar), trả false → dừng sớm. */
+export async function llmGenerateStream({ prompt, system, temperature = 0.3, maxTokens = 1500, onToken }) {
+  return chatStream(LLM_CFG, { messages: buildMessages(system, prompt), temperature, maxTokens, onToken });
+}
+
+/**
+ * Multi-turn (có history).
+ * @param {Array<{role:'system'|'user'|'assistant', content:string}>} opt.messages
+ */
+async function llmChat({ messages, temperature = 0.7, json = false, maxTokens = 800 }) {
+  return chatOnce(LLM_CFG, { messages, temperature, maxTokens, json });
+}
 
 /**
  * Attach AI routes to an Express Router.
@@ -86,14 +243,14 @@ function wrapAi(endpoint, handler) {
         const result = await handler(req.body || {}, req);
         const u = result?._usage || {};
         await recordAiCall(req, {
-          provider: 'ollama', model: OLLAMA_MODEL,
+          provider: 'vllm', model: LLM_MODEL,
           prompt_tokens:     u.prompt_tokens     || 0,
           completion_tokens: u.completion_tokens || 0,
           status: 'ok',
         });
         // GA4: ai_chat — endpoint + model + thời gian xử lý. Tokens nếu handler báo.
         sendGA4Event(req, 'ai_chat', {
-          endpoint, model: OLLAMA_MODEL,
+          endpoint, model: LLM_MODEL,
           prompt_tokens: u.prompt_tokens || 0,
           completion_tokens: u.completion_tokens || 0,
           duration_ms: Date.now() - t0,
@@ -102,9 +259,9 @@ function wrapAi(endpoint, handler) {
         if (result && '_usage' in result) delete result._usage;
         res.json(result);
       } catch (e) {
-        await recordAiCall(req, { provider: 'ollama', model: OLLAMA_MODEL, status: 'error' });
+        await recordAiCall(req, { provider: 'vllm', model: LLM_MODEL, status: 'error' });
         sendGA4Event(req, 'ai_chat', {
-          endpoint, model: OLLAMA_MODEL,
+          endpoint, model: LLM_MODEL,
           duration_ms: Date.now() - t0, status: 'error',
         });
         console.error('[ai] handler error:', e?.message || e);
@@ -114,80 +271,6 @@ function wrapAi(endpoint, handler) {
   ];
 }
 
-// ─────────────────────────────────────────────────────────────
-// Low-level: gọi Ollama
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Gọi /generate (single-turn, prompt thuần).
- * @param {Object} opt
- * @param {string} opt.prompt   - Prompt đầy đủ (đã ghép system + user)
- * @param {string} [opt.system] - System prompt (nếu model support)
- * @param {number} [opt.temperature] - Default 0.3 (để output ổn định)
- * @param {boolean} [opt.json]  - Yêu cầu output JSON (Ollama format=json)
- * @param {number}  [opt.maxTokens] - num_predict
- * @returns {Promise<string>}
- */
-export async function ollamaGenerate({ prompt, system, temperature = 0.3, json = false, maxTokens = 1500 }) {
-  const ctrl = new AbortController();
-  const tid = setTimeout(() => ctrl.abort(), OLLAMA_TIMEOUT_MS);
-  try {
-    const body = {
-      model: OLLAMA_MODEL,
-      prompt,
-      stream: false,
-      options: { temperature, num_predict: maxTokens },
-    };
-    if (system) body.system = system;
-    if (json) body.format = 'json';
-
-    const res = await fetch(`${OLLAMA_URL}/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-ollama-seckey': OLLAMA_SECKEY },
-      body: JSON.stringify(body),
-      signal: ctrl.signal,
-    });
-    if (!res.ok) throw new Error(`Ollama HTTP ${res.status}: ${await res.text().catch(() => '')}`);
-    const data = await res.json();
-    return String(data.response || '').trim();
-  } finally {
-    clearTimeout(tid);
-  }
-}
-
-/**
- * Gọi /chat (multi-turn, có history). Ollama hỗ trợ messages giống OpenAI.
- * @param {Object} opt
- * @param {Array<{role:'system'|'user'|'assistant', content:string}>} opt.messages
- * @param {number} [opt.temperature]
- * @param {boolean} [opt.json]
- * @param {number}  [opt.maxTokens]
- */
-async function ollamaChat({ messages, temperature = 0.7, json = false, maxTokens = 800 }) {
-  const ctrl = new AbortController();
-  const tid = setTimeout(() => ctrl.abort(), OLLAMA_TIMEOUT_MS);
-  try {
-    const body = {
-      model: OLLAMA_MODEL,
-      messages,
-      stream: false,
-      options: { temperature, num_predict: maxTokens },
-    };
-    if (json) body.format = 'json';
-
-    const res = await fetch(`${OLLAMA_URL}/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-ollama-seckey': OLLAMA_SECKEY },
-      body: JSON.stringify(body),
-      signal: ctrl.signal,
-    });
-    if (!res.ok) throw new Error(`Ollama HTTP ${res.status}: ${await res.text().catch(() => '')}`);
-    const data = await res.json();
-    return String(data.message?.content || '').trim();
-  } finally {
-    clearTimeout(tid);
-  }
-}
 
 // ─────────────────────────────────────────────────────────────
 // HEALTH
@@ -195,10 +278,10 @@ async function ollamaChat({ messages, temperature = 0.7, json = false, maxTokens
 
 async function handleHealth() {
   try {
-    const reply = await ollamaGenerate({ prompt: 'Trả lời gọn: OK', maxTokens: 20 });
-    return { ok: true, url: OLLAMA_URL, model: OLLAMA_MODEL, sampleReply: reply };
+    const reply = await llmGenerate({ prompt: 'Trả lời gọn: OK', maxTokens: 20 });
+    return { ok: true, url: LLM_URL, model: LLM_MODEL, sampleReply: reply };
   } catch (e) {
-    return { ok: false, url: OLLAMA_URL, error: String(e?.message || e) };
+    return { ok: false, url: LLM_URL, error: String(e?.message || e) };
   }
 }
 
@@ -257,7 +340,7 @@ ${soapText}
 
 Chấm theo rubric. CHỈ trả JSON.`;
 
-  const raw = await ollamaGenerate({
+  const raw = await llmGenerate({
     prompt,
     system: SOAP_SYSTEM,
     temperature: 0.2,
@@ -339,7 +422,7 @@ THÔNG TIN BẠN BIẾT (chỉ tiết lộ khi SV hỏi đúng):
     { role: 'user', content: studentMessage },
   ];
 
-  const reply = await ollamaChat({ messages, temperature: 0.7, maxTokens: 250 });
+  const reply = await llmChat({ messages, temperature: 0.7, maxTokens: 250 });
   return { reply, hidden: {} };
 }
 
@@ -378,7 +461,7 @@ ${transcriptText}
 
 Đánh giá theo các tiêu chí. CHỈ trả JSON.`;
 
-  const raw = await ollamaGenerate({
+  const raw = await llmGenerate({
     prompt, system: ROLEPLAY_SYSTEM, temperature: 0.2, json: true, maxTokens: 1000,
   });
   const parsed = safeParseJson(raw);
@@ -463,12 +546,12 @@ async function handleTutorChat({ domain = 'general', grade, context, history = [
 
   let reply = '';
   try {
-    reply = await ollamaChat({ messages, temperature: 0.55, maxTokens: 600 });
+    reply = await llmChat({ messages, temperature: 0.55, maxTokens: 600 });
   } catch (e) {
-    console.warn('[ai-tutor] ollama failed, fallback template:', e?.message || e);
+    console.warn('[ai-tutor] LLM failed, fallback template:', e?.message || e);
     reply = templateTutorReply(domain, message);
   }
-  return { reply: reply.trim(), domain, mode: isSocratic ? 'socratic' : 'direct', model: OLLAMA_MODEL };
+  return { reply: reply.trim(), domain, mode: isSocratic ? 'socratic' : 'direct', model: LLM_MODEL };
 }
 
 function templateTutorReply(domain, message) {
@@ -514,7 +597,7 @@ ${hiddenStr || '(không có thông tin ẩn riêng)'}`;
   ];
   let reply = '';
   try {
-    reply = await ollamaChat({ messages, temperature: 0.7, maxTokens: 200 });
+    reply = await llmChat({ messages, temperature: 0.7, maxTokens: 200 });
   } catch (e) {
     reply = `(BN không thể trả lời — lỗi AI: ${e?.message || e})`;
   }
@@ -585,7 +668,7 @@ Chấm. CHỈ JSON.`;
 
   let parsed = {};
   try {
-    const raw = await ollamaGenerate({
+    const raw = await llmGenerate({
       prompt, system: sys, temperature: 0.2, json: true, maxTokens: 1200,
     });
     parsed = safeParseJson(raw);
@@ -650,7 +733,7 @@ GỢI Ý CÂU MỞ ĐẦU NẾU HỌC SINH LÚNG TÚNG: ${character.suggestedOpe
   ];
   let reply = '';
   try {
-    reply = await ollamaChat({ messages, temperature: 0.65, maxTokens: 300 });
+    reply = await llmChat({ messages, temperature: 0.65, maxTokens: 300 });
   } catch (e) {
     reply = `(${character.name} không thể trả lời lúc này — lỗi AI: ${e?.message || e})`;
   }
@@ -709,7 +792,7 @@ KHI LEARNER ĐI SAI HƯỚNG (vd: hứa hẹn quá đà, kê đơn không phù h
   ];
   let reply = '';
   try {
-    reply = await ollamaChat({ messages, temperature: 0.7, maxTokens: 250 });
+    reply = await llmChat({ messages, temperature: 0.7, maxTokens: 250 });
   } catch (e) {
     reply = `(NPC không thể trả lời — ${e?.message || e})`;
   }
@@ -763,7 +846,7 @@ Chấm. CHỈ JSON.`;
 
   let parsed = {};
   try {
-    const raw = await ollamaGenerate({ prompt, system: sys, temperature: 0.2, json: true, maxTokens: 1000 });
+    const raw = await llmGenerate({ prompt, system: sys, temperature: 0.2, json: true, maxTokens: 1000 });
     parsed = safeParseJson(raw);
   } catch (e) {
     console.warn('[neg-grade] AI failed:', e?.message);
@@ -855,7 +938,7 @@ NHIỆM VỤ: ${modePrompt}`;
 
   let reply = '';
   try {
-    reply = await ollamaGenerate({
+    reply = await llmGenerate({
       prompt, system: sys, temperature: 0.4, maxTokens: 800,
     });
   } catch (e) {
@@ -890,7 +973,7 @@ Soạn ${n} câu hỏi. CHỈ JSON.`;
 
   let parsed = {};
   try {
-    const raw = await ollamaGenerate({
+    const raw = await llmGenerate({
       prompt, system: sys, temperature: 0.3, json: true, maxTokens: 1200,
     });
     parsed = safeParseJson(raw);
@@ -951,7 +1034,7 @@ Chấm câu trên theo rubric. CHỈ trả JSON.`;
 
   let parsed = null;
   try {
-    const raw = await ollamaGenerate({
+    const raw = await llmGenerate({
       prompt, system: SENTENCE_SYSTEM, temperature: 0.2, json: true, maxTokens: 400,
     });
     parsed = safeParseJson(raw);
@@ -1034,7 +1117,7 @@ Chấm bài trên theo rubric. CHỈ trả JSON.`;
 
   let parsed = null;
   try {
-    const raw = await ollamaGenerate({ prompt: userPrompt, system: WRITING_SYSTEM, temperature: 0.3, json: true, maxTokens: 1400 });
+    const raw = await llmGenerate({ prompt: userPrompt, system: WRITING_SYSTEM, temperature: 0.3, json: true, maxTokens: 1400 });
     parsed = safeParseJson(raw);
   } catch (e) {
     console.warn('[grade-writing] AI failed:', e?.message || e);
@@ -1117,7 +1200,7 @@ Trích tối đa ${n} từ vựng chuyên ngành. CHỈ JSON.`;
 
   let parsed = {};
   try {
-    const raw = await ollamaGenerate({
+    const raw = await llmGenerate({
       prompt, system: sys, temperature: 0.2, json: true, maxTokens: 2200,
     });
     parsed = safeParseJson(raw);
@@ -1161,7 +1244,7 @@ const REQ_TYPE_VN = {
   other:  'ý kiến đóng góp',
 };
 
-/** Câu trả lời mẫu khi Ollama không kết nối được — vẫn giữ trải nghiệm "AI điều hành". */
+/** Câu trả lời mẫu khi LLM không kết nối được — vẫn giữ trải nghiệm "AI điều hành". */
 function templateNote({ type, title }) {
   const kind = REQ_TYPE_VN[type] || 'đề xuất';
   return `Ban điều hành AI đã tiếp nhận đề xuất "${title}" (${kind}). `
@@ -1170,7 +1253,7 @@ function templateNote({ type, title }) {
 
 /**
  * AI "Hiệu trưởng" xem xét 1 yêu cầu, sinh phản hồi ngắn + trạng thái.
- * Best-effort: nếu Ollama lỗi/timeout → dùng câu trả lời mẫu.
+ * Best-effort: nếu LLM lỗi/timeout → dùng câu trả lời mẫu.
  * @returns {Promise<{ note:string, status:string, source:'ai'|'template' }>}
  */
 export async function aiReviewRequest({ domain, type, title, detail }) {
@@ -1186,7 +1269,7 @@ export async function aiReviewRequest({ domain, type, title, detail }) {
 Hãy viết phản hồi NGẮN (1–2 câu, tối đa ~60 từ): xác nhận đã tiếp nhận, nêu hướng xử lý/dự kiến hợp lý. KHÔNG hứa hẹn quá mức, KHÔNG bịa thời hạn cụ thể. Chỉ trả về nội dung phản hồi, không mở đầu thừa.`;
   try {
     const note = await Promise.race([
-      ollamaGenerate({ prompt, system, temperature: 0.5, maxTokens: 160 }),
+      llmGenerate({ prompt, system, temperature: 0.5, maxTokens: 160 }),
       new Promise((_, rej) => setTimeout(() => rej(new Error('triage timeout')), 12000)),
     ]);
     const clean = String(note || '').trim();
@@ -1250,7 +1333,7 @@ Soạn ${n} câu hỏi MỚI. CHỈ JSON.`;
   try {
     // temp thấp (0.4) → ưu tiên độ chính xác đáp án hơn sáng tạo; đề tiểu học
     // cần answer key đúng tuyệt đối (model 14b dễ sai số học ở temp cao).
-    const raw = await ollamaGenerate({ prompt, system: sys, temperature: 0.4, json: true, maxTokens: 1300 });
+    const raw = await llmGenerate({ prompt, system: sys, temperature: 0.4, json: true, maxTokens: 1300 });
     parsed = safeParseJson(raw);
   } catch (e) {
     console.warn('[practice-more] AI failed:', e?.message);
@@ -1295,7 +1378,7 @@ Soạn ${n} câu hỏi MỚI. CHỈ JSON.`;
       }));
     } catch (e) { console.warn('[practice-more] save failed:', e?.message); }
   }
-  return { questions, topic, saved, model: OLLAMA_MODEL };
+  return { questions, topic, saved, model: LLM_MODEL };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1327,7 +1410,7 @@ QUY TẮC:
   let reply = '';
   let ok = false;
   try {
-    reply = await ollamaChat({ messages, temperature: 0.6, maxTokens: 400 });
+    reply = await llmChat({ messages, temperature: 0.6, maxTokens: 400 });
     ok = !!reply.trim();
   } catch (e) {
     reply = `Cô tạm thời chưa kết nối được, em thử lại sau ít phút nhé! (${e?.message || e})`;
@@ -1345,7 +1428,7 @@ QUY TẮC:
       }));
     } catch (e) { console.warn('[lesson-coach] save failed:', e?.message); }
   }
-  return { reply, saved, model: OLLAMA_MODEL };
+  return { reply, saved, model: LLM_MODEL };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1359,7 +1442,7 @@ async function handleLessonBank(_body, req) {
   return {
     weekId,
     counts,
-    questions: await getAiQuestions(weekId, 50),  // để luyện lại không cần gọi Ollama
+    questions: await getAiQuestions(weekId, 50),  // để luyện lại không cần gọi LLM
     qa: await getAiQa(weekId, 30),                // hỏi-đáp đã có để ôn lại
   };
 }
@@ -1369,7 +1452,7 @@ async function handleLessonBank(_body, req) {
 // ─────────────────────────────────────────────────────────────
 
 function safeParseJson(text) {
-  // Khi format=json, Ollama trả về JSON pure. Nhưng phòng trường hợp model
+  // Khi response_format=json_object, model trả JSON thuần. Nhưng phòng trường hợp model
   // thêm ```json``` hay text trước/sau, vẫn parse được.
   const m = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   const raw = m ? m[1] : text;
@@ -1421,7 +1504,7 @@ Trả về JSON đúng schema, không thêm text gì khác.`;
 
   let raw;
   try {
-    raw = await ollamaGenerate({
+    raw = await llmGenerate({
       prompt: userPrompt, system, temperature: 0.4, json: true, maxTokens: 2500,
     });
   } catch (e) {

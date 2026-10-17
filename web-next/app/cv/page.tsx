@@ -1,12 +1,15 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import { tiziaFetch } from '@/lib/tizia';
 import Toolbar from './Toolbar';
 
-export const metadata: Metadata = {
-  title: 'CV / Portfolio · Tizia',
-  description: 'Hồ sơ học tập — thành tích, huy hiệu và lịch sử luyện tập trên Tizia.',
-};
+export const metadata: Metadata = pageMeta({
+  title: 'CV & hồ sơ năng lực người học',
+  description:
+    'Hồ sơ năng lực tự động dựng từ quá trình học trên Tizia: kỹ năng đã đạt, thành tích và sản phẩm học tập.',
+  path: '/cv',
+});
 
 // ── Shape API (đã verify với backend) ──
 // GET /api/auth/me → { user: {...} }  (server/contexts/identity/auth.js:518)
@@ -49,7 +52,7 @@ const MAJOR_LABEL: Record<string, string> = {
 export default async function CvPage() {
   const meRes = await tiziaFetch<{ user: Me | null }>('/api/auth/me');
 
-  // Gate đăng nhập: trang gốc redirect login.html?return=/cv.html khi chưa đăng nhập.
+  // Gate đăng nhập: trang gốc redirect login.html?return=/cv khi chưa đăng nhập.
   if (meRes.status === 401 || !meRes.data?.user) {
     return (
       <div className="py-16 text-center text-muted-foreground">

@@ -347,19 +347,52 @@ const PUBLIC_PATH_EXACT = new Set([
   '/pharmacomm-giang-vien.html',
   // GPP 2D — thực hành nghiệp vụ nhà thuốc GPP (đề tài ThS Phạm Thị Hương Lý).
   '/gpp.html',
-  // Pharma Crush — game ghép 3 học nhóm thuốc / cơ chế tác dụng.
-  '/pharma-crush.html',
-  // Pharma Sort — phân loại thuốc theo nhóm tác dụng.
-  '/pharma-sort.html',
-  // Tủ thuốc mô phỏng / Nhà thuốc thực hành — luyện nhận diện & sắp xếp thuốc
-  // theo tủ (cùng đề tài ThS Phạm Thị Hương Lý). Standalone, guest dùng được.
-  '/tu-thuoc-mo-phong.html',
   // Nhà thuốc 2D An Tâm Pharma — cảnh mặt tiền + nội thất trực quan (khách xem).
   '/nha-thuoc-2d.html',
+  // Pharma Crush — game ghép 3 học nhóm thuốc / cơ chế tác dụng.
+  '/pharma-crush.html',
+  '/pharma-sort.html',
+  // Tủ thuốc mô phỏng — luyện nhận diện & sắp xếp thuốc theo tủ (đề tài ThS
+  // Phạm Thị Hương Lý, cùng tác giả GPP 2D). Standalone, guest dùng được.
+  '/tu-thuoc-mo-phong.html',
+]);
+
+// Từ khi Next làm cửa trước, mọi trang đã migrate dùng URL SẠCH (/kham-pha thay
+// cho /kham-pha.html). Danh sách trên viết theo .html nên trang nào rơi xuống
+// Express bằng URL sạch sẽ bị gate chặn — khách và Googlebot nhận 302 về login
+// (đã xảy ra với /luat-giao-thong-600, /bien-bao-giao-thong). Sinh thêm biến thể
+// không đuôi .html để hai dạng URL luôn cùng quyền truy cập.
+const PUBLIC_PATH_CLEAN = new Set(
+  [...PUBLIC_PATH_EXACT]
+    .filter((p) => p.endsWith('.html'))
+    .map((p) => p.slice(0, -'.html'.length))
+    .filter((p) => p !== ''), // '/index.html' → '/index' (vẫn hợp lệ, khác chuỗi rỗng)
+);
+
+// Danh sách trang khách xem được nhưng CHƯA có trong allowlist .html ở trên —
+// thêm trực tiếp ở dạng URL sạch. Bổ sung khi mở thêm trang cho khách/SEO.
+const PUBLIC_PATH_EXTRA = new Set([
+  // Ngân hàng 600 câu lý thuyết lái xe + biển báo — nội dung công khai, là từ
+  // khoá tìm kiếm mạnh nhất của Tizia. Ghi/điểm vẫn cần đăng nhập ở /api/*.
+  '/luat-giao-thong-600', '/luat-giao-thong-600.html',
+  '/bien-bao-giao-thong', '/bien-bao-giao-thong.html',
+  '/tra-cuu-bien-bao-gplx', '/tra-cuu-bien-bao-gplx.html',
+  '/tu-vung-tieng-anh', '/tu-vung-tieng-anh.html',
+  '/luyen-de', '/luyen-de.html',
+  '/apps', '/school', '/space', '/subject', '/module', '/lesson', '/quiz',
+  '/kham-pha', '/tinh-nang', '/marketplace', '/league', '/leaderboard',
+  '/bao-che-hub', '/bao-che-hub.html',
+  '/dev', '/welcome',
+  // Thư viện ôn tập công khai (/on-tap/...) — trang nội dung chính cho SEO.
+  '/on-tap',
+  // SEO endpoint do Next phục vụ, nhưng nếu gọi thẳng Express vẫn phải mở.
+  '/sitemap.xml', '/robots.txt',
 ]);
 
 function isPublicPath(p) {
   if (PUBLIC_PATH_EXACT.has(p)) return true;
+  if (PUBLIC_PATH_CLEAN.has(p)) return true;
+  if (PUBLIC_PATH_EXTRA.has(p)) return true;
   for (const pref of PUBLIC_PATH_PREFIXES) if (p.startsWith(pref)) return true;
   // Cho phép các file css/png/svg/woff lẻ — chúng vô hại và sẽ được duyệt qua.
   return /\.(css|png|jpg|jpeg|gif|svg|webp|ico|woff2?|ttf|map)$/i.test(p);

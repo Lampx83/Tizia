@@ -1,12 +1,14 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import Link from 'next/link';
 import { CapabilityGrid } from './CapabilityGrid';
 
-export const metadata: Metadata = {
-  title: 'Tizia · Hỗ trợ thiết bị',
+export const metadata: Metadata = pageMeta({
+  title: 'Hỗ trợ thiết bị',
   description:
     'Tizia chạy trên đa thiết bị — khả năng đã phát hiện trên thiết bị hiện tại + hướng dẫn cho từng loại.',
-};
+  path: '/devices',
+});
 
 type Device = {
   name: string;
@@ -23,7 +25,7 @@ const DEVICES: Device[] = [
     name: 'Meta Quest 2 / 3 / Pro', vendor: 'Meta · WebXR + Hand Tracking',
     icon: '🥽', status: 'full',
     works: ['3D Realistic với hand tracking native', 'Metaverse 3D multi-user', '2D Arcade qua trình duyệt'],
-    rec: 'Mở <b>Meta Quest Browser</b> → <code>http://&lt;host&gt;:8041/3d-shelf.html</code> → bấm <b>ENTER VR</b> → giơ tay pinch ngón cái+trỏ',
+    rec: 'Mở <b>Meta Quest Browser</b> → <code>http://&lt;host&gt;:8041/3d-shelf</code> → bấm <b>ENTER VR</b> → giơ tay pinch ngón cái+trỏ',
     modes: ['3D ✓', 'Metaverse ✓', '2D ✓', 'AR ✗', 'Quiz ✓'],
   },
   {

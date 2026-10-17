@@ -228,7 +228,7 @@ export default function NangLucClient({
             </div>
           </div>
           <Link
-            href="/index.html"
+            href="/"
             className="rounded-[10px] bg-foreground px-4 py-2 text-[13px] font-bold text-background hover:opacity-90"
           >
             {me.enrolled_domain ? '🔄 Đổi trường' : '🎓 Chọn trường'}
@@ -474,13 +474,13 @@ function Tree({
           {isSelf && (
             <div className="mt-2.5 flex flex-wrap gap-2">
               <Link
-                href="/index.html"
+                href="/"
                 className="rounded-xl bg-primary px-3.5 py-2 text-[13px] font-bold text-primary-foreground hover:opacity-90"
               >
                 🏫 Khám phá các trường
               </Link>
               <Link
-                href="/cay-tri-thuc.html"
+                href="/cay-tri-thuc"
                 className="rounded-xl border border-border bg-white/[.08] px-3.5 py-2 text-[13px] font-bold hover:bg-white/[.14]"
               >
                 🌳 Cây Tri Thức
@@ -498,7 +498,7 @@ function Tree({
             đạt ≥70% để mở khoá.
           </p>
           <Link
-            href="/school.html?domain=preschool"
+            href="/school?domain=preschool"
             className="mt-3 inline-block rounded-xl bg-primary px-[18px] py-2.5 font-bold text-primary-foreground hover:opacity-90"
           >
             🏫 Vào Trường Mầm non

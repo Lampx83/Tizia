@@ -10,6 +10,7 @@
  */
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import { notFound, redirect } from 'next/navigation';
 import { tiziaFetch } from '@/lib/tizia';
 import { appIcon } from '@/lib/app-icon';
@@ -40,10 +41,13 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { alias } = await params;
   const app = await findApp(alias);
-  return {
-    title: app ? `${app.name} · Tizia` : 'Ứng dụng · Tizia',
-    description: app?.description || 'Ứng dụng chạy trong Tizia.',
-  };
+  return pageMeta({
+    title: app ? app.name : 'Ứng dụng',
+    description:
+      app?.description ||
+      'Ứng dụng học tập chạy trong khung Tizia — mở thẳng trong trình duyệt, không cần cài đặt.',
+    path: `/app/${alias}`,
+  });
 }
 
 export default async function AppFramePage({ params }: { params: Promise<{ alias: string }> }) {

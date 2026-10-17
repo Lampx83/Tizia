@@ -232,7 +232,7 @@ ${p || '(Chưa lập kế hoạch)'}`;
   return (
     <div className="soap-studio">
       <div className="head">
-        <Link className="back" href="/space.html?domain=pharmacy&b=hall">
+        <Link className="back" href="/space?domain=pharmacy&b=hall">
           ← Hội trường
         </Link>
         <h1>🎓 SOAP Writer Studio</h1>

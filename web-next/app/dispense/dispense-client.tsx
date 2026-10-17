@@ -226,7 +226,7 @@ export default function DispenseClient() {
   return (
     <div className="disp-root">
       <div className="topbar">
-        <a href="/space.html?b=gpp&domain=pharmacy">← Nhà thuốc GPP</a>
+        <a href="/space?b=gpp&domain=pharmacy">← Nhà thuốc GPP</a>
         <span className="title">💊 Cấp phát thuốc · 5 Đúng</span>
         <span className="spacer" />
         {scoreShown && (

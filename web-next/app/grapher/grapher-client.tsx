@@ -236,7 +236,7 @@ export default function GrapherClient() {
     }
   }
 
-  const backHref = '/school.html' + (domain ? '?domain=' + encodeURIComponent(domain) : '') + '#campus-hero';
+  const backHref = '/school' + (domain ? '?domain=' + encodeURIComponent(domain) : '') + '#campus-hero';
   const uses = TYPES[type].uses;
   const setVal = { a: setA, b: setB, c: setC } as const;
   const vals = { a, b, c };

@@ -1,12 +1,14 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import { BAO_CHE, RECIPES } from './topic-data';
 import TopicCard from './TopicCard';
 
-export const metadata: Metadata = {
-  title: 'Hub Bào chế GMP — Tizia',
+export const metadata: Metadata = pageMeta({
+  title: 'Hub Bào chế GMP',
   description:
     'Mô phỏng pha chế thuốc theo đơn trong nhiều phiên bản công nghệ — cân hoạt chất, đong dung môi, q.s. nước cất, đóng chai. 8 đơn từ Siro Paracetamol đến nhỏ mắt NaCl, 2 tay phối hợp qua MediaPipe để rót ổn định hơn.',
-};
+  path: '/bao-che-hub',
+});
 
 // Hub tĩnh "Bào chế GMP" — Server Component: hero + intro + thư mục 8 đơn (SSR, SEO).
 // Phần tương tác (đổi mode) tách sang Client Component <TopicCard />. Trang gốc
@@ -18,7 +20,7 @@ export default function BaoCheHubPage() {
     <div className="baoche-scope">
       <style>{scopedCss}</style>
 
-      <a className="bc-back" href="/index.html">← Quay lại Tizia</a>
+      <a className="bc-back" href="/">← Quay lại Tizia</a>
 
       <div className="bc-hero">
         <div className="bc-logo">🧪</div>
@@ -57,7 +59,7 @@ export default function BaoCheHubPage() {
 
       <div className="bc-recipes">
         {RECIPES.map((r) => (
-          <a key={r.slug} className="bc-recipe" href={`/compounding-lab.html?recipe=${r.slug}`}>
+          <a key={r.slug} className="bc-recipe" href={`/compounding-lab?recipe=${r.slug}`}>
             <div className="bc-recipe-icon">{r.icon}</div>
             <div className="bc-lvl-num">{r.order}</div>
             <div className="bc-rname">{r.name}</div>

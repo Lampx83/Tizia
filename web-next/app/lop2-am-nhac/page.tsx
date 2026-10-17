@@ -1,11 +1,13 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import AmNhacMount from './AmNhacMount';
 
-export const metadata: Metadata = {
-  title: '🎵 Đô-Rê-Mi Bay — Âm nhạc Lớp 2 · Tizia',
+export const metadata: Metadata = pageMeta({
+  title: '🎵 Đô-Rê-Mi Bay — Âm nhạc Lớp 2',
   description:
     'Game âm nhạc Lớp 2: gõ phím A S D F G H J (hoặc bấm thanh nốt) khi nốt Đô-Rê-Mi rơi tới vạch. WebAudio phát đúng tần số 7 nốt, chấm PERFECT/GOOD, combo và điểm.',
-};
+  path: '/lop2-am-nhac',
+});
 
 // Server Component: khung SEO tĩnh (tiêu đề) render sẵn. Toàn bộ tương tác (WebAudio
 // tổng hợp âm 7 nốt, nốt rơi theo requestAnimationFrame, gõ phím/bấm thanh nốt,

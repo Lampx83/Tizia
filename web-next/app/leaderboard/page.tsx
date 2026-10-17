@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import { tiziaFetch } from '@/lib/tizia';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -6,10 +7,12 @@ import { Badge } from '@/components/ui/badge';
 
 // SEO: metadata riêng. Đây là Server Component → cả bảng dưới nằm trong HTML server
 // trả về → bot Google đọc được (khác SPA React thuần).
-export const metadata: Metadata = {
-  title: 'Bảng xếp hạng',
-  description: 'Bảng xếp hạng người chơi Tizia — điểm cao theo từng chế độ.',
-};
+export const metadata: Metadata = pageMeta({
+  title: 'Bảng xếp hạng người học',
+  description:
+    'Bảng xếp hạng theo điểm kinh nghiệm và thành tích học tập trên Tizia — so tài với bạn cùng lớp và cả cộng đồng.',
+  path: '/leaderboard',
+});
 
 type Row = { player_name?: string; player?: string; score: number; correct?: number; total?: number };
 

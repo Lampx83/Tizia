@@ -1,15 +1,17 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import { tiziaFetch } from '@/lib/tizia';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PremiumButton, ClaimButton } from './Interactive';
 
-export const metadata: Metadata = {
-  title: '🎖 Battle Pass · Tizia',
+export const metadata: Metadata = pageMeta({
+  title: '🎖 Battle Pass',
   description:
     'Battle Pass mùa 2 tháng — 30 tier reward. Học để leo tier, mở khoá skin pet, frame avatar, emoji pack.',
-};
+  path: '/battle-pass',
+});
 
 type Reward = { coin: number; xp: number; item: string | null; claimed: boolean };
 type Tier = { tier: number; unlocked: boolean; free: Reward; premium: Reward };

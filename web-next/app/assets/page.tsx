@@ -46,7 +46,7 @@ export default function AssetsPage() {
     <div className="assets-root">
       <div className="wrap">
         <div className="head">
-          <a href="/index.html" className="back">
+          <a href="/" className="back">
             ← Trang chủ
           </a>
           <div className="logo">🧱</div>
@@ -58,7 +58,7 @@ export default function AssetsPage() {
         <p className="tagline">
           Catalogue toàn bộ model 3D (.glb/.gltf) dùng được trong Tizia — phân loại theo gói, tag, kích thước.
           Bấm vào card để xem trước. Có thể copy URL để dùng trong{' '}
-          <a href="/lesson-builder.html" style={{ color: 'inherit' }}>
+          <a href="/lesson-builder" style={{ color: 'inherit' }}>
             Lesson Builder
           </a>
           .

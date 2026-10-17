@@ -115,7 +115,7 @@ const SKELETON = `
 <header id="auth-header"></header>
 
 <div class="top">
-  <a class="back" href="/index.html">← Trang chủ</a>
+  <a class="back" href="/">← Trang chủ</a>
   <h1>💻 Lập trình điều khiển nhân vật</h1>
   <span class="level-info" id="lv-info">Level 1 / 5</span>
 </div>

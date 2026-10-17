@@ -1,11 +1,13 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import DaoDucMount from './DaoDucMount';
 
-export const metadata: Metadata = {
-  title: '🤝 Đúng hay Sai? — Đạo đức Lớp 2 · Tizia',
+export const metadata: Metadata = pageMeta({
+  title: '🤝 Đúng hay Sai? — Đạo đức Lớp 2',
   description:
     'Trò chơi đạo đức Lớp 2: đọc tình huống rồi chọn ✅ đúng hoặc ❌ sai (hoặc vuốt thẻ). Học sống đẹp qua 15 tình huống gần gũi.',
-};
+  path: '/lop2-dao-duc',
+});
 
 // Server Component: khung SEO tĩnh (tiêu đề) render sẵn. Toàn bộ tương tác (rút
 // tình huống, chọn/vuốt thẻ, feedback, modal tổng kết, đồng bộ XP /api/wallet)

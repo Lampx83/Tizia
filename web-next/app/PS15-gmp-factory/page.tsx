@@ -229,7 +229,7 @@ const STYLE = `
 `;
 
 const SKELETON = `
-<a class="back" href="/index.html">← Trang chủ</a>
+<a class="back" href="/">← Trang chủ</a>
 
 <div id="topbar">
   <span class="pill">PS15</span>

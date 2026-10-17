@@ -601,10 +601,10 @@ const LEGACY_CSS = `
 
 // Khung DOM tĩnh gốc (markup trong <body> của public/math-fun.html) — giữ NGUYÊN
 // mọi id/class/onclick để engine cũ (window.enterGrade/goHome/g2*/g6*/petTalk)
-// gọi trúng. Đường dẫn ./index.html giữ nguyên (proxy Express phục vụ).
+// gọi trúng. Đường dẫn ./ giữ nguyên (proxy Express phục vụ).
 const SKELETON = `
   <div class="home" id="home">
-    <a href="./index.html" class="back-link">← Trang chủ</a>
+    <a href="./" class="back-link">← Trang chủ</a>
     <span class="floating" style="top:10%;left:5%;">∑</span>
     <span class="floating" style="top:20%;right:10%;">π</span>
     <span class="floating" style="bottom:15%;left:15%;">√</span>

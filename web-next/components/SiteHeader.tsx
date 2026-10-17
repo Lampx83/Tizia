@@ -93,6 +93,7 @@ export default function SiteHeader() {
         <nav className="ml-3 hidden items-center gap-4 text-sm text-muted-foreground md:flex">
           <Link href="/kham-pha" className="transition-colors hover:text-foreground">Khám phá</Link>
           <Link href="/school" className="transition-colors hover:text-foreground">Trường học</Link>
+          <Link href="/on-tap" className="transition-colors hover:text-foreground">Ôn tập</Link>
           <Link href="/league" className="transition-colors hover:text-foreground">Bảng xếp hạng</Link>
         </nav>
 
@@ -155,6 +156,7 @@ export default function SiteHeader() {
                     </div>
                     <nav className="p-1.5 text-sm">
                       <Link href="/kham-pha" className="block rounded-md px-3 py-2 transition-colors hover:bg-foreground/5" onClick={() => setOpen(false)}>🧭 Khám phá</Link>
+                      <Link href="/on-tap" className="block rounded-md px-3 py-2 transition-colors hover:bg-foreground/5" onClick={() => setOpen(false)}>📚 Thư viện ôn tập</Link>
                       <Link href="/nang-luc" className="block rounded-md px-3 py-2 transition-colors hover:bg-foreground/5" onClick={() => setOpen(false)}>🎯 Năng lực</Link>
                       <Link href="/complete-profile" className="block rounded-md px-3 py-2 transition-colors hover:bg-foreground/5" onClick={() => setOpen(false)}>👤 Hồ sơ</Link>
                       {me.role === 'admin' && (

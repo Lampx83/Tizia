@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import SpaceMount from './SpaceMount';
 
 // Trang "Không gian khám phá" (space) — bộ nội dung + phòng trải nghiệm + quiz
@@ -6,11 +7,12 @@ import SpaceMount from './SpaceMount';
 // /api/skills/*, /api/curriculum/*). Server component chỉ giữ metadata SEO;
 // toàn bộ tương tác (modal, canvas game, audio, quiz) nằm trong client mount.
 // Tiêu đề thực (emoji + tên trường) được wrap client cập nhật theo ?b=&?domain=.
-export const metadata: Metadata = {
-  title: 'Không gian · Tizia',
+export const metadata: Metadata = pageMeta({
+  title: 'Không gian học tập — Phòng học, phòng thí nghiệm ảo',
   description:
-    'Không gian khám phá theo trường: phòng trải nghiệm, hoạt động thực hành và quiz củng cố kiến thức cá nhân hoá.',
-};
+    'Vào từng không gian trong trường ảo Tizia: phòng học, phòng thí nghiệm, thư viện và xưởng thực hành, mỗi nơi là một hoạt động học.',
+  path: '/space',
+});
 
 export default function SpacePage() {
   return <SpaceMount />;

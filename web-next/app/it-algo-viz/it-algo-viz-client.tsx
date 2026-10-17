@@ -460,7 +460,7 @@ export default function ItAlgoVizClient() {
       <div className="av-top">
         <a
           className="av-back"
-          href={`/school.html?domain=${encodeURIComponent(domain)}#campus-hero`}
+          href={`/school?domain=${encodeURIComponent(domain)}#campus-hero`}
         >
           ← Khuôn viên trường
         </a>

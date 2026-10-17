@@ -1,23 +1,17 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 
-export const metadata: Metadata = {
-  title: 'Tizia Dev · Hướng dẫn phát triển app cho Tizia',
+export const metadata: Metadata = pageMeta({
+  // Tên trang đã chứa thương hiệu → absoluteTitle để template không nối "· Tizia" lần hai.
+  absoluteTitle: 'Tizia Dev — Hướng dẫn phát triển app cho Tizia',
+  title: 'Tizia Dev',
   description:
     'Tài liệu đầy đủ cho lập trình viên: đóng gói app SPA thành .zip (manifest.json + public/), cài vào Tizia, đọc danh tính người dùng, nối backend riêng qua proxy /api/apps, xử lý sự cố. Cùng một gói chạy được cả trên AI Portal.',
-  keywords: 'Tizia dev, portal app, phát triển app Tizia, manifest.json, AI Portal app, SDK Tizia',
-  alternates: { canonical: 'https://tizia.vn/dev' },
-  openGraph: {
-    type: 'website',
-    siteName: 'Tizia',
-    locale: 'vi_VN',
-    title: 'Tizia Dev · Hướng dẫn phát triển app',
-    description:
-      'Đóng gói app SPA thành .zip rồi cài thẳng vào Tizia. Hướng dẫn đầy đủ kèm hình minh hoạ: manifest, biến host inject, proxy backend, cách build đúng, xử lý sự cố.',
-    url: 'https://tizia.vn/dev',
-    images: ['https://tizia.vn/og-default.svg'],
-  },
-};
+  path: '/dev',
+  keywords: ['Tizia dev', 'portal app', 'phát triển app Tizia', 'manifest.json', 'AI Portal app'],
+});
+
 
 const LD_HOWTO = {
   '@context': 'https://schema.org',
@@ -369,7 +363,7 @@ const ERRORS: [string, string, string][] = [
   ['no_manifest', '400', 'Zip không có manifest.json ở gốc (hoặc trong đúng 1 thư mục con).'],
   ['bad_manifest', '400', 'manifest.json không phải JSON hợp lệ — thường do thừa dấu phẩy cuối.'],
   ['invalid_manifest', '400', 'Thiếu name, hoặc alias sai định dạng (phải chữ thường + gạch nối).'],
-  ['no_index_html', '400', 'Thiếu public/index.html. Nhớ build TRƯỚC khi nén.'],
+  ['no_index_html', '400', 'Thiếu public/. Nhớ build TRƯỚC khi nén.'],
   ['bad_zip', '400', 'File tải lên không phải zip.'],
   ['too_many_files', '413', 'Quá 2000 file — thường do lỡ nén cả node_modules.'],
   ['too_large_uncompressed', '413', 'Giải nén vượt 100 MB.'],
@@ -486,7 +480,7 @@ export default function DevPage() {
   "icon": "👋",
   "version": "1.0.0"
 }`}</Pre>
-        <Pre label="public/index.html">{`<!doctype html>
+        <Pre label="public/">{`<!doctype html>
 <html lang="vi">
 <head><meta charset="utf-8"><title>Hello Tizia</title></head>
 <body style="font-family:system-ui;padding:32px">
@@ -563,7 +557,7 @@ export default function DevPage() {
             Portal Apps
           </Link>{' '}
           → mở app. Sau đó giải nén, sửa <Code>alias</Code> và <Code>name</Code> trong{' '}
-          <Code>manifest.json</Code> thành của bạn, sửa <Code>public/index.html</Code> tuỳ ý, nén lại rồi
+          <Code>manifest.json</Code> thành của bạn, sửa <Code>public/</Code> tuỳ ý, nén lại rồi
           cài đè. Đó là toàn bộ vòng làm việc.
         </Note>
       </Section>
@@ -732,7 +726,7 @@ export async function getSources() {
   build: { outDir: 'public' },
 })`}</Pre>
           <p className="mt-2 text-[13px] text-muted-foreground">
-            Kiểm tra nhanh: mở <Code>public/index.html</Code>, thẻ script/link phải bắt đầu bằng{' '}
+            Kiểm tra nhanh: mở <Code>public/</Code>, thẻ script/link phải bắt đầu bằng{' '}
             <Code>./assets/</Code>. Nếu thấy <Code>/assets/</Code> hay{' '}
             <Code>/embed/ten-app/assets/</Code> là còn sai.
           </p>

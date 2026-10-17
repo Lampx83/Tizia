@@ -249,7 +249,7 @@ export default function CodeLab() {
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [solved, setSolved] = useState<Set<string>>(new Set());
   const [subtitle, setSubtitle] = useState('— Python · C++ · Java · NEU Online Judge');
-  const [backHref, setBackHref] = useState('/school.html?domain=it#campus-hero');
+  const [backHref, setBackHref] = useState('/school?domain=it#campus-hero');
   const [statsTitle, setStatsTitle] = useState('');
 
   const [probHtml, setProbHtml] = useState('');
@@ -365,7 +365,7 @@ export default function CodeLab() {
     const params = new URLSearchParams(window.location.search);
     contestSlugRef.current = params.get('contest') || CONTEST_SLUG_DEFAULT;
     const d = params.get('domain');
-    if (d) setBackHref(`/school.html?domain=${encodeURIComponent(d)}#campus-hero`);
+    if (d) setBackHref(`/school?domain=${encodeURIComponent(d)}#campus-hero`);
 
     let cancelled = false;
 

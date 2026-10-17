@@ -1,13 +1,15 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import Link from 'next/link';
 import { SAC_KY } from './topic-data';
 import TopicCard from './TopicCard';
 
-export const metadata: Metadata = {
-  title: 'Hub Sắc ký TLC — Tizia',
+export const metadata: Metadata = pageMeta({
+  title: 'Hub Sắc ký TLC',
   description:
     'Mô phỏng thí nghiệm Sắc ký lớp mỏng (TLC) trong nhiều phiên bản công nghệ — từ Canvas 2D nhẹ trên mobile đến VR thật trên Meta Quest và phòng lab Metaverse multiplayer.',
-};
+  path: '/sac-ky-vr',
+});
 
 // Hub tĩnh TLC — Server Component: hero + intro + bảng so sánh (SSR, SEO).
 // Phần tương tác (đổi mode) tách sang Client Component <TopicCard />.
@@ -19,7 +21,7 @@ export default function SacKyVrPage() {
     <div className="sacky-scope">
       <style>{scopedCss}</style>
 
-      <a className="sk-back" href="/index.html">← Quay lại Tizia</a>
+      <a className="sk-back" href="/">← Quay lại Tizia</a>
 
       <div className="sk-hero">
         <div className="sk-logo">🧪</div>
@@ -59,7 +61,7 @@ export default function SacKyVrPage() {
       <TopicCard topic={SAC_KY} />
 
       <footer className="sk-footer">
-        <Link href="/index.html" className="sk-footer-link">Tizia</Link>
+        <Link href="/" className="sk-footer-link">Tizia</Link>
       </footer>
     </div>
   );

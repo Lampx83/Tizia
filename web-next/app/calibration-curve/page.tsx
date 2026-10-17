@@ -168,7 +168,7 @@ export default function CalibrationCurve() {
       <style>{scopedCss}</style>
 
       <div className="topbar">
-        <a href="/space.html?b=lab_qc&domain=pharmacy">← PTN Kiểm nghiệm</a>
+        <a href="/space?b=lab_qc&domain=pharmacy">← PTN Kiểm nghiệm</a>
         <span className="title">📈 Đường chuẩn UV-Vis (định lượng)</span>
         <span className="spacer" />
         {score > 0 && <span>🎯 <span className="score">{score}</span></span>}

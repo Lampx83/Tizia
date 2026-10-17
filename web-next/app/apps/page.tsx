@@ -1,16 +1,18 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import Link from 'next/link';
 import { tiziaFetch } from '@/lib/tizia';
 import { appIcon } from '@/lib/app-icon';
 import { groupByDomain } from '@/lib/app-groups';
 
-export const metadata: Metadata = {
-  title: 'Ứng dụng — công cụ & trò chơi học tập trong Tizia',
+export const metadata: Metadata = pageMeta({
+  title: 'Ứng dụng — công cụ và trò chơi học tập',
   description:
     'Danh sách ứng dụng chạy trong Tizia: công cụ học tập, trò chơi, phòng thí nghiệm ảo và app do cộng đồng tự viết rồi cài vào.',
-};
+  path: '/apps',
+});
 
-// Portal app (cài qua /portal-apps.html) — trả từ GET /api/portal-apps.
+// Portal app (cài qua /portal-apps) — trả từ GET /api/portal-apps.
 type PortalApp = {
   id: number | string;
   alias: string;
