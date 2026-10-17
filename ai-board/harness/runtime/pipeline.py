@@ -96,6 +96,15 @@ def _retryable_model_error(error: Exception) -> bool:
     return False
 
 
+def _request_attrs(options: dict, extra: dict | None, body: dict | None = None) -> dict:
+    """Sampling + thinking của 1 lời gọi cho span chat; thinking None = mặc định của server."""
+    extra = extra or {}
+    thinking = False if extra.get('logprobs') else extra['thinking'] if 'thinking' in extra else extra.get('think')
+    return {"temperature": options.get("temperature"), "max_tokens": options.get("num_predict"),
+            "thinking": None if thinking is None else bool(thinking),
+            "reasoning_chars": (body or {}).get("_reasoning_chars")}
+
+
 @functools.lru_cache(maxsize=None)
 def _static_prefix(prompt_name: str | None) -> str:
     """Phần prompt cố định (trước placeholder đầu tiên) — trace chỉ gửi phần sau nó."""
@@ -167,7 +176,7 @@ class Deps:
                 if last_attempt or not _retryable_model_error(error):
                     self._trace(gate, model, prompt, prompt_name, "", metrics, n,
                                 "timeout" if isinstance(error, TimeoutError) else "http_error", str(error),
-                                child, iteration, provider=provider)
+                                child, iteration, provider=provider, request=_request_attrs(options, extra))
                     raise
         metrics = meter.measure(provider, body, int((time.monotonic() - started) * 1000))
         n = meter.units(provider, metrics)
@@ -177,7 +186,8 @@ class Deps:
         if db_path is not None and proposal_id is not None:
             gate_trace.record(db_path, skill_proposal_id=proposal_id, gate=gate,
                                model=model, prompt=prompt, body=body)
-        self._trace(gate, model, prompt, prompt_name, body.get("response", ""), metrics, n, "ok", None, child, iteration, provider=provider)
+        self._trace(gate, model, prompt, prompt_name, body.get("response", ""), metrics, n, "ok", None, child, iteration,
+                    provider=provider, request=_request_attrs(options, extra, body))
         body["_metrics"] = metrics
         return body
 
@@ -228,7 +238,7 @@ class Deps:
                 budget.spend('units', n)
                 self._trace(gate, candidate['model'], prompt, prompt_name, body.get('response', ''), metrics, n,
                             'http_error' if error else 'ok', str(error) if error else None, child, iteration,
-                            provider=provider)
+                            provider=provider, request=_request_attrs(call_options, call_extra, body))
                 if not error:
                     if db_path is not None and proposal_id is not None:
                         gate_trace.record(db_path, skill_proposal_id=proposal_id, gate=gate,
@@ -246,7 +256,7 @@ class Deps:
         raise RuntimeError(f'No reviewed, compatible and available candidate for {role}')
 
     def _trace(self, gate, model, prompt, prompt_name, output, metrics, n, result, error, child, iteration,
-               provider=None):
+               provider=None, request=None):
         if self.trace is None:
             return
         prefix = _static_prefix(prompt_name)
@@ -255,7 +265,8 @@ class Deps:
         self.trace.record(gate=gate, model=model, prompt=prompt, prompt_name=prompt_name,
                           prompt_hash=_PROMPT_LOCK.get(prompt_name), static_prefix=prefix,
                           output=output, metrics=metrics, budget_units=n, result=result, error=error,
-                          child=child, iteration=iteration, **({'provider': provider} if provider else {}))
+                          child=child, iteration=iteration, **({'provider': provider} if provider else {}),
+                          **({'request': request} if request and hasattr(self.trace, 'open_span') else {}))
 
 
 def load_inbox(path: str | os.PathLike) -> list[dict]:
@@ -314,7 +325,19 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
     fn = _GATE_FNS.get(number)
     if fn is None:
         return {"gate": number, "blocked": False, "reason": None}
-    return fn(request, deps, budget, state, db_path=db_path, proposal_id=proposal_id)
+    trace = deps.trace if hasattr(deps.trace, 'open_span') else None
+    span = trace.open_span(f"invoke_agent gate {number}", {"gen_ai.operation.name": "invoke_agent", "tizia.gate.id": number}) if trace else None
+    try:
+        result = fn(request, deps, budget, state, db_path=db_path, proposal_id=proposal_id)
+    except BaseException as error:
+        if span:
+            trace.close_span(span, "error", {"tizia.gate.status": "error", "tizia.error.type": type(error).__name__})
+        raise
+    if span:
+        blocked = bool(result.get("blocked"))
+        trace.close_span(span, "ok", {"tizia.gate.status": "blocked" if blocked else "passed",
+                                                              **({"tizia.gate.outcome": str(result["outcome"])[:80]} if result.get("outcome") else {})})
+    return result
 
 
 def create_proposal(db_path, *, request: dict) -> int:

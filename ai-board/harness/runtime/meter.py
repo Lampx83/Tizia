@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import secrets
 import time
 from collections import deque
 from pathlib import Path
@@ -99,17 +100,55 @@ class Tracer:
         self._notes: list[dict] = []
         self._seq = 0
         self._gpu = deque()  # (monotonic s, giây GPU) trong 1 giờ gần nhất
+        self.post_spans = None
+        self.trace_id = None
+        self.spans: list[dict] = []  # span đã đóng, chờ gửi
+        self._open: list[dict] = []  # span đang mở; cuối = cha của span kế
 
-    def begin(self, run_id, post) -> None:
-        """Gắn run mới; xả đệm của run cũ nếu còn."""
+    def begin(self, run_id, post, post_spans=None) -> None:
+        """Gắn run mới; xả đệm của run cũ nếu còn. Mở span `invoke_agent ai-board` của run."""
+        self.end_run()
         self.flush()
         self.run_id, self.post, self.attempt, self._seq = run_id, post, 0, 0
         self._notes = []
+        self.post_spans, self.trace_id, self._open = post_spans, secrets.token_hex(16), []
+        self.open_span("invoke_agent ai-board", {"gen_ai.operation.name": "invoke_agent", "gen_ai.agent.name": "ai-board",
+                                                 "gen_ai.conversation.id": str(run_id)})
+
+    def open_span(self, name: str, attributes: dict | None = None, *, kind: str = "internal", start_ms: int | None = None) -> dict:
+        """Mở span con của span đang mở cuối (hoặc gốc). Prompt/completion không bao giờ vào attributes."""
+        span = {"trace_id": self.trace_id or secrets.token_hex(16), "span_id": secrets.token_hex(8),
+                "parent_span_id": self._open[-1]["span_id"] if self._open else None, "name": name[:120], "kind": kind,
+                "start_ms": start_ms if start_ms is not None else int(time.time() * 1000), "end_ms": None,
+                "status": "unset", "attributes": dict(attributes or {}), "events": []}
+        self.trace_id = span["trace_id"]
+        self._open.append(span)
+        return span
+
+    def close_span(self, span: dict, status: str = "ok", attributes: dict | None = None, *, end_ms: int | None = None) -> dict:
+        span["attributes"].update(attributes or {})
+        span.update(status=status, end_ms=max(end_ms if end_ms is not None else int(time.time() * 1000), span["start_ms"]))
+        if span in self._open:
+            self._open.remove(span)
+        self.spans.append(span)
+        return span
+
+    def add_span(self, name: str, attributes: dict, *, start_ms: int, end_ms: int, status: str = "ok", kind: str = "internal") -> dict:
+        """Span đã xong (chat, execute_tool): mở và đóng ngay dưới span đang mở."""
+        return self.close_span(self.open_span(name, attributes, kind=kind, start_ms=start_ms), status, end_ms=end_ms)
+
+    def end_run(self, outcome: str | None = None) -> None:
+        """Đóng mọi span còn mở (gốc cuối cùng); outcome lỗi → status error."""
+        status = "error" if outcome and ("fail" in outcome or "error" in outcome) else "ok"
+        while self._open:
+            span = self._open[-1]
+            self.close_span(span, status if span is self._open[0] else "unset",
+                            {"tizia.outcome": outcome} if outcome and span is self._open[0] else None)
 
     def record(self, *, gate: float, model: str, prompt: str, prompt_name: str | None, prompt_hash: str | None,
                static_prefix: str, output: str, metrics: dict, budget_units: int, result: str,
                error: str | None = None, child: int | None = None, iteration: int = 0,
-               provider: str | None = None) -> dict:
+               provider: str | None = None, request: dict | None = None) -> dict:
         if self.pending and (self.pending[-1]["gate"] != gate or len(self.pending) >= 20):
             self.flush()  # 1 lô mỗi cổng; đầy lô thì xả trước khi thêm, để record cuối còn nhận được phần đánh giá
         self._seq += 1
@@ -125,12 +164,28 @@ class Tracer:
             "notes": self._notes, "edits": None, "evaluation": [],
         }
         self._notes = []
+        self._chat_span(rec, metrics, request or {})
         self._write({**rec, "prompt_var": variable, "output": output})
         (pv, pt), (out, ot) = _cap(variable), _cap(output)
         self.pending.append({**rec, "prompt_var": pv, "output": out, "truncated": {"prompt": pt, "output": ot}})
         now = time.monotonic()
         self._gpu.append((now, (metrics.get("gpu_ms") or 0) / 1000))
         return rec
+
+    def _chat_span(self, rec: dict, metrics: dict, request: dict) -> None:
+        end = rec["at"]
+        done = metrics.get("done_reason")
+        attrs = {"gen_ai.operation.name": "chat", "gen_ai.provider.name": rec["provider"], "gen_ai.request.model": rec["model"],
+                 "gen_ai.usage.input_tokens": metrics.get("tokens_in"), "gen_ai.usage.output_tokens": metrics.get("tokens_out"),
+                 "gen_ai.response.finish_reasons": [done] if done else [], "tizia.gate": rec["gate"], "tizia.child": rec["child"],
+                 "tizia.iteration": rec["iteration"], "tizia.call_id": rec["call_id"], "tizia.result": rec["result"],
+                 "tizia.thinking": request.get("thinking"), "tizia.reasoning_chars": request.get("reasoning_chars"), "tizia.prompt_name": rec["prompt_name"]}
+        if request.get("temperature") is not None:
+            attrs["gen_ai.request.temperature"] = request["temperature"]
+        if request.get("max_tokens") is not None:
+            attrs["gen_ai.request.max_tokens"] = request["max_tokens"]
+        self.add_span(f"chat {rec['model']}", attrs, kind="client", start_ms=end - int(metrics.get("wall_ms") or 0), end_ms=end,
+                      status="ok" if rec["result"] == "ok" else "error")
 
     def note(self, kind: str, name: str, summary: str = "", data=None) -> None:
         """Ghi 1 điều AI biết ("knows") hoặc 1 tool harness đã chạy cho AI ("tool"); đính vào lần gọi model KẾ TIẾP."""
@@ -161,6 +216,7 @@ class Tracer:
             self._write({"call_id": last["call_id"], "result": result, "error": last["error"]})
 
     def flush(self) -> None:
+        self._flush_spans()
         if not self.pending or not self.post:
             self.pending.clear()
             return
@@ -179,6 +235,18 @@ class Tracer:
                 self.post(chunk)
             except Exception as error:  # noqa: BLE001 — trace best-effort
                 print(f"[trace] gửi {len(chunk)} record lỗi: {str(error)[:200]}")
+
+    def _flush_spans(self) -> None:
+        if not self.spans:
+            return
+        spans, self.spans = self.spans, []
+        if not self.post_spans:
+            return
+        for i in range(0, len(spans), 50):
+            try:
+                self.post_spans(spans[i:i + 50])
+            except Exception as error:  # noqa: BLE001 — trace best-effort
+                print(f"[trace] gửi {len(spans[i:i + 50])} span lỗi: {str(error)[:200]}")
 
     def over_hourly_cap(self, cap: float = HOURLY_GPU_S) -> bool:
         return self.gpu_s_last_hour() >= cap

@@ -656,6 +656,71 @@ async function rolloutDo(btn) {
   await refresh();
 }
 
+const SPAN_STATUS = { ok: ['ok', 'Xong'], error: ['bad', 'Lỗi'], unset: ['idle', 'Chưa đóng'] };
+const TOOL_STATUS = { ok: ['ok', 'Xong'], finish_ok: ['ok', 'Hoàn tất'], error: ['bad', 'Sai tham số'], forbidden: ['bad', 'Bị chặn'],
+  finish_rejected: ['warn', 'Bị loại'], repeated: ['bad', 'Lặp lại'] };
+const tokenText = (n) => n == null ? 'không rõ' : fmtNum(n);
+const thinkingText = (v) => v === true ? 'Bật' : v === false ? 'Tắt' : 'Mặc định';
+
+// Một hàng mỗi span (run, cổng, lần gọi model, tool) theo OTel GenAI; thanh ngang = vị trí và độ dài trên trục thời gian của lượt.
+function spanRows(spans) {
+  const depth = new Map();
+  const ids = new Set(spans.map((s) => s.span_id));
+  const level = (s) => {
+    if (depth.has(s.span_id)) return depth.get(s.span_id);
+    const parent = ids.has(s.parent_span_id) ? spans.find((p) => p.span_id === s.parent_span_id) : null;
+    const d = parent ? level(parent) + 1 : 0;
+    depth.set(s.span_id, d);
+    return d;
+  };
+  const t0 = Math.min(...spans.map((s) => s.start_ms));
+  const t1 = Math.max(...spans.map((s) => s.end_ms ?? Date.now()));
+  const span = Math.max(1, t1 - t0);
+  const kids = new Map();
+  for (const s of spans) { const p = ids.has(s.parent_span_id) ? s.parent_span_id : null; kids.set(p, [...(kids.get(p) || []), s]); }
+  const ordered = [];
+  const walk = (parent) => (kids.get(parent) || []).sort((x, y) => x.start_ms - y.start_ms).forEach((s) => { ordered.push(s); walk(s.span_id); });
+  walk(null);
+  return ordered.map((s) => {
+    const a = s.attributes || {};
+    const op = a['gen_ai.operation.name'];
+    const end = s.end_ms ?? Date.now();
+    const left = ((s.start_ms - t0) / span) * 100, width = Math.max(0.6, ((end - s.start_ms) / span) * 100);
+    let what = esc(s.name), think = '', tokens = '', finish = '';
+    let [state, label] = SPAN_STATUS[s.status] || SPAN_STATUS.unset;
+    if (op === 'chat') {
+      what = `Gọi ${code(a['gen_ai.request.model'] || '?')}`;
+      think = thinkingText(a['tizia.thinking']);
+      tokens = `${tokenText(a['gen_ai.usage.input_tokens'])} / ${tokenText(a['gen_ai.usage.output_tokens'])}`;
+      finish = esc((a['gen_ai.response.finish_reasons'] || []).join(', ') || '');
+    } else if (op === 'execute_tool') {
+      what = `Tool ${code(a['gen_ai.tool.name'])}`;
+      [state, label] = TOOL_STATUS[a['tizia.tool.status']] || [state, label];
+    } else if (a['tizia.gate.id'] != null) {
+      what = `<b>${gateName(a['tizia.gate.id'])}</b>`;
+      if (a['tizia.gate.status'] === 'blocked') [state, label] = ['bad', 'Dừng'];
+    } else {
+      what = '<b>Lượt xử lý</b>';
+    }
+    return `<tr class="span-row d${Math.min(level(s), 3)}">
+      <td class="span-what">${what}</td><td>${think}</td><td class="num">${tokens}</td>
+      <td class="num">${s.end_ms == null ? 'đang chạy' : end - s.start_ms < 1000 ? `${end - s.start_ms} ms` : `${secs(end - s.start_ms)} s`}</td><td>${finish}</td><td>${tag(state, label)}</td>
+      <td class="span-bar" aria-hidden="true"><i class="st-${state}" style="left:calc(12px + (100% - 24px) * ${(left / 100).toFixed(4)});width:calc((100% - 24px) * ${(Math.min(width, 100 - left) / 100).toFixed(4)})"></i></td></tr>`;
+  }).join('');
+}
+
+function renderSpanTimeline(trace) {
+  const runs = (trace.runs || []).filter((r) => r.spans?.length);
+  if (!runs.length) return `<h2>Dòng thời gian từng bước</h2><p class="meta blk">Chưa có dữ liệu span cho yêu cầu này. Các lượt xử lý mới sẽ hiện ở đây.</p>`;
+  const table = (run) => `<div class="table-wrap"><table class="span-table">
+    <thead><tr><th>Bước</th><th>Suy luận</th><th class="num">Token vào / ra</th><th class="num">Thời gian</th><th>Kết thúc</th><th>Trạng thái</th><th class="span-bar-head">Trục thời gian</th></tr></thead>
+    <tbody>${spanRows(run.spans)}</tbody></table></div>`;
+  const [latest, ...older] = [...runs].reverse();
+  return `<h2>Dòng thời gian từng bước</h2>
+    <div class="blk"><p class="meta">Lượt #${esc(latest.id)} · ${esc(latest.spans.length)} bước đã ghi</p>${table(latest)}</div>
+    ${older.map((run) => det(`spans-${run.id}`, `Lượt #${esc(run.id)} · ${esc(run.spans.length)} bước`, table(run))).join('')}`;
+}
+
 function renderAiBoard(t) {
   const x = t.totals || {};
   const unit = x.budget_unit === 'k_tokens' ? 'k tokens' : 'GPU-s';
@@ -688,6 +753,7 @@ function renderAiBoard(t) {
     ${renderRollout(t)}
     ${renderPlan(t.plan, root, t.children || [], t)}
     ${renderPipeline(t)}
+    ${renderSpanTimeline(t)}
     ${renderAttemptHistory(t)}
     <h2 id="events">Diễn biến xử lý</h2>
     ${renderEvents(t.events || [])}

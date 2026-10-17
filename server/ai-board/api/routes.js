@@ -12,6 +12,7 @@ import { activeChats } from '../services/chat-activity.js';
 import { guardModelText, MAX_QUESTIONS } from '../../contexts/ai-board-intake/clarify.js';
 import { attachAppealRoutes } from './appeals.js';
 import { attachRolloutRoutes } from './rollout.js';
+import { createSpanService } from '../services/spans.js';
 import { attachWorkerLessonRoutes, attachLessonReviewRoutes } from './lessons.js';
 import { createHsmStore } from '../hsm/store.js';
 import { createToolCheckpointService } from '../services/tool-checkpoint.js';
@@ -246,6 +247,7 @@ export function attachAiBoardRequestRoutes(router, {
     const trace = await store.getRequestTrace(req.params.requestId);
     if (!trace) return res.status(404).json({ error: 'ticket_not_found' });
     if (store.db) trace.hsm = await createHsmStore(store).read(trace.root.id);
+    if (store.db) { const spans = await createSpanService(store).forRuns(trace.runs.map((r) => r.id)); for (const run of trace.runs) run.spans = spans.get(Number(run.id)) || []; }
     res.json(trace);
   });
 
@@ -408,6 +410,10 @@ export function attachAiBoardWorkerRoutes(router, {
   const gateProofs = createGateProofService(store);
   route.post('/api/ai-board/worker/tickets/:id/gate-proof/:op', authenticate, handle(async (req,res) => {
     res.json(await gateProofs.apply(req.params.id, req.params.op, req.body || {}));
+  }));
+  const spanService = createSpanService(store);
+  route.post('/api/ai-board/worker/tickets/:id/spans', authenticate, handle(async (req,res) => {
+    res.json(await spanService.record(req.params.id, req.body || {}));
   }));
   const toolCheckpoint = createToolCheckpointService(store);
   route.post('/api/ai-board/worker/tickets/:id/checkpoint/:op', authenticate, handle(async (req,res) => {
