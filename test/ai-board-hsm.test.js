@@ -37,6 +37,22 @@ test('live action guard rechecks owner scope without advancing the Gate4 state',
   } finally {await f.close();}
 });
 
+test('Gate4 and the action guard accept a reverify run like plan and execute runs, and still refuse an unknown trigger',async()=>{
+  const f=await fixture();
+  try {
+    await f.db.run('UPDATE ai_plans SET capability_policy_hash=? WHERE root_ticket_id=?',[CAPABILITY_CATALOG.hash,f.id]);
+    const hash=(await f.post('snapshot',{})).body.hsm_contract.hash;
+    const action={run_id:f.run,contract_hash:hash,action:'model'};
+    const begin={run_id:f.run,contract_hash:hash,attempt:0,event:'BEGIN',expected_version:0,idempotency_key:'reverify-begin'};
+    await f.db.run("UPDATE ai_runs SET trigger='reverify' WHERE id=?",[f.run]);
+    assert.equal((await f.post('hsm/authority',action)).status,200);
+    assert.equal((await f.post('hsm',begin)).status,200);
+    await f.db.run("UPDATE ai_runs SET trigger='shadow_precheck' WHERE id=?",[f.run]);
+    assert.equal((await f.post('hsm/authority',action)).status,409);
+    assert.equal((await f.post('hsm',{...begin,attempt:1,idempotency_key:'reverify-begin-2'})).status,409);
+  } finally {await f.close();}
+});
+
 test('live action guard refuses stale plans, exhausted parent budgets and old leases',async()=>{
   const f=await fixture();
   try {

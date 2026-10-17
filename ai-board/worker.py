@@ -617,6 +617,17 @@ def _forge(candidate, token):
     return candidate.GitHub(os.getenv("AI_BOARD_GITHUB_REPO", "Lampx83/Tizia"), token) if token else None
 
 
+def observe_base(client: WorkerClient, repo) -> dict:
+    """Report the current tip of the PR base branch so the server can tell which kept candidates were verified on an older base."""
+    import candidate
+    from services import reverify
+
+    tip = reverify.base_tip(repo)
+    if not tip:
+        return {"status": "no_base"}
+    return {"status": "observed", **client.post("/api/ai-board/worker/base", {"ref": candidate.PR_BASE, "sha": tip})}
+
+
 def sync_pull_requests(client: WorkerClient, github) -> dict:
     """Ask GitHub about the PRs the server still thinks are open; report merged/closed ones.
     github None (no token) → skip with a log line. One PR's GitHub/HTTP error → listed in errors, retried next sync."""
@@ -900,7 +911,7 @@ class HttpWorker:
         self._report_gate = report_gate
         folder_src = None
         try:
-            if snapshot.get("folder") and self.planner and self.candidates and trigger != "rollback":
+            if snapshot.get("folder") and self.planner and self.candidates and trigger not in ("rollback", "reverify"):
                 import candidate
                 folder = snapshot["folder"]
                 branch = folder.get("branch") or candidate.folder_branch(folder["slug"], folder.get("cycle") or 1)
@@ -1364,6 +1375,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--execute", action="store_true", help="run the accepted plan through gates 3, 4, 5 and 5.5")
     parser.add_argument("--poll-seconds", type=float, default=5.0)
     parser.add_argument("--sync-prs", action="store_true", help="report merged/closed ai-board PRs from GitHub, then exit")
+    parser.add_argument("--observe-base", action="store_true", help="report the PR base branch tip of the worker repo, then exit")
     parser.add_argument("--diagnose", action="store_true",
                         help="turn the top learning-part failure cluster into at most one self request, then exit")
     args = parser.parse_args(argv)
@@ -1380,7 +1392,7 @@ def main(argv: list[str] | None = None) -> int:
     base_url = server_url()
     key = take_secret("AI_BOARD_WORKER_KEY")
     github_token = take_secret("AI_BOARD_GITHUB_TOKEN")
-    if (args.mode != "off" or args.sync_prs or args.diagnose) and len(key) < 24:
+    if (args.mode != "off" or args.sync_prs or args.diagnose or args.observe_base) and len(key) < 24:
         parser.error("AI_BOARD_WORKER_KEY must be at least 24 characters")
     _, Deps, _ = _load_harness()
     if args.diagnose:  # chạy tay; vòng đêm gọi cùng hàm
@@ -1389,6 +1401,10 @@ def main(argv: list[str] | None = None) -> int:
         deps = _real_deps(Deps, meter.Tracer(diagnose.TRACES_PATH), None)
         print(json.dumps(diagnose.diagnose_to_self_request(WorkerClient(base_url, key), deps,
                                                            now_ms=int(time.time() * 1000)), ensure_ascii=False))
+        return 0
+    if args.observe_base:
+        repo_dir = os.getenv("AI_BOARD_REPO_DIR")
+        print(json.dumps(observe_base(WorkerClient(base_url, key), Path(repo_dir) if repo_dir else REPO_ROOT), ensure_ascii=False))
         return 0
     if args.sync_prs:
         import candidate

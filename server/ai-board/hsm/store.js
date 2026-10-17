@@ -56,7 +56,7 @@ export function createHsmStore(store) {
       reason ||= input.contract_hash!==CONTRACT_HASH || (row && row.contract_hash!==CONTRACT_HASH)?'hsm_contract_mismatch':null;
       reason ||= run.plan_hash!==root.plan_hash || Number(run.plan_revision)!==Number(root.plan_revision)?'hsm_run_plan_mismatch':null;
       const latestRun=await t.get('SELECT id FROM ai_runs WHERE ticket_id=? ORDER BY id DESC LIMIT 1',[root.id]);
-      reason ||= run.outcome!==null || !['plan','execute'].includes(run.trigger) || latestRun.id!==run.id?'hsm_run_inactive':null;
+      reason ||= run.outcome!==null || !['plan','execute','reverify'].includes(run.trigger) || latestRun.id!==run.id?'hsm_run_inactive':null;
       reason ||= !plan?'hsm_plan_not_executing':null;
       reason ||= row && row.plan_hash!==root.plan_hash?'hsm_plan_changed':null;
       if (prior && !reason) return {...JSON.parse(prior.response_json),execute:false,duplicate:true};
@@ -107,7 +107,7 @@ export function createHsmStore(store) {
       await currentScope(t,root);
       const run=await t.get('SELECT * FROM ai_runs WHERE id=? AND ticket_id=?',[runId,root.id]);
       const latest=await t.get('SELECT id FROM ai_runs WHERE ticket_id=? ORDER BY id DESC LIMIT 1',[root.id]);
-      if (!run || run.worker_id!==input.worker_id || run.outcome!==null || !['plan','execute'].includes(run.trigger) || latest?.id!==run.id) fail('action_run_inactive');
+      if (!run || run.worker_id!==input.worker_id || run.outcome!==null || !['plan','execute','reverify'].includes(run.trigger) || latest?.id!==run.id) fail('action_run_inactive');
       if (input.contract_hash!==CONTRACT_HASH || run.plan_hash!==root.plan_hash || Number(run.plan_revision)!==Number(root.plan_revision)) fail('action_plan_changed');
       const plan=await executionPlan(t,root);
       if (!plan) fail('action_not_authorized');

@@ -104,3 +104,41 @@ def test_a_missing_commit_object_is_an_error_not_a_silent_pass(world):
     with pytest.raises(reverify.Conflict):
         reverify.integrate(repo, ghost, tip, label='ticket-9')
     assert branches(repo) == before
+
+
+def test_observe_base_posts_the_tip_of_the_pr_base_and_reports_a_missing_base(world, tmp_path, monkeypatch):
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    import worker
+    monkeypatch.delenv('PR_BASE_BRANCH', raising=False)
+    repo, base, _ = world
+    posted = []
+
+    class Client:
+        def post(self, path, body):
+            posted.append((path, body))
+            return {'ref': body['ref'], 'sha': body['sha'], 'changed': True}
+
+    assert worker.observe_base(Client(), repo) == {'status': 'observed', 'ref': PR_BASE, 'sha': base, 'changed': True}
+    assert posted == [('/api/ai-board/worker/base', {'ref': PR_BASE, 'sha': base})]
+    empty = tmp_path / 'empty'
+    git(tmp_path, 'init', '-q', '-b', 'other', str(empty))
+    assert worker.observe_base(Client(), empty) == {'status': 'no_base'} and len(posted) == 1
+
+
+def test_the_remote_tracking_base_wins_over_a_stale_local_branch(world, tmp_path, monkeypatch):
+    monkeypatch.delenv('PR_BASE_BRANCH', raising=False)
+    repo, base, _ = world
+    clone = tmp_path / 'clone'
+    git(tmp_path, 'clone', '-q', str(repo), str(clone))
+    git(clone, 'checkout', '-q', PR_BASE)
+    ahead = commit(repo, 'public/b.html', 'b\n', 'origin moved')
+    git(clone, 'fetch', '-q', 'origin')
+    assert git(clone, 'rev-parse', PR_BASE) == base
+    assert reverify.base_tip(clone) == ahead
+
+
+def test_diffs_of_separates_the_test_file_whichever_folder_or_order(world):
+    commits = [{'sha': 'a' * 40, 'files': ['tests/x.test.js', 'public/p.html']}, {'sha': 'b' * 40, 'files': ['test/y.test.js']}]
+    assert reverify.diffs_of(commits) == [{'file': 'public/p.html', 'test_file': 'tests/x.test.js', 'commit': 'a' * 40},
+                                           {'file': 'test/y.test.js', 'test_file': 'test/y.test.js', 'commit': 'b' * 40}]
