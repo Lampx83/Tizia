@@ -319,6 +319,18 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check) -> tup
     return prompt, steps, rejected, None
 
 
+def _tool_span(deps, name: str, step: int, child, kind: str, observation: str, started_ms: int) -> None:
+    """Span `execute_tool <tool>` dưới span cổng đang mở; chỉ digest của observation, không nội dung."""
+    trace = getattr(deps, "trace", None)
+    if not hasattr(trace, "add_span"):
+        return
+    tool = name if name in SCHEMAS else "invalid_request"
+    trace.add_span(f"execute_tool {tool}", {
+        "gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": tool, "gen_ai.tool.call.id": f"{child or 0}:{step}",
+        "tizia.step": step, "tizia.child": child, "tizia.tool.status": kind, "tizia.observation_digest": sha_of(observation or ""),
+    }, start_ms=started_ms, end_ms=int(time.time() * 1000), status="error" if kind in ("error", "forbidden", "finish_rejected", "repeated") else "ok")
+
+
 def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str, source, sha: str, check,
                 role: str | None = None, call_extra: dict | None = None, db_path=None, proposal_id=None,
                 child: int | None = None, store=None, pins: dict | None = None, repair_reason: str | None = None,
@@ -369,6 +381,7 @@ def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str,
             return _result('paused', f'loop dừng: {loop_budget.exhausted()}', 'budget', steps=steps)
         rejected = False
         n, args, kind, sig = len(steps), {}, "ok", None
+        started_ms = int(time.time() * 1000)
         try:
             name, args = parse_request(body)
             validate(name, args)
@@ -384,12 +397,14 @@ def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str,
         except Forbidden as error:
             if store and name in WRITE_TOOLS:
                 store.done(n, name, args, str(error), "forbidden")
+            _tool_span(deps, name, n, child, "forbidden", str(error), started_ms)
             return _result("blocked", str(error), "critical", steps=steps)
         except server_hsm.AuthorityError as error:
             return _result('blocked', str(error), error.failure_class, steps=steps)
         repeats = repeats + 1 if sig is not None and sig == last_sig else 0
         last_sig = sig
         if repeats >= MAX_REPEATS:
+            _tool_span(deps, name, n, child, "repeated", observation, started_ms)
             return _result("blocked", f"model lặp lại đúng một request {repeats + 1} lần ({name})", "ordinary", steps=steps)
         if repeats and name != "finish":
             observation += REPEAT_HINT
@@ -400,6 +415,7 @@ def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str,
                 if store:
                     store.done(n, name, args, "", "finish_ok")
                     store.save_ledger(budget.snapshot())
+                _tool_span(deps, name, n, child, "finish_ok", "", started_ms)
                 return _result("proposed", out=out, steps=steps + [name], **({"stale_reset": ws.stale_reset} if ws.stale_reset else {}))
             except ValueError as error:
                 if not ws.complete() and not nudged:
@@ -415,6 +431,7 @@ def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str,
         if store:
             store.done(n, name, args, observation, kind)
             store.save_ledger(budget.snapshot())
+        _tool_span(deps, name, n, child, kind, observation, started_ms)
         steps.append(name)
         prompt += OBSERVATION.format(tool=name, text=observation[:_cap(name)])
 

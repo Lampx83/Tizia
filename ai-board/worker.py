@@ -898,6 +898,8 @@ class HttpWorker:
                 run["id"],
                 lambda calls: self.client.post(
                     f"/api/ai-board/worker/tickets/{ticket_id}/traces", {**lease, "run_id": run["id"], "calls": calls}),
+                lambda spans: self.client.post(
+                    f"/api/ai-board/worker/tickets/{ticket_id}/spans", {**lease, "run_id": run["id"], "spans": spans}),
             )
 
         def report_gate(gate: float) -> None:
@@ -970,9 +972,15 @@ class HttpWorker:
 
     def _release(self, ticket_id: int, payload: dict) -> dict:
         """Gửi nốt trace còn đệm khi còn lease (sau release server trả 409 stale_lease), rồi trả lease."""
-        if self.tracer:
-            self.tracer.flush()
+        self._close_trace(payload.get("outcome"))
         return self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/release", payload)
+
+    def _close_trace(self, outcome: str | None) -> None:
+        """Đóng span run và xả trace trước mọi lời gọi trả lease."""
+        if self.tracer:
+            if hasattr(self.tracer, "end_run"):
+                self.tracer.end_run(outcome)
+            self.tracer.flush()
 
     def _rollback(self, ticket_id: int, lease: dict, snapshot: dict, run: dict) -> dict:
         """Admin yêu cầu hoàn tác: bỏ nhánh candidate, hoặc tạo nhánh revert nếu đã merge. Lỗi → server chờ admin."""
@@ -987,6 +995,7 @@ class HttpWorker:
             raise
         except Exception as error:  # noqa: BLE001 — git/IO: báo server, không để root kẹt 'running'
             result = {"outcome": "failed", "detail": str(error)[:1000]}
+        self._close_trace(result["outcome"])
         done = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/rollback", {
             **lease, "run_id": run["id"], **result,
         })
@@ -1075,6 +1084,7 @@ class HttpWorker:
                 if (detail_value.get("gate") == 2.5 and detail_value.get("reason") == "needs_clarification"
                         and detail_value.get("public_message")):
                     try:
+                        self._close_trace("needs_clarification")
                         clarification = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/clarifications", {
                             **lease, "run_id": run["id"], "question": detail_value["public_message"],
                             "idempotency_key": f"{prefix}:clarification",

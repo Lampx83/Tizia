@@ -93,6 +93,15 @@
   .pill { display:inline-block; font-size:11px; padding:1px 8px; border-radius:999px; background:var(--bg3); border:1px solid var(--border); }
   .strip { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px 24px; font-variant-numeric:tabular-nums; }
   .table-wrap { overflow-x:auto; }
+  .span-table td.num, .span-table th.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .span-table { min-width:760px; }
+  .span-table td { padding:6px 12px; } .span-what { white-space:nowrap; }
+  .span-row.d1 .span-what { padding-left:24px; } .span-row.d2 .span-what { padding-left:40px; color:var(--txt); } .span-row.d3 .span-what { padding-left:56px; }
+  .span-row:hover td { background:var(--bg3); }
+  .span-bar-head { min-width:160px; }
+  .span-bar { position:relative; min-width:160px; }
+  .span-bar::before { content:""; position:absolute; left:12px; right:12px; top:50%; height:1px; background:var(--border); }
+  .span-bar i { position:absolute; top:calc(50% - 4px); height:8px; border-radius:2px; background:var(--c); opacity:.85; }
   table { border-collapse:collapse; width:100%; font-size:12px; }
   th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); vertical-align:top; }
   th { color:var(--muted); font-weight:600; white-space:nowrap; }
