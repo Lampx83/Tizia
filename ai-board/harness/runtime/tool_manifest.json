@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "tools": [
     {
       "name": "tree",
@@ -148,5 +148,74 @@
       "max_output_chars": 500,
       "max_seconds": 5
     }
-  ]
+  ],
+  "command_policy": {
+    "allow": [
+      [
+        "git",
+        "status"
+      ],
+      [
+        "git",
+        "diff"
+      ],
+      [
+        "git",
+        "log"
+      ],
+      [
+        "git",
+        "show"
+      ],
+      [
+        "git",
+        "ls-files"
+      ],
+      [
+        "git",
+        "rev-parse"
+      ],
+      [
+        "node",
+        "--test"
+      ],
+      [
+        "npm",
+        "test"
+      ],
+      [
+        "npm",
+        "run",
+        "check:content"
+      ],
+      [
+        "python",
+        "-m",
+        "pytest"
+      ]
+    ],
+    "deny_args": [
+      "npx",
+      "install",
+      "add",
+      "-r",
+      "-rf",
+      "-fr",
+      "--recursive",
+      "--force"
+    ],
+    "deny_sql": [
+      "DROP",
+      "TRUNCATE"
+    ],
+    "deny_write": [
+      "package-lock.json",
+      "*.lock",
+      "yarn.lock",
+      "pnpm-lock.yaml",
+      "dist/*",
+      "*/generated/*",
+      "generated/*"
+    ]
+  }
 }

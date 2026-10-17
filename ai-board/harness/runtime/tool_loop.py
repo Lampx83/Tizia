@@ -141,6 +141,8 @@ class Workspace:
 
     def _check_scope(self, path: str, *, test: bool = False) -> str:
         path = _clean_path(path)
+        if reason := MANIFEST.policy.write_reason(path):
+            raise Forbidden(reason)
         if test and not path.startswith(("test/", "tests/")):
             raise Forbidden(f"test chỉ được nằm trong test/: {path!r}")
         if not test and path != self.file:
@@ -319,6 +321,12 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check) -> tup
     return prompt, steps, rejected, None
 
 
+def check_command(argv: list[str]) -> None:
+    """Chặn argv ngoài command_policy trước khi chạy. Raise Forbidden."""
+    if reason := MANIFEST.policy.command_reason(argv):
+        raise Forbidden(reason)
+
+
 def _tool_span(deps, name: str, step: int, child, kind: str, observation: str, started_ms: int) -> None:
     """Span `execute_tool <tool>` dưới span cổng đang mở; chỉ digest của observation, không nội dung."""
     trace = getattr(deps, "trace", None)
@@ -346,6 +354,8 @@ def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str,
         server_hsm.register_tool_manifest(MANIFEST.data)
     except server_hsm.AuthorityError as error:
         return _result('blocked', str(error), error.failure_class)
+    if reason := MANIFEST.policy.write_reason(subtask["file"]):
+        return _result("blocked", reason, "critical")
     ws = Workspace(source, sha, subtask["file"], current)
     prompt = PROMPT.format(tools=_tool_list(), title=subtask["title"], file=subtask["file"], verify=subtask["verify"]) + ORDER
     if context:

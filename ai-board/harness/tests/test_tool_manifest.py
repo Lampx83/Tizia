@@ -90,3 +90,45 @@ def test_suite_provenance_pins_the_manifest():
     root = Path(__file__).resolve().parents[3]
     meta = runner.provenance(root, "m", None)
     assert meta["tool_manifest"] == tool_loop.MANIFEST.hash and "tool_manifest" in runner.FIXED
+
+
+@pytest.mark.parametrize("argv", [
+    ["rm", "-rf", "dist"],
+    ["npm", "install", "left-pad"],
+    ["npx", "cowsay"],
+    ["git", "push", "origin", "main"],
+    ["git", "-C", "/x", "status"],
+    ["node", "--test", "--", "DROP TABLE users"],
+    ["git", "log", "-rf"],
+], ids=["rm", "install", "npx", "git-write", "git-C", "drop-sql", "deny-arg"])
+def test_command_outside_policy_is_refused(argv):
+    assert tool_loop.MANIFEST.policy.command_reason(argv)
+
+
+def test_allowed_commands_pass():
+    for argv in (["git", "status"], ["npm", "test"], ["python", "-m", "pytest", "-q"]):
+        assert tool_loop.MANIFEST.policy.command_reason(argv) is None
+
+
+@pytest.mark.parametrize("path", ["package-lock.json", "app/yarn.lock", "dist/a.js", "x/generated/b.js"])
+def test_generated_and_lock_files_are_write_denied(path):
+    assert tool_loop.MANIFEST.policy.write_reason(path)
+    assert tool_loop.MANIFEST.policy.write_reason("public/a.html") is None
+
+
+@pytest.mark.parametrize("change", [
+    lambda d: d.pop("command_policy"),
+    lambda d: d["command_policy"].update(allow=[]),
+    lambda d: d["command_policy"].update(allow=[[]]),
+    lambda d: d["command_policy"].update(deny_write="*.lock"),
+    lambda d: d["command_policy"].pop("deny_sql"),
+], ids=["absent", "no-allow", "empty-prefix", "deny-not-list", "missing-key"])
+def test_bad_command_policy_is_refused(change):
+    with pytest.raises(tool_manifest.ManifestError):
+        tool_manifest.parse(mutated(change), known=KNOWN)
+
+
+def test_policy_change_changes_manifest_hash():
+    base = tool_manifest.canonical_hash(RAW)
+    loosened = mutated(lambda d: d["command_policy"]["allow"].append(["npx"]))
+    assert tool_manifest.canonical_hash(loosened) != base

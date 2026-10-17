@@ -374,3 +374,25 @@ def test_finish_with_an_edit_but_no_test_or_a_test_but_no_edit_is_a_free_nudge()
     assert out["status"] == "proposed" and budget.semantic_repairs == 0 and "chưa finish được" in deps.prompts[2]
     out, budget, deps = run([TEST, FINISH, EDIT, FINISH])
     assert out["status"] == "proposed" and budget.semantic_repairs == 0 and "chưa finish được" in deps.prompts[2]
+
+
+def test_lock_file_subtask_is_blocked_before_any_model_call():
+    deps = Deps([FINISH])
+    budget = Budget()
+    result = tool_loop.run_subtask({**SUBTASK, "file": "package-lock.json"}, PAGE, deps=deps, budget=budget,
+                                   model='m', source='.', sha='abc', check=lambda _out: None)
+    assert result['status'] == 'blocked' and result['failure_class'] == 'critical'
+    assert deps.prompts == [] and budget.model_calls == 0
+
+
+def test_edit_outside_write_policy_is_forbidden_without_effect():
+    ws = tool_loop.Workspace('.', 'abc', 'public/a.html', PAGE)
+    with pytest.raises(tool_loop.Forbidden):
+        ws._check_scope('dist/a.js')
+    assert ws.content == PAGE
+
+
+def test_check_command_refuses_outside_allowlist():
+    tool_loop.check_command(['git', 'status'])
+    with pytest.raises(tool_loop.Forbidden):
+        tool_loop.check_command(['rm', '-rf', 'public'])
