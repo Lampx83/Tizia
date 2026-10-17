@@ -68,7 +68,7 @@
 </style>
 </head>
 <body>
-<div id="info">🌐 <b>Metaverse</b> · phòng dược chung — pinch hoặc kéo chuột để cầm thuốc</div>
+<div id="info">🌐 <b>Metaverse</b> · phòng dược chung: pinch hoặc kéo chuột để cầm thuốc</div>
 <a class="back" href="./">← Trang chính</a>
 <div id="players"><h4>👥 Trong phòng</h4><div id="player-list">đang kết nối...</div></div>
 <canvas id="cam-preview" width="180" height="135"></canvas>
@@ -99,11 +99,11 @@ import { showWelcomeCard } from './js/welcome-card.js';
 
 showWelcomeCard({
   icon: '🌐',
-  title: 'Metaverse — Phòng dược chung',
-  intro: 'Phòng 3D realtime, mỗi người là một avatar — cùng xếp thuốc lên kệ.',
+  title: 'Metaverse: Phòng dược chung',
+  intro: 'Phòng 3D realtime, mỗi người là một avatar, cùng xếp thuốc lên kệ.',
   bullets: [
     'Pinch ngón cái + trỏ (hoặc click) trên hộp thuốc để cầm.',
-    'Kéo lên kệ — ô đúng nhóm glow xanh, sai glow đỏ.',
+    'Kéo lên kệ: ô đúng nhóm glow xanh, sai glow đỏ.',
     'Cursor + avatar của người khác sẽ hiện realtime qua WebSocket.',
     'Bấm "🔄 Reset phòng" để bắt đầu lại cho tất cả.',
   ],
@@ -354,7 +354,7 @@ ws.addEventListener('open', () => {
 });
 
 ws.addEventListener('close', () => {
-  statusEl.textContent = '🔴 Mất kết nối — refresh để vào lại';
+  statusEl.textContent = '🔴 Mất kết nối, refresh để vào lại';
 });
 
 ws.addEventListener('message', (ev) => {
@@ -648,7 +648,7 @@ const handToggleBtn = document.getElementById('hand-toggle');
 if (!SECURE_FOR_CAMERA) {
   handToggleBtn.textContent = '🖱️ Chỉ chuột (webcam cần HTTPS)';
   handToggleBtn.style.background = '#6b7280';
-  handToggleBtn.title = `Webcam cần HTTPS hoặc localhost. Bạn đang ở ${location.host} — Chrome chặn camera. Dùng chuột để chơi.`;
+  handToggleBtn.title = `Webcam cần HTTPS hoặc localhost. Bạn đang ở ${location.host}: Chrome chặn camera. Dùng chuột để chơi.`;
   handToggleBtn.addEventListener('click', () => {
     showToast('⚠️ Webcam cần HTTPS. Đang chơi bằng chuột');
   });

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Portal Apps · Cài app cho dev — Tizia</title>
+<title>Portal Apps · Cài app cho dev | Tizia</title>
 <meta name="description" content="Developer dashboard: cài app SPA chuẩn AI Portal (manifest.json + .zip) vào Tizia. Quản lý, gỡ, public app của bạn." />
 <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
 <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
@@ -125,7 +125,7 @@
       <summary>📋 Quy chuẩn manifest.json</summary>
       <p style="margin-top:10px; font-size:13px; color:var(--muted);">
         Bắt buộc <code>alias</code> (lowercase kebab, ví dụ <code>my-app</code>) +
-        <code>name</code>. <code>hasBackend: true</code> KHÔNG được hỗ trợ — chỉ frontend-only.
+        <code>name</code>. <code>hasBackend: true</code> KHÔNG được hỗ trợ, chỉ frontend-only.
       </p>
 <pre>{
   "id": "my-app",
@@ -146,7 +146,7 @@
     └── assets/...      ← JS/CSS đã build (đường dẫn TƯƠNG ĐỐI: ./assets/...)</pre>
       <p style="font-size:13px; color:var(--muted);">
         ⚠️ Trong <code>index.html</code>, mọi đường dẫn asset phải tương đối
-        (<code>./assets/...</code>), KHÔNG dùng <code>/assets/...</code> tuyệt đối —
+        (<code>./assets/...</code>), KHÔNG dùng <code>/assets/...</code> tuyệt đối: 
         vì app chạy dưới <code>/portal-apps/u/&lt;id&gt;/&lt;alias&gt;/</code>.
         Với Vite: <code>vite.config.js</code> set <code>base: './'</code>.
       </p>

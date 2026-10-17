@@ -53,13 +53,13 @@
 <body>
 <div class="top">
   <a class="back" id="back" href="/school.html?domain=it#campus-hero">← Khuôn viên trường</a>
-  <div><h1>🔒 Mật mã &amp; CTF <span class="sub">— mã hoá cổ điển &amp; giải cờ phòng thủ</span></h1></div>
+  <div><h1>🔒 Mật mã &amp; CTF <span class="sub">: mã hoá cổ điển &amp; giải cờ phòng thủ</span></h1></div>
   <div class="prog" id="prog">0/3 cờ</div>
 </div>
 <div class="wrap">
   <div class="card">
     <h2>🧰 Bàn làm việc mật mã Caesar</h2>
-    <p class="lead">Mã Caesar dịch mỗi chữ cái đi một số bước cố định trong bảng chữ. Đây là mã cổ điển — học để <b>hiểu nguyên lí &amp; điểm yếu</b>, không dùng để bảo mật thật (rất dễ phá bằng thử 25 khả năng).</p>
+    <p class="lead">Mã Caesar dịch mỗi chữ cái đi một số bước cố định trong bảng chữ. Đây là mã cổ điển, học để <b>hiểu nguyên lí &amp; điểm yếu</b>, không dùng để bảo mật thật (rất dễ phá bằng thử 25 khả năng).</p>
     <div class="modes" id="modes">
       <button data-m="enc" class="active">Mã hoá →</button>
       <button data-m="dec">← Giải mã</button>
@@ -121,7 +121,7 @@ $('freqBtn').addEventListener('click', () => {
 // ── thử thách CTF (tự sinh bản mã từ bản rõ để tránh sai sót) ──
 const CH = [
   { id:'c1', lv:'Caesar +3', type:'caesar', k:3, plain:'MAT KHAU', hint:'Mã Caesar dịch +3. Bật chế độ “Giải mã”, đặt độ dịch 3.' },
-  { id:'c2', lv:'Caesar (ẩn độ dịch)', type:'caesar', k:11, plain:'BAO MAT THONG TIN', hint:'Không biết độ dịch — kéo thử 25 khả năng hoặc dùng phân tích tần suất.' },
+  { id:'c2', lv:'Caesar (ẩn độ dịch)', type:'caesar', k:11, plain:'BAO MAT THONG TIN', hint:'Không biết độ dịch, kéo thử 25 khả năng hoặc dùng phân tích tần suất.' },
   { id:'c3', lv:'Atbash', type:'atbash', plain:'CRYPTO', hint:'Mã Atbash đối xứng bảng chữ: A↔Z, B↔Y, C↔X… Tự nghịch đảo (mã hoá lại = giải mã).' },
 ];
 function cipherOf(ch){ return ch.type==='atbash' ? atbash(ch.plain) : caesar(ch.plain, ch.k); }
@@ -150,7 +150,7 @@ function check(id){
     fb.textContent = `✓ Chính xác! Bản rõ là “${ch.plain}”.`;
     if (!solved.has(id)){ solved.add(id); try{ localStorage.setItem(DONE_KEY, JSON.stringify([...solved])); }catch(e){}
       try { const k='tizia:space:done'; const d=JSON.parse(localStorage.getItem(k)||'{}'); d.seclab=Math.max(d.seclab||0, solved.size); localStorage.setItem(k, JSON.stringify(d)); }catch(e){}
-      renderCh(); showToast(solved.size===CH.length ? '🏆 Bắt đủ 3 cờ — CTF hoàn thành!' : '🚩 Bắt được cờ!'); }
+      renderCh(); showToast(solved.size===CH.length ? '🏆 Bắt đủ 3 cờ, CTF hoàn thành!' : '🚩 Bắt được cờ!'); }
   } else { fb.textContent = '✗ Chưa đúng. Thử đổi độ dịch hoặc phân tích tần suất rồi giải lại.'; }
 }
 

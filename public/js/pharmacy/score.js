@@ -75,7 +75,7 @@ function buildFeedback(stages, fatal, bonusHits, moduleId) {
   lines.push("Nhận xét theo SEGUE:");
   for (const st of stages) {
     const label = st.stage === "E1" ? "E (Elicit)" : st.stage === "E2" ? "E (End)" : st.stage;
-    if (st.score === 2) lines.push(`- ${label}: tốt — đủ từ khóa cốt lõi.`);
+    if (st.score === 2) lines.push(`- ${label}: tốt, đủ từ khóa cốt lõi.`);
     else if (st.score === 1) lines.push(`- ${label}: sơ sài. Thiếu: ${st.missingKeywords.slice(0, 5).join(", ")}.`);
     else lines.push(`- ${label}: chưa đạt. Cần: ${st.comment}`);
   }

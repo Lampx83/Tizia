@@ -105,11 +105,11 @@ import { showWelcomeCard } from './js/welcome-card.js';
 
 showWelcomeCard({
   icon: '🥽',
-  title: 'Phòng dược 3D — Hướng dẫn',
+  title: 'Phòng dược 3D: Hướng dẫn',
   intro: 'Mô phỏng kệ thuốc thật bằng Three.js, hỗ trợ pinch tay & VR.',
   bullets: [
     'Pinch ngón cái + trỏ (hoặc click) vào thùng carton để mở.',
-    'Cầm từng hộp thuốc và kéo lên kệ — ô đúng nhóm sẽ glow xanh.',
+    'Cầm từng hộp thuốc và kéo lên kệ, ô đúng nhóm sẽ glow xanh.',
     'Sai ô sẽ glow đỏ. Nhả ra gần ô đúng để snap.',
     'Bấm "Nộp bài" để lưu điểm, "Làm lại" để chơi lại.',
   ],
@@ -629,7 +629,7 @@ document.body.appendChild(help);
     try {
       const ok = await navigator.xr.isSessionSupported('immersive-vr');
       status = ok
-        ? '✅ WebXR sẵn sàng — bấm <b>ENTER VR</b> dưới đáy.'
+        ? '✅ WebXR sẵn sàng, bấm <b>ENTER VR</b> dưới đáy.'
         : '⚠️ Chrome có WebXR nhưng không thấy thiết bị VR.';
     } catch (e) {
       status = '⚠️ WebXR bị chặn: ' + e.message;
@@ -1628,7 +1628,7 @@ if (!SECURE_FOR_CAMERA) {
   handBtn.style.cursor = 'help';
   handBtn.title = `Webcam chỉ chạy trên HTTPS hoặc localhost. Bạn đang ở: ${location.host}\nChrome chặn camera trên HTTP IP LAN. Dùng chuột để chơi.`;
   handBtn.addEventListener('click', () => {
-    setHint('⚠️ Webcam cần HTTPS. Đang ở ' + location.host + ' — chỉ chơi được bằng chuột');
+    setHint('⚠️ Webcam cần HTTPS. Đang ở ' + location.host + 'chỉ chơi được bằng chuột');
   });
 } else {
   handBtn.addEventListener('click', () => {
@@ -1714,7 +1714,7 @@ function updateHandTracking(time) {
           if (s) s.placedBoxId = null;
           handState.grabbed.slotId = null;
         }
-        setHint('✊ Đang cầm — thả gần ô đúng để snap');
+        setHint('✊ Đang cầm: thả gần ô đúng để snap');
       }
     }
   }
@@ -1757,15 +1757,15 @@ submitBtn.addEventListener('click', () => {
   let correct = 0, placed = 0;
   const items = medicineBoxes.map(med => {
     if (!med.slotId) {
-      return `<li style="color:#9e9e9e">⚠️ <b>${med.name}</b> — chưa đặt lên kệ</li>`;
+      return `<li style="color:#9e9e9e">⚠️ <b>${med.name}</b>, chưa đặt lên kệ</li>`;
     }
     placed++;
     const slot = slots.find(s => s.id === med.slotId);
     if (slot.category === med.category) {
       correct++;
-      return `<li style="color:#2e7d32">✅ <b>${med.name}</b> — đúng ô <b>"${slot.category}"</b></li>`;
+      return `<li style="color:#2e7d32">✅ <b>${med.name}</b>, đúng ô <b>"${slot.category}"</b></li>`;
     }
-    return `<li style="color:#c62828">❌ <b>${med.name}</b> — thuộc "<b>${med.category}</b>", đặt nhầm ở "<b>${slot.category}</b>"</li>`;
+    return `<li style="color:#c62828">❌ <b>${med.name}</b>, thuộc "<b>${med.category}</b>", đặt nhầm ở "<b>${slot.category}</b>"</li>`;
   });
   const total = medicineBoxes.length;
   const pct = Math.round((correct / total) * 100);

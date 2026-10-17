@@ -9,13 +9,13 @@ export const ACHIEVEMENTS = [
   { id: 'first', icon: '🏫', title: 'Học sinh THPT',
     desc: 'Hoàn thành hoạt động đầu tiên', trigger: { quizzesPassed: 1 } },
   { id: 'bookworm', icon: '📚', title: 'Mọt sách THPT',
-    desc: '10 bài quiz hoàn thành — thói quen học chắc nền tảng THPT', trigger: { quizzesPassed: 10 } },
+    desc: '10 bài quiz hoàn thành, thói quen học chắc nền tảng THPT', trigger: { quizzesPassed: 10 } },
   { id: 'streak-3', icon: '🌱', title: 'Bắt đầu đều đặn',
-    desc: 'Vào học 3 ngày liên tiếp — thói quen tốt bắt đầu từ đây', trigger: { streak: 3 } },
+    desc: 'Vào học 3 ngày liên tiếp, thói quen tốt bắt đầu từ đây', trigger: { streak: 3 } },
   { id: 'streak-5', icon: '🔥', title: 'Ôn luyện đều đặn',
     desc: 'Vào học 5 ngày liên tiếp', trigger: { streak: 5 } },
   { id: 'streak-7', icon: '📅', title: 'Một tuần học đều',
-    desc: 'Vào học 7 ngày liên tiếp — một tuần đúng nghĩa, thói quen bền vững', trigger: { streak: 7 } },
+    desc: 'Vào học 7 ngày liên tiếp, một tuần đúng nghĩa, thói quen bền vững', trigger: { streak: 7 } },
   { id: 'streak-14', icon: '⚡', title: 'Hai tuần bứt phá',
     desc: 'Vào học 14 ngày liên tiếp', trigger: { streak: 14 } },
 
@@ -124,7 +124,7 @@ export const ACHIEVEMENTS = [
   { id: 'star-20', icon: '✨', title: 'Sưu tầm 20 sao',
     desc: 'Tích luỹ 20 sao', trigger: { totalStars: 20 } },
   { id: 'star-30', icon: '⭐', title: 'Ngôi sao 30',
-    desc: 'Tích luỹ 30 sao — đang trên đà chinh phục chương trình THPT', trigger: { totalStars: 30 } },
+    desc: 'Tích luỹ 30 sao, đang trên đà chinh phục chương trình THPT', trigger: { totalStars: 30 } },
   { id: 'star-50', icon: '💫', title: 'Ngôi sao THPT',
     desc: 'Tích luỹ 50 sao', trigger: { totalStars: 50 } },
 
@@ -143,17 +143,17 @@ export const ACHIEVEMENTS = [
 
   // ── Streak dài hạn ──
   { id: 'streak-30', icon: '🔥', title: 'Kiên trì 30 ngày',
-    desc: 'Vào học 30 ngày liên tiếp — nghị lực đáng nể!', trigger: { streak: 30 } },
+    desc: 'Vào học 30 ngày liên tiếp, nghị lực đáng nể!', trigger: { streak: 30 } },
 
   // ── Sao tích luỹ cao ──
   { id: 'star-100', icon: '🌠', title: 'Ngôi sao 100',
-    desc: 'Tích luỹ 100 sao — chinh phục toàn bộ chương trình THPT', trigger: { totalStars: 100 } },
+    desc: 'Tích luỹ 100 sao, chinh phục toàn bộ chương trình THPT', trigger: { totalStars: 100 } },
   { id: 'star-120', icon: '🏆', title: 'Thủ khoa 120 sao',
-    desc: 'Tích luỹ 120 sao — đỉnh cao 3 năm THPT, xứng danh học sinh xuất sắc toàn diện', trigger: { totalStars: 120 } },
+    desc: 'Tích luỹ 120 sao, đỉnh cao 3 năm THPT, xứng danh học sinh xuất sắc toàn diện', trigger: { totalStars: 120 } },
 
   // ── Combo Ban KHXH lớp 10 ──
   { id: 'khxh-double', icon: '🗺️', title: 'Đôi KHXH lớp 10',
-    desc: 'Đạt sao Lịch sử + Địa lý lớp 10 — nền tảng ban Khoa học Xã hội',
+    desc: 'Đạt sao Lịch sử + Địa lý lớp 10, nền tảng ban Khoa học Xã hội',
     trigger: { moduleStars: { 'H10SU': 1, 'H10DIA': 1 } } },
 
   // ── Combo Ban KHTN lớp 11 & 12 ──
@@ -161,19 +161,19 @@ export const ACHIEVEMENTS = [
     desc: 'Đạt sao Vật lý + Hoá học + Sinh học lớp 11',
     trigger: { moduleStars: { 'H11LY': 1, 'H11HOA': 1, 'H11SINH': 1 } } },
   { id: 'khtn-triple-12', icon: '🔭', title: 'Tam giác KHTN lớp 12',
-    desc: 'Đạt sao Vật lý + Hoá học + Sinh học lớp 12 — sẵn sàng thi tốt nghiệp',
+    desc: 'Đạt sao Vật lý + Hoá học + Sinh học lớp 12, sẵn sàng thi tốt nghiệp',
     trigger: { moduleStars: { 'H12LY': 1, 'H12HOA': 1, 'H12SINH': 1 } } },
 
   // ── Lộ trình ban hoàn chỉnh ──
   { id: 'science-path', icon: '🔬', title: 'Lộ trình KHTN hoàn chỉnh',
-    desc: 'Đạt sao Lý + Hoá + Sinh cả 3 lớp 10–12 — xứng danh chiến binh KHTN',
+    desc: 'Đạt sao Lý + Hoá + Sinh cả 3 lớp 10–12, xứng danh chiến binh KHTN',
     trigger: { moduleStars: {
       'H10LY': 1, 'H10HOA': 1, 'H10SINH': 1,
       'H11LY': 1, 'H11HOA': 1, 'H11SINH': 1,
       'H12LY': 1, 'H12HOA': 1, 'H12SINH': 1,
     } } },
   { id: 'social-path', icon: '🏛️', title: 'Lộ trình KHXH hoàn chỉnh',
-    desc: 'Đạt sao Lịch sử + Địa lý cả 3 lớp 10–12 — xứng danh chiến binh KHXH',
+    desc: 'Đạt sao Lịch sử + Địa lý cả 3 lớp 10–12, xứng danh chiến binh KHXH',
     trigger: { moduleStars: {
       'H10SU': 1, 'H10DIA': 1,
       'H11SU': 1, 'H11DIA': 1,

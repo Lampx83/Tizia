@@ -38,7 +38,7 @@ const DOMAIN_REGISTRY = {
  */
 export const DOMAIN_LEVELS = {
   school: { label: 'Phổ thông', icon: '🎒', desc: 'Tiểu học · THCS · THPT' },
-  he:     { label: 'Đại học & Cao đẳng', icon: '🎓', desc: 'Higher Education — đào tạo nghề chuyên sâu' },
+  he:     { label: 'Đại học & Cao đẳng', icon: '🎓', desc: 'Higher Education: đào tạo nghề chuyên sâu' },
 };
 
 /**

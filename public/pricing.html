@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
 <meta charset="utf-8" />
-<title>Bảng giá Tizia — Gói Free, Pro, Plus cho học sinh, lớp học và trường</title>
+<title>Bảng giá Tizia: Gói Free, Pro, Plus cho học sinh, lớp học và trường</title>
 <meta name="description" content="So sánh các gói Tizia: Free (Mầm non + Tiểu học miễn phí), Pro (K-12 + AI cá nhân hoá) và Plus (gia đình, lớp học, trường). Mua theo tháng hoặc theo năm tiết kiệm 2 tháng." />
 <meta name="keywords" content="Tizia bảng giá, gói học, học phí ảo, edtech VN, gói gia đình, gói trường" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -12,12 +12,12 @@
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Tizia" />
 <meta property="og:locale" content="vi_VN" />
-<meta property="og:title" content="Bảng giá Tizia — Free, Pro, Plus" />
+<meta property="og:title" content="Bảng giá Tizia, Free, Pro, Plus" />
 <meta property="og:description" content="Mầm non + Tiểu học miễn phí. Nâng cấp Pro/Plus để học hết K-12, đại học và mở AI cá nhân hoá." />
 <meta property="og:url" content="https://tizia.vn/pricing.html" />
 <meta property="og:image" content="https://tizia.vn/og-default.svg" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Bảng giá Tizia — Free, Pro, Plus" />
+<meta name="twitter:title" content="Bảng giá Tizia, Free, Pro, Plus" />
 <meta name="twitter:description" content="Mầm non + Tiểu học miễn phí. Nâng cấp Pro/Plus để học hết K-12 + AI cá nhân hoá." />
 <meta name="twitter:image" content="https://tizia.vn/og-default.svg" />
 <script type="application/ld+json">
@@ -190,7 +190,7 @@
     <h3>Câu hỏi thường gặp</h3>
     <details>
       <summary>Tôi có thể huỷ gói bất cứ lúc nào không?</summary>
-      <p>Có. Sau khi huỷ, bạn vẫn dùng được đến hết kỳ thanh toán hiện tại, sau đó tài khoản tự chuyển về gói Miễn phí — không mất dữ liệu, có thể nâng lại bất cứ lúc nào.</p>
+      <p>Có. Sau khi huỷ, bạn vẫn dùng được đến hết kỳ thanh toán hiện tại, sau đó tài khoản tự chuyển về gói Miễn phí, không mất dữ liệu, có thể nâng lại bất cứ lúc nào.</p>
     </details>
     <details>
       <summary>AI ở gói Pro có gì khác?</summary>
@@ -245,7 +245,7 @@
     ctxBanner.innerHTML = `Để mở khoá <strong>${esc(wantDomain)}</strong>, bạn cần gói <strong>${esc(USER_PLANS[want]?.name || 'Plus')}</strong> trở lên.`;
   } else if (want) {
     ctxBanner.style.display = 'block';
-    ctxBanner.textContent = `Bạn đang xem gói ${USER_PLANS[want]?.name || want} — chọn chu kỳ và bấm Nâng cấp bên dưới.`;
+    ctxBanner.textContent = `Bạn đang xem gói ${USER_PLANS[want]?.name || want}: chọn chu kỳ và bấm Nâng cấp bên dưới.`;
   }
 
   function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
@@ -345,11 +345,11 @@
         return;
       }
       msg.classList.add('show', 'ok');
-      msg.textContent = '✓ Đơn đã tạo (' + data.orderRef + ') — đang chuyển đến cổng thanh toán…';
+      msg.textContent = '✓ Đơn đã tạo (' + data.orderRef + '): đang chuyển đến cổng thanh toán…';
       setTimeout(() => { location.href = data.payUrl; }, 600);
     } catch (e) {
       $('msg').className = 'msg show err';
-      $('msg').textContent = '⚠️ Lỗi mạng — thử lại sau.';
+      $('msg').textContent = '⚠️ Lỗi mạng: thử lại sau.';
       btn.disabled = false; btn.textContent = 'Nâng cấp ' + USER_PLANS[plan].name;
     }
   }

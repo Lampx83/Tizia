@@ -69,7 +69,7 @@
 <body>
 <header>
   <h1>📱 Hỗ trợ thiết bị <a class="back" href="./">← Trang chính</a></h1>
-  <div class="sub">Tizia chạy trên đa thiết bị — đây là khả năng đã được phát hiện trên thiết bị hiện tại + hướng dẫn cho từng loại</div>
+  <div class="sub">Tizia chạy trên đa thiết bị, đây là khả năng đã được phát hiện trên thiết bị hiện tại + hướng dẫn cho từng loại</div>
 </header>
 
 <div class="capabilities">
@@ -80,7 +80,7 @@
 <div class="devices" id="devices"></div>
 
 <footer>
-  <b>Tizia</b> — The Intelligent Zone for Interactive Academy<br>
+  <b>Tizia</b>: The Intelligent Zone for Interactive Academy<br>
   📡 WebXR Hand Tracking yêu cầu HTTPS · WebSocket cần proxy hỗ trợ upgrade · MediaPipe cần webcam + Chrome/Edge
 </footer>
 
@@ -147,14 +147,14 @@ const DEVICES = [
     modes: ['3D ✓', 'Metaverse ✓', '2D ✓', 'AR ✓', 'Quiz ✓'],
   },
   {
-    name: 'Phone (Android/iOS) — AR', vendor: 'Chrome ARCore / Safari ARKit',
+    name: 'Phone (Android/iOS): AR', vendor: 'Chrome ARCore / Safari ARKit',
     icon: '📱', status: 'partial',
     works: ['2D Arcade với chuột/touch', 'Quiz (rất phù hợp)', 'AR mode khi có WebXR AR'],
     rec: 'Mở Chrome (Android) hoặc Safari (iOS) → bấm <b>2D Arcade</b> chế độ <b>chuột/chạm</b>, hoặc <b>Quiz</b> để học từ vựng phân loại.',
     modes: ['3D ⚠️', 'Metaverse ✓', '2D ✓', 'AR ⚠️', 'Quiz ✓'],
   },
   {
-    name: 'Desktop + Webcam', vendor: 'Chrome / Edge — MediaPipe',
+    name: 'Desktop + Webcam', vendor: 'Chrome / Edge: MediaPipe',
     icon: '💻', status: 'full',
     works: ['Mọi mode với MediaPipe pinch (webcam)', 'Hoặc chuột nếu không có webcam', 'Dashboard giảng viên'],
     rec: 'Trình duyệt hiện đại + webcam. Mở bất kỳ mode nào → <b>Bật điều khiển tay</b>.',
@@ -164,20 +164,20 @@ const DEVICES = [
     name: 'Tablet (iPad / Android tablet)', vendor: 'Touch + Safari/Chrome',
     icon: '🖥️', status: 'partial',
     works: ['2D Arcade kéo-thả bằng tay', 'Quiz nhanh', 'Metaverse với touch'],
-    rec: 'Phù hợp cho <b>lớp học</b> — không cần webcam. Mở 2D Arcade → "🖱️ Chơi bằng chuột".',
+    rec: 'Phù hợp cho <b>lớp học</b>: không cần webcam. Mở 2D Arcade → "🖱️ Chơi bằng chuột".',
     modes: ['3D ⚠️', 'Metaverse ✓', '2D ✓', 'AR ⚠️', 'Quiz ✓'],
   },
   {
     name: 'Ray-Ban Meta Smart Glasses', vendor: 'Meta · không có màn hình',
     icon: '🕶️', status: 'none',
-    works: ['Không hỗ trợ — kính chỉ có camera + loa, không có màn hình hiển thị web'],
+    works: ['Không hỗ trợ: kính chỉ có camera + loa, không có màn hình hiển thị web'],
     rec: 'Dùng <b>điện thoại Meta View app</b> để xem nội dung; hoặc kết hợp glass camera với 2D Arcade trên máy khác (sắp có).',
     modes: ['3D ✗', 'Metaverse ✗', '2D ✗', 'AR ✗', 'Quiz ✗'],
   },
   {
     name: 'Google Glass Enterprise', vendor: 'Google · màn hình rất nhỏ',
     icon: '👓', status: 'partial',
-    works: ['Quiz mode (text-only) — phù hợp xem nhanh', 'Khó tương tác chính xác'],
+    works: ['Quiz mode (text-only): phù hợp xem nhanh', 'Khó tương tác chính xác'],
     rec: 'Mở Quiz qua trình duyệt nhúng. Tương tác bằng touch pad của kính.',
     modes: ['3D ✗', 'Metaverse ✗', '2D ⚠️', 'AR ✗', 'Quiz ⚠️'],
   },

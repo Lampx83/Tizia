@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>🎖 Battle Pass · Tizia</title>
-<meta name="description" content="Battle Pass mùa 2 tháng — 30 tier reward. Học để leo tier, mở khoá skin pet, frame avatar, emoji pack." />
+<meta name="description" content="Battle Pass mùa 2 tháng, 30 tier reward. Học để leo tier, mở khoá skin pet, frame avatar, emoji pack." />
 <link rel="icon" href="/favicon.ico" />
 <style>
   :root {
@@ -154,7 +154,7 @@ function render(d) {
   `;
   document.getElementById('prem').addEventListener('click', async () => {
     if (d.progress.has_premium) return;
-    if (!confirm('Mở Premium track tốn 5000 🪙 — chắc chắn?')) return;
+    if (!confirm('Mở Premium track tốn 5000 🪙, chắc chắn?')) return;
     const r = await fetch('/api/bp/buy-premium', { method:'POST', credentials:'same-origin' });
     const data = await r.json();
     if (!data.ok) { alert(data.error || 'Lỗi'); return; }

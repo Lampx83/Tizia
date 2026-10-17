@@ -41,10 +41,10 @@ export const MODULES = [
   { category: 'curriculum', id: 'E4.6', title: 'Khoá luận kinh tế',        yearLevel: 4, subject: 'khoa-luan-kt',    scenarioIds: ['E4.6-capstone-quiz'],           knowledgeQuiz: 'E4.6-capstone-quiz',           minStarsToUnlock: 24, prerequisites: ['E3.1', 'E3.4'], hasCertificate: true },
 
   // ──────────── PRACTICE / SKILL ────────────
-  { category: 'practice', id: 'EP01', title: 'Mô phỏng doanh nghiệp — Vận hành', subject: 'doanh-nghiep-ao', scenarioIds: ['EP01-biz-ops-quiz'],  knowledgeQuiz: 'EP01-biz-ops-quiz',  minStarsToUnlock: 18, icon: '🏢' },
-  { category: 'practice', id: 'EP02', title: 'Mô phỏng TTCK — Stock sim',   subject: 'stock-sim',         scenarioIds: ['EP02-stock-sim-quiz'], knowledgeQuiz: 'EP02-stock-sim-quiz', minStarsToUnlock: 12, icon: '📈' },
+  { category: 'practice', id: 'EP01', title: 'Mô phỏng doanh nghiệp, Vận hành', subject: 'doanh-nghiep-ao', scenarioIds: ['EP01-biz-ops-quiz'],  knowledgeQuiz: 'EP01-biz-ops-quiz',  minStarsToUnlock: 18, icon: '🏢' },
+  { category: 'practice', id: 'EP02', title: 'Mô phỏng TTCK: Stock sim',   subject: 'stock-sim',         scenarioIds: ['EP02-stock-sim-quiz'], knowledgeQuiz: 'EP02-stock-sim-quiz', minStarsToUnlock: 12, icon: '📈' },
   { category: 'practice', id: 'EP03', title: 'Vườn ươm khởi nghiệp',        subject: 'startup-incubator', scenarioIds: ['EP03-startup-quiz'],   knowledgeQuiz: 'EP03-startup-quiz',   minStarsToUnlock: 18, icon: '🌱' },
-  { category: 'practice', id: 'EP04', title: 'FinTech Lab — Mobile banking', subject: 'fintech-lab',       scenarioIds: ['EP04-fintech-quiz'],   knowledgeQuiz: 'EP04-fintech-quiz',   minStarsToUnlock: 18, icon: '💳' },
+  { category: 'practice', id: 'EP04', title: 'FinTech Lab: Mobile banking', subject: 'fintech-lab',       scenarioIds: ['EP04-fintech-quiz'],   knowledgeQuiz: 'EP04-fintech-quiz',   minStarsToUnlock: 18, icon: '💳' },
 
   // ──────────── CAREER ────────────
   { category: 'career', id: 'EC01', title: 'Kế toán – Kiểm toán',          subject: 'career', scenarioIds: ['EC01-career-quiz'], knowledgeQuiz: 'EC01-career-quiz', minStarsToUnlock: 18, icon: '📒' },
@@ -53,7 +53,7 @@ export const MODULES = [
   { category: 'career', id: 'EC04', title: 'Khởi nghiệp – Founder',         subject: 'career', scenarioIds: ['EC04-career-quiz'], knowledgeQuiz: 'EC04-career-quiz', minStarsToUnlock: 24, icon: '🚀' },
 
   // ──────────── GAMES ────────────
-  { category: 'game', id: 'EG01', title: 'Bull vs Bear — Stock race',       subject: 'game', scenarioIds: ['EG01-bull-bear-quiz'],   knowledgeQuiz: 'EG01-bull-bear-quiz',   minStarsToUnlock: 6,  icon: '🐂' },
-  { category: 'game', id: 'EG02', title: 'Pitch Battle — Demo Day',         subject: 'game', scenarioIds: ['EG02-pitch-battle-quiz'], knowledgeQuiz: 'EG02-pitch-battle-quiz', minStarsToUnlock: 12, icon: '🎤' },
-  { category: 'game', id: 'EG03', title: 'Tycoon — Quản lý công ty',        subject: 'game', scenarioIds: ['EG03-tycoon-quiz'],       knowledgeQuiz: 'EG03-tycoon-quiz',       minStarsToUnlock: 12, icon: '🏭' },
+  { category: 'game', id: 'EG01', title: 'Bull vs Bear: Stock race',       subject: 'game', scenarioIds: ['EG01-bull-bear-quiz'],   knowledgeQuiz: 'EG01-bull-bear-quiz',   minStarsToUnlock: 6,  icon: '🐂' },
+  { category: 'game', id: 'EG02', title: 'Pitch Battle: Demo Day',         subject: 'game', scenarioIds: ['EG02-pitch-battle-quiz'], knowledgeQuiz: 'EG02-pitch-battle-quiz', minStarsToUnlock: 12, icon: '🎤' },
+  { category: 'game', id: 'EG03', title: 'Tycoon: Quản lý công ty',        subject: 'game', scenarioIds: ['EG03-tycoon-quiz'],       knowledgeQuiz: 'EG03-tycoon-quiz',       minStarsToUnlock: 12, icon: '🏭' },
 ];

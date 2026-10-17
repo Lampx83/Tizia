@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>🗺️ Bản đồ Việt Nam Tri Thức · Tizia</title>
-<meta name="description" content="Khám phá 34 tỉnh thành Việt Nam (sau sáp nhập 2025) — mỗi tỉnh một câu chuyện, một mini quiz." />
+<meta name="description" content="Khám phá 34 tỉnh thành Việt Nam (sau sáp nhập 2025): mỗi tỉnh một câu chuyện, một mini quiz." />
 <link rel="icon" href="/favicon.ico" />
 <style>
   :root {
@@ -155,7 +155,7 @@
 </div>
 
 <div class="hero">
-  <h1>🗺️ 34 Tỉnh Thành — 34 Câu Chuyện</h1>
+  <h1>🗺️ 34 Tỉnh Thành, 34 Câu Chuyện</h1>
   <p>Việt Nam sau sáp nhập (1/7/2025) có 34 tỉnh, thành phố. Bấm vào tỉnh em yêu thích, trả lời 2 câu hỏi vui để cắm cờ chinh phục!</p>
   <div class="flag-stripe"><div class="s"></div><div class="s"></div><div class="s"></div></div>
 </div>
@@ -341,14 +341,14 @@ function onAnswer(btn) {
         addXP(10);
         toast(`🎉 +10 XP! Chinh phục ${activeProvince.name}!`);
       } else {
-        toast(`✓ Trả lời đúng cả 2 câu — ${activeProvince.name}!`);
+        toast(`✓ Trả lời đúng cả 2 câu, ${activeProvince.name}!`);
       }
       // mark card
       const card = document.querySelector(`.card[data-id="${activeProvince.id}"]`);
       if (card) card.classList.add('solved');
       updateStats();
     } else {
-      toast(`💪 Chưa đúng hết — thử lại nhé!`);
+      toast(`💪 Chưa đúng hết, thử lại nhé!`);
     }
   }
 }

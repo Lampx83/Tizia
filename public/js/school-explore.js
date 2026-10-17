@@ -156,7 +156,7 @@ function render(host, data, label) {
     <div class="tz-se-wrap">
       <div class="tz-se-head">
         <h2>🗺 Khám phá ${esc(label)}</h2>
-        <span class="sub">Hoạt động trong trường — mở dần theo tiến độ học.</span>
+        <span class="sub">Hoạt động trong trường, mở dần theo tiến độ học.</span>
         <span class="pill">Lv ${data.user_tier} · ${unlocked}/${total}</span>
       </div>
       ${TIER_META.map(meta => renderTier(meta, groups[meta.i] || [], data.user_tier)).join('')}

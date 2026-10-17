@@ -316,7 +316,7 @@
       <div class="welcome">
         <div class="badge">🏆 KỲ THI TỐT NGHIỆP</div>
         <h1>${exam.title}</h1>
-        <div class="subtitle">Kỳ thi OSCE Composite — 10 trạm, ~${totalMin} phút, đậu ≥ ${exam.passingScore}/100</div>
+        <div class="subtitle">Kỳ thi OSCE Composite, 10 trạm, ~${totalMin} phút, đậu ≥ ${exam.passingScore}/100</div>
 
         <div class="stations-overview">
           ${exam.stations.map(s => `
@@ -344,7 +344,7 @@
           <b>⚠️ Lưu ý kỳ thi:</b>
           <ul style="margin:6px 0 0;padding-left:20px;line-height:1.65">
             <li>10 trạm chạy nối tiếp, mỗi trạm ~5 phút có đồng hồ đếm ngược.</li>
-            <li>Hết giờ trạm sẽ <b>tự chuyển sang trạm kế</b> — không quay lại được.</li>
+            <li>Hết giờ trạm sẽ <b>tự chuyển sang trạm kế</b>: không quay lại được.</li>
             <li>Bài làm sớm hơn 80% thời gian được <b>thưởng +5%</b> điểm trạm đó.</li>
             <li>Đóng tab giữa kỳ thi sẽ được phục hồi tiến độ khi vào lại.</li>
           </ul>
@@ -749,7 +749,7 @@
     const rub = st.rubric || { S: 10, O: 15, A: 10, P: 25, total: 60 };
     host.innerHTML = `
       <p style="font-size:13px;opacity:0.8;margin-bottom:12px">
-        Viết ghi chú SOAP đầy đủ cho ca lâm sàng (case <code>${escapeHtml(st.caseRef || '—')}</code>).
+        Viết ghi chú SOAP đầy đủ cho ca lâm sàng (case <code>${escapeHtml(st.caseRef || '-')}</code>).
         Mục tiêu điểm: S=${rub.S}, O=${rub.O}, A=${rub.A}, P=${rub.P}.
       </p>
       ${['S - Subjective','O - Objective','A - Assessment','P - Plan'].map(sec => `
@@ -789,7 +789,7 @@
     const checklist = st.checklist || [];
     host.innerHTML = `
       <div class="roleplay-checklist">
-        <h5>📋 Checklist OSCE — cố gắng cover các điểm sau trong câu trả lời:</h5>
+        <h5>📋 Checklist OSCE, cố gắng cover các điểm sau trong câu trả lời:</h5>
         <ul>
           ${checklist.map(c => `<li>${escapeHtml(c)}</li>`).join('')}
         </ul>
@@ -839,7 +839,7 @@
   // --- Generic fallback ---
   function renderGenericBody(st, host) {
     host.innerHTML = `
-      <p style="opacity:0.85">Trạm <b>${escapeHtml(st.kind)}</b> — nhập câu trả lời của bạn:</p>
+      <p style="opacity:0.85">Trạm <b>${escapeHtml(st.kind)}</b>, nhập câu trả lời của bạn:</p>
       <textarea id="generic-ans" rows="6" placeholder="Câu trả lời..."></textarea>
     `;
   }
@@ -887,7 +887,7 @@
     });
     saveState();
 
-    if (autoSubmit) toast('⏰ Hết giờ trạm — tự động chuyển trạm');
+    if (autoSubmit) toast('⏰ Hết giờ trạm, tự động chuyển trạm');
     if (skipped) toast('Đã bỏ qua trạm này');
 
     enterStation(idx + 1);
@@ -953,10 +953,10 @@
             <h2>CHỨNG CHỈ OSCE TỐT NGHIỆP</h2>
             <div style="opacity:0.85;font-size:14px">Trao tặng cho sinh viên Dược</div>
             <div class="recipient">${escapeHtml(state.playerName)}</div>
-            <div style="font-size:14px">đã hoàn thành <b>${exam.stations.length} trạm OSCE Composite</b> với tổng điểm <b>${total.toFixed(1)}/100</b> — <i>${tierLabel}</i>.</div>
+            <div style="font-size:14px">đã hoàn thành <b>${exam.stations.length} trạm OSCE Composite</b> với tổng điểm <b>${total.toFixed(1)}/100</b>, <i>${tierLabel}</i>.</div>
             <div class="cert-meta">
               <div>Mã chứng chỉ: <span class="cert-id">${certId}</span></div>
-              <div>Lớp: ${escapeHtml(state.classCode || '—')} · Ngày cấp: ${dateStr}</div>
+              <div>Lớp: ${escapeHtml(state.classCode || '-')} · Ngày cấp: ${dateStr}</div>
               <div style="margin-top:6px;opacity:0.7">Tizia · Trường ĐH Dược · Mô phỏng OSCE năm cuối</div>
             </div>
             <button class="download-btn" id="print-btn">🖨️ In / lưu PDF chứng chỉ</button>

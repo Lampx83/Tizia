@@ -30,7 +30,7 @@ function injectSecondaryStyles() {
     box-shadow: inset 0 0 30px rgba(0,0,0,.4); }
   .hzx-stage.shake { animation: hzxShake .35s ease; }
   @keyframes hzxShake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
-  /* Items rải đều trong scene — pos = vị trí phần trăm */
+  /* Items rải đều trong scene, pos = vị trí phần trăm */
   .hzx-spot { position:absolute; transform:translate(-50%,-50%);
     width:62px; height:62px; border-radius:50%; cursor:pointer; border:none;
     background:rgba(15,23,42,.7); border:2px dashed rgba(255,255,255,.35);
@@ -105,7 +105,7 @@ function injectSecondaryStyles() {
   .dpx-actions .dpx-btn.ghost { background:rgba(255,255,255,.08); }
   .dpx-actions .dpx-score { margin-left:auto; font-weight:800; font-size:14px; }
 
-  /* ── Experiment Stages — quy trình thí nghiệm theo bước ── */
+  /* ── Experiment Stages, quy trình thí nghiệm theo bước ── */
   .esx-wrap { display:flex; flex-direction:column; gap:14px; padding:6px 0; }
   .esx-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:14px; }
   .esx-badge { background:rgba(14,165,233,.18); border:1px solid rgba(14,165,233,.5);
@@ -140,7 +140,7 @@ function injectSecondaryStyles() {
     font-size:15px; font-weight:800; color:#bbf7d0; display:none; }
   .esx-done-banner.show { display:block; animation: esxFade .35s ease; }
 
-  /* ── Procedure Sort — kéo bước vào đúng thứ tự ── */
+  /* ── Procedure Sort, kéo bước vào đúng thứ tự ── */
   .psx-wrap { display:flex; flex-direction:column; gap:12px; padding:6px 0; }
   .psx-hint { font-size:13.5px; opacity:.85; line-height:1.5; }
   .psx-pool { background:rgba(255,255,255,.04); border:1px dashed rgba(255,255,255,.18);
@@ -162,7 +162,7 @@ function injectSecondaryStyles() {
   .psx-step.right { background: rgba(34,197,94,.2); border-color:#22c55e; }
   .psx-step.wrong { background: rgba(239,68,68,.2); border-color:#ef4444; }
 
-  /* ── Formula Calculator — slider tương tác ── */
+  /* ── Formula Calculator, slider tương tác ── */
   .fcx-wrap { display:flex; flex-direction:column; gap:14px; padding:6px 0; }
   .fcx-formula { text-align:center; font-family: 'JetBrains Mono','SF Mono',monospace;
     font-size: 20px; font-weight:700;
@@ -181,7 +181,7 @@ function injectSecondaryStyles() {
     font-family:'JetBrains Mono',monospace; font-size:18px; font-weight:800;
     box-shadow: 0 6px 18px rgba(16,163,74,.25); }
 
-  /* ── Quiz Secondary (THCS) — Modern Vibrant ── */
+  /* ── Quiz Secondary (THCS), Modern Vibrant ── */
   .sqz-wrap { display:flex; flex-direction:column; gap:14px; padding:8px 0 90px; }
   .sqz-head { display:flex; align-items:center; gap:14px; padding: 10px 16px;
     background: linear-gradient(135deg, rgba(99,102,241,.22), rgba(14,165,233,.16));
@@ -236,7 +236,7 @@ function injectSecondaryStyles() {
   .sqz-fb .xp { display:inline-block; background:rgba(253,224,71,.18); color:#fde047;
     padding: 1px 8px; border-radius:999px; font-weight:800; margin-right: 6px; }
 
-  /* Khối "Lý thuyết kèm" — hiện sau giải thích ngắn, giúp học sinh hiểu sâu */
+  /* Khối "Lý thuyết kèm", hiện sau giải thích ngắn, giúp học sinh hiểu sâu */
   .sqz-theory { margin-top: 10px; padding: 12px 14px 10px; border-radius: 10px;
     background: rgba(56,189,248,.10); border-left: 3px solid #38bdf8;
     color: #dbeafe; font-size: 13.5px; line-height: 1.6;
@@ -251,7 +251,7 @@ function injectSecondaryStyles() {
     font-size: 12.5px; color: #fde68a; }
   .sqz-theory b, .sqz-theory strong { color: #fef3c7; }
 
-  /* Per-choice feedback — hiện dưới text của TỪNG đáp án sau khi lock */
+  /* Per-choice feedback, hiện dưới text của TỪNG đáp án sau khi lock */
   .sqz-opt-body { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
   .sqz-opt-text { display: block; font-weight: 700; }
   .sqz-opt-fb { display: block; font-size: 13px; line-height: 1.55;
@@ -292,7 +292,7 @@ function injectSecondaryStyles() {
   .sqz-done .score { font-size: 44px; font-weight:900; color:#22c55e; }
   .sqz-done .pct { opacity:.85; margin-top:6px; }
 
-  /* ── Quiz Highschool (THPT) — Focused Academic ── */
+  /* ── Quiz Highschool (THPT), Focused Academic ── */
   .hqz-wrap { display:flex; flex-direction:column; gap:14px; padding:8px 0 90px;
     color: #e2e8f0; font-family: 'Inter','SF Pro Display',system-ui,sans-serif; }
   .hqz-head { display:flex; align-items:center; gap:14px; padding: 10px 14px;
@@ -448,14 +448,14 @@ export function renderHazardScene(host, items, onDone) {
         fb.className = 'hzx-feedback ok';
         fb.textContent = '✓ ' + it.label;
         if (found === targets) {
-          fb.textContent = `🏆 Đã rà soát đủ ${targets} nguy cơ — phòng thí nghiệm an toàn!`;
+          fb.textContent = `🏆 Đã rà soát đủ ${targets} nguy cơ: phòng thí nghiệm an toàn!`;
           if (typeof onDone === 'function') setTimeout(() => onDone({ found, targets }), 600);
         }
       } else {
         btn.classList.add('zap');
         stage.classList.add('shake');
         fb.className = 'hzx-feedback bad';
-        fb.textContent = '⚠️ Đây không phải quy tắc bắt buộc — đọc lại sách giáo khoa nhé.';
+        fb.textContent = '⚠️ Đây không phải quy tắc bắt buộc, đọc lại sách giáo khoa nhé.';
         setTimeout(() => { btn.classList.remove('zap'); stage.classList.remove('shake'); }, 600);
       }
     });
@@ -721,7 +721,7 @@ export function renderExperimentStages(host, steps, opts = {}) {
   wrap.innerHTML = `
     <div class="esx-head">
       <span class="esx-badge">🧪 Quy trình thực hành</span>
-      <span>${opts.intro || 'Theo dõi từng bước thực hành — bấm "Tiếp" để qua bước kế.'}</span>
+      <span>${opts.intro || 'Theo dõi từng bước thực hành, bấm "Tiếp" để qua bước kế.'}</span>
     </div>
     <div class="esx-stepbar">
       ${norm.map((s, i) => `<div class="esx-pill" data-pill="${i}">${i + 1}. ${(s.title || '').slice(0, 24)}</div>`).join('')}
@@ -1024,8 +1024,8 @@ export function renderQuizSecondary(engine, host) {
       fb.style.display = 'block';
       fb.className = 'sqz-fb ' + (ok ? 'ok' : 'bad');
       fb.innerHTML = ok
-        ? `<span class="xp">+10 XP</span><b>Chính xác!</b>${q.explanation ? ' — ' + String(q.explanation).replace(/</g,'&lt;') : ''}`
-        : `<b>Chưa đúng.</b> Đáp án: <b>${String(q.choices[q.answer] || '').replace(/</g,'&lt;')}</b>${q.explanation ? ' — ' + String(q.explanation).replace(/</g,'&lt;') : ''}`;
+        ? `<span class="xp">+10 XP</span><b>Chính xác!</b>${q.explanation ? ' ' +  String(q.explanation).replace(/</g,'&lt;') : ''}`
+        : `<b>Chưa đúng.</b> Đáp án: <b>${String(q.choices[q.answer] || '').replace(/</g,'&lt;')}</b>${q.explanation ? '. ' +  String(q.explanation).replace(/</g,'&lt;') : ''}`;
       renderTheory();
       renderChoiceFeedback();
     }
@@ -1049,8 +1049,8 @@ export function renderQuizSecondary(engine, host) {
         fb.className = 'sqz-fb ' + (ok ? 'ok' : 'bad');
         const bonus = ok && streak >= 3 ? ` 🔥 Streak x${streak}!` : '';
         fb.innerHTML = ok
-          ? `<span class="xp">+10 XP${bonus}</span><b>Chính xác!</b>${q.explanation ? ' — ' + String(q.explanation).replace(/</g,'&lt;') : ''}`
-          : `<b>Chưa đúng.</b> Đáp án: <b>${String(q.choices[q.answer] || '').replace(/</g,'&lt;')}</b>${q.explanation ? ' — ' + String(q.explanation).replace(/</g,'&lt;') : ''}`;
+          ? `<span class="xp">+10 XP${bonus}</span><b>Chính xác!</b>${q.explanation ? ' ' +  String(q.explanation).replace(/</g,'&lt;') : ''}`
+          : `<b>Chưa đúng.</b> Đáp án: <b>${String(q.choices[q.answer] || '').replace(/</g,'&lt;')}</b>${q.explanation ? '. ' +  String(q.explanation).replace(/</g,'&lt;') : ''}`;
         renderTheory();
         renderChoiceFeedback();
         // Refresh streak + progressbar

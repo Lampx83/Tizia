@@ -380,7 +380,7 @@ function renderTree(data, subject){
   if (summary.earned === 0) {
     html += `<div class="empty-state">
       <h3>🌱 Hãy bắt đầu khám phá!</h3>
-      <p>Em chưa đạt kỹ năng nào — vào một không gian (ví dụ Trường Mầm non → Lớp Mầm) và làm quiz đạt ≥70% để mở khoá.</p>
+      <p>Em chưa đạt kỹ năng nào, vào một không gian (ví dụ Trường Mầm non → Lớp Mầm) và làm quiz đạt ≥70% để mở khoá.</p>
       <a href="/school.html?domain=preschool">🏫 Vào Trường Mầm non</a>
     </div>`;
   }
@@ -427,7 +427,7 @@ function renderTree(data, subject){
           </div>
           <div class="bar mastery"><i style="width:${masteryPct}%"></i></div>
           <div class="skill-list">
-            ${isEmpty ? '<span class="empty-msg">Chưa có kỹ năng nào — vào trường và làm quiz đi em!</span>' : earnedChips + more}
+            ${isEmpty ? '<span class="empty-msg">Chưa có kỹ năng nào, vào trường và làm quiz đi em!</span>' : earnedChips + more}
           </div>
           ${total > earned && !isEmpty ? `<div style="margin-top:8px"><span class="more" data-comp="${c.code}">Xem ${total - earned} kỹ năng chưa đạt →</span></div>` : ''}
         </div>

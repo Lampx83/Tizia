@@ -165,7 +165,7 @@
     <ul>
       <li><span>Buret 50 mL</span><span>NaOH 0.100 M</span></li>
       <li><span>Bình tam giác</span><span>HCl + chỉ thị</span></li>
-      <li><span>Máy khuấy từ</span><span>—</span></li>
+      <li><span>Máy khuấy từ</span><span>-</span></li>
     </ul>
 
     <div class="lbl">Hoá chất</div>
@@ -596,16 +596,16 @@ function refreshUI() {
   const dist = state.volumeAdded - V_EQUIVALENCE;
   endpointIndicator.classList.remove('near', 'past');
   if (state.pH >= 8.2 && state.pH < 10) {
-    endpointIndicator.textContent = '🌸 Đã đến điểm tương đương — DỪNG LẠI và đo!';
+    endpointIndicator.textContent = '🌸 Đã đến điểm tương đương, DỪNG LẠI và đo!';
     endpointIndicator.classList.add('near');
   } else if (state.pH >= 10) {
-    endpointIndicator.textContent = '🔴 Quá điểm — đã thừa NaOH (kết quả sẽ kém chính xác)';
+    endpointIndicator.textContent = '🔴 Quá điểm: đã thừa NaOH (kết quả sẽ kém chính xác)';
     endpointIndicator.classList.add('past');
   } else if (state.pH >= 6) {
-    endpointIndicator.textContent = '⚠️ Sắp đến điểm — chỉ nhỏ giọt CHẬM';
+    endpointIndicator.textContent = '⚠️ Sắp đến điểm, chỉ nhỏ giọt CHẬM';
     endpointIndicator.classList.add('near');
   } else {
-    endpointIndicator.textContent = '⚪ Còn xa điểm tương đương — có thể mở van NHANH';
+    endpointIndicator.textContent = '⚪ Còn xa điểm tương đương, có thể mở van NHANH';
   }
 }
 

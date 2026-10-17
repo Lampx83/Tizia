@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Sắc ký 2D · TLC Lab — Tizia</title>
+<title>Sắc ký 2D · TLC Lab | Tizia</title>
 <style>
   :root {
     --bg-1: #0f172a;
@@ -546,7 +546,7 @@ function onCanvasClick(e) {
       state.devStartTime = performance.now();
       state.score += 20;
       state.step = 5;
-      toast('✓ Đặt đĩa vào bình — đang triển khai...', 'ok');
+      toast('✓ Đặt đĩa vào bình, đang triển khai...', 'ok');
       setHint('Đợi dung môi di chuyển hết (5 giây)');
       // Disable action button during animation
       btnAction.disabled = true;
@@ -653,7 +653,7 @@ function promptRf(sample) {
   updateUI();
   // All measured?
   if (Object.keys(state.measurements).length >= 3) {
-    setHint('Đã đo cả 3 vệt — click nút "Hoàn thành đo Rf"');
+    setHint('Đã đo cả 3 vệt, click nút "Hoàn thành đo Rf"');
   }
 }
 

@@ -62,7 +62,7 @@ function showGuestSaveToast() {
   if (_guestToastShown) return;
   _guestToastShown = true;
   const t = document.createElement('div');
-  t.textContent = '🧸 Khách dùng thử — tiến độ không được lưu. Đăng nhập để giữ điểm.';
+  t.textContent = '🧸 Khách dùng thử, tiến độ không được lưu. Đăng nhập để giữ điểm.';
   t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9999;background:rgba(15,23,42,0.96);color:#fde68a;border:1px solid rgba(251,191,36,0.5);padding:10px 18px;border-radius:999px;font:600 13px/1.4 Inter,system-ui,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,0.4);max-width:90vw';
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 5000);

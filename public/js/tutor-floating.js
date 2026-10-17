@@ -99,7 +99,7 @@
         font-size: 18px; cursor: pointer; opacity: 0.7;
       }
       .edututor-head .close:hover { opacity: 1; }
-      /* Toggle Socratic — đặt ngay trước nút Close */
+      /* Toggle Socratic, đặt ngay trước nút Close */
       .edututor-mode {
         margin-left: auto;
         display: inline-flex; align-items: center; gap: 5px;
@@ -181,7 +181,7 @@
     injectStyles();
     const fab = document.createElement('button');
     fab.id = 'edututor-fab';
-    fab.title = 'AI Tutor — hỏi gì cũng được';
+    fab.title = 'AI Tutor: hỏi gì cũng được';
     fab.textContent = '🦉';
     fab.addEventListener('click', togglePanel);
     document.body.appendChild(fab);
@@ -226,8 +226,8 @@
       const note = document.createElement('div');
       note.className = 'edututor-msg sys';
       note.innerHTML = m === 'socratic'
-        ? '🤔 <b>Socratic ON</b> — Thầy AI sẽ không cho đáp án mà hỏi ngược để em tự nghĩ ra.'
-        : '💡 <b>Trực tiếp ON</b> — Thầy AI sẽ giải đáp thẳng.';
+        ? '🤔 <b>Socratic ON</b>: Thầy AI sẽ không cho đáp án mà hỏi ngược để em tự nghĩ ra.'
+        : '💡 <b>Trực tiếp ON</b>: Thầy AI sẽ giải đáp thẳng.';
       msgs.appendChild(note);
       msgs.scrollTop = msgs.scrollHeight;
     });
@@ -273,7 +273,7 @@
   function restoreHistory() {
     loadHistory();
     if (!history.length) {
-      addMsg('bot', `Xin chào! Mình là AI tutor của Tizia — chuyên lĩnh vực <b>${DOMAIN_LABEL[autoDomain] || autoDomain}</b>. Bạn cần mình giúp gì ở trang này?`);
+      addMsg('bot', `Xin chào! Mình là AI tutor của Tizia, chuyên lĩnh vực <b>${DOMAIN_LABEL[autoDomain] || autoDomain}</b>. Bạn cần mình giúp gì ở trang này?`);
     } else {
       for (const h of history) addMsg(h.role === 'user' ? 'user' : 'bot', h.content, /*skipSpeak*/ true);
     }
@@ -349,7 +349,7 @@
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
-      const reply = String(data.reply || '').trim() || 'Mình chưa rõ câu hỏi của bạn — kể chi tiết hơn nhé.';
+      const reply = String(data.reply || '').trim() || 'Mình chưa rõ câu hỏi của bạn, kể chi tiết hơn nhé.';
       thinking.classList.remove('thinking');
       thinking.innerHTML = formatReply(reply);
       history.push({ role: 'assistant', content: reply }); saveHistory();
@@ -392,7 +392,7 @@
     buildPanel();
   }
 
-  // Public API — cho phép trang khác mount thủ công + reset
+  // Public API: cho phép trang khác mount thủ công + reset
   window.EduTutor = {
     open() { document.getElementById('edututor-panel')?.classList.add('open'); },
     close() { document.getElementById('edututor-panel')?.classList.remove('open'); },

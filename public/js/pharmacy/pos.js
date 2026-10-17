@@ -11,7 +11,7 @@ export function openPosTerminal({ pickedIds = [], hasValidPrescription = false, 
   overlay.innerHTML = `
     <div class="pos-modal">
       <div class="pos-head">
-        <div class="pos-title">💳 PHARMA POS v1.0 — ${PHARMACY_INFO.name}</div>
+        <div class="pos-title">💳 PHARMA POS v1.0: ${PHARMACY_INFO.name}</div>
         <button class="pos-close" type="button">✕</button>
       </div>
       <div class="pos-body">
@@ -114,7 +114,7 @@ export function openPosTerminal({ pickedIds = [], hasValidPrescription = false, 
       if (lnCell) lnCell.textContent = VND(lt);
       const msgs = [];
       const ex = expiryState(d);
-      if (ex.state === 'expired') { msgs.push(`<span class="ln-bad">⛔ Hết hạn ${d.expDate} — không được bán</span>`); blockedReasons.push(`${d.brand}: đã hết hạn (${d.expDate})`); }
+      if (ex.state === 'expired') { msgs.push(`<span class="ln-bad">⛔ Hết hạn ${d.expDate}: không được bán</span>`); blockedReasons.push(`${d.brand}: đã hết hạn (${d.expDate})`); }
       else if (ex.state === 'near') { msgs.push(`<span class="ln-near">⚠️ Cận hạn (còn ${ex.days} ngày)</span>`); }
       const need = boxesNeeded(l), stock = d.stock ?? 0;
       if (need > stock) { msgs.push(`<span class="ln-bad">⛔ Vượt tồn: cần ${need} hộp · còn ${stock}</span>`); blockedReasons.push(`${d.brand}: vượt tồn kho (cần ${need} hộp, còn ${stock})`); }
@@ -239,7 +239,7 @@ function printInvoice(p) {
     <h2>${PHARMACY_INFO.name}</h2>
     <div style="text-align:center;font-size:10px">${PHARMACY_INFO.address} · ĐT: ${PHARMACY_INFO.phone} · MST: ${PHARMACY_INFO.taxCode}</div>
     <hr><div><b>Số HD:</b> ${p.invoiceNo}</div>
-    <div>KH: ${p.customer.name || '—'} · ${p.customer.phone || ''}</div>
+    <div>KH: ${p.customer.name || '-'} · ${p.customer.phone || ''}</div>
     <div>Thu ngân: ${p.cashier} · TT: ${p.payment}</div>
     <table><thead><tr><th>Tên</th><th>SL</th><th>Thành tiền</th></tr></thead><tbody>${rows}</tbody></table>
     <div style="margin-top:8px">Tạm tính: ${new Intl.NumberFormat('vi-VN').format(p.sub)} đ</div>

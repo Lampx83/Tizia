@@ -47,7 +47,7 @@ export function renderGraph(graph, events = [], root = {}) {
   return `<details class="blk" data-k="exec-graph"><summary><b>Đồ thị xử lý</b> · ${graph.nodes.length} nút · ${graph.edges.length} cạnh · ${esc(String(graph.hash).slice(0, 10))}</summary>
     <p class="meta">Cùng một đồ thị với bộ điều phối của worker (đọc từ hợp đồng chung). Nút xanh là nút các sự kiện đã chứng minh được đi qua; nút xám chưa tới.</p>
     ${rows.map(([title, ids]) => `<div class="graph-row"><span class="meta">${esc(title)}</span>${ids.filter((id) => byId.has(id)).map((id) => `<span class="graph-node ${seen.has(id) ? 'seen' : ''}" data-node="${esc(id)}">${esc(label(byId.get(id)))}</span>`).join('')}</div>`).join('')}
-    <ul class="graph-edges">${graph.edges.map((e) => `<li><code>${esc(e.from)}</code> —${esc(e.on)}→ <code>${esc(e.to)}</code></li>`).join('')}</ul>
+    <ul class="graph-edges">${graph.edges.map((e) => `<li><code>${esc(e.from)}</code> -${esc(e.on)}→ <code>${esc(e.to)}</code></li>`).join('')}</ul>
   </details>`;
 }
 

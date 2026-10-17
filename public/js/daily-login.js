@@ -126,7 +126,7 @@ class DailyLogin {
     const next = d.next_streak;
     this.host.innerHTML = `
       <h2>🎁 Phần thưởng đăng nhập hằng ngày</h2>
-      <div class="sub">Chuỗi 7 ngày — ngày 7 jackpot. Bỏ lỡ ngày là reset!</div>
+      <div class="sub">Chuỗi 7 ngày: ngày 7 jackpot. Bỏ lỡ ngày là reset!</div>
       <div class="row">
         ${d.rewards.map(r => {
           const isClaimed = r.day < next;

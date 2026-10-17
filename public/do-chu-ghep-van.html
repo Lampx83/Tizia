@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>🔤 Đố Chữ Ghép Vần · Tizia</title>
-<meta name="description" content="Trò chơi ghép âm tiết Tiếng Việt — kéo các chữ cái vào ô để tạo từ theo nghĩa được gợi ý. Dành cho lớp 1-3." />
+<meta name="description" content="Trò chơi ghép âm tiết Tiếng Việt, kéo các chữ cái vào ô để tạo từ theo nghĩa được gợi ý. Dành cho lớp 1-3." />
 <style>
   :root {
     --bg-1:#fef3c7; --bg-2:#fce7f3; --bg-3:#fef9ff;
@@ -249,7 +249,7 @@
   </div>
 
   <div class="footer-note">
-    Mỗi từ đúng <b>+10 điểm</b>. Đủ điểm sẽ lên cấp khó hơn. Kéo nhầm cũng không sao — cứ thử lại nhé!
+    Mỗi từ đúng <b>+10 điểm</b>. Đủ điểm sẽ lên cấp khó hơn. Kéo nhầm cũng không sao, cứ thử lại nhé!
   </div>
 </div>
 
@@ -517,7 +517,7 @@ function check() {
   } else {
     // Sai
     document.querySelectorAll('.slot').forEach(s => s.classList.add('wrong'));
-    toast('Chưa đúng — thử lại nhé!', 'bad');
+    toast('Chưa đúng: thử lại nhé!', 'bad');
     setTimeout(() => {
       document.querySelectorAll('.slot').forEach(s => s.classList.remove('wrong'));
     }, 500);

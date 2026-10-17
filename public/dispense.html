@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Cấp phát thuốc · 5 Đúng — Tizia</title>
+<title>Cấp phát thuốc · 5 Đúng | Tizia</title>
 <style>
   :root { --bg-1:#0f172a; --bg-2:#1e293b; --accent:#16a34a; --ok:#10b981; --err:#ef4444; --warn:#fbbf24; }
   * { box-sizing:border-box; }
@@ -59,17 +59,17 @@
     </div>
 
     <div class="card" id="count-card">
-      <h4 style="margin:0 0 8px">Bước 1 — Đếm đủ số viên</h4>
+      <h4 style="margin:0 0 8px">Bước 1, Đếm đủ số viên</h4>
       <div style="font-size:13.5px;opacity:.85">Tính tổng số viên cần cấp từ đơn rồi bốc vào lọ, sau đó bấm “Cấp phát”.</div>
       <button class="btn" id="b-dispense" style="margin-top:10px">✅ Cấp phát</button>
       <div class="fb" id="fb1"></div>
     </div>
 
     <div class="card hidden" id="label-card">
-      <h4 style="margin:0 0 8px">Bước 2 — Kiểm “5 Đúng” trước khi giao</h4>
+      <h4 style="margin:0 0 8px">Bước 2, Kiểm “5 Đúng” trước khi giao</h4>
       <div class="label" id="label"></div>
       <div style="font-size:13px;opacity:.85;margin-top:8px">Đối chiếu NHÃN với ĐƠN. Nhãn có khớp không?</div>
-      <button class="btn" id="b-ok">✅ Khớp — Giao thuốc</button>
+      <button class="btn" id="b-ok">✅ Khớp: Giao thuốc</button>
       <button class="btn danger" id="b-flag">🚩 Có sai sót!</button>
       <div class="fb" id="fb2"></div>
       <ul class="rights">
@@ -137,7 +137,7 @@ $('b-dispense').onclick = () => {
     showLabel();
   } else {
     st.firstTry=false; fb.className='fb no';
-    fb.textContent = st.counted > st.total ? `✗ Thừa ${st.counted-st.total} viên — tính lại: ${st.rx.perDose}×${st.rx.perDay}×${st.rx.days}.` : `✗ Thiếu ${st.total-st.counted} viên.`;
+    fb.textContent = st.counted > st.total ? `✗ Thừa ${st.counted-st.total} viên, tính lại: ${st.rx.perDose}×${st.rx.perDay}×${st.rx.days}.` : `✗ Thiếu ${st.total-st.counted} viên.`;
   }
 };
 
@@ -157,9 +157,9 @@ function decide(flag) {
   const correct = (flag && hasErr) || (!flag && !hasErr);
   const fb = $('fb2');
   if (correct) { score += 50; fb.className='fb ok';
-    fb.textContent = hasErr ? `✓ Bắt đúng lỗi! Nhãn sai "${fieldName(st.label.errField)}".` : '✓ Nhãn khớp đơn — giao thuốc an toàn.'; }
+    fb.textContent = hasErr ? `✓ Bắt đúng lỗi! Nhãn sai "${fieldName(st.label.errField)}".` : '✓ Nhãn khớp đơn, giao thuốc an toàn.'; }
   else { fb.className='fb no';
-    fb.textContent = hasErr ? `✗ Bỏ sót lỗi! Nhãn sai "${fieldName(st.label.errField)}".` : '✗ Nhãn vốn đã đúng — không nên báo lỗi.'; }
+    fb.textContent = hasErr ? `✗ Bỏ sót lỗi! Nhãn sai "${fieldName(st.label.errField)}".` : '✗ Nhãn vốn đã đúng, không nên báo lỗi.'; }
   $('score-wrap').style.display='inline'; $('score').textContent=score;
   st.phase='done';
   $('done-text').innerHTML = `${correct?'🎉 Cấp phát chuẩn!':'⚠️ Cần cẩn thận hơn.'} Điểm: <b>${score}</b>.<br>Nhớ: tính đúng số lượng + kiểm 5 Đúng mỗi lần giao thuốc.`;

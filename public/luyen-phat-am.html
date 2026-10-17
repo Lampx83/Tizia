@@ -72,9 +72,9 @@
 <h1>🎤 Luyện phát âm Tiếng Anh</h1>
 <div class="toolbar">
   <select id="level">
-    <option value="easy">🟢 Dễ — câu ngắn</option>
-    <option value="med">🟡 Vừa — câu thông dụng</option>
-    <option value="hard">🔴 Khó — câu phức</option>
+    <option value="easy">🟢 Dễ: câu ngắn</option>
+    <option value="med">🟡 Vừa: câu thông dụng</option>
+    <option value="hard">🔴 Khó: câu phức</option>
   </select>
 </div>
 
@@ -96,7 +96,7 @@
     <div class="label">Bạn vừa nói:</div>
     <div class="heard" id="heard"></div>
     <div class="score-box">
-      <div class="score-circle" id="scoreCircle">—</div>
+      <div class="score-circle" id="scoreCircle">-</div>
       <div class="diff" id="diff"></div>
     </div>
   </div>
@@ -188,7 +188,7 @@
       circle.textContent = scorePct + '%';
       circle.className = 'score-circle ' + (scorePct >= 80 ? 'high' : scorePct >= 50 ? 'mid' : 'low');
       el('status').textContent = scorePct >= 80 ? '🎉 Tuyệt vời!' :
-        scorePct >= 50 ? '👍 Khá ổn — luyện thêm chút nữa' : '💪 Cần luyện thêm — bấm 🔊 nghe lại';
+        scorePct >= 50 ? '👍 Khá ổn: luyện thêm chút nữa' : '💪 Cần luyện thêm, bấm 🔊 nghe lại';
       el('resultBox').classList.remove('hidden');
     };
     try { recognition.start(); } catch (err) { el('status').textContent = '❌ ' + err.message; }

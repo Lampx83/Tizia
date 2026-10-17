@@ -152,7 +152,7 @@
   <div id="picker">
     <p class="tagline">
       4 kịch bản Việt: phỏng vấn IT (junior/senior), tư vấn BN ngại uống thuốc, và trình dược viên đàm phán giá với bệnh viện.
-      NPC AI phản ứng theo lựa chọn của bạn — hợp tác → mở lòng, thô vụng → phòng thủ. Cuối phiên, AI giảng viên chấm điểm kỹ năng mềm.
+      NPC AI phản ứng theo lựa chọn của bạn, hợp tác → mở lòng, thô vụng → phòng thủ. Cuối phiên, AI giảng viên chấm điểm kỹ năng mềm.
     </p>
     <div class="grid" id="grid"></div>
   </div>
@@ -162,8 +162,8 @@
       <div class="chat-head">
         <div class="ava" id="ava">🤝</div>
         <div class="info">
-          <div class="role" id="npc-role">—</div>
-          <div class="stage" id="stage-label">Bạn đóng vai: <span id="you-role">—</span></div>
+          <div class="role" id="npc-role">-</div>
+          <div class="stage" id="stage-label">Bạn đóng vai: <span id="you-role">-</span></div>
         </div>
         <button id="back-list">← Đổi kịch bản</button>
         <button class="finish" id="finish">Kết thúc + chấm</button>
@@ -249,7 +249,7 @@ function startSim(id) {
 
 function renderStagesBar() {
   $('stages-bar').innerHTML = current.stages.map((s, i) => `
-    <div class="stage-chip ${i < stageIdx ? 'done' : i === stageIdx ? 'current' : ''}">${i+1}. ${escape(s.name.split('—')[0].trim())}</div>
+    <div class="stage-chip ${i < stageIdx ? 'done' : i === stageIdx ? 'current' : ''}">${i+1}. ${escape(s.name.split(/—|:/)[0].trim())}</div>
   `).join('');
 }
 
@@ -319,7 +319,7 @@ async function send() {
 
 $('finish').addEventListener('click', async () => {
   if (!current || history.length < 4) {
-    alert('Đàm phán quá ngắn — trao đổi thêm vài lượt trước khi chấm.');
+    alert('Đàm phán quá ngắn, trao đổi thêm vài lượt trước khi chấm.');
     return;
   }
   const res = await fetch('./api/ai/negotiate-grade', {
@@ -356,7 +356,7 @@ function renderResult(d) {
   const ss = d.softSkills || {};
   $('result').classList.add('show');
   $('result').innerHTML = `
-    <h3>🎓 Kết quả đàm phán — ${escape(current.title)}</h3>
+    <h3>🎓 Kết quả đàm phán, ${escape(current.title)}</h3>
     <div><b>Điểm tổng:</b> <span style="font-size:28px;color:${score>=70?'#10b981':score>=50?'#fbbf24':'#ef4444'};font-weight:800;">${score}/100</span></div>
     ${(d.fatalsTriggered || []).length ? '<div style="margin-top:10px;"><b>⛔ Lỗi nghiêm trọng:</b></div>' + d.fatalsTriggered.map(f => `<div class="fatal">${escape(f)}</div>`).join('') : ''}
     ${(d.bonusHits || []).length ? '<div style="margin-top:12px;"><b>✅ Đã làm tốt:</b></div>' + d.bonusHits.map(b => `<div class="bonus">+ ${escape(b)}</div>`).join('') : ''}

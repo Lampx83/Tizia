@@ -73,7 +73,7 @@ export function renderPath({ host, modules, subjects, domain, categories, progre
     groups.push({
       id: `year-${y}`,
       label: domain.yearLabels?.[y - 1] || `Năm ${y}`,
-      short: domain.yearLabels?.[y - 1]?.split(' — ')[0] || `Năm ${y}`,
+      short: domain.yearLabels?.[y - 1]?.split(': ')[0] || `Năm ${y}`,
       color: '#fbbf24',
       modules: arr,
       drawLines: true,
@@ -225,7 +225,7 @@ function renderNode(mod, { subjects, progress, locked, hasContent, nodeFlags }) 
   const noContent = !hasContent(mod.id);
   const prereqReason = locked?.get(mod.id);
   const isLocked = noContent || !!prereqReason;
-  const reason = noContent ? 'Chưa có nội dung — sắp ra mắt' : (prereqReason || '');
+  const reason = noContent ? 'Chưa có nội dung, sắp ra mắt' : (prereqReason || '');
   const subj = subjects[mod.subject] || { label: mod.subject, icon: '📘', color: '#94a3b8' };
   const starsHtml = '★'.repeat(stars) + '☆'.repeat(3 - stars);
 
@@ -443,7 +443,7 @@ function injectStylesOnce() {
       opacity: 0.45; cursor: not-allowed; pointer-events: none;
       filter: grayscale(0.5);
     }
-    /* "Chưa có nội dung" — phân biệt với khoá do prereq: viền nét đứt, mờ nhẹ hơn */
+    /* "Chưa có nội dung", phân biệt với khoá do prereq: viền nét đứt, mờ nhẹ hơn */
     .path-node.no-content {
       opacity: 0.6; filter: grayscale(0.3);
       border-style: dashed;

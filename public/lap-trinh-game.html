@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>💻 Lập trình điều khiển nhân vật · Tizia</title>
-<meta name="description" content="Viết JS để điều khiển nhân vật đi qua các phòng, ăn coin, mở cửa — CodeCombat phong cách Tizia." />
+<meta name="description" content="Viết JS để điều khiển nhân vật đi qua các phòng, ăn coin, mở cửa: CodeCombat phong cách Tizia." />
 <link rel="icon" href="/favicon.ico" />
 <style>
   :root {
@@ -204,7 +204,7 @@ const LEVELS = [
   },
   {
     title: 'L4: Dùng vòng lặp',
-    desc: 'Lưới 8x8 — đi đến ô (7,7). Dùng <code>for</code> loop để gọn code.',
+    desc: 'Lưới 8x8: đi đến ô (7,7). Dùng <code>for</code> loop để gọn code.',
     grid: 8, hero: [0, 0, 'E'], coins: [], goal: [7, 7],
     reward: { coin: 60, xp: 110 },
   },
@@ -239,7 +239,7 @@ function initLevel(idx) {
   };
   abortRun = true; setTimeout(() => abortRun = false, 100);
   document.getElementById('lv-info').textContent = `Level ${idx + 1} / ${LEVELS.length}`;
-  document.getElementById('lv-desc').innerHTML = `<b>${lv.title}</b> — ${lv.desc}`;
+  document.getElementById('lv-desc').innerHTML = `<b>${lv.title}</b>: ${lv.desc}`;
   document.getElementById('coin-max').textContent = state.coinsMax;
   document.getElementById('coin-count').textContent = '0';
   document.getElementById('cons').innerHTML = '';

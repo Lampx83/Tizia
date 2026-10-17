@@ -3,7 +3,7 @@ const status = document.querySelector('#status');
 let admin = false;
 const states = { proposed:'Đề xuất chưa xác minh', legacy:'Bản cũ chưa review', verified:'Đã xác minh', curated:'Giữ dài hạn', rejected:'Đã từ chối', expired:'Đã hết hạn', deleted:'Đã xóa' };
 const reasons = { ...states, revalidation_due:'Đến hạn kiểm lại', source_expired:'Nguồn hết hạn', evidence_changed:'Evidence nguồn thiếu hoặc đã thay đổi', dependency_changed:'Kế hoạch hoặc file nguồn đã thay đổi', dependency_unavailable:'Không kiểm tra được file nguồn', scope_changed:'Phạm vi nguồn đã thay đổi', scope_denied:'Quyền đối với nguồn đã bị thu hồi' };
-const date = value => value ? new Date(Number(value)).toLocaleString('vi-VN') : '—';
+const date = value => value ? new Date(Number(value)).toLocaleString('vi-VN') : '-';
 function el(tag, text, className) {
   const node = document.createElement(tag);
   if (text !== undefined) node.textContent = text;
@@ -50,7 +50,7 @@ function renderLesson(lesson) {
   node.append(el('p', `Phiên bản ${lesson.version} · ${lesson.visibility === 'repository' ? 'Dùng chung trong repository' : 'Phạm vi riêng'} · ${lesson.kind}`, 'meta'));
   node.append(el('p', lesson.eligibility_reason ? `Chưa được dùng lại: ${reasons[lesson.eligibility_reason] || lesson.eligibility_reason}` : 'Đủ điều kiện dùng lại theo kiểm tra hiện tại.', lesson.eligibility_reason ? 'ineligible' : 'eligible'));
   node.append(el('p', `Tạo: ${date(lesson.created_at)} · Kiểm lại/hết hạn: ${date(lesson.review_due_at)} · Kết thúc: ${date(lesson.ended_at)}`, 'meta'));
-  const source = el('p', `Ticket ${lesson.ticket_id} · Run ${lesson.run_id} · Evidence ${lesson.evidence_trace_id} · Cổng ${lesson.gate ?? '—'} · Files: ${(lesson.files || []).join(', ') || '—'}`, 'meta');
+  const source = el('p', `Ticket ${lesson.ticket_id} · Run ${lesson.run_id} · Evidence ${lesson.evidence_trace_id} · Cổng ${lesson.gate ?? '-'} · Files: ${(lesson.files || []).join(', ') || '-'}`, 'meta');
   node.append(details('Nguồn và bằng chứng', source));
   async function review(operation, extra = {}) { await api(`${base}/${lesson.id}/review`, {version:lesson.version, operation, ...extra}); await load(); }
   if (!['rejected','deleted','expired'].includes(lesson.state)) {

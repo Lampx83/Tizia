@@ -81,10 +81,10 @@ export function showEnrollmentModal({ mode = 'enroll', current = null } = {}) {
 
     const warning = mode === 'switch' ? `
       <div class="te-warn">
-        ⚠️ <b>Đổi trường = bắt đầu lại từ đầu</b> ở trường mới. XP, coin, level và kỹ năng độc lập theo từng trường. Tiến trình ở trường hiện tại <b>vẫn được lưu</b> — quay lại trường cũ sẽ khôi phục.
+        ⚠️ <b>Đổi trường = bắt đầu lại từ đầu</b> ở trường mới. XP, coin, level và kỹ năng độc lập theo từng trường. Tiến trình ở trường hiện tại <b>vẫn được lưu</b>: quay lại trường cũ sẽ khôi phục.
       </div>` : `
       <div class="te-warn warn-info">
-        🎓 Mỗi tài khoản tại 1 thời điểm chỉ học ở <b>một trường</b>. Bạn vẫn tham quan được trường khác, nhưng chỉ <b>xem</b> — không làm bài, không chơi game, không tích XP.
+        🎓 Mỗi tài khoản tại 1 thời điểm chỉ học ở <b>một trường</b>. Bạn vẫn tham quan được trường khác, nhưng chỉ <b>xem</b>: không làm bài, không chơi game, không tích XP.
       </div>`;
 
     overlay.innerHTML = `
@@ -114,7 +114,7 @@ export function showEnrollmentModal({ mode = 'enroll', current = null } = {}) {
       </style>
       <div class="te-shell">
         <h3>${mode === 'switch' ? '🔄 Đổi trường đang học' : '🎓 Chọn trường bạn muốn học'}</h3>
-        <p class="te-lead">${mode === 'switch' ? 'Chọn trường mới — tiến trình trường cũ vẫn lưu (ẩn) và sẽ khôi phục nếu quay về sau.' : 'Bạn cần chọn trường trước khi bắt đầu. Có thể đổi sau ở trang Năng lực.'}</p>
+        <p class="te-lead">${mode === 'switch' ? 'Chọn trường mới, tiến trình trường cũ vẫn lưu (ẩn) và sẽ khôi phục nếu quay về sau.' : 'Bạn cần chọn trường trước khi bắt đầu. Có thể đổi sau ở trang Năng lực.'}</p>
         ${warning}
         <div class="te-grid">${items}</div>
         <div class="te-loading">⏳ Đang lưu…</div>
@@ -229,7 +229,7 @@ export async function applyViewOnlyGate(domain) {
         if (isWriteApi && !isAllowedWrite) {
           return Promise.resolve(new Response(JSON.stringify({
             error: 'view_only', viewOnly: true,
-            message: 'Bạn đang ở trường khác — không tương tác được.',
+            message: 'Bạn đang ở trường khác, không tương tác được.',
           }), { status: 403, headers: { 'Content-Type': 'application/json' } }));
         }
       } catch {}

@@ -186,7 +186,7 @@
         <button class="cbtn">XEM LỘ TRÌNH</button></div>
     </div>
 
-    <div class="group-title">🎮 Nhóm 2 · Play Roles — Dự án giả lập "VinaApp"</div>
+    <div class="group-title">🎮 Nhóm 2 · Play Roles: Dự án giả lập "VinaApp"</div>
     <div class="cards">
       <div class="ccard play" data-go="dev"><span class="tag play">PLAY ROLE</span><div class="cic">💻</div>
         <h3>Lập trình viên VinaApp</h3>
@@ -207,7 +207,7 @@
   <div class="view" id="career">
     <button class="vback" data-back>← Về trung tâm</button>
     <div class="panel">
-      <div class="vhead"><span class="vic">🧭</span><h2>AI Career Coach — Bạn hợp nghề nào?</h2></div>
+      <div class="vhead"><span class="vic">🧭</span><h2>AI Career Coach: Bạn hợp nghề nào?</h2></div>
       <div class="prog" id="cqProg"></div>
       <div id="cqBody"></div>
     </div>
@@ -284,7 +284,7 @@
         <div class="rmMain">
           <div class="rmInsights" id="rmInsights"></div>
           <div class="rmTreeWrap">
-            <div class="rmTreeHint">🌳 Cây kỹ năng — bấm vào ô kỹ năng để mở chi tiết</div>
+            <div class="rmTreeHint">🌳 Cây kỹ năng, bấm vào ô kỹ năng để mở chi tiết</div>
             <div id="rmTree"></div>
           </div>
         </div>
@@ -422,8 +422,8 @@
   // ───────────────── 4. DEV GAME (fix UI) ─────────────────
   const DEV_OPTS = [
     { code:'.loginRow { display:flex; justify-content:center; }', ok:true, fb:'Chính xác! display:flex + justify-content:center căn nút vào giữa theo chiều ngang.' },
-    { code:'.loginBtn { color: red; }', ok:false, fb:'Đổi màu chữ không liên quan đến vị trí — nút vẫn lệch.' },
-    { code:'.loginRow { font-size: 20px; }', ok:false, fb:'Cỡ chữ không căn lề được — nút vẫn nằm bên trái.' },
+    { code:'.loginBtn { color: red; }', ok:false, fb:'Đổi màu chữ không liên quan đến vị trí, nút vẫn lệch.' },
+    { code:'.loginRow { font-size: 20px; }', ok:false, fb:'Cỡ chữ không căn lề được, nút vẫn nằm bên trái.' },
     { code:'.loginBtn { margin-top: 10px; }', ok:false, fb:'margin-top chỉ đẩy xuống dưới, không căn ngang.' },
   ];
   INIT_dev = () => {
@@ -445,10 +445,10 @@
     { t:'Sản phẩm: Gói VinaApp Premium', bug:false },
     { t:'Đơn giá: 250.000đ', bug:false },
     { t:'Số lượng: 1', bug:false },
-    { t:'Tổng cộng: -250.000đ', bug:true, why:'Tổng tiền bị ÂM — lỗi tính toán nghiêm trọng.' },
-    { t:'Số thẻ: undefined', bug:true, why:'Hiện chữ "undefined" — dữ liệu chưa được nối đúng.' },
+    { t:'Tổng cộng: -250.000đ', bug:true, why:'Tổng tiền bị ÂM, lỗi tính toán nghiêm trọng.' },
+    { t:'Số thẻ: undefined', bug:true, why:'Hiện chữ "undefined": dữ liệu chưa được nối đúng.' },
     { t:'Phương thức: Thẻ tín dụng', bug:false },
-    { t:'[ Thanh toántoán ]', bug:true, why:'Nhãn nút bị lặp chữ — lỗi chính tả/giao diện.' },
+    { t:'[ Thanh toántoán ]', bug:true, why:'Nhãn nút bị lặp chữ, lỗi chính tả/giao diện.' },
   ];
   let foundBugs = 0;
   INIT_test = () => {
@@ -479,7 +479,7 @@
     { sit:'Khoá API bí mật của VinaApp bị thấy nằm ngay trong mã JavaScript chạy ở trình duyệt người dùng.',
       opts:[ ['Đưa khoá về máy chủ (backend), không để lộ ở frontend', true],
              ['Đổi tên biến cho khó đoán', false], ['Thu nhỏ (minify) file JS', false], ['Thêm chú thích "đừng xem"', false] ],
-      ok:'Đúng! Bí mật phải nằm ở backend. Mọi thứ gửi xuống trình duyệt đều có thể bị đọc — đổi tên/minify không phải bảo mật.' },
+      ok:'Đúng! Bí mật phải nằm ở backend. Mọi thứ gửi xuống trình duyệt đều có thể bị đọc, đổi tên/minify không phải bảo mật.' },
   ];
   let secIdx = 0;
   INIT_sec = () => { secIdx = 0; renderSec(); };
@@ -501,7 +501,7 @@
         el('secBody').querySelectorAll('.opt').forEach((x, j) => { x.disabled = true; if (s.opts[j][1]) x.classList.add('correct'); });
         fb.className = 'fb show ok'; fb.textContent = s.ok;
         setTimeout(() => { secIdx++; renderSec(); }, 1700);
-      } else { b.classList.add('wrong'); fb.className = 'fb show no'; fb.textContent = 'Chưa đúng — cách này không vá được lỗ hổng. Thử lại.'; }
+      } else { b.classList.add('wrong'); fb.className = 'fb show no'; fb.textContent = 'Chưa đúng: cách này không vá được lỗ hổng. Thử lại.'; }
     });
   }
 
@@ -513,17 +513,17 @@
   // Từ điển kỹ năng dùng chung cho mọi lộ trình. `mod` = id module trường;
   // `href` = trang thực hành; nếu không có cả hai → hiện lý thuyết nhanh + nguồn tự học (`res`).
   const SKILLS = {
-    py:    { ic:'🐍', label:'Nhập môn Python',     mod:'I1.1', d:'Ngôn ngữ lập trình phổ biến, dễ học — nền tảng cho mọi nhánh CNTT. Học biến, vòng lặp, hàm, cấu trúc dữ liệu cơ bản.' },
+    py:    { ic:'🐍', label:'Nhập môn Python',     mod:'I1.1', d:'Ngôn ngữ lập trình phổ biến, dễ học: nền tảng cho mọi nhánh CNTT. Học biến, vòng lặp, hàm, cấu trúc dữ liệu cơ bản.' },
     math:  { ic:'➗', label:'Toán & Logic',        mod:'I1.2', d:'Toán rời rạc, logic, xác suất–thống kê: nền tảng tư duy cho giải thuật, AI và phân tích dữ liệu.' },
-    arch:  { ic:'🖥️', label:'Kiến trúc máy tính',  mod:'I1.3', d:'Cách máy tính hoạt động: CPU, bộ nhớ, biểu diễn nhị phân — hiểu để viết code hiệu quả.' },
+    arch:  { ic:'🖥️', label:'Kiến trúc máy tính',  mod:'I1.3', d:'Cách máy tính hoạt động: CPU, bộ nhớ, biểu diễn nhị phân, hiểu để viết code hiệu quả.' },
     linux: { ic:'🐧', label:'Hệ điều hành Linux',  mod:'I1.4', d:'Dòng lệnh, quản lý tiến trình, file, quyền. Kỹ năng bắt buộc cho DevOps, bảo mật và server.' },
     ctdl:  { ic:'🧮', label:'CTDL & Giải thuật',   mod:'I2.1', d:'Mảng, danh sách, cây, đồ thị + thuật toán sắp xếp, tìm kiếm. "Xương sống" của lập trình viên giỏi.' },
-    oop:   { ic:'🧩', label:'Lập trình HĐT (OOP)', mod:'I2.2', d:'Tư duy hướng đối tượng: lớp, kế thừa, đa hình — cách tổ chức code lớn, dễ bảo trì.' },
+    oop:   { ic:'🧩', label:'Lập trình HĐT (OOP)', mod:'I2.2', d:'Tư duy hướng đối tượng: lớp, kế thừa, đa hình, cách tổ chức code lớn, dễ bảo trì.' },
     sql:   { ic:'🗃️', label:'Cơ sở dữ liệu SQL',   mod:'I2.3', d:'Thiết kế bảng, truy vấn SELECT/JOIN, tối ưu. Mọi ứng dụng đều cần lưu và truy xuất dữ liệu.' },
     net:   { ic:'🌐', label:'Mạng máy tính',       mod:'I2.4', d:'TCP/IP, HTTP, DNS, mô hình OSI. Hiểu mạng để làm web, cloud, và đặc biệt là an toàn thông tin.' },
-    web:   { ic:'🎨', label:'Thiết kế Web',        mod:'I2.5', d:'HTML, CSS, JavaScript — dựng giao diện chạy trên trình duyệt, bước đầu của web & mobile.' },
+    web:   { ic:'🎨', label:'Thiết kế Web',        mod:'I2.5', d:'HTML, CSS, JavaScript: dựng giao diện chạy trên trình duyệt, bước đầu của web & mobile.' },
     ktpm:  { ic:'🏗️', label:'Kỹ thuật phần mềm',   mod:'I3.1', d:'Quy trình phát triển phần mềm: phân tích yêu cầu, thiết kế, kiểm thử, làm việc nhóm theo Agile.' },
-    ai:    { ic:'🧠', label:'Trí tuệ nhân tạo',    mod:'I3.3', d:'Tìm kiếm, suy luận, học máy cơ bản — nền tảng để xây dựng hệ thống thông minh.' },
+    ai:    { ic:'🧠', label:'Trí tuệ nhân tạo',    mod:'I3.3', d:'Tìm kiếm, suy luận, học máy cơ bản, nền tảng để xây dựng hệ thống thông minh.' },
     ml:    { ic:'🤖', label:'Machine Learning',    mod:'I3.4', d:'Mô hình học từ dữ liệu: hồi quy, phân loại, mạng nơ-ron. Kỹ năng lõi của AI/ML Engineer.' },
     full:  { ic:'🧱', label:'Web Full-stack',      mod:'I3.5', d:'Node.js + React: làm cả backend lẫn frontend, dựng ứng dụng web hoàn chỉnh đầu–cuối.' },
     mob:   { ic:'📱', label:'Mobile Dev',          mod:'I3.6', d:'Xây ứng dụng Android/iOS: vòng đời màn hình, gọi API, lưu dữ liệu, đưa app lên store.' },
@@ -534,12 +534,12 @@
     ds:    { ic:'📈', label:'Khoa học dữ liệu',     mod:'I4.3', d:'Toàn trình xử lý dữ liệu: thu thập, làm sạch, mô hình hoá, kể chuyện bằng dữ liệu.' },
     // Kỹ năng chưa có module riêng → lý thuyết nhanh + nguồn tự học uy tín.
     git:   { ic:'🔧', label:'Git & GitHub', d:'Quản lý phiên bản code, làm việc nhóm qua branch/commit/pull request. Kỹ năng dùng hằng ngày của mọi lập trình viên.',
-             res:[['roadmap.sh — Git & GitHub','https://roadmap.sh/git-github'],['Tài liệu Git chính thức (tiếng Việt)','https://git-scm.com/book/vi/v2']] },
+             res:[['roadmap.sh: Git & GitHub','https://roadmap.sh/git-github'],['Tài liệu Git chính thức (tiếng Việt)','https://git-scm.com/book/vi/v2']] },
     viz:   { ic:'📊', label:'Trực quan hoá dữ liệu', d:'Biến số liệu thành biểu đồ dễ hiểu để ra quyết định: bar, line, scatter, dashboard.',
-             res:[['Power BI — Microsoft Learn','https://learn.microsoft.com/training/powerbi/'],['Data Visualization — freeCodeCamp','https://www.freecodecamp.org/learn/data-visualization/']] },
-    docker:{ ic:'🐳', label:'Docker & Container', mod:'I3.7', d:'Đóng gói ứng dụng vào container để chạy giống nhau ở mọi nơi — kỹ năng cốt lõi của DevOps.' },
-    cicd:  { ic:'🔁', label:'CI/CD', d:'Tự động build, test, triển khai mỗi khi code thay đổi — giúp ra mắt nhanh và an toàn.',
-             res:[['roadmap.sh — DevOps','https://roadmap.sh/devops'],['GitHub Actions — tài liệu','https://docs.github.com/actions']] },
+             res:[['Power BI: Microsoft Learn','https://learn.microsoft.com/training/powerbi/'],['Data Visualization: freeCodeCamp','https://www.freecodecamp.org/learn/data-visualization/']] },
+    docker:{ ic:'🐳', label:'Docker & Container', mod:'I3.7', d:'Đóng gói ứng dụng vào container để chạy giống nhau ở mọi nơi, kỹ năng cốt lõi của DevOps.' },
+    cicd:  { ic:'🔁', label:'CI/CD', d:'Tự động build, test, triển khai mỗi khi code thay đổi, giúp ra mắt nhanh và an toàn.',
+             res:[['roadmap.sh: DevOps','https://roadmap.sh/devops'],['GitHub Actions: tài liệu','https://docs.github.com/actions']] },
     ctf:   { ic:'🚩', label:'Pentest & CTF', href:'/it-ctf-web.html', d:'Thực hành tìm và khai thác lỗ hổng có đạo đức qua các thử thách Capture-The-Flag.' },
   };
 
@@ -551,7 +551,7 @@
     data: { ic:'📊', name:'Data Analyst / Scientist', desc:'Biến dữ liệu thô thành insight: truy vấn, phân tích xu hướng, mô hình hoá và đề xuất quyết định.',
             sal:{intern:'6–9 tr',junior:'14–24 tr',senior:'40–75 tr+'}, demand:90,
             tree:[['py'],['math','sql'],['viz','ml'],['ds']] },
-    devops:{ ic:'☁️', name:'DevOps Engineer', desc:'Tự động hoá vòng đời phần mềm: build, deploy, giám sát hạ tầng cloud — cầu nối giữa Dev và vận hành.',
+    devops:{ ic:'☁️', name:'DevOps Engineer', desc:'Tự động hoá vòng đời phần mềm: build, deploy, giám sát hạ tầng cloud, cầu nối giữa Dev và vận hành.',
             sal:{intern:'6–9 tr',junior:'15–26 tr',senior:'40–80 tr+'}, demand:88,
             tree:[['linux'],['net','py'],['docker','cicd'],['devops','cloud']] },
     sec:  { ic:'🛡️', name:'Cybersecurity Specialist', desc:'Bảo vệ hệ thống: rà soát lỗ hổng, kiểm thử xâm nhập, ứng cứu sự cố. Ngành đang rất khát nhân lực.',

@@ -204,7 +204,7 @@
   <input id="searchInput" placeholder="🔍 Tìm từ (Anh hoặc Việt)…" autocomplete="off" />
   <button id="searchBtn">Tìm</button>
   <button class="primary" id="addWordBtn">➕ Thêm từ mới</button>
-  <button id="importBtn" title="Tải file Word/.txt — AI tự lọc từ vựng chuyên ngành">📄 Nhập từ file</button>
+  <button id="importBtn" title="Tải file Word/.txt: AI tự lọc từ vựng chuyên ngành">📄 Nhập từ file</button>
   <input type="file" id="importFile" accept=".txt,.csv,.md,.docx" style="display:none" />
 </div>
 <div class="searchMsg" id="searchMsg"></div>
@@ -251,7 +251,7 @@
     <span>Đã thuộc: <b id="mastered">0</b></span>
     <span>Tổng: <b id="all">0</b></span>
   </div>
-  <button class="opt" id="reviewAll" style="max-width:300px;display:none">Hôm nay ôn xong — ôn lại tất cả ↻</button>
+  <button class="opt" id="reviewAll" style="max-width:300px;display:none">Hôm nay ôn xong, ôn lại tất cả ↻</button>
 </div>
 
 <!-- ───── Quiz ───── -->
@@ -259,7 +259,7 @@
   <div class="qbar"><span>Câu <b id="qIdx">1</b>/<b id="qTotal">10</b></span><span>Đúng: <b id="qRight">0</b></span></div>
   <div class="qcard">
     <div class="qprompt" id="qPrompt">Chọn nghĩa đúng của từ:</div>
-    <div class="qword" id="qWord">—</div>
+    <div class="qword" id="qWord">-</div>
     <div class="qphon" id="qPhon"></div>
     <div class="opts" id="qOpts"></div>
   </div>
@@ -287,7 +287,7 @@
   </div>
   <input class="linput" id="lInput" placeholder="gõ từ ở đây…" autocomplete="off" autocapitalize="off" spellcheck="false" />
   <div class="lreveal" id="lReveal">
-    <div class="rword" id="lWord">—</div>
+    <div class="rword" id="lWord">-</div>
     <div class="rmeta" id="lPhon"></div>
     <div class="rmean" id="lMean"></div>
     <div class="rex" id="lEx"></div>
@@ -303,7 +303,7 @@
   <div class="qbar"><span>Từ <b id="wIdx">1</b>/<b id="wTotal">8</b></span><span>Đặt câu đúng: <b id="wRight">0</b></span></div>
   <div class="wcard">
     <div class="wprompt">✍️ Đặt MỘT câu tiếng Anh có dùng từ chuyên ngành dưới đây:</div>
-    <div class="wword" id="wWord">—</div>
+    <div class="wword" id="wWord">-</div>
     <div class="wmeta" id="wPhon"></div>
     <div class="wmean" id="wMean"></div>
     <textarea class="wta" id="wInput" placeholder="Ví dụ: The new algorithm runs much faster than the old one."></textarea>
@@ -342,7 +342,7 @@
 <div class="overlay" id="importOverlay">
   <div class="modal" style="max-width:560px;text-align:left">
     <h2 style="margin:0 0 2px">📄 Nhập từ vựng từ file</h2>
-    <p id="impStatus" style="margin:2px 0 10px;color:var(--muted);font-size:13.5px">Chọn file Word (.docx) hoặc .txt — hệ thống tự lọc từ vựng chuyên ngành và xếp vào chủ đề phù hợp.</p>
+    <p id="impStatus" style="margin:2px 0 10px;color:var(--muted);font-size:13.5px">Chọn file Word (.docx) hoặc .txt, hệ thống tự lọc từ vựng chuyên ngành và xếp vào chủ đề phù hợp.</p>
     <div id="impList" style="max-height:46vh;overflow:auto;display:flex;flex-direction:column;gap:8px"></div>
     <div class="mbtns" style="margin-top:14px">
       <button id="impCancel">Đóng</button>
@@ -758,7 +758,7 @@
     el('mTitle').textContent = pct === 100 ? 'Tuyệt đối!' : pass ? 'Chúc mừng!' : 'Cố lên!';
     el('mMsg').innerHTML = pass
       ? 'Bạn trả lời đúng <b>' + pct + '%</b>. Chuỗi học: 🔥 <b>' + streakValid() + ' ngày</b>. Các từ trả lời đúng đã được dời lịch ôn xa hơn.'
-      : 'Đúng <b>' + pct + '%</b> — ôn lại các từ sai rồi thử lại nhé. Những từ sai sẽ xuất hiện sớm trong phần Học thẻ.';
+      : 'Đúng <b>' + pct + '%</b>: ôn lại các từ sai rồi thử lại nhé. Những từ sai sẽ xuất hiện sớm trong phần Học thẻ.';
     el('overlay').classList.add('show');
   }
 
@@ -812,7 +812,7 @@
     el('lCheck').style.display = 'none'; el('lNext').style.display = '';
     el('lWord').textContent = it.w;
     el('lPhon').textContent = it.ph + ' · ' + it.pos;
-    el('lMean').textContent = (correct ? '✅ Chính xác! ' : '❌ Bạn gõ: “' + (guess || '—') + '”. ') + it.v;
+    el('lMean').textContent = (correct ? '✅ Chính xác! ' : '❌ Bạn gõ: “' + (guess || '-') + '”. ') + it.v;
     el('lEx').textContent = it.ex || '';
     el('lReveal').classList.add('show', correct ? 'ok' : 'no');
   }
@@ -927,7 +927,7 @@
     const pct = Math.round(right / total * 100), pass = pct >= 70;
     el('mScore').textContent = right + '/' + total;
     el('mEmoji').textContent = pct === 100 ? '🏆' : pass ? '🎉' : '💪';
-    el('mTitle').textContent = label + (pct === 100 ? ' — Tuyệt đối!' : pass ? ' — Tốt lắm!' : ' — Cố lên!');
+    el('mTitle').textContent = label + (pct === 100 ? 'Tuyệt đối!' : pass ? 'Tốt lắm!' : 'Cố lên!');
     el('mMsg').innerHTML = 'Bạn đạt <b>' + pct + '%</b>. Chuỗi học: 🔥 <b>' + streakValid() + ' ngày</b>.';
     // Nghe/Viết không có màn "xem lại" riêng → ẩn nút đó, chỉ giữ "Làm lại".
     el('mReview').style.display = 'none';
@@ -1037,7 +1037,7 @@
     if (en.length < 1 || vi.length < 1) { alert('Nhập tối thiểu Từ tiếng Anh + Nghĩa tiếng Việt.'); return; }
     let tk = el('awTopic').value;
     if (tk === '__new__') { const nm = el('awNewTopic').value.trim(); if (!nm) { alert('Nhập tên chủ đề mới.'); return; } tk = 'custom_' + (Object.keys(customStore.labels).length + 1); customStore.labels[tk] = '✏️ ' + nm; }
-    const item = { w:en, pos:el('awPos').value, ph:el('awIpa').value.trim() || ('/' + en + '/'), v:vi, ex:el('awEx').value.trim() || (en + ' — ' + vi), custom:true };
+    const item = { w:en, pos:el('awPos').value, ph:el('awIpa').value.trim() || ('/' + en + '/'), v:vi, ex:el('awEx').value.trim() || (en + ', ' + vi), custom:true };
     customStore.words[tk] = customStore.words[tk] || []; customStore.words[tk].push(item); saveCustom();
     mergeCustom(); rebuildTopicSelect();
     el('addOverlay').classList.remove('show');
@@ -1077,7 +1077,7 @@
     let xmlBytes;
     if (target.comp === 0) xmlBytes = raw;
     else {
-      if (typeof DecompressionStream === 'undefined') throw new Error('Trình duyệt không hỗ trợ đọc .docx — hãy lưu file thành .txt rồi tải lên.');
+      if (typeof DecompressionStream === 'undefined') throw new Error('Trình duyệt không hỗ trợ đọc .docx: hãy lưu file thành .txt rồi tải lên.');
       const stream = new Response(raw).body.pipeThrough(new DecompressionStream('deflate-raw'));
       xmlBytes = new Uint8Array(await new Response(stream).arrayBuffer());
     }
@@ -1150,7 +1150,7 @@
       const i = +c.dataset.i, w = importWords[i]; if (!w) return;
       let tk = el('impList').querySelector('.impTopic[data-i="' + i + '"]').value;
       if (tk === 'khac') { tk = IMPORT_TOPIC; if (!customStore.labels[tk]) customStore.labels[tk] = '📄 Từ nhập file'; }
-      const item = { w: w.en, pos: w.pos, ph: w.ipa || ('/' + w.en + '/'), v: w.vi, ex: w.ex || (w.en + ' — ' + w.vi), custom: true };
+      const item = { w: w.en, pos: w.pos, ph: w.ipa || ('/' + w.en + '/'), v: w.vi, ex: w.ex || (w.en + ', ' + w.vi), custom: true };
       const dup = (customStore.words[tk] || []).some(x => x.w.toLowerCase() === item.w.toLowerCase())
         || (VOCAB[tk] || []).some(x => x.w.toLowerCase() === item.w.toLowerCase());
       if (!dup) { customStore.words[tk] = customStore.words[tk] || []; customStore.words[tk].push(item); added++; if (!firstTopic) firstTopic = tk; }

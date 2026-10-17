@@ -134,7 +134,7 @@ function injectPrimaryStyles() {
   .ptl-event.opened .d-long { display:block; animation: qslPop .35s cubic-bezier(.2,.9,.3,1.6); }
   .ptl-hint { font-size:12.5px; opacity:.7; }
 
-  /* ── Quiz Primary — Adventure Cute (1 câu/màn, big options, pet companion) ── */
+  /* ── Quiz Primary, Adventure Cute (1 câu/màn, big options, pet companion) ── */
   .pqz-wrap { display:flex; flex-direction:column; gap:18px; padding:8px 0 90px; position:relative; }
   .pqz-progress { display:flex; gap:6px; justify-content:center; flex-wrap:wrap; padding:6px 0; }
   .pqz-progress .star { font-size: 22px; line-height:1; opacity:.4; transition: opacity .2s, transform .25s; }
@@ -253,7 +253,7 @@ export function renderQuestLine(host, items, onDone, opts = {}) {
   wrap.innerHTML = `
     <div class="qsl-head">
       <span class="badge">🗺️ Quest</span>
-      <span>Hoàn thành từng chặng theo thứ tự — bạn đồng hành ${pet} sẽ chạy theo!</span>
+      <span>Hoàn thành từng chặng theo thứ tự, bạn đồng hành ${pet} sẽ chạy theo!</span>
     </div>
     <div class="qsl-track" data-track>
       <div class="qsl-pet" data-pet>${pet}</div>
@@ -402,7 +402,7 @@ export function renderQuizPrimaryInline(host, items) {
           btn.classList.add('is-correct');
           opts.forEach(o => o.disabled = true);
           fb.className = 'pmq-fb ok show';
-          fb.innerHTML = `<b>✓ Chính xác!</b> ${q.fb ? ' — ' + q.fb : '+10 ⭐'}`;
+          fb.innerHTML = `<b>✓ Chính xác!</b> ${q.fb ? ' ' + q.fb : '+10 ⭐'}`;
         } else {
           btn.classList.add('is-wrong');
           fb.className = 'pmq-fb bad show';
@@ -538,8 +538,8 @@ export function renderQuizPrimary(engine, host) {
       fb.style.display = 'block';
       fb.className = 'pqz-fb ' + (ok ? 'ok' : 'bad');
       fb.innerHTML = ok
-        ? `<b>🎉 Đúng rồi!</b> ${q.explanation ? ' — ' + String(q.explanation).replace(/</g,'&lt;') : '+10 ⭐'}`
-        : `<b>😅 Chưa đúng.</b> Đáp án đúng: <b>${String(q.choices[q.answer] || '').replace(/</g,'&lt;')}</b>${q.explanation ? ' — ' + String(q.explanation).replace(/</g,'&lt;') : ''}`;
+        ? `<b>🎉 Đúng rồi!</b> ${q.explanation ? ' ' + String(q.explanation).replace(/</g,'&lt;') : '+10 ⭐'}`
+        : `<b>😅 Chưa đúng.</b> Đáp án đúng: <b>${String(q.choices[q.answer] || '').replace(/</g,'&lt;')}</b>${q.explanation ? '. ' +  String(q.explanation).replace(/</g,'&lt;') : ''}`;
     }
 
     opts.forEach(btn => {
@@ -558,8 +558,8 @@ export function renderQuizPrimary(engine, host) {
         fb.style.display = 'block';
         fb.className = 'pqz-fb ' + (ok ? 'ok' : 'bad');
         fb.innerHTML = ok
-          ? `<b>🎉 Chính xác!</b>${q.explanation ? ' — ' + String(q.explanation).replace(/</g,'&lt;') : ' +10 ⭐'}`
-          : `<b>😅 Chưa đúng.</b> Đáp án đúng: <b>${String(q.choices[q.answer] || '').replace(/</g,'&lt;')}</b>${q.explanation ? ' — ' + String(q.explanation).replace(/</g,'&lt;') : ''}`;
+          ? `<b>🎉 Chính xác!</b>${q.explanation ? ' ' + String(q.explanation).replace(/</g,'&lt;') : ' +10 ⭐'}`
+          : `<b>😅 Chưa đúng.</b> Đáp án đúng: <b>${String(q.choices[q.answer] || '').replace(/</g,'&lt;')}</b>${q.explanation ? '. ' +  String(q.explanation).replace(/</g,'&lt;') : ''}`;
         if (ok) showBubble('Tuyệt vời!', 'happy');
         else showBubble('Cố lên!', 'sad');
         nextBtn.disabled = false;
@@ -592,7 +592,7 @@ export function renderQuizPrimary(engine, host) {
         <h2>${correctCount === total ? 'Hoàn hảo!' : (correctCount >= total * 0.7 ? 'Giỏi lắm!' : 'Cố lên nha!')}</h2>
         <div class="score">${correctCount}/${total}</div>
         <div class="stars-row">${'⭐'.repeat(stars)}${'☆'.repeat(3 - stars)}</div>
-        <p style="opacity:.85;margin:6px 0 16px;font-size:16px;font-weight:700;">Em đạt ${pct}% — pet ${pet} tự hào về em!</p>
+        <p style="opacity:.85;margin:6px 0 16px;font-size:16px;font-weight:700;">Em đạt ${pct}%, pet ${pet} tự hào về em!</p>
         <button type="button" class="pqz-next-btn" data-final>Tiếp tục</button>
       </div>
     `;

@@ -59,18 +59,18 @@
 <body>
 <div class="top">
   <a class="back" id="back" href="/school.html?domain=it#campus-hero">← Khuôn viên trường</a>
-  <div><h1>🌳 Trực quan giải thuật <span class="sub">— xem từng bước so sánh &amp; hoán đổi</span></h1></div>
+  <div><h1>🌳 Trực quan giải thuật <span class="sub">: xem từng bước so sánh &amp; hoán đổi</span></h1></div>
   <div class="prog" id="prog">0/3 củng cố</div>
 </div>
 <div class="wrap">
   <div class="algos" id="algos"></div>
   <div class="panel">
     <div class="meta">
-      <span class="nm" id="algoName">—</span>
-      <span class="big" id="algoBig">—</span>
-      <span class="stable" id="algoStable">—</span>
+      <span class="nm" id="algoName">-</span>
+      <span class="big" id="algoBig">-</span>
+      <span class="stable" id="algoStable">-</span>
     </div>
-    <div class="note" id="algoNote">—</div>
+    <div class="note" id="algoNote">-</div>
     <canvas id="c" width="1040" height="300"></canvas>
     <div class="legend">
       <span><i style="background:var(--base)"></i>chưa xét</span>
@@ -110,9 +110,9 @@ const ALGOS = {
   bubble:    { name:'Sắp xếp nổi bọt (Bubble sort)',  big:'Tốt nhất O(n) · TB/Xấu O(n²)', stable:true,
     note:'So sánh từng cặp kề nhau và đẩy phần tử lớn "nổi" dần về cuối sau mỗi vòng.' },
   selection: { name:'Sắp xếp chọn (Selection sort)',  big:'O(n²) mọi trường hợp', stable:false,
-    note:'Mỗi vòng tìm phần tử nhỏ nhất trong phần còn lại rồi đưa về đầu — ít hoán đổi nhưng luôn O(n²) so sánh.' },
+    note:'Mỗi vòng tìm phần tử nhỏ nhất trong phần còn lại rồi đưa về đầu, ít hoán đổi nhưng luôn O(n²) so sánh.' },
   insertion: { name:'Sắp xếp chèn (Insertion sort)',  big:'Tốt nhất O(n) · TB/Xấu O(n²)', stable:true,
-    note:'Chèn dần từng phần tử vào đúng chỗ trong đoạn đã sắp xếp bên trái — rất nhanh với dữ liệu gần như đã sắp.' },
+    note:'Chèn dần từng phần tử vào đúng chỗ trong đoạn đã sắp xếp bên trái, rất nhanh với dữ liệu gần như đã sắp.' },
   merge:     { name:'Sắp xếp trộn (Merge sort)',      big:'O(n log n) mọi trường hợp · tốn O(n) bộ nhớ', stable:true,
     note:'Chia đôi đệ quy đến đoạn 1 phần tử rồi trộn (merge) hai nửa đã sắp xếp lại với nhau.' },
   quick:     { name:'Sắp xếp nhanh (Quick sort)',     big:'TB O(n log n) · Xấu nhất O(n²)', stable:false,

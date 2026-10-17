@@ -92,7 +92,7 @@
   .mb-card.flipped { background: linear-gradient(135deg, rgba(99,102,241,.18), rgba(34,197,94,.12));
     border-color: #22c55e; }
   .mb-card.flipped .ci { transform: scale(1.3) rotate(-8deg); }
-  .mb-card.flipped .more::before { content:'✓ Đã ghi nhớ — bấm lại để gập'; color:#86efac; }
+  .mb-card.flipped .more::before { content:'✓ Đã ghi nhớ, bấm lại để gập'; color:#86efac; }
   .mb-card.flipped::after { content:'⭐'; position:absolute; top:6px; right:8px; font-size:14px;
     animation: cardStar .5s cubic-bezier(.2,.9,.3,1.6); }
   @keyframes cardStar { 0%{transform:scale(0) rotate(0)} 60%{transform:scale(1.3) rotate(20deg)} 100%{transform:scale(1) rotate(0)} }
@@ -403,8 +403,8 @@ function renderBlocks(blocks){
       }
       return b.mcq.map(m=>`<div class="mcq" data-a="${m.a}"><div class="mcq-q">${esc(m.q)}</div>${m.o.map((o,j)=>`<button class="mcq-o" data-i="${j}">${esc(o)}</button>`).join('')}<div class="mcq-fb">${esc(m.fb||'')}</div></div>`).join('');
     }
-    if(b.piano){ const o=(typeof b.piano==='object')?b.piano:{}; const i=_pr.push({t:'piano',b:b})-1; return prShell(i,'🎹', o.title||'Đàn phím — chơi thử', o.sub||'Bấm phím để nghe nốt nhạc. Bấm ▶ để nghe câu mẫu rồi tự chơi theo.'); }
-    if(b.rhythm){ const o=(typeof b.rhythm==='object')?b.rhythm:{}; const i=_pr.push({t:'rhythm',b:b})-1; return prShell(i,'🥁', o.title||'Tập gõ nhịp', o.sub||'Chọn nhịp 2/4, 3/4 hay 4/4 — bấm Bắt đầu rồi gõ theo phách (phách 1 là phách mạnh).'); }
+    if(b.piano){ const o=(typeof b.piano==='object')?b.piano:{}; const i=_pr.push({t:'piano',b:b})-1; return prShell(i,'🎹', o.title||'Đàn phím: chơi thử', o.sub||'Bấm phím để nghe nốt nhạc. Bấm ▶ để nghe câu mẫu rồi tự chơi theo.'); }
+    if(b.rhythm){ const o=(typeof b.rhythm==='object')?b.rhythm:{}; const i=_pr.push({t:'rhythm',b:b})-1; return prShell(i,'🥁', o.title||'Tập gõ nhịp', o.sub||'Chọn nhịp 2/4, 3/4 hay 4/4: bấm Bắt đầu rồi gõ theo phách (phách 1 là phách mạnh).'); }
     if(b.mixer){ const o=(typeof b.mixer==='object')?b.mixer:{}; const i=_pr.push({t:'mixer',b:b})-1; return prShell(i,'🎨', o.title||'Pha màu cơ bản', o.sub||'Bấm 2 màu cơ bản (Đỏ – Vàng – Lam) để xem màu pha ra. Thử pha đúng màu được yêu cầu.'); }
     if(b.draw){ const o=(typeof b.draw==='object')?b.draw:{}; const i=_pr.push({t:'draw',b:b})-1; return prShell(i,'🖌️', o.title||'Vẽ tự do', o.sub||'Chọn màu, cỡ bút rồi vẽ trực tiếp lên giấy. Tự do sáng tạo!'); }
     if(b.order){ const i=_pr.push({t:'order',b:b})-1; return prShell(i,'🔢', b.order.title||'Sắp xếp đúng thứ tự', b.order.sub||'Bấm các bước lần lượt theo thứ tự em cho là đúng, rồi bấm Kiểm tra.'); }
@@ -449,7 +449,7 @@ function openRoom(r){
     import('/js/engine/secondary-ui.js?v=p5').then(ui => {
       secNodes.forEach(node => {
         const d = _pr[+node.dataset.sec];
-        if(d.t === 'hazard') ui.renderHazardScene(node, d.items, () => toast('🏆 Đã rà soát đủ nguy cơ — phòng thí nghiệm an toàn!'));
+        if(d.t === 'hazard') ui.renderHazardScene(node, d.items, () => toast('🏆 Đã rà soát đủ nguy cơ, phòng thí nghiệm an toàn!'));
         else if(d.t === 'memory') ui.renderMemoryMatch(node, d.pairs, ({seconds}) => toast(`🏆 Ghép xong sau ${seconds}s!`));
         else if(d.t === 'planner') ui.renderDayPlanner(node, d.items, ({score, total}) => toast(`Kế hoạch: ${score}/${total} điểm`));
         else if(d.t === 'stages') ui.renderExperimentStages(node, d.steps, { onDone: () => toast('🏆 Hoàn tất quy trình!') });
@@ -578,12 +578,12 @@ function initRhythm(body,b){
   function start(){ if(timer) return; total=0; good=0; msg.className='pr-msg'; msg.textContent='Cảm nhận số phách và gõ theo nhé!'; interval=60000/bpm; beatIdx=-1; tick(); timer=setInterval(tick,interval); }
   function stop(){ if(timer){ clearInterval(timer); timer=null; } [...beatsRow.children].forEach(d=>d.classList.remove('on')); beatIdx=-1; }
   btnStart.addEventListener('click',start);
-  btnStop.addEventListener('click',()=>{ stop(); if(total>0){ const pct=Math.round(100*good/total); msg.className='pr-msg ok'; msg.textContent='Đã gõ '+total+' lần — '+good+' đúng nhịp ('+pct+'%).'; } });
+  btnStop.addEventListener('click',()=>{ stop(); if(total>0){ const pct=Math.round(100*good/total); msg.className='pr-msg ok'; msg.textContent='Đã gõ '+total+' lần'+good+' đúng nhịp ('+pct+'%).'; } });
   function onTap(){ if(!timer) return;
     const now=performance.now(); const predicted=lastBeat+Math.round((now-lastBeat)/interval)*interval; const delta=Math.abs(now-predicted); total++;
     if(delta<90){ good++; msg.className='pr-msg ok'; msg.textContent='Chuẩn! ('+Math.round(delta)+' ms)'; }
     else if(delta<200){ good++; msg.className='pr-msg'; msg.textContent='Tạm ổn ('+Math.round(delta)+' ms)'; }
-    else { msg.className='pr-msg bad'; msg.textContent='Hơi lệch ('+Math.round(delta)+' ms) — chú ý phách 1 mạnh.'; } }
+    else { msg.className='pr-msg bad'; msg.textContent='Hơi lệch ('+Math.round(delta)+' ms): chú ý phách 1 mạnh.'; } }
   tap.addEventListener('click',onTap);
   const keyH=e=>{ if(e.code==='Space' && modal.classList.contains('show')){ e.preventDefault(); onTap(); } };
   document.addEventListener('keydown', keyH);
@@ -658,7 +658,7 @@ function initOrder(body,b){
     if(picks.length!==items.length){ msg.className='pr-msg bad'; msg.textContent='Em chưa chọn đủ '+items.length+' bước.'; return; }
     let ok=0;
     btns.forEach(btn=>{ const correct=+btn.dataset.i+1; const got=picks.indexOf(+btn.dataset.i)+1; if(got===correct){ btn.classList.add('correct'); ok++; } else btn.classList.add('wrong'); btn.dataset.done='1'; });
-    if(ok===items.length){ msg.className='pr-msg ok'; msg.textContent='🎉 Hoàn hảo — đúng cả '+ok+'/'+items.length+' bước!'; }
+    if(ok===items.length){ msg.className='pr-msg ok'; msg.textContent='🎉 Hoàn hảo: đúng cả '+ok+'/'+items.length+' bước!'; }
     else { msg.className='pr-msg bad'; msg.textContent='Đúng '+ok+'/'+items.length+' bước. Bấm Làm lại để thử.'; }
   });
   rs.addEventListener('click',()=>{ picks.length=0; btns.forEach(btn=>{ btn.classList.remove('picked','correct','wrong'); delete btn.dataset.done; btn.querySelector('.num').textContent='–'; }); msg.className='pr-msg'; msg.textContent=''; });
@@ -715,7 +715,7 @@ const BADGE_HTML = {
 
 function renderQuiz(){
   if(!_currentBatch.length){
-    quizEl.innerHTML = '<p style="opacity:.7">Chưa có câu hỏi nào — bé thử lại sau nhé.</p>';
+    quizEl.innerHTML = '<p style="opacity:.7">Chưa có câu hỏi nào, bé thử lại sau nhé.</p>';
     return;
   }
   _picked = {};
@@ -931,7 +931,7 @@ refreshSkillChips();
   // Pool = ngân hàng tuần (lop2..lop5) nếu có, fallback về S.quiz seed.
   const pool = await getQuizPool();
   if(!pool.length){
-    quizEl.innerHTML = '<p style="opacity:.7">Chưa có câu hỏi nào — bé thử lại sau nhé.</p>';
+    quizEl.innerHTML = '<p style="opacity:.7">Chưa có câu hỏi nào, bé thử lại sau nhé.</p>';
     return;
   }
   const sq = await getSpacedQuizModule();

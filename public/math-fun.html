@@ -599,8 +599,8 @@
     <span class="floating" style="bottom:20%;right:5%;">÷</span>
     <span class="floating" style="top:50%;left:50%;">×</span>
 
-    <h1>🎮 Toán vui — Học mà chơi</h1>
-    <p class="sub">Chọn lứa tuổi của em — mỗi nơi có riêng phong cách & nhân vật. Học theo dạng game, mỗi câu đúng được sao và XP!</p>
+    <h1>🎮 Toán vui, Học mà chơi</h1>
+    <p class="sub">Chọn lứa tuổi của em, mỗi nơi có riêng phong cách & nhân vật. Học theo dạng game, mỗi câu đúng được sao và XP!</p>
     <div class="pick">
       <div class="grade-card g2" onclick="enterGrade(2)">
         <div class="big-emo">🐿</div>
@@ -1046,7 +1046,7 @@ function g6Finish() {
   $('g6-result').classList.add('show');
   const win = pct >= 0.7;
   $('g6-r-emo').textContent = pct >= 0.9 ? '👑' : win ? '⚔️' : '💀';
-  $('g6-r-title').textContent = pct >= 0.9 ? 'Boss bị tiêu diệt!' : win ? 'Chiến thắng!' : 'Bại trận — thử lại!';
+  $('g6-r-title').textContent = pct >= 0.9 ? 'Boss bị tiêu diệt!' : win ? 'Chiến thắng!' : 'Bại trận: thử lại!';
   $('g6-r-score').textContent = g6State.correct + '/' + g6State.total;
   $('g6-r-xp').textContent = xpEarned;
   $('g6-r-gold').textContent = goldEarned;

@@ -95,7 +95,7 @@
   <div class="intro">
     Dashboard hiển thị độ phủ <b>(môn × tuần × có scenarios)</b> theo từng trường, đối chiếu chuẩn
     <b>Chương trình GDPT 2018</b> (Thông tư 32/2018 + TT 13/2022 cho THPT + TT 51/2020 cho mầm non).
-    Đếm hiện tại lấy từ <code>modules.js</code> mỗi domain — coverage <i>thực</i> sẽ được lấy từ ScoreUp
+    Đếm hiện tại lấy từ <code>modules.js</code> mỗi domain: coverage <i>thực</i> sẽ được lấy từ ScoreUp
     sau khi anh chạy upgrade <code>docs/upgrade-prompts/SCOREUP-UPGRADE.md</code> Phase 4
     (endpoint <code>/curriculum/:grade/:subject</code>).
   </div>
@@ -228,7 +228,7 @@ function renderDomainCard(meta, agg) {
             <div class="nm"><b>${d.name}</b><small>${d.shortName}</small></div>${statusBadge(d.status)}
           </div>
           <div style="color:var(--muted);font-size:12px;text-align:center;padding:12px 0">
-            ${d.status === 'locked' ? '🔒 Trường đang khoá — sẽ mở theo roadmap.' : '⚠️ Không load được modules.'}
+            ${d.status === 'locked' ? '🔒 Trường đang khoá, sẽ mở theo roadmap.' : '⚠️ Không load được modules.'}
           </div>
         </div>`;
       }

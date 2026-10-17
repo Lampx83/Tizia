@@ -272,7 +272,7 @@ class CombatByQuiz {
       await new Promise(r => setTimeout(r, 900));
       if (s.bossHp <= 0) return this.win();
       if (s.hearts <= 0) return this.lose();
-      if (s.qNo >= s.qMax) return this.lose('Hết lượt — boss chạy mất rồi!');
+      if (s.qNo >= s.qMax) return this.lose('Hết lượt: boss chạy mất rồi!');
 
       // Câu kế tiếp
       await this.loadQuestion();
@@ -318,7 +318,7 @@ class CombatByQuiz {
       <div class="tz-cb-result">
         <div class="big">💀</div>
         <h2>${esc(msg || 'Em đã thua trận này')}</h2>
-        <p style="color:#cbd5e1">Đừng nản — ôn lại bài rồi quay lại boss này nhé.</p>
+        <p style="color:#cbd5e1">Đừng nản, ôn lại bài rồi quay lại boss này nhé.</p>
         <button data-close>Thử lại sau</button>
       </div>
     `;

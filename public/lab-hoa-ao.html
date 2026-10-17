@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>🧪 Lab Hoá Học Ảo · Tizia</title>
-<meta name="description" content="Lab hoá học ảo — kéo thả hai hoá chất vào ống nghiệm để khám phá phản ứng, hiện tượng và phương trình." />
+<meta name="description" content="Lab hoá học ảo, kéo thả hai hoá chất vào ống nghiệm để khám phá phản ứng, hiện tượng và phương trình." />
 <style>
   :root {
     --bg-1:#dbeafe; --bg-2:#ede9fe; --bg-3:#ffffff;
@@ -439,7 +439,7 @@
         <button class="predict-btn" data-pred="kh">↑ Sinh khí</button>
         <button class="predict-btn" data-pred="dm">🎨 Đổi màu</button>
         <button class="predict-btn" data-pred="nh">🔥 Trung hoà</button>
-        <button class="predict-btn" data-pred="nx">— Không phản ứng</button>
+        <button class="predict-btn" data-pred="nx">: Không phản ứng</button>
         <button class="predict-btn" data-pred="">Bỏ qua</button>
       </div>
     </div>
@@ -494,7 +494,7 @@
         <button class="modal-tab" data-cat="kh">↑ Khí</button>
         <button class="modal-tab" data-cat="dm">🎨 Đổi màu</button>
         <button class="modal-tab" data-cat="nh">🔥 Trung hoà</button>
-        <button class="modal-tab" data-cat="nx">— Không phản ứng</button>
+        <button class="modal-tab" data-cat="nx">: Không phản ứng</button>
       </div>
       <div class="rxn-grid" id="rxn-grid"></div>
     </div>
@@ -545,17 +545,17 @@ const REACTIONS = [
   { a:'AgNO3', b:'NaCl', cat:'kt',
     eq:'AgNO₃ + NaCl → AgCl↓ + NaNO₃',
     phen:'Kết tủa trắng đục AgCl xuất hiện tức thì.',
-    expl:'AgCl không tan trong nước — phản ứng nhận biết ion Cl⁻ kinh điển.',
+    expl:'AgCl không tan trong nước, phản ứng nhận biết ion Cl⁻ kinh điển.',
     emit:'precip', liquidColor:'#f8fafc', precipColor:'#ffffff' },
   { a:'CuSO4', b:'NaOH', cat:'kt',
     eq:'CuSO₄ + 2NaOH → Cu(OH)₂↓ + Na₂SO₄',
     phen:'Kết tủa xanh lam Cu(OH)₂ rất rõ.',
-    expl:'Cu(OH)₂ là kết tủa xanh lam đặc trưng — phản ứng nhận biết ion Cu²⁺.',
+    expl:'Cu(OH)₂ là kết tủa xanh lam đặc trưng, phản ứng nhận biết ion Cu²⁺.',
     emit:'precip', liquidColor:'#3b82f6', precipColor:'#1d4ed8' },
   { a:'BaCl2', b:'H2SO4', cat:'kt',
     eq:'BaCl₂ + H₂SO₄ → BaSO₄↓ + 2HCl',
     phen:'Kết tủa trắng BaSO₄ rất bền, không tan trong axit.',
-    expl:'BaSO₄ là kết tủa trắng bền nhất — dùng nhận biết ion SO₄²⁻.',
+    expl:'BaSO₄ là kết tủa trắng bền nhất, dùng nhận biết ion SO₄²⁻.',
     emit:'precip', liquidColor:'#f1f5f9', precipColor:'#ffffff' },
   { a:'BaCl2', b:'Na2CO3', cat:'kt',
     eq:'BaCl₂ + Na₂CO₃ → BaCO₃↓ + 2NaCl',
@@ -570,7 +570,7 @@ const REACTIONS = [
   { a:'CuSO4', b:'BaCl2', cat:'kt',
     eq:'CuSO₄ + BaCl₂ → BaSO₄↓ + CuCl₂',
     phen:'Kết tủa trắng BaSO₄, dd vẫn xanh nhạt (CuCl₂).',
-    expl:'Ba²⁺ "khoá" SO₄²⁻ thành BaSO₄ — đồng vẫn còn trong dd nhưng ở dạng CuCl₂.',
+    expl:'Ba²⁺ "khoá" SO₄²⁻ thành BaSO₄: đồng vẫn còn trong dd nhưng ở dạng CuCl₂.',
     emit:'precip', liquidColor:'#7dd3fc', precipColor:'#ffffff' },
   { a:'CuSO4', b:'Na2CO3', cat:'kt',
     eq:'CuSO₄ + Na₂CO₃ → CuCO₃↓ + Na₂SO₄',
@@ -638,13 +638,13 @@ const REACTIONS = [
     emit:'precip', liquidColor:'#bae6fd', precipColor:'#b45309' },
   { a:'Fe', b:'AgNO3', cat:'dm',
     eq:'Fe + 2AgNO₃ → Fe(NO₃)₂ + 2Ag',
-    phen:'Bạc kim loại bám trên sắt — ánh xám trắng.',
+    phen:'Bạc kim loại bám trên sắt, ánh xám trắng.',
     expl:'Fe đẩy Ag (yếu hơn) ra khỏi muối → bạc tự do bám lên.',
     emit:'precip', liquidColor:'#bbf7d0', precipColor:'#cbd5e1' },
   { a:'Zn', b:'AgNO3', cat:'dm',
     eq:'Zn + 2AgNO₃ → Zn(NO₃)₂ + 2Ag',
     phen:'Bạc bám lấp lánh trên kẽm.',
-    expl:'Zn đẩy Ag ra — tạo bạc kim loại sáng bóng.',
+    expl:'Zn đẩy Ag ra, tạo bạc kim loại sáng bóng.',
     emit:'precip', liquidColor:'#f1f5f9', precipColor:'#cbd5e1' },
 
   // ── Không phản ứng (giáo dục) ──
@@ -696,7 +696,7 @@ const REACTIONS = [
   { a:'NaCl', b:'H2SO4', cat:'nx',
     eq:'NaCl + H₂SO₄ (loãng) → (không đáng kể)',
     phen:'Không có hiện tượng rõ ràng.',
-    expl:'Chỉ ở H₂SO₄ đặc, nóng mới giải phóng HCl khí — không xét ở đây.',
+    expl:'Chỉ ở H₂SO₄ đặc, nóng mới giải phóng HCl khí, không xét ở đây.',
     emit:null, liquidColor:'#fef3c7' },
   { a:'NaCl', b:'BaCl2', cat:'nx',
     eq:'NaCl + BaCl₂ → (không phản ứng)',
@@ -850,7 +850,7 @@ function placeChem(idx, id) {
 }
 function placeChemFirstEmpty(id) {
   const idx = slots[0] ? (slots[1] ? -1 : 1) : 0;
-  if (idx < 0) { toast('Ống đã đủ 2 lọ — bấm Pha trộn hoặc Rửa ống nhé.', 'bad'); return; }
+  if (idx < 0) { toast('Ống đã đủ 2 lọ, bấm Pha trộn hoặc Rửa ống nhé.', 'bad'); return; }
   placeChem(idx, id);
 }
 function renderSlot(idx) {
@@ -916,7 +916,7 @@ function react() {
 
   if (!rxn) {
     // Cặp chưa định nghĩa trong dataset
-    toast('🤔 Cặp này chưa có trong sổ tay — chưa thấy hiện tượng đáng kể.', 'warn');
+    toast('🤔 Cặp này chưa có trong sổ tay, chưa thấy hiện tượng đáng kể.', 'warn');
     renderResult(a, b, {
       cat:'nx',
       eq:`${CHEMS[a].name} + ${CHEMS[b].name} → (không thấy hiện tượng)`,
@@ -941,7 +941,7 @@ function react() {
     bonus = 5;
     toast('🎯 Đoán đúng hiện tượng! +5 XP', 'good');
   } else if (prediction) {
-    toast(`Đoán hơi sai — hiện tượng thực tế: ${catLabel(rxn.cat)}`, 'warn');
+    toast(`Đoán hơi sai, hiện tượng thực tế: ${catLabel(rxn.cat)}`, 'warn');
   }
   prediction = null;
   $$('.predict-btn').forEach(b => b.classList.remove('on'));
@@ -1002,7 +1002,7 @@ function emitEffects(rxn) {
 }
 
 function catLabel(cat) {
-  return ({kt:'↓ Kết tủa', kh:'↑ Khí', dm:'🎨 Đổi màu', nh:'🔥 Trung hoà', nx:'— Không phản ứng'})[cat] || cat;
+  return ({kt:'↓ Kết tủa', kh:'↑ Khí', dm:'🎨 Đổi màu', nh:'🔥 Trung hoà', nx:'Không phản ứng'})[cat] || cat;
 }
 function renderResult(a, b, rxn, isNew) {
   const tagsHtml = `<span class="tag ${rxn.cat}">${catLabel(rxn.cat)}</span>`
@@ -1021,7 +1021,7 @@ function markDiscovered(key, rxn, isNew, bonus) {
       xp += bonus; saveXp();
       syncWalletXp(bonus); refreshAll();
     } else {
-      toast('🔁 Phản ứng đã biết — ôn lại vẫn tốt!', 'good');
+      toast('🔁 Phản ứng đã biết, ôn lại vẫn tốt!', 'good');
     }
     checkChallenge(rxn);
     return;
@@ -1088,12 +1088,12 @@ function hint() {
   // Tìm 1 phản ứng thật chưa khám phá → gợi ý 1 chất, đố chất còn lại
   const undisc = REACTIONS.filter(r => r.cat !== 'nx' && !discovered.has(pairKey(r.a, r.b)));
   if (!undisc.length) {
-    toast('🎓 Em đã khám phá hết các phản ứng — đỉnh quá!', 'good');
+    toast('🎓 Em đã khám phá hết các phản ứng, đỉnh quá!', 'good');
     return;
   }
   const pick = undisc[Math.floor(Math.random() * undisc.length)];
   const which = Math.random() < .5 ? pick.a : pick.b;
-  toast(`💡 Gợi ý: thử bắt đầu với ${CHEMS[which].name} — còn lại em đoán nhé!`, 'warn');
+  toast(`💡 Gợi ý: thử bắt đầu với ${CHEMS[which].name}, còn lại em đoán nhé!`, 'warn');
 }
 
 // ── Predict mode ─────────────────────────────────────────────
@@ -1147,7 +1147,7 @@ function renderBook(cat) {
       return `<div class="rxn-card locked">
         <div class="rxn-tag tag ${r.cat}">${catLabel(r.cat)}</div>
         <div class="rxn-eq">${CHEMS[r.a].name} + ${CHEMS[r.b].name} → ???</div>
-        <div class="rxn-phen">Chưa khám phá — hãy pha 2 lọ này!</div>
+        <div class="rxn-phen">Chưa khám phá: hãy pha 2 lọ này!</div>
       </div>`;
     }
     return `<div class="rxn-card">
@@ -1162,7 +1162,7 @@ function renderBook(cat) {
 function renderBadges() {
   const el = $('#badges');
   el.innerHTML = ACHIEVEMENTS.map(a => `
-    <div class="badge ${badges.has(a.id) ? 'got' : ''}" data-tip="${a.name} — ${a.desc}">
+    <div class="badge ${badges.has(a.id) ? 'got' : ''}" data-tip="${a.name}, ${a.desc}">
       ${a.icon}
     </div>
   `).join('');

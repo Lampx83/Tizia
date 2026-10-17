@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Đường cong Dược động học · PK/TDM — Tizia</title>
+<title>Đường cong Dược động học · PK/TDM | Tizia</title>
 <style>
   :root { --bg-1:#0f172a; --bg-2:#1e293b; --accent:#ec4899; --ok:#10b981; --err:#ef4444; --warn:#fbbf24; }
   * { box-sizing:border-box; }
@@ -189,9 +189,9 @@ function update() {
   else {
     solved = false;
     let msg = '⚠️ ';
-    if (cMx > TOXIC) msg += 'Đỉnh vượt ngưỡng độc — giảm liều';
-    else if (cMn < WIN_LO) msg += 'Đáy dưới ngưỡng — tăng liều / rút ngắn khoảng cách';
-    else if (cMn > WIN_HI) msg += 'Đáy quá cao — giảm liều / giãn khoảng cách';
+    if (cMx > TOXIC) msg += 'Đỉnh vượt ngưỡng độc, giảm liều';
+    else if (cMn < WIN_LO) msg += 'Đáy dưới ngưỡng: tăng liều / rút ngắn khoảng cách';
+    else if (cMn > WIN_HI) msg += 'Đáy quá cao: giảm liều / giãn khoảng cách';
     else msg += 'Chưa tối ưu';
     v.textContent = msg; v.className = 'verdict bad';
   }

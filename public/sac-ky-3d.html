@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
-<title>Sắc ký 3D Lab · TLC — Tizia</title>
+<title>Sắc ký 3D Lab · TLC | Tizia</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1f2e; font-family: 'Inter', system-ui, sans-serif; color: white; touch-action: none; }
   canvas { display: block; touch-action: none; }
@@ -204,7 +204,7 @@
 
 <button class="sfx-toggle" id="sfx-toggle" title="Bật/tắt âm thanh">🔊</button>
 <button class="sfx-toggle" id="uv-toggle" style="top: 102px; display: none;" title="Bật/tắt đèn UV 365nm">🔦</button>
-<button class="sfx-toggle" id="mode-toggle" style="top: 148px; width: auto; padding: 0 12px; font-size: 12px; height: 38px;" title="Chế độ thực hành — Simple (3 bước chấm thẳng) vs Full (chuẩn Unity gốc với pre-prep)">🔬 Simple</button>
+<button class="sfx-toggle" id="mode-toggle" style="top: 148px; width: auto; padding: 0 12px; font-size: 12px; height: 38px;" title="Chế độ thực hành, Simple (3 bước chấm thẳng) vs Full (chuẩn Unity gốc với pre-prep)">🔬 Simple</button>
 
 <div id="hover-label">Label</div>
 
@@ -247,18 +247,18 @@ import { sfx, isSfxEnabled, toggleSfx } from './js/sfx.js';
 // STATE
 // =============================================================
 const SAMPLES = [
-  { id: 'A', hex: 0xef4444, trueRf: 0.30, name: 'Mẫu A — Caffeine' },
-  { id: 'B', hex: 0x3b82f6, trueRf: 0.55, name: 'Mẫu B — Aspirin' },
-  { id: 'C', hex: 0x22c55e, trueRf: 0.78, name: 'Mẫu C — Paracetamol' },
+  { id: 'A', hex: 0xef4444, trueRf: 0.30, name: 'Mẫu A: Caffeine' },
+  { id: 'B', hex: 0x3b82f6, trueRf: 0.55, name: 'Mẫu B: Aspirin' },
+  { id: 'C', hex: 0x22c55e, trueRf: 0.78, name: 'Mẫu C: Paracetamol' },
 ];
 const TUTORIALS = {
   0: { n: 0, title: 'Chuẩn bị dung dịch mẫu (Full Mode)', body: 'Theo Unity gốc: <b>(1)</b> Click <b>lọ bột Caffeine</b> → thìa tự múc bột vào cốc vàng. <b>(2)</b> Click <b>cốc vàng</b> để rót dung môi từ lọ pha động vào. <b>(3)</b> Click <b>bộ đun cách thuỷ</b> → cốc bay tới, đun có hơi nước bốc lên. Hoàn tất → chấm mẫu.', hint: '🔬 Mỗi click sẽ phát animation chuẩn Unity. Tổng ~10s pre-prep.' },
   1: { n: 1, title: 'Chuẩn bị bản mỏng', body: 'Đĩa TLC silica gel đã đặt sẵn trên bàn. Đường gốc (origin line) cách mép dưới ~1cm.', hint: 'Click vào lọ mẫu A/B/C để bắt đầu chấm.' },
   2: { n: 2, title: 'Chấm mẫu lên đường gốc', body: 'Click vào 1 lọ mẫu (A/B/C) để hút mao quản, sau đó click lên đĩa TLC.', hint: '💡 Mỗi mẫu chấm 1 lần. Vệt chấm nên nhỏ (≤3mm).' },
   3: { n: 3, title: 'Pha pha động', body: 'Click vào lọ dung môi (chai lớn 💧) để đổ vào bình triển khai.', hint: '💡 Bình kín giúp hơi dung môi bão hoà, Rf ổn định.' },
-  4: { n: 4, title: 'Triển khai sắc ký', body: 'Click vào đĩa TLC để đặt vào bình triển khai. Đường gốc phải CAO HƠN mặt dung môi.', hint: '💡 Dung môi mao dẫn lên kéo theo mẫu — tách theo ái lực.' },
+  4: { n: 4, title: 'Triển khai sắc ký', body: 'Click vào đĩa TLC để đặt vào bình triển khai. Đường gốc phải CAO HƠN mặt dung môi.', hint: '💡 Dung môi mao dẫn lên kéo theo mẫu, tách theo ái lực.' },
   5: { n: 5, title: 'Triển khai đang chạy...', body: 'Quan sát dung môi mao dẫn lên kéo theo 3 mẫu tách dần theo R<sub>f</sub>. Theo Unity gốc thời gian là 30 giây (có thể bấm ⏩ <b>Tăng tốc</b> để rút còn 5s).', hint: '⏳ 30s thực tế · ⏩ Tăng tốc → 5s · Sau đó "Lấy đĩa ra"' },
-  6: { n: 6, title: 'Đo hệ số R<sub>f</sub> · soi UV', body: 'Sau khi triển khai, vệt mẫu mờ trên đĩa (silica gel hấp thụ rất ít ánh sáng nhìn thấy). Bấm <b>🔦 UV</b> (góc phải) để soi UV 365nm — vệt phát huỳnh quang sáng. Click vào vệt để đo R<sub>f</sub>.', hint: '💡 Bật UV trước để thấy vệt rõ. Đúng ±0.05 = +30, sai ±0.10 = +15.' },
+  6: { n: 6, title: 'Đo hệ số R<sub>f</sub> · soi UV', body: 'Sau khi triển khai, vệt mẫu mờ trên đĩa (silica gel hấp thụ rất ít ánh sáng nhìn thấy). Bấm <b>🔦 UV</b> (góc phải) để soi UV 365nm, vệt phát huỳnh quang sáng. Click vào vệt để đo R<sub>f</sub>.', hint: '💡 Bật UV trước để thấy vệt rõ. Đúng ±0.05 = +30, sai ±0.10 = +15.' },
 };
 
 let state;
@@ -660,7 +660,7 @@ SAMPLES.forEach((s, i) => {
   lctx.font = 'bold 36px sans-serif'; lctx.textAlign = 'center';
   lctx.fillText(s.id, 60, 42);
   lctx.font = 'bold 9px sans-serif';
-  lctx.fillText(s.name.split('— ')[1] || '', 60, 60);
+  lctx.fillText(s.name.split(': ')[1] || '', 60, 60);
   lctx.font = '8px sans-serif';
   lctx.fillStyle = '#7c2d12';
   lctx.fillText('Đơn nguyên', 60, 72);
@@ -1315,7 +1315,7 @@ function handleClick(obj) {
         cv.userData.liquid.scale.y = 0.2 + state.cupPowder * 0.15;
         sfx.correct();
         toast(`✓ Đổ bột vào cốc (${state.cupPowder}/3)`, 'ok');
-        if (state.cupPowder >= 3) toast('Đủ bột — Click 🥃 Cốc vàng để hoà dung môi', 'info');
+        if (state.cupPowder >= 3) toast('Đủ bột: Click 🥃 Cốc vàng để hoà dung môi', 'info');
         updateUI();
       });
       return;
@@ -1329,21 +1329,21 @@ function handleClick(obj) {
         cv.userData.liquid.scale.y = 0.5 + state.cupSolvent * 0.18;
         sfx.correct();
         toast(`✓ Hoà dung môi (${state.cupSolvent}/3)`, 'ok');
-        if (state.cupSolvent >= 3) toast('Đủ dung môi — Click 🔥 Bộ đun cách thuỷ', 'info');
+        if (state.cupSolvent >= 3) toast('Đủ dung môi: Click 🔥 Bộ đun cách thuỷ', 'info');
         updateUI();
       });
       return;
     }
     if (t === 'hotplate' && state.cupSolvent >= 1 && !state.cupHeated) {
       sfx.grab();
-      toast('🔥 Đun cách thuỷ — chờ ~4 giây...', 'info');
+      toast('🔥 Đun cách thuỷ, chờ ~4 giây...', 'info');
       animateCupToHotPlate(() => {
         state.cupHeated = true;
         state.prepDone = true;
         state.step = 1;
         state.score += 30;
         sfx.perfect();
-        toast('✓ Đun xong — dung dịch sẵn sàng. Bây giờ chấm mẫu lên đĩa TLC.', 'ok');
+        toast('✓ Đun xong: dung dịch sẵn sàng. Bây giờ chấm mẫu lên đĩa TLC.', 'ok');
         updateUI();
       });
       return;
@@ -1355,7 +1355,7 @@ function handleClick(obj) {
 
   if (state.step <= 2 && t === 'sample') {
     if (state.capillary) {
-      toast('⚠️ Mao quản đã có mẫu — chấm lên đĩa TLC trước', 'err');
+      toast('⚠️ Mao quản đã có mẫu, chấm lên đĩa TLC trước', 'err');
       sfx.wrong();
       return;
     }
@@ -1409,7 +1409,7 @@ function handleClick(obj) {
     state.devStartTime = performance.now();
     state.score += 20;
     state.step = 5;
-    toast('✓ Đặt đĩa — triển khai 30 giây (bấm ⏩ để tăng tốc)', 'ok');
+    toast('✓ Đặt đĩa: triển khai 30 giây (bấm ⏩ để tăng tốc)', 'ok');
     sfx.grab();
     btnAction.disabled = true;
     btnAction.textContent = '⏩ Tăng tốc';
@@ -1838,7 +1838,7 @@ document.getElementById('mode-toggle').addEventListener('click', () => {
   fullMode = !fullMode;
   document.getElementById('mode-toggle').textContent = fullMode ? '🔬 Full' : '🔬 Simple';
   document.getElementById('mode-toggle').style.background = fullMode ? 'rgba(236,72,153,0.5)' : '';
-  toast(fullMode ? '🔬 Chuyển sang Full Mode — có pre-prep chuẩn Unity gốc' : '🔬 Simple Mode — chấm mẫu thẳng', 'info');
+  toast(fullMode ? '🔬 Chuyển sang Full Mode, có pre-prep chuẩn Unity gốc' : '🔬 Simple Mode: chấm mẫu thẳng', 'info');
   // Reset state to apply mode
   if (uvOn) setUVMode(false);
   newState();
@@ -1871,7 +1871,7 @@ function promptRf(sample) {
   state.score += pts;
   updateUI();
   if (Object.keys(state.measurements).length >= 3) {
-    setHint('Đã đo cả 3 vệt — click "Hoàn thành đo Rf" để xem kết quả');
+    setHint('Đã đo cả 3 vệt, click "Hoàn thành đo Rf" để xem kết quả');
   }
 }
 

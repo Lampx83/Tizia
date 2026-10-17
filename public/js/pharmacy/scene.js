@@ -773,10 +773,10 @@ export function makeDrugBackLabelTex(drug) {
     if (line) flush();
     iy += 4;
   };
-  const lot = drug.lot || meta.lot || '—';
-  const reg = drug.regNo || drug.sdk || '—';
-  const mfgD = drug.mfgDate || '—';
-  const expD = drug.expDate || meta.expiry || '—';
+  const lot = drug.lot || meta.lot || '-';
+  const reg = drug.regNo || drug.sdk || '-';
+  const mfgD = drug.mfgDate || '-';
+  const expD = drug.expDate || meta.expiry || '-';
   field('Thành phần, hàm lượng:', drug.activeIngredient || drug.generic, true);
   field('Dạng bào chế:', drug.form);
   field('Quy cách đóng gói:', drug.packaging || drug.pack);
@@ -2149,9 +2149,9 @@ export function buildScene(canvas, opts = {}) {
     ctx.fillStyle = '#bae6fd'; ctx.font = 'bold 26px Inter, sans-serif';
     ctx.fillText('TỔNG TIỀN PHẢI THANH TOÁN', 260, 110);
     ctx.fillStyle = '#fef3c7'; ctx.font = 'bold 75px Inter, sans-serif';
-    ctx.fillText('— ₫', 260, 200);
+    ctx.fillText('₫', 260, 200);
     ctx.fillStyle = '#cbd5e1'; ctx.font = '18px Inter, sans-serif';
-    ctx.fillText('(đã gồm 8% VAT) — Cảm ơn quý khách!', 260, 280);
+    ctx.fillText('(đã gồm 8% VAT): Cảm ơn quý khách!', 260, 280);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     return tex;

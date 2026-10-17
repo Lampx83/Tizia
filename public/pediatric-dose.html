@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Máy tính liều Nhi · Pediatric Dosing — Tizia</title>
+<title>Máy tính liều Nhi · Pediatric Dosing | Tizia</title>
 <style>
   :root { --bg-1:#0f172a; --bg-2:#1e293b; --accent:#38bdf8; --ok:#10b981; --err:#ef4444; --warn:#fbbf24; }
   * { box-sizing:border-box; }
@@ -82,7 +82,7 @@
         </div>
         <div class="qfb" id="q-fb"></div>
       </div>
-      <div class="note">Công thức: <b>liều (mg) = mg/kg × cân nặng</b> (không vượt liều tối đa) · <b>thể tích (mL) = liều ÷ nồng độ siro</b>. Số liệu mang tính minh hoạ giáo dục — luôn theo chỉ định bác sĩ & tờ HDSD.</div>
+      <div class="note">Công thức: <b>liều (mg) = mg/kg × cân nặng</b> (không vượt liều tối đa) · <b>thể tích (mL) = liều ÷ nồng độ siro</b>. Số liệu mang tính minh hoạ giáo dục, luôn theo chỉ định bác sĩ & tờ HDSD.</div>
     </div>
   </div>
 </div>
@@ -93,9 +93,9 @@ try { ({ submitAttempt } = await import('./js/api.js')); } catch (e) {}
 
 // drug data (illustrative pediatric dosing)
 const DRUGS = {
-  paracetamol: { name:'Paracetamol — hạ sốt/giảm đau', mgkg:15, freq:4, maxDay:60, absMax:1000, conc:24, concLabel:'120 mg / 5 mL (24 mg/mL)' },
-  ibuprofen:   { name:'Ibuprofen — hạ sốt/kháng viêm',  mgkg:10, freq:3, maxDay:40, absMax:400,  conc:20, concLabel:'100 mg / 5 mL (20 mg/mL)' },
-  amoxicillin: { name:'Amoxicillin — kháng sinh',        mgkg:25, freq:2, maxDay:50, absMax:500,  conc:50, concLabel:'250 mg / 5 mL (50 mg/mL)' },
+  paracetamol: { name:'Paracetamol: hạ sốt/giảm đau', mgkg:15, freq:4, maxDay:60, absMax:1000, conc:24, concLabel:'120 mg / 5 mL (24 mg/mL)' },
+  ibuprofen:   { name:'Ibuprofen: hạ sốt/kháng viêm',  mgkg:10, freq:3, maxDay:40, absMax:400,  conc:20, concLabel:'100 mg / 5 mL (20 mg/mL)' },
+  amoxicillin: { name:'Amoxicillin: kháng sinh',        mgkg:25, freq:2, maxDay:50, absMax:500,  conc:50, concLabel:'250 mg / 5 mL (50 mg/mL)' },
 };
 const drugSel = document.getElementById('drug');
 drugSel.innerHTML = Object.entries(DRUGS).map(([k,d]) => `<option value="${k}">${d.name}</option>`).join('');
@@ -158,7 +158,7 @@ function update() {
   const warn = document.getElementById('warn');
   let msgs = [], cls = 'cau';
   if (w < 5) msgs.push('⚠️ Trẻ nhỏ/sơ sinh (<5 kg): liều cần bác sĩ chỉ định riêng.');
-  if (r.overCap) { msgs.push('⛔ Đã chạm liều tối đa người lớn (' + r.d.absMax + ' mg) — không tăng thêm theo cân nặng.'); cls='bad'; }
+  if (r.overCap) { msgs.push('⛔ Đã chạm liều tối đa người lớn (' + r.d.absMax + ' mg): không tăng thêm theo cân nặng.'); cls='bad'; }
   if (r.vol > 10) msgs.push('💡 Thể tích > 10 mL: chia nhiều lần hút hoặc chuyển dạng viên/gói cho trẻ lớn.');
   warn.className = 'warn ' + cls + (msgs.length ? ' show' : '');
   warn.innerHTML = msgs.join('<br>');
@@ -174,7 +174,7 @@ function newQ() {
   const w = 4 + Math.floor(Math.random()*22);  // 4..25 kg
   const r = calc(w, key);
   quizAns = r.vol;
-  document.getElementById('q-text').innerHTML = `Bé <b>${w} kg</b>, dùng <b>${DRUGS[key].name.split(' — ')[0]}</b> (${DRUGS[key].concLabel.split('(')[0].trim()}), liều <b>${DRUGS[key].mgkg} mg/kg/lần</b>. Cần hút <b>bao nhiêu mL</b> mỗi lần?`;
+  document.getElementById('q-text').innerHTML = `Bé <b>${w} kg</b>, dùng <b>${DRUGS[key].name.split(': ')[0]}</b> (${DRUGS[key].concLabel.split('(')[0].trim()}), liều <b>${DRUGS[key].mgkg} mg/kg/lần</b>. Cần hút <b>bao nhiêu mL</b> mỗi lần?`;
   const inp = document.getElementById('q-input'); inp.style.display = 'inline-block'; inp.value=''; inp.focus();
   document.getElementById('q-check').style.display = 'inline-block';
   document.getElementById('q-fb').classList.remove('show');

@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Khám phá Tizia — Toàn cảnh tính năng vũ trụ giáo dục ảo (3D · VR · AI)</title>
-<meta name="description" content="Khám phá tất cả tính năng Tizia — trường ảo, AI tutor, mô phỏng 3D/VR, gamification, multiplayer, Battle Pass… hé lộ dần theo hành trình học của em." />
+<title>Khám phá Tizia: Toàn cảnh tính năng vũ trụ giáo dục ảo (3D · VR · AI)</title>
+<meta name="description" content="Khám phá tất cả tính năng Tizia, trường ảo, AI tutor, mô phỏng 3D/VR, gamification, multiplayer, Battle Pass… hé lộ dần theo hành trình học của em." />
 <link rel="icon" href="/favicon.ico" />
 <style>
   :root {
@@ -138,13 +138,13 @@
 
 <script type="module">
 const TIER_META = [
-  { i:0, ic:'🌱', name:'Mở sẵn — Bắt đầu nào' },
-  { i:1, ic:'🔥', name:'Lv 1 — Sau câu quiz đầu tiên' },
-  { i:2, ic:'⭐', name:'Lv 2 — Kiên trì 3 ngày' },
-  { i:3, ic:'⚡', name:'Lv 3 — Chăm chỉ (30 câu đúng)' },
-  { i:4, ic:'🧠', name:'Lv 4 — Học sâu (10 kỹ năng)' },
-  { i:5, ic:'🏆', name:'Lv 5 — Học dài hạn (30 ngày)' },
-  { i:6, ic:'💎', name:'Lv 6 — Sáng tạo (Pro/GV)' },
+  { i:0, ic:'🌱', name:'Mở sẵn: Bắt đầu nào' },
+  { i:1, ic:'🔥', name:'Lv 1: Sau câu quiz đầu tiên' },
+  { i:2, ic:'⭐', name:'Lv 2: Kiên trì 3 ngày' },
+  { i:3, ic:'⚡', name:'Lv 3: Chăm chỉ (30 câu đúng)' },
+  { i:4, ic:'🧠', name:'Lv 4: Học sâu (10 kỹ năng)' },
+  { i:5, ic:'🏆', name:'Lv 5: Học dài hạn (30 ngày)' },
+  { i:6, ic:'💎', name:'Lv 6: Sáng tạo (Pro/GV)' },
 ];
 
 async function load() {
@@ -186,7 +186,7 @@ function render(d) {
           📅 <b>${d.progress.active_days}</b> ngày
         </div>
         ${d.next_unlock ? `
-          <div class="next">🔓 Sắp mở: <b>${esc(d.next_unlock.name)}</b> — ${esc(d.next_unlock.hint || 'tiếp tục học')}</div>
+          <div class="next">🔓 Sắp mở: <b>${esc(d.next_unlock.name)}</b>: ${esc(d.next_unlock.hint || 'tiếp tục học')}</div>
         ` : ''}
       </div>
     </div>
@@ -213,7 +213,7 @@ function renderTier(meta, items, userTier) {
             <div class="nm">${esc(f.name.replace(/[\p{Emoji}]+/gu, '').trim())}</div>
             ${f.desc ? `<div class="desc">${esc(f.desc)}</div>` : '<div class="desc"></div>'}
             ${f.unlocked
-              ? (f.url ? `<a href="${esc(f.url)}" class="open">Mở →</a>` : '<span class="open" style="opacity:.5">— sẵn sàng</span>')
+              ? (f.url ? `<a href="${esc(f.url)}" class="open">Mở →</a>` : '<span class="open" style="opacity:.5">, sẵn sàng</span>')
               : `<span class="unlock-hint">${esc(f.unlock_text || 'Sắp mở')}</span>`}
           </div>
         `).join('')}

@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>⛈️ Bão Số Học · Tizia</title>
-<meta name="description" content="Phép tính rơi xuống như mưa — chọn đáp án nhanh trước khi chạm đất. Trò chơi luyện tính nhẩm vui nhộn." />
+<meta name="description" content="Phép tính rơi xuống như mưa, chọn đáp án nhanh trước khi chạm đất. Trò chơi luyện tính nhẩm vui nhộn." />
 <style>
   :root {
     --bg-1:#0c1a3a; --bg-2:#142554; --bg-3:#1a3375;
@@ -197,7 +197,7 @@
         <b id="over-score">0</b>
         điểm · combo cao nhất <span id="over-combo">0</span> · trả lời đúng <span id="over-right">0</span>
       </div>
-      <p id="over-msg">Cứ luyện tập thêm em nhé — bão sẽ dịu xuống thôi.</p>
+      <p id="over-msg">Cứ luyện tập thêm em nhé, bão sẽ dịu xuống thôi.</p>
       <button class="start" id="btn-restart">🔁 Chơi lại</button>
     </div>
   </div>
@@ -424,10 +424,10 @@ function gameOver() {
   $('#over-combo').textContent = maxCombo;
   $('#over-right').textContent = right;
   let title, ic, msg;
-  if (score >= 300) { ic = '🏆'; title = 'Tuyệt vời!'; msg = 'Em là cao thủ Bão Số Học — sét đánh đầu các con tính!'; }
+  if (score >= 300) { ic = '🏆'; title = 'Tuyệt vời!'; msg = 'Em là cao thủ Bão Số Học, sét đánh đầu các con tính!'; }
   else if (score >= 150) { ic = '🌟'; title = 'Giỏi quá!'; msg = 'Em đã tính rất tốt. Cố thêm chút nữa là phá kỉ lục!'; }
   else if (score >= 60) { ic = '👍'; title = 'Khá đó!'; msg = 'Em đang tiến bộ. Luyện thêm để giữ combo lâu hơn nhé.'; }
-  else { ic = '🌱'; title = 'Cố lên!'; msg = 'Đừng nản — mỗi lần chơi là một lần em giỏi hơn.'; }
+  else { ic = '🌱'; title = 'Cố lên!'; msg = 'Đừng nản: mỗi lần chơi là một lần em giỏi hơn.'; }
   $('#over-ic').textContent = ic;
   $('#over-title').textContent = title;
   $('#over-msg').textContent = msg;

@@ -101,7 +101,7 @@
       </style>
       <div class="tz-cc-title">🍪 Tizia dùng cookie để cải thiện trải nghiệm</div>
       <p>Chúng tôi dùng cookie cần thiết để giữ phiên đăng nhập, và cookie phân tích
-        (Google Analytics) để hiểu cách bạn dùng nền tảng — qua đó cải thiện bài học.
+        (Google Analytics) để hiểu cách bạn dùng nền tảng, qua đó cải thiện bài học.
         Bạn có thể đổi lựa chọn bất kỳ lúc nào qua nút 🛡️ ở góc phải.</p>
       <div class="tz-cc-actions">
         <button class="tz-cc-accept" type="button">Đồng ý tất cả</button>
@@ -124,7 +124,7 @@
       <div class="tz-cc-row">
         <div>
           <b>Cần thiết</b>
-          <small>Cookie phiên đăng nhập, bảo mật — luôn bật để hệ thống chạy.</small>
+          <small>Cookie phiên đăng nhập, bảo mật: luôn bật để hệ thống chạy.</small>
         </div>
         <div class="tz-sw" aria-checked="true" aria-disabled="true" role="switch"></div>
       </div>

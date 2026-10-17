@@ -154,7 +154,7 @@ function fmtTime(ms) {
 }
 
 function fmtDuration(ms) {
-  if (!ms) return '—';
+  if (!ms) return '-';
   const s = Math.round(ms / 1000);
   return s < 60 ? `${s}s` : `${Math.floor(s/60)}m${(s%60).toString().padStart(2,'0')}`;
 }
@@ -270,13 +270,13 @@ const EXPERIENCES = [
   { href: '/nang-luc.html',        ic: '🎯', t: 'Năng lực của em', d: 'Cây phẩm chất + năng lực theo khung GDPT 2018.',          audience: 'all' },
   { href: '/cay-tri-thuc.html',    ic: '🌳', t: 'Cây Tri Thức',    d: 'Mỗi tuần hoàn thành = 1 chiếc lá lên cây.',                audience: 'all' },
   { href: '/bang-phong-than.html', ic: '🏆', t: 'Bảng Phong Thần', d: 'Xem em đứng thứ mấy theo tuần/tháng/all-time.',           audience: 'all' },
-  { href: '/ban-do-vn.html',       ic: '🗺️', t: 'Bản đồ VN',       d: '34 tỉnh — 34 câu chuyện + quiz địa lý.',                  audience: 'all' },
+  { href: '/ban-do-vn.html',       ic: '🗺️', t: 'Bản đồ VN',       d: '34 tỉnh: 34 câu chuyện + quiz địa lý.',                  audience: 'all' },
   { href: '/pixel-art-studio.html',ic: '🎨', t: 'Pixel Art',       d: 'Vẽ pixel art 16×16, share PNG cho bạn.',                  audience: 'all' },
-  { href: '/pet-tri-thuc.html',    ic: '🐉', t: 'Pet Tri Thức',    d: 'Nuôi Tiziamon — sinh vật ảo tiến hoá theo điểm.',          audience: 'k12' },
+  { href: '/pet-tri-thuc.html',    ic: '🐉', t: 'Pet Tri Thức',    d: 'Nuôi Tiziamon: sinh vật ảo tiến hoá theo điểm.',          audience: 'k12' },
   { href: '/bao-so-hoc.html',      ic: '⛈️', t: 'Bão Số Học',      d: 'Arcade phép tính rơi, combo sét đánh.',                   audience: 'kid' },
-  { href: '/do-chu-ghep-van.html', ic: '🔤', t: 'Đố Chữ Ghép Vần', d: 'Ghép âm/vần thành từ — 60 từ chia 3 cấp.',                audience: 'kid' },
-  { href: '/code-quest.html',      ic: '🤖', t: 'Code Quest',      d: 'Lập trình kéo-thả Scratch — 10 level giải puzzle.',       audience: 'cs'  },
-  { href: '/lab-hoa-ao.html',      ic: '🧪', t: 'Lab Hoá ảo',      d: 'Kéo thả 10 hoá chất — khám phá 15 phản ứng.',             audience: 'sci' },
+  { href: '/do-chu-ghep-van.html', ic: '🔤', t: 'Đố Chữ Ghép Vần', d: 'Ghép âm/vần thành từ, 60 từ chia 3 cấp.',                audience: 'kid' },
+  { href: '/code-quest.html',      ic: '🤖', t: 'Code Quest',      d: 'Lập trình kéo-thả Scratch, 10 level giải puzzle.',       audience: 'cs'  },
+  { href: '/lab-hoa-ao.html',      ic: '🧪', t: 'Lab Hoá ảo',      d: 'Kéo thả 10 hoá chất, khám phá 15 phản ứng.',             audience: 'sci' },
 ];
 
 const CS_MAJORS  = new Set(['it', 'engineering']);

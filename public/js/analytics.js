@@ -61,7 +61,7 @@
       if (!b || !b.measurementId) {
         // GA chưa cấu hình → không load gtag.js, vẫn buffer track() để debug.
         ready = true;
-        if (window.__TIZIA_GA_DEBUG__) console.warn('[analytics] GA_MEASUREMENT_ID chưa set — bỏ qua.');
+        if (window.__TIZIA_GA_DEBUG__) console.warn('[analytics] GA_MEASUREMENT_ID chưa set: bỏ qua.');
         return;
       }
       cfg = b;

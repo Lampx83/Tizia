@@ -195,7 +195,7 @@
     return DOMAIN_META.find(d => d.id === id) || { name: id, icon: '❓', status: 'unknown' };
   }
   function fmtDate(ms) {
-    if (!ms) return '—';
+    if (!ms) return '-';
     const d = new Date(Number(ms));
     return d.toLocaleDateString('vi-VN') + ' ' + d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
   }

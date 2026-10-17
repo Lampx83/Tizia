@@ -23,7 +23,7 @@ export const INTEGRATIONS = [
   { id: 'scoreup',  icon: '📝', name: 'ScoreUp',    tag: 'Thi & luyện trắc nghiệm',
     color: '#f59e0b', path: 'scoreup/', url: 'https://fit.neu.edu.vn/scoreup/',
     desc: 'Ngân hàng câu hỏi, đề thi, chấm điểm và gợi ý học tập cá nhân hoá.' },
-  { id: 'codelab',  icon: '💻', name: 'Codelab',    tag: 'Online Judge — chấm code thật',
+  { id: 'codelab',  icon: '💻', name: 'Codelab',    tag: 'Online Judge: chấm code thật',
     color: '#38bdf8', path: 'codelab/',
     desc: 'Luyện & thi lập trình, chạy code thật trong sandbox, chấm tự động bằng test case.' },
   { id: 'smartdoc', icon: '📚', name: 'Smartdoc',   tag: 'Giáo trình & bài giảng tương tác',

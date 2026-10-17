@@ -25,10 +25,10 @@ export const DOMAIN = {
   icon: '💻',
   yearsTotal: 4,
   yearLabels: [
-    'Năm 1 — Đại cương',
-    'Năm 2 — Cơ sở ngành',
-    'Năm 3 — Chuyên ngành',
-    'Năm 4 — Tích hợp + Khoá luận',
+    'Năm 1: Đại cương',
+    'Năm 2: Cơ sở ngành',
+    'Năm 3: Chuyên ngành',
+    'Năm 4: Tích hợp + Khoá luận',
   ],
   tagline: 'Cử nhân CNTT · từ Python đến Machine Learning · CTF · Hackathon · Cloud',
 };
