@@ -20,44 +20,6 @@ import { db } from './db.js';
 
 const SLUG_ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-function ensureSchema() {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS lessons (
-      id           INTEGER PRIMARY KEY AUTOINCREMENT,
-      slug         TEXT NOT NULL UNIQUE,
-      title        TEXT NOT NULL,
-      description  TEXT,
-      author       TEXT,
-      grade        TEXT,
-      subject      TEXT,
-      blocks_json  TEXT NOT NULL,
-      published    INTEGER NOT NULL DEFAULT 0,
-      views        INTEGER NOT NULL DEFAULT 0,
-      likes        INTEGER NOT NULL DEFAULT 0,
-      created_at   INTEGER NOT NULL,
-      updated_at   INTEGER NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_lessons_published ON lessons(published, created_at);
-
-    CREATE TABLE IF NOT EXISTS lesson_likes (
-      slug       TEXT NOT NULL,
-      user_key   TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      PRIMARY KEY (slug, user_key)
-    );
-
-    CREATE TABLE IF NOT EXISTS lesson_comments (
-      id         INTEGER PRIMARY KEY AUTOINCREMENT,
-      slug       TEXT NOT NULL,
-      author     TEXT,
-      text       TEXT NOT NULL,
-      created_at INTEGER NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_lesson_comments_slug ON lesson_comments(slug, created_at);
-  `);
-}
-ensureSchema();
-
 function genSlug(len = 6) {
   let s = '';
   for (let i = 0; i < len; i++) s += SLUG_ALPHA[Math.floor(Math.random() * SLUG_ALPHA.length)];
@@ -76,7 +38,7 @@ function validateBlocks(blocks) {
 
 export function attachLessons(r) {
   // CREATE / UPDATE
-  r.post('/api/lessons', (req, res) => {
+  r.post('/api/lessons', async (req, res) => {
     const b = req.body || {};
     const title = String(b.title || '').trim().slice(0, 200);
     if (!title) return res.status(400).json({ error: 'title required' });
@@ -86,9 +48,9 @@ export function attachLessons(r) {
     let slug = String(b.slug || '').trim();
     if (slug) {
       // UPDATE existing
-      const exists = db.prepare('SELECT id FROM lessons WHERE slug = ?').get(slug);
+      const exists = await db.prepare('SELECT id FROM lessons WHERE slug = ?').get(slug);
       if (!exists) return res.status(404).json({ error: 'lesson not found' });
-      db.prepare(`
+      await db.prepare(`
         UPDATE lessons
         SET title=?, description=?, author=?, grade=?, subject=?,
             blocks_json=?, published=?, updated_at=?
@@ -110,11 +72,11 @@ export function attachLessons(r) {
     let attempts = 0;
     while (attempts < 10) {
       slug = genSlug(6);
-      const exist = db.prepare('SELECT id FROM lessons WHERE slug=?').get(slug);
+      const exist = await db.prepare('SELECT id FROM lessons WHERE slug=?').get(slug);
       if (!exist) break;
       attempts++;
     }
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO lessons (slug, title, description, author, grade, subject, blocks_json, published, views, likes, created_at, updated_at)
       VALUES (?,?,?,?,?,?,?,?,0,0,?,?)
     `).run(
@@ -131,12 +93,12 @@ export function attachLessons(r) {
   });
 
   // READ ONE
-  r.get('/api/lessons/:slug', (req, res) => {
+  r.get('/api/lessons/:slug', async (req, res) => {
     const slug = req.params.slug;
-    const row = db.prepare('SELECT * FROM lessons WHERE slug=?').get(slug);
+    const row = await db.prepare('SELECT * FROM lessons WHERE slug=?').get(slug);
     if (!row) return res.status(404).json({ error: 'not found' });
     // Bump view if not author looking
-    db.prepare('UPDATE lessons SET views = views + 1 WHERE slug=?').run(slug);
+    await db.prepare('UPDATE lessons SET views = views + 1 WHERE slug=?').run(slug);
     res.json({
       slug: row.slug, title: row.title, description: row.description,
       author: row.author, grade: row.grade, subject: row.subject,
@@ -148,16 +110,16 @@ export function attachLessons(r) {
   });
 
   // DELETE
-  r.delete('/api/lessons/:slug', (req, res) => {
+  r.delete('/api/lessons/:slug', async (req, res) => {
     const slug = req.params.slug;
-    db.prepare('DELETE FROM lessons WHERE slug=?').run(slug);
-    db.prepare('DELETE FROM lesson_likes WHERE slug=?').run(slug);
-    db.prepare('DELETE FROM lesson_comments WHERE slug=?').run(slug);
+    await db.prepare('DELETE FROM lessons WHERE slug=?').run(slug);
+    await db.prepare('DELETE FROM lesson_likes WHERE slug=?').run(slug);
+    await db.prepare('DELETE FROM lesson_comments WHERE slug=?').run(slug);
     res.json({ ok: true });
   });
 
   // LIST published (marketplace)
-  r.get('/api/lessons', (req, res) => {
+  r.get('/api/lessons', async (req, res) => {
     const subject = String(req.query.subject || '').trim();
     const grade = String(req.query.grade || '').trim();
     const sort = String(req.query.sort || 'recent'); // recent | likes | views
@@ -176,43 +138,43 @@ export function attachLessons(r) {
     ) + ' LIMIT ?';
     params.push(limit);
 
-    const rows = db.prepare(sql).all(...params);
+    const rows = await db.prepare(sql).all(...params);
     res.json({ items: rows, total: rows.length });
   });
 
   // LIKE (toggle)
-  r.post('/api/lessons/:slug/like', (req, res) => {
+  r.post('/api/lessons/:slug/like', async (req, res) => {
     const slug = req.params.slug;
     const userKey = String(req.body?.userKey || req.ip || '').slice(0, 80);
     if (!userKey) return res.status(400).json({ error: 'userKey required' });
-    const existing = db.prepare('SELECT * FROM lesson_likes WHERE slug=? AND user_key=?').get(slug, userKey);
+    const existing = await db.prepare('SELECT * FROM lesson_likes WHERE slug=? AND user_key=?').get(slug, userKey);
     if (existing) {
-      db.prepare('DELETE FROM lesson_likes WHERE slug=? AND user_key=?').run(slug, userKey);
-      db.prepare('UPDATE lessons SET likes = likes - 1 WHERE slug=? AND likes > 0').run(slug);
+      await db.prepare('DELETE FROM lesson_likes WHERE slug=? AND user_key=?').run(slug, userKey);
+      await db.prepare('UPDATE lessons SET likes = likes - 1 WHERE slug=? AND likes > 0').run(slug);
       return res.json({ ok: true, liked: false });
     }
-    db.prepare('INSERT INTO lesson_likes (slug, user_key, created_at) VALUES (?,?,?)').run(slug, userKey, Date.now());
-    db.prepare('UPDATE lessons SET likes = likes + 1 WHERE slug=?').run(slug);
+    await db.prepare('INSERT INTO lesson_likes (slug, user_key, created_at) VALUES (?,?,?)').run(slug, userKey, Date.now());
+    await db.prepare('UPDATE lessons SET likes = likes + 1 WHERE slug=?').run(slug);
     res.json({ ok: true, liked: true });
   });
 
   // COMMENTS
-  r.get('/api/lessons/:slug/comments', (req, res) => {
+  r.get('/api/lessons/:slug/comments', async (req, res) => {
     const slug = req.params.slug;
-    const rows = db.prepare(`
+    const rows = await db.prepare(`
       SELECT id, author, text, created_at FROM lesson_comments WHERE slug=?
       ORDER BY created_at DESC LIMIT 50
     `).all(slug);
     res.json({ items: rows });
   });
-  r.post('/api/lessons/:slug/comments', (req, res) => {
+  r.post('/api/lessons/:slug/comments', async (req, res) => {
     const slug = req.params.slug;
     const text = String(req.body?.text || '').trim().slice(0, 500);
     const author = String(req.body?.author || 'Ẩn danh').trim().slice(0, 40);
     if (!text) return res.status(400).json({ error: 'text required' });
-    const exists = db.prepare('SELECT id FROM lessons WHERE slug=?').get(slug);
+    const exists = await db.prepare('SELECT id FROM lessons WHERE slug=?').get(slug);
     if (!exists) return res.status(404).json({ error: 'lesson not found' });
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO lesson_comments (slug, author, text, created_at) VALUES (?,?,?,?)
     `).run(slug, author, text, Date.now());
     res.json({ ok: true });

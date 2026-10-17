@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>An Tâm Pharma · Nhà thuốc Thực hành 2D</title>
+<meta name="description" content="Nhà thuốc thực hành 2D An Tâm Pharma — mô phỏng trực quan mặt tiền và nội thất chuẩn GPP: quầy chữ L, hệ tủ Rx/OTC/sản phẩm không phải thuốc, bấm để xem danh mục.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%A5%3C/text%3E%3C/svg%3E">
+<style>
+  :root{
+    --teal:#2F6B5F; --teal-dk:#225C4E; --teal-lt:#3d8476; --white:#ffffff;
+    --cream:#FBF7E9; --khaki:#DAC9A6; --ink:#123; --led:#fff6d6;
+    --rx:#e05d5d; --otc:#3fae6a; --other:#c79a3a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:#0c1614;
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",Arial,sans-serif;-webkit-user-select:none;user-select:none}
+  #stage{position:fixed;inset:0}
+  svg.scene{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .hidden{display:none!important}
+  /* HUD */
+  .hud{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;gap:12px;padding:12px 16px;z-index:20;
+    background:linear-gradient(180deg,rgba(8,20,18,.55),rgba(8,20,18,0));pointer-events:none}
+  .hud .brand{display:flex;align-items:center;gap:10px;color:#fff;font-weight:800;letter-spacing:.3px;text-shadow:0 1px 4px rgba(0,0,0,.5)}
+  .hud .brand small{font-weight:500;opacity:.8;font-size:12px;display:block;letter-spacing:.5px}
+  .hud .spacer{flex:1}
+  .hud .btn{pointer-events:auto}
+  .btn{cursor:pointer;border:none;border-radius:12px;padding:10px 16px;font-size:14px;font-weight:700;color:#fff;
+    background:var(--teal);box-shadow:0 6px 18px rgba(0,0,0,.3);transition:.15s;display:inline-flex;align-items:center;gap:8px}
+  .btn:hover{filter:brightness(1.12);transform:translateY(-1px)}
+  .btn.light{background:#fff;color:var(--teal-dk)}
+  .btn.ghost{background:rgba(255,255,255,.14);backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.25)}
+  /* Enter button (storefront) */
+  .enter-wrap{position:absolute;left:50%;bottom:9%;transform:translateX(-50%);z-index:20;text-align:center}
+  .enter-wrap .hint{color:#eafff8;font-size:13px;margin-top:10px;opacity:.85;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+  .enter-btn{cursor:pointer;border:none;border-radius:999px;padding:15px 30px;font-size:17px;font-weight:800;color:#fff;
+    background:linear-gradient(135deg,var(--teal-lt),var(--teal-dk));box-shadow:0 10px 30px rgba(0,0,0,.4);
+    letter-spacing:.4px;transition:.18s;animation:pulse 2.6s ease-in-out infinite}
+  .enter-btn:hover{transform:scale(1.05)}
+  @keyframes pulse{0%,100%{box-shadow:0 10px 30px rgba(0,0,0,.4)}50%{box-shadow:0 10px 40px rgba(78,180,164,.6)}}
+  /* interactive cabinet parts */
+  .shelf-hit{cursor:pointer}
+  .shelf-hit:hover .shelf-hl{opacity:.9}
+  .zone-tab{cursor:pointer}
+  /* info panel */
+  .panel{position:absolute;top:0;right:0;height:100%;width:min(380px,86vw);z-index:30;
+    background:linear-gradient(180deg,#12332c,#0e2621);color:#eafff8;box-shadow:-12px 0 40px rgba(0,0,0,.45);
+    transform:translateX(100%);transition:transform .28s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column}
+  .panel.open{transform:none}
+  .panel .ph{padding:18px 20px 14px;border-bottom:1px solid rgba(255,255,255,.12)}
+  .panel .tag{display:inline-block;font-size:11px;font-weight:800;padding:3px 10px;border-radius:999px;color:#fff;margin-bottom:8px}
+  .panel h3{margin:2px 0 4px;font-size:19px}
+  .panel .zone{font-size:12.5px;opacity:.8}
+  .panel .pb{padding:14px 20px;overflow:auto;flex:1}
+  .panel .pb .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.6px;opacity:.65;margin:6px 0}
+  .panel ul{margin:6px 0 16px;padding-left:18px}
+  .panel li{margin:4px 0;font-size:14px}
+  .panel .note{font-size:13px;background:rgba(255,255,255,.06);border-left:3px solid var(--teal-lt);border-radius:8px;padding:10px 12px;margin:8px 0}
+  .panel .pf{padding:14px 20px;border-top:1px solid rgba(255,255,255,.12);display:flex;gap:8px}
+  .panel .x{position:absolute;top:12px;right:14px;cursor:pointer;color:#eafff8;background:rgba(255,255,255,.1);
+    border:none;border-radius:8px;width:32px;height:32px;font-size:18px}
+  .panel .x:hover{background:rgba(255,255,255,.2)}
+  .toast{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);z-index:25;background:rgba(8,20,18,.9);
+    color:#eafff8;padding:10px 18px;border-radius:999px;font-size:13px;opacity:0;transition:.2s;pointer-events:none;white-space:nowrap}
+  .toast.show{opacity:1}
+  @media (max-width:640px){ .hud .brand small{display:none} .enter-btn{font-size:15px;padding:13px 24px} }
+</style>
+</head>
+<body data-no-auth-header data-no-suggestion-fab data-no-notifications-bell data-no-analytics>
+<div id="stage">
+
+  <!-- ============ HUD ============ -->
+  <div class="hud">
+    <div class="brand">
+      <svg width="34" height="34" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="19" fill="#fff"/><circle cx="20" cy="20" r="19" fill="none" stroke="#2F6B5F" stroke-width="2"/><path d="M20 27 C20 20 14 18 13 13 C19 13 20 18 20 21 C20 18 21 13 27 13 C26 18 20 20 20 27Z" fill="#2F6B5F"/><path d="M20 27 v-7" stroke="#2F6B5F" stroke-width="2" fill="none"/></svg>
+      <div>AN TÂM PHARMA<small>NHÀ THUỐC THỰC HÀNH · GPP</small></div>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn ghost" id="btnOutside">🚪 Ra mặt tiền</button>
+    <button class="btn light" id="btnPractice">🧪 Vào thực hành</button>
+  </div>
+
+  <!-- ============ SCENE 1: STOREFRONT ============ -->
+  <svg class="scene" id="storefront" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cfe9ea"/><stop offset="1" stop-color="#eaf6f2"/></linearGradient>
+      <linearGradient id="tealSign" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#357a6c"/><stop offset="1" stop-color="#225C4E"/></linearGradient>
+      <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#bfe6e0" stop-opacity=".85"/><stop offset=".5" stop-color="#8fc9c0" stop-opacity=".5"/><stop offset="1" stop-color="#cfeee8" stop-opacity=".8"/></linearGradient>
+      <linearGradient id="interiorGlow" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eafaf6"/><stop offset="1" stop-color="#bfeee2"/></linearGradient>
+    </defs>
+    <!-- sky / building face -->
+    <rect x="0" y="0" width="1600" height="900" fill="url(#sky)"/>
+    <rect x="0" y="0" width="1600" height="150" fill="#dfeef0"/>
+    <!-- building wall -->
+    <rect x="120" y="60" width="1360" height="620" fill="#f2f7f5"/>
+    <!-- ===== U-shaped signage ===== -->
+    <!-- top molding -->
+    <rect x="150" y="70" width="1300" height="14" fill="#eef4f2"/>
+    <rect x="150" y="84" width="1300" height="8" fill="#d7e5e1"/>
+    <!-- horizontal sign -->
+    <rect x="150" y="92" width="1300" height="150" fill="url(#tealSign)"/>
+    <rect x="150" y="92" width="1300" height="150" fill="none" stroke="#1c4c40" stroke-width="2"/>
+    <!-- left logo box -->
+    <rect x="168" y="104" width="126" height="126" rx="6" fill="#fff"/>
+    <g transform="translate(231,150)"><circle r="52" fill="#fff" stroke="#2F6B5F" stroke-width="3"/><path d="M0 34 C0 14 -20 8 -22 -12 C-2 -12 0 8 0 20 C0 8 2 -12 22 -12 C20 8 0 14 0 34Z" fill="#2F6B5F"/><text y="46" text-anchor="middle" font-size="12" font-weight="800" fill="#2F6B5F" letter-spacing="1">AN TÂM</text></g>
+    <!-- center text -->
+    <text x="800" y="150" text-anchor="middle" font-size="62" font-weight="900" fill="#fff" letter-spacing="6" font-family="Arial,Helvetica,sans-serif">NHÀ THUỐC</text>
+    <text x="800" y="212" text-anchor="middle" font-size="46" font-weight="800" fill="#eafff8" letter-spacing="10" font-family="Arial,Helvetica,sans-serif">THỰC HÀNH</text>
+    <!-- right symmetry white box -->
+    <rect x="1306" y="104" width="126" height="126" rx="6" fill="#fff" opacity=".95"/>
+    <text x="1369" y="176" text-anchor="middle" font-size="13" font-weight="700" fill="#8aa9a1" letter-spacing="1">GPP</text>
+    <!-- side columns (vertical signage) -->
+    <g font-family="Arial" font-weight="800" fill="#fff" letter-spacing="2">
+      <rect x="150" y="242" width="90" height="420" fill="url(#tealSign)" stroke="#1c4c40" stroke-width="2"/>
+      <g transform="translate(178,250)"><circle cx="17" cy="34" r="26" fill="#fff" stroke="#2F6B5F" stroke-width="2"/><path d="M17 50 C17 38 4 34 3 22 C15 22 17 34 17 41 C17 34 19 22 31 22 C30 34 17 38 17 50Z" fill="#2F6B5F"/></g>
+      <text x="197" y="330" font-size="17" writing-mode="tb" letter-spacing="2">NHÀ THUỐC THỰC HÀNH</text>
+      <rect x="1360" y="242" width="90" height="420" fill="url(#tealSign)" stroke="#1c4c40" stroke-width="2"/>
+      <text x="1407" y="300" font-size="17" writing-mode="tb" letter-spacing="2">NHÀ THUỐC THỰC HÀNH</text>
+    </g>
+    <!-- ===== glass sliding doors ===== -->
+    <g id="doors">
+      <rect x="240" y="250" width="1120" height="412" fill="url(#interiorGlow)"/>
+      <!-- interior hint through glass: teal cabinets -->
+      <g opacity=".55">
+        <rect x="270" y="300" width="170" height="300" fill="#357a6c"/><rect x="278" y="312" width="154" height="276" fill="#eafaf6"/>
+        <rect x="470" y="300" width="220" height="300" fill="#2F6B5F"/><rect x="480" y="312" width="200" height="276" fill="#dff5ef"/>
+        <rect x="720" y="330" width="360" height="120" rx="6" fill="#10201c"/><rect x="732" y="342" width="336" height="96" fill="#7fd6b6"/>
+        <rect x="1120" y="300" width="210" height="300" fill="#357a6c"/><rect x="1130" y="312" width="190" height="276" fill="#eafaf6"/>
+      </g>
+      <!-- door frame + panes -->
+      <g stroke="#225C4E" stroke-width="10" fill="none">
+        <rect x="240" y="250" width="1120" height="412"/>
+        <line x1="520" y1="250" x2="520" y2="662"/><line x1="800" y1="250" x2="800" y2="662"/><line x1="1080" y1="250" x2="1080" y2="662"/>
+      </g>
+      <rect x="240" y="250" width="1120" height="412" fill="url(#glass)" opacity=".38"/>
+      <!-- 5 frosted decal stripes -->
+      <g fill="#ffffff" opacity=".7">
+        <rect x="250" y="404" width="1100" height="12"/><rect x="250" y="424" width="1100" height="12"/>
+        <rect x="250" y="444" width="1100" height="12"/><rect x="250" y="464" width="1100" height="12"/>
+        <rect x="250" y="484" width="1100" height="12"/>
+      </g>
+      <!-- handles on middle two panes -->
+      <rect x="770" y="360" width="8" height="200" rx="4" fill="#cfd8d6"/><rect x="822" y="360" width="8" height="200" rx="4" fill="#cfd8d6"/>
+    </g>
+    <!-- ===== sidewalk ===== -->
+    <rect x="0" y="662" width="1600" height="238" fill="#c9c9c9"/>
+    <g id="pavement"></g>
+    <rect x="0" y="662" width="1600" height="8" fill="#a7b0ad"/>
+    <!-- planters + bushes -->
+    <g id="greenery">
+      <rect x="120" y="636" width="1360" height="30" fill="#2f7d3a"/>
+      <g id="bushes"></g>
+    </g>
+    <!-- trees -->
+    <g>
+      <rect x="70" y="470" width="18" height="200" fill="#7a5a3a"/><circle cx="79" cy="450" r="70" fill="#2f8a3a"/><circle cx="120" cy="480" r="52" fill="#37a046"/><circle cx="40" cy="485" r="48" fill="#2f8a3a"/>
+      <rect x="1512" y="470" width="18" height="200" fill="#7a5a3a"/><circle cx="1521" cy="450" r="70" fill="#2f8a3a"/><circle cx="1480" cy="480" r="52" fill="#37a046"/><circle cx="1560" cy="485" r="48" fill="#2f8a3a"/>
+    </g>
+  </svg>
+
+  <div class="enter-wrap" id="enterWrap">
+    <button class="enter-btn" id="enterBtn">Bước vào nhà thuốc →</button>
+    <div class="hint">Cửa kính lùa mở ra khu vực khách hàng bên trong</div>
+  </div>
+
+  <!-- ============ SCENE 2: INTERIOR ============ -->
+  <svg class="scene hidden" id="interior" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef4f2"/><stop offset="1" stop-color="#e2ece9"/></linearGradient>
+      <linearGradient id="cabTeal" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#357a6c"/><stop offset=".5" stop-color="#2F6B5F"/><stop offset="1" stop-color="#255a4e"/></linearGradient>
+      <linearGradient id="cabInner" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#eef7f4"/></linearGradient>
+      <linearGradient id="counterBody" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#357a6c"/><stop offset="1" stop-color="#214f45"/></linearGradient>
+      <linearGradient id="tvNature" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bfe9ff"/><stop offset=".55" stop-color="#eafbe9"/><stop offset="1" stop-color="#6fbf6a"/></linearGradient>
+      <radialGradient id="led" cx="50%" cy="0%" r="90%"><stop offset="0" stop-color="#fff6d6" stop-opacity=".95"/><stop offset="1" stop-color="#fff6d6" stop-opacity="0"/></radialGradient>
+      <pattern id="floor" width="120" height="120" patternUnits="userSpaceOnUse">
+        <rect width="120" height="120" fill="#FBF7E9"/><rect width="60" height="60" fill="#dcc9a1"/><rect x="60" y="60" width="60" height="60" fill="#dcc9a1"/>
+      </pattern>
+      <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3"/></filter>
+    </defs>
+
+    <!-- wall + floor -->
+    <rect x="0" y="0" width="1600" height="640" fill="url(#wall)"/>
+    <rect x="0" y="600" width="1600" height="300" fill="url(#floor)"/>
+    <!-- ceiling -->
+    <rect x="0" y="0" width="1600" height="96" fill="#f7fbfa"/>
+    <rect x="0" y="96" width="1600" height="6" fill="#dbe7e3"/>
+    <!-- downlights -->
+    <g fill="#e9f3f0"><circle cx="230" cy="48" r="13"/><circle cx="560" cy="48" r="13"/><circle cx="1040" cy="48" r="13"/><circle cx="1370" cy="48" r="13"/></g>
+    <g fill="#fff7cf"><circle cx="230" cy="48" r="6"/><circle cx="560" cy="48" r="6"/><circle cx="1040" cy="48" r="6"/><circle cx="1370" cy="48" r="6"/></g>
+    <!-- track lighting bars -->
+    <rect x="360" y="40" width="360" height="6" rx="3" fill="#b9c4c1"/><rect x="900" y="40" width="360" height="6" rx="3" fill="#b9c4c1"/>
+    <!-- ceiling fan -->
+    <g transform="translate(800,58)" id="fan">
+      <g fill="#eef2f1" stroke="#cdd6d3" stroke-width="1">
+        <ellipse cx="0" cy="0" rx="70" ry="12"/><ellipse cx="0" cy="0" rx="12" ry="70"/>
+      </g>
+      <circle r="14" fill="#dfe7e4" stroke="#c2ccc8"/>
+    </g>
+
+    <!-- ===== TV on back wall ===== -->
+    <g>
+      <rect x="690" y="150" width="220" height="132" rx="8" fill="#10201c"/>
+      <rect x="700" y="160" width="200" height="112" rx="4" fill="url(#tvNature)"/>
+      <circle cx="770" cy="200" r="14" fill="#ffe9a8"/><path d="M840 250 q20-40 40 0" stroke="#3c8f3a" stroke-width="6" fill="none"/>
+      <path d="M800 258 C798 236 786 232 784 218 C798 218 800 232 800 240 C800 232 802 218 816 218 C814 232 800 236 800 258Z" fill="#2f8a3a"/>
+    </g>
+
+    <!-- ===== CABINETS (built by JS) ===== -->
+    <g id="cabinets"></g>
+
+    <!-- ===== L-shaped counter (foreground) ===== -->
+    <g id="counter">
+      <!-- floor shadow -->
+      <ellipse cx="620" cy="712" rx="560" ry="26" fill="#000" opacity=".08"/>
+      <!-- long front counter -->
+      <rect x="120" y="628" width="980" height="150" rx="6" fill="url(#counterBody)"/>
+      <!-- fluted panel lines -->
+      <g stroke="#2a6055" stroke-width="3" opacity=".7">
+        <line x1="150" y1="648" x2="150" y2="760"/><line x1="168" y1="648" x2="168" y2="760"/><line x1="186" y1="648" x2="186" y2="760"/>
+        <line x1="204" y1="648" x2="204" y2="760"/><line x1="222" y1="648" x2="222" y2="760"/>
+      </g>
+      <!-- white molding rectangles -->
+      <g fill="none" stroke="#fff" stroke-width="3" opacity=".9">
+        <rect x="300" y="646" width="150" height="112" rx="4"/><rect x="470" y="646" width="150" height="112" rx="4"/>
+        <rect x="640" y="646" width="150" height="112" rx="4"/><rect x="810" y="646" width="150" height="112" rx="4"/>
+      </g>
+      <!-- glass display strip with LED -->
+      <g><rect x="315" y="662" width="120" height="80" fill="#0f2a25"/><rect x="322" y="668" width="106" height="10" fill="#fff7cf" opacity=".8"/>
+         <rect x="332" y="694" width="20" height="34" fill="#e57"/><rect x="360" y="700" width="18" height="28" fill="#5bd"/><rect x="386" y="690" width="20" height="38" fill="#fc6"/></g>
+      <!-- white stone top -->
+      <rect x="112" y="618" width="996" height="22" rx="5" fill="#ffffff"/><rect x="112" y="636" width="996" height="5" fill="#dfe6e3"/>
+      <!-- L return (right, coming forward) -->
+      <rect x="1010" y="600" width="150" height="270" rx="6" fill="url(#counterBody)"/>
+      <rect x="1004" y="590" width="162" height="20" rx="5" fill="#fff"/>
+      <g fill="none" stroke="#fff" stroke-width="3" opacity=".9"><rect x="1028" y="628" width="110" height="100" rx="4"/><rect x="1028" y="740" width="110" height="100" rx="4"/></g>
+      <!-- items on counter: monitor, printer, lily vase, plant -->
+      <g><rect x="470" y="556" width="86" height="58" rx="4" fill="#20343019" /><rect x="474" y="560" width="78" height="46" rx="3" fill="#2b4a44"/><rect x="505" y="614" width="16" height="10" fill="#9fb3ad"/><rect x="486" y="624" width="54" height="6" rx="3" fill="#c3cfcb"/></g>
+      <!-- printer -->
+      <rect x="600" y="588" width="60" height="30" rx="4" fill="#e7eeeb"/><rect x="608" y="584" width="44" height="8" fill="#cfdad6"/>
+      <!-- lily vase -->
+      <g transform="translate(360,560)"><path d="M0 54 L10 54 L8 20 L2 20 Z" fill="#eef3f1"/><g fill="#fff" stroke="#dfe8e5"><circle cx="5" cy="14" r="8"/><circle cx="-6" cy="8" r="7"/><circle cx="16" cy="9" r="7"/></g><g stroke="#3c8f3a" stroke-width="2"><line x1="5" y1="20" x2="5" y2="6"/></g></g>
+      <!-- kim ngan plant at L corner -->
+      <g transform="translate(1070,548)"><rect x="-22" y="34" width="44" height="34" rx="6" fill="#c9a36a"/><g fill="#2f9a4a"><ellipse cx="0" cy="18" rx="10" ry="22"/><ellipse cx="-16" cy="24" rx="9" ry="18"/><ellipse cx="16" cy="24" rx="9" ry="18"/><ellipse cx="-8" cy="6" rx="8" ry="16"/><ellipse cx="9" cy="6" rx="8" ry="16"/></g></g>
+      <!-- internal door (back-left) hint already behind cabinets -->
+    </g>
+  </svg>
+
+  <!-- ============ INFO PANEL ============ -->
+  <div class="panel" id="panel">
+    <button class="x" id="panelX">✕</button>
+    <div class="ph"><span class="tag" id="pTag">Rx</span><h3 id="pTitle">—</h3><div class="zone" id="pZone">—</div></div>
+    <div class="pb" id="pBody"></div>
+    <div class="pf"><button class="btn" id="pPractice" style="flex:1">🧪 Luyện tập nhóm này</button></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+// ====================== DỮ LIỆU TỦ (bám spec docx) ======================
+const RX = ['Thuốc kháng sinh','Thuốc tim mạch','Thuốc nội tiết','Thuốc điều trị đái tháo đường','Thuốc hô hấp','Thuốc thần kinh','Thuốc tiêu hóa','Thuốc kê đơn chuyên khoa khác'];
+const OTC = ['Thuốc giảm đau, hạ sốt','Thuốc cảm cúm','Thuốc ho','Thuốc dị ứng','Thuốc tiêu hóa thông thường','Vitamin','Thuốc dùng ngoài','Dung dịch sát khuẩn'];
+const TPCN = ['Vitamin và khoáng chất','Men vi sinh','Omega-3','Hỗ trợ xương khớp','Hỗ trợ gan','Hỗ trợ tim mạch','Hỗ trợ tiêu hóa'];
+const MYPHAM = ['Sữa rửa mặt','Kem chống nắng','Kem dưỡng da','Dược mỹ phẩm','Sản phẩm chăm sóc tóc','Chăm sóc cơ thể'];
+const VATTU = ['Khẩu trang','Băng gạc','Băng cá nhân','Găng tay y tế','Nhiệt kế','Máy đo huyết áp','Máy đo đường huyết','Que thử','Dung dịch sát khuẩn','Dụng cụ sơ cứu'];
+
+// 3 hệ tủ: mỗi hệ có nhiều ngăn (shelf). detail: mô tả khi bấm.
+const CABS = [
+  { id:'rx', title:'Tủ thuốc kê đơn', tag:'Rx', color:'var(--rx)', hex:'#e05d5d',
+    zone:'Phía sau quầy chính — khu dược sĩ đứng cấp phát', shelves: RX.map(n=>({name:n})) },
+  { id:'otc', title:'Tủ thuốc không kê đơn (OTC)', tag:'OTC', color:'var(--otc)', hex:'#3fae6a',
+    zone:'Dãy tủ thẳng cửa ra vào — khách thấy ngay khi bước vào', shelves: OTC.map(n=>({name:n})) },
+  { id:'other', title:'Tủ sản phẩm không phải là thuốc', tag:'Khác', color:'var(--other)', hex:'#c79a3a',
+    zone:'Dãy tủ sát tường đối diện quầy chính', shelves:[
+      {name:'Vitamin & khoáng chất', sub:['Vitamin và khoáng chất','Men vi sinh','Omega-3']},
+      {name:'Thực phẩm chức năng', sub:TPCN},
+      {name:'Hỗ trợ xương khớp / gan', sub:['Hỗ trợ xương khớp','Hỗ trợ gan']},
+      {name:'Hỗ trợ tim mạch / tiêu hóa', sub:['Hỗ trợ tim mạch','Hỗ trợ tiêu hóa']},
+      {name:'Mỹ phẩm & dược mỹ phẩm', sub:MYPHAM},
+      {name:'Chăm sóc da / tóc / cơ thể', sub:['Kem dưỡng da','Sản phẩm chăm sóc tóc','Chăm sóc cơ thể']},
+      {name:'Vật tư y tế', sub:['Khẩu trang','Băng gạc','Băng cá nhân','Găng tay y tế','Dụng cụ sơ cứu']},
+      {name:'Thiết bị đo & que thử', sub:['Nhiệt kế','Máy đo huyết áp','Máy đo đường huyết','Que thử','Dung dịch sát khuẩn']},
+    ] },
+];
+const BOX_COLORS = ['#e6675f','#4aa3d6','#f0b64a','#5ac08a','#b07fd0','#e88fb0','#7fc6c0','#f2a46a'];
+
+// ====================== DỰNG SVG TỦ ======================
+const SVGNS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs){ const n=document.createElementNS(SVGNS,tag); for(const k in attrs) n.setAttribute(k,attrs[k]); return n; }
+
+function buildCabinets(){
+  const g = document.getElementById('cabinets');
+  const total = 1600, margin = 40, gap = 30, n = CABS.length;
+  const w = (total - margin*2 - gap*(n-1)) / n;         // bề rộng 1 hệ tủ
+  const top = 130, bottom = 596, H = bottom - top;
+  const moldH = 22, baseH = 24;
+  CABS.forEach((cab, ci) => {
+    const x = margin + ci*(w+gap);
+    // khung tủ teal
+    g.appendChild(el('rect',{x, y:top, width:w, height:H, rx:6, fill:'url(#cabTeal)', stroke:'#1f4a40','stroke-width':2}));
+    // hậu tủ sáng
+    const innerX=x+12, innerW=w-24, innerTop=top+moldH, innerBot=bottom-baseH;
+    g.appendChild(el('rect',{x:innerX, y:innerTop, width:innerW, height:innerBot-innerTop, fill:'url(#cabInner)'}));
+    // zone tab (nhãn hệ tủ) — bấm để xem tổng quan
+    const tab = el('g',{class:'zone-tab','data-cab':ci});
+    tab.appendChild(el('rect',{x:x+w/2-140, y:top-34, width:280, height:28, rx:14, fill:cab.hex}));
+    const tt = el('text',{x:x+w/2, y:top-14, 'text-anchor':'middle', 'font-size':16, 'font-weight':800, fill:'#fff', 'font-family':'Arial'}); tt.textContent = cab.title.toUpperCase();
+    tab.appendChild(tt); g.appendChild(tab);
+    // các ngăn (8)
+    const shelves = cab.shelves, sh = (innerBot-innerTop)/shelves.length;
+    shelves.forEach((s, si) => {
+      const sy = innerTop + si*sh;
+      // LED hắt sáng đỉnh ngăn
+      g.appendChild(el('rect',{x:innerX, y:sy, width:innerW, height:sh*0.5, fill:'url(#led)', opacity:.5}));
+      // hộp thuốc
+      const nBox = 5, bw = (innerW-20)/nBox;
+      for(let b=0;b<nBox;b++){
+        const bh = sh*0.42, bx = innerX+10+b*bw;
+        g.appendChild(el('rect',{x:bx, y:sy+sh-bh-9, width:bw-6, height:bh, rx:2, fill:BOX_COLORS[(si+b)%BOX_COLORS.length], opacity:.92}));
+        g.appendChild(el('rect',{x:bx, y:sy+sh-bh-9, width:bw-6, height:4, fill:'#ffffff', opacity:.5}));
+      }
+      // nhãn ngăn
+      const lbl = el('text',{x:innerX+8, y:sy+15, 'font-size':12.5, 'font-weight':700, fill:'#1d3b34','font-family':'Arial'}); lbl.textContent = s.name;
+      g.appendChild(lbl);
+      // đợt kính
+      g.appendChild(el('line',{x1:innerX, y1:sy+sh-2, x2:innerX+innerW, y2:sy+sh-2, stroke:'#bfe0d8','stroke-width':2}));
+      // vùng bấm + highlight
+      const hit = el('g',{class:'shelf-hit','data-cab':ci,'data-shelf':si});
+      const hl = el('rect',{x:innerX, y:sy, width:innerW, height:sh, fill:cab.hex, opacity:0, class:'shelf-hl'});
+      hit.appendChild(hl);
+      hit.appendChild(el('rect',{x:innerX, y:sy, width:innerW, height:sh, fill:'transparent'}));
+      g.appendChild(hit);
+    });
+    // phào chỉ đỉnh (molding trắng) + gờ
+    g.appendChild(el('rect',{x:x-4, y:top-6, width:w+8, height:moldH+6, fill:'#ffffff'}));
+    g.appendChild(el('rect',{x:x-4, y:top+moldH-2, width:w+8, height:4, fill:'#dfe8e5'}));
+    // chân tủ trắng
+    g.appendChild(el('rect',{x:x-2, y:bottom-baseH, width:w+4, height:baseH, fill:'#ffffff'}));
+    g.appendChild(el('rect',{x:x-2, y:bottom-baseH, width:w+4, height:4, fill:'#e3ece9'}));
+  });
+
+  // gắn sự kiện (event delegation)
+  g.addEventListener('click', (e)=>{
+    const shelf = e.target.closest('.shelf-hit'); const tab = e.target.closest('.zone-tab');
+    if(shelf) openShelf(+shelf.dataset.cab, +shelf.dataset.shelf);
+    else if(tab) openCabinet(+tab.dataset.cab);
+  });
+}
+
+// ====================== PANEL ======================
+const panel = document.getElementById('panel');
+function fill(cab, headTitle, zone, bodyHTML){
+  document.getElementById('pTag').textContent = cab.tag;
+  document.getElementById('pTag').style.background = cab.hex;
+  document.getElementById('pTitle').textContent = headTitle;
+  document.getElementById('pZone').textContent = zone;
+  document.getElementById('pBody').innerHTML = bodyHTML;
+  panel.classList.add('open');
+}
+function openCabinet(ci){
+  const c = CABS[ci];
+  const items = c.shelves.map(s=> s.sub ? `<li><b>${s.name}</b><ul>${s.sub.map(x=>`<li>${x}</li>`).join('')}</ul></li>` : `<li>${s.name}</li>`).join('');
+  fill(c, c.title, c.zone, `<div class="note">Hệ tủ module 3 tầng, cao sát trần — 8 ngăn/khoang, đợt kính trong suốt có đèn LED hắt sáng.</div><div class="lbl">Các thẻ ngăn</div><ul>${items}</ul>`);
+}
+function openShelf(ci, si){
+  const c = CABS[ci], s = c.shelves[si];
+  let body = `<div class="note">Ngăn số ${si+1} · ${c.title}</div>`;
+  if(s.sub){ body += `<div class="lbl">Nhóm sản phẩm</div><ul>${s.sub.map(x=>`<li>${x}</li>`).join('')}</ul>`; }
+  else { body += `<div class="lbl">Thông tin</div><p style="font-size:14px;line-height:1.5">Ngăn trưng bày <b>${s.name.toLowerCase()}</b>, sắp xếp theo nhóm tác dụng, có nhãn thẻ dán mặt ngăn theo chuẩn GPP.</p>`; }
+  fill(c, s.name, c.zone, body);
+  currentTag = c.tag;
+}
+let currentTag = '';
+document.getElementById('panelX').onclick = ()=> panel.classList.remove('open');
+document.getElementById('pPractice').onclick = ()=> location.href = '/gpp.html';
+
+// ====================== STOREFRONT DECOR (pavement + bushes) ======================
+(function decor(){
+  const pav = document.getElementById('pavement');
+  const cols=['#BDBDBD','#D2B48C','#FFFDD0'];
+  for(let r=0;r<4;r++) for(let cx=0;cx<28;cx++){
+    const off=(r%2)*30, x=cx*60+off, y=678+r*54;
+    pav.appendChild(el('rect',{x, y, width:56, height:50, rx:2, fill:cols[(r+cx)%3], stroke:'#b3b3b3','stroke-width':1}));
+  }
+  const bushes=document.getElementById('bushes');
+  for(let i=0;i<44;i++){ const x=140+i*30;
+    bushes.appendChild(el('circle',{cx:x, cy:640, r:14, fill:'#228B22'}));
+    bushes.appendChild(el('circle',{cx:x-6+((i*7)%12), cy:634, r:3, fill:'#fff'}));
+  }
+})();
+
+// ====================== SCENE TOGGLE ======================
+const sf = document.getElementById('storefront'), inr = document.getElementById('interior');
+const enterWrap = document.getElementById('enterWrap'), doors = document.getElementById('doors');
+function showInterior(){
+  // hiệu ứng cửa lùa mở
+  doors.animate([{opacity:1},{opacity:.15}],{duration:450,fill:'forwards'});
+  enterWrap.style.transition='opacity .3s'; enterWrap.style.opacity='0';
+  setTimeout(()=>{ sf.classList.add('hidden'); inr.classList.remove('hidden'); enterWrap.classList.add('hidden'); toast('Chào mừng đến khu vực khách hàng — bấm vào các tủ để xem danh mục'); }, 460);
+}
+function showStorefront(){ inr.classList.add('hidden'); sf.classList.remove('hidden'); enterWrap.classList.remove('hidden'); enterWrap.style.opacity='1'; doors.animate([{opacity:.15},{opacity:1}],{duration:400,fill:'forwards'}); panel.classList.remove('open'); }
+document.getElementById('enterBtn').onclick = showInterior;
+document.getElementById('btnOutside').onclick = showStorefront;
+document.getElementById('btnPractice').onclick = ()=> location.href='/gpp.html';
+
+// toast
+let toastT; const toastEl=document.getElementById('toast');
+function toast(msg){ toastEl.textContent=msg; toastEl.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>toastEl.classList.remove('show'),3200); }
+
+// build
+buildCabinets();
+</script>
+</body>
+</html>

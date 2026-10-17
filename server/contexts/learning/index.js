@@ -19,48 +19,16 @@ import { db } from '../../db.js';
 import { requireAuth } from '../identity/auth.js';
 import * as scoreup from '../../integrations/scoreup.js';
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS skill_prereq (
-    skill_id          INTEGER NOT NULL,         -- skill cần học
-    prereq_skill_id   INTEGER NOT NULL,         -- skill phải master trước
-    weight            REAL    NOT NULL DEFAULT 1.0,  -- 0..1, soft prereq < 1
-    PRIMARY KEY (skill_id, prereq_skill_id),
-    FOREIGN KEY (skill_id)        REFERENCES skills(id) ON DELETE CASCADE,
-    FOREIGN KEY (prereq_skill_id) REFERENCES skills(id) ON DELETE CASCADE
-  );
-  CREATE INDEX IF NOT EXISTS idx_skill_prereq_child ON skill_prereq(skill_id);
-
-  CREATE TABLE IF NOT EXISTS user_theta (
-    user_id           INTEGER NOT NULL,
-    subject_id        TEXT    NOT NULL DEFAULT '',  -- '' = global
-    theta             REAL    NOT NULL DEFAULT 0,   -- IRT ability, -3..+3
-    n_attempts        INTEGER NOT NULL DEFAULT 0,
-    updated_at        INTEGER NOT NULL,
-    PRIMARY KEY (user_id, subject_id),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-  );
-
-  CREATE TABLE IF NOT EXISTS question_irt (
-    question_id       TEXT    PRIMARY KEY,            -- ScoreUp question id
-    subject_id        TEXT,
-    b                 REAL    NOT NULL DEFAULT 0,     -- difficulty, -3..+3
-    a                 REAL    NOT NULL DEFAULT 1,     -- discrimination (chưa dùng)
-    n_attempts        INTEGER NOT NULL DEFAULT 0,
-    n_correct         INTEGER NOT NULL DEFAULT 0,
-    updated_at        INTEGER NOT NULL
-  );
-`);
-
 // Auto-seed prerequisites khi DB còn trống. Heuristic: trong cùng (competency,
 // domain), skill ở vị trí i có prereq là skill ở vị trí i-1 (theo id order =
 // thứ tự seed). Cộng thêm: skill grade N (nếu có) prereq là skill grade N-1
 // cùng competency. Catalog hiện tại đơn giản (mỗi domain ~ 1 grade group),
 // nên primary prereq sẽ là intra-competency chain.
-function maybeSeedPrereq() {
-  const cnt = db.prepare(`SELECT COUNT(*) AS n FROM skill_prereq`).get().n;
+async function maybeSeedPrereq() {
+  const cnt = (await db.prepare(`SELECT COUNT(*) AS n FROM skill_prereq`).get()).n;
   if (cnt > 0) return;
   console.log('[learning] seeding skill_prereq …');
-  const all = db.prepare(
+  const all = await db.prepare(
     `SELECT id, code, domain, grade_min, competency_id
        FROM skills ORDER BY competency_id, domain, COALESCE(grade_min, 0), id`
   ).all();
@@ -73,22 +41,25 @@ function maybeSeedPrereq() {
   const insert = db.prepare(
     `INSERT OR IGNORE INTO skill_prereq (skill_id, prereq_skill_id, weight) VALUES (?, ?, ?)`
   );
-  const tx = db.transaction(() => {
+  const tx = db.transaction(async () => {
     let total = 0;
     for (const list of byKey.values()) {
       for (let i = 1; i < list.length; i++) {
         // Soft chain: skill[i] phụ thuộc skill[i-1] với weight 0.7
-        insert.run(list[i].id, list[i-1].id, 0.7);
+        await insert.run(list[i].id, list[i-1].id, 0.7);
         total++;
         // Long-range: skill[i] cũng nhẹ phụ thuộc skill[0] (gốc của competency)
-        if (i >= 2) { insert.run(list[i].id, list[0].id, 0.3); total++; }
+        if (i >= 2) { await insert.run(list[i].id, list[0].id, 0.3); total++; }
       }
     }
     console.log(`[learning] seeded ${total} prereq edges`);
   });
-  tx();
+  await tx();
 }
-maybeSeedPrereq();
+
+export async function initLearning() {
+  await maybeSeedPrereq();
+}
 
 // ── Helpers ────────────────────────────────────────────
 const _getThetaStmt = db.prepare(
@@ -121,18 +92,18 @@ const _upsertQuestionIrtStmt = db.prepare(`
  *   - b_new = b + β * (p_correct - correct), β = 0.05 (câu sai nhiều → b cao hơn)
  * Với p_correct = 1 / (1 + exp(-(θ - b))) — IRT logistic 1PL.
  */
-export function updateIrt({ user_id, question_id, subject_id = '', correct }) {
+export async function updateIrt({ user_id, question_id, subject_id = '', correct }) {
   if (!user_id || !question_id) return;
-  const cur = _getThetaStmt.get(user_id, subject_id || '');
+  const cur = await _getThetaStmt.get(user_id, subject_id || '');
   const theta = cur?.theta ?? 0;
-  const qIrt = _getQuestionIrtStmt.get(question_id);
+  const qIrt = await _getQuestionIrtStmt.get(question_id);
   const b = qIrt?.b ?? 0;
   const p = 1 / (1 + Math.exp(-(theta - b)));
   const newTheta = Math.max(-3, Math.min(3, theta + 0.2 * ((correct ? 1 : 0) - p)));
   const newB     = Math.max(-3, Math.min(3, b     + 0.05 * (p - (correct ? 1 : 0))));
   const now = Date.now();
-  _upsertThetaStmt.run(user_id, subject_id || '', newTheta, (cur?.n_attempts || 0) + 1, now);
-  _upsertQuestionIrtStmt.run(
+  await _upsertThetaStmt.run(user_id, subject_id || '', newTheta, (cur?.n_attempts || 0) + 1, now);
+  await _upsertQuestionIrtStmt.run(
     question_id, subject_id || '', newB, qIrt?.a ?? 1,
     (qIrt?.n_attempts || 0) + 1, (qIrt?.n_correct || 0) + (correct ? 1 : 0), now,
   );
@@ -148,11 +119,11 @@ export function updateIrt({ user_id, question_id, subject_id = '', correct }) {
  * Nếu user chưa set grade/enrolled_domain → bỏ filter tương ứng (admin/new
  * user thấy đầy đủ).
  */
-function getNextRecommendedSkills(userId, limit = 5) {
-  const u = db.prepare(`SELECT grade, enrolled_domain FROM users WHERE id = ?`).get(userId) || {};
+async function getNextRecommendedSkills(userId, limit = 5) {
+  const u = (await db.prepare(`SELECT grade, enrolled_domain FROM users WHERE id = ?`).get(userId)) || {};
   const grade  = u.grade ?? null;
   const domain = u.enrolled_domain ?? null;
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     SELECT s.id, s.code, s.name, s.domain, s.grade_min, s.grade_max,
            c.code AS competency_code, c.name AS competency_name,
            (SELECT COUNT(*) FROM skill_prereq p WHERE p.skill_id = s.id) AS prereq_count,
@@ -188,7 +159,7 @@ async function nextAdaptiveQuestion({ userId, subjectId, excludeIds = [] }) {
   if (!scoreup.isConfigured()) {
     return { error: 'scoreup_not_configured' };
   }
-  const thetaRow = _getThetaStmt.get(userId, subjectId || '');
+  const thetaRow = await _getThetaStmt.get(userId, subjectId || '');
   const theta = thetaRow?.theta ?? 0;
   // Fetch 1 batch ngẫu nhiên 10 câu trong subject. Lọc câu đã làm.
   let pool;
@@ -206,7 +177,7 @@ async function nextAdaptiveQuestion({ userId, subjectId, excludeIds = [] }) {
   if (candidates.length === 0) return { error: 'all_excluded' };
   // Score mỗi câu = -|b - theta|. b lấy từ question_irt nếu có.
   const idList = candidates.map(q => q.id);
-  const irtRows = idList.length > 0 ? db.prepare(
+  const irtRows = idList.length > 0 ? await db.prepare(
     `SELECT question_id, b, n_attempts FROM question_irt WHERE question_id IN (${idList.map(() => '?').join(',')})`
   ).all(...idList.map(String)) : [];
   const irtMap = new Map(irtRows.map(r => [r.question_id, r]));
@@ -229,10 +200,10 @@ async function nextAdaptiveQuestion({ userId, subjectId, excludeIds = [] }) {
 // ── Routes ─────────────────────────────────────────────
 export function attachLearning(router) {
   // Recommend skills tiếp theo
-  router.get('/api/skills/next-recommended', requireAuth, (req, res) => {
+  router.get('/api/skills/next-recommended', requireAuth, async (req, res) => {
     try {
       const limit = Math.min(20, Math.max(1, Number(req.query.limit) || 5));
-      const items = getNextRecommendedSkills(req.user.id, limit);
+      const items = await getNextRecommendedSkills(req.user.id, limit);
       res.json({ ok: true, items });
     } catch (e) {
       console.error('[learning] next-recommended error', e);
@@ -241,9 +212,9 @@ export function attachLearning(router) {
   });
 
   // Lấy θ user (per subject)
-  router.get('/api/learning/theta', requireAuth, (req, res) => {
+  router.get('/api/learning/theta', requireAuth, async (req, res) => {
     const subjectId = String(req.query.subject_id || '');
-    const row = _getThetaStmt.get(req.user.id, subjectId);
+    const row = await _getThetaStmt.get(req.user.id, subjectId);
     res.json({
       theta: row?.theta ?? 0,
       n_attempts: row?.n_attempts ?? 0,
@@ -263,18 +234,18 @@ export function attachLearning(router) {
   });
 
   // Prereq graph cho 1 skill code (debug + FE render tree)
-  router.get('/api/skills/prereq/:code', (req, res) => {
+  router.get('/api/skills/prereq/:code', async (req, res) => {
     const code = String(req.params.code || '');
-    const skill = db.prepare(`SELECT id, code, name FROM skills WHERE code = ?`).get(code);
+    const skill = await db.prepare(`SELECT id, code, name FROM skills WHERE code = ?`).get(code);
     if (!skill) return res.status(404).json({ error: 'not_found' });
-    const prereqs = db.prepare(`
+    const prereqs = await db.prepare(`
       SELECT s.code, s.name, p.weight
         FROM skill_prereq p
         JOIN skills s ON s.id = p.prereq_skill_id
        WHERE p.skill_id = ?
        ORDER BY p.weight DESC
     `).all(skill.id);
-    const unlocks = db.prepare(`
+    const unlocks = await db.prepare(`
       SELECT s.code, s.name, p.weight
         FROM skill_prereq p
         JOIN skills s ON s.id = p.skill_id

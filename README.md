@@ -108,7 +108,7 @@ Trường có nội dung đầy đủ nhất hiện tại:
 | **📊 Dashboard giảng viên** | `/dashboard.html` | Stats + histogram + ma trận nhầm · export CSV |
 
 Bộ data: 81 thuốc, 30 dược liệu, 10 ca lâm sàng, 85+ scenarios theo Dược điển VN V + giáo trình
-ĐH Dược HN. **AI tutor Ollama** (qwen2.5:14b) nội bộ chấm SOAP + role-play AI patient.
+ĐH Dược HN. **AI tutor vLLM** (qwen3.5-35b-a3b-int4) nội bộ chấm SOAP + role-play AI patient.
 
 ---
 
@@ -154,7 +154,7 @@ Mở `http://<host>:8041`.
 | `GET`  | `/api/export.csv` | Tải toàn bộ attempts (UTF-8 BOM, tên file `tizia-attempts-YYYY-MM-DD.csv`) |
 | `GET`  | `/api/badges` | Danh sách tất cả huy hiệu |
 | `GET`  | `/api/achievements?player=` | Huy hiệu đã mở khoá của 1 SV |
-| `POST` | `/api/ai/grade-soap`, `/patient-turn`, `/evaluate-roleplay` | AI tutor (Ollama) |
+| `POST` | `/api/ai/grade-soap`, `/patient-turn`, `/evaluate-roleplay` | AI tutor (vLLM) |
 | `GET`  | `/api/ai-board/inbox` | Hộp thư Ban điều hành AI — yêu cầu pending/reviewing toàn hệ thống. **Đọc-chỉ**, auth bằng header `x-ai-board-key`, chỉ tồn tại khi đặt `AI_BOARD_KEY` (xem dưới) |
 | `WS`   | `/ws` | Multiplayer cho Metaverse |
 | `WS`   | `/ws-lab` | Multiplayer cho Phòng bào chế |
@@ -168,9 +168,9 @@ Mở `http://<host>:8041`.
 | `HOST` | `0.0.0.0` | Bind address |
 | `DATA_DIR` | `./data` (host) / `/data` (Docker) | Thư mục SQLite |
 | `BASE_PATH` | `` | Path prefix (vd `/ps` cho `tizia.vn/ps`) |
-| `OLLAMA_URL` | dev tunnel | Endpoint Ollama |
-| `OLLAMA_SECKEY` | `pharmasim` | Header `x-ollama-seckey` (shared secret nội bộ) |
-| `OLLAMA_MODEL` | `qwen2.5:14b-instruct-ctx16k` | Tên model |
+| `LLM_URL` | dev tunnel | Endpoint vLLM (OpenAI-compatible, `.../vllm/v1`) |
+| `LLM_SECKEY` | `tizia` | Header `x-ollama-seckey` (shared secret nội bộ) |
+| `LLM_MODEL` | `qwen3.5-35b-a3b-int4` | Tên model |
 | `AI_BOARD_KEY` | *(trống)* | Bật `/api/ai-board/inbox`. ≥24 ký tự (`openssl rand -hex 32`); trống = route 404 |
 
 ### 🏛️ Hộp thư cho Ban điều hành AI
@@ -244,7 +244,7 @@ Project trước có tên **PharmacySIM**. Sau khi tách engine đa-domain, đ�
     -v tizia_tizia-data:/to \
     alpine sh -c 'cp -a /from/. /to/'
   ```
-- `OLLAMA_SECKEY` giữ nguyên `'pharmasim'` (shared secret với Ollama server nội bộ — không liên quan brand)
+- `LLM_SECKEY` là shared secret với gateway LLM nội bộ — không liên quan brand
 
 ---
 
@@ -255,7 +255,7 @@ Project trước có tên **PharmacySIM**. Sau khi tách engine đa-domain, đ�
 - [x] Gamification (stars + coin + streak + achievements)
 - [x] VR Hand Tracking native (Quest, Vision Pro)
 - [x] Multiplayer realtime (Metaverse + Compounding lab)
-- [x] AI tutor Ollama (SOAP grading + AI patient role-play)
+- [x] AI tutor vLLM (SOAP grading + AI patient role-play)
 - [ ] Viết quiz thật cho ~140 module skeleton (đang dùng auto-stub)
 - [ ] Trường Y (medicine)
 - [ ] Trường Sư phạm, Trường Kiến trúc, …
@@ -271,4 +271,4 @@ Project trước có tên **PharmacySIM**. Sau khi tách engine đa-domain, đ�
 - Engine code: MIT
 - Pharmacy data: theo Dược điển VN V + giáo trình Mai Tất Tố, Lê Quan Nghiệm, Đỗ Tất Lợi, Hoàng Thị Kim Huyền
 - 3D scenes: Three.js (MIT) · A-Frame (MIT) · MediaPipe (Apache 2.0)
-- AI tutor: Ollama + qwen2.5:14b (Apache 2.0)
+- AI tutor: vLLM + Qwen3.5-35B-A3B (int4)

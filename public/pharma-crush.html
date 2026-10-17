@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Pharma Crush · Ghép đúng nhóm – Nhớ đúng thuốc</title>
+<meta name="description" content="Game ghép 3 học nhóm thuốc: ghép các thuốc CÙNG NHÓM TÁC DỤNG DƯỢC LÝ để ghi điểm. Ôn phân loại thuốc cho sinh viên Dược.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%92%8A%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --sky1:#bfe6f7; --sky2:#8fd0ef; --sky3:#6fbde6; --deep:#4f a; --deep:#59aede;
+    --paper:#fffdf6; --cream:#fdf3dd; --ink:#4a5b7a; --muted:#8fa3bf;
+    --gold:#ffc93c; --gold-d:#e08c14; --green:#5cc86e; --green-d:#3aa653;
+    --red:#f2606a; --tray1:#eaf4fc; --tray2:#dceaf7; --r:22px;
+    --tile:#fdf0d5; --tile2:#f7e3bd; --tileEdge:#e8cfa2;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;user-select:none;-webkit-user-select:none;touch-action:manipulation;
+    font-family:'Nunito',system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink)}
+  body{background:
+      radial-gradient(closest-side at 18% 14%, rgba(255,255,255,.30), transparent 70%),
+      radial-gradient(closest-side at 84% 8%,  rgba(255,255,255,.22), transparent 70%),
+      linear-gradient(180deg,var(--sky1) 0%,var(--sky2) 42%,var(--sky3) 76%,var(--deep) 100%)}
+  .bubbles{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:0}
+  .bubbles i{position:absolute;bottom:-90px;border-radius:50%;
+    background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.85),rgba(255,255,255,.14) 62%,rgba(255,255,255,0) 70%);
+    animation:rise linear infinite}
+  @keyframes rise{0%{transform:translateY(0) scale(.85);opacity:0}12%{opacity:.7}88%{opacity:.45}
+                  100%{transform:translateY(-115vh) scale(1.15);opacity:0}}
+
+  #app{position:fixed;inset:0;z-index:1;display:flex;flex-direction:column;
+       padding:calc(8px + env(safe-area-inset-top)) 10px calc(8px + env(safe-area-inset-bottom));gap:9px}
+  .row{display:flex;gap:10px;min-height:0;flex:1}
+  .col{display:flex;flex-direction:column;gap:9px}
+  .side{width:246px;flex:none;overflow:auto}
+  .center{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+
+  .card{position:relative;background:linear-gradient(180deg,var(--paper),var(--cream));border-radius:var(--r);
+    padding:12px 13px 13px;border:3px solid #fff;
+    box-shadow:0 6px 0 rgba(9,38,80,.30),0 12px 22px rgba(6,26,60,.32),inset 0 2px 0 #fff}
+  .card h4{margin:-19px auto 10px;width:max-content;max-width:100%;font-family:'Baloo 2',cursive;font-size:13px;
+    letter-spacing:.4px;text-transform:uppercase;color:#fff;padding:4px 14px;border-radius:99px;border:2.5px solid #fff;
+    background:linear-gradient(180deg,var(--green),var(--green-d));box-shadow:0 3px 0 rgba(9,38,80,.28)}
+  .btn{cursor:pointer;border:2.5px solid #fff;border-radius:16px;padding:11px 20px;font-size:15px;font-weight:900;
+    font-family:'Baloo 2',cursive;color:#fff;background:linear-gradient(180deg,var(--green),var(--green-d));
+    box-shadow:0 5px 0 var(--green-d),0 9px 16px rgba(6,26,60,.35);transition:.12s;letter-spacing:.3px;margin:5px 4px 0}
+  .btn:active{transform:translateY(3px);box-shadow:0 2px 0 var(--green-d)}
+  .btn.blue{background:linear-gradient(180deg,#4facf0,#1f6fd0);box-shadow:0 5px 0 #14538f,0 9px 16px rgba(6,26,60,.35)}
+  .btn.gray{background:linear-gradient(180deg,#9db0c6,#6f8299);box-shadow:0 5px 0 #57687c}
+  .rbtn{width:46px;height:46px;flex:none;display:grid;place-items:center;font-size:19px;cursor:pointer;border-radius:16px;
+    border:2.5px solid #fff;color:#fff;background:linear-gradient(180deg,#4facf0,#1f6fd0);
+    box-shadow:0 5px 0 #14538f,0 8px 14px rgba(6,26,60,.35);transition:.12s}
+  .rbtn:active{transform:translateY(3px);box-shadow:0 2px 0 #14538f}
+
+  .hdr{display:flex;align-items:center;gap:10px;flex:none}
+  .logo{flex:none;padding:7px 15px;border-radius:18px;border:3px solid #fff;text-align:center;
+    background:linear-gradient(180deg,#ffd955,#ffab1f);box-shadow:0 5px 0 #cf7a10,0 10px 18px rgba(6,26,60,.35)}
+  .logo .t1{font-family:'Baloo 2',cursive;font-size:23px;font-weight:800;color:#fff;line-height:1;letter-spacing:.6px;
+    text-shadow:0 2px 0 #d2761a,0 3px 0 #b4620f,0 5px 8px rgba(0,0,0,.35)}
+  .logo .t2{font-size:10px;font-weight:800;color:#7d4a08;margin-top:3px}
+  .stats{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:12px;
+    background:linear-gradient(180deg,#fff,#eef4fb);border-radius:18px;padding:7px 16px;border:3px solid #fff;
+    box-shadow:0 5px 0 rgba(9,38,80,.28),0 10px 18px rgba(6,26,60,.3)}
+  .pill{background:linear-gradient(180deg,#fff6dd,#ffe6ae);border:2px solid #fff;border-radius:13px;padding:4px 13px;
+    font-family:'Baloo 2',cursive;font-weight:800;font-size:15px;white-space:nowrap;box-shadow:0 2px 0 rgba(9,38,80,.16)}
+  .score{text-align:center;min-width:92px}
+  .score .lbl{font-size:9.5px;letter-spacing:1.2px;color:var(--muted);font-weight:900}
+  .score .val{font-family:'Baloo 2',cursive;font-size:25px;font-weight:800;color:#12508f;line-height:1}
+  .stars{display:flex;gap:2px}
+  .stars b{font-size:19px;filter:grayscale(1);opacity:.32;transition:.25s}
+  .stars b.on{filter:drop-shadow(0 0 6px rgba(255,201,60,.9));opacity:1;transform:scale(1.12)}
+  .hearts{display:flex;align-items:center;gap:5px;background:linear-gradient(180deg,#ffe9ea,#ffd0d3);border:2px solid #fff;
+    border-radius:13px;padding:4px 11px;font-weight:900;box-shadow:0 2px 0 rgba(9,38,80,.16)}
+
+  .board-wrap{position:relative;background:linear-gradient(180deg,var(--tray1),var(--tray2));border-radius:26px;padding:12px;
+    border:4px solid #fff;
+    box-shadow:0 7px 0 rgba(90,140,190,.45),0 14px 26px rgba(40,90,150,.32),inset 0 2px 0 #fff}
+  #board{position:relative;touch-action:none}
+  /* lớp ô lõm TĨNH nằm dưới — không bao giờ vẽ lại */
+  .slots{position:absolute;inset:0;display:grid;pointer-events:none}
+  .slot{border-radius:15px;background:rgba(255,255,255,.55);box-shadow:inset 0 2px 5px rgba(120,160,200,.35)}
+  /* mỗi hộp thuốc là 1 phần tử TỒN TẠI LIÊN TỤC, chỉ đổi transform khi rơi/đổi
+     chỗ → không dựng lại DOM, không nháy, animation rơi là thật */
+  .tile{position:absolute;left:0;top:0;cursor:pointer;border:none;background:none;padding:0;
+    transition:transform .28s cubic-bezier(.25,1.15,.4,1), opacity .2s;will-change:transform}
+  .tile.snap{transition:none}
+  .tile.fresh .box{animation:dropIn .38s cubic-bezier(.26,1.36,.5,1) both}
+  @keyframes dropIn{0%{transform:translateY(-160%) scale(.9);opacity:0}
+                    72%{transform:translateY(4%) scale(1.02);opacity:1}
+                    100%{transform:none;opacity:1}}
+  /* Thẻ thuốc kiểu casual game: nền kem bo tròn, icon nhóm ở trên, tên thuốc
+     đậm dễ đọc, hàm lượng nhỏ bên dưới. */
+  .box{position:absolute;inset:0;border-radius:15px;overflow:hidden;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:1px;padding:4px 3px;
+    background:linear-gradient(180deg,#fffaf0 0%,var(--tile) 55%,var(--tile2) 100%);
+    border:2px solid #fff;
+    box-shadow:inset 0 2px 0 #fff, 0 4px 0 var(--tileEdge), 0 7px 12px rgba(70,110,160,.3)}
+  .ico{line-height:0;filter:drop-shadow(0 1.5px 1.5px rgba(0,0,0,.18))}
+  .rx{position:absolute;top:3px;right:4px;z-index:3;font-size:7px;font-weight:900;line-height:1;
+    color:#fff;background:var(--gc);border-radius:5px;padding:1.5px 4px;opacity:.9}
+  .nm{font-weight:900;line-height:1.06;text-align:center;color:#3f5170;letter-spacing:-.2px;overflow:hidden;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:normal;padding:0 2px}
+  .dose{font-weight:800;color:#93a4bd;line-height:1.1}
+  /* ===== req #145: ô đã MẤT ICON gợi ý ("nhớ bằng đầu") =====
+     Không còn hình nhóm để nhìn nên: chữ đậm & tối hơn cho dễ đọc, cho phép
+     xuống 3 dòng, và viền vàng nhạt + ngôi sao góc để người chơi nhận ra đây
+     là ô ghép trúng sẽ được thưởng điểm cao hơn. */
+  .tile.noico .nm{color:#1f2d45;-webkit-line-clamp:3;letter-spacing:0;
+    text-shadow:0 1px 0 rgba(255,255,255,.95);
+    /* chỉ ngắt tại điểm <wbr> đã chèn giữa tên → chia dòng cân đối, không cụt chữ */
+    overflow-wrap:normal;word-break:normal}
+  .tile.noico .dose{color:#5f708c}
+  .tile.noico .box{background:linear-gradient(180deg,#fffdf6 0%,#fff6de 60%,#ffeec2 100%);
+    border-color:#fff8e6;box-shadow:inset 0 2px 0 #fff,0 4px 0 var(--tileEdge),
+    0 7px 12px rgba(70,110,160,.3),0 0 0 2px rgba(255,193,58,.55)}
+  .tile.noico .box::before{content:'★';position:absolute;top:2px;left:4px;z-index:3;
+    font-size:9px;line-height:1;color:#f0a91c;opacity:.85}
+
+  /* ===== VẬT PHẨM ĐẶC BIỆT ===== */
+  .tile.sp .box{box-shadow:inset 0 2px 0 #fff,0 4px 0 var(--tileEdge),0 7px 12px rgba(70,110,160,.3),
+    0 0 0 3px var(--gold),0 0 18px 4px rgba(255,201,60,.8)}
+  .spb{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:4;pointer-events:none;
+    display:grid;place-items:center;font-family:'Baloo 2',cursive;font-weight:800;color:#fff;
+    background:radial-gradient(circle at 34% 28%,#ffe789,var(--gold) 55%,var(--gold-d));
+    border:2.5px solid #fff;border-radius:50%;box-shadow:0 3px 0 rgba(0,0,0,.28),0 0 16px rgba(255,201,60,.9);
+    text-shadow:0 1.5px 0 rgba(0,0,0,.3);animation:spSpin 2.6s linear infinite}
+  @keyframes spSpin{0%,100%{transform:translate(-50%,-50%) rotate(-7deg) scale(1)}
+                    50%{transform:translate(-50%,-50%) rotate(7deg) scale(1.08)}}
+  .tile.rainbow .box{background:linear-gradient(100deg,#fff0f2,#fff6e4,#eafbef,#eaf4ff,#f5eaff);
+    background-size:300% 100%;animation:rbShift 3s linear infinite}
+  @keyframes rbShift{to{background-position:300% 0}}
+
+  .box{transition:transform .13s cubic-bezier(.34,1.56,.64,1)}
+  .tile:hover .box{transform:translateY(-3px) scale(1.03)}
+  .tile.sel{z-index:5}
+  .tile.sel .box{transform:translateY(-4px) scale(1.07)}
+  .tile.sel .box{box-shadow:0 0 0 3px #fff,0 0 0 6.5px var(--gold),0 0 26px 7px rgba(255,201,60,.85),
+    inset 0 2px 0 #fff,0 5px 0 var(--tileEdge)}
+  .tile.hint .box{animation:hintPulse 1.05s ease-in-out infinite}
+  @keyframes hintPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,201,60,.95),0 4px 0 var(--tileEdge)}
+                       50%{box-shadow:0 0 0 11px rgba(255,201,60,0),0 4px 0 var(--tileEdge)}}
+  .tile.pop{z-index:6}
+  .tile.pop .box{animation:popOut .3s ease-in forwards}
+  @keyframes popOut{0%{transform:scale(1) rotate(0)}
+    32%{transform:scale(1.26) rotate(-7deg);filter:brightness(1.7) saturate(1.4)}
+    100%{transform:scale(.08) rotate(16deg);opacity:0;filter:brightness(2.2)}}
+
+  .tile.moving{z-index:8}
+  .tile.nope .box{animation:nope .38s}
+  @keyframes nope{0%,100%{transform:none}25%{transform:translateX(-6px) rotate(-4deg)}75%{transform:translateX(6px) rotate(4deg)}}
+
+  /* tia nổ hàng/cột */
+  .beam{position:absolute;pointer-events:none;z-index:44;border-radius:99px;
+    background:linear-gradient(90deg,rgba(255,255,255,0),#fff7cf,rgba(255,255,255,0));
+    box-shadow:0 0 22px 7px rgba(255,201,60,.85);animation:beamFade .5s ease-out forwards}
+  .beam.v{background:linear-gradient(180deg,rgba(255,255,255,0),#fff7cf,rgba(255,255,255,0))}
+  @keyframes beamFade{0%{opacity:0;transform:scale(.4)}30%{opacity:1;transform:scale(1)}100%{opacity:0}}
+  .wrongTip{position:absolute;transform:translate(-50%,-100%);z-index:52;pointer-events:none;
+    background:linear-gradient(180deg,#fff,#ffe9ea);color:#8d2a30;border:2.5px solid #fff;border-radius:12px;
+    padding:5px 11px;font-size:13px;font-weight:900;white-space:nowrap;
+    box-shadow:0 4px 0 rgba(140,30,40,.35),0 8px 16px rgba(0,0,0,.35);animation:wtPop 1.5s ease-out forwards}
+  @keyframes wtPop{0%{opacity:0;transform:translate(-50%,-80%) scale(.7)}
+    15%{opacity:1;transform:translate(-50%,-100%) scale(1.06)}
+    30%{transform:translate(-50%,-100%) scale(1)}
+    80%{opacity:1}100%{opacity:0;transform:translate(-50%,-125%) scale(.95)}}
+  .spark{position:absolute;width:8px;height:8px;border-radius:2px;pointer-events:none;z-index:45;
+    animation:sparkFly .66s ease-out forwards}
+  @keyframes sparkFly{0%{transform:translate(0,0) scale(1.1) rotate(0);opacity:1}
+                      100%{transform:translate(var(--dx),var(--dy)) scale(.15) rotate(260deg);opacity:0}}
+  .fly{position:absolute;pointer-events:none;font-family:'Baloo 2',cursive;font-weight:800;color:#fff;font-size:23px;
+    z-index:50;text-shadow:0 2px 0 var(--gold-d),0 0 14px rgba(255,201,60,.9),0 4px 10px rgba(0,0,0,.5);
+    animation:flyUp 1.05s ease-out forwards;white-space:nowrap}
+  @keyframes flyUp{0%{transform:translate(-50%,0) scale(.5);opacity:0}
+                   22%{transform:translate(-50%,-16px) scale(1.2);opacity:1}
+                   100%{transform:translate(-50%,-68px) scale(1);opacity:0}}
+  .comboFx{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);z-index:60;pointer-events:none;
+    font-family:'Baloo 2',cursive;font-size:32px;font-weight:800;color:#fff;text-align:center;line-height:1.02;
+    text-shadow:0 3px 0 var(--gold-d),0 0 30px rgba(255,190,60,1),0 8px 20px rgba(0,0,0,.55);
+    animation:comboPop 1.15s cubic-bezier(.2,1.7,.4,1) forwards;white-space:nowrap}
+  @keyframes comboPop{0%{transform:translate(-50%,-50%) scale(.25) rotate(-12deg);opacity:0}
+                      28%{transform:translate(-50%,-50%) scale(1.2) rotate(4deg);opacity:1}
+                      68%{transform:translate(-50%,-50%) scale(1) rotate(0);opacity:1}
+                      100%{transform:translate(-50%,-135%) scale(.8);opacity:0}}
+  .shake{animation:shakeB .36s}
+  @keyframes shakeB{0%,100%{transform:none}20%{transform:translate(-7px,3px)}50%{transform:translate(6px,-4px)}80%{transform:translate(-3px,2px)}}
+  .confetti{position:fixed;top:-16px;width:11px;height:15px;z-index:200;pointer-events:none;animation:fall linear forwards}
+  @keyframes fall{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(108vh) rotate(820deg);opacity:.85}}
+
+  .goal{display:flex;align-items:center;gap:8px;background:#fff;border:2.5px solid #eef3fa;border-radius:13px;
+    padding:7px 9px;margin-bottom:6px;box-shadow:0 2px 0 rgba(9,38,80,.1)}
+  .goal.done{background:linear-gradient(180deg,#eafbef,#d6f6e0);border-color:#b6ecc7}
+  .goal .gi{font-size:19px;flex:none}
+  .goal .gt{flex:1;min-width:0;font-size:11.5px;font-weight:800;color:#3c5madeup}
+  .goal .gt{color:#3d5680;line-height:1.25}
+  .goal .gn{font-family:'Baloo 2',cursive;font-weight:800;font-size:15px;color:#12508f;flex:none}
+  .goal.done .gn::after{content:' ✓';color:#2b9a55}
+  .badge{display:inline-block;font-size:10px;font-weight:900;padding:2px 8px;border-radius:99px;color:#fff;
+    background:linear-gradient(180deg,#ff8a5c,#e8552f);margin-left:6px;vertical-align:middle}
+  /* tủ kiểm soát đặc biệt (ô khoá) */
+  .tile.locked{cursor:not-allowed}
+  .tile.locked .box{background:linear-gradient(180deg,#e4e9f1,#c9d3e0);border-color:#f0f3f8}
+  .tile.locked .box::after{content:'';position:absolute;inset:0;background:
+    repeating-linear-gradient(45deg,rgba(90,110,140,.16) 0 7px,rgba(90,110,140,0) 7px 14px)}
+  .lockb{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:4;font-size:var(--lz);
+    filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))}
+  .tile.crack .box{animation:crackShake .4s}
+  @keyframes crackShake{0%,100%{transform:none}25%{transform:translateX(-5px) rotate(-3deg)}
+                        75%{transform:translateX(5px) rotate(3deg)}}
+  /* bản đồ màn */
+  .lvgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:8px;margin-top:12px}
+  .lvbtn{aspect-ratio:1;border-radius:14px;border:2.5px solid #fff;cursor:pointer;font-family:'Baloo 2',cursive;
+    font-weight:800;font-size:16px;color:#fff;background:linear-gradient(180deg,#5fc6f5,#2b86d8);
+    box-shadow:0 3px 0 #1c66ac;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
+  .lvbtn .ss{font-size:9px;letter-spacing:-1px}
+  .lvbtn.boss{background:linear-gradient(180deg,#ff9a62,#e8552f);box-shadow:0 3px 0 #b93c1c}
+  .lvbtn.lock{background:linear-gradient(180deg,#c3cddb,#96a4b8);box-shadow:0 3px 0 #74839a;cursor:pointer;font-size:13px}
+  .mission{text-align:center}
+  .mission .sub{font-size:11.5px;color:var(--muted);font-weight:800}
+  .mission .g{font-family:'Baloo 2',cursive;font-size:15px;font-weight:800;margin:3px 0 7px;line-height:1.15;color:#1c3a63}
+  .cnt{background:#fff;border:2.5px solid #e6edf6;border-radius:14px;padding:5px;font-family:'Baloo 2',cursive;
+    font-size:23px;font-weight:800;color:#12508f;box-shadow:inset 0 2px 4px rgba(20,50,90,.1)}
+  .bar-out{height:10px;background:#e2e9f2;border-radius:99px;overflow:hidden;margin-top:8px;box-shadow:inset 0 2px 3px rgba(20,50,90,.22)}
+  .bar-in{height:100%;width:0;border-radius:99px;transition:width .35s cubic-bezier(.3,1.2,.5,1);
+    background:linear-gradient(90deg,#ffe066,#ffab1f);box-shadow:0 0 8px rgba(255,190,60,.7)}
+  .hintbox{background:linear-gradient(180deg,#f2f8ff,#e6f0fc);border-radius:14px;padding:9px 11px;margin-top:10px;border:2px solid #d5e6fa}
+  .hintbox .h{display:flex;align-items:center;gap:7px;font-weight:900;font-size:12.5px}
+  .hintbox .dot{width:15px;height:15px;border-radius:5px;flex:none;box-shadow:0 1.5px 0 rgba(0,0,0,.2)}
+  .hintbox p{margin:5px 0 0;font-size:11.5px;line-height:1.45;color:#4d6a8d}
+  .timer{font-family:'Baloo 2',cursive;text-align:center;font-size:31px;font-weight:800;color:#12508f;letter-spacing:1px}
+  .timer.warn{color:var(--red);animation:tick .85s ease-in-out infinite}
+  @keyframes tick{50%{transform:scale(1.08)}}
+  .tool{display:flex;align-items:center;gap:9px;background:linear-gradient(180deg,#fff,#f1f6fc);border:2.5px solid #fff;
+    border-radius:14px;padding:7px 9px;margin-bottom:7px;cursor:pointer;width:100%;text-align:left;font-family:inherit;
+    box-shadow:0 3px 0 rgba(9,38,80,.2);transition:.12s}
+  .tool:active:not(:disabled){transform:translateY(2px);box-shadow:0 1px 0 rgba(9,38,80,.2)}
+  .tool:disabled{opacity:.42;cursor:default}
+  .tool .ic{width:31px;height:31px;border-radius:11px;display:grid;place-items:center;font-size:15px;flex:none;color:#fff;
+    border:2px solid #fff;box-shadow:0 2px 0 rgba(0,0,0,.18)}
+  .tool .tx{flex:1;font-size:12px;font-weight:900;color:#25456f}
+  .tool .n{background:linear-gradient(180deg,var(--green),var(--green-d));color:#fff;border:2px solid #fff;border-radius:99px;
+    min-width:24px;height:24px;display:grid;place-items:center;font-size:11.5px;font-weight:900;flex:none}
+  .tip{display:flex;gap:9px;align-items:flex-start;background:linear-gradient(180deg,#fffceb,#fff4cd);
+    border:2.5px solid #ffe9a6;border-radius:14px;padding:9px 10px}
+  .tip .who{font-size:27px;line-height:1;flex:none}
+  .tip .txt{font-size:11.5px;line-height:1.45;font-weight:700;color:#6b5416}
+  .tip .txt b{display:block;font-size:10.5px;color:#b07d10;letter-spacing:.5px;margin-bottom:2px}
+  .splist{display:flex;flex-direction:column;gap:6px}
+  .spitem{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:800;color:#25456f}
+  .spitem i{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-style:normal;color:#fff;
+    font-family:'Baloo 2',cursive;background:radial-gradient(circle at 34% 28%,#ffe789,var(--gold) 55%,var(--gold-d));
+    border:2px solid #fff;box-shadow:0 2px 0 rgba(0,0,0,.2);flex:none}
+
+  .ftr{display:flex;align-items:center;gap:9px;flex:none}
+  .combo{flex:1;min-width:0;display:flex;align-items:center;gap:10px;background:linear-gradient(180deg,#fff,#eef4fb);
+    border-radius:16px;padding:8px 15px;border:3px solid #fff;font-family:'Baloo 2',cursive;font-weight:800;
+    box-shadow:0 5px 0 rgba(9,38,80,.26),0 9px 16px rgba(6,26,60,.3)}
+  .cb-out{flex:1;height:13px;background:#e2e9f2;border-radius:99px;overflow:hidden;box-shadow:inset 0 2px 3px rgba(20,50,90,.25)}
+  .cb-in{height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#ffe066,#ff7a1a);transition:width .25s}
+  .trophies{flex:none;gap:13px}
+  .mochip{display:none;align-items:center;gap:9px;background:linear-gradient(180deg,#fff,#eef4fb);border-radius:15px;
+    padding:6px 11px;border:3px solid #fff;font-weight:900;font-size:12px;flex:none;max-width:100%;
+    box-shadow:0 4px 0 rgba(9,38,80,.26),0 8px 14px rgba(6,26,60,.28)}
+  .mochip .mg{color:#fff;border-radius:9px;padding:3px 9px;font-size:11.5px;max-width:46vw;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;box-shadow:0 2px 0 rgba(0,0,0,.2)}
+  .mochip .mt{font-variant-numeric:tabular-nums;color:#12508f}
+
+  .mask{position:fixed;inset:0;background:rgba(5,22,48,.76);backdrop-filter:blur(3px);z-index:100;display:none;place-items:center;padding:18px}
+  .mask.show{display:grid;animation:fadeIn .2s}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  .modal{background:linear-gradient(180deg,var(--paper),var(--cream));border-radius:26px;padding:24px 22px;max-width:620px;
+    width:100%;max-height:88vh;overflow:auto;border:4px solid #fff;text-align:center;
+    box-shadow:0 10px 0 rgba(9,38,80,.34),0 20px 40px rgba(4,18,44,.5);animation:popIn .32s cubic-bezier(.2,1.5,.4,1)}
+  @keyframes popIn{from{transform:scale(.82) translateY(14px);opacity:0}to{transform:none;opacity:1}}
+  .modal h2{margin:.1em 0 .35em;font-family:'Baloo 2',cursive;font-size:27px;font-weight:800;color:#12508f}
+  .modal p{margin:6px 0;color:#4d6a8d;font-size:14px;font-weight:700}
+  .bigstars{font-size:40px;letter-spacing:4px}
+  .bigstars span{display:inline-block;animation:starPop .45s cubic-bezier(.2,1.7,.4,1) backwards}
+  @keyframes starPop{from{transform:scale(0) rotate(-40deg);opacity:0}to{transform:none;opacity:1}}
+  .glist{text-align:left;display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+  .gcard{background:#fff;border-radius:14px;padding:10px 12px;border:2.5px solid #eef3f9;box-shadow:0 3px 0 rgba(9,38,80,.12)}
+  .gcard .gh{display:flex;align-items:center;gap:7px;font-weight:900;font-size:13px;color:#20406b}
+  .gcard .dot{width:14px;height:14px;border-radius:5px;flex:none;box-shadow:0 1.5px 0 rgba(0,0,0,.2)}
+  .gcard .gd{font-size:11px;color:#6d8bae;margin:4px 0 6px;font-weight:700}
+  .gcard .gl{font-size:11.5px;line-height:1.55;color:#37587f;font-weight:700}
+
+  .mobtn{display:none}
+  @media (max-width:1080px){ .side{width:214px} }
+  @media (max-width:860px){
+    #app{padding:calc(6px + env(safe-area-inset-top)) 7px calc(6px + env(safe-area-inset-bottom));gap:7px}
+    .side{display:none}
+    .side.mopen{display:flex;position:fixed;top:62px;bottom:62px;z-index:70;width:min(300px,90vw);overflow:auto;animation:slideIn .22s ease-out}
+    .side.left.mopen{left:7px} .side.right.mopen{right:7px}
+    @keyframes slideIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+    .mobtn{display:grid} .mochip{display:flex}
+    .center{justify-content:flex-start;padding-top:2px}
+    .hdr{gap:6px} .stats{gap:8px;padding:5px 10px;border-radius:15px}
+    .score .lbl{display:none} .score{min-width:auto} .score .val{font-size:20px}
+    .rbtn{width:40px;height:40px;border-radius:14px;font-size:17px}
+    .board-wrap{padding:7px;border-radius:18px}
+    .combo{padding:6px 12px;font-size:12.5px;border-radius:14px} .trophies{display:none}
+    .modal{padding:18px 15px;border-radius:20px} .modal h2{font-size:22px} .glist{grid-template-columns:1fr}
+    .comboFx{font-size:26px}
+  }
+  @media (max-width:560px){
+    .logo{display:none} .stars{display:none} .rx{display:none}
+    .pill{font-size:11.5px;padding:3px 8px}
+    .stats{justify-content:space-around;gap:6px;padding:4px 8px}
+    .hdr{gap:4px}
+    .rbtn{width:34px;height:34px;border-radius:11px;font-size:15px;border-width:2px;
+      box-shadow:0 3px 0 #14538f}
+    #btnSound{display:none}              /* ít dùng trên điện thoại, nhường chỗ */
+    .score .val{font-size:17px}
+    .goal .gt{font-size:11px} .goal .gn{font-size:13px}
+    .lvgrid{grid-template-columns:repeat(auto-fill,minmax(48px,1fr));gap:6px}
+    .lvbtn{font-size:14px;border-radius:11px}
+  }
+  @media (max-height:520px) and (orientation:landscape){ .mochip{display:none} .ftr{display:none} #app{padding:5px;gap:5px} }
+</style>
+</head>
+<body data-no-auth-header data-no-suggestion-fab data-no-notifications-bell data-no-analytics>
+<div class="bubbles" id="bubbles"></div>
+<div id="app">
+  <div class="hdr">
+    <button class="rbtn mobtn" id="mLeft" title="Nhiệm vụ">📋</button>
+    <div class="logo"><div class="t1">PHARMA CRUSH 💊</div><div class="t2">Ghép đúng nhóm – Nhớ đúng thuốc</div></div>
+    <div class="stats">
+      <div class="pill" id="lvl">LEVEL 1</div>
+      <div class="score"><div class="lbl">ĐIỂM</div><div class="val" id="score">0</div></div>
+      <div class="stars" id="stars"><b>★</b><b>★</b><b>★</b></div>
+      <div class="hearts" title="Số nước đi còn lại">🎯 <span id="movesTop">26</span></div>
+    </div>
+    <button class="rbtn mobtn" id="mRight" title="Công cụ">🧰</button>
+    <button class="rbtn" id="btnSound" title="Bật/tắt âm thanh">🔊</button>
+    <button class="rbtn" id="btnMap" title="Bản đồ màn">🗺️</button>
+    <button class="rbtn" id="btnBook" title="Sổ tay dược sĩ">📖</button>
+  </div>
+
+  <div class="row">
+    <div class="col side left" id="sideL">
+      <div class="card mission">
+        <h4>Nhiệm vụ</h4>
+        <div id="goalList"></div>
+        <div class="hintbox"><div class="h"><span class="dot" id="mDot"></span><span id="mName">—</span></div>
+          <p id="mDesc">—</p></div>
+      </div>
+      <div class="card"><h4>Nước đi còn lại</h4><div class="timer" id="time">26</div>
+        <div class="sub" style="text-align:center;margin-top:4px" id="tierNote">—</div></div>
+      <div class="card"><h4>Vật phẩm</h4>
+        <div class="splist">
+          <div class="spitem"><i>↔</i>Ghép 4 ngang → nổ cả hàng</div>
+          <div class="spitem"><i>↕</i>Ghép 4 dọc → nổ cả cột</div>
+          <div class="spitem"><i>✚</i>Ghép chữ L/T → nổ vùng 3×3</div>
+          <div class="spitem"><i>★</i>Ghép 5 → xoá sạch cả nhóm</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="center">
+      <div class="mochip" id="moChip"></div>
+      <div class="board-wrap"><div id="board"></div></div>
+    </div>
+
+    <div class="col side right" id="sideR">
+      <div class="card">
+        <h4>Công cụ hỗ trợ</h4>
+        <button class="tool" id="tShuffle"><span class="ic" style="background:linear-gradient(180deg,#7aa8f5,#3f6fd8)">🔀</span><span class="tx">Xáo trộn</span><span class="n" id="nShuffle">3</span></button>
+        <button class="tool" id="tHint"><span class="ic" style="background:linear-gradient(180deg,#ffd257,#e8a012)">💡</span><span class="tx">Gợi ý nước đi</span><span class="n" id="nHint">3</span></button>
+        <button class="tool" id="tBreak"><span class="ic" style="background:linear-gradient(180deg,#f98070,#dd4b39)">🔨</span><span class="tx">Loại bỏ 1 ô</span><span class="n" id="nBreak">2</span></button>
+        <button class="tool" id="tTime"><span class="ic" style="background:linear-gradient(180deg,#66d68f,#2f9a56)">⏰</span><span class="tx">Thêm 5 nước đi</span><span class="n" id="nTime">2</span></button>
+      </div>
+      <div class="card"><h4>Mẹo dược sĩ</h4>
+        <div class="tip"><div class="who">👩‍⚕️</div><div class="txt"><b>MẸO</b><span id="tipTx">Ghép 3 hộp CÙNG NHÓM tác dụng dược lý — tên thuốc khác nhau vẫn được!</span></div></div>
+      </div>
+      <div class="card" style="padding:9px"><button class="btn blue" style="width:100%;margin:0" id="btnBook2">📖 Sổ tay dược sĩ</button></div>
+    </div>
+  </div>
+
+  <div class="ftr">
+    <button class="rbtn" id="btnHome" title="Về trang thực hành">🏠</button>
+    <button class="rbtn" id="btnNew" title="Chơi lại màn này">🔄</button>
+    <div class="combo"><span>COMBO x<span id="cbX">1</span></span><div class="cb-out"><div class="cb-in" id="cbBar"></div></div></div>
+    <div class="combo trophies"><span>🏆 <span id="tG">0</span></span><span>🥈 <span id="tS">0</span></span><span>🥉 <span id="tB">0</span></span></div>
+  </div>
+</div>
+<div class="mask" id="mask"><div class="modal" id="modal"></div></div>
+
+<script type="module">
+import * as G from './js/gpp/crush.js?v=gpp0906a';
+import { drugArt, groupIcon } from './js/gpp/artwork.js?v=gpp0906a';
+import { sfx, unlock, setMuted, isMuted } from './js/gpp/sfx.js?v=gpp0906a';
+
+const $ = id => document.getElementById(id);
+const groups = G.buildGroups();
+let level=1, score=0, trophies={g:0,s:0,b:0};
+let board=null, cfg=null, collected=0, movesLeft=0;
+let stat={byGroup:{},rx:0,otc:0,specials:0,score:0,unlocked:0};
+const SAVE='pharma_crush_progress_v1';
+// req #159: qua màn 10 (Crush hoặc Sort) là nhận chìa khóa cửa nhà thuốc — trang
+// tu-thuoc-mo-phong.html đọc prog.max > KEY_LEVEL từ localStorage này.
+const KEY_LEVEL=10;
+function loadProgress(){ try{ return JSON.parse(localStorage.getItem(SAVE))||{max:1,stars:{}}; }catch{ return {max:1,stars:{}}; } }
+function saveProgress(p){ try{ localStorage.setItem(SAVE, JSON.stringify(p)); }catch{} }
+let prog=loadProgress();
+let sel=null, busy=false, breakMode=false, tools={shuffle:3,hint:3,break:2,time:2};
+let cellSize=80, gapSize=7, lastCell=0;
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+function tileAt(r,c){
+  for(const el of els.values()) if(+el.dataset.r===r && +el.dataset.c===c) return el;
+  return null;
+}
+
+/* bong bóng nền */
+(function(){ const b=$('bubbles');
+  for(let i=0;i<14;i++){ const s=12+Math.random()*46, e=document.createElement('i');
+    e.style.cssText=`left:${Math.random()*100}vw;width:${s}px;height:${s}px;
+      animation-duration:${13+Math.random()*16}s;animation-delay:${-Math.random()*22}s`;
+    b.appendChild(e); } })();
+
+/* ---------- kích thước ---------- */
+// Lưới cố định 5×5 trên mọi màn hình — ô đủ to để đọc tên thuốc.
+function gridForScreen(){ return {r:5,c:5}; }
+function fitBoard(){
+  const wrap=document.querySelector('.center'), w=wrap.clientWidth;
+  // trừ chiều cao thanh trạng thái (chỉ hiện trên màn nhỏ) để bàn cờ không tràn
+  const chip=$('moChip');
+  const chipH=(chip && getComputedStyle(chip).display!=='none') ? chip.offsetHeight+8 : 0;
+  const h=wrap.clientHeight-chipH;
+  if(w<80||h<80) return false;
+  const small=innerWidth<=560;
+  gapSize = small?5:7;
+  const padW=small?16:44, padH=small?26:40;
+  cellSize=Math.max(40, Math.floor(Math.min(
+    (w-padW-gapSize*(G.COLS-1))/G.COLS, (h-padH-gapSize*(G.ROWS-1))/G.ROWS)));
+  const bd=$('board');
+  bd.style.gap=gapSize+'px';
+  bd.style.gridTemplateColumns=`repeat(${G.COLS}, ${cellSize}px)`;
+  bd.style.gridAutoRows=cellSize+'px';
+  return true;
+}
+function nameFont(n){ return Math.max(7.2, Math.min(12.5, (cellSize-8)/(n.length*0.60))).toFixed(1); }
+// req #145: ô đã mất icon thì không còn hình để nhìn, chữ phải to & rõ hơn hẳn.
+// Tên dài (Ciprofloxacin, Clorpheniramin…) dùng hệ số chặt hơn rồi cho xuống
+// dòng — thà tách dòng chứ TUYỆT ĐỐI không cắt cụt tên thuốc (đọc nhầm thuốc
+// là lỗi chuyên môn, không phải lỗi thẩm mỹ).
+// Tên dài được chèn một điểm ngắt <wbr> ở CHÍNH GIỮA rồi mới phóng to, nên khi
+// phải xuống dòng thì chia đôi cân đối ("Clorphe / niramin") thay vì rơi lẻ một
+// chữ cái ("Omeprazo / l"). Cỡ chữ tính theo NỬA dài nhất để nửa đó luôn vừa ô.
+const BIG_SPLIT = 8;                       // từ 9 ký tự trở lên mới cần tách dòng
+function nameHtmlBig(n){
+  if (n.length <= BIG_SPLIT) return n;
+  const h = Math.ceil(n.length / 2);
+  return n.slice(0, h) + '<wbr>' + n.slice(h);
+}
+function nameFontBig(n){
+  const longest = n.length <= BIG_SPLIT ? n.length : Math.ceil(n.length / 2);
+  return Math.max(8.6, Math.min(15, (cellSize-8)/(longest*0.58))).toFixed(1);
+}
+
+/* ---------- vẽ ---------- */
+// Mỗi hộp thuốc gắn với MỘT phần tử DOM suốt đời nó (khoá theo cell.id). Khi bàn
+// đổi, ta chỉ đổi transform → trình duyệt tự trượt hộp tới chỗ mới. Không xoá và
+// dựng lại DOM nên không còn nháy, và cú rơi là animation thật.
+const els = new Map();          // cell.id -> element
+const step = () => cellSize + gapSize;
+function paintTile(el, cell){
+  const nm=G.shortName(cell.drug), isRx=(cell.drug.keDon||'').startsWith('ETC');
+  const hue = cfg.showColor ? cell.hex : '#93a3b8';   // tier 3: bỏ màu nhận diện nhóm
+  el.style.setProperty('--gc',hue);
+  const icoSize=Math.round(cellSize*0.40);
+  // req #145: ô "nhớ bằng đầu" — icon nhóm MẤT HẲN (không tô xám cho mờ). Chỗ
+  // trống nhường lại cho tên thuốc: chữ to hơn ~35% và đậm màu hơn để dễ đọc.
+  const noIco = G.iconHidden(cfg, cell);
+  const sp = cell.sp ? `<div class="spb" style="width:${Math.round(cellSize*0.40)}px;height:${Math.round(cellSize*0.40)}px;
+      font-size:${Math.round(cellSize*0.25)}px">${G.SPECIAL_INFO[cell.sp].icon}</div>` : '';
+  el.innerHTML=`<div class="box">
+    <span class="rx">${isRx?'Rx':'OTC'}</span>
+    ${noIco ? '' : `<div class="ico">${groupIcon(cell.group, hue, icoSize)}</div>`}
+    <div class="nm" style="font-size:${noIco ? nameFontBig(nm) : nameFont(nm)}px">${noIco ? nameHtmlBig(nm) : nm}</div>
+    <div class="dose" style="font-size:${Math.max(6.5,cellSize*(noIco?0.135:0.115)).toFixed(1)}px">${cell.drug.hamLuong||''}</div>
+    ${sp}</div>`;
+  el.classList.toggle('noico', noIco);
+  if(cell.lock){
+    el.style.setProperty('--lz', Math.round(cellSize*0.42)+'px');
+    el.firstElementChild.insertAdjacentHTML('beforeend', `<span class="lockb">🔒</span>`);
+  }
+  el.dataset.sig=(cell.sp||'')+'|'+(cell.lock||0)+'|'+(cfg.showTag?1:0)+(cfg.showColor?1:0)+(G.iconHidden(cfg,cell)?'N':'')+'|'+cellSize;
+  el.classList.toggle('locked', !!cell.lock);
+  el.classList.toggle('sp', !!cell.sp);
+  el.classList.toggle('rainbow', cell.sp==='rainbow');
+  el.title=`${cell.drug.ten} — nhóm ${cell.group}`+(cell.sp?` · ${G.SPECIAL_INFO[cell.sp].name}: ${G.SPECIAL_INFO[cell.sp].desc}`:'');
+}
+/** Dựng lớp ô lõm tĩnh + đặt kích thước khung bàn. */
+function layoutBoard(){
+  const bd=$('board');
+  let slots=bd.querySelector('.slots');
+  if(!slots){ slots=document.createElement('div'); slots.className='slots'; bd.prepend(slots); }
+  const w=G.COLS*cellSize+(G.COLS-1)*gapSize, h=G.ROWS*cellSize+(G.ROWS-1)*gapSize;
+  bd.style.width=w+'px'; bd.style.height=h+'px';
+  slots.style.gridTemplateColumns=`repeat(${G.COLS},${cellSize}px)`;
+  slots.style.gridAutoRows=cellSize+'px';
+  slots.style.gap=gapSize+'px';
+  if(slots.children.length!==G.ROWS*G.COLS){
+    slots.innerHTML='';
+    for(let i=0;i<G.ROWS*G.COLS;i++){ const d=document.createElement('div'); d.className='slot'; slots.appendChild(d); }
+  }
+}
+function render(){
+  const bd=$('board'); layoutBoard();
+  const seen=new Set(), st=step();
+  for(let r=0;r<G.ROWS;r++) for(let c=0;c<G.COLS;c++){
+    const cell=board[r][c]; if(!cell) continue;
+    seen.add(cell.id);
+    let el=els.get(cell.id);
+    const sig=(cell.sp||'')+'|'+(cell.lock||0)+'|'+(cfg.showTag?1:0)+(cfg.showColor?1:0)+(G.iconHidden(cfg,cell)?'N':'')+'|'+cellSize;
+    if(!el){
+      el=document.createElement('div'); el.className='tile snap fresh';
+      el.style.width=cellSize+'px'; el.style.height=cellSize+'px';
+      paintTile(el,cell);
+      el.style.transform=`translate(${c*st}px,${r*st}px)`;   // đặt đúng ô ngay
+      bd.appendChild(el); els.set(cell.id,el);
+      // hiệu ứng rơi chạy trên .box (CSS animation) — không phụ thuộc rAF nên
+      // vẫn đúng khi trang mở ở tab nền.
+      const box=el.firstElementChild;
+      if(box) box.addEventListener('animationend',()=>el.classList.remove('fresh'),{once:true});
+      setTimeout(()=>el.classList.remove('snap','fresh'),420);
+    } else {
+      if(el.dataset.sig!==sig) paintTile(el,cell);                    // chỉ vẽ lại khi thật sự đổi
+      el.style.width=cellSize+'px'; el.style.height=cellSize+'px';
+      el.style.transform=`translate(${c*st}px,${r*st}px)`;
+    }
+    el.dataset.r=r; el.dataset.c=c;
+  }
+  for(const [id,el] of [...els]) if(!seen.has(id)){ el.remove(); els.delete(id); }
+  markSel();
+}
+/** Xoá sạch phần tử (đổi màn / đổi cỡ lưới). */
+function resetTiles(){ els.forEach(el=>el.remove()); els.clear(); const s=$('board').querySelector('.slots'); if(s) s.remove(); }
+
+/* ---------- HUD ---------- */
+function starCount(){ return cfg.starAt.filter(v=>score>=v).length; }
+const fmt = s => String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+function hud(){
+  $('lvl').textContent='LEVEL '+level+(cfg.boss?' ⚔️':'');
+  $('score').textContent=score.toLocaleString('vi-VN');
+  $('movesTop').textContent=movesLeft;
+  stat.score=score;
+  // danh sách mục tiêu
+  const gl=$('goalList'); gl.innerHTML='';
+  cfg.goals.forEach(g=>{
+    const cur=Math.min(G.goalProgress(g,stat), g.need);
+    const d=document.createElement('div');
+    d.className='goal'+(cur>=g.need?' done':'');
+    d.innerHTML=`<span class="gi">${G.goalIcon(g)}</span>
+      <span class="gt">${G.goalLabel(g)}</span>
+      <span class="gn">${cur}/${g.need}</span>`;
+    gl.appendChild(d);
+  });
+  const gg=cfg.goalGroup;
+  $('mName').textContent=gg.name; $('mDesc').textContent=G.groupDesc(gg.name);
+  $('mDot').style.background=cfg.showColor?gg.hex:'#93a3b8';
+  $('tG').textContent=trophies.g; $('tS').textContent=trophies.s; $('tB').textContent=trophies.b;
+  const st=starCount(); [...$('stars').children].forEach((s,i)=>s.classList.toggle('on',i<st));
+  for(const [k,id] of [['shuffle','Shuffle'],['hint','Hint'],['break','Break'],['time','Time']]){
+    $('n'+id).textContent=tools[k]; $('t'+id).disabled=!tools[k]; }
+  moChip();
+}
+function moChip(){ const el=$('moChip'); if(!el||!cfg) return;
+  const g=cfg.goals[0], cur=Math.min(G.goalProgress(g,stat),g.need);
+  const bg = cfg.showColor && g.group ? cfg.goalGroup.hex : '#64748b';
+  el.innerHTML=`<span class="mg" style="background:${bg}">${G.goalIcon(g)} ${G.goalLabel(g)}</span>
+    <b>${cur}/${g.need}</b><span class="mt">🎯 ${movesLeft}</span>`
+    + (cfg.goals.length>1?`<span class="badge">+${cfg.goals.length-1}</span>`:''); }
+function tipSay(t){ $('tipTx').textContent=t; }
+/** Đánh dấu ô đang chọn mà KHÔNG vẽ lại bàn — vẽ lại sẽ thay thế phần tử đang
+    giữ ngón tay, làm mất chuỗi sự kiện vuốt trên cảm ứng. */
+function markSel(){
+  els.forEach(t=>{
+    const on = sel && +t.dataset.r===sel.r && +t.dataset.c===sel.c;
+    t.classList.toggle('sel', !!on);
+  });
+}
+
+/* ---------- hiệu ứng ---------- */
+function fly(text,r,c){
+  const bd=$('board'), t=tileAt(r,c); if(!t) return;
+  const b=bd.getBoundingClientRect(), q=t.getBoundingClientRect();
+  const s=document.createElement('div'); s.className='fly'; s.textContent=text;
+  s.style.left=(q.left-b.left+q.width/2)+'px'; s.style.top=(q.top-b.top)+'px';
+  bd.appendChild(s); setTimeout(()=>s.remove(),1060);
+}
+function sparks(r,c,hex){
+  const bd=$('board'), t=tileAt(r,c); if(!t) return;
+  const b=bd.getBoundingClientRect(), q=t.getBoundingClientRect();
+  const x=q.left-b.left+q.width/2, y=q.top-b.top+q.height/2;
+  for(let i=0;i<7;i++){ const s=document.createElement('div'); s.className='spark';
+    const a=Math.random()*Math.PI*2, dist=28+Math.random()*38;
+    s.style.cssText=`left:${x}px;top:${y}px;background:${i%2?hex:'#ffd452'};--dx:${Math.cos(a)*dist}px;--dy:${Math.sin(a)*dist}px`;
+    bd.appendChild(s); setTimeout(()=>s.remove(),680); }
+}
+function beam(r,c,dir){
+  const bd=$('board'), t=tileAt(r,c); if(!t) return;
+  const b=bd.getBoundingClientRect(), q=t.getBoundingClientRect();
+  const e=document.createElement('div'); e.className='beam'+(dir==='v'?' v':'');
+  if(dir==='v'){ e.style.cssText=`left:${q.left-b.left+q.width/2-5}px;top:0;width:10px;height:${bd.clientHeight}px`; }
+  else { e.style.cssText=`top:${q.top-b.top+q.height/2-5}px;left:0;height:10px;width:${bd.clientWidth}px`; }
+  bd.appendChild(e); setTimeout(()=>e.remove(),520);
+}
+function comboFx(html){ const bd=$('board'); const e=document.createElement('div');
+  e.className='comboFx'; e.innerHTML=html; bd.appendChild(e); setTimeout(()=>e.remove(),1180); }
+function confetti(){ const cols=['#ffd452','#ff8a3d','#4fc172','#4fa3ee','#e5648c','#a855f7'];
+  for(let i=0;i<80;i++){ const d=document.createElement('div'); d.className='confetti';
+    d.style.cssText=`left:${Math.random()*100}vw;background:${cols[i%cols.length]};
+      animation-duration:${1.6+Math.random()*1.6}s;animation-delay:${Math.random()*.6}s;
+      border-radius:${Math.random()<.5?'50%':'2px'}`;
+    document.body.appendChild(d); setTimeout(()=>d.remove(),3800); } }
+
+/* ---------- hoạt ảnh đổi chỗ ---------- */
+async function animateSwap(a,b,revert){
+  const ta=tileAt(a.r,a.c), tb=tileAt(b.r,b.c); if(!ta||!tb) return;
+  const st=step();
+  ta.classList.add('moving'); tb.classList.add('moving');
+  ta.style.transform=`translate(${b.c*st}px,${b.r*st}px)`;
+  tb.style.transform=`translate(${a.c*st}px,${a.r*st}px)`;
+  await sleep(220);
+  if(revert){                                   // không khớp → trượt về chỗ cũ
+    ta.style.transform=`translate(${a.c*st}px,${a.r*st}px)`;
+    tb.style.transform=`translate(${b.c*st}px,${b.r*st}px)`;
+    ta.classList.add('nope'); tb.classList.add('nope');
+    await sleep(240);
+    ta.classList.remove('nope'); tb.classList.remove('nope');
+  }
+  ta.classList.remove('moving'); tb.classList.remove('moving');
+}
+
+/** Bong bóng giải thích ngắn ngay tại chỗ ghép sai (phản hồi sửa sai tức thì). */
+function flashWrong(a,b,cellA,cellB){
+  if(!cellA||!cellB||cellA.group===cellB.group) return;
+  const bd=$('board'), t=tileAt(a.r,a.c); if(!t) return;
+  const q=t.getBoundingClientRect(), z=bd.getBoundingClientRect();
+  const e=document.createElement('div');
+  e.className='wrongTip';
+  e.innerHTML=`<b style="color:${cellA.hex}">${cellA.tag}</b> ≠ <b style="color:${cellB.hex}">${cellB.tag}</b>`;
+  e.style.left=Math.min(Math.max(q.left-z.left+q.width/2,60), bd.clientWidth-60)+'px';
+  e.style.top=(q.top-z.top-6)+'px';
+  bd.appendChild(e); setTimeout(()=>e.remove(),1500);
+}
+
+/* ---------- vòng chơi ---------- */
+function startLevel(lv){
+  level=lv; cfg=G.levelConfig(level,groups);
+  const g=gridForScreen(); G.setGrid(g.r,g.c);
+  board=G.newBoard(cfg.pool);
+  if(cfg.locked) G.placeLocks(board, cfg.locked);
+  stat={byGroup:{},rx:0,otc:0,specials:0,score:0,unlocked:0};
+  collected=0; sel=null; busy=false; breakMode=false;
+  movesLeft=cfg.moves;
+  resetTiles();                    // màn mới: dựng lại từ đầu
+  fitBoard(); lastCell=cellSize; render(); hud(); tickUI();
+  $('tierNote').textContent=G.tierNote(cfg);
+  tipSay(cfg.tutorial
+    ? 'Chạm 1 hộp rồi VUỐT sang hộp bên cạnh để đổi chỗ. Xếp 3 hộp cùng nhóm thành hàng là ăn điểm!'
+    : (cfg.boss ? '⚔️ Màn thử thách: phải hoàn thành CẢ HAI mục tiêu!'
+       : (cfg.locked ? '🔐 Có tủ kiểm soát đặc biệt bị khoá — ghép bộ 3 ngay tại tủ để mở.'
+          : `Mục tiêu: ${G.goalLabel(cfg.goals[0])}.`)));
+  armAutoHint();
+}
+/** Trừ 1 nước đi sau mỗi lần đổi chỗ hợp lệ; hết nước thì kết màn. */
+function spendMove(){
+  movesLeft=Math.max(0,movesLeft-1); tickUI(); hud();
+  if(movesLeft<=3&&movesLeft>0) sfx.tick();
+}
+function tickUI(){ $('time').textContent=movesLeft;
+  $('time').classList.toggle('warn',movesLeft<=5); moChip(); }
+
+let autoHintT=null;
+function armAutoHint(){
+  clearTimeout(autoHintT);
+  if(!cfg.autoHintMs) return;
+  autoHintT=setTimeout(()=>{
+    if(busy||!board) return;
+    const h=G.findHint(board); if(!h) return;
+    [[h.r1,h.c1],[h.r2,h.c2]].forEach(([r,c])=>{ const t=tileAt(r,c);
+      if(t){ t.classList.add('hint'); setTimeout(()=>t.classList.remove('hint'),3200); } });
+    tipSay('Gợi ý: thử đổi chỗ hai hộp đang nhấp nháy.');
+    armAutoHint();
+  }, cfg.autoHintMs);
+}
+
+/** Nổ 1 tập ô: hiệu ứng + tính điểm + cập nhật nhiệm vụ. */
+function blastCells(clear, chain){
+  let hasSpecial=false;
+  // req #145: đếm ô đã MẤT ICON gợi ý trong cú ghép này — ghép trúng những ô đó
+  // là nhớ được nhóm thuốc bằng đầu chứ không nhìn hình, nên thưởng điểm cao hơn.
+  let memoryHits=0;
+  for(const k of clear){
+    const [r,c]=k.split(',').map(Number);
+    const cell=board[r][c]; if(!cell) continue;
+    if(G.iconHidden(cfg, cell)) memoryHits++;
+    const t=tileAt(r,c); if(t) t.classList.add('pop');
+    sparks(r,c,cell.hex);
+    if(cell.lock && t){ t.classList.remove('pop'); t.classList.add('crack'); setTimeout(()=>t.classList.remove('crack'),420); }
+    if(cell.sp){ hasSpecial=true;
+      if(cell.sp==='row') beam(r,c,'h');
+      else if(cell.sp==='col') beam(r,c,'v');
+      else if(cell.sp==='bomb'){ beam(r,c,'h'); beam(r,c,'v'); } }
+  }
+  if(hasSpecial) sfx.boom(); else sfx.match(chain);
+  const res=G.clearMatches(board, clear, cfg.pool);
+  // cộng dồn số liệu của màn để chấm mọi kiểu mục tiêu
+  for(const k in res.byGroup) stat.byGroup[k]=(stat.byGroup[k]||0)+res.byGroup[k];
+  stat.rx+=res.rx; stat.otc+=res.otc; stat.unlocked+=res.unlocked;
+  const mult=Math.min(chain,G.MAX_CHAIN);
+  // Ô thường 20 điểm; ô đã mất icon 30 điểm (gấp rưỡi) — phần thưởng cho trí nhớ.
+  const base=res.count*20 + memoryHits*10;
+  const gained=base*mult;
+  score+=gained;
+  collected+=res.byGroup[cfg.goalGroup.name]||0;
+  stat.score=score;
+  if(res.unlocked) tipSay(`🔓 Đã mở ${res.unlocked} tủ kiểm soát đặc biệt!`);
+  const top=Object.entries(res.byGroup).sort((a,b)=>b[1]-a[1])[0];
+  if(top) tipSay(G.tipFor(top[0],res.drugs));
+  const first=[...clear][0].split(',').map(Number);
+  fly((chain>1?'COMBO +':'+')+gained+(memoryHits?' 🧠':''), first[0], first[1]);
+  if(memoryHits) tipSay(`🧠 Nhớ giỏi! Ghép trúng ${memoryHits} hộp không còn icon — thưởng thêm ${memoryHits*10*mult} điểm.`);
+  return res;
+}
+
+async function resolve(swapAt){
+  busy=true; let chain=0;
+  try{
+  while(true){
+    const plan=G.planMatches(board, chain===0?swapAt:null);
+    if(!plan) break;
+    chain++;
+    if(chain>=2){
+      comboFx(`${G.praiseFor(chain)}<br><span style="font-size:20px">chuỗi x${chain}</span>`);
+      $('board').classList.add('shake'); setTimeout(()=>$('board').classList.remove('shake'),360);
+    }
+    blastCells(plan.clear, chain);
+    $('cbX').textContent=Math.min(chain,G.MAX_CHAIN);
+    $('cbBar').style.width=Math.min(100,chain/G.MAX_CHAIN*100)+'%';
+    hud();
+    await sleep(300);
+    G.placeSpecials(board, plan.creates);
+    if(plan.creates.length){ stat.specials+=plan.creates.length; sfx.special(); }
+    const isLast = chain>=G.MAX_CHAIN;
+    G.applyGravity(board,cfg.pool,isLast);
+    if(isLast) G.settleNoMatch(board,cfg.pool);   // dừng chuỗi tại đây
+    render(); sfx.drop(); hud();
+    await sleep(330);
+    if(isLast) break;
+  }
+  $('cbX').textContent=1; $('cbBar').style.width='0%';
+  if(!G.hasValidMove(board)){ G.shuffleBoard(board,cfg.pool); render(); tipSay('Hết nước đi — bàn đã được xáo lại.'); }
+  } catch(err){
+    console.error('[pharma-crush] lỗi khi xử lý nước đi:', err);
+    tipSay('Có trục trặc khi xử lý nước đi — bàn đã được dựng lại, bạn chơi tiếp nhé.');
+    try{ resetTiles(); render(); }catch{}
+  } finally {
+    busy=false;                       // KHÔNG BAO GIỜ để cờ bận kẹt lại
+  }
+  stat.score=score;
+  if(G.goalsDone(cfg.goals, stat)){ endLevel(true); return; }
+  if(movesLeft<=0) endLevel(false);
+}
+
+/** Thực hiện 1 nước đi giữa 2 ô kề nhau. */
+async function doMove(a,b){
+  if(busy){ tipSay('Đang xử lý nước vừa rồi — chờ một chút nhé.'); return; }
+  busy=true;
+  try{
+  const cellA=board[a.r][a.c], cellB=board[b.r][b.c];
+  const ok = G.wouldMatch(board,a.r,a.c,b.r,b.c);
+  await animateSwap(a,b,!ok);
+  if(!ok){ sfx.wrong(); tipSay(G.wrongTip(cellA,cellB)); flashWrong(a,b,cellA,cellB); busy=false; return; } // ghép sai KHÔNG mất nước đi
+  sfx.swap(); spendMove();
+  const tmp=board[a.r][a.c]; board[a.r][a.c]=board[b.r][b.c]; board[b.r][b.c]=tmp;
+  render();
+  // đổi chỗ có vật phẩm đặc biệt → kích hoạt ngay
+  let fired=null;
+  for(const p of [a,b]){
+    const cell=board[p.r][p.c];
+    if(cell&&cell.sp){
+      const other = (p===a? board[b.r][b.c] : board[a.r][a.c]);
+      const cl=G.triggerSpecial(board,p.r,p.c, other&&other.group);
+      if(cl&&cl.size){ fired = fired? new Set([...fired,...cl]) : cl; }
+    }
+  }
+  if(fired){
+    blastCells(fired,1); hud();
+    await sleep(320);
+    G.applyGravity(board,cfg.pool);
+    render(); hud(); await sleep(330);
+  }
+  }catch(err){
+    console.error('[pharma-crush] lỗi khi đổi chỗ:', err);
+    tipSay('Có trục trặc khi đổi chỗ — bạn thử lại nước khác nhé.');
+    try{ resetTiles(); render(); }catch{}
+  }
+  busy=false;
+  await resolve({r:b.r,c:b.c});
+  armAutoHint();
+}
+
+/* ---------- điều khiển: chạm/vuốt + click ---------- */
+const bd=$('board');
+let ptr=null;
+bd.addEventListener('pointerdown', e=>{
+  unlock();
+  const t=e.target.closest('.tile'); if(!t||busy) return;
+  const r=+t.dataset.r, c=+t.dataset.c;
+  if(board[r][c] && board[r][c].lock && !breakMode){
+    tipSay('🔒 Tủ kiểm soát đặc biệt đang khoá — hãy ghép bộ 3 ngay tại tủ để mở.'); return; }
+  ptr={r,c,x:e.clientX,y:e.clientY,moved:false};
+  if(breakMode) return;
+  sel={r,c}; markSel(); sfx.tap();
+});
+addEventListener('pointermove', e=>{
+  if(!ptr||ptr.moved||busy) return;
+  const dx=e.clientX-ptr.x, dy=e.clientY-ptr.y;
+  const th=Math.max(14, cellSize*0.3);
+  if(Math.abs(dx)<th && Math.abs(dy)<th) return;
+  ptr.moved=true;
+  const dir = Math.abs(dx)>Math.abs(dy) ? (dx>0?[0,1]:[0,-1]) : (dy>0?[1,0]:[-1,0]);
+  const nr=ptr.r+dir[0], nc=ptr.c+dir[1];
+  sel=null; markSel();
+  if(nr<0||nc<0||nr>=G.ROWS||nc>=G.COLS) return;
+  doMove({r:ptr.r,c:ptr.c},{r:nr,c:nc});
+});
+addEventListener('pointerup', async e=>{
+  if(!ptr) return;
+  const wasMoved=ptr.moved, from={r:ptr.r,c:ptr.c}; ptr=null;
+  if(wasMoved||busy) return;
+  const el=document.elementFromPoint(e.clientX,e.clientY);
+  const t=el&&el.closest&&el.closest('.tile'); if(!t) return;
+  const r=+t.dataset.r, c=+t.dataset.c;
+  if(breakMode){ breakMode=false; tools.break--; board[r][c]=null;
+    G.applyGravity(board,cfg.pool); render(); hud(); sfx.boom(); tipSay('Đã loại bỏ 1 ô.'); await resolve(null); return; }
+  // chạm ô thứ hai (cách chơi bằng 2 lần bấm)
+  if(lastTap && (Math.abs(lastTap.r-r)+Math.abs(lastTap.c-c)===1)){
+    const a=lastTap; lastTap=null; sel=null; markSel();
+    await doMove(a,{r,c}); return;
+  }
+  lastTap={r,c};
+});
+let lastTap=null;
+addEventListener('pointercancel',()=>{ ptr=null; });
+
+/* ---------- công cụ ---------- */
+$('tShuffle').onclick=async()=>{ if(!tools.shuffle||busy)return; tools.shuffle--; G.shuffleBoard(board,cfg.pool);
+  render(); hud(); sfx.drop(); await resolve(null); };
+$('tHint').onclick=()=>{ if(!tools.hint||busy)return; tools.hint--; hud();
+  const h=G.findHint(board); if(!h){ tipSay('Không còn nước đi — hãy dùng Xáo trộn.'); return; }
+  [[h.r1,h.c1],[h.r2,h.c2]].forEach(([r,c])=>{ const t=tileAt(r,c);
+    if(t){ t.classList.add('hint'); setTimeout(()=>t.classList.remove('hint'),2800); } });
+  tipSay('Đã tô sáng một cặp có thể ghép.'); };
+$('tBreak').onclick=()=>{ if(!tools.break||busy)return; breakMode=true; sel=null; markSel(); tipSay('Chạm 1 ô bất kỳ để loại bỏ.'); };
+$('tTime').onclick=()=>{ if(!tools.time||busy)return; tools.time--; movesLeft+=5; tickUI(); hud(); tipSay('+5 nước đi!'); };
+
+/* ---------- modal ---------- */
+function modal(html){ $('modal').innerHTML=html; $('mask').classList.add('show'); }
+function closeModal(){ $('mask').classList.remove('show'); }
+$('mask').addEventListener('click',e=>{ if(e.target===$('mask')) closeModal(); });
+
+function endLevel(win){
+  const st=starCount();
+  if(win){
+    prog.max=Math.max(prog.max, level+1);
+    prog.stars[level]=Math.max(prog.stars[level]||0, st);
+    saveProgress(prog);
+  }
+  if(win){ if(st===3)trophies.g++; else if(st===2)trophies.s++; else trophies.b++; confetti(); sfx.win(); }
+  else sfx.lose();
+  hud();
+  const stars=[0,1,2].map(i=>`<span style="animation-delay:${i*.13}s;${i<st?'':'filter:grayscale(1);opacity:.28'}">★</span>`).join('');
+  modal(`<h2>${win?'🎉 Hoàn thành Level '+level:'⏰ Hết giờ'}</h2>
+    <div class="bigstars">${stars}</div>
+    <p>${win?`Đã thu thập <b>${collected}/${cfg.target}</b> thuốc nhóm <b>${cfg.goalGroup.name}</b> trong ${cfg.moves-movesLeft} nước.`
+            :`Hết nước đi — mới thu thập <b>${collected}/${cfg.target}</b>. Chơi lại thoải mái, không mất lượt.`}</p>
+    <p>Điểm: <b style="font-size:20px;color:#12508f">${score.toLocaleString('vi-VN')}</b></p>
+    <div class="tip" style="text-align:left;margin-top:12px"><div class="who">👩‍⚕️</div><div class="txt">
+      <b>GHI NHỚ</b>${cfg.goalGroup.name}: ${G.groupDesc(cfg.goalGroup.name)}</div></div>
+    ${win&&level===KEY_LEVEL?`<div class="tip" style="text-align:left;margin-top:12px;background:#fff4c8"><div class="who">🔑</div><div class="txt">
+      <b>BẠN ĐÃ CÓ CHÌA KHÓA!</b>Sảnh tiền thực hành đã hoàn thành. Quay về cửa nhà thuốc và bấm vào cánh cửa để vào trong.</div></div>
+    <button class="btn" id="mDoor" style="background:linear-gradient(180deg,#ffc93c,#e08c14)">🚪 Tới cửa nhà thuốc</button>`:''}
+    <button class="btn" id="mNext">${win?'Level tiếp theo →':'Thử lại màn này'}</button>
+    <button class="btn blue" id="mMap">🗺️ Bản đồ màn</button>
+    <button class="btn gray" id="mHome2">Về trang thực hành</button>`);
+  $('mMap').onclick=openMap;
+  if($('mDoor')) $('mDoor').onclick=()=>location.href='/tu-thuoc-mo-phong.html';
+  $('mNext').onclick=()=>{ tools={shuffle:3,hint:3,break:2,time:2}; closeModal(); startLevel(win?level+1:level); };
+  $('mHome2').onclick=()=>location.href='/tu-thuoc-mo-phong.html';
+}
+
+function openMap(){
+  const maxShow=Math.max(20, Math.ceil(prog.max/10)*10);
+  let html='';
+  for(let l=1;l<=maxShow;l++){
+    const open=l<=prog.max, boss=l%7===0, st=prog.stars[l]||0;
+    // req #144: màn CHƯA mở giờ vẫn bấm được — nhưng phải nhập mật khẩu mới vào.
+    // Sinh viên không có mật khẩu thì vẫn đi tuần tự như cũ.
+    html+=`<button class="lvbtn${boss?' boss':''}${open?'':' lock'}" data-lv="${l}"${open?'':' data-locked="1"'}>
+      ${open?l:'🔒'+l}<span class="ss">${open?'★'.repeat(st)+'☆'.repeat(3-st):''}</span></button>`;
+  }
+  modal(`<h2>🗺️ Bản đồ màn chơi</h2>
+    <p>Đã mở <b>${prog.max}</b> màn · ⚔️ là màn thử thách (mục tiêu kép)</p>
+    <p style="font-size:13px;opacity:.8;margin:-4px 0 8px">🔒 Màn chưa mở vẫn chọn được nếu có mật khẩu của giảng viên.</p>
+    <div class="lvgrid">${html}</div>
+    <button class="btn gray" id="mClose2">Đóng</button>`);
+  $('mClose2').onclick=closeModal;
+  $('modal').querySelectorAll('.lvbtn[data-lv]').forEach(b=>b.onclick=()=>{
+    const lv=+b.dataset.lv;
+    if(b.dataset.locked) return askLevelPassword(lv);
+    tools={shuffle:3,hint:3,break:2,time:2}; closeModal(); startLevel(lv);
+  });
+}
+
+// Hỏi mật khẩu để mở thẳng một màn khoá. Mật khẩu do MÁY CHỦ kiểm
+// (/api/gpp/unlock-level) nên không nằm trong mã nguồn trang này.
+function askLevelPassword(lv){
+  modal(`<h2>🔐 Mở Level ${lv}</h2>
+    <p>Màn này chưa mở. Nhập mật khẩu của giảng viên để vào thẳng.</p>
+    <input id="lvPw" type="password" inputmode="numeric" autocomplete="off" placeholder="Mật khẩu"
+      style="width:100%;max-width:260px;padding:11px 13px;border-radius:11px;border:1px solid rgba(255,255,255,.25);
+             background:rgba(0,0,0,.25);color:inherit;font:inherit;text-align:center;letter-spacing:2px" />
+    <div id="lvPwErr" style="min-height:1.3em;color:#fca5a5;font-size:13px;margin:8px 0"></div>
+    <button class="btn blue" id="lvPwGo">Mở màn</button>
+    <button class="btn gray" id="lvPwBack">Quay lại</button>`);
+  const inp=$('lvPw'), err=$('lvPwErr');
+  inp.focus();
+  const submit=async()=>{
+    err.textContent='';
+    try{
+      const r=await fetch('/api/gpp/unlock-level',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({level:lv,password:inp.value})});
+      if(!r.ok){ err.textContent=(await r.json().catch(()=>({}))).error||'Mật khẩu không đúng.'; inp.select(); return; }
+      // Mở khoá tới màn này để lần sau vào thẳng, không phải nhập lại.
+      prog.max=Math.max(prog.max, lv); saveProgress(prog);
+      tools={shuffle:3,hint:3,break:2,time:2}; closeModal(); startLevel(lv);
+    }catch{ err.textContent='Không kết nối được máy chủ để kiểm tra mật khẩu.'; }
+  };
+  $('lvPwGo').onclick=submit;
+  inp.addEventListener('keydown',e=>{ if(e.key==='Enter') submit(); });
+  $('lvPwBack').onclick=openMap;
+}
+function openBook(){
+  const sp=Object.entries(G.SPECIAL_INFO).map(([k,v])=>`<div class="spitem"><i>${v.icon}</i><b>${v.name}</b> — ${v.desc}</div>`).join('');
+  const cards=groups.map(g=>`<div class="gcard"><div class="gh"><span class="dot" style="background:${g.hex}"></span>${g.name}</div>
+    <div class="gd">${G.groupDesc(g.name)}</div>
+    <div class="gl">${g.drugs.map(d=>`• ${G.shortName(d)}`).join('<br>')}</div></div>`).join('');
+  modal(`<h2>📖 Sổ tay dược sĩ</h2>
+    <p>Ghép 3 hộp <b>cùng nhóm tác dụng dược lý</b> — tên thuốc có thể khác nhau.</p>
+    <div class="splist" style="text-align:left;margin:12px 0">${sp}</div>
+    <div class="glist">${cards}</div><button class="btn blue" id="mClose">Đóng</button>`);
+  $('mClose').onclick=closeModal;
+}
+$('btnMap').onclick=openMap;
+$('btnBook').onclick=openBook; $('btnBook2').onclick=openBook;
+$('btnHome').onclick=()=>location.href='/tu-thuoc-mo-phong.html';
+$('btnNew').onclick=()=>{ if(confirm('Chơi lại màn này?')) startLevel(level); };
+$('btnSound').onclick=()=>{ unlock(); setMuted(!isMuted()); $('btnSound').textContent=isMuted()?'🔇':'🔊'; };
+$('mLeft').onclick=()=>{ $('sideR').classList.remove('mopen'); $('sideL').classList.toggle('mopen'); };
+$('mRight').onclick=()=>{ $('sideL').classList.remove('mopen'); $('sideR').classList.toggle('mopen'); };
+
+const ro=new ResizeObserver(()=>{
+  if(board && gridForScreen().c!==G.COLS){ startLevel(level); return; }
+  if(!fitBoard()) return;
+  if(cellSize!==lastCell){ lastCell=cellSize; if(board) render(); }
+});
+ro.observe(document.querySelector('.center'));
+addEventListener('resize',()=>{ if(fitBoard()&&board) render(); });
+
+startLevel(Math.max(1, prog.max));
+</script>
+</body>
+</html>

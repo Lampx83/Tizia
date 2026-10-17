@@ -10,31 +10,6 @@
 import { db, recordSrsReview } from '../../db.js';
 import { requireAuth } from '../identity/auth.js';
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS srs_card_content (
-    card_key      TEXT PRIMARY KEY,           -- 'deck:<deck_id>:c<idx>' hoặc 'vocab:<word>'
-    deck_id       INTEGER,                     -- null nếu standalone
-    front         TEXT NOT NULL,
-    back          TEXT NOT NULL,
-    hint          TEXT,
-    media_url     TEXT,
-    created_at    INTEGER NOT NULL,
-    FOREIGN KEY (deck_id) REFERENCES srs_decks(id) ON DELETE CASCADE
-  );
-
-  CREATE TABLE IF NOT EXISTS srs_decks (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    creator_id    INTEGER NOT NULL,
-    name          TEXT NOT NULL,
-    description   TEXT,
-    subject_tag   TEXT,
-    grade_tag     TEXT,
-    is_public     INTEGER NOT NULL DEFAULT 1,
-    created_at    INTEGER NOT NULL,
-    FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
-  );
-`);
-
 const _getDueStmt = db.prepare(`
   SELECT c.card_key, c.ease, c.interval_d, c.reps, c.lapses, c.due_at, c.last_correct,
          co.front, co.back, co.hint, co.deck_id
@@ -71,14 +46,14 @@ const _myDecksStmt = db.prepare(`
 
 export function attachSrs(router) {
   // Review queue: card đến hạn (or new cards from a deck nếu chỉ định)
-  router.get('/api/srs/queue', requireAuth, (req, res) => {
+  router.get('/api/srs/queue', requireAuth, async (req, res) => {
     const limit = Math.max(1, Math.min(50, Number(req.query.limit) || 20));
     const deckId = req.query.deck_id ? Number(req.query.deck_id) : null;
     const now = Date.now();
-    const due = _getDueStmt.all(req.user.id, now, limit);
+    const due = await _getDueStmt.all(req.user.id, now, limit);
     let cards = due;
     if (cards.length < limit && deckId) {
-      const fresh = _getNewFromDeckStmt.all(deckId, req.user.id, limit - cards.length);
+      const fresh = await _getNewFromDeckStmt.all(deckId, req.user.id, limit - cards.length);
       cards = [...cards, ...fresh.map(c => ({ ...c, isNew: true }))];
     }
     res.json({ ok: true, queue: cards, due_count: due.length });
@@ -86,11 +61,11 @@ export function attachSrs(router) {
 
   // Record review: body { card_key, correct, quality? }
   // quality 0-3 map: 0=again, 1=hard, 2=good, 3=easy → quality≥1 = correct
-  router.post('/api/srs/review', requireAuth, (req, res) => {
+  router.post('/api/srs/review', requireAuth, async (req, res) => {
     const cardKey = String(req.body?.card_key || '').slice(0, 120);
     const quality = Math.max(0, Math.min(3, Number(req.body?.quality) ?? 2));
     if (!cardKey) return res.status(400).json({ error: 'card_key required' });
-    const result = recordSrsReview({
+    const result = await recordSrsReview({
       user_id: req.user.id,
       card_key: cardKey, correct: quality >= 1,
     });
@@ -98,16 +73,16 @@ export function attachSrs(router) {
   });
 
   // List decks (public marketplace)
-  router.get('/api/srs/decks', (_req, res) => {
-    res.json({ items: _decksListStmt.all() });
+  router.get('/api/srs/decks', async (_req, res) => {
+    res.json({ items: await _decksListStmt.all() });
   });
 
-  router.get('/api/srs/decks/mine', requireAuth, (req, res) => {
-    res.json({ items: _myDecksStmt.all(req.user.id) });
+  router.get('/api/srs/decks/mine', requireAuth, async (req, res) => {
+    res.json({ items: await _myDecksStmt.all(req.user.id) });
   });
 
   // Create deck
-  router.post('/api/srs/decks', requireAuth, (req, res) => {
+  router.post('/api/srs/decks', requireAuth, async (req, res) => {
     const b = req.body || {};
     const name = String(b.name || '').trim().slice(0, 100);
     const description = String(b.description || '').slice(0, 500);
@@ -117,10 +92,10 @@ export function attachSrs(router) {
     const cards = Array.isArray(b.cards) ? b.cards : [];
     if (cards.length < 1) return res.status(400).json({ error: 'min_1_card' });
 
-    const tx = db.transaction(() => {
-      const info = db.prepare(`
+    const tx = db.transaction(async () => {
+      const info = await db.prepare(`
         INSERT INTO srs_decks (creator_id, name, description, subject_tag, grade_tag, is_public, created_at)
-        VALUES (?, ?, ?, ?, ?, 1, ?)
+        VALUES (?, ?, ?, ?, ?, 1, ?) RETURNING id
       `).run(req.user.id, name, description, subject_tag, grade_tag, Date.now());
       const deckId = info.lastInsertRowid;
       const insCard = db.prepare(`
@@ -128,21 +103,23 @@ export function attachSrs(router) {
         VALUES (?, ?, ?, ?, ?, ?)
       `);
       const now = Date.now();
-      cards.slice(0, 200).forEach((c, i) => {
+      const list = cards.slice(0, 200);
+      for (let i = 0; i < list.length; i++) {
+        const c = list[i];
         const key = `deck:${deckId}:c${i}`;
-        insCard.run(key, deckId, String(c.front || '').slice(0, 500),
+        await insCard.run(key, deckId, String(c.front || '').slice(0, 500),
                     String(c.back || '').slice(0, 500),
                     String(c.hint || '').slice(0, 200), now);
-      });
+      }
       return deckId;
     });
-    const deckId = tx();
+    const deckId = await tx();
     res.json({ ok: true, deck_id: deckId });
   });
 
   // Stats: tổng card đang due + reps tổng
-  router.get('/api/srs/stats', requireAuth, (req, res) => {
-    const stats = db.prepare(`
+  router.get('/api/srs/stats', requireAuth, async (req, res) => {
+    const stats = await db.prepare(`
       SELECT COUNT(*) AS total,
              SUM(CASE WHEN due_at <= ? THEN 1 ELSE 0 END) AS due_now,
              SUM(total_reviews) AS reviews,

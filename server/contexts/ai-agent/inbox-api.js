@@ -2,14 +2,19 @@
 // /api/ai-board/inbox — hộp thư Ban điều hành AI, ĐỌC-CHỈ
 // ============================================================
 // VÌ SAO CÓ FILE NÀY
-// Ban điều hành AI (routine Claude Opus) chạy trong môi trường agent/CI, KHÔNG
-// có volume production nên không chạy được server/scripts/sync-inbox.mjs (script
-// đó đọc thẳng data/tizia.db). Mọi route hộp thư hiện có đều đòi cookie session:
-//   GET /api/requests        → 401 (và chỉ trả yêu cầu của CHÍNH tài khoản đó)
-//   GET /api/admin/requests  → 401 + requireAdmin
-// Hệ quả: các phiên hàng ngày từ 2026-07 tới nay không đọc được yêu cầu thật của
-// sinh viên (xem public/CHANGELOG-eduverse.md, phiên 45/58/62). Route này là
-// đường đọc còn thiếu.
+// Ban điều hành AI (routine Claude chạy hàng ngày) làm việc trong môi trường
+// agent/CI, KHÔNG có volume production và KHÔNG đăng nhập được, nên không đọc
+// được yêu cầu của HS/SV qua các route hiện có — tất cả đều đòi cookie session:
+//   GET /api/requests             → chỉ trả yêu cầu của CHÍNH tài khoản đang đăng nhập
+//   GET /api/requests/:id/thread  → 401 (auth gate chung)
+//   GET /api/admin/requests       → 401 + requireAdmin
+// Hệ quả đo được: từ 2026-09-13 tới nay phiên hàng ngày KHÔNG đọc được yêu cầu
+// thật nào (xem public/CHANGELOG-eduverse.md, phiên 62→69). Route này là đường
+// đọc còn thiếu.
+//
+// Bản gốc của file này đã chạy trên nhánh `main`; đây là bản PORT sang nhánh
+// đang phục vụ production (Postgres) — khác biệt duy nhất: truy vấn DB là async
+// nên handler `await listBoardInbox(...)`.
 //
 // BẢO MẬT
 //  • TẮT MẶC ĐỊNH. Không set AI_BOARD_KEY → route không được mount, path trả 404
@@ -21,8 +26,7 @@
 //  • Key ngắn (<24 ký tự) bị từ chối ngay lúc khởi động — key yếu còn tệ hơn
 //    không có key, vì tạo cảm giác an toàn giả.
 //  • ĐỌC-CHỈ tuyệt đối: chỉ SELECT. Không có route ghi nào trong file này. Đổi
-//    trạng thái / phản hồi HS vẫn đi qua admin (cookie + requireAdmin) hoặc
-//    scripts/admin-reply.js chạy trên máy có DB.
+//    trạng thái / phản hồi HS vẫn đi qua admin (cookie + requireAdmin).
 //
 // DỮ LIỆU TRẢ VỀ chứa tên hiển thị của HS/SV và nội dung yêu cầu của họ — coi
 // key này nhạy cảm ngang mật khẩu admin. Chỉ đặt qua biến môi trường, không
@@ -57,13 +61,13 @@ export function readBoardKey(env = process.env) {
   return raw;
 }
 
-export function attachAiBoardInbox(r, { env = process.env } = {}) {
+export function attachAiBoardInbox(r, { env = process.env, list = listBoardInbox } = {}) {
   const key = readBoardKey(env);
   if (!key) return false; // chưa bật → không mount route nào cả
 
   const expected = digest(key);
 
-  r.get('/api/ai-board/inbox', (req, res) => {
+  r.get('/api/ai-board/inbox', async (req, res) => {
     const sent = req.headers['x-ai-board-key'];
     // Header vắng / lặp (mảng) → chặn trước khi đụng tới so khớp.
     if (typeof sent !== 'string' || !sent) {
@@ -73,7 +77,16 @@ export function attachAiBoardInbox(r, { env = process.env } = {}) {
       return res.status(403).json({ error: 'forbidden', message: 'Key không hợp lệ.' });
     }
 
-    const items = listBoardInbox(req.query.limit);
+    // DB async (Postgres) → lỗi truy vấn phải thành 500 JSON, không được để
+    // promise rejection nổi lên thành unhandled và treo request.
+    let items;
+    try {
+      items = await list(req.query.limit);
+    } catch (err) {
+      console.error('[ai-board] đọc hộp thư thất bại:', err?.message || err);
+      return res.status(500).json({ error: 'server_error', message: 'Không đọc được hộp thư.' });
+    }
+
     const stats = { pending: 0, reviewing: 0 };
     const by_domain = {};
     for (const it of items) {

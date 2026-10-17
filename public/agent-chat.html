@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Trợ lý AI · Agent kiểu AI Portal — Tizia</title>
+<meta name="description" content="Cài & trò chuyện với Agent chuẩn AI Portal (base_url expose /metadata + /ask) ngay trong Tizia. Chat streaming, danh tính từ tài khoản Tizia." />
+<link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+<meta name="theme-color" content="#fbbf24" />
+<style>
+  :root { --bg-1:#0b1220; --bg-2:#0f1830; --accent:#fbbf24; --accent-2:#f97316;
+    --card:rgba(255,255,255,.05); --border:rgba(255,255,255,.12); --muted:#94a3b8;
+    --ok:#22c55e; --err:#ef4444; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; min-height:100%; font-family:'Inter',system-ui,sans-serif; color:#e5edf7;
+    background:radial-gradient(ellipse 80% 50% at 50% 0%, rgba(251,191,36,.12), transparent),
+    linear-gradient(180deg,var(--bg-1),var(--bg-2)); }
+  a { color: var(--accent); }
+  .top { display:flex; align-items:center; gap:14px; padding:12px 18px; border-bottom:1px solid var(--border);
+    background:rgba(0,0,0,.25); position:sticky; top:0; z-index:5; }
+  .top .home { color:#fff; text-decoration:none; opacity:.85; font-size:13.5px;
+    background:rgba(255,255,255,.08); padding:7px 12px; border-radius:9px; }
+  .top h1 { margin:0; font-size:17px; font-weight:800; }
+  .top h1 .dim { opacity:.55; font-weight:600; font-size:13.5px; }
+  .layout { display:grid; grid-template-columns: 300px 1fr; gap:16px; max-width:none; margin:0 auto; padding:18px; }
+  @media (max-width:800px){ .layout{ grid-template-columns:1fr; } }
+  .panel { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px; }
+  .panel h2 { margin:0 0 10px; font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+  .agent { display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:10px; cursor:pointer;
+    border:1px solid transparent; }
+  .agent:hover { background:rgba(255,255,255,.05); }
+  .agent.active { border-color:var(--accent); background:rgba(251,191,36,.1); }
+  .agent .ic { width:30px; height:30px; border-radius:8px; background:rgba(255,255,255,.08); display:grid; place-items:center; font-size:15px; }
+  .agent .nm { font-weight:700; font-size:14px; }
+  .agent .meta { font-size:11.5px; color:var(--muted); }
+  .agent .badge { font-size:10px; padding:1px 6px; border-radius:6px; background:rgba(34,197,94,.15); color:var(--ok); }
+  .empty { color:var(--muted); font-size:13px; line-height:1.6; padding:6px 2px; }
+  input, textarea, button { font-family:inherit; }
+  .field { width:100%; padding:9px 11px; border-radius:9px; border:1px solid var(--border);
+    background:rgba(0,0,0,.25); color:#e5edf7; font-size:13.5px; margin-bottom:8px; }
+  .btn { background:linear-gradient(90deg,var(--accent),var(--accent-2)); color:#1a1206; font-weight:800;
+    border:none; border-radius:9px; padding:9px 14px; cursor:pointer; font-size:13.5px; }
+  .btn:disabled { opacity:.5; cursor:default; }
+  .btn.ghost { background:rgba(255,255,255,.08); color:#e5edf7; font-weight:600; }
+  details { margin-top:10px; } details summary { cursor:pointer; color:var(--muted); font-size:12.5px; }
+  .chat { display:flex; flex-direction:column; min-height:70vh; }
+  .msgs { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:12px; padding:6px 2px 14px; }
+  .bubble { max-width:82%; padding:10px 13px; border-radius:13px; font-size:14px; line-height:1.6; white-space:pre-wrap; word-wrap:break-word; }
+  .bubble.user { align-self:flex-end; background:rgba(251,191,36,.16); border:1px solid rgba(251,191,36,.3); }
+  .bubble.bot { align-self:flex-start; background:rgba(255,255,255,.06); border:1px solid var(--border); }
+  .bubble.err { align-self:flex-start; background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.4); color:#fecaca; }
+  .composer { display:flex; gap:8px; align-items:flex-end; }
+  .composer textarea { flex:1; resize:vertical; min-height:46px; max-height:180px; margin:0; }
+  .hint { color:var(--muted); font-size:12px; margin:2px 0 10px; }
+  .status { font-size:12px; color:var(--muted); min-height:16px; }
+  .status.err { color:var(--err); } .status.ok { color:var(--ok); }
+</style>
+</head>
+<body>
+  <div class="top">
+    <a class="home" href="./index.html">← Trang chủ</a>
+    <h1>Trợ lý AI <span class="dim">· Agent kiểu AI Portal</span></h1>
+  </div>
+
+  <div class="layout">
+    <!-- SIDEBAR: agents + register -->
+    <div class="panel">
+      <h2>Agent đã cài</h2>
+      <div id="agentList"><div class="empty">Đang tải…</div></div>
+
+      <details id="addBox">
+        <summary>➕ Cài agent mới</summary>
+        <div style="margin-top:10px">
+          <input class="field" id="fAlias" placeholder="alias (vd: papers)" autocomplete="off" />
+          <input class="field" id="fBase" placeholder="base_url (https://…/v1)" autocomplete="off" />
+          <input class="field" id="fName" placeholder="Tên hiển thị (tuỳ chọn)" autocomplete="off" />
+          <button class="btn" id="btnRegister">Cài & kiểm tra /metadata</button>
+          <div class="status" id="regStatus"></div>
+          <p class="hint">Tizia sẽ gọi <code>GET base_url/metadata</code> để xác nhận agent đang chạy trước khi lưu.</p>
+        </div>
+      </details>
+    </div>
+
+    <!-- CHAT -->
+    <div class="panel chat">
+      <div id="chatHead" class="hint">Chọn một agent bên trái để bắt đầu trò chuyện.</div>
+      <div class="msgs" id="msgs"></div>
+      <div class="composer">
+        <textarea id="prompt" class="field" placeholder="Nhập câu hỏi… (Enter để gửi, Shift+Enter xuống dòng)" disabled></textarea>
+        <button class="btn" id="btnSend" disabled>Gửi</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+let current = null;      // {alias, name, icon}
+let busy = false;
+
+function esc(s){ return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+async function loadAgents() {
+  const list = $('#agentList');
+  try {
+    const r = await fetch('/api/agents', { credentials: 'same-origin' });
+    if (r.status === 401) { list.innerHTML = '<div class="empty">Bạn cần <a href="./login.html">đăng nhập</a> để dùng trợ lý.</div>'; return; }
+    const j = await r.json();
+    const all = [...(j.own||[]).map(a=>({...a, mine:true})), ...(j.public||[])];
+    if (!all.length) { list.innerHTML = '<div class="empty">Chưa có agent nào. Mở “Cài agent mới” bên dưới để thêm.</div>'; return; }
+    list.innerHTML = '';
+    for (const a of all) {
+      const el = document.createElement('div');
+      el.className = 'agent';
+      el.innerHTML = `<div class="ic">🤖</div><div style="flex:1;min-width:0">
+        <div class="nm">${esc(a.name)}</div>
+        <div class="meta">${esc(a.alias)}${a.mine?'':' · công khai'}</div></div>
+        ${a.mine && a.isPublic ? '<span class="badge">public</span>' : ''}`;
+      el.onclick = () => selectAgent(a, el);
+      list.appendChild(el);
+    }
+  } catch (e) { list.innerHTML = '<div class="empty">Lỗi tải danh sách: '+esc(e.message)+'</div>'; }
+}
+
+function selectAgent(a, el) {
+  current = a;
+  document.querySelectorAll('.agent').forEach(x=>x.classList.remove('active'));
+  if (el) el.classList.add('active');
+  $('#chatHead').innerHTML = `Đang trò chuyện với <b>${esc(a.name)}</b> <span class="hint">(${esc(a.alias)})</span>`;
+  $('#msgs').innerHTML = '';
+  $('#prompt').disabled = false; $('#btnSend').disabled = false;
+  $('#prompt').focus();
+  if (Array.isArray(a.samplePrompts) && a.samplePrompts.length) {
+    addBubble('bot', 'Gợi ý: ' + a.samplePrompts.slice(0,3).map(p=>'“'+p+'”').join('  ·  '));
+  }
+}
+
+function addBubble(kind, text) {
+  const b = document.createElement('div');
+  b.className = 'bubble ' + kind;
+  b.textContent = text;
+  $('#msgs').appendChild(b);
+  $('#msgs').scrollTop = $('#msgs').scrollHeight;
+  return b;
+}
+
+// Parse an SSE `data:` payload → best-effort text delta (supports {delta}, {content_markdown}, {answer}, {content}).
+function extractDelta(dataStr) {
+  const s = dataStr.trim();
+  if (!s || s === '[DONE]') return '';
+  try {
+    const o = JSON.parse(s);
+    return o.delta ?? o.content_markdown ?? o.answer ?? o.content ?? o.text ?? '';
+  } catch { return s; }
+}
+
+async function send() {
+  if (busy || !current) return;
+  const ta = $('#prompt');
+  const prompt = ta.value.trim();
+  if (!prompt) return;
+  busy = true; $('#btnSend').disabled = true; ta.value = '';
+  addBubble('user', prompt);
+  const bot = addBubble('bot', '…');
+  let acc = '';
+  try {
+    const r = await fetch(`/api/agents/${encodeURIComponent(current.alias)}/ask`, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+      body: JSON.stringify({ prompt }),
+    });
+    if (!r.ok) {
+      const t = await r.text().catch(()=> '');
+      bot.remove(); addBubble('err', 'Lỗi ' + r.status + ': ' + (t.slice(0,300) || 'agent không phản hồi.'));
+    } else if ((r.headers.get('content-type')||'').includes('text/event-stream') && r.body) {
+      const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = '';
+      for (;;) {
+        const { done, value } = await reader.read(); if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const parts = buf.split(/\n\n/); buf = parts.pop();
+        for (const evt of parts) {
+          for (const line of evt.split(/\n/)) {
+            if (line.startsWith('data:')) { acc += extractDelta(line.slice(5)); bot.textContent = acc || '…'; }
+          }
+          $('#msgs').scrollTop = $('#msgs').scrollHeight;
+        }
+      }
+      if (!acc) { const j = (()=>{try{return JSON.parse(buf);}catch{return null;}})(); acc = j ? (j.content_markdown||j.answer||j.content||'') : ''; }
+      bot.textContent = acc || '(không có nội dung)';
+    } else {
+      const j = await r.json().catch(()=>null);
+      bot.textContent = (j && (j.content_markdown||j.answer||j.content)) || '(không có nội dung)';
+    }
+  } catch (e) {
+    bot.remove(); addBubble('err', 'Lỗi kết nối: ' + e.message);
+  } finally {
+    busy = false; $('#btnSend').disabled = false; $('#prompt').focus();
+  }
+}
+
+async function registerAgent() {
+  const alias = $('#fAlias').value.trim().toLowerCase();
+  const baseUrl = $('#fBase').value.trim();
+  const name = $('#fName').value.trim();
+  const st = $('#regStatus');
+  st.className = 'status'; st.textContent = 'Đang kiểm tra agent…';
+  $('#btnRegister').disabled = true;
+  try {
+    const r = await fetch('/api/agents/register', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ alias, baseUrl, name: name || undefined }),
+    });
+    const j = await r.json().catch(()=>({}));
+    if (!r.ok) { st.className = 'status err'; st.textContent = (j.message || j.error || 'Cài thất bại.'); }
+    else { st.className = 'status ok'; st.textContent = '✅ Đã cài “'+(j.agent?.name||alias)+'”.'; $('#fAlias').value=$('#fBase').value=$('#fName').value=''; loadAgents(); }
+  } catch (e) { st.className = 'status err'; st.textContent = 'Lỗi: ' + e.message; }
+  finally { $('#btnRegister').disabled = false; }
+}
+
+$('#btnSend').onclick = send;
+$('#btnRegister').onclick = registerAgent;
+$('#prompt').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+loadAgents();
+</script>
+</body>
+</html>

@@ -3,21 +3,21 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Ứng dụng tích hợp — ScoreUp · Codelab · Smartdoc · FeedBackMe | Tizia</title>
-<meta name="description" content="4 ứng dụng tích hợp Tizia một cổng đăng nhập: ScoreUp (chấm điểm), Codelab NEU OJ (luyện code), Smartdoc (tài liệu thông minh), FeedBackMe (góp ý đa chiều)." />
-<meta name="keywords" content="Tizia apps, ScoreUp, Codelab, NEU OJ, Smartdoc, FeedBackMe, tích hợp, single sign-on, edtech" />
+<title>Ứng dụng — công cụ & trò chơi học tập trong Tizia</title>
+<meta name="description" content="Ứng dụng chạy trong Tizia: công cụ học tập, trò chơi, phòng thí nghiệm ảo và app do cộng đồng tự viết rồi cài vào." />
+<meta name="keywords" content="Tizia apps, ứng dụng học tập, portal app, công cụ học tập, edtech" />
 <link rel="canonical" href="https://tizia.vn/apps.html" />
 <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
 <link rel="apple-touch-icon" href="./favicon.svg" />
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Tizia" />
 <meta property="og:locale" content="vi_VN" />
-<meta property="og:title" content="Ứng dụng tích hợp Tizia — ScoreUp · Codelab · Smartdoc · FeedBackMe" />
-<meta property="og:description" content="Single sign-on tới ScoreUp (chấm điểm), Codelab (luyện code), Smartdoc và FeedBackMe trong vũ trụ Tizia." />
+<meta property="og:title" content="Ứng dụng — công cụ & trò chơi học tập trong Tizia" />
+<meta property="og:description" content="Công cụ và trò chơi học tập chạy ngay trong Tizia; ai cũng có thể tự viết app rồi cài vào." />
 <meta property="og:url" content="https://tizia.vn/apps.html" />
 <meta property="og:image" content="https://tizia.vn/og-default.svg" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Ứng dụng tích hợp Tizia — ScoreUp · Codelab · Smartdoc · FeedBackMe" />
+<meta name="twitter:title" content="Ứng dụng — công cụ & trò chơi học tập trong Tizia" />
 <meta name="twitter:image" content="https://tizia.vn/og-default.svg" />
 <script type="application/ld+json">
 {
@@ -25,20 +25,7 @@
   "@type": "BreadcrumbList",
   "itemListElement": [
     { "@type": "ListItem", "position": 1, "name": "Tizia", "item": "https://tizia.vn/" },
-    { "@type": "ListItem", "position": 2, "name": "Ứng dụng tích hợp", "item": "https://tizia.vn/apps.html" }
-  ]
-}
-</script>
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "ItemList",
-  "name": "Ứng dụng tích hợp Tizia",
-  "itemListElement": [
-    { "@type": "SoftwareApplication", "position": 1, "name": "ScoreUp",          "applicationCategory": "EducationalApplication", "operatingSystem": "Web", "url": "https://tizia.vn/scoreup" },
-    { "@type": "SoftwareApplication", "position": 2, "name": "Codelab (NEU OJ)", "applicationCategory": "EducationalApplication", "operatingSystem": "Web", "url": "https://tizia.vn/codelab" },
-    { "@type": "SoftwareApplication", "position": 3, "name": "Smartdoc",         "applicationCategory": "EducationalApplication", "operatingSystem": "Web", "url": "https://tizia.vn/smartdoc" },
-    { "@type": "SoftwareApplication", "position": 4, "name": "FeedBackMe",       "applicationCategory": "EducationalApplication", "operatingSystem": "Web", "url": "https://tizia.vn/feedback" }
+    { "@type": "ListItem", "position": 2, "name": "Ứng dụng", "item": "https://tizia.vn/apps.html" }
   ]
 }
 </script>
@@ -62,20 +49,36 @@
   .top .right a:hover { opacity:1; }
 
   /* ---- grid view ---- */
-  .wrap { max-width:1040px; margin:0 auto; padding:30px 20px 48px; width:100%; }
+  .wrap { max-width:none; margin:0 auto; padding:30px 20px 48px; width:100%; }
   .lead { font-size:14.5px; color:var(--muted); line-height:1.6; max-width:680px; margin:0 0 26px; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:18px; }
-  .app { display:flex; flex-direction:column; background:var(--card); border:1px solid var(--border);
-    border-radius:16px; padding:20px; text-decoration:none; transition:transform .12s, border-color .12s, background .12s;
-    border-top:3px solid var(--c); }
-  .app:hover { transform:translateY(-3px); border-color:var(--c); background:rgba(255,255,255,.08); }
-  .app .ico { font-size:34px; line-height:1; margin-bottom:12px; }
-  .app h3 { margin:0 0 4px; font-size:18px; }
-  .app .tag { font-size:12.5px; font-weight:700; color:var(--c); margin-bottom:10px; }
-  .app p { margin:0 0 14px; font-size:13px; color:var(--muted); line-height:1.55; flex:1; }
-  .app .go { font-size:13px; font-weight:700; color:var(--c); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; }
+  /* Thẻ gọn: icon + tên + ĐÚNG 1 dòng mô tả. Hover chỉ nâng nhẹ + sáng viền —
+     KHÔNG đổ nền vàng vì chữ trắng trên vàng đọc không nổi. */
+  .app { display:flex; align-items:center; gap:12px; background:var(--card); border:1px solid var(--border);
+    border-radius:12px; padding:14px 16px; text-decoration:none; min-width:0;
+    transition:transform .15s, border-color .15s, background .15s, box-shadow .15s; }
+  .app:hover { transform:translateY(-2px); border-color:rgba(251,191,36,.7);
+    background:rgba(255,255,255,.07); box-shadow:0 8px 20px rgba(0,0,0,.25); }
+  .app .ico { font-size:24px; line-height:1; width:44px; height:44px; flex:none;
+    display:grid; place-items:center; border-radius:12px;
+    background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); transition:border-color .15s; }
+  .app:hover .ico { border-color:rgba(251,191,36,.4); }
+  .app .txt { min-width:0; }
+  .app h3 { margin:0; font-size:14.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .app p { margin:2px 0 0; font-size:12.5px; color:var(--muted);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .app .badge { display:inline-block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.4px;
     padding:2px 8px; border-radius:7px; background:rgba(255,255,255,.08); color:var(--muted); margin-left:8px; }
+
+  .jump { display:flex; flex-wrap:wrap; gap:8px; margin:18px 0 4px; }
+  .jump a { font-size:12.5px; color:var(--muted); text-decoration:none; padding:6px 12px;
+    border:1px solid var(--border); border-radius:999px; background:var(--card);
+    transition:border-color .15s, color .15s; }
+  .jump a:hover { border-color:rgba(251,191,36,.6); color:#e5edf7; }
+  .jump a span { opacity:.6; font-size:11.5px; }
+  .grp { margin-top:26px; scroll-margin-top:70px; }
+  .grp h2 { font-size:15px; font-weight:700; margin:0 0 12px; }
+  .grp h2 span { font-size:12.5px; font-weight:400; color:var(--muted); margin-left:6px; }
 
   /* ---- embed view ---- */
   body.embed #root { height:100vh; display:flex; flex-direction:column; overflow:hidden; }
@@ -92,10 +95,10 @@
 </head>
 <body>
 <noscript>
-  <h1>🔌 Ứng dụng tích hợp Tizia</h1>
-  <p>ScoreUp · Codelab · Smartdoc · FeedBackMe — single sign-on tới các hệ thống đồng hành. Bật JavaScript để xem danh sách đầy đủ.</p>
+  <h1>🧩 Ứng dụng Tizia</h1>
+  <p>Công cụ và trò chơi học tập chạy trong Tizia. Bật JavaScript để xem danh sách đầy đủ.</p>
 </noscript>
-<h1 style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden">Ứng dụng tích hợp Tizia — ScoreUp, Codelab, Smartdoc, FeedBackMe</h1>
+<h1 style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden">Ứng dụng Tizia — công cụ và trò chơi học tập</h1>
 <div id="root"></div>
 
 <script type="module">
@@ -106,6 +109,33 @@
   const params = new URLSearchParams(location.search);
   const appParam = params.get('app');
   const root = document.getElementById('root');
+
+  // Icon thẻ app — bản chạy tay của web-next/lib/app-icon.ts (2 bản UI phải khớp nhau).
+  // App chuẩn AI Portal đặt icon là TÊN icon Lucide ("FileText") → đổi sang emoji gần
+  // nghĩa; đã là emoji thì giữ; không nhận ra thì 🧩.
+  const ALIAS_ICON = { qrcode:'🔳', 'library-search':'📚', annota:'🗂️', quantis:'📊',
+    bibliomap:'🗺️', scorum:'🎓', convertum:'🧮' };
+  const LUCIDE_EMOJI = { filetext:'📄', filesearch:'🔍', file:'📄', files:'🗂️', folder:'📁',
+    book:'📕', bookopen:'📖', bookmarked:'🔖', library:'📚', newspaper:'📰',
+    sigma:'📊', barchart:'📊', barchart3:'📊', linechart:'📈', piechart:'🥧',
+    database:'🗄️', table:'📋', calculator:'🧮', activity:'📈',
+    map:'🗺️', mappin:'📍', globe:'🌐', network:'🕸️', share2:'🔗',
+    search:'🔎', microscope:'🔬', flask:'🧪', flaskconical:'🧪', atom:'⚛️',
+    graduationcap:'🎓', school:'🏫', pencil:'✏️', pentool:'🖊️', notebook:'📓',
+    clipboardlist:'📋', checksquare:'✅', target:'🎯', trophy:'🏆', brain:'🧠',
+    bot:'🤖', code:'💻', terminal:'⌨️', settings:'⚙️', wrench:'🔧',
+    qrcode:'🔳', image:'🖼️', camera:'📷', video:'🎬', music:'🎵',
+    palette:'🎨', timer:'⏱️', clock:'🕐', calendar:'📅', zap:'⚡',
+    mail:'✉️', messagesquare:'💬', users:'👥', user:'👤', bell:'🔔',
+    circledollarsign:'💰', wallet:'👛', shoppingcart:'🛒' };
+  function appIcon(raw, alias) {
+    const byAlias = alias && ALIAS_ICON[String(alias).trim().toLowerCase()];
+    if (byAlias) return byAlias;
+    const s = String(raw || '').trim();
+    if (!s) return '🧩';
+    if (!/[A-Za-z0-9]/.test(s)) return s;
+    return LUCIDE_EMOJI[s.toLowerCase().replace(/[^a-z0-9]/g, '')] || '🧩';
+  }
 
   // Portal apps (cài qua /portal-apps.html) — alias hoá thành "portal:<id>"
   async function fetchPortalApps() {
@@ -123,7 +153,7 @@
       const all = [...(own || []), ...(pub || []), ...(builtin || [])];
       const pa = all.find(a => String(a.id) === String(id));
       if (pa) renderEmbed({
-        id: 'portal:' + pa.id, name: pa.name, icon: pa.icon || '🧩',
+        id: 'portal:' + pa.id, name: pa.name, icon: appIcon(pa.icon),
         tag: pa.kind === 'builtin' ? (pa.category || 'Built-in') : 'Portal app',
         color: '#fbbf24', path: pa.url, url: pa.url,
       });
@@ -138,57 +168,62 @@
       renderGrid([]);
     }
   } else {
-    try { window.tiziaTrack?.('app_grid_view', { count: APPS.length }); } catch {}
+    try { window.tiziaTrack?.('app_grid_view'); } catch {}
     fetchPortalApps().then(({ own, public: pub, builtin }) =>
       renderGrid([...(own || []), ...(pub || []), ...(builtin || [])]));
   }
 
+  // Nhóm app theo trường — bản chạy tay của web-next/lib/app-groups.ts (2 bản phải khớp).
+  const DOMAIN_ORDER = ['preschool','primary','secondary','highschool','it','pharmacy',
+    'language','driving','general','community'];
+  const DOMAIN_LABEL = { preschool:'🍼 Mầm non', primary:'🎒 Tiểu học',
+    secondary:'📚 Trung học cơ sở', highschool:'🎓 Trung học phổ thông',
+    it:'💻 Công nghệ thông tin', pharmacy:'💊 Dược', language:'🌍 Ngoại ngữ',
+    driving:'🚗 Lái xe', general:'🛠️ Dùng chung', community:'🧩 Cộng đồng đóng góp' };
+  function groupByDomain(apps) {
+    const buckets = new Map();
+    for (const app of apps) {
+      const key = (app.domain && DOMAIN_LABEL[app.domain]) ? app.domain : 'community';
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(app);
+    }
+    return DOMAIN_ORDER.filter(k => (buckets.get(k) || []).length).map(k => ({
+      key: k, label: DOMAIN_LABEL[k],
+      apps: buckets.get(k).sort((a, b) => String(a.name).localeCompare(String(b.name), 'vi')),
+    }));
+  }
+
   function renderGrid(portalApps = []) {
     document.body.style.display = 'block';
-    const portalCards = portalApps.length ? `
-        <h2 style="margin:32px 0 14px; font-size:18px;">
-          🧩 Apps cộng đồng
-          <a href="portal-apps.html" style="float:right; font-size:13px; font-weight:600; color:#fbbf24; text-decoration:none;">
-            + Cài app mới (dev) →
-          </a>
-        </h2>
-        <div class="grid">
-          ${portalApps.map(a => `
-            <a class="app" style="--c:#fbbf24" href="?app=portal:${a.id}">
-              <div class="ico">${a.icon || '🧩'}</div>
-              <h3>${escapeHtml(a.name)}</h3>
-              <div class="tag">${escapeHtml(a.alias)}${a.version ? ' · v' + a.version : ''}</div>
-              <p>${escapeHtml(a.description || 'Portal app cài qua manifest + zip.')}</p>
-              <div class="go">Mở ứng dụng →</div>
-            </a>`).join('')}
-        </div>` : `
-        <h2 style="margin:32px 0 14px; font-size:18px;">
-          🧩 Apps cộng đồng
-          <a href="portal-apps.html" style="float:right; font-size:13px; font-weight:600; color:#fbbf24; text-decoration:none;">
-            + Cài app mới (dev) →
-          </a>
-        </h2>
-        <p class="lead" style="opacity:.7;">Chưa có Portal app nào.
-          <a href="portal-apps.html" style="color:#fbbf24;">Cài app đầu tiên</a> theo chuẩn manifest + zip.</p>`;
+    const groups = groupByDomain(portalApps);
+    const cardsOf = (list) => list.map(a => `
+            <a class="app" href="/app/${encodeURIComponent(a.alias)}" title="${escapeHtml(a.description || a.name)}">
+              <div class="ico">${appIcon(a.icon, a.alias)}</div>
+              <div class="txt">
+                <h3>${escapeHtml(a.name)}</h3>
+                <p>${escapeHtml(a.description || 'Ứng dụng trong Tizia')}</p>
+              </div>
+            </a>`).join('');
+    const portalCards = groups.length ? `
+        <nav class="jump">
+          ${groups.map(g => `<a href="#nhom-${g.key}">${g.label} <span>${g.apps.length}</span></a>`).join('')}
+        </nav>
+        ${groups.map(g => `
+        <section id="nhom-${g.key}" class="grp">
+          <h2>${g.label} <span>${g.apps.length} ứng dụng</span></h2>
+          <div class="grid">${cardsOf(g.apps)}</div>
+        </section>`).join('')}` : `
+        <p class="lead" style="opacity:.7;">Chưa có ứng dụng nào.
+          <a href="/dev" style="color:#fbbf24;">Tự làm app đầu tiên</a> theo chuẩn manifest + zip.</p>`;
     root.innerHTML = `
       <div class="top">
         <a class="home" href="index.html">← Tizia</a>
-        <h1>🔌 Ứng dụng tích hợp <span class="dim">· Tizia</span></h1>
+        <h1>🧩 Ứng dụng <span class="dim">· Tizia</span></h1>
       </div>
       <div class="wrap">
-        <p class="lead">Các hệ thống đồng hành được nhúng thẳng vào Tizia qua cùng một origin.
-          Mỗi ứng dụng mở trong khung nhúng có thanh điều hướng quay lại. Nếu một ứng dụng chưa chạy,
-          bạn sẽ thấy hướng dẫn khởi động ngay trong khung.</p>
-        <div class="grid">
-          ${APPS.map(a => `
-            <a class="app" style="--c:${a.color}" href="?app=${a.id}">
-              <div class="ico">${a.icon}</div>
-              <h3>${a.name}</h3>
-              <div class="tag">${a.tag}</div>
-              <p>${a.desc}</p>
-              <div class="go">Mở ứng dụng →</div>
-            </a>`).join('')}
-        </div>
+        <p class="lead">Công cụ và trò chơi học tập chạy ngay trong Tizia — bấm để mở trong khung,
+          không rời khỏi trang. Bạn cũng có thể <a href="/dev" style="color:#fbbf24;">tự viết app</a>
+          rồi cài vào đây.</p>
         ${portalCards}
       </div>`;
   }

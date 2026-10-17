@@ -23,7 +23,7 @@
       linear-gradient(180deg, var(--bg-1) 0%, var(--bg-2) 60%, var(--bg-3) 100%);
     padding: 32px 20px 60px;
   }
-  .container { max-width: 1200px; margin: 0 auto; }
+  .container { max-width:none; margin: 0 auto; }
   .back { display: inline-flex; align-items: center; gap: 6px; opacity: 0.75; text-decoration: none; color: white; font-size: 13px; margin-bottom: 18px; }
   .back:hover { opacity: 1; }
   .hero { text-align: center; margin-bottom: 36px; }
@@ -168,15 +168,15 @@
     <div class="logo">🧪</div>
     <h1>Hub Bào chế GMP</h1>
     <p class="tagline">
-      Mô phỏng <b>pha chế thuốc theo đơn</b> trong nhiều phiên bản công nghệ — cân hoạt chất,
-      đong dung môi, q.s. nước cất, đóng chai. 8 đơn từ Siro Paracetamol đến nhỏ mắt NaCl,
-      <b>2 tay phối hợp</b> qua MediaPipe để rót ổn định hơn.
+      Phòng bào chế mô phỏng <b>12 bài thực hành</b> bám giáo trình <b>Thực hành Bào chế (DUOC 04)</b> —
+      từ nhũ tương, hỗn dịch, thuốc tiêm, nhỏ mắt, thuốc mỡ, thuốc đặt đến viên nén, nang cứng.
+      Mỗi bài: phân tích công thức → thao tác 3D đúng quy trình → kiểm tra chất lượng thành phẩm.
     </p>
     <div class="pills">
-      <span class="pill">📱 Mobile · Desktop · VR / XR</span>
-      <span class="pill">🤲 2 tay MediaPipe</span>
-      <span class="pill">🎯 8 đơn · Free-form</span>
-      <span class="pill">🎮 8 phiên bản gộp 1 card</span>
+      <span class="pill">📚 12 bài giáo trình</span>
+      <span class="pill">🧫 24 thao tác bào chế 3D</span>
+      <span class="pill">📖 Phân tích vai trò thành phần</span>
+      <span class="pill">✅ Kiểm chất lượng thành phẩm</span>
     </div>
   </div>
 
@@ -195,37 +195,51 @@
   </div>
 
   <div class="section-title">
-    <h2>🎯 Chọn đơn pha chế (8 đơn)</h2>
-    <span class="hint">Từ Siro Paracetamol đến Nhỏ mắt NaCl 0.9%</span>
+    <h2>📚 12 bài thực hành theo giáo trình</h2>
+    <span class="hint">Chọn bài để vào phòng bào chế 3D</span>
   </div>
 
-  <div class="recipes">
-    <a class="recipe" href="compounding-lab.html?recipe=siro-paracetamol"><div class="icon">🍯</div><div class="lvl-num">Đơn 1</div><div class="rname">Siro Para</div></a>
-    <a class="recipe" href="compounding-lab.html?recipe=dung-dich-vitc"><div class="icon">🍋</div><div class="lvl-num">Đơn 2</div><div class="rname">DD VitC</div></a>
-    <a class="recipe" href="compounding-lab.html?recipe=hon-dich-smecta"><div class="icon">🥛</div><div class="lvl-num">Đơn 3</div><div class="rname">Smecta</div></a>
-    <a class="recipe" href="compounding-lab.html?recipe=con-iod"><div class="icon">🟤</div><div class="lvl-num">Đơn 4</div><div class="rname">Cồn iod</div></a>
-    <a class="recipe" href="compounding-lab.html?recipe=siro-ho-thaoduoc"><div class="icon">🌿</div><div class="lvl-num">Đơn 5</div><div class="rname">Siro ho</div></a>
-    <a class="recipe" href="compounding-lab.html?recipe=kem-calamine"><div class="icon">🌸</div><div class="lvl-num">Đơn 6</div><div class="rname">Calamine</div></a>
-    <a class="recipe" href="compounding-lab.html?recipe=vien-ngam-vitc"><div class="icon">🟡</div><div class="lvl-num">Đơn 7</div><div class="rname">Ngậm VitC</div></a>
-    <a class="recipe" href="compounding-lab.html?recipe=nhomat-nacl"><div class="icon">💧</div><div class="lvl-num">Đơn 8</div><div class="rname">Nhỏ mắt</div></a>
+  <div class="recipes" id="lesson-grid">
+    <div style="grid-column:1/-1;opacity:.6;padding:14px;text-align:center">Đang tải bài học…</div>
   </div>
 
-  <div class="section-title">
-    <h2>🎮 Chọn phiên bản</h2>
-    <span class="hint">Tất cả 8 phiên bản gộp trong 1 card — chọn chip để đổi chế độ</span>
+  <div class="section-title" style="margin-top:34px">
+    <h2>🎮 Pha chế tự do (phiên bản cũ)</h2>
+    <span class="hint">8 đơn free-form + 2 tay MediaPipe — luyện thao tác định lượng</span>
   </div>
-
   <div id="topic-card"></div>
-
-  <footer>
-    <b>Tizia</b> — The Intelligent Zone for Interactive Academy<br>
-    Cùng 8 đơn GMP, cùng quy trình bào chế chuẩn, khác công nghệ — chọn phiên bản phù hợp.
-    Tất cả phiên bản web ghi điểm về cùng 1 dashboard giảng viên.
-  </footer>
 </div>
 
 <script type="module">
-  import { renderTopicCard } from './js/topic-modes.js';
+  // ── 12 bài giáo trình: đọc từ DB, gom theo bài, link sang bao-che-lab.html ──
+  const grid = document.getElementById('lesson-grid');
+  try {
+    const j = await fetch('/api/content/baoche-lessons', { credentials: 'same-origin' }).then(r => r.json());
+    const items = (j.items || []).slice().sort((a, b) => a.lesson - b.lesson);
+    if (items.length) {
+      const byLesson = {};
+      for (const r of items) (byLesson[r.lesson] ??= []).push(r);
+      let html = '';
+      for (const L of Object.keys(byLesson).sort((a, b) => a - b)) {
+        const title = byLesson[L][0].lessonTitle || '';
+        html += `<div style="grid-column:1/-1;font-size:12px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin:10px 2px 2px">Bài ${L} — ${title}</div>`;
+        html += byLesson[L].map(r => `
+          <a class="recipe" href="compounding-lab.html?src=baoche&recipe=${encodeURIComponent(r.id)}" title="${(r.name||'').replace(/"/g,'&quot;')}">
+            <div class="icon">${r.icon || '🧪'}</div>
+            <div class="lvl-num">${r.steps.length} bước</div>
+            <div class="rname">${r.name || ''}</div>
+          </a>`).join('');
+      }
+      grid.innerHTML = html;
+    } else {
+      grid.innerHTML = '<div style="grid-column:1/-1;opacity:.6;padding:14px;text-align:center">Chưa có dữ liệu bài học.</div>';
+    }
+  } catch (e) {
+    grid.innerHTML = '<div style="grid-column:1/-1;opacity:.6;padding:14px;text-align:center">Không tải được bài học.</div>';
+  }
+
+  // ── Phiên bản pha chế tự do cũ ──
+  const { renderTopicCard } = await import('./js/topic-modes.js');
   renderTopicCard({ host: document.getElementById('topic-card'), topicId: 'bao-che' });
 </script>
 

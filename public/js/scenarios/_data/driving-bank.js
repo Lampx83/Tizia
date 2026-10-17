@@ -1,8 +1,8 @@
-// Gộp 5 chương câu hỏi luật GT B1/B2 → nguồn seed collection 'driving-600'.
-import { ITEMS as C1 } from './driving/01-khai-niem-quy-tac.js';
-import { ITEMS as C2 } from './driving/02-van-hoa-dao-duc.js';
-import { ITEMS as C3 } from './driving/03-ky-thuat-lai-xe.js';
-import { ITEMS as C4 } from './driving/04-cau-tao-sua-chua.js';
-import { ITEMS as C5 } from './driving/05-nghiep-vu-van-tai.js';
+// Nguồn seed collection 'driving-600'.
+// 2026-07-03: thay bằng BỘ 600 CÂU CHÍNH THỨC do SV Thì Dũng cung cấp (req #44/#45),
+// đã lọc bỏ câu cần hình ảnh (biển báo/sa hình) → 344 câu trả lời được bằng chữ,
+// giữ đủ 58 câu điểm liệt (c:true). Các file chương cũ 01–05 giữ lại tham khảo,
+// KHÔNG còn dùng cho seed.
+import { ITEMS as OFFICIAL } from './driving/official-600.js';
 // id ổn định để seed/prune đúng (q<index>).
-export const ITEMS = [...C1, ...C2, ...C3, ...C4, ...C5].map((it, i) => ({ id: 'q' + String(i + 1).padStart(3, '0'), ...it }));
+export const ITEMS = OFFICIAL.map((it, i) => ({ id: 'q' + String(i + 1).padStart(3, '0'), ...it }));

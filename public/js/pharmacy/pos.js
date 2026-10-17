@@ -1,10 +1,10 @@
 // PosTerminal — port từ Pharmacy-AI/src/components/pos/PosTerminal.tsx (Phase 1).
 // MVP fidelity: cart, customer, payment, totals, invoice no, Rx warning, action log.
-import { ALL_DRUGS, getDrug, PHARMACY_INFO, VAT_RATE } from './catalog.js?v=ph0682';
+import { ALL_DRUGS, getDrug, PHARMACY_INFO, VAT_RATE } from './catalog.js?v=ph0804';
 
 const VND = (n) => new Intl.NumberFormat('vi-VN').format(Math.round(n)) + ' đ';
 
-export function openPosTerminal({ pickedIds = [], hasValidPrescription = false, onCheckout, onClose }) {
+export function openPosTerminal({ pickedIds = [], pickedItems = null, hasValidPrescription = false, onCheckout, onClose }) {
   // Build modal
   const overlay = document.createElement('div');
   overlay.className = 'pos-overlay';
@@ -53,10 +53,16 @@ export function openPosTerminal({ pickedIds = [], hasValidPrescription = false, 
   `;
   document.body.appendChild(overlay);
 
-  // State
-  const lines = pickedIds.map(id => {
+  // State — mỗi món trong khay = 1 dòng. Đơn vị ra lẻ (vỉ/gói/ống…) bán mode
+  // 'unit' (giá + đếm theo đơn vị), nguyên hộp bán mode 'box'. Ưu tiên pickedItems
+  // (kèm dạng bán) nếu có; fallback pickedIds (mọi món = nguyên hộp).
+  const UNIT_WORD = { vi: 'vỉ', goi: 'gói', ong: 'ống', lo: 'lọ', vien: 'viên' };
+  const src = (pickedItems && pickedItems.length)
+    ? pickedItems.map(it => ({ id: it.drugId, mode: it.mode || 'box', unitWord: UNIT_WORD[it.unit] || null }))
+    : pickedIds.map(id => ({ id, mode: 'box', unitWord: null }));
+  const lines = src.map(({ id, mode, unitWord }) => {
     const d = getDrug(id);
-    return d ? { id, qty: 1, discountPct: 0, mode: 'box' } : null;
+    return d ? { id, qty: 1, discountPct: 0, mode, unitWord } : null;
   }).filter(Boolean);
   const meta = { customerName: '', customerPhone: '', cashier: 'DS A', payment: 'cash', rx: hasValidPrescription };
 
@@ -73,7 +79,7 @@ export function openPosTerminal({ pickedIds = [], hasValidPrescription = false, 
   }
   function unitLabelFor(l) {
     const d = getDrug(l.id);
-    return l.mode === 'unit' ? (d.unit || 'đơn vị') : 'hộp';
+    return l.mode === 'unit' ? (l.unitWord || d.unit || 'đơn vị') : 'hộp';
   }
   function lineTotal(l) { return unitPriceFor(l) * l.qty * (1 - l.discountPct / 100); }
 

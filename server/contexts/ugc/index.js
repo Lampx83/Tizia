@@ -18,55 +18,6 @@ const CREATOR_SHARE_PCT = 70;     // 70% reward về creator
 const MAX_QUESTIONS = 15;
 const MIN_QUESTIONS = 3;
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS ugc_quests (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    creator_id      INTEGER NOT NULL,
-    title           TEXT NOT NULL,
-    description     TEXT,
-    subject_tag     TEXT,                -- 'toan','van','anh','khoa-hoc','su-dia',...
-    grade_tag       TEXT,                -- '1','2','3',...
-    questions       TEXT NOT NULL,       -- JSON array
-    plays           INTEGER NOT NULL DEFAULT 0,
-    likes           INTEGER NOT NULL DEFAULT 0,
-    flags           INTEGER NOT NULL DEFAULT 0,
-    status          TEXT NOT NULL DEFAULT 'published', -- published|hidden|removed
-    created_at      INTEGER NOT NULL,
-    updated_at      INTEGER NOT NULL,
-    FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
-  );
-  CREATE INDEX IF NOT EXISTS idx_ugc_subject ON ugc_quests(subject_tag, status);
-  CREATE INDEX IF NOT EXISTS idx_ugc_creator ON ugc_quests(creator_id);
-
-  CREATE TABLE IF NOT EXISTS ugc_plays (
-    user_id       INTEGER NOT NULL,
-    quest_id      INTEGER NOT NULL,
-    score         INTEGER NOT NULL,        -- % đúng
-    played_at     INTEGER NOT NULL,
-    PRIMARY KEY (user_id, quest_id, played_at),
-    FOREIGN KEY (user_id)  REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (quest_id) REFERENCES ugc_quests(id) ON DELETE CASCADE
-  );
-
-  CREATE TABLE IF NOT EXISTS ugc_likes (
-    user_id       INTEGER NOT NULL,
-    quest_id      INTEGER NOT NULL,
-    PRIMARY KEY (user_id, quest_id),
-    FOREIGN KEY (user_id)  REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (quest_id) REFERENCES ugc_quests(id) ON DELETE CASCADE
-  );
-
-  CREATE TABLE IF NOT EXISTS ugc_flags (
-    user_id       INTEGER NOT NULL,
-    quest_id      INTEGER NOT NULL,
-    reason        TEXT NOT NULL,
-    flagged_at    INTEGER NOT NULL,
-    PRIMARY KEY (user_id, quest_id),
-    FOREIGN KEY (user_id)  REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (quest_id) REFERENCES ugc_quests(id) ON DELETE CASCADE
-  );
-`);
-
 function validateQuestions(qs) {
   if (!Array.isArray(qs)) return { ok: false, error: 'questions phải là array' };
   if (qs.length < MIN_QUESTIONS || qs.length > MAX_QUESTIONS) {
@@ -115,6 +66,7 @@ const _insertStmt = db.prepare(`
      questions, created_at, updated_at)
   VALUES (@creator_id, @title, @description, @subject_tag, @grade_tag,
           @questions, @created_at, @updated_at)
+  RETURNING id
 `);
 
 const _updateStmt = db.prepare(`
@@ -150,25 +102,25 @@ function publicQuest(row, includeAnswers = false) {
 
 export function attachUgc(router) {
   // List marketplace
-  router.get('/api/ugc/quests', (req, res) => {
+  router.get('/api/ugc/quests', async (req, res) => {
     const subject = String(req.query.subject || '');
     const grade = String(req.query.grade || '');
     const limit = Math.min(60, Math.max(1, Number(req.query.limit) || 30));
-    const rows = _listStmt.all(subject, subject, grade, grade, limit);
+    const rows = await _listStmt.all(subject, subject, grade, grade, limit);
     res.json({ items: rows.map(r => publicQuest(r)) });
   });
 
   // Detail (không trả correct cho non-creator)
-  router.get('/api/ugc/quests/:id', (req, res) => {
+  router.get('/api/ugc/quests/:id', async (req, res) => {
     const id = Number(req.params.id);
-    const row = _getStmt.get(id);
+    const row = await _getStmt.get(id);
     if (!row || row.status !== 'published') return res.status(404).json({ error: 'not_found' });
     const isCreator = req.user && req.user.id === row.creator_id;
     res.json({ quest: publicQuest(row, isCreator) });
   });
 
   // Create
-  router.post('/api/ugc/quests', requireAuth, (req, res) => {
+  router.post('/api/ugc/quests', requireAuth, async (req, res) => {
     const b = req.body || {};
     const title = String(b.title || '').trim().slice(0, 100);
     const description = String(b.description || '').slice(0, 500);
@@ -178,7 +130,7 @@ export function attachUgc(router) {
     const v = validateQuestions(b.questions);
     if (!v.ok) return res.status(400).json({ error: v.error });
     const now = Date.now();
-    const info = _insertStmt.run({
+    const info = await _insertStmt.run({
       creator_id: req.user.id,
       title, description, subject_tag, grade_tag,
       questions: JSON.stringify(b.questions),
@@ -188,9 +140,9 @@ export function attachUgc(router) {
   });
 
   // Update (creator only)
-  router.put('/api/ugc/quests/:id', requireAuth, (req, res) => {
+  router.put('/api/ugc/quests/:id', requireAuth, async (req, res) => {
     const id = Number(req.params.id);
-    const row = _getStmt.get(id);
+    const row = await _getStmt.get(id);
     if (!row) return res.status(404).json({ error: 'not_found' });
     if (row.creator_id !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'forbidden' });
@@ -198,7 +150,7 @@ export function attachUgc(router) {
     const b = req.body || {};
     const v = validateQuestions(b.questions);
     if (!v.ok) return res.status(400).json({ error: v.error });
-    _updateStmt.run({
+    await _updateStmt.run({
       id, creator_id: row.creator_id,
       title: String(b.title || row.title).slice(0, 100),
       description: String(b.description || '').slice(0, 500),
@@ -211,8 +163,8 @@ export function attachUgc(router) {
   });
 
   // List của creator hiện tại (gồm cả hidden để creator quản lý)
-  router.get('/api/ugc/mine', requireAuth, (req, res) => {
-    const rows = db.prepare(`
+  router.get('/api/ugc/mine', requireAuth, async (req, res) => {
+    const rows = await db.prepare(`
       SELECT q.*, u.display_name AS creator_name, u.role AS creator_role
         FROM ugc_quests q JOIN users u ON u.id = q.creator_id
        WHERE q.creator_id = ?
@@ -222,9 +174,9 @@ export function attachUgc(router) {
   });
 
   // Submit play results: body { answers: [int...] } — server chấm + cộng reward
-  router.post('/api/ugc/quests/:id/play', requireAuth, (req, res) => {
+  router.post('/api/ugc/quests/:id/play', requireAuth, async (req, res) => {
     const id = Number(req.params.id);
-    const row = _getStmt.get(id);
+    const row = await _getStmt.get(id);
     if (!row || row.status !== 'published') return res.status(404).json({ error: 'not_found' });
     let qs = [];
     try { qs = JSON.parse(row.questions); } catch {}
@@ -241,30 +193,30 @@ export function attachUgc(router) {
     const scorePct = Math.round((correct / qs.length) * 100);
 
     // Persist play
-    db.prepare(`INSERT INTO ugc_plays (user_id, quest_id, score, played_at) VALUES (?, ?, ?, ?)`)
+    await db.prepare(`INSERT INTO ugc_plays (user_id, quest_id, score, played_at) VALUES (?, ?, ?, ?)`)
       .run(req.user.id, id, scorePct, Date.now());
-    _bumpPlayStmt.run(id);
+    await _bumpPlayStmt.run(id);
 
     // Reward player: scale với score (50% → 0; 100% → full)
     const factor = Math.max(0, (scorePct - 50) / 50);
     const playerCoin = Math.round(REWARD_COIN * factor);
     const playerXp   = Math.round(REWARD_XP   * factor);
     if (playerCoin > 0 || playerXp > 0) {
-      const w = getUserWallet(req.user.id) || { coins: 0, xp: 0 };
-      upsertUserWallet(req.user.id, {
+      const w = await getUserWallet(req.user.id) || { coins: 0, xp: 0 };
+      await upsertUserWallet(req.user.id, {
         coins: (w.coins || 0) + playerCoin,
         xp:    (w.xp    || 0) + playerXp,
       }, { monotonic: false });
-      try { addLeagueWeekXp(req.user.id, playerXp); } catch {}
-      try { trackEngagementProgress(req.user.id, 'quiz', correct); } catch {}
+      try { await addLeagueWeekXp(req.user.id, playerXp); } catch {}
+      try { await trackEngagementProgress(req.user.id, 'quiz', correct); } catch {}
     }
 
     // Reward creator: 70% của playerCoin (kinh tế ảo) — không lấy của player.
     if (row.creator_id !== req.user.id && playerCoin > 0) {
       const creatorCoin = Math.round(playerCoin * CREATOR_SHARE_PCT / 100);
       if (creatorCoin > 0) {
-        const cw = getUserWallet(row.creator_id) || { coins: 0 };
-        upsertUserWallet(row.creator_id, {
+        const cw = await getUserWallet(row.creator_id) || { coins: 0 };
+        await upsertUserWallet(row.creator_id, {
           coins: (cw.coins || 0) + creatorCoin,
         }, { monotonic: false });
       }
@@ -277,35 +229,35 @@ export function attachUgc(router) {
   });
 
   // Like / unlike (toggle)
-  router.post('/api/ugc/quests/:id/like', requireAuth, (req, res) => {
+  router.post('/api/ugc/quests/:id/like', requireAuth, async (req, res) => {
     const id = Number(req.params.id);
-    const existing = db.prepare(`SELECT 1 FROM ugc_likes WHERE user_id = ? AND quest_id = ?`)
+    const existing = await db.prepare(`SELECT 1 FROM ugc_likes WHERE user_id = ? AND quest_id = ?`)
       .get(req.user.id, id);
     if (existing) {
-      db.prepare(`DELETE FROM ugc_likes WHERE user_id = ? AND quest_id = ?`).run(req.user.id, id);
-      _decLikeStmt.run(id);
+      await db.prepare(`DELETE FROM ugc_likes WHERE user_id = ? AND quest_id = ?`).run(req.user.id, id);
+      await _decLikeStmt.run(id);
       return res.json({ ok: true, liked: false });
     }
-    db.prepare(`INSERT INTO ugc_likes (user_id, quest_id) VALUES (?, ?)`).run(req.user.id, id);
-    _bumpLikeStmt.run(id);
+    await db.prepare(`INSERT INTO ugc_likes (user_id, quest_id) VALUES (?, ?)`).run(req.user.id, id);
+    await _bumpLikeStmt.run(id);
     res.json({ ok: true, liked: true });
   });
 
   // Flag — báo cáo nội dung sai/độc hại. Tự hide khi flags ≥ 3.
-  router.post('/api/ugc/quests/:id/flag', requireAuth, (req, res) => {
+  router.post('/api/ugc/quests/:id/flag', requireAuth, async (req, res) => {
     const id = Number(req.params.id);
     const reason = String(req.body?.reason || 'other').slice(0, 60);
-    db.prepare(`INSERT OR IGNORE INTO ugc_flags (user_id, quest_id, reason, flagged_at)
+    await db.prepare(`INSERT OR IGNORE INTO ugc_flags (user_id, quest_id, reason, flagged_at)
                 VALUES (?, ?, ?, ?)`).run(req.user.id, id, reason, Date.now());
-    _bumpFlagStmt.run(id);
-    const row = _getStmt.get(id);
-    if (row && row.flags >= 3) _hideStmt.run(id);
+    await _bumpFlagStmt.run(id);
+    const row = await _getStmt.get(id);
+    if (row && row.flags >= 3) await _hideStmt.run(id);
     res.json({ ok: true, auto_hidden: row && row.flags >= 3 });
   });
 
   // Creator stats — earn coin, plays tổng
-  router.get('/api/ugc/me/stats', requireAuth, (req, res) => {
-    const row = db.prepare(`
+  router.get('/api/ugc/me/stats', requireAuth, async (req, res) => {
+    const row = await db.prepare(`
       SELECT COUNT(*) AS quests, SUM(plays) AS total_plays, SUM(likes) AS total_likes
         FROM ugc_quests
        WHERE creator_id = ? AND status != 'removed'

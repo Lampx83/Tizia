@@ -329,6 +329,19 @@
     transform: scaleX(-1); display: none;
   }
   #cam-preview.shown { display: block; }
+  #cam-dist {
+    position: absolute; bottom: 52px; right: 12px; z-index: 10;
+    width: 200px; text-align: center; display: none;
+    font-size: 11px; font-weight: 700; color: #fff;
+    padding: 3px 6px; border-radius: 6px; box-sizing: border-box;
+    background: rgba(0,0,0,0.55); transition: background .2s;
+    pointer-events: none;
+  }
+  #cam-dist.shown { display: block; }
+  #cam-dist.d-near { background: rgba(239,68,68,0.85); }
+  #cam-dist.d-ok   { background: rgba(34,197,94,0.9); }
+  #cam-dist.d-far  { background: rgba(59,130,246,0.85); }
+  #cam-dist.d-none { background: rgba(107,114,128,0.85); }
   #crosshair {
     position: absolute; top: 50%; left: 50%; margin: -8px 0 0 -8px;
     width: 16px; height: 16px; border: 2px solid #fff;
@@ -445,6 +458,7 @@
 </div>
 <div id="action-fab" title="Cài đặt nhanh">⚙️</div>
 <canvas id="cam-preview" width="200" height="150"></canvas>
+<div id="cam-dist"><span id="cam-dist-txt">Đưa tay vào khung</span></div>
 <div id="crosshair"></div>
 <div id="walk-hint">🚶 WASD đi · chuột nhìn · Click thao tác · <kbd>Esc</kbd> thoát</div>
 
@@ -544,6 +558,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { submitAttempt, getPlayerName, ensurePlayerName } from './js/api.js';
 import { sfx } from './js/sfx.js';
 import { showWelcomeCard } from './js/welcome-card.js';
+import { buildApparatus } from './js/pharmacy/baoche/stations.js?v=8';
 // Công thức pha chế + hoá chất từ DB (/api/content/lab-recipes, lab-reagents)
 // — không bundle nữa. REAGENTS lưu dạng 1 doc (object map).
 const [RECIPES, REAGENTS] = await Promise.all([
@@ -558,9 +573,67 @@ const getRecipeFromUrl = () => {
   return id ? getRecipeById(id) : null;
 };
 
+// ============================================================
+// CHẾ ĐỘ GIÁO TRÌNH (?src=baoche): nạp 12 bài (baoche-lessons) vào
+// RECIPES/REAGENTS để chạy CÙNG engine thật — sinh viên nhấc chai reagent
+// trên giá → đổ vào cốc/ống đong, cân đúng khối lượng ±tolerance, q.s., đóng chai.
+// Bước định lượng sinh từ CÔNG THỨC (mỗi hoạt chất 1 chai trên giá).
+// ============================================================
+const CURRICULUM = new URLSearchParams(location.search).get('src') === 'baoche';
+window.__BAOCHE = null;
+if (CURRICULUM) {
+  const LESSONS = await fetch('/api/content/baoche-lessons', { credentials: 'same-origin' })
+    .then(r => r.ok ? r.json() : { items: [] }).then(j => j.items || []).catch(() => []);
+  window.__BAOCHE = {}; for (const r of LESSONS) window.__BAOCHE[r.id] = r;
+  const slug = (s) => 'bc_' + String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 26);
+  const num = (s) => { const m = String(s || '').replace(',', '.').match(/[\d.]+/); return m ? parseFloat(m[0]) : NaN; };
+  const isQs = (s) => /vđ|vd|vừa đủ|q\.?s/i.test(String(s || ''));
+  const LIQ = /nước|dầu|ethanol|cồn|glycerin|glycol|dung dịch|sorbitol|siro|acid acetic|triethanolamin|tinh dầu|lecithin|nipagin|nipasol/i;
+  const powCol = [0xf2ede0, 0xfff7e0, 0xf5f5f5, 0xfff9c4, 0xefe6d2, 0xfafaf0, 0xffffff, 0xf0e9d8];
+  const liqCol = [0xd8e8ff, 0xffe0a3, 0xe6e6fa, 0xfff7d6, 0xdff0ff, 0xf7cfb5, 0xcfe0f0, 0xe0f2ff];
+  let ci = 0;
+  const curReagents = { water: REAGENTS.water || { name: 'Nước cất', color: 0xd1f5ff, liquid: 0xe0f2ff, isPowder: false, category: 'Dung môi' } };
+  const converted = [];
+  for (const r of LESSONS) {
+    const steps = [{ reagentId: 'beaker', action: 'place-on-balance', label: 'Đặt cốc lên cân điện tử để tare 0' }];
+    const ings = (r.formula || []).map(f => ({ name: f.name, amount: num(f.amount), unit: (f.unit || '').toLowerCase(), qs: isQs(f.amount) })).filter(x => x.name);
+    for (const ing of ings) {
+      const id = slug(ing.name);
+      if (!curReagents[id]) {
+        const liquid = ing.unit === 'ml' || LIQ.test(ing.name);
+        const col = (liquid ? liqCol : powCol)[ci % 8];
+        curReagents[id] = { name: ing.name, color: col, liquid: col, isPowder: !liquid, category: 'Thành phần công thức' };
+        ci++;
+      }
+      if (ing.qs || !isFinite(ing.amount) || ing.amount <= 0) continue;
+      const unit = ing.unit === 'ml' ? 'mL' : 'g';
+      const amount = ing.unit === 'mg' ? ing.amount / 1000 : ing.amount;
+      const tol = +Math.max(unit === 'g' ? 0.02 : 0.5, amount * 0.03).toFixed(unit === 'g' ? 3 : 2);
+      if (unit === 'mL') {
+        steps.push({ reagentId: id, action: 'pour', target: amount, unit: 'mL', tolerance: tol, container: 'cylinder', label: `Đong ${ing.name} ${amount} mL vào ống đong` });
+        steps.push({ reagentId: id, action: 'transfer', container: 'beaker-from-cylinder', label: `Đổ ${ing.name} từ ống đong vào cốc` });
+      } else {
+        steps.push({ reagentId: id, action: 'pour', target: amount, unit: 'g', tolerance: tol, container: 'beaker', label: `Cân ${ing.name} ${amount} g vào cốc` });
+      }
+    }
+    if (ings.find(x => x.qs) && (r.finalUnit === 'mL' || !r.finalUnit)) {
+      steps.push({ reagentId: 'water', action: 'pour', target: r.finalVolume || 100, unit: 'mL', tolerance: 1.5, container: 'beaker', label: `Thêm nước cất vừa đủ ${r.finalVolume || 100} mL (q.s.)` });
+    }
+    steps.push({ reagentId: 'beaker', action: 'bottle', label: 'Đổ thành phẩm vào lọ/chai, dán nhãn đúng quy chế' });
+    converted.push({
+      id: r.id, name: r.name, icon: r.icon || '🧪', level: r.lesson,
+      short: r.methodName || r.short || '', desc: `Bài ${r.lesson} — ${r.lessonTitle || ''}. ${r.methodName || ''}`,
+      finalVolume: r.finalVolume || 100, finalUnit: r.finalUnit || 'mL', finalColor: r.finalColor || 0xcbb26b,
+      finalBottleLabel: r.name, indication: r.indication || '', steps, distractors: [], _baoche: r,
+    });
+  }
+  Object.assign(REAGENTS, curReagents);
+  RECIPES.length = 0; RECIPES.push(...converted);
+}
+
 const sessionStartedAt = Date.now();
 
-showWelcomeCard({
+if (!CURRICULUM) showWelcomeCard({
   icon: '🧪',
   title: 'Phòng bào chế thuốc — Hướng dẫn',
   intro: 'Thực hiện đơn pha chế theo đúng quy trình GMP rút gọn. 5 bài từ dễ đến khó.',
@@ -2035,7 +2108,10 @@ function setupReagents(recipe) {
   }
   const ids = [...needed, ...(recipe.distractors || [])];
   const N = ids.length;
-  const xStart = -1.3, xStep = 2.5 / Math.max(N - 1, 1);
+  // Curriculum: dồn nguyên liệu về NỬA TRÁI giá (để dụng cụ vào nửa phải).
+  const xStart = CURRICULUM ? -1.65 : -1.3;
+  const xSpan = CURRICULUM ? 1.95 : 2.5;
+  const xStep = xSpan / Math.max(N - 1, 1);
   ids.forEach((id, i) => {
     const r = REAGENTS[id];
     if (!r) return;
@@ -2049,6 +2125,54 @@ function setupReagents(recipe) {
     scene.add(b);
     addMouthMarker(b, 0.312, 0xff2020);    // RED — reagent bottle lip
     reagents.push(b);
+  });
+}
+
+// ============================================================
+// CHẾ ĐỘ GIÁO TRÌNH — bày TRỌN BỘ DỤNG CỤ đặc thù của bài lên bàn để SV lấy.
+// Nguồn: _baoche.equipment[] + suy từ action các bước gốc. Hình dạng lấy từ
+// stations.js (buildApparatus). Hover hiện tên; click hiện gợi ý dùng ở bước nào.
+// ============================================================
+const curriculumEquip = [];
+function clearEquipment() { for (const g of curriculumEquip) { scene.remove(g); g.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose()); }); } curriculumEquip.length = 0; }
+const ACT_EQUIP = {
+  heat: ['waterbath', 'Nồi đun cách thủy'], melt: ['hotplate', 'Bếp đun chảy'],
+  emulsify: ['homogenizer', 'Máy đồng nhất hóa'], sieve: ['sieve', 'Rây'],
+  filter: ['funnel', 'Bộ lọc màng / hút chân không'], autoclave: ['autoclave', 'Nồi hấp tiệt trùng'],
+  sterilize: ['autoclave', 'Nồi hấp tiệt trùng'], 'fill-capsule': ['capsule', 'Máy đóng nang'],
+  press: ['press', 'Máy dập viên'], mold: ['mold', 'Khuôn thuốc đặt'], demold: ['mold', 'Khuôn thuốc đặt'],
+  'adjust-ph': ['phmeter', 'Máy đo pH'], dry: ['oven', 'Tủ sấy'], cool: ['oven', 'Tủ làm lạnh'],
+  'seal-ampoule': ['burner', 'Máy hàn ống tiêm'], degas: ['degas', 'Bình sục khí trơ (N₂)'],
+};
+const EQUIP_NAME_KEY = [
+  [/cách thủy|đun cách/i, 'waterbath', 'Nồi đun cách thủy'], [/đồng nhất/i, 'homogenizer', 'Máy đồng nhất hóa'],
+  [/bếp|đun chảy|bát sứ/i, 'hotplate', 'Bếp / bát sứ đun chảy'], [/rây/i, 'sieve', 'Rây'],
+  [/lọc|màng|chân không/i, 'funnel', 'Bộ lọc màng'], [/hấp|autoclave|tiệt trùng/i, 'autoclave', 'Nồi hấp tiệt trùng'],
+  [/đóng nang/i, 'capsule', 'Máy đóng nang'], [/dập viên/i, 'press', 'Máy dập viên'],
+  [/khuôn/i, 'mold', 'Khuôn thuốc đặt'], [/đo ph|máy ph/i, 'phmeter', 'Máy đo pH'],
+  [/sấy/i, 'oven', 'Tủ sấy'], [/đóng thuốc tiêm|hàn/i, 'burner', 'Máy đóng/hàn ống tiêm'],
+];
+function spawnEquipment(recipe) {
+  clearEquipment();
+  const b = recipe && recipe._baoche; if (!b) return;
+  const wanted = new Map(); // key -> tên hiển thị
+  for (const s of (b.steps || [])) { const m = ACT_EQUIP[s.action]; if (m) wanted.set(m[0], m[1]); }
+  for (const e of (b.equipment || [])) { for (const [re, key, label] of EQUIP_NAME_KEY) if (re.test(e)) wanted.set(key, label); }
+  wanted.delete('mortar'); // cối chày đã có sẵn trên bàn
+  const keys = [...wanted.keys()];
+  const N = keys.length; if (!N) return;
+  // Đặt dụng cụ lên NỬA PHẢI của giá phía trên (không để trên bàn cho gọn).
+  const xL = 0.55, xR = 1.65;
+  keys.forEach((key, i) => {
+    let built; try { built = buildApparatus(key, THREE, { params: { tempMin: 60, tempMax: 70, mesh: 350, pore: '0.2µm', phMin: 5, phMax: 7 }, action: '', label: '' }, recipe); } catch { return; }
+    const g = built.group;
+    const x = N === 1 ? 1.1 : xL + i * ((xR - xL) / (N - 1));
+    g.position.set(x, 1.69, -0.55);
+    g.scale.setScalar(0.62);
+    try { built.tick(0, 0.0, false); } catch {}
+    g.userData = { kind: 'equipment', id: 'equip-' + key, name: wanted.get(key), label: 'Dụng cụ bài thực hành' };
+    g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    scene.add(g); curriculumEquip.push(g);
   });
 }
 
@@ -2831,6 +2955,8 @@ const _liftFwd = new THREE.Vector3();
 const _liftRight = new THREE.Vector3();
 const _liftUp = new THREE.Vector3(0, 1, 0);
 const _liftHand = new THREE.Vector3();
+const _hsNdc = new THREE.Vector2();
+const _hsRay = new THREE.Raycaster();
 
 // World-space target position for an object held "in hand". Default is a
 // fixed camera-relative slot at front-right (the "sáng" behaviour the
@@ -2840,11 +2966,19 @@ function computeHandSlot(obj) {
   const bb = new THREE.Box3().setFromObject(obj);
   const size = bb.getSize(new THREE.Vector3());
 
-  // MediaPipe right-hand cursor — live tracking
-  if (handState.running && handState.hands[1].active && handCursors[1].visible) {
-    _liftHand.copy(handCursors[1].position);
-    _liftHand.y -= size.y * 0.4;
-    _liftHand.y += Math.sin(performance.now() * 0.0024) * LIFT_BOB_AMP;
+  // MediaPipe: vật đi theo CHÍNH tay đang cầm (carryHand). Vị trí = dọc TIA NHÌN
+  // qua bàn tay, KHOẢNG CÁCH theo "sải tay": tay lại gần (to) → vật lại gần; ra
+  // xa (nhỏ) → vật ra xa. Nhờ vậy đưa tay gần/xa thì vật đi theo gần/xa.
+  const ch = handState.carryHand >= 0 ? handState.carryHand : 1;
+  const chand = handState.hands[ch];
+  if (handState.running && chand?.active && handCursors[ch]?.visible) {
+    const span = chand.sspan || 0.18;
+    const tDepth = Math.min(1, Math.max(0, (span - 0.12) / (0.30 - 0.12))); // 0 = xa, 1 = gần
+    const dist = 1.35 - tDepth * (1.35 - 0.42);                             // 1.35m (xa) → 0.42m (gần)
+    _hsNdc.set(chand.sx || 0, chand.sy || 0);
+    _hsRay.setFromCamera(_hsNdc, camera);
+    _liftHand.copy(_hsRay.ray.origin).addScaledVector(_hsRay.ray.direction, dist);
+    _liftHand.y -= size.y * 0.30;
     return _liftHand;
   }
 
@@ -2920,11 +3054,14 @@ function updateLift() {
     obj.position.lerpVectors(liftState.fromPos, target, e);
     if (t >= 1) liftState.phase = 'held';
   } else if (liftState.phase === 'held') {
-    // Chase the camera-relative target every frame + idle rotate + tilt
     const target = computeHandSlot(obj);
-    obj.position.lerp(target, 0.22);
-    obj.rotation.y += 0.006;
-    obj.rotation.z = Math.sin(performance.now() * 0.0018) * 0.08;
+    if (handState.running && handState.carryHand >= 0) {
+      obj.position.lerp(target, 0.5);   // cầm bằng tay: bám chặt, không tự xoay (VR)
+    } else {
+      obj.position.lerp(target, 0.22);
+      obj.rotation.y += 0.006;
+      obj.rotation.z = Math.sin(performance.now() * 0.0018) * 0.08;
+    }
   } else if (liftState.phase === 'lowering') {
     const t = Math.min(1, elapsed / LIFT_MS);
     const e = 1 - Math.pow(1 - t, 3);
@@ -3411,10 +3548,26 @@ const handState = {
     { active: false, x: 0, y: 0, pinching: false, label: 'Right', color: 0xfb923c, ringHex: '#fb923c' },
   ],
   bothPinchAt: 0,           // timestamp the most recent both-pinch combo was detected
+  carryHand: -1,            // slot của tay đang cầm vật (để vật đi theo đúng tay đó)
 };
+// Vật CẦM ĐƯỢC bằng tay (nhấc–mang): reagent + cốc/ống đong/pipet/đũa/chày.
+function isGrabbable(grp) {
+  const u = grp?.userData; if (!u) return false;
+  if (u.kind === 'reagent') return true;
+  return ['beaker', 'cylinder', 'pipet', 'stirrer', 'pestle'].includes(u.id);
+}
 const handBtn = document.getElementById('hand-btn');
 const camPreviewEl = document.getElementById('cam-preview');
 const camCtx = camPreviewEl.getContext('2d');
+const camDistEl = document.getElementById('cam-dist');
+const camDistTxtEl = document.getElementById('cam-dist-txt');
+// Quy đổi "sải tay" (chuẩn hoá) → cự ly tay–webcam ≈ 8.2cm·độ-rộng-khung / span.
+// (lòng bàn tay ~9.5cm, FOV ngang ~60° → d ≈ 0.082 / span, mét)
+function spanToCm(span) { return span > 0.02 ? Math.round(0.082 / span * 100) : null; }
+function setCamDist(cls, txt) {
+  camDistEl.className = 'shown ' + cls;
+  camDistTxtEl.textContent = txt;
+}
 // Two cursor spheres in 3D — one per hand.
 const handCursors = [
   new THREE.Mesh(new THREE.SphereGeometry(0.020, 16, 16), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.92, depthTest: false })),
@@ -3442,15 +3595,44 @@ if (!SECURE_FOR_CAMERA) {
   handBtn.addEventListener('click', () => handState.running ? stopHandTracking() : initHandTracking());
 }
 
-async function initHandTracking() {
-  handBtn.disabled = true; handBtn.textContent = '⏳ Đang tải MediaPipe...';
-  try {
+// Chế độ GIÁO TRÌNH: đưa nút điều khiển tay RA NGOÀI menu ⚙️ thành nút nổi độc
+// lập (luôn thấy) để SV bật MediaPipe dễ dàng.
+if (CURRICULUM && handBtn) {
+  document.body.appendChild(handBtn);
+  handBtn.style.position = 'fixed';
+  handBtn.style.right = '12px';
+  handBtn.style.bottom = '150px';
+  handBtn.style.zIndex = '35';
+  handBtn.style.padding = '10px 14px';
+  handBtn.style.borderRadius = '12px';
+  handBtn.style.fontSize = '13px';
+  handBtn.style.boxShadow = '0 6px 18px rgba(0,0,0,0.35)';
+}
+
+// Preload MediaPipe (module + WASM + model + tạo landmarker) TRƯỚC, ở nền —
+// để khi bấm chỉ cần xin webcam là chạy ngay, không phải chờ tải.
+let handPreloadPromise = null;
+let handPreloaded = false;
+function preloadHand() {
+  if (handPreloadPromise) return handPreloadPromise;
+  handPreloadPromise = (async () => {
     const { HandLandmarker, FilesetResolver } = await import('./vendor/mediapipe/vision_bundle.mjs');
     const fileset = await FilesetResolver.forVisionTasks('./vendor/mediapipe/wasm');
     handState.landmarker = await HandLandmarker.createFromOptions(fileset, {
       baseOptions: { modelAssetPath: './models/hand_landmarker.task', delegate: 'GPU' },
       runningMode: 'VIDEO', numHands: 2,
     });
+    handPreloaded = true;
+    if (!handState.running) handBtn.textContent = '🖐️ Điều khiển tay (sẵn sàng)';
+  })();
+  return handPreloadPromise;
+}
+
+async function initHandTracking() {
+  handBtn.disabled = true;
+  handBtn.textContent = handPreloaded ? '📷 Đang mở webcam...' : '⏳ Đang tải MediaPipe...';
+  try {
+    await preloadHand();   // đã preload thì trả về ngay
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 }, audio: false });
     handState.video = document.createElement('video');
     handState.video.srcObject = stream;
@@ -3462,8 +3644,9 @@ async function initHandTracking() {
     handBtn.textContent = '✋ Tắt hand tracking (2 tay)';
     handBtn.disabled = false;
     camPreviewEl.classList.add('shown');
+    setCamDist('d-none', 'Đưa tay vào khung');
     for (const c of handCursors) c.visible = true;
-    showToast('🤲 Hai tay: chụm cái+trỏ để cầm/đặt. Cầm chai + chụm tay kia vào cốc để rót ổn định.', 4500, 'ok');
+    showToast('📏 Ngồi cách webcam ~60–70 cm. Bàn tay đưa trong tầm 30–70 cm: lại gần → vật tiến, ra xa → vật lùi.', 5500, 'ok');
   } catch (err) {
     handBtn.disabled = false; handBtn.textContent = '🖐️ Bật điều khiển tay';
     showToast('❌ Hand tracking lỗi: ' + (err.message || err.name), 3000, 'err');
@@ -3477,9 +3660,17 @@ function stopHandTracking() {
   handBtn.classList.remove('active');
   handBtn.textContent = '🖐️ Bật điều khiển tay';
   camPreviewEl.classList.remove('shown');
+  camDistEl.className = '';
   for (const c of handCursors) c.visible = false;
   for (const h of handState.hands) { h.active = false; h.pinching = false; }
   twoHandBadgeEl.style.display = 'none';
+}
+
+// Chế độ giáo trình: preload MediaPipe ở nền ngay khi mở trang (khi đủ điều kiện
+// camera) để bấm nút là bật webcam chạy ngay, không phải chờ tải.
+if (CURRICULUM && SECURE_FOR_CAMERA) {
+  handBtn.textContent = '🖐️ Điều khiển tay (đang chuẩn bị…)';
+  (window.requestIdleCallback || ((f) => setTimeout(f, 1200)))(() => { preloadHand().catch(() => { handBtn.textContent = '🖐️ Bật điều khiển tay'; }); });
 }
 
 const _handPlaneN = new THREE.Vector3();
@@ -3502,6 +3693,7 @@ function updateHand(time) {
       handCursors[i].visible = false;
     }
     twoHandBadgeEl.style.display = 'none';
+    setCamDist('d-none', 'Đưa tay vào khung');
     return;
   }
 
@@ -3531,18 +3723,39 @@ function updateHand(time) {
     camCtx.moveTo(t.x * camPreviewEl.width, t.y * camPreviewEl.height);
     camCtx.lineTo(idx.x * camPreviewEl.width, idx.y * camPreviewEl.height);
     camCtx.stroke();
-    // NDC (mirror x)
+    // NDC (mirror x) + LÀM MƯỢT (EMA) để giảm rung tay.
     const px = (t.x + idx.x) / 2, py = (t.y + idx.y) / 2;
-    _handRay.x = (1 - px) * 2 - 1;
-    _handRay.y = -(py * 2 - 1);
+    let nx = (1 - px) * 2 - 1, ny = -(py * 2 - 1);
+    if (hand.sx === undefined) { hand.sx = nx; hand.sy = ny; }
+    hand.sx += (nx - hand.sx) * 0.4; hand.sy += (ny - hand.sy) * 0.4;
+    _handRay.x = hand.sx; _handRay.y = hand.sy;
     hand.x = _handRay.x; hand.y = _handRay.y;
     raycaster.setFromCamera(_handRay, camera);
-    camera.getWorldDirection(_handPlaneN);
-    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(_handPlaneN, new THREE.Vector3(0, 1.0, 0));
-    if (raycaster.ray.intersectPlane(plane, _handHit)) {
+    // ĐỘ SÂU THẬT (gần/xa): con trỏ BÁM vào hình học — trúng dụng cụ/chai thì đặt
+    // ngay lên vật đó (đúng gần/xa); trống thì rơi xuống MẶT BÀN (y≈0.95); vẫn
+    // trống (trỏ lên cao) thì dùng mặt phẳng đối diện camera.
+    hand.hoverGrp = null;
+    const chits = raycaster.intersectObjects(getClickable(), true);
+    if (chits.length) {
+      _handHit.copy(chits[0].point);
+      hand.hoverGrp = pickTopGroup(chits[0].object);
       handCursors[slot].position.copy(_handHit);
       handCursors[slot].visible = true;
+    } else {
+      const benchPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.95); // mặt bàn y=0.95
+      let ok = raycaster.ray.intersectPlane(benchPlane, _handHit) && _handHit.z > -1.0 && _handHit.z < 1.7 && Math.abs(_handHit.x) < 2.2;
+      if (!ok) {
+        camera.getWorldDirection(_handPlaneN);
+        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(_handPlaneN, new THREE.Vector3(0, 1.0, 0));
+        ok = raycaster.ray.intersectPlane(plane, _handHit);
+      }
+      if (ok) { handCursors[slot].position.copy(_handHit); handCursors[slot].visible = true; }
     }
+    // "Sải tay" (cổ tay ↔ khớp giữa) làm THƯỚC ĐỘ SÂU: tay lại gần camera → to hơn.
+    const wrist = lm[0], midMcp = lm[9];
+    const span = Math.hypot(wrist.x - midMcp.x, wrist.y - midMcp.y);
+    if (hand.sspan === undefined) hand.sspan = span;
+    hand.sspan += (span - hand.sspan) * 0.3;
     // Pinch detection (hysteresis)
     const pinchDist = Math.hypot(t.x - idx.x, t.y - idx.y);
     const wasPinching = hand.pinching;
@@ -3550,32 +3763,69 @@ function updateHand(time) {
     else if (hand.pinching && pinchDist > 0.08) hand.pinching = false;
     handCursors[slot].material.color.setHex(hand.pinching ? 0xef4444 : hand.color);
     handCursors[slot].scale.setScalar(hand.pinching ? 1.25 : 1.0);
-    // On pinch START → click on hovered object (per-hand click).
+    // ===== CẦM – MANG – THẢ kiểu VR =====
+    const grp = hand.hoverGrp;   // vật con trỏ tay đang trỏ (đã raycast ở trên)
     if (hand.pinching && !wasPinching) {
-      const hits = raycaster.intersectObjects(getClickable(), true);
-      if (hits.length) {
-        const grp = pickTopGroup(hits[0].object);
-        if (grp) {
-          // Flag two-hand bonus if the OTHER hand is also pinching.
-          const otherIdx = 1 - slot;
-          const other = handState.hands[otherIdx];
-          if (other.active && other.pinching) {
-            state.twoHandBonus = true;
-            handState.bothPinchAt = performance.now();
-            sfx.grab();
-          }
-          handleClickOn(grp);
-          state.twoHandBonus = false;     // consume the flag immediately
+      // PINCH XUỐNG
+      if (!selectedTool && grp) {
+        if (isGrabbable(grp)) {
+          handState.carryHand = slot;     // vật sẽ ĐI THEO chính tay này
+          setSelectedTool(grp);           // → startLift → vật bay lên theo tay
+        } else {
+          handleClickOn(grp);             // vật cố định (cân/dụng cụ) → tác động ngay
         }
       }
+    } else if (!hand.pinching && wasPinching) {
+      // NHẢ PINCH
+      if (selectedTool && handState.carryHand === slot) {
+        const tgt = grp;                  // rót/đặt vào vật đang trỏ dưới tay
+        if (tgt && tgt !== selectedTool) {
+          const other = handState.hands[1 - slot];
+          state.twoHandBonus = !!(other && other.active && other.pinching);
+          handleClickOn(tgt);             // dùng selectedTool → rót/đặt → setSelectedTool(null)→endLift
+          state.twoHandBonus = false;
+        } else {
+          setSelectedTool(null);          // thả về chỗ cũ
+        }
+        handState.carryHand = -1;
+      }
+    }
+    // Khi đang CẦM bằng tay này → con trỏ nổi cùng độ sâu với vật (theo sải tay),
+    // để tay + vật đi liền nhau khi đưa gần/xa.
+    if (handState.carryHand === slot && selectedTool) {
+      const tD = Math.min(1, Math.max(0, ((hand.sspan || 0.18) - 0.12) / (0.30 - 0.12)));
+      const dist = 1.35 - tD * (1.35 - 0.42);
+      handCursors[slot].position.copy(raycaster.ray.origin).addScaledVector(raycaster.ray.direction, dist);
+      handCursors[slot].visible = true;
     }
     // Send cursor to multiplayer (using whichever hand is more "active")
     if (slot === 1 && ws && ws.readyState === 1) sendCursor(_handHit.x, _handHit.y, _handHit.z);
   }
 
-  // Hide any unused cursors this frame.
+  // Highlight vật con trỏ tay đang trỏ (ưu tiên tay đang pinch, rồi tay 0) — để
+  // SV thấy rõ sẽ chạm/cầm vật nào, bù cho cảm giác chiều sâu.
+  const hg = (handState.hands[0].pinching && handState.hands[0].hoverGrp)
+          || (handState.hands[1].pinching && handState.hands[1].hoverGrp)
+          || (handState.hands[0].active && handState.hands[0].hoverGrp)
+          || (handState.hands[1].active && handState.hands[1].hoverGrp) || null;
+  setHoverTarget(hg);
+
+  // Chỉ báo cự ly: quy sải tay của tay đại diện (đang cầm > đang pinch > tay 0)
+  // ra cm và phân loại quá gần / tốt / hơi xa để SV tự chỉnh chỗ ngồi.
+  const rep = (handState.carryHand >= 0 && handState.hands[handState.carryHand].active) ? handState.hands[handState.carryHand]
+            : handState.hands[0].active ? handState.hands[0]
+            : handState.hands[1].active ? handState.hands[1] : null;
+  if (rep) {
+    const cm = spanToCm(rep.sspan || 0.18);
+    if (cm == null) setCamDist('d-none', 'Đưa tay vào khung');
+    else if (cm < 28) setCamDist('d-near', `Hơi gần · ${cm} cm — lùi tay ra`);
+    else if (cm > 72) setCamDist('d-far', `Hơi xa · ${cm} cm — đưa tay lại`);
+    else setCamDist('d-ok', `Cự ly tốt · ${cm} cm`);
+  }
+
+  // Hide any unused cursors this frame + reset EMA để lần sau vào không bị nhảy.
   for (let i = 0; i < handState.hands.length; i++) {
-    if (!handState.hands[i].active) { handCursors[i].visible = false; handState.hands[i].pinching = false; }
+    if (!handState.hands[i].active) { handCursors[i].visible = false; handState.hands[i].pinching = false; handState.hands[i].sx = undefined; handState.hands[i].hoverGrp = null; }
   }
 
   // Show two-hand combo badge while both hands are pinching.
@@ -3596,7 +3846,7 @@ function ndcFromEvent(e) {
 }
 
 function getClickable() {
-  return [beaker, cylinder, finalBottle, balance, mortar, pestleGrp, pipetGrp, stirrerGrp, ...reagents];
+  return [beaker, cylinder, finalBottle, balance, mortar, pestleGrp, pipetGrp, stirrerGrp, ...reagents, ...curriculumEquip];
 }
 
 function pickTopGroup(object) {
@@ -3667,6 +3917,13 @@ function findMatchingStepIdx(action, su, tu) {
 function handleClickOn(target) {
   if (!target) { setSelectedTool(null); return; }
   const tu = target.userData;
+
+  // Dụng cụ giáo trình: hiện tên + gợi ý (mô phỏng — thao tác đặc thù sẽ bổ sung).
+  if (tu.kind === 'equipment') {
+    showToast(`🔧 ${tu.name} — dụng cụ của bài (dùng cho đun/nghiền/lọc/đổ khuôn/dập viên…)`, 2600);
+    setSelectedTool(null);
+    return;
+  }
 
   // FIRST CLICK: pick up any tool / reagent.
   const isPickup = !selectedTool || (tu.kind === 'reagent' && selectedTool.userData?.kind === 'reagent');
@@ -4092,6 +4349,7 @@ startGameImpl = function () {
   resetLift();
   // Setup reagents for this recipe
   setupReagents(currentRecipe);
+  if (CURRICULUM) spawnEquipment(currentRecipe);   // bày trọn bộ dụng cụ đặc thù của bài
   setFinalLabel(currentRecipe.finalBottleLabel);
 
   // Reset scene state
@@ -4450,7 +4708,9 @@ addEventListener('resize', () => {
 });
 
 const clock = new THREE.Clock();
-// Kick off: either go straight into recipe (URL param) or show modal
+// Kick off: either go straight into recipe (URL param) or show modal.
+// Chế độ GIÁO TRÌNH đã nạp 12 bài vào RECIPES/REAGENTS phía trên → chạy CÙNG
+// engine thật (nhấc chai reagent, đổ, cân ±sai số).
 if (currentRecipe) {
   startGame();
 } else {

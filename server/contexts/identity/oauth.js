@@ -151,12 +151,12 @@ function slugify(s) {
     .toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9_.-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 24) || 'user';
 }
-function uniqueUsername(base) {
+async function uniqueUsername(base) {
   let u = slugify(base);
-  if (!isUsernameTaken(u)) return u;
+  if (!await isUsernameTaken(u)) return u;
   for (let i = 1; i < 1000; i++) {
     const cand = `${u}_${i}`;
-    if (!isUsernameTaken(cand)) return cand;
+    if (!await isUsernameTaken(cand)) return cand;
   }
   return `${u}_${randomBytes(3).toString('hex')}`;
 }
@@ -279,11 +279,11 @@ export function attachOAuth(r, { basePath = '' } = {}) {
       }
 
       // Tìm user theo (provider, subject); chưa có → tạo user mới + link.
-      let row = findUserByOAuth(p.id, profile.subject);
+      let row = await findUserByOAuth(p.id, profile.subject);
       let userId;
       if (row) {
         userId = row.id;
-        updateUserProfile(userId, {
+        await updateUserProfile(userId, {
           display_name: row.display_name || profile.display_name,
           email: profile.email,
           avatar_url: profile.avatar_url,
@@ -291,21 +291,21 @@ export function attachOAuth(r, { basePath = '' } = {}) {
       } else {
         // Sinh username duy nhất từ email local-part hoặc display_name.
         const base = profile.email ? profile.email.split('@')[0] : profile.display_name;
-        const username = uniqueUsername(base || p.id + '_user');
-        const created = createUser({
+        const username = await uniqueUsername(base || p.id + '_user');
+        const created = await createUser({
           username,
           display_name: profile.display_name || username,
           password_hash: '',   // user thuần SSO — không thể login bằng password
           role: 'student',
         });
         userId = created.id;
-        updateUserProfile(userId, { email: profile.email, avatar_url: profile.avatar_url });
-        linkOAuth({ user_id: userId, provider: p.id, subject: profile.subject, email: profile.email });
+        await updateUserProfile(userId, { email: profile.email, avatar_url: profile.avatar_url });
+        await linkOAuth({ user_id: userId, provider: p.id, subject: profile.subject, email: profile.email });
       }
 
       // Cấp session + cookie httpOnly y như password login.
       const sessionToken = randomBytes(32).toString('hex');
-      createSession({ token: sessionToken, user_id: userId, ttlMs: SESSION_TTL_MS });
+      await createSession({ token: sessionToken, user_id: userId, ttlMs: SESSION_TTL_MS });
       appendSetCookie(res, setCookie(res, SESSION_COOKIE, sessionToken, { maxAge: SESSION_TTL_MS }));
 
       // Redirect về returnTo (đã lưu trong state cookie).

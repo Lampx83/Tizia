@@ -21,10 +21,10 @@ const refundDoneStmt = db.prepare(`SELECT COALESCE(SUM(amount),0) AS s FROM refu
  * Đối soát toàn hệ thống.
  * revenue_ledger (doanh thu ghi sổ) PHẢI = payments_success − refunds_done.
  */
-export function reconcile() {
-  const revenueLedger = -getBalance(`revenue`); // revenue là credit (âm) → đảo dấu
-  const paid = paySuccessStmt.get().s;
-  const refunded = refundDoneStmt.get().s;
+export async function reconcile() {
+  const revenueLedger = -(await getBalance(`revenue`)); // revenue là credit (âm) → đảo dấu
+  const paid = (await paySuccessStmt.get()).s;
+  const refunded = (await refundDoneStmt.get()).s;
   const expected = paid - refunded;
   const diff = revenueLedger - expected;
   const row = { revenue_ledger: revenueLedger, payments_success: paid, refunds_done: refunded, expected, diff, ok: diff === 0 };
@@ -37,6 +37,7 @@ const refundedForPaymentStmt = db.prepare(`SELECT COALESCE(SUM(amount),0) AS s F
 const insertRefundStmt = db.prepare(`
   INSERT INTO refunds (payment_id, amount, reason, status, gateway_refund_ref, created_at)
   VALUES (@payment_id, @amount, @reason, 'done', @ref, @t)
+  RETURNING id
 `);
 const markInvoiceRefundedStmt = db.prepare(`UPDATE invoices SET status='refunded', updated_at=@t WHERE id=@id`);
 
@@ -44,25 +45,25 @@ const markInvoiceRefundedStmt = db.prepare(`UPDATE invoices SET status='refunded
  * Hoàn tiền 1 payment (toàn phần/một phần). Ghi refund + bút toán đảo + cập nhật invoice.
  * @returns {{ ok, refund_id, txn_group, remaining }}
  */
-export function refundPayment({ payment_id, amount, reason = null }) {
-  const pay = getPaymentStmt.get(Number(payment_id));
+export async function refundPayment({ payment_id, amount, reason = null }) {
+  const pay = await getPaymentStmt.get(Number(payment_id));
   if (!pay) throw new Error('payment không tồn tại');
   if (pay.status !== 'success') throw new Error('chỉ hoàn được payment success');
-  const already = refundedForPaymentStmt.get(pay.id).s;
+  const already = (await refundedForPaymentStmt.get(pay.id)).s;
   const amt = Math.round(Number(amount));
   if (!Number.isFinite(amt) || amt <= 0) throw new Error('amount không hợp lệ');
   if (already + amt > pay.amount) throw new Error(`vượt quá số đã thu (đã hoàn ${already}/${pay.amount})`);
 
   const now = Date.now();
   let refund_id, txn_group;
-  const tx = db.transaction(() => {
+  const tx = db.transaction(async () => {
     // TODO go-live: gọi API refund VNPay ở đây, chỉ ghi 'done' khi cổng xác nhận.
-    const info = insertRefundStmt.run({ payment_id: pay.id, amount: amt, reason: reason ? String(reason).slice(0, 300) : null, ref: `RF${now.toString(36).toUpperCase()}`, t: now });
+    const info = await insertRefundStmt.run({ payment_id: pay.id, amount: amt, reason: reason ? String(reason).slice(0, 300) : null, ref: `RF${now.toString(36).toUpperCase()}`, t: now });
     refund_id = info.lastInsertRowid;
-    ({ txn_group } = recordRefund({ gateway: pay.gateway, amount: amt, payment_id: pay.id }));
-    if (already + amt >= pay.amount) markInvoiceRefundedStmt.run({ id: pay.invoice_id, t: now });
+    ({ txn_group } = await recordRefund({ gateway: pay.gateway, amount: amt, payment_id: pay.id }));
+    if (already + amt >= pay.amount) await markInvoiceRefundedStmt.run({ id: pay.invoice_id, t: now });
   });
-  tx();
+  await tx();
   return { ok: true, refund_id, txn_group, remaining: pay.amount - already - amt };
 }
 

@@ -83,18 +83,13 @@ function defaultSubject(domain) {
 
 // In-memory cache: subject_id → friendly name (populated từ scoreup_subjects_cache nếu có)
 let _subjectNameCache = null;
-function loadSubjectNameCache() {
+async function loadSubjectNameCache() {
   if (_subjectNameCache) return _subjectNameCache;
   _subjectNameCache = new Map();
   try {
-    const rows = db.prepare(`
-      SELECT name FROM sqlite_master WHERE type='table' AND name='scoreup_subjects_cache'
-    `).all();
-    if (rows.length) {
-      const subs = db.prepare(`SELECT subject_id, subject_name FROM scoreup_subjects_cache`).all();
-      for (const s of subs) {
-        if (s.subject_id && s.subject_name) _subjectNameCache.set(String(s.subject_id), String(s.subject_name));
-      }
+    const subs = await db.prepare(`SELECT subject_id, subject_name FROM scoreup_subjects_cache`).all();
+    for (const s of subs) {
+      if (s.subject_id && s.subject_name) _subjectNameCache.set(String(s.subject_id), String(s.subject_name));
     }
   } catch {}
   return _subjectNameCache;
@@ -102,11 +97,11 @@ function loadSubjectNameCache() {
 
 // subject_id ngoài API có thể là ObjectId 24-hex / UUID / hash — không readable.
 // Resolver: cache hit → tên thật. Miss → tên mặc định theo domain (chứ KHÔNG show ID thô).
-function prettySubject(subjectId, domain) {
+async function prettySubject(subjectId, domain) {
   const def = defaultSubject(domain);
   if (!subjectId) return def;
   const id = String(subjectId).trim();
-  const cached = loadSubjectNameCache().get(id);
+  const cached = (await loadSubjectNameCache()).get(id);
   if (cached) return { name: cached, emoji: def.emoji };
   // ID dạng hex dài / UUID / số → coi như không readable
   const looksLikeId = /^[a-f0-9]{16,}$/i.test(id) || /^[0-9a-f-]{32,}$/i.test(id) || /^\d{5,}$/.test(id);
@@ -117,9 +112,9 @@ function prettySubject(subjectId, domain) {
 
 // Recommendation: tìm subject HS đang yếu nhất (low accuracy) trong 30 ngày
 // gần nhất + suggest "ôn lại". Nếu chưa có data → trỏ môn mặc định theo domain.
-function getRecommendation(userId, enrolledDomain) {
+async function getRecommendation(userId, enrolledDomain) {
   const since = Date.now() - 30 * 86400_000;
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     SELECT subject_id, COUNT(*) AS n,
            SUM(CASE WHEN correct THEN 1 ELSE 0 END) AS c
       FROM question_attempts
@@ -143,7 +138,7 @@ function getRecommendation(userId, enrolledDomain) {
   const candidates = rows.filter(r => r.n >= 5);
   if (candidates.length === 0) {
     const recent = rows.sort((a,b) => b.n - a.n)[0];
-    const subj = prettySubject(recent.subject_id, enrolledDomain);
+    const subj = await prettySubject(recent.subject_id, enrolledDomain);
     return {
       type: 'continue',
       action: 'Tiếp tục bài đang học',
@@ -155,7 +150,7 @@ function getRecommendation(userId, enrolledDomain) {
   }
   const weakest = candidates.sort((a,b) => a.acc - b.acc)[0];
   const accPct = Math.round(weakest.acc * 100);
-  const subj = prettySubject(weakest.subject_id, enrolledDomain);
+  const subj = await prettySubject(weakest.subject_id, enrolledDomain);
   return {
     type: 'review',
     action: accPct < 50 ? 'Ôn lại điểm yếu' : 'Tiếp tục luyện',
@@ -167,20 +162,20 @@ function getRecommendation(userId, enrolledDomain) {
 }
 
 // Activity quick stats — số liệu thật
-function getActivityStats(userId) {
+async function getActivityStats(userId) {
   const since7d = Date.now() - 7 * 86400_000;
   const since30d = Date.now() - 30 * 86400_000;
-  const quiz7 = db.prepare(`
+  const quiz7 = (await db.prepare(`
     SELECT COUNT(*) AS n, SUM(CASE WHEN correct THEN 1 ELSE 0 END) AS c
       FROM question_attempts WHERE user_id = ? AND created_at >= ?
-  `).get(userId, since7d) || { n: 0, c: 0 };
-  const code7 = db.prepare(`
+  `).get(userId, since7d)) || { n: 0, c: 0 };
+  const code7 = (await db.prepare(`
     SELECT COUNT(*) AS n FROM codelab_submissions
      WHERE user_id = ? AND processed_at >= ? AND status = 'accepted'
-  `).get(userId, since7d) || { n: 0 };
-  const scenario30 = db.prepare(`
+  `).get(userId, since7d)) || { n: 0 };
+  const scenario30 = (await db.prepare(`
     SELECT COUNT(*) AS n FROM scenario_runs WHERE user_id = ? AND last_ts >= ?
-  `).get(userId, since30d) || { n: 0 };
+  `).get(userId, since30d)) || { n: 0 };
   return {
     quiz_7d: quiz7.n,
     quiz_correct_7d: quiz7.c,
@@ -191,22 +186,22 @@ function getActivityStats(userId) {
 }
 
 export function attachDashboard(router) {
-  router.get('/api/dashboard/me', requireAuth, (req, res) => {
+  router.get('/api/dashboard/me', requireAuth, async (req, res) => {
     try {
       const userId = req.user.id;
-      const wallet = getUserWallet(userId) || { coins: 0, xp: 0, streak: 0, achievements: [] };
-      const eng = getEngagementReadOnly(userId);
+      const wallet = (await getUserWallet(userId)) || { coins: 0, xp: 0, streak: 0, achievements: [] };
+      const eng = await getEngagementReadOnly(userId);
       const li = levelInfo(wallet.xp || 0);
       const { rank, next, levelsToNext } = rankFor(li.level);
 
       // Skills overall + 7-day stats
-      const skSummary = getUserSkillSummary(userId);
-      const activity = getActivityStats(userId);
+      const skSummary = await getUserSkillSummary(userId);
+      const activity = await getActivityStats(userId);
 
       // League (independent — XP tuần)
       let league = null;
       try {
-        const lb = getLeagueBoardForUser(userId);
+        const lb = await getLeagueBoardForUser(userId);
         if (lb) {
           league = {
             tier: lb.tier_meta,
@@ -218,7 +213,7 @@ export function attachDashboard(router) {
       } catch {}
 
       const title = titleFromActivity(activity.quiz_correct_7d * 4, skSummary.earned, li.level);
-      const rec = getRecommendation(userId, req.user.enrolled_domain);
+      const rec = await getRecommendation(userId, req.user.enrolled_domain);
 
       res.json({
         ok: true,

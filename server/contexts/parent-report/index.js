@@ -22,27 +22,27 @@ function startOfWeekMon(date = vnNow()) {
   return d;
 }
 
-function buildReport(childId, weekStartDate) {
+async function buildReport(childId, weekStartDate) {
   const ws = startOfWeekMon(weekStartDate);
   const we = new Date(ws.getTime() + 7 * 86400_000);
   const wsMs = ws.getTime() - TZ;   // back to UTC ms for DB query
   const weMs = we.getTime() - TZ;
 
-  const child = getUserById(childId);
+  const child = await getUserById(childId);
   if (!child) return null;
 
   // Engagement
-  const eng = getEngagementReadOnly(childId);
+  const eng = await getEngagementReadOnly(childId);
   // League
   let league = null;
   try {
-    const lb = getLeagueBoardForUser(childId);
+    const lb = await getLeagueBoardForUser(childId);
     league = lb ? { tier: lb.tier_meta, week_xp: lb.week_xp, my_rank: lb.my_rank } : null;
   } catch {}
   // Skills overall
-  const sk = (() => {
-    const tree = getUserSkillTree(childId);
-    const summary = getUserSkillSummary(childId);
+  const sk = await (async () => {
+    const tree = await getUserSkillTree(childId);
+    const summary = await getUserSkillSummary(childId);
     const hasEarned = tree.filter(t => t.earned_skills.length > 0);
     const overallMastery = hasEarned.length > 0
       ? Math.round(hasEarned.reduce((s, t) => s + (t.mastery_pct || 0), 0) / hasEarned.length)
@@ -61,23 +61,23 @@ function buildReport(childId, weekStartDate) {
     };
   })();
   // Quiz attempts trong tuần
-  const quizRows = db.prepare(`
+  const quizRows = (await db.prepare(`
     SELECT COUNT(*) AS n, SUM(CASE WHEN correct THEN 1 ELSE 0 END) AS c
       FROM question_attempts
      WHERE user_id = ? AND attempted_at >= ? AND attempted_at < ?
-  `).get(childId, wsMs, weMs) || { n: 0, c: 0 };
+  `).get(childId, wsMs, weMs)) || { n: 0, c: 0 };
   // Scenario runs
-  const scenarioRows = db.prepare(`
+  const scenarioRows = (await db.prepare(`
     SELECT COUNT(*) AS n, AVG(best_score) AS avg
       FROM scenario_runs
      WHERE user_id = ? AND created_at >= ? AND created_at < ?
-  `).get(childId, wsMs, weMs) || { n: 0, avg: 0 };
+  `).get(childId, wsMs, weMs)) || { n: 0, avg: 0 };
   // Codelab
-  const codeRows = db.prepare(`
+  const codeRows = (await db.prepare(`
     SELECT COUNT(*) AS n, SUM(CASE WHEN status='accepted' THEN 1 ELSE 0 END) AS accepted
       FROM codelab_submissions
      WHERE user_id = ? AND received_at >= ? AND received_at < ?
-  `).get(childId, wsMs, weMs) || { n: 0, accepted: 0 };
+  `).get(childId, wsMs, weMs)) || { n: 0, accepted: 0 };
 
   // Đề xuất ngắn dựa trên data
   const tips = [];
@@ -125,18 +125,18 @@ export function attachParentReport(router) {
     res.json({ weeks });
   });
 
-  router.get('/api/parent/report/:child_id', requireAuth, (req, res) => {
+  router.get('/api/parent/report/:child_id', requireAuth, async (req, res) => {
     const childId = Number(req.params.child_id);
     const weekStart = String(req.query.week || '').slice(0, 10);
     // Verify child belongs to this parent
-    const children = listChildrenOfParent(req.user.id) || [];
+    const children = (await listChildrenOfParent(req.user.id)) || [];
     if (!children.find(c => c.id === childId)) {
       return res.status(403).json({ error: 'not_your_child' });
     }
     const date = weekStart
       ? new Date(weekStart + 'T00:00:00Z')
       : vnNow();
-    const report = buildReport(childId, date);
+    const report = await buildReport(childId, date);
     if (!report) return res.status(404).json({ error: 'not_found' });
     res.json({ ok: true, report });
   });
