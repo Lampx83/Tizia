@@ -609,11 +609,12 @@ function reasonBlock(raw) {
 const ROLLOUT_MODE = { envelope: ['ok', 'Trong phạm vi tự phát hành'], review: ['warn', 'Cần admin duyệt'], blocked: ['bad', 'Chưa đủ bằng chứng'] };
 const ROLLOUT_REASON = { audience_expands: 'mở rộng người xem', verdict_needs_review: 'kết luận yêu cầu xem xét', tier_not_surface: 'không phải thay đổi bề mặt',
   validator_disagreement: 'hai lần soát không đồng ý', hard_permissions_not_proven: 'chưa chứng minh quyền cứng', functional_oracle_not_proven: 'chưa qua kiểm chứng chức năng',
-  no_candidate: 'chưa có bản thay đổi' };
+  no_candidate: 'chưa có bản thay đổi', base_changed: 'base đã đổi sau lần kiểm, cần kiểm lại' };
 const ROLLOUT_DECISION = { approved: 'đã duyệt', rejected: 'từ chối', served: 'đã phát hành', withdrawn: 'đã thu hồi' };
 const AUDIENCE = { owner_only: 'chỉ người tạo', school: 'cả trường' };
 const ROLLOUT_ERROR = { review_required: 'cần duyệt bản này trước khi phát hành', stale_candidate: 'bản thay đổi đã đổi, hãy tải lại trang', rejected_candidate: 'bản này đã bị từ chối',
-  not_approvable: 'chưa đủ bằng chứng để duyệt', not_servable: 'chưa đủ bằng chứng để phát hành', no_release: 'chưa đăng ký chức năng để phát hành', no_candidate: 'chưa có bản thay đổi' };
+  not_approvable: 'chưa đủ bằng chứng để duyệt', not_servable: 'chưa đủ bằng chứng để phát hành', no_release: 'chưa đăng ký chức năng để phát hành', no_candidate: 'chưa có bản thay đổi',
+  ticket_busy: 'AI Board đang xử lý yêu cầu này', reverify_limit: 'đã kiểm lại tối đa 3 lần', not_reverifiable: 'yêu cầu đã hoàn tác hoặc đóng' };
 const reasonText = (r) => (r.startsWith('sensitive_scope:') ? `đụng vùng nhạy cảm (${r.slice(16)})` : ROLLOUT_REASON[r] || r);
 
 function renderRollout(t) {
@@ -627,11 +628,13 @@ function renderRollout(t) {
       <div class="line1"><b>Bản ${code(head.slice(0, 10))}</b> trên ${code(r.candidate.base_sha.slice(0, 10))} ${tag(state, label)}
         ${r.release ? `<span>Hiện tại: <b>${esc(AUDIENCE[r.release.status] || 'đang tắt')}</b> (${code(r.release.slug)})</span>` : '<span class="meta">Chưa đăng ký chức năng để phát hành.</span>'}</div>
       <div class="meta">Phạm vi: ${r.candidate.files.map((f) => code(f)).join(' ')}</div>
+      ${r.base?.changed ? `<div class="meta" role="alert">Base của nhánh chính đã đổi từ ${code(r.candidate.base_sha.slice(0, 10))} sang ${code(r.base.observed.slice(0, 10))}: bằng chứng cũ không dùng để phát hành lên base mới.</div>` : ''}
       ${r.envelope.reasons.length ? `<div class="meta">Cần duyệt vì: ${esc(r.envelope.reasons.map(reasonText).join('; '))}</div>` : ''}
       <div class="row">
         <label class="meta">Người xem <select id="rollout-audience">${Object.entries(AUDIENCE).map(([k, v]) => `<option value="${k}" ${k === (ui.audience || 'owner_only') ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
         ${r.envelope.mode !== 'blocked' ? act('approve', 'Duyệt', 'ok') : ''}
         ${r.envelope.mode !== 'blocked' && r.release ? act('serve', 'Phát hành', 'ok') : ''}
+        ${act('reverify', 'Kiểm lại với base mới', r.base?.changed ? 'ok' : '')}
         ${act('reject', 'Từ chối', 'danger-outline')}
         ${r.release && r.release.status !== 'owner_only' ? act('withdraw', 'Thu hồi', 'danger-outline') : ''}
       </div>
@@ -646,7 +649,7 @@ async function rolloutDo(btn) {
   ui.audience = $('#rollout-audience')?.value || btn.dataset.audience;
   try {
     await post(`/api/admin/ai-board/tickets/${encodeURIComponent(btn.dataset.root)}/rollout/${btn.dataset.do}`, { head_sha: btn.dataset.head, audience: ui.audience });
-    ui.rolloutMsg = `Đã ${{ approve: 'duyệt', serve: 'phát hành', reject: 'từ chối', withdraw: 'thu hồi' }[btn.dataset.do]}.`;
+    ui.rolloutMsg = `Đã ${{ approve: 'duyệt', serve: 'phát hành', reject: 'từ chối', withdraw: 'thu hồi', reverify: 'xếp hàng kiểm lại với base mới; worker sẽ nhận ở lượt tới' }[btn.dataset.do]}.`;
   } catch (e) {
     ui.rolloutMsg = `Chưa thực hiện được: ${ROLLOUT_ERROR[e.message] || e.message}`;
   }

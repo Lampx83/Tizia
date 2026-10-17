@@ -869,6 +869,96 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     return await recordPullRequestTransaction(Number(ticketId), { ...input, idempotencyKey, now: input.now ?? Date.now() }, pr);
   }
 
+  // ── Base change: re-verify a kept candidate against the current base (worker rebases it and reruns gates 4-5.5). ──
+  const MAX_REVERIFY = 3;
+  const reverifyRequest = async (rootId) => parseJson((await db.get(`SELECT internal_detail FROM ai_events WHERE ticket_id=? AND event_type='reverify_requested'
+    ORDER BY id DESC LIMIT 1`, [rootId]))?.internal_detail) ?? {};
+
+  async function recordBaseObservation({ ref, sha, now = Date.now() }) {
+    if (!/^[A-Za-z0-9._/-]{1,80}$/.test(String(ref)) || !SHA.test(String(sha))) throw new WorkerContractError('invalid base observation', 400, 'invalid_base');
+    const last = await db.get('SELECT sha FROM ai_base_observations WHERE ref=? ORDER BY id DESC LIMIT 1', [ref]);
+    if (last?.sha !== sha) await db.run('INSERT INTO ai_base_observations(ref, sha, observed_at) VALUES (?, ?, ?)', [ref, sha, now]);
+    return { ref, sha, changed: last?.sha !== sha };
+  }
+
+  async function latestBase(ref = PR_BASE) {
+    return (await db.get('SELECT sha, observed_at FROM ai_base_observations WHERE ref=? ORDER BY id DESC LIMIT 1', [ref])) ?? null;
+  }
+
+  const requestReverifyTransaction = (rootId, adminUserId, now) => db.tx(async () => {
+    const root = await db.get(`SELECT * FROM ai_tickets WHERE id=? AND kind='root'`, [Number(rootId)]);
+    if (!root) throw new WorkerContractError('ticket not found', 404, 'ticket_not_found');
+    if (['reverify', 'reverifying'].includes(root.phase)) return { ok: true, status: root.status, phase: root.phase, duplicate: true };
+    if (PHASES[root.phase]?.rollback || PHASES[root.phase]?.terminal) throw new WorkerContractError('this request was rolled back or closed', 409, 'not_reverifiable');
+    if (root.lease_token && root.lease_expires_at > now) throw new WorkerContractError('AI Board is working on this request', 409, 'ticket_busy');
+    const candidate = await latestCandidate(root.id);
+    if (!candidate) throw new WorkerContractError('no kept change to re-verify', 409, 'no_candidate');
+    const done = (await db.get(`SELECT COUNT(*) n FROM ai_events WHERE ticket_id=? AND event_type='reverify_requested'`, [root.id])).n;
+    if (done >= MAX_REVERIFY) throw new WorkerContractError(`re-verification is capped at ${MAX_REVERIFY} per request`, 409, 'reverify_limit');
+    await closeRoot(root, {
+      status: 'queued', phase: 'reverify', note: 'Quản trị viên yêu cầu kiểm lại với base mới; đang chờ AI Board.', reason: null, now,
+      event: { type: 'reverify_requested', actorType: 'admin', actorId: adminUserId, idem: `reverify-requested:${root.id}:${done + 1}`,
+        detail: JSON.stringify({ from_status: root.status, from_phase: root.phase, from_note: root.public_note, branch: candidate.branch,
+          base_sha: candidate.base_sha, head_sha: candidate.head_sha }) },
+    });
+    return { ok: true, status: 'queued', phase: 'reverify', attempt: done + 1, cap: MAX_REVERIFY };
+  });
+
+  async function requestReverify(rootId, { adminUserId, now = Date.now() }) {
+    const result = await requestReverifyTransaction(rootId, adminUserId, now);
+    await recordAdminAction({ ticketId: rootId }, adminUserId, 'reverify');
+    return result;
+  }
+
+  /** Worker reports the current base tip: unchanged, the old evidence stands and the ticket returns; changed, the accepted plan and candidate come back for the rebase. */
+  const startReverifyTransaction = (ticketId, input) => db.tx(async () => {
+    const root = await assertLease(ticketId, input.workerId, input.leaseToken, input.now);
+    if (root.phase !== 'reverifying') throw new WorkerContractError('ticket is not re-verifying', 409, 'not_reverifying');
+    const run = await db.get('SELECT * FROM ai_runs WHERE id=? AND ticket_id=?', [Number(input.runId), root.id]);
+    if (!run) throw new WorkerContractError('run does not belong to ticket');
+    if (!SHA.test(String(input.tip))) throw new WorkerContractError('invalid base tip', 400, 'invalid_base');
+    await recordBaseObservation({ ref: PR_BASE, sha: input.tip, now: input.now });
+    const candidate = await latestCandidate(root.id);
+    const origin = await reverifyRequest(root.id);
+    if (!candidate) throw new WorkerContractError('no kept change to re-verify', 409, 'no_candidate');
+    if (candidate.base_sha === input.tip) {
+      await db.run('UPDATE ai_runs SET outcome=?, evidence_json=?, updated_at=? WHERE id=?', ['reverify_current', JSON.stringify({ reverify: { outcome: 'current', tip: input.tip } }), input.now, run.id]);
+      await closeRoot(root, { status: origin.from_status || 'planned', phase: origin.from_phase || 'pre_pr_ready', note: origin.from_note ?? root.public_note, reason: root.internal_reason, now: input.now,
+        event: { type: 'reverify_current', actorType: 'worker', actorId: input.workerId, idem: `reverify-current:${run.id}`, detail: JSON.stringify({ tip: input.tip }) } });
+      return { outcome: 'current', tip: input.tip };
+    }
+    const plan = root.plan_hash && await db.get(`SELECT * FROM ai_plans WHERE root_ticket_id=? AND plan_hash=? AND revision=? AND status='valid'`, [root.id, root.plan_hash, root.plan_revision]);
+    if (!plan || plan.tier === 'core') throw new WorkerContractError('no accepted plan to re-verify against', 409, 'plan_required');
+    await db.run(`UPDATE ai_tickets SET status='planned', phase='ticketized', updated_at=? WHERE id=?`, [input.now, root.id]);
+    await db.run('UPDATE ai_runs SET plan_hash=?, plan_revision=?, updated_at=? WHERE id=?', [plan.plan_hash, plan.revision, input.now, run.id]);
+    await db.run(insertEvent, [root.id, 'reverify_started', 'worker', input.workerId, 'running->planned', 'Đang ghép base mới và kiểm lại.',
+      JSON.stringify({ from_base: candidate.base_sha, tip: input.tip }), `reverify-started:${run.id}`, input.now]);
+    return { outcome: 'rebase', tip: input.tip, tier: plan.tier, plan_hash: plan.plan_hash, capability_policy_hash: plan.capability_policy_hash,
+      plan: JSON.parse(plan.plan_json), candidate, children: await planChildren(root.id, plan.revision) };
+  });
+
+  async function startReverify(ticketId, input) {
+    return await startReverifyTransaction(Number(ticketId), { ...input, now: input.now ?? Date.now() });
+  }
+
+  const reverifyConflictTransaction = (ticketId, input) => db.tx(async () => {
+    const root = await assertLease(ticketId, input.workerId, input.leaseToken, input.now);
+    if (!['reverifying', 'ticketized'].includes(root.phase)) throw new WorkerContractError('ticket is not re-verifying', 409, 'not_reverifying');
+    const run = await db.get('SELECT id FROM ai_runs WHERE id=? AND ticket_id=?', [Number(input.runId), root.id]);
+    if (!run) throw new WorkerContractError('run does not belong to ticket');
+    const files = (Array.isArray(input.files) ? input.files : []).slice(0, 20).map((f) => String(f).slice(0, 300));
+    const detail = String(input.detail || '').slice(0, 1000) || null;
+    await db.run('UPDATE ai_runs SET outcome=?, evidence_json=?, failure_reason=?, updated_at=? WHERE id=?',
+      ['reverify_conflict', JSON.stringify({ reverify: { outcome: 'conflict', tip: input.tip ?? null, files, detail } }), detail, input.now, run.id]);
+    await closeRoot(root, { status: 'waiting_admin', phase: 'reverify_conflict', note: 'Ghép base mới bị xung đột; chờ quản trị viên.', reason: detail, now: input.now,
+      event: { type: 'reverify_conflict', actorType: 'worker', actorId: input.workerId, idem: `reverify-conflict:${run.id}`, detail: JSON.stringify({ files, tip: input.tip ?? null }) } });
+    return { status: 'waiting_admin', phase: 'reverify_conflict', files };
+  });
+
+  async function submitReverifyConflict(ticketId, input) {
+    return await reverifyConflictTransaction(Number(ticketId), { ...input, now: input.now ?? Date.now() });
+  }
+
   async function getLeasedSnapshot(ticketId, workerId, leaseToken, now = Date.now()) {
     const ticket = await assertLease(ticketId, workerId, leaseToken, now);
     const request = await db.get(`
@@ -887,6 +977,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       // Spec chưa đủ rõ: cổng 2.5 / tier xử lý kỹ hơn.
       clarification_incomplete: !!await db.get("SELECT 1 FROM ai_ticket_tags WHERE ticket_id=? AND tag='needs_clarification'", [ticket.id]),
       ...(ticket.phase === 'rolling_back' ? { rollback_candidate: await latestCandidate(ticket.id) } : {}),
+      ...(ticket.phase === 'reverifying' ? { reverify_candidate: await latestCandidate(ticket.id) } : {}),
       // Folder: worker dựng code từ đỉnh nhánh chu kỳ này thay cho dev; brief = tầng L1/L3.
       folder: await withBrief(await db.get(`SELECT f.id, f.slug, f.title, f.branch, f.head_sha, f.pr_number, f.pr_url, f.cycle
         FROM requests q JOIN ai_feature_folders f ON f.id = q.folder_id WHERE q.id = ?`, [ticket.source_request_id])),
@@ -1758,6 +1849,11 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     cancelRequest,
     requestRollback,
     submitRollback,
+    requestReverify,
+    startReverify,
+    submitReverifyConflict,
+    recordBaseObservation,
+    latestBase,
     recordModelCalls,
     getRequestTrace,
     claimNext,

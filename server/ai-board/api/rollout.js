@@ -10,12 +10,13 @@ const SENSITIVE = [/^server\//, /^scripts\//, /^public\/js\/engine\//, /(^|\/)(a
 const parse = (text) => { try { return JSON.parse(text); } catch { return null; } };
 
 /** Pure envelope decision: `envelope` serves without review, `review` needs an admin approval, `blocked` can never be served. */
-export function decide({ verdict, tier, audience, disagreement }) {
+export function decide({ verdict, tier, audience, disagreement, observedBase = null }) {
   const candidate = verdict?.candidate;
   const gates = Array.isArray(verdict?.gates) ? verdict.gates : [];
   const files = (candidate?.commits || []).flatMap((commit) => commit.files || []);
   const reasons = [];
   if (!candidate?.head_sha || !candidate?.base_sha || !files.length) return { mode: 'blocked', reasons: ['no_candidate'], files };
+  if (observedBase && observedBase !== candidate.base_sha) return { mode: 'blocked', reasons: ['base_changed'], files };
   const hardOk = gates.length > 0 && gates.every((g) => g.blocked === false) && gates.some((g) => g.gate === 4);
   const gate5 = gates.find((g) => g.gate === 5);
   const oracleOk = !!gate5 && gate5.smoke_passed === true && gate5.http_observed === true;
@@ -44,17 +45,19 @@ export function attachRolloutRoutes(router, { store, requireAuth, requireAdmin, 
     const disagreement = !!await db.get(`SELECT 1 FROM ai_gate_traces g JOIN ai_runs r ON r.id=g.run_id
       WHERE r.ticket_id=? AND g.gate=2.5 AND g.internal_reason LIKE 'validator_disagreement%' LIMIT 1`, [ticket.id]);
     const rows = await db.all('SELECT * FROM ai_candidate_approvals WHERE ticket_id=? ORDER BY id', [ticket.id]);
-    return { ticket, run, verdict, release, disagreement, rows };
+    const base = await store.latestBase();
+    return { ticket, run, verdict, release, disagreement, rows, base };
   }
 
   const matches = (row, run, c) => row.run_id === run.id && row.base_sha === c.base_sha && row.head_sha === c.head_sha;
   const view = (s, audience = 'owner_only') => {
-    const envelope = decide({ verdict: s.verdict, tier: s.ticket.tier, audience, disagreement: s.disagreement });
+    const envelope = decide({ verdict: s.verdict, tier: s.ticket.tier, audience, disagreement: s.disagreement, observedBase: s.base?.sha });
     const c = s.verdict?.candidate;
     const current = c && s.run ? s.rows.filter((r) => matches(r, s.run, c)) : [];
     return {
       ticket_id: s.ticket.id, run_id: s.run?.id ?? null, candidate: c ? { base_sha: c.base_sha, head_sha: c.head_sha, branch: c.branch, files: envelope.files } : null,
-      envelope, release: s.release ? { slug: s.release.slug, status: s.release.status } : null,
+      envelope, base: s.base ? { observed: s.base.sha, observed_at: s.base.observed_at, changed: !!c && s.base.sha !== c.base_sha } : null,
+      release: s.release ? { slug: s.release.slug, status: s.release.status } : null,
       approvals: current.map((r) => ({ id: r.id, decision: r.decision, audience: r.audience, basis: r.basis, actor_user_id: r.actor_user_id, created_at: r.created_at, note: r.note })),
       stale_decisions: s.rows.length - current.length,
     };
@@ -62,7 +65,7 @@ export function attachRolloutRoutes(router, { store, requireAuth, requireAdmin, 
   const append = (s, decision, basis, audience, actor, reasons, note) => db.insert(
     `INSERT INTO ai_candidate_approvals(ticket_id, run_id, base_sha, head_sha, scope_json, audience, decision, basis, reasons_json, actor_user_id, note, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [s.ticket.id, s.run.id, s.verdict.candidate.base_sha, s.verdict.candidate.head_sha, JSON.stringify(decide({ verdict: s.verdict, tier: s.ticket.tier, audience, disagreement: s.disagreement }).files),
+    [s.ticket.id, s.run.id, s.verdict.candidate.base_sha, s.verdict.candidate.head_sha, JSON.stringify(decide({ verdict: s.verdict, tier: s.ticket.tier, audience, disagreement: s.disagreement, observedBase: s.base?.sha }).files),
       audience, decision, basis, JSON.stringify(reasons), actor, note ?? null, Date.now()]);
   const guard = async (req, res) => {
     const s = await load(Number(req.params.id));
@@ -83,7 +86,7 @@ export function attachRolloutRoutes(router, { store, requireAuth, requireAdmin, 
   route.post('/api/admin/ai-board/tickets/:id/rollout/approve', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
     const s = await guard(req, res); if (!s) return;
     const audience = audienceOf(req);
-    const d = decide({ verdict: s.verdict, tier: s.ticket.tier, audience, disagreement: s.disagreement });
+    const d = decide({ verdict: s.verdict, tier: s.ticket.tier, audience, disagreement: s.disagreement, observedBase: s.base?.sha });
     if (d.mode === 'blocked') return res.status(409).json({ error: 'not_approvable', reasons: d.reasons });
     await append(s, 'approved', 'admin', audience, req.user.id, d.reasons, req.body?.note);
     res.json(view(await load(s.ticket.id), audience));
@@ -102,7 +105,7 @@ export function attachRolloutRoutes(router, { store, requireAuth, requireAdmin, 
     const s = await guard(req, res); if (!s) return;
     if (!s.release) return res.status(409).json({ error: 'no_release' });
     const audience = audienceOf(req);
-    const d = decide({ verdict: s.verdict, tier: s.ticket.tier, audience, disagreement: s.disagreement });
+    const d = decide({ verdict: s.verdict, tier: s.ticket.tier, audience, disagreement: s.disagreement, observedBase: s.base?.sha });
     if (d.mode === 'blocked') return res.status(409).json({ error: 'not_servable', reasons: d.reasons });
     const c = s.verdict.candidate;
     const mine = s.rows.filter((r) => matches(r, s.run, c));
@@ -116,6 +119,13 @@ export function attachRolloutRoutes(router, { store, requireAuth, requireAdmin, 
       await append(s, 'served', d.mode === 'envelope' ? 'envelope' : 'admin', audience, req.user.id, d.reasons, req.body?.note);
     });
     res.json(view(await load(s.ticket.id), audience));
+  });
+
+  route.post('/api/admin/ai-board/tickets/:id/rollout/reverify', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
+    try { res.json(await store.requestReverify(Number(req.params.id), { adminUserId: req.user.id })); } catch (error) {
+      if (error?.status && error?.code) return res.status(error.status).json({ error: error.code, message: error.message });
+      throw error;
+    }
   });
 
   route.post('/api/admin/ai-board/tickets/:id/rollout/withdraw', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {

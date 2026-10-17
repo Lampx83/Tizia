@@ -26,6 +26,7 @@ export function visitedNodes(events = [], root = {}) {
         attempts = Math.max(attempts, Number(d.attempt) || 0);
       } catch { /* an unreadable event proves nothing */ }
     }
+    if (e.event_type === 'reverify_started') seen.add('reverify_open');
     if (e.event_type === 'plan_validated') seen.add('plan_ready');
     if (e.event_type === 'plan_blocked') seen.add('plan_stopped');
     if (e.event_type === 'pre_pr_verdict') { seen.add('attempt_close'); seen.add('repair_check'); seen.add('verdict'); }
@@ -34,7 +35,7 @@ export function visitedNodes(events = [], root = {}) {
   return seen;
 }
 
-const NODE_LABEL = { attempt_open: 'Mở lượt làm', attempt_close: 'Đóng lượt (dọn nhánh tạm)', repair_check: 'Có sửa lại không?', repair: 'Ghi lý do sửa',
+const NODE_LABEL = { attempt_open: 'Mở lượt làm', reverify_open: 'Ghép base mới (kiểm lại)', attempt_close: 'Đóng lượt (dọn nhánh tạm)', repair_check: 'Có sửa lại không?', repair: 'Ghi lý do sửa',
   verdict: 'Kết luận', plan_ready: 'Plan sẵn sàng', plan_stopped: 'Plan bị dừng' };
 
 export function renderGraph(graph, events = [], root = {}) {
@@ -42,7 +43,7 @@ export function renderGraph(graph, events = [], root = {}) {
   const seen = visitedNodes(events, root);
   const label = (n) => NODE_LABEL[n.id] || (n.gate != null ? `Bước ${n.gate} · ${graph.names?.[n.gate] || ''}` : n.id);
   const rows = [['Lập kế hoạch', ['gate_1', 'gate_2', 'gate_2_5', 'plan_ready', 'plan_stopped']],
-    ['Thực hiện', ['attempt_open', 'gate_3', 'gate_4', 'gate_5', 'gate_5_5', 'attempt_close']], ['Điều phối', ['repair_check', 'repair', 'verdict']]];
+    ['Thực hiện', ['attempt_open', 'reverify_open', 'gate_3', 'gate_4', 'gate_5', 'gate_5_5', 'attempt_close']], ['Điều phối', ['repair_check', 'repair', 'verdict']]];
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   return `<details class="blk" data-k="exec-graph"><summary><b>Đồ thị xử lý</b> · ${graph.nodes.length} nút · ${graph.edges.length} cạnh · ${esc(String(graph.hash).slice(0, 10))}</summary>
     <p class="meta">Cùng một đồ thị với bộ điều phối của worker (đọc từ hợp đồng chung). Nút xanh là nút các sự kiện đã chứng minh được đi qua; nút xám chưa tới.</p>

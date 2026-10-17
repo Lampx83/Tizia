@@ -168,6 +168,8 @@ class _Execution:
                 "gate_5": lambda: self.gate(5), "gate_5_5": lambda: self.gate(5.5), "attempt_close": self.attempt_close,
                 "repair_check": self.repair_check, "repair": self.repair, "verdict": self.verdict}
 
+    ENTRY = "execute"
+
     def run(self) -> dict:
         from runtime import exec_graph
 
@@ -178,7 +180,7 @@ class _Execution:
             if cursor and cursor.get("base") == self.grounded and isinstance(cursor.get("repairs"), list):
                 self.repairs, self.repair_reason = list(cursor["repairs"]), cursor.get("repair_reason")
         try:
-            self.path = exec_graph.run(self.handlers(), exec_graph.spec()["entries"]["execute"])
+            self.path = exec_graph.run(self.handlers(), exec_graph.spec()["entries"][self.ENTRY])
         finally:
             self.close_attempt()  # a lease loss or crash inside a node still cleans the attempt up
         return self.result
@@ -340,6 +342,52 @@ class _Execution:
         return "passed"
 
 
+class _Reverification(_Execution):
+    """Gates 4 to 5.5 on a kept candidate cherry-picked onto the moved base (graph entry `reverify`). It never regenerates code
+    and never repairs: a failed check or a conflict is the admin's call."""
+
+    ENTRY = "reverify"
+
+    def __init__(self, *args, carried: dict, tip: str, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.carried, self.tip, self.conflict = carried, tip, None
+        self.memory_path = None
+
+    def handlers(self) -> dict:
+        return {**super().handlers(), "reverify_open": self.reverify_open, "repair_check": lambda: "done"}
+
+    def reverify_open(self) -> str:
+        from services import reverify
+
+        self.shots, self.gates, self.kind, self.candidate = [], [], None, None
+        try:
+            owned = reverify.integrate(self.checkout_source, self.carried, self.tip, label=f"ticket-{self.ticket_id}")
+        except reverify.Conflict as error:
+            self.conflict = error
+            self.gates, self.kind = [{"gate": 3, "blocked": True, "reason": str(error)[:500]}], "ordinary"
+            return "blocked"
+        self.scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
+        state = self.state = {
+            "plan": _execution_plan(self.plan), "scratch_repo": owned["full_checkout"], "checkout_source": str(self.checkout_source),
+            "skill_id": f"ticket-{self.ticket_id}", "diffs": reverify.diffs_of(owned["commits"]), "should_stop": self.should_stop, **owned,
+        }
+        if self.catalog is not None:
+            state["catalog"] = self.catalog
+        if self.request_detail:
+            state["request_detail"] = self.request_detail
+        if self.request_type:
+            state["request_type"] = self.request_type
+        self.open = True
+        self.gates = [{"gate": 3, "blocked": False, "reason": f"ghép lên base mới {self.tip[:10]}; không sinh lại code"}]
+        return "passed"
+
+    def verdict(self) -> str:
+        out = super().verdict()
+        if self.conflict is not None:
+            self.result["_reverify_conflict"] = {"files": self.conflict.files, "detail": str(self.conflict)}
+        return out
+
+
 def drop_screenshots(shots: list[dict]) -> None:
     """Xoá file ảnh tạm của cổng 5 (và thư mục chứa nếu đã rỗng)."""
     for shot in shots or []:
@@ -423,7 +471,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
                    request_detail: str | None = None, memory_path=None,
                    should_stop: Callable[[], bool] | None = None, candidate_opts: dict | None = None,
                    request_type: str | None = None, eval_tasks: list[dict] | None = None, preview_capture=None,
-                   checkpoint=None, plan_hash: str | None = None) -> dict:
+                   checkpoint=None, plan_hash: str | None = None, reverify: dict | None = None) -> dict:
     """Run Gates 3→5.5, repairing an ordinary failure at most MAX_REPAIRS times. Return a redacted verdict.
 
     policy = snapshot catalog {hash, capabilities}; None only outside the HTTP worker (no catalog check).
@@ -440,11 +488,13 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
                 "repairs": [], "candidate": None, "budget_used": 0,
                 "gates": [{"gate": 3, "blocked": True, "reason": reason}]}
     catalog = policy.get("capabilities") if policy is not None else None
-    execution = _Execution(
+    extra = {"carried": reverify["candidate"], "tip": reverify["tip"]} if reverify else {}
+    execution = (_Reverification if reverify else _Execution)(
         plan, ticket_id=ticket_id, checkout_source=checkout_source, deps=deps, budget=budget, run_gate=run_gate, cleanup=cleanup,
         catalog=catalog, request_detail=request_detail, memory_path=memory_path, should_stop=should_stop,
         candidate_opts=candidate_opts, request_type=request_type, eval_tasks=eval_tasks, preview_capture=preview_capture,
-        checkpoint=checkpoint if checkpoint is not None else _worker_checkpoint(ticket_id, plan, plan_hash), plan_hash=plan_hash)
+        checkpoint=checkpoint if checkpoint is not None or reverify else _worker_checkpoint(ticket_id, plan, plan_hash), plan_hash=plan_hash,
+        **extra)
     return execution.run()
 
 
@@ -931,6 +981,48 @@ class HttpWorker:
         })
         return {"status": done["status"], "ticket_id": ticket_id, "run_id": run["id"], "rollback": result["outcome"]}
 
+    def _reverify(self, ticket_id: int, lease: dict, prefix: str, snapshot: dict, run: dict) -> dict:
+        """The base moved: report its tip, then rebase the kept candidate and rerun gates 4 to 5.5 on it. A conflict stops for the admin."""
+        from repositories import server_hsm
+        from services import reverify
+
+        url = f"/api/ai-board/worker/tickets/{ticket_id}"
+        repo = self.candidates.repo
+        tip = reverify.base_tip(repo)
+        if not tip:
+            done = self.client.post(f"{url}/reverify/conflict", {**lease, "run_id": run["id"], "files": [],
+                                                                  "detail": "the PR base branch was not found in the worker repo"})
+            return {"status": done["status"], "ticket_id": ticket_id, "run_id": run["id"], "reverify": "conflict"}
+        started = self.client.post(f"{url}/reverify/start", {**lease, "run_id": run["id"], "tip": tip})
+        if started["outcome"] == "current":
+            return {"status": "reverify_current", "ticket_id": ticket_id, "run_id": run["id"], "tip": tip}
+        request = snapshot.get("request") or {}
+        hsm_api = server_hsm.RemoteGate4(self.client, ticket_id=ticket_id, run_id=run["id"], worker_id=self.worker_id,
+                                         lease_token=lease["lease_token"], contract=snapshot.get("hsm_contract"))
+        limit = int((snapshot.get("ticket") or {}).get("budget_limit") or DEFAULT_BUDGET_LIMIT)
+        with server_hsm.server_scope(hsm_api):
+            result = self._with_heartbeat(lambda lost: self.change_runner(
+                started["plan"], ticket_id, limit, source=repo, policy=snapshot.get("capability_policy") or {},
+                accepted_policy_hash=started.get("capability_policy_hash"),
+                request_detail=(request.get("title", "") + "\n" + (request.get("clarified_spec") or request.get("detail") or "")),
+                should_stop=lost, plan_hash=started.get("plan_hash"), reverify={"candidate": started["candidate"], "tip": tip},
+            ), ticket_id, lease, on_lease_lost=lambda lost_result: self.candidates.discard((lost_result or {}).get("candidate")))
+        shots = result.pop("screenshots", None) or []
+        drop_screenshots(shots)
+        conflict = result.pop("_reverify_conflict", None)
+        if conflict is not None:
+            done = self.client.post(f"{url}/reverify/conflict", {**lease, "run_id": run["id"], "tip": tip, **conflict})
+            return {"status": done["status"], "ticket_id": ticket_id, "run_id": run["id"], "reverify": "conflict"}
+        try:
+            verdict = self.client.post(f"{url}/verdict", {**lease, "run_id": run["id"], "verdict": result,
+                                                         "idempotency_key": f"{prefix}:verdict"})["verdict"]
+        except Exception as error:  # noqa: BLE001
+            if _is_stale_lease(error):
+                self.candidates.discard(result.get("candidate"))
+            raise
+        self._release(ticket_id, {**lease, "outcome": "planned", "idempotency_key": f"{prefix}:release"})
+        return {"status": "planned", "ticket_id": ticket_id, "run_id": run["id"], "reverify": verdict["outcome"], "pre_pr_verdict": verdict}
+
     def _run_leased(self, ticket_id: int, lease: dict, prefix: str, snapshot: dict, run: dict,
                     trigger: str, folder_src: dict | None = None) -> dict:
         # Folder: planner + cổng đọc từ đỉnh nhánh chu kỳ; candidate commit nối tiếp chính nhánh đó.
@@ -941,6 +1033,8 @@ class HttpWorker:
             "folder_brief": brief.get("text")}} if folder_src else {}
         if trigger == "rollback":
             return self._rollback(ticket_id, lease, snapshot, run)
+        if trigger == "reverify":
+            return self._reverify(ticket_id, lease, prefix, snapshot, run)
         # 'execute' = admin đã cho phép plan (tier protected): lượt này không lập plan lại mà chạy plan đã duyệt.
         executing = trigger == "execute"
         if not executing:

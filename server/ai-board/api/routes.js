@@ -508,6 +508,20 @@ export function attachAiBoardWorkerRoutes(router, {
     }));
   }));
 
+  route.post('/api/ai-board/worker/tickets/:id/reverify/start', authenticate, handle(async (req, res) => {
+    const lease = leaseInput(req.body);
+    res.json(await store.startReverify(req.params.id, { ...lease, runId: req.body?.run_id, tip: req.body?.tip }));
+  }));
+
+  route.post('/api/ai-board/worker/tickets/:id/reverify/conflict', authenticate, handle(async (req, res) => {
+    const lease = leaseInput(req.body);
+    res.json(await store.submitReverifyConflict(req.params.id, { ...lease, runId: req.body?.run_id, tip: req.body?.tip, files: req.body?.files, detail: req.body?.detail }));
+  }));
+
+  route.post('/api/ai-board/worker/base', authenticate, handle(async (req, res) => {
+    res.json(await store.recordBaseObservation({ ref: req.body?.ref, sha: req.body?.sha }));
+  }));
+
   route.post('/api/ai-board/worker/tickets/:id/verdict', authenticate, handle(async (req, res) => {
     const lease = leaseInput(req.body);
     const verdict = await store.submitPrePrVerdict(req.params.id, {
