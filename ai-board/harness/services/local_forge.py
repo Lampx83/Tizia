@@ -33,6 +33,14 @@ class LocalForge:
     def _load(self) -> list[dict]:
         return json.loads(self.state.read_text(encoding="utf-8")) if self.state.exists() else []
 
+    def close(self, branch: str) -> None:
+        """Deleting a branch closes its open PR for good (GitHub semantics); pushing the name again opens a new one."""
+        prs = self._load()
+        for pr in prs:
+            if pr["branch"] == branch and pr["state"] == "open" and not pr["merge_commit_sha"]:
+                pr["state"] = "closed"
+        self._save(prs)
+
     def _save(self, prs: list[dict]) -> None:
         self.state.write_text(json.dumps(prs, indent=1), encoding="utf-8")
 
@@ -91,3 +99,15 @@ class LocalForge:
         pr["merge_commit_sha"] = merge_commit
         self._save(prs)
         return merge_commit
+
+
+def local_github(bare, github_cls):
+    """A `github_cls` client wired to a LocalForge; delete_branch also closes the forge's PR."""
+    forge = LocalForge(bare)
+
+    class LocalGitHub(github_cls):
+        def delete_branch(self, repo, branch):
+            super().delete_branch(repo, branch)
+            forge.close(branch)
+
+    return LocalGitHub("local/demo", "", transport=forge, remote_url=str(bare))

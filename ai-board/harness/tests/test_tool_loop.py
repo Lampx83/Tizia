@@ -360,3 +360,17 @@ def test_search_miss_lists_real_lines_that_share_words_with_the_search():
     out, _, deps = run([{"tool": "edit_file", "arguments": {"file": "public/a.html", "edits": [{"search": "<main>xyz</main> h1 A tiêu", "replace": "x"}]}}, EDIT, TEST, FINISH])
     assert out["status"] == "proposed"
     assert "Dòng thật có từ trong search" in deps.prompts[1] and "L1| <main>" in deps.prompts[1]
+
+
+def test_search_miss_with_a_close_line_does_not_add_the_word_overlap_list():
+    close = {"tool": "edit_file", "arguments": {"file": "public/a.html", "edits": [{"search": "<main>" + chr(10) + "<h1>A</h2>", "replace": "x"}]}}
+    out, _, deps = run([close, EDIT, TEST, FINISH])
+    assert out["status"] == "proposed"
+    assert "Dòng gần giống nhất" in deps.prompts[1] and "Dòng thật có từ trong search" not in deps.prompts[1]
+
+
+def test_finish_with_an_edit_but_no_test_or_a_test_but_no_edit_is_a_free_nudge():
+    out, budget, deps = run([EDIT, FINISH, TEST, FINISH])
+    assert out["status"] == "proposed" and budget.semantic_repairs == 0 and "chưa finish được" in deps.prompts[2]
+    out, budget, deps = run([TEST, FINISH, EDIT, FINISH])
+    assert out["status"] == "proposed" and budget.semantic_repairs == 0 and "chưa finish được" in deps.prompts[2]

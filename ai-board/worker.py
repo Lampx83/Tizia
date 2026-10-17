@@ -562,8 +562,8 @@ def _forge(candidate, token):
     """GitHub client, or a local bare-repo forge when AI_BOARD_LOCAL_FORGE names one (demo: no remote PR ever leaves the machine)."""
     local = os.getenv("AI_BOARD_LOCAL_FORGE")
     if local:
-        from services.local_forge import LocalForge
-        return candidate.GitHub("local/demo", "", transport=LocalForge(local), remote_url=local)
+        from services.local_forge import local_github
+        return local_github(local, candidate.GitHub)
     return candidate.GitHub(os.getenv("AI_BOARD_GITHUB_REPO", "Lampx83/Tizia"), token) if token else None
 
 

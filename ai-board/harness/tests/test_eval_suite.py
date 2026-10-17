@@ -575,6 +575,11 @@ def test_bounded_returns_an_infra_row_when_the_trial_hangs_and_passes_results_an
     assert row["infra_error"] and row["resolved"] is False and "trial_timeout" in row["error"]
     assert runner.bounded(lambda t, m: {"ok": m}, 5, task, "gold") == {"ok": "gold"}
     def boom(t, m):
-        raise KeyError("x")
-    with pytest.raises(KeyError):
+        raise ValueError("x")
+    with pytest.raises(ValueError):
         runner.bounded(boom, 5, task, "gold")
+    stuck = threading.Event()
+    runner.bounded(lambda t, m: stuck.wait(30), 0.2, task, "gold")
+    hung = [th for th in threading.enumerate() if th.is_alive() and th is not threading.current_thread() and th.daemon and not th.name.startswith("pytest")]
+    stuck.set()
+    assert hung

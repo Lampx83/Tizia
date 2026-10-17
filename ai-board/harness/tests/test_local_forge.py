@@ -4,7 +4,7 @@ import subprocess
 import pytest
 
 from candidate import Candidates, GitHub
-from services.local_forge import LocalForge
+from services.local_forge import LocalForge, local_github
 
 BRANCH = 'ai-board/2026-10-17-ticket-9-abc123'
 
@@ -32,7 +32,8 @@ def world(tmp_path):
     head = git(clone, 'rev-parse', 'HEAD')
     git(clone, 'checkout', '-q', '--detach', 'dev')
     forge = LocalForge(remote)
-    candidates = Candidates(clone, github=GitHub('local/demo', '', transport=forge, remote_url=str(remote)))
+    candidates = Candidates(clone, github=local_github(remote, GitHub))
+    forge = candidates.github.transport
     cand = {'branch': BRANCH, 'base_sha': base, 'head_sha': head, 'commits': [{'sha': head, 'title': 'change', 'files': ['x.txt']}]}
     return remote, clone, forge, candidates, cand
 
@@ -82,3 +83,23 @@ def test_forge_refuses_a_plain_directory_and_an_unpushed_branch(world, tmp_path)
         LocalForge(tmp_path / 'plain')
     with pytest.raises(OSError):
         forge('POST', '/repos/local/demo/pulls', {'head': BRANCH, 'base': 'dev', 'title': 't', 'body': ''})
+
+
+def test_merge_makes_a_real_merge_commit_and_only_merges_an_open_pr(world):
+    remote, clone, forge, candidates, cand = world
+    pr = candidates.publish(cand, title='t', body='b')
+    merge = forge.merge(pr['number'])
+    assert len(git(remote, 'rev-list', '--parents', '-n', '1', merge).split()) == 3
+    with pytest.raises(ValueError):
+        forge.merge(pr['number'])
+
+
+def test_pr_numbers_are_unique_and_a_closed_pr_cannot_be_merged(world):
+    remote, clone, forge, candidates, cand = world
+    first = candidates.publish(cand, title='t', body='b')
+    candidates.rollback(cand, 9, pull_request=first)
+    git(clone, 'branch', '-f', BRANCH, cand['head_sha'])
+    second = candidates.publish(cand, title='t', body='b')
+    assert (first['number'], second['number']) == (1, 2)
+    with pytest.raises(ValueError):
+        forge.merge(first['number'])

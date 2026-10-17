@@ -41,7 +41,7 @@ async function setup() {
   };
   const status = async (folderId) => (await db.d.get('SELECT status FROM ai_feature_releases WHERE folder_id=?', [folderId])).status;
   const url = (id, action) => `/api/admin/ai-board/tickets/${id}/rollout${action ? `/${action}` : ''}`;
-  return { db, call, feature, status, addRun, url, close: () => new Promise((resolve) => server.close(resolve)) };
+  return { db, store, call, feature, status, addRun, url, close: () => new Promise((resolve) => server.close(resolve)) };
 }
 
 test('decide: envelope only when every hard check holds; sensitive scope, audience growth and disagreement need review; missing proof blocks', () => {
@@ -120,5 +120,85 @@ test('a new candidate head voids the old approval; a preview never serves; rejec
     const blocked = await t.call(3, 'POST', t.url(bad.root_ticket_id, 'approve'), { audience: 'owner_only' });
     assert.equal(blocked.status, 409);
     assert.equal(blocked.body.error, 'not_approvable');
+  } finally { await t.close(); }
+});
+
+test('decide: each hard check failing alone blocks; an empty file list is not a candidate', () => {
+  const base = { tier: 'surface', audience: 'owner_only', disagreement: false };
+  const without = (gate, patch) => GATES.map((g) => (g.gate === gate ? { ...g, ...patch } : g));
+  for (const [name, gates] of [
+    ['gate 3 blocked', without(3, { blocked: true })],
+    ['gate 5.5 blocked', without(5.5, { blocked: true })],
+    ['gate 4 absent', GATES.filter((g) => g.gate !== 4)],
+    ['smoke not passed', without(5, { smoke_passed: false })],
+    ['http not observed', without(5, { http_observed: false })],
+    ['smoke missing', without(5, { smoke_passed: undefined })],
+    ['http missing', without(5, { http_observed: undefined })],
+  ]) assert.equal(decide({ ...base, verdict: verdict({ gates }) }).mode, 'blocked', name);
+  const empty = verdict();
+  empty.candidate.commits = [{ sha: HEAD, files: [] }];
+  assert.deepEqual(decide({ ...base, verdict: empty }), { mode: 'blocked', reasons: ['no_candidate'], files: [] });
+});
+
+test('an approval holds only for the same run, base, head and audience', async () => {
+  const t = await setup();
+  try {
+    const f = await t.feature(verdict({ outcome: 'needs_review' }));
+    const id = f.root_ticket_id;
+    assert.equal((await t.call(3, 'POST', t.url(id, 'approve'), { audience: 'owner_only', head_sha: HEAD })).status, 200);
+    assert.equal((await t.call(3, 'POST', t.url(id, 'serve'), { audience: 'school', head_sha: HEAD })).status, 403);
+    const same = (over) => verdict({ outcome: 'needs_review', candidate: { ...verdict().candidate, ...over } });
+    for (const [attempt, over] of [[2, {}], [3, { base_sha: 'e'.repeat(40) }], [4, { head_sha: NEXT }]]) {
+      await t.addRun(id, attempt, same(over));
+      const view = await t.call(3, 'GET', t.url(id));
+      assert.deepEqual(view.body.approvals, [], `attempt ${attempt}`);
+      const serve = await t.call(3, 'POST', t.url(id, 'serve'), { audience: 'owner_only', head_sha: view.body.candidate.head_sha });
+      assert.equal(serve.status, 403, `attempt ${attempt}`);
+    }
+  } finally { await t.close(); }
+});
+
+test('a recorded validator disagreement forces review; a blocked candidate cannot be served; a ticket without a release cannot be served', async () => {
+  const t = await setup();
+  try {
+    const f = await t.feature(verdict());
+    const id = f.root_ticket_id;
+    const run = await t.db.d.get('SELECT id FROM ai_runs WHERE ticket_id=?', [id]);
+    await t.db.d.run(`INSERT INTO ai_gate_traces(run_id, gate, status, public_reason, internal_reason, created_at) VALUES (?, 2.5, 'blocked', 'x', 'validator_disagreement: lần 1 a | lần 2 ok', 1)`, [run.id]);
+    const view = await t.call(3, 'GET', t.url(id));
+    assert.equal(view.body.envelope.mode, 'review');
+    assert.ok(view.body.envelope.reasons.includes('validator_disagreement'));
+    assert.equal((await t.call(3, 'POST', t.url(id, 'serve'), { audience: 'owner_only', head_sha: HEAD })).status, 403);
+
+    const bad = await t.feature(verdict({ gates: [{ gate: 4, blocked: true }] }));
+    const served = await t.call(3, 'POST', t.url(bad.root_ticket_id, 'serve'), { audience: 'owner_only', head_sha: HEAD });
+    assert.equal(served.status, 409);
+    assert.equal(served.body.error, 'not_servable');
+
+    const lone = await t.db.d.get('SELECT 1 AS n');
+    assert.ok(lone);
+    const plain = await t.store.createRequestWithRoot({ ownerUserId: 1, ownerDomain: 'primary', ownerDisplayName: 'Lan', idempotencyKey: 'rollout-norel-aaaa', type: 'other',
+      title: 'Sửa nút', detail: 'fixture', attachments: [] });
+    await t.addRun(plain.root_ticket_id, 1, verdict());
+    const none = await t.call(3, 'POST', t.url(plain.root_ticket_id, 'serve'), { audience: 'owner_only', head_sha: HEAD });
+    assert.equal(none.status, 409);
+    assert.equal(none.body.error, 'no_release');
+  } finally { await t.close(); }
+});
+
+test('an approval is void when the same run later records another base or head', async () => {
+  const t = await setup();
+  try {
+    const f = await t.feature(verdict({ outcome: 'needs_review' }));
+    const id = f.root_ticket_id;
+    assert.equal((await t.call(3, 'POST', t.url(id, 'approve'), { audience: 'owner_only', head_sha: HEAD })).status, 200);
+    for (const over of [{ base_sha: 'e'.repeat(40) }, { head_sha: NEXT }]) {
+      await t.db.d.run('UPDATE ai_runs SET evidence_json=? WHERE ticket_id=?', [JSON.stringify({ verdict: verdict({ outcome: 'needs_review', candidate: { ...verdict().candidate, ...over } }) }), id]);
+      const view = await t.call(3, 'GET', t.url(id));
+      assert.deepEqual(view.body.approvals, [], JSON.stringify(over));
+      assert.equal((await t.call(3, 'POST', t.url(id, 'serve'), { audience: 'owner_only', head_sha: view.body.candidate.head_sha })).status, 403);
+      await t.db.d.run('UPDATE ai_runs SET evidence_json=? WHERE ticket_id=?', [JSON.stringify({ verdict: verdict({ outcome: 'needs_review' }) }), id]);
+    }
+    assert.equal((await t.call(3, 'GET', t.url(id))).body.approvals.length, 1);
   } finally { await t.close(); }
 });
