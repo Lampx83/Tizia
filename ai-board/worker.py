@@ -558,6 +558,15 @@ class WorkerClient:
         return self.transport("POST", path, payload, headers)
 
 
+def _forge(candidate, token):
+    """GitHub client, or a local bare-repo forge when AI_BOARD_LOCAL_FORGE names one (demo: no remote PR ever leaves the machine)."""
+    local = os.getenv("AI_BOARD_LOCAL_FORGE")
+    if local:
+        from services.local_forge import LocalForge
+        return candidate.GitHub("local/demo", "", transport=LocalForge(local), remote_url=local)
+    return candidate.GitHub(os.getenv("AI_BOARD_GITHUB_REPO", "Lampx83/Tizia"), token) if token else None
+
+
 def sync_pull_requests(client: WorkerClient, github) -> dict:
     """Ask GitHub about the PRs the server still thinks are open; report merged/closed ones.
     github None (no token) → skip with a log line. One PR's GitHub/HTTP error → listed in errors, retried next sync."""
@@ -1289,8 +1298,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.sync_prs:
         import candidate
-        github = (candidate.GitHub(os.getenv("AI_BOARD_GITHUB_REPO", "Lampx83/Tizia"), github_token)
-                  if github_token else None)
+        github = _forge(candidate, github_token)
         print(json.dumps(sync_pull_requests(WorkerClient(base_url, key), github), ensure_ascii=False))
         return 0
     import meter
@@ -1336,8 +1344,7 @@ def main(argv: list[str] | None = None) -> int:
         import candidate
         worker.change_runner = harness_change_runner(checkout_source=repo, tracer=tracer,
                                                      progress=worker.gate_started)
-        github = (candidate.GitHub(os.getenv("AI_BOARD_GITHUB_REPO", "Lampx83/Tizia"), github_token)
-                  if github_token else None)
+        github = _forge(candidate, github_token)
         worker.candidates = candidate.Candidates(repo, github=github)
         if os.getenv("AI_BOARD_PRIVATE_PREVIEW_ENABLED") == "true":
             from preview import PreviewPublisher

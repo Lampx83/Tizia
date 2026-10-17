@@ -606,6 +606,53 @@ function reasonBlock(raw) {
     <details class="raw"><summary>raw JSON</summary><pre>${esc(JSON.stringify(data, null, 2))}</pre></details>`;
 }
 
+const ROLLOUT_MODE = { envelope: ['ok', 'Trong phạm vi tự phát hành'], review: ['warn', 'Cần admin duyệt'], blocked: ['bad', 'Chưa đủ bằng chứng'] };
+const ROLLOUT_REASON = { audience_expands: 'mở rộng người xem', verdict_needs_review: 'kết luận yêu cầu xem xét', tier_not_surface: 'không phải thay đổi bề mặt',
+  validator_disagreement: 'hai lần soát không đồng ý', hard_permissions_not_proven: 'chưa chứng minh quyền cứng', functional_oracle_not_proven: 'chưa qua kiểm chứng chức năng',
+  no_candidate: 'chưa có bản thay đổi' };
+const ROLLOUT_DECISION = { approved: 'đã duyệt', rejected: 'từ chối', served: 'đã phát hành', withdrawn: 'đã thu hồi' };
+const AUDIENCE = { owner_only: 'chỉ người tạo', school: 'cả trường' };
+const ROLLOUT_ERROR = { review_required: 'cần duyệt bản này trước khi phát hành', stale_candidate: 'bản thay đổi đã đổi, hãy tải lại trang', rejected_candidate: 'bản này đã bị từ chối',
+  not_approvable: 'chưa đủ bằng chứng để duyệt', not_servable: 'chưa đủ bằng chứng để phát hành', no_release: 'chưa đăng ký chức năng để phát hành', no_candidate: 'chưa có bản thay đổi' };
+const reasonText = (r) => (r.startsWith('sensitive_scope:') ? `đụng vùng nhạy cảm (${r.slice(16)})` : ROLLOUT_REASON[r] || r);
+
+function renderRollout(t) {
+  const r = t.rollout;
+  if (!r?.candidate) return '';
+  const [state, label] = ROLLOUT_MODE[r.envelope.mode];
+  const head = r.candidate.head_sha;
+  const act = (name, text, cls = '', audience = ui.audience || 'owner_only') => `<button class="btn ${cls}" data-action="rollout" data-do="${name}" data-root="${esc(r.ticket_id)}" data-head="${esc(head)}" data-audience="${esc(audience)}">${text}</button>`;
+  return `<h2>Phát hành bản thay đổi</h2>
+    <div class="blk" id="rollout">
+      <div class="line1"><b>Bản ${code(head.slice(0, 10))}</b> trên ${code(r.candidate.base_sha.slice(0, 10))} ${tag(state, label)}
+        ${r.release ? `<span>Hiện tại: <b>${esc(AUDIENCE[r.release.status] || 'đang tắt')}</b> (${code(r.release.slug)})</span>` : '<span class="meta">Chưa đăng ký chức năng để phát hành.</span>'}</div>
+      <div class="meta">Phạm vi: ${r.candidate.files.map((f) => code(f)).join(' ')}</div>
+      ${r.envelope.reasons.length ? `<div class="meta">Cần duyệt vì: ${esc(r.envelope.reasons.map(reasonText).join('; '))}</div>` : ''}
+      <div class="row">
+        <label class="meta">Người xem <select id="rollout-audience">${Object.entries(AUDIENCE).map(([k, v]) => `<option value="${k}" ${k === (ui.audience || 'owner_only') ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+        ${r.envelope.mode !== 'blocked' ? act('approve', 'Duyệt', 'ok') : ''}
+        ${r.envelope.mode !== 'blocked' && r.release ? act('serve', 'Phát hành', 'ok') : ''}
+        ${act('reject', 'Từ chối', 'danger-outline')}
+        ${r.release && r.release.status !== 'owner_only' ? act('withdraw', 'Thu hồi', 'danger-outline') : ''}
+      </div>
+      ${ui.rolloutMsg ? `<div class="meta" role="status">${esc(ui.rolloutMsg)}</div>` : ''}
+      ${r.approvals.length ? `<ul class="meta">${r.approvals.map((a) => `<li>${fmt(a.created_at)} · ${esc(ROLLOUT_DECISION[a.decision])} · ${esc(AUDIENCE[a.audience])} · ${a.basis === 'envelope' ? 'trong phạm vi tự phát hành' : `admin #${esc(a.actor_user_id)}`}${a.note ? ` · ${esc(a.note)}` : ''}</li>`).join('')}</ul>` : ''}
+      ${r.stale_decisions ? `<div class="meta">${esc(r.stale_decisions)} quyết định cũ thuộc bản khác nên không còn hiệu lực.</div>` : ''}
+    </div>`;
+}
+
+async function rolloutDo(btn) {
+  btn.disabled = true;
+  ui.audience = $('#rollout-audience')?.value || btn.dataset.audience;
+  try {
+    await post(`/api/admin/ai-board/tickets/${encodeURIComponent(btn.dataset.root)}/rollout/${btn.dataset.do}`, { head_sha: btn.dataset.head, audience: ui.audience });
+    ui.rolloutMsg = `Đã ${{ approve: 'duyệt', serve: 'phát hành', reject: 'từ chối', withdraw: 'thu hồi' }[btn.dataset.do]}.`;
+  } catch (e) {
+    ui.rolloutMsg = `Chưa thực hiện được: ${ROLLOUT_ERROR[e.message] || e.message}`;
+  }
+  await refresh();
+}
+
 function renderAiBoard(t) {
   const x = t.totals || {};
   const unit = x.budget_unit === 'k_tokens' ? 'k tokens' : 'GPU-s';
@@ -635,6 +682,7 @@ function renderAiBoard(t) {
       <span>Lần gọi lại model: <b>${esc(x.retries)}</b></span>
     </div>
     ${renderWrites(t)}
+    ${renderRollout(t)}
     ${renderPlan(t.plan, root, t.children || [], t)}
     ${renderPipeline(t)}
     ${renderAttemptHistory(t)}
@@ -720,6 +768,8 @@ async function refresh() {
   if (trace.ok && trace.data?.root?.id != null) {
     const writes = await api(`/api/admin/ai-board/tickets/${trace.data.root.id}/unknown-writes`);
     if (writes.ok) view.trace.writes = writes.data;
+    const rollout = await api(`/api/admin/ai-board/tickets/${trace.data.root.id}/rollout`);
+    if (rollout.ok) view.trace.rollout = rollout.data;
   }
   if (!trace.ok && retainedTrace) stopLiveTrace();
   if (ui.flash === ui.traceError) ui.flash = '';
@@ -774,6 +824,7 @@ document.addEventListener('click', e => {
   else if (action === 'authorize-close') { ui.authorizeConfirm = null; }
   else if (action === 'authorize-go') return authorizePlan(btn);
   else if (action === 'retry-transient') return retryTransient(btn);
+  else if (action === 'rollout') return rolloutDo(btn);
   else if (action === 'reconcile-open') ui.reconcile = { identity: btn.dataset.identity, decision: 'applied', reason: '', evidence: '', resume: true, msg: '' };
   else if (action === 'reconcile-close') ui.reconcile = null;
   else if (action === 'reconcile-go') return submitReconcile(btn);
