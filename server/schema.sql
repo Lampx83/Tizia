@@ -1090,3 +1090,18 @@ CREATE INDEX IF NOT EXISTS idx_gpp_testresult_participant ON gpp_test_result(par
 -- máy chủ (server/pharmacy.js) nên mất sạch mỗi lần khởi động lại; 4 bảng dưới
 -- đây lưu bền vững để chấm điểm và xem lại. ĐỘC LẬP với gpp_* (đề tài khác).
 -- Định danh SV tự khai (mã SV + họ tên + lớp), KHÔNG mật khẩu — đúng đặc tả.
+
+-- =====================================================================
+-- AN TOÀN DỮ LIỆU (17/10/2026) — liên kết phụ huynh/giáo viên ↔ học sinh phải
+-- được XÁC NHẬN. Trước đây POST /api/family/link chỉ cần username của học sinh
+-- là liên kết ngay và xem được dashboard/báo cáo của trẻ.
+--   status: 'pending'   — đã gửi yêu cầu, CHƯA được xem dữ liệu của học sinh
+--           'confirmed' — học sinh (hoặc quản trị) đã chấp nhận
+--           'rejected'  — học sinh/quản trị từ chối hoặc thu hồi (giữ dòng để đối soát)
+-- Liên kết CŨ (tạo trước bản vá) nhận DEFAULT 'pending' → không bị xoá, nhưng phải
+-- được xác nhận lại mới xem được dữ liệu của trẻ.
+-- =====================================================================
+ALTER TABLE family_links ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending';
+ALTER TABLE family_links ADD COLUMN IF NOT EXISTS decided_at BIGINT;
+ALTER TABLE family_links ADD COLUMN IF NOT EXISTS decided_by BIGINT;
+CREATE INDEX IF NOT EXISTS idx_family_child_status ON family_links(child_user_id, status);

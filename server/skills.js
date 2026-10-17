@@ -364,12 +364,13 @@ export function attachSkills(router, { requireAuth, requireEnrolled }) {
   });
 
   // GET /api/skills/child/:child_id — PH xem cây năng lực của 1 con.
-  // Quyền: req.user phải là parent qua family_links. Trả 403 nếu không link.
+  // Quyền: req.user phải là parent ĐÃ ĐƯỢC XÁC NHẬN qua family_links (status
+  // 'confirmed', xem schema.sql) hoặc admin. Trả 403 nếu không.
   router.get('/api/skills/child/:child_id', requireAuth, async (req, res) => {
     const child_id = Number(req.params.child_id);
     if (!Number.isFinite(child_id)) return res.status(400).json({ error: 'invalid child_id' });
     const link = await db.prepare(`
-      SELECT 1 FROM family_links WHERE parent_user_id = ? AND child_user_id = ? LIMIT 1
+      SELECT 1 FROM family_links WHERE parent_user_id = ? AND child_user_id = ? AND status = 'confirmed' LIMIT 1
     `).get(req.user.id, child_id);
     if (!link && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'not_parent_of_child' });

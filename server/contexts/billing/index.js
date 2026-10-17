@@ -12,6 +12,7 @@
 
 import { db,
          linkChildToParent, unlinkChildFromParent, listChildrenOfParent,
+         listUnconfirmedLinksOfParent, listFamilyLinksOfChild, getFamilyLink, decideFamilyLink,
          getUserByUsername, getUserById, setUserPlan } from '../../db.js';
 import { USER_PLANS as USER_PLANS_B2C } from './user-plans.js';
 
@@ -136,6 +137,11 @@ export function attachBilling(r) {
   }
 
   // POST /api/family/link { childUsername }
+  // AN TOÀN DỮ LIỆU (17/10/2026): chỉ TẠO YÊU CẦU (status 'pending'). Phụ huynh/GV
+  // CHƯA xem được gì của học sinh cho tới khi chính học sinh (hoặc quản trị) chấp
+  // nhận ở POST /api/family/links/:id/approve. Trả cùng một câu trả lời dù username
+  // có tồn tại, có phải học sinh hay không — để route này không thành công cụ dò
+  // tài khoản trẻ em theo username.
   r.post('/api/family/link', async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'unauthorized' });
     if (!canBeParent(req.user)) {
@@ -143,15 +149,50 @@ export function attachBilling(r) {
     }
     const uname = String(req.body?.childUsername || '').trim();
     if (!uname) return res.status(400).json({ error: 'missing_child' });
+    const pendingReply = {
+      ok: true, pending: true,
+      message: 'Đã gửi yêu cầu liên kết. Học sinh cần đăng nhập và chấp nhận ở trang Gia đình (hoặc quản trị viên duyệt) thì bạn mới xem được tiến độ học tập.',
+    };
     const child = await getUserByUsername(uname);
-    if (!child) return res.status(404).json({ error: 'child_not_found', message: 'Không tìm thấy tài khoản này.' });
-    if (child.id === req.user.id) return res.status(400).json({ error: 'self_link', message: 'Không thể link chính bạn.' });
-    if (child.role !== 'pupil') {
-      return res.status(400).json({ error: 'child_not_pupil', message: 'Chỉ link được tài khoản Học sinh.' });
+    if (child && child.id === req.user.id) return res.status(400).json({ error: 'self_link', message: 'Không thể link chính bạn.' });
+    if (!child || child.role !== 'pupil') return res.status(202).json(pendingReply);
+    await linkChildToParent({ parent_user_id: req.user.id, child_user_id: child.id });
+    res.status(202).json(pendingReply);
+  });
+
+  // POST /api/family/links/:id/approve | /reject — CHỈ học sinh của liên kết đó
+  // hoặc quản trị. reject cũng dùng để học sinh THU HỒI liên kết đã chấp nhận.
+  // Không xoá dòng: đặt status 'rejected' để còn đối soát.
+  async function decide(req, res, status) {
+    if (!req.user) return res.status(401).json({ error: 'unauthorized' });
+    const link = await getFamilyLink(req.params.id);
+    const isAdmin = req.user.role === 'admin';
+    if (!link || (!isAdmin && Number(link.child_user_id) !== Number(req.user.id))) {
+      return res.status(404).json({ error: 'not_found' });
     }
-    const out = await linkChildToParent({ parent_user_id: req.user.id, child_user_id: child.id });
-    if (!out.linked) return res.status(409).json({ error: 'already_linked' });
-    res.json({ ok: true, child: { id: child.id, username: child.username, display_name: child.display_name } });
+    if (status === 'confirmed' && link.status === 'rejected' && !isAdmin) {
+      return res.status(409).json({ error: 'already_rejected', message: 'Yêu cầu này đã bị từ chối. Phụ huynh cần gửi lại yêu cầu mới.' });
+    }
+    await decideFamilyLink({ id: link.id, status, by: req.user.id });
+    console.log(`[family] link ${link.id} → ${status} bởi user ${req.user.id}${isAdmin ? ' (admin)' : ''}`);
+    res.json({ ok: true, id: Number(link.id), status });
+  }
+  r.post('/api/family/links/:id/approve', (req, res) => decide(req, res, 'confirmed'));
+  r.post('/api/family/links/:id/reject', (req, res) => decide(req, res, 'rejected'));
+
+  // GET /api/admin/family-links?status=pending — quản trị xem để duyệt/đối soát.
+  r.get('/api/admin/family-links', async (req, res) => {
+    if (req.user?.role !== 'admin') return res.status(403).json({ error: 'forbidden' });
+    const status = ['pending', 'confirmed', 'rejected'].includes(req.query.status) ? req.query.status : 'pending';
+    const rows = await db.prepare(`
+      SELECT f.id, f.status, f.created_at, f.decided_at, f.decided_by,
+             p.id AS parent_id, p.username AS parent_username, p.role AS parent_role,
+             c.id AS child_id, c.username AS child_username, c.grade AS child_grade
+        FROM family_links f
+        JOIN users p ON p.id = f.parent_user_id
+        JOIN users c ON c.id = f.child_user_id
+       WHERE f.status = ? ORDER BY f.created_at DESC LIMIT 500`).all(status);
+    res.json({ status, links: rows });
   });
 
   r.post('/api/family/unlink', async (req, res) => {
@@ -162,15 +203,20 @@ export function attachBilling(r) {
     res.json({ ok: out.unlinked });
   });
 
-  // GET /api/family/me — list con của user (chỉ trả nếu canBeParent)
+  // GET /api/family/me — phụ huynh: con ĐÃ XÁC NHẬN (đủ thông tin) + yêu cầu đang
+  // chờ (chỉ username). Học sinh: danh sách yêu cầu/liên kết tới mình để chấp nhận.
   r.get('/api/family/me', async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'unauthorized' });
-    if (!canBeParent(req.user)) return res.json({ children: [], can_be_parent: false });
+    if (!canBeParent(req.user)) {
+      const incoming = req.user.role === 'pupil' ? await listFamilyLinksOfChild(req.user.id) : [];
+      return res.json({ children: [], can_be_parent: false, incoming });
+    }
     const me = await getUserById(req.user.id);
     const meEff = me ? me.plan || 'free' : 'free';
     const children = await listChildrenOfParent(req.user.id);
+    const pending = await listUnconfirmedLinksOfParent(req.user.id);
     res.json({
-      children, can_be_parent: true,
+      children, pending, can_be_parent: true,
       parent_plan: meEff,
       message: meEff === 'free'
         ? 'Mua gói Plus/Pro để chia sẻ cho con đã link.'
@@ -178,5 +224,5 @@ export function attachBilling(r) {
     });
   });
 
-  console.log('[billing] routes mounted: /api/billing/{plans,me,subscribe} + /api/family/*');
+  console.log('[billing] routes mounted: /api/billing/{plans,me,subscribe} + /api/family/* (liên kết cần xác nhận)');
 }

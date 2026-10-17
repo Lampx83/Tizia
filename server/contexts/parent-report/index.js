@@ -60,23 +60,24 @@ async function buildReport(childId, weekStartDate) {
         .map(t => ({ name: t.competency.name, mastery: t.mastery_pct, earned: t.earned_skills.length, total: t.total_skills })),
     };
   })();
-  // Quiz attempts trong tuần
+  // Quiz attempts trong tuần. (17/10/2026: sửa tên cột cho khớp schema Postgres —
+  // attempted_at/created_at/received_at cũ không tồn tại nên báo cáo luôn lỗi.)
   const quizRows = (await db.prepare(`
-    SELECT COUNT(*) AS n, SUM(CASE WHEN correct THEN 1 ELSE 0 END) AS c
+    SELECT COUNT(*) AS n, SUM(CASE WHEN correct <> 0 THEN 1 ELSE 0 END) AS c
       FROM question_attempts
-     WHERE user_id = ? AND attempted_at >= ? AND attempted_at < ?
+     WHERE user_id = ? AND created_at >= ? AND created_at < ?
   `).get(childId, wsMs, weMs)) || { n: 0, c: 0 };
   // Scenario runs
   const scenarioRows = (await db.prepare(`
     SELECT COUNT(*) AS n, AVG(best_score) AS avg
       FROM scenario_runs
-     WHERE user_id = ? AND created_at >= ? AND created_at < ?
+     WHERE user_id = ? AND last_ts >= ? AND last_ts < ?
   `).get(childId, wsMs, weMs)) || { n: 0, avg: 0 };
   // Codelab
   const codeRows = (await db.prepare(`
     SELECT COUNT(*) AS n, SUM(CASE WHEN status='accepted' THEN 1 ELSE 0 END) AS accepted
       FROM codelab_submissions
-     WHERE user_id = ? AND received_at >= ? AND received_at < ?
+     WHERE user_id = ? AND processed_at >= ? AND processed_at < ?
   `).get(childId, wsMs, weMs)) || { n: 0, accepted: 0 };
 
   // Đề xuất ngắn dựa trên data
@@ -128,16 +129,23 @@ export function attachParentReport(router) {
   router.get('/api/parent/report/:child_id', requireAuth, async (req, res) => {
     const childId = Number(req.params.child_id);
     const weekStart = String(req.query.week || '').slice(0, 10);
-    // Verify child belongs to this parent
+    // Chỉ phụ huynh ĐÃ ĐƯỢC HỌC SINH XÁC NHẬN (listChildrenOfParent lọc status
+    // 'confirmed') hoặc quản trị mới xem được báo cáo.
     const children = (await listChildrenOfParent(req.user.id)) || [];
-    if (!children.find(c => c.id === childId)) {
+    if (!children.find(c => c.id === childId) && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'not_your_child' });
     }
-    const date = weekStart
-      ? new Date(weekStart + 'T00:00:00Z')
-      : vnNow();
-    const report = await buildReport(childId, date);
-    if (!report) return res.status(404).json({ error: 'not_found' });
-    res.json({ ok: true, report });
+    try {
+      const date = weekStart
+        ? new Date(weekStart + 'T00:00:00Z')
+        : vnNow();
+      const report = await buildReport(childId, date);
+      if (!report) return res.status(404).json({ error: 'not_found' });
+      res.json({ ok: true, report });
+    } catch (e) {
+      // Trước đây lỗi SQL ở đây thành unhandledRejection → request treo không trả lời.
+      console.error('[parent-report] build failed:', e.message);
+      res.status(500).json({ error: 'report_failed' });
+    }
   });
 }

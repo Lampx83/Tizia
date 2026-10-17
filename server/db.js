@@ -763,40 +763,88 @@ export async function isUsernameTaken(username) {
 }
 
 // ── Family links (Trục 4) ──
+// AN TOÀN DỮ LIỆU (17/10/2026): liên kết chỉ có hiệu lực xem dữ liệu khi
+// status = 'confirmed' (học sinh hoặc quản trị đã chấp nhận). Xem schema.sql.
 const insertFamilyStmt = db.prepare(`
-  INSERT OR IGNORE INTO family_links (parent_user_id, child_user_id, created_at)
-  VALUES (@parent_user_id, @child_user_id, @created_at)
+  INSERT OR IGNORE INTO family_links (parent_user_id, child_user_id, created_at, status)
+  VALUES (@parent_user_id, @child_user_id, @created_at, 'pending')
 `);
 const deleteFamilyStmt = db.prepare(`
   DELETE FROM family_links WHERE parent_user_id = @parent AND child_user_id = @child
 `);
+// CHỈ con đã xác nhận — mọi API trả dữ liệu học sinh cho phụ huynh dùng hàm này.
 const listChildrenStmt = db.prepare(`
   SELECT u.id, u.username, u.display_name, u.role, u.grade, u.school_name, u.plan, u.plan_expires_at
   FROM family_links f JOIN users u ON u.id = f.child_user_id
-  WHERE f.parent_user_id = ? ORDER BY f.created_at ASC
+  WHERE f.parent_user_id = ? AND f.status = 'confirmed' ORDER BY f.created_at ASC
 `);
+// Yêu cầu chưa/không được xác nhận: chỉ trả username để phụ huynh biết trạng
+// thái, KHÔNG trả lớp/trường/gói của trẻ.
+const listUnconfirmedOfParentStmt = db.prepare(`
+  SELECT f.id AS link_id, f.status, f.created_at, u.username
+  FROM family_links f JOIN users u ON u.id = f.child_user_id
+  WHERE f.parent_user_id = ? AND f.status <> 'confirmed' ORDER BY f.created_at ASC
+`);
+// Phía học sinh: ai đang xin liên kết / đã liên kết với mình.
+const listLinksOfChildStmt = db.prepare(`
+  SELECT f.id AS link_id, f.status, f.created_at, f.decided_at,
+         u.id AS parent_id, u.username AS parent_username, u.display_name AS parent_display_name, u.role AS parent_role
+  FROM family_links f JOIN users u ON u.id = f.parent_user_id
+  WHERE f.child_user_id = ? AND f.status <> 'rejected' ORDER BY f.created_at ASC
+`);
+const getFamilyLinkStmt = db.prepare(`SELECT * FROM family_links WHERE id = ?`);
+const decideFamilyLinkStmt = db.prepare(`
+  UPDATE family_links SET status = @status, decided_at = @t, decided_by = @by WHERE id = @id
+`);
+const isConfirmedParentStmt = db.prepare(`
+  SELECT 1 AS ok FROM family_links
+  WHERE parent_user_id = ? AND child_user_id = ? AND status = 'confirmed' LIMIT 1
+`);
+// Kế thừa gói từ phụ huynh: quyền LỢI cho trẻ, không lộ dữ liệu trẻ → giữ cho cả
+// liên kết 'pending' (để không cắt gói của gia đình đang trả tiền), bỏ 'rejected'.
 const getParentPlanStmt = db.prepare(`
   SELECT u.id AS parent_id, u.plan AS parent_plan, u.plan_expires_at AS parent_plan_expires_at
   FROM family_links f JOIN users u ON u.id = f.parent_user_id
-  WHERE f.child_user_id = ?
+  WHERE f.child_user_id = ? AND f.status <> 'rejected'
   ORDER BY (CASE u.plan WHEN 'pro' THEN 3 WHEN 'plus' THEN 2 WHEN 'free' THEN 1 ELSE 0 END) DESC
   LIMIT 1
 `);
 
+/** Tạo YÊU CẦU liên kết (status 'pending'). Chưa xem được dữ liệu cho tới khi
+ *  học sinh/quản trị xác nhận. linked=false nếu cặp này đã có dòng. */
 export async function linkChildToParent({ parent_user_id, child_user_id }) {
   const info = await insertFamilyStmt.run({
     parent_user_id: Number(parent_user_id),
     child_user_id: Number(child_user_id),
     created_at: Date.now(),
   });
-  return { linked: info.changes > 0 };
+  return { linked: info.changes > 0, status: 'pending' };
 }
 export async function unlinkChildFromParent({ parent_user_id, child_user_id }) {
   const info = await deleteFamilyStmt.run({ parent: Number(parent_user_id), child: Number(child_user_id) });
   return { unlinked: info.changes > 0 };
 }
+/** Con ĐÃ XÁC NHẬN của phụ huynh. */
 export async function listChildrenOfParent(parent_user_id) {
   return await listChildrenStmt.all(Number(parent_user_id));
+}
+export async function listUnconfirmedLinksOfParent(parent_user_id) {
+  return await listUnconfirmedOfParentStmt.all(Number(parent_user_id));
+}
+export async function listFamilyLinksOfChild(child_user_id) {
+  return await listLinksOfChildStmt.all(Number(child_user_id));
+}
+export async function getFamilyLink(id) {
+  return (await getFamilyLinkStmt.get(Number(id))) || null;
+}
+export async function decideFamilyLink({ id, status, by }) {
+  if (!['confirmed', 'rejected'].includes(status)) throw new Error('status không hợp lệ');
+  const info = await decideFamilyLinkStmt.run({ id: Number(id), status, by: Number(by) || null, t: Date.now() });
+  return { changed: info.changes > 0 };
+}
+/** parent_user_id có phải phụ huynh ĐÃ XÁC NHẬN của child_user_id không. */
+export async function isConfirmedParentOf(parent_user_id, child_user_id) {
+  return !!(await isConfirmedParentStmt.get(Number(parent_user_id), Number(child_user_id)));
 }
 /** Trả về parent có plan cao nhất (để con kế thừa). null nếu không có/không link. */
 export async function getBestParentPlanForChild(child_user_id) {

@@ -34,7 +34,7 @@ export default async function FamilyPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">👨‍👩‍👧 Gia đình</h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          Link tài khoản con (Học sinh) với tài khoản của bạn để chia sẻ gói cước.
+          Gửi yêu cầu liên kết tới tài khoản con (Học sinh). Con cần đăng nhập và chấp nhận thì bạn mới xem được tiến độ học tập.
         </p>
       </div>
 

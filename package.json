@@ -12,7 +12,8 @@
     "db:tunnel:stop": "bash scripts/proddb-tunnel.sh stop",
     "db:tunnel:status": "bash scripts/proddb-tunnel.sh status",
     "dev:proddb": "bash scripts/proddb-tunnel.sh start && DB_TARGET=prod node --env-file-if-exists=.env --watch server/index.js",
-    "check:content": "node scripts/check-content-integrity.mjs"
+    "check:content": "node scripts/check-content-integrity.mjs",
+    "test": "node --test --test-timeout=120000 test/*.test.mjs"
   },
   "engines": {
     "node": ">=20"

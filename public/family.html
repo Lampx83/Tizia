@@ -133,7 +133,8 @@
       const r = await fetch('/api/family/link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ childUsername: username }) });
       const data = await r.json();
       if (r.ok) {
-        msg.textContent = `✓ Đã link ${data.child.display_name} (@${data.child.username})`;
+        // Liên kết cần học sinh/quản trị xác nhận (17/10/2026) — server chỉ báo đã gửi yêu cầu.
+        msg.textContent = '✓ ' + (data.message || 'Đã gửi yêu cầu liên kết.');
         msg.className = 'ok';
         document.getElementById('child-username').value = '';
         refresh();

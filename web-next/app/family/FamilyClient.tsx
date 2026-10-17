@@ -16,8 +16,28 @@ export type FamilyChild = {
   plan_expires_at?: number | null;
 };
 
+// Yêu cầu liên kết chưa được học sinh xác nhận — chỉ có username (không lộ lớp/trường).
+export type FamilyPending = {
+  link_id: number;
+  status: 'pending' | 'rejected';
+  created_at: number;
+  username: string;
+};
+
+// Phía học sinh: ai đang xin liên kết / đã liên kết với mình.
+export type FamilyIncoming = {
+  link_id: number;
+  status: 'pending' | 'confirmed';
+  created_at: number;
+  parent_username: string;
+  parent_display_name: string;
+  parent_role: string;
+};
+
 export type FamilyMe = {
   children?: FamilyChild[];
+  pending?: FamilyPending[];
+  incoming?: FamilyIncoming[];
   can_be_parent: boolean;
   parent_plan?: string;
   message?: string;
@@ -81,15 +101,13 @@ export default function FamilyClient({ initial }: { initial: FamilyMe }) {
           body: JSON.stringify({ childUsername: uname }),
         });
         const d: {
-          child?: { display_name: string; username: string };
+          pending?: boolean;
           message?: string;
           error?: string;
         } = await r.json();
-        if (r.ok && d.child) {
-          setAddMsg({
-            text: `✓ Đã link ${d.child.display_name} (@${d.child.username})`,
-            kind: 'ok',
-          });
+        // Liên kết cần học sinh/quản trị xác nhận → server chỉ báo "đã gửi yêu cầu".
+        if (r.ok && d.pending) {
+          setAddMsg({ text: '✓ ' + (d.message || 'Đã gửi yêu cầu liên kết.'), kind: 'ok' });
           setUsername('');
           refresh();
         } else {
@@ -104,12 +122,30 @@ export default function FamilyClient({ initial }: { initial: FamilyMe }) {
     [username, refresh],
   );
 
+  const decide = useCallback(
+    async (linkId: number, action: 'approve' | 'reject') => {
+      const ask =
+        action === 'approve'
+          ? 'Chấp nhận? Người này sẽ xem được tiến độ học tập của bạn.'
+          : 'Từ chối / thu hồi liên kết này?';
+      if (!confirm(ask)) return;
+      await fetch(`/api/family/links/${linkId}/${action}`, {
+        method: 'POST',
+        credentials: 'same-origin',
+      });
+      refresh();
+    },
+    [refresh],
+  );
+
   const planName = `Gói ${PLAN_LABEL[data.parent_plan ?? ''] || data.parent_plan || 'Miễn phí'}`;
   const planSub = data.can_be_parent
     ? data.message
     : 'Tài khoản Học sinh không thể làm phụ huynh. Đổi vai trò sang Sinh viên hoặc Giảng viên.';
 
   const children = data.children ?? [];
+  const pending = data.pending ?? [];
+  const incoming = data.incoming ?? [];
 
   return (
     <>
@@ -154,6 +190,55 @@ export default function FamilyClient({ initial }: { initial: FamilyMe }) {
                 {addMsg.text}
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Yêu cầu phụ huynh đã gửi, đang chờ học sinh xác nhận. */}
+      {data.can_be_parent && pending.length > 0 && (
+        <Card>
+          <CardContent className="p-5">
+            <h3 className="mb-3 text-base font-semibold">Đang chờ học sinh xác nhận</h3>
+            <ul className="space-y-1 text-sm">
+              {pending.map((p) => (
+                <li key={p.link_id}>
+                  @{p.username} —{' '}
+                  {p.status === 'rejected' ? 'đã bị từ chối' : 'chờ xác nhận'}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Học sinh: chấp nhận / từ chối yêu cầu liên kết. */}
+      {!data.can_be_parent && incoming.length > 0 && (
+        <Card>
+          <CardContent className="p-5">
+            <h3 className="mb-3 text-base font-semibold">Yêu cầu liên kết với bạn</h3>
+            <ul className="space-y-2 text-sm">
+              {incoming.map((x) => (
+                <li key={x.link_id} className="flex flex-wrap items-center gap-2">
+                  <span>
+                    <b>{x.parent_display_name}</b> (@{x.parent_username}) —{' '}
+                    {x.status === 'confirmed' ? 'đã liên kết' : 'đang xin liên kết'}
+                  </span>
+                  {x.status === 'pending' && (
+                    <Button type="button" size="sm" onClick={() => decide(x.link_id, 'approve')}>
+                      Chấp nhận
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => decide(x.link_id, 'reject')}
+                  >
+                    {x.status === 'confirmed' ? 'Thu hồi' : 'Từ chối'}
+                  </Button>
+                </li>
+              ))}
+            </ul>
           </CardContent>
         </Card>
       )}
