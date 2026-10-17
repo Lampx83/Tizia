@@ -57,7 +57,7 @@ const CSS = `
     background: rgba(15,23,42,0.95);
   }
   .tz-eng-hud[hidden] { display: none !important; }
-  /* Inline trong header (auth-header có #ev-eng-slot) — bỏ position fixed,
+  /* Inline trong header (auth-header có #ev-eng-slot), bỏ position fixed,
      bỏ shadow, giảm padding, cao vừa header. */
   #ev-eng-slot .tz-eng-hud {
     position: static; top: auto; right: auto;
@@ -191,7 +191,7 @@ const CSS = `
     background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.4);
     cursor: not-allowed; transform: none;
   }
-  /* "Đi học/Chơi ngay" — link xanh dương để phân biệt với nút "Nhận" cam */
+  /* "Đi học/Chơi ngay", link xanh dương để phân biệt với nút "Nhận" cam */
   .tz-eng-q-go {
     background: linear-gradient(135deg, #38bdf8, #0ea5e9);
     color: #0c1726;

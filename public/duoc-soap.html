@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>🎓 SOAP Writer Studio — Hội thảo chuyên đề · Tizia</title>
+<title>🎓 SOAP Writer Studio, Hội thảo chuyên đề · Tizia</title>
 <link rel="manifest" href="./manifest.webmanifest" />
 <meta name="theme-color" content="#8b5cf6" />
 <style>
@@ -128,7 +128,7 @@
 
   <div id="case-picker">
     <p class="tagline">
-      Đây là <b>hội thảo tương tác</b> — không chỉ xem slide. Chọn một <b>ca lâm sàng thực</b>,
+      Đây là <b>hội thảo tương tác</b>: không chỉ xem slide. Chọn một <b>ca lâm sàng thực</b>,
       đọc kỹ thông tin BN, đơn thuốc, xét nghiệm, sau đó viết báo cáo theo cấu trúc
       <b>SOAP</b> (Subjective – Objective – Assessment – Plan). AI giảng viên sẽ chấm từng mục
       theo rubric, chỉ DRP còn bỏ sót, gợi ý phần cần cải thiện.
@@ -162,36 +162,36 @@
     <div class="panel">
       <h2>✍️ Báo cáo SOAP của bạn</h2>
       <div style="font-size:12.5px;opacity:.7;margin-bottom:10px">
-        Tham khảo phác đồ Bộ Y tế, Dược thư Quốc gia. Viết ngắn gọn, đúng trọng tâm — KHÔNG
+        Tham khảo phác đồ Bộ Y tế, Dược thư Quốc gia. Viết ngắn gọn, đúng trọng tâm: KHÔNG
         copy lại đề bài.
       </div>
       <form class="soap-form" id="soap-form" onsubmit="return false">
         <div class="field">
-          <label>S — Subjective
+          <label>S: Subjective
             <span class="hint">Lời kể của BN: triệu chứng chính, hoàn cảnh xuất hiện, tiền sử thuốc bằng lời kể.</span>
           </label>
           <textarea id="s-text" placeholder="VD: BN nam 68t tự thuật nôn ra máu đỏ tươi 2 lần sáng nay, đang dùng warfarin 5mg/ngày, mới được kê thêm clarithromycin 5 ngày…"></textarea>
         </div>
         <div class="field">
-          <label>O — Objective
+          <label>O: Objective
             <span class="hint">Sinh hiệu, xét nghiệm đáng chú ý, thuốc đang dùng (liều cụ thể), khám lâm sàng.</span>
           </label>
           <textarea id="o-text" placeholder="VD: INR 7.8 (mục tiêu 2–3), Hb 8.5 g/dL (giảm), eGFR 65 mL/ph. Đơn hiện tại: warfarin 5mg…"></textarea>
         </div>
         <div class="field">
-          <label>A — Assessment
+          <label>A: Assessment
             <span class="hint">Nhận định vấn đề dùng thuốc (DRP): chẩn đoán, nguyên nhân, mức độ nặng.</span>
           </label>
           <textarea id="a-text" placeholder="VD: Xuất huyết tiêu hoá do quá liều warfarin, nguyên nhân tương tác CYP3A4 với clarithromycin, mức độ nguy hiểm (INR > 5 + chảy máu hoạt động)…"></textarea>
         </div>
         <div class="field">
-          <label>P — Plan
+          <label>P: Plan
             <span class="hint">Kế hoạch can thiệp + theo dõi: ngưng thuốc, đảo ngược tác dụng, thay thế, theo dõi INR/AE, tư vấn BN.</span>
           </label>
           <textarea id="p-text" placeholder="VD: Ngưng warfarin + clarithromycin; Vitamin K 10mg IV chậm; đổi sang azithromycin; re-start warfarin khi INR<2; theo dõi INR mỗi 3 ngày; tư vấn BN báo BS mọi thuốc mới…"></textarea>
         </div>
         <div class="actions">
-          <button type="button" class="btn primary" id="submit">🤖 Nộp — AI chấm theo rubric</button>
+          <button type="button" class="btn primary" id="submit">🤖 Nộp: AI chấm theo rubric</button>
           <button type="button" class="btn ghost" id="clear">Xoá nháp</button>
           <span class="word-meter" id="word-meter">0 từ</span>
         </div>
@@ -254,32 +254,32 @@ function startCase(id) {
   const c = currentCase;
   $('ci-title').textContent = c.title;
   $('ci-cc').textContent = c.chiefComplaint;
-  $('ci-history').textContent = c.history || '—';
+  $('ci-history').textContent = c.history || '-';
 
   const p = c.patient || {};
   $('ci-patient').innerHTML = `
     <div class="l">Mã BN</div><div class="v">${esc(p.initials || p.id)}</div>
     <div class="l">Tuổi</div><div class="v">${esc(p.ageYears)} ${p.sex === 'M' ? '· Nam' : p.sex === 'F' ? '· Nữ' : ''}</div>
-    <div class="l">Cân nặng</div><div class="v">${p.weightKg ? p.weightKg + ' kg' : '—'}</div>
-    <div class="l">Chiều cao</div><div class="v">${p.heightCm ? p.heightCm + ' cm' : '—'}</div>
+    <div class="l">Cân nặng</div><div class="v">${p.weightKg ? p.weightKg + ' kg' : '-'}</div>
+    <div class="l">Chiều cao</div><div class="v">${p.heightCm ? p.heightCm + ' cm' : '-'}</div>
   `;
   const back = [
     (p.comorbidities || []).length ? `<b>Bệnh nền:</b> ${p.comorbidities.map(esc).join(', ')}` : null,
     (p.allergies || []).length ? `<b>Dị ứng:</b> ${p.allergies.map(esc).join(', ')}` : `<b>Dị ứng:</b> Không`,
   ].filter(Boolean).join('<br>');
-  $('ci-back').innerHTML = back || '—';
+  $('ci-back').innerHTML = back || '-';
 
   const labs = p.labs || {};
   const labRows = Object.entries(labs).map(([k, v]) =>
     `<div class="l">${esc(k)}</div><div class="v">${esc(v)}</div>`).join('');
-  $('ci-labs').innerHTML = labRows || '<div class="l" style="grid-column:1/3;opacity:.6">— Chưa có —</div>';
+  $('ci-labs').innerHTML = labRows || '<div class="l" style="grid-column:1/3;opacity:.6">Chưa có</div>';
 
   $('ci-rx').innerHTML = (c.prescriptions || []).map(rx => `
     <div class="rx">
       <span><span class="drug">${esc(rx.drugId)}</span> <span class="dose">${esc(rx.dose)} ${esc(rx.route)} ${esc(rx.frequency)}</span></span>
       <span class="dose">${esc(rx.duration || '')}</span>
     </div>
-  `).join('') || '<div class="row" style="opacity:.6">— Chưa có đơn —</div>';
+  `).join('') || '<div class="row" style="opacity:.6">Chưa có đơn</div>';
 
   scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -327,22 +327,22 @@ $('submit').addEventListener('click', async () => {
 
   // Gộp 4 textarea thành 1 SOAP note có nhãn rõ ràng — backend đọc cấu trúc này tốt hơn.
   const soapText =
-`[S — SUBJECTIVE]
+`[S: SUBJECTIVE]
 ${s || '(BN chưa khai thác)'}
 
-[O — OBJECTIVE]
+[O: OBJECTIVE]
 ${o || '(Chưa ghi)'}
 
-[A — ASSESSMENT]
+[A: ASSESSMENT]
 ${a || '(Chưa nhận định)'}
 
-[P — PLAN]
+[P: PLAN]
 ${p || '(Chưa lập kế hoạch)'}`;
 
   const fb = $('fb');
   fb.classList.add('show');
   fb.innerHTML = `<h3>🤖 AI giảng viên đang chấm…</h3>
-    <div class="loading">Phân tích SOAP theo rubric — có thể mất 20–40 giây.</div>`;
+    <div class="loading">Phân tích SOAP theo rubric, có thể mất 20–40 giây.</div>`;
   fb.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   const btn = $('submit');
@@ -401,7 +401,7 @@ function renderFeedback(d) {
                   overall >= 50 ? '⚠️ Cần cải thiện' : '❌ Chưa đạt';
 
   const html = `
-    <h3>📊 Kết quả chấm SOAP — ${esc(currentCase.title)}</h3>
+    <h3>📊 Kết quả chấm SOAP, ${esc(currentCase.title)}</h3>
     <div class="overall-score">
       <div>
         <div class="big" style="color:${color}">${overall}<span style="font-size:18px;opacity:.6">/100</span></div>
@@ -433,18 +433,18 @@ function fallbackBreakdown(d) {
   const pct = v => Math.round((v ?? 0) * 100);
   const row = (label, key) => `
     <div class="soap-row">
-      <div class="soap-label"><b>${label}</b> — ${pct(s[key])}/100</div>
+      <div class="soap-label"><b>${label}</b>: ${pct(s[key])}/100</div>
       <div class="soap-bar"><div style="width:${pct(s[key])}%"></div></div>
-      <div class="soap-fb">${esc(fb[key] || '—')}</div>
+      <div class="soap-fb">${esc(fb[key] || '-')}</div>
     </div>`;
   const missed = (d.missedDRPs || []).map(x => `<li>${esc(x)}</li>`).join('');
   const strengths = (d.strengths || []).map(x => `<li>${esc(x)}</li>`).join('');
   return `
     <div class="ai-feedback-grid">
-      ${row('S — Subjective', 'subjective')}
-      ${row('O — Objective', 'objective')}
-      ${row('A — Assessment', 'assessment')}
-      ${row('P — Plan', 'plan')}
+      ${row('S: Subjective', 'subjective')}
+      ${row('O: Objective', 'objective')}
+      ${row('A: Assessment', 'assessment')}
+      ${row('P: Plan', 'plan')}
       ${missed ? `<div class="soap-missed"><b>⚠️ DRPs còn bỏ sót:</b><ul>${missed}</ul></div>` : ''}
       ${strengths ? `<div class="soap-strengths"><b>✅ Điểm tốt:</b><ul>${strengths}</ul></div>` : ''}
     </div>`;

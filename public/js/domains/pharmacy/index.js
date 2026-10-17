@@ -18,11 +18,11 @@ export const DOMAIN = {
   icon: '💊',
   yearsTotal: 5,
   yearLabels: [
-    'Năm 1 — HỌC (Tutorial)',
-    'Năm 2 — TẬP (Guided Practice)',
-    'Năm 3 — ÁP DỤNG (Independent)',
-    'Năm 4 — TÍCH HỢP (Case-based)',
-    'Năm 5 — THỰC HÀNH (OSCE / Portfolio)',
+    'Năm 1: HỌC (Tutorial)',
+    'Năm 2: TẬP (Guided Practice)',
+    'Năm 3: ÁP DỤNG (Independent)',
+    'Năm 4: TÍCH HỢP (Case-based)',
+    'Năm 5: THỰC HÀNH (OSCE / Portfolio)',
   ],
-  tagline: 'Từ nhóm chức Hoá hữu cơ đến OSCE 10 trạm — qua 102 module, 85+ scenarios, hỗ trợ 2D · 3D · VR · XR · Metaverse',
+  tagline: 'Từ nhóm chức Hoá hữu cơ đến OSCE 10 trạm, qua 102 module, 85+ scenarios, hỗ trợ 2D · 3D · VR · XR · Metaverse',
 };

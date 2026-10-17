@@ -44,7 +44,7 @@ export async function gradeSoap({ caseId, soapText, rubric = 'all' }) {
         assessment: baseScore * 0.6,
         plan: baseScore * 0.6,
       },
-      html: '<i>⚠️ AI offline — chấm tạm bằng heuristic độ dài.</i>',
+      html: '<i>⚠️ AI offline: chấm tạm bằng heuristic độ dài.</i>',
       raw: { fallback: true, wordCount },
     };
   }

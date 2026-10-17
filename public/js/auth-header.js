@@ -36,7 +36,7 @@ const CSS = `
     backdrop-filter: blur(14px);
     color: white; font-family: 'Inter', system-ui, sans-serif;
     /* Một số trang đặt rule "header { max-width: 800px }" cho header riêng
-       của trang — selector theo tag sẽ trúng luôn auth-header và bóp 800px.
+       của trang, selector theo tag sẽ trúng luôn auth-header và bóp 800px.
        Reset cứng để auth-header luôn full-width, kệ trang đang style thế nào. */
     max-width: none; width: auto; box-sizing: border-box;
   }
@@ -60,7 +60,7 @@ const CSS = `
   @media (max-width: 720px) { .ev-header .ev-tagline { display: none; } }
   .ev-header .ev-spacer { flex: 1; }
 
-  /* Nút Quay lại + breadcrumb — chỉ hiện ở trang trong */
+  /* Nút Quay lại + breadcrumb, chỉ hiện ở trang trong */
   .ev-header .ev-back {
     display: inline-flex; align-items: center; justify-content: center;
     width: 32px; height: 32px; border-radius: 8px;
@@ -83,19 +83,19 @@ const CSS = `
 
   /* Slot chứa chuông notification (do notifications-bell.js mount vào) */
   #ev-bell-slot { display: inline-flex; align-items: center; }
-  /* Slot chứa engagement HUD (Streak · Hearts · Quest) — engagement-hud.js
+  /* Slot chứa engagement HUD (Streak · Hearts · Quest), engagement-hud.js
      sẽ reparent .tz-eng-hud vào đây nếu slot tồn tại, để bar hiển thị inline
      trong header thay vì floating top-right. */
   #ev-eng-slot { display: inline-flex; align-items: center; }
-  /* Slot chứa pet bubble — pet-widget.js sẽ reparent .tz-pet-bubble vào đây
+  /* Slot chứa pet bubble, pet-widget.js sẽ reparent .tz-pet-bubble vào đây
      để gọn cùng các HUD khác. */
   #ev-pet-slot { display: inline-flex; align-items: center; }
   @media (max-width: 720px) {
-    /* Trên mobile header đã chật — ẩn HUD inline, chỉ giữ nút chuông + tài khoản */
+    /* Trên mobile header đã chật, ẩn HUD inline, chỉ giữ nút chuông + tài khoản */
     #ev-eng-slot, #ev-pet-slot { display: none; }
   }
 
-  /* Quick-link 5 mini-game / trải nghiệm trực quan — luôn hiện ở mọi trang.
+  /* Quick-link 5 mini-game / trải nghiệm trực quan, luôn hiện ở mọi trang.
      Trước đây chỉ ẩn trong "Khám phá thêm" cuối trang chủ, user không tìm thấy. */
   .ev-quicklinks { display: inline-flex; gap: 4px; padding: 0 4px; }
   .ev-quicklinks a {
@@ -198,7 +198,7 @@ const CSS = `
   .ev-header .ev-anon { font-size: 13px; opacity: 0.8; }
   .ev-header .ev-anon a { color: #fbbf24; text-decoration: none; font-weight: 700; }
 
-  /* Plan badge (Free/Plus/Pro) — hiển thị cạnh tên trong chip user và trong dialog */
+  /* Plan badge (Free/Plus/Pro), hiển thị cạnh tên trong chip user và trong dialog */
   .ev-plan-pill {
     display: inline-flex; align-items: center; gap: 4px;
     padding: 1px 7px; border-radius: 7px;

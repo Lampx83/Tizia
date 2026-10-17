@@ -244,7 +244,7 @@
   if (moduleMeta) {
     title.textContent = `${moduleId} · ${moduleMeta.title}`;
     subtitle.textContent = `Năm ${moduleMeta.yearLevel} · Môn: ${moduleMeta.subject}`;
-    document.title = `${moduleId} · ${moduleMeta.title} — Tizia`;
+    document.title = `${moduleId} · ${moduleMeta.title} | Tizia`;
     info.style.display = 'block';
     infoText.innerHTML = `<b>Yêu cầu mở khoá:</b> ${moduleMeta.minStarsToUnlock} sao tích luỹ${moduleMeta.prerequisites?.length ? ` · <b>Tiền đề:</b> ${moduleMeta.prerequisites.join(', ')}` : ''}`;
     infoChips.innerHTML = `
@@ -299,7 +299,7 @@
       games.style.cssText = 'margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;';
       games.innerHTML = `
         <a href="${g.href}" style="display:inline-flex;align-items:center;gap:8px;padding:10px 16px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#1c1502;font-weight:800;text-decoration:none;border-radius:12px;font-size:14px;box-shadow:0 6px 16px rgba(251,191,36,.25);">
-          ${g.ic} ${g.name} <span style="opacity:.7;font-weight:600;font-size:12px;">— ${g.sub}</span>
+          ${g.ic} ${g.name} <span style="opacity:.7;font-weight:600;font-size:12px;">, ${g.sub}</span>
         </a>`;
       info.appendChild(games);
     }
@@ -311,7 +311,7 @@
       title.textContent = s0.title;
       const bits = [s0.chapter && `📂 ${s0.chapter}`, s0.boss && '👑 Boss', s0.difficulty && `⭐ Độ khó ${s0.difficulty}/5`].filter(Boolean);
       subtitle.textContent = bits.join(' · ');
-      document.title = `${s0.title} — Tizia`;
+      document.title = `${s0.title} | Tizia`;
     } else {
       title.textContent = moduleId;
       subtitle.textContent = 'Bài học';
@@ -327,7 +327,7 @@
       skill:    { icon: '🌟', label: 'Bé giỏi', hint: 'Tự lập việc nhỏ' },
     },
     primary: {
-      practice: { icon: '🎮', label: 'Thực hành — chơi & khám phá', hint: 'Học bằng làm' },
+      practice: { icon: '🎮', label: 'Thực hành: chơi & khám phá', hint: 'Học bằng làm' },
       theory:   { icon: '📚', label: 'Học bài', hint: 'Kiến thức nền tảng' },
       skill:    { icon: '🏆', label: 'Thi tài', hint: 'Luyện sao mỗi tuần' },
     },
@@ -343,7 +343,7 @@
     },
     // ĐH — giữ thuật ngữ chuyên ngành.
     _default: {
-      practice: { icon: '🧪', label: 'Thực hành — làm & trải nghiệm', hint: 'Ưu tiên: học bằng làm' },
+      practice: { icon: '🧪', label: 'Thực hành: làm & trải nghiệm', hint: 'Ưu tiên: học bằng làm' },
       theory:   { icon: '📖', label: 'Lý thuyết', hint: 'Kiến thức nền tảng' },
       skill:    { icon: '🎯', label: 'Luyện kỹ năng', hint: 'Tư vấn · OSCE · viết SOAP · role-play' },
     },
@@ -447,7 +447,7 @@
         <h4>${s.title}</h4>
         <div class="meta">
           <span>🎯 ${s.kind}</span>
-          <span>⭐ ${s.difficulty ?? '—'}/5</span>
+          <span>⭐ ${s.difficulty ?? '-'}/5</span>
           ${s.questions ? `<span>${s.questions.length} câu</span>` : ''}
           ${s.correctPairs ? `<span>${s.correctPairs.length} cặp</span>` : ''}
           ${s.targets ? `<span>${s.targets.length} ảnh</span>` : ''}
@@ -583,7 +583,7 @@
       <div class="result-breakdown">
         ${result.rubricBreakdown.map(r => `
           <div class="result-row ${r.score >= 0.5 ? 'ok' : 'bad'}">
-            <b>${r.criterion}</b> — ${r.feedback}
+            <b>${r.criterion}</b>: ${r.feedback}
           </div>
         `).join('')}
       </div>

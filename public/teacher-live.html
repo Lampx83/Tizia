@@ -204,7 +204,7 @@
 
       <div class="block">
         <h3>📌 Ghim task hiện tại</h3>
-        <input id="pin-text" placeholder="VD: Đang làm bài 3 — chương Sắc ký" />
+        <input id="pin-text" placeholder="VD: Đang làm bài 3, chương Sắc ký" />
         <div class="grid2">
           <button class="btn-primary" id="pin-set">Ghim</button>
           <button class="btn-danger" id="pin-clear">Bỏ ghim</button>
@@ -331,7 +331,7 @@ function renderGrid() {
         <button class="kick" data-kick="${s.id}" title="Mời ra">✕</button>
         <div class="name">${escape(s.name)}</div>
         <div class="meta">${formatTimeAgo(s.lastSeen)} · ${s.status || 'idle'}</div>
-        <div class="page">📄 ${s.page || '—'}</div>
+        <div class="page">📄 ${s.page || '-'}</div>
         ${s.total > 0 ? `
           <div class="progress-bar"><div style="width:${pct}%"></div></div>
           <div class="meta" style="margin-top:3px;">${s.correct}/${s.total} · ${s.score}đ</div>

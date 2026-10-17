@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
 <meta name="theme-color" content="#dde6e1" />
-<title>PS15 · Tour Nhà máy GMP — 4 Cleanroom</title>
+<title>PS15 · Tour Nhà máy GMP, 4 Cleanroom</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden;
     background: linear-gradient(180deg, #e8efe9 0%, #c9d5cc 100%);
@@ -263,7 +263,7 @@
 
 <!-- Right info panel -->
 <div id="panel">
-  <h3 id="p-iso">ISO 9 — CLASS D</h3>
+  <h3 id="p-iso">ISO 9: CLASS D</h3>
   <h2 id="p-name">Phòng Kho · Tiếp nhận nguyên liệu</h2>
 
   <div id="room-stats">
@@ -976,7 +976,7 @@ const CHALLENGES = {
         'Chỉ tên và số lượng',
         'Số lô, CoA, ngày nhận, người nhận, tình trạng bao bì',
         'Chỉ ngày và người nhận',
-        'Không cần — đã có hoá đơn',
+        'Không cần: đã có hoá đơn',
       ],
       correct: 1,
       ref: 'ICH Q7 §6: Đầy đủ traceability cho mọi lô đầu vào.',
@@ -1130,7 +1130,7 @@ function setRoom(key, lerpCamera = true) {
   state.challengeIdx = 0;
   const r = ROOMS[key];
 
-  pIso.textContent = `${r.iso} — ${r.class}`;
+  pIso.textContent = `${r.iso}: ${r.class}`;
   pName.textContent = r.name;
   pParticles.textContent = r.particles;
   pAch.textContent = r.ach;
@@ -1197,7 +1197,7 @@ function answerChallenge(choice) {
   const correct = choice === ch.correct;
   state.answers[room][idx] = choice;
 
-  showToast(correct ? '✓ Chính xác!' : '✗ Sai rồi — xem giải thích', correct ? 'ok' : 'err');
+  showToast(correct ? '✓ Chính xác!' : '✗ Sai rồi: xem giải thích', correct ? 'ok' : 'err');
 
   renderChallenge();
   updateProgress();

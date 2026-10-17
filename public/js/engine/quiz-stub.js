@@ -23,7 +23,7 @@ export function makeQuizStub(mod) {
   missing.add(mod.id);
   return {
     id: `quiz-stub-${mod.id}`,
-    title: `${mod.id} · ${mod.title} — Quiz (đang phát triển)`,
+    title: `${mod.id} · ${mod.title}: Quiz (đang phát triển)`,
     kind: 'quiz',
     yearLevel: mod.yearLevel,
     subject: mod.subject,
@@ -34,7 +34,7 @@ export function makeQuizStub(mod) {
       {
         stem: `Module này là về: ${mod.title}. Bạn đã sẵn sàng học?`,
         choices: [
-          'Sẵn sàng — chờ nội dung quiz đầy đủ',
+          'Sẵn sàng: chờ nội dung quiz đầy đủ',
           'Tôi muốn xem các phiên bản trải nghiệm trước (2D/3D/VR…)',
           'Cần đọc tài liệu trước',
           'Quay lại lộ trình',

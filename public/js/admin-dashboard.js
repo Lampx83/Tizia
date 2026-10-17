@@ -9,8 +9,8 @@ import { morph } from './dom-morph.js';
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fmt = (t) => t ? new Date(t).toLocaleString('vi-VN', { hour12:false }) : '—';
-const fmtNum = (n) => (n == null) ? '—' : Number(n).toLocaleString('vi-VN');
+const fmt = (t) => t ? new Date(t).toLocaleString('vi-VN', { hour12:false }) : '-';
+const fmtNum = (n) => (n == null) ? '-' : Number(n).toLocaleString('vi-VN');
 
 // ─────────── API helper ───────────
 let csrfToken = null;
@@ -37,14 +37,14 @@ function toast(msg, kind='ok') {
 }
 
 function fmtBytes(b) {
-  if (b == null) return '—';
+  if (b == null) return '-';
   const u = ['B','KB','MB','GB','TB'];
   let i = 0; let n = b;
   while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
   return n.toFixed(n < 10 ? 1 : 0) + ' ' + u[i];
 }
 function fmtUptime(s) {
-  if (s == null) return '—';
+  if (s == null) return '-';
   const d = Math.floor(s / 86400);
   const h = Math.floor((s % 86400) / 3600);
   const m = Math.floor((s % 3600) / 60);
@@ -53,7 +53,7 @@ function fmtUptime(s) {
   return `${m}m`;
 }
 function humanTime(t) {
-  if (!t) return '—';
+  if (!t) return '-';
   const diff = (Date.now() - t) / 1000;
   if (diff < 60) return Math.floor(diff) + 's trước';
   if (diff < 3600) return Math.floor(diff / 60) + ' phút trước';
@@ -221,7 +221,7 @@ function renderKpi(overview) {
     { k:'pageviews_24h', label:'Pageview 24h', cls:'info' },
     { k:'pageviews_7d', label:'Pageview 7 ngày', cls:'info' },
     { k:'ai_decisions', label:'Quyết định AI', cls:'info' },
-    { k:'ai_tokens_24h', label:'AI tokens 24h', cls:'info', fallback:'—' },
+    { k:'ai_tokens_24h', label:'AI tokens 24h', cls:'info', fallback:'-' },
     { k:'active_sessions', label:'Tài khoản còn phiên', cls:'ok' },
     { k:'events', label:'Sự kiện' },
     { k:'requests', label:'Tổng góp ý' },
@@ -487,12 +487,12 @@ function renderRequests() {
           return `
         <tr data-rid="${r.id}">
           <td>${r.id}</td>
-          <td><span class="pill">${r.type === 'self' ? '—' : esc(r.domain)}</span></td>
+          <td><span class="pill">${r.type === 'self' ? '-' : esc(r.domain)}</span></td>
           <td style="max-width:260px">${esc(r.title)}${traceSub(ticket?.trace_ref)}</td>
-          <td><div class="req-detail" title="${esc(r.detail || '')}">${esc(requestBody(r.detail) || '—')}</div></td>
+          <td><div class="req-detail" title="${esc(r.detail || '')}">${esc(requestBody(r.detail) || '-')}</div></td>
           <td title="${esc(r.type)}">${esc(REQUEST_TYPE_LABEL[r.type] || r.type)}</td>
           <td>${esc(r.student)}</td>
-          <td>${esc(ROLE_NAME[r.requester_role] || r.requester_role || '—')}</td>
+          <td>${esc(ROLE_NAME[r.requester_role] || r.requester_role || '-')}</td>
           <td><span class="pill st-${esc(r.status)}">${esc(REQUEST_STATUS_LABEL[r.status] || r.status)}</span></td>
           <td>${ticketSummary}</td>
           <td>${ownerCell(ticket)}</td>
@@ -627,8 +627,8 @@ function renderUsers() {
           <td>${esc(u.display_name)}</td>
           <td><span class="pill ${u.role}">${u.role}</span></td>
           <td><span class="pill">${esc(u.plan || 'free')}</span></td>
-          <td style="font-size:12px">${u.enrolled_domain ? `<span class="pill" style="background:#16a34a;color:#fff">${esc(u.enrolled_domain)}</span>` : '<span style="opacity:.5">—</span>'}</td>
-          <td style="font-size:12px;opacity:.7">${u.email ? esc(u.email) : '—'}</td>
+          <td style="font-size:12px">${u.enrolled_domain ? `<span class="pill" style="background:#16a34a;color:#fff">${esc(u.enrolled_domain)}</span>` : '<span style="opacity:.5">-</span>'}</td>
+          <td style="font-size:12px;opacity:.7">${u.email ? esc(u.email) : '-'}</td>
           <td style="font-size:12px;opacity:.7">${fmt(u.last_login)}</td>
           <td class="actions" style="white-space:nowrap">
             <button class="btn" data-act="enroll" data-uid="${u.id}" data-domain="${esc(u.enrolled_domain || '')}" title="Đổi trường đang học">🎓</button>
@@ -680,10 +680,10 @@ function openEnrollModal(u) {
   ov.innerHTML = `
     <div style="background:#0f172a;border:1px solid #334155;color:#f1f5f9;border-radius:14px;padding:20px 22px;max-width:480px;width:100%;box-shadow:0 30px 80px rgba(0,0,0,.6)">
       <h3 style="margin:0 0 4px;font-size:18px">Đặt/đổi trường đang học</h3>
-      <p style="font-size:13px;opacity:.7;margin:0 0 10px">@${esc(u.username)} · ${esc(u.display_name)} · hiện tại: <b>${cur || '— chưa chọn —'}</b></p>
-      <p style="font-size:12px;color:#fbbf24;margin:0 0 12px;line-height:1.5">Bucket cũ (ví, skill, level) ở trường trước <b>vẫn lưu</b> — quay lại trường đó sẽ khôi phục.</p>
+      <p style="font-size:13px;opacity:.7;margin:0 0 10px">@${esc(u.username)} · ${esc(u.display_name)} · hiện tại: <b>${cur || 'chưa chọn'}</b></p>
+      <p style="font-size:12px;color:#fbbf24;margin:0 0 12px;line-height:1.5">Bucket cũ (ví, skill, level) ở trường trước <b>vẫn lưu</b>, quay lại trường đó sẽ khôi phục.</p>
       <label style="font-size:12px;display:block;margin-bottom:5px">Trường mới</label>
-      <select id="enrollDomain" style="width:100%;padding:9px 11px;background:#1e293b;color:#f1f5f9;border:1px solid #334155;border-radius:8px;font-size:14px"><option value="">— (không gắn trường — chỉ admin)</option>${opts}</select>
+      <select id="enrollDomain" style="width:100%;padding:9px 11px;background:#1e293b;color:#f1f5f9;border:1px solid #334155;border-radius:8px;font-size:14px"><option value="">, (không gắn trường, chỉ admin)</option>${opts}</select>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
         <button class="btn" data-close>Huỷ</button>
         <button class="btn primary" id="enrollSave">Lưu</button>
@@ -837,7 +837,7 @@ async function loadSimple(path, key, cols, fmtMap = {}) {
   const body = rows.map(row => '<tr>' + cols.map(c => {
     let v = row[c]; if (fmtMap[c]) v = fmtMap[c](v);
     if (['status','plan','role','action','decided_by'].includes(c)) v = `<span class="pill ${row[c]||''}">${v??''}</span>`;
-    return `<td>${v ?? '—'}</td>`;
+    return `<td>${v ?? '-'}</td>`;
   }).join('') + '</tr>').join('');
   $('#tabbody').innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
@@ -897,7 +897,7 @@ async function loadCampus(host = $('#tabbody')) {
     <h2 class="section-title">Campus 2.5D theo trường <span class="line"></span></h2>
     <p style="color:var(--muted);font-size:13px;margin:0 0 14px">
       Quản lý bố cục bản đồ cho <b>${CAMPUS_DOMAINS.length} trường</b> trong hệ thống Tizia
-      — đồng bộ với trang chủ. Override lưu vào DB; Reset để về layout mặc định.
+đồng bộ với trang chủ. Override lưu vào DB; Reset để về layout mặc định.
     </p>
 
     <h3 style="font-size:13px;margin:12px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">
@@ -947,7 +947,7 @@ function openSchoolPanel(domain, label) {
   _campusLayoutCache  = null;
   const meta = CAMPUS_DOMAINS.find(c => c.domain === domain);
   const displayLabel = label || (meta ? `${meta.emoji} ${meta.label}` : domain);
-  $('#school-overlay-title').textContent = `Quản lý trường — ${displayLabel}`;
+  $('#school-overlay-title').textContent = `Quản lý trường: ${displayLabel}`;
   $('#school-overlay').style.display = 'flex';
 
   // Render sidebar tabs
@@ -1069,7 +1069,7 @@ async function renderSchoolAppsTab(domain, host) {
   host.innerHTML = `
     <h2 class="section-title">Apps của trường (${apps.length}) <span class="line"></span></h2>
     <p style="color:var(--muted);font-size:13px;margin-bottom:16px">
-      Danh sách app từ <code>builtin-catalog.js</code> domain=<b>${esc(domain)}</b> — catalog version <code>${esc(r.version || '?')}</code>.
+      Danh sách app từ <code>builtin-catalog.js</code> domain=<b>${esc(domain)}</b>: catalog version <code>${esc(r.version || '?')}</code>.
     </p>
     ${Object.entries(byCat).map(([cat, list]) => `
       <h3 style="font-size:13px;margin:18px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">${catLabel[cat] || cat} (${list.length})</h3>
@@ -1112,7 +1112,7 @@ async function renderSchoolCurriculumTab(domain, host) {
         <div style="font-size:32px;margin-bottom:8px">${meta?.icon || '🔒'}</div>
         <b>Chưa có module registry cho trường này</b>
         <div style="font-size:12px;margin-top:6px">
-          ${meta?.status === 'locked' ? 'Trường đang khoá — chưa có biên soạn nội dung.' : `Domain <code>${esc(domain)}</code> chưa được khai báo trong DOMAIN_REGISTRY.`}
+          ${meta?.status === 'locked' ? 'Trường đang khoá, chưa có biên soạn nội dung.' : `Domain <code>${esc(domain)}</code> chưa được khai báo trong DOMAIN_REGISTRY.`}
         </div>
       </div>
     `;
@@ -1145,7 +1145,7 @@ async function renderSchoolCurriculumTab(domain, host) {
   host.innerHTML = `
     <h2 class="section-title">Curriculum coverage <span class="line"></span></h2>
     <p style="color:var(--muted);font-size:13px;margin-bottom:14px">
-      <b>${esc(meta?.name || domain)}</b> — ${modules.length} module, ${Object.keys(subjects).length} môn metadata.
+      <b>${esc(meta?.name || domain)}</b>, ${modules.length} module, ${Object.keys(subjects).length} môn metadata.
       Mỗi môn chuẩn GDPT 2018 cần <b>${TARGET_WEEKS}</b> tuần.
     </p>
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:14px">
@@ -1186,7 +1186,7 @@ async function renderSchoolAdminsTab(domain, host) {
   if (!r.ok) { host.innerHTML = `<div style="color:var(--bad);padding:20px">Lỗi: ${esc(r.data?.error || r.status)}</div>`; return; }
   const admins = r.data?.admins || [];
   host.innerHTML = `
-    <h2 class="section-title">Quản lý trường — ${admins.length} admin <span class="line"></span></h2>
+    <h2 class="section-title">Quản lý trường: ${admins.length} admin <span class="line"></span></h2>
     <p style="color:var(--muted);font-size:13px;margin-bottom:14px">
       User có trong danh sách này sẽ thấy menu <b>"Quản lý trường ${esc(domain)}"</b> sau khi đăng nhập (qua <code>managed_domains</code> trong <code>/api/auth/me</code>).
     </p>
@@ -1209,7 +1209,7 @@ async function renderSchoolAdminsTab(domain, host) {
             <div style="display:grid;grid-template-columns:60px 1fr 1fr 150px 90px;gap:8px;padding:10px 14px;background:var(--bg);align-items:center">
               <div style="font-variant-numeric:tabular-nums;color:var(--muted)">#${a.user_id}</div>
               <div><b>${esc(a.display_name || a.username || '?')}</b><br><span style="font-size:11px;color:var(--muted)">@${esc(a.username || '')}</span></div>
-              <div style="font-size:12px;color:var(--muted)">${esc(a.note || '—')}</div>
+              <div style="font-size:12px;color:var(--muted)">${esc(a.note || '-')}</div>
               <div style="font-size:11.5px;color:var(--muted)">${fmt(a.granted_at)}</div>
               <div style="text-align:right"><button class="btn" data-revoke="${a.user_id}" style="font-size:11px;padding:5px 8px;color:var(--bad);border-color:var(--bad);background:rgba(239,68,68,.08)">Thu hồi</button></div>
             </div>
@@ -1263,7 +1263,7 @@ async function renderSchoolUsersTab(domain, host) {
         <div style="font-variant-numeric:tabular-nums;color:var(--muted)">#${u.id}</div>
         <div><b>${esc(u.display_name || u.username)}</b><br><span style="font-size:11px;color:var(--muted)">@${esc(u.username)} · ${esc(u.role)}</span></div>
         <div style="font-size:11.5px">${kind === 'enrolled' ? '<span style="background:rgba(34,197,94,.15);color:var(--ok);padding:2px 7px;border-radius:6px;font-size:10.5px;font-weight:700">ENROLLED</span>' : '<span style="background:rgba(99,102,241,.15);color:#a5b4fc;padding:2px 7px;border-radius:6px;font-size:10.5px;font-weight:700">GRANT</span>'}</div>
-        <div style="font-size:11.5px;color:var(--muted)">${esc(g?.note || '—')}${expires}</div>
+        <div style="font-size:11.5px;color:var(--muted)">${esc(g?.note || '-')}${expires}</div>
         <div style="text-align:right;display:flex;gap:4px;justify-content:flex-end">
           ${kind === 'enrolled'
             ? `<button class="btn" data-unenroll="${u.id}" style="font-size:11px;padding:5px 8px" title="Bỏ gắn enrolled_domain">↺ Bỏ enroll</button>`
@@ -1512,7 +1512,7 @@ async function renderDbTableDetail(tbl) {
       </table>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:12.5px;color:var(--muted)">
-      <div>Trang ${curPage}/${totalPages} — hiển thị row ${_dbRowOffset + 1}–${Math.min(_dbRowOffset + rows.length, total)} / ${fmtNum(total)}</div>
+      <div>Trang ${curPage}/${totalPages}, hiển thị row ${_dbRowOffset + 1}–${Math.min(_dbRowOffset + rows.length, total)} / ${fmtNum(total)}</div>
       <div style="display:flex;gap:6px">
         <button class="btn" id="db-pg-first"  ${_dbRowOffset === 0 ? 'disabled' : ''} style="font-size:11px">«</button>
         <button class="btn" id="db-pg-prev"   ${_dbRowOffset === 0 ? 'disabled' : ''} style="font-size:11px">‹ Prev</button>
@@ -1558,7 +1558,7 @@ function openDbRowEditor(tbl, cols, pkCol, existing) {
     <div id="db-row-modal" style="position:fixed;inset:0;z-index:2000;background:rgba(11,18,32,.85);display:flex;align-items:center;justify-content:center;padding:20px">
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;max-width:640px;width:100%;max-height:88vh;overflow:auto">
         <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
-          <h3 style="margin:0;font-size:15px">${isInsert ? 'Insert row' : 'Edit row'} — <code>${esc(tbl)}</code></h3>
+          <h3 style="margin:0;font-size:15px">${isInsert ? 'Insert row' : 'Edit row'}, <code>${esc(tbl)}</code></h3>
           <button class="btn" id="db-row-cancel" style="font-size:12px">✕</button>
         </div>
         <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
@@ -1628,7 +1628,7 @@ function renderDbSqlSub(host) {
         <label style="font-size:12.5px;color:var(--muted);font-weight:700">SQL Query</label>
         <label style="font-size:12px;display:flex;align-items:center;gap:6px;color:var(--warn);cursor:pointer">
           <input id="db-allow-write" type="checkbox">
-          <span>Cho phép WRITE (INSERT/UPDATE/DELETE/DROP) — audit log</span>
+          <span>Cho phép WRITE (INSERT/UPDATE/DELETE/DROP): audit log</span>
         </label>
       </div>
       <textarea id="db-sql" rows="8" placeholder="SELECT * FROM users LIMIT 20;" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:monospace;font-size:13px;line-height:1.5;resize:vertical"></textarea>
@@ -1652,7 +1652,7 @@ function renderDbSqlSub(host) {
       if (!allowWrite) return toast('Tick "Cho phép WRITE" trước', 'err');
       const c1 = confirm(`Non-SELECT query:\n\n${sql.slice(0, 300)}${sql.length > 300 ? '…' : ''}\n\nChạy thử?`);
       if (!c1) return;
-      const c2 = confirm(`Xác nhận lần 2 — không thể undo.\n\nThực sự chạy?`);
+      const c2 = confirm(`Xác nhận lần 2, không thể undo.\n\nThực sự chạy?`);
       if (!c2) return;
     }
     const result = $('#db-sql-result');
@@ -1665,14 +1665,14 @@ function renderDbSqlSub(host) {
       return;
     }
     if (r.data.mode === 'write') {
-      result.innerHTML = `<div style="padding:14px;background:rgba(34,197,94,.08);border:1px solid var(--ok);border-radius:8px;color:var(--ok);font-size:13px">Write OK — <b>${r.data.changes}</b> rows affected${r.data.last_id ? ` · last_id=<b>${r.data.last_id}</b>` : ''}.</div>`;
+      result.innerHTML = `<div style="padding:14px;background:rgba(34,197,94,.08);border:1px solid var(--ok);border-radius:8px;color:var(--ok);font-size:13px">Write OK, <b>${r.data.changes}</b> rows affected${r.data.last_id ? ` · last_id=<b>${r.data.last_id}</b>` : ''}.</div>`;
       toast('Write OK');
       return;
     }
     const cols = r.data.columns || [];
     const rows = r.data.rows || [];
     if (!rows.length) {
-      result.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);background:var(--bg2);border:1px solid var(--border);border-radius:8px">Query OK — 0 rows.</div>`;
+      result.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);background:var(--bg2);border:1px solid var(--border);border-radius:8px">Query OK, 0 rows.</div>`;
       return;
     }
     const truncate = (v) => v == null ? '<span style="color:var(--muted);font-style:italic">NULL</span>' : esc(String(v).length > 120 ? String(v).slice(0, 120) + '…' : String(v));
@@ -1703,7 +1703,7 @@ async function renderDbBackupsSub(host) {
       <button class="btn" id="db-bk-refresh" style="font-size:12.5px">Refresh</button>
     </div>
     <p style="color:var(--muted);font-size:12.5px;margin:0 0 12px">
-      Backup folder: <code>${esc(r.data?.data_dir || '?')}</code> — tổng <b>${backups.length}</b> file.
+      Backup folder: <code>${esc(r.data?.data_dir || '?')}</code>, tổng <b>${backups.length}</b> file.
     </p>
     ${backups.length === 0
       ? '<div style="padding:24px;text-align:center;color:var(--muted);background:var(--bg2);border:1px solid var(--border);border-radius:10px">Chưa có backup nào.</div>'
@@ -1732,7 +1732,7 @@ async function renderDbBackupsSub(host) {
     }
   `;
   $('#db-bk-new').addEventListener('click', async () => {
-    if (!confirm('Tạo snapshot backup tizia.db ngay? (an toàn — không khoá DB)')) return;
+    if (!confirm('Tạo snapshot backup tizia.db ngay? (an toàn: không khoá DB)')) return;
     const rr = await api('/api/admin/db/backup', { method: 'POST' });
     if (!rr.ok) return toast('Lỗi: ' + (rr.data?.message || rr.data?.error), 'err');
     toast(`Tạo ${rr.data.name} (${fmtBytes(rr.data.size)})`);
@@ -1784,7 +1784,7 @@ const RELEASE_LABEL = { owner_only: 'chỉ người tạo', school: 'cả trư�
 const releaseSelect = (slug, status) => status
   ? `<select data-release="${esc(slug)}">${Object.entries(RELEASE_LABEL).map(([v, l]) =>
       `<option value="${v}"${v === status ? ' selected' : ''}>${l}</option>`).join('')}</select>`
-  : '—';
+  : '-';
 async function loadFeatureFolders() {
   const [r, rel] = await Promise.all([api('/api/admin/ai-board/folders'), api('/api/ai-board/releases?domain=')]);
   const folders = r.data?.folders || [];
@@ -1799,7 +1799,7 @@ async function loadFeatureFolders() {
           <td>${f.id}</td>
           <td style="max-width:280px">${esc(f.title)}<div class="trace-sub">${esc(f.slug)}</div>${traceSub(f.trace_ref)}</td>
           <td><span class="pill">${esc(f.domain)}</span></td>
-          <td>${esc(f.owner_name || '—')}</td>
+          <td>${esc(f.owner_name || '-')}</td>
           <td><span class="pill">${esc(FOLDER_STATE_LABEL[f.state] || f.state)}</span></td>
           <td>${f.requests}</td><td>${f.votes}</td><td>${f.gpu_s}</td>
           <td style="white-space:nowrap">${f.approved
@@ -1879,8 +1879,8 @@ function frozenChart(scores) {
 }
 
 // Theo dõi sau merge + tự revert: kết quả theo self PR đã merge.
-const WATCH_STATUS_LABEL = { waiting: 'chưa đủ dữ liệu', ok: 'không tụt', dropped: 'tụt — đã tạo yêu cầu revert' };
-function pct(v) { return v == null ? '—' : `${v}%`; }
+const WATCH_STATUS_LABEL = { waiting: 'chưa đủ dữ liệu', ok: 'không tụt', dropped: 'tụt: đã tạo yêu cầu revert' };
+function pct(v) { return v == null ? '-' : `${v}%`; }
 function watchSection(rows) {
   if (!rows.length) return '';
   return `
@@ -1895,7 +1895,7 @@ function watchSection(rows) {
           <td>${w.before_runs} lượt<div class="trace-sub">ready ${pct(w.before_ready_pct)} · merge ${pct(w.before_merge_pct)}</div></td>
           <td>${w.after_runs} lượt<div class="trace-sub">ready ${pct(w.after_ready_pct)} · merge ${pct(w.after_merge_pct)}</div></td>
           <td>${w.drop_ready_pts != null ? `ready ${w.drop_ready_pts}` : ''}${w.drop_merge_pts != null ? `${w.drop_ready_pts != null ? ' · ' : ''}merge ${w.drop_merge_pts}` : ''}</td>
-          <td>${w.revert_request_id ? `yêu cầu #${w.revert_request_id}` : '—'}</td>
+          <td>${w.revert_request_id ? `yêu cầu #${w.revert_request_id}` : '-'}</td>
         </tr>`).join('')}</tbody>
     </table>`;
 }
@@ -1907,7 +1907,7 @@ function nightSection(si) {
     <div id="si-nights" style="margin-bottom:22px">
       <div class="toolbar" style="align-items:center;gap:10px">
         <button class="btn${enabled ? ' primary' : ''}" data-si-switch="${enabled ? '0' : '1'}">
-          ${enabled ? 'Đang bật — tắt vòng đêm' : 'Đang tắt — bật vòng đêm'}</button>
+          ${enabled ? 'Đang bật, tắt vòng đêm' : 'Đang tắt, bật vòng đêm'}</button>
         ${paused ? `<span class="pill" style="color:var(--bad)">Tự dừng: ${empty} đêm liền không biến thể nào thắng</span>` : ''}
         <span class="trace-sub">Khung ${limits.window.start}–${limits.window.end} (${limits.window.tz}) ·
           tối đa ${limits.max_variants_per_night} biến thể/đêm · cần ≥ ${limits.min_labelled_tasks} task có nhãn</span>
@@ -1919,20 +1919,20 @@ function nightSection(si) {
             <td>${esc(n.night)}${n.note ? `<div class="trace-sub">${esc(n.note)}</div>` : ''}</td>
             <td><span class="pill">${esc(n.status)}</span></td>
             <td>${n.pr_sync ? esc([n.pr_sync.status, n.pr_sync.merged?.length && `${n.pr_sync.merged.length} merged`,
-              n.pr_sync.closed?.length && `${n.pr_sync.closed.length} closed`].filter(Boolean).join(' · ')) : '—'}</td>
+              n.pr_sync.closed?.length && `${n.pr_sync.closed.length} closed`].filter(Boolean).join(' · ')) : '-'}</td>
             <td>${n.variants.length ? n.variants.map(v => `
               <div style="margin-bottom:6px">
                 <span class="pill">${esc(VARIANT_STATUS_LABEL[v.status] || v.status)}</span>
-                ${esc(v.cluster?.key || '')} — ${esc((v.diagnosis?.hypothesis || '').slice(0, 140))}
+                ${esc(v.cluster?.key || '')}: ${esc((v.diagnosis?.hypothesis || '').slice(0, 140))}
                 ${v.eval ? `<div class="trace-sub">thắng ${v.eval.wins} · thua ${v.eval.losses} · hoà ${v.eval.ties}
                   ${v.eval.dropped?.length ? `· nhóm tụt: ${esc(v.eval.dropped.join(', '))}` : ''}</div>` : ''}
                 ${v.reason ? `<div class="trace-sub">${esc(v.reason)}</div>` : ''}
                 ${v.pr?.url ? `<div class="trace-sub"><a href="${esc(v.pr.url)}" target="_blank" rel="noopener">PR #${v.pr.number}</a></div>` : ''}
-              </div>`).join('') : '—'}</td>
+              </div>`).join('') : '-'}</td>
             <td>${fmtNum(n.gpu_s_propose)} / ${fmtNum(n.gpu_s_eval)}</td>
           </tr>`).join('')}</tbody>
       </table>` : '<div class="loading">Chưa có đêm nào.</div>'}
-      <div class="panel-title" style="margin-top:18px">Đường cong học — bộ đánh giá đóng băng
+      <div class="panel-title" style="margin-top:18px">Đường cong học, bộ đánh giá đóng băng
         <span class="trace-sub">mỗi điểm = 1 lần merge thay đổi self; bộ này chưa bao giờ đưa cho board</span></div>
       ${frozenChart(frozen)}
       ${watchSection(watch)}
@@ -1980,7 +1980,7 @@ function transientRetrySection(tr) {
     <div id="tr-blocked" style="margin-bottom:22px">
       <div class="toolbar" style="align-items:center;gap:10px">
         <button class="btn${enabled ? ' primary' : ''}" data-tr-switch="${enabled ? '0' : '1'}">
-          ${enabled ? `Đang bật — tắt tự chạy lại sau ${Math.round(retry_after_ms / 60000)} phút` : 'Đang tắt — bật tự chạy lại'}</button>
+          ${enabled ? `Đang bật, tắt tự chạy lại sau ${Math.round(retry_after_ms / 60000)} phút` : 'Đang tắt, bật tự chạy lại'}</button>
         <span class="trace-sub">Áp dụng mọi loại yêu cầu, không riêng tự cải thiện. Tắt = bạn tự bấm "Chạy lại ngay" khi thấy GPU rảnh trên Grafana.</span>
       </div>
       ${blocked.length ? `<table>
@@ -2228,7 +2228,7 @@ async function loadConfig() {
       <div style="padding:6px 14px 12px;font-size:13px;line-height:1.55;color:var(--txt)">
         Server không có biến môi trường <code style="background:rgba(0,0,0,.3);padding:1px 5px;border-radius:4px">DATABASE_URL</code>.
         Tính năng <b>Tạo backup</b> / <b>Phục hồi</b> dùng <code>pg_dump</code>/<code>pg_restore</code> → chỉ hoạt động khi server đã chuyển sang Postgres.
-        Hiện tại đang chạy SQLite (giai đoạn migration đang dở) — vui lòng set <code>DATABASE_URL</code> rồi restart server.
+        Hiện tại đang chạy SQLite (giai đoạn migration đang dở): vui lòng set <code>DATABASE_URL</code> rồi restart server.
       </div>
     </div>`;
 
@@ -2238,7 +2238,7 @@ async function loadConfig() {
       <div style="padding:10px 14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;font-size:13px">
         <div><div style="color:var(--muted)">Số file</div><div style="font-weight:700">${items.length}</div></div>
         <div><div style="color:var(--muted)">Tổng dung lượng</div><div style="font-weight:700">${fmtBytes(r.data.total_size)}</div></div>
-        <div><div style="color:var(--muted)">Mới nhất</div><div style="font-weight:700">${items[0] ? fmt(items[0].created_at) : '—'}</div></div>
+        <div><div style="color:var(--muted)">Mới nhất</div><div style="font-weight:700">${items[0] ? fmt(items[0].created_at) : '-'}</div></div>
       </div>
     </div>`;
 
@@ -2322,7 +2322,7 @@ async function loadSimpleWithDelete(path, key, cols, fmtMap = {}, deleteBase, en
   const body = rows.map(row => '<tr>' + cols.map(c => {
     let v = row[c]; if (fmtMap[c]) v = fmtMap[c](v);
     if (['status','plan','role','action','decided_by'].includes(c)) v = `<span class="pill ${row[c]||''}">${v??''}</span>`;
-    return `<td>${v ?? '—'}</td>`;
+    return `<td>${v ?? '-'}</td>`;
   }).join('') + `<td class="actions"><button class="btn danger" data-rid="${row.id}" title="Xoá">🗑</button></td>` + '</tr>').join('');
   $('#tabbody').innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
   $$('[data-rid]').forEach(b => {
@@ -2421,7 +2421,7 @@ function injectAdminBadge() {
   if (crumbs.querySelector('.badge')) return; // đã inject rồi
   crumbs.insertAdjacentHTML('beforeend',
     `<span class="badge" style="margin-left:8px">ADMIN</span>` +
-    `<span class="live-dot" title="Live — auto refresh 60s" style="margin-left:8px"></span>`
+    `<span class="live-dot" title="Live, auto refresh 60s" style="margin-left:8px"></span>`
   );
 }
 document.addEventListener('ev-header-mounted', injectAdminBadge, { once: true });

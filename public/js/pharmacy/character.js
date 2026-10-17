@@ -494,7 +494,7 @@ export async function createCharacter(ctx) {
         let best = null, bd = Infinity;
         for (const it of interactables) { const d = pos.distanceTo(it.pos); if (d < bd) { bd = d; best = it; } }
         nearInteractable = (best && bd < 1.4) ? best : null;
-        onPrompt?.(nearInteractable ? `Nhấn E — ${nearInteractable.label}` : null);
+        onPrompt?.(nearInteractable ? `Nhấn E: ${nearInteractable.label}` : null);
       }
     }
     prevPos.copy(pos);

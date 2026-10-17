@@ -7,11 +7,11 @@ export const ACHIEVEMENTS = [
   { id: 'first-quiz', icon: '🌟', title: 'Ngôi sao nhỏ',
     desc: 'Hoàn thành bài quiz đầu tiên', trigger: { quizzesPassed: 1 } },
   { id: 'bookworm', icon: '📚', title: 'Mọt sách tiểu học',
-    desc: '10 bài quiz hoàn thành — em đang chăm học rất giỏi!', trigger: { quizzesPassed: 10 } },
+    desc: '10 bài quiz hoàn thành, em đang chăm học rất giỏi!', trigger: { quizzesPassed: 10 } },
   { id: 'streak-3', icon: '🔥', title: 'Chăm học 3 ngày',
     desc: 'Vào học 3 ngày liên tiếp', trigger: { streak: 3 } },
   { id: 'streak-5', icon: '⭐', title: 'Tuần học đầu',
-    desc: 'Vào học 5 ngày liên tiếp — đúng một tuần đi học! Em thật chăm chỉ', trigger: { streak: 5 } },
+    desc: 'Vào học 5 ngày liên tiếp, đúng một tuần đi học! Em thật chăm chỉ', trigger: { streak: 5 } },
   { id: 'streak-7', icon: '🌈', title: 'Tuần vàng',
     desc: 'Vào học 7 ngày liên tiếp', trigger: { streak: 7 } },
   { id: 'streak-14', icon: '🌟', title: 'Hai tuần chăm học',
@@ -75,7 +75,7 @@ export const ACHIEVEMENTS = [
   { id: 'star-60', icon: '🌠', title: 'Bầu trời sao',
     desc: 'Tích luỹ 60 sao', trigger: { totalStars: 60 } },
   { id: 'star-100', icon: '🏆', title: 'Học sinh xuất sắc',
-    desc: 'Tích luỹ 100 sao — học sinh Tiểu học xuất sắc, sẵn sàng bước vào THCS',
+    desc: 'Tích luỹ 100 sao, học sinh Tiểu học xuất sắc, sẵn sàng bước vào THCS',
     trigger: { totalStars: 100 } },
 
   // ── Tốt nghiệp lớp ──

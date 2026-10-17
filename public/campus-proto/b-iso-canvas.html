@@ -2296,7 +2296,7 @@ if(EDIT){
   // Báo parent đã sẵn sàng — gửi danh sách building để inspector dropdown
   postToParent({type:'campus-ready', domain:_dom, buildings:BUILDINGS.map((b,i)=>({i, id:b.id, name:b.name, emoji:b.emoji}))});
 
-  console.log('[campus-editor] EDIT mode ON — click building để chọn, drag để di chuyển, R xoay, Del xoá');
+  console.log('[campus-editor] EDIT mode ON: click building để chọn, drag để di chuyển, R xoay, Del xoá');
 }
 </script>
 </body>

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="robots" content="noindex,nofollow" />
 <title>Gia đình · Tizia</title>
-<meta name="description" content="Quản lý gia đình Tizia — liên kết tài khoản con, chia sẻ gói cước, theo dõi tiến độ học tập." />
+<meta name="description" content="Quản lý gia đình Tizia, liên kết tài khoản con, chia sẻ gói cước, theo dõi tiến độ học tập." />
 <link rel="manifest" href="./manifest.webmanifest" />
 <meta name="theme-color" content="#0ea5e9" />
 <style>
@@ -97,7 +97,7 @@
 
     const tbody = document.getElementById('tbody-children');
     if (!data.can_be_parent) {
-      tbody.innerHTML = '<tr><td colspan="5" class="empty">—</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" class="empty">-</td></tr>';
       document.getElementById('form-add').style.display = 'none';
       return;
     }
@@ -106,12 +106,12 @@
       return;
     }
     tbody.innerHTML = data.children.map(c => {
-      const grade = c.grade == null ? '—' : (c.grade === 0 ? 'Mầm non' : 'Lớp ' + c.grade);
+      const grade = c.grade == null ? '-' : (c.grade === 0 ? 'Mầm non' : 'Lớp ' + c.grade);
       return `<tr>
         <td><b>${esc(c.display_name)}</b></td>
         <td>@${esc(c.username)}</td>
         <td>${grade}</td>
-        <td>${esc(c.school_name || '—')}</td>
+        <td>${esc(c.school_name || '-')}</td>
         <td><button class="danger" data-child="${c.id}">Bỏ link</button></td>
       </tr>`;
     }).join('');

@@ -92,7 +92,7 @@
       <div class="title">Tizia · Cast trình chiếu</div>
       <div class="room" id="room-label">Đang khởi tạo…</div>
     </div>
-    <div class="code" id="code-label">—</div>
+    <div class="code" id="code-label">-</div>
   </div>
   <div class="frame" id="frame"></div>
 </div>
@@ -142,7 +142,7 @@ if (!target || !ALLOWED.has(target)) {
   mountIframe();
 }
 
-document.getElementById('code-label').textContent = room || '—';
+document.getElementById('code-label').textContent = room || '-';
 
 function mountIframe() {
   const url = './' + encodeURIComponent(target) + '.html' + (room ? '#room=' + encodeURIComponent(room) : '');
@@ -169,16 +169,16 @@ function showPicker() {
     <div class="picker">
       <div class="card">
         <h1>📺 Cast trình chiếu</h1>
-        <p>Dán URL này lên máy chiếu lớp — học sinh sẽ thấy view sạch, không có nút điều khiển.</p>
+        <p>Dán URL này lên máy chiếu lớp, học sinh sẽ thấy view sạch, không có nút điều khiển.</p>
         <label>Chọn nội dung cần chiếu</label>
         <select id="sel">
           ${targets.map(t => `<option value="${t}" ${t==='space'?'selected':''}>${t}</option>`).join('')}
         </select>
-        <label>Mã phòng (tuỳ chọn) — đồng bộ HS qua hash</label>
+        <label>Mã phòng (tuỳ chọn): đồng bộ HS qua hash</label>
         <input id="room" placeholder="VD: A3X9KL" maxlength="12" />
         <button id="go">Bắt đầu chiếu</button>
         <div class="hints">
-          💡 <b>Mẹo</b>: gắn <code>?bare=1</code> để ẩn cả header — vd
+          💡 <b>Mẹo</b>: gắn <code>?bare=1</code> để ẩn cả header, vd
           <code>/cast.html?target=space&room=A3X9&bare=1</code>.
           Gắn <code>&autoreload=60</code> để tự refresh mỗi 60 giây.
         </div>

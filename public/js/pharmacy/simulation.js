@@ -403,18 +403,18 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
     overlay.innerHTML = `
       <div class="pkgflow-modal">
         <div class="sp-head">
-          <span>✉️ Đóng gói ra lẻ — <b>${pkg.label}</b></span>
+          <span>✉️ Đóng gói ra lẻ, <b>${pkg.label}</b></span>
           <button class="pkgflow-close" type="button" aria-label="Đóng">✕</button>
         </div>
         <div class="sp-hint">${pkg.airtight
-          ? 'Túi zip kín khí — chọn đơn vị từ giỏ ra lẻ để đựng (không in nhãn).'
+          ? 'Túi zip kín khí, chọn đơn vị từ giỏ ra lẻ để đựng (không in nhãn).'
           : (fromBasket ? 'Chọn đơn vị từ <b>GIỎ RA LẺ</b> và dạng đóng gói, rồi ghi nhãn theo mẫu.'
-                        : 'Giỏ ra lẻ đang trống — chọn tạm từ catalog. (Nên ra lẻ thuốc vào giỏ trước.)')}</div>
+                        : 'Giỏ ra lẻ đang trống, chọn tạm từ catalog. (Nên ra lẻ thuốc vào giỏ trước.)')}</div>
         <label class="le2-field">
           <span class="le2-lbl">${fromBasket ? 'Đơn vị trong giỏ ra lẻ' : 'Chọn thuốc'}</span>
           <select class="pkgflow-drug">
             ${choices.length ? choices.map(c => `<option value="${c.value}">${c.label}</option>`).join('')
-                             : '<option value="">— Giỏ ra lẻ trống —</option>'}
+                             : '<option value="">Giỏ ra lẻ trống</option>'}
           </select>
         </label>
         <div class="le2-lbl" style="margin-top:8px">Dạng đóng gói</div>
@@ -517,7 +517,7 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
     overlay.innerHTML = `
       <div class="salestray-modal">
         <div class="salestray-head">
-          <span>🛒 Khay bán hàng — đã chuẩn bị (${picked.length})</span>
+          <span>🛒 Khay bán hàng, đã chuẩn bị (${picked.length})</span>
           <button class="salestray-close" type="button" aria-label="Đóng">✕</button>
         </div>
         <div class="salestray-body">
@@ -779,11 +779,11 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
     const reg = drug.regNo || drug.sdk;
     if (reg) { ctx.fillText(`SĐK: ${reg}`, 18, y); y += 17; }
     y = Math.max(y, 150);
-    const lot = drug.lot || meta?.lot || '—', exp = drug.expDate || meta?.expiry || '—';
+    const lot = drug.lot || meta?.lot || '-', exp = drug.expDate || meta?.expiry || '-';
     ctx.fillStyle = '#0f172a'; ctx.font = 'bold 14px Inter, sans-serif';
     ctx.fillText(`Lô: ${lot}`, 18, y); ctx.fillText(`HSD: ${exp}`, 180, y);
     ctx.fillStyle = '#64748b'; ctx.font = '12px Inter, sans-serif';
-    ctx.fillText((drug.manufacturer || '—').slice(0, 44), 18, 184);
+    ctx.fillText((drug.manufacturer || '-').slice(0, 44), 18, 184);
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
   }
@@ -820,14 +820,14 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
               ${drug.isAntibiotic ? '<span class="ins-tag ins-abx">Kháng sinh</span>' : ''}
               ${drug.isHazardPregnancy ? '<span class="ins-tag ins-warn">⚠️ Thai kỳ</span>' : ''}
             </div>
-            <!-- Bỏ bảng thông tin trùng với nhãn — chỉ giữ thông tin VẬN HÀNH
+            <!-- Bỏ bảng thông tin trùng với nhãn, chỉ giữ thông tin VẬN HÀNH
                  không có trên nhãn: tồn kho, đơn giá, mã vạch. -->
             <div class="ins-meta">
               <span>📦 Tồn kho: <b>${meta.stock} hộp</b></span>
               <span>💵 Đơn giá: <b>${(drug.unitPrice || 0).toLocaleString('vi')} đ</b></span>
-              <span>🏷️ <code>${drug.barcode || drug.sku || '—'}</code></span>
+              <span>🏷️ <code>${drug.barcode || drug.sku || '-'}</code></span>
             </div>
-            <!-- Yêu cầu thầy #5: BỎ panel nhãn mô phỏng — mọi thông tin nhãn đã in
+            <!-- Yêu cầu thầy #5: BỎ panel nhãn mô phỏng, mọi thông tin nhãn đã in
                  ĐẦY ĐỦ lên hộp + bao bì trực tiếp. (Bỏ luôn dòng hướng dẫn xoay hộp.) -->
           </div>
           <div class="ins-actions">
@@ -1433,23 +1433,23 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
           <h2>${drug.brand || drug.name}</h2>
           <div class="book-detail-sub">${drug.generic || ''} · ${drug.strength || ''}</div>
           <table class="book-detail-tbl">
-            <tr><td>Hoạt chất</td><td>${drug.generic || '—'}</td></tr>
-            <tr><td>Hàm lượng</td><td>${drug.strength || '—'}</td></tr>
-            <tr><td>Dạng bào chế</td><td>${drug.form || '—'}</td></tr>
-            <tr><td>Phân nhóm</td><td>${drug.category || '—'}</td></tr>
-            <tr><td>Quy cách</td><td>${drug.pack || '—'}</td></tr>
-            <tr><td>Đơn vị nhỏ nhất</td><td>${drug.retailUnit || '—'}</td></tr>
-            <tr><td>Barcode</td><td><code>${drug.barcode || '—'}</code></td></tr>
+            <tr><td>Hoạt chất</td><td>${drug.generic || '-'}</td></tr>
+            <tr><td>Hàm lượng</td><td>${drug.strength || '-'}</td></tr>
+            <tr><td>Dạng bào chế</td><td>${drug.form || '-'}</td></tr>
+            <tr><td>Phân nhóm</td><td>${drug.category || '-'}</td></tr>
+            <tr><td>Quy cách</td><td>${drug.pack || '-'}</td></tr>
+            <tr><td>Đơn vị nhỏ nhất</td><td>${drug.retailUnit || '-'}</td></tr>
+            <tr><td>Barcode</td><td><code>${drug.barcode || '-'}</code></td></tr>
             <tr><td>Hạn dùng</td><td>${m.expiry}</td></tr>
             <tr><td>Tồn kho</td><td>${m.stock} hộp</td></tr>
             <tr><td>Đơn giá</td><td>${(drug.unitPrice || 0).toLocaleString('vi')} đ</td></tr>
             <tr><td>Kê đơn</td><td>${drug.isRx ? '✅ Có (Rx)' : '❌ Không (OTC)'}</td></tr>
-            <tr><td>Kháng sinh</td><td>${drug.isAntibiotic ? '✅' : '—'}</td></tr>
-            <tr><td>Cẩn trọng thai kỳ</td><td>${drug.isHazardPregnancy ? '⚠️ CÓ' : '—'}</td></tr>
+            <tr><td>Kháng sinh</td><td>${drug.isAntibiotic ? '✅' : '-'}</td></tr>
+            <tr><td>Cẩn trọng thai kỳ</td><td>${drug.isHazardPregnancy ? '⚠️ CÓ' : '-'}</td></tr>
           </table>
           ${isDuocThu ? `
             <h3>Chuyên luận (Dược thư)</h3>
-            <p><b>Chỉ định:</b> Theo hướng dẫn chuyên ngành — xem chi tiết trong Dược thư Quốc gia 2018, chuyên luận ${drug.generic || drug.name}.</p>
+            <p><b>Chỉ định:</b> Theo hướng dẫn chuyên ngành, xem chi tiết trong Dược thư Quốc gia 2018, chuyên luận ${drug.generic || drug.name}.</p>
             <p><b>Liều dùng:</b> Cần tham khảo bác sĩ/bộ Y tế cho từng đối tượng.</p>
             <p><b>Chống chỉ định:</b> Mẫn cảm với thành phần hoạt chất, các trường hợp đặc biệt theo chuyên luận.</p>
             <p><b>Tác dụng KMM:</b> Tham khảo Dược thư.</p>
@@ -1545,7 +1545,7 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
               </tbody>
             </table>
             <div class="rx-warn">
-              ⚠ <b>KHÔNG kê kháng sinh</b> — Viêm họng do virus không có chỉ định kháng sinh.<br>
+              ⚠ <b>KHÔNG kê kháng sinh</b>: Viêm họng do virus không có chỉ định kháng sinh.<br>
               Tự ý dùng kháng sinh trong giai đoạn thai kỳ có thể gây hại cho thai nhi.
             </div>
             <div class="rx-instr">
@@ -1669,9 +1669,9 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
     const REPLIES = [
       { kw: ['chào','xin chào','dạ','alo'], reply: 'Alo, dược sĩ cần tư vấn gì về đơn thuốc của BN Lan?' },
       { kw: ['kháng sinh','amox','antibiotic'], reply: 'BN viêm họng do virus + đang mang thai 12 tuần thì KHÔNG kê kháng sinh. Anh kê paracetamol + vitamin C + súc họng nước muối đủ rồi.' },
-      { kw: ['thai','mang thai','pregnancy'], reply: 'Đúng rồi, BN đang thai 12 tuần. Cẩn thận thuốc thuộc nhóm cấm — đặc biệt tetracyclin, fluoroquinolon, NSAID quá liều.' },
+      { kw: ['thai','mang thai','pregnancy'], reply: 'Đúng rồi, BN đang thai 12 tuần. Cẩn thận thuốc thuộc nhóm cấm, đặc biệt tetracyclin, fluoroquinolon, NSAID quá liều.' },
       { kw: ['dị ứng','allergy'], reply: 'BN chưa khai dị ứng với thuốc nào trong tiền sử. Nếu dược sĩ thấy nghi vấn, hỏi lại BN trước khi giao.' },
-      { kw: ['liều','dose','dosage'], reply: 'Paracetamol max 4g/ngày người lớn — đơn của tôi là 1.5g/ngày (1v × 3 lần × 500mg) an toàn cho thai phụ.' },
+      { kw: ['liều','dose','dosage'], reply: 'Paracetamol max 4g/ngày người lớn, đơn của tôi là 1.5g/ngày (1v × 3 lần × 500mg) an toàn cho thai phụ.' },
       { kw: ['tương tác','interaction','phối hợp'], reply: 'Paracetamol + Vitamin C + NaCl 0.9% không có tương tác có ý nghĩa lâm sàng. Yên tâm cấp phát.' },
       { kw: ['thay','đổi','khác'], reply: 'Nếu BN không sẵn paracetamol viên nén, có thể dùng paracetamol gói sủi cùng hàm lượng. Bú nước muối thì có thể dùng NaCl 0.9% chai khác cũng được.' },
       { kw: ['bệnh','tình trạng','triệu'], reply: 'BN khám tôi 2 ngày trước, sốt nhẹ 38°C, đau họng, không khó thở, không phát ban. Diễn tiến nhẹ, theo dõi tại nhà 5-7 ngày.' },
@@ -1760,7 +1760,7 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
     // Dùng max() để mẫu số luôn ≥ tử số.
     const denom = Math.max(picked.length, labeled);
     if ($('stat-picked')) $('stat-picked').textContent = picked.length;
-    if ($('stat-labeled')) $('stat-labeled').textContent = `${labeled}/${denom || '—'}`;
+    if ($('stat-labeled')) $('stat-labeled').textContent = `${labeled}/${denom || '-'}`;
     if ($('labels-status')) $('labels-status').textContent = labeled
       ? `Đã dán nhãn HDSD lên ${labeled} hộp.`
       : 'Chưa có nhãn nào được dán. Mở khay dụng cụ trên quầy hoặc nút "Soạn nhãn mới".';
@@ -1796,11 +1796,11 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
         tt.innerHTML = `
           <div class="tt-brand">${drug.brand || drug.name}</div>
           <div class="tt-generic">${drug.generic || ''}${drug.strength ? ' · ' + drug.strength : ''}</div>
-          <div class="tt-row"><span>Dạng</span><span>${drug.form || '—'}</span></div>
+          <div class="tt-row"><span>Dạng</span><span>${drug.form || '-'}</span></div>
           <div class="tt-row"><span>SKU</span><span>${drug.sku}</span></div>
           <div class="tt-row"><span>Hạn dùng</span><span class="${soonExpiry ? 'tt-warn' : ''}">${meta.expiry}</span></div>
           <div class="tt-row"><span>Tồn kho</span><span class="${lowStock ? 'tt-warn' : ''}">${meta.stock} hộp</span></div>
-          <div class="tt-row"><span>Đơn vị</span><span>${drug.retailUnit || '—'}</span></div>
+          <div class="tt-row"><span>Đơn vị</span><span>${drug.retailUnit || '-'}</span></div>
         `;
         tt.hidden = false;
         const rect = canvas.getBoundingClientRect();

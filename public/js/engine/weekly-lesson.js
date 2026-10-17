@@ -92,7 +92,7 @@ export function renderWeeklyLesson({ host, scenario, grade = 2, subjectLabel = '
         <button class="wl-btn wl-btn-bank" id="wl-bank" style="display:none">
           📚 Kho câu hỏi
         </button>
-        <!-- "Trồng lá" CTA — bấm vào Cây Tri Thức xem các tuần đã hoàn thành dưới dạng visual -->
+        <!-- "Trồng lá" CTA: bấm vào Cây Tri Thức xem các tuần đã hoàn thành dưới dạng visual -->
         <a class="wl-btn" id="wl-tree" href="/cay-tri-thuc.html" target="_blank" rel="noopener"
            style="background:linear-gradient(135deg,rgba(34,197,94,.2),rgba(132,204,22,.2));color:#15803d;border:1px solid rgba(34,197,94,.5);text-decoration:none;display:inline-flex;align-items:center;gap:6px">
           🌳 Cây Tri Thức của em
@@ -172,7 +172,7 @@ export function renderWeeklyLesson({ host, scenario, grade = 2, subjectLabel = '
       if (!qs.length) {
         aiZone.innerHTML = `<div class="wl-card wl-ai-msg">🦉 Cô chưa nghĩ ra đề mới lúc này (AI bận hoặc ngoại tuyến). Em làm bài kiểm tra trước nhé!</div>`;
       } else if (typeof onStartBonus === 'function') {
-        aiZone.innerHTML = `<div class="wl-card wl-ai-msg">✨ Cô vừa ra ${qs.length} câu mới cho em! <small style="opacity:.7">(AI tự soạn — nếu thấy câu nào lạ, em hỏi cô giáo nhé)</small></div>`;
+        aiZone.innerHTML = `<div class="wl-card wl-ai-msg">✨ Cô vừa ra ${qs.length} câu mới cho em! <small style="opacity:.7">(AI tự soạn, nếu thấy câu nào lạ, em hỏi cô giáo nhé)</small></div>`;
         onStartBonus({
           id: `${scenario.id}-bonus`,
           title: `♾️ Học thêm · ${scenario.title}`,
@@ -200,7 +200,7 @@ export function renderWeeklyLesson({ host, scenario, grade = 2, subjectLabel = '
     }
     aiZone.innerHTML = `
       <div class="wl-card wl-chat">
-        <div class="wl-sec">🦉 Cô giáo AI — hỏi gì cô cũng giảng lại nhé!</div>
+        <div class="wl-sec">🦉 Cô giáo AI, hỏi gì cô cũng giảng lại nhé!</div>
         <div class="wl-chat-log" id="wl-chat-log">
           <div class="wl-msg wl-msg-ai">Chào em! Phần nào trong bài "${esc(scenario.title)}" em chưa hiểu, cứ hỏi cô nhé 😊</div>
         </div>

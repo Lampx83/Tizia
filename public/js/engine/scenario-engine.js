@@ -268,7 +268,7 @@ function renderQuizInstant(engine, host) {
       const note = perChoice || (q.explanation ? String(q.explanation) : '');
       ex.innerHTML = ok
         ? `<b>✓ Chính xác!</b> <span class="qzx-xp">+10 XP</span>${note ? ' · ' + note : ''}`
-        : `<b>✗ Chưa đúng.</b> Đáp án đúng: <b>${q.choices[q.answer]}</b>${note ? ' — ' + note : ''}`;
+        : `<b>✗ Chưa đúng.</b> Đáp án đúng: <b>${q.choices[q.answer]}</b>${note ? '. ' +  note : ''}`;
       // "Học thêm" — mini-bài giảng (theory[]) nếu câu hỏi có (vd ngân hàng lớp 6).
       if (Array.isArray(q.theory) && q.theory.length) {
         const det = document.createElement('details');
@@ -467,13 +467,13 @@ async function renderSoapWrite(engine, host) {
 /** @param {ScenarioEngine} engine */
 function renderPatientRoleplay(engine, host) {
   host.insertAdjacentHTML('beforeend',
-    `<div class="roleplay-placeholder">🗣️ AI Patient Role-play — sẽ implement chi tiết ở module L5.2.</div>`);
+    `<div class="roleplay-placeholder">🗣️ AI Patient Role-play, sẽ implement chi tiết ở module L5.2.</div>`);
 }
 
 /** @param {ScenarioEngine} engine */
 function renderIdentification(engine, host) {
   host.insertAdjacentHTML('beforeend',
-    `<div class="identification-placeholder">🌿 Nhận diện (ảnh / AR / kính hiển vi) — sẽ implement ở L2.2 và L2.3.</div>`);
+    `<div class="identification-placeholder">🌿 Nhận diện (ảnh / AR / kính hiển vi): sẽ implement ở L2.2 và L2.3.</div>`);
 }
 
 /** @param {ScenarioEngine} engine */
@@ -496,7 +496,7 @@ function renderCalculator(engine, host) {
     const computed = computeFormula(sc.formula, values);
     const ok = Math.abs(computed - sc.target) <= sc.tolerance;
     host.querySelector('.calc-result').textContent =
-      `Kết quả: ${computed.toFixed(2)} — ${ok ? '✅ Đúng' : `❌ Lệch (đáp án ${sc.target})`}`;
+      `Kết quả: ${computed.toFixed(2)}, ${ok ? '✅ Đúng' : `❌ Lệch (đáp án ${sc.target})`}`;
     engine.complete({ input: values, computed, target: sc.target, ok });
   };
 }

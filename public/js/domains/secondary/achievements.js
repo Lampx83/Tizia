@@ -7,7 +7,7 @@ export const ACHIEVEMENTS = [
   { id: 'first-quiz', icon: '🌟', title: 'Khởi đầu THCS',
     desc: 'Hoàn thành bài quiz đầu tiên', trigger: { quizzesPassed: 1 } },
   { id: 'bookworm', icon: '📚', title: 'Mọt sách THCS',
-    desc: '10 bài quiz hoàn thành — đang trên đà chinh phục chương trình THCS', trigger: { quizzesPassed: 10 } },
+    desc: '10 bài quiz hoàn thành, đang trên đà chinh phục chương trình THCS', trigger: { quizzesPassed: 10 } },
   { id: 'streak-3', icon: '🔥', title: 'Bắt đầu đều đặn',
     desc: 'Vào học 3 ngày liên tiếp', trigger: { streak: 3 } },
   { id: 'streak-5', icon: '⚡', title: 'Cháy 5 ngày',
@@ -17,7 +17,7 @@ export const ACHIEVEMENTS = [
   { id: 'streak-14', icon: '🌟', title: 'Hai tuần không ngừng',
     desc: 'Vào học 14 ngày liên tiếp', trigger: { streak: 14 } },
   { id: 'streak-30', icon: '🏆', title: 'Kiên trì 30 ngày',
-    desc: 'Vào học liên tục suốt 1 tháng — học sinh THCS xuất sắc!', trigger: { streak: 30 } },
+    desc: 'Vào học liên tục suốt 1 tháng, học sinh THCS xuất sắc!', trigger: { streak: 30 } },
 
   // ── Toán (hệ 36-tuần) ──
   { id: 'toan6-weekly', icon: '🔢', title: 'Thống trị Toán 6',
@@ -141,13 +141,13 @@ export const ACHIEVEMENTS = [
   { id: 'star-20', icon: '✨', title: 'Sưu tầm 20 sao',
     desc: 'Tích luỹ 20 sao', trigger: { totalStars: 20 } },
   { id: 'star-30', icon: '⭐', title: 'Ngôi sao 30',
-    desc: 'Tích luỹ 30 sao — đang trên đà học tốt chương trình THCS', trigger: { totalStars: 30 } },
+    desc: 'Tích luỹ 30 sao, đang trên đà học tốt chương trình THCS', trigger: { totalStars: 30 } },
   { id: 'star-50',  icon: '💫', title: 'Ngôi sao THCS',
     desc: 'Tích luỹ 50 sao', trigger: { totalStars: 50 } },
   { id: 'star-100', icon: '🏆', title: 'Thủ lĩnh sao THCS',
     desc: 'Tích luỹ 100 sao', trigger: { totalStars: 100 } },
   { id: 'star-120', icon: '🌠', title: 'Học sinh THCS 120 sao',
-    desc: 'Tích luỹ 120 sao — chinh phục phần lớn chương trình 4 năm THCS, nền tảng vững chắc vào THPT', trigger: { totalStars: 120 } },
+    desc: 'Tích luỹ 120 sao, chinh phục phần lớn chương trình 4 năm THCS, nền tảng vững chắc vào THPT', trigger: { totalStars: 120 } },
 
   // ── Tốt nghiệp lớp ──
   { id: 'year1-sec-complete', icon: '🥇', title: 'Lên lớp 7 tự tin!',
@@ -166,9 +166,9 @@ export const ACHIEVEMENTS = [
 
   // ── Legacy (subject.html path system — giữ nguyên để tương thích) ──
   { id: 'sn-boss', icon: '➕', title: 'Vô địch Số nguyên',
-    desc: 'Hạ Boss chương Số nguyên (Toán 6 — đường học chương)', trigger: { moduleStars: { 'S6-so-nguyen-4': 1 } } },
+    desc: 'Hạ Boss chương Số nguyên (Toán 6: đường học chương)', trigger: { moduleStars: { 'S6-so-nguyen-4': 1 } } },
   { id: 'ps-boss', icon: '🍕', title: 'Bậc thầy Phân số',
-    desc: 'Hạ Boss chương Phân số (Toán 6 — đường học chương)', trigger: { moduleStars: { 'S6-phan-so-5': 1 } } },
+    desc: 'Hạ Boss chương Phân số (Toán 6: đường học chương)', trigger: { moduleStars: { 'S6-phan-so-5': 1 } } },
   { id: 'math-9', icon: '🏅', title: 'Toán 9 cổng',
     desc: 'Đạt 3 sao Toán lớp 9 (cổng vào)', trigger: { moduleStars: { 'S9': 3 } } },
   { id: 'van-6', icon: '📚', title: 'Ngữ văn 6 cổng',

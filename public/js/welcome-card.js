@@ -51,7 +51,7 @@ function injectStyle() {
     from { transform: scale(.85) translateY(20px); opacity: 0; }
     to { transform: scale(1) translateY(0); opacity: 1; }
   }
-  /* Wavy paper-tape edge at the top — visually echoes the Unity hint cards */
+  /* Wavy paper-tape edge at the top, visually echoes the Unity hint cards */
   .wc-card::before {
     content: ''; position: absolute; top: 0; left: 0; right: 0; height: 14px;
     background:

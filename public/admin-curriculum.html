@@ -49,7 +49,7 @@
 <body data-no-gamify>
 <header>
   <h1>📝 Sửa nội dung học</h1>
-  <span class="sub">Sửa nóng quiz + lý thuyết trong DB — không cần deploy lại</span>
+  <span class="sub">Sửa nóng quiz + lý thuyết trong DB, không cần deploy lại</span>
   <a class="back" href="/admin.html">← Ban điều hành</a>
 </header>
 
@@ -78,7 +78,7 @@
     <textarea id="json" spellcheck="false"></textarea>
     <div class="row" style="margin-top:12px">
       <button class="primary" id="save">💾 Lưu (sửa nóng)</button>
-      <button id="reseed" title="Khôi phục về bản gốc từ file JS — chỉ có tác dụng sau khi chạy seed lại">↩︎ Xoá bản sửa tay</button>
+      <button id="reseed" title="Khôi phục về bản gốc từ file JS, chỉ có tác dụng sau khi chạy seed lại">↩︎ Xoá bản sửa tay</button>
       <button class="danger" id="del" style="margin-left:auto">🗑 Ẩn bài này</button>
     </div>
     <p class="hint">💡 "Xoá bản sửa tay" gỡ bản admin → lần seed kế tiếp sẽ phủ lại bản gốc từ file JS. "Ẩn bài" = soft-delete (active=0), HS không thấy nhưng dữ liệu còn.</p>
@@ -173,7 +173,7 @@ $('#id-q').addEventListener('keydown', e => { if (e.key === 'Enter') { const id 
 $('#save').addEventListener('click', save);
 $('#del').addEventListener('click', del);
 $('#reseed').addEventListener('click', () =>
-  showMsg(edMsg, 'Để khôi phục bản gốc: gỡ row admin trong DB rồi chạy seed-curriculum.mjs. (Nút này chỉ nhắc — chưa tự động hoá để tránh mất bản sửa nhầm.)', 'ok'));
+  showMsg(edMsg, 'Để khôi phục bản gốc: gỡ row admin trong DB rồi chạy seed-curriculum.mjs. (Nút này chỉ nhắc, chưa tự động hoá để tránh mất bản sửa nhầm.)', 'ok'));
 </script>
 </body>
 </html>

@@ -9,11 +9,11 @@ export const ACHIEVEMENTS = [
     trigger: { quizzesPassed: 1 } },
 
   { id: 'double',       icon: '⚡', title: 'Cú đúp Kinh tế',
-    desc: 'Hoàn thành 2 module trong cùng 1 ngày — năng suất nhà kinh tế',
+    desc: 'Hoàn thành 2 module trong cùng 1 ngày, năng suất nhà kinh tế',
     trigger: { modulesIn1Day: 2 } },
 
   { id: 'streak-3',     icon: '🌱', title: 'Học Kinh tế 3 ngày liên tiếp',
-    desc: 'Streak 3 ngày — thói quen tích luỹ tri thức kinh tế hàng ngày',
+    desc: 'Streak 3 ngày: thói quen tích luỹ tri thức kinh tế hàng ngày',
     trigger: { streak: 3 } },
 
   { id: 'streak-5',     icon: '🔥', title: 'Cháy 5 ngày',
@@ -21,27 +21,27 @@ export const ACHIEVEMENTS = [
     trigger: { streak: 5 } },
 
   { id: 'streak-7',     icon: '📅', title: 'Một tuần học kinh tế',
-    desc: 'Streak 7 ngày liên tiếp — một tuần đầu tư vào tri thức kinh tế mỗi ngày',
+    desc: 'Streak 7 ngày liên tiếp, một tuần đầu tư vào tri thức kinh tế mỗi ngày',
     trigger: { streak: 7 } },
 
   { id: 'streak-14',    icon: '⚡', title: '2 tuần học kinh tế liên tục',
-    desc: 'Streak 14 ngày liên tiếp — đầu tư vào bản thân mỗi ngày',
+    desc: 'Streak 14 ngày liên tiếp, đầu tư vào bản thân mỗi ngày',
     trigger: { streak: 14 } },
 
   { id: 'streak-30',    icon: '🏆', title: '1 tháng học kinh tế',
-    desc: 'Streak 30 ngày — kỷ luật học tập nền tảng của mọi nhà kinh tế',
+    desc: 'Streak 30 ngày: kỷ luật học tập nền tảng của mọi nhà kinh tế',
     trigger: { streak: 30 } },
 
   { id: 'star-60',      icon: '💫', title: '60 sao Kinh tế',
-    desc: 'Tích luỹ 60 sao — đã qua nửa hành trình Cử nhân Kinh tế',
+    desc: 'Tích luỹ 60 sao, đã qua nửa hành trình Cử nhân Kinh tế',
     trigger: { totalStars: 60 } },
 
   { id: 'star-90',      icon: '🌠', title: '90 sao Kinh tế',
-    desc: 'Tích luỹ 90 sao — sắp hoàn thành toàn bộ chương trình Kinh tế',
+    desc: 'Tích luỹ 90 sao, sắp hoàn thành toàn bộ chương trình Kinh tế',
     trigger: { totalStars: 90 } },
 
   { id: 'star-120',     icon: '🏆', title: 'Cử nhân 120 sao',
-    desc: 'Tích luỹ 120 sao — chinh phục toàn bộ 4 năm chương trình Cử nhân Kinh tế',
+    desc: 'Tích luỹ 120 sao, chinh phục toàn bộ 4 năm chương trình Cử nhân Kinh tế',
     trigger: { totalStars: 120 } },
 
   { id: 'bookworm',     icon: '📚', title: 'Mọt sách kinh tế',
@@ -160,24 +160,24 @@ export const ACHIEVEMENTS = [
     trigger: { moduleStars: { 'E4.5': 3 } } },
 
   { id: 'year4-econ-complete', icon: '🏅', title: 'Tốt nghiệp Năm 4 Kinh tế',
-    desc: 'Hoàn thành toàn bộ module Năm 4 Kinh tế — kết thúc lộ trình Cử nhân Kinh tế',
+    desc: 'Hoàn thành toàn bộ module Năm 4 Kinh tế, kết thúc lộ trình Cử nhân Kinh tế',
     trigger: { yearComplete: 4 } },
 
   // ── Practice achievements ───────────────────────────────────
   { id: 'biz-ops-master',    icon: '🏢', title: 'Chuyên gia Vận hành Doanh nghiệp',
-    desc: 'Hoàn thành mô phỏng doanh nghiệp (EP01) với 3 sao — thành thạo OEE, Lean, KPI',
+    desc: 'Hoàn thành mô phỏng doanh nghiệp (EP01) với 3 sao: thành thạo OEE, Lean, KPI',
     trigger: { moduleStars: { 'EP01': 3 } } },
 
   { id: 'stock-trader',      icon: '📈', title: 'Nhà giao dịch chứng khoán',
-    desc: 'Chinh phục Stock Sim (EP02) với 3 sao — nắm vững MPT, RSI, CAPM, Short Selling',
+    desc: 'Chinh phục Stock Sim (EP02) với 3 sao: nắm vững MPT, RSI, CAPM, Short Selling',
     trigger: { moduleStars: { 'EP02': 3 } } },
 
   { id: 'startup-founder',   icon: '🌱', title: 'Startup Founder',
-    desc: 'Tốt nghiệp Vườn ươm khởi nghiệp (EP03) với 3 sao — PMF, Lean Canvas, Fundraising',
+    desc: 'Tốt nghiệp Vườn ươm khởi nghiệp (EP03) với 3 sao: PMF, Lean Canvas, Fundraising',
     trigger: { moduleStars: { 'EP03': 3 } } },
 
   { id: 'fintech-expert',    icon: '💳', title: 'FinTech Expert',
-    desc: 'Chinh phục FinTech Lab (EP04) với 3 sao — Open Banking, BNPL, KYC, Blockchain',
+    desc: 'Chinh phục FinTech Lab (EP04) với 3 sao: Open Banking, BNPL, KYC, Blockchain',
     trigger: { moduleStars: { 'EP04': 3 } } },
 
   { id: 'practice-champion', icon: '🏅', title: 'Practice Champion',
@@ -207,15 +207,15 @@ export const ACHIEVEMENTS = [
 
   // ── Game achievements ───────────────────────────────────────
   { id: 'bull-bear-trader',  icon: '🐂', title: 'Bull & Bear Trader',
-    desc: 'Chinh phục quiz thị trường chứng khoán (EG01) — biết mua bán đúng thời điểm',
+    desc: 'Chinh phục quiz thị trường chứng khoán (EG01): biết mua bán đúng thời điểm',
     trigger: { moduleStars: { 'EG01': 3 } } },
 
   { id: 'pitch-master',      icon: '🎤', title: 'Pitch Master',
-    desc: 'Chinh phục Pitch Battle (EG02) — thuyết phục được nhà đầu tư tại Demo Day',
+    desc: 'Chinh phục Pitch Battle (EG02): thuyết phục được nhà đầu tư tại Demo Day',
     trigger: { moduleStars: { 'EG02': 3 } } },
 
   { id: 'tycoon-ceo',        icon: '🏭', title: 'Tycoon CEO',
-    desc: 'Chinh phục quiz Quản lý công ty (EG03) — điều hành doanh nghiệp xuất sắc',
+    desc: 'Chinh phục quiz Quản lý công ty (EG03): điều hành doanh nghiệp xuất sắc',
     trigger: { moduleStars: { 'EG03': 3 } } },
 
   { id: 'econ-game-master',  icon: '🏆', title: 'Kinh tế Game Master',

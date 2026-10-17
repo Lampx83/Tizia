@@ -109,8 +109,8 @@ export function openHdsdEditor({ pickedIds = [], onCreate, onClose }) {
             <div class="le2-sk-pharm">${PHARMACY_INFO.name} · ${PHARMACY_INFO.address} · ĐT ${PHARMACY_INFO.phone}</div>
             <div class="le2-sk-head">HƯỚNG DẪN SỬ DỤNG</div>
             <div class="le2-sk-bn">BN: <b class="le2-sk-patient">Khách vãng lai</b></div>
-            <div class="le2-sk-drug"><b class="le2-sk-brand">—</b></div>
-            <div class="le2-sk-strength">—</div>
+            <div class="le2-sk-drug"><b class="le2-sk-brand">-</b></div>
+            <div class="le2-sk-strength">-</div>
             <div class="le2-sk-doses-grid">
               ${['Sáng','Trưa','Chiều','Tối'].map((t, i) => `
                 <div class="le2-sk-cell">
@@ -154,7 +154,7 @@ export function openHdsdEditor({ pickedIds = [], onCreate, onClose }) {
       <optgroup label="${gName}">
         ${items.map(d => `<option value="${d.id}">${d.brand || d.name} ${d.strength || ''}</option>`).join('')}
       </optgroup>
-    `).join('') || '<option value="">— Không có thuốc khớp —</option>';
+    `).join('') || '<option value="">Không có thuốc khớp</option>';
     // Giữ lựa chọn cũ nếu còn trong danh sách lọc.
     if (prevVal && [...$('.le2-drug').options].some(o => o.value === prevVal)) $('.le2-drug').value = prevVal;
   }
@@ -226,9 +226,9 @@ export function openHdsdEditor({ pickedIds = [], onCreate, onClose }) {
 
   function renderPreview() {
     const l = readLabel();
-    $('.le2-sk-patient').textContent = l.patient || '—';
-    $('.le2-sk-brand').textContent = l.brand || '—';
-    $('.le2-sk-strength').textContent = l.strength || (l.generic || '—');
+    $('.le2-sk-patient').textContent = l.patient || '-';
+    $('.le2-sk-brand').textContent = l.brand || '-';
+    $('.le2-sk-strength').textContent = l.strength || (l.generic || '-');
     ['morning','noon','afternoon','evening'].forEach((k, i) => {
       $(`.le2-sk-num[data-cell="${i}"]`).textContent = l[k];
     });
@@ -309,7 +309,7 @@ export function openPackageEditor({ drug, formType = 'vi', packageType = 'white'
               </div>
             </div>
             ${pkg.special ? `<div class="pkg-sk-special">${pkg.special}</div>` : ''}
-            <div class="pkg-sk-row"><b>Tên thuốc, Nồng độ/Hàm lượng:</b><br><span class="pkg-sk-drug">—</span></div>
+            <div class="pkg-sk-row"><b>Tên thuốc, Nồng độ/Hàm lượng:</b><br><span class="pkg-sk-drug">-</span></div>
             <div class="pkg-sk-row"><b>- Cách dùng, liều dùng:</b><br><span class="pkg-sk-dose">…</span></div>
             <div class="pkg-sk-row"><b>- Hạn dùng:</b> <span class="pkg-sk-exp">…</span></div>
             <div class="pkg-sk-row"><b>*Lưu ý:</b> <span class="pkg-sk-note">…</span></div>
@@ -326,7 +326,7 @@ export function openPackageEditor({ drug, formType = 'vi', packageType = 'white'
   const $ = (s) => overlay.querySelector(s);
 
   function render() {
-    $('.pkg-sk-drug').textContent = $('.pkg-drug').value || '—';
+    $('.pkg-sk-drug').textContent = $('.pkg-drug').value || '-';
     $('.pkg-sk-dose').textContent = $('.pkg-dose').value || '…';
     $('.pkg-sk-exp').textContent  = $('.pkg-exp').value || '…';
     $('.pkg-sk-note').textContent = $('.pkg-note').value || '…';

@@ -7,12 +7,12 @@
 const PAGES = {
   scoreup: {
     mode: 'quiz', icon: '📝', label: 'ScoreUp', tech: 'Trắc nghiệm · Ngân hàng câu hỏi', url: 'apps.html?app=scoreup',
-    desc: 'Mở ScoreUp — luyện & thi trắc nghiệm với câu hỏi thật, chấm điểm tức thì.',
+    desc: 'Mở ScoreUp: luyện & thi trắc nghiệm với câu hỏi thật, chấm điểm tức thì.',
     specs: ['ok:Câu hỏi thật', 'Đề thi', 'Gợi ý AI', 'bad:Cần ScoreUp chạy'],
   },
   smartdoc: {
     mode: 'meta', icon: '📚', label: 'Smartdoc', tech: 'Giáo trình tương tác', url: 'apps.html?app=smartdoc',
-    desc: 'Mở Smartdoc — giáo trình & bài giảng web tương tác.',
+    desc: 'Mở Smartdoc: giáo trình & bài giảng web tương tác.',
     specs: ['ok:Word → web', 'Sách điện tử', 'Phòng học', 'bad:Cần Smartdoc chạy'],
   },
 };

@@ -9,11 +9,11 @@ export const ACHIEVEMENTS = [
     trigger: { quizzesPassed: 1 } },
 
   { id: 'bookworm',    icon: '📚', title: 'Mọt lập trình',
-    desc: 'Hoàn thành 10 quiz — thói quen học CNTT đang hình thành',
+    desc: 'Hoàn thành 10 quiz, thói quen học CNTT đang hình thành',
     trigger: { quizzesPassed: 10 } },
 
   { id: 'streak-3',    icon: '🌱', title: 'Code 3 ngày liên tiếp',
-    desc: 'Streak 3 ngày — thói quen lập trình hàng ngày bắt đầu từ đây',
+    desc: 'Streak 3 ngày: thói quen lập trình hàng ngày bắt đầu từ đây',
     trigger: { streak: 3 } },
 
   { id: 'streak-5',    icon: '🔥', title: 'Cháy 5 ngày',
@@ -21,31 +21,31 @@ export const ACHIEVEMENTS = [
     trigger: { streak: 5 } },
 
   { id: 'streak-7',    icon: '📅', title: 'Code cả tuần',
-    desc: 'Streak 7 ngày liên tiếp — một tuần commit mỗi ngày, lập trình viên thực thụ',
+    desc: 'Streak 7 ngày liên tiếp, một tuần commit mỗi ngày, lập trình viên thực thụ',
     trigger: { streak: 7 } },
 
   { id: 'streak-14',   icon: '⚡', title: '2 tuần code liên tục',
-    desc: 'Streak 14 ngày liên tiếp — commit như một lập trình viên thực sự',
+    desc: 'Streak 14 ngày liên tiếp, commit như một lập trình viên thực sự',
     trigger: { streak: 14 } },
 
   { id: 'streak-30',   icon: '🏆', title: '1 tháng code không ngừng',
-    desc: 'Streak 30 ngày — kỷ luật bền vững, nền tảng của mọi kỹ sư giỏi',
+    desc: 'Streak 30 ngày: kỷ luật bền vững, nền tảng của mọi kỹ sư giỏi',
     trigger: { streak: 30 } },
 
   { id: 'star-30',     icon: '🌟', title: '30 sao CNTT',
-    desc: 'Tích luỹ 30 sao — đang trên đà chinh phục chương trình Kỹ sư',
+    desc: 'Tích luỹ 30 sao, đang trên đà chinh phục chương trình Kỹ sư',
     trigger: { totalStars: 30 } },
 
   { id: 'star-60',     icon: '💫', title: '60 sao CNTT',
-    desc: 'Tích luỹ 60 sao — đã qua nửa hành trình Kỹ sư phần mềm',
+    desc: 'Tích luỹ 60 sao, đã qua nửa hành trình Kỹ sư phần mềm',
     trigger: { totalStars: 60 } },
 
   { id: 'star-90',     icon: '🌠', title: '90 sao CNTT',
-    desc: 'Tích luỹ 90 sao — gần hoàn thành toàn bộ chương trình CNTT',
+    desc: 'Tích luỹ 90 sao, gần hoàn thành toàn bộ chương trình CNTT',
     trigger: { totalStars: 90 } },
 
   { id: 'star-120',    icon: '🏆', title: 'Kỹ sư 120 sao',
-    desc: 'Tích luỹ 120 sao — chinh phục toàn bộ 4 năm chương trình Kỹ sư CNTT',
+    desc: 'Tích luỹ 120 sao, chinh phục toàn bộ 4 năm chương trình Kỹ sư CNTT',
     trigger: { totalStars: 120 } },
 
   // ── Year 1 Achievements (mới) ──
@@ -160,7 +160,7 @@ export const ACHIEVEMENTS = [
 
   // ── Game Achievements ──
   { id: 'code-racer',   icon: '⚡', title: 'Code Racer',
-    desc: 'Pass Code Race — Giải thuật 5 phút (IG01)',
+    desc: 'Pass Code Race: Giải thuật 5 phút (IG01)',
     trigger: { moduleStars: { 'IG01': 2 } } },
 
   { id: 'bug-hunter',   icon: '🐛', title: 'Bug Hunter',

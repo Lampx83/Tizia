@@ -162,7 +162,7 @@
 <div class="stage" id="stage">
   <div class="lobby">
     <h2>🎤 Phòng đang mở</h2>
-    <p>HS dùng PIN ở trên để join — không cần đăng nhập.</p>
+    <p>HS dùng PIN ở trên để join, không cần đăng nhập.</p>
     <div class="lobby-players" id="lobby-players"></div>
     <button class="start-btn" id="start" disabled>🚀 Bắt đầu (cần ≥ 1 HS)</button>
   </div>
@@ -284,7 +284,7 @@ function renderEnd(msg) {
     <div class="end-stage">
       <div class="trophy">🏆</div>
       <h2 style="font-size:36px;margin:14px 0;background:linear-gradient(135deg, var(--accent), var(--good));-webkit-background-clip:text;color:transparent">Quiz kết thúc!</h2>
-      <p style="color:var(--text-soft);margin-bottom:24px">Top 3 — chúc mừng!</p>
+      <p style="color:var(--text-soft);margin-bottom:24px">Top 3, chúc mừng!</p>
       <div>
         ${msg.leaderboard.slice(0, 10).map((p, i) => `
           <div class="lb-row ${i===0?'top1':i===1?'top2':i===2?'top3':''}">

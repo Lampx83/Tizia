@@ -148,18 +148,18 @@
   document.getElementById('cv-avatar').textContent = initials;
   document.getElementById('cv-name').textContent = me.display_name;
   document.getElementById('cv-sub').textContent = `@${me.username} · ${me.role === 'student' ? 'Sinh viên' : 'Giảng viên'}`;
-  const majorLabel = MAJOR_LABEL[me.major] || me.major || '—';
+  const majorLabel = MAJOR_LABEL[me.major] || me.major || '-';
   document.getElementById('cv-meta').textContent = `${majorLabel}${me.cohort ? ' · ' + me.cohort : ''}${me.school_name ? ' · ' + me.school_name : ''}`;
 
   // Hồ sơ
   const profile = document.getElementById('cv-profile');
   const rows = [
     ['Họ và tên', me.display_name],
-    ['Email', me.email || '—'],
+    ['Email', me.email || '-'],
     ['Ngành học', majorLabel],
-    ['Khoá', me.cohort || '—'],
-    ['Trường', me.school_name || '—'],
-    ['Tuổi', me.age != null ? me.age : '—'],
+    ['Khoá', me.cohort || '-'],
+    ['Trường', me.school_name || '-'],
+    ['Tuổi', me.age != null ? me.age : '-'],
   ];
   profile.innerHTML = rows.map(([k, v]) => `<span class="k">${k}</span><span class="v">${v}</span>`).join('');
 
@@ -192,7 +192,7 @@
   if (top.length) {
     tbody.innerHTML = top.map(a => `
       <tr>
-        <td>${a.version || '—'}</td>
+        <td>${a.version || '-'}</td>
         <td><span class="pct">${a.score || 0}</span> / 100</td>
         <td>${a.correct || 0}/${a.total || 0}</td>
         <td>${new Date(a.created_at).toLocaleDateString('vi-VN')}</td>

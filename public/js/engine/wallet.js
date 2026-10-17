@@ -60,7 +60,7 @@ try {
   window.addEventListener('storage', (e) => {
     if (e.key !== 'tizia:me') return;
     if (_isStaleTab()) {
-      console.warn('[wallet] tài khoản đã đổi ở tab khác — tab này bị khoá đồng bộ ví');
+      console.warn('[wallet] tài khoản đã đổi ở tab khác, tab này bị khoá đồng bộ ví');
       try { window.dispatchEvent(new CustomEvent('tizia:account-changed-elsewhere', {
         detail: { owner: _tabOwnerUid, now: _currentUid() },
       })); } catch {}
@@ -119,7 +119,7 @@ export function getWallet() {
       // ví trong localStorage thuộc UID khác current → vứt, dùng remote.
       const curUid = _currentUid();
       if (curUid != null && w._uid != null && w._uid !== curUid) {
-        console.warn(`[wallet] discard local wallet of uid=${w._uid} (current=${curUid}) — cross-user pollution prevented`);
+        console.warn(`[wallet] discard local wallet of uid=${w._uid} (current=${curUid}): cross-user pollution prevented`);
         try { localStorage.removeItem(WALLET_KEY); } catch {}
         return _applySessionGuard(_normalizeWallet({}));
       }

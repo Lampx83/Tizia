@@ -311,7 +311,7 @@ class Onboarding {
   renderStepPet() {
     this.body.innerHTML = `
       <h2>Chọn bạn đồng hành 🐾</h2>
-      <p class="sub">Pet đi cùng em trong trường ảo + tiến hoá theo em. <b style="color:#fde68a">Pet không khoá môn</b> — chỉ làm Thầy AI trò chuyện hợp tính em hơn. Chọn 1 bạn:</p>
+      <p class="sub">Pet đi cùng em trong trường ảo + tiến hoá theo em. <b style="color:#fde68a">Pet không khoá môn</b>, chỉ làm Thầy AI trò chuyện hợp tính em hơn. Chọn 1 bạn:</p>
       <div class="pets">
         ${PETS.map(p => `
           <div class="pet ${this.data.pet === p.id ? 'selected' : ''}" data-pet="${p.id}">
@@ -339,7 +339,7 @@ class Onboarding {
     this.body.innerHTML = `
       <h2>Đây là góc Engagement 🔥</h2>
       <p class="sub">Mỗi ngày em vào học sẽ giữ <b style="color:#fbbf24">streak 🔥</b>, làm sai mất <b style="color:#ef4444">hearts ❤</b>, hoàn thành <b style="color:#34d399">3 nhiệm vụ 📋</b> để nhận coin/XP và leo bảng <b style="color:#fbbf24">League tuần 🏆</b>.</p>
-      <p class="sub" style="font-size:12.5px;opacity:.75">Nhìn lên góc phải trên cùng — đó là HUD của em.</p>
+      <p class="sub" style="font-size:12.5px;opacity:.75">Nhìn lên góc phải trên cùng, đó là HUD của em.</p>
       <div class="tz-onb-actions">
         <button class="skip" data-back>← Quay lại</button>
         <button class="next" data-next>Bắt đầu học! 🚀</button>

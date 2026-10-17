@@ -25,7 +25,7 @@ export const LEVELS = [
   { n: 7,  count: 8,  time: 45,  shuffleSlots: true,  label: 'Thử thách',      desc: '8 loại · 45s · ô shuffle' },
   { n: 8,  count: 9,  time: 40,  shuffleSlots: true,  label: 'Khó',            desc: '9 loại · 40s' },
   { n: 9,  count: 10, time: 35,  shuffleSlots: true,  label: 'Rất khó',        desc: '10 loại · 35s' },
-  { n: 10, count: 16, time: 30,  shuffleSlots: true,  label: 'Boss — đỉnh cao',desc: '16 loại · 30s · FULL CATALOG' },
+  { n: 10, count: 16, time: 30,  shuffleSlots: true,  label: 'Boss: đỉnh cao',desc: '16 loại · 30s · FULL CATALOG' },
 ];
 
 // --- Level progression in localStorage ---

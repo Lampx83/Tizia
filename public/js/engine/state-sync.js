@@ -242,7 +242,7 @@ function _installFlushHooks() {
   try {
     window.addEventListener('storage', (e) => {
       if (e.key === 'tizia:me' && isStaleTab()) {
-        console.warn('[state-sync] tài khoản đã đổi ở tab khác — tab này khoá sync');
+        console.warn('[state-sync] tài khoản đã đổi ở tab khác, tab này khoá sync');
         _booted = false;
       } else if (e.key && isWhitelisted(e.key)) {
         // Tab khác cập nhật key whitelist → cập nhật snapshot để tab này

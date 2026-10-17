@@ -73,7 +73,7 @@ function autoMount() {
           <div class="sgf-head-ico">${boardIcon('board')}</div>
           <div class="sgf-head-text">
             <h3 id="sgf-title">Ban điều hành AI</h3>
-            <p>Trường do <b>AI điều hành</b> — gửi đề nghị, AI sẽ xem xét &amp;
+            <p>Trường do <b>AI điều hành</b>: gửi đề nghị, AI sẽ xem xét &amp;
                phản hồi. Yêu cầu được làm xong sẽ đánh dấu hoàn thành kèm lời nhắn.</p>
           </div>
           <button type="button" class="sgf-x" data-close aria-label="Đóng">${boardIcon('close')}</button>
@@ -94,7 +94,7 @@ function autoMount() {
             </select>
           </label>
           <label class="sgf-lab" id="sgf-folder-row" hidden>Gắn vào chức năng
-            <select id="sgf-folder" class="sgf-in"><option value="">— Yêu cầu lẻ —</option></select>
+            <select id="sgf-folder" class="sgf-in"><option value="">Yêu cầu lẻ</option></select>
           </label>
           <label class="sgf-lab"><span>Tiêu đề <span class="sgf-req">*</span></span>
             <input id="sgf-title-in" class="sgf-in" maxlength="200" required minlength="4" aria-describedby="sgf-msg"
@@ -113,7 +113,7 @@ function autoMount() {
               <span>Đính kèm ảnh chụp <b>màn hình hiện tại</b> (Ban điều hành xem trực tiếp giao diện anh/chị đang gặp)</span>
             </label>
             <label class="sgf-attach-row sgf-file-row">
-              <span class="sgf-attach-lbl">Đính kèm file (ảnh / PDF / Word / Excel / PPT / CSDL .db / .sql — tối đa 50MB × 5 file):</span>
+              <span class="sgf-attach-lbl">Đính kèm file (ảnh / PDF / Word / Excel / PPT / CSDL .db / .sql, tối đa 50MB × 5 file):</span>
               <input type="file" id="sgf-file-in" multiple accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.db,.sqlite,.sqlite3,.sql,application/sql,application/x-sqlite3" />
             </label>
             <div class="sgf-attach-hint">Có thể <b>kéo-thả</b> file vào khung này hoặc <b>dán ảnh</b> trực tiếp (Ctrl/⌘+V).</div>
@@ -143,7 +143,7 @@ function autoMount() {
               <button type="button" class="sgf-send" id="sgf-clar-send">Trả lời</button></div>
           </div>
           <div class="sgf-clar-sum" id="sgf-clar-sum" hidden>
-            <div class="sgf-ob-q">Ban hiểu yêu cầu của bạn như sau — đúng chưa?</div>
+            <div class="sgf-ob-q">Ban hiểu yêu cầu của bạn như sau, đúng chưa?</div>
             <textarea id="sgf-clar-spec" class="sgf-in" rows="7" maxlength="4000" readonly aria-label="Bản tóm tắt yêu cầu"></textarea>
             <div class="sgf-bar"><button type="button" class="sgf-chip" id="sgf-clar-edit">Sửa</button>
               <button type="button" class="sgf-send" id="sgf-clar-ok">Đúng, gửi</button></div>
@@ -424,7 +424,7 @@ function bind(root) {
       msg.textContent = 'Cảm ơn! Giờ bạn có thể gửi đề nghị.';
       root.querySelector('#sgf-title-in')?.focus();
     } catch {
-      status.textContent = 'Chưa lưu được — bấm lại một lựa chọn để thử lại.';
+      status.textContent = 'Chưa lưu được: bấm lại một lựa chọn để thử lại.';
     }
   }
 
@@ -533,7 +533,7 @@ function bind(root) {
       showStep({ kind: last.kind, text: last.text, asked: data.asked, max: data.max,
         complete: data.asked < data.max });
     } catch {
-      clarMsg.textContent = 'Không mở được phần trao đổi — thử lại sau.';
+      clarMsg.textContent = 'Không mở được phần trao đổi, thử lại sau.';
     }
   }
 
@@ -553,7 +553,7 @@ function bind(root) {
       if (!(r.headers.get('content-type') || '').includes('ndjson')) {
         const e = await r.json().catch(() => ({}));
         out.remove();
-        clarMsg.textContent = '' + (e.message || 'Chưa gửi được — thử lại sau.');
+        clarMsg.textContent = '' + (e.message || 'Chưa gửi được: thử lại sau.');
         clarReply.hidden = false;
         if (answer !== undefined) { clarLog.lastChild?.remove(); clarIn.value = answer; }
         return;
@@ -583,7 +583,7 @@ function bind(root) {
       showStep(done);
     } catch {
       out.remove();
-      clarMsg.textContent = 'Lỗi mạng — thử lại sau.';
+      clarMsg.textContent = 'Lỗi mạng: thử lại sau.';
       clarReply.hidden = false;
     }
   }
@@ -611,7 +611,7 @@ function bind(root) {
         body: JSON.stringify({ spec: clarSpec.value, complete: lastSummary?.complete !== false }),
       });
       const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.message || 'Chưa gửi được — thử lại sau.');
+      if (!r.ok) throw new Error(data.message || 'Chưa gửi được: thử lại sau.');
       clarifyBox.hidden = true;
       clarifyId = null;
       refreshPending();
@@ -725,7 +725,7 @@ function bind(root) {
     if (title.length < 4) { msg.textContent = 'Tiêu đề quá ngắn (≥ 4 ký tự)'; return; }
 
     const detail = [
-      `[Trang: ${ctx.title || '—'}] ${ctx.url}`,
+      `[Trang: ${ctx.title || '-'}] ${ctx.url}`,
       userDetail,
     ].filter(Boolean).join('\n');
 
@@ -811,7 +811,7 @@ function bind(root) {
       setTimeout(loadInbox, 2500);
       setTimeout(loadInbox, 6000);
     } catch {
-      msg.textContent = 'Lỗi mạng — thử lại sau.';
+      msg.textContent = 'Lỗi mạng: thử lại sau.';
     } finally {
       sendBtn.disabled = false;
     }
@@ -840,7 +840,7 @@ function bind(root) {
       const { mine = [], school = [] } = await r.json();
       myFolders = mine.filter(f => f.state !== 'archived'); // lưu trữ rồi thì không gắn yêu cầu mới
       const keep = folderSel.value;
-      folderSel.innerHTML = '<option value="">— Yêu cầu lẻ —</option>'
+      folderSel.innerHTML = '<option value="">Yêu cầu lẻ</option>'
         + myFolders.map(f => `<option value="${f.id}">${escapeHtml(f.title)}</option>`).join('');
       folderSel.value = mine.some(f => String(f.id) === keep) ? keep : '';
       syncFolderRow();
@@ -1016,7 +1016,7 @@ function bind(root) {
         });
       });
     } catch {
-      inbox.innerHTML = '<div class="sgf-empty">Không tải được — cần backend chạy.</div>';
+      inbox.innerHTML = '<div class="sgf-empty">Không tải được: cần backend chạy.</div>';
     }
   }
 }
@@ -1024,8 +1024,8 @@ function bind(root) {
 // Vị trí trong hàng đợi công bằng (server tính theo đúng thứ tự worker nhận việc).
 export function queueLine(q) {
   if (!q) return '';
-  if (q.deferred) return '<div class="sgf-it-queue">Hôm nay Ban đã làm nhiều việc cho bạn rồi — yêu cầu này sẽ được làm tiếp vào ngày mai.</div>';
-  if (q.worker_ready !== true || !Number.isFinite(q.eta_s)) return '<div class="sgf-it-queue">Đang chờ Ban điều hành sẵn sàng — chưa thể ước tính thời gian.</div>';
+  if (q.deferred) return '<div class="sgf-it-queue">Hôm nay Ban đã làm nhiều việc cho bạn rồi, yêu cầu này sẽ được làm tiếp vào ngày mai.</div>';
+  if (q.worker_ready !== true || !Number.isFinite(q.eta_s)) return '<div class="sgf-it-queue">Đang chờ Ban điều hành sẵn sàng, chưa thể ước tính thời gian.</div>';
   const min = Math.max(1, Math.round((q.eta_s || 0) / 60));
   return `<div class="sgf-it-queue">Đang xếp hàng: thứ ${Number(q.position)} · khoảng ${min} phút nữa tới lượt</div>`;
 }

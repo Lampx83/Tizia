@@ -27,7 +27,7 @@ export function labelWarnings(drug) {
   const f = (drug.form || '').toLowerCase();
   const grp = (drug.pharmaGroup || drug.category || '').toLowerCase();
   const out = [];
-  if (/tiêm|truyền/.test(f) || /tiêm|truyền/.test(grp)) out.push('Tiêm/tiêm truyền — theo chỉ định');
+  if (/tiêm|truyền/.test(f) || /tiêm|truyền/.test(grp)) out.push('Tiêm/tiêm truyền: theo chỉ định');
   if (/nhỏ mắt|tra mắt/.test(f)) out.push('Thuốc nhỏ mắt');
   else if (/nhỏ mũi/.test(f)) out.push('Thuốc nhỏ mũi');
   else if (/nhỏ tai/.test(f)) out.push('Thuốc nhỏ tai');
@@ -40,11 +40,11 @@ export function labelWarnings(drug) {
 // Tiện ích: lấy NSX–HSD–lô (ưu tiên field thật, fallback meta hash từ scene).
 function lotInfo(drug, meta) {
   return {
-    lot: drug.lot || meta?.lot || '—',
-    mfg: drug.mfgDate || '—',
-    exp: drug.expDate || meta?.expiry || '—',
-    reg: drug.regNo || drug.sdk || '—',
-    storage: drug.storage || '—',
+    lot: drug.lot || meta?.lot || '-',
+    mfg: drug.mfgDate || '-',
+    exp: drug.expDate || meta?.expiry || '-',
+    reg: drug.regNo || drug.sdk || '-',
+    storage: drug.storage || '-',
   };
 }
 
@@ -60,17 +60,17 @@ export function outerLabelHTML(drug, meta) {
     ${drug.isRx ? '<span class="tt-rx-corner">Rx</span>' : ''}
     <div class="tt-name">${esc(drug.brand || drug.name)}</div>
     ${showActiveUnderName ? `<div class="tt-active">${esc(drug.activeIngredient || drug.generic)}</div>` : ''}
-    <div class="tt-form">Dạng bào chế: <b>${esc(drug.form || '—')}</b></div>
+    <div class="tt-form">Dạng bào chế: <b>${esc(drug.form || '-')}</b></div>
     <dl class="tt-fields">
-      <div><dt>Thành phần, hàm lượng</dt><dd>${esc(drug.activeIngredient || drug.generic || '—')}</dd></div>
-      <div><dt>Quy cách đóng gói</dt><dd>${esc(drug.packaging || drug.pack || '—')}</dd></div>
+      <div><dt>Thành phần, hàm lượng</dt><dd>${esc(drug.activeIngredient || drug.generic || '-')}</dd></div>
+      <div><dt>Quy cách đóng gói</dt><dd>${esc(drug.packaging || drug.pack || '-')}</dd></div>
       <div><dt>Chỉ định, cách dùng, chống chỉ định</dt><dd><i>Xin đọc trong tờ hướng dẫn sử dụng thuốc</i></dd></div>
       <div><dt>Số giấy ĐK lưu hành</dt><dd>${esc(reg)}</dd></div>
       <div><dt>Số lô SX</dt><dd>${esc(lot)}</dd></div>
       <div><dt>NSX – HSD</dt><dd>${esc(mfg)} – ${esc(exp)}</dd></div>
       <div><dt>Tiêu chuẩn chất lượng</dt><dd>TCCS</dd></div>
       <div><dt>Bảo quản</dt><dd>${esc(storage)}</dd></div>
-      <div><dt>Cơ sở sản xuất</dt><dd>${esc(drug.manufacturer || '—')}</dd></div>
+      <div><dt>Cơ sở sản xuất</dt><dd>${esc(drug.manufacturer || '-')}</dd></div>
       ${imported ? `<div><dt>Xuất xứ</dt><dd>${esc(drug.country)}</dd></div>` : ''}
     </dl>
     <div class="tt-warns">
@@ -95,7 +95,7 @@ export function directLabelHTML(drug, meta) {
       <span><b>Lô:</b> ${esc(lot)}</span>
       <span><b>HSD:</b> ${esc(exp)}</span>
     </div>
-    <div class="tt-maker">${esc(drug.manufacturer || '—')}</div>
+    <div class="tt-maker">${esc(drug.manufacturer || '-')}</div>
   </div>`;
 }
 

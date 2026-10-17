@@ -488,7 +488,7 @@
   }
   function saveToGallery() {
     if (!state.bitmap.some(c => c !== 'transparent')) {
-      toast('Bức tranh trống — hãy vẽ vài nét trước nhé!', true);
+      toast('Bức tranh trống: hãy vẽ vài nét trước nhé!', true);
       return;
     }
     const png = bitmapToPngDataURL(16);
@@ -721,7 +721,7 @@
       setSize(16);
       state.bitmap = tpl.slice();
       draw();
-      toast('Đã nạp mẫu — em có thể chỉnh sửa thoải mái!');
+      toast('Đã nạp mẫu: em có thể chỉnh sửa thoải mái!');
     });
   });
 

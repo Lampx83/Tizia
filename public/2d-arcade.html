@@ -70,7 +70,7 @@
 <div id="start-overlay">
   <h1>💊 Tizia · 2D Arcade</h1>
   <p>Mở thùng thuốc, cầm từng hộp, xếp lên kệ đúng <b>nhóm điều trị</b></p>
-  <p>👉 Chụm ngón cái + trỏ trước webcam để <b>pinch</b> — hoặc dùng chuột để kéo</p>
+  <p>👉 Chụm ngón cái + trỏ trước webcam để <b>pinch</b>: hoặc dùng chuột để kéo</p>
   <p class="tip">Webcam cần mở qua <code>http://localhost</code> (không phải <code>file://</code>)</p>
   <button id="start-btn">▶️ Bắt đầu (webcam)</button>
   <a href="#" id="mouse-only" style="color:#fbbf24;text-decoration:none;font-size:14px;margin-top:4px">🖱️ Chơi bằng chuột (không cần webcam)</a>
@@ -405,7 +405,7 @@ function endRound(success, timeBonus = 0, comboBonus = 0) {
     <div style="font-size:32px;margin:8px 0">${starsHtml}</div>
     <div class="score">${game.score}</div>
     <div class="sub">Đúng ${correctCount}/${total} (${pct}%) ${success ? `· bonus +${timeBonus + comboBonus}` : ''}</div>
-    ${hasNext ? `<button id="next-level" style="background:#f59e0b">▶️ Level ${nextLevel.n} — ${nextLevel.label}</button>` : ''}
+    ${hasNext ? `<button id="next-level" style="background:#f59e0b">▶️ Level ${nextLevel.n}: ${nextLevel.label}</button>` : ''}
     <button id="play-again">🔄 Chơi lại</button>
     <button class="secondary" onclick="location.href='./'">← Trang chính</button>
   `;
@@ -818,7 +818,7 @@ if (!SECURE_FOR_CAMERA) {
   const note = document.createElement('div');
   note.style.cssText = 'background:rgba(251,191,36,0.15);border:1px solid #fbbf24;padding:10px 16px;border-radius:8px;font-size:13px;color:#fde68a;max-width:520px;line-height:1.5;margin:4px 0';
   note.innerHTML = `⚠️ <b>Webcam chỉ chạy qua HTTPS hoặc localhost.</b><br>
-    Bạn đang truy cập <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px">${location.host}</code> qua HTTP — Chrome chặn camera ở chế độ này.<br>
+    Bạn đang truy cập <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px">${location.host}</code> qua HTTP, Chrome chặn camera ở chế độ này.<br>
     👉 Chơi bằng chuột/touch (không cần webcam) phía dưới.`;
   overlay.insertBefore(note, document.getElementById('start-btn'));
   document.getElementById('start-btn').style.display = 'none';

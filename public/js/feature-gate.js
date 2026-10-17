@@ -120,7 +120,7 @@ function showUnlockHint(f) {
     toast.className = 'tz-unlock-toast';
     document.body.appendChild(toast);
   }
-  toast.innerHTML = `🔒 <b>${f.name}</b> — ${f.unlock_text || 'Tiếp tục học để mở'}`;
+  toast.innerHTML = `🔒 <b>${f.name}</b>: ${f.unlock_text || 'Tiếp tục học để mở'}`;
   toast.classList.add('show');
   clearTimeout(toast._t);
   toast._t = setTimeout(() => toast.classList.remove('show'), 2800);

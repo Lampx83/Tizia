@@ -70,7 +70,7 @@ function injectPreschoolStyles() {
   if (_psStyled || typeof document === 'undefined') return;
   _psStyled = true;
   const css = `
-  /* Big Bubble Quiz — 1 câu/màn, đáp án to + cute */
+  /* Big Bubble Quiz, 1 câu/màn, đáp án to + cute */
   .psq-wrap { display:flex; flex-direction:column; gap:18px; align-items:stretch; padding:8px 0 24px; }
   .psq-progress { display:flex; gap:6px; justify-content:center; margin-bottom:4px; font-size:22px; }
   .psq-progress .dot { width:14px; height:14px; border-radius:50%; background:rgba(255,255,255,.18); }
@@ -106,7 +106,7 @@ function injectPreschoolStyles() {
   @keyframes psqPop { 0%{transform:scale(1)} 40%{transform:scale(1.18)} 100%{transform:scale(1.05)} }
   @keyframes psqWobble { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-12px)} 40%{transform:translateX(12px)} 60%{transform:translateX(-8px)} 80%{transform:translateX(8px)} }
 
-  /* 6 sắc bong bóng — pastel rực rỡ */
+  /* 6 sắc bong bóng, pastel rực rỡ */
   .psq-bubble.c0 { background: linear-gradient(135deg, #fde68a, #fbbf24); }
   .psq-bubble.c1 { background: linear-gradient(135deg, #fecaca, #f87171); }
   .psq-bubble.c2 { background: linear-gradient(135deg, #bbf7d0, #34d399); }
@@ -133,7 +133,7 @@ function injectPreschoolStyles() {
   .psq-done .stars { font-size: 48px; letter-spacing: 6px; margin: 6px 0 14px; }
   .psq-done p { font-size: clamp(16px, 2.2vw, 20px); opacity: .9; margin: 6px 0 18px; }
 
-  /* Sticker Board — drag/tap stickers vào bảng */
+  /* Sticker Board, drag/tap stickers vào bảng */
   .psb-wrap { display:flex; flex-direction:column; gap:16px; padding: 8px 0; }
   .psb-board { min-height: 160px; border-radius: 20px; padding: 16px;
     background: linear-gradient(135deg, rgba(254,243,199,.95), rgba(253,224,71,.65));
@@ -162,7 +162,7 @@ function injectPreschoolStyles() {
   .psb-board .psb-sticker .emo { font-size: 32px; line-height:1; }
   .psb-progress { text-align:center; font-size: 18px; font-weight: 800; color:#fbbf24; }
 
-  /* Trace Canvas — tô chữ/số */
+  /* Trace Canvas, tô chữ/số */
   .pst-wrap { display:flex; flex-direction:column; gap:14px; align-items:center; padding: 8px 0; }
   .pst-canvas { width: min(90vw, 460px); aspect-ratio: 1; border-radius: 24px;
     background: #fffbeb; border: 4px solid #fbbf24; touch-action: none; cursor: crosshair;

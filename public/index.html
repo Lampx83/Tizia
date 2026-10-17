@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Tizia — Vũ trụ giáo dục ảo 3D · VR · AI | tizia.vn</title>
-<meta name="description" content="Tizia — The Intelligent Zone for Interactive Academy. Vũ trụ giáo dục ảo do AI điều hành: trường Dược, CNTT, Kinh tế, phổ thông với 2D · 3D · VR · XR · Metaverse · gamification." />
+<title>Tizia: Vũ trụ giáo dục ảo 3D · VR · AI | tizia.vn</title>
+<meta name="description" content="Tizia, The Intelligent Zone for Interactive Academy. Vũ trụ giáo dục ảo do AI điều hành: trường Dược, CNTT, Kinh tế, phổ thông với 2D · 3D · VR · XR · Metaverse · gamification." />
 <meta name="keywords" content="Tizia, edtech Việt Nam, giáo dục ảo, học 3D VR, gia sư AI, trường ảo, GDPT 2018, lớp 2, dược, CNTT, kinh tế, metaverse giáo dục" />
 <meta name="author" content="Tizia" />
 <meta name="theme-color" content="#fbbf24" />
@@ -13,7 +13,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
 <link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png" />
 <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
-<meta property="og:title" content="Tizia — Vũ trụ giáo dục ảo 3D · VR · AI" />
+<meta property="og:title" content="Tizia, Vũ trụ giáo dục ảo 3D · VR · AI" />
 <meta property="og:description" content="Trường Dược, CNTT, Kinh tế, phổ thông với 2D · 3D · VR · XR · Metaverse, gia sư AI và Ban điều hành AI tự cải tiến theo góp ý người học." />
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Tizia" />
@@ -23,7 +23,7 @@
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Tizia — Vũ trụ giáo dục ảo 3D · VR · AI" />
+<meta name="twitter:title" content="Tizia, Vũ trụ giáo dục ảo 3D · VR · AI" />
 <meta name="twitter:description" content="Trường Dược, CNTT, Kinh tế, phổ thông với 2D · 3D · VR · XR · Metaverse · gia sư AI." />
 <meta name="twitter:image" content="https://tizia.vn/og-default.svg" />
 <script type="application/ld+json">
@@ -676,7 +676,7 @@ if (!window.isSecureContext && location.hostname !== 'localhost' && location.hos
     <!-- Cột trái: lời chào -->
     <div class="hero-left">
       <h1 class="greet" id="hero-greet">Chào mừng đến Tizia <span class="wave">👋</span></h1>
-      <p class="tagline">Vũ trụ giáo dục <b>do AI điều hành</b> — học liệu, môi trường thực hành và <b>tự cải tiến mỗi ngày</b>.</p>
+      <p class="tagline">Vũ trụ giáo dục <b>do AI điều hành</b>: học liệu, môi trường thực hành và <b>tự cải tiến mỗi ngày</b>.</p>
       <div class="cta-row">
         <a class="cta primary" id="hero-enter" href="#schools">Vào trường của bạn</a>
         <button class="cta ghost" id="hero-tutor-cta" type="button">Hỏi AI Tutor</button>
@@ -1113,7 +1113,7 @@ if (!window.isSecureContext && location.hostname !== 'localhost' && location.hos
 
     const openCount = DOMAIN_META.filter(d => d.status !== 'locked').length;
     const planLine = isGuest
-      ? `bạn đang ở chế độ khách — vào trường Mầm non, đăng nhập miễn phí để mở Tiểu học`
+      ? `bạn đang ở chế độ khách, vào trường Mầm non, đăng nhập miễn phí để mở Tiểu học`
       : (myPlan === 'pro'
           ? `chào ${(me.display_name || me.username || '')}, chúc một buổi học vui`
           : (myPlan === 'plus'
@@ -1154,7 +1154,7 @@ if (!window.isSecureContext && location.hostname !== 'localhost' && location.hos
       let cta, attrs, t = 'a';
       if (isComingSoon) {
         cta = '🔒 Sắp mở';
-        attrs = 'aria-disabled="true" title="Trường này đang được xây dựng — sắp mở"';
+        attrs = 'aria-disabled="true" title="Trường này đang được xây dựng, sắp mở"';
         t = 'div';
       } else if (needLogin) {
         cta = '🔐 Đăng nhập để vào';
@@ -1163,7 +1163,7 @@ if (!window.isSecureContext && location.hostname !== 'localhost' && location.hos
         // CTA trung tính — không gợi "phải trả tiền". Click vào sẽ tới trang
         // thông tin gói (bao gồm cả tuỳ chọn miễn phí + trả phí).
         cta = '🔒 Tạm chưa mở';
-        attrs = `href="pricing.html?want=${encodeURIComponent(required)}&domain=${encodeURIComponent(d.id)}" title="Trường ${d.name} chưa khả dụng với tài khoản hiện tại — xem điều kiện"`;
+        attrs = `href="pricing.html?want=${encodeURIComponent(required)}&domain=${encodeURIComponent(d.id)}" title="Trường ${d.name} chưa khả dụng với tài khoản hiện tại, xem điều kiện"`;
       } else {
         cta = '→ Vào trường';
         attrs = `href="school.html?domain=${encodeURIComponent(d.id)}"`;
@@ -1266,7 +1266,7 @@ if (!window.isSecureContext && location.hostname !== 'localhost' && location.hos
 </div>
 
 <footer>
-  <b>Tizia</b> — The Intelligent Zone for Interactive Academy
+  <b>Tizia</b>: The Intelligent Zone for Interactive Academy
   <span style="margin: 0 8px; opacity: 0.4;">·</span>
   <a href="#" data-pwa-install
      onclick="event.preventDefault(); window.tiziaInstallPWA && window.tiziaInstallPWA();"
@@ -1300,7 +1300,7 @@ if (me) {
       <span class="gb-icon">🧸</span>
       <div class="gb-text">
         <b>Bạn đang dùng thử ở chế độ khách.</b>
-        Vào được trường <b>Mầm non</b> — các trường khác cần đăng nhập để mở khoá.
+        Vào được trường <b>Mầm non</b>: các trường khác cần đăng nhập để mở khoá.
       </div>
       <a class="gb-cta" href="login.html?return=%2F">Đăng nhập</a>
       <a class="gb-alt" href="register.html">Tạo tài khoản</a>

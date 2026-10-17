@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>💻 Code Lab · Trường CNTT · Tizia</title>
-<meta name="description" content="Luyện lập trình Python/C++/Java trên NEU Codelab — chạy code thật trong sandbox, chấm tự động bằng test case." />
+<meta name="description" content="Luyện lập trình Python/C++/Java trên NEU Codelab, chạy code thật trong sandbox, chấm tự động bằng test case." />
 <style>
   :root { --bg-1:#0b1220; --bg-2:#0f1830; --accent:#38bdf8; --accent-2:#22c55e;
     --card:rgba(255,255,255,.05); --border:rgba(255,255,255,.12); --ok:#22c55e; --bad:#ef4444; }
@@ -71,7 +71,7 @@
 <div class="top">
   <a class="back" id="back" href="/school.html?domain=it#campus-hero">← Khuôn viên trường</a>
   <div>
-    <h1>💻 Code Lab <span class="sub">— Python · C++ · Java · NEU Online Judge</span></h1>
+    <h1>💻 Code Lab <span class="sub">: Python · C++ · Java · NEU Online Judge</span></h1>
   </div>
   <select id="langSel" style="margin-left:auto;background:rgba(255,255,255,.08);color:#fff;border:1px solid var(--border);border-radius:9px;padding:7px 10px;font-size:13px;"></select>
   <div class="prog" id="prog">0/0 bài</div>
@@ -133,7 +133,7 @@ const FALLBACK_CHALLENGES = [
     sol:'function isEven(n) {\n  return n % 2 === 0;\n}' },
 
   { id:'countVowels', cat:'Cơ bản', title:'Đếm nguyên âm', fnName:'countVowels',
-    desc:'Viết hàm <code>countVowels(s)</code> đếm số nguyên âm (a, e, i, o, u — không phân biệt hoa thường) trong chuỗi.',
+    desc:'Viết hàm <code>countVowels(s)</code> đếm số nguyên âm (a, e, i, o, u: không phân biệt hoa thường) trong chuỗi.',
     starter:'function countVowels(s) {\n  \n}',
     tests:[{args:['hello'],expected:2},{args:['Tizia'],expected:4},{args:['xyz'],expected:0},{args:['AEIOU'],expected:5}],
     sol:'function countVowels(s) {\n  return (s.match(/[aeiou]/gi) || []).length;\n}' },
@@ -375,7 +375,7 @@ function bootOfflineMode(){
   CHALLENGES = FALLBACK_CHALLENGES;
   SOLVED = loadLocalSolved();
   $('langSel').style.display = 'none';
-  document.querySelector('.top h1 .sub').textContent = '— chế độ offline (Codelab chưa cấu hình)';
+  document.querySelector('.top h1 .sub').textContent = 'chế độ offline (Codelab chưa cấu hình)';
   $('submitBtn').style.display = 'none'; // offline không nộp được
   renderList();
   if (CHALLENGES.length) selectChallenge(CHALLENGES[0].id);
@@ -391,7 +391,7 @@ function renderLangSelect(){
     // Bài hiện tại không hỗ trợ ngôn ngữ mới → unselect.
     if (CURRENT && CURRENT.langIds?.length && !CURRENT.langIds.includes(CURRENT_LANG.id)) {
       CURRENT = null;
-      $('prob').innerHTML = '<p style="opacity:.55;padding:6px 4px">Chọn 1 bài ở danh sách bên trái — danh sách đã lọc theo ngôn ngữ vừa chọn.</p>';
+      $('prob').innerHTML = '<p style="opacity:.55;padding:6px 4px">Chọn 1 bài ở danh sách bên trái, danh sách đã lọc theo ngôn ngữ vừa chọn.</p>';
       $('code').value = '';
       $('results').classList.remove('show');
     } else if (CURRENT) {
@@ -582,7 +582,7 @@ async function submitOnce(){
     // 5 lần × 1.5s cho đến khi status cuối.
     const subId = data?.id || data?.submissionId;
     if (!subId) throw new Error('Codelab không trả submission ID');
-    showToast('Đã nộp — đang chấm…');
+    showToast('Đã nộp: đang chấm…');
     let final = null;
     for (let i = 0; i < 10; i++) {
       await new Promise(r => setTimeout(r, 1500));
@@ -625,7 +625,7 @@ function renderRunResult(data, sample){
   const head = passed
     ? `<div class="res-head pass">✅ Khớp ví dụ mẫu (${esc(statusName)})</div>`
     : sample
-      ? `<div class="res-head fail">⚠️ ${esc(statusName)} — chưa khớp ví dụ mẫu</div>`
+      ? `<div class="res-head fail">⚠️ ${esc(statusName)}: chưa khớp ví dụ mẫu</div>`
       : `<div class="res-head">▶ ${esc(statusName)}</div>`;
   box.innerHTML = head +
     (sample ? `<div class="case ${passed?'pass':'fail'}"><div class="mark">${passed?'✓':'✗'}</div>
@@ -646,7 +646,7 @@ function renderSubmitResult(sub){
   const accepted = status === 'accepted';
   const head = accepted
     ? `<div class="res-head pass">✅ Vượt tất cả ${passed}/${total} test! (Codelab Accepted)</div>`
-    : `<div class="res-head fail">⚠️ ${esc(sub.status || 'Failed')} — ${passed}/${total} test</div>`;
+    : `<div class="res-head fail">⚠️ ${esc(sub.status || 'Failed')}: ${passed}/${total} test</div>`;
   box.innerHTML = head + (sub.message ? `<div class="console show"><div class="ttl">message</div>${esc(sub.message)}</div>` : '');
 
   if (accepted && !SOLVED.has(CURRENT.id)) {
@@ -729,7 +729,7 @@ $('resetBtn').addEventListener('click', () => {
 $('solBtn').addEventListener('click', async () => {
   if (!CURRENT) return;
   if (MODE === 'offline') {
-    if ($('hint').dataset.shown === CURRENT.id) { $('code').value = CURRENT.sol; $('hint').textContent='Đã chèn lời giải mẫu — đọc hiểu rồi tự viết lại.'; }
+    if ($('hint').dataset.shown === CURRENT.id) { $('code').value = CURRENT.sol; $('hint').textContent='Đã chèn lời giải mẫu, đọc hiểu rồi tự viết lại.'; }
     else { $('hint').dataset.shown = CURRENT.id; $('hint').textContent='Bấm lần nữa để chèn lời giải mẫu.'; }
     return;
   }

@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>🎨 Quest Marketplace · Tizia</title>
-<meta name="description" content="Khám phá quest do GV và HS tự tạo — chơi, like, hoặc tự làm quest mới. Creator được trả coin từ player." />
+<meta name="description" content="Khám phá quest do GV và HS tự tạo, chơi, like, hoặc tự làm quest mới. Creator được trả coin từ player." />
 <link rel="icon" href="/favicon.ico" />
 <style>
   :root {
@@ -171,7 +171,7 @@ async function load() {
     grid.innerHTML = data.items.map(q => `
       <div class="quest-card" data-id="${q.id}">
         <div class="title">${esc(q.title)}</div>
-        <div class="desc">${esc(q.description || '— không có mô tả —')}</div>
+        <div class="desc">${esc(q.description || 'không có mô tả')}</div>
         <div class="tags">
           ${q.subject_tag ? `<span class="tag">${esc(q.subject_tag)}</span>` : ''}
           ${q.grade_tag ? `<span class="tag">Lớp ${esc(q.grade_tag)}</span>` : ''}
@@ -284,7 +284,7 @@ function renderResult() {
       <p style="color:var(--text-soft)">Em đúng ${r.correct}/${r.total} câu</p>
       ${(r.reward.coin > 0 || r.reward.xp > 0)
         ? `<div class="reward">+${r.reward.coin} 🪙 · +${r.reward.xp} ✨</div>`
-        : `<p style="color:var(--text-soft)">Đạt < 50% — không có thưởng. Thử lại nhé!</p>`}
+        : `<p style="color:var(--text-soft)">Đạt < 50%, không có thưởng. Thử lại nhé!</p>`}
       <div class="actions" style="justify-content:center">
         <button class="submit" data-like>❤ Thích quest</button>
         <button class="close" data-close>Đóng</button>

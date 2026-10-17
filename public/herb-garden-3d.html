@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Vườn dược liệu 3D — Tizia</title>
+<title>Vườn dược liệu 3D | Tizia</title>
 <style>
   :root { --accent:#5bbd7c; --ok:#10b981; --err:#ef4444; }
   * { box-sizing:border-box; }
@@ -49,9 +49,9 @@
 <div class="info" id="info">
   <span class="x" id="info-x">✕</span>
   <div class="ic" id="info-ic">🌿</div>
-  <h3 id="info-name">—</h3>
-  <div class="kv">🌱 Bộ phận dùng: <b id="info-part">—</b></div>
-  <div class="kv">💊 Công dụng: <b id="info-use">—</b></div>
+  <h3 id="info-name">-</h3>
+  <div class="kv">🌱 Bộ phận dùng: <b id="info-part">-</b></div>
+  <div class="kv">💊 Công dụng: <b id="info-use">-</b></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -230,7 +230,7 @@ function startQuest(){
 function stopQuest(){ quest.active=false; questEl.classList.remove('show'); document.getElementById('quest-btn').textContent='🎯 Đố vui'; }
 function askQuest(){
   const h = HERB_BY_ID[quest.queue[quest.idx]];
-  questEl.innerHTML = `Câu ${quest.idx+1}/6 · Tìm cây dùng <b>${h.part.toLowerCase()}</b> để <b>${h.use.toLowerCase()}</b> — bấm vào cây đó!`;
+  questEl.innerHTML = `Câu ${quest.idx+1}/6 · Tìm cây dùng <b>${h.part.toLowerCase()}</b> để <b>${h.use.toLowerCase()}</b>: bấm vào cây đó!`;
   document.getElementById('score').textContent = quest.score;
 }
 function checkQuest(id){
@@ -240,7 +240,7 @@ function checkQuest(id){
     if (quest.idx >= quest.queue.length){ questEl.innerHTML = `🏆 Hoàn thành! Đúng <b>${quest.score}/6</b> cây.`; quest.active=false;
       document.getElementById('quest-btn').textContent='↺ Chơi lại'; }
     else setTimeout(askQuest, 700);
-  } else { toast('✗ Chưa đúng — đọc lại bộ phận dùng & công dụng nhé'); }
+  } else { toast('✗ Chưa đúng: đọc lại bộ phận dùng & công dụng nhé'); }
 }
 document.getElementById('quest-btn').addEventListener('click', () => { if (quest.active) stopQuest(); else startQuest(); });
 

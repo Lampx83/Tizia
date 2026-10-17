@@ -285,7 +285,7 @@
   </div>
 
   <div id="timeline">
-    <div class="empty">Chưa có y lệnh nào — bắt đầu xử trí…</div>
+    <div class="empty">Chưa có y lệnh nào, bắt đầu xử trí…</div>
   </div>
 </div>
 
@@ -704,7 +704,7 @@ function drawScreen() {
     c.fillRect(0, 295, 480, 25);
     c.fillStyle = '#fff';
     c.font = 'bold 14px monospace';
-    c.fillText('!! ANAPHYLAXIS — STAGE III !!', 130, 313);
+    c.fillText('!! ANAPHYLAXIS: STAGE III !!', 130, 313);
   }
 
   screenTex.needsUpdate = true;
@@ -1005,7 +1005,7 @@ const actionMap = {
   'adr-im': {
     quality: 'gold', // first-line, correct
     title: 'Adrenalin 0.5 mg IM mặt trước–ngoài đùi (1:1000)',
-    feedback: 'Đúng — first-line. 0.5 mg (0.5 mL dd 1 mg/mL) IM đùi giữa cho người lớn ≥50 kg. Tác dụng <5 phút.',
+    feedback: 'Đúng: first-line. 0.5 mg (0.5 mL dd 1 mg/mL) IM đùi giữa cho người lớn ≥50 kg. Tác dụng <5 phút.',
     ref: 'BYT Quyết định 51/2017 · Resuscitation Council UK 2021 · ASCIA',
     cls: 'ok',
     apply: () => { vitals.target.sbp = 105; vitals.target.dbp = 68; vitals.target.spo2 = 93; vitals.target.hr = 110; vitals.target.rr = 22; },
@@ -1015,8 +1015,8 @@ const actionMap = {
   'adr-iv': {
     quality: 'danger',
     title: 'Adrenalin IV bolus (KHÔNG đúng ở bước đầu)',
-    feedback: '❌ KHÔNG — Adrenalin IV bolus chỉ dùng khi đã ngừng tim hoặc trong tay BS hồi sức có monitor liên tục. Nguy cơ loạn nhịp thất, NMCT, XHN. First-line vẫn là IM đùi.',
-    ref: 'BYT 51/2017 · WAO 2020 — IM is first-line',
+    feedback: '❌ KHÔNG: Adrenalin IV bolus chỉ dùng khi đã ngừng tim hoặc trong tay BS hồi sức có monitor liên tục. Nguy cơ loạn nhịp thất, NMCT, XHN. First-line vẫn là IM đùi.',
+    ref: 'BYT 51/2017 · WAO 2020: IM is first-line',
     cls: 'bad',
     apply: () => { vitals.target.hr = 160; vitals.target.sbp = Math.max(70, vitals.target.sbp - 5); }, // tachy/risk
     key: 'adrIV',
@@ -1025,7 +1025,7 @@ const actionMap = {
   'o2': {
     quality: 'gold',
     title: 'Thở O₂ mặt nạ 10 L/phút',
-    feedback: 'Đúng — O₂ lưu lượng cao (mặt nạ không hít lại 10–15 L/phút) cho mọi BN phản vệ có giảm SpO₂.',
+    feedback: 'Đúng: O₂ lưu lượng cao (mặt nạ không hít lại 10–15 L/phút) cho mọi BN phản vệ có giảm SpO₂.',
     ref: 'BYT 51/2017 Mục 5 · ASCIA',
     cls: 'ok',
     apply: () => { vitals.target.spo2 = Math.max(vitals.target.spo2, 96); vitals.target.rr = Math.min(vitals.target.rr, 20); },
@@ -1035,7 +1035,7 @@ const actionMap = {
   'fluid': {
     quality: 'gold',
     title: 'Truyền NaCl 0.9% 500 mL nhanh (bolus)',
-    feedback: 'Đúng — truyền nhanh 500–1000 mL NaCl 0.9% (10–20 mL/kg) cho tụt HA do giãn mạch + thoát mạch. Có thể lặp.',
+    feedback: 'Đúng: truyền nhanh 500–1000 mL NaCl 0.9% (10–20 mL/kg) cho tụt HA do giãn mạch + thoát mạch. Có thể lặp.',
     ref: 'BYT 51/2017 Mục 6 · RC UK 2021',
     cls: 'ok',
     apply: () => { vitals.target.sbp = Math.max(vitals.target.sbp, 110); vitals.target.dbp = Math.max(vitals.target.dbp, 70); vitals.target.hr = Math.min(vitals.target.hr, 100); },
@@ -1045,7 +1045,7 @@ const actionMap = {
   'diphen': {
     quality: 'secondary',
     title: 'Diphenhydramin 50 mg IM (thuốc HỖ TRỢ)',
-    feedback: '⚠️ Chỉ là thuốc thứ phát — KHÔNG cứu sống, không thay thế Adrenalin. Chỉ dùng SAU khi đã tiêm Adrenalin để giảm ngứa & mề đay.',
+    feedback: '⚠️ Chỉ là thuốc thứ phát, KHÔNG cứu sống, không thay thế Adrenalin. Chỉ dùng SAU khi đã tiêm Adrenalin để giảm ngứa & mề đay.',
     ref: 'AAAAI/ACAAI 2020 Joint Task Force',
     cls: 'warn',
     apply: () => { /* no vital change */ },
@@ -1075,7 +1075,7 @@ const actionMap = {
   'repeat': {
     quality: 'gold',
     title: 'Lặp Adrenalin 0.5 mg IM sau 5 phút',
-    feedback: 'Đúng — nếu sau 5–15 phút BN chưa đáp ứng (HA vẫn thấp, vẫn khó thở) → lặp lại liều IM ở chân đối bên. Có thể lặp ≥3 liều rồi cân nhắc infusion.',
+    feedback: 'Đúng: nếu sau 5–15 phút BN chưa đáp ứng (HA vẫn thấp, vẫn khó thở) → lặp lại liều IM ở chân đối bên. Có thể lặp ≥3 liều rồi cân nhắc infusion.',
     ref: 'BYT 51/2017 Mục 4 · RC UK 2021',
     cls: 'ok',
     apply: () => { vitals.target.sbp = Math.max(vitals.target.sbp, 118); vitals.target.dbp = Math.max(vitals.target.dbp, 78); vitals.target.hr = Math.min(vitals.target.hr, 92); vitals.target.spo2 = Math.max(vitals.target.spo2, 97); },
@@ -1118,7 +1118,7 @@ function logDecision(actId) {
 
 function renderTimeline() {
   if (decisions.length === 0) {
-    elTimeline.innerHTML = '<div class="empty">Chưa có y lệnh nào — bắt đầu xử trí…</div>';
+    elTimeline.innerHTML = '<div class="empty">Chưa có y lệnh nào, bắt đầu xử trí…</div>';
     return;
   }
   elTimeline.innerHTML = decisions.map(d => `
@@ -1208,7 +1208,7 @@ function scoreCase() {
 
   // Critical correct actions
   if (done.adrIM) { score += 45; breakdown.push({ k: 'Adrenalin 0.5 mg IM (first-line)', s: '+45', ok: true }); }
-  else            { breakdown.push({ k: 'Adrenalin 0.5 mg IM (first-line)', s: 'BỎ SÓT — bệnh nhân tử vong nguy cơ cao', ok: false }); }
+  else            { breakdown.push({ k: 'Adrenalin 0.5 mg IM (first-line)', s: 'BỎ SÓT: bệnh nhân tử vong nguy cơ cao', ok: false }); }
 
   if (done.o2)    { score += 12; breakdown.push({ k: 'O₂ mặt nạ 10 L/phút', s: '+12', ok: true }); }
   else            { breakdown.push({ k: 'O₂ mặt nạ', s: 'thiếu', ok: false }); }
@@ -1246,7 +1246,7 @@ async function submitResult() {
   document.getElementById('r-score').textContent = `${score}/100`;
   document.getElementById('result-card').classList.toggle('poor', score < 60);
   document.getElementById('r-title').textContent = score >= 90 ? '🏆 Xử trí xuất sắc'
-    : score >= 70 ? '👍 Xử trí đạt yêu cầu' : score >= 50 ? '⚠️ Có sai sót — cần xem lại' : '❌ Sai phác đồ nghiêm trọng';
+    : score >= 70 ? '👍 Xử trí đạt yêu cầu' : score >= 50 ? '⚠️ Có sai sót, cần xem lại' : '❌ Sai phác đồ nghiêm trọng';
 
   document.getElementById('r-rows').innerHTML = breakdown.map(b =>
     `<div class="row ${b.ok ? 'true' : 'bad'}"><span>${b.k}</span><b>${b.s}</b></div>`
@@ -1254,9 +1254,9 @@ async function submitResult() {
 
   document.getElementById('r-refs').innerHTML = `
     <b>📚 Tham khảo</b>
-    • Bộ Y Tế VN — Thông tư 51/2017/TT-BYT: Hướng dẫn phòng & xử trí phản vệ.<br>
-    • Resuscitation Council UK — Emergency Treatment of Anaphylaxis (2021 update).<br>
-    • ASCIA (Úc) — Acute Management of Anaphylaxis Guidelines (2023).<br>
+    • Bộ Y Tế VN, Thông tư 51/2017/TT-BYT: Hướng dẫn phòng & xử trí phản vệ.<br>
+    • Resuscitation Council UK, Emergency Treatment of Anaphylaxis (2021 update).<br>
+    • ASCIA (Úc): Acute Management of Anaphylaxis Guidelines (2023).<br>
     • WAO Anaphylaxis Guidance 2020.
   `;
   document.getElementById('result-modal').classList.add('open');
@@ -1331,7 +1331,7 @@ requestAnimationFrame(render3D);
 elAlarm.classList.add('on');
 
 // Initial hint
-setTimeout(() => showToast('🚨 BN sốc phản vệ — hãy ra y lệnh ngay!', 'err'), 600);
+setTimeout(() => showToast('🚨 BN sốc phản vệ, hãy ra y lệnh ngay!', 'err'), 600);
 
 // Debug hook
 window.__ps01 = { vitals, done, decisions, actionMap };

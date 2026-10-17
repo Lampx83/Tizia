@@ -72,7 +72,7 @@
 <body>
 <div class="top">
   <a class="back" id="back" href="/school.html?domain=it#campus-hero">← Khuôn viên trường</a>
-  <div><h1>🛡️ CTF Bảo mật Web <span class="sub">— SQLi · XSS · Path Traversal · Command Injection</span></h1></div>
+  <div><h1>🛡️ CTF Bảo mật Web <span class="sub">: SQLi · XSS · Path Traversal · Command Injection</span></h1></div>
   <div class="prog" id="prog">0/4 cờ</div>
 </div>
 
@@ -80,10 +80,10 @@
   <div class="card intro">
     <h2>Mục tiêu</h2>
     <p>Đây là môi trường <b>sandbox an toàn</b> mô phỏng 4 lỗ hổng bảo mật web phổ biến nhất theo OWASP Top 10.
-       Bạn sẽ đóng vai pentester (kẻ tấn công đạo đức) — tìm input để khai thác lỗ hổng, hiểu cách lỗ hổng phát sinh,
+       Bạn sẽ đóng vai pentester (kẻ tấn công đạo đức): tìm input để khai thác lỗ hổng, hiểu cách lỗ hổng phát sinh,
        và đọc bài học để biết cách <b>phòng thủ</b> ở đời thật.</p>
     <p>Mỗi thử thách hiện code dễ tổn thương → bạn nhập payload → hệ thống đánh giá cục bộ. Không có server thật bị tấn công.</p>
-    <div class="warn">⚠️ Kiến thức này chỉ dùng để <b>bảo vệ</b>. Việc tấn công hệ thống không được phép là <b>vi phạm pháp luật</b> (Bộ luật Hình sự 2015 — Điều 287, 289).</div>
+    <div class="warn">⚠️ Kiến thức này chỉ dùng để <b>bảo vệ</b>. Việc tấn công hệ thống không được phép là <b>vi phạm pháp luật</b> (Bộ luật Hình sự 2015, Điều 287, 289).</div>
   </div>
 
   <!-- CH1: SQL INJECTION -->
@@ -94,11 +94,11 @@
       <span class="caret">▶</span>
     </div>
     <div class="ch-body">
-      <p class="scen">Hệ thống cũ ghép chuỗi SQL trực tiếp từ form đăng nhập — không hề parameter hoá:</p>
+      <p class="scen">Hệ thống cũ ghép chuỗi SQL trực tiếp từ form đăng nhập, không hề parameter hoá:</p>
       <div class="code"><span class="c">// Backend (PHP/Node giả lập)</span>
 <span class="k">const</span> sql = <span class="s">`SELECT * FROM users WHERE name='${u}' AND pass='${p}'`</span>;
 <span class="k">if</span> (db.query(sql).rows.length) login();</div>
-      <p class="scen">Có 1 tài khoản tên <code style="color:#fbbf24">admin</code> trong CSDL. Bạn <b>không biết mật khẩu</b> —
+      <p class="scen">Có 1 tài khoản tên <code style="color:#fbbf24">admin</code> trong CSDL. Bạn <b>không biết mật khẩu</b>, 
         hãy nhập payload vào ô <i>Tên</i> sao cho query trả về ≥1 row (đăng nhập thành công) bất kể mật khẩu là gì.</p>
       <label class="lbl">Tên đăng nhập (payload SQLi):</label>
       <input class="ipt" id="ch1-u" placeholder="admin' OR ..." autocomplete="off"/>
@@ -111,14 +111,14 @@
       <div class="fb" id="ch1-fb"></div>
       <div class="hint" id="ch1-hint" hidden>
         💡 Bạn cần thoát khỏi dấu nháy đơn rồi nối điều kiện luôn đúng. Thử: <b>admin' OR '1'='1</b>
-        — phần sau dấu <code>--</code> hoặc tương đương sẽ biến mật khẩu thành vô nghĩa.
+phần sau dấu <code>--</code> hoặc tương đương sẽ biến mật khẩu thành vô nghĩa.
       </div>
       <details class="lesson"><summary>📚 Bài học phòng thủ</summary>
-        <p>• <b>Parameter hoá / Prepared statements</b> — không bao giờ ghép chuỗi vào câu SQL.
+        <p>• <b>Parameter hoá / Prepared statements</b>: không bao giờ ghép chuỗi vào câu SQL.
           Dùng <code>db.query('SELECT * FROM users WHERE name=? AND pass=?', [u, p])</code>.
           ORM (Prisma, Sequelize, Drizzle) tự làm việc này.<br>
-          • <b>Hash mật khẩu</b> với bcrypt/scrypt/argon2 — không lưu plain text.<br>
-          • <b>Least privilege</b> — user DB chỉ có quyền cần thiết.<br>
+          • <b>Hash mật khẩu</b> với bcrypt/scrypt/argon2: không lưu plain text.<br>
+          • <b>Least privilege</b>: user DB chỉ có quyền cần thiết.<br>
           • <b>WAF + rate limit</b> chặn brute-force/automated payloads.</p>
       </details>
     </div>
@@ -128,14 +128,14 @@
   <div class="ch" id="ch2">
     <div class="ch-head" data-toggle="ch2">
       <span class="num">2</span>
-      <span class="ttl">Reflected XSS — chiếm DOM <span class="tag">XSS</span></span>
+      <span class="ttl">Reflected XSS: chiếm DOM <span class="tag">XSS</span></span>
       <span class="caret">▶</span>
     </div>
     <div class="ch-body">
       <p class="scen">Trang tìm kiếm render thẳng query vào HTML:</p>
       <div class="code"><span class="c">// Trang /search?q=...</span>
 results.innerHTML = <span class="s">`Bạn tìm: <b>${req.query.q}</b>`</span>;</div>
-      <p class="scen">Hãy nhập payload sao cho code JavaScript <b>tự thi hành</b> trên trang —
+      <p class="scen">Hãy nhập payload sao cho code JavaScript <b>tự thi hành</b> trên trang: 
         cụ thể: gán <code style="color:#fbbf24">window.__pwn = 1</code> để chứng minh control flow.</p>
       <label class="lbl">Query string (payload XSS):</label>
       <input class="ipt" id="ch2-q" placeholder='<img src=x onerror="...">' autocomplete="off"/>
@@ -149,11 +149,11 @@ results.innerHTML = <span class="s">`Bạn tìm: <b>${req.query.q}</b>`</span>;<
         (trình duyệt cố tình chặn). Thử event handler trên thẻ hợp lệ: <b>&lt;img src=x onerror="window.__pwn=1"&gt;</b>
       </div>
       <details class="lesson"><summary>📚 Bài học phòng thủ</summary>
-        <p>• <b>Output encoding</b> — luôn escape <code>&lt; &gt; " ' &amp;</code> khi đưa user input vào HTML.
+        <p>• <b>Output encoding</b>: luôn escape <code>&lt; &gt; " ' &amp;</code> khi đưa user input vào HTML.
           Template engine (EJS, Handlebars, JSX) tự escape <code>{{var}}</code>; CHỈ dùng raw <code>{{{var}}}</code> khi
           đã sanitize.<br>
-          • <b>Content Security Policy (CSP)</b> — header <code>script-src 'self'</code> chặn inline script.<br>
-          • <b>HttpOnly cookies</b> — JS không đọc được session cookie nếu attacker chiếm được DOM.<br>
+          • <b>Content Security Policy (CSP)</b>: header <code>script-src 'self'</code> chặn inline script.<br>
+          • <b>HttpOnly cookies</b>: JS không đọc được session cookie nếu attacker chiếm được DOM.<br>
           • <b>Sanitize HTML</b> bằng DOMPurify khi BUỘC phải render HTML do user soạn.</p>
       </details>
     </div>
@@ -163,7 +163,7 @@ results.innerHTML = <span class="s">`Bạn tìm: <b>${req.query.q}</b>`</span>;<
   <div class="ch" id="ch3">
     <div class="ch-head" data-toggle="ch3">
       <span class="num">3</span>
-      <span class="ttl">Path Traversal — đọc file bí mật <span class="tag">LFI</span></span>
+      <span class="ttl">Path Traversal: đọc file bí mật <span class="tag">LFI</span></span>
       <span class="caret">▶</span>
     </div>
     <div class="ch-body">
@@ -188,7 +188,7 @@ res.sendFile(path.resolve(p));</div>
         <p>• <b>Whitelist tên file</b> hoặc map id → tên (vd <code>/download?id=42</code> tra DB).<br>
           • <b>Normalize + validate</b>: <code>path.resolve(p).startsWith(SAFE_DIR)</code> để chặn ra ngoài.<br>
           • <b>Block các pattern</b>: <code>..</code>, <code>%2e%2e</code>, byte null.<br>
-          • <b>Chroot / container</b> — process không có quyền đọc <code>/etc</code> ngay từ đầu.</p>
+          • <b>Chroot / container</b>: process không có quyền đọc <code>/etc</code> ngay từ đầu.</p>
       </details>
     </div>
   </div>
@@ -197,7 +197,7 @@ res.sendFile(path.resolve(p));</div>
   <div class="ch" id="ch4">
     <div class="ch-head" data-toggle="ch4">
       <span class="num">4</span>
-      <span class="ttl">Command Injection — thoát khỏi tham số <span class="tag">RCE</span></span>
+      <span class="ttl">Command Injection: thoát khỏi tham số <span class="tag">RCE</span></span>
       <span class="caret">▶</span>
     </div>
     <div class="ch-body">
@@ -218,7 +218,7 @@ exec(<span class="s">`ping -c 2 ${req.query.ip}`</span>, callback);</div>
         <code>|</code> (pipe), <code>$(...)</code> (command substitution). Thử: <b>8.8.8.8 ; whoami</b>
       </div>
       <details class="lesson"><summary>📚 Bài học phòng thủ</summary>
-        <p>• <b>KHÔNG dùng shell</b> khi không cần — dùng <code>execFile('ping', ['-c', '2', ip])</code>
+        <p>• <b>KHÔNG dùng shell</b> khi không cần: dùng <code>execFile('ping', ['-c', '2', ip])</code>
           (Node) hoặc thư viện chuyên dụng. Tham số không qua shell parsing.<br>
           • <b>Validate strict</b>: chỉ cho phép IPv4 hợp lệ với regex/parser, từ chối mọi ký tự khác.<br>
           • <b>Least privilege</b> + <b>seccomp/AppArmor</b> giới hạn syscall process được phép.<br>
@@ -231,7 +231,7 @@ exec(<span class="s">`ping -c 2 ${req.query.ip}`</span>, callback);</div>
     <h2 style="margin:0 0 8px; color:#86efac;">🏆 Đã chiếm cả 4 cờ!</h2>
     <p style="font-size:13.5px; line-height:1.6; opacity:.88; margin:6px 0;">Bạn đã hiểu cách phát sinh và cách phòng thủ
       4 lỗ hổng bảo mật web phổ biến nhất. Hãy ghi nhớ một câu duy nhất:
-      <b style="color:#fbbf24">Không bao giờ tin user input — luôn validate/parameterize/escape.</b></p>
+      <b style="color:#fbbf24">Không bao giờ tin user input, luôn validate/parameterize/escape.</b></p>
     <p style="font-size:12.5px; opacity:.72; margin-top:9px;">Hành trang tiếp theo: tìm hiểu OWASP Top 10 đầy đủ
       (CSRF, SSRF, IDOR, deserialization…), thử nền tảng học thật như PortSwigger Web Security Academy.</p>
   </div>
@@ -324,14 +324,14 @@ const CHECKERS = {
       window.removeEventListener('message', onMsg);
       iframe.remove();
       if (e.data.pwn) markSolved('ch2', 'JS của bạn đã được thi hành trong DOM nạn nhân.');
-      else fb('ch2-fb', false, '✗ Payload chưa thi hành. Nhớ rằng &lt;script&gt; gán qua innerHTML KHÔNG chạy — dùng event handler trên thẻ hợp lệ.');
+      else fb('ch2-fb', false, '✗ Payload chưa thi hành. Nhớ rằng &lt;script&gt; gán qua innerHTML KHÔNG chạy, dùng event handler trên thẻ hợp lệ.');
     };
     window.addEventListener('message', onMsg);
     setTimeout(() => {
       if (!done) {
         window.removeEventListener('message', onMsg);
         if (iframe.parentNode) iframe.remove();
-        fb('ch2-fb', false, '✗ Hết giờ chờ — payload có thể đã gây lỗi parse. Thử lại với event handler trên thẻ hợp lệ.');
+        fb('ch2-fb', false, '✗ Hết giờ chờ, payload có thể đã gây lỗi parse. Thử lại với event handler trên thẻ hợp lệ.');
       }
     }, 1200);
   },
@@ -350,7 +350,7 @@ const CHECKERS = {
     if (/^\/etc\/passwd$/.test(resolved) || /^\/etc\/shadow$/.test(resolved)) {
       markSolved('ch3', `Đã thoát ra ngoài <code>./public/uploads/</code>. Đường dẫn thực: <code style="color:#fde68a">${resolved}</code>`);
     } else {
-      fb('ch3-fb', false, `✗ Đường dẫn quy ra: <code>${resolved}</code> — chưa đến /etc/passwd. Tính lại số <code>../</code>.`);
+      fb('ch3-fb', false, `✗ Đường dẫn quy ra: <code>${resolved}</code>, chưa đến /etc/passwd. Tính lại số <code>../</code>.`);
     }
   },
   // Command injection: chuỗi ip phải có separator + chứa whoami
@@ -361,7 +361,7 @@ const CHECKERS = {
     const hasInjection = /[;&|`$]|\$\(/.test(ip);
     const runsWhoami = /\bwhoami\b/.test(ip);
     if (hasInjection && runsWhoami) {
-      markSolved('ch4', `Shell sẽ chạy: <code>ping -c 2 ${ip}</code> — phần sau separator được exec riêng.`);
+      markSolved('ch4', `Shell sẽ chạy: <code>ping -c 2 ${ip}</code>, phần sau separator được exec riêng.`);
     } else if (runsWhoami && !hasInjection) {
       fb('ch4-fb', false, '✗ Có whoami rồi, nhưng shell sẽ coi cả chuỗi là 1 hostname. Cần KÝ TỰ NỐI LỆNH (; hoặc &&).');
     } else if (hasInjection && !runsWhoami) {

@@ -37,7 +37,7 @@ export async function renderRequestBoard({ host, domain, domainName }) {
         <div class="rb-icon">${boardIcon('board')}</div>
         <div>
           <h3 class="rb-title">Ban điều hành AI · ${escapeHtml(domainName)}</h3>
-          <p class="rb-sub">Trường do <b>AI điều hành</b> — cung cấp học liệu, môi trường học tập và
+          <p class="rb-sub">Trường do <b>AI điều hành</b>: cung cấp học liệu, môi trường học tập và
              <b>liên tục tự cải tiến</b> theo yêu cầu của bạn. Đề xuất thêm trò chơi, học liệu lý thuyết,
              cải thiện phòng thí nghiệm… Hiệu trưởng AI sẽ phản hồi & đưa vào hàng đợi nâng cấp.</p>
         </div>

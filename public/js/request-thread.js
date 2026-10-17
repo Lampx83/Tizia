@@ -112,7 +112,7 @@ export async function renderRequestThread({ host, requestId, me = '', onChange }
     <section data-private-preview class="private-preview" aria-label="Bản xem riêng của yêu cầu"></section>
     ${isOwner ? `
       <form class="rt-composer" id="rt-form-${requestId}">
-        ${closed ? `<div class="rt-reopen-note">Yêu cầu đã đóng — gửi thêm sẽ <b>mở lại</b> để Ban điều hành xem tiếp.</div>` : ''}
+        ${closed ? `<div class="rt-reopen-note">Yêu cầu đã đóng, gửi thêm sẽ <b>mở lại</b> để Ban điều hành xem tiếp.</div>` : ''}
         <textarea class="rt-input" id="rt-in-${requestId}" rows="2" maxlength="10000"
           aria-label="Nội dung trao đổi với Ban điều hành AI" aria-describedby="rt-msg-${requestId}"
           placeholder="Trao đổi tiếp với Ban điều hành AI… (Enter để gửi, Shift+Enter xuống dòng)"></textarea>
@@ -161,7 +161,7 @@ export async function renderRequestThread({ host, requestId, me = '', onChange }
       await renderRequestThread({ host, requestId, me, onChange });
       if (typeof onChange === 'function') onChange();
     } catch {
-      msgEl.textContent = 'Lỗi mạng — thử lại sau.';
+      msgEl.textContent = 'Lỗi mạng: thử lại sau.';
       sendBtn.disabled = false;
     }
   }

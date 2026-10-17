@@ -13,22 +13,22 @@
 const PAGES = {
   codelab: {
     mode: '2d', icon: '💻', label: 'Codelab', tech: 'Online Judge · Judge0', url: 'apps.html?app=codelab',
-    desc: 'Mở Codelab — chạy & chấm code thật trong sandbox, test case tự động.',
+    desc: 'Mở Codelab: chạy & chấm code thật trong sandbox, test case tự động.',
     specs: ['ok:Chấm code thật', 'Nhiều ngôn ngữ', 'Cuộc thi', 'bad:Cần Codelab chạy'],
   },
   scoreup: {
     mode: 'quiz', icon: '📝', label: 'ScoreUp', tech: 'Trắc nghiệm · Ngân hàng câu hỏi', url: 'apps.html?app=scoreup',
-    desc: 'Mở ScoreUp — luyện & thi trắc nghiệm với câu hỏi thật, chấm điểm tức thì.',
+    desc: 'Mở ScoreUp: luyện & thi trắc nghiệm với câu hỏi thật, chấm điểm tức thì.',
     specs: ['ok:Câu hỏi thật', 'Đề thi', 'Gợi ý AI', 'bad:Cần ScoreUp chạy'],
   },
   smartdoc: {
     mode: 'meta', icon: '📚', label: 'Smartdoc', tech: 'Giáo trình tương tác', url: 'apps.html?app=smartdoc',
-    desc: 'Mở Smartdoc — giáo trình & bài giảng web tương tác, phòng học trực tiếp.',
+    desc: 'Mở Smartdoc: giáo trình & bài giảng web tương tác, phòng học trực tiếp.',
     specs: ['ok:Word → web', 'Sách điện tử', 'Phòng học', 'bad:Cần Smartdoc chạy'],
   },
   feedback: {
     mode: 'native', icon: '🎯', label: 'FeedBackMe', tech: 'LMS · Exam · AI feedback', url: 'apps.html?app=feedback',
-    desc: 'Mở FeedBackMe — exam có giám thị + phản hồi AI theo lỗi sai và kỹ năng.',
+    desc: 'Mở FeedBackMe: exam có giám thị + phản hồi AI theo lỗi sai và kỹ năng.',
     specs: ['ok:Exam giám thị', 'AI feedback', 'Gamification', 'bad:Cần FeedBackMe chạy'],
   },
 };

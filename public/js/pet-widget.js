@@ -17,7 +17,7 @@ const CSS = `
   }
   .tz-pet-bubble:hover { transform: scale(1.08); box-shadow: 0 14px 36px rgba(0,0,0,0.5); }
   .tz-pet-bubble[hidden] { display: none !important; }
-  /* Inline trong header (auth-header có #ev-pet-slot) — bubble nhỏ gọn,
+  /* Inline trong header (auth-header có #ev-pet-slot), bubble nhỏ gọn,
      bỏ floating + animation idle để không nhảy trong header. */
   #ev-pet-slot .tz-pet-bubble {
     position: static; left: auto; top: auto; bottom: auto;
@@ -46,7 +46,7 @@ const CSS = `
     border: 2px solid #0f172a;
     white-space: nowrap;
   }
-  /* 0% là nhiễu thị giác — ẩn cho tới khi pet thật sự có tiến triển */
+  /* 0% là nhiễu thị giác, ẩn cho tới khi pet thật sự có tiến triển */
   .tz-pet-bubble .badge[hidden] { display: none !important; }
   @keyframes tz-pet-idle {
     0%, 100% { transform: translateY(0) rotate(0); }

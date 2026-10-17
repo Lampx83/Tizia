@@ -185,8 +185,8 @@
       <div class="chat-head">
         <div class="av" id="av">🤒</div>
         <div class="info">
-          <div class="name" id="pt-name">—</div>
-          <div class="sub" id="pt-sub">—</div>
+          <div class="name" id="pt-name">-</div>
+          <div class="sub" id="pt-sub">-</div>
         </div>
         <div class="actions">
           <button id="back-list">← Đổi ca</button>
@@ -348,7 +348,7 @@ async function send() {
 
 $('finish').addEventListener('click', async () => {
   if (!currentCase || history.length < 4) {
-    alert('Phỏng vấn quá ngắn — hãy hỏi thêm vài câu trước khi chấm.');
+    alert('Phỏng vấn quá ngắn, hãy hỏi thêm vài câu trước khi chấm.');
     return;
   }
   const res = await fetch('./api/ai/sim-grade', {
@@ -388,7 +388,7 @@ function renderGrade(d) {
   const score = Math.round((d.overallScore || 0) * 100);
   const fatal = d.fatalsTriggered || [];
   g.innerHTML = `
-    <h3>📊 Kết quả phỏng vấn — ${escapeHtml(currentCase.title)}</h3>
+    <h3>📊 Kết quả phỏng vấn, ${escapeHtml(currentCase.title)}</h3>
     <div class="row">
       <b>Điểm tổng:</b>
       <span style="font-size:24px;color:${score >= 70 ? '#10b981' : score >= 50 ? '#fbbf24' : '#ef4444'};font-weight:800;">${score}/100</span>

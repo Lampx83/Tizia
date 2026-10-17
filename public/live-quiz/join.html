@@ -172,7 +172,7 @@ function connect() {
     }
   };
   ws.onclose = () => {
-    if (!state.finished) renderWait('Mất kết nối — thử reload.');
+    if (!state.finished) renderWait('Mất kết nối: thử reload.');
   };
 }
 

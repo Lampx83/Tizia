@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>🧠 Học thông minh · Tizia</title>
-<meta name="description" content="Học theo lộ trình AI — Tizia chọn câu hỏi phù hợp độ khó cho em (adaptive IRT) + đề xuất kỹ năng kế tiếp dựa trên knowledge graph." />
+<meta name="description" content="Học theo lộ trình AI | Tizia chọn câu hỏi phù hợp độ khó cho em (adaptive IRT) + đề xuất kỹ năng kế tiếp dựa trên knowledge graph." />
 <link rel="icon" href="/favicon.ico" />
 <style>
   :root {
@@ -117,7 +117,7 @@
 const SUBJ_LANDINGS = {
   preschool: {
     title: '🧸 Học thông minh · Mầm non',
-    intro: 'Mầm non học bằng trò chơi tương tác — chọn 1 hoạt động bên dưới:',
+    intro: 'Mầm non học bằng trò chơi tương tác, chọn 1 hoạt động bên dưới:',
     back: { label: 'Quay về campus Mầm non', href: '/school.html?domain=preschool' },
     apps: [
       { ic:'🗺️', name:'Không gian học Mầm non', rd:'Chọn lớp lá/chồi/mầm, học theo 5 lĩnh vực phát triển GDPT 2018.', href:'/space.html?domain=preschool' },
@@ -127,30 +127,30 @@ const SUBJ_LANDINGS = {
   },
   primary: {
     title: '🎒 Học thông minh · Tiểu học',
-    intro: 'Tiểu học (lớp 1–5) học theo tuần — chọn 1 cổng vào:',
+    intro: 'Tiểu học (lớp 1–5) học theo tuần, chọn 1 cổng vào:',
     back: { label: 'Quay về campus Tiểu học', href: '/school.html?domain=primary' },
     apps: [
       { ic:'🗺️', name:'Không gian học Tiểu học', rd:'9 môn × 36 tuần (KNTT/CTST/CD), có lý thuyết + quiz tuần.', href:'/space.html?domain=primary' },
-      { ic:'🎯', name:'Năng lực của em', rd:'15 nhóm năng lực GDPT 2018 — xem em đã đạt skill nào.', href:'/nang-luc.html' },
-      { ic:'⛈️', name:'Bão Số Học', rd:'Mini-game luyện tính nhanh — thêm Cây Tri Thức, Bản đồ VN trong Không gian học.', href:'/bao-so-hoc.html' },
+      { ic:'🎯', name:'Năng lực của em', rd:'15 nhóm năng lực GDPT 2018, xem em đã đạt skill nào.', href:'/nang-luc.html' },
+      { ic:'⛈️', name:'Bão Số Học', rd:'Mini-game luyện tính nhanh, thêm Cây Tri Thức, Bản đồ VN trong Không gian học.', href:'/bao-so-hoc.html' },
       { ic:'🤖', name:'AI sinh đề luyện tập', rd:'AI tự sinh quiz theo chủ đề + lớp em chọn, kèm giải thích.', href:'/ai-quiz-gen.html?grade=3' },
     ],
   },
   secondary: {
     title: '📐 Học thông minh · THCS',
-    intro: 'THCS (lớp 6–9) — Lớp 6 có 12 môn × 36 tuần, Lớp 7–9 hiện có Toán & Ngữ văn. Chọn 1 cổng vào:',
+    intro: 'THCS (lớp 6–9), Lớp 6 có 12 môn × 36 tuần, Lớp 7–9 hiện có Toán & Ngữ văn. Chọn 1 cổng vào:',
     back: { label: 'Quay về campus THCS', href: '/school.html?domain=secondary' },
     apps: [
       { ic:'🗺️', name:'Không gian học THCS', rd:'12 môn lớp 6 + Toán/Ngữ văn 7–9 theo CT GDPT 2018.', href:'/space.html?domain=secondary' },
       { ic:'🎯', name:'Năng lực của em', rd:'Skill THCS đã đạt + còn thiếu, lộ trình mở khóa kế tiếp.', href:'/nang-luc.html' },
-      { ic:'🗺️', name:'Bản đồ Tri thức VN', rd:'34 tỉnh thành (sau sáp nhập 2025) — đặc sản, danh lam, quiz địa lý + lịch sử.', href:'/ban-do-vn.html' },
+      { ic:'🗺️', name:'Bản đồ Tri thức VN', rd:'34 tỉnh thành (sau sáp nhập 2025): đặc sản, danh lam, quiz địa lý + lịch sử.', href:'/ban-do-vn.html' },
       { ic:'📝', name:'Luyện đề vào lớp 10', rd:'Đề thi thử có bấm giờ + chấm điểm: Toán, Văn, Anh lớp 9.', href:'/luyen-de.html' },
       { ic:'🤖', name:'AI sinh đề luyện tập', rd:'AI tự sinh quiz theo chủ đề + lớp em chọn, kèm giải thích.', href:'/ai-quiz-gen.html?grade=6' },
     ],
   },
   highschool: {
     title: '🎓 Học thông minh · THPT',
-    intro: 'THPT (lớp 10–12) — chọn 1 cổng vào để ôn tập + luyện thi:',
+    intro: 'THPT (lớp 10–12), chọn 1 cổng vào để ôn tập + luyện thi:',
     back: { label: 'Quay về campus THPT', href: '/school.html?domain=highschool' },
     apps: [
       { ic:'🗺️', name:'Không gian học THPT', rd:'Toán, Văn, Anh, Lý, Hoá, Sinh, Sử, Địa theo CT GDPT 2018.', href:'/space.html?domain=highschool' },
@@ -165,7 +165,7 @@ const SUBJ_LANDINGS = {
     intro: 'Trường Ngoại ngữ dùng các app chuyên biệt thay vì quiz tổng quát. Chọn 1 hoạt động bên dưới để học:',
     back: { label: 'Quay về campus Ngoại ngữ', href: '/school.html?domain=language' },
     apps: [
-      { ic:'📚', name:'2000 từ vựng tiếng Anh', rd:'5 chủ đề: cơ bản, du lịch, kinh doanh, học thuật, IELTS — spaced repetition + phát âm.', href:'/tu-vung-tieng-anh.html' },
+      { ic:'📚', name:'2000 từ vựng tiếng Anh', rd:'5 chủ đề: cơ bản, du lịch, kinh doanh, học thuật, IELTS, spaced repetition + phát âm.', href:'/tu-vung-tieng-anh.html' },
       { ic:'🎤', name:'Luyện phát âm AI', rd:'Đọc câu mẫu, AI chấm bằng Speech Recognition, score theo từng từ.', href:'/luyen-phat-am.html' },
       { ic:'🃏', name:'Flashcards đa ngôn ngữ', rd:'Tự nhập bộ thẻ EN/JP/KR/CN, lưu localStorage cá nhân.', href:'/portal-apps/u/4/flashcards/' },
     ],
@@ -182,7 +182,7 @@ const SUBJ_LANDINGS = {
   },
   'driving-admin': {
     title: '📋 Thủ tục hành chính · Trường Lái xe',
-    intro: 'AI tư vấn quy trình thi sát hạch, cấp đổi GPLX, đăng ký lệ phí. Hiện đang biên soạn — tạm thời tham khảo:',
+    intro: 'AI tư vấn quy trình thi sát hạch, cấp đổi GPLX, đăng ký lệ phí. Hiện đang biên soạn, tạm thời tham khảo:',
     back: { label: 'Quay về Văn phòng cấp GPLX', href: '/space.html?b=admin-drive&domain=driving' },
     apps: [
       { ic:'📖', name:'600 câu lý thuyết', rd:'Phải đạt trước khi nộp hồ sơ thi.', href:'/luat-giao-thong-600.html' },
@@ -335,7 +335,7 @@ function renderShell() {
           <div class="prereq-mini"><i style="width:${r.prereq_progress}%"></i></div>
           <div class="prereq-lbl">Sẵn sàng học: ${r.prereq_progress}%</div>
         </div>
-      `).join('') : '<div class="empty">Em đã đạt tất cả kỹ năng đề xuất — quay lại sau khi mở khoá thêm nội dung.</div>'}
+      `).join('') : '<div class="empty">Em đã đạt tất cả kỹ năng đề xuất, quay lại sau khi mở khoá thêm nội dung.</div>'}
     </div>
   `;
 
@@ -353,7 +353,7 @@ function renderShell() {
 
 function renderQuestion() {
   const q = state.currentQuestion;
-  if (state.qError) return `<div class="empty">⚠ ${esc(state.qError)} — chọn môn khác hoặc thử lại sau.</div>`;
+  if (state.qError) return `<div class="empty">⚠ ${esc(state.qError)}: chọn môn khác hoặc thử lại sau.</div>`;
   if (!q) return '<div class="empty">Chưa có câu hỏi.</div>';
   const answers = q.answers || q.options || [];
   return `

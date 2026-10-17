@@ -54,7 +54,7 @@
 <body>
 <div class="top">
   <a class="back" id="back" href="/school.html?domain=it#campus-hero">← Khuôn viên trường</a>
-  <div><h1>🗄️ SQL Playground <span class="sub">— viết truy vấn &amp; xem kết quả thật</span></h1></div>
+  <div><h1>🗄️ SQL Playground <span class="sub">: viết truy vấn &amp; xem kết quả thật</span></h1></div>
   <div class="prog" id="prog">0/5 thử thách</div>
 </div>
 <div class="layout">
@@ -67,7 +67,7 @@
   <div class="work">
     <div class="task">
       <div class="lbl">Thử thách</div>
-      <div class="q" id="taskQ">—</div>
+      <div class="q" id="taskQ">-</div>
     </div>
     <textarea id="sql" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
     <div class="controls">
@@ -254,7 +254,7 @@ function run(){
       renderCh(); showToast(solved.size===CH.length ? '🏆 Hoàn thành mọi thử thách SQL!' : '✓ Giải đúng thử thách!');
     }
   } else {
-    head = `<div class="msg">📊 Kết quả truy vấn (${rowWord}). So với yêu cầu của thử thách hiện tại thì chưa khớp — kiểm tra lại cột/điều kiện.</div>`;
+    head = `<div class="msg">📊 Kết quả truy vấn (${rowWord}). So với yêu cầu của thử thách hiện tại thì chưa khớp, kiểm tra lại cột/điều kiện.</div>`;
   }
   out.innerHTML = head + renderResult(res);
 }
@@ -263,7 +263,7 @@ let toastT; function showToast(m){ const t=$('toast'); t.textContent=m; t.classL
 
 $('runBtn').addEventListener('click', run);
 $('solBtn').addEventListener('click', () => {
-  if ($('hint').dataset.shown==='1'){ $('sql').value = current.sol; $('hint').textContent='Đã chèn truy vấn mẫu — đọc hiểu rồi thử sửa lại theo ý mình.'; }
+  if ($('hint').dataset.shown==='1'){ $('sql').value = current.sol; $('hint').textContent='Đã chèn truy vấn mẫu, đọc hiểu rồi thử sửa lại theo ý mình.'; }
   else { $('hint').dataset.shown='1'; $('hint').textContent='Bấm lần nữa để chèn truy vấn mẫu vào ô soạn thảo.'; }
 });
 $('sql').addEventListener('keydown', e => { if ((e.ctrlKey||e.metaKey) && e.key==='Enter') run(); });

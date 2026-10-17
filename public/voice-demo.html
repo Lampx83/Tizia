@@ -135,7 +135,7 @@
       <div class="you-dot" id="you" style="left:50%;top:50%;">🦊</div>
     </div>
     <div class="info">
-      💡 <b>Cách thử:</b> mở 2 tab cùng phòng, mỗi tab kéo chấm vàng để thay đổi vị trí mình. Theo dõi cột "Gain" ở từng peer — gain 0 = quá xa, gain 1 = sát.
+      💡 <b>Cách thử:</b> mở 2 tab cùng phòng, mỗi tab kéo chấm vàng để thay đổi vị trí mình. Theo dõi cột "Gain" ở từng peer: gain 0 = quá xa, gain 1 = sát.
       Bấm và giữ "🎤 Nói" để push-to-talk. Phải <code>https://</code> hoặc <code>localhost</code> để được cấp quyền mic.
     </div>
     <div class="peer-list" id="peers"></div>
@@ -209,7 +209,7 @@ spatialVoice.onStateChange = (st) => {
       <div class="av">${p.role === 'teacher' ? '👩‍🏫' : '👤'}</div>
       <div class="info-text">
         <div class="name">${escape(p.name)}</div>
-        <div class="meta">vị trí ${p.pos ? `(${p.pos.x.toFixed(1)},${p.pos.z.toFixed(1)})` : '—'} · gain ${Math.round((p.gain||0)*100)}%</div>
+        <div class="meta">vị trí ${p.pos ? `(${p.pos.x.toFixed(1)},${p.pos.z.toFixed(1)})` : '-'} · gain ${Math.round((p.gain||0)*100)}%</div>
       </div>
     </div>
   `).join('');

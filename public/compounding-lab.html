@@ -440,8 +440,8 @@
 
 <div id="action-menu">
   <button id="mp-action">👥 Tham gia phòng chung</button>
-  <button id="walk-btn" title="Phím V — vào chế độ đi quanh phòng">🚶 Đi quanh phòng (V)</button>
-  <button id="hand-btn" title="MediaPipe hand tracking — pinch ngón cái + trỏ qua webcam">🖐️ Bật điều khiển tay</button>
+  <button id="walk-btn" title="Phím V: vào chế độ đi quanh phòng">🚶 Đi quanh phòng (V)</button>
+  <button id="hand-btn" title="MediaPipe hand tracking: pinch ngón cái + trỏ qua webcam">🖐️ Bật điều khiển tay</button>
 </div>
 <div id="action-fab" title="Cài đặt nhanh">⚙️</div>
 <canvas id="cam-preview" width="200" height="150"></canvas>
@@ -480,18 +480,18 @@
 <div id="help-card">
   <h5>🎮 Cách thao tác <span class="toggle" id="help-toggle">×</span></h5>
   <div class="body">
-    <div class="row"><span class="kbd">🖱️</span><span class="desc"><b>Click chai/dụng cụ</b> để cầm — vật được viền xanh + hiện badge "Đang cầm"</span></div>
+    <div class="row"><span class="kbd">🖱️</span><span class="desc"><b>Click chai/dụng cụ</b> để cầm: vật được viền xanh + hiện badge "Đang cầm"</span></div>
     <div class="row"><span class="kbd">🖱️</span><span class="desc"><b>Click lần 2</b> vào cốc/ống đong/cân để <b>rót / đặt</b></span></div>
     <div class="row"><span class="kbd">Esc</span><span class="desc">Bỏ chọn vật đang cầm</span></div>
     <div class="row"><span class="kbd">V</span><span class="desc">Vào chế độ <b>đi quanh phòng</b> (WASD + chuột)</span></div>
-    <div class="row"><span class="kbd">✋</span><span class="desc"><b>Pinch ngón cái + trỏ</b> qua webcam (nút "Bật điều khiển tay") — hỗ trợ <b>2 tay</b></span></div>
+    <div class="row"><span class="kbd">✋</span><span class="desc"><b>Pinch ngón cái + trỏ</b> qua webcam (nút "Bật điều khiển tay"): hỗ trợ <b>2 tay</b></span></div>
     <div class="row"><span class="kbd">🤲</span><span class="desc"><b>Hai tay đồng thời pinch</b> (cầm chai + chụm vào cốc) → <b>rót ổn định</b>, ít quá tay</span></div>
     <div class="row" style="margin-top:5px;border-top:1px dashed rgba(0,0,0,0.1);padding-top:5px"><span style="font-size:11px;opacity:0.75;font-weight:700">🧰 Dụng cụ thêm</span></div>
     <div class="row"><span class="kbd">💧</span><span class="desc"><b>Pipet 5 mL</b>: cầm → click container có dung dịch để <b>hút</b>, sau đó click container khác để <b>nhỏ</b></span></div>
     <div class="row"><span class="kbd">🥄</span><span class="desc"><b>Đũa khuấy</b>: cầm → click vào cốc/ống đong/cối để <b>khuấy</b></span></div>
     <div class="row"><span class="kbd">💢</span><span class="desc"><b>Chày</b>: cầm → click cối có hỗn hợp để <b>nghiền</b> (sinh bụi)</span></div>
     <div class="row"><span class="kbd">🤝</span><span class="desc"><b>Lắc chai</b>: double-click chai thành phẩm</span></div>
-    <div class="row" style="margin-top:5px;border-top:1px dashed rgba(0,0,0,0.1);padding-top:5px"><span style="font-size:11px;opacity:0.75">💡 Thao tác tự do — sai quy trình sẽ được tổng kết cuối bài.</span></div>
+    <div class="row" style="margin-top:5px;border-top:1px dashed rgba(0,0,0,0.1);padding-top:5px"><span style="font-size:11px;opacity:0.75">💡 Thao tác tự do, sai quy trình sẽ được tổng kết cuối bài.</span></div>
   </div>
 </div>
 
@@ -521,7 +521,7 @@
     <div class="lm-foot">
       <label class="lm-mp">
         <input type="checkbox" id="lm-mp-toggle" />
-        <span>Vào phòng chung (multiplayer) — nhìn thấy bạn cùng lớp pha chế cùng lúc</span>
+        <span>Vào phòng chung (multiplayer): nhìn thấy bạn cùng lớp pha chế cùng lúc</span>
       </label>
       <input type="text" id="lm-name" placeholder="Tên / mã SV (cho phòng chung)" maxlength="32" />
     </div>
@@ -562,13 +562,13 @@ const sessionStartedAt = Date.now();
 
 showWelcomeCard({
   icon: '🧪',
-  title: 'Phòng bào chế thuốc — Hướng dẫn',
+  title: 'Phòng bào chế thuốc, Hướng dẫn',
   intro: 'Thực hiện đơn pha chế theo đúng quy trình GMP rút gọn. 5 bài từ dễ đến khó.',
   bullets: [
     'Đọc đơn pha chế (clipboard bên trái) trước khi thao tác.',
-    'Bước nào — chọn dụng cụ tương ứng, click vào reagent rồi click vào dụng cụ (cốc/ống đong).',
+    'Bước nào: chọn dụng cụ tương ứng, click vào reagent rồi click vào dụng cụ (cốc/ống đong).',
     'Cân hoạt chất đúng khối lượng (±tolerance) hoặc đong đúng thể tích.',
-    'Có thể vào phòng chung để pha chế cùng các SV khác — thấy cursor + tiến độ realtime.',
+    'Có thể vào phòng chung để pha chế cùng các SV khác, thấy cursor + tiến độ realtime.',
     'Hoàn thành cả 6-9 bước rồi bấm "Hoàn thành & Nộp" để lưu điểm.',
   ],
   controls: { keys: ['W','A','S','D'], mouse: 'left' },
@@ -1114,7 +1114,7 @@ makeBook( 0.65, 0.555 + 0.20, -0.001, 0.20, 0.04, 0.13, 0xb91c1c, 'DDVN V');
   const x = c.getContext('2d');
   x.fillStyle = '#0c4a6e'; x.fillRect(0, 0, 768, 432);
   x.fillStyle = '#bae6fd'; x.font = 'bold 26px system-ui'; x.textAlign = 'center';
-  x.fillText('BẢNG TUẦN HOÀN — KHOA DƯỢC', 384, 36);
+  x.fillText('BẢNG TUẦN HOÀN: KHOA DƯỢC', 384, 36);
   // Mini periodic table: 18 columns × 7 rows of colored boxes with symbols
   const ELEM_ROWS = [
     'H                                                  He',
@@ -1170,7 +1170,7 @@ makeBook( 0.65, 0.555 + 0.20, -0.001, 0.20, 0.04, 0.13, 0xb91c1c, 'DDVN V');
   x.strokeStyle = '#92400e'; x.lineWidth = 5; x.strokeRect(8, 8, 496, 624);
   x.fillStyle = '#92400e'; x.font = 'bold 28px system-ui'; x.textAlign = 'center';
   x.fillText('📊 PHÂN LOẠI THUỐC', 256, 50);
-  x.font = '16px system-ui'; x.fillText('(Hệ thống ATC — WHO)', 256, 76);
+  x.font = '16px system-ui'; x.fillText('(Hệ thống ATC: WHO)', 256, 76);
   const drugs = [
     ['A', 'Tiêu hóa & chuyển hóa', '#10b981'],
     ['B', 'Máu & cơ quan tạo máu', '#dc2626'],
@@ -1497,7 +1497,7 @@ makeStool(1.0, 1.0, -0.4);
   const rack = new THREE.Group();
   rack.position.set(-1.55, 0.94, 0.4);
   rack.rotation.y = 0.18;
-  rack.userData = { kind: 'tool', id: 'test-tube-rack', name: 'Giá ống nghiệm — Mẫu QC chuẩn', label: 'Reference standards' };
+  rack.userData = { kind: 'tool', id: 'test-tube-rack', name: 'Giá ống nghiệm: Mẫu QC chuẩn', label: 'Reference standards' };
   scene.add(rack);
   // Wooden U-shaped frame
   const woodMat = new THREE.MeshStandardMaterial({ color: 0xc77e4d, roughness: 0.7 });
@@ -1715,7 +1715,7 @@ makeStool(1.0, 1.0, -0.4);
       x.fillStyle = '#1f2937'; x.font = '20px "Comic Sans MS", cursive';
       const lines = [
         'Bài: Siro Paracetamol 24mg/mL',
-        '— Tính toán liều cho 100 mL —',
+        'Tính toán liều cho 100 mL',
         '',
         'Paracetamol: 24 × 100 = 2400 mg',
         '            = 2.4 g  ✓',
@@ -2302,7 +2302,7 @@ function setFinalLabel(text) {
   const lines = text.split('\n');
   lines.forEach((l, i) => x.fillText(l, 128, 70 + i * 28));
   x.fillStyle = '#7c2d12'; x.font = '14px system-ui';
-  x.fillText('Rx — Pharmacy', 128, 160);
+  x.fillText('Rx: Pharmacy', 128, 160);
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
   fbLabel.material.map = tex; fbLabel.material.needsUpdate = true;
 }
@@ -2310,7 +2310,7 @@ function setFinalLabel(text) {
 // Mortar + pestle
 const mortar = new THREE.Group();
 mortar.position.set(0.85, 0.94, 0.15);
-mortar.userData = { kind: 'tool', id: 'mortar', name: 'Cối + chày', label: 'Sứ ceramic — nghiền dược liệu' };
+mortar.userData = { kind: 'tool', id: 'mortar', name: 'Cối + chày', label: 'Sứ ceramic: nghiền dược liệu' };
 scene.add(mortar);
 const mBody = new THREE.Mesh(
   new THREE.CylinderGeometry(0.08, 0.06, 0.08, 32),
@@ -3615,7 +3615,7 @@ function setSelectedTool(t) {
   if (selectedTool) {
     selectedTool.traverse(o => { if (o.material?.emissive) o.material.emissive.setHex(0x114b2a); });
     const n = selectedTool.userData?.name || selectedTool.userData?.id;
-    showToast('✋ Đang cầm: ' + n + ' — click vào dụng cụ để đặt/rót', 1800, 'ok');
+    showToast('✋ Đang cầm: ' + n + 'click vào dụng cụ để đặt/rót', 1800, 'ok');
     holdNameEl.textContent = 'Đang cầm: ' + n;
     holdBadgeEl.classList.add('shown');
     if (walk.active) holdBadgeEl.classList.add('walk-mode');
@@ -3683,7 +3683,7 @@ function handleClickOn(target) {
       // EMPTY pipet → SUCK from target
       const dstS = containerOps[tu.id].get();
       if (dstS.vol < 0.05) {
-        logError(`${tu.name} rỗng — không hút được`);
+        logError(`${tu.name} rỗng: không hút được`);
         setSelectedTool(null); return;
       }
       const amount = Math.min(5, dstS.vol);
@@ -3732,7 +3732,7 @@ function handleClickOn(target) {
   if (su.id === 'stirrer' && containerOps[tu.id]) {
     const dstS = containerOps[tu.id].get();
     if (dstS.vol < 0.5) {
-      logError(`${tu.name} (gần) rỗng — không có gì để khuấy`);
+      logError(`${tu.name} (gần) rỗng: không có gì để khuấy`);
       setSelectedTool(null); return;
     }
     const centerPos = new THREE.Vector3(); containerOps[tu.id].grp().getWorldPosition(centerPos); centerPos.y += 0.06;
@@ -3753,7 +3753,7 @@ function handleClickOn(target) {
   if (su.id === 'pestle' && tu.id === 'mortar') {
     const mState = containerOps.mortar.get();
     if (mState.vol < 0.5) {
-      logError('Cối rỗng — không có gì để nghiền');
+      logError('Cối rỗng: không có gì để nghiền');
       setSelectedTool(null); return;
     }
     const centerPos = new THREE.Vector3(); mortar.getWorldPosition(centerPos); centerPos.y += 0.04;
@@ -3770,7 +3770,7 @@ function handleClickOn(target) {
 
   // Pestle clicked on something other than mortar → error
   if (su.id === 'pestle' && tu.id !== 'mortar') {
-    logError(`Chày chỉ dùng được với cối — không thể với ${tu.name}`);
+    logError(`Chày chỉ dùng được với cối, không thể với ${tu.name}`);
     setSelectedTool(null); return;
   }
 
@@ -3784,7 +3784,7 @@ function handleClickOn(target) {
     sendAction('place-' + su.id + '-on-balance');
     const idx = findMatchingStepIdx('place-on-balance', su, tu);
     if (idx >= 0) markStepCompleted(idx);
-    else logError(`Đặt ${su.name} lên cân — không nằm trong quy trình`);
+    else logError(`Đặt ${su.name} lên cân: không nằm trong quy trình`);
     setSelectedTool(null);
     return;
   }
@@ -3800,7 +3800,7 @@ function handleClickOn(target) {
       // doFreePour handles its own setSelectedTool(null) in onComplete.
       doFreePour(tu.id, selectedTool);
       const dstName = tu.id === 'beaker' ? 'cốc' : tu.id === 'cylinder' ? 'ống đong' : tu.id === 'mortar' ? 'cối' : 'chai thành phẩm';
-      logError(`Rót ${su.name} vào ${dstName} — không có trong đơn`);
+      logError(`Rót ${su.name} vào ${dstName}: không có trong đơn`);
     }
     return;
   }
@@ -3809,7 +3809,7 @@ function handleClickOn(target) {
   if (containerOps[su.id] && containerOps[tu.id]) {
     const srcInfo = containerOps[su.id].get();
     if (srcInfo.vol < 0.01) {
-      logError(`${su.name} rỗng — không có gì để đổ`);
+      logError(`${su.name} rỗng: không có gì để đổ`);
       setSelectedTool(null);
       return;
     }
@@ -3843,7 +3843,7 @@ function handleClickOn(target) {
           sfx.perfect();
           markStepCompleted(idx);
         } else {
-          logError(`Đổ ${su.name} → ${tu.name} — không có trong đơn`);
+          logError(`Đổ ${su.name} → ${tu.name}: không có trong đơn`);
         }
         setSelectedTool(null);
       },
@@ -4388,10 +4388,10 @@ submitBtn.addEventListener('click', async () => {
   if (state.errors.length) breakdown.push(`Lỗi thao tác: ${state.errors.length} (−${errPenalty})`);
   score = Math.max(0, score);
 
-  const verdict = score >= 90 ? '🎉 Xuất sắc — đạt GMP!'
-                : score >= 70 ? '👍 Khá — vẫn còn sai số nhỏ.'
-                : score >= 50 ? '🙂 Trung bình — cần luyện thêm.'
-                : '📚 Cần làm lại — nhiều sai sót.';
+  const verdict = score >= 90 ? '🎉 Xuất sắc: đạt GMP!'
+                : score >= 70 ? '👍 Khá: vẫn còn sai số nhỏ.'
+                : score >= 50 ? '🙂 Trung bình: cần luyện thêm.'
+                : '📚 Cần làm lại, nhiều sai sót.';
 
   const errorsHtml = state.errors.length
     ? `<div style="margin-top:14px;padding:10px 12px;background:rgba(220,38,38,0.08);border-left:3px solid #dc2626;border-radius:6px;text-align:left">

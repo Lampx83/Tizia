@@ -54,9 +54,9 @@ export const MODULES = [
   { category: 'curriculum', id: 'I4.5', title: 'Khoá luận CNTT',                yearLevel: 4, subject: 'khoa-luan-it',    scenarioIds: ['I4.5-thesis-quiz'], knowledgeQuiz: 'I4.5-thesis-quiz', minStarsToUnlock: 24, prerequisites: ['I3.1', 'I3.4'], hasCertificate: true },
 
   // ──────────── PRACTICE / SKILL ────────────
-  { category: 'practice', id: 'IP01', title: 'Startup Lab — Khởi nghiệp số',    subject: 'startup-lab',  scenarioIds: [], directHref: '/it-code-lab.html?contest=325049',  minStarsToUnlock: 18, icon: '🚀' },
+  { category: 'practice', id: 'IP01', title: 'Startup Lab: Khởi nghiệp số',    subject: 'startup-lab',  scenarioIds: [], directHref: '/it-code-lab.html?contest=325049',  minStarsToUnlock: 18, icon: '🚀' },
   { category: 'practice', id: 'IP02', title: 'Hackathon 48h',                   subject: 'hackathon',    scenarioIds: [], directHref: '/it-code-lab.html?contest=511768',  minStarsToUnlock: 12, icon: '⚡' },
-  { category: 'practice', id: 'IP03', title: 'CTF Lab — Capture The Flag',     subject: 'ctf-lab',       scenarioIds: [], directHref: '/it-ctf-web.html',                  minStarsToUnlock: 18, icon: '🚩' },
+  { category: 'practice', id: 'IP03', title: 'CTF Lab: Capture The Flag',     subject: 'ctf-lab',       scenarioIds: [], directHref: '/it-ctf-web.html',                  minStarsToUnlock: 18, icon: '🚩' },
   { category: 'practice', id: 'IP04', title: 'Open Source Contribution Lab',  subject: 'open-source',   scenarioIds: [], directHref: '/it-code-lab.html?contest=325049',  minStarsToUnlock: 12, icon: '🐙' },
 
   // ──────────── CAREER ────────────
@@ -68,8 +68,8 @@ export const MODULES = [
   { category: 'career', id: 'IC06', title: 'AI / ML Engineer',     subject: 'career', scenarioIds: ['IC06-career-quiz'], knowledgeQuiz: 'IC06-career-quiz', directHref: '/it-algo-viz.html',         minStarsToUnlock: 24, icon: '🤖' },
 
   // ──────────── GAMES ────────────
-  { category: 'game', id: 'IG01', title: 'Code Race — Giải thuật 5 phút',  subject: 'game', scenarioIds: ['IG01-code-race-quiz'],      knowledgeQuiz: 'IG01-code-race-quiz',      minStarsToUnlock: 6,  icon: '⚡' },
-  { category: 'game', id: 'IG02', title: 'Bug Hunt — Debug speed',         subject: 'game', scenarioIds: ['IG02-bug-hunt-quiz'],       knowledgeQuiz: 'IG02-bug-hunt-quiz',       minStarsToUnlock: 6,  icon: '🐛' },
+  { category: 'game', id: 'IG01', title: 'Code Race: Giải thuật 5 phút',  subject: 'game', scenarioIds: ['IG01-code-race-quiz'],      knowledgeQuiz: 'IG01-code-race-quiz',      minStarsToUnlock: 6,  icon: '⚡' },
+  { category: 'game', id: 'IG02', title: 'Bug Hunt: Debug speed',         subject: 'game', scenarioIds: ['IG02-bug-hunt-quiz'],       knowledgeQuiz: 'IG02-bug-hunt-quiz',       minStarsToUnlock: 6,  icon: '🐛' },
   { category: 'game', id: 'IG03', title: 'SQL Detective',                   subject: 'game', scenarioIds: ['IG03-sql-detective-quiz'],  knowledgeQuiz: 'IG03-sql-detective-quiz',  minStarsToUnlock: 12, icon: '🔎' },
-  { category: 'game', id: 'IG04', title: 'Kafka — System Design battle',   subject: 'game', scenarioIds: ['IG04-system-design-quiz'],  knowledgeQuiz: 'IG04-system-design-quiz',  minStarsToUnlock: 18, icon: '⚔️' },
+  { category: 'game', id: 'IG04', title: 'Kafka: System Design battle',   subject: 'game', scenarioIds: ['IG04-system-design-quiz'],  knowledgeQuiz: 'IG04-system-design-quiz',  minStarsToUnlock: 18, icon: '⚔️' },
 ];

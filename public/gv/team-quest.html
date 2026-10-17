@@ -190,7 +190,7 @@ async function loadActive() {
     const r = await fetch('/api/teacher/team-quest/active?class_code=' + encodeURIComponent(currentClass), { credentials:'same-origin' });
     const d = await r.json();
     if (!d.items || d.items.length === 0) {
-      document.getElementById('active').innerHTML = `<div class="empty">Chưa có quest nào — hãy tạo!</div>`;
+      document.getElementById('active').innerHTML = `<div class="empty">Chưa có quest nào, hãy tạo!</div>`;
       return;
     }
     document.getElementById('active').innerHTML = d.items.map(q => {

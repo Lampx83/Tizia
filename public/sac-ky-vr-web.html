@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
-<title>Sắc ký VR Web · A-Frame WebXR — Tizia</title>
+<title>Sắc ký VR Web · A-Frame WebXR | Tizia</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; font-family: 'Inter', system-ui, sans-serif; color: white; background: #1e293b; }
   .topbar {
@@ -107,7 +107,7 @@
   <span class="stat">⏱️ <b id="timer">0s</b></span>
   <span class="stat">🎯 <b id="score">0</b></span>
   <span class="spacer"></span>
-  <span class="stat" style="opacity:0.75" id="hint-text">Click hoặc gaze vào lọ mẫu — bấm "Enter VR" để vào kính</span>
+  <span class="stat" style="opacity:0.75" id="hint-text">Click hoặc gaze vào lọ mẫu, bấm "Enter VR" để vào kính</span>
 </div>
 
 <a-scene background="color: #1e293b" fog="type: linear; color: #1e293b; near: 8; far: 25" vr-mode-ui="enabled: true">
@@ -363,7 +363,7 @@ function handleClick(el) {
 
 function onSampleClick(sid) {
   if (state.step > 2) return;
-  if (state.capillary) { toast('Mao quản đã có mẫu — chấm trước', 'err'); return; }
+  if (state.capillary) { toast('Mao quản đã có mẫu, chấm trước', 'err'); return; }
   state.capillary = sid;
   const s = SAMPLES.find(x => x.id === sid);
   const cap = $('cap-tip');
@@ -473,7 +473,7 @@ $('btn-restart').addEventListener('click', () => {
   $('cap-tip').setAttribute('visible', false);
   btnAction.disabled = true;
   btnAction.textContent = 'Thao tác';
-  setHint('Click hoặc gaze vào lọ mẫu — bấm "Enter VR" để vào kính');
+  setHint('Click hoặc gaze vào lọ mẫu, bấm "Enter VR" để vào kính');
   updateUI();
 });
 
@@ -489,7 +489,7 @@ function promptRf(sample) {
   toast(pts > 0 ? `✓ ${sample.id} +${pts}` : `✗ ${sample.id} sai (${sample.trueRf.toFixed(2)})`, pts > 0 ? 'ok' : 'err');
   updateUI();
   if (Object.keys(state.measurements).length >= 3) {
-    setHint('Đã đo xong — click "Hoàn thành đo Rf"');
+    setHint('Đã đo xong: click "Hoàn thành đo Rf"');
   }
 }
 
@@ -534,7 +534,7 @@ function loop() {
     if (state.devProgress >= 1) {
       btnAction.disabled = false;
       btnAction.textContent = '⬆️ Lấy đĩa ra';
-      setHint('Triển khai xong — click "Lấy đĩa ra"');
+      setHint('Triển khai xong: click "Lấy đĩa ra"');
       updateUI();
     }
   }

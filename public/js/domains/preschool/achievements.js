@@ -55,7 +55,7 @@ export const ACHIEVEMENTS = [
 
   // ── Streak & Chuyên cần ──
   { id: 'streak-5',  icon: '🌈', title: 'Bé học 5 ngày',
-    desc: 'Vào học 5 ngày liên tiếp — một tuần học đầy đủ của bé', trigger: { streak: 5 } },
+    desc: 'Vào học 5 ngày liên tiếp, một tuần học đầy đủ của bé', trigger: { streak: 5 } },
   { id: 'streak-7',  icon: '⭐', title: 'Bé chăm chỉ',
     desc: 'Vào học 7 ngày liên tiếp', trigger: { streak: 7 } },
   { id: 'streak-14', icon: '🌟', title: 'Siêu chăm học',
@@ -77,7 +77,7 @@ export const ACHIEVEMENTS = [
   { id: 'star-30', icon: '🌟', title: 'Bé siêu sao',
     desc: 'Tích luỹ 30 sao', trigger: { totalStars: 30 } },
   { id: 'star-45', icon: '🏆', title: 'Bé tài năng toàn diện',
-    desc: 'Tích luỹ 45 sao — chinh phục toàn bộ các lĩnh vực phát triển Mầm non',
+    desc: 'Tích luỹ 45 sao, chinh phục toàn bộ các lĩnh vực phát triển Mầm non',
     trigger: { totalStars: 45 } },
 
   // ── Combo đặc biệt — phát triển nhiều chiều ──

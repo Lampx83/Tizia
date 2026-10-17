@@ -214,7 +214,7 @@
     <!-- Walls tab -->
     <div id="tab-walls" class="tab-pane">
       <div id="wallBanner" style="display:none; background:#0d2a1a; border:1px solid var(--ok); border-radius:8px; padding:9px 12px; margin-bottom:10px; font-size:12px; color:var(--ok);">
-        ✏️ Đang vẽ tường — click 2 điểm để tạo 1 đoạn, có thể chain liên tục.
+        ✏️ Đang vẽ tường, click 2 điểm để tạo 1 đoạn, có thể chain liên tục.
         <span style="float:right; cursor:pointer; color:var(--muted);" onclick="stopWallMode()" title="Dừng vẽ (Esc)">✕</span>
       </div>
       <div style="display:flex; gap:6px; margin-bottom:10px;">
@@ -236,7 +236,7 @@
     <!-- Roads tab -->
     <div id="tab-roads" class="tab-pane">
       <div id="roadBanner" style="display:none; background:#0d2a1a; border:1px solid var(--ok); border-radius:8px; padding:9px 12px; margin-bottom:10px; font-size:12px; color:var(--ok);">
-        ✏️ Đang vẽ đường <b id="roadModeKindLbl">nội bộ</b> — click 2 điểm để tạo 1 đoạn.
+        ✏️ Đang vẽ đường <b id="roadModeKindLbl">nội bộ</b>, click 2 điểm để tạo 1 đoạn.
         <span style="float:right; cursor:pointer; color:var(--muted);" onclick="stopRoadMode()" title="Dừng vẽ (Esc)">✕</span>
       </div>
       <div style="margin-bottom:10px;">
@@ -427,7 +427,7 @@ function startPlace(card){
   $('#placingBanner').style.display='';
   $('#placingName').textContent=card.dataset.name+` (${placeKind==='building'?'Toà nhà':'Trang trí'})`;
   document.querySelector('.tab-btn[data-tab="inspector"]').click();
-  toast(`🎯 Click vào map để đặt "${card.dataset.name}" — Esc để huỷ`,'ok');
+  toast(`🎯 Click vào map để đặt "${card.dataset.name}": Esc để huỷ`,'ok');
 }
 
 function cancelPlace(){
@@ -458,8 +458,8 @@ function takeSnap(){
 function updateUndoUI(){
   $('#undoBtn').disabled = _past.length === 0;
   $('#redoBtn').disabled = _future.length === 0;
-  $('#undoBtn').title = `Undo (Ctrl+Z) — còn ${_past.length} bước`;
-  $('#redoBtn').title = `Redo (Ctrl+Shift+Z) — còn ${_future.length} bước`;
+  $('#undoBtn').title = `Undo (Ctrl+Z): còn ${_past.length} bước`;
+  $('#redoBtn').title = `Redo (Ctrl+Shift+Z): còn ${_future.length} bước`;
 }
 function recordChange(){
   if(_applyingHistory) return;
@@ -488,7 +488,7 @@ function doUndo(){
   _future.push(_lastSnap);
   const target = _past.pop();
   applyHistory(target);
-  toast(`↺ Hoàn tác — còn ${_past.length} bước`, 'ok');
+  toast(`↺ Hoàn tác: còn ${_past.length} bước`, 'ok');
   updateUndoUI();
 }
 function doRedo(){
@@ -496,7 +496,7 @@ function doRedo(){
   _past.push(_lastSnap);
   const target = _future.pop();
   applyHistory(target);
-  toast(`↻ Làm lại — còn ${_future.length} bước`, 'ok');
+  toast(`↻ Làm lại: còn ${_future.length} bước`, 'ok');
   updateUndoUI();
 }
 function resetHistory(){ _past=[]; _future=[]; _lastSnap=null; updateUndoUI(); }
@@ -553,7 +553,7 @@ async function loadFromServer(){
     const r=await fetch(`/api/campus-layout/${dom.value}`,{credentials:'same-origin'});
     const j=await r.json();
     ta.value = j.layout ? JSON.stringify(j.layout,null,2) : '';
-    toast(j.layout ? 'Đã tải override hiện tại' : 'Chưa có override — đang dùng default','ok');
+    toast(j.layout ? 'Đã tải override hiện tại' : 'Chưa có override: đang dùng default','ok');
   }catch(e){ toast('Lỗi tải: '+e.message,'bad'); }
 }
 
@@ -574,7 +574,7 @@ async function saveOverride(){
     });
     const j=await r.json();
     if(!r.ok) return toast('Lỗi: '+(j.message||j.error),'bad');
-    toast('💾 Đã lưu — đang reload map','ok');
+    toast('💾 Đã lưu: đang reload map','ok');
     setDirty(false);
     reloadIframe();
   }catch(e){ toast('Lỗi: '+e.message,'bad'); }
@@ -598,7 +598,7 @@ async function exportEffective(){
   // Lấy C từ iframe (CAMPUSES[domain] đã merged override)
   try{
     const w=iframe.contentWindow;
-    if(!w || !w.CAMPUSES) return toast('Iframe chưa load xong — đợi vài giây rồi thử lại','bad');
+    if(!w || !w.CAMPUSES) return toast('Iframe chưa load xong, đợi vài giây rồi thử lại','bad');
     const C=w.CAMPUSES[dom.value];
     if(!C) return toast('Không tìm thấy CAMPUSES['+dom.value+']','bad');
     const json=JSON.stringify(C,null,2);
@@ -612,7 +612,7 @@ async function exportEffective(){
 
 function importFile(file){
   const fr=new FileReader();
-  fr.onload=()=>{ ta.value=fr.result; toast('📁 Đã đọc file — bấm Save để áp dụng','ok'); };
+  fr.onload=()=>{ ta.value=fr.result; toast('📁 Đã đọc file, bấm Save để áp dụng','ok'); };
   fr.onerror=()=>toast('Lỗi đọc file','bad');
   fr.readAsText(file);
 }
@@ -755,7 +755,7 @@ window.addEventListener('message', e=>{
     setDirty(true);
     if(placingCard){ placingCard.classList.remove('placing'); placingCard=null; }
     $('#placingBanner').style.display='none';
-    toast(`✅ Đã đặt "${m.item?.name||m.k||''}" — drag để tinh chỉnh vị trí`,'ok');
+    toast(`✅ Đã đặt "${m.item?.name||m.k||''}": drag để tinh chỉnh vị trí`,'ok');
   } else if(m.type==='campus-place-cancelled'){
     if(placingCard){ placingCard.classList.remove('placing'); placingCard=null; }
     $('#placingBanner').style.display='none';
@@ -823,7 +823,7 @@ window.addEventListener('message', e=>{
   if (m.type==='campus-wall-added' || m.type==='campus-wall-deleted' || m.type==='campus-walls-cleared') {
     setDirty(true);
     refreshWallList();
-    if (m.type==='campus-wall-added') toast(`🧱 Đã thêm tường #${m.idx} — tổng ${m.total}`, 'ok');
+    if (m.type==='campus-wall-added') toast(`🧱 Đã thêm tường #${m.idx}: tổng ${m.total}`, 'ok');
     else if (m.type==='campus-wall-deleted') toast(`🗑 Đã xoá tường #${m.idx}`, 'ok');
     else toast(`🗑 Đã xoá ${m.cleared} tường`, 'ok');
   } else if (m.type==='campus-wall-mode-stopped') {
@@ -834,7 +834,7 @@ window.addEventListener('message', e=>{
       $('#wallStartBtn').classList.add('primary');
     }
   } else if (m.type==='campus-wall-anchor') {
-    toast(`📌 Điểm A: (${m.gx}, ${m.gy}) — click điểm B để tạo đoạn`, 'ok');
+    toast(`📌 Điểm A: (${m.gx}, ${m.gy}), click điểm B để tạo đoạn`, 'ok');
   }
 });
 
@@ -919,7 +919,7 @@ window.addEventListener('message', e=>{
   if (m.type==='campus-road-added' || m.type==='campus-road-deleted' || m.type==='campus-roads-cleared') {
     setDirty(true);
     refreshRoadList();
-    if (m.type==='campus-road-added') toast(`🛣️ Đã thêm đường #${m.idx} (${m.road?.kind||''}) — tổng ${m.total}`, 'ok');
+    if (m.type==='campus-road-added') toast(`🛣️ Đã thêm đường #${m.idx} (${m.road?.kind||''}): tổng ${m.total}`, 'ok');
     else if (m.type==='campus-road-deleted') toast(`🗑 Đã xoá đường #${m.idx}`, 'ok');
     else toast(`🗑 Đã xoá ${m.cleared} đường`, 'ok');
   } else if (m.type==='campus-road-mode-stopped') {
@@ -930,7 +930,7 @@ window.addEventListener('message', e=>{
       $('#roadStartBtn').classList.add('primary');
     }
   } else if (m.type==='campus-road-anchor') {
-    toast(`📌 Điểm A: (${m.gx}, ${m.gy}) — click điểm B để tạo`, 'ok');
+    toast(`📌 Điểm A: (${m.gx}, ${m.gy}), click điểm B để tạo`, 'ok');
   }
 });
 

@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>🏆 League tuần · Tizia</title>
-<meta name="description" content="Bảng xếp hạng tuần Tizia — Đồng → Kim cương. Top 5 lên hạng, bottom 5 xuống hạng vào Chủ nhật 23:59 hằng tuần." />
+<meta name="description" content="Bảng xếp hạng tuần Tizia, Đồng → Kim cương. Top 5 lên hạng, bottom 5 xuống hạng vào Chủ nhật 23:59 hằng tuần." />
 <link rel="icon" href="/favicon.ico" />
 <style>
   :root {
@@ -145,10 +145,10 @@ function render(d) {
     `;
     // Insert dividers
     if (rank === 5 && board.length > 5) {
-      rows += `<div class="zone-divider promote"><span class="ic">⬆️</span> Vùng thăng hạng — Top 5 → ${TIER_ORDER[Math.min(5, tierIdx+1)] ? capit(meta.label) + ' kế cao hơn' : 'giữ hạng cao nhất'}</div>`;
+      rows += `<div class="zone-divider promote"><span class="ic">⬆️</span> Vùng thăng hạng, Top 5 → ${TIER_ORDER[Math.min(5, tierIdx+1)] ? capit(meta.label) + ' kế cao hơn' : 'giữ hạng cao nhất'}</div>`;
     }
     if (board.length >= 20 && rank === board.length - 5) {
-      rows += `<div class="zone-divider relegate"><span class="ic">⬇️</span> Vùng xuống hạng — 5 cuối tụt 1 tier</div>`;
+      rows += `<div class="zone-divider relegate"><span class="ic">⬇️</span> Vùng xuống hạng: 5 cuối tụt 1 tier</div>`;
     }
   });
 
@@ -166,7 +166,7 @@ function render(d) {
       <b>Top 5</b> cuối Chủ nhật → lên tier kế tiếp. <span class="danger">Bottom 5</span> (nếu nhóm ≥20 người) tụt 1 tier.
       Mỗi câu quiz đúng = 5 XP. Mỗi bài Codelab accepted = 5–20 XP. Claim quest = XP của quest.
     </div>
-    <div class="board">${rows || '<div class="loading">Nhóm chưa có ai khác — quay lại sau.</div>'}</div>
+    <div class="board">${rows || '<div class="loading">Nhóm chưa có ai khác, quay lại sau.</div>'}</div>
   `;
 }
 

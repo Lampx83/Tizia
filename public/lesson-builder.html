@@ -213,7 +213,7 @@
 
   <div class="canvas">
     <h2>📚 Bài giảng tương tác</h2>
-    <textarea class="meta-input" id="m-desc" placeholder="Mô tả ngắn (tuỳ chọn) — học sinh sẽ thấy khi truy cập link share" style="width:100%;min-height:42px;margin-bottom:12px;"></textarea>
+    <textarea class="meta-input" id="m-desc" placeholder="Mô tả ngắn (tuỳ chọn), học sinh sẽ thấy khi truy cập link share" style="width:100%;min-height:42px;margin-bottom:12px;"></textarea>
     <div class="drop-zone" id="dropzone">
       <div class="empty-drop" id="empty-msg">
         Kéo khối từ panel bên trái vào đây để bắt đầu xây bài giảng.<br>
@@ -229,7 +229,7 @@
     </div>
     <div class="url-row" id="url-row" style="display:none;">
       <div style="font-size:11px;opacity:0.7;margin-bottom:6px;">🔗 URL share cho HS:</div>
-      <a id="share-url" href="#" target="_blank">—</a>
+      <a id="share-url" href="#" target="_blank">-</a>
       <div style="display:flex;gap:6px;margin-top:8px;">
         <button onclick="navigator.clipboard.writeText(document.getElementById('share-url').href);" style="font-size:11px;padding:5px 10px;background:rgba(16,185,129,0.2);color:#6ee7b7;border:none;border-radius:6px;cursor:pointer;">📋 Copy</button>
         <button onclick="window.open(document.getElementById('share-url').href, '_blank');" style="font-size:11px;padding:5px 10px;background:rgba(14,165,233,0.2);color:#7dd3fc;border:none;border-radius:6px;cursor:pointer;">👁 Xem</button>
@@ -244,7 +244,7 @@
   </div>
 </div>
 
-<div class="toast" id="toast">—</div>
+<div class="toast" id="toast">-</div>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -470,7 +470,7 @@ function renderBlock(b, i) {
         <textarea data-k="text">${escape(b.text)}</textarea>`;
       break;
     case 'divider':
-      body = `<div style="opacity:0.6;font-size:12px;text-align:center;padding:10px;">— Đường kẻ ngang —</div>`;
+      body = `<div style="opacity:0.6;font-size:12px;text-align:center;padding:10px;">Đường kẻ ngang</div>`;
       break;
   }
   el.innerHTML = `

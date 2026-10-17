@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Hub Sắp xếp thuốc — Tizia</title>
+<title>Hub Sắp xếp thuốc | Tizia</title>
 <style>
   :root {
     --bg-1: #0f172a;
@@ -176,7 +176,7 @@
     <div class="logo">💊</div>
     <h1>Hub Sắp xếp thuốc</h1>
     <p class="tagline">
-      Mô phỏng <b>phân loại thuốc theo nhóm điều trị</b> trong nhiều phiên bản công nghệ —
+      Mô phỏng <b>phân loại thuốc theo nhóm điều trị</b> trong nhiều phiên bản công nghệ, 
       từ Canvas 2D arcade nhẹ trên mobile đến <b>WebXR hand tracking</b> trên Meta Quest
       và phòng dược <b>Metaverse multiplayer</b>. 16 thuốc thông dụng · 10 cấp độ.
     </p>
@@ -212,14 +212,14 @@
 
   <div class="section-title">
     <h2>🎮 Chọn phiên bản</h2>
-    <span class="hint">Tất cả 8 phiên bản gộp trong 1 card — chọn chip để đổi chế độ</span>
+    <span class="hint">Tất cả 8 phiên bản gộp trong 1 card, chọn chip để đổi chế độ</span>
   </div>
 
   <div id="topic-card"></div>
 
   <footer>
-    <b>Tizia</b> — The Intelligent Zone for Interactive Academy<br>
-    Cùng 16 thuốc, cùng nhóm điều trị, khác công nghệ — chọn phiên bản phù hợp với thiết bị & mục đích.
+    <b>Tizia</b>: The Intelligent Zone for Interactive Academy<br>
+    Cùng 16 thuốc, cùng nhóm điều trị, khác công nghệ: chọn phiên bản phù hợp với thiết bị & mục đích.
     Tất cả phiên bản web ghi điểm về cùng 1 dashboard giảng viên.
   </footer>
 </div>
@@ -240,7 +240,7 @@ function renderLevels() {
     const stars = progress[l.n]?.stars ?? 0;
     const isCurrent = cur.n === l.n;
     const starsHtml = `<span class="filled">${'★'.repeat(stars)}</span><span class="empty">${'★'.repeat(3 - stars)}</span>`;
-    return `<a href="#" data-level="${l.n}" class="lvl ${unlocked ? '' : 'locked'} ${isCurrent ? 'current' : ''}" title="${l.label} — ${l.desc}">
+    return `<a href="#" data-level="${l.n}" class="lvl ${unlocked ? '' : 'locked'} ${isCurrent ? 'current' : ''}" title="${l.label}, ${l.desc}">
       ${l.n === 10 ? '<span class="badge-new">BOSS</span>' : ''}
       <div class="num">${l.n}</div>
       <div class="name">${l.label}</div>

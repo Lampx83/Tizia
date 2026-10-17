@@ -88,7 +88,7 @@
   <div class="card">
     <h2>➕ Tạo lớp mới</h2>
     <label>Tên lớp</label>
-    <input id="new-name" placeholder="VD: Dược 2025 — K15" maxlength="60" />
+    <input id="new-name" placeholder="VD: Dược 2025, K15" maxlength="60" />
     <label>Tên giảng viên</label>
     <input id="new-teacher" placeholder="VD: PGS.TS. Nguyễn Văn A" maxlength="40" />
     <button id="create-btn">Tạo lớp + sinh mã</button>
@@ -108,7 +108,7 @@ let active = null;
 
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
 function fmt(ms) {
-  if (!ms) return '—';
+  if (!ms) return '-';
   const d = new Date(ms);
   return d.toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
 }
@@ -117,7 +117,7 @@ async function loadClasses() {
   const r = await fetch('api/classes');
   const cls = await r.json();
   if (!cls.length) {
-    list.innerHTML = '<div class="empty" style="padding:14px;font-size:12px">Chưa có lớp — tạo lớp đầu tiên!</div>';
+    list.innerHTML = '<div class="empty" style="padding:14px;font-size:12px">Chưa có lớp, tạo lớp đầu tiên!</div>';
     return;
   }
   list.innerHTML = cls.map(c => `
@@ -185,8 +185,8 @@ async function loadDetail(code) {
           <td><b>${i+1}.</b> ${escapeHtml(m.player_name)}</td>
           <td class="r">${m.attempts}</td>
           <td class="r" style="color:#fbbf24;font-weight:700">${m.best_score}</td>
-          <td class="r">${m.avg_score ?? '—'}</td>
-          <td class="r">${m.perfect_count > 0 ? '⭐'.repeat(Math.min(m.perfect_count, 5)) + (m.perfect_count > 5 ? '+' : '') : '—'}</td>
+          <td class="r">${m.avg_score ?? '-'}</td>
+          <td class="r">${m.perfect_count > 0 ? '⭐'.repeat(Math.min(m.perfect_count, 5)) + (m.perfect_count > 5 ? '+' : '') : '-'}</td>
           <td class="r" style="font-size:11px;opacity:0.7">${fmt(m.last_seen)}</td>
         </tr>
       `).join('')}
@@ -219,7 +219,7 @@ async function loadPlayerDetail(playerName) {
     return;
   }
   pd.innerHTML = `
-    <h3>📈 ${escapeHtml(playerName)} — ${atts.length} lượt gần nhất</h3>
+    <h3>📈 ${escapeHtml(playerName)}: ${atts.length} lượt gần nhất</h3>
     ${atts.map(a => `
       <div class="att">
         <span><span class="badge">${a.version}${a.level_n ? ' L'+a.level_n : ''}</span> ${a.correct}/${a.total} · <b style="color:#fbbf24">${a.score}đ</b></span>

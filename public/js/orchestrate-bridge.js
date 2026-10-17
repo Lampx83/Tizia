@@ -104,7 +104,7 @@
     } else if (msg.type === 'teacher-pinned') {
       renderPinnedBanner(msg.task);
     } else if (msg.type === 'teacher-quiz') {
-      if (msg.quizId) showToast('📝 GV mở quiz: ' + msg.quizId + ' — bấm để vào', 'info', 12000, () => {
+      if (msg.quizId) showToast('📝 GV mở quiz: ' + msg.quizId + 'bấm để vào', 'info', 12000, () => {
         location.href = './quiz.html?id=' + encodeURIComponent(msg.quizId);
       });
     } else if (msg.type === 'kicked') {

@@ -239,7 +239,7 @@ export function nextMilestone(modules, progress, hasContent, subjectLabels = {})
   const label = subjectLabels[subject] || subject;
   const bossDone = (prog[boss.id]?.stars || 0) >= 1;
   if (bossDone) {
-    return { text: `Đã chinh phục Boss ${label} 👑 — thử đạt 3 sao toàn bộ!`, subject, remaining: 0, ready: true };
+    return { text: `Đã chinh phục Boss ${label} 👑: thử đạt 3 sao toàn bộ!`, subject, remaining: 0, ready: true };
   }
   if (remaining === 0) {
     return { text: `Sẵn sàng khiêu chiến Boss ${label} 👑 (${boss.title})!`, subject, remaining: 0, ready: true };

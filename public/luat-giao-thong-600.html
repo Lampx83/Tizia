@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>🚦 Lý thuyết Lái xe ô tô — Thi sát hạch theo hạng · Tizia</title>
-<meta name="description" content="Câu hỏi lý thuyết lái xe ô tô theo Luật TTATGT 2024 — luyện tập theo chủ đề + thi thử theo hạng GPLX (B, C1, C, D1, D2, D…), có câu điểm liệt phải trả lời đúng để qua." />
+<title>🚦 Lý thuyết Lái xe ô tô, Thi sát hạch theo hạng · Tizia</title>
+<meta name="description" content="Câu hỏi lý thuyết lái xe ô tô theo Luật TTATGT 2024, luyện tập theo chủ đề + thi thử theo hạng GPLX (B, C1, C, D1, D2, D…), có câu điểm liệt phải trả lời đúng để qua." />
 <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
 <meta name="theme-color" content="#dc2626" />
 <style>
@@ -84,7 +84,7 @@
 </style>
 </head>
 <body>
-<h1>🚦 Lý thuyết Lái xe ô tô — Luật giao thông đường bộ</h1>
+<h1>🚦 Lý thuyết Lái xe ô tô, Luật giao thông đường bộ</h1>
 
 <div class="toolbar">
   <button data-mode="learn" class="active">📖 Luyện tập</button>
@@ -116,9 +116,9 @@
 </div>
 
 <div id="dePicker">
-  <h2>📑 Chọn đề thi — Hạng <span id="deClsName">B</span></h2>
+  <h2>📑 Chọn đề thi, Hạng <span id="deClsName">B</span></h2>
   <p style="text-align:center;color:var(--muted);font-size:12.5px;max-width:680px;margin:0 auto 14px;line-height:1.5">
-    <b>15 đề thi ngẫu nhiên</b> được tạo cố định cho hạng này — mỗi đề <span id="deMeta">30 câu · 20 phút</span>, có câu điểm liệt. Bấm vào một đề để vào thi.
+    <b>15 đề thi ngẫu nhiên</b> được tạo cố định cho hạng này, mỗi đề <span id="deMeta">30 câu · 20 phút</span>, có câu điểm liệt. Bấm vào một đề để vào thi.
   </p>
   <div id="deGrid"></div>
   <div style="text-align:center;margin-top:16px">
@@ -127,7 +127,7 @@
 </div>
 
 <div class="stats" id="stats">
-  <span>Câu <b id="curIdx">1</b>/<b id="totalQ">—</b></span>
+  <span>Câu <b id="curIdx">1</b>/<b id="totalQ">-</b></span>
   <span>Đúng: <b id="rightCount">0</b></span>
   <span>Sai: <b id="wrongCount">0</b></span>
   <span id="timerBox" style="display:none">⏱ <b id="timer">22:00</b></span>
@@ -153,7 +153,7 @@
 
 <div class="summary" id="summary">
   <h2 style="margin:0 0 4px;" id="sumTitle">Kết quả</h2>
-  <div class="big" id="sumScore">—</div>
+  <div class="big" id="sumScore">-</div>
   <div id="sumDetail" style="color:var(--muted); line-height:1.6;"></div>
   <div id="sumBtns" style="margin-top:20px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
     <button onclick="location.reload()" style="font-family:inherit; padding:10px 22px; border-radius:10px; border:0; background:var(--red); color:white; font-weight:700; cursor:pointer;">Làm lại</button>
@@ -293,7 +293,7 @@
       Đúng: <b>${right}</b> · Sai: <b>${total - right}</b><br>
       Câu liệt sai: <b style="color:${critWrong ? 'var(--red)' : 'var(--green)'}">${critWrong}</b><br>
       ${!passByScore ? '<span style="color:var(--red)">→ Chưa đủ ' + need + '/' + total + ' câu</span><br>' : ''}
-      ${critWrong > 0 ? '<span style="color:var(--red)">→ Sai câu LIỆT — tự động trượt</span>' : ''}
+      ${critWrong > 0 ? '<span style="color:var(--red)">→ Sai câu LIỆT, tự động trượt</span>' : ''}
     `;
     // Nút sau khi nộp: thi sát hạch theo đề → cho thi lại đúng đề / đổi đề khác.
     if (examDe) {

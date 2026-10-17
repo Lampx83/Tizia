@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>🃏 Flashcards SRS · Tizia</title>
-<meta name="description" content="Ôn từ vựng, công thức, ngày tháng theo phương pháp Spaced Repetition — học hiệu quả như Anki." />
+<meta name="description" content="Ôn từ vựng, công thức, ngày tháng theo phương pháp Spaced Repetition, học hiệu quả như Anki." />
 <link rel="icon" href="/favicon.ico" />
 <style>
   :root {
@@ -179,7 +179,7 @@ function renderHome() {
     <h3 style="font-size:13px;color:var(--text-soft);letter-spacing:.6px;text-transform:uppercase;margin:24px 0 12px">📚 Decks công khai</h3>
     <div class="deck-grid">
       ${state.decks.length === 0
-        ? '<div class="empty" style="grid-column:1/-1">Chưa có deck nào — tự tạo đầu tiên!</div>'
+        ? '<div class="empty" style="grid-column:1/-1">Chưa có deck nào, tự tạo đầu tiên!</div>'
         : state.decks.map(d => `
           <div class="deck" data-id="${d.id}">
             <div class="nm">${esc(d.name)}</div>
@@ -203,7 +203,7 @@ async function startReview(deckId) {
     state.queue = d.queue || [];
     state.cur = 0; state.showing = 'front'; state.finished = false;
     if (state.queue.length === 0) {
-      alert('Không có card nào đến hạn ôn — quay lại sau!');
+      alert('Không có card nào đến hạn ôn, quay lại sau!');
       return;
     }
     renderCard();
