@@ -7,6 +7,8 @@ import hashlib
 import json
 from pathlib import Path
 
+from services import context
+
 SKILLS_DIR = Path(__file__).resolve().parent.parent / "skills"
 LOCK_FILE = SKILLS_DIR / "skills.lock.json"
 
@@ -26,3 +28,13 @@ def test_lock_covers_every_skill():
 def test_aiboard_manual_is_compact():
     manual = Path(__file__).resolve().parent.parent / "prompts" / "AIBOARD.md"
     assert len(manual.read_bytes()) <= 2048
+
+
+def test_skill_pad_reaches_target_and_keeps_own_rules_first(monkeypatch):
+    skill = context.SKILLS["edit-css-style"]
+    own = skill.sections[3].strip()
+    monkeypatch.setenv("AI_BOARD_SKILL_PAD_CHARS", "10100")
+    padded = context.skill_text(skill, 3)
+    assert len(padded) == 10100 and padded.startswith(own)
+    monkeypatch.delenv("AI_BOARD_SKILL_PAD_CHARS")
+    assert context.skill_text(skill, 3) == own
