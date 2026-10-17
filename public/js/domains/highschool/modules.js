@@ -59,70 +59,75 @@ export const MODULES = [
   M('H12HOA', 'Hoá học 12', 3, 'hoa-hoc', 6, 'H11HOA',
     'Ester – lipid · carbohydrate · amine – amino acid – protein · polymer · đại cương kim loại · ÔN THI TỐT NGHIỆP THPT.'),
 
-  // ───────── Sinh học (ban KHTN) — Lớp 10 đã có scenarios sinh-hoc.js ─────────
+  // ───────── Sinh học (ban KHTN) ─────────
   M('H10SINH', 'Sinh học 10', 1, 'sinh-hoc', 0, null,
     'Thành phần hoá học của tế bào · cấu trúc tế bào · trao đổi chất qua màng · phân bào (nguyên phân – giảm phân) · công nghệ vi sinh vật.'),
-  // Lớp 11/12 Sinh học chưa có scenarios riêng — vẫn list để học sinh thấy lộ trình.
   M('H11SINH', 'Sinh học 11', 2, 'sinh-hoc', 3, 'H10SINH',
-    'Trao đổi chất ở sinh vật · cảm ứng · sinh trưởng – phát triển · sinh sản TV/ĐV. (Scenarios đang biên soạn).'),
+    'Trao đổi chất ở sinh vật · cảm ứng · sinh trưởng – phát triển · sinh sản TV/ĐV.'),
   M('H12SINH', 'Sinh học 12', 3, 'sinh-hoc', 6, 'H11SINH',
-    'ADN – gen – NST · quy luật di truyền · tiến hoá · sinh thái học · ÔN THI THPT. (Scenarios đang biên soạn).'),
+    'ADN – gen – NST · quy luật di truyền · tiến hoá · sinh thái học · ÔN THI THPT.'),
 
-  // ───────── Lịch sử (ban KHXH) — Lớp 10 đã có scenarios lich-su.js ─────────
+  // ───────── Lịch sử (ban KHXH) ─────────
   M('H10SU', 'Lịch sử 10', 1, 'lich-su', 0, null,
     'Sử học là gì · văn minh thế giới cổ-trung đại (Hy Lạp, La Mã, Trung Quốc, Ấn Độ) · ĐNA trước CN · VN cổ đại (Văn Lang-Âu Lạc) → Tây Sơn.'),
   M('H11SU', 'Lịch sử 11', 2, 'lich-su', 3, 'H10SU',
-    'Cách mạng tư sản & CNTB · CNXH từ 1917 · giành độc lập của ĐNA · cải cách & bảo vệ Tổ quốc. (Scenarios đang biên soạn).'),
+    'Cách mạng tư sản & CNTB · CNXH từ 1917 · giành độc lập của ĐNA · cải cách & bảo vệ Tổ quốc.'),
   M('H12SU', 'Lịch sử 12', 3, 'lich-su', 6, 'H11SU',
-    'Trật tự thế giới sau 1945 · ASEAN · CMVN 1930-1975 · Đổi mới · hội nhập quốc tế · ÔN THI THPT. (Scenarios đang biên soạn).'),
+    'Trật tự thế giới sau 1945 · ASEAN · CMVN 1930-1975 · Đổi mới · hội nhập quốc tế · ÔN THI THPT.'),
 
-  // ───────── Địa lí (ban KHXH) — Lớp 10 đã có scenarios dia-ly.js ─────────
+  // ───────── Địa lí (ban KHXH) ─────────
   M('H10DIA', 'Địa lí 10', 1, 'dia-li', 0, null,
     'Trái Đất trong vũ trụ · các vành đai khí hậu · dân cư – xã hội · nông nghiệp – công nghiệp – dịch vụ · môi trường – tài nguyên.'),
   M('H11DIA', 'Địa lí 11', 2, 'dia-li', 3, 'H10DIA',
-    'Toàn cầu hoá & khu vực hoá · địa lí các quốc gia tiêu biểu (Hoa Kỳ, TQ, Nhật Bản, EU, ASEAN). (Scenarios đang biên soạn).'),
+    'Toàn cầu hoá & khu vực hoá · địa lí các quốc gia tiêu biểu (Hoa Kỳ, TQ, Nhật Bản, EU, ASEAN).'),
   M('H12DIA', 'Địa lí 12', 3, 'dia-li', 6, 'H11DIA',
-    'Địa lí tự nhiên & dân cư VN · các ngành & vùng kinh tế · biển đảo · ÔN THI TỐT NGHIỆP THPT. (Scenarios đang biên soạn).'),
+    'Địa lí tự nhiên & dân cư VN · các ngành & vùng kinh tế · biển đảo · ÔN THI TỐT NGHIỆP THPT.'),
 
   // ───────── GD Kinh tế & Pháp luật (ban KHXH) ─────────
   M('H10GDCD', 'GD Kinh tế & Pháp luật 10', 1, 'gdcd', 0, null,
     'Nền kinh tế & các chủ thể · thị trường – giá cả · ngân sách – thuế · hệ thống chính trị & pháp luật nước CHXHCN Việt Nam.'),
   M('H11GDCD', 'GD Kinh tế & Pháp luật 11', 2, 'gdcd', 3, 'H10GDCD',
-    'Cạnh tranh – cung cầu · lạm phát – thất nghiệp · đạo đức kinh doanh · quyền bình đẳng. (Scenarios đang biên soạn).'),
+    'Cạnh tranh – cung cầu · lạm phát – thất nghiệp · đạo đức kinh doanh · quyền bình đẳng.'),
   M('H12GDCD', 'GD Kinh tế & Pháp luật 12', 3, 'gdcd', 6, 'H11GDCD',
-    'Tăng trưởng & phát triển · hội nhập kinh tế · pháp luật lao động, kinh doanh & quyền con người. (Scenarios đang biên soạn).'),
+    'Tăng trưởng & phát triển · hội nhập kinh tế · pháp luật lao động, kinh doanh & quyền con người.'),
 
   // ───────── Tin học ─────────
   M('H10TIN', 'Tin học 10', 1, 'tin-hoc', 0, null,
     'Máy tính & xã hội tri thức · biểu diễn thông tin · mạng & Internet an toàn · lập trình Python (ICT/KHMT) · thuật toán cơ bản.'),
   M('H11TIN', 'Tin học 11', 2, 'tin-hoc', 3, 'H10TIN',
-    'CSDL & hệ quản trị · kỹ thuật lập trình · thiết kế web (ICT) hoặc CTDL & thuật toán (KHMT). (Scenarios đang biên soạn).'),
+    'CSDL & hệ quản trị · kỹ thuật lập trình · thiết kế web (ICT) hoặc CTDL & thuật toán (KHMT).'),
   M('H12TIN', 'Tin học 12', 3, 'tin-hoc', 6, 'H11TIN',
-    'AI & khoa học dữ liệu nhập môn · dự án phần mềm · an toàn – đạo đức số · định hướng nghề CNTT. (Scenarios đang biên soạn).'),
+    'AI & khoa học dữ liệu nhập môn · dự án phần mềm · an toàn – đạo đức số · định hướng nghề CNTT.'),
 
   // ───────── Công nghệ (định hướng) ─────────
   M('H10CN', 'Công nghệ 10', 1, 'cong-nghe', 0, null,
-    'Định hướng Trồng trọt hoặc Cơ khí · thiết kế kỹ thuật cơ bản · vẽ kỹ thuật. (Scenarios đang biên soạn).'),
+    'Định hướng Trồng trọt hoặc Cơ khí · thiết kế kỹ thuật cơ bản · vẽ kỹ thuật.'),
   M('H11CN', 'Công nghệ 11', 2, 'cong-nghe', 3, 'H10CN',
-    'Trồng trọt (chế biến, bảo quản nông sản) hoặc Cơ khí chế tạo (vẽ kỹ thuật nâng cao, gia công). (Scenarios đang biên soạn).'),
+    'Trồng trọt (chế biến, bảo quản nông sản) hoặc Cơ khí chế tạo (vẽ kỹ thuật nâng cao, gia công).'),
   M('H12CN', 'Công nghệ 12', 3, 'cong-nghe', 6, 'H11CN',
-    'Lâm nghiệp – Thuỷ sản hoặc Điện – Điện tử (mạch, cảm biến) · dự án ứng dụng. (Scenarios đang biên soạn).'),
+    'Lâm nghiệp – Thuỷ sản hoặc Điện – Điện tử (mạch, cảm biến) · dự án ứng dụng.'),
 
   // ───────── GD Quốc phòng - An ninh (bắt buộc theo GDPT 2018 — TT 32/2018) ─────────
   M('H10GDQP', 'GD Quốc phòng - An ninh 10', 1, 'gdqp', 0, null,
     'Lịch sử QĐND VN · truyền thống các quân chủng-binh chủng · kỹ thuật chiến thuật cơ bản (đội ngũ, bắn AK) · an ninh quốc gia.'),
   M('H11GDQP', 'GD Quốc phòng - An ninh 11', 2, 'gdqp', 3, 'H10GDQP',
-    'Bảo vệ chủ quyền lãnh thổ – biên giới quốc gia · phòng chống tội phạm sử dụng công nghệ cao · điều lệnh đội ngũ. (Scenarios đang biên soạn).'),
+    'Bảo vệ chủ quyền lãnh thổ – biên giới quốc gia · phòng chống tội phạm sử dụng công nghệ cao · điều lệnh đội ngũ.'),
   M('H12GDQP', 'GD Quốc phòng - An ninh 12', 3, 'gdqp', 6, 'H11GDQP',
-    'Truyền thống bảo vệ Tổ quốc · an ninh phi truyền thống (mạng, môi trường) · kỹ thuật chiến đấu bộ binh. (Scenarios đang biên soạn).'),
+    'Truyền thống bảo vệ Tổ quốc · an ninh phi truyền thống (mạng, môi trường) · kỹ thuật chiến đấu bộ binh.'),
+
+  // ───────── GD Địa phương (bắt buộc theo GDPT 2018) ─────────
+  M('H10GDDP', 'GD Địa phương 10', 1, 'gd-dia-phuong', 0, null,
+    'Lịch sử–văn hoá–địa lí địa phương lớp 10: danh lam · di sản · danh nhân · lễ hội · phát triển kinh tế–xã hội của địa phương.'),
+  M('H11GDDP', 'GD Địa phương 11', 2, 'gd-dia-phuong', 3, 'H10GDDP',
+    'Lịch sử–văn hoá–địa lí địa phương lớp 11: tiếp nối nghiên cứu và thực hành về di sản và phát triển bền vững của địa phương.'),
+  M('H12GDDP', 'GD Địa phương 12', 3, 'gd-dia-phuong', 6, 'H11GDDP',
+    'Lịch sử–văn hoá–địa lí địa phương lớp 12: tổng hợp, dự án và định hướng đóng góp cho sự phát triển địa phương.'),
 
   // ───────── HĐ Trải nghiệm – Hướng nghiệp (bắt buộc) ─────────
-  // Module placeholder cho lộ trình UI. Học sinh thấy ở /space?domain=highschool;
-  // Tizia chưa tự host scenarios — sẽ migrate sang ScoreUp khi Phase 4 ready.
   M('H10HDTN', 'HĐ Trải nghiệm 10', 1, 'htn', 0, null,
-    'Khám phá bản thân · định hướng nghề · trải nghiệm xã hội · trách nhiệm công dân. (Scenarios đang biên soạn).'),
+    'Khám phá bản thân · định hướng nghề · trải nghiệm xã hội · trách nhiệm công dân.'),
   M('H11HDTN', 'HĐ Trải nghiệm 11', 2, 'htn', 3, 'H10HDTN',
-    'Phát triển bản thân · trải nghiệm nghề · định hướng chọn ngành ĐH. (Scenarios đang biên soạn).'),
+    'Phát triển bản thân · trải nghiệm nghề · định hướng chọn ngành ĐH.'),
   M('H12HDTN', 'HĐ Trải nghiệm 12', 3, 'htn', 6, 'H11HDTN',
-    'Định hướng tương lai · chuẩn bị thi tốt nghiệp & vào ĐH · trải nghiệm cộng đồng. (Scenarios đang biên soạn).'),
+    'Định hướng tương lai · chuẩn bị thi tốt nghiệp & vào ĐH · trải nghiệm cộng đồng.'),
 ];

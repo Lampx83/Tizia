@@ -1024,4 +1024,41 @@ export const H10SU_LESSONS = {
       { q: 'Từ việc nhà Nguyễn bế quan toả cảng, em rút ra bài học gì cho hôm nay?', a: 'Bài học là phải chủ động mở cửa, hội nhập, tiếp thu khoa học - công nghệ tiên tiến của thế giới, không bảo thủ đóng kín. Đồng thời vẫn giữ vững độc lập, tự chủ và bản sắc dân tộc trong quá trình hội nhập.' },
     ],
   },
+
+  'H10SU-w36-quiz': {
+    topic: 'Kết thúc Lịch Sử 10 — Thế giới và Việt Nam qua lăng kính lịch sử',
+    intro: 'Lịch Sử 10 đưa em qua những trang sử vĩ đại của nhân loại và dân tộc — từ các nền văn minh cổ đại đến thế giới cận đại và quá trình đấu tranh giành độc lập của Việt Nam. Hôm nay chúng ta nhìn lại hành trình đó và chuẩn bị cho lớp 11.',
+    objectives: [
+      'Hệ thống hoá các giai đoạn lịch sử thế giới và Việt Nam đã học trong năm.',
+      'Nhận ra mối liên hệ nhân quả giữa các sự kiện lịch sử để hiểu "vì sao" hơn là "cái gì".',
+      'Chuẩn bị tư duy phân tích lịch sử cần thiết cho chương trình lớp 11.',
+    ],
+    theory: [
+      { h: 'Bức tranh toàn cảnh Lịch Sử 10' },
+      { ul: [
+        'Các nền văn minh cổ đại: Lưỡng Hà, Ai Cập, Hy Lạp, La Mã, Trung Hoa, Ấn Độ — cội nguồn văn minh nhân loại.',
+        'Lịch sử trung đại thế giới: chế độ phong kiến châu Âu và châu Á, các đế quốc, tôn giáo lớn.',
+        'Lịch sử Việt Nam: từ thời Văn Lang–Âu Lạc đến thời Lý–Trần–Lê Sơ và các cuộc kháng chiến chống ngoại xâm.',
+        'Thời cận đại: Cách mạng Tư sản Pháp, Công nghiệp hoá, chủ nghĩa thực dân và phong trào đấu tranh giải phóng.',
+      ] },
+      { h: 'Hành trang sang Lịch Sử 11' },
+      { ul: [
+        'Thế giới cận đại → Thế giới hiện đại: từ Chiến tranh Thế giới I đến phong trào giải phóng dân tộc ở châu Á-Phi.',
+        'Việt Nam dưới thực dân Pháp → Phong trào yêu nước đầu thế kỉ XX: Phan Bội Châu, Phan Châu Trinh.',
+        'Cách mạng tháng Mười Nga (1917) và ảnh hưởng đến phong trào cộng sản thế giới và Việt Nam.',
+        'Tư duy lịch sử: so sánh sự kiện, phân tích nguyên nhân–kết quả, đánh giá nhân vật lịch sử.',
+      ] },
+      { h: 'Cách học Sử hiệu quả hơn' },
+      { ul: [
+        'Lập timeline: vẽ trục thời gian với các sự kiện quan trọng — nhớ bối cảnh tốt hơn học thuộc lòng ngày tháng.',
+        'Hỏi "Tại sao?": mỗi sự kiện đều có nguyên nhân và hệ quả — hiểu chuỗi nhân quả là học Sử giỏi.',
+        'Đọc thêm truyện lịch sử hoặc xem phim tài liệu — tạo hình ảnh sống động trong đầu.',
+      ] },
+      { note: 'Lịch sử không phải là danh sách ngày tháng và tên người cần học thuộc. Lịch sử là câu chuyện của con người — em hiểu con người, em sẽ hiểu lịch sử.' },
+    ],
+    examples: [
+      { q: 'Tại sao việc học lịch sử thế giới ở lớp 10 lại quan trọng để hiểu lịch sử Việt Nam lớp 11?', a: 'Lịch sử Việt Nam không xảy ra trong chân không — nó luôn chịu tác động của bối cảnh thế giới. Ví dụ: Cách mạng Tư sản Pháp (1789) lan rộng tư tưởng tự do-bình đẳng ảnh hưởng đến phong trào yêu nước VN thế kỉ XIX; Cách mạng Tháng Mười Nga (1917) mở ra con đường cách mạng vô sản cho Nguyễn Ái Quốc. Không hiểu thế giới, ta không giải thích được nhiều sự kiện trong nước.' },
+      { q: 'Điểm gì ở chương trình Lịch Sử 10 sẽ xuất hiện lại nhiều nhất trong đề thi lớp 11 và lớp 12?', a: 'Hai điểm hay xuất hiện lại: (1) Bối cảnh thực dân Pháp xâm lược và chính sách khai thác thuộc địa — nền tảng để hiểu phong trào yêu nước và cách mạng VN; (2) Các nền văn minh và xu hướng lịch sử thế giới cổ-trung đại — thường xuất hiện trong câu phân tích "hội nhập và bản sắc" hoặc so sánh các nền văn minh. Dành thời gian nắm vững hai phần này sẽ có lợi dài hạn.' },
+    ],
+  },
 };

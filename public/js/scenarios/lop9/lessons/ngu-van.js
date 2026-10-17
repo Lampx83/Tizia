@@ -1378,4 +1378,40 @@ export const S9NV_LESSONS = {
     ]
   ),
 
+  'S9NV-w36-quiz': L(
+    'Kết thúc Ngữ Văn THCS — Hành trình của những con chữ',
+    'Tuần kết thúc năm học — cô không ôn bài, cô muốn cùng các em nhìn lại 4 năm văn chương THCS: những tác phẩm đã đọc, những cảm xúc đã có, và điều văn học để lại trong trái tim mỗi người.',
+    [
+      'Hệ thống hoá các tác phẩm và thể loại văn học đã học trong chương trình THCS.',
+      'Nhận ra giá trị văn học đối với đời sống tâm hồn và nhân cách con người.',
+      'Tự tin bước vào chương trình Ngữ văn THPT với hành trang đã có.',
+    ],
+    [
+      { h: 'Những tác phẩm đã đồng hành' },
+      { p: 'Từ lớp 6 đến lớp 9, em đã gặp hàng chục tác giả và tác phẩm: từ những câu chuyện dân gian gần gũi (Thạch Sanh, Sự tích Hồ Gươm) đến thơ Trung đại (Ức Trai, Nguyễn Du, Hồ Xuân Hương), từ văn học kháng chiến (Chính Hữu, Nguyễn Đình Thi) đến hiện đại (Nguyễn Duy, Hữu Thỉnh, Y Phương, Thanh Hải).' },
+      { h: 'Điều văn học dạy chúng ta' },
+      { ul: [
+        'Biết đặt mình vào vị trí người khác — phát triển sự đồng cảm.',
+        'Dùng ngôn ngữ chính xác và đẹp — giao tiếp hiệu quả và tinh tế.',
+        'Cảm nhận cái đẹp trong những điều bình dị — giúp cuộc sống phong phú hơn.',
+        'Nhìn thẳng vào thực tế xã hội qua lăng kính nhân văn — biết phân biệt đúng sai.',
+      ] },
+      { h: 'Từ THCS lên THPT — văn học thay đổi gì?' },
+      { ul: [
+        'Văn bản dài hơn, phức tạp hơn: truyện ngắn dài, tiểu thuyết trích đoạn, thơ nhiều tầng nghĩa.',
+        'Yêu cầu nghị luận cao hơn: lập luận chặt, dẫn chứng phong phú, văn phong riêng.',
+        'Xuất hiện các tác phẩm nước ngoài kinh điển: Romeo và Juliet, Số đỏ, Chiếc thuyền ngoài xa...',
+        'Thi THPT Quốc gia: phần Đọc hiểu và Nghị luận chiếm tỉ trọng lớn.',
+      ] },
+      { h: 'Lời nhắn gửi' },
+      { p: 'Đọc sách — đọc nhiều, đọc đa dạng. Đó là cách duy nhất để viết hay. Không có con đường tắt nào khác. Người viết giỏi đều là người đọc giỏi trước.' },
+      { note: 'Văn học không dạy em trả lời đúng — văn học dạy em đặt câu hỏi đúng. Hãy mang theo tình yêu con chữ ấy vào THPT và cả cuộc đời.' },
+    ],
+    [
+      { q: 'Hãy kể tên một tác phẩm văn học THCS để lại ấn tượng sâu nhất với em và lí giải tại sao.', a: 'Ví dụ: "Làng" của Kim Lân — vì tình yêu làng quê và lòng tự trọng của ông Hai được khắc hoạ rất chân thực, giản dị mà sâu sắc. Khi ông Hai phải đấu tranh giữa tình yêu làng Chợ Dầu và lòng yêu nước, ta thấy tâm lí người nông dân Việt Nam hiện lên sống động. Tác phẩm dạy em rằng yêu nước không cần lời lẽ to tát — nó sống ngay trong những tình cảm bình dị nhất.' },
+      { q: 'Môn Ngữ Văn giúp gì cho các môn học và công việc khác trong cuộc sống?', a: 'Ngữ Văn rèn kĩ năng đọc hiểu, viết lách và diễn đạt — những kĩ năng nền tảng cho mọi lĩnh vực. Người giỏi Văn biết trình bày ý kiến rõ ràng, thuyết phục; biết đọc và tóm tắt tài liệu nhanh; biết viết email, báo cáo, luận văn đúng và hay. Trong thời đại AI, người biết diễn đạt ý tưởng của mình chính xác sẽ là người dùng AI hiệu quả nhất.' },
+      { q: 'Câu văn hoặc câu thơ nào trong chương trình lớp 9 em tâm đắc nhất?', a: 'Ví dụ: câu thơ "Con dù lớn vẫn là con của mẹ / Đi hết đời, lòng mẹ vẫn theo con" (Y Phương) vì nó diễn tả tình mẫu tử bằng ngôn ngữ giản dị nhất mà chạm thẳng vào trái tim. Hoặc "Ta làm con chim hót / Ta làm một cành hoa" (Thanh Hải) — ước nguyện được cống hiến dù nhỏ bé, bình dị mà đẹp đẽ vô cùng.' },
+    ]
+  ),
+
 };

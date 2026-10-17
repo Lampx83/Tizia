@@ -293,6 +293,15 @@ export const P1TV_WEEKS = [
     Q('Sắp xếp thành câu: "yêu / em / cô"', ['Em yêu cô.', 'Cô yêu em.', 'Yêu em cô.', 'Cả hai đều đúng tuỳ ngữ cảnh'], 3, 'Cả "Em yêu cô." và "Cô yêu em." đều là câu đúng.', ['Sai — "Em yêu cô." đúng nhưng chưa đủ, còn cách khác.', 'Sai — "Cô yêu em." đúng nhưng chưa đủ, còn cách khác.', 'Sai — "Yêu em cô." sai trật tự từ.', 'Đúng — cả "Em yêu cô." và "Cô yêu em." đều đúng.']),
     Q('Bài học cuối năm: em nên?', ['Quên hết kiến thức', 'Bỏ học', 'Chỉ chơi', 'Ôn lại bài thường xuyên'], 3, 'Ôn bài thường xuyên.', ['Sai — không nên quên kiến thức đã học.', 'Sai — không được bỏ học.', 'Sai — không chỉ chơi mà quên học.', 'Đúng — em nên ôn lại bài thường xuyên.']),
   ]),
+
+  M(36, 'Kết thúc Lớp 1 — Hành trang Tiếng Việt vào Lớp 2', [
+    Q('Bảng chữ cái tiếng Việt có bao nhiêu chữ cái?', ['24', '29', '26', '32'], 1, 'Tiếng Việt có 29 chữ cái.', ['Sai — đếm thiếu rồi, tiếng Việt nhiều chữ cái hơn.', 'Đúng — bảng chữ cái tiếng Việt có 29 chữ cái.', 'Sai — 26 là bảng chữ cái tiếng Anh.', 'Sai — đếm thừa rồi.']),
+    Q('Tiếng Việt có mấy dấu thanh?', ['4', '5', '6', '7'], 2, 'Ngang, huyền, sắc, hỏi, ngã, nặng — 6 thanh.', ['Sai — đếm thiếu, còn thanh hỏi và thanh ngã nữa.', 'Sai — đếm thiếu 1 thanh.', 'Đúng — ngang, huyền, sắc, hỏi, ngã, nặng: 6 thanh.', 'Sai — đếm thừa 1 thanh.']),
+    Q('Tiếng "trâu" có âm đầu là gì?', ['t', 'tr', 'ch', 'th'], 1, 'Âm đầu "tr", vần "âu".', ['Sai — "t" mới là một phần, âm đầu ở đây là âm ghép.', 'Đúng — âm đầu là "tr", vần là "âu".', 'Sai — "ch" là âm đầu của tiếng khác, ví dụ "chân".', 'Sai — "th" là âm đầu của tiếng khác, ví dụ "thỏ".']),
+    Q('Câu hỏi thường kết thúc bằng dấu gì?', ['Dấu chấm', 'Dấu phẩy', 'Dấu chấm than', 'Dấu chấm hỏi'], 3, 'Câu hỏi kết thúc bằng dấu chấm hỏi (?).', ['Sai — dấu chấm dùng cho câu kể.', 'Sai — dấu phẩy dùng để ngăn cách trong câu, không kết thúc câu.', 'Sai — dấu chấm than dùng cho câu cảm.', 'Đúng — câu hỏi kết thúc bằng dấu chấm hỏi (?).']),
+    Q('Lên Lớp 2 em sẽ tập viết gì?', ['Chỉ viết chữ cái', 'Đoạn văn ngắn', 'Không viết nữa', 'Chỉ chép lại bài'], 1, 'Lớp 2 bắt đầu viết đoạn văn ngắn.', ['Sai — viết chữ cái em đã làm xong ở Lớp 1 rồi.', 'Đúng — Lớp 2 em sẽ tập viết đoạn văn ngắn.', 'Sai — lên lớp em còn viết nhiều hơn nữa.', 'Sai — không chỉ chép, em còn tự viết câu và đoạn của mình.']),
+    Q('Cách tốt nhất để giỏi Tiếng Việt trong hè là?', ['Đọc sách mỗi ngày', 'Xem tivi cả ngày', 'Cất hết sách đi', 'Chỉ chơi điện tử'], 0, 'Đọc mỗi ngày 10 phút cũng rất tốt.', ['Đúng — đọc sách mỗi ngày, dù chỉ 10 phút, giúp em tiến bộ nhanh.', 'Sai — xem tivi cả ngày không giúp em đọc và viết tốt hơn.', 'Sai — hè vẫn nên giữ thói quen đọc sách.', 'Sai — chơi điện tử cả ngày không giúp em giỏi Tiếng Việt.']),
+  ]),
 ];
 
 export const P1TV_SCENARIOS = indexBy(P1TV_WEEKS);

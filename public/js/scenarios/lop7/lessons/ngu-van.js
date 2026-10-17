@@ -1218,5 +1218,44 @@ export const S7NV_LESSONS = {
       { q: 'Trước giờ thi, em nên làm gì để giữ tâm lí tốt?', a: 'Ôn lại nhẹ nhàng những ý chính, không ôn nhồi nhét; ngủ đủ giấc đêm trước; ăn sáng đầy đủ; đến phòng thi sớm; hít thở sâu để bình tĩnh. Một tâm lí thoải mái và tỉnh táo sẽ giúp em làm bài tốt hơn nhiều so với việc lo lắng, căng thẳng.' },
     ],
   },
+
+  'S7NV-w36-quiz': {
+    topic: 'Kết thúc Ngữ Văn 7 — Ngôn ngữ và tâm hồn bước vào lớp 8',
+    intro: 'Cả năm lớp 7, chúng ta đã cùng nhau đọc những trang văn đẹp, cảm nhận những bài thơ hay, và học cách diễn đạt bằng ngôn ngữ của riêng mình. Tuần cuối này, hãy nhìn lại hành trình văn chương đó và chuẩn bị tâm thế để đón chào những tác phẩm mới, những bài học mới ở lớp 8.',
+    objectives: [
+      'Hệ thống hoá các thể loại văn học và kỹ năng đọc hiểu đã học trong năm.',
+      'Ôn tập các kiểu bài viết: văn biểu cảm, văn nghị luận, thuyết minh cơ bản.',
+      'Kết nối kiến thức Ngữ Văn 7 với những gì sẽ học ở lớp 8 và xa hơn.',
+    ],
+    theory: [
+      { h: 'Bức tranh toàn cảnh Ngữ Văn 7' },
+      { ul: [
+        'Văn học dân gian: ca dao, tục ngữ, thành ngữ — kho báu ngôn ngữ của ông cha.',
+        'Thơ: Thơ trữ tình (Tiếng gà trưa, Đêm nay Bác không ngủ, Sang thu...); đặc điểm: vần, nhịp, hình ảnh, cảm xúc.',
+        'Truyện: Truyện ngắn hiện đại (Lão Hạc, Buổi học cuối cùng, Cổng trường mở ra...); đặc điểm: nhân vật, tình huống, chủ đề, ngôi kể.',
+        'Văn bản nhật dụng: đề tài gần gũi đời sống (môi trường, gia đình, xã hội).',
+        'Tiếng Việt: từ ghép, từ láy, đại từ, quan hệ từ, thành phần biệt lập; phép tu từ (ẩn dụ, hoán dụ, điệp ngữ, liệt kê).',
+        'Tập làm văn: văn biểu cảm (nêu cảm nhận về người/vật/sự việc), văn nghị luận sơ bộ (luận điểm, lí lẽ, dẫn chứng).',
+      ] },
+      { h: 'Điểm chung của một bài văn hay' },
+      { ul: [
+        'Đọc hiểu: nhận diện thể loại → tìm chủ đề → phân tích chi tiết nổi bật → rút ra bài học.',
+        'Viết: xác định mục đích → lập dàn ý → viết từng đoạn rõ ý → đọc soát và sửa.',
+        'Ngôn ngữ: dùng từ chính xác, câu đa dạng, không lặp từ, biết dùng phép tu từ đúng chỗ.',
+      ] },
+      { h: 'Cầu nối sang lớp 8' },
+      { ul: [
+        'Lớp 8 sẽ học thêm: truyện ngắn đặc sắc (Tôi đi học, Trong lòng mẹ, Tức nước vỡ bờ), thơ trữ tình hiện đại.',
+        'Kiểu bài viết mở rộng: tự sự (kể chuyện sáng tạo), nghị luận xã hội và văn học chuyên sâu hơn.',
+        'Tiếng Việt: các kiểu câu phức tạp, biện pháp tu từ nâng cao, ngữ pháp văn bản.',
+      ] },
+      { note: 'Ngữ Văn không chỉ là môn thi — đó là hành trang tư duy và cảm xúc cho cả cuộc đời. Hãy đọc sách nhiều trong hè và viết nhật ký để ngôn ngữ của em ngày càng phong phú!' },
+    ],
+    examples: [
+      { q: 'Phân biệt văn biểu cảm và văn nghị luận bằng ví dụ cụ thể.', a: 'Văn biểu cảm nhằm bộc lộ tình cảm, cảm xúc — ví dụ "Cảm nghĩ về người mẹ": em ghi lại những kỷ niệm cảm động với mẹ, nêu tình yêu và biết ơn. Văn nghị luận nhằm thuyết phục bằng lí lẽ — ví dụ "Vì sao cần bảo vệ môi trường?": em đưa luận điểm, dẫn chứng số liệu, và đề xuất hành động cụ thể.' },
+      { q: 'Tìm ý nghĩa của câu tục ngữ "Có công mài sắt, có ngày nên kim".', a: 'Câu tục ngữ khuyên: kiên trì và chăm chỉ sẽ đạt được thành công dù khó khăn đến đâu. "Sắt" (to, cứng, khó mài) là ẩn dụ cho thử thách; "kim" (nhỏ, tinh xảo, hữu dụng) là ẩn dụ cho kết quả tốt đẹp. Bài học: đừng bao giờ bỏ cuộc — sự bền bỉ mới tạo nên thành công.' },
+      { q: 'Hãy viết một đoạn văn biểu cảm (5–7 câu) về kỷ niệm đáng nhớ nhất trong năm học lớp 7.', a: 'Gợi ý cấu trúc: Câu 1 — nêu kỷ niệm (đó là điều gì, khi nào). Câu 2–3 — kể lại ngắn gọn sự việc với chi tiết cảm xúc. Câu 4–5 — bày tỏ tình cảm (vui, buồn, tự hào, biết ơn). Câu 6–7 — khẳng định ý nghĩa và bài học rút ra. Ví dụ có thể về ngày thi đầu tiên đạt điểm cao, một chuyến dã ngoại lớp, hay khoảnh khắc được bạn bè giúp đỡ.' },
+    ],
+  },
 };
 

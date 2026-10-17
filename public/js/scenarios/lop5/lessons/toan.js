@@ -639,4 +639,24 @@ export const P5_TOAN_LESSONS = {
       { title: 'Lên cấp 2', body: 'Hãy duy trì thói quen làm bài cẩn thận, trình bày rõ ràng.' },
     ]
   ),
+
+  'P5-w36-quiz': L(
+    'Kết thúc Tiểu học — Hành trang Toán vào Lớp 6',
+    'Chúc mừng! Em đã hoàn thành 5 năm học Toán tiểu học. Cùng nhìn lại bức tranh toàn cảnh nhé.',
+    [
+      'Hệ thống hoá 5 năm kiến thức Toán tiểu học.',
+      'Tự tin và sẵn sàng học Toán THCS.',
+    ],
+    [
+      '**5 trụ cột Toán tiểu học:** Số & phép tính — Đo lường — Hình học — Thống kê — Giải toán.',
+      '**Số đã học:** tự nhiên (triệu, tỉ), phân số, hỗn số, số thập phân.',
+      '**Hình học đã học:** hình vuông, chữ nhật, tam giác, thang, tròn; hộp chữ nhật, hình lập phương.',
+      '**Tư duy toán:** đọc đề → tóm tắt → lập kế hoạch → giải → kiểm tra.',
+      '**Lớp 6 sẽ học:** số nguyên âm/dương, tỉ lệ thức, biểu thức chứa chữ, hình học phẳng với đo góc và diện tích nâng cao.',
+    ],
+    [
+      { title: 'Nhìn lại', body: '5 năm em từ "đếm số 1–10" đến "tính thể tích hình hộp và phần trăm" — một hành trình dài!' },
+      { title: 'Lời khuyên', body: 'Trước khi vào Lớp 6: ôn phân số và số thập phân — đó là nền tảng của Toán THCS.' },
+    ]
+  ),
 };

@@ -712,4 +712,41 @@ export const P4TIN_LESSONS = {
       { q: 'Trong Scratch, em lập trình bằng cách nào?', a: 'Kéo thả và ghép các khối lệnh.' },
     ],
   },
+
+  'P4TIN-w36-quiz': {
+    topic: 'Kết thúc Lớp 4 — Hành trang Tin học vào Lớp 5',
+    intro: 'Chúc mừng các em đã hoàn thành năm học Tin học Lớp 4! Hôm nay cô tổng kết hành trình số hóa, từ phần cứng đến Scratch, và mở ra những chân trời lập trình thú vị hơn ở Lớp 5!',
+    objectives: [
+      'Hệ thống toàn bộ kiến thức Tin học Lớp 4 theo bốn mảng lớn.',
+      'Biết những kỹ năng lập trình và công nghệ mới chờ ở Lớp 5.',
+      'Lập kế hoạch tự học lập trình trong kỳ hè.',
+    ],
+    theory: [
+      { h: 'Bốn mảng Tin học Lớp 4' },
+      { ul: [
+        'Máy tính và phần cứng: CPU (bộ não), RAM (trí nhớ tạm), ổ cứng (lưu trữ), màn hình, bàn phím, chuột, loa; phân biệt phần cứng (sờ được) và phần mềm (chương trình).',
+        'An toàn thông tin: mật khẩu mạnh (8+ ký tự, chữ hoa + thường + số + ký tự đặc biệt); không chia sẻ với ai; phòng tránh lừa đảo (phishing); không gặp người lạ biết qua mạng.',
+        'Thuật toán và tư duy lập trình: thuật toán là dãy bước có thứ tự giải quyết vấn đề; các cấu trúc cơ bản — tuần tự, rẽ nhánh (nếu-thì), lặp (while/for).',
+        'Lập trình Scratch: nhân vật (Sprite), phông nền (Backdrop); các khối lệnh (di chuyển, cảm biến, âm thanh, ngoại hình, điều kiện, lặp); tạo hoạt hình và trò chơi đơn giản.',
+      ] },
+      { h: 'Lớp 5 Tin học sẽ học gì?' },
+      { ul: [
+        'Thuật toán nâng cao: tìm kiếm nhị phân, sắp xếp bong bóng.',
+        'Scratch nâng cao: biến (variable), danh sách, nhiều nhân vật tương tác, game có điểm số.',
+        'Phần mềm soạn thảo văn bản: Microsoft Word/Google Docs — định dạng, bảng biểu, hình ảnh.',
+        'Internet an toàn: nhận biết thông tin đúng/sai trên mạng; bảo vệ dữ liệu cá nhân.',
+      ] },
+      { h: 'Kế hoạch hè lập trình' },
+      { ul: [
+        'Làm 1 dự án Scratch nhỏ trong hè: thiết kế game câu cá hoặc quiz trắc nghiệm.',
+        'Khám phá code.org (Hour of Code) — miễn phí, tiếng Việt, rất vui!',
+        'Ghi nhật ký: mỗi tuần học được gì mới về máy tính/internet.',
+      ] },
+      { note: 'Thế giới số đang thay đổi mỗi ngày — em học Tin học hôm nay là chuẩn bị cho tương lai!' },
+    ],
+    examples: [
+      { q: 'Viết thuật toán (các bước) để pha 1 ly nước chanh mật ong.', a: 'B1: Lấy ly sạch. B2: Vắt ½ quả chanh vào ly. B3: Thêm 1 thìa mật ong. B4: Rót nước ấm vào. B5: Khuấy đều. B6: Thêm đá nếu muốn uống lạnh. → Đây chính là thuật toán: dãy bước tuần tự để tạo ra kết quả mong muốn.' },
+      { q: 'Trong Scratch, em muốn mèo tự động hỏi tên người dùng rồi chào. Em dùng những khối lệnh nào?', a: 'Khối "Hỏi [Bạn tên gì?] và chờ" → khối "Nói [Xin chào!] + [câu trả lời] trong 3 giây". Dùng biến "câu trả lời" (answer) để lưu tên người dùng.' },
+    ],
+  },
 };

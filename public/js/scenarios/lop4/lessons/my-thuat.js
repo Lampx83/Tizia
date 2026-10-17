@@ -791,4 +791,49 @@ export const P4MT_LESSONS = {
       { q: 'Em vẽ xong sớm 10 phút. Em làm gì?', a: 'Em ngồi yên, soát lại bố cục, tô thêm chi tiết nhỏ cho phong phú. Không nói chuyện với bạn — giữ trật tự cho mọi người.' },
     ],
   },
+
+  'P4MT-w36-quiz': {
+    topic: 'Kết thúc Lớp 4 — Hành trang Mỹ thuật vào Lớp 5',
+    intro: 'Chúc mừng các em đã hoàn thành năm học Mỹ thuật Lớp 4! Hôm nay cô cùng trò nhìn lại hành trình sáng tạo đầy màu sắc, và chuẩn bị cho những tác phẩm đẹp hơn nữa ở Lớp 5!',
+    objectives: [
+      'Hệ thống các kỹ năng và kiến thức Mỹ thuật Lớp 4 theo bốn lĩnh vực.',
+      'Hiểu những kỹ thuật và thể loại mới sắp học ở Lớp 5.',
+      'Lên kế hoạch sáng tác trong kỳ nghỉ hè.',
+    ],
+    theory: [
+      { h: 'Hành trình Mỹ thuật Lớp 4 — Bốn lĩnh vực sáng tạo' },
+      { ul: [
+        'Vẽ tranh: tranh đề tài (gia đình, phong cảnh, hoạt động, thiên nhiên); màu sắc chủ đạo — màu nền — màu chi tiết; bố cục hình chữ T, hình tam giác, đường chéo.',
+        'Vẽ trang trí: trang trí đường diềm; hình vuông, hình tròn; đường nét, màu sắc nhịp nhàng; hoa văn dân tộc (xà tích, trống đồng).',
+        'Tập nặn (hình khối 3D): nặn đất sét thành các hình cơ bản (cầu, trụ, hộp) rồi ghép thành mô hình (con vật, nhà cửa, phương tiện giao thông).',
+        'Thường thức mỹ thuật: tìm hiểu tranh dân gian Đông Hồ, tranh lụa; một số họa sĩ Việt Nam (Tô Ngọc Vân, Bùi Xuân Phái); các thể loại tranh (phong cảnh, chân dung, tĩnh vật).',
+      ] },
+      { h: 'Kiến thức màu sắc đã học' },
+      { ul: [
+        'Màu cơ bản (nguyên): đỏ, vàng, lam.',
+        'Màu nhị hợp (pha từ 2 màu cơ bản): cam (đỏ + vàng), xanh lá (vàng + lam), tím (đỏ + lam).',
+        'Màu nóng (đỏ, cam, vàng) — gợi ấm áp, năng động.',
+        'Màu lạnh (lam, tím, xanh lá) — gợi mát mẻ, bình yên.',
+        'Màu tương phản — màu bổ túc: đỏ-xanh lá; vàng-tím; cam-lam.',
+      ] },
+      { h: 'Lớp 5 Mỹ thuật sẽ học gì?' },
+      { ul: [
+        'Vẽ chân dung: tỉ lệ mặt người, ánh mắt, biểu cảm.',
+        'Điêu khắc và kiến trúc: tìm hiểu tượng đài, công trình kiến trúc Việt Nam và thế giới.',
+        'In ấn: kỹ thuật in nổi (cắt lino, khắc gỗ đơn giản), in bằng vật liệu tự nhiên (lá cây, vỏ cam).',
+        'Mỹ thuật ứng dụng: thiết kế bìa sách, nhãn vở, thiệp chúc mừng.',
+      ] },
+      { h: 'Kế hoạch hè sáng tạo' },
+      { ul: [
+        'Vẽ nhật ký hè: mỗi tuần vẽ 1 hình về điều thú vị em đã làm hoặc nhìn thấy.',
+        'Tập vẽ chân dung người thân từ ảnh — chuẩn bị cho Lớp 5.',
+        'Thu thập tranh cắt từ báo/tạp chí về phong cảnh, con người — làm album cảm hứng.',
+      ] },
+      { note: 'Mỗi bức vẽ của em là một câu chuyện riêng — hãy tự hào về từng nét vẽ em đã thực hiện!' },
+    ],
+    examples: [
+      { q: 'Pha màu cam cần những màu gì? Tại sao cam là màu nóng?', a: 'Pha đỏ + vàng = cam. Màu cam gợi cảm giác ấm áp, năng lượng, vui tươi như ánh mặt trời buổi chiều — đó là màu nóng.' },
+      { q: 'Điểm khác biệt giữa tranh dân gian Đông Hồ và tranh lụa là gì?', a: 'Tranh Đông Hồ: in trên giấy điệp, màu từ thiên nhiên (gạo, rau, đá), chủ đề dân dã (gà, lợn, cưới hỏi). Tranh lụa: vẽ trên lụa tơ tằm, bút lông mảnh, màu nhẹ trong trẻo — thường vẽ phong cảnh, phụ nữ Việt.' },
+    ],
+  },
 };

@@ -1111,4 +1111,43 @@ export const H11GDCD_LESSONS = {
       { q: 'Một người tự ý khám xét chỗ ở của người khác mà không có lệnh. Hành vi này thuộc loại vi phạm gì và hệ quả ra sao?', a: 'Đây là hành vi xâm phạm quyền bất khả xâm phạm về chỗ ở của công dân, vi phạm pháp luật. Khám xét chỗ ở chỉ được tiến hành khi có căn cứ và có lệnh của cơ quan có thẩm quyền, theo đúng trình tự. Người tự ý khám xét có thể bị xử lí theo quy định pháp luật.' },
     ],
   },
+
+  'H11GDCD-w36-quiz': {
+    topic: 'Kết thúc GDCD 11 — Công dân có hiểu biết trong thế giới hội nhập',
+    intro: 'GDCD 11 đã trang bị cho chúng ta hệ thống kiến thức về kinh tế thị trường, pháp luật, quyền công dân và trách nhiệm trong xã hội. Hôm nay chúng ta nhìn lại toàn bộ chương trình và hiểu tại sao những kiến thức này không chỉ dùng để thi — mà là nền tảng để sống và làm việc có trách nhiệm.',
+    objectives: [
+      'Hệ thống hoá các chủ đề GDCD 11: kinh tế thị trường, pháp luật, quyền và nghĩa vụ công dân.',
+      'Kết nối kiến thức pháp luật với những tình huống thực tiễn trong cuộc sống hàng ngày.',
+      'Hiểu vai trò của công dân trẻ trong xây dựng xã hội dân chủ, văn minh.',
+    ],
+    theory: [
+      { h: 'Phần kinh tế thị trường' },
+      { ul: [
+        'Thị trường và cơ chế thị trường: cung – cầu – giá cả; cạnh tranh là động lực phát triển.',
+        'Vai trò Nhà nước: điều tiết vĩ mô, chống độc quyền, phân phối thu nhập, bảo vệ môi trường.',
+        'Sản xuất, tiêu dùng và lao động: quy luật kinh tế cơ bản, phân công lao động xã hội.',
+        'Cạnh tranh lành mạnh vs. không lành mạnh: gian lận thương mại, hàng giả là vi phạm pháp luật.',
+      ] },
+      { h: 'Phần pháp luật và quyền công dân' },
+      { ul: [
+        'Pháp luật: khái niệm, vai trò trong đời sống xã hội — "luật pháp là ý chí của nhân dân".',
+        'Vi phạm pháp luật: hình sự, dân sự, hành chính, kỷ luật — tương ứng với từng loại trách nhiệm pháp lý.',
+        'Quyền bình đẳng: trước pháp luật, trong hôn nhân – gia đình, trong lao động, trong kinh doanh.',
+        'Quyền tự do cơ bản: tự do ngôn luận, tự do tín ngưỡng, bất khả xâm phạm thân thể, chỗ ở, thư tín.',
+        'Quyền dân chủ: bầu cử, ứng cử, tham gia quản lý Nhà nước, khiếu nại và tố cáo.',
+      ] },
+      { h: 'Bài học cho cuộc sống' },
+      { ul: [
+        'Biết quyền để bảo vệ bản thân: khi bị vi phạm quyền, có thể khiếu nại, tố cáo đúng cơ quan.',
+        'Biết nghĩa vụ để thực hiện trách nhiệm: đóng thuế, tuân thủ pháp luật, bảo vệ môi trường.',
+        'Kinh tế thị trường tạo cơ hội — nhưng cạnh tranh phải lành mạnh và hợp pháp.',
+        'Công dân trẻ có quyền và trách nhiệm tham gia xây dựng pháp luật qua bầu cử và góp ý.',
+      ] },
+      { note: 'GDCD không phải môn "học để thi" — đây là môn học để sống. Mỗi khi ký hợp đồng, mỗi khi cần khiếu nại, mỗi khi tham gia bầu cử — em sẽ dùng kiến thức này. Người hiểu pháp luật là người sống chủ động và tự bảo vệ được bản thân trong xã hội hiện đại.' },
+    ],
+    examples: [
+      { q: 'Một học sinh lớp 11 muốn khởi nghiệp sau khi tốt nghiệp. GDCD 11 giúp gì cho em đó?', a: 'GDCD 11 cung cấp cho học sinh muốn khởi nghiệp: (1) Hiểu cơ chế thị trường — cung cầu, giá cả, cạnh tranh — để định giá sản phẩm và tìm thị trường ngách; (2) Biết quy định về đăng ký kinh doanh và thuế — tránh vi phạm hành chính; (3) Hiểu quyền bình đẳng trong kinh doanh — không ai có quyền phân biệt đối xử; (4) Nắm được cạnh tranh lành mạnh và không lành mạnh — biết ranh giới hành vi được phép. Đây là kiến thức nền tảng mà mọi doanh nhân cần có từ trước khi bắt đầu.' },
+      { q: 'Tại sao pháp luật được coi là công cụ quan trọng nhất để quản lý xã hội trong nhà nước dân chủ?', a: 'Pháp luật có 4 đặc điểm làm cho nó trở thành công cụ quản lý tối ưu: (1) TÍNH PHÁP LÝ — do Nhà nước ban hành và bảo đảm thực hiện bằng quyền lực Nhà nước; (2) TÍNH PHỔ BIẾN — áp dụng đồng đều cho mọi công dân không phân biệt địa vị; (3) TÍNH XÁC ĐỊNH — quy định rõ ràng, tránh tuỳ tiện; (4) TÍNH CẤP BÁCH — phải thực hiện ngay, không thể trì hoãn. Các công cụ khác (đạo đức, phong tục) không có những đặc điểm này nên không thể thay thế pháp luật trong quản lý xã hội hiện đại.' },
+    ],
+  },
 };

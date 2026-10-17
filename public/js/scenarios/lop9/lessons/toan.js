@@ -939,4 +939,40 @@ export const S9TOAN_LESSONS = {
       { q: 'Lời khuyên khi gặp một câu quá khó trong đề thi?', a: 'Giữ bình tĩnh, không hoảng loạn. Đánh dấu câu đó, chuyển sang làm các câu vừa sức để bảo toàn điểm, rồi quay lại nếu còn thời gian.' },
     ]
   ),
+
+  'S9TOAN-w36-quiz': L(
+    'Kết thúc Toán THCS — Nhìn lại hành trình',
+    'Tuần cuối năm, cô và các em cùng nhìn lại toàn bộ hành trình Toán THCS — không phải để ôn bài mà để thấy mình đã trưởng thành đến đâu và mang theo điều gì vào THPT.',
+    [
+      'Hệ thống hoá bức tranh toàn cảnh kiến thức Toán 9.',
+      'Nhận ra sự kết nối giữa các mạch kiến thức đã học.',
+      'Tự đánh giá điểm mạnh và xác định hướng phát triển ở THPT.',
+    ],
+    [
+      { h: 'Bản đồ kiến thức Toán 9' },
+      { p: 'Toán 9 gồm hai mạch lớn: Đại số (căn thức, hàm số bậc nhất & bậc hai, hệ phương trình, phương trình bậc hai, Vi-ét) và Hình học (hệ thức lượng trong tam giác vuông, tỉ số lượng giác, đường tròn, hình không gian).' },
+      { h: 'Những "viên gạch nền" vào THPT' },
+      { ul: [
+        'Căn thức: nền tảng cho hàm số vô tỉ, đạo hàm ở lớp 11–12.',
+        'Phương trình bậc hai và Vi-ét: xuất hiện xuyên suốt chương trình THPT.',
+        'Tỉ số lượng giác: mở đầu cho chương lượng giác và vectơ lớp 10.',
+        'Đường tròn: dẫn vào hình học giải tích ở lớp 10–11.',
+      ] },
+      { h: 'Toán học rèn luyện tư duy gì?' },
+      { p: 'Sau 4 năm Toán THCS, em không chỉ biết tính toán — em đã rèn được: tư duy logic (lập luận từng bước), tư duy trừu tượng (ẩn số, hàm số), tư duy không gian (hình học), và thói quen kiểm tra kết quả. Đây là hành trang quý giá cho mọi môn học ở THPT.' },
+      { h: 'Lời khuyên cho hành trình Toán THPT' },
+      { ul: [
+        'Lớp 10: học kĩ hàm số, vectơ và lượng giác — đây là nền tảng cho cả khối THPT.',
+        'Đừng bỏ bài tập: Toán THPT chỉ hiểu được khi làm bài đủ nhiều.',
+        'Giữ thói quen làm dàn ý hướng giải trước khi tính.',
+        'Xây dựng sổ công thức riêng — và tra cứu mỗi khi cần.',
+      ] },
+      { note: 'Cô biết Toán không dễ — nhưng mỗi bài khó các em vượt qua đều làm não bộ mạnh hơn. Hãy tự hào vì đã đi được đến đây và tự tin bước tiếp. Chúc mừng năm học!' },
+    ],
+    [
+      { q: 'Hãy liệt kê 3 kiến thức Toán 9 quan trọng nhất sẽ dùng nhiều ở THPT.', a: '(1) Phương trình bậc hai và công thức Vi-ét — xuất hiện trong hàm số bậc hai, phương trình lượng giác, số phức. (2) Tỉ số lượng giác của góc nhọn — mở đầu cho toàn bộ chương lượng giác lớp 10–12. (3) Căn thức và hằng đẳng thức đáng nhớ — nền tảng tính toán mọi bài tập THPT.' },
+      { q: 'Nếu thi vào 10 chưa được điểm như mong muốn, em nên nhìn nhận thế nào?', a: 'Một kì thi không định nghĩa năng lực cả đời. Quan trọng là em rút ra được bài học: phần nào còn yếu, cách ôn tập nào hiệu quả hơn. Tinh thần vượt thử thách đó chính là thứ giúp em tiến bộ ở THPT và xa hơn nữa.' },
+      { q: 'Một câu Toán gây ấn tượng hoặc thú vị nhất trong chương trình lớp 9 mà em nhớ?', a: 'Có thể là định lí Vi-ét: chỉ cần biết tổng và tích hai nghiệm là ta có thể phân tích và giải hàng loạt bài toán mà không cần tìm từng nghiệm riêng — một "phím tắt" rất thanh lịch của đại số.' },
+    ]
+  ),
 };

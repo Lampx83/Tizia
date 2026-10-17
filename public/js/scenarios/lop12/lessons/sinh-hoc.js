@@ -882,4 +882,43 @@ export const H12SINH_LESSONS = {
       { q: 'Trong phòng thi, gặp một câu bài tập khó và mất nhiều thời gian, em nên xử lí thế nào?', a: 'Nên đánh dấu câu đó và tạm bỏ qua để làm các câu khác dễ hơn trước, đảm bảo lấy trọn điểm những câu vừa sức. Khi đã hoàn thành phần còn lại và còn thời gian thì quay lại câu khó. Cách này tránh mất điểm oan vì sa lầy vào một câu.' },
     ],
   },
+
+  'H12SINH-w36-quiz': {
+    topic: 'Kết thúc Sinh Học THPT — Sự sống kỳ diệu và trách nhiệm của chúng ta',
+    intro: 'Tuần cuối năm học Sinh Học — hãy bước ra khỏi các bài tập di truyền và nhìn ngắm điều kỳ diệu nhất trong vũ trụ: sự sống. Từ ADN trong mỗi tế bào đến hệ sinh thái toàn cầu, Sinh Học đặt ra câu hỏi sâu nhất về bản thể con người và trách nhiệm với Trái đất.',
+    objectives: [
+      'Hệ thống hoá chương trình Sinh Học 3 năm THPT theo các cấp độ tổ chức sự sống.',
+      'Nhận ra ý nghĩa của Sinh Học đối với y học, nông nghiệp, môi trường và đạo đức.',
+      'Xây dựng nhận thức về trách nhiệm của con người với đa dạng sinh học và hành tinh.',
+    ],
+    theory: [
+      { h: 'Bản đồ Sinh Học 3 năm THPT — Từ gen đến sinh quyển' },
+      { ul: [
+        'Lớp 10: Tế bào (cấu trúc, chuyển hoá năng lượng, sinh sản tế bào), cơ thể thực vật và động vật.',
+        'Lớp 11: Chuyển hoá vật chất và năng lượng ở thực vật/động vật, sinh sản, cảm ứng và điều hoà.',
+        'Lớp 12: Di truyền học (Mendel, liên kết, hoán vị, ĐB gen/NST), tiến hoá (Darwin, học thuyết hiện đại), sinh thái học (quần thể, quần xã, hệ sinh thái, sinh quyển).',
+      ] },
+      { h: 'Sinh Học thay đổi y học và nông nghiệp' },
+      { ul: [
+        'Y học: Kỹ thuật CRISPR chỉnh sửa gen chữa bệnh di truyền; liệu pháp tế bào gốc tái tạo mô; vaccine mRNA (COVID-19) — tổng hợp từ ADN phiên mã ngược.',
+        'Nông nghiệp: Cây GMO kháng sâu bệnh (Bt toxin từ gen vi khuẩn); giống lúa IR64 kháng lụt; thuỷ sản nuôi cấy mô.',
+        'Môi trường: Vi khuẩn phân huỷ dầu tràn; nấm mốc xử lý rác thải nhựa; bảo tồn gen loài quý hiếm.',
+      ] },
+      { h: 'Câu hỏi sinh học đang được khoa học giải quyết' },
+      { ul: [
+        'Tuổi già: Tại sao tế bào lão hoá? Có thể đảo ngược không?',
+        'Ung thư: Biến đổi gen nào khiến tế bào phân chia mất kiểm soát?',
+        'Trí nhớ: Ký ức được mã hoá thế nào trong hệ thần kinh?',
+        'Khởi nguồn sự sống: ADN hay protein xuất hiện trước — "con gà hay quả trứng" của sinh học?',
+      ] },
+      { h: 'Trách nhiệm của chúng ta với đa dạng sinh học' },
+      { p: 'Trái đất đang trải qua đợt tuyệt chủng hàng loạt lần thứ 6 — và lần này do con người gây ra. Mỗi loài biến mất là mất đi hàng triệu năm tiến hoá, mất đi những gen có thể là chìa khoá chữa bệnh chưa biết. Sinh Học cho chúng ta biết tại sao điều đó quan trọng và phải làm gì.' },
+      { note: 'Em đã học về sự sống từ trong ra ngoài: từ nucleotide trong ADN đến chuỗi thức ăn toàn cầu. Điều kỳ diệu nhất là tất cả sự đa dạng đó — cây dương xỉ, cá voi xanh, con người — đều dùng cùng một bộ mã di truyền. Chúng ta thực sự là anh em với mọi sinh vật trên Trái đất.' },
+    ],
+    examples: [
+      { q: 'Kỹ thuật CRISPR-Cas9 là gì và tại sao nó được coi là cách mạng trong y học?', a: 'CRISPR-Cas9 là hệ thống "kéo cắt phân tử" lấy từ vi khuẩn: RNA hướng dẫn (guide RNA) dẫn protein Cas9 đến đúng vị trí trên ADN, sau đó Cas9 cắt đứt chuỗi ADN tại đó để vô hiệu hoá hoặc thay thế gen. Ứng dụng đang phát triển: chữa bệnh hồng cầu hình liềm (thalassemia), ung thư máu, mù di truyền. Lý do cách mạng: chính xác đến từng nucleotide, chi phí thấp hơn các kỹ thuật cũ 1000 lần, có thể ứng dụng trên bất kì sinh vật nào.' },
+      { q: 'Giải thích tại sao mất đi một loài trong hệ sinh thái có thể gây ra hiệu ứng domino ảnh hưởng đến toàn bộ hệ sinh thái.', a: 'Ví dụ kinh điển: tuyệt chủng sói xám ở Yellowstone → hươu nai sinh sản không kiểm soát → ăn hết cỏ ven suối → bờ suối sói lở → cá giảm → chim thay đổi → toàn bộ hệ sinh thái thay đổi. Khi đưa sói trở lại (1995), chuỗi này đảo ngược trong vài thập kỉ. Đây là "trophic cascade" — loài đỉnh chuỗi thức ăn là "kỹ sư sinh thái" điều phối toàn bộ hệ thống. Suy rộng: mỗi loài biến mất đều có thể kéo theo hàng chục loài khác.' },
+      { q: 'Di truyền học và tiến hoá học có mâu thuẫn với nhau không? Chúng bổ sung cho nhau như thế nào?', a: 'Không mâu thuẫn — ngược lại, di truyền học cung cấp CƠ CHẾ cho tiến hoá: đột biến gen tạo ra biến dị di truyền; chọn lọc tự nhiên giữ lại biến dị có lợi; gene flow, genetic drift và cách li sinh sản tạo ra loài mới. Thuyết tiến hoá tổng hợp hiện đại (Modern Synthesis) kết hợp Darwin (chọn lọc tự nhiên) với Mendel (di truyền) và di truyền quần thể (Hardy-Weinberg). ADN là "bằng chứng phân tử" của tiến hoá — ta có thể đọc lịch sử tiến hoá từ trình tự ADN.' },
+    ],
+  },
 };

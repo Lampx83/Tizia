@@ -924,4 +924,39 @@ export const P3TA_LESSONS = {
       { q: 'Em 9 tuổi, sống ở Hà Nội, nói tiếng Anh:', a: '"I\'m nine years old. I\'m from Hanoi, Vietnam."' },
     ],
   },
+
+  'P3TA-w36-quiz': {
+    topic: 'End of Grade 3 — Ready for Grade 4!',
+    intro: 'Congratulations! You have finished Grade 3 English! Let\'s look back at everything we learned and get ready for Grade 4 with confidence!',
+    objectives: [
+      'Review key vocabulary and structures from Grade 3 English.',
+      'Feel confident about speaking, reading and writing simple English.',
+      'Know what exciting topics await in Grade 4.',
+    ],
+    theory: [
+      { h: 'What we learned in Grade 3 English' },
+      { ul: [
+        'GREETINGS & INTRODUCTIONS: Hello/Hi, What\'s your name? My name is... How old are you? I\'m ... years old. Where are you from? I\'m from...',
+        'FAMILY & FRIENDS: mother/father/sister/brother/friend; This is my ... ; He/She is ...',
+        'SCHOOL & CLASSROOM: book, pen, ruler, bag, desk, chair, classroom, teacher, student.',
+        'NUMBERS 1–100: counting, ages, phone numbers, addresses.',
+        'COLOURS & SHAPES: red, blue, green, yellow, circle, square, triangle, rectangle.',
+        'ANIMALS & NATURE: dog, cat, bird, fish, tree, flower, sun, cloud, rain.',
+        'FOOD & DRINKS: rice, bread, milk, water, apple, banana; I like / I don\'t like...',
+        'SIMPLE SENTENCES: Subject + Verb (I eat. She runs.); Is/Are sentences (This is a book. They are students.); Simple questions (What is this? Where is...?)',
+      ] },
+      { h: 'Grade 4 will bring new adventures!' },
+      { ul: [
+        'Longer conversations about hobbies, sports, and activities.',
+        'Present continuous tense: "I am playing football."',
+        'More vocabulary about seasons, weather, and daily routines.',
+        'Short reading passages and simple writing tasks.',
+      ] },
+      { note: 'Keep practising English this summer — watch cartoons, sing songs, and talk with friends in English!' },
+    ],
+    examples: [
+      { q: 'Introduce yourself in English (name, age, hometown).', a: '"Hello! My name is An. I\'m 9 years old. I\'m from Hanoi, Vietnam. Nice to meet you!"' },
+      { q: 'Describe your favourite animal in English.', a: 'Example: "My favourite animal is a dog. It is brown and white. It is cute and friendly."' },
+    ],
+  },
 };

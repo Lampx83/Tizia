@@ -1062,4 +1062,43 @@ export const S9TIN_LESSONS = {
       { q: 'Hãy nêu một dự án nhỏ kết hợp được nhiều kiến thức đã học trong năm.', a: 'Ví dụ: làm một trang web "Sổ điểm lớp" — dùng Python đọc danh sách điểm từ tệp và tính trung bình (Python, file I/O), hiển thị bằng bảng HTML có định dạng CSS, thêm JavaScript để lọc / sắp xếp, rồi triển khai lên GitHub Pages. Dự án này gói gọn cả hai mạch Python và Web.' },
     ]
   ),
+
+  'S9TIN-w36-quiz': L(
+    'Kết thúc Tin học THCS — Tư duy số cho thế kỉ 21',
+    'Tuần cuối năm, cô không dạy thêm kĩ năng mới mà muốn cùng các em nhìn lại: trong thế giới đang thay đổi nhanh chóng bởi AI và công nghệ, những gì em học được sẽ giúp ích như thế nào?',
+    [
+      'Nhận ra giá trị của tư duy số và lập trình trong mọi lĩnh vực.',
+      'Hiểu xu hướng công nghệ đang thay đổi thế giới và cơ hội cho thế hệ trẻ.',
+      'Xây dựng kế hoạch tự học công nghệ sau kì thi.',
+    ],
+    [
+      { h: 'Bản đồ Tin học THCS' },
+      { ul: [
+        'Lớp 6–7: Kĩ năng số cơ bản — file, mạng, bảo mật, trình bày thông tin.',
+        'Lớp 8: Giải thuật và lập trình — tư duy lô-gic qua Scratch/Python cơ bản.',
+        'Lớp 9: Python, HTML/CSS/JS, Web, AI cơ bản — nền tảng thực chiến.',
+      ] },
+      { h: 'Thế giới AI đang thay đổi gì?' },
+      { ul: [
+        'AI viết code, phân tích dữ liệu, tạo nội dung — nhiều công việc đang thay đổi.',
+        'Người không biết dùng AI sẽ bị người biết dùng AI thay thế — không phải AI thay thế người.',
+        'Kĩ năng đặt câu hỏi đúng (prompt) cho AI đang trở thành năng lực quý giá.',
+        'Tư duy logic và khả năng phân tích — thứ AI chưa thay thế được — là điểm mạnh của em.',
+      ] },
+      { h: 'Những gì Tin học lớp 9 dạy thực ra là...' },
+      { p: 'Học Python không chỉ để viết code — mà để biết chia nhỏ vấn đề lớn thành bước nhỏ (decomposition). Học Web không chỉ để làm trang web — mà để hiểu mọi phần mềm đều có input, process và output. Học bảo mật không chỉ để bảo vệ tài khoản — mà để tư duy về rủi ro và phòng ngừa.' },
+      { h: 'Gợi ý cho mùa hè và năm THPT đầu tiên' },
+      { ul: [
+        'Làm một dự án nhỏ: website cá nhân, chatbot, game đơn giản — chọn cái nào em thích nhất.',
+        'Thử các nền tảng: freeCodeCamp, CS50x (Harvard miễn phí), Khan Academy Computing.',
+        'Tham gia CLB Tin học ở THPT — môi trường học hỏi lẫn nhau rất hiệu quả.',
+      ] },
+      { note: 'Tốt nhất là học cùng ai đó — một người bạn cùng sở thích công nghệ sẽ giúp em học nhanh hơn và vui hơn gấp đôi.' },
+    ],
+    [
+      { q: 'Tại sao học lập trình lại giúp em ở các môn khác không liên quan đến công nghệ?', a: 'Lập trình rèn 3 kĩ năng tư duy phổ quát: (1) Decomposition — chia bài toán lớn thành các bước nhỏ (dùng trong Toán, Văn, dự án nhóm). (2) Pattern recognition — nhận ra quy luật lặp lại (dùng trong học ngữ pháp, công thức Hóa). (3) Debugging mindset — kiên nhẫn tìm lỗi và sửa, không bỏ cuộc (dùng trong mọi việc). Đây là lí do các trường top thế giới yêu cầu học lập trình ngay cả với sinh viên văn, sử, kinh tế.' },
+      { q: 'Sự khác nhau giữa người "biết dùng máy tính" và người "có tư duy số" là gì?', a: 'Người biết dùng máy tính chỉ thực hiện được các thao tác đã biết (mở file, gửi email, dùng phần mềm). Người có tư duy số biết tự tìm cách giải quyết vấn đề mới bằng công nghệ, biết đánh giá thông tin trực tuyến (critical thinking), biết bảo vệ bản thân trong không gian số, và có khả năng tự học công cụ mới khi cần. Tư duy số không phụ thuộc vào một phần mềm cụ thể — nó là cách tiếp cận vấn đề.' },
+      { q: 'Nếu em muốn tìm hiểu AI sâu hơn trong những năm THPT, em nên bắt đầu từ đâu?', a: 'Bước 1: Nắm vững Python (miễn phí trên Python.org, freeCodeCamp, Kaggle). Bước 2: Học toán liên quan — xác suất thống kê và đại số tuyến tính cơ bản. Bước 3: Làm quen với thư viện pandas và scikit-learn để xử lí dữ liệu đơn giản. Bước 4: Tham gia các cuộc thi AI nhỏ (Kaggle competitions cho người mới). Không cần vội — mỗi bước chắc chắn quan trọng hơn nhiều bước hời hợt.' },
+    ]
+  ),
 };

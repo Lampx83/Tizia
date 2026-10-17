@@ -255,6 +255,15 @@ export const P5AN_WEEKS = [
     Q('Sau cấp 1 em sẽ?', ['Học tiếp âm nhạc ở cấp 2', 'Quên hết', 'Không quan tâm', 'Bỏ học'], 0, 'Tiếp tục học âm nhạc ở cấp 2.', ['Đúng — tiếp tục học âm nhạc ở cấp 2.', 'Sai — không nên quên hết.', 'Sai — nên giữ niềm yêu âm nhạc.', 'Sai — không nên bỏ học.']),
     Q('Lời tạm biệt thầy cô môn nhạc?', ['Trêu chọc', 'Vẫy tay rồi chạy ra cửa', 'Cảm ơn và hứa giữ tình yêu âm nhạc', 'Im lặng'], 2, 'Lời cảm ơn chân thành.', ['Sai — không nên trêu chọc thầy cô.', 'Sai — chạy ra cửa là thiếu lễ phép.', 'Đúng — cảm ơn và hứa giữ tình yêu âm nhạc.', 'Sai — im lặng là thiếu lời cảm ơn.']),
   ]),
+
+  M(36, 'Kết thúc Tiểu học — Âm nhạc đồng hành cả đời', [
+    Q('Ký hiệu sắc thái "forte" (f) trong bản nhạc nghĩa là gì?', ['Hát to, mạnh', 'Hát nhỏ, nhẹ', 'Hát nhanh', 'Hát chậm'], 0, 'forte = to, mạnh.', ['Đúng — forte (f) là hát/đàn to, mạnh.', 'Sai — nhỏ, nhẹ là piano (p).', 'Sai — nhanh – chậm là tốc độ, ghi bằng ký hiệu khác.', 'Sai — nhanh – chậm là tốc độ, ghi bằng ký hiệu khác.']),
+    Q('Ký hiệu sắc thái "piano" (p) trong bản nhạc nghĩa là gì?', ['Hát to, mạnh', 'Hát nhỏ, nhẹ', 'Đàn piano', 'Hát nhanh'], 1, 'piano = nhỏ, nhẹ (không phải tên cây đàn).', ['Sai — to, mạnh là forte (f).', 'Đúng — piano (p) là hát/đàn nhỏ, nhẹ.', 'Sai — ở đây "piano" là ký hiệu sắc thái, không phải tên nhạc cụ.', 'Sai — đó là ký hiệu về tốc độ, không phải sắc thái.']),
+    Q('Recorder (sáo dọc) là loại nhạc cụ gì?', ['Nhạc cụ gõ', 'Nhạc cụ dây', 'Nhạc cụ hơi', 'Nhạc cụ phím'], 2, 'Recorder phát ra âm thanh nhờ luồng hơi thổi vào.', ['Sai — nhạc cụ gõ là trống, phách, song loan.', 'Sai — nhạc cụ dây là đàn guitar, violin, đàn tranh.', 'Đúng — recorder là nhạc cụ hơi, thổi bằng luồng hơi.', 'Sai — nhạc cụ phím là piano, organ.']),
+    Q('Nhạc cụ tự nhiên mà ai cũng luôn mang theo bên mình là gì?', ['Trống', 'Đàn', 'Sáo', 'Giọng hát'], 3, 'Giọng hát là nhạc cụ tự nhiên, luôn sẵn có.', ['Sai — trống là nhạc cụ phải mang theo.', 'Sai — đàn là nhạc cụ phải mang theo.', 'Sai — sáo là nhạc cụ phải mang theo.', 'Đúng — giọng hát là nhạc cụ tự nhiên luôn sẵn có của mỗi người.']),
+    Q('Nhịp 2/4 có mấy phách trong một ô nhịp?', ['2 phách', '3 phách', '4 phách', '8 phách'], 0, 'Số trên của nhịp cho biết số phách trong ô nhịp.', ['Đúng — nhịp 2/4 có 2 phách mỗi ô nhịp.', 'Sai — 3 phách là nhịp 3/4.', 'Sai — 4 phách là nhịp 4/4.', 'Sai — không có nhịp 8 phách trong các nhịp đã học ở tiểu học.']),
+    Q('Âm nhạc giúp ích gì cho việc học các môn khác?', ['Không giúp gì cả', 'Giúp thư giãn, tăng trí nhớ và rèn sự tập trung', 'Chỉ làm mất thời gian', 'Chỉ dành cho người có năng khiếu'], 1, 'Âm nhạc giúp não thư giãn, tăng trí nhớ, rèn tập trung và kiên nhẫn.', ['Sai — âm nhạc hỗ trợ rất nhiều cho việc học.', 'Đúng — âm nhạc giúp thư giãn, tăng trí nhớ và rèn sự tập trung.', 'Sai — nghe và hát đúng cách còn giúp em học hiệu quả hơn.', 'Sai — ai cũng có thể hát và cảm thụ âm nhạc.']),
+  ]),
 ];
 
 export const P5AN_SCENARIOS = indexBy(P5AN_WEEKS);

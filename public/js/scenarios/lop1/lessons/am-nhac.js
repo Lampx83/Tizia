@@ -859,4 +859,29 @@ export const P1AN_LESSONS = {
       { q: 'Âm nhạc mang lại điều gì cho em?', a: 'Niềm vui, sự thư giãn và giúp em tự tin hơn.' },
     ],
   },
+
+  'P1AN-w36-quiz': {
+    topic: 'Kết thúc Lớp 1 — Một năm hát ca vui vẻ',
+    intro: 'Năm học kết thúc rồi! Em đã hát rất nhiều bài hát hay. Mình cùng nhớ lại nhé!',
+    objectives: [
+      'Nhớ các bài hát và nhạc cụ đã học.',
+      'Yêu âm nhạc và tiếp tục hát mỗi ngày.',
+    ],
+    theory: [
+      { h: 'Em đã học được gì?' },
+      { ul: [
+        'Khoảng 16 bài hát: dân ca, bài hát thiếu nhi, đồng dao.',
+        'Nhạc cụ gõ: thanh phách, trống nhỏ, song loan.',
+        'Khái niệm âm thanh: to/nhỏ, nhanh/chậm, cao/thấp.',
+        'Quốc ca Việt Nam — hát nghiêm trang, tự hào.',
+      ] },
+      { h: 'Lên Lớp 2 em sẽ học thêm' },
+      { ul: ['Thêm nhiều bài hát hay hơn.', 'Học nhịp và nốt nhạc đơn giản.', 'Có thể tập nhạc cụ mới.'] },
+      { note: 'Hè này nhớ hát mỗi ngày nhé! Âm nhạc là người bạn của em suốt cả cuộc đời.' },
+    ],
+    examples: [
+      { q: '"Quốc ca Việt Nam" được hát khi nào?', a: 'Khi chào cờ, khi có sự kiện trang trọng. Đứng nghiêm và hát rõ lời.' },
+      { q: 'Thanh phách được dùng để làm gì?', a: 'Gõ đệm theo nhịp cho bài hát.' },
+    ],
+  },
 };

@@ -1095,4 +1095,40 @@ export const P4KH_LESSONS = {
       { q: 'Liệt kê 3 việc em làm hằng ngày để bảo vệ môi trường:', a: 'Ví dụ: tắt đèn khi ra khỏi phòng; khoá vòi khi đánh răng; bỏ rác đúng nơi; dùng túi vải; trồng cây.' },
     ],
   },
+
+  'P4KH-w36-quiz': {
+    topic: 'Kết thúc Lớp 4 — Hành trang Khoa học vào Lớp 5',
+    intro: 'Chúc mừng các em đã hoàn thành năm học Khoa học Lớp 4! Cô cùng trò ôn lại những khám phá thú vị trong năm và nhìn về thế giới khoa học rộng lớn chờ đón ở Lớp 5 nhé!',
+    objectives: [
+      'Hệ thống ba mảng Khoa học Lớp 4: vật chất, năng lượng, sinh vật – con người.',
+      'Nắm chắc các khái niệm và hiện tượng tự nhiên đã học.',
+      'Chuẩn bị tư duy tìm hiểu khoa học cho Lớp 5.',
+    ],
+    theory: [
+      { h: 'Ba mảng lớn Khoa học Lớp 4' },
+      { ul: [
+        'Vật chất và vật liệu: nước (3 thể, vòng tuần hoàn, làm sạch nước); không khí (thành phần, tính chất, gió); âm thanh (nguồn âm, lan truyền, ứng dụng); ánh sáng (nguồn sáng, truyền thẳng, bóng tối); nhiệt (dẫn nhiệt, cách nhiệt, ứng dụng).',
+        'Năng lượng và môi trường: các nguồn năng lượng (điện, gió, nước, Mặt Trời, nhiên liệu); tiết kiệm năng lượng; 3R (Reduce-Reuse-Recycle); bảo tồn thiên nhiên.',
+        'Sinh vật và sức khoẻ: thực vật (quang hợp, sinh sản có hạt và không có hạt); động vật (phân loại theo xương sống, chuỗi thức ăn); cơ thể người (dinh dưỡng, tiêu hoá, hô hấp, tuần hoàn); phòng bệnh truyền nhiễm.',
+      ] },
+      { h: 'Khoa học Lớp 5 sẽ học gì?' },
+      { ul: [
+        'Hệ Mặt Trời và Trái Đất: Mặt Trăng, ngày đêm, mùa, nguyệt thực - nhật thực.',
+        'Sự sinh sản của thực vật và động vật.',
+        'Môi trường và tài nguyên thiên nhiên: đất, rừng, biển.',
+        'Biến đổi khí hậu và bảo vệ môi trường toàn cầu.',
+      ] },
+      { h: 'Kế hoạch hè khoa học' },
+      { ul: [
+        'Quan sát thiên nhiên xung quanh: ghi nhật ký khám phá (thời tiết, cây cối, côn trùng).',
+        'Thực hiện 1–2 thí nghiệm khoa học đơn giản tại nhà (trồng hạt đậu, làm pin chanh).',
+        'Tìm hiểu câu hỏi: "Tại sao trời có sấm sét?" / "Vì sao mặt trời mọc đằng Đông?"',
+      ] },
+      { note: 'Khoa học là hành trình tìm kiếm "tại sao?" không bao giờ ngừng — hãy luôn tò mò!' },
+    ],
+    examples: [
+      { q: 'Vòng tuần hoàn của nước gồm các giai đoạn nào?', a: 'Bay hơi (nước → hơi nước) → Ngưng tụ (hơi → mây) → Mưa (nước rơi xuống) → chảy vào sông/thấm vào đất → lại bay hơi.' },
+      { q: 'Âm thanh không truyền được qua môi trường nào?', a: 'Chân không (không có không khí). Trong không gian vũ trụ không có âm thanh vì không có môi trường vật chất để truyền.' },
+    ],
+  },
 };

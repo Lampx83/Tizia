@@ -1136,4 +1136,47 @@ export const H12TA_LESSONS = {
       { q: 'Chia: "The teacher made us ___ (take) the test again."', a: 'take. "make sb + V" dùng động từ nguyên thể KHÔNG "to" (không phải "to take").' },
     ],
   },
+
+  'H12TA-w36-quiz': {
+    topic: 'Closing Chapter — Your English Journey Continues',
+    intro: 'This is our final week together — not to review grammar rules, but to celebrate how far your English has come and to prepare you for the exciting world that awaits you beyond the graduation exam.',
+    objectives: [
+      'Reflect on the English skills and knowledge gained through 3 years of THPT.',
+      'Understand how English opens doors in university, careers, and global citizenship.',
+      'Build confidence and motivation for continued English learning after graduation.',
+    ],
+    theory: [
+      { h: 'Your English Journey Through THPT' },
+      { p: 'Over three years, you explored diverse topics and language skills: grammar from conditionals to reported speech and passive voice; vocabulary across technology, environment, culture and career themes; reading strategies for complex texts; writing from essays to formal letters; and speaking and listening skills for real-world communication.' },
+      { h: 'English Skills That Will Serve You for Life' },
+      { ul: [
+        'Reading: The ability to read and understand academic texts, research papers, and news in English — essential for university and continuous learning.',
+        'Writing: Clear, organized writing in English is valued in almost every profession — emails, reports, social media, and research.',
+        'Speaking and Listening: For global collaboration, job interviews, travel, and building international friendships.',
+        'Vocabulary: Each new word is a new tool — the more words you know, the more precisely you can think and express yourself.',
+      ] },
+      { h: 'English Opens These Doors After Graduation' },
+      { ul: [
+        'University: English-medium programs, international exchange opportunities, research papers in English.',
+        'Career: Multinational companies, tech startups, tourism, aviation, diplomacy — most good jobs require English.',
+        'Self-learning: YouTube, online courses (Coursera, edX), books and podcasts — the best learning resources are in English.',
+        'Global citizenship: Connecting with people from 195+ countries, understanding world news firsthand.',
+      ] },
+      { h: 'Tips for the Graduation Exam (Kì thi tốt nghiệp THPT)' },
+      { ul: [
+        'Reading: Skim for main idea first, then scan for specific answers. Don\'t get stuck on one word you don\'t know — use context.',
+        'Vocabulary/Grammar: Answer from what you know; eliminate obvious wrong choices.',
+        'Writing: Plan your essay in 2 minutes; use discourse markers (however, furthermore, in conclusion); proofread for verb tenses.',
+        'Time management: Complete easier questions first; flag and return to difficult ones.',
+      ] },
+      { h: 'Keep Learning — English Is a Journey, Not a Destination' },
+      { p: 'Passing the graduation exam is a milestone, not the finish line. The most successful English learners never stop: they watch English films without subtitles, read English books for pleasure, find international friends, and speak without fear of mistakes. Every mistake is evidence of learning.' },
+      { note: 'Congratulations on completing your THPT English journey! You have built a strong foundation. Trust it, build on it, and keep going. The world is waiting to hear what you have to say.' },
+    ],
+    examples: [
+      { q: 'What are three ways you plan to continue improving your English after graduation?', a: 'There is no single correct answer — this is your personal learning plan. Examples: (1) Watch 30 minutes of English-subtitled content daily to improve listening and vocabulary; (2) Read one English article or short story per week to maintain reading habits; (3) Join an English-speaking club or find an international conversation partner. The key is consistency — small daily habits beat intensive cramming.' },
+      { q: 'How will strong English skills benefit you in your planned university major or career?', a: 'This depends on your path. Engineering/IT: 90% of programming documentation, tutorials, and research is in English. Medicine: Clinical research and international medical journals are mostly English. Business: International trade, finance, and multinational companies require daily English. Education: Teaching English or studying abroad requires near-native proficiency. Even if your major is in Vietnamese, English gives you access to global knowledge.' },
+      { q: 'What is one thing about English language or culture you found genuinely interesting during THPT and why?', a: 'This is an open reflection question. Perhaps it was discovering how idioms reflect culture (e.g., "break a leg" for good luck), or how English grammar structures thought differently from Vietnamese, or a story or article that changed how you see the world. Genuine curiosity about language is the most powerful motivator for continued learning.' },
+    ],
+  },
 };

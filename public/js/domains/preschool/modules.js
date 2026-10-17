@@ -1,13 +1,9 @@
 // ============================================================
 // Trường Mầm non — Module list (Mầm/Chồi/Lá) theo TT 51/2020
 // ============================================================
-// 5 LĨNH VỰC PHÁT TRIỂN × 3 độ tuổi = 15 module track. Mỗi track phủ 35 tuần
-// hoạt động theo chủ đề năm học (trường mầm non, bản thân, gia đình, nghề,
-// động vật, Tết, thực vật, giao thông, nước, quê hương …).
-//
-// Module gốc N1/N2/N3 GIỮ NGUYÊN — đã có scenarios N{1,2,3}-w01…w36 tích hợp
-// Toán + Nhận biết + Vận động cơ bản. Các module mới của các lĩnh vực còn
-// thiếu đặt scenarios `…đang biên soạn`, sẽ migrate sang ScoreUp Phase 1 sau.
+// 5 LĨNH VỰC PHÁT TRIỂN × 3 độ tuổi = 15 module track.
+// Lĩnh vực 2 (Nhận thức / N1-N3) GIỮ NGUYÊN — đã có scenarios đầy đủ.
+// Lĩnh vực 1,3,4,5 (TC/NN/TX/TM) — quiz content bổ sung phiên 11 (2026-07-08).
 // ============================================================
 
 // Module lĩnh vực (thể chất / ngôn ngữ / TC-XH / thẩm mỹ). Content thật ở
@@ -28,9 +24,8 @@ const _field = (id, title, yl, subject, prereq, description, weeks) => ({
 
 /** @type {import('../../engine/types.js').CourseModule[]} */
 export const MODULES = [
-  // ───────── Lĩnh vực 2 — Phát triển nhận thức (đã có content) ─────────
-  // N1/N2/N3 hiện tại đang gom tổng "36 tuần + Làm quen Toán" — vẫn để dưới
-  // môn `lam-quen-toan` (alias) để mọi scenario N{1,2,3}-w01…w36 hoạt động.
+  // ───────── Lĩnh vực 2 — Phát triển nhận thức (đã có content đầy đủ) ─────────
+  // N1/N2/N3 gom tổng "36 tuần + Làm quen Toán" theo môn `lam-quen-toan`.
   { category: 'curriculum', id: 'N1', title: 'Mầm (3 tuổi) · 36 tuần + Làm quen Toán', yearLevel: 1, subject: 'lam-quen-toan',
     scenarioIds: ['N1-quiz', 'N1-match', 'N1-w01'], knowledgeQuiz: 'N1-quiz', minStarsToUnlock: 0,
     description: '36 tuần chủ đề (trường mầm non, bản thân, gia đình, nghề, động vật, Tết, thực vật, giao thông, nước, quê hương) + Đếm 1–5, nhận biết màu.' },

@@ -927,4 +927,35 @@ export const P3CN_LESSONS = {
       { q: 'Tận dụng vật liệu tái chế giúp ích gì?', a: 'Giảm rác và bảo vệ môi trường.' },
     ],
   },
+
+  'P3CN-w36-quiz': {
+    topic: 'Kết thúc Lớp 3 — Công nghệ: Đôi tay khéo léo, tâm hồn sáng tạo',
+    intro: 'Một năm Công nghệ Lớp 3 đầy khéo léo và sáng tạo sắp kết thúc! Em đã làm quen với kĩ thuật thủ công, nông nghiệp, và gia đình. Hôm nay cùng nhìn lại những gì đã học và chuẩn bị cho những dự án mới nhé!',
+    objectives: [
+      'Tổng kết kĩ năng công nghệ thủ công và kiến thức nhà nông đã học.',
+      'Hiểu ý nghĩa của công nghệ trong đời sống gia đình.',
+      'Có ý tưởng dự án công nghệ sáng tạo trong kỳ hè.',
+    ],
+    theory: [
+      { h: 'Ba lĩnh vực Công nghệ Lớp 3 em đã khám phá' },
+      { ul: [
+        'THỦ CÔNG KĨ THUẬT: Cắt, gấp, dán giấy; làm đồ thủ công từ vật liệu tái chế; đọc và thực hiện theo hướng dẫn đơn giản.',
+        'NÔNG NGHIỆP GIA ĐÌNH: Trồng cây rau và hoa trong chậu; tưới nước và chăm sóc cây; hiểu về đất và phân bón tự nhiên.',
+        'GIA ĐÌNH - KĨ THUẬT: Sử dụng an toàn các đồ dùng gia đình; nấu ăn đơn giản; giữ gìn vật dụng trong nhà.',
+      ] },
+      { h: 'Tư duy thiết kế — em đã có!' },
+      { p: 'Khi làm một sản phẩm thủ công, em trải qua quy trình: (1) Xác định cần làm gì → (2) Lên ý tưởng và lập kế hoạch → (3) Thực hiện → (4) Kiểm tra và hoàn thiện. Đây chính là "tư duy thiết kế" mà các kĩ sư và kiến trúc sư dùng hàng ngày!' },
+      { h: 'Dự án Công nghệ hè' },
+      { ul: [
+        'Trồng 1 chậu rau hoặc 1 khóm hoa ở ban công/sân nhà — chăm sóc đến hết hè.',
+        'Làm 1 đồ vật từ vật liệu tái chế: hộp bút từ lon nước, kệ sách từ bìa carton.',
+        'Học nấu 1 món ăn đơn giản cùng bố/mẹ.',
+      ] },
+      { note: 'Người giỏi Công nghệ không nhất thiết phải dùng máy móc đắt tiền — chỉ cần đôi tay khéo léo, óc sáng tạo và tinh thần không bỏ cuộc là đủ!' },
+    ],
+    examples: [
+      { q: 'Kể các bước trồng 1 chậu rau xà lách từ hạt giống.', a: '1. Chuẩn bị chậu đất (đất sạch, tơi). 2. Gieo hạt (sâu 0,5cm). 3. Tưới nước nhẹ. 4. Đặt chỗ có ánh sáng. 5. Tưới mỗi ngày. 6. Thu hoạch sau 30–40 ngày.' },
+      { q: 'Kể 3 vật liệu tái chế có thể dùng để làm đồ thủ công.', a: 'Chai nhựa (làm lọ hoa, hộp đựng bút); hộp carton (làm kệ sách, hộp đồ chơi); lon nước (làm chậu trồng cây, đèn trang trí).' },
+    ],
+  },
 };

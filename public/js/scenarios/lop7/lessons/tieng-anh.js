@@ -1609,4 +1609,55 @@ export const S7TA_LESSONS = {
       { q: 'Final wish: trả lời "Wish you all the best in your exam!"', a: 'Thank you, teacher! Wish you a happy summer too! — cách đáp lời chúc lịch sự.' },
     ],
   },
+
+  'S7TA-w36-quiz': {
+    topic: 'Closing Year — Grade 7 English & the Road to Grade 8',
+    intro: 'Another school year of English is coming to a close! This week we look back at everything we have learned in Grade 7 — grammar, vocabulary, and communication skills — and look ahead to what is waiting for us in Grade 8. Well done for all your hard work this year!',
+    objectives: [
+      'Review the key grammar structures, vocabulary themes, and communication skills from Grade 7.',
+      'Identify areas to strengthen over the summer before Grade 8 begins.',
+      'Build confidence to use English more actively in daily life.',
+    ],
+    theory: [
+      { h: 'Grammar Highlights — Grade 7' },
+      { ul: [
+        'Tenses: Present Simple & Continuous (habits vs. now), Past Simple (finished actions), Future Simple (will/going to).',
+        'Modal verbs: can/could (ability), should (advice), must/have to (obligation), might/may (possibility).',
+        'Comparatives & Superlatives: bigger, the biggest; more beautiful, the most beautiful.',
+        'Conditionals: Zero (If + Present, Present) and First (If + Present, will + V).',
+        'Reported speech basics: "She said she was happy."',
+        'Passive voice introduction: The book was written by Nam.',
+      ] },
+      { h: 'Key Vocabulary Themes' },
+      { ul: [
+        'Daily life & routines, family and relationships.',
+        'Health and the body — giving advice, talking about illness.',
+        'Environment and nature — pollution, conservation, climate change.',
+        'Community and society — school life, hobbies, local places.',
+        'Technology basics — using devices, online safety.',
+        'Food, festivals, and culture — Vietnamese and world traditions.',
+      ] },
+      { h: 'Communication Skills' },
+      { ul: [
+        'Asking for and giving information, directions, and opinions.',
+        'Making and responding to invitations, suggestions, and requests.',
+        'Describing people, places, and events.',
+        'Writing: informal emails, short paragraphs, simple essays.',
+        'Reading strategies: skimming (main idea), scanning (specific details).',
+      ] },
+      { h: 'What Is Coming in Grade 8' },
+      { ul: [
+        'More complex grammar: Past Perfect, Present Perfect in context, Second Conditional.',
+        'Wider vocabulary: science, history, career and society topics.',
+        'Longer reading texts and more formal writing styles.',
+        'More speaking practice: debates, presentations, and role plays.',
+      ] },
+      { note: 'Summer tip: read one short English article per day, watch one episode of an English cartoon or series, and write 3 sentences in English every morning. Small daily habits build big fluency!' },
+    ],
+    examples: [
+      { q: 'Rewrite using Passive Voice: "People speak Vietnamese in Vietnam."', a: 'Vietnamese is spoken in Vietnam (by people). — Chủ thể "people" có thể bỏ khi không quan trọng; động từ chia be + V3: is spoken.' },
+      { q: 'Make a First Conditional sentence about studying for exams.', a: 'If I study hard every day, I will get good marks in Grade 8. / If you do not review vocabulary, you will forget it quickly.' },
+      { q: 'Write 3 sentences about what you enjoyed most in Grade 7 English and why.', a: 'Model answer: "I enjoyed the reading lessons most because I discovered many interesting topics about nature and culture. I also liked practising conversations with my classmates — it made me less shy about speaking. My favourite part was learning idioms and phrases that I can use in real life, not just in tests."' },
+    ],
+  },
 };

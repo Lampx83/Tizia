@@ -1608,4 +1608,40 @@ export const S9LSDL_LESSONS = {
       { q: 'Em cần chuẩn bị những gì về kiến thức và tâm lí trước kì thi vào lớp 10?', a: 'Về kiến thức: hệ thống lại bằng sơ đồ tư duy, nắm chắc các mốc và ý nghĩa lịch sử trọng tâm, đặc điểm – thế mạnh các vùng địa lí, rèn kĩ năng đọc bảng số liệu và biểu đồ. Về tâm lí: giữ tinh thần thoải mái, tự tin vào sự chuẩn bị của mình, ngủ đủ giấc trước ngày thi, chuẩn bị đầy đủ giấy tờ và dụng cụ, đến phòng thi sớm và bình tĩnh đọc kĩ đề trước khi làm.' },
     ]
   ),
+
+  'S9LSDL-w36-quiz': L(
+    'Kết thúc Lịch sử – Địa lí THCS — Đất nước nhìn từ quá khứ và không gian',
+    'Tuần tổng kết năm học — thay vì ôn bài, cô muốn cùng các em phóng tầm nhìn: Lịch sử và Địa lí dạy cho chúng ta điều gì về đất nước, về dân tộc, và về vị trí của mình trong thế giới này?',
+    [
+      'Nhận ra sợi dây kết nối giữa Lịch sử và Địa lí trong việc hiểu đất nước.',
+      'Biết ứng dụng kiến thức Lịch sử-Địa lí vào nhìn nhận các sự kiện đương đại.',
+      'Định hướng tiếp tục học và yêu thích môn học qua THPT.',
+    ],
+    [
+      { h: 'Lịch sử và Địa lí — hai góc nhìn về một đất nước' },
+      { p: 'Địa lí hỏi "Ở đâu?" và "Tại sao ở đây?"; Lịch sử hỏi "Điều gì đã xảy ra?" và "Tại sao?". Cùng nhau, hai môn vẽ ra bức tranh hoàn chỉnh: Việt Nam nằm ở đâu, địa hình và khí hậu ra sao, và người dân đã sống — chiến đấu — xây dựng đất nước này như thế nào.' },
+      { h: 'Những mốc Lịch sử không thể quên' },
+      { ul: [
+        '938: Chiến thắng Bạch Đằng — mở ra kỉ nguyên độc lập sau 1000 năm Bắc thuộc.',
+        '1954: Hiệp định Giơnevơ — chia cắt đất nước, bước ngoặt lớn của cuộc kháng chiến.',
+        '1975: Thống nhất đất nước — kết thúc 30 năm chiến tranh.',
+        '1986: Đổi mới — mở ra thời kì hội nhập và phát triển kinh tế.',
+      ] },
+      { h: 'Địa lí Việt Nam trong một cái nhìn' },
+      { ul: [
+        'Hình chữ S trải dài 1650 km — đa dạng khí hậu, văn hoá và vùng kinh tế.',
+        '3 vùng kinh tế trọng điểm: Bắc (Hà Nội), Trung (Đà Nẵng–Huế), Nam (TP.HCM).',
+        'Biển Đông: không gian chiến lược, nguồn tài nguyên và hành lang giao thương.',
+        'Tài nguyên thiên nhiên phong phú nhưng khai thác chưa bền vững — thách thức lớn.',
+      ] },
+      { h: 'Bài học lớn nhất từ Lịch sử – Địa lí' },
+      { p: 'Địa lí cho thấy vị trí tạo ra thời cơ và thách thức — dân tộc nào tận dụng được địa thế sẽ thịnh vượng. Lịch sử cho thấy sức mạnh của đoàn kết và ý chí — những dân tộc nhỏ vẫn có thể chiến thắng những đế chế lớn. Đó là bài học không chỉ cho quá khứ mà cho cả tương lai.' },
+      { note: 'Biết đất nước mình từ đâu đến và đang ở đâu — đó là nền tảng để hiểu chúng ta đang đi về đâu. Môn học này không phải để học thuộc, mà để yêu.' },
+    ],
+    [
+      { q: 'Vì sao nói "Địa lí và Lịch sử là hai mặt của một đồng tiền" khi nói về một quốc gia?', a: 'Vì địa lí (vị trí, địa hình, tài nguyên, khí hậu) tạo ra điều kiện và bối cảnh cho lịch sử xảy ra, còn lịch sử là câu chuyện con người phản ứng với môi trường địa lí đó. Ví dụ: Việt Nam nằm ở ngã tư đường giao thương châu Á (Địa lí) → bị nhiều cường quốc xâm lược nhưng cũng tiếp thu được nhiều văn hoá (Lịch sử). Hai môn không thể hiểu đầy đủ nếu chỉ học riêng lẻ.' },
+      { q: 'Sự kiện lịch sử hoặc địa danh Việt Nam nào em ấn tượng nhất và tại sao?', a: 'Ví dụ: Điện Biên Phủ — vì đây là nơi diễn ra trận đánh được cả thế giới gọi là "Điện Biên Phủ trên không" và "bài học cho mọi đế quốc": một đất nước nhỏ, vừa thoát khỏi chế độ thuộc địa đã đánh bại một cường quốc phương Tây. Sự kiện này gắn cả Địa lí (địa hình rừng núi Tây Bắc tạo lợi thế) với Lịch sử (chiến lược thiên tài của Đại tướng Võ Nguyên Giáp).' },
+      { q: 'Điều gì ở môn Lịch sử – Địa lí lớp 9 sẽ theo em vào cuộc sống dài lâu nhất?', a: 'Cách đọc bản đồ và phân tích số liệu (kĩ năng tư duy phân tích), khả năng nhìn sự kiện trong bối cảnh rộng hơn (tư duy hệ thống), và quan trọng nhất — tình yêu đất nước dựa trên hiểu biết, không phải cảm xúc mù quáng. Đất nước mình đẹp và đáng yêu vì có lí do cụ thể, và hiểu lí do đó khiến tình yêu đó bền vững hơn.' },
+    ]
+  ),
 };

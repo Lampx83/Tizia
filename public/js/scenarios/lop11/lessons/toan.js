@@ -1012,4 +1012,40 @@ export const H11TOAN_LESSONS = {
       { q: 'Cho P(A) = 0,4; P(B) = 0,3; A, B độc lập. Tính P(A ∪ B).', a: 'P(A ∩ B) = 0,4·0,3 = 0,12. P(A ∪ B) = 0,4 + 0,3 − 0,12 = 0,58.' },
     ],
   },
+
+  'H11TOAN-w36-quiz': {
+    topic: 'Kết thúc Toán 11 — Hành trang vào lớp 12',
+    intro: 'Năm học lớp 11 khép lại với rất nhiều kiến thức nền tảng quan trọng. Hôm nay chúng ta nhìn lại toàn bộ hành trình, củng cố những điểm then chốt và chuẩn bị tâm thế tự tin bước vào lớp 12.',
+    objectives: [
+      'Hệ thống hoá toàn bộ chương trình Toán 11 theo các mảng kiến thức.',
+      'Nhận biết những chủ đề sẽ được mở rộng và nâng cao ở lớp 12.',
+      'Xây dựng kế hoạch tự học hiệu quả trong kì nghỉ hè.',
+    ],
+    theory: [
+      { h: 'Bức tranh toàn cảnh Toán 11' },
+      { ul: [
+        'Đại số & Giải tích: hàm lượng giác, phương trình lượng giác, dãy số, giới hạn, đạo hàm cơ bản.',
+        'Hình học không gian: đường thẳng, mặt phẳng, quan hệ song song – vuông góc, khoảng cách.',
+        'Thống kê & Xác suất: xác suất biến cố, quy tắc cộng – nhân, biến ngẫu nhiên rời rạc.',
+      ] },
+      { h: 'Những viên đá nền cho lớp 12' },
+      { ul: [
+        'Đạo hàm (lớp 11) → Nguyên hàm, tích phân (lớp 12): nắm vững quy tắc đạo hàm giúp tiếp thu tích phân nhanh hơn.',
+        'Giới hạn → Hàm liên tục và ứng dụng đạo hàm vào khảo sát hàm số (đường cong y = f(x)).',
+        'Xác suất → Phân phối xác suất, khoảng tin cậy trong thống kê suy diễn.',
+        'Hình học không gian → Thể tích khối đa diện và khối tròn xoay bằng tích phân.',
+      ] },
+      { h: 'Lộ trình ôn hè thông minh' },
+      { ul: [
+        'Tuần 1–2: Ôn lại đạo hàm và giới hạn — đây là "cầu nối" quan trọng nhất sang lớp 12.',
+        'Tuần 3–4: Luyện hình học không gian — bài tập khoảng cách và góc là điểm hay ra thi.',
+        'Tuần 5–6: Làm lại đề cương xác suất và thống kê — dễ mất điểm vì hay bỏ quên.',
+      ] },
+      { note: 'Lớp 12 không khó hơn lớp 11 về bản chất — chỉ nâng thêm một tầng ứng dụng. Nền móng vững từ bây giờ là lợi thế lớn nhất cho kỳ thi tốt nghiệp THPT Quốc gia.' },
+    ],
+    examples: [
+      { q: 'Tại sao việc thành thạo đạo hàm ở lớp 11 lại quan trọng cho lớp 12?', a: 'Lớp 12 sẽ học nguyên hàm và tích phân — phép toán "ngược" của đạo hàm. Ngoài ra, khảo sát hàm số (tìm cực trị, tiệm cận, vẽ đồ thị) đòi hỏi tính đạo hàm thành thạo. Học sinh nắm vững đạo hàm lớp 11 tiết kiệm rất nhiều thời gian ôn tập lớp 12 và ít bị sai lầm cơ bản.' },
+      { q: 'Em nên ôn tập theo thứ tự nào để chuẩn bị tốt nhất cho Toán lớp 12?', a: 'Thứ tự hiệu quả: (1) Đạo hàm và ứng dụng → (2) Phương trình lượng giác → (3) Hình học không gian → (4) Xác suất. Lý do: đạo hàm xuất hiện trong hầu hết các dạng bài lớp 12; hình học không gian tốn thời gian nhất nên cần ôn sớm; xác suất có công thức tương đối gọn, để cuối cũng vừa đủ.' },
+    ],
+  },
 };

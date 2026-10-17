@@ -808,4 +808,42 @@ export const H11CN_LESSONS = {
       { q: 'Bài tập: Liệt kê ba việc cần làm để sử dụng ô tô an toàn.', a: 'Giải: (1) Thắt dây an toàn và tuân thủ luật giao thông; (2) bảo dưỡng định kỳ (dầu, phanh, lốp, nước làm mát); (3) không lái xe khi mệt mỏi hoặc đã uống rượu bia.' },
     ],
   },
+
+  'H11CN-w36-quiz': {
+    topic: 'Kết thúc Công Nghệ 11 — Kỹ thuật, Xe hơi và Hành trình lớp 12',
+    intro: 'Công Nghệ 11 đã dẫn chúng ta qua thế giới vật liệu cơ khí, phương pháp gia công, động cơ đốt trong và hệ thống ô tô hiện đại. Hôm nay chúng ta tổng kết kiến thức, kết nối với thực tiễn kỹ thuật và hiểu tại sao kỹ thuật cơ khí vẫn là nền tảng của công nghiệp hiện đại dù thế giới đang số hoá.',
+    objectives: [
+      'Hệ thống hoá kiến thức Công Nghệ 11 về vật liệu, gia công cơ khí, động cơ và ô tô.',
+      'Kết nối kiến thức kỹ thuật với xu hướng công nghệ hiện đại: xe điện, tự động hoá, IoT.',
+      'Định hướng cho những học sinh yêu thích kỹ thuật: các ngành học và nghề nghiệp phù hợp.',
+    ],
+    theory: [
+      { h: 'Bức tranh Công Nghệ 11' },
+      { ul: [
+        'Phần 1 — Cơ khí chế tạo: vật liệu (thép, nhôm, nhựa, composite), phương pháp gia công (tiện, phay, khoan, đúc, hàn), quy trình sản xuất cơ khí.',
+        'Phần 2 — Động cơ đốt trong: nguyên lý 4 kỳ (nạp – nén – nổ – xả), hệ thống làm mát, bôi trơn, đánh lửa, nhiên liệu.',
+        'Phần 3 — Ô tô hiện đại: hệ thống truyền lực, hệ thống phanh ABS, hệ thống điều khiển điện tử ECU, cảm biến và an toàn chủ động.',
+        'Xu hướng: xe điện (EV), xe hybrid, lái xe tự động (ADAS/autonomous driving).',
+      ] },
+      { h: 'Vật liệu và ứng dụng thực tiễn' },
+      { ul: [
+        'Nhôm hợp kim (Al–Si, Al–Mg): nhẹ + bền → khung xe máy bay, thân xe hơi; tấm pin mặt trời.',
+        'Thép không gỉ (inox): chống ăn mòn → dụng cụ y tế, thiết bị nhà bếp, cấu kiện biển.',
+        'Vật liệu composite (carbon fiber): siêu nhẹ + siêu bền → xe đua F1, thiết bị thể thao cao cấp, drone.',
+        'Nhựa kỹ thuật (ABS, polycarbonate): cách điện, nhẹ, định hình dễ → vỏ điện thoại, đèn ô tô, mũ bảo hiểm.',
+      ] },
+      { h: 'Công nghệ 12 và những hướng nghề nghiệp' },
+      { ul: [
+        'Công Nghệ 12 tập trung vào công nghệ điện-điện tử, lắp đặt điện dân dụng, hệ thống thông tin điều khiển.',
+        'Nghề kỹ sư cơ khí: thiết kế và sản xuất sản phẩm từ kim loại/nhựa — nhu cầu cao trong công nghiệp ô tô và điện tử.',
+        'Kỹ sư ô tô và động cơ: bảo dưỡng, thiết kế xe điện — thị trường đang bùng nổ toàn cầu.',
+        'Kỹ sư tự động hoá/cơ điện tử: kết hợp cơ khí + điện + lập trình — nghề có thu nhập cao nhất ngành kỹ thuật.',
+      ] },
+      { note: 'Thế giới đang chuyển đổi năng lượng: xe xăng → xe điện, nhà máy thủ công → tự động hoá CNC và robot. Nhưng ai vận hành, bảo trì và thiết kế những máy móc đó? Chính là những người hiểu cả cơ khí truyền thống lẫn công nghệ số — đúng như những gì Công Nghệ 11 đã trang bị cho em.' },
+    ],
+    examples: [
+      { q: 'Tại sao xe điện được coi là tương lai của ngành ô tô? Nêu ít nhất 3 ưu điểm so với xe động cơ đốt trong.', a: 'Ba ưu điểm chính của xe điện: (1) KHÔNG PHÁT THẢI CO2 tại chỗ → giảm ô nhiễm không khí đô thị; (2) HIỆU SUẤT NĂNG LƯỢNG cao hơn (điện → cơ khoảng 90–95% hiệu suất, so với 25–40% của động cơ đốt trong); (3) VẬN HÀNH ÊM, ÍT RUNG ĐỘNG hơn vì không có trục khuỷu và xi lanh. Thách thức còn lại: thời gian sạc, hạ tầng trạm sạc, giá pin vẫn còn cao — nhưng đang giảm nhanh nhờ công nghệ pin lithium-ion và pin thể rắn (solid-state battery) thế hệ mới.' },
+      { q: 'Một học sinh thích vừa cơ khí vừa lập trình. Nên chọn ngành học nào ở đại học?', a: 'Ngành phù hợp nhất là CƠ ĐIỆN TỬ (Mechatronics Engineering) hoặc KỸ THUẬT TỰ ĐỘNG HOÁ. Đây là ngành kết hợp 4 lĩnh vực: cơ khí, điện-điện tử, điều khiển và lập trình. Sinh viên học thiết kế máy móc (cơ khí) + mạch điện (điện tử) + PLC/vi điều khiển (điều khiển) + Python/C++ (lập trình) để tạo ra hệ thống robot, dây chuyền tự động. Thu nhập trung bình của kỹ sư cơ điện tử tại VN hiện khoảng 20–35 triệu đồng/tháng sau 3–5 năm kinh nghiệm.' },
+    ],
+  },
 };

@@ -1201,4 +1201,48 @@ export const H11NV_LESSONS = {
       { q: 'Khi gặp câu hỏi nghị luận xã hội trong đề thi, em cần lưu ý gì?', a: 'Cần xác định rõ vấn đề là về tư tưởng đạo lí hay hiện tượng đời sống để chọn cách triển khai phù hợp. Bài viết phải có luận điểm rõ ràng, dẫn chứng thực tế tiêu biểu, lí lẽ chặt chẽ và đặc biệt là thể hiện được quan điểm, thái độ riêng cùng sự liên hệ chân thành với bản thân. Cần viết đúng dung lượng yêu cầu và tránh lan man, sáo rỗng.' },
     ],
   },
+
+  'H11NV-w36-quiz': {
+    topic: 'Kết thúc Ngữ Văn 11 — Chiều sâu cảm xúc và hành trình lớp 12',
+    intro: 'Hành trình Ngữ Văn lớp 11 đã mang đến những tác phẩm văn học sâu sắc nhất của văn học Việt Nam và thế giới. Hôm nay chúng ta nhìn lại những gì đã học, ghi nhớ những tác phẩm tiêu biểu và sẵn sàng bước vào lớp 12 với tâm thế văn chương vững chắc hơn.',
+    objectives: [
+      'Hệ thống hoá các tác phẩm văn học lớp 11 theo giai đoạn và thể loại.',
+      'Nắm vững các kĩ năng đọc hiểu và viết nghị luận đã được rèn luyện.',
+      'Chuẩn bị tâm thế và phương pháp cho Ngữ Văn lớp 12 — môn thi tốt nghiệp THPT Quốc gia.',
+    ],
+    theory: [
+      { h: 'Bức tranh văn học lớp 11' },
+      { ul: [
+        'Văn học trung đại: thơ Nôm (Hồ Xuân Hương, Nguyễn Khuyến, Tú Xương), văn tế, chiếu, hịch, thể hát nói.',
+        'Văn học đầu TK XX – 1945: Thơ Mới (Xuân Diệu, Huy Cận, Hàn Mặc Tử), tiểu thuyết tự lực văn đoàn, truyện ngắn Nam Cao, Nguyễn Công Hoan.',
+        'Văn học cách mạng và kháng chiến: thơ Tố Hữu, văn xuôi Nguyễn Ái Quốc.',
+        'Văn học nước ngoài: trích đoạn kịch, tiểu thuyết Âu – Mỹ – Nga.',
+      ] },
+      { h: 'Kĩ năng cốt lõi đã tích luỹ' },
+      { ul: [
+        'Đọc hiểu văn bản: xác định thể loại, nhận biết biện pháp tu từ, phân tích nội dung và thông điệp.',
+        'Viết nghị luận văn học: phân tích nhân vật, đoạn trích, phong cách tác giả, so sánh tác phẩm.',
+        'Viết nghị luận xã hội: vấn đề đạo lí và hiện tượng đời sống — lập luận chặt chẽ, dẫn chứng xác thực.',
+        'Tiếng Việt: phong cách ngôn ngữ, biện pháp tu từ, liên kết văn bản.',
+      ] },
+      { h: 'Những tác phẩm then chốt không được quên' },
+      { ul: [
+        '"Vội vàng" (Xuân Diệu): triết lí sống mãnh liệt, hưởng thụ và trân trọng tuổi trẻ.',
+        '"Đây thôn Vĩ Dạ" (Hàn Mặc Tử): nỗi đau của người cô độc, vẻ đẹp xứ Huế mộng mơ.',
+        '"Chí Phèo" (Nam Cao): bi kịch tha hoá và khao khát lương thiện — tác phẩm của năm học phổ biến nhất trong đề thi.',
+        '"Hai đứa trẻ" (Thạch Lam): cuộc sống phố huyện, nỗi chờ đợi và ánh sáng ước mơ.',
+      ] },
+      { h: 'Định hướng lớp 12' },
+      { ul: [
+        'Tác phẩm mới: "Tây Tiến" (Quang Dũng), "Việt Bắc" (Tố Hữu), "Vợ nhặt" (Kim Lân), "Rừng xà nu" (Nguyễn Trung Thành), "Chiếc thuyền ngoài xa" (Nguyễn Minh Châu)...',
+        'Kĩ năng viết được nâng lên — đề thi tốt nghiệp yêu cầu bài nghị luận khoảng 600 từ.',
+        'Văn nghị luận xã hội chiếm 2–3 điểm đề thi — cần thực hành nhiều hơn.',
+      ] },
+      { note: 'Bí quyết học văn giỏi không phải học thuộc lòng mà là hiểu sâu và biết cảm nhận. Hè này hãy đọc thêm sách, xem phim chuyển thể từ tác phẩm văn học, và viết nhật kí ngắn mỗi ngày — đó là cách luyện văn tốt nhất mà không cần sách vở.' },
+    ],
+    examples: [
+      { q: 'Điểm khác biệt lớn nhất giữa văn học lớp 11 và những gì sẽ học ở lớp 12 là gì?', a: 'Văn học lớp 11 tập trung vào văn học Việt Nam từ trung đại đến 1945 — giai đoạn xây dựng nền móng văn học dân tộc. Văn học lớp 12 tiếp nối với giai đoạn 1945–1975 (kháng chiến) và sau 1975 (đổi mới), phản ánh hiện thực chiến tranh và cuộc sống con người sâu sắc hơn. Kĩ năng cũng nâng cao hơn: đề thi tốt nghiệp THPT yêu cầu bài viết dài, lập luận sắc sảo và kết hợp nhiều phương diện phân tích.' },
+      { q: 'Làm thế nào để không nhầm lẫn các tác phẩm và tác giả khi ôn thi?', a: 'Ba bước hiệu quả: (1) Lập bảng hệ thống hoá theo giai đoạn (trước 1945 / 1945–1954 / 1954–1975) và thể loại (thơ / truyện ngắn / tiểu thuyết / kịch); (2) Gắn mỗi tác phẩm với một "hình ảnh chủ đạo" đặc trưng — ví dụ "Chí Phèo" = cái lò gạch cũ / bát cháo hành; (3) Luyện viết tóm tắt ngắn (5 câu) cho từng tác phẩm rồi tự kiểm tra không nhìn. Não ghi nhớ tốt nhất qua câu chuyện và hình ảnh, không phải qua bảng số liệu khô khan.' },
+    ],
+  },
 };

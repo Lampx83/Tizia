@@ -886,4 +886,40 @@ export const P4CN_LESSONS = {
       { q: 'Em định tắt máy tính, cách nào đúng?', a: 'Vào Start → Shut down (Windows) hoặc menu Apple → Tắt máy (Mac). KHÔNG rút điện đột ngột — có thể hỏng máy.' },
     ],
   },
+
+  'P4CN-w36-quiz': {
+    topic: 'Kết thúc Lớp 4 — Hành trang Công nghệ vào Lớp 5',
+    intro: 'Chúc mừng các em đã hoàn thành năm học Công nghệ Lớp 4! Hôm nay cô tổng kết hành trình từ thủ công kỹ thuật đến nông nghiệp, điện tử — và cùng nhìn về những phát minh sáng tạo đang chờ ở Lớp 5!',
+    objectives: [
+      'Hệ thống kiến thức Công nghệ Lớp 4 theo ba lĩnh vực: kỹ thuật, nông nghiệp, năng lượng.',
+      'Hiểu nguyên lý an toàn khi sử dụng các thiết bị và điện.',
+      'Có tư duy tìm tòi sáng tạo và yêu lao động cho Lớp 5.',
+    ],
+    theory: [
+      { h: 'Ba lĩnh vực Công nghệ Lớp 4 đã chinh phục' },
+      { ul: [
+        'Kỹ thuật và thủ công: cắt, gấp, dán giấy (hình khối 3D, thiệp, hộp, mô hình); sử dụng an toàn kéo, dao rọc; đọc bản vẽ kỹ thuật đơn giản; quy trình làm sản phẩm (thiết kế → chuẩn bị vật liệu → thực hiện → kiểm tra).',
+        'Nông nghiệp gia đình: trồng cây (đất, nước, ánh sáng, phân bón); nhận biết sâu bệnh thông thường; thu hoạch và bảo quản rau quả; chăm sóc vật nuôi nhỏ (gà, cá, thỏ).',
+        'Năng lượng và điện: nguồn điện (pin, lưới điện); mạch điện kín — mới có dòng điện; an toàn điện (tay khô, không chạm dây trần, tắt nguồn trước khi sửa); đèn LED tiết kiệm điện; tắt máy tính đúng quy trình (Shut down).',
+      ] },
+      { h: 'Nguyên tắc an toàn lao động & điện — cần nhớ mãi' },
+      { ul: [
+        'Điện: KHÔNG dùng điện khi tay ướt; KHÔNG cắm nhiều thiết bị vào 1 ổ cắm; tắt điện trước khi thay bóng đèn.',
+        'Cắt gọt: cắt đẩy ra xa người; thu dọn dụng cụ sắc ngay sau dùng; không chạy khi cầm kéo/dao.',
+        'Nông nghiệp: rửa tay sau khi tiếp xúc đất/phân; đeo khẩu trang khi phun thuốc; kiểm tra đất và nước trước khi trồng.',
+      ] },
+      { h: 'Lớp 5 Công nghệ sẽ học gì?' },
+      { ul: [
+        'Mô hình kỹ thuật phức tạp hơn: lắp ráp có khớp nối, vít, ốc.',
+        'Lập trình robot đơn giản và mạch điện có công tắc nhiều vị trí.',
+        'Nông nghiệp bền vững: vườn rau thủy canh, phân hữu cơ từ rác thực phẩm.',
+        'Thiết kế sáng tạo: quy trình Design Thinking (Đồng cảm → Xác định → Ý tưởng → Tạo mẫu → Kiểm tra).',
+      ] },
+      { note: 'Công nghệ là cầu nối giữa ý tưởng và hiện thực — hãy luôn tò mò và dám thử!' },
+    ],
+    examples: [
+      { q: 'Nêu 3 điều kiện cần thiết để cây phát triển tốt.', a: 'Đất màu mỡ (cung cấp dinh dưỡng khoáng); Nước (hoà tan khoáng chất, vận chuyển chất); Ánh sáng (giúp lá quang hợp tạo chất hữu cơ). Thêm không khí (CO₂ cho quang hợp, O₂ cho hô hấp rễ).' },
+      { q: 'Tại sao KHÔNG cắm nhiều thiết bị vào 1 ổ cắm?', a: 'Mỗi ổ cắm có giới hạn tải điện. Cắm quá nhiều → tổng công suất vượt mức → dây điện nóng → cháy nổ hoặc trập điện. Nguyên tắc: kiểm tra tổng công suất và không vượt giới hạn ghi trên ổ cắm.' },
+    ],
+  },
 };

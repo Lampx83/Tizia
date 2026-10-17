@@ -875,4 +875,44 @@ export const P4GDTC_LESSONS = {
       { q: 'Khẩu hiệu thể thao của chúng ta là gì?', a: '"Khỏe để học tập tốt". Vận động giúp em khỏe, học giỏi và sống vui — lợi ích cả đời.' },
     ],
   },
+
+  'P4GDTC-w36-quiz': {
+    topic: 'Kết thúc Lớp 4 — Hành trang Thể chất vào Lớp 5',
+    intro: 'Chúc mừng một năm học thể chất khoẻ mạnh và vui vẻ! Hôm nay cô và trò ôn lại các kỹ năng vận động đã học, và chuẩn bị kế hoạch vận động trong kỳ hè để vào Lớp 5 thêm khoẻ mạnh, nhanh nhẹn!',
+    objectives: [
+      'Hệ thống các kỹ năng vận động đã học trong năm Lớp 4.',
+      'Biết nguyên tắc luyện tập thể thao an toàn trong hè.',
+      'Lập kế hoạch vận động hàng ngày trong kỳ nghỉ.',
+    ],
+    theory: [
+      { h: 'Kỹ năng vận động Lớp 4 đã học' },
+      { ul: [
+        'Đội hình đội ngũ: hàng dọc, hàng ngang, vòng tròn; các lệnh tập hợp, dàn hàng, dồn hàng, nghiêm, nghỉ, quay phải, quay trái.',
+        'Chạy bền: chạy đều nhịp 4–6 phút liên tục; thở đúng (hít vào bằng mũi, thở ra bằng miệng); không bỏ cuộc giữa chừng.',
+        'Nhảy: nhảy dây đơn, nhảy xa, nhảy cao; kỹ thuật đà – bật – bay – tiếp đất.',
+        'Ném và phối hợp: ném bóng vào đích; bắt bóng hai tay; phối hợp tay mắt.',
+        'Trò chơi vận động: chạy tiếp sức, bóng rổ mini, cướp cờ, nhảy bao bố; kỹ năng đồng đội.',
+        'Bài thể dục: 8 động tác cơ bản (điều hoà, tay, chân, vươn thở, bụng, toàn thân, thăng bằng, nhảy); bài thể dục với cờ hoặc ghế.',
+      ] },
+      { h: 'Lớp 5 GDTC sẽ học gì?' },
+      { ul: [
+        'Chạy ngắn: xuất phát thấp, kỹ thuật về đích.',
+        'Bơi lội cơ bản (nếu trường có bể bơi): ếch, sải, kỹ thuật thở.',
+        'Bóng đá, bóng rổ kỹ thuật cơ bản: dẫn bóng, chuyền bóng, ghi điểm.',
+        'Thể dục dụng cụ: xà đơn, xà kép ở mức cơ bản.',
+      ] },
+      { h: 'Kế hoạch vận động hè "60 phút mỗi ngày"' },
+      { ul: [
+        '10 phút sáng: khởi động toàn thân (tay, chân, cổ, lưng).',
+        '30 phút hoạt động chính: đạp xe, bơi, chạy bộ, đá cầu, cầu lông với bạn bè.',
+        '10 phút chiều: trò chơi vận động cùng gia đình.',
+        '10 phút tối: yoga giãn cơ nhẹ trước khi ngủ.',
+      ] },
+      { note: 'WHO khuyến cáo trẻ em cần ít nhất 60 phút vận động mỗi ngày — hãy làm cho cơ thể em vui!' },
+    ],
+    examples: [
+      { q: 'Em nên làm gì 5 phút trước khi chạy bền?', a: 'Khởi động: xoay cổ tay, cổ chân; căng cơ đùi, bắp chân; chạy bước nhỏ tại chỗ 1–2 phút. Khởi động giúp cơ nóng dần, giảm nguy cơ chuột rút và chấn thương.' },
+      { q: 'Nếu bạn chạy tiếp sức vấp ngã, em nên làm gì?', a: 'Không cười nhạo. Chạy lại xem bạn có bị thương không. Nếu cần thì kêu thầy cô. Đồng đội là hỗ trợ nhau trong lúc khó — đó là tinh thần thể thao.' },
+    ],
+  },
 };

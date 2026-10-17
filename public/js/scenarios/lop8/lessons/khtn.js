@@ -1266,4 +1266,61 @@ export const S8KHTN_LESSONS = {
       { q: 'Tính nồng độ mol của dung dịch chứa 0,2 mol HCl trong 0,5 lít dung dịch.', a: 'C_M = n/V = 0,2/0,5 = 0,4 mol/L (0,4 M).' },
     ]
   ),
+
+  'S8KHTN-w36-quiz': L(
+    'Kết thúc KHTN 8 — Ba ngành khoa học, một hành trình',
+    'Năm lớp 8 đã dẫn các em qua ba thế giới khoa học kì diệu: Vật Lí với áp suất, lực đẩy và nhiệt học; Hoá Học với acid, base, oxide, muối và nồng độ dung dịch; Sinh Học với toàn bộ cơ thể người — từng tế bào, từng hệ cơ quan. Đây là tuần ôn tập tổng kết, cũng là bệ phóng để em tự tin bước vào KHTN lớp 9.',
+    [
+      'Hệ thống ba mạch kiến thức lớn của KHTN 8: Vật Lí, Hoá Học và Sinh Học.',
+      'Nắm vững các công thức và phương trình hoá học trọng tâm.',
+      'Hiểu rõ cầu nối kiến thức sang lớp 9 để định hướng ôn tập.',
+    ],
+    [
+      { h: 'Vật Lí — Cơ học và Nhiệt học' },
+      { ul: [
+        'Áp suất: p = F/S (Pa); áp suất chất lỏng p = d·h; áp suất khí quyển ~10⁵ Pa.',
+        'Lực đẩy Archimedes: F_A = d·V (V là thể tích phần chất lỏng bị chiếm chỗ). Vật nổi khi F_A ≥ P.',
+        'Công cơ học: A = F·s (J); Công suất: P = A/t (W); Hiệu suất: H = A_ích/A_toàn phần × 100%.',
+        'Nhiệt học: nhiệt năng, nhiệt lượng Q = m·c·Δt; sự nở vì nhiệt (rắn, lỏng, khí); truyền nhiệt (dẫn, đối lưu, bức xạ).',
+      ] },
+      { h: 'Hoá Học — Phân loại chất vô cơ' },
+      { ul: [
+        'Oxide: gồm oxide acid (SO₃, CO₂, P₂O₅) và oxide base (CaO, Na₂O, Fe₂O₃); phản ứng với nước, acid, base.',
+        'Acid: phân li ra H⁺ và gốc acid; tác dụng với kim loại, oxide base, base, muối.',
+        'Base (kiềm/không tan): phân li ra OH⁻; tác dụng với acid, oxide acid, muối, một số kim loại.',
+        'Muối: phân li ra cation kim loại và anion gốc acid; phản ứng trao đổi, tác dụng với acid/base/kim loại.',
+        'Nồng độ dung dịch: C% = (m_chất tan / m_dung dịch) × 100; C_M = n/V (mol/L).',
+        'Pha chế dung dịch và cân bằng phương trình hoá học là kĩ năng cốt lõi.',
+      ] },
+      { h: 'Sinh Học — Cơ thể người' },
+      { ul: [
+        'Cấu trúc cơ thể: tế bào → mô → cơ quan → hệ cơ quan → cơ thể.',
+        'Hệ vận động: xương (khớp, thành phần hoá học), cơ (co – duỗi, mệt mỏi cơ).',
+        'Hệ tuần hoàn: tim 4 ngăn; vòng tuần hoàn nhỏ (phổi) và lớn (cơ thể); thành phần máu; nhóm máu ABO.',
+        'Hệ hô hấp: đường dẫn khí; trao đổi khí ở phổi và tế bào; bảo vệ hệ hô hấp.',
+        'Hệ tiêu hoá: cơ quan và enzyme tiêu hoá; hấp thụ chất dinh dưỡng ở ruột non.',
+        'Hệ bài tiết, thần kinh, nội tiết, sinh dục — các chức năng điều hoà và duy trì cân bằng nội môi.',
+        'Vệ sinh và bảo vệ sức khoẻ: phòng bệnh truyền nhiễm, an toàn thực phẩm, lối sống lành mạnh.',
+      ] },
+      { h: 'Cầu nối sang KHTN lớp 9' },
+      { ul: [
+        'Vật Lí: điện học nâng cao (điện trở, định luật Ohm, mạch điện song song/nối tiếp), quang học, từ trường.',
+        'Hoá Học: phi kim (clo, cacbon, silic), hợp chất của cacbon (CO, CO₂, CaCO₃), hoá học hữu cơ (hidrocacbon, dẫn xuất, polime, glucozơ, protein).',
+        'Sinh Học: di truyền học (ADN, gen, nhiễm sắc thể, các quy luật Mendel), tiến hoá, sinh thái học.',
+      ] },
+      { h: 'Bí quyết ôn tập tổng hợp' },
+      { ul: [
+        'Lập bảng công thức Hoá – Lí kèm đơn vị và điều kiện áp dụng.',
+        'Ôn tính chất hoá học của acid/base/oxide/muối kèm phương trình minh hoạ.',
+        'Vẽ sơ đồ tư duy từng hệ cơ quan với cấu trúc và chức năng.',
+        'Tự làm đề tổng hợp, chấm điểm và phân tích lỗi sai.',
+      ] },
+      { note: 'Khoa học không chỉ là lí thuyết trên trang sách — đó là công cụ để hiểu cuộc sống. Mỗi khi em nhìn thấy bình nước sôi, ăn cơm, hay nhìn thấy máu chảy từ vết thương, đó là KHTN đang xảy ra quanh em!' },
+    ],
+    [
+      { q: 'Một vật nặng 500 g hoàn toàn chìm trong nước (d_nước = 10 000 N/m³), thể tích vật là 80 cm³. Vật có nổi không?', a: 'P = 0,5 × 10 = 5 N. F_A = d × V = 10 000 × 80×10⁻⁶ = 0,8 N. Vì P = 5 N > F_A = 0,8 N nên vật chìm.' },
+      { q: 'Viết phương trình hoá học: CuO + H₂SO₄ → ? và NaOH + HCl → ?', a: 'CuO + H₂SO₄ → CuSO₄ + H₂O (oxide base + acid → muối + nước). NaOH + HCl → NaCl + H₂O (base + acid → muối + nước — phản ứng trung hoà).' },
+      { q: 'Hãy mô tả ngắn gọn vòng tuần hoàn lớn của máu.', a: 'Máu giàu O₂ từ tâm thất trái → động mạch chủ → toàn bộ cơ thể (cung cấp O₂ và chất dinh dưỡng, nhận CO₂ và chất thải) → tĩnh mạch chủ → tâm nhĩ phải. Vòng tuần hoàn lớn nuôi toàn thân, còn vòng nhỏ (tâm thất phải → phổi) có chức năng trao đổi khí.' },
+    ]
+  ),
 };

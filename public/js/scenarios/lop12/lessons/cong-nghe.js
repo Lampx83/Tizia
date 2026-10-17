@@ -997,4 +997,44 @@ export const H12CN_LESSONS = {
       { q: 'Cổng NOR cho đầu ra bằng 1 trong trường hợp nào?', a: 'NOR = NOT(OR) nên đầu ra bằng 1 chỉ khi tất cả đầu vào đều bằng 0. Nếu có bất kì đầu vào nào bằng 1 thì đầu ra NOR bằng 0.' },
     ],
   },
+
+  'H12CN-w36-quiz': {
+    topic: 'Kết thúc Công Nghệ THPT — Kỹ thuật vì cuộc sống tốt hơn',
+    intro: 'Tuần cuối năm học Công Nghệ — hãy nhìn lại hành trình điện và điện tử: từ mạch điện cơ bản đến transistor và vi mạch. Công nghệ không phải là thứ xa lạ — đó là những gì đang chạy trong mỗi thiết bị bạn dùng hàng ngày.',
+    objectives: [
+      'Hệ thống hoá kiến thức Công Nghệ Điện–Điện tử 3 năm THPT.',
+      'Nhận ra sự hiện diện của kỹ thuật điện và điện tử trong đời sống và công nghiệp.',
+      'Định hướng nghề nghiệp cho những ai yêu thích kỹ thuật và công nghệ.',
+    ],
+    theory: [
+      { h: 'Bản đồ Công Nghệ 3 năm THPT' },
+      { ul: [
+        'Lớp 10: An toàn điện, mạng điện dân dụng (sơ đồ, thiết bị đóng cắt, bảo vệ), mạch điện cơ bản, động cơ điện một pha.',
+        'Lớp 11: Cơ sở kỹ thuật điện–điện tử (điện trở, tụ điện, cuộn cảm trong AC), transistor BJT cơ bản, mạch khuếch đại và dao động đơn giản.',
+        'Lớp 12 HK1 (Điện): Lắp đặt mạng điện trong nhà, đọc bản vẽ điện, sửa chữa thiết bị điện đơn giản. HK2 (Điện tử): Kỹ thuật số (cổng logic, mạch tổ hợp/tuần tự), vi điều khiển Arduino cơ bản, dự án điện tử ứng dụng.',
+      ] },
+      { h: 'Điện và Điện tử ở khắp nơi trong cuộc sống' },
+      { ul: [
+        'Nhà thông minh (Smart Home): Cảm biến chuyển động, điều khiển ánh sáng và điều hoà qua WiFi — tất cả là điện tử nhúng và vi điều khiển.',
+        'Xe điện: Pin lithium, motor điện, hệ thống quản lý pin (BMS) — kỹ thuật điện hiện đại nhất.',
+        'Năng lượng tái tạo: Bộ nghịch lưu (inverter) trong điện mặt trời, turbine gió — chuyển đổi điện AC/DC.',
+        'Y tế: Máy MRI, máy điện tim (ECG), máy trợ thính, máy tạo nhịp tim — tất cả là điện tử y sinh.',
+      ] },
+      { h: 'Nghề nghiệp kỹ thuật điện–điện tử' },
+      { ul: [
+        'Kỹ sư điện công nghiệp: Thiết kế, lắp đặt, vận hành hệ thống điện nhà máy, toà nhà.',
+        'Kỹ sư điện tử nhúng (Embedded Systems): Lập trình vi điều khiển cho robot, xe tự lái, thiết bị y tế.',
+        'Kỹ sư viễn thông: Mạng 5G, cáp quang, satellite — nhu cầu tăng mạnh.',
+        'Kỹ thuật viên điện: Lắp đặt và sửa chữa điện dân dụng/công nghiệp — nghề thực hành ổn định.',
+      ] },
+      { h: 'An toàn điện — kiến thức suốt đời' },
+      { p: 'Dù không làm kỹ thuật điện chuyên nghiệp, biết an toàn điện cơ bản sẽ bảo vệ bạn và gia đình: không sờ vào ổ điện, cầu dao khi tay ướt; dùng thiết bị chống rò điện (RCD/ELCB); ngắt nguồn điện trước khi sửa chữa; không kéo dài dây điện dưới thảm hoặc qua cửa.' },
+      { note: 'Kỹ thuật viên và kỹ sư điện là những người giữ cho thế giới sáng lên — nghĩa đen. Từ ánh đèn trong bệnh viện đến hệ thống điện giữa đêm bão, họ là những người thầm lặng quan trọng nhất. Nếu em yêu thích điện tử, đây là con đường đáng theo đuổi.' },
+    ],
+    examples: [
+      { q: 'Mạch tổ hợp và mạch tuần tự khác nhau như thế nào? Cho ví dụ ứng dụng mỗi loại.', a: 'Mạch tổ hợp: đầu ra CHỈ phụ thuộc đầu vào hiện tại, không có bộ nhớ. Ví dụ: bộ cộng (adder) trong CPU, mạch mã hoá/giải mã (encoder/decoder), mạch dồn kênh (multiplexer). Mạch tuần tự: đầu ra phụ thuộc đầu vào HIỆN TẠI và TRẠNG THÁI trước đó (có bộ nhớ). Ví dụ: flip-flop (D, JK, T) lưu 1 bit; thanh ghi dịch (shift register) trong truyền dữ liệu; bộ đếm (counter) trong đồng hồ số và đo tần số. Bộ nhớ RAM/ROM trong máy tính là mạch tuần tự phức tạp.' },
+      { q: 'Giải thích nguyên lý hoạt động của một bộ chuyển đổi AC/DC đơn giản (adapter điện thoại).', a: 'Adapter điện thoại (switching power supply) gồm các giai đoạn: (1) Chỉnh lưu sơ cấp: AC 220V → DC 311V qua cầu diode. (2) Chuyển mạch (switching): Transistor MOSFET đóng/ngắt DC ở tần số cao (50–200 kHz) tạo xung. (3) Biến áp cao tần: Giảm điện áp xuống 5–12V — biến áp nhỏ gọn vì tần số cao. (4) Chỉnh lưu thứ cấp: AC thứ cấp → DC qua diode. (5) Lọc và ổn áp: Tụ điện lọc gợn sóng, IC ổn áp giữ điện áp đầu ra ổn định.' },
+      { q: 'Em muốn làm một dự án điện tử đơn giản với Arduino. Đề xuất một ý tưởng và mô tả các linh kiện cần thiết.', a: 'Ý tưởng: Nhiệt kế số hiển thị LCD. Linh kiện: Arduino Uno, cảm biến nhiệt độ DHT11 hoặc DS18B20, màn hình LCD 16x2 (giao tiếp I2C để tiết kiệm chân), dây kết nối, nguồn 5V USB. Code đơn giản: đọc giá trị nhiệt độ từ cảm biến mỗi 2 giây, hiển thị lên LCD. Mở rộng: thêm buzzer cảnh báo khi >37.5°C, thêm module WiFi ESP8266 để gửi dữ liệu lên điện thoại qua Blynk app. Tổng chi phí: ~200.000–400.000 VND.' },
+    ],
+  },
 };

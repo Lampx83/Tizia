@@ -704,4 +704,35 @@ export const P5GDTC_LESSONS = {
       { q: 'Nếu không khoẻ trong lúc kiểm tra thì sao?', a: 'Báo cô ngay - không cố làm gây nguy hiểm.' },
     ],
   },
+
+  'P5GDTC-w36-quiz': {
+    topic: 'Kết thúc Tiểu học — Sức khoẻ là hành trang lên cấp 2',
+    intro: 'Chúc mừng! Em đã hoàn thành chương trình GDTC tiểu học. Một cơ thể khoẻ mạnh là nền tảng cho mọi thành công!',
+    objectives: [
+      'Tổng kết kĩ năng vận động đã học trong 5 năm.',
+      'Lập kế hoạch duy trì sức khoẻ ở cấp 2.',
+    ],
+    theory: [
+      { h: '5 năm em đã luyện tập gì?' },
+      { ul: [
+        'Chạy: kĩ thuật xuất phát, chạy ngắn 60m và chạy bền.',
+        'Nhảy: nhảy dây, nhảy xa, nhảy cao kĩ thuật cơ bản.',
+        'Ném: ném bóng đích, ném xa bằng một tay.',
+        'Bóng đá, bóng ném, cầu lông: kĩ năng đội nhóm.',
+        'Thể dục nhịp điệu: 8 động tác tay không và bài thể dục tổng hợp.',
+      ] },
+      { h: 'Kế hoạch sức khoẻ ở THCS' },
+      { ul: [
+        'Vận động ít nhất 60 phút mỗi ngày (WHO khuyến nghị cho học sinh 6-17 tuổi).',
+        'Chọn 1-2 môn thể thao yêu thích để tập đều đặn.',
+        'Ngủ đủ 8-9 tiếng mỗi đêm.',
+        'Ăn uống cân bằng, uống đủ nước, hạn chế đồ ăn nhanh.',
+      ] },
+      { note: 'Cơ thể khoẻ → tinh thần sáng → học tập tốt. Đó là công thức thành công!' },
+    ],
+    examples: [
+      { q: 'Em chạy bền tốt nhờ điều gì?', a: 'Thở đều (hít qua mũi, thở ra miệng), chạy tốc độ vừa phải không cố sức quá, duy trì tư thế đúng.' },
+      { q: 'Em sẽ chọn môn thể thao nào để tiếp tục ở THCS?', a: 'Ví dụ: bơi lội, bóng đá, cầu lông, bơi nghệ thuật, võ thuật, bóng bàn — tuỳ điều kiện và sở thích.' },
+    ],
+  },
 };

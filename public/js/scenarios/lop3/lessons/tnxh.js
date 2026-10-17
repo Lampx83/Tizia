@@ -966,4 +966,35 @@ export const P3TNXH_LESSONS = {
       { q: 'Số điện thoại cấp cứu y tế?', a: '115.' },
     ],
   },
+
+  'P3TNXH-w36-quiz': {
+    topic: 'Kết thúc Lớp 3 — Tự nhiên và Xã hội: Hành trang vào Lớp 4',
+    intro: 'Chào mừng em đã hoàn thành môn Tự nhiên và Xã hội Lớp 3! Cả năm nay chúng ta đã cùng nhau khám phá con người, sức khoẻ, xã hội và thiên nhiên. Hôm nay cùng ôn lại và hướng tới những khám phá mới nhé!',
+    objectives: [
+      'Tổng kết kiến thức ba chủ đề lớn của TNXH Lớp 3.',
+      'Biết những gì thú vị sẽ học ở Khoa học và Lịch sử - Địa lý Lớp 4.',
+      'Thêm yêu thiên nhiên và xã hội xung quanh em.',
+    ],
+    theory: [
+      { h: 'Ba chủ đề lớn em đã khám phá' },
+      { ul: [
+        'CON NGƯỜI VÀ SỨC KHOẺ: Cơ quan hô hấp, tuần hoàn, thần kinh; vệ sinh cá nhân; phòng bệnh; an toàn giao thông và trong cuộc sống.',
+        'XÃ HỘI: Gia đình, trường học, cuộc sống địa phương; cộng đồng và các hoạt động xã hội; an toàn trực tuyến cơ bản.',
+        'TỰ NHIÊN: Thực vật và động vật (đặc điểm, phân loại); bầu trời ban ngày và ban đêm; bốn mùa; bề mặt trái đất; môi trường và bảo vệ môi trường.',
+      ] },
+      { h: 'Lên Lớp 4, em sẽ học' },
+      { ul: [
+        'KHOA HỌC: Vật chất và năng lượng; sự sống; Trái đất và bầu trời — sâu hơn, rộng hơn.',
+        'LỊCH SỬ VÀ ĐỊA LÝ: Lịch sử dân tộc Việt Nam; địa hình các vùng miền; bản đồ Việt Nam.',
+        'Hai môn riêng thay cho TNXH — nhiều điều thú vị đang chờ đón!',
+      ] },
+      { h: 'Em đã trưởng thành hơn' },
+      { p: 'Qua năm học, em biết giữ gìn sức khoẻ, sống an toàn, yêu thiên nhiên và tôn trọng mọi người xung quanh. Đó là những giá trị em mang theo suốt cuộc đời!' },
+      { note: 'Hè này hãy quan sát thiên nhiên quanh em — cây cối, côn trùng, bầu trời — và ghi vào nhật ký khám phá nhé!' },
+    ],
+    examples: [
+      { q: 'Nêu 3 việc cần làm để bảo vệ cơ quan hô hấp.', a: 'Không hút thuốc lá; đeo khẩu trang khi ô nhiễm; vệ sinh mũi họng; không ở gần người đang hút thuốc.' },
+      { q: 'Kể tên 2 loại động vật có vú và 2 loài côn trùng.', a: 'Động vật có vú: chó, mèo (hoặc bò, ngựa). Côn trùng: bướm, ong (hoặc kiến, muỗi).' },
+    ],
+  },
 };

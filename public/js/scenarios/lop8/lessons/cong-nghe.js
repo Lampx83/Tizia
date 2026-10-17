@@ -1428,4 +1428,56 @@ export const S8CN_LESSONS = {
       { q: 'Một cặp bánh răng có tỉ số truyền i = 2,5. Nếu bánh dẫn quay 5 vòng thì bánh bị dẫn quay bao nhiêu vòng?', a: 'Vì i = n1/n2 = 2,5 nên n2 = n1/i = 5/2,5 = 2 vòng. Bánh bị dẫn quay 2 vòng khi bánh dẫn quay 5 vòng.' },
     ],
   },
+
+  'S8CN-w36-quiz': {
+    topic: 'Kết thúc Công Nghệ 8 — Từ bản vẽ đến mạch điện',
+    intro: 'Công Nghệ 8 đã dẫn em đi từ những nét vẽ kĩ thuật đầu tiên, qua thế giới cơ khí với bánh răng và dây đai, đến mạng điện trong nhà với công tắc, ổ cắm và máy biến áp. Ba mạch nội dung này liên kết chặt chẽ với nhau và với thực tế cuộc sống. Hãy ôn lại toàn bộ để vững vàng bước vào lớp 9!',
+    objectives: [
+      'Hệ thống lại ba mạch nội dung: Vẽ kĩ thuật, Cơ khí và Kĩ thuật điện.',
+      'Nắm vững các công thức tính toán cốt lõi và quy tắc an toàn quan trọng.',
+      'Hiểu định hướng học Công Nghệ lớp 9 và ứng dụng thực tiễn.',
+    ],
+    theory: [
+      { h: 'Mạch 1 — Vẽ kĩ thuật' },
+      { ul: [
+        'Hình chiếu vuông góc: ba mặt phẳng chiếu (đứng, bằng, cạnh); quy tắc vẽ nét liền đậm, nét liền mảnh, nét đứt, nét chấm gạch.',
+        'Bản vẽ chi tiết: khung tên, hình chiếu, kích thước (đường kích thước, số kích thước), yêu cầu kĩ thuật, vật liệu.',
+        'Bản vẽ lắp: thể hiện quan hệ giữa các chi tiết trong sản phẩm.',
+        'Đọc bản vẽ kĩ thuật: nhận dạng hình chiếu, đọc kích thước, xác định hình dạng thật của vật.',
+      ] },
+      { h: 'Mạch 2 — Cơ khí' },
+      { ul: [
+        'Vật liệu cơ khí: kim loại (gang, thép, nhôm, đồng) và phi kim (cao su, nhựa, gỗ) — tính chất và ứng dụng.',
+        'Gia công bằng tay: đo-vạch dấu, cưa, dũa, khoan — yêu cầu an toàn lao động trong từng bước.',
+        'Mối ghép: cố định (hàn, đinh tán, ren vít) và động (khớp quay, khớp trượt).',
+        'Cơ cấu truyền chuyển động: đai (i = D₁/D₂), bánh răng (i = Z₁/Z₂), xích, bánh vít – trục vít.',
+        'Tỉ số truyền: i = n₁/n₂ = D₂/D₁ (đai) = Z₂/Z₁ (bánh răng). i > 1: giảm tốc; i < 1: tăng tốc.',
+      ] },
+      { h: 'Mạch 3 — Kĩ thuật điện' },
+      { ul: [
+        'Vai trò điện năng và an toàn điện: không chạm vào dây điện hở, không dùng thiết bị điện ở nơi ẩm ướt; sơ cứu điện giật (ngắt điện trước, CPR, gọi cấp cứu).',
+        'Đồ dùng điện: loại điện-quang (đèn sợi đốt, huỳnh quang, LED), điện-nhiệt (nồi cơm điện, bàn là), điện-cơ (quạt, máy bơm).',
+        'Máy biến áp: U₁/U₂ = n₁/n₂; dùng để tăng/giảm điện áp.',
+        'Mạng điện trong nhà: mạch chính → mạch nhánh; thiết bị đóng cắt (cầu dao, aptomat), lấy điện (ổ cắm), bảo vệ (cầu chì, aptomat, RCD).',
+        'Tính toán điện năng: A = P × t (kWh khi P tính bằng kW và t tính bằng h); tiền điện = A × giá điện.',
+      ] },
+      { h: 'Quy tắc an toàn không thể quên' },
+      { ul: [
+        'Cơ khí: đeo kính bảo hộ khi cưa/dũa/khoan; kẹp chặt chi tiết trước khi gia công; không chỉnh cần khoan khi máy đang quay.',
+        'Điện: ngắt điện trước khi sửa chữa; dùng dụng cụ có cán cách điện; không dùng cầu chì không đúng tiêu chuẩn.',
+      ] },
+      { h: 'Cầu nối sang lớp 9' },
+      { ul: [
+        'Thực hành lắp mạch điện điều khiển đèn (một đèn điều khiển từ một chỗ, hai chỗ).',
+        'Ứng dụng điện dân dụng: sửa chữa thiết bị đơn giản, lắp đặt mạch điện bảng điện.',
+        'Nông nghiệp và công nghệ trong sản xuất (tuỳ định hướng sách giáo khoa).',
+      ] },
+      { note: 'Kiến thức Công Nghệ 8 xuất hiện trong cuộc sống mỗi ngày — từ chiếc quạt trên bàn, ổ cắm trên tường, đến xe đạp bánh răng em đi học. Hãy nhìn quanh và nhận ra: đó là Công Nghệ!' },
+    ],
+    examples: [
+      { q: 'Một máy biến áp có n₁ = 1000 vòng, U₁ = 220V. Tính n₂ để có U₂ = 6V.', a: 'Theo công thức U₁/U₂ = n₁/n₂ → n₂ = n₁ × U₂/U₁ = 1000 × 6/220 ≈ 27,3 vòng. Lấy n₂ = 27 vòng (máy hạ áp, U₂ < U₁).' },
+      { q: 'Mô tả cách sơ cứu người bị điện giật đúng quy trình.', a: '(1) Ngắt điện ngay (kéo cầu dao, aptomat, hoặc rút phích cắm) — tuyệt đối không chạm vào người bị nạn khi còn điện. (2) Đặt nạn nhân nằm ngửa ở nơi thoáng. (3) Kiểm tra ý thức và hô hấp: nếu không thở, thực hiện hô hấp nhân tạo (CPR) ngay. (4) Gọi cấp cứu 115. Không di chuyển nạn nhân trừ khi cần thiết.' },
+      { q: 'Hãy kể tên ba thiết bị điện trong nhà và phân loại chúng theo nguyên lí làm việc.', a: 'Điện-quang: đèn LED (điện năng → quang năng). Điện-nhiệt: nồi cơm điện (điện năng → nhiệt năng). Điện-cơ: quạt điện (điện năng → cơ năng). Phân loại theo nguyên lí giúp em hiểu bản chất và tính toán tiêu thụ điện phù hợp cho từng loại.' },
+    ],
+  },
 };

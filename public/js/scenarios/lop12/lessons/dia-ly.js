@@ -1031,4 +1031,49 @@ export const H12DIA_LESSONS = {
       { q: 'Nêu cách phân biệt nhanh các vùng kinh tế qua sản phẩm chuyên môn hoá đặc trưng.', a: 'Gắn mỗi vùng với sản phẩm "đặc sản": Trung du và miền núi Bắc Bộ – chè, khoáng sản, thuỷ điện; Tây Nguyên – cà phê; Đông Nam Bộ – cao su, công nghiệp – dầu khí; Đồng bằng sông Cửu Long – lúa, thuỷ sản, trái cây; Duyên hải Nam Trung Bộ – muối, điện gió – mặt trời, du lịch biển. Nhận diện từ khoá sản phẩm là biết ngay vùng.' },
     ],
   },
+
+  'H12DIA-w36-quiz': {
+    topic: 'Kết thúc Địa Lý THPT — Đất nước và thế giới trong tầm tay',
+    intro: 'Tuần cuối năm học Địa Lý — hãy nhìn lại chặng đường đã đi: từ tự nhiên Việt Nam đến địa lý kinh tế các vùng, từ biển đảo đến hội nhập quốc tế. Địa Lý không chỉ là bản đồ — đó là câu chuyện về con người và mảnh đất họ sinh sống.',
+    objectives: [
+      'Hệ thống hoá chương trình Địa Lý 3 năm THPT theo các chủ đề lớn.',
+      'Nhận ra tầm quan trọng của tư duy địa lý trong hiểu biết thế giới và nghề nghiệp.',
+      'Kết nối kiến thức địa lý với các vấn đề toàn cầu đương đại: biến đổi khí hậu, toàn cầu hoá, đô thị hoá.',
+    ],
+    theory: [
+      { h: 'Bản đồ Địa Lý 3 năm THPT' },
+      { ul: [
+        'Lớp 10: Địa lý đại cương (vũ trụ, khí hậu, đất, sinh vật), dân số và đô thị hoá, các nền kinh tế thế giới, địa lý ngành toàn cầu.',
+        'Lớp 11: Địa lý khu vực — Đông Nam Á (ASEAN), Đông Á (Nhật Bản, Trung Quốc), Bắc Mỹ, Châu Phi, Australia.',
+        'Lớp 12: Địa lý Việt Nam — vị trí địa lý chiến lược, tự nhiên (địa hình, khí hậu), dân cư, chuyển dịch kinh tế, địa lý các vùng kinh tế (7 vùng), biển đảo và chủ quyền quốc gia, hội nhập ASEAN và thế giới.',
+      ] },
+      { h: 'Địa Lý Việt Nam — những điều đặc biệt' },
+      { ul: [
+        'Vị trí chiến lược: giao điểm của Đông Nam Á lục địa và hải đảo, đường hàng hải quốc tế, tiếp giáp Biển Đông.',
+        'Địa hình phong phú: đồng bằng sông Hồng và sông Cửu Long nuôi sống hàng triệu người; cao nguyên Tây Nguyên — "mái nhà" xuất khẩu cà phê, cao su; rừng nhiệt đới Tây Bắc — đa dạng sinh học cao.',
+        'Khí hậu đa dạng: miền Bắc có 4 mùa rõ, miền Nam mùa mưa–khô; điều đó tạo ra nông nghiệp đa dạng nhất Đông Nam Á.',
+        'Biển đảo: 3260 km bờ biển, 2 quần đảo lớn (Hoàng Sa, Trường Sa) — tài nguyên biển và chủ quyền quốc gia gắn liền nhau.',
+      ] },
+      { h: 'Tư duy Địa Lý trong thế kỉ 21' },
+      { ul: [
+        'Biến đổi khí hậu: Địa Lý cho em hiểu tại sao đồng bằng sông Cửu Long đang bị ngập mặn và cần làm gì.',
+        'Toàn cầu hoá: Chuỗi cung ứng toàn cầu, FDI, EVFTA — Địa Lý kinh tế là nền tảng hiểu kinh tế quốc tế.',
+        'Đô thị hoá: Hà Nội và TP.HCM phình to — Địa Lý đô thị và quy hoạch lãnh thổ là ngành nghề nhiều tiềm năng.',
+        'GIS và dữ liệu không gian: Công nghệ bản đồ số (Google Maps, GPS, viễn thám) là ngành nghề tăng trưởng nhanh.',
+      ] },
+      { h: 'Lời khuyên cho bài thi tốt nghiệp THPT môn Địa Lý' },
+      { ul: [
+        'Atlat: Đây là "sách mở" — học cách tra cứu nhanh trang nào có số liệu gì; không cần thuộc số liệu nếu dùng Atlat tốt.',
+        'Nhận xét bảng số liệu: Luôn so sánh (cao nhất – thấp nhất – trung bình – xu hướng), không chỉ liệt kê số.',
+        'Vẽ biểu đồ: Nhận diện loại (cột, đường, tròn, miền) trước; vẽ đúng tỷ lệ; có tên biểu đồ và chú giải.',
+        'Câu nghị luận: Nêu vấn đề → Phân tích nguyên nhân → Hậu quả → Giải pháp — cấu trúc này luôn đúng.',
+      ] },
+      { note: 'Địa Lý là môn học nhìn thế giới bằng mắt của người lập bản đồ — không phải để vẽ đường biên giới, mà để hiểu tại sao con người sống, làm việc và xung đột theo cách họ đang làm. Đó là kiến thức cho công dân toàn cầu.' },
+    ],
+    examples: [
+      { q: 'Tại sao đồng bằng sông Cửu Long là "vựa lúa" của Việt Nam nhưng lại đang đối mặt với nguy cơ ngập chìm vì biến đổi khí hậu?', a: 'ĐBSCL là vựa lúa vì: đất phù sa màu mỡ từ sông Mekong, địa hình bằng phẳng dễ tưới tiêu, khí hậu nóng ẩm quanh năm. Nguy cơ ngập: Mực nước biển dâng (2–4 mm/năm) + sụt lún đất (khai thác nước ngầm quá mức, +1–3 cm/năm) + giảm phù sa (các đập thuỷ điện trên thượng nguồn Mekong) → xâm nhập mặn tăng → đất nông nghiệp thu hẹp. Đây là thách thức địa lý–môi trường nghiêm trọng nhất Việt Nam trong thế kỉ 21.' },
+      { q: 'Vì sao vị trí địa lý của Việt Nam vừa là lợi thế vừa là thách thức trong hội nhập quốc tế?', a: 'Lợi thế: nằm trên tuyến hàng hải quốc tế Đông–Tây quan trọng; tiếp giáp Trung Quốc (thị trường lớn nhất TG), cạnh ASEAN (10 quốc gia); bờ biển dài (3260 km) với nhiều cảng nước sâu tiềm năng. Thách thức: Biển Đông có tranh chấp chủ quyền phức tạp; tiếp giáp cường quốc lớn luôn đặt ra bài toán cân bằng địa chính trị; thiên tai (bão, lũ, hạn hán) phức tạp hơn do địa hình dài hẹp. Việt Nam dùng "ngoại giao đa phương" và "đối tác chiến lược" để quản lý bối cảnh địa lý phức tạp này.' },
+      { q: 'Nghề nghiệp nào liên quan đến Địa Lý mà em chưa biết trước khi học THPT?', a: 'Các nghề nghiệp địa lý ít người biết: Kỹ sư GIS (Geographic Information Systems) — xây dựng bản đồ số cho điện lực, giao thông, quy hoạch đô thị; Chuyên gia viễn thám — phân tích ảnh vệ tinh cho nông nghiệp, rừng, biển; Nhà quy hoạch đô thị — thiết kế tăng trưởng bền vững của thành phố; Chuyên gia biến đổi khí hậu — đánh giá rủi ro lũ lụt, hạn hán cho chính phủ và tổ chức quốc tế; Nhà phân tích địa chính trị — tư vấn chính sách đối ngoại. Tất cả đang ngày càng được tuyển dụng cao.' },
+    ],
+  },
 };

@@ -44,7 +44,63 @@ export const SUBJECTS = [
   { id: 'all',        name: 'Tổng quát', icon: '🌐' },
 ];
 export const getSubject = (id) => SUBJECTS.find(s => s.id === id) || null;
-export const ACHIEVEMENTS = [];
+export const ACHIEVEMENTS = [
+  { id: 'first-word',      icon: '🔤', title: 'Từ đầu tiên',
+    desc: 'Hoàn thành bài học đầu tiên tại Trường Ngoại ngữ',
+    trigger: { quizzesPassed: 1 } },
+
+  { id: 'vocab-builder',   icon: '📚', title: 'Xây dựng vốn từ',
+    desc: 'Hoàn thành module Từ vựng đa cấp độ (L01) đạt 3 sao',
+    trigger: { moduleStars: { 'lang-vocab': 3 } } },
+
+  { id: 'pronunciation-ace', icon: '🎤', title: 'Phát âm chuẩn',
+    desc: 'Hoàn thành module Luyện phát âm với AI (L02) đạt 3 sao',
+    trigger: { moduleStars: { 'lang-pronunciation': 3 } } },
+
+  { id: 'flashcard-pro',   icon: '🃏', title: 'Flashcard Master',
+    desc: 'Hoàn thành module Flashcards tự tạo (L03) đạt 3 sao',
+    trigger: { moduleStars: { 'lang-flashcards': 3 } } },
+
+  { id: 'ai-learner',      icon: '🤖', title: 'Học cùng AI',
+    desc: 'Hoàn thành module AI Tutor Ngoại ngữ (L04) đạt 3 sao',
+    trigger: { moduleStars: { 'lang-tutor': 3 } } },
+
+  { id: 'multilingual',    icon: '🌐', title: 'Đa ngôn ngữ',
+    desc: 'Hoàn thành cả 4 module Ngoại ngữ (L01–L04) — thành thạo ngoại ngữ toàn diện',
+    trigger: { moduleStars: { 'lang-vocab': 2, 'lang-pronunciation': 2, 'lang-flashcards': 2, 'lang-tutor': 2 } } },
+
+  { id: 'star-4',          icon: '⭐', title: 'Bước đầu ngoại ngữ',
+    desc: 'Tích lũy 4 sao đầu tiên tại Trường Ngoại ngữ — đã bắt đầu hành trình học ngôn ngữ',
+    trigger: { totalStars: 4 } },
+
+  { id: 'star-8',          icon: '🌟', title: 'Nửa chặng ngoại ngữ',
+    desc: 'Tích lũy 8 sao — đã thành thạo nửa chương trình, vốn từ và phát âm đang tiến bộ rõ rệt',
+    trigger: { totalStars: 8 } },
+
+  { id: 'star-12',         icon: '🏆', title: 'Thông thạo ngoại ngữ',
+    desc: 'Tích lũy 12 sao — hoàn thành xuất sắc toàn bộ 4 module Ngoại ngữ, sẵn sàng giao tiếp thực tế',
+    trigger: { totalStars: 12 } },
+
+  { id: 'streak-3',       icon: '🔤', title: 'Học ngoại ngữ 3 ngày liên tiếp',
+    desc: 'Luyện tập 3 ngày liên tiếp — hình thành thói quen học ngoại ngữ hàng ngày',
+    trigger: { streak: 3 } },
+
+  { id: 'streak-5',       icon: '🗣️', title: 'Nửa tuần ngoại ngữ',
+    desc: 'Học ngoại ngữ 5 ngày liên tiếp — thói quen học hàng ngày đang hình thành rõ rệt',
+    trigger: { streak: 5 } },
+
+  { id: 'streak-7',       icon: '📅', title: 'Một tuần luyện tập',
+    desc: 'Học ngoại ngữ đều đặn 7 ngày — đủ để cảm nhận sự tiến bộ rõ rệt',
+    trigger: { streak: 7 } },
+
+  { id: 'streak-14',      icon: '⚡', title: '2 tuần kiên trì',
+    desc: 'Duy trì học 14 ngày liên tiếp — vốn từ và phát âm cải thiện đáng kể',
+    trigger: { streak: 14 } },
+
+  { id: 'streak-30',      icon: '🏆', title: 'Một tháng chinh phục ngoại ngữ',
+    desc: 'Học liên tục 30 ngày tại Trường Ngoại ngữ — tư duy ngôn ngữ thực sự hình thành',
+    trigger: { streak: 30 } },
+];
 export const getExperiencesFor = (mid) => MODULES.find(m => m.id === mid)?.experiences || [];
 export const listModulesWithExperiences = () => MODULES.filter(m => m.experiences?.length);
 

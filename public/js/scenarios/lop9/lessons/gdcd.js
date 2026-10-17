@@ -923,4 +923,40 @@ export const S9GDCD_LESSONS = {
       { q: 'Trong phòng thi em quên mất một khái niệm cần dùng. Em xử lí thế nào?', a: 'Bình tĩnh, không hoảng loạn. Bỏ qua tạm thời, làm các câu khác trước để lấy lại tự tin và "kích hoạt" trí nhớ. Thường khi làm câu khác, khái niệm sẽ tự nhớ lại. Nếu vẫn quên, hãy diễn đạt bằng cách hiểu của mình kèm ví dụ — vẫn được điểm ý.' },
     ]
   ),
+
+  'S9GDCD-w36-quiz': L(
+    'Kết thúc GDCD THCS — Người công dân tốt bắt đầu từ đây',
+    'Tuần khép lại bốn năm GDCD — không phải để ôn thi mà để nhìn lại: những giá trị đạo đức và pháp luật em đã học không phải để thi, mà để sống.',
+    [
+      'Tổng kết các giá trị cốt lõi đã học trong bốn năm GDCD THCS.',
+      'Hiểu mối quan hệ giữa đạo đức cá nhân và trách nhiệm công dân.',
+      'Tự nhận thức về điểm mạnh và điểm cần rèn luyện của bản thân.',
+    ],
+    [
+      { h: 'Bốn năm GDCD — Những giá trị cốt lõi' },
+      { ul: [
+        'Lớp 6: Tự lập, tiết kiệm, trung thực — nền tảng nhân cách.',
+        'Lớp 7: Khoan dung, hợp tác, sống có đạo đức trong cộng đồng.',
+        'Lớp 8: Pháp luật và kỉ cương, quyền và nghĩa vụ công dân.',
+        'Lớp 9: Lí tưởng sống, trách nhiệm công dân, quyền con người, hội nhập quốc tế.',
+      ] },
+      { h: 'Đạo đức và Pháp luật — Hai trụ cột song hành' },
+      { p: 'Đạo đức là "muốn làm điều tốt" — xuất phát từ bên trong, từ giá trị và lương tâm. Pháp luật là "phải làm" — quy định bên ngoài, có chế tài nếu vi phạm. Người tốt không chỉ tuân thủ pháp luật mà còn tự nguyện sống đạo đức ngay cả khi không có ai nhìn.' },
+      { h: 'GDCD trong cuộc sống hàng ngày' },
+      { ul: [
+        'Khi tham gia giao thông: hiểu đúng luật và tự giác chấp hành.',
+        'Khi mạng xã hội: biết quyền ngôn luận và giới hạn của nó.',
+        'Khi gặp bất công: biết con đường khiếu nại, tố cáo đúng quy trình.',
+        'Khi đến tuổi 18: hiểu quyền bầu cử và trách nhiệm công dân đầy đủ.',
+      ] },
+      { h: 'Lời nhắn gửi từ GDCD' },
+      { p: 'Điểm số môn GDCD sẽ phai mờ theo thời gian, nhưng những giá trị em chọn mang theo sẽ định hình cuộc đời. Trung thực, trách nhiệm, yêu thương và ý thức pháp luật — đó không phải là kiến thức để thi, đó là người em muốn trở thành.' },
+      { note: '"Điều em biết về đạo đức và pháp luật chỉ có giá trị khi em thực sự sống theo nó" — đó là bài kiểm tra thực sự, không có câu hỏi trắc nghiệm nào đo được.' },
+    ],
+    [
+      { q: 'Sự khác nhau cơ bản giữa vi phạm đạo đức và vi phạm pháp luật là gì?', a: 'Vi phạm đạo đức là hành vi trái với chuẩn mực đạo đức xã hội, bị lương tâm cắn rứt và dư luận xã hội lên án, nhưng không có chế tài pháp lí chính thức. Vi phạm pháp luật là hành vi trái quy định pháp luật, bị Nhà nước xử lí theo trình tự pháp lí với các hình thức như phạt tiền, phạt tù, bồi thường thiệt hại. Nhiều hành vi vừa vi phạm đạo đức vừa vi phạm pháp luật (như lừa đảo, bạo lực); một số chỉ vi phạm đạo đức mà không vi phạm pháp luật (như vô ơn, bội bạc).' },
+      { q: 'Em muốn trở thành công dân như thế nào sau khi học xong THCS?', a: 'Câu hỏi này không có đáp án đúng sai — quan trọng là em trả lời thật lòng. Ví dụ: "Tôi muốn là người trung thực trong mọi mối quan hệ, biết tuân thủ pháp luật không phải vì sợ bị phạt mà vì hiểu sự cần thiết của nó, và biết đứng lên bảo vệ lẽ phải khi cần — dù điều đó không dễ dàng".' },
+      { q: 'Lớp 9 kết thúc, em nhớ nhất điều gì từ môn GDCD?', a: 'Ví dụ: "Tôi nhớ nhất bài học về quyền con người — rằng mỗi người đều có phẩm giá đáng được tôn trọng, dù nghèo hay giàu, dù thuộc sắc tộc hay tôn giáo nào. Điều này khiến tôi nhìn mọi người xung quanh khác đi — trân trọng hơn và đồng cảm hơn". Câu trả lời của em mới là thứ quan trọng nhất.' },
+    ]
+  ),
 };

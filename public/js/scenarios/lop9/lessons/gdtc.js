@@ -1123,4 +1123,44 @@ export const S9GDTC_LESSONS = {
       { q: 'Lời cảm ơn cuối cấp dành cho thầy/cô GDTC?', a: 'Cảm ơn các thầy/cô GDTC đã rèn cho chúng em không chỉ kỹ thuật và thể lực, mà cả tinh thần fair play, tính kỷ luật và sự bền bỉ. Chúng em hứa sẽ giữ thói quen vận động đều đặn suốt đời và lan toả tinh thần thể thao lành mạnh. Hẹn gặp lại thầy/cô ở các giải giao hữu cấp 3!' },
     ]
   ),
+
+  'S9GDTC-w36-quiz': L(
+    'Kết thúc GDTC THCS — Sức khoẻ là nền tảng của mọi thành công',
+    'Tuần cuối năm — nhìn lại hành trình GDTC THCS và cùng nhau xây dựng kế hoạch giữ gìn sức khoẻ cho cả cuộc đời.',
+    [
+      'Hệ thống hoá các môn thể thao và kĩ năng đã học trong chương trình THCS.',
+      'Hiểu nguyên tắc duy trì thói quen vận động lâu dài.',
+      'Xây dựng kế hoạch tập luyện cá nhân cho năm học THPT.',
+    ],
+    [
+      { h: 'Bốn năm GDTC THCS — Hành trình vận động' },
+      { ul: [
+        'Lớp 6-7: Thể dục nhịp điệu, điền kinh, bơi lội — nền tảng thể lực toàn diện.',
+        'Lớp 8-9: Bóng rổ, bóng đá, cầu lông, võ thuật — kĩ năng thể thao đội nhóm và cá nhân.',
+        'Xuyên suốt: khởi động, hồi tĩnh, an toàn, dinh dưỡng, sơ cứu — kiến thức sức khoẻ cho cả đời.',
+      ] },
+      { h: 'Sức khoẻ — Nền tảng không thể thiếu' },
+      { p: 'Học tốt cần não bộ khoẻ mạnh — não bộ khoẻ cần cơ thể khoẻ. Các nghiên cứu khoa học xác nhận: học sinh vận động ít nhất 60 phút/ngày có kết quả học tập tốt hơn, tinh thần ổn định hơn và ít lo âu hơn so với bạn ít vận động.' },
+      { h: 'Nguyên tắc duy trì thói quen vận động lâu dài' },
+      { ul: [
+        'Chọn môn mình yêu thích — sự thú vị quan trọng hơn hiệu quả ngắn hạn.',
+        'Tập đều hơn tập nhiều: 30 phút/ngày đều đặn tốt hơn 3 tiếng cuối tuần.',
+        'Rủ bạn tập cùng — accountability partner giúp duy trì kỷ luật.',
+        'Ghi nhật ký vận động ngắn gọn — theo dõi tiến bộ tạo động lực.',
+        'Không hoàn hảo nhưng đừng bỏ cuộc — một buổi tập nhẹ vẫn tốt hơn không tập.',
+      ] },
+      { h: 'Gợi ý cho THPT' },
+      { ul: [
+        'Tham gia CLB thể thao trường ngay từ tuần đầu tiên.',
+        'Dù bận học, ưu tiên ít nhất 3 buổi/tuần vận động nhẹ.',
+        'Chia sẻ kiến thức GDTC đã học cho đồng đội và bạn bè — dạy lại là cách học tốt nhất.',
+      ] },
+      { note: 'Huy chương và thành tích thi đấu là thứ có thể phai theo thời gian. Nhưng một cơ thể khoẻ mạnh và thói quen vận động tốt là "tài sản" giữ giá trị cả cuộc đời.' },
+    ],
+    [
+      { q: 'Vì sao nói "vận động thể chất là thuốc bổ cho não bộ"?', a: 'Khi vận động, cơ thể tăng lưu lượng máu não, giải phóng BDNF (yếu tố tăng trưởng thần kinh giúp kết nối tế bào não mạnh hơn) và các endorphin (cải thiện tâm trạng, giảm stress). Nhiều nghiên cứu cho thấy học sinh vận động đều đặn có khả năng tập trung, ghi nhớ và giải quyết vấn đề tốt hơn đáng kể. Đặc biệt trong mùa thi, một buổi đi bộ 20-30 phút có thể cải thiện hiệu quả ôn tập hơn là thêm một tiếng ngồi im.' },
+      { q: 'Làm thế nào để duy trì thói quen tập thể dục khi lên THPT với lịch học dày hơn?', a: 'Chiến lược thực tế: (1) Biến vận động thành thói quen "gắn kèm" hoạt động khác — đi bộ thay xe buýt một đoạn, leo cầu thang thay thang máy. (2) Chọn giờ tập nhất quán — sáng sớm trước khi mọi thứ chiếm mất. (3) Tập ngắn nhưng đều — 20-30 phút là đủ, không cần 2 tiếng. (4) Rủ bạn thân tập cùng — hai người khó bỏ cuộc hơn một. (5) Xem giờ tập là "sạc pin" cho việc học, không phải "lấy giờ học".' },
+      { q: 'Điều em tự hào nhất về bản thân trong môn GDTC sau 4 năm THCS?', a: 'Câu này không có đáp án đúng — hãy trả lời thật lòng. Ví dụ: "Tôi tự hào vì đã khắc phục nỗi sợ bơi lội từ lớp 6 — từ một người không dám bước xuống hồ sâu đến người bơi được 200m không nghỉ. Điều này dạy tôi rằng không có kĩ năng nào là không học được nếu kiên trì đủ lâu".' },
+    ]
+  ),
 };

@@ -982,4 +982,45 @@ export const P4TA_LESSONS = {
       { q: 'Chọn a/an: "I have ___ orange and ___ pen."', a: 'an orange (nguyên âm) và a pen (phụ âm).' },
     ],
   },
+
+  'P4TA-w36-quiz': {
+    topic: 'End of Grade 4 English — Review & Grade 5 Preview',
+    intro: 'Congratulations on completing Grade 4 English! Let\'s look back at everything you\'ve learned and get excited about Grade 5!',
+    objectives: [
+      'Review all key vocabulary topics and grammar points from Grade 4.',
+      'Understand what exciting topics await in Grade 5.',
+      'Set a summer study plan to keep English skills sharp.',
+    ],
+    theory: [
+      { h: 'Grade 4 — What You\'ve Mastered' },
+      { ul: [
+        'Vocabulary topics: school, home & family, community helpers, hobbies & sports, animals & nature, food & health, seasons & weather, travel & transport, holidays & celebrations, future jobs.',
+        'Grammar — tenses: simple present (habits, facts), simple past (did/didn\'t + V), present continuous (am/is/are + V-ing), be going to (plans).',
+        'Question words: Who, What, Where, When, Why, How, How many, How much.',
+        'Comparatives & superlatives: bigger, the biggest; more interesting, the most interesting.',
+        'Modal verbs: can (ability), should (advice), must (obligation), may (permission).',
+        'Articles: a/an (indefinite), the (definite), zero article.',
+        'Skills: reading short texts, writing sentences & short paragraphs, listening to instructions, speaking in simple conversations.',
+      ] },
+      { h: 'Grade 5 — What\'s Coming' },
+      { ul: [
+        'New tenses: present perfect (have/has + V3), future simple (will + V).',
+        'Conditional sentences type 1: If it rains, I will stay home.',
+        'Passive voice introduction: The book is read by students.',
+        'Richer vocabulary: environment, technology, famous people, world cultures.',
+        'Longer reading passages and writing compositions.',
+      ] },
+      { h: 'Summer Study Tips' },
+      { ul: [
+        'Read 1 short English story per week to build reading fluency.',
+        'Watch cartoons or clips in English with subtitles (15 min/day).',
+        'Review irregular past tenses: go-went-gone, see-saw-seen, etc.',
+      ] },
+      { note: 'You\'ve worked so hard this year! Enjoy your summer and come back ready for Grade 5!' },
+    ],
+    examples: [
+      { q: 'Make a sentence using "be going to": (she / visit / grandma / next week)', a: 'She is going to visit her grandma next week.' },
+      { q: 'Compare: Mount Everest / high / other mountains.', a: 'Mount Everest is the highest mountain.' },
+    ],
+  },
 };

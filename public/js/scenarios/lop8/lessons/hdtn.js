@@ -1642,4 +1642,63 @@ export const S8HDTN_LESSONS = {
       { q: 'Em cảm thấy lo lắng khi nghĩ đến áp lực thi cử của lớp 9. Em nên chuẩn bị tâm lí thế nào?', a: 'Cảm giác lo lắng trước một năm quan trọng là điều bình thường, và em hoàn toàn có thể chuẩn bị tâm lí tốt. Trước hết, hãy nhớ rằng em đã tích luỹ được rất nhiều kĩ năng quý trong năm lớp 8 — đó là hành trang vững chắc. Em nên lập kế hoạch ôn tập sớm và chia nhỏ để không bị "ngợp" vào phút cuối; áp dụng các kĩ thuật quản lí căng thẳng đã học như hít thở sâu, vận động, chia sẻ với người thân. Đừng quên chăm sóc sức khoẻ và dành thời gian nghỉ ngơi. Quan trọng nhất, hãy đặt mục tiêu vừa sức và tin vào sự nỗ lực của mình. Áp lực vừa phải sẽ là động lực, miễn là em biết cân bằng và không cô đơn trên hành trình này.' },
     ]
   ),
+
+  'S8HDTN-w36-quiz': L(
+    'Kết thúc HĐTN 8 — Trưởng thành qua từng trải nghiệm, vững bước vào lớp 9',
+    'Năm lớp 8 là năm em trưởng thành vượt bậc — không chỉ về kiến thức mà còn về kĩ năng sống: biết quản lí bản thân, biết ứng phó với căng thẳng, biết làm việc nhóm, biết tư duy tài chính và định hướng nghề nghiệp. Đây là tuần nhìn lại toàn bộ hành trình đó và chuẩn bị tinh thần cho lớp 9 — năm học quan trọng và thử thách nhất bậc THCS.',
+    [
+      'Tổng kết các kĩ năng và trải nghiệm đã học trong HĐTN lớp 8.',
+      'Nhận diện những điểm đã tiến bộ và những điểm cần tiếp tục rèn luyện.',
+      'Xây dựng kế hoạch hành động cụ thể cho mùa hè và năm học lớp 9.',
+    ],
+    [
+      { h: 'Chủ đề 1 — Hiểu bản thân và phát triển cá nhân' },
+      { ul: [
+        'Khám phá điểm mạnh và điểm yếu bản thân qua MBTI, sở thích Holland, bài kiểm tra đa trí tuệ.',
+        'Tư duy phát triển (growth mindset): tin rằng năng lực có thể phát triển qua nỗ lực và học hỏi, không phải bẩm sinh cố định.',
+        'Mục tiêu SMART: Specific, Measurable, Achievable, Relevant, Time-bound — cách đặt mục tiêu hiệu quả.',
+        'Quản lí thời gian: ma trận Eisenhower (khẩn cấp/quan trọng); nguyên tắc Pareto 80/20; kĩ thuật Pomodoro.',
+      ] },
+      { h: 'Chủ đề 2 — Sức khoẻ thể chất và tinh thần' },
+      { ul: [
+        'Sức khoẻ tinh thần: nhận biết và đặt tên cảm xúc (wheel of emotions); điều tiết cảm xúc bằng hít thở, vận động, viết nhật kí.',
+        'Ứng phó căng thẳng (stress): phân biệt eustress (căng thẳng tốt — thúc đẩy) và distress (căng thẳng xấu — ảnh hưởng sức khoẻ); kĩ thuật thư giãn (5-4-3-2-1 giác quan, hít thở hộp vuông).',
+        'Giấc ngủ và phục hồi: thiếu ngủ ảnh hưởng trí nhớ, cảm xúc và hiệu suất; 8–9 tiếng/đêm là khuyến cáo cho thiếu niên.',
+        'Tránh xa thuốc lá, rượu bia, chất kích thích: não bộ ở tuổi 13–18 đang phát triển mạnh — chất kích thích gây tổn hại vĩnh viễn.',
+      ] },
+      { h: 'Chủ đề 3 — Kĩ năng xã hội và cộng đồng' },
+      { ul: [
+        'Giao tiếp hiệu quả: lắng nghe chủ động (active listening), phản ánh cảm xúc, đặt câu hỏi mở.',
+        'Làm việc nhóm: phân vai rõ ràng, tôn trọng ý kiến khác biệt, giải quyết xung đột bằng đối thoại.',
+        'Sự đồng cảm (empathy): đặt mình vào vị trí người khác — nền tảng của mọi mối quan hệ tốt đẹp.',
+        'Trách nhiệm cộng đồng: tham gia hoạt động tình nguyện, bảo vệ môi trường, ứng xử văn minh nơi công cộng.',
+      ] },
+      { h: 'Chủ đề 4 — Tài chính và hướng nghiệp' },
+      { ul: [
+        'Quản lí tài chính cá nhân: ngân sách (thu – chi – tiết kiệm); phân biệt nhu cầu và mong muốn; tránh chi tiêu bốc đồng.',
+        'Khởi nghiệp sáng tạo: tư duy thiết kế (design thinking), mô hình kinh doanh đơn giản.',
+        'Hướng nghiệp: tìm hiểu các nhóm ngành nghề; liên kết sở thích – điểm mạnh – nhu cầu xã hội để định hướng nghề tương lai.',
+      ] },
+      { h: 'Lớp 9 — Năm học bản lề: Những điều cần chuẩn bị' },
+      { ul: [
+        'Học vững ba môn thi vào lớp 10 (thường là Toán, Văn, Tiếng Anh) từ sớm — không để dồn vào HK II.',
+        'Giữ sức khoẻ: ngủ đủ giấc, ăn uống lành mạnh, tập thể dục — đây là nền tảng của hiệu suất học tập.',
+        'Tìm người hỗ trợ: thầy cô, bố mẹ, bạn bè tin cậy — không cô đơn chiến đấu với áp lực.',
+        'Biết "nói không": từ chối những hoạt động không cần thiết để bảo vệ thời gian và năng lượng.',
+        'Lập nhật kí phát triển: ghi lại cảm xúc, bài học và tiến bộ — đây là công cụ giúp em nhìn thấy mình đang lớn lên.',
+      ] },
+      { h: '3 Bài học lớn nhất của năm lớp 8' },
+      { ul: [
+        'Bài học 1: Em có khả năng thay đổi và phát triển — năng lực không phải là thứ cố định mà được rèn giũa qua nỗ lực.',
+        'Bài học 2: Mối quan hệ tốt là tài sản quý — đầu tư thời gian và tâm sức cho những mối quan hệ ý nghĩa.',
+        'Bài học 3: Hành động nhỏ, đều đặn, mỗi ngày — sẽ tạo ra kết quả lớn theo thời gian.',
+      ] },
+      { note: 'Em đã trưởng thành rất nhiều trong năm học này. Mỗi thử thách em vượt qua, mỗi kĩ năng em rèn được, mỗi mối quan hệ em xây dựng — đó là những viên gạch của người em sẽ trở thành. Hãy bước vào lớp 9 với tất cả sự tự tin và lòng biết ơn vì đã có hành trình đẹp như vậy!' },
+    ],
+    [
+      { q: 'Em đã từng trải qua một tình huống căng thẳng cao điểm (kì thi, xung đột với bạn bè). Hãy kể lại và phân tích cách em đã ứng phó, theo khung đã học.', a: 'Đây là câu hỏi để em tự phản tư — không có đáp án đúng/sai cố định. Một câu trả lời tốt gồm: (1) MÔ TẢ tình huống cụ thể (thi gì? Chuyện gì xảy ra?). (2) NHẬN BIẾT cảm xúc khi đó (lo lắng, tức giận, áp lực — đặt đúng tên). (3) PHÂN TÍCH cách ứng phó: Em đã làm gì? (hít thở, nói chuyện với ai, tạm rời khỏi tình huống?). Cách đó có hiệu quả không? (4) BÀI HỌC: nếu xảy ra lại, em sẽ làm khác thế nào? Quan trọng là em trung thực với bản thân và rút ra được bài học thực tế.' },
+      { q: 'Nếu phải đặt MỘT mục tiêu SMART cho mùa hè trước khi vào lớp 9, em sẽ đặt mục tiêu gì và tại sao?', a: 'Ví dụ mục tiêu SMART: "Trong 8 tuần mùa hè (1/6–31/7), tôi sẽ ôn lại toàn bộ chương trình Toán lớp 8 bằng cách làm 3 bài tập/ngày, đạt tỉ lệ đúng ≥ 80% vào cuối kì." Phân tích: Specific (ôn Toán 8), Measurable (3 bài/ngày, 80% đúng), Achievable (vừa sức), Relevant (chuẩn bị cho lớp 9), Time-bound (8 tuần cụ thể). Em nên chọn mục tiêu gắn với điểm yếu cụ thể của mình — không nhất thiết phải là Toán.' },
+      { q: 'Vì sao tư duy phát triển (growth mindset) lại quan trọng đặc biệt trong năm lớp 9?', a: 'Lớp 9 là năm thử thách và áp lực nhất bậc THCS. Tư duy phát triển quan trọng vì: (1) Khi gặp khó (môn khó, điểm kém), tư duy phát triển nhắc em "Tôi chưa giỏi ĐỰA NÀY thôi, chứ không phải tôi không thể" — tránh nản chí và bỏ cuộc. (2) Giúp em coi thất bại là phản hồi để cải thiện, không phải là bằng chứng của sự kém cỏi. (3) Khi bạn bè giỏi hơn, tư duy phát triển chuyển ghen tị thành cảm hứng: "Họ giỏi là vì họ đã nỗ lực — tôi cũng có thể!" (4) Đây là nền tảng tâm lí để học hiệu quả suốt đời, không chỉ riêng lớp 9.' },
+    ]
+  ),
 };

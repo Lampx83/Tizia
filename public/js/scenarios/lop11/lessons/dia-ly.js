@@ -850,4 +850,43 @@ export const H11DIA_LESSONS = {
       { q: 'Liên hệ: bài học gì cho Việt Nam từ kinh nghiệm các nước đã học?', a: 'Phân tích: Tài nguyên không bảo đảm giàu có (Vê-nê-xu-ê-la), con người và công nghệ mới là then chốt (Nhật Bản). Việt Nam nên đầu tư nhân lực, công nghệ, đa dạng hoá kinh tế, hội nhập sâu rộng và phát triển bền vững để vươn lên.' },
     ],
   },
+
+  'H11DIA-w36-quiz': {
+    topic: 'Kết thúc Địa Lý 11 — Bản đồ thế giới trong tầm tay',
+    intro: 'Địa Lý 11 đã mở ra bức tranh toàn cầu cho chúng ta: từ các khu vực kinh tế sôi động đến những vùng địa lý đặc biệt, từ các tổ chức quốc tế đến vị thế của Việt Nam trong thế giới hội nhập. Hôm nay chúng ta hệ thống lại toàn bộ và chuẩn bị tâm thế cho Địa Lý 12 — môn học về Việt Nam.',
+    objectives: [
+      'Hệ thống hoá các khu vực và quốc gia đã học trong năm lớp 11 theo vị trí, đặc điểm nổi bật.',
+      'Nhận biết những xu hướng toàn cầu hoá, biến đổi khí hậu và an ninh lương thực liên quan đến địa lý.',
+      'Chuẩn bị học Địa Lý 12 — chủ yếu về địa lý tự nhiên và kinh tế – xã hội Việt Nam.',
+    ],
+    theory: [
+      { h: 'Thế giới qua bản đồ Địa Lý 11' },
+      { ul: [
+        'Châu Âu: EU (27 thành viên, đồng euro, tự do đi lại) — mô hình liên kết kinh tế-chính trị sâu nhất thế giới.',
+        'Châu Mỹ: Hoa Kỳ (kinh tế số 1, GDP ~25 nghìn tỉ USD), Mỹ La-tinh (tài nguyên giàu, bất bình đẳng cao).',
+        'Châu Á: Trung Quốc (công xưởng thế giới, cải cách 1978), Nhật Bản (công nghệ cao, già hoá), Tây Nam Á (dầu mỏ).',
+        'Châu Đại Dương: Australia (tài nguyên khoáng sản + nông sản + giáo dục), ASEAN (hội nhập Đông Nam Á).',
+        'Châu Phi: Nam Phi (kim loại quý, BRICS), đa phần chậm phát triển — vị trí địa lý không thuận lợi.',
+      ] },
+      { h: 'Các tổ chức và xu hướng then chốt' },
+      { ul: [
+        'WTO (1995): thương mại tự do — Việt Nam gia nhập 2007; EU (Maastricht 1993); ASEAN (1967, VN vào 1995).',
+        'Toàn cầu hoá: thuận lợi (thị trường mở, chuyển giao công nghệ) và thách thức (mất việc làm, lệ thuộc).',
+        'Biến đổi khí hậu: Đồng bằng sông Cửu Long (VN) — vùng dễ bị tổn thương nhất Đông Nam Á.',
+        'An ninh lương thực: nông nghiệp châu Phi và châu Á vẫn là trọng tâm phát triển bền vững toàn cầu.',
+      ] },
+      { h: 'Địa Lý 12 — trở về với Việt Nam' },
+      { ul: [
+        'Địa lý tự nhiên VN: vị trí địa lý, địa hình, khí hậu, sông ngòi, đất và sinh vật, khoáng sản.',
+        'Địa lý dân cư: dân số, lao động, đô thị hoá — cơ cấu dân số "vàng" và thách thức già hoá.',
+        'Địa lý kinh tế: các ngành nông–lâm–ngư nghiệp, công nghiệp, dịch vụ và vùng kinh tế trọng điểm.',
+        'Địa lý 7 vùng kinh tế: Trung du miền núi Bắc Bộ, Đồng bằng sông Hồng, Bắc Trung Bộ, DH Nam Trung Bộ, Tây Nguyên, ĐNB, ĐBSCL — đặc điểm và thế mạnh từng vùng.',
+      ] },
+      { note: 'Địa lý là môn học giúp em "đọc" thế giới và đất nước. Mỗi khi đi du lịch, xem tin tức quốc tế, hay nghĩ về tương lai nghề nghiệp — em đang dùng kiến thức địa lý. Đất nước Việt Nam với 3.260 km bờ biển, 54 dân tộc, từ Sa Pa đến Cà Mau là bài học địa lý sống động nhất mà em có thể khám phá suốt cuộc đời.' },
+    ],
+    examples: [
+      { q: 'Tại sao Việt Nam lại được xem là một trong những quốc gia dễ bị tổn thương nhất do biến đổi khí hậu?', a: 'Việt Nam có Đồng bằng sông Cửu Long (ĐBSCL) — vựa lúa lớn nhất cả nước — nằm ở cao độ trung bình chỉ 0,5–1m so với mực nước biển. Nước biển dâng 1m có thể nhấn chìm 40% ĐBSCL, ảnh hưởng đến 17–18 triệu dân và an ninh lương thực toàn quốc. Ngoài ra, đường bờ biển dài 3.260 km khiến nhiều vùng ven biển dễ bị bão, xâm nhập mặn và triều cường. Đây là lý do Việt Nam rất tích cực tham gia các hiệp định khí hậu quốc tế như Paris Agreement (2015).' },
+      { q: 'Nếu chỉ được chọn 5 "từ khoá số liệu" để ôn thi Địa lý 11, em sẽ chọn gì?', a: 'Năm từ khoá số liệu quan trọng nhất: (1) ASEAN 1967 – VN vào 1995; (2) WTO 1995 – VN vào 2007; (3) EU Maastricht 1993; (4) Trung Quốc cải cách mở cửa 1978; (5) Tây Nam Á – 1/2 trữ lượng dầu thế giới. Nắm 5 con số này + biết liên hệ ý nghĩa là đã có thể trả lời phần lớn câu hỏi lý thuyết trong đề thi về địa lý thế giới lớp 11.' },
+    ],
+  },
 };

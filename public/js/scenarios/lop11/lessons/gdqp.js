@@ -1105,4 +1105,43 @@ export const H11GDQP_LESSONS = {
       { q: 'Nhắc lại ba con số quan trọng về nghĩa vụ quân sự và lãnh hải.', a: 'Lãnh hải rộng 12 hải lí; đăng kí nghĩa vụ quân sự khi đủ 17 tuổi; độ tuổi gọi nhập ngũ là từ đủ 18 đến hết 25 tuổi.' },
     ],
   },
+
+  'H11GDQP-w36-quiz': {
+    topic: 'Kết thúc GDQP-AN 11 — Tuổi trẻ, Tổ quốc và Trách nhiệm',
+    intro: 'GDQP-AN lớp 11 đã trang bị cho chúng ta kiến thức và kỹ năng thiết yếu về quốc phòng an ninh, bảo vệ chủ quyền, phòng chống các mối đe doạ và nghĩa vụ của công dân với Tổ quốc. Hôm nay chúng ta nhìn lại hành trình đó và hiểu sâu hơn ý nghĩa của những kiến thức này với cuộc sống thực tiễn.',
+    objectives: [
+      'Hệ thống hoá các kiến thức GDQP-AN lớp 11 theo từng chủ đề lớn.',
+      'Nhận thức được vai trò và trách nhiệm của thế hệ trẻ trong bảo vệ Tổ quốc thời hiện đại.',
+      'Kết nối kiến thức GDQP-AN với lớp 12 và cuộc sống công dân trưởng thành.',
+    ],
+    theory: [
+      { h: 'Bức tranh GDQP-AN 11 — những gì đã học' },
+      { ul: [
+        'Truyền thống quân sự: lịch sử đấu tranh giữ nước của dân tộc — 4.000 năm với hàng chục cuộc kháng chiến lớn.',
+        'Quốc phòng toàn dân: "mỗi người dân là chiến sĩ, mỗi làng là pháo đài" — nền quốc phòng dựa vào dân.',
+        'An ninh nhân dân: bảo vệ Đảng, Nhà nước và nhân dân khỏi các mối đe doạ bên trong và bên ngoài.',
+        'Chủ quyền lãnh thổ: đất liền, vùng trời, vùng biển (lãnh hải 12 hải lí, vùng đặc quyền kinh tế 200 hải lí).',
+        'Nghĩa vụ quân sự: đăng ký 17 tuổi, nhập ngũ 18–25 tuổi; quyền và nghĩa vụ khi phục vụ.',
+      ] },
+      { h: 'Kỹ năng quân sự và an toàn' },
+      { ul: [
+        'Điều lệnh đội ngũ: kỷ luật, đội hình, chào hỏi — rèn tác phong nhanh nhẹn và đúng mực.',
+        'Kỹ thuật cơ bản: băng bó vết thương, sơ tán khi có sự cố — kỹ năng sống cứu người thực sự.',
+        'Phòng chống tệ nạn xã hội: ma tuý, cờ bạc, mê tín dị đoan — "không thử dù chỉ một lần".',
+        'An toàn vũ khí: không tiếp xúc bom đạn chưa nổ; báo ngay cho cơ quan chức năng nếu phát hiện.',
+      ] },
+      { h: 'Quốc phòng thế kỉ 21 — thách thức mới' },
+      { ul: [
+        'Chiến tranh thông tin và không gian mạng: tin giả, tấn công mạng, thao túng dư luận — "chiến trường" không có tiếng súng.',
+        'Biến đổi khí hậu và an ninh phi truyền thống: thiên tai, dịch bệnh, an ninh lương thực — đe doạ không kém vũ trang.',
+        'Bảo vệ chủ quyền biển đảo: Biển Đông là vấn đề chiến lược lâu dài — cần hiểu UNCLOS 1982 và lập trường của VN.',
+        'Thế hệ trẻ bảo vệ Tổ quốc bằng cách: giỏi chuyên môn, sống có kỷ luật, không để bị lợi dụng tuyên truyền.',
+      ] },
+      { note: 'Yêu nước không chỉ là xuống đường hay cầm súng. Ở tuổi học sinh, yêu nước là học giỏi, rèn đức, không để bị lôi kéo vào các hoạt động gây hại cho xã hội, và hiểu biết để phân biệt thông tin đúng sai trên mạng xã hội. Đó là cách bảo vệ Tổ quốc thiết thực nhất của thế hệ em.' },
+    ],
+    examples: [
+      { q: 'Ngày nay, một học sinh THPT có thể "bảo vệ Tổ quốc" theo nghĩa nào?', a: 'Bảo vệ Tổ quốc với học sinh THPT không phải là cầm súng mà là: (1) HỌC GIỎI để sau này đóng góp cho đất nước bằng chuyên môn — bác sĩ giỏi, kỹ sư giỏi, giáo viên giỏi là sức mạnh quốc gia; (2) HIỂU BIẾT để không bị lừa bởi tin giả, không bị lôi kéo vào các hoạt động vi phạm pháp luật; (3) GIỮ GÌN hình ảnh đất nước khi giao tiếp với người nước ngoài và trên không gian mạng quốc tế; (4) TUÂN THỦ pháp luật và đăng ký nghĩa vụ quân sự đúng quy định khi đến tuổi.' },
+      { q: 'Tại sao "chiến tranh thông tin" được coi là mối đe doạ an ninh quan trọng trong thế kỉ 21?', a: 'Chiến tranh thông tin nguy hiểm vì: (1) Quy mô lớn — một bài đăng sai có thể lan đến hàng triệu người trong vài giờ; (2) Khó phân biệt — tin giả được dàn dựng chuyên nghiệp, trông rất thật; (3) Không cần vũ khí — chỉ cần gây hoang mang xã hội, làm mất niềm tin vào chính quyền, kích động chia rẽ là đã đạt mục tiêu; (4) Mọi người đều có thể trở thành "lính" vô tình khi chia sẻ tin chưa kiểm chứng. Cách phòng thủ: luôn kiểm tra nguồn gốc thông tin trước khi chia sẻ, đọc nhiều nguồn từ cơ quan chính thống.' },
+    ],
+  },
 };

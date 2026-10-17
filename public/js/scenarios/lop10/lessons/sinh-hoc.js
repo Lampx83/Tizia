@@ -870,4 +870,42 @@ export const H10SINH_LESSONS = {
       { q: 'So sánh điểm khác biệt cơ bản giữa virus và vi khuẩn.', a: 'Vi khuẩn là tế bào nhân sơ hoàn chỉnh, tự trao đổi chất và sinh sản độc lập, có thể bị diệt bởi kháng sinh. Virus chưa có cấu tạo tế bào, chỉ là vỏ protein bọc lõi axit nucleic, phải kí sinh nội bào bắt buộc và không chịu tác dụng của kháng sinh.' },
     ],
   },
+
+  'H10SINH-w36-quiz': {
+    topic: 'Kết thúc Sinh Học 10 — Tế bào và Vi sinh vật làm nền tảng cho lớp 11',
+    intro: 'Sinh Học 10 đưa em vào thế giới tế bào — đơn vị cơ bản của sự sống. Từ cấu trúc phân tử đến trao đổi chất, từ phân bào đến vi sinh vật, mỗi bài học đều góp phần xây dựng nền tảng cho sinh học cơ thể ở lớp 11.',
+    objectives: [
+      'Hệ thống hoá các khái niệm cốt lõi về tế bào, trao đổi chất và vi sinh vật.',
+      'Nhận biết mối liên hệ giữa Sinh 10 (cấp tế bào) và Sinh 11 (cấp cơ thể).',
+      'Định hướng cách học Sinh học hiệu quả để không cần học thuộc lòng hàng loạt.',
+    ],
+    theory: [
+      { h: 'Bức tranh toàn cảnh Sinh Học 10' },
+      { ul: [
+        'Hóa học của sự sống: nước, carbohydrate, lipid, protein, nucleic acid — vật chất xây dựng tế bào.',
+        'Cấu trúc tế bào: màng sinh chất, các bào quan, tế bào nhân sơ vs nhân thực.',
+        'Chuyển hoá năng lượng: quang hợp (lục lạp) và hô hấp tế bào (ti thể).',
+        'Phân bào: nguyên phân và giảm phân — cơ sở của sinh sản và di truyền.',
+        'Vi sinh vật: vi khuẩn, virus, ứng dụng vi sinh trong đời sống và y học.',
+      ] },
+      { h: 'Cầu nối sang Sinh Học 11 (Cơ thể)' },
+      { ul: [
+        'Tế bào → Mô → Cơ quan → Hệ cơ quan → Cơ thể: lớp 11 mở rộng từ tế bào lên toàn cơ thể.',
+        'Trao đổi chất tế bào → Tiêu hoá, hô hấp, tuần hoàn, bài tiết của cơ thể thực vật và động vật.',
+        'Enzyme và xúc tác sinh học → Điều tiết hormone, thần kinh — lớp 11 mở rộng cơ chế điều hoà.',
+        'Nguyên phân/Giảm phân → Di truyền Mendel và NST — nền tảng của di truyền học lớp 12.',
+      ] },
+      { h: 'Ôn hè cho Sinh học' },
+      { ul: [
+        'Vẽ lại sơ đồ cấu trúc tế bào từ trí nhớ — cách ôn hiệu quả nhất cho phần này.',
+        'Luyện so sánh: quang hợp vs hô hấp, nguyên phân vs giảm phân, nhân sơ vs nhân thực.',
+        'Đọc thêm về ứng dụng vi sinh vật (kháng sinh, vaccine, lên men) — kết nối kiến thức với cuộc sống.',
+      ] },
+      { note: 'Sinh học không đòi hỏi học thuộc công thức như Toán hay Lý — nhưng đòi hỏi hiểu CƠ CHẾ và mối quan hệ. Em hỏi "Tại sao?", không chỉ "Cái gì?" — đó là cách học Sinh giỏi nhất.' },
+    ],
+    examples: [
+      { q: 'Tại sao học tốt cấu trúc tế bào ở lớp 10 lại giúp học lớp 11 nhẹ nhàng hơn?', a: 'Lớp 11 mô tả cơ thể thực vật và động vật hoạt động như thế nào — nhưng mọi hoạt động đó đều xảy ra ở cấp tế bào. Ví dụ: quang hợp xảy ra trong lục lạp của tế bào lá; tiêu hoá phân giải thức ăn thành phân tử đủ nhỏ để vào tế bào; thần kinh dẫn truyền xung điện qua màng tế bào thần kinh. Không hiểu tế bào → không hiểu cơ quan → khó hiểu cơ thể.' },
+      { q: 'Nguyên phân và giảm phân học ở lớp 10 có ứng dụng gì ở các lớp tiếp theo?', a: 'Nguyên phân → Lớp 11: tăng trưởng, tái tạo mô, liền thương. Giảm phân → Lớp 12: di truyền học Mendel (mỗi giao tử mang 1 allele), cơ chế tạo biến dị tổ hợp. Đặc biệt giảm phân II tương tự nguyên phân — học sinh nhớ điểm khác biệt (giảm số NST và tạo giao tử) sẽ dễ hiểu tại sao con không giống cha mẹ 100%.' },
+    ],
+  },
 };

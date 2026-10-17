@@ -813,4 +813,41 @@ export const H11HOA_LESSONS = {
       { q: 'Bài tập: Phân biệt HCOOH và CH3COOH bằng một thuốc thử.', a: 'Giải: Dùng AgNO3/NH3 (Tollens). HCOOH có nhóm -CHO nên TRÁNG BẠC (tạo kết tủa Ag); CH3COOH không tráng bạc. Vậy chất cho kết tủa bạc là HCOOH.' },
     ],
   },
+
+  'H11HOA-w36-quiz': {
+    topic: 'Kết thúc Hoá Học 11 — Hữu cơ và bước ngoặt lớp 12',
+    intro: 'Lớp 11 là năm học trọng tâm nhất của hoá học hữu cơ trong cả bậc THPT. Hôm nay chúng ta hệ thống lại toàn bộ kiến thức, nhận diện những mạch nối với lớp 12, và sẵn sàng tiếp tục hành trình khám phá thế giới phân tử.',
+    objectives: [
+      'Hệ thống hoá các nhóm chất hữu cơ đã học: hydrocarbon, ancol, phenol, aldehyde, axit, este.',
+      'Nắm vững chuỗi phản ứng hoá học quan trọng và phương pháp nhận biết các chất.',
+      'Hiểu những chủ đề lớp 12 sẽ kế thừa và nâng cao từ nền tảng lớp 11.',
+    ],
+    theory: [
+      { h: 'Bức tranh hoá hữu cơ lớp 11' },
+      { ul: [
+        'Hydrocarbon: ankan (chuỗi no), anken (liên kết đôi C=C), ankin (liên kết ba), benzen và đồng đẳng.',
+        'Dẫn xuất oxygen: ancol (–OH), phenol (–OH ở vòng thơm), aldehyde (–CHO), xeton (–CO–), axit carboxylic (–COOH), este (–COO–).',
+        'Phản ứng đặc trưng: tráng bạc (aldehyde, HCOOH), cộng Br2 (anken, ankin, aldehyde), thế ở vòng thơm, phản ứng este hoá.',
+        'Vô cơ học kỳ I: điện li, axit–bazơ–muối, phản ứng oxi hoá khử, phi kim nhóm VII–VI–V.',
+      ] },
+      { h: 'Chuỗi biến hoá phải thuộc lòng' },
+      { ul: [
+        'Ankan → Anken (crackinh/tách H2) → Ancol (cộng H2O) → Aldehyde (oxi hoá nhẹ) → Axit (oxi hoá mạnh) → Este (este hoá với ancol).',
+        'Benzen + Br2/Fe → Bromobenzene; + HNO3/H2SO4 đ → Nitrobenzene.',
+        'CH4 (nhiệt phân) → C2H2 (axetilen) → CH3CHO (cộng H2O, Hg2+) → CH3COOH.',
+      ] },
+      { h: 'Hoá học lớp 12 — nối tiếp thế nào?' },
+      { ul: [
+        'Carbohydrate (glucozo, saccarozo, tinh bột, xenlulozơ): mở rộng từ aldehyde và este đã học ở lớp 11.',
+        'Amin và amino axit: nhóm –NH2 kết hợp với –COOH → protein — chương học hấp dẫn nhất của năm.',
+        'Polime và vật liệu polymer: phản ứng trùng hợp (từ anken) và trùng ngưng (từ diol + diaxit).',
+        'Kim loại và điện phân: tiếp tục từ nền vô cơ lớp 10–11.',
+      ] },
+      { note: 'Học hoá hữu cơ hiệu quả nhất bằng cách vẽ sơ đồ chuỗi phản ứng ra giấy và "kể chuyện" về từng chất: nó xuất phát từ đâu, tạo ra gì, nhận biết bằng gì. Não người nhớ câu chuyện tốt hơn bảng số liệu gấp nhiều lần.' },
+    ],
+    examples: [
+      { q: 'Em muốn nhớ toàn bộ chuỗi oxi hoá ancol mà không cần học thuộc lòng — có cách nào?', a: 'Hãy nhớ quy tắc "chỉ số hydrogen": ancol bậc 1 (–CH2OH) mất 2H → aldehyde (–CHO) mất 2H nữa → axit (–COOH). Hình dung như "đang cởi bỏ từng lớp hydrogen". Ancol bậc 2 (–CHOH–) mất 2H → xeton (không tráng bạc được). Ancol bậc 3 không oxi hoá dễ. Một sơ đồ nhỏ vẽ tay sẽ giúp em nhớ nguyên cả năm mà không cần ôn lại.' },
+      { q: 'Trong đề thi tốt nghiệp THPT, phần Hoá hữu cơ thường chiếm bao nhiêu câu và tập trung vào gì?', a: 'Phần hữu cơ thường chiếm khoảng 15–20/40 câu trắc nghiệm trong đề thi tốt nghiệp. Trọng tâm: (1) tính chất và phản ứng của các hợp chất hữu cơ đặc trưng; (2) bài toán tính khối lượng/mol chất trong phản ứng; (3) nhận biết và phân biệt chất; (4) polymer và ứng dụng thực tiễn. Kiến thức lớp 11 (ancol, axit, este) và lớp 12 (carbohydrate, amin, polime) cùng được thi — nên ôn đều cả hai năm.' },
+    ],
+  },
 };

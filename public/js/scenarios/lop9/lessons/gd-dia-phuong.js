@@ -1249,4 +1249,35 @@ export const S9GDDP_LESSONS = {
       { q: 'Viết bản cam kết "1-1-1" của riêng em sau năm học môn Giáo dục địa phương.', a: 'Gợi ý mẫu: (1) Thói quen: mỗi tuần ít nhất ba buổi đi xe buýt hoặc xe đạp đến trường, luôn bỏ rác đúng nơi quy định; (2) Việc cho di sản: dịp hè dẫn em nhỏ trong nhà thăm Văn Miếu và kể về truyền thống hiếu học; (3) Mục tiêu năm sau: thi đỗ vào trường THPT nguyện vọng 1 và tham gia một câu lạc bộ tìm hiểu lịch sử hoặc hướng dẫn viên nhỏ tuổi.' },
     ],
   },
+
+  'S9GDDP-w36-quiz': {
+    topic: 'Kết thúc Giáo dục địa phương — Người trẻ của mảnh đất này',
+    intro: 'Tuần cuối — sau tất cả những gì đã học về địa phương mình, cô muốn hỏi em một câu: Em là ai trong câu chuyện của mảnh đất này? Không phải hỏi để thi, mà để em thực sự suy ngẫm.',
+    objectives: [
+      'Tổng kết giá trị của việc hiểu biết sâu về địa phương nơi mình sinh sống.',
+      'Xác định vai trò của thế hệ trẻ trong bảo tồn và phát triển bản sắc địa phương.',
+      'Xây dựng mối quan hệ thực sự với cộng đồng địa phương qua hành động cụ thể.',
+    ],
+    theory: [
+      { h: 'Bốn năm GD địa phương — Những gì em đã biết' },
+      { p: 'Sau bốn năm, em không chỉ biết tên các di tích, danh nhân và sự kiện — em đã hiểu câu chuyện đằng sau chúng: tại sao nơi này quan trọng, ai đã xây dựng nên nó, và người dân đã sống và chiến đấu như thế nào để gìn giữ bản sắc qua hàng thế kỉ thay đổi.' },
+      { h: 'Thế hệ trẻ và di sản địa phương' },
+      { ul: [
+        'Người trẻ không chỉ là "người nhận" di sản — mà là người quyết định di sản nào được sống tiếp.',
+        'Di sản không thể tồn tại trong tủ kính — nó cần được dùng, được kể, được yêu mến.',
+        'Sáng tạo từ truyền thống không phải phá vỡ truyền thống — đó là cách di sản tiếp tục liên quan.',
+        'Mỗi bạn trẻ có thể là "đại sứ" tự nguyện cho địa phương mình — qua mạng xã hội, qua câu chuyện kể.',
+      ] },
+      { h: 'Câu hỏi để mang theo' },
+      { p: 'Khi em sắp rời THCS và tiến vào THPT, hãy mang theo những câu hỏi này: Địa phương em đang đối mặt với thách thức gì? Thế hệ của em có thể đóng góp gì? Điều gì ở nơi em sinh ra xứng đáng được thế giới biết đến hơn?' },
+      { h: 'Từ bản cam kết đến hành động' },
+      { p: 'Bản cam kết "1-1-1" từ tuần 35 chỉ có ý nghĩa khi được thực hiện. Trong hè này, hãy thực hiện ít nhất MỘT hành động cụ thể: thăm một di tích chưa từng đến, kể cho người ngoài địa phương nghe về một đặc sản văn hoá, hoặc tham gia một hoạt động tình nguyện bảo vệ cảnh quan địa phương.' },
+      { note: 'Yêu địa phương không phải là cảm xúc trừu tượng — nó là tổng hợp của hàng nghìn lần em chọn ứng xử đúng, giữ gìn đúng, và trân trọng đúng những gì đang có.' },
+    ],
+    examples: [
+      { q: 'Nếu có 10 phút để giới thiệu địa phương em với một người bạn nước ngoài, em sẽ nói gì?', a: 'Gợi ý cấu trúc 10 phút: (1) Một câu tóm tắt định danh: "[Địa danh] là nơi..." — ấn tượng đầu tiên quan trọng. (2) Ba điều độc đáo nhất: có thể là lịch sử, ẩm thực, phong cảnh hoặc con người. (3) Một câu chuyện nhỏ cụ thể — kỉ niệm của chính em ở đó khiến người nghe cảm nhận được cái hồn của nơi ấy. (4) Lời mời chân thành: "Nếu có dịp, nhất định phải đến trải nghiệm trực tiếp".' },
+      { q: 'Làm thế nào người trẻ có thể bảo tồn di sản địa phương theo cách phù hợp với thời đại số?', a: 'Các cách sáng tạo và thực tế: (1) Tạo nội dung mạng xã hội về di sản địa phương — video ngắn, ảnh có caption kể chuyện, podcast tiếng Việt và tiếng Anh. (2) Tham gia dự án số hoá: chụp ảnh lưu trữ, dịch tài liệu cũ, tạo bản đồ số di tích. (3) Kết nối nghệ nhân địa phương với thị trường online. (4) Thiết kế sản phẩm mới lấy cảm hứng từ truyền thống — làm cho di sản "mặc được, ăn được, dùng được" trong cuộc sống hiện đại.' },
+      { q: 'Điều em tự hào nhất khi nói về địa phương mình là gì?', a: 'Câu hỏi này dành cho câu trả lời thật của riêng em. Ví dụ với học sinh Hà Nội: "Tôi tự hào vì Hà Nội có tầng lớp nghìn năm — dù biến đổi nhiều nhưng nếp thanh lịch và truyền thống hiếu học vẫn còn đó trong những người tôi gặp mỗi ngày. Không nhiều nơi trên thế giới có chiều sâu văn hoá tích luỹ qua 1000 năm như vậy". Điều em tự hào nhất chính là thứ đáng kể nhất.' },
+    ],
+  },
 };

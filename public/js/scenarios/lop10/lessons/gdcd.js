@@ -1018,4 +1018,42 @@ export const H10GDCD_LESSONS = {
       { q: 'Theo em, vì sao môn Giáo dục Kinh tế và Pháp luật lại kết hợp cả hai lĩnh vực kinh tế và pháp luật trong một môn?', a: 'Vì trong đời sống, hoạt động kinh tế và pháp luật luôn gắn bó. Mọi giao dịch kinh tế đều diễn ra trong khuôn khổ pháp luật: kinh doanh phải đúng luật, nộp thuế, ký hợp đồng hợp pháp. Hiểu cả hai giúp công dân vừa làm kinh tế hiệu quả, vừa tôn trọng pháp luật — đó là mục tiêu của môn học này.' },
     ],
   },
+
+  'H10GDCD-w36-quiz': {
+    topic: 'Kết thúc GDCD 10 — Công dân có hiểu biết trong thế giới hội nhập',
+    intro: 'Giáo dục Kinh tế và Pháp luật 10 trang bị cho em nền tảng suy nghĩ như một công dân kinh tế — hiểu thị trường, quyền và nghĩa vụ, pháp luật dân sự và hình sự. Hôm nay chúng ta nhìn lại hành trình đó và hướng tới lớp 11.',
+    objectives: [
+      'Hệ thống hoá các khái niệm kinh tế và pháp luật cơ bản đã học trong năm.',
+      'Nhận ra mối liên hệ giữa kiến thức lớp 10 và các vấn đề kinh tế-pháp luật của lớp 11.',
+      'Hiểu cách áp dụng kiến thức kinh tế và pháp luật vào cuộc sống thực hàng ngày.',
+    ],
+    theory: [
+      { h: 'Bức tranh toàn cảnh GDCD 10' },
+      { ul: [
+        'Kinh tế học cơ bản: cung-cầu, thị trường, giá cả, các hình thức sở hữu, vai trò của Nhà nước.',
+        'Tài chính cá nhân: thu nhập, chi tiêu, tiết kiệm, đầu tư, bảo hiểm — kĩ năng sống thiết yếu.',
+        'Pháp luật dân sự: hợp đồng, quyền sở hữu, thừa kế, hôn nhân gia đình.',
+        'Pháp luật hình sự: khái niệm tội phạm, trách nhiệm hình sự, vai trò của tố tụng hình sự.',
+        'Quyền công dân: quyền hiến pháp, quyền dân sự, nghĩa vụ với nhà nước và xã hội.',
+      ] },
+      { h: 'Hành trang sang GDCD 11' },
+      { ul: [
+        'Kinh tế vi mô → Kinh tế vĩ mô: từ thị trường đơn lẻ đến tăng trưởng kinh tế quốc gia, lạm phát, thất nghiệp.',
+        'Pháp luật dân sự → Pháp luật lao động, hành chính: quyền người lao động, hợp đồng lao động.',
+        'Quyền hiến pháp → Bầu cử, tham gia chính trị: quyền và nghĩa vụ của công dân trưởng thành.',
+        'Tài chính cá nhân → Tài chính doanh nghiệp: từ quản lý ngân sách cá nhân đến quản trị tài chính.',
+      ] },
+      { h: 'Ứng dụng thực tế ngay hôm nay' },
+      { ul: [
+        'Theo dõi giá cả hàng ngày và phân tích nguyên nhân: tại sao giá xăng lên? Tại sao giá rau biến động?',
+        'Đọc hợp đồng khi mua sắm online: điều khoản đổi trả, bảo hành, bảo mật thông tin.',
+        'Tìm hiểu về quyền của người tiêu dùng (Luật Bảo vệ quyền lợi người tiêu dùng 2023).',
+      ] },
+      { note: 'GDCD không phải môn học lý thuyết — mỗi ngày em đều là một "diễn viên" trong nền kinh tế và hệ thống pháp luật. Hiểu luật chơi, em chơi tốt hơn và bảo vệ bản thân tốt hơn.' },
+    ],
+    examples: [
+      { q: 'Cách nào giúp em nhớ lâu các quyền và nghĩa vụ công dân mà không cần học thuộc lòng?', a: 'Phương pháp hiệu quả nhất: kết nối với tình huống thực. Mỗi quyền hoặc nghĩa vụ, hãy tự hỏi "Điều này ảnh hưởng đến em như thế nào trong 5 năm tới?". Ví dụ: quyền bầu cử → em sẽ đủ tuổi bầu cử vào năm mấy?; nghĩa vụ nộp thuế → khi đi làm em đóng thuế thu nhập cá nhân thế nào? Câu hỏi cá nhân hoá giúp ghi nhớ sâu hơn bất kì sơ đồ nào.' },
+      { q: 'GDCD 11 sẽ khác GDCD 10 như thế nào, và em cần chuẩn bị gì?', a: 'GDCD 11 mở rộng từ kinh tế vi mô (thị trường, hợp đồng cá nhân) lên kinh tế vĩ mô (GDP, lạm phát, chính sách tiền tệ) và từ pháp luật dân sự lên pháp luật lao động và hành chính. Chuẩn bị: (1) Nắm chắc khái niệm cơ bản về cung-cầu và giá cả — sẽ mở rộng sang thị trường hàng hoá/lao động/tiền tệ; (2) Hiểu phân biệt giữa quyền và nghĩa vụ — lớp 11 thêm nhiều tình huống phức tạp hơn.' },
+    ],
+  },
 };

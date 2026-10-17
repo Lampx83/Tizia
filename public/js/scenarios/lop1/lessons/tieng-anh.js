@@ -932,4 +932,37 @@ export const P1TA_LESSONS = {
       { q: 'Đếm và gọi tên 3 màu yêu thích:', a: 'one – red, two – blue, three – yellow. (1 màu đỏ, 2 xanh dương, 3 vàng.)' },
     ],
   },
+
+  'P1TA-w36-quiz': {
+    topic: 'End of Grade 1 — Ready for Grade 2!',
+    intro: 'Wow! You did great this year! Let\'s look back at everything you learned. 🎉',
+    objectives: [
+      'Review all key English topics from Grade 1.',
+      'Feel excited about learning English in Grade 2.',
+    ],
+    theory: [
+      { h: 'What did you learn this year?' },
+      { ul: [
+        'Greetings: Hello, Hi, Goodbye, Good morning, Thank you, Sorry.',
+        'Numbers 1–10: one, two, three … ten.',
+        'Colours: red, blue, yellow, green, black, white.',
+        'Family: mum, dad, sister, brother.',
+        'Body: head, eye, nose, mouth, hand, foot.',
+        'Animals: cat, dog, fish, bird, cow.',
+        'Food: rice, cake, milk, apple.',
+        'Sentences: My name is _. I am _. I like _. I can _.',
+      ] },
+      { h: 'In Grade 2 you will learn …' },
+      { ul: [
+        'More action words: run, jump, swim, read, write.',
+        'Where things are: in, on, under, next to.',
+        'Longer sentences and simple questions.',
+      ] },
+      { note: 'Keep saying English words every day this summer — even just 5 words a day!' },
+    ],
+    examples: [
+      { q: 'Say hello and tell your name and age:', a: '"Hello! My name is ___. I am six years old."' },
+      { q: 'What colour is the sky?', a: '"The sky is blue."' },
+    ],
+  },
 };

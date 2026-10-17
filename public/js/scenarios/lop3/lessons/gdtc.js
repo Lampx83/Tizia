@@ -787,4 +787,38 @@ export const P3GDTC_LESSONS = {
       { q: 'Hè em làm gì để giữ khoẻ?', a: 'Tập thể dục sáng, đi bộ/đạp xe, học bơi, chơi cùng bạn. Tránh ngồi xem ti vi cả ngày — sẽ yếu cơ.' },
     ],
   },
+
+  'P3GDTC-w36-quiz': {
+    topic: 'Kết thúc Lớp 3 — Thể dục: Cơ thể khoẻ mạnh, tinh thần vui vẻ!',
+    intro: 'Một năm GDTC Lớp 3 năng động và vui vẻ sắp kết thúc! Em đã chạy, nhảy, ném, bắt và vận động thật nhiều. Hôm nay cùng nhìn lại hành trình thể chất của em và chuẩn bị một mùa hè tràn đầy năng lượng!',
+    objectives: [
+      'Tổng kết các kĩ năng vận động đã học và rèn luyện.',
+      'Hiểu tầm quan trọng của vận động thể chất mỗi ngày.',
+      'Lên kế hoạch giữ vóc dáng khoẻ mạnh trong kỳ nghỉ hè.',
+    ],
+    theory: [
+      { h: 'Những kĩ năng vận động em đã rèn luyện' },
+      { ul: [
+        'CHẠY: Chạy đúng tư thế, không đánh tay thừa; chạy ngắn (30m–60m) và chạy bền nhẹ.',
+        'NHẢY: Nhảy xa, nhảy cao bằng kĩ thuật bước bộ; bật nhảy tại chỗ.',
+        'NÉM: Ném bóng bằng một tay đúng kĩ thuật; ném bóng vào đích.',
+        'TRÒ CHƠI VẬN ĐỘNG: Kéo co, chạy tiếp sức, cướp cờ, nhảy dây — phát triển sức mạnh và tinh thần đồng đội.',
+        'ĐỘI HÌNH THỂ DỤC: Tập hợp hàng dọc, hàng ngang; quay trái, phải; giãn cách đều.',
+      ] },
+      { h: 'Cơ thể em đã lớn mạnh như thế nào?' },
+      { p: 'Mỗi giờ thể dục, em đã rèn luyện không chỉ cơ bắp mà còn cả ý chí kiên trì, tinh thần đồng đội và sự tự tin. Thể dục giúp em ngủ ngon, học tốt và luôn vui vẻ!' },
+      { h: 'Kế hoạch vận động hè' },
+      { ul: [
+        'Đặt mục tiêu: vận động ít nhất 60 phút mỗi ngày.',
+        'Chọn 2–3 hoạt động yêu thích: bơi lội, đạp xe, đá cầu, nhảy dây.',
+        'Học một kĩ năng thể thao mới trong hè (bơi, cầu lông, bóng bàn).',
+        'Nhớ uống đủ nước và ăn đủ dinh dưỡng khi vận động nhiều.',
+      ] },
+      { note: 'Thể dục sáng chỉ 10 phút mỗi ngày — nhảy dây, chạy nhẹ, kéo giãn — giúp em tỉnh ngủ và sảng khoái cả ngày!' },
+    ],
+    examples: [
+      { q: 'Em chạy 60m mất 12 giây. Tốc độ trung bình là bao nhiêu m/giây?', a: 'Tốc độ = 60m ÷ 12s = 5 m/giây. (Áp dụng kiến thức Toán vào thể dục thực tế!)' },
+      { q: 'Kể 3 lợi ích của việc tập thể dục đều đặn.', a: 'Tim và phổi khoẻ mạnh; xương và cơ chắc chắn; ngủ ngon, tập trung học tốt hơn; tinh thần vui vẻ, ít stress.' },
+    ],
+  },
 };

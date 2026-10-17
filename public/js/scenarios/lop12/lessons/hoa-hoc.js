@@ -1010,4 +1010,50 @@ export const H12HOA_LESSONS = {
       { q: 'Vì sao nên dùng phương pháp bảo toàn electron cho bài kim loại tác dụng HNO3?', a: 'Vì phản ứng kim loại với HNO3 là oxi hoá - khử phức tạp. Dùng bảo toàn electron (số mol e kim loại nhường = số mol e mà N+5 nhận để tạo NO, NO2...) giúp giải nhanh không cần cân bằng đầy đủ phương trình.' },
     ],
   },
+
+  'H12HOA-w36-quiz': {
+    topic: 'Kết thúc Hoá Học THPT — Phân tử xây dựng thế giới',
+    intro: 'Tuần cuối năm học — hãy cùng bước ra ngoài các phương trình hoá học và nhìn xem Hoá Học đang hiện diện ở đâu trong thế giới quanh ta: từ nhựa dẻo trong tay đến thuốc chữa bệnh, từ phân bón nuôi lớn loài người đến pin lưu trữ năng lượng.',
+    objectives: [
+      'Hệ thống hoá chương trình Hoá Học 3 năm THPT theo các mảng kiến thức lớn.',
+      'Nhận ra ứng dụng thực tế của Hoá Học trong y dược, vật liệu, năng lượng và môi trường.',
+      'Xây dựng định hướng học tập tiếp theo cho những ai yêu thích Hoá Học.',
+    ],
+    theory: [
+      { h: 'Bản đồ Hoá Học 3 năm THPT' },
+      { ul: [
+        'Lớp 10: Nguyên tử, bảng tuần hoàn, liên kết hoá học, phản ứng oxi hoá–khử, halogens và nhóm VIA.',
+        'Lớp 11: Nitơ–photpho–cacbon–silic, đại cương hữu cơ, hydrocarbon (alkane, alkene, alkyne, arene), dẫn xuất halogen.',
+        'Lớp 12: Ancol–phenol–ether, aldehyde–ketone–acid carboxylic, ester–lipid, carbohydrate, amine–amino acid–protein–polymer, điện hoá học–pin–ăn mòn.',
+      ] },
+      { h: 'Hoá Học tạo ra thế giới hiện đại' },
+      { ul: [
+        'Dược phẩm: Aspirin (RCOOH), kháng sinh (vòng thơm, amide bond), vaccine — tất cả là hoá học hữu cơ.',
+        'Vật liệu: Nhựa (polymer), sợi tổng hợp (polyester, nylon), sơn, keo dán — tổng hợp từ hoá hữu cơ.',
+        'Năng lượng: Pin Lithium-ion (điện hoá học), pin nhiên liệu hydrogen, biofuel từ tinh bột (carbohydrate).',
+        'Nông nghiệp: Phân bón N-P-K (tổng hợp từ N2 khí quyển bằng Haber-Bosch), thuốc trừ sâu.',
+        'Môi trường: Xử lý nước thải, hấp thụ CO2, xúc tác xanh — Hoá học là chìa khoá giải quyết ô nhiễm.',
+      ] },
+      { h: 'Hoá Học ở đại học — những ngành liên quan' },
+      { ul: [
+        'Dược học: 5 năm nghiên cứu sâu phân tử sinh học, tổng hợp thuốc, kiểm nghiệm.',
+        'Công nghệ hoá học: thiết kế quy trình sản xuất, tối ưu phản ứng công nghiệp.',
+        'Hoá phân tích: kiểm định chất lượng thực phẩm, môi trường, vật liệu.',
+        'Công nghệ thực phẩm, Nông nghiệp: ứng dụng Hoá vào sản xuất và bảo quản.',
+      ] },
+      { h: 'Lời khuyên cho kì thi tốt nghiệp THPT môn Hoá' },
+      { ul: [
+        'Nhớ quy tắc điện hoá: dãy hoạt động kim loại, pin Galvanic, điện phân.',
+        'Hữu cơ: nhận diện nhóm chức → gọi tên → viết phương trình đặc trưng.',
+        'Bài toán hỗn hợp: quy đổi mol, bảo toàn electron và khối lượng.',
+        'Công thức phân tử: dùng C, H, O, N và bảo toàn khối lượng/electron để tìm nhanh.',
+      ] },
+      { note: 'Hoá Học không chỉ là công thức — đó là cách hiểu tại sao sắt gỉ, tại sao mật ong ngọt, tại sao thuốc chữa bệnh, tại sao nhựa không phân huỷ. Người hiểu Hoá là người đọc được ngôn ngữ của vật chất.' },
+    ],
+    examples: [
+      { q: 'Polymer nào được sử dụng phổ biến nhất trong đời sống và tác hại môi trường của nó là gì?', a: 'Polyethylene (PE) và polypropylene (PP) chiếm hơn 50% nhựa toàn cầu — dùng trong túi nilon, chai lọ, bao bì. Tác hại: không phân huỷ sinh học trong hàng trăm năm; vỡ thành vi nhựa (microplastics) xâm nhập chuỗi thực phẩm và cơ thể con người. Giải pháp đang nghiên cứu: bioplastic (PLA từ tinh bột ngô), enzyme phân huỷ nhựa (PETase), thu gom và tái chế bằng phản ứng nhiệt phân.' },
+      { q: 'Tại sao điện hoá học quan trọng trong kỉ nguyên năng lượng tái tạo?', a: 'Pin và điện phân là cốt lõi của cách mạng năng lượng: Pin Lithium-ion lưu trữ điện từ mặt trời và gió; Pin Lithium-iron-phosphate (LFP) trong xe điện; Pin nhiên liệu hydrogen (H2 + O2 → H2O + điện) không phát thải; Điện phân nước sản xuất hydrogen xanh từ điện tái tạo. Mọi thứ đều là phản ứng oxi hoá–khử ở điện cực — kiến thức Hoá lớp 12 đang thay đổi thế giới.' },
+      { q: 'Em thấy phần nào của Hoá Học THPT thú vị và có ứng dụng thực tế nhất? Vì sao?', a: 'Câu hỏi mở để em suy nghĩ. Gợi ý: Hoá hữu cơ (vì mọi sinh vật đều là hoá hữu cơ — ADN, protein, carbohydrate); Điện hoá (vì pin và ắc quy trong mọi thiết bị điện tử); Hoá phân tích (vì kiểm tra chất lượng thực phẩm và môi trường là bảo vệ sức khoẻ). Không có đáp án sai — tò mò là điểm khởi đầu của khoa học.' },
+    ],
+  },
 };

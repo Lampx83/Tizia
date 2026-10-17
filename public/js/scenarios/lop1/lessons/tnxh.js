@@ -901,4 +901,26 @@ export const P1TNXH_LESSONS = {
       { q: 'Em kể 3 điều em làm được để bảo vệ môi trường?', a: 'Vứt rác đúng chỗ, tiết kiệm nước, trồng/chăm cây xanh.' },
     ],
   },
+
+  'P1TNXH-w36-quiz': {
+    topic: 'Kết thúc Lớp 1 — Tổng kết Tự nhiên và Xã hội',
+    intro: 'Cả năm em đã học về bản thân, gia đình, trường học và thiên nhiên. Giỏi lắm! Cô cùng em nhìn lại nhé.',
+    objectives: [
+      'Nhớ lại những kiến thức TNXH quan trọng của Lớp 1.',
+      'Áp dụng vào cuộc sống hàng ngày.',
+    ],
+    theory: [
+      { h: 'Bản thân em' },
+      { ul: ['Cơ thể có các giác quan: mắt thấy, tai nghe, mũi ngửi, lưỡi nếm, tay sờ.', 'Giữ vệ sinh: đánh răng, rửa tay, tắm gội.', 'An toàn: không ra đường một mình, tránh vật sắc nhọn.'] },
+      { h: 'Gia đình và trường học' },
+      { ul: ['Gia đình là nơi em được yêu thương. Hãy yêu quý và giúp đỡ ông bà, bố mẹ.', 'Trường học là nơi em học và có bạn bè. Hãy ngoan ngoãn và giúp đỡ bạn.'] },
+      { h: 'Thiên nhiên quanh em' },
+      { ul: ['Cây xanh, nước sạch và không khí trong lành rất quý.', 'Bảo vệ môi trường: không xả rác, tiết kiệm nước, yêu thiên nhiên.'] },
+      { note: 'Lên Lớp 2 em sẽ học thêm về xã hội và tự nhiên rộng lớn hơn. Hãy luôn tò mò nhé!' },
+    ],
+    examples: [
+      { q: 'Giác quan nào giúp em nhận biết màu sắc?', a: 'Mắt (thị giác).' },
+      { q: 'Em làm gì để bảo vệ thiên nhiên?', a: 'Vứt rác đúng nơi, không hái hoa bẻ cành, tiết kiệm nước, chăm cây.' },
+    ],
+  },
 };

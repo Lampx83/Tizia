@@ -775,4 +775,36 @@ export const P3MT_LESSONS = {
       { q: 'Hè em muốn làm gì với mỹ thuật?', a: 'Em vẽ nhật ký bằng tranh, làm Origami tặng bạn, làm đồ tái chế trang trí phòng. Đầy ý tưởng vui!' },
     ],
   },
+
+  'P3MT-w36-quiz': {
+    topic: 'Kết thúc Lớp 3 — Mỹ thuật: Sắc màu của một năm học',
+    intro: 'Một năm Mỹ thuật Lớp 3 đầy màu sắc và sáng tạo sắp khép lại! Em đã vẽ, nặn, xé dán và tạo ra bao nhiêu tác phẩm đẹp. Hôm nay cùng nhìn lại hành trình nghệ thuật của em nhé!',
+    objectives: [
+      'Tổng kết các kĩ năng mỹ thuật đã học trong năm.',
+      'Trân trọng những tác phẩm em đã tạo ra.',
+      'Mang sự sáng tạo vào kỳ nghỉ hè và Lớp 4.',
+    ],
+    theory: [
+      { h: 'Hành trình sáng tạo Mỹ thuật Lớp 3' },
+      { ul: [
+        'VẼ: Vẽ bằng bút chì và tô màu sáp/màu nước; vẽ đường nét, hình dạng; phối màu cơ bản (màu nóng/lạnh, màu bổ sung).',
+        'IN ẤN: In mộc bản bằng lá cây, bọt biển; in hoa văn lên giấy và vải.',
+        'NGHỆ THUẬT 3D: Nặn đất sét; xé và dán giấy; làm Origami; dựng hình từ vật liệu tái chế.',
+        'THƯỞNG THỨC: Nhìn và cảm nhận tranh vẽ, tác phẩm điêu khắc; học về các hoạ sĩ nổi tiếng.',
+      ] },
+      { h: 'Những gì em học được về sáng tạo' },
+      { p: 'Mỹ thuật dạy em rằng không có câu trả lời "đúng" hay "sai" trong nghệ thuật — chỉ có sự thể hiện của riêng em. Mỗi tác phẩm em vẽ đều có giá trị vì nó mang dấu ấn của em.' },
+      { h: 'Dự án hè và Lớp 4' },
+      { ul: [
+        'Làm "Nhật ký tranh hè": mỗi tuần vẽ 1 trang về những gì em thấy, nghe, cảm nhận.',
+        'Lớp 4 sẽ học thêm về nghệ thuật dân gian Việt Nam: tranh Đông Hồ, tranh Hàng Trống.',
+        'Tập vẽ thực vật, con vật, cảnh vật theo quan sát thực tế.',
+      ] },
+      { note: 'Nghệ thuật ở khắp nơi quanh em — trong màu hoàng hôn, trong hoa lá sân nhà, trong bạt ngàn cánh đồng lúa xanh. Hãy mang hộp màu ra và vẽ!' },
+    ],
+    examples: [
+      { q: 'Kể tên 3 kĩ thuật mỹ thuật em đã học và 1 tác phẩm em tự hào nhất.', a: 'Ví dụ: "Em đã học vẽ màu nước, nặn đất sét và in lá cây. Em tự hào nhất về bức tranh phong cảnh quê em vẽ bằng màu nước ở tuần 20."' },
+      { q: 'Trộn màu đỏ và màu vàng được màu gì?', a: 'Màu cam. (Các cặp màu cơ bản: đỏ + vàng = cam; xanh dương + vàng = xanh lá; đỏ + xanh dương = tím.)' },
+    ],
+  },
 };

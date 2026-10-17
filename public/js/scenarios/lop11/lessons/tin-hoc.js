@@ -1093,4 +1093,42 @@ export const H11TIN_LESSONS = {
       { q: 'Tổng kết: nêu ba nguyên tắc bảo vệ tài khoản và dữ liệu mà em đã học cả năm.', a: 'Ba nguyên tắc: (1) Dùng mật khẩu mạnh và bật xác thực 2 lớp cho mọi tài khoản quan trọng; (2) Cảnh giác với lừa đảo phishing — không bấm link lạ, không cung cấp OTP/mật khẩu; (3) Sao lưu dữ liệu định kỳ ở nơi tách biệt (quy tắc 3-2-1) để khôi phục khi gặp sự cố như hỏng đĩa hay ransomware.' },
     ],
   },
+
+  'H11TIN-w36-quiz': {
+    topic: 'Kết thúc Tin Học 11 — Lập trình và tư duy số cho thế kỉ 21',
+    intro: 'Tin Học 11 đã đưa chúng ta từ tư duy giải thuật đến lập trình có cấu trúc, từ cơ sở dữ liệu đến an toàn thông tin. Hôm nay chúng ta nhìn lại hành trình đó, nhận ra giá trị thực tiễn của từng kỹ năng và hiểu tại sao tư duy lập trình là một trong những kỹ năng quan trọng nhất của thế kỉ 21.',
+    objectives: [
+      'Hệ thống hoá các chủ đề Tin Học 11: lập trình, CSDL, mạng máy tính, an toàn thông tin.',
+      'Kết nối kỹ năng lập trình với nghề nghiệp và cuộc sống trong thế giới số.',
+      'Hiểu định hướng học tiếp: Tin Học 12 và con đường vào đại học ngành CNTT.',
+    ],
+    theory: [
+      { h: 'Bức tranh Tin Học 11 — những gì đã học' },
+      { ul: [
+        'Lập trình có cấu trúc: kiểu dữ liệu, biểu thức, câu lệnh rẽ nhánh (if-else), vòng lặp (for/while), thủ tục/hàm (function), mảng, xâu kí tự.',
+        'Cơ sở dữ liệu: mô hình quan hệ, bảng/trường/khoá chính, SQL cơ bản (SELECT-FROM-WHERE, INSERT, UPDATE, DELETE).',
+        'Mạng máy tính: giao thức TCP/IP, mô hình OSI, địa chỉ IP/subnet, các dịch vụ mạng (HTTP, DNS, FTP).',
+        'An toàn thông tin: mã hoá đối xứng/bất đối xứng, phishing, ransomware, mật khẩu mạnh, xác thực 2 lớp.',
+      ] },
+      { h: 'Tư duy lập trình — kỹ năng sống' },
+      { ul: [
+        'Phân rã vấn đề (decomposition): chia bài toán lớn thành các bài nhỏ dễ giải — áp dụng được trong mọi lĩnh vực.',
+        'Nhận diện mẫu (pattern recognition): tìm cấu trúc lặp lại để viết vòng lặp và hàm hiệu quả.',
+        'Tư duy giải thuật (algorithmic thinking): từng bước cụ thể, có thể kiểm tra — không mơ hồ.',
+        'Debug (gỡ lỗi): kiên nhẫn tìm và sửa lỗi — kỹ năng này cực kỳ giá trị trong mọi công việc đòi hỏi chính xác.',
+      ] },
+      { h: 'Con đường phía trước' },
+      { ul: [
+        'Tin Học 12: ứng dụng CNTT trong các lĩnh vực — thiết kế, truyền thông, quản lý, AI; định hướng nghề nghiệp.',
+        'Đại học ngành CNTT/Kỹ thuật phần mềm: tiếp tục lập trình với Python, Java, C++ ở trình độ cao hơn.',
+        'Học thêm hè: Python (miễn phí trên Coursera/YouTube), HTML+CSS (web cơ bản), tham gia hackathon cấp trường.',
+        'Chứng chỉ IT phổ biến cho HS THPT: IC3 (cơ bản), MOS (Microsoft Office), Python Essentials (Cisco).',
+      ] },
+      { note: 'Thế giới việc làm năm 2030 sẽ cần không phải chuyên gia lập trình — mà là người HIỂU lập trình và biết ứng dụng CNTT trong lĩnh vực của mình: bác sĩ dùng AI chẩn đoán, giáo viên dùng dữ liệu học sinh, nhà thiết kế dùng code để tự động hoá. Tin Học 11 đã trao cho em chiếc chìa khoá đó.' },
+    ],
+    examples: [
+      { q: 'Kỹ năng lập trình nào từ Tin Học 11 hữu ích nhất trong cuộc sống hàng ngày, dù em không theo ngành CNTT?', a: 'Kỹ năng hữu ích nhất không phải viết code — mà là tư duy phân rã vấn đề. Khi gặp dự án lớn (làm luận văn, tổ chức sự kiện, quản lý nhóm), người biết chia nhỏ thành từng bước rõ ràng và kiểm tra từng bước sẽ hoàn thành tốt hơn nhiều. Kỹ năng thứ hai là debug tư duy: khi kế hoạch không chạy đúng, tìm bước nào sai thay vì bỏ cuộc — đây là tư duy có giá trị trong mọi nghề.' },
+      { q: 'Nếu muốn học thêm lập trình trong hè để chuẩn bị cho đại học CNTT, em nên bắt đầu từ đâu?', a: 'Lộ trình 3 bước cho hè: (1) Python cơ bản — học qua CS50P (Harvard, miễn phí) hoặc Sololearn Python. Python dễ đọc, cộng đồng lớn và là ngôn ngữ phổ biến nhất năm 2024. (2) Luyện bài tập giải thuật trên LeetCode/HackerRank — chọn bài Easy trước. (3) Làm 1 dự án nhỏ cá nhân: chatbot đơn giản, bảng điểm tự động, game tic-tac-toe. Dự án thực tế giúp em học nhanh hơn lý thuyết 3 lần và là "portfolio" đầu tiên khi xin học bổng hoặc phỏng vấn.' },
+    ],
+  },
 };

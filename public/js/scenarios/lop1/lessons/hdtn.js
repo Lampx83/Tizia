@@ -693,4 +693,34 @@ export const P1HDTN_LESSONS = {
       { q: 'Em hơi lo vì lên Lớp 2 sẽ khó hơn?', a: 'Bình thường thôi. Lớp 2 có cô mới, bạn cũ vẫn còn nhiều. Em đã có nền tảng Lớp 1, cố gắng từng ngày là sẽ học tốt. Cô tin em!' },
     ],
   },
+
+  'P1HDTN-w36-quiz': {
+    topic: 'Kết thúc Lớp 1 — Hành trang trải nghiệm vào Lớp 2',
+    intro: 'Mình đã cùng nhau trải qua cả một năm học đầy kỉ niệm. Cô rất vui được đồng hành cùng em!',
+    objectives: [
+      'Nhìn lại những trải nghiệm đáng nhớ trong năm học.',
+      'Hứng khởi và tự tin bước vào Lớp 2.',
+    ],
+    theory: [
+      { h: 'Những điều em đã trải nghiệm' },
+      { ul: [
+        'Ngày đầu đến trường — hồi hộp nhưng vui.',
+        'Kết bạn mới, học tên bạn, cùng nhau chơi.',
+        'Học cách tự giác: chuẩn bị sách vở, giữ vệ sinh lớp.',
+        'Tham gia lễ hội, sự kiện trường: ngày khai giảng, Tết Trung Thu, 20/11…',
+        'Giúp đỡ bạn, chia sẻ đồ dùng, nói lời cảm ơn và xin lỗi.',
+      ] },
+      { h: 'Bước vào Lớp 2' },
+      { ul: [
+        'Em sẽ có thêm nhiều bạn và nhiều hoạt động mới.',
+        'Tiếp tục rèn kĩ năng tự lập, trách nhiệm.',
+        'Nhớ giữ tình bạn với các bạn cùng lớp 1.',
+      ] },
+      { note: 'Cô tặng em lời nhắn: "Mỗi ngày là một hành trình mới. Hãy luôn vui vẻ, tử tế và can đảm!"' },
+    ],
+    examples: [
+      { q: 'Điều gì em nhớ nhất trong năm học Lớp 1?', a: 'Em tự kể: ngày đầu tiên đến trường, bài học yêu thích, người bạn thân, hoạt động vui nhất…' },
+      { q: 'Em sẽ làm gì để chuẩn bị vào Lớp 2?', a: 'Ôn lại kiến thức Lớp 1, chuẩn bị dụng cụ học tập, nghỉ ngơi và vui chơi đầy đủ trong hè.' },
+    ],
+  },
 };

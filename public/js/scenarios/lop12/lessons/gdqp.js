@@ -969,4 +969,44 @@ export const H12GDQP_LESSONS = {
       { q: 'Là công dân sắp đến tuổi nghĩa vụ quân sự, em xác định trách nhiệm của mình thế nào?', a: 'Em xác định học tập tốt, rèn luyện sức khoẻ và đạo đức, chấp hành nghiêm pháp luật và Luật Nghĩa vụ quân sự; sẵn sàng đăng ký, khám tuyển và thực hiện nghĩa vụ quân sự khi đến tuổi. Đó là nghĩa vụ thiêng liêng, vẻ vang của mỗi công dân đối với Tổ quốc.' },
     ],
   },
+
+  'H12GDQP-w36-quiz': {
+    topic: 'Kết thúc GDQP-AN — Tuổi trẻ và trách nhiệm với Tổ quốc',
+    intro: 'Tuần cuối năm học GDQP-AN — hãy nhìn lại hành trình từ lý thuyết quốc phòng đến thực hành điều lệnh, từ hiểu biết an ninh mạng đến trách nhiệm bảo vệ chủ quyền. Tình yêu Tổ quốc không chỉ là khẩu hiệu — đó là hành động cụ thể của mỗi công dân.',
+    objectives: [
+      'Hệ thống hoá kiến thức GDQP-AN 3 năm THPT: quốc phòng toàn dân, an ninh nhân dân.',
+      'Nhận ra trách nhiệm của thanh niên với sự nghiệp bảo vệ Tổ quốc trong bối cảnh mới.',
+      'Xây dựng ý thức cảnh giác trước các mối đe doạ an ninh phi truyền thống: mạng, thông tin, xã hội.',
+    ],
+    theory: [
+      { h: 'Bản đồ GDQP-AN 3 năm THPT' },
+      { ul: [
+        'Lớp 10: Lịch sử giữ nước VN, truyền thống quân sự, một số hiểu biết QP-AN, kỹ năng dân quân du kích.',
+        'Lớp 11: Chiến lược "Bảo vệ Tổ quốc từ sớm, từ xa", quân số và tổ chức QĐND VN, điều lệnh đội ngũ cơ bản.',
+        'Lớp 12: An ninh quốc gia, bảo vệ chủ quyền biển đảo, an ninh mạng và phòng chống "diễn biến hoà bình", luật Quốc phòng và Luật An ninh quốc gia, nghĩa vụ quân sự.',
+      ] },
+      { h: 'Bảo vệ Tổ quốc trong thời đại mới' },
+      { ul: [
+        'Chiến tranh lai (Hybrid Warfare): Kết hợp quân sự, kinh tế, thông tin, mạng — không cần bom đạn để gây bất ổn.',
+        'An ninh mạng quốc gia: Tấn công cơ sở hạ tầng số (điện lực, ngân hàng, y tế) là mối đe doạ thực sự.',
+        'Thông tin sai lệch: "Fake news", tài khoản ảo, tin đồn gây chia rẽ xã hội — đây là vũ khí phi truyền thống nguy hiểm.',
+        'Bảo vệ chủ quyền biển đảo: Vùng đặc quyền kinh tế 200 hải lý và thềm lục địa là tài nguyên quốc gia cần bảo vệ bằng pháp lý, ngoại giao và quân sự.',
+      ] },
+      { h: 'Nghĩa vụ quân sự — quyền và bổn phận' },
+      { p: 'Nam công dân từ 17 tuổi đăng ký, từ 18–25 tuổi trong diện gọi nhập ngũ. Thời gian phục vụ: 24 tháng cho sĩ quan, 18 tháng cho hạ sĩ quan–binh sĩ. Ngoài nghĩa vụ bắt buộc, còn có đường học tập trong quân đội: các trường quân sự đào tạo kỹ sư, y sĩ quân y, phi công, sĩ quan.' },
+      { h: 'Hành động cụ thể của thanh niên bảo vệ Tổ quốc hôm nay' },
+      { ul: [
+        'Không chia sẻ, không lan truyền thông tin chưa được kiểm chứng về các vấn đề chính trị, an ninh.',
+        'Báo cáo nội dung xúc phạm chủ quyền, kích động chia rẽ dân tộc trên mạng xã hội.',
+        'Học và làm việc tốt: Đóng góp vào sức mạnh kinh tế và khoa học của đất nước là bảo vệ Tổ quốc.',
+        'Hiểu và tôn trọng pháp luật: Nhà nước pháp quyền là nền tảng của xã hội ổn định và phát triển.',
+      ] },
+      { note: 'Yêu nước không phải chỉ là hát quốc ca hay treo cờ ngày lễ. Yêu nước là cống hiến thật sự: học giỏi, làm việc tốt, sống lương thiện, nộp thuế đầy đủ, bảo vệ môi trường, và lên tiếng khi thấy bất công. Đó là cách mỗi công dân xây dựng Tổ quốc mỗi ngày.' },
+    ],
+    examples: [
+      { q: 'Tại sao "diễn biến hoà bình" được coi là mối đe doạ an ninh quốc gia? Thanh niên có thể làm gì để phòng ngừa?', a: '"Diễn biến hoà bình" là chiến lược các thế lực thù địch sử dụng thông tin, văn hoá, kinh tế để thay đổi chế độ chính trị từ bên trong mà không dùng vũ lực. Biểu hiện: kích động ly khai, bạo loạn; tung tin giả về lãnh đạo; lợi dụng tự do ngôn luận để tuyên truyền chống nhà nước. Thanh niên phòng ngừa bằng cách: kiểm tra nguồn thông tin trước khi chia sẻ (cross-check từ nhiều nguồn đáng tin); không để bị lợi dụng bởi tài khoản mạng ẩn danh kích động; hiểu pháp luật về an ninh mạng (Luật An ninh mạng 2018); tích cực tham gia xây dựng cộng đồng mạng lành mạnh.' },
+      { q: 'Việt Nam bảo vệ chủ quyền biển đảo bằng những phương thức nào ngoài sức mạnh quân sự?', a: 'Việt Nam sử dụng đa phương thức: (1) Pháp lý: Đệ trình lên UNCLOS, Toà án Quốc tế về Luật Biển (ITLOS), phán quyết Toà Trọng tài 2016 bác yêu sách "đường lưỡi bò"; (2) Ngoại giao: Xây dựng quan hệ đối tác chiến lược toàn diện với các cường quốc, tranh thủ ủng hộ quốc tế; (3) Kinh tế: Phát triển kinh tế biển (đánh cá, dầu khí, du lịch) tạo sự hiện diện thực tế; (4) Thông tin: Công bố bằng chứng lịch sử và pháp lý về chủ quyền; (5) Dân sự: Đưa dân ra sống ở đảo, duy trì hoạt động kinh tế.' },
+      { q: 'Theo em, trách nhiệm bảo vệ Tổ quốc của một sinh viên đại học khác thế nào so với một chiến sĩ quân đội?', a: 'Cả hai đều bảo vệ Tổ quốc — nhưng bằng các phương thức khác nhau và không kém nhau về giá trị. Chiến sĩ bảo vệ chủ quyền lãnh thổ, trực tiếp đối mặt với nguy hiểm vật lý — đó là sự hy sinh cụ thể và trực tiếp. Sinh viên bảo vệ Tổ quốc bằng cách nâng cao sức mạnh tổng hợp quốc gia: nghiên cứu khoa học giúp phát triển vũ khí và công nghệ; học y khoa cứu chữa thương binh và người dân; học kinh tế tạo ra tăng trưởng và việc làm; học CNTT bảo vệ an ninh mạng quốc gia. Đất nước cần cả hai vai trò — và cả hai đều quan trọng như nhau.' },
+    ],
+  },
 };

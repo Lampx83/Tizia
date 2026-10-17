@@ -1467,4 +1467,71 @@ export const S8TA_LESSONS = {
       { q: 'Chuyển sang bị động và tường thuật: Active "They will build a new school." → bị động?', a: 'A new school will be built. — future passive: will be + V3.' },
     ]
   ),
+
+  'S8TA-w36-quiz': L(
+    'Closing Year — Grade 8 English & the Road to Grade 9',
+    'Congratulations on reaching the final week of Grade 8 English! This year you have mastered tenses, modals, conditionals, passive voice, reported speech and much more. Let us look back at everything you have learned and look forward to the exciting language challenges waiting for you in Grade 9.',
+    [
+      'Review all key grammar structures and vocabulary themes from Grade 8.',
+      'Identify common mistakes to avoid and strengthen the four skills.',
+      'Understand what new language points are coming in Grade 9.',
+    ],
+    [
+      { h: 'Grammar Recap — Tenses' },
+      { ul: [
+        'Simple Present & Present Continuous: habits vs. actions happening now.',
+        'Simple Past & Past Continuous: completed actions and simultaneous past actions.',
+        'Present Perfect: experiences / recent news (have/has + V3); contrast with Simple Past.',
+        'Future: will (prediction/decision), going to (plan/intention), Present Continuous (arrangement).',
+      ] },
+      { h: 'Grammar Recap — Modals & Conditionals' },
+      { ul: [
+        'Modals: can/could (ability), may/might (possibility), must/have to (obligation), should (advice), need not (no obligation). Rule: modal + bare infinitive, no -s.',
+        'Conditional Type 0: If + present, present (universal truth).',
+        'Conditional Type 1: If + present, will + V (real/likely future).',
+        'Conditional Type 2: If + past, would + V (hypothetical/unreal) — introduced in Grade 8.',
+      ] },
+      { h: 'Grammar Recap — Passive Voice & Reported Speech' },
+      { ul: [
+        'Passive: be + V3; tense of "be" mirrors the active tense. Do NOT use V2 after "be".',
+        'Reported speech: tense back-shift (is→was, will→would, can→could); pronoun change; time expressions (now→then, today→that day).',
+        'Reported questions: if/whether for yes/no; question word for Wh-; verb order becomes subject + verb.',
+      ] },
+      { h: 'Vocabulary Themes' },
+      { ul: [
+        'Environment: pollution, renewable energy, deforestation, wildlife conservation.',
+        'Technology: artificial intelligence, cyberbullying, screen time, digital literacy.',
+        'Culture & Society: ethnic minorities, festivals, customs, tourism.',
+        'Health & Sport: balanced diet, workout routine, mental health, team spirit.',
+      ] },
+      { h: 'Four Skills Summary' },
+      { ul: [
+        'Listening: gist and detail; numbers, dates, directions, opinions.',
+        'Speaking: expressing opinions (I think / In my opinion), suggesting (How about / Why don\'t we), describing places and people.',
+        'Reading: skim for main idea, scan for specific information, infer meaning from context.',
+        'Writing: topic sentence, supporting details, concluding sentence; email format (greeting, body, closing); connectives (however, therefore, in addition, as a result).',
+      ] },
+      { h: 'Common Mistakes to Avoid' },
+      { ul: [
+        'Modal + to: ✗ "She can to swim." → ✓ "She can swim."',
+        '"Will" after "if" in Type 1: ✗ "If you will study..." → ✓ "If you study..."',
+        'V2 after "be" in passive: ✗ "It was broke." → ✓ "It was broken."',
+        'Forgetting pronoun/tense shift in reported speech.',
+      ] },
+      { h: 'Looking Ahead — Grade 9 English' },
+      { ul: [
+        'Past Perfect (had + V3) and Past Perfect Continuous.',
+        'Conditional Type 3: If + had + V3, would have + V3 (past unreal).',
+        'Relative clauses: who, which, that, whose, where.',
+        'Gerunds and infinitives as objects; more complex noun clauses.',
+        'Academic vocabulary for writing and reading non-fiction texts.',
+      ] },
+      { note: 'Keep English alive every day — read a short article, listen to a song, write three sentences in your journal. The best way to remember grammar is to USE it. Have a wonderful summer and see you in Grade 9!' },
+    ],
+    [
+      { q: 'Rewrite using passive voice: "The teacher announced the results yesterday."', a: 'The results were announced (by the teacher) yesterday. — Simple Past passive: was/were + V3.' },
+      { q: 'Report this sentence: She said, "I am preparing for the exam now."', a: 'She said (that) she was preparing for the exam then. — tense back-shift (am→was), pronoun shift (I→she), time shift (now→then).' },
+      { q: 'Write a sentence using Conditional Type 2: situation — you do not have a car, so you cannot drive to school.', a: 'If I had a car, I would drive to school. — Type 2: If + past simple, would + bare infinitive (hypothetical present/future).' },
+    ]
+  ),
 };

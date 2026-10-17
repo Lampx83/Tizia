@@ -881,4 +881,39 @@ export const H10NV_LESSONS = {
       { q: 'Vì sao cần dành thời gian đọc lại bài trước khi nộp?', a: 'Để phát hiện và sửa lỗi chính tả, diễn đạt, bổ sung ý còn thiếu; tránh mất điểm đáng tiếc do sai sót nhỏ. Một bài sạch lỗi, mạch lạc luôn được đánh giá cao hơn.' },
     ],
   },
+
+  'H10NV-w36-quiz': {
+    topic: 'Kết thúc Ngữ Văn 10 — Hành trang ngôn ngữ vào lớp 11',
+    intro: 'Ngữ Văn 10 là năm đầu THPT — nơi em bắt đầu đọc văn học theo chiều sâu và rèn luyện tư duy viết độc lập. Hôm nay chúng ta nhìn lại hành trình đó, củng cố những kĩ năng cốt lõi và chuẩn bị cho những thách thức văn chương phong phú hơn ở lớp 11.',
+    objectives: [
+      'Hệ thống hoá các thể loại văn học và kĩ năng đọc hiểu đã học trong năm.',
+      'Nhận biết những kĩ năng viết cần tiếp tục rèn luyện để chuẩn bị cho lớp 11.',
+      'Xây dựng thói quen đọc và ghi chép trong kì hè để nuôi dưỡng cảm xúc văn chương.',
+    ],
+    theory: [
+      { h: 'Bức tranh toàn cảnh Ngữ Văn 10' },
+      { ul: [
+        'Đọc hiểu: thần thoại, sử thi, thơ Đường luật, văn xuôi trung đại — hành trình qua nhiều nền văn học.',
+        'Tiếng Việt: phong cách ngôn ngữ, biện pháp tu từ, liên kết văn bản, nghĩa tường minh/hàm ẩn.',
+        'Làm văn: nghị luận văn học và nghị luận xã hội — hai kĩ năng cốt lõi của cả bậc THPT.',
+      ] },
+      { h: 'Hành trang cho Ngữ Văn 11' },
+      { ul: [
+        'Thơ trung đại → Thơ hiện đại: từ Nguyễn Du (lớp 10) đến thơ Mới, thơ kháng chiến (lớp 11).',
+        'Nghị luận xã hội: lớp 11 yêu cầu chiều sâu suy nghĩ và dẫn chứng phong phú hơn — bắt đầu tích luỹ từ bây giờ.',
+        'Đọc mở rộng: đọc thêm tác phẩm văn xuôi VN (Nam Quốc Sơn Hà, Đoạn trường tân thanh…) để có vốn văn học dày hơn.',
+      ] },
+      { h: 'Kế hoạch hè cho người yêu văn' },
+      { ul: [
+        'Đọc ít nhất 2 tiểu thuyết hoặc tập thơ ngắn: nuôi cảm xúc và mở rộng vốn từ.',
+        'Viết nhật kí hoặc bài cảm nghĩ ngắn (1 trang/tuần) — thói quen viết tốt hơn luyện đề.',
+        'Xem phim chuyển thể từ tác phẩm văn học để cảm nhận cách kể chuyện bằng hình ảnh.',
+      ] },
+      { note: 'Văn học không phải để "thuộc lòng" — mà để cảm nhận và suy nghĩ. Em yêu văn, em sẽ viết tốt. Em viết tốt, em sẽ tự tin hơn ở mọi môn học.' },
+    ],
+    examples: [
+      { q: 'Điểm khác biệt lớn nhất giữa nghị luận văn học lớp 10 và lớp 11 là gì?', a: 'Lớp 10 tập trung vào kĩ năng cơ bản: phân tích nhân vật, hình ảnh, biện pháp tu từ theo hướng dẫn. Lớp 11 đòi hỏi tư duy bình luận sâu hơn: em cần tự đặt vấn đề, so sánh tác phẩm/tác giả và thể hiện quan điểm cá nhân có căn cứ — không chỉ kể lại hay liệt kê ý.' },
+      { q: 'Làm thế nào để cải thiện kĩ năng viết nghị luận trong kì hè mà không cần ôn lý thuyết nhàm?', a: 'Cách hiệu quả nhất: đọc báo (VnExpress, Tuổi Trẻ, Tia Sáng) mỗi ngày và ghi lại 3 ý kiến của bản thân về bài đọc. Sau đó thử viết 1 đoạn nghị luận 150–200 chữ từ những suy nghĩ đó. Thực hành viết thực tế từ cuộc sống tốt hơn nhiều so với chép đề cương.' },
+    ],
+  },
 };

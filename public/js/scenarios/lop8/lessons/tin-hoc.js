@@ -1370,4 +1370,64 @@ export const S8TIN_LESSONS = {
       { q: 'So sánh tìm kiếm tuyến tính và nhị phân — khi nào dùng cái nào?', a: 'Tuyến tính O(n) dùng được cho mọi dãy (kể cả chưa sắp), phù hợp dãy nhỏ. Nhị phân O(log n) nhanh hơn nhiều nhưng yêu cầu dãy đã sắp xếp, phù hợp dãy lớn đã được sắp sẵn.' },
     ]
   ),
+
+  'S8TIN-w36-quiz': L(
+    'Kết thúc Tin Học 8 — Tư duy lập trình bước vào kỉ nguyên số',
+    'Chào mừng đến tuần học cuối của Tin Học 8! Năm nay em đã học lập trình Python thực sự — viết code chạy được, giải bài toán và hiểu thuật toán. Em cũng hiểu sâu hơn về an toàn thông tin và trí tuệ nhân tạo — những chủ đề quan trọng nhất của thế kỉ XXI. Hãy nhìn lại hành trình đó để tự tin bước tiếp!',
+    [
+      'Tổng hợp các chủ đề lớn của Tin Học 8: Python cơ bản, thuật toán, an toàn thông tin và AI.',
+      'Ôn lại cú pháp Python trọng tâm và các thuật toán đã học.',
+      'Hiểu định hướng Tin Học lớp 9 và cách phát triển tư duy lập trình.',
+    ],
+    [
+      { h: '1. Python cơ bản' },
+      { ul: [
+        'Kiểu dữ liệu: int, float, str, bool, list, tuple, dict.',
+        'Vào/ra dữ liệu: input() (trả về str, cần int()/float() để đổi kiểu), print() (f-string: f"Kết quả: {x}").',
+        'Toán tử: số học (+, -, *, /, //, %, **), so sánh (==, !=, <, >, <=, >=), logic (and, or, not).',
+        'Cấu trúc rẽ nhánh: if/elif/else.',
+        'Vòng lặp: for item in list / for i in range(n), while (điều kiện); break và continue.',
+        'Hàm (function): def func_name(params): ... return value; tầm quan trọng của docstring.',
+        'List: indexing [i], slicing [a:b], len(), append(), remove(), sort().',
+      ] },
+      { h: '2. Thuật toán' },
+      { ul: [
+        'Khái niệm: tính đúng đắn, hữu hạn, xác định, hiệu quả; biểu diễn bằng ngôn ngữ tự nhiên, sơ đồ khối (flowchart), giả mã.',
+        'Tìm kiếm tuyến tính: duyệt từng phần tử, O(n), dùng cho mọi dãy.',
+        'Tìm kiếm nhị phân: cần dãy đã sắp, chia đôi mỗi bước, O(log n).',
+        'Sắp xếp nổi bọt (Bubble Sort): so sánh hai phần tử kề nhau và đổi chỗ, O(n²), dễ cài đặt.',
+        'Đánh giá độ phức tạp thời gian (Big-O): O(1), O(log n), O(n), O(n log n), O(n²).',
+      ] },
+      { h: '3. An toàn thông tin' },
+      { ul: [
+        'Mật khẩu mạnh: ≥ 12 kí tự, kết hợp HOA, thường, số, đặc biệt; không dùng ngày sinh, tên người thân.',
+        'Xác thực 2 yếu tố (2FA): lớp bảo vệ thứ hai ngoài mật khẩu.',
+        'Phishing và social engineering: nhận biết email/tin nhắn lừa đảo, không bấm link lạ, không tiết lộ OTP.',
+        'Malware, ransomware: sao lưu dữ liệu định kì; cài phần mềm diệt virus; không cài phần mềm lậu.',
+        'Quyền tác giả và Creative Commons: không sao chép trái phép; trích dẫn nguồn.',
+        'Ứng xử mạng: không bắt nạt trực tuyến, không phát tán thông tin sai lệch (tin giả, deepfake).',
+      ] },
+      { h: '4. Trí tuệ nhân tạo (AI)' },
+      { ul: [
+        'AI là gì: máy tính thực hiện các nhiệm vụ đòi hỏi trí tuệ người (nhận diện ảnh, xử lí ngôn ngữ, ra quyết định).',
+        'Học máy (Machine Learning): hệ thống học từ dữ liệu thay vì được lập trình tường minh.',
+        'Ứng dụng quanh ta: gợi ý YouTube/Netflix, trợ lí ảo (Siri, Google), xe tự lái, chẩn đoán y tế.',
+        'Cơ hội và nguy cơ: năng suất tăng, nhiều công việc mới xuất hiện; nhưng cũng gây mất việc làm, lo ngại về quyền riêng tư và thiên kiến (bias).',
+        'Dùng AI có trách nhiệm: kiểm chứng thông tin AI đưa ra, không dùng AI để gian lận hay tạo nội dung có hại.',
+      ] },
+      { h: '5. Định hướng Tin Học lớp 9' },
+      { ul: [
+        'Python nâng cao: hàm đệ quy, xử lí tệp văn bản (open/read/write), từ điển nâng cao, module.',
+        'Thuật toán nâng cao: sắp xếp chọn, sắp xếp chèn; phân tích và tối ưu chương trình.',
+        'Cơ sở dữ liệu cơ bản: khái niệm CSDL, bảng, truy vấn đơn giản.',
+        'Dự án nhỏ: viết chương trình giải bài toán thực tế — bước đầu trải nghiệm lập trình dự án.',
+      ] },
+      { note: 'Lập trình là ngôn ngữ của thế kỉ XXI — biết lập trình không chỉ giúp em làm việc tốt hơn mà còn giúp em tư duy rõ ràng, giải quyết vấn đề có hệ thống. Hãy giữ thói quen viết code mỗi ngày, dù chỉ 15 phút!' },
+    ],
+    [
+      { q: 'Viết hàm Python đếm số phần tử chẵn trong một danh sách.', a: 'def dem_chan(lst):\n    return sum(1 for x in lst if x % 2 == 0)\n# Ví dụ: dem_chan([1, 2, 3, 4, 6]) → 3 (các số chẵn: 2, 4, 6).' },
+      { q: 'Dãy [3, 1, 4, 1, 5, 9, 2, 6]. Tìm kiếm nhị phân số 5 có áp dụng được không? Vì sao?', a: 'Không áp dụng được ngay, vì tìm kiếm nhị phân yêu cầu dãy đã sắp xếp tăng dần. Cần sắp xếp trước: [1, 1, 2, 3, 4, 5, 6, 9], rồi mới tìm nhị phân số 5 tại chỉ số 5.' },
+      { q: 'Tại sao không nên dùng cùng một mật khẩu cho nhiều tài khoản?', a: 'Nếu một dịch vụ bị rò rỉ dữ liệu và mật khẩu bị lộ, kẻ xấu sẽ thử mật khẩu đó trên tất cả các dịch vụ khác (credential stuffing attack). Dùng mật khẩu khác nhau cho mỗi tài khoản đảm bảo dù một tài khoản bị xâm phạm, các tài khoản khác vẫn an toàn. Dùng trình quản lí mật khẩu (password manager) để không cần nhớ hết.' },
+    ]
+  ),
 };

@@ -807,4 +807,38 @@ export const P4TV_LESSONS = {
       { q: 'Câu "Ôi, cảnh đẹp tuyệt vời!" là loại câu nào?', a: 'Câu cảm (có "Ôi" + dấu "!").' },
     ],
   },
+
+  'P4TV-w36-quiz': {
+    topic: 'Kết thúc Lớp 4 — Hành trang Tiếng Việt vào Lớp 5',
+    intro: 'Chúc mừng các em đã hoàn thành năm học Lớp 4! Hôm nay cô tổng kết hành trình Tiếng Việt — bốn kỹ năng nghe, nói, đọc, viết — và cùng nhìn về Lớp 5 nhé!',
+    objectives: [
+      'Hệ thống bốn kỹ năng Tiếng Việt Lớp 4: nghe, nói, đọc, viết.',
+      'Nắm vững kiến thức từ vựng, ngữ pháp, làm văn cả năm.',
+      'Hiểu những nội dung mới chờ đợi ở Lớp 5.',
+    ],
+    theory: [
+      { h: 'Hành trình Tiếng Việt Lớp 4' },
+      { ul: [
+        'Từ và cấu tạo từ: từ đơn, từ phức (ghép tổng hợp, ghép phân loại, láy âm, láy vần, láy cả tiếng).',
+        'Từ loại: danh từ (người, vật, khái niệm), động từ (hành động, trạng thái), tính từ (đặc điểm).',
+        'Câu: câu kể (Ai là gì? Ai làm gì? Ai thế nào?); câu hỏi; câu khiến; câu cảm; câu ghép.',
+        'Thành phần câu: chủ ngữ, vị ngữ, trạng ngữ (thời gian, nơi chốn, nguyên nhân, mục đích).',
+        'Dấu câu: dấu hai chấm (báo hiệu lời dẫn hoặc liệt kê); ngoặc kép (trích dẫn, ý nghĩa đặc biệt); gạch ngang (lời thoại, chú thích, liệt kê).',
+        'Tập làm văn: miêu tả đồ vật, cây cối, con vật; viết thư; kể chuyện đã nghe – đã đọc.',
+        'MRVT theo chủ điểm: Thương người, Măng mọc thẳng, Trên đôi cánh ước mơ, Có chí thì nên, Tiếng sáo diều, Du lịch-Khám phá, Vẻ đẹp muôn màu, Những người quả cảm, Khám phá thế giới, Tình yêu cuộc sống.',
+      ] },
+      { h: 'Lớp 5 sẽ học gì?' },
+      { ul: [
+        'Từ: từ đồng nghĩa, trái nghĩa, đồng âm; thành ngữ, tục ngữ.',
+        'Câu: câu đơn, câu ghép (quan hệ: nguyên nhân-kết quả, tương phản, điều kiện-kết quả).',
+        'Văn: miêu tả người, miêu tả cảnh; viết chương trình hoạt động; viết báo cáo thống kê; tập viết đoạn đối thoại.',
+        'Kỹ năng đọc hiểu: nhận biết chi tiết, suy luận, đánh giá, liên hệ thực tế.',
+      ] },
+      { note: 'Hè này hãy đọc thêm sách — đó là cách tốt nhất để vừa nâng cao vốn từ vừa luyện đọc hiểu!' },
+    ],
+    examples: [
+      { q: 'Phân loại từ "mềm mại": từ ghép hay từ láy?', a: 'Từ láy âm (mềm — mại, các phụ âm đầu giống nhau: m).' },
+      { q: 'Xác định trạng ngữ: "Vì trời mưa, chúng tôi nghỉ ở nhà."', a: 'Trạng ngữ chỉ nguyên nhân: "Vì trời mưa".' },
+    ],
+  },
 };

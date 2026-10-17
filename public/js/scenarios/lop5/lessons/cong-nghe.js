@@ -705,4 +705,34 @@ export const P5CN_LESSONS = {
       { q: 'Học công nghệ rồi áp dụng vào đâu?', a: 'Áp dụng vào cuộc sống hằng ngày - giúp gia đình, tiết kiệm, an toàn.' },
     ],
   },
+
+  'P5CN-w36-quiz': {
+    topic: 'Kết thúc Tiểu học — Hành trang Công nghệ vào THCS',
+    intro: 'Chúc mừng! Em đã hoàn thành chương trình Công nghệ tiểu học. Những kĩ năng thực hành sẽ theo em suốt cuộc đời!',
+    objectives: [
+      'Tổng kết kiến thức và kĩ năng công nghệ tiểu học.',
+      'Kết nối với Công nghệ THCS và cuộc sống.',
+    ],
+    theory: [
+      { h: 'Hành trình Công nghệ 5 năm' },
+      { ul: [
+        '🧵 **Thủ công kĩ thuật:** cắt, xé, dán, đan, thêu, khâu — kĩ năng đôi tay khéo léo.',
+        '🌿 **Nông nghiệp gia đình:** trồng rau, chăm sóc cây, nhân giống, bảo quản nông sản.',
+        '🏠 **Nấu ăn và gia đình:** các món ăn đơn giản, vệ sinh an toàn thực phẩm, sắp xếp nhà cửa.',
+        '🔌 **An toàn kĩ thuật:** an toàn điện, không tự ý sửa chữa thiết bị, nhận biết rủi ro.',
+        '💡 **Tư duy thiết kế:** xác định nhu cầu → thiết kế → chế tạo → đánh giá.',
+      ] },
+      { h: 'Lên THCS sẽ học thêm' },
+      { ul: [
+        'Công nghệ cơ khí: bản vẽ kĩ thuật, gia công vật liệu.',
+        'Điện – điện tử: mạch điện đơn giản, linh kiện cơ bản.',
+        'Nông nghiệp kĩ thuật cao: thuỷ canh, nhà kính, công nghệ số trong nông nghiệp.',
+      ] },
+      { note: 'Công nghệ = làm ra sản phẩm hữu ích. Hãy luôn hỏi "Làm thế nào để cuộc sống tốt hơn?" — đó là tư duy của kĩ sư tương lai!' },
+    ],
+    examples: [
+      { q: 'Em đã học được kĩ năng thực hành nào thú vị nhất?', a: 'Ví dụ: trồng cây rau tự tưới (hệ thống tưới nhỏ giọt), khâu vá, nấu món ăn đơn giản cho gia đình.' },
+      { q: 'Tư duy thiết kế gồm mấy bước?', a: 'Xác định vấn đề → Lên ý tưởng → Lập kế hoạch → Thực hiện → Đánh giá và cải tiến.' },
+    ],
+  },
 };

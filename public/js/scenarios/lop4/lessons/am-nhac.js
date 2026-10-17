@@ -779,4 +779,43 @@ export const P4AN_LESSONS = {
       { q: 'Em chọn hát bài nào cho phần thực hành?', a: 'Chọn bài em thuộc nhất và cảm nhận tốt nhất. Hát tự tin, đúng nhịp, có cảm xúc.' },
     ],
   },
+
+  'P4AN-w36-quiz': {
+    topic: 'Kết thúc Lớp 4 — Hành trang Âm nhạc vào Lớp 5',
+    intro: 'Chúc mừng các em đã hoàn thành năm học Âm nhạc Lớp 4! Hôm nay cô và trò nhìn lại những bài hát, kiến thức nhạc lý và kỹ năng đã học trong năm — rồi cùng nhau mở ra cánh cửa âm nhạc thú vị hơn ở Lớp 5!',
+    objectives: [
+      'Hệ thống các bài hát và kiến thức âm nhạc Lớp 4.',
+      'Biết những nội dung mới chờ đón ở Lớp 5.',
+      'Duy trì tình yêu âm nhạc trong kỳ nghỉ hè.',
+    ],
+    theory: [
+      { h: 'Hành trình Âm nhạc Lớp 4' },
+      { ul: [
+        'Bài hát học trong năm: Em yêu hoà bình, Bạn ơi lắng nghe, Cò lả, Khăn quàng thắm mãi vai em, Thiếu nhi thế giới liên hoan, Chú voi con ở Bản Đôn, Hãy giữ cho em bầu trời xanh, Tự hào nam nhi, Lớp chúng ta đoàn kết.',
+        'Nhạc lý cơ bản: nốt nhạc (Đồ-Rê-Mi-Fa-Sol-La-Si); khuông nhạc và khoá Sol; hình nốt (đen, trắng, đơn); dấu lặng.',
+        'Nhịp: nhịp 2/4 (mạnh-nhẹ), nhịp 3/4 (mạnh-nhẹ-nhẹ), nhịp 4/4 (mạnh-nhẹ-hơi mạnh-nhẹ).',
+        'Sắc thái biểu cảm: f (forte - to), p (piano - nhỏ), mf (mezzo forte - vừa), mp (mezzo piano - hơi nhỏ).',
+        'Nhạc cụ quen thuộc: sáo recorder, trống, đàn phím, đàn ghi-ta; nhạc cụ dân tộc (đàn tranh, đàn bầu, trống trống).',
+        'Kỹ năng: hát đúng cao độ – trường độ – lời ca; đọc nhạc cơ bản; nghe và phân biệt tính chất âm nhạc.',
+      ] },
+      { h: 'Lớp 5 Âm nhạc sẽ học gì?' },
+      { ul: [
+        'Các bài hát mới theo chủ điểm: quê hương đất nước, thiên nhiên, hòa bình thế giới.',
+        'Nhạc lý nâng cao: dấu nối, dấu luyến, dấu nhắc lại, thứ tự âm thanh.',
+        'Kỹ năng đọc nhạc: đọc thang 5 nốt, 7 nốt trên khuông nhạc.',
+        'Âm nhạc thường thức: tìm hiểu nhạc sĩ thiếu nhi Việt Nam nổi tiếng và các thể loại âm nhạc.',
+      ] },
+      { h: 'Kế hoạch hè âm nhạc' },
+      { ul: [
+        'Hát lại 3–5 bài em yêu thích nhất trong năm để không quên lời và giai điệu.',
+        'Tìm nghe âm nhạc dân tộc: quan họ, ca trù, đờn ca tài tử, dân ca Tây Nguyên.',
+        'Thử hát karaoke cùng gia đình — luyện hơi thở và phong cách biểu diễn!',
+      ] },
+      { note: 'Âm nhạc là ngôn ngữ không biên giới — hãy để âm nhạc là người bạn đồng hành suốt cuộc đời em!' },
+    ],
+    examples: [
+      { q: 'Kể tên 3 bài hát em yêu thích nhất trong chương trình Âm nhạc Lớp 4.', a: 'Tuỳ học sinh (ví dụ: Chú voi con ở Bản Đôn, Em yêu hoà bình, Khăn quàng thắm mãi vai em). Quan trọng là nhớ đúng tên bài và tên tác giả.' },
+      { q: 'Nhịp 3/4 có đặc điểm gì? Kể một bài hát có nhịp 3/4.', a: 'Nhịp 3/4: mỗi ô nhịp có 3 phách, phách 1 mạnh, phách 2 và 3 nhẹ — tạo cảm giác nhẹ nhàng, uyển chuyển như điệu valse. Ví dụ: bài Cò lả.' },
+    ],
+  },
 };

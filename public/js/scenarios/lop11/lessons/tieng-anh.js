@@ -1006,4 +1006,43 @@ export const H11TA_LESSONS = {
       { q: 'Dạng True/False/Not Given trong reading yêu cầu gì?', a: 'So sánh nội dung câu hỏi với bài đọc: True (khớp), False (trái ngược), Not Given (bài không đề cập). Không suy diễn ngoài thông tin có trong bài.' },
     ],
   },
+
+  'H11TA-w36-quiz': {
+    topic: 'Closing Chapter — Grade 11 English & the Road Ahead',
+    intro: 'You have come a long way in Grade 11 English! This final week is about celebrating your progress, reviewing what matters most, and building a clear plan for Grade 12 — where English becomes even more important for your national exam and future career.',
+    objectives: [
+      'Review the key grammar points, vocabulary themes, and skills developed in Grade 11.',
+      'Understand what to expect in Grade 12 English and the national graduation exam.',
+      'Build a summer study plan that keeps your English growing.',
+    ],
+    theory: [
+      { h: 'What You Mastered This Year' },
+      { ul: [
+        'Grammar: relative clauses (defining / non-defining), conditional sentences (types 1–3), reported speech, modal verbs of deduction and advice, passive voice in various tenses.',
+        'Vocabulary: academic topics (education, environment, technology, health, culture) — over 500 new words across themes.',
+        'Reading: skimming for gist, scanning for detail, True/False/Not Given, matching headings.',
+        'Writing: argumentative essays (opinion, for-and-against), formal letters, process descriptions.',
+        'Speaking & Listening: presentations, discussions, listening for main idea and specific information.',
+      ] },
+      { h: 'Grade 12 English — What Is Coming' },
+      { ul: [
+        'Topics expand to: globalisation, scientific achievements, career orientation, cultural diversity.',
+        'The national exam (thi tốt nghiệp THPT) includes: 40 multiple-choice questions on grammar, vocabulary, and reading + 1 writing task (approx. 150 words).',
+        'Writing score matters more: clear argument, correct grammar, appropriate cohesive devices.',
+        'Listening and speaking are tested in mid-term and final school exams — keep practising.',
+      ] },
+      { h: 'Your Summer English Booster Plan' },
+      { ul: [
+        'Week 1–2: Review conditional sentences and modal verbs — these appear every year in the national exam.',
+        'Week 3–4: Read one English article per day (BBC Learning English, VOA Learning English) — 5 minutes is enough.',
+        'Week 5–6: Write one short paragraph (5–8 sentences) every other day on any topic — builds fluency fast.',
+        'Daily habit: learn 5 new words using flashcard apps (Quizlet / Anki). Review old words every 3 days.',
+      ] },
+      { note: 'English is not just a school subject — it is your passport to global opportunities. Every hour you invest this summer compounds into confidence, scores, and doors that open in university and beyond. Keep going!' },
+    ],
+    examples: [
+      { q: 'What is the most common mistake Vietnamese students make in the national English exam writing task?', a: 'The most common mistake is writing too short (under 120 words) or going off-topic. Many students also forget to use cohesive devices (however, therefore, as a result, in addition) which make the essay flow logically. Another frequent error is subject-verb agreement and wrong verb tense. Solution: always plan 3 minutes before writing — note your main idea, 2–3 supporting points, and a conclusion sentence. Then write and leave 2 minutes to check for basic errors.' },
+      { q: 'How can I improve my reading speed for the exam without losing comprehension?', a: 'Three techniques that work: (1) Skim the questions FIRST before reading the passage — then you know what to look for. (2) Do not translate word-by-word; read whole phrases and guess unknown words from context. (3) Practice with timed reading: set a 12-minute timer for a 600-word passage and push yourself to finish. Speed improves gradually — consistency is more important than intensity.' },
+    ],
+  },
 };

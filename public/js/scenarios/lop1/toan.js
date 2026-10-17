@@ -308,6 +308,15 @@ export const P1_TOAN_WEEKS = [
     Q('Số bé nhất có 2 chữ số?', ['11', '20', '99', '10'], 3, '10 là số bé nhất có 2 chữ số.', ['Sai — 11 lớn hơn 10.', 'Sai — 20 lớn hơn 10.', 'Sai — 99 là số lớn nhất có 2 chữ số.', 'Đúng — 10 là số bé nhất có 2 chữ số.']),
     Q('1 chục + 1 chục = ? chục', ['2', '1', '10', '20'], 0, '1 + 1 = 2 chục.', ['Đúng — 1 chục + 1 chục = 2 chục.', 'Sai — mới có 1 chục, còn thiếu.', 'Sai — đó là số đơn vị, câu hỏi hỏi số chục.', 'Sai — 20 là số đơn vị, không phải số chục.']),
   ]),
+
+  M(36, 'Kết thúc Lớp 1 — Hành trang vào Lớp 2', [
+    Q('Cả năm Lớp 1 em đã học đếm và viết số đến bao nhiêu?', ['Đến 10', 'Đến 20', 'Đến 50', 'Đến 100'], 3, 'Lớp 1 học số từ 0 đến 100.', ['Sai — đó là phần đầu HK1 thôi, sau đó em còn học tiếp.', 'Sai — sang HK2 em đã học tới số lớn hơn nhiều.', 'Sai — em còn học tiếp tới số lớn hơn nữa.', 'Đúng — Lớp 1 học đếm và viết số từ 0 đến 100.']),
+    Q('35 + 27 = ?', ['62', '52', '63', '61'], 0, 'Đơn vị: 5 + 7 = 12, viết 2 nhớ 1. Chục: 3 + 2 + 1 = 6 → 62.', ['Đúng — 5 + 7 = 12 viết 2 nhớ 1, rồi 3 + 2 + 1 = 6 → 62.', 'Sai — em quên "nhớ 1" sang hàng chục.', 'Sai — cộng thừa 1 rồi.', 'Sai — cộng thiếu 1 rồi.']),
+    Q('Hình nào có 3 cạnh?', ['Hình vuông', 'Hình tam giác', 'Hình tròn', 'Hình chữ nhật'], 1, 'Tam giác có 3 cạnh.', ['Sai — hình vuông có 4 cạnh bằng nhau.', 'Đúng — tam giác có đúng 3 cạnh.', 'Sai — hình tròn không có cạnh thẳng nào.', 'Sai — hình chữ nhật có 4 cạnh.']),
+    Q('Kim ngắn chỉ số 9, kim dài chỉ số 12. Đồng hồ chỉ mấy giờ?', ['8 giờ', '10 giờ', '9 giờ', '12 giờ'], 2, 'Kim dài chỉ 12 là giờ đúng; kim ngắn chỉ 9 → 9 giờ.', ['Sai — kim ngắn đang chỉ số 9, không phải số 8.', 'Sai — kim ngắn đang chỉ số 9, không phải số 10.', 'Đúng — kim dài chỉ 12 nên là giờ đúng: 9 giờ.', 'Sai — số 12 là chỗ kim dài, kim ngắn mới cho biết mấy giờ.']),
+    Q('Có 24 quả cam, cho bạn 9 quả. Còn lại mấy quả?', ['15', '16', '13', '33'], 0, '24 − 9 = 15 quả.', ['Đúng — 24 − 9 = 15 quả.', 'Sai — trừ thiếu 1.', 'Sai — trừ thừa 2.', 'Sai — cho đi thì phải bớt, không cộng thêm.']),
+    Q('Lên Lớp 2 em sẽ được học bảng nào?', ['Bảng chữ cái', 'Bảng màu', 'Bảng nhân và bảng chia', 'Bảng tuần hoàn'], 2, 'Lớp 2 bắt đầu học bảng nhân, bảng chia.', ['Sai — bảng chữ cái là của môn Tiếng Việt.', 'Sai — bảng màu là của môn Mĩ thuật.', 'Đúng — Lớp 2 em sẽ học bảng nhân và bảng chia.', 'Sai — bảng tuần hoàn là của môn Hoá học, học ở cấp lớn hơn nhiều.']),
+  ]),
 ];
 
 export const P1_TOAN_SCENARIOS = indexBy(P1_TOAN_WEEKS);

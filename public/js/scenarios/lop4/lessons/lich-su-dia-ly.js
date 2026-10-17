@@ -1176,4 +1176,44 @@ export const P4LSDL_LESSONS = {
       { q: 'Em có cảm nhận gì về các anh hùng dân tộc Việt Nam?', a: 'Tự hào, biết ơn vì các anh hùng đã hi sinh để bảo vệ độc lập đất nước. Em cố gắng học giỏi để xây dựng quê hương.' },
     ],
   },
+
+  'P4LSDL-w36-quiz': {
+    topic: 'Kết thúc Lớp 4 — Hành trang Lịch sử & Địa lý vào Lớp 5',
+    intro: 'Chúc mừng các em đã hoàn thành năm học Lịch sử & Địa lý Lớp 4! Hôm nay cô cùng trò ôn lại hành trình từ địa lý tự nhiên đến lịch sử dân tộc, và chuẩn bị cho năm học mới thú vị hơn ở Lớp 5!',
+    objectives: [
+      'Hệ thống toàn bộ kiến thức Lịch sử và Địa lý Lớp 4.',
+      'Hiểu mối liên hệ giữa địa lý tự nhiên và lịch sử dân tộc.',
+      'Sẵn sàng học Lịch sử & Địa lý ở tầm rộng hơn trong Lớp 5.',
+    ],
+    theory: [
+      { h: 'Địa lý Lớp 4 — Đất nước và con người Việt Nam' },
+      { ul: [
+        'Vị trí địa lý: Việt Nam ở Đông Nam Á, giáp Trung Quốc (Bắc), Lào, Campuchia (Tây), Biển Đông (Đông-Nam).',
+        'Địa hình: 3/4 là đồi núi; đồng bằng sông Hồng (Bắc Bộ) và sông Cửu Long (Nam Bộ) là vựa lúa.',
+        'Sông ngòi: sông Hồng (miền Bắc), sông Mã, sông Cả (miền Trung), sông Cửu Long (miền Nam).',
+        'Khí hậu: nhiệt đới gió mùa; miền Bắc 4 mùa; miền Nam 2 mùa (mưa-khô).',
+        'Dân cư và dân tộc: 54 dân tộc anh em; người Kinh chiếm đa số.',
+        'Vùng kinh tế: Đồng bằng Bắc Bộ (công nghiệp, lúa); Tây Nguyên (cà phê, cao su); Nam Bộ (lúa, thuỷ sản, dầu khí).',
+      ] },
+      { h: 'Lịch sử Lớp 4 — Chặng đường dựng nước và giữ nước' },
+      { ul: [
+        'Thuở dựng nước: Hùng Vương, nhà nước Văn Lang (2879 TCN); thành Cổ Loa — An Dương Vương.',
+        'Nghìn năm Bắc thuộc: Hai Bà Trưng (40–43); Bà Triệu (248); Lý Bí — nhà Tiền Lý (544).',
+        'Độc lập tự chủ: Ngô Quyền — chiến thắng Bạch Đằng (938); Đinh Bộ Lĩnh thống nhất — Đại Cồ Việt (968).',
+        'Thời Lý–Trần–Lê: Lý Thái Tổ dời đô (1010); Nhà Trần 3 lần chống Mông–Nguyên; Lê Lợi — Lam Sơn (1418–1428).',
+        'Giai đoạn cận đại: Pháp xâm lược 1858; Phong trào Cần Vương, Yên Bái, Xô Viết Nghệ Tĩnh.',
+        'Cách mạng tháng Tám 1945 — Hồ Chí Minh đọc Tuyên ngôn Độc lập 2/9/1945.',
+      ] },
+      { h: 'Lịch sử & Địa lý Lớp 5 sẽ học gì?' },
+      { ul: [
+        'Địa lý: các châu lục và đại dương; đặc điểm tự nhiên và kinh tế các vùng trên thế giới.',
+        'Lịch sử: Việt Nam từ 1945 đến nay — kháng chiến, thống nhất, đổi mới và hội nhập.',
+      ] },
+      { note: 'Lịch sử là gốc rễ, địa lý là không gian — hiểu hai thứ đó, em hiểu chính đất nước mình đang sống!' },
+    ],
+    examples: [
+      { q: 'Trận Bạch Đằng năm 938 do ai chỉ huy và đánh thắng quân nào?', a: 'NGÔ QUYỀN chỉ huy, đánh thắng quân NAM HÁN trên sông Bạch Đằng — mở ra kỷ nguyên độc lập.' },
+      { q: 'Tại sao đồng bằng sông Cửu Long là vựa lúa lớn nhất nước?', a: 'Địa hình bằng phẳng, đất phù sa màu mỡ, hệ thống sông kênh rạch cung cấp nước tưới dồi dào, khí hậu nóng ẩm thuận lợi trồng lúa 2–3 vụ/năm.' },
+    ],
+  },
 };

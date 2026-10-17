@@ -909,4 +909,39 @@ export const S9CN_LESSONS = {
       { q: 'Theo em, điều quý giá nhất mà môn Công nghệ 9 để lại là gì?', a: 'Không chỉ là các kĩ năng cụ thể như sửa điện, nấu ăn hay sửa xe, mà còn là thái độ chủ động, cẩn thận, an toàn và thói quen tự học. Những điều này giúp em tự tin xoay xở trong cuộc sống và sẵn sàng học những kĩ năng mới sau này.' },
     ]
   ),
+
+  'S9CN-w36-quiz': L(
+    'Kết thúc Công nghệ THCS — Đôi tay tạo nên tương lai',
+    'Tuần cuối của năm học — cô muốn cùng các em nhìn lại hành trình Công nghệ THCS và khám phá xem những kĩ năng thực hành này sẽ dẫn chúng ta đến đâu.',
+    [
+      'Hệ thống hoá các mạch kĩ năng thực hành đã học trong chương trình THCS.',
+      'Nhận ra giá trị của kĩ năng nghề và tư duy kĩ thuật trong cuộc sống hiện đại.',
+      'Định hướng học tập và nghề nghiệp liên quan đến công nghệ ở THPT và sau này.',
+    ],
+    [
+      { h: 'Bốn năm Công nghệ THCS — Bản đồ kĩ năng' },
+      { ul: [
+        'Lớp 6: Nông nghiệp, nuôi trồng — hiểu nguồn gốc lương thực và tư duy bền vững.',
+        'Lớp 7: Trồng trọt, chăn nuôi, thuỷ sản — nền tảng kinh tế nông nghiệp.',
+        'Lớp 8: Điện kĩ thuật, mạch điện, an toàn — kĩ năng thiết yếu trong gia đình.',
+        'Lớp 9: Sửa xe, bảo dưỡng thiết bị, nấu ăn — kĩ năng tự lập thực tế.',
+      ] },
+      { h: 'Nghề nghiệp tương lai và kĩ năng công nghệ' },
+      { p: 'Thế giới đang thiếu thợ lành nghề — thợ điện, kĩ thuật viên cơ khí, đầu bếp chuyên nghiệp đều có thu nhập tốt và nhiều cơ hội việc làm. Không phải con đường nào cũng phải qua đại học mới thành công.' },
+      { ul: [
+        'Kĩ thuật điện/điện tử: THPT kĩ thuật hoặc trường cao đẳng nghề (3 năm học nghề).',
+        'Ẩm thực và nhà hàng: trường dạy nấu ăn, thực tập nhà hàng khách sạn.',
+        'Nông nghiệp công nghệ cao: kết hợp kĩ thuật nông nghiệp với công nghệ số.',
+        'Cơ khí và ô tô: cơ hội lớn trong bối cảnh công nghiệp hoá và xe điện.',
+      ] },
+      { h: 'Kĩ năng thực hành và tư duy kĩ thuật' },
+      { p: 'Điều Công nghệ dạy không chỉ là "làm được" — mà là "làm an toàn", "làm đúng quy trình" và "biết tại sao phải làm vậy". Đây là tư duy kĩ thuật, thứ mà mọi kĩ sư, thợ lành nghề và nhà quản lí đều cần.' },
+      { note: 'Xã hội cần những người biết làm — không chỉ những người biết nói. Đừng coi thường kĩ năng thực hành. Đôi tay khéo léo và khối óc tư duy cùng nhau tạo nên những người thực sự tài năng.' },
+    ],
+    [
+      { q: 'Kĩ năng thực hành học ở Công nghệ 9 nào em thấy hữu ích nhất trong cuộc sống hàng ngày?', a: 'Kĩ năng sửa điện cơ bản (thay bóng đèn, kiểm tra cầu chì, đấu nối thiết bị điện) — vì nhà nào cũng cần, tiết kiệm chi phí và quan trọng hơn là an toàn tính mạng. Biết sơ cứu tai nạn điện cũng là kĩ năng cứu người trong tình huống khẩn cấp.' },
+      { q: 'Tại sao học Công nghệ trong trường phổ thông lại quan trọng, dù không phải ai cũng theo nghề kĩ thuật?', a: 'Vì cuộc sống hàng ngày luôn đòi hỏi kĩ năng thực hành nhất định: tự sửa đồ dùng đơn giản, nấu ăn, trồng rau, tiết kiệm điện. Hơn nữa, tư duy kĩ thuật (đọc quy trình, làm theo từng bước, kiểm tra kết quả) là kĩ năng mềm quý giá áp dụng cho mọi công việc. Người biết "tự lo" sẽ tự tin và độc lập hơn trong cuộc sống.' },
+      { q: 'Nếu em muốn theo nghề kĩ thuật sau này, em cần chuẩn bị gì từ bây giờ?', a: 'Tìm hiểu cụ thể về nghề em quan tâm (thợ điện, cơ khí, điện tử, ẩm thực...): yêu cầu gì, học ở đâu, thu nhập ra sao. Tìm cơ hội thực hành: tham gia sửa đồ ở nhà, phụ giúp người thân trong công việc kĩ thuật. Ở THPT theo ban C hoặc D kĩ thuật nếu muốn học nghề. Đặc biệt: rèn kĩ năng đọc tài liệu kĩ thuật bằng tiếng Anh — vì thiết bị hiện đại đều có hướng dẫn tiếng Anh.' },
+    ]
+  ),
 };

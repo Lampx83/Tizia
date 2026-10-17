@@ -239,6 +239,11 @@ const PUBLIC_PATH_PREFIXES = [
   // Webhook ScoreUp (& các vendor sau này) — auth bằng HMAC qua header riêng,
   // KHÔNG cookie. Receiver tự verify chữ ký rồi mới trust payload.
   '/api/webhooks/',
+  // Hộp thư Ban điều hành AI — auth bằng header `x-ai-board-key`, KHÔNG cookie
+  // (routine chạy trong môi trường agent, không đăng nhập được). Route tự verify
+  // key bằng timingSafeEqual và CHỈ được mount khi env AI_BOARD_KEY đủ mạnh; chưa
+  // bật thì path này 404. Đọc-chỉ, không có route ghi. Xem contexts/ai-agent/inbox-api.js.
+  '/api/ai-board/',
   // Bundle JS/scenarios không phải bí mật — guest cần để render trang chủ + trường Mầm non.
   '/js/',
   // Bản đồ khuôn viên (iframe nhúng vào school.html) — không có bí mật, là HTML/JS thuần.

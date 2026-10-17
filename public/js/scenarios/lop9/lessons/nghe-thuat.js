@@ -823,4 +823,40 @@ export const S9NT_LESSONS = {
       { q: 'Khi trình bày tác phẩm cuối năm trước lớp, em nên trả lời gọn những ý nào để bài thuyết minh thuyết phục?', a: 'Bốn ý theo gợi ý quy trình: (1) tác phẩm tên gì; (2) vì sao em chọn đề tài này (cảm xúc thật); (3) em đã vận dụng kiến thức nào của năm học — trường phái, vòng hợp âm, nguyên tắc thiết kế...; (4) điều em hài lòng nhất và điều muốn làm tốt hơn. Tự tin nhưng chân thành, và lắng nghe góp ý với tinh thần cầu thị — chính việc chỉ ra được kiến thức đã học trong tác phẩm là điểm cộng lớn nhất.' },
     ],
   },
+
+  'S9NT-w36-quiz': {
+    topic: 'Kết thúc Nghệ thuật THCS — Hành trình của cái đẹp',
+    intro: 'Tuần cuối năm — thay vì học kĩ thuật mới, cô muốn cùng các em nhìn lại bốn năm Nghệ thuật THCS: từ những nốt nhạc đầu tiên, những nét vẽ đầu tiên, đến những tác phẩm mang dấu vân tay riêng của mỗi người.',
+    objectives: [
+      'Hệ thống hoá hành trình học Nghệ thuật (Âm nhạc + Mỹ thuật) qua bốn năm THCS.',
+      'Nhận ra giá trị của nghệ thuật đối với đời sống tinh thần và phát triển bản thân.',
+      'Xác định cách tiếp tục nuôi dưỡng cảm thụ nghệ thuật sau khi rời THCS.',
+    ],
+    theory: [
+      { h: 'Bốn năm nghệ thuật — Một hành trình của cái đẹp' },
+      { p: 'Từ lớp 6: học đọc nốt, nhận biết thể loại, tìm hiểu các trường phái hội hoạ. Lớp 7–8: đi sâu vào hoà âm, phối màu, biểu cảm nghệ thuật. Lớp 9: tổng hợp và sáng tạo — dự án âm nhạc, triển lãm tác phẩm, thuyết trình về nghệ thuật.' },
+      { h: 'Nghệ thuật dạy gì ngoài kĩ thuật?' },
+      { ul: [
+        'Kiên nhẫn: không tác phẩm nào hoàn hảo từ lần đầu.',
+        'Dũng cảm: đặt cái tôi sáng tạo ra ngoài để người khác nhìn nhận.',
+        'Đồng cảm: hiểu tại sao người khác lại cảm nhận tác phẩm khác mình.',
+        'Tư duy thẩm mỹ: nhìn thấy cái đẹp trong những điều bình thường.',
+      ] },
+      { h: 'Nghệ thuật trong thế giới số' },
+      { p: 'Thiết kế đồ hoạ, âm nhạc số, nghệ thuật AI — thế giới sáng tạo đang mở rộng cùng công nghệ. Nhưng nền tảng vẫn là cảm thụ thẩm mỹ và kĩ năng sáng tạo mà em đã học — AI có thể tạo ra hình ảnh, nhưng không thể cảm nhận thay em.' },
+      { h: 'Nuôi dưỡng tâm hồn nghệ thuật sau THCS' },
+      { ul: [
+        'Nghe nhạc chủ động: chú ý cấu trúc, hoà âm, cảm xúc — không chỉ làm nền.',
+        'Viếng thăm bảo tàng, triển lãm ít nhất một lần mỗi kì.',
+        'Vẽ phác thảo nhanh trong sổ tay — không cần đẹp, chỉ cần thường xuyên.',
+        'Tham gia CLB âm nhạc hoặc nghệ thuật ở THPT — môi trường nuôi dưỡng cảm hứng.',
+      ] },
+      { note: 'Nghệ thuật không phải môn phụ — nó là ngôn ngữ thứ hai của tâm hồn. Người biết nói "ngôn ngữ đẹp" ấy sẽ sống phong phú hơn, hiểu người khác sâu hơn, và tìm thấy niềm vui trong những nơi mà người khác chỉ thấy bình thường.' },
+    ],
+    examples: [
+      { q: 'Tác phẩm nghệ thuật (tranh, bài nhạc, phim) nào ảnh hưởng sâu sắc nhất đến em và tại sao?', a: 'Đây là câu hỏi không có đáp án đúng sai — mỗi người có trải nghiệm riêng. Điều quan trọng là em có thể giải thích TẠI SAO tác phẩm đó chạm đến mình: đó là cầu nối giữa cảm thụ thụ động và hiểu biết nghệ thuật thực sự. Ví dụ: "Bức tranh Starry Night của Van Gogh — vì cách ông dùng nét xoáy tròn khiến bầu trời như đang chuyển động, giống cách tôi cảm nhận sự hỗn loạn và vẻ đẹp của cuộc sống đan xen nhau".' },
+      { q: 'Làm thế nào để tiếp tục học nghệ thuật khi lên THPT không còn giờ Âm nhạc/Mỹ thuật?', a: 'THPT không có tiết Nhạc-Họa không có nghĩa là dừng tiếp xúc với nghệ thuật. Gợi ý: (1) Tham gia CLB âm nhạc, mỹ thuật, nhiếp ảnh của trường. (2) Học online — Coursera, YouTube có hàng nghìn khoá thiết kế, nhạc lý, nhiếp ảnh miễn phí. (3) Làm poster, thiết kế tờ rơi cho các hoạt động của lớp — thực hành thực tế tốt nhất. (4) Nghe nhạc có chủ đích — học hỏi từ những gì mình yêu thích.' },
+      { q: 'Hành trình nghệ thuật THCS dạy em điều gì về bản thân mà các môn học khác không dạy được?', a: 'Nghệ thuật là môn hiếm hoi không có "đáp án đúng" — em phải tự tìm cách diễn đạt của riêng mình. Điều này dạy em tin vào giác quan và cảm nhận cá nhân, dám thử và chấp nhận thất bại, và hiểu rằng "khác biệt" là điểm mạnh chứ không phải điểm yếu. Những ai học được điều này qua nghệ thuật thường mang nó vào mọi lĩnh vực khác của cuộc sống.' },
+    ],
+  },
 };

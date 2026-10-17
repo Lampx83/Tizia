@@ -1199,4 +1199,43 @@ export const H12GDCD_LESSONS = {
       { q: 'Câu hỏi ôn: Theo UNCLOS 1982, lãnh hải và vùng đặc quyền kinh tế của Việt Nam rộng bao nhiêu?', a: 'Lãnh hải rộng 12 hải lý tính từ đường cơ sở (quốc gia có chủ quyền đầy đủ); vùng đặc quyền kinh tế rộng 200 hải lý (quốc gia có quyền chủ quyền về khai thác tài nguyên). Đây là kiến thức gắn với bảo vệ chủ quyền biển đảo.' },
     ],
   },
+
+  'H12GDCD-w36-quiz': {
+    topic: 'Kết thúc GD Kinh tế và Pháp luật — Công dân có trách nhiệm trong thế giới hội nhập',
+    intro: 'Tuần cuối năm học — hãy nhìn lại hành trình GD Kinh tế và Pháp luật: từ quyền lợi người tiêu dùng đến trách nhiệm thuế khoá, từ quyền dân sự đến nghĩa vụ công dân. Tất cả chuẩn bị cho em trở thành người công dân trưởng thành có ý thức.',
+    objectives: [
+      'Hệ thống hoá kiến thức kinh tế và pháp luật đã học trong chương trình lớp 12.',
+      'Nhận ra quyền lợi và trách nhiệm của công dân trong nền kinh tế thị trường và nhà nước pháp quyền.',
+      'Chuẩn bị tâm thế cho cuộc sống tự lập: quản lý tài chính cá nhân, hiểu pháp luật cơ bản.',
+    ],
+    theory: [
+      { h: 'Bản đồ GD Kinh tế & Pháp luật lớp 12' },
+      { ul: [
+        'HK1 — Kinh tế: Tăng trưởng và phát triển kinh tế bền vững, hội nhập kinh tế quốc tế, thị trường tài chính, bảo hiểm, quyền người tiêu dùng.',
+        'HK2 — Pháp luật: Hiến pháp, quyền dân sự–chính trị, quyền kinh tế–xã hội, nghĩa vụ thuế, luật hình sự (vi phạm pháp luật, trách nhiệm hình sự).',
+      ] },
+      { h: 'Kiến thức kinh tế em cần khi ra đời' },
+      { ul: [
+        'Quản lý tài chính cá nhân: thu nhập – chi tiêu – tiết kiệm – đầu tư. Quy tắc 50/30/20 (50% nhu cầu, 30% mong muốn, 20% tiết kiệm).',
+        'Lạm phát và sức mua: Tại sao tiền tiết kiệm trong ngân hàng có thể "mất giá trị thực" nếu lãi suất thấp hơn lạm phát?',
+        'Bảo hiểm: BHYT, BHXH là quyền và nghĩa vụ; mua bảo hiểm sớm bảo vệ tài chính trước rủi ro bất ngờ.',
+        'Thuế: Hiểu thuế thu nhập cá nhân, thuế VAT — là nghĩa vụ công dân và nguồn lực quốc gia.',
+      ] },
+      { h: 'Kiến thức pháp luật em cần biết khi 18 tuổi' },
+      { ul: [
+        '18 tuổi: Đủ năng lực hành vi dân sự đầy đủ — em chịu trách nhiệm pháp lý hoàn toàn về mọi hành vi.',
+        'Quyền bầu cử: Tham gia bầu cử là quyền và bổn phận công dân quan trọng nhất.',
+        'Hợp đồng: Khi kí hợp đồng (thuê nhà, vay tiền, mua xe), em ràng buộc pháp lý — đọc kĩ trước khi kí.',
+        'Trách nhiệm hình sự đầy đủ: Không còn được xử lý theo quy định người chưa thành niên — hiểu luật để tránh vi phạm.',
+      ] },
+      { h: 'Công dân toàn cầu — quyền và trách nhiệm mở rộng' },
+      { p: 'Trong thế giới toàn cầu hoá, em không chỉ là công dân Việt Nam mà còn là công dân toàn cầu: có quyền kết nối với mọi người trên thế giới, học và làm việc ở nhiều quốc gia; đồng thời có trách nhiệm với môi trường, nhân quyền và công bằng xã hội vượt ra ngoài biên giới quốc gia.' },
+      { note: 'Bài học quan trọng nhất của GD Kinh tế và Pháp luật không phải là thuộc lòng điều luật — mà là hiểu rằng trong nhà nước pháp quyền, mọi người đều bình đẳng trước pháp luật và em có đủ quyền để bảo vệ bản thân và sống đúng phẩm giá.' },
+    ],
+    examples: [
+      { q: 'Kể từ khi đủ 18 tuổi, em có những quyền và trách nhiệm pháp lý mới nào quan trọng nhất?', a: 'Quyền mới: bầu cử và ứng cử; kí hợp đồng có giá trị pháp lý đầy đủ; quyền kinh doanh (đăng ký doanh nghiệp); quyền lập gia đình. Trách nhiệm mới: chịu trách nhiệm hình sự đầy đủ (không còn xử lý theo luật người chưa thành niên); nghĩa vụ quân sự (nam công dân từ 18 tuổi); nghĩa vụ thuế khi có thu nhập; tuân thủ hoàn toàn Hiến pháp và pháp luật.' },
+      { q: 'Hội nhập kinh tế quốc tế mang lại lợi ích và thách thức gì cho người lao động Việt Nam?', a: 'Lợi ích: tiếp cận công nghệ và kỹ năng mới từ FDI; nhiều việc làm mới trong ngành xuất khẩu (dệt may, điện tử); thị trường lao động mở rộng (có thể làm việc ở nước ngoài); hàng hoá đa dạng giá rẻ hơn. Thách thức: cạnh tranh với lao động các nước; đòi hỏi kỹ năng cao hơn (ngoại ngữ, công nghệ); bất bình đẳng có thể tăng nếu chính sách phân phối không tốt; nguy cơ phụ thuộc công nghệ nước ngoài.' },
+      { q: 'Em hiểu thế nào về "trách nhiệm xã hội" của công dân ngoài việc không vi phạm pháp luật?', a: 'Trách nhiệm xã hội của công dân vượt ra ngoài "không vi phạm luật": (1) Tham gia tích cực — bỏ phiếu, tham gia cộng đồng, lên tiếng về vấn đề xã hội; (2) Bảo vệ môi trường — không chỉ không xả rác mà còn ủng hộ chính sách xanh; (3) Phòng chống tham nhũng — không đưa hối lộ, tố giác tham nhũng khi biết; (4) Hỗ trợ người yếu thế — nộp thuế đầy đủ là cách đóng góp cho an sinh xã hội; (5) Lan toả thông tin đúng — không chia sẻ tin giả gây hại xã hội.' },
+    ],
+  },
 };

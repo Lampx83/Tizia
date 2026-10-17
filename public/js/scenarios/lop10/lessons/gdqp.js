@@ -1010,4 +1010,43 @@ export const H10GDQP_LESSONS = {
       { q: 'Vì sao học GDQP-AN lại cần thiết với mỗi học sinh?', a: 'Vì môn học bồi dưỡng lòng yêu nước, ý thức bảo vệ Tổ quốc và trang bị những kỹ năng thiết thực để bảo vệ bản thân, gia đình và cộng đồng.' },
     ],
   },
+
+  'H10GDQP-w36-quiz': {
+    topic: 'Kết thúc GDQP-AN 10 — Tuổi trẻ, Tổ quốc và Trách nhiệm',
+    intro: 'GDQP-AN 10 xây dựng nền tảng ý thức quốc phòng, an ninh và kỹ năng sống quan trọng. Hôm nay chúng ta nhìn lại hành trình đó và chuẩn bị cho những thách thức lớn hơn ở lớp 11.',
+    objectives: [
+      'Hệ thống hoá kiến thức quốc phòng-an ninh, kỹ năng sống và nghĩa vụ công dân đã học.',
+      'Nhận biết mối liên hệ giữa GDQP-AN 10 và chương trình lớp 11.',
+      'Củng cố ý thức trách nhiệm của thanh niên đối với đất nước.',
+    ],
+    theory: [
+      { h: 'Bức tranh toàn cảnh GDQP-AN 10' },
+      { ul: [
+        'Đường lối quốc phòng: quốc phòng toàn dân, chiến tranh nhân dân — truyền thống đánh giặc của dân tộc.',
+        'An ninh nhân dân: bảo vệ an ninh chính trị, trật tự xã hội, phòng chống tội phạm.',
+        'Kỹ năng quân sự: điều lệnh đội ngũ, thể lực, sơ cứu ban đầu, phòng chống cháy nổ.',
+        'An toàn và phòng thủ dân sự: ứng phó thiên tai, thảm hoạ, bảo vệ bản thân.',
+        'Luật pháp quốc phòng: Luật Nghĩa vụ quân sự, quyền và nghĩa vụ công dân.',
+      ] },
+      { h: 'Hành trang sang GDQP-AN 11' },
+      { ul: [
+        'Nhận thức quốc phòng → Chiến lược bảo vệ Tổ quốc trong tình hình mới: Biển Đông, an ninh mạng.',
+        'Kỹ năng quân sự cơ bản → Kỹ thuật bắn súng, phòng chống vũ khí hủy diệt (NBC).',
+        'An ninh nhân dân → Phòng chống âm mưu "diễn biến hoà bình" và tấn công mạng.',
+        'Phòng thủ dân sự → Ứng phó khủng hoảng và tình huống khẩn cấp quốc gia.',
+      ] },
+      { h: 'Trách nhiệm của thanh niên hôm nay' },
+      { ul: [
+        'Học tốt — phát triển bản thân là đóng góp thiết thực nhất cho đất nước hiện tại.',
+        'Chấp hành pháp luật và sống gương mẫu — xây dựng xã hội lành mạnh từ mỗi cá nhân.',
+        'Sẵn sàng thực hiện nghĩa vụ quân sự khi đến tuổi — bảo vệ Tổ quốc là thiêng liêng.',
+        'Cảnh giác với thông tin sai lệch và âm mưu chia rẽ dân tộc trên mạng xã hội.',
+      ] },
+      { note: 'Tổ quốc không chỉ cần chiến sĩ có súng — mà còn cần những công dân tài năng, có ý thức và trách nhiệm. Em đang xây dựng Tổ quốc mỗi ngày bằng việc học, làm và sống tốt.' },
+    ],
+    examples: [
+      { q: 'Nghĩa vụ quân sự có ý nghĩa gì trong bối cảnh hiện nay, và thanh niên có thể đóng góp cho quốc phòng theo những cách nào khác ngoài nhập ngũ?', a: 'Nghĩa vụ quân sự vẫn là nghĩa vụ thiêng liêng và pháp lý của mọi công dân nam đủ điều kiện — bảo đảm lực lượng quốc phòng thường xuyên. Ngoài nhập ngũ, thanh niên đóng góp qua: (1) Trở thành chuyên gia kỹ thuật quốc phòng (kỹ sư quân sự, bác sĩ quân y, chuyên gia an ninh mạng); (2) Tham gia dân quân tự vệ ở địa phương; (3) Nghiên cứu khoa học-công nghệ phục vụ quốc phòng; (4) Sống gương mẫu và tuyên truyền giáo dục ý thức quốc phòng.' },
+      { q: 'An ninh mạng đang trở thành một mặt trận mới. Học sinh lớp 10 có thể làm gì để góp phần bảo vệ an ninh mạng?', a: 'Bốn việc học sinh có thể làm ngay: (1) Không chia sẻ thông tin cá nhân và gia đình lên mạng xã hội không cần thiết; (2) Kiểm chứng thông tin trước khi chia sẻ — không lan truyền tin giả gây hoang mang xã hội; (3) Sử dụng mật khẩu mạnh và bật xác thực 2 lớp (2FA) cho các tài khoản quan trọng; (4) Báo cáo nội dung vi phạm, lừa đảo, chia rẽ dân tộc đến cơ quan chức năng. Mỗi học sinh là một "chiến sĩ" tuyến đầu trên mạng xã hội.' },
+    ],
+  },
 };

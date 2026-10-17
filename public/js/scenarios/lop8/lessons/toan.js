@@ -960,4 +960,57 @@ export const S8TOAN_LESSONS = {
       { q: 'Giải phương trình 2x − 5 = 3.', a: '2x = 8 ⇒ x = 4. Vậy nghiệm là x = 4.' },
     ]
   ),
+
+  'S8TOAN-w36-quiz': L(
+    'Kết thúc Toán 8 — Hành trang vào lớp 9',
+    'Chào mừng các em đến với tuần học cuối cùng của năm lớp 8! Đây là dịp để nhìn lại toàn bộ hành trình — từ bảy hằng đẳng thức, phân thức đại số, hàm số bậc nhất, đến tứ giác, tam giác đồng dạng, hình chóp và xác suất. Mỗi viên gạch toán học đó đang chờ đợi để nâng em lên những tầm cao mới ở lớp 9.',
+    [
+      'Hệ thống lại toàn bộ chương trình Toán 8 theo bốn mạch lớn: Đại số, Hình học, Thống kê & Xác suất.',
+      'Nhận diện các dạng bài trọng tâm và những công thức không thể thiếu.',
+      'Hiểu rõ hành trang kiến thức cần chuẩn bị để học tốt Toán 9.',
+    ],
+    [
+      { h: 'Mạch 1 — Đại số' },
+      { ul: [
+        'Đa thức nhiều biến: bậc, thu gọn, cộng trừ nhân.',
+        'Bảy hằng đẳng thức đáng nhớ — nền tảng của phân tích nhân tử.',
+        'Phân tích nhân tử: đặt nhân tử chung, hằng đẳng thức, nhóm, hệ số bất định.',
+        'Phân thức đại số: rút gọn, cộng trừ nhân chia, tìm ĐKXĐ.',
+        'Phương trình bậc nhất một ẩn và bài toán lập phương trình.',
+        'Bất phương trình bậc nhất; hàm số bậc nhất y = ax + b và đồ thị.',
+        'Phương trình tích, phương trình chứa ẩn ở mẫu.',
+      ] },
+      { h: 'Mạch 2 — Hình học' },
+      { ul: [
+        'Tứ giác đặc biệt: hình thang cân, hình bình hành, hình chữ nhật, hình thoi, hình vuông — tính chất và dấu hiệu nhận biết.',
+        'Định lí Thalès và hệ quả; đường trung bình của tam giác và hình thang.',
+        'Tam giác đồng dạng (c.c.c, c.g.c, g.g): tỉ số k, tỉ số chu vi = k, tỉ số diện tích = k².',
+        'Ứng dụng đo gián tiếp nhờ tam giác đồng dạng.',
+        'Định lí Pythagore và đảo; hình chóp đều, lăng trụ đứng (S, V).',
+      ] },
+      { h: 'Mạch 3 — Thống kê và Xác suất' },
+      { p: 'Thu thập, phân loại dữ liệu; bảng tần số, tần suất và biểu đồ (cột, đường, quạt); các số đặc trưng (trung bình, mốt, trung vị). Xác suất theo công thức cổ điển: P(A) = số kết quả thuận lợi / tổng số kết quả đồng khả năng.' },
+      { h: 'Cầu nối sang lớp 9' },
+      { ul: [
+        'Căn bậc hai — hệ thức lượng trong tam giác vuông (sẽ học HK I).',
+        'Phương trình bậc hai một ẩn: discriminant Δ, công thức nghiệm, hệ thức Viète.',
+        'Hàm số bậc hai y = ax² và parabol; bất phương trình bậc hai.',
+        'Hình học: đường tròn, góc với đường tròn, tứ giác nội tiếp.',
+        'Thống kê mô tả nâng cao và xác suất có điều kiện (lớp 9).',
+      ] },
+      { h: 'Những công thức không thể thiếu' },
+      { ul: [
+        '7 HĐT: (a±b)², a²−b², (a±b)³, a³±b³, (a±b)(a²∓ab+b²).',
+        'Đồng dạng: k tỉ số → k² diện tích → k³ thể tích.',
+        'Hình chóp đều: V = (1/3)·S_đáy·h; lăng trụ: V = S_đáy·h.',
+        'Xác suất cổ điển: P(A) = m/n.',
+      ] },
+      { note: 'Mỗi chương toán là một công cụ; người học giỏi không chỉ nhớ công thức mà còn biết chọn đúng công cụ cho đúng bài toán. Hãy tự ra đề và giải để kiểm tra mình trước khi bước vào lớp 9!' },
+    ],
+    [
+      { q: 'Hãy khai triển và thu gọn: (x − 2)(x + 2) − (x − 1)².', a: '(x−2)(x+2) = x²−4 (HĐT số 3). (x−1)² = x²−2x+1 (HĐT số 1). Kết quả: x²−4 − (x²−2x+1) = x²−4−x²+2x−1 = 2x−5.' },
+      { q: 'Hai tam giác đồng dạng có tỉ số k = 3. Tam giác nhỏ có diện tích 12 cm². Tính diện tích tam giác lớn.', a: 'Tỉ số diện tích = k² = 9. Diện tích tam giác lớn = 12 × 9 = 108 cm².' },
+      { q: 'Giải phương trình: (2x − 1)/(x + 1) = 1 với x ≠ −1.', a: 'ĐKXĐ: x ≠ −1. Nhân cả hai vế với (x+1): 2x−1 = x+1 ⇒ x = 2 (thỏa ĐK). Nghiệm: x = 2.' },
+    ]
+  ),
 };

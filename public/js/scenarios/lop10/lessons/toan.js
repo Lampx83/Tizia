@@ -652,4 +652,41 @@ export const H10TOAN_LESSONS = {
       { q: 'Lớp 30 học sinh có 18 nam, 12 nữ. Chọn ngẫu nhiên 5 đi dự đại hội. Tính xác suất có đúng 3 nữ.', a: 'P = C(12,3)·C(18,2)/C(30,5) = 220·153/142506 = 33660/142506 ≈ 0,236.' },
     ]
   ),
+
+  'H10TOAN-w36-quiz': {
+    topic: 'Kết thúc Toán 10 — Hành trang vào lớp 11',
+    intro: 'Năm học lớp 10 khép lại — một bước ngoặt quan trọng khi bước vào THPT. Hôm nay chúng ta nhìn lại toàn bộ hành trình Toán 10, hệ thống hoá những kiến thức cốt lõi và chuẩn bị tâm thế tự tin cho lớp 11.',
+    objectives: [
+      'Hệ thống hoá toàn bộ chương trình Toán 10 theo các mảng kiến thức lớn.',
+      'Nhận biết những chủ đề sẽ được nâng cao và mở rộng ở lớp 11.',
+      'Xây dựng kế hoạch tự học hiệu quả trong kì nghỉ hè để sẵn sàng cho lớp 11.',
+    ],
+    theory: [
+      { h: 'Bức tranh toàn cảnh Toán 10' },
+      { ul: [
+        'Đại số & Hàm số: tập hợp, hàm số bậc nhất/bậc hai, bất phương trình bậc nhất/bậc hai.',
+        'Hình học phẳng & Toạ độ: vectơ, tích vô hướng, phương trình đường thẳng, đường tròn, elip.',
+        'Lượng giác: giá trị lượng giác của góc, hệ thức lượng trong tam giác, định lý sin và cos.',
+        'Thống kê & Xác suất: mô tả thống kê, xác suất cổ điển, tổ hợp và chỉnh hợp.',
+      ] },
+      { h: 'Viên đá nền cho lớp 11' },
+      { ul: [
+        'Hàm số bậc hai → Hàm lượng giác, phương trình lượng giác: nắm vững parabol giúp hiểu đồ thị sin/cos.',
+        'Tổ hợp & Xác suất → Xác suất biến cố phức hợp, biến ngẫu nhiên rời rạc ở lớp 11.',
+        'Hệ thức lượng tam giác → Mở rộng sang hệ lượng giác và hàm lượng giác tổng quát.',
+        'Vectơ & Toạ độ → Hình học không gian, quan hệ song song – vuông góc ở lớp 11.',
+      ] },
+      { h: 'Lộ trình ôn hè thông minh' },
+      { ul: [
+        'Tuần 1–2: Củng cố phương trình và bất phương trình — nền tảng của mọi dạng toán lớp 11.',
+        'Tuần 3–4: Ôn lại lượng giác và hệ thức lượng — sẽ mở rộng nhiều ở lớp 11.',
+        'Tuần 5–6: Thực hành xác suất và tổ hợp — tránh bỡ ngỡ khi gặp biến ngẫu nhiên.',
+      ] },
+      { note: 'Lớp 11 nâng thêm một tầng trừu tượng (lượng giác tổng quát, giới hạn, đạo hàm) — nhưng học sinh nào nắm vững Toán 10 sẽ tiếp thu nhanh và tự tin hơn nhiều.' },
+    ],
+    examples: [
+      { q: 'Tại sao kĩ năng vẽ đồ thị parabol ở lớp 10 lại quan trọng cho Toán lớp 11?', a: 'Lớp 11 học hàm lượng giác (y = sin x, y = cos x) và hàm số tổng quát. Kĩ năng nhận dạng chiều biến thiên, điểm cực đại/cực tiểu, trục đối xứng từ parabol được "tái sử dụng" trực tiếp. Học sinh quen đồ thị bậc hai sẽ vẽ đồ thị lượng giác và hàm hợp nhanh hơn nhiều.' },
+      { q: 'Em nên ưu tiên ôn phần nào của Toán 10 trong kì hè để học lớp 11 nhẹ nhàng hơn?', a: 'Ưu tiên: (1) Phương trình và bất phương trình — vì lớp 11 sẽ giải phương trình lượng giác và phương trình mũ/logarit; (2) Lượng giác cơ bản — cầu nối trực tiếp sang hàm lượng giác; (3) Xác suất tổ hợp — lớp 11 nâng lên xác suất có điều kiện. Hình học toạ độ có thể ôn nhẹ hơn vì lớp 11 chuyển sang không gian.' },
+    ],
+  },
 };
