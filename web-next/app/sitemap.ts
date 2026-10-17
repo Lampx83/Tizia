@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { SITE_URL, xmlSafeUrl } from '@/lib/seo';
 import { DOMAIN_META, getRequiredPlan } from './school/domains';
+import { PRICING_ENABLED } from '@/lib/flags';
 
 // ─────────────────────────────────────────────────────────────────────────
 // sitemap.xml động.
@@ -22,7 +23,7 @@ const CORE: Entry[] = [
   { path: '/on-tap', priority: 0.9, freq: 'weekly' },
   { path: '/school', priority: 0.9, freq: 'weekly' },
   { path: '/apps', priority: 0.8, freq: 'weekly' },
-  { path: '/pricing', priority: 0.8, freq: 'monthly' },
+  ...(PRICING_ENABLED ? [{ path: '/pricing', priority: 0.8, freq: 'monthly' } as Entry] : []),
   { path: '/nang-luc', priority: 0.8, freq: 'monthly' },
   { path: '/tinh-nang.html', priority: 0.7, freq: 'monthly' },
   { path: '/dev', priority: 0.6, freq: 'monthly' },

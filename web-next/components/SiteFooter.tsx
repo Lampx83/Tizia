@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { SITE_NAME, SITE_TAGLINE } from '@/lib/seo';
+import { PRICING_ENABLED } from '@/lib/flags';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Chân trang toàn site.
@@ -60,7 +61,8 @@ const PLAY: Array<[string, string]> = [
 
 const ABOUT: Array<[string, string]> = [
   ['/kham-pha', 'Khám phá tính năng'],
-  ['/pricing', 'Bảng giá'],
+  // Ẩn khi tạm dừng bán gói (lib/flags.ts).
+  ...(PRICING_ENABLED ? ([['/pricing', 'Bảng giá']] as Array<[string, string]>) : []),
   ['/apps', 'Thư viện ứng dụng'],
   ['/marketplace', 'Chợ bài giảng cộng đồng'],
   ['/dev', 'Dành cho lập trình viên'],

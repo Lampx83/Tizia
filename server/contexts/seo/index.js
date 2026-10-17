@@ -40,7 +40,8 @@ function publicUrls(origin) {
     ['/kham-pha', '0.9', 'weekly'],
     ['/school', '0.9', 'weekly'],
     ['/apps', '0.8', 'weekly'],
-    ['/pricing', '0.8', 'monthly'],
+    // /pricing chỉ khi đang mở bán (cờ PRICING_ENABLED, tắt mặc định — 17/10/2026).
+    ...(process.env.PRICING_ENABLED === '1' ? [['/pricing', '0.8', 'monthly']] : []),
     ['/nang-luc', '0.8', 'monthly'],
     ['/tinh-nang.html', '0.7', 'monthly'],
     ['/luyen-de', '0.9', 'weekly'],

@@ -95,9 +95,13 @@ export function requireFeature(feature) {
   };
 }
 
+// Bán gói trả phí có đang mở không — cờ PRICING_ENABLED, TẮT mặc định (chưa có
+// pháp nhân, 17/10/2026). Đọc mỗi lần gọi để test/đổi env không cần sửa code.
+export const salesEnabled = () => process.env.PRICING_ENABLED === '1';
+
 // ── Routes ──
 export function attachBilling(r) {
-  r.get('/api/billing/plans', (_req, res) => res.json({ plans: Object.values(PLANS) }));
+  r.get('/api/billing/plans', (_req, res) => res.json({ plans: Object.values(PLANS), sales_enabled: salesEnabled() }));
 
   r.get('/api/billing/me', async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'unauthorized' });
@@ -115,6 +119,9 @@ export function attachBilling(r) {
     if (planDef.price_vnd === 0) {
       const sub = await activateSubscription({ user_id: req.user.id, plan, periodDays: null });
       return res.json({ ok: true, activated: true, subscription: sub });
+    }
+    if (!salesEnabled()) {
+      return res.status(403).json({ error: 'sales_disabled', message: 'Gói trả phí đang tạm dừng.' });
     }
     if (process.env.BILLING_DEMO_ACTIVATE === '1') {
       const sub = await activateSubscription({ user_id: req.user.id, plan, periodDays: 30 });

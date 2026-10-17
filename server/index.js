@@ -60,7 +60,15 @@ import { attachSecurity, securityHeaders, csrf, apiLimiter, sensitiveAuthLimiter
 import { log, initErrorTracking, installProcessGuards, requestContext, requestLogger, expressErrorHandler } from './observability.js';
 // Payment context — chỉ nạp khi PAYMENT_ENABLED=1 (dynamic import bên dưới) để bảng
 // payment + route KHÔNG xuất hiện ở deployment chưa bật thanh toán.
-const PAYMENT_ENABLED = process.env.PAYMENT_ENABLED === '1';
+// AN TOÀN PHÁP LÝ (17/10/2026): PRICING_ENABLED là cờ TỔNG cho việc bán gói trả phí —
+// TẮT mặc định vì chưa có pháp nhân. Khi tắt: ẩn /pricing.html (trang thông báo),
+// /api/billing/subscribe từ chối gói trả phí, và payment KHÔNG mount dù có đặt
+// PAYMENT_ENABLED=1. Code bảng giá + VNPay giữ nguyên để bật lại.
+const PRICING_ENABLED = process.env.PRICING_ENABLED === '1';
+const PAYMENT_ENABLED = PRICING_ENABLED && process.env.PAYMENT_ENABLED === '1';
+if (process.env.PAYMENT_ENABLED === '1' && !PRICING_ENABLED) {
+  console.warn('[payment] PAYMENT_ENABLED=1 nhưng PRICING_ENABLED chưa bật → KHÔNG mount thanh toán.');
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, '..');
@@ -1085,6 +1093,21 @@ ensureTeacherAccount();            // tạo sẵn tài khoản giảng viên khi
 if (PAYMENT_ENABLED) {
   const { attachPayment } = await import('./contexts/payment/index.js');
   attachPayment(r, { basePath: BASE_PATH });
+}
+
+// Trang bảng giá vanilla (fallback khi gọi thẳng Express). Tắt bán → trả trang thông
+// báo noindex thay cho public/pricing.html (file giữ nguyên để bật lại).
+if (!PRICING_ENABLED) {
+  r.get(['/pricing.html', '/pricing'], (_req, res) => {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    res.type('html').send(`<!doctype html><html lang="vi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title>Bảng giá — Tizia</title></head>
+<body style="font-family:system-ui,sans-serif;max-width:560px;margin:64px auto;padding:0 16px;text-align:center">
+<h1 style="font-size:22px">Gói trả phí đang tạm dừng</h1>
+<p style="color:#555">Tizia hiện chỉ mở các nội dung miễn phí và không nhận thanh toán trực tuyến.</p>
+<p><a href="${BASE_PATH || ''}/">← Về trang chủ</a></p></body></html>`);
+  });
 }
 
 // ============================================================

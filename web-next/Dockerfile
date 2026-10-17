@@ -16,6 +16,9 @@ WORKDIR /app
 # Phải truyền địa chỉ Express của prod tại đây (mặc định tên service compose).
 ARG BACKEND_URL=http://tizia:8041
 ENV BACKEND_URL=$BACKEND_URL
+# Bán gói trả phí: TẮT mặc định (chưa có pháp nhân, 17/10/2026). "1" = hiện /pricing.
+ARG NEXT_PUBLIC_PRICING_ENABLED=0
+ENV NEXT_PUBLIC_PRICING_ENABLED=$NEXT_PUBLIC_PRICING_ENABLED
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1 NODE_ENV=production

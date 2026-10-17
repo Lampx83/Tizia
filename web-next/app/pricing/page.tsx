@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
-import { pageMeta, faqLd, breadcrumbLd } from '@/lib/seo';
+import Link from 'next/link';
+import { pageMeta, privateMeta, faqLd, breadcrumbLd } from '@/lib/seo';
+import { PRICING_ENABLED } from '@/lib/flags';
 import { Suspense } from 'react';
 import { tiziaFetch } from '@/lib/tizia';
 import PricingClient from './PricingClient';
@@ -7,13 +9,16 @@ import type { Me } from './plans';
 
 // canonical CŨ trỏ /pricing — URL đó nay 308 sang /pricing, nên Google coi
 // canonical là redirect và bỏ qua. Dùng pageMeta để luôn lấy URL cuối cùng.
-export const metadata: Metadata = pageMeta({
+// Trang giá TẮT (mặc định, xem lib/flags.ts) → noindex + chỉ hiện thông báo.
+export const metadata: Metadata = !PRICING_ENABLED
+  ? privateMeta('Bảng giá', 'Các gói trả phí của Tizia đang tạm dừng.', '/pricing')
+  : pageMeta({
   title: 'Bảng giá — Gói Free, Pro, Plus cho học sinh, lớp học và trường',
   description:
     'So sánh các gói Tizia: Free (Mầm non + Tiểu học miễn phí), Pro (K-12 + AI cá nhân hoá) và Plus (gia đình, lớp học, trường). Mua theo tháng hoặc theo năm tiết kiệm 2 tháng.',
   path: '/pricing',
   keywords: ['bảng giá Tizia', 'học phí học trực tuyến', 'gói gia đình', 'gói trường học', 'edtech Việt Nam'],
-});
+  });
 
 
 const LD_BREADCRUMB = breadcrumbLd([
@@ -62,7 +67,26 @@ const LD_PRODUCT = {
   },
 };
 
+// Thông báo khi tạm dừng bán. Trang trường có gói yêu cầu vẫn chuyển hướng tới
+// đây (school/page.tsx) nên cần lời giải thích + đường quay lại.
+function PricingPaused() {
+  return (
+    <div className="mx-auto max-w-xl py-16 text-center">
+      <h1 className="text-2xl font-semibold tracking-tight">Gói trả phí đang tạm dừng</h1>
+      <p className="mt-3 text-sm text-muted-foreground">
+        Tizia hiện chỉ mở các nội dung miễn phí và không nhận thanh toán trực tuyến. Trường học hoặc
+        đơn vị muốn dùng thử, vui lòng liên hệ qua hộp thư góp ý trên trang.
+      </p>
+      <Link href="/" className="mt-6 inline-block font-medium text-primary hover:underline">
+        ← Về trang chủ
+      </Link>
+    </div>
+  );
+}
+
 export default async function PricingPage() {
+  if (!PRICING_ENABLED) return <PricingPaused />;
+
   // Fetch user để biết gói hiện tại (currentPlan) + trạng thái đăng nhập. 401 →
   // me = null (guest), trang vẫn render đủ (public SEO).
   const res = await tiziaFetch<{ user: Me }>('/api/auth/me');
