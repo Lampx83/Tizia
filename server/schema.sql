@@ -1105,3 +1105,28 @@ ALTER TABLE family_links ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT '
 ALTER TABLE family_links ADD COLUMN IF NOT EXISTS decided_at BIGINT;
 ALTER TABLE family_links ADD COLUMN IF NOT EXISTS decided_by BIGINT;
 CREATE INDEX IF NOT EXISTS idx_family_child_status ON family_links(child_user_id, status);
+
+-- =====================================================================
+-- AN TOÀN DỮ LIỆU (17/10/2026) — dữ liệu GPP / PharmaComm gắn với TÀI KHOẢN.
+-- Trước đây /api/gpp/* và /api/pharmacy/* công khai, định danh bằng mã SV tự
+-- khai: ai biết mã SV là đọc được lớp, nhóm nghiên cứu, điểm pre/post, lịch sử,
+-- hội thoại của SV đó và ghi được dữ liệu dưới tên SV đó.
+-- Nay phải đăng nhập; mã SV gắn với tài khoản đầu tiên dùng nó (owner_user_id).
+-- Dòng cũ có owner NULL: chỉ quản trị/giảng viên xem; tài khoản nhận lại mã cũ
+-- chỉ thấy dữ liệu tạo SAU thời điểm nhận (owner_claimed_at) — tránh "nhận vơ"
+-- mã SV của người khác để đọc dữ liệu cũ. Quản trị xác minh thì đặt
+-- owner_claimed_at = 0 để SV thấy cả dữ liệu cũ.
+-- =====================================================================
+ALTER TABLE gpp_participant ADD COLUMN IF NOT EXISTS owner_user_id BIGINT;
+ALTER TABLE gpp_participant ADD COLUMN IF NOT EXISTS owner_claimed_at BIGINT;
+ALTER TABLE pharmacy_student ADD COLUMN IF NOT EXISTS owner_user_id BIGINT;
+ALTER TABLE pharmacy_practice_session ADD COLUMN IF NOT EXISTS owner_user_id BIGINT;
+ALTER TABLE pharmacy_practice_session ADD COLUMN IF NOT EXISTS owner_teacher TEXT;
+CREATE INDEX IF NOT EXISTS idx_pps_owner ON pharmacy_practice_session(owner_user_id, started_at DESC);
+
+-- AN TOÀN DỮ LIỆU (17/10/2026) — lớp học gắn với tài khoản tạo lớp. Trước đây
+-- danh sách thành viên, lượt làm bài, CSV điểm của MỌI lớp mở cho mọi tài khoản
+-- đăng nhập (và ai cũng tự đăng ký được vai giáo viên). Lớp cũ có creator NULL:
+-- chỉ quản trị xem được cho tới khi gán người tạo.
+ALTER TABLE classes ADD COLUMN IF NOT EXISTS creator_user_id BIGINT;
+CREATE INDEX IF NOT EXISTS idx_classes_creator ON classes(creator_user_id);

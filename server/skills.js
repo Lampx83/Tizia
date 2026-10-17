@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db } from './db.js';
+import { ownsClass, publicClass } from './contexts/security/access.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MAPPING_PATH = path.resolve(__dirname, 'skills-mapping.json');
@@ -394,12 +395,13 @@ export function attachSkills(router, { requireAuth, requireEnrolled }) {
     }
     const class_code = String(req.params.class_code || '').trim().slice(0, 16);
     if (!class_code) return res.status(400).json({ error: 'class_code required' });
-    const cls = await db.prepare(`SELECT id, code, name, teacher_name, created_at FROM classes WHERE code = ?`).get(class_code);
+    const cls = await db.prepare(`SELECT id, code, name, teacher_name, creator_user_id, created_at FROM classes WHERE code = ?`).get(class_code);
     if (!cls) return res.status(404).json({ error: 'class_not_found' });
 
-    // Đếm rough quyền: GV chỉ xem được class do mình tạo (teacher_name khớp
-    // display_name). Admin xem tất cả. Không khớp → 403.
-    if (req.user.role === 'teacher' && cls.teacher_name !== req.user.display_name) {
+    // Quyền: chỉ người TẠO lớp (classes.creator_user_id) hoặc admin. Trước 17/10/2026
+    // so teacher_name (chuỗi tự khai lúc tạo lớp) với display_name (tự đổi được) nên
+    // ai cũng giả được giáo viên của lớp.
+    if (!ownsClass(req.user, cls)) {
       return res.status(403).json({ error: 'not_class_teacher' });
     }
 
@@ -414,7 +416,7 @@ export function attachSkills(router, { requireAuth, requireEnrolled }) {
     `).all(class_code);
     const total = (await db.prepare(`SELECT COUNT(*) AS n FROM skills`).get()).n;
     res.json({
-      class: cls,
+      class: publicClass(cls),
       total_skills: total,
       members: members.map(m => ({
         user_id: m.user_id,

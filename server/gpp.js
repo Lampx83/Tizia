@@ -9,8 +9,10 @@
 // Xoá module = xoá file này + gỡ 1 dòng attachGpp trong index.js.
 //
 // Danh tính SV lấy theo mã SV (student_code) do người học nhập ở màn enroll,
-// KHÔNG nhận điểm/định danh nhạy cảm từ body của route chấm điểm. player_name
-// từ session (nếu đăng nhập Tizia) chỉ lưu để đối soát, không bắt buộc.
+// KHÔNG nhận điểm/định danh nhạy cảm từ body của route chấm điểm.
+// AN TOÀN DỮ LIỆU (17/10/2026): /api/gpp/* không còn công khai — phải đăng nhập
+// Tizia. Mã SV gắn với tài khoản đầu tiên dùng nó (owner_user_id); chỉ chủ hoặc
+// quản trị đọc/ghi dữ liệu của mã đó. Xem schema.sql (owner_claimed_at).
 // =====================================================================
 import { db } from './db.js';
 import { llmGenerate } from './ai.js';
@@ -21,19 +23,26 @@ const sid = () => `g_${Date.now().toString(36)}_${Math.random().toString(36).sli
 const jn = (v) => { try { return v == null ? null : JSON.stringify(v); } catch { return null; } };
 
 // ---- prepared statements ----
+// owner_claimed_at: mã mới → 0 (mọi dữ liệu là của chủ). Mã CŨ chưa có chủ được
+// một tài khoản nhận → mốc hiện tại: tài khoản đó chỉ thấy dữ liệu tạo SAU mốc này.
 const upsertParticipant = db.prepare(`
-  INSERT INTO gpp_participant (student_code, full_name, class_name, year_level, study_group, user_ref, created_at, updated_at)
-  VALUES (@student_code, @full_name, @class_name, @year_level, @study_group, @user_ref, @t, @t)
+  INSERT INTO gpp_participant (student_code, full_name, class_name, year_level, study_group, user_ref, owner_user_id, owner_claimed_at, created_at, updated_at)
+  VALUES (@student_code, @full_name, @class_name, @year_level, @study_group, @user_ref, @owner, 0, @t, @t)
   ON CONFLICT (student_code) DO UPDATE SET
     full_name = COALESCE(EXCLUDED.full_name, gpp_participant.full_name),
     class_name = COALESCE(EXCLUDED.class_name, gpp_participant.class_name),
     year_level = COALESCE(EXCLUDED.year_level, gpp_participant.year_level),
     study_group = COALESCE(EXCLUDED.study_group, gpp_participant.study_group),
     user_ref = COALESCE(EXCLUDED.user_ref, gpp_participant.user_ref),
+    owner_claimed_at = CASE WHEN gpp_participant.owner_user_id IS NULL AND EXCLUDED.owner_user_id IS NOT NULL
+                            THEN @t ELSE gpp_participant.owner_claimed_at END,
+    owner_user_id = COALESCE(gpp_participant.owner_user_id, EXCLUDED.owner_user_id),
     updated_at = @t
   RETURNING id
 `);
 const getParticipant = db.prepare(`SELECT * FROM gpp_participant WHERE student_code = ?`);
+const getParticipantById = db.prepare(`SELECT * FROM gpp_participant WHERE id = ?`);
+const getParticipantByOwner = db.prepare(`SELECT * FROM gpp_participant WHERE owner_user_id = ? ORDER BY updated_at DESC LIMIT 1`);
 const insSession = db.prepare(`
   INSERT INTO gpp_session (id, participant_id, started_at, meta)
   VALUES (@id, @participant_id, @t, @meta) RETURNING id
@@ -58,23 +67,33 @@ const insSurvey = db.prepare(`
 `);
 const levelResultsForPid = db.prepare(`
   SELECT level, MAX(passed) passed, MAX(score) score
-  FROM gpp_level_result WHERE participant_id = ? GROUP BY level ORDER BY level
+  FROM gpp_level_result WHERE participant_id = ? AND created_at >= ? GROUP BY level ORDER BY level
 `);
-const testsForPid = db.prepare(`SELECT phase, score10, created_at FROM gpp_test_result WHERE participant_id = ? ORDER BY created_at`);
+const testsForPid = db.prepare(`SELECT phase, score10, created_at FROM gpp_test_result WHERE participant_id = ? AND created_at >= ? ORDER BY created_at`);
+
+const isAdmin = (req) => req.user?.role === 'admin';
+const ownsParticipant = (req, p) => !!p && (isAdmin(req) || (p.owner_user_id != null && Number(p.owner_user_id) === Number(req.user?.id)));
 
 // player_name từ session (an toàn: chỉ đọc, không tin body).
 function userRef(req) {
   return req.user?.player_name || req.user?.username || req.user?.name || null;
 }
 
+// Trả participant id nếu người gọi là CHỦ (hoặc admin); 'forbidden' nếu mã/ID thuộc
+// người khác; null nếu không có định danh. Trước 17/10/2026 ai cũng ghi được điểm
+// dưới participantId/mã SV của người khác.
 async function resolveParticipant(req, body) {
-  // Ưu tiên participantId đã có; nếu không, tra theo studentCode.
-  if (body.participantId) return Number(body.participantId);
-  const code = (body.studentCode || '').trim();
-  if (!code) return null;
-  const row = await getParticipant.get(code);
-  return row ? Number(row.id) : null;
+  let row = null;
+  if (body.participantId) row = await getParticipantById.get(Number(body.participantId));
+  else {
+    const code = (body.studentCode || '').trim();
+    if (!code) return null;
+    row = await getParticipant.get(code);
+  }
+  if (!row) return null;
+  return ownsParticipant(req, row) ? Number(row.id) : 'forbidden';
 }
+const FORBIDDEN = { ok: false, error: 'not_your_participant', message: 'Mã sinh viên này thuộc tài khoản khác.' };
 
 export function attachGpp(r) {
   // Mở màn Pharma Crush bằng mật khẩu (req #144, ThS Hương Lý). Mục đích SƯ PHẠM:
@@ -96,6 +115,10 @@ export function attachGpp(r) {
       const b = req.body || {};
       const code = (b.studentCode || '').trim();
       if (!code) return res.status(400).json({ ok: false, error: 'missing_student_code' });
+      const existing = await getParticipant.get(code);
+      if (existing && existing.owner_user_id != null && !ownsParticipant(req, existing)) {
+        return res.status(403).json({ ok: false, error: 'student_code_taken', message: 'Mã sinh viên này đã gắn với một tài khoản khác. Nếu đây là mã của bạn, hãy báo giảng viên hoặc quản trị viên.' });
+      }
       const yl = [2, 3].includes(Number(b.yearLevel)) ? Number(b.yearLevel) : null;
       const grp = ['exp', 'ctrl'].includes(b.studyGroup) ? b.studyGroup : null;
       const info = await upsertParticipant.run({
@@ -105,6 +128,7 @@ export function attachGpp(r) {
         year_level: yl,
         study_group: grp,
         user_ref: userRef(req),
+        owner: isAdmin(req) ? (existing?.owner_user_id ?? null) : Number(req.user.id),
         t: now(),
       });
       const participantId = info.lastInsertRowid;
@@ -119,6 +143,7 @@ export function attachGpp(r) {
     try {
       const b = req.body || {};
       const pid = await resolveParticipant(req, b);
+      if (pid === 'forbidden') return res.status(403).json(FORBIDDEN);
       await insEvent.run({
         session_id: b.sessionId || null,
         participant_id: pid,
@@ -140,6 +165,7 @@ export function attachGpp(r) {
     try {
       const b = req.body || {};
       const pid = await resolveParticipant(req, b);
+      if (pid === 'forbidden') return res.status(403).json(FORBIDDEN);
       const stepsTotal = Number(b.stepsTotal) || 0;
       const stepsPassed = Number(b.stepsPassed) || 0;
       const score = stepsTotal ? Math.round((stepsPassed / stepsTotal) * 1000) / 10 : Number(b.score) || 0;
@@ -166,6 +192,7 @@ export function attachGpp(r) {
     try {
       const b = req.body || {};
       const pid = await resolveParticipant(req, b);
+      if (pid === 'forbidden') return res.status(403).json(FORBIDDEN);
       const n = Number(b.nQuestions) || (Array.isArray(b.answers) ? b.answers.length : 0);
       const nc = Number(b.nCorrect) || 0;
       const score10 = n ? Math.round((nc / n) * 100) / 10 : 0;
@@ -190,6 +217,7 @@ export function attachGpp(r) {
     try {
       const b = req.body || {};
       const pid = await resolveParticipant(req, b);
+      if (pid === 'forbidden') return res.status(403).json(FORBIDDEN);
       const kind = ['arcs', 'clt', 'sus'].includes(b.kind) ? b.kind : null;
       if (!kind) return res.status(400).json({ ok: false, error: 'bad_kind' });
       const info = await insSurvey.run({
@@ -201,14 +229,16 @@ export function attachGpp(r) {
   });
 
   // Tiến trình của 1 người học (mở khoá cấp nào, điểm pre/post).
+  // Chỉ chủ mã SV hoặc quản trị. Mã của người khác → trả như "chưa có" (không xác
+  // nhận mã tồn tại). Không truyền studentCode → mã gắn với tài khoản đang đăng nhập.
   r.get('/api/gpp/progress', async (req, res) => {
     try {
       const code = (req.query.studentCode || '').trim();
-      if (!code) return res.status(400).json({ ok: false, error: 'missing_student_code' });
-      const p = await getParticipant.get(code);
-      if (!p) return res.json({ ok: true, participant: null, levels: [], tests: [] });
-      const levels = await levelResultsForPid.all(p.id);
-      const tests = await testsForPid.all(p.id);
+      const p = code ? await getParticipant.get(code) : await getParticipantByOwner.get(Number(req.user?.id));
+      if (!p || !ownsParticipant(req, p)) return res.json({ ok: true, participant: null, levels: [], tests: [] });
+      const since = isAdmin(req) ? 0 : Number(p.owner_claimed_at) || 0;
+      const levels = await levelResultsForPid.all(p.id, since);
+      const tests = await testsForPid.all(p.id, since);
       res.json({ ok: true, participant: { id: p.id, studentCode: p.student_code, className: p.class_name, yearLevel: p.year_level, studyGroup: p.study_group }, levels, tests });
     } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
   });

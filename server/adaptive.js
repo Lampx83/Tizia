@@ -104,15 +104,24 @@ async function suggestNext(state, availableSkills = []) {
   return { mode: 'continue', skill: state.skill, hint: 'Tiếp tục luyện skill này — chưa đạt ngưỡng thông thạo.' };
 }
 
+// Người học = tài khoản đang đăng nhập; admin được chỉ định learner khác.
+function selfLearner(req, requested) {
+  if (req.user?.role === 'admin' && requested) return String(requested).trim().slice(0, 40);
+  return String(req.user?.display_name || '').trim().slice(0, 40);
+}
+
 export function attachAdaptive(r) {
   /**
    * POST /api/adaptive/event
    * Body: { learner, skill, correct, questionId?, durationMs?, domain?, context? }
    * Returns: { ok, pKnown, mastered, suggestion }
    */
+  // AN TOÀN DỮ LIỆU (17/10/2026): learner lấy từ TÀI KHOẢN đang đăng nhập
+  // (display_name, khớp localStorage tizia:playerName mà FE vẫn gửi), không tin
+  // body — trước đây ai cũng đọc/ghi được trạng thái học của người khác theo tên.
   r.post('/api/adaptive/event', async (req, res) => {
     const b = req.body || {};
-    const learner = String(b.learner || '').trim().slice(0, 40);
+    const learner = selfLearner(req, b.learner);
     const skill = String(b.skill || '').trim().slice(0, 80);
     const correct = !!b.correct;
     if (!learner || !skill) {
@@ -162,7 +171,7 @@ export function attachAdaptive(r) {
    * Trả về suggest cho câu tiếp theo (không update state).
    */
   r.get('/api/adaptive/next', async (req, res) => {
-    const learner = String(req.query.learner || '').trim();
+    const learner = selfLearner(req, req.query.learner);
     const skill = String(req.query.skill || '').trim();
     if (!learner || !skill) return res.status(400).json({ error: 'learner and skill required' });
     const skills = String(req.query.skills || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -186,6 +195,9 @@ export function attachAdaptive(r) {
   r.get('/api/adaptive/learner/:name', async (req, res) => {
     const learner = String(req.params.name || '').trim();
     if (!learner) return res.status(400).json({ error: 'learner required' });
+    if (req.user?.role !== 'admin' && learner !== String(req.user?.display_name || '').slice(0, 40)) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
     const states = await db.prepare(`
       SELECT skill, p_known, attempts, correct_streak, fail_streak, last_at
       FROM adaptive_state WHERE learner = ? ORDER BY p_known ASC

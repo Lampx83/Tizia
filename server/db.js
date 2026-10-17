@@ -145,18 +145,36 @@ export async function getRecent(limit = 20) {
 
 // --- Class management ---
 const createClassStmt = db.prepare(`
-  INSERT INTO classes (code, name, teacher_name, created_at)
-  VALUES (@code, @name, @teacher_name, @created_at)
+  INSERT INTO classes (code, name, teacher_name, creator_user_id, created_at)
+  VALUES (@code, @name, @teacher_name, @creator_user_id, @created_at)
   RETURNING id
 `);
 const getClassByCodeStmt = db.prepare(`
-  SELECT id, code, name, teacher_name, created_at FROM classes WHERE code = ?
+  SELECT id, code, name, teacher_name, creator_user_id, created_at FROM classes WHERE code = ?
 `);
 const listClassesStmt = db.prepare(`
   SELECT id, code, name, teacher_name, created_at,
     (SELECT COUNT(*) FROM attempts WHERE class_code = classes.code) AS attempt_count,
     (SELECT COUNT(DISTINCT player_name) FROM attempts WHERE class_code = classes.code) AS student_count
   FROM classes ORDER BY created_at DESC
+`);
+// Lớp do một tài khoản tạo (AN TOÀN DỮ LIỆU 17/10/2026).
+const listClassesByCreatorStmt = db.prepare(`
+  SELECT id, code, name, teacher_name, created_at,
+    (SELECT COUNT(*) FROM attempts WHERE class_code = classes.code) AS attempt_count,
+    (SELECT COUNT(DISTINCT player_name) FROM attempts WHERE class_code = classes.code) AS student_count
+  FROM classes WHERE creator_user_id = ? ORDER BY created_at DESC
+`);
+// Người chơi (player_name) có lượt làm bài trong một lớp do creator tạo không.
+const playerInCreatorClassStmt = db.prepare(`
+  SELECT 1 AS ok FROM attempts a JOIN classes c ON c.code = a.class_code
+  WHERE c.creator_user_id = ? AND a.player_name = ? LIMIT 1
+`);
+const recentInCreatorClassesStmt = db.prepare(`
+  SELECT a.id, a.version, a.player_name, a.score, a.correct, a.total, a.created_at
+  FROM attempts a JOIN classes c ON c.code = a.class_code
+  WHERE c.creator_user_id = @creator
+  ORDER BY a.created_at DESC LIMIT @limit
 `);
 const classMembersStmt = db.prepare(`
   SELECT player_name,
@@ -177,12 +195,19 @@ const playerAttemptsStmt = db.prepare(`
   FROM attempts WHERE player_name = @player ORDER BY created_at DESC LIMIT @limit
 `);
 
-export async function createClass({ code, name, teacher_name }) {
-  const info = await createClassStmt.run({ code, name, teacher_name, created_at: Date.now() });
+export async function createClass({ code, name, teacher_name, creator_user_id = null }) {
+  const info = await createClassStmt.run({ code, name, teacher_name, creator_user_id, created_at: Date.now() });
   return { id: info.lastInsertRowid, code };
 }
 export async function getClassByCode(code) { return (await getClassByCodeStmt.get(code)) || null; }
 export async function listClasses() { return await listClassesStmt.all(); }
+export async function listClassesByCreator(user_id) { return await listClassesByCreatorStmt.all(Number(user_id)); }
+export async function isPlayerInCreatorClass(user_id, player_name) {
+  return !!(await playerInCreatorClassStmt.get(Number(user_id), String(player_name)));
+}
+export async function getRecentInCreatorClasses(user_id, limit = 20) {
+  return await recentInCreatorClassesStmt.all({ creator: Number(user_id), limit });
+}
 export async function getClassMembers(code) { return await classMembersStmt.all(code); }
 export async function getClassAttempts(code, limit = 100) { return await classAttemptsStmt.all(code, { limit }); }
 export async function getPlayerAttempts(player, limit = 50) { return await playerAttemptsStmt.all({ player, limit }); }
@@ -757,6 +782,15 @@ export async function updateUserEditable(id, { display_name, age, email,
     cohort: cohort ? String(cohort).slice(0, 20) : null,
     school_name: school_name ? String(school_name).slice(0, 120) : null,
   });
+}
+// display_name đang được dùng làm khoá cho attempts, thông báo, yêu cầu, adaptive…
+// nên tên trùng = đọc được dữ liệu của người kia. Chặn trùng khi đăng ký/sửa hồ sơ
+// (AN TOÀN DỮ LIỆU 17/10/2026). Tên trùng ĐÃ CÓ trong DB không bị đổi.
+const displayNameTakenStmt = db.prepare(`
+  SELECT 1 AS ok FROM users WHERE lower(display_name) = lower(?) AND id <> ? LIMIT 1
+`);
+export async function isDisplayNameTaken(name, exceptUserId = 0) {
+  return !!(await displayNameTakenStmt.get(String(name), Number(exceptUserId) || 0));
 }
 export async function isUsernameTaken(username) {
   return ((await countUsernameStmt.get(String(username)))?.n || 0) > 0;

@@ -1,5 +1,6 @@
 // GPP 2D — client lưu trạng thái + gọi API /api/gpp/*.
 // Định danh nghiên cứu giữ ở localStorage để không phải nhập lại mỗi lần vào.
+import { goLoginIf401 } from '../auth-redirect.js';
 const LS = 'gpp_participant_v1';
 
 export const state = {
@@ -47,6 +48,7 @@ async function post(path, body) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body || {}),
   });
+  if (goLoginIf401(r)) return new Promise(() => {});   // đang chuyển trang đăng nhập
   return r.json().catch(() => ({ ok: false }));
 }
 
@@ -101,5 +103,6 @@ export async function aiScenario(level) {
 }
 export async function fetchProgress(studentCode) {
   const r = await fetch('/api/gpp/progress?studentCode=' + encodeURIComponent(studentCode));
+  if (goLoginIf401(r)) return new Promise(() => {});   // đang chuyển trang đăng nhập
   return r.json().catch(() => ({ ok: false }));
 }

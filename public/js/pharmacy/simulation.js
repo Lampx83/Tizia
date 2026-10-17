@@ -36,6 +36,7 @@ import { STAGE_LABEL } from './rubric.js';
 // #142 — lưu bền vững hội thoại + thao tác 3D vào DB (trước đây chỉ nằm trong
 // bộ nhớ máy chủ nên mất sạch mỗi lần khởi động lại).
 import { startPractice, logMessage, logAction, finishPractice, getPracticeId } from './practice-client.js?v=ph0924';
+import { goLoginIf401 } from '../auth-redirect.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -131,6 +132,7 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ moduleId })
     });
+    if (goLoginIf401(r)) return;
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'session create failed');
     session = data.session; scenario = data.scenario;
@@ -301,6 +303,7 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ moduleId, restore: { messages: localMsgs, actions: localActions } })
     });
+    if (goLoginIf401(r)) return new Promise(() => {});   // đang chuyển trang đăng nhập
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'không tạo lại được phiên');
     session = d.session;

@@ -6,8 +6,9 @@
 // Class leaderboard: top HS trong lớp theo weekly XP / streak / mastery.
 // ============================================================
 
-import { db, listClasses, getClassByCode } from '../../db.js';
+import { db, listClasses, listClassesByCreator, getClassByCode } from '../../db.js';
 import { requireAuth } from '../identity/auth.js';
+import { ownsClass, publicClass } from '../security/access.js';
 
 const _getActiveStmt = db.prepare(`
   SELECT * FROM team_quests WHERE class_code = ? AND status = 'active'
@@ -32,8 +33,9 @@ async function inClass(userId, classCode) {
 
 export function attachTeacher(router) {
   // GV xem các lớp họ làm chủ nhiệm
-  router.get('/api/teacher/classes', requireAuth, teacherOnly, async (_req, res) => {
-    const list = await listClasses();
+  // (17/10/2026) chỉ lớp do chính GV tạo; admin xem tất cả.
+  router.get('/api/teacher/classes', requireAuth, teacherOnly, async (req, res) => {
+    const list = req.user.role === 'admin' ? await listClasses() : await listClassesByCreator(req.user.id);
     res.json({ classes: list });
   });
 
@@ -110,26 +112,35 @@ export function attachTeacher(router) {
   });
 
   // Class leaderboard — top HS theo XP tuần (lấy từ league_memberships)
+  // AN TOÀN DỮ LIỆU (17/10/2026): chỉ người tạo lớp / admin; và chỉ HS CÓ làm bài
+  // trong lớp (trước đây LEFT JOIN nên trả 50 HS bất kỳ toàn hệ thống).
   router.get('/api/teacher/class/:code/leaderboard', requireAuth, async (req, res) => {
     const code = String(req.params.code).toUpperCase();
     const cls = await getClassByCode(code);
     if (!cls) return res.status(404).json({ error: 'not_found' });
-    // Lấy member của lớp qua attempts
-    const memberRows = await db.prepare(`
-      SELECT DISTINCT u.id, u.display_name, u.role,
-             COALESCE(lm.week_xp, 0) AS week_xp,
-             COALESCE(es.streak, 0) AS streak,
-             (SELECT COUNT(*) FROM user_skills WHERE user_id = u.id) AS skills_earned
-        FROM users u
-        LEFT JOIN attempts a ON a.player_id = u.id AND a.class_code = ?
-        LEFT JOIN league_memberships lm ON lm.user_id = u.id
-          AND lm.season_id = (SELECT id FROM league_seasons WHERE ended_at IS NULL ORDER BY id DESC LIMIT 1)
-        LEFT JOIN engagement_state es ON es.user_id = u.id
-       WHERE u.role = 'pupil'
-       GROUP BY u.id
-       ORDER BY week_xp DESC, skills_earned DESC
-       LIMIT 50
-    `).all(code);
-    res.json({ class: cls, leaderboard: memberRows });
+    if (!ownsClass(req.user, cls)) return res.status(403).json({ error: 'not_class_owner' });
+    // Lấy member của lớp qua attempts (player_name = display_name — attempts KHÔNG
+    // có cột player_id nên bản cũ lỗi SQL và request treo).
+    let memberRows;
+    try {
+      memberRows = await db.prepare(`
+        SELECT u.id, u.display_name, u.role,
+               COALESCE(MAX(lm.week_xp), 0) AS week_xp,
+               COALESCE(MAX(es.streak), 0) AS streak,
+               (SELECT COUNT(*) FROM user_skills WHERE user_id = u.id) AS skills_earned
+          FROM users u
+          JOIN (SELECT DISTINCT player_name FROM attempts WHERE class_code = ?) p ON p.player_name = u.display_name
+          LEFT JOIN league_memberships lm ON lm.user_id = u.id
+            AND lm.season_id = (SELECT id FROM league_seasons WHERE ended_at IS NULL ORDER BY id DESC LIMIT 1)
+          LEFT JOIN engagement_state es ON es.user_id = u.id
+         GROUP BY u.id, u.display_name, u.role
+         ORDER BY week_xp DESC, skills_earned DESC
+         LIMIT 50
+      `).all(code);
+    } catch (e) {
+      console.error('[teacher] class leaderboard failed:', e.message);
+      return res.status(500).json({ error: 'leaderboard_failed' });
+    }
+    res.json({ class: publicClass(cls), leaderboard: memberRows });
   });
 }

@@ -6,7 +6,7 @@ import {
   createUser, getUserByUsername, getUserById, touchLogin, updateDisplayName, updateUserEditable,
   createSession, getSession, deleteSession,
   getBestParentPlanForChild,
-  getEnrolledDomain, setEnrolledDomain,
+  getEnrolledDomain, setEnrolledDomain, isDisplayNameTaken,
   listUserDomainGrants, listManagedDomains,
 } from '../../db.js';
 import { effectivePlan, effectivePlanWithFamily, meetsPlan, USER_PLANS } from '../billing/user-plans.js';
@@ -263,19 +263,17 @@ const PUBLIC_PATH_PREFIXES = [
   // Content store tổng quát (data heterogeneous) — GET public như curriculum;
   // PUT/DELETE có requireAdmin riêng trong contexts/content.
   '/api/content',
-  // Nhà thuốc 3D GPP — session/chat/action/score lưu in-memory (Map). Cho guest
-  // để mô phỏng trải nghiệm như SV Dược (alert "kiểm tra đăng nhập" nếu chặn
-  // 401 → UX tệ). Login user vẫn dùng được, không có dữ liệu nhạy cảm bị lộ.
-  // 🔸 Từ 20/08 (#142) prefix này còn phủ /api/pharmacy/practice/* — nhóm route
-  // CÓ ghi DB (hội thoại + thao tác 3D + điểm). Vẫn để công khai vì đặc tả yêu
-  // cầu người học vào thẳng không cần tài khoản/mật khẩu, định danh tự khai
-  // bằng mã SV giống module GPP bên dưới. Dữ liệu chỉ đọc được khi biết UUID
-  // phiên; route sửa/xoá KHÔNG tồn tại nên không sửa được bài của người khác.
+  // Nhà thuốc 3D / PharmaComm. AN TOÀN DỮ LIỆU (17/10/2026): prefix này vẫn qua
+  // được cổng chung NHƯNG mọi route (trừ /api/pharmacy/teacher/*, có đăng nhập
+  // giảng viên riêng) bị chặn bởi requirePharmacyActor (server/pharmacy-teacher.js,
+  // mount trong index.js): cần tài khoản Tizia HOẶC cookie giảng viên PharmaComm —
+  // giảng viên PharmaComm không có tài khoản Tizia nên không gác ở đây được.
+  // Trước bản vá, prefix công khai hoàn toàn: ai biết mã SV là đọc được lịch sử,
+  // kết quả, hội thoại của SV đó (/practice/history?code=, /practice/result/:id).
   '/api/pharmacy/',
-  // GPP 2D — thực hành nghiệp vụ nhà thuốc (đề tài NCKH). Guest luyện tập được;
-  // định danh nghiên cứu bằng mã SV do người học nhập, không dữ liệu nhạy cảm.
-  // (export.csv nên hạn chế qua admin khi cần — hiện chỉ tổng hợp điểm luyện tập.)
-  '/api/gpp/',
+  // GPP 2D (/api/gpp/*): ĐÃ BỎ khỏi danh sách công khai ngày 17/10/2026 —
+  // /api/gpp/progress?studentCode= từng trả lớp, nhóm nghiên cứu, điểm pre/post
+  // của mã SV bất kỳ cho người chưa đăng nhập. Nay phải đăng nhập (xem gpp.js).
   '/manifest.webmanifest', '/sw.js', '/favicon',
   '/vendor/', '/models/',
   // Đính kèm yêu cầu (ảnh chụp màn hình / file HS gửi cho "Ban điều hành AI").
@@ -289,6 +287,9 @@ const PUBLIC_PATH_PREFIXES = [
 ];
 const PUBLIC_PATH_EXACT = new Set([
   '/login.html', '/register.html', '/login', '/register',
+  // Mở màn Pharma Crush bằng mật khẩu giảng viên — chỉ so mật khẩu, không đọc/ghi
+  // dữ liệu người học; trò chơi cho khách nên giữ công khai khi /api/gpp/* đã khoá.
+  '/api/gpp/unlock-level',
   // SEO: trang công khai crawlable cho Googlebot (xem contexts/seo).
   '/welcome', '/robots.txt', '/sitemap.xml',
   // CHẾ ĐỘ KHÁCH (không đăng nhập): được xem trang chủ + chợ app + trang trường
@@ -514,6 +515,9 @@ export function attachAuth(r) {
     if (await getUserByUsername(username)) {
       return res.status(409).json({ error: 'username đã tồn tại' });
     }
+    if (await isDisplayNameTaken(display_name)) {
+      return res.status(409).json({ error: 'tên hiển thị đã có người dùng, hãy chọn tên khác' });
+    }
 
     // Validate field role-specific. Cho phép thiếu (sẽ rơi vào /complete-profile)
     // nhưng nếu user CÓ điền thì phải hợp lệ — tránh major lạ chui vào DB.
@@ -639,6 +643,9 @@ export function attachAuth(r) {
     const b = req.body ?? {};
     const name = String(b.displayName || '').trim().slice(0, 60);
     if (!name) return res.status(400).json({ error: 'tên hiển thị không được trống' });
+    if (await isDisplayNameTaken(name, req.user.id)) {
+      return res.status(409).json({ error: 'tên hiển thị đã có người dùng, hãy chọn tên khác' });
+    }
 
     // age: bắt buộc hợp lệ nếu có gửi (giữ ràng buộc giống đăng ký 3–100)
     const ageRaw = Number(b.age);

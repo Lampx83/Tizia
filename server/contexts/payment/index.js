@@ -178,8 +178,8 @@ export function attachPayment(r, { basePath = '' } = {}) {
   r.get('/api/payment/invoices/:orderRef', requireAuth, async (req, res) => {
     const invoice = await getInvoiceByRefStmt.get(String(req.params.orderRef));
     if (!invoice) return res.status(404).json({ error: 'not_found' });
-    // Chỉ chủ đơn (hoặc cùng trường + teacher) xem được — đơn giản: chủ đơn.
-    if (invoice.user_id !== req.user.id && req.user.role !== 'teacher') {
+    // Chỉ chủ đơn hoặc admin (17/10/2026: trước đây mọi 'teacher' — vai tự đăng ký được).
+    if (Number(invoice.user_id) !== Number(req.user.id) && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'forbidden' });
     }
     res.json({
@@ -191,8 +191,8 @@ export function attachPayment(r, { basePath = '' } = {}) {
 
   // ── Hoàn tiền (teacher/admin) — ghi refund + bút toán đảo ──
   r.post('/api/payment/refunds', requireAuth, async (req, res) => {
-    if (req.user.role !== 'teacher' && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'forbidden', message: 'Chỉ giáo viên/quản trị được hoàn tiền.' });
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'forbidden', message: 'Chỉ quản trị được hoàn tiền.' });
     }
     try {
       const out = await refundPayment({ payment_id: req.body?.paymentId, amount: req.body?.amount, reason: req.body?.reason });

@@ -1,6 +1,8 @@
 // Pharmacy AI port — session store + chat / action / score routes.
 // Logic ported 1-1 from github.com/Lampx83/Pharmacy-AI (src/lib/segue/*, src/lib/session/store.ts).
 import express from 'express';
+import { randomUUID } from 'node:crypto';
+import { pharmacyActor } from './pharmacy-teacher.js';
 import { llmGenerate, llmGenerateStream, openaiGenerate, openaiGenerateStream, isOpenAIConfigured } from './ai.js';
 import { SCENARIOS } from '../public/js/pharmacy/scenarios.js';
 import { computeScore } from '../public/js/pharmacy/score.js';
@@ -8,7 +10,9 @@ import { computeScore } from '../public/js/pharmacy/score.js';
 const sessions = new Map();
 
 function createSession(moduleId) {
-  const id = `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  // UUID (122 bit ngẫu nhiên) thay cho Math.random ~31 bit — mã phiên đoán được thì
+  // đọc được hội thoại của người khác qua GET /api/pharmacy/session/:id.
+  const id = `s_${randomUUID()}`;
   const s = {
     id, moduleId,
     startedAt: Date.now(),
@@ -21,6 +25,18 @@ function createSession(moduleId) {
 }
 
 function getSession(id) { return sessions.get(id); }
+// Chủ phiên (AN TOÀN DỮ LIỆU 17/10/2026): khoá actor (u:<id> | t:<username>) lưu
+// NGOÀI object phiên (không lọt vào JSON trả client). Chỉ chủ phiên hoặc admin
+// được đọc/ghi phiên.
+const owners = new Map();
+async function getOwnSession(req, id) {
+  const s = sessions.get(id);
+  if (!s) return null;
+  const a = await pharmacyActor(req);
+  if (!a) return null;
+  if (a.isAdmin || owners.get(s.id) === a.key) return s;
+  return null;   // không phải chủ → coi như không có (không xác nhận phiên tồn tại)
+}
 function saveSession(s) { sessions.set(s.id, s); }
 
 // Dọn session bỏ quên (in-memory, không ai xoá): idle > 6 giờ → xoá, quét mỗi 30'.
@@ -402,7 +418,7 @@ export function attachPharmacy(r) {
   // Session lưu IN-MEMORY → server restart/rebuild là mất → client gặp 404 sẽ gọi
   // lại endpoint này kèm `restore` (transcript + actions nó tự giữ) để tạo phiên
   // mới LIỀN MẠCH: AI vẫn nhớ hội thoại, chấm điểm vẫn đủ hành động.
-  r.post('/api/pharmacy/session', express.json({ limit: '256kb' }), (req, res) => {
+  r.post('/api/pharmacy/session', express.json({ limit: '256kb' }), async (req, res) => {
     const moduleId = req.body?.moduleId || 'gpp';
     if (!SCENARIOS[moduleId]) return res.status(400).json({ error: 'invalid moduleId' });
     const s = createSession(moduleId);
@@ -435,6 +451,7 @@ export function attachPharmacy(r) {
     if (SCENARIOS[moduleId]) {
       for (const m of s.messages) if (m.role === 'user') updateMoodState(SCENARIOS[moduleId], s, m.content);
     }
+    owners.set(s.id, (await pharmacyActor(req)).key);
     saveSession(s);
     res.json({ session: s, scenario: SCENARIOS[moduleId] });
   });
@@ -442,7 +459,7 @@ export function attachPharmacy(r) {
   // POST /api/pharmacy/chat — user → NPC
   r.post('/api/pharmacy/chat', express.json({ limit: '256kb' }), async (req, res) => {
     const { sessionId, message } = req.body || {};
-    const s = getSession(sessionId);
+    const s = await getOwnSession(req, sessionId);
     if (!s) return res.status(404).json({ error: 'session not found' });
     const scenario = SCENARIOS[s.moduleId];
     // Guard ĐẶC THÙ bệnh nhân (né "không rành thuốc", tiết lộ 2 lớp, chào, thụ động,
@@ -598,7 +615,7 @@ export function attachPharmacy(r) {
   // CẮT SỚM ngay trong lúc stream khi đủ số câu/ký tự → abort upstream đỡ tốn GPU.
   r.post('/api/pharmacy/chat-stream', express.json({ limit: '256kb' }), async (req, res) => {
     const { sessionId, message } = req.body || {};
-    const s = getSession(sessionId);
+    const s = await getOwnSession(req, sessionId);
     if (!s) return res.status(404).json({ error: 'session not found' });
     const scenario = SCENARIOS[s.moduleId];
     const isPatient = scenario.npcKind !== 'professional';
@@ -743,9 +760,9 @@ export function attachPharmacy(r) {
   });
 
   // POST /api/pharmacy/action — record a 3D-scene action
-  r.post('/api/pharmacy/action', express.json(), (req, res) => {
+  r.post('/api/pharmacy/action', express.json(), async (req, res) => {
     const { sessionId, type, payload } = req.body || {};
-    const s = getSession(sessionId);
+    const s = await getOwnSession(req, sessionId);
     if (!s) return res.status(404).json({ error: 'session not found' });
     if (!type) return res.status(400).json({ error: 'missing type' });
     s.actions.push({ type, payload: payload || {}, ts: Date.now() });
@@ -754,9 +771,9 @@ export function attachPharmacy(r) {
   });
 
   // POST /api/pharmacy/score — finalize + compute SEGUE score
-  r.post('/api/pharmacy/score', express.json(), (req, res) => {
+  r.post('/api/pharmacy/score', express.json(), async (req, res) => {
     const { sessionId } = req.body || {};
-    const s = getSession(sessionId);
+    const s = await getOwnSession(req, sessionId);
     if (!s) return res.status(404).json({ error: 'session not found' });
     s.endedAt = Date.now();
     saveSession(s);
@@ -765,8 +782,8 @@ export function attachPharmacy(r) {
   });
 
   // GET /api/pharmacy/session/:id — debug/recover
-  r.get('/api/pharmacy/session/:id', (req, res) => {
-    const s = getSession(req.params.id);
+  r.get('/api/pharmacy/session/:id', async (req, res) => {
+    const s = await getOwnSession(req, req.params.id);
     if (!s) return res.status(404).json({ error: 'not found' });
     res.json({ session: s });
   });

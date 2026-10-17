@@ -4,17 +4,18 @@ import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { db, initDb, insertAttempt, getLeaderboard, getStats, getRecent, getAllAttempts, getHistogram, getConfusion, getAchievements, unlockAchievement, createClass, getClassByCode, listClasses, getClassMembers, getClassAttempts, getPlayerAttempts, createRequest, listRequests, voteRequest, setRequestStatus, getRequestStats, getRequestById, addRequestMessage, listRequestMessages, reopenRequestIfClosed, listNotifications, countUnreadNotifications, markNotificationRead, markAllNotificationsRead, getUserWallet, upsertUserWallet, getScenarioRunsForUser, recordScenarioRunDb, getUserState, putUserState, UserStateValueTooLargeError } from './db.js';
+import { db, initDb, insertAttempt, getLeaderboard, getStats, getRecent, getAllAttempts, getHistogram, getConfusion, getAchievements, unlockAchievement, createClass, getClassByCode, listClasses, listClassesByCreator, getRecentInCreatorClasses, getClassMembers, getClassAttempts, getPlayerAttempts, createRequest, listRequests, voteRequest, setRequestStatus, getRequestStats, getRequestById, addRequestMessage, listRequestMessages, reopenRequestIfClosed, listNotifications, countUnreadNotifications, markNotificationRead, markAllNotificationsRead, getUserWallet, upsertUserWallet, getScenarioRunsForUser, recordScenarioRunDb, getUserState, putUserState, UserStateValueTooLargeError } from './db.js';
 import { attachRoom } from './room.js';
 import { attachAi } from './ai.js';
 import { attachTts } from './tts.js';
 import { attachPharmacy } from './pharmacy.js';
 import { attachPharmacyPractice } from './pharmacy-practice.js';
-import { attachPharmacyTeacher, ensureTeacherAccount } from './pharmacy-teacher.js';
+import { attachPharmacyTeacher, ensureTeacherAccount, requirePharmacyActor } from './pharmacy-teacher.js';
 import { attachGpp } from './gpp.js';
 import { acknowledgeNewRequest, getDecisionsForRequest, getRecentDecisions } from './contexts/ai-agent/decisions.js';
 import { attachAiBoardInbox } from './contexts/ai-agent/inbox-api.js';
 import { attachAppProxies } from './app-proxy.js';
+import { ownsClass, canViewPlayer, isAdminUser, requireAdminRole, publicClass } from './contexts/security/access.js';
 import { attachScoreUpWebhook } from './contexts/integration/scoreup-webhook.js';
 import { attachCodelabWebhook } from './contexts/integration/codelab-webhook.js';
 import * as scoreup from './integrations/scoreup.js';
@@ -466,9 +467,14 @@ r.get('/api/stats', async (req, res) => {
   res.json(await getStats(version));
 });
 
+// AN TOÀN DỮ LIỆU (17/10/2026): trước đây trả tên + điểm lượt làm bài mới nhất của
+// TOÀN HỆ THỐNG cho mọi tài khoản. Nay: admin xem tất cả; người khác chỉ thấy lượt
+// làm bài trong các lớp do mình tạo.
 r.get('/api/recent', async (req, res) => {
   const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
-  res.json(await getRecent(limit));
+  if (isAdminUser(req.user)) return res.json(await getRecent(limit));
+  if (!req.user) return res.status(401).json({ error: 'unauthorized' });
+  res.json(await getRecentInCreatorClasses(req.user.id, limit));
 });
 
 r.get('/api/histogram', async (req, res) => {
@@ -885,6 +891,11 @@ r.get('/api/codelab/submissions/:id', requireAuth, async (req, res) => {
   if (!codelabReady(res)) return;
   try {
     const sub = await codelab.getSubmission(req.params.id);
+    // 17/10/2026: comment trên nói có kiểm chủ nhưng code chưa kiểm — bài nộp
+    // (mã nguồn + kết quả) của người khác đọc được chỉ bằng ID.
+    if (!isAdminUser(req.user) && sub?.externalUserRef !== refOf(req)) {
+      return res.status(404).json({ error: 'not_found' });
+    }
     res.json(sub);
   } catch (e) { codelabFail(res, e); }
 });
@@ -1053,6 +1064,9 @@ attachTts(r);
 // PHARMACY-AI — port từ github.com/Lampx83/Pharmacy-AI (nhà thuốc 3D GPP).
 // Session + chat + action + SEGUE scoring + fatal-error detection.
 // ============================================================
+// AN TOÀN DỮ LIỆU (17/10/2026): mọi /api/pharmacy/* (trừ /teacher/*) cần tài khoản
+// Tizia hoặc giảng viên PharmaComm. Phải đứng TRƯỚC các attachPharmacy*.
+r.use('/api/pharmacy', requirePharmacyActor);
 attachPharmacy(r);
 
 // ============================================================
@@ -1098,9 +1112,13 @@ function genCode(len = 6) {
   return s;
 }
 
+// AN TOÀN DỮ LIỆU (17/10/2026): lớp gắn với người tạo; chỉ người tạo (hoặc admin)
+// xem danh sách thành viên, lượt làm bài, CSV điểm. GET /api/classes/:code vẫn mở
+// cho mọi tài khoản đăng nhập vì HS cần tra mã lớp khi tham gia (chỉ tên lớp/GV).
 r.post('/api/classes', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'unauthorized' });
   const name = String(req.body?.name || '').trim().slice(0, 60);
-  const teacherName = String(req.body?.teacherName || 'GV').trim().slice(0, 40);
+  const teacherName = String(req.body?.teacherName || req.user.display_name || 'GV').trim().slice(0, 40);
   if (!name) return res.status(400).json({ error: 'name required' });
   let code = null;
   for (let i = 0; i < 8; i++) {
@@ -1108,27 +1126,33 @@ r.post('/api/classes', async (req, res) => {
     if (!(await getClassByCode(c))) { code = c; break; }
   }
   if (!code) return res.status(500).json({ error: 'could not generate code' });
-  const result = await createClass({ code, name, teacher_name: teacherName });
+  const result = await createClass({ code, name, teacher_name: teacherName, creator_user_id: req.user.id });
   res.json({ id: result.id, code, name, teacherName });
 });
 
-r.get('/api/classes', async (_req, res) => res.json(await listClasses()));
+r.get('/api/classes', async (req, res) => {
+  if (isAdminUser(req.user)) return res.json(await listClasses());
+  if (!req.user) return res.status(401).json({ error: 'unauthorized' });
+  res.json(await listClassesByCreator(req.user.id));
+});
 
 r.get('/api/classes/:code', async (req, res) => {
   const cls = await getClassByCode(req.params.code);
   if (!cls) return res.status(404).json({ error: 'class not found' });
-  res.json(cls);
+  res.json(publicClass(cls));
 });
 
 r.get('/api/classes/:code/members', async (req, res) => {
   const cls = await getClassByCode(req.params.code);
   if (!cls) return res.status(404).json({ error: 'class not found' });
+  if (!ownsClass(req.user, cls)) return res.status(403).json({ error: 'not_class_owner' });
   res.json(await getClassMembers(req.params.code));
 });
 
 r.get('/api/classes/:code/attempts', async (req, res) => {
   const cls = await getClassByCode(req.params.code);
   if (!cls) return res.status(404).json({ error: 'class not found' });
+  if (!ownsClass(req.user, cls)) return res.status(403).json({ error: 'not_class_owner' });
   const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
   res.json(await getClassAttempts(req.params.code, limit));
 });
@@ -1136,6 +1160,7 @@ r.get('/api/classes/:code/attempts', async (req, res) => {
 r.get('/api/classes/:code/export.csv', async (req, res) => {
   const cls = await getClassByCode(req.params.code);
   if (!cls) return res.status(404).send('class not found');
+  if (!ownsClass(req.user, cls)) return res.status(403).send('forbidden');
   const rows = await getClassAttempts(req.params.code, 5000);
   const esc = v => v == null ? '' : (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g,'""')}"` : String(v));
   const lines = ['id,version,level,player_name,score,correct,total,duration_ms,created_at_iso'];
@@ -1147,7 +1172,9 @@ r.get('/api/classes/:code/export.csv', async (req, res) => {
   res.send('﻿' + lines.join('\n'));
 });
 
+// Chỉ chính người đó, người tạo lớp mà người đó có làm bài, hoặc admin (17/10/2026).
 r.get('/api/players/:name/attempts', async (req, res) => {
+  if (!(await canViewPlayer(req.user, req.params.name))) return res.status(403).json({ error: 'forbidden' });
   const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
   res.json(await getPlayerAttempts(req.params.name, limit));
 });
@@ -1157,6 +1184,7 @@ r.get('/api/achievements', async (req, res) => {
   // (giáo viên xem học sinh — sau có thể gate theo role).
   const player = String(req.query.player || req.user?.display_name || '').trim();
   if (!player) return res.status(400).json({ error: 'player required' });
+  if (!(await canViewPlayer(req.user, player))) return res.status(403).json({ error: 'forbidden' });
   const rows = await getAchievements(player);
   res.json(rows.map(row => ({ ...row, badge: BADGES.find(b => b.id === row.badge_id) })));
 });
@@ -1463,7 +1491,8 @@ r.post('/api/notifications/read-all', async (req, res) => {
   res.json({ ok: true, marked: n });
 });
 
-r.get('/api/export.csv', async (_req, res) => {
+// Mọi lượt làm bài của mọi người (tên, điểm, chi tiết) → CHỈ admin (17/10/2026).
+r.get('/api/export.csv', requireAdminRole, async (_req, res) => {
   const rows = await getAllAttempts();
   const esc = v => {
     if (v == null) return '';

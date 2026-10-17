@@ -789,11 +789,13 @@ export function attachAdmin(r) {
     res.json({ ok: true, deleted: id });
   });
 
-  // Trục 2: log prompt AI của HS — GV/admin xem được. ?blocked=1 lọc prompt đã bị filter chặn.
+  // Trục 2: log prompt AI của HS. ?blocked=1 lọc prompt đã bị filter chặn.
+  // AN TOÀN DỮ LIỆU (17/10/2026): CHỈ admin — log chứa prompt của MỌI học sinh kèm
+  // username/tên/lớp, mà vai 'teacher' thì ai cũng tự đăng ký được.
   r.get('/api/teacher/ai-prompts', async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'unauthorized' });
-    if (!['teacher', 'admin'].includes(req.user.role)) {
-      return res.status(403).json({ error: 'forbidden', message: 'Chỉ giảng viên hoặc admin xem được' });
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'forbidden', message: 'Chỉ quản trị viên xem được' });
     }
     const blockedOnly = req.query.blocked === '1' || req.query.blocked === 'true';
     const limit = Number(req.query.limit) || 50;

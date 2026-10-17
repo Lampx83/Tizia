@@ -7,9 +7,11 @@
 // không đụng vào logic bệnh nhân AI. Xoá module = xoá file này + 1 dòng
 // attachPharmacyPractice trong index.js + 4 bảng pharmacy_practice_*.
 //
-// Danh tính người học: TỰ KHAI (mã SV + họ tên + lớp), KHÔNG mật khẩu — đúng
-// đặc tả mục 2 ("màn hình nhập thông tin định danh, không phải hệ thống xác
-// thực tài khoản"). player_name từ session Tizia chỉ lưu để đối soát.
+// Danh tính người học: mã SV + họ tên + lớp do người học khai (đặc tả mục 2).
+// AN TOÀN DỮ LIỆU (17/10/2026): khác đặc tả gốc, nay PHẢI đăng nhập tài khoản
+// Tizia (hoặc là giảng viên PharmaComm) — gác ở requirePharmacyActor. Mã SV gắn
+// với tài khoản đầu tiên dùng nó; phiên gắn với tài khoản tạo phiên. Chỉ chủ
+// phiên, giảng viên PharmaComm hoặc quản trị đọc được kết quả.
 //
 // Dữ liệu APPEND-ONLY: không có route sửa/xoá lời thoại hay thao tác (đặc tả
 // mục 5 & 12: "Không cho sinh viên sửa hoặc xóa nội dung đã lưu").
@@ -24,7 +26,7 @@ import {
   OTC_SAFETY_FLAGS, OTC_PRINCIPLES,
 } from '../public/js/pharmacy/otc-rubric.js';
 import { OTC02_LEVEL_OVERRIDES } from '../public/js/pharmacy/otc02-rubric.js';
-import { currentTeacher } from './pharmacy-teacher.js';   // req #143: nhận diện lượt GV chạy thử
+import { currentTeacher, pharmacyActor } from './pharmacy-teacher.js';   // req #143: nhận diện lượt GV chạy thử
 import {
   RUBRIC, RUBRIC_VERSION, RUBRIC_GROUPS, MAX_PER_CRITERION, MAX_TOTAL, summarize,
 } from '../public/js/pharmacy/practice-rubric.js';
@@ -39,10 +41,10 @@ const insSession = db.prepare(`
   INSERT INTO pharmacy_practice_session
     (session_id, student_code, student_name, class_name, scenario_code, scenario_name,
      scenario_version, rubric_version, ai_model_version, started_at, status,
-     chat_session_id, user_ref, session_kind, created_at, updated_at)
+     chat_session_id, user_ref, session_kind, owner_user_id, owner_teacher, created_at, updated_at)
   VALUES (@session_id, @student_code, @student_name, @class_name, @scenario_code, @scenario_name,
      @scenario_version, @rubric_version, @ai_model_version, @t, 'in_progress',
-     @chat_session_id, @user_ref, @session_kind, @t, @t)
+     @chat_session_id, @user_ref, @session_kind, @owner_user_id, @owner_teacher, @t, @t)
   RETURNING session_id
 `);
 const getSessionRow = db.prepare(`SELECT * FROM pharmacy_practice_session WHERE session_id = ?`);
@@ -58,13 +60,15 @@ const finishSession = db.prepare(`
 // chỉ một hồ sơ; họ tên/lớp cập nhật theo lần khai gần nhất (sửa được lỗi gõ).
 // Lượt khách và lượt chạy thử của giảng viên KHÔNG tạo hồ sơ sinh viên.
 const upsertStudent = db.prepare(`
-  INSERT INTO pharmacy_student (student_code, student_name, class_name, first_seen_at, last_seen_at, session_count)
-  VALUES (@code, @name, @cls, @t, @t, 1)
+  INSERT INTO pharmacy_student (student_code, student_name, class_name, first_seen_at, last_seen_at, session_count, owner_user_id)
+  VALUES (@code, @name, @cls, @t, @t, 1, @owner)
   ON CONFLICT (student_code) DO UPDATE
     SET student_name = EXCLUDED.student_name,
         class_name   = EXCLUDED.class_name,
         last_seen_at = EXCLUDED.last_seen_at,
-        session_count = pharmacy_student.session_count + 1`);
+        session_count = pharmacy_student.session_count + 1,
+        owner_user_id = COALESCE(pharmacy_student.owner_user_id, EXCLUDED.owner_user_id)`);
+const getStudent = db.prepare(`SELECT student_code, owner_user_id FROM pharmacy_student WHERE student_code = ?`);
 
 const insMessage = db.prepare(`
   INSERT INTO pharmacy_practice_message (session_id, speaker, content, message_order, created_at)
@@ -110,6 +114,28 @@ const recentForStudent = db.prepare(`
     FROM pharmacy_practice_session
    WHERE student_code = ? ORDER BY started_at DESC LIMIT 20
 `);
+// Lịch sử của CHÍNH tài khoản đang đăng nhập (không tra theo mã SV người khác).
+const recentForOwner = db.prepare(`
+  SELECT session_id, scenario_code, scenario_name, started_at, completed_at,
+         duration_ms, status, total_score
+    FROM pharmacy_practice_session
+   WHERE owner_user_id = ? AND session_kind <> 'TEACHER_TEST' ORDER BY started_at DESC LIMIT 20
+`);
+
+// ---- quyền trên một phiên (AN TOÀN DỮ LIỆU 17/10/2026) ----------------
+// Ghi (lời thoại, thao tác, kết thúc): chỉ chủ phiên (hoặc admin).
+function canWriteSession(actor, row) {
+  if (!actor || !row) return false;
+  if (actor.isAdmin) return true;
+  if (row.owner_user_id != null && actor.userId != null && Number(row.owner_user_id) === actor.userId) return true;
+  if (row.owner_teacher && actor.teacher && row.owner_teacher === actor.teacher.username) return true;
+  return false;
+}
+// Đọc kết quả: chủ phiên, giảng viên PharmaComm (khu GV đã liệt kê mọi phiên SV), admin.
+// Phiên cũ (trước bản vá, owner NULL) chỉ giảng viên/admin đọc được.
+function canReadSession(actor, row) {
+  return canWriteSession(actor, row) || !!actor?.teacher;
+}
 
 // player_name từ session Tizia (chỉ đọc, không tin body).
 function userRef(req) {
@@ -565,7 +591,8 @@ export function attachPharmacyPractice(r) {
       // viên (không vào lịch sử, điểm trung bình, thống kê). Tư cách giảng viên đọc
       // từ COOKIE đã đăng nhập, KHÔNG lấy theo cờ client gửi lên — client tự khai
       // "tôi là giảng viên" thì không có tác dụng.
-      const teacher = await currentTeacher(req);
+      const actor = await pharmacyActor(req);
+      const teacher = actor?.teacher || await currentTeacher(req);
       let session_kind = 'STUDENT';
       if (teacher) {
         session_kind = 'TEACHER_TEST';
@@ -574,6 +601,14 @@ export function attachPharmacyPractice(r) {
         class_name = 'Giảng viên chạy thử';
       } else if (b.guest === true) {
         session_kind = 'GUEST';
+      }
+      // Mã SV đã gắn với tài khoản KHÁC → không cho dùng (chống mạo danh SV thật,
+      // chèn bài vào hồ sơ người khác).
+      if (session_kind === 'STUDENT' && !actor?.isAdmin) {
+        const st = await getStudent.get(student_code);
+        if (st?.owner_user_id != null && Number(st.owner_user_id) !== actor?.userId) {
+          return res.status(403).json({ error: 'Mã sinh viên này đã gắn với một tài khoản khác. Nếu đây là mã của bạn, hãy báo giảng viên hoặc quản trị viên.' });
+        }
       }
 
       const session_id = randomUUID();
@@ -588,12 +623,14 @@ export function attachPharmacyPractice(r) {
         chat_session_id: clean(b.chatSessionId, 80) || null,
         user_ref: userRef(req),
         session_kind,
+        owner_user_id: session_kind === 'TEACHER_TEST' ? null : (actor?.userId ?? null),
+        owner_teacher: session_kind === 'TEACHER_TEST' ? teacher.username : null,
         t: now(),
       });
       // Hồ sơ sinh viên chỉ lập cho lượt SINH VIÊN thật — khách và GV chạy thử không
       // được tạo hồ sơ, để danh sách lớp của cô sạch.
       if (session_kind === 'STUDENT') {
-        try { await upsertStudent.run({ code: student_code, name: student_name, cls: class_name, t: now() }); }
+        try { await upsertStudent.run({ code: student_code, name: student_name, cls: class_name, owner: actor?.userId ?? null, t: now() }); }
         catch (e) { console.error('[pharmacy-practice] upsert hồ sơ SV lỗi:', e.message); }
       }
       res.json({ sessionId: session_id, scenarioCode: sc.code || moduleId, scenarioName: sc.title || null, sessionKind: session_kind });
@@ -609,7 +646,7 @@ export function attachPharmacyPractice(r) {
     try {
       const { sessionId, speaker, content, order } = req.body || {};
       const row = await getSessionRow.get(String(sessionId || ''));
-      if (!row) return res.status(404).json({ error: 'Không tìm thấy phiên thực hành.' });
+      if (!row || !canWriteSession(await pharmacyActor(req), row)) return res.status(404).json({ error: 'Không tìm thấy phiên thực hành.' });
       if (row.status !== 'in_progress') return res.status(409).json({ error: 'Phiên đã kết thúc.' });
       const sp = speaker === 'patient' ? 'patient' : 'student';
       const text = String(content || '').trim();
@@ -628,7 +665,7 @@ export function attachPharmacyPractice(r) {
     try {
       const { sessionId, type, payload, order, result } = req.body || {};
       const row = await getSessionRow.get(String(sessionId || ''));
-      if (!row) return res.status(404).json({ error: 'Không tìm thấy phiên thực hành.' });
+      if (!row || !canWriteSession(await pharmacyActor(req), row)) return res.status(404).json({ error: 'Không tìm thấy phiên thực hành.' });
       if (row.status !== 'in_progress') return res.status(409).json({ error: 'Phiên đã kết thúc.' });
       const t = clean(type, 60);
       const ord = Number(order);
@@ -665,7 +702,7 @@ export function attachPharmacyPractice(r) {
   r.post('/api/pharmacy/practice/finish', J, async (req, res) => {
     const { sessionId } = req.body || {};
     const row0 = await getSessionRow.get(String(sessionId || ''));
-    if (!row0) return res.status(404).json({ error: 'Không tìm thấy phiên thực hành.' });
+    if (!row0 || !canWriteSession(await pharmacyActor(req), row0)) return res.status(404).json({ error: 'Không tìm thấy phiên thực hành.' });
     if (row0.status === 'scoring') return res.json({ ok: true, sessionId: row0.session_id, status: 'scoring' });
 
     const completedAt = row0.completed_at || now();
@@ -807,7 +844,7 @@ export function attachPharmacyPractice(r) {
   r.get('/api/pharmacy/practice/result/:id', async (req, res) => {
     try {
       const row = await getSessionRow.get(String(req.params.id || ''));
-      if (!row) return res.status(404).json({ error: 'Không tìm thấy phiên thực hành.' });
+      if (!row || !canReadSession(await pharmacyActor(req), row)) return res.status(404).json({ error: 'Không tìm thấy phiên thực hành.' });
       const [messages, actions, scores] = await Promise.all([
         listMessages.all(row.session_id),
         listActions.all(row.session_id),
@@ -838,12 +875,16 @@ export function attachPharmacyPractice(r) {
     }
   });
 
-  // GET /api/pharmacy/practice/history?code=SV001 — SV xem lại các lượt của mình.
+  // GET /api/pharmacy/practice/history — SV xem lại các lượt của CHÍNH MÌNH (theo
+  // tài khoản đăng nhập). ?code= chỉ có tác dụng với giảng viên PharmaComm/admin;
+  // trước 17/10/2026 ai truyền ?code= của SV bất kỳ cũng đọc được.
   r.get('/api/pharmacy/practice/history', async (req, res) => {
     try {
+      const actor = await pharmacyActor(req);
       const code = clean(req.query.code, 40).toUpperCase();
-      if (!code) return res.status(400).json({ error: 'Thiếu mã sinh viên.' });
-      res.json({ items: await recentForStudent.all(code) });
+      if (code && (actor?.teacher || actor?.isAdmin)) return res.json({ items: await recentForStudent.all(code) });
+      if (actor?.userId == null) return res.json({ items: [] });
+      res.json({ items: await recentForOwner.all(actor.userId) });
     } catch (err) {
       console.error('[pharmacy-practice] history failed:', err.message);
       res.status(500).json({ error: 'Không đọc được lịch sử.' });

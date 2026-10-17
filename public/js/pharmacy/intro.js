@@ -7,6 +7,7 @@
 // public/nha-thuoc-3d.html (Express) và web-next (Next) — 1 nguồn duy nhất.
 import { SCENARIO_CARDS, SCENARIOS } from './scenarios.js?v=ph0924';
 import { getStudent, setStudent, clearStudent, setGuest, isGuest } from './practice-client.js?v=ph0924';
+import { goLoginIf401 } from '../auth-redirect.js';
 
 // req #143: đã BỎ dải 4 ô "mục tiêu học tập" và phần mô tả dài dưới mỗi thẻ khỏi
 // màn chọn tình huống theo yêu cầu của giảng viên — màn này chỉ còn danh sách tên
@@ -327,7 +328,10 @@ async function loadHistory(overlay) {
   const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const vn = (ms) => { if (!ms) return '—'; const d = new Date(Number(ms) + 7 * 3600 * 1000), p = (n) => String(n).padStart(2, '0'); return `${p(d.getUTCHours())}:${p(d.getUTCMinutes())} ${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`; };
   try {
+    // Server trả lịch sử của TÀI KHOẢN đang đăng nhập (17/10/2026); ?code= chỉ có
+    // tác dụng với giảng viên/quản trị.
     const r = await fetch('/api/pharmacy/practice/history?code=' + encodeURIComponent(st.studentCode));
+    if (goLoginIf401(r)) return;
     const d = await r.json();
     const items = d.items || [];
     if (!items.length) { box.textContent = 'Chưa có lượt thực hành nào.'; return; }

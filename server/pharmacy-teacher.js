@@ -128,6 +128,30 @@ async function requireTeacher(req, res, next) {
 }
 export { requireTeacher, currentTeacher };
 
+// ---- gác chung cho /api/pharmacy/* (AN TOÀN DỮ LIỆU 17/10/2026) -------------
+// Trước đây cả prefix /api/pharmacy/ công khai: ai cũng đọc được lịch sử, kết quả
+// (họ tên, mã SV, hội thoại, điểm) của SV bất kỳ chỉ bằng mã SV hoặc mã phiên.
+// Nay mọi route (trừ /api/pharmacy/teacher/*, có cổng đăng nhập riêng) cần một
+// "người thực hành": tài khoản Tizia đã đăng nhập HOẶC giảng viên PharmaComm.
+// req.pharmacyActor = { key, userId, teacher, isAdmin } để route kiểm chủ sở hữu.
+export async function pharmacyActor(req) {
+  if (req.pharmacyActor !== undefined) return req.pharmacyActor;
+  const teacher = await currentTeacher(req);
+  const u = req.user || null;
+  let actor = null;
+  if (u) actor = { key: `u:${u.id}`, userId: Number(u.id), teacher, isAdmin: u.role === 'admin' };
+  else if (teacher) actor = { key: `t:${teacher.username}`, userId: null, teacher, isAdmin: false };
+  req.pharmacyActor = actor;
+  return actor;
+}
+export async function requirePharmacyActor(req, res, next) {
+  // Mount ở '/api/pharmacy' → req.path đã bỏ prefix. Khu giảng viên tự gác (login/me/…).
+  if (req.path.startsWith('/teacher/')) return next();
+  const a = await pharmacyActor(req);
+  if (!a) return res.status(401).json({ error: 'unauthorized', needLogin: true, message: 'Vui lòng đăng nhập để thực hành.' });
+  next();
+}
+
 // =====================================================================
 // ROUTES
 // =====================================================================

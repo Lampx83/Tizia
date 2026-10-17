@@ -11,6 +11,7 @@
 // =====================================================================
 
 import { ALL_DRUGS } from './catalog.js?v=ph0804';
+import { goLoginIf401 } from '../auth-redirect.js';
 
 const STUDENT_KEY = 'pharmacomm:student';   // localStorage — nhớ giữa các lượt
 const STATE_KEY = 'pharmacomm:practice';    // sessionStorage — theo tab
@@ -71,6 +72,7 @@ export async function startPractice({ moduleId, chatSessionId }) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...st, moduleId, chatSessionId }),
     });
+    if (goLoginIf401(r)) return new Promise(() => {});   // đang chuyển trang đăng nhập
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'Không tạo được phiên thực hành.');
     state = { practiceId: d.sessionId, moduleId, msgOrder: 0, actOrder: 0, finished: false };
@@ -151,6 +153,7 @@ export async function finishPractice() {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ sessionId: id }),
   });
+  if (goLoginIf401(r)) return new Promise(() => {});   // đang chuyển trang đăng nhập
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.error || 'Chấm điểm lỗi.');
   endPracticeLocal();   // req #227: lượt này xong — lượt sau phải tạo mã lượt MỚI
