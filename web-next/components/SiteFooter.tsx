@@ -23,7 +23,7 @@ import { SITE_NAME, SITE_TAGLINE } from '@/lib/seo';
 const FOOTER_ROUTES: RegExp[] = [
   /^\/$/,
   /^\/(kham-pha|school|space|apps|pricing|nang-luc|marketplace|league|leaderboard)(\/|$)/,
-  /^\/(dev|portal-apps|cv|subject|module|lesson|register|login|bang-phong-than)(\/|$)/,
+  /^\/(dev|portal-apps|cv|subject|module|lesson|register|login|bang-phong-than|hop-tac)(\/|$)/,
   /^\/(luyen-de|srs|hoc-thong-minh|tu-vung-tieng-anh|quiz|on-tap)(\/|$)/,
   /^\/(luat-giao-thong-600|bien-bao-giao-thong|tra-cuu-bien-bao-gplx)(\/|$)/,
 ];
@@ -64,6 +64,7 @@ const ABOUT: Array<[string, string]> = [
   ['/apps', 'Thư viện ứng dụng'],
   ['/marketplace', 'Chợ bài giảng cộng đồng'],
   ['/dev', 'Dành cho lập trình viên'],
+  ['/hop-tac', 'Hợp tác'],
   ['/register', 'Đăng ký miễn phí'],
 ];
 

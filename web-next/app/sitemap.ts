@@ -26,6 +26,7 @@ const CORE: Entry[] = [
   { path: '/nang-luc', priority: 0.8, freq: 'monthly' },
   { path: '/tinh-nang.html', priority: 0.7, freq: 'monthly' },
   { path: '/dev', priority: 0.6, freq: 'monthly' },
+  { path: '/hop-tac', priority: 0.6, freq: 'monthly' },
   { path: '/marketplace', priority: 0.6, freq: 'weekly' },
   { path: '/league', priority: 0.5, freq: 'weekly' },
   { path: '/leaderboard', priority: 0.5, freq: 'daily' },

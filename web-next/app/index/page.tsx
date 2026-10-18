@@ -357,6 +357,27 @@ export default async function IndexPage() {
         })}
       </section>
 
+      {/* ============ HỢP TÁC (chỉ khách + giáo viên/quản trị; ẩn với tài khoản người học) ============ */}
+      {(isGuest || me?.role === 'teacher' || me?.role === 'admin') && (
+        <section className={styles.section} aria-labelledby="hop-tac-home">
+          <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card/60 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="max-w-3xl space-y-1.5">
+              <h2 id="hop-tac-home" className="text-lg font-semibold">🤝 Dành cho nhà trường và tổ chức</h2>
+              <p className="text-sm text-muted-foreground">
+                Tizia hợp tác với trường học, trung tâm đào tạo, doanh nghiệp và cơ sở y tế: dùng nền tảng cho đơn vị
+                (kể cả triển khai trên máy chủ riêng), tích hợp hệ thống, biên soạn học liệu và nghiên cứu chung.
+              </p>
+            </div>
+            <Link
+              href="/hop-tac"
+              className="inline-flex h-10 shrink-0 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              Liên hệ hợp tác
+            </Link>
+          </div>
+        </section>
+      )}
+
       {/* ============ KHÁM PHÁ THÊM (marquee) ============ */}
       <section className={styles.section} style={{ marginBottom: 20 }}>
         <div className={styles.sectionTitle}>
