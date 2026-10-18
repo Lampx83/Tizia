@@ -2494,7 +2494,9 @@ function renderTabBar() {
     return `<button class="tab ${k === currentTab ? 'active' : ''}" data-k="${k}">${v.label}${badge}</button>`;
   }).join('')
     // Link ra trang sửa nội dung học (curriculum_content) — chỉ super-admin.
-    + (isSchoolAdminMode() ? '' : `<a class="tab" href="/admin-curriculum.html" title="Sửa nóng quiz + lý thuyết trong DB">✏️ Sửa nội dung</a>`);
+    + (isSchoolAdminMode() ? '' : `<a class="tab" href="/admin-curriculum.html" title="Sửa nóng quiz + lý thuyết trong DB">✏️ Sửa nội dung</a>`)
+    // Yêu cầu hợp tác của tổ chức (form /hop-tac) — chỉ super-admin.
+    + (isSchoolAdminMode() ? '' : `<a class="tab" href="/admin-hop-tac.html" title="Yêu cầu liên hệ hợp tác từ trang /hop-tac">🤝 Hợp tác</a>`);
   const bar = $('#tabs');
   if (bar) bar.innerHTML = tabsHtml;
 }

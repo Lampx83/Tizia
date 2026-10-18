@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="robots" content="noindex,nofollow" />
+<title>🤝 Yêu cầu hợp tác · Admin Tizia</title>
+<link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+<meta name="theme-color" content="#fbbf24" />
+<style>
+  :root { --bg:#0f172a; --card:rgba(255,255,255,.05); --accent:#fbbf24; --green:#10b981;
+    --red:#ef4444; --blue:#60a5fa; --text:#e5edf7; --muted:#94a3b8; --border:rgba(255,255,255,.12); }
+  * { box-sizing:border-box; }
+  html,body { margin:0; min-height:100%; font-family:'Inter',system-ui,sans-serif;
+    color:var(--text); background:radial-gradient(ellipse 80% 50% at 50% 0%, rgba(251,191,36,.12), transparent),
+    linear-gradient(180deg,var(--bg),#1e293b); }
+  a { color: var(--accent); }
+  .top { display:flex; align-items:center; gap:14px; padding:12px 18px;
+    border-bottom:1px solid var(--border); background:rgba(0,0,0,.25); position:sticky; top:0; z-index:5; }
+  .top .home { color:#fff; text-decoration:none; opacity:.85; font-size:13.5px;
+    background:rgba(255,255,255,.08); padding:7px 12px; border-radius:9px; }
+  .top h1 { margin:0; font-size:17px; font-weight:800; }
+  .top h1 .dim { opacity:.55; font-weight:600; font-size:13.5px; }
+  .wrap { margin: 0 auto; padding: 24px 20px 60px; max-width: 1400px; }
+  .lead { color: var(--muted); line-height: 1.65; font-size: 13.5px; margin: 0 0 18px; max-width: 980px; }
+  .lead code { background: rgba(255,255,255,.08); padding: 1px 6px; border-radius: 4px; font-size: 12.5px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin: 14px 0; }
+  .filters { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
+  .filters input, .filters select { padding: 8px 12px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 13.5px; }
+  .filters input { flex: 1; min-width: 220px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { padding:6px 12px; border-radius:999px; border:1px solid var(--border); background:transparent; color:var(--muted);
+    font-size:12.5px; cursor:pointer; font-family:inherit; }
+  .chip.active { background: rgba(251,191,36,.18); color: var(--accent); border-color: rgba(251,191,36,.4); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 10px 10px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: .5px; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: rgba(255,255,255,.03); }
+  td .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .pill { display:inline-block; font-size:11px; padding:3px 9px; border-radius:999px; font-weight:700; }
+  .pill.new { background: rgba(251,191,36,.18); color: var(--accent); }
+  .pill.contacted { background: rgba(96,165,250,.18); color: var(--blue); }
+  .pill.closed { background: rgba(148,163,184,.18); color: var(--muted); }
+  .pill.warn { background: rgba(239,68,68,.15); color: #fca5a5; }
+  .empty { color: var(--muted); padding: 26px; text-align: center; font-size: 13.5px; border: 1px dashed var(--border); border-radius: 10px; }
+  .pager { display:flex; gap:8px; justify-content:flex-end; align-items:center; margin-top:12px; font-size:13px; color:var(--muted); }
+  button.btn { padding: 7px 14px; border: 1px solid var(--border); background: rgba(255,255,255,.06); color: var(--text);
+    border-radius: 8px; font-size: 13px; cursor: pointer; font-family: inherit; }
+  button.btn:hover { background: rgba(255,255,255,.12); }
+  button.btn.primary { background: linear-gradient(135deg, var(--accent), #f97316); color: #3e2723; border: 0; font-weight: 700; }
+  button.btn.danger { background: rgba(239,68,68,.12); color: #fca5a5; }
+  button.btn:disabled { opacity: .5; cursor: not-allowed; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: flex-start; justify-content: center;
+    padding: 5vh 16px; z-index: 50; overflow: auto; }
+  .modal-bg.show { display: flex; }
+  .modal { background: #111a2e; border: 1px solid var(--border); border-radius: 14px; width: min(760px, 100%); padding: 20px 22px; }
+  .modal h3 { margin: 0 0 4px; font-size: 18px; }
+  .modal .sub { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+  dl { display:grid; grid-template-columns: 170px 1fr; gap: 6px 14px; margin: 0 0 14px; font-size: 13.5px; }
+  dt { color: var(--muted); }
+  dd { margin: 0; word-break: break-word; }
+  .msg { white-space: pre-wrap; background: rgba(255,255,255,.04); border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-size: 13.5px; line-height: 1.6; }
+  .grp { margin: 12px 0; }
+  .grp label { display:block; font-size: 12.5px; color: var(--muted); margin-bottom: 5px; }
+  .grp select, .grp textarea { width: 100%; padding: 9px 12px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 13.5px; }
+  .grp textarea { min-height: 80px; resize: vertical; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:space-between; margin-top: 16px; }
+  .actions .left, .actions .right { display:flex; gap:8px; flex-wrap:wrap; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.55; }
+  .toast { position: fixed; bottom: 22px; right: 22px; background: var(--green); color: white;
+    padding: 11px 17px; border-radius: 9px; font-size: 13.5px; font-weight: 700;
+    opacity: 0; transform: translateY(10px); transition: opacity .2s, transform .2s; z-index: 100; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.err { background: var(--red); }
+  @media (max-width: 720px) { dl { grid-template-columns: 1fr; } .hide-sm { display: none; } }
+</style>
+</head>
+<body>
+<div class="top">
+  <a class="home" href="admin.html">← Admin</a>
+  <h1>🤝 Yêu cầu hợp tác <span class="dim">· Tizia</span></h1>
+</div>
+<div class="wrap">
+  <p class="lead">
+    Yêu cầu do <b>tổ chức</b> gửi từ trang <a href="/hop-tac" target="_blank" rel="noopener">/hop-tac</a>
+    (người gửi xác nhận từ 18 tuổi, đại diện đơn vị). Dữ liệu không gắn với tài khoản Tizia nào.
+    Lưu tối đa <b>24 tháng</b> kể từ lần cập nhật cuối rồi tự xoá. Khi đặt <code>GROWTH_LEADS_KEY</code>,
+    CRM của SIM kéo các yêu cầu này qua <code>/api/internal/growth/leads</code> (trừ email thử và yêu cầu bị đánh dấu spam).
+  </p>
+  <div class="card">
+    <div class="filters">
+      <div class="chips" id="statusChips"></div>
+      <select id="spamSel" title="Spam">
+        <option value="">Ẩn spam</option>
+        <option value="1">Chỉ spam</option>
+        <option value="all">Tất cả</option>
+      </select>
+      <input type="text" id="q" placeholder="🔎 Tìm theo đơn vị, người liên hệ, email…" />
+    </div>
+    <div id="table"><div class="empty">⏳ Đang tải…</div></div>
+    <div class="pager" id="pager"></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <h3 id="mTitle"></h3>
+    <p class="sub" id="mSub"></p>
+    <dl id="mInfo"></dl>
+    <div class="msg" id="mMsg"></div>
+    <div class="grp">
+      <label for="mStatus">Trạng thái xử lý</label>
+      <select id="mStatus">
+        <option value="new">Mới</option>
+        <option value="contacted">Đã liên hệ</option>
+        <option value="closed">Đã đóng</option>
+      </select>
+    </div>
+    <div class="grp">
+      <label for="mNote">Ghi chú nội bộ (chỉ admin thấy)</label>
+      <textarea id="mNote" maxlength="5000"></textarea>
+    </div>
+    <div class="actions">
+      <div class="left">
+        <button class="btn" id="mSpam"></button>
+        <button class="btn danger" id="mWithdraw">Đánh dấu rút đồng ý</button>
+        <button class="btn danger" id="mDelete">🗑 Xoá</button>
+      </div>
+      <div class="right">
+        <button class="btn" id="mClose">Đóng</button>
+        <button class="btn primary" id="mSave">Lưu</button>
+      </div>
+    </div>
+    <p class="hint">
+      <b>Rút đồng ý</b>: dùng khi đơn vị đề nghị dừng liên hệ — hệ thống ghi thời điểm, xoá email và điện thoại,
+      và báo cho CRM SIM (optOuts) để ngừng liên hệ. <b>Yêu cầu xoá dữ liệu</b>: bấm «Rút đồng ý» trước, đợi CRM
+      đồng bộ (tối đa vài giờ) rồi mới «Xoá», để bên CRM cũng xoá thông tin liên hệ.
+    </p>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+  const STATUS = { '': 'Tất cả', new: 'Mới', contacted: 'Đã liên hệ', closed: 'Đã đóng' };
+  const PAGE = 50;
+  let state = { status: '', q: '', spam: '', offset: 0 };
+  let current = null;
+
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const fmt = (ms) => ms ? new Date(ms).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '—';
+
+  function toast(msg, isErr = false) {
+    const t = $('#toast');
+    t.className = 'toast show' + (isErr ? ' err' : '');
+    t.textContent = msg;
+    setTimeout(() => t.classList.remove('show'), 2600);
+  }
+  async function csrf() {
+    try { return (await (await fetch('/api/csrf', { credentials: 'include' })).json()).token; } catch { return null; }
+  }
+  async function api(method, url, body) {
+    const opts = { method, credentials: 'include', headers: { 'Content-Type': 'application/json' } };
+    if (method !== 'GET') { const tok = await csrf(); if (tok) opts.headers['X-CSRF-Token'] = tok; }
+    if (body) opts.body = JSON.stringify(body);
+    const r = await fetch(url, opts);
+    if (r.status === 401) { location.href = '/login.html?return=' + encodeURIComponent('/admin-hop-tac.html'); throw new Error('login'); }
+    const data = await r.json().catch(() => ({}));
+    return { ok: r.ok, status: r.status, data };
+  }
+
+  function renderChips(counts = {}) {
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
+    $('#statusChips').innerHTML = Object.entries(STATUS).map(([k, v]) => {
+      const n = k ? (counts[k] || 0) : total;
+      return `<button class="chip ${state.status === k ? 'active' : ''}" data-s="${k}">${v} · ${n}</button>`;
+    }).join('');
+  }
+
+  async function load() {
+    const p = new URLSearchParams({ limit: String(PAGE), offset: String(state.offset) });
+    if (state.status) p.set('status', state.status);
+    if (state.q) p.set('q', state.q);
+    if (state.spam) p.set('spam', state.spam);
+    const r = await api('GET', '/api/admin/partnership?' + p);
+    if (r.status === 403) { $('#table').innerHTML = '<div class="empty">⛔ Cần quyền quản trị hệ thống (admin).</div>'; return; }
+    if (!r.ok) { $('#table').innerHTML = `<div class="empty">Lỗi tải dữ liệu (${r.status}).</div>`; return; }
+    renderChips(r.data.counts);
+    const items = r.data.items || [];
+    if (!items.length) { $('#table').innerHTML = '<div class="empty">Chưa có yêu cầu nào.</div>'; $('#pager').innerHTML = ''; return; }
+    $('#table').innerHTML = `<table><thead><tr>
+        <th>Thời điểm</th><th>Đơn vị</th><th>Người liên hệ</th><th class="hide-sm">Lĩnh vực</th><th>Trạng thái</th>
+      </tr></thead><tbody>${items.map((it) => `
+      <tr data-id="${it.id}">
+        <td>${esc(fmt(it.createdAt))}</td>
+        <td><b>${esc(it.organization)}</b><div class="sub">${esc(it.orgTypeLabel)}${it.seats ? ' · ' + esc(it.seats) + ' người dùng' : ''}</div></td>
+        <td>${esc(it.contactName)}<div class="sub">${esc(it.email || '(đã xoá)')}</div></td>
+        <td class="hide-sm">${esc(it.areaLabel)}</td>
+        <td><span class="pill ${esc(it.status)}">${esc(STATUS[it.status] || it.status)}</span>
+          ${it.withdrawnAt ? '<span class="pill warn">Rút đồng ý</span>' : ''}
+          ${it.spam ? '<span class="pill warn">Spam</span>' : ''}
+          ${it.isTest ? '<span class="pill closed">Email thử</span>' : ''}</td>
+      </tr>`).join('')}</tbody></table>`;
+    const total = r.data.total || 0;
+    const from = state.offset + 1, to = Math.min(state.offset + PAGE, total);
+    $('#pager').innerHTML = `${from}–${to} / ${total}
+      <button class="btn" id="prev" ${state.offset ? '' : 'disabled'}>‹ Trước</button>
+      <button class="btn" id="next" ${to < total ? '' : 'disabled'}>Sau ›</button>`;
+    $('#prev').onclick = () => { state.offset = Math.max(0, state.offset - PAGE); load(); };
+    $('#next').onclick = () => { state.offset += PAGE; load(); };
+    current = null;
+    window._items = items;
+  }
+
+  function openModal(it) {
+    current = it;
+    $('#mTitle').textContent = it.organization;
+    $('#mSub').textContent = `Gửi lúc ${fmt(it.createdAt)} · cập nhật ${fmt(it.updatedAt)} · #${it.id}`;
+    const src = it.source ? Object.entries(it.source).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join(' · ') : '';
+    const rows = [
+      ['Loại đơn vị', it.orgTypeLabel],
+      ['Người liên hệ', it.contactName],
+      ['Email', it.email ? `<a href="mailto:${esc(it.email)}">${esc(it.email)}</a>` : '(đã xoá sau khi rút đồng ý)', true],
+      ['Điện thoại', it.phone || '—'],
+      ['Lĩnh vực', it.areaLabel],
+      ['Số người dùng dự kiến', it.seats ?? '—'],
+      ['Đồng ý được liên hệ', `${fmt(it.consentAt)} (${it.consentVersion})`],
+      ['Rút đồng ý', it.withdrawnAt ? fmt(it.withdrawnAt) : '—'],
+      ['Nguồn', src || '—'],
+    ];
+    $('#mInfo').innerHTML = rows.map(([k, v, html]) => `<dt>${esc(k)}</dt><dd>${html ? v : esc(v)}</dd>`).join('');
+    $('#mMsg').textContent = it.message;
+    $('#mStatus').value = it.status;
+    $('#mNote').value = it.adminNote || '';
+    $('#mSpam').textContent = it.spam ? 'Bỏ đánh dấu spam' : 'Đánh dấu spam';
+    $('#mWithdraw').disabled = !!it.withdrawnAt;
+    $('#modalBg').classList.add('show');
+  }
+  function closeModal() { $('#modalBg').classList.remove('show'); current = null; }
+
+  $('#table').addEventListener('click', (e) => {
+    const tr = e.target.closest('tr[data-id]');
+    if (!tr) return;
+    const it = (window._items || []).find((x) => String(x.id) === tr.dataset.id);
+    if (it) openModal(it);
+  });
+  $('#statusChips').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-s]');
+    if (!b) return;
+    state.status = b.dataset.s; state.offset = 0; load();
+  });
+  $('#spamSel').addEventListener('change', (e) => { state.spam = e.target.value; state.offset = 0; load(); });
+  let tq;
+  $('#q').addEventListener('input', (e) => { clearTimeout(tq); tq = setTimeout(() => { state.q = e.target.value.trim(); state.offset = 0; load(); }, 300); });
+
+  $('#mClose').onclick = closeModal;
+  $('#modalBg').addEventListener('click', (e) => { if (e.target === $('#modalBg')) closeModal(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+  $('#mSave').onclick = async () => {
+    if (!current) return;
+    const r = await api('PATCH', `/api/admin/partnership/${current.id}`, { status: $('#mStatus').value, adminNote: $('#mNote').value });
+    if (!r.ok) return toast('Lỗi: ' + (r.data.error || r.status), true);
+    toast('✓ Đã lưu'); closeModal(); load();
+  };
+  $('#mSpam').onclick = async () => {
+    if (!current) return;
+    const r = await api('PATCH', `/api/admin/partnership/${current.id}`, { spam: !current.spam });
+    if (!r.ok) return toast('Lỗi: ' + (r.data.error || r.status), true);
+    toast(current.spam ? '✓ Đã bỏ đánh dấu spam' : '✓ Đã đánh dấu spam'); closeModal(); load();
+  };
+  $('#mWithdraw').onclick = async () => {
+    if (!current || !confirm('Đánh dấu đơn vị này đã rút đồng ý? Email và điện thoại sẽ bị xoá khỏi bản ghi.')) return;
+    const r = await api('POST', `/api/admin/partnership/${current.id}/withdraw`);
+    if (!r.ok) return toast('Lỗi: ' + (r.data.error || r.status), true);
+    toast('✓ Đã ghi nhận rút đồng ý'); closeModal(); load();
+  };
+  $('#mDelete').onclick = async () => {
+    if (!current || !confirm('Xoá hẳn yêu cầu này? Không khôi phục được.')) return;
+    const r = await api('DELETE', `/api/admin/partnership/${current.id}`);
+    if (!r.ok) return toast('Lỗi: ' + (r.data.error || r.status), true);
+    toast('✓ Đã xoá'); closeModal(); load();
+  };
+
+  load();
+</script>
+</body>
+</html>

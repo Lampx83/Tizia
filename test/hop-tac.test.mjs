@@ -275,3 +275,48 @@ test('hạn lưu 24 tháng: job dọn xoá yêu cầu quá hạn kể từ lần
   const { rows } = await srv.sql(`SELECT email FROM partnership_requests WHERE email IN ('cu@donvi-cu.vn','moi@donvi-moi.vn')`);
   assert.deepEqual(rows.map((r) => r.email), ['moi@donvi-moi.vn']);
 });
+
+// Mục D (18/10/2026): cổng đăng nhập (identity/auth.js makeAuthGate) chỉ mở ĐÚNG các
+// đường dẫn Hợp tác; mọi route khác và trang/API quản trị hợp tác vẫn bị chặn.
+test('cổng đăng nhập: khách vào được trang Hợp tác, API form và endpoint leads', { skip: SKIP }, async () => {
+  const guest = srv.client();
+  const sent = await guest.post('/api/partnership/requests', form({ email: 'khach@donvi-gate.vn' }), freshIp());
+  assert.equal(sent.status, 200, sent.text);
+  assert.equal((await guest.get('/api/partnership/info')).status, 200);
+  // Endpoint leads: không bị cổng trả 401 needLogin — tới được route và route tự kiểm HMAC.
+  const unsigned = await guest.get(`${LEADS}?from=${vnToday()}&to=${vnToday()}`);
+  assert.equal(unsigned.status, 401);
+  assert.equal(unsigned.json.error, 'unauthorized');
+  assert.equal(unsigned.json.needLogin, undefined, 'không phải 401 của cổng đăng nhập');
+  assert.equal((await bare.client().get(LEADS)).status, 503, 'chưa đặt khoá → route trả 503');
+  assert.equal((await signed(srv, `from=${vnToday()}&to=${vnToday()}`)).status, 200);
+  // Trang /hop-tac do Next phục vụ; nếu yêu cầu rơi xuống Express thì không bị đẩy về login.
+  const page = await guest.get('/hop-tac');
+  assert.notEqual(page.status, 302);
+  assert.doesNotMatch(page.headers.get('location') || '', /login/);
+});
+
+test('cổng đăng nhập: trang/API quản trị hợp tác và các route cũ vẫn bị chặn', { skip: SKIP }, async () => {
+  const guest = srv.client();
+  for (const url of ['/admin-hop-tac.html', '/admin.html', '/dashboard.html', '/teacher.html']) {
+    const r = await guest.get(url);
+    assert.equal(r.status, 302, url);
+    assert.match(r.headers.get('location') || '', /\/login\.html\?return=/, url);
+  }
+  const gatedApi = [
+    '/api/admin/partnership', '/api/admin/partnership/1', '/api/admin/overview',
+    '/api/partnership/khac', '/api/partnership', '/api/internal/growth/events', '/api/internal/khac',
+    '/api/classes', '/api/notifications',
+  ];
+  for (const url of gatedApi) {
+    const r = await guest.get(url);
+    assert.equal(r.status, 401, url);
+    assert.equal(r.json.needLogin, true, url);
+  }
+  const wd = await guest.post('/api/admin/partnership/1/withdraw', {});
+  assert.equal(wd.status, 401);
+  // Đã đăng nhập nhưng không phải admin: trang HTML mở được (chỉ là khung), dữ liệu thì 403.
+  const learner = await loginAs(srv, 'sv_gate');
+  assert.equal((await learner.get('/api/admin/partnership')).status, 403);
+  assert.equal((await learner.post('/api/admin/partnership/1/withdraw', {})).status, 403);
+});
