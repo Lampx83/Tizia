@@ -18,11 +18,16 @@ RUN_CAPS = ("model_calls", "tool_calls", "tokens", "units")
 VERIFY_RESERVE = {"model_calls": 2, "tool_calls": 0, "tokens": 20_000, "wall_clock_s": 240.0}
 
 
+class BudgetExhausted(RuntimeError):
+    pass
+
+
 @dataclass
 class Budget:
     max_model_calls: int = 40
     max_tool_calls: int = 200
     max_tokens: int = 200_000
+    max_request_tokens: int = 0
     max_retries: int = 3
     max_units: int = 600
     max_wall_clock_s: float = 900.0
@@ -96,6 +101,10 @@ class Budget:
         """Còn ngân sách để đi tiếp 1 bước? Không tính phí, chỉ kiểm tra."""
         return self.exhausted() is None
 
+    def can_request(self) -> bool:
+        """A pinned engine context bounds one full response before remote work starts."""
+        return self.tick() and 0 <= self.max_request_tokens <= self.max_tokens - self.tokens
+
     def spend(self, cap: str, n: int = 1) -> bool:
         """Ghi nợ n đơn vị cap. False nếu ghi xong là chạm/vượt trần."""
         if cap not in CAPS:
@@ -109,6 +118,7 @@ class Budget:
             max_model_calls=self.max_model_calls,
             max_tool_calls=self.max_tool_calls,
             max_tokens=self.max_tokens,
+            max_request_tokens=self.max_request_tokens,
             max_retries=self.max_retries,
             max_units=self.max_units,
             max_wall_clock_s=self.max_wall_clock_s,

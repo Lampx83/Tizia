@@ -59,7 +59,7 @@ class NativeModel:
     def query(self, messages, **kwargs):
         from minisweagent.exceptions import LimitsExceeded
         from minisweagent.models.utils.actions_toolcall import BASH_TOOL, parse_toolcall_actions
-        if not self.budget.tick() or self.unknown_usage:
+        if not self.budget.can_request() or self.unknown_usage:
             raise LimitsExceeded({'role': 'exit', 'content': 'Budget exhausted or usage unknown',
                                   'extra': {'exit_status': 'LimitsExceeded', 'submission': ''}})
         self.budget.spend('model_calls')
@@ -181,9 +181,13 @@ def generate(request, client, model_name, *, runtime=None, session_factory=Check
     agent = Agent(model, environment, **{**config['agent'], 'step_limit': budget.max_model_calls, 'cost_limit': 0,
                   'wall_time_limit_seconds': int(budget.max_wall_clock_s), 'output_path': request.get('trajectory')})
     try:
-        environment.start()
-        outcome = agent.run(task=request['title'] + '\n\n' + request['detail'])
-        changed = environment.candidate()
+        if not budget.can_request():
+            outcome = {'exit_status': 'LimitsExceeded'}
+        else:
+            environment.start()
+            outcome = agent.run(task=request['title'] + '\n\n' + request['detail'])
+            if budget.tick():
+                changed = environment.candidate()
     except Exception as caught:
         error = type(caught).__name__
     finally:
@@ -202,13 +206,13 @@ def generate(request, client, model_name, *, runtime=None, session_factory=Check
                          'config_sha256': hashlib.sha256(config_path.read_bytes()).hexdigest()}}
 
 
-def run_trial(task, deps, root, source, *, runtime=None, wall_s=300):
+def run_trial(task, deps, root, source, *, runtime=None, wall_s=300, budget=None):
     """Original request -> upstream agent -> candidate -> the same private corpus oracle."""
     import difflib
     import eval_corpus
     from evaluation.suite import candidate_grade, taskpack
     started = time.monotonic()
-    budget = Budget(max_wall_clock_s=wall_s)
+    budget = budget if budget is not None else Budget(max_wall_clock_s=wall_s)
     repo = taskpack.prepare_checkout(Path(root), task['base_sha'], source)
     router = getattr(deps.models, 'routing', None)
     if router is None:

@@ -33,9 +33,15 @@ def prepare(root: Path, blocks: list[dict], pins: dict, *, seed: int,
     if not chosen or len(set(chosen)) != len(chosen):
         raise ValueError('empty or duplicate arms')
     rng, schedule = random.Random(seed), []
+    paired_order = list(chosen)
+    if arms is not None and len(chosen) == 2:
+        rng.shuffle(paired_order)
     for block_number, block in enumerate(blocks):
-        order = list(chosen)
-        rng.shuffle(order)
+        if arms is not None and len(chosen) == 2:
+            order = paired_order if block_number % 2 == 0 else paired_order[::-1]
+        else:
+            order = list(chosen)
+            rng.shuffle(order)
         for arm in order:
             schedule.append({**block, "split": "dev", "block": block_number,
                              "ordinal": len(schedule), "arm": arm, "pins": pins})

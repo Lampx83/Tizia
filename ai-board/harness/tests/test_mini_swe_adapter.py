@@ -63,15 +63,43 @@ def reply(command=None):
             'usage': {'prompt_tokens': 10, 'completion_tokens': 5}}
 
 
-def run(repo, client):
+def run(repo, client, budget=None):
     if not (RUNTIME / 'minisweagent').exists():
         pytest.skip('Install the pinned eval-only mini-swe runtime before adapter integration tests')
     source, sha = repo
     runner = Runner()
     result = mini_swe.generate({'source': str(source), 'base_sha': sha, 'title': 'Change a to 2',
-                 'detail': 'Change the visible a value.', 'wall_s': 300}, client, 'pinned-qwen', runtime=RUNTIME,
+                 'detail': 'Change the visible a value.', 'wall_s': 300,
+                 **({'budget': budget.snapshot()} if budget is not None else {})}, client, 'pinned-qwen', runtime=RUNTIME,
                  session_factory=lambda *args: CheckSession(*args, client=runner))
     return result, runner
+
+
+def test_pre_request_bound_stops_before_spending_or_calling_provider(repo):
+    from runtime.budget import Budget
+    client = ModelClient([])
+    result, runner = run(repo, client, Budget(tokens=180000, max_request_tokens=32768))
+    assert result['outcome'] == 'LimitsExceeded' and result['error'] is None
+    assert result['budget']['tokens'] == 180000 and result['model_calls'] == 0
+    assert not client.payloads and not result['cleanup_pending']
+
+
+def test_exhausted_budget_is_not_an_export_infrastructure_failure(repo):
+    from runtime.budget import Budget
+    result, runner = run(repo, ModelClient([reply('edit fixture')]), Budget(max_model_calls=1))
+    assert result['outcome'] == 'LimitsExceeded' and result['error'] is None
+    assert result['candidate'] == {} and runner.closed and not result['cleanup_pending']
+
+
+def test_context_sized_responses_stop_before_the_next_request_can_overshoot(repo):
+    from runtime.budget import Budget
+    responses = [reply('edit fixture') for _ in range(6)]
+    for response in responses:
+        response['usage'] = {'prompt_tokens': 32760, 'completion_tokens': 8}
+    result, runner = run(repo, ModelClient(responses), Budget(max_request_tokens=32768))
+    assert result['model_calls'] == 6 and result['budget']['tokens'] == 196608
+    assert result['outcome'] == 'LimitsExceeded' and result['error'] is None
+    assert result['candidate'] == {'public/a.js': 'export const a = 2;\n'} and runner.closed
 
 
 def test_upstream_agent_generates_candidate_without_gold_or_credentials(repo):

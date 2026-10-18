@@ -112,6 +112,17 @@ def test_trial_model_timeout_does_not_retry_or_claim_complete_usage(world, mode,
     assert row["tokens_in"] is None and row["cost_status"] == "unknown"
 
 
+def test_trial_request_bound_is_shared_after_planning_without_remote_cleanup(world):
+    from runtime.budget import Budget
+    root, tasks = world
+    deps, models = deps_for(world)
+    budget = Budget(max_request_tokens=200000, max_wall_clock_s=300)
+    row = trial.run_trial(pick(tasks, 1), 'e2e', dataclasses.replace(deps, stop_on_model_error=True), root, ROOT, budget=budget)
+    assert [phase for phase, _ in models.calls] == ['gate1']
+    assert row['budget']['model_calls'] == 1 and row['budget']['tokens'] == 600
+    assert not row['resolved'] and not row['infra_error'] and not row['cleanup_pending']
+
+
 def test_successful_trial_preserves_unknown_usage_without_blocking_cleanup(world, monkeypatch):
     root, tasks = world
     deps, _ = deps_for(world)

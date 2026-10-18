@@ -11,10 +11,30 @@ def test_two_arm_schedule_has_one_attempt_per_task_and_rejects_pin_drift(tmp_pat
     pins = {name: 'pinned' for name in interleaved.PINS}
     manifest = interleaved.prepare(tmp_path, blocks, pins, seed=12, warm_cold='cold-first', load_notes='idle', arms=comparison.ARMS)
     assert len(manifest['schedule']) == 84
+    leaders = [row['arm'] for row in manifest['schedule'][::2]]
+    assert all(left != right for left, right in zip(leaders, leaders[1:]))
     assert all({row['arm'] for row in manifest['schedule'] if row['id'] == block['id']} == set(comparison.ARMS) for block in blocks)
     assert interleaved.prepare(tmp_path, blocks, pins, seed=12, warm_cold='cold-first', load_notes='idle', arms=comparison.ARMS) == manifest
     with pytest.raises(ValueError, match='pins changed'):
         interleaved.prepare(tmp_path, blocks, {**pins, 'source': 'changed'}, seed=12, warm_cold='cold-first', load_notes='idle', arms=comparison.ARMS)
+
+
+@pytest.mark.parametrize('arm', comparison.ARMS)
+def test_both_arms_receive_the_common_request_bound(tmp_path, monkeypatch, arm):
+    corpus = tmp_path/'cases.json'
+    corpus.write_bytes(b'[]')
+    monkeypatch.setattr(comparison, 'configured_deps', lambda model: object())
+    monkeypatch.setattr(comparison, 'code_pins', lambda deps: {})
+    monkeypatch.setattr(comparison, 'cases', lambda path: [{'id': 't1'}])
+    def run(*args, budget=None, **kwargs):
+        assert budget.max_request_tokens == 32768 and budget.max_tokens == 200000
+        return {'id': 't1', 'resolved': False}
+    monkeypatch.setattr(comparison.trial, 'run_trial', run)
+    monkeypatch.setattr(comparison.mini_swe, 'run_trial', run)
+    protocol = {'config': {'model': 'model', 'context_length': 32768, 'corpus': str(corpus),
+                 'root': str(tmp_path), 'source': str(tmp_path), 'mini_runtime': str(tmp_path)},
+                'details': {'code': {}}, 'pins': {'corpus': comparison.hashlib.sha256(b'[]').hexdigest()}}
+    assert comparison.one_trial(protocol, {'id': 't1', 'arm': arm})['arm'] == arm
 
 
 def test_mismatched_trial_result_stops_comparison_before_next_attempt(tmp_path):

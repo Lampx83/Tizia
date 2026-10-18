@@ -12,6 +12,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from evaluation.suite import candidate_grade, interleaved, mini_swe, runner, trial
+from runtime.budget import Budget
 
 ARMS = ('ai-board', 'mini-swe')
 
@@ -91,7 +92,8 @@ def prepare(config_path):
     details = {'source': tasks[0]['base_sha'], 'model': config['model'], 'context_length': config['context_length'],
                'temperature': 0, 'thinking': False, 'output_tokens': mini_swe.OUTPUT_TOKENS, 'evaluator': candidate_grade.PROTOCOL,
                'engine': engine_info(deps, config['model']),
-               'budget': {'model_calls': 40, 'tool_calls': 200, 'tokens': 200000, 'wall_s': 300},
+               'budget': {'model_calls': 40, 'tool_calls': 200, 'tokens': 200000, 'wall_s': 300,
+                          'request_token_bound': config['context_length']},
                'corpus_sha256': hashlib.sha256(Path(config['corpus']).read_bytes()).hexdigest(),
                'requests_sha256': sha([{key: task[key] for key in ('id', 'title', 'detail')} for task in tasks]),
                'code': current,
@@ -126,10 +128,11 @@ def one_trial(protocol, scheduled):
         raise ValueError('frozen DEV corpus changed')
     task = next(task for task in tasks if task['id'] == scheduled['id'])
     root = Path(config['root'])
+    budget = Budget(max_wall_clock_s=300, max_request_tokens=config['context_length'])
     if scheduled['arm'] == 'ai-board':
-        row = trial.run_trial(task, 'e2e', deps, root, config['source'], wall_s=300)
+        row = trial.run_trial(task, 'e2e', deps, root, config['source'], wall_s=300, budget=budget)
     elif scheduled['arm'] == 'mini-swe':
-        row = mini_swe.run_trial(task, deps, root, config['source'], runtime=Path(config['mini_runtime']), wall_s=300)
+        row = mini_swe.run_trial(task, deps, root, config['source'], runtime=Path(config['mini_runtime']), wall_s=300, budget=budget)
     else:
         raise ValueError('unknown comparison arm')
     if set(row.get('served') or []) - {config['model']} or set(row.get('providers') or []) - {'vllm'}:

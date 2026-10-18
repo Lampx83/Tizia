@@ -19,7 +19,7 @@ from typing import Any, Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from runtime.budget import Budget          # noqa: E402
+from runtime.budget import Budget, BudgetExhausted          # noqa: E402
 from repositories.dbconn import harness_db      # noqa: E402
 from services import candidate                   # noqa: E402
 from repositories import gate_trace                  # noqa: E402
@@ -145,8 +145,8 @@ class Deps:
         Lỗi HTTP/timeout vẫn tính units theo wall (GPU có thể đã chạy) rồi raise lại.
         body["_metrics"] = metrics đã chuẩn hoá cho cổng dùng (done_reason, …)."""
         options = {"num_predict": NUM_PREDICT.get(gate, NUM_PREDICT_DEFAULT), "temperature": 0, **(options or {})}
-        if not budget.tick():
-            raise RuntimeError("budget exhausted before model call")
+        if not budget.tick() or not budget.can_request():
+            raise BudgetExhausted("budget exhausted before model call (request token bound)")
         if getattr(self.models, 'routing', None):
             return self._call_routed(model, prompt, gate=gate, budget=budget, db_path=db_path,
                                      proposal_id=proposal_id, format=format, prompt_name=prompt_name,

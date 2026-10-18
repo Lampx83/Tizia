@@ -45,10 +45,13 @@ class RecordingDeps(Deps):
         phase = self.capture.get("phase")
         calls = self.capture.setdefault("model_calls", [])
         event = {"attempt": len(calls) + 1, "phase": phase}
+        budget = kwargs.get('budget')
+        before = budget.model_calls if budget is not None else None
         try:
             body = super().call_model(*args, **kwargs)
         except Exception as error:
-            self.capture["model_failure"] = True
+            if budget is None or budget.model_calls != before:
+                self.capture["model_failure"] = True
             if self.capture.get("enabled") and phase in ("planning", "validation"):
                 calls.append({**event, "state": "failed", "error_type": type(error).__name__})
             raise
@@ -331,7 +334,7 @@ def run_trial(task: dict, mode: str, base_deps: Deps, root: Path, source, fast: 
         "id": task["id"], "mode": mode, "resolved": resolved, "collateral": sorted(set(collateral)), "gate_passed": row["gate_passed"],
         "budget": budget.snapshot(),
         "gate4": row.get("gate4"), "prod": row.get("prod"), "ended": row.get("ended"), "shipped": row.get("shipped", False),
-        "review": row.get("review"), "reason": row.get("reason"), "infra_error": bool(error) or cleanup_pending,
+        "review": row.get("review"), "reason": row.get("reason"), "infra_error": bool(error and not error.startswith('BudgetExhausted:')) or cleanup_pending,
         "error": error or ("model_cleanup_pending" if cleanup_pending else None), "plan": plan_facts, "capture": capture,
         "model_calls": budget.model_calls, "loop_tools": list(deps.capture.get("loop_tools") or []), "loop_errors": list(deps.capture.get("loop_errors") or []), "retries": row.get("retries", 0),
         "cleanup_pending": cleanup_pending, "cost_status": "unknown" if unknown_usage else "complete",
