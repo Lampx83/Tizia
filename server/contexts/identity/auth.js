@@ -244,6 +244,14 @@ const PUBLIC_PATH_PREFIXES = [
   // key bằng timingSafeEqual và CHỈ được mount khi env AI_BOARD_KEY đủ mạnh; chưa
   // bật thì path này 404. Đọc-chỉ, không có route ghi. Xem contexts/ai-agent/inbox-api.js.
   '/api/ai-board/',
+  // Hợp tác (contexts/partnership): GET /api/partnership/info + POST form liên hệ của
+  // tổ chức — khách chưa đăng nhập phải gửi được. Route không đọc req.user (không gắn
+  // tài khoản), có ô bẫy + giới hạn tần suất riêng. Mục quản trị nằm ở /api/admin/
+  // partnership (vẫn qua gate + requireAdmin).
+  '/api/partnership/',
+  // Endpoint leads cho CRM SIM — auth bằng chữ ký HMAC (X-Growth-Signature), không
+  // cookie. Chưa đặt GROWTH_LEADS_KEY → 503. Chỉ GET, chỉ đọc.
+  '/api/internal/growth/',
   // Bundle JS/scenarios không phải bí mật — guest cần để render trang chủ + trường Mầm non.
   '/js/',
   // Bản đồ khuôn viên (iframe nhúng vào school.html) — không có bí mật, là HTML/JS thuần.

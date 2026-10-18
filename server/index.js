@@ -35,6 +35,7 @@ import { attachBilling } from './contexts/billing/index.js';
 import { attachIntegration } from './contexts/integration/index.js';
 import { attachAdmin, requireAdmin, requireSchoolAccess } from './contexts/admin/index.js';
 import { attachAdminDb } from './contexts/admin/db-admin.js';
+import { attachPartnership } from './contexts/partnership/index.js';
 import { attachEngagement, trackEngagementProgress, initEngagement } from './contexts/engagement/index.js';
 import { addLeagueWeekXp } from './contexts/engagement/league.js';
 import { attachLearning, updateIrt, initLearning } from './contexts/learning/index.js';
@@ -269,7 +270,7 @@ app.use(['/api/auth/login', '/api/auth/register'], sensitiveAuthLimiter);
 // noindex,nofollow cho trang nội bộ/quản trị/cast (backup ngoài auth gate + meta robots).
 // Áp sớm để cả file static lẫn route động đều nhận header.
 const NOINDEX_HEADER_EXACT = new Set([
-  '/admin.html', '/dashboard.html', '/family.html', '/teacher.html',
+  '/admin.html', '/admin-hop-tac.html', '/dashboard.html', '/family.html', '/teacher.html',
   '/complete-profile.html', '/lesson-builder.html', '/cast.html', '/devices.html',
 ]);
 const NOINDEX_HEADER_PREFIXES = ['/admin/', '/parent/', '/gv/', '/live-quiz/', '/api/', '/sim/', '/uploads/'];
@@ -375,6 +376,8 @@ attachIntegration(r);
 attachSecurity(r);
 attachAdmin(r);
 attachAdminDb(r);
+// Hợp tác: form liên hệ của tổ chức (/hop-tac), mục admin, endpoint leads cho CRM (HMAC).
+attachPartnership(r, { requireAdmin, basePath: BASE_PATH });
 // Hộp thư Ban điều hành AI (đọc-chỉ, auth bằng header x-ai-board-key). Chỉ được
 // mount khi env AI_BOARD_KEY đủ mạnh — không set thì không có route nào thêm.
 attachAiBoardInbox(r);
