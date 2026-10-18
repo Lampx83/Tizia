@@ -86,15 +86,53 @@ def test_gate3_params_come_from_routing_catalog_and_thinking_is_off(split_on, mo
 def test_non_gate3_role_keeps_its_options_only_system_added(split_on):
     models = FakeModels([{"ok": 1}])
     deps = pipeline.Deps(models=models, notify=None)
-    deps.call_model("m", "task", gate=1, budget=Budget(), format="json")
+    deps.call_model("m", "task", gate=2.5, budget=Budget(), format="json")
     call = models.calls[0]
     assert call["extra"] == {"system": prompt_roles.SYSTEM} and call["options"]["temperature"] == 0
     assert call["prompt"] == "task" + prompt_roles.RESTATE
 
 
+@pytest.mark.parametrize('role,gate', [('gate1', 1), ('gate4_review', 4)])
+def test_split_reasoning_roles_have_bounded_output_and_shared_trial_spend(split_on, monkeypatch, role, gate):
+    sent = []
+    def post(self, path, payload, **kwargs):
+        sent.append(payload)
+        return {'choices': [{'message': {'content': '{}'}, 'finish_reason': 'stop'}],
+                'usage': {'prompt_tokens': 100, 'completion_tokens': 200}}
+    monkeypatch.setattr(OllamaClient, '_post', post)
+    models = OllamaClient(routing=ModelRouter({'VLLM_URL': 'http://fixture.invalid'}))
+    budget = Budget(max_request_tokens=32768)
+    deps = pipeline.Deps(models=models, notify=None)
+    deps.call_model('m', 'task', gate=gate, role=role, budget=budget)
+    assert sent[0]['chat_template_kwargs'] == {'enable_thinking': True}
+    assert sent[0]['max_tokens'] == 16384
+    assert sent[0]['temperature'] == 0.6 and sent[0]['top_p'] == 0.95
+    assert sent[0]['response_format'] == {'type': 'json_object'}
+    assert budget.tokens == 300 and budget.model_calls == 1
+    restored = Budget.restore(budget.snapshot())
+    deps.call_model('m', 'task again', gate=gate, role=role, budget=restored)
+    assert restored.tokens == 600 and restored.model_calls == 2
+
+
 def test_split_values_block_at_most_five_lines():
     values = prompt_roles.SYSTEM.split("Giá trị kỹ thuật:", 1)[1].strip().splitlines()
     assert len(values) <= 5
+
+
+def test_split_schema_classifier_stays_non_thinking_with_original_output_cap(split_on, monkeypatch):
+    sent = []
+    def post(self, path, payload, **kwargs):
+        sent.append(payload)
+        return {'choices': [{'message': {'content': '{}'}, 'finish_reason': 'stop'}],
+                'usage': {'prompt_tokens': 10, 'completion_tokens': 5}}
+    monkeypatch.setattr(OllamaClient, '_post', post)
+    models = OllamaClient(routing=ModelRouter({'VLLM_URL': 'http://fixture.invalid'}))
+    schema = {'type': 'object', 'properties': {}}
+    pipeline.Deps(models=models, notify=None).call_model('m', 'classify', gate=1,
+          budget=Budget(), format=schema, options={'num_predict': 256})
+    assert sent[0]['chat_template_kwargs'] == {'enable_thinking': False}
+    assert sent[0]['max_tokens'] == 256 and sent[0]['temperature'] == 0
+    assert sent[0]['response_format']['type'] == 'json_schema'
 
 
 def test_client_sends_system_then_user_in_vllm_payload(monkeypatch):

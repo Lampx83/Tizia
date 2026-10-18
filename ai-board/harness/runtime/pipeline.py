@@ -106,12 +106,12 @@ def _request_attrs(options: dict, extra: dict | None, body: dict | None = None, 
             "prompt_roles": "split" if extra.get("system") else "single"}
 
 
-def _split_call(prompt: str, role: str, routing, extra: dict | None, options: dict) -> tuple[str, dict | None, dict]:
+def _split_call(prompt: str, role: str, routing, extra: dict | None, options: dict, format=None) -> tuple[str, dict | None, dict]:
     """Split mode (AI_BOARD_PROMPT_ROLE_SPLIT=1): system message + user, per-role gate 3 params; logprobs calls stay as they were."""
     if not prompt_roles.enabled() or (extra or {}).get('system') or (extra or {}).get('logprobs'):
         return prompt, extra, options
     system, user = prompt_roles.split(prompt)
-    role_extra, role_options = prompt_roles.call_params(role, routing)
+    role_extra, role_options = prompt_roles.call_params(role, routing, structured=isinstance(format, dict))
     return user, {**(extra or {}), **role_extra, 'system': system}, {**options, **role_options}
 
 
@@ -164,7 +164,7 @@ class Deps:
                                      role=role or self.model_role, exclude=exclude_candidates, reason=route_reason)
         from providers.routing import ModelRouter
         resolved_role = ModelRouter.role(gate, model, self.models, explicit=role or self.model_role, extra=extra)
-        prompt, extra, options = _split_call(prompt, resolved_role, getattr(self.models, 'routing', None), extra, options)
+        prompt, extra, options = _split_call(prompt, resolved_role, getattr(self.models, 'routing', None), extra, options, format)
         provider = ('vllm' if getattr(self.models, 'protocol', '') == 'vllm'
                     or getattr(self.models, 'vllm_url', '') and resolved_role == 'gate3_heavy'
                     else self.provider)
@@ -209,7 +209,7 @@ class Deps:
                      prompt_name, child, iteration, options, extra, role, exclude, reason):
         router = self.models.routing
         role = router.role(gate, model, self.models, explicit=role, extra=extra)
-        prompt, extra, options = _split_call(prompt, role, router, extra, options)
+        prompt, extra, options = _split_call(prompt, role, router, extra, options, format)
         last_error = None
         for candidate in router.candidates(role, exclude=exclude):
             if self.model_candidate and role == self.model_role and candidate['id'] != self.model_candidate:
@@ -235,9 +235,10 @@ class Deps:
                     call_extra, call_options = extra, options
                     if candidate['provider'] == 'vllm' and not (extra or {}).get('logprobs'):
                         think = bool((extra or {}).get('force_thinking', router.reasoning(role)))  # one call can opt in without changing the role
-                        call_extra = {**{k: v for k, v in (extra or {}).items() if k != 'force_thinking'}, 'thinking': think}
+                        call_extra = {**{k: v for k, v in (extra or {}).items() if k not in ('force_thinking', 'max_total_output_tokens')}, 'thinking': think}
                         if think:  # reasoning tokens count against max_tokens: leave room for the answer itself
-                            call_options = {**options, 'num_predict': int(options.get('num_predict') or 0) + router.reasoning_tokens()}
+                            call_options = {**options, 'num_predict': (extra or {}).get('max_total_output_tokens',
+                                            int(options.get('num_predict') or 0) + router.reasoning_tokens())}
                     body = client.generate(candidate['model'], prompt, format=format, extra=call_extra,
                                            _single_attempt=True, **call_options)
                     if not isinstance(body, dict):

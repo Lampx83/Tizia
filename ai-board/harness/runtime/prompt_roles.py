@@ -7,8 +7,10 @@ from pathlib import Path
 SYSTEM = (Path(__file__).resolve().parent.parent / "prompts" / "system_roles.md").read_text(encoding="utf-8").strip()
 RESTATE = "\n\nNhắc lại: trả đúng định dạng đã yêu cầu ở trên, không thêm chữ nào ngoài định dạng đó."
 TOOL_ROLES = ("gate3_light", "gate3_heavy")
+REASONING_ROLES = ("gate1", "gate4_review")
 # Dự phòng khi catalog thiếu role; số liệu theo manual (tool loop: thinking off, sampling non-thinking).
 DEFAULT_SAMPLING = {"thinking": False, "temperature": 0.7, "top_p": 0.8, "top_k": 20, "presence_penalty": 1.5}
+REASONING_SAMPLING = {"temperature": 0.6, "top_p": 0.95, "top_k": 20, "presence_penalty": 0, "num_predict": 16384}
 
 
 def enabled() -> bool:
@@ -21,8 +23,12 @@ def split(user: str) -> tuple[str, str]:
     return SYSTEM, user + RESTATE
 
 
-def call_params(role: str, routing) -> tuple[dict, dict]:
-    """(extra, options) của gate 3: thinking tắt và sampling theo catalog; role khác không đổi."""
+def call_params(role: str, routing, *, structured: bool = False) -> tuple[dict, dict]:
+    """Separate bounded reasoning from schema/implementation calls in split mode."""
+    if structured:
+        return {"thinking": False, "force_thinking": False}, {"temperature": 0}
+    if role in REASONING_ROLES:
+        return {"thinking": True, "force_thinking": True, "max_total_output_tokens": 16384}, dict(REASONING_SAMPLING)
     if role not in TOOL_ROLES:
         return {}, {}
     entry = {**DEFAULT_SAMPLING, **((routing.sampling(role) if routing else None) or {})}
