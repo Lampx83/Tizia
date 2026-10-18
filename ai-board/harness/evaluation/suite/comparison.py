@@ -40,7 +40,7 @@ def configured_deps(model):
     pipeline.NUM_PREDICT_DEFAULT = mini_swe.OUTPUT_TOKENS
     # Overrides apply only inside the measured process.
     environ.update(AI_BOARD_TOOL_LOOP='1', AI_BOARD_VERIFIED_LOOP='1', AI_BOARD_LOOP_MODEL_CALLS='40',
-                   AI_BOARD_LOOP_TOOL_CALLS='200', AI_BOARD_GATE25_SIM_USER='')
+                   AI_BOARD_LOOP_TOOL_CALLS='200', AI_BOARD_GATE25_SIM_USER='', AI_BOARD_PROMPT_ROLE_SPLIT='')
     deps = Deps.real()
     router = getattr(deps.models, 'routing', None)
     if router is None:

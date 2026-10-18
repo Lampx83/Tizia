@@ -6,6 +6,24 @@ import pytest
 from evaluation.suite import comparison, interleaved
 
 
+def test_comparison_disables_inherited_prompt_split_to_preserve_common_sampling(monkeypatch):
+    from types import SimpleNamespace
+    from runtime import pipeline, prompt_roles
+    import dotenv
+    router = SimpleNamespace(catalog={'roles': {'gate3_heavy': []}},
+                             first=lambda role: {'provider': 'vllm', 'model': 'common-int4'})
+    monkeypatch.setattr(dotenv, 'load_dotenv', lambda *args: None)
+    monkeypatch.setattr(pipeline.Deps, 'real', lambda: pipeline.Deps(models=SimpleNamespace(routing=router), notify=None))
+    monkeypatch.setattr(pipeline, 'NUM_PREDICT', dict(pipeline.NUM_PREDICT))
+    monkeypatch.setattr(pipeline, 'NUM_PREDICT_DEFAULT', pipeline.NUM_PREDICT_DEFAULT)
+    for name in ('AI_BOARD_TOOL_LOOP', 'AI_BOARD_VERIFIED_LOOP', 'AI_BOARD_LOOP_MODEL_CALLS',
+                 'AI_BOARD_LOOP_TOOL_CALLS', 'AI_BOARD_GATE25_SIM_USER'):
+        monkeypatch.setenv(name, '')
+    monkeypatch.setenv('AI_BOARD_PROMPT_ROLE_SPLIT', '1')
+    comparison.configured_deps('common-int4')
+    assert not prompt_roles.enabled()
+
+
 def test_two_arm_schedule_has_one_attempt_per_task_and_rejects_pin_drift(tmp_path):
     blocks = [{'id': f't{i}', 'mode': 'e2e', 'repeat': 1, 'split': 'dev'} for i in range(42)]
     pins = {name: 'pinned' for name in interleaved.PINS}

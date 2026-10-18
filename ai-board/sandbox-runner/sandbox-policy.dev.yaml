@@ -2,8 +2,8 @@
 version: 1
 vm: { cpus: 1, memory_mib: 2048, disk_mib: 10240, ttl_s: 1200, lease_s: 120 }
 concurrency: 1
-# guest-inputs: da2509b3b5dab62e57a1c29b8a73df7f1fa81f723f7df049afbeddc4edb738b0
-guest_image: image-registry:5000/gate5@sha256:deba52bb1a25ce0a80e46ea3c3c404b2fe5ed728369524bac5ca06d6c675e14e
+# guest-inputs: ebe8a257021d45087f0d045f51fedbd561b8cd82242d35ce8830ad708997f826
+guest_image: image-registry:5000/gate5@sha256:3ae4293666139a4033e1676da54e969f6e0bbee24d13702d89673eabdbaa74a0
 network: none
 egress: []
 guest_env: { CI: "1", GATE5_CA_SHA256: "4b386847e6e3fbd65e91086e284957d53d96c17916afc0c12ea8c58f01ac313a" }

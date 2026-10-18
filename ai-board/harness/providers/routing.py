@@ -61,6 +61,8 @@ def validate_catalog(catalog):
     for field in ('embedding_space', 'classifier_calibration_id'):
         if field in catalog and not _nonempty_string(catalog[field]):
             raise ValueError('Invalid catalog compatibility lock')
+    if set(catalog.get('sampling') or {}) - ROLES:
+        raise ValueError('Unknown sampling role')
     cooldown = catalog.get('endpoint_cooldown_s')
     if not isinstance(cooldown, (int, float)) or isinstance(cooldown, bool) or not math.isfinite(cooldown) or cooldown < 0:
         raise ValueError('Invalid endpoint cooldown')
@@ -129,6 +131,10 @@ class ModelRouter:
         if not valid:
             raise ValueError('Invalid model provider endpoint') from None
         return url
+
+    def sampling(self, role):
+        """Catalog `sampling` map: per-role thinking flag and sampling params (absent role = None)."""
+        return (self.catalog.get('sampling') or {}).get(role)
 
     def reasoning(self, role):
         """Catalog `reasoning` map: roles whose vLLM calls run with thinking on (extra token allowance for the reasoning)."""

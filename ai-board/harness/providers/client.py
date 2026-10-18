@@ -94,9 +94,13 @@ class OllamaClient:
                            extra=extra, _single_attempt=_single_attempt, **options)
         if self.protocol == 'vllm':
             ModelRouter.validate_endpoint(self.base_url)
-            payload = {'model': model, 'messages': [{'role': 'user', 'content': prompt}], 'stream': False}
+            messages = [{'role': 'user', 'content': prompt}]
+            if extra and extra.get('system'):
+                messages.insert(0, {'role': 'system', 'content': extra['system']})
+            payload = {'model': model, 'messages': messages, 'stream': False}
             for source, target in [('num_predict', 'max_tokens'), ('temperature', 'temperature'),
-                                   ('top_p', 'top_p'), ('seed', 'seed'), ('stop', 'stop')]:
+                                   ('top_p', 'top_p'), ('top_k', 'top_k'), ('presence_penalty', 'presence_penalty'),
+                                   ('min_p', 'min_p'), ('seed', 'seed'), ('stop', 'stop')]:
                 if source in options:
                     payload[target] = options[source]
             if format:
