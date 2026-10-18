@@ -38,16 +38,22 @@ class RecordingDeps(Deps):
     capture: dict = dataclasses.field(default_factory=dict)
 
     def call_model(self, *args, **kwargs):
+        if self.stop_on_model_error and self.capture.get("model_failure"):
+            raise RuntimeError("model cleanup pending; no additional request")
         phase = self.capture.get("phase")
         calls = self.capture.setdefault("model_calls", [])
         event = {"attempt": len(calls) + 1, "phase": phase}
         try:
             body = super().call_model(*args, **kwargs)
         except Exception as error:
+            self.capture["model_failure"] = True
             if self.capture.get("enabled") and phase in ("planning", "validation"):
                 calls.append({**event, "state": "failed", "error_type": type(error).__name__})
             raise
         self.ledger.append(body)
+        if any(type(body.get(key)) is not int or body[key] < 0
+               for key in ("prompt_eval_count", "eval_count")):
+            self.capture["usage_missing"] = True
         if kwargs.get("prompt_name") == "tool_loop.md":
             try:
                 step = tool_loop.parse_request(body)[0]
@@ -160,7 +166,7 @@ def _capture_source(capture: dict, repo, sha: str) -> dict:
     return files
 
 
-def _plan_stage(task: dict, repo, deps: RecordingDeps, wall_s: int, variant: str | None = None) -> tuple[dict, dict | None, list[dict]]:
+def _plan_stage(task: dict, repo, deps: RecordingDeps, budget: Budget, variant: str | None = None) -> tuple[dict, dict | None, list[dict]]:
     """Gates 1 -> 2 -> 2.5 the way the worker runs them. Returns (plan facts, plan or None, tracer records)."""
     tracer = gold_eval.Collect()
     deps = dataclasses.replace(deps, trace=tracer)
@@ -168,7 +174,7 @@ def _plan_stage(task: dict, repo, deps: RecordingDeps, wall_s: int, variant: str
     facts = {"attempts": 0, "first_parse_ok": False, "first_hit": False, "first_exact": False, "first_nonexistent": False,
              "first_plans_new_page": False, "first_extra": 0, "blocked": False, "validator_blocked": False, "validator_reason": None,
              "final_hit": False, "final_exact": False, "final_files": [], "reason": None, "approved": "approved" in (variant or "").split("+")}
-    request, budget = request_of(task, variant), Budget(max_wall_clock_s=wall_s, max_units=600)
+    request = request_of(task, variant)
     if os.environ.get("AI_BOARD_GATE25_SIM_USER") == "1" and gold:  # ceiling run: the requester names the page when asked
         request = {**request, "_simulated_answer": f"Chỉ sửa {gold[0]}, đúng như yêu cầu ở trên; không sửa trang nào khác."}
     deps.capture["phase"] = "planning"
@@ -187,6 +193,9 @@ def _plan_stage(task: dict, repo, deps: RecordingDeps, wall_s: int, variant: str
         deps.capture["source_targets"] = list(out.get("source_targets") or [])
         deps.capture["best_match"] = out.get("best_match")
     if out.get("blocked") or not plan:
+        return facts, None, tracer.records
+    if not budget.tick():
+        facts.update(blocked=True, reason=f"budget exhausted: {budget.exhausted()}")
         return facts, None, tracer.records
     final = [t["file"] for t in plan["subtasks"]]
     facts.update(final_hit=set(gold) <= set(final), final_exact=set(final) == set(gold), final_files=final)
@@ -211,10 +220,13 @@ def _plan_stage(task: dict, repo, deps: RecordingDeps, wall_s: int, variant: str
     return facts, plan, tracer.records
 
 
-def review_candidate(state: dict, deps) -> dict:
+def review_candidate(state: dict, deps, budget: Budget | None = None) -> dict:
     """Gate 4 model content review on the candidate. Every corpus/pack request is benign, so a block here is a false positive."""
     try:
-        out = static_check.content_review(state, deps, Budget(max_wall_clock_s=300, max_units=50))
+        budget = budget if budget is not None else Budget(max_wall_clock_s=300, max_units=50)
+        if not budget.tick():
+            return {"ran": False, "error": f"budget exhausted: {budget.exhausted()}"}
+        out = static_check.content_review(state, deps, budget)
     except Exception as exc:  # noqa: BLE001 - outage is not a verdict
         return {"ran": False, "error": f"{type(exc).__name__}: {exc}"[:150]}
     if out is None:
@@ -237,19 +249,27 @@ def ref_errors(diff: str, repo: Path, sha: str, plan: dict | None) -> int:
 
 
 def run_trial(task: dict, mode: str, base_deps: Deps, root: Path, source, fast: eval_fast.FastTier | None = None,
-              fast_lock: threading.Lock | None = None, *, wall_s: int = 900, review: bool = False) -> dict:
+              fast_lock: threading.Lock | None = None, *, wall_s: int = 300, review: bool = False,
+              budget: Budget | None = None) -> dict:
     """Never raises for model/infra outcomes (they are result rows). eval_fast.FastTierError propagates: the environment is broken, not the model."""
     gate3_guards.fallbacks(reset=True)
+    budget = budget if budget is not None else Budget(max_wall_clock_s=wall_s, max_units=600)
+    started = time.monotonic()
+    if hasattr(base_deps.models, "deadline"):
+        deadline = started + max(0, budget.max_wall_clock_s - budget.elapsed_s)
+        if base_deps.models.deadline is not None:
+            deadline = min(deadline, base_deps.models.deadline)
+        base_deps = dataclasses.replace(base_deps, models=dataclasses.replace(base_deps.models, deadline=deadline))
     deps = recording(base_deps)
     deps.capture["enabled"] = task.get("split") == "dev"
     kind, _, variant = mode.partition(":")
     taskpack.prepare_checkout(root, task["base_sha"], source)
     rec = taskpack.case_record(task, root, source) if task.get("pack") else eval_corpus.case_record(task, root, source)
-    repo, gold, started = Path(rec["checkout"]), golds(task), time.monotonic()
+    repo, gold = Path(rec["checkout"]), golds(task)
     plan_facts, plan, plan_records, error = None, None, [], None
     try:
         if kind == "e2e":
-            plan_facts, plan, plan_records = _plan_stage(task, repo, deps, wall_s, variant or None)
+            plan_facts, plan, plan_records = _plan_stage(task, repo, deps, budget, variant or None)
     except eval_fast.FastTierError:
         raise
     except Exception as exc:  # noqa: BLE001 - provider outage is a result
@@ -282,14 +302,14 @@ def run_trial(task: dict, mode: str, base_deps: Deps, root: Path, source, fast: 
                 with fast_lock or threading.Lock():
                     out = hook(state, scratch, files)
             if review and kind == "gold" and out.get("gate4") != "blocked":
-                out["review"] = review_candidate({**state, "request_detail": task["detail"]}, deps)
+                out["review"] = review_candidate({**state, "request_detail": task["detail"]}, deps, budget)
             return out
     if kind == "e2e" and not case["subtasks"]:
         row = {"case": task["id"], "gate_passed": False, "oracle": False, "reason": "no plan to implement", "calls": 0, "retries": 0, "tokens_in": 0,
                "tokens_out": 0, "done_reasons": [], "last_output": None}
     else:
         try:
-            row = gold_eval.run_case(task["id"], case, base_deps.models.gate3_model, deps, after)
+            row = gold_eval.run_case(task["id"], case, base_deps.models.gate3_model, deps, after, budget=budget)
         except eval_fast.FastTierError:
             raise
         except Exception as exc:  # noqa: BLE001
@@ -306,15 +326,21 @@ def run_trial(task: dict, mode: str, base_deps: Deps, root: Path, source, fast: 
                "full_diff": row.get("diff") or "", "trial_error": error} if deps.capture.get("enabled") else None
     p_in, p_out = _tokens(plan_records)
     texts = [hashlib.sha1(str(b.get("response", "")).encode("utf-8")).hexdigest() for b in deps.ledger]
-    resolved = bool(row["oracle"]) and not error
+    cleanup_pending = bool(deps.capture.get("model_failure"))
+    unknown_usage = cleanup_pending or bool(deps.capture.get("usage_missing"))
+    resolved = bool(row["oracle"]) and not error and not cleanup_pending
     return {
         "id": task["id"], "mode": mode, "resolved": resolved, "collateral": sorted(set(collateral)), "gate_passed": row["gate_passed"],
+        "budget": budget.snapshot(),
         "gate4": row.get("gate4"), "prod": row.get("prod"), "ended": row.get("ended"), "shipped": row.get("shipped", False),
-        "review": row.get("review"), "reason": row.get("reason"), "infra_error": bool(error), "error": error, "plan": plan_facts, "capture": capture,
-        "model_calls": len(deps.ledger), "loop_tools": list(deps.capture.get("loop_tools") or []), "loop_errors": list(deps.capture.get("loop_errors") or []), "retries": row.get("retries", 0),
+        "review": row.get("review"), "reason": row.get("reason"), "infra_error": bool(error) or cleanup_pending,
+        "error": error or ("model_cleanup_pending" if cleanup_pending else None), "plan": plan_facts, "capture": capture,
+        "model_calls": budget.model_calls, "loop_tools": list(deps.capture.get("loop_tools") or []), "loop_errors": list(deps.capture.get("loop_errors") or []), "retries": row.get("retries", 0),
+        "cleanup_pending": cleanup_pending, "cost_status": "unknown" if unknown_usage else "complete",
         "stuck": any(a == b for a, b in zip(texts, texts[1:])),
         "truncated": any(b.get("done_reason") == "length" for b in deps.ledger) or "length" in (row.get("done_reasons") or []),
-        "tokens_in": row.get("tokens_in", 0) + p_in, "tokens_out": row.get("tokens_out", 0) + p_out,
+        "tokens_in": None if unknown_usage else row.get("tokens_in", 0) + p_in,
+        "tokens_out": None if unknown_usage else row.get("tokens_out", 0) + p_out,
         "wall_s": round(time.monotonic() - started, 1),
         "providers": sorted({(b.get("_route") or {}).get("provider") or b.get("_provider") for b in deps.ledger} - {None}),
         "served": sorted({b.get("model") for b in deps.ledger if isinstance(b.get("model"), str)}),

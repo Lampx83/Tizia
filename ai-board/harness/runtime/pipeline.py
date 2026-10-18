@@ -126,6 +126,7 @@ class Deps:
     sleep: Callable[[float], None] = time.sleep  # test bơm no-op: backoff thật không làm chậm test suite
     model_role: str | None = None
     model_candidate: str | None = None
+    stop_on_model_error: bool = False
 
     @classmethod
     def real(cls) -> "Deps":
@@ -144,6 +145,8 @@ class Deps:
         Lỗi HTTP/timeout vẫn tính units theo wall (GPU có thể đã chạy) rồi raise lại.
         body["_metrics"] = metrics đã chuẩn hoá cho cổng dùng (done_reason, …)."""
         options = {"num_predict": NUM_PREDICT.get(gate, NUM_PREDICT_DEFAULT), "temperature": 0, **(options or {})}
+        if not budget.tick():
+            raise RuntimeError("budget exhausted before model call")
         if getattr(self.models, 'routing', None):
             return self._call_routed(model, prompt, gate=gate, budget=budget, db_path=db_path,
                                      proposal_id=proposal_id, format=format, prompt_name=prompt_name,
@@ -172,7 +175,7 @@ class Deps:
                 n = meter.units(provider, metrics)
                 budget.spend("model_calls")
                 budget.spend("units", n)
-                last_attempt = attempt == len(MODEL_RETRY_BACKOFF_S)
+                last_attempt = self.stop_on_model_error or attempt == len(MODEL_RETRY_BACKOFF_S)
                 if last_attempt or not _retryable_model_error(error):
                     self._trace(gate, model, prompt, prompt_name, "", metrics, n,
                                 "timeout" if isinstance(error, TimeoutError) else "http_error", str(error),
@@ -245,6 +248,8 @@ class Deps:
                                           model=candidate['model'], prompt=prompt, body=body)
                     body.update(_metrics=metrics, _route=evidence, _model=candidate['model'])
                     return body
+                if self.stop_on_model_error:
+                    raise error
                 retryable = (error.code in {500, 502, 503, 504} if isinstance(error, urllib.error.HTTPError)
                              else _retryable_model_error(error))
                 if not retryable:

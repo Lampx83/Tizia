@@ -23,7 +23,7 @@ import eval_fast
 from gates import gate3_guards, plan_validate
 from runtime import tool_manifest
 from runtime.budget import Budget
-from evaluation.suite import ablation, grading, metrics, taskpack, trial
+from evaluation.suite import ablation, grading, isolated, metrics, taskpack, trial
 from evaluation.suite.launcher import sqlite_launcher
 
 HERE = Path(__file__).resolve().parent
@@ -76,6 +76,8 @@ class Store:
             path.parent.mkdir(parents=True, exist_ok=True)
             with path.open("a", encoding="utf-8") as out:
                 out.write(json.dumps(row, ensure_ascii=False) + "\n")
+                out.flush()
+                os.fsync(out.fileno())
 
 
 def render(rep: dict) -> str:
@@ -121,7 +123,7 @@ def integrity(meta: dict, rows: list[dict], current: dict | None = None) -> list
     infra = sum(bool(r.get("infra_error")) for r in rows)
     if rows and infra / len(rows) > 0.1:
         problems.append(f"{infra}/{len(rows)} trials ended in infrastructure errors")
-    gate1_rows = [r for r in rows if r["mode"].startswith("e2e") and r["plan"]["attempts"]]
+    gate1_rows = [r for r in rows if r["mode"].startswith("e2e") and (r.get("plan") or {}).get("attempts")]
     if meta.get("reasoning", {}).get("gate1") and gate1_rows and not any(r.get("reasoning_chars") for r in gate1_rows):
         problems.append("reasoning is configured for gate1 but no reasoning text ever came back")
     return problems
@@ -157,7 +159,11 @@ def _bar(total: int):
 def cmd_run(args, deps=None) -> int:
     from main import ENV_FILE, ROOT
     from runtime.pipeline import Deps
-    if deps is None:  # real run: fail closed unless the first candidate of every measured role is vLLM
+    real_run = deps is None
+    if args.trial_timeout_s <= 0 or (real_run and (args.workers != 1 or args.trial_timeout_s > 300)):
+        print("[suite] timeout must be positive (maximum 300 seconds for real trials), with exactly one real worker", file=sys.stderr)
+        return 2
+    if real_run:  # fail closed unless the first candidate of every measured role is vLLM
         from dotenv import load_dotenv
         load_dotenv(ENV_FILE)
         deps = Deps.real()
@@ -208,7 +214,7 @@ def cmd_run(args, deps=None) -> int:
     prov = {**provenance(ROOT, model, router), "context_arm": args.context_arm, "gate3_guards": guards, "gate25_fixes": fixes,
             "best_match": args.best_match or "enforce", "retrieval": args.retrieval, "tool_loop": args.tool_loop or "", "skill_pad_chars": args.skill_pad_chars, "loop_caps": caps or [10, 30],
             "budget": {"model_calls": Budget.max_model_calls, "tool_calls": Budget.max_tool_calls, "tokens": Budget.max_tokens,
-                       "units": 600, "wall_clock_s": "per-task"},
+                       "units": 600, "wall_clock_s": args.trial_timeout_s, "scope": "whole_trial"},
             **({"timing_conditions": timing} if timing else {}),
             **({"winner_rule": args.winner_rule, "winner_rule_sha": hashlib.sha256(args.winner_rule.encode("utf-8")).hexdigest()[:16]} if args.winner_rule else {}),
             **({"gate25_answered": True} if args.gate25_answered else {}), **({"gate25_sim_user": True} if args.gate25_sim_user else {})}
@@ -257,6 +263,10 @@ def cmd_run(args, deps=None) -> int:
             print(f"[suite] {run_dir} đã có run khác cấu hình (ref/catalog/prompt/suite/pipeline/corpus); chạy ở --root khác", file=sys.stderr)
             return 2
     store = Store(run_dir / "results.jsonl", root / eval_corpus.VAULT / "suite" / name / "results.jsonl")
+    intent_path = run_dir / "trial-intent.json"
+    if intent_path.exists() or any(row.get("cleanup_pending") for row in store.rows.values()):
+        print("[suite] unresolved trial/remote cleanup: reconcile before resume; budget is not reset", file=sys.stderr)
+        return 2
     todo = [(t, m, r) for r in range(1, args.repeats + 1) for t in tasks for m in modes if (t["id"], m, r) not in store.rows]
     meta_path.write_text(json.dumps({**meta, "status": "running", "todo": len(todo)}, indent=2), encoding="utf-8")
     launcher = sqlite_launcher if args.fast_tier else None
@@ -269,21 +279,37 @@ def cmd_run(args, deps=None) -> int:
         if stop.is_set() or (run_dir / "STOP").exists() or (deadline and time.monotonic() > deadline):
             return None
         try:
-            row = bounded(trial.run_trial, args.trial_timeout_s, task, mode, deps, root, ROOT, fast, fast_lock, review=args.review)
+            if real_run:
+                with intent_path.open("x", encoding="utf-8") as intent:
+                    json.dump({"id": task["id"], "mode": mode, "repeat": repeat,
+                               "budget": prov["budget"], "source": prov["ref"], "model": model}, intent)
+                    intent.flush()
+                    os.fsync(intent.fileno())
+                row = isolated.execute_trial([sys.executable, str(Path(isolated.__file__).resolve())],
+                      {"task": task, "mode": mode, "root": str(root.resolve()), "source": str(ROOT),
+                       "fast_tier": args.fast_tier, "review": args.review, "wall_s": args.trial_timeout_s,
+                       "reasoning": prov["reasoning"], "context_arm": args.context_arm}, timeout_s=args.trial_timeout_s)
+            else:
+                row = trial.run_trial(task, mode, deps, root, ROOT, fast, fast_lock,
+                                      wall_s=args.trial_timeout_s, review=args.review)
         except eval_fast.FastTierError as error:  # environment broken: keep finished work, stop the run
             abort.append(str(error)[:300])
             stop.set()
             return None
         row = {**row, "repeat": repeat, **{k: task[k] for k in metrics.CELLS if k in task}}
         store.add(row)
+        if row.get("cleanup_pending"):
+            abort.append("trial cleanup/remote idle requires reconciliation")
+            stop.set()
+        elif real_run:
+            intent_path.unlink()
         return row
 
     bar, done_now, resolved_now = _bar(len(todo)), 0, 0
-    pool = futures.ThreadPoolExecutor(max_workers=max(1, args.workers))
+    pool = None if real_run else futures.ThreadPoolExecutor(max_workers=max(1, args.workers))
     try:
-        pending = [pool.submit(work, item) for item in todo]
-        for future in futures.as_completed(pending):
-            row = future.result()
+        rows_now = (future.result() for future in futures.as_completed([pool.submit(work, item) for item in todo])) if pool else map(work, todo)
+        for row in rows_now:
             if row is not None:
                 done_now += 1
                 resolved_now += row["resolved"]
@@ -293,7 +319,8 @@ def cmd_run(args, deps=None) -> int:
         stop.set()
         print("\n[suite] dừng: chờ các lượt đang chạy xong, rồi ghi báo cáo (chạy lại cùng lệnh để tiếp tục)", file=sys.stderr)
     finally:
-        pool.shutdown(wait=True, cancel_futures=True)
+        if pool:
+            pool.shutdown(wait=True, cancel_futures=True)
         bar.close()
         if fast:
             fast.close()
@@ -306,31 +333,6 @@ def cmd_run(args, deps=None) -> int:
         print(render(write_report(run_dir, rows)))
     print(f"[suite] {status}; {run_dir}" + (f"; KHÔNG TIN SỐ LIỆU: {'; '.join(problems)}" if problems else "; integrity ok"))
     return 2 if abort else 0
-
-
-def bounded(fn, seconds, *args, **kwargs):
-    """Run fn on a daemon thread; after `seconds` give up and return a failed infra row. The abandoned thread cannot be killed (ponytail: needs a subprocess per trial)."""
-    box = {}
-    thread = threading.Thread(target=lambda: box.update(_run_guarded(fn, args, kwargs)), daemon=True)
-    thread.start()
-    thread.join(seconds or None)
-    if thread.is_alive():
-        task, mode = args[0], args[1]
-        error = f"trial_timeout: no result after {seconds}s"
-        return {"id": task["id"], "mode": mode, "resolved": False, "collateral": [], "gate_passed": False, "gate4": None, "prod": "skipped", "ended": None,
-                "shipped": False, "review": None, "reason": error, "infra_error": True, "error": error, "plan": None, "capture": None, "model_calls": 0,
-                "loop_tools": [], "retries": 0, "stuck": False, "truncated": False, "tokens_in": 0, "tokens_out": 0, "wall_s": float(seconds),
-                "providers": [], "served": [], "reasoning_chars": 0, "diff": None, "recall": None, "ref_errors": 0, "schema_fallbacks": 0}
-    if "raise" in box:
-        raise box["raise"]
-    return box["value"]
-
-
-def _run_guarded(fn, args, kwargs) -> dict:
-    try:
-        return {"value": fn(*args, **kwargs)}
-    except BaseException as error:  # noqa: BLE001 - re-raised on the caller's thread
-        return {"raise": error}
 
 
 def cmd_report(args) -> int:
@@ -433,13 +435,13 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--repeats", type=int, default=3)
     run.add_argument("--modes", default="e2e,e2e:approved,gold,e2e:nodia",
                     help="e2e = own plan from the request text; gold = gold subtask (gate 3 only); e2e:nodia = e2e typed without diacritics; e2e:approved = e2e where a plan block counts as admin-approved")
-    run.add_argument("--workers", type=int, default=2, help="parallel trials against the shared GPU")
+    run.add_argument("--workers", type=int, default=1, help="exactly one worker for real model trials")
     run.add_argument("--root", required=True)
     run.add_argument("--cases", type=int)
     run.add_argument("--kinds", help="comma list of task kinds to keep (smoke runs)")
     run.add_argument("--fast-tier", action="store_true", help="gate 4 + production text oracle on a locally started corpus app")
     run.add_argument("--max-minutes", type=float)
-    run.add_argument("--trial-timeout-s", type=int, default=1800, help="hard wall-clock cap per trial; an expired trial is an infra_error row")
+    run.add_argument("--trial-timeout-s", type=int, default=300, help="whole-trial deadline; timeout stops the suite pending cleanup reconciliation")
     run.add_argument("--allow-dirty", action="store_true")
     run.add_argument("--review", action="store_true", help="also run the gate 4 model content review on gold-mode candidates (false-block rate)")
     run.add_argument("--pack", action="append", help="task pack JSON (merged-history tasks); repeatable")

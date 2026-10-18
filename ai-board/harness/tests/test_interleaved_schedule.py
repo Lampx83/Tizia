@@ -11,7 +11,7 @@ def test_four_arms_keep_failures_and_resume_without_reexecuting(tmp_path):
     manifest = prepare(tmp_path, [{"id": "task-a", "mode": "e2e", "repeat": 1}], pins, seed=17,
                        warm_cold="cold each arm", load_notes="fake executor; no GPU")
     assert set(row["arm"] for row in manifest["schedule"]) == {"control", "B01", "B02", "B01+B02"}
-    fake = [sys.executable, "-c", "import json,sys; r=json.load(sys.stdin); print(json.dumps({'model_calls':2,'tokens_in':10,'tokens_out':3})); sys.exit(2 if r['arm']=='B02' else 0)"]
+    fake = [sys.executable, "-c", "import json,sys; r=json.load(sys.stdin); print(json.dumps({'model_calls':2,'tokens_in':10,'tokens_out':3,'cleanup_confirmed':True})); sys.exit(2 if r['arm']=='B02' else 0)"]
     execute(tmp_path, fake, timeout_s=10)
     before = (tmp_path / "attempts.jsonl").read_bytes()
     execute(tmp_path, fake, timeout_s=10)
@@ -59,7 +59,8 @@ def test_timeout_stays_in_ledger_and_crash_intent_cannot_reset_budget(tmp_path):
             warm_cold="unknown", load_notes="")
     slow = [sys.executable, "-c", "import time; time.sleep(5)"]
     events = execute(tmp_path, slow, timeout_s=.05)
-    assert sum(event.get("status") == "timeout" for event in events) == 4
+    assert sum(event.get("status") == "timeout" for event in events) == 1
+    assert events[-1]["cleanup_pending"] is True
     assert all(event.get("cost_status") == "unknown; adapter did not finish" for event in events if event["event"] == "result")
     with (tmp_path / "attempts.jsonl").open("a", encoding="utf-8") as out:
         out.write(json.dumps({"event": "intent", "attempt_id": "interrupted-original"}) + "\n")
@@ -67,3 +68,12 @@ def test_timeout_stays_in_ledger_and_crash_intent_cannot_reset_budget(tmp_path):
     with pytest.raises(ValueError, match="budget is not reset"):
         execute(tmp_path, slow, timeout_s=.05)
     assert (tmp_path / "attempts.jsonl").read_bytes() == before
+
+
+def test_malformed_adapter_result_stops_before_the_next_arm(tmp_path):
+    pins = {key: "fixture" for key in ("source", "model", "corpus", "catalog", "prompt", "harness", "budget")}
+    prepare(tmp_path, [{"id": "task-a", "mode": "e2e", "repeat": 1}], pins, seed=1,
+            warm_cold="unknown", load_notes="fake; no model")
+    events = execute(tmp_path, [sys.executable, "-c", "print('not-json')"], timeout_s=10)
+    assert len(events) == 2
+    assert events[-1]["cleanup_pending"] is True

@@ -65,7 +65,7 @@ class Collect(meter.Tracer):
         self.begin(0, self.records.extend)
 
 
-def run_case(name: str, case: dict, model: str, base: Deps, after=None) -> dict:
+def run_case(name: str, case: dict, model: str, base: Deps, after=None, *, budget: Budget | None = None) -> dict:
     """1 case cổng 3 → row kết quả. case: subtask, detail, oracle(nội dung)→bool, checkout (repo git base; mặc định Tizia).
     Nhiều file: `subtasks` (list) thay `subtask`, oracle nhận {file: nội dung} và row có thêm `diff` (candidate so với base).
     after(state, scratch, files) → dict gộp vào row: chạy khi cổng 3 qua, trước khi xóa scratch (fast tier: cổng 4 + oracle sản xuất)."""
@@ -76,8 +76,10 @@ def run_case(name: str, case: dict, model: str, base: Deps, after=None) -> dict:
     subtasks = case.get("subtasks") or [case["subtask"]]
     state = {"plan": {"subtasks": subtasks}, "checkout_source": str(case.get("checkout", ROOT)), "request_detail": case["detail"]}
     started = time.monotonic()
+    budget = budget if budget is not None else Budget(max_wall_clock_s=900, max_units=600)
     try:
-        out = implement.run(state, deps, Budget(max_wall_clock_s=900, max_units=600), repo_dir=scratch)
+        out = (implement.run(state, deps, budget, repo_dir=scratch) if budget.tick()
+               else {"blocked": True, "reason": f"budget exhausted: {budget.exhausted()}"})
     except Exception as error:  # noqa: BLE001 — 504/timeout vẫn là 1 kết quả eval
         out = {"blocked": True, "reason": f"{type(error).__name__}: {error}"[:300]}
     tracer.flush()

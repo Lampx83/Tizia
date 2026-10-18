@@ -92,18 +92,21 @@ def summarize(rows: list[dict]) -> dict:
                          "schema_fallbacks": sum(r.get("schema_fallbacks", 0) for r in rows)}
     out["cost_per_resolved_clean"] = telemetry
     if rows[0]["mode"].startswith("e2e"):
-        plans = [r["plan"] for r in rows]
+        plans = [r["plan"] for r in rows if r.get("plan") is not None]
+        known = len(plans)
         out["planning"] = {
-            "first_hit": rate(sum(p["first_hit"] for p in plans), n), "first_exact": rate(sum(p["first_exact"] for p in plans), n),
-            "final_hit": rate(sum(p["final_hit"] for p in plans), n), "first_parse_ok": rate(sum(p["first_parse_ok"] for p in plans), n),
-            "first_nonexistent": rate(sum(p["first_nonexistent"] for p in plans), n),
-            "first_plans_new_page": rate(sum(p["first_plans_new_page"] for p in plans), n),
-            "blocked": rate(sum(p["blocked"] for p in plans), n), "extra_files_mean": round(sum(p["first_extra"] for p in plans) / n, 2),
+            "unknown": n - known,
+            "first_hit": rate(sum(p["first_hit"] for p in plans), known), "first_exact": rate(sum(p["first_exact"] for p in plans), known),
+            "final_hit": rate(sum(p["final_hit"] for p in plans), known), "first_parse_ok": rate(sum(p["first_parse_ok"] for p in plans), known),
+            "first_nonexistent": rate(sum(p["first_nonexistent"] for p in plans), known),
+            "first_plans_new_page": rate(sum(p["first_plans_new_page"] for p in plans), known),
+            "blocked": rate(sum(p["blocked"] for p in plans), known),
+            "extra_files_mean": round(sum(p["first_extra"] for p in plans) / known, 2) if known else None,
         }
     judged = [r for r in rows if (r.get("review") or {}).get("ran")]
     if judged:  # corpus and pack requests are benign: every block is a false positive of the gate 4 content guard
         out["review_false_block"] = rate(sum(bool(r["review"]["blocked"]) for r in judged), len(judged))
-    funnel = [("planned", lambda r: not r["mode"].startswith("e2e") or r["plan"]["final_hit"]), ("gate3", lambda r: r["gate_passed"]),
+    funnel = [("planned", lambda r: not r["mode"].startswith("e2e") or (r.get("plan") or {}).get("final_hit")), ("gate3", lambda r: r["gate_passed"]),
               ("gate4", lambda r: r.get("gate4") == "passed"), ("resolved", lambda r: r["resolved"])]
     out["funnel"] = {name: sum(bool(f(r)) for r in rows) for name, f in funnel}
     return out

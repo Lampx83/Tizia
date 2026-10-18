@@ -68,7 +68,8 @@ def run_owned(command: list[str], *, input: str, timeout: float) -> subprocess.C
                   'sys.exit(p.returncode)']
         payload = json.dumps({'command': command, 'input': input})
     process = subprocess.Popen(launch, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE, text=True, start_new_session=not windows)
+                               stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+                               start_new_session=not windows)
     close_job = None
     try:
         if windows:

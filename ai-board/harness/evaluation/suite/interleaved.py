@@ -69,6 +69,8 @@ def execute(root: Path, command: list[str], *, timeout_s: float) -> list[dict]:
         finished = {e['attempt_id'] for e in events if e['event'] == 'result'}
         if intents - finished:
             raise ValueError('unresolved attempt: reconcile before resume; budget is not reset')
+        if any(e.get('cleanup_pending') for e in events):
+            raise ValueError('cleanup pending: reconcile before resume; budget is not reset')
         protocol = {'command': command, 'timeout_s': timeout_s, 'containment': 'owned-tree-v1'}
         protocol_path = root / 'executor.json'
         if protocol_path.exists():
@@ -109,10 +111,14 @@ def execute(root: Path, command: list[str], *, timeout_s: float) -> list[dict]:
             except (OSError, ValueError) as error:
                 if status != 'cancel':
                     status = 'failure'
-                detail.update({'error_type': type(error).__name__, 'cost_status': 'unknown'})
+                detail.update({'error_type': type(error).__name__, 'cost_status': 'unknown', 'cleanup_pending': True})
+            cleanup_pending = (status in ('timeout', 'cancel') or detail.get('cleanup_pending')
+                               or bool((result or {}).get('cleanup_pending'))
+                               or (status == 'failure' and not (result or {}).get('cleanup_confirmed')))
             append({'event': 'result', 'attempt_id': identity, 'status': status,
-                    'result': result, **detail})
-            if status == 'cancel':
+                    'result': result, **detail,
+                    **({'cleanup_pending': True} if cleanup_pending else {})})
+            if cleanup_pending:
                 break
         return events
     finally:

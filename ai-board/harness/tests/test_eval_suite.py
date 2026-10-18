@@ -82,6 +82,94 @@ def test_e2e_right_plan_is_resolved_and_counts_both_stages(world):
     assert row["tokens_in"] >= 620 and row["collateral"] == [] and metrics.failure_class(row) is None
 
 
+def test_trial_does_not_replenish_model_budget_after_planning(world):
+    from runtime.budget import Budget
+
+    root, tasks = world
+    deps, models = deps_for(world)
+    budget = Budget(max_model_calls=1, max_wall_clock_s=300)
+    row = trial.run_trial(pick(tasks, 1), "e2e", deps, root, ROOT, budget=budget)
+    assert not row["resolved"] and not row["infra_error"]
+    assert [phase for phase, _ in models.calls] == ["gate1"]
+    assert row["budget"]["model_calls"] == 1
+    assert row["budget"]["exhausted"] == "model_calls"
+
+
+@pytest.mark.parametrize("mode", ["e2e", "gold"])
+def test_trial_model_timeout_does_not_retry_or_claim_complete_usage(world, mode, monkeypatch):
+    root, tasks = world
+    deps, models = deps_for(world)
+    attempted = []
+
+    def timeout(*args, **kwargs):
+        attempted.append(True)
+        raise TimeoutError("response interrupted")
+
+    monkeypatch.setattr(SuiteModels, "generate", timeout)
+    row = trial.run_trial(pick(tasks, 1), mode, dataclasses.replace(deps, stop_on_model_error=True), root, ROOT)
+    assert len(attempted) == 1
+    assert row["cleanup_pending"] is True and not row["resolved"]
+    assert row["tokens_in"] is None and row["cost_status"] == "unknown"
+
+
+def test_successful_trial_preserves_unknown_usage_without_blocking_cleanup(world, monkeypatch):
+    root, tasks = world
+    deps, _ = deps_for(world)
+    generate = SuiteModels.generate
+
+    def missing_usage(self, *args, **kwargs):
+        body = generate(self, *args, **kwargs)
+        body.pop("prompt_eval_count")
+        return body
+
+    monkeypatch.setattr(SuiteModels, "generate", missing_usage)
+    row = trial.run_trial(pick(tasks, 1), "gold", deps, root, ROOT)
+    assert row["resolved"] and not row["cleanup_pending"]
+    assert row["tokens_in"] is None and row["tokens_out"] is None
+    assert row["cost_status"] == "unknown" and not row["infra_error"]
+
+
+def test_isolated_trial_applies_context_arm_before_generating_candidate(world, monkeypatch):
+    import sys
+    from evaluation.suite.isolated import execute_trial
+    from evaluation.suite import isolated
+
+    output = []
+    run_owned = isolated.run_owned
+    def observe(*args, **kwargs):
+        result = run_owned(*args, **kwargs)
+        output.append(result.stderr)
+        return result
+    monkeypatch.setattr(isolated, "run_owned", observe)
+
+    root, tasks = world
+    task = pick(tasks, 1)
+    # Substitute only the external model/config boundary; run the actual JSON child entry point.
+    program = f'''
+import sys
+from pathlib import Path
+sys.path.insert(0, {str(Path(__file__).parent)!r})
+import dotenv
+dotenv.load_dotenv = lambda *a, **k: None
+from test_eval_suite import SuiteModels
+from runtime.pipeline import Deps
+from evaluation.suite import isolated
+generate = SuiteModels.generate
+def scripted(self, model, prompt, **kwargs):
+    assert "toàn bộ file" in prompt, "isolated context arm was lost"
+    return generate(self, model, prompt, **kwargs)
+SuiteModels.generate = scripted
+SuiteModels.routing = None
+Deps.real = staticmethod(lambda: Deps(models=SuiteModels(Path({str(root)!r}), {{{task['key']!r}: {task!r}}}), notify=None))
+isolated.main()
+'''
+    row = execute_trial([sys.executable, "-c", program],
+                        {"task": task, "mode": "gold", "root": str(root), "source": str(ROOT),
+                         "wall_s": 120, "context_arm": "fullfile"}, timeout_s=120)
+    assert row["resolved"], (row.get("reason"), output)
+    assert row["model_calls"] == 1 and not row["cleanup_pending"]
+
+
 def test_e2e_wrong_page_is_a_plan_miss_not_an_implementation_failure(world):
     root, tasks = world
     deps, models = deps_for(world)
@@ -183,6 +271,26 @@ def test_run_end_to_end_parallel_resume_and_report(world, capsys):
     calls = len(models.calls)
     assert runner.main(argv, deps) == 0 and len(models.calls) == calls  # resume: nothing re-run
     assert runner.main([*argv[:-1], "--allow-dirty", "--repeats", "3"], deps) == 2  # different config in the same dir is refused
+
+
+def test_suite_refuses_resume_until_remote_cleanup_is_reconciled(world, monkeypatch):
+    root, _ = world
+    deps, models = deps_for(world)
+    for name in ("AI_BOARD_TOOL_LOOP", "AI_BOARD_GATE25_FIXES", "AI_BOARD_BEST_MATCH", "AI_BOARD_RETRIEVAL"):
+        monkeypatch.setenv(name, "")
+    argv = ["run", "--seed", str(SEED), "--split", "dev", "--cases", "1", "--repeats", "1", "--modes", "gold",
+            "--context-arm", "hybrid", "--root", str(root), "--allow-dirty"]
+    assert runner.main(argv, deps) == 0
+    path = next((root / "suite").glob("*-ctx-hybrid/results.jsonl"))
+    row = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
+    original = path.read_bytes()
+    path.write_text(json.dumps({**row, "cleanup_pending": True}) + "\n", encoding="utf-8")
+    calls = len(models.calls)
+    try:
+        assert runner.main(argv, deps) == 2
+        assert len(models.calls) == calls
+    finally:
+        path.write_bytes(original)
 
 
 def test_best_match_flag_is_recorded_in_run_name_and_provenance(world, monkeypatch):
@@ -563,23 +671,3 @@ def test_simulated_requester_environment_runs_through_the_trial_without_error(wo
     monkeypatch.setenv("AI_BOARD_GATE25_SIM_USER", "1")
     row = trial.run_trial(pick(tasks, 1), "e2e", deps, root, ROOT)
     assert row["error"] is None and row["resolved"]
-
-
-def test_bounded_returns_an_infra_row_when_the_trial_hangs_and_passes_results_and_errors_through():
-    import threading
-    from evaluation.suite import runner
-    task = {"id": "t1"}
-    hang = threading.Event()
-    row = runner.bounded(lambda t, m: hang.wait(30), 0.2, task, "gold")
-    hang.set()
-    assert row["infra_error"] and row["resolved"] is False and "trial_timeout" in row["error"]
-    assert runner.bounded(lambda t, m: {"ok": m}, 5, task, "gold") == {"ok": "gold"}
-    def boom(t, m):
-        raise ValueError("x")
-    with pytest.raises(ValueError):
-        runner.bounded(boom, 5, task, "gold")
-    stuck = threading.Event()
-    runner.bounded(lambda t, m: stuck.wait(30), 0.2, task, "gold")
-    hung = [th for th in threading.enumerate() if th.is_alive() and th is not threading.current_thread() and th.daemon and not th.name.startswith("pytest")]
-    stuck.set()
-    assert hung
