@@ -569,6 +569,7 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
         diffs.append({
             "title": subtask["title"], "file": subtask["file"], "test_file": out["test_file"],
             "model": model, "diff": diff_text,
+            **({'verification': out['verification']} if out.get('verification') else {}),
             "commit": _git(["rev-parse", "HEAD"], cwd=repo, text=True).stdout.strip(),
         })
 

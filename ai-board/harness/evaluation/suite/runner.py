@@ -21,7 +21,7 @@ from pathlib import Path
 import eval_corpus
 import eval_fast
 from gates import gate3_guards, plan_validate
-from runtime import tool_manifest
+from runtime import tool_loop, tool_manifest
 from runtime.budget import Budget
 from evaluation.suite import ablation, grading, isolated, metrics, taskpack, trial
 from evaluation.suite.launcher import sqlite_launcher
@@ -38,7 +38,7 @@ def provenance(root_repo: Path, model: str, router) -> dict:  # router None = in
     git = lambda *a: subprocess.run(["git", "-C", str(root_repo), *a], capture_output=True, text=True, stdin=subprocess.DEVNULL).stdout.strip()  # noqa: E731
     harness = root_repo / "ai-board" / "harness"
     suite_files = sorted(HERE.glob("*.py")) + [HERE / "queue_fixture_sqlite.mjs"]
-    gates = sorted((harness / "gates").glob("*.py")) + sorted((harness / "runtime").glob("*.py"))
+    gates = sorted((harness / "gates").glob("*.py")) + sorted((harness / "runtime").glob("*.py")) + sorted((harness / "verification").glob("*.py"))
     return {
         "ref": git("rev-parse", "HEAD"), "dirty": bool(git("status", "--porcelain", "--untracked-files=no")),
         "model": model, "routing_catalog": _sha(root_repo / "server" / "ai-board" / "model-routing.json"),
@@ -213,6 +213,7 @@ def cmd_run(args, deps=None) -> int:
         return 2
     prov = {**provenance(ROOT, model, router), "context_arm": args.context_arm, "gate3_guards": guards, "gate25_fixes": fixes,
             "best_match": args.best_match or "enforce", "retrieval": args.retrieval, "tool_loop": args.tool_loop or "", "skill_pad_chars": args.skill_pad_chars, "loop_caps": caps or [10, 30],
+            "verified_loop": tool_loop.verified_enabled(),
             "budget": {"model_calls": Budget.max_model_calls, "tool_calls": Budget.max_tool_calls, "tokens": Budget.max_tokens,
                        "units": 600, "wall_clock_s": args.trial_timeout_s, "scope": "whole_trial"},
             **({"timing_conditions": timing} if timing else {}),

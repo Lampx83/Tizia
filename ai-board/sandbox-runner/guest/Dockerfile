@@ -27,4 +27,6 @@ COPY ai-board/harness ai-board/harness
 COPY server/ai-board server/ai-board
 COPY scripts/smoke-user-state.sh scripts/smoke-user-state.sh
 COPY ai-board/sandbox-runner/guest/guest-boot.sh /usr/local/bin/guest-boot.sh
+COPY ai-board/sandbox-runner/guest/isolate-evaluator.sh /usr/local/bin/isolate-evaluator.sh
+RUN sh /usr/local/bin/isolate-evaluator.sh
 RUN chmod +x /usr/local/bin/guest-boot.sh && mkdir -p /workspace

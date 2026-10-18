@@ -30,6 +30,8 @@ def failure_class(row: dict) -> str | None:
     if row.get("infra_error"):
         return "infra"
     if row["mode"].startswith("e2e"):
+        if row.get('plan') is None:
+            return 'planning_unknown'
         if row["plan"]["blocked"]:
             return "plan_blocked"
         if row["plan"].get("validator_blocked") and not row["plan"].get("approved"):

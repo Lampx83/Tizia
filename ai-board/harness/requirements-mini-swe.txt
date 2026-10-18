@@ -1,0 +1,2 @@
+# Evaluation only. Install with --no-deps --require-hashes into a dedicated runtime directory.
+mini-swe-agent==2.4.6 --hash=sha256:a35463c553ac825c7773b03cfa69cd44958e3af20155dcc5711fdf9e4c67cd54

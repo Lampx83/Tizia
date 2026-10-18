@@ -2,19 +2,10 @@
 version: 1
 vm: { cpus: 1, memory_mib: 2048, disk_mib: 10240, ttl_s: 1200, lease_s: 120 }
 concurrency: 1
-# guest-inputs: 77ac7cf03a8f648e51382a75fec1163da772018f0127e228d8f20c75f137cbb2
-guest_image: image-registry:5000/gate5@sha256:a51749ebf7baacb796fe0e49f1eb8fb76f7041e509e04e86f610f7b16b637682
-egress:
-  - { host: registry-1.docker.io, port: 443 }
-  - { host: auth.docker.io, port: 443 }
-  - { host: production.cloudflare.docker.com, port: 443 }
-  - { host: production.cloudfront.docker.com, port: 443 }
-  - { host: dl-cdn.alpinelinux.org, port: 443 }
-  - { host: registry.npmjs.org, port: 443 }
-  - { host: github.com, port: 443 }
-  - { host: objects.githubusercontent.com, port: 443 }
-  - { host: release-assets.githubusercontent.com, port: 443 }
-  - { host: nodejs.org, port: 443 }
+# guest-inputs: 707c85a3dfe75c1fefeb73fb4ca63d6da8452f03c23938fccf6a6c4477f5e286
+guest_image: image-registry:5000/gate5@sha256:105522a576686e4d91b40c0b69caf8de98c7a9f04d34689ecf05a14c97150a77
+network: none
+egress: []
 guest_env: { CI: "1", GATE5_CA_SHA256: "4b386847e6e3fbd65e91086e284957d53d96c17916afc0c12ea8c58f01ac313a" }
 archive: { max_bytes: 104857600, max_expanded_bytes: 536870912, max_files: 20000 }
 exec: { timeout_s: 1200, max_stdout_bytes: 1048576, max_stderr_bytes: 1048576, workdir: /workspace }

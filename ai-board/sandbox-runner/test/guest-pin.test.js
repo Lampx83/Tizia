@@ -62,6 +62,16 @@ test('classifier and provider configuration changes invalidate the guest source 
   assert.notEqual(guestInputsHash(root), classifierChanged, 'routing compatibility is a trusted guest input');
 });
 
+test('evaluator access policy is a pinned guest input and applied by the image', () => {
+  const rel = 'ai-board/sandbox-runner/guest/isolate-evaluator.sh';
+  const root = fakeRepo({ ...BASE, [rel]: 'chmod 600 evaluator\n' });
+  const original = guestInputsHash(root);
+  fs.writeFileSync(path.join(root, rel), 'chmod 700 evaluator\n');
+  assert.notEqual(guestInputsHash(root), original);
+  const dockerfile = fs.readFileSync(path.join(REPO, 'ai-board/sandbox-runner/guest/Dockerfile'), 'utf8');
+  assert.ok(dockerfile.includes('RUN sh /usr/local/bin/isolate-evaluator.sh'));
+});
+
 test('guest staging excludes evaluation answers and local agent instructions', () => {
   const root = fakeRepo({ ...BASE,
     'ai-board/harness/evaluation/private-gold.json': '{"answer":"held-out"}\n',

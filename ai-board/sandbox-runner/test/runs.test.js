@@ -32,6 +32,13 @@ function setup(over = {}) {
 }
 const code = (promise) => promise.then(() => null, (error) => error.code);
 
+test('no-network readiness is explicit in the run receipt', async () => {
+  const { runs } = setup({ policy: { ...POLICY, network: 'none', egress: [] } });
+  const receipt = await runs.create({ run_id: 'no-network-check' });
+  assert.equal(receipt.network, 'none');
+  assert.equal(receipt.policy_hash, POLICY.hash);
+});
+
 test('preview HTTP is bounded, fixed-destination and unavailable after lease or restart', async () => {
   const { runs, backend, clock, store } = setup();
   let forwarded;

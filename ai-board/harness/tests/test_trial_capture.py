@@ -18,6 +18,7 @@ tree = ast.parse(candidate.read_text(encoding="utf-8"))
 @dataclasses.dataclass(frozen=True)
 class StubDeps:
     responses: list
+    stop_on_model_error: bool = False
 
     def call_model(self, *args, **kwargs):
         result = self.responses.pop(0)
@@ -42,6 +43,16 @@ exec(compile(ast.Module(body=selected, type_ignores=[]), str(candidate), "exec")
 
 
 class CaptureTests(unittest.TestCase):
+    def test_measured_failure_latch_blocks_another_request_without_replaying_it(self):
+        deps = scope['RecordingDeps']([RuntimeError('private'), {'response': 'must not run'}], stop_on_model_error=True)
+        deps.capture.update(enabled=True, phase='planning')
+        with self.assertRaises(RuntimeError):
+            deps.call_model()
+        with self.assertRaisesRegex(RuntimeError, 'cleanup pending'):
+            deps.call_model()
+        self.assertEqual(len(deps.responses), 1)
+        self.assertEqual(len(deps.capture['model_calls']), 1)
+
     def test_full_responses_are_pinned_without_arguments_or_credentials(self):
         text = "x" * 10000
         deps = scope["RecordingDeps"]([{"response": text, "model": "TEST", "authorization": "SECRET", "_route": {"token": "SECRET"}}])

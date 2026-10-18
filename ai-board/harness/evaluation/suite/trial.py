@@ -18,7 +18,7 @@ import code_index
 import eval_corpus
 import eval_fast
 from evaluation import gold as gold_eval
-from evaluation.suite import taskpack
+from evaluation.suite import candidate_grade, taskpack
 from gates import brainstorm, gate3_guards, plan_validate, scope_check, static_check
 from runtime.budget import Budget
 from runtime import tool_loop
@@ -40,6 +40,8 @@ class RecordingDeps(Deps):
     def call_model(self, *args, **kwargs):
         if self.stop_on_model_error and self.capture.get("model_failure"):
             raise RuntimeError("model cleanup pending; no additional request")
+        if self.stop_on_model_error and self.capture.get('usage_missing'):
+            raise RuntimeError('model usage unknown; no additional request')
         phase = self.capture.get("phase")
         calls = self.capture.setdefault("model_calls", [])
         event = {"attempt": len(calls) + 1, "phase": phase}
@@ -280,14 +282,10 @@ def run_trial(task: dict, mode: str, base_deps: Deps, root: Path, source, fast: 
         plan_facts = plan_facts or {"attempts": 0, "blocked": True, "validator_blocked": False, "first_hit": False, "first_exact": False,
                                     "first_parse_ok": False, "first_nonexistent": False, "first_plans_new_page": False, "first_extra": 0,
                                     "final_hit": False, "final_exact": False, "final_files": [], "validator_reason": None}
-        single = rec["oracle"] if task.get("pack") else (lambda files: bool(files.get(gold[0])) and rec["oracle"](files[gold[0]]))
-
         def oracle(files: dict) -> bool:
-            for path, text in files.items():
-                before = eval_fast._base_bytes(repo, path)
-                if path not in gold and (before is None or before.decode("utf-8", "replace") != text):
-                    collateral.append(path)
-            return single(files)
+            graded = candidate_grade.grade(task, rec, files)
+            collateral.extend(graded['collateral'])
+            return graded['resolved']
         case = {"subtasks": (plan or {}).get("subtasks") or [], "detail": task["detail"], "checkout": rec["checkout"], "oracle": oracle}
     else:
         case = rec
@@ -326,7 +324,7 @@ def run_trial(task: dict, mode: str, base_deps: Deps, root: Path, source, fast: 
                "full_diff": row.get("diff") or "", "trial_error": error} if deps.capture.get("enabled") else None
     p_in, p_out = _tokens(plan_records)
     texts = [hashlib.sha1(str(b.get("response", "")).encode("utf-8")).hexdigest() for b in deps.ledger]
-    cleanup_pending = bool(deps.capture.get("model_failure"))
+    cleanup_pending = bool(deps.capture.get("model_failure") or deps.capture.get("sandbox_cleanup_pending"))
     unknown_usage = cleanup_pending or bool(deps.capture.get("usage_missing"))
     resolved = bool(row["oracle"]) and not error and not cleanup_pending
     return {

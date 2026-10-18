@@ -4,7 +4,7 @@ import { WorkerContractError } from './store-contract.js';
 const HASH = /^[0-9a-f]{64}$/;
 const EFFECTS = ['read', 'draft_write', 'control'];
 const FIELDS = ['name', 'description', 'parameters', 'effect', 'max_arg_bytes', 'max_output_chars', 'max_seconds'];
-export const LOOP_TOOLS = new Set(['tree', 'outline', 'grep', 'read_file', 'edit_file', 'write_test', 'finish']);
+export const LOOP_TOOLS = new Set(['tree', 'outline', 'grep', 'read_file', 'edit_file', 'write_test', 'run_check', 'finish']);
 const fail = (code, status = 409) => { throw new WorkerContractError(code, status, code); };
 const sorted = (value) => Array.isArray(value) ? value.map(sorted)
   : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, sorted(value[key])])) : value;
@@ -13,12 +13,27 @@ const sorted = (value) => Array.isArray(value) ? value.map(sorted)
 export const canonicalHash = (manifest) => createHash('sha256').update(JSON.stringify(sorted(manifest)), 'utf8').digest('hex');
 
 function check(manifest) {
+  if (![1, 2, 3].includes(manifest?.version)) fail('tool_manifest_invalid', 400);
+  if (manifest.version >= 2) {
+    const fields = manifest.version === 3 ? ['version', 'tools', 'command_policy', 'check_runtime_sha256']
+      : ['version', 'tools', 'command_policy'];
+    const policy = manifest.command_policy;
+    const strings = (value) => Array.isArray(value) && value.every((item) => typeof item === 'string' && item.length > 0);
+    if (Reflect.ownKeys(manifest).sort().join() !== fields.sort().join()
+      || !policy || Reflect.ownKeys(policy).sort().join() !== ['allow', 'deny_args', 'deny_sql', 'deny_write'].sort().join()
+      || !Array.isArray(policy.allow) || !policy.allow.length || !policy.allow.every((prefix) => strings(prefix) && prefix.length)
+      || !['deny_args', 'deny_sql', 'deny_write'].every((name) => strings(policy[name]))) fail('tool_manifest_invalid', 400);
+    if (manifest.version === 3 && !HASH.test(String(manifest.check_runtime_sha256))) fail('tool_manifest_invalid', 400);
+    check({ version: 1, tools: manifest.tools });
+    return;
+  }
   const ok = manifest && typeof manifest === 'object' && Number.isSafeInteger(manifest.version) && Array.isArray(manifest.tools)
     && manifest.tools.length > 0 && manifest.tools.length <= 32 && Object.keys(manifest).length === 2;
   if (!ok) fail('tool_manifest_invalid', 400);
   const seen = new Set();
   for (const tool of manifest.tools) {
     const caps = ['max_arg_bytes', 'max_output_chars', 'max_seconds'].map((key) => tool?.[key]);
+    if (caps.some((value) => !Number.isFinite(value))) fail('tool_manifest_invalid', 400);
     if (!tool || typeof tool !== 'object' || Object.keys(tool).sort().join() !== [...FIELDS].sort().join()
       || !LOOP_TOOLS.has(tool.name) || seen.has(tool.name) || !EFFECTS.includes(tool.effect)
       || tool.parameters?.type !== 'object' || caps.some((n) => typeof n !== 'number' || !(n > 0))) fail('tool_manifest_invalid', 400);

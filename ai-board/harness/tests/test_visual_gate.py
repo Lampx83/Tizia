@@ -1,5 +1,6 @@
 """Cổng ảnh: selector bị đổi từ diff, so lỗi mới, và 3 diff thật chạy qua Chromium."""
 import http.server
+import re
 import subprocess
 import threading
 from pathlib import Path
@@ -77,7 +78,7 @@ def _git(*args) -> bytes:
     return subprocess.run(["git", *args], cwd=REPO, capture_output=True, check=True).stdout
 
 
-CASES = [("ai-board/2026-09-26-ticket-18-3ec392", True), ("ai-board/2026-09-26-ticket-19-526834", True),
+CASES = [("ai-board/2026-09-26-ticket-18-3ec392", True),
          ("ai-board/2026-09-26-ticket-11-a56fc2", False)]
 
 
@@ -136,6 +137,32 @@ def test_real_ticket_diffs(branch, blocked):
         manager.stop()
         server.shutdown()
     assert bool(issues) is blocked, issues
+
+
+def test_historical_toast_diff_covers_a_previously_accessible_button():
+    branch = 'ai-board/2026-09-26-ticket-19-526834'
+    try:
+        base = _git('merge-base', branch, 'HEAD').decode().strip()
+    except subprocess.CalledProcessError:
+        pytest.skip(f'missing historical branch {branch}')
+    # The full historical page already covers its controls with an iframe; isolate the changed rule.
+    rules = [re.search(r'\.achievement-toast\s*\{[^}]+\}',
+             _git('show', f'{ref}:public/js/engine/path-renderer.js').decode()).group() for ref in (base, branch)]
+    manager, browser = _browser()
+    try:
+        for width in (375, 1280):
+            page = browser.new_page(viewport={'width': width, 'height': 812})
+            audits = []
+            for rule in rules:
+                page.set_content('<style>body{background:#151330;color:white}' + rule +
+                    '</style><button id="fixture" style="position:fixed;top:32px;right:32px;width:80px;height:40px">Menu</button>')
+                audits.append(visual.audit(page, ['.achievement-toast']))
+            assert not audits[0]['covered'], audits[0]
+            assert any('button#fixture' in issue for issue in visual.regressions(*audits)), audits
+            page.close()
+    finally:
+        browser.close()
+        manager.stop()
 
 
 def test_settle_waits_for_the_load_event_before_the_audit_measures():

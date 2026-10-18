@@ -18,9 +18,12 @@ from repositories import server_hsm
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import file_context  # noqa: E402
 import tools  # noqa: E402
+import code_index
+from verification import loop_checks
+from verification.sandbox import SandboxError
 
 ERROR_CHARS = 2000
-IMPLEMENTED = {"tree", "outline", "grep", "read_file", "edit_file", "write_test", "finish"}
+IMPLEMENTED = {"tree", "outline", "grep", "read_file", "edit_file", "write_test", "run_check", "finish"}
 MANIFEST = tool_manifest.load(known=IMPLEMENTED)
 REPO_TOOLS = tuple(name for name in ("tree", "outline", "grep") if name in MANIFEST.tools)
 WRITE_TOOLS = MANIFEST.names("draft_write")
@@ -46,6 +49,10 @@ def mode() -> str:
 
 def enabled() -> bool:
     return mode() == "1"
+
+
+def verified_enabled() -> bool:
+    return _env_int('AI_BOARD_VERIFIED_LOOP', 0) == 1
 
 
 def _env_int(name: str, default: int) -> int:
@@ -132,15 +139,56 @@ def _clean_path(path: str) -> str:
 class Workspace:
     """Bản nháp của file đích trong bộ nhớ + test; nguồn là git sha cố định."""
 
-    def __init__(self, source, sha: str, file: str, current: str | None):
+    def __init__(self, source, sha: str, file: str, current: str | None, *, checks=None, budget=None):
         self.source, self.sha, self.file, self.base = source, sha, file, current
         self.base_hash = None if current is None else sha_of(current)
         self.content = current or ""
         self.test_file = self.test = None
         self.stale_reset = None
+        self.checks, self.budget, self.proofs = checks, budget, {}
+
+    def _read(self, path: str) -> str:
+        path = _clean_path(path)
+        if not loop_checks.readable(path):
+            raise Forbidden(f"read policy denied: {path!r}")
+        if path == self.file:
+            return self.content
+        meta = code_index.git(self.source, 'ls-tree', self.sha, '--', path).decode('utf-8')
+        if not meta.startswith(('100644 blob ', '100755 blob ')):
+            raise Forbidden(f"dependency is missing or is not a regular pinned file: {path!r}")
+        return tools._show(self.source, self.sha, path) or ''
+
+    def _check(self, profile: str, *, charge=True) -> dict:
+        if self.checks is None:
+            raise ToolError('verified checks are disabled')
+        if profile not in loop_checks.PROFILES:
+            raise ToolError('check profile must be light, platform or relevant')
+        if not self.budget.tick():
+            raise ToolError('verification budget exhausted')
+        if charge:
+            self.budget.spend('tool_calls')
+        server_hsm.authorize_action('run_check', tool_manifest=MANIFEST.hash)
+        try:
+            receipt = self.checks.run(profile, self)
+        except (SandboxError, OSError, ValueError) as error:
+            raise Forbidden(f'verification unavailable: {error}') from None
+        server_hsm.authorize_action('run_check', tool_manifest=MANIFEST.hash)
+        self.proofs[profile] = receipt
+        return receipt
+
+    def verified(self):
+        pin = loop_checks.digest(self.file, self.content, self.test_file, self.test, self.sha, MANIFEST.hash)
+        for profile in loop_checks.PROFILES:
+            proof = self.proofs.get(profile)
+            if not proof or proof.get('digest') != pin:
+                proof = self._check(profile)
+            if not proof.get('passed'):
+                raise ValueError(f"{profile} failed: {proof.get('output', '')[:1200]}")
 
     def _check_scope(self, path: str, *, test: bool = False) -> str:
         path = _clean_path(path)
+        if reason := MANIFEST.policy.write_reason(path):
+            raise Forbidden(reason)
         if test and not path.startswith(("test/", "tests/")):
             raise Forbidden(f"test chỉ được nằm trong test/: {path!r}")
         if not test and path != self.file:
@@ -164,15 +212,44 @@ class Workspace:
         return out
 
     def _run(self, name: str, args: dict) -> str:
+        if name == 'run_check':
+            return json.dumps(self._check(args['profile'], charge=False), ensure_ascii=False)
         if name in REPO_TOOLS:
             if "file" in args:
                 args = {**args, "file": _clean_path(args["file"])}
             if "path" in args:
                 args = {**args, "path": _clean_path(args["path"])}
+            if self.checks and 'file' in args:
+                self._read(args['file'])
+            if self.checks and 'file' not in args:
+                path = args.get('path', 'public')
+                if not path or path.startswith('.') or any(part.startswith('.') or part.lower() in loop_checks.DENIED_PARTS
+                                                          for part in path.split('/')):
+                    raise Forbidden('repository read path denied')
+                listed = code_index.git(self.source, 'ls-tree', '-r', '--name-only', self.sha, '--', path).decode('utf-8').splitlines()
+                listed = [file for file in listed if loop_checks.readable(file)]
+                if name == 'tree':
+                    return '\n'.join(listed)[:MANIFEST.tools[name].max_output_chars]
+                hits = []
+                for start in range(0, min(len(listed), 2000), 40):
+                    try:
+                        output = code_index.git(self.source, 'grep', '-l', '-F', '-I', '-i',
+                                  *[arg for word in args['words'] for arg in ('-e', word)],
+                                  self.sha, '--', *listed[start:start + 40]).decode('utf-8')
+                    except OSError:
+                        continue
+                    hits.extend(line.split(':', 1)[1] for line in output.splitlines())
+                    if len(hits) >= 20:
+                        break
+                return '\n'.join(hits)[:MANIFEST.tools[name].max_output_chars]
             return tools.run(name, self.source, self.sha, args, MANIFEST.tools[name].max_output_chars) or "(không có kết quả)"
         if name == "read_file":
-            self._check_scope(args["file"])
-            return "\n".join(f"L{n}| {line}" for n, line in enumerate(self.content.splitlines(), 1))[:MANIFEST.tools[name].max_output_chars]
+            if self.checks:
+                content = self._read(args['file'])
+            else:
+                self._check_scope(args["file"])
+                content = self.content
+            return "\n".join(f"L{n}| {line}" for n, line in enumerate(content.splitlines(), 1))[:MANIFEST.tools[name].max_output_chars]
         if name == "edit_file":
             self._check_scope(args["file"])
             self._fresh()
@@ -180,9 +257,14 @@ class Workspace:
                 self.content = file_context.apply_edits(self.content, args["edits"], filename=self.file)
             except ValueError as error:
                 raise ToolError(str(error) + self._candidates(args["edits"], str(error))) from None
+            self.proofs.clear()
+            if self.checks:
+                receipt = self._check('light')
+                return json.dumps(receipt, ensure_ascii=False)
             return f"đã áp {len(args['edits'])} edit; file còn {len(self.content.splitlines())} dòng"
         if name == "write_test":
             self.test_file, self.test = self._check_scope(args["test_file"], test=True), args["test"]
+            self.proofs.clear()
             return "đã nhận test"
         self._fresh()
         return ""
@@ -206,7 +288,10 @@ class Workspace:
             raise ValueError("chưa có thay đổi nào ở file đích")
         if not self.test_file:
             raise ValueError("thiếu test (write_test)")
-        return {"code": self.content, "test_file": self.test_file, "test": self.test}
+        if self.checks:
+            self.verified()
+        return {"code": self.content, "test_file": self.test_file, "test": self.test,
+                **({'verification': self.proofs} if self.checks else {})}
 
 
 def _cap(name: str) -> int:
@@ -226,7 +311,7 @@ def _result(status: str, reason: str | None = None, failure_class: str | None = 
 def _pins(subtask: dict, sha: str, ws: Workspace, extra: dict | None) -> dict:
     return {"subtask": sha_of(json.dumps(subtask, sort_keys=True, ensure_ascii=False, default=str)), "base": sha,
             "file": ws.base_hash, "prompt": sha_of(PROMPT + ORDER + _tool_list()),
-            "tools": MANIFEST.hash[:16], **(extra or {})}
+            "tools": MANIFEST.hash[:16], "verified_loop": ws.checks is not None, **(extra or {})}
 
 
 STALE_DEPENDENCIES = {"file", "base", "subtask"}  # the rest of the pins identify the runtime and still pause
@@ -310,13 +395,20 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check) -> tup
             try:
                 out = ws.proposal()
                 check(out)
+                store.save_ledger(budget.snapshot())
                 return prompt, steps + [name], False, _result("proposed", out=out, steps=steps + [name])
-            except ValueError as error:
+            except (ValueError, Forbidden, ToolError) as error:
                 return prompt, steps, False, _result("blocked", f"replay finish lệch: {error}", "critical", steps=steps)
         steps.append(name)
         rejected = kind == "finish_rejected"
         prompt += OBSERVATION.format(tool=name, text=observation[:_cap(name)])
     return prompt, steps, rejected, None
+
+
+def check_command(argv: list[str]) -> None:
+    """Chặn argv ngoài command_policy trước khi chạy. Raise Forbidden."""
+    if reason := MANIFEST.policy.command_reason(argv):
+        raise Forbidden(reason)
 
 
 def _tool_span(deps, name: str, step: int, child, kind: str, observation: str, started_ms: int) -> None:
@@ -328,13 +420,35 @@ def _tool_span(deps, name: str, step: int, child, kind: str, observation: str, s
     trace.add_span(f"execute_tool {tool}", {
         "gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": tool, "gen_ai.tool.call.id": f"{child or 0}:{step}",
         "tizia.step": step, "tizia.child": child, "tizia.tool.status": kind, "tizia.observation_digest": sha_of(observation or ""),
+        "tizia.policy_denied": kind == 'forbidden', "tizia.tool_manifest": MANIFEST.hash,
     }, start_ms=started_ms, end_ms=int(time.time() * 1000), status="error" if kind in ("error", "forbidden", "finish_rejected", "repeated") else "ok")
 
 
-def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str, source, sha: str, check,
+def run_subtask(subtask, current, *, deps, budget, source, sha, **kwargs):
+    """Own check-session lifetime across normal finish, failure, cancellation and replay."""
+    checks = (loop_checks.CheckSession(source, sha, budget, MANIFEST.hash)
+              if verified_enabled() else None)
+    if checks and MANIFEST.data.get('check_runtime_sha256') != loop_checks.runtime_hash():
+        return _result('blocked', 'check runtime differs from approved manifest', 'critical')
+    try:
+        result = _run_subtask(subtask, current, deps=deps, budget=budget, source=source, sha=sha, checks=checks, **kwargs)
+    finally:
+        if checks:
+            checks.close()
+            if checks.cleanup_pending and hasattr(deps, 'capture'):
+                deps.capture['sandbox_cleanup_pending'] = True
+            if kwargs.get('store'):
+                kwargs['store'].save_ledger(budget.snapshot())
+    if checks and checks.cleanup_pending:
+        return _result('blocked', 'sandbox cleanup requires reconciliation', 'critical',
+                       unknown_outcome={'run_id': checks.run_id})
+    return result
+
+
+def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str, source, sha: str, check,
                 role: str | None = None, call_extra: dict | None = None, db_path=None, proposal_id=None,
                 child: int | None = None, store=None, pins: dict | None = None, repair_reason: str | None = None,
-                context: str | None = None) -> dict:
+                context: str | None = None, checks=None) -> dict:
     """Loop tuần tự cho 1 subtask dưới parent `budget`. File mới bắt đầu rỗng, edit_file chèn tại after_line=0.
     `check(out)` = kiểm nội dung (ValueError nếu hỏng).
 
@@ -346,8 +460,12 @@ def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str,
         server_hsm.register_tool_manifest(MANIFEST.data)
     except server_hsm.AuthorityError as error:
         return _result('blocked', str(error), error.failure_class)
-    ws = Workspace(source, sha, subtask["file"], current)
+    if reason := MANIFEST.policy.write_reason(subtask["file"]):
+        return _result("blocked", reason, "critical")
+    ws = Workspace(source, sha, subtask["file"], current, checks=checks, budget=budget)
     prompt = PROMPT.format(tools=_tool_list(), title=subtask["title"], file=subtask["file"], verify=subtask["verify"]) + ORDER
+    if checks:
+        prompt += '\nVerified loop: dependency reads are allowed on pinned source. Inspect the automatic light result after edits. Use run_check with profile relevant for the written Node test. Finish requires current light, platform and relevant receipts; sandbox errors block completion.\n'
     if context:
         prompt += CONTEXT.format(context=context)
         pins = {**(pins or {}), "context": sha_of(context)}
@@ -366,7 +484,8 @@ def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str,
     while True:
         if not loop_budget.tick():
             return _result("paused", f"loop dừng: {loop_budget.exhausted()}", "budget", steps=steps)
-        if rejected and not budget.can_afford():
+        reserve = {'model_calls': 1, 'tool_calls': 3, 'tokens': 3072, 'wall_clock_s': 65} if checks else None
+        if rejected and not (budget.can_afford(reserve) if reserve else budget.can_afford()):
             return _result("paused", "không đủ ngân sách dự phòng cho verification trước lượt sửa tiếp", "budget", steps=steps)
         try:
             server_hsm.authorize_action('model', tool_manifest=MANIFEST.hash)
@@ -413,11 +532,13 @@ def run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str,
                 out = ws.proposal()
                 check(out)
                 if store:
-                    store.done(n, name, args, "", "finish_ok")
+                    store.done(n, name, args, json.dumps(out.get('verification') or {}, sort_keys=True), "finish_ok")
                     store.save_ledger(budget.snapshot())
                 _tool_span(deps, name, n, child, "finish_ok", "", started_ms)
                 return _result("proposed", out=out, steps=steps + [name], **({"stale_reset": ws.stale_reset} if ws.stale_reset else {}))
-            except ValueError as error:
+            except Forbidden as error:
+                return _result('blocked', str(error), 'critical', steps=steps)
+            except (ValueError, ToolError) as error:
                 if not ws.complete() and not nudged:
                     nudged = True
                     kind, observation = "error", f"chưa finish được: {error}. Làm bước còn thiếu rồi finish (edit_file, write_test, finish)."

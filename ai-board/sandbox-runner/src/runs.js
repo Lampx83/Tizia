@@ -33,6 +33,7 @@ export function createRuns({ policy, backend, store, now = Date.now, alert = () 
   const save = () => store.save(data);
   const view = (run) => ({
     run_id: run.run_id, state: run.state, lease_expires_at: run.lease_expires_at, expires_at: run.expires_at, policy_hash: policy.hash,
+    ...(policy.network === 'none' ? { network: 'none' } : {}),
   });
   const markUnhealthy = (reason, runId) => {
     if (!unhealthy) alert({ event: reason, run_id: runId });

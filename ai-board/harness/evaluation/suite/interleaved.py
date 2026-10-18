@@ -11,6 +11,7 @@ import json
 import os
 import random
 import subprocess
+import time
 from pathlib import Path
 
 from .process_tree import run_owned
@@ -20,7 +21,7 @@ PINS = ("source", "model", "corpus", "catalog", "prompt", "harness", "budget")
 
 
 def prepare(root: Path, blocks: list[dict], pins: dict, *, seed: int,
-            warm_cold: str, load_notes: str) -> dict:
+            warm_cold: str, load_notes: str, arms: tuple[str, ...] | None = None) -> dict:
     """Freeze the schedule before any process starts; reject changed resume pins."""
     if any(not pins.get(key) for key in PINS):
         raise ValueError("missing common experiment pins")
@@ -28,15 +29,20 @@ def prepare(root: Path, blocks: list[dict], pins: dict, *, seed: int,
         raise ValueError("empty or duplicate matched blocks")
     if any(b.get('split', 'dev') != 'dev' for b in blocks):
         raise ValueError("only public DEV blocks are allowed")
+    chosen = ARMS if arms is None else arms
+    if not chosen or len(set(chosen)) != len(chosen):
+        raise ValueError('empty or duplicate arms')
     rng, schedule = random.Random(seed), []
     for block_number, block in enumerate(blocks):
-        arms = list(ARMS)
-        rng.shuffle(arms)
-        for arm in arms:
+        order = list(chosen)
+        rng.shuffle(order)
+        for arm in order:
             schedule.append({**block, "split": "dev", "block": block_number,
                              "ordinal": len(schedule), "arm": arm, "pins": pins})
     manifest = {"version": 1, "seed": seed, "pins": pins, "warm_cold": warm_cold,
                 "load_notes": load_notes, "timing_comparable": False, "schedule": schedule}
+    if arms is not None:
+        manifest['arms'] = list(arms)
     root.mkdir(parents=True, exist_ok=True)
     path = root / 'schedule.json'
     if path.exists():
@@ -71,6 +77,8 @@ def execute(root: Path, command: list[str], *, timeout_s: float) -> list[dict]:
             raise ValueError('unresolved attempt: reconcile before resume; budget is not reset')
         if any(e.get('cleanup_pending') for e in events):
             raise ValueError('cleanup pending: reconcile before resume; budget is not reset')
+        if any((e.get('result') or {}).get('incomparable') for e in events):
+            raise ValueError('incomparable attempt: the pinned comparison cannot resume')
         protocol = {'command': command, 'timeout_s': timeout_s, 'containment': 'owned-tree-v1'}
         protocol_path = root / 'executor.json'
         if protocol_path.exists():
@@ -96,6 +104,7 @@ def execute(root: Path, command: list[str], *, timeout_s: float) -> list[dict]:
             append({'event': 'intent', 'attempt_id': identity, 'trial': row})
             status, result = 'failure', None
             detail = {}
+            started = time.monotonic()
             try:
                 process = run_owned(command, input=json.dumps(row), timeout=timeout_s)
                 status = 'cancel' if process.returncode == 130 else ('success' if process.returncode == 0 else 'failure')
@@ -104,6 +113,9 @@ def execute(root: Path, command: list[str], *, timeout_s: float) -> list[dict]:
                 if not isinstance(result, dict):
                     result = None
                     raise ValueError('adapter must return one suite result object')
+                if manifest.get('arms') and (result.get('id') != row['id'] or result.get('mode') != row['mode']
+                                               or type(result.get('resolved')) is not bool):
+                    raise ValueError('adapter result does not match the scheduled trial')
             except subprocess.TimeoutExpired:
                 status, detail = 'timeout', {'cost_status': 'unknown; adapter did not finish'}
             except KeyboardInterrupt:
@@ -115,10 +127,11 @@ def execute(root: Path, command: list[str], *, timeout_s: float) -> list[dict]:
             cleanup_pending = (status in ('timeout', 'cancel') or detail.get('cleanup_pending')
                                or bool((result or {}).get('cleanup_pending'))
                                or (status == 'failure' and not (result or {}).get('cleanup_confirmed')))
+            detail['wall_s'] = round(time.monotonic() - started, 3)
             append({'event': 'result', 'attempt_id': identity, 'status': status,
                     'result': result, **detail,
                     **({'cleanup_pending': True} if cleanup_pending else {})})
-            if cleanup_pending:
+            if cleanup_pending or (result or {}).get('incomparable'):
                 break
         return events
     finally:

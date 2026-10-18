@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 3,
   "tools": [
     {
       "name": "tree",
@@ -109,8 +109,8 @@
       },
       "effect": "draft_write",
       "max_arg_bytes": 60000,
-      "max_output_chars": 500,
-      "max_seconds": 5
+      "max_output_chars": 4000,
+      "max_seconds": 90
     },
     {
       "name": "write_test",
@@ -136,6 +136,25 @@
       "max_seconds": 5
     },
     {
+      "name": "run_check",
+      "description": "Chạy named check trên draft hiện tại trong sandbox không mạng: light, platform hoặc relevant. Không nhận shell/argv.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "profile"
+        ]
+      },
+      "effect": "read",
+      "max_arg_bytes": 100,
+      "max_output_chars": 4000,
+      "max_seconds": 90
+    },
+    {
       "name": "finish",
       "description": "Đề xuất kết thúc; harness kiểm rồi mới chuyển sang các cổng sau.",
       "parameters": {
@@ -146,7 +165,77 @@
       "effect": "control",
       "max_arg_bytes": 100,
       "max_output_chars": 500,
-      "max_seconds": 5
+      "max_seconds": 100
     }
-  ]
+  ],
+  "command_policy": {
+    "allow": [
+      [
+        "git",
+        "status"
+      ],
+      [
+        "git",
+        "diff"
+      ],
+      [
+        "git",
+        "log"
+      ],
+      [
+        "git",
+        "show"
+      ],
+      [
+        "git",
+        "ls-files"
+      ],
+      [
+        "git",
+        "rev-parse"
+      ],
+      [
+        "node",
+        "--test"
+      ],
+      [
+        "npm",
+        "test"
+      ],
+      [
+        "npm",
+        "run",
+        "check:content"
+      ],
+      [
+        "python",
+        "-m",
+        "pytest"
+      ]
+    ],
+    "deny_args": [
+      "npx",
+      "install",
+      "add",
+      "-r",
+      "-rf",
+      "-fr",
+      "--recursive",
+      "--force"
+    ],
+    "deny_sql": [
+      "DROP",
+      "TRUNCATE"
+    ],
+    "deny_write": [
+      "package-lock.json",
+      "*.lock",
+      "yarn.lock",
+      "pnpm-lock.yaml",
+      "dist/*",
+      "*/generated/*",
+      "generated/*"
+    ]
+  },
+  "check_runtime_sha256": "5de83292741e66f08f3eb765e9e25b3471601eb83846ea93b4350532378d8bf5"
 }

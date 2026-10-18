@@ -380,6 +380,7 @@ test('loop tools run only under an admin-approved manifest and revoke bites on t
     assert.deepEqual(reported.body,{manifest_hash:MANIFEST_HASH,status:'pending'});
     assert.equal((await f.post('tool-manifest',{manifest:MANIFEST})).body.status,'pending','re-report is a no-op');
     assert.equal((await tool(MANIFEST_HASH)).body.error,'tool_manifest_not_approved');
+    assert.equal((await f.post('hsm/authority',{...base,action:'run_check',tool_manifest:MANIFEST_HASH})).body.error,'tool_manifest_not_approved');
     assert.equal((await f.post('hsm/authority',{...base,action:'model',tool_manifest:MANIFEST_HASH})).body.error,'tool_manifest_not_approved');
     assert.equal((await adminDecide(f,MANIFEST_HASH,'approve',false)).status,403);
     assert.equal((await adminDecide(f,MANIFEST_HASH,'revoke')).body.error,'tool_manifest_not_approved','pending cannot be revoked');
@@ -387,8 +388,10 @@ test('loop tools run only under an admin-approved manifest and revoke bites on t
     assert.equal(approved.status,200);assert.equal(approved.body.status,'approved');
     assert.deepEqual(approved.body.tools.map(x=>x.name),MANIFEST.tools.map(x=>x.name));
     assert.equal((await tool(MANIFEST_HASH)).status,200);
+    assert.equal((await f.post('hsm/authority',{...base,action:'run_check',tool_manifest:MANIFEST_HASH})).status,200);
     assert.equal((await f.post('hsm/authority',{...base,action:'model',tool_manifest:MANIFEST_HASH})).status,200);
     assert.equal((await adminDecide(f,MANIFEST_HASH,'revoke')).body.status,'revoked');
+    assert.equal((await f.post('hsm/authority',{...base,action:'run_check',tool_manifest:MANIFEST_HASH})).body.error,'tool_manifest_not_approved');
     assert.equal((await tool(MANIFEST_HASH)).body.error,'tool_manifest_not_approved');
     assert.equal((await adminDecide(f,MANIFEST_HASH,'approve')).body.error,'tool_manifest_revoked');
     assert.equal((await adminDecide(f,'f'.repeat(64),'approve')).status,404);
