@@ -97,13 +97,14 @@ def prepare(config_path):
                'corpus_sha256': hashlib.sha256(Path(config['corpus']).read_bytes()).hexdigest(),
                'requests_sha256': sha([{key: task[key] for key in ('id', 'title', 'detail')} for task in tasks]),
                'code': current,
+               'runtime_dependencies': mini_swe.dependency_pins(),
                'arms': {'ai-board': {'verified_loop': True, 'tool_manifest': current['tool_manifest'], 'loop_caps': [40, 200]},
                         'mini-swe': {'version': mini_swe.VERSION, 'revision': mini_swe.REVISION,
                                      'wheel_sha256': mini_swe.WHEEL_SHA256,
                                      'config_sha256': hashlib.sha256(mini_config.read_bytes()).hexdigest()}}}
     pins = {'source': details['source'], 'model': sha({key: details[key] for key in ('model', 'context_length', 'temperature', 'thinking', 'output_tokens')}),
             'corpus': details['corpus_sha256'], 'catalog': current['routing_catalog'], 'prompt': details['requests_sha256'],
-            'harness': sha(current), 'budget': sha(details['budget'])}
+            'harness': sha({'code': current, 'dependencies': details['runtime_dependencies']}), 'budget': sha(details['budget'])}
     root = Path(config['root'])
     root.mkdir(parents=True, exist_ok=True)
     protocol = {'config': config, 'details': details, 'pins': pins}
@@ -120,6 +121,8 @@ def prepare(config_path):
 
 def one_trial(protocol, scheduled):
     config = protocol['config']
+    if mini_swe.dependency_pins() != protocol['details'].get('runtime_dependencies'):
+        raise ValueError('runtime dependencies changed; do not resume')
     deps = configured_deps(config['model'])
     if code_pins(deps) != protocol['details']['code']:
         raise ValueError('runtime/source pins changed before a trial')

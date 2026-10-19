@@ -30,6 +30,7 @@ class ModelClient:
 class Runner:
     def __init__(self):
         self.changed, self.commands, self.closed = {}, [], False
+        self.shells = []
 
     def create(self, *args, **kwargs):
         return {'network': 'none', 'policy_hash': 'fake-policy', 'state': 'ready'}
@@ -40,6 +41,7 @@ class Runner:
     def exec(self, run_id, argv, **kwargs):
         output = ''
         if argv[0] == 'runuser':
+            self.shells.append(argv[-3])
             self.commands.append(argv[-1])
             if 'edit fixture' in argv[-1]:
                 self.changed['public/a.js'] = 'export const a = 2;\n'
@@ -110,6 +112,7 @@ def test_upstream_agent_generates_candidate_without_gold_or_credentials(repo):
     assert result['model_calls'] == 2 and result['tokens_in'] == 20 and result['tokens_out'] == 10
     assert result['budget']['tool_calls'] == 2 and runner.closed and not result['cleanup_pending']
     assert result['upstream']['version'] == '2.4.6'
+    assert runner.shells == ['bash', 'bash']  # Public tool promises Bash, not the guest's POSIX sh.
     assert result['trajectory']['info']['model_stats']['api_calls'] == 2
     assert [message['role'] for message in client.payloads[-1]['messages']] == ['system', 'user', 'assistant', 'tool']
     assert 'base_sha' not in json.dumps(client.payloads[0]) and 'gold' not in json.dumps(client.payloads[0])

@@ -4,9 +4,11 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import importlib
+from importlib.metadata import version as distribution_version
 import json
 from os import environ
 from pathlib import Path
+import platform
 import sys
 import tempfile
 import time
@@ -22,6 +24,14 @@ OUTPUT_TOKENS = 3072
 CORE_HASHES = {'agents/default.py': 'e8ef8aa365942d739c2ec5cb0879f60f377d2dc2de8ec670aaedf3bafb45a4c2',
                'config/mini.yaml': 'b539a8965f5bf41dd0f32daafa5d2db22581923d13812fa378fd09569b9d6b0c',
                'models/utils/actions_toolcall.py': '47b666412e4f838508b50009cf34c7f63fe15e9e40affc257a17c0829896526f'}
+
+
+def dependency_pins():
+    # Active DefaultAgent/native-tool dependency closure; optional upstream backends are unused.
+    names = ('Jinja2', 'MarkupSafe', 'PyYAML', 'pydantic', 'pydantic-core', 'annotated-types',
+             'typing-extensions', 'typing-inspection', 'platformdirs', 'python-dotenv',
+             'rich', 'markdown-it-py', 'mdurl', 'Pygments')
+    return {'python': platform.python_version(), 'packages': {name: distribution_version(name) for name in names}}
 
 
 def upstream(runtime: Path | None = None):
@@ -102,7 +112,7 @@ class NativeModel:
 class RunnerEnvironment:
     def __init__(self, session):
         self.session = session
-        self.config = {'cwd': '/workspace/checkout', 'network': 'none', 'adapter': 'tizia-runner-v1'}
+        self.config = {'cwd': '/workspace/checkout', 'network': 'none', 'shell': 'bash', 'adapter': 'tizia-runner-v1'}
         self.base = {}
 
     def get_template_vars(self, **kwargs):
@@ -134,7 +144,7 @@ class RunnerEnvironment:
             raise LimitsExceeded({'role': 'exit', 'content': 'Budget exhausted', 'extra': {'exit_status': 'LimitsExceeded', 'submission': ''}})
         self.session.budget.spend('tool_calls')
         result = self.session.client.exec(self.session.run_id,
-                   ['runuser', '-u', 'gate', '--', 'sh', '-c', 'cd /workspace/checkout && ' + command],
+                   ['runuser', '-u', 'gate', '--', 'bash', '-c', 'cd /workspace/checkout && ' + command],
                    timeout=self.session._remaining(), deadline=self.session.deadline)
         cleanup = self.session.client.exec(self.session.run_id,
                    ['python', '/opt/ai-board/ai-board/harness/verification/baseline_guest.py', 'cleanup'],
@@ -203,6 +213,7 @@ def generate(request, client, model_name, *, runtime=None, session_factory=Check
             'incomparable': any(reply['model'] != model_name for reply in model.responses),
             'truncated': any(reply.get('finish_reason') == 'length' for reply in model.responses),
             'upstream': {'version': VERSION, 'revision': REVISION, 'wheel_sha256': WHEEL_SHA256,
+                         'dependencies': dependency_pins(),
                          'config_sha256': hashlib.sha256(config_path.read_bytes()).hexdigest()}}
 
 

@@ -6,6 +6,12 @@ import pytest
 from evaluation.suite import comparison, interleaved
 
 
+@pytest.mark.parametrize('details', [{}, {'runtime_dependencies': {'python': '0.0', 'packages': {}}}])
+def test_dependency_drift_or_missing_freeze_refuses_trial_before_model_setup(details):
+    with pytest.raises(ValueError, match='runtime dependencies changed'):
+        comparison.one_trial({'config': {}, 'details': details}, {'id': 't1', 'arm': 'mini-swe'})
+
+
 def test_comparison_disables_inherited_prompt_split_to_preserve_common_sampling(monkeypatch):
     from types import SimpleNamespace
     from runtime import pipeline, prompt_roles
@@ -51,7 +57,8 @@ def test_both_arms_receive_the_common_request_bound(tmp_path, monkeypatch, arm):
     monkeypatch.setattr(comparison.mini_swe, 'run_trial', run)
     protocol = {'config': {'model': 'model', 'context_length': 32768, 'corpus': str(corpus),
                  'root': str(tmp_path), 'source': str(tmp_path), 'mini_runtime': str(tmp_path)},
-                'details': {'code': {}}, 'pins': {'corpus': comparison.hashlib.sha256(b'[]').hexdigest()}}
+                'details': {'code': {}, 'runtime_dependencies': comparison.mini_swe.dependency_pins()},
+                'pins': {'corpus': comparison.hashlib.sha256(b'[]').hexdigest()}}
     assert comparison.one_trial(protocol, {'id': 't1', 'arm': arm})['arm'] == arm
 
 
