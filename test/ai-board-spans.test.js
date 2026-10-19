@@ -86,3 +86,16 @@ test('content keys, foreign prefixes, another trace id and a stale lease are ref
     assert.equal(Number((await t.db.d.get('SELECT COUNT(*) AS n FROM ai_spans')).n), 1);
   } finally { await t.close(); }
 });
+
+test('lease-bound platform claims survive storage and reach the admin trace with evidence pins', async () => {
+  const t = await setup();
+  try {
+    const attributes = { 'tizia.claim.file': 'public/a.js', 'tizia.claim.profile': 'relevant',
+      'tizia.claim.file_hash': 'a'.repeat(64), 'tizia.claim.test_hash': 'b'.repeat(64),
+      'tizia.claim.digest': 'c'.repeat(64), 'tizia.claim.command': 'run_check relevant',
+      'tizia.claim.verified': true, 'tizia.claim.exit_code': 0, 'tizia.claim.log_excerpt': '# tests 1; # pass 1' };
+    assert.equal((await t.post({ spans: [span(TOOL_SPAN, null, 'verify_claim', { attributes })] })).status, 200);
+    const body = await t.trace();
+    assert.deepEqual(body.runs.find(r => r.id === t.run.id).spans[0].attributes, attributes);
+  } finally { await t.close(); }
+});

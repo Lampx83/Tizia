@@ -108,3 +108,17 @@ export function describeEvent(event = {}) {
   return EVENT_LABELS[event.event_type] || 'Cập nhật xử lý yêu cầu';
 }
 export const TECHNICAL_EVENTS = new Set(['heartbeat', 'lease_released', 'gate_started', 'shadow_precheck_passed']);
+// Receipts describe the checked candidate at that time; they do not assert a release.
+export function renderVerificationClaims(trace = {}) {
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const claims = (trace.runs || []).flatMap(run => (run.spans || [])
+    .filter(s => s.name === 'verify_claim').map(s => ({ run: run.id, a: s.attributes || {} })));
+  const heading = '<h2>Bằng chứng kiểm tra</h2><p class="meta">Kết quả gắn với bản sửa tại thời điểm kiểm tra. Kết quả này chưa xác nhận phát hành.</p>';
+  if (!claims.length) return `${heading}<p class="blk meta">Chưa có bằng chứng từ bước kiểm tra.</p>`;
+  return `${heading}<div class="table-wrap"><table><thead><tr><th>Tệp / bước</th><th>Kết quả</th><th>Bằng chứng</th></tr></thead><tbody>${claims.map(({ run, a }) => `<tr>
+    <td>${esc(a['tizia.claim.file'])}<br><small>Lượt ${esc(run)} · ${esc(a['tizia.claim.profile'])}</small></td>
+    <td>${a['tizia.claim.verified'] === true ? 'Đã kiểm chứng' : 'Chưa đạt'}<br><small>Exit ${esc(a['tizia.claim.exit_code'] ?? 'chưa rõ')}</small></td>
+    <td class="claim-evidence"><details><summary>Xem lệnh, băm và log</summary><p>${esc(a['tizia.claim.command'])}</p>
+      <p>Test: ${esc(a['tizia.claim.test_file'] || 'chưa có')}<br>Băm tệp: <code>${esc(a['tizia.claim.file_hash'])}</code><br>Băm test: <code>${esc(a['tizia.claim.test_hash'])}</code><br>Pin: <code>${esc(a['tizia.claim.digest'])}</code></p>
+      <pre>${esc(a['tizia.claim.log_excerpt'])}</pre></details></td></tr>`).join('')}</tbody></table></div>`;
+}

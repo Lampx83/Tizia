@@ -189,9 +189,10 @@ def _regex_end(text: str, i: int) -> int | None:
     return None
 
 
-def _strip_js(text: str) -> str:
+def _strip_js(text: str, *, literals: list[str] | None = None) -> str:
     out, i, n = [], 0, len(text)
     prev, depth, stack, in_tpl = "", 0, [], False  # prev = token code cuối; stack/depth = ngoặc trong `${ }`
+    tpl_start = None
     while i < n:
         if in_tpl:
             m = _TPL_CHUNK.match(text, i)
@@ -203,10 +204,16 @@ def _strip_js(text: str) -> str:
                 out.append(text[i:i + 2])
                 i += 2
             elif text[i] == "`":
+                if literals is not None and tpl_start is not None:
+                    literals.append(text[tpl_start:i])
+                tpl_start = None
                 in_tpl, prev = False, "x"
                 out.append("`")
                 i += 1
             elif text.startswith("${", i):
+                if literals is not None and tpl_start is not None:
+                    literals.append(text[tpl_start:i])
+                tpl_start = None
                 in_tpl, prev = False, "{"
                 stack.append(depth)
                 depth = 0
@@ -229,6 +236,8 @@ def _strip_js(text: str) -> str:
             while j < n and text[j] != c and text[j] not in _EOL:
                 j += 2 if text[j] == "\\" else 1
             if j < n and text[j] == c:
+                if literals is not None:
+                    literals.append(text[i + 1:j])
                 out.append(text[i:j + 1])
                 i = j + 1
             else:  # không đóng trên dòng: không chắc → giữ cả dòng
@@ -240,12 +249,14 @@ def _strip_js(text: str) -> str:
             prev = "x"
         elif c == "`":
             in_tpl = True
+            tpl_start = i + 1
             out.append(c)
             i += 1
         elif c in "{}":
             if c == "}" and stack and depth == 0:
                 depth = stack.pop()
                 in_tpl = True
+                tpl_start = i + 1
             else:
                 depth = depth + 1 if c == "{" else max(depth - 1, 0)
             prev = c
@@ -271,6 +282,16 @@ def _strip_js(text: str) -> str:
                 out.append("/")
                 i, prev = i + 1, "/"
     return "".join(out)
+
+
+def string_literals(text: str, filename: str) -> list[str]:
+    """Literal data using the existing lexer; comments and regexes stay code."""
+    parts = []
+    if _kind(text, filename) == 'js':
+        _strip_js(text, literals=parts)
+    else:
+        parts = [m.group()[1:-1] for m in _CSS_TOKEN.finditer(text) if m.group().startswith(('"', "'"))]
+    return parts
 
 
 def _strip_css(text: str) -> str:

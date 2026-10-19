@@ -1,11 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { projectPipeline, describeModelCall, describeEvent, loopActions } from '../public/js/ai-board-trace.js';
+import { projectPipeline, describeModelCall, describeEvent, loopActions, renderVerificationClaims } from '../public/js/ai-board-trace.js';
 import { visitedNodes, renderGraph } from '../public/js/ai-board-hsm.js';
 const gate = (id, number, status, at = id) => ({ id, gate: number, status, created_at: at });
 const call = (id, gate, name, child = null) => ({ id, gate, created_at: id, evidence: { gate, prompt_name: name, child, call_id: `call-${id}` } });
 const run = (id, trigger, gates = [], calls = []) => ({ id, trigger, created_at: id, gates, calls });
 const byGate = (p, gate) => p.steps.find(s => s.gate === gate);
+
+test('request claims show pinned platform checks and escape untrusted evidence', () => {
+  const html = renderVerificationClaims({ runs: [{ id: 7, spans: [{ name: 'verify_claim', attributes: {
+    'tizia.claim.file': 'public/a.js', 'tizia.claim.profile': 'relevant', 'tizia.claim.verified': true,
+    'tizia.claim.file_hash': 'a'.repeat(64), 'tizia.claim.test_hash': 'b'.repeat(64),
+    'tizia.claim.command': 'run_check relevant', 'tizia.claim.exit_code': 0,
+    'tizia.claim.log_excerpt': '<script>alert(1)</script>', 'tizia.claim.digest': 'c'.repeat(64),
+  } }] }] });
+  assert.match(html, /Đã kiểm chứng/);
+  assert.match(html, /run_check relevant/);
+  assert.match(html, /&lt;script&gt;/);
+  assert.doesNotMatch(html, /<script>/);
+  assert.match(renderVerificationClaims({}), /Chưa có bằng chứng/);
+});
 
 test('three planning attempts replace one pipeline with latest results, keeping history', () => {
   const runs = [run(1, 'plan', [gate(1, 2.5, 'blocked')]), run(2, 'plan', [gate(2, 2.5, 'blocked')]), run(3, 'plan', [gate(3, 2.5, 'passed')])];

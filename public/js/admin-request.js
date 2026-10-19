@@ -4,7 +4,7 @@
 import { patchHtml } from './dom-morph.js';
 import { mountPrivatePreview } from './private-preview.js';
 import { installLightbox, pairBeforeAfter } from './lightbox.js';
-import { projectPipeline, describeModelCall, describeEvent, loopActions, stepTotals, TECHNICAL_EVENTS, TRACE_STEPS } from './ai-board-trace.js';
+import { projectPipeline, describeModelCall, describeEvent, loopActions, stepTotals, TECHNICAL_EVENTS, TRACE_STEPS, renderVerificationClaims } from './ai-board-trace.js';
 import { renderHsm, renderGraph } from './ai-board-hsm.js';
 
 const $ = (s) => document.querySelector(s);
@@ -754,6 +754,7 @@ function renderAiBoard(t) {
     ${renderPlan(t.plan, root, t.children || [], t)}
     ${renderPipeline(t)}
     ${renderSpanTimeline(t)}
+    ${renderVerificationClaims(t)}
     ${renderAttemptHistory(t)}
     <h2 id="events">Diễn biến xử lý</h2>
     ${renderEvents(t.events || [])}

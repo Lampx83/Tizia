@@ -13,9 +13,9 @@ const sorted = (value) => Array.isArray(value) ? value.map(sorted)
 export const canonicalHash = (manifest) => createHash('sha256').update(JSON.stringify(sorted(manifest)), 'utf8').digest('hex');
 
 function check(manifest) {
-  if (![1, 2, 3].includes(manifest?.version)) fail('tool_manifest_invalid', 400);
+  if (![1, 2, 3, 4].includes(manifest?.version)) fail('tool_manifest_invalid', 400);
   if (manifest.version >= 2) {
-    const fields = manifest.version === 3 ? ['version', 'tools', 'command_policy', 'check_runtime_sha256']
+    const fields = manifest.version >= 3 ? ['version', 'tools', 'command_policy', 'check_runtime_sha256']
       : ['version', 'tools', 'command_policy'];
     const policy = manifest.command_policy;
     const strings = (value) => Array.isArray(value) && value.every((item) => typeof item === 'string' && item.length > 0);
@@ -23,7 +23,7 @@ function check(manifest) {
       || !policy || Reflect.ownKeys(policy).sort().join() !== ['allow', 'deny_args', 'deny_sql', 'deny_write'].sort().join()
       || !Array.isArray(policy.allow) || !policy.allow.length || !policy.allow.every((prefix) => strings(prefix) && prefix.length)
       || !['deny_args', 'deny_sql', 'deny_write'].every((name) => strings(policy[name]))) fail('tool_manifest_invalid', 400);
-    if (manifest.version === 3 && !HASH.test(String(manifest.check_runtime_sha256))) fail('tool_manifest_invalid', 400);
+    if (manifest.version >= 3 && !HASH.test(String(manifest.check_runtime_sha256))) fail('tool_manifest_invalid', 400);
     check({ version: 1, tools: manifest.tools });
     return;
   }

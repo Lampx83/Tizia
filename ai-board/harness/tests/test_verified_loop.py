@@ -69,11 +69,33 @@ class Checks:
         pin = loop_checks.digest(ws.file, ws.content, ws.test_file, ws.test, self.sha, self.tools)
         self.calls.append((profile, pin, ws.content, ws.test))
         return {'profile': profile, 'digest': pin, 'passed': 'broken' not in ws.content,
+                'exit_code': 0 if 'broken' not in ws.content else 1,
                 'output': 'observed syntax error' if 'broken' in ws.content else 'passed',
                 'policy_hash': 'no-network-policy', 'run_id': 'fake-isolated-check'}
 
     def close(self):
         self.closed = True
+
+
+def test_verified_loop_records_platform_claims_with_pins_and_check_evidence(repo, monkeypatch):
+    from runtime.meter import Tracer
+    source, sha = repo
+    monkeypatch.setenv('AI_BOARD_VERIFIED_LOOP', '1')
+    monkeypatch.setattr(loop_checks, 'CheckSession', Checks)
+    provider = Script([action('edit_file', file='public/a.js', edits=[{'search': '1', 'replace': '3'}]),
+                       action('write_test', test_file='test/a.test.js', test='a public test'), action('finish')])
+    provider.trace = Tracer()
+    result = tool_loop.run_subtask({'title': 'Change a', 'file': 'public/a.js', 'verify': 'a is 3'},
+             'export const a = 1;\n', deps=provider, budget=Budget(max_wall_clock_s=300), model='fake',
+             source=source, sha=sha, check=lambda out: None)
+    assert result['status'] == 'proposed'
+    claims = [s['attributes'] for s in provider.trace.spans if s['name'] == 'verify_claim']
+    assert {c['tizia.claim.profile'] for c in claims} == {'light', 'platform', 'relevant'}
+    relevant = next(c for c in claims if c['tizia.claim.profile'] == 'relevant')
+    assert relevant['tizia.claim.verified'] is True and relevant['tizia.claim.exit_code'] == 0
+    assert relevant['tizia.claim.base'] == sha and relevant['tizia.claim.manifest'] == tool_loop.MANIFEST.hash
+    assert len(relevant['tizia.claim.file_hash']) == 64 and len(relevant['tizia.claim.test_hash']) == 64
+    assert relevant['tizia.claim.command'] == 'run_check relevant' and relevant['tizia.claim.log_excerpt'] == 'passed'
 
 
 def test_observed_error_is_repaired_and_edits_invalidate_prior_test_proof(repo, monkeypatch):
@@ -100,6 +122,36 @@ def test_observed_error_is_repaired_and_edits_invalidate_prior_test_proof(repo, 
     assert set(result['out']['verification']) == {'light', 'platform', 'relevant'}
     assert budget.semantic_repairs == 0
     assert len(provider.prompts) == 7  # A rejected finish can repair after the legacy 60-second cutoff.
+
+
+def test_finish_allows_em_dash_in_regex_or_comments_without_treating_code_as_ui_copy(repo, monkeypatch):
+    source, sha = repo
+    monkeypatch.setenv('AI_BOARD_VERIFIED_LOOP', '1')
+    monkeypatch.setattr(loop_checks, 'CheckSession', Checks)
+    replacement = '''2; const escape = s => s.replace(/["']/g, c => c); const rx = /[—:]/; /* — */'''
+    provider = Script([action('edit_file', file='public/a.js', edits=[{'search': '1', 'replace': replacement}]),
+                       action('write_test', test_file='test/a.test.js', test='a public test'), action('finish')])
+    result = tool_loop.run_subtask({'title': 'Change a', 'file': 'public/a.js', 'verify': 'new copy'},
+             'export const a = 1;\n', deps=provider, budget=Budget(max_wall_clock_s=300), model='fake',
+             source=source, sha=sha, check=lambda out: None)
+    assert result['status'] == 'proposed' and len(provider.prompts) == 3
+
+
+@pytest.mark.parametrize('label', ['Hello—world', r'Hello\u2014world', r'Hello\u{02014}world'])
+def test_finish_rejects_new_ui_em_dash_and_returns_to_repair(repo, monkeypatch, label):
+    source, sha = repo
+    monkeypatch.setenv('AI_BOARD_VERIFIED_LOOP', '1')
+    monkeypatch.setattr(loop_checks, 'CheckSession', Checks)
+    provider = Script([
+        action('edit_file', file='public/a.js', edits=[{'search': '1', 'replace': '"' + label + '"'}]),
+        action('write_test', test_file='test/a.test.js', test='a public test'), action('finish'),
+        action('edit_file', file='public/a.js', edits=[{'search': label, 'replace': 'Hello: world'}]),
+        action('finish')])
+    result = tool_loop.run_subtask({'title': 'Change a', 'file': 'public/a.js', 'verify': 'new copy'},
+             'export const a = 1;\n', deps=provider, budget=Budget(max_wall_clock_s=300), model='fake',
+             source=source, sha=sha, check=lambda out: None)
+    assert result['status'] == 'proposed' and 'Hello: world' in result['out']['code']
+    assert any('em dash' in p for p in provider.prompts)
 
 
 @pytest.mark.parametrize('path', ['../public/b.js', 'public/../server/b.js', 'secrets/config.json', 'AGENTS.md', 'ai-board/harness/evaluation/gold.py'])

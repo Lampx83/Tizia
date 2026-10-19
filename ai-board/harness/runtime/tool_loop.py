@@ -11,7 +11,7 @@ import sys
 import time
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-from runtime import tool_manifest
+from runtime import tool_manifest, meter
 from runtime.budget import ChildBudget
 from repositories import server_hsm
 
@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import file_context  # noqa: E402
 import tools  # noqa: E402
 import code_index
-from verification import loop_checks
+from verification import loop_checks, ui_copy
 from verification.sandbox import SandboxError
 
 ERROR_CHARS = 2000
@@ -139,13 +139,14 @@ def _clean_path(path: str) -> str:
 class Workspace:
     """Bản nháp của file đích trong bộ nhớ + test; nguồn là git sha cố định."""
 
-    def __init__(self, source, sha: str, file: str, current: str | None, *, checks=None, budget=None):
+    def __init__(self, source, sha: str, file: str, current: str | None, *, checks=None, budget=None, trace=None):
         self.source, self.sha, self.file, self.base = source, sha, file, current
         self.base_hash = None if current is None else sha_of(current)
         self.content = current or ""
         self.test_file = self.test = None
         self.stale_reset = None
         self.checks, self.budget, self.proofs = checks, budget, {}
+        self.trace = trace
 
     def _read(self, path: str) -> str:
         path = _clean_path(path)
@@ -173,7 +174,23 @@ class Workspace:
         except (SandboxError, OSError, ValueError) as error:
             raise Forbidden(f'verification unavailable: {error}') from None
         server_hsm.authorize_action('run_check', tool_manifest=MANIFEST.hash)
+        if profile == 'platform' and ui_copy.introduces_em_dash(self.file, self.base or '', self.content):
+            receipt = {**receipt, 'passed': False, 'exit_code': 1,
+                       'output': 'UI copy policy: new em dash in a changed UI literal; replace it with contextual punctuation.'}
         self.proofs[profile] = receipt
+        if hasattr(self.trace, 'add_span'):
+            now = int(time.time() * 1000)
+            self.trace.add_span('verify_claim', {
+                'tizia.claim.profile': profile, 'tizia.claim.file': self.file[:300],
+                'tizia.claim.test_file': (self.test_file or '')[:300],
+                'tizia.claim.file_hash': hashlib.sha256(self.content.encode()).hexdigest(),
+                'tizia.claim.test_hash': hashlib.sha256((self.test or '').encode()).hexdigest(),
+                'tizia.claim.base': self.sha, 'tizia.claim.manifest': MANIFEST.hash,
+                'tizia.claim.digest': receipt['digest'], 'tizia.claim.command': f'run_check {profile}',
+                'tizia.claim.exit_code': receipt.get('exit_code'),
+                'tizia.claim.verified': bool(receipt.get('passed') and receipt.get('exit_code') == 0),
+                'tizia.claim.log_excerpt': meter.redact(receipt.get('output', ''))[:280],
+            }, start_ms=now, end_ms=now, status='ok' if receipt.get('passed') else 'error')
         return receipt
 
     def verified(self):
@@ -462,7 +479,7 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
         return _result('blocked', str(error), error.failure_class)
     if reason := MANIFEST.policy.write_reason(subtask["file"]):
         return _result("blocked", reason, "critical")
-    ws = Workspace(source, sha, subtask["file"], current, checks=checks, budget=budget)
+    ws = Workspace(source, sha, subtask["file"], current, checks=checks, budget=budget, trace=getattr(deps, 'trace', None))
     prompt = PROMPT.format(tools=_tool_list(), title=subtask["title"], file=subtask["file"], verify=subtask["verify"]) + ORDER
     if checks:
         prompt += '\nVerified loop: dependency reads are allowed on pinned source. Inspect the automatic light result after edits. Use run_check with profile relevant for the written Node test. Finish requires current light, platform and relevant receipts; sandbox errors block completion.\n'
