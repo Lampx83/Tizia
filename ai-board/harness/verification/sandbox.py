@@ -5,6 +5,7 @@ import io
 import json
 import os
 import random
+import re
 import shutil
 import tarfile
 import tempfile
@@ -107,9 +108,12 @@ class RunnerClient:
                     chunks.append(chunk)
         except urllib.error.HTTPError as error:
             try:
-                detail = json.loads(error.read().decode("utf-8"))
+                # Parent cleanup needs only failure status; never drain a trickling error body.
+                detail = {} if deadline is not None and phase == 'destroy' else json.loads(error.read().decode("utf-8"))
             except (ValueError, UnicodeDecodeError):
                 detail = {}
+            finally:
+                error.close()
             raise SandboxError(str(detail.get("error") or "runner_error"), str(detail.get("phase") or phase), error.code) from None
         except (urllib.error.URLError, TimeoutError, OSError):
             raise SandboxError("runner_unreachable", phase) from None
@@ -119,6 +123,15 @@ class RunnerClient:
         return json.loads(raw or b"{}")
 
     def create(self, run_id: str, manifest: list[dict], **kwargs) -> dict:
+        journal = os.getenv('AI_BOARD_OWNED_RUN_FILE')
+        if journal:
+            if not re.fullmatch(r'(?:loop|g5)-[a-f0-9]{24}', run_id):
+                raise ValueError('invalid owned sandbox id')
+            # Persist intent before HTTP: a killed worker cannot report a lost create reply.
+            with open(journal, 'a', encoding='ascii') as handle:
+                handle.write(run_id + '\n')
+                handle.flush()
+                os.fsync(handle.fileno())
         return self._json("POST", "/v1/runs", "provision", {"run_id": run_id, "manifest": manifest}, timeout=CREATE_TIMEOUT_S, **kwargs)
 
     def upload(self, run_id: str, archive: bytes, **kwargs) -> dict:
@@ -137,8 +150,8 @@ class RunnerClient:
     def renew(self, run_id: str, **kwargs) -> dict:
         return self._json("POST", f"/v1/runs/{run_id}/renew", "renew", **kwargs)
 
-    def destroy(self, run_id: str) -> dict:
-        return self._json("DELETE", f"/v1/runs/{run_id}", "destroy")
+    def destroy(self, run_id: str, *, deadline=None) -> dict:
+        return self._json("DELETE", f"/v1/runs/{run_id}", "destroy", deadline=deadline)
 
 
 def _normalise(file: Path):

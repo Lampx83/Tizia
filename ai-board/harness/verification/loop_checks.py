@@ -21,7 +21,7 @@ SOURCE_EXTENSIONS = {'.html', '.css', '.js', '.mjs', '.cjs', '.ts', '.json', '.m
 
 def runtime_hash():
     return hashlib.sha256(b''.join((Path(__file__).parent / name).read_bytes().replace(b'\r\n', b'\n')
-                                  for name in ('loop_checks.py', 'loop_check_guest.py', 'baseline_guest.py', 'ui_copy.py',
+                                  for name in ('loop_checks.py', 'loop_check_guest.py', 'baseline_guest.py', 'ui_copy.py', 'sandbox.py',
                                                '../services/file_context.py'))).hexdigest()
 
 

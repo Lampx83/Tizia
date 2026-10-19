@@ -32,6 +32,28 @@ function setup(over = {}) {
 }
 const code = (promise) => promise.then(() => null, (error) => error.code);
 
+test('destroy cannot confirm cleanup before an in-flight create settles', async () => {
+  const { runs, backend } = setup();
+  const create = backend.create.bind(backend);
+  let release, started;
+  const booting = new Promise((resolve) => { started = resolve; });
+  const finish = new Promise((resolve) => { release = resolve; });
+  backend.create = async (spec) => { started(); await finish; return create(spec); };
+  const pending = runs.create({ run_id: 'boot-cancel-001' });
+  await booting;
+  let confirmed = false;
+  const stopped = runs.destroy('boot-cancel-001').then((receipt) => { confirmed = true; return receipt; });
+  const repeated = runs.destroy('boot-cancel-001').then((receipt) => { confirmed = true; return receipt; });
+  await new Promise(setImmediate);
+  const premature = confirmed;
+  release();
+  await pending.catch(() => {});
+  assert.equal((await stopped).state, 'destroyed');
+  assert.equal((await repeated).state, 'destroyed');
+  assert.equal(premature, false, 'a later boot must not resurrect an acknowledged destroyed VM');
+  assert.equal(backend.vms.size, 0);
+});
+
 test('no-network readiness is explicit in the run receipt', async () => {
   const { runs } = setup({ policy: { ...POLICY, network: 'none', egress: [] } });
   const receipt = await runs.create({ run_id: 'no-network-check' });
@@ -100,9 +122,10 @@ test('a destroy that lands while the VM is still booting leaves no VM behind and
   backend.create = (spec) => new Promise((resolve) => { finishBoot = () => resolve(create(spec)); }); // client gave up mid-boot
   const creating = runs.create({ run_id: 'run-0001', manifest: MANIFEST });
   await new Promise((resolve) => setImmediate(resolve));
-  await runs.destroy('run-0001');
+  const destroying = runs.destroy('run-0001');
   finishBoot();
   assert.equal(await code(creating), 'run_closed', 'the late boot is refused, not published as ready');
+  assert.equal((await destroying).state, 'destroyed');
   assert.notEqual((await runs.status('run-0001')).state, 'ready');
   assert.equal(backend.vms.size, 0, 'the sandbox that finished booting is destroyed');
   backend.create = create;

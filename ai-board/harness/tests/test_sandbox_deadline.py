@@ -54,10 +54,11 @@ class BudgetClient(FakeClient):
 def test_cumulative_deadline_destroys_hanging_work_and_rejects_late_success(tmp_path, phase, monkeypatch):
     monkeypatch.setattr(sandbox, "RENEW_EVERY_S", 0.01)
     client = BudgetClient(phase)
+    request = state(checkout(tmp_path))
     # A resumed run has only 0.15 seconds left, rather than a new 0.45 seconds.
     budget = Budget(max_wall_clock_s=0.45, elapsed_before_s=0.30)
     started = time.monotonic()
-    result = sandbox.run(state(checkout(tmp_path)), client=client, budget=budget)
+    result = sandbox.run(request, client=client, budget=budget)
     assert result["blocked"] and result["reason"] == "sandbox budget: wall_clock_s"
     assert time.monotonic() - started < 0.4
     assert client.closed.is_set() and client.calls[-1] == "destroy"
@@ -88,7 +89,8 @@ def test_create_retry_backoff_cannot_reset_deadline(tmp_path, monkeypatch):
         raise sandbox.SandboxError("busy", "provision", 429)
     client.create = busy
     monkeypatch.setattr(sandbox, "_sleep", time.sleep)
-    result = sandbox.run(state(checkout(tmp_path)), client=client, budget=Budget(max_wall_clock_s=0.05))
+    request = state(checkout(tmp_path))
+    result = sandbox.run(request, client=client, budget=Budget(max_wall_clock_s=0.05))
     assert result["reason"] == "sandbox budget: wall_clock_s"
     assert client.calls.count("create") == 1 and client.closed.is_set()
 

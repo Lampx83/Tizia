@@ -227,6 +227,11 @@ export function createRuns({ policy, backend, store, now = Date.now, alert = () 
 
   async function destroy(runId) {
     const run = find(runId, 'destroy');
+    if (run.state === 'creating') {
+      run.state = 'destroying';
+      save();
+    }
+    await admission; // Repeated DELETEs must also wait for any late boot to settle.
     if (run.state === 'destroyed' || run.state === 'expired' || run.state === 'indeterminate' || run.state === 'failed') {
       return { run_id: runId, state: run.state };
     }
