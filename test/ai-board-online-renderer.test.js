@@ -49,6 +49,19 @@ test('renderer shows Vietnamese errors and never raw server text', async () => {
   assert.ok(!text.includes('SELECT'));
 });
 
+test('capacity, rate and query failures give distinct recovery guidance without raw error text',async()=>{
+  for(const [code,expected] of [['feature_row_limit',/giới hạn bản ghi/],['feature_storage_limit',/đầy dung lượng/],
+    ['resource_rate_limit',/một phút/],['query_deadline_exceeded',/đang bận/]]) {
+    const api={list:async()=>[],invoke:async()=>{},create:async()=>{throw Object.assign(new Error('SELECT private payload'),{code});}};
+    const nodes=walk(renderSchema(schema,{doc,api}));
+    nodes.find(n=>n.tag==='input').value='Ghi chú';
+    await nodes.find(n=>n.tag==='form').listeners.submit({preventDefault(){}});
+    const note=nodes.filter(n=>n.className==='ou-status').at(-1);
+    assert.equal(note.attrs.role,'alert');assert.match(note.textContent,expected);assert.ok(!note.textContent.includes('SELECT'));
+    assert.equal(nodes.find(n=>n.tag==='button'&&n.type==='submit').disabled,false);
+  }
+});
+
 test('browser api: session cookie + CSRF header on writes, never on reads; session token not in body', async () => {
   const seen = [];
   const fetchImpl = async (url, init = {}) => { seen.push({ url, init }); return { ok: true, json: async () => (url === '/api/csrf' ? { token: 'CSRF1' } : { result: {} }) }; };

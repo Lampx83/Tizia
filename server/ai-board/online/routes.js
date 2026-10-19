@@ -11,7 +11,11 @@ export function attachOnlineRoutes(router, { requireAuth, requireAdmin, requireS
     try {
       res.json(await fn({ id: req.user.id, sessionToken: sessionToken(req) }, req));
     } catch (error) {
-      if (error instanceof ScopedCrudError || error instanceof BrokerError) return res.status(error.status).json({ error: error.code });
+      if (error.code === '57014') return res.status(504).json({error:'query_deadline_exceeded'});
+      if (error instanceof ScopedCrudError || error instanceof BrokerError) {
+        if (error.retryAfter) res.setHeader('Retry-After', error.retryAfter);
+        return res.status(error.status).json({ error: error.code, ...(error.retryAfter ? {retry_after_seconds:error.retryAfter} : {}) });
+      }
       if (error instanceof SchemaError) return res.status(422).json({ error: error.code });
       next(error);
     }

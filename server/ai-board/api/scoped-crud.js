@@ -11,7 +11,11 @@ export function attachScopedCrudRoutes(router, { db, requireAuth, requireStrictC
       const { _csrf, ...body } = req.body || {};
       res.json(await fn(identity, req.params, body, req.query));
     } catch (error) {
-      if (error instanceof ScopedCrudError) return res.status(error.status).json({ error: error.code });
+      if (error.code === '57014') return res.status(504).json({error:'query_deadline_exceeded'});
+      if (error instanceof ScopedCrudError) {
+        if (error.retryAfter) res.setHeader('Retry-After', error.retryAfter);
+        return res.status(error.status).json({ error: error.code, ...(error.retryAfter ? {retry_after_seconds:error.retryAfter} : {}) });
+      }
       if (error.code === '23505') return res.status(409).json({ error: 'already_exists' });
       if (error.code === '23503') return res.status(400).json({ error: 'invalid_identity' });
       next(error);

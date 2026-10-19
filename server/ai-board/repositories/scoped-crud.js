@@ -10,9 +10,14 @@ const integer = (value) => {
   return n;
 };
 const RANK = { read: 1, write: 2 };
+export const SCOPED_LIMITS = Object.freeze({ rows_per_feature: 1000, retained_json_bytes: 16 * 1024 * 1024,
+  requests_per_minute: 120, query_ms: 1000 });
 async function applyGrant(t, res, user, owner, permission) {
+  const previous = await t.get('SELECT permission FROM ai_resource_grants WHERE resource_id=? AND user_id=? AND owner_user_id=?', [res.id, user, owner]);
+  if ((previous?.permission ?? 'none') === permission) return { changed: false, narrowing: false };
   await t.run('DELETE FROM ai_resource_grants WHERE resource_id=? AND user_id=? AND owner_user_id=?', [res.id, user, owner]);
   if (permission !== 'none') await t.run('INSERT INTO ai_resource_grants(resource_id, user_id, owner_user_id, permission) VALUES (?, ?, ?, ?)', [res.id, user, owner, permission]);
+  return { changed: true, narrowing: permission === 'none' || RANK[permission] < RANK[previous?.permission] };
 }
 const PAYLOAD_RETENTION_MS = 30 * 86400000;
 const AUDIT_RETENTION_MS = 90 * 86400000;
@@ -41,6 +46,7 @@ const view = (r) => ({ id: r.id, resource_id: r.resource_id, owner_user_id: r.ow
 
 export function createScopedCrud(db) {
   if (db?.dialect !== 'postgres') throw new Error('Scoped CRUD requires PostgreSQL');
+  const limitQueries = t => t.get("SELECT set_config('statement_timeout', ?, true)", [`${SCOPED_LIMITS.query_ms}ms`]);
   async function actor(t, identity) {
     // HTTP authenticates first; re-read the session and role inside each operation, not a cached role.
     const row = await t.get(`SELECT u.id, u.role FROM users u JOIN sessions s ON s.user_id=u.id
@@ -71,33 +77,70 @@ export function createScopedCrud(db) {
     if (row.deleted && row.updated_at <= Date.now() - PAYLOAD_RETENTION_MS) row.payload_json = '{}';
     return row;
   }
-  async function audit(t, r, a, operation, detail) {
+  async function audit(t, r, a, operation, detail, cleanup = false) {
     await t.insert(`INSERT INTO ai_resource_audit(resource_id, actor_user_id, operation, detail_json, created_at)
       VALUES (?, ?, ?, ?, ?)`, [r.id, a.id, operation, JSON.stringify(detail), Date.now()]);
+    // Cleanup may exceed the logical cap only for an existing object; idempotent retries add no evidence.
+    if (cleanup) return;
+    const { feature_id: feature } = await t.get('SELECT feature_id FROM ai_feature_resources WHERE id=?', [r.id]);
+    const storage = await t.get(`SELECT COALESCE(SUM(bytes),0) AS bytes FROM (
+      SELECT octet_length(c.payload_json) AS bytes FROM ai_feature_records c JOIN ai_feature_resources s ON s.id=c.resource_id WHERE s.feature_id=?
+      UNION ALL SELECT octet_length(v.payload_json) FROM ai_record_revisions v JOIN ai_feature_records c ON c.id=v.record_id
+        JOIN ai_feature_resources s ON s.id=c.resource_id WHERE s.feature_id=?
+      UNION ALL SELECT octet_length(v.detail_json) FROM ai_resource_audit v JOIN ai_feature_resources s ON s.id=v.resource_id WHERE s.feature_id=?
+      UNION ALL SELECT octet_length(fields_json) FROM ai_feature_resources WHERE feature_id=?
+    ) retained`, [feature, feature, feature, feature]);
+    if (storage.bytes > SCOPED_LIMITS.retained_json_bytes) fail('feature_storage_limit', 413);
   }
   async function snapshot(t, a, row, operation) {
     await t.run(`INSERT INTO ai_record_revisions(record_id, revision, actor_user_id, owner_user_id,
       operation, payload_json, deleted, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [row.id, row.revision, a.id, row.owner_user_id, operation, row.payload_json, row.deleted, Date.now()]);
-    await audit(t, { id: row.resource_id }, a, operation, { record_id: row.id, revision: row.revision, owner_user_id: row.owner_user_id });
+    await audit(t, { id: row.resource_id }, a, operation, { record_id: row.id, revision: row.revision, owner_user_id: row.owner_user_id }, operation === 'deleted');
   }
   async function operation(identity, f, r, fn) {
-    return db.tx(async (t) => { const a = await actor(t, identity); return fn(t, a, await resource(t, a, f, r)); });
+    // Admission commits before the data transaction so failed writes cannot refund their rate allowance.
+    const retryAfter = await db.tx(async (t) => {
+      await limitQueries(t);
+      const a = await actor(t, identity), res = await resource(t, a, f, r);
+      const now = Date.now(), window = Math.floor(now / 60000) * 60000;
+      const rate = await t.get(`INSERT INTO ai_resource_rate(feature_id,actor_id,window_ms,requests_count) VALUES(?,?,?,1)
+        ON CONFLICT(feature_id,actor_id,window_ms) DO UPDATE SET requests_count=LEAST(ai_resource_rate.requests_count+1,?) RETURNING requests_count`,
+      [res.feature_id, a.id, window, SCOPED_LIMITS.requests_per_minute + 1]);
+      return rate.requests_count > SCOPED_LIMITS.requests_per_minute ? Math.max(1, Math.ceil((window + 60000 - Date.now()) / 1000)) : null;
+    });
+    if (retryAfter) {
+      const error = new ScopedCrudError('resource_rate_limit', 429);
+      error.retryAfter = retryAfter;
+      throw error;
+    }
+    return withResource(identity, f, r, fn);
+  }
+  async function withResource(identity, f, r, fn) {
+    return db.tx(async t => {
+      await limitQueries(t);
+      const a = await actor(t, identity);
+      return fn(t, a, await resource(t, a, f, r));
+    });
   }
   return {
     async prune() {
       // Platform clock only: callers cannot extend retention or supply a cutoff.
       const now = Date.now();
       await db.tx(async (t) => {
+        await t.run('DELETE FROM ai_resource_rate WHERE window_ms<?', [now - 120000]);
         await t.run("UPDATE ai_record_revisions SET payload_json='{}' WHERE created_at<=? AND payload_json<>'{}'", [now - PAYLOAD_RETENTION_MS]);
         await t.run('DELETE FROM ai_record_revisions WHERE created_at<=?', [now - AUDIT_RETENTION_MS]);
         await t.run("UPDATE ai_feature_records SET payload_json='{}' WHERE deleted=1 AND updated_at<=? AND payload_json<>'{}'", [now - PAYLOAD_RETENTION_MS]);
+        await t.run(`DELETE FROM ai_feature_records c WHERE c.deleted=1 AND c.updated_at<=?
+          AND NOT EXISTS (SELECT 1 FROM ai_record_revisions v WHERE v.record_id=c.id)`, [now - AUDIT_RETENTION_MS]);
         await t.run('DELETE FROM ai_resource_audit WHERE created_at<=?', [now - AUDIT_RETENTION_MS]);
       });
     },
     async provision(identity, featureId, input) {
       envelope(input, ['name', 'fields']);
       return db.tx(async (t) => {
+        await limitQueries(t);
         const a = await actor(t, identity);
         if (a.role !== 'admin') fail('admin_required');
         const f = await t.get(`SELECT * FROM ai_feature_folders WHERE id=?${t.lockRow}`, [integer(featureId)]);
@@ -150,8 +193,9 @@ export function createScopedCrud(db) {
             return { ok: true, status: 'review_required', review_id: id };
           }
         }
-        await applyGrant(t, res, user, owner, input.permission);
-        await audit(t, res, a, input.permission === 'none' ? 'grant_revoked' : 'grant_changed', { user_id: user, owner_user_id: owner, permission: input.permission });
+        const change = await applyGrant(t, res, user, owner, input.permission);
+        if (change.changed) await audit(t, res, a, input.permission === 'none' ? 'grant_revoked' : 'grant_changed',
+          { user_id: user, owner_user_id: owner, permission: input.permission }, change.narrowing);
         return { ok: true, status: 'applied' };
       });
     },
@@ -166,7 +210,7 @@ export function createScopedCrud(db) {
         const status = input.decision === 'approve' ? 'approved' : 'rejected';
         await t.run('UPDATE ai_resource_grant_reviews SET status=?, decided_by=?, decided_at=? WHERE id=?', [status, a.id, Date.now(), review.id]);
         if (status === 'approved') await applyGrant(t, res, review.user_id, review.owner_user_id, review.permission);
-        await audit(t, res, a, 'grant_reviewed', { review_id: review.id, decision: status, user_id: review.user_id, owner_user_id: review.owner_user_id, permission: review.permission });
+        await audit(t, res, a, 'grant_reviewed', { review_id: review.id, decision: status, user_id: review.user_id, owner_user_id: review.owner_user_id, permission: review.permission }, status === 'rejected');
         return { ok: true, status };
       });
     },
@@ -186,6 +230,9 @@ export function createScopedCrud(db) {
         const owner = input.owner_user_id === undefined ? a.id : integer(input.owner_user_id);
         await permitted(t, a, res, owner, true);
         const json = payload(input.data, JSON.parse(res.fields_json));
+        const count = await t.get(`SELECT COUNT(*) AS n FROM ai_feature_records c JOIN ai_feature_resources r ON r.id=c.resource_id
+          WHERE r.feature_id=?`, [res.feature_id]);
+        if (count.n >= SCOPED_LIMITS.rows_per_feature) fail('feature_row_limit', 429);
         const id = await t.insert(`INSERT INTO ai_feature_records(resource_id, owner_user_id, created_by, payload_json, updated_at)
           VALUES (?, ?, ?, ?, ?)`, [res.id, owner, a.id, json, Date.now()]);
         const row = await record(t, a, res, id, true);
@@ -195,6 +242,13 @@ export function createScopedCrud(db) {
     },
     async read(identity, f, r, id) {
       return operation(identity, f, r, async (t, a, res) => view(await record(t, a, res, id)));
+    },
+    // Host-only scope: one broker request pays once, but authority is re-read after remote work.
+    async admitRead(identity, f, r, id) {
+      const bound = { id: integer(identity.id), sessionToken: String(identity.sessionToken || '') };
+      f = integer(f); r = integer(r); id = integer(id);
+      const read = async (t, a, res) => view(await record(t, a, res, id));
+      return { record: await operation(bound, f, r, read), revalidate: () => withResource(bound, f, r, read) };
     },
     async list(identity, f, r, ownerId) {
       return operation(identity, f, r, async (t, a, res) => {
@@ -217,7 +271,10 @@ export function createScopedCrud(db) {
           const patch = JSON.parse(payload(input.data, allowed));
           json = payload({ ...JSON.parse(row.payload_json), ...patch }, allowed);
         }
-        else if (kind === 'deleted') deleted = 1;
+        else if (kind === 'deleted') {
+          if (row.deleted) return view(row);
+          deleted = 1;
+        }
         else if (kind === 'owner_changed') {
           if (a.role !== 'admin') fail('admin_required');
           owner = integer(input.owner_user_id);

@@ -38,6 +38,7 @@ for (const modern of [false,true]) test(`PostgreSQL reset (${modern ? 'board' : 
         VALUES(1,'school','off',1,1);
       INSERT INTO ai_feature_incidents(folder_id,kind,evidence,opened_by,opened_at,prior_release_status)
         VALUES(1,'permission_breach','fixture incident evidence',1,1,'school');
+      INSERT INTO ai_resource_rate(feature_id,actor_id,window_ms,requests_count) VALUES(1,1,1,120);
       INSERT INTO ai_self_improve_state VALUES(1,1,1,1,1,1);
       INSERT INTO ai_transient_retry_state VALUES(1,0,1,1);
       INSERT INTO ai_tickets(id,source_request_id,kind,title,status,phase,created_at,updated_at) VALUES(1,7,'root','Root','queued','intake',1,1);

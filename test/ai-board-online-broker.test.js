@@ -35,11 +35,12 @@ test('ui schema: valid data-only schema passes, attack shapes fail', () => {
 
 const id = { id: 9, sessionToken: 's' };
 const MANIFEST = { 7: { send_note: { adapter: 'fixture', resource_id: 3, fields: ['text'], response_fields: ['status', 'ref'] } } };
+const readScope = read => ({ admitRead: async (...args) => ({record: await read(...args), revalidate: () => read(...args)}) });
 function rig() {
   const calls = { send: [], read: [], audit: [] };
   const adapter = { send: async (p) => { calls.send.push(p); return { status: 'queued', ref: 'r1', secret_echo: 'LEAK' }; } };
   const record = { id: 5, deleted: false, data: { text: 'hello', private_note: 'nope' } };
-  const crud = { read: async (identity, f, r, rid) => { calls.read.push({ identity, f, r, rid }); return record; } };
+  const crud = readScope(async (identity, f, r, rid) => { calls.read.push({ identity, f, r, rid }); return record; });
   const broker = createBroker({ crud, adapters: { fixture: adapter }, audit: (e) => calls.audit.push(e), manifest: MANIFEST });
   return { broker, calls };
 }
@@ -85,23 +86,23 @@ test('broker: every attack is denied before the adapter is called', async () => 
 test('broker: current-rights denial stops before adapter', async () => {
   for (const code of ['scope_denied', 'authentication_required', 'record_not_found', 'feature_unavailable']) {
     const sent = [];
-    const crud = { read: async () => { throw new ScopedCrudError(code, 403); } };
+    const crud = readScope(async () => { throw new ScopedCrudError(code, 403); });
     const broker = createBroker({ crud, adapters: { fixture: { send: async (p) => sent.push(p) } }, manifest: MANIFEST });
     await assert.rejects(() => broker.invoke(id, 7, { operation: 'send_note', record_id: 1 }), (e) => e.code === code);
     assert.equal(sent.length, 0);
   }
   const sent = [];
   const mk = (extra) => createBroker({ adapters: { fixture: { send: async () => sent.push(1) } }, manifest: MANIFEST, ...extra });
-  const deleted = mk({ crud: { read: async () => ({ deleted: true, data: {} }) } });
+  const deleted = mk({ crud: readScope(async () => ({ deleted: true, data: {} })) });
   await assert.rejects(() => deleted.invoke(id, 7, { operation: 'send_note', record_id: 5 }), (e) => e.code === 'record_deleted');
-  const gated = mk({ crud: { read: async () => ({ data: {} }) }, releaseAllowed: async () => false });
+  const gated = mk({ crud: readScope(async () => ({ data: {} })), releaseAllowed: async () => false });
   await assert.rejects(() => gated.invoke(id, 7, { operation: 'send_note', record_id: 5 }), (e) => e.code === 'feature_unavailable');
   assert.equal(sent.length, 0);
 });
 
 test('broker: revocation while the external call is pending withholds the result', async () => {
   let reads = 0;
-  const crud = { read: async () => { reads += 1; if (reads > 1) throw new ScopedCrudError('scope_denied'); return { deleted: false, data: { text: 'x' } }; } };
+  const crud = readScope(async () => { reads += 1; if (reads > 1) throw new ScopedCrudError('scope_denied'); return { deleted: false, data: { text: 'x' } }; });
   const sent = [];
   const broker = createBroker({ crud, manifest: MANIFEST, adapters: { fixture: { send: async (p) => { sent.push(p); return { status: 'ok' }; } } } });
   await assert.rejects(() => broker.invoke(id, 7, { operation: 'send_note', record_id: 1 }), (e) => e.code === 'scope_denied');

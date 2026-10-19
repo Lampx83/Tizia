@@ -16,6 +16,10 @@ const ERRORS = {
   record_not_found: 'Không tìm thấy bản ghi.',
   redirect_denied: 'Dịch vụ đích phản hồi không hợp lệ.',
   adapter_unreachable: 'Không kết nối được dịch vụ đích. Thử lại sau.',
+  feature_row_limit: 'Chức năng đã đạt giới hạn bản ghi. Dữ liệu hiện có vẫn được giữ; hãy liên hệ quản trị viên.',
+  feature_storage_limit: 'Chức năng đã đầy dung lượng lưu trữ. Dữ liệu hiện có vẫn được giữ; hãy liên hệ quản trị viên.',
+  resource_rate_limit: 'Bạn đang thao tác quá nhanh. Hãy chờ tối đa một phút rồi thử lại.',
+  query_deadline_exceeded: 'Dữ liệu đang bận. Hãy thử lại sau.',
 };
 const message = (code) => ERRORS[code] || 'Có lỗi xảy ra. Thử lại sau.';
 

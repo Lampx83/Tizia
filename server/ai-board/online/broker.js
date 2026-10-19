@@ -18,7 +18,6 @@ export function createBroker({ crud, manifest, operations, adapters = {}, audit 
     names: async (featureId) => Object.keys(own(manifest ?? {}, String(featureId)) ?? {}),
   };
   const lookup = (featureId, operation) => provider.get(featureId, operation);
-  const reread = (identity, featureId, def, recordId) => crud.read(identity, featureId, def.resource_id, recordId);
 
   async function invoke(identity, featureId, input) {
     const trace = { actor: Number(identity?.id) || null, feature: Number(featureId) || null, operation: null, adapter: null };
@@ -35,14 +34,15 @@ export function createBroker({ crud, manifest, operations, adapters = {}, audit 
       if (!adapter) throw new BrokerError('operation_not_approved', 404);
       trace.adapter = def.adapter;
       if (!await releaseAllowed(identity, featureId)) throw new BrokerError('feature_unavailable', 404);
-      const record = await reread(identity, featureId, def, input.record_id); // throws ScopedCrudError when denied
+      const scope = await crud.admitRead(identity, featureId, def.resource_id, input.record_id);
+      const record = scope.record; // throws ScopedCrudError when denied
       if (record.deleted) throw new BrokerError('record_deleted', 409);
       const payload = {};
       for (const field of def.fields) if (field in record.data) payload[field] = record.data[field];
       const raw = await adapter.send(payload);
       // authorization may have been revoked while the external call was pending: withhold the stale result
       if (!await releaseAllowed(identity, featureId)) throw new BrokerError('feature_unavailable', 404);
-      await reread(identity, featureId, def, input.record_id);
+      await scope.revalidate();
       const result = {};
       for (const field of def.response_fields) {
         const v = raw?.[field];
