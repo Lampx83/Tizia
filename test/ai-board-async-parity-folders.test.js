@@ -83,6 +83,7 @@ test('release flags: async module behaves like the sync module on every backend'
   const seed = async (db) => {
     const now = 1_800_000_000_000;
     await db.run(`INSERT INTO users(id, username, display_name, role, enrolled_domain) VALUES (1, 'lan', 'Lan', 'student', 'pharmacy')`);
+    await db.run(`INSERT INTO users(id, username, display_name, role) VALUES (9, 'admin', 'Admin', 'admin')`);
     for (const [id, slug, domain] of [[1, 'the-ghi-nho', 'pharmacy'], [2, 'bai-tap', 'it']]) {
       await db.run(`INSERT INTO ai_feature_folders(id, slug, title, owner_user_id, domain, state, created_at, updated_at, last_activity_at)
         VALUES (?, ?, ?, 1, ?, 'active', ?, ?, ?)`, [id, slug, slug, domain, now, now, now]);

@@ -39,10 +39,8 @@ export function createHsmStore(store) {
       issues:(Array.isArray(result.issues)?result.issues:[]).slice(0,20).map(x=>String(x).slice(0,300))}):null;
     const inputHash=createHash('sha256').update(JSON.stringify([attempt,input.event,version,input.contract_hash,resultJson])).digest('hex');
     const answer=await db.tx(async t=>{
-      const root=await t.get('SELECT * FROM ai_tickets WHERE id=?'+t.lockRow,[Number(ticketId)]);
-      if (!root) fail('ticket_not_found',404);
-      // The root lock is shared with cancellation, lease replacement and plan authorization.
-      await store.assertLease(ticketId,input.worker_id,input.lease_token);
+      // Lease validation locks folder then root, shared with archive and plan authorization.
+      const root=await store.assertLease(ticketId,input.worker_id,input.lease_token);
       const run=await t.get('SELECT * FROM ai_runs WHERE id=? AND ticket_id=?',[runId,root.id]);
       if (!run || run.worker_id!==input.worker_id) fail('hsm_run_mismatch');
       await currentScope(t,root);
@@ -90,9 +88,7 @@ export function createHsmStore(store) {
   }
   async function readLeased(ticketId,input) {
     return db.tx(async t=>{
-      const root=await t.get('SELECT * FROM ai_tickets WHERE id=?'+t.lockRow,[Number(ticketId)]);
-      if (!root) fail('ticket_not_found',404);
-      await store.assertLease(ticketId,input.worker_id,input.lease_token);
+      const root=await store.assertLease(ticketId,input.worker_id,input.lease_token);
       await currentScope(t,root);
       return read(ticketId,input.run_id);
     });
@@ -101,9 +97,7 @@ export function createHsmStore(store) {
     const runId=Number(input.run_id);
     if (!Number.isSafeInteger(runId) || runId<1 || !/^[a-z][a-z0-9_]{0,40}$/.test(String(input.action || ''))) fail('action_guard_invalid',400);
     return db.tx(async t=>{
-      const root=await t.get('SELECT * FROM ai_tickets WHERE id=?'+t.lockRow,[Number(ticketId)]);
-      if (!root) fail('ticket_not_found',404);
-      await store.assertLease(ticketId,input.worker_id,input.lease_token);
+      const root=await store.assertLease(ticketId,input.worker_id,input.lease_token);
       await currentScope(t,root);
       const run=await t.get('SELECT * FROM ai_runs WHERE id=? AND ticket_id=?',[runId,root.id]);
       const latest=await t.get('SELECT id FROM ai_runs WHERE ticket_id=? ORDER BY id DESC LIMIT 1',[root.id]);

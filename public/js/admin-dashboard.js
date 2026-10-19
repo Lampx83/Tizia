@@ -1782,8 +1782,9 @@ const TABS = {
 // ─────────── Chức năng (folder chức năng mới) ───────────
 const FOLDER_STATE_LABEL = { draft: 'chờ duyệt', active: 'đang làm', awaiting_merge: 'chờ merge', released: 'đã phát hành', archived: 'lưu trữ' };
 const RELEASE_LABEL = { owner_only: 'chỉ người tạo', school: 'cả trường', off: 'tắt' };
-const releaseSelect = (slug, status) => status
-  ? `<select data-release="${esc(slug)}">${Object.entries(RELEASE_LABEL).map(([v, l]) =>
+const INCIDENT_LABEL = { permission_breach: 'vượt quyền', data_corruption: 'hỏng dữ liệu', mandatory_health_failure: 'kiểm tra sức khỏe bắt buộc thất bại' };
+const releaseSelect = (slug, status, isolated) => status
+  ? `<select aria-label="Phát hành ${esc(slug)}" data-release="${esc(slug)}"${isolated ? ' disabled' : ''}>${Object.entries(RELEASE_LABEL).map(([v, l]) =>
       `<option value="${v}"${v === status ? ' selected' : ''}>${l}</option>`).join('')}</select>`
   : '-';
 async function loadFeatureFolders() {
@@ -1792,9 +1793,9 @@ async function loadFeatureFolders() {
   const releaseOf = Object.fromEntries((rel.data?.releases || []).map(x => [x.slug, x.status]));
   const host = $('#tabbody');
   host.innerHTML = folders.length ? `
-    <table>
+    <div class="request-table-scroll" tabindex="0" role="region" aria-label="Danh sách chức năng"><table>
       <thead><tr><th>#</th><th>Chức năng</th><th>Trường</th><th>Người tạo</th><th>Trạng thái</th><th>Yêu cầu</th>
-        <th>Vote</th><th>GPU-s</th><th>Duyệt</th><th>Phát hành</th></tr></thead>
+        <th>Vote</th><th>GPU-s</th><th>Duyệt</th><th>Phát hành</th><th>Sự cố</th></tr></thead>
       <tbody>${folders.map(f => `
         <tr>
           <td>${f.id}</td>
@@ -1803,15 +1804,19 @@ async function loadFeatureFolders() {
           <td>${esc(f.owner_name || '-')}</td>
           <td><span class="pill">${esc(FOLDER_STATE_LABEL[f.state] || f.state)}</span></td>
           <td>${f.requests}</td><td>${f.votes}</td><td>${f.gpu_s}</td>
-          <td style="white-space:nowrap">${f.approved
+          <td style="white-space:nowrap">${f.incident_id ? '<span class="pill">đang cô lập</span>' : f.approved
             ? `<span class="pill">đã duyệt</span> <button class="btn danger" data-folder-act="revoke" data-fid="${f.id}">Thu hồi</button>`
               + (f.state === 'awaiting_merge' ? ` <button class="btn" data-folder-act="released" data-fid="${f.id}"
                   title="PR của chu kỳ này đã merge: phát hành, chu kỳ sau mở nhánh mới">Đã merge</button>` : '')
             : `<button class="btn primary" data-folder-act="approve" data-fid="${f.id}">Duyệt</button>`}</td>
-          <td>${releaseSelect(f.slug, releaseOf[f.slug])}</td>
+          <td>${releaseSelect(f.slug, releaseOf[f.slug], f.incident_id)}</td>
+          <td><button class="btn" data-lifecycle="${f.id}">${f.incident_id ? 'Xem và khôi phục' : 'Quản lý sự cố'}</button></td>
         </tr>`).join('')}</tbody>
-    </table>` : '<div class="loading">Chưa có chức năng nào.</div>';
+    </table></div>` : '<div class="loading">Chưa có chức năng nào.</div>';
+  host.querySelectorAll('[data-lifecycle]').forEach(btn => btn.addEventListener('click', () =>
+    openFeatureLifecycle(folders.find(f => f.id === Number(btn.dataset.lifecycle)))));
   host.querySelectorAll('[data-release]').forEach(sel => sel.addEventListener('change', async () => {
+    if (sel.value === 'off' && !confirm('Tắt phát hành chức năng này? Dữ liệu hiện có được giữ lại.')) return loadFeatureFolders();
     sel.disabled = true;
     const res = await api(`/api/admin/ai-board/releases/${encodeURIComponent(sel.dataset.release)}`,
       { method: 'POST', body: JSON.stringify({ status: sel.value }) });
@@ -1827,6 +1832,53 @@ async function loadFeatureFolders() {
       released: 'Đã phát hành; yêu cầu sau sẽ mở chu kỳ mới' }[btn.dataset.folderAct]);
     loadFeatureFolders();
   }));
+}
+
+async function openFeatureLifecycle(folder) {
+  const base = `/api/admin/ai-board/folders/${folder.id}/lifecycle`;
+  const result = await api(base);
+  if (!result.ok) return toast('Không đọc được trạng thái sự cố.', 'err');
+  const state = result.data, incident = state.incident;
+  const dialog = document.createElement('dialog');
+  dialog.className = 'modal lifecycle-dialog';
+  dialog.setAttribute('aria-labelledby', 'lifecycle-title');
+  dialog.innerHTML = `<h3 id="lifecycle-title">${incident ? 'Khôi phục chức năng' : 'Cô lập chức năng'}</h3>
+    <p class="sub">${esc(folder.title)}</p>
+    <p>${incident ? `Đang cô lập do ${esc(INCIDENT_LABEL[incident.kind] || 'sự cố đã xác minh')}. Sau khôi phục, phạm vi phát hành trở về: ${esc(RELEASE_LABEL[incident.prior_release_status])}.`
+      : 'Chỉ cô lập khi đã xác minh sự cố quyền, dữ liệu hoặc kiểm tra sức khỏe bắt buộc. Thao tác chỉ dừng chức năng này và giữ dữ liệu.'}</p>
+    ${incident ? `<p class="ctx">Bằng chứng lúc cô lập: ${esc(incident.evidence)}</p>` : ''}
+    <form>
+      ${incident ? '' : `<div class="grp"><label for="lifecycle-kind">Sự cố đã xác minh</label><select id="lifecycle-kind" name="kind">
+        ${Object.entries(INCIDENT_LABEL).map(([value,label]) => `<option value="${value}">${label}</option>`).join('')}</select></div>`}
+      <div class="grp"><label for="lifecycle-evidence">${incident ? 'Bằng chứng đã khắc phục và kiểm tra lại' : 'Bằng chứng quan sát sự cố'}</label>
+        <textarea id="lifecycle-evidence" name="evidence" required minlength="10" maxlength="2000"></textarea></div>
+      <p><label><input type="checkbox" name="confirmed" required> Tôi đã kiểm tra bằng chứng và duyệt thao tác này.</label></p>
+      <p role="status" data-lifecycle-status></p>
+      <div class="actions"><button type="button" class="btn" data-close>Đóng</button>
+        <button type="submit" class="btn ${incident ? 'primary' : 'danger'}">${incident ? 'Khôi phục' : 'Cô lập chức năng'}</button></div>
+    </form>
+    <details><summary>Lịch sử phát hành (${state.history.length} lượt gần nhất)</summary><ul>${state.history.map(row =>
+      `<li>${esc(RELEASE_LABEL[row.previous_status])} → ${esc(RELEASE_LABEL[row.next_status])}, quản trị viên #${row.actor_id}</li>`).join('')}</ul></details>`;
+  document.body.append(dialog);
+  dialog.addEventListener('close', () => dialog.remove(), {once:true});
+  dialog.querySelector('[data-close]').addEventListener('click', () => dialog.close());
+  dialog.querySelector('form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = event.currentTarget, button = form.querySelector('[type=submit]');
+    button.disabled = true;
+    const body = {evidence:form.elements.evidence.value, confirmed:form.elements.confirmed.checked,
+      ...(incident ? {incident_id:incident.id, release_event_id:state.release_event_id, feature_updated_at:state.feature.updated_at}
+        : {kind:form.elements.kind.value})};
+    const response = await api(`${base}/${incident ? 'restore' : 'isolate'}`, {method:'POST',body:JSON.stringify(body)});
+    button.disabled = false;
+    if (!response.ok) {
+      form.querySelector('[data-lifecycle-status]').textContent = response.status === 409
+        ? 'Trạng thái đã thay đổi. Đóng cửa sổ và đọc lại trước khi quyết định.' : 'Không thực hiện được thao tác. Kiểm tra quyền và bằng chứng.';
+      return;
+    }
+    dialog.close();toast(incident ? 'Đã khôi phục chức năng.' : 'Đã cô lập chức năng.');loadFeatureFolders();
+  });
+  dialog.showModal();
 }
 
 // ─────────── Tự cải thiện (task eval từ lần hỏng, gắn nhãn 1 click) ───────────

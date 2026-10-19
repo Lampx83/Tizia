@@ -51,11 +51,11 @@ export function createScopedCrud(db) {
   async function resource(t, a, featureId, resourceId) {
     // ponytail: feature-row lock serializes grants/CRUD; narrow to resource locks if contention is measured.
     const folder = await t.get(`SELECT * FROM ai_feature_folders WHERE id=?${t.lockRow}`, [integer(featureId)]);
-    if (!folder || !folder.approved_at || folder.state === 'archived') fail('feature_unavailable', 404);
+    if (!folder || !folder.approved_at) fail('feature_unavailable', 404);
     const r = await t.get(`SELECT * FROM ai_feature_resources WHERE id=? AND feature_id=?${t.lockRow}`,
       [integer(resourceId), folder.id]);
     if (!r) fail('resource_not_found', 404);
-    return r;
+    return { ...r, feature_state: folder.state };
   }
   async function permitted(t, a, r, owner, write = false) {
     if (a.role === 'admin') return;
@@ -123,6 +123,7 @@ export function createScopedCrud(db) {
       envelope(input, ['expected_fields', 'add_fields']);
       return operation(identity, f, r, async (t, a, res) => {
         if (a.role !== 'admin') fail('admin_required');
+        if (res.feature_state === 'archived') fail('feature_unavailable', 404);
         const current = JSON.parse(res.fields_json);
         const expected = fields(input.expected_fields), additions = fields(input.add_fields);
         if (JSON.stringify(expected) !== JSON.stringify(current)) fail('schema_conflict', 409);

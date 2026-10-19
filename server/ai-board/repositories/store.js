@@ -1,7 +1,7 @@
 // Async AI board store on the db contract (db/index.js). Parity tests in test/ai-board-async-*.test.js compare final board state per feature.
 import { randomBytes } from 'node:crypto';
 import { CAPABILITY_CATALOG, isSelfEditable, PlanGuardrailError, validatePlan } from '../security/policy.js';
-import { registerRelease } from '../services/releases.js';
+import { registerRelease, assertFeatureNotIsolated } from '../services/releases.js';
 import { repeatedQuestion } from '../services/clarity-rules.js';
 import {
   ACTIVE_ONLY, AI_BRANCH, ANY_QUEUE, CLAIM_INTENTS, CLARIFYING_NOTE, CLARIFY_AUTHOR, CONTRACT, DAY_MS, EVENT_TYPES, EXECUTION_GRAPH,
@@ -101,10 +101,11 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   /** Folder của yêu cầu mới: gắn vào folder của chính người gửi, hoặc loại 'feature' thì tạo folder mới. */
   async function folderForRequest(input, now) {
     if (input.folderId) {
-      const folder = await db.get('SELECT * FROM ai_feature_folders WHERE id=?', [Number(input.folderId)]);
+      const folder = await db.get(`SELECT * FROM ai_feature_folders WHERE id=?${db.lockRow}`, [Number(input.folderId)]);
       if (!folder || folder.owner_user_id !== input.ownerUserId || folder.state === 'archived') {
         throw new RequestValidationError('Không tìm thấy chức năng này trong danh sách của bạn.');
       }
+      await assertFeatureNotIsolated(db, folder.id);
       await db.run('UPDATE ai_feature_folders SET last_activity_at=?, updated_at=? WHERE id=?', [now, now, folder.id]);
       return folder.id;
     }
@@ -172,6 +173,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     await archiveStaleFolders();
     const folders = await db.all(`
       SELECT ${FOLDER_COLUMNS}, u.display_name AS owner_name,
+        (SELECT i.id FROM ai_feature_incidents i WHERE i.folder_id=f.id AND i.resolved_at IS NULL) AS incident_id,
         (SELECT COALESCE(SUM(${db.jsonNum('g.evidence_json', 'budget_units')}), 0)
           FROM ai_gate_traces g JOIN ai_runs gr ON gr.id = g.run_id JOIN ai_tickets gt ON gt.id = gr.ticket_id
           JOIN requests gq ON gq.id = gt.source_request_id WHERE g.status = 'model_call' AND gq.folder_id = f.id) AS gpu_s,
@@ -183,6 +185,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     const out = [];
     for (const f of folders) {
       out.push({ ...folderRow(f), owner_name: f.owner_name,
+        incident_id: f.incident_id,
         gpu_s: Math.round(f.gpu_s),
         // Chu kỳ đang mở: nhánh/đỉnh/PR của folder; chưa có thì trace của root mới nhất.
         trace_ref: f.branch ? { branch: f.branch, head_sha: f.head_sha, pr_number: f.pr_number, pr_url: f.pr_url }
@@ -193,8 +196,9 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
 
   /** Admin duyệt folder 1 lần: plan đang chờ CHỈ vì folder chưa duyệt được cho phép luôn; lượt sau tự chạy. */
   const approveFolderTransaction = (folderId, adminUserId, now) => db.tx(async () => {
-    const folder = await db.get('SELECT * FROM ai_feature_folders WHERE id=?', [Number(folderId)]);
+    const folder = await db.get(`SELECT * FROM ai_feature_folders WHERE id=?${db.lockRow}`, [Number(folderId)]);
     if (!folder) throw new WorkerContractError('folder not found', 404, 'folder_not_found');
+    await assertFeatureNotIsolated(db, folder.id);
     await db.run(`UPDATE ai_feature_folders SET approved_by=?, approved_at=?, updated_at=?,
       state=CASE WHEN state='draft' THEN 'active' ELSE state END WHERE id=?`, [Number(adminUserId), now, now, folder.id]);
     await registerRelease(db, folder, adminUserId, now); // cờ phát hành, mặc định chỉ người tạo
@@ -270,7 +274,14 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   // ── Vòng đời folder: draft → active → awaiting_merge → released → archived; mở lại → chu kỳ mới ──
   /** Đóng chu kỳ + lưu trữ; nhánh chưa merge ghi vào event để dọn trên GitHub.
       ponytail: xoá nhánh remote do người/cron làm theo event folder_archived; worker chưa có job dọn. */
-  async function archiveFolderRow(folder, reason, actorId, now) {
+  const archiveFolderRow = (folder, reason, actorId, now) => db.tx(async () => {
+    folder = await db.get(`SELECT * FROM ai_feature_folders WHERE id=?${db.lockRow}`, [folder.id]);
+    if (!folder || (actorId && folder.owner_user_id !== Number(actorId))) {
+      throw new WorkerContractError('folder not found', 404, 'folder_not_found');
+    }
+    if (folder.state === 'archived' || (reason === 'inactive'
+      && folder.last_activity_at >= now - LIMITS.folder_archive_days.value * DAY_MS)) return false;
+    await stopFolderWork(folder, 'folder_archived', actorId ? 'requester' : 'system', actorId ?? 'lifecycle', now);
     await db.run(`UPDATE ai_feature_folders SET state='archived', branch=NULL, head_sha=NULL, pr_number=NULL, pr_url=NULL,
       cycle=CASE WHEN branch IS NULL THEN cycle ELSE cycle + 1 END, updated_at=? WHERE id=?`, [now, folder.id]);
     const root = await db.get(`SELECT t.id FROM ai_tickets t JOIN requests q ON q.id = t.source_request_id
@@ -281,20 +292,37 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
         JSON.stringify({ folder_id: folder.id, reason, unmerged_branch: folder.branch, pr_number: folder.pr_number }),
         `folder-archived:${folder.id}:${now}`, now]);
     }
+    return true;
+  });
+
+  // Caller holds the folder lock and validates its actor before cancelling only that folder's work.
+  async function stopFolderWork(folder, reason, actorType, actorId, now) {
+    const pending = await db.all("SELECT id FROM requests WHERE folder_id=? AND status NOT IN ('done','rejected','cancelled') ORDER BY id", [folder.id]);
+    for (const request of pending) {
+      const root = await db.get(`SELECT * FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL${db.lockRow}`, [request.id]);
+      if (root) {
+        await closeRoot(root, { status: 'cancelled', phase: 'requester_cancelled', reason,
+          note: reason === 'folder_archived' ? 'Yêu cầu đã dừng vì chức năng được lưu trữ.' : 'Yêu cầu đã dừng để cô lập sự cố của chức năng.', now,
+          event: { type: 'request_cancelled', actorType, actorId, idem: `${reason}:${root.id}:${now}` } });
+        await db.run(`UPDATE ai_tickets SET status='cancelled', updated_at=?
+          WHERE parent_id=? AND status NOT IN ('done','failed','invalidated','cancelled')`, [now, root.id]);
+      } else await db.run("UPDATE requests SET status='cancelled', updated_at=? WHERE id=?", [now, request.id]);
+    }
   }
 
   /** Lưu trữ folder im lặng quá limits.folder_archive_days. Gọi lúc đọc danh sách: tất định, không cần cron. */
   async function archiveStaleFolders(now = Date.now()) {
     const cutoff = now - LIMITS.folder_archive_days.value * DAY_MS;
     const stale = await db.all(`SELECT * FROM ai_feature_folders WHERE state <> 'archived' AND last_activity_at < ?`, [cutoff]);
-    for (const folder of stale) await archiveFolderRow(folder, 'inactive', null, now);
-    return stale.length;
+    let archived = 0;
+    for (const folder of stale) if (await archiveFolderRow(folder, 'inactive', null, now)) archived++;
+    return archived;
   }
 
   async function archiveFolder(folderId, ownerUserId, now = Date.now()) {
     const folder = await db.get('SELECT * FROM ai_feature_folders WHERE id=?', [Number(folderId)]);
     if (!folder || folder.owner_user_id !== Number(ownerUserId)) throw new WorkerContractError('folder not found', 404, 'folder_not_found');
-    if (folder.state !== 'archived') await archiveFolderRow(folder, 'owner', ownerUserId, now);
+    await archiveFolderRow(folder, 'owner', ownerUserId, now);
     return { ok: true, state: 'archived' };
   }
 
@@ -555,9 +583,23 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     `)).map((w) => (w.status === 'running' && now - w.last_seen_at > leaseMs ? { ...w, status: 'stale' } : w));
   }
 
+  async function lockRootFolder(ticketId) {
+    // All improvement writes lock folder before root, including HSM, approval and archive.
+    const request = await db.get(`SELECT q.folder_id FROM requests q JOIN ai_tickets t ON t.source_request_id=q.id WHERE t.id=?`, [Number(ticketId)]);
+    if (request?.folder_id) await db.get(`SELECT id FROM ai_feature_folders WHERE id=?${db.lockRow}`, [request.folder_id]);
+  }
+
+  async function lockedRequestRoot(requestId) {
+    const ref = await db.get('SELECT id FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL', [Number(requestId)]);
+    if (!ref) return null;
+    await lockRootFolder(ref.id);
+    return db.get(`SELECT * FROM ai_tickets WHERE id=?${db.lockRow}`, [ref.id]);
+  }
+
   async function assertLease(ticketId, workerId, leaseToken, now = Date.now()) {
+    await lockRootFolder(ticketId);
     const ticket = await db.get(`
-      SELECT * FROM ai_tickets WHERE id = ? AND kind = 'root'
+      SELECT * FROM ai_tickets WHERE id = ? AND kind = 'root'${db.lockRow}
     `, [Number(ticketId)]);
     if (!ticket) throw new WorkerContractError('ticket not found', 404, 'ticket_not_found');
     if (!workerId || ticket.lease_owner !== workerId || !leaseToken || ticket.lease_token !== leaseToken) {
@@ -594,6 +636,8 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       SELECT t.id, t.phase, t.status, t.lease_token
       FROM ai_tickets t JOIN requests r ON r.id=t.source_request_id
       WHERE t.kind='root' AND r.owner_state='verified'
+        AND NOT EXISTS (SELECT 1 FROM ai_feature_folders f WHERE f.id=r.folder_id AND f.state='archived')
+        AND NOT EXISTS (SELECT 1 FROM ai_feature_incidents i WHERE i.folder_id=r.folder_id AND i.resolved_at IS NULL)
         -- lease_expires_at trên hàng 'queued' (bình thường NULL) đóng vai "không nhận trước giờ này": tự chạy
         -- lại sau lỗi hạ tầng thoáng qua (transient_retry) dời nó tới tương lai thay vì cho nhận ngay.
         AND ((t.status='queued' AND (t.lease_expires_at IS NULL OR t.lease_expires_at<=?) AND (
@@ -886,7 +930,8 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   }
 
   const requestReverifyTransaction = (rootId, adminUserId, now) => db.tx(async () => {
-    const root = await db.get(`SELECT * FROM ai_tickets WHERE id=? AND kind='root'`, [Number(rootId)]);
+    await lockRootFolder(rootId);
+    const root = await db.get(`SELECT * FROM ai_tickets WHERE id=? AND kind='root'${db.lockRow}`, [Number(rootId)]);
     if (!root) throw new WorkerContractError('ticket not found', 404, 'ticket_not_found');
     if (['reverify', 'reverifying'].includes(root.phase)) return { ok: true, status: root.status, phase: root.phase, duplicate: true };
     if (PHASES[root.phase]?.rollback || PHASES[root.phase]?.terminal) throw new WorkerContractError('this request was rolled back or closed', 409, 'not_reverifiable');
@@ -987,11 +1032,13 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   const withBrief = async (folder) => (folder ? { ...folder, brief: await folderBrief(folder.id) } : null);
 
   async function heartbeat(ticketId, workerId, leaseToken, { now = Date.now(), leaseMs = LEASE_MS } = {}) {
+    return db.tx(async () => {
     await assertLease(ticketId, workerId, leaseToken, now);
     const expires = now + leaseMs;
     await db.run('UPDATE ai_tickets SET lease_expires_at=?, updated_at=? WHERE id=?', [expires, now, Number(ticketId)]);
     await db.run(`UPDATE ai_workers SET status='running', current_ticket_id=?, last_seen_at=?, updated_at=? WHERE worker_id=?`, [Number(ticketId), now, now, workerId]);
     return { lease_expires_at: expires };
+    });
   }
 
   const createRunTransaction = (ticketId, input) => db.tx(async () => {
@@ -1458,7 +1505,8 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   }
 
   const extendBudgetTransaction = (rootTicketId, amount, reason, adminUserId, now) => db.tx(async () => {
-    const root = await db.get(`SELECT * FROM ai_tickets WHERE id=? AND kind='root'`, [Number(rootTicketId)]);
+    await lockRootFolder(rootTicketId);
+    const root = await db.get(`SELECT * FROM ai_tickets WHERE id=? AND kind='root'${db.lockRow}`, [Number(rootTicketId)]);
     if (!root) throw new WorkerContractError('ticket not found', 404, 'ticket_not_found');
     if (root.status !== 'waiting_admin' || root.phase !== 'budget_exhausted') {
       throw new WorkerContractError('ticket is not waiting on an exhausted budget', 409, 'not_budget_exhausted');
@@ -1509,7 +1557,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     if (['done', 'rejected'].includes(request.status)) {
       throw new WorkerContractError('request is already closed', 409, 'request_closed');
     }
-    const root = await db.get('SELECT * FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL', [request.id]);
+    const root = await db.get(`SELECT * FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL${db.lockRow}`, [request.id]);
     if (root) {
       await closeRoot(root, {
         status: 'cancelled', phase: 'requester_cancelled', note: 'Người gửi đã hủy yêu cầu.', now,
@@ -1530,7 +1578,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   }
 
   const requestRollbackTransaction = (requestId, adminUserId, now) => db.tx(async () => {
-    const root = await db.get('SELECT * FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL', [requestId]);
+    const root = await lockedRequestRoot(requestId);
     if (!root) throw new WorkerContractError('ticket not found', 404, 'ticket_not_found');
     if (PHASES[root.phase]?.rollback) return { ok: true, status: root.status, phase: root.phase, duplicate: true };
     // Status stays 'planned' while gates 3→5.5 run, so a live lease is what means "working".
@@ -1691,13 +1739,21 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   }
 
   const authorizePlanTransaction = (rootTicketId, planHash, adminUserId, now) => db.tx(async () => {
-    const plan = await db.get('SELECT * FROM ai_plans WHERE root_ticket_id=? AND plan_hash=? AND status=?', [Number(rootTicketId), String(planHash), 'valid']);
-    if (!plan) throw new WorkerContractError('plan not found', 404, 'plan_not_found');
-    if (plan.tier === 'core') throw new WorkerContractError('core work remains human-owned', 409, 'core_human_owned');
-    const root = await db.get('SELECT phase FROM ai_tickets WHERE id=?', [Number(rootTicketId)]);
+    await lockRootFolder(rootTicketId);
+    const root = await db.get(`SELECT * FROM ai_tickets WHERE id=?${db.lockRow}`, [Number(rootTicketId)]);
     if (root?.phase === 'budget_ceiling') {
       throw new WorkerContractError('ticket passed the budget ceiling; a new request is required', 409, 'budget_ceiling');
     }
+    if (!root || ['cancelled', 'done'].includes(root.status) || PHASES[root.phase]?.terminal) {
+      throw new WorkerContractError('request is already closed', 409, 'request_closed');
+    }
+    const folder = await db.get(`SELECT f.state FROM ai_feature_folders f JOIN requests q ON q.folder_id=f.id WHERE q.id=?`, [root.source_request_id]);
+    if (folder?.state === 'archived') throw new WorkerContractError('folder is archived', 409, 'folder_archived');
+    const request = await db.get('SELECT folder_id FROM requests WHERE id=?', [root.source_request_id]);
+    if (request?.folder_id) await assertFeatureNotIsolated(db, request.folder_id);
+    const plan = await db.get('SELECT * FROM ai_plans WHERE root_ticket_id=? AND plan_hash=? AND status=?', [Number(rootTicketId), String(planHash), 'valid']);
+    if (!plan) throw new WorkerContractError('plan not found', 404, 'plan_not_found');
+    if (plan.tier === 'core') throw new WorkerContractError('core work remains human-owned', 409, 'core_human_owned');
     await db.run(`INSERT INTO ai_authorizations(root_ticket_id, plan_hash, plan_revision, admin_user_id, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`, [Number(rootTicketId), String(planHash), Number(plan.revision), Number(adminUserId), now]);
     if (plan.tier === 'protected') {
       await db.run(`UPDATE ai_tickets SET status='queued', phase='authorized', public_note='Kế hoạch đã được cho phép; đang chờ thực hiện.', internal_reason=NULL, updated_at=? WHERE id=?`, [now, Number(rootTicketId)]);
@@ -1761,7 +1817,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   }
 
   const invalidatePlanTransaction = (requestId, reason, now) => db.tx(async () => {
-    const root = await db.get(`SELECT * FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL`, [Number(requestId)]);
+    const root = await lockedRequestRoot(requestId);
     if (!root || !root.plan_hash || PHASES[root.phase]?.terminal) return false;
     await invalidateCurrentPlan(root, now);
     await requeueForReplan(root.id, {
@@ -1792,7 +1848,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   const rerunGateTransaction = (requestId, gate, adminUserId, now) => db.tx(async () => {
     const stage = gateStage(gate);
     if (!stage) throw new WorkerContractError('unknown gate', 400, 'invalid_gate');
-    const root = await db.get('SELECT * FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL', [requestId]);
+    const root = await lockedRequestRoot(requestId);
     if (await rerunStage(root) !== stage) {
       throw new WorkerContractError('this gate cannot be rerun in the current state of the request', 409, 'not_rerunnable');
     }
@@ -1844,6 +1900,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     archiveFolder,
     reopenFolder,
     archiveStaleFolders,
+    stopFolderWork,
     folderBrief,
     listWorkers,
     cancelRequest,

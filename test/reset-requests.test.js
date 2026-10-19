@@ -32,6 +32,12 @@ for (const modern of [false,true]) test(`PostgreSQL reset (${modern ? 'board' : 
       INSERT INTO notifications VALUES(1,7,'Delete'),(2,NULL,'Keep');
       INSERT INTO skill_proposals VALUES(1,7); INSERT INTO gate_trace VALUES(1,1);`);
     if (modern) await d.exec(`INSERT INTO ai_board_profile VALUES(1,'student','[]','beginner',1);
+      INSERT INTO ai_feature_folders(id,slug,title,owner_user_id,domain,state,created_at,updated_at,last_activity_at)
+        VALUES(1,'reset-feature','Reset feature',1,'it','active',1,1,1);
+      INSERT INTO ai_feature_release_events(folder_id,previous_status,next_status,actor_id,created_at)
+        VALUES(1,'school','off',1,1);
+      INSERT INTO ai_feature_incidents(folder_id,kind,evidence,opened_by,opened_at,prior_release_status)
+        VALUES(1,'permission_breach','fixture incident evidence',1,1,'school');
       INSERT INTO ai_self_improve_state VALUES(1,1,1,1,1,1);
       INSERT INTO ai_transient_retry_state VALUES(1,0,1,1);
       INSERT INTO ai_tickets(id,source_request_id,kind,title,status,phase,created_at,updated_at) VALUES(1,7,'root','Root','queued','intake',1,1);

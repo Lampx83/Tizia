@@ -170,10 +170,11 @@ try {
   await call(actors.other, `${p1}/records/${own.id}`, undefined, 403);
   await call(actors.other, `${p1}/records/${own.id}/history`, undefined, 403); mark('Revocation immediately blocks read and evidence');
   await d.run("UPDATE ai_feature_folders SET state='archived' WHERE id=?", [f1]);
-  await call(actors.creator, `${p1}/records/${racing.id}`, undefined, 404);
-  await call(actors.creator, `${p1}/records/${racing.id}/update`, { revision: 2, data: { text: 'archived attack' } }, 404);
+  await call(actors.creator, `${p1}/records/${racing.id}`, undefined, 200);
+  await call(actors.creator, `${p1}/records/${racing.id}/update`, { revision: 2, data: { text: 'Archived runtime update' } }, 200);
+  await call(actors.admin, `/${f1}/resources`, { name: 'archive_new', fields: ['text'] }, 404);
   await d.run("UPDATE ai_feature_folders SET state='active' WHERE id=?", [f1]);
-  mark('Archived feature blocks reads and writes despite retained grant');
+  mark('Archived feature preserves existing scoped runtime data but freezes new resources');
   await d.run("UPDATE users SET role='student' WHERE id=?", [actors.admin.id]);
   await call(actors.admin, `${p1}/technical-trace`, undefined, 403); mark('Current role rechecked rather than old role');
   await d.run('DELETE FROM sessions WHERE token=?', [actors.creator.token]);

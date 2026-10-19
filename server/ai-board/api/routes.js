@@ -19,6 +19,7 @@ import { createToolCheckpointService } from '../services/tool-checkpoint.js';
 import { createGateProofService } from '../services/gate-proofs.js';
 import { createToolManifestStore } from '../repositories/tool-manifests.js';
 import { publicContract } from '../hsm/contract.js';
+import { createFeatureLifecycle } from '../services/feature-lifecycle.js';
 
 // Không cấu hình model phân loại → không gọi gì (không phân loại).
 const defaultClassifyRequest = (title, detail) => (
@@ -204,6 +205,15 @@ export function attachAiBoardRequestRoutes(router, {
     if (error instanceof WorkerContractError) return res.status(error.status).json({ error: error.code, message: error.message });
     throw error;
   };
+  const lifecycle = createFeatureLifecycle(store);
+  route.get('/api/admin/ai-board/folders/:id/lifecycle', requireAuth, requireAdmin, async (req, res) => {
+    try { res.json(await lifecycle.state(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
+  });
+  for (const action of ['isolate', 'restore']) {
+    route.post(`/api/admin/ai-board/folders/:id/lifecycle/${action}`, requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
+      try { res.json(await lifecycle[action](req.params.id, req.user.id, req.body)); } catch (error) { folderError(res, error); }
+    });
+  }
   route.get('/api/ai-board/folders', requireAuth, async (req, res) => {
     const domain = String(req.query.domain || req.user.enrolled_domain || '').trim();
     if (!domain) return res.status(400).json({ error: 'domain required' });

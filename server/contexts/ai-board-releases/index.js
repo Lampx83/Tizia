@@ -7,6 +7,7 @@
 // ============================================================
 import * as asyncReleases from '../../ai-board/releases-async.js';
 import { asyncRoutes } from '../../ai-board/async-routes.js';
+import { WorkerContractError } from '../../ai-board/repositories/store-contract.js';
 
 const { RELEASE_STATUSES, canSee } = asyncReleases;
 
@@ -42,7 +43,12 @@ export function attachAiBoardReleases(router, { db, requireAuth, requireAdmin, r
   route.post('/api/admin/ai-board/releases/:slug', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
     const status = req.body?.status;
     if (!RELEASE_STATUSES.includes(status)) return res.status(400).json({ error: 'invalid_status' });
-    if (!await setReleaseStatus(db, req.params.slug, status, req.user.id)) return res.status(404).json({ error: 'release_not_found' });
+    try {
+      if (!await setReleaseStatus(db, req.params.slug, status, req.user.id)) return res.status(404).json({ error: 'release_not_found' });
+    } catch (error) {
+      if (error instanceof WorkerContractError) return res.status(error.status).json({ error: error.code, message: error.message });
+      throw error;
+    }
     res.json({ ok: true });
   });
 }
