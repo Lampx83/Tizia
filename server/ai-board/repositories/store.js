@@ -26,6 +26,11 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       JOIN requests sq ON sq.id = st.source_request_id
       WHERE se.transition = 'queued->running' AND sq.owner_user_id = r.owner_user_id), 0) ASC,
     t.created_at ASC, t.id ASC`;
+  const FEATURE_WAIT = `EXISTS (
+    SELECT 1 FROM ai_tickets ft JOIN requests fq ON fq.id=ft.source_request_id
+    WHERE fq.folder_id=r.folder_id AND ft.parent_id IS NULL AND ft.id<>t.id
+      AND fq.status NOT IN ('done','rejected','cancelled')
+      AND (ft.id<t.id OR (ft.lease_owner IS NOT NULL AND ft.lease_expires_at>?)))`;
   const findRetry = `
     SELECT r.id AS request_id, t.id AS root_ticket_id
     FROM requests r JOIN ai_tickets t ON t.source_request_id = r.id AND t.parent_id IS NULL
@@ -459,15 +464,16 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   }
 
   async function queueInfo(ownerUserId, now = Date.now()) {
-    const waiting = await db.all(`
-      SELECT t.id, t.priority, t.created_at, r.owner_user_id,
+    const rows = await db.all(`
+      SELECT t.id, t.priority, t.created_at, r.owner_user_id, ${FEATURE_WAIT} AS feature_wait,
         COALESCE((SELECT MAX(se.created_at) FROM ai_events se JOIN ai_tickets st ON st.id = se.ticket_id
           JOIN requests sq ON sq.id = st.source_request_id
           WHERE se.transition = 'queued->running' AND sq.owner_user_id = r.owner_user_id), 0) AS served
       FROM ai_tickets t JOIN requests r ON r.id = t.source_request_id
       WHERE t.kind = 'root' AND t.status = 'queued' AND t.phase <> 'clarifying' AND r.owner_state = 'verified'
         AND r.type <> 'self'
-    `);
+    `, [now]);
+    const waiting = rows.filter(row => !row.feature_wait);
     // Mô phỏng các lượt claim liên tiếp theo FAIR_ORDER: người vừa được phục vụ xuống cuối vòng.
     // ponytail: O(n²) trên hàng đợi; đủ cho vài trăm root đang chờ.
     const served = new Map(waiting.map((w) => [w.owner_user_id, w.served]));
@@ -491,6 +497,9 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     const workerReady = !!await db.get(`SELECT 1 FROM ai_workers WHERE mode='active'
       AND status IN ('idle', 'running') AND last_seen_at > ? LIMIT 1`, [now - 120_000]);
     const out = new Map();
+    for (const row of rows) if (row.feature_wait && row.owner_user_id === Number(ownerUserId)) {
+      out.set(row.id, { position: null, eta_s: null, deferred, worker_ready: workerReady, reason: 'feature_predecessor' });
+    }
     order.forEach((row, i) => {
       if (row.owner_user_id === Number(ownerUserId)) out.set(row.id, {
         position: i + 1, eta_s: workerReady ? (i + 1) * runS : null, deferred, worker_ready: workerReady,
@@ -614,6 +623,8 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   const claimTransaction = ({ workerId, version, mode, intent, now, leaseMs, yieldNew }) => db.tx(async () => {
     if (!WORKER_MODES.has(mode)) throw new WorkerContractError('invalid worker mode');
     if (!CLAIM_INTENTS.has(intent)) throw new WorkerContractError('invalid claim intent');
+    // Serialize admission only, scoped to this board; model execution never holds this lock.
+    await db.get('SELECT pg_advisory_xact_lock(hashtext(current_schema()),7000103)');
     await db.run(`
       INSERT INTO ai_workers(worker_id, version, mode, status, current_ticket_id, last_seen_at, updated_at)
       VALUES (?, ?, ?, ?, NULL, ?, ?)
@@ -638,6 +649,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       WHERE t.kind='root' AND r.owner_state='verified'
         AND NOT EXISTS (SELECT 1 FROM ai_feature_folders f WHERE f.id=r.folder_id AND f.state='archived')
         AND NOT EXISTS (SELECT 1 FROM ai_feature_incidents i WHERE i.folder_id=r.folder_id AND i.resolved_at IS NULL)
+        AND NOT ${FEATURE_WAIT}
         -- lease_expires_at trên hàng 'queued' (bình thường NULL) đóng vai "không nhận trước giờ này": tự chạy
         -- lại sau lỗi hạ tầng thoáng qua (transient_retry) dời nó tới tương lai thay vì cho nhận ngay.
         AND ((t.status='queued' AND (t.lease_expires_at IS NULL OR t.lease_expires_at<=?) AND (
@@ -658,7 +670,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
         -- Việc tự sửa của board không tính trần học viên (ngân sách đêm riêng).
         AND (t.status <> 'queued' OR r.type = 'self' OR ${OWNER_GPU_S} < ?)
         ORDER BY ${FAIR_ORDER} LIMIT 1${db.lockQueue('t')}
-    `, [now, intent, now, intent, now, mode, workerId, now - leaseMs, now - DAY_MS, LIMITS.gpu_s_per_user_day.loose]);
+    `, [now, now, intent, now, intent, now, mode, workerId, now - leaseMs, now - DAY_MS, LIMITS.gpu_s_per_user_day.loose]);
     if (!candidate) return null;
     const token = randomBytes(24).toString('hex');
     const expires = now + leaseMs;

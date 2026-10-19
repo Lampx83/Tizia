@@ -1024,6 +1024,7 @@ function bind(root) {
 // Vị trí trong hàng đợi công bằng (server tính theo đúng thứ tự worker nhận việc).
 export function queueLine(q) {
   if (!q) return '';
+  if (q.reason === 'feature_predecessor') return '<div class="sgf-it-queue">Đang chờ yêu cầu trước của chức năng này hoàn tất.</div>';
   if (q.deferred) return '<div class="sgf-it-queue">Hôm nay Ban đã làm nhiều việc cho bạn rồi, yêu cầu này sẽ được làm tiếp vào ngày mai.</div>';
   if (q.worker_ready !== true || !Number.isFinite(q.eta_s)) return '<div class="sgf-it-queue">Đang chờ Ban điều hành sẵn sàng, chưa thể ước tính thời gian.</div>';
   const min = Math.max(1, Math.round((q.eta_s || 0) / 60));
