@@ -472,7 +472,7 @@ function renderRequests() {
       <div class="spacer"></div>
       <button class="btn" id="reqRefresh">Tải lại</button>
     </div>
-    <table>
+    <div class="request-table-scroll" role="region" aria-label="Danh sách yêu cầu" tabindex="0"><table>
       <thead><tr>
         <th>#</th><th>Trường</th><th>Tiêu đề</th><th>Nội dung yêu cầu</th><th>Loại</th>
         <th>Người yêu cầu</th><th>Vai trò</th><th>Trạng thái</th><th>AI Board</th><th>Phụ trách</th><th>Vote</th><th>Tạo lúc</th><th></th>
@@ -509,6 +509,7 @@ function renderRequests() {
       `).join('')}
       </tbody>
     </table>
+    </div>
     ${filtered.length === 0 ? '<div class="empty">Không có yêu cầu nào trong bộ lọc.</div>' : ''}
     ${intakeRejections.length ? `<details><summary>Yêu cầu bị chặn tại intake (${intakeRejections.length} gần nhất)</summary>
       ${intakeRejections.map((r) => `<p>${esc(fmt(r.created_at))} · ${esc(r.public_message)}<br><small>${esc(r.internal_detail)}</small></p>`).join('')}</details>` : ''}

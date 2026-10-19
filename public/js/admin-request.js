@@ -9,9 +9,9 @@ import { renderHsm, renderGraph } from './ai-board-hsm.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fmt = (t) => t ? new Date(t).toLocaleString('vi-VN', { hour12:false }) : '—';
-const fmtNum = (n) => (n == null) ? '—' : Number(n).toLocaleString('vi-VN');
-const secs = (ms) => ms == null ? '—' : (ms / 1000).toFixed(1);
+const fmt = (t) => t ? new Date(t).toLocaleString('vi-VN', { hour12:false }) : 'chưa có';
+const fmtNum = (n) => (n == null) ? 'chưa có' : Number(n).toLocaleString('vi-VN');
+const secs = (ms) => ms == null ? 'chưa có' : (ms / 1000).toFixed(1);
 const elapsed = (t) => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
 const REQUEST_ID = Number(new URLSearchParams(location.search).get('id'));
@@ -160,8 +160,8 @@ function callStep(e, rerunGate = null) {
     <div class="metrics"><span>Model: ${esc(e.model || 'chưa ghi nhận')}</span><span>Thời gian: ${secs(m.wall_ms)} giây</span><span>Token vào / ra: ${fmtNum(m.tokens_in)} / ${fmtNum(m.tokens_out)}</span></div>
     ${det(`${e.call_id}:metrics`, 'Chi phí và thông số kỹ thuật', `<div class="metrics"><span>GPU ${secs(m.gpu_ms)} s</span>
       <span>load ${secs(m.load_ms)} s</span><span>queue ${secs(m.queue_ms)} s</span>
-      <span>tokens ${fmtNum(m.tokens_in)} / ${fmtNum(m.tokens_out)}</span><span>${esc(m.tok_s ?? '—')} tok/s</span>
-      <span>stop ${esc(m.done_reason ?? '—')}</span><span>${esc(e.budget_units ?? '—')} units</span></div>`, { cls: 'raw' })}
+      <span>tokens ${fmtNum(m.tokens_in)} / ${fmtNum(m.tokens_out)}</span><span>${esc(m.tok_s ?? 'chưa có')} tok/s</span>
+      <span>stop ${esc(m.done_reason ?? 'chưa có')}</span><span>${esc(e.budget_units ?? 'chưa có')} units</span></div>`, { cls: 'raw' })}
     ${explain(e)}
     ${det(`${e.call_id}:io`, 'Xem đầu vào và kết quả của nhiệm vụ này',
       `<div class="meta">Mã bản ghi: ${esc(e.call_id)} · ${esc(e.prompt_name || 'bản ghi cũ chưa có nhãn')}</div>
@@ -209,11 +209,11 @@ function loopTimeline(group) {
 function attention(steps, events) {
   const items = [];
   for (const s of steps) {
-    if (s.state === 'bad') items.push(['bad', `${gateName(s.gate)}: chưa đạt${s.result?.public_reason ? ` — ${esc(s.result.public_reason)}` : ''}`, `#pipeline-title-${s.gate}`]);
-    for (const c of stepTotals(s).failed) items.push(['warn', `${gateName(s.gate)}: lượt gọi AI ${esc(CALL_LABEL[c.result] || c.result)}${c.error ? ` — ${esc(c.error)}` : ''}`, `#pipeline-title-${s.gate}`]);
+    if (s.state === 'bad') items.push(['bad', `${gateName(s.gate)}: chưa đạt${s.result?.public_reason ? `: ${esc(s.result.public_reason)}` : ''}`, `#pipeline-title-${s.gate}`]);
+    for (const c of stepTotals(s).failed) items.push(['warn', `${gateName(s.gate)}: lượt gọi AI ${esc(CALL_LABEL[c.result] || c.result)}${c.error ? `: ${esc(c.error)}` : ''}`, `#pipeline-title-${s.gate}`]);
   }
   const ev = events.filter(e => !TECHNICAL_EVENTS.has(e.event_type) && eventState(e) !== 'ok').slice(-3);
-  for (const e of ev) items.push([eventState(e), `${esc(describeEvent(e))}${e.public_message ? ` — ${esc(e.public_message)}` : ''} · ${fmt(e.created_at)}`, '#events']);
+  for (const e of ev) items.push([eventState(e), `${esc(describeEvent(e))}${e.public_message ? `: ${esc(e.public_message)}` : ''} · ${fmt(e.created_at)}`, '#events']);
   if (!items.length) return '';
   return `<aside class="attention" aria-label="Điểm cần chú ý"><b>Điểm cần chú ý (${items.length})</b><ul>${items.map(([st, text, href]) => `<li class="st-${st}"><a href="${href}">${text}</a></li>`).join('')}</ul></aside>`;
 }
@@ -280,7 +280,7 @@ function renderAttemptHistory(trace) {
   const body = runs.map((run, i) => {
     const [state, label] = runState(run, i === runs.length - 1 && trace.root.live);
     const gates = run.gates || [], calls = run.calls || [];
-    const content = `<p class="meta">${fmt(run.created_at)} → ${fmt(run.updated_at)} · worker ${esc(run.worker_id || '—')} · ngân sách lượt này: ${budgetCell(run.budget_used, run.budget_limit)}</p>
+    const content = `<p class="meta">${fmt(run.created_at)} → ${fmt(run.updated_at)} · worker ${esc(run.worker_id || 'chưa có')} · ngân sách lượt này: ${budgetCell(run.budget_used, run.budget_limit)}</p>
       ${gates.map(g => gateStep(g)).join('')}${calls.map(c => callStep(c.evidence || {})).join('')}
       ${run.trigger === 'rollback' ? rollbackStep(run, trace.root.live && i === runs.length - 1) : ''}`;
     return det(`run-${run.id}:history`, `<b>Lượt #${esc(run.id)} · ${esc(runTitle(run))}</b> ${tag(state, label)} · ${calls.length} lượt gọi AI`, content);
@@ -305,7 +305,7 @@ const pct = (p) => `${Math.round(Number(p) * 100)}%`;
 // Top 3 xác suất, bỏ nhãn < 1%.
 const topProbs = (probs = {}) => Object.entries(probs).sort((a, b) => b[1] - a[1]).filter(([, p]) => p >= 0.01)
   .slice(0, 3).map(([k, p]) => `${PROB_LABEL[k] || k} ${pct(p)}`).join(' · ');
-const shadowTag = (x) => (x?.shadow ? ' <span class="pill">shadow — chỉ ghi log</span>' : '');
+const shadowTag = (x) => (x?.shadow ? ' <span class="pill">shadow: chỉ ghi log</span>' : '');
 
 function classifiedRows(d) {
   const rows = [];
@@ -316,7 +316,7 @@ function classifiedRows(d) {
     rows.push(['Nguy hiểm', `${esc(topProbs(d.danger.probs))}${labels.length ? ` → soát: ${esc(labels.join(', '))}` : ''}${shadowTag(d.danger)}`]);
   }
   if (d.rules) rows.push(['Luật cứng', d.rules.needed ? `${esc(d.rules.mode === 'split' ? 'quá rộng' : 'mơ hồ')}: ${esc((d.rules.reasons || []).join('; '))}` : 'rõ']);
-  if (d.clarify) rows.push(['Làm rõ', d.clarify.needed ? `có (${esc(d.clarify.mode)}) · nguồn: ${esc((d.clarify.source || []).join(', ') || '—')}` : 'không']);
+  if (d.clarify) rows.push(['Làm rõ', d.clarify.needed ? `có (${esc(d.clarify.mode)}) · nguồn: ${esc((d.clarify.source || []).join(', ') || 'chưa có')}` : 'không']);
   return rows;
 }
 
@@ -341,7 +341,7 @@ function renderEvents(events) {
     return `<li class="event-row st-${state}"><div class="line1"><b>${esc(describeEvent(e))}</b>
         <span class="meta">${fmt(e.created_at)} · ${esc(actor)}</span></div>
       ${e.public_message ? `<div style="margin-top:4px">${esc(e.public_message)}</div>` : ''}
-      ${det(`event-${e.run_id ?? ''}-${e.created_at}-${e.event_type}-${i}`, 'Thông tin kỹ thuật của sự kiện', `<div class="meta">${esc(e.event_type)} · ${esc(e.transition || 'không đổi trạng thái')} · ticket #${esc(e.ticket_id)} · ${esc(e.actor_id || '—')}</div>${e.internal_detail ? eventDetail(e) : ''}`)}</li>`;
+      ${det(`event-${e.run_id ?? ''}-${e.created_at}-${e.event_type}-${i}`, 'Thông tin kỹ thuật của sự kiện', `<div class="meta">${esc(e.event_type)} · ${esc(e.transition || 'không đổi trạng thái')} · ticket #${esc(e.ticket_id)} · ${esc(e.actor_id || 'chưa có')}</div>${e.internal_detail ? eventDetail(e) : ''}`)}</li>`;
   };
   const recent = shown.slice(-6), earlier = shown.slice(0, -6), technical = events.filter(e => TECHNICAL_EVENTS.has(e.event_type));
   return `<ol class="event-list">${recent.map(row).join('')}</ol>
@@ -402,9 +402,9 @@ function renderPlan(p, root, children, trace) {
       <dl class="kv">
         ${plan.read_only_admin_verification ? '<dt>Kiểm tra trang admin</dt><dd>Chỉ quan sát giao diện; không cấp quyền sửa vùng đặc quyền.</dd>' : ''}
         <dt>Mức duyệt</dt><dd>${esc(TIER_TEXT[p.tier] || p.tier)}</dd>
-        <dt>Rủi ro</dt><dd>${esc(RISK_TEXT[plan.risk || p.risk] || plan.risk || p.risk || '—')}</dd>
-        <dt>File được sửa</dt><dd>${(plan.allowed_scope || p.allowed_scope || []).map(code).join(', ') || '—'}</dd>
-        <dt>Quyền</dt><dd>${(plan.capabilities || p.capabilities || []).map(capText).join(', ') || '—'}</dd>
+        <dt>Rủi ro</dt><dd>${esc(RISK_TEXT[plan.risk || p.risk] || plan.risk || p.risk || 'chưa có')}</dd>
+        <dt>File được sửa</dt><dd>${(plan.allowed_scope || p.allowed_scope || []).map(code).join(', ') || 'chưa có'}</dd>
+        <dt>Quyền</dt><dd>${(plan.capabilities || p.capabilities || []).map(capText).join(', ') || 'chưa có'}</dd>
         <dt>Bản kế hoạch</dt><dd>${esc(p.revision)}</dd>
       </dl>
       ${plan.grounding ? `<details><summary>Dẫn chứng code tại ${esc(plan.grounding.sha)}</summary>${plan.grounding.evidence.map(e => `<div class="blk"><b>${esc(e.target)}</b><pre>${esc(e.quote)}</pre><div>Trước: ${esc(e.before)}</div><div>Sau: ${esc(e.after)}</div><div>Kiểm chứng: ${esc(e.verify)}</div></div>`).join('')}</details>` : ''}
@@ -506,7 +506,7 @@ function renderConfirm(request, candidate) {
   const rollback = ui.confirm === 'rollback';
   const files = [...new Set((candidate?.commits || []).flatMap(c => c.files || []))];
   const consequences = rollback ? [
-    `AI Board kiểm tra nhánh ${code(candidate?.branch)} (${esc(candidate?.commits?.length)} commit, sửa ${files.map(code).join(', ') || '—'}).`,
+    `AI Board kiểm tra nhánh ${code(candidate?.branch)} (${esc(candidate?.commits?.length)} commit, sửa ${files.map(code).join(', ') || 'chưa có'}).`,
     'Nếu nhánh chưa được merge: xóa nhánh. Web đang chạy không đổi vì thay đổi chưa từng lên web.',
     'Nếu đã merge vào dev/main: tạo nhánh revert mới. Cần người mở PR và merge nhánh đó để gỡ thay đổi khỏi web.',
     'Revert chỉ gỡ code. Trường dữ liệu đã được mở rộng và bản ghi người dùng đã ghi vẫn được giữ, không bị hoàn tác theo.',
@@ -591,7 +591,7 @@ function renderWrites(t) {
       ${ui.reconcile?.identity === w.identity ? reconcileForm(w, writes)
         : `<button type="button" class="btn" data-action="reconcile-open" data-identity="${esc(w.identity)}">Đối chiếu bước này</button>`}</div>`).join('')}
     ${resolved.length ? det('writes-resolved', `Đã đối chiếu (${resolved.length})`, resolved.map((w) => `<div class="write-row"><div class="line1">
-        <b>Bước ${esc(w.step)} · ${esc(w.tool)}</b>${writeTag(w.status)}<span class="meta">${esc(w.resolved_by || '—')} · ${fmt(w.resolved_at)}</span></div>
+        <b>Bước ${esc(w.step)} · ${esc(w.tool)}</b>${writeTag(w.status)}<span class="meta">${esc(w.resolved_by || 'chưa có')} · ${fmt(w.resolved_at)}</span></div>
       ${w.reason ? `<div class="meta">${esc(w.reason)}</div>` : ''}${w.evidence ? `<pre>${esc(evidenceText(w.evidence))}</pre>` : ''}</div>`).join('')) : ''}
   </section>`;
 }
