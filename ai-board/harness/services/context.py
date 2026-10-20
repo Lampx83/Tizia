@@ -191,7 +191,7 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
             parts.append('EXISTING FEATURE TARGET: ' + ', '.join(known) + '. Modify this renderer; do not add a different page.')
             for target in known:
                 parts.append(f'FILE {target}\n' + file_context.excerpt(tools._show(source, commit, target),
-                    ['queueline'] if functional.select({'request_title': request.get('subject'), 'request_detail': request.get('body')}) == functional.QUEUE_PROBE
+                    ['queueline', 'worker_ready', 'eta_s'] if functional.select({'request_title': request.get('subject'), 'request_detail': request.get('body')}) == functional.QUEUE_PROBE
                     else keywords(request.get('body'), request.get('subject')), budget=1500, filename=target))
         if not file and request.get("owned_files"):  # L2: file folder sở hữu lên đầu, lấy dàn ý
             targets = list(dict.fromkeys([*request["owned_files"], *targets]))

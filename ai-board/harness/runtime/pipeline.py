@@ -169,28 +169,32 @@ class Deps:
                     or getattr(self.models, 'vllm_url', '') and resolved_role == 'gate3_heavy'
                     else self.provider)
         for attempt, wait_s in enumerate((0.0,) + MODEL_RETRY_BACKOFF_S):
+            if not budget.tick() or not budget.can_request():
+                raise BudgetExhausted('budget exhausted before model retry')
             if wait_s:
                 if getattr(self.models, 'deadline', None) is not None and wait_s >= self.models.remaining_s():
                     raise TimeoutError('Model request deadline exceeded')
                 self.sleep(wait_s)
+            if not budget.tick() or not budget.can_request():
+                raise BudgetExhausted('budget exhausted before model retry')
             started = time.monotonic()
             try:
                 if hasattr(self.models, 'generate_for'):
-                    body = self.models.generate_for(resolved_role, model, prompt, format=format, extra=extra, **options)
+                    body = self.models.generate_for(resolved_role, model, prompt, format=format, extra=extra, _single_attempt=True, **options)
                 else:
-                    body = (self.models.generate(model, prompt, format=format, extra=extra, **options) if extra
-                        else self.models.generate(model, prompt, format=format, **options))
+                    body = (self.models.generate(model, prompt, format=format, extra=extra, _single_attempt=True, **options) if extra
+                        else self.models.generate(model, prompt, format=format, _single_attempt=True, **options))
                 break
             except Exception as error:
                 metrics = meter.measure(provider, {}, int((time.monotonic() - started) * 1000))
                 n = meter.units(provider, metrics)
                 budget.spend("model_calls")
                 budget.spend("units", n)
+                self._trace(gate, model, prompt, prompt_name, "", metrics, n,
+                            "timeout" if isinstance(error, TimeoutError) else "http_error", str(error),
+                            child, iteration, provider=provider, request=_request_attrs(options, extra, role=resolved_role))
                 last_attempt = self.stop_on_model_error or attempt == len(MODEL_RETRY_BACKOFF_S)
                 if last_attempt or not _retryable_model_error(error):
-                    self._trace(gate, model, prompt, prompt_name, "", metrics, n,
-                                "timeout" if isinstance(error, TimeoutError) else "http_error", str(error),
-                                child, iteration, provider=provider, request=_request_attrs(options, extra, role=resolved_role))
                     raise
         metrics = meter.measure(provider, body, int((time.monotonic() - started) * 1000))
         n = meter.units(provider, metrics)
@@ -219,14 +223,14 @@ class Deps:
             client = router.client(candidate, self.models)
             evidence = router.evidence(role, candidate, reason if last_error is None else 'infrastructure_failover')
             for wait_s in (0.0,) + MODEL_RETRY_BACKOFF_S:
-                if not budget.tick():
-                    raise RuntimeError('budget exhausted before routed model call')
+                if not budget.tick() or not budget.can_request():
+                    raise BudgetExhausted('budget exhausted before routed model call')
                 if wait_s:
                     if getattr(client, 'deadline', None) is not None and wait_s >= client.remaining_s():
                         raise TimeoutError('Model request deadline exceeded')
                     self.sleep(wait_s)
-                if not budget.tick():
-                    raise RuntimeError('budget exhausted before routed model call')
+                if not budget.tick() or not budget.can_request():
+                    raise BudgetExhausted('budget exhausted before routed model call')
                 started = time.monotonic()
                 if self.trace:
                     self.trace.note('tool', 'model routing', f"{role}: {candidate['id']} ({evidence['reason']})", evidence)

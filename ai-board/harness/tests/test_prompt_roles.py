@@ -28,8 +28,8 @@ class FakeModels:
     def __init__(self, script, routing=None):
         self.script, self.calls, self.routing = list(script), [], routing
 
-    def generate(self, model, prompt, *, format=None, extra=None, **options):
-        self.calls.append({"model": model, "prompt": prompt, "extra": extra or {}, "options": options})
+    def generate(self, model, prompt, *, format=None, extra=None, _single_attempt=False, **options):
+        self.calls.append({"model": model, "prompt": prompt, "extra": extra or {}, "options": options, "single_attempt": _single_attempt})
         item = self.script.pop(0) if len(self.script) > 1 else self.script[0]
         return {"response": json.dumps(item), "prompt_eval_count": 1, "eval_count": 1}
 
@@ -51,6 +51,7 @@ def test_split_off_sends_one_user_prompt_and_no_system(monkeypatch):
     assert run(models)["status"] == "proposed"
     call = models.calls[0]
     assert "system" not in call["extra"] and "thinking" not in call["extra"] and call["options"] == {"num_predict": call["options"]["num_predict"], "temperature": 0}
+    assert call["single_attempt"] is True
     assert not call["prompt"].endswith(prompt_roles.RESTATE)
 
 

@@ -79,8 +79,10 @@ def test_failed_call_is_charged_by_wall_time_traced_and_reraised(tmp_path):
         raise AssertionError("lỗi gọi model phải raise lại")
     tracer.flush()
     # Timeout thử lại 2 lần (MODEL_RETRY_BACKOFF_S) trước khi bỏ cuộc — 3 lượt gọi, 3 lượt tính phí,
-    # nhưng chỉ 1 dòng trace (trace ghi lúc bỏ cuộc hẳn, không ghi từng lần thử lại thoáng qua).
-    assert budget.units == 3 and budget.model_calls == 3 and sent[0]["result"] == "timeout" and len(sent) == 1
+    # Mỗi HTTP attempt có trace để failed retries không biến mất khỏi ledger server.
+    assert budget.units == 3 and budget.model_calls == 3 and len(sent) == 3
+    assert all(call["result"] == "timeout" for call in sent)
+    assert sum(call["budget_units"] for call in sent) == budget.units
 
 
 def test_trace_batches_per_gate_and_marks_retries():

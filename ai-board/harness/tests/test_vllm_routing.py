@@ -212,3 +212,35 @@ def test_one_call_can_force_thinking_without_changing_its_role():
     forced, plain = calls[0][2], calls[1][2]
     assert forced['chat_template_kwargs'] == {'enable_thinking': True} and forced['max_tokens'] == 100 + models.routing.reasoning_tokens()
     assert plain['chat_template_kwargs'] == {'enable_thinking': False} and plain['max_tokens'] == 100
+
+
+@pytest.mark.parametrize('mode', ['legacy_ollama', 'legacy_vllm', 'routed_vllm'])
+@pytest.mark.parametrize('nested', [False, True])
+def test_retry_stops_at_shared_call_cap_without_hidden_http_attempts(mode, nested, monkeypatch):
+    from runtime.budget import BudgetExhausted, ChildBudget
+    from providers import client
+    monkeypatch.setattr(client, '_sleep', lambda _: None)
+    with gateway(status=503) as (url, calls):
+        models = OllamaClient.from_env({'OLLAMA_URL': url, 'VLLM_URL': url if 'vllm' in mode else '',
+            'GATE3_MODEL_HEAVY': 'heavy', 'AI_BOARD_MODEL_ROUTING': 'true' if mode == 'routed_vllm' else 'false'})
+        budget, trace = (ChildBudget(Budget(), max_model_calls=1) if nested else Budget(max_model_calls=1)), Tracer()
+        with pytest.raises(BudgetExhausted, match='budget exhausted'):
+            Deps(models=models, notify=None, sleep=lambda _: None, trace=trace).call_model('heavy', 'p', gate=3,
+                role='gate3_heavy', budget=budget)
+        assert len(calls) == budget.model_calls == len(trace.pending) == 1
+        assert trace.pending[0]['budget_units'] == budget.units
+        assert '_single_attempt' not in json.dumps(calls), 'transport control is not a provider payload option'
+
+
+@pytest.mark.parametrize('routing', ['false', 'true'])
+def test_retry_backoff_cannot_start_another_request_after_wall_allowance_expires(routing):
+    from runtime.budget import BudgetExhausted
+    with gateway(status=503) as (url, calls):
+        models = OllamaClient.from_env({'VLLM_URL': url, 'GATE3_MODEL_HEAVY': 'heavy', 'AI_BOARD_MODEL_ROUTING': routing})
+        budget = Budget()
+        def expire(_):
+            budget.elapsed_before_s = budget.max_wall_clock_s
+        with pytest.raises(BudgetExhausted, match='budget exhausted'):
+            Deps(models=models, notify=None, sleep=expire).call_model('heavy', 'p', gate=3,
+                role='gate3_heavy', budget=budget)
+        assert len(calls) == budget.model_calls == 1

@@ -12,13 +12,23 @@ if str(HARNESS_DIR) not in sys.path:
 
 
 @pytest.fixture(autouse=True)
-def _no_repomap(monkeypatch):
+def _no_repomap(monkeypatch, request):
     """repomap.related dựng chỉ mục cả public/ (~20 s/process): mọi test mặc định nhận [] — test của repomap
     tự monkeypatch lại khi cần kiểm tra hành vi có gợi ý."""
     import repomap
     import tools
     monkeypatch.setattr(repomap, "related", lambda *a, **kw: [])
     monkeypatch.setattr(tools, "matching_files", lambda *a, **kw: [])  # same index build, same reason
+    if request.module.__name__ == "test_eval_strata":
+        return  # The deterministic baseline must retain real product-repository retrieval.
+    import code_index
+    ui_index = code_index.ui_index
+    def fixture_index(source, *args, **kwargs):
+        # Corpus tests use fixed gold replies; retrieval tests keep their actual temporary repositories.
+        if request.module.__name__ == "test_eval_corpus" or Path(source).resolve() == HARNESS_DIR.parents[1].resolve():
+            return {"files": {}, "words": {}}
+        return ui_index(source, *args, **kwargs)
+    monkeypatch.setattr(code_index, "ui_index", fixture_index)
 
 
 @pytest.fixture
