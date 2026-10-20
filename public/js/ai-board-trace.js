@@ -104,6 +104,19 @@ const EVENT_LABELS = {
   gate_proof_reused: 'Dùng lại kết quả kiểm tra đã có', gate_proof_invalidated: 'Kết quả kiểm tra cũ không còn hợp lệ',
   transient_retry: 'Đã xếp hàng thử lại sau lỗi hạ tầng',
 };
+export function budgetSummary(totals = {}) {
+  const units = { gpu_s: 'giây ngân sách', k_tokens: 'k token', mixed: 'đơn vị theo nguồn xử lý', unknown: 'đơn vị chưa xác định' };
+  const unit = totals.budget_unit || 'gpu_s';
+  return {
+    unit: units[unit] || units.unknown,
+    combined: ['gpu_s', 'k_tokens'].includes(unit) ? totals.budget_used : null,
+    providers: Object.entries(totals.by_provider || {}).map(([provider, values]) => ({
+      provider, used: values.budget_used, unit: units[values.budget_unit] || units.unknown,
+      missing: values.missing?.budget_units || 0,
+    })),
+  };
+}
+
 export function describeEvent(event = {}) {
   return EVENT_LABELS[event.event_type] || 'Cập nhật xử lý yêu cầu';
 }

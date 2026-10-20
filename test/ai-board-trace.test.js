@@ -212,7 +212,7 @@ test('admin trace view is admin-only and sums GPU seconds, tokens, loads and ret
     assert.equal(trace.runs[0].totals.gpu_s, 24.8);
     assert.equal(trace.runs[1].totals.calls, 1);
 
-    const { by_model: byModel, ...totals } = trace.totals;
+    const { by_model: byModel, by_provider: byProvider, ...totals } = trace.totals;
     assert.deepEqual(totals, {
       calls: 3, tokens_in: 4010, tokens_out: 705, model_loads: 1, retries: 1, gpu_s: 24.8, wall_s: 28,
       budget_used: 0, budget_limit: 200, budget_unit: 'gpu_s',
@@ -398,4 +398,41 @@ test('trace ingest keeps what the model knew, which tools ran, what it changed a
     assert.equal(full.evaluation[1].detail.length, 800);
     for (const e of [junk, absent]) assert.deepEqual([e.notes, e.edits, e.evaluation], [[], null, []]);
   } finally { await api.close(); }
+});
+
+
+test('mixed provider trace keeps incompatible budget units separate through the admin API', async () => {
+  const {db,store}=await fixture();
+  const {request_id:requestId}=await newRequest(store,'trace-mixed-budget');
+  const {ticket,lease,run}=await leasedRun(store,'mixed-budget-worker');
+  const api=await serve(store);
+  try {
+    const sent=await api.postTraces(ticket.id,{...lease,run_id:run.id,calls:[
+      call('mixed-local',{provider:'ollama',budget_units:5,metrics:{gpu_ms:4800,wall_ms:5100,tokens_in:100,tokens_out:20}}),
+      call('mixed-api',{provider:'api',budget_units:2,metrics:{wall_ms:2000,tokens_in:1000,tokens_out:200}}),
+    ]});
+    assert.equal(sent.status,200);
+    const response=await api.getTrace(requestId,9);assert.equal(response.status,200);
+    const trace=await response.json();
+    assert.equal(trace.totals.budget_unit,'mixed');
+    assert.equal(trace.totals.by_provider.ollama.budget_used,5);
+    assert.equal(trace.totals.by_provider.ollama.budget_unit,'gpu_s');
+    assert.equal(trace.totals.by_provider.api.budget_used,2);
+    assert.equal(trace.totals.by_provider.api.budget_unit,'k_tokens');
+    assert.equal(trace.totals.by_provider.api.gpu_s,null,'unmeasured GPU time remains unknown');
+    assert.equal(trace.totals.by_provider.api.missing.gpu_ms,1);
+    assert.equal((await api.getTrace(requestId,1)).status,403);
+    const unknown=await api.postTraces(ticket.id,{...lease,run_id:run.id,calls:[
+      call('mixed-unknown',{provider:'not-known',budget_units:null}),
+      call('api-missing',{provider:'api',budget_units:null,metrics:{wall_ms:1000}}),
+    ]});
+    assert.equal(unknown.status,200);
+    const after=await(await api.getTrace(requestId,9)).json();
+    assert.equal(after.totals.by_provider.unknown.budget_unit,'unknown');
+    assert.equal(after.totals.by_provider.unknown.budget_used,null);
+    assert.equal(after.totals.by_provider.api.budget_used,null);
+    assert.equal(after.totals.by_provider.api.missing.budget_units,1);
+    assert.equal(after.totals.by_provider.api.tokens_in,1000,'retain known partial measurements');
+    assert.equal(after.totals.by_provider.api.missing.tokens_in,1);
+  } finally {await api.close();db.close();}
 });

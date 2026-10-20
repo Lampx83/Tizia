@@ -1724,7 +1724,22 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     const evidences = allCalls.map((c) => c.evidence);
     const byModel = {};
     for (const e of evidences) (byModel[e?.model || 'unknown'] ??= []).push(e);
-    const onlyApi = evidences.length > 0 && evidences.every((e) => e?.provider === 'api');
+    const byProvider = Object.create(null);
+    const providerUnit = provider => provider === 'api' ? 'k_tokens' : ['ollama', 'vllm'].includes(provider) ? 'gpu_s' : 'unknown';
+    for (const e of evidences) (byProvider[e?.provider || 'unknown'] ??= []).push(e);
+    const units = new Set(Object.entries(byProvider).map(([provider]) => providerUnit(provider)));
+    const budgetUnit = units.size > 1 ? 'mixed' : [...units][0] || 'gpu_s';
+    const providerTotals = Object.fromEntries(Object.entries(byProvider).map(([provider, list]) => {
+      const totals = { ...summarizeCalls(list), budget_unit: providerUnit(provider), missing: {} };
+      // Missing measurements are not free usage; partial sums remain explicitly marked.
+      for (const [metric, field] of [['gpu_ms', 'gpu_s'], ['wall_ms', 'wall_s'], ['tokens_in', 'tokens_in'], ['tokens_out', 'tokens_out']]) {
+        totals.missing[metric] = list.filter(e => e?.metrics?.[metric] == null).length;
+        if (totals.missing[metric] === list.length) totals[field] = null;
+      }
+      totals.missing.budget_units = list.filter(e => e?.budget_units == null).length;
+      totals.budget_used = totals.missing.budget_units ? null : list.reduce((sum, e) => sum + e.budget_units, 0);
+      return [provider, totals];
+    }));
     const current = root.plan_hash && await db.get(`
       SELECT plan_hash, revision, tier, status, plan_json FROM ai_plans WHERE root_ticket_id=? AND plan_hash=?
       ORDER BY revision DESC LIMIT 1
@@ -1745,7 +1760,8 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
         by_model: Object.fromEntries(Object.entries(byModel).map(([model, list]) => [model, summarizeCalls(list)])),
         budget_used: root.cumulative_budget, // tổng tích lũy mọi lượt, chỉ để báo cáo
         budget_limit: root.budget_limit, // trần MỖI lượt
-        budget_unit: onlyApi ? 'k_tokens' : 'gpu_s',
+        budget_unit: budgetUnit,
+        by_provider: providerTotals,
       },
     };
   }

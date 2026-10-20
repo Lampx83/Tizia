@@ -1,11 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { projectPipeline, describeModelCall, describeEvent, loopActions, renderVerificationClaims } from '../public/js/ai-board-trace.js';
+import { projectPipeline, describeModelCall, describeEvent, loopActions, renderVerificationClaims, budgetSummary } from '../public/js/ai-board-trace.js';
 import { visitedNodes, renderGraph } from '../public/js/ai-board-hsm.js';
 const gate = (id, number, status, at = id) => ({ id, gate: number, status, created_at: at });
 const call = (id, gate, name, child = null) => ({ id, gate, created_at: id, evidence: { gate, prompt_name: name, child, call_id: `call-${id}` } });
 const run = (id, trigger, gates = [], calls = []) => ({ id, trigger, created_at: id, gates, calls });
 const byGate = (p, gate) => p.steps.find(s => s.gate === gate);
+
+test('budget presentation does not add incompatible units and preserves missing evidence', () => {
+  const mixed = budgetSummary({budget_unit:'mixed',budget_used:999,by_provider:{
+    ollama:{budget_used:5,budget_unit:'gpu_s',missing:{budget_units:0}},
+    api:{budget_used:2,budget_unit:'k_tokens',missing:{budget_units:0}},
+    unknown:{budget_used:null,budget_unit:'unknown',missing:{budget_units:1}},
+  }});
+  assert.equal(mixed.combined,null);
+  assert.deepEqual(mixed.providers.map(p=>p.used),[5,2,null]);
+  assert.deepEqual(mixed.providers.map(p=>p.unit),['giây ngân sách','k token','đơn vị chưa xác định']);
+  assert.equal(mixed.providers[2].missing,1);
+  assert.equal(budgetSummary({budget_unit:'gpu_s',budget_used:0}).combined,0);
+  assert.equal(budgetSummary({budget_unit:'k_tokens',budget_used:3}).combined,3);
+  assert.equal(budgetSummary({budget_unit:'unknown',budget_used:3}).combined,null);
+});
 
 test('request claims show pinned platform checks and escape untrusted evidence', () => {
   const html = renderVerificationClaims({ runs: [{ id: 7, spans: [{ name: 'verify_claim', attributes: {

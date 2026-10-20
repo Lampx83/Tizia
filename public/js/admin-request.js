@@ -4,7 +4,7 @@
 import { patchHtml } from './dom-morph.js';
 import { mountPrivatePreview } from './private-preview.js';
 import { installLightbox, pairBeforeAfter } from './lightbox.js';
-import { projectPipeline, describeModelCall, describeEvent, loopActions, stepTotals, TECHNICAL_EVENTS, TRACE_STEPS, renderVerificationClaims } from './ai-board-trace.js';
+import { projectPipeline, describeModelCall, describeEvent, loopActions, stepTotals, TECHNICAL_EVENTS, TRACE_STEPS, renderVerificationClaims, budgetSummary } from './ai-board-trace.js';
 import { renderHsm, renderGraph } from './ai-board-hsm.js';
 
 const $ = (s) => document.querySelector(s);
@@ -723,7 +723,7 @@ function renderSpanTimeline(trace) {
 
 function renderAiBoard(t) {
   const x = t.totals || {};
-  const unit = x.budget_unit === 'k_tokens' ? 'k tokens' : 'GPU-s';
+  const budget = budgetSummary(x);
   const root = t.root;
   const runs = t.runs || [];
   const [state, label] = ROOT_STATUS[root.status] || ['idle', root.status];
@@ -741,8 +741,9 @@ function renderAiBoard(t) {
         <a href="${esc(t.pull_request.url)}" target="_blank" rel="noopener noreferrer">#${esc(t.pull_request.number)}</a>
         · head ${code(String(t.pull_request.head_sha).slice(0, 10))}${riskOf(runs) ? ` · rủi ro ${code(riskOf(runs))}` : ''}</div>` : ''}</div>
     <div class="blk strip">
-      <span>Giới hạn mỗi lượt xử lý: <b>${fmtNum(x.budget_limit)}</b> ${unit}</span>
-      <span>Đã dùng qua mọi lượt: <b>${fmtNum(x.budget_used)}</b> ${unit}</span>
+      <span>Giới hạn mỗi lượt xử lý: <b>${fmtNum(x.budget_limit)}</b> ${esc(budget.unit)}</span>
+      <span>Ngân sách đã chốt qua các lượt: ${budget.combined == null ? 'Chưa có tổng cùng đơn vị' : `<b>${fmtNum(budget.combined)}</b> ${esc(budget.unit)}`}</span>
+      ${budget.providers.map(p => `<span>Theo vết đã ghi · ${esc(p.provider)}: <b>${fmtNum(p.used)}</b> ${esc(p.unit)}${p.missing ? ` · ${esc(p.missing)} lượt chưa có số đo ngân sách` : ''}</span>`).join('')}
       <span>GPU đã đo: <b>${esc(x.gpu_s)}</b> giây</span>
       <span>Token vào / ra: <b>${fmtNum(x.tokens_in)} / ${fmtNum(x.tokens_out)}</b></span>
       <span>Gọi AI qua mọi lượt: <b>${esc(x.calls)}</b></span>
