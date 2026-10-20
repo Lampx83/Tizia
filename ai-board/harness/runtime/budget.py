@@ -19,7 +19,7 @@ VERIFY_RESERVE = {"model_calls": 2, "tool_calls": 0, "tokens": 20_000, "wall_clo
 
 
 class BudgetExhausted(RuntimeError):
-    pass
+    failure_class = 'budget'
 
 
 @dataclass
@@ -90,6 +90,10 @@ class Budget:
 
     def exhausted(self) -> str | None:
         """Tên cap đã chạm, None nếu còn chỗ."""
+        from runtime.root_allowance import current
+        root = current()
+        if root is not None and (reason := root.exhausted()):
+            return reason
         if self.elapsed_s >= self.max_wall_clock_s:
             return "wall_clock_s"
         for cap in RUN_CAPS:
@@ -109,6 +113,14 @@ class Budget:
         """Ghi nợ n đơn vị cap. False nếu ghi xong là chạm/vượt trần."""
         if cap not in CAPS:
             raise ValueError(f"cap lạ: {cap}")
+        if cap == 'tool_calls':
+            from runtime.root_allowance import current
+            root = current()
+            if root is not None:
+                if type(n) is not int or n < 0:
+                    raise ValueError('invalid tool charge')
+                for _ in range(n):
+                    root.reserve('tool')
         setattr(self, cap, getattr(self, cap) + n)
         return self.exhausted() is None
 
@@ -131,7 +143,10 @@ class Budget:
 
     def can_afford(self, reserve: dict = VERIFY_RESERVE) -> bool:
         """Còn đủ ngân sách cho `reserve` (model_calls, tool_calls, tokens, wall_clock_s) mà không chạm trần?"""
-        return (self.max_model_calls - self.model_calls >= reserve["model_calls"]
+        from runtime.root_allowance import current
+        root = current()
+        return ((root is None or root.can_afford(reserve))
+                and self.max_model_calls - self.model_calls >= reserve["model_calls"]
                 and self.max_tool_calls - self.tool_calls >= reserve["tool_calls"]
                 and self.max_tokens - self.tokens >= reserve["tokens"]
                 and self.max_wall_clock_s - self.elapsed_s >= reserve["wall_clock_s"]
@@ -141,7 +156,22 @@ class Budget:
         """Ghi 1 lượt sửa nội dung vào ledger toàn run. False nếu đã hết 3 lượt (không ghi thêm)."""
         if self.semantic_repairs >= self.max_semantic_repairs:
             return False
+        from runtime.root_allowance import current
+        root = current()
+        if root is not None:
+            root.reserve('semantic_repair')
         self.semantic_repairs += 1
+        return True
+
+    def spend_quality_switch(self) -> bool:
+        if self.quality_switches:
+            return False
+        from runtime.root_allowance import current
+        root = current()
+        if root is not None:
+            if not root.reserve_quality_switch():
+                return False
+        self.quality_switches = 1
         return True
 
 

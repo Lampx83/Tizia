@@ -1025,7 +1025,7 @@ function bind(root) {
 export function queueLine(q) {
   if (!q) return '';
   if (q.reason === 'feature_predecessor') return '<div class="sgf-it-queue">Đang chờ yêu cầu trước của chức năng này hoàn tất.</div>';
-  if (q.deferred) return '<div class="sgf-it-queue">Hôm nay Ban đã làm nhiều việc cho bạn rồi, yêu cầu này sẽ được làm tiếp vào ngày mai.</div>';
+  if (q.deferred) return '<div class="sgf-it-queue">Ngân sách xử lý trong 24 giờ gần nhất đang được dùng hoặc giữ chỗ. Yêu cầu sẽ chờ khi có ngân sách trở lại.</div>';
   if (q.worker_ready !== true || !Number.isFinite(q.eta_s)) return '<div class="sgf-it-queue">Đang chờ Ban điều hành sẵn sàng, chưa thể ước tính thời gian.</div>';
   const min = Math.max(1, Math.round((q.eta_s || 0) / 60));
   return `<div class="sgf-it-queue">Đang xếp hàng: thứ ${Number(q.position)} · khoảng ${min} phút nữa tới lượt</div>`;

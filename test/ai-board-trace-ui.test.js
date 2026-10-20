@@ -1,11 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { projectPipeline, describeModelCall, describeEvent, loopActions, renderVerificationClaims, budgetSummary } from '../public/js/ai-board-trace.js';
+import { projectPipeline, describeModelCall, describeEvent, loopActions, renderVerificationClaims, budgetSummary, renderRootAllowance } from '../public/js/ai-board-trace.js';
 import { visitedNodes, renderGraph } from '../public/js/ai-board-hsm.js';
 const gate = (id, number, status, at = id) => ({ id, gate: number, status, created_at: at });
 const call = (id, gate, name, child = null) => ({ id, gate, created_at: id, evidence: { gate, prompt_name: name, child, call_id: `call-${id}` } });
 const run = (id, trigger, gates = [], calls = []) => ({ id, trigger, created_at: id, gates, calls });
 const byGate = (p, gate) => p.steps.find(s => s.gate === gate);
+
+test('root work allowance explains held capacity and does not show legacy unknown usage as free', () => {
+  assert.equal(renderRootAllowance(null), '');
+  const limits = { model_calls: 40, tool_calls: 200, tokens: 200000, semantic_repairs: 3, quality_switches: 1 };
+  const html = renderRootAllowance({ limits, used: { model_calls: 3, tool_calls: 1, tokens: 1060, semantic_repairs: 3, quality_switches: 1 }, unknown_model_attempts: 1 });
+  assert.match(html, /Ngân sách toàn yêu cầu/);
+  assert.match(html, /1\.060/);
+  assert.match(html, /chưa xác định đủ token/);
+  const legacy = renderRootAllowance({ limits, used: { model_calls: 0, tokens: 0 }, blocked_reason: 'legacy_allowance_unknown' });
+  assert.match(legacy, /chưa có đủ số liệu/);
+  assert.doesNotMatch(legacy, /0\s*\/\s*40/);
+});
 
 test('budget presentation does not add incompatible units and preserves missing evidence', () => {
   const mixed = budgetSummary({budget_unit:'mixed',budget_used:999,by_provider:{

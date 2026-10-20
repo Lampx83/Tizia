@@ -58,6 +58,9 @@ async function serve(store) {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
   return {
+    postAllowance: (ticketId, op, body) => fetch(`${base}/api/ai-board/worker/tickets/${ticketId}/allowance/${op}`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-ai-worker-key': KEY }, body: JSON.stringify(body),
+    }),
     postTraces: (ticketId, body) => fetch(`${base}/api/ai-board/worker/tickets/${ticketId}/traces`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-ai-worker-key': KEY }, body: JSON.stringify(body),
     }),
@@ -88,6 +91,24 @@ function call(callId, over = {}) {
 }
 
 const modelRows = async (db) => (await db.prepare(`SELECT * FROM ai_gate_traces WHERE status='model_call' ORDER BY id`).all());
+
+test('admin trace exposes durable root allowance without exposing reservation credentials', async () => {
+  const { db, store } = await fixture();
+  const request = await newRequest(store, 'root-work-admin-trace');
+  const { ticket, lease } = await leasedRun(store, 'root-work-trace-worker');
+  const api = await serve(store);
+  try {
+    assert.equal((await api.postAllowance(ticket.id, 'reserve', { ...lease, idempotency_key: 'admin-trace-reservation',
+      kind: 'model', provider: 'vllm', token_bound: 8192 })).status, 200);
+    const response = await api.getTrace(request.request_id, 9);
+    assert.equal(response.status, 200);
+    const trace = await response.json();
+    assert.equal(trace.root_work.used.tokens, 8192);
+    assert.equal(trace.root_work.unknown_model_attempts, 1);
+    assert.doesNotMatch(JSON.stringify(trace.root_work), /lease_hash|lease_token/);
+    assert.equal((await api.getTrace(request.request_id, 1)).status, 403);
+  } finally { await api.close(); await db.close(); }
+});
 
 test('trace ingest stores one sanitized row per call and is idempotent by call_id', async () => {
   const { db, store } = await fixture();

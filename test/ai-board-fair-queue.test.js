@@ -76,6 +76,8 @@ test('over the daily GPU cap a new run waits; the cap counts the requester, not 
   assert.equal(await store.claimNext({ workerId: 'w2', mode: 'shadow' }), null);
   assert.equal((await store.listRequestsForOwner(1, 'it')).find((r) => r.queue)?.queue.deferred, true);
   await submit(2);
+  await db.prepare("UPDATE ai_tickets SET priority=10 WHERE status='queued' AND source_request_id IN (SELECT id FROM requests WHERE owner_user_id=1)").run();
+  assert.equal((await store.listRequestsForOwner(2, 'it'))[0].queue.position, 1, 'quota-deferred roots do not precede eligible work');
   assert.ok(await store.claimNext({ workerId: 'w3', mode: 'shadow' })); // someone else is not held back
 });
 

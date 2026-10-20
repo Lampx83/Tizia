@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+from contextlib import nullcontext
 import hashlib
 import json
 import os
@@ -240,7 +241,8 @@ class _Execution:
                     else:
                         result = self.run_gate(gate, {}, deps, budget, state)
                 except Exception as error:  # model/network/tool outage, not the candidate's code
-                    result = {"gate": gate, "blocked": True, "reason": str(error)[:1000], "failure_class": "transient"}
+                    result = {"gate": gate, "blocked": True, "reason": str(error)[:1000],
+                              "failure_class": getattr(error, 'failure_class', 'transient')}
                 if self.attempt_checkpoint is not None:
                     self.attempt_checkpoint.save(budget)
                 if getattr(deps, "trace", None):
@@ -309,7 +311,8 @@ class _Execution:
         if not self.budget.tick():
             self.kind = "budget"
             return "done"
-        if os.getenv("AI_BOARD_TOOL_LOOP") == "1" and not self.budget.spend_repair():  # ledger sửa nội dung chung với loop
+        from runtime.root_allowance import current as root_allowance
+        if (os.getenv("AI_BOARD_TOOL_LOOP") == "1" or root_allowance() is not None) and not self.budget.spend_repair():
             return "done"
         self.repairs.append({"gate": last["gate"], "reason": last["reason"]})
         self.repair_reason = f"cổng {last['gate']}: {last['reason']}"
@@ -930,7 +933,10 @@ class HttpWorker:
                                               "idempotency_key": f"{prefix}:release-conflict"})
                     return {"status": "folder_conflict", "ticket_id": ticket_id, "run_id": run["id"]}
                 folder_src = {"path": path, "branch": branch, "tip": tip}
-            return self._run_leased(ticket_id, lease, prefix, snapshot, run, trigger, folder_src)
+            from runtime.root_allowance import root_scope
+            allowance = root_scope(self.client, ticket_id, lease) if snapshot.get('root_allowance_protocol') == 1 else nullcontext()
+            with allowance:
+                return self._run_leased(ticket_id, lease, prefix, snapshot, run, trigger, folder_src)
         finally:
             self._report_gate = None
             if folder_src:

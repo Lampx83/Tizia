@@ -481,8 +481,11 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
                 # One quality switch uses the final existing repair attempt, never a fresh budget.
                 if (iteration == MAX_INNER_RETRIES and not getattr(budget, 'quality_switches', 0)
                         and routing.candidates(role, exclude=failed_candidates)):
-                    routing_options.update(exclude_candidates=failed_candidates, route_reason='quality_switch')
-                    budget.quality_switches = 1
+                    if budget.spend_quality_switch():
+                        routing_options.update(exclude_candidates=failed_candidates, route_reason='quality_switch')
+            from runtime.root_allowance import current as root_allowance
+            if iteration and root_allowance() is not None and not budget.spend_repair():
+                return {'gate': 3, 'blocked': True, 'diffs': diffs, 'reason': 'root repair allowance exhausted', 'failure_class': 'budget'}
             if trace and iteration:
                 trace.note("knows", "retry feedback", str(error), {"hint": retry_hint(str(error), iteration - 1),
                                                                     "ai_output": raw[:SNIPPET_CHARS]})

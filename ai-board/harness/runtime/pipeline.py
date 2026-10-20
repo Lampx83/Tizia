@@ -186,6 +186,8 @@ class Deps:
                         else self.models.generate(model, prompt, format=format, _single_attempt=True, **options))
                 break
             except Exception as error:
+                if isinstance(error, BudgetExhausted) and getattr(error, 'before_model', False):
+                    raise
                 metrics = meter.measure(provider, {}, int((time.monotonic() - started) * 1000))
                 n = meter.units(provider, metrics)
                 budget.spend("model_calls")
@@ -248,6 +250,8 @@ class Deps:
                     if not isinstance(body, dict):
                         raise ValueError('Model response must be a JSON object')
                 except Exception as caught:
+                    if isinstance(caught, BudgetExhausted) and getattr(caught, 'before_model', False):
+                        raise
                     error = caught
                     body = {}
                 provider = 'vllm' if candidate['provider'] == 'vllm' else 'ollama'

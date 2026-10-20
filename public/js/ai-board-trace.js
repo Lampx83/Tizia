@@ -104,6 +104,22 @@ const EVENT_LABELS = {
   gate_proof_reused: 'Dùng lại kết quả kiểm tra đã có', gate_proof_invalidated: 'Kết quả kiểm tra cũ không còn hợp lệ',
   transient_retry: 'Đã xếp hàng thử lại sau lỗi hạ tầng',
 };
+const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+export function renderRootAllowance(state) {
+  if (!state) return '';
+  const title = '<b>Ngân sách toàn yêu cầu</b>';
+  if (state.blocked_reason === 'legacy_allowance_unknown') return `<section class="blk">${title}<p>Yêu cầu cũ chưa có đủ số liệu để xác định ngân sách còn lại. Cần quản trị viên xem xét.</p></section>`;
+  const fmt = value => Number.isFinite(value) ? new Intl.NumberFormat('vi-VN').format(value) : 'chưa có';
+  const labels = { model_calls: 'Lượt gọi AI đã tính/giữ', tool_calls: 'Lượt công cụ', tokens: 'Token đã tính/giữ',
+    semantic_repairs: 'Lượt sửa nội dung', quality_switches: 'Lượt đổi model vì chất lượng' };
+  const full = ['model_calls', 'tool_calls', 'tokens'].some(cap => state.used?.[cap] >= state.limits?.[cap]);
+  return `<section class="blk">${title}<div class="strip">${Object.entries(labels).map(([cap, label]) =>
+    `<span>${label}: <b>${fmt(state.used?.[cap])} / ${fmt(state.limits?.[cap])}</b></span>`).join('')}</div>
+    ${state.unknown_model_attempts ? `<p>${esc(state.unknown_model_attempts)} lượt gọi chưa xác định đủ token; phần giữ chỗ chưa được hoàn.</p>` : ''}
+    ${state.blocked_reason ? '<p>Ngân sách toàn yêu cầu đang bị khóa để kiểm tra.</p>' : full ? '<p>Đã dùng hoặc giữ chỗ toàn bộ ngân sách; chưa thể bắt đầu việc mới.</p>' : ''}</section>`;
+}
+
 export function budgetSummary(totals = {}) {
   const units = { gpu_s: 'giây ngân sách', k_tokens: 'k token', mixed: 'đơn vị theo nguồn xử lý', unknown: 'đơn vị chưa xác định' };
   const unit = totals.budget_unit || 'gpu_s';
@@ -123,7 +139,6 @@ export function describeEvent(event = {}) {
 export const TECHNICAL_EVENTS = new Set(['heartbeat', 'lease_released', 'gate_started', 'shadow_precheck_passed']);
 // Receipts describe the checked candidate at that time; they do not assert a release.
 export function renderVerificationClaims(trace = {}) {
-  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const claims = (trace.runs || []).flatMap(run => (run.spans || [])
     .filter(s => s.name === 'verify_claim').map(s => ({ run: run.id, a: s.attributes || {} })));
   const heading = '<h2>Bằng chứng kiểm tra</h2><p class="meta">Kết quả gắn với bản sửa tại thời điểm kiểm tra. Kết quả này chưa xác nhận phát hành.</p>';

@@ -4,7 +4,7 @@
 import { patchHtml } from './dom-morph.js';
 import { mountPrivatePreview } from './private-preview.js';
 import { installLightbox, pairBeforeAfter } from './lightbox.js';
-import { projectPipeline, describeModelCall, describeEvent, loopActions, stepTotals, TECHNICAL_EVENTS, TRACE_STEPS, renderVerificationClaims, budgetSummary } from './ai-board-trace.js';
+import { projectPipeline, describeModelCall, describeEvent, loopActions, stepTotals, TECHNICAL_EVENTS, TRACE_STEPS, renderVerificationClaims, budgetSummary, renderRootAllowance } from './ai-board-trace.js';
 import { renderHsm, renderGraph } from './ai-board-hsm.js';
 
 const $ = (s) => document.querySelector(s);
@@ -751,6 +751,7 @@ function renderAiBoard(t) {
       <span>Lần gọi lại model: <b>${esc(x.retries)}</b></span>
     </div>
     ${renderWrites(t)}
+    ${renderRootAllowance(t.root_work)}
     ${renderRollout(t)}
     ${renderPlan(t.plan, root, t.children || [], t)}
     ${renderPipeline(t)}

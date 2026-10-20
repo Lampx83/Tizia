@@ -16,10 +16,23 @@ export { PlanGuardrailError };
 
 export function createAsyncAiBoardStore(db, hooks = {}) {
   // Dialect-specific SQL fragments (json access) built from the contract.
-  const ownerGpuS = (owner) => `(SELECT COALESCE(SUM(${db.jsonNum('g.evidence_json', 'budget_units')}), 0)
-    FROM ai_gate_traces g JOIN ai_runs gr ON gr.id = g.run_id JOIN ai_tickets gt ON gt.id = gr.ticket_id
-    JOIN requests grq ON grq.id = gt.source_request_id
-    WHERE g.status = 'model_call' AND g.created_at > ? AND grq.owner_user_id = ${owner})`;
+  // Unknown durable work holds the existing daily ceiling; observations never debit that root twice.
+  const unknownHoldS = Math.max(LIMITS.gpu_s_per_user_day.loose, LIMITS.gpu_s_per_user_day.folder);
+  const ownerGpuS = (owner) => `(SELECT COALESCE(SUM(cost.seconds), 0) FROM (
+    SELECT w.created_at, q.owner_user_id,
+      CASE WHEN w.provider='api' THEN 0 ELSE GREATEST(0, COALESCE(
+        ${db.jsonNum('w.metrics_json', 'gpu_ms')}, ${db.jsonNum('w.metrics_json', 'wall_ms')}, ${unknownHoldS * 1000})) / 1000.0 END AS seconds
+      FROM ai_work_reservations w JOIN ai_tickets t ON t.id=w.root_ticket_id JOIN requests q ON q.id=t.source_request_id
+      WHERE w.kind='model'
+    UNION ALL
+    SELECT g.created_at, grq.owner_user_id,
+      CASE WHEN ${db.jsonText('g.evidence_json', 'provider')}='api' THEN 0 ELSE GREATEST(0, COALESCE(
+        ${db.jsonNum('g.evidence_json', 'metrics.gpu_ms')}, ${db.jsonNum('g.evidence_json', 'metrics.wall_ms')},
+        ${db.jsonNum('g.evidence_json', 'budget_units')} * 1000, ${unknownHoldS * 1000})) / 1000.0 END
+      FROM ai_gate_traces g JOIN ai_runs gr ON gr.id=g.run_id JOIN ai_tickets gt ON gt.id=gr.ticket_id
+      JOIN requests grq ON grq.id=gt.source_request_id
+      WHERE g.status='model_call' AND NOT EXISTS(SELECT 1 FROM ai_work_reservations w WHERE w.root_ticket_id=gt.id)
+    ) cost WHERE cost.created_at > ? AND cost.owner_user_id=${owner})`;
   const OWNER_GPU_S = ownerGpuS('r.owner_user_id');
   const FAIR_ORDER = `r.type = 'self' ASC, t.priority DESC,
     COALESCE((SELECT MAX(se.created_at) FROM ai_events se JOIN ai_tickets st ON st.id = se.ticket_id
@@ -465,15 +478,18 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
 
   async function queueInfo(ownerUserId, now = Date.now()) {
     const rows = await db.all(`
-      SELECT t.id, t.priority, t.created_at, r.owner_user_id, ${FEATURE_WAIT} AS feature_wait,
+      SELECT t.id, t.priority, t.created_at, r.owner_user_id, r.folder_id, ${FEATURE_WAIT} AS feature_wait,
+        ${OWNER_GPU_S} AS resource_used,
+        EXISTS(SELECT 1 FROM ai_work_reservations w WHERE w.root_ticket_id=t.id AND w.kind='model') AS resumed_work,
         COALESCE((SELECT MAX(se.created_at) FROM ai_events se JOIN ai_tickets st ON st.id = se.ticket_id
           JOIN requests sq ON sq.id = st.source_request_id
           WHERE se.transition = 'queued->running' AND sq.owner_user_id = r.owner_user_id), 0) AS served
       FROM ai_tickets t JOIN requests r ON r.id = t.source_request_id
       WHERE t.kind = 'root' AND t.status = 'queued' AND t.phase <> 'clarifying' AND r.owner_state = 'verified'
         AND r.type <> 'self'
-    `, [now]);
-    const waiting = rows.filter(row => !row.feature_wait);
+    `, [now, now - DAY_MS]);
+    const deferredFor = row => !row.resumed_work && row.resource_used >= (row.folder_id == null ? LIMITS.gpu_s_per_user_day.loose : LIMITS.gpu_s_per_user_day.folder);
+    const waiting = rows.filter(row => !row.feature_wait && !deferredFor(row));
     // Mô phỏng các lượt claim liên tiếp theo FAIR_ORDER: người vừa được phục vụ xuống cuối vòng.
     // ponytail: O(n²) trên hàng đợi; đủ cho vài trăm root đang chờ.
     const served = new Map(waiting.map((w) => [w.owner_user_id, w.served]));
@@ -492,17 +508,17 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
         SELECT updated_at, created_at FROM ai_runs WHERE outcome IS NOT NULL ORDER BY id DESC LIMIT 20) recent
     `))?.ms;
     const runS = Math.max(Math.round((avg || 0) / 1000), 60);
-    const used = (await db.get(`SELECT ${ownerGpuS('?')} AS s`, [now - DAY_MS, Number(ownerUserId)])).s;
-    const deferred = used >= LIMITS.gpu_s_per_user_day.loose;
     const workerReady = !!await db.get(`SELECT 1 FROM ai_workers WHERE mode='active'
       AND status IN ('idle', 'running') AND last_seen_at > ? LIMIT 1`, [now - 120_000]);
     const out = new Map();
-    for (const row of rows) if (row.feature_wait && row.owner_user_id === Number(ownerUserId)) {
-      out.set(row.id, { position: null, eta_s: null, deferred, worker_ready: workerReady, reason: 'feature_predecessor' });
+    for (const row of rows) if ((row.feature_wait || deferredFor(row)) && row.owner_user_id === Number(ownerUserId)) {
+      out.set(row.id, { position: null, eta_s: null, deferred: deferredFor(row), worker_ready: workerReady,
+        reason: row.feature_wait ? 'feature_predecessor' : 'daily_resource_budget' });
     }
     order.forEach((row, i) => {
       if (row.owner_user_id === Number(ownerUserId)) out.set(row.id, {
-        position: i + 1, eta_s: workerReady ? (i + 1) * runS : null, deferred, worker_ready: workerReady,
+        position: i + 1, eta_s: workerReady && !deferredFor(row) ? (i + 1) * runS : null,
+        deferred: deferredFor(row), worker_ready: workerReady,
       });
     });
     return out;
@@ -620,6 +636,15 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     return ticket;
   }
 
+  async function assertModelResourceAdmission(root, now = Date.now()) {
+    const request = await db.get('SELECT owner_user_id, folder_id, type FROM requests WHERE id=?', [root.source_request_id]);
+    if (request.type === 'self' || await db.get("SELECT 1 FROM ai_work_reservations WHERE root_ticket_id=? AND kind='model' LIMIT 1", [root.id])) return;
+    const used = (await db.get(`SELECT ${ownerGpuS('?')} AS s`, [now - DAY_MS, request.owner_user_id])).s;
+    if (used >= (request.folder_id == null ? LIMITS.gpu_s_per_user_day.loose : LIMITS.gpu_s_per_user_day.folder)) {
+      throw new WorkerContractError('daily resource allowance exhausted', 409, 'daily_resource_budget');
+    }
+  }
+
   const claimTransaction = ({ workerId, version, mode, intent, now, leaseMs, yieldNew }) => db.tx(async () => {
     if (!WORKER_MODES.has(mode)) throw new WorkerContractError('invalid worker mode');
     if (!CLAIM_INTENTS.has(intent)) throw new WorkerContractError('invalid claim intent');
@@ -668,9 +693,12 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
             AND ar.worker_id <> ? AND aw.last_seen_at > ?))
         -- Trần GPU-s/người/24h: lượt mới chờ; lease đang chạy hết hạn vẫn được cứu (không cắt việc đang làm).
         -- Việc tự sửa của board không tính trần học viên (ngân sách đêm riêng).
-        AND (t.status <> 'queued' OR r.type = 'self' OR ${OWNER_GPU_S} < ?)
+        AND (t.status <> 'queued' OR r.type = 'self'
+          OR EXISTS(SELECT 1 FROM ai_work_reservations w WHERE w.root_ticket_id=t.id AND w.kind='model')
+          OR ${OWNER_GPU_S} < CASE WHEN r.folder_id IS NULL THEN CAST(? AS BIGINT) ELSE CAST(? AS BIGINT) END)
         ORDER BY ${FAIR_ORDER} LIMIT 1${db.lockQueue('t')}
-    `, [now, now, intent, now, intent, now, mode, workerId, now - leaseMs, now - DAY_MS, LIMITS.gpu_s_per_user_day.loose]);
+    `, [now, now, intent, now, intent, now, mode, workerId, now - leaseMs, now - DAY_MS,
+      LIMITS.gpu_s_per_user_day.loose, LIMITS.gpu_s_per_user_day.folder]);
     if (!candidate) return null;
     const token = randomBytes(24).toString('hex');
     const expires = now + leaseMs;
@@ -1943,6 +1971,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     getRequestTrace,
     claimNext,
     assertLease, // drafts.js: route ảnh bản nháp kiểm lease như các route worker khác
+    assertModelResourceAdmission,
     getLeasedSnapshot,
     heartbeat,
     createRun,

@@ -20,6 +20,7 @@ import { createGateProofService } from '../services/gate-proofs.js';
 import { createToolManifestStore } from '../repositories/tool-manifests.js';
 import { publicContract } from '../hsm/contract.js';
 import { createFeatureLifecycle } from '../services/feature-lifecycle.js';
+import { createRootAllowanceService } from '../services/root-allowance.js';
 
 // Không cấu hình model phân loại → không gọi gì (không phân loại).
 const defaultClassifyRequest = (title, detail) => (
@@ -256,6 +257,7 @@ export function attachAiBoardRequestRoutes(router, {
   route.get('/api/admin/ai-board/requests/:requestId/trace', requireAuth, requireAdmin, async (req, res) => {
     const trace = await store.getRequestTrace(req.params.requestId);
     if (!trace) return res.status(404).json({ error: 'ticket_not_found' });
+    if (store.db) trace.root_work = await createRootAllowanceService(store).read(trace.root.id);
     if (store.db) trace.hsm = await createHsmStore(store).read(trace.root.id);
     if (store.db) { const spans = await createSpanService(store).forRuns(trace.runs.map((r) => r.id)); for (const run of trace.runs) run.spans = spans.get(Number(run.id)) || []; }
     res.json(trace);
@@ -426,6 +428,10 @@ export function attachAiBoardWorkerRoutes(router, {
     res.json(await spanService.record(req.params.id, req.body || {}));
   }));
   const toolCheckpoint = createToolCheckpointService(store);
+  const rootAllowance = createRootAllowanceService(store);
+  route.post('/api/ai-board/worker/tickets/:id/allowance/:op', authenticate, handle(async (req, res) => {
+    res.json(await rootAllowance.apply(req.params.id, req.params.op, req.body || {}));
+  }));
   route.post('/api/ai-board/worker/tickets/:id/checkpoint/:op', authenticate, handle(async (req,res) => {
     res.json(await toolCheckpoint.apply(req.params.id, req.params.op, req.body || {}));
   }));
@@ -448,7 +454,7 @@ export function attachAiBoardWorkerRoutes(router, {
   route.post('/api/ai-board/worker/tickets/:id/snapshot', authenticate, handle(async (req, res) => {
     const lease = leaseInput(req.body);
     res.json({ ...await store.getLeasedSnapshot(req.params.id, lease.workerId, lease.leaseToken), lessons_schema_version: 1,
-      hsm_contract:publicContract() });
+      hsm_contract:publicContract(), root_allowance_protocol: 1 });
   }));
 
   route.post('/api/ai-board/worker/tickets/:id/heartbeat', authenticate, handle(async (req, res) => {

@@ -39,7 +39,9 @@ class RemotePlanner:
             return {"status": "engine_unavailable", "error": "internal planning service unavailable"}
 
     def __call__(self, snapshot, source=None):
-        if source is not None or snapshot.get("folder") or snapshot.get("request", {}).get("type") == "self":
+        from runtime.root_allowance import current
+        # shortcut: root-accounted planning stays local until the engine supports lease-bound reservations.
+        if current() is not None or source is not None or snapshot.get("folder") or snapshot.get("request", {}).get("type") == "self":
             if self.fallback is None:
                 raise ValueError("remote planner workspace must be registered on the engine; folder/self require local planner")
             self.trace_id, self.events = None, []

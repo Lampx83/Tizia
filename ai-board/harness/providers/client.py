@@ -202,6 +202,27 @@ class OllamaClient:
             tags = json.loads(resp.read().decode("utf-8")).get("models", [])
         return next((m.get("digest") for m in tags if model in (m.get("name"), m.get("model"))), None)
 
+    def _request_token_bound(self, payload):
+        if self.protocol != 'vllm':
+            context, output = payload['options']['num_ctx'], payload['options'].get('num_predict')
+            if type(context) is not int or context <= 0 or type(output) is not int or output <= 0:
+                raise ValueError('explicit context and output bounds required')
+            bound = context + output
+        else:
+            path = '/models' if self.base_url.endswith('/v1') else '/v1/models'
+            request = urllib.request.Request(self.base_url + path)
+            if self.seckey:
+                request.add_header('Authorization', 'Bearer ' + self.seckey)
+                if not self.bearer_only:
+                    request.add_header('x-ollama-seckey', self.seckey)
+            with urllib.request.build_opener(_NoRedirect()).open(request, timeout=min(15, self.remaining_s())) as response:
+                body = json.loads(response.read(1_000_000))
+            found = next((item for item in body.get('data', []) if item.get('id') == payload['model']), {})
+            bound = found.get('max_model_len')
+        if type(bound) is not int or bound <= 0:
+            raise ValueError('model request token bound unavailable')
+        return bound
+
     def _post(self, path: str, payload: dict, *, retry=True) -> dict:
         if not self.base_url:
             raise RuntimeError("OLLAMA_URL chưa set trong .env — xem AI Board Harness section")
@@ -221,16 +242,30 @@ class OllamaClient:
                 req.add_header('x-ollama-seckey', self.seckey)
         for pause in ((*RETRY_PAUSES_S, None) if retry else (None,)):
             timeout = self.remaining_s()
+            from runtime.root_allowance import current
+            root = current() if path.endswith(('/generate', '/chat/completions')) else None
+            attempt, body = None, None
+            provider = self.route_label if self.protocol == 'vllm' else 'ollama'
+            if root is not None:
+                attempt = root.reserve('model', provider=provider, token_bound=self._request_token_bound(payload))
+            started = time.monotonic()
             try:
+                timeout = self.remaining_s()  # Metadata and durable admission may have consumed the deadline.
                 send = urllib.request.build_opener(_NoRedirect()).open if self.protocol == 'vllm' else urllib.request.urlopen
                 with send(req, timeout=timeout) as resp:
-                    return json.loads(resp.read().decode("utf-8"))
+                    body = json.loads(resp.read().decode("utf-8"))
+                    return body
             except urllib.error.HTTPError as error:
                 if error.code not in RETRY_STATUS or pause is None:
                     raise
             except urllib.error.URLError as error:  # connection refused/reset; a read timeout is TimeoutError, not retried
                 if isinstance(error.reason, TimeoutError) or pause is None:
                     raise
+            finally:
+                if attempt is not None:
+                    from runtime.meter import measure
+                    root.settle(attempt, measure(provider, body if isinstance(body, dict) else {},
+                                                int((time.monotonic() - started) * 1000)))
             if self.deadline is not None and pause >= self.remaining_s():
                 raise TimeoutError('Model request deadline exceeded') from None
             _sleep(pause)
