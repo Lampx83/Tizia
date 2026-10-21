@@ -55,11 +55,15 @@ for (const modern of [false,true]) test(`PostgreSQL reset (${modern ? 'board' : 
         VALUES(1,1,0,'fixture','Running',1,'hash',1);
       INSERT INTO ai_hsm_events(ticket_id,run_id,attempt,worker_id,event,identity,input_hash,accepted,response_json,created_at)
         VALUES(1,1,0,'fixture','BEGIN','reset-hsm','hash',1,'{}',1);`);
+    if (modern) await d.exec(`INSERT INTO ai_skills(id,name,task_types_json,created_by,updated_by,created_at,updated_at)
+      VALUES(1,'keep-admin-config','["all"]',1,1,1,1);
+      INSERT INTO ai_skill_versions(id,skill_id,version,task_types_json,original_text,hash,token_count,lint_json,created_by,created_at)
+      VALUES(1,1,1,'["all"]','Keep global configuration',repeat('a',64),100,'{"ok":false}',1,1);`);
     const before = await snapshot(d);
     assert.match((await run()).stdout,/Dry run/); assert.deepEqual(await snapshot(d),before);
     await run('--yes'); const after = await snapshot(d);
-    for (const t of ['users','user_wallets','curriculum','schema_migrations','ai_board_profile','ai_transient_retry_state']) if (before[t]) assert.deepEqual(after[t],before[t],t);
-    for (const [t,rows] of Object.entries(after)) if ((t.startsWith('ai_') && !['ai_board_profile','ai_self_improve_state','ai_transient_retry_state'].includes(t)) || ['requests','request_messages','skill_proposals','gate_trace'].includes(t)) assert.deepEqual(rows,[],t);
+    for (const t of ['users','user_wallets','curriculum','schema_migrations','ai_board_profile','ai_transient_retry_state','ai_skills','ai_skill_versions']) if (before[t]) assert.deepEqual(after[t],before[t],t);
+    for (const [t,rows] of Object.entries(after)) if ((t.startsWith('ai_') && !['ai_board_profile','ai_self_improve_state','ai_transient_retry_state','ai_skills','ai_skill_versions'].includes(t)) || ['requests','request_messages','skill_proposals','gate_trace'].includes(t)) assert.deepEqual(rows,[],t);
     assert.deepEqual(after.notifications,[{id:2,request_id:null,title:'Keep'}]);
     if (modern) assert.deepEqual(after.ai_self_improve_state,before.ai_self_improve_state.map(r => ({...r,frozen_at:null})));
     assert.equal(await d.insert(`INSERT INTO requests(domain,title,created_at,updated_at) VALUES('it','New',2,2)`),1);

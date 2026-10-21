@@ -35,6 +35,7 @@ COPY public/ ./public/
 COPY scripts/ ./scripts/
 # Prompt làm rõ yêu cầu (server/contexts/ai-board-intake) dùng chung file khoá hash với harness.
 COPY ai-board/harness/prompts/ ./ai-board/harness/prompts/
+COPY ai-board/harness/skills/ ./ai-board/harness/skills/
 # Trusted preview startup is read as source by the serving broker; it runs inside the pinned guest.
 COPY ai-board/harness/verification/preview_guest.py ./ai-board/harness/verification/preview_guest.py
 

@@ -21,6 +21,7 @@ import { createToolManifestStore } from '../repositories/tool-manifests.js';
 import { publicContract } from '../hsm/contract.js';
 import { createFeatureLifecycle } from '../services/feature-lifecycle.js';
 import { createRootAllowanceService } from '../services/root-allowance.js';
+import { attachSkillRoutes, attachWorkerSkillRoutes } from './skills.js';
 
 // Không cấu hình model phân loại → không gọi gì (không phân loại).
 const defaultClassifyRequest = (title, detail) => (
@@ -43,6 +44,7 @@ export function attachAiBoardRequestRoutes(router, {
 }) {
   const route = asyncRoutes(router);
   if(store.db) attachLessonReviewRoutes(router,{db:store.db,requireAuth,requireStrictCsrf});
+  if(store.db) attachSkillRoutes(router,{store,requireAuth,requireAdmin,requireStrictCsrf});
   if(store.db) attachAppealRoutes(router,{store,requireAuth,requireAdmin,requireStrictCsrf});
   if(store.db) attachRolloutRoutes(router,{store,requireAuth,requireAdmin,requireStrictCsrf});
   route.post('/api/requests', requireAuth, requireEnrolled, async (req, res, next) => {
@@ -424,6 +426,7 @@ export function attachAiBoardWorkerRoutes(router, {
     res.json(await gateProofs.apply(req.params.id, req.params.op, req.body || {}));
   }));
   const spanService = createSpanService(store);
+  attachWorkerSkillRoutes(route,{store,authenticate,handle});
   route.post('/api/ai-board/worker/tickets/:id/spans', authenticate, handle(async (req,res) => {
     res.json(await spanService.record(req.params.id, req.body || {}));
   }));

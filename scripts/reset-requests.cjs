@@ -10,6 +10,7 @@ const url = process.argv.find((a) => /^postgres(ql)?:\/\//.test(a)) || process.e
 if (!url) { console.error('DATABASE_URL (PostgreSQL) is required'); process.exit(1); }
 
 // Children before parents. Missing tables are normal on older dev databases.
+// Global admin skill configuration/versions stay, like users and curriculum.
 const ALL = [
   'ai_work_reservations', 'ai_root_allowances',
   'ai_resource_rate',

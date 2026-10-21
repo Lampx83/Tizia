@@ -500,6 +500,8 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
     skill_context = {'file': subtask['file'], 'task_type': subtask.get('task_type')}
     pins = {**(pins or {}), 'skills': default_skills.pin(role or 'gate3_light', skill_context)
             if prompt_roles.enabled() else 'off'}
+    if prompt_roles.enabled():
+        skill_context['expected_pin'] = pins['skills']
     last_sig, repeats = None, 0
     history = None
     if os.getenv('AI_BOARD_CONTEXT_COMPACTION') == '1':
@@ -535,10 +537,13 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
             server_hsm.authorize_action('model', tool_manifest=MANIFEST.hash)
         except server_hsm.AuthorityError as error:
             return _result('blocked', str(error), error.failure_class, steps=steps)
-        body = deps.call_model(model, call_prompt, gate=3, budget=loop_budget, format="json", db_path=db_path,
-                               proposal_id=proposal_id, prompt_name="tool_loop.md", child=child, iteration=len(steps),
-                               role=role, skill_context=skill_context,
-                               **({"extra": call_extra} if call_extra else {}))
+        try:
+            body = deps.call_model(model, call_prompt, gate=3, budget=loop_budget, format="json", db_path=db_path,
+                                   proposal_id=proposal_id, prompt_name="tool_loop.md", child=child, iteration=len(steps),
+                                   role=role, skill_context=skill_context,
+                                   **({"extra": call_extra} if call_extra else {}))
+        except default_skills.SkillPolicyChanged as error:
+            return _result('paused', str(error), 'critical', steps=steps)
         if store:
             store.save_ledger(budget.snapshot())
         if not loop_budget.tick():

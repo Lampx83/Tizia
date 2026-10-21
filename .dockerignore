@@ -12,6 +12,7 @@ npm-debug.log
 .env*
 ai-board/
 !ai-board/harness/prompts/
+!ai-board/harness/skills/
 !ai-board/harness/verification/preview_guest.py
 data
 *.db

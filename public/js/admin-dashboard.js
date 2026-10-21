@@ -5,6 +5,7 @@
 
 import { DOMAIN_META } from './engine/domain.js';
 import { morph } from './dom-morph.js';
+import { mountSkillsTab } from './admin-skills.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
@@ -1773,6 +1774,7 @@ const TABS = {
   curriculum: { label:'Curriculum', load: loadCurriculumTab },
   requests:   { label:'Góp ý', load: loadRequests, badge: () => reqCache.filter(r => r.status === 'pending').length },
   features:   { label:'Chức năng', load: loadFeatureFolders },
+  skills:     { label:'Skills', load: () => mountSkillsTab($('#tabbody'), { api, toast }) },
   selfimprove: { label:'Tự cải thiện', load: loadSelfImprove },
   users:     { label:'Người dùng', load: loadUsers },
   db:         { label:'CSDL',     load: loadDbTab },

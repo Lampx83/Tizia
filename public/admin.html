@@ -148,6 +148,20 @@
 
   /* ============ PILLS ============ */
   .pill { display:inline-block; font-size:11px; padding:2px 9px; border-radius:999px; background:rgba(255,255,255,0.07); font-weight:600; }
+  .skills-panel h2 { margin:0; font-size:20px; }
+  .skills-panel .meta { color:var(--muted); font-size:13px; line-height:1.6; }
+  .skills-panel table { min-width:680px; }
+  .skills-form { max-width:760px; margin:20px 0; padding:20px; border:1px solid var(--border); border-radius:10px; }
+  .skills-form > label { display:block; margin:14px 0 6px; }
+  .skills-form > input, .skills-form textarea { width:100%; max-width:100%; padding:10px; background:var(--bg); color:var(--txt); border:1px solid var(--border-strong); border-radius:7px; font:inherit; }
+  .skills-form textarea { font:13px/1.6 monospace; resize:vertical; }
+  .skills-form fieldset { margin:16px 0; border:1px solid var(--border); }
+  .skills-form .skill-type { display:inline-flex; align-items:center; gap:6px; margin:8px 14px 8px 0; }
+  .skills-form[hidden] { display:none; }
+  .skill-version { border-top:1px solid var(--border); margin:16px 0; padding:14px 0; }
+  .skill-version summary { cursor:pointer; padding:8px 0; }
+  .skill-source { max-width:100%; max-height:360px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; padding:14px; background:var(--bg2); border-radius:8px; line-height:1.6; }
+  .skills-panel :focus-visible { outline:2px solid var(--accent2); outline-offset:3px; }
   .pill.pending   { background:rgba(148,163,184,0.20); color:#cbd5e1; }
   .pill.reviewing { background:rgba(251,191,36,0.20); color:#fcd34d; }
   .pill.done      { background:rgba(34,197,94,0.20); color:#86efac; }
@@ -359,6 +373,6 @@
 <div class="toast" id="toast"></div>
 <div class="chart-tooltip" id="ctt"></div>
 
-<script type="module" src="/js/admin-dashboard.js?v=no-icons"></script>
+<script type="module" src="/js/admin-dashboard.js?v=skills-registry"></script>
 </body>
 </html>

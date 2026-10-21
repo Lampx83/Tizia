@@ -20,6 +20,13 @@ class RootAllowance:
         self.base = f'/api/ai-board/worker/tickets/{ticket_id}/allowance'
         self.state = None
 
+    def skills(self, task_type, role):
+        result = self.client.post(self.base.removesuffix('/allowance') + '/skills',
+                                  {**self.lease, 'task_type': task_type, 'role': role})
+        if not isinstance(result, dict) or not isinstance(result.get('skills'), list) or len(result['skills']) > 1:
+            raise ValueError('invalid approved skill catalog')
+        return result['skills']
+
     def _call(self, op, **body):
         try:
             state = self.client.post(f'{self.base}/{op}', {**self.lease, **body})
