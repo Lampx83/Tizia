@@ -1,5 +1,5 @@
 // ============================================================
-// Lớp 1 — Barrel lý thuyết tuần: gộp 8 môn × 35 tuần.
+// Lớp 1, Barrel lý thuyết tuần: gộp 8 môn × 35 tuần.
 // File chưa tồn tại sẽ trả về {} (no-op) qua try/catch import động.
 // Khi agent sinh xong từng môn, chỉ cần import thêm vào đây.
 // ============================================================

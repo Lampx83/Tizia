@@ -1,5 +1,5 @@
 // ============================================================
-// Lớp 1 · TIẾNG VIỆT — Lý thuyết + Ví dụ 35 tuần (GDPT 2018)
+// Lớp 1 · TIẾNG VIỆT, Lý thuyết + Ví dụ 35 tuần (GDPT 2018)
 // Key TRÙNG id quiz: "P1TV-wNN-quiz".
 // Giọng cô giáo lớp 1: rất nhẹ nhàng, câu ngắn, từ đơn giản.
 // ============================================================
@@ -494,7 +494,7 @@ export const P1TV_LESSONS = {
     ],
     examples: [
       { q: 'Câu "Em yêu trường em." có mấy tiếng?', a: 'Có 4 tiếng: em / yêu / trường / em.' },
-      { q: 'Điền chữ đúng: "con … nhỏ" — chọn mèo / meo / mẻo', a: 'Điền "mèo" — viết: con mèo nhỏ.' },
+      { q: 'Điền chữ đúng: "con … nhỏ", chọn mèo / meo / mẻo', a: 'Điền "mèo", viết: con mèo nhỏ.' },
     ],
   },
 
@@ -695,7 +695,7 @@ export const P1TV_LESSONS = {
   },
 
   'P1TV-w36-quiz': {
-    topic: 'Kết thúc Lớp 1 — Hành trang Tiếng Việt vào Lớp 2',
+    topic: 'Kết thúc Lớp 1: Hành trang Tiếng Việt vào Lớp 2',
     intro: 'Chúc mừng! Cả năm học em đã làm rất tốt! Mình cùng nhìn lại hành trình chữ và tiếng nhé.',
     objectives: [
       'Nhớ lại các âm, vần, từ và câu đã học.',
@@ -716,10 +716,10 @@ export const P1TV_LESSONS = {
         'Viết đoạn văn ngắn.',
         'Học thêm nhiều từ và kiểu câu mới.',
       ] },
-      { note: 'Hè này hãy đọc sách mỗi ngày — dù chỉ 10 phút thôi. Đó là cách tốt nhất để yêu tiếng Việt!' },
+      { note: 'Hè này hãy đọc sách mỗi ngày, dù chỉ 10 phút thôi. Đó là cách tốt nhất để yêu tiếng Việt!' },
     ],
     examples: [
-      { q: '"Con trâu" — "trâu" có âm đầu và vần gì?', a: 'Âm đầu "tr", vần "âu".' },
+      { q: '"Con trâu", "trâu" có âm đầu và vần gì?', a: 'Âm đầu "tr", vần "âu".' },
       { q: 'Đặt câu hỏi với từ "ai": "_____ đang học bài?"', a: 'Ai đang học bài? (Dùng dấu hỏi cuối câu.)' },
     ],
   },

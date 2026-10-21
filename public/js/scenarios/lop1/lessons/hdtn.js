@@ -1,5 +1,5 @@
 // ============================================================
-// Lớp 1 · HOẠT ĐỘNG TRẢI NGHIỆM — 35 tuần (GDPT 2018)
+// Lớp 1 · HOẠT ĐỘNG TRẢI NGHIỆM, 35 tuần (GDPT 2018)
 // Key TRÙNG id quiz: "P1HDTN-wNN-quiz".
 // Mạch: Bản thân → Gia đình → Nhà trường → Cộng đồng → Tự nhiên.
 // Nội dung ngắn gọn, giọng cô giáo lớp 1 ấm áp, gọi "các em".
@@ -99,7 +99,7 @@ export const P1HDTN_LESSONS = {
     ],
     examples: [
       { q: 'Cặp em rất nặng?', a: 'Em xem lại sách vở: chỉ mang đúng môn của hôm đó theo thời khoá biểu. Bớt đồ chơi và sách không cần. Cặp sẽ nhẹ hơn.' },
-      { q: 'Em hay đeo một quai vì trông "ngầu"?', a: 'Đeo một quai sẽ làm lưng lệch, lâu ngày bị cong cột sống. Em nên đeo hai quai cho khoẻ — đó mới là "ngầu" thật sự.' },
+      { q: 'Em hay đeo một quai vì trông "ngầu"?', a: 'Đeo một quai sẽ làm lưng lệch, lâu ngày bị cong cột sống. Em nên đeo hai quai cho khoẻ, đó mới là "ngầu" thật sự.' },
     ],
   },
 
@@ -119,7 +119,7 @@ export const P1HDTN_LESSONS = {
     ],
     examples: [
       { q: 'Em quên đánh răng tối qua?', a: 'Sáng nay em đánh răng kĩ hơn một chút. Tối nay nhớ đánh răng trước khi đi ngủ. Đặt bàn chải ở chỗ dễ thấy để khỏi quên.' },
-      { q: 'Em hay nuốt kem đánh răng?', a: 'Kem đánh răng không phải để ăn — em chỉ ngậm rồi nhổ ra, súc miệng nhiều lần với nước sạch. Nếu lỡ nuốt một ít cũng không sao.' },
+      { q: 'Em hay nuốt kem đánh răng?', a: 'Kem đánh răng không phải để ăn, em chỉ ngậm rồi nhổ ra, súc miệng nhiều lần với nước sạch. Nếu lỡ nuốt một ít cũng không sao.' },
     ],
   },
 
@@ -195,11 +195,11 @@ export const P1HDTN_LESSONS = {
       { ul: ['Hỏi thăm, lấy nước.', 'Nói nhỏ, không mở loa to.', 'Không đòi hỏi, không khóc nhõng nhẽo.'] },
       { h: 'Hằng ngày' },
       { p: 'Đi học về chào ông bà, bố mẹ. Yêu thương qua lời nói và việc làm nhỏ hằng ngày.' },
-      { note: 'Yêu thương không cần ngày lễ — mỗi ngày đều có thể thể hiện.' },
+      { note: 'Yêu thương không cần ngày lễ, mỗi ngày đều có thể thể hiện.' },
     ],
     examples: [
       { q: 'Bà em bị đau đầu?', a: 'Em hỏi: "Bà có sao không ạ?". Lấy cốc nước ấm cho bà. Mở nhạc nhỏ hoặc tắt tivi cho bà nghỉ. Vậy là em biết quan tâm rồi.' },
-      { q: 'Em muốn tặng quà mẹ nhưng không có tiền?', a: 'Quà không cần đắt. Em vẽ tấm thiệp, hái bông hoa nhỏ trong vườn, hoặc giúp việc nhà — đều là quà ý nghĩa.' },
+      { q: 'Em muốn tặng quà mẹ nhưng không có tiền?', a: 'Quà không cần đắt. Em vẽ tấm thiệp, hái bông hoa nhỏ trong vườn, hoặc giúp việc nhà; đều là quà ý nghĩa.' },
     ],
   },
 
@@ -215,7 +215,7 @@ export const P1HDTN_LESSONS = {
       { ul: ['Đi vỉa hè bên phải.', 'Qua đường: nhìn trái – phải, đi đúng vạch.', 'Đi xe máy với bố mẹ → đội mũ bảo hiểm.'] },
       { h: 'Người lạ' },
       { p: 'Người lạ rủ đi → từ chối và chạy về gặp người tin cậy (bố mẹ, cô giáo, chú công an).' },
-      { note: 'Không nhận quà, không lên xe người lạ — dù họ nói biết bố mẹ em.' },
+      { note: 'Không nhận quà, không lên xe người lạ; dù họ nói biết bố mẹ em.' },
     ],
     examples: [
       { q: 'Có người lạ tự xưng là bạn của bố, bảo đón em?', a: 'Em từ chối ngay: "Em phải đợi bố mẹ ạ". Quay vào trường gặp cô. Bố mẹ luôn có người đón cố định, không đổi người lạ.' },
@@ -236,7 +236,7 @@ export const P1HDTN_LESSONS = {
       { h: 'Khi có vấn đề' },
       { ul: ['Khách lạ → không tự mở cửa, gọi người lớn.', 'Bỏng nhẹ → ngâm nước mát sạch, báo người lớn.'] },
       { h: 'Số điện thoại khẩn cấp' },
-      { ul: ['114 — Cứu hoả', '113 — Cảnh sát', '115 — Cấp cứu y tế'] },
+      { ul: ['114: Cứu hoả', '113: Cảnh sát', '115: Cấp cứu y tế'] },
       { note: 'Khi sợ hãi hay gặp nguy hiểm, em gọi bố mẹ ngay.' },
     ],
     examples: [
@@ -254,13 +254,13 @@ export const P1HDTN_LESSONS = {
     ],
     theory: [
       { h: 'Tết Trung thu' },
-      { p: 'Trung thu là ngày Rằm tháng 8 âm lịch — Tết của thiếu nhi Việt Nam.' },
+      { p: 'Trung thu là ngày Rằm tháng 8 âm lịch, Tết của thiếu nhi Việt Nam.' },
       { ul: ['Bánh đặc trưng: bánh nướng, bánh dẻo.', 'Đèn Trung thu: đèn ông sao, đèn cá chép.', 'Hoạt động: phá cỗ, rước đèn, múa lân.'] },
       { note: 'Trung thu cũng là dịp gia đình quây quần dưới ánh trăng.' },
     ],
     examples: [
       { q: 'Em muốn tự làm đèn ông sao?', a: 'Em xin bố mẹ giúp. Cần tre nhỏ và giấy bóng kính nhiều màu. Bố mẹ buộc khung, em dán giấy. Đèn em tự làm sẽ rất đáng quý.' },
-      { q: 'Em được tặng nhiều bánh Trung thu, ăn hết không?', a: 'Không nên ăn nhiều một lúc — bánh ngọt và nhiều dầu. Em ăn mỗi ngày một ít, chia cho gia đình cùng ăn. Cất nơi mát.' },
+      { q: 'Em được tặng nhiều bánh Trung thu, ăn hết không?', a: 'Không nên ăn nhiều một lúc, bánh ngọt và nhiều dầu. Em ăn mỗi ngày một ít, chia cho gia đình cùng ăn. Cất nơi mát.' },
     ],
   },
 
@@ -279,7 +279,7 @@ export const P1HDTN_LESSONS = {
       { note: 'Giữ trường đẹp: không vẽ bậy, vứt rác đúng chỗ.' },
     ],
     examples: [
-      { q: 'Em gặp bác bảo vệ ở cổng trường?', a: 'Em chào lễ phép: "Cháu chào bác ạ!". Bác bảo vệ giữ an toàn cho cả trường — rất đáng để em tôn trọng.' },
+      { q: 'Em gặp bác bảo vệ ở cổng trường?', a: 'Em chào lễ phép: "Cháu chào bác ạ!". Bác bảo vệ giữ an toàn cho cả trường, rất đáng để em tôn trọng.' },
       { q: 'Em muốn mượn sách ở thư viện?', a: 'Em đến thư viện trong giờ mở. Hỏi cô thủ thư: "Cô ơi cho cháu mượn quyển… ạ". Đọc xong nhớ trả đúng hạn, giữ sách sạch.' },
     ],
   },
@@ -298,7 +298,7 @@ export const P1HDTN_LESSONS = {
       { note: 'Gặp cô ngoài đường em vẫn chào lễ phép.' },
     ],
     examples: [
-      { q: 'Em không có tiền mua quà, làm sao?', a: 'Cô không cần quà đắt. Một tấm thiệp tự vẽ, một bông hoa hái trong vườn, hoặc lời chúc chân thành — cô sẽ rất vui.' },
+      { q: 'Em không có tiền mua quà, làm sao?', a: 'Cô không cần quà đắt. Một tấm thiệp tự vẽ, một bông hoa hái trong vườn, hoặc lời chúc chân thành; cô sẽ rất vui.' },
       { q: 'Em gặp cô ở chợ?', a: 'Em vẫn chào lễ phép: "Cháu chào cô ạ!". Cô là cô của em ở mọi nơi, không chỉ trong lớp.' },
     ],
   },
@@ -319,7 +319,7 @@ export const P1HDTN_LESSONS = {
     ],
     examples: [
       { q: 'Bạn em bẻ cành hoa làm đồ chơi?', a: 'Em nhắc nhẹ: "Bạn đừng bẻ, hoa đau lắm!". Báo cô nếu bạn vẫn bẻ. Hoa của trường là của chung.' },
-      { q: 'Em muốn trồng cây trong lớp?', a: 'Em xin phép cô. Có thể trồng cây nhỏ trong chậu đặt cửa sổ. Em phân công nhau tưới nước — cây sẽ là "thành viên" mới của lớp.' },
+      { q: 'Em muốn trồng cây trong lớp?', a: 'Em xin phép cô. Có thể trồng cây nhỏ trong chậu đặt cửa sổ. Em phân công nhau tưới nước, cây sẽ là "thành viên" mới của lớp.' },
     ],
   },
 
@@ -350,7 +350,7 @@ export const P1HDTN_LESSONS = {
     ],
     theory: [
       { h: 'Cuối HK1' },
-      { ul: ['Em đã trưởng thành hơn so với đầu năm.', 'Cô có nhận xét — em bình tĩnh lắng nghe.', 'Việc làm tốt → tự hào.', 'Việc chưa tốt → cố gắng ở HK2.'] },
+      { ul: ['Em đã trưởng thành hơn so với đầu năm.', 'Cô có nhận xét: em bình tĩnh lắng nghe.', 'Việc làm tốt → tự hào.', 'Việc chưa tốt → cố gắng ở HK2.'] },
       { note: 'Lắng nghe nhận xét để tiến bộ, không cãi cô, không khóc.' },
     ],
     examples: [
@@ -376,7 +376,7 @@ export const P1HDTN_LESSONS = {
     ],
     examples: [
       { q: 'Em muốn đặt mục tiêu nhưng không biết chọn gì?', a: 'Em nghĩ về điều mình chưa giỏi nhất. Ví dụ "viết chữ N còn xấu" → mục tiêu "viết chữ N đẹp hơn". Nhỏ và cụ thể.' },
-      { q: 'Em đặt mục tiêu mà mãi không đạt?', a: 'Em xem lại: mục tiêu có quá lớn không? Có thể chia nhỏ hơn. Hỏi cô/bố mẹ cách đạt. Đừng nản — quan trọng là vẫn cố gắng.' },
+      { q: 'Em đặt mục tiêu mà mãi không đạt?', a: 'Em xem lại: mục tiêu có quá lớn không? Có thể chia nhỏ hơn. Hỏi cô/bố mẹ cách đạt. Đừng nản, quan trọng là vẫn cố gắng.' },
     ],
   },
 
@@ -389,13 +389,13 @@ export const P1HDTN_LESSONS = {
     ],
     theory: [
       { h: 'Tết Nguyên đán' },
-      { p: 'Tết Nguyên đán là Mùng 1 tháng Giêng âm lịch — ngày Tết cổ truyền của Việt Nam.' },
+      { p: 'Tết Nguyên đán là Mùng 1 tháng Giêng âm lịch, ngày Tết cổ truyền của Việt Nam.' },
       { ul: ['Trước Tết: cùng dọn nhà, lau bàn ghế.', 'Mâm cỗ miền Bắc thường có bánh chưng.', 'Chúc Tết: lời chúc lễ phép, vui vẻ.'] },
-      { note: 'Tết là dịp sum vầy — gia đình quây quần là điều quý giá nhất.' },
+      { note: 'Tết là dịp sum vầy, gia đình quây quần là điều quý giá nhất.' },
     ],
     examples: [
       { q: 'Em chúc ông bà ngày Tết thế nào?', a: 'Em nói: "Cháu chúc ông bà năm mới mạnh khoẻ, sống lâu trăm tuổi ạ!". Vòng tay cúi đầu khi chúc. Ông bà sẽ rất vui.' },
-      { q: 'Em muốn giúp dọn nhà nhưng vụng về?', a: 'Em làm việc nhỏ vừa sức: lau bàn, xếp dép, dọn đồ chơi. Không sao nếu chậm — quan trọng là tinh thần giúp đỡ.' },
+      { q: 'Em muốn giúp dọn nhà nhưng vụng về?', a: 'Em làm việc nhỏ vừa sức: lau bàn, xếp dép, dọn đồ chơi. Không sao nếu chậm, quan trọng là tinh thần giúp đỡ.' },
     ],
   },
 
@@ -430,7 +430,7 @@ export const P1HDTN_LESSONS = {
       { h: 'Trò chơi dân gian' },
       { ul: ['Bịt mắt bắt dê.', 'Rồng rắn lên mây.', 'Ô ăn quan (với sỏi và bàn vẽ).', 'Kéo co, nhảy dây.'] },
       { h: 'Trò chơi hiện đại' },
-      { p: 'Trò chơi điện tử, trò chơi trên điện thoại — không phải dân gian.' },
+      { p: 'Trò chơi điện tử, trò chơi trên điện thoại; không phải dân gian.' },
       { note: 'Chơi vui vẻ là chính, không gian lận, không cãi nhau.' },
     ],
     examples: [
@@ -488,9 +488,9 @@ export const P1HDTN_LESSONS = {
     ],
     theory: [
       { h: 'Ngày 8/3' },
-      { p: 'Ngày 8/3 là Quốc tế Phụ nữ — ngày tôn vinh phụ nữ trên toàn thế giới.' },
+      { p: 'Ngày 8/3 là Quốc tế Phụ nữ, ngày tôn vinh phụ nữ trên toàn thế giới.' },
       { ul: ['Tặng mẹ, bà: thiệp, hoa, giúp việc nhà.', 'Chúc cô giáo và các bạn nữ trong lớp.', 'Lời chúc chân thành, lịch sự.'] },
-      { note: 'Quà không cần đắt — tấm lòng mới quý.' },
+      { note: 'Quà không cần đắt: tấm lòng mới quý.' },
     ],
     examples: [
       { q: 'Em muốn tặng mẹ ngày 8/3?', a: 'Em vẽ tấm thiệp viết "Con yêu mẹ". Tự rửa bát hộ mẹ. Ôm mẹ một cái. Mẹ sẽ cảm động hơn bất kì món quà nào.' },
@@ -526,12 +526,12 @@ export const P1HDTN_LESSONS = {
       'Tiết kiệm nước, dùng đồ thân thiện môi trường.',
     ],
     theory: [
-      { h: 'Việc nhỏ — ý nghĩa lớn' },
+      { h: 'Việc nhỏ: ý nghĩa lớn' },
       { ul: ['Bỏ rác đúng nơi quy định.', 'Đánh răng: hứng nước cốc, không xả vòi.', 'Phân loại rác: tái chế và bỏ đi.', 'Dùng túi vải, bình nước cá nhân thay đồ nhựa.'] },
       { note: 'Mỗi việc nhỏ của em góp phần bảo vệ Trái đất.' },
     ],
     examples: [
-      { q: 'Em thấy chai nhựa rỗng?', a: 'Em rửa sạch, bỏ vào thùng rác tái chế. Chai nhựa có thể được chế lại thành đồ mới — đỡ thải rác ra môi trường.' },
+      { q: 'Em thấy chai nhựa rỗng?', a: 'Em rửa sạch, bỏ vào thùng rác tái chế. Chai nhựa có thể được chế lại thành đồ mới, đỡ thải rác ra môi trường.' },
       { q: 'Nhà em hay dùng túi nilon, em làm sao?', a: 'Em đề xuất với mẹ: dùng túi vải khi đi chợ. Em có thể tự nhận trách nhiệm xếp túi vải trước khi mẹ đi chợ. Vậy là em đã giúp môi trường.' },
     ],
   },
@@ -552,7 +552,7 @@ export const P1HDTN_LESSONS = {
     ],
     examples: [
       { q: 'Bạn em bắt một con cánh cam đẹp?', a: 'Em nói nhẹ với bạn: "Thả nó ra đi, kẻo nó chết". Quan sát từ xa cũng đủ. Sinh vật cũng có cuộc sống của nó.' },
-      { q: 'Em đi dã ngoại, có chai nước suối nhặt được?', a: 'Em KHÔNG uống — không biết nguồn gốc. Chỉ uống nước trong bình của mình hoặc nước đóng chai chưa mở.' },
+      { q: 'Em đi dã ngoại, có chai nước suối nhặt được?', a: 'Em KHÔNG uống: không biết nguồn gốc. Chỉ uống nước trong bình của mình hoặc nước đóng chai chưa mở.' },
     ],
   },
 
@@ -585,13 +585,13 @@ export const P1HDTN_LESSONS = {
     ],
     theory: [
       { h: 'Ngày 1/6' },
-      { p: 'Ngày 1/6 là Quốc tế Thiếu nhi — ngày của tất cả các em nhỏ trên thế giới.' },
+      { p: 'Ngày 1/6 là Quốc tế Thiếu nhi, ngày của tất cả các em nhỏ trên thế giới.' },
       { h: 'Quyền của trẻ em' },
       { ul: ['Quyền được học hành.', 'Quyền được vui chơi.', 'Quyền được bảo vệ, chăm sóc.'] },
       { note: 'Thấy bạn bị bắt nạt → báo cô/thầy/người lớn để bảo vệ bạn.' },
     ],
     examples: [
-      { q: 'Em thấy một bạn lớn hơn bắt nạt bạn cùng lớp?', a: 'Em không đánh lại — sẽ nguy hiểm. Em chạy báo cô giáo hoặc bác bảo vệ ngay. Người lớn sẽ xử lí. Báo cho người lớn không phải mách lẻo.' },
+      { q: 'Em thấy một bạn lớn hơn bắt nạt bạn cùng lớp?', a: 'Em không đánh lại: sẽ nguy hiểm. Em chạy báo cô giáo hoặc bác bảo vệ ngay. Người lớn sẽ xử lí. Báo cho người lớn không phải mách lẻo.' },
       { q: 'Bố mẹ bảo em phải đi làm thay vì học?', a: 'Việc đó không đúng. Trẻ em có quyền được học. Em nói chuyện với cô giáo. Cô sẽ giúp em và gia đình tìm cách phù hợp.' },
     ],
   },
@@ -611,7 +611,7 @@ export const P1HDTN_LESSONS = {
       { note: 'Thẻ giới thiệu là cách giúp các bạn nhớ em nhanh hơn.' },
     ],
     examples: [
-      { q: 'Em sợ chữ xấu trên thẻ?', a: 'Em viết nháp bằng bút chì trước, viết chậm và đều. Sau đó tô lại bằng bút màu. Đường viền thẳng, chữ rõ — không cần quá đẹp.' },
+      { q: 'Em sợ chữ xấu trên thẻ?', a: 'Em viết nháp bằng bút chì trước, viết chậm và đều. Sau đó tô lại bằng bút màu. Đường viền thẳng, chữ rõ; không cần quá đẹp.' },
       { q: 'Em không biết mình thích gì để ghi?', a: 'Em nghĩ về điều em hay làm vui nhất: vẽ, chơi xếp hình, nghe truyện, đá bóng… Đó chính là sở thích của em.' },
     ],
   },
@@ -650,7 +650,7 @@ export const P1HDTN_LESSONS = {
     ],
     examples: [
       { q: 'Em chưa biết mình thích nghề gì?', a: 'Bình thường thôi. Em còn nhỏ, sẽ dần khám phá. Em chú ý: em thích vẽ? thích chăm em bé? thích máy móc? Đó là gợi ý cho ước mơ.' },
-      { q: 'Bố mẹ muốn em làm bác sĩ nhưng em thích vẽ?', a: 'Em nói chuyện thật thà với bố mẹ về điều em yêu. Ước mơ là của em — bố mẹ sẽ ủng hộ nếu em chăm chỉ và có khả năng.' },
+      { q: 'Bố mẹ muốn em làm bác sĩ nhưng em thích vẽ?', a: 'Em nói chuyện thật thà với bố mẹ về điều em yêu. Ước mơ là của em, bố mẹ sẽ ủng hộ nếu em chăm chỉ và có khả năng.' },
     ],
   },
 
@@ -666,7 +666,7 @@ export const P1HDTN_LESSONS = {
       { p: 'Tạm biệt cô và bạn lễ phép. Trong hè vẫn ôn lại bài để khỏi quên kiến thức.' },
       { h: 'An toàn mùa hè' },
       { ul: ['Đi bơi → có người lớn ở nơi an toàn, KHÔNG bơi một mình.', 'Trời nắng → đội mũ, uống đủ nước.', 'Không chạy ngoài trưa nắng lâu.'] },
-      { note: 'Hè vui nhưng phải an toàn — bố mẹ sẽ yên tâm hơn.' },
+      { note: 'Hè vui nhưng phải an toàn, bố mẹ sẽ yên tâm hơn.' },
     ],
     examples: [
       { q: 'Em buồn vì sẽ xa các bạn?', a: 'Em vẫn có thể gọi điện, gửi thư cho bạn trong hè. Nghỉ hè chỉ tạm xa, mở năm học mới sẽ gặp lại. Hè cũng có nhiều việc vui.' },
@@ -695,7 +695,7 @@ export const P1HDTN_LESSONS = {
   },
 
   'P1HDTN-w36-quiz': {
-    topic: 'Kết thúc Lớp 1 — Hành trang trải nghiệm vào Lớp 2',
+    topic: 'Kết thúc Lớp 1: Hành trang trải nghiệm vào Lớp 2',
     intro: 'Mình đã cùng nhau trải qua cả một năm học đầy kỉ niệm. Cô rất vui được đồng hành cùng em!',
     objectives: [
       'Nhìn lại những trải nghiệm đáng nhớ trong năm học.',
@@ -704,7 +704,7 @@ export const P1HDTN_LESSONS = {
     theory: [
       { h: 'Những điều em đã trải nghiệm' },
       { ul: [
-        'Ngày đầu đến trường — hồi hộp nhưng vui.',
+        'Ngày đầu đến trường: hồi hộp nhưng vui.',
         'Kết bạn mới, học tên bạn, cùng nhau chơi.',
         'Học cách tự giác: chuẩn bị sách vở, giữ vệ sinh lớp.',
         'Tham gia lễ hội, sự kiện trường: ngày khai giảng, Tết Trung Thu, 20/11…',

@@ -1,5 +1,5 @@
 // ============================================================
-// Helper soạn quiz tuần cho Lớp 1 — tránh lặp boilerplate.
+// Helper soạn quiz tuần cho Lớp 1, tránh lặp boilerplate.
 // ============================================================
 
 export const Q = (stem, choices, answer, explanation, choiceFeedback) =>
@@ -15,7 +15,7 @@ export const W = (modulePrefix, subjectKey, n, title, questions, opts = {}) => {
   const week = String(n).padStart(2, '0');
   return {
     id:           `${modulePrefix}-w${week}-quiz`,
-    title:        `Tuần ${n} — ${title}`,
+    title:        `Tuần ${n}: ${title}`,
     kind:         opts.kind ?? 'quiz',
     yearLevel:    1,
     subject:      subjectKey,

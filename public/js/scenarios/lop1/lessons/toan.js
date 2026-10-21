@@ -1,5 +1,5 @@
 // ============================================================
-// Lớp 1 · TOÁN — Lý thuyết + Ví dụ 35 tuần (GDPT 2018)
+// Lớp 1 · TOÁN, Lý thuyết + Ví dụ 35 tuần (GDPT 2018)
 // Key TRÙNG id quiz: "P1-wNN-quiz".
 // Giọng cô giáo lớp 1: rất nhẹ nhàng, câu ngắn, từ đơn giản.
 // ============================================================
@@ -715,7 +715,7 @@ export const P1_TOAN_LESSONS = {
   },
 
   'P1-w36-quiz': {
-    topic: 'Kết thúc Lớp 1 — Hành trang vào Lớp 2',
+    topic: 'Kết thúc Lớp 1: Hành trang vào Lớp 2',
     intro: 'Ôi, cả năm học qua nhanh quá! Cô rất tự hào về các em. Mình cùng nhìn lại những điều đã học nhé!',
     objectives: [
       'Nhớ lại những kiến thức Toán quan trọng nhất của Lớp 1.',
@@ -735,7 +735,7 @@ export const P1_TOAN_LESSONS = {
         'Số đến 1000.',
         'Bảng nhân và bảng chia.',
         'Đo độ dài bằng cm.',
-        'Xem lịch — ngày, tháng, tuần.',
+        'Xem lịch: ngày, tháng, tuần.',
       ] },
       { note: 'Cô chúc em một kì hè vui vẻ. Hãy nhớ ôn lại bảng cộng trừ mỗi ngày nhé!' },
     ],

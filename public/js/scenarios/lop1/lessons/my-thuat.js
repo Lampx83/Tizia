@@ -1,5 +1,5 @@
 // ============================================================
-// Lớp 1 · MĨ THUẬT — Lý thuyết + Ví dụ cho 35 tuần (GDPT 2018)
+// Lớp 1 · MĨ THUẬT, Lý thuyết + Ví dụ cho 35 tuần (GDPT 2018)
 // Key TRÙNG id quiz: "P1MT-wNN-quiz".
 // Nội dung ngắn gọn, giọng cô giáo lớp 1 ấm áp, gọi "các em".
 // ============================================================
@@ -227,7 +227,7 @@ export const P1MT_LESSONS = {
       { h: 'Hình tam giác' },
       { p: 'Hình tam giác có 3 cạnh thẳng và 3 góc. Vẽ bằng 3 nét thẳng nối lại.' },
       { ul: ['Mái nhà ngói → tam giác.', 'Cái nón lá nhìn ngang → tam giác.', 'Lá cờ đuôi nheo → tam giác.'] },
-      { note: 'Tam giác có nhiều loại: cao, thấp, đều — đều có 3 cạnh.' },
+      { note: 'Tam giác có nhiều loại: cao, thấp, đều; đều có 3 cạnh.' },
     ],
     examples: [
       { q: 'Vẽ mái nhà bằng tam giác?', a: 'Em vẽ một hình vuông làm tường nhà. Trên đỉnh đặt một hình tam giác làm mái. Mái tô đỏ, tường tô vàng.' },
@@ -399,7 +399,7 @@ export const P1MT_LESSONS = {
     ],
     theory: [
       { h: 'Cách in lá' },
-      { ul: ['Bước 1: chọn lá có gân nổi rõ.', 'Bước 2: quét màu lên mặt có gân.', 'Bước 3: úp lá lên giấy, ấn nhẹ và đều.', 'Bước 4: nhấc lá ra — đã có hình lá có gân đẹp.'] },
+      { ul: ['Bước 1: chọn lá có gân nổi rõ.', 'Bước 2: quét màu lên mặt có gân.', 'Bước 3: úp lá lên giấy, ấn nhẹ và đều.', 'Bước 4: nhấc lá ra; đã có hình lá có gân đẹp.'] },
       { note: 'In xong nhớ rửa tay và lau bàn cho sạch nhé!' },
     ],
     examples: [
@@ -419,7 +419,7 @@ export const P1MT_LESSONS = {
       { h: 'Hình ảnh ngày Tết' },
       { ul: ['Miền Bắc: hoa đào hồng.', 'Miền Nam: hoa mai vàng.', 'Bánh chưng, bánh tét.', 'Phong bao lì xì đỏ.'] },
       { h: 'Màu sắc' },
-      { p: 'Tranh Tết chủ đạo là đỏ và vàng — ấm áp, may mắn.' },
+      { p: 'Tranh Tết chủ đạo là đỏ và vàng, ấm áp, may mắn.' },
       { note: 'Vẽ tranh Tết phải thật tươi vui, đầm ấm các em nhé!' },
     ],
     examples: [
@@ -468,7 +468,7 @@ export const P1MT_LESSONS = {
 
   'P1MT-w25-quiz': {
     topic: 'Nặn đất sét – quả bóng',
-    intro: 'Hôm nay tay em sẽ thành "phép màu" — nặn đất sét thành quả bóng tròn xinh! Cùng làm nào các em.',
+    intro: 'Hôm nay tay em sẽ thành "phép màu", nặn đất sét thành quả bóng tròn xinh! Cùng làm nào các em.',
     objectives: [
       'Biết bóp đất cho mềm trước khi nặn.',
       'Vê được đất thành quả bóng tròn.',
@@ -534,11 +534,11 @@ export const P1MT_LESSONS = {
       { h: 'Quan sát trước khi vẽ' },
       { p: 'Em nhìn kĩ bạn: tóc dài hay ngắn, có kính hay không, hay cười không…' },
       { ul: ['Tóc xoăn → vẽ nét lượn xoăn.', 'Tóc thẳng → vẽ nét thẳng dọc.', 'Đeo kính → vẽ hai hình tròn nối nhau ở mắt.'] },
-      { note: 'Vẽ xong em có thể tặng tranh cho bạn — bạn sẽ rất vui!' },
+      { note: 'Vẽ xong em có thể tặng tranh cho bạn, bạn sẽ rất vui!' },
     ],
     examples: [
       { q: 'Vẽ bạn tóc xoăn, hay cười?', a: 'Em vẽ khuôn mặt bầu dục. Tóc dùng nét lượn xoăn quanh đầu. Miệng cười tươi cong lên. Hai má có thể chấm hồng nhẹ.' },
-      { q: 'Vẽ bạn đeo kính?', a: 'Vẽ khuôn mặt bình thường. Trên hai mắt vẽ thêm hai hình tròn nối nhau bằng một thanh ngang nhỏ — đó là kính. Có thể tô gọng nâu.' },
+      { q: 'Vẽ bạn đeo kính?', a: 'Vẽ khuôn mặt bình thường. Trên hai mắt vẽ thêm hai hình tròn nối nhau bằng một thanh ngang nhỏ, đó là kính. Có thể tô gọng nâu.' },
     ],
   },
 
@@ -629,7 +629,7 @@ export const P1MT_LESSONS = {
       { p: 'Hãy chọn điều em yêu thích nhất: gia đình, con vật, đồ chơi, ngôi nhà…' },
       { h: 'Các bước vẽ' },
       { ul: ['Hình dung bố cục trước khi vẽ.', 'Vẽ phác bằng bút chì.', 'Tô màu có đậm – nhạt.', 'Đặt tên ngắn, rõ ý.'] },
-      { note: 'Nếu lỡ vẽ sai, em hãy biến cái sai thành chi tiết khác — đó cũng là sáng tạo!' },
+      { note: 'Nếu lỡ vẽ sai, em hãy biến cái sai thành chi tiết khác; đó cũng là sáng tạo!' },
     ],
     examples: [
       { q: 'Em yêu con mèo, vẽ thế nào?', a: 'Em vẽ chú mèo to ở giữa, đang chơi với cuộn len. Bên cạnh có bát sữa nhỏ. Nền là sàn nhà ấm áp. Đặt tên: "Mèo con của em".' },
@@ -669,7 +669,7 @@ export const P1MT_LESSONS = {
       { ul: ['Chấm, nét thẳng, nét cong, nét gấp khúc.', 'Ba màu cơ bản: đỏ – vàng – xanh lam.', 'Pha màu cam, lục.', 'Hình vuông, tròn, tam giác.', 'Vẽ nhà, cây, con vật, chân dung; xé dán; in lá; nặn đất.'] },
       { h: 'Cuối năm em nên' },
       { p: 'Cất gọn đồ dùng để giữ cho năm sau. Tiếp tục quan sát và sáng tạo mỗi ngày.' },
-      { note: 'Điều quan trọng nhất khi vẽ là cảm xúc và sáng tạo của em — không cần giống ai!' },
+      { note: 'Điều quan trọng nhất khi vẽ là cảm xúc và sáng tạo của em, không cần giống ai!' },
     ],
     examples: [
       { q: 'Em sẽ làm gì để tiếp tục yêu Mĩ thuật?', a: 'Em sẽ quan sát mọi vật quanh mình mỗi ngày. Có thể vẽ nhật kí bằng hình. Tô màu mọi thứ em yêu thích.' },
@@ -678,7 +678,7 @@ export const P1MT_LESSONS = {
   },
 
   'P1MT-w36-quiz': {
-    topic: 'Kết thúc Lớp 1 — Nhìn lại hành trình sáng tạo',
+    topic: 'Kết thúc Lớp 1: Nhìn lại hành trình sáng tạo',
     intro: 'Chúc mừng em đã hoàn thành năm học Mĩ thuật Lớp 1! Mình cùng nhớ lại những điều đẹp đẽ đã làm nhé.',
     objectives: [
       'Nhớ lại các kĩ năng mĩ thuật đã học trong năm.',
@@ -698,7 +698,7 @@ export const P1MT_LESSONS = {
       { note: 'Hè này hãy mang bút chì và vẽ bất cứ điều gì em thích. Một ngày một bức vẽ nho nhỏ là đủ!' },
     ],
     examples: [
-      { q: '3 màu cơ bản là gì?', a: 'Đỏ, vàng, xanh lam — pha 2 màu cơ bản tạo ra màu thứ cấp.' },
+      { q: '3 màu cơ bản là gì?', a: 'Đỏ, vàng, xanh lam; pha 2 màu cơ bản tạo ra màu thứ cấp.' },
       { q: 'Em sẽ vẽ gì trong hè?', a: 'Ví dụ: vẽ gia đình, con vật yêu thích, cảnh thiên nhiên quê hương.' },
     ],
   },

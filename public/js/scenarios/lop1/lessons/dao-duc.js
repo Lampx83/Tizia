@@ -1,5 +1,5 @@
 // ============================================================
-// Lớp 1 · ĐẠO ĐỨC — Lý thuyết + Ví dụ 35 tuần (GDPT 2018)
+// Lớp 1 · ĐẠO ĐỨC, Lý thuyết + Ví dụ 35 tuần (GDPT 2018)
 // Key TRÙNG id quiz: "P1DD-wNN-quiz".
 // Hình thành phẩm chất: nhân ái, chăm chỉ, trung thực,
 // trách nhiệm, yêu nước. Văn phong nhẹ nhàng cho HS 6 tuổi.
@@ -16,7 +16,7 @@ export const P1DD_LESSONS = {
       'Biết một số việc HS lớp 1 cần làm.',
     ],
     theory: [
-      { h: 'Em là HS lớp 1 — em đã lớn!' },
+      { h: 'Em là HS lớp 1, em đã lớn!' },
       { p: 'Vào lớp 1, em không còn là em bé mẫu giáo nữa. Em đã biết cầm bút, mặc đồng phục và có sách vở của riêng mình.' },
       { h: 'HS lớp 1 cần làm gì?' },
       { ul: [
@@ -25,11 +25,11 @@ export const P1DD_LESSONS = {
         'Chăm chú nghe cô giảng bài.',
         'Lễ phép với thầy cô, hoà nhã với bạn bè.',
       ] },
-      { note: 'Em tự hào vì mình đã là học sinh lớp 1 — cố gắng học giỏi nhé!' },
+      { note: 'Em tự hào vì mình đã là học sinh lớp 1, cố gắng học giỏi nhé!' },
     ],
     examples: [
       { q: 'Sáng nay đi học, em chuẩn bị những gì?', a: 'Em mặc đồng phục, soạn sách vở theo thời khoá biểu, chào bố mẹ rồi đi học.' },
-      { q: 'Em thấy bạn còn khóc đòi mẹ trong lớp, em làm gì?', a: 'Em nắm tay bạn, dỗ bạn và cùng bạn vào học — bạn sẽ thấy vui hơn.' },
+      { q: 'Em thấy bạn còn khóc đòi mẹ trong lớp, em làm gì?', a: 'Em nắm tay bạn, dỗ bạn và cùng bạn vào học; bạn sẽ thấy vui hơn.' },
     ],
   },
 
@@ -79,13 +79,13 @@ export const P1DD_LESSONS = {
     ],
     examples: [
       { q: 'Bà bị đau lưng, em làm gì?', a: 'Em xoa lưng, lấy nước cho bà uống và hỏi thăm "Bà có đau lắm không ạ?".' },
-      { q: 'Mẹ đi làm về, em làm gì?', a: 'Em chạy ra ôm mẹ và nói "Mẹ ơi, con yêu mẹ!" — mẹ sẽ rất vui.' },
+      { q: 'Mẹ đi làm về, em làm gì?', a: 'Em chạy ra ôm mẹ và nói "Mẹ ơi, con yêu mẹ!", mẹ sẽ rất vui.' },
     ],
   },
 
   'P1DD-w04-quiz': {
     topic: 'Lễ phép với anh chị, nhường nhịn em nhỏ',
-    intro: 'Trong nhà có anh chị em — cùng nhau yêu thương, nhường nhịn nhau là điều rất đẹp!',
+    intro: 'Trong nhà có anh chị em, cùng nhau yêu thương, nhường nhịn nhau là điều rất đẹp!',
     objectives: [
       'Lễ phép, vâng lời anh chị.',
       'Nhường nhịn em nhỏ.',
@@ -100,11 +100,11 @@ export const P1DD_LESSONS = {
         'Khi em ngã, em đỡ em dậy.',
         'Dạy em những điều tốt.',
       ] },
-      { note: 'Anh chị em hoà thuận — gia đình mới hạnh phúc.' },
+      { note: 'Anh chị em hoà thuận, gia đình mới hạnh phúc.' },
     ],
     examples: [
-      { q: 'Anh nhắc em phải dọn đồ chơi, em làm gì?', a: 'Em vâng lời anh và đi dọn ngay — anh nhắc đúng để giữ nhà gọn gàng.' },
-      { q: 'Em bé tranh đồ chơi của em, em làm gì?', a: 'Em nhường em bé, rồi xin mẹ một món khác — em là chị/anh mà.' },
+      { q: 'Anh nhắc em phải dọn đồ chơi, em làm gì?', a: 'Em vâng lời anh và đi dọn ngay, anh nhắc đúng để giữ nhà gọn gàng.' },
+      { q: 'Em bé tranh đồ chơi của em, em làm gì?', a: 'Em nhường em bé, rồi xin mẹ một món khác; em là chị/anh mà.' },
     ],
   },
 
@@ -128,7 +128,7 @@ export const P1DD_LESSONS = {
     ],
     examples: [
       { q: 'Tối em làm gì để sáng không vội?', a: 'Em soạn cặp sách, chuẩn bị quần áo và đi ngủ sớm.' },
-      { q: 'Em đi muộn, vào lớp em làm gì?', a: 'Em gõ cửa, xin lỗi cô và nhẹ nhàng vào chỗ ngồi — không làm ảnh hưởng đến cả lớp.' },
+      { q: 'Em đi muộn, vào lớp em làm gì?', a: 'Em gõ cửa, xin lỗi cô và nhẹ nhàng vào chỗ ngồi; không làm ảnh hưởng đến cả lớp.' },
     ],
   },
 
@@ -174,11 +174,11 @@ export const P1DD_LESSONS = {
       ] },
       { h: 'Biết ơn thầy cô' },
       { p: 'Thầy cô vất vả dạy em từng nét chữ, từng phép tính. 20/11 em có thể tặng cô một bông hoa, một tấm thiệp do em tự làm.' },
-      { note: '"Không thầy đố mày làm nên" — không có thầy cô, không có thành công của em.' },
+      { note: '"Không thầy đố mày làm nên", không có thầy cô, không có thành công của em.' },
     ],
     examples: [
       { q: 'Cô bước vào lớp, em làm gì?', a: 'Em đứng dậy, khoanh tay chào: "Em chào cô ạ!"' },
-      { q: 'Em muốn trả lời câu hỏi, em làm gì?', a: 'Em giơ tay xin phép — đợi cô gọi tên rồi mới trả lời.' },
+      { q: 'Em muốn trả lời câu hỏi, em làm gì?', a: 'Em giơ tay xin phép, đợi cô gọi tên rồi mới trả lời.' },
     ],
   },
 
@@ -197,12 +197,12 @@ export const P1DD_LESSONS = {
         'Cho bạn mượn đồ khi bạn cần.',
         'Giúp bạn học yếu hơn.',
         'Không kéo bè, không nói xấu bạn.',
-        'Bạn buồn — em hỏi thăm, an ủi.',
+        'Bạn buồn: em hỏi thăm, an ủi.',
       ] },
       { note: 'Một bạn nhỏ tốt sẽ có nhiều bạn tốt.' },
     ],
     examples: [
-      { q: 'Bạn không biết làm bài, em làm gì?', a: 'Em chỉ cách làm cho bạn, không cho chép — để bạn cũng tự hiểu.' },
+      { q: 'Bạn không biết làm bài, em làm gì?', a: 'Em chỉ cách làm cho bạn, không cho chép; để bạn cũng tự hiểu.' },
       { q: 'Bạn ngã ở sân trường, em làm gì?', a: 'Em đỡ bạn dậy, hỏi bạn có đau không, đưa bạn vào phòng y tế nếu cần.' },
     ],
   },
@@ -216,7 +216,7 @@ export const P1DD_LESSONS = {
     ],
     theory: [
       { h: 'Nền nếp là gì?' },
-      { p: 'Là làm các việc theo giờ giấc và thứ tự cố định mỗi ngày — ăn ngủ học chơi đúng giờ.' },
+      { p: 'Là làm các việc theo giờ giấc và thứ tự cố định mỗi ngày, ăn ngủ học chơi đúng giờ.' },
       { h: 'Thời khoá biểu hàng ngày' },
       { ul: [
         '6h: dậy, vệ sinh cá nhân.',
@@ -229,7 +229,7 @@ export const P1DD_LESSONS = {
     ],
     examples: [
       { q: 'Tối em làm gì trước khi đi ngủ?', a: 'Em đánh răng, soạn cặp cho ngày mai và lên giường ngủ đúng giờ.' },
-      { q: 'Em xem tivi tới khuya có tốt không?', a: 'Không — sáng dậy mệt, học không hiểu bài. Em nên ngủ sớm.' },
+      { q: 'Em xem tivi tới khuya có tốt không?', a: 'Không: sáng dậy mệt, học không hiểu bài. Em nên ngủ sớm.' },
     ],
   },
 
@@ -245,22 +245,22 @@ export const P1DD_LESSONS = {
       { p: 'Là chăm chú nghe giảng, làm bài đầy đủ, ôn lại bài đã học, không lười biếng.' },
       { h: 'Em làm gì để chăm?' },
       { ul: [
-        'Nghe cô giảng — không nói chuyện riêng.',
+        'Nghe cô giảng: không nói chuyện riêng.',
         'Làm hết bài tập, không bỏ dở.',
         'Khó bài thì hỏi cô, hỏi bạn.',
         'Đọc sách thay vì xem tivi quá nhiều.',
       ] },
-      { note: '"Có công mài sắt, có ngày nên kim" — chăm chỉ sẽ giỏi.' },
+      { note: '"Có công mài sắt, có ngày nên kim", chăm chỉ sẽ giỏi.' },
     ],
     examples: [
-      { q: 'Em không hiểu bài, em làm gì?', a: 'Em giơ tay hỏi cô, hoặc nhờ bạn giảng lại — không giấu dốt.' },
+      { q: 'Em không hiểu bài, em làm gì?', a: 'Em giơ tay hỏi cô, hoặc nhờ bạn giảng lại; không giấu dốt.' },
       { q: 'Cô giao bài về nhà, em làm khi nào?', a: 'Em làm ngay buổi tối, không để đến sáng mai.' },
     ],
   },
 
   'P1DD-w11-quiz': {
     topic: 'Chào hỏi, cảm ơn, xin lỗi',
-    intro: 'Ba từ vàng — chào hỏi, cảm ơn, xin lỗi — sẽ giúp em thật đáng yêu trong mắt mọi người!',
+    intro: 'Ba từ vàng, chào hỏi, cảm ơn, xin lỗi, sẽ giúp em thật đáng yêu trong mắt mọi người!',
     objectives: [
       'Biết chào hỏi đúng cách.',
       'Biết nói cảm ơn và xin lỗi đúng lúc.',
@@ -268,7 +268,7 @@ export const P1DD_LESSONS = {
     theory: [
       { h: 'Chào hỏi' },
       { p: 'Gặp người lớn: khoanh tay, cúi đầu, chào lễ phép. Gặp bạn: vẫy tay hoặc cười tươi.' },
-      { h: 'Cảm ơn — Xin lỗi' },
+      { h: 'Cảm ơn: Xin lỗi' },
       { ul: [
         'Cảm ơn: khi nhận quà, được giúp đỡ.',
         'Xin lỗi: khi làm sai, làm phiền người khác.',
@@ -277,7 +277,7 @@ export const P1DD_LESSONS = {
       { note: 'Ba từ vàng làm cho cuộc sống ấm áp và lịch sự hơn.' },
     ],
     examples: [
-      { q: 'Bạn cho em mượn bút, em nói gì?', a: '"Cảm ơn bạn!" — và nhớ trả bút sau khi dùng xong.' },
+      { q: 'Bạn cho em mượn bút, em nói gì?', a: '"Cảm ơn bạn!", và nhớ trả bút sau khi dùng xong.' },
       { q: 'Em làm rơi sách của bạn, em nói gì?', a: '"Xin lỗi bạn nhé!" rồi em nhặt sách lên trả lại bạn.' },
     ],
   },
@@ -299,7 +299,7 @@ export const P1DD_LESSONS = {
         'Có lỗi thì nhận, không đổ cho bạn.',
         'Không lừa dối bố mẹ.',
       ] },
-      { note: '"Một lần bất tín, vạn lần bất tin" — nói dối một lần, không ai tin nữa.' },
+      { note: '"Một lần bất tín, vạn lần bất tin", nói dối một lần, không ai tin nữa.' },
     ],
     examples: [
       { q: 'Em nhặt được 20 nghìn ở sân trường, em làm gì?', a: 'Em nộp cho cô giáo hoặc bác bảo vệ để trả lại người mất.' },
@@ -325,11 +325,11 @@ export const P1DD_LESSONS = {
         'Cất đồ chơi sau khi chơi.',
         'Tự ngồi vào bàn học mỗi tối.',
       ] },
-      { note: 'Tự giác hôm nay — thành công ngày mai.' },
+      { note: 'Tự giác hôm nay: thành công ngày mai.' },
     ],
     examples: [
-      { q: 'Mẹ chưa nhắc, em đã ngồi vào bàn học. Đó là gì?', a: 'Đó là tự giác — em chủ động học mà không đợi mẹ nhắc.' },
-      { q: 'Đồ chơi em chơi xong nhưng còn để bừa. Em làm gì?', a: 'Em tự dọn vào hộp — không đợi mẹ nhắc.' },
+      { q: 'Mẹ chưa nhắc, em đã ngồi vào bàn học. Đó là gì?', a: 'Đó là tự giác: em chủ động học mà không đợi mẹ nhắc.' },
+      { q: 'Đồ chơi em chơi xong nhưng còn để bừa. Em làm gì?', a: 'Em tự dọn vào hộp, không đợi mẹ nhắc.' },
     ],
   },
 
@@ -353,8 +353,8 @@ export const P1DD_LESSONS = {
       { note: 'Lời nói lịch sự làm em đáng yêu và được mọi người quý mến.' },
     ],
     examples: [
-      { q: 'Cô hỏi: "Em hiểu bài chưa?". Em trả lời thế nào lịch sự?', a: '"Thưa cô, em hiểu rồi ạ!" — có "thưa cô" và "ạ" rất lễ phép.' },
-      { q: 'Em muốn xin nước của bạn, em nói gì?', a: '"Bạn cho mình xin chút nước nhé!" — sau khi uống nhớ cảm ơn.' },
+      { q: 'Cô hỏi: "Em hiểu bài chưa?". Em trả lời thế nào lịch sự?', a: '"Thưa cô, em hiểu rồi ạ!", có "thưa cô" và "ạ" rất lễ phép.' },
+      { q: 'Em muốn xin nước của bạn, em nói gì?', a: '"Bạn cho mình xin chút nước nhé!", sau khi uống nhớ cảm ơn.' },
     ],
   },
 
@@ -379,17 +379,17 @@ export const P1DD_LESSONS = {
         'Chơi với vật sắc, đồ điện, lửa.',
         'Chơi gần ao hồ một mình.',
       ] },
-      { note: 'Chơi vui là chơi an toàn — không ai bị đau, không ai phải khóc.' },
+      { note: 'Chơi vui là chơi an toàn, không ai bị đau, không ai phải khóc.' },
     ],
     examples: [
       { q: 'Bạn rủ em trèo cây hái xoài, em làm gì?', a: 'Em từ chối: "Trèo cây nguy hiểm lắm, mình nhờ người lớn nhặt giúp đi!"' },
-      { q: 'Em chơi gần ao một mình có an toàn không?', a: 'Không — rất nguy hiểm. Phải có người lớn đi cùng.' },
+      { q: 'Em chơi gần ao một mình có an toàn không?', a: 'Không: rất nguy hiểm. Phải có người lớn đi cùng.' },
     ],
   },
 
   'P1DD-w16-quiz': {
     topic: 'An toàn giao thông cho học sinh lớp 1',
-    intro: 'Đi học mỗi ngày — em cần biết luật giao thông để an toàn nhé!',
+    intro: 'Đi học mỗi ngày: em cần biết luật giao thông để an toàn nhé!',
     objectives: [
       'Biết các quy tắc giao thông cơ bản.',
       'Có ý thức chấp hành tín hiệu.',
@@ -407,13 +407,13 @@ export const P1DD_LESSONS = {
       { note: 'An toàn giao thông là hạnh phúc của mọi nhà.' },
     ],
     examples: [
-      { q: 'Em đang qua đường, đèn vàng bật. Em làm gì?', a: 'Em đi nhanh sang vỉa hè (nếu đã đi gần xong) hoặc dừng lại — chờ đèn xanh.' },
+      { q: 'Em đang qua đường, đèn vàng bật. Em làm gì?', a: 'Em đi nhanh sang vỉa hè (nếu đã đi gần xong) hoặc dừng lại, chờ đèn xanh.' },
       { q: 'Bạn rủ đá bóng dưới lòng đường, em làm gì?', a: 'Em từ chối: "Nguy hiểm lắm! Mình ra sân trường đá nhé!"' },
     ],
   },
 
   'P1DD-w17-quiz': {
-    topic: 'Ôn tập HK1 — Em là bạn nhỏ ngoan',
+    topic: 'Ôn tập HK1: Em là bạn nhỏ ngoan',
     intro: 'Học kỳ 1 đã đi qua. Mình cùng nhìn lại và tự hỏi: em đã ngoan chưa nhé?',
     objectives: [
       'Tổng hợp các phẩm chất đã học.',
@@ -441,7 +441,7 @@ export const P1DD_LESSONS = {
 
   'P1DD-w18-quiz': {
     topic: 'Kiểm tra cuối HK1',
-    intro: 'Tuần kiểm tra cuối HK1 — em chỉ cần làm bài thật bình tĩnh và trung thực nhé!',
+    intro: 'Tuần kiểm tra cuối HK1, em chỉ cần làm bài thật bình tĩnh và trung thực nhé!',
     objectives: [
       'Tổng hợp toàn bộ kiến thức đạo đức HK1.',
       'Làm bài kiểm tra trung thực, nghiêm túc.',
@@ -455,14 +455,14 @@ export const P1DD_LESSONS = {
         'Đến lớp sớm, ngồi yên chờ cô.',
       ] },
       { h: 'Khi làm bài' },
-      { p: 'Đọc kỹ câu hỏi. Suy nghĩ rồi trả lời. KHÔNG quay cóp, KHÔNG nhắc bạn — đó là trung thực.' },
+      { p: 'Đọc kỹ câu hỏi. Suy nghĩ rồi trả lời. KHÔNG quay cóp, KHÔNG nhắc bạn; đó là trung thực.' },
       { h: 'Sau khi làm xong' },
       { p: 'Soát lại bài, không nộp vội. Khi nộp bài: lễ phép đưa hai tay.' },
       { note: 'Điểm cao là tốt, nhưng quan trọng nhất là em làm bài trung thực.' },
     ],
     examples: [
       { q: 'Bạn xin chép bài em, em làm gì?', a: 'Em từ chối nhẹ nhàng: "Mình không cho chép được, bạn tự làm nhé!"' },
-      { q: 'Em không biết câu hỏi, em có nên đoán bừa không?', a: 'Em suy nghĩ thật kỹ rồi chọn đáp án em thấy hợp lý nhất — không nhìn bài bạn.' },
+      { q: 'Em không biết câu hỏi, em có nên đoán bừa không?', a: 'Em suy nghĩ thật kỹ rồi chọn đáp án em thấy hợp lý nhất, không nhìn bài bạn.' },
     ],
   },
 
@@ -509,7 +509,7 @@ export const P1DD_LESSONS = {
       ] },
       { h: 'Lời chúc Tết' },
       { p: 'Em có thể chúc: "Cháu chúc ông/bà mạnh khoẻ, sống lâu trăm tuổi" hoặc "Chúc cô chú năm mới hạnh phúc, an khang thịnh vượng".' },
-      { note: 'Tết là dịp gia đình sum vầy — em hãy là bạn nhỏ ngoan để Tết thêm vui.' },
+      { note: 'Tết là dịp gia đình sum vầy, em hãy là bạn nhỏ ngoan để Tết thêm vui.' },
     ],
     examples: [
       { q: 'Em nhận lì xì như thế nào?', a: 'Em đưa hai tay nhận, cúi đầu cảm ơn: "Cháu cảm ơn cô/chú ạ!"' },
@@ -534,16 +534,16 @@ export const P1DD_LESSONS = {
         'Không xả rác làm cô lao công vất vả.',
         'Cảm ơn khi nhận sự phục vụ.',
       ] },
-      { note: 'Mọi nghề đều đáng quý — không có người lao động, cuộc sống sẽ rất khó khăn.' },
+      { note: 'Mọi nghề đều đáng quý, không có người lao động, cuộc sống sẽ rất khó khăn.' },
     ],
     examples: [
-      { q: 'Em ăn cơm còn dư, em làm gì?', a: 'Em cố ăn hết — hạt cơm là công sức của bác nông dân, không nên bỏ phí.' },
-      { q: 'Em thấy cô lao công quét sân trường, em làm gì?', a: 'Em chào cô và không xả rác bừa — giúp cô bớt vất vả.' },
+      { q: 'Em ăn cơm còn dư, em làm gì?', a: 'Em cố ăn hết: hạt cơm là công sức của bác nông dân, không nên bỏ phí.' },
+      { q: 'Em thấy cô lao công quét sân trường, em làm gì?', a: 'Em chào cô và không xả rác bừa, giúp cô bớt vất vả.' },
     ],
   },
 
   'P1DD-w22-quiz': {
-    topic: 'Tết Nguyên đán — Phong tục đẹp',
+    topic: 'Tết Nguyên đán: Phong tục đẹp',
     intro: 'Tết Việt có rất nhiều phong tục đẹp. Mình cùng tìm hiểu nhé!',
     objectives: [
       'Biết một số phong tục đẹp ngày Tết.',
@@ -555,7 +555,7 @@ export const P1DD_LESSONS = {
         'Gói bánh chưng, bánh tét.',
         'Cúng tổ tiên đêm Giao thừa.',
         'Hái lộc đầu năm.',
-        'Xông đất — chúc nhau may mắn.',
+        'Xông đất: chúc nhau may mắn.',
         'Đi lễ chùa, thăm họ hàng.',
       ] },
       { h: 'Em giữ gìn truyền thống' },
@@ -609,17 +609,17 @@ export const P1DD_LESSONS = {
         'Lương tâm thanh thản, không lo bị phát hiện.',
         'Bố mẹ, thầy cô tự hào về em.',
       ] },
-      { note: 'Nói dối một lần — mất tin tưởng cả đời. Hãy sống thật thà nhé!' },
+      { note: 'Nói dối một lần: mất tin tưởng cả đời. Hãy sống thật thà nhé!' },
     ],
     examples: [
-      { q: 'Em làm vỡ ly nước, em nói gì với mẹ?', a: '"Mẹ ơi, con lỡ làm vỡ ly, con xin lỗi mẹ." — nhận lỗi là thật thà.' },
-      { q: 'Bạn hỏi mượn đồ chơi em có, em nên nói thật không?', a: 'Có — em nói thật, có hoặc không. Nói dối không tốt.' },
+      { q: 'Em làm vỡ ly nước, em nói gì với mẹ?', a: '"Mẹ ơi, con lỡ làm vỡ ly, con xin lỗi mẹ.", nhận lỗi là thật thà.' },
+      { q: 'Bạn hỏi mượn đồ chơi em có, em nên nói thật không?', a: 'Có: em nói thật, có hoặc không. Nói dối không tốt.' },
     ],
   },
 
   'P1DD-w25-quiz': {
     topic: 'Đoàn kết với bạn trong lớp',
-    intro: 'Một cây làm chẳng nên non — đoàn kết mới làm nên việc lớn. Mình cùng học nhé!',
+    intro: 'Một cây làm chẳng nên non, đoàn kết mới làm nên việc lớn. Mình cùng học nhé!',
     objectives: [
       'Hiểu lợi ích của đoàn kết.',
       'Biết hành động cụ thể để đoàn kết.',
@@ -634,10 +634,10 @@ export const P1DD_LESSONS = {
         'Không kì thị, không trêu chọc bạn khác.',
         'Cùng cổ vũ khi lớp tham gia thi.',
       ] },
-      { note: '"Đoàn kết, đoàn kết, đại đoàn kết — Thành công, thành công, đại thành công." — Bác Hồ.' },
+      { note: '"Đoàn kết, đoàn kết, đại đoàn kết; Thành công, thành công, đại thành công.", Bác Hồ.' },
     ],
     examples: [
-      { q: 'Lớp em chuẩn bị thi hát, em làm gì?', a: 'Em cùng bạn luyện tập, cổ vũ nhau — cả lớp cùng cố gắng.' },
+      { q: 'Lớp em chuẩn bị thi hát, em làm gì?', a: 'Em cùng bạn luyện tập, cổ vũ nhau; cả lớp cùng cố gắng.' },
       { q: 'Bạn mới chuyển vào lớp, em làm gì?', a: 'Em ra chào bạn, chỉ cho bạn chỗ ngồi, giúp bạn quen với lớp.' },
     ],
   },
@@ -659,16 +659,16 @@ export const P1DD_LESSONS = {
         'Không xả rác nơi công cộng.',
         'Báo người lớn nếu thấy ai phá hoại.',
       ] },
-      { note: 'Của công là của tất cả mọi người — phá là thiệt cho chính em.' },
+      { note: 'Của công là của tất cả mọi người, phá là thiệt cho chính em.' },
     ],
     examples: [
       { q: 'Em thấy bạn vẽ bậy lên tường lớp, em làm gì?', a: 'Em khuyên bạn dừng lại và báo cô giáo nếu bạn không nghe.' },
-      { q: 'Ở công viên, em có nên bẻ cành hoa không?', a: 'Không — hoa là của chung, hái mất thì mọi người không được ngắm.' },
+      { q: 'Ở công viên, em có nên bẻ cành hoa không?', a: 'Không: hoa là của chung, hái mất thì mọi người không được ngắm.' },
     ],
   },
 
   'P1DD-w27-quiz': {
-    topic: 'Yêu thiên nhiên — bảo vệ cây xanh',
+    topic: 'Yêu thiên nhiên: bảo vệ cây xanh',
     intro: 'Cây xanh là người bạn của em. Mình cùng yêu và bảo vệ cây nhé!',
     objectives: [
       'Hiểu cây xanh có lợi.',
@@ -709,11 +709,11 @@ export const P1DD_LESSONS = {
         'Không bắt nhốt chim, bướm.',
         'Bảo vệ động vật hoang dã.',
       ] },
-      { note: 'Yêu thương động vật là tấm lòng nhân ái — phẩm chất rất đẹp của con người.' },
+      { note: 'Yêu thương động vật là tấm lòng nhân ái, phẩm chất rất đẹp của con người.' },
     ],
     examples: [
       { q: 'Em thấy chim non rơi xuống đất, em làm gì?', a: 'Em nhẹ nhàng đặt chim lên cành cây, không bắt về nuôi.' },
-      { q: 'Bạn ném đá mèo, em làm gì?', a: 'Em khuyên bạn: "Bạn đừng ném, mèo đau lắm!" — và nói cô giáo nếu cần.' },
+      { q: 'Bạn ném đá mèo, em làm gì?', a: 'Em khuyên bạn: "Bạn đừng ném, mèo đau lắm!", và nói cô giáo nếu cần.' },
     ],
   },
 
@@ -738,7 +738,7 @@ export const P1DD_LESSONS = {
       { note: 'Càng tự lập, em càng tự tin và đáng yêu.' },
     ],
     examples: [
-      { q: 'Em có nên để mẹ xúc cơm cho ăn không?', a: 'Không — em đã lớn, tự cầm thìa xúc được.' },
+      { q: 'Em có nên để mẹ xúc cơm cho ăn không?', a: 'Không: em đã lớn, tự cầm thìa xúc được.' },
       { q: 'Sáng dậy em tự làm gì?', a: 'Đánh răng, rửa mặt, mặc quần áo, ăn sáng và đi học.' },
     ],
   },
@@ -764,33 +764,33 @@ export const P1DD_LESSONS = {
     ],
     examples: [
       { q: 'Có người lạ bấm chuông, em làm gì?', a: 'Em KHÔNG mở cửa, gọi điện cho bố mẹ ngay.' },
-      { q: 'Số gọi cứu hoả là?', a: 'Số 114 — gọi khi thấy cháy.' },
+      { q: 'Số gọi cứu hoả là?', a: 'Số 114: gọi khi thấy cháy.' },
     ],
   },
 
   'P1DD-w31-quiz': {
     topic: 'Phòng tránh xâm hại cơ thể',
-    intro: 'Cơ thể em là của em — không ai có quyền chạm vào tuỳ tiện. Mình học bài học rất quan trọng nhé!',
+    intro: 'Cơ thể em là của em, không ai có quyền chạm vào tuỳ tiện. Mình học bài học rất quan trọng nhé!',
     objectives: [
       'Biết vùng riêng tư trên cơ thể.',
       'Biết nói "KHÔNG" và báo người lớn.',
     ],
     theory: [
       { h: 'Vùng riêng tư' },
-      { p: 'Là phần cơ thể được đồ lót che — không ai được nhìn hay chạm vào (trừ bố mẹ khi tắm cho em hoặc bác sĩ khám khi có bố mẹ ở bên).' },
+      { p: 'Là phần cơ thể được đồ lót che, không ai được nhìn hay chạm vào (trừ bố mẹ khi tắm cho em hoặc bác sĩ khám khi có bố mẹ ở bên).' },
       { h: 'Quy tắc 5 ngón tay' },
       { ul: [
-        'Ngón cái: ông bà, bố mẹ — có thể ôm.',
-        'Ngón trỏ: thầy cô, anh chị em ruột — bắt tay, choàng vai.',
-        'Ngón giữa: bạn bè — bắt tay, vẫy tay.',
-        'Ngón áp út: người quen xa — vẫy tay chào.',
-        'Ngón út: người lạ — XUA TAY, tránh xa.',
+        'Ngón cái: ông bà, bố mẹ; có thể ôm.',
+        'Ngón trỏ: thầy cô, anh chị em ruột; bắt tay, choàng vai.',
+        'Ngón giữa: bạn bè; bắt tay, vẫy tay.',
+        'Ngón áp út: người quen xa; vẫy tay chào.',
+        'Ngón út: người lạ; XUA TAY, tránh xa.',
       ] },
-      { note: 'Có ai chạm vào vùng riêng tư hoặc làm em khó chịu — em phải nói "KHÔNG", chạy đi và kể cho bố mẹ ngay.' },
+      { note: 'Có ai chạm vào vùng riêng tư hoặc làm em khó chịu, em phải nói "KHÔNG", chạy đi và kể cho bố mẹ ngay.' },
     ],
     examples: [
       { q: 'Có người lạ rủ em đi chơi và cho kẹo, em làm gì?', a: 'Em từ chối: "Cháu không đi đâu cả!", chạy về và kể bố mẹ ngay.' },
-      { q: 'Ai có quyền chạm vùng riêng tư của em khi tắm?', a: 'Bố mẹ hoặc người chăm sóc em — không ai khác được phép.' },
+      { q: 'Ai có quyền chạm vùng riêng tư của em khi tắm?', a: 'Bố mẹ hoặc người chăm sóc em, không ai khác được phép.' },
     ],
   },
 
@@ -807,12 +807,12 @@ export const P1DD_LESSONS = {
       { h: 'Biểu tượng Tổ quốc' },
       { ul: [
         'Quốc kỳ: cờ đỏ sao vàng năm cánh.',
-        'Quốc ca: "Tiến quân ca" — nhạc sĩ Văn Cao.',
+        'Quốc ca: "Tiến quân ca", nhạc sĩ Văn Cao.',
         'Quốc hiệu: nước Cộng hoà Xã hội Chủ nghĩa Việt Nam.',
       ] },
       { h: 'Em yêu Tổ quốc thế nào?' },
       { p: 'Chào cờ trang nghiêm. Học giỏi để mai sau giúp đất nước. Tự hào nói: "Em là người Việt Nam!"' },
-      { note: 'Tổ quốc Việt Nam ngàn năm văn hiến — em hãy luôn yêu và tự hào nhé!' },
+      { note: 'Tổ quốc Việt Nam ngàn năm văn hiến, em hãy luôn yêu và tự hào nhé!' },
     ],
     examples: [
       { q: 'Lá cờ Tổ quốc có màu gì, hình gì?', a: 'Nền đỏ, ở giữa có ngôi sao vàng năm cánh.' },
@@ -838,7 +838,7 @@ export const P1DD_LESSONS = {
         'Giúp bạn học bài khó.',
         'Chăm sóc cây trong vườn.',
       ] },
-      { note: 'Mỗi ngày một việc tốt — em trở thành bạn nhỏ ngoan và giỏi.' },
+      { note: 'Mỗi ngày một việc tốt, em trở thành bạn nhỏ ngoan và giỏi.' },
     ],
     examples: [
       { q: 'Em kể 1 việc tốt em đã làm.', a: 'Ví dụ: "Em giúp mẹ nhặt rau", "Em cho bạn mượn bút", "Em nhặt rác bỏ vào thùng".' },
@@ -847,7 +847,7 @@ export const P1DD_LESSONS = {
   },
 
   'P1DD-w34-quiz': {
-    topic: 'Ôn tập HK2 — Em ngoan ở nhà và ở trường',
+    topic: 'Ôn tập HK2: Em ngoan ở nhà và ở trường',
     intro: 'Mình cùng ôn lại các bài học của HK2 nhé!',
     objectives: [
       'Hệ thống lại các phẩm chất đã học.',
@@ -869,8 +869,8 @@ export const P1DD_LESSONS = {
         'Chăm chỉ học tập.',
       ] },
       { h: 'Là công dân nhỏ' },
-      { p: 'Yêu Tổ quốc, yêu lao động, biết phòng tránh xâm hại — biết bảo vệ chính mình.' },
-      { note: 'Em đã ngoan hơn nhiều so với hồi vào lớp 1 — cô tự hào về em!' },
+      { p: 'Yêu Tổ quốc, yêu lao động, biết phòng tránh xâm hại; biết bảo vệ chính mình.' },
+      { note: 'Em đã ngoan hơn nhiều so với hồi vào lớp 1, cô tự hào về em!' },
     ],
     examples: [
       { q: 'Em đã thay đổi gì so với hồi đầu năm?', a: 'Ví dụ: "Em tự đánh răng, tự soạn cặp, không khóc khi mẹ đưa đi học nữa".' },
@@ -879,7 +879,7 @@ export const P1DD_LESSONS = {
   },
 
   'P1DD-w35-quiz': {
-    topic: 'Tổng kết — Em đã lớn hơn',
+    topic: 'Tổng kết: Em đã lớn hơn',
     intro: 'Một năm học khép lại. Em hãy nhìn lại xem mình đã lớn lên như thế nào nhé!',
     objectives: [
       'Tự nhận xét sự trưởng thành của bản thân.',
@@ -906,7 +906,7 @@ export const P1DD_LESSONS = {
   },
 
   'P1DD-w36-quiz': {
-    topic: 'Kết thúc Lớp 1 — 5 Phẩm chất em mang theo vào Lớp 2',
+    topic: 'Kết thúc Lớp 1–5 Phẩm chất em mang theo vào Lớp 2',
     intro: 'Năm học Lớp 1 khép lại. Em đã lớn hơn, ngoan hơn và giỏi hơn. Cô rất tự hào! Mình cùng ôn 5 phẩm chất tốt nhé.',
     objectives: [
       'Nhớ lại các phẩm chất đạo đức đã học trong năm.',
@@ -915,18 +915,18 @@ export const P1DD_LESSONS = {
     theory: [
       { h: '5 phẩm chất em đã học' },
       { ul: [
-        '❶ Thật thà — không nói dối, nhận lỗi khi sai.',
-        '❷ Yêu thương — yêu gia đình, thầy cô, bạn bè.',
-        '❸ Chăm chỉ — cố gắng làm bài, không bỏ cuộc.',
-        '❹ Sạch sẽ — giữ vệ sinh bản thân và lớp học.',
-        '❺ An toàn — biết tự bảo vệ mình và không làm hại bạn.',
+        '❶ Thật thà: không nói dối, nhận lỗi khi sai.',
+        '❷ Yêu thương: yêu gia đình, thầy cô, bạn bè.',
+        '❸ Chăm chỉ: cố gắng làm bài, không bỏ cuộc.',
+        '❹ Sạch sẽ: giữ vệ sinh bản thân và lớp học.',
+        '❺ An toàn: biết tự bảo vệ mình và không làm hại bạn.',
       ] },
       { h: 'Lời hứa vào Lớp 2' },
       { p: 'Em sẽ mang 5 phẩm chất này vào Lớp 2. Mỗi ngày cố gắng thêm một chút là đã giỏi lắm rồi!' },
       { note: 'Chúc em một mùa hè vui vẻ và bình an. Đến năm học mới nhớ vẫn là bạn nhỏ ngoan nhé!' },
     ],
     examples: [
-      { q: 'Em kể 1 điều em đã làm thật thà trong năm học?', a: 'Ví dụ: "Em báo cô khi quên bài tập" — thật thà dù biết có thể bị nhắc nhở.' },
+      { q: 'Em kể 1 điều em đã làm thật thà trong năm học?', a: 'Ví dụ: "Em báo cô khi quên bài tập", thật thà dù biết có thể bị nhắc nhở.' },
       { q: 'Chăm chỉ là gì?', a: 'Mỗi ngày làm bài đầy đủ, không lười, cố gắng dù bài khó.' },
     ],
   },

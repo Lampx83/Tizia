@@ -1,5 +1,5 @@
 // ============================================================
-// Lớp 1 · GDTC — Lý thuyết + Ví dụ cho 35 tuần (GDPT 2018)
+// Lớp 1 · GDTC, Lý thuyết + Ví dụ cho 35 tuần (GDPT 2018)
 // Key TRÙNG id quiz: "P1GDTC-wNN-quiz".
 // Nội dung ngắn gọn, giọng cô giáo lớp 1 ấm áp, gọi "các em".
 // ============================================================
@@ -41,14 +41,14 @@ export const P1GDTC_LESSONS = {
       { note: 'Đứng đúng tư thế giúp em có dáng đẹp và khoẻ mạnh.' },
     ],
     examples: [
-      { q: 'Khi đứng nghiêm, em hay nghiêng đầu, sửa thế nào?', a: 'Em giữ đầu thẳng, mắt nhìn về phía trước (chọn một điểm cố định). Tưởng tượng có sợi dây kéo đỉnh đầu lên — người sẽ thẳng tự nhiên.' },
+      { q: 'Khi đứng nghiêm, em hay nghiêng đầu, sửa thế nào?', a: 'Em giữ đầu thẳng, mắt nhìn về phía trước (chọn một điểm cố định). Tưởng tượng có sợi dây kéo đỉnh đầu lên, người sẽ thẳng tự nhiên.' },
       { q: 'Đứng nghiêm lâu mỏi, em làm sao?', a: 'Em đợi khẩu lệnh "Nghỉ!" rồi chùng chân nhẹ. Nếu chóng mặt em báo cô để được nghỉ ngồi.' },
     ],
   },
 
   'P1GDTC-w03-quiz': {
     topic: 'Quay phải – quay trái',
-    intro: 'Khẩu lệnh "Bên phải, quay!" — em xoay sang phía nào? Cùng cô tập nhé!',
+    intro: 'Khẩu lệnh "Bên phải, quay!", em xoay sang phía nào? Cùng cô tập nhé!',
     objectives: [
       'Phân biệt khẩu lệnh quay phải, quay trái.',
       'Quay đúng kĩ thuật, lấy gót làm trụ.',
@@ -77,7 +77,7 @@ export const P1GDTC_LESSONS = {
       { h: 'Đi đều' },
       { ul: ['Bước cùng chân với cả hàng, đều nhịp.', 'Tay vung tự nhiên ngược chiều với chân.', 'Lưng thẳng, mắt nhìn phía trước.'] },
       { h: 'Khoảng cách' },
-      { p: 'Giữ khoảng cách vừa đủ với bạn phía trước — không đạp gót bạn, cũng không tụt lại quá xa.' },
+      { p: 'Giữ khoảng cách vừa đủ với bạn phía trước, không đạp gót bạn, cũng không tụt lại quá xa.' },
       { note: 'Đi đều rèn cho em nề nếp và kỉ luật.' },
     ],
     examples: [
@@ -117,7 +117,7 @@ export const P1GDTC_LESSONS = {
       { h: 'Khi chạy' },
       { ul: ['Mắt nhìn thẳng phía trước.', 'Hơi khom người khi xuất phát, dồn lực.', 'Tay vung trước – sau theo nhịp.'] },
       { h: 'Về đích' },
-      { p: 'Khi về đích, em giảm tốc từ từ. Không dừng phắt — dễ ngã hoặc đau chân.' },
+      { p: 'Khi về đích, em giảm tốc từ từ. Không dừng phắt, dễ ngã hoặc đau chân.' },
       { note: 'Mệt thì báo cô để được nghỉ, không cố sức nguy hiểm.' },
     ],
     examples: [
@@ -141,7 +141,7 @@ export const P1GDTC_LESSONS = {
     ],
     examples: [
       { q: 'Em vươn tay mà lưng cong, sửa thế nào?', a: 'Em chú ý giữ ngực ưỡn nhẹ, bụng hóp. Khi vươn cao, mắt nhìn theo tay nhưng đầu không ngửa quá. Lưng thẳng tự nhiên.' },
-      { q: 'Em quên hít – thở, làm sao?', a: 'Em nhẩm trong đầu: vươn lên — "hít"; hạ xuống — "thở". Tập vài lần sẽ thành phản xạ.' },
+      { q: 'Em quên hít – thở, làm sao?', a: 'Em nhẩm trong đầu: vươn lên; "hít"; hạ xuống, "thở". Tập vài lần sẽ thành phản xạ.' },
     ],
   },
 
@@ -251,11 +251,11 @@ export const P1GDTC_LESSONS = {
     theory: [
       { h: 'Tư thế bắt bóng' },
       { ul: ['Hai bàn tay khum, mở trước ngực.', 'Mắt nhìn theo bóng.', 'Khi bóng chạm tay, hơi rút tay về cho êm.'] },
-      { note: 'Trượt bóng thì nhặt lại, tập tiếp — không nản chí.' },
+      { note: 'Trượt bóng thì nhặt lại, tập tiếp; không nản chí.' },
     ],
     examples: [
       { q: 'Bóng đến nhanh quá em không kịp bắt?', a: 'Em nhờ bạn ném nhẹ hơn lúc đầu. Khi quen rồi mới tăng tốc. Hai tay luôn sẵn sàng trước ngực để phản ứng nhanh.' },
-      { q: 'Bóng chạm tay rồi rơi mất?', a: 'Em rút tay về phía ngực khi bóng chạm — như "ôm" bóng vào người. Đừng để tay cứng đờ, dễ bóng bật ra.' },
+      { q: 'Bóng chạm tay rồi rơi mất?', a: 'Em rút tay về phía ngực khi bóng chạm, như "ôm" bóng vào người. Đừng để tay cứng đờ, dễ bóng bật ra.' },
     ],
   },
 
@@ -269,7 +269,7 @@ export const P1GDTC_LESSONS = {
     theory: [
       { h: 'Cách đi' },
       { ul: ['Mắt nhìn phía trước, hơi xuống vạch.', 'Hai tay dang ngang nhẹ giúp thăng bằng.', 'Đặt bàn chân thẳng trên vạch.'] },
-      { note: 'Bước lệch ra ngoài thì đứng lại, bước trở về vạch — không cố nhảy.' },
+      { note: 'Bước lệch ra ngoài thì đứng lại, bước trở về vạch; không cố nhảy.' },
     ],
     examples: [
       { q: 'Em hay bước lệch khỏi vạch?', a: 'Em bước chậm hơn, đặt từng bàn chân chính xác trên vạch. Mắt nhìn vạch phía trước, dang tay giữ thăng bằng.' },
@@ -319,7 +319,7 @@ export const P1GDTC_LESSONS = {
 
   'P1GDTC-w17-quiz': {
     topic: 'Trò chơi: Bịt mắt bắt dê',
-    intro: 'Bịt mắt mà vẫn bắt được bạn — rèn thính giác và phản xạ đấy các em!',
+    intro: 'Bịt mắt mà vẫn bắt được bạn, rèn thính giác và phản xạ đấy các em!',
     objectives: [
       'Chơi đúng luật, không hé mắt.',
       'Chơi an toàn trên sân bằng phẳng.',
@@ -348,7 +348,7 @@ export const P1GDTC_LESSONS = {
       { h: 'Đã học trong HK1' },
       { ul: ['Đứng nghiêm, đứng nghỉ; quay trái – phải.', 'Đi đều, đi nhanh, chạy.', 'Bài thể dục buổi sáng (tay, chân, lườn, bụng).', 'Nhảy, bật xa, ném – bắt bóng.', 'Đi vạch, đi ván; trò chơi vận động.'] },
       { h: 'Khi kiểm tra' },
-      { p: 'Em bình tĩnh, làm đúng kĩ thuật đã học. Nếu chưa tốt, em sẽ tập thêm — không bỏ cuộc.' },
+      { p: 'Em bình tĩnh, làm đúng kĩ thuật đã học. Nếu chưa tốt, em sẽ tập thêm; không bỏ cuộc.' },
       { note: 'Sau kiểm tra, cảm ơn cô và dọn gọn dụng cụ.' },
     ],
     examples: [
@@ -379,7 +379,7 @@ export const P1GDTC_LESSONS = {
 
   'P1GDTC-w20-quiz': {
     topic: 'Đi vượt chướng ngại vật thấp',
-    intro: 'Đi qua chướng ngại như nhảy qua dây thấp — vui và rèn khéo léo. Cùng tập nhé!',
+    intro: 'Đi qua chướng ngại như nhảy qua dây thấp, vui và rèn khéo léo. Cùng tập nhé!',
     objectives: [
       'Quan sát chướng ngại trước khi đi.',
       'Nâng cao đầu gối qua vật.',
@@ -407,7 +407,7 @@ export const P1GDTC_LESSONS = {
     theory: [
       { h: 'Khi chạy' },
       { ul: ['Tay vung trước – sau tự nhiên theo nhịp.', 'Hít vào bằng mũi, thở ra bằng miệng, đều đặn.', 'Mắt nhìn phía trước, theo vạch.'] },
-      { note: 'Hết hơi thì đi bộ chậm rồi nghỉ — không cố chạy thêm.' },
+      { note: 'Hết hơi thì đi bộ chậm rồi nghỉ, không cố chạy thêm.' },
     ],
     examples: [
       { q: 'Em chạy hay lệch sang một bên?', a: 'Em nhìn vạch ở xa (không nhìn dưới chân). Tay vung thẳng trước-sau, không xoắn người. Lưng thẳng.' },
@@ -463,7 +463,7 @@ export const P1GDTC_LESSONS = {
     theory: [
       { h: 'Tư thế ném' },
       { ul: ['Chân trước chân sau, đứng vững.', 'Tay cầm vòng, xuôi theo thân.', 'Mắt nhắm vào cọc đích.', 'Đưa vòng từ sau ra trước rồi nhẹ tay.'] },
-      { note: 'Trượt thì tập lại — không nản chí.' },
+      { note: 'Trượt thì tập lại: không nản chí.' },
     ],
     examples: [
       { q: 'Em ném mà vòng bay quá cọc?', a: 'Em ném nhẹ tay hơn, vòng bay vòng cung nhẹ chứ không thẳng băng. Tập gần trước, xa dần khi quen.' },
@@ -505,7 +505,7 @@ export const P1GDTC_LESSONS = {
     ],
     examples: [
       { q: 'Em tâng được vài cái là rơi?', a: 'Bình thường thôi. Em tập tâng nhẹ, đều tay. Đẩy bóng thẳng lên trên (không xiên). Tập nhiều lần sẽ tâng được lâu hơn.' },
-      { q: 'Bóng rơi xa, làm sao?', a: 'Em chạy nhẹ ra nhặt, không vội. Tâng bóng cần đẩy thẳng lên, không xiên sang bên — bóng sẽ rơi ngay tại chỗ.' },
+      { q: 'Bóng rơi xa, làm sao?', a: 'Em chạy nhẹ ra nhặt, không vội. Tâng bóng cần đẩy thẳng lên, không xiên sang bên; bóng sẽ rơi ngay tại chỗ.' },
     ],
   },
 
@@ -523,7 +523,7 @@ export const P1GDTC_LESSONS = {
       { note: 'Đồng diễn rèn tinh thần tập thể.' },
     ],
     examples: [
-      { q: 'Em quên động tác giữa chừng?', a: 'Em liếc nhìn bạn bên cạnh và làm theo. Không đứng yên giữa hàng — sẽ làm lệch đội hình. Tập về sẽ thuộc.' },
+      { q: 'Em quên động tác giữa chừng?', a: 'Em liếc nhìn bạn bên cạnh và làm theo. Không đứng yên giữa hàng, sẽ làm lệch đội hình. Tập về sẽ thuộc.' },
       { q: 'Em đứng lệch hàng?', a: 'Em quan sát hàng phía trước và bên cạnh. Bước nhẹ về vị trí đúng. Khoảng cách một cánh tay là chuẩn.' },
     ],
   },
@@ -640,7 +640,7 @@ export const P1GDTC_LESSONS = {
       { note: 'Có động tác chưa tốt thì hỏi cô và tập thêm.' },
     ],
     examples: [
-      { q: 'Em nhớ động tác này nhưng quên động tác kia?', a: 'Em hỏi cô để được nhắc lại. Tập thêm phần chưa thuộc. Bạn nhớ tốt có thể chỉ em — học hỏi từ bạn là rất đáng quý.' },
+      { q: 'Em nhớ động tác này nhưng quên động tác kia?', a: 'Em hỏi cô để được nhắc lại. Tập thêm phần chưa thuộc. Bạn nhớ tốt có thể chỉ em, học hỏi từ bạn là rất đáng quý.' },
       { q: 'Bạn em bật xa hơn em?', a: 'Em khen bạn và hỏi bí quyết. Có thể bạn vung tay mạnh hơn, khuỵu gối sâu hơn. Em học và tập theo.' },
     ],
   },
@@ -654,12 +654,12 @@ export const P1GDTC_LESSONS = {
     ],
     theory: [
       { h: 'Khi tới lượt' },
-      { ul: ['Bình tĩnh, hít thở sâu.', 'Nghe kĩ hiệu lệnh, làm đúng theo.', 'Nếu sai, xin cô làm lại — không nản.'] },
+      { ul: ['Bình tĩnh, hít thở sâu.', 'Nghe kĩ hiệu lệnh, làm đúng theo.', 'Nếu sai, xin cô làm lại; không nản.'] },
       { note: 'Sau khi xong: cảm ơn cô và dọn dụng cụ gọn gàng.' },
     ],
     examples: [
       { q: 'Em run khi đến lượt mình?', a: 'Em hít thở sâu 3 lần. Nhớ lại các bước đã tập. Cô và bạn ủng hộ em. Cứ làm theo những gì em đã quen.' },
-      { q: 'Lỡ làm sai một động tác?', a: 'Em bình tĩnh, xin cô làm lại lần nữa. Cô luôn cho cơ hội. Không có gì phải buồn — sai là để học.' },
+      { q: 'Lỡ làm sai một động tác?', a: 'Em bình tĩnh, xin cô làm lại lần nữa. Cô luôn cho cơ hội. Không có gì phải buồn, sai là để học.' },
     ],
   },
 
@@ -684,7 +684,7 @@ export const P1GDTC_LESSONS = {
   },
 
   'P1GDTC-w36-quiz': {
-    topic: 'Kết thúc Lớp 1 — Một năm chăm vận động',
+    topic: 'Kết thúc Lớp 1: Một năm chăm vận động',
     intro: 'Năm học sắp kết thúc. Em đã lớn hơn và khoẻ hơn rất nhiều! Cô cùng em nhìn lại hành trình nhé.',
     objectives: [
       'Nhớ lại các kĩ năng vận động đã học.',
@@ -709,7 +709,7 @@ export const P1GDTC_LESSONS = {
     ],
     examples: [
       { q: 'Bài thể dục buổi sáng giúp ích gì?', a: 'Giúp cơ thể tỉnh táo, dẻo dai, tập trung học tốt hơn.' },
-      { q: 'Hè em muốn học môn thể thao nào?', a: 'Ví dụ: bơi lội, cầu lông, đá bóng, nhảy dây — tuỳ em thích và điều kiện gia đình.' },
+      { q: 'Hè em muốn học môn thể thao nào?', a: 'Ví dụ: bơi lội, cầu lông, đá bóng, nhảy dây; tuỳ em thích và điều kiện gia đình.' },
     ],
   },
 };

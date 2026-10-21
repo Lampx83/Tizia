@@ -1,5 +1,5 @@
 // ============================================================
-// Lớp 1 — Barrel: gộp tất cả 8 môn × 35 tuần (GDPT 2018, 6 tuổi)
+// Lớp 1, Barrel: gộp tất cả 8 môn × 35 tuần (GDPT 2018, 6 tuổi)
 // ============================================================
 import { P1_TOAN_SCENARIOS  } from './toan.js';
 import { P1TV_SCENARIOS     } from './tieng-viet.js';
