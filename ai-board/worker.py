@@ -1260,6 +1260,8 @@ class HarnessPlanner:
                 "capability": capability,
                 "risk": "medium" if subtask.get("size") == "large" else "low",
                 "non_goals": ["Không sửa file ngoài allowed_scope."],
+                **({'task_type': subtask['task_type']} if subtask.get('task_type') in
+                   {'backend', 'frontend', 'database', 'review', 'test', 'all'} else {}),
             })
         capabilities = list(dict.fromkeys([*old_caps, *(step["capability"] for step in steps)]))
         return {

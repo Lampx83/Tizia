@@ -12,6 +12,14 @@ if str(AI_BOARD_DIR) not in sys.path:
 from worker import HarnessPlanner, HttpWorker, PlanBlockedError, WorkerClient, _execution_plan, execute_pre_pr, main
 
 
+def test_planner_task_type_survives_canonical_and_execution_plan():
+    old = {'summary_vi': 'One existing page', 'capabilities': [], 'subtasks': [
+        {'title': 'Update label', 'file': 'public/a.html', 'verify': 'label B', 'size': 'small', 'task_type': 'backend'}]}
+    plan = HarnessPlanner._canonical({'domain': 'it', 'type': 'other'}, old)
+    assert plan['steps'][0]['task_type'] == 'backend'
+    assert _execution_plan(plan)['subtasks'][0]['task_type'] == 'backend'
+
+
 def test_canonical_steps_use_the_requested_catalog_scope_without_granting_unknown_caps():
     catalog = {
         'public.ui': {'allow': ['public/'], 'deny': []},

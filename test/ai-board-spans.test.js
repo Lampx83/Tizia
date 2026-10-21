@@ -99,3 +99,15 @@ test('lease-bound platform claims survive storage and reach the admin trace with
     assert.deepEqual(body.runs.find(r => r.id === t.run.id).spans[0].attributes, attributes);
   } finally { await t.close(); }
 });
+
+test('loaded skill identities survive worker ingest and PostgreSQL trace projection', async () => {
+  const t = await setup();
+  try {
+    const event = { name: 'tizia.skill.used', time_ms: 1_790_000_000_900,
+      attributes: { 'tizia.skill.name': 'default-frontend', 'tizia.skill.source': 'default',
+        'tizia.skill.version': 1, 'tizia.skill.sha256': 'c'.repeat(64), 'tizia.skill.token_bound': 600 } };
+    assert.equal((await t.post({ spans: [span(CHAT_SPAN, null, 'chat fixture', { events: [event] })] })).status, 200);
+    const trace = await t.trace();
+    assert.deepEqual(trace.runs.find(r => r.id === t.run.id).spans[0].events, [event]);
+  } finally { await t.close(); }
+});

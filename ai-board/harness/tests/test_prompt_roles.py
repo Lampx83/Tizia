@@ -59,7 +59,7 @@ def test_split_on_puts_rules_in_system_and_restates_format_last_in_user(split_on
     models = FakeModels([EDIT, TEST, FINISH])
     assert run(models)["status"] == "proposed"
     call = models.calls[1]
-    assert call["extra"]["system"] == prompt_roles.SYSTEM and "Luật nền tảng" not in call["prompt"]
+    assert call["extra"]["system"].startswith(prompt_roles.SYSTEM) and "Luật nền tảng" not in call["prompt"]
     assert call["prompt"].index("Thứ tự làm") < call["prompt"].index("KẾT QUẢ TOOL edit_file") < call["prompt"].rindex("Nhắc lại")
     assert call["prompt"].endswith(prompt_roles.RESTATE)
 
@@ -77,7 +77,8 @@ def test_gate3_params_come_from_routing_catalog_and_thinking_is_off(split_on, mo
     tool_loop.run_subtask(SUBTASK, PAGE, deps=deps, budget=Budget(), model="m", source=".", sha="abc",
                           check=lambda _o: None, role="gate3_heavy")
     payload = sent[0]
-    assert payload["messages"][0] == {"role": "system", "content": prompt_roles.SYSTEM}
+    assert payload["messages"][0]['role'] == 'system'
+    assert payload["messages"][0]['content'].startswith(prompt_roles.SYSTEM)
     assert payload["messages"][1]["content"].endswith(prompt_roles.RESTATE)
     assert payload["chat_template_kwargs"] == {"enable_thinking": False}
     assert payload["temperature"] == 0.7 and payload["top_p"] == 0.8

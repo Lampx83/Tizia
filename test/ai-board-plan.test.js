@@ -60,6 +60,17 @@ async function submit(store, ticket, run, value, extra = {}) {
   });
 }
 
+test('task type survives plan normalization without granting capability or changing tier', () => {
+  const input = plan();
+  input.steps[0].task_type = 'backend';
+  const checked = validatePlan(input, 'pharmacy');
+  assert.equal(checked.plan.steps[0].task_type, 'backend');
+  assert.equal(checked.tier, 'surface');
+  assert.deepEqual(checked.plan.capabilities, ['public.ui']);
+  input.steps[0].task_type = 'shell';
+  assert.throws(() => validatePlan(input, 'pharmacy'), /task_type/);
+});
+
 test('validated surface plan creates ordered children once', async () => {
   const { db, store, ticket, run } = await fixture();
   const first = await submit(store, ticket, run, plan());

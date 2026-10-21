@@ -82,6 +82,10 @@ def parse_plan(text: str) -> dict:
                 raise ValueError(f"subtask[{i}] thiếu {k}")
         if st["size"] not in SIZES:
             raise ValueError(f"subtask[{i}].size='{st['size']}' không thuộc {SIZES}")
+        if 'task_type' in st:
+            from services.default_skills import TASK_TYPES
+            if not isinstance(st['task_type'], str) or st['task_type'] not in TASK_TYPES:
+                raise ValueError(f'subtask[{i}].task_type không hợp lệ')
     caps = plan.get("capabilities") or []
     if not isinstance(caps, list):
         raise ValueError("capabilities phải là mảng")
@@ -168,7 +172,8 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             trace.note("knows", "retry feedback", reason)
         ask = prompt if not attempt else prompt + RETRY_SUFFIX.format(reason=reason)
         body = deps.call_model(deps.models.gate1_model, ask, gate=1, budget=budget,
-                               db_path=db_path, proposal_id=proposal_id, prompt_name="brainstorm.md")
+                               db_path=db_path, proposal_id=proposal_id, prompt_name="brainstorm.md",
+                               skill_context={'task_type': request.get('task_type'), 'file': (ctx.get('targets') or [''])[0]})
         stage = "plan parse"
         try:
             plan = parse_plan(body.get("response", ""))

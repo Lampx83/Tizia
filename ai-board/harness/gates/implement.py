@@ -491,7 +491,8 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
                                                                     "ai_output": raw[:SNIPPET_CHARS]})
             # Phản hồi nối SAU prompt cố định + ngữ cảnh: prefix giữ nguyên byte, Ollama tái dùng KV cache.
             call = dict(gate=3, budget=budget, db_path=db_path, proposal_id=proposal_id, prompt_name="implement.md", child=child,
-                        iteration=iteration, options=_retry_sampling(iteration), **routing_options)
+                        iteration=iteration, options=_retry_sampling(iteration),
+                        skill_context={'file': subtask['file'], 'task_type': subtask.get('task_type')}, **routing_options)
             try:
                 server_hsm.authorize_action('model')
             except server_hsm.AuthorityError as error:

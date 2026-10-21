@@ -702,6 +702,12 @@ function spanRows(spans) {
     } else {
       what = '<b>Lượt xử lý</b>';
     }
+    const skills = (s.events || []).filter((e) => e.name === 'tizia.skill.used').slice(0, 2);
+    if (skills.length) what += `<div class="meta">${skills.map((e) => {
+      const skill = e.attributes || {};
+      return tag(skill['tizia.skill.source'] === 'admin' ? 'warn' : 'idle',
+        `${skill['tizia.skill.name'] || '?'} v${skill['tizia.skill.version'] || '?'}`);
+    }).join(' ')}</div>`;
     return `<tr class="span-row d${Math.min(level(s), 3)}">
       <td class="span-what">${what}</td><td>${think}</td><td class="num">${tokens}</td>
       <td class="num">${s.end_ms == null ? 'đang chạy' : end - s.start_ms < 1000 ? `${end - s.start_ms} ms` : `${secs(end - s.start_ms)} s`}</td><td>${finish}</td><td>${tag(state, label)}</td>

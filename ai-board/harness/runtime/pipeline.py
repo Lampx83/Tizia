@@ -103,14 +103,23 @@ def _request_attrs(options: dict, extra: dict | None, body: dict | None = None, 
     return {"temperature": options.get("temperature"), "max_tokens": options.get("num_predict"),
             "thinking": None if thinking is None else bool(thinking),
             "reasoning_chars": (body or {}).get("_reasoning_chars"), "role": role,
-            "prompt_roles": "split" if extra.get("system") else "single"}
+            "prompt_roles": "split" if extra.get("system") else "single",
+            **({'skills': extra['_skill_evidence']} if extra.get('_skill_evidence') else {})}
 
 
 def _split_call(prompt: str, role: str, routing, extra: dict | None, options: dict, format=None) -> tuple[str, dict | None, dict]:
     """Split mode (AI_BOARD_PROMPT_ROLE_SPLIT=1): system message + user, per-role gate 3 params; logprobs calls stay as they were."""
+    context = (extra or {}).get('_skill_context')
+    if extra and '_skill_context' in extra:
+        extra = {k: v for k, v in extra.items() if k != '_skill_context'}
     if not prompt_roles.enabled() or (extra or {}).get('system') or (extra or {}).get('logprobs'):
         return prompt, extra, options
     system, user = prompt_roles.split(prompt)
+    if role in ('gate1', 'gate3_light', 'gate3_heavy', 'gate4_review'):
+        from services import default_skills
+        selected = default_skills.select(role, context)
+        system += '\n\n' + default_skills.system_text(selected)
+        extra = {**(extra or {}), '_skill_evidence': [s.evidence() for s in selected]}
     role_extra, role_options = prompt_roles.call_params(role, routing, structured=isinstance(format, dict))
     return user, {**(extra or {}), **role_extra, 'system': system}, {**options, **role_options}
 
@@ -149,12 +158,15 @@ class Deps:
                     db_path=None, proposal_id: int | None = None, format: str | dict | None = "json",
                     prompt_name: str | None = None, child: int | None = None, iteration: int = 0,
                     options: dict | None = None, extra: dict | None = None,
-                    role: str | None = None, exclude_candidates=(), route_reason='reviewed_priority') -> dict:
+                    role: str | None = None, exclude_candidates=(), route_reason='reviewed_priority',
+                    skill_context: dict | None = None) -> dict:
         """1 lời gọi model + phí budget + trace — chỗ duy nhất mọi cổng đi qua.
         Phí: model_calls +1, tokens, units (meter: giây GPU ollama / 1K token api).
         Lỗi HTTP/timeout vẫn tính units theo wall (GPU có thể đã chạy) rồi raise lại.
         body["_metrics"] = metrics đã chuẩn hoá cho cổng dùng (done_reason, …)."""
         options = {"num_predict": NUM_PREDICT.get(gate, NUM_PREDICT_DEFAULT), "temperature": 0, **(options or {})}
+        if skill_context:
+            extra = {**(extra or {}), '_skill_context': skill_context}
         if not budget.tick() or not budget.can_request():
             raise BudgetExhausted("budget exhausted before model call (request token bound)")
         if getattr(self.models, 'routing', None):

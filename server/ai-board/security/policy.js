@@ -184,6 +184,9 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
     const risk = nonEmptyString(step.risk, `steps[${index}].risk`);
     if (!RISKS.has(risk)) fail('malformed_plan', `unknown step risk '${risk}'`);
     if (risk === 'high' && tier === 'surface') tier = 'protected';
+    if (step.task_type != null && !['backend', 'frontend', 'database', 'review', 'test', 'all'].includes(step.task_type)) {
+      fail('malformed_plan', `invalid steps[${index}].task_type`);
+    }
     return {
       order,
       title: nonEmptyString(step.title, `steps[${index}].title`),
@@ -194,6 +197,7 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
       capability,
       risk,
       non_goals: stringList(step.non_goals, `steps[${index}].non_goals`, { allowEmpty: true }),
+      ...(step.task_type == null ? {} : { task_type: step.task_type }),
     };
   });
 

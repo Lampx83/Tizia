@@ -185,8 +185,11 @@ class Tracer:
             attrs["gen_ai.request.temperature"] = request["temperature"]
         if request.get("max_tokens") is not None:
             attrs["gen_ai.request.max_tokens"] = request["max_tokens"]
-        self.add_span(f"chat {rec['model']}", attrs, kind="client", start_ms=end - int(metrics.get("wall_ms") or 0), end_ms=end,
-                      status="ok" if rec["result"] == "ok" else "error")
+        span = self.add_span(f"chat {rec['model']}", attrs, kind="client", start_ms=end - int(metrics.get("wall_ms") or 0), end_ms=end,
+                             status="ok" if rec["result"] == "ok" else "error")
+        for skill in request.get('skills') or []:
+            span['events'].append({'name': 'tizia.skill.used', 'time_ms': end,
+                                   'attributes': {f'tizia.skill.{k}': v for k, v in skill.items()}})
 
     def note(self, kind: str, name: str, summary: str = "", data=None) -> None:
         """Ghi 1 điều AI biết ("knows") hoặc 1 tool harness đã chạy cho AI ("tool"); đính vào lần gọi model KẾ TIẾP."""

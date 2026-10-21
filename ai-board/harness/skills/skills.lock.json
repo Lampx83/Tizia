@@ -1,6 +1,13 @@
 {
   "add-html-section": "033bbce126c765259a7fb13eff70a1cb53de51f6395a0385e9a3f9dcaebe9a94",
   "default": "528fa5853c56d01bf95941b34a3a6a7acf01d976ba2a1cc5704a37dae9239530",
+  "default-all": "14bc0cccd344d79661a4c416beafeae22872c36dc712cdcf3d300815ce9c4903",
+  "default-backend": "362a971db823eec2fe5d9a461c87a07987afbed50b5fbec233b3ae262f20d492",
+  "default-database": "ddd2c06b5de9d6eab50ccd7a72687ab04718aca3ce20572ca8abfdcd36c6cf6e",
+  "default-frontend": "de0b04434281b47fee189c6301ca32065bcfbb634eab0166c5a5fc80fec01d63",
+  "default-review": "1f653abeb756498d6c32628281904c8b01b43988e71bc3dc66f95a16751315b6",
+  "default-skill-authoring": "57874ce30fd22e40a1b8359ac475378e6c5119ed2b023d72d073046b63225bd4",
+  "default-test": "4960186633c34b4502c9ca679dfb5cf230cd350be80bd0b7f062a5c8a0577bf6",
   "edit-css-style": "4b381ad2a43e079f529941fd7045da0fc8b0f82f3af2e013d391912108157071",
   "edit-html-text": "28bb56cfe1ba4168d743e9426187f5b6436beeadd5cde7314f296556fc1dc3ec",
   "fix-js-behavior": "843d1488da2212ee14697a4bf8fb26beaeeaf0f834b15f6846d52dd672062a86",

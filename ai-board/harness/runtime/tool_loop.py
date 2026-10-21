@@ -495,6 +495,11 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
         prompt += (f"\nLần làm trước bị loại ở bước kiểm tra: {repair_reason}\nLàm lại đầy đủ từ đầu như yêu cầu ở trên "
                    "(sửa file đích VÀ viết test bằng write_test trước khi finish), tránh đúng lỗi này.\n")
         pins = {**(pins or {}), "repair": sha_of(repair_reason)}
+    from runtime import prompt_roles
+    from services import default_skills
+    skill_context = {'file': subtask['file'], 'task_type': subtask.get('task_type')}
+    pins = {**(pins or {}), 'skills': default_skills.pin(role or 'gate3_light', skill_context)
+            if prompt_roles.enabled() else 'off'}
     last_sig, repeats = None, 0
     history = None
     if os.getenv('AI_BOARD_CONTEXT_COMPACTION') == '1':
@@ -532,7 +537,8 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
             return _result('blocked', str(error), error.failure_class, steps=steps)
         body = deps.call_model(model, call_prompt, gate=3, budget=loop_budget, format="json", db_path=db_path,
                                proposal_id=proposal_id, prompt_name="tool_loop.md", child=child, iteration=len(steps),
-                               role=role, **({"extra": call_extra} if call_extra else {}))
+                               role=role, skill_context=skill_context,
+                               **({"extra": call_extra} if call_extra else {}))
         if store:
             store.save_ledger(budget.snapshot())
         if not loop_budget.tick():
