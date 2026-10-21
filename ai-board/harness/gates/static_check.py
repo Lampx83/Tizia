@@ -18,7 +18,7 @@ from pathlib import Path
 import candidate
 import classifier
 import functional
-from gates import guard, intake_guard, risk_triage
+from gates import adversarial_review, change_class, guard, intake_guard, risk_triage
 from repositories import server_hsm
 
 CONTENT_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "content_guard.md").read_text(encoding="utf-8")
@@ -309,6 +309,14 @@ def run_gate(state: dict, deps, budget, *, db_path=None, proposal_id: int | None
         if review and review["blocked"]:
             found = [{"check": "content_guard", "failure_class": review["failure_class"],
                       "detail": review["reason"][:300]}]
+    change = change_class.classify(diffs)
+    state["change_class"] = change["class"]
+    out["change_class"] = change["class"]
+    if not found and change["class"] == "one_way" and budget is not None and getattr(deps, "models", None) is not None:
+        review = adversarial_review.run(state, deps, budget, db_path=db_path, proposal_id=proposal_id)
+        out["adversarial_review"] = {k: review[k] for k in ("verdict", "findings", "truncated")}
+        if review["blocked"]:
+            found = [{"check": "adversarial_review", "failure_class": review["failure_class"], "detail": review["reason"]}]
     if found:
         classes = {f["failure_class"] for f in found}  # an outage alone is retryable; any real finding outranks it
         worst = "critical" if "critical" in classes else "transient" if classes == {"transient"} else "ordinary"

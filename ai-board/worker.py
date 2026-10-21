@@ -104,6 +104,10 @@ def _public_gate_result(result: dict) -> dict:
     elif result["gate"] == 4:
         out["issues"] = list(result.get("issues") or [])
         out["checks"] = list(result.get("checks") or [])
+        if result.get("change_class"):
+            out["change_class"] = result["change_class"]
+        if result.get("adversarial_review"):
+            out["adversarial_review"] = result["adversarial_review"]
     elif result["gate"] == 5:
         out["smoke_passed"] = bool((result.get("evidence") or {}).get("smoke_passed"))
         out["http_observed"] = bool((result.get("evidence") or {}).get("http_observed"))
@@ -116,6 +120,8 @@ def _public_gate_result(result: dict) -> dict:
     elif result["gate"] == 5.5:
         out["risk_level"] = result.get("risk_level")
         out["risk_signals"] = list(result.get("risk_signals") or [])
+        if result.get("change_class"):
+            out["change_class"] = result["change_class"]
     return out
 
 

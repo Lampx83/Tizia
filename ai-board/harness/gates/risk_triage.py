@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import re
 
+from gates import change_class
+
 TIERS = ("low", "medium", "high", "critical")
 _ROUTE = re.compile(r"\b(?:app|router)\s*\.\s*(?:get|post|put|patch|delete|all|use)\s*\(")
 _DOMAIN = re.compile(r"(?:^|/)(?:_ai-generated|domains)/([^/]+)/")
@@ -81,12 +83,15 @@ def run(state: dict) -> dict:
         add("guard_review", "high", "; ".join(high)[:300] or "guard yêu cầu người soát")
     if not any(_TEST.search(path) for path in paths):
         add("missing_test", "bump", "diff không kèm file test")
+    change = change_class.classify(diffs)
+    if change["class"] == "one_way":
+        add("one_way_change", "high", ", ".join(f"{r['kind']}: {r['path']}" for r in change["reasons"])[:300])
 
     tier = max((TIERS.index(s["tier"]) for s in signals if s["tier"] in TIERS), default=0)
     if any(s["name"] == "missing_test" for s in signals):
         tier = min(tier + 1, len(TIERS) - 1)
     result = {"gate": 5.5, "blocked": False, "reason": None,
-              "risk_level": TIERS[tier], "risk_signals": signals, "domains": domains}
+              "risk_level": TIERS[tier], "risk_signals": signals, "domains": domains, "change_class": change["class"]}
     if unmatched:
         result.update(blocked=True, failure_class="critical",
                       reason=f"path ngoài catalog capability: {', '.join(unmatched)}"[:1000])

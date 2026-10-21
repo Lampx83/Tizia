@@ -223,6 +223,13 @@ function validatePrePrVerdict(value, selfRequest = false) {
     if (gate === 3 && /^[0-9a-f]{64}$/.test(String(item.tool_manifest))) clean.tool_manifest = item.tool_manifest;
     if (gate === 4) clean.issues = Array.isArray(item.issues) ? item.issues.slice(0, 20).map((x) => String(x).slice(0, 500)) : [];
     if (gate === 4) clean.checks = Array.isArray(item.checks) ? item.checks.slice(0, 20).map((x) => String(x).slice(0, 40)) : [];
+    if ((gate === 4 || gate === 5.5) && ['one_way', 'two_way'].includes(item.change_class)) clean.change_class = item.change_class;
+    if (gate === 4 && item.adversarial_review && typeof item.adversarial_review === 'object') clean.adversarial_review = {
+      verdict: ['pass', 'concerns'].includes(item.adversarial_review.verdict) ? item.adversarial_review.verdict : null,
+      truncated: item.adversarial_review.truncated === true,
+      findings: (Array.isArray(item.adversarial_review.findings) ? item.adversarial_review.findings : []).slice(0, 8)
+        .filter((f) => ['high', 'medium', 'low'].includes(f?.severity)).map((f) => ({ severity: f.severity, issue: String(f.issue || '').slice(0, 200) })),
+    };
     if (gate === 5) {
       clean.smoke_passed = item.smoke_passed === true;
       clean.http_observed = item.http_observed === true;
