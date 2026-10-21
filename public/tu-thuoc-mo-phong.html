@@ -1559,201 +1559,204 @@
 </div>
 
 <script>
-const CSV_DATA = `STT Buổi,Tên Bài,Tên hoạt chất,Nhóm dược lý,"Hoạt chất, hàm lượng/nồng độ",Tên biệt dược,Dạng bào chế,Đường dùng,Nơi sản xuất,Nước sản xuất,Số kiểm soát,Số đăng ký,Hạn sử dụng,Điều kiện bảo quản,Cấp độ ,Link google drive,Ghi chú
-Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Metoprolol vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,Metoprolol 50mg,Betaloc 50mg,,,,,,,,,1,,
-Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Adrenalin ống tiêm,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
-Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Atropin sulfas ống tiêm,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
-Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Dopegyt vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
-Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Xylomethazolin nhỏ mắt,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
-Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Atenolol vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
-Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Heptamyl vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
-Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Salbutamol vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
-Buổi 3,THUỐC TÁC DỤNG TRÊN TKTW,Lidocain ống tiêm,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
-Buổi 3,THUỐC TÁC DỤNG TRÊN TKTW,Novocain ống tiêm,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
-Buổi 3,THUỐC TÁC DỤNG TRÊN TKTW,Buvivacain ống tiêm,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
-Buổi 3,THUỐC TÁC DỤNG TRÊN TKTW,Carbamazepin vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
-Buổi 3,THUỐC TÁC DỤNG TRÊN TKTW,Haloperidol vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Paracetamol vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,Paracetamol,Biragan 500,Viên nén bao phim,Uống,BIDIPHAR,Việt Nam ,26002,VD-23137-15,06/05/2029,"Kín, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1y3bfMqc3Xr5c3zM6mloxudxPfutxj1gq?usp=sharing,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Pallas ống,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Hapacol gói,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,Paracetamol,Hapacol 80,Bột sủi bọt,Uống,DHG ,Việt Nam ,010625,VD-20561-14,15/06/2028,"Nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1JEwup_wvUJ6wzs4NZs1hziidFaiI6366, em dùng điện thoại chưa đẩy được lên drive ạ
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Decolgen vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,Decolgen ND,Viên nén ,Uống,UNITED INTERNATIONAL PHARMA,Việt Nam ,516811,VD-22382-15,06/10/2028,"Bảo quản ở nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1iKzGdDyrmqT3Lp5yfAkdxS5qcvswP9wi, em dùng điện thoại chưa đẩy được lên drive ạ
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Efferalgan viên đặt,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Voltaren tuyp,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,Voltaren ,Gel,Bôi ngoài da,HALEON ,Thụy sĩ,MJ6Y,760100073723,10/2028,"không bảo quản trên 30°C, tránh nhiệt ",1,https://drive.google.com/drive/folders/13YfVfNBjHRLVuFtITkLesjPubhKoBfYI, em dùng điện thoại chưa đẩy được lên drive ạ
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Diclofenac ống tiêm,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Diclofenac vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,Diclofenac ,Diclofenac DHG,Viên nén,Uống ,DHG,Việt Nam ,041125,VD-20551-14,14/11/2027,"Nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1QTt2uzEB4BAVdu8553CUH7kXlQqYcfGb, em dùng điện thoại chưa đẩy được lên drive ạ
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Meloxicam (hoặc Mebilax hoặc Mobic) vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Mofen hoặc Ibudor vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Nurofen siro,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Celecoxib vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Alphachymochipsin,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,Alphachoay ,Viên nén,Uống ,SANOFI,Việt Nam ,GVH0244,893110342224,01/08/2028,"Nhiệt độ không quá 30°C, tránh ẩm và ánh sáng",1,https://drive.google.com/drive/folders/18cnAiQfhJJCYwuUCrtsMrUSdlbDOuTxC?usp=sharing,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Piroxicam vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Aspirin vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Indomethacin vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Alaxan vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Pharmaton vỉ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Uniferon B9 vỉ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Folacid vỉ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin B6 ống tiêm,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin B6 vỉ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin K ống tiêm,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin PP vỉ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin B2 lọ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin E vỉ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin B12 ống tiêm,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin A vỉ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin B1-B6-B12 vỉ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin C ống tiêm,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin C vỉ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin C lọ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin B1 vỉ,VITAMIN VÀ KHOÁNG CHẤT,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Dịch truyền Alvensin,DỊCH TRUYỀN,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Dịch truyền Glucose,DỊCH TRUYỀN,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,"Dịch truyền NaCl 0,9%",DỊCH TRUYỀN,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Dịch truyền Moriheparin,DỊCH TRUYỀN,,,,,,,,,,,1,,
-Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Dịch truyền Ringer lactat,DỊCH TRUYỀN,,,,,,,,,,,1,,
-Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Loratadin vỉ,THUỐC KHÁNG HISTAMIN H1,,,,,,,,,,,1,,
-Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Cetirizine vỉ,THUỐC KHÁNG HISTAMIN H1,,,,,,,,,,,1,,
-Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Clorpheniramin vỉ,THUỐC KHÁNG HISTAMIN H1,Clorpheniramin 4mg,Clorpheniramin 4,Viên nén,Uống,DHG,Việt Nam ,050326,VD-21132-14,04/03/2029,"Nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1ga_teWz7yZ1UdYbNaPauXzHuw7-7MlDN, em dùng điện thoại chưa đẩy được lên drive ạ
-Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Theralene vỉ,THUỐC KHÁNG HISTAMIN H1,,,,,,,,,,,1,,
-Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Theralene lọ siro,THUỐC KHÁNG HISTAMIN H1,,,,,,,,,,,1,,
-Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Promethazin vỉ,THUỐC KHÁNG HISTAMIN H1,,,,,,,,,,,1,,
-Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Promethazin tuyp,THUỐC KHÁNG HISTAMIN H1,,,,,,,,,,,1,,
-Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Dimedrol ống,THUỐC KHÁNG HISTAMIN H1,,,,,,,,,,,1,,
-Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Halodimenal vỉ,THUỐC KHÁNG HISTAMIN H1,,,,,,,,,,,1,,
-Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Erolin lọ siro,THUỐC KHÁNG HISTAMIN H1,,,,,,,,,,,1,,
-Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Xyral vỉ,THUỐC KHÁNG HISTAMIN H1,,,,,,,,,,,1,,
-Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Acyclovir vỉ,THUỐC KHÁNG VIRUS,,,,,,,,,,,1,,
-Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Acyclovir tuyp,THUỐC KHÁNG VIRUS,,,,,,,,,,,1,,
-Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Aspirin vỉ,THUỐC TIM MẠCH,,,,,,,,,,,1,,
-Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Enalapril vỉ,THUỐC TIM MẠCH,Enalapril maleate 5mg,Enalapril Stella 5mg,Viên nén tròn,Đường uống,Công ty TNHH Liên doanh Stellapharm,Việt Nam,,893110914624,27/08/2024,"Bảo quản trong bao bì kín, nơi khô. Nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/1l7B26gHxogRzD8AZRiBDlnkXS3l7r03R?usp=drive_link,
-Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Atenolon vỉ,THUỐC TIM MẠCH,Atenolol 50mg,Atenolol Stada 50mg,Viên nén ,Đường uống,Công ty liên doanh TNHH Stada Việt Nam,Việt Nam,,VD-23232-15,02/10/2024,"Bảo quản trong bao bì kín, nơi khô. Nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/1VUPeb4XOyuu1eipMY7t6rCEwokcSVC_i?usp=sharing,
-Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Digoxin vỉ,THUỐC TIM MẠCH,,,,,,,,,,,1,,
-Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Natrilix SR vỉ,THUỐC TIM MẠCH,,,,,,,,,,,1,,
-Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Captopril vỉ,THUỐC TIM MẠCH,,,,,,,,,,,1,,
-Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Propranolon vỉ,THUỐC TIM MẠCH,,,,,,,,,,,1,,
-Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Nitromint xịt,THUỐC TIM MẠCH,,,,,,,,,,,1,,
-Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Felodipin vỉ,THUỐC TIM MẠCH,,,,,,,,,,,1,,
-Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Furosemid vỉ,THUỐC TIM MẠCH,,,,,,,,,,,1,,
-Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Telmisartan vỉ,THUỐC TIM MẠCH,,,,,,,,,,,1,,
-Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Amlodipin (hoặc Apitim 5),THUỐC TIM MẠCH,,,,,,,,,,,1,,
-Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Nifedipin vỉ,THUỐC TIM MẠCH,Nifedipin 20mg,Nifedipin T20 retard ,viên nén,Uống ,LD Stellapharm,Việt Nam ,361225,893110462724,17/12/2029,"Bao bì kín, nơi khô, tránh ánh sáng, nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/1TevTfICOqXLVLe2DdqWb5DGxpwwUIl46, em dùng điện thoại chưa đẩy được lên drive ạ
-Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Methyldopa vỉ,THUỐC TIM MẠCH,,,,,,,,,,,1,,
-Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Diltiazem vỉ,THUỐC TIM MẠCH,,,,,,,,,,,1,,
-Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Metoprolol,THUỐC TIM MẠCH,,,,,,,,,,,1,,
-Buổi 7,HORMON VÀ KHÁNG HORMON,Hydrocortison lọ,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
-Buổi 7,HORMON VÀ KHÁNG HORMON,Dexamethason ống,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
-Buổi 7,HORMON VÀ KHÁNG HORMON,Betamethason tuyp,HORMON VÀ KHÁNG HORMON,Betamethason ,Betamethason ,Gel,Bôi ngoài da,MEDIPHARCO,Việt Nam ,1131225,893110654524,30/11/2030,"Để nơi khô thoáng, nhiệt độ dưới 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1TflCKK2h86SMA0Cg-x2dSuVtuy__o60O,
-Buổi 7,HORMON VÀ KHÁNG HORMON,Collydexa nhỏ mắt,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
-Buổi 7,HORMON VÀ KHÁNG HORMON,Methyl prednisolon vỉ,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
-Buổi 7,HORMON VÀ KHÁNG HORMON,Prednisolon vỉ,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
-Buổi 7,HORMON VÀ KHÁNG HORMON,Dehitacil vỉ,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
-Buổi 7,HORMON VÀ KHÁNG HORMON,Newchoice vỉ,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
-Buổi 7,HORMON VÀ KHÁNG HORMON,Postinor vỉ,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
-Buổi 7,HORMON VÀ KHÁNG HORMON,Mifestad vỉ,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
-Buổi 7,HORMON VÀ KHÁNG HORMON,Misoprolol vỉ,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
-Buổi 7,HORMON VÀ KHÁNG HORMON,Oxytoxin ống,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
-Buổi 7,HORMON VÀ KHÁNG HORMON,Progestogel tuyp 1%,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
-Buổi 7,HORMON VÀ KHÁNG HORMON,Progesterol ống tiêm,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
-Buổi 7,HORMON VÀ KHÁNG HORMON,Testosterol ống tiêm,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
-Buổi 7,HORMON VÀ KHÁNG HORMON,Levothyrox,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
-Buổi 7,HORMON VÀ KHÁNG HORMON,Thyrozol (thiamazol) vỉ,HORMON VÀ KHÁNG HORMON,,,,,,,,,,,1,,
-Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Fenofibrat (Fenbrat) vỉ,THUỐC ĐIỀU TRỊ LIPID MÁU,,,,,,,,,,,1,,
-Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Simvastatin vỉ,THUỐC ĐIỀU TRỊ LIPID MÁU,,,,,,,,,,,1,,
-Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Rovuvastatin 20mg vỉ,THUỐC ĐIỀU TRỊ LIPID MÁU,,,,,,,,,,,1,,
-Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Rovuvastatin 10mg vỉ,THUỐC ĐIỀU TRỊ LIPID MÁU,,,,,,,,,,,1,,
-Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Atorvastatin 10mg vỉ,THUỐC ĐIỀU TRỊ LIPID MÁU,,,,,,,,,,,1,,
-Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Atoris 20mg vỉ,THUỐC ĐIỀU TRỊ LIPID MÁU,,,,,,,,,,,1,,
-Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Bút tiêm insulin vỉ,THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,,,,,,,,,,,1,,
-Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Glucovance vỉ,THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,,,,,,,,,,,1,,
-Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Diamicron vỉ,THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,,,,,,,,,,,1,,
-Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Insulin lọ tiêm,THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,,,,,,,,,,,1,,
-Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Metformin vỉ,THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,,,,,,,,,,,1,,
-Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Glimmepiride,THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Ampicillin lọ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Ampicillin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Amoxicillin vỉ,THUỐC KHÁNG SINH,,Bidimoxy 500,viên nang cứng,Uống,BIDIPHAR ,Việt Nam ,26001,893110092523,09/01/2029,"Nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng ",1,https://drive.google.com/drive/folders/1QwFHrYGJcZpcLUDr_JE60chOXcgFJ2Fi, em dùng điện thoại chưa đẩy được lên drive ạ
-Buổi 9,THUỐC KHÁNG SINH,Klamentin gói bột,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Penicillin lọ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Cefuroxime lọ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Cefalexin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Cefotaxime lọ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Cefuroxime vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Cefixime vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Gentamicin ống đỏ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Gentamicin nhỏ mắt,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Tobramicin nhỏ mắt,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Erythromycin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Clairithromycin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Zaromax vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Ery child gói bột,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Tetracyclin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Tetracyclin tuyp,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Doxycicllin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Clorocid hoặc cloramphnicol vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Cloramphenicol nhỏ mắt,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Lincomycin ống xanh,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Lincomycin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Metronidazol vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Zidocin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Levofloxacin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Ciprofloxacin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Acid nalidixic vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Trimeseptol vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,Sulfaguanidin vỉ,THUỐC KHÁNG SINH,,,,,,,,,,,1,,
-Buổi 9,THUỐC KHÁNG SINH,"Amoxicillin (875mg), Clavulanic acid (125mg)",THUỐC KHÁNG SINH,"Amoxicillin (875mg), Clavulanic acid (125mg)",Augmentin 1g,Viên nén,Uống,Smith Kline Beecham,Anh,B75C,VN-20517-17,05/2024,"Bảo quản nơi khô ráo, không quá 30oC",1,https://drive.google.com/drive/folders/10PojxnLJPfWIlBSaNDiefutMWun99ZsF?usp=drive_link,
-Buổi 10,THUỐC TIÊU HÓA,Nước uống Hye lyte lọ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Berberin lọ,THUỐC TIÊU HÓA,,Beberbusan ,Viên nén,Uống,168 Busal Hàn Quốc ,Việt Nam ,010126,03/9199293414949-FSMS,02/01/2029,"Nơi khô ráo thoáng mát, tránh ánh nắng",1,https://drive.google.com/drive/folders/1o6iUf_TeicTQ1Zr-PV3Tu87ZBGH0sg0E?usp=sharing,
-Buổi 10,THUỐC TIÊU HÓA,Omeprazol vỉ,THUỐC TIÊU HÓA,,Omsergy,Viên nang cứng,Uống ,SAGA LIFESCIENCES LIMITED ,Ấn Độ ,0S8012517,890110786224,09/03/2028,"Bảo quản dưới 30°C, tránh ánh sáng, nhiệt và ẩm",1,https://drive.google.com/drive/folders/1sfc8qLiwXOWf9EKZBTccPHlLs418b8cE, em dùng điện thoại chưa đẩy được lên drive ạ
-Buổi 10,THUỐC TIÊU HÓA,Pantoprazol vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Lansoprazol vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Cimetidin vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Famotidin vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Vinfadin lọ bột pha tiêm,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Oresol gói cam,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,"Oresol gói 27,9g",THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Edoper vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Spamaverin vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Papaverin vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Nospa vỉ,THUỐC TIÊU HÓA,,No-spa,Viên nén,Uống ,SANOFI ,Việt Nam ,GVH0743,893110049200,07/04/2028,"Nơi khô, tránh ánh sáng, nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/14kb-gFqOK0ObNGVWRISOd30DSC-b2SeP, em dùng điện thoại chưa đẩy được lên drive ạ
-Buổi 10,THUỐC TIÊU HÓA,Maloox vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Yumangel gói,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Meritintab vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Phosphaslugel gói,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Noigel gói,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Hydrasec gói,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Gastrolpulgit gói,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Bisacodyl vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Mecolzine vỉ,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Biosubtyl gói,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Sorbitol gói,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Vintex ống tiêm,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 10,THUỐC TIÊU HÓA,Atropin sulfas ống tiêm,THUỐC TIÊU HÓA,,,,,,,,,,,1,,
-Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Babycanyl siro lọ,THUỐC HÔ HẤP,,,,,,,,,,,1,,
-Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Mekocitrin viêm ngậm,THUỐC HÔ HẤP,,,,,,,,,,,1,,
-Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Methophan vỉ,THUỐC HÔ HẤP,,,,,,,,,,,1,,
-Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Dexamethason vỉ,THUỐC HÔ HẤP,,,,,,,,,,,1,,
-Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Acemuc gói,THUỐC HÔ HẤP,,Acemuc ,Thuốc cốm,Uống,SANOFI ,Việt Nam ,FVH1064,893100495724,05/05/2027,"Nơi khô, tránh ánh sáng, nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/18mvg1kCMl7tZSwnF9ZxwDKa5GN3xZcP5?usp=sharing,
-Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Acetyl stein vỉ,THUỐC HÔ HẤP,,,,,,,,,,,1,,
-Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Bromhexin vỉ,THUỐC HÔ HẤP,,,,,,,,,,,1,,
-Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Terpin – codein vỉ,THUỐC HÔ HẤP,,,,,,,,,,,1,,
-Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Salbutamol vỉ,THUỐC HÔ HẤP,,,,,,,,,,,1,,
-Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Pirazinamyd vỉ,THUỐC ĐIỀU TRỊ LAO,,,,,,,,,,,1,,
-Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Arifamcin vỉ,THUỐC ĐIỀU TRỊ LAO,,,,,,,,,,,1,,
-Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Ethabutol vỉ,THUỐC ĐIỀU TRỊ LAO,,,,,,,,,,,1,,
-Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Streptomycin vỉ,THUỐC ĐIỀU TRỊ LAO,,,,,,,,,,,1,,
-Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Ventolin inhaler (dùng chung cả lớp),THUỐC HÔ HẤP,,,,,,,,,,,1,,
-Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Symbicort tubuhaler (dùng chung cả lớp),THUỐC HÔ HẤP,,,,,,,,,,,1,,
-Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Seretide Accuhaler (dùng chung cả lớp),THUỐC HÔ HẤP,,,,,,,,,,,1,,
-Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Berodual (dùng chung cả lớp),THUỐC HÔ HẤP,,,,,,,,,,,1,,
-Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Kedefar (Ketoconazol) vỉ,THUỐC CHỐNG NẤM,,,,,,,,,,,1,,
-Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Fluconazol vỉ,THUỐC CHỐNG NẤM,,,,,,,,,,,1,,
-Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Calcrem tuyp,THUỐC CHỐNG NẤM,,,,,,,,,,,1,,
-Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Nystatin tuyp,THUỐC CHỐNG NẤM,,,,,,,,,,,1,,
-Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Astersunat vỉ,THUỐC ĐIỀU TRỊ BỆNH DO ĐỘNG VẬT NGUYÊN SINH,,,,,,,,,,,1,,
-Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Fansidar vỉ,THUỐC ĐIỀU TRỊ BỆNH DO ĐỘNG VẬT NGUYÊN SINH,,,,,,,,,,,1,,
-Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Metronidazol vỉ,THUỐC ĐIỀU TRỊ BỆNH DO ĐỘNG VẬT NGUYÊN SINH,,,,,,,,,,,1,,
-Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Griseofulvin tuyp,THUỐC CHỐNG NẤM,,,,,,,,,,,1,,
-Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Griseofulvin vỉ,THUỐC CHỐNG NẤM,,,,,,,,,,,1,,`;
+/* req #235: Danh mục 1 — DANH MỤC THUỐC TÂN DƯỢC MÔN DƯỢC LÝ (Google Sheet của ThS Hương Lý, đồng bộ 21/10/2026, 195 thuốc).
+   ⚠️ Đang nhúng trong trang; khi có Danh mục 2 nên chuyển cả hai danh mục vào DB. */
+const CSV_DATA = `STT Buổi,Tên Bài,Tên hoạt chất,Nhóm dược lý,"Hoạt chất, hàm lượng/nồng độ",Tên biệt dược,Dạng bào chế,Đường dùng,Nơi sản xuất,Nước sản xuất,Số kiểm soát,Số đăng ký,Hạn sử dụng,Điều kiện bảo quản,Cấp độ ,Link google drive,Ghi chú,Rx/OTC,KSĐB
+Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Metoprolol vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,Metoprolol tartrat 50mg,Betaloc 50 H60v AstraZeneca,Viên nén,Uống,Astrazeneca,Trung Quốc,38009,VN-17245-13,01/12/2023,Không bảo quản trên 30°C,1,https://drive.google.com/drive/folders/1wp3F0uZc79FLa7ExuvtP2twbOi-STOq1?usp=drive_link,,Rx,Không
+Buổi 3,THUỐC TÁC DỤNG TRÊN TKTV,Metoprolol vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,Metoprolol succinat 50mg,Betaloc zok 50NE H28v AstraZeneca,Viên nén phóng thích kéo dài,Uống,Astrazeneca,Trung Quốc,93578,730110022123,27/09/2027,Không bảo quản trên 30°C,,,,Rx,Không
+Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Adrenalin ống tiêm,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,Adrenalin 1mg/1ml,Adrenalin H10ô Vĩnh Phúc,Dung dịch tiêm,"TB, TTM, TTTM, TDD",VINPHACO,Việt Nam,30118,VD - 27151- 17,06/01/2028,"Nơi khô ráo, nhiệt độ dưới 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1_4idboWkd3r9LEnXES6cPWeUBJukpfdb?usp=drive_link,,Rx,Không
+Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Atropin sulfas ống tiêm,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,"Atropin sulfat 0,25mg/ml",Atropin Sulfat H100ô Hải Dương,Dung dịch tiêm,"TB, TTM, TDD",Công ty cổ phần Dược Vật tư y tế Hải Dương,Việt Nam,20682,893114045723,12/5/2027,"Nơi khô ráo, tránh ánh sáng, nhiệt độ dưới 30°C,",1,https://drive.google.com/drive/folders/1tEk8G4N_koU6RiLvI6tz0A1KpJ0imlWT,,Rx,Thuốc độc
+Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Dopegyt vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,Methyldopa 250mg,Dopegyt 250NE H100v Hung,Viên nén bao phim,Uống,EGIS,Hungary,300425,VN-13124-11,30/04/2028,"Bảo quản ở nhiệt độ dưới 30°C, tránh ánh sáng trực tiếp",1,https://drive.google.com/drive/folders/1LZcaNuYCtX_-r_W4CVaYVABdfI-8pRPO?usp=drive_link,Thiếu HDSD,Rx,Không
+Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Xylomethazolin nhỏ mắt,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,"Xylometazolin hydroclorid 0,1%",Otrivin 0.1% NL L10ml Novartis,Dung dịch nhỏ mũi,Nhỏ mũi,Haleon,Thụy Sĩ,58093,VN-22914-21,09/07/2029,"Bảo quản dưới 30°C, tránh nóng",1,https://drive.google.com/drive/folders/1nWETVw_JCNL26qFbfC7AY21RiuDFE5tL?usp=drive_link,Thiếu HDSD,OTC,Không
+Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Atenolol vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,Atenolol 50mg,Stadnolol 50NE H100v Stellapharm,Viên nén,Uống,Công ty TNHH LD Stellapharm,Việt Nam,59556,893110050423,24/09/2028,"Trong bao bì kín, nơi khô. Nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/1GjP5LhdPvFc8F5X1zHKINRXiQOGCt8lB,,Rx,Không
+Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Heptamyl vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,"Heptaminol hydroclorid 187,8mg",Heptaminol H20v NE Đồng Tháp,Viên nén,Uống,Công ty Cổ phần Xuất nhập khẩu Y tế Domesco,Việt Nam,27421,893110455624,17/01/2028,"Nơi khô, dưới 30°C, tránh ánh sáng trực tiếp",1,,,Rx,Không
+Buổi 2,THUỐC TÁC DỤNG TRÊN TKTV,Salbutamol vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,Salbutamol 4mg,Salbutamol 4NE H100v TW2,Viêm nén,Uống,NADYPHAR,Việt Nam,1102,,11/02/2028,"Bảo quản ở nhiệt độ không quá 30°C, nơi khô ráo, tránh ánh sáng",1,https://drive.google.com/drive/folders/1unYMVUQLlafOJzsJMSzE20I4j6K1mznL?usp=drive_link,,Rx,"Thuốc thuộc danh mục chất bị cấm sử dụng trong một số ngành, lĩnh vực"
+Buổi 3,THUỐC TÁC DỤNG TRÊN TKTW,Lidocain ống tiêm,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,Lidocain hydroclorid 2%/2ml,Lidocain H100ô Vĩnh Phúc,Dung dịch tiêm,"TB, TTM, TTTM, TDD",Công ty cổ phần Dược phẩm Vĩnh Phúc,Việt Nam,75424,893110688924,24/04/2029,"Nơi khô ráo, nhiệt độ dưới 30°C, tránh ánh sáng",1,,,Rx,Không
+Buổi 3,THUỐC TÁC DỤNG TRÊN TKTW,Novocain ống tiêm,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,Procain hydroclorid 3%,Novocain 3% H100ô Hải Dương,Dung dịch tiêm,"TB, TDD",Công ty cổ phần Dược Vật tư y tế Hải Dương,Việt Nam,72219,893114273400,02/11/2029,"Nơi khô ráo, thoáng mát (dưới 30°C), tránh ánh nắng mạnh",1,,,Rx,Thuốc độc
+Buổi 3,THUỐC TÁC DỤNG TRÊN TKTW,Buvivacain ống tiêm,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,Bupivacain hydroclorid 20mg/4ml,"Marcaine Spinal Heavy 0,5% 20mg/4ml TI H5ô AstraZeneca",Dung dịch tiêm,Tiêm tủy sống,AstraZeneca (sản xuất: Cenexi),Pháp,77848,VN-19785-16,22/11/2028,"Nơi khô ráo, nhiệt độ dưới 30°C, tránh ánh sáng",1,,,Rx,Thuốc độc
+Buổi 3,THUỐC TÁC DỤNG TRÊN TKTW,Carbamazepin vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,Carbamazepin 200mg,Carbamazepin 200mg L100v Danaphar,Viên nén,Uống,Công ty Cổ phần Dược Danapha,Việt Nam,42350,VD-23439-15,11/08/2028,"Nơi khô ráo, nhiệt độ phòng, độ ẩm không quá 70%",1,,,Rx,Thuốc độc
+Buổi 3,THUỐC TÁC DỤNG TRÊN TKTW,Haloperidol vỉ,THUỐC TÁC DỤNG TRÊN TKTV-TKTW,"Haloperidol 1,5mg","Haloperidol 1,5NE H250v Danapha",Viên nén,Uống,Danapha,Việt Nam,34123,VD-24085-16,11/10/2029,"Nơi khô thoáng, tránh ánh sáng, nhiệt độ dưới 30°C",1,https://drive.google.com/drive/folders/1eVN2tE85ZxYY99adJ0zQjRQ78Xrb-OYN?usp=drive_link,,Rx,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Paracetamol vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,Paracetamol 500mg,Panadol 500NE H120v GSK,Viên nén bao phim,Uống,BIDIPHAR,Việt Nam,26002,VD-23137-15,06/05/2029,"Kín, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1y3bfMqc3Xr5c3zM6mloxudxPfutxj1gq?usp=sharing,,OTC,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Pallas ống,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,Paracetamol 250mg/5ml,Pallas 250mg/5ml H30ô An Thiên,Dung dịch uống,Uống,Công ty TNHH Dược phẩm An Thiên,Việt Nam,17973,VD-34660-20,05/04/2027,"Nơi khô ráo, nhiệt độ dưới 30°C, tránh ánh sáng",1,,,,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Hapacol gói,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,Paracetamol 80mg,Hapacol 80 H24g Hậu Giang,Bột sủi bọt,Uống,DHG,Việt Nam,93267,VD-20561-14,15/06/2028,"Nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1-xHOBXLhwFFXpl0KKhYL5uUAAH6xBNbV?usp=drive_link,,OTC,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Decolgen vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,"Paracetamol 500mg, Phenylephrin hydroclorid 10mg",Decolgen ND H120v United,Viên nén,Uống,UNITED INTERNATIONAL PHARMA,Việt Nam,516811,VD-22382-15,06/10/2028,"Bảo quản ở nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1ppYmQpe9yWR16LDWwDeH34ZO7kZnDcPF?usp=drive_link,,OTC,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Efferalgan viên đặt,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,Paracetamol 80mg,Efferalgan 80Đ H10v Pháp,Viên đặt,Đặt trực tràng,UPSA SAS,Pháp,81420,VN-20952-18,16/10/2027,Bảo quản dưới 30°C,1,,,OTC,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Voltaren tuyp,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,Diclofenac 1%,Voltaren TU20g Novartis,Gel,Bôi ngoài da,HALEON,Thụy sĩ,90088,760100073723,10/2028,"không bảo quản trên 30°C, tránh nhiệt",1,https://drive.google.com/drive/folders/1apExgcTCeNuzKD3bU20eG4fiAYAbxwDx?usp=drive_link,,OTC,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Diclofenac ống tiêm,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,Diclofenac natri 75mg/3ml,Voltaren 75mg/3ml TI H5ô Novartis,Dung dịch tiêm,Tiêm bắp,Lek Pharmaceuticals d.d.,Slovenia,50996,VN-20041-16,18/07/2027,"Bảo quản dưới 30°C, tránh ánh sáng, tránh đông lạnh",1,,,,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Diclofenac vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,Diclofenac,Diclofenac H100v Hậu Giang,Viên nén,Uống,DHG,Việt Nam,69468,VD-20551-14,14/11/2027,"Nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1a1A4mysIXTw47ZhoiQScHjo3397khJdB?usp=drive_link,,Rx,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Meloxicam (hoặc Mebilax hoặc Mobic) vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,"Meloxicam 7,5mg",Meloxicam 7.5NE Đồng Tháp H20v,Viên nén,Uống,Công ty cổ phần xuất nhập khẩu y tế Domesco,Việt Nam,80261,893110455724,05/12/2028,"Nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1SnwNhv9Wx5-CPgxHSLZckXz4ORFWdUpG,,Rx,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Mofen hoặc Ibudor vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,Ibuprofen 400mg,Gofen 400mg H50v Mega,Viên nang mềm,Uống,Mega lifesciences,Úc,46825,VN-18019-14,15/05/2026,"Nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1PQsUiZjiuhEUINf_Yct_FfCWnjQ_p2y5,,OTC,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Nurofen siro,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,Ibuprofen 100mg/5ml,Nurofen for Children 100mg/5ml L60ml Reckitt,Hỗn dịch uống,Uống,Reckitt Benckiser Healthcare Manufacturing (Thailand) Ltd.,Thái Lan,27828,885100045525,21/06/2029,"Bảo quản dưới 30°C, nơi khô ráo, tránh ánh sáng trực tiếp",1,,,,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Celecoxib vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,Celecoxib 200mg,Coxileb 200mg H30v Glomed,Viên nang cứng,Uống,Công ty TNHH Abbott Healthcare Việt Nam,Việt Nam,3001115,VD-21268-14,21/12/2028,"Để nơi khô ráo, nhiệt độ không quá 30°C",1,https://drive.google.com/file/d/1z3zHXPchUzmW19N8_w4kukSCs9j0dZ8S/view?usp=drive_link,,Rx,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Alphachymochipsin,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,"Alpha chymotrypsin 4,2mg",Alpha choay NE H30v Sanofi,Viên nén,Ngậm dưới lưỡi,SANOFI,Việt Nam,62207,893110342224,01/08/2028,"Nhiệt độ không quá 30°C, tránh ẩm và ánh sáng",1,https://drive.google.com/drive/folders/18cnAiQfhJJCYwuUCrtsMrUSdlbDOuTxC?usp=sharing,,Rx,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Piroxicam vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,Piroxicam 20mg,Piroxicam 20NE H100v Ấn,Viên nang cứng,Uống,Brawn Laboratories LTD,Ấn Độ,87421,890110518024,17/01/2028,Ở nhiệt độ không quá 30°C,1,https://drive.google.com/file/d/1YtsdoP22SNxSsnpsXk_PplUaMJ7IJjZA/view?usp=drive_link,,Rx,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Aspirin vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,Acid acetylsalicylic 500mg,Aspirin PH8 H200v Mekophar,Viên bao phim tan trong ruột,Uống,Công ty cổ phần hóa - dược phẩm mekophar,Việt Nam,47885,VD-15513-11,01/05/2027,"Bảo quản nơi khô, độ ẩm ≤ 70%, nhiệt độ không quá 30°C, Tránh ánh sáng",1,https://drive.google.com/drive/folders/11Ba3S8ZS1R79iJCGLdQoVHAfWRTwIMXO,,OTC,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Indomethacin vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,Indomethacin 25mg,Indomethacin V30v DP120,Viên nén bao phim,Uống,Công ty TNHH MTV 120 Armephaco,Việt Nam,69183,VD-30122-18,16/09/2027,"Nơi khô mát, tránh ánh sâng, nhiệt độ dưới 30°C",1,https://drive.google.com/drive/folders/1zSAzEG12qYYhH03xzVRwJzyFtSpa_ekX,,Rx,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Alaxan vỉ,THUỐC GIẢM ĐAU - HẠ SỐT - CHỐNG VIÊM KHÔNG STEROID,"Paracetamol 325mg, Ibuprofen 200mg",Alaxan4v NE H100v United,Viên nén,Uống,Công ty TNHH United International Pharma,Việt Nam,519081,893100840624,16/11/2029,Bảo quản không quá 30°C,1,https://drive.google.com/drive/folders/1KTRdj8gsQtaYIFUGmvsCYSApDTSpAWfm,,OTC,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Pharmaton vỉ,VITAMIN VÀ KHOÁNG CHẤT,"Cao nhân sâm G115 40mg, vitamin và khoáng chất",Pharmaton Vitality L30v Boehringer,Viên nén,Uống,Opella Healthcare Poland,Ba Lan,73364,1020/2025/ĐKSP,15/7/2028,"Nhiệt độ không quá 30°C, tránh ẩm và ánh sáng, tránh nguồn nhiệt trực tiếp. Để xa tầm tay trẻ em",1,https://drive.google.com/drive/folders/13tpcyhX9XtgMojnDftX5QBdNabx5LoRm,,TPBVSK,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Uniferon B9 vỉ,VITAMIN VÀ KHOÁNG CHẤT,"Sắt (II) sulfat khô (tương đương 50mg Fe++), Acid folic 0,25mg",Uniferon B9 NE H30v Mediplantex,Viên nén bao đường,Uống,Công ty cổ phần Dược TW Mediplantex,Việt Nam,81752,VD-18989-13,21/10/2029,"Nơi khô mát, tránh ánh sâng, nhiệt độ dưới 30°C",1,https://drive.google.com/drive/folders/1-pS2a6PrUrx9fTCuuV_rt5DPqRFVZqCT,,OTC,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Folacid vỉ,VITAMIN VÀ KHOÁNG CHẤT,Acid folic 5mg,Folacid 5NE H80v Pharmedic,Viên nén,uống,CTCP DPDL PHARMEDIC,Việt Nam,12946,893110806224,03/06/28,"Bảo quản ở nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1cMY5F5BYZfQ-BNrLwvvvmAP_OHFboP-y,,Rx,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin B6 ống tiêm,VITAMIN VÀ KHOÁNG CHẤT,Pyridoxin hydroclorid (Vitamin B6) 100mg/ml,Vit B6 H100ô Vĩnh Phúc,Dung dịch tiêm,"TB, TTM",Công ty cổ phần Dược phẩm Vĩnh Phúc,Việt Nam,39543,893110712524,01/10/2027,"Bao bì kín, tránh ẩm, tránh ánh sáng, dưới 30°C",1,,,,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin B6 vỉ,VITAMIN VÀ KHOÁNG CHẤT,Pyridoxin hydroclorid (Vitamin B6) 250mg,Vit B6 250mg L100v Đại Uy,viên nén bao đường,uống,Công ty cổ phần hóa dược phẩm Mekophar,Việt Nam,83707,VD-34022-20,14/5/2027,"Nơi khô mát, tránh ánh sâng, nhiệt độ dưới 30°C",1,https://drive.google.com/drive/folders/1UygQ1RD8bBB2R2zMDBap3vZ9WHN_mcPE,,OTC,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin K ống tiêm,VITAMIN VÀ KHOÁNG CHẤT,Phytomenadion (Vitamin K1) 10mg/ml,Vit K TI H10ô Vĩnh Phúc,Dung dịch tiêm,"TDD, TB, TTM",Công ty cổ phần Dược phẩm Vĩnh Phúc,Việt Nam,72731,VD-28704-18,04/08/2027,"Nơi khô thoáng, tránh ánh sáng mặt trời; không bảo quản lạnh",1,,,,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin PP vỉ,VITAMIN VÀ KHOÁNG CHẤT,Nicotinamid (Vitamin PP) 50mg,Vit PP H180v Traphaco,Viên nén,uống,Traphaco,VIệt Nam,81001,VC-21016-14,30/07/2027,"Nơi khô ráo, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1iOksv7vpOA9NjuEB22wPX33M3RB-6pgh,,OTC,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin B2 lọ,VITAMIN VÀ KHOÁNG CHẤT,Riboflavin (Vitamin B2) 2mg,Vitamin B2 2mgNE H180v Traphaco,Viên nén,Uống,Công ty Cổ phần Traphaco,Việt Nam,14373,VD-21981-14,14/03/2028,"Nơi khô ráo, nhiệt độ dưới 30°C, tránh ánh sáng",1,,,,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin B12 ống tiêm,VITAMIN VÀ KHOÁNG CHẤT,Cyanocobalamin (Vitamin B12) 1000mcg/1ml,Vit B12 bồng TI Vĩnh Phúc,thuốc tiêm,tiêm bắp,Công ty CP dược vật tư y tế Hải Dương,Việt Nam,60225,893110606424,25/02/2028,"Để nơi khô ráo, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1JkawgZeZbq4PbB7HC_aKGqvKmnP1E1Fw,,Rx,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin E vỉ,VITAMIN VÀ KHOÁNG CHẤT,Tocopherol (Vitamin E) 400IU,Enat 400 NA H30v Mega,Viên nang,uống,Mega Lifesciences Public Company Limited,Thái Lan,77946,VN-15978-12,16/11/2030,"Bảo quản nơi khô mát, nhiệt độ dưới 30°C",1,https://drive.google.com/drive/folders/1rht2TVcJC5gVkcGHjwaNmKWQAquqW64S,,OTC,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin A vỉ,VITAMIN VÀ KHOÁNG CHẤT,Retinol (Vitamin A) 5000IU,Vitamin A 5000IU NA H100v Mekophar,Viên nang cứng,uống,Công ty cổ phần hóa dược phẩm Mekophar,Việt Nam,21353,VD-12403-10,17/12/2027,"Bảo quản nơi khô, độ ẩm không quá 70%, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/15mrvFvm6H_vQZhzchyy75Ic0egcLepua,,OTC,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin B1-B6-B12 vỉ,VITAMIN VÀ KHOÁNG CHẤT,"Vitamin B1 100mg, Vitamin B6 200mg, Vitamin B12 200mcg",Scanneuron Forte H100v Stada,Viên nén bao phim,Uống,LD Stellapharm - CN1,Việt Nam,140426,893110352423,03/04/2029,"Bao bì kín, nơi khôn tránh ánh sáng, nhiệt độ không quá 30°C",1,,,Rx,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin C ống tiêm,VITAMIN VÀ KHOÁNG CHẤT,Acid ascorbic (Vitamin C) 500mg/5ml,Vitamin C 500/5ml TI H100ô Pharbaco,Dung dịch tiêm,"TB, TTM",Công ty cổ phần Dược phẩm Trung ương I - Pharbaco,Việt Nam,45543,VD-24296-16,03/03/2027,"Nơi khô ráo, nhiệt độ dưới 30°C, tránh ánh sáng",1,,,,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin C vỉ,VITAMIN VÀ KHOÁNG CHẤT,Acid ascorbic (Vitamin C) 500mg,Vit C 500mg H100v Quảng Bình,Viên nén bao phim,uống,Công ty CP dược phẩm Quảng Bình,Việt Nam,5425,893110292623,05/11/2027,"Nơi khô ráo, tránh ánh sáng, nhiệt độ không quá 30°C",1,,,Rx,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin C lọ,VITAMIN VÀ KHOÁNG CHẤT,Acid ascorbic (Vitamin C) 100mg,Ceelin L60ml United,Siro,uống,Công ty TNHH United International Pharma,Việt Nam,506362,893100569224,04/05/2027,"Bảo quarn trong chai đậy kín, nơi khô ráo, nhiệt độ không quá 30°C",1,,,OTC,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Vitamin B1 vỉ,VITAMIN VÀ KHOÁNG CHẤT,Thiamin hydroclorid (Vitamin B1) 250mg,Vitamin B1 250 H100v Mekophar,Viên nén bao đường,uống,Công ty cổ phần Hóa - Dược phẩm Mekophar,Việt Nam,56777,893100341724,02/12/2028,"Nơi khô ráo, tránh ánh sáng, nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/1oKGK5zxZeRr_Pm20hqS-C72yq_LAxbun,,Rx,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Dịch truyền Alvensin,DỊCH TRUYỀN,Acid amin 40g/l,Alvesin 40 TI L500ml Berlin-Chemie,Dung dịch tiêm truyền,TTM,Berlin-Chemie AG (Menarini Group),Đức,57819,VN-21158-18,24/12/2029,"Nơi khô ráo, nhiệt độ dưới 30°C, tránh ánh sáng",1,,,,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Dịch truyền Glucose,DỊCH TRUYỀN,Glucose 5%/500ml,Glucose 5% L500ml Fresenius Kabi Bidiphar,Dung dịch tiêm truyền,TTM,Công ty Cổ phần Fresenius Kabi Bidiphar,Việt Nam,90336,893110238000,18/11/2029,"Nơi khô mát, tránh ánh sáng, dưới 30°C",1,,,,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,"Dịch truyền NaCl 0,9%",DỊCH TRUYỀN,"Natri clorid 0,9%/500ml","NaCl 0,9% L500ml Bình Định",Dung dịch,Tiêm truyền,Fresenlus Kabi,Việt Nam,10025,893110039623,26/03/2029,Bảo quản ở nhiệt độ không quá 30°C,1,https://drive.google.com/drive/folders/1EomKCGuIJUHaEjqLX956EB6G5mErYRO0?usp=drive_link,,Rx,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Dịch truyền Moriheparin,DỊCH TRUYỀN,"Acid amin 7,585g/100ml",Morihepamin TI Túi200ml AY Pharmaceuticals,Dung dịch tiêm truyền,TTM,"AY Pharmaceuticals Co., Ltd.",Nhật Bản,67809,VN-17215-13,06/04/2029,"Dưới 30°C, tránh ánh sáng",1,,,,Không
+Buổi 4,THUỐC GIẢM ĐAU – HẠ SỐT – CHỐNG VIÊM KHÔNG STEROID - THUỐC ĐIỀU TRỊ THIẾU MÁU,Dịch truyền Ringer lactat,DỊCH TRUYỀN,"Natri clorid 3g, Natri lactat 1,55g, Kali clorid 0,2g, Calci clorid 0,135g/500ml",Ringer lactate L500ml Bình Định,Dung dịch tiêm truyền,TTM,Công ty Cổ phần Fresenius Kabi Bidiphar,Việt Nam,65647,893110188324,15/11/2028,Nhiệt độ không quá 30°C,1,,,,Không
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Loratadin vỉ,THUỐC KHÁNG HISTAMIN H1,Loratadin 10mg,Loratadin 10mg H100v TPC,viên nén,Uống,Traphaco,Việt Nam,52307,VD-18488-13,28/08/2029,"Nơi khô ráo, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1GiBxG_A30QpGRKZ64vPVOACgLD6laWsB,,OTC,Không
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Cetirizine vỉ,THUỐC KHÁNG HISTAMIN H1,Cetirizin dihydroclorid 10mg,Kacerin H100v Khánh Hòa,viên nén,Uống,Công ty CP dược phẩm Khánh Hòa,Việt Nam,8181225,VD-19387-13,21/12/2028,"Dưới 30°C, nơi khô ráo, tránh ánh sáng",1,,,OTC,Không
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Clorpheniramin vỉ,THUỐC KHÁNG HISTAMIN H1,Clorpheniramin maleat 4mg,Clorpheniramin 4mg L200v Hậu Giang,Viên nén,Uống,DHG,Việt Nam,73343,VD-21132-14,04/03/2029,"Nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1cRt9dMTRX3FvbKKpTjcDwvOZWCZ87oz5?usp=sharing,,OTC,Không
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Theralene vỉ,THUỐC KHÁNG HISTAMIN H1,Alimemazin tartrat 5mg,Theralene 5NE H40v Sanofi,Viên nén bao phim,Uống,Sanofi,Việt Nam,84589,VD-23403-15,25/08/2027,Bảo quản nhiệt độ không quá 30°C,1,https://drive.google.com/drive/folders/1Rhu52dhI9BjJs1wI_pP_kKobV62d0HAa,,OTC,Không
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Theralene lọ siro,THUỐC KHÁNG HISTAMIN H1,"Alimemazin tartrat 0,05%","Theralene 0,05% L90ml Sanofi",Siro,Uống,Công ty Cổ phần Sanofi Việt Nam,Việt Nam,66221,VD-32209-19,14/06/2027,"Nơi khô ráo, thoáng mát (dưới 30°C), tránh ánh nắng mạnh",1,,,,Không
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Promethazin vỉ,THUỐC KHÁNG HISTAMIN H1,Promethazin hydroclorid 15mg,Promethazin 15NE H100v Nadyphar,Viên nén,Uống,Công ty Cổ phần Dược phẩm 2/9 - Nadyphar,Việt Nam,67830,893100627824,28/01/2029,"Không quá 30°C, nơi khô ráo, tránh ánh sáng",1,,,,Không
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Promethazin tuyp,THUỐC KHÁNG HISTAMIN H1,Promethazin hydroclorid 2%,Promethazine TU Mediphar,Kem bôi da,Dùng ngoài da,Công ty cổ phần dược Medipharco,Việt Nam,150126,893100203300,09/01/2029,"Nơi khô thoáng, tránh ánh sáng, nhiệt độ dưới 30°C",1,,,OTC,Không
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Dimedrol ống,THUỐC KHÁNG HISTAMIN H1,Diphenhydramin hydroclorid 10mg/ml,Dimedrol TI H100ô Vĩnh Phúc,Dung dịch tiêm,"TB, TTM",Công ty cổ phần Dược phẩm Vĩnh Phúc,Việt Nam,13367,893110688824,09/02/2027,"Nơi khô thoáng, nhiệt độ dưới 30°C",1,,,,Không
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Halodimenal vỉ,THUỐC KHÁNG HISTAMIN H1,Dimenhydrinat 50mg,Hanodimenal 50NE H500v Hà Nội,Viên nén,Uống,Công ty Cổ phần Dược phẩm Hà Nội,Việt Nam,52756,893100313824,23/03/2029,"Nơi khô ráo, nhiệt độ dưới 30°C, tránh ánh sáng",1,,,,Không
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Erolin lọ siro,THUỐC KHÁNG HISTAMIN H1,Loratadin 5mg/5ml,Lorastad SP 5mg/5ml SI L60ml Stellapharm,Siro,Uống,Công ty TNHH Liên doanh Stellapharm,Việt Nam,51720,893100107423,16/06/2028,Bảo quản dưới 30°C,1,,,,Không
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Xyral vỉ,THUỐC KHÁNG HISTAMIN H1,Levocetirizin dihydroclorid 5mg,Xyzal 5mg H10v GSK,Viên nén bao phim,Uống,UCB Farchim S.A.,Thụy Sĩ,26825,VN-19469-15,27/06/2027,Bảo quản dưới 30°C,1,,,,Không
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Acyclovir vỉ,THUỐC KHÁNG VIRUS,Acyclovir 800mg,Acyclovir 800mg H50v Stella,Viên nén,uống,Công ty TNHH LD Stellapharm - Chi nhánh 1,Việt Nam,210925,893110059500,10/09/2029,"Bao bì kín, nơi khô, tránh ánh sáng. Nhiệt độ không quá 30°C",1,,,Rx,Không
+Buổi 5,THUỐC KHÁNG HISTAMIN H1 – THUỐC KHÁNG VIRUS,Acyclovir tuyp,THUỐC KHÁNG VIRUS,Acyclovir 5%,Acyclovir TU5g Stada,Kem bôi da,dùng ngoài da,Công ty TNHH LD Stellapharm - Chi nhánh 1,Việt Nam,391225,893110336723,10/12/2028,"Bao bì kín, nơi khô, tránh ánh sáng. Nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/1ZQ5W6dwzcCIyclOI5OtP6BxnZq7Qlu0p,,OTC,Không
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Aspirin vỉ,THUỐC TIM MẠCH,Acid acetylsalicylic 81mg,Aspirin 81 H56v Stada,Viên nén bao phim tan trong ruột,uống,LD Stellapharm - CN1,Việt Nam,691225,893110337023,22/12/2025,"Bao bì kín, nơi khô, tránh ẩm. Nhiệt độ không quá 30°C",1,https://drive.google.com/file/d/11N1fzBDSUocemXbM8rJHMxFODzi_Mfj_/view?usp=drive_link,,Rx,Không
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Enalapril vỉ,THUỐC TIM MẠCH,Enalapril maleat 10mg,Enalapril 10mg H100v Stella,Viên nén tròn,Đường uống,Công ty TNHH Liên doanh Stellapharm,Việt Nam,180925,893110049423,27/09/2028,"Bảo quản trong bao bì kín, nơi khô. Nhiệt độ không quá 30°C",1,https://drive.google.com/file/d/1JUSf2N-3PVN1iCmyEKdXTSOs2i5AvhYv/view?usp=drive_link,,Rx,Không
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Atenolon vỉ,THUỐC TIM MẠCH,Atenolol 50mg,Stadnolon 50mg H100v Stada,Viên nén,Đường uống,Công ty liên doanh TNHH Stada Việt Nam,Việt Nam,60825,893110050423,28/08/2030,"Bảo quản trong bao bì kín, nơi khô. Nhiệt độ không quá 30°C",1,,,Rx,Không
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Digoxin vỉ,THUỐC TIM MẠCH,"Digoxin 0,25mg",Digoxine H30v Thành Nam,Viên nén,Đường uống,CTCPDP 3/2,Việt Nam,53424,VD-31550-19,12/5/2027,"Nơi khô mát, nhiệt độ dưới 30 C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1gSYcpPMOuHV8xFCsFjurxxGPALIIWkQP,,Rx,Không
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Natrilix SR vỉ,THUỐC TIM MẠCH,"Indapamid 1,5mg",Natrilix-RS 1.5NE H30v Servier,Viên nén bao phim giải phóng kéo dài,Uống,Les Laboratoires Servier Industrie,Pháp,11867,VN-22164-19,26/12/2029,Bảo quản dưới 30°C,1,,,,Không
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Captopril vỉ,THUỐC TIM MẠCH,Captopril 25mg,Captopril 25NE H100v Stada,Viên nén,uống,LD Stellapharm - CN1,Việt Nam,220923,VD-27519-17,18/09/2026,"Bảo quản trong bao bì kín, nơi khô. Nhiệt độ không quá 30°C",1,,,Rx,Không
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Propranolon vỉ,THUỐC TIM MẠCH,Propranolol 40mg,Propranolol 40NE H100v TV.Pharm,Viên nén,uống,Công ty cổ phần dược phẩm TV pharm,Việt Nam,61289,VD-21392-14,31/07/2027,"Nơi khô ráo, tránh ánh sáng, nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/18TULZWJnExhzPX_16N0lHlfxG2Ln_kx0,,Rx,Không
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Nitromint xịt,THUỐC TIM MẠCH,"Nitroglycerin 0,4mg/liều","Nitromint 0,4mg/liều KD L10g Egis",Dung dịch xịt dưới lưỡi,Xịt dưới lưỡi,Egis Pharmaceuticals PLC,Hungary,95054,VN-20270-17,13/10/2029,"Nơi khô ráo, nhiệt độ dưới 30°C, tránh ánh sáng",1,,,,Không
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Felodipin vỉ,THUỐC TIM MẠCH,Felodipin 5mg,Felodipin Stella 5 retard 5NE H100v Stellapharm,viên nén bao phim,uống,LD Stellapharm,Việt Nam,54169,VD-2656217,30/11/2028,"Bao bì kín, nơi khô, nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/1GcQ9yLr57NeqChy70SAixsnsiF_14aqM,,Rx,Không
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Furosemid vỉ,THUỐC TIM MẠCH,Furosemid 40mg,Furosemid 40NE H40v TPC,viên nén,Uống,Mekophar,Việt Nam,51371,VD-31311-18,01/10/2027,"Nơi khô ráo, tránh ánh sáng, nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/1JTAHTihgIoC1QEIJgVYZ-kInbQXebS-9?usp=drive_link,,Rx,Không
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Telmisartan vỉ,THUỐC TIM MẠCH,Telmisartan 40mg,Micardis 40 H30v Đức,viên nén,uống,LD Stellapharm,Việt Nam,160925,893110060700,25/09/2028,"Bao bì kín, nơi khô, tránh ánh sáng, nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/1sj9uSqKbHM0AmXZ1Slw4lgSNIFkCy9-G,,Rx,Không
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Amlodipin (hoặc Apitim 5),THUỐC TIM MẠCH,Amlodipin 5mg,Stadovas 5mg H30v Stada,Viên nang cứng,Uống,LD Stellapharm,Việt Nam,401225,VD-19692-13,26/12/2029,"Bao bì kín, nơi khô, tránh ánh sáng, nhiệt độ không quá 30°C",1,,,Rx,Không
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Nifedipin vỉ,THUỐC TIM MẠCH,Nifedipin 20mg,Nifedipin 20NE H100v Stada,viên nén,Uống,LD Stellapharm,Việt Nam,361225,893110462724,17/12/2029,"Bao bì kín, nơi khô, tránh ánh sáng, nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/1r3RzWZtGoRQhB-OSPF-0P8sZdSG0QDyb?usp=drive_link,,Rx,Không
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Methyldopa vỉ,THUỐC TIM MẠCH,Methyldopa 250mg,Methyldopa H100v NE TPC,Viên nén bao phim,Uống,Công ty Cổ phần Traphaco,Việt Nam,11466,VD-21013-14,11/09/2029,"Nơi khô ráo, thoáng mát, không quá 30°C",1,,,,Không
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Diltiazem vỉ,THUỐC TIM MẠCH,Diltiazem hydroclorid 60mg,Diltiazem Stella 60NE H30v Stellapharm,Viên nén,Uống,LD Stellapharm,Việt Nam,201223,VD-27522-17,09/12/2027,"Bao bì kín, nơi khô, tránh ánh sáng, nhiệt độ không quá 30°C",1,,,Rx,Không
+Buổi 6,THUỐC ĐIỀU TRỊ TIM MẠCH,Metoprolol,THUỐC TIM MẠCH,Metoprolol succinat 25mg,Betaloc zok 25NE H14v Astra,Viên nén phóng thích kéo dài,Uống,AstraZeneca,Trung Quốc,11568,VN-17243-13,13/01/2028,Không bảo quản ở nhiệt độ trên 30°C,1,,,,Không
+Buổi 7,HORMON VÀ KHÁNG HORMON,Hydrocortison lọ,HORMON VÀ KHÁNG HORMON,Hydrocortison 100mg,Hydrocortison 100TI H1lọ Bidiphar,bột đông khô pha tiêm,"tiêm bắp, ttm",Công ty cổ phần Dược - trang thiết bị y tế Bình Định,Việt Nam,36569,VD-29954-18,10/05/2027,"Nơi khô, tránh ánh sáng, nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/1IAdyZpcDydu54STJhpfxD0JL9MbNjL4g,,Rx,Không
+Buổi 7,HORMON VÀ KHÁNG HORMON,Dexamethason ống,HORMON VÀ KHÁNG HORMON,Dexamethason natri phosphat 4mg/ml,Dexamethason H10ô Vĩnh Phúc,Dung dịch tiêm,"TB, TTM, tiêm trong khớp",Công ty cổ phần Dược phẩm Vĩnh Phúc,Việt Nam,72828,893110172124,15/04/2028,"Để nơi mát, tránh ánh sáng, nhiệt độ dưới 30°C",1,,,,Không
+Buổi 7,HORMON VÀ KHÁNG HORMON,Betamethason tuyp,HORMON VÀ KHÁNG HORMON,"Betamethason 0,064%","Betamethason 0,064% TU30g Medipharco",Gel,Bôi ngoài da,MEDIPHARCO,Việt Nam,1131225,893110654524,30/11/2030,"Để nơi khô thoáng, nhiệt độ dưới 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1TflCKK2h86SMA0Cg-x2dSuVtuy__o60O,,Rx,Không
+Buổi 7,HORMON VÀ KHÁNG HORMON,Collydexa nhỏ mắt,HORMON VÀ KHÁNG HORMON,"Gentamicin 0,3%, Dexamethason natri phosphat 0,1%",Collydexa Gold L5ml Hà Nội,"Dung dịch nhỏ mắt, mũi, tai","Nhỏ mắt, nhỏ mũi, nhỏ tai",Công ty Cổ phần Dược phẩm Hà Nội,Việt Nam,31069,893110629324,22/01/2027,"Để nơi mát, tránh ánh sáng, nhiệt độ dưới 30°C",1,,,,Không
+Buổi 7,HORMON VÀ KHÁNG HORMON,Methyl prednisolon vỉ,HORMON VÀ KHÁNG HORMON,Methylprednisolon 4mg,Methylpred- Nic 4mg H30v USA- Nic pharma,Viên nén,uống,Công ty TNHH DP USA - NIC,Việt Nam,241201,VD-24543-16,26/12/2027,"Bảo quản nơi khô mát, nhiệt độ dưới 30°C. Tránh ánh sáng",1,,,Rx,Không
+Buổi 7,HORMON VÀ KHÁNG HORMON,Prednisolon vỉ,HORMON VÀ KHÁNG HORMON,Prednisolon 5mg,Prednisolon 5mg H40v Nam Hà,Viên nén,uống,Công ty cổ phần dược phẩm Nam Hà,Việt Nam,25101,VD-35027-21,23/03/2028,"Nơi khô, tránh ánh sáng, nhiệt độ không quá 30°C",1,,,Rx,Không
+Buổi 7,HORMON VÀ KHÁNG HORMON,Dehitacil vỉ,HORMON VÀ KHÁNG HORMON,"Dexamethason 0,5mg",Dexamethason 0.5mg H600v Armephaco,Viên nén,uống,Công ty cổ phần dược phẩm Hà Tây,Việt Nam,12529,893110374025,13/8/2029,"Nơi khô, nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/1UFQ-8NDBtJwZJpYmfXcviuhwLhvu-z5D,,Rx,Không
+Buổi 7,HORMON VÀ KHÁNG HORMON,Newchoice vỉ,HORMON VÀ KHÁNG HORMON,"Ethinylestradiol 0,03mg, Levonorgestrel 0,125mg",Newchoice NE H28v Nam Hà,Viên nén bao phim,uống,Công ty cổ phẩn dược phẩm Nam Hà,Việt Nam,25168,893110641024,03/11/2030,"Bảo quản nơi khô, tránh ánh sáng. Nhiệt độ không quá 30°C",1,,,Rx,Không
+Buổi 7,HORMON VÀ KHÁNG HORMON,Postinor vỉ,HORMON VÀ KHÁNG HORMON,"Levonorgestrel 1,5mg",Postinor H1v Hung,Viên nén,Uống,Gedeon Richter Plc.,Hungary,63749,VN-19160-15,21/08/2028,"Dưới 30°C, tránh ánh nắng mặt trời và nơi ẩm cao",1,,,,Không
+Buổi 7,HORMON VÀ KHÁNG HORMON,Mifestad vỉ,HORMON VÀ KHÁNG HORMON,Mifepriston 10mg,Mifestad 10NE H1v Stada,viên nén,uống,LD Stellapharm - CN1,Việt Nam,60825,893110221724,08/08/2029,"Bao bì kín, nơi khô nhiệt độ không quá 30°C",1,,,Rx,Không
+Buổi 7,HORMON VÀ KHÁNG HORMON,Misoprolol vỉ,HORMON VÀ KHÁNG HORMON,Misoprostol 200mcg,Misoclear 200mcgNE H30v Stada,Viên nén,Uống,Công ty TNHH Liên doanh Stada - Việt Nam,Việt Nam,55514,VD-33097-19,07/07/2027,"Dưới 30°C, tránh ánh sáng mặt trời chiếu trực tiếp",1,,,,Không
+Buổi 7,HORMON VÀ KHÁNG HORMON,Oxytoxin ống,HORMON VÀ KHÁNG HORMON,Oxytocin 5IU/ml,Oxytocin 5IU/1ml TI H100ô Gedeon Richter,Dung dịch tiêm,"TB, TTM",Gedeon Richter Plc.,Hungary,59010,VN-20167-16,12/03/2028,"Bảo quản lạnh 2–8°C, tránh ánh sáng",1,,,,Thuốc độc
+Buổi 7,HORMON VÀ KHÁNG HORMON,Progestogel tuyp 1%,HORMON VÀ KHÁNG HORMON,Progesteron 1%,Progestogel 1% TU80g Besins,Gel,Bôi ngoài da,Besins Manufacturing Belgium SA,Bỉ,87152,540110443125,19/04/2029,Bảo quản dưới 25°C,1,,,,Không
+Buổi 7,HORMON VÀ KHÁNG HORMON,Progesterol ống tiêm,HORMON VÀ KHÁNG HORMON,Progesteron 25mg/ml,Progesterone 25mg/1ml TI H10ô Rotexmedica,Dung dịch tiêm,Tiêm bắp,Rotexmedica GmbH Arzneimittelwerk,Đức,22461,VN-16898-13,08/10/2027,"Bảo quản ở 25°C, tránh ánh sáng",1,,,,Thuốc độc
+Buổi 7,HORMON VÀ KHÁNG HORMON,Testosterol ống tiêm,HORMON VÀ KHÁNG HORMON,"Testosteron propionat 30mg, Testosteron phenylpropionat 60mg, Testosteron isocaproat 60mg, Testosteron decanoat 100mg/ml",Sustanon 250 TI H1ô Aspen,Dung dịch tiêm (dầu),Tiêm bắp sâu,Ever Pharma Jena GmbH,Đức,38366,400114122723,11/10/2028,"Bảo quản nơi khô ráo, thoáng mát, nhiệt độ phòng, tránh ánh nắng trực tiếp",1,,,,Thuốc độc
+Buổi 7,HORMON VÀ KHÁNG HORMON,Levothyrox,HORMON VÀ KHÁNG HORMON,Levothyroxin natri 50mcg,Levothyrox 50NE H30v Đức,Viên nén,Uống,Merck KGaA,Đức,34205,VN-17750-14,22/05/2027,"Nơi khô mát, dưới 30°C, tránh ánh sáng",1,,,,Không
+Buổi 7,HORMON VÀ KHÁNG HORMON,Thyrozol (thiamazol) vỉ,HORMON VÀ KHÁNG HORMON,Thiamazol 5mg,Thyrozol 5mg Đức,Viên nén bao phim,Uống,Merck Healthcare KGaA,Đức,31959,VN-21907-19,19/11/2029,Bảo quản dưới 30°C,1,,,,Không
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Fenofibrat (Fenbrat) vỉ,THUỐC ĐIỀU TRỊ LIPID MÁU,Fenofibrat 200mg,Fenofibrate 200NA H30v Domesco,Viên nang cứng,Uống,Công ty Cổ phần Xuất nhập khẩu Y tế Domesco,Việt Nam,28546,893110319023,21/07/2029,"Dưới 30°C, tránh ánh nắng trực tiếp",1,,,,Không
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Simvastatin vỉ,THUỐC ĐIỀU TRỊ LIPID MÁU,Simvastatin 20mg,Simvastatin 20 H30v Stada,Viên nén bao phim,Uống,Công ty TNHH Liên doanh Stada - Việt Nam,Việt Nam,87746,VD-30836-18,23/07/2028,"Dưới 30°C, tránh ánh sáng mặt trời chiếu trực tiếp",1,,,,Không
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Rovuvastatin 20mg vỉ,THUỐC ĐIỀU TRỊ LIPID MÁU,Rosuvastatin 20mg,Rosuvastatin 20NE H30v Stellapharm,Viên nén bao phim,Uống,Công ty TNHH Liên doanh Stellapharm,Việt Nam,19934,893110060300,11/08/2029,"Trong bao bì kín, nơi khô, không quá 30°C",1,,,,Không
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Rovuvastatin 10mg vỉ,THUỐC ĐIỀU TRỊ LIPID MÁU,Rosuvastatin 10mg,Rosuvastatin 10NE H30v Stellapharm,Viên nén bao phim,Uống,Công ty TNHH Liên doanh Stellapharm - Chi nhánh 1,Việt Nam,10177,893110060400,06/09/2029,"Trong bao bì kín, nơi khô, không quá 30°C",1,,,,Không
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Atorvastatin 10mg vỉ,THUỐC ĐIỀU TRỊ LIPID MÁU,Atorvastatin 10mg,Lipitor 10NE H30v Pfizer,viên nén bao phim,Uống,Pfize,Đức,58288,VN-17768-14,14/5/2027,Bảo quản dưới 30°C,1,https://drive.google.com/drive/folders/1xMjOVgk912Nctd4ku7q1JrnmTNAdZ296,,Rx,Không
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Atoris 20mg vỉ,THUỐC ĐIỀU TRỊ LIPID MÁU,Atorvastatin 20mg,Lipitor 20NE H30v Pfizer,viên nén bao phim,Uống,Pfize,Đức,50174,001110025723,14/5/27,Bảo quản dưới 30°C,1,https://drive.google.com/drive/folders/17NEu6Q8stXlOnDQMLJWP4y7GIu5MyZ_H,,Rx,Không
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Bút tiêm insulin vỉ,THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Insulin người hỗn hợp 30/70 100IU/ml,Mixtard 30 FlexPen 100IU/ml TI H5bút Novo Nordisk,Hỗn dịch tiêm,Tiêm dưới da,Novo Nordisk A/S,Đan Mạch,90342,QLSP-927-16,12/01/2029,"Chưa dùng: tủ lạnh 2–8°C, không để đông; đang dùng: dưới 30°C trong 6 tuần, đậy nắp tránh ánh sáng",1,,,,Không
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Glucovance vỉ,THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,"Metformin hydroclorid 500mg, Glibenclamid 5mg",Glucovance 500mg/5mg H30v Pháp,viên nén bao phim,Uống,Merck,Pháp,52759,VN-20023-16,14/5/27,Bảo quản dưới 30°C,1,https://drive.google.com/drive/folders/1J2W6PgVipublgU73bNjhnHlaYifMwIok,,Rx,Không
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Diamicron vỉ,THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Gliclazid 30mg,DiamicronMR 30NE H60v Servier,Viên nén phóng thích có kiểm soát,uống,Công ty TNHH Servier,Việt Nam,6122324,VN-20549-17,04/2028,Bảo quản dưới 30°C,1,,,Rx,Không
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Insulin lọ tiêm,THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Insulin người hỗn hợp 30/70 100IU/ml,Mixtard 30 100IU/ml TI L10ml Novo Nordisk,Hỗn dịch tiêm,Tiêm dưới da,Novo Nordisk A/S,Đan Mạch,80558,300410305724,26/04/2029,"Tủ lạnh 2–8°C, xa bộ phận làm lạnh, không để đông",1,,,,Không
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Metformin vỉ,THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Metformin hydroclorid 500mg,Metformin 500mg H60v Stella,viên nén bao phim,uống,LD Stellapharm - CN 1,Việt Nam,60425,VD-23976-15,03/04/2030,"Bao bì kín, nơi khô, nhiệt độ không quá 30°C",1,,,Rx,Không
+Buổi 8,THUỐC ĐIỀU TRỊ LIPID MÁU - THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Glimmepiride,THUỐC ĐIỀU TRỊ ĐÁI THÁO ĐƯỜNG,Glimepirid 2mg,Glumerif 2NE H30v DHG Pharma,Viên nén,Uống,Công ty Cổ phần Dược Hậu Giang,Việt Nam,38568,VD-21780-14,07/08/2028,"Để nơi mát, tránh ánh sáng, nhiệt độ dưới 30°C",1,,,,Không
+Buổi 9,THUỐC KHÁNG SINH,Ampicillin lọ,THUỐC KHÁNG SINH,Ampicillin natri 1g,Ampicillin 1g TI H50lọ Mekophar,Thuốc bột pha tiêm,"TB, TTM",Công ty Cổ phần Hóa-Dược phẩm Mekophar,Việt Nam,76404,VD-17110-12,27/11/2029,"Nhiệt độ phòng, tránh ẩm, tránh ánh sáng",1,,,,Không
+Buổi 9,THUỐC KHÁNG SINH,Ampicillin vỉ,THUỐC KHÁNG SINH,Ampicillin 500mg,Ampicilin 500NA H100v Vidipha,viên nang cứng,Uống,Công ty cổ phần dược phẩm trung ương Vidipha,Việt Nam,20126,VD-20473-14,24/01/2029,"Bảo quản nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,,,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Amoxicillin vỉ,THUỐC KHÁNG SINH,Amoxicillin 500mg,Amoxicilin 500NA H100v Vidiphar,viên nang cứng,Uống,BIDIPHAR,Việt Nam,26001,893110092523,09/01/2029,"Nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1QwFHrYGJcZpcLUDr_JE60chOXcgFJ2Fi,em dùng điện thoại chưa đẩy được lên drive ạ,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Klamentin gói bột,THUỐC KHÁNG SINH,"Amoxicillin 500mg, Acid clavulanic 62,5mg",Klamentin 500/62.5 H24g Hậu Giang,Thuốc cốm pha hỗn dịch,Uống,DHG,Việt Nam,220423,VD-24717-16,05/04/2026,"Nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,,,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Penicillin lọ,THUỐC KHÁNG SINH,Benzylpenicillin natri 1.000.000IU,Penicillin G 1.000.000IU TI H50lọ Mekophar,Thuốc bột pha tiêm,"Tiêm bắp, tiêm tĩnh mạch",MERCOPHAR,Việt Nam,2901,VD-26387-17,29/01/2029,"Bảo quản nơi khô ráo, tránh ánh sáng, nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/1nmMspQdVJsurvtrhVO5c20Sb6FXiDvx6?usp=sharing,,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Cefuroxime lọ,THUỐC KHÁNG SINH,Cefuroxim axetil 125mg/5ml,Zinnat 125mg/5ml L50ml GSK,Thuốc cốm,Uống,GlaxoSmithKline,Anh,31131,VN-9663-10,18/08/2029,Bảo quản cốm dưới 30°C; Bảo quản huyền dịch đã pha trong tủ lạnh từ 2°C đến 8°C và sử dụng trong vòng 10 ngày,1,https://drive.google.com/drive/folders/1SMR01Hu0H3APV-XoOfPrRiNlMc0cm0Ok?usp=sharing,,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Cefalexin vỉ,THUỐC KHÁNG SINH,Cephalexin 500mg,Cephalexin 500 H100v Vidipha,viên nang cứng,Uống,Công ty cổ phần dược phẩm trung ương Vidipha,Việt Nam,1001225,8931108239245,10/12/2028,"Bảo quản nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1IxKPXfZlf6XAmbSgq9kbDd8B4BT_tEz0,,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Cefotaxime lọ,THUỐC KHÁNG SINH,Cefotaxim 1g,Cefotaxim TI Ấn,Bột pha tiêm,"Tiêm bắp, Tiêm TM",CTY TNHH PHIL INTER PHẨM,Việt Nam,2302,VD-24634-16,23/02/2029,"Trong hộp kín, nơi khô mát, tránh ánh sáng, nhiệt độ dưới 30°C",1,https://drive.google.com/drive/folders/1xQCOUGXWVttEKn3S-G5jRxwfVnds9z7M?usp=sharing,,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Cefuroxime vỉ,THUỐC KHÁNG SINH,Cefuroxim 500mg,Cefuroxim 500 H100v Vidiphar,viên bao phim,uống,Công ty cổ phần dược phẩm trung ương Vidipha,Việt Nam,3310526,893110682924,29/05/2029,"Bảo quản nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1A4roIbd98zAU9t9fmAmtnFgYcsv5wxdz,,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Cefixime vỉ,THUỐC KHÁNG SINH,Cefixim 200mg,Cefixim 200 H20v Cửu Long,viên nang cứng,uống,Công ty cổ phần dược phẩm TV.PHARM,Việt Nam,2707,VD-32922-19,27/7/2028,"Nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1C4scwbyImNNPZ3Zkj-3Fjk_-WnO9PykC?usp=sharing,,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Gentamicin ống đỏ,THUỐC KHÁNG SINH,Gentamicin 80mg/2ml,Gentamicin 80mg/2ml TI H100ô Vidipha,thuốc tiêm,"tiêm bắp, tiêm truyền tĩnh mạch",Công ty cổ phần Dược VTYT Hải Dương,Việt Nam,98333,VD-25858-16,05/05/2028,"Để nơi khô ráo, tránh ánh sáng, nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/1eKwT0VabU_Isv4Dh_2s4Hfe1KtJCaojJ,,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Gentamicin nhỏ mắt,THUỐC KHÁNG SINH,"Gentamicin 0,3%, Dexamethason natri phosphat 0,1%",Collydexa Gold L5ml Hà Nội,"Dung dịch nhỏ mắt, mũi, tai","Nhỏ mắt, nhỏ mũi, nhỏ tai",Công ty cổ phần dược phẩm Hà Nội,Việt Nam,541025,893110629324,19/10/2027,"Nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,,,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Tobramicin nhỏ mắt,THUỐC KHÁNG SINH,Tobramycin 3mg/ml,Tobrex L5ml Alcon,dung dịch nhỏ mắt,nhỏ mắt,Công ty TNHH Novartis,Việt Nam,23355,VN-19385-15,08/01/2028,Bảo quản không quá 30°C,1,https://drive.google.com/drive/folders/1UlcLNhCmTKzu_54QsSSkfkbkngu53bwX?usp=drive_link,,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Erythromycin vỉ,THUỐC KHÁNG SINH,Erythromycin 500mg,Erythromycin 500NE H100v Mekophar,Viên nén bao phim,uống,Công ty cổ phần hóa - dược phẩm Mekophar,Việt Nam,20151,VD-32136-19,24/01/2028,"Bảo quản nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,,,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Clairithromycin vỉ,THUỐC KHÁNG SINH,Clarithromycin 500mg,Clarithromycine 500 H28v Stada,Viên nén bao phim,uống,LD Stellapharm -CN1,Việt Nam,80925,VD-26559-17,05/09/2028,"Bao bì kín, nơi khô, tránh ánh sáng. Nhiệt độ không quá 30°C",1,,,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Zaromax vỉ,THUỐC KHÁNG SINH,Azithromycin 500mg,Zaromax 500mg H30v Hậu Giang,Viên nén bao phim,uống,Công ty cổ phần dược Hậu Giang,Việt Nam,50925,893110271323,29/09/2028,"Nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,,,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Ery child gói bột,THUỐC KHÁNG SINH,Erythromycin 250mg,Ery Children 250G H24g Sophartex,Dạng thuốc bột,Uống,Công ty cổ phần dược phẩm Tedis - Việt Hà,Việt Nam,31803,VN-18965-15,05/05/2028,Bảo quản nhiệt độ dưới 30°C,1,https://drive.google.com/drive/folders/1sC9Vc3u3d4p8HIaw9lkYzQiP2w5Avy0k,,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Tetracyclin vỉ,THUỐC KHÁNG SINH,Tetracyclin hydroclorid 500mg,Tetracyclin 500NA H100v Mekophar,viên nang cứng,uống,Công ty cổ phần dược phẩm TW 25,Việt Nam,241288,VD-33628-19,16/12/2027,"Nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1sbMEEMn6teMDEer9gETTth2eiOqmb0SZ,,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Tetracyclin tuyp,THUỐC KHÁNG SINH,Tetracyclin hydroclorid 1%,Tetracyclin 1% TU5g Medipharco,thuốc mỡ tra mắt,dùng ngoài da,Công ty cổ phần dược medipharco,Việt Nam,660226,893110920324,25/02/2030,"Nơi khô thoáng, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1Xgzq8mTLXTp6I2OrLhpwM8zs0PPzr0l4,Thiếu HDSD,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Doxycicllin vỉ,THUỐC KHÁNG SINH,Doxycyclin 100mg,Doxycyclin 100NA H100v Domesco,Viên nang cứng,Uống,MERCOPHAR,Việt Nam,36905,VD-32134-19,05/05/2028,"Nơi khô ráo, tránh ánh sáng,nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/1oYpQ97gIu_LawbuRkui3LRD9-tpRtsza?usp=sharing,,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Clorocid hoặc cloramphnicol vỉ,THUỐC KHÁNG SINH,Cloramphenicol 250mg,Chloramphenicol 250NA H100v Mekophar,Viên nang cứng,Uống,Công ty Cổ phần Hóa-Dược phẩm Mekophar,Việt Nam,88335,VD-14485-11,04/06/2028,"Nơi khô, tránh ánh sáng, dưới 30°C",1,,,Rx,"Thuốc thuộc danh mục chất bị cấm sử dụng trong một số ngành, lĩnh vực"
+Buổi 9,THUỐC KHÁNG SINH,Cloramphenicol nhỏ mắt,THUỐC KHÁNG SINH,"Cloramphenicol 0,4%","Cloramphenicol 0,4% L8ml Thephaco",Dung dịch nhỏ mắt,Nhỏ mắt,Công ty Cổ phần Dược - Vật tư y tế Thanh Hóa (Thephaco),Việt Nam,20186,893115212424,24/11/2029,"Nơi khô, dưới 30°C, tránh ánh sáng",1,,,Rx,"Thuốc thuộc danh mục chất bị cấm sử dụng trong một số ngành, lĩnh vực"
+Buổi 9,THUỐC KHÁNG SINH,Lincomycin ống xanh,THUỐC KHÁNG SINH,Lincomycin hydroclorid 600mg/2ml,Lincomycin 600 H10ô Vĩnh Phúc,Dung dịch tiêm,"TB sâu, TTM (truyền)",Công ty Cổ phần Dược phẩm Vĩnh Phúc,Việt Nam,44755,893110375323,23/01/2027,"Để nơi mát, tránh ánh sáng, nhiệt độ dưới 30°C",1,,,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Lincomycin vỉ,THUỐC KHÁNG SINH,Lincomycin 500mg,Lincomycin 500mg H100v Armepharco,Viên nang cứng,uống,Công ty TNHH MTV 120 Armephaco,Việt Nam,72025,893110463424,25/11/2028,"Nơi khô mát, tránh ánh sáng, nhiệt độ dưới 30°C",1,https://drive.google.com/drive/folders/1yS9ZCDWpbGT2dnsQ9iQ2l5vD5VeyTojF,,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Metronidazol vỉ,THUỐC KHÁNG SINH,Metronidazol 250mg,Metronidazol 250NE H500v Hà Tây,Viên nén,Uống,DHG PHARMA,Việt Nam,76531,VD-22036-14,09/07/2028,"Nơi khô, nhiệt đội không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1DArqejb67bOJ2cn2FNsEDrKdc7mL7FGH?usp=sharing,,Rx,"Thuốc thuộc danh mục chất bị cấm sử dụng trong một số ngành, lĩnh vực"
+Buổi 9,THUỐC KHÁNG SINH,Zidocin vỉ,THUỐC KHÁNG SINH,"Spiramycin 750.000IU, Metronidazol 125mg",Zidocin 750.000IU/125NE H20v DHG,Viên nén bao phim,Uống,Công ty Cổ phần Dược Hậu Giang,Việt Nam,47618,VD-21559-14,08/04/2028,"Nơi khô ráo, thoáng mát, nhiệt độ không quá 30°C",1,,,Rx,"Thuốc thuộc danh mục chất bị cấm sử dụng trong một số ngành, lĩnh vực"
+Buổi 9,THUỐC KHÁNG SINH,Levofloxacin vỉ,THUỐC KHÁNG SINH,Levofloxacin 500mg,Tavanic 500 H5v Sanofi,Viên nén bao phim,Uống,DH PHARMA,Việt Nam,99222,VD-21558-14,08/04/2029,"Nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1qYVgz6rjq6RjZdOgCoBc_W96eh6rA659?usp=sharing,,Rx,"Thuốc thuộc danh mục chất bị cấm sử dụng trong một số ngành, lĩnh vực"
+Buổi 9,THUỐC KHÁNG SINH,Ciprofloxacin vỉ,THUỐC KHÁNG SINH,Ciprofloxacin 500mg,Ciprofloxacin 500NE H100v Ấn,Viên nén bao phim,Uống,DH PHARMA,Việt Nam,1209,VD-20549-14,12/09/2028,"Nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng",1,https://drive.google.com/drive/folders/1soKy-GQjFjUMX7VJGhwZUotkRspNjvBb?usp=drive_link,,Rx,"Thuốc thuộc danh mục chất bị cấm sử dụng trong một số ngành, lĩnh vực"
+Buổi 9,THUỐC KHÁNG SINH,Acid nalidixic vỉ,THUỐC KHÁNG SINH,Acid nalidixic 500mg,Aginalxic 500NE H100v Agimexpharm,Viên nén bao phim,Uống,Chi nhánh Công ty cổ phần Dược phẩm Agimexpharm - Nhà máy sản xuất dược phẩm Agimexpharm,Việt Nam,98866,VD-23486-15,03/10/2029,"Nơi khô ráo, thoáng mát, nhiệt độ không quá 30°C, tránh ánh sáng cường độ cao",1,,,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Trimeseptol vỉ,THUỐC KHÁNG SINH,"Sulfamethoxazol 400mg, Trimethoprim 80mg",Trimeseptol NE H500v Hà Tây,Viên nén,Uống,CÔNG TY CP DƯỢC PHẨM HÀ TÂY,Việt Nam,330326,VD-24195-16,12/03/31,"Nơi khô, nhiệt độ dưới 30°C",1,https://drive.google.com/drive/folders/1fE7FsWUO6goc59qw4_JaAlK8jYstbakT,,Rx,Không
+Buổi 9,THUỐC KHÁNG SINH,Sulfaguanidin vỉ,THUỐC KHÁNG SINH,Sulfaguanidin 500mg,Sulfaganin 500NE H100v Mekophar,Viên nén,Uống,MEKOPHAR,Việt Nam,1209,VD-20549-14,12/09/2028,"Nơi khô ráo, nhiệt độ dưới 30°C, tránh ánh sáng",1,,,,Không
+Buổi 9,THUỐC KHÁNG SINH,"Amoxicillin (875mg), Clavulanic acid (125mg)",THUỐC KHÁNG SINH,"Amoxicillin 875mg, Acid clavulanic 125mg",Augmentin 1gNE tím H14v GSK,Viên nén,Uống,Smith Kline Beecham,Anh,16564,VN-20517-17,05/2024,"Bảo quản nơi khô ráo, không quá 30oC",1,https://drive.google.com/drive/folders/10PojxnLJPfWIlBSaNDiefutMWun99ZsF?usp=drive_link,,Rx,Không
+Buổi 10,THUỐC TIÊU HÓA,Nước uống Hye lyte lọ,THUỐC TIÊU HÓA,"Natri clorid 520mg, Natri citrat khan 580mg, Kali clorid 300mg, Glucose 2,7g",Hydrite H30g United,Bột pha dung dịch uống,Uống,Công ty TNHH United International Pharma,Việt Nam,87815,893100281100,11/11/2029,Không quá 30°C,1,,,,Không
+Buổi 10,THUỐC TIÊU HÓA,Berberin lọ,THUỐC TIÊU HÓA,Berberin clorid 5mg,Beberbusan L500v CTCP 168 Busan,Viên nén,Uống,168 Busal Hàn Quốc,Việt Nam,19598,03/9199293414949-FSMS,02/01/2029,"Nơi khô ráo thoáng mát, tránh ánh nắng",1,https://drive.google.com/drive/folders/1o6iUf_TeicTQ1Zr-PV3Tu87ZBGH0sg0E?usp=drive_link,,Thực phẩm bổ sung,Không
+Buổi 10,THUỐC TIÊU HÓA,Omeprazol vỉ,THUỐC TIÊU HÓA,Omeprazol 20mg,Omsergy 20mg H100v Ấn,Viên nang cứng,Uống,SAGA LIFESCIENCES LIMITED,Ấn Độ,69237,890110786224,09/03/2028,"Bảo quản dưới 30°C, tránh ánh sáng, nhiệt và ẩm",1,https://drive.google.com/drive/folders/1A-rNvIcMSFn2ZKsri88HBV5bSp3bXjI-?usp=drive_link,,Rx,Không
+Buổi 10,THUỐC TIÊU HÓA,Pantoprazol vỉ,THUỐC TIÊU HÓA,Pantoprazol 40mg,Pantostad 40 H28v Stada,Viên nén bao phim tan trong ruột,uống,LD Stellapharm - CN1,Việt Nam,50525,893110096624,21/05/2028,"Bao bì kín, nơi khô. Nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/1ITj5KlAupj5mrkfoTIJlDEjq_Xrt_7RE,,Rx,Không
+Buổi 10,THUỐC TIÊU HÓA,Lansoprazol vỉ,THUỐC TIÊU HÓA,Lansoprazol 30mg,Lansoprazol 30 H30v Stada,Viên nang cứng chứ vi hạt bao tan trong ruột,uống,LD Stellapharm - CN1,Việt Nam,130725,893110060000,27/07/2028,"Bao bì kín, nơi khô. Nhiệt độ không quá 30°C",1,,,Rx,Không
+Buổi 10,THUỐC TIÊU HÓA,Cimetidin vỉ,THUỐC TIÊU HÓA,Cimetidin 200mg,Cimetidin 200 H100v Mekophar,viên nén,uống,Công ty cổ phần Hoá - Dược phẩm Mekophar,Việt Nam,89652,VD-32131-19,05/01/2028,"Nơi khô ráo, tránh ánh sáng, nhiệt độ không quá 30°C",1,,,Rx,Không
+Buổi 10,THUỐC TIÊU HÓA,Famotidin vỉ,THUỐC TIÊU HÓA,Famotidin 40mg,Famotidin 40NE H100v Hataphar,Viên nén,Uống,Công ty Cổ phần Dược phẩm Hà Tây (Hataphar),Việt Nam,53030,893110042723,01/09/2028,"Để nơi mát, tránh ánh sáng, nhiệt độ dưới 30°C",1,,,,Không
+Buổi 10,THUỐC TIÊU HÓA,Vinfadin lọ bột pha tiêm,THUỐC TIÊU HÓA,Famotidin 20mg,Vinfadin 20mg/2ml TI H10ô Vinphaco,Dung dịch tiêm,"TB, TTM",Công ty cổ phần Dược phẩm Vĩnh Phúc,Việt Nam,91052,893110172524,09/12/2029,"Bảo quản ở 15–25°C, tránh ánh sáng",1,,,,Không
+Buổi 10,THUỐC TIÊU HÓA,Oresol gói cam,THUỐC TIÊU HÓA,"Natri clorid 520mg, Natri citrat 580mg, Kali clorid 300mg, Glucose khan 2,7g","Oresol 245 4,1G H20g DHG Pharma",Thuốc bột pha dung dịch uống,Uống,Công ty Cổ phần Dược Hậu Giang,Việt Nam,14550,893100095423,10/03/2029,"Nơi khô ráo, nhiệt độ dưới 30°C",1,,,,Không
+Buổi 10,THUỐC TIÊU HÓA,"Oresol gói 27,9g",THUỐC TIÊU HÓA,"Natri clorid 3,5g, Natri citrat 2,9g, Kali clorid 1,5g, Glucose khan 20g","Oresol 27,9G H20g Bidiphar",Thuốc bột pha dung dịch uống,Uống,Công ty Cổ phần Fresenius Kabi Bidiphar,Việt Nam,84000,VD-1590-06,06/01/2029,"Nơi khô ráo, nhiệt độ dưới 30°C",1,,,,Không
+Buổi 10,THUỐC TIÊU HÓA,Edoper vỉ,THUỐC TIÊU HÓA,Loperamid hydroclorid 2mg,Eldoper 2NA H100v Micro Labs,Viên nang cứng,Uống,Micro Labs Limited,Ấn Độ,90645,890110031323,22/01/2028,"Nơi khô mát, tránh sáng chiếu, nhiệt độ dưới 30°C",1,,,,Không
+Buổi 10,THUỐC TIÊU HÓA,Spamaverin vỉ,THUỐC TIÊU HÓA,Alverin citrat 40mg,Spasmaverine 40NE H60v Sanofi,Viên nén,Uống,Công ty TNHH Sanofi - Aventis Việt Nam,Việt Nam,64753,VD-21163-14,28/11/2028,"Dưới 30°C, tránh ánh sáng",1,,,,Không
+Buổi 10,THUỐC TIÊU HÓA,Papaverin vỉ,THUỐC TIÊU HÓA,Papaverin hydroclorid 40mg,Papaverin 40mg H100v Vidipha,Viên nén,Uống,Công ty Cổ phần Dược phẩm Vidipha,Việt Nam,61856,893110685124,15/12/2028,"Để nơi mát, tránh ánh sáng, nhiệt độ dưới 30°C",1,,,,Không
+Buổi 10,THUỐC TIÊU HÓA,Nospa vỉ,THUỐC TIÊU HÓA,Drotaverin hydroclorid 40mg,No-spa 40NE H50v Sanofi,Viên nén,Uống,SANOFI,Việt Nam,61957,893110049200,07/04/2028,"Nơi khô, tránh ánh sáng, nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/1wOhqc4lGp0lkNF4bF6E8wO1ZEpRtQra7?usp=drive_link,,Rx,Không
+Buổi 10,THUỐC TIÊU HÓA,Maloox vỉ,THUỐC TIÊU HÓA,"Magnesi trisilicat khan 400mg, Nhôm hydroxyd (gel khô) 300mg",Maalox 400/400NE H48v Sanofi,Viên nhai,uống,Công ty cổ phần Hóa - Dược phẩm mekophar,Việt Nam,55841,VD-32141-19,02/02/2027,"Nơi khô ráo, tránh ánh sáng, Nhiệt độ không quá 30°C",1,,,OTC,Không
+Buổi 10,THUỐC TIÊU HÓA,Yumangel gói,THUỐC TIÊU HÓA,"Almagat 6,667%",Yumangel 1g/15ml G H20g Yuhan,Hỗn dịch uống,uống,Yuhan Corporation,Hàn Quốc,26029,880100021724,26/02/2028,"Dưới 30°C, trong bao bì kín vá tránh ánh sáng",1,,,OTC,Không
+Buổi 10,THUỐC TIÊU HÓA,Meritintab vỉ,THUỐC TIÊU HÓA,Trimebutin maleat 100mg,Meritintab 100NE H100v Dae Hwa,Viên nén bao phim,Uống,"Dae Hwa Pharmaceutical Co., Ltd.",Hàn Quốc,76634,880110026725,12/06/2029,"Bao bì kín, nhiệt độ dưới 30°C, tránh ẩm",1,,,,Không
+Buổi 10,THUỐC TIÊU HÓA,Phosphaslugel gói,THUỐC TIÊU HÓA,Nhôm phosphat 20%,Phosphalugel H26g Pháp,Hỗn dịch,uống,SANOFI,Pháp,404782,300100006024,05/05/2027,Bảo quản dưới 30°C,1,https://drive.google.com/drive/folders/11lQQJwN7Sen7I8-1QK9hGuQFyKQIOAjb,,,Không
+Buổi 10,THUỐC TIÊU HÓA,Noigel gói,THUỐC TIÊU HÓA,"Magnesi nhôm silicat, Simethicon, D-mannitol",Noigel 15ml G H30g Il-Yang,Gel uống (gói),Uống,"Il-Yang Pharm. Co., Ltd.",Hàn Quốc,87190,VN-5080-07,20/05/2027,"Nơi khô ráo, nhiệt độ dưới 30°C, tránh ánh sáng",1,,,,Không
+Buổi 10,THUỐC TIÊU HÓA,Hydrasec gói,THUỐC TIÊU HÓA,Racecadotril 10mg,Hidrasec 10mg H16g Abbott,Bột,Uống,SOPHARTEX,Pháp,35063,300110000524,10/2027,Bảo quản ở nhiệt độ dưới 30°C,1,https://drive.google.com/drive/folders/1Bm8JzdbKGGCM_a0sJG1lJtd7mihGUk0W?usp=drive_link,,Rx,Không
+Buổi 10,THUỐC TIÊU HÓA,Gastrolpulgit gói,THUỐC TIÊU HÓA,"Attapulgit 2,5g, Nhôm hydroxyd - Magnesi carbonat gel khô 0,5g","Gastropulgite 2,5G H30g Ipsen",Bột pha hỗn dịch uống,Uống,Beaufour Ipsen Industrie,Pháp,93877,VN-17985-14,05/10/2028,"Nơi khô, nhiệt độ dưới 30°C",1,,,,Không
+Buổi 10,THUỐC TIÊU HÓA,Bisacodyl vỉ,THUỐC TIÊU HÓA,Bisacodyl 5mg,Bisacodyl NE H100v Hậu Giang,Viên bao tan trong ruột,Uống,Công ty Cổ phần Dược Hậu Giang,Việt Nam,67181,893100427324,11/11/2029,"Nơi khô ráo, không quá 30°C, tránh ánh sáng",1,,,,Không
+Buổi 10,THUỐC TIÊU HÓA,Mecolzine vỉ,THUỐC TIÊU HÓA,Mesalazin 500mg,Mitisalz 500NE H30v Phapharco,Viên nén bao phim tan trong ruột,Uống,Công ty cổ phần Dược và Vật tư y tế Bình Thuận (Phapharco),Việt Nam,54279,893110260824,21/05/2028,"Nơi khô ráo, thoáng mát, tránh ánh sáng trực tiếp, nhiệt độ không quá 30°C",1,,,,Không
+Buổi 10,THUỐC TIÊU HÓA,Biosubtyl gói,THUỐC TIÊU HÓA,Bacillus subtilis 10^7-10^8 CFU/g,Biosubtyl-II G H25g Biopharco,Thuốc bột uống,Uống,Công ty Cổ phần Vắc xin và Sinh phẩm Nha Trang,Việt Nam,84699,QLSP-855-15,25/01/2028,"Nơi khô mát, nhiệt độ dưới 30°C",1,,,,Không
+Buổi 10,THUỐC TIÊU HÓA,Sorbitol gói,THUỐC TIÊU HÓA,Sorbitol 5g,Sorbitol 5G H20g Hậu Giang,Thuốc bột uống,Uống,Công ty Cổ phần Dược Hậu Giang,Việt Nam,10948,893100270723,12/12/2029,"Nơi khô, không quá 30°C, tránh ánh sáng",1,,,,Không
+Buổi 10,THUỐC TIÊU HÓA,Vintex ống tiêm,THUỐC TIÊU HÓA,Vinpocetin 10mg/2ml,Thevinin 10mg/2mlTI H10ô Thephaco,Dung dịch tiêm,TTM,Công ty Cổ phần Dược - Vật tư y tế Thanh Hóa (Thephaco),Việt Nam,19750,VD-23156-15,08/05/2029,"Nơi khô ráo, nhiệt độ dưới 30°C, tránh ánh sáng",1,,,,Không
+Buổi 10,THUỐC TIÊU HÓA,Atropin sulfas ống tiêm,THUỐC TIÊU HÓA,"Atropin sulfat 0,25mg/ml",Atropin Sulfat H100ô Hải Dương,Dung dịch tiêm,"TB, TTM, TDD",Công ty cổ phần Dược Vật tư y tế Hải Dương,Việt Nam,30443,VD-24376-16,02/04/2027,"Nơi khô ráo, nhiệt độ dưới 30°C, tránh ánh sáng",1,,,,Thuốc độc
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Babycanyl siro lọ,THUỐC HÔ HẤP,"Terbutalin sulfat 1,5mg, Guaifenesin 66,5mg/5ml",Babycanyl L60ml Hà Tây,Siro,Uống,Công ty Cổ phần Dược phẩm Hà Tây,Việt Nam,98181,893115284623,05/05/2027,"Nơi khô, nhiệt độ dưới 30°C",1,,,,"Thuốc thuộc danh mục chất bị cấm sử dụng trong một số ngành, lĩnh vực"
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Mekocitrin viêm ngậm,THUỐC HÔ HẤP,Tyrothricin 1mg,Mekotricin 1mgDT H24v Mekophar,Viên ngậm,Ngậm,Công ty Cổ phần Hóa-Dược phẩm Mekophar,Việt Nam,78245,893100075900,05/11/2027,"Nơi khô ráo, nhiệt độ dưới 30°C",1,,,,Không
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Methophan vỉ,THUỐC HÔ HẤP,"Dextromethorphan hydrobromid 10mg, Loratadin 2,5mg, Guaifenesin 100mg",Methorphan H100v Traphaco,Viên nén bao phim,Uống,CÔNG TY TNHH TRAPHACO HƯNG YÊN,Việt Nam,14230,VD - 19625 - 13,10/04/29,"Nơi khô ráo, tránh ánh sáng, nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/1UvIhto4ZpREwAqQne84vLZTa6HrJgqme,,Rx,Không
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Dexamethason vỉ,THUỐC HÔ HẤP,"Dexamethason 0,5mg","Dexamethason 0,5NE H200v Mekophar",Viên nén,Uống,Công ty Cổ phần Hóa-Dược phẩm Mekophar,Việt Nam,73918,893110419924,10/07/2029,"Nơi khô ráo, nhiệt độ dưới 30°C, tránh ánh sáng",1,,,,Không
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Acemuc gói,THUỐC HÔ HẤP,Acetylcystein 200mg,Acemuc 200G H30g Sanofi,Thuốc cốm,Uống,SANOFI,Việt Nam,85842,893100495724,05/05/2027,"Nơi khô, tránh ánh sáng, nhiệt độ không quá 30°C",1,https://drive.google.com/drive/folders/18mvg1kCMl7tZSwnF9ZxwDKa5GN3xZcP5?usp=sharing,,OTC,Không
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Acetyl stein vỉ,THUỐC HÔ HẤP,Acetylcystein 200mg,Stacytine 200 H100v Stada,Viên nang cứng,Uống,LD Stellapharm - CN1,Việt Nam,331225,893100097224,16/12/2028,"Bao bì kín, nơi khô, tránh ánh sáng. Nhiệt độ không quá 30°C",1,,,OTC,Không
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Bromhexin vỉ,THUỐC HÔ HẤP,Bromhexin hydroclorid 8mg,Bisolvon 8NE H30v Opella,Viên nén,Uống,Opella Healthcare Italy S.R.L.,Indonesia,38745,893100752424,02/06/2028,Bảo quản dưới 30°C,1,,,,Không
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Terpin – codein vỉ,THUỐC HÔ HẤP,"Terpin hydrat 100mg, Codein 10mg",Terpin codein 10mg H80v DP Cửu long,Viên nén,Uống,Công ty Cổ phần Dược phẩm Cửu Long,Việt Nam,57032,VD-35730-22,24/02/2028,"Nơi khô ráo, nhiệt độ dưới 30°C, tránh ánh sáng",1,,,,Thuốc dạng phối hợp có chứa dược chất gây nghiện
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Salbutamol vỉ,THUỐC HÔ HẤP,Salbutamol 2mg,Salbutamol 2NE H100v TW2,Viên nén,Uống,Công ty Cổ phần Dược phẩm Trung ương 2,Việt Nam,15065,893115157723,14/04/2028,"Để nơi mát, tránh ánh sáng, nhiệt độ dưới 30°C",1,,,,"Thuốc thuộc danh mục chất bị cấm sử dụng trong một số ngành, lĩnh vực"
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Pirazinamyd vỉ,THUỐC ĐIỀU TRỊ LAO,Pyrazinamid 500mg,Pyrazinamide 500NE H100v Mekophar,Viên nén,Uống,Công ty Cổ phần Hóa-Dược phẩm Mekophar,Việt Nam,51464,893110493024,21/06/2028,"Nơi khô ráo, tránh ánh sáng, không quá 30°C",1,,,,Không
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Arifamcin vỉ,THUỐC ĐIỀU TRỊ LAO,Rifampicin 300mg,Rifampicin 300NA H100v Mekophar,Viên nang cứng,Uống,Công ty Cổ phần Hóa-Dược phẩm Mekophar,Việt Nam,78682,893110237623,04/05/2028,"Nơi khô ráo, nhiệt độ dưới 30°C, tránh ánh sáng",1,,,,Không
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Ethabutol vỉ,THUỐC ĐIỀU TRỊ LAO,Ethambutol hydroclorid 400mg,Ethambutol 400NE H100v Mekophar,Viên nén,Uống,Công ty Cổ phần Hóa-Dược phẩm Mekophar,Việt Nam,48040,893110904024,28/09/2029,"Dưới 30°C, tránh ánh sáng",1,,,,Không
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Streptomycin vỉ,THUỐC ĐIỀU TRỊ LAO,Streptomycin sulfat 1g,Trepmycin 1g TI H50lọ Pharbaco,Thuốc bột pha tiêm,TB sâu,Công ty Cổ phần Dược phẩm Trung ương 1 - Pharbaco,Việt Nam,96805,893110681724,19/06/2027,Bảo quản dưới 30°C,1,,,,Không
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Ventolin inhaler (dùng chung cả lớp),THUỐC HÔ HẤP,Salbutamol 100mcg/liều,Ventoline xịt L200liều GSK,Hỗn dịch xịt (bình xịt định liều),Hít/xịt qua miệng,Glaxo Wellcome S.A.,Tây Ban Nha,31649,VN-18791-15,18/01/2027,"Dưới 30°C, tránh đông lạnh và ánh nắng trực tiếp",1,,,,"Thuốc thuộc danh mục chất bị cấm sử dụng trong một số ngành, lĩnh vực"
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Symbicort tubuhaler (dùng chung cả lớp),THUỐC HÔ HẤP,"Budesonid 160mcg, Formoterol fumarat 4,5mcg/liều","Symbicort 160/4,5 L120liều AstraZeneca",Bột để hít,Hít qua miệng,AstraZeneca AB,Thụy Điển,85575,VN-20379-17,02/02/2029,"Không quá 30°C, đậy kín",1,,,,Không
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Seretide Accuhaler (dùng chung cả lớp),THUỐC HÔ HẤP,"Salmeterol 50mcg, Fluticason propionat 250mcg/liều",Seretide Accuhaler 50/250KD H1 GSK,Bột hít phân liều,Hít qua miệng,GlaxoSmithKline LLC,Hoa Kỳ,34921,001110013824,24/05/2027,"Không quá 30°C, nơi khô ráo",1,,,,Không
+Buổi 11,THUỐC TÁC DỤNG TRÊN HỆ HÔ HẤP – THUỐC ĐIỀU TRỊ LAO,Berodual (dùng chung cả lớp),THUỐC HÔ HẤP,"Ipratropium bromid 0,02mg, Fenoterol hydrobromid 0,05mg/liều",Berodual xịt L10ml Boehringer,Dung dịch xịt định liều,Hít (xịt qua ống ngậm),Boehringer Ingelheim Pharma GmbH & Co. KG,Đức,17760,VN-17269-13,05/05/2029,"Dưới 30°C, nơi khô ráo",1,,,,"Thuốc thuộc danh mục chất bị cấm sử dụng trong một số ngành, lĩnh vực"
+Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Kedefar (Ketoconazol) vỉ,THUỐC CHỐNG NẤM,Ketoconazol 200mg,Ketoconazol 200NE H20v Mekophar,Viên nén,Uống,Công ty Cổ phần Hóa-Dược phẩm Mekophar,Việt Nam,32360,VD-11249-10,25/06/2028,"Nơi khô ráo, nhiệt độ dưới 30°C, tránh ánh sáng",1,,,,Không
+Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Fluconazol vỉ,THUỐC CHỐNG NẤM,Fluconazol 150mg,Fluconazol H1v Stada,Viên nang cứng,Uống,Công ty TNHH Liên doanh Stada - Việt Nam,Việt Nam,23749,VD-2968-07,06/10/2028,"Dưới 30°C, tránh ánh sáng mặt trời chiếu trực tiếp",1,,,,Không
+Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Calcrem tuyp,THUỐC CHỐNG NẤM,Clotrimazol 1%,Cafunten 1% TU10g Medipharco,Kem bôi da,Bôi ngoài da,Medipharco,Việt Nam,38020,893100129925,25/06/2027,"Để nơi mát, tránh ánh sáng, nhiệt độ dưới 30°C",1,,,,Không
+Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Nystatin tuyp,THUỐC CHỐNG NẤM,Nystatin 100.000IU,Nystafar 100.000IU G H10g Pharmedic,Thuốc bột rơ miệng,Rơ miệng,Công ty Pharmedic,Việt Nam,63357,893110882024,08/10/2028,"Nơi khô ráo, thoáng mát, nhiệt độ không quá 30°C",1,,,,Không
+Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Astersunat vỉ,THUỐC ĐIỀU TRỊ BỆNH DO ĐỘNG VẬT NGUYÊN SINH,"Dihydroartemisinin 40mg, Piperaquin phosphat 320mg",Falcidin 40/320NE H8v Mekophar,Viên nén bao phim,Uống,Công ty Cổ phần Hóa-Dược phẩm Mekophar,Việt Nam,64134,VD-20951-14,05/09/2027,"Nơi khô ráo, nhiệt độ dưới 30°C, tránh ánh sáng",1,,,,Không
+Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Fansidar vỉ,THUỐC ĐIỀU TRỊ BỆNH DO ĐỘNG VẬT NGUYÊN SINH,"Sulfadoxin 500mg, Pyrimethamin 25mg",,,,,,,,,,1,,,,Không
+Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Metronidazol vỉ,THUỐC ĐIỀU TRỊ BỆNH DO ĐỘNG VẬT NGUYÊN SINH,Metronidazol 250mg,Metronidazol 250NE H500v Hà Tây,Viên nén,Uống,Công ty Cổ phần Dược phẩm Hà Tây,Việt Nam,96496,893115286023,07/03/2028,"Nơi khô, nhiệt độ dưới 30°C",1,,,,"Thuốc thuộc danh mục chất bị cấm sử dụng trong một số ngành, lĩnh vực"
+Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Griseofulvin tuyp,THUỐC CHỐNG NẤM,Griseofulvin 5%,Griseofulvin 5% TU10g Mekophar,Kem bôi da,Bôi ngoài da,Công ty Cổ phần Hóa-Dược phẩm Mekophar,Việt Nam,34683,VD-19111-13,14/04/2028,"Nơi khô ráo, tránh ánh sáng, không quá 30°C",1,,,,Không
+Buổi 12,THUỐC CHỐNG NẤM – THUỐC ĐT BỆNH DO ĐVNS – THUỐC ĐT UNG THƯ,Griseofulvin vỉ,THUỐC CHỐNG NẤM,Griseofulvin 500mg,Griseofulvin 500NE H20v Mekophar,Viên nén,Uống,Công ty Cổ phần Hóa-Dược phẩm Mekophar,Việt Nam,72657,VD-30678-18,21/10/2029,"Nhiệt độ không quá 30°C, tránh ánh sáng mặt trời quá mạnh",1,,,,Không`;
 
 /* ---------- parse CSV (quote-aware) ---------- */
 function parseCSV(text){
@@ -3270,6 +3273,9 @@ function m1PackInfo(it){
   const bl = m1HashNum(it.key+'bl',0,1) ? 3 : 10;
   return { unit:'viên', per:bl*10, spec:`Hộp ${bl} vỉ × 10 viên` };
 }
+// req #235: bảo quản lạnh theo ĐÚNG điều kiện bảo quản ghi trong danh mục (không bốc ngẫu nhiên nữa)
+function m1IsCold(r){ return /^(chưa dùng:\s*)?(bảo quản lạnh|tủ lạnh)/i.test(((r && r['Điều kiện bảo quản']) || '').trim()); }
+function m1RecOf(key){ return allRecords.find(r => m1KeyOf(r) === key) || null; }
 function m1PkgPrice(it){ return 12000 + m1HashNum(it.key+'p', 0, 78) * 1000; }   // giá nhập / 1 đơn vị đóng gói (chưa VAT)
 // req #226: danh mục thuốc của các nhiệm vụ 1-2-3 MỞ RỘNG dần theo mức độ — mức 1 lấy thuốc trong 2 tủ
 // đầu, rồi 4 tủ, 8, 12, 18… Mỗi lượt chơi mới bốc ngẫu nhiên 2 thuốc kê đơn + 2 thuốc không kê đơn.
@@ -3327,7 +3333,7 @@ function getM1Items(){
     const r = byKey[key];
     const ton = m1HashNum(key+'k',1,2);   // hộp; tủ chỉ chứa 1–2 hộp mỗi loại
     const it = { key, name: r['Tên hoạt chất'], cabinet: drugClass(r), tonKho: ton, tonThuc: ton, unit: m1UnitOf(r['Tên hoạt chất']), banTuan: m1HashNum(key+'b',6,38),
-                 cold: m1HashNum(key+'cold',0,99) < 30 };
+                 cold: m1IsCold(r) };
     it.pack = m1PackInfo(it);
     return it;
   });
@@ -3620,16 +3626,9 @@ function renderHoSoSub(st){
 // req #174 (phản hồi): "số lần chơi" = số lần HOÀN THÀNH NHIỆM VỤ (xong nhiệm vụ 1, hoặc xong 1
 // lô ở nhiệm vụ 3). Xong nhiệm vụ 1 tính cho cả hai tủ (kê đơn + không kê đơn).
 function m1PracticeCount(){ try{ return Number(localStorage.getItem('tu-thuoc-mo-phong:m1count')) || 0; }catch(e){ return 0; } }
+// req #236: mức độ tính theo LƯỢT (hoàn thành cả chuỗi nhiệm vụ 1 → 3), không tính từng nhiệm vụ — xem m3Finish
 function m1CountPlay(){
   try{ localStorage.setItem('tu-thuoc-mo-phong:m1count', String(m1PracticeCount() + 1)); }catch(e){}
-  try{
-    registerPlay(); saveGame(); applyCabinetVisibility();
-    const otherKey = 'tu-thuoc-mo-phong:game_v2' + (TU_MODE === 'otc' ? '' : ':otc');
-    const g = JSON.parse(localStorage.getItem(otherKey) || 'null') || { tier:0, progress:0, stars:0, shields:0, combo:0, shieldsFromStars:0, plays:0 };
-    g.plays = (typeof g.plays === 'number' ? g.plays : (g.tier||0) * PLAYS_PER_TIER) + 1;
-    g.tier = Math.max(g.tier||0, Math.min(TIERS.length-1, Math.floor(g.plays / PLAYS_PER_TIER)));
-    localStorage.setItem(otherKey, JSON.stringify(g));
-  }catch(e){}
 }
 function renderDonHangSub(st){
   const body = document.getElementById('nhaccBody');
@@ -4065,61 +4064,76 @@ function m2RenderPrice(){
   const x = getM2State();
   const pass = x.items.filter(it => !m2Reasons(it).length);
   if(!pass.length){ x.step = 'done'; saveM2State(x); m2FinishDone(); return; }
+  // req #237: chỉ hiện GIÁ NHẬP (sau VAT) theo đơn vị nhỏ nhất và ô GIÁ BÁN. Giá bán ≥ giá nhập → đồng ý;
+  // thấp hơn giá nhập → hỏi lại "có chắc chắn không", người học xác nhận thì vẫn đồng ý.
   const cost = it => (m1PkgPrice(it) * 1.05) / it.pack.per;
-  const sell = it => Math.max(100, Math.round(cost(it) * 1.2 / 100) * 100);
   const fmt = v => v.toLocaleString('vi-VN', { maximumFractionDigits: 1 });
-  // req #237: giá vốn đã được chia sẵn theo đơn vị nhỏ nhất — người học chỉ nhập giá bán
   const body = m2Modal('🏷️ Bước 7 — Niêm yết giá bán', `
-    <p class="pos-note">Ghi giá bán cho các sản phẩm <b>đạt</b>, tính theo <b>đơn vị đóng gói nhỏ nhất</b> (viên, ống, lọ, tuýp…). <b>Giá vốn đã được tính sẵn</b>; bạn chỉ cần tính và nhập <b>giá bán</b> = giá vốn + 20% lãi gộp, làm tròn đến hàng trăm đồng.</p>
-    <div class="pos-note" style="background:#fff8d6;border:1px dashed #c98d3d;border-radius:8px;padding:8px 10px">
-      <b>Vì sao cộng VAT 5%?</b> Thuốc phòng bệnh, chữa bệnh thuộc nhóm hàng hoá chịu <b>thuế giá trị gia tăng (GTGT) 5%</b> theo Luật Thuế GTGT, nên hàng thuốc luôn tính VAT 5%. Nhà thuốc trả VAT khi mua nên thuế này được tính vào giá vốn:<br>
-      <b>Giá vốn = giá nhập × (1 + 5%) ÷ số đơn vị nhỏ nhất trong 1 hộp.</b></div>
-    <table class="pos-table"><thead><tr><th>Sản phẩm</th><th>Quy cách</th><th>Giá nhập / hộp (chưa VAT)</th><th>Giá vốn / đơn vị nhỏ nhất (đã tính sẵn)</th><th>Giá bán niêm yết / đơn vị nhỏ nhất (đ)</th></tr></thead><tbody>
-      ${pass.map((it,i) => `<tr><td>${esc(it.name)}</td><td>${it.pack.spec}</td><td>${fmt(m1PkgPrice(it))} đ</td>
-        <td><b>${fmt(cost(it))} đ/${it.pack.unit}</b><br><small style="color:#6b7280">${fmt(m1PkgPrice(it))} × 1,05${it.pack.per > 1 ? ' ÷ ' + it.pack.per : ''}</small></td>
+    <p class="pos-note">Ghi <b>giá bán</b> cho các sản phẩm <b>đạt</b>, tính theo <b>đơn vị đóng gói nhỏ nhất</b> (viên, ống, lọ, tuýp…).</p>
+    <table class="pos-table"><thead><tr><th>Sản phẩm</th><th>Quy cách</th><th>Giá nhập (sau VAT) / đơn vị nhỏ nhất</th><th>Giá bán niêm yết / đơn vị nhỏ nhất (đ)</th></tr></thead><tbody>
+      ${pass.map((it,i) => `<tr><td>${esc(it.name)}</td><td>${it.pack.spec}</td>
+        <td><b>${fmt(cost(it))} đ/${it.pack.unit}</b></td>
         <td><input type="number" min="0" data-s="${i}" style="width:90px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px"> đ/${it.pack.unit}</td></tr>`).join('')}
-    </tbody></table><button type="button" class="pos-btn" id="m2PriceOk">✅ Niêm yết giá</button><div class="pos-err" id="m2Err"></div>`);
+    </tbody></table><button type="button" class="pos-btn" id="m2PriceOk">✅ Niêm yết giá</button><div class="pos-err" id="m2Err"></div><div id="m2PriceAsk"></div>`);
+  const ask = body.querySelector('#m2PriceAsk');
   body.querySelector('#m2PriceOk').addEventListener('click', () => {
-    const err = body.querySelector('#m2Err');
+    const err = body.querySelector('#m2Err'); err.textContent = ''; ask.innerHTML = '';
+    const low = [];
     for(let i = 0; i < pass.length; i++){
       const sv = body.querySelector(`[data-s="${i}"]`).value, it = pass[i];
-      if(sv === ''){ err.textContent = '⚠️ Nhập giá bán cho tất cả sản phẩm.'; return; }
-      if(Math.abs(Number(sv) - sell(it)) > 100){ err.textContent = `⚠️ Giá bán của "${it.name}" chưa đúng — giá vốn × 1,2, làm tròn đến 100 đồng.`; return; }
+      if(sv === '' || !(Number(sv) > 0)){ err.textContent = '⚠️ Nhập giá bán cho tất cả sản phẩm.'; return; }
+      if(Number(sv) < cost(it)) low.push(`${esc(it.name)} (${fmt(Number(sv))} đ &lt; giá nhập ${fmt(cost(it))} đ)`);
     }
+    if(low.length){
+      ask.innerHTML = `<div class="pos-note" style="background:#fff1e6;border:1px solid #e0a070;border-radius:8px;padding:8px 10px;margin-top:8px">⚠️ Giá bán của <b>${low.join(', ')}</b> thấp hơn giá nhập. Bạn có chắc chắn bán thấp hơn giá nhập không?<br>
+        <button type="button" class="pos-btn" id="m2LowYes" style="margin-top:6px">Có, vẫn niêm yết</button> <button type="button" class="pos-btn" id="m2LowNo" style="margin-top:6px;background:#9aa89f">Sửa lại giá</button></div>`;
+      ask.querySelector('#m2LowNo').addEventListener('click', () => { ask.innerHTML = ''; });
+      ask.querySelector('#m2LowYes').addEventListener('click', done);
+      return;
+    }
+    done();
+  });
+  function done(){
     x.step = 'ledger'; saveM2State(x); m2CloseModal();
     pmZoneLabel.textContent = '📒 Bước 8: đến Quầy thu ngân, mở máy tính → tab Thực nhập để ghi sổ kiểm nhập.';
-  });
+  }
 }
 // req #224 (bước 8): người học không thể nhớ hết thông tin để điền sổ → cho xem lại bao bì nhiều mặt + hoá đơn.
 // Thông tin KHÔNG liệt kê sẵn: người học tự đọc trên các mặt bao bì (trước / sau / bên).
-const M3_SPECIAL = [
-  { name:'Morphin sulfat 10 mg/1 ml', kind:'narc', spec:'Hộp 10 ống × 1 ml' }, { name:'Pethidin 100 mg/2 ml', kind:'narc', spec:'Hộp 10 ống × 2 ml' },
-  { name:'Diazepam 5 mg', kind:'psy', spec:'Hộp 10 vỉ × 10 viên' }, { name:'Alprazolam 0,5 mg', kind:'psy', spec:'Hộp 3 vỉ × 10 viên' },
-  { name:'Phenobarbital 100 mg', kind:'psy', spec:'Hộp 10 vỉ × 10 viên' }, { name:'Ephedrin hydroclorid 30 mg/1 ml', kind:'pre', spec:'Hộp 10 ống × 1 ml' },
-  { name:'Pseudoephedrin 60 mg', kind:'pre', spec:'Hộp 10 vỉ × 10 viên' },
-];
-const M3_KIND = { narc:'Thuốc gây nghiện', psy:'Thuốc hướng thần', pre:'Tiền chất dùng làm thuốc' };
+// Thuốc phải kiểm soát đặc biệt — các nhóm theo Luật Dược / Thông tư 18/2026/TT-BYT; thuốc nào thuộc nhóm nào lấy từ cột KSĐB của danh mục
+const M3_KIND = { narc:'Thuốc gây nghiện', psy:'Thuốc hướng thần', pre:'Thuốc tiền chất', combo:'Thuốc dạng phối hợp có chứa dược chất gây nghiện',
+  toxic:'Thuốc độc', banned:'Thuốc thuộc danh mục chất bị cấm sử dụng trong một số ngành, lĩnh vực' };
+function ksdbKind(r){
+  const t = ((r && r['KSĐB']) || '').toLowerCase();
+  if(!t || t === 'không') return null;
+  if(/phối hợp/.test(t)) return 'combo'; if(/bị cấm/.test(t)) return 'banned'; if(/độc/.test(t)) return 'toxic';
+  if(/hướng thần/.test(t)) return 'psy'; if(/tiền chất/.test(t)) return 'pre'; if(/gây nghiện/.test(t)) return 'narc';
+  return null;
+}
 function pkgData(it){
-  const rec = allRecords.find(r => r['Tên hoạt chất'] === it.name) || {}, sp = M3_SPECIAL.find(z => z.name === it.name);
+  const rec = (it.key && m1RecOf(it.key)) || allRecords.find(r => r['Tên hoạt chất'] === it.name) || {};
   const k = it.key || it.name, d = new Date();
   const base = (typeof getM1Items === 'function' ? getM1Items().find(a => a.key === it.key) : null) || it;
   const pack = it.pack || base.pack || m1PackInfo({ name: it.name, key: k });
-  const cold = it.cold != null ? !!it.cold : !!base.cold;
-  return { name: it.name, strength: sp ? sp.name : (rec['Hoạt chất, hàm lượng/nồng độ'] || ''), maker: sp ? 'Công ty SX (minh hoạ)' : (rec['Nơi sản xuất'] || 'Công ty SX (minh hoạ)'),
-    reg: `VD-${10000 + m1HashNum(k+'dk',0,89999)}-24`, lot: `LO${m1HashNum(k+'lo',1000,9999)}`, exp: `${String(m1HashNum(k+'hd',1,12)).padStart(2,'0')}/${d.getFullYear()+2}`,
-    store: cold ? 'Bảo quản trong tủ lạnh 2–8°C, tránh ánh sáng, không để đông băng.' : 'Bảo quản nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng.',
-    spec: sp ? sp.spec : pack.spec, kind: sp ? sp.kind : null, rx: sp ? true : (it.cabinet === 'rx' || base.cabinet === 'rx') };
+  const cold = it.cold != null ? !!it.cold : m1IsCold(rec);
+  const maker = [rec['Nơi sản xuất'], rec['Nước sản xuất']].filter(Boolean).join(' – ');
+  return { name: it.name, brand: rec['Tên biệt dược'] || '', strength: rec['Hoạt chất, hàm lượng/nồng độ'] || '',
+    form: [rec['Dạng bào chế'], rec['Đường dùng'] ? 'Đường dùng: ' + rec['Đường dùng'] : ''].filter(Boolean).join(' · '),
+    maker: maker || 'Công ty SX (minh hoạ)', realReg: !!rec['Số đăng ký'],
+    reg: rec['Số đăng ký'] || `VD-${10000 + m1HashNum(k+'dk',0,89999)}-24`, lot: `LO${m1HashNum(k+'lo',1000,9999)}`, exp: `${String(m1HashNum(k+'hd',1,12)).padStart(2,'0')}/${d.getFullYear()+2}`,
+    store: rec['Điều kiện bảo quản'] || (cold ? 'Bảo quản trong tủ lạnh 2–8°C, tránh ánh sáng, không để đông băng.' : 'Bảo quản nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng.'),
+    spec: pack.spec, kind: ksdbKind(rec), rx: (it.cabinet === 'rx' || base.cabinet === 'rx' || (rec['STT Buổi'] && drugClass(rec) === 'rx')) };
 }
 // Bao bì 3 mặt: trước (ảnh thật nếu có) · sau (thành phần, số ĐK, lô, HSD, nhà SX) · bên (bảo quản, quy cách, lưu ý)
 function pkgViewer(it){
   const dd = pkgData(it), photo = m2PhotoUrl(it.name), e = esc;
-  const banner = (dd.kind ? `<div class="bn">${M3_KIND[dd.kind].toUpperCase()}</div>` : (dd.rx ? '<div class="bn rx">Thuốc bán theo đơn</div>' : ''));
-  const front = `<div class="pkg-face" data-face="front">${photo ? `<img src="${photo}" alt="Mặt trước ${e(it.name)}" onerror="this.remove()">` : ''}<div class="pkg-gen">${banner}<h4>${e(it.name)}</h4><div>${e(dd.strength)}</div><div class="fine">Hộp thuốc — mặt trước (hình minh hoạ)</div></div></div>`;
+  const banner = (['narc','psy','pre'].includes(dd.kind) ? `<div class="bn">${M3_KIND[dd.kind].toUpperCase()}</div>` : '') + (dd.rx ? '<div class="bn rx">Rx · Thuốc bán theo đơn</div>' : '');
+  const front = `<div class="pkg-face" data-face="front">${photo ? `<img src="${photo}" alt="Mặt trước ${e(it.name)}" onerror="this.remove()">` : ''}<div class="pkg-gen">${banner}<h4>${e(dd.brand || it.name)}</h4><div>${e(dd.strength)}</div><div>${e(dd.form)}</div><div class="fine">Hộp thuốc — mặt trước (hình minh hoạ)</div></div></div>`;
   const back = `<div class="pkg-face" data-face="back" hidden><div class="pkg-gen">${banner}<h4>${e(it.name)}</h4><table><tbody>
-      <tr><th>Thành phần / hàm lượng</th><td>${e(dd.strength || it.name)}</td></tr><tr><th>Số đăng ký (SĐK)</th><td>${dd.reg} <small>(số minh hoạ)</small></td></tr>
-      <tr><th>Số lô SX</th><td>${dd.lot}</td></tr><tr><th>Hạn dùng (HSD)</th><td>${dd.exp}</td></tr><tr><th>Nhà sản xuất</th><td>${e(dd.maker)}</td></tr></tbody></table></div></div>`;
+      <tr><th>Thành phần / hàm lượng</th><td>${e(dd.strength || it.name)}</td></tr>${dd.form ? `<tr><th>Dạng bào chế</th><td>${e(dd.form)}</td></tr>` : ''}<tr><th>Số đăng ký (SĐK)</th><td>${e(dd.reg)}${dd.realReg ? '' : ' <small>(số minh hoạ)</small>'}</td></tr>
+      <tr><th>Số lô SX</th><td>${dd.lot} <small>(minh hoạ)</small></td></tr><tr><th>Hạn dùng (HSD)</th><td>${dd.exp} <small>(minh hoạ)</small></td></tr><tr><th>Nhà sản xuất</th><td>${e(dd.maker)}</td></tr></tbody></table></div></div>`;
   const side = `<div class="pkg-face" data-face="side" hidden><div class="pkg-gen">${banner}<table><tbody>
-      <tr><th>Bảo quản</th><td>${dd.store}</td></tr><tr><th>Quy cách đóng gói</th><td>${e(dd.spec)}</td></tr></tbody></table>
+      <tr><th>Bảo quản</th><td>${e(dd.store)}</td></tr><tr><th>Quy cách đóng gói</th><td>${e(dd.spec)}</td></tr></tbody></table>
       <div class="fine">Đọc kỹ hướng dẫn sử dụng trước khi dùng. Để xa tầm tay trẻ em.</div></div></div>`;
   return `<div class="pkg" data-pkg><div class="pkg-tabs"><button type="button" class="on" data-f="front">Mặt trước</button><button type="button" data-f="back">Mặt sau</button><button type="button" data-f="side">Mặt bên</button><button type="button" class="zoom" data-zoom>🔍 Phóng to</button></div>${front}${back}${side}</div>`;
 }
@@ -4173,9 +4187,9 @@ function renderThucNhapTab(){
   posPanel.innerHTML = `
     <p class="pos-note">📒 <b>Sổ kiểm nhập thuốc</b> (mẫu). Các cột thông tin đã điền từ hoá đơn và nhãn; điền nốt <b>điều kiện bảo quản, quy cách đóng gói, số lượng, đơn vị tính, đơn giá</b> cho các sản phẩm đạt. Không nhớ thông tin? Bấm <b>🔎 Xem lại hình</b> ở từng dòng để xem lại hộp thuốc, nhãn, hoá đơn và số lượng thực nhận.</p>
     <div style="overflow-x:auto"><table class="pos-table" style="font-size:.72rem;min-width:900px"><thead><tr>${th.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>
-      ${pass.map((it,i) => { const r = rec(it); return `<tr data-i="${i}"><td>${dt}<br><button type="button" class="pos-btn m2-ref" data-r="${i}" style="padding:3px 8px;font-size:.7rem;margin-top:4px">🔎 Xem lại hình</button></td><td>${esc(it.name)}${r['Hoạt chất, hàm lượng/nồng độ'] ? '<br>' + esc(r['Hoạt chất, hàm lượng/nồng độ']) : ''}</td>
-        <td>VD-${10000 + m1HashNum(it.key+'dk',0,89999)}-24 <small>(số minh hoạ)</small></td><td>LO${m1HashNum(it.key+'lo',1000,9999)} / ${String(m1HashNum(it.key+'hd',1,12)).padStart(2,'0')}/${d.getFullYear()+2}</td>
-        <td>${esc(r['Nơi sản xuất'] || 'Công ty SX (minh hoạ)')}</td><td>${esc(x.supplierName)}</td><td>00000014</td>
+      ${pass.map((it,i) => { const r = rec(it), pk = pkgData(it); return `<tr data-i="${i}"><td>${dt}<br><button type="button" class="pos-btn m2-ref" data-r="${i}" style="padding:3px 8px;font-size:.7rem;margin-top:4px">🔎 Xem lại hình</button></td><td>${esc(it.name)}${r['Hoạt chất, hàm lượng/nồng độ'] ? '<br>' + esc(r['Hoạt chất, hàm lượng/nồng độ']) : ''}</td>
+        <td>${esc(pk.reg)}${pk.realReg ? '' : ' <small>(số minh hoạ)</small>'}</td><td>${pk.lot} / ${pk.exp}</td>
+        <td>${esc(pk.maker)}</td><td>${esc(x.supplierName)}</td><td>00000014</td>
         <td>${sel('cold', ['Nhiệt độ thường, dưới 30°C, tránh ánh sáng','Tủ lạnh 2–8°C'])}</td><td>${sel('spec', specs())}</td>
         <td><input type="number" min="0" data-f="qty" style="width:64px;padding:3px;border:1px solid #caa25a;border-radius:6px"></td>
         <td>${sel('unit', ['hộp','lọ','vỉ','viên','ống','tuýp','gói'])}</td>
@@ -4199,7 +4213,6 @@ function renderThucNhapTab(){
 }
 function m2FinishDone(){
   try{ localStorage.setItem(LS_M2N, String(m2Count() + 1)); }catch(e){}
-  m2CountPlay();
   const msg = '🎉 Hoàn thành nhiệm vụ 2: đã kiểm nhập, niêm yết giá và ghi sổ.';
   const ov = document.getElementById('m2Overlay');
   if(ov && ov.style.display !== 'none') ov.querySelector('#m2Body').innerHTML = `<div class="pos-soon" style="color:#1f7a3d">${msg}</div>`;
@@ -4234,11 +4247,14 @@ function startM3(){
   const m2 = getM2State();
   const src = (m2.items && m2.items.length ? m2.items.filter(it => !m2Reasons(it).length) : []);
   const all = getM1Items();
-  const list = (src.length ? src : all).map(it => { const base = all.find(a => a.key === it.key) || it; return { key: it.key, name: it.name, cold: !!base.cold, cabinet: base.cabinet }; });
-  // req #235: từ mức Dễ trở lên, thùng hàng có thêm 1 thuốc kiểm soát đặc biệt (gây nghiện / hướng thần / tiền chất)
+  const toItem = (key, name, cold, cabinet) => { const kind = ksdbKind(m1RecOf(key)); return { key, name, cold: !!cold, cabinet: kind && !cold ? 'special' : cabinet, skind: kind }; };
+  const list = (src.length ? src : all).map(it => { const base = all.find(a => a.key === it.key) || it; return toItem(it.key, it.name, base.cold, base.cabinet); });
+  // req #235: từ mức Dễ trở lên, thùng hàng có thêm hàng nhập: 1 thuốc phải kiểm soát đặc biệt và 1 thuốc bảo quản lạnh
+  // (lấy THẬT từ danh mục — cột KSĐB và Điều kiện bảo quản), nếu bộ thuốc của lượt chưa có
   if(m1SharedTier() >= 1){
-    const sp = M3_SPECIAL[Math.floor(Math.random() * M3_SPECIAL.length)];
-    list.push({ key: 'sp:' + sp.name, name: sp.name, cold: false, cabinet: 'special', skind: sp.kind });
+    const pickRec = f => { const pool = allRecords.filter(r => r['Tên hoạt chất'] && f(r) && !list.some(x => x.key === m1KeyOf(r))); const withPhoto = pool.filter(r => PHOTO_SLUGS.has(slugify(r['Tên hoạt chất']))); const pl = withPhoto.length ? withPhoto : pool; return pl.length ? pl[Math.floor(Math.random() * pl.length)] : null; };
+    if(!list.some(x => x.cabinet === 'special')){ const r = pickRec(r => ksdbKind(r) && !m1IsCold(r)); if(r) list.push(toItem(m1KeyOf(r), r['Tên hoạt chất'], false, drugClass(r))); }
+    if(!list.some(x => x.cold)){ const r = pickRec(r => m1IsCold(r) && !ksdbKind(r)); if(r) list.push(toItem(m1KeyOf(r), r['Tên hoạt chất'], true, drugClass(r))); }
   }
   saveM3State({ step:'stored', items:list, cls:{}, done:{}, roomItems:[], fridge:{} });
 }
@@ -4366,7 +4382,7 @@ function m3RenderClassify(){
       if(k !== 'drug'){ err.textContent = `⚠️ "${it.name}" là thuốc — chọn "Thuốc" rồi phân nhóm.`; return; }
       const g = body.querySelector(`input[name=g${i}]:checked`)?.value;
       if(!g){ err.textContent = '⚠️ Chọn nhóm thuốc (kê đơn / không kê đơn / kiểm soát đặc biệt).'; return; }
-      if(g !== it.cabinet){ err.textContent = it.cabinet === 'special' ? `⚠️ "${it.name}" chưa đúng nhóm — xem lại thông tin trên bao bì: đây là thuốc phải kiểm soát đặc biệt.` : `⚠️ "${it.name}" chưa đúng nhóm — xem lại bao bì (thuốc bán theo đơn hay không).`; return; }
+      if(g !== it.cabinet){ err.textContent = it.cabinet === 'special' ? `⚠️ "${it.name}" chưa đúng nhóm — đối chiếu hoạt chất với danh mục thuốc phải kiểm soát đặc biệt.` : (g === 'special' ? `⚠️ "${it.name}" không thuộc danh mục thuốc phải kiểm soát đặc biệt.` : `⚠️ "${it.name}" chưa đúng nhóm — xem lại bao bì (thuốc bán theo đơn hay không).`); return; }
     }
     const nxt = m3AfterClassify(x);
     if(nxt === 'special'){
@@ -4387,7 +4403,7 @@ function m3RenderSpecial(){
   const sp = (x.roomItems || []).filter(it => it.cabinet === 'special');
   const kinds = Object.keys(M3_KIND);
   const body = m3Modal('🔒 Bước 4 — Thuốc kiểm soát đặc biệt', `
-    <p class="pos-note">Theo <b>Thông tư 18/2026/TT-BYT</b>, thuốc phải kiểm soát đặc biệt cất trong <b>tủ riêng có khoá chắc chắn</b>, <b>không để lẫn với thuốc khác</b> và phải <b>ghi sổ theo dõi xuất – nhập – tồn</b>. Đọc bao bì, <b>phân loại</b> rồi chọn <b>ngăn</b> phù hợp.</p>
+    <p class="pos-note">Theo <b>Thông tư 18/2026/TT-BYT</b>, thuốc phải kiểm soát đặc biệt cất trong <b>tủ riêng có khoá chắc chắn</b>, <b>không để lẫn với thuốc khác</b> và phải <b>ghi sổ theo dõi xuất – nhập – tồn</b>. Đọc <b>thành phần</b> trên bao bì, đối chiếu danh mục để <b>phân loại</b> rồi chọn <b>ngăn</b> phù hợp.</p>
     ${sp.map((it,i) => `<div class="m2-tile" data-i="${i}" style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
       <div style="flex:1 1 380px;min-width:0"><b>${esc(it.name)}</b>${pkgViewer(it)}</div>
       <div style="flex:1 1 260px">
@@ -4402,7 +4418,7 @@ function m3RenderSpecial(){
     for(let i = 0; i < sp.length; i++){
       const it = sp[i], t = body.querySelector(`input[name=sk${i}]:checked`)?.value, n = body.querySelector(`input[name=sn${i}]:checked`)?.value;
       if(!t || !n){ err.textContent = `⚠️ "${it.name}": chọn loại thuốc và ngăn.`; return; }
-      if(t !== it.skind){ err.textContent = `⚠️ "${it.name}" chưa đúng loại — đọc lại thông tin trên bao bì.`; return; }
+      if(t !== it.skind){ err.textContent = `⚠️ "${it.name}" chưa đúng loại — đối chiếu hoạt chất (${esc(pkgData(it).strength || it.name)}) với danh mục thuốc phải kiểm soát đặc biệt.`; return; }
       if(n !== it.skind){ err.textContent = `⚠️ "${it.name}" xếp sai ngăn — mỗi loại thuốc kiểm soát đặc biệt có ngăn riêng, không để lẫn.`; return; }
       if(!body.querySelector(`input[name=sl${i}]`).checked){ err.textContent = `⚠️ "${it.name}": phải ghi sổ theo dõi xuất – nhập – tồn riêng.`; return; }
     }
@@ -4440,7 +4456,7 @@ function m3Finish(msg){
   if(msg){ pmZoneLabel.textContent = msg; }
 }
 function m3Count(){ try{ return Number(localStorage.getItem('tu-thuoc-mo-phong:m3count')) || 0; }catch(e){ return 0; } }
-// Nhiệm vụ 2 hoàn thành = 1 lần chơi (tính cho cả hai tủ, như nhiệm vụ 1).
+// Hoàn thành 1 LƯỢT (nhiệm vụ 1 → 3) = 1 lần chơi, tính cho cả hai tủ; đủ PLAYS_PER_TIER lượt thì lên mức.
 function m2CountPlay(){
   try{
     registerPlay(); saveGame(); applyCabinetVisibility();
@@ -4497,7 +4513,6 @@ function renderThuSub(){
     }
     x.step = 'done'; saveM2State(x);
     try{ localStorage.setItem(LS_M2N, String(m2Count() + 1)); }catch(e){}
-    m2CountPlay();
     body.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đã gửi thư cho ${esc(x.supplierName)}. Hàng được giữ ở khu chờ xử lý cho tới khi nhà cung ứng phản hồi.<br>🎉 Hoàn thành nhiệm vụ 2 (nhánh xử lý hàng không đạt).</div>`;
     window.refreshMissionsList?.();
   });
@@ -4610,7 +4625,10 @@ function renderM1Checklist(){
     const tier = Math.min(4, Math.floor(plays / PLAYS_PER_TIER)), inTier = tier >= 4 ? PLAYS_PER_TIER : plays % PLAYS_PER_TIER;
     el.innerHTML = `<div style="font:800 .72rem 'Nunito',sans-serif;color:#26405f">Mức độ: <b>${names[tier]}</b> · thuốc trong ${cabs[tier]} tủ</div>
       <div style="height:8px;background:#dfe6ee;border-radius:6px;overflow:hidden;margin:3px 0"><div style="height:100%;width:${tier>=4?100:Math.round(inTier/PLAYS_PER_TIER*100)}%;background:#2e8256"></div></div>
-      <div style="font:600 .62rem 'Nunito',sans-serif;color:#8a97ab">${tier>=4 ? 'Đã đạt mức cao nhất' : inTier + '/' + PLAYS_PER_TIER + ' lần hoàn thành nhiệm vụ để lên mức tiếp theo'}</div>`;
+      <div style="font:600 .62rem 'Nunito',sans-serif;color:#8a97ab">${tier>=4 ? 'Đã đạt mức cao nhất' : inTier + '/' + PLAYS_PER_TIER + ' lượt hoàn thành (nhiệm vụ 1 → 3) để lên mức tiếp theo'}</div>
+      <div style="margin-top:6px;font:700 .66rem 'Nunito',sans-serif;color:#26405f">📚 Danh mục thuốc:
+        <label style="display:block;font-weight:600;margin-top:2px"><input type="radio" name="mgCat" value="1" checked> Danh mục 1 — Môn Dược lý (${allRecords.length} thuốc)</label>
+        <label style="display:block;font-weight:600;color:#8a97ab" title="Đang chờ giảng viên cung cấp"><input type="radio" name="mgCat" value="2" disabled> Danh mục 2 — Nhà thuốc mô phỏng (sắp có)</label></div>`;
   }
   function renderMissions(){
     renderLevel();
