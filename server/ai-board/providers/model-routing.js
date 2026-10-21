@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const ROLES = new Set(['gate1', 'gate25', 'gate3_light', 'gate3_heavy', 'gate4_review', 'classifier', 'embed', 'calibration', 'eval_judge']);
+const ROLES = new Set(['gate1', 'gate25', 'gate3_light', 'gate3_heavy', 'gate4_review', 'classifier', 'embed', 'calibration', 'eval_judge', 'compactor']);
 const PROVIDERS = new Set(['ollama', 'vllm', 'api']);
 const CAPABILITIES = new Set(['json', 'logprobs', 'embedding']);
 const RETRYABLE_HTTP = new Set([500, 502, 503, 504]);

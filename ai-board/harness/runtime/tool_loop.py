@@ -353,7 +353,7 @@ def probe_write(name: str, args: dict, ws: Workspace, row: dict) -> tuple[str, d
     return probe(name, args, ws, row) if probe else None
 
 
-def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check) -> tuple:
+def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check, history=None) -> tuple:
     """Nạp checkpoint: kiểm pin, nhận ledger cũ, dựng lại bản nháp. → (prompt, steps, rejected, kết quả dừng|None)."""
     saved = store.load()
     if saved["pins"] is None:
@@ -418,7 +418,10 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check) -> tup
                 return prompt, steps, False, _result("blocked", f"replay finish lệch: {error}", "critical", steps=steps)
         steps.append(name)
         rejected = kind == "finish_rejected"
-        prompt += OBSERVATION.format(tool=name, text=observation[:_cap(name)])
+        if history is not None:
+            history.add(n, name, observation[:_cap(name)])
+        else:
+            prompt += OBSERVATION.format(tool=name, text=observation[:_cap(name)])
     return prompt, steps, rejected, None
 
 
@@ -493,9 +496,14 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
                    "(sửa file đích VÀ viết test bằng write_test trước khi finish), tránh đúng lỗi này.\n")
         pins = {**(pins or {}), "repair": sha_of(repair_reason)}
     last_sig, repeats = None, 0
+    history = None
+    if os.getenv('AI_BOARD_CONTEXT_COMPACTION') == '1':
+        from runtime.compaction import History, pin
+        history = History()
+        pins = {**(pins or {}), 'compaction': pin()}
     steps, rejected, nudged = [], False, False  # the first premature finish is a free nudge; repeating it spends a content repair
     if store:
-        prompt, steps, rejected, stop = _resume(store, ws, budget, _pins(subtask, sha, ws, pins), prompt, check)
+        prompt, steps, rejected, stop = _resume(store, ws, budget, _pins(subtask, sha, ws, pins), prompt, check, history)
         if stop:
             return stop
     while True:
@@ -505,10 +513,24 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
         if rejected and not (budget.can_afford(reserve) if reserve else budget.can_afford()):
             return _result("paused", "không đủ ngân sách dự phòng cho verification trước lượt sửa tiếp", "budget", steps=steps)
         try:
+            call_prompt = prompt
+            if history is not None:
+                from runtime.compaction import CompactionPause
+                from runtime.budget import BudgetExhausted
+                try:
+                    call_prompt = history.prepare(prompt, deps=deps, model=model, role=role or 'gate3_light', budget=loop_budget, manifest=MANIFEST.hash,
+                        db_path=db_path, proposal_id=proposal_id, child=child, iteration=len(steps))
+                except (CompactionPause, BudgetExhausted) as error:
+                    return _result('paused', str(error), 'budget', steps=steps)
+                finally:
+                    if store:
+                        store.save_ledger(budget.snapshot())
+                if not loop_budget.tick() or (rejected and not (budget.can_afford(reserve) if reserve else budget.can_afford())):
+                    return _result('paused', 'compaction consumed the remaining work or verification allowance', 'budget', steps=steps)
             server_hsm.authorize_action('model', tool_manifest=MANIFEST.hash)
         except server_hsm.AuthorityError as error:
             return _result('blocked', str(error), error.failure_class, steps=steps)
-        body = deps.call_model(model, prompt, gate=3, budget=loop_budget, format="json", db_path=db_path,
+        body = deps.call_model(model, call_prompt, gate=3, budget=loop_budget, format="json", db_path=db_path,
                                proposal_id=proposal_id, prompt_name="tool_loop.md", child=child, iteration=len(steps),
                                role=role, **({"extra": call_extra} if call_extra else {}))
         if store:
@@ -571,7 +593,10 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
             store.save_ledger(budget.snapshot())
         _tool_span(deps, name, n, child, kind, observation, started_ms)
         steps.append(name)
-        prompt += OBSERVATION.format(tool=name, text=observation[:_cap(name)])
+        if history is not None:
+            history.add(n, name, observation[:_cap(name)])
+        else:
+            prompt += OBSERVATION.format(tool=name, text=observation[:_cap(name)])
 
 
 PROBE_CASES = (

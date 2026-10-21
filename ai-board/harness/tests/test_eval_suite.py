@@ -159,6 +159,7 @@ def test_isolated_trial_applies_context_arm_before_generating_candidate(world, m
     program = f'''
 import sys
 from pathlib import Path
+sys.path.insert(0, {str(Path(__file__).resolve().parents[1])!r})
 sys.path.insert(0, {str(Path(__file__).parent)!r})
 import dotenv
 dotenv.load_dotenv = lambda *a, **k: None

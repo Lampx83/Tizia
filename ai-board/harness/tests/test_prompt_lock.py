@@ -31,3 +31,8 @@ def test_lock_covers_every_prompt_file():
         f"prompts.lock.json lệch so với file .md thật trong thư mục — "
         f"thiếu {real_names - locked_names!r}, thừa {locked_names - real_names!r}"
     )
+
+
+def test_prompt_line_endings_match_the_git_lf_contract():
+    for prompt in PROMPTS_DIR.glob('*.md'):
+        assert b'\r\n' not in prompt.read_bytes(), f'{prompt.name}: normalize to LF before locking bytes'

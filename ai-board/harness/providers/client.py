@@ -202,6 +202,19 @@ class OllamaClient:
             tags = json.loads(resp.read().decode("utf-8")).get("models", [])
         return next((m.get("digest") for m in tags if model in (m.get("name"), m.get("model"))), None)
 
+    def context_window(self, model, *, role=None):
+        if role == 'compactor' and not self.routing:
+            raise ValueError('compactor requires reviewed model routing')
+        if self.routing:
+            candidates = self.routing.candidates(role)
+            if not candidates:
+                raise ValueError('no reviewed candidate for context capacity')
+            return min(self.routing.client(candidate, self).context_window(candidate['model']) for candidate in candidates)
+        if self.vllm_url and role == 'gate3_heavy':
+            return replace(self, base_url=ModelRouter.validate_endpoint(self.vllm_url),
+                           seckey=self.vllm_seckey, protocol='vllm', vllm_url='').context_window(model)
+        return self._request_token_bound({'model': model}) if self.protocol == 'vllm' else NUM_CTX
+
     def _request_token_bound(self, payload):
         if self.protocol != 'vllm':
             context, output = payload['options']['num_ctx'], payload['options'].get('num_predict')

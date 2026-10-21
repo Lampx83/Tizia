@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateCatalog, resolveCandidates, routedClassifyRequest } from '../server/ai-board/model-routing.js';
+import { loadCatalog, validateCatalog, resolveCandidates, routedClassifyRequest } from '../server/ai-board/model-routing.js';
+
+test('the shipped compactor role can be loaded by the server as well as the worker', () => {
+  const catalog = loadCatalog();
+  const selected = resolveCandidates('compactor', { catalog, env: { AI_BOARD_MODEL_ROUTING: 'true', VLLM_URL: 'http://fixture.invalid' } });
+  assert.equal(selected.length, 1);
+  assert.equal(selected[0].provider, 'vllm');
+});
 
 function fixture() {
   return {

@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 CATALOG = Path(__file__).resolve().parents[3] / 'server' / 'ai-board' / 'model-routing.json'
-ROLES = {'gate1', 'gate25', 'gate3_light', 'gate3_heavy', 'gate4_review', 'classifier', 'embed', 'calibration', 'eval_judge'}
+ROLES = {'gate1', 'gate25', 'gate3_light', 'gate3_heavy', 'gate4_review', 'classifier', 'embed', 'calibration', 'eval_judge', 'compactor'}
 CAPABILITIES = {'json', 'logprobs', 'embedding'}
 
 
