@@ -13,7 +13,7 @@ const lineDiff = (a, b) => {
   return rows;
 };
 const diffHtml = (a, b) => `<pre class="skill-diff" aria-label="So sánh bản gốc và bản viết lại">${lineDiff(a, b).map(([kind, line]) =>
-  `<span class="diff-${kind}">${kind === 'add' ? '+ ' : kind === 'del' ? '- ' : '  '}${esc(line)}</span>`).join('\n')}</pre>`;
+  `<span class="diff-${kind}">${kind === 'add' ? '+ ' : kind === 'del' ? '- ' : '  '}${esc(line)}</span>`).join('')}</pre>`;
 const REWRITE = { queued:'Đang xếp hàng, chờ worker rảnh', running:'Đang viết lại', succeeded:'Đã viết lại', failed:'Viết lại không thành công' };
 const versionState = (version, active) => version.rejected_at ? 'Đã từ chối' : version.id === active ? 'Đang được chọn' : version.approved_by ? 'Đã duyệt' : version.rewrite ? REWRITE[version.rewrite.status] : 'Bản nháp';
 const evalHtml = version => !version.evaluation?.kinds ? '' : `<p>Smoke test nhỏ: ${version.evaluation.passed}/${version.evaluation.total} loại tác vụ qua. ${version.evaluation.kinds.map(kind =>
@@ -130,7 +130,7 @@ export async function mountSkillsTab(host, { api, toast }) {
         const admin = item.source === 'admin', rewritten = version.rewritten_text != null;
         const lint = rewritten ? version.rewrite_lint : version.lint, canApprove = admin && !version.rejected_at && lint?.ok && !['queued', 'running'].includes(version.rewrite?.status);
         const fresh = admin && !version.rejected_at && !version.approved_by && !version.rewrite && !rewritten;
-        return `<details class="skill-version"${version.version === data.versions[0].version ? ' open' : ''}><summary>Phiên bản ${esc(version.version)} · ${esc(admin ? versionState(version, item.active_version_id) : 'Mặc định')}${version.parent_version_id ? ' · sửa từ bản trước' : ''}</summary>
+        return `<details class="skill-version"${version.version === data.versions[0].version ? ' open' : ''}><summary>Phiên bản ${esc(version.version)} · ${esc(admin ? versionState(version, item.status === 'approved' ? item.active_version_id : null) : 'Mặc định')}${version.parent_version_id ? ' · sửa từ bản trước' : ''}</summary>
         <p>${lint?.ok ? 'Lint đạt' : `Lint chưa đạt: ${esc((lint?.errors || []).join('; '))}`}${rewritten ? ' (bản viết lại)' : ''}</p>
         ${version.rewrite ? `<p>${esc(REWRITE[version.rewrite.status])}${version.rewrite.error ? `: ${esc(version.rewrite.error)}` : ''}${version.rewrite.usage ? `. ${Number(version.rewrite.usage.model_calls)} lượt gọi, ${Number(version.rewrite.usage.tokens)} token.` : ''}</p>` : ''}
         ${evalHtml(version)}
