@@ -18,7 +18,7 @@ from pathlib import Path
 import candidate
 import classifier
 import functional
-from gates import adversarial_review, change_class, guard, intake_guard, risk_triage
+from gates import adversarial_review, change_class, guard, intake_guard, reviewer_fix, risk_triage
 from repositories import server_hsm
 
 CONTENT_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "content_guard.md").read_text(encoding="utf-8")
@@ -315,6 +315,10 @@ def run_gate(state: dict, deps, budget, *, db_path=None, proposal_id: int | None
     if not found and change["class"] == "one_way" and budget is not None and getattr(deps, "models", None) is not None:
         review = adversarial_review.run(state, deps, budget, db_path=db_path, proposal_id=proposal_id)
         out["adversarial_review"] = {k: review[k] for k in ("verdict", "findings", "truncated")}
+        if review["blocked"] and review.get("failure_class") == "ordinary" and reviewer_fix.allowed(state):
+            fixed = reviewer_fix.run(state, deps, budget, review["findings"], db_path=db_path, proposal_id=proposal_id)
+            if fixed["applied"]:
+                return run_gate(state, deps, budget, db_path=db_path, proposal_id=proposal_id)
         if review["blocked"]:
             found = [{"check": "adversarial_review", "failure_class": review["failure_class"], "detail": review["reason"]}]
     if found:

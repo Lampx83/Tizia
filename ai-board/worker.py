@@ -221,6 +221,7 @@ class _Execution:
             state["memory_path"] = str(self.memory_path)
         if self.repair_reason:
             state["repair_reason"] = self.repair_reason
+        state["repairs_left"] = MAX_REPAIRS - len(self.repairs)  # reviewer fix spends the same repair cap
         if self.plan.get("grounding"):
             import code_index
             if (code_index.git(self.checkout_source, "rev-parse", "HEAD").decode().strip() != self.plan["grounding"]["sha"]
@@ -249,6 +250,7 @@ class _Execution:
                 except Exception as error:  # model/network/tool outage, not the candidate's code
                     result = {"gate": gate, "blocked": True, "reason": str(error)[:1000],
                               "failure_class": getattr(error, 'failure_class', 'transient')}
+                self.repairs.extend(state.pop("reviewer_repairs", []))
                 if self.attempt_checkpoint is not None:
                     self.attempt_checkpoint.save(budget)
                 if getattr(deps, "trace", None):

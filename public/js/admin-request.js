@@ -370,8 +370,8 @@ const code = (s) => `<code>${esc(s)}</code>`;
 const riskOf = (runs) => [...runs].reverse().flatMap((r) => r.gates || [])
   .find((g) => Number(g.gate) === 5.5)?.evidence?.risk_level;
 const CHANGE_TEXT = { one_way: 'một chiều (khó hoàn tác, cần admin duyệt)', two_way: 'hai chiều (hoàn tác được)' };
-const changeOf = (runs) => [...runs].reverse().flatMap((r) => r.gates || [])
-  .find((g) => Number(g.gate) === 5.5 && g.evidence?.change_class)?.evidence.change_class;
+const changeOf = (runs) => [...runs].reverse().map((r) => r.change_class).find(Boolean)
+  || [...runs].reverse().flatMap((r) => r.gates || []).find((g) => Number(g.gate) === 5.5 && g.evidence?.change_class)?.evidence.change_class;
 const capText = (c) => `${esc(CAP_TEXT[c] || c)} ${code(c)}`;
 
 function planApproval(p, root) {
@@ -748,7 +748,8 @@ function renderAiBoard(t) {
       ${t.candidate ? `<div class="meta" style="margin-top:4px">Nhánh thay đổi: ${code(t.candidate.branch)} · ${esc(t.candidate.commits?.length)} commit</div>` : ''}
       ${t.pull_request && /^https:\/\/github\.com\//.test(t.pull_request.url) ? `<div class="meta" style="margin-top:4px">PR vào ${code(t.pull_request.base)}:
         <a href="${esc(t.pull_request.url)}" target="_blank" rel="noopener noreferrer">#${esc(t.pull_request.number)}</a>
-        · head ${code(String(t.pull_request.head_sha).slice(0, 10))}${riskOf(runs) ? ` · rủi ro ${code(riskOf(runs))}` : ''}${changeOf(runs) ? ` · loại thay đổi ${esc(CHANGE_TEXT[changeOf(runs)])}` : ''}</div>` : ''}</div>
+        · head ${code(String(t.pull_request.head_sha).slice(0, 10))}${riskOf(runs) ? ` · rủi ro ${code(riskOf(runs))}` : ''}</div>` : ''}
+      ${changeOf(runs) ? `<div class="meta" style="margin-top:4px">Loại thay đổi: ${esc(CHANGE_TEXT[changeOf(runs)])}</div>` : ''}</div>
     <div class="blk strip">
       <span>Giới hạn mỗi lượt xử lý: <b>${fmtNum(x.budget_limit)}</b> ${esc(budget.unit)}</span>
       <span>Ngân sách đã chốt qua các lượt: ${budget.combined == null ? 'Chưa có tổng cùng đơn vị' : `<b>${fmtNum(budget.combined)}</b> ${esc(budget.unit)}`}</span>

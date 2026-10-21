@@ -1744,7 +1744,8 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       const rollback = parseJson(runEvidence)?.rollback ?? null;
       const live = root.live && i === runRows.length - 1 && !run.status && !rollback;
       const produced = parseJson(runEvidence)?.verdict?.candidate; // commit của chính lượt này (trace admin)
-      return { ...run, rollback, gates, calls, totals: summarizeCalls(calls.map((c) => c.evidence)),
+      const changeClass = (parseJson(runEvidence)?.verdict?.gates || []).find((g) => [4, 5.5].includes(Number(g.gate)) && g.change_class)?.change_class ?? null;
+      return { ...run, rollback, gates, calls, change_class: changeClass, totals: summarizeCalls(calls.map((c) => c.evidence)),
         commit: produced ? { branch: produced.branch, head_sha: produced.head_sha } : null,
         budget_used: budgetUsed, budget_limit: root.budget_limit,
         progress: runProgress({ ...run, gates, calls }, events, live) };
