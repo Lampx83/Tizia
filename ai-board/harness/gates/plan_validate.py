@@ -183,6 +183,33 @@ def _fold(text: str) -> str:
     return _QUOTE_CHARS.sub("'", text) if "quotes" in fixes() else text
 
 
+def _too_short(quote: str) -> bool:
+    """Quote too small to prove grounding. `shortquote` counts identifier chars so a bare tag like `<style>` passes."""
+    if 'shortquote' in fixes():
+        return len(re.findall(r'\w', quote)) < 4
+    return len(quote.strip()) < 8
+
+
+_GAP_QUOTES = re.compile('["\'`‘’“”]')
+
+
+def _quoted_in(quote: str, text: str) -> bool:
+    """Quote verbatim in text. `ellipsis` fix: `...` in quote is a gap; its pieces must appear in order."""
+    if 'ellipsis' not in fixes() or '...' not in quote:
+        return _fold(quote) in _fold(text)
+    # a gap also swallows the attribute quotes around it: `class=...loading>` is `class="loading">`
+    pieces = [piece for piece in (_GAP_QUOTES.sub('', _fold(p)) for p in quote.split('...')) if piece]
+    if not pieces:
+        return False
+    haystack, pos = _GAP_QUOTES.sub('', _fold(text)), 0
+    for piece in pieces:
+        found = haystack.find(piece, pos)
+        if found < 0:
+            return False
+        pos = found + len(piece)
+    return True
+
+
 _LINE_MARKER = re.compile(r'^[ \t]*(?:[\w./-]+:)?L?\d+\|[ ]?', re.M)
 
 
@@ -214,8 +241,8 @@ def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict
             evidence = {**evidence, 'quote': quote}
         if task['file'] in files and file != task['file']:
             raise ValueError('trích dẫn phải thuộc file hiện có dự định sửa')
-        if (not isinstance(quote, str) or len(quote.strip()) < 8 or len(quote) > 1200
-                or _fold(quote) not in _fold(files.get(file, ''))):  # models join source lines: compare content, not layout
+        if (not isinstance(quote, str) or _too_short(quote) or len(quote) > 1200
+                or not _quoted_in(quote, files.get(file, ''))):  # models join source lines: compare content, not layout
             raise ValueError(f'{task["file"]}: không tìm thấy trích dẫn hành vi trong code nguồn')
         if any(not isinstance(evidence.get(key), str) or not evidence[key].strip() for key in ('before', 'after', 'verify')):
             raise ValueError('thiếu hành vi trước/sau hoặc tiêu chí kiểm chứng')
@@ -321,10 +348,9 @@ def verified_answer(text: str, question: str, haystacks: list[str]) -> str | Non
     if not isinstance(answer, str) or not answer.strip() or not isinstance(quote, str):
         return None
     quote = _LINE_MARKER.sub("", quote)
-    if len(quote.strip()) < 8 or not set(_WORD.findall(question.lower())) & set(_WORD.findall(quote.lower())):
+    if _too_short(quote) or not set(_WORD.findall(question.lower())) & set(_WORD.findall(quote.lower())):
         return None
-    folded = _fold(quote)
-    return answer.strip()[:200] if any(folded in _fold(h) for h in haystacks) else None
+    return answer.strip()[:200] if any(_quoted_in(quote, h) for h in haystacks) else None
 
 
 def settled_answer(request: dict, question: str, repo_context: str, files: dict, state: dict, deps, budget, *, db_path=None, proposal_id=None) -> str | None:
