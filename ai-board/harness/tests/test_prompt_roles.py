@@ -163,6 +163,18 @@ def test_client_without_system_keeps_single_user_message(monkeypatch):
     assert seen["messages"] == [{"role": "user", "content": "task"}]
 
 
+@pytest.mark.parametrize('thinking', [False, True])
+def test_ollama_receives_role_thinking_without_internal_markers(monkeypatch, thinking):
+    sent = {}
+    monkeypatch.setattr(OllamaClient, '_post', lambda self, path, payload, **kw: sent.update(payload) or {})
+    OllamaClient(base_url='http://fixture.invalid').generate('m', 'task',
+        extra={'thinking': thinking, 'force_thinking': thinking,
+               'max_total_output_tokens': 16384, 'system': 'rules'}, num_predict=16384)
+    assert sent['think'] is thinking and sent['system'] == 'rules'
+    assert sent['options']['num_predict'] == 16384
+    assert not {'thinking', 'force_thinking', 'max_total_output_tokens'}.intersection(sent)
+
+
 @pytest.mark.parametrize("split", [False, True])
 def test_chat_span_carries_role_thinking_and_prompt_mode(split):
     extra = {"thinking": False, **({"system": "s"} if split else {})}

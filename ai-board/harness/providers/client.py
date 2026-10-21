@@ -148,7 +148,10 @@ class OllamaClient:
         }
         if format:
             payload["format"] = format
-        payload.update(extra or {})  # top-level fields: think, logprobs, top_logprobs
+        payload.update({k: v for k, v in (extra or {}).items()
+                        if k not in ('thinking', 'force_thinking', 'max_total_output_tokens')})
+        if extra and 'thinking' in extra:
+            payload['think'] = bool(extra['thinking'])
         return self._post("/api/generate", payload, retry=False) if _single_attempt else self._post("/api/generate", payload)
 
     def generate_for(self, role: str, model: str, prompt: str, **options) -> dict:
