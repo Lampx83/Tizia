@@ -2,7 +2,7 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;'
 const TYPE = { backend:'Backend', frontend:'Giao diện', database:'Cơ sở dữ liệu', review:'Review', test:'Kiểm thử', all:'Chung' };
 const STATUS = { draft:'Bản nháp', approved:'Đã duyệt', disabled:'Đã tắt' };
 const lineDiff = (a, b) => {
-  const x = a.split('\n'), y = b.split('\n'), t = Array.from({ length:x.length + 1 }, () => new Array(y.length + 1).fill(0));
+  const x = a.replace(/\n$/, '').split('\n'), y = b.replace(/\n$/, '').split('\n'), t = Array.from({ length:x.length + 1 }, () => new Array(y.length + 1).fill(0));
   for (let i = x.length - 1; i >= 0; i--) for (let j = y.length - 1; j >= 0; j--) t[i][j] = x[i] === y[j] ? t[i+1][j+1] + 1 : Math.max(t[i+1][j], t[i][j+1]);
   const rows = []; let i = 0, j = 0;
   while (i < x.length || j < y.length) {
