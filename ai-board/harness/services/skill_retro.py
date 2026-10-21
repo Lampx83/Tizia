@@ -21,7 +21,7 @@ def _evidence(runs):
 
 
 def run_step(client, deps, *, worker_id):
-    """Claim one retro when the server says idle and a trigger fired; one proposal call, up to two smoke calls; raw output kept."""
+    """Claim retro, propose skill edit, smoke, report. Keeps raw output."""
     retro = client.post(CLAIM, {'worker_id': worker_id}).get('retro')
     if not retro:
         return {'status': 'none'}

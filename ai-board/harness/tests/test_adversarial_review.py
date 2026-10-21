@@ -86,3 +86,10 @@ def test_gate_4_runs_review_only_for_one_way_and_blocks_on_high_finding(monkeypa
     two = {'full_diff': [{'file': 'public/a.html', 'diff': PAY.replace('server/contexts/payment/index.js', 'public/a.html')}], 'full_checkout': 'unused'}
     out = main.run_gate(4, {}, replace(fake_deps, models=quiet, verify=None), Budget(), two)
     assert out['blocked'] is False and out['change_class'] == 'two_way' and quiet.calls == []
+
+
+def test_truncated_clean_review_fails_closed():
+    big = state()
+    big['full_diff'][0]['diff'] = PAY + '+' + 'x' * 20000 + '\n'
+    out = run(Models({'verdict': 'pass', 'findings': []}), big)
+    assert out['blocked'] is True and out['failure_class'] == 'critical'

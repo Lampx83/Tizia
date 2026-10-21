@@ -11,6 +11,7 @@ export const REWRITE_BOUND = { model_calls: 4, tokens: 40000 };
 const STALE_RUNNING_MS = 20 * 60 * 1000;
 export const RETRO_BATCH = 5;
 const ORIGIN = 'skill-edit';
+const CLAIM_LOCK = 45046;
 const hash = text => createHash('sha256').update(text).digest('hex');
 const parse = (text, fallback = null) => { try { return JSON.parse(text); } catch { return fallback; } };
 const bad = (message, code = 'invalid_skill', status = 400) => new WorkerContractError(message, status, code);
@@ -196,6 +197,7 @@ export function createSkillService(db) {
   async function claimRewrite(workerId) {
     if (typeof workerId !== 'string' || !workerId) throw bad('worker_id required');
     return db.tx(async () => {
+      await db.get('SELECT pg_advisory_xact_lock(?)', [CLAIM_LOCK]);
       const now = Date.now();
       if (await db.get('SELECT id FROM ai_tickets WHERE lease_owner IS NOT NULL AND lease_expires_at>? LIMIT 1', [now])) return { job: null, reason: 'ticket_active' };
       await db.run("UPDATE ai_skill_rewrites SET status='failed',error='worker_lost',finished_at=? WHERE status='running' AND claimed_at<?", [now, now - STALE_RUNNING_MS]);
@@ -278,6 +280,7 @@ export function createSkillService(db) {
   async function claimRetro(workerId) {
     if (typeof workerId !== 'string' || !workerId) throw bad('worker_id required');
     return db.tx(async () => {
+      await db.get('SELECT pg_advisory_xact_lock(?)', [CLAIM_LOCK]);
       const now = Date.now();
       if (await db.get('SELECT id FROM ai_tickets WHERE lease_owner IS NOT NULL AND lease_expires_at>? LIMIT 1', [now])) return { retro: null, reason: 'ticket_active' };
       await db.run("UPDATE skill_proposals SET outcome='failed',updated_at=? WHERE origin=? AND outcome='retro_running' AND updated_at<?", [now, ORIGIN, now - STALE_RUNNING_MS]);

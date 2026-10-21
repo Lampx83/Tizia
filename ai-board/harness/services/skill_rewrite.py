@@ -65,7 +65,7 @@ def smoke(deps, budget, system, rewritten, job):
 
 
 def run_step(client, deps, *, worker_id):
-    """Claim one confirmed job when the server says the worker is idle; one rewrite call, up to two smoke calls; raw output kept."""
+    """Claim confirmed rewrite job, rewrite, smoke, report. Keeps raw output."""
     job = client.post(CLAIM, {'worker_id': worker_id}).get('job')
     if not job:
         return {'status': 'none'}

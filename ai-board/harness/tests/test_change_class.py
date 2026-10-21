@@ -45,3 +45,8 @@ def test_risk_triage_adds_high_signal_and_class_for_one_way():
     assert any(s['name'] == 'one_way_change' and s['tier'] == 'high' for s in out['risk_signals'])
     two = risk_triage.run({'full_diff': [diff('public/index.html')], 'catalog': None})
     assert two['change_class'] == 'two_way' and not any(s['name'] == 'one_way_change' for s in two['risk_signals'])
+
+
+def test_lookalike_names_and_route_helper():
+    assert kinds(diff('public/js/authors.js')) == [] and kinds(diff('public/checkout.html')) == []
+    assert kinds(diff('server/ai-board/api/x.js', ["route.post('/api/x', h);"])) == ['api_schema']

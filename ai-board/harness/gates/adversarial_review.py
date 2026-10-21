@@ -60,4 +60,6 @@ def run(state: dict, deps, budget, *, db_path=None, proposal_id=None) -> dict:
     result = {'ran': True, 'blocked': bool(high), 'verdict': parsed['verdict'], 'findings': findings, 'truncated': truncated}
     if high:
         result.update(failure_class='ordinary', reason='adversarial review: ' + '; '.join(high)[:260])
+    elif truncated:
+        result.update(blocked=True, failure_class='critical', reason='adversarial review: diff too large to review fully')
     return result

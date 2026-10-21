@@ -4,10 +4,10 @@ from __future__ import annotations
 import re
 
 _TEST = re.compile(r"(?:^|/)(?:tests?|__tests__)/|(?:\.|_)(?:test|spec)\.[^/]+$")
-_ROUTE = re.compile(r"\b(?:app|router)\s*\.\s*(?:get|post|put|patch|delete|all|use)\s*\(")
+_ROUTE = re.compile(r"\b(?:app|router|route)\s*\.\s*(?:get|post|put|patch|delete|all|use)\s*\(")
 _MIGRATION = re.compile(r"(?:^|/)migrations?/|(?:^|/)[^/]*migration[^/]*\.sql$")
-_AUTH = re.compile(r"(?:^|/)(?:auth|identity|session|login|password|oauth|csrf)[^/]*(?:/|\.)", re.I)
-_PAYMENT = re.compile(r"(?:^|/)(?:payments?|billing|checkout|invoices?)[^/]*(?:/|\.)", re.I)
+_AUTH = re.compile(r"(?:^|/)(?:auth|identity|session|login|password|oauth|csrf)(?:[-_.][^/]*)?(?:/|$)", re.I)
+_PAYMENT = re.compile(r"(?:^|/)(?:payments?|billing)(?:[-_.][^/]*)?(?:/|$)", re.I)
 _SCHEMA_FILE = re.compile(r"(?:^|/)(?:contract|openapi|swagger|schema)[^/]*\.(?:json|ya?ml)$", re.I)
 _SERVER = ("server/", "api/")
 
