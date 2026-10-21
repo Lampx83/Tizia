@@ -1,12 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { WorkerContractError } from '../repositories/store-contract.js';
 
 export const TASK_TYPES = ['backend', 'frontend', 'database', 'review', 'test', 'all'];
 const FIELDS = ['name', 'description', 'task_type', 'source', 'version', 'max_tokens'];
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../ai-board/harness/skills');
+export const REWRITE_BOUND = { model_calls: 4, tokens: 40000 };
+const STALE_RUNNING_MS = 20 * 60 * 1000;
 const hash = text => createHash('sha256').update(text).digest('hex');
 const parse = (text, fallback = null) => { try { return JSON.parse(text); } catch { return fallback; } };
 const bad = (message, code = 'invalid_skill', status = 400) => new WorkerContractError(message, status, code);
@@ -74,7 +76,25 @@ export function createSkillService(db) {
   async function read(id) {
     const item = await skill(id);
     const versions = await db.all('SELECT * FROM ai_skill_versions WHERE skill_id=? ORDER BY version DESC LIMIT 200', [id]);
-    return { skill: item, versions: versions.map(v => ({ ...v, task_types: parse(v.task_types_json, []), lint: parse(v.lint_json, {}), evaluation: parse(v.eval_json) })) };
+    const jobs = new Map((await db.all(`SELECT r.* FROM ai_skill_rewrites r JOIN ai_skill_versions v ON v.id=r.version_id WHERE v.skill_id=?`, [id])).map(j => [j.version_id, j]));
+    return { skill: item, versions: versions.map(v => {
+      const job = jobs.get(v.id);
+      return { ...v, task_types: parse(v.task_types_json, []), lint: parse(v.lint_json, {}), evaluation: parse(v.eval_json),
+        rewrite_lint: parse(v.rewrite_lint_json), rewrite: job ? { id: job.id, status: job.status, error: job.error, model: job.model,
+          confirmed_at: job.confirmed_at, finished_at: job.finished_at, usage: parse(job.usage_json), raw_response: job.raw_response } : null };
+    }) };
+  }
+  async function appendVersion(actor, item, taskTypes, text, parentId = null) {
+    const now = Date.now();
+    const version = Number((await db.get('SELECT COALESCE(MAX(version),0)+1 AS n FROM ai_skill_versions WHERE skill_id=?', [item.id])).n);
+    const lint = lintSkill(text, { name: item.name, version });
+    if (lint.ok && JSON.stringify([...lint.task_types].sort()) !== JSON.stringify([...taskTypes].sort())) {
+      lint.ok = false; lint.errors.push('Declared task types differ from selected types');
+    }
+    const id = await db.insert(`INSERT INTO ai_skill_versions(skill_id,version,task_types_json,original_text,hash,token_count,lint_json,parent_version_id,created_by,created_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?)`, [item.id, version, JSON.stringify(taskTypes), text, hash(text), lint.token_count ?? Buffer.byteLength(text), JSON.stringify(lint), parentId, actor.id, now]);
+    await db.run('UPDATE ai_skills SET updated_by=?,updated_at=? WHERE id=?', [actor.id, now, item.id]);
+    return { skill: await skill(item.id), version: (await read(item.id)).versions.find(v => v.id === id) };
   }
   async function upload(actor, input) {
     if (typeof input.name !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(input.name) || input.name.startsWith('default-')) throw bad('Choose an admin skill name');
@@ -86,33 +106,128 @@ export function createSkillService(db) {
       await db.run(`INSERT INTO ai_skills(name,task_types_json,created_by,updated_by,created_at,updated_at)
         VALUES(?,?,?,?,?,?) ON CONFLICT(name) DO NOTHING`, [input.name, JSON.stringify(input.task_types), actor.id, actor.id, now, now]);
       const item = await db.get(`SELECT * FROM ai_skills WHERE name=?${db.lockRow}`, [input.name]);
-      const version = Number((await db.get('SELECT COALESCE(MAX(version),0)+1 AS n FROM ai_skill_versions WHERE skill_id=?', [item.id])).n);
-      const lint = lintSkill(input.original_text, { name: item.name, version });
-      if (lint.ok && JSON.stringify([...lint.task_types].sort()) !== JSON.stringify([...input.task_types].sort())) {
-        lint.ok = false; lint.errors.push('Declared task types differ from selected types');
-      }
-      const id = await db.insert(`INSERT INTO ai_skill_versions(skill_id,version,task_types_json,original_text,hash,token_count,lint_json,created_by,created_at)
-        VALUES(?,?,?,?,?,?,?,?,?)`, [item.id, version, JSON.stringify(input.task_types), input.original_text, hash(input.original_text), lint.token_count ?? Buffer.byteLength(input.original_text), JSON.stringify(lint), actor.id, now]);
-      await db.run('UPDATE ai_skills SET updated_by=?,updated_at=? WHERE id=?', [actor.id, now, item.id]);
-      return { skill: await skill(item.id), version: (await read(item.id)).versions.find(v => v.id === id) };
+      return appendVersion(actor, item, input.task_types, input.original_text);
     });
+  }
+  /** Served text + lint for a version: rewrite when present, else the upload. Throws unless it is approvable. */
+  function servable(item, version) {
+    if (version.rejected_at) throw bad('Version was rejected', 'version_rejected', 409);
+    const rewritten = version.rewritten_text != null;
+    const text = rewritten ? version.rewritten_text : version.original_text;
+    const lint = lintSkill(text, { name: item.name, version: version.version });
+    const stored = parse(rewritten ? version.rewrite_lint_json : version.lint_json, {});
+    if (!lint.ok || !stored.ok || lint.hash !== (rewritten ? version.rewritten_hash : version.hash)) throw bad('Version failed lint/hash', 'skill_lint_failed', 422);
+    return lint;
+  }
+  async function lockedVersion(id, versionId) {
+    if (!validId(id) || !validId(versionId)) throw bad('Invalid skill version id');
+    await db.get(`SELECT id FROM ai_skills WHERE id=?${db.lockRow}`, [id]);
+    const item = await skill(id);
+    const version = await db.get(`SELECT * FROM ai_skill_versions WHERE id=? AND skill_id=?${db.lockRow}`, [versionId, id]);
+    if (!version) throw bad('Version does not belong to skill');
+    return { item, version };
   }
   async function approve(actor, id, input) {
     if (input.confirmed !== true) throw bad('Approval confirmation required', 'confirmation_required');
     if (!validId(id) || !validId(input.version_id)) throw bad('Invalid skill version id');
     return db.tx(async () => {
       await requireCurrentAdmin(actor);
-      await db.get(`SELECT id FROM ai_skills WHERE id=?${db.lockRow}`, [id]);
-      const item = await skill(id);
-      const version = await db.get('SELECT * FROM ai_skill_versions WHERE id=? AND skill_id=?', [input.version_id, id]);
-      if (!version) throw bad('Version does not belong to skill');
-      const lint = lintSkill(version.rewritten_text ?? version.original_text, { name: item.name, version: version.version });
-      if (!lint.ok || !parse(version.lint_json, {}).ok || lint.hash !== version.hash) throw bad('Version failed lint/hash', 'skill_lint_failed', 422);
+      const { item, version } = await lockedVersion(id, input.version_id);
+      const job = await db.get('SELECT status FROM ai_skill_rewrites WHERE version_id=?', [version.id]);
+      if (job && ['queued', 'running'].includes(job.status)) throw bad('Rewrite still in progress', 'rewrite_in_progress', 409);
+      const lint = servable(item, version);
       const now = Date.now();
       await db.run('UPDATE ai_skill_versions SET approved_by=COALESCE(approved_by,?),approved_at=COALESCE(approved_at,?) WHERE id=?', [actor.id, now, version.id]);
       await db.run("UPDATE ai_skills SET status='approved',active_version_id=?,task_types_json=?,updated_by=?,updated_at=? WHERE id=?",
         [version.id, JSON.stringify(lint.task_types), actor.id, now, id]);
       return read(id);
+    });
+  }
+  async function requestRewrite(actor, id, versionId, input) {
+    if (input.confirmed !== true) throw bad('Rewrite confirmation required', 'confirmation_required');
+    return db.tx(async () => {
+      await requireCurrentAdmin(actor);
+      const { version } = await lockedVersion(id, versionId);
+      if (version.rejected_at || version.approved_at || version.rewritten_text != null) throw bad('Version cannot be rewritten', 'rewrite_not_allowed', 409);
+      if (await db.get('SELECT id FROM ai_skill_rewrites WHERE version_id=?', [version.id])) throw bad('Rewrite already requested', 'rewrite_exists', 409);
+      await db.run('INSERT INTO ai_skill_rewrites(version_id,confirmed_by,confirmed_at) VALUES(?,?,?)', [version.id, actor.id, Date.now()]);
+      return read(id);
+    });
+  }
+  async function reject(actor, id, versionId, input) {
+    if (input.confirmed !== true) throw bad('Reject confirmation required', 'confirmation_required');
+    return db.tx(async () => {
+      await requireCurrentAdmin(actor);
+      const { item, version } = await lockedVersion(id, versionId);
+      const job = await db.get(`SELECT id,status FROM ai_skill_rewrites WHERE version_id=?${db.lockRow}`, [version.id]);
+      if (item.active_version_id === version.id || job?.status === 'running') throw bad('Version is active or being rewritten', 'version_busy', 409);
+      const now = Date.now();
+      if (job?.status === 'queued') await db.run("UPDATE ai_skill_rewrites SET status='failed',error='rejected',finished_at=? WHERE id=?", [now, job.id]);
+      await db.run('UPDATE ai_skill_versions SET rejected_by=COALESCE(rejected_by,?),rejected_at=COALESCE(rejected_at,?) WHERE id=?', [actor.id, now, version.id]);
+      return read(id);
+    });
+  }
+  async function edit(actor, id, versionId, input) {
+    if (typeof input.text !== 'string' || Buffer.byteLength(input.text, 'utf8') > 3000) throw bad('Edited text exceeds conservative 3000-token bound');
+    return db.tx(async () => {
+      await requireCurrentAdmin(actor);
+      const { item, version } = await lockedVersion(id, versionId);
+      return appendVersion(actor, item, parse(version.task_types_json, []), input.text, version.id);
+    });
+  }
+  async function rollback(actor, id, input) {
+    if (input.confirmed !== true) throw bad('Rollback confirmation required', 'confirmation_required');
+    return db.tx(async () => {
+      await requireCurrentAdmin(actor);
+      const { item, version } = await lockedVersion(id, input.version_id);
+      if (!version.approved_at) throw bad('Only a previously approved version can be restored', 'version_not_approved', 409);
+      if (item.active_version_id === version.id && item.status === 'approved') throw bad('Version is already active', 'already_active', 409);
+      const lint = servable(item, version);
+      await db.run("UPDATE ai_skills SET status='approved',active_version_id=?,task_types_json=?,updated_by=?,updated_at=? WHERE id=?",
+        [version.id, JSON.stringify(lint.task_types), actor.id, Date.now(), id]);
+      return read(id);
+    });
+  }
+  async function claimRewrite(workerId) {
+    if (typeof workerId !== 'string' || !workerId) throw bad('worker_id required');
+    return db.tx(async () => {
+      const now = Date.now();
+      if (await db.get('SELECT id FROM ai_tickets WHERE lease_owner IS NOT NULL AND lease_expires_at>? LIMIT 1', [now])) return { job: null, reason: 'ticket_active' };
+      await db.run("UPDATE ai_skill_rewrites SET status='failed',error='worker_lost',finished_at=? WHERE status='running' AND claimed_at<?", [now, now - STALE_RUNNING_MS]);
+      if (await db.get("SELECT id FROM ai_skill_rewrites WHERE status='running' LIMIT 1")) return { job: null, reason: 'rewrite_running' };
+      const job = await db.get("SELECT * FROM ai_skill_rewrites WHERE status='queued' ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED");
+      if (!job) return { job: null, reason: 'none' };
+      const token = randomBytes(16).toString('hex');
+      await db.run("UPDATE ai_skill_rewrites SET status='running',claim_token=?,claimed_at=? WHERE id=?", [token, now, job.id]);
+      const v = await db.get('SELECT v.*,s.name FROM ai_skill_versions v JOIN ai_skills s ON s.id=v.skill_id WHERE v.id=?', [job.version_id]);
+      return { job: { id: job.id, claim_token: token, name: v.name, version: v.version, task_types: parse(v.task_types_json, []),
+        original_text: v.original_text, max_tokens: 1500, bound: REWRITE_BOUND } };
+    });
+  }
+  const cleanEval = input => {
+    const kinds = (Array.isArray(input?.kinds) ? input.kinds : []).slice(0, 3).filter(k => TASK_TYPES.includes(k?.kind))
+      .map(k => ({ kind: k.kind, ok: k.ok === true, tokens: Number.isSafeInteger(k.tokens) ? k.tokens : null, ...(typeof k.reason === 'string' ? { reason: k.reason.slice(0, 200) } : {}) }));
+    return { method: 'toy_json_smoke', kinds, passed: kinds.filter(k => k.ok).length, total: kinds.length };
+  };
+  async function reportRewrite(input) {
+    return db.tx(async () => {
+      const job = await db.get(`SELECT * FROM ai_skill_rewrites WHERE id=?${db.lockRow}`, [Number(input.job_id)]);
+      if (!job || job.status !== 'running' || typeof input.claim_token !== 'string' || input.claim_token !== job.claim_token) throw bad('Stale rewrite claim', 'stale_claim', 409);
+      const now = Date.now(), usage = { model_calls: Number(input.usage?.model_calls) || 0, tokens: Number(input.usage?.tokens) || 0 };
+      const raw = typeof input.raw_response === 'string' ? input.raw_response.slice(0, 20000) : null;
+      const finish = (status, error) => db.run('UPDATE ai_skill_rewrites SET status=?,error=?,finished_at=?,model=?,raw_response=?,usage_json=? WHERE id=?',
+        [status, error, now, typeof input.model === 'string' ? input.model.slice(0, 120) : null, raw, JSON.stringify(usage), job.id]);
+      if (usage.model_calls > REWRITE_BOUND.model_calls || usage.tokens > REWRITE_BOUND.tokens) { await finish('failed', 'usage_exceeds_bound'); return { status: 'failed' }; }
+      if (typeof input.rewritten_text !== 'string' || !input.rewritten_text) { await finish('failed', String(input.error || 'no_output').slice(0, 200)); return { status: 'failed' }; }
+      const version = await db.get('SELECT v.*,s.name FROM ai_skill_versions v JOIN ai_skills s ON s.id=v.skill_id WHERE v.id=?', [job.version_id]);
+      const lint = lintSkill(input.rewritten_text, { name: version.name, version: version.version });
+      if (lint.ok && JSON.stringify([...lint.task_types].sort()) !== JSON.stringify([...parse(version.task_types_json, [])].sort())) {
+        lint.ok = false; lint.errors.push('Rewrite changed task types');
+      }
+      await db.run('UPDATE ai_skill_versions SET rewritten_text=?,rewritten_hash=?,rewrite_lint_json=?,eval_json=? WHERE id=?',
+        [input.rewritten_text, hash(input.rewritten_text), JSON.stringify(lint), JSON.stringify(cleanEval(input.evaluation)), version.id]);
+      await finish('succeeded', null);
+      return { status: 'succeeded', lint_ok: lint.ok };
     });
   }
   async function disable(actor, id, input) {
@@ -135,7 +250,8 @@ export function createSkillService(db) {
           (jsonb_exists(s.task_types_json::jsonb,?) OR jsonb_exists(s.task_types_json::jsonb,'all'))))
       ORDER BY CASE WHEN jsonb_exists(s.task_types_json::jsonb,?) THEN 0 ELSE 1 END,s.name,s.id LIMIT 1`, [role,role,taskType,taskType]);
     return rows.map(v => ({ id: v.skill_id, version_id: v.id, name: v.name, source: 'admin', version: v.version,
-      hash: v.hash, token_count: v.token_count, text: v.rewritten_text ?? v.original_text }));
+      hash: v.rewritten_text != null ? v.rewritten_hash : v.hash,
+      token_count: v.rewritten_text != null ? parse(v.rewrite_lint_json, {}).token_count : v.token_count, text: v.rewritten_text ?? v.original_text }));
   }
   async function list() {
     const rows = await db.all(`SELECT s.*,v.version,v.hash,v.token_count FROM ai_skills s LEFT JOIN ai_skill_versions v
@@ -154,5 +270,5 @@ export function createSkillService(db) {
     }
     return { skills: items, usage_window: 'latest_2000_spans', token_method: 'utf8_upper_bound' };
   }
-  return { upload, read, approve, disable, active, list };
+  return { upload, read, approve, disable, active, list, requestRewrite, reject, edit, rollback, claimRewrite, reportRewrite };
 }

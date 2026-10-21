@@ -14,6 +14,9 @@ export function attachSkillRoutes(router, { store, requireAuth, requireAdmin, re
   route.post('/api/admin/ai-board/skills', requireAuth, requireAdmin, requireStrictCsrf, handle(req => skills.upload(actor(req),req.body || {})));
   for (const action of ['approve','disable']) route.post(`/api/admin/ai-board/skills/:id/${action}`, requireAuth, requireAdmin, requireStrictCsrf,
     handle(req => skills[action](actor(req),req.params.id,req.body || {})));
+  route.post('/api/admin/ai-board/skills/:id/rollback', requireAuth, requireAdmin, requireStrictCsrf, handle(req => skills.rollback(actor(req),req.params.id,req.body || {})));
+  for (const [action,method] of [['rewrite','requestRewrite'],['reject','reject'],['edit','edit']]) route.post(`/api/admin/ai-board/skills/:id/versions/:versionId/${action}`,
+    requireAuth, requireAdmin, requireStrictCsrf, handle(req => skills[method](actor(req),req.params.id,req.params.versionId,req.body || {})));
 }
 
 export function attachWorkerSkillRoutes(route, { store, authenticate, handle }) {
@@ -21,5 +24,11 @@ export function attachWorkerSkillRoutes(route, { store, authenticate, handle }) 
   route.post('/api/ai-board/worker/tickets/:id/skills', authenticate, handle(async (req,res) => {
     await store.assertLease(req.params.id,req.body?.worker_id,req.body?.lease_token);
     res.json({ skills: await skills.active(req.body?.task_type,req.body?.role) });
+  }));
+  route.post('/api/ai-board/worker/skill-rewrite/claim', authenticate, handle(async (req,res) => {
+    res.json(await skills.claimRewrite(req.body?.worker_id));
+  }));
+  route.post('/api/ai-board/worker/skill-rewrite/report', authenticate, handle(async (req,res) => {
+    res.json(await skills.reportRewrite(req.body || {}));
   }));
 }

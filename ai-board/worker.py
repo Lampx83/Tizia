@@ -1491,6 +1491,15 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, ensure_ascii=False))
         # 1 bước/tick, chỉ khi lượt claim vừa rồi rảnh việc thật: lượt poll tiếp theo tự ưu tiên claim thật
         # trước (yield_to_chat hiện có), nên đêm không bao giờ giữ worker quá 1 bước trước khi nhường.
+        if night_deps is not None and result.get("status") == "idle":
+            from services import skill_rewrite
+            rewrite = skill_rewrite.run_step(worker.client, night_deps, worker_id=worker.worker_id)
+            if rewrite["status"] != "none":
+                print(json.dumps({"skill_rewrite": rewrite}, ensure_ascii=False))
+                if args.once or args.mode == "off":
+                    return 0
+                time.sleep(max(args.poll_seconds, 1.0))
+                continue
         if night_deps is not None and result.get("status") in ("idle", "gpu_paused"):
             night_result = run_self_improve_night(worker.client, night_deps, clock=lambda: int(time.time() * 1000),
                                                    github=worker.candidates.github if worker.candidates else None)
