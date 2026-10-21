@@ -1492,10 +1492,15 @@ def main(argv: list[str] | None = None) -> int:
         # 1 bước/tick, chỉ khi lượt claim vừa rồi rảnh việc thật: lượt poll tiếp theo tự ưu tiên claim thật
         # trước (yield_to_chat hiện có), nên đêm không bao giờ giữ worker quá 1 bước trước khi nhường.
         if night_deps is not None and result.get("status") == "idle":
-            from services import skill_rewrite
-            rewrite = skill_rewrite.run_step(worker.client, night_deps, worker_id=worker.worker_id)
-            if rewrite["status"] != "none":
-                print(json.dumps({"skill_rewrite": rewrite}, ensure_ascii=False))
+            from services import skill_retro, skill_rewrite
+            for name, step in (("skill_rewrite", skill_rewrite), ("skill_retro", skill_retro)):
+                admin_step = step.run_step(worker.client, night_deps, worker_id=worker.worker_id)
+                if admin_step["status"] != "none":
+                    print(json.dumps({name: admin_step}, ensure_ascii=False))
+                    break
+            else:
+                admin_step = None
+            if admin_step is not None:
                 if args.once or args.mode == "off":
                     return 0
                 time.sleep(max(args.poll_seconds, 1.0))

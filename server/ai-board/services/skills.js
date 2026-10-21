@@ -9,6 +9,8 @@ const FIELDS = ['name', 'description', 'task_type', 'source', 'version', 'max_to
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../ai-board/harness/skills');
 export const REWRITE_BOUND = { model_calls: 4, tokens: 40000 };
 const STALE_RUNNING_MS = 20 * 60 * 1000;
+export const RETRO_BATCH = 5;
+const ORIGIN = 'skill-edit';
 const hash = text => createHash('sha256').update(text).digest('hex');
 const parse = (text, fallback = null) => { try { return JSON.parse(text); } catch { return fallback; } };
 const bad = (message, code = 'invalid_skill', status = 400) => new WorkerContractError(message, status, code);
@@ -84,15 +86,16 @@ export function createSkillService(db) {
           confirmed_at: job.confirmed_at, finished_at: job.finished_at, usage: parse(job.usage_json), raw_response: job.raw_response } : null };
     }) };
   }
-  async function appendVersion(actor, item, taskTypes, text, parentId = null) {
+  async function appendVersion(actor, item, taskTypes, text, parentId = null, extra = {}) {
     const now = Date.now();
     const version = Number((await db.get('SELECT COALESCE(MAX(version),0)+1 AS n FROM ai_skill_versions WHERE skill_id=?', [item.id])).n);
     const lint = lintSkill(text, { name: item.name, version });
     if (lint.ok && JSON.stringify([...lint.task_types].sort()) !== JSON.stringify([...taskTypes].sort())) {
       lint.ok = false; lint.errors.push('Declared task types differ from selected types');
     }
-    const id = await db.insert(`INSERT INTO ai_skill_versions(skill_id,version,task_types_json,original_text,hash,token_count,lint_json,parent_version_id,created_by,created_at)
-      VALUES(?,?,?,?,?,?,?,?,?,?)`, [item.id, version, JSON.stringify(taskTypes), text, hash(text), lint.token_count ?? Buffer.byteLength(text), JSON.stringify(lint), parentId, actor.id, now]);
+    const id = await db.insert(`INSERT INTO ai_skill_versions(skill_id,version,task_types_json,original_text,hash,token_count,lint_json,parent_version_id,created_by,created_at,eval_json,proposal_id,proposal_source,proposal_reason)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [item.id, version, JSON.stringify(taskTypes), text, hash(text), lint.token_count ?? Buffer.byteLength(text), JSON.stringify(lint), parentId, actor.id, now,
+      extra.evaluation ? JSON.stringify(cleanEval(extra.evaluation)) : null, extra.proposal_id ?? null, extra.source ?? null, extra.reason ?? null]);
     await db.run('UPDATE ai_skills SET updated_by=?,updated_at=? WHERE id=?', [actor.id, now, item.id]);
     return { skill: await skill(item.id), version: (await read(item.id)).versions.find(v => v.id === id) };
   }
@@ -140,6 +143,7 @@ export function createSkillService(db) {
       await db.run('UPDATE ai_skill_versions SET approved_by=COALESCE(approved_by,?),approved_at=COALESCE(approved_at,?) WHERE id=?', [actor.id, now, version.id]);
       await db.run("UPDATE ai_skills SET status='approved',active_version_id=?,task_types_json=?,updated_by=?,updated_at=? WHERE id=?",
         [version.id, JSON.stringify(lint.task_types), actor.id, now, id]);
+      if (version.proposal_id) await db.run("UPDATE skill_proposals SET outcome='accepted',updated_at=? WHERE id=?", [now, version.proposal_id]);
       return read(id);
     });
   }
@@ -164,6 +168,7 @@ export function createSkillService(db) {
       const now = Date.now();
       if (job?.status === 'queued') await db.run("UPDATE ai_skill_rewrites SET status='failed',error='rejected',finished_at=? WHERE id=?", [now, job.id]);
       await db.run('UPDATE ai_skill_versions SET rejected_by=COALESCE(rejected_by,?),rejected_at=COALESCE(rejected_at,?) WHERE id=?', [actor.id, now, version.id]);
+      if (version.proposal_id) await db.run("UPDATE skill_proposals SET outcome='rejected',updated_at=? WHERE id=?", [now, version.proposal_id]);
       return read(id);
     });
   }
@@ -230,6 +235,97 @@ export function createSkillService(db) {
       return { status: 'succeeded', lint_ok: lint.ok };
     });
   }
+  const proposalFields = input => {
+    if (typeof input.text !== 'string' || !input.text || Buffer.byteLength(input.text, 'utf8') > 3000) throw bad('Proposal text missing or over 3000-token bound');
+    if (typeof input.reason !== 'string' || !input.reason.trim() || input.reason.length > 400) throw bad('Proposal needs a short reason');
+  };
+  const usageOf = input => ({ model_calls: Number(input.usage?.model_calls) || 0, tokens: Number(input.usage?.tokens) || 0 });
+  const overBound = usage => usage.model_calls > REWRITE_BOUND.model_calls || usage.tokens > REWRITE_BOUND.tokens;
+  const ids = value => (Array.isArray(value) ? value : []).filter(Number.isSafeInteger).slice(0, 20);
+  async function proposalVersion(item, text, reason, source, evaluation, proposalId) {
+    const parent = await db.get('SELECT * FROM ai_skill_versions WHERE id=?', [item.active_version_id]);
+    return appendVersion({ id: item.created_by }, item, parse(parent.task_types_json, []), text, parent.id, { evaluation, proposal_id: proposalId, source, reason: reason.trim() });
+  }
+  async function createProposal(input) {
+    if (input.source !== 'model') throw bad('Direct proposals come from the model');
+    proposalFields(input);
+    const usage = usageOf(input);
+    if (overBound(usage)) throw bad('Proposal usage exceeds bound', 'usage_exceeds_bound');
+    if (typeof input.skill_name !== 'string') throw bad('skill_name required');
+    return db.tx(async () => {
+      const found = await db.get('SELECT id FROM ai_skills WHERE name=?', [input.skill_name]);
+      if (!found) throw bad('Skill not found', 'skill_not_found', 404);
+      await db.get(`SELECT id FROM ai_skills WHERE id=?${db.lockRow}`, [found.id]);
+      const item = await skill(found.id);
+      if (item.status !== 'approved') throw bad('Only an approved skill accepts proposals', 'skill_not_active', 409);
+      const now = Date.now();
+      const proposalId = await db.insert(`INSERT INTO skill_proposals(origin,gate_reached,outcome,request_ids,template_key,budget_json,created_at,updated_at)
+        VALUES(?,?,?,?,?,?,?,?)`, [ORIGIN, 0, 'pending', JSON.stringify(ids(input.request_ids)), item.name, JSON.stringify({ usage }), now, now]);
+      const made = await proposalVersion(item, input.text, input.reason, 'model', input.evaluation, proposalId);
+      return { proposal_id: proposalId, version_id: made.version.id };
+    });
+  }
+  async function proposals() {
+    const rows = await db.all(`SELECT p.id,p.outcome,p.request_ids,p.created_at,v.id AS version_id,v.version,v.parent_version_id,v.lint_json,v.eval_json,
+        v.original_text,v.proposal_source,v.proposal_reason,s.id AS skill_id,s.name
+      FROM skill_proposals p JOIN ai_skill_versions v ON v.proposal_id=p.id JOIN ai_skills s ON s.id=v.skill_id
+      WHERE p.origin=? ORDER BY p.id DESC LIMIT 100`, [ORIGIN]);
+    const parents = new Map((await db.all('SELECT id,COALESCE(rewritten_text,original_text) AS text FROM ai_skill_versions WHERE id IN (SELECT parent_version_id FROM ai_skill_versions WHERE proposal_id IS NOT NULL)')).map(r => [r.id, r.text]));
+    return { proposals: rows.map(r => ({ id: r.id, outcome: r.outcome, skill_id: r.skill_id, skill_name: r.name, version_id: r.version_id, version: r.version,
+      parent_version_id: r.parent_version_id, source: r.proposal_source, reason: r.proposal_reason, request_ids: parse(r.request_ids, []),
+      lint: parse(r.lint_json, {}), evaluation: parse(r.eval_json), base_text: parents.get(r.parent_version_id) ?? '', proposed_text: r.original_text, created_at: r.created_at })) };
+  }
+  async function claimRetro(workerId) {
+    if (typeof workerId !== 'string' || !workerId) throw bad('worker_id required');
+    return db.tx(async () => {
+      const now = Date.now();
+      if (await db.get('SELECT id FROM ai_tickets WHERE lease_owner IS NOT NULL AND lease_expires_at>? LIMIT 1', [now])) return { retro: null, reason: 'ticket_active' };
+      await db.run("UPDATE skill_proposals SET outcome='failed',updated_at=? WHERE origin=? AND outcome='retro_running' AND updated_at<?", [now, ORIGIN, now - STALE_RUNNING_MS]);
+      if (await db.get("SELECT id FROM ai_skill_rewrites WHERE status IN ('queued','running') LIMIT 1")) return { retro: null, reason: 'rewrite_pending' };
+      if (await db.get("SELECT id FROM skill_proposals WHERE origin=? AND outcome='retro_running' LIMIT 1", [ORIGIN])) return { retro: null, reason: 'retro_running' };
+      const skills = await db.all(`SELECT s.*,v.approved_at,COALESCE(v.rewritten_text,v.original_text) AS text,v.task_types_json AS types FROM ai_skills s
+        JOIN ai_skill_versions v ON v.id=s.active_version_id WHERE s.status='approved' ORDER BY s.id`);
+      for (const item of skills) {
+        if (await db.get("SELECT id FROM skill_proposals WHERE origin=? AND template_key=? AND outcome='pending' LIMIT 1", [ORIGIN, item.name])) continue;
+        const mark = await db.get('SELECT MAX(created_at) AS at FROM skill_proposals WHERE origin=? AND template_key=?', [ORIGIN, item.name]);
+        const since = Math.max(Number(item.approved_at) || 0, Number(mark?.at) + 1 || 0);
+        const runs = await db.all(`SELECT DISTINCT r.id AS run_id,r.outcome,r.failure_reason,t.source_request_id AS request_id FROM ai_spans sp
+          JOIN ai_runs r ON r.id=sp.run_id JOIN ai_tickets t ON t.id=r.ticket_id
+          WHERE r.created_at>=? AND sp.events_json LIKE ? ORDER BY r.id DESC LIMIT 50`, [since, `%"tizia.skill.name":"${item.name}"%`]);
+        const failed = runs.filter(r => r.outcome === 'blocked');
+        if (!failed.length && runs.length < RETRO_BATCH) continue;
+        const picked = [...failed, ...runs.filter(r => r.outcome !== 'blocked')].slice(0, 5);
+        const evidence = [];
+        for (const r of picked) {
+          const errors = await db.all("SELECT DISTINCT name FROM ai_spans WHERE run_id=? AND status='error' ORDER BY name LIMIT 5", [r.run_id]);
+          evidence.push({ run_id: r.run_id, request_id: r.request_id, outcome: r.outcome, failure_reason: String(r.failure_reason || '').slice(0, 200), error_spans: errors.map(e => e.name) });
+        }
+        const token = randomBytes(16).toString('hex');
+        const proposalId = await db.insert(`INSERT INTO skill_proposals(origin,gate_reached,outcome,request_ids,template_key,budget_json,created_at,updated_at)
+          VALUES(?,?,?,?,?,?,?,?)`, [ORIGIN, 0, 'retro_running', JSON.stringify(ids(picked.map(r => Number(r.request_id)))), item.name, JSON.stringify({ claim_token: token }), now, now]);
+        return { retro: { proposal_id: proposalId, claim_token: token, trigger: failed.length ? 'failed_run' : 'batch', runs: evidence,
+          skill: { name: item.name, version_id: item.active_version_id, task_types: parse(item.types, []), text: item.text, max_tokens: 1500 }, bound: REWRITE_BOUND } };
+      }
+      return { retro: null, reason: 'none' };
+    });
+  }
+  async function reportRetro(input) {
+    return db.tx(async () => {
+      const row = await db.get(`SELECT * FROM skill_proposals WHERE id=? AND origin=?${db.lockRow}`, [Number(input.proposal_id), ORIGIN]);
+      const meta = parse(row?.budget_json, {});
+      if (!row || row.outcome !== 'retro_running' || typeof input.claim_token !== 'string' || input.claim_token !== meta.claim_token) throw bad('Stale retro claim', 'stale_claim', 409);
+      const now = Date.now(), usage = usageOf(input), raw = typeof input.raw_response === 'string' ? input.raw_response.slice(0, 20000) : null;
+      const close = (outcome, extra) => db.run('UPDATE skill_proposals SET outcome=?,budget_json=?,updated_at=? WHERE id=?', [outcome, JSON.stringify({ usage, raw_response: raw, ...extra }), now, row.id]);
+      let valid = true;
+      try { proposalFields({ text: input.text, reason: input.reason }); } catch { valid = false; }
+      if (overBound(usage) || !valid) { await close('failed', { error: overBound(usage) ? 'usage_exceeds_bound' : String(input.error || 'invalid_model_output').slice(0, 200) }); return { status: 'failed' }; }
+      const item = await skill((await db.get('SELECT id FROM ai_skills WHERE name=?', [row.template_key])).id);
+      if (item.status !== 'approved') { await close('failed', { error: 'skill_not_active' }); return { status: 'failed' }; }
+      const made = await proposalVersion(item, input.text, input.reason, 'retro', input.evaluation, row.id);
+      await close('pending', { version_id: made.version.id });
+      return { status: 'pending', version_id: made.version.id };
+    });
+  }
   async function disable(actor, id, input) {
     if (input.confirmed !== true) throw bad('Disable confirmation required', 'confirmation_required');
     if (!validId(id)) throw bad('Invalid skill id');
@@ -270,5 +366,5 @@ export function createSkillService(db) {
     }
     return { skills: items, usage_window: 'latest_2000_spans', token_method: 'utf8_upper_bound' };
   }
-  return { upload, read, approve, disable, active, list, requestRewrite, reject, edit, rollback, claimRewrite, reportRewrite };
+  return { upload, read, approve, disable, active, list, requestRewrite, reject, edit, rollback, claimRewrite, reportRewrite, createProposal, proposals, claimRetro, reportRetro };
 }

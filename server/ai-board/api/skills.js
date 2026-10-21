@@ -10,6 +10,7 @@ export function attachSkillRoutes(router, { store, requireAuth, requireAdmin, re
     catch (error) { if (error instanceof WorkerContractError) res.status(error.status).json({ error:error.code, message:error.message }); else next(error); }
   };
   route.get('/api/admin/ai-board/skills', requireAuth, requireAdmin, handle(() => skills.list()));
+  route.get('/api/admin/ai-board/skills/proposals', requireAuth, requireAdmin, handle(() => skills.proposals()));
   route.get('/api/admin/ai-board/skills/:id', requireAuth, requireAdmin, handle(req => skills.read(req.params.id)));
   route.post('/api/admin/ai-board/skills', requireAuth, requireAdmin, requireStrictCsrf, handle(req => skills.upload(actor(req),req.body || {})));
   for (const action of ['approve','disable']) route.post(`/api/admin/ai-board/skills/:id/${action}`, requireAuth, requireAdmin, requireStrictCsrf,
@@ -30,5 +31,14 @@ export function attachWorkerSkillRoutes(route, { store, authenticate, handle }) 
   }));
   route.post('/api/ai-board/worker/skill-rewrite/report', authenticate, handle(async (req,res) => {
     res.json(await skills.reportRewrite(req.body || {}));
+  }));
+  route.post('/api/ai-board/worker/skill-proposals', authenticate, handle(async (req,res) => {
+    res.json(await skills.createProposal(req.body || {}));
+  }));
+  route.post('/api/ai-board/worker/skill-retro/claim', authenticate, handle(async (req,res) => {
+    res.json(await skills.claimRetro(req.body?.worker_id));
+  }));
+  route.post('/api/ai-board/worker/skill-retro/report', authenticate, handle(async (req,res) => {
+    res.json(await skills.reportRetro(req.body || {}));
   }));
 }

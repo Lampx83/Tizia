@@ -23,6 +23,7 @@ const sample = name => `---\nname: ${name}\ndescription: Hướng dẫn cho giao
 export async function mountSkillsTab(host, { api, toast }) {
   const result = await api('/api/admin/ai-board/skills');
   if (!result.ok) throw new Error('Không tải được danh sách skill. Thử làm mới trang.');
+  const queue = (await api('/api/admin/ai-board/skills/proposals')).data?.proposals?.filter(item => item.outcome === 'pending') ?? [];
   host.innerHTML = `<section class="skills-panel">
     <div class="toolbar"><h2>Skills</h2><span class="spacer"></span><button type="button" class="btn" id="skill-add">Thêm skill</button></div>
     <p class="meta">Bản nháp chưa được nạp. Bản đã duyệt sẵn sàng cho lượt chạy được bật Skills; tính năng vẫn trong phạm vi thử nghiệm.</p>
@@ -36,6 +37,17 @@ export async function mountSkillsTab(host, { api, toast }) {
       <div class="toolbar"><button class="btn" type="submit">Lưu bản nháp</button><button class="btn" type="button" id="skill-close">Đóng</button></div>
       <p id="skill-upload-status" role="status"></p>
     </form>
+    <section class="skill-queue" aria-labelledby="skill-queue-title"><h3 id="skill-queue-title">Hàng chờ đề xuất${queue.length ? ` (${queue.length})` : ''}</h3>
+      ${queue.length ? `<p class="meta">Model và retro chỉ đề xuất. Chỉ quản trị viên duyệt mới tạo thay đổi, và phiên bản mới chưa được dùng cho đến khi duyệt.</p>` : '<p class="meta">Chưa có đề xuất đang chờ.</p>'}
+      ${queue.map(item => `<details class="skill-version" open><summary>${esc(item.skill_name)} · phiên bản ${esc(item.version)} · ${item.source === 'retro' ? 'Retro sau lượt chạy' : 'Model đề xuất'}</summary>
+        <p>Lý do: ${esc(item.reason)}</p>
+        ${item.request_ids.length ? `<p class="meta">Từ yêu cầu: ${item.request_ids.map(id => `<a href="/admin-request.html?id=${Number(id)}">#${Number(id)}</a>`).join(', ')}</p>` : ''}
+        <p>${item.lint?.ok ? 'Lint đạt' : `Lint chưa đạt: ${esc((item.lint?.errors || []).join('; '))}`}</p>
+        ${evalHtml({ evaluation:item.evaluation })}
+        ${diffHtml(item.base_text, item.proposed_text)}
+        <div class="toolbar"><button class="btn" type="button" data-proposal-accept="${item.skill_id}:${item.version_id}"${item.lint?.ok ? '' : ' disabled'}>Duyệt và chọn phiên bản này</button>
+          <button class="btn" type="button" data-proposal-reject="${item.skill_id}:${item.version_id}">Từ chối</button></div></details>`).join('')}
+    </section>
     <p class="meta">Số liệu trong 2.000 bước đã ghi gần nhất, gộp các phiên bản. Kết quả thuộc lượt chạy có dùng skill, không chứng minh chất lượng riêng của skill. Qua kiểm tra gồm cả lượt đang chờ người duyệt.</p>
     <div class="request-table-scroll" role="region" aria-label="Danh sách Skills" tabindex="0"><table><thead><tr><th>Skill / nguồn</th><th>Tác vụ</th><th>Phiên bản</th><th>Trạng thái</th><th>Lần gọi</th><th>Qua kiểm tra</th><th>Thao tác</th></tr></thead>
     <tbody>${result.data.skills.map(skill => `<tr>
@@ -87,6 +99,21 @@ export async function mountSkillsTab(host, { api, toast }) {
     } catch (error) { status.textContent = error.message; }
     finally { button.disabled = false; }
   };
+  const decide = (attr, action, body, done, ask) => {
+    for (const node of host.querySelectorAll(`[${attr}]`)) node.onclick = async () => {
+      const [skillId, versionId] = node.getAttribute(attr).split(':');
+      if (ask && !window.confirm(ask)) return;
+      node.disabled = true;
+      try {
+        const result = await api(action(skillId, versionId), { method:'POST', body:JSON.stringify(body(versionId)) });
+        if (!result.ok) { toast(result.data.message || 'Thao tác chưa thực hiện được.', 'err'); return; }
+        toast(done); await mountSkillsTab(host, { api, toast });
+      } catch (error) { toast(error.message || 'Thao tác thất bại.', 'err'); }
+      finally { node.disabled = false; }
+    };
+  };
+  decide('data-proposal-accept', skillId => `/api/admin/ai-board/skills/${skillId}/approve`, versionId => ({ version_id:Number(versionId), confirmed:true }), 'Đã duyệt đề xuất và chọn phiên bản.', 'Duyệt đề xuất này và dùng làm phiên bản đang chọn?');
+  decide('data-proposal-reject', (skillId, versionId) => `/api/admin/ai-board/skills/${skillId}/versions/${versionId}/reject`, () => ({ confirmed:true }), 'Đã từ chối đề xuất.', 'Từ chối đề xuất này?');
   for (const button of host.querySelectorAll('[data-skill-view]')) button.onclick = async () => {
     button.disabled = true;
     try {

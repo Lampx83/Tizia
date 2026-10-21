@@ -165,6 +165,7 @@
   .skill-diff .diff-add { display:block; background:color-mix(in srgb, var(--ok) 18%, transparent); }
   .skill-diff .diff-del { display:block; background:color-mix(in srgb, var(--bad) 16%, transparent); text-decoration:line-through; }
   .skill-edit { margin:12px 0; } .skill-edit textarea { display:block; width:100%; margin:6px 0 10px; padding:10px; background:var(--bg); color:var(--txt); border:1px solid var(--border-strong); border-radius:7px; font:13px/1.6 monospace; }
+  .skill-queue { margin:20px 0; padding:4px 0; } .skill-queue h3 { margin:0 0 6px; font-size:16px; }
   .skill-version .toolbar { flex-wrap:wrap; gap:8px; margin:12px 0; }
   .skills-panel :focus-visible { outline:2px solid var(--accent2); outline-offset:3px; }
   .pill.pending   { background:rgba(148,163,184,0.20); color:#cbd5e1; }
@@ -378,6 +379,6 @@
 <div class="toast" id="toast"></div>
 <div class="chart-tooltip" id="ctt"></div>
 
-<script type="module" src="/js/admin-dashboard.js?v=skills-rewrite"></script>
+<script type="module" src="/js/admin-dashboard.js?v=skills-queue"></script>
 </body>
 </html>
