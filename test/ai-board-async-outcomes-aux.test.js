@@ -1,10 +1,11 @@
-// Async twins of the helper modules (drafts, eval tasks, self-improve, frozen benchmark, post-merge watch, transient retry,
-// intake guard, classifier trace, screenshot retention) == their sync originals, final board state compared.
+// Helper modules on the async board store: drafts, eval tasks, self-improve, frozen benchmark, post-merge watch, transient retry,
+// intake guard, classifier trace, screenshot retention. Asserts business outcomes and persisted rows.
 import test from 'node:test';
+import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { assertParity, failure } from './support/ai-board-parity.js';
+import { runBoard, failure } from './support/ai-board-parity.js';
 import {
   blocked, candidate, claimAndRun, gates, newRequest, planOf, submit, verdict,
 } from './support/ai-board-scenarios.js';
@@ -12,8 +13,8 @@ import {
 const DAY = 24 * 3600_000;
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32, 7)]).toString('base64');
 
-test('parity: eval tasks, drafts (shots, retry streak, handoff), request retry', async () => {
-  await assertParity(async (store, d, { m, db }) => {
+test('eval tasks, drafts (shots, retry streak, handoff), request retry', async () => {
+  const { result: out } = await runBoard(async (store, d, { m, db }) => {
     const out = {};
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aib-shots-'));
     try {
@@ -65,10 +66,36 @@ test('parity: eval tasks, drafts (shots, retry streak, handoff), request retry',
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
     return out;
   });
+  assert.equal(out.shots.stored, 2);
+  assert.equal(out.shotsDup.duplicate, true, 'same screenshots are not stored twice');
+  assert.equal(out.shotsBad.error, 'invalid_worker_operation', 'screenshots need the current run lease');
+  assert.equal(out.streak, 1);
+  assert.equal(out.state1, 'retry', 'first blocked run offers a retry');
+  assert.equal(out.after1.kind, 'retry');
+  assert.equal(out.afterMissing, null);
+  assert.equal(out.badLabel.error, 'invalid_label', 'path traversal is rejected');
+  assert.equal(out.label.status, 'labelled');
+  assert.deepEqual(out.label.expected_files, ['package.json']);
+  assert.equal(out.noTask.error, 'eval_task_not_found');
+  assert.equal(out.badStatus.error, 'invalid_worker_operation');
+  assert.equal(out.split.ready, false, 'below the minimum of labelled tasks no split is ready');
+  assert.equal(out.busy.error, 'ticket_busy', 'retry refused while the root holds a lease');
+  assert.equal(out.retryForeign.error, 'request_not_found');
+  assert.deepEqual(out.retry, { status: 'queued', ok: true });
+  assert.equal(out.retryAgain.error, 'not_retryable');
+  assert.equal(out.state2, 'admin', 'second blocked run hands off to admin');
+  assert.equal(out.after2.kind, 'handoff');
+  assert.equal(out.passingNotice.kind, 'draft', 'passing verdict leaves the draft notice');
+  assert.deepEqual(out.deleted, { ok: true });
+  assert.equal(out.deletedAgain.error, 'eval_task_not_found');
+  assert.equal(out.purgeOff, null, 'retention 0 disables purge');
+  assert.deepEqual(out.purge, { messages: 1, files: 2 });
+  assert.deepEqual(out.purgeAgain, { messages: 0, files: 0 }, 'purge is idempotent');
+  assert.equal(out.files, 0);
 });
 
-test('parity: transient retry switch, intake flags and rejections, classifier trace', async () => {
-  await assertParity(async (store, d, { m, db }) => {
+test('transient retry switch, intake flags and rejections, classifier trace', async () => {
+  const { result: out } = await runBoard(async (store, d, { m, db }) => {
     const out = {};
     out.stateDefault = await m.transientRetryState(db);
     await newRequest(store, { tag: 't' });
@@ -93,12 +120,21 @@ test('parity: transient retry switch, intake flags and rejections, classifier tr
     out.alerts = await d.all('SELECT severity, category, status FROM ai_alerts ORDER BY id');
     return out;
   });
+  assert.deepEqual(out.stateDefault, { enabled: false, retry_after_ms: 300000 }, 'transient retry is off by default');
+  assert.deepEqual(out.blocked.map((t) => t.source_request_id), [1], 'transient-blocked root is listed');
+  assert.equal(out.notBlocked.error, 'ticket_not_found');
+  assert.deepEqual([out.retried.status, out.retried.phase], ['queued', 'authorized']);
+  assert.equal(out.retriedAgain.error, 'not_transient_blocked');
+  assert.equal(out.badSwitch.error, 'invalid_worker_operation');
+  assert.equal(out.on.enabled, true);
+  assert.equal(out.off.enabled, false);
+  assert.deepEqual(out.alerts, [{ severity: 'high', category: 'intake_rejected', status: 'open' }], 'repeated intake flags do not add alerts');
 });
 
-test('parity: self-improve night, frozen benchmark, PR state and post-merge watch for a merged self PR', async () => {
+test('self-improve night, frozen benchmark, PR state and post-merge watch for a merged self PR', async () => {
   const file = 'ai-board/harness/retrieval_weights.json';
   const sha = 'c'.repeat(40);
-  await assertParity(async (store, d, { m, db }) => {
+  const { result: out } = await runBoard(async (store, d, { m, db }) => {
     const out = {};
     // 20 labelled tasks open the night; the switch is off until an admin turns it on
     for (let i = 1; i <= 20; i += 1) {
@@ -155,5 +191,32 @@ test('parity: self-improve night, frozen benchmark, PR state and post-merge watc
     out.nights = await m.listNights(db);
     return out;
   });
-
+  assert.equal(out.listOff.enabled, false, 'self-improve stays off until admin enables it');
+  assert.equal(out.badNight.error, 'invalid_night');
+  assert.equal(out.disabled.run, false);
+  assert.equal(out.disabled.reason, 'disabled');
+  assert.equal(out.on.enabled, true);
+  assert.equal(out.badSwitch.error, 'invalid_worker_operation');
+  assert.equal(out.start.run, true);
+  assert.equal(out.noNight.error, 'night_not_found');
+  assert.equal(out.verdict, 'ready_for_pr');
+  assert.deepEqual(out.won, { night: '2026-10-01', request_id: 1 });
+  assert.deepEqual(out.wonAgain, out.won, 'duplicate verdict does not double-count the win');
+  assert.equal(out.notSelf, null);
+  assert.equal(out.open[0].number, 31);
+  assert.equal(out.badReport.error, 'invalid_pr_state');
+  assert.equal(out.noPr.error, 'pr_not_found');
+  assert.deepEqual(out.merged.files, ['ai-board/harness/retrieval_weights.json']);
+  assert.equal(out.mergedAgain.state, 'merged', 'a later close report does not overwrite the merge');
+  assert.deepEqual(out.openAfter, []);
+  assert.equal(out.pendingFrozen.pending.length, 1, 'merged self PR waits for one frozen measurement');
+  assert.equal(out.badFrozen.error, 'invalid_worker_operation');
+  assert.equal(out.frozenAgain.strata.easy, 0.9, 'first frozen measurement wins');
+  assert.equal(out.scores.length, 1);
+  assert.deepEqual(out.pendingAfter, []);
+  assert.deepEqual(out.watchEarly, [], 'post-merge watch waits out the window');
+  assert.equal(out.watchDue.length, 1);
+  assert.equal(out.watch.status, 'waiting', 'too few production runs keeps the watch waiting');
+  assert.equal(out.watchMissing.error, 'pr_not_found');
+  assert.equal(out.watchList[0].status, 'waiting');
 });

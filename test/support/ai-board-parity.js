@@ -1,6 +1,5 @@
-// Replay a scenario on two isolated PostgreSQL schemas; returned values and persisted state must match.
+// Run a scripted board scenario on an isolated PostgreSQL schema; callers assert on returned values and persisted state.
 // Clock is deterministic; tokens and random suffixes are normalised.
-import assert from 'node:assert/strict';
 import { createAsyncAiBoardStore } from '../../server/ai-board/store-async.js';
 import { backends } from './ai-board-db.js';
 import * as asyncAux from '../../server/ai-board/aux-async.js';
@@ -57,19 +56,10 @@ async function runOne(label, make, scenario, d) {
   } finally { Date.now = realNow; }
 }
 
-/** Compare identical deterministic scenarios on two isolated PostgreSQL schemas. */
-export async function assertParity(scenario, { hooks = {} } = {}) {
-  let expected;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const d = await backends[0].open();
-    try {
-      const got = await runOne('postgres', (db) => ({ store: createAsyncAiBoardStore(db, hooks), api: { m: asyncAux, db } }), scenario, d);
-      if (!expected) expected = got;
-      else {
-        assert.deepEqual(got.result, expected.result, 'PG replay returned values differ');
-        for (const table of Object.getOwnPropertyNames(expected.state)) assert.deepEqual(got.state[table], expected.state[table], `PG replay table ${table} differs`);
-      }
-    } finally { await d.dispose(); }
-  }
-  return expected;
+/** Run scenario once on a fresh schema. Returns normalised { result, state }. */
+export async function runBoard(scenario, { hooks = {} } = {}) {
+  const d = await backends[0].open();
+  try {
+    return await runOne('postgres', (db) => ({ store: createAsyncAiBoardStore(db, hooks), api: { m: asyncAux, db } }), scenario, d);
+  } finally { await d.dispose(); }
 }

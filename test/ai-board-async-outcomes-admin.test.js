@@ -1,6 +1,7 @@
-// Async store == sync store: admin actions, cancel, rollback, budget, replan, PR recording, model-call traces.
+// Admin actions, cancel, rollback, budget, replan, PR recording and model-call traces on the async board store.
 import test from 'node:test';
-import { assertParity, failure } from './support/ai-board-parity.js';
+import assert from 'node:assert/strict';
+import { runBoard, failure } from './support/ai-board-parity.js';
 import {
   blocked, candidate, claimAndRun, newRequest, passing, planOf, protectedPlan, submit, verdict,
 } from './support/ai-board-scenarios.js';
@@ -10,8 +11,8 @@ const PR = (n = 7, over = {}) => ({
   head_sha: candidate().head_sha, base_sha: candidate().base_sha, ...over,
 });
 
-test('parity: admin note/reject, requester cancel, legacy request cancel, invalidate plan', async () => {
-  await assertParity(async (store, d) => {
+test('admin note/reject, requester cancel, legacy request cancel, invalidate plan', async () => {
+  const { result: out } = await runBoard(async (store, d) => {
     const out = {};
     const a = await newRequest(store, { tag: 'a' });
     out.note = await store.noteRequest(a.request_id, 'đã xem', 9);
@@ -29,19 +30,34 @@ test('parity: admin note/reject, requester cancel, legacy request cancel, invali
     out.legacyHasRoot = await store.hasRoot(legacy);
     out.legacy = await store.cancelRequest(legacy, { ownerUserId: 1 });
     // invalidate: only a request with a plan, and only once
-    await newRequest(store, { tag: 'c' });
+    const cReq = await newRequest(store, { tag: 'c' });
     const c = await claimAndRun(store, 'w1');
-    out.invalidateNoPlan = await store.invalidatePlanForRequest(3, 'x');
+    out.invalidateNoPlan = await store.invalidatePlanForRequest(cReq.request_id, 'x');
     await submit(store, c, planOf(), 'plan-adm-c');
-    out.invalidate = await store.invalidatePlanForRequest(3, 'người gửi bổ sung thông tin');
-    out.invalidateAgain = await store.invalidatePlanForRequest(3, 'x');
-    out.trace = await store.getRequestTrace(3);
+    out.invalidate = await store.invalidatePlanForRequest(cReq.request_id, 'người gửi bổ sung thông tin');
+    out.invalidateAgain = await store.invalidatePlanForRequest(cReq.request_id, 'x');
+    out.trace = await store.getRequestTrace(cReq.request_id);
     return out;
   });
+
+  assert.equal(out.note, true);
+  assert.equal(out.reject, true);
+  assert.equal(out.rejectAgain, true, 'repeat reject is accepted as no-op');
+  assert.equal(out.missing, false, 'reject of unknown request does nothing');
+  assert.equal(out.foreign.error, 'request_not_found', 'other owner cannot cancel');
+  assert.equal(out.cancel.status, 'cancelled');
+  assert.equal(out.cancelAgain.duplicate, true);
+  assert.equal(out.closed.error, 'request_closed', 'cancel after a closed request is refused');
+  assert.equal(out.legacyHasRoot, false);
+  assert.equal(out.legacy.status, 'cancelled', 'legacy request without root ticket can still be cancelled');
+  assert.equal(out.invalidateNoPlan, false, 'no plan yet, nothing to invalidate');
+  assert.equal(out.invalidate, true, 'plan of a request is invalidated once');
+  assert.equal(out.invalidateAgain, false);
+  assert.equal(out.trace.root.phase, 'needs_replan');
 });
 
-test('parity: rollback (discard / revert / failure), PR recording and model-call traces', async () => {
-  await assertParity(async (store, d) => {
+test('rollback (discard / revert / failure), PR recording and model-call traces', async () => {
+  const { result: out } = await runBoard(async (store, d) => {
     const out = {};
     for (const [tag, outcome] of [['d', 'discarded'], ['r', 'revert_ready'], ['f', 'failed']]) {
       const req = await newRequest(store, { tag });
@@ -79,10 +95,32 @@ test('parity: rollback (discard / revert / failure), PR recording and model-call
     })();
     return out;
   });
+
+  assert.equal(out.pr_d.number, 11);
+  assert.equal(out.prAgain_d, 11, 'same PR key returns the same number');
+  assert.equal(out.prOther_d.error, 'pr_already_open');
+  assert.equal(out.prBad_d.error, 'invalid_worker_operation');
+  assert.deepEqual(out.calls_d, { stored: 2, duplicates: 0 });
+  assert.deepEqual(out.callsDup_d, { stored: 0, duplicates: 1 });
+  assert.equal(out.callsBad_d.error, 'invalid_trace');
+  assert.equal(out.busy_d.error, 'ticket_busy');
+  assert.equal(out.confirm_d.error, 'confirmation_required', 'rollback needs explicit confirmation');
+  assert.equal(out.rb_d.phase, 'rollback');
+  assert.equal(out.rbDup_d.duplicate, true);
+  assert.equal(out.submit_d.outcome, 'discarded');
+  assert.deepEqual([out.submit_d.status, out.submit_d.phase], ['cancelled', 'rolled_back']);
+  assert.equal(out.trace_d.root.phase, 'rolled_back');
+  assert.equal(out.pr_r.number, 12);
+  assert.equal(out.submit_r.outcome, 'revert_ready', 'revert path opens a revert branch for admin');
+  assert.equal(out.submit_r.status, 'waiting_admin');
+  assert.equal(out.pr_f.number, 13);
+  assert.equal(out.submit_f.outcome, 'failed');
+  assert.equal(out.submit_f.phase, 'rollback_failed');
+  assert.equal(out.noChange.error, 'nothing_to_rollback');
 });
 
-test('parity: budget exhaustion, extension and ceiling, gate reruns, folder-free queue after replan', async () => {
-  await assertParity(async (store, d) => {
+test('budget exhaustion, extension and ceiling, gate reruns, folder-free queue after replan', async () => {
+  const { result: out } = await runBoard(async (store, d) => {
     const out = {};
     // plan submitted over the per-run budget -> waiting_admin/budget_exhausted -> extend -> replan queued
     const a = await newRequest(store, { tag: 'a' });
@@ -130,4 +168,21 @@ test('parity: budget exhaustion, extension and ceiling, gate reruns, folder-free
     out.finalQueue = await store.listAdminQueue();
     return out;
   });
+
+  assert.equal(out.exhausted.status, 'waiting_admin', 'plan over budget goes to admin');
+  assert.equal(out.badAmount.error, 'invalid_worker_operation');
+  assert.equal(out.badReason.error, 'invalid_worker_operation');
+  assert.equal(out.extend1.ok, true);
+  assert.equal(out.notExhausted.error, 'not_budget_exhausted');
+  assert.equal(out.afterExtend.phase, 'needs_replan');
+  assert.equal(out.rootEnd.phase, 'needs_replan');
+  assert.equal(out.stagePlan, 'plan');
+  assert.equal(out.badGate.error, 'invalid_gate');
+  assert.equal(out.rerunPlan.ok, true);
+  assert.equal(out.rerunWrongStage.error, 'not_rerunnable');
+  assert.equal(out.busyRerun.error, 'not_rerunnable');
+  assert.equal(out.rerunExec.phase, 'authorized');
+  assert.equal(out.resume.status, 'planned');
+  assert.equal(out.resumeAgain, true, 'resume of the authorized plan is idempotent');
+  assert.equal(out.finalQueue[0].phase, 'needs_replan');
 });
