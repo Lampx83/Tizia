@@ -149,8 +149,10 @@ export function createToolCheckpointService(store) {
   /** Thao tác checkpoint của ticket; lease sai/cũ → stale_lease trước khi đụng dữ liệu. */
   async function apply(ticketId, op, body = {}) {
     if (!Object.hasOwn(ops, op)) throw bad('unknown checkpoint operation', 'unknown_operation', 404);
-    await store.assertLease(ticketId, body.worker_id, body.lease_token);
-    return await ops[op](ticketId, body);
+    return db.tx(async () => {
+      await store.assertLease(ticketId, body.worker_id, body.lease_token);
+      return ops[op](ticketId, body);
+    });
   }
   return { apply };
 }

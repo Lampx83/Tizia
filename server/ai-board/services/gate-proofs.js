@@ -68,8 +68,10 @@ export function createGateProofService(store) {
   /** record | check của ticket; lease sai/cũ → stale_lease trước khi đọc proof. */
   async function apply(ticketId, op, body = {}) {
     if (!Object.hasOwn(ops, op)) throw bad('unknown gate proof operation', 'unknown_operation', 404);
-    await store.assertLease(ticketId, body.worker_id, body.lease_token);
-    return await ops[op](Number(ticketId), body);
+    return db.tx(async () => {
+      await store.assertLease(ticketId, body.worker_id, body.lease_token);
+      return ops[op](Number(ticketId), body);
+    });
   }
   return { apply };
 }
