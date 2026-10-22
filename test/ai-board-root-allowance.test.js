@@ -10,6 +10,7 @@ import { openBoard } from './support/ai-board-db.js';
 import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
 import { attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
 import { planOf } from './support/ai-board-scenarios.js';
+import { LIMITS } from '../server/ai-board/repositories/store-contract.js';
 
 const KEY = 'fixture-root-allowance-worker-key';
 async function fixture({ dropReserveAck = false, delayReserveAckMs = 0 } = {}) {
@@ -60,6 +61,7 @@ test('first provider reservations recheck daily admission after two independent 
     const results = await Promise.all([reserve(a, 'daily-a', 'daily-attempt-a'), reserve(b, 'daily-b', 'daily-attempt-b')]);
     assert.deepEqual(results.map(r => r.status).sort(), [200, 409]);
     assert.equal(results.find(r => r.status === 409).body.error, 'daily_resource_budget');
+    assert.equal(results.find(r => r.status === 409).body.reason, 'daily_gpu_loose');
     const winner = results[0].status === 200 ? [a, 'daily-a'] : [b, 'daily-b'];
     assert.equal((await reserve(...winner, 'daily-root-retry')).status, 200, 'an admitted root retains its allowance');
   } finally { await f.close(); }
@@ -267,5 +269,59 @@ test('unknown token usage cannot refund a root reservation and invalid metrics c
     assert.equal(denied.status, 409);
     assert.equal(denied.body.error, 'root_allowance_exhausted');
     assert.equal((await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: 'tool-after-exhaustion', kind: 'tool' })).status, 409);
+  } finally { await f.close(); }
+});
+
+test('each root budget denial names the one limit it hit and keeps the legacy error code', async () => {
+  const f = await fixture();
+  try {
+    const ticket = await f.store.claimNext({ workerId: 'reason-codes', version: 'test', mode: 'shadow', intent: 'plan', leaseMs: 120000 });
+    const lease = leaseOf(ticket, 'reason-codes');
+    await f.post(ticket.id, 'read', lease);
+    const setLimits = limits => f.db.d.run('UPDATE ai_root_allowances SET limits_json=? WHERE root_ticket_id=?',
+      [JSON.stringify({ ...LIMITS.root_work, ...limits }), ticket.id]);
+    const cases = [
+      ['root_model_calls', { model_calls: 0 }, { kind: 'model', provider: 'vllm', token_bound: 1 }],
+      ['root_tool_calls', { tool_calls: 0 }, { kind: 'tool' }],
+      ['root_tokens_reserve', { tokens: 1000 }, { kind: 'model', provider: 'vllm', token_bound: 1024 }],
+      ['root_semantic_repairs', { semantic_repairs: 0 }, { kind: 'semantic_repair' }],
+      ['root_quality_switches', { quality_switches: 0 }, { kind: 'quality_switch' }],
+    ];
+    for (const [i, [reason, limits, reservation]] of cases.entries()) {
+      await setLimits(limits);
+      const denied = await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: `reason-case-${i}`, ...reservation });
+      assert.equal(denied.status, 409, reason);
+      assert.equal(denied.body.error, 'root_allowance_exhausted');
+      assert.equal(denied.body.reason, reason);
+    }
+    await setLimits({ tokens: 1024 });
+    assert.equal((await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: 'reason-fill-tokens', kind: 'model', provider: 'vllm', token_bound: 1024 })).status, 200);
+    const capped = await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: 'reason-capped-tokens', kind: 'model', provider: 'vllm', token_bound: 1 });
+    assert.equal(capped.body.reason, 'root_tokens');
+    const repeated = await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: 'reason-fill-tokens', kind: 'model', provider: 'vllm', token_bound: 1024 });
+    assert.equal(repeated.body.error, 'attempt_already_reserved');
+    assert.equal(repeated.body.reason, 'attempt_already_reserved');
+  } finally { await f.close(); }
+});
+
+test('admin request trace shows which root limit is at its cap and the unknown holds, without changing the ledger', async () => {
+  const f = await fixture();
+  try {
+    const ticket = await f.store.claimNext({ workerId: 'admin-reasons', version: 'test', mode: 'shadow', intent: 'plan', leaseMs: 120000 });
+    const lease = leaseOf(ticket, 'admin-reasons');
+    await f.post(ticket.id, 'read', lease);
+    await f.db.d.run('UPDATE ai_root_allowances SET limits_json=? WHERE root_ticket_id=?',
+      [JSON.stringify({ ...LIMITS.root_work, model_calls: 1 }), ticket.id]);
+    assert.equal((await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: 'admin-trace-first', kind: 'model', provider: 'vllm', token_bound: 512 })).status, 200);
+    const before = (await f.post(ticket.id, 'read', lease)).body;
+    const trace = await f.store.getRequestTrace(f.request.request_id);
+    const { allowance } = trace.root;
+    const groups = Object.fromEntries(allowance.groups.map(g => [g.reason, g]));
+    assert.equal(groups.root_model_calls.hit, true);
+    assert.equal(groups.root_tool_calls.hit, false);
+    assert.equal(allowance.unknown_holds, 1);
+    assert.equal(allowance.daily_gpu.reason, 'daily_gpu_loose');
+    assert.equal(allowance.daily_gpu.hit, true, 'unknown hold charges the owner daily GPU ledger');
+    assert.deepEqual((await f.post(ticket.id, 'read', lease)).body.used, before.used);
   } finally { await f.close(); }
 });

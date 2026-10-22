@@ -394,7 +394,7 @@ export function attachAiBoardWorkerRoutes(router, {
       await fn(req, res);
     } catch (error) {
       if (error instanceof WorkerContractError) {
-        return res.status(error.status).json({ error: error.code, message: error.message });
+        return res.status(error.status).json({ error: error.code, message: error.message, ...(error.reason && { reason: error.reason }) });
       }
       if (error instanceof PlanGuardrailError) {
         return res.status(422).json({

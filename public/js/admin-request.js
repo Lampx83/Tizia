@@ -609,6 +609,25 @@ function reasonBlock(raw) {
     <details class="raw"><summary>raw JSON</summary><pre>${esc(JSON.stringify(data, null, 2))}</pre></details>`;
 }
 
+const BUDGET_REASON = { daily_gpu_folder: 'GPU trong ngày của thư mục', daily_gpu_loose: 'GPU trong ngày của người gửi',
+  root_model_calls: 'số lần gọi model của yêu cầu', root_tool_calls: 'số lần gọi công cụ của yêu cầu', root_tokens: 'token của yêu cầu',
+  root_tokens_reserve: 'token dự trù của một lần gọi model vượt trần', root_semantic_repairs: 'số lần tự sửa theo ngữ nghĩa',
+  root_quality_switches: 'số lần đổi sang model chất lượng', attempt_already_reserved: 'lần thử trùng khóa, không gửi lại',
+  legacy_allowance_unknown: 'yêu cầu cũ chưa có số liệu ngân sách, cần xem xét', model_token_bound_violation: 'một lần gọi model dùng nhiều token hơn dự trù',
+  run_budget_exhausted: 'ngân sách của lượt đã hết', automatic_round_limit: 'đã hết số vòng tự động' };
+
+function allowanceBlock(a) {
+  if (!a) return '';
+  const daily = a.daily_gpu?.applies ? [a.daily_gpu] : [];
+  const hit = [...daily, ...a.groups].filter(g => g.hit).map(g => BUDGET_REASON[g.reason] || g.reason);
+  const holds = a.unknown_holds > 0 ? `<div class="meta">${fmtNum(a.unknown_holds)} lần gọi model chưa rõ kết quả vẫn giữ ngân sách; chưa có cách giải phóng tự động.</div>` : '';
+  return `<div class="meta" style="margin-top:4px">${a.blocked_reason ? `Bị chặn: ${esc(BUDGET_REASON[a.blocked_reason] || a.blocked_reason)}. ` : ''}${hit.length
+    ? `Đã chạm giới hạn: ${esc(hit.join('; '))}.` : 'Chưa chạm giới hạn ngân sách nào.'}</div>${holds}
+    <details class="raw"><summary>Chi tiết ngân sách</summary><ul class="meta">
+      ${daily.map(d => `<li>${esc(BUDGET_REASON[d.reason])}: ${fmtNum(d.used)} / ${fmtNum(d.cap)}</li>`).join('')}
+      ${a.groups.map(g => `<li>${esc(BUDGET_REASON[g.reason])}: ${fmtNum(g.used)} / ${fmtNum(g.limit)}</li>`).join('')}</ul></details>`;
+}
+
 const ROLLOUT_MODE = { envelope: ['ok', 'Trong phạm vi tự phát hành'], review: ['warn', 'Cần admin duyệt'], blocked: ['bad', 'Chưa đủ bằng chứng'] };
 const ROLLOUT_REASON = { audience_expands: 'mở rộng người xem', verdict_needs_review: 'kết luận yêu cầu xem xét', tier_not_surface: 'không phải thay đổi bề mặt',
   validator_disagreement: 'hai lần soát không đồng ý', hard_permissions_not_proven: 'chưa chứng minh quyền cứng', functional_oracle_not_proven: 'chưa qua kiểm chứng chức năng',
@@ -745,6 +764,7 @@ function renderAiBoard(t) {
         <span>${esc(root.phase_label)}</span>${root.live ? '<span class="pulse" title="Worker đang giữ yêu cầu này"></span>' : ''}</div>
       ${root.public_note ? `<div style="margin-top:4px">${esc(root.public_note)}</div>` : ''}
       ${root.internal_reason ? reasonBlock(root.internal_reason) : ''}
+      ${allowanceBlock(root.allowance)}
       ${t.candidate ? `<div class="meta" style="margin-top:4px">Nhánh thay đổi: ${code(t.candidate.branch)} · ${esc(t.candidate.commits?.length)} commit</div>` : ''}
       ${t.pull_request && /^https:\/\/github\.com\//.test(t.pull_request.url) ? `<div class="meta" style="margin-top:4px">PR vào ${code(t.pull_request.base)}:
         <a href="${esc(t.pull_request.url)}" target="_blank" rel="noopener noreferrer">#${esc(t.pull_request.number)}</a>

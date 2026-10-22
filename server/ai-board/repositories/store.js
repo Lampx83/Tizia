@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { CAPABILITY_CATALOG, isSelfEditable, PlanGuardrailError, validatePlan } from '../security/policy.js';
 import { registerRelease, assertFeatureNotIsolated } from '../services/releases.js';
 import { repeatedQuestion } from '../services/clarity-rules.js';
+import { readRootAllowance } from '../services/root-allowance.js';
 import {
   ACTIVE_ONLY, AI_BRANCH, ANY_QUEUE, CLAIM_INTENTS, CLARIFYING_NOTE, CLARIFY_AUTHOR, CONTRACT, DAY_MS, EVENT_TYPES, EXECUTION_GRAPH,
   IDEMPOTENCY_KEY as KEY, LEASE_MS, LIMITS, MAX_BUDGET_EXTENSION, MAX_BUDGET_EXTENSIONS, MAX_BUDGET_LIMIT, MAX_TRACE_BATCH,
@@ -636,12 +637,21 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     return ticket;
   }
 
+  async function dailyGpuStatus(sourceRequestId, now = Date.now()) {
+    const request = await db.get('SELECT owner_user_id, folder_id, type FROM requests WHERE id=?', [sourceRequestId]);
+    const folder = request.folder_id != null;
+    const used = (await db.get(`SELECT ${ownerGpuS('?')} AS s`, [now - DAY_MS, request.owner_user_id])).s;
+    const cap = folder ? LIMITS.gpu_s_per_user_day.folder : LIMITS.gpu_s_per_user_day.loose;
+    const applies = request.type !== 'self';
+    return { used, cap, applies, hit: applies && used >= cap, reason: folder ? 'daily_gpu_folder' : 'daily_gpu_loose' };
+  }
+
   async function assertModelResourceAdmission(root, now = Date.now()) {
     const request = await db.get('SELECT owner_user_id, folder_id, type FROM requests WHERE id=?', [root.source_request_id]);
     if (request.type === 'self' || await db.get("SELECT 1 FROM ai_work_reservations WHERE root_ticket_id=? AND kind='model' LIMIT 1", [root.id])) return;
-    const used = (await db.get(`SELECT ${ownerGpuS('?')} AS s`, [now - DAY_MS, request.owner_user_id])).s;
-    if (used >= (request.folder_id == null ? LIMITS.gpu_s_per_user_day.loose : LIMITS.gpu_s_per_user_day.folder)) {
-      throw new WorkerContractError('daily resource allowance exhausted', 409, 'daily_resource_budget');
+    const daily = await dailyGpuStatus(root.source_request_id, now);
+    if (daily.hit) {
+      throw Object.assign(new WorkerContractError('daily resource allowance exhausted', 409, 'daily_resource_budget'), { reason: daily.reason });
     }
   }
 
@@ -1781,6 +1791,9 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     const candidate = await latestCandidate(root.id);
     root.can_rollback = !!candidate && !PHASES[root.phase]?.rollback;
     root.rerun_stage = await rerunStage(root); // 'plan' | 'execute' | null: which failed stage the admin may rerun now
+    const allowance = await readRootAllowance(db, root.id);
+    root.allowance = allowance && { blocked_reason: allowance.blocked_reason, unknown_holds: allowance.unknown_holds,
+      groups: allowance.groups, daily_gpu: await dailyGpuStatus(Number(requestId)) };
     return {
       root, plan, children, runs, events, candidate, pull_request: await latestPullRequest(root.id), trace_ref: await traceRef(root.id),
       gate_names: CONTRACT.gates.names, graph: EXECUTION_GRAPH,

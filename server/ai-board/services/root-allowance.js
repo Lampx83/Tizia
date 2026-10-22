@@ -2,38 +2,65 @@ import { createHash } from 'node:crypto';
 import { LIMITS, WorkerContractError } from '../repositories/store-contract.js';
 
 const bad = (message, code = 'invalid_allowance', status = 400) => new WorkerContractError(message, status, code);
+const denial = (reason, message, code = 'root_allowance_exhausted') => Object.assign(bad(message, code, 409), { reason });
 const keyPattern = /^[A-Za-z0-9._:-]{8,128}$/;
 const kinds = { model: 'model_calls', tool: 'tool_calls', semantic_repair: 'semantic_repairs', quality_switch: 'quality_switches' };
 const leaseHash = value => createHash('sha256').update(value).digest('hex');
 const fields = ['tokens_in', 'tokens_out', 'wall_ms', 'gpu_ms'];
 const integer = value => Number.isSafeInteger(value) && value >= 0;
 
+/** Lý do đầu tiên chặn một reservation, null nếu được cấp. Thứ tự kiểm tra giữ nguyên quyết định cấp/từ chối. */
+export function rootDenial(state, kind, tokens) {
+  const { used, limits } = state;
+  if (used.model_calls >= limits.model_calls) return 'root_model_calls';
+  if (used.tool_calls >= limits.tool_calls) return 'root_tool_calls';
+  if (used.tokens >= limits.tokens) return 'root_tokens';
+  const cap = kinds[kind];
+  if (used[cap] + 1 > limits[cap]) return `root_${cap}`;
+  if (used.tokens + tokens > limits.tokens) return 'root_tokens_reserve';
+  return null;
+}
+
+/** Từng giới hạn root với số đã dùng và cờ chạm trần; chỉ đọc, không ghi ledger. */
+export function rootAllowanceGroups({ used, limits }) {
+  return [
+    ['root_model_calls', used.model_calls, limits.model_calls],
+    ['root_tool_calls', used.tool_calls, limits.tool_calls],
+    ['root_tokens', used.tokens, limits.tokens],
+    ['root_semantic_repairs', used.semantic_repairs, limits.semantic_repairs],
+    ['root_quality_switches', used.quality_switches, limits.quality_switches],
+  ].map(([reason, value, limit]) => ({ reason, used: value, limit, hit: value >= limit }));
+}
+
+export async function readRootAllowance(db, root) {
+  const row = await db.get('SELECT * FROM ai_root_allowances WHERE root_ticket_id=?', [root]);
+  if (!row) return null;
+  const limits = row.limits_json ? JSON.parse(row.limits_json) : LIMITS.root_work;
+  const used = { model_calls: 0, tool_calls: 0, tokens: 0, semantic_repairs: 0, quality_switches: 0 };
+  const byProvider = Object.create(null);
+  const reservations = await db.all('SELECT * FROM ai_work_reservations WHERE root_ticket_id=? ORDER BY created_at, attempt_key', [root]);
+  for (const r of reservations) {
+    used[kinds[r.kind]]++;
+    used.tokens += r.tokens_used ?? r.tokens_reserved;
+    if (r.kind !== 'model') continue;
+    const p = byProvider[r.provider] ??= { model_calls: 0, tokens_in: null, tokens_out: null, wall_ms: null, gpu_ms: null,
+      missing: { tokens_in: 0, tokens_out: 0, wall_ms: 0, gpu_ms: 0 } };
+    p.model_calls++;
+    const metrics = r.metrics_json ? JSON.parse(r.metrics_json) : {};
+    for (const field of fields) {
+      if (metrics[field] == null) p.missing[field]++;
+      else p[field] = (p[field] ?? 0) + metrics[field];
+    }
+  }
+  const unknown = reservations.filter(r => r.kind === 'model' && r.tokens_used == null).length;
+  return { limits, used, blocked_reason: row.blocked_reason, by_provider: byProvider,
+    unknown_model_attempts: unknown, unknown_holds: unknown, groups: rootAllowanceGroups({ limits, used }) };
+}
+
 /** Root-owned work is reserved before I/O; unknown attempts keep their full token reservation. */
 export function createRootAllowanceService(store) {
   const db = store.db;
-  async function state(root) {
-    const row = await db.get('SELECT * FROM ai_root_allowances WHERE root_ticket_id=?', [root]);
-    if (!row) return null;
-    const limits = row.limits_json ? JSON.parse(row.limits_json) : LIMITS.root_work;
-    const used = { model_calls: 0, tool_calls: 0, tokens: 0, semantic_repairs: 0, quality_switches: 0 };
-    const byProvider = Object.create(null);
-    const reservations = await db.all('SELECT * FROM ai_work_reservations WHERE root_ticket_id=? ORDER BY created_at, attempt_key', [root]);
-    for (const r of reservations) {
-      used[kinds[r.kind]]++;
-      used.tokens += r.tokens_used ?? r.tokens_reserved;
-      if (r.kind !== 'model') continue;
-      const p = byProvider[r.provider] ??= { model_calls: 0, tokens_in: null, tokens_out: null, wall_ms: null, gpu_ms: null,
-        missing: { tokens_in: 0, tokens_out: 0, wall_ms: 0, gpu_ms: 0 } };
-      p.model_calls++;
-      const metrics = r.metrics_json ? JSON.parse(r.metrics_json) : {};
-      for (const field of fields) {
-        if (metrics[field] == null) p.missing[field]++;
-        else p[field] = (p[field] ?? 0) + metrics[field];
-      }
-    }
-    return { limits, used, blocked_reason: row.blocked_reason, by_provider: byProvider,
-      unknown_model_attempts: reservations.filter(r => r.kind === 'model' && r.tokens_used == null).length };
-  }
+  const state = root => readRootAllowance(db, root);
 
   async function apply(ticketId, op, body = {}) {
     if (!['read', 'reserve', 'settle'].includes(op)) throw bad('unknown allowance operation', 'unknown_operation', 404);
@@ -51,7 +78,7 @@ export function createRootAllowanceService(store) {
       const params = [root.id, body.idempotency_key];
       const prior = await db.get('SELECT * FROM ai_work_reservations WHERE root_ticket_id=? AND attempt_key=?', params);
       if (op === 'reserve') {
-        if (prior) throw bad('attempt already reserved; do not repeat remote work', 'attempt_already_reserved', 409);
+        if (prior) throw denial('attempt_already_reserved', 'attempt already reserved; do not repeat remote work', 'attempt_already_reserved');
         if (current.blocked_reason) throw bad('root allowance needs review', current.blocked_reason, 409);
         if (typeof body.kind !== 'string' || !Object.hasOwn(kinds, body.kind)) throw bad('invalid reservation kind');
         const model = body.kind === 'model';
@@ -59,11 +86,8 @@ export function createRootAllowanceService(store) {
         if (!integer(tokens) || (model && !tokens)) throw bad('positive model token bound required');
         if (model && !['vllm', 'ollama', 'api'].includes(body.provider)) throw bad('invalid provider');
         if (model) await store.assertModelResourceAdmission(root);
-        const cap = kinds[body.kind];
-        if (['model_calls', 'tool_calls', 'tokens'].some(field => current.used[field] >= current.limits[field])
-            || current.used[cap] + 1 > current.limits[cap] || current.used.tokens + tokens > current.limits.tokens) {
-          throw bad('root work allowance exhausted', 'root_allowance_exhausted', 409);
-        }
+        const reason = rootDenial(current, body.kind, tokens);
+        if (reason) throw denial(reason, 'root work allowance exhausted');
         await db.run(`INSERT INTO ai_work_reservations(root_ticket_id, attempt_key, kind, provider, lease_hash, tokens_reserved, created_at)
           VALUES (?, ?, ?, ?, ?, ?, ?)`, [...params, body.kind, model ? body.provider : null, leaseHash(body.lease_token), tokens, Date.now()]);
       } else {
