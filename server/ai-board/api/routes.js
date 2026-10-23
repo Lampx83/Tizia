@@ -376,6 +376,17 @@ export function attachAiBoardRequestRoutes(router, {
     try { res.json(await store.rerunGate(req.params.id, req.body?.gate, req.user.id)); }
     catch (error) { folderError(res, error); }
   });
+  // Graph node → gate that restarts it. Gate 2 and earlier re-plan; gate 3 and later redo execution.
+  const NODE_GATE = { gate_1: 1, gate_2: 2, gate_2_5: 2.5, gate_3: 3, gate_4: 4, gate_5: 5, gate_5_5: 5.5 };
+  route.post('/api/admin/ai-board/requests/:requestId/nodes/:node/rerun', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
+    const gate = NODE_GATE[req.params.node];
+    if (gate == null) return res.status(400).json({ error: 'invalid_node', message: 'This node cannot run again.' });
+    try {
+      const result = await store.rerunGate(req.params.requestId, gate, req.user.id);
+      // Node checkpoints are not readable by admins yet, so the rerun restarts the whole stage from its first gate.
+      res.json({ ...result, node: req.params.node, resumed_from: 'stage', note: 'Runs the whole stage again from its first step. Node checkpoint resume is not available yet.' });
+    } catch (error) { folderError(res, error); }
+  });
 }
 
 function digest(value) {

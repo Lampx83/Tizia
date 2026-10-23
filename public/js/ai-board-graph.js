@@ -87,6 +87,15 @@ function proofNote(gate, events = []) {
   return `Old proof not reused (${why}). This step was checked again.`;
 }
 
+const evidenceOf = (step) => {
+  const raw = step.result?.evidence;
+  if (typeof raw !== 'string') return raw || {};
+  try { return JSON.parse(raw) || {}; } catch { return {}; }
+};
+// Digests only: argv, exit code and time. Output is never shown here.
+const sandboxOf = (step) => (Array.isArray(evidenceOf(step).sandbox_receipts) ? evidenceOf(step).sandbox_receipts : []);
+const skillsOf = (step) => (evidenceOf(step).skills || []).map(s => (typeof s === 'string' ? s : s?.name)).filter(Boolean);
+
 function gateDetail(step, trace) {
   const calls = callsOf(step);
   const totals = stepTotals(step);
@@ -96,7 +105,7 @@ function gateDetail(step, trace) {
   const latest = models.at(-1);
   const earlier = (step.previousResults || []).map(r => r.public_reason).filter(Boolean);
   return {
-    step, models, tools, earlier,
+    step, models, tools, earlier, sandbox: sandboxOf(step), skills: skillsOf(step),
     error: step.result?.public_reason || step.result?.internal_reason || failedCall?.error || '',
     budget: calls.reduce((sum, c) => sum + numberOr(c.budget_units), 0),
     ms: totals.ms,
@@ -202,14 +211,17 @@ const pick = (nodes, selectedId) => nodes[selectedId] ? selectedId
 const secs = (ms) => (ms == null ? 'Not recorded' : `${(ms / 1000).toFixed(1)} s`);
 const num = (n) => (n == null ? 'Not recorded' : Number(n).toLocaleString('en-US'));
 
-// Stage rerun moved here from the old step list; LF79 replaces it.
+// Server decides (root.rerun_allowed, root.rerun_reason); the button only shows that answer.
 function rerunAction(node, root) {
-  if (node.state !== 'failed' || !node.step || root?.rerun_stage !== gateStage(node.gate)) return '';
-  const plan = gateStage(node.gate) === 'plan';
-  const text = plan ? 'Plan again from step 1' : 'Redo from step 3';
-  const title = plan ? 'Run planning again from step 1. The new result updates the steps.'
-    : 'Run the approved plan again from step 3, then the checks. The new result updates the steps.';
-  return `<button type="button" class="btn rerun" data-action="rerun-gate" data-gate="${esc(node.gate)}" title="${esc(title)}">${esc(text)}</button>`;
+  if (!node.step || node.state === 'idle') return '';
+  const stage = gateStage(node.gate);
+  const why = node.state === 'running' ? 'This step is running now.'
+    : root?.rerun_stage && root.rerun_stage !== stage ? 'This step is in the other stage. Run that stage instead.'
+    : root?.rerun_allowed ? '' : root?.rerun_reason || 'This step cannot run again now.';
+  const title = why || (stage === 'plan' ? 'Plans again from step 1. The new result updates the steps.'
+    : 'Runs the approved plan again from step 3, then the checks. The new result updates the steps.');
+  const button = `<button type="button" class="btn rerun" data-action="rerun-node" data-node="${esc(node.id)}"${why ? ' disabled' : ''} title="${esc(title)}">Run again</button>`;
+  return `${button}${why ? `<p class="meta">${esc(why)}</p>` : ''}`;
 }
 
 function kv(rows) {
@@ -240,10 +252,12 @@ function nodePanel(node, root) {
   const proof = node.proof ? `<p class="meta">${esc(node.proof)}</p>` : '';
   const models = node.models.length ? `<h4>AI calls</h4><ol class="g-list">${node.models.map(m => `<li><b>${esc(m.title)}</b> · ${esc(m.result)} · ${esc(secs(m.ms))} · budget ${esc(num(m.budget))} · ${esc(m.model || 'model not recorded')}${m.error ? `<div class="meta">${esc(m.error)}</div>` : ''}</li>`).join('')}</ol>` : '';
   const tools = node.tools.length ? `<h4>Tool calls</h4><ol class="g-list">${node.tools.map(t => `<li><b>${esc(t.tool)}</b>${t.target ? ` <code>${esc(t.target)}</code>` : ''} · ${esc(CALL_LABEL[t.result] || 'No result yet')} · ${esc(secs(t.ms))}</li>`).join('')}</ol>` : '';
+  const sandbox = node.sandbox.length ? `<h4>Sandbox runs</h4><ol class="g-list">${node.sandbox.map(r => `<li><code>${esc((r.argv || []).join(' '))}</code> · exit ${esc(r.rc ?? 'none')} · ${esc(secs(r.duration_ms))}${r.error ? ` · ${esc(r.error)}` : ''}</li>`).join('')}</ol>` : '';
+  const skills = node.skills.length ? `<h4>Skills</h4><p>${node.skills.map(s => esc(s)).join(', ')}</p>` : '';
   const earlier = node.earlier.length ? `<h4>Earlier attempts</h4><ol class="g-list">${node.earlier.map(r => `<li>${esc(r)}</li>`).join('')}</ol>` : '';
   const raw = `<details class="raw g-raw" data-k="graph-raw:${esc(node.id)}"><summary>Details</summary><pre>${esc(JSON.stringify({ result: node.step.result || null, calls: callsOf(node.step) }, null, 2))}</pre></details>`;
   const action = rerunAction(node, root);
-  return `${head}${purpose}${kv(rows)}${error}${proof}${models}${tools}${earlier}${action ? `<div class="g-slot">${action}</div>` : ''}${raw}`;
+  return `${head}${purpose}${kv(rows)}${error}${proof}${models}${tools}${sandbox}${skills}${earlier}${action ? `<div class="g-slot">${action}</div>` : ''}${raw}`;
 }
 
 // Edge: a straight line, or a bowed curve for a loop-back. Endpoints are node centres (nodes paint over them).
