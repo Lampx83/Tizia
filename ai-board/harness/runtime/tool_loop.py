@@ -9,6 +9,7 @@ import posixpath
 import re
 import sys
 import time
+from contextvars import ContextVar
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from runtime import limits, meter, sandbox_tool, tool_manifest
@@ -34,9 +35,12 @@ WRITE_TOOLS = MANIFEST.names("draft_write")
 SCHEMAS = {name: spec.parameters for name, spec in MANIFEST.tools.items()}
 
 
+_SANDBOX_OFFERED = ContextVar("sandbox_offered", default=False)
+
+
 def _specs() -> dict:
-    """Tool của manifest + tool bổ sung đang bật (run_in_sandbox khi AI_BOARD_SANDBOX_TOOL=1)."""
-    return {**MANIFEST.tools, **sandbox_tool.specs()}
+    """Tool của manifest + run_in_sandbox khi subtask đang chạy được phép (flag + task_type)."""
+    return {**MANIFEST.tools, **(sandbox_tool.specs() if _SANDBOX_OFFERED.get() else {})}
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "tool_loop.md").read_text(encoding="utf-8")
 MAX_REPEATS = _LOOP["repeats"]
@@ -309,6 +313,8 @@ class Workspace:
             return self.sandbox(args['argv'], drafts)
         except sandbox_tool.Refused as error:
             raise Forbidden(str(error)) from None
+        except sandbox_tool.CleanupUnconfirmed as error:
+            raise Forbidden(f"{error}; subtask stopped, VM teardown not confirmed") from None
 
     def _candidates(self, edits: list, message: str) -> str:
         """Khi search không khớp và không có dòng gần giống: liệt kê dòng thật chia sẻ nhiều từ nhất với search (model hay bịa chuỗi)."""
@@ -475,9 +481,13 @@ def run_subtask(subtask, current, *, deps, budget, source, sha, **kwargs):
               if verified_enabled() else None)
     if checks and MANIFEST.data.get('check_runtime_sha256') != loop_checks.runtime_hash():
         return _result('blocked', 'check runtime differs from approved manifest', 'critical')
+    sandbox_log: list = []
+    token = _SANDBOX_OFFERED.set(sandbox_tool.offered(subtask.get("task_type")))
     try:
-        result = _run_subtask(subtask, current, deps=deps, budget=budget, source=source, sha=sha, checks=checks, **kwargs)
+        result = _run_subtask(subtask, current, deps=deps, budget=budget, source=source, sha=sha, checks=checks,
+                              sandbox_log=sandbox_log, **kwargs)
     finally:
+        _SANDBOX_OFFERED.reset(token)
         if checks:
             checks.close()
             if checks.cleanup_pending and hasattr(deps, 'capture'):
@@ -487,13 +497,13 @@ def run_subtask(subtask, current, *, deps, budget, source, sha, **kwargs):
     if checks and checks.cleanup_pending:
         return _result('blocked', 'sandbox cleanup requires reconciliation', 'critical',
                        unknown_outcome={'run_id': checks.run_id})
-    return result
+    return {**result, 'sandbox_receipts': sandbox_log} if sandbox_log else result
 
 
 def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str, source, sha: str, check,
                 role: str | None = None, call_extra: dict | None = None, db_path=None, proposal_id=None,
                 child: int | None = None, store=None, pins: dict | None = None, repair_reason: str | None = None,
-                context: str | None = None, checks=None) -> dict:
+                context: str | None = None, checks=None, sandbox_log: list | None = None) -> dict:
     """Loop tuần tự cho 1 subtask dưới parent `budget`. File mới bắt đầu rỗng, edit_file chèn tại after_line=0.
     `check(out)` = kiểm nội dung (ValueError nếu hỏng).
 
@@ -508,8 +518,9 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
         return _result('blocked', str(error), error.failure_class)
     if reason := MANIFEST.policy.write_reason(subtask["file"]):
         return _result("blocked", reason, "critical")
-    sandbox = (sandbox_tool.Runner(source, sha, lease_ok=getattr(deps, 'lease_ok', None), trace=getattr(deps, 'trace', None))
-               if sandbox_tool.enabled() else None)
+    sandbox = (sandbox_tool.Runner(source, sha, lease_ok=getattr(deps, 'lease_ok', None), trace=getattr(deps, 'trace', None),
+                                   receipts=sandbox_log)
+               if _SANDBOX_OFFERED.get() else None)
     ws = Workspace(source, sha, subtask["file"], current, checks=checks, budget=budget, trace=getattr(deps, 'trace', None), sandbox=sandbox)
     prompt = PROMPT.format(tools=_tool_list(), title=subtask["title"], file=subtask["file"], verify=subtask["verify"]) + ORDER
     if checks:

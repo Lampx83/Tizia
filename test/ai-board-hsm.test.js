@@ -37,6 +37,18 @@ test('live action guard rechecks owner scope without advancing the Gate4 state',
   } finally {await f.close();}
 });
 
+test('live action guard authorizes run_in_sandbox like other gate 3 actions without a tool manifest',async()=>{
+  const f=await fixture();
+  try {
+    await f.db.run('UPDATE ai_plans SET capability_policy_hash=? WHERE root_ticket_id=?',[CAPABILITY_CATALOG.hash,f.id]);
+    const input={run_id:f.run,contract_hash:(await f.post('snapshot',{})).body.hsm_contract.hash,action:'run_in_sandbox'};
+    const granted=await f.post('hsm/authority',input);
+    assert.equal(granted.status,200);assert.equal(granted.body.authorized,true);
+    await f.db.run("UPDATE ai_runs SET outcome='ready_for_pr' WHERE id=?",[f.run]);
+    assert.equal((await f.post('hsm/authority',input)).status,409);
+  } finally {await f.close();}
+});
+
 test('Gate4 and the action guard accept a reverify run like plan and execute runs, and still refuse an unknown trigger',async()=>{
   const f=await fixture();
   try {

@@ -51,9 +51,27 @@ def stage_without_git(monkeypatch):
     monkeypatch.setattr(sandbox_tool, "_stage", stage)
 
 
+class FakeTrace:
+    def __init__(self):
+        self.notes, self.spans = [], []
+
+    def note(self, kind, name, summary="", data=None):
+        self.notes.append((kind, name, summary, data))
+
+    def add_span(self, name, attributes, **_):
+        self.spans.append(attributes)
+
+
 @pytest.fixture
 def flag_on(monkeypatch):
     monkeypatch.setenv(FLAG, "1")
+
+
+@pytest.fixture
+def offered_tool(flag_on):
+    token = tool_loop._SANDBOX_OFFERED.set(True)
+    yield
+    tool_loop._SANDBOX_OFFERED.reset(token)
 
 
 def runner(client, lease_ok=lambda: True, trace=None):
@@ -150,12 +168,71 @@ def test_receipt_written_per_exec():
     assert receipt["rc"] == 0 and receipt["duration_ms"] >= 0 and receipt["error"] is None
 
 
-def test_output_truncated_to_contract_limit_and_full_text_kept_as_artifact():
+def test_output_truncated_to_contract_limit_and_full_text_kept_in_receipt():
     client = FakeClient([{**OK, "stdout": "a" * 5000}])
     r = runner(client)
     out = json.loads(r(ALLOWED, {}))
     assert len(out["stdout"]) == 2000 and out["truncated"] is True
-    assert "a" * 5000 in open(r.receipts[0]["artifact"], encoding="utf-8").read()
+    assert "a" * 3000 in r.receipts[0]["output"] and "artifact" not in out
+
+
+def test_receipt_and_output_reach_trace_notes():
+    client = FakeClient([{**OK, "stdout": "hello\n", "stderr": "warn\n"}])
+    trace = FakeTrace()
+    runner(client, trace=trace)(ALLOWED, {})
+    kind, name, summary, data = trace.notes[0]
+    assert (kind, name) == ("tool", sandbox_tool.NAME)
+    assert "rc=0" in summary and " ".join(ALLOWED) in summary
+    assert "hello" in data and "warn" in data
+    assert trace.spans[0]["tizia.sandbox.rc"] == 0
+
+
+def test_cleanup_failure_stops_loop_with_plain_reason(offered_tool):
+    client = FakeClient()
+
+    def refuse_destroy(run_id, **_):
+        raise SandboxError("bad_request", "destroy", 400)
+    client.destroy = refuse_destroy
+    ws = tool_loop.Workspace("repo", "abc", "public/a.html", PAGE, sandbox=runner(client))
+    with pytest.raises(Forbidden, match="cleanup_unconfirmed"):
+        ws.run(sandbox_tool.NAME, {"argv": ALLOWED})
+    assert ws.sandbox.receipts[-1]["error"] == "cleanup_unconfirmed"
+    assert ws.sandbox.receipts[-1]["rc"] == 0
+
+
+def test_offered_needs_flag_and_allowed_task_type(monkeypatch):
+    monkeypatch.delenv(FLAG, raising=False)
+    assert sandbox_tool.offered("backend") is False
+    monkeypatch.setenv(FLAG, "1")
+    assert sandbox_tool.offered("backend") is True
+    assert sandbox_tool.offered("frontend") is True
+    assert sandbox_tool.offered("review") is False
+    assert sandbox_tool.offered("unknown") is False
+    assert sandbox_tool.offered(None) is False
+
+
+def _names_in_subtask_loop(monkeypatch, subtask):
+    seen = {}
+
+    def fake(subtask, current, **kwargs):
+        seen["names"] = set(tool_loop._specs())
+        return {"status": "blocked", "reason": "stub", "failure_class": "ordinary"}
+    monkeypatch.setattr(tool_loop, "_run_subtask", fake)
+    tool_loop.run_subtask(subtask, PAGE, deps=None, budget=None, model="m", source="repo", sha="abc")
+    return seen["names"]
+
+
+@pytest.mark.parametrize("task_type, flag, present", [
+    ("backend", "1", True),
+    ("review", "1", False),
+    (None, "1", False),
+    ("backend", "", False),
+])
+def test_tool_offered_in_gate3_loop_only_when_flag_and_task_type_allow(monkeypatch, task_type, flag, present):
+    monkeypatch.setenv(FLAG, flag)
+    names = _names_in_subtask_loop(monkeypatch, {"file": "public/a.html", "task_type": task_type})
+    assert (sandbox_tool.NAME in names) is present
+    assert sandbox_tool.NAME not in tool_loop._specs()
 
 
 def test_flag_off_leaves_tool_loop_unchanged(monkeypatch):
@@ -166,14 +243,14 @@ def test_flag_off_leaves_tool_loop_unchanged(monkeypatch):
         tool_loop.parse_request(CALL)
 
 
-def test_flag_on_registers_tool_without_touching_manifest(flag_on):
+def test_flag_on_registers_tool_without_touching_manifest(offered_tool):
     assert sandbox_tool.NAME in tool_loop._specs()
     assert sandbox_tool.NAME not in tool_loop.MANIFEST.tools
     assert tool_loop.parse_request(CALL) == (
         sandbox_tool.NAME, {"argv": ALLOWED})
 
 
-def test_workspace_runs_sandbox_tool_on_draft_and_refuses_bad_argv(flag_on):
+def test_workspace_runs_sandbox_tool_on_draft_and_refuses_bad_argv(offered_tool):
     client = FakeClient()
     ws = tool_loop.Workspace("repo", "abc", "public/a.html", PAGE, sandbox=runner(client))
     assert json.loads(ws.run(sandbox_tool.NAME, {"argv": ALLOWED}))["rc"] == 0
