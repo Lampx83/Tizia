@@ -125,7 +125,25 @@ Bộ data: 81 thuốc, 30 dược liệu, 10 ca lâm sàng, 85+ scenarios theo D
 
 Mở `http://<host>:8041`.
 
-> AI Board (`ai-board-worker`, `sandbox-runner`, `image-registry`) nằm trong `docker-compose.yml` dưới profile `ai-board`, **không chạy khi deploy mặc định**. Chỉ bật khi có chủ đích: `docker compose --profile ai-board up -d` (cần `sandbox-runner/secrets/runner-token` và biến env trong Portainer).
+> AI Board (`ai-board-worker`, `sandbox-runner`, `image-registry`) nằm trong `docker-compose.yml` dưới profile `ai-board`, **không chạy khi deploy mặc định**. Chỉ bật khi có chủ đích: `docker compose --profile ai-board up -d` (cần `sandbox-runner/secrets/runner-token` và biến env trong Portainer). `docker-compose.yml` là file gốc duy nhất; `docker-compose.dev.yml` chỉ là lớp ghi đè cho máy dev (tên `tizia-dev`, cổng, `.env`, volume dev).
+
+### Dựng từ máy trắng (dev + AI Board)
+
+Máy chưa có image nào. Chạy theo thứ tự (Linux, hoặc Git Bash + Docker Desktop trên Windows):
+
+```bash
+# 1. Tạo .env từ .env.example rồi điền POSTGRES_PASSWORD và khóa AI Board (không commit)
+# 2. Kiểm tra máy + tạo runner token + ghi KVM_GID vào ai-board-host.env
+scripts/ai-board-bootstrap.sh
+# 3. (một lần) Build guest Gate 5, push vào image-registry, ghim digest vào sandbox-policy.dev.yaml, khởi động runner
+scripts/ai-board-bootstrap.sh --build-guest
+# 4. Build image app + worker và chạy stack dev có AI Board (worker chờ runner healthy)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env --env-file ai-board-host.env --profile ai-board up -d --build
+```
+
+Bước 3 phải chạy trước bước 4: runner chưa ghim digest thì không healthy, và `up` ở bước 4 sẽ báo worker không khởi động được vì phụ thuộc runner. Bước 3 tùy chọn `--warm-dir DIR` (thư mục có `docker-data.tar.gz`, tạo bằng `scripts/warm-guest.mjs` trong runner đang chạy); không có warm cache thì guest vẫn chạy nhưng chậm hơn. Sau bước 3 `git diff` sẽ thấy `sandbox-policy.dev.yaml` đổi digest: review rồi mới commit. Prod (Portainer) không cần bootstrap: chỉ cần `runner-token` và env của stack.
+
+`runner-token` không tự sinh nếu không chạy bootstrap; nếu Docker tạo nhầm thư mục `secrets/runner-token/` thì bootstrap sẽ xóa thư mục rỗng đó và tạo lại file.
 
 ### ⏪ Rollback — refactor mount-order qua registry.js (ticket 04/06)
 

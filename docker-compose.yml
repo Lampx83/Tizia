@@ -1,7 +1,9 @@
-x-logging: &logging  # json-file xoay vòng cho service AI Board (profile ai-board)
+x-logging: &logging  # json-file xoay vòng cho mọi service (10 MB × 3 file), không để log đầy ổ đĩa
   driver: json-file
   options: { max-size: 10m, max-file: "3" }
 
+# Base stack (prod). Dev: docker compose -f docker-compose.yml -f docker-compose.dev.yml ... (xem README).
+# AI Board: thêm --profile ai-board (worker, sandbox-runner, image-registry); --profile storage cho SeaweedFS.
 services:
   tizia:
     build:
@@ -21,15 +23,21 @@ services:
       BASE_PATH: ${BASE_PATH:-}
       # Dùng mật khẩu chỉ gồm chữ và số (hoặc mã hóa URL) vì nó nằm trong chuỗi kết nối.
       DATABASE_URL: postgres://${POSTGRES_USER:-tizia}:${POSTGRES_PASSWORD:?đặt POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tizia}
+      AI_BOARD_SANDBOX_URL: http://sandbox-runner:8090
+      AI_BOARD_SANDBOX_TOKEN_FILE: /run/secrets/sandbox-runner-token
+    networks: [default, sandbox-api]
+    logging: *logging
     volumes:
       - pharmacysim-data:/data  # sao lưu pg_dump (/data/backups) + file tải lên; dữ liệu chính nằm trong PostgreSQL
+      - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro  # tạo bằng scripts/ai-board-bootstrap.sh
 
   # PostgreSQL: chỉ trên mạng compose nội bộ, KHÔNG publish cổng. Lên bản major mới = dump/restore (không đổi tag tại chỗ);
   # postgresql16-client trong image tizia phải cùng major với tag này.
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:f4610795587492cd4fb887c2dc3de301b813278bb6f616992061141b5f15ac36
     container_name: tizia-postgres
     restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-tizia}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?đặt POSTGRES_PASSWORD}
@@ -43,16 +51,19 @@ services:
     volumes:
       - tizia-postgres-data:/var/lib/postgresql/data
 
-  # AI Board (profile ai-board, KHÔNG chạy mặc định). Bật: docker compose --profile ai-board up -d.
-  # Giá trị bí mật/cấu hình lấy từ Portainer env của stack (dòng trần = không đặt giá trị ở đây).
+  # AI Board (profile ai-board, KHÔNG chạy mặc định). Giá trị bí mật/cấu hình lấy từ env của stack (dòng trần = không đặt giá trị ở đây).
   ai-board-worker:
     container_name: tizia-ai-board-worker
     build:
       context: .
       dockerfile: ai-board/worker.Dockerfile
+      args:
+        WORKER_CHROMIUM: "0"  # gate 5 chạy trong guest có Chromium riêng khi AI_BOARD_SANDBOX_URL được đặt
     image: tizia-ai-board-worker:latest
     profiles: [ai-board]
-    depends_on: [tizia, sandbox-runner]
+    depends_on:
+      tizia: { condition: service_healthy }
+      sandbox-runner: { condition: service_healthy }
     restart: on-failure:10  # crash loop nhanh (vd thiếu AI_BOARD_WORKER_KEY) dừng sau 10 lần
     cap_add: [NET_ADMIN]  # chỉ để khóa egress; Gate 5 chạy trong microVM của sandbox, không privileged
     networks: [default, sandbox-api]
@@ -60,7 +71,7 @@ services:
     mem_limit: 4g
     pids_limit: 512
     logging: *logging
-    environment:  # dòng có giá trị = nối dây trong container; dòng trần = lấy từ Portainer env
+    environment:  # dòng có giá trị = nối dây trong container; dòng trần = lấy từ env của stack
       AI_BOARD_SERVER_URL: http://tizia:8041
       AI_BOARD_REPO_DIR: /repo
       AI_BOARD_SANDBOX_URL: http://sandbox-runner:8090
@@ -99,14 +110,20 @@ services:
 
   image-registry:
     container_name: tizia-image-registry
-    image: registry:2
+    image: registry:2@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
     profiles: [ai-board]
     restart: unless-stopped
     logging: *logging
     environment:
       REGISTRY_STORAGE_DELETE_ENABLED: "true"  # scripts/gc-guest-images.mjs xóa manifest guest không còn được policy ghim
-      REGISTRY_LOG_FORMATTER: json
-      REGISTRY_LOG_LEVEL: warn
+      REGISTRY_LOG_FORMATTER: json  # mỗi dòng log là một object JSON
+      REGISTRY_LOG_LEVEL: warn  # bỏ dòng info (từng request, purge, cache); giữ cảnh báo và lỗi
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5000/v2/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     ports:
       - "127.0.0.1:5000:5000"  # loopback: push guest image từ máy host
     volumes:
@@ -116,14 +133,14 @@ services:
     container_name: tizia-sandbox-runner
     build:
       context: ai-board/sandbox-runner
-    image: tizia-sandbox-runner:dev
+    image: tizia-sandbox-runner:latest
     profiles: [ai-board]
     restart: on-failure
     user: node
     devices:
       - /dev/kvm
     group_add:
-      - "${KVM_GID:-109}"
+      - "${KVM_GID:-109}"  # ai-board-bootstrap.sh ghi giá trị đúng của host vào ai-board-host.env
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
@@ -132,10 +149,35 @@ services:
     pids_limit: 512
     logging: *logging
     networks: [default, sandbox-api]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8090/healthz').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 60s
     volumes:
       - sandbox-runner-state:/home/node/.microsandbox
       - ./ai-board/sandbox-runner/sandbox-policy.dev.yaml:/etc/sandbox/sandbox-policy.yaml:ro  # guest Gate 5 ghim qua image-registry; không dùng sandbox-policy.online.yaml (guest alpine khác)
       - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
+
+  # Tùy chọn: kho ảnh bản nháp AI Board trên SeaweedFS (S3 gateway). `docker compose --profile storage up -d seaweedfs`.
+  # Trong env của stack: AI_BOARD_SHOTS_S3_ENDPOINT=http://seaweedfs:8333, AI_BOARD_SHOTS_S3_BUCKET, AI_BOARD_SHOTS_S3_ACCESS_KEY / _SECRET_KEY,
+  # AI_BOARD_SHOTS_S3_CREATE_BUCKET=1 (dev: tự tạo bucket ở lần ghi đầu; production tạo bucket sẵn) và AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+  # bằng đúng cặp khóa đó. Thiếu cặp khóa thì SeaweedFS không đòi chữ ký (cổng chỉ mở ở 127.0.0.1).
+  seaweedfs:
+    container_name: tizia-seaweedfs
+    image: chrislusf/seaweedfs@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d  # 4.48
+    profiles: [storage]
+    restart: unless-stopped
+    command: -logtostderr -log_json server -s3 -dir=/data  # master + volume + filer + S3 trong 1 container; log JSON ra stderr
+    logging: *logging
+    environment:  # đặt AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY bằng đúng giá trị AI_BOARD_SHOTS_S3_ACCESS_KEY / _SECRET_KEY
+      AWS_ACCESS_KEY_ID:
+      AWS_SECRET_ACCESS_KEY:
+    ports:
+      - "127.0.0.1:8333:8333"  # loopback only; tizia gọi qua mạng compose http://seaweedfs:8333
+    volumes:
+      - seaweedfs-data:/data
 
 networks:
   sandbox-api: {}
@@ -148,3 +190,4 @@ volumes:
   ai-board-memory:
   sandbox-runner-state:
   sandbox-registry:
+  seaweedfs-data:
