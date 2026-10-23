@@ -54,6 +54,20 @@ def loop(env=None) -> dict:
     }
 
 
+def loop_adaptive(env=None) -> dict:
+    """Soft budget + stuck rules for the tool loop; flag AI_BOARD_ADAPTIVE_BUDGET (contract default) gates their use."""
+    env = os.environ if env is None else env
+    spec = _parsed()["limits"]["loop"]
+    raw = env.get(spec["flag"])
+    return {
+        "enabled": spec["default_enabled"] if raw in (None, "") else raw == "1",
+        "soft_start": spec["soft_start"],
+        "soft_step": spec["soft_step"],
+        "same_call_repeats": spec["stuck"]["same_call_repeats"],
+        "no_progress_steps": spec["stuck"]["no_progress_steps"],
+    }
+
+
 def budget(env=None) -> dict:
     """Mặc định Budget + ChildBudget; BUDGET_MAX_<KEY> override từng khoá (trừ child_*)."""
     env = os.environ if env is None else env

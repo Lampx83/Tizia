@@ -47,7 +47,11 @@
     "max_subtasks_per_run": 10,
     "loop": {
       "_why": "Tool-loop ceilings per subtask (runtime/tool_loop.py). AI_BOARD_LOOP_MODEL_CALLS / AI_BOARD_LOOP_TOOL_CALLS override for a measured run only.",
-      "model_calls": 10, "tool_calls": 30, "repeats": 3, "error_chars": 2000
+      "model_calls": 10, "tool_calls": 30, "repeats": 3, "error_chars": 2000,
+      "soft_start": 4, "soft_step": 2,
+      "stuck": { "same_call_repeats": 3, "no_progress_steps": 4 },
+      "flag": "AI_BOARD_ADAPTIVE_BUDGET", "default_enabled": false,
+      "adaptive_why": "Flag on: soft budget = soft_start + soft_step per progress signal (new read range, accepted edit, changed check state), capped at model_calls; stuck stops the subtask as blocked. Off = fixed caps above."
     },
     "budget": {
       "_why": "Defaults of runtime/budget.py Budget (one run) and ChildBudget (one loop). BUDGET_MAX_<KEY> overrides for a measured run only.",

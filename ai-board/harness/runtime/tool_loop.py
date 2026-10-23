@@ -13,6 +13,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from runtime import limits, tool_manifest, meter
 from runtime.budget import ChildBudget
+from runtime.loop_budget import Stop, make_adaptive
 from repositories import server_hsm
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -478,6 +479,7 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
     | blocked (ordinary: hết lượt sửa; critical: ngoài phạm vi/stale/checkpoint lệch/kết quả ghi chưa rõ).
     Model báo finish chỉ kết thúc đề xuất. `store` (repositories.tool_steps.PgSteps) bật checkpoint + resume."""
     loop_budget = ChildBudget(budget, **child_caps())
+    adaptive = make_adaptive(child_caps()["max_model_calls"])
     try:
         server_hsm.register_tool_manifest(MANIFEST.data)
     except server_hsm.AuthorityError as error:
@@ -518,6 +520,8 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
     while True:
         if not loop_budget.tick():
             return _result("paused", f"loop dừng: {loop_budget.exhausted()}", "budget", steps=steps)
+        if adaptive is not None and not adaptive.allow():
+            return _result("paused", f"ngân sách mềm {adaptive.soft_limit()} lượt hết, chưa có tiến triển mới", "budget", steps=steps)
         reserve = {'model_calls': 1, 'tool_calls': 3, 'tokens': 3072, 'wall_clock_s': 65} if checks else None
         if rejected and not (budget.can_afford(reserve) if reserve else budget.can_afford()):
             return _result("paused", "không đủ ngân sách dự phòng cho verification trước lượt sửa tiếp", "budget", steps=steps)
@@ -572,11 +576,18 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
             return _result("blocked", str(error), "critical", steps=steps)
         except server_hsm.AuthorityError as error:
             return _result('blocked', str(error), error.failure_class, steps=steps)
-        repeats = repeats + 1 if sig is not None and sig == last_sig else 0
-        last_sig = sig
-        if repeats >= MAX_REPEATS:
-            _tool_span(deps, name, n, child, "repeated", observation, started_ms)
-            return _result("blocked", f"model lặp lại đúng một request {repeats + 1} lần ({name})", "ordinary", steps=steps)
+        if adaptive is not None:
+            verdict = adaptive.step(name, args, observation, ok=kind == "ok")
+            if isinstance(verdict, Stop):
+                _tool_span(deps, name, n, child, "repeated", observation, started_ms)
+                return _result("blocked", verdict.reason, verdict.failure_class, steps=steps)
+            repeats = adaptive.repeats
+        else:
+            repeats = repeats + 1 if sig is not None and sig == last_sig else 0
+            last_sig = sig
+            if repeats >= MAX_REPEATS:
+                _tool_span(deps, name, n, child, "repeated", observation, started_ms)
+                return _result("blocked", f"model lặp lại đúng một request {repeats + 1} lần ({name})", "ordinary", steps=steps)
         if repeats and name != "finish":
             observation += REPEAT_HINT
         if name == "finish":
