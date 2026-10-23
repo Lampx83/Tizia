@@ -25,6 +25,7 @@ from services import candidate                   # noqa: E402
 from repositories import gate_trace                  # noqa: E402
 from runtime import meter, prompt_roles             # noqa: E402
 from services import context                     # noqa: E402
+from services import attachments                 # noqa: E402
 from gates import brainstorm, implement, intake_guard, plan_validate, risk_triage, scope_check, static_check, verify  # noqa: E402
 from providers.client import OllamaClient    # noqa: E402
 from services import prescreen                   # noqa: E402
@@ -320,6 +321,9 @@ def load_inbox(path: str | os.PathLike) -> list[dict]:
 
 def _intake_and_plan(request, deps, budget, state, **trace) -> dict:
     """Cổng 1: guardrail yêu cầu (tất định rồi LLM; chỉ leo thang tới người soát) rồi lập plan."""
+    request, attachment_report = attachments.enrich(request, models=deps.models, budget=budget)
+    if attachment_report is not None:
+        state["attachments"] = attachment_report
     g = intake_guard.run(request.get("subject"), request.get("body"), deps, budget, **trace)
     state["intake"] = g
     if g["verdict"] != "allow":

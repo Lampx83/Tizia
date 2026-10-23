@@ -28,6 +28,37 @@ const STATUS_META = {
   rejected:  { label: 'Từ chối',     cls: 'rejected' },
 };
 
+const MAX_FILES = 3;
+const MAX_BYTES = 10 * 1024 * 1024;
+const ACCEPT = 'image/png,image/jpeg,image/webp,image/gif,application/pdf,'
+  + '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const ALLOWED = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'application/pdf', DOCX]);
+
+class UploadError extends Error {}
+
+async function uploadFiles(files) {
+  if (files.length > MAX_FILES) throw new UploadError(`Tối đa ${MAX_FILES} tệp`);
+  const out = [];
+  for (const file of files) {
+    const mime = file.type || (file.name.toLowerCase().endsWith('.docx') ? DOCX : '');
+    if (!ALLOWED.has(mime)) throw new UploadError(`Chỉ nhận ảnh, PDF hoặc DOCX: ${file.name}`);
+    if (file.size > MAX_BYTES) throw new UploadError(`Tệp quá lớn (tối đa 10 MB): ${file.name}`);
+    const { token } = await fetch('api/csrf', { credentials: 'same-origin' }).then((r) => r.json());
+    const r = await fetch('api/requests/attachments', {
+      method: 'POST',
+      headers: { 'Content-Type': mime, 'X-Filename': encodeURIComponent(file.name), 'X-CSRF-Token': token },
+      body: file,
+    });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      throw new UploadError(e.message || 'Tải tệp lên thất bại');
+    }
+    out.push(await r.json());
+  }
+  return out;
+}
+
 export async function renderRequestBoard({ host, domain, domainName }) {
   injectStylesOnce();
 
@@ -59,6 +90,9 @@ export async function renderRequestBoard({ host, domain, domainName }) {
           <textarea id="rb-detail" class="rb-input rb-detail" maxlength="10000" rows="3"
                     placeholder="Mô tả điều bạn muốn thay đổi và kết quả mong đợi."></textarea>
         </label>
+        <label class="rb-field rb-files" for="rb-files" id="rb-files-wrap" hidden>Đính kèm (tối đa ${MAX_FILES}: ảnh, PDF hoặc DOCX)
+          <input id="rb-files" class="rb-input" type="file" multiple accept="${ACCEPT}" />
+        </label>
         <div class="rb-actions">
           <span class="rb-msg" id="rb-msg" role="status" aria-live="polite"></span>
           <button type="submit" class="rb-submit" id="rb-submit">${boardIcon('send')} Gửi cho Ban điều hành</button>
@@ -74,6 +108,11 @@ export async function renderRequestBoard({ host, domain, domainName }) {
   const msg = host.querySelector('#rb-msg');
   let pendingRequestKey = null;
   let submitting = false;
+  const filesWrap = host.querySelector('#rb-files-wrap');
+  fetch('api/ai-board/capabilities', { credentials: 'same-origin' })
+    .then((r) => (r.ok ? r.json() : {}))
+    .then((caps) => { filesWrap.hidden = !caps.multimodal; })
+    .catch(() => {});
 
   async function load() {
     try {
@@ -105,22 +144,24 @@ export async function renderRequestBoard({ host, domain, domainName }) {
     msg.textContent = 'Đang gửi…';
     try {
       pendingRequestKey ||= crypto.randomUUID();
+      const attachments = filesWrap.hidden ? [] : await uploadFiles(host.querySelector('#rb-files').files);
       const r = await fetch('api/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Idempotency-Key': pendingRequestKey },
-        body: JSON.stringify({ domain, type, title, detail, student: getPlayerName() || 'Ẩn danh' }),
+        body: JSON.stringify({ domain, type, title, detail, student: getPlayerName() || 'Ẩn danh', ...(attachments.length ? { attachments } : {}) }),
       });
       if (!r.ok) { const e2 = await r.json().catch(() => ({})); msg.textContent = '⚠️ ' + (e2.error || 'Lỗi gửi'); return; }
       msg.textContent = '✓ Đã gửi! Hiệu trưởng AI đang xem xét…';
       pendingRequestKey = null;
       host.querySelector('#rb-title').value = '';
       host.querySelector('#rb-detail').value = '';
+      host.querySelector('#rb-files').value = '';
       load();
       // AI phản hồi ở nền — reload lại để hiện lời phê duyệt khi sẵn sàng
       setTimeout(load, 2500);
       setTimeout(() => { load(); msg.textContent = ''; }, 8000);
-    } catch {
-      msg.textContent = '⚠️ Lỗi mạng';
+    } catch (err) {
+      msg.textContent = err instanceof UploadError ? '⚠️ ' + err.message : '⚠️ Lỗi mạng';
     } finally {
       submitting = false;
       submit.disabled = false;
@@ -273,6 +314,7 @@ function injectStylesOnce() {
     }
     .rb-input::placeholder { color: #b8c5d8; opacity: 1; }
     .rb-detail { width: 100%; resize: vertical; }
+    .rb-files[hidden] { display: none; }
     .rb-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; justify-content: flex-end; }
     .rb-msg { font-size: 13px; color: var(--rb-muted); margin-right: auto; }
     .rb-submit {
