@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { checkSkills } from '../scripts/check-skills.mjs';
 
@@ -107,4 +108,19 @@ test('worker dockerignore dropping a skill from the image fails', t => {
   fs.appendFileSync(path.join(dir, 'ai-board/worker.Dockerfile.dockerignore'), `${SKILLS}/default-test/\n`);
   const errors = errorsOf(dir);
   assert.ok(errors.some(e => /worker image.*thiếu.*default-test/.test(e)), errors.join('\n'));
+});
+
+test('image RUN step: script exits 1 on broken skill and 0 when clean, without Dockerfile in cwd', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-skills-run-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  for (const p of ['scripts/check-skills.mjs', 'server', SKILLS]) {
+    fs.cpSync(path.join(ROOT, p), path.join(dir, p), { recursive: true });
+  }
+  const run = () => spawnSync(process.execPath, ['scripts/check-skills.mjs'], { cwd: dir, encoding: 'utf8' });
+  assert.equal(run().status, 0);
+  const file = skillPath(dir, 'default-test');
+  fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/\n$/, ' \n'));
+  const result = run();
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /default-test/);
 });
