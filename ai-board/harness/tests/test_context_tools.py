@@ -80,7 +80,8 @@ def test_skill_match_uses_request_type_and_gate3_file():
 
 def test_every_skill_parses_with_both_gate_sections():
     assert set(context.SKILLS) == {"edit-html-text", "edit-css-style", "add-html-section", "new-static-page",
-                                   "fix-js-behavior", "new-feature", "default"}
+                                   "fix-js-behavior", "new-feature", "default", "frontend-design-core",
+                                   "plan-from-request", "implement-one-slice"}
     for skill in context.SKILLS.values():
         assert skill.sections.get(1) and skill.sections.get(3), skill.name
         assert skill.tools and skill.tools3
