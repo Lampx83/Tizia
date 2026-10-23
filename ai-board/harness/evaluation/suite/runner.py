@@ -23,6 +23,7 @@ import eval_fast
 from gates import gate3_guards, plan_validate
 from runtime import tool_loop, tool_manifest
 from runtime.budget import Budget
+from services.context import VARIANT_FILES
 from evaluation.suite import ablation, case_select, grading, isolated, metrics, reconcile, taskpack, trial
 from evaluation.suite.launcher import sqlite_launcher
 
@@ -203,6 +204,11 @@ def cmd_run(args, deps=None) -> int:
     os.environ["AI_BOARD_BEST_MATCH"] = args.best_match
     os.environ["AI_BOARD_RETRIEVAL"] = args.retrieval if args.retrieval in ("literal", "model") else ""
     os.environ["AI_BOARD_TOOL_LOOP"] = args.tool_loop or ""
+    variant = [v for v in (args.skill_variant or "").split(",") if v]
+    if set(variant) - set(VARIANT_FILES) or len(set(variant)) != len(variant):
+        print(f"[suite] --skill-variant must be distinct names from {', '.join(VARIANT_FILES)}", file=sys.stderr)
+        return 2
+    os.environ["AI_BOARD_SKILL_VARIANT"] = ",".join(variant)
     os.environ["AI_BOARD_SKILL_PAD_CHARS"] = str(args.skill_pad_chars or "")
     os.environ["AI_BOARD_PROMPT_ROLE_SPLIT"] = "1" if args.prompt_split else ""
     try:
@@ -225,7 +231,8 @@ def cmd_run(args, deps=None) -> int:
                        "units": 600, "wall_clock_s": args.trial_timeout_s, "scope": "whole_trial"},
             **({"timing_conditions": timing} if timing else {}),
             **({"winner_rule": args.winner_rule, "winner_rule_sha": hashlib.sha256(args.winner_rule.encode("utf-8")).hexdigest()[:16]} if args.winner_rule else {}),
-            **({"gate25_answered": True} if args.gate25_answered else {}), **({"gate25_sim_user": True} if args.gate25_sim_user else {})}
+            **({"gate25_answered": True} if args.gate25_answered else {}), **({"gate25_sim_user": True} if args.gate25_sim_user else {}),
+            **({"skill_variant": variant, "skill_variant_sha": {v: _sha(VARIANT_FILES[v]) for v in variant}} if variant else {})}
     if prov["dirty"] and not args.allow_dirty:
         print("[suite] working tree has uncommitted changes: commit them (or --allow-dirty for a throwaway run)", file=sys.stderr)
         return 2
@@ -270,6 +277,7 @@ def cmd_run(args, deps=None) -> int:
             + (f"-loop{'' if args.tool_loop == '1' else args.tool_loop}" if args.tool_loop else "")
             + (f"-cap{caps[0]}x{caps[1]}" if caps else "")
             + (f"-skill{args.skill_pad_chars}" if args.skill_pad_chars else "")
+            + (f"-var-{'+'.join(variant)}" if variant else "")
             + ("-split" if args.prompt_split else "")
             + (f"-cases-{case_meta['sha256'][:12]}" if case_meta else ""))
     run_dir = root / "suite" / name
@@ -497,6 +505,7 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--prompt-split", action="store_true", help="model calls send system (platform rules) + user (restated format); gate 3 thinking off and catalog sampling; default off")
     run.add_argument("--loop-caps", default="", help="MODEL_CALLS,TOOL_CALLS per-subtask loop ceilings (default 10,30); recorded in the manifest")
     run.add_argument("--skill-pad-chars", type=int, default=0, help="pad the picked skill section to N chars with other skills' sections (skill length ablation)")
+    run.add_argument("--skill-variant", default="", help=f"append gate 1/3 sections of these skills after the picked one: comma list from {', '.join(VARIANT_FILES)}")
     run.add_argument("--winner-rule", default="", help="the decision rule, written before the run and stored in the manifest with its hash")
     run.add_argument("--timing-conditions", default="", help="JSON object {gpu, load, warm_cold, protocol, comparable} the operator vouches for; without it timing stays pending")
     run.add_argument("--reasoning-on", default="", help="comma list of roles to run with thinking on (ablation), e.g. gate1,gate25")

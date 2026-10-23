@@ -684,3 +684,22 @@ def test_simulated_requester_environment_runs_through_the_trial_without_error(wo
     monkeypatch.setenv("AI_BOARD_GATE25_SIM_USER", "1")
     row = trial.run_trial(pick(tasks, 1), "e2e", deps, root, ROOT)
     assert row["error"] is None and row["resolved"]
+
+
+def test_skill_variant_flag_is_validated_recorded_and_separates_the_arm(world, monkeypatch):
+    root, _ = world
+    deps, _ = deps_for(world)
+    monkeypatch.setenv("AI_BOARD_SKILL_VARIANT", "")
+    argv = ["run", "--seed", str(SEED), "--split", "dev", "--cases", "1", "--repeats", "1", "--modes", "gold", "--root", str(root), "--allow-dirty", "--gate25-sim-user"]
+    assert runner.main([*argv, "--skill-variant", "no-such-skill"], deps) == 2
+    assert runner.main([*argv, "--skill-variant", "plan-from-request,plan-from-request"], deps) == 2
+    assert runner.main([*argv, "--skill-variant", "plan-from-request,implement-one-slice"], deps) == 0
+    assert os.environ["AI_BOARD_SKILL_VARIANT"] == "plan-from-request,implement-one-slice"
+    assert runner.main(argv, deps) == 0 and os.environ["AI_BOARD_SKILL_VARIANT"] == ""
+    suite = root / "suite"
+    variant_name = "s11-dev-555555555555-dirty-simuser-var-plan-from-request+implement-one-slice"
+    variant = json.loads((suite / variant_name / "run.json").read_text(encoding="utf-8"))
+    plain = json.loads((suite / variant_name.replace("-var-plan-from-request+implement-one-slice", "") / "run.json").read_text(encoding="utf-8"))
+    assert variant["skill_variant"] == ["plan-from-request", "implement-one-slice"]
+    assert set(variant["skill_variant_sha"]) == {"plan-from-request", "implement-one-slice"}
+    assert "skill_variant" not in plain and "skill_variant_sha" not in plain
