@@ -21,6 +21,7 @@ SCHEMA = {"type": "object", "properties": {"argv": {"type": "array", "items": {"
 DESCRIPTION = ("Chạy argv trong sandbox, chỉ mẫu allow-list: node --test test/<file>, node --check <file>. "
                "Không shell, không mạng. Output bị cắt; bản đầy đủ lưu thành artifact.")
 NON_RETRYABLE = {"lease_lost", "wall_clock_s", "cleanup_unconfirmed", "not_configured"}
+OUTPUT_CAP = 4000  # redacted stdout+stderr kept per receipt; the trace note clips again to its own cap
 SOURCE_SUFFIXES = (".js", ".mjs", ".cjs")
 
 
@@ -28,8 +29,18 @@ class Refused(ValueError):
     """argv ngoài allow-list hoặc path không hợp lệ: chặn trước khi có VM."""
 
 
+class CleanupUnconfirmed(RuntimeError):
+    """VM teardown not confirmed: stop the subtask as blocked, same as Gate 5."""
+
+
 def enabled(env=None) -> bool:
     return limits.sandbox_tool(env)["enabled"]
+
+
+def offered(task_type, gate: int = 3, env=None) -> bool:
+    """Tool offered in gate `gate` loop for this task type; flag must be on, unknown type is not offered."""
+    cfg = limits.sandbox_tool(env)
+    return cfg["enabled"] and gate in cfg["task_types"].get(task_type, [])
 
 
 def _spec(cfg: dict) -> tool_manifest.ToolSpec:
@@ -98,11 +109,11 @@ def _stage(source, sha: str, drafts: dict[str, str], root: Path) -> None:
 class Runner:
     """Gọi run_in_sandbox: stage một lần, mỗi attempt một VM; ghi receipt cho từng lần exec."""
 
-    def __init__(self, source, sha: str, *, client=None, lease_ok=None, trace=None, env=None):
+    def __init__(self, source, sha: str, *, client=None, lease_ok=None, trace=None, env=None, receipts=None):
         self.source, self.sha, self.client, self.trace = source, sha, client, trace
         self.lease_ok = lease_ok or authority_ok
         self.cfg = limits.sandbox_tool(env)
-        self.receipts: list[dict] = []
+        self.receipts: list[dict] = [] if receipts is None else receipts
 
     def __call__(self, argv, drafts: dict[str, str]) -> str:
         check_argv(argv, self.cfg["allowed_argv"])
@@ -112,36 +123,47 @@ class Runner:
             for attempt in range(self.cfg["max_retries"] + 1):
                 started = time.monotonic()
                 receipt = {"run_id": None, "argv": list(argv), "attempt": attempt, "rc": None, "error": None}
+                session = SandboxSession(stage, client=self.client, lease_ok=self.lease_ok, deadline=deadline)
+                receipt["run_id"] = session.run_id
+                outcome, error = None, None
                 try:
-                    with SandboxSession(stage, client=self.client, lease_ok=self.lease_ok, deadline=deadline) as session:
-                        receipt["run_id"] = session.run_id
+                    with session:
                         outcome = session.exec(argv, self.cfg["exec_timeout_s"])
-                    receipt["rc"] = outcome["rc"]
+                except SandboxError as caught:
+                    error = caught
+                if session.cleanup_pending:
+                    receipt["error"] = "cleanup_unconfirmed"
+                    if outcome is not None:
+                        self._observe(receipt, outcome, started)
+                    else:
+                        self._record(receipt, started)
+                    raise CleanupUnconfirmed(f"sandbox destroy: cleanup_unconfirmed (run {session.run_id})")
+                if outcome is not None:
                     return self._observe(receipt, outcome, started)
-                except SandboxError as error:
-                    receipt["error"] = error.code
-                    retry = attempt < self.cfg["max_retries"] and error.code not in NON_RETRYABLE and time.monotonic() < deadline \
-                        and (error.status in (0, 429) or error.status >= 500)
-                    self._record(receipt, started)
-                    if not retry:
-                        return json.dumps({"rc": None, "error": error.code, "phase": error.phase}, ensure_ascii=False)
+                receipt["error"] = error.code
+                retry = attempt < self.cfg["max_retries"] and error.code not in NON_RETRYABLE and time.monotonic() < deadline \
+                    and (error.status in (0, 429) or error.status >= 500)
+                self._record(receipt, started)
+                if not retry:
+                    return json.dumps({"rc": None, "error": error.code, "phase": error.phase}, ensure_ascii=False)
         raise AssertionError("unreachable")
 
     def _observe(self, receipt: dict, outcome: dict, started: float) -> str:
         limit = self.cfg["output_chars"]
         stdout, stderr = meter.redact(outcome["stdout"]), meter.redact(outcome["stderr"])
-        artifact = Path(tempfile.mkdtemp(prefix="ai-sandbox-out-")) / f"{receipt['run_id']}.txt"
-        artifact.write_text(f"$ {' '.join(receipt['argv'])}\nrc={outcome['rc']}\n--- stdout ---\n{stdout}\n--- stderr ---\n{stderr}\n",
-                            encoding="utf-8")
-        receipt["artifact"] = str(artifact)
+        receipt["rc"] = outcome["rc"]
+        receipt["output"] = f"--- stdout ---\n{stdout}\n--- stderr ---\n{stderr}"[:OUTPUT_CAP]
         self._record(receipt, started)
         truncated = outcome["truncated"] or len(stdout) > limit or len(stderr) > limit
-        return json.dumps({"rc": outcome["rc"], "stdout": stdout[:limit], "stderr": stderr[:limit], "truncated": truncated,
-                           "artifact": artifact.name}, ensure_ascii=False)
+        return json.dumps({"rc": outcome["rc"], "stdout": stdout[:limit], "stderr": stderr[:limit], "truncated": truncated},
+                          ensure_ascii=False)
 
     def _record(self, receipt: dict, started: float) -> None:
         receipt["duration_ms"] = int((time.monotonic() - started) * 1000)
         self.receipts.append(receipt)
+        if hasattr(self.trace, "note"):
+            self.trace.note("tool", "run_in_sandbox", f"{' '.join(receipt['argv'])} rc={receipt['rc']} attempt={receipt['attempt']}"
+                            f"{' error=' + receipt['error'] if receipt['error'] else ''}", receipt.get("output"))
         if hasattr(self.trace, "add_span"):
             now = int(time.time() * 1000)
             self.trace.add_span("sandbox_exec", {

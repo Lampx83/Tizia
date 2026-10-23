@@ -465,12 +465,14 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
                 pins={"role": role}, repair_reason=state.get("repair_reason"), context=context)
             if looped.get("stale_reset") and trace:
                 trace.note("tool", "stale checkpoint", f"an upstream artifact changed ({', '.join(looped['stale_reset'])}); this subtask was checked again from scratch")
+            state.setdefault("sandbox_receipts", []).extend(looped.get("sandbox_receipts", []))
             if looped["status"] != "proposed":
                 state["diffs"] = diffs
                 return None, {"gate": 3, "blocked": True, "diffs": diffs, "failure_class": looped["failure_class"],
                               "reason": f"subtask '{subtask.get('title')}': {looped['reason']}",
                               **({"unknown_outcome": looped["unknown_outcome"]} if looped.get("unknown_outcome") else {}),
-                              "tool_manifest": tool_loop.MANIFEST.hash}
+                              "tool_manifest": tool_loop.MANIFEST.hash,
+                              **({"sandbox_receipts": state["sandbox_receipts"]} if state.get("sandbox_receipts") else {})}
             return looped["out"], None
 
         # auto: one-shot first; the loop repairs a gate-4 rejection (repair_reason) or an exhausted one-shot attempt.
@@ -583,4 +585,5 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
     state["diffs"] = diffs
     state["scratch_repo"] = str(repo)
     return {"gate": 3, "blocked": False, "reason": None, "diffs": diffs,
-            **({"tool_manifest": tool_loop.MANIFEST.hash} if tool_loop.mode() else {})}
+            **({"tool_manifest": tool_loop.MANIFEST.hash} if tool_loop.mode() else {}),
+            **({"sandbox_receipts": state["sandbox_receipts"]} if state.get("sandbox_receipts") else {})}
