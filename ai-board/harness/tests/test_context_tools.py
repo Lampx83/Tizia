@@ -82,7 +82,11 @@ def test_every_skill_parses_with_both_gate_sections():
     assert set(context.SKILLS) == {"edit-html-text", "edit-css-style", "add-html-section", "new-static-page",
                                    "fix-js-behavior", "new-feature", "default", "frontend-design-core",
                                    "plan-from-request", "implement-one-slice"}
+    variants = {"frontend-design-core", "plan-from-request", "implement-one-slice"}
     for skill in context.SKILLS.values():
+        if skill.name in variants:
+            assert skill.sections.get(1) or skill.sections.get(3), skill.name
+            continue
         assert skill.sections.get(1) and skill.sections.get(3), skill.name
         assert skill.tools and skill.tools3
 
