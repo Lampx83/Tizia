@@ -63,6 +63,13 @@
       "create_timeout_s": 600, "upload_timeout_s": 300, "artifact_timeout_s": 120,
       "renew_every_s": 30, "lease_s": 120, "call_attempts": 3, "backoff_s": [1, 2, 4, 8]
     },
+    "sandbox_tool": {
+      "_why": "run_in_sandbox tool-loop tool (runtime/sandbox_tool.py). Off unless flag=1. One VM per call; retries = new VM. argv must match an allowed pattern exactly; <test> = test/ path, <file> = repo path (path_policy). No shell.",
+      "flag": "AI_BOARD_SANDBOX_TOOL", "default_enabled": false,
+      "wall_clock_s": 300, "exec_timeout_s": 120, "max_retries": 2,
+      "output_chars": 2000,
+      "allowed_argv": [["node", "--test", "<test>"], ["node", "--check", "<file>"]]
+    },
     "pending_roots_per_user": { "value": 3, "_why": "one person cannot fill the school's queue" },
     "open_folders_per_user": { "value": 3, "_why": "feature folders not yet archived; keeps branches and context bounded" },
     "folder_archive_days": { "value": 30, "_why": "a folder with no activity this long is archived: its cycle closes, history and brief stay" },

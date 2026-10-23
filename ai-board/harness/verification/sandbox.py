@@ -6,6 +6,7 @@ import json
 import os
 import random
 import re
+import contextvars
 import shutil
 import tarfile
 import tempfile
@@ -226,7 +227,8 @@ class _Lease:
         self.client, self.run_id, self.lease_ok, self.clock, self.sleep = client, run_id, lease_ok, clock, sleep
         self.deadline, self.ready = deadline, ready
         self.stop, self.revoked = threading.Event(), False
-        self.thread = threading.Thread(target=self._loop, name="sandbox-lease", daemon=True)
+        # copied context: the HSM authority held in a ContextVar must reach the renewal thread
+        self.thread = threading.Thread(target=contextvars.copy_context().run, args=(self._loop,), name="sandbox-lease", daemon=True)
 
     def _loop(self) -> None:
         last_ok = self.clock()
@@ -268,6 +270,59 @@ class _Lease:
     def __exit__(self, *_exc) -> None:
         self.stop.set()
         self.thread.join(timeout=5)
+
+
+class SandboxSession:
+    """One microVM for one call: create + upload on enter, lease renew, destroy on exit. Retries belong to the caller."""
+
+    def __init__(self, checkout: str | Path, *, client: RunnerClient | None = None, lease_ok: Callable[[], bool] | None = None,
+                 deadline: float | None = None):
+        self.client = client or RunnerClient.from_env()
+        if self.client is None:
+            raise SandboxError("not_configured", "config")
+        self.checkout, self.deadline = Path(checkout), deadline
+        self.run_id = f"loop-{uuid.uuid4().hex[:24]}"
+        self.lease_ok = lease_ok or (lambda: True)
+        self.lease, self.cleanup_pending = None, False
+
+    def __enter__(self) -> "SandboxSession":
+        self.lease = _Lease(self.client, self.run_id, self.lease_ok, deadline=self.deadline, ready=False)
+        self.lease.__enter__()
+        try:
+            self.client.create(self.run_id, MANIFEST, **self._limits())
+            self.lease.ready = True
+            self.client.upload(self.run_id, package(self.checkout, {}, {}), **self._limits())
+        except BaseException:
+            self._close()
+            raise
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        self._close()
+        if exc is None and self.cleanup_pending:
+            raise SandboxError("cleanup_unconfirmed", "destroy")
+        return False
+
+    def exec(self, argv: list[str], timeout: float) -> dict:
+        if self.lease.revoked or not self.lease_ok():
+            raise SandboxError("lease_lost", "lease")
+        outcome = self.client.exec(self.run_id, argv, timeout=_remaining(self.deadline, timeout), deadline=self.deadline)
+        if self.lease.revoked or not self.lease_ok():
+            raise SandboxError("lease_lost", "lease")
+        return {"rc": outcome.get("code"), "stdout": outcome.get("stdout", ""), "stderr": outcome.get("stderr", ""),
+                "truncated": bool(outcome.get("truncated") or outcome.get("timed_out"))}
+
+    def _limits(self) -> dict:
+        return {} if self.deadline is None else {"deadline": self.deadline}
+
+    def _close(self) -> None:
+        self.lease.__exit__(None, None, None)
+        try:
+            # no deadline: teardown must still run after the budget is spent
+            destroyed = _retry(lambda: self.client.destroy(self.run_id), lambda error: error.status == 0 or error.status >= 500)
+            self.cleanup_pending = not (isinstance(destroyed, dict) and destroyed.get("state") in {"destroyed", "expired", "failed"})
+        except SandboxError:
+            self.cleanup_pending = True
 
 
 def _blocked(reason: str, kind: str = "transient") -> dict:

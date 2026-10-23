@@ -11,7 +11,7 @@ import sys
 import time
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-from runtime import limits, tool_manifest, meter
+from runtime import limits, meter, sandbox_tool, tool_manifest
 from runtime.budget import ChildBudget
 from runtime.loop_budget import Stop, make_adaptive
 from repositories import server_hsm
@@ -32,7 +32,11 @@ REPO_TOOLS = tuple(name for name in ("tree", "outline", "grep") if name in MANIF
 WRITE_TOOLS = MANIFEST.names("draft_write")
 # Tool ghi chỉ chạm bản nháp trong bộ nhớ; file thật chỉ được ghi ở cổng 3 sau khi loop đề xuất xong.
 SCHEMAS = {name: spec.parameters for name, spec in MANIFEST.tools.items()}
-DESCRIPTIONS = {name: spec.description for name, spec in MANIFEST.tools.items()}
+
+
+def _specs() -> dict:
+    """Tool của manifest + tool bổ sung đang bật (run_in_sandbox khi AI_BOARD_SANDBOX_TOOL=1)."""
+    return {**MANIFEST.tools, **sandbox_tool.specs()}
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "tool_loop.md").read_text(encoding="utf-8")
 MAX_REPEATS = _LOOP["repeats"]
@@ -106,8 +110,8 @@ def parse_request(body: dict) -> tuple[str, dict]:
             args = json.loads(args or "{}")
         except ValueError:
             raise ToolError("arguments không phải JSON") from None
-    if not isinstance(name, str) or name not in SCHEMAS:
-        raise ToolError(f"tool lạ: {name!r}; có: {', '.join(SCHEMAS)}")
+    if not isinstance(name, str) or name not in _specs():
+        raise ToolError(f"tool lạ: {name!r}; có: {', '.join(_specs())}")
     if not isinstance(args, dict):
         raise ToolError("arguments phải là object")
     return name, args
@@ -115,9 +119,10 @@ def parse_request(body: dict) -> tuple[str, dict]:
 
 def validate(name: str, args: dict) -> None:
     """Kiểm tham số theo JSON Schema thu gọn (kiểu string/array + required). Raise ToolError."""
-    schema = SCHEMAS[name]
-    if len(json.dumps(args, ensure_ascii=False).encode("utf-8")) > MANIFEST.tools[name].max_arg_bytes:
-        raise ToolError(f"{name}: tham số vượt trần {MANIFEST.tools[name].max_arg_bytes} byte")
+    spec = _specs()[name]
+    schema = spec.parameters
+    if len(json.dumps(args, ensure_ascii=False).encode("utf-8")) > spec.max_arg_bytes:
+        raise ToolError(f"{name}: tham số vượt trần {spec.max_arg_bytes} byte")
     for key in schema["required"]:
         if key not in args:
             raise ToolError(f"{name}: thiếu `{key}`")
@@ -146,7 +151,7 @@ def _clean_path(path: str) -> str:
 class Workspace:
     """Bản nháp của file đích trong bộ nhớ + test; nguồn là git sha cố định."""
 
-    def __init__(self, source, sha: str, file: str, current: str | None, *, checks=None, budget=None, trace=None):
+    def __init__(self, source, sha: str, file: str, current: str | None, *, checks=None, budget=None, trace=None, sandbox=None):
         self.source, self.sha, self.file, self.base = source, sha, file, current
         self.base_hash = None if current is None else sha_of(current)
         self.content = current or ""
@@ -154,6 +159,7 @@ class Workspace:
         self.stale_reset = None
         self.checks, self.budget, self.proofs = checks, budget, {}
         self.trace = trace
+        self.sandbox = sandbox
 
     def _read(self, path: str) -> str:
         path = _clean_path(path)
@@ -230,7 +236,7 @@ class Workspace:
         started = time.monotonic()
         out = self._run(name, args)
         # ponytail: kiểm sau khi chạy (tool chạy trong process); ngắt giữa chừng cần tách process
-        if time.monotonic() - started > MANIFEST.tools[name].max_seconds:
+        if time.monotonic() - started > _specs()[name].max_seconds:
             self.content, self.test_file, self.test = before
             raise ToolError(f"{name}: vượt trần thời gian {MANIFEST.tools[name].max_seconds}s")
         return out
@@ -238,6 +244,8 @@ class Workspace:
     def _run(self, name: str, args: dict) -> str:
         if name == 'run_check':
             return json.dumps(self._check(args['profile'], charge=False), ensure_ascii=False)
+        if name == sandbox_tool.NAME:
+            return self._sandbox(args)
         if name in REPO_TOOLS:
             if "file" in args:
                 args = {**args, "file": _clean_path(args["file"])}
@@ -293,6 +301,15 @@ class Workspace:
         self._fresh()
         return ""
 
+    def _sandbox(self, args: dict) -> str:
+        if self.sandbox is None:
+            raise ToolError(f'{sandbox_tool.NAME} chưa có runner')
+        drafts = {self.file: self.content, **({self.test_file: self.test} if self.test_file else {})}
+        try:
+            return self.sandbox(args['argv'], drafts)
+        except sandbox_tool.Refused as error:
+            raise Forbidden(str(error)) from None
+
     def _candidates(self, edits: list, message: str) -> str:
         """Khi search không khớp và không có dòng gần giống: liệt kê dòng thật chia sẻ nhiều từ nhất với search (model hay bịa chuỗi)."""
         if "không khớp" not in message or "Dòng gần giống" in message:
@@ -320,12 +337,13 @@ class Workspace:
 
 def _cap(name: str) -> int:
     """Trần ký tự quan sát đưa lại cho model; lỗi request (tên không phải tool) dùng trần chung."""
-    return MANIFEST.tools[name].max_output_chars if name in MANIFEST.tools else ERROR_CHARS
+    specs = _specs()
+    return specs[name].max_output_chars if name in specs else ERROR_CHARS
 
 
 def _tool_list() -> str:
-    return "\n".join(f"- {n}: {DESCRIPTIONS[n]} params={json.dumps(SCHEMAS[n]['properties'], ensure_ascii=False)}"
-                     for n in SCHEMAS)
+    return "\n".join(f"- {n}: {spec.description} params={json.dumps(spec.parameters['properties'], ensure_ascii=False)}"
+                     for n, spec in _specs().items())
 
 
 def _result(status: str, reason: str | None = None, failure_class: str | None = None, **extra) -> dict:
@@ -443,7 +461,7 @@ def _tool_span(deps, name: str, step: int, child, kind: str, observation: str, s
     trace = getattr(deps, "trace", None)
     if not hasattr(trace, "add_span"):
         return
-    tool = name if name in SCHEMAS else "invalid_request"
+    tool = name if name in _specs() else "invalid_request"
     trace.add_span(f"execute_tool {tool}", {
         "gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": tool, "gen_ai.tool.call.id": f"{child or 0}:{step}",
         "tizia.step": step, "tizia.child": child, "tizia.tool.status": kind, "tizia.observation_digest": sha_of(observation or ""),
@@ -490,7 +508,9 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
         return _result('blocked', str(error), error.failure_class)
     if reason := MANIFEST.policy.write_reason(subtask["file"]):
         return _result("blocked", reason, "critical")
-    ws = Workspace(source, sha, subtask["file"], current, checks=checks, budget=budget, trace=getattr(deps, 'trace', None))
+    sandbox = (sandbox_tool.Runner(source, sha, lease_ok=getattr(deps, 'lease_ok', None), trace=getattr(deps, 'trace', None))
+               if sandbox_tool.enabled() else None)
+    ws = Workspace(source, sha, subtask["file"], current, checks=checks, budget=budget, trace=getattr(deps, 'trace', None), sandbox=sandbox)
     prompt = PROMPT.format(tools=_tool_list(), title=subtask["title"], file=subtask["file"], verify=subtask["verify"]) + ORDER
     if checks:
         prompt += '\nVerified loop: dependency reads are allowed on pinned source. Inspect the automatic light result after edits. Use run_check with profile relevant for the written Node test. Finish requires current light, platform and relevant receipts; sandbox errors block completion.\n'

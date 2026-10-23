@@ -9,6 +9,7 @@ from runtime import limits
 READS = frozenset({"read_file"})
 EDITS = frozenset({"edit_file"})
 CHECKS = frozenset({"run_check"})
+SANDBOX = frozenset({"run_in_sandbox"})
 
 
 @dataclass(frozen=True)
@@ -30,7 +31,7 @@ class LoopBudget:
         self.steps = self.progress = self.idle = self.repeats = 0
         self.last_sig = None
         self.seen_reads: set[str] = set()
-        self.check_state = None
+        self.receipt_state: dict[str, tuple] = {}
 
     def soft_limit(self) -> int:
         return min(self.ceiling, self.spec["soft_start"] + self.spec["soft_step"] * self.progress)
@@ -64,19 +65,22 @@ class LoopBudget:
         if tool in EDITS:
             return True
         if tool in CHECKS:
-            return self._check_changed(observation)
+            return self._receipt_changed(tool, observation, ("passed", "exit_code"))
+        if tool in SANDBOX:
+            return self._receipt_changed(tool, observation, ("rc", "stdout", "stderr"))
         return False
 
-    def _check_changed(self, observation: str) -> bool:
+    def _receipt_changed(self, tool: str, observation: str, keys: tuple) -> bool:
+        """Kết quả khác lần trước của cùng tool mới là tiến triển; lặp lại kết quả cũ thì không."""
         try:
             receipt = json.loads(observation)
         except ValueError:
             return False
-        if not isinstance(receipt, dict) or "passed" not in receipt:
+        if not isinstance(receipt, dict) or not all(key in receipt for key in keys):
             return False
-        state = (receipt.get("passed"), receipt.get("exit_code"))
-        changed = state != self.check_state
-        self.check_state = state
+        state = tuple(receipt.get(key) for key in keys)
+        changed = state != self.receipt_state.get(tool)
+        self.receipt_state[tool] = state
         return changed
 
 
