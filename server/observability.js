@@ -18,6 +18,7 @@
 // là tự bật, không sửa code.
 
 import { randomUUID } from 'node:crypto';
+import { fmt, nowMs } from './ai-board/clock.js';
 
 const LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
 const ENV = process.env.NODE_ENV || 'development';
@@ -45,7 +46,7 @@ function pretty(rec) {
 
 function emit(level, msg, ctx) {
   if (LEVELS[level] < MIN_LEVEL) return;
-  const rec = { t: new Date().toISOString(), level, msg, ...sanitize(ctx) };
+  const rec = { t: fmt(nowMs()), level, msg, ...sanitize(ctx) };
   const line = IS_PROD ? JSON.stringify(rec) : pretty(rec);
   // warn/error → stderr để tách luồng giám sát; info/debug → stdout.
   (level === 'error' || level === 'warn' ? process.stderr : process.stdout).write(line + '\n');

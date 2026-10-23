@@ -7,10 +7,11 @@ import { installLightbox, pairBeforeAfter } from './lightbox.js';
 import { projectPipeline, describeEvent, TECHNICAL_EVENTS, TRACE_STEPS, renderVerificationClaims, budgetSummary, renderRootAllowance } from './ai-board-trace.js';
 import { renderHsm } from './ai-board-hsm.js';
 import { renderTicketGraph, graphNodes } from './ai-board-graph.js';
+import { fmt as clockFmt } from './ai-board-clock.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fmt = (t) => t ? new Date(t).toLocaleString('vi-VN', { hour12:false }) : 'chưa có';
+const fmt = (t) => t ? clockFmt(t) : 'chưa có';
 const fmtNum = (n) => (n == null) ? 'chưa có' : Number(n).toLocaleString('vi-VN');
 const secs = (ms) => ms == null ? 'chưa có' : (ms / 1000).toFixed(1);
 const elapsed = (t) => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };

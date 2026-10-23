@@ -1,4 +1,5 @@
 import { mountPrivatePreview } from './private-preview.js';
+import { fmt } from './ai-board-clock.js';
 // ============================================================
 // Request thread — phiên trao đổi của 1 yêu cầu gửi Ban điều hành AI
 // ============================================================
@@ -31,7 +32,7 @@ const fmtTime = (t) => {
   if (hh < 24) return `${hh} giờ trước`;
   const dd = Math.floor(hh / 24);
   if (dd < 30) return `${dd} ngày trước`;
-  try { return new Date(t).toLocaleDateString('vi-VN'); } catch { return ''; }
+  return fmt(t);
 };
 
 function escapeHtml(s) {

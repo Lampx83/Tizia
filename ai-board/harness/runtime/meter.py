@@ -15,6 +15,7 @@ from collections import deque
 from pathlib import Path
 
 from runtime import limits
+from clock import fmt, now_ms
 
 PROVIDERS = ("ollama", "vllm", "api")
 TRACE_CAP = 8192  # ký tự mỗi phần prompt/output gửi server; JSONL cục bộ giữ đủ
@@ -238,7 +239,7 @@ class Tracer:
             try:
                 self.post(chunk)
             except Exception as error:  # noqa: BLE001 — trace best-effort
-                print(f"[trace] gửi {len(chunk)} record lỗi: {str(error)[:200]}")
+                print(f"[trace {fmt(now_ms())}] gửi {len(chunk)} record lỗi: {str(error)[:200]}")
 
     def _flush_spans(self) -> None:
         if not self.spans:
@@ -250,7 +251,7 @@ class Tracer:
             try:
                 self.post_spans(spans[i:i + 50])
             except Exception as error:  # noqa: BLE001 — trace best-effort
-                print(f"[trace] gửi {len(spans[i:i + 50])} span lỗi: {str(error)[:200]}")
+                print(f"[trace {fmt(now_ms())}] gửi {len(spans[i:i + 50])} span lỗi: {str(error)[:200]}")
 
     def over_hourly_cap(self, cap: float = HOURLY_GPU_S) -> bool:
         return self.gpu_s_last_hour() >= cap
@@ -275,4 +276,4 @@ class Tracer:
             with self.path.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(rec, ensure_ascii=False) + "\n")
         except OSError as error:
-            print(f"[trace] ghi JSONL lỗi: {error}")
+            print(f"[trace {fmt(now_ms())}] ghi JSONL lỗi: {error}")
