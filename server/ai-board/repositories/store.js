@@ -1,6 +1,7 @@
 // Async AI board store on the db contract (db/index.js). Parity tests in test/ai-board-async-*.test.js compare final board state per feature.
 import { randomBytes } from 'node:crypto';
-import { CAPABILITY_CATALOG, isSelfEditable, PlanGuardrailError, validatePlan } from '../security/policy.js';
+import { CAPABILITY_CATALOG, PlanGuardrailError, validatePlan } from '../security/policy.js';
+import { check as checkPath } from '../security/path-policy.js';
 import { registerRelease, assertFeatureNotIsolated } from '../services/releases.js';
 import { repeatedQuestion } from '../services/clarity-rules.js';
 import { readRootAllowance } from '../services/root-allowance.js';
@@ -8,7 +9,7 @@ import {
   ACTIVE_ONLY, AI_BRANCH, ANY_QUEUE, CLAIM_INTENTS, CLARIFYING_NOTE, CLARIFY_AUTHOR, CONTRACT, DAY_MS, EVENT_TYPES, EXECUTION_GRAPH,
   IDEMPOTENCY_KEY as KEY, LEASE_MS, LIMITS, MAX_BUDGET_EXTENSION, MAX_BUDGET_EXTENSIONS, MAX_BUDGET_LIMIT, MAX_TRACE_BATCH,
   PHASES, PLAN_QUEUE, PR_BASE, PR_URL, REQUEST_TYPES, ROLLBACK_OUTCOMES, RUN_TRIGGERS, RequestValidationError, SELF_TAG,
-  SELF_USER, SHA, SPEC_AUTHOR, WORKER_MODES, WorkerContractError, assertConfirmed, cleanAttachments, cleanModelCall,
+  SHA, SPEC_AUTHOR, WORKER_MODES, WorkerContractError, assertConfirmed, cleanAttachments, cleanModelCall,
   assertWithinCeiling, parseAttachments, parseJson, progressDetail, runProgress, scaledLimit, summarizeCalls, triggerFor, validateCandidate,
   validatePrePrVerdict,
 } from './store-contract.js';
@@ -424,26 +425,10 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     });
   }
 
-  /** Người dùng hệ thống `ai-board` (tạo lần đầu, không đăng nhập được). Tên đã thuộc tài khoản thật → 409. */
-  async function selfUserId() {
-    const user = await db.get('SELECT id, role FROM users WHERE username = ?', [SELF_USER]);
-    if (user && user.role !== 'system') {
-      throw new WorkerContractError(`username ${SELF_USER} belongs to a real account`, 409, 'self_user_conflict');
-    }
-    return user?.id ?? Number(await db.insert(`INSERT INTO users(username, display_name, password_hash, role, created_at)
-      VALUES (?, 'Ban điều hành AI', '!', 'system', ?)`, [SELF_USER, Date.now()]));
-  }
-
-  /** Worker tạo yêu cầu self (board tự sửa 1 file trong vùng cho phép). File ngoài vùng → 422. */
-  const createSelfRequest = ({ title, detail, targetFile, idempotencyKey }) => db.tx(async () => {
-    const target = String(targetFile ?? '').trim();
-    if (!isSelfEditable(target)) {
-      throw new WorkerContractError(`target file outside the self-edit area: ${target.slice(0, 200)}`, 422,
-        'self_target_outside_area');
-    }
-    return await createRequestWithRoot({ ownerUserId: await selfUserId(), ownerDomain: SELF_USER, ownerDisplayName: SELF_USER,
-      idempotencyKey, title, detail, selfTarget: target });
-  });
+  /** Yêu cầu self đã tắt: skill/prompt chỉ đổi qua commit người hoặc luồng upload admin. */
+  const createSelfRequest = async () => {
+    throw new WorkerContractError('self requests are disabled', 403, 'self_request_disabled');
+  };
 
   async function listRequestsForOwner(ownerUserId, domain, limit = 50) {
     const rows = await db.all(`
@@ -957,6 +942,11 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     if (value.base !== PR_BASE) throw new WorkerContractError(`PR must target ${PR_BASE}`);
     if (!AI_BRANCH.test(String(value.branch)) || !SHA.test(String(value.head_sha)) || !SHA.test(String(value.base_sha))) {
       throw new WorkerContractError('invalid PR branch or sha');
+    }
+    if (input.changedFiles != null && !Array.isArray(input.changedFiles)) throw new WorkerContractError('changed_files must be an array');
+    for (const file of input.changedFiles ?? []) {
+      const verdict = checkPath(file, 'pr');
+      if (!verdict.allow) throw new WorkerContractError(verdict.reason, 422, 'path_denied');
     }
     const pr = { number: Number(value.number), url: value.url, branch: value.branch, base: PR_BASE,
       base_sha: value.base_sha, head_sha: value.head_sha };

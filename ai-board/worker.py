@@ -966,8 +966,10 @@ class HttpWorker:
         try:
             pr = self._with_heartbeat(lambda _lost: self.candidates.publish(
                 verdict["candidate"], title=title, body=body, labels=labels), ticket_id, lease)
+            changed = sorted({f for c in verdict["candidate"].get("commits", []) for f in c.get("files", [])})
             self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/pull-request", {
                 **lease, "run_id": run["id"], "pull_request": pr, "idempotency_key": f"{prefix}:pr",
+                "changed_files": changed,
             })
         except LeaseLostError:
             raise

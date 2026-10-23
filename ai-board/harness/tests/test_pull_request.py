@@ -226,9 +226,8 @@ def test_review_of_a_self_pr_uses_the_self_edit_rules(tmp_path):
     built = {'checkout': str(repo), 'base_sha': base}
     assert review_pr.request_type({'labels': [{'name': 'ai-board'}, {'name': 'ai-board:self'}]}) == 'self'
     assert review_pr.request_type({'labels': [{'name': 'ai-board'}]}) is None
-    ok = review_pr.check(built, 1, request_type='self')
-    assert ok['guard_problems'] == [] and ok['passed'] is True
-    assert any('protected_path' in p for p in review_pr.check(built, 1)['guard_problems'])
+    for request_type in ('self', None):
+        assert any('protected_path' in p for p in review_pr.check(built, 1, request_type=request_type)['guard_problems'])
 
 
 def test_pull_files_reads_every_page():

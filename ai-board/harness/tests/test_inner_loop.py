@@ -7,7 +7,8 @@ from conftest import FakeModels, deps_with, plan_with
 from gates import implement
 
 PAGE = "<html>\n<body>\n  <main>\n    <h1>Tính năng</h1>\n  </main>\n</body>\n</html>\n"
-ESM_TEST = "import test from 'node:test';\nimport assert from 'node:assert/strict';\n"
+ESM_TEST = ("import test from 'node:test';\nimport assert from 'node:assert/strict';\n"
+            "// public/tinh-nang.html public/app.js public/new.html public/a.html\n")
 GOOD = {"edits": [{"after_line": 4, "insert": "    <p>Mới.</p>"}], "test_file": "test/moi.test.js", "test": ESM_TEST}
 BAD_SEARCH = {**GOOD, "edits": [{"search": "<h1>Không có</h1>", "replace": "x"}]}
 

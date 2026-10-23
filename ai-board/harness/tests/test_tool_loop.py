@@ -12,7 +12,7 @@ from repositories import server_hsm
 PAGE = "<main>\n<h1>A</h1>\n</main>\n"
 SUBTASK = {"title": "Thêm dòng", "file": "public/a.html", "verify": "thấy B"}
 EDIT = {"tool": "edit_file", "arguments": {"file": "public/a.html", "edits": [{"after_line": 2, "insert": "<p>B</p>"}]}}
-TEST = {"tool": "write_test", "arguments": {"test_file": "test/a.test.js", "test": "import test from 'node:test';"}}
+TEST = {"tool": "write_test", "arguments": {"test_file": "test/a.test.js", "test": "import test from 'node:test';\n// public/a.html\n"}}
 FINISH = {"tool": "finish", "arguments": {}}
 
 def test_revoked_authority_during_model_call_blocks_tool_before_effect(monkeypatch):

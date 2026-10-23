@@ -587,12 +587,13 @@ export function attachAiBoardWorkerRoutes(router, {
     res.json(await aux.evalTaskSplit(store.db));
   }));
 
-  // Board tự sửa: yêu cầu self, chủ là người dùng hệ thống ai-board; file ngoài vùng → 422.
+  // Board tự sửa đã tắt: luôn 403 self_request_disabled.
   route.post('/api/ai-board/worker/self-requests', authenticate, handle(async (req, res) => {
     try {
       res.json({ ok: true, ...await store.createSelfRequest({ title: req.body?.title, detail: req.body?.detail,
         targetFile: req.body?.target_file, idempotencyKey: req.body?.idempotency_key }) });
     } catch (error) {
+      if (error instanceof WorkerContractError) return res.status(error.status).json({ error: error.code, message: error.message });
       if (error instanceof RequestValidationError) return res.status(400).json({ error: 'invalid_request', message: error.message });
       throw error;
     }
@@ -653,6 +654,7 @@ export function attachAiBoardWorkerRoutes(router, {
     const lease = leaseInput(req.body);
     res.json({ pull_request: await store.recordPullRequest(req.params.id, {
       ...lease, runId: req.body?.run_id, pullRequest: req.body?.pull_request, idempotencyKey: req.body?.idempotency_key,
+      changedFiles: req.body?.changed_files,
     }) });
   }));
 

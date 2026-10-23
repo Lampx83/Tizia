@@ -18,7 +18,7 @@ class EditModels:
         return {"response": self.reply, "prompt_eval_count": 120, "eval_count": 80}
 
 
-TEST = {"test_file": "test/x.test.js", "test": "import test from 'node:test';\n"}
+TEST = {"test_file": "test/x.test.js", "test": "import test from 'node:test';\n// public/tinh-nang.html\n"}
 GOOD = json.dumps({"edits": [{"search": "<h1>✨ Tính năng</h1>", "replace": "<h1>✨ Tính năng nổi bật</h1>"}], **TEST},
                   ensure_ascii=False)
 

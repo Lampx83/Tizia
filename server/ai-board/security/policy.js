@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 
+import { check as checkPath } from './path-policy.js';
+
 export const CAPABILITY_POLICY_VERSION = 'd0-v3'; // v3: money_paths luôn cần người
 const LEXICON = JSON.parse(fs.readFileSync(new URL('../guard-lexicon.json', import.meta.url), 'utf8'));
 const MONEY_PATHS = LEXICON.money_paths.paths;
@@ -73,6 +75,8 @@ function safePath(value, field) {
     fail('scope_violation', `${field} contains unsafe path: ${value}`,
       'Kế hoạch vượt ngoài phạm vi an toàn và đang chờ xem lại.');
   }
+  const verdict = checkPath(normalized, 'write');
+  if (!verdict.allow) fail('scope_violation', `${field}: ${verdict.reason}`, 'Kế hoạch vượt ngoài phạm vi an toàn và đang chờ xem lại.');
   return normalized;
 }
 

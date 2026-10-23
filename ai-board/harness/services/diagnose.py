@@ -181,7 +181,7 @@ def diagnose_to_self_request(client, deps, *, now_ms: int, budget: Budget | None
     try:
         out["request"] = client.post("/api/ai-board/worker/self-requests", _request(cluster, out["diagnosis"], now_ms))
     except urllib.error.HTTPError as error:
-        if error.code != 422:
+        if error.code not in (403, 422):
             raise
         code = json.loads(error.read().decode("utf-8") or "{}").get("error")
         out.update(status="dropped", reason=f"server từ chối: {code}")

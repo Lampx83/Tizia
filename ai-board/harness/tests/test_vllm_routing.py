@@ -147,7 +147,7 @@ def test_real_implement_uses_heavy_role_with_shared_tag_and_routing_off(monkeypa
     # Scope checks have their own tests; this fixture isolates the actual Gate 3 call boundary.
     monkeypatch.setattr(implement, 'check_file_path', lambda _: None)
     codegen = json.dumps({'code': 'export const x = 1;', 'test_file': 'test/x.test.js',
-                         'test': "import test from 'node:test';\n"})
+                         'test': "import test from 'node:test';\n// public/x.js\n"})
     with gateway(response={'response': codegen}) as (ollama_url, ollama_calls):
         with gateway(response={'choices': [{'message': {'content': codegen}, 'finish_reason': 'stop'}]}) as (vllm_url, vllm_calls):
             models = OllamaClient.from_env({'OLLAMA_URL': ollama_url, 'VLLM_URL': vllm_url,

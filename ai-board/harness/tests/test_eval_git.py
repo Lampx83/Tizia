@@ -90,7 +90,8 @@ class EditModels:
         edits = [{"search": old, "replace": new}]
         if new == "Bon":
             edits.append({"search": "const counter = 1;", "replace": "const counter = ;"})
-        return {"response": json.dumps({"edits": edits, **FILLER}, ensure_ascii=False), "prompt_eval_count": 100, "eval_count": 50}
+        scope = "".join(f"// {p}\n" for p in sorted(set(re.findall(r"[\w./-]+\.(?:html|js|mjs|css)", prompt))))
+        return {"response": json.dumps({"edits": edits, **FILLER, "test": FILLER["test"] + scope}, ensure_ascii=False), "prompt_eval_count": 100, "eval_count": 50}
 
 
 def build(tmp_path, repo, *extra):

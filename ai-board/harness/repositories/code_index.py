@@ -22,6 +22,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 from services import file_context
+import path_policy
 
 DEFAULT_PATH = Path(__file__).resolve().parents[2] / "memory" / "code_index.json"
 ROOTS = ("public", "server/contexts")
@@ -186,7 +187,8 @@ def outline_text(path: str, entry: dict) -> str:
 
 
 def _indexable(path: str, size: int) -> bool:
-    return path.startswith(tuple(r + "/" for r in ROOTS)) and path.endswith(EXTS) and size <= MAX_BYTES
+    return path.startswith(tuple(r + "/" for r in ROOTS)) and path.endswith(EXTS) and size <= MAX_BYTES \
+        and not path_policy.denied(path, "read")
 
 
 def _blobs(source, sha: str, paths: list[str] | None = None) -> dict[str, tuple[str, int]]:
@@ -327,7 +329,7 @@ def refresh(source, old_sha: str, new_sha: str, path=DEFAULT_PATH) -> list[str]:
     new_sha = git(source, "rev-parse", "--verify", f"{new_sha}^{{commit}}").decode().strip()
     names = git(source, "diff", "--name-only", "-z", old_sha, new_sha).decode("utf-8", "replace")
     changed = [n for n in filter(None, names.split("\0")) if n.startswith(tuple(r + "/" for r in ROOTS))
-               and n.endswith(EXTS)]
+               and n.endswith(EXTS) and not path_policy.denied(n, "read")]
     present = _blobs(source, new_sha, changed) if changed else {}
     for name in changed:
         if name not in present:
