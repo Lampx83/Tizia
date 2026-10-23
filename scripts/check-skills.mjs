@@ -78,10 +78,6 @@ function dockerIncluded(file, rules) {
   return !excluded;
 }
 
-function frontmatter(text) {
-  return text.startsWith('---\n') ? text.split('---\n')[1] ?? '' : '';
-}
-
 export function checkSkills(root = ROOT) {
   const errors = [];
   const info = [];
@@ -123,8 +119,7 @@ export function checkSkills(root = ROOT) {
       info.push(`${where}: bỏ lint server (format harness)`);
       continue;
     }
-    const meta = frontmatter(text).split('\n').find(l => l.startsWith('source:'))?.slice(7).trim() ?? 'admin';
-    const lint = lintSkill(text, { source: meta, name });
+    const lint = lintSkill(text, { source: name.startsWith('default-') ? 'default' : 'admin', name });
     for (const message of lint.errors) fail(where, `lint: ${message}`);
   }
 
