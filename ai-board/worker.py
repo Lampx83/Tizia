@@ -1248,7 +1248,8 @@ class HarnessPlanner:
             "complexity_by_server": True,
             "grounding_required": request.get('type') != 'self',
             # Folder: L1 brief, L3 yêu cầu gần nhất, L2 file sở hữu — server tính, có trần.
-            **({"folder_brief": brief["text"], "folder_recent": brief["recent"], "owned_files": brief["owned_files"]}
+            **({"folder_brief": brief["text"], "folder_decisions": brief.get("decisions") or "",
+                 "folder_recent": brief["recent"], "owned_files": brief["owned_files"]}
                if (brief := (snapshot.get("folder") or {}).get("brief")) else {}),
         }
 
@@ -1302,7 +1303,7 @@ class HarnessPlanner:
             # Lách guard qua nhiều lượt nhỏ: soát lexicon trên cả bản mô tả gộp của folder.
             from gates import guard
             hits = {label: guard.LEXICON["labels"][label]["intake"]
-                    for label in guard.topic_hits(f"{request['folder_brief']}\n{request.get('folder_recent') or ''}")}
+                    for label in guard.topic_hits(f"{request['folder_brief']}\n{request.get('folder_decisions') or ''}\n{request.get('folder_recent') or ''}")}
             stop = sorted(label for label, verdict in hits.items() if verdict in ("reject", "critical"))
             if stop:
                 raise PlanBlockedError("folder brief crosses a hard rule", {

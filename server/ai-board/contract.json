@@ -93,8 +93,8 @@
       "max_per_prompt": 2, "max_tokens_per_prompt": 3000
     },
     "context": {
-      "_why": "Feature-folder context tiers (ticket 06), chars. L1 brief + L3 recent requests are computed from the DB at read time; L2 owned-file outlines come from git. Full history never enters a prompt.",
-      "brief_chars": 1500, "recent_chars": 1000, "owned_files": 6,
+      "_why": "Feature-folder context tiers (ticket 06), chars. L1 brief, L4 decisions (ai_folder_decisions) and L3 recent requests are computed from the DB at read time; L2 owned-file outlines come from git. Full history never enters a prompt.",
+      "brief_chars": 1500, "recent_chars": 1000, "owned_files": 6, "decisions_chars": 1200, "decisions_max": 5,
       "thread_chars": 4000
     },
     "gpu_s_per_user_day": { "loose": 1500, "folder": 4000, "_why": "rolling 24h; over it the request waits, a running run is never cut" },
