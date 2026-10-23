@@ -2,7 +2,7 @@ x-logging: &logging  # json-file xoay vòng cho mọi service (10 MB × 3 file),
   driver: json-file
   options: { max-size: 10m, max-file: "3" }
 
-# Base stack (prod). Dev: docker compose -f docker-compose.yml -f docker-compose.dev.yml ... (xem README).
+# Stack prod (file này đứng riêng). Stack dev là docker-compose.dev.yml, extends file này (xem README).
 # AI Board: thêm --profile ai-board (worker, sandbox-runner, image-registry); --profile storage cho SeaweedFS.
 services:
   tizia:

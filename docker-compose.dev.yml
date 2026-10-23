@@ -1,24 +1,70 @@
-# Dev override: docker compose -f docker-compose.yml -f docker-compose.dev.yml [--profile ai-board] up -d
-# Chỉ khác biệt dev: tên container tizia-dev, cổng, file .env, volume dữ liệu dev, bản dev của image, DATABASE_URL cho chạy ngoài container.
+# Stack dev độc lập: docker compose -f docker-compose.dev.yml --profile ai-board up -d
+# Dùng chung cấu hình với docker-compose.yml (extends); chỉ khai báo khác biệt dev. Prod chỉ dùng docker-compose.yml.
 services:
-  tizia:
+  tizia-dev:
+    extends: { file: docker-compose.yml, service: tizia }
     image: tizia:dev
     container_name: tizia-dev
+    depends_on: !override  # the app needs PostgreSQL at boot
+      tizia-postgres: { condition: service_healthy }
     ports: !override
       - "${PORT:-8041}:8041"
       - "127.0.0.1:8042:8042"  # private preview host remains loopback-only
     env_file:
       - .env
-    environment:  # mọi cấu hình (khóa, model, retention) nằm trong file .env
+    environment:  # chỉ nối dây trong container; mọi cấu hình (khóa, model, retention) nằm trong file .env
       NODE_ENV: development
       AI_BOARD_PREVIEW_BIND_HOST: 0.0.0.0
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}  # ghi đè DATABASE_URL trong .env (dành cho chạy ngoài container)
-    volumes:
+      BASE_PATH: !reset null
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@tizia-postgres:5432/${POSTGRES_DB}  # ghi đè DATABASE_URL trong .env (dành cho chạy ngoài container)
+    volumes: !override
       - tizia-dev-data:/data  # sao lưu pg_dump + file tải lên; dữ liệu chính nằm trong PostgreSQL
+      - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
+    networks: [default, sandbox-api]
+
+  # PostgreSQL cho cả ứng dụng (ticket 11). Chỉ trên mạng compose nội bộ: KHÔNG publish cổng ra host.
+  tizia-postgres:
+    extends: { file: docker-compose.yml, service: postgres }
+    container_name: tizia-postgres
+    environment:  # bare = lấy từ .env / shell, như trước khi gộp compose
+      POSTGRES_USER:
+      POSTGRES_PASSWORD:
+      POSTGRES_DB:
+    volumes:
+      - tizia-postgres-data:/var/lib/postgresql/data
+
+  ai-board-worker:
+    extends: { file: docker-compose.yml, service: ai-board-worker }
+    depends_on: !override
+      tizia-dev: { condition: service_healthy }
+      sandbox-runner: { condition: service_healthy }
+    build:
+      args:
+        WORKER_CHROMIUM: "0"
+    environment:
+      AI_BOARD_SERVER_URL: http://tizia-dev:8041
+    networks: [default, sandbox-api]
+
+  image-registry:
+    extends: { file: docker-compose.yml, service: image-registry }
 
   sandbox-runner:
+    extends: { file: docker-compose.yml, service: sandbox-runner }
     image: tizia-sandbox-runner:dev
+    networks: [default, sandbox-api]
+
+  seaweedfs:
+    extends: { file: docker-compose.yml, service: seaweedfs }
+
+networks:
+  sandbox-api: {}
 
 volumes:
   tizia-dev-data:
     driver: local
+  tizia-postgres-data:
+  ai-board-repo:
+  ai-board-memory:
+  sandbox-runner-state:
+  sandbox-registry:
+  seaweedfs-data:
