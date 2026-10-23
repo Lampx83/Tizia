@@ -1,5 +1,5 @@
 // ============================================================
-// Lớp 1 · TIẾNG ANH (tự chọn) — Lý thuyết + Ví dụ 35 tuần (GDPT 2018)
+// Lớp 1 · TIẾNG ANH (tự chọn), Lý thuyết + Ví dụ 35 tuần (GDPT 2018)
 // Key TRÙNG id quiz: "P1TA-wNN-quiz".
 // Lý thuyết giảng bằng tiếng Việt; ví dụ minh hoạ bằng tiếng Anh.
 // Trình độ rất cơ bản, dành cho HS 6 tuổi vừa làm quen tiếng Anh.
@@ -8,7 +8,7 @@
 export const P1TA_LESSONS = {
   // ──────────────── HK1 ────────────────
   'P1TA-w01-quiz': {
-    topic: 'Hello / Hi — Chào hỏi',
+    topic: 'Hello / Hi: Chào hỏi',
     intro: 'Các em ơi, tuần đầu tiên cô dạy các em hai từ chào hỏi rất vui tai trong tiếng Anh nhé!',
     objectives: [
       'Biết hai từ chào: Hello và Hi.',
@@ -26,13 +26,13 @@ export const P1TA_LESSONS = {
       { note: '"Hi" thân mật, dùng với bạn bè. "Hello" lịch sự hơn, dùng với cô giáo và người lớn.' },
     ],
     examples: [
-      { q: 'Em gặp bạn Lan ở sân trường, em chào thế nào?', a: '"Hello, Lan!" hoặc "Hi, Lan!" — Xin chào Lan!' },
+      { q: 'Em gặp bạn Lan ở sân trường, em chào thế nào?', a: '"Hello, Lan!" hoặc "Hi, Lan!", Xin chào Lan!' },
       { q: 'Cô giáo vừa vào lớp, em nói gì?', a: '"Hello, teacher!" = Em chào cô ạ!' },
     ],
   },
 
   'P1TA-w02-quiz': {
-    topic: 'Goodbye / Bye — Tạm biệt',
+    topic: 'Goodbye / Bye: Tạm biệt',
     intro: 'Tuần này cô dạy các em cách tạm biệt bạn bè và cô giáo bằng tiếng Anh nhé!',
     objectives: [
       'Biết hai từ tạm biệt: Goodbye và Bye.',
@@ -53,13 +53,13 @@ export const P1TA_LESSONS = {
     ],
     examples: [
       { q: 'Tan học, em chào cô như thế nào?', a: '"Goodbye, teacher!" = Tạm biệt cô ạ!' },
-      { q: 'Bạn Nam vẫy tay nói "Bye!", em đáp lại?', a: '"Bye!" hoặc "See you!" — Tạm biệt / Hẹn gặp lại!' },
+      { q: 'Bạn Nam vẫy tay nói "Bye!", em đáp lại?', a: '"Bye!" hoặc "See you!", Tạm biệt / Hẹn gặp lại!' },
     ],
   },
 
   'P1TA-w03-quiz': {
     topic: 'Good morning / Good night',
-    intro: 'Buổi sáng, buổi tối — mỗi lúc người ta lại có cách chào khác nhau. Mình cùng học nhé các em!',
+    intro: 'Buổi sáng, buổi tối; mỗi lúc người ta lại có cách chào khác nhau. Mình cùng học nhé các em!',
     objectives: [
       'Biết chào theo buổi: Good morning, Good afternoon, Good evening.',
       'Biết câu chúc ngủ ngon: Good night.',
@@ -105,13 +105,13 @@ export const P1TA_LESSONS = {
       { note: 'Tên riêng luôn viết HOA chữ cái đầu: Lan, Nam, Bin.' },
     ],
     examples: [
-      { q: 'Bạn hỏi: "What\'s your name?" — Em tên Mai, trả lời thế nào?', a: '"My name is Mai." hoặc "I\'m Mai." = Tên tôi là Mai.' },
+      { q: 'Bạn hỏi: "What\'s your name?", Em tên Mai, trả lời thế nào?', a: '"My name is Mai." hoặc "I\'m Mai." = Tên tôi là Mai.' },
       { q: 'Dịch câu: "I\'m Nam."', a: 'Nghĩa là: Tôi là Nam.' },
     ],
   },
 
   'P1TA-w05-quiz': {
-    topic: 'Numbers 1-5 — Số đếm 1 đến 5',
+    topic: 'Numbers 1-5: Số đếm 1 đến 5',
     intro: 'Tuần này mình học đếm số từ 1 đến 5 bằng tiếng Anh nhé. Các em vừa đếm vừa giơ ngón tay nha!',
     objectives: [
       'Đọc đúng số 1–5 bằng tiếng Anh.',
@@ -127,17 +127,17 @@ export const P1TA_LESSONS = {
         '5 = five /phai/',
       ] },
       { h: 'Cách học' },
-      { p: 'Em vừa giơ ngón tay vừa đếm: one, two, three, four, five — rất dễ nhớ!' },
-      { note: '"Three" /thri/ — em hơi cong lưỡi nhé.' },
+      { p: 'Em vừa giơ ngón tay vừa đếm: one, two, three, four, five; rất dễ nhớ!' },
+      { note: '"Three" /thri/, em hơi cong lưỡi nhé.' },
     ],
     examples: [
-      { q: 'Em có 3 cái bút, tiếng Anh đọc là?', a: '"Three pencils" — three = 3.' },
-      { q: 'Đếm tiếp: one, two, ___', a: '"three" — sau two là three.' },
+      { q: 'Em có 3 cái bút, tiếng Anh đọc là?', a: '"Three pencils", three = 3.' },
+      { q: 'Đếm tiếp: one, two, ___', a: '"three", sau two là three.' },
     ],
   },
 
   'P1TA-w06-quiz': {
-    topic: 'Numbers 6-10 — Số đếm 6 đến 10',
+    topic: 'Numbers 6-10: Số đếm 6 đến 10',
     intro: 'Mình đếm tiếp từ 6 đến 10 nhé các em. Đếm xong là biết hết một bàn tay rồi đó!',
     objectives: [
       'Đọc đúng số 6–10 bằng tiếng Anh.',
@@ -157,13 +157,13 @@ export const P1TA_LESSONS = {
       { note: '"Eight" /êt/ chỉ có 1 âm thôi, không đọc thành "ê-i-tờ" nhé.' },
     ],
     examples: [
-      { q: 'Có 8 con cá, đọc tiếng Anh?', a: '"Eight fish" — eight = 8.' },
-      { q: 'Đếm tiếp: seven, eight, ___', a: '"nine" — sau eight là nine.' },
+      { q: 'Có 8 con cá, đọc tiếng Anh?', a: '"Eight fish", eight = 8.' },
+      { q: 'Đếm tiếp: seven, eight, ___', a: '"nine", sau eight là nine.' },
     ],
   },
 
   'P1TA-w07-quiz': {
-    topic: 'How many? — Hỏi số lượng',
+    topic: 'How many?, Hỏi số lượng',
     intro: 'Khi muốn hỏi "có bao nhiêu?", tiếng Anh dùng câu "How many?". Mình học nhé!',
     objectives: [
       'Hiểu câu hỏi "How many…?" = Bao nhiêu…?',
@@ -182,13 +182,13 @@ export const P1TA_LESSONS = {
       { note: 'Số nhiều thường thêm "s" cuối từ.' },
     ],
     examples: [
-      { q: '"How many cats?" — em đếm thấy 2 con mèo, trả lời?', a: '"Two cats." = Có 2 con mèo.' },
-      { q: '5 quyển sách viết là?', a: '"Five books" — nhiều hơn 1 nên thêm "s".' },
+      { q: '"How many cats?", em đếm thấy 2 con mèo, trả lời?', a: '"Two cats." = Có 2 con mèo.' },
+      { q: '5 quyển sách viết là?', a: '"Five books", nhiều hơn 1 nên thêm "s".' },
     ],
   },
 
   'P1TA-w08-quiz': {
-    topic: 'Colors (1) — Đỏ, xanh, vàng',
+    topic: 'Colors (1): Đỏ, xanh, vàng',
     intro: 'Cô có hộp bút màu rất đẹp. Các em cùng học tên màu sắc bằng tiếng Anh nhé!',
     objectives: [
       'Biết 3 màu cơ bản: red, blue, yellow.',
@@ -202,17 +202,17 @@ export const P1TA_LESSONS = {
         'yellow /yê-lâu/ = màu vàng',
       ] },
       { h: 'Mẫu câu' },
-      { p: '"What color is it?" = Nó màu gì? — Trả lời: "It is red." = Nó màu đỏ.' },
+      { p: '"What color is it?" = Nó màu gì?, Trả lời: "It is red." = Nó màu đỏ.' },
       { note: 'Đèn tín hiệu giao thông có 3 màu: red, yellow, green.' },
     ],
     examples: [
-      { q: 'Quả cà chua chín màu gì? (tiếng Anh)', a: '"Red" — màu đỏ.' },
-      { q: 'Bầu trời màu gì?', a: '"Blue" — xanh dương.' },
+      { q: 'Quả cà chua chín màu gì? (tiếng Anh)', a: '"Red", màu đỏ.' },
+      { q: 'Bầu trời màu gì?', a: '"Blue", xanh dương.' },
     ],
   },
 
   'P1TA-w09-quiz': {
-    topic: 'Colors (2) — Xanh lá, đen, trắng, hồng',
+    topic: 'Colors (2): Xanh lá, đen, trắng, hồng',
     intro: 'Tuần này mình học thêm 4 màu nữa nhé. Sau bài này, em có thể gọi tên hộp màu của mình rồi đó!',
     objectives: [
       'Biết thêm 4 màu: green, black, white, pink.',
@@ -231,13 +231,13 @@ export const P1TA_LESSONS = {
       { note: 'Pink là màu hồng nhạt, thường thấy ở hoa hoặc kẹo.' },
     ],
     examples: [
-      { q: 'Lá cây màu gì? (tiếng Anh)', a: '"Green" — xanh lá.' },
-      { q: 'Tuyết và sữa màu gì?', a: '"White" — màu trắng.' },
+      { q: 'Lá cây màu gì? (tiếng Anh)', a: '"Green", xanh lá.' },
+      { q: 'Tuyết và sữa màu gì?', a: '"White", màu trắng.' },
     ],
   },
 
   'P1TA-w10-quiz': {
-    topic: 'Family (1) — Mum / Dad',
+    topic: 'Family (1): Mum / Dad',
     intro: 'Gia đình là nơi yêu thương nhất. Hôm nay mình học gọi bố và mẹ bằng tiếng Anh nhé!',
     objectives: [
       'Biết các từ: mum, dad, father, mother.',
@@ -263,7 +263,7 @@ export const P1TA_LESSONS = {
   },
 
   'P1TA-w11-quiz': {
-    topic: 'Family (2) — Brother / Sister / Baby',
+    topic: 'Family (2): Brother / Sister / Baby',
     intro: 'Trong nhà còn có anh chị, em bé nữa. Mình học tên gọi của mọi người trong nhà nhé!',
     objectives: [
       'Biết: brother, sister, baby.',
@@ -280,16 +280,16 @@ export const P1TA_LESSONS = {
       { h: 'Mẫu câu' },
       { p: '"I have a brother." = Tôi có một anh/em trai.' },
       { p: '"This is my baby sister." = Đây là em gái của tôi.' },
-      { note: 'Tiếng Anh không phân biệt anh hay em — đều là brother / sister.' },
+      { note: 'Tiếng Anh không phân biệt anh hay em, đều là brother / sister.' },
     ],
     examples: [
-      { q: 'Em gái tiếng Anh là?', a: '"sister" — chị gái hoặc em gái đều là sister.' },
+      { q: 'Em gái tiếng Anh là?', a: '"sister", chị gái hoặc em gái đều là sister.' },
       { q: 'Dịch: "I have a baby brother."', a: 'Tôi có một em trai nhỏ.' },
     ],
   },
 
   'P1TA-w12-quiz': {
-    topic: 'Classroom things (1) — Book, pen, pencil',
+    topic: 'Classroom things (1): Book, pen, pencil',
     intro: 'Trong cặp sách của em có rất nhiều đồ. Mình học tên gọi của chúng bằng tiếng Anh nhé!',
     objectives: [
       'Biết: book, pen, pencil.',
@@ -309,12 +309,12 @@ export const P1TA_LESSONS = {
     ],
     examples: [
       { q: 'Em chỉ vào quyển sách và nói:', a: '"This is a book." = Đây là quyển sách.' },
-      { q: 'Bút chì tiếng Anh là?', a: '"pencil" — đọc là /pen-xồ/.' },
+      { q: 'Bút chì tiếng Anh là?', a: '"pencil", đọc là /pen-xồ/.' },
     ],
   },
 
   'P1TA-w13-quiz': {
-    topic: 'Classroom things (2) — Bag, chair, desk',
+    topic: 'Classroom things (2): Bag, chair, desk',
     intro: 'Tuần này mình học thêm tên cặp sách, ghế, bàn trong lớp nhé các em!',
     objectives: [
       'Biết: bag, chair, desk, ruler.',
@@ -334,13 +334,13 @@ export const P1TA_LESSONS = {
       { note: 'this = đây (gần); that = kia (xa).' },
     ],
     examples: [
-      { q: 'Cái thước kẻ tiếng Anh là?', a: '"ruler" — đọc /ru-lơ/.' },
+      { q: 'Cái thước kẻ tiếng Anh là?', a: '"ruler", đọc /ru-lơ/.' },
       { q: 'Em chỉ vào cặp của mình:', a: '"This is my bag." = Đây là cặp của em.' },
     ],
   },
 
   'P1TA-w14-quiz': {
-    topic: 'My body (1) — Head, eyes, nose, mouth',
+    topic: 'My body (1): Head, eyes, nose, mouth',
     intro: 'Trên mặt em có gì nào? Mắt, mũi, miệng… mình học tên các bộ phận này bằng tiếng Anh nhé!',
     objectives: [
       'Biết: head, eye, nose, mouth.',
@@ -361,12 +361,12 @@ export const P1TA_LESSONS = {
     ],
     examples: [
       { q: 'Cô nói "Touch your eyes!", em làm gì?', a: 'Em chỉ tay (hoặc khẽ chạm) vào hai mắt mình.' },
-      { q: 'Miệng tiếng Anh là?', a: '"mouth" — đọc /mau/.' },
+      { q: 'Miệng tiếng Anh là?', a: '"mouth", đọc /mau/.' },
     ],
   },
 
   'P1TA-w15-quiz': {
-    topic: 'My body (2) — Hand, foot, ears',
+    topic: 'My body (2): Hand, foot, ears',
     intro: 'Hôm nay mình học tiếp tên tay, chân, tai bằng tiếng Anh nhé!',
     objectives: [
       'Biết: hand, foot/feet, ear/ears, leg, arm.',
@@ -387,12 +387,12 @@ export const P1TA_LESSONS = {
     ],
     examples: [
       { q: 'Em có mấy bàn tay? (tiếng Anh)', a: '"Two hands." = 2 bàn tay.' },
-      { q: 'Số nhiều của "foot" là?', a: '"feet" — không phải "foots" nhé.' },
+      { q: 'Số nhiều của "foot" là?', a: '"feet", không phải "foots" nhé.' },
     ],
   },
 
   'P1TA-w16-quiz': {
-    topic: 'Toys (1) — Ball, doll, car',
+    topic: 'Toys (1): Ball, doll, car',
     intro: 'Đồ chơi của các em có gì nào? Mình học tên đồ chơi yêu thích bằng tiếng Anh nhé!',
     objectives: [
       'Biết: ball, doll, car, teddy bear.',
@@ -414,12 +414,12 @@ export const P1TA_LESSONS = {
     ],
     examples: [
       { q: 'Em thích quả bóng, nói thế nào?', a: '"I like the ball." hoặc "I like my ball."' },
-      { q: 'Gấu bông tiếng Anh là?', a: '"teddy bear" — đọc /te-đi-be-ơ/.' },
+      { q: 'Gấu bông tiếng Anh là?', a: '"teddy bear", đọc /te-đi-be-ơ/.' },
     ],
   },
 
   'P1TA-w17-quiz': {
-    topic: 'Toys (2) — Kite, plane, train',
+    topic: 'Toys (2): Kite, plane, train',
     intro: 'Tuần này mình học thêm tên các đồ chơi bay được và chạy được nhé!',
     objectives: [
       'Biết: kite, plane, train, robot.',
@@ -439,13 +439,13 @@ export const P1TA_LESSONS = {
       { note: 'plane là cách nói ngắn của airplane / aeroplane.' },
     ],
     examples: [
-      { q: 'Con diều tiếng Anh là?', a: '"kite" — đọc /kai/.' },
+      { q: 'Con diều tiếng Anh là?', a: '"kite", đọc /kai/.' },
       { q: 'Dịch: "It is a train."', a: 'Nó là tàu hoả.' },
     ],
   },
 
   'P1TA-w18-quiz': {
-    topic: 'Review HK1 — Ôn tập học kỳ 1',
+    topic: 'Review HK1: Ôn tập học kỳ 1',
     intro: 'Học kỳ 1 sắp xong rồi. Mình cùng ôn lại tất cả các từ và mẫu câu đã học nhé các em!',
     objectives: [
       'Ôn lại: chào hỏi, số đếm, màu sắc, gia đình, đồ dùng, cơ thể, đồ chơi.',
@@ -454,9 +454,9 @@ export const P1TA_LESSONS = {
     theory: [
       { h: 'Chào hỏi' },
       { ul: [
-        'Hello / Hi — xin chào',
-        'Goodbye / Bye — tạm biệt',
-        'Good morning / Good night — chào sáng / chúc ngủ ngon',
+        'Hello / Hi: xin chào',
+        'Goodbye / Bye: tạm biệt',
+        'Good morning / Good night, chào sáng / chúc ngủ ngon',
       ] },
       { h: 'Số đếm 1-10' },
       { p: 'one – two – three – four – five – six – seven – eight – nine – ten.' },
@@ -479,7 +479,7 @@ export const P1TA_LESSONS = {
 
   // ──────────────── HK2 ────────────────
   'P1TA-w19-quiz': {
-    topic: 'Animals (1) — Cat, dog, fish, bird',
+    topic: 'Animals (1): Cat, dog, fish, bird',
     intro: 'Học kỳ 2 mình bắt đầu với các con vật quen thuộc nhé. Em yêu con vật nào nhất nào?',
     objectives: [
       'Biết: cat, dog, fish, bird.',
@@ -500,14 +500,14 @@ export const P1TA_LESSONS = {
       { note: 'fish có cả số ít và số nhiều đều là "fish" (không thêm "s").' },
     ],
     examples: [
-      { q: 'Con mèo kêu thế nào? (tiếng Anh)', a: '"Meow!" — và con mèo gọi là "cat".' },
+      { q: 'Con mèo kêu thế nào? (tiếng Anh)', a: '"Meow!", và con mèo gọi là "cat".' },
       { q: 'Dịch: "I have two birds."', a: 'Tôi có 2 con chim.' },
     ],
   },
 
   'P1TA-w20-quiz': {
-    topic: 'Animals (2) — Cow, pig, hen, duck',
-    intro: 'Tuần này mình thăm trang trại. Có bò, lợn, gà, vịt — mình học tên tiếng Anh của chúng nhé!',
+    topic: 'Animals (2): Cow, pig, hen, duck',
+    intro: 'Tuần này mình thăm trang trại. Có bò, lợn, gà, vịt; mình học tên tiếng Anh của chúng nhé!',
     objectives: [
       'Biết: cow, pig, hen, duck.',
       'Bắt chước tiếng kêu con vật.',
@@ -526,14 +526,14 @@ export const P1TA_LESSONS = {
       { note: 'gà trống là "rooster" hoặc "cock"; gà con là "chick".' },
     ],
     examples: [
-      { q: 'Con vịt kêu "quack quack" tiếng Anh gọi là?', a: '"duck" — đọc /đắc/.' },
-      { q: 'Sữa lấy từ con vật nào?', a: '"cow" (con bò) — moo!' },
+      { q: 'Con vịt kêu "quack quack" tiếng Anh gọi là?', a: '"duck", đọc /đắc/.' },
+      { q: 'Sữa lấy từ con vật nào?', a: '"cow" (con bò), moo!' },
     ],
   },
 
   'P1TA-w21-quiz': {
-    topic: 'Big animals — Elephant, tiger, monkey',
-    intro: 'Mình cùng đi sở thú nhé! Voi to, hổ oai, khỉ leo cây — tên tiếng Anh ra sao?',
+    topic: 'Big animals: Elephant, tiger, monkey',
+    intro: 'Mình cùng đi sở thú nhé! Voi to, hổ oai, khỉ leo cây; tên tiếng Anh ra sao?',
     objectives: [
       'Biết: elephant, tiger, monkey, lion.',
       'Biết tính từ: big (to), small (nhỏ).',
@@ -553,13 +553,13 @@ export const P1TA_LESSONS = {
       { note: 'Vườn thú = zoo /zu/. "I see a tiger at the zoo." = Tôi thấy một con hổ ở sở thú.' },
     ],
     examples: [
-      { q: 'Con voi tiếng Anh là?', a: '"elephant" — đọc /e-li-phần/.' },
+      { q: 'Con voi tiếng Anh là?', a: '"elephant", đọc /e-li-phần/.' },
       { q: 'Dịch: "The lion is big."', a: 'Con sư tử thì to lớn.' },
     ],
   },
 
   'P1TA-w22-quiz': {
-    topic: 'Lunar New Year — Happy New Year!',
+    topic: 'Lunar New Year: Happy New Year!',
     intro: 'Tết đến rồi! Mình học cách chúc Tết bằng tiếng Anh nhé các em!',
     objectives: [
       'Biết câu chúc: Happy New Year!',
@@ -579,13 +579,13 @@ export const P1TA_LESSONS = {
       { note: 'Khi nhận lì xì, em nói: "Thank you!" = Cháu cảm ơn ạ.' },
     ],
     examples: [
-      { q: 'Em chúc bà năm mới bằng tiếng Anh:', a: '"Happy New Year, grandma!" — Chúc mừng năm mới bà ạ!' },
-      { q: 'Bao lì xì tiếng Anh là?', a: '"red envelope" — phong bì đỏ.' },
+      { q: 'Em chúc bà năm mới bằng tiếng Anh:', a: '"Happy New Year, grandma!", Chúc mừng năm mới bà ạ!' },
+      { q: 'Bao lì xì tiếng Anh là?', a: '"red envelope", phong bì đỏ.' },
     ],
   },
 
   'P1TA-w23-quiz': {
-    topic: 'Food (1) — Rice, fish, meat',
+    topic: 'Food (1): Rice, fish, meat',
     intro: 'Bữa cơm Việt Nam có cơm, cá, thịt. Mình học tên các món bằng tiếng Anh nhé!',
     objectives: [
       'Biết: rice, fish, meat, soup, egg.',
@@ -607,13 +607,13 @@ export const P1TA_LESSONS = {
     ],
     examples: [
       { q: 'Em thích cơm, nói tiếng Anh?', a: '"I like rice."' },
-      { q: 'Trứng tiếng Anh là?', a: '"egg" — đọc /ék/.' },
+      { q: 'Trứng tiếng Anh là?', a: '"egg", đọc /ék/.' },
     ],
   },
 
   'P1TA-w24-quiz': {
-    topic: 'Food (2) — Cake, candy, ice cream',
-    intro: 'Bánh, kẹo, kem — món nào em thích nhất nào? Mình học tên các món ngọt nhé!',
+    topic: 'Food (2): Cake, candy, ice cream',
+    intro: 'Bánh, kẹo, kem; món nào em thích nhất nào? Mình học tên các món ngọt nhé!',
     objectives: [
       'Biết: cake, candy, ice cream, bread.',
       'Hỏi/trả lời "Do you like…?" – "Yes, I do."',
@@ -629,16 +629,16 @@ export const P1TA_LESSONS = {
       { h: 'Mẫu câu' },
       { p: '"Do you like cake?" = Bạn có thích bánh không?' },
       { p: '"Yes, I do." = Có. / "No, I don\'t." = Không.' },
-      { note: 'Ăn nhiều kẹo dễ sâu răng — nhớ đánh răng nhé các em!' },
+      { note: 'Ăn nhiều kẹo dễ sâu răng, nhớ đánh răng nhé các em!' },
     ],
     examples: [
       { q: '"Do you like ice cream?" Trả lời CÓ:', a: '"Yes, I do." = Có, tôi có thích.' },
-      { q: 'Bánh mì tiếng Anh là?', a: '"bread" — đọc /brét/.' },
+      { q: 'Bánh mì tiếng Anh là?', a: '"bread", đọc /brét/.' },
     ],
   },
 
   'P1TA-w25-quiz': {
-    topic: 'Drinks — Water, milk, juice',
+    topic: 'Drinks: Water, milk, juice',
     intro: 'Khát nước rồi! Mình học tên các loại đồ uống nhé các em!',
     objectives: [
       'Biết: water, milk, juice, tea.',
@@ -660,12 +660,12 @@ export const P1TA_LESSONS = {
     ],
     examples: [
       { q: 'Em muốn uống sữa, nói thế nào?', a: '"I want some milk." = Em muốn ít sữa.' },
-      { q: 'Nước ép cam tiếng Anh là?', a: '"orange juice" — orange (cam) + juice (nước ép).' },
+      { q: 'Nước ép cam tiếng Anh là?', a: '"orange juice", orange (cam) + juice (nước ép).' },
     ],
   },
 
   'P1TA-w26-quiz': {
-    topic: 'Fruits — Apple, banana, orange',
+    topic: 'Fruits: Apple, banana, orange',
     intro: 'Trái cây đầy màu sắc và rất ngon. Mình học tên các loại quả nhé!',
     objectives: [
       'Biết: apple, banana, orange, mango.',
@@ -686,13 +686,13 @@ export const P1TA_LESSONS = {
       { note: 'Ăn trái cây mỗi ngày giúp em khoẻ và đẹp da.' },
     ],
     examples: [
-      { q: 'Quả chuối tiếng Anh là?', a: '"banana" — đọc /bơ-na-nờ/.' },
-      { q: 'Dùng "a" hay "an" trước "orange"?', a: '"an orange" — vì orange bắt đầu bằng nguyên âm "o".' },
+      { q: 'Quả chuối tiếng Anh là?', a: '"banana", đọc /bơ-na-nờ/.' },
+      { q: 'Dùng "a" hay "an" trước "orange"?', a: '"an orange", vì orange bắt đầu bằng nguyên âm "o".' },
     ],
   },
 
   'P1TA-w27-quiz': {
-    topic: 'Weather — Sunny, rainy, hot, cold',
+    topic: 'Weather: Sunny, rainy, hot, cold',
     intro: 'Hôm nay trời thế nào nhỉ? Mình học cách nói về thời tiết bằng tiếng Anh nhé!',
     objectives: [
       'Biết: sunny, rainy, hot, cold, windy, cloudy.',
@@ -715,12 +715,12 @@ export const P1TA_LESSONS = {
     ],
     examples: [
       { q: 'Hôm nay trời nắng, nói tiếng Anh?', a: '"It is sunny today." = Hôm nay trời nắng.' },
-      { q: 'Trời mưa tiếng Anh là?', a: '"rainy" — "It is rainy."' },
+      { q: 'Trời mưa tiếng Anh là?', a: '"rainy", "It is rainy."' },
     ],
   },
 
   'P1TA-w28-quiz': {
-    topic: "Can / Can't — Có thể / Không thể",
+    topic: "Can / Can't: Có thể / Không thể",
     intro: 'Em làm được gì nào? Hát, nhảy, bơi? Mình học cách khoe khả năng bằng tiếng Anh nhé!',
     objectives: [
       'Biết dùng can = có thể; can\'t = không thể.',
@@ -740,12 +740,12 @@ export const P1TA_LESSONS = {
     ],
     examples: [
       { q: 'Em biết bơi, nói tiếng Anh?', a: '"I can swim." = Tôi biết bơi.' },
-      { q: '"Can you sing?" — Em biết hát, trả lời?', a: '"Yes, I can." = Vâng, tôi có thể.' },
+      { q: '"Can you sing?", Em biết hát, trả lời?', a: '"Yes, I can." = Vâng, tôi có thể.' },
     ],
   },
 
   'P1TA-w29-quiz': {
-    topic: 'Action verbs — Run, jump, sing, dance',
+    topic: 'Action verbs: Run, jump, sing, dance',
     intro: 'Cùng đứng dậy vận động nào! Mình học các từ chỉ hành động trong tiếng Anh nhé!',
     objectives: [
       'Biết: run, jump, sing, dance, walk, swim.',
@@ -766,16 +766,16 @@ export const P1TA_LESSONS = {
       { note: 'Vận động mỗi ngày giúp em khoẻ mạnh và thông minh.' },
     ],
     examples: [
-      { q: 'Cô nói "Jump!", em làm gì?', a: 'Em nhảy lên — jump = nhảy lên.' },
-      { q: 'Bơi tiếng Anh là?', a: '"swim" — đọc /xguim/.' },
+      { q: 'Cô nói "Jump!", em làm gì?', a: 'Em nhảy lên: jump = nhảy lên.' },
+      { q: 'Bơi tiếng Anh là?', a: '"swim", đọc /xguim/.' },
     ],
   },
 
   'P1TA-w30-quiz': {
-    topic: 'This / That — Đây / Kia',
+    topic: 'This / That: Đây / Kia',
     intro: 'Khi muốn chỉ vật gần và vật xa, tiếng Anh có hai từ rất hay: this và that. Mình học nhé!',
     objectives: [
-      'Biết: this (đây) — that (kia).',
+      'Biết: this (đây); that (kia).',
       'Đặt câu "This is…" / "That is…".',
     ],
     theory: [
@@ -787,7 +787,7 @@ export const P1TA_LESSONS = {
       { h: 'Mẫu câu' },
       { p: '"This is a book." = Đây là quyển sách. (sách ở gần)' },
       { p: '"That is a car." = Kia là cái ô tô. (ô tô ở xa)' },
-      { note: 'Số nhiều: these (những cái này) — those (những cái kia).' },
+      { note: 'Số nhiều: these (những cái này); those (những cái kia).' },
     ],
     examples: [
       { q: 'Em cầm cây bút trên tay và nói:', a: '"This is a pen." = Đây là cây bút.' },
@@ -796,7 +796,7 @@ export const P1TA_LESSONS = {
   },
 
   'P1TA-w31-quiz': {
-    topic: 'Where? — In / On / Under',
+    topic: 'Where?, In / On / Under',
     intro: 'Quyển sách ở đâu nhỉ? Trên bàn, trong cặp hay dưới ghế? Mình học các giới từ chỉ vị trí nhé!',
     objectives: [
       'Biết: in (trong), on (trên), under (dưới).',
@@ -816,12 +816,12 @@ export const P1TA_LESSONS = {
     ],
     examples: [
       { q: 'Con mèo nằm dưới ghế. Tiếng Anh?', a: '"The cat is under the chair."' },
-      { q: '"Where is the pen?" — bút ở trong cặp:', a: '"It is in the bag." = Nó ở trong cặp.' },
+      { q: '"Where is the pen?", bút ở trong cặp:', a: '"It is in the bag." = Nó ở trong cặp.' },
     ],
   },
 
   'P1TA-w32-quiz': {
-    topic: 'Clothes — Shirt, hat, shoes',
+    topic: 'Clothes: Shirt, hat, shoes',
     intro: 'Hôm nay em mặc gì nào? Mình học tên các loại quần áo bằng tiếng Anh nhé!',
     objectives: [
       'Biết: shirt, hat, shoes, dress, trousers.',
@@ -842,13 +842,13 @@ export const P1TA_LESSONS = {
       { note: 'shoes, trousers luôn có "s" vì là cặp/đôi.' },
     ],
     examples: [
-      { q: 'Đôi giày tiếng Anh là?', a: '"shoes" — luôn có "s" vì đi cả đôi.' },
+      { q: 'Đôi giày tiếng Anh là?', a: '"shoes", luôn có "s" vì đi cả đôi.' },
       { q: 'Em đội mũ đi học, nói tiếng Anh?', a: '"I wear a hat to school."' },
     ],
   },
 
   'P1TA-w33-quiz': {
-    topic: 'Days & playtime — Today, play, school',
+    topic: 'Days & playtime: Today, play, school',
     intro: 'Hôm nay là thứ mấy nhỉ? Mình học cách nói về thời gian và việc đi học, vui chơi nhé!',
     objectives: [
       'Biết: today, school, play, friend.',
@@ -869,13 +869,13 @@ export const P1TA_LESSONS = {
       { note: 'go to school = đi đến trường. go home = về nhà.' },
     ],
     examples: [
-      { q: 'Bạn tiếng Anh là?', a: '"friend" — đọc /phren/.' },
+      { q: 'Bạn tiếng Anh là?', a: '"friend", đọc /phren/.' },
       { q: 'Dịch: "I play with Lan."', a: 'Tôi chơi với Lan.' },
     ],
   },
 
   'P1TA-w34-quiz': {
-    topic: 'Polite words — Please, thank you, sorry',
+    topic: 'Polite words: Please, thank you, sorry',
     intro: 'Bạn nhỏ ngoan biết nói lời lịch sự. Mình học 3 từ vàng trong tiếng Anh nhé!',
     objectives: [
       'Biết: please, thank you, sorry, excuse me.',
@@ -902,7 +902,7 @@ export const P1TA_LESSONS = {
   },
 
   'P1TA-w35-quiz': {
-    topic: 'Review whole year — Ôn tập cuối năm',
+    topic: 'Review whole year: Ôn tập cuối năm',
     intro: 'Một năm học sắp khép lại rồi. Các em đã giỏi hơn rất nhiều! Mình cùng ôn lại tất cả nhé!',
     objectives: [
       'Ôn lại toàn bộ chủ đề: chào hỏi, số, màu, gia đình, đồ vật, cơ thể, con vật, đồ ăn, thời tiết, hành động.',
@@ -919,11 +919,11 @@ export const P1TA_LESSONS = {
       { p: 'cat, dog, fish, bird, cow, pig, elephant, tiger; rice, fish, cake, milk, apple.' },
       { h: 'Mẫu câu vàng' },
       { ul: [
-        '"My name is ___." — Tên tôi là ___.',
-        '"I am six." — Tôi 6 tuổi.',
-        '"I like ___." — Tôi thích ___.',
-        '"I can ___." — Tôi có thể ___.',
-        '"This is a ___." — Đây là ___.',
+        '"My name is ___.", Tên tôi là ___.',
+        '"I am six.", Tôi 6 tuổi.',
+        '"I like ___.", Tôi thích ___.',
+        '"I can ___.", Tôi có thể ___.',
+        '"This is a ___.", Đây là ___.',
       ] },
       { note: 'Lên Lớp 2 các em sẽ học thêm nhiều điều thú vị hơn nữa. Chúc các em luôn yêu tiếng Anh nhé!' },
     ],
@@ -934,7 +934,7 @@ export const P1TA_LESSONS = {
   },
 
   'P1TA-w36-quiz': {
-    topic: 'End of Grade 1 — Ready for Grade 2!',
+    topic: 'End of Grade 1: Ready for Grade 2!',
     intro: 'Wow! You did great this year! Let\'s look back at everything you learned. 🎉',
     objectives: [
       'Review all key English topics from Grade 1.',
@@ -958,7 +958,7 @@ export const P1TA_LESSONS = {
         'Where things are: in, on, under, next to.',
         'Longer sentences and simple questions.',
       ] },
-      { note: 'Keep saying English words every day this summer — even just 5 words a day!' },
+      { note: 'Keep saying English words every day this summer, even just 5 words a day!' },
     ],
     examples: [
       { q: 'Say hello and tell your name and age:', a: '"Hello! My name is ___. I am six years old."' },

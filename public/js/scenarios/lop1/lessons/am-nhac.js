@@ -1,5 +1,5 @@
 // ============================================================
-// Lớp 1 · ÂM NHẠC — Lý thuyết + Ví dụ 35 tuần (GDPT 2018)
+// Lớp 1 · ÂM NHẠC, Lý thuyết + Ví dụ 35 tuần (GDPT 2018)
 // Key TRÙNG id quiz: "P1AN-wNN-quiz".
 // Tập trung: hát đúng, vận động theo nhạc, làm quen nhạc cụ gõ,
 // nghe nhạc, phân biệt to/nhỏ, nhanh/chậm, cao/thấp.
@@ -16,7 +16,7 @@ export const P1AN_LESSONS = {
     ],
     theory: [
       { h: 'Đôi nét về bài hát' },
-      { p: '"Quê hương tươi đẹp" là dân ca của dân tộc Nùng — một trong 54 dân tộc anh em của Việt Nam. Bài hát ca ngợi cảnh đẹp của quê hương.' },
+      { p: '"Quê hương tươi đẹp" là dân ca của dân tộc Nùng, một trong 54 dân tộc anh em của Việt Nam. Bài hát ca ngợi cảnh đẹp của quê hương.' },
       { h: 'Hát thế nào?' },
       { ul: [
         'Hát giọng nhẹ nhàng, êm ái.',
@@ -26,13 +26,13 @@ export const P1AN_LESSONS = {
       { note: 'Khi hát em hình dung cảnh quê mình: núi, sông, cánh đồng… để hát thêm hay.' },
     ],
     examples: [
-      { q: '"Quê hương tươi đẹp" là dân ca của dân tộc nào?', a: 'Dân tộc Nùng — một dân tộc thiểu số của Việt Nam.' },
+      { q: '"Quê hương tươi đẹp" là dân ca của dân tộc nào?', a: 'Dân tộc Nùng: một dân tộc thiểu số của Việt Nam.' },
       { q: 'Hát bài này với cảm xúc thế nào?', a: 'Nhẹ nhàng, trìu mến, hình dung quê hương tươi đẹp.' },
     ],
   },
 
   'P1AN-w02-quiz': {
-    topic: 'Nghe nhạc — phân biệt to và nhỏ',
+    topic: 'Nghe nhạc: phân biệt to và nhỏ',
     intro: 'Âm thanh quanh ta có lúc to, lúc nhỏ. Mình cùng lắng nghe và phân biệt nhé!',
     objectives: [
       'Phân biệt âm to và âm nhỏ.',
@@ -45,12 +45,12 @@ export const P1AN_LESSONS = {
         'Âm nhỏ: tiếng lá rơi, tiếng thì thầm, tiếng đồng hồ tích tắc.',
       ] },
       { h: 'Tập nghe' },
-      { p: 'Em ngồi im, nhắm mắt và lắng nghe. Cô vỗ tay to — em giơ tay cao. Cô vỗ tay nhỏ — em giơ tay thấp.' },
-      { note: 'Nghe to nhỏ giúp em hát hay hơn — biết hát to khi đoạn vui, hát nhỏ khi đoạn dịu dàng.' },
+      { p: 'Em ngồi im, nhắm mắt và lắng nghe. Cô vỗ tay to, em giơ tay cao. Cô vỗ tay nhỏ, em giơ tay thấp.' },
+      { note: 'Nghe to nhỏ giúp em hát hay hơn, biết hát to khi đoạn vui, hát nhỏ khi đoạn dịu dàng.' },
     ],
     examples: [
-      { q: 'Tiếng trống trường to hay nhỏ?', a: 'To — tiếng trống vang xa khắp sân trường.' },
-      { q: 'Tiếng lá rơi to hay nhỏ?', a: 'Nhỏ — phải lắng tai mới nghe được.' },
+      { q: 'Tiếng trống trường to hay nhỏ?', a: 'To: tiếng trống vang xa khắp sân trường.' },
+      { q: 'Tiếng lá rơi to hay nhỏ?', a: 'Nhỏ: phải lắng tai mới nghe được.' },
     ],
   },
 
@@ -63,7 +63,7 @@ export const P1AN_LESSONS = {
     ],
     theory: [
       { h: 'Phách là gì?' },
-      { p: 'Phách là những nhịp đều đặn — giống tiếng "tích tắc" của đồng hồ trong bài hát.' },
+      { p: 'Phách là những nhịp đều đặn, giống tiếng "tích tắc" của đồng hồ trong bài hát.' },
       { h: 'Cách vỗ tay theo phách' },
       { ul: [
         'Vỗ tay đều, không nhanh không chậm.',
@@ -74,12 +74,12 @@ export const P1AN_LESSONS = {
     ],
     examples: [
       { q: 'Vỗ phách là vỗ như thế nào?', a: 'Vỗ đều đặn, mỗi tiếng vỗ ứng với 1 phách của bài hát.' },
-      { q: 'Đếm 1-2-1-2 mà nhanh quá thì phải làm gì?', a: 'Vỗ chậm lại — đều với cả lớp và với giai điệu bài hát.' },
+      { q: 'Đếm 1-2-1-2 mà nhanh quá thì phải làm gì?', a: 'Vỗ chậm lại: đều với cả lớp và với giai điệu bài hát.' },
     ],
   },
 
   'P1AN-w04-quiz': {
-    topic: 'Nhạc cụ gõ — thanh phách',
+    topic: 'Nhạc cụ gõ: thanh phách',
     intro: 'Thanh phách là nhạc cụ gõ đơn giản nhưng rất vui. Mình cùng học chơi nhé!',
     objectives: [
       'Biết hình dáng và cách cầm thanh phách.',
@@ -92,13 +92,13 @@ export const P1AN_LESSONS = {
       { ul: [
         'Cầm thanh phách giữa các ngón tay, không nắm chặt.',
         'Gõ đều theo phách bài hát.',
-        'Gõ vừa phải — không quá mạnh.',
+        'Gõ vừa phải: không quá mạnh.',
       ] },
-      { note: 'Thanh phách giúp lớp em hát đều và vui hơn — như có dàn nhạc nhỏ.' },
+      { note: 'Thanh phách giúp lớp em hát đều và vui hơn, như có dàn nhạc nhỏ.' },
     ],
     examples: [
-      { q: 'Thanh phách làm bằng gì?', a: 'Bằng gỗ — gồm 2 thanh gỗ nhỏ.' },
-      { q: 'Em có nên gõ thanh phách thật mạnh không?', a: 'Không — gõ vừa phải, tiếng "cốc cốc" vui là đủ.' },
+      { q: 'Thanh phách làm bằng gì?', a: 'Bằng gỗ: gồm 2 thanh gỗ nhỏ.' },
+      { q: 'Em có nên gõ thanh phách thật mạnh không?', a: 'Không: gõ vừa phải, tiếng "cốc cốc" vui là đủ.' },
     ],
   },
 
@@ -118,11 +118,11 @@ export const P1AN_LESSONS = {
         'Có thể vừa hát vừa làm động tác minh hoạ.',
         'Hát rõ chữ "cháu lên ba".',
       ] },
-      { note: 'Em hát với niềm vui và sự hồn nhiên — như bé 3 tuổi đi học.' },
+      { note: 'Em hát với niềm vui và sự hồn nhiên, như bé 3 tuổi đi học.' },
     ],
     examples: [
       { q: 'Bài "Cháu lên ba" nói về ai?', a: 'Về một em bé lên 3 tuổi, đi mẫu giáo, được cô và mẹ yêu thương.' },
-      { q: 'Hát bài này với cảm xúc nào?', a: 'Vui tươi, hồn nhiên — giống một em bé đang vui.' },
+      { q: 'Hát bài này với cảm xúc nào?', a: 'Vui tươi, hồn nhiên; giống một em bé đang vui.' },
     ],
   },
 
@@ -130,7 +130,7 @@ export const P1AN_LESSONS = {
     topic: 'Nhanh và chậm trong âm nhạc',
     intro: 'Có bài hát hát nhanh, có bài hát hát chậm. Mình cùng phân biệt nhé!',
     objectives: [
-      'Phân biệt nhịp nhanh — nhịp chậm.',
+      'Phân biệt nhịp nhanh: nhịp chậm.',
       'Vận động theo nhịp nhanh chậm.',
     ],
     theory: [
@@ -140,12 +140,12 @@ export const P1AN_LESSONS = {
         'Nhịp chậm: bài ru, dịu dàng (ví dụ "Ru con").',
       ] },
       { h: 'Tập' },
-      { p: 'Cô đánh trống nhanh — em chạy nhanh. Cô đánh trống chậm — em đi chậm.' },
+      { p: 'Cô đánh trống nhanh, em chạy nhanh. Cô đánh trống chậm, em đi chậm.' },
       { note: 'Hát đúng tốc độ giúp bài hát hay đúng tính chất.' },
     ],
     examples: [
-      { q: 'Bài hát ru em ngủ thường hát thế nào?', a: 'Chậm và dịu dàng — để em bé dễ ngủ.' },
-      { q: 'Bài "Múa vui" hát nhanh hay chậm?', a: 'Nhanh và vui tươi — để mọi người cùng múa.' },
+      { q: 'Bài hát ru em ngủ thường hát thế nào?', a: 'Chậm và dịu dàng: để em bé dễ ngủ.' },
+      { q: 'Bài "Múa vui" hát nhanh hay chậm?', a: 'Nhanh và vui tươi: để mọi người cùng múa.' },
     ],
   },
 
@@ -161,20 +161,20 @@ export const P1AN_LESSONS = {
       { p: '"Mời bạn vui múa ca" là bài hát mời gọi các bạn cùng vui hát múa. Giai điệu vui tươi, nhịp đều.' },
       { h: 'Vận động' },
       { ul: [
-        'Khi hát "mời bạn" — vẫy tay mời.',
-        'Khi hát "múa ca" — xoay người, vỗ tay.',
+        'Khi hát "mời bạn", vẫy tay mời.',
+        'Khi hát "múa ca", xoay người, vỗ tay.',
         'Hát cùng cả lớp thành vòng tròn.',
       ] },
       { note: 'Hát kết hợp vận động giúp bài thêm sống động và vui.' },
     ],
     examples: [
-      { q: 'Bài "Mời bạn vui múa ca" giai điệu thế nào?', a: 'Vui tươi, nhịp đều — mời mọi người cùng hát và múa.' },
+      { q: 'Bài "Mời bạn vui múa ca" giai điệu thế nào?', a: 'Vui tươi, nhịp đều; mời mọi người cùng hát và múa.' },
       { q: 'Khi hát "mời bạn" em làm động tác gì?', a: 'Vẫy tay mời bạn lại để cùng hát múa.' },
     ],
   },
 
   'P1AN-w08-quiz': {
-    topic: 'Nhạc cụ gõ — trống nhỏ',
+    topic: 'Nhạc cụ gõ: trống nhỏ',
     intro: 'Trống nhỏ vang giòn, làm bài hát thêm sôi động. Mình cùng học nhé!',
     objectives: [
       'Biết hình dáng trống nhỏ.',
@@ -186,14 +186,14 @@ export const P1AN_LESSONS = {
       { h: 'Cách đánh' },
       { ul: [
         'Cầm dùi trống vững.',
-        'Đánh vào giữa mặt trống — không vào mép.',
+        'Đánh vào giữa mặt trống, không vào mép.',
         'Đánh đều theo phách hoặc nhịp.',
       ] },
-      { note: 'Trống là nhạc cụ cổ — có ở hầu hết các nền văn hoá.' },
+      { note: 'Trống là nhạc cụ cổ, có ở hầu hết các nền văn hoá.' },
     ],
     examples: [
       { q: 'Khi đánh trống, em đánh vào đâu?', a: 'Vào giữa mặt trống để tiếng vang to và đẹp.' },
-      { q: 'Mặt trống làm bằng gì?', a: 'Bằng da căng — khi đánh sẽ rung và phát ra âm thanh.' },
+      { q: 'Mặt trống làm bằng gì?', a: 'Bằng da căng: khi đánh sẽ rung và phát ra âm thanh.' },
     ],
   },
 
@@ -206,23 +206,23 @@ export const P1AN_LESSONS = {
     ],
     theory: [
       { h: 'Đôi nét' },
-      { p: '"Cùng quây quần" là bài hát về tình bạn — các bạn ngồi quây quần bên nhau, cùng vui cùng học.' },
+      { p: '"Cùng quây quần" là bài hát về tình bạn, các bạn ngồi quây quần bên nhau, cùng vui cùng học.' },
       { h: 'Cách hát' },
       { ul: [
         'Giọng ấm áp, thân thiện.',
         'Có thể ngồi vòng tròn khi hát.',
         'Nắm tay bạn bên cạnh khi hát.',
       ] },
-      { note: 'Tình bạn quây quần là điều rất đáng quý — em hãy giữ gìn tình bạn nhé!' },
+      { note: 'Tình bạn quây quần là điều rất đáng quý, em hãy giữ gìn tình bạn nhé!' },
     ],
     examples: [
-      { q: '"Quây quần" nghĩa là gì?', a: 'Là tụ tập quanh nhau, ngồi gần nhau — như gia đình quây quần bên bữa cơm.' },
-      { q: 'Hát bài này có thể làm thêm gì?', a: 'Ngồi vòng tròn, nắm tay bạn — tăng cảm giác thân thiết.' },
+      { q: '"Quây quần" nghĩa là gì?', a: 'Là tụ tập quanh nhau, ngồi gần nhau; như gia đình quây quần bên bữa cơm.' },
+      { q: 'Hát bài này có thể làm thêm gì?', a: 'Ngồi vòng tròn, nắm tay bạn; tăng cảm giác thân thiết.' },
     ],
   },
 
   'P1AN-w10-quiz': {
-    topic: 'Nghe nhạc — "Quốc ca Việt Nam"',
+    topic: 'Nghe nhạc: "Quốc ca Việt Nam"',
     intro: 'Quốc ca là bài hát thiêng liêng của Tổ quốc. Mình cùng nghe và tìm hiểu nhé!',
     objectives: [
       'Biết Quốc ca là "Tiến quân ca", do nhạc sĩ Văn Cao sáng tác.',
@@ -241,7 +241,7 @@ export const P1AN_LESSONS = {
       { note: 'Hát Quốc ca thể hiện lòng yêu nước và tự hào dân tộc.' },
     ],
     examples: [
-      { q: 'Quốc ca Việt Nam tên gốc là gì?', a: '"Tiến quân ca" — do nhạc sĩ Văn Cao sáng tác.' },
+      { q: 'Quốc ca Việt Nam tên gốc là gì?', a: '"Tiến quân ca", do nhạc sĩ Văn Cao sáng tác.' },
       { q: 'Khi chào cờ em làm gì?', a: 'Đứng nghiêm, mắt nhìn cờ, hát Quốc ca trang nghiêm.' },
     ],
   },
@@ -262,10 +262,10 @@ export const P1AN_LESSONS = {
         'Phát âm rõ chữ "cây xanh".',
         'Có thể đung đưa nhẹ theo nhạc.',
       ] },
-      { note: 'Dân ca là âm nhạc của ông cha — em yêu dân ca là yêu văn hoá Việt Nam.' },
+      { note: 'Dân ca là âm nhạc của ông cha, em yêu dân ca là yêu văn hoá Việt Nam.' },
     ],
     examples: [
-      { q: '"Lý cây xanh" là dân ca vùng nào?', a: 'Dân ca Nam Bộ — vùng miền Nam Việt Nam.' },
+      { q: '"Lý cây xanh" là dân ca vùng nào?', a: 'Dân ca Nam Bộ: vùng miền Nam Việt Nam.' },
       { q: '"Lý" trong âm nhạc nghĩa là gì?', a: 'Là một thể loại dân ca, giai điệu vui tươi của miền Nam.' },
     ],
   },
@@ -280,16 +280,16 @@ export const P1AN_LESSONS = {
     theory: [
       { h: 'Âm cao và âm thấp' },
       { ul: [
-        'Âm cao: thanh, nhẹ — tiếng chim hót, tiếng sáo.',
-        'Âm thấp: trầm, nặng — tiếng trống lớn, tiếng đàn ông nói.',
+        'Âm cao: thanh, nhẹ; tiếng chim hót, tiếng sáo.',
+        'Âm thấp: trầm, nặng; tiếng trống lớn, tiếng đàn ông nói.',
       ] },
       { h: 'Tập' },
-      { p: 'Cô đàn nốt cao — em đứng dậy. Cô đàn nốt thấp — em ngồi xuống.' },
+      { p: 'Cô đàn nốt cao, em đứng dậy. Cô đàn nốt thấp, em ngồi xuống.' },
       { note: 'Phân biệt cao thấp giúp em hát đúng giai điệu, không bị "lệch tông".' },
     ],
     examples: [
-      { q: 'Tiếng chim hót là âm cao hay thấp?', a: 'Âm cao — nghe thanh và nhẹ.' },
-      { q: 'Tiếng trống lớn là âm cao hay thấp?', a: 'Âm thấp — nghe trầm và mạnh.' },
+      { q: 'Tiếng chim hót là âm cao hay thấp?', a: 'Âm cao: nghe thanh và nhẹ.' },
+      { q: 'Tiếng trống lớn là âm cao hay thấp?', a: 'Âm thấp: nghe trầm và mạnh.' },
     ],
   },
 
@@ -313,12 +313,12 @@ export const P1AN_LESSONS = {
     ],
     examples: [
       { q: 'Bài "Tìm bạn thân" nói về điều gì?', a: 'Về việc tìm bạn để cùng chơi, cùng học.' },
-      { q: 'Cuối bài hát em làm gì?', a: 'Tìm 1 bạn để nắm tay — chơi trò tìm bạn thân.' },
+      { q: 'Cuối bài hát em làm gì?', a: 'Tìm 1 bạn để nắm tay, chơi trò tìm bạn thân.' },
     ],
   },
 
   'P1AN-w14-quiz': {
-    topic: 'Nhạc cụ gõ — song loan',
+    topic: 'Nhạc cụ gõ: song loan',
     intro: 'Song loan là nhạc cụ truyền thống của Việt Nam. Mình cùng tìm hiểu nhé!',
     objectives: [
       'Biết hình dáng song loan.',
@@ -333,11 +333,11 @@ export const P1AN_LESSONS = {
         'Gõ đều theo phách.',
         'Hay dùng trong đờn ca tài tử Nam Bộ và cải lương.',
       ] },
-      { note: 'Song loan là một phần của âm nhạc truyền thống Việt Nam — em hãy tự hào nhé!' },
+      { note: 'Song loan là một phần của âm nhạc truyền thống Việt Nam, em hãy tự hào nhé!' },
     ],
     examples: [
-      { q: 'Song loan làm bằng vật liệu gì?', a: 'Bằng gỗ — có 2 mảnh nối bằng lò xo.' },
-      { q: 'Song loan hay dùng trong loại nhạc nào?', a: 'Đờn ca tài tử Nam Bộ và cải lương — âm nhạc truyền thống.' },
+      { q: 'Song loan làm bằng vật liệu gì?', a: 'Bằng gỗ: có 2 mảnh nối bằng lò xo.' },
+      { q: 'Song loan hay dùng trong loại nhạc nào?', a: 'Đờn ca tài tử Nam Bộ và cải lương, âm nhạc truyền thống.' },
     ],
   },
 
@@ -357,10 +357,10 @@ export const P1AN_LESSONS = {
         'Vừa hát vừa làm động tác bắt chéo tay (như bắc kim thang).',
         'Có thể chơi theo nhóm 2 bạn nắm tay.',
       ] },
-      { note: 'Đồng dao là di sản tuổi thơ — em hát đồng dao là giữ gìn văn hoá dân gian.' },
+      { note: 'Đồng dao là di sản tuổi thơ, em hát đồng dao là giữ gìn văn hoá dân gian.' },
     ],
     examples: [
-      { q: '"Bắc kim thang" thuộc thể loại nào?', a: 'Đồng dao Nam Bộ — bài hát chơi của trẻ em xưa.' },
+      { q: '"Bắc kim thang" thuộc thể loại nào?', a: 'Đồng dao Nam Bộ: bài hát chơi của trẻ em xưa.' },
       { q: 'Đồng dao là gì?', a: 'Là bài hát của trẻ em xưa, thường gắn với trò chơi dân gian.' },
     ],
   },
@@ -375,26 +375,26 @@ export const P1AN_LESSONS = {
     theory: [
       { h: 'Các bài đã học' },
       { ul: [
-        '"Quê hương tươi đẹp" — dân ca Nùng.',
-        '"Cháu lên ba" — thiếu nhi quen thuộc.',
-        '"Mời bạn vui múa ca" — vui múa.',
-        '"Cùng quây quần" — tình bạn.',
-        '"Lý cây xanh" — dân ca Nam Bộ.',
-        '"Tìm bạn thân" — trò chơi.',
-        '"Bắc kim thang" — đồng dao Nam Bộ.',
+        '"Quê hương tươi đẹp", dân ca Nùng.',
+        '"Cháu lên ba", thiếu nhi quen thuộc.',
+        '"Mời bạn vui múa ca", vui múa.',
+        '"Cùng quây quần", tình bạn.',
+        '"Lý cây xanh", dân ca Nam Bộ.',
+        '"Tìm bạn thân", trò chơi.',
+        '"Bắc kim thang", đồng dao Nam Bộ.',
       ] },
       { h: 'Phối hợp hát + gõ phách' },
       { p: 'Hát kèm gõ thanh phách hoặc vỗ tay đều theo phách bài hát.' },
-      { note: 'Hát đều, gõ đều — bài hát mới hay và đẹp.' },
+      { note: 'Hát đều, gõ đều; bài hát mới hay và đẹp.' },
     ],
     examples: [
-      { q: 'Bài nào là dân ca Nùng?', a: '"Quê hương tươi đẹp" — dân ca dân tộc Nùng.' },
-      { q: 'Bài nào hay dùng để chơi trò tìm bạn?', a: '"Tìm bạn thân" — vừa hát vừa chơi rất vui.' },
+      { q: 'Bài nào là dân ca Nùng?', a: '"Quê hương tươi đẹp", dân ca dân tộc Nùng.' },
+      { q: 'Bài nào hay dùng để chơi trò tìm bạn?', a: '"Tìm bạn thân", vừa hát vừa chơi rất vui.' },
     ],
   },
 
   'P1AN-w17-quiz': {
-    topic: 'Ôn tập HK1 — kể tên bài đã học',
+    topic: 'Ôn tập HK1: kể tên bài đã học',
     intro: 'Học kỳ 1 sắp xong rồi. Em hãy ôn lại tên các bài hát và nhạc cụ đã học nhé!',
     objectives: [
       'Nhớ tên các bài hát đã học.',
@@ -405,23 +405,23 @@ export const P1AN_LESSONS = {
       { p: '7 bài: Quê hương tươi đẹp, Cháu lên ba, Mời bạn vui múa ca, Cùng quây quần, Lý cây xanh, Tìm bạn thân, Bắc kim thang.' },
       { h: 'Nhạc cụ gõ đã học' },
       { ul: [
-        'Thanh phách — 2 thanh gỗ.',
-        'Trống nhỏ — mặt da, tiếng "tùng".',
-        'Song loan — gỗ, có lò xo, tiếng "cốc".',
+        'Thanh phách: 2 thanh gỗ.',
+        'Trống nhỏ: mặt da, tiếng "tùng".',
+        'Song loan: gỗ, có lò xo, tiếng "cốc".',
       ] },
       { h: 'Khái niệm' },
-      { p: 'To/nhỏ, nhanh/chậm, cao/thấp — đều là tính chất của âm thanh trong âm nhạc.' },
+      { p: 'To/nhỏ, nhanh/chậm, cao/thấp; đều là tính chất của âm thanh trong âm nhạc.' },
       { note: 'Em ôn lại để chuẩn bị thi cuối HK1 nhé!' },
     ],
     examples: [
       { q: 'Kể 2 nhạc cụ gõ em đã học.', a: 'Ví dụ: thanh phách và trống nhỏ (hoặc song loan).' },
-      { q: 'Bài "Lý cây xanh" là dân ca vùng nào?', a: 'Nam Bộ — dân ca miền Nam Việt Nam.' },
+      { q: 'Bài "Lý cây xanh" là dân ca vùng nào?', a: 'Nam Bộ: dân ca miền Nam Việt Nam.' },
     ],
   },
 
   'P1AN-w18-quiz': {
     topic: 'Kiểm tra cuối HK1',
-    intro: 'Tuần kiểm tra cuối HK1 — em hát thật tự tin và đúng nhịp nhé!',
+    intro: 'Tuần kiểm tra cuối HK1, em hát thật tự tin và đúng nhịp nhé!',
     objectives: [
       'Tự tin hát 1 bài đã học.',
       'Gõ đúng phách.',
@@ -435,11 +435,11 @@ export const P1AN_LESSONS = {
       ] },
       { h: 'Khi thi' },
       { p: 'Đứng nghiêm, chào cô. Giới thiệu bài. Hát to, rõ, đúng cao độ. Sau khi hát: chào cô.' },
-      { note: 'Hát hay không bằng hát đúng — em cứ tự tin là tốt nhất.' },
+      { note: 'Hát hay không bằng hát đúng, em cứ tự tin là tốt nhất.' },
     ],
     examples: [
       { q: 'Trước khi hát em làm gì?', a: 'Chào cô và giới thiệu: "Em xin hát bài… của tác giả…"' },
-      { q: 'Em hát bị quên lời, làm thế nào?', a: 'Bình tĩnh, hát la-la theo giai điệu để hát tiếp — không bỏ giữa chừng.' },
+      { q: 'Em hát bị quên lời, làm thế nào?', a: 'Bình tĩnh, hát la-la theo giai điệu để hát tiếp; không bỏ giữa chừng.' },
     ],
   },
 
@@ -460,17 +460,17 @@ export const P1AN_LESSONS = {
         'Nhịp nhanh vừa, sôi động.',
         'Có thể vỗ tay theo phách.',
       ] },
-      { note: 'Tết đến — ai cũng vui. Em hát bài này với niềm vui đón Tết.' },
+      { note: 'Tết đến: ai cũng vui. Em hát bài này với niềm vui đón Tết.' },
     ],
     examples: [
-      { q: 'Bài "Sắp đến Tết rồi" do ai sáng tác?', a: 'Nhạc sĩ Hoàng Vân — tác giả nhiều bài thiếu nhi nổi tiếng.' },
-      { q: 'Hát bài này với cảm xúc thế nào?', a: 'Vui tươi, háo hức — như em đang chờ Tết.' },
+      { q: 'Bài "Sắp đến Tết rồi" do ai sáng tác?', a: 'Nhạc sĩ Hoàng Vân: tác giả nhiều bài thiếu nhi nổi tiếng.' },
+      { q: 'Hát bài này với cảm xúc thế nào?', a: 'Vui tươi, háo hức; như em đang chờ Tết.' },
     ],
   },
 
   'P1AN-w20-quiz': {
     topic: 'Bài hát "Cả nhà thương nhau"',
-    intro: 'Bài hát ấm áp về gia đình — bố mẹ và em yêu thương nhau. Mình cùng hát nhé!',
+    intro: 'Bài hát ấm áp về gia đình, bố mẹ và em yêu thương nhau. Mình cùng hát nhé!',
     objectives: [
       'Hát thuộc bài "Cả nhà thương nhau".',
       'Hát với cảm xúc ấm áp.',
@@ -488,7 +488,7 @@ export const P1AN_LESSONS = {
     ],
     examples: [
       { q: 'Bài "Cả nhà thương nhau" nói về điều gì?', a: 'Về tình yêu thương trong gia đình: bố, mẹ và con.' },
-      { q: 'Hát bài này với cảm xúc nào?', a: 'Ấm áp, tình cảm — như em đang nghĩ về bố mẹ.' },
+      { q: 'Hát bài này với cảm xúc nào?', a: 'Ấm áp, tình cảm; như em đang nghĩ về bố mẹ.' },
     ],
   },
 
@@ -511,13 +511,13 @@ export const P1AN_LESSONS = {
       { note: 'Bài "Sắp đến Tết rồi", "Cháu lên ba"… đều ở nhịp 2/4.' },
     ],
     examples: [
-      { q: 'Trong nhịp 2/4, phách nào là phách mạnh?', a: 'Phách 1 — phách đầu tiên trong ô nhịp.' },
-      { q: 'Đếm phách 1-2-1-2 nghĩa là?', a: 'Đếm theo nhịp 2/4 — mỗi 2 phách lặp lại.' },
+      { q: 'Trong nhịp 2/4, phách nào là phách mạnh?', a: 'Phách 1: phách đầu tiên trong ô nhịp.' },
+      { q: 'Đếm phách 1-2-1-2 nghĩa là?', a: 'Đếm theo nhịp 2/4: mỗi 2 phách lặp lại.' },
     ],
   },
 
   'P1AN-w22-quiz': {
-    topic: 'Tết — bài hát "Sắp đến Tết rồi" (ôn)',
+    topic: 'Tết: bài hát "Sắp đến Tết rồi" (ôn)',
     intro: 'Mình cùng ôn lại bài "Sắp đến Tết rồi" để chào đón Tết về nhé!',
     objectives: [
       'Hát thuộc và đúng bài "Sắp đến Tết rồi".',
@@ -525,18 +525,18 @@ export const P1AN_LESSONS = {
     ],
     theory: [
       { h: 'Ôn bài' },
-      { p: 'Hát lại bài "Sắp đến Tết rồi" của nhạc sĩ Hoàng Vân — bài hát vui đón Tết.' },
+      { p: 'Hát lại bài "Sắp đến Tết rồi" của nhạc sĩ Hoàng Vân, bài hát vui đón Tết.' },
       { h: 'Phối hợp' },
       { ul: [
         'Hát kết hợp vỗ tay theo phách.',
         'Hát kết hợp gõ thanh phách.',
         'Có thể hát theo nhóm: 1 nhóm hát, 1 nhóm gõ.',
       ] },
-      { note: 'Hát Tết phải vui — gương mặt rạng rỡ, mắt long lanh nhé!' },
+      { note: 'Hát Tết phải vui: gương mặt rạng rỡ, mắt long lanh nhé!' },
     ],
     examples: [
-      { q: 'Vừa hát vừa vỗ tay theo gì?', a: 'Theo phách bài hát — vỗ đều, đúng nhịp.' },
-      { q: 'Hát Tết em nên có cảm xúc gì?', a: 'Vui tươi, rạng rỡ — như đang đón Tết thật.' },
+      { q: 'Vừa hát vừa vỗ tay theo gì?', a: 'Theo phách bài hát: vỗ đều, đúng nhịp.' },
+      { q: 'Hát Tết em nên có cảm xúc gì?', a: 'Vui tươi, rạng rỡ; như đang đón Tết thật.' },
     ],
   },
 
@@ -559,13 +559,13 @@ export const P1AN_LESSONS = {
       { note: 'Học bài hát vừa biết thêm tên các loại quả thật vui.' },
     ],
     examples: [
-      { q: 'Bài "Quả" hát về cái gì?', a: 'Về các loại quả: khế, mít, bóng, đất — vừa thật vừa vui.' },
+      { q: 'Bài "Quả" hát về cái gì?', a: 'Về các loại quả: khế, mít, bóng, đất; vừa thật vừa vui.' },
       { q: 'Em làm hình tròn bằng tay là chỉ quả gì?', a: 'Có thể là quả mít, quả bóng, hoặc quả cam.' },
     ],
   },
 
   'P1AN-w24-quiz': {
-    topic: 'Nhịp 2/4 — vỗ tay theo nhịp mạnh và nhẹ',
+    topic: 'Nhịp 2/4: vỗ tay theo nhịp mạnh và nhẹ',
     intro: 'Nhịp 2/4 có 2 phách: 1 mạnh, 1 nhẹ. Mình tập vỗ tay nhé!',
     objectives: [
       'Hiểu nhịp 2/4 cơ bản.',
@@ -580,11 +580,11 @@ export const P1AN_LESSONS = {
         'Áp dụng vào bài "Sắp đến Tết rồi", "Cháu lên ba".',
         'Có thể dậm chân mạnh, vỗ tay nhẹ.',
       ] },
-      { note: 'Phân biệt mạnh nhẹ giúp bài hát có hồn — không "trôi" đều đều.' },
+      { note: 'Phân biệt mạnh nhẹ giúp bài hát có hồn, không "trôi" đều đều.' },
     ],
     examples: [
-      { q: 'Phách 1 trong nhịp 2/4 vỗ thế nào?', a: 'Vỗ mạnh — đó là phách mạnh, đầu ô nhịp.' },
-      { q: 'Phách 2 vỗ thế nào?', a: 'Vỗ nhẹ — đó là phách nhẹ.' },
+      { q: 'Phách 1 trong nhịp 2/4 vỗ thế nào?', a: 'Vỗ mạnh: đó là phách mạnh, đầu ô nhịp.' },
+      { q: 'Phách 2 vỗ thế nào?', a: 'Vỗ nhẹ: đó là phách nhẹ.' },
     ],
   },
 
@@ -607,14 +607,14 @@ export const P1AN_LESSONS = {
       { note: 'Đi học về em nhớ chào ba mẹ, đúng như bài hát nhé!' },
     ],
     examples: [
-      { q: 'Em đi học về chào ai?', a: 'Chào ông bà, bố mẹ — đúng như bài hát "Đi học về".' },
+      { q: 'Em đi học về chào ai?', a: 'Chào ông bà, bố mẹ; đúng như bài hát "Đi học về".' },
       { q: 'Bài này tác giả là ai?', a: 'Hoàng Long – Hoàng Lân (hai anh em nhạc sĩ thiếu nhi nổi tiếng).' },
     ],
   },
 
   'P1AN-w26-quiz': {
     topic: 'Nốt đen và nốt trắng (làm quen)',
-    intro: 'Em bắt đầu làm quen với "ngôn ngữ" của âm nhạc — các nốt nhạc nhé!',
+    intro: 'Em bắt đầu làm quen với "ngôn ngữ" của âm nhạc, các nốt nhạc nhé!',
     objectives: [
       'Nhận biết hình dáng nốt đen và nốt trắng.',
       'Biết nốt đen ngắn hơn nốt trắng.',
@@ -623,12 +623,12 @@ export const P1AN_LESSONS = {
       { h: 'Nốt đen' },
       { p: 'Hình tròn nhỏ MÀU ĐEN, có 1 cái đuôi thẳng. Nốt đen kéo dài 1 phách.' },
       { h: 'Nốt trắng' },
-      { p: 'Hình tròn TRỐNG GIỮA (rỗng), có 1 cái đuôi thẳng. Nốt trắng kéo dài 2 phách — bằng 2 nốt đen.' },
-      { note: 'Em chưa cần nhớ kĩ — chỉ cần biết hình dáng và đếm phách thôi.' },
+      { p: 'Hình tròn TRỐNG GIỮA (rỗng), có 1 cái đuôi thẳng. Nốt trắng kéo dài 2 phách, bằng 2 nốt đen.' },
+      { note: 'Em chưa cần nhớ kĩ, chỉ cần biết hình dáng và đếm phách thôi.' },
     ],
     examples: [
       { q: 'Nốt đen kéo dài mấy phách?', a: '1 phách.' },
-      { q: 'Nốt trắng kéo dài mấy phách?', a: '2 phách — bằng 2 nốt đen.' },
+      { q: 'Nốt trắng kéo dài mấy phách?', a: '2 phách: bằng 2 nốt đen.' },
     ],
   },
 
@@ -648,11 +648,11 @@ export const P1AN_LESSONS = {
         'Bắt chước tiếng gà: "chiếp chiếp" hoặc "líp líp".',
         'Có thể giả động tác gà con: chụm tay làm mỏ.',
       ] },
-      { note: 'Hát bài này hình dung đàn gà con vàng óng theo mẹ ra sân — thật đáng yêu.' },
+      { note: 'Hát bài này hình dung đàn gà con vàng óng theo mẹ ra sân, thật đáng yêu.' },
     ],
     examples: [
       { q: 'Bài "Đàn gà con" hát về điều gì?', a: 'Về đàn gà con xinh xắn, theo mẹ kiếm ăn.' },
-      { q: 'Gà con kêu thế nào?', a: '"Chiếp chiếp" hoặc "líp líp" — nhỏ, vui và đáng yêu.' },
+      { q: 'Gà con kêu thế nào?', a: '"Chiếp chiếp" hoặc "líp líp", nhỏ, vui và đáng yêu.' },
     ],
   },
 
@@ -672,11 +672,11 @@ export const P1AN_LESSONS = {
         'Có thể bước nặng nề như voi đi.',
         'Hát rõ chữ "chú voi con".',
       ] },
-      { note: 'Voi là loài vật quý hiếm — em yêu voi nhé!' },
+      { note: 'Voi là loài vật quý hiếm, em yêu voi nhé!' },
     ],
     examples: [
-      { q: 'Bản Đôn nằm ở đâu?', a: 'Ở tỉnh Đắk Lắk — vùng Tây Nguyên, nơi nổi tiếng nuôi voi.' },
-      { q: 'Tác giả bài hát là ai?', a: 'Nhạc sĩ Phạm Tuyên — nổi tiếng với nhiều bài hát thiếu nhi.' },
+      { q: 'Bản Đôn nằm ở đâu?', a: 'Ở tỉnh Đắk Lắk: vùng Tây Nguyên, nơi nổi tiếng nuôi voi.' },
+      { q: 'Tác giả bài hát là ai?', a: 'Nhạc sĩ Phạm Tuyên: nổi tiếng với nhiều bài hát thiếu nhi.' },
     ],
   },
 
@@ -700,7 +700,7 @@ export const P1AN_LESSONS = {
     ],
     examples: [
       { q: 'Bài "Múa vui" tác giả là ai?', a: 'Nhạc sĩ Lưu Hữu Phước.' },
-      { q: 'Múa bài này nên xếp đội hình thế nào?', a: 'Vòng tròn — nắm tay nhau, dễ múa và dễ vui.' },
+      { q: 'Múa bài này nên xếp đội hình thế nào?', a: 'Vòng tròn: nắm tay nhau, dễ múa và dễ vui.' },
     ],
   },
 
@@ -714,9 +714,9 @@ export const P1AN_LESSONS = {
     theory: [
       { h: 'Âm thanh các nhạc cụ' },
       { ul: [
-        'Trống: "tùng tùng" — vang, trầm.',
-        'Thanh phách: "cốc cốc" — giòn, ngắn.',
-        'Song loan: "cốc" — gọn, trong.',
+        'Trống: "tùng tùng", vang, trầm.',
+        'Thanh phách: "cốc cốc", giòn, ngắn.',
+        'Song loan: "cốc", gọn, trong.',
         'Đàn piano: trong, có nhiều cao độ.',
         'Sáo: cao, du dương.',
       ] },
@@ -725,8 +725,8 @@ export const P1AN_LESSONS = {
       { note: 'Tập nghe giúp đôi tai em "thính" hơn với âm nhạc.' },
     ],
     examples: [
-      { q: 'Nhạc cụ nào kêu "tùng tùng" trầm và vang?', a: 'Trống — đặc biệt là trống lớn.' },
-      { q: 'Tiếng sáo có đặc điểm gì?', a: 'Cao và du dương — nghe êm tai.' },
+      { q: 'Nhạc cụ nào kêu "tùng tùng" trầm và vang?', a: 'Trống: đặc biệt là trống lớn.' },
+      { q: 'Tiếng sáo có đặc điểm gì?', a: 'Cao và du dương: nghe êm tai.' },
     ],
   },
 
@@ -748,11 +748,11 @@ export const P1AN_LESSONS = {
         'Ngón áp út (ngón đeo nhẫn).',
         'Ngón út.',
       ] },
-      { note: 'Vừa hát vừa giơ từng ngón tay tương ứng — rất vui!' },
+      { note: 'Vừa hát vừa giơ từng ngón tay tương ứng, rất vui!' },
     ],
     examples: [
-      { q: 'Ngón tay to nhất là ngón gì?', a: 'Ngón cái — to và khoẻ nhất.' },
-      { q: 'Ngón tay nhỏ nhất là ngón gì?', a: 'Ngón út — nhỏ nhất, ngoan nhất theo bài hát.' },
+      { q: 'Ngón tay to nhất là ngón gì?', a: 'Ngón cái: to và khoẻ nhất.' },
+      { q: 'Ngón tay nhỏ nhất là ngón gì?', a: 'Ngón út: nhỏ nhất, ngoan nhất theo bài hát.' },
     ],
   },
 
@@ -768,15 +768,15 @@ export const P1AN_LESSONS = {
       { p: '"Trời nắng, trời mưa" là bài hát mẫu giáo và lớp 1 quen thuộc. Bài hát kể về chú thỏ đi chơi gặp nắng mưa.' },
       { h: 'Trò chơi' },
       { ul: [
-        'Cô hát "trời nắng" — em chạy nhảy như thỏ.',
-        'Cô hát "trời mưa" — em ngồi xuống trú mưa.',
+        'Cô hát "trời nắng", em chạy nhảy như thỏ.',
+        'Cô hát "trời mưa", em ngồi xuống trú mưa.',
         'Trò chơi vui và giúp em vận động.',
       ] },
       { note: 'Hát kèm chuyển động giúp em nhớ bài nhanh và khoẻ mạnh.' },
     ],
     examples: [
-      { q: 'Khi hát "trời mưa", em làm gì?', a: 'Ngồi xuống, ôm đầu — như thỏ trú mưa.' },
-      { q: 'Khi hát "trời nắng" em làm gì?', a: 'Nhảy lò cò, chạy nhảy — như thỏ đi chơi vui.' },
+      { q: 'Khi hát "trời mưa", em làm gì?', a: 'Ngồi xuống, ôm đầu; như thỏ trú mưa.' },
+      { q: 'Khi hát "trời nắng" em làm gì?', a: 'Nhảy lò cò, chạy nhảy; như thỏ đi chơi vui.' },
     ],
   },
 
@@ -790,25 +790,25 @@ export const P1AN_LESSONS = {
     theory: [
       { h: 'Nhạc cụ gõ' },
       { ul: [
-        'Thanh phách: 2 thanh gỗ — "cốc cốc".',
-        'Trống nhỏ: mặt da — "tùng tùng".',
-        'Song loan: gỗ + lò xo — "cốc".',
+        'Thanh phách: 2 thanh gỗ; "cốc cốc".',
+        'Trống nhỏ: mặt da; "tùng tùng".',
+        'Song loan: gỗ + lò xo; "cốc".',
       ] },
       { h: 'Nốt nhạc' },
       { ul: [
-        'Nốt đen: tròn đen + đuôi — 1 phách.',
-        'Nốt trắng: tròn rỗng + đuôi — 2 phách.',
+        'Nốt đen: tròn đen + đuôi; 1 phách.',
+        'Nốt trắng: tròn rỗng + đuôi; 2 phách.',
       ] },
       { note: 'Nốt trắng dài bằng 2 nốt đen.' },
     ],
     examples: [
       { q: 'Nhạc cụ nào kêu "cốc cốc"?', a: 'Thanh phách hoặc song loan.' },
-      { q: 'Nốt nào ngân dài hơn?', a: 'Nốt trắng — 2 phách, dài gấp đôi nốt đen.' },
+      { q: 'Nốt nào ngân dài hơn?', a: 'Nốt trắng: 2 phách, dài gấp đôi nốt đen.' },
     ],
   },
 
   'P1AN-w34-quiz': {
-    topic: 'Ôn tập HK2 — các bài hát đã học',
+    topic: 'Ôn tập HK2: các bài hát đã học',
     intro: 'Mình cùng ôn lại các bài hát của HK2 nhé!',
     objectives: [
       'Nhớ tên và hát được các bài đã học HK2.',
@@ -817,26 +817,26 @@ export const P1AN_LESSONS = {
     theory: [
       { h: 'Bài hát HK2' },
       { ul: [
-        '"Sắp đến Tết rồi" — Hoàng Vân.',
-        '"Cả nhà thương nhau" — Phan Văn Minh.',
-        '"Quả" — Xanh Xanh.',
-        '"Đi học về" — Hoàng Long – Hoàng Lân.',
-        '"Đàn gà con" — Phi-líp Bê-pho.',
-        '"Chú voi con ở Bản Đôn" — Phạm Tuyên.',
-        '"Múa vui" — Lưu Hữu Phước.',
-        '"Năm ngón tay ngoan" — Trần Văn Thụ.',
+        '"Sắp đến Tết rồi", Hoàng Vân.',
+        '"Cả nhà thương nhau", Phan Văn Minh.',
+        '"Quả", Xanh Xanh.',
+        '"Đi học về", Hoàng Long – Hoàng Lân.',
+        '"Đàn gà con", Phi-líp Bê-pho.',
+        '"Chú voi con ở Bản Đôn", Phạm Tuyên.',
+        '"Múa vui", Lưu Hữu Phước.',
+        '"Năm ngón tay ngoan", Trần Văn Thụ.',
         '"Trời nắng, trời mưa".',
       ] },
       { note: 'Em chọn 1-2 bài thích nhất và hát thật hay nhé!' },
     ],
     examples: [
-      { q: 'Bài về gia đình em đã học là bài nào?', a: '"Cả nhà thương nhau" — tình yêu gia đình.' },
+      { q: 'Bài về gia đình em đã học là bài nào?', a: '"Cả nhà thương nhau", tình yêu gia đình.' },
       { q: 'Bài về con vật ở Tây Nguyên là bài nào?', a: '"Chú voi con ở Bản Đôn".' },
     ],
   },
 
   'P1AN-w35-quiz': {
-    topic: 'Tổng kết — Em yêu âm nhạc',
+    topic: 'Tổng kết: Em yêu âm nhạc',
     intro: 'Năm học khép lại. Em đã yêu âm nhạc hơn rồi đúng không? Mình cùng nhìn lại nhé!',
     objectives: [
       'Tự nhận xét sự tiến bộ.',
@@ -855,13 +855,13 @@ export const P1AN_LESSONS = {
       { note: 'Lớn lên có thể em sẽ học chơi đàn, sáo… Âm nhạc là người bạn cả đời.' },
     ],
     examples: [
-      { q: 'Bài hát nào em thích nhất trong năm?', a: 'Em tự kể — có thể là "Cả nhà thương nhau" hoặc "Trời nắng trời mưa"…' },
+      { q: 'Bài hát nào em thích nhất trong năm?', a: 'Em tự kể: có thể là "Cả nhà thương nhau" hoặc "Trời nắng trời mưa"…' },
       { q: 'Âm nhạc mang lại điều gì cho em?', a: 'Niềm vui, sự thư giãn và giúp em tự tin hơn.' },
     ],
   },
 
   'P1AN-w36-quiz': {
-    topic: 'Kết thúc Lớp 1 — Một năm hát ca vui vẻ',
+    topic: 'Kết thúc Lớp 1: Một năm hát ca vui vẻ',
     intro: 'Năm học kết thúc rồi! Em đã hát rất nhiều bài hát hay. Mình cùng nhớ lại nhé!',
     objectives: [
       'Nhớ các bài hát và nhạc cụ đã học.',
@@ -873,7 +873,7 @@ export const P1AN_LESSONS = {
         'Khoảng 16 bài hát: dân ca, bài hát thiếu nhi, đồng dao.',
         'Nhạc cụ gõ: thanh phách, trống nhỏ, song loan.',
         'Khái niệm âm thanh: to/nhỏ, nhanh/chậm, cao/thấp.',
-        'Quốc ca Việt Nam — hát nghiêm trang, tự hào.',
+        'Quốc ca Việt Nam: hát nghiêm trang, tự hào.',
       ] },
       { h: 'Lên Lớp 2 em sẽ học thêm' },
       { ul: ['Thêm nhiều bài hát hay hơn.', 'Học nhịp và nốt nhạc đơn giản.', 'Có thể tập nhạc cụ mới.'] },
