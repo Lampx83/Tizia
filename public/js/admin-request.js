@@ -568,6 +568,8 @@ function renderAiBoard(t) {
         <span>${esc(root.phase_label)}</span>${root.live ? '<span class="pulse" title="Worker đang giữ yêu cầu này"></span>' : ''}</div>
       ${root.public_note ? `<div style="margin-top:4px">${esc(root.public_note)}</div>` : ''}
       ${root.internal_reason ? reasonBlock(root.internal_reason) : ''}
+      ${root.lost_worker ? `<div class="meta warn" style="margin-top:4px"><b>Worker mất kết nối</b> khi đang giữ yêu cầu (${code(root.lost_worker.worker_id)}). Hệ thống không tự chạy lại; cần quản trị viên xem và quyết định.</div>` : ''}
+      ${runs.filter((r) => r.runner_failure).slice(-1).map((r) => `<div class="meta warn" style="margin-top:4px"><b>Sandbox lỗi</b> ở gate ${esc(r.runner_failure.gate)}${r.runner_failure.code ? ` · mã ${code(r.runner_failure.code)}` : ''}${r.runner_failure.reason ? `: ${esc(r.runner_failure.reason)}` : ''}</div>`).join('')}
       ${allowanceBlock(root.allowance)}
       ${t.candidate ? `<div class="meta" style="margin-top:4px">Nhánh thay đổi: ${code(t.candidate.branch)} · ${esc(t.candidate.commits?.length)} commit</div>` : ''}
       ${t.pull_request && /^https:\/\/github\.com\//.test(t.pull_request.url) ? `<div class="meta" style="margin-top:4px">PR vào ${code(t.pull_request.base)}:
