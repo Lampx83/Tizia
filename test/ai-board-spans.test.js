@@ -37,7 +37,7 @@ async function setup() {
     return { status: r.status, body: await r.json() };
   };
   const trace = async () => (await fetch(`${base}/api/admin/ai-board/requests/${request.request_id ?? request.id}/trace`, { headers: { 'x-test-user': '9' } })).json();
-  return { db, post, trace, run, close: () => new Promise((resolve) => server.close(resolve)) };
+  return { db, post, trace, run, ticket, close: () => new Promise((resolve) => server.close(resolve)) };
 }
 
 const span = (span_id, parent, name, over = {}) => ({ trace_id: TRACE, span_id, parent_span_id: parent, name, kind: 'internal',
@@ -109,5 +109,49 @@ test('loaded skill identities survive worker ingest and PostgreSQL trace project
     assert.equal((await t.post({ spans: [span(CHAT_SPAN, null, 'chat fixture', { events: [event] })] })).status, 200);
     const trace = await t.trace();
     assert.deepEqual(trace.runs.find(r => r.id === t.run.id).spans[0].events, [event]);
+  } finally { await t.close(); }
+});
+
+test('admin trace gives each run its wall-clock limit from the subtask count of its plan revision', async () => {
+  const t = await setup();
+  try {
+    const root = await t.db.d.get('SELECT source_request_id FROM ai_tickets WHERE id=?', [t.ticket.id]);
+    for (let i = 1; i <= 3; i++) {
+      await t.db.d.run(`INSERT INTO ai_tickets(parent_id, source_request_id, sequence, kind, title, status, phase, plan_revision, created_at, updated_at)
+        VALUES (?, ?, ?, 'implementation', ?, 'queued', 'ticketized', 1, 0, 0)`, [t.ticket.id, root.source_request_id, i, `step ${i}`]);
+    }
+    await t.db.d.run('UPDATE ai_runs SET plan_revision=1 WHERE id=?', [t.run.id]);
+    let run = (await t.trace()).runs.find((r) => r.id === t.run.id);
+    assert.equal(run.subtask_count, 3);
+    assert.equal(run.wall_clock_limit_s, 1380);
+
+    await t.db.d.run('UPDATE ai_runs SET plan_revision=NULL WHERE id=?', [t.run.id]);
+    run = (await t.trace()).runs.find((r) => r.id === t.run.id);
+    assert.equal(run.subtask_count, 0);
+    assert.equal(run.wall_clock_limit_s, 300);
+  } finally { await t.close(); }
+});
+
+test('gate_history is the per-gate median over recent runs of all tickets, skipping errors and stubs', async () => {
+  const t = await setup();
+  try {
+    const addRun = async (key, ticketId) => (await t.db.d.insert(`INSERT INTO ai_runs(ticket_id, attempt, trigger, idempotency_key, created_at, updated_at)
+      VALUES (?, 1, 'plan', ?, 0, 0)`, [ticketId, key]));
+    const gateRow = async (runId, n, gate, ms, extra = {}) => t.db.d.run(`INSERT INTO ai_spans(run_id, trace_id, span_id, parent_span_id, name, kind,
+      start_ms, end_ms, status, attributes_json, events_json, created_at) VALUES (?, ?, ?, NULL, ?, 'internal', 0, ?, ?, ?, '[]', 0)`,
+    [runId, String(n).padStart(32, 'e'), String(n).padStart(16, 'f'), `invoke_agent gate ${gate}`, ms,
+      extra.status ?? 'ok', JSON.stringify({ 'tizia.gate.id': gate, 'tizia.gate.status': extra.gateStatus ?? 'passed' })]);
+    const other = await addRun('other-ticket-run', t.ticket.id);
+    const third = await addRun('third-run', t.ticket.id);
+    const fourth = await addRun('fourth-run', t.ticket.id);
+    await gateRow(t.run.id, 1, 3, 1000);
+    await gateRow(other, 2, 3, 3000);
+    await gateRow(third, 3, 3, 2000);
+    await gateRow(third, 4, 1, 500);
+    await gateRow(fourth, 5, 3, 99999, { status: 'error' });
+    await gateRow(fourth, 6, 4, 77, { gateStatus: 'stub' });
+
+    const trace = await t.trace();
+    assert.deepEqual(trace.gate_history, { 3: { median_ms: 2000, n: 3 }, 1: { median_ms: 500, n: 1 } });
   } finally { await t.close(); }
 });

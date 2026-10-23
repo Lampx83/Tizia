@@ -85,3 +85,26 @@ def test_gate_exception_closes_its_span_as_error(monkeypatch):
     gate = next(s for s in posted if s["name"] == "invoke_agent gate 4")
     assert gate["status"] == "error" and gate["attributes"]["tizia.error.type"] == "RuntimeError"
     assert next(s for s in posted if s["name"] == "invoke_agent ai-board")["status"] == "error"
+
+
+def test_every_gate_leaves_one_timed_span_with_gate_id(monkeypatch):
+    posted = []
+    tracer = meter.Tracer()
+    tracer.begin(9, lambda calls: None, posted.extend)
+    deps = pipeline.Deps(models=FakeVllm([]), notify=None, trace=tracer)
+    gates = (1, 2.5, 3, 4, 5.5)
+    for number in gates:
+        monkeypatch.setitem(pipeline._GATE_FNS, number, lambda *a, _n=number, **k: {"gate": _n, "blocked": _n == 4, "outcome": "x" if _n == 4 else None})
+    for number in gates:
+        pipeline.run_gate(number, {}, deps, Budget(), {})
+    tracer.end_run("blocked")
+    tracer.flush()
+
+    run = next(s for s in posted if s["name"] == "invoke_agent ai-board")
+    spans = [s for s in posted if "tizia.gate.id" in s["attributes"]]
+    assert [s["attributes"]["tizia.gate.id"] for s in spans] == list(gates)
+    assert all(s["parent_span_id"] == run["span_id"] and s["status"] == "ok" for s in spans)
+    assert all(s["start_ms"] <= s["end_ms"] for s in spans)
+    statuses = {s["attributes"]["tizia.gate.id"]: s["attributes"]["tizia.gate.status"] for s in spans}
+    assert statuses == {1: "passed", 2.5: "passed", 3: "passed", 4: "blocked", 5.5: "passed"}
+    assert next(s for s in spans if s["attributes"]["tizia.gate.id"] == 4)["attributes"]["tizia.gate.outcome"] == "x"
