@@ -77,3 +77,12 @@ def test_prompts_use_bounded_thread(monkeypatch):
         assert "earlier messages cut" in prompt
         assert "m000 " not in prompt
         assert "spec: SPEC" in prompt
+
+
+def test_newest_message_alone_over_cap_is_clipped_not_dropped(monkeypatch):
+    monkeypatch.setattr(limits, "thread_chars", lambda: 500)
+    thread = [{"role": "user", "body": "first"}, {"role": "user", "body": "answer " * 200}]
+    text = context.thread_text(thread, "the spec")
+    assert len(text) <= 500
+    assert "(1 earlier messages cut)" in text
+    assert text.splitlines()[-1].startswith("user: answer answer")

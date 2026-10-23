@@ -3,6 +3,8 @@ Mọi path đi qua path_policy.check(path, "read"); bị từ chối → chuỗi
 from __future__ import annotations
 
 import json
+import posixpath
+import re
 
 import path_policy
 import tools
@@ -35,18 +37,27 @@ class ReadOnlyTools:
                     isinstance(value, list) and all(isinstance(v, str) for v in value)):
                 raise ValueError(f"{name}.{key} sai kiểu")
         for key in ("file", "path"):
-            if key in args and not path_policy.check(args[key], "read")["allow"]:
-                return f"từ chối đọc {args[key]!r}: {path_policy.check(args[key], 'read')['reason']}"
+            if key in args:
+                verdict = path_policy.check(args[key], "read")
+                if not verdict["allow"]:
+                    return f"từ chối đọc {args[key]!r}: {verdict['reason']}"
         return self._dispatch(name, args)[: self.cap]
 
     def _dispatch(self, name: str, args: dict) -> str:
         if name == "tree":
-            return tools.tree(self.source, self.sha, path=args.get("path", "public")) or "(rỗng)"
+            base = args.get("path", "public")
+            head, sep, rest = (tools.tree(self.source, self.sha, path=base)).partition(": ")
+            names = [n for n in rest.split(", ") if n and path_policy.check(posixpath.join(base, n), "read")["allow"]]
+            return f"{head}{sep}{', '.join(names)}" if names else "(rỗng)"
         if name == "outline":
             return tools.outline(self.source, self.sha, file=args["file"]) or "(rỗng)"
         if name == "grep":
-            return tools.grep(self.source, self.sha, words=args["words"], file=args.get("file"),
-                              path=args.get("path", "public"), budget=self.cap) or "(không khớp)"
+            out = tools.grep(self.source, self.sha, words=args["words"], file=args.get("file"),
+                             path=args.get("path", "public"), budget=self.cap)
+            if out.startswith("file khớp từ khoá: "):
+                hits = [h for h in out.split(": ", 1)[1].split(", ") if path_policy.check(re.sub(r" \(\d+\)$", "", h), "read")["allow"]]
+                out = "file khớp từ khoá: " + ", ".join(hits) if hits else ""
+            return out or "(không khớp)"
         return self._read(args["file"])
 
     def _read(self, file: str) -> str:

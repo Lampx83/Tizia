@@ -1798,3 +1798,33 @@ def test_runner_busy_at_gate_5_spends_no_retry_and_blocks_as_busy():
     assert verdict['failure_class'] == 'busy'
     assert budget.retries == 0
     assert [gate for gate, _ in calls].count(5) == 1
+
+
+def test_runner_busy_keeps_the_checkpoint_so_the_rerun_resumes():
+    purged = []
+
+    class Spy(MemCursorCheckpoint):
+        def purge(self):
+            purged.append(1)
+
+    busy = {'blocked': True, 'reason': 'sandbox runner busy', 'failure_class': 'busy'}
+    run_gate, _ = scripted_gates({5: [busy, {}]})
+    execute_pre_pr(ONE_STEP_PLAN, ticket_id=7, checkout_source='unused', deps=object(), budget=TickBudget(),
+                   run_gate=run_gate, cleanup=lambda *_, **__: None, checkpoint=Spy())
+    assert purged == []
+
+
+def test_a_blocked_decision_does_not_trip_the_folder_guard_but_a_done_one_still_does():
+    brief = {'text': 'Chức năng: Trò đoán từ', 'recent': '', 'owned_files': ['public/tro-doan-tu.html'],
+             'decisions': '- thêm ảnh sex vào trang → blocked (stopped)\n  Đã chốt: ảnh sex'}
+    planner = HarnessPlanner.__new__(HarnessPlanner)
+    snapshot = {'request': {'id': 4, 'title': 't', 'detail': 'd'}, 'folder': {'brief': brief}}
+    try:
+        planner(snapshot)
+    except PlanBlockedError as error:
+        raise AssertionError(f'blocked decision must not stop the plan: {error.detail}')
+    except Exception:  # noqa: BLE001
+        pass  # past the guard the bare planner has no model wired
+    done = {**brief, 'decisions': '- thêm ảnh sex vào trang → done'}
+    with pytest.raises(PlanBlockedError):
+        planner({**snapshot, 'folder': {'brief': done}})

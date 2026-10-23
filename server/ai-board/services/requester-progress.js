@@ -5,7 +5,7 @@ import { gateEta } from '../../../public/js/ai-board-gate-timing.js';
 /** Requester view of one own request. Null when not owner. Never prompts, spans, sandbox output or model names. */
 export async function requesterProgress(store, requestId, ownerUserId) {
   const row = await store.db.get(`
-    SELECT r.id, r.status, t.id AS root_id, t.phase, t.public_note, t.cumulative_budget, t.budget_limit,
+    SELECT r.id, r.status, t.id AS root_id, t.phase, t.public_note,
            t.lease_owner, t.lease_expires_at
     FROM requests r LEFT JOIN ai_tickets t ON t.source_request_id = r.id AND t.parent_id IS NULL
     WHERE r.id = ? AND r.owner_user_id = ?
@@ -21,7 +21,6 @@ export async function requesterProgress(store, requestId, ownerUserId) {
     note: row.public_note ?? null,
     live,
     eta_ms: live ? await etaMs(store, row.root_id) : null,
-    budget: row.root_id ? { used: row.cumulative_budget, limit: row.budget_limit } : null,
     stop_reason: stopped ? row.public_note ?? null : null,
   };
 }

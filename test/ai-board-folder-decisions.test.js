@@ -84,13 +84,48 @@ test('blocked pre-PR verdict writes a decision record with the stop reason and p
       capabilities: ['public.ui'], risk: 'low', non_goals: ['Không đổi đăng nhập'], steps: [step] } });
   const gates = [{ gate: 3, blocked: false, reason: null }, { gate: 4, blocked: true, reason: 'touched auth', issues: [] }];
   await store.submitPrePrVerdict(ticket.id, { ...lease, runId: run.id, idempotencyKey: 'decision-verdict-001', verdict: {
-    outcome: 'blocked', gate_reached: 4, reason: 'touched auth', budget_used: 80, failure_class: 'critical',
+    outcome: 'blocked', gate_reached: 4, reason: 'touched auth', budget_used: 80, failure_class: 'ordinary',
     repairs: [], candidate: null, gates } });
   const [row] = await d.all('SELECT outcome, stop_reason, spec, cut_json, subtasks_json, verdict_json FROM ai_folder_decisions');
   assert.equal(row.outcome, 'blocked');
   assert.equal(row.stop_reason, 'touched auth');
   assert.deepEqual(JSON.parse(row.cut_json), ['Không đổi đăng nhập']);
   assert.deepEqual(JSON.parse(row.subtasks_json), [{ order: 1, title: 'Trang mới', files: ['public/tro-doan-tu.html'], anchor: null }]);
-  assert.equal(JSON.parse(row.verdict_json).failure_class, 'critical');
+  assert.equal(JSON.parse(row.verdict_json).failure_class, 'ordinary');
   assert.match((await store.folderBrief(folder.folder_id)).decisions, /- Trò đoán từ khoá \d+ → blocked \(touched auth\)/);
+});
+
+async function blockedFolderRoot(ctx, tag, failureClass) {
+  const { store, submit } = ctx;
+  const folder = await submit(1, { type: 'feature' });
+  await store.approveFolder(folder.folder_id, 9);
+  const ticket = await store.claimNext({ workerId: `w-${tag}`, mode: 'active', intent: 'plan' });
+  const lease = { workerId: `w-${tag}`, leaseToken: ticket.lease_token };
+  const run = await store.createRun(ticket.id, { ...lease, trigger: 'plan', idempotencyKey: `decision-run-${tag}` });
+  const step = { order: 1, title: 'Trang mới', description: 'x', allowed_scope: ['public/tro-doan-tu.html'],
+    acceptance: ['a'], tests: ['node --test'], capability: 'public.ui', risk: 'low', non_goals: ['x'] };
+  await store.submitPlan(ticket.id, { ...lease, runId: run.id, budgetUsed: 10, idempotencyKey: `decision-plan-${tag}`,
+    plan: { domain: 'it', goal: 'g', allowed_scope: step.allowed_scope, acceptance: step.acceptance, tests: step.tests,
+      capabilities: ['public.ui'], risk: 'low', non_goals: ['x'], steps: [step] } });
+  await store.submitPrePrVerdict(ticket.id, { ...lease, runId: run.id, idempotencyKey: `decision-verdict-${tag}`, verdict: {
+    outcome: 'blocked', gate_reached: 4, reason: 'stopped', budget_used: 80, failure_class: failureClass, repairs: [], candidate: null,
+    gates: [{ gate: 3, blocked: false, reason: null }, { gate: 4, blocked: true, reason: 'stopped', issues: [] }] } });
+}
+
+test('a resumable waiting_admin block writes no decision record', async () => {
+  const ctx = await fixture();
+  await blockedFolderRoot(ctx, 'plan', 'plan');
+  assert.equal((await ctx.d.all('SELECT id FROM ai_folder_decisions')).length, 0);
+});
+
+test('budget ceiling writes a blocked decision record', async () => {
+  const ctx = await fixture();
+  await blockedFolderRoot(ctx, 'budget', 'budget');
+  const [root] = await ctx.d.all("SELECT id FROM ai_tickets WHERE kind='root' AND phase='budget_exhausted'");
+  await ctx.d.run('UPDATE ai_tickets SET budget_limit=? WHERE id=?', [LIMITS.per_run.units.max, root.id]);
+  const result = await ctx.store.extendBudget(root.id, { amount: 100, reason: 'ceiling check long reason', adminUserId: 9 });
+  assert.equal(result.status, 'human_owned');
+  const [row] = await ctx.d.all('SELECT outcome, stop_reason FROM ai_folder_decisions');
+  assert.equal(row.outcome, 'blocked');
+  assert.equal(row.stop_reason, result.reason);
 });

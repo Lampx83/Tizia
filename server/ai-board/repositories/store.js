@@ -1207,6 +1207,20 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
         ? [current.status, current.phase, current.public_note]
         : states[input.outcome];
     if (!next) throw new WorkerContractError('invalid release outcome');
+    let busyRequeue = input.outcome === 'busy';
+    if (busyRequeue) {
+      const busyLimits = CONTRACT.limits.runner_busy;
+      const prior = (await db.get(`SELECT COUNT(*) AS n FROM ai_events WHERE ticket_id=? AND event_type='lease_released' AND public_message=?`,
+        [Number(ticketId), states.busy[2]])).n;
+      const reverifying = (await db.get(`SELECT trigger FROM ai_runs WHERE ticket_id=? AND trigger <> 'shadow_precheck' ORDER BY id DESC LIMIT 1`, [Number(ticketId)]))?.trigger === 'reverify';
+      if (prior >= (busyLimits.max_releases ?? 5)) {
+        busyRequeue = false;
+        const origin = reverifying ? await reverifyRequest(Number(ticketId)) : {};
+        next.splice(0, 3, ...(reverifying
+          ? [origin.from_status || 'planned', origin.from_phase || 'pre_pr_ready', origin.from_note ?? current.public_note]
+          : ['waiting_admin', 'transient_blocked', 'Sandbox vẫn bận sau nhiều lần thử; chờ quản trị viên chạy lại.']));
+      } else if (reverifying) next.splice(0, 2, 'queued', 'reverify');
+    }
     await db.run(`
       UPDATE ai_tickets SET status=?, phase=?, public_note=?, internal_reason=?,
         lease_owner=NULL, lease_token=NULL, lease_expires_at=?, updated_at=? WHERE id=?
@@ -1214,7 +1228,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       // A planned release keeps the verdict's reason (e.g. the critical violation) unless the worker adds one.
       input.internalDetail || (input.outcome === 'planned' ? current.internal_reason : null),
       // busy: not-before time for the claim query (lease_expires_at on a queued row).
-      input.outcome === 'busy' ? input.now + CONTRACT.limits.runner_busy.retry_after_ms : null, input.now, Number(ticketId)]);
+      busyRequeue ? input.now + CONTRACT.limits.runner_busy.retry_after_ms : null, input.now, Number(ticketId)]);
     if (input.outcome === 'waiting' || input.outcome === 'failed') {
       // The precheck gate that stopped the run gets its own gate row: the admin sees the step and can rerun it.
       let detail = null;
@@ -1592,7 +1606,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       VALUES (?, ?, 'pre_pr_verdict', 'worker', ?, ?, ?, ?, ?, ?)
     `, [root.id, run.id, input.workerId, `running->${phase}`, note, verdict.reason,
       input.idempotencyKey, input.now]);
-    if (verdict.outcome === 'blocked') await recordFolderDecision(root, 'blocked', verdict.reason, input.now);
+    if (verdict.outcome === 'blocked' && leaseExpiresAt == null && status !== 'waiting_admin') await recordFolderDecision(root, 'blocked', verdict.reason, input.now);
     return verdict;
   });
 
@@ -1627,6 +1641,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       await db.run(insertEvent, [root.id, 'budget_ceiling', 'admin', String(adminUserId), 'waiting_admin->human_owned',
         'Yêu cầu đã được chuyển cho con người xử lý.', JSON.stringify({ amount, reason, ceiling }),
         `budget-ceiling:${root.id}`, now,]);
+      await recordFolderDecision(root, 'blocked', ceiling, now);
       return { ok: false, status: 'human_owned', budget_limit: root.budget_limit, reason: ceiling };
     }
     const liftedLimit = root.internal_reason === 'automatic_round_limit' ? 'automatic_round_limit' : 'run_budget_exhausted';

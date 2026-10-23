@@ -52,12 +52,14 @@ def thread_text(thread: list | None, spec: str | None = None) -> str:
     if len(full) <= cap:
         return full
     head = [f"spec: {spec}"[:cap // 2]] if spec else []
-    for cut in range(len(lines) + 1):
+    for cut in range(len(lines)):
         parts = [*head, *([f"({cut} earlier messages cut)"] if cut else []), *lines[cut:]]
         text = "\n".join(parts)
         if len(text) <= cap:
             return text
-    return text[:cap]
+    prefix = [*head, *([f"({len(lines) - 1} earlier messages cut)"] if len(lines) > 1 else [])]
+    room = cap - len("\n".join(prefix)) - 1
+    return "\n".join([*prefix, lines[-1][:room]])
 
 
 @dataclass(frozen=True)

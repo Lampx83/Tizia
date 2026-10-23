@@ -62,3 +62,12 @@ def test_scaled_limit_golden(case):
 def test_config_hash_is_file_sha256():
     raw = (REPO / "server" / "ai-board" / "contract.json").read_bytes()
     assert limits.config_sha256() == hashlib.sha256(raw).hexdigest()
+
+
+def test_every_flag_accepts_the_same_truthy_spellings():
+    for value in ("1", "true", "ON", "yes"):
+        assert limits.react_plan({"AI_BOARD_REACT_PLAN": value})["enabled"]
+        assert limits.loop_adaptive({"AI_BOARD_ADAPTIVE_BUDGET": value})["enabled"]
+        assert limits.sandbox_tool({"AI_BOARD_SANDBOX_TOOL": value})["enabled"]
+    for value in ("0", "false", "no"):
+        assert not limits.sandbox_tool({"AI_BOARD_SANDBOX_TOOL": value})["enabled"]

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import path_policy
 from budget import Budget
 from conftest import plan_with
 from gates import brainstorm, react_plan
@@ -21,6 +22,9 @@ def repo(tmp_path):
     (tmp_path / "public" / "a.html").write_text(PAGE, encoding="utf-8")
     (tmp_path / "ai-board" / "harness").mkdir(parents=True)
     (tmp_path / "ai-board" / "harness" / "main.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "server" / "ai-board").mkdir(parents=True)
+    (tmp_path / "server" / "index.js").write_text("const x = 1\n", encoding="utf-8")
+    (tmp_path / "server" / "ai-board" / "s.js").write_text("const x = 1\n", encoding="utf-8")
     git = ["git", "-C", str(tmp_path), "-c", "user.email=t@t", "-c", "user.name=t"]
     subprocess.run(["git", "-C", str(tmp_path), "init", "-q"], check=True)
     subprocess.run(git + ["add", "-A"], check=True)
@@ -182,3 +186,16 @@ def test_flag_on_returns_react_quotes_when_loop_finishes(request_item, react_on,
     assert out["react_quotes"] == [["Thêm"]]
     assert deps.prompts == []
     assert seen["model"] == "fake-gate1"
+
+
+def test_readonly_tree_and_grep_hide_deny_paths(repo):
+    root, sha = repo
+    tools = ReadOnlyTools(root, sha)
+    for bare in ("ai-board", "server/ai-board", "ai-board/"):
+        assert tools.run("tree", {"path": bare}).startswith("từ chối")
+        assert tools.run("grep", {"words": ["x"], "path": bare}).startswith("từ chối")
+    top = tools.run("grep", {"words": ["x"], "path": "ai-board/harness"})
+    assert top.startswith("từ chối")
+    assert tools.run("tree", {"path": "server"}) in ("(rỗng)", "từ chối")
+    assert "ai-board" not in tools.run("grep", {"words": ["const"], "path": "server"})
+    assert path_policy.denied("server/ai-board") and path_policy.denied("ai-board")

@@ -104,6 +104,14 @@ services:
       BUDGET_MAX_RETRIES:
       BUDGET_MAX_WALL_CLOCK_S:
       AI_BOARD_PRIVATE_PREVIEW_ENABLED:
+      AI_BOARD_REACT_PLAN:
+      AI_BOARD_SANDBOX_TOOL:
+      AI_BOARD_ADAPTIVE_BUDGET:
+      AI_BOARD_MULTIMODAL:
+      AI_BOARD_SKILL_VARIANT:
+      AI_BOARD_LOOP_MODEL_CALLS:
+      AI_BOARD_LOOP_TOOL_CALLS:
+      AI_BOARD_GRAPH_PERSISTENCE:
     volumes:
       - ai-board-repo:/repo
       - ai-board-memory:/opt/ai-board/ai-board/memory

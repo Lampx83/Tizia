@@ -470,6 +470,34 @@ test('busy release puts the ticket back in the queue after a not-before delay wi
   } finally {await f.close();}
 });
 
+const relock=(f,phase='executing')=>f.db.run("UPDATE ai_tickets SET status='running',phase=?,lease_owner='worker-a',lease_token='lease-a',lease_expires_at=? WHERE id=?",[phase,Date.now()+3600000,f.id]);
+
+test('busy releases are bounded: past the limit the root waits for an admin instead of requeueing',async()=>{
+  const f=await fixture();
+  try {
+    await seedPlanTraces(f);
+    for(let i=0;i<5;i++){
+      assert.equal((await f.post('release',{outcome:'busy',idempotency_key:`busy-bound-${i}-0001`})).body.ticket.status,'queued');
+      await relock(f);
+    }
+    const sixth=await f.post('release',{outcome:'busy',idempotency_key:'busy-bound-5-0001'});
+    assert.equal(sixth.body.ticket.status,'waiting_admin');assert.equal(sixth.body.ticket.phase,'transient_blocked');
+    const row=await f.db.get('SELECT lease_expires_at FROM ai_tickets WHERE id=?',[f.id]);
+    assert.equal(row.lease_expires_at,null);
+  } finally {await f.close();}
+});
+
+test('busy release during a reverify run goes back to the reverify queue, not the execute queue',async()=>{
+  const f=await fixture();
+  try {
+    await seedPlanTraces(f);
+    await f.db.run("UPDATE ai_runs SET trigger='reverify' WHERE id=?",[f.run]);
+    await relock(f,'ticketized');
+    const released=await f.post('release',{outcome:'busy',idempotency_key:'busy-reverify-0001'});
+    assert.equal(released.body.ticket.status,'queued');assert.equal(released.body.ticket.phase,'reverify');
+  } finally {await f.close();}
+});
+
 test('two real Python HttpWorkers racing for one authorized ticket: exactly one claims it',async()=>{
   const f=await fixture();
   try {
