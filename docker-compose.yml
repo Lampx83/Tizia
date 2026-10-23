@@ -1,3 +1,7 @@
+x-logging: &logging  # json-file xoay vòng cho service AI Board (profile ai-board)
+  driver: json-file
+  options: { max-size: 10m, max-file: "3" }
+
 services:
   tizia:
     build:
@@ -39,7 +43,108 @@ services:
     volumes:
       - tizia-postgres-data:/var/lib/postgresql/data
 
+  # AI Board (profile ai-board, KHÔNG chạy mặc định). Bật: docker compose --profile ai-board up -d.
+  # Giá trị bí mật/cấu hình lấy từ Portainer env của stack (dòng trần = không đặt giá trị ở đây).
+  ai-board-worker:
+    container_name: tizia-ai-board-worker
+    build:
+      context: .
+      dockerfile: ai-board/worker.Dockerfile
+    image: tizia-ai-board-worker:latest
+    profiles: [ai-board]
+    depends_on: [tizia, sandbox-runner]
+    restart: on-failure:10  # crash loop nhanh (vd thiếu AI_BOARD_WORKER_KEY) dừng sau 10 lần
+    cap_add: [NET_ADMIN]  # chỉ để khóa egress; Gate 5 chạy trong microVM của sandbox, không privileged
+    networks: [default, sandbox-api]
+    cpus: 2
+    mem_limit: 4g
+    pids_limit: 512
+    logging: *logging
+    environment:  # dòng có giá trị = nối dây trong container; dòng trần = lấy từ Portainer env
+      AI_BOARD_SERVER_URL: http://tizia:8041
+      AI_BOARD_REPO_DIR: /repo
+      AI_BOARD_SANDBOX_URL: http://sandbox-runner:8090
+      AI_BOARD_WORKER_KEY:
+      AI_BOARD_WORKER_MODE:
+      AI_BOARD_GITHUB_TOKEN:
+      PR_BASE_BRANCH:
+      OLLAMA_URL:
+      OLLAMA_SECKEY:
+      VLLM_URL:
+      VLLM_SECKEY:
+      AI_BOARD_ENGINE_URL:
+      AI_BOARD_INTERNAL_KEY:
+      AI_BOARD_PROJECT:
+      API_MODEL_PROVIDER:
+      API_KEY:
+      AI_BOARD_MODEL_ROUTING:
+      AI_BOARD_AUTO_FALLBACK:
+      AI_BOARD_API_ENABLED:
+      GATE1_MODEL:
+      GATE3_MODEL_HEAVY:
+      GATE3_MODEL_LIGHT:
+      EMBED_MODEL:
+      AI_BOARD_CLASSIFIER_MODEL:
+      CALIBRATION_MODEL:
+      BUDGET_MAX_MODEL_CALLS:
+      BUDGET_MAX_TOOL_CALLS:
+      BUDGET_MAX_TOKENS:
+      BUDGET_MAX_RETRIES:
+      BUDGET_MAX_WALL_CLOCK_S:
+      AI_BOARD_PRIVATE_PREVIEW_ENABLED:
+    volumes:
+      - ai-board-repo:/repo
+      - ai-board-memory:/opt/ai-board/ai-board/memory
+      - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
+
+  image-registry:
+    container_name: tizia-image-registry
+    image: registry:2
+    profiles: [ai-board]
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"  # scripts/gc-guest-images.mjs xóa manifest guest không còn được policy ghim
+      REGISTRY_LOG_FORMATTER: json
+      REGISTRY_LOG_LEVEL: warn
+    ports:
+      - "127.0.0.1:5000:5000"  # loopback: push guest image từ máy host
+    volumes:
+      - sandbox-registry:/var/lib/registry
+
+  sandbox-runner:
+    container_name: tizia-sandbox-runner
+    build:
+      context: ai-board/sandbox-runner
+    image: tizia-sandbox-runner:dev
+    profiles: [ai-board]
+    restart: on-failure
+    user: node
+    devices:
+      - /dev/kvm
+    group_add:
+      - "${KVM_GID:-109}"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    cpus: 2
+    mem_limit: 3g
+    pids_limit: 512
+    logging: *logging
+    networks: [default, sandbox-api]
+    volumes:
+      - sandbox-runner-state:/home/node/.microsandbox
+      - ./ai-board/sandbox-runner/sandbox-policy.dev.yaml:/etc/sandbox/sandbox-policy.yaml:ro  # guest Gate 5 ghim qua image-registry; không dùng sandbox-policy.online.yaml (guest alpine khác)
+      - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
+
+networks:
+  sandbox-api: {}
+
 volumes:
   pharmacysim-data:
     driver: local
   tizia-postgres-data:
+  ai-board-repo:
+  ai-board-memory:
+  sandbox-runner-state:
+  sandbox-registry:
