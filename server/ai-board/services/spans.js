@@ -6,6 +6,7 @@ const MAX_SPANS = 200;
 const MAX_ATTRS = 40;
 const MAX_EVENTS = 20;
 const MAX_TEXT = 300;
+const DONE_GATE_STATUSES = ['passed', 'blocked'];
 const TRACE = /^[0-9a-f]{32}$/;
 const SPAN = /^[0-9a-f]{16}$/;
 const KEY = /^(gen_ai|tizia)\.[a-z0-9_.]{1,80}$/;
@@ -104,5 +105,31 @@ export function createSpanService(store) {
     return out;
   }
 
-  return { record, forRuns };
+  /** Median ms per gate over the last `runs` runs that have gate spans, all tickets and models. */
+  async function gateHistory(runs = 30) {
+    const rows = await db.all(`SELECT run_id, attributes_json, status, start_ms, end_ms FROM ai_spans
+      WHERE name LIKE 'invoke_agent gate%' AND run_id IN (SELECT run_id FROM ai_spans WHERE name LIKE 'invoke_agent gate%'
+        GROUP BY run_id ORDER BY run_id DESC LIMIT ?)`, [Math.min(Math.max(Number(runs) || 0, 1), 100)]);
+    const perRun = new Map();
+    for (const row of rows) {
+      const attrs = parse(row.attributes_json, {});
+      const gate = Number(attrs['tizia.gate.id']);
+      if (attrs['tizia.gate.id'] == null || !Number.isFinite(gate) || row.status !== 'ok' || row.end_ms == null) continue;
+      if (!DONE_GATE_STATUSES.includes(attrs['tizia.gate.status'])) continue;
+      const ms = Number(row.end_ms) - Number(row.start_ms);
+      if (!(ms >= 0)) continue;
+      const run = perRun.get(row.run_id) || new Map();
+      run.set(gate, (run.get(gate) || 0) + ms);
+      perRun.set(row.run_id, run);
+    }
+    const samples = new Map();
+    for (const run of perRun.values()) for (const [gate, ms] of run) samples.set(gate, [...(samples.get(gate) || []), ms]);
+    return Object.fromEntries([...samples].map(([gate, list]) => {
+      const sorted = [...list].sort((a, b) => a - b);
+      const mid = sorted.length >> 1;
+      return [gate, { median_ms: sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2, n: sorted.length }];
+    }));
+  }
+
+  return { record, forRuns, gateHistory };
 }

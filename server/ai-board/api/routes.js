@@ -261,7 +261,12 @@ export function attachAiBoardRequestRoutes(router, {
     if (!trace) return res.status(404).json({ error: 'ticket_not_found' });
     if (store.db) trace.root_work = await createRootAllowanceService(store).read(trace.root.id);
     if (store.db) trace.hsm = await createHsmStore(store).read(trace.root.id);
-    if (store.db) { const spans = await createSpanService(store).forRuns(trace.runs.map((r) => r.id)); for (const run of trace.runs) run.spans = spans.get(Number(run.id)) || []; }
+    if (store.db) {
+      const spans = createSpanService(store);
+      const byRun = await spans.forRuns(trace.runs.map((r) => r.id));
+      for (const run of trace.runs) run.spans = byRun.get(Number(run.id)) || [];
+      trace.gate_history = await spans.gateHistory(30);
+    }
     res.json(trace);
   });
 

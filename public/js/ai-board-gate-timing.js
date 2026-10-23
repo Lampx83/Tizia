@@ -35,15 +35,24 @@ export function typicalGateMs(runs = [], gate, beforeRunId = null) {
 }
 
 /**
- * ETA of gates not yet finished in `currentRunId`. eta_ms null + reason 'no_history' if any remaining gate lacks history.
- * Default gates: TRACE_STEPS ids.
+ * ETA of gates not finished in `currentRunId`. Per gate: same-ticket median, else `gateHistory` (server, all tickets), else none.
+ * source: 'same ticket' | 'all tickets' | 'no estimate'. eta_ms null + reason 'no_history' if any gate has no estimate.
  */
-export function gateEta(runs = [], { currentRunId = null, gates = TRACE_STEPS.map(s => s.gate) } = {}) {
+export function gateEta(runs = [], { currentRunId = null, gates = TRACE_STEPS.map(s => s.gate), gateHistory = {} } = {}) {
   const current = runs.find(r => r.id === currentRunId);
   const finished = current ? gateDurationsForRun(current) : new Map();
   const remaining = gates.filter(gate => !finished.has(gate));
-  const typical = Object.fromEntries(remaining.map(gate => [gate, typicalGateMs(runs, gate, currentRunId)]));
+  const typical = {};
+  for (const gate of remaining) {
+    const own = typicalGateMs(runs, gate, currentRunId);
+    const shared = gateHistory?.[gate];
+    if (own.ms != null) typical[gate] = { ...own, source: 'same ticket' };
+    else if (shared?.median_ms != null) typical[gate] = { ms: shared.median_ms, samples: shared.n, reason: null, source: 'all tickets' };
+    else typical[gate] = { ms: null, samples: 0, reason: 'no_history', source: 'no estimate' };
+  }
   const missing = remaining.filter(gate => typical[gate].ms == null);
-  if (missing.length) return { remaining, typical, missing, eta_ms: null, reason: 'no_history' };
-  return { remaining, typical, missing, eta_ms: remaining.reduce((sum, gate) => sum + typical[gate].ms, 0), reason: null };
+  const sources = new Set(remaining.map(gate => typical[gate].source));
+  const source = missing.length ? 'no estimate' : sources.has('all tickets') ? 'all tickets' : remaining.length ? 'same ticket' : null;
+  if (missing.length) return { remaining, typical, missing, source, eta_ms: null, reason: 'no_history' };
+  return { remaining, typical, missing, source, eta_ms: remaining.reduce((sum, gate) => sum + typical[gate].ms, 0), reason: null };
 }
