@@ -1,6 +1,6 @@
 """Ratchet loop: đọc snapshot inbox, đi 7 cổng, ghi kết quả vào skill_proposals.
 
-Cổng 1-5 (+2.5, 5.5) thật; cổng 6-7 còn là stub cho qua. Chỉ chạy nhánh DRY_RUN=1 —
+Cổng 1-5 (+2.5, 5.5) thật; cổng 6-7 là stub khai báo (stub=True); số cổng lạ raise. Chỉ chạy nhánh DRY_RUN=1 —
 không git thật (repo Tizia), không GitHub, không Telegram ở bất kỳ đâu trong
 file này (Ollama thì gọi thật ở cổng 1 + 3; cổng 3 có git cục bộ riêng vào 1
 repo scratch tạm, xem gates/implement.py; nhánh candidate do candidate.py lo).
@@ -347,7 +347,20 @@ def _smoke(request, deps, budget, state, **_) -> dict:
     return candidate.ensure(state, 5) or verify.run(state, deps, budget)
 
 
-# gate → fn(request, deps, budget, state, db_path=, proposal_id=). Cổng không có ở đây (6, 7) là stub cho qua.
+class UnknownGateError(ValueError):
+    """Số cổng không có trong _GATE_FNS; không được coi là cho qua."""
+
+    def __init__(self, number: float):
+        super().__init__(f"unknown gate {number!r}; known: {sorted(_GATE_FNS)}")
+        self.number = number
+
+
+def _stub_gate(number: float):
+    """Cổng 6, 7: chưa có logic, giữ để gate_reached=7 còn khớp dữ liệu đã ghi."""
+    return lambda request, deps, budget, state, **_: {"gate": number, "blocked": False, "reason": None, "stub": True}
+
+
+# gate → fn(request, deps, budget, state, db_path=, proposal_id=). Số ngoài bảng → UnknownGateError.
 _GATE_FNS = {
     1: _intake_and_plan,
     2: lambda request, deps, budget, state, **_: scope_check.run(state),
@@ -356,6 +369,8 @@ _GATE_FNS = {
     4: lambda request, deps, budget, state, **trace: static_check.run_gate(state, deps, budget, **trace),
     5: _smoke,
     5.5: lambda request, deps, budget, state, **_: risk_triage.run(state),
+    6: _stub_gate(6),
+    7: _stub_gate(7),
 }
 
 
@@ -364,10 +379,10 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
     """Điểm thay duy nhất khi 1 cổng có logic thật. `state` mang plan/artifact
     giữa các cổng trong cùng 1 lượt (cổng 1 ghi plan, cổng 2 đọc). db_path/
     proposal_id chỉ để gate_trace ghi trace. Báo deps.progress trước khi chạy."""
-    deps.progress(number)
     fn = _GATE_FNS.get(number)
     if fn is None:
-        return {"gate": number, "blocked": False, "reason": None}
+        raise UnknownGateError(number)
+    deps.progress(number)
     trace = deps.trace if hasattr(deps.trace, 'open_span') else None
     span = trace.open_span(f"invoke_agent gate {number}", {"gen_ai.operation.name": "invoke_agent", "tizia.gate.id": number}) if trace else None
     try:
@@ -378,7 +393,8 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
         raise
     if span:
         blocked = bool(result.get("blocked"))
-        trace.close_span(span, "ok", {"tizia.gate.status": "blocked" if blocked else "passed",
+        status = "stub" if result.get("stub") else "blocked" if blocked else "passed"
+        trace.close_span(span, "ok", {"tizia.gate.status": status,
                                                               **({"tizia.gate.outcome": str(result["outcome"])[:80]} if result.get("outcome") else {})})
     return result
 
