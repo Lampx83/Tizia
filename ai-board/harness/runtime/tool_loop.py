@@ -33,6 +33,7 @@ REPO_TOOLS = tuple(name for name in ("tree", "outline", "grep") if name in MANIF
 WRITE_TOOLS = MANIFEST.names("draft_write")
 # Tool ghi chỉ chạm bản nháp trong bộ nhớ; file thật chỉ được ghi ở cổng 3 sau khi loop đề xuất xong.
 SCHEMAS = {name: spec.parameters for name, spec in MANIFEST.tools.items()}
+DESCRIPTIONS = {name: spec.description for name, spec in MANIFEST.tools.items()}
 
 
 _SANDBOX_OFFERED = ContextVar("sandbox_offered", default=False)
