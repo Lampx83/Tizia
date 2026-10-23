@@ -10,3 +10,4 @@ ai-board/worker-entrypoint.sh text eol=lf
 *.sh text eol=lf
 ai-board/sandbox-runner/guest/Dockerfile* text eol=lf
 ai-board/sandbox-runner/sandbox-policy*.yaml text eol=lf
+server/ai-board/contract.json text eol=lf

@@ -126,7 +126,8 @@
     },
     "runner_busy": {
       "_why": "Gate 5 hoặc run_in_sandbox nhận 429 (runner bận) sau retry: worker trả lease, ticket về hàng đợi sau retry_after_ms, không tính retry và không chặn.",
-      "retry_after_ms": 60000
+      "retry_after_ms": 60000,
+      "max_releases": 5
     },
     "transient_retry": {
       "_why": "Yêu cầu (mọi loại, không riêng self) bị chặn ở cổng 5 vì lỗi hạ tầng thoáng qua (GPU dùng chung quá tải) sau khi backoff gọi model (main.py MODEL_RETRY_BACKOFF_S) đã hết mà vẫn hỏng. Mặc định tắt: admin tự xem Grafana rồi bấm 'Chạy lại ngay' lúc rảnh GPU. Bật: ticket tự về hàng đợi sau retry_after_ms, không cần admin theo dõi liên tục.",
