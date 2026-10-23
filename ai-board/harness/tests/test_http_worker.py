@@ -1798,3 +1798,17 @@ def test_runner_busy_at_gate_5_spends_no_retry_and_blocks_as_busy():
     assert verdict['failure_class'] == 'busy'
     assert budget.retries == 0
     assert [gate for gate, _ in calls].count(5) == 1
+
+
+def test_runner_busy_keeps_the_checkpoint_so_the_rerun_resumes():
+    purged = []
+
+    class Spy(MemCursorCheckpoint):
+        def purge(self):
+            purged.append(1)
+
+    busy = {'blocked': True, 'reason': 'sandbox runner busy', 'failure_class': 'busy'}
+    run_gate, _ = scripted_gates({5: [busy, {}]})
+    execute_pre_pr(ONE_STEP_PLAN, ticket_id=7, checkout_source='unused', deps=object(), budget=TickBudget(),
+                   run_gate=run_gate, cleanup=lambda *_, **__: None, checkpoint=Spy())
+    assert purged == []

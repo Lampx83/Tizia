@@ -336,8 +336,8 @@ class _Execution:
     def verdict(self) -> str:
         gates, kind, last = self.gates, self.kind, self.gates[-1]
         passed = _passed(gates, kind)
-        if self.checkpoint is not None and kind not in ("transient", "critical"):
-            self.checkpoint.purge()  # lượt có kết luận cuối; transient/critical giữ lại để resume hoặc đối chiếu
+        if self.checkpoint is not None and kind not in ("transient", "critical", "busy"):
+            self.checkpoint.purge()  # lượt có kết luận cuối; transient/critical/busy giữ lại để resume hoặc đối chiếu
         needs_review = passed and last["risk_level"] in ("high", "critical")
         outcome = "needs_review" if needs_review else "ready_for_pr" if passed else "blocked"
         if self.memory_path:
