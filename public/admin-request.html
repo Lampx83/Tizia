@@ -22,12 +22,6 @@
   a { text-underline-offset:3px; }
   .back { display:inline-flex; align-items:center; min-height:44px; }
   .request-head { padding-bottom:20px; border-bottom:1px solid var(--border); }
-  /* Ticket graph: state = icon + word + border style; colour only adds emphasis. */
-  @keyframes spin { to { transform:rotate(360deg); } }
-  @media (max-width:600px) {
-  }
-  @media (prefers-reduced-motion: reduce) {
-  }
   .write-row { padding:10px 0; border-top:1px solid var(--border); }
   .reconcile-form fieldset { border:1px solid var(--border); border-radius:8px; margin:8px 0; padding:8px 12px; }
   .rf-opt { display:flex; gap:8px; align-items:center; min-height:44px; }
@@ -139,29 +133,42 @@
   }
   .claim-evidence code { white-space:normal; overflow-wrap:anywhere; word-break:break-all; }
   .claim-evidence pre { white-space:pre-wrap; overflow-wrap:anywhere; }
-  /* Ticket graph: no boxes, one accent, state = icon (shape + colour) + word in legend and panel. */
+  /* Ticket graph: thin edges, no boxes. Colour: one accent plus the state colours. */
   .ticket-graph { margin:56px 0 0; }
-  .g-budget { margin:6px 0 0; font-variant-numeric:tabular-nums; }
-  .g-legend { display:flex; flex-wrap:wrap; gap:8px 20px; margin:20px 0 0; }
+  .g-strip { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:28px 32px; margin:20px 0 0; }
+  .g-cell-label { font-size:12px; color:var(--muted); }
+  .g-big { font-size:28px; font-weight:600; line-height:1.2; margin-top:4px; font-variant-numeric:tabular-nums; }
+  .g-sub { font-size:12px; color:var(--muted); margin-top:2px; }
+  .g-bar { height:3px; margin-top:12px; background:var(--border); border-radius:2px; overflow:hidden; }
+  .g-bar i { display:block; height:100%; background:var(--ok); }
+  .tone-warn .g-big, .tone-warn .g-sub { color:var(--warn); }
+  .tone-warn .g-bar i { background:var(--warn); }
+  .tone-bad .g-big, .tone-bad .g-sub { color:var(--bad); }
+  .tone-bad .g-bar i { background:var(--bad); }
+  .g-legend { display:flex; flex-wrap:wrap; gap:8px 20px; margin:44px 0 0; }
   .g-state { display:inline-flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); }
   .g-state.st-succeeded { color:var(--ok); }
   .g-state.st-failed { color:var(--bad); }
   .g-state.st-running { color:var(--accent2); }
-  .g-lane { margin:44px 0 0; }
-  .g-lane-title { font-size:12px; font-weight:600; color:var(--muted); margin:0 0 14px; }
-  .g-nodes { list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:12px 36px; }
-  .gnode { all:unset; box-sizing:border-box; display:inline-flex; align-items:center; gap:10px; min-height:44px; cursor:pointer; color:var(--txt); font-size:15px; }
-  .gnode .g-name { text-underline-offset:6px; text-decoration-thickness:2px; text-decoration-color:transparent; }
-  .gnode:hover .g-name { text-decoration-color:var(--muted); }
-  .gnode[aria-pressed="true"] .g-name { text-decoration-color:var(--accent); }
-  .gnode:focus-visible { outline:2px solid var(--accent); outline-offset:4px; border-radius:4px; }
-  .gnode.st-idle { color:var(--muted); }
-  .g-icon { flex:none; }
-  .gnode.st-succeeded .g-icon { color:var(--ok); }
-  .gnode.st-failed .g-icon { color:var(--bad); }
-  .gnode.st-running .g-icon { color:var(--accent2); animation:spin 1.4s linear infinite; }
-  .gnode.st-idle .g-icon { color:var(--muted); }
-  @keyframes spin { to { transform:rotate(360deg); } }
+  .g-frame { margin-top:28px; overflow-x:auto; overflow-y:hidden; }
+  .g-svg { display:block; width:100%; min-width:900px; height:auto; }
+  .g-edge { fill:none; stroke:var(--muted); stroke-opacity:.45; stroke-width:1; }
+  .g-edge.done { stroke:var(--ok); stroke-opacity:.8; }
+  .g-edge.stop { stroke:var(--bad); stroke-opacity:.6; stroke-dasharray:2 4; }
+  .g-edge.flow { stroke:var(--accent2); stroke-opacity:1; stroke-dasharray:4 8; animation:g-flow 1.2s linear infinite; }
+  @keyframes g-flow { to { stroke-dashoffset:-24; } }
+  .g-ring { fill:var(--bg); stroke:var(--muted); stroke-width:1.5; }
+  .g-glyph { color:var(--muted); }
+  .g-node.st-succeeded .g-ring, .g-node.st-succeeded .g-glyph { stroke:var(--ok); color:var(--ok); }
+  .g-node.st-failed .g-ring, .g-node.st-failed .g-glyph { stroke:var(--bad); color:var(--bad); }
+  .g-node.st-running .g-ring, .g-node.st-running .g-glyph { stroke:var(--accent2); color:var(--accent2); }
+  .g-node.st-running .g-glyph { animation:g-turn 1.4s linear infinite; transform-box:fill-box; transform-origin:center; }
+  @keyframes g-turn { to { transform:rotate(360deg); } }
+  .g-halo { fill:none; stroke:var(--accent); stroke-width:1.5; }
+  .g-label { font-size:13px; fill:var(--muted); text-anchor:middle; }
+  .g-node { cursor:pointer; outline:none; }
+  .g-node:hover .g-label, .g-node.is-selected .g-label { fill:var(--txt); }
+  .g-node:focus-visible .g-ring { stroke:var(--accent); stroke-width:2.5; }
   .g-loop { margin:28px 0 0; }
   .g-detail { margin-top:64px; padding-top:28px; border-top:1px solid var(--border); max-width:72ch; min-height:80px; }
   .g-empty { margin:0; }
@@ -178,12 +185,12 @@
   .g-slot { margin:24px 0 0; }
   .g-raw { margin-top:24px; }
   @media (max-width:600px) {
-    .g-nodes { gap:8px 24px; }
-    .g-lane { margin-top:36px; }
+    .g-strip { grid-template-columns:1fr 1fr; }
+    .g-big { font-size:22px; }
     .g-detail { margin-top:48px; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .gnode.st-running .g-icon { animation:none; }
+    .g-edge.flow, .g-node.st-running .g-glyph { animation:none; }
   }
   .event-row > .line1 { display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; }
 </style>

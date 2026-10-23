@@ -718,6 +718,13 @@ async function tick() {
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
 
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const node = e.target.closest?.('#app g[data-node]');
+  if (!node) return;
+  e.preventDefault();
+  node.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+});
 document.addEventListener('click', e => {
   const node = e.target.closest('#app [data-node]');
   if (node && view?.trace && graphNodes(view.trace)[node.dataset.node]) { ui.node = node.dataset.node; render(); return; }

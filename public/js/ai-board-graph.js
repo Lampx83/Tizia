@@ -5,23 +5,22 @@ import { visitedNodes } from './ai-board-hsm.js';
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const NODES = {
-  gate_1: { lane: 'plan', name: 'Check request', purpose: 'Check the request text. Write a plan.' },
-  gate_2: { lane: 'plan', name: 'Check allowed files', purpose: 'Check that the plan only changes allowed files.' },
-  gate_2_5: { lane: 'plan', name: 'Check plan', purpose: 'Compare the plan with the current code.' },
-  plan_ready: { lane: 'plan', name: 'Plan ready', purpose: 'The plan passed. An admin can allow the work.' },
-  plan_stopped: { lane: 'plan', name: 'Plan stopped', purpose: 'A plan check failed. Work stops here.' },
-  attempt_open: { lane: 'execute', name: 'Start attempt', purpose: 'Open one work attempt on the approved plan.' },
-  gate_3: { lane: 'execute', name: 'Write code', purpose: 'Write the code for each approved task.' },
-  gate_4: { lane: 'execute', name: 'Check code', purpose: 'Check the change and the safety rules.' },
-  gate_5: { lane: 'execute', name: 'Run app', purpose: 'Run the app in a sandbox. Check how it behaves.' },
-  gate_5_5: { lane: 'execute', name: 'Check risk', purpose: 'Collect evidence. Rate the risk before a pull request.' },
-  attempt_close: { lane: 'execute', name: 'End attempt', purpose: 'End the attempt. Remove the temporary branch.' },
-  repair_check: { lane: 'execute', name: 'Repair needed?', purpose: 'Decide if one more repair is allowed.' },
-  repair: { lane: 'execute', name: 'Repair', purpose: 'Record the reason. Start the attempt again.' },
-  verdict: { lane: 'execute', name: 'Verdict', purpose: 'Final result: ready, needs review, or blocked.' },
-  reverify_open: { lane: 'side', name: 'Check on new base', purpose: 'Rebuild the change on the latest base. Check it again.' },
+  gate_1: { name: 'Check request', purpose: 'Check the request text. Write a plan.', at: [60, 70] },
+  gate_2: { name: 'Check allowed files', purpose: 'Check that the plan only changes allowed files.', at: [230, 70] },
+  gate_2_5: { name: 'Check plan', purpose: 'Compare the plan with the current code.', at: [400, 70] },
+  plan_ready: { name: 'Plan ready', purpose: 'The plan passed. An admin can allow the work.', at: [570, 70] },
+  plan_stopped: { name: 'Plan stopped', purpose: 'A plan check failed. Work stops here.', at: [400, 170] },
+  attempt_open: { name: 'Start attempt', purpose: 'Open one work attempt on the approved plan.', at: [60, 270] },
+  gate_3: { name: 'Write code', purpose: 'Write the code for each approved task.', at: [230, 270] },
+  gate_4: { name: 'Check code', purpose: 'Check the change and the safety rules.', at: [400, 270] },
+  gate_5: { name: 'Run app', purpose: 'Run the app in a sandbox. Check how it behaves.', at: [570, 270] },
+  gate_5_5: { name: 'Check risk', purpose: 'Collect evidence. Rate the risk before a pull request.', at: [740, 270] },
+  attempt_close: { name: 'End attempt', purpose: 'End the attempt. Remove the temporary branch.', at: [910, 270] },
+  reverify_open: { name: 'Check on new base', purpose: 'Rebuild the change on the latest base. Check it again.', at: [400, 380] },
+  repair_check: { name: 'Repair needed?', purpose: 'Decide if one more repair is allowed.', at: [910, 380] },
+  repair: { name: 'Repair', purpose: 'Record the reason. Start the attempt again.', at: [740, 380] },
+  verdict: { name: 'Verdict', purpose: 'Final result: ready, needs review, or blocked.', at: [910, 480] },
 };
-const LANES = [['plan', 'Plan'], ['execute', 'Work and checks'], ['side', 'Re-check']];
 const STEP_STATE = { run: 'running', ok: 'succeeded', bad: 'failed' };
 const STEP_NOTE = { queued: 'The worker has not started this run yet.', unfinished: 'Stopped before a result.', wait: 'Not reached yet.' };
 const STATE_LABEL = { idle: 'Waiting', running: 'Running', succeeded: 'Done', failed: 'Failed' };
@@ -33,11 +32,17 @@ const PURPOSE_EN = {
 };
 const PIN_LABEL = { candidate: 'change', plan: 'plan', base: 'base commit', harness: 'checker code', prompt: 'content check prompt',
   tool: 'toolset', model: 'model', oracle: 'permission list' };
-const GATE_ORDER = TRACE_STEPS.map(s => s.gate);
+// Drawn: the main path, the repair and verdict branches, and blocked edges into plan_stopped. Other blocked edges would clutter the graph.
+const drawnEdge = (edge) => ['passed', 'repair', 'done'].includes(edge.on) || edge.to === 'plan_stopped';
+// Edges that loop back in the drawing. They bow below the row so they do not cross nodes.
+const BACKWARD = new Set(['repair>attempt_open']);
 
 const gateOf = (id) => (id.startsWith('gate_') ? Number(id.slice(5).replace('_', '.')) : null);
 const numberOr = (value) => (Number.isFinite(Number(value)) ? Number(value) : 0);
 const gateStage = (gate) => (gate < 3 ? 'plan' : 'execute');
+// Epoch values before 2000 are fixture or bad data, never a real start time.
+const EPOCH_MIN = Date.UTC(2000, 0, 1);
+const MAX_RUN_MS = 30 * 24 * 3600 * 1000;
 
 function callsOf(step) {
   return (step?.calls || []).flatMap(g => [...g.previous, g.current])
@@ -53,7 +58,6 @@ function modelCall(call) {
     error: call.error || '',
     model: call.model || '',
     ms: call.metrics?.wall_ms ?? null,
-    tokens: [call.metrics?.tokens_in, call.metrics?.tokens_out],
     budget: call.budget_units ?? null,
   };
 }
@@ -63,7 +67,7 @@ const median = (xs) => {
   const m = s.length >> 1;
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
-// Typical duration of a gate from recorded gate spans. Empty when the trace has none.
+// Typical duration of a gate from recorded gate spans. Null when the trace has none.
 function typicalMs(trace, gate) {
   const samples = (trace.runs || []).flatMap(r => r.spans || [])
     .filter(s => Number(s.attributes?.['tizia.gate.id']) === gate && s.end_ms != null && s.end_ms >= s.start_ms)
@@ -103,7 +107,7 @@ function gateDetail(step, trace) {
   };
 }
 
-// Pure: node id -> {id, lane, name, purpose, state, ...detail}. Gates use step data; the rest use reached-events.
+// Pure: node id -> {id, gate, name, purpose, state, ...detail}. Gates use step data; the rest use reached-events.
 export function graphNodes(trace = {}) {
   const projection = projectPipeline(trace);
   const selected = new Set([...projection.selected].map(Number));
@@ -131,26 +135,44 @@ export function graphNodes(trace = {}) {
   return out;
 }
 
-// Budget as parts for one line. API models show tokens; local runtimes show GPU time and elapsed time.
-export function budgetParts(trace = {}, now = Date.now()) {
+// Clock for elapsed run time. Implausible timestamps show a label, never a number.
+export function runningClock(trace = {}, now = Date.now()) {
+  const runs = projectPipeline(trace).runs;
+  const started = Number(runs[0]?.created_at);
+  if (!runs.length || !(started >= EPOCH_MIN)) return { text: 'Not started', tone: 'idle' };
+  const last = Math.max(0, ...runs.map(r => Number(r.updated_at) || 0));
+  const elapsed = (trace.root?.live ? now : last) - started;
+  if (!(elapsed >= 0) || elapsed > MAX_RUN_MS) return { text: 'No data', tone: 'idle' };
+  const t = Math.floor(elapsed / 1000);
+  const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = String(t % 60).padStart(2, '0');
+  return { text: h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`, tone: 'idle' };
+}
+
+const toneOf = (ratio) => (ratio >= 1 ? 'bad' : ratio >= 0.8 ? 'warn' : 'ok');
+const fmt = (n) => Number(n).toLocaleString('en-US');
+
+// Budget cells: big number, optional thin bar. API budgets show tokens, local runtimes show GPU time and runtime.
+export function budgetCells(trace = {}, now = Date.now()) {
   const used = trace.root_work?.used || {};
   const limits = trace.root_work?.limits || {};
-  const runs = projectPipeline(trace).runs;
-  const started = runs[0]?.created_at;
-  const last = Math.max(0, ...runs.map(r => Number(r.updated_at) || 0));
-  const elapsed = started ? ((trace.root?.live ? now : last) - Number(started)) : null;
-  const fmt = (n) => Number(n).toLocaleString('en-US');
-  const clock = (ms) => { const t = Math.floor(ms / 1000); const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, sec = String(t % 60).padStart(2, '0'); return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`; };
-  const parts = [`Model calls ${fmt(used.model_calls ?? 0)} of ${fmt(limits.model_calls ?? 0)}`];
-  if (trace.totals?.budget_unit === 'k_tokens') parts.push(`Tokens ${fmt(used.tokens ?? 0)} of ${fmt(limits.tokens ?? 0)}`);
-  else parts.push(`GPU time ${((trace.totals?.gpu_s ?? 0)).toFixed(1)} s`);
-  if (elapsed != null) parts.push(`Running ${clock(elapsed)}`);
+  const cell = (label, usedN, limitN) => {
+    const ratio = limitN > 0 ? usedN / limitN : 0;
+    const tone = toneOf(ratio);
+    const big = ratio >= 1 ? 'Used up' : `${fmt(usedN)} / ${fmt(limitN)}`;
+    return { label, big, sub: ratio >= 1 ? '' : `${Math.round(ratio * 100)}% used`, ratio: Math.min(ratio, 1), tone: ratio >= 1 ? 'bad' : tone, bar: true };
+  };
+  const cells = [cell('Model calls', used.model_calls ?? 0, limits.model_calls ?? 0)];
+  if (trace.totals?.budget_unit === 'k_tokens') cells.push(cell('Tokens', used.tokens ?? 0, limits.tokens ?? 0));
+  else cells.push({ label: 'GPU time', big: `${(trace.totals?.gpu_s ?? 0).toFixed(1)} s`, sub: 'local model', tone: 'idle', bar: false });
+  const clock = runningClock(trace, now);
+  cells.push({ label: 'Running', big: clock.text, sub: '', tone: 'idle', bar: false });
   const steps = projectPipeline(trace).steps.filter(s => s.state !== 'ok');
   const times = steps.map(s => typicalMs(trace, s.gate));
-  if (!steps.length) parts.push('Time left: none');
-  else if (times.every(t => t != null)) parts.push(`Time left: about ${Math.round(times.reduce((a, b) => a + b, 0) / 60000)} min`);
-  else parts.push('Time left: No estimate. No step timing yet.');
-  return parts;
+  let eta = { big: 'No estimate', sub: 'No step timing yet' };
+  if (!steps.length) eta = { big: 'None', sub: 'All steps done' };
+  else if (times.every(t => t != null)) eta = { big: `about ${Math.round(times.reduce((a, b) => a + b, 0) / 60000)} min`, sub: 'From earlier gate timings' };
+  cells.push({ label: 'Time left', ...eta, tone: 'idle', bar: false });
+  return cells;
 }
 
 const ICON = {
@@ -209,23 +231,56 @@ function nodePanel(node, root) {
   return `${head}${purpose}${kv(rows)}${error}${proof}${models}${tools}${earlier}${action ? `<div class="g-slot">${action}</div>` : ''}${raw}`;
 }
 
+// Edge: a straight line, or a bowed curve for a loop-back. Endpoints are node centres (nodes paint over them).
+function edgePath(from, to, back) {
+  const [x1, y1] = NODES[from].at, [x2, y2] = NODES[to].at;
+  if (!back) return `M${x1} ${y1}L${x2} ${y2}`;
+  return `M${x1} ${y1}Q${(x1 + x2) / 2} ${Math.max(y1, y2) + 150} ${x2} ${y2}`;
+}
+
+function edgeSvg(edge, nodes) {
+  const from = nodes[edge.from], to = nodes[edge.to];
+  if (!from || !to) return '';
+  const back = BACKWARD.has(`${edge.from}>${edge.to}`);
+  const flowing = to.state === 'running' && from.state === 'succeeded' && edge.on !== 'blocked';
+  const done = from.state === 'succeeded' && (to.state === 'succeeded' || to.state === 'running');
+  const cls = ['g-edge', flowing ? 'flow' : '', done ? 'done' : '', edge.on === 'blocked' ? 'stop' : ''].filter(Boolean).join(' ');
+  return `<path class="${cls}" d="${edgePath(edge.from, edge.to, back)}" data-edge="${esc(edge.from)}>${esc(edge.to)}"/>`;
+}
+
 // Panel for the chosen node; `chosen` null → the running node, else the failed one.
 export function renderTicketGraph(trace = {}, chosen = null, now = Date.now()) {
   const nodes = graphNodes(trace);
-  const present = new Set((trace.graph?.nodes || []).map(n => n.id));
   const selectedId = pick(nodes, chosen);
-  const lanes = LANES.map(([lane, title]) => {
-    const items = Object.values(nodes).filter(n => n.lane === lane && (present.size === 0 || present.has(n.id)));
-    if (!items.length) return '';
-    return `<div class="g-lane"><h3 class="g-lane-title">${esc(title)}</h3><ol class="g-nodes">${items.map(n => `<li><button type="button" class="gnode st-${n.state}" data-node="${esc(n.id)}" aria-pressed="${n.id === selectedId}" aria-label="${esc(n.name)}: ${esc(STATE_LABEL[n.state])}" title="${esc(n.name)}: ${esc(STATE_LABEL[n.state])}">${icon(n.state)}<span class="g-name">${esc(n.name)}</span></button></li>`).join('')}</ol></div>`;
+  const edges = (trace.graph?.edges || []).filter(drawnEdge).map(e => edgeSvg(e, nodes)).join('');
+  const present = new Set((trace.graph?.nodes || []).map(n => n.id));
+  const drawn = Object.values(nodes).filter(n => present.size === 0 || present.has(n.id)).map(n => {
+    const sel = n.id === selectedId;
+    const label = `${n.name}: ${STATE_LABEL[n.state]}`;
+    return `<g class="g-node st-${n.state}${sel ? ' is-selected' : ''}" data-node="${esc(n.id)}" role="button" tabindex="0" aria-pressed="${sel}" aria-label="${esc(label)}" transform="translate(${n.at[0]} ${n.at[1]})">
+      ${sel ? '<circle class="g-halo" r="28"/>' : ''}
+      <circle class="g-ring" r="18"/>
+      <g transform="translate(-8 -8)"><g class="g-glyph">${ICON[n.state]}</g></g>
+      <text class="g-label" y="42" text-anchor="middle">${esc(n.name)}</text>
+    </g>`;
   }).join('');
   const rollback = projectPipeline(trace).runs.at(-1)?.rollback;
   const rollbackLine = rollback ? `<p class="meta g-loop">Rollback: ${esc(ROLLBACK_LABEL[rollback.outcome] || rollback.outcome)}.</p>` : '';
+  const cells = budgetCells(trace, now).map(c => `<div class="g-cell tone-${c.tone}">
+      <div class="g-cell-label">${esc(c.label)}</div>
+      <div class="g-big">${esc(c.big)}</div>
+      ${c.sub ? `<div class="g-sub">${esc(c.sub)}</div>` : ''}
+      ${c.bar ? `<div class="g-bar" aria-hidden="true"><i style="width:${Math.round(c.ratio * 100)}%"></i></div>` : ''}
+    </div>`).join('');
   return `<section class="ticket-graph" aria-labelledby="ticket-graph-title">
     <h2 id="ticket-graph-title">Ticket graph</h2>
-    <p class="meta g-budget">${budgetParts(trace, now).map(esc).join(' · ')}</p>
+    <div class="g-strip" role="group" aria-label="Budget">${cells}</div>
     <p class="g-legend meta">${Object.keys(ICON).map(s => `<span class="g-state st-${s}">${icon(s)}${esc(STATE_LABEL[s])}</span>`).join('')}</p>
-    ${lanes}${rollbackLine}
+    <div class="g-frame"><svg class="g-svg" viewBox="0 0 1000 540" role="group" aria-label="Ticket processing graph">
+      <g class="g-edges">${edges}</g>
+      <g class="g-nodes">${drawn}</g>
+    </svg></div>
+    ${rollbackLine}
     <div class="g-detail" role="region" aria-live="polite" aria-label="Node details">${nodePanel(nodes[selectedId], trace.root)}</div>
   </section>`;
 }
