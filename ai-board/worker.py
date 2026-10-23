@@ -1243,6 +1243,7 @@ class HarnessPlanner:
             "type": request.get("type"), "subject": request.get("title"),
             # Spec đã làm rõ với người gửi thay mô tả gốc; không có thì như cũ.
             "body": request.get("clarified_spec") or request.get("detail") or request.get("title"),
+            "clarified_spec": request.get("clarified_spec"),
             "thread": snapshot.get("thread") or [], "votes": request.get("votes", 1),
             "complexity_by_server": True,
             "grounding_required": request.get('type') != 'self',

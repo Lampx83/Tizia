@@ -44,6 +44,22 @@ def manual() -> str:
     return _MANUAL
 
 
+def thread_text(thread: list | None, spec: str | None = None) -> str:
+    """Thread → text prompt, trần limits.context.thread_chars. Vượt trần: spec, dòng cắt, lượt mới nhất."""
+    lines = [f"{m.get('role')}: {m.get('body')}" for m in thread or []]
+    full = " | ".join(lines)
+    cap = limits.thread_chars()
+    if len(full) <= cap:
+        return full
+    head = [f"spec: {spec}"[:cap // 2]] if spec else []
+    for cut in range(len(lines) + 1):
+        parts = [*head, *([f"({cut} earlier messages cut)"] if cut else []), *lines[cut:]]
+        text = "\n".join(parts)
+        if len(text) <= cap:
+            return text
+    return text[:cap]
+
+
 @dataclass(frozen=True)
 class Skill:
     name: str

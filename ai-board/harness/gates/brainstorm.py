@@ -45,9 +45,7 @@ PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "brainstorm.md").
 
 def build_prompt(request: dict, surface: frozenset[str], context_text: str = "") -> str:
     """AIBOARD.md + prompt đã khoá (prefix cố định) rồi mới tới context/request thay đổi theo lượt."""
-    thread = " | ".join(
-        f"{m.get('role')}: {m.get('body')}" for m in (request.get("thread") or [])
-    ) or "(không có)"
+    thread = context.thread_text(request.get("thread"), request.get("clarified_spec")) or "(không có)"
     return context.manual() + PROMPT.format(
         id=request.get("id"),
         domain=request.get("domain") or "(core)",
