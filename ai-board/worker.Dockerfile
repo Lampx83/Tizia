@@ -17,9 +17,12 @@ COPY --from=node /usr/local/bin/node /usr/local/bin/node
 
 ENV VIRTUAL_ENV=/opt/venv PATH=/opt/venv/bin:$PATH PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     PYTHONUNBUFFERED=1 PYTHONIOENCODING=utf-8
+# WORKER_CHROMIUM=0 bỏ Chromium (~1.2 GB). Chỉ an toàn khi AI_BOARD_SANDBOX_URL được đặt: gate 5 khi đó chạy trong guest có Chromium riêng.
+ARG WORKER_CHROMIUM=1
 COPY ai-board/harness/requirements.txt /tmp/requirements.txt
 RUN python -m venv /opt/venv && pip install --no-cache-dir -r /tmp/requirements.txt \
-    && python -m playwright install --with-deps chromium && rm -rf /var/lib/apt/lists/*
+    && if [ "$WORKER_CHROMIUM" = 1 ]; then python -m playwright install --with-deps chromium; fi \
+    && rm -rf /var/lib/apt/lists/*
 
 # Harness code is baked in (redeploy to update it); the repo it changes is a separate clone (/repo).
 RUN groupadd -r docker && useradd -m -u 10001 -G docker aiboard
