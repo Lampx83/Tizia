@@ -168,10 +168,30 @@ test('time left: estimate covers only the current run stage, from earlier runs',
   // Execute run finished gate 3; gates 4, 5, 5.5 remain at a 20 s median each = 60 s.
   const left = budgetCells(withHistory([span(3, 5000)], 'execute'), EPOCH + 160000).find(c => c.label === 'Time left');
   assert.equal(left.big, 'about 1 min');
-  assert.equal(left.sub, 'From 2 earlier runs');
+  assert.equal(left.sub, 'From earlier runs of this ticket');
   // Plan run finished gate 1; gates 2 and 2.5 remain at 20 s each = 40 s.
   const plan = budgetCells(withHistory(), EPOCH + 160000).find(c => c.label === 'Time left');
   assert.equal(plan.big, 'under 1 min');
+});
+
+const shared = () => Object.fromEntries(GATES.map(g => [g, { median_ms: 15000, n: 30 }]));
+
+test('new ticket with no same-ticket history uses the all-tickets median, and says so', () => {
+  const trace = { ...running(), gate_history: shared() };
+  const left = budgetCells(trace, EPOCH).find(c => c.label === 'Time left');
+  // Execute run has no spans yet: gates 3, 4, 5, 5.5 at 15 s each = 60 s.
+  assert.equal(left.big, 'about 1 min');
+  assert.equal(left.sub, 'From other tickets');
+  assert.equal(graphNodes(trace).gate_4.typical.source, 'all tickets');
+  assert.equal(graphNodes(trace).gate_4.typical.ms, 15000);
+  assert.match(renderTicketGraph(trace, 'gate_4'), /about 15\.0 s · From other tickets · All models/);
+});
+
+test('same-ticket history wins over the all-tickets median', () => {
+  const trace = { ...withHistory(), gate_history: shared() };
+  const node = graphNodes(trace).gate_2;
+  assert.equal(node.typical.source, 'same ticket');
+  assert.equal(node.typical.ms, 20000);
 });
 
 test('time left says No estimate with a reason when a remaining gate has no history', () => {

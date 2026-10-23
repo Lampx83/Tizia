@@ -65,6 +65,16 @@ function modelCall(call) {
 
 const currentRunId = (trace) => projectPipeline(trace).latest?.id ?? null;
 
+// This ticket's earlier runs first, then the server's median over other tickets, else none.
+const gateEstimate = (trace, gate, runId) => {
+  const own = typicalGateMs(trace.runs || [], gate, runId);
+  if (own.ms != null) return { ...own, source: 'same ticket' };
+  const shared = trace.gate_history?.[gate];
+  if (shared?.median_ms != null) return { ms: shared.median_ms, samples: shared.n, reason: null, source: 'all tickets' };
+  return { ...own, source: 'no estimate' };
+};
+const SOURCE_TEXT = { 'same ticket': 'From earlier runs of this ticket', 'all tickets': 'From other tickets' };
+
 function proofNote(gate, events = []) {
   const last = [...events].reverse().map((e) => {
     if (e.event_type !== 'gate_proof_reused' && e.event_type !== 'gate_proof_invalidated') return null;
@@ -92,7 +102,7 @@ function gateDetail(step, trace) {
     ms: totals.ms,
     current: step.state === 'run' ? (latest ? `${latest.title}: ${latest.result}` : 'Waiting for the worker to reply.') : '',
     note: STEP_NOTE[step.state] || '',
-    typical: typicalGateMs(trace.runs || [], step.gate, currentRunId(trace)),
+    typical: gateEstimate(trace, step.gate, currentRunId(trace)),
     proof: proofNote(step.gate, trace.events),
   };
 }
@@ -170,12 +180,11 @@ export function budgetCells(trace = {}, now = Date.now()) {
   } else cells.push({ label: 'Run time', big: clockText(elapsed), sub: subText || 'No limit recorded', tone: 'idle', bar: false });
 
   const stageGates = latest?.trigger === 'execute' ? [3, 4, 5, 5.5] : [1, 2, 2.5];
-  const eta = gateEta(trace.runs || [], { currentRunId: currentRunId(trace), gates: stageGates });
+  const eta = gateEta(trace.runs || [], { currentRunId: currentRunId(trace), gates: stageGates, gateHistory: trace.gate_history || {} });
   if (!eta.remaining.length) cells.push({ label: 'Time left', big: 'None', sub: 'All steps done', tone: 'idle', bar: false });
   else if (eta.eta_ms != null) {
-    const earlier = Math.min(...eta.remaining.map(g => eta.typical[g].samples));
     const big = eta.eta_ms < 60000 ? 'under 1 min' : `about ${Math.round(eta.eta_ms / 60000)} min`;
-    cells.push({ label: 'Time left', big, sub: `From ${earlier} earlier run${earlier === 1 ? '' : 's'}`, tone: 'idle', bar: false });
+    cells.push({ label: 'Time left', big, sub: SOURCE_TEXT[eta.source], tone: 'idle', bar: false });
   } else cells.push({ label: 'Time left', big: 'No estimate', sub: 'No earlier run timed the next steps', tone: 'idle', bar: false });
   return cells;
 }
@@ -218,7 +227,7 @@ function nodePanel(node, root) {
   }
   const status = { running: node.current, failed: 'Stopped at this step.', succeeded: 'Finished.', idle: node.note }[node.state];
   const typical = node.typical.ms == null ? 'No estimate. No earlier run timed this step.'
-    : `about ${secs(node.typical.ms)} from ${node.typical.samples} earlier run${node.typical.samples === 1 ? '' : 's'}`;
+    : `about ${secs(node.typical.ms)} · ${SOURCE_TEXT[node.typical.source]} · All models`;
   const rows = [
     ['Now', esc(status || STATE_LABEL[node.state])],
     ['Time used', esc(secs(node.ms))],
