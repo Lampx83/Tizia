@@ -2,6 +2,7 @@
 !ai-board/
 !server/
 !scripts/
+!package.json
 ai-board/memory/
 ai-board/ai-log.md
 ai-board/inbox.json

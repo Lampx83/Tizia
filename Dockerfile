@@ -38,6 +38,8 @@ COPY ai-board/harness/prompts/ ./ai-board/harness/prompts/
 COPY ai-board/harness/skills/ ./ai-board/harness/skills/
 # Trusted preview startup is read as source by the serving broker; it runs inside the pinned guest.
 COPY ai-board/harness/verification/preview_guest.py ./ai-board/harness/verification/preview_guest.py
+# Skill lỗi → build thất bại → Portainer redeploy không thay container đang chạy.
+RUN node scripts/check-skills.mjs
 
 RUN mkdir -p /data && chown -R node:node /data /app
 USER node

@@ -29,7 +29,9 @@ RUN groupadd -r docker && useradd -m -u 10001 -G docker aiboard
 WORKDIR /opt/ai-board
 COPY ai-board/ ai-board/
 COPY server/ server/
+COPY package.json ./package.json
 COPY scripts/ scripts/
+RUN node scripts/check-skills.mjs
 RUN mkdir -p ai-board/memory /repo && chown -R aiboard:aiboard ai-board/memory /repo
 
 ENTRYPOINT ["tini", "--", "/bin/sh", "/opt/ai-board/ai-board/worker-entrypoint.sh"]
