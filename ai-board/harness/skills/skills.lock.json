@@ -12,6 +12,8 @@
   "edit-html-text": "28bb56cfe1ba4168d743e9426187f5b6436beeadd5cde7314f296556fc1dc3ec",
   "fix-js-behavior": "843d1488da2212ee14697a4bf8fb26beaeeaf0f834b15f6846d52dd672062a86",
   "frontend-design-core": "7bc9b7b3157ad602d7c416f79743cad32fcfcc6ac086202280f2555f68f7d71f",
+  "implement-one-slice": "5bb13c077668434c23eeb2a66c2404426c7cedffa15b07b776be79acfac6ed02",
   "new-feature": "963f6de73a7f459b39f84e28f720dfa4340863f1487c05d21e705f1e5f3d44a2",
-  "new-static-page": "29befece5bdf9149756e404f5b0bb6f129cc076bc5a235cf365df34020204ef6"
+  "new-static-page": "29befece5bdf9149756e404f5b0bb6f129cc076bc5a235cf365df34020204ef6",
+  "plan-from-request": "05567cf39312943b69d32d2265b4952f52bd8fc814d7493d697928786eb8ae1b"
 }
