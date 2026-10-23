@@ -125,6 +125,8 @@ Bộ data: 81 thuốc, 30 dược liệu, 10 ca lâm sàng, 85+ scenarios theo D
 
 Mở `http://<host>:8041`.
 
+> AI Board (`ai-board-worker`, `sandbox-runner`, `image-registry`) nằm trong `docker-compose.yml` dưới profile `ai-board`, **không chạy khi deploy mặc định**. Chỉ bật khi có chủ đích: `docker compose --profile ai-board up -d` (cần `sandbox-runner/secrets/runner-token` và biến env trong Portainer).
+
 ### ⏪ Rollback — refactor mount-order qua registry.js (ticket 04/06)
 
 Ticket 04+06 đổi cách `server/index.js` mount context: từ ~30 lệnh `attachX()`
