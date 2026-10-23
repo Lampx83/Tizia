@@ -3,7 +3,7 @@
 # Without --profile online the runner never starts; with the overlay but AI_BOARD_ONLINE_BACKEND_SCRIPTS unset the app
 # still rejects backend_script registration and answers /backend 404. Prepare the token first:
 #   openssl rand -hex 32 > ai-board/sandbox-runner/secrets/online-runner-token
-# For the dev stack (service tizia-dev) set the same three variables in its env file instead of using this overlay.
+# For the dev stack (container tizia-dev, service tizia) set the same three variables in its env file instead of using this overlay.
 x-logging: &logging
   driver: json-file
   options: { max-size: 10m, max-file: "3" }

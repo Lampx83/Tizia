@@ -5,6 +5,7 @@ FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb836
 WORKDIR /app
 COPY package*.json ./
 RUN --mount=type=secret,id=msb_ca \
+    --mount=type=cache,target=/root/.npm \
     if [ -s /run/secrets/msb_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/msb_ca; fi; \
     npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 
@@ -13,9 +14,9 @@ FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb836
 # pg_dump / pg_restore for the admin backups. Major version = the postgres image major (compose: postgres:16).
 RUN --mount=type=secret,id=msb_ca \
     if [ -s /run/secrets/msb_ca ]; then \
-      SSL_CERT_FILE=/run/secrets/msb_ca apk add --no-cache postgresql16-client=16.15-r0; \
+      SSL_CERT_FILE=/run/secrets/msb_ca apk add --no-cache postgresql16-client~16.15; \
     else \
-      apk add --no-cache postgresql16-client=16.15-r0; \
+      apk add --no-cache postgresql16-client~16.15; \
     fi
 WORKDIR /app
 ENV NODE_ENV=production \
