@@ -959,6 +959,7 @@ class HttpWorker:
                  tier: str | None, verdict: dict) -> str | None:
         """Push the verified candidate and open its one PR into dev, then report it. Return why not, else None.
         GitHub/git trouble is not the candidate's fault: the verdict stands, the admin sees the reason."""
+        import candidate
         existing = snapshot.get("pull_request")
         if existing:
             return f"root already has PR #{existing.get('number')}; not opening another"
@@ -973,6 +974,8 @@ class HttpWorker:
             })
         except LeaseLostError:
             raise
+        except candidate.PathDenied as error:
+            return str(error)
         except Exception as error:  # noqa: BLE001
             return f"PR not opened: {str(error)[:500]}"
         return None
@@ -1199,8 +1202,9 @@ class HttpWorker:
             pr_problem = None
             if self.open_prs and verdict and verdict.get("outcome") in ("ready_for_pr", "needs_review"):
                 pr_problem = self._open_pr(ticket_id, lease, prefix, snapshot, run, plan, planned.get("tier"), verdict)
+            pr_blocked = bool(pr_problem) and pr_problem.startswith("path_denied")
             self._release(ticket_id, {
-                **lease, "outcome": "planned", "idempotency_key": f"{prefix}:release",
+                **lease, "outcome": "waiting" if pr_blocked else "planned", "idempotency_key": f"{prefix}:release",
                 **({"internal_detail": pr_problem} if pr_problem else {}),
             })
             result = {

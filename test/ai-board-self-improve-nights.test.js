@@ -51,9 +51,8 @@ async function fixture({ labelled = SI.min_labelled_tasks } = {}) {
   const report = (body) => worker('/api/ai-board/worker/self-improve/night/report', body);
   const nights = async () => (await call('GET', '/api/admin/ai-board/self-improve', { user: 9 })).body;
   let n = 0;
-  const selfRequest = async () => (await worker('/api/ai-board/worker/self-requests', {
-    title: 'Skill sửa chữ', detail: 'Chẩn đoán.', target_file: SKILL, idempotency_key: `self-night-${String(++n).padStart(3, '0')}`,
-  })).body;
+  const selfRequest = () => store.createRequestWithRoot({ ownerUserId: 9, ownerDomain: 'ai-board', ownerDisplayName: 'ai-board',
+    title: 'Skill sửa chữ', detail: 'Chẩn đoán.', selfTarget: SKILL, idempotencyKey: `self-night-${String(++n).padStart(3, '0')}` });
   return { db, store, bells, call, worker, toggle, night, report, nights, selfRequest, close: () => server.close() };
 }
 
@@ -65,8 +64,6 @@ async function pastNight(f, date, variants) {
   await f.report({ night: date, finished: 'done' });
 }
 const dropped = (key) => ({ cluster: { key }, status: 'dropped', reason: 'khuôn sai' });
-
-const SELF_OFF = 'self requests disabled (LF80 path policy); fixture creates self requests, now refused';
 
 test('the switch is off by default and only an admin can flip it', async () => {
   const f = await fixture();
@@ -93,7 +90,7 @@ test('a night does not run below the labelled-task minimum', async () => {
   } finally { f.close(); }
 });
 
-test('a night does not run while a self-improve PR is still open', { skip: SELF_OFF }, async () => {
+test('a night does not run while a self-improve PR is still open', async () => {
   const f = await fixture();
   try {
     await f.toggle(true);
@@ -148,6 +145,19 @@ test('five finished nights in a row without an accepted variant pause the loop u
   } finally { f.close(); }
 });
 
+test('self requests are refused over HTTP, so a night with no self PR creates no variant', async () => {
+  const f = await fixture();
+  try {
+    await f.toggle(true);
+    const refused = await f.worker('/api/ai-board/worker/self-requests', { title: 'Skill sửa chữ', detail: 'x',
+      target_file: SKILL, idempotency_key: 'self-night-refused' });
+    assert.equal(refused.status, 403);
+    assert.equal(refused.body.error, 'self_request_disabled');
+    assert.equal((await f.night('2026-09-28')).body.run, true);
+    assert.deepEqual((await f.nights()).nights[0].variants, []);
+  } finally { f.close(); }
+});
+
 test('a cluster that failed three nights in a row is skipped for seven days', async () => {
   const f = await fixture();
   try {
@@ -161,64 +171,24 @@ test('a cluster that failed three nights in a row is skipped for seven days', as
   } finally { f.close(); }
 });
 
-// Verdict của biến thể (lượt self sau khi admin duyệt plan) → cập nhật dòng đêm; chuông admin chỉ khi thắng.
-const SHA = (c) => c.repeat(40);
-const EVAL = { accepted: true, base_sha: SHA('a'), variant_sha: SHA('b'), tasks: 6, wins: 3, losses: 1, ties: 2,
-  gpu_s: 812, gpu_s_limit: 2400, gold: false, dropped: [], strata: { base: {}, variant: {} }, config: {}, pairs: [] };
-const gates = (ev, gate5 = {}) => [{ gate: 3, blocked: false }, { gate: 4, blocked: false, issues: [] },
-  { gate: 5, blocked: false, smoke_passed: false, http_observed: false, runner: 'eval', eval: ev, ...gate5 },
-  { gate: 5.5, blocked: false, risk_level: 'high', risk_signals: [] }];
-const candidate = { branch: 'ai-board/2026-09-28-ticket-1-abc123', base_sha: SHA('a'), head_sha: SHA('b'),
-  commits: [{ sha: SHA('b'), title: 't', files: [SKILL] }] };
-
-async function variantVerdict(f, verdict) {
-  await f.toggle(true);
-  await f.night('2026-09-28');
-  const req = await f.selfRequest();
-  await f.report({ night: '2026-09-28', variant: { cluster: { key: 'k' }, request_id: req.request_id,
-    root_ticket_id: req.root_ticket_id, status: 'waiting' } });
-  const id = req.root_ticket_id;
-  const held = await f.store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' });
-  const run = await f.store.createRun(id, { workerId: 'w1', leaseToken: held.lease_token, trigger: 'plan', idempotencyKey: 'night-v-run-1' });
-  const step = { order: 1, title: 'Sửa', description: 'x', allowed_scope: [SKILL], acceptance: ['đổi'], tests: ['pytest'],
-    capability: 'self.config', risk: 'low', non_goals: [] };
-  const waiting = await f.store.submitPlan(id, { workerId: 'w1', leaseToken: held.lease_token, runId: run.id, budgetUsed: 1,
-    idempotencyKey: 'night-v-plan-1', plan: { domain: 'ai-board', goal: 'Sửa.', allowed_scope: [SKILL], acceptance: ['đổi'],
-      tests: ['pytest'], capabilities: ['self.config'], risk: 'low', non_goals: [], steps: [step] } });
-  await f.store.releaseLease(id, { workerId: 'w1', leaseToken: held.lease_token, outcome: 'planned', idempotencyKey: 'night-v-rel-1' });
-  await f.store.authorizePlan(id, waiting.plan_hash, 9);
-  const exec = await f.store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' });
-  const lease = { worker_id: 'w1', lease_token: exec.lease_token };
-  const run2 = await f.store.createRun(id, { workerId: 'w1', leaseToken: exec.lease_token, trigger: 'execute', idempotencyKey: 'night-v-run-2' });
-  await f.store.resumeAuthorizedPlan(id, { workerId: 'w1', leaseToken: exec.lease_token, runId: run2.id });
-  const res = await f.worker(`/api/ai-board/worker/tickets/${id}/verdict`, { ...lease, run_id: run2.id, verdict,
-    idempotency_key: 'night-v-verdict-1' });
-  assert.equal(res.status, 200, JSON.stringify(res.body));
-  return (await f.nights()).nights[0];
-}
-
-test('a won variant updates its night row and rings the admin bell', { skip: SELF_OFF }, async () => {
+test('a self plan on a deny_paths file is refused at plan submit, so a variant cannot reach a verdict or ring the bell', async () => {
   const f = await fixture();
   try {
-    const row = await variantVerdict(f, { outcome: 'needs_review', gate_reached: 5.5, reason: 'review', budget_used: 10,
-      failure_class: null, repairs: [], candidate, gates: gates(EVAL) });
-    assert.equal(row.variants[0].status, 'accepted');
-    assert.deepEqual([row.variants[0].eval.wins, row.variants[0].eval.losses, row.variants[0].eval.ties], [3, 1, 2]);
-    assert.equal(row.gpu_s_eval, 812);
-    assert.equal(f.bells.length, 1);
-    assert.equal(f.bells[0].night, '2026-09-28');
-  } finally { f.close(); }
-});
-
-test('a lost variant is recorded with its dropped strata and rings no bell', { skip: SELF_OFF }, async () => {
-  const f = await fixture();
-  try {
-    const lost = { ...EVAL, accepted: false, wins: 1, losses: 3, dropped: ['type=logic'] };
-    const row = await variantVerdict(f, { outcome: 'blocked', gate_reached: 5, reason: 'thua 3 task', budget_used: 10,
-      failure_class: 'eval', repairs: [], candidate: null, gates: gates(lost, { blocked: true, reason: 'thua 3 task' }).slice(0, 3) });
-    assert.equal(row.variants[0].status, 'rejected');
-    assert.deepEqual(row.variants[0].eval.dropped, ['type=logic']);
-    assert.equal(row.variants[0].reason, 'thua 3 task');
-    assert.equal(f.bells.length, 0);
+    await f.toggle(true);
+    await f.night('2026-09-28');
+    const req = await f.selfRequest();
+    await f.report({ night: '2026-09-28', variant: { cluster: { key: 'k' }, request_id: req.request_id,
+      root_ticket_id: req.root_ticket_id, status: 'waiting' } });
+    const held = await f.store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' });
+    const leaseRef = { workerId: 'w1', leaseToken: held.lease_token };
+    const run = await f.store.createRun(req.root_ticket_id, { ...leaseRef, trigger: 'plan', idempotencyKey: 'night-v-run-1' });
+    const step = { order: 1, title: 'Sửa', description: 'x', allowed_scope: [SKILL], acceptance: ['đổi'], tests: ['pytest'],
+      capability: 'self.config', risk: 'low', non_goals: [] };
+    await assert.rejects(f.store.submitPlan(req.root_ticket_id, { ...leaseRef, runId: run.id, budgetUsed: 1,
+      idempotencyKey: 'night-v-plan-1', plan: { domain: 'ai-board', goal: 'Sửa.', allowed_scope: [SKILL], acceptance: ['đổi'],
+        tests: ['pytest'], capabilities: ['self.config'], risk: 'low', non_goals: [], steps: [step] } }),
+    (error) => error.code === 'scope_violation');
+    assert.deepEqual(f.bells, []);
+    assert.equal((await f.nights()).nights[0].variants[0].status, 'waiting');
   } finally { f.close(); }
 });

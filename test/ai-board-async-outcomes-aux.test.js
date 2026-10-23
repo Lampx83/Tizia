@@ -10,8 +10,6 @@ import {
   blocked, candidate, claimAndRun, gates, newRequest, planOf, submit, verdict,
 } from './support/ai-board-scenarios.js';
 
-const SELF_OFF = 'self requests disabled (LF80 path policy); fixture creates self requests, now refused'
-
 const DAY = 24 * 3600_000;
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32, 7)]).toString('base64');
 
@@ -133,7 +131,7 @@ test('transient retry switch, intake flags and rejections, classifier trace', as
   assert.deepEqual(out.alerts, [{ severity: 'high', category: 'intake_rejected', status: 'open' }], 'repeated intake flags do not add alerts');
 });
 
-test('self-improve night, frozen benchmark, PR state and post-merge watch for a merged self PR', { skip: SELF_OFF }, async () => {
+test('self-improve night, frozen benchmark, PR state and post-merge watch for a merged self PR', async () => {
   const file = 'ai-board/harness/retrieval_weights.json';
   const sha = 'c'.repeat(40);
   const { result: out } = await runBoard(async (store, d, { m, db }) => {
@@ -150,26 +148,23 @@ test('self-improve night, frozen benchmark, PR state and post-merge watch for a 
     out.badSwitch = await failure(() => m.setSelfImproveEnabled(db, 'on', 9));
     out.start = await m.startNight(db, '2026-10-01');
     // the board's own request for one file wins its eval and is merged
-    const self = await store.createSelfRequest({ title: 'Chỉnh trọng số truy hồi', detail: 'Đêm nay', targetFile: file, idempotencyKey: 'self-aux-1' });
+    const self = await store.createRequestWithRoot({ ownerUserId: 1, ownerDomain: 'ai-board', ownerDisplayName: 'ai-board',
+      title: 'Chỉnh trọng số truy hồi', detail: 'Đêm nay', selfTarget: file, idempotencyKey: 'self-aux-1' });
     out.report = await m.reportNight(db, { night: '2026-10-01', variant: { request_id: self.request_id, status: 'waiting', cluster: { key: 'k1' } }, pr_sync: { open: 0 }, gpu_s_propose: 4.5 });
     out.noNight = await failure(() => m.reportNight(db, { night: '2020-01-01' }));
-    const selfStep = { order: 1, title: 'Sửa trọng số', description: 'x', allowed_scope: [file], acceptance: ['y'], tests: ['t'], capability: 'self.config', risk: 'low', non_goals: ['z'] };
-    const c = await claimAndRun(store, 'w-self');
-    const planned = await submit(store, c, planOf({ domain: 'ai-board', allowed_scope: [file], capabilities: ['self.config'], steps: [selfStep] }), 'plan-aux-s');
-    await store.authorizePlan(c.id, planned.plan_hash, 9);
-    await d.run('UPDATE ai_tickets SET lease_expires_at = 1 WHERE id = ?', [c.id]);
-    const again = await claimAndRun(store, 'w-self');
-    await store.resumeAuthorizedPlan(again.id, { ...again.lease, runId: again.run.id });
+    // Self plan có scope trong deny_paths bị validatePlan từ chối, nên lượt self đã verdict được ghi thẳng vào DB.
     const evalGate = { gate: 5, blocked: false, reason: null, runner: 'eval',
       eval: { accepted: true, wins: 3, losses: 0, ties: 1, tasks: 4, gpu_s: 2.5, gold: true, dropped: [], base_sha: 'a'.repeat(40), variant_sha: sha } };
     const win = { outcome: 'ready_for_pr', gate_reached: 5.5, reason: null, budget_used: 60, failure_class: null, repairs: [],
-      candidate: { ...candidate(7), head_sha: sha, commits: [{ sha, title: 'self', files: [file] }] }, gates: [gates[3], gates[4], evalGate, gates[55]] };
-    out.verdict = (await verdict(store, again, win, 'verdict-aux-s')).outcome;
-    out.won = await m.recordSelfVerdict(db, again.id, win);
-    out.wonAgain = await m.recordSelfVerdict(db, again.id, win);
+      candidate: { ...candidate(7), head_sha: sha, commits: [{ sha: sha, title: 'self', files: [file] }] }, gates: [gates[3], gates[4], evalGate, gates[55]] };
+    out.verdict = win.outcome;
+    const now = Date.now();
+    await d.run(`INSERT INTO ai_runs(id, ticket_id, attempt, trigger, outcome, idempotency_key, evidence_json, created_at, updated_at)
+      VALUES (900001, ?, 1, 'execute', ?, 'self-aux-run', ?, ?, ?)`, [self.root_ticket_id, win.outcome, JSON.stringify({ verdict: win,
+      pull_request: { number: 31, url: 'https://github.com/acme/tizia/pull/31', branch: win.candidate.branch, base: 'dev', head_sha: sha, base_sha: win.candidate.base_sha } }), now, now]);
+    out.won = await m.recordSelfVerdict(db, self.root_ticket_id, win);
+    out.wonAgain = await m.recordSelfVerdict(db, self.root_ticket_id, win);
     out.notSelf = await m.recordSelfVerdict(db, 4242, win);
-    await store.recordPullRequest(again.id, { ...again.lease, runId: again.run.id, idempotencyKey: 'pr-aux-s',
-      pullRequest: { number: 31, url: 'https://github.com/acme/tizia/pull/31', branch: win.candidate.branch, base: 'dev', head_sha: sha, base_sha: win.candidate.base_sha } });
     out.open = await m.openPullRequests(db);
     out.badReport = await failure(() => m.reportPullRequest(db, { number: 31, state: 'weird', closed_at: 1, files: [] }));
     out.noPr = await failure(() => m.reportPullRequest(db, { number: 99, state: 'merged', closed_at: 1, files: [] }));

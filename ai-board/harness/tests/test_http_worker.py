@@ -1190,6 +1190,15 @@ def test_passing_verdict_opens_one_pr_and_reports_it_before_release():
     assert labels == ['ai-board', 'ai-board:tier-surface', 'ai-board:daily-batch']
 
 
+def test_denied_path_stops_before_pr_and_releases_waiting():
+    import candidate
+    transport = FakeTransport()
+    _publishing_worker(transport, PublishingCandidates(fail=candidate.PathDenied('path_denied: write: ai-board/worker.py'))).run_once()
+    assert 'pull-request' not in [call[1].rsplit('/', 1)[-1] for call in transport.calls]
+    release = transport.calls[-1][2]
+    assert release['outcome'] == 'waiting' and release['internal_detail'] == 'path_denied: write: ai-board/worker.py'
+
+
 def test_blocked_verdict_or_existing_pr_opens_nothing():
     blocked = {**PASSING, 'outcome': 'blocked', 'candidate': None, 'failure_class': 'ordinary'}
     candidates = PublishingCandidates()
