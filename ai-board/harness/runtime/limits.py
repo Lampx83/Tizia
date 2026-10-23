@@ -85,6 +85,13 @@ def sandbox_client() -> dict:
     return {**spec, "backoff_s": tuple(spec["backoff_s"])}
 
 
+def sandbox_tool(env=None) -> dict:
+    """run_in_sandbox limits; enabled only when flag env == "1" (contract default off)."""
+    env = os.environ if env is None else env
+    spec = _parsed()["limits"]["sandbox_tool"]
+    return {**spec, "enabled": env.get(spec["flag"]) == "1", "allowed_argv": [tuple(p) for p in spec["allowed_argv"]]}
+
+
 def scaled_limit(kind: str, n: int) -> int:
     """Trần mỗi lượt theo số subtask n, cùng công thức với store-contract.js scaledLimit."""
     limits = _parsed()["limits"]
