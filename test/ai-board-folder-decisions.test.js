@@ -122,11 +122,8 @@ test('budget ceiling writes a blocked decision record', async () => {
   const ctx = await fixture();
   await blockedFolderRoot(ctx, 'budget', 'budget');
   const [root] = await ctx.d.all("SELECT id FROM ai_tickets WHERE kind='root' AND phase='budget_exhausted'");
-  let result;
-  for (let i = 0; i < 20 && result?.status !== 'human_owned'; i += 1) {
-    result = await ctx.store.extendBudget(root.id, { amount: 100000, reason: 'ceiling check long reason', adminUserId: 9 }).catch((e) => e);
-    if (result?.status !== 'human_owned') break;
-  }
+  await ctx.d.run('UPDATE ai_tickets SET budget_limit=? WHERE id=?', [LIMITS.per_run.units.max, root.id]);
+  const result = await ctx.store.extendBudget(root.id, { amount: 100, reason: 'ceiling check long reason', adminUserId: 9 });
   assert.equal(result.status, 'human_owned');
   const [row] = await ctx.d.all('SELECT outcome, stop_reason FROM ai_folder_decisions');
   assert.equal(row.outcome, 'blocked');
