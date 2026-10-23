@@ -6,9 +6,13 @@ import html
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from runtime import limits
+from services import skill_selection
+
 ROOT = Path(__file__).resolve().parents[1] / 'skills'
 TASK_TYPES = {'backend', 'frontend', 'database', 'review', 'test', 'all'}
 FIELDS = {'name', 'description', 'task_type', 'source', 'version', 'max_tokens'}
+OPTIONAL_FIELDS = {'topic'}  # trùng topic thì chỉ 1 skill được chọn (skill_selection.choose)
 FORBIDDEN = re.compile(r'(?:ignore|override|bypass|grant|enable)\s+(?:all\s+)?(?:platform|permission|tools?|rules?|budget|sandbox)|(?:request|require|need)\w*\s+(?:permission|access|tools?)|tools?\s+required\s*:|(?:bỏ qua|ghi đè|cấp quyền|vô hiệu hóa|yêu cầu quyền|cần quyền)', re.I)
 
 
@@ -28,6 +32,7 @@ class Skill:
     digest: str
     token_bound: int
     version_id: int | None = None
+    topic: str | None = None
 
     def evidence(self):
         return {'name': self.name, 'version': self.version, 'source': self.source,
@@ -55,11 +60,13 @@ def parse(text):
     meta = {}
     for line in parts[1].splitlines():
         key, sep, value = line.partition(':')
-        if not sep or key in meta or key not in FIELDS or not value.strip():
+        if not sep or key in meta or key not in FIELDS | OPTIONAL_FIELDS or not value.strip():
             raise ValueError('invalid or duplicate skill field')
         meta[key] = value.strip()
-    if set(meta) != FIELDS or not re.fullmatch(r'[a-z][a-z0-9-]{0,63}', meta['name']):
+    if not FIELDS <= set(meta) <= FIELDS | OPTIONAL_FIELDS or not re.fullmatch(r'[a-z][a-z0-9-]{0,63}', meta['name']):
         raise ValueError('missing skill fields or invalid name')
+    if 'topic' in meta and not re.fullmatch(r'[a-z][a-z0-9-]{0,63}', meta['topic']):
+        raise ValueError('invalid skill topic')
     types = tuple(meta['task_type'].strip('[]').replace(' ', '').split(','))
     if not types or len(set(types)) != len(types) or set(types) - TASK_TYPES:
         raise ValueError('invalid skill task types')
@@ -76,7 +83,7 @@ def parse(text):
     if len(re.findall(r'^\d+\. ', body, re.M)) > 7 or FORBIDDEN.search(body):
         raise ValueError('skill requests authority or exceeds seven rules')
     return Skill(meta['name'], meta['description'], types, meta['source'], version, cap,
-                 body, hashlib.sha256(text.encode('utf-8')).hexdigest(), bound)
+                 body, hashlib.sha256(text.encode('utf-8')).hexdigest(), bound, topic=meta.get('topic'))
 
 
 def catalog():
@@ -93,6 +100,11 @@ def catalog():
 
 
 def select(role, context=None):
+    return select_report(role, context)[0]
+
+
+def select_report(role, context=None):
+    """(skills, {'selected': [{name, reason}], 'dropped': [{name, reason}]}) qua skill_selection.choose."""
     context = context or {}
     task = context.get('task_type')
     file = str(context.get('file') or '').replace('\\', '/')
@@ -105,13 +117,13 @@ def select(role, context=None):
                 'test' if file.startswith(('test/', 'tests/')) or '.test.' in file else
                 'frontend' if file.startswith('public/') else
                 'backend' if file.startswith(('server/', 'ai-board/')) else 'all')
-    names = [f'default-{task}']
-    if task not in {'review', 'all'}:
-        names.append('default-all')
     by_name = {s.name: s for s in catalog()}
-    chosen = [by_name[name] for name in names]
-    if sum(s.token_bound for s in chosen) + 2 * (len(chosen) - 1) > 1000:
-        raise ValueError('default system skill budget exceeded')
+    task_skill = by_name[f'default-{task}']
+    candidates = [skill_selection.Candidate(task_skill.name, 0, 'task-type default', task_skill.token_bound, topic=task_skill.topic,
+                                            required=True, payload=task_skill)]
+    if task not in {'review', 'all'}:
+        base = by_name['default-all']
+        candidates.append(skill_selection.Candidate(base.name, 2, 'platform baseline', base.token_bound, topic=base.topic, payload=base))
     from runtime.root_allowance import current
     root = current()
     if root is not None and task != 'skill-authoring':
@@ -129,10 +141,16 @@ def select(role, context=None):
             bound = len(admin_text(skill).encode('utf-8'))
             if bound > skill.max_tokens or bound != row.get('token_count'):
                 raise ValueError('approved skill token bound mismatch')
-            chosen = [chosen[0], replace(skill, token_bound=bound)]
-    if sum(s.token_bound for s in chosen) + 2 * (len(chosen) - 1) > 3000:
-        raise ValueError('combined skill budget exceeded')
-    return chosen
+            skill = replace(skill, token_bound=bound)
+            candidates.append(skill_selection.Candidate(skill.name, 1, 'approved admin skill', bound, topic=skill.topic,
+                                                        payload=skill))
+    budget = limits.contract()['limits']['skills']
+    chosen, report = skill_selection.choose(candidates, budget['max_per_prompt'], budget['max_tokens_per_prompt'])
+    selected = [c.payload for c in chosen]
+    defaults = [s for s in selected if s.source == 'default']
+    if sum(s.token_bound for s in defaults) + 2 * (len(defaults) - 1) > 1000:
+        raise ValueError('default system skill budget exceeded')
+    return selected, report
 
 
 def system_text(skills):
@@ -144,5 +162,6 @@ def pin(role, context=None):
 
 
 def selection_pin(selected):
-    payload = json.dumps([s.evidence() for s in selected], sort_keys=True).encode() + Path(__file__).read_bytes()
+    payload = (json.dumps([s.evidence() for s in selected], sort_keys=True).encode() + Path(__file__).read_bytes()
+               + Path(skill_selection.__file__).read_bytes() + json.dumps(limits.contract()['limits']['skills'], sort_keys=True).encode())
     return hashlib.sha256(payload).hexdigest()

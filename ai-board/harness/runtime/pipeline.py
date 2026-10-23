@@ -105,7 +105,7 @@ def _request_attrs(options: dict, extra: dict | None, body: dict | None = None, 
             "thinking": None if thinking is None else bool(thinking),
             "reasoning_chars": (body or {}).get("_reasoning_chars"), "role": role,
             "prompt_roles": "split" if extra.get("system") else "single",
-            **({'skills': extra['_skill_evidence']} if extra.get('_skill_evidence') else {})}
+            **({'skills': extra['_skill_evidence'], 'skill_selection': extra['_skill_selection']} if extra.get('_skill_evidence') else {})}
 
 
 def _split_call(prompt: str, role: str, routing, extra: dict | None, options: dict, format=None) -> tuple[str, dict | None, dict]:
@@ -118,14 +118,14 @@ def _split_call(prompt: str, role: str, routing, extra: dict | None, options: di
     system, user = prompt_roles.split(prompt)
     if role in ('gate1', 'gate3_light', 'gate3_heavy', 'gate4_review'):
         from services import default_skills
-        selected = default_skills.select(role, context)
+        selected, selection = default_skills.select_report(role, context)
         if (context or {}).get('expected_pin') and context['expected_pin'] != default_skills.selection_pin(selected):
             raise default_skills.SkillPolicyChanged('selected skills changed; restart under current guidance')
         system += '\n\n' + default_skills.system_text(selected)
         admin = '\n\n'.join(default_skills.admin_text(s) for s in selected if s.source == 'admin')
         if admin:
             _, user = prompt_roles.split(prompt + '\n\n' + admin)
-        extra = {**(extra or {}), '_skill_evidence': [s.evidence() for s in selected]}
+        extra = {**(extra or {}), '_skill_evidence': [s.evidence() for s in selected], '_skill_selection': selection}
     role_extra, role_options = prompt_roles.call_params(role, routing, structured=isinstance(format, dict))
     return user, {**(extra or {}), **role_extra, 'system': system}, {**options, **role_options}
 

@@ -182,6 +182,9 @@ class Tracer:
                  "tizia.iteration": rec["iteration"], "tizia.call_id": rec["call_id"], "tizia.result": rec["result"],
                  "tizia.thinking": request.get("thinking"), "tizia.reasoning_chars": request.get("reasoning_chars"), "tizia.prompt_name": rec["prompt_name"],
                  "tizia.role": request.get("role"), "tizia.prompt_roles": request.get("prompt_roles")}
+        if request.get("skills"):
+            attrs["tizia.skills.selected"] = [s["name"] for s in request["skills"]]
+            attrs["tizia.skills.dropped"] = [f"{d['name']}: {d['reason']}" for d in request["skill_selection"]["dropped"]]
         if request.get("temperature") is not None:
             attrs["gen_ai.request.temperature"] = request["temperature"]
         if request.get("max_tokens") is not None:
