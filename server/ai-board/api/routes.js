@@ -48,6 +48,9 @@ export function attachAiBoardRequestRoutes(router, {
   if(store.db) attachSkillRoutes(router,{store,requireAuth,requireAdmin,requireStrictCsrf});
   if(store.db) attachAppealRoutes(router,{store,requireAuth,requireAdmin,requireStrictCsrf});
   if(store.db) attachRolloutRoutes(router,{store,requireAuth,requireAdmin,requireStrictCsrf});
+  route.get('/api/ai-board/capabilities', requireAuth, (req, res) => {
+    res.json({ multimodal: /^(1|true|on|yes)$/i.test(String(process.env.AI_BOARD_MULTIMODAL || '')) });
+  });
   route.post('/api/requests', requireAuth, requireEnrolled, async (req, res, next) => {
     const body = req.body || {};
     // Yêu cầu board tự sửa chỉ hệ thống tạo (POST /api/ai-board/worker/self-requests), không bao giờ từ FAB.

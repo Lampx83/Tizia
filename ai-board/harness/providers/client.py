@@ -77,7 +77,7 @@ class OllamaClient:
             vllm_seckey=env.get('VLLM_SECKEY') or None,
         )
 
-    def generate(self, model: str, prompt: str, *, format: str | dict | None = None, extra: dict | None = None,
+    def generate(self, model: str, prompt: str | list, *, format: str | dict | None = None, extra: dict | None = None,
                  _single_attempt: bool = False,
                  **options) -> dict:
         """POST /api/generate. Trả nguyên body JSON.
@@ -140,6 +140,8 @@ class OllamaClient:
             return {**body, 'response': content, 'done_reason': choice.get('finish_reason'), '_reasoning_chars': len(reasoning),
                     'prompt_eval_count': usage.get('prompt_tokens'), 'eval_count': usage.get('completion_tokens'),
                     '_provider': self.route_label, **({'tool_calls': tool_calls} if tool_calls else {})}
+        if not isinstance(prompt, str):  # content parts (vision) exist only on the vLLM chat route
+            raise ValueError('content parts need the vLLM protocol')
         payload = {
             "model": model,
             "prompt": prompt,
