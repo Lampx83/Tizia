@@ -103,6 +103,7 @@
       "retry_after_ms": 300000
     }
   },
+  "clock": { "_why": "Hiển thị giờ AI Board. DB giữ epoch ms tuyệt đối; chỉ format đổi theo múi giờ này.", "tz": "Asia/Ho_Chi_Minh" },
   "branch_prefix": "ai-board/",
   "branch_slug_max": 60,
   "branch_pattern": "^ai-board/\\d{4}-\\d{2}-\\d{2}-[a-z0-9-]{1,60}$",
