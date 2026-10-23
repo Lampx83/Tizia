@@ -62,3 +62,33 @@ test('default gate list follows trace steps', () => {
   const eta = gateEta([], { currentRunId: null });
   assert.deepEqual(eta.remaining, [1, 2, 2.5, 3, 4, 5, 5.5]);
 });
+
+test('ETA falls back to all-ticket gate history per gate and names the source', () => {
+  const runs = [run(1, [gateSpan(1, 100)]), run(2, [])];
+  const gateHistory = { 3: { median_ms: 7000, n: 30 }, 4: { median_ms: 900, n: 12 } };
+  const eta = gateEta(runs, { currentRunId: 2, gates: [1, 3, 4], gateHistory });
+  assert.equal(eta.eta_ms, 100 + 7000 + 900);
+  assert.equal(eta.source, 'all tickets');
+  assert.deepEqual(eta.typical[1], { ms: 100, samples: 1, reason: null, source: 'same ticket' });
+  assert.equal(eta.typical[3].source, 'all tickets');
+  assert.equal(eta.typical[3].samples, 30);
+});
+
+test('ETA with same-ticket history only reports same ticket source', () => {
+  const runs = [run(1, [gateSpan(3, 1000)]), run(2, [])];
+  const eta = gateEta(runs, { currentRunId: 2, gates: [3] });
+  assert.equal(eta.source, 'same ticket');
+  assert.equal(eta.eta_ms, 1000);
+});
+
+test('no same-ticket and no shared history gives no estimate with source label', () => {
+  const eta = gateEta([run(1, [])], { currentRunId: 1, gates: [3], gateHistory: { 4: { median_ms: 5, n: 1 } } });
+  assert.equal(eta.source, 'no estimate');
+  assert.equal(eta.typical[3].source, 'no estimate');
+  assert.equal(eta.eta_ms, null);
+});
+
+test('missing gate_history (old server, no database) behaves like no history', () => {
+  const eta = gateEta([run(1, [])], { currentRunId: 1, gates: [3], gateHistory: undefined });
+  assert.equal(eta.reason, 'no_history');
+});

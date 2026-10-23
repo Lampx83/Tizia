@@ -131,3 +131,27 @@ test('admin trace gives each run its wall-clock limit from the subtask count of 
     assert.equal(run.wall_clock_limit_s, 300);
   } finally { await t.close(); }
 });
+
+test('gate_history is the per-gate median over recent runs of all tickets, skipping errors and stubs', async () => {
+  const t = await setup();
+  try {
+    const addRun = async (key, ticketId) => (await t.db.d.insert(`INSERT INTO ai_runs(ticket_id, attempt, trigger, idempotency_key, created_at, updated_at)
+      VALUES (?, 1, 'plan', ?, 0, 0)`, [ticketId, key]));
+    const gateRow = async (runId, n, gate, ms, extra = {}) => t.db.d.run(`INSERT INTO ai_spans(run_id, trace_id, span_id, parent_span_id, name, kind,
+      start_ms, end_ms, status, attributes_json, events_json, created_at) VALUES (?, ?, ?, NULL, ?, 'internal', 0, ?, ?, ?, '[]', 0)`,
+    [runId, String(n).padStart(32, 'e'), String(n).padStart(16, 'f'), `invoke_agent gate ${gate}`, ms,
+      extra.status ?? 'ok', JSON.stringify({ 'tizia.gate.id': gate, 'tizia.gate.status': extra.gateStatus ?? 'passed' })]);
+    const other = await addRun('other-ticket-run', t.ticket.id);
+    const third = await addRun('third-run', t.ticket.id);
+    const fourth = await addRun('fourth-run', t.ticket.id);
+    await gateRow(t.run.id, 1, 3, 1000);
+    await gateRow(other, 2, 3, 3000);
+    await gateRow(third, 3, 3, 2000);
+    await gateRow(third, 4, 1, 500);
+    await gateRow(fourth, 5, 3, 99999, { status: 'error' });
+    await gateRow(fourth, 6, 4, 77, { gateStatus: 'stub' });
+
+    const trace = await t.trace();
+    assert.deepEqual(trace.gate_history, { 3: { median_ms: 2000, n: 3 }, 1: { median_ms: 500, n: 1 } });
+  } finally { await t.close(); }
+});
