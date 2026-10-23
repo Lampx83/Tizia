@@ -8,6 +8,7 @@ import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
 import { openBoard } from './support/ai-board-db.js';
 import { runProgress } from '../server/ai-board/store.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
+import { graphNodes } from '../public/js/ai-board-graph.js';
 
 const KEY = 'fixture-worker-key-32-characters-long';
 const USERS = {
@@ -241,6 +242,9 @@ test('admin trace view is admin-only and sums GPU seconds, tokens, loads and ret
     assert.deepEqual(Object.keys(byModel).sort(), ['llama3', 'qwen2.5-coder:14b']);
     assert.equal(byModel['qwen2.5-coder:14b'].calls, 2);
     assert.equal(byModel.llama3.gpu_s, 0);
+    assert.deepEqual(trace.graph.nodes.map((n) => n.id).filter((id) => id === 'gate_2_5' || id === 'gate_3'), ['gate_2_5', 'gate_3']);
+    assert.equal(graphNodes(trace).gate_2_5.state, 'idle');
+    assert.equal(graphNodes(trace).gate_2.state, 'idle');
   } finally {
     await api.close();
     db.close();

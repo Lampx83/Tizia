@@ -78,7 +78,7 @@ export function projectPipeline(trace = {}) {
       if (!groups.has(group)) groups.set(group, []);
       groups.get(group).push(call);
     }
-    const live = leaseLive && run === latest && run === runs.at(-1);
+    const live = Boolean(run) && leaseLive && run === latest && run === runs.at(-1);
     // Sequential execution: chronological starts win over maximum-gate progress,
     // including a repair that returns to an earlier gate. Completed calls are not starts.
     const active = live && (start ? start.gate === def.gate && start.created_at > (result?.created_at || 0)
