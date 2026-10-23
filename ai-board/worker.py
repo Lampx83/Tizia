@@ -123,6 +123,17 @@ def _public_gate_result(result: dict) -> dict:
 MAX_REPAIRS = CONTRACT["max_repairs"]  # server enforces the same bound
 
 
+def _scannable_decisions(text: str | None) -> str:
+    """Decision records minus blocked/cancelled entries (a stopped request's title/spec must not re-trigger the folder guard)."""
+    keep, skipping = [], False
+    for line in (text or "").splitlines():
+        if line.startswith("- "):
+            skipping = bool(re.search(r" → (blocked|cancelled)\b", line))
+        if not skipping:
+            keep.append(line)
+    return "\n".join(keep)
+
+
 def _passed(gates: list[dict], kind: str | None) -> bool:
     """Qua hết: không lỗi, tới 5.5 không bị chặn, smoke qua và quan sát được qua HTTP (self: biến thể thắng eval)."""
     smoke = next((gate for gate in gates if gate["gate"] == 5), None)
@@ -1313,7 +1324,7 @@ class HarnessPlanner:
             # Lách guard qua nhiều lượt nhỏ: soát lexicon trên cả bản mô tả gộp của folder.
             from gates import guard
             hits = {label: guard.LEXICON["labels"][label]["intake"]
-                    for label in guard.topic_hits(f"{request['folder_brief']}\n{request.get('folder_decisions') or ''}\n{request.get('folder_recent') or ''}")}
+                    for label in guard.topic_hits(f"{request['folder_brief']}\n{_scannable_decisions(request.get('folder_decisions'))}\n{request.get('folder_recent') or ''}")}
             stop = sorted(label for label, verdict in hits.items() if verdict in ("reject", "critical"))
             if stop:
                 raise PlanBlockedError("folder brief crosses a hard rule", {
