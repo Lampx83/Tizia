@@ -241,7 +241,7 @@ def test_retry_fix_resamples_a_truncated_validator_once(monkeypatch):
 
 def test_context_fix_widens_the_excerpt_with_the_subtask_verify(monkeypatch):
     seen = {}
-    monkeypatch.setattr(plan_validate.file_context, 'excerpt', lambda text, words, *, budget, filename: seen.update(words=words, budget=budget) or '')
+    monkeypatch.setattr(plan_validate.file_context, 'excerpt', lambda text, words, *, budget, filename, pinned=(): seen.update(words=words, budget=budget) or '')
     monkeypatch.setattr(plan_validate.code_index, 'git', lambda *a: b'abc' if a[1] == 'rev-parse' else b'x')
     plan = {'subtasks': [{'file': 'public/a.html', 'title': 't', 'verify': 'chứa "Tất cả"'}]}
     plan_validate.source_evidence({'subject': 's'}, plan, {'checkout_source': '.'})
