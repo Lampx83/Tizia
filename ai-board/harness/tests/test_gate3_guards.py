@@ -54,7 +54,7 @@ def test_schema_refusal_falls_back_and_is_counted(monkeypatch):
             calls.append(kw.get("format"))
             if kw.get("format"):
                 raise RuntimeError("400 schema")
-            return {"response": '{"edits":[{"search":"a","replace":"b"}],"test_file":"test/t.mjs","test":"import test from \'node:test\'"}'}
+            return {"response": '{"edits":[{"search":"a","replace":"b"}],"test_file":"test/t.mjs","test":"import test from \'node:test\'; // public/x.html"}'}
 
     class Budget:
         max_units = None

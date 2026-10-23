@@ -111,6 +111,9 @@ class FakeModels:
         # với cổng 1 (đúng thiết kế thật — vai validator, không phải model
         # khác) nên generate() phân biệt 2 lời gọi bằng nội dung PROMPT
         # (marker "PLAN CẦN SOÁT" chỉ có trong prompts/plan_validate.md).
+        scope = [s["file"] for s in (plan.get("subtasks", []) if isinstance(plan, dict) else [])]
+        if "test" in self.codegen and scope:
+            self.codegen = {**self.codegen, "test": self.codegen["test"] + "".join(f"// scope: {f}\n" for f in scope)}
         self.validation = validation if validation is not None else {"clear": True, "question": None}
         self.calls = []
         self.embed_calls = []

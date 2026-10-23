@@ -35,6 +35,7 @@ def source(tmp_path):
 
 
 def child(scratch, title, file, code, test_file="test/generated.test.js", test="// t\n"):
+    test = f"{test}// {file}\n"
     diff = implement._write_and_diff(scratch, file, code, test_file, test)
     return {"title": title, "file": file, "test_file": test_file, "diff": diff,
             "commit": git(scratch, "rev-parse", "HEAD")}
@@ -360,21 +361,12 @@ def _skill_edit(tmp_path, board_source, request_type):
     return state
 
 
-def test_a_self_skill_edit_passes_gate_4_and_the_pipeline_relocks_in_the_same_commit(tmp_path, board_source, fake_deps):
+def test_a_self_skill_edit_is_refused_as_protected_because_self_requests_are_off(tmp_path, board_source, fake_deps):
     state = _skill_edit(tmp_path, board_source, "self")
     try:
         out = main.run_gate(4, {}, fake_deps, None, state)
-        assert out["blocked"] is False, out
-        checkout = Path(state["full_checkout"])
-        lock = json.loads((checkout / SKILLS_LOCK).read_text(encoding="utf-8"))
-        assert lock == {"demo": _sha((checkout / SKILL).read_bytes())} != {"demo": _sha(b"match: sua chu\n")}
-        # Khoá nằm trong đúng commit của thay đổi: không commit thêm, không file bẩn, head mới về server.
-        assert git(checkout, "rev-list", "--count", f"{state['base_sha']}..HEAD") == "1"
-        assert state["commits"][-1]["sha"] == git(checkout, "rev-parse", "HEAD")
-        assert git(checkout, "status", "--porcelain") == ""
-        changed = git(checkout, "show", "--name-only", "--format=", "HEAD").split()
-        assert SKILLS_LOCK in changed and SKILLS_LOCK in state["commits"][-1]["files"]
-        assert PROMPTS_LOCK not in changed  # prompt không đổi → khoá prompt giữ nguyên
+        assert out["blocked"] is True and out["failure_class"] == "critical"
+        assert "protected_path: ai-board/harness/skills/demo/SKILL.md" in out["reason"]
     finally:
         candidate.cleanup(state, keep_branch=False)
 

@@ -85,12 +85,11 @@ SELF_AREA = ["ai-board/harness/skills/edit-html-text/SKILL.md", "ai-board/harnes
              "ai-board/harness/retrieval_weights.json"]
 
 
-def test_only_a_self_request_may_edit_skills_gate_prompts_and_retrieval_weights():
-    """Same diff passes for type self, stays protected_path for every other type."""
+def test_self_area_is_protected_for_every_request_type_because_self_is_off():
+    """Skill/prompt/weights diff stays protected_path for every type, self included."""
     for path in SELF_AREA:
         text = diff(path, added=["match: đổi tên, sửa chữ"], removed=["match: sửa chữ"])
-        assert guard.scan(text, request_type="self")["findings"] == [], path
-        for other in (None, "feature", "other"):
+        for other in ("self", None, "feature", "other"):
             found = {(f["check"], f["failure_class"]) for f in guard.scan(text, request_type=other)["findings"]}
             assert ("protected_path", "critical") in found, (path, other)
 
