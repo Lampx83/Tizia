@@ -18,9 +18,12 @@ from pathlib import Path
 from typing import Callable
 
 from gates import verify
+from runtime import limits
 
 PROTOCOL = "1"
-CREATE_TIMEOUT_S = 600.0  # first boot after a cache wipe imports a multi-GB guest image
+_CLIENT = limits.sandbox_client()
+# First boot after a cache wipe imports a multi-GB guest image.
+CREATE_TIMEOUT_S = float(_CLIENT["create_timeout_s"])
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", ".pytest_cache", ".cache", ".scratch"}
 GUEST_STATE = "state.json"
 # What gates.verify.run / functional read from `state` inside the guest; nothing else of the worker's state is uploaded.
@@ -30,10 +33,12 @@ MANIFEST = [{"name": "result", "path": f"{GUEST_OUT}/result.json"}, {"name": "sh
 GUEST_ENTRY = ("mkdir -p /workspace/out && chmod 777 /workspace/out && cd /opt/ai-board/ai-board/harness && "
                'exec runuser -u gate -- env "PATH=$PATH" "PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH" HOME=/home/gate '
                "python -m gates.gate5_guest /workspace/state.json /workspace/checkout /workspace/out")
-RENEW_EVERY_S = 30.0
-BACKOFF_S = (1, 2, 4, 8)
-LEASE_S = 120.0
-CALL_ATTEMPTS = 3
+RENEW_EVERY_S = float(_CLIENT["renew_every_s"])
+BACKOFF_S = _CLIENT["backoff_s"]
+LEASE_S = float(_CLIENT["lease_s"])
+CALL_ATTEMPTS = _CLIENT["call_attempts"]
+UPLOAD_TIMEOUT_S = float(_CLIENT["upload_timeout_s"])
+ARTIFACT_TIMEOUT_S = float(_CLIENT["artifact_timeout_s"])
 _sleep = time.sleep
 
 
@@ -135,7 +140,7 @@ class RunnerClient:
         return self._json("POST", "/v1/runs", "provision", {"run_id": run_id, "manifest": manifest}, timeout=CREATE_TIMEOUT_S, **kwargs)
 
     def upload(self, run_id: str, archive: bytes, **kwargs) -> dict:
-        raw, _ = self._call("PUT", f"/v1/runs/{run_id}/workspace", "upload", archive, content_type="application/gzip", timeout=300, **kwargs)
+        raw, _ = self._call("PUT", f"/v1/runs/{run_id}/workspace", "upload", archive, content_type="application/gzip", timeout=UPLOAD_TIMEOUT_S, **kwargs)
         return json.loads(raw)
 
     def exec(self, run_id: str, argv: list[str], *, timeout: float, deadline=None) -> dict:
@@ -145,7 +150,7 @@ class RunnerClient:
         return self._json("POST", f"/v1/runs/{run_id}/exec", "exec", payload, timeout=timeout, deadline=deadline)
 
     def download(self, run_id: str, name: str, **kwargs) -> bytes:
-        return self._call("GET", f"/v1/runs/{run_id}/artifacts/{name}", "download", timeout=120, **kwargs)[0]
+        return self._call("GET", f"/v1/runs/{run_id}/artifacts/{name}", "download", timeout=ARTIFACT_TIMEOUT_S, **kwargs)[0]
 
     def renew(self, run_id: str, **kwargs) -> dict:
         return self._json("POST", f"/v1/runs/{run_id}/renew", "renew", **kwargs)

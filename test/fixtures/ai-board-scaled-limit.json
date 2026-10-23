@@ -1,0 +1,125 @@
+{
+  "_why": "Golden values for scaledLimit (store-contract.js) and scaled_limit (runtime/limits.py, worker.py). Regenerate only when contract limits.per_run changes.",
+  "cases": [
+    {
+      "kind": "units",
+      "n": 0,
+      "expected": 120
+    },
+    {
+      "kind": "units",
+      "n": 1,
+      "expected": 270
+    },
+    {
+      "kind": "units",
+      "n": 2,
+      "expected": 420
+    },
+    {
+      "kind": "units",
+      "n": 3,
+      "expected": 570
+    },
+    {
+      "kind": "units",
+      "n": 5,
+      "expected": 870
+    },
+    {
+      "kind": "units",
+      "n": 10,
+      "expected": 1620
+    },
+    {
+      "kind": "units",
+      "n": 11,
+      "expected": 1620
+    },
+    {
+      "kind": "units",
+      "n": -2,
+      "expected": 120
+    },
+    {
+      "kind": "wall_clock_s",
+      "n": 0,
+      "expected": 300
+    },
+    {
+      "kind": "wall_clock_s",
+      "n": 1,
+      "expected": 660
+    },
+    {
+      "kind": "wall_clock_s",
+      "n": 2,
+      "expected": 1020
+    },
+    {
+      "kind": "wall_clock_s",
+      "n": 3,
+      "expected": 1380
+    },
+    {
+      "kind": "wall_clock_s",
+      "n": 5,
+      "expected": 2100
+    },
+    {
+      "kind": "wall_clock_s",
+      "n": 10,
+      "expected": 3600
+    },
+    {
+      "kind": "wall_clock_s",
+      "n": 11,
+      "expected": 3600
+    },
+    {
+      "kind": "wall_clock_s",
+      "n": -2,
+      "expected": 300
+    },
+    {
+      "kind": "model_calls",
+      "n": 0,
+      "expected": 10
+    },
+    {
+      "kind": "model_calls",
+      "n": 1,
+      "expected": 22
+    },
+    {
+      "kind": "model_calls",
+      "n": 2,
+      "expected": 34
+    },
+    {
+      "kind": "model_calls",
+      "n": 3,
+      "expected": 46
+    },
+    {
+      "kind": "model_calls",
+      "n": 5,
+      "expected": 70
+    },
+    {
+      "kind": "model_calls",
+      "n": 10,
+      "expected": 130
+    },
+    {
+      "kind": "model_calls",
+      "n": 11,
+      "expected": 130
+    },
+    {
+      "kind": "model_calls",
+      "n": -2,
+      "expected": 10
+    }
+  ]
+}

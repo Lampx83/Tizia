@@ -79,7 +79,7 @@ _PROMPT_LOCK = json.loads((PROMPTS_DIR / "prompts.lock.json").read_text(encoding
 
 # Backoff cho lỗi hạ tầng thoáng qua khi gọi Ollama (GPU dùng chung, tenant khác chiếm chỗ →
 # 500/timeout/connection ngắt). 2 lần thử lại, 2s rồi 5s — đủ ngắn để không đội thời gian lease
-# (BUDGET_MAX_WALL_CLOCK_S mặc định 1200s), đủ để vượt qua 1 lần nghẽn thoáng qua.
+# (limits.budget.wall_clock_s, 900s), đủ để vượt qua 1 lần nghẽn thoáng qua.
 # ponytail: hằng số cố định, chỉnh tại đây nếu thực tế cần khác.
 MODEL_RETRY_BACKOFF_S = (2.0, 5.0)
 

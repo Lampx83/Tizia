@@ -45,6 +45,20 @@
       "model_calls": { "base": 10, "per_subtask": 12, "max": 150, "_why": "gate 1/2.5 calls + up to 4 attempts x (implement, repair) per subtask" }
     },
     "max_subtasks_per_run": 10,
+    "loop": {
+      "_why": "Tool-loop ceilings per subtask (runtime/tool_loop.py). AI_BOARD_LOOP_MODEL_CALLS / AI_BOARD_LOOP_TOOL_CALLS override for a measured run only.",
+      "model_calls": 10, "tool_calls": 30, "repeats": 3, "error_chars": 2000
+    },
+    "budget": {
+      "_why": "Defaults of runtime/budget.py Budget (one run) and ChildBudget (one loop). BUDGET_MAX_<KEY> overrides for a measured run only.",
+      "model_calls": 40, "tool_calls": 200, "tokens": 200000, "retries": 3, "units": 600,
+      "wall_clock_s": 900, "semantic_repairs": 3, "child_wall_clock_s": 300
+    },
+    "sandbox_client": {
+      "_why": "Gate 5 runner client (verification/sandbox.py): per-call timeouts in seconds, retry attempts and backoff for transient errors.",
+      "create_timeout_s": 600, "upload_timeout_s": 300, "artifact_timeout_s": 120,
+      "renew_every_s": 30, "lease_s": 120, "call_attempts": 3, "backoff_s": [1, 2, 4, 8]
+    },
     "pending_roots_per_user": { "value": 3, "_why": "one person cannot fill the school's queue" },
     "open_folders_per_user": { "value": 3, "_why": "feature folders not yet archived; keeps branches and context bounded" },
     "folder_archive_days": { "value": 30, "_why": "a folder with no activity this long is archived: its cycle closes, history and brief stay" },

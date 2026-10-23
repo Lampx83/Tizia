@@ -14,19 +14,19 @@ import time
 from collections import deque
 from pathlib import Path
 
+from runtime import limits
+
 PROVIDERS = ("ollama", "vllm", "api")
 TRACE_CAP = 8192  # ký tự mỗi phần prompt/output gửi server; JSONL cục bộ giữ đủ
 POST_BYTES = 56_000  # dưới express.json limit 64kb, chừa chỗ lease/run_id
 # Phần giải thích kèm mỗi lần gọi (AI biết gì / tool nào chạy / sửa gì / đánh giá ra sao): tổng ≲ 14 KB mỗi record.
 MAX_NOTES, NOTE_SUMMARY_CAP, NOTE_DATA_CAP, EDIT_CAP, EVAL_CAP = 30, 500, 1500, 4000, 800
-_MEMORY = json.loads((Path(__file__).resolve().parents[3] / "server" / "ai-board" / "contract.json")
-                     .read_text(encoding="utf-8"))["limits"]["memory"]
+_MEMORY = limits.contract()["limits"]["memory"]
 ROTATE_BYTES = _MEMORY["traces_mb"] * 1024 * 1024
 ROTATE_KEEP = _MEMORY["traces_keep"]  # file hiện tại + (KEEP-1) bản cũ
 # Trần mỗi worker, đọc từ server/ai-board/contract.json (limits); vượt thì ngừng nhận ticket mới,
 # không phạt ticket đang chạy. Phải lớn hơn 1 lượt lớn nhất để task lớn không bị bỏ đói.
-HOURLY_GPU_S = json.loads((Path(__file__).resolve().parents[3] / "server" / "ai-board" / "contract.json")
-                          .read_text(encoding="utf-8"))["limits"]["gpu_s_per_worker_hour"]["value"]
+HOURLY_GPU_S = limits.contract()["limits"]["gpu_s_per_worker_hour"]["value"]
 
 # Cùng họ mẫu với gates/guard.py _SECRET — che trước khi ghi/gửi trace.
 _SECRET = re.compile(

@@ -9,7 +9,7 @@ import {
   IDEMPOTENCY_KEY as KEY, LEASE_MS, LIMITS, MAX_BUDGET_EXTENSION, MAX_BUDGET_EXTENSIONS, MAX_BUDGET_LIMIT, MAX_TRACE_BATCH,
   PHASES, PLAN_QUEUE, PR_BASE, PR_URL, REQUEST_TYPES, ROLLBACK_OUTCOMES, RUN_TRIGGERS, RequestValidationError, SELF_TAG,
   SELF_USER, SHA, SPEC_AUTHOR, WORKER_MODES, WorkerContractError, assertConfirmed, cleanAttachments, cleanModelCall,
-  parseAttachments, parseJson, progressDetail, runProgress, scaledLimit, summarizeCalls, triggerFor, validateCandidate,
+  assertWithinCeiling, parseAttachments, parseJson, progressDetail, runProgress, scaledLimit, summarizeCalls, triggerFor, validateCandidate,
   validatePrePrVerdict,
 } from './store-contract.js';
 
@@ -1386,6 +1386,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     if (!KEY.test(idempotencyKey)) throw new WorkerContractError('invalid idempotency key');
     const budgetUsed = Number(input.budgetUsed ?? 0);
     if (!Number.isFinite(budgetUsed) || budgetUsed < 0) throw new WorkerContractError('invalid budget');
+    assertWithinCeiling(budgetUsed);
     const now = input.now ?? Date.now();
     const root = await assertLease(ticketId, input.workerId, input.leaseToken, now);
     const request = await db.get('SELECT domain, type FROM requests WHERE id=?', [root.source_request_id]);

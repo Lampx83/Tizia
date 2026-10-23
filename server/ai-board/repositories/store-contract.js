@@ -121,6 +121,13 @@ export function scaledLimit(kind, n) {
   const count = Math.min(Math.max(Number(n) || 0, 0), LIMITS.max_subtasks_per_run);
   return Math.min(base + step * count, max);
 }
+// Trần budget một lượt do worker báo lên; vượt là bị từ chối, không kẹp âm thầm.
+export const BUDGET_UNITS_CEILING = LIMITS.per_run.units.max;
+export function assertWithinCeiling(budgetUsed) {
+  if (budgetUsed > BUDGET_UNITS_CEILING) {
+    throw new WorkerContractError('budget above contract ceiling', 400, 'budget_above_ceiling');
+  }
+}
 const MAX_BUDGET_EXTENSIONS = 2;
 const SHA = /^[0-9a-f]{40}$/;
 export const LEASE_MS = 120_000; // worker lease; also the admin view's stale threshold
@@ -284,6 +291,7 @@ function validatePrePrVerdict(value, selfRequest = false) {
   if (value.outcome === 'blocked' && !last.blocked) throw new WorkerContractError('blocked verdict requires a blocked gate');
   const budgetUsed = Number(value.budget_used ?? 0);
   if (!Number.isInteger(budgetUsed) || budgetUsed < 0) throw new WorkerContractError('invalid verdict budget');
+  assertWithinCeiling(budgetUsed);
   // Workers that omit failure_class: their blocks are treated as ordinary.
   const failureClass = value.outcome === 'blocked' ? (value.failure_class ?? 'ordinary') : (value.failure_class ?? null);
   if (value.outcome === 'blocked' ? !FAILURE_CLASSES.has(failureClass) || (failureClass === 'eval' && !selfRequest)
@@ -302,6 +310,7 @@ function validatePrePrVerdict(value, selfRequest = false) {
     budget_used: budgetUsed, failure_class: failureClass,
     repairs: repairs.map((r) => ({ gate: Number(r.gate), reason: String(r.reason || '').slice(0, 1000) })),
     candidate, gates,
+    config_sha256: /^[0-9a-f]{64}$/.test(value.config_sha256) ? value.config_sha256 : null,
     // Tuỳ chọn: sha gốc + skill cổng 1 của lượt, để task eval từ lần hỏng chạy lại được.
     ...(SHA.test(String(value.base_sha)) ? { base_sha: value.base_sha } : {}),
     ...(/^[a-z0-9-]{1,80}$/.test(String(value.skill)) ? { skill: value.skill } : {}) };
