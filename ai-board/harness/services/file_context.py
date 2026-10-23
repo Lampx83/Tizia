@@ -354,13 +354,16 @@ def visible_source(text: str, filename: str | None = None) -> str:
     return "\n".join(s for line, s in zip(lines, shown) if s.strip() or not line.strip())
 
 
-def excerpt(content: str, words: list[str], *, budget: int = CONTEXT_BUDGET, filename: str | None = None) -> str:
+def excerpt(content: str, words: list[str], *, budget: int = CONTEXT_BUDGET, filename: str | None = None,
+            pinned: tuple[str, ...] = ()) -> str:
     """Các dòng `Lnn| …` (đã bỏ comment, số dòng thật) theo ưu tiên: quanh dòng khớp từ khoá, cuối file, dàn ý; dừng
-    khi hết budget. Dòng chỉ-comment không hiện và không tốn budget/bán kính/đuôi."""
+    khi hết budget. Dòng chỉ-comment không hiện và không tốn budget/bán kính/đuôi. Dòng khớp `pinned` đứng trước."""
     lines, shown = _view(content, filename)
     live = [i for i, line in enumerate(lines) if shown[i].strip() or not line.strip()]
     lowered = [shown[i].lower() for i in live]
     hits = [p for p, low in enumerate(lowered) if any(w in low for w in words)]
+    if pinned:
+        hits.sort(key=lambda p: not any(w in lowered[p] for w in pinned))
     ranked = [q for p in hits for q in range(max(p - RADIUS, 0), min(p + RADIUS + 1, len(live)))]
     ranked += range(max(len(live) - TAIL_LINES, 0), len(live))
     ranked += [p for p, i in enumerate(live) if _OUTLINE.search(shown[i])]

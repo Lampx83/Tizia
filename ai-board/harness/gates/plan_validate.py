@@ -138,6 +138,20 @@ def parse_validation(text: str) -> dict:
             "reason": str(out.get("reason") or '')[:500]}
 
 
+_PINNED_QUOTED = re.compile(r"""['"“‘]([^'"”’\n]{3,80})['"”’]""")
+_PINNED_SELECTOR = re.compile(r"[.#][A-Za-z][\w-]*")
+
+
+def pinned_words(task: dict) -> list[str]:
+    """Quoted phrases and selector-like tokens of a subtask (`.yes`, `#toast`); the keyword cap must not drop them."""
+    found = []
+    for text in (task.get('title'), task.get('verify')):
+        if text:
+            found += [phrase.strip().lower() for phrase in _PINNED_QUOTED.findall(text)]
+            found += [token.lower() for token in _PINNED_SELECTOR.findall(text)]
+    return list(dict.fromkeys(found))
+
+
 def source_evidence(request: dict, plan: dict, state: dict) -> tuple[str | None, dict, str]:
     source = state.get('checkout_source') or Path(__file__).resolve().parents[3]
     try:
@@ -157,9 +171,10 @@ def source_evidence(request: dict, plan: dict, state: dict) -> tuple[str | None,
             continue
         files[path] = text
         wide = 'context' in fixes()
-        chunks.append(f'FILE {path} at {sha}\n' + file_context.excerpt(text,
-            file_context.keywords(request.get('subject'), request.get('body'), task.get('title'), task.get('verify') if wide else None),
-            budget=6000 if wide else 3500, filename=path))
+        words = file_context.keywords(request.get('subject'), request.get('body'), task.get('title'), task.get('verify') if wide else None)
+        pins = tuple(pinned_words(task)) if 'pinned' in fixes() else ()
+        chunks.append(f'FILE {path} at {sha}\n' + file_context.excerpt(text, list(dict.fromkeys([*pins, *words])),
+            budget=6000 if wide else 3500, filename=path, pinned=pins))
     return sha, files, '\n\n'.join(chunks)[:16000]
 
 
@@ -190,6 +205,7 @@ def _too_short(quote: str) -> bool:
     return len(quote.strip()) < 8
 
 
+_QUOTE_MAX = 320  # schema maxLength for a grounding quote
 _GAP_QUOTES = re.compile('["\'`‘’“”]')
 
 
@@ -236,8 +252,13 @@ def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict
             raise ValueError('dẫn chứng không khớp file dự định sửa')
         file = evidence.get('file')
         quote = evidence.get('quote')
+        cut_at_cap = isinstance(quote, str) and len(quote) >= _QUOTE_MAX
         if isinstance(quote, str):  # REPO DATA shows lines as `path:N| text` / `LN| text`; models copy the marker too
             quote = _LINE_MARKER.sub('', quote)
+            evidence = {**evidence, 'quote': quote}
+        if ('truncated' in fixes() and cut_at_cap and isinstance(quote, str)
+                and not _quoted_in(quote, files.get(file, ''))):  # the schema cut the quote mid-token; its last token is unreliable
+            quote = quote.rsplit(' ', 1)[0]
             evidence = {**evidence, 'quote': quote}
         if task['file'] in files and file != task['file']:
             raise ValueError('trích dẫn phải thuộc file hiện có dự định sửa')
@@ -418,7 +439,7 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
             trace.note("knows", "source evidence", f"{len(repo_context)} chars of source code given to the validator")
     short = {"type": "string", "maxLength": 200}
     record = {"type": "object", "additionalProperties": False,
-              "properties": {name: ({"type": "string", "maxLength": 320} if name == "quote" else short)
+              "properties": {name: ({"type": "string", "maxLength": _QUOTE_MAX} if name == "quote" else short)
                              for name in ("target", "file", "quote", "before", "after", "verify")},
               "required": ["target", "file", "quote", "before", "after", "verify"]}
     schema = {"type": "object", "additionalProperties": False,
