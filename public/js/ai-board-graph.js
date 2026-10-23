@@ -1,5 +1,6 @@
 // Ticket graph: node states from the trace projection. View only; authority stays on the server.
-import { projectPipeline, describeModelCall, loopActions, stepTotals, TRACE_STEPS } from './ai-board-trace.js';
+import { projectPipeline, describeModelCall, loopActions, stepTotals } from './ai-board-trace.js';
+import { gateEta, typicalGateMs } from './ai-board-gate-timing.js';
 import { visitedNodes } from './ai-board-hsm.js';
 
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -62,18 +63,7 @@ function modelCall(call) {
   };
 }
 
-const median = (xs) => {
-  const s = [...xs].sort((a, b) => a - b);
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
-// Typical duration of a gate from recorded gate spans. Null when the trace has none.
-function typicalMs(trace, gate) {
-  const samples = (trace.runs || []).flatMap(r => r.spans || [])
-    .filter(s => Number(s.attributes?.['tizia.gate.id']) === gate && s.end_ms != null && s.end_ms >= s.start_ms)
-    .map(s => s.end_ms - s.start_ms);
-  return samples.length ? median(samples) : null;
-}
+const currentRunId = (trace) => projectPipeline(trace).latest?.id ?? null;
 
 function proofNote(gate, events = []) {
   const last = [...events].reverse().map((e) => {
@@ -102,7 +92,7 @@ function gateDetail(step, trace) {
     ms: totals.ms,
     current: step.state === 'run' ? (latest ? `${latest.title}: ${latest.result}` : 'Waiting for the worker to reply.') : '',
     note: STEP_NOTE[step.state] || '',
-    typical: typicalMs(trace, step.gate),
+    typical: typicalGateMs(trace.runs || [], step.gate, currentRunId(trace)),
     proof: proofNote(step.gate, trace.events),
   };
 }
@@ -135,43 +125,58 @@ export function graphNodes(trace = {}) {
   return out;
 }
 
-// Clock for elapsed run time. Implausible timestamps show a label, never a number.
-export function runningClock(trace = {}, now = Date.now()) {
-  const runs = projectPipeline(trace).runs;
-  const started = Number(runs[0]?.created_at);
-  if (!runs.length || !(started >= EPOCH_MIN)) return { text: 'Not started', tone: 'idle' };
-  const last = Math.max(0, ...runs.map(r => Number(r.updated_at) || 0));
-  const elapsed = (trace.root?.live ? now : last) - started;
-  if (!(elapsed >= 0) || elapsed > MAX_RUN_MS) return { text: 'No data', tone: 'idle' };
-  const t = Math.floor(elapsed / 1000);
-  const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = String(t % 60).padStart(2, '0');
-  return { text: h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`, tone: 'idle' };
+// Elapsed ms of one run; null when the start is missing or implausible (fixtures, bad data).
+function runElapsed(run, live, now) {
+  const started = Number(run?.created_at);
+  if (!(started >= EPOCH_MIN)) return null;
+  const end = live ? now : Number(run.updated_at) || started;
+  const elapsed = end - started;
+  return elapsed >= 0 && elapsed <= MAX_RUN_MS ? elapsed : null;
 }
+
+const clockText = (ms) => {
+  const t = Math.floor(ms / 1000);
+  const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = String(t % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
+};
 
 const toneOf = (ratio) => (ratio >= 1 ? 'bad' : ratio >= 0.8 ? 'warn' : 'ok');
 const fmt = (n) => Number(n).toLocaleString('en-US');
 
-// Budget cells: big number, optional thin bar. API budgets show tokens, local runtimes show GPU time and runtime.
+// Budget cells: big number, optional thin bar. API budgets show tokens, local runtimes show GPU time.
 export function budgetCells(trace = {}, now = Date.now()) {
   const used = trace.root_work?.used || {};
   const limits = trace.root_work?.limits || {};
   const cell = (label, usedN, limitN) => {
     const ratio = limitN > 0 ? usedN / limitN : 0;
-    const tone = toneOf(ratio);
     const big = ratio >= 1 ? 'Used up' : `${fmt(usedN)} / ${fmt(limitN)}`;
-    return { label, big, sub: ratio >= 1 ? '' : `${Math.round(ratio * 100)}% used`, ratio: Math.min(ratio, 1), tone: ratio >= 1 ? 'bad' : tone, bar: true };
+    return { label, big, sub: ratio >= 1 ? '' : `${Math.round(ratio * 100)}% used`, ratio: Math.min(ratio, 1), tone: toneOf(ratio), bar: true };
   };
   const cells = [cell('Model calls', used.model_calls ?? 0, limits.model_calls ?? 0)];
   if (trace.totals?.budget_unit === 'k_tokens') cells.push(cell('Tokens', used.tokens ?? 0, limits.tokens ?? 0));
   else cells.push({ label: 'GPU time', big: `${(trace.totals?.gpu_s ?? 0).toFixed(1)} s`, sub: 'local model', tone: 'idle', bar: false });
-  const clock = runningClock(trace, now);
-  cells.push({ label: 'Running', big: clock.text, sub: '', tone: 'idle', bar: false });
-  const steps = projectPipeline(trace).steps.filter(s => s.state !== 'ok');
-  const times = steps.map(s => typicalMs(trace, s.gate));
-  let eta = { big: 'No estimate', sub: 'No step timing yet' };
-  if (!steps.length) eta = { big: 'None', sub: 'All steps done' };
-  else if (times.every(t => t != null)) eta = { big: `about ${Math.round(times.reduce((a, b) => a + b, 0) / 60000)} min`, sub: 'From earlier gate timings' };
-  cells.push({ label: 'Time left', ...eta, tone: 'idle', bar: false });
+
+  const latest = projectPipeline(trace).latest;
+  const elapsed = runElapsed(latest, trace.root?.live, now);
+  const subtasks = latest?.subtask_count;
+  const subText = Number.isFinite(subtasks) ? `${subtasks} subtask${subtasks === 1 ? '' : 's'}` : '';
+  const limitS = latest?.wall_clock_limit_s;
+  if (!latest) cells.push({ label: 'Run time', big: 'Not started', sub: '', tone: 'idle', bar: false });
+  else if (elapsed == null) cells.push({ label: 'Run time', big: 'No data', sub: '', tone: 'idle', bar: false });
+  else if (Number.isFinite(limitS) && limitS > 0) {
+    const ratio = elapsed / (limitS * 1000);
+    cells.push({ label: 'Run time', big: `${clockText(elapsed)} / ${clockText(limitS * 1000)}`, sub: ratio >= 1 ? 'Over the time limit' : subText,
+      ratio: Math.min(ratio, 1), tone: toneOf(ratio), bar: true });
+  } else cells.push({ label: 'Run time', big: clockText(elapsed), sub: subText || 'No limit recorded', tone: 'idle', bar: false });
+
+  const stageGates = latest?.trigger === 'execute' ? [3, 4, 5, 5.5] : [1, 2, 2.5];
+  const eta = gateEta(trace.runs || [], { currentRunId: currentRunId(trace), gates: stageGates });
+  if (!eta.remaining.length) cells.push({ label: 'Time left', big: 'None', sub: 'All steps done', tone: 'idle', bar: false });
+  else if (eta.eta_ms != null) {
+    const earlier = Math.min(...eta.remaining.map(g => eta.typical[g].samples));
+    const big = eta.eta_ms < 60000 ? 'under 1 min' : `about ${Math.round(eta.eta_ms / 60000)} min`;
+    cells.push({ label: 'Time left', big, sub: `From ${earlier} earlier run${earlier === 1 ? '' : 's'}`, tone: 'idle', bar: false });
+  } else cells.push({ label: 'Time left', big: 'No estimate', sub: 'No earlier run timed the next steps', tone: 'idle', bar: false });
   return cells;
 }
 
@@ -212,7 +217,8 @@ function nodePanel(node, root) {
     return `${head}${purpose}<p>${esc(text)}</p>`;
   }
   const status = { running: node.current, failed: 'Stopped at this step.', succeeded: 'Finished.', idle: node.note }[node.state];
-  const typical = node.typical == null ? 'No estimate. No step timing yet.' : `about ${secs(node.typical)}`;
+  const typical = node.typical.ms == null ? 'No estimate. No earlier run timed this step.'
+    : `about ${secs(node.typical.ms)} from ${node.typical.samples} earlier run${node.typical.samples === 1 ? '' : 's'}`;
   const rows = [
     ['Now', esc(status || STATE_LABEL[node.state])],
     ['Time used', esc(secs(node.ms))],

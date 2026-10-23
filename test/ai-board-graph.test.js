@@ -1,10 +1,11 @@
-// Ticket graph: node states from trace fixtures, edges, detail panel, rerun, budget strip, clock, escaping, reduced-motion CSS.
+// Ticket graph: node states from trace fixtures, edges, detail panel, rerun, budget strip, gate timing, escaping, reduced-motion CSS.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { graphNodes, renderTicketGraph, budgetCells, runningClock } from '../public/js/ai-board-graph.js';
+import { graphNodes, renderTicketGraph, budgetCells } from '../public/js/ai-board-graph.js';
 
 const EPOCH = Date.UTC(2026, 9, 23);
+const GATES = [1, 2, 2.5, 3, 4, 5, 5.5];
 const gate = (id, g, status, created_at, extra = {}) => ({ id, gate: g, status, created_at, public_reason: null, internal_reason: null, evidence: null, ...extra });
 const call = (id, g, prompt_name, created_at, extra = {}) => ({ id, created_at, evidence: { gate: g, prompt_name, call_id: `call-${id}`, result: 'ok', metrics: { wall_ms: 1500 }, budget_units: 4, ...extra } });
 const started = (run_id, g, created_at) => ({ event_type: 'gate_started', run_id, created_at, internal_detail: JSON.stringify({ gate: g, attempt: 0 }) });
@@ -13,6 +14,13 @@ const execRun = (id, gates, calls = []) => ({ id, trigger: 'execute', created_at
 const root = (extra = {}) => ({ id: 1, status: 'running', live: false, phase: 'x', lease_expires_at: null, ...extra });
 const contract = JSON.parse(fs.readFileSync(new URL('../server/ai-board/contract.json', import.meta.url), 'utf8'));
 const graph = { nodes: contract.execution_graph.nodes, edges: contract.execution_graph.edges };
+
+// Span shaped like the harness writes it (pipeline.run_gate): invoke_agent gate N, ok, tizia.gate.status.
+const span = (g, ms, status = 'passed', start = 0) => ({
+  name: `invoke_agent gate ${g}`, status: 'ok', start_ms: start, end_ms: start + ms, attributes: {
+    'gen_ai.operation.name': 'invoke_agent', 'tizia.gate.id': g, 'tizia.gate.status': status,
+  },
+});
 
 // Plan passed, execution in progress at gate 4 (gate 3 done).
 const running = () => ({
@@ -30,6 +38,17 @@ const failed = () => ({
   runs: [planRun(10, [gate(1, 1, 'passed', 10), gate(2, 2, 'blocked', 11, { public_reason: 'Plan touches a blocked file.' })],
     [call(31, 2, 'brainstorm.md', 9, { result: 'error', error: 'timeout from model' })])],
   events: [started(10, 1, 5), started(10, 2, 9)],
+});
+// Two finished earlier runs (10 s and 30 s per gate) and a current run that finished gate 1 only.
+const withHistory = (currentSpans = [span(1, 5000)], trigger = 'plan') => ({
+  root: root({ live: true }),
+  graph,
+  runs: [
+    { id: 1, trigger: 'plan', created_at: EPOCH, updated_at: EPOCH + 60000, gates: [], calls: [], spans: GATES.map(g => span(g, 10000)) },
+    { id: 2, trigger: 'plan', created_at: EPOCH + 70000, updated_at: EPOCH + 130000, gates: [], calls: [], spans: GATES.map(g => span(g, 30000)) },
+    { id: 3, trigger, created_at: EPOCH + 140000, updated_at: EPOCH + 150000, gates: [], calls: [], spans: currentSpans },
+  ],
+  events: [],
 });
 
 test('running fixture gives running, succeeded, and waiting nodes', () => {
@@ -96,10 +115,11 @@ test('edges follow the contract: passed path, repair loop, verdict, and blocked 
   assert.doesNotMatch(html, /data-edge="gate_5>attempt_close"/);
 });
 
-test('an edge into a running node flows; a passed edge between done nodes is marked done', () => {
+test('an edge into a running node flows only from a finished source; passed edge between done nodes is done', () => {
   const html = renderTicketGraph(running(), null);
   assert.match(html, /class="g-edge flow done" d="[^"]*" data-edge="gate_3>gate_4"/);
   assert.match(html, /class="g-edge done" d="[^"]*" data-edge="gate_1>gate_2"/);
+  assert.doesNotMatch(html, /class="g-edge flow[^"]*" d="[^"]*" data-edge="reverify_open>gate_4"/);
 });
 
 test('rerun action stays on a failed gate node, matching the server stage', () => {
@@ -135,22 +155,53 @@ test('budget cells: API shows tokens with bar, local shows GPU time; warn at 80%
   assert.equal(budgetCells(spent, EPOCH)[0].tone, 'bad');
 });
 
-test('time left is never invented: No estimate without gate spans', () => {
-  const trace = running();
-  assert.equal(budgetCells(trace, EPOCH).at(-1).big, 'No estimate');
-  trace.runs[1].spans = [{ start_ms: 0, end_ms: 40000, attributes: { 'tizia.gate.id': 4 } }];
-  assert.equal(graphNodes(trace).gate_4.typical, 40000);
-  assert.equal(graphNodes(running()).gate_4.typical, null);
-  assert.match(renderTicketGraph(running(), 'gate_4'), /Typical time<\/dt><dd>No estimate\. No step timing yet\./);
+test('typical gate time is the median of earlier runs only, never the current run', () => {
+  const trace = withHistory();
+  const n = graphNodes(trace);
+  assert.deepEqual([n.gate_2.typical.ms, n.gate_2.typical.samples], [20000, 2]);
+  // Current run's own gate 1 span must not feed its own typical value.
+  assert.equal(graphNodes(withHistory([span(1, 999999)])).gate_1.typical.ms, 20000);
+  assert.equal(graphNodes(running()).gate_4.typical.ms, null);
 });
 
-test('running clock: fixture epochs and missing runs show a label, never a huge number', () => {
-  assert.equal(runningClock({ root: root({ live: true }), runs: [] }, EPOCH).text, 'Not started');
-  assert.equal(runningClock(running(), EPOCH).text, 'Not started'); // fixture created_at 10 ms is not a real start
-  const real = { root: root({ live: true }), runs: [planRun(EPOCH, [])], events: [] };
-  assert.equal(runningClock(real, EPOCH + 65000).text, '1:05');
-  assert.equal(runningClock(real, EPOCH + 3723000).text, '1:02:03');
-  assert.equal(runningClock({ root: root({ live: true }), runs: [planRun(EPOCH, [])] }, EPOCH + 40 * 24 * 3600 * 1000).text, 'No data');
+test('time left: estimate covers only the current run stage, from earlier runs', () => {
+  // Execute run finished gate 3; gates 4, 5, 5.5 remain at a 20 s median each = 60 s.
+  const left = budgetCells(withHistory([span(3, 5000)], 'execute'), EPOCH + 160000).find(c => c.label === 'Time left');
+  assert.equal(left.big, 'about 1 min');
+  assert.equal(left.sub, 'From 2 earlier runs');
+  // Plan run finished gate 1; gates 2 and 2.5 remain at 20 s each = 40 s.
+  const plan = budgetCells(withHistory(), EPOCH + 160000).find(c => c.label === 'Time left');
+  assert.equal(plan.big, 'under 1 min');
+});
+
+test('time left says No estimate with a reason when a remaining gate has no history', () => {
+  const current = withHistory();
+  const left = budgetCells({ ...current, runs: current.runs.slice(2) }, EPOCH).find(c => c.label === 'Time left');
+  assert.equal(left.big, 'No estimate');
+  assert.equal(left.sub, 'No earlier run timed the next steps');
+  assert.equal(budgetCells(running(), EPOCH).find(c => c.label === 'Time left').big, 'No estimate');
+});
+
+test('run time shows runtime over the run limit, with subtask count; warns near and past the limit', () => {
+  const latestRun = (extra) => ({ id: 2, trigger: 'plan', created_at: EPOCH, updated_at: EPOCH, gates: [], calls: [], ...extra });
+  const trace = (extra) => ({ root: root({ live: true }), totals: { budget_unit: 'gpu_s', gpu_s: 0 }, root_work: { used: {}, limits: {} }, runs: [latestRun(extra)] });
+  const run = (t, now) => budgetCells(t, now).find(c => c.label === 'Run time');
+  const limited = trace({ wall_clock_limit_s: 600, subtask_count: 3 });
+  assert.equal(run(limited, EPOCH + 125000).big, '2:05 / 10:00');
+  assert.equal(run(limited, EPOCH + 125000).sub, '3 subtasks');
+  assert.equal(run(limited, EPOCH + 125000).tone, 'ok');
+  assert.equal(run(limited, EPOCH + 500000).tone, 'warn');
+  assert.equal(run(limited, EPOCH + 700000).tone, 'bad');
+  assert.equal(run(limited, EPOCH + 700000).sub, 'Over the time limit');
+  const unlimited = trace({ subtask_count: 1 });
+  assert.equal(run(unlimited, EPOCH + 65000).sub, '1 subtask');
+  assert.equal(run(unlimited, EPOCH + 65000).bar, false);
+  assert.equal(run(unlimited, EPOCH + 65000).big, '1:05');
+});
+
+test('run time never shows an invented number: Not started, No data for fixture epochs', () => {
+  assert.equal(budgetCells({ root: root({ live: true }), runs: [] }, EPOCH).find(c => c.label === 'Run time').big, 'Not started');
+  assert.equal(budgetCells(running(), EPOCH).find(c => c.label === 'Run time').big, 'No data'); // fixture created_at 10 ms
 });
 
 test('untrusted reason text is escaped in the panel', () => {
