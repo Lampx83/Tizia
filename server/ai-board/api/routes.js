@@ -22,6 +22,7 @@ import { publicContract } from '../hsm/contract.js';
 import { createFeatureLifecycle } from '../services/feature-lifecycle.js';
 import { createRootAllowanceService } from '../services/root-allowance.js';
 import { attachSkillRoutes, attachWorkerSkillRoutes } from './skills.js';
+import { requesterProgress } from '../services/requester-progress.js';
 
 // Không cấu hình model phân loại → không gọi gì (không phân loại).
 const defaultClassifyRequest = (title, detail) => (
@@ -154,6 +155,12 @@ export function attachAiBoardRequestRoutes(router, {
     const stats = {};
     for (const item of items) stats[item.status] = (stats[item.status] || 0) + 1;
     res.json({ items, stats });
+  });
+
+  route.get('/api/requests/:id/progress', requireAuth, async (req, res) => {
+    const progress = await requesterProgress(store, req.params.id, req.user.id);
+    if (!progress) return res.status(404).json({ error: 'request_not_found' });
+    res.json(progress);
   });
 
   route.post('/api/requests/:id/cancel', requireAuth, requireStrictCsrf, async (req, res) => {

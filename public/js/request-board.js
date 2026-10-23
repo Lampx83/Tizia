@@ -21,6 +21,30 @@ const TYPE_META = {
   skill:  { icon: '🎯', label: 'Luyện kỹ năng' },
   other:  { icon: '💡', label: 'Ý kiến khác' },
 };
+const ACTIVE_STATUSES = new Set(['pending', 'reviewing']);
+const PROGRESS_POLL_MS = 5000;
+
+async function paintProgress(el) {
+  let p = null;
+  try {
+    const r = await fetch(`api/requests/${el.dataset.progress}/progress`);
+    if (r.ok) p = await r.json();
+  } catch { /* mạng lỗi: ẩn dòng, lần tải sau thử lại */ }
+  if (!el.isConnected) return;
+  if (!p) { el.hidden = true; return; }
+  el.textContent = progressLine(p);
+  el.hidden = false;
+  if (p.live) setTimeout(() => paintProgress(el), PROGRESS_POLL_MS);
+}
+
+function progressLine(p) {
+  const parts = [p.step ? `Step: ${p.step}` : null];
+  if (p.live && p.eta_ms != null) parts.push(`about ${Math.max(1, Math.round(p.eta_ms / 60000))} min left`);
+  if (p.budget) parts.push(`Budget: ${p.budget.used} / ${p.budget.limit}`);
+  if (p.stop_reason) parts.push(`Stopped: ${p.stop_reason}`);
+  return parts.filter(Boolean).join(' · ');
+}
+
 const STATUS_META = {
   pending:   { label: 'Chờ duyệt',   cls: 'pending' },
   reviewing: { label: 'Đang làm',    cls: 'reviewing' },
@@ -170,11 +194,14 @@ function renderList(host, items, reload) {
             </button>
             ${mine ? `<a class="rb-thread-toggle" href="appeal.html?request=${it.id}">Xem cờ và kháng nghị</a>` : ''}
           </div>
+          ${ACTIVE_STATUSES.has(it.status) ? `<div class="rb-progress" data-progress="${it.id}" role="status" hidden></div>` : ''}
           <div class="rb-thread" id="rb-thread-${it.id}" hidden></div>
         </div>
       </div>
     `;
   }).join('');
+
+  host.querySelectorAll('[data-progress]').forEach(paintProgress);
 
   host.querySelectorAll('[data-vote]').forEach(el => {
     el.addEventListener('click', async () => {
@@ -309,6 +336,7 @@ function injectStylesOnce() {
     .rb-att-file { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: #fde68a;
       background: rgba(251,191,36,0.12); padding: 3px 8px; border-radius: 6px; text-decoration: none; border: 1px solid rgba(251,191,36,0.25); }
     .rb-att-file:hover { background: rgba(251,191,36,0.22); }
+    .rb-progress { font-size: 12px; margin-top: 8px; color: #94a3b8; overflow-wrap: anywhere; }
     .rb-item-meta { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-top: 12px; font-size: 12px; }
     .rb-status { padding: 3px 8px; border-radius: 6px; font-weight: 600; white-space: nowrap; }
     .rb-status.pending   { background: rgba(148,163,184,0.25); }

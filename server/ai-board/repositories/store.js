@@ -1717,6 +1717,8 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
              m.last_admin_id, (SELECT username FROM users WHERE id = m.last_admin_id) AS last_admin_name, m.last_action, m.last_action_at
       FROM ai_ticket_admins m WHERE m.ticket_id = ?`, [root.id]) || null;
     root.live = !!root.lease_owner && root.lease_expires_at > Date.now(); // 1 worker đang giữ lease = đang xử lý
+    // Lease còn tên worker nhưng đã hết hạn: worker mất, không tự chạy lại.
+    root.lost_worker = root.lease_owner && !root.live ? { worker_id: root.lease_owner, lease_expired_at: root.lease_expires_at } : null;
     root.phase_label = PHASES[root.phase]?.label ?? root.phase;
     const children = await db.all(`
       SELECT id, title, status, sequence AS "order", plan_revision FROM ai_tickets
@@ -1759,7 +1761,11 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       const live = root.live && i === runRows.length - 1 && !run.status && !rollback;
       const produced = parseJson(runEvidence)?.verdict?.candidate; // commit của chính lượt này (trace admin)
       const changeClass = (parseJson(runEvidence)?.verdict?.gates || []).find((g) => [4, 5.5].includes(Number(g.gate)) && g.change_class)?.change_class ?? null;
-      return { ...run, rollback, gates, calls, change_class: changeClass, totals: summarizeCalls(calls.map((c) => c.evidence)),
+      // Runner (Docker sandbox, gate 5/5.5) bị chặn: mã lỗi lấy từ evidence gate, không có thì để reason.
+      const runnerGate = gates.filter((g) => [5, 5.5].includes(Number(g.gate)) && g.status === 'blocked').at(-1);
+      const runnerFailure = runnerGate ? { gate: Number(runnerGate.gate), code: runnerGate.evidence?.code ?? null,
+        reason: runnerGate.public_reason ?? null, internal_reason: runnerGate.internal_reason ?? null } : null;
+      return { ...run, rollback, gates, calls, change_class: changeClass, runner_failure: runnerFailure, totals: summarizeCalls(calls.map((c) => c.evidence)),
         commit: produced ? { branch: produced.branch, head_sha: produced.head_sha } : null,
         budget_used: budgetUsed, budget_limit: root.budget_limit,
         subtask_count: subtaskCount, wall_clock_limit_s: scaledLimit('wall_clock_s', subtaskCount),
