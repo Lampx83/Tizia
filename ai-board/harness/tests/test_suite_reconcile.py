@@ -8,6 +8,8 @@ from evaluation.suite import reconcile, runner
 from test_eval_suite import SEED, deps_for, world  # noqa: F401  (module fixture)
 from verification.sandbox import SandboxError
 
+pytestmark = pytest.mark.usefixtures("pinned_head")
+
 RUN = "loop-" + "a" * 24
 RUN2 = "g5-" + "b" * 24
 

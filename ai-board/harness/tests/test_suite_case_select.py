@@ -7,6 +7,8 @@ from evaluation.suite import case_select
 from test_eval_suite import SEED, deps_for, world  # noqa: F401  (fixture)
 from evaluation.suite import runner
 
+pytestmark = pytest.mark.usefixtures("pinned_head")
+
 
 def write(tmp_path, name, data):
     path = tmp_path / name
