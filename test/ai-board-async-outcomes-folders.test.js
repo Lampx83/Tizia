@@ -90,29 +90,18 @@ test('folder creation, caps, votes, approval, cycle, archive/reopen, brief', asy
 
 });
 
-test('self requests (board edits its own skills)', async () => {
+test('self requests are refused: the board cannot edit its own skills', async () => {
   const { result: out } = await runBoard(async (store, d) => {
     const r = {};
-    r.outside = await failure(() => store.createSelfRequest({ title: 'Sửa lõi', detail: 'x', targetFile: 'server/db.js', idempotencyKey: 'self-fold-0' }));
     const file = 'ai-board/harness/retrieval_weights.json';
-    r.self = await store.createSelfRequest({ title: 'Chỉnh trọng số truy hồi', detail: 'Đêm nay', targetFile: file, idempotencyKey: 'self-fold-1' });
-    r.selfAgain = await store.createSelfRequest({ title: 'Chỉnh trọng số truy hồi', detail: 'Đêm nay', targetFile: file, idempotencyKey: 'self-fold-1' });
-    r.systemUser = await d.get(`SELECT username, role FROM users WHERE role = 'system'`);
-    const c = await claimAndRun(store, 'w-self');
-    const selfStep = step({ allowed_scope: [file], capability: 'self.config', risk: 'low' });
-    r.planWrongFile = await failure(() => submit(store, c, planOf({ domain: 'ai-board', allowed_scope: ['ai-board/harness/other.json'], capabilities: ['self.config'], steps: [{ ...selfStep, allowed_scope: ['ai-board/harness/other.json'] }] }), 'plan-self-0'));
-    r.plan = await submit(store, c, planOf({ domain: 'ai-board', allowed_scope: [file], capabilities: ['self.config'], steps: [selfStep] }), 'plan-self-1');
-    r.queue = await store.listAdminQueue();
+    r.self = await failure(() => store.createSelfRequest({ title: 'Chỉnh trọng số truy hồi', detail: 'Đêm nay', targetFile: file, idempotencyKey: 'self-fold-1' }));
+    r.outside = await failure(() => store.createSelfRequest({ title: 'Sửa lõi', detail: 'x', targetFile: 'server/db.js', idempotencyKey: 'self-fold-0' }));
+    r.systemUser = await d.get(`SELECT username FROM users WHERE role = 'system'`);
     return r;
   });
-  assert.equal(out.outside.error, 'self_target_outside_area');
-  assert.equal(out.self.created, true);
-  assert.deepEqual([out.selfAgain.created, out.selfAgain.request_id], [false, 1], 'same key does not create a second self request');
-  assert.deepEqual(out.systemUser, { username: 'ai-board', role: 'system' });
-  assert.equal(out.planWrongFile.error, 'scope_violation');
-  assert.equal(out.plan.status, 'waiting_authorization', 'self.config is a protected capability');
-  assert.equal(out.queue[0].status, 'waiting_authorization');
-
+  assert.equal(out.self.error, 'self_request_disabled');
+  assert.equal(out.outside.error, 'self_request_disabled');
+  assert.equal(out.systemUser ?? null, null, 'no system user is created for self requests');
 });
 
 test('release flags: registration keeps first approval, listing respects visibility, status validation', async () => {

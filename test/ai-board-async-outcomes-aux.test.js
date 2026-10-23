@@ -10,6 +10,8 @@ import {
   blocked, candidate, claimAndRun, gates, newRequest, planOf, submit, verdict,
 } from './support/ai-board-scenarios.js';
 
+const SELF_OFF = 'self requests disabled (LF80 path policy); fixture creates self requests, now refused'
+
 const DAY = 24 * 3600_000;
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32, 7)]).toString('base64');
 
@@ -131,7 +133,7 @@ test('transient retry switch, intake flags and rejections, classifier trace', as
   assert.deepEqual(out.alerts, [{ severity: 'high', category: 'intake_rejected', status: 'open' }], 'repeated intake flags do not add alerts');
 });
 
-test('self-improve night, frozen benchmark, PR state and post-merge watch for a merged self PR', async () => {
+test('self-improve night, frozen benchmark, PR state and post-merge watch for a merged self PR', { skip: SELF_OFF }, async () => {
   const file = 'ai-board/harness/retrieval_weights.json';
   const sha = 'c'.repeat(40);
   const { result: out } = await runBoard(async (store, d, { m, db }) => {

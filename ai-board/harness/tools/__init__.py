@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 import code_index
+import path_policy
 import repomap
 import file_context
 import memory
@@ -379,12 +380,18 @@ TOOLS: dict[str, Tool] = {t.name: t for t in (
 )}
 
 
+def _drop_denied(text: str) -> str:
+    """Bỏ dòng có path (đầu dòng, trước ':' hoặc khoảng trắng) nằm trong deny_paths."""
+    return "\n".join(line for line in text.splitlines()
+                     if not path_policy.denied(re.split(r"[:\s]", line.strip(), 1)[0] if line.strip() else ""))
+
+
 def run(name: str, source, sha: str, params: dict, budget: int) -> str:
     """Chạy 1 tool, cắt output ≤ budget ký tự. Không raise (tool lỗi → "")."""
     tool = TOOLS[name]
     if name in ("grep", "locate", "exemplar"):
         params = {**params, "budget": budget}
     try:
-        return _cap(tool.fn(source, sha, **params), budget)
+        return _cap(_drop_denied(tool.fn(source, sha, **params)), budget)
     except Exception:  # noqa: BLE001 — context thiếu 1 tool vẫn tốt hơn cổng sập
         return ""

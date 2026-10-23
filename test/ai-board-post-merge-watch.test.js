@@ -13,6 +13,8 @@ import { LIMITS } from '../server/ai-board/store.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
 import { checkPostMergeWatch, pendingPostMergeWatch } from '../server/ai-board/post-merge-watch-async.js';
 
+const SELF_OFF = 'self requests disabled (LF80 path policy); fixture creates self requests, now refused'
+
 const KEY = 'fixture-worker-key-32-characters-long';
 const SKILL = 'ai-board/harness/skills/edit-html-text/SKILL.md';
 const SHA = (c) => c.repeat(40);
@@ -135,7 +137,7 @@ async function fixture() {
     seedWindow, close: () => server.close() };
 }
 
-test('a merged self PR is not pending until the "after" window (days) has fully elapsed', async () => {
+test('a merged self PR is not pending until the "after" window (days) has fully elapsed', { skip: SELF_OFF }, async () => {
   const f = await fixture();
   try {
     const self = await f.selfRun();
@@ -145,7 +147,7 @@ test('a merged self PR is not pending until the "after" window (days) has fully 
   } finally { f.close(); }
 });
 
-test('a merged non-self PR never becomes a pending post-merge watch', async () => {
+test('a merged non-self PR never becomes a pending post-merge watch', { skip: SELF_OFF }, async () => {
   const f = await fixture();
   try {
     const other = await f.selfRun(); // dùng hạ tầng self để mở PR nhanh, rồi đổi request về type khác
@@ -157,7 +159,7 @@ test('a merged non-self PR never becomes a pending post-merge watch', async () =
   } finally { f.close(); }
 });
 
-test('fewer than min_runs production runs on either side: waiting, no conclusion, still pending next time', async () => {
+test('fewer than min_runs production runs on either side: waiting, no conclusion, still pending next time', { skip: SELF_OFF }, async () => {
   const f = await fixture();
   try {
     const self = await f.selfRun();
@@ -181,7 +183,7 @@ test('fewer than min_runs production runs on either side: waiting, no conclusion
   } finally { f.close(); }
 });
 
-test('enough data, no meaningful drop: concluded ok, no revert, drops out of pending', async () => {
+test('enough data, no meaningful drop: concluded ok, no revert, drops out of pending', { skip: SELF_OFF }, async () => {
   const f = await fixture();
   try {
     const self = await f.selfRun();
@@ -203,7 +205,7 @@ test('enough data, no meaningful drop: concluded ok, no revert, drops out of pen
   } finally { f.close(); }
 });
 
-test('a drop past the threshold creates exactly one self revert request, tier protected via the usual pipeline', async () => {
+test('a drop past the threshold creates exactly one self revert request, tier protected via the usual pipeline', { skip: SELF_OFF }, async () => {
   const f = await fixture();
   try {
     const self = await f.selfRun('ai-board/harness/prompts/brainstorm.md');

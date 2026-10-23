@@ -19,6 +19,35 @@
       "^ai-board/harness/retrieval_weights\\.json$"
     ]
   },
+  "deny_paths": {
+    "_why": "Đường dẫn AI Board không được đọc/ghi/PR: một danh sách dùng chung, policy/path-policy.js và ai-board/harness/path_policy.py đọc cùng file. Khớp sau khi chuẩn hoá (\\ → /, bỏ ./, không cho .. hay đường dẫn tuyệt đối) và KHÔNG phân biệt hoa thường (NTFS). Regex toàn chuỗi, cú pháp chung JS/Python.",
+    "patterns": [
+      "^ai-board/",
+      "^server/ai-board/",
+      "^server/contexts/ai-board-[^/]*/",
+      "^public/[^/]*ai-board",
+      "^public/js/ai-board-",
+      "^public/[^/]*admin-request",
+      "(^|/)Dockerfile[^/]*$",
+      "(^|/)docker-compose[^/]*$",
+      "(^|/)\\.dockerignore$",
+      "(^|/)\\.gitignore$",
+      "(^|/)package(-lock)?\\.json$",
+      "^\\.github/",
+      "(^|/)\\.claude/",
+      "(^|/)\\.cursor/",
+      "(^|/)\\.vscode/",
+      "(^|/)\\.husky/",
+      "(^|/)\\.mcp\\.json$",
+      "(^|/)\\.cursorrules$",
+      "(^|/)(CLAUDE|AGENTS|GEMINI)\\.md$",
+      "(^|/)\\.env(\\.[^/]*)?$",
+      "^server/index\\.js$",
+      "^server/db\\.js$",
+      "^server/contexts/registry\\.js$",
+      "(^|/)(node_modules|__pycache__|secrets?|credentials|heldout|evaluation|vault)/"
+    ]
+  },
   "readonly_admin_verification": {
     "surface": "trang (quan tri|admin)|admin-request\\.html",
     "observe": "(chi )?(kiem tra|xac minh|quan sat|theo doi|xem chuoi|xem hien thi)",

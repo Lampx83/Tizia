@@ -17,6 +17,8 @@ import re
 import unicodedata
 from pathlib import Path
 
+import path_policy
+
 CHECKS = ("secret", "pii", "injection", "content", "test_removal", "protected_path", "python_syntax",
           "palette", "theme", "contrast", "sensitive_topic", "external_link", "external_script", "network_call",
           "image", "personal_form", "answer_key", "sovereignty_map")
@@ -42,7 +44,7 @@ def _term(term: str) -> re.Pattern:
 
 # File tiền thật / ví xu: diff chạm là critical (cùng danh sách với policy.js money_scope).
 MONEY_PATHS = frozenset(LEXICON["money_paths"]["paths"])
-# Vùng yêu cầu self được sửa (cùng regex với policy.js isSelfEditable): chỉ nới luật path hạ tầng cho đúng các file này.
+# Vùng self (cùng regex với policy.js isSelfEditable); self đã tắt nên chỉ diagnose.py còn dùng để đối chiếu.
 SELF_EDIT = [re.compile(p) for p in LEXICON["self_edit_paths"]["patterns"]]
 
 # Term ASCII so trên bản bỏ dấu, term có dấu so trên bản NFC — xem _doc trong guard-lexicon.json.
@@ -252,14 +254,6 @@ _FEATURE_MODULE = re.compile(
 # ponytail: danh sách từ ngắn, đủ cho nội dung giáo dục D0; bộ lọc nội dung thật thay sau.
 _UNSAFE = re.compile(r"(?i)(?<!\w)(?:fuck|shit|bitch|đụ|địt|đĩ|lồn|cặc|đồ\s+ngu|óc\s+chó)(?!\w)")
 _TEST_PATH = re.compile(r"(?:^|/)(?:tests?|__tests__)/|(?:\.|_)(?:test|spec)\.[^/]+$|(?:^|/)test_[^/]+\.py$")
-_PROTECTED = re.compile(
-    r"^(?:Dockerfile|docker-compose[^/]*\.ya?ml|package(?:-lock)?\.json|\.github/|ai-board/|server/ai-board/"
-    r"|server/contexts/registry\.js|server/index\.js|server/db\.js|\.dockerignore|\.gitignore)"
-)
-# Cấu hình công cụ AI ở bất kỳ độ sâu nào: hook/lệnh trong đó chạy khi mở repo.
-_AI_TOOL_CONFIG = re.compile(
-    r"(?:^|/)(?:\.claude|\.cursor|\.vscode|\.husky)/|(?:^|/)(?:\.mcp\.json|\.cursorrules|CLAUDE\.md|AGENTS\.md|GEMINI\.md)$"
-)
 
 
 def _sections(text: str):
@@ -293,8 +287,7 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
     """Findings [{check, severity, failure_class, detail}] chặn + flags [{check, severity, detail}] không chặn
     + checks ran + ui_changed + visible_text_changed + review_required (có flag high). Detail never echoes
     a secret or the offending text. PII skips allowed_contacts (base public/, see contacts_in) and tizia.vn
-    emails. request_text (yêu cầu gốc) chỉ để leo thang bảng màu cờ khi yêu cầu chạm chủ đề nhạy cảm.
-    request_type 'self' (board tự sửa): sửa/thêm file trong SELF_EDIT không tính protected_path."""
+    emails. request_text (yêu cầu gốc) chỉ để leo thang bảng màu cờ khi yêu cầu chạm chủ đề nhạy cảm."""
     findings, flags = [], []
 
     def add(check, severity, detail):
@@ -311,9 +304,8 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
         ui_changed |= path.startswith("public/")
         if path == ".env" or (path.startswith(".env.") and not path.endswith(".example")):
             add("secret", "critical", f"{path}: không được chạm file env")
-        self_edit = request_type == "self" and not deleted and any(p.match(path) for p in SELF_EDIT)
-        if (_PROTECTED.match(path) or _AI_TOOL_CONFIG.search(path)) and not self_edit:
-            add("protected_path", "critical", f"{path}: path hạ tầng/registry cần con người")
+        if path_policy.denied(path, "write"):
+            add("protected_path", "critical", f"{path}: path hạ tầng/registry/AI Board cần con người")
         if path in MONEY_PATHS:
             add("protected_path", "critical", f"{path}: file tiền/thanh toán cần con người")
         if is_test and existing and (removed or deleted):

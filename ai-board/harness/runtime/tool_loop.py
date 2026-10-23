@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import file_context  # noqa: E402
 import tools  # noqa: E402
 import code_index
+import path_policy
 from verification import loop_checks, ui_copy
 from verification.sandbox import SandboxError
 
@@ -133,7 +134,10 @@ def validate(name: str, args: dict) -> None:
 def _clean_path(path: str) -> str:
     if PurePosixPath(path).is_absolute() or PureWindowsPath(path).is_absolute() or ".." in re.split(r"[\\/]", path):
         raise Forbidden(f"path không được phép: {path!r}")
-    return posixpath.normpath(path.replace("\\", "/"))
+    normalized = posixpath.normpath(path.replace("\\", "/"))
+    if path_policy.denied(normalized, "read"):
+        raise Forbidden(f"path thuộc deny_paths: {path!r}")
+    return normalized
 
 
 class Workspace:

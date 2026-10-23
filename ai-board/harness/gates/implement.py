@@ -18,6 +18,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import context as repo_context
 import file_context
+import path_policy
 from gates import gate3_guards
 from repositories.tool_steps import PgSteps
 from runtime import tool_loop
@@ -273,6 +274,8 @@ def _check_rest(out: dict, current: str | None, file: str | None) -> None:
     test_file = posixpath.normpath(out["test_file"].replace("\\", "/"))
     if not test_file.startswith(("test/", "tests/")):
         raise ValueError(f"test_file '{out['test_file']}' phải nằm trong test/")
+    if file and not path_policy.names_scope(out["test"], [file]):
+        raise ValueError(f"test phải import hoặc nêu file trong phạm vi: {file}")
     if test_file.endswith((".js", ".mjs")) and (_COMMONJS.search(out["test"]) or "node:test" not in out["test"]):
         raise ValueError("test phải là ESM dùng node:test (import), không dùng require/module.exports")
     out["test_file"] = test_file

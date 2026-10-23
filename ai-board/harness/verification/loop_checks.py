@@ -11,6 +11,7 @@ import time
 import uuid
 
 from verification.sandbox import RunnerClient, SandboxError, _Lease
+import path_policy
 
 PROFILES = ('light', 'platform', 'relevant')
 VERSION = 1
@@ -30,7 +31,7 @@ def readable(path: str) -> bool:
     return bool(parts) and PurePosixPath(path).suffix.lower() in SOURCE_EXTENSIONS and not path.startswith('/') and '\\' not in path and all(
         not part.startswith('.') and part.lower() not in DENIED_PARTS
         and not any(word in part.lower() for word in ('credential', 'secret'))
-        and part.lower() not in {'agents.md', 'claude.md'} for part in parts)
+        and part.lower() not in {'agents.md', 'claude.md'} for part in parts) and not path_policy.denied(path, 'read')
 
 
 def digest(file: str, content: str, test_file, test, base: str, tools: str) -> str:
