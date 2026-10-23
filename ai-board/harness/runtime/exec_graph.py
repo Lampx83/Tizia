@@ -79,17 +79,17 @@ def compile_graph(handlers: dict[str, Callable[[], str]], entry: str, *, graph_s
 def run(handlers: dict[str, Callable[[], str]], entry: str, *, graph_spec: dict | None = None,
         checkpointer=None, thread_id: str | None = None) -> list[str]:
     """Walk the graph from `entry`; return the executed node path including the end node reached.
-    With `checkpointer` + `thread_id` a saved checkpoint of that thread resumes after its last finished node."""
+    With `checkpointer` + `thread_id` each node's progress is saved; the thread is purged first, so a
+    rerun re-enters from `entry` (resume is the caller's replay of tool steps, not a graph jump)."""
     from langgraph.errors import GraphRecursionError
 
     graph_spec = graph_spec or spec()
     compiled, nodes, routes = compile_graph(handlers, entry, graph_spec=graph_spec, checkpointer=checkpointer)
     config = {"recursion_limit": int(graph_spec.get("recursion_limit", 80))}
-    payload = {"path": []}
     if checkpointer is not None:
+        checkpointer.purge(thread_id)
         config["configurable"] = {"thread_id": thread_id, "checkpoint_ns": ""}
-        if checkpointer.get_tuple({"configurable": config["configurable"]}) is not None:
-            payload = None
+    payload = {"path": []}
     try:
         final = compiled.invoke(payload, config=config)
     except GraphRecursionError as error:

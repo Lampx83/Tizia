@@ -93,3 +93,8 @@ class HttpCheckpoint:
 
     def purge(self) -> None:
         self.client.post(f"{self.base}/purge", {**self.lease, "run_scope": self.run_scope, "proposal_ids": [str(key) for key in sorted(self.keys)]})
+
+    def graph_saver(self, pin: str):
+        """LangGraph saver of this run; thread = run_scope, so a new plan or base starts a new thread."""
+        from repositories.server_graph_saver import HttpGraphSaver
+        return HttpGraphSaver(self.client, self.ticket_id, self.lease, pin, thread_id=f"{self.run_scope}:graph")

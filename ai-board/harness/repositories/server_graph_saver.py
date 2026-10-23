@@ -21,9 +21,9 @@ def _unpack(serde, packed: str) -> Any:
 class HttpGraphSaver(BaseCheckpointSaver):
     """Thread = `ticket-<id>:<scope>`; `pin` (plan_hash + base) khác với lúc ghi đầu thì server từ chối resume."""
 
-    def __init__(self, client, ticket_id: int, lease: dict, pin: str):
+    def __init__(self, client, ticket_id: int, lease: dict, pin: str, thread_id: str | None = None):
         super().__init__()
-        self.client, self.lease, self.pin = client, lease, pin
+        self.client, self.lease, self.pin, self.thread_id = client, lease, pin, thread_id
         self.base = f"/api/ai-board/worker/tickets/{ticket_id}/checkpoint"
 
     def _call(self, op: str, **body) -> dict:
@@ -48,8 +48,8 @@ class HttpGraphSaver(BaseCheckpointSaver):
         self._call("graph_writes", thread_id=thread, checkpoint_ns=ns, checkpoint_id=config["configurable"]["checkpoint_id"],
                    task_id=task_id, writes=rows)
 
-    def purge(self, thread_id: str, checkpoint_ns: str = "") -> None:
-        self._call("graph_purge", thread_id=thread_id, checkpoint_ns=checkpoint_ns)
+    def purge(self, thread_id: str | None = None, checkpoint_ns: str = "") -> None:
+        self._call("graph_purge", thread_id=thread_id or self.thread_id, checkpoint_ns=checkpoint_ns)
 
     def get_tuple(self, config) -> CheckpointTuple | None:
         thread, ns = self._address(config)

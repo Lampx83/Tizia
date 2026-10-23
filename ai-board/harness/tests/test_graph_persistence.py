@@ -22,41 +22,42 @@ class Crash(BaseException):
 
 
 class FakeServer:
-    """Bản in-memory của graph_* trong tool-checkpoint.js: lease kiểm trước, pin khác → graph_drift."""
+    """Bản in-memory của graph_* trong tool-checkpoint.js: lease kiểm trước; pin theo thread, khác → graph_drift."""
 
     def __init__(self):
-        self.checkpoints, self.writes, self.pin, self.lease_ok = {}, {}, None, True
-        self.calls = []
+        self.checkpoints, self.writes, self.pins, self.lease_ok = {}, {}, {}, True
 
     def post(self, path, payload):
         op = path.rsplit("/", 1)[1]
-        self.calls.append(op)
         if not self.lease_ok or payload.get("lease_token") != "t1":
             raise RuntimeError("stale_lease")
-        assert payload["thread_id"].startswith("ticket-7:"), "thread outside ticket scope"
-        if self.checkpoints and self.pin != payload["pin"]:
+        thread, ns = payload["thread_id"], payload.get("checkpoint_ns", "")
+        assert thread.startswith("ticket-7:"), "thread outside ticket scope"
+        key = (thread, ns)
+        if op == "graph_purge":
+            for k in [k for k in self.checkpoints if k[:2] == key]:
+                del self.checkpoints[k]
+            for k in [k for k in self.writes if k[:2] == key]:
+                del self.writes[k]
+            return {"ok": True}
+        if key in self.pins and self.pins[key] != payload["pin"]:
             raise RuntimeError("graph_drift")
         if op == "graph_put":
-            self.pin = payload["pin"]
-            self.checkpoints[payload["checkpoint_id"]] = {"checkpoint_id": payload["checkpoint_id"], "parent_id": payload["parent_id"],
-                                                          "type": payload["type"], "checkpoint": payload["checkpoint"], "metadata": payload["metadata"]}
+            self.pins[key] = payload["pin"]
+            cid = payload["checkpoint_id"]
+            self.checkpoints[(thread, ns, cid)] = {"checkpoint_id": cid, "parent_id": payload["parent_id"],
+                                                   "type": payload["type"], "checkpoint": payload["checkpoint"], "metadata": payload["metadata"]}
             return {"ok": True}
         if op == "graph_writes":
             for w in payload["writes"]:
-                self.writes.setdefault(payload["checkpoint_id"], {})[(payload["task_id"], w["idx"])] = {
+                self.writes.setdefault((thread, ns, payload["checkpoint_id"]), {})[(payload["task_id"], w["idx"])] = {
                     "task_id": payload["task_id"], "idx": w["idx"], "channel": w["channel"], "type": w["type"], "value": w["value"]}
             return {"ok": True}
         if op == "graph_get":
-            cid = payload.get("checkpoint_id") or (max(self.checkpoints) if self.checkpoints else None)
-            row = self.checkpoints.get(cid)
-            return {"checkpoint": row, "writes": sorted(self.writes.get(cid, {}).values(), key=lambda w: (w["task_id"], w["idx"]))}
-        if op == "graph_list":
-            rows = sorted(self.checkpoints.values(), key=lambda r: r["checkpoint_id"], reverse=True)
-            return {"checkpoints": rows[:payload.get("limit") or 10]}
-        if op == "graph_purge":
-            self.checkpoints.clear()
-            self.writes.clear()
-            return {"ok": True}
+            rows = sorted((k[2] for k in self.checkpoints if k[:2] == key))
+            cid = payload.get("checkpoint_id") or (rows[-1] if rows else None)
+            row = self.checkpoints.get((thread, ns, cid))
+            return {"checkpoint": row, "writes": sorted(self.writes.get((thread, ns, cid), {}).values(), key=lambda w: (w["task_id"], w["idx"]))}
         raise AssertionError(op)
 
 
@@ -86,23 +87,25 @@ def test_graph_without_saver_is_unchanged():
     assert log == ["a", "b", "c"]
 
 
-def test_crash_after_b_resumes_at_c_without_rerunning_finished_nodes():
+def test_crash_then_rerun_reenters_from_entry_and_purges_prior_progress():
     server, log = FakeServer(), []
     with pytest.raises(Crash):
         exec_graph.run(handlers(log, crash_at="c"), "a", graph_spec=SPEC, checkpointer=saver(server), thread_id=THREAD)
     assert log == ["a", "b", "c"]
     log.clear()
     path = exec_graph.run(handlers(log), "a", graph_spec=SPEC, checkpointer=saver(server), thread_id=THREAD)
-    assert log == ["c"], "finished nodes must not run again"
+    assert log == ["a", "b", "c"], "re-entry: resume is replay of tool steps, not a graph jump"
     assert path == ["a", "b", "c", "done"]
 
 
-def test_resume_refuses_a_changed_plan_pin():
+def test_same_thread_with_changed_pin_is_refused():
     server, log = FakeServer(), []
     with pytest.raises(Crash):
         exec_graph.run(handlers(log, crash_at="b"), "a", graph_spec=SPEC, checkpointer=saver(server), thread_id=THREAD)
     with pytest.raises(RuntimeError, match="graph_drift"):
-        exec_graph.run(handlers([]), "a", graph_spec=SPEC, checkpointer=saver(server, pin="plan-8:base-a"), thread_id=THREAD)
+        saver(server, pin="plan-8:base-a").put({"configurable": {"thread_id": THREAD, "checkpoint_ns": ""}},
+                                               {"id": "00ff", "v": 1, "ts": "", "channel_values": {}, "channel_versions": {},
+                                                "versions_seen": {}, "pending_sends": [], "updated_channels": None}, {}, {})
 
 
 def test_stale_lease_stops_before_any_checkpoint_write():
