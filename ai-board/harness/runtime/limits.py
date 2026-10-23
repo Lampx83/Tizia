@@ -68,6 +68,23 @@ def loop_adaptive(env=None) -> dict:
     }
 
 
+def react_plan(env=None) -> dict:
+    """Gate 2 ReAct loop caps + stuck rules; flag AI_BOARD_REACT_PLAN (contract default) gates use."""
+    env = os.environ if env is None else env
+    spec = _parsed()["limits"]["react_plan"]
+    raw = env.get(spec["flag"])
+    return {
+        "enabled": spec["default_enabled"] if raw in (None, "") else raw == "1",
+        "model_calls": spec["model_calls"],
+        "tool_calls": spec["tool_calls"],
+        "observation_chars": spec["observation_chars"],
+        "soft_start": spec["soft_start"],
+        "soft_step": spec["soft_step"],
+        "same_call_repeats": spec["stuck"]["same_call_repeats"],
+        "no_progress_steps": spec["stuck"]["no_progress_steps"],
+    }
+
+
 def budget(env=None) -> dict:
     """Mặc định Budget + ChildBudget; BUDGET_MAX_<KEY> override từng khoá (trừ child_*)."""
     env = os.environ if env is None else env

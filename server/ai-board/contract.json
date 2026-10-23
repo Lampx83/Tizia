@@ -53,6 +53,20 @@
       "flag": "AI_BOARD_ADAPTIVE_BUDGET", "default_enabled": false,
       "adaptive_why": "Flag on: soft budget = soft_start + soft_step per progress signal (new read range, accepted edit, changed check state), capped at model_calls; stuck stops the subtask as blocked. Off = fixed caps above."
     },
+    "react_plan": {
+      "_why": "Gate 2 ReAct planning loop (gates/react_plan.py). Read-only tools only; model_calls and tool_calls are per request. Flag off = one-shot plan as before.",
+      "flag": "AI_BOARD_REACT_PLAN",
+      "default_enabled": false,
+      "model_calls": 6,
+      "tool_calls": 12,
+      "observation_chars": 1500,
+      "soft_start": 3,
+      "soft_step": 1,
+      "stuck": {
+        "same_call_repeats": 2,
+        "no_progress_steps": 2
+      }
+    },
     "budget": {
       "_why": "Defaults of runtime/budget.py Budget (one run) and ChildBudget (one loop). BUDGET_MAX_<KEY> overrides for a measured run only.",
       "model_calls": 40, "tool_calls": 200, "tokens": 200000, "retries": 3, "units": 600,

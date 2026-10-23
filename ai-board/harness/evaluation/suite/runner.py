@@ -201,6 +201,7 @@ def cmd_run(args, deps=None) -> int:
         return 2
     os.environ["AI_BOARD_GATE25_FIXES"] = fixes
     os.environ["AI_BOARD_GATE25_ANSWERED"] = "1" if args.gate25_answered else ""
+    os.environ["AI_BOARD_REACT_PLAN"] = "1" if args.react_plan else ""
     os.environ["AI_BOARD_GATE25_SIM_USER"] = "1" if args.gate25_sim_user else ""
     os.environ["AI_BOARD_BEST_MATCH"] = args.best_match
     os.environ["AI_BOARD_RETRIEVAL"] = args.retrieval if args.retrieval in ("literal", "model") else ""
@@ -233,6 +234,7 @@ def cmd_run(args, deps=None) -> int:
             **({"timing_conditions": timing} if timing else {}),
             **({"winner_rule": args.winner_rule, "winner_rule_sha": hashlib.sha256(args.winner_rule.encode("utf-8")).hexdigest()[:16]} if args.winner_rule else {}),
             **({"gate25_answered": True} if args.gate25_answered else {}), **({"gate25_sim_user": True} if args.gate25_sim_user else {}),
+            **({"react_plan": True} if args.react_plan else {}),
             **({"skill_variant": variant, "skill_variant_sha": {v: _sha(VARIANT_FILES[v]) for v in variant}} if variant else {})}
     if prov["dirty"] and not args.allow_dirty:
         print("[suite] working tree has uncommitted changes: commit them (or --allow-dirty for a throwaway run)", file=sys.stderr)
@@ -273,6 +275,7 @@ def cmd_run(args, deps=None) -> int:
             + (f"-f25-{fixes.replace(',', '+') or 'none'}" if fixes != plan_validate.DEFAULT_FIXES else "")
             + ("-ans" if args.gate25_answered else "")
             + ("-simuser" if args.gate25_sim_user else "")
+            + ("-react" if args.react_plan else "")
             + ("-bm-adv" if args.best_match else "")
             + ("-ret-lit" if args.retrieval == "literal" else "-ret-model" if args.retrieval == "model" else "")
             + (f"-loop{'' if args.tool_loop == '1' else args.tool_loop}" if args.tool_loop else "")
@@ -498,6 +501,7 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--guards", default="", help="gate 3 guards to switch on (comma list of noop, refs, schema); default none")
     run.add_argument("--gate25-fixes", default=None, help="gate 2.5 patches on (comma list: quotes, tokens, context, retry, literal, reasoning; none = off); default none")
     run.add_argument("--gate25-answered", action="store_true", help="gate 2.5 answers clarifications settled by a verbatim request/source quote and reruns the validator; default off")
+    run.add_argument("--react-plan", action="store_true", help="gate 2 ReAct planning loop with read-only tools (AI_BOARD_REACT_PLAN); default off")
     run.add_argument("--gate25-sim-user", action="store_true", help="ceiling measurement: a simulated requester answers the validator's question with the gold page; never a product setting")
     run.add_argument("--best-match", choices=["advisory"], default="", help="best_match mismatch recorded in trace instead of rejecting plan at gates 1 and 2.5; default off (reject)")
     run.add_argument("--retrieval", choices=("off", "literal", "model"), default="off", help="gate 1 retrieval: model = the model names up to 4 strings and the harness greps them at the pinned sha; literal = quoted strings in the request shortlist candidate files (git grep -F at the pinned sha)")
