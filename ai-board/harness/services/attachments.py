@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 
+from runtime import limits
 from runtime.budget import BudgetExhausted
 
 CONTRACT = Path(__file__).resolve().parents[2].parent / 'server/ai-board/contract.json'
@@ -21,7 +22,7 @@ SCANNED_MIN_CHARS = 20
 
 def enabled(env=None) -> bool:
     env = os.environ if env is None else env
-    return str(env.get('AI_BOARD_MULTIMODAL', '')).strip().lower() in ('1', 'true', 'on', 'yes')
+    return limits.truthy(env.get('AI_BOARD_MULTIMODAL'))
 
 
 def _limits() -> dict:

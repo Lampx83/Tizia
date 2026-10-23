@@ -11,6 +11,11 @@ CONTRACT_PATH = Path(__file__).resolve().parents[3] / "server" / "ai-board" / "c
 _FLOAT_KEYS = {"wall_clock_s", "child_wall_clock_s"}
 
 
+def truthy(raw) -> bool:
+    """Flag env value on: 1/true/on/yes (case-insensitive)."""
+    return str(raw or "").strip().lower() in ("1", "true", "on", "yes")
+
+
 @lru_cache(maxsize=1)
 def _raw() -> bytes:
     return CONTRACT_PATH.read_bytes()
@@ -60,7 +65,7 @@ def loop_adaptive(env=None) -> dict:
     spec = _parsed()["limits"]["loop"]
     raw = env.get(spec["flag"])
     return {
-        "enabled": spec["default_enabled"] if raw in (None, "") else raw == "1",
+        "enabled": spec["default_enabled"] if raw in (None, "") else truthy(raw),
         "soft_start": spec["soft_start"],
         "soft_step": spec["soft_step"],
         "same_call_repeats": spec["stuck"]["same_call_repeats"],
@@ -74,7 +79,7 @@ def react_plan(env=None) -> dict:
     spec = _parsed()["limits"]["react_plan"]
     raw = env.get(spec["flag"])
     return {
-        "enabled": spec["default_enabled"] if raw in (None, "") else raw == "1",
+        "enabled": spec["default_enabled"] if raw in (None, "") else truthy(raw),
         "model_calls": spec["model_calls"],
         "tool_calls": spec["tool_calls"],
         "observation_chars": spec["observation_chars"],
@@ -110,7 +115,7 @@ def sandbox_tool(env=None) -> dict:
     """run_in_sandbox limits; enabled only when flag env == "1" (contract default off)."""
     env = os.environ if env is None else env
     spec = _parsed()["limits"]["sandbox_tool"]
-    return {**spec, "enabled": env.get(spec["flag"]) == "1", "allowed_argv": [tuple(p) for p in spec["allowed_argv"]]}
+    return {**spec, "enabled": truthy(env.get(spec["flag"])), "allowed_argv": [tuple(p) for p in spec["allowed_argv"]]}
 
 
 def scaled_limit(kind: str, n: int) -> int:
