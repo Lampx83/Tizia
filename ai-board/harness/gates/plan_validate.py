@@ -175,7 +175,46 @@ def source_evidence(request: dict, plan: dict, state: dict) -> tuple[str | None,
         pins = tuple(pinned_words(task)) if 'pinned' in fixes() else ()
         chunks.append(f'FILE {path} at {sha}\n' + file_context.excerpt(text, list(dict.fromkeys([*pins, *words])),
             budget=6000 if wide else 3500, filename=path, pinned=pins))
+        if 'targetpresent' in fixes() and pins and (lines := _anchor_lines(text, pins)):
+            chunks.append(f'ANCHOR LINES {path} at {sha}\n' + lines)
     return sha, files, '\n\n'.join(chunks)[:16000]
+
+
+_FILE_SUFFIX = re.compile(r'^\.(html?|css|m?js|json|md|py)$')
+
+
+def _anchor_in(anchor: str, text: str) -> bool:
+    """Anchor declared in source: quoted phrase as substring; `.name`/`#name` only as a class/id attribute or CSS selector."""
+    if not anchor[:1] in '.#':
+        return _squash(anchor).lower() in _squash(text).lower()
+    if _FILE_SUFFIX.match(anchor):
+        return False
+    name = re.escape(anchor[1:])
+    if anchor[0] == '.':
+        pattern = rf'class\s*=\s*["\'][^"\']*\b{name}\b|\.{name}\s*[{{,:>.\s]'
+    else:
+        pattern = rf'id\s*=\s*["\']{name}["\']|#{name}\s*[{{,:>.\s]'
+    return bool(re.search(pattern, text))
+
+
+def _anchor_lines(text: str, anchors) -> str:
+    """Source lines holding a plan anchor; the excerpt can cut the selector the plan names."""
+    hits = [line.strip() for line in text.splitlines() if any(_anchor_in(a, line) for a in anchors)]
+    return '\n'.join(hits[:8])
+
+
+def target_anchored(plan: dict, files: dict, request: dict) -> bool:
+    """`targetpresent` fix: each subtask's own file holds one of its anchors, and no quoted request text repeats there (ambiguous)."""
+    if 'targetpresent' not in fixes() or not plan.get('subtasks'):
+        return False
+    literals = [_squash(lit).lower() for lit in file_context.literals(request.get('subject'), request.get('body'))]
+    for task in plan['subtasks']:
+        text = _squash(files.get(task['file'], '')).lower()
+        if not any(_anchor_in(a, files.get(task['file'], '')) for a in pinned_words(task)):
+            return False
+        if any(lit and text.count(lit) > 1 for lit in literals):
+            return False
+    return True
 
 
 def _squash(text: str) -> str:
@@ -469,6 +508,10 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
     validation, stop = validate(request)
     if stop:
         return stop
+    anchored = bool(request.get('grounding_required')) and target_anchored(plan, files, request)
+    if anchored and not validation['clear'] and validation.get('grounded'):
+        judge('target anchored', True, 'anchors verified in plan files; clarification not raised')
+        validation = {**validation, 'clear': True}
     if 'reasoning' in fixes() and _uncertain(validation) and budget.can_afford():
         # A hard case gets one more pass with thinking on. It can only confirm the block or open a review: it never passes a plan itself.
         second, second_stop = validate(request, think=True)
@@ -518,10 +561,14 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                 raise ValueError('plan cần sửa renderer hiện có: ' + ', '.join(sorted(required)))
             if 'LƯU Ý: chữ người dùng nhắc KHÔNG nằm' in (state.get('planning_context') or '') and not targets.intersection(state.get('source_targets') or []):
                 raise ValueError('plan không sửa module đang render nội dung người dùng yêu cầu')
-            best_match.enforce(state.get('best_match'), targets,
-                               f"plan không sửa file khớp nhiều cụm người dùng viết nhất: {state.get('best_match')}", judge,
-                               contradicted=literal_contradicts(request, state.get('best_match'), files,
-                                                                state.get('checkout_source') or Path(__file__).resolve().parents[3], sha))
+            contradicted = literal_contradicts(request, state.get('best_match'), files,
+                                               state.get('checkout_source') or Path(__file__).resolve().parents[3], sha)
+            if anchored and not contradicted:
+                judge('best_match', True, 'targetpresent: anchors verified in plan files; advisory skipped')
+            else:
+                best_match.enforce(state.get('best_match'), targets,
+                                   f"plan không sửa file khớp nhiều cụm người dùng viết nhất: {state.get('best_match')}", judge,
+                                   contradicted=contradicted)
             state['grounding'] = checked_grounding(validation, plan, sha, files)
             judge("source grounding", True, f"{len(state['grounding']['evidence'])} quotes matched verbatim in {', '.join(files)}")
         except ValueError as error:
