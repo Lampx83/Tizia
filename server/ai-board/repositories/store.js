@@ -84,6 +84,35 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       await db.run(insertEvent, [root.id, event.type, event.actorType, String(event.actorId), `${root.status}->${status}`,
         note, event.detail ?? null, event.idem, now]);
     }
+    if (status === 'done' || status === 'cancelled' || PHASES[phase]?.terminal) {
+      await recordFolderDecision(root, status === 'done' || status === 'cancelled' ? status : 'blocked', reason ?? phase, now);
+    }
+  }
+
+  /** Ghi quyết định tất định của root đã kết thúc (folder only); không gọi model. Ghi đè khi root đóng lại. */
+  async function recordFolderDecision(root, outcome, stopReason, now) {
+    const request = await db.get('SELECT id, title, folder_id, clarified_spec FROM requests WHERE id=?', [root.source_request_id]);
+    if (!request?.folder_id) return;
+    const plan = parseJson((await db.get(`SELECT plan_json FROM ai_plans WHERE root_ticket_id=? AND status='valid'
+      ORDER BY revision DESC LIMIT 1`, [root.id]))?.plan_json) ?? {};
+    const subtasks = (plan.steps || []).map((step, index) => ({
+      order: step.order ?? index + 1, title: step.title ?? null, files: step.allowed_scope || [],
+      anchor: step.anchor ?? step.selector ?? null,
+    }));
+    const verdict = parseJson((await db.get(`SELECT evidence_json FROM ai_runs WHERE ticket_id=? AND outcome IS NOT NULL
+      ORDER BY id DESC LIMIT 1`, [root.id]))?.evidence_json)?.verdict ?? null;
+    const pr = await latestPullRequest(root.id);
+    const verdictSummary = verdict && { outcome: verdict.outcome, gate_reached: verdict.gate_reached, reason: verdict.reason, failure_class: verdict.failure_class };
+    await db.run(`
+      INSERT INTO ai_folder_decisions(root_ticket_id, folder_id, request_id, title, outcome, stop_reason, spec, cut_json,
+        subtasks_json, verdict_json, pr_url, created_at, finished_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (root_ticket_id) DO UPDATE SET outcome=EXCLUDED.outcome, stop_reason=EXCLUDED.stop_reason,
+        spec=EXCLUDED.spec, cut_json=EXCLUDED.cut_json, subtasks_json=EXCLUDED.subtasks_json,
+        verdict_json=EXCLUDED.verdict_json, pr_url=EXCLUDED.pr_url, finished_at=EXCLUDED.finished_at
+    `, [root.id, request.folder_id, request.id, request.title, outcome, stopReason ?? null,
+      request.clarified_spec ?? null, JSON.stringify(plan.non_goals || []), JSON.stringify(subtasks),
+      verdictSummary ? JSON.stringify(verdictSummary) : null, pr?.url ?? null, root.created_at, now]);
   }
 
   const createRequestTransaction = (input) => db.tx(async () => {
@@ -288,7 +317,36 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     if (kept < doneLines.length) text += `\n(+${doneLines.length - kept} việc cũ hơn đã làm)`;
     const recent = rows.slice(-2).map((r) => `[#${r.id}] ${clip(r.title, 150)}: ${clip(r.clarified_spec || r.detail, 330)}`)
       .join('\n').slice(0, cap.recent_chars);
-    return { text: text.slice(0, cap.brief_chars), recent, owned_files: owned };
+    return { text: text.slice(0, cap.brief_chars), decisions: await decisionsSection(folder.id), recent, owned_files: owned };
+  }
+
+  /** L4: quyết định các root đã kết thúc, mới nhất trước; vượt trần thì bỏ mục cũ nhất, ghi số đã bỏ. */
+  async function decisionsSection(folderId) {
+    const cap = LIMITS.context;
+    const records = await db.all(`
+      SELECT title, outcome, stop_reason, spec, cut_json, subtasks_json, pr_url FROM ai_folder_decisions
+      WHERE folder_id = ? ORDER BY finished_at DESC, id DESC LIMIT ?
+    `, [Number(folderId), cap.decisions_max]);
+    const clip = (s, n) => { const t = String(s ?? '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
+    const lines = records.map((r) => {
+      const subtasks = (parseJson(r.subtasks_json) || []).map((s) => `${clip(s.title, 60)}${s.files?.length ? ` (${s.files.join(', ')}${s.anchor ? ` @${clip(s.anchor, 40)}` : ''})` : ''}`);
+      const cut = parseJson(r.cut_json) || [];
+      return [`- ${clip(r.title, 120)} → ${r.outcome}${r.stop_reason ? ` (${clip(r.stop_reason, 120)})` : ''}`,
+        r.spec ? `  Đã chốt: ${clip(r.spec, 220)}` : null,
+        cut.length ? `  Bỏ ngoài phạm vi: ${clip(cut.join('; '), 160)}` : null,
+        subtasks.length ? `  Việc: ${clip(subtasks.join('; '), 260)}` : null,
+        r.pr_url ? `  PR: ${r.pr_url}` : null].filter(Boolean).join('\n');
+    });
+    if (!lines.length) return '';
+    const RESERVE = 40; // chỗ cho dòng "(+N quyết định cũ hơn)"
+    let kept = 0;
+    while (kept < lines.length && lines.slice(0, kept + 1).join('\n').length <= cap.decisions_chars - RESERVE) kept += 1;
+    const dropped = records.length - kept;
+    const older = await db.get('SELECT COUNT(*) AS n FROM ai_folder_decisions WHERE folder_id = ?', [Number(folderId)]);
+    const omitted = dropped + Math.max(0, Number(older.n) - records.length);
+    const body = lines.slice(0, kept).join('\n');
+    const note = omitted ? `\n(+${omitted} quyết định cũ hơn)` : '';
+    return `Quyết định (mới nhất trước):\n${body}${note}`.slice(0, cap.decisions_chars);
   }
 
   // ── Vòng đời folder: draft → active → awaiting_merge → released → archived; mở lại → chu kỳ mới ──
@@ -1531,6 +1589,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       VALUES (?, ?, 'pre_pr_verdict', 'worker', ?, ?, ?, ?, ?, ?)
     `, [root.id, run.id, input.workerId, `running->${phase}`, note, verdict.reason,
       input.idempotencyKey, input.now]);
+    if (verdict.outcome === 'blocked') await recordFolderDecision(root, 'blocked', verdict.reason, input.now);
     return verdict;
   });
 
