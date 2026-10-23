@@ -14,8 +14,8 @@ export const protectedPlan = () => planOf({
   allowed_scope: ['server/contexts/content/x.js'], capabilities: ['content.write'], risk: 'medium',
 }, { allowed_scope: ['server/contexts/content/x.js'], capability: 'content.write', risk: 'medium' });
 export const corePlan = () => planOf({
-  allowed_scope: ['server/db.js'], capabilities: ['core.server'], risk: 'high',
-}, { allowed_scope: ['server/db.js'], capability: 'core.server', risk: 'high' });
+  allowed_scope: ['server/contexts/learning/progress.js'], capabilities: ['core.server'], risk: 'high',
+}, { allowed_scope: ['server/contexts/learning/progress.js'], capability: 'core.server', risk: 'high' });
 
 export const gates = {
   3: { gate: 3, blocked: false, reason: null },

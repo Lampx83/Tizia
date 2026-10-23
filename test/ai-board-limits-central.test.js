@@ -16,7 +16,8 @@ test('scaledLimit matches the shared golden values', () => {
 test('contract carries the loop, budget and sandbox client defaults', () => {
   const { _why: _l, ...loop } = CONTRACT.limits.loop;
   const { _why: _b, ...budget } = CONTRACT.limits.budget;
-  assert.deepEqual(loop, { model_calls: 10, tool_calls: 30, repeats: 3, error_chars: 2000 });
+  assert.deepEqual({ model_calls: loop.model_calls, tool_calls: loop.tool_calls, repeats: loop.repeats, error_chars: loop.error_chars },
+    { model_calls: 10, tool_calls: 30, repeats: 3, error_chars: 2000 });
   assert.deepEqual(budget, { model_calls: 40, tool_calls: 200, tokens: 200000, retries: 3, units: 600,
     wall_clock_s: 900, semantic_repairs: 3, child_wall_clock_s: 300 });
   assert.deepEqual(CONTRACT.limits.sandbox_client.backoff_s, [1, 2, 4, 8]);

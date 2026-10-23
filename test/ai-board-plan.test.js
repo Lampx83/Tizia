@@ -217,8 +217,8 @@ test('protected plan waits for explicit admin authorization; core plan is human-
   {
     const { db, store, ticket, run } = await fixture();
     const corePlan = plan({
-      allowed_scope: ['server/db.js'], capabilities: ['core.server'], risk: 'high',
-      steps: [{ ...plan().steps[0], allowed_scope: ['server/db.js'], capability: 'core.server', risk: 'high' }],
+      allowed_scope: ['server/contexts/learning/progress.js'], capabilities: ['core.server'], risk: 'high',
+      steps: [{ ...plan().steps[0], allowed_scope: ['server/contexts/learning/progress.js'], capability: 'core.server', risk: 'high' }],
     });
     const result = await submit(store, ticket, run, corePlan);
     assert.equal(result.status, 'human_owned');
