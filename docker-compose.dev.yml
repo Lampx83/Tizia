@@ -45,6 +45,17 @@ services:
       AI_BOARD_SERVER_URL: http://tizia-dev:8041
     networks: [default, sandbox-api]
 
+  # Worker thứ hai (profile multi-worker): mirror docker-compose.yml, kế thừa worker dev ở file này.
+  ai-board-worker-2:
+    extends: { service: ai-board-worker }
+    container_name: tizia-ai-board-worker-2
+    hostname: ai-board-worker-2
+    profiles: !override [multi-worker]
+    volumes: !override
+      - ai-board-repo-2:/repo
+      - ai-board-memory-2:/opt/ai-board/ai-board/memory
+      - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
+
   image-registry:
     extends: { file: docker-compose.yml, service: image-registry }
 
@@ -65,6 +76,8 @@ volumes:
   tizia-postgres-data:
   ai-board-repo:
   ai-board-memory:
+  ai-board-repo-2:
+  ai-board-memory-2:
   sandbox-runner-state:
   sandbox-registry:
   seaweedfs-data:

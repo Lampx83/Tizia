@@ -356,6 +356,7 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
 
     run_id = f"g5-{uuid.uuid4().hex[:24]}"  # one id per Gate 5 invocation; a retry is a new invocation
     result = None
+    created_run = busy = False
     try:
         # same run_id: the runner answers a repeated create for a live run with that run's view, so a lost reply is safe
         # to repeat. 429 (busy) = a previous VM is still tearing down. A 5xx burns the id (run 'failed'), so it is not retried.
@@ -369,6 +370,7 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
         with lease:
             live()
             created = _retry(lambda: client.create(run_id, MANIFEST, **request_limits), lambda error: error.status in (0, 429), deadline=deadline)
+            created_run = True
             lease.ready = True
             live()
             client.upload(run_id, archive, **request_limits)
@@ -393,12 +395,16 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
     except SandboxError as error:
         if deadline is not None and time.monotonic() >= deadline:
             return _blocked("sandbox budget: wall_clock_s")
+        if error.status == 429 and not created_run:
+            busy = True
+            return _blocked("sandbox runner busy", "busy")
         return _blocked(f"sandbox {error.phase}: {error.code}")
     except (ValueError, KeyError, TypeError, AttributeError, OSError, tarfile.TarError):
         return _blocked("sandbox trả kết quả không hợp lệ")
     finally:
         try:
-            destroyed = _retry(lambda: client.destroy(run_id), lambda error: error.status == 0 or error.status >= 500)
+            # busy: no VM was created; a failing destroy would replace the busy verdict with cleanup_unconfirmed
+            destroyed = {"state": "destroyed"} if busy else _retry(lambda: client.destroy(run_id), lambda error: error.status == 0 or error.status >= 500)
             if isinstance(destroyed, dict) and destroyed.get("state") not in {"destroyed", "expired", "failed"}:
                 raise SandboxError("cleanup_unconfirmed", "destroy")
             if isinstance(result, dict) and isinstance(result.get("evidence"), dict):

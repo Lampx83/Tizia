@@ -28,7 +28,7 @@ def runner(plan,ticket_id,max_units,**kwargs):
     return execute_pre_pr(plan,ticket_id=ticket_id,checkout_source=root,deps=SimpleNamespace(),budget=Budget(),run_gate=run_gate,
         cleanup=lambda *args,**kw:None,policy=kwargs['policy'],accepted_policy_hash=kwargs['accepted_policy_hash'])
 
-worker=HttpWorker(WorkerClient(sys.argv[1],sys.argv[2]),worker_id='worker-probe',mode='active',
+worker=HttpWorker(WorkerClient(sys.argv[1],sys.argv[2]),worker_id=sys.argv[3] if len(sys.argv)>3 else 'worker-probe',mode='active',
     planner=lambda _:({},0),change_runner=runner,candidates=SimpleNamespace(discard=lambda _:None))
 try:
     print(json.dumps({'worker':worker.run_once(),'gate4_calls':len(calls)}))

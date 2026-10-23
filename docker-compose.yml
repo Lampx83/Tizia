@@ -108,6 +108,18 @@ services:
       - ai-board-memory:/opt/ai-board/ai-board/memory
       - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
 
+  # Worker thứ hai (profile multi-worker, bật cùng --profile ai-board). Repo và memory riêng: clone git và
+  # file memory không ghi chung giữa hai worker. Không nằm trong profile ai-board nên mặc định vẫn chỉ 1 worker.
+  ai-board-worker-2:
+    extends: { service: ai-board-worker }
+    container_name: tizia-ai-board-worker-2
+    hostname: ai-board-worker-2  # worker id = hostname + "-worker"; worker 1 dùng container id
+    profiles: !override [multi-worker]
+    volumes: !override
+      - ai-board-repo-2:/repo
+      - ai-board-memory-2:/opt/ai-board/ai-board/memory
+      - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
+
   image-registry:
     container_name: tizia-image-registry
     image: registry:2@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
@@ -188,6 +200,8 @@ volumes:
   tizia-postgres-data:
   ai-board-repo:
   ai-board-memory:
+  ai-board-repo-2:
+  ai-board-memory-2:
   sandbox-runner-state:
   sandbox-registry:
   seaweedfs-data:

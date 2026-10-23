@@ -322,7 +322,7 @@ def test_create_retries_a_transient_runner_error_with_the_same_run_id(tmp_path, 
 def test_create_gives_up_after_three_attempts_and_never_retries_a_terminal_error(tmp_path, sleeps):
     busy = Flaky(create_status=429, times=99)
     result = sandbox_verify.run(state(checkout(tmp_path)), client=busy)
-    assert result["blocked"] and result["failure_class"] == "transient" and busy.calls.count("create") == 3
+    assert result["blocked"] and result["failure_class"] == "busy" and busy.calls.count("create") == 3
     sleeps.clear()
     assert sandbox_verify.run(state(checkout(tmp_path)), client=FakeClient(fail="create"))["blocked"]  # 502 create_failed: id burned
     assert sleeps == []
@@ -355,3 +355,18 @@ def test_every_state_key_the_guest_gate_reads_is_uploaded():
         read |= set(re.findall(r"""state(?:\.get\(|\[)["']([a-z_]+)["']""", (root / rel).read_text(encoding="utf-8")))
     written_or_guest_side = {"evidence", "base_pages_dir", "full_checkout"}  # gate output / set by gate5_guest / replaced by checkout_dir
     assert read - written_or_guest_side <= set(sandbox_verify.GUEST_STATE_KEYS), read
+
+
+def test_busy_runner_at_create_blocks_as_busy_and_never_destroys(tmp_path, monkeypatch):
+    monkeypatch.setattr(sandbox_verify, "_sleep", lambda *_: None)
+
+    class Busy(FakeClient):
+        def create(self, run_id, manifest):
+            self.calls.append("create")
+            raise SandboxError("busy", "create", 429)
+
+    client = Busy()
+    result = sandbox_verify.run(state(checkout(tmp_path)), client=client)
+    assert result["blocked"] is True and result["failure_class"] == "busy"
+    assert result["reason"] == "sandbox runner busy"
+    assert "destroy" not in client.calls

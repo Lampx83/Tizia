@@ -33,6 +33,11 @@ class CleanupUnconfirmed(RuntimeError):
     """VM teardown not confirmed: stop the subtask as blocked, same as Gate 5."""
 
 
+class RunnerBusy(RuntimeError):
+    """Runner still busy after retries: worker requeues the ticket, no retry spent."""
+    failure_class = "busy"
+
+
 def enabled(env=None) -> bool:
     return limits.sandbox_tool(env)["enabled"]
 
@@ -145,6 +150,8 @@ class Runner:
                     and (error.status in (0, 429) or error.status >= 500)
                 self._record(receipt, started)
                 if not retry:
+                    if error.status == 429:
+                        raise RunnerBusy(f"sandbox runner busy (run {session.run_id})")
                     return json.dumps({"rc": None, "error": error.code, "phase": error.phase}, ensure_ascii=False)
         raise AssertionError("unreachable")
 
