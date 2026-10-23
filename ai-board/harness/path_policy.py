@@ -25,7 +25,7 @@ def check(path, op: str = "read") -> dict:
     normalized = normalize(path)
     if normalized is None:
         return {"allow": False, "reason": f"{op}: path không hợp lệ"}
-    if any(p.search(normalized) for p in _DENY):
+    if any(p.search(normalized) or p.search(normalized + "/") for p in _DENY):
         return {"allow": False, "reason": f"{op}: {normalized} thuộc vùng AI Board/hạ tầng (deny_paths)"}
     return {"allow": True, "reason": ""}
 
