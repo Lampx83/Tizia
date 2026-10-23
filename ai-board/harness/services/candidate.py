@@ -108,6 +108,10 @@ class ScopeViolation(ValueError):
     """Candidate tried to write outside its child's allowed scope — critical, never repaired."""
 
 
+class PathDenied(ValueError):
+    """Candidate changes a deny_paths file; raised before push so nothing reaches GitHub."""
+
+
 def _git_out(args: list[str], cwd) -> str:
     """git with stderr kept in the error message (CalledProcessError hides it)."""
     result = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, encoding="utf-8",
@@ -344,9 +348,18 @@ class Candidates:
         self.repo = repo
         self.github = github
 
+    def denied_paths(self, candidate: dict) -> list[str]:
+        """Reasons for paths the candidate changes that path_policy denies for writes; [] when none."""
+        changed = _git_out(["diff", "--no-renames", "--name-only", f"{candidate['base_sha']}..{candidate['head_sha']}"],
+                           self.repo).split()
+        return [path_policy.check(path, "write")["reason"] for path in changed if path_policy.denied(path, "write")]
+
     def publish(self, candidate: dict, *, title: str, body: str, labels=()) -> dict:
-        """Push the verified candidate, open (or find) its one PR into dev. Return the server's pull_request record.
-        Raise ValueError when GitHub's PR head is not the verified head (stale) or targets another base."""
+        """Push candidate, open (or find) its one PR into dev. Return server pull_request record.
+        PathDenied before any push on a denied path; ValueError on stale head or another base."""
+        reasons = self.denied_paths(candidate)
+        if reasons:
+            raise PathDenied(f"path_denied: {'; '.join(reasons)}"[:500])
         self.github.push(self.repo, candidate["branch"])
         pr = self.github.open_pull(candidate["branch"], title=title, body=body)
         if pr["head"]["sha"] != candidate["head_sha"]:

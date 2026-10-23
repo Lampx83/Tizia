@@ -13,24 +13,14 @@ import { LIMITS } from '../server/ai-board/store.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
 import { checkPostMergeWatch, pendingPostMergeWatch } from '../server/ai-board/post-merge-watch-async.js';
 
-const SELF_OFF = 'self requests disabled (LF80 path policy); fixture creates self requests, now refused'
-
 const KEY = 'fixture-worker-key-32-characters-long';
 const SKILL = 'ai-board/harness/skills/edit-html-text/SKILL.md';
 const SHA = (c) => c.repeat(40);
 const DAY = 24 * 3600_000;
 const PMW = LIMITS.self_improve.post_merge_watch; // {days, min_runs, max_drop_pts}
 
-const EVAL = { accepted: true, base_sha: SHA('a'), variant_sha: SHA('b'), tasks: 6, wins: 3, losses: 1, ties: 2,
-  gpu_s: 100, gpu_s_limit: 2400, gold: false, dropped: [], strata: { base: {}, variant: {} },
-  config: { base: {}, variant: {} }, pairs: [] };
-const selfGates = () => [{ gate: 3, blocked: false }, { gate: 4, blocked: false, issues: [] },
-  { gate: 5, blocked: false, smoke_passed: false, http_observed: false, runner: 'eval', eval: EVAL },
-  { gate: 5.5, blocked: false, risk_level: 'high', risk_signals: [{ name: 'catalog_tier', tier: 'high', detail: SKILL }] }];
 const selfCandidate = { branch: 'ai-board/2026-09-28-ticket-9-abc123', base_sha: SHA('a'), head_sha: SHA('b'),
   commits: [{ sha: SHA('b'), title: 't', files: [SKILL] }] };
-const VERDICT = { outcome: 'needs_review', gate_reached: 5.5, reason: 'risk triage requires human review',
-  budget_used: 10, failure_class: null, repairs: [], candidate: selfCandidate, gates: selfGates() };
 
 async function fixture() {
   const db = await openBoard({ users: [
@@ -65,38 +55,19 @@ async function fixture() {
   const check = (prNumber) => worker('/api/ai-board/worker/self-improve/post-merge-watch/check', { pr_number: prNumber });
 
   let n = 0;
-  /** Tạo + admin duyệt plan + thực hiện 1 yêu cầu self trọn vẹn, trả lease đang giữ + verdict. */
-  async function selfRun(targetFile = SKILL) {
+  let runId = 900000;
+  /** Self PR đã có trong DB: root self (createRequestWithRoot, route self đã tắt) + run mang pull_request.number, rồi báo merged. */
+  async function selfPr(prNumber, { target = SKILL, closedAt = Date.now() } = {}) {
     n += 1;
-    const created = await store.createSelfRequest({ title: `Sửa skill ${n}`, detail: 'Chẩn đoán.', targetFile,
-      idempotencyKey: `pmw-self-${n}` });
-    const id = created.root_ticket_id;
-    const ticket = await store.claimNext({ workerId: 'w1', version: 't', mode: 'active', intent: 'plan' });
-    assert.equal(ticket.id, id);
-    const planLease = { workerId: 'w1', leaseToken: ticket.lease_token };
-    const planRun = await store.createRun(id, { ...planLease, trigger: 'plan', idempotencyKey: `pmw-plan-run-${n}` });
-    const step = { order: 1, title: 'Sửa', description: 'x', allowed_scope: [targetFile], acceptance: ['đổi'],
-      tests: ['pytest'], capability: 'self.config', risk: 'low', non_goals: [] };
-    const waiting = await store.submitPlan(id, { ...planLease, runId: planRun.id, budgetUsed: 1, idempotencyKey: `pmw-plan-${n}`,
-      plan: { domain: 'ai-board', goal: 'Sửa.', allowed_scope: [targetFile], acceptance: step.acceptance,
-        tests: step.tests, capabilities: ['self.config'], risk: 'low', non_goals: [], steps: [step] } });
-    await store.releaseLease(id, { ...planLease, outcome: 'planned', idempotencyKey: `pmw-release-${n}` });
-    await store.authorizePlan(id, waiting.plan_hash, 9);
-    const exec = await store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' });
-    const lease = { workerId: 'w1', leaseToken: exec.lease_token };
-    const run = await store.createRun(id, { ...lease, trigger: 'execute', idempotencyKey: `pmw-exec-run-${n}` });
-    await store.resumeAuthorizedPlan(id, { ...lease, runId: run.id });
-    await store.submitPrePrVerdict(id, { ...lease, runId: run.id, verdict: VERDICT, idempotencyKey: `pmw-verdict-${n}` });
-    return { id, run, lease };
-  }
-  /** Mở PR cho 1 self run vừa qua verdict rồi báo merged qua HTTP worker, closed_at tuỳ chọn. */
-  async function mergeSelfPr({ id, run, lease }, prNumber, { closedAt = Date.now(), files = [SKILL] } = {}) {
-    await store.recordPullRequest(id, { ...lease, runId: run.id, idempotencyKey: `pmw-pr-${prNumber}`,
-      pullRequest: { number: prNumber, url: `https://github.com/Lampx83/Tizia/pull/${prNumber}`, base: 'dev',
-        branch: selfCandidate.branch, base_sha: selfCandidate.base_sha, head_sha: selfCandidate.head_sha } });
-    await store.releaseLease(id, { ...lease, outcome: 'planned', idempotencyKey: `pmw-post-release-${prNumber}` });
+    const created = await store.createRequestWithRoot({ ownerUserId: 9, ownerDomain: 'ai-board', ownerDisplayName: 'ai-board',
+      title: `Sửa skill ${n}`, detail: 'Chẩn đoán.', selfTarget: target, idempotencyKey: `pmw-self-${n}` });
+    runId += 1;
+    const now = Date.now();
+    await db.prepare(`INSERT INTO ai_runs(id, ticket_id, attempt, trigger, outcome, idempotency_key, evidence_json, created_at, updated_at)
+      VALUES (?, ?, 1, 'execute', 'needs_review', ?, ?, ?, ?)`).run(runId, created.root_ticket_id, `pmw-run-${runId}`,
+      JSON.stringify({ pull_request: { number: prNumber }, verdict: { candidate: selfCandidate } }), now, now);
     const res = await worker('/api/ai-board/worker/pull-requests/state',
-      { number: prNumber, state: 'merged', closed_at: closedAt, files });
+      { number: prNumber, state: 'merged', closed_at: closedAt, files: [target] });
     assert.equal(res.status, 200);
   }
   let prodId = 100;
@@ -133,38 +104,34 @@ async function fixture() {
       await insertProdRun({ createdAt, outcome, prNumber });
     }
   }
-  return { db, store, call, worker, nights, pending, check, selfRun, mergeSelfPr, insertProdRun, insertMergedPr,
+  return { db, store, call, worker, nights, pending, check, selfPr, insertProdRun, insertMergedPr,
     seedWindow, close: () => server.close() };
 }
 
-test('a merged self PR is not pending until the "after" window (days) has fully elapsed', { skip: SELF_OFF }, async () => {
+test('a merged self PR is not pending until the "after" window (days) has fully elapsed', async () => {
   const f = await fixture();
   try {
-    const self = await f.selfRun();
     const closedAt = Date.now() - (PMW.days - 1) * DAY; // còn 1 ngày nữa mới đủ cửa sổ sau
-    await f.mergeSelfPr(self, 60, { closedAt });
+    await f.selfPr(60, { closedAt });
     assert.deepEqual((await f.pending()).body.pending, []);
   } finally { f.close(); }
 });
 
-test('a merged non-self PR never becomes a pending post-merge watch', { skip: SELF_OFF }, async () => {
+test('a merged non-self PR never becomes a pending post-merge watch', async () => {
   const f = await fixture();
   try {
-    const other = await f.selfRun(); // dùng hạ tầng self để mở PR nhanh, rồi đổi request về type khác
-    const requestId = (await f.db.prepare('SELECT source_request_id FROM ai_tickets WHERE id=?').get(other.id)).source_request_id;
-    (await f.db.prepare("UPDATE requests SET type='other' WHERE id=?").run(requestId));
     const closedAt = Date.now() - (PMW.days + 1) * DAY;
-    await f.mergeSelfPr(other, 61, { closedAt });
+    await f.insertProdRun({ createdAt: closedAt, outcome: 'ready_for_pr', prNumber: 61 });
+    await f.insertMergedPr(61, closedAt);
     assert.deepEqual((await f.pending()).body.pending, []);
   } finally { f.close(); }
 });
 
-test('fewer than min_runs production runs on either side: waiting, no conclusion, still pending next time', { skip: SELF_OFF }, async () => {
+test('fewer than min_runs production runs on either side: waiting, no conclusion, still pending next time', async () => {
   const f = await fixture();
   try {
-    const self = await f.selfRun();
     const closedAt = Date.now() - (PMW.days + 1) * DAY;
-    await f.mergeSelfPr(self, 70, { closedAt });
+    await f.selfPr(70, { closedAt });
     await f.seedWindow(closedAt - PMW.days * DAY, PMW.days * DAY, PMW.min_runs - 2, 0.9, 0.9); // trước: thiếu
     await f.seedWindow(closedAt, PMW.days * DAY, PMW.min_runs, 0.9, 0.9); // sau: đủ
 
@@ -183,12 +150,11 @@ test('fewer than min_runs production runs on either side: waiting, no conclusion
   } finally { f.close(); }
 });
 
-test('enough data, no meaningful drop: concluded ok, no revert, drops out of pending', { skip: SELF_OFF }, async () => {
+test('enough data, no meaningful drop: concluded ok, no revert, drops out of pending', async () => {
   const f = await fixture();
   try {
-    const self = await f.selfRun();
     const closedAt = Date.now() - (PMW.days + 1) * DAY;
-    await f.mergeSelfPr(self, 71, { closedAt });
+    await f.selfPr(71, { closedAt });
     await f.seedWindow(closedAt - PMW.days * DAY, PMW.days * DAY, PMW.min_runs, 0.8, 0.8);
     await f.seedWindow(closedAt, PMW.days * DAY, PMW.min_runs, 0.8, 0.8); // giống hệt trước: tụt 0 điểm
 
@@ -205,37 +171,30 @@ test('enough data, no meaningful drop: concluded ok, no revert, drops out of pen
   } finally { f.close(); }
 });
 
-test('a drop past the threshold creates exactly one self revert request, tier protected via the usual pipeline', { skip: SELF_OFF }, async () => {
+test('a drop is recorded without a revert request: self requests are refused, so the watch cannot open one', async () => {
   const f = await fixture();
   try {
-    const self = await f.selfRun('ai-board/harness/prompts/brainstorm.md');
     const closedAt = Date.now() - (PMW.days + 1) * DAY;
-    await f.mergeSelfPr(self, 72, { closedAt, files: ['ai-board/harness/prompts/brainstorm.md'] });
+    await f.selfPr(72, { target: 'ai-board/harness/prompts/brainstorm.md', closedAt });
     await f.seedWindow(closedAt - PMW.days * DAY, PMW.days * DAY, PMW.min_runs, 0.9, 0.9); // trước: 90%
     await f.seedWindow(closedAt, PMW.days * DAY, PMW.min_runs, 0.2, 0.2); // sau: 20% — tụt 70 điểm > ngưỡng
 
     const result = (await f.check(72)).body.watch;
     assert.equal(result.status, 'dropped');
     assert.ok(result.drop_ready_pts > PMW.max_drop_pts);
-    assert.ok(result.revert_request_id);
-
-    const revertRow = (await f.db.prepare('SELECT type, domain, owner_user_id FROM requests WHERE id=?').get(result.revert_request_id));
-    assert.equal(revertRow.type, 'self');
-    const tag = (await f.db.prepare(`SELECT tag FROM ai_ticket_tags tag JOIN ai_tickets t ON t.id = tag.ticket_id
-      WHERE t.source_request_id = ? AND tag.tag LIKE 'self_target:%'`).get(result.revert_request_id));
-    assert.equal(tag.tag, 'self_target:ai-board/harness/prompts/brainstorm.md'); // nhắm đúng file PR gốc đã sửa
-
+    assert.equal(result.revert_request_id, null);
     assert.deepEqual((await f.pending()).body.pending, []); // đã kết luận: không kiểm lại
 
-    // Báo lại (worker gọi lại check cùng PR) không tạo yêu cầu revert thứ hai — idempotency_key theo pr_number.
-    const again = await checkPostMergeWatch(f.db.d, 72, f.store.createSelfRequest);
-    assert.equal(again.revert_request_id, result.revert_request_id);
-    assert.equal((await f.db.prepare("SELECT COUNT(*) n FROM requests WHERE idempotency_key='self-revert:pr-72'").get()).n, 1);
+    const refused = await f.worker('/api/ai-board/worker/self-requests', { title: 'Tự revert PR #72', detail: 'x',
+      target_file: 'ai-board/harness/prompts/brainstorm.md', idempotency_key: 'self-revert:pr-72' });
+    assert.equal(refused.status, 403);
+    assert.equal(refused.body.error, 'self_request_disabled');
+    assert.equal((await f.db.prepare("SELECT COUNT(*) n FROM requests WHERE idempotency_key LIKE 'self-revert:%'").get()).n, 0);
 
     const admin = await f.nights();
     const watched = admin.post_merge_watch.find((w) => w.pr_number === 72);
     assert.equal(watched.status, 'dropped');
-    assert.equal(watched.revert_request_id, result.revert_request_id);
+    assert.equal(watched.revert_request_id, null);
   } finally { f.close(); }
 });
 

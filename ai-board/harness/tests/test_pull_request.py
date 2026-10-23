@@ -242,3 +242,26 @@ def test_pull_files_reads_every_page():
     assert len(files) == 101 and files[-1] == 'server/x.js'
     assert calls == ['/repos/Lampx83/Tizia/pulls/7/files?per_page=100&page=1',
                      '/repos/Lampx83/Tizia/pulls/7/files?per_page=100&page=2']
+
+
+def test_publish_refuses_a_denied_path_before_any_push(repos):
+    remote, clone, cand = repos
+    git(clone, 'checkout', '-q', BRANCH)
+    (clone / 'ai-board').mkdir()
+    (clone / 'ai-board' / 'worker.py').write_text('x', encoding='utf-8')
+    git(clone, 'add', 'ai-board/worker.py')
+    git(clone, 'commit', '-q', '-m', 'touch worker')
+    head = git(clone, 'rev-parse', 'HEAD')
+    git(clone, 'checkout', '-q', '--detach', 'dev')
+    cand = {**cand, 'head_sha': head, 'commits': [{'sha': head, 'title': 'touch worker', 'files': ['ai-board/worker.py']}]}
+    api = FakeApi(head_sha=head)
+    with pytest.raises(candidate.PathDenied, match='path_denied: write: ai-board/worker.py'):
+        Candidates(clone, github=github(remote, api)).publish(cand, title='t', body='b')
+    assert api.calls == []
+    assert subprocess.run(['git', '-C', str(remote), 'rev-parse', '--verify', '--quiet', f'refs/heads/{BRANCH}'],
+                          capture_output=True).returncode != 0
+
+
+def test_publish_allows_a_normal_path_before_push(repos):
+    remote, clone, cand = repos
+    assert Candidates(clone).denied_paths(cand) == []
