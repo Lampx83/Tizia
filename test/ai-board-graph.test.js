@@ -233,7 +233,7 @@ test('untrusted reason text is escaped in the panel', () => {
 });
 
 test('reduced motion turns off edge flow and running spin', () => {
-  const css = fs.readFileSync(new URL('../public/admin-request.html', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('../public/admin-request.html', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
   const from = css.indexOf('@media (prefers-reduced-motion: reduce) {\n    .g-edge.flow');
   assert.ok(from > 0, 'reduced-motion block for graph');
   const block = css.slice(from, css.indexOf('}\n  }', from) + 4);
