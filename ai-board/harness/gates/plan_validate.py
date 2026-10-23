@@ -108,9 +108,7 @@ CREATE TABLE IF NOT EXISTS request_messages (
 
 def build_prompt(request: dict, plan: dict, repo_context: str = '(không có)') -> str:
     """AIBOARD.md (context.manual) đứng đầu, trước prompt đã khoá — prefix KV giống hệt mọi lần gọi."""
-    thread = " | ".join(
-        f"{m.get('role')}: {m.get('body')}" for m in (request.get("thread") or [])
-    ) or "(không có)"
+    thread = context.thread_text(request.get("thread"), request.get("clarified_spec")) or "(không có)"
     return context.manual() + PROMPT.format(
         domain=request.get("domain") or "(core)",
         subject=request.get("subject", ""),
@@ -415,7 +413,7 @@ def verified_answer(text: str, question: str, haystacks: list[str]) -> str | Non
 
 def settled_answer(request: dict, question: str, repo_context: str, files: dict, state: dict, deps, budget, *, db_path=None, proposal_id=None) -> str | None:
     """One extra model call: answer to `question` iff request or source quotes it verbatim."""
-    thread = " | ".join(f"{m.get('role')}: {m.get('body')}" for m in (request.get("thread") or [])) or "(không có)"
+    thread = context.thread_text(request.get("thread"), request.get("clarified_spec")) or "(không có)"
     prompt = context.manual() + ANSWERABLE_PROMPT.format(subject=request.get("subject", ""), body=request.get("body", ""),
                                                           thread=thread, question=question, repo_context=repo_context)
     schema = {"type": "object", "additionalProperties": False,

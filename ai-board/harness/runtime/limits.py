@@ -97,6 +97,10 @@ def budget(env=None) -> dict:
     return out
 
 
+def thread_chars() -> int:
+    return _parsed()["limits"]["context"]["thread_chars"]
+
+
 def sandbox_client() -> dict:
     spec = _parsed()["limits"]["sandbox_client"]
     return {**spec, "backoff_s": tuple(spec["backoff_s"])}
