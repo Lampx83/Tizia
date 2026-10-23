@@ -57,8 +57,9 @@ if command -v openssl >/dev/null 2>&1; then
   fi
   if [ ! -s "$TOKEN" ] && [ ! -d "$TOKEN" ]; then
     mkdir -p "$(dirname "$TOKEN")"
-    (umask 077 && openssl rand -hex 32 > "$TOKEN")
-    echo "created $TOKEN (64 hex chars, mode 600; the runner's container user must be able to read it)" >&2
+    openssl rand -hex 32 > "$TOKEN"
+    chmod 644 "$TOKEN"  # runner and app containers read it as uid 1000, not the host owner
+    echo "created $TOKEN (64 hex chars, mode 644)" >&2
   fi
   if [ -f "$TOKEN" ] && [ "$(wc -c < "$TOKEN")" -lt 33 ]; then
     err "$TOKEN is shorter than 32 characters: delete it and rerun (runner refuses short tokens)"

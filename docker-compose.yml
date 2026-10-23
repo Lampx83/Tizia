@@ -154,7 +154,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 4
-      start_period: 60s
+      start_period: 600s  # readiness boot probe runs before listen(); first guest pull can exceed a minute
     volumes:
       - sandbox-runner-state:/home/node/.microsandbox
       - ./ai-board/sandbox-runner/sandbox-policy.dev.yaml:/etc/sandbox/sandbox-policy.yaml:ro  # guest Gate 5 ghim qua image-registry; không dùng sandbox-policy.online.yaml (guest alpine khác)

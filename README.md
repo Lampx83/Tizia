@@ -141,6 +141,8 @@ scripts/ai-board-bootstrap.sh --build-guest
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env --env-file ai-board-host.env --profile ai-board up -d --build
 ```
 
+Máy đã từng chạy stack dev (trước file compose gộp): service đổi tên `tizia-dev`→`tizia`, `tizia-postgres`→`postgres`, tên container giữ nguyên. Trước lần `up` đầu tiên, xóa hai container cũ: `docker rm -f tizia-dev tizia-postgres` (KHÔNG thêm `-v`), rồi kiểm tra `docker volume ls` vẫn còn `<project>_tizia-postgres-data`.
+
 Bước 3 phải chạy trước bước 4: runner chưa ghim digest thì không healthy, và `up` ở bước 4 sẽ báo worker không khởi động được vì phụ thuộc runner. Bước 3 tùy chọn `--warm-dir DIR` (thư mục có `docker-data.tar.gz`, tạo bằng `scripts/warm-guest.mjs` trong runner đang chạy); không có warm cache thì guest vẫn chạy nhưng chậm hơn. Sau bước 3 `git diff` sẽ thấy `sandbox-policy.dev.yaml` đổi digest: review rồi mới commit. Prod (Portainer) không cần bootstrap: chỉ cần `runner-token` và env của stack.
 
 `runner-token` không tự sinh nếu không chạy bootstrap; nếu Docker tạo nhầm thư mục `secrets/runner-token/` thì bootstrap sẽ xóa thư mục rỗng đó và tạo lại file.
