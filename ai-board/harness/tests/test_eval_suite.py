@@ -697,9 +697,10 @@ def test_skill_variant_flag_is_validated_recorded_and_separates_the_arm(world, m
     assert os.environ["AI_BOARD_SKILL_VARIANT"] == "plan-from-request,implement-one-slice"
     assert runner.main(argv, deps) == 0 and os.environ["AI_BOARD_SKILL_VARIANT"] == ""
     suite = root / "suite"
-    variant_name = "s11-dev-555555555555-dirty-simuser-var-plan-from-request+implement-one-slice"
+    suffix = "-var-plan-from-request+implement-one-slice"
+    variant_name = next(d.name for d in suite.iterdir() if d.name.endswith(suffix))
     variant = json.loads((suite / variant_name / "run.json").read_text(encoding="utf-8"))
-    plain = json.loads((suite / variant_name.replace("-var-plan-from-request+implement-one-slice", "") / "run.json").read_text(encoding="utf-8"))
+    plain = json.loads((suite / variant_name.replace(suffix, "") / "run.json").read_text(encoding="utf-8"))
     assert variant["skill_variant"] == ["plan-from-request", "implement-one-slice"]
     assert set(variant["skill_variant_sha"]) == {"plan-from-request", "implement-one-slice"}
     assert "skill_variant" not in plain and "skill_variant_sha" not in plain
