@@ -181,3 +181,14 @@ def deps_with(models):
 @pytest.fixture
 def fake_deps():
     return deps_with(plan_with(["features"]))
+
+
+@pytest.fixture
+def pinned_head(monkeypatch):
+    """Pin provenance ref: run dir name embeds it, so a moving HEAD breaks resume."""
+    from evaluation.suite import runner
+
+    real = runner.provenance
+    pinned = "5" * 40
+    monkeypatch.setattr(runner, "provenance", lambda *a, **k: {**real(*a, **k), "ref": pinned})
+    return pinned
