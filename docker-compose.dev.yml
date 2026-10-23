@@ -55,6 +55,10 @@ services:
 
   seaweedfs:
     extends: { file: docker-compose.yml, service: seaweedfs }
+    ports: !override  # UI master/filer không có auth: chỉ loopback, chỉ dev
+      - "127.0.0.1:8333:8333"
+      - "127.0.0.1:9333:9333"
+      - "127.0.0.1:8888:8888"
 
 networks:
   sandbox-api: {}

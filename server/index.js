@@ -73,6 +73,7 @@ import { shotBackendFromEnv, shotProxy, startShotRetention } from './ai-board/sh
 import { staticCacheControl } from './static-cache.js';
 import { attachAiBoardIntake, clarifyNotifier } from './contexts/ai-board-intake/index.js';
 import { attachAiBoardReleases } from './contexts/ai-board-releases/index.js';
+import { attachAiBoardShots } from './contexts/ai-board-shots/index.js';
 import { aiQuotaGate, recordAiCall } from './ai-quota.js';
 import { createNotification } from './db.js';
 import { log, initErrorTracking, installProcessGuards, requestContext, requestLogger, expressErrorHandler } from './observability.js';
@@ -390,6 +391,7 @@ attachAiBoardWorkerRoutes(r, {
 });
 // Cờ phát hành: có page gate /<slug>.html → phải trước route HTML + static bên dưới.
 attachAiBoardReleases(r, { db: aiBoard.db, releases: aiBoard.releases, requireAuth, requireAdmin, requireStrictCsrf });
+attachAiBoardShots(r, { db: aiBoard.db, requireAuth, requireAdmin });
 const scopedCrud = attachScopedCrudRoutes(r, { db: aiBoard.db, requireAuth, requireStrictCsrf, sessionToken: (req) => req.user.token });
 // Online egress control. Nothing registered (DB) or configured (env) = every operation denied.
 const onlineRegistry = createOnlineRegistry(aiBoard.db, { backendScripts: backendScriptsEnabled() });
