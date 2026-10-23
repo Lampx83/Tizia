@@ -43,7 +43,8 @@ class SuiteModels:
             return {"response": plan_json(key, file), "prompt_eval_count": 500, "eval_count": 100}
         self.calls.append(("gate3", key))
         body = {"edits": case["gold"]["edits"]} if "edits" in case["gold"] else {"code": case["gold"]["code"]}
-        return {"response": json.dumps({**body, **FILLER}, ensure_ascii=False), "prompt_eval_count": 120, "eval_count": 80}
+        scope = "".join(f"// {p}\n" for p in sorted(set(re.findall(r"[\w./-]+\.(?:html|js|mjs|css)", prompt))))
+        return {"response": json.dumps({**body, **FILLER, "test": FILLER["test"] + scope}, ensure_ascii=False), "prompt_eval_count": 120, "eval_count": 80}
 
 
 @pytest.fixture(scope="module")

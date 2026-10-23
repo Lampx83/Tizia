@@ -78,7 +78,8 @@ class GoldModels:
             elif case["level"] == self.wrong_level:
                 edits.append({"search": "<html", "replace": '<html data-x="1"'})
             body = {"edits": edits}
-        return {"response": json.dumps({**body, **FILLER}, ensure_ascii=False), "prompt_eval_count": 120, "eval_count": 80}
+        scope = "".join(f"// {p}\n" for p in sorted(set(re.findall(r"[\w./-]+\.(?:html|js|mjs|css)", prompt))))
+        return {"response": json.dumps({**body, **FILLER, "test": FILLER["test"] + scope}, ensure_ascii=False), "prompt_eval_count": 120, "eval_count": 80}
 
 
 def cases_of(root, seed=SEED, side=None):
