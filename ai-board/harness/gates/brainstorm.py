@@ -27,7 +27,7 @@ from pathlib import Path
 import code_index
 import context
 import functional
-from gates import best_match
+from gates import best_match, react_plan
 from gates.scope_check import load_capability_names
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -171,9 +171,14 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
         elif trace:
             trace.note("knows", "retry feedback", reason)
         ask = prompt if not attempt else prompt + RETRY_SUFFIX.format(reason=reason)
-        body = deps.call_model(deps.models.gate1_model, ask, gate=1, budget=budget,
-                               db_path=db_path, proposal_id=proposal_id, prompt_name="brainstorm.md",
-                               skill_context={'task_type': request.get('task_type'), 'file': (ctx.get('targets') or [''])[0]})
+        skill_context = {'task_type': request.get('task_type'), 'file': (ctx.get('targets') or [''])[0]}
+        react = None
+        if not attempt and react_plan.enabled():
+            react = react_plan.run(prompt, deps, budget, model=deps.models.gate1_model, source=source, sha=commit,
+                                   db_path=db_path, proposal_id=proposal_id, skill_context=skill_context)
+        body = react or deps.call_model(deps.models.gate1_model, ask, gate=1, budget=budget,
+                                        db_path=db_path, proposal_id=proposal_id, prompt_name="brainstorm.md",
+                                        skill_context=skill_context)
         stage = "plan parse"
         try:
             plan = parse_plan(body.get("response", ""))
@@ -194,7 +199,8 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             continue
         return {"gate": 1, "blocked": False, "reason": None, "plan": plan,
                 "skill": ctx["skill"], "context_chars": ctx["chars"], "repo_context": ctx['text'],
-                'source_targets': ctx.get('targets') or [], 'best_match': ctx.get('best_match')}
+                'source_targets': ctx.get('targets') or [], 'best_match': ctx.get('best_match'),
+                **({'react_quotes': react['quotes']} if react else {})}
     return {"gate": 1, "blocked": True, "reason": f"plan không hợp lệ: {reason}", "plan": None,
             "skill": ctx["skill"], "context_chars": ctx["chars"], "repo_context": ctx["text"],
             "source_targets": ctx.get("targets") or [], "best_match": ctx.get("best_match")}
