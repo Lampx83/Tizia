@@ -25,6 +25,7 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-tizia}:${POSTGRES_PASSWORD:?đặt POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tizia}
       AI_BOARD_SANDBOX_URL: http://sandbox-runner:8090
       AI_BOARD_SANDBOX_TOKEN_FILE: /run/secrets/sandbox-runner-token
+      AI_BOARD_SHOT_RETENTION_DAYS: ${AI_BOARD_SHOT_RETENTION_DAYS:-}  # >0 bật dọn ảnh chụp cũ (6 giờ/lần); trống = tắt
     networks: [default, sandbox-api]
     logging: *logging
     volumes:
