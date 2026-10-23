@@ -11,7 +11,7 @@ import sys
 import time
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-from runtime import tool_manifest, meter
+from runtime import limits, tool_manifest, meter
 from runtime.budget import ChildBudget
 from repositories import server_hsm
 
@@ -22,7 +22,8 @@ import code_index
 from verification import loop_checks, ui_copy
 from verification.sandbox import SandboxError
 
-ERROR_CHARS = 2000
+_LOOP = limits.loop(env={})
+ERROR_CHARS = _LOOP["error_chars"]
 IMPLEMENTED = {"tree", "outline", "grep", "read_file", "edit_file", "write_test", "run_check", "finish"}
 MANIFEST = tool_manifest.load(known=IMPLEMENTED)
 REPO_TOOLS = tuple(name for name in ("tree", "outline", "grep") if name in MANIFEST.tools)
@@ -32,7 +33,7 @@ SCHEMAS = {name: spec.parameters for name, spec in MANIFEST.tools.items()}
 DESCRIPTIONS = {name: spec.description for name, spec in MANIFEST.tools.items()}
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "tool_loop.md").read_text(encoding="utf-8")
-MAX_REPEATS = 3
+MAX_REPEATS = _LOOP["repeats"]
 REPEAT_HINT = (" BẠN VỪA LẶP ĐÚNG request trước. Đổi cách: dùng grep với từ khoá nằm trong dòng cần sửa (hoặc read_file) để lấy dòng thật, "
                "rồi edit_file bằng after_line hoặc search chép nguyên văn dòng đó.")
 ORDER = ("\nThứ tự làm: (1) edit_file sửa file đích theo đoạn trích bên dưới (đọc thêm bằng read_file/grep chỉ khi đoạn trích chưa đủ), "
@@ -64,8 +65,9 @@ def _env_int(name: str, default: int) -> int:
 
 
 def child_caps() -> dict:
-    """Per-subtask loop ceilings; AI_BOARD_LOOP_MODEL_CALLS / AI_BOARD_LOOP_TOOL_CALLS raise them for a measured run."""
-    return {"max_model_calls": _env_int("AI_BOARD_LOOP_MODEL_CALLS", 10), "max_tool_calls": _env_int("AI_BOARD_LOOP_TOOL_CALLS", 30)}
+    """Per-subtask loop ceilings from contract limits.loop; AI_BOARD_LOOP_* override them for a measured run."""
+    loop = limits.loop()
+    return {"max_model_calls": loop["model_calls"], "max_tool_calls": loop["tool_calls"]}
 
 
 def sha_of(text: str) -> str:

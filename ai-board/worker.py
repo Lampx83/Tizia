@@ -11,6 +11,7 @@ import posixpath
 import re
 import shutil
 import socket
+import sys
 import threading
 import tempfile
 import time
@@ -23,20 +24,14 @@ from typing import Any, Callable
 
 Transport = Callable[[str, str, dict, dict], dict]
 REPO_ROOT = Path(__file__).resolve().parents[1]
-# Worker <-> server contract, shared with server/ai-board/store.js.
-CONTRACT = json.loads((REPO_ROOT / "server" / "ai-board" / "contract.json")
-                      .read_text(encoding="utf-8"))
+sys.path.insert(0, str(REPO_ROOT / "ai-board" / "harness"))
+# Worker <-> server contract, shared with server/ai-board/store.js; loader in harness runtime/limits.py.
+from runtime.limits import config_sha256, contract, scaled_limit  # noqa: E402
+CONTRACT = contract()
 PLAN_GATES = tuple(CONTRACT["gates"]["plan"])
 PRE_PR_GATES = tuple(CONTRACT["gates"]["pre_pr"])
 DEFAULT_BUDGET_LIMIT = CONTRACT["default_budget_limit"]
 LIMITS = CONTRACT["limits"]
-
-
-def scaled_limit(kind: str, n: int) -> int:
-    """Trần mỗi lượt theo số subtask n, cùng công thức với store.js scaledLimit (contract.json limits.per_run)."""
-    spec = LIMITS["per_run"][kind]
-    count = min(max(int(n or 0), 0), LIMITS["max_subtasks_per_run"])
-    return min(spec["base"] + spec["per_subtask"] * count, spec["max"])
 
 
 class LeaseLostError(RuntimeError):
@@ -352,7 +347,7 @@ class _Execution:
             "outcome": outcome, "gate_reached": last["gate"], "reason": reason,
             "failure_class": None if passed else kind, "repairs": self.repairs,
             "candidate": self.candidate if passed else None,
-            "budget_used": int(getattr(self.budget, "units", 0)), "gates": gates,
+            "budget_used": int(getattr(self.budget, "units", 0)), "gates": gates, "config_sha256": config_sha256(),
             "screenshots": self.shots,  # chỉ cục bộ: HttpWorker lấy ra trước khi gửi verdict
             **({"base_sha": self.base_sha} if self.base_sha else {}),  # task eval từ lần hỏng chạy lại đúng sha này
         }

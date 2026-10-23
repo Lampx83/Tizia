@@ -125,7 +125,7 @@ test('budget exhaustion, extension and ceiling, gate reruns, folder-free queue a
     // plan submitted over the per-run budget -> waiting_admin/budget_exhausted -> extend -> replan queued
     const a = await newRequest(store, { tag: 'a' });
     const ca = await claimAndRun(store, 'w1');
-    out.exhausted = await store.submitPlan(ca.id, { ...ca.lease, runId: ca.run.id, plan: planOf(), budgetUsed: 9000, idempotencyKey: 'plan-bud-a' });
+    out.exhausted = await store.submitPlan(ca.id, { ...ca.lease, runId: ca.run.id, plan: planOf(), budgetUsed: 2400, idempotencyKey: 'plan-bud-a' });
     out.badAmount = await failure(() => store.extendBudget(ca.id, { amount: 0, reason: 'a perfectly good reason', adminUserId: 9 }));
     out.badReason = await failure(() => store.extendBudget(ca.id, { amount: 10, reason: 'short', adminUserId: 9 }));
     out.extend1 = await store.extendBudget(ca.id, { amount: 100, reason: 'raise the cap once', adminUserId: 9 });
@@ -135,7 +135,7 @@ test('budget exhaustion, extension and ceiling, gate reruns, folder-free queue a
     for (let i = 0; i < 3; i += 1) {
       const c = await claimAndRun(store, `w-bud-${i}`);
       if (!c) { out[`noclaim_${i}`] = true; break; }
-      await store.submitPlan(c.id, { ...c.lease, runId: c.run.id, plan: planOf(), budgetUsed: 9000, idempotencyKey: `plan-bud-${i}` });
+      await store.submitPlan(c.id, { ...c.lease, runId: c.run.id, plan: planOf(), budgetUsed: 2400, idempotencyKey: `plan-bud-${i}` });
       out[`ext_${i}`] = await failure(() => store.extendBudget(c.id, { amount: 100, reason: 'raise the cap again', adminUserId: 9 }));
     }
     out.rootEnd = await d.get('SELECT status, phase, internal_reason, budget_limit FROM ai_tickets WHERE id = ?', [ca.id]);

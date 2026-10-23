@@ -1,0 +1,64 @@
+"""contract limits loader: defaults = old constants, env override, shared scaling golden, config hash."""
+import hashlib
+import json
+import os
+import sys
+from pathlib import Path
+
+import pytest
+
+from runtime import limits, meter, tool_loop
+from runtime.budget import Budget, ChildBudget
+from verification import sandbox
+
+REPO = Path(__file__).resolve().parents[3]
+GOLDEN = json.loads((REPO / "test" / "fixtures" / "ai-board-scaled-limit.json").read_text(encoding="utf-8"))
+
+
+def test_defaults_equal_old_constants():
+    assert limits.budget(env={}) == {"model_calls": 40, "tool_calls": 200, "tokens": 200_000, "retries": 3, "units": 600,
+                                     "wall_clock_s": 900.0, "semantic_repairs": 3, "child_wall_clock_s": 300.0}
+    assert limits.loop(env={}) == {"model_calls": 10, "tool_calls": 30, "repeats": 3, "error_chars": 2000}
+    assert limits.sandbox_client()["backoff_s"] == (1, 2, 4, 8)
+    assert limits.sandbox_client()["call_attempts"] == 3
+    assert (sandbox.CREATE_TIMEOUT_S, sandbox.UPLOAD_TIMEOUT_S, sandbox.ARTIFACT_TIMEOUT_S) == (600.0, 300, 120)
+    assert (tool_loop.MAX_REPEATS, tool_loop.ERROR_CHARS) == (3, 2000)
+    assert Budget().max_wall_clock_s == 900.0 and Budget().max_units == 600
+    child = ChildBudget(Budget())
+    assert (child._max["model_calls"], child._max["tool_calls"]) == (10, 30)
+
+
+def test_from_env_defaults_match_contract_without_env(monkeypatch):
+    for key in list(os.environ):
+        if key.startswith("BUDGET_MAX_") or key.startswith("AI_BOARD_LOOP_"):
+            monkeypatch.delenv(key)
+    b = Budget.from_env()
+    assert (b.max_model_calls, b.max_tool_calls, b.max_units, b.max_wall_clock_s) == (40, 200, 600, 900.0)
+
+
+def test_env_override_applies_inside_loader(monkeypatch):
+    monkeypatch.setenv("BUDGET_MAX_UNITS", "123")
+    monkeypatch.setenv("BUDGET_MAX_WALL_CLOCK_S", "45.5")
+    monkeypatch.setenv("AI_BOARD_LOOP_TOOL_CALLS", "7")
+    b = Budget.from_env()
+    assert (b.max_units, b.max_wall_clock_s) == (123, 45.5)
+    assert tool_loop.child_caps()["max_tool_calls"] == 7
+    assert limits.budget(env={"BUDGET_MAX_UNITS": ""})["units"] == 600
+
+
+def test_meter_reads_contract_limits():
+    assert meter.ROTATE_BYTES == 5 * 1024 * 1024 and meter.ROTATE_KEEP == 2
+    assert meter.HOURLY_GPU_S == 2700
+
+
+@pytest.mark.parametrize("case", GOLDEN["cases"], ids=lambda c: f"{c['kind']}-{c['n']}")
+def test_scaled_limit_golden(case):
+    assert limits.scaled_limit(case["kind"], case["n"]) == case["expected"]
+    sys.path.insert(0, str(REPO / "ai-board"))
+    import worker
+    assert worker.scaled_limit(case["kind"], case["n"]) == case["expected"]
+
+
+def test_config_hash_is_file_sha256():
+    raw = (REPO / "server" / "ai-board" / "contract.json").read_bytes()
+    assert limits.config_sha256() == hashlib.sha256(raw).hexdigest()

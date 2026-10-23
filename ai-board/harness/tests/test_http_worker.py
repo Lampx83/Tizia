@@ -9,6 +9,7 @@ AI_BOARD_DIR = Path(__file__).resolve().parents[2]
 if str(AI_BOARD_DIR) not in sys.path:
     sys.path.insert(0, str(AI_BOARD_DIR))
 
+from runtime.limits import config_sha256
 from worker import HarnessPlanner, HttpWorker, PlanBlockedError, WorkerClient, _execution_plan, execute_pre_pr, main
 
 
@@ -402,6 +403,7 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
             {'gate': 5.5, 'blocked': False, 'reason': None,
              'risk_level': 'low', 'risk_signals': []},
         ],
+        'config_sha256': config_sha256(),
     }
 
 

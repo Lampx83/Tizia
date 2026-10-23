@@ -139,7 +139,7 @@ test('plans (surface, protected + authorize + resume, core, guardrail block, bud
     r.transientRoot = await d.get('SELECT status, phase FROM ai_tickets WHERE id = ?', [t.id]);
     await newRequest(store, { tag: 'bb' });
     const big = await claimAndRun(store, 'w-bb');
-    r.bigBudget = await store.submitPlan(big.id, { ...big.lease, runId: big.run.id, plan: planOf(), budgetUsed: 99999, idempotencyKey: 'plan-core-bb' });
+    r.bigBudget = await store.submitPlan(big.id, { ...big.lease, runId: big.run.id, plan: planOf(), budgetUsed: 2400, idempotencyKey: 'plan-core-bb' });
     r.queue = await store.listAdminQueue();
     return r;
   });

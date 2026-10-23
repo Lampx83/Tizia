@@ -6,6 +6,8 @@ import os
 import time
 from dataclasses import dataclass, field
 
+from runtime import limits
+
 # Cộng dồn qua các lần resume (skill_proposals.budget_json), không reset —
 # đây là cái chặn loop vô hạn ăn GPU máy dùng chung.
 CAPS = ("model_calls", "tool_calls", "tokens", "retries", "units", "semantic_repairs")
@@ -16,6 +18,8 @@ RUN_CAPS = ("model_calls", "tool_calls", "tokens", "units")
 # Đo: cổng 4 = 1 lần gọi model ~4K token (suite dev: p50 12K token / 3 lần gọi, p90 ~7K/lần); cổng 5 sandbox ~180 s
 # warm, không gọi model; cổng 5.5 không gọi model. ponytail: wall_clock_s theo máy warm, cold pull cần đo lại.
 VERIFY_RESERVE = {"model_calls": 2, "tool_calls": 0, "tokens": 20_000, "wall_clock_s": 240.0}
+_DEFAULTS = limits.budget(env={})
+_LOOP = limits.loop(env={})
 
 
 class BudgetExhausted(RuntimeError):
@@ -24,14 +28,14 @@ class BudgetExhausted(RuntimeError):
 
 @dataclass
 class Budget:
-    max_model_calls: int = 40
-    max_tool_calls: int = 200
-    max_tokens: int = 200_000
+    max_model_calls: int = _DEFAULTS["model_calls"]
+    max_tool_calls: int = _DEFAULTS["tool_calls"]
+    max_tokens: int = _DEFAULTS["tokens"]
     max_request_tokens: int = 0
-    max_retries: int = 3
-    max_units: int = 600
-    max_wall_clock_s: float = 900.0
-    max_semantic_repairs: int = 3
+    max_retries: int = _DEFAULTS["retries"]
+    max_units: int = _DEFAULTS["units"]
+    max_wall_clock_s: float = _DEFAULTS["wall_clock_s"]
+    max_semantic_repairs: int = _DEFAULTS["semantic_repairs"]
 
     model_calls: int = 0
     tool_calls: int = 0
@@ -48,21 +52,12 @@ class Budget:
 
     @classmethod
     def from_env(cls, env: dict | None = None) -> "Budget":
-        """Đọc BUDGET_MAX_* từ env, thiếu thì lấy mặc định."""
-        env = os.environ if env is None else env
-
-        def num(key, default, cast):
-            raw = env.get(f"BUDGET_MAX_{key.upper()}")
-            return default if raw in (None, "") else cast(raw)
-
+        """Budget từ contract + BUDGET_MAX_* trong env."""
+        d = limits.budget(env)
         return cls(
-            max_model_calls=num("model_calls", 40, int),
-            max_tool_calls=num("tool_calls", 200, int),
-            max_tokens=num("tokens", 200_000, int),
-            max_retries=num("retries", 3, int),
-            max_units=num("units", 600, int),
-            max_wall_clock_s=num("wall_clock_s", 900.0, float),
-            max_semantic_repairs=num("semantic_repairs", 3, int),
+            max_model_calls=d["model_calls"], max_tool_calls=d["tool_calls"], max_tokens=d["tokens"],
+            max_retries=d["retries"], max_units=d["units"], max_wall_clock_s=d["wall_clock_s"],
+            max_semantic_repairs=d["semantic_repairs"],
         )
 
     @classmethod
@@ -178,7 +173,8 @@ class Budget:
 class ChildBudget:
     """Trần riêng của 1 loop (model/tool/giây), mọi khoản chi chuyển thẳng lên parent; chạm trần nào trước thì dừng."""
 
-    def __init__(self, parent: Budget, *, max_model_calls: int = 10, max_tool_calls: int = 30, max_wall_clock_s: float = 300.0):
+    def __init__(self, parent: Budget, *, max_model_calls: int = _LOOP["model_calls"], max_tool_calls: int = _LOOP["tool_calls"],
+                 max_wall_clock_s: float = _DEFAULTS["child_wall_clock_s"]):
         object.__setattr__(self, "parent", parent)
         object.__setattr__(self, "_own", {"model_calls": 0, "tool_calls": 0})
         object.__setattr__(self, "_max", {"model_calls": max_model_calls, "tool_calls": max_tool_calls})
