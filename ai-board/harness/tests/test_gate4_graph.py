@@ -70,3 +70,13 @@ def test_malformed_authority_response_blocks_with_classified_error(answer):
 def test_missing_contract_cannot_create_http_execution_backend(contract):
     with pytest.raises(AuthorityError,match='contract'):
         RemoteGate4(Service(),ticket_id=1,run_id=2,worker_id='test',lease_token='local',contract=contract)
+
+def test_begin_and_receipt_wire_contract_is_fixed():
+    service=Service()
+    result={'gate':4,'blocked':True,'issues':[{'code':'static'}]}
+    assert backend(service).execute(lambda: dict(result))==result
+    begin,receipt=service.events
+    assert begin=={'run_id':2,'worker_id':'test','lease_token':'local','contract_hash':'pin','attempt':0,
+        'event':'BEGIN','expected_version':0,'idempotency_key':'hsm:2:0:begin'}
+    assert receipt=={'run_id':2,'worker_id':'test','lease_token':'local','contract_hash':'pin','attempt':0,
+        'event':'BLOCKED','expected_version':1,'idempotency_key':'hsm:2:0:result','result':result}
