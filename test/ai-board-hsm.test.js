@@ -443,3 +443,45 @@ test('malformed manifests and stale leases cannot register a version',async()=>{
     assert.equal((await f.db.all('SELECT 1 FROM ai_tool_manifests')).length,0);
   } finally {await f.close();}
 });
+
+const seedPlanTraces=async f=>{
+    const plan={domain:'pharmacy',goal:'Syntax fixture',capabilities:['public.ui'],allowed_scope:['public/pharmacy/demo.js'],
+      steps:[{order:1,title:'Syntax fixture',capability:'public.ui',allowed_scope:['public/pharmacy/demo.js'],tests:['node --check'],acceptance:['valid syntax'],risk:'low'}]};
+    await f.db.run("UPDATE ai_plans SET plan_json=?,capability_policy_hash=? WHERE root_ticket_id=?",[JSON.stringify(plan),CAPABILITY_CATALOG.hash,f.id]);
+    await f.db.run("UPDATE ai_runs SET plan_hash='plan-a',plan_revision=1 WHERE id=?",[f.run]);
+    for(const gate of [1,2,2.5]) await f.db.insert("INSERT INTO ai_gate_traces(run_id,gate,status,created_at) VALUES (?,?,'passed',?)",[f.run,gate,Date.now()]);
+};
+
+test('busy release puts the ticket back in the queue after a not-before delay without a verdict or blocked run',async()=>{
+  const f=await fixture();
+  try {
+    await seedPlanTraces(f);
+    const before=Date.now();
+    const released=await f.post('release',{outcome:'busy',internal_detail:'sandbox runner busy',idempotency_key:'busy-release-0001'});
+    assert.equal(released.status,200);
+    const row=await f.db.get('SELECT status,phase,lease_owner,lease_expires_at FROM ai_tickets WHERE id=?',[f.id]);
+    assert.equal(row.status,'queued');assert.equal(row.phase,'authorized');assert.equal(row.lease_owner,null);
+    assert.ok(Number(row.lease_expires_at)>=before+60000);
+    assert.equal((await f.db.get('SELECT outcome FROM ai_runs WHERE id=?',[f.run])).outcome,null);
+    const claim=async(worker)=>(await fetch(`${f.base}/api/ai-board/worker/claim`,{method:'POST',headers:{'content-type':'application/json','x-ai-worker-key':KEY},body:JSON.stringify({worker_id:worker,version:'t',mode:'active',intent:'plan'})})).json();
+    assert.equal((await claim('worker-b')).ticket,null);
+    await f.db.run('UPDATE ai_tickets SET lease_expires_at=? WHERE id=?',[Date.now()-1,f.id]);
+    assert.ok((await claim('worker-a')).ticket);  // requeued root returns to its previous live worker
+  } finally {await f.close();}
+});
+
+test('two real Python HttpWorkers racing for one authorized ticket: exactly one claims it',async()=>{
+  const f=await fixture();
+  try {
+    await seedPlanTraces(f);
+    await f.db.run("UPDATE ai_tickets SET status='queued',phase='authorized',plan_revision=1,lease_owner=NULL,lease_token=NULL,lease_expires_at=NULL WHERE id=?",[f.id]);
+    const python=process['env'].TEST_PYTHON || path.resolve('ai-board/harness/.venv/Scripts/python.exe');
+    const run=(worker)=>promisify(execFile)(python,[path.resolve('test/support/hsm-worker-probe.py'),f.base,KEY,worker],{cwd:process.cwd(),timeout:60000,maxBuffer:1000000})
+      .then(child=>JSON.parse(child.stdout.trim().split('\n').at(-1)));
+    const outs=await Promise.all([run('worker-race-1'),run('worker-race-2')]);
+    assert.equal(outs.reduce((sum,out)=>sum+out.gate4_calls,0),1);
+    assert.equal(outs.filter(out=>out.worker.status==='idle').length,1);
+    const ticket=await f.db.get('SELECT status,lease_owner FROM ai_tickets WHERE id=?',[f.id]);
+    assert.notEqual(ticket.status,'queued');
+  } finally {await f.close();}
+});

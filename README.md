@@ -125,7 +125,7 @@ Bộ data: 81 thuốc, 30 dược liệu, 10 ca lâm sàng, 85+ scenarios theo D
 
 Mở `http://<host>:8041`.
 
-> AI Board (`ai-board-worker`, `sandbox-runner`, `image-registry`) nằm trong `docker-compose.yml` dưới profile `ai-board`, **không chạy khi deploy mặc định**. Chỉ bật khi có chủ đích: `docker compose --profile ai-board up -d` (cần `sandbox-runner/secrets/runner-token` và biến env trong Portainer). Prod chỉ dùng `docker-compose.yml`. Dev dùng `docker-compose.dev.yml` đứng riêng: mỗi service dev `extends` service cùng tên trong `docker-compose.yml` và chỉ khai báo khác biệt dev (tên `tizia-dev`, cổng, `.env`, volume dev). Hai file không bao giờ gộp với nhau (`-f` chồng nhau).
+> AI Board (`ai-board-worker`, `sandbox-runner`, `image-registry`) nằm trong `docker-compose.yml` dưới profile `ai-board`, **không chạy khi deploy mặc định**. Worker thứ hai: thêm `--profile multi-worker` (service `ai-board-worker-2`, repo và memory riêng; bật cùng `--profile ai-board`). Chỉ bật khi có chủ đích: `docker compose --profile ai-board up -d` (cần `sandbox-runner/secrets/runner-token` và biến env trong Portainer). Prod chỉ dùng `docker-compose.yml`. Dev dùng `docker-compose.dev.yml` đứng riêng: mỗi service dev `extends` service cùng tên trong `docker-compose.yml` và chỉ khai báo khác biệt dev (tên `tizia-dev`, cổng, `.env`, volume dev). Hai file không bao giờ gộp với nhau (`-f` chồng nhau).
 
 ### Dựng từ máy trắng (dev + AI Board)
 

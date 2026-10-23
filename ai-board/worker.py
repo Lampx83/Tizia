@@ -996,6 +996,12 @@ class HttpWorker:
         self._close_trace(payload.get("outcome"))
         return self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/release", payload)
 
+    def _requeue_busy(self, ticket_id: int, lease: dict, prefix: str, run: dict, result: dict) -> dict:
+        """Runner busy: give the lease back without a verdict; server requeues after a not-before delay."""
+        self._release(ticket_id, {**lease, "outcome": "busy", "internal_detail": result.get("reason"),
+                                  "idempotency_key": f"{prefix}:release-busy"})
+        return {"status": "busy", "ticket_id": ticket_id, "run_id": run["id"]}
+
     def _close_trace(self, outcome: str | None) -> None:
         """Đóng span run và xả trace trước mọi lời gọi trả lease."""
         if self.tracer:
@@ -1054,6 +1060,8 @@ class HttpWorker:
         if conflict is not None:
             done = self.client.post(f"{url}/reverify/conflict", {**lease, "run_id": run["id"], "tip": tip, **conflict})
             return {"status": done["status"], "ticket_id": ticket_id, "run_id": run["id"], "reverify": "conflict"}
+        if result.get("failure_class") == "busy":
+            return self._requeue_busy(ticket_id, lease, prefix, run, result)
         try:
             verdict = self.client.post(f"{url}/verdict", {**lease, "run_id": run["id"], "verdict": result,
                                                          "idempotency_key": f"{prefix}:verdict"})["verdict"]
@@ -1177,6 +1185,8 @@ class HttpWorker:
                         self._upload_screenshots(ticket_id, lease, run, shots)
                 finally:
                     drop_screenshots(shots)
+                if result.get("failure_class") == "busy":
+                    return self._requeue_busy(ticket_id, lease, prefix, run, result)
                 try:
                     verdict = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/verdict", {
                         **lease, "run_id": run["id"], "verdict": {**result, "skill": skill} if skill else result,

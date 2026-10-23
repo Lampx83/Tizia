@@ -1787,3 +1787,14 @@ def test_a_lease_lost_between_gates_still_cleans_the_attempt_up_and_raises():
         execute_pre_pr(ONE_STEP_PLAN, ticket_id=7, checkout_source='unused', deps=object(), budget=TickBudget(), run_gate=run_gate,
                        cleanup=lambda state, keep_branch: cleanups.append(keep_branch), should_stop=lambda: stop['now'])
     assert [gate for gate, _ in calls] == [3, 4] and cleanups == [False]
+
+
+def test_runner_busy_at_gate_5_spends_no_retry_and_blocks_as_busy():
+    busy = {'blocked': True, 'reason': 'sandbox runner busy', 'failure_class': 'busy'}
+    budget = TickBudget()
+    run_gate, calls = scripted_gates({5: [busy, {}]})
+    verdict = execute_pre_pr(ONE_STEP_PLAN, ticket_id=7, checkout_source='unused', deps=object(),
+                             budget=budget, run_gate=run_gate, cleanup=lambda *_, **__: None)
+    assert verdict['failure_class'] == 'busy'
+    assert budget.retries == 0
+    assert [gate for gate, _ in calls].count(5) == 1

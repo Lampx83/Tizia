@@ -1197,6 +1197,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       shadow_ok: ['queued', 'shadow_checked', 'Đã qua kiểm tra ban đầu; đang chờ lập kế hoạch.'],
       waiting: ['waiting', 'precheck_blocked', 'Yêu cầu đang chờ quản trị viên xem xét.'],
       failed: ['waiting', 'precheck_failed', 'Kiểm tra ban đầu chưa đạt.'],
+      busy: ['queued', 'authorized', 'Sandbox đang bận; tự thử lại sau ít phút.'],
     };
     const plannedStatuses = new Set(['planned', 'waiting_authorization', 'human_owned', 'waiting_admin']);
     const next = input.outcome === 'planned' && current.status === 'planned'
@@ -1208,10 +1209,12 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     if (!next) throw new WorkerContractError('invalid release outcome');
     await db.run(`
       UPDATE ai_tickets SET status=?, phase=?, public_note=?, internal_reason=?,
-        lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE id=?
+        lease_owner=NULL, lease_token=NULL, lease_expires_at=?, updated_at=? WHERE id=?
     `, [next[0], next[1], next[2],
       // A planned release keeps the verdict's reason (e.g. the critical violation) unless the worker adds one.
-      input.internalDetail || (input.outcome === 'planned' ? current.internal_reason : null), input.now, Number(ticketId)]);
+      input.internalDetail || (input.outcome === 'planned' ? current.internal_reason : null),
+      // busy: not-before time for the claim query (lease_expires_at on a queued row).
+      input.outcome === 'busy' ? input.now + CONTRACT.limits.runner_busy.retry_after_ms : null, input.now, Number(ticketId)]);
     if (input.outcome === 'waiting' || input.outcome === 'failed') {
       // The precheck gate that stopped the run gets its own gate row: the admin sees the step and can rerun it.
       let detail = null;

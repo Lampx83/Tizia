@@ -266,3 +266,11 @@ def test_loop_budget_same_result_is_not_progress():
     assert isinstance(budget.step(sandbox_tool.NAME, {"argv": ALLOWED}, observation), loop_budget.Continue)
     assert isinstance(budget.step(sandbox_tool.NAME, {"argv": ["node", "--check", "test/a.test.js"]}, observation), loop_budget.Continue)
     assert isinstance(budget.step(sandbox_tool.NAME, {"argv": ALLOWED}, observation), loop_budget.Stop)
+
+
+def test_busy_runner_after_retries_raises_busy_instead_of_an_observation():
+    client = FakeClient([SandboxError("busy", "exec", 429)] * 10)
+    with pytest.raises(sandbox_tool.RunnerBusy) as caught:
+        runner(client)(["node", "--check", "a.js"], {})
+    assert caught.value.failure_class == "busy"
+    assert_every_vm_destroyed(client)
