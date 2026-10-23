@@ -128,7 +128,10 @@ export function checkSkills(root = ROOT) {
   }
 
   const expected = new Set([...skillRels.map(rel => `${rel}/SKILL.md`), LOCK]);
-  for (const image of IMAGES) {
+  // Trong image (RUN bước kiểm) không có Dockerfile/.dockerignore: tập file đã là thứ COPY đưa vào.
+  const contextFiles = fs.existsSync(path.join(root, 'Dockerfile'));
+  if (!contextFiles) info.push('image: bỏ kiểm allowlist (không có build context; RUN trong image kiểm tập file thật)');
+  for (const image of contextFiles ? IMAGES : []) {
     const dockerfile = fs.readFileSync(path.join(root, image.dockerfile), 'utf8');
     if (!image.copy.test(dockerfile)) {
       fail(image.dockerfile, `thiếu bước COPY cho ${image.name} (${image.copy})`);
