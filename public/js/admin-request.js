@@ -5,7 +5,8 @@ import { patchHtml } from './dom-morph.js';
 import { mountPrivatePreview } from './private-preview.js';
 import { installLightbox, pairBeforeAfter } from './lightbox.js';
 import { projectPipeline, describeModelCall, describeEvent, loopActions, stepTotals, TECHNICAL_EVENTS, TRACE_STEPS, renderVerificationClaims, budgetSummary, renderRootAllowance } from './ai-board-trace.js';
-import { renderHsm, renderGraph } from './ai-board-hsm.js';
+import { renderHsm } from './ai-board-hsm.js';
+import { renderTicketGraph, graphNodes } from './ai-board-graph.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -17,7 +18,7 @@ const elapsed = (t) => { const s = Math.max(0, Math.round((Date.now() - t) / 100
 const REQUEST_ID = Number(new URLSearchParams(location.search).get('id'));
 // Trạng thái giao diện riêng của admin (không phải dữ liệu server): bảng xác nhận đang mở ở bước nào.
 // `open`: khóa <details> (data-k) → đã mở/đóng, sống qua mọi lần vẽ lại do refresh().
-const ui = { confirm: null, step: 1, msg: '', flash: '', authorizeConfirm: null, open: {}, reconcile: null };
+const ui = { confirm: null, step: 1, msg: '', flash: '', authorizeConfirm: null, open: {}, reconcile: null, node: null };
 let view = null;
 let gateNames = {}; // tên cổng lấy từ trace (contract.gates.names của server)
 
@@ -758,7 +759,7 @@ function renderAiBoard(t) {
   const shownState = root.live ? 'run' : state;
   return `
     <h2>AI Board</h2>
-    ${renderGraph(t.graph, t.events, root)}
+    ${renderTicketGraph(t, ui.node)}
     ${renderHsm(t.hsm)}
     <div class="blk status st-${shownState}"><div class="line1"><b>Xử lý yêu cầu</b>${tag(shownState, root.live ? 'Đang xử lý' : label)}
         <span>${esc(root.phase_label)}</span>${root.live ? '<span class="pulse" title="Worker đang giữ yêu cầu này"></span>' : ''}</div>
@@ -898,9 +899,11 @@ function stopLiveTrace() {
 
 // Đang có worker xử lý thì hỏi 2 giây/lần, còn lại 10 giây; tạm dừng khi tab ẩn hoặc admin đang xác nhận.
 let timer = null;
+const ENDED = ['done', 'cancelled'];
 function schedule() {
   clearTimeout(timer);
   const root = view?.trace?.root;
+  if (root && !root.live && ENDED.includes(root.status)) return;
   const active = root && (root.live || ['queued', 'running'].includes(root.status));
   timer = setTimeout(tick, active ? 2000 : 10000);
 }
@@ -915,6 +918,8 @@ async function tick() {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
 
 document.addEventListener('click', e => {
+  const node = e.target.closest('#app [data-node]');
+  if (node && view?.trace && graphNodes(view.trace)[node.dataset.node]) { ui.node = node.dataset.node; render(); return; }
   const btn = e.target.closest('[data-action]');
   if (!btn || btn.disabled) return;
   const action = btn.dataset.action;
