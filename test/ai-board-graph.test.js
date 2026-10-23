@@ -33,7 +33,7 @@ const running = () => ({
   events: [started(20, 3, 150), started(20, 4, 300)],
 });
 const failed = () => ({
-  root: root({ status: 'blocked', rerun_stage: 'plan' }),
+  root: root({ status: 'blocked', rerun_stage: 'plan', rerun_allowed: true }),
   graph,
   runs: [planRun(10, [gate(1, 1, 'passed', 10), gate(2, 2, 'blocked', 11, { public_reason: 'Plan touches a blocked file.' })],
     [call(31, 2, 'brainstorm.md', 9, { result: 'error', error: 'timeout from model' })])],
@@ -122,18 +122,50 @@ test('an edge into a running node flows only from a finished source; passed edge
   assert.doesNotMatch(html, /class="g-edge flow[^"]*" d="[^"]*" data-edge="reverify_open>gate_4"/);
 });
 
-test('rerun action stays on a failed gate node, matching the server stage', () => {
+const runButton = (html) => html.match(/<button[^>]*rerun-node[^>]*>/)?.[0] || '';
+
+test('run again: enabled when the server allows the stage, for a failed or finished node', () => {
   const plan = renderTicketGraph(failed(), 'gate_2');
-  assert.match(plan, /data-action="rerun-gate" data-gate="2"/);
-  assert.match(plan, /Plan again from step 1/);
-  const exec = failed();
-  exec.root.rerun_stage = 'execute';
-  assert.doesNotMatch(renderTicketGraph(exec, 'gate_2'), /rerun-gate/);
-  assert.doesNotMatch(renderTicketGraph({ ...failed(), root: root({ status: 'blocked', rerun_stage: null }) }, 'gate_2'), /rerun-gate/);
+  assert.match(plan, /data-action="rerun-node" data-node="gate_2"/);
+  assert.doesNotMatch(runButton(plan), /disabled/);
+  assert.match(plan, />Run again</);
+  assert.doesNotMatch(runButton(renderTicketGraph(failed(), 'gate_1')), /disabled/);
 });
 
-test('rerun action is not offered on a succeeded node', () => {
-  assert.doesNotMatch(renderTicketGraph(failed(), 'gate_1'), /rerun-gate/);
+test('run again: disabled with the server reason when another stage or a live lease blocks it', () => {
+  const exec = failed();
+  exec.root.rerun_stage = 'execute';
+  exec.root.rerun_allowed = true;
+  assert.match(runButton(renderTicketGraph(exec, 'gate_2')), /disabled/);
+  assert.match(renderTicketGraph(exec, 'gate_2'), /This step is in the other stage/);
+  const leased = { ...failed(), root: root({ status: 'blocked', rerun_stage: null, rerun_allowed: false,
+    rerun_reason: 'A worker is running this request now. Wait until it stops.' }) };
+  assert.match(runButton(renderTicketGraph(leased, 'gate_2')), /disabled/);
+  assert.match(renderTicketGraph(leased, 'gate_2'), /A worker is running this request now/);
+});
+
+test('run again: a running node is disabled; reason text from the server is escaped', () => {
+  const html = renderTicketGraph(running(), 'gate_4');
+  assert.match(runButton(html), /disabled/);
+  assert.match(html, /This step is running now./);
+  const hostile = failed();
+  hostile.root.rerun_allowed = false;
+  hostile.root.rerun_stage = null;
+  hostile.root.rerun_reason = '<img src=x onerror=alert(1)>';
+  const page = renderTicketGraph(hostile, 'gate_2');
+  assert.doesNotMatch(page, /<img src=x/);
+  assert.ok(page.includes('&lt;img src=x onerror=alert(1)&gt;'));
+});
+
+test('node detail lists sandbox runs and skills from evidence, digests only', () => {
+  const data = failed();
+  data.runs[0].gates[1] = gate(2, 2, 'blocked', 11, { public_reason: 'x', evidence: JSON.stringify({
+    skills: ['tizia-ui', { name: 'node-test' }], sandbox_receipts: [{ argv: ['node', '--test', 'test/a.test.js'], rc: 0, duration_ms: 812, attempt: 0 }],
+  }) });
+  const html = renderTicketGraph(data, 'gate_2');
+  assert.ok(html.includes('<h4>Sandbox runs</h4>'));
+  assert.ok(html.includes('<code>node --test test/a.test.js</code> · exit 0 · 0.8 s'));
+  assert.ok(html.includes('<h4>Skills</h4><p>tizia-ui, node-test</p>'));
 });
 
 test('budget cells: API shows tokens with bar, local shows GPU time; warn at 80%, bad when used up', () => {

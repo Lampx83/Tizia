@@ -746,11 +746,12 @@ document.addEventListener('click', e => {
   else if (action === 'reconcile-open') ui.reconcile = { identity: btn.dataset.identity, decision: 'applied', reason: '', evidence: '', resume: true, msg: '' };
   else if (action === 'reconcile-close') ui.reconcile = null;
   else if (action === 'reconcile-go') return submitReconcile(btn);
-  else if (action === 'rerun-gate') {
+  else if (action === 'rerun-node') {
+    if (!window.confirm('Run this step again? The earlier failed attempt stays in the history.')) return;
     btn.disabled = true;
-    post(`/api/admin/ai-board/requests/${REQUEST_ID}/rerun-gate`, { gate: Number(btn.dataset.gate) })
-      .then((r) => { ui.flash = `Đã xếp hàng chạy lại ${r.from_gate === 1 ? 'phần lập kế hoạch từ bước 1' : 'phần thực hiện và kiểm chứng từ bước 3'}. Kết quả mới sẽ cập nhật tại các bước hiện tại.`; })
-      .catch(e => { ui.flash = `Không chạy lại được: ${e.message}`; }).finally(async () => { await refresh(); schedule(); });
+    post(`/api/admin/ai-board/requests/${REQUEST_ID}/nodes/${encodeURIComponent(btn.dataset.node)}/rerun`, {})
+      .then((r) => { ui.flash = `Started again. ${r.note}`; })
+      .catch(e => { ui.flash = `Could not run again: ${e.message}`; }).finally(async () => { await refresh(); schedule(); });
     return;
   }
   render();

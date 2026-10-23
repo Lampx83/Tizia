@@ -1791,7 +1791,10 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     } : null;
     const candidate = await latestCandidate(root.id);
     root.can_rollback = !!candidate && !PHASES[root.phase]?.rollback;
-    root.rerun_stage = await rerunStage(root); // 'plan' | 'execute' | null: which failed stage the admin may rerun now
+    const rerun = await rerunState(root);
+    root.rerun_stage = rerun.stage; // 'plan' | 'execute' | null: which failed stage the admin may rerun now
+    root.rerun_allowed = !!rerun.stage;
+    root.rerun_reason = rerun.reason;
     const allowance = await readRootAllowance(db, root.id);
     root.allowance = allowance && { blocked_reason: allowance.blocked_reason, unknown_holds: allowance.unknown_holds,
       groups: allowance.groups, daily_gpu: await dailyGpuStatus(Number(requestId)) };
@@ -1909,19 +1912,23 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   const EXEC_BLOCKED_PHASES = ['transient_blocked', 'pre_pr_blocked'];
   const gateStage = (gate) => ([1, 2, 2.5].includes(gate) ? 'plan' : [3, 4, 5, 5.5].includes(gate) ? 'execute' : null);
 
-  /** Which stage an admin may rerun right now: 'plan' | 'execute' | null (live, leased, terminal, or a change already exists). */
-  async function rerunStage(root) {
-    if (!root || root.parent_id != null || root.lease_owner || await latestCandidate(root.id)) return null;
-    if (PLAN_BLOCKED_PHASES.includes(root.phase)) return 'plan';
-    return EXEC_BLOCKED_PHASES.includes(root.phase) ? 'execute' : null;
+  /** Which stage an admin may rerun now, with a plain reason when none: {stage: 'plan' | 'execute' | null, reason}. */
+  async function rerunState(root) {
+    if (!root || root.parent_id != null) return { stage: null, reason: 'Only the main request can run again.' };
+    if (root.lease_owner) return { stage: null, reason: 'A worker is running this request now. Wait until it stops.' };
+    if (await latestCandidate(root.id)) return { stage: null, reason: 'A change already exists for this request.' };
+    if (PLAN_BLOCKED_PHASES.includes(root.phase)) return { stage: 'plan', reason: '' };
+    if (EXEC_BLOCKED_PHASES.includes(root.phase)) return { stage: 'execute', reason: '' };
+    return { stage: null, reason: 'The request is not stopped at a step that can run again.' };
   }
 
   const rerunGateTransaction = (requestId, gate, adminUserId, now) => db.tx(async () => {
     const stage = gateStage(gate);
     if (!stage) throw new WorkerContractError('unknown gate', 400, 'invalid_gate');
     const root = await lockedRequestRoot(requestId);
-    if (await rerunStage(root) !== stage) {
-      throw new WorkerContractError('this gate cannot be rerun in the current state of the request', 409, 'not_rerunnable');
+    const allowed = await rerunState(root);
+    if (allowed.stage !== stage) {
+      throw new WorkerContractError(allowed.reason || 'This step is in the other stage. Run that stage instead.', 409, 'not_rerunnable');
     }
     const key = `gate-rerun:${root.id}:${now}:${randomBytes(4).toString('hex')}`;
     if (stage === 'plan') {
@@ -1950,7 +1957,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     queryGet: (sql, params = []) => db.get(sql, params),
     queryAll: (sql, params = []) => db.all(sql, params),
     rerunGate,
-    rerunStage,
+    rerunState,
     // A request with a root ticket takes its status from the root (trigger ai_root_request_status): only a legacy request may be reopened directly.
     hasRoot: async (requestId) => !!await db.get('SELECT 1 FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL', [Number(requestId)]),
     createRequestWithRoot,
