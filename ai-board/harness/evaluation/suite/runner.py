@@ -23,7 +23,7 @@ import eval_fast
 from gates import gate3_guards, plan_validate
 from runtime import tool_loop, tool_manifest
 from runtime.budget import Budget
-from evaluation.suite import ablation, grading, isolated, metrics, taskpack, trial
+from evaluation.suite import ablation, case_select, grading, isolated, metrics, taskpack, trial
 from evaluation.suite.launcher import sqlite_launcher
 
 HERE = Path(__file__).resolve().parent
@@ -160,6 +160,12 @@ def cmd_run(args, deps=None) -> int:
     from main import ENV_FILE, ROOT
     from runtime.pipeline import Deps
     real_run = deps is None
+    if args.case_ids and (args.cases or args.kinds):
+        print("[suite] --case-ids không dùng chung với --cases/--kinds", file=sys.stderr)
+        return 2
+    if args.case_key and not args.case_ids:
+        print("[suite] --case-key cần --case-ids", file=sys.stderr)
+        return 2
     if args.trial_timeout_s <= 0 or (real_run and (args.workers != 1 or args.trial_timeout_s > 300)):
         print("[suite] timeout must be positive (maximum 300 seconds for real trials), with exactly one real worker", file=sys.stderr)
         return 2
@@ -229,11 +235,21 @@ def cmd_run(args, deps=None) -> int:
     except eval_corpus.CorpusError as error:
         print(f"[suite] {error}", file=sys.stderr)
         return 2
-    tasks = [t for t in tasks if args.split in ("all", t["split"])]
-    if args.kinds:
-        tasks = [t for t in tasks if t.get("kind") in args.kinds.split(",")]
-    if args.cases:
-        tasks = tasks[: args.cases]
+    case_meta = None
+    if args.case_ids:
+        try:
+            ids, sha = case_select.load(Path(args.case_ids), args.case_key)
+            tasks = case_select.select(tasks, ids, args.split)
+        except case_select.SelectionError as error:
+            print(f"[suite] {error}", file=sys.stderr)
+            return 2
+        case_meta = {"file": Path(args.case_ids).name, "key": args.case_key, "sha256": sha, "n": len(tasks)}
+    else:
+        tasks = [t for t in tasks if args.split in ("all", t["split"])]
+        if args.kinds:
+            tasks = [t for t in tasks if t.get("kind") in args.kinds.split(",")]
+        if args.cases:
+            tasks = tasks[: args.cases]
     for pack in args.pack or []:
         problems = taskpack.validate(json.loads(Path(pack).read_text(encoding="utf-8")), ROOT)
         if problems:
@@ -254,11 +270,13 @@ def cmd_run(args, deps=None) -> int:
             + (f"-loop{'' if args.tool_loop == '1' else args.tool_loop}" if args.tool_loop else "")
             + (f"-cap{caps[0]}x{caps[1]}" if caps else "")
             + (f"-skill{args.skill_pad_chars}" if args.skill_pad_chars else "")
-            + ("-split" if args.prompt_split else ""))
+            + ("-split" if args.prompt_split else "")
+            + (f"-cases-{case_meta['sha256'][:12]}" if case_meta else ""))
     run_dir = root / "suite" / name
     run_dir.mkdir(parents=True, exist_ok=True)
     meta = {"seed": args.seed, "split": args.split, "repeats": args.repeats, "modes": modes, "fast_tier": args.fast_tier, "review": args.review, "packs": [_sha(Path(p)) for p in args.pack or []], **prov,
-            "corpus_sha": hashlib.sha256(json.dumps(tasks, ensure_ascii=False, sort_keys=True).encode()).hexdigest()}
+            "corpus_sha": hashlib.sha256(json.dumps(tasks, ensure_ascii=False, sort_keys=True).encode()).hexdigest(),
+            **({"case_ids": case_meta} if case_meta else {})}
     meta_path = run_dir / "run.json"
     if meta_path.exists():
         old = json.loads(meta_path.read_text(encoding="utf-8"))
@@ -334,6 +352,8 @@ def cmd_run(args, deps=None) -> int:
     meta_path.write_text(json.dumps({**meta, "status": status, "rows": len(rows), "integrity": problems}, indent=2), encoding="utf-8")
     if rows:
         print(render(write_report(run_dir, rows)))
+    if case_meta:
+        print(f"[suite] mẫu: {case_meta['n']} case x {args.repeats} lượt x {len(modes)} mode")
     print(f"[suite] {status}; {run_dir}" + (f"; KHÔNG TIN SỐ LIỆU: {'; '.join(problems)}" if problems else "; integrity ok"))
     return 2 if abort else 0
 
@@ -441,6 +461,8 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--workers", type=int, default=1, help="exactly one worker for real model trials")
     run.add_argument("--root", required=True)
     run.add_argument("--cases", type=int)
+    run.add_argument("--case-ids", help="file: JSON id array, or object with --case-key; runs exactly these corpus cases (sorted by id)")
+    run.add_argument("--case-key", help="key to read from an object --case-ids file (e.g. tune, confirm)")
     run.add_argument("--kinds", help="comma list of task kinds to keep (smoke runs)")
     run.add_argument("--fast-tier", action="store_true", help="gate 4 + production text oracle on a locally started corpus app")
     run.add_argument("--max-minutes", type=float)
