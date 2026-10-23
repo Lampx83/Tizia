@@ -1735,12 +1735,15 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     const allCalls = [];
     // ai_runs has no status column; the verdict outcome (null until one lands) is the run's status.
     const runRows = await db.all(`
-      SELECT r.id, r.attempt, r.trigger, r.outcome AS status, r.gate, r.created_at, r.updated_at, r.worker_id, r.evidence_json,
+      SELECT r.id, r.attempt, r.trigger, r.outcome AS status, r.gate, r.created_at, r.updated_at, r.worker_id, r.evidence_json, r.plan_revision,
              w.mode AS worker_mode, w.version AS worker_version, w.last_seen_at AS worker_last_seen
       FROM ai_runs r LEFT JOIN ai_workers w ON w.worker_id = r.worker_id
       WHERE r.ticket_id=? ORDER BY r.created_at, r.id
     `, [root.id]);
+    const subtasksByRevision = new Map();
+    for (const child of children) subtasksByRevision.set(child.plan_revision, (subtasksByRevision.get(child.plan_revision) || 0) + 1);
     const runs = runRows.map(({ evidence_json: runEvidence, ...run }, i) => {
+      const subtaskCount = subtasksByRevision.get(run.plan_revision) || 0;
       const gates = [];
       const calls = [];
       for (const { run_id: runId, evidence_json: json, ...row } of traces) {
@@ -1758,6 +1761,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       return { ...run, rollback, gates, calls, change_class: changeClass, totals: summarizeCalls(calls.map((c) => c.evidence)),
         commit: produced ? { branch: produced.branch, head_sha: produced.head_sha } : null,
         budget_used: budgetUsed, budget_limit: root.budget_limit,
+        subtask_count: subtaskCount, wall_clock_limit_s: scaledLimit('wall_clock_s', subtaskCount),
         progress: runProgress({ ...run, gates, calls }, events, live) };
     });
     const evidences = allCalls.map((c) => c.evidence);
