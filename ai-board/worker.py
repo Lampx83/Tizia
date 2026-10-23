@@ -186,11 +186,17 @@ class _Execution:
             cursor = self.checkpoint.load_cursor()
             if cursor and cursor.get("base") == self.grounded and isinstance(cursor.get("repairs"), list):
                 self.repairs, self.repair_reason = list(cursor["repairs"]), cursor.get("repair_reason")
+        saver = self.checkpoint.graph_saver(f"{self.checkpoint.run_scope}@{self.grounded}") if self.graph_persistence() else None
         try:
-            self.path = exec_graph.run(self.handlers(), exec_graph.spec()["entries"][self.ENTRY])
+            self.path = exec_graph.run(self.handlers(), exec_graph.spec()["entries"][self.ENTRY], checkpointer=saver,
+                                       thread_id=saver.thread_id if saver else None)
         finally:
             self.close_attempt()  # a lease loss or crash inside a node still cleans the attempt up
         return self.result
+
+    def graph_persistence(self) -> bool:
+        from runtime import exec_graph
+        return exec_graph.persistence_enabled() and self.checkpoint is not None and hasattr(self.checkpoint, "graph_saver")
 
     # ── nodes ──
     def attempt_open(self) -> str:
@@ -414,7 +420,8 @@ def drop_screenshots(shots: list[dict]) -> None:
 
 def _worker_checkpoint(ticket_id: int, plan: dict, plan_hash: str | None = None):
     """Checkpoint theo ticket + plan_hash server (thiếu → băm plan cục bộ): qua API server khi có lease, DATABASE_URL chỉ cho chạy ngoài worker HTTP; None khi cờ tắt."""
-    if os.getenv("AI_BOARD_TOOL_LOOP") != "1":
+    from runtime import exec_graph
+    if os.getenv("AI_BOARD_TOOL_LOOP") != "1" and not exec_graph.persistence_enabled():
         return None
     digest = str(plan_hash) if plan_hash else hashlib.sha256(
         json.dumps(plan, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")).hexdigest()

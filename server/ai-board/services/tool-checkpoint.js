@@ -8,6 +8,8 @@ const RESOLUTIONS = { applied: 'applied', not_applied: 'void', compensate: 'comp
 const IDENTITY = /^[0-9a-f]{32}$/;
 const MAX_JSON = 200_000;
 const MAX_OBSERVATION = 100_000;
+const MAX_GRAPH_BLOB = 8_000_000;
+const MAX_GRAPH_WRITES = 200;
 const bad = (message, code = 'invalid_checkpoint', status = 400) => new WorkerContractError(message, status, code);
 const digest = (text) => createHash('sha256').update(String(text ?? ''), 'utf8').digest('hex');
 
@@ -28,6 +30,33 @@ const marks = (list) => list.map(() => '?').join(',');
 export function createToolCheckpointService(store) {
   const db = store.db;
   const scopeOf = (ticketId) => `ticket-${Number(ticketId)}:`;
+
+  // Graph thread = one LangGraph run; plan_hash pins it: a changed plan or base cannot resume the old checkpoints.
+  const graphThread = (ticketId, body) => {
+    const thread = String(body.thread_id ?? '');
+    if (!thread.startsWith(scopeOf(ticketId))) throw bad('thread_id must start with the ticket scope', 'scope_mismatch', 409);
+    return thread;
+  };
+  const graphPin = (body) => {
+    const pin = String(body.pin ?? '');
+    if (!pin) throw bad('graph pin required', 'invalid_pin');
+    return pin.slice(0, 200);
+  };
+  const graphId = (value) => {
+    const id = String(value ?? '');
+    if (!id || id.length > 200) throw bad('invalid graph id', 'invalid_checkpoint');
+    return id;
+  };
+  const graphBlob = (value, name) => {
+    const text = String(value ?? '');
+    if (text.length > MAX_GRAPH_BLOB) throw bad(`${name} too large`);
+    return text;
+  };
+  const graphRow = (row) => ({ checkpoint_id: row.checkpoint_id, parent_id: row.parent_id, type: row.type, checkpoint: row.checkpoint, metadata: row.metadata });
+  async function pinGraph(thread, pin) {
+    const row = await db.get('SELECT plan_hash FROM graph_checkpoint WHERE thread_id=? LIMIT 1', [thread]);
+    if (row && row.plan_hash !== pin) throw bad('graph plan changed since the checkpoint', 'graph_drift', 409);
+  }
 
   async function ownedRun(ticketId, { proposalId, child }) {
     const run = await db.get('SELECT * FROM tool_run WHERE proposal_id=? AND child=?', [proposalId, child]);
@@ -141,6 +170,59 @@ export function createToolCheckpointService(store) {
         if (!owned || open) continue; // bước chưa chốt không bao giờ bị dọn
         await db.run('DELETE FROM tool_step WHERE proposal_id=?', [id]);
         await db.run('DELETE FROM tool_run WHERE proposal_id=?', [id]);
+      }
+      return { ok: true };
+    },
+    async graph_put(ticketId, body) {
+      const thread = graphThread(ticketId, body), pin = graphPin(body), ns = String(body.checkpoint_ns ?? '');
+      await pinGraph(thread, pin);
+      await db.run(`INSERT INTO graph_checkpoint(thread_id, checkpoint_ns, checkpoint_id, parent_id, type, checkpoint, metadata, plan_hash, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (thread_id, checkpoint_ns, checkpoint_id) DO UPDATE SET checkpoint=EXCLUDED.checkpoint, metadata=EXCLUDED.metadata,
+          updated_at=EXCLUDED.updated_at`,
+        [thread, ns, graphId(body.checkpoint_id), body.parent_id == null ? null : String(body.parent_id), String(body.type || '').slice(0, 40),
+          graphBlob(body.checkpoint, 'checkpoint'), graphBlob(body.metadata, 'metadata'), pin, Date.now()]);
+      return { ok: true };
+    },
+    async graph_get(ticketId, body) {
+      const thread = graphThread(ticketId, body), ns = String(body.checkpoint_ns ?? '');
+      await pinGraph(thread, graphPin(body));
+      const row = body.checkpoint_id
+        ? await db.get(`SELECT * FROM graph_checkpoint WHERE thread_id=? AND checkpoint_ns=? AND checkpoint_id=?`, [thread, ns, graphId(body.checkpoint_id)])
+        : await db.get(`SELECT * FROM graph_checkpoint WHERE thread_id=? AND checkpoint_ns=? ORDER BY checkpoint_id DESC LIMIT 1`, [thread, ns]);
+      if (!row) return { checkpoint: null, writes: [] };
+      const writes = await db.all(`SELECT task_id, idx, channel, type, value FROM graph_write
+        WHERE thread_id=? AND checkpoint_ns=? AND checkpoint_id=? ORDER BY task_id, idx`, [thread, ns, row.checkpoint_id]);
+      return { checkpoint: graphRow(row), writes };
+    },
+    async graph_list(ticketId, body) {
+      const thread = graphThread(ticketId, body), ns = String(body.checkpoint_ns ?? '');
+      await pinGraph(thread, graphPin(body));
+      const limit = Math.min(Math.max(Number(body.limit) || 10, 1), 100);
+      const rows = body.before
+        ? await db.all(`SELECT * FROM graph_checkpoint WHERE thread_id=? AND checkpoint_ns=? AND checkpoint_id < ? ORDER BY checkpoint_id DESC LIMIT ?`,
+          [thread, ns, graphId(body.before), limit])
+        : await db.all(`SELECT * FROM graph_checkpoint WHERE thread_id=? AND checkpoint_ns=? ORDER BY checkpoint_id DESC LIMIT ?`, [thread, ns, limit]);
+      return { checkpoints: rows.map(graphRow) };
+    },
+    async graph_purge(ticketId, body) {
+      const thread = graphThread(ticketId, body), ns = String(body.checkpoint_ns ?? '');
+      await db.run('DELETE FROM graph_write WHERE thread_id=? AND checkpoint_ns=?', [thread, ns]);
+      await db.run('DELETE FROM graph_checkpoint WHERE thread_id=? AND checkpoint_ns=?', [thread, ns]);
+      return { ok: true };
+    },
+    async graph_writes(ticketId, body) {
+      const thread = graphThread(ticketId, body), pin = graphPin(body), ns = String(body.checkpoint_ns ?? '');
+      await pinGraph(thread, pin);
+      const writes = Array.isArray(body.writes) ? body.writes : [];
+      if (writes.length > MAX_GRAPH_WRITES) throw bad('too many pending writes');
+      const id = graphId(body.checkpoint_id), task = graphId(body.task_id);
+      for (const write of writes) {
+        await db.run(`INSERT INTO graph_write(thread_id, checkpoint_ns, checkpoint_id, task_id, idx, channel, type, value)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT (thread_id, checkpoint_ns, checkpoint_id, task_id, idx) DO UPDATE SET channel=EXCLUDED.channel, type=EXCLUDED.type, value=EXCLUDED.value`,
+          [thread, ns, id, task, Number(write.idx), String(write.channel || '').slice(0, 80), write.type == null ? null : String(write.type).slice(0, 40),
+            graphBlob(write.value, 'write')]);
       }
       return { ok: true };
     },

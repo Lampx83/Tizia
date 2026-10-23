@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import operator
+import os
 from pathlib import Path
 from typing import Annotated, Callable, TypedDict
 
@@ -11,6 +12,10 @@ PATH = Path(__file__).resolve().parents[3] / "server" / "ai-board" / "contract.j
 
 def spec() -> dict:
     return json.loads(PATH.read_text(encoding="utf-8"))["execution_graph"]
+
+
+def persistence_enabled() -> bool:
+    return os.environ.get("AI_BOARD_GRAPH_PERSISTENCE") == "1"
 
 
 class GraphState(TypedDict, total=False):
@@ -22,7 +27,7 @@ class GraphError(RuntimeError):
     """The spec and the handlers disagree, or a node reported an outcome the spec has no edge for."""
 
 
-def compile_graph(handlers: dict[str, Callable[[], str]], entry: str, *, graph_spec: dict | None = None):
+def compile_graph(handlers: dict[str, Callable[[], str]], entry: str, *, graph_spec: dict | None = None, checkpointer=None):
     """Every reachable node but a bare end node needs a handler; every outcome a handler returns needs an edge."""
     from langgraph.graph import END, START, StateGraph
 
@@ -68,17 +73,25 @@ def compile_graph(handlers: dict[str, Callable[[], str]], entry: str, *, graph_s
     for nid in work:
         graph.add_conditional_edges(nid, router(nid))
     # An end node is where the walk stops; remember which one so callers can tell verdict from plan_stopped.
-    return graph.compile(), nodes, routes
+    return graph.compile(checkpointer=checkpointer), nodes, routes
 
 
-def run(handlers: dict[str, Callable[[], str]], entry: str, *, graph_spec: dict | None = None) -> list[str]:
-    """Walk the graph from `entry`; return the executed node path including the end node reached."""
+def run(handlers: dict[str, Callable[[], str]], entry: str, *, graph_spec: dict | None = None,
+        checkpointer=None, thread_id: str | None = None) -> list[str]:
+    """Walk the graph from `entry`; return the executed node path including the end node reached.
+    With `checkpointer` + `thread_id` each node's progress is saved; the thread is purged first, so a
+    rerun re-enters from `entry` (resume is the caller's replay of tool steps, not a graph jump)."""
     from langgraph.errors import GraphRecursionError
 
     graph_spec = graph_spec or spec()
-    compiled, nodes, routes = compile_graph(handlers, entry, graph_spec=graph_spec)
+    compiled, nodes, routes = compile_graph(handlers, entry, graph_spec=graph_spec, checkpointer=checkpointer)
+    config = {"recursion_limit": int(graph_spec.get("recursion_limit", 80))}
+    if checkpointer is not None:
+        checkpointer.purge(thread_id)
+        config["configurable"] = {"thread_id": thread_id, "checkpoint_ns": ""}
+    payload = {"path": []}
     try:
-        final = compiled.invoke({"path": []}, config={"recursion_limit": int(graph_spec.get("recursion_limit", 80))})
+        final = compiled.invoke(payload, config=config)
     except GraphRecursionError as error:
         raise GraphError("the graph did not terminate within its recursion limit") from error
     path = list(final["path"])
