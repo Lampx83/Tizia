@@ -122,6 +122,8 @@ def _split_call(prompt: str, role: str, routing, extra: dict | None, options: di
         if (context or {}).get('expected_pin') and context['expected_pin'] != default_skills.selection_pin(selected):
             raise default_skills.SkillPolicyChanged('selected skills changed; restart under current guidance')
         system += '\n\n' + default_skills.system_text(selected)
+        if role == 'gate4_review':
+            system += default_skills.review_axes_block()
         admin = '\n\n'.join(default_skills.admin_text(s) for s in selected if s.source == 'admin')
         if admin:
             _, user = prompt_roles.split(prompt + '\n\n' + admin)

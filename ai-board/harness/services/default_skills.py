@@ -1,12 +1,14 @@
 """Reviewed advisory skills; tool/context policy remains outside these files."""
 import hashlib
 import json
+import os
 import re
 import html
 from dataclasses import dataclass, replace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1] / 'skills'
+REVIEW_AXES = ROOT / 'proposed' / 'review-two-axes' / 'SKILL.md'
 TASK_TYPES = {'backend', 'frontend', 'database', 'review', 'test', 'all'}
 FIELDS = {'name', 'description', 'task_type', 'source', 'version', 'max_tokens'}
 FORBIDDEN = re.compile(r'(?:ignore|override|bypass|grant|enable)\s+(?:all\s+)?(?:platform|permission|tools?|rules?|budget|sandbox)|(?:request|require|need)\w*\s+(?:permission|access|tools?)|tools?\s+required\s*:|(?:bỏ qua|ghi đè|cấp quyền|vô hiệu hóa|yêu cầu quyền|cần quyền)', re.I)
@@ -137,6 +139,17 @@ def select(role, context=None):
 
 def system_text(skills):
     return '\n\n'.join(_render(s.name, s.version, s.body) for s in skills if s.source == 'default')
+
+
+def review_axes_block():
+    """Two-axis review skill as advisory block when AI_BOARD_SKILL_VARIANT names it, else ''. Cap enforced as for admin skills."""
+    if 'review-two-axes' not in [v.strip() for v in os.environ.get('AI_BOARD_SKILL_VARIANT', '').split(',')]:
+        return ''
+    skill = parse(REVIEW_AXES.read_bytes().decode('utf-8'))
+    text = admin_text(skill)
+    if len(text.encode('utf-8')) > skill.max_tokens:
+        raise ValueError('review-two-axes exceeds token budget')
+    return '\n\n' + text
 
 
 def pin(role, context=None):

@@ -696,8 +696,12 @@ def test_skill_variant_flag_is_validated_recorded_and_separates_the_arm(world, m
     assert runner.main([*argv, "--skill-variant", "plan-from-request,plan-from-request"], deps) == 2
     assert runner.main([*argv, "--skill-variant", "plan-from-request,implement-one-slice"], deps) == 0
     assert os.environ["AI_BOARD_SKILL_VARIANT"] == "plan-from-request,implement-one-slice"
+    assert runner.main([*argv, "--skill-variant", "review-two-axes"], deps) == 0
+    assert os.environ["AI_BOARD_SKILL_VARIANT"] == "review-two-axes"
     assert runner.main(argv, deps) == 0 and os.environ["AI_BOARD_SKILL_VARIANT"] == ""
     suite = root / "suite"
+    review_arm = next(d for d in suite.iterdir() if d.name.endswith("-var-review-two-axes"))
+    assert json.loads((review_arm / "run.json").read_text(encoding="utf-8"))["skill_variant"] == ["review-two-axes"]
     suffix = "-var-plan-from-request+implement-one-slice"
     variant_name = next(d.name for d in suite.iterdir() if d.name.endswith(suffix))
     variant = json.loads((suite / variant_name / "run.json").read_text(encoding="utf-8"))

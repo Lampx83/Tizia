@@ -34,7 +34,7 @@ def run(state: dict, deps, budget, *, db_path=None, proposal_id=None) -> dict:
     diff = re.sub(r'</?DIFF>', '', text[:MAX_DIFF_CHARS])
     if not budget.tick():
         return _blocked('adversarial review: budget exhausted', 'budget')
-    system = prompt_roles.SYSTEM + '\n\n' + default_skills.system_text(default_skills.select('gate4_review', {}))
+    system = prompt_roles.SYSTEM + '\n\n' + default_skills.system_text(default_skills.select('gate4_review', {})) + default_skills.review_axes_block()
     routing = getattr(deps.models, 'routing', None)
     role_extra, role_options = prompt_roles.call_params('gate4_review', routing)
     try:
