@@ -554,8 +554,14 @@ function renderSpanTimeline(trace) {
     ${older.map((run) => det(`spans-${run.id}`, `Lượt #${esc(run.id)} · ${esc(run.spans.length)} bước`, table(run))).join('')}`;
 }
 
+// Screenshots of the newest message that carries any (before/after pairs go through renderAtts).
+function shotsOf(messages) {
+  const withShots = [...messages].reverse().find((m) => Array.isArray(m.attachments) && m.attachments.some((a) => a?.kind === 'screenshot'));
+  return withShots ? renderAtts(withShots.attachments.filter((a) => a?.kind === 'screenshot')) : '';
+}
+
 // Result box: what was asked, which files change, acceptance and subtasks.
-function resultBox(t) {
+function resultBox(t, messages = []) {
   const plan = t.plan?.plan;
   if (!plan) return '';
   const files = (plan.allowed_scope || []).map((f) => code(f)).join(' ');
@@ -566,15 +572,16 @@ function resultBox(t) {
     ${row('File thay đổi', files)}
     ${row('Tiêu chí đạt', (plan.acceptance || []).map(esc).join('; '))}
     ${subtasks ? row('Việc con', `<ul>${subtasks}</ul>`) : ''}
+    ${row('Ảnh chụp', shotsOf(messages))}
   </div>`;
 }
 
-function renderAiBoard(t) {
+function renderAiBoard(t, messages = []) {
   const root = t.root;
   const [state, label] = ROOT_STATUS[root.status] || ['idle', root.status];
   const shownState = root.live ? 'run' : state;
   const summary = `<div class="g-summary">
-      ${resultBox(t)}
+      ${resultBox(t, messages)}
       <div class="line1">${tag(shownState, root.live ? 'Đang xử lý' : label)}<span>${esc(root.phase_label)}</span>${root.live ? '<span class="pulse" title="Worker đang giữ yêu cầu này"></span>' : ''}</div>
       ${root.public_note ? `<div>${esc(root.public_note)}</div>` : ''}
       ${root.internal_reason ? reasonBlock(root.internal_reason) : ''}
@@ -622,7 +629,7 @@ function render() {
         · <span class="pill">${esc(r.status)}</span> · tạo ${fmt(r.created_at)}</div>
       ${renderActions(r, trace)}
     </header>
-    ${trace ? renderAiBoard(trace) : '<section class="blk meta">Yêu cầu này chưa có ticket AI Board.</section>'}
+    ${trace ? renderAiBoard(trace, thread.messages || []) : '<section class="blk meta">Yêu cầu này chưa có ticket AI Board.</section>'}
   `);
   syncOpen();
   const go = $('#confirm-go');
