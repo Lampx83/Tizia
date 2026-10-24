@@ -159,10 +159,14 @@
   .g-state.st-running { color:var(--accent2); }
   .g-frame { margin-top:28px; overflow-x:auto; overflow-y:hidden; }
   .g-svg { display:block; width:100%; min-width:900px; height:auto; }
-  .g-edge { fill:none; stroke:var(--muted); stroke-opacity:.45; stroke-width:1; }
-  .g-edge.done { stroke:var(--ok); stroke-opacity:.8; }
-  .g-edge.stop { stroke:var(--bad); stroke-opacity:.6; stroke-dasharray:2 4; }
-  .g-edge.flow { stroke:var(--accent2); stroke-opacity:1; stroke-dasharray:4 8; animation:g-flow 1.2s linear infinite; }
+  .g-edge { fill:none; stroke:var(--muted); stroke-opacity:.6; stroke-width:1.5; marker-end:url(#g-arr); }
+  .g-arr { fill:var(--muted); fill-opacity:.8; }
+  .g-arr.done { fill:var(--ok); }
+  .g-arr.stop { fill:var(--bad); }
+  .g-arr.flow { fill:var(--accent2); }
+  .g-edge.done { stroke:var(--ok); stroke-opacity:.8; marker-end:url(#g-arr-done); }
+  .g-edge.stop { stroke:var(--bad); stroke-opacity:.6; stroke-dasharray:2 4; marker-end:url(#g-arr-stop); }
+  .g-edge.flow { stroke:var(--accent2); stroke-opacity:1; stroke-dasharray:4 8; animation:g-flow 1.2s linear infinite; marker-end:url(#g-arr-flow); }
   @keyframes g-flow { to { stroke-dashoffset:-24; } }
   .g-box { fill:var(--bg); stroke:var(--muted); stroke-width:1.5; }
   .g-glyph { color:var(--muted); }

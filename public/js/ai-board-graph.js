@@ -267,15 +267,19 @@ function logPanel(node) {
   return `${models}${tools}${sandbox}${skills}${earlier}${raw}`;
 }
 
-// Orthogonal edge: straight when aligned, else one bend. Loop-back runs under the row. Endpoints are node centres.
+// Orthogonal edge: straight when aligned, else one bend. Loop-back runs under the row. Starts at the source centre, ends on the target box edge so the arrowhead stays visible.
 function edgePath(from, to, back) {
   const [x1, y1] = NODES[from].at, [x2, y2] = NODES[to].at;
-  if (back) return `M${x1} ${y1}V${Math.max(y1, y2) + 60}H${x2}V${y2}`;
-  if (x1 === x2 || y1 === y2) return `M${x1} ${y1}L${x2} ${y2}`;
+  const sx = Math.sign(x2 - x1), sy = Math.sign(y2 - y1);
+  if (back) return `M${x1} ${y1}V${Math.max(y1, y2) + 60}H${x2}V${y2 + 28}`;
+  if (y1 === y2) return `M${x1} ${y1}L${x2 - sx * 75} ${y2}`;
+  if (x1 === x2) return `M${x1} ${y1}L${x2} ${y2 - sy * 28}`;
   // Into plan_stopped drop first, so the run stays on the free row below the gate row.
-  if (to === 'plan_stopped') return `M${x1} ${y1}V${y2}H${x2}`;
-  return `M${x1} ${y1}H${x2}V${y2}`;
+  if (to === 'plan_stopped') return `M${x1} ${y1}V${y2}H${x2 - sx * 75}`;
+  return `M${x1} ${y1}H${x2}V${y2 - sy * 28}`;
 }
+
+const ARROW_DEFS = ['', 'done', 'stop', 'flow'].map(k => `<marker id="g-arr${k ? `-${k}` : ''}" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto"><path class="g-arr${k ? ` ${k}` : ''}" d="M0 1L10 5L0 9z"/></marker>`).join('');
 
 function edgeSvg(edge, nodes) {
   const from = nodes[edge.from], to = nodes[edge.to];
@@ -325,6 +329,7 @@ export function renderTicketGraph(trace = {}, chosen = null, now = Date.now(), e
       <div class="g-strip" role="group" aria-label="Budget">${cells}</div>
       <p class="g-legend meta">${Object.keys(ICON).map(s => `<span class="g-state st-${s}">${icon(s)}${esc(STATE_LABEL[s])}</span>`).join('')}</p>
       <div class="g-frame"><svg class="g-svg" viewBox="-20 0 1040 540" role="group" aria-label="Ticket processing graph">
+        <defs>${ARROW_DEFS}</defs>
         <g class="g-edges">${edges}</g>
         <g class="g-nodes">${drawn}</g>
       </svg></div>
