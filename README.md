@@ -112,18 +112,47 @@ Bộ data: 81 thuốc, 30 dược liệu, 10 ca lâm sàng, 85+ scenarios theo D
 
 ---
 
-## 📦 Deploy qua Portainer (Stack from Git)
+## 📦 Deploy lên production (tizia.vn)
 
-1. Portainer → **Stacks** → **+ Add stack** → name: `tizia`
-2. Build method: **Repository**
-3. Điền:
-   - **Repository URL**: `https://github.com/Lampx83/Tizia.git`
-   - **Repository reference**: `refs/heads/main`
-   - **Compose path**: `docker-compose.yml`
-4. Bật **Automatic updates** (tuỳ chọn) → poll 5–15 phút để auto-redeploy
-5. **Deploy the stack**
+> **Push lên GitHub KHÔNG tự deploy.** Repo không có CI. Prod không đọc nhánh git nào:
+> container `tizia` (Express) và `tizia-next` (Next, cửa trước) được build từ thư mục
+> **`/home/codelab/tizia-dev`** trên server `101.96.66.232`. Thư mục này không có `.git`,
+> chỉ đổi khi có người chép code vào. `watchtower` trên server chỉ theo dõi `sim-agent`.
 
-Mở `http://<host>:8041`.
+**Nhánh prod là `feat/postgres-migration`**, không phải `main` (hai nhánh có lịch sử tách rời).
+
+### Cách deploy
+
+Commit và push lên `feat/postgres-migration`, rồi chạy:
+
+```bash
+bash scripts/deploy-prod.sh --dry-run   # xem file nào sẽ đổi, container nào sẽ rebuild
+bash scripts/deploy-prod.sh             # deploy thật, hỏi xác nhận trước khi ghi
+```
+
+Script [scripts/deploy-prod.sh](scripts/deploy-prod.sh) làm các bước:
+
+1. Kiểm tra: đúng nhánh prod, không còn thay đổi chưa commit, không thiếu commit của người khác trên GitHub.
+2. Xuất **HEAD đã commit** bằng `git archive`, so nội dung với `tizia-dev` và liệt kê file sẽ đổi.
+3. Báo trước nếu container đang có file khác `tizia-dev` (hot-patch `docker cp` sắp bị ghi đè).
+4. `rsync` `server/ public/ scripts/ package*.json web-next/` vào `tizia-dev`. File bị ghi đè được cất vào `tizia-dev/.bak-deploy-<giờ>/`.
+5. `docker compose up -d --build` **chỉ** container có file đổi (`tizia` và/hoặc `tizia-next`), chờ healthy.
+6. Kiểm tra `/api/health`, trang chủ, md5 file trong container khớp `tizia-dev`, chạy `scripts/check-deployed-build.mjs`. Cuối cùng in lệnh quay lại bản trước.
+
+Script **không đụng** `.env`, `docker-compose.yml`, `Dockerfile`, `node_modules`, `web-next/.env.local` hay dữ liệu.
+Tuỳ chọn: `--only tizia|next`, `--delete` (dọn file đã xoá khỏi git), `--yes`, `--help`.
+Cần SSH alias `tizia-prod` trong `~/.ssh/config` (hoặc đặt `PROD_HOST`).
+
+### Bẫy cần nhớ
+
+- **Thay đổi cấu trúc bảng (DDL)**: chạy trên container `tizia-postgres` **trước** khi deploy. Script chỉ nhắc khi thấy `db.js`/`pg.js`/schema đổi.
+- **`docker cp` vào container là tạm thời**: có hiệu lực ngay nhưng mất ở lần rebuild sau. Muốn giữ lâu thì file phải nằm trong `tizia-dev`, tức là đi qua script.
+- **Đừng chép đè** `docker-compose.yml` từ máy local lên prod: bản trên prod có cấu hình riêng (IP cố định, network `126_default`, volume ngoài).
+- Xem bản đang chạy là commit nào: `node scripts/check-deployed-build.mjs`, hoặc `ssh tizia-prod cat /home/codelab/tizia-dev/.last-deploy`.
+
+### Chạy trên máy khác (không phải tizia.vn)
+
+`docker compose up --build -d` ở thư mục gốc repo, mở `http://<host>:8041`.
 
 ### Lưu ý production
 - **HTTPS BẮT BUỘC nếu cần webcam**: MediaPipe `getUserMedia` **chỉ chạy trên HTTPS hoặc localhost**.
@@ -131,11 +160,7 @@ Mở `http://<host>:8041`.
   - **Cloudflare Tunnel** (đơn giản nhất, public HTTPS miễn phí): xem [cloudflared-config.example.yml](cloudflared-config.example.yml)
   - **Caddy + Let's Encrypt**: `DOMAIN=edu.example.com ACME_EMAIL=… docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d`
   - **Caddy + mkcert** (LAN nội bộ): trust root CA trên từng máy
-- **Backup volume**:
-  ```bash
-  docker run --rm -v tizia_tizia-data:/data -v $PWD:/backup alpine \
-    tar czf /backup/tizia-backup.tar.gz /data
-  ```
+- **Backup trên tizia.vn**: cron 3h hằng ngày chạy `/home/codelab/services/backup/tizia-backup.sh` (pg_dump Postgres + uploads + portal-apps, có restore thử). Máy khác thì tự backup volume `/data` và volume Postgres.
 - **Đổi port host**: sửa `8041:8041` → `<host_port>:8041` trong compose, KHÔNG đổi `PORT` env.
 
 ---
