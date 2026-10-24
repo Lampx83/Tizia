@@ -288,7 +288,7 @@ function edgeSvg(edge, nodes) {
 }
 
 // Three stacked panels: properties, graph, execution log. Chosen node null → the running node, else the failed one.
-export function renderTicketGraph(trace = {}, chosen = null, now = Date.now()) {
+export function renderTicketGraph(trace = {}, chosen = null, now = Date.now(), extras = {}) {
   const nodes = graphNodes(trace);
   const selectedId = pick(nodes, chosen);
   const edges = (trace.graph?.edges || []).filter(drawnEdge).map(e => edgeSvg(e, nodes)).join('');
@@ -315,10 +315,13 @@ export function renderTicketGraph(trace = {}, chosen = null, now = Date.now()) {
     </div>`).join('');
   const chosenNode = nodes[selectedId];
   const steps = shown.map(n => `<li><button type="button" class="g-step st-${n.state}${n.id === selectedId ? ' is-selected' : ''}" data-node="${esc(n.id)}" aria-pressed="${n.id === selectedId}">${icon(n.state)}<span class="g-step-name">${esc(n.name)}</span><span class="g-step-state">${esc(STATE_LABEL[n.state])}</span></button></li>`).join('');
-  return `<section class="ticket-graph" aria-labelledby="ticket-graph-title">
-    <h2 id="ticket-graph-title">Ticket graph</h2>
-    <div class="blk g-props" role="region" aria-live="polite" aria-label="Thuộc tính bước">${propsPanel(chosenNode, trace.root)}</div>
-    <div class="blk g-graph">
+  return `<section class="ticket-graph">
+    <div class="blk g-props" role="region" aria-live="polite" aria-label="Properties">
+      <div class="g-caption">Properties</div>
+      ${extras.summary || ''}${propsPanel(chosenNode, trace.root)}
+    </div>
+    <div class="blk g-graph" aria-label="Graph">
+      <div class="g-caption">Graph</div>
       <div class="g-strip" role="group" aria-label="Budget">${cells}</div>
       <p class="g-legend meta">${Object.keys(ICON).map(s => `<span class="g-state st-${s}">${icon(s)}${esc(STATE_LABEL[s])}</span>`).join('')}</p>
       <div class="g-frame"><svg class="g-svg" viewBox="-20 0 1040 540" role="group" aria-label="Ticket processing graph">
@@ -327,9 +330,13 @@ export function renderTicketGraph(trace = {}, chosen = null, now = Date.now()) {
       </svg></div>
       ${rollbackLine}
     </div>
-    <div class="blk g-log" role="region" aria-label="Nhật ký thực thi">
+    <div class="blk g-log" role="region" aria-label="Execution log">
       <ul class="g-steps" aria-label="Các bước">${steps}</ul>
-      <div class="g-pane">${logPanel(chosenNode)}</div>
+      <div class="g-pane">
+        <div class="g-caption">Execution log</div>
+        ${logPanel(chosenNode)}
+        ${extras.events || ''}
+      </div>
     </div>
   </section>`;
 }

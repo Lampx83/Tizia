@@ -555,47 +555,28 @@ function renderSpanTimeline(trace) {
 }
 
 function renderAiBoard(t) {
-  const x = t.totals || {};
-  const budget = budgetSummary(x);
   const root = t.root;
-  const runs = t.runs || [];
   const [state, label] = ROOT_STATUS[root.status] || ['idle', root.status];
   const shownState = root.live ? 'run' : state;
-  return `
-    <h2>AI Board</h2>
-    ${renderTicketGraph(t, ui.node)}
-    ${renderHsm(t.hsm)}
-    <div class="blk status st-${shownState}"><div class="line1"><b>Xử lý yêu cầu</b>${tag(shownState, root.live ? 'Đang xử lý' : label)}
-        <span>${esc(root.phase_label)}</span>${root.live ? '<span class="pulse" title="Worker đang giữ yêu cầu này"></span>' : ''}</div>
-      ${root.public_note ? `<div style="margin-top:4px">${esc(root.public_note)}</div>` : ''}
+  const summary = `<div class="g-summary">
+      <div class="line1">${tag(shownState, root.live ? 'Đang xử lý' : label)}<span>${esc(root.phase_label)}</span>${root.live ? '<span class="pulse" title="Worker đang giữ yêu cầu này"></span>' : ''}</div>
+      ${root.public_note ? `<div>${esc(root.public_note)}</div>` : ''}
       ${root.internal_reason ? reasonBlock(root.internal_reason) : ''}
-      ${root.lost_worker ? `<div class="meta warn" style="margin-top:4px"><b>Worker mất kết nối</b> khi đang giữ yêu cầu (${code(root.lost_worker.worker_id)}). Hệ thống không tự chạy lại; cần quản trị viên xem và quyết định.</div>` : ''}
-      ${runs.filter((r) => r.runner_failure).slice(-1).map((r) => `<div class="meta warn" style="margin-top:4px"><b>Sandbox lỗi</b> ở gate ${esc(r.runner_failure.gate)}${r.runner_failure.code ? ` · mã ${code(r.runner_failure.code)}` : ''}${r.runner_failure.reason ? `: ${esc(r.runner_failure.reason)}` : ''}</div>`).join('')}
-      ${allowanceBlock(root.allowance)}
-      ${t.candidate ? `<div class="meta" style="margin-top:4px">Nhánh thay đổi: ${code(t.candidate.branch)} · ${esc(t.candidate.commits?.length)} commit</div>` : ''}
-      ${t.pull_request && /^https:\/\/github\.com\//.test(t.pull_request.url) ? `<div class="meta" style="margin-top:4px">PR vào ${code(t.pull_request.base)}:
-        <a href="${esc(t.pull_request.url)}" target="_blank" rel="noopener noreferrer">#${esc(t.pull_request.number)}</a>
-        · head ${code(String(t.pull_request.head_sha).slice(0, 10))}${riskOf(runs) ? ` · rủi ro ${code(riskOf(runs))}` : ''}</div>` : ''}
-      ${changeOf(runs) ? `<div class="meta" style="margin-top:4px">Loại thay đổi: ${esc(CHANGE_TEXT[changeOf(runs)])}</div>` : ''}</div>
-    <div class="blk strip">
-      <span>Giới hạn mỗi lượt xử lý: <b>${fmtNum(x.budget_limit)}</b> ${esc(budget.unit)}</span>
-      <span>Ngân sách đã chốt qua các lượt: ${budget.combined == null ? 'Chưa có tổng cùng đơn vị' : `<b>${fmtNum(budget.combined)}</b> ${esc(budget.unit)}`}</span>
-      ${budget.providers.map(p => `<span>Theo vết đã ghi · ${esc(p.provider)}: <b>${fmtNum(p.used)}</b> ${esc(p.unit)}${p.missing ? ` · ${esc(p.missing)} lượt chưa có số đo ngân sách` : ''}</span>`).join('')}
-      <span>GPU đã đo: <b>${esc(x.gpu_s)}</b> giây</span>
-      <span>Token vào / ra: <b>${fmtNum(x.tokens_in)} / ${fmtNum(x.tokens_out)}</b></span>
-      <span>Gọi AI qua mọi lượt: <b>${esc(x.calls)}</b></span>
-      <span>Lần nạp model: <b>${esc(x.model_loads)}</b></span>
-      <span>Lần gọi lại model: <b>${esc(x.retries)}</b></span>
-    </div>
-    ${renderWrites(t)}
-    ${renderRootAllowance(t.root_work)}
-    ${renderRollout(t)}
-    ${renderPlan(t.plan, root, t.children || [], t)}
-    ${renderSpanTimeline(t)}
-    ${renderVerificationClaims(t)}
-    <h2 id="events">Diễn biến xử lý</h2>
-    ${renderEvents(t.events || [])}
-  `;
+      ${root.lost_worker ? `<div class="meta warn">Worker mất kết nối khi đang giữ yêu cầu (${code(root.lost_worker.worker_id)}). Cần quản trị viên quyết định.</div>` : ''}
+      ${traceLine(t.trace_ref)}
+      ${managedLine(root.managed)}
+      ${renderWrites(t)}
+      ${root.status === 'waiting_authorization' ? renderPlan(t.plan, root, t.children || [], t) : ''}
+    </div>`;
+  const events = minimalEvents(t.events || []);
+  return renderTicketGraph(t, ui.node, Date.now(), { summary, events });
+}
+
+// Last few user-facing events only; technical ones stay out of the page.
+function minimalEvents(events) {
+  const rows = events.filter(e => !TECHNICAL_EVENTS.has(e.event_type)).slice(-6).reverse()
+    .map(e => `<li><span>${esc(describeEvent(e))}</span><span class="meta">${fmt(e.created_at)}</span></li>`).join('');
+  return rows ? `<ol class="g-events">${rows}</ol>` : '';
 }
 
 // Trace cho admin: nhánh · commit ngắn · PR. Bấm nhánh/commit để copy. Server chỉ trả ở API admin.
@@ -614,34 +595,22 @@ document.addEventListener('click', async (e) => {
 
 function render() {
   if (!view) return;
-  const previewNodes=[...(document.querySelector('#private-preview')?.childNodes||[])];
-  const { thread, decisions, trace } = view;
+  const { thread, trace } = view;
   const r = thread.request;
-  const live = trace?.root?.live;
   document.title = `Yêu cầu #${r.id} · Tizia`;
   patchHtml($('#app'), `
     <header class="request-head">
-    <a class="back" href="/admin.html#requests">Về trang quản trị</a>
-    <h1>Yêu cầu #${esc(r.id)}: ${esc(r.title)}</h1>
-    ${traceLine(trace?.trace_ref)}
-    <div class="meta">${r.type === 'self' ? 'AI Board tự đề xuất' : `${esc(r.domain)} · ${esc(r.type)} · ${esc(r.student)}`}
-      · <span class="pill">${esc(r.status)}</span> · tạo ${fmt(r.created_at)}
-      ${live ? '· <span class="auto live">tự cập nhật mỗi 2 giây</span>' : ''}</div>
-    ${managedLine(trace?.root?.managed)}
-    ${renderActions(r, trace)}
+      <a class="back" href="/admin.html#requests">Về trang quản trị</a>
+      <h1>Yêu cầu #${esc(r.id)}: ${esc(r.title)}</h1>
+      <div class="meta">${r.type === 'self' ? 'AI Board tự đề xuất' : `${esc(r.domain)} · ${esc(r.type)} · ${esc(r.student)}`}
+        · <span class="pill">${esc(r.status)}</span> · tạo ${fmt(r.created_at)}</div>
+      ${renderActions(r, trace)}
     </header>
-    <section id="private-preview" class="blk private-preview" aria-label="Bản xem riêng của yêu cầu"></section>
-    <h2>Trao đổi</h2>
-    ${renderThread(thread.messages || [])}
-    ${renderDecisions(decisions)}
-    ${trace ? renderAiBoard(trace) : '<h2>AI Board</h2><div class="blk meta">Yêu cầu này chưa có ticket AI Board.</div>'}
+    ${trace ? renderAiBoard(trace) : '<section class="blk meta">Yêu cầu này chưa có ticket AI Board.</section>'}
   `);
   syncOpen();
-  const previewHost=document.querySelector('#private-preview');
-  previewHost?.append(...previewNodes);
-  mountPrivatePreview(previewHost,REQUEST_ID);
   const go = $('#confirm-go');
-  if (go) go.disabled = !confirmed(); // chữ đã gõ còn nguyên sau khi vá DOM
+  if (go) go.disabled = !confirmed();
 }
 
 // Áp ui.open lên mọi <details data-k>; chưa ai bấm thì theo mặc định (data-dopen). Vá DOM theo vị trí nên không tin `open` cũ.

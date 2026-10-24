@@ -134,7 +134,13 @@
   .claim-evidence code { white-space:normal; overflow-wrap:anywhere; word-break:break-all; }
   .claim-evidence pre { white-space:pre-wrap; overflow-wrap:anywhere; }
   /* Ticket graph: thin edges, no boxes. Colour: one accent plus the state colours. */
-  .ticket-graph { margin:56px 0 0; }
+  .ticket-graph { margin:24px 0 0; display:grid; gap:14px; }
+  .ticket-graph .blk { margin:0; padding:18px; }
+  .g-caption { font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin-bottom:12px; }
+  .g-summary { display:grid; gap:6px; padding-bottom:14px; margin-bottom:14px; border-bottom:1px solid var(--border); font-size:13px; }
+  .g-summary .line1 { display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center; }
+  .g-events { list-style:none; margin:14px 0 0; padding:0; font-size:13px; }
+  .g-events li { display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-top:1px solid var(--border); }
   .g-strip { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:28px 32px; margin:20px 0 0; }
   .g-cell-label { font-size:12px; color:var(--muted); }
   .g-big { font-size:28px; font-weight:600; line-height:1.2; margin-top:4px; font-variant-numeric:tabular-nums; }
