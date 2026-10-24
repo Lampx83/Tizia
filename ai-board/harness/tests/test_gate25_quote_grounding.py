@@ -52,3 +52,12 @@ def test_bare_tag_grounds_only_under_shortquote(monkeypatch):
 
 def test_shortquote_still_rejects_trivial_quote(monkeypatch):
     _rejects('public/pk-curve.html', '<div>', PK_CURVE, monkeypatch, ['shortquote'])
+
+
+def test_evidence_target_is_the_step_file(monkeypatch):
+    monkeypatch.setenv('AI_BOARD_GATE25_FIXES', '')
+    plan = {'subtasks': [{'file': 'public/league.html', 'title': 't', 'verify': 'v'}]}
+    validation = {'grounded': True, 'grounding': [{'target': 'Thêm dòng sau phần tử loading', 'file': 'public/league.html',
+                                                   'quote': LEAGUE, 'before': 'b', 'after': 'a', 'verify': 'v'}]}
+    checked = plan_validate.checked_grounding(validation, plan, 'sha', {'public/league.html': LEAGUE})
+    assert checked['evidence'][0]['target'] == 'public/league.html'

@@ -304,7 +304,7 @@ def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict
             raise ValueError(f'{task["file"]}: không tìm thấy trích dẫn hành vi trong code nguồn')
         if any(not isinstance(evidence.get(key), str) or not evidence[key].strip() for key in ('before', 'after', 'verify')):
             raise ValueError('thiếu hành vi trước/sau hoặc tiêu chí kiểm chứng')
-        clean.append({key: evidence[key][:1200] for key in ('target', 'file', 'quote', 'before', 'after', 'verify')})
+        clean.append({**{key: evidence[key][:1200] for key in ('file', 'quote', 'before', 'after', 'verify')}, 'target': task['file']})  # server matches target against the step's allowed_scope
     return {'sha': sha, 'evidence': clean}
 
 
