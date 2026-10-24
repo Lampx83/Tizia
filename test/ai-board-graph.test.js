@@ -110,7 +110,8 @@ test('edges follow the contract: passed path, repair loop, verdict, and blocked 
   const html = renderTicketGraph(running(), null);
   assert.match(html, /data-edge="gate_1>gate_2"/);
   assert.match(html, /data-edge="repair_check>repair"/);
-  assert.match(html, /d="M740 380Q400 530 60 270" data-edge="repair>attempt_open"/);
+  assert.match(html, /d="M740 380V440H60V270" data-edge="repair>attempt_open"/);
+  assert.doesNotMatch(html, /d="[^"]*[QC][^"]*"/);
   assert.match(html, /class="g-edge stop" d="[^"]*" data-edge="gate_2>plan_stopped"/);
   assert.doesNotMatch(html, /data-edge="gate_5>attempt_close"/);
 });
