@@ -6,7 +6,7 @@ import { mountPrivatePreview } from './private-preview.js';
 import { installLightbox, pairBeforeAfter } from './lightbox.js';
 import { projectPipeline, describeEvent, TECHNICAL_EVENTS, TRACE_STEPS, renderVerificationClaims, budgetSummary, renderRootAllowance } from './ai-board-trace.js';
 import { renderHsm } from './ai-board-hsm.js';
-import { renderTicketGraph, graphNodes } from './ai-board-graph.js';
+import { renderTicketGraph, graphNodes } from './ai-board-graph.js?v=20261024b';
 import { fmt as clockFmt } from './ai-board-clock.js';
 
 const $ = (s) => document.querySelector(s);
@@ -554,11 +554,27 @@ function renderSpanTimeline(trace) {
     ${older.map((run) => det(`spans-${run.id}`, `Lượt #${esc(run.id)} · ${esc(run.spans.length)} bước`, table(run))).join('')}`;
 }
 
+// Result box: what was asked, which files change, acceptance and subtasks.
+function resultBox(t) {
+  const plan = t.plan?.plan;
+  if (!plan) return '';
+  const files = (plan.allowed_scope || []).map((f) => code(f)).join(' ');
+  const subtasks = (t.children || []).map((c) => `<li>${esc(c.title)} <span class="meta">${esc(c.status)}</span></li>`).join('');
+  const row = (k, v) => (v ? `<div class="g-result-row"><span class="meta">${k}</span><span>${v}</span></div>` : '');
+  return `<div class="g-result"><div class="g-caption">Kết quả</div>
+    ${row('Mục tiêu', esc(plan.goal))}
+    ${row('File thay đổi', files)}
+    ${row('Tiêu chí đạt', (plan.acceptance || []).map(esc).join('; '))}
+    ${subtasks ? row('Việc con', `<ul>${subtasks}</ul>`) : ''}
+  </div>`;
+}
+
 function renderAiBoard(t) {
   const root = t.root;
   const [state, label] = ROOT_STATUS[root.status] || ['idle', root.status];
   const shownState = root.live ? 'run' : state;
   const summary = `<div class="g-summary">
+      ${resultBox(t)}
       <div class="line1">${tag(shownState, root.live ? 'Đang xử lý' : label)}<span>${esc(root.phase_label)}</span>${root.live ? '<span class="pulse" title="Worker đang giữ yêu cầu này"></span>' : ''}</div>
       ${root.public_note ? `<div>${esc(root.public_note)}</div>` : ''}
       ${root.internal_reason ? reasonBlock(root.internal_reason) : ''}
