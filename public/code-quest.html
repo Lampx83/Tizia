@@ -30,13 +30,13 @@
   .pill b { color:#1d4ed8; }
 
   /* Level selector */
-  .level-row { display:flex; gap:6px; padding:10px 18px; flex-wrap:wrap; max-width:1320px; margin:0 auto; }
+  .level-row { display:flex; gap:6px; padding:10px 18px; flex-wrap:wrap; max-width:none; margin:0 auto; }
   .level-btn { background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.25); padding:6px 12px; border-radius:14px; cursor:pointer; font-family:inherit; font-size:12.5px; font-weight:700; transition:background .12s, transform .12s; }
   .level-btn:hover { background:rgba(255,255,255,.28); }
   .level-btn.active { background:var(--accent); color:#0f172a; border-color:transparent; transform:scale(1.05); }
   .level-btn.solved::after { content:' ⭐'; }
 
-  .layout { display:grid; grid-template-columns: 230px 1fr 320px; gap:14px; padding:0 18px 18px; max-width:1320px; margin:0 auto; }
+  .layout { display:grid; grid-template-columns: 230px 1fr 320px; gap:14px; padding:0 18px 18px; max-width:none; margin:0 auto; }
   @media (max-width:1100px) {
     .layout { grid-template-columns: 1fr; }
   }

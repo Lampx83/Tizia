@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>📖 Đọc hiểu Tiếng Anh chuyên ngành · Tizia</title>
+<meta name="description" content="Luyện đọc hiểu tiếng Anh chuyên ngành CNTT: đọc đoạn văn theo chủ đề, chọn đáp án, nộp bài rồi xem đáp án đúng kèm giải thích." />
+<link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+<meta name="theme-color" content="#22d3ee" />
+<style>
+  :root { --bg:#0a1326; --card:rgba(255,255,255,.05); --card2:#141f38; --accent:#22d3ee; --accent2:#6366f1;
+    --green:#10b981; --red:#ef4444; --amber:#fbbf24; --text:#e6eefb; --muted:#93a4c0; --border:rgba(255,255,255,.12); }
+  * { box-sizing:border-box; }
+  html { background:var(--bg); }
+  body { margin:0; min-height:100vh; font-family:'Inter',system-ui,sans-serif; color:var(--text);
+    background-color:var(--bg);
+    background-image: radial-gradient(ellipse 70% 50% at 50% -5%, rgba(34,211,238,.14), transparent),
+      radial-gradient(ellipse 60% 40% at 88% 8%, rgba(99,102,241,.13), transparent),
+      linear-gradient(180deg,var(--bg),#0d1a33);
+    background-attachment:fixed; padding:0 0 60px; }
+  a.back { display:inline-flex; align-items:center; gap:6px; position:fixed; left:16px; top:14px; z-index:30;
+    background:rgba(10,19,38,.85); color:#bfe9ff; text-decoration:none; padding:7px 13px; border-radius:20px;
+    font-size:12.5px; backdrop-filter:blur(8px); border:1px solid var(--border); }
+  a.back:hover { border-color:var(--accent); }
+  .wrap { max-width:800px; margin:0 auto; padding:60px 18px 0; }
+  header.hero { text-align:center; margin-bottom:14px; }
+  header.hero h1 { font-size:26px; margin:0 0 6px;
+    background:linear-gradient(120deg,#22d3ee,#818cf8); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header.hero p { color:var(--muted); font-size:13.5px; max-width:600px; margin:0 auto; line-height:1.6; }
+
+  /* Danh sách bài */
+  .list { display:grid; gap:12px; margin-top:8px; }
+  .pcard { text-align:left; font-family:inherit; cursor:pointer; background:var(--card); border:1px solid var(--border);
+    border-radius:14px; padding:16px 18px; color:var(--text); transition:.15s; }
+  .pcard:hover { border-color:var(--accent); transform:translateY(-2px); }
+  .pcard .meta { display:flex; gap:8px; align-items:center; margin-bottom:5px; }
+  .pcard .lv { font-size:11px; font-weight:800; color:var(--accent); background:rgba(34,211,238,.12);
+    border:1px solid rgba(34,211,238,.3); border-radius:20px; padding:2px 9px; }
+  .pcard .qn { font-size:11.5px; color:var(--muted); }
+  .pcard h3 { margin:0; font-size:16px; }
+
+  /* Màn làm bài */
+  #reader { display:none; }
+  .passage { background:var(--card2); border:1px solid var(--border); border-radius:14px; padding:18px 20px; margin-bottom:16px; }
+  .passage h2 { margin:0 0 10px; font-size:19px; }
+  .passage .en { font-size:15.5px; line-height:1.85; color:#dbe6f5; }
+  .q { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:12px; }
+  .q .qt { font-weight:700; font-size:14.5px; margin-bottom:10px; }
+  .opt { display:flex; gap:10px; align-items:flex-start; padding:9px 12px; border:1px solid var(--border); border-radius:9px;
+    margin:6px 0; cursor:pointer; font-size:14px; transition:.12s; }
+  .opt:hover { border-color:rgba(255,255,255,.28); background:rgba(255,255,255,.03); }
+  .opt input { margin-top:3px; }
+  .opt.right { background:rgba(16,185,129,.16); border-color:rgba(16,185,129,.55); color:#6ee7b7; }
+  .opt.wrong { background:rgba(239,68,68,.14); border-color:rgba(239,68,68,.55); color:#fca5a5; }
+  .opt.locked { cursor:default; }
+  .ex { display:none; margin-top:10px; font-size:13px; color:var(--muted); line-height:1.6;
+    background:rgba(0,0,0,.2); border-left:3px solid var(--accent2); border-radius:0 8px 8px 0; padding:9px 12px; }
+  .ex.show { display:block; }
+  .bar { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin:18px 0; }
+  .btn { font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; border:0; border-radius:10px; padding:11px 22px; }
+  .btn.primary { background:var(--accent); color:#062330; }
+  .btn.ghost { background:var(--card); color:var(--text); border:1px solid var(--border); }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
+  #scoreBox { display:none; text-align:center; background:var(--card2); border:1px solid var(--border); border-radius:14px;
+    padding:16px; margin-bottom:16px; }
+  #scoreBox .big { font-size:34px; font-weight:800; }
+  #scoreBox .big.good { color:var(--green); } #scoreBox .big.bad { color:var(--amber); }
+  .loading, .err { text-align:center; color:var(--muted); padding:30px 0; }
+</style>
+</head>
+<body>
+<a class="back" href="/tu-vung-tieng-anh?domain=it&topic=cntt">← Về Từ vựng chuyên ngành</a>
+
+<div class="wrap">
+  <header class="hero">
+    <h1>📖 Đọc hiểu Tiếng Anh chuyên ngành</h1>
+    <p>Đọc đoạn văn theo chủ đề, chọn đáp án, rồi nộp bài để xem đáp án đúng kèm giải thích chi tiết.</p>
+  </header>
+
+  <div id="list" class="list"><div class="loading">Đang tải bài đọc…</div></div>
+
+  <div id="reader">
+    <div id="scoreBox"></div>
+    <div class="passage">
+      <h2 id="pTitle"></h2>
+      <div class="en" id="pText"></div>
+    </div>
+    <div id="questions"></div>
+    <div class="bar" id="actionBar"></div>
+  </div>
+</div>
+
+<script>
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  const LETTER = ['A','B','C','D','E','F'];
+  let PASSAGES = [], cur = null, submitted = false;
+
+  async function load() {
+    try {
+      const r = await fetch('/api/content/reading-en', { credentials: 'same-origin' });
+      const data = await r.json();
+      PASSAGES = (data.items || []).filter(p => p && Array.isArray(p.questions) && p.questions.length);
+      renderList();
+    } catch {
+      $('#list').innerHTML = '<div class="err">Không tải được bài đọc — cần backend chạy.</div>';
+    }
+  }
+
+  function renderList() {
+    if (!PASSAGES.length) { $('#list').innerHTML = '<div class="err">Chưa có bài đọc nào.</div>'; return; }
+    $('#list').innerHTML = PASSAGES.map((p, i) =>
+      '<button class="pcard" data-i="' + i + '">' +
+        '<div class="meta"><span class="lv">' + esc(p.level || '') + '</span>' +
+        '<span class="qn">' + p.questions.length + ' câu hỏi</span></div>' +
+        '<h3>' + esc(p.title || 'Bài đọc') + '</h3>' +
+      '</button>').join('');
+    document.querySelectorAll('.pcard').forEach(b => b.onclick = () => openPassage(+b.dataset.i));
+  }
+
+  function openPassage(i) {
+    cur = PASSAGES[i]; submitted = false;
+    $('#list').style.display = 'none';
+    $('#reader').style.display = 'block';
+    $('#scoreBox').style.display = 'none';
+    $('#pTitle').textContent = cur.title || 'Bài đọc';
+    $('#pText').textContent = cur.passage || '';
+    $('#questions').innerHTML = cur.questions.map((q, qi) =>
+      '<div class="q" id="q' + qi + '">' +
+        '<div class="qt">' + (qi + 1) + '. ' + esc(q.q) + '</div>' +
+        (q.o || []).map((o, oi) =>
+          '<label class="opt" data-q="' + qi + '" data-o="' + oi + '">' +
+            '<input type="radio" name="q' + qi + '" value="' + oi + '" />' +
+            '<span><b>' + LETTER[oi] + '.</b> ' + esc(o) + '</span>' +
+          '</label>').join('') +
+        '<div class="ex" id="ex' + qi + '">💡 ' + esc(q.ex || '') + '</div>' +
+      '</div>').join('');
+    $('#actionBar').innerHTML =
+      '<button class="btn ghost" id="btnBack">← Bài khác</button>' +
+      '<button class="btn primary" id="btnSubmit">Nộp bài</button>';
+    $('#btnBack').onclick = backToList;
+    $('#btnSubmit').onclick = submit;
+    window.scrollTo(0, 0);
+  }
+
+  function backToList() {
+    $('#reader').style.display = 'none';
+    $('#list').style.display = 'grid';
+    window.scrollTo(0, 0);
+  }
+
+  function submit() {
+    if (submitted) return;
+    submitted = true;
+    let right = 0;
+    cur.questions.forEach((q, qi) => {
+      const picked = document.querySelector('input[name="q' + qi + '"]:checked');
+      const pick = picked ? +picked.value : -1;
+      if (pick === q.a) right++;
+      // khoá + tô màu từng lựa chọn
+      document.querySelectorAll('.opt[data-q="' + qi + '"]').forEach(op => {
+        op.classList.add('locked');
+        const oi = +op.dataset.o;
+        const input = op.querySelector('input'); if (input) input.disabled = true;
+        if (oi === q.a) op.classList.add('right');
+        else if (oi === pick) op.classList.add('wrong');
+      });
+      $('#ex' + qi).classList.add('show');
+    });
+    const total = cur.questions.length;
+    const pass = right >= Math.ceil(total * 0.6);
+    const sb = $('#scoreBox');
+    sb.innerHTML = '<div class="big ' + (pass ? 'good' : 'bad') + '">' + right + '/' + total + '</div>' +
+      '<div style="color:var(--muted);font-size:13.5px;margin-top:4px">' +
+      (pass ? '🎉 Tốt lắm! Bạn đọc hiểu khá chắc.' : '💪 Cố lên — xem lại phần giải thích bên dưới nhé.') + '</div>';
+    sb.style.display = 'block';
+    $('#actionBar').innerHTML =
+      '<button class="btn ghost" id="btnBack2">← Bài khác</button>' +
+      '<button class="btn primary" id="btnRetry">🔄 Làm lại bài này</button>';
+    $('#btnBack2').onclick = backToList;
+    $('#btnRetry').onclick = () => openPassage(PASSAGES.indexOf(cur));
+    window.scrollTo(0, 0);
+  }
+
+  load();
+</script>
+</body>
+</html>

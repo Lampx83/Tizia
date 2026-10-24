@@ -55,10 +55,11 @@ function humanTime(t) {
 
 // ─────────── Chart tooltip ───────────
 const tooltip = $('#ctt');
-function showTooltip(x, y, html) {
+function showTooltip(x, y, html, rich = false) {
+  tooltip.className = 'chart-tooltip' + (rich ? ' rich' : '');
   tooltip.innerHTML = html;
-  tooltip.style.left = (x + 10) + 'px';
-  tooltip.style.top = (y - 30) + 'px';
+  tooltip.style.left = (x + 12) + 'px';
+  tooltip.style.top = (y - (rich ? 8 : 30)) + 'px';
   tooltip.style.opacity = '1';
 }
 function hideTooltip() { tooltip.style.opacity = '0'; }
@@ -201,6 +202,46 @@ async function navigateKpi(k) {
   }
 }
 
+// Nội dung tooltip giàu thông tin cho từng thẻ KPI — mô tả ý nghĩa + số liệu liên quan.
+function kpiTipData(k, overview) {
+  const d = overview.delta || {};
+  const n = (x) => fmtNum(x || 0);
+  const map = {
+    users: { desc: 'Tổng số tài khoản đã đăng ký trên toàn hệ thống.', rows: [
+      ['Mới trong 24h', `+${n(d.users_24h)}`], ['24h trước đó', n(d.users_prev_24h)],
+      ['Còn phiên đăng nhập', n(overview.active_sessions)] ] },
+    attempts: { desc: 'Tổng lượt hoàn thành bài học / quiz của người học.', rows: [
+      ['Trong 24h', `+${n(d.attempts_24h)}`], ['24h trước đó', n(d.attempts_prev_24h)] ] },
+    requests_pending: { desc: 'Số góp ý của người dùng đang chờ xử lý.', rows: [
+      ['Tổng góp ý', n(overview.requests)], ['Nhận trong 24h', `+${n(d.requests_24h)}`] ] },
+    pageviews_24h: { desc: 'Số lượt xem trang trong 24 giờ qua.', rows: [
+      ['7 ngày qua', n(overview.pageviews_7d)], ['Tổng cộng', n(overview.pageviews_total)] ] },
+    pageviews_7d: { desc: 'Số lượt xem trang trong 7 ngày qua.', rows: [
+      ['24h qua', n(overview.pageviews_24h)], ['Tổng cộng', n(overview.pageviews_total)] ] },
+    ai_decisions: { desc: 'Số quyết định của AI đã ghi nhận (xử lý góp ý, chấm bài, sinh nội dung).', rows: [] },
+    ai_tokens_24h: { desc: 'Tổng số token AI tiêu thụ trong 24h qua.', rows: [
+      ['Tổng cộng', n(overview.ai_tokens_total)] ] },
+    active_sessions: { desc: 'Số tài khoản còn phiên đăng nhập hợp lệ (cookie 30 ngày — không phải realtime).', rows: [
+      ['Tổng tài khoản', n(overview.users)] ] },
+    events: { desc: 'Tổng số sự kiện analytics đã ghi nhận (pageview, thao tác…).', rows: [
+      ['Pageview 24h', n(overview.pageviews_24h)] ] },
+    requests: { desc: 'Tổng số góp ý người dùng đã gửi.', rows: [
+      ['Đang chờ', n(overview.requests_pending)], ['Nhận trong 24h', `+${n(d.requests_24h)}`] ] },
+  };
+  return map[k];
+}
+function kpiTipHtml(c, overview) {
+  const t = kpiTipData(c.k, overview);
+  if (!t) return '';
+  const rows = (t.rows || []).map(([l, v]) =>
+    `<div class="tr"><span>${l}</span><b>${v}</b></div>`).join('');
+  const hint = KPI_NAV[c.k] ? `<div class="tip-nav">↳ Bấm để xem chi tiết</div>` : '';
+  return `<div class="tip-h">${c.icon} ${c.label}</div>`
+    + `<div class="tip-d">${t.desc}</div>`
+    + (rows ? `<div class="tip-rows">${rows}</div>` : '')
+    + hint;
+}
+
 function renderKpi(overview) {
   const d = overview.delta || {};
   const heroCards = [
@@ -221,9 +262,11 @@ function renderKpi(overview) {
     const v = overview[c.k];
     if (v == null && !c.fallback) return '';
     const dlt = c.delta ? `<div class="delta ${c.delta.cls}">${c.delta.icon} ${c.delta.text} <small>· ${c.deltaLabel}</small></div>` : '';
-    const navAttr = KPI_NAV[c.k] ? ` data-nav="${c.k}" title="Bấm để xem chi tiết"` : '';
+    const navAttr = KPI_NAV[c.k] ? ` data-nav="${c.k}"` : '';
+    const tip = kpiTipHtml(c, overview);
+    const tipAttr = tip ? ` data-tip="${encodeURIComponent(tip)}"` : '';
     return `
-      <div class="kpi ${c.cls || ''} ${c.k === 'requests_pending' && v > 0 ? 'pending' : ''}"${navAttr}>
+      <div class="kpi ${c.cls || ''} ${c.k === 'requests_pending' && v > 0 ? 'pending' : ''}"${navAttr}${tipAttr}>
         <div class="label">${c.label}</div>
         <div class="value">${v != null ? fmtNum(v) : c.fallback}</div>
         ${dlt}
@@ -383,8 +426,20 @@ function renderSystem(sys) {
 // ─────────── Tabs (legacy: Góp ý / Users / Schools / AI / Content / Billing) ───────────
 let reqCache = [];
 let reqFilter = 'all';
+let reqPage = 1;                 // phân trang bảng góp ý (10 dòng/trang)
+const REQ_PAGE_SIZE = 10;
 let userCache = [];
 let currentTab = 'dashboard';
+
+// ─── School-admin mode ───
+// User thường được cấp quản trị ≥1 trường (school_admins) — KHÔNG phải super-admin.
+// Khi bật: trang /admin thu gọn — chỉ Dashboard (khoá theo trường mình quản lý) +
+// tab Trường (chỉ trường mình). Ẩn tab toàn cục (Người dùng toàn hệ thống, CSDL,
+// Cấu hình, Curriculum, Góp ý, Sửa nội dung). Backend cũng chặn theo requireSchoolAccess.
+let _me = null;
+let _managedDomains = [];
+let _isSuperAdmin = true; // init() cập nhật theo /api/auth/me
+function isSchoolAdminMode() { return !_isSuperAdmin && _managedDomains.length > 0; }
 
 async function loadRequests() {
   const r = await api('/api/admin/requests?limit=300');
@@ -394,6 +449,12 @@ async function loadRequests() {
 function renderRequests() {
   const filtered = reqFilter === 'all' ? reqCache : reqCache.filter(r => r.status === reqFilter);
   const counts = reqCache.reduce((m,r) => (m[r.status] = (m[r.status]||0)+1, m), {});
+  // Phân trang 10 dòng/trang. Kẹp reqPage vào [1..totalPages] để đổi bộ lọc không văng trang trắng.
+  const totalPages = Math.max(1, Math.ceil(filtered.length / REQ_PAGE_SIZE));
+  if (reqPage > totalPages) reqPage = totalPages;
+  if (reqPage < 1) reqPage = 1;
+  const pageStart = (reqPage - 1) * REQ_PAGE_SIZE;
+  const pageRows = filtered.slice(pageStart, pageStart + REQ_PAGE_SIZE);
   const host = $('#tabbody');
   host.innerHTML = `
     <div class="toolbar">
@@ -402,6 +463,7 @@ function renderRequests() {
         <option value="all">Tất cả (${reqCache.length})</option>
         <option value="pending">Chờ xử lý (${counts.pending||0})</option>
         <option value="reviewing">Đang xử lý (${counts.reviewing||0})</option>
+        <option value="awaiting_user">Chờ HS bổ sung (${counts.awaiting_user||0})</option>
         <option value="done">Hoàn thành (${counts.done||0})</option>
         <option value="rejected">Từ chối (${counts.rejected||0})</option>
       </select>
@@ -411,10 +473,10 @@ function renderRequests() {
     <table>
       <thead><tr>
         <th>#</th><th>Trường</th><th>Tiêu đề</th><th>Loại</th>
-        <th>HS</th><th>Trạng thái</th><th>Vote</th><th>Tạo lúc</th><th></th>
+        <th>HS</th><th>Trạng thái</th><th>Vote</th><th>Tạo lúc</th><th>Cập nhật</th><th></th>
       </tr></thead>
       <tbody>
-      ${filtered.map(r => `
+      ${pageRows.map(r => `
         <tr data-rid="${r.id}">
           <td>${r.id}</td>
           <td><span class="pill">${esc(r.domain)}</span></td>
@@ -424,6 +486,7 @@ function renderRequests() {
           <td><span class="pill ${r.status}">${r.status}</span></td>
           <td>${r.votes}</td>
           <td style="font-size:12px;opacity:.7">${fmt(r.created_at)}</td>
+          <td style="font-size:12px;opacity:.7">${r.updated_at && r.updated_at !== r.created_at ? fmt(r.updated_at) : '—'}</td>
           <td class="actions" style="white-space:nowrap">
             <button class="btn" data-act="detail" data-rid="${r.id}" title="Xem chi tiết">👁</button>
             <button class="btn primary" data-act="reply" data-rid="${r.id}" title="Trả lời + đổi trạng thái">💬</button>
@@ -433,11 +496,18 @@ function renderRequests() {
       `).join('')}
       </tbody>
     </table>
-    ${filtered.length === 0 ? '<div class="empty">Không có yêu cầu nào trong bộ lọc.</div>' : ''}
+    ${filtered.length === 0 ? '<div class="empty">Không có yêu cầu nào trong bộ lọc.</div>' : `
+      <div class="reqPager" style="display:flex;align-items:center;justify-content:center;gap:10px;margin-top:12px;font-size:13px">
+        <button class="btn" id="reqPrev" ${reqPage <= 1 ? 'disabled' : ''}>← Trước</button>
+        <span style="opacity:.75">Trang <b>${reqPage}</b>/${totalPages} · ${filtered.length} yêu cầu</span>
+        <button class="btn" id="reqNext" ${reqPage >= totalPages ? 'disabled' : ''}>Sau →</button>
+      </div>`}
   `;
   $('#reqFilter').value = reqFilter;
-  $('#reqFilter').addEventListener('change', e => { reqFilter = e.target.value; renderRequests(); });
+  $('#reqFilter').addEventListener('change', e => { reqFilter = e.target.value; reqPage = 1; renderRequests(); });
   $('#reqRefresh').addEventListener('click', loadRequests);
+  const prev = $('#reqPrev'); if (prev) prev.addEventListener('click', () => { reqPage--; renderRequests(); });
+  const next = $('#reqNext'); if (next) next.addEventListener('click', () => { reqPage++; renderRequests(); });
   host.querySelectorAll('[data-act]').forEach(b => {
     b.addEventListener('click', () => {
       const id = Number(b.dataset.rid);
@@ -481,17 +551,32 @@ async function toggleDetail(id) {
   ]);
   const decisions = dr.data?.decisions || [];
   const msgs = tr2.data?.messages || [];
+  // Render file đính kèm (req: admin không xem được ảnh HS gửi). Ảnh raster → hiện
+  // thumbnail bấm mở to; file khác → link tải. Tên có thể bị URL-encode → giải mã hiển thị.
+  const attsHtml = (atts) => {
+    if (!Array.isArray(atts) || !atts.length) return '';
+    const dec = (s) => { try { return decodeURIComponent(String(s || '')); } catch { return String(s || ''); } };
+    const items = atts.map(a => {
+      const url = esc(a.url || ''); const nm = esc(dec(a.name) || 'file');
+      const isImg = a.kind === 'screenshot' || /^image\//.test(a.mime || '') || /\.(png|jpe?g|gif|webp)$/i.test(a.url || '');
+      if (isImg) return `<a href="${url}" target="_blank" rel="noopener" title="${nm}" style="display:inline-block;margin:4px 6px 0 0">
+        <img src="${url}" alt="${nm}" style="max-width:260px;max-height:220px;border-radius:8px;border:1px solid rgba(255,255,255,.15);vertical-align:top" /></a>`;
+      return `<a href="${url}" target="_blank" rel="noopener" download style="display:inline-flex;align-items:center;gap:5px;margin:4px 8px 0 0;padding:5px 10px;border-radius:7px;background:rgba(99,102,241,.14);border:1px solid rgba(99,102,241,.35);color:#c7d2fe;text-decoration:none;font-size:12px">📎 ${nm}</a>`;
+    }).join('');
+    return `<div style="margin-top:7px">${items}</div>`;
+  };
   const threadHtml = msgs.map(m => {
     const board = m.role === 'ai' || m.role === 'admin';
     const who = board ? `🏛️ ${esc(m.author_name || 'Ban điều hành AI')}` : `👤 ${esc(m.author_name || 'HS')}`;
     return `<div class="blk" style="border-left:3px solid ${board ? '#10b981' : '#6366f1'};margin-bottom:6px">
       <div style="font-size:11px;opacity:.6;margin-bottom:3px">${who} · ${fmt(m.created_at)}</div>
       <div style="white-space:pre-wrap">${esc(m.body)}</div>
+      ${attsHtml(m.attachments)}
     </div>`;
   }).join('');
   detail.querySelector('.detail-box').innerHTML = `
     <h4>Nội dung yêu cầu</h4>
-    <div class="blk">${esc(r.title)}${r.detail ? `<div style="opacity:.7;margin-top:5px">${esc(r.detail)}</div>` : ''}</div>
+    <div class="blk">${esc(r.title)}${r.detail ? `<div style="opacity:.7;margin-top:5px">${esc(r.detail)}</div>` : ''}${attsHtml(r.attachments)}</div>
     <h4>Phiên trao đổi (${msgs.length})</h4>
     ${threadHtml || '<div class="blk" style="opacity:.6">Chưa có trao đổi nào.</div>'}
     <h4>Lịch sử quyết định AI (${decisions.length})</h4>
@@ -570,12 +655,8 @@ function renderUsers() {
           <td style="font-size:12px;opacity:.7">${u.email ? esc(u.email) : '—'}</td>
           <td style="font-size:12px;opacity:.7">${fmt(u.last_login)}</td>
           <td class="actions" style="white-space:nowrap">
-            <button class="btn" data-act="wallet" data-uid="${u.id}" title="Xem/sửa ví XP/coin">🎮</button>
-            <button class="btn" data-act="enroll" data-uid="${u.id}" data-domain="${esc(u.enrolled_domain || '')}" title="Đổi trường đang học">🎓</button>
-            <button class="btn" data-act="role" data-uid="${u.id}" data-role="${u.role}" title="Đổi vai trò">👥</button>
-            <button class="btn" data-act="edit" data-uid="${u.id}" title="Sửa thông tin">✏️</button>
-            <button class="btn" data-act="pwd" data-uid="${u.id}" title="Đặt lại mật khẩu">🔑</button>
-            <button class="btn danger" data-act="del" data-uid="${u.id}" title="Xoá user">🗑</button>
+            <button class="btn" data-act="impersonate" data-uid="${u.id}" title="Đăng nhập bằng tài khoản này">🕵️ Đăng nhập</button>
+            <button class="btn" data-act="edit" data-uid="${u.id}" title="Chỉnh sửa & cấu hình toàn bộ thông tin user">✏️ Chỉnh sửa</button>
           </td>
         </tr>
       `).join('')}
@@ -589,29 +670,50 @@ function renderUsers() {
       const id = Number(b.dataset.uid);
       const u = userCache.find(x => x.id === id);
       if (!u) return;
-      if (b.dataset.act === 'role') openRoleModal(id, b.dataset.role);
+      if (b.dataset.act === 'impersonate') confirmImpersonate(u);
       else if (b.dataset.act === 'edit') openEditUserModal(u);
-      else if (b.dataset.act === 'wallet') openWalletModal(u);
-      else if (b.dataset.act === 'pwd') openResetPwdModal(u);
-      else if (b.dataset.act === 'del') confirmDeleteUser(u);
-      else if (b.dataset.act === 'enroll') openEnrollModal(u);
     });
   });
 }
+
+// "Đăng nhập với tư cách" — đổi phiên sang user này. Sau khi chuyển, mọi trang
+// hiện banner cam + nút "Quay lại admin" (xem auth-header.js). Phiên admin gốc
+// được cất trong cookie phụ nên quay lại không cần đăng nhập lại.
+async function confirmImpersonate(u) {
+  const ok = confirm(
+    `Đăng nhập với tư cách "${u.display_name}" (@${u.username})?\n\n` +
+    `Bạn sẽ thấy toàn bộ Tizia đúng như user này. Dùng banner phía trên để quay lại admin bất cứ lúc nào.`
+  );
+  if (!ok) return;
+  try {
+    const r = await api(`/api/admin/users/${u.id}/impersonate`, { method: 'POST' });
+    if (!r.ok) {
+      toast('Lỗi: ' + (r.data?.message || r.data?.error || 'không đăng nhập được với tư cách user này'), 'err');
+      return;
+    }
+    toast('✓ Đang chuyển sang tư cách @' + u.username);
+    location.href = r.data?.redirectTo || '/';
+  } catch (e) {
+    toast('Lỗi: ' + (e.message || 'không đăng nhập được với tư cách user này'), 'err');
+  }
+}
+
+// Danh sách trường (domain) dùng chung cho form Quản lý + modal đổi trường.
+const USER_DOMAINS = [
+  ['preschool','🧸 Mầm non'], ['primary','🎒 Tiểu học'], ['secondary','📐 THCS'], ['highschool','🏫 THPT'],
+  ['pharmacy','💊 Dược'], ['it','💻 CNTT'], ['economics','📉 Kinh tế'], ['business','📈 Kinh doanh'],
+  ['finance','🏦 Tài chính'], ['medicine','⚕️ Y'], ['nursing','🩺 Điều dưỡng'], ['law','⚖️ Luật'],
+  ['education','🎓 Sư phạm'], ['engineering','⚙️ Kỹ thuật'], ['architecture','🏛️ Kiến trúc'],
+  ['languages','🗣️ Ngoại ngữ'], ['agriculture','🌾 Nông nghiệp'], ['tourism','🏖️ Du lịch'],
+  ['arts','🎨 Mỹ thuật'], ['media','📰 Truyền thông'], ['social-sciences','📚 KHXH&NV'],
+  ['natural-sciences','🔬 KHTN'], ['logistics','🚚 Logistics'], ['public-admin','🏢 Hành chính'],
+];
 
 // Admin set/đổi enrolled_domain của HS (vd HS chọn nhầm, hoặc admin reset).
 // Bucket cũ (ví/skill/level ở trường trước) KHÔNG bị xoá — chỉ ẩn vì query lọc
 // theo enrolled_domain hiện tại. Đổi sang giá trị NULL = bỏ gắn trường (admin).
 function openEnrollModal(u) {
-  const DOMAINS = [
-    ['preschool','🧸 Mầm non'], ['primary','🎒 Tiểu học'], ['secondary','📐 THCS'], ['highschool','🏫 THPT'],
-    ['pharmacy','💊 Dược'], ['it','💻 CNTT'], ['economics','📉 Kinh tế'], ['business','📈 Kinh doanh'],
-    ['finance','🏦 Tài chính'], ['medicine','⚕️ Y'], ['nursing','🩺 Điều dưỡng'], ['law','⚖️ Luật'],
-    ['education','🎓 Sư phạm'], ['engineering','⚙️ Kỹ thuật'], ['architecture','🏛️ Kiến trúc'],
-    ['languages','🗣️ Ngoại ngữ'], ['agriculture','🌾 Nông nghiệp'], ['tourism','🏖️ Du lịch'],
-    ['arts','🎨 Mỹ thuật'], ['media','📰 Truyền thông'], ['social-sciences','📚 KHXH&NV'],
-    ['natural-sciences','🔬 KHTN'], ['logistics','🚚 Logistics'], ['public-admin','🏢 Hành chính'],
-  ];
+  const DOMAINS = USER_DOMAINS;
   const cur = u.enrolled_domain || '';
   const opts = DOMAINS.map(([id, label]) =>
     `<option value="${id}" ${id === cur ? 'selected' : ''}>${label}</option>`).join('');
@@ -670,11 +772,24 @@ async function submitCreateUser() {
   closeModal();
   await loadUsers();
 }
+// User đang mở trong modal "Quản lý" — để các nút hành động trong modal dùng.
+let editingUser = null;
 async function openEditUserModal(u) {
-  $('#eu-sub').textContent = `@${u.username} · id=${u.id} · role=${u.role}`;
+  editingUser = u;
+  $('#eu-sub').textContent = `@${u.username} · id=${u.id} · tạo: ${fmt(u.created_at)}`;
   $('#eu-display').value = u.display_name || '';
   $('#eu-email').value = u.email || '';
   $('#eu-age').value = u.age || '';
+  $('#eu-role').value = u.role || 'student';
+  $('#eu-plan').value = u.plan || 'free';
+  // Trường đang học — build options (kèm lựa chọn "không gắn trường")
+  $('#eu-enrolled').innerHTML = '<option value="">— (không gắn trường)</option>' +
+    USER_DOMAINS.map(([id, label]) => `<option value="${id}">${label}</option>`).join('');
+  $('#eu-enrolled').value = u.enrolled_domain || '';
+  $('#eu-grade').value = u.grade || '';
+  $('#eu-major').value = u.major || '';
+  $('#eu-cohort').value = u.cohort || '';
+  $('#eu-school').value = u.school_name || '';
   $('#modal-bg').dataset.uid = u.id;
   hideAllModals(); $('#modal-editUser').style.display = '';
   $('#modal-bg').classList.add('show');
@@ -682,14 +797,28 @@ async function openEditUserModal(u) {
 }
 async function submitEditUser() {
   const uid = Number($('#modal-bg').dataset.uid);
+  // Toàn bộ field hồ sơ → PATCH /users/:id (gói cước xử lý riêng qua /plan vì có
+  // logic hết hạn). Gửi '' cho các field cho phép NULL để server tự set NULL.
   const body = {
     display_name: $('#eu-display').value.trim(),
     email: $('#eu-email').value.trim() || null,
-    age: $('#eu-age').value || null,
+    age: $('#eu-age').value || '',
+    role: $('#eu-role').value,
+    grade: $('#eu-grade').value || '',
+    major: $('#eu-major').value.trim() || '',
+    cohort: $('#eu-cohort').value.trim() || '',
+    school_name: $('#eu-school').value.trim() || '',
+    enrolled_domain: $('#eu-enrolled').value || '',
   };
   const r = await api(`/api/admin/users/${uid}`, { method:'PATCH', body: JSON.stringify(body) });
   if (!r.ok) return toast('Lỗi: ' + (r.data?.message || r.data?.error || r.status), 'err');
-  toast('✓ Đã cập nhật');
+  // Gói cước: chỉ gọi khi có thay đổi (tránh reset ngày hết hạn không cần thiết).
+  const newPlan = $('#eu-plan').value;
+  if (newPlan !== (editingUser?.plan || 'free')) {
+    const rp = await api(`/api/admin/users/${uid}/plan`, { method:'POST', body: JSON.stringify({ plan: newPlan }) });
+    if (!rp.ok) return toast('Đã lưu hồ sơ nhưng đổi gói lỗi: ' + (rp.data?.error || rp.status), 'err');
+  }
+  toast('✓ Đã cập nhật toàn bộ thông tin');
   closeModal();
   await loadUsers();
 }
@@ -812,7 +941,7 @@ async function submitWallet() {
 function openRoleModal(uid, currentRole) {
   const u = userCache.find(x => x.id === uid);
   if (!u) return;
-  $('#modal-replyReq').style.display = 'none';
+  hideAllModals();
   $('#modal-setRole').style.display = '';
   $('#modal-role-sub').textContent = `@${u.username} · ${u.display_name} · hiện tại: ${currentRole}`;
   $('#modal-role').value = currentRole;
@@ -857,17 +986,49 @@ const CAMPUS_DOMAINS = DOMAIN_META.map(d => ({
 
 let _campusEditorDomain = null;
 let _campusLayoutCache  = null;
+let _schoolsView = 'cards';   // 'cards' | 'table' — chế độ hiển thị tab Trường
 
 async function loadCampus(host = $('#tabbody')) {
   const r = await api('/api/admin/campus-layouts');
   const overrides = new Set((r.data?.layouts || []).map(x => x.domain));
   const updatedMap = Object.fromEntries((r.data?.layouts || []).map(x => [x.domain, x.updated_at]));
 
+  // Thông tin mở rộng mỗi trường: người quản lý, số app, số HS/SV, số content.
+  const [saRes, usersRes, appsRes, contentRes] = await Promise.all([
+    api('/api/admin/school-admins').catch(() => ({ data: {} })),
+    api('/api/admin/users?limit=500').catch(() => ({ data: {} })),
+    fetch('/api/portal-apps/catalog', { credentials: 'same-origin' }).then(x => x.json()).catch(() => ({})),
+    api('/api/admin/content-by-domain').catch(() => ({ data: {} })),
+  ]);
+  const adminsByDomain = {};
+  (saRes.data?.admins || []).forEach(a => {
+    (adminsByDomain[a.domain_id] ||= []).push(a.display_name || a.username || ('#' + a.user_id));
+  });
+  const userCountByDomain = {};
+  (usersRes.data?.users || []).forEach(u => {
+    if (u.enrolled_domain) userCountByDomain[u.enrolled_domain] = (userCountByDomain[u.enrolled_domain] || 0) + 1;
+  });
+  const appCountByDomain = {};
+  ((appsRes.builtin) || []).forEach(a => {
+    if (a.domain) appCountByDomain[a.domain] = (appCountByDomain[a.domain] || 0) + 1;
+  });
+  const contentByDomain = (contentRes.data?.counts) || {};
+
+  // Helpers dùng chung cho cả thẻ và bảng.
+  const mgrsOf = d => adminsByDomain[d] || [];
+  const mgrText = d => mgrsOf(d).length ? mgrsOf(d).map(esc).join(', ') : '— chưa gán —';
+  const contentOf = d => contentByDomain[d] || { total: 0, quiz: 0, lesson: 0 };
+  const statusText = s => s === 'locked' ? '🔒 Sắp mở' : s === 'preview' ? '🟡 Preview' : '🟢 Ready';
+
   // Nhóm theo cấp: Phổ thông trước, ĐH/CĐ sau. Trường locked dồn cuối nhóm.
+  // School-admin chỉ thấy trường mình quản lý.
+  const visibleDomains = isSchoolAdminMode()
+    ? CAMPUS_DOMAINS.filter(c => _managedDomains.includes(c.domain))
+    : CAMPUS_DOMAINS;
   const order = { ready: 0, preview: 1, locked: 2 };
   const sortFn = (a, b) => (order[a.status] ?? 3) - (order[b.status] ?? 3);
-  const grpSchool = CAMPUS_DOMAINS.filter(c => c.level === 'school').sort(sortFn);
-  const grpHE     = CAMPUS_DOMAINS.filter(c => c.level === 'he').sort(sortFn);
+  const grpSchool = visibleDomains.filter(c => c.level === 'school').sort(sortFn);
+  const grpHE     = visibleDomains.filter(c => c.level === 'he').sort(sortFn);
 
   const renderCard = (c) => {
     const statusBadge = c.status === 'locked'
@@ -885,6 +1046,14 @@ async function loadCampus(host = $('#tabbody')) {
           <div style="font-weight:700;font-size:14px">${c.label}</div>
           <div style="font-size:11.5px;color:var(--muted);margin-top:2px">${editorState}</div>
         </div>
+        <div style="font-size:11.5px;color:var(--muted);display:flex;flex-direction:column;gap:4px;border-top:1px solid var(--border);padding-top:8px">
+          <div>🛡️ Quản lý: <span style="color:var(--text)">${
+            (adminsByDomain[c.domain] && adminsByDomain[c.domain].length)
+              ? adminsByDomain[c.domain].slice(0, 3).map(esc).join(', ') + (adminsByDomain[c.domain].length > 3 ? ` +${adminsByDomain[c.domain].length - 3}` : '')
+              : '<span style="color:var(--dim)">— chưa gán —</span>'
+          }</span></div>
+          <div>🧩 <b style="color:var(--text)">${appCountByDomain[c.domain] || 0}</b> app · 👥 <b style="color:var(--text)">${userCountByDomain[c.domain] || 0}</b> HS/SV · 📚 <b style="color:var(--text)">${contentOf(c.domain).total}</b> content</div>
+        </div>
         <div style="display:flex;gap:6px;margin-top:auto">
           <button class="btn primary" style="flex:1;font-size:12px" data-campus-edit="${c.domain}" data-campus-label="${c.label} ${c.emoji}">✏️ Sửa</button>
           ${overrides.has(c.domain) ? `<button class="btn" style="color:var(--bad);border-color:var(--bad);background:rgba(239,68,68,.08);font-size:12px" data-campus-del="${c.domain}" title="Xoá override">↺</button>` : ''}
@@ -893,28 +1062,66 @@ async function loadCampus(host = $('#tabbody')) {
     `;
   };
 
+  // ── Chế độ BẢNG — 1 hàng / trường, dễ quan sát & so sánh ──
+  const levelName = c => c.level === 'he' ? 'ĐH/CĐ' : 'Phổ thông';
+  const renderRow = (c) => {
+    const ct = contentOf(c.domain);
+    const ovr = overrides.has(c.domain)
+      ? `<span style="color:var(--ok)">● Override</span> · <span style="color:var(--muted)">${fmt(updatedMap[c.domain])}</span>`
+      : '<span style="color:var(--dim)">● Mặc định</span>';
+    return `
+      <tr style="border-bottom:1px solid var(--border);${c.status === 'locked' ? 'opacity:.65' : ''}">
+        <td style="white-space:nowrap"><span style="font-size:16px">${c.emoji}</span> <b>${esc(c.label)}</b></td>
+        <td style="color:var(--muted);font-size:12px">${levelName(c)}</td>
+        <td style="font-size:12px">${statusText(c.status)}</td>
+        <td style="font-size:12.5px">${mgrText(c.domain)}</td>
+        <td style="text-align:center"><b>${appCountByDomain[c.domain] || 0}</b></td>
+        <td style="text-align:center"><b>${userCountByDomain[c.domain] || 0}</b></td>
+        <td style="text-align:center"><b>${ct.total}</b><span style="color:var(--dim);font-size:11px"> mục</span></td>
+        <td style="font-size:11.5px">${ovr}</td>
+        <td style="white-space:nowrap">
+          <button class="btn primary" style="font-size:11.5px;padding:5px 10px" data-campus-edit="${c.domain}" data-campus-label="${c.label} ${c.emoji}">✏️ Sửa</button>
+          ${overrides.has(c.domain) ? `<button class="btn" style="color:var(--bad);border-color:var(--bad);background:rgba(239,68,68,.08);font-size:11.5px;padding:5px 8px" data-campus-del="${c.domain}" title="Xoá override">↺</button>` : ''}
+        </td>
+      </tr>`;
+  };
+  const th = (t, extra = '') => `<th style="text-align:left;padding:9px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);border-bottom:1px solid var(--border);${extra}">${t}</th>`;
+  const tableHtml = `
+    <style>#tabbody .schools-table td{padding:9px 10px;vertical-align:middle}#tabbody .schools-table tbody tr:hover{background:var(--bg2)}</style>
+    <div style="overflow-x:auto;border:1px solid var(--border);border-radius:12px">
+      <table class="schools-table" style="width:100%;border-collapse:collapse;font-size:13px;min-width:820px">
+        <thead><tr>
+          ${th('Trường')}${th('Cấp')}${th('Trạng thái')}${th('Quản lý')}
+          ${th('Apps', 'text-align:center')}${th('HS/SV', 'text-align:center')}${th('Content', 'text-align:center')}${th('Campus')}${th('')}
+        </tr></thead>
+        <tbody>
+          ${[...grpSchool, ...grpHE].map(renderRow).join('')}
+        </tbody>
+      </table>
+    </div>`;
+
+  const cardsHtml = `
+    <h3 style="font-size:13px;margin:12px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">🎒 Phổ thông (${grpSchool.length})</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px">${grpSchool.map(renderCard).join('')}</div>
+    <h3 style="font-size:13px;margin:24px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">🎓 Đại học & Cao đẳng (${grpHE.length})</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px">${grpHE.map(renderCard).join('')}</div>`;
+
+  const toggleBtn = (v, label) => `<button class="btn ${_schoolsView === v ? 'primary' : ''}" data-schools-view="${v}" style="font-size:12px;padding:6px 14px">${label}</button>`;
+
   host.innerHTML = `
-    <h2 class="section-title">🗺️ Campus 2.5D theo trường <span class="line"></span></h2>
-    <p style="color:var(--muted);font-size:13px;margin:0 0 14px">
-      Quản lý bố cục bản đồ cho <b>${CAMPUS_DOMAINS.length} trường</b> trong hệ thống Tizia
-      — đồng bộ với trang chủ. Override lưu vào DB; Reset để về layout mặc định.
-    </p>
-
-    <h3 style="font-size:13px;margin:12px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">
-      🎒 Phổ thông (${grpSchool.length})
-    </h3>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
-      ${grpSchool.map(renderCard).join('')}
+    <h2 class="section-title">🏫 Tổng quan trường <span class="line"></span></h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 14px">
+      <p style="color:var(--muted);font-size:13px;margin:0;flex:1;min-width:240px">
+        <b>${CAMPUS_DOMAINS.length} trường</b> — người quản lý, số app, số HS/SV, số content & bố cục campus. Bấm <b>Sửa</b> để mở panel quản lý.
+      </p>
+      <div style="display:flex;gap:6px">${toggleBtn('cards', '▦ Thẻ')}${toggleBtn('table', '☰ Bảng')}</div>
     </div>
-
-    <h3 style="font-size:13px;margin:24px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">
-      🎓 Đại học & Cao đẳng (${grpHE.length})
-    </h3>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
-      ${grpHE.map(renderCard).join('')}
-    </div>
+    ${_schoolsView === 'table' ? tableHtml : cardsHtml}
   `;
 
+  host.querySelectorAll('[data-schools-view]').forEach(btn => {
+    btn.addEventListener('click', () => { _schoolsView = btn.dataset.schoolsView; loadCampus(host); });
+  });
   host.querySelectorAll('[data-campus-edit]').forEach(btn => {
     btn.addEventListener('click', () => openSchoolPanel(btn.dataset.campusEdit, btn.dataset.campusLabel));
   });
@@ -943,6 +1150,10 @@ const SCHOOL_TABS = [
 let _activeSchoolTab = 'campus';
 
 function openSchoolPanel(domain, label) {
+  // School-admin chỉ mở được trường mình quản lý (chặn cả khi lách qua hash/console).
+  if (isSchoolAdminMode() && !_managedDomains.includes(domain)) {
+    return toast('Bạn không có quyền quản trị trường này', 'err');
+  }
   _campusEditorDomain = domain;
   _campusLayoutCache  = null;
   const meta = CAMPUS_DOMAINS.find(c => c.domain === domain);
@@ -950,8 +1161,10 @@ function openSchoolPanel(domain, label) {
   $('#school-overlay-title').textContent = `🏫 Quản lý trường — ${displayLabel}`;
   $('#school-overlay').style.display = 'flex';
 
-  // Render sidebar tabs
-  $('#school-tabs').innerHTML = SCHOOL_TABS.map(t => `
+  // Render sidebar tabs. School-admin: ẩn tab "Quản lý" (bổ nhiệm admin) + "Người dùng"
+  // (danh sách user toàn hệ thống) — chỉ super-admin thao tác 2 tab đó.
+  const tabs = isSchoolAdminMode() ? SCHOOL_TABS.filter(t => !['admins', 'users'].includes(t.id)) : SCHOOL_TABS;
+  $('#school-tabs').innerHTML = tabs.map(t => `
     <button class="btn school-tab" data-school-tab="${t.id}"
       style="justify-content:flex-start;text-align:left;padding:10px 12px;font-size:13px;line-height:1.2"
       title="${t.hint}">
@@ -1766,33 +1979,204 @@ async function renderDbAuditSub(host) {
   `;
 }
 
+// ─────────── Tab APPS & AGENTS — cài/quản lý portal-apps + portal-agents ───────────
+// Cài app (.zip chuẩn AI Portal) + đăng ký agent (alias+base_url) ngay trong admin,
+// dùng lại API /api/portal-apps/* và /api/agents/*. Chỉ super-admin thấy tab này
+// (visibleTabKeys ẩn với school-admin).
+async function loadAppsAgentsTab() {
+  const host = $('#tabbody');
+  const [appsR, agentsR] = await Promise.all([ api('/api/portal-apps'), api('/api/agents') ]);
+  const apps = appsR.ok ? appsR.data : { own:[], public:[], builtin:[] };
+  const agents = agentsR.ok ? agentsR.data : { own:[], public:[] };
+  const allApps = [
+    ...(apps.own||[]).map(a=>({ ...a, scope:'own' })),
+    ...(apps.public||[]).map(a=>({ ...a, scope:'public' })),
+    ...(apps.builtin||[]).map(a=>({ ...a, scope:'builtin' })),
+  ];
+  const allAgents = [
+    ...(agents.own||[]).map(a=>({ ...a, scope:'own' })),
+    ...(agents.public||[]).map(a=>({ ...a, scope:'public' })),
+  ];
+
+  host.innerHTML = `
+    <h2 class="section-title">🤖 Agents (${allAgents.length}) <span class="line"></span></h2>
+    <p style="color:var(--muted);font-size:12.5px;margin:-4px 0 12px">
+      Agent kiểu AI Portal: nhập <code>alias</code> + <code>base_url</code> (dịch vụ expose <code>GET /metadata</code> + <code>POST /ask</code>). Tizia gọi <code>/metadata</code> để xác nhận trước khi lưu.</p>
+    <div class="toolbar" style="gap:8px;flex-wrap:wrap">
+      <input id="agAlias" placeholder="alias" style="width:130px">
+      <input id="agBase" placeholder="base_url (https://…/v1)" style="flex:1;min-width:220px">
+      <input id="agName" placeholder="Tên (tuỳ chọn)" style="width:170px">
+      <button class="btn primary" id="agRegister">➕ Cài agent</button>
+    </div>
+    <div id="agMsg" style="font-size:12.5px;margin:4px 0 10px;min-height:16px"></div>
+    ${allAgents.length ? `<table><thead><tr>
+      <th>Tên</th><th>Alias</th><th>Base URL</th><th>Phạm vi</th><th style="text-align:center">Public</th><th></th>
+    </tr></thead><tbody>
+      ${allAgents.map(a => `<tr>
+        <td>${esc(a.name)}</td><td><span class="pill">${esc(a.alias)}</span></td>
+        <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;font-size:12px;opacity:.8">${esc(a.baseUrl||'')}</td>
+        <td><span class="pill">${a.scope}</span></td>
+        <td style="text-align:center">${a.isPublic ? '✅' : '—'}</td>
+        <td class="actions" style="white-space:nowrap">
+          ${a.own ? `<button class="btn" data-agpub="${a.id}" data-cur="${a.isPublic?1:0}">${a.isPublic?'Ẩn':'Public'}</button>
+                     <button class="btn danger" data-agdel="${a.id}">🗑</button>` : '<span style="opacity:.5;font-size:12px">của người khác</span>'}
+        </td></tr>`).join('')}
+    </tbody></table>` : '<div class="empty">Chưa có agent nào.</div>'}
+
+    <h2 class="section-title" style="margin-top:30px">🧩 Thư viện App (${allApps.length}) <span class="line"></span></h2>
+    <p style="color:var(--muted);font-size:12.5px;margin:-4px 0 12px">
+      Thư viện app dùng chung cho các trường. Thêm nhanh một trang có sẵn thành app (trỏ URL), hoặc cài app SPA đóng gói (<code>.zip</code> = <code>manifest.json</code> + <code>public/index.html</code>, chạy được cả trên AI Portal).</p>
+    <div class="toolbar" style="gap:8px;flex-wrap:wrap;margin-bottom:6px">
+      <input id="libAlias" placeholder="alias" style="width:120px">
+      <input id="libName" placeholder="Tên app" style="width:150px">
+      <input id="libUrl" placeholder="target_url (/trang.html hoặc https://…)" style="flex:1;min-width:200px">
+      <input id="libIcon" placeholder="icon 🧩" style="width:70px">
+      <select id="libDomain" title="Cấp học / campus">
+        <option value="">— mọi cấp —</option>
+        <option value="preschool">Mầm non</option>
+        <option value="primary">Tiểu học</option>
+        <option value="secondary">THCS/THPT</option>
+        <option value="it">CNTT</option>
+        <option value="pharmacy">Dược</option>
+        <option value="language">Ngoại ngữ</option>
+        <option value="driving">Lái xe</option>
+        <option value="general">Chung</option>
+      </select>
+      <button class="btn primary" id="libAdd">➕ Thêm vào thư viện</button>
+    </div>
+    <div class="toolbar" style="gap:8px;flex-wrap:wrap">
+      <input type="file" id="appZip" accept=".zip,application/zip" style="flex:1;min-width:220px">
+      <button class="btn" id="appInstall">⬆️ Hoặc cài app đóng gói (.zip)</button>
+    </div>
+    <div id="appMsg" style="font-size:12.5px;margin:4px 0 10px;min-height:16px"></div>
+    ${allApps.length ? `<table><thead><tr>
+      <th>Tên</th><th>Alias</th><th>Loại</th><th>Kích thước</th><th style="text-align:center">Public</th><th></th>
+    </tr></thead><tbody>
+      ${allApps.map(a => `<tr>
+        <td>${esc(a.name)}</td><td><span class="pill">${esc(a.alias)}</span></td>
+        <td><span class="pill">${esc(a.kind||a.scope)}</span></td>
+        <td style="font-size:12px">${a.sizeBytes?fmtBytes(a.sizeBytes):'—'}</td>
+        <td style="text-align:center">${a.isPublic?'✅':'—'}</td>
+        <td class="actions" style="white-space:nowrap">
+          ${a.url ? `<a class="btn" href="${esc(a.url)}" target="_blank" title="Mở">↗</a>` : ''}
+          ${a.scope!=='builtin' ? `<button class="btn" data-apppub="${a.id}" data-cur="${a.isPublic?1:0}">${a.isPublic?'Ẩn':'Public'}</button>` : ''}
+          <button class="btn danger" data-appdel="${a.id}" title="Gỡ khỏi thư viện">🗑</button>
+        </td></tr>`).join('')}
+    </tbody></table>` : '<div class="empty">Chưa có app nào.</div>'}
+  `;
+
+  $('#agRegister').addEventListener('click', async () => {
+    const alias = $('#agAlias').value.trim().toLowerCase();
+    const baseUrl = $('#agBase').value.trim();
+    const name = $('#agName').value.trim();
+    const msg = $('#agMsg');
+    msg.textContent = '⏳ Đang kiểm tra /metadata…'; msg.style.color = 'var(--muted)';
+    const r = await api('/api/agents/register', { method:'POST', body: JSON.stringify({ alias, baseUrl, name: name||undefined }) });
+    if (!r.ok) { msg.textContent = '⛔ ' + (r.data?.message||r.data?.error||('lỗi '+r.status)); msg.style.color = 'var(--bad)'; }
+    else { toast('✓ Đã cài agent'); loadAppsAgentsTab(); }
+  });
+
+  $('#appInstall').addEventListener('click', async () => {
+    const f = $('#appZip').files?.[0];
+    const msg = $('#appMsg');
+    if (!f) { msg.textContent = 'Chọn file .zip trước.'; msg.style.color='var(--bad)'; return; }
+    msg.textContent = '⏳ Đang tải lên & giải nén…'; msg.style.color='var(--muted)';
+    try {
+      const buf = await f.arrayBuffer();
+      const res = await fetch('/api/portal-apps/install', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/zip'}, body: buf });
+      const j = await res.json().catch(()=>({}));
+      if (!res.ok) { msg.textContent = '⛔ ' + (j.message||j.error||('lỗi '+res.status)); msg.style.color='var(--bad)'; }
+      else { toast('✓ Đã cài app'); loadAppsAgentsTab(); }
+    } catch(e) { msg.textContent = 'Lỗi: ' + e.message; msg.style.color='var(--bad)'; }
+  });
+
+  $('#libAdd').addEventListener('click', async () => {
+    const msg = $('#appMsg');
+    const body = {
+      alias: $('#libAlias').value.trim().toLowerCase(),
+      name: $('#libName').value.trim(),
+      targetUrl: $('#libUrl').value.trim(),
+      icon: $('#libIcon').value.trim() || undefined,
+      domain: $('#libDomain').value || undefined,
+    };
+    msg.textContent = '⏳ Đang thêm vào thư viện…'; msg.style.color='var(--muted)';
+    const r = await api('/api/portal-apps/library', { method:'POST', body: JSON.stringify(body) });
+    if (!r.ok) { msg.textContent = '⛔ ' + (r.data?.message||r.data?.error||('lỗi '+r.status)); msg.style.color='var(--bad)'; }
+    else { toast('✓ Đã thêm vào thư viện'); loadAppsAgentsTab(); }
+  });
+
+  const togglePublic = (base) => async (b) => {
+    const cur = b.dataset.cur === '1';
+    const r = await api(`${base}/${b.dataset.id}/publish`, { method:'POST', body: JSON.stringify({ public: !cur }) });
+    if (!r.ok) return toast('Lỗi: '+(r.data?.error||r.status),'err');
+    toast('✓'); loadAppsAgentsTab();
+  };
+  const del = (base, label) => (b) => openConfirm({
+    title:`🗑 Gỡ ${label}?`, msg:'Hành động không thể undo.', ctx:`id=${b.dataset.id}`,
+    onConfirm: async () => { const r = await api(`${base}/${b.dataset.id}`, {method:'DELETE'}); if(!r.ok) return toast('Lỗi: '+(r.data?.error||r.status),'err'); toast('✓ Đã gỡ'); closeModal(); loadAppsAgentsTab(); },
+  });
+  host.querySelectorAll('[data-agpub]').forEach(b => { b.dataset.id = b.dataset.agpub; b.addEventListener('click', () => togglePublic('/api/agents')(b)); });
+  host.querySelectorAll('[data-agdel]').forEach(b => { b.dataset.id = b.dataset.agdel; b.addEventListener('click', () => del('/api/agents','agent')(b)); });
+  host.querySelectorAll('[data-apppub]').forEach(b => { b.dataset.id = b.dataset.apppub; b.addEventListener('click', () => togglePublic('/api/portal-apps')(b)); });
+  host.querySelectorAll('[data-appdel]').forEach(b => { b.dataset.id = b.dataset.appdel; b.addEventListener('click', () => del('/api/portal-apps','app')(b)); });
+}
+
 const TABS = {
   dashboard:  { label:'📊 Dashboard', load: loadDashboard },
+  users:      { label:'👥 Người dùng', load: loadUsers },
   schools:    { label:'🏫 Trường', load: loadSchoolsCampus },
   curriculum: { label:'📊 Curriculum', load: loadCurriculumTab },
+  apps:       { label:'🧩 Apps & Agents', load: loadAppsAgentsTab },
   requests:   { label:'💡 Góp ý', load: loadRequests, badge: () => reqCache.filter(r => r.status === 'pending').length },
-  users:      { label:'👥 Người dùng', load: loadUsers },
   db:         { label:'🗄️ CSDL',     load: loadDbTab },
   config:     { label:'⚙️ Cấu hình', load: loadConfig },
 };
 
+// Phạm vi dashboard: null = toàn hệ thống; '<domain>' = chỉ 1 trường (super-admin
+// chọn qua dropdown; Phase 2 sẽ auto-set cho school-admin). Khi scoped, các chỉ số
+// toàn cục (pageview, AI token, hệ thống, feed) bị ẩn vì không tách được theo trường.
+let _dashDomain = null;
+
 // ─────────── Dashboard tab (KPI + charts + tops + feed + system) ───────────
 async function loadDashboard() {
-  const [ov, ts, tokenModelsRes, topStudents, sys, activity, pv] = await Promise.all([
-    api('/api/admin/overview2'),
-    api('/api/admin/timeseries?days=30'),
+  const scoped = !!_dashDomain;
+  const dq = scoped ? `&domain=${encodeURIComponent(_dashDomain)}` : '';
+  // Scoped chỉ fetch 3 endpoint hỗ trợ theo-trường; toàn cục fetch đủ 7.
+  const reqs = [
+    api(`/api/admin/overview2${scoped ? `?domain=${encodeURIComponent(_dashDomain)}` : ''}`),
+    api(`/api/admin/timeseries?days=30${dq}`),
+    api(`/api/admin/top?metric=students&limit=8${dq}`),
+  ];
+  if (!scoped) reqs.push(
     api('/api/admin/ai-tokens-by-model?days=30'),
-    api('/api/admin/top?metric=students&limit=8'),
     api('/api/admin/system'),
     api('/api/admin/activity?limit=40'),
     api('/api/admin/pageviews?days=30'),
-  ]);
+  );
+  const [ov, ts, topStudents, tokenModelsRes, sys, activity, pv] = await Promise.all(reqs);
 
   if (ov.status === 403) {
     $('#tabbody').innerHTML = `<div class="err">⛔ Cần quyền <b>admin</b>. Tài khoản hiện tại không đủ quyền.<br>
       Liên hệ quản trị để được cấp quyền.</div>`;
     return;
   }
+
+  // Bộ chọn trường. Super-admin: chọn được mọi trường + "Toàn hệ thống". School-admin:
+  // chỉ các trường mình quản lý (không có tuỳ chọn toàn hệ thống), khoá theo phạm vi.
+  const schoolMode = isSchoolAdminMode();
+  const scopeMeta = scoped ? CAMPUS_DOMAINS.find(c => c.domain === _dashDomain) : null;
+  const scopeLabel = scopeMeta ? esc(scopeMeta.label) : esc(_dashDomain || '');
+  const pickerDomains = schoolMode ? CAMPUS_DOMAINS.filter(c => _managedDomains.includes(c.domain)) : CAMPUS_DOMAINS;
+  const pickerHtml = `
+    <div class="toolbar" style="margin-bottom:16px;gap:10px;flex-wrap:wrap">
+      <label style="font-size:13px;opacity:.7">🏫 ${schoolMode ? 'Trường bạn quản lý' : 'Phạm vi'}:</label>
+      <select id="dash-domain" style="padding:8px 12px;background:var(--bg2);color:var(--fg,#e2e8f0);border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit"${schoolMode && pickerDomains.length <= 1 ? ' disabled' : ''}>
+        ${schoolMode ? '' : '<option value="">🌐 Toàn hệ thống</option>'}
+        ${pickerDomains.map(c => `<option value="${c.domain}" ${c.domain === _dashDomain ? 'selected' : ''}>${c.emoji} ${esc(c.label)}</option>`).join('')}
+      </select>
+      ${scoped ? `<span style="font-size:12px;opacity:.6">Đang xem <b>${scopeLabel}</b> · chỉ số toàn cục (pageview, AI, hệ thống) ẩn khi lọc theo trường</span>` : ''}
+    </div>
+  `;
 
   const kpiHtml = renderKpi(ov.data || {});
   const chartsHtml = `
@@ -1808,6 +2192,7 @@ async function loadDashboard() {
           <div class="chart" id="chart-users"></div>
         </div>
       </div>
+      ${scoped ? '' : `
       <div style="height:14px"></div>
       <div class="two-col">
         <div class="panel">
@@ -1818,20 +2203,20 @@ async function loadDashboard() {
           <div class="panel-title">⚡ Tokens theo model</div>
           <div id="chart-tokens-model" style="padding:6px 0"></div>
         </div>
-      </div>
+      </div>`}
     </section>
   `;
-  const pvHtml = renderPageviewSection(pv.data || {});
+  const pvHtml = scoped ? '' : renderPageviewSection(pv.data || {});
   const topsHtml = `
     <section class="section">
-      <h2 class="section-title">🏆 Bảng xếp hạng <span class="line"></span></h2>
+      <h2 class="section-title">🏆 Bảng xếp hạng${scoped ? ` — ${scopeLabel}` : ''} <span class="line"></span></h2>
       <div class="panel">
         <div class="panel-title">🏆 Top học sinh năng động</div>
         <div id="top-students"></div>
       </div>
     </section>
   `;
-  const feedHtml = `
+  const feedHtml = scoped ? '' : `
     <section class="section">
       <div class="two-col">
         <div class="panel">
@@ -1845,10 +2230,22 @@ async function loadDashboard() {
       </div>
     </section>
   `;
-  $('#tabbody').innerHTML = kpiHtml + chartsHtml + pvHtml + topsHtml + feedHtml;
+  $('#tabbody').innerHTML = pickerHtml + kpiHtml + chartsHtml + pvHtml + topsHtml + feedHtml;
+
+  $('#dash-domain')?.addEventListener('change', (e) => {
+    _dashDomain = e.target.value || null;
+    loadDashboard();
+  });
 
   $$('.kpi[data-nav]').forEach(el => {
     el.addEventListener('click', () => navigateKpi(el.dataset.nav));
+  });
+
+  // Hover mọi thẻ KPI → tooltip giàu thông tin (mô tả + số liệu liên quan).
+  $$('.kpi[data-tip]').forEach(el => {
+    const html = decodeURIComponent(el.dataset.tip);
+    el.addEventListener('mousemove', (e) => showTooltip(e.pageX, e.pageY, html, true));
+    el.addEventListener('mouseleave', hideTooltip);
   });
 
   const series = (ts.data?.series || []);
@@ -1858,23 +2255,26 @@ async function loadDashboard() {
   lineChart($('#chart-users'),
     series.map(s => ({ date: s.date, value: s.users })),
     { color:'var(--accent2)', label:'User mới' });
-  lineChart($('#chart-tokens'),
-    series.map(s => ({ date: s.date, value: s.ai_tokens })),
-    { color:'var(--purple)', label:'Tokens' });
-  renderPageviewCharts(pv.data || {});
-
-  const tokenModels = (tokenModelsRes.data?.models || []).map(m => ({
-    model: `${m.model} ${m.provider ? '(' + m.provider + ')' : ''}`,
-    value: (m.pin || 0) + (m.pout || 0),
-  }));
-  barChartH($('#chart-tokens-model'), tokenModels);
 
   $('#top-students').innerHTML = renderTopList(topStudents.data?.rows || [], {
     nameKey:'display_name', valueKey:'attempts',
     sub: r => ` · @${r.username} · điểm ${fmtNum(r.total_score)}`,
   });
-  $('#activity-feed').innerHTML = renderFeed(activity.data?.items || []);
-  $('#sysblock').innerHTML = renderSystem(sys.data || {});
+
+  // Các phần toàn cục — chỉ render khi KHÔNG lọc theo trường (element mới tồn tại).
+  if (!scoped) {
+    lineChart($('#chart-tokens'),
+      series.map(s => ({ date: s.date, value: s.ai_tokens })),
+      { color:'var(--purple)', label:'Tokens' });
+    renderPageviewCharts(pv.data || {});
+    const tokenModels = (tokenModelsRes.data?.models || []).map(m => ({
+      model: `${m.model} ${m.provider ? '(' + m.provider + ')' : ''}`,
+      value: (m.pin || 0) + (m.pout || 0),
+    }));
+    barChartH($('#chart-tokens-model'), tokenModels);
+    $('#activity-feed').innerHTML = renderFeed(activity.data?.items || []);
+    $('#sysblock').innerHTML = renderSystem(sys.data || {});
+  }
 
   // Đồng bộ badge "Góp ý" sau khi dashboard load xong (nhẹ, không trùng request)
   if (ov.data?.requests_pending != null) {
@@ -2083,13 +2483,18 @@ async function loadSimpleWithDelete(path, key, cols, fmtMap = {}, deleteBase, en
   });
 }
 
+// Tab hiển thị theo quyền: super-admin thấy hết; school-admin chỉ Dashboard + Trường.
+function visibleTabKeys() {
+  return isSchoolAdminMode() ? ['dashboard', 'schools'] : Object.keys(TABS);
+}
 function renderTabBar() {
-  const tabsHtml = Object.entries(TABS).map(([k,v]) => {
+  const allowed = visibleTabKeys();
+  const tabsHtml = Object.entries(TABS).filter(([k]) => allowed.includes(k)).map(([k,v]) => {
     const badge = v.badge ? `<span class="count">${v.badge()}</span>` : '';
     return `<button class="tab ${k === currentTab ? 'active' : ''}" data-k="${k}">${v.label}${badge}</button>`;
   }).join('')
-    // Link ra trang sửa nội dung học (curriculum_content) — không phải tab SPA.
-    + `<a class="tab" href="/admin-curriculum.html" title="Sửa nóng quiz + lý thuyết trong DB">✏️ Sửa nội dung</a>`;
+    // Link ra trang sửa nội dung học (curriculum_content) — chỉ super-admin.
+    + (isSchoolAdminMode() ? '' : `<a class="tab" href="/admin-curriculum.html" title="Sửa nóng quiz + lý thuyết trong DB">✏️ Sửa nội dung</a>`);
   const bar = $('#tabs');
   if (bar) bar.innerHTML = tabsHtml;
 }
@@ -2102,6 +2507,8 @@ function tabFromHash() {
 
 async function showTab(key) {
   if (!TABS[key]) key = 'dashboard';
+  // School-admin: chặn mọi tab ngoài phạm vi (vd gõ #users vào URL) → về dashboard.
+  if (!visibleTabKeys().includes(key)) key = 'dashboard';
   currentTab = key;
   // Sync URL hash để F5 / share link giữ nguyên tab. Dùng replaceState để
   // không spam history; dashboard ẩn hash (URL sạch).
@@ -2144,6 +2551,11 @@ document.addEventListener('ev-header-mounted', injectAdminBadge, { once: true })
 
 async function init() {
   const meR = await api('/api/auth/me');
+  _me = meR.data?.user || null;
+  _isSuperAdmin = _me?.role === 'admin';
+  _managedDomains = _me?.managed_domains || [];
+  // School-admin: khoá dashboard vào trường đầu tiên mình quản lý.
+  if (isSchoolAdminMode()) _dashDomain = _managedDomains[0];
 
   // Render shell một lần — tab bar lớn + container nội dung
   $('#app').innerHTML = `
@@ -2189,6 +2601,10 @@ async function init() {
   $('#cu-submit').addEventListener('click', submitCreateUser);
   $('#eu-cancel').addEventListener('click', closeModal);
   $('#eu-submit').addEventListener('click', submitEditUser);
+  // Nút hành động khác trong modal "Quản lý" — dùng editingUser (user đang mở).
+  $('#eu-wallet').addEventListener('click', () => editingUser && openWalletModal(editingUser));
+  $('#eu-pwd').addEventListener('click', () => editingUser && openResetPwdModal(editingUser));
+  $('#eu-del').addEventListener('click', () => editingUser && confirmDeleteUser(editingUser));
   $('#rp-cancel').addEventListener('click', closeModal);
   $('#rp-submit').addEventListener('click', submitResetPwd);
   $('#ew-cancel').addEventListener('click', closeModal);

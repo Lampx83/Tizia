@@ -1,87 +1,96 @@
-// Admin DB CRUD — cho phép admin browse tables, run SQL (cả write), download
-// backup. Mọi non-SELECT đều ghi audit log vào admin_db_audit + console.
+// Admin DB CRUD — cho phép admin browse tables, run SQL (cả write), tạo/tải backup.
+// Mọi non-SELECT đều ghi audit log vào admin_db_audit + console.
 // Mount qua attachAdminDb(router) trong server/contexts/admin/index.js.
+//
+// Postgres: schema introspection qua information_schema/pg_catalog (thay PRAGMA/
+// sqlite_master); backup qua pg_dump (thay better-sqlite3 db.backup()).
 import fs from 'node:fs';
 import path from 'node:path';
-import { db, dbPath, DATA_DIR } from '../../db.js';
+import { spawn } from 'node:child_process';
+import { db, pool, DATA_DIR } from '../../db.js';
 import { requireAdmin } from './index.js';
 
-// Bootstrap audit table — ghi mọi query write từ admin UI để truy vết.
-db.exec(`
-  CREATE TABLE IF NOT EXISTS admin_db_audit (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id     INTEGER NOT NULL,
-    username    TEXT,
-    sql         TEXT    NOT NULL,
-    changes     INTEGER,
-    last_id     INTEGER,
-    error       TEXT,
-    created_at  INTEGER NOT NULL
-  );
-  CREATE INDEX IF NOT EXISTS idx_admin_db_audit_user ON admin_db_audit(user_id, created_at);
-`);
-
+// admin_db_audit table do server/schema.sql sở hữu (không tạo inline nữa).
 const _auditInsert = db.prepare(
   `INSERT INTO admin_db_audit (user_id, username, sql, changes, last_id, error, created_at)
    VALUES (@user_id, @username, @sql, @changes, @last_id, @error, @t)`
 );
+async function audit(row) { try { await _auditInsert.run(row); } catch { /* audit best-effort */ } }
 
-const SELECT_RE = /^\s*(SELECT|WITH|EXPLAIN|PRAGMA)\b/i;
-const FORBIDDEN_TABLES = new Set(['sqlite_sequence']);
+// Read-only: các câu KHÔNG ghi dữ liệu (Postgres). Bỏ PRAGMA (SQLite), thêm SHOW/TABLE/VALUES.
+const SELECT_RE = /^\s*(SELECT|WITH|EXPLAIN|SHOW|TABLE|VALUES)\b/i;
+const FORBIDDEN_TABLES = new Set([]);
 
 function isReadOnly(sql) { return SELECT_RE.test(sql); }
-function tableExists(name) {
-  return !!db.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`).get(name);
+async function tableExists(name) {
+  return !!(await db.prepare(
+    `SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name = ?`
+  ).get(name));
 }
 function validIdent(name) { return /^[A-Za-z_][A-Za-z0-9_]*$/.test(String(name || '')); }
+const PG_DUMP_BIN = process.env.PG_DUMP_BIN || 'pg_dump';
 
 export function attachAdminDb(r) {
   // ─── List tables + row counts ────────────────────────────────────────────
-  r.get('/api/admin/db/tables', requireAdmin, (_req, res) => {
-    const rows = db.prepare(
-      `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`
+  r.get('/api/admin/db/tables', requireAdmin, async (_req, res) => {
+    const rows = await db.prepare(
+      `SELECT table_name AS name FROM information_schema.tables
+       WHERE table_schema='public' ORDER BY table_name`
     ).all();
-    const out = rows.map(({ name }) => {
+    const out = [];
+    for (const { name } of rows) {
       let rowCount = null;
-      try { rowCount = db.prepare(`SELECT COUNT(*) c FROM "${name}"`).get().c; }
-      catch (e) { rowCount = -1; }
-      return { name, rowCount };
-    });
-    res.json({ tables: out, dbPath });
+      try { rowCount = (await db.prepare(`SELECT COUNT(*) c FROM "${name}"`).get()).c; }
+      catch { rowCount = -1; }
+      out.push({ name, rowCount });
+    }
+    res.json({ tables: out, dbPath: process.env.DATABASE_URL ? '(postgres)' : null });
   });
 
   // ─── Schema + indices của 1 bảng ─────────────────────────────────────────
-  r.get('/api/admin/db/schema/:table', requireAdmin, (req, res) => {
+  r.get('/api/admin/db/schema/:table', requireAdmin, async (req, res) => {
     const t = String(req.params.table);
     if (!validIdent(t)) return res.status(400).json({ error: 'invalid_table' });
-    if (!tableExists(t)) return res.status(404).json({ error: 'not_found' });
-    const cols    = db.prepare(`PRAGMA table_info("${t}")`).all();
-    const indexes = db.prepare(`PRAGMA index_list("${t}")`).all();
-    const fks     = db.prepare(`PRAGMA foreign_key_list("${t}")`).all();
-    const ddl     = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name=?`).get(t)?.sql || null;
-    res.json({ table: t, columns: cols, indexes, foreign_keys: fks, ddl });
+    if (!(await tableExists(t))) return res.status(404).json({ error: 'not_found' });
+    const cols = await db.prepare(
+      `SELECT column_name AS name, data_type AS type, is_nullable, column_default
+       FROM information_schema.columns
+       WHERE table_schema='public' AND table_name = ? ORDER BY ordinal_position`
+    ).all(t);
+    const indexes = await db.prepare(
+      `SELECT indexname AS name, indexdef FROM pg_indexes
+       WHERE schemaname='public' AND tablename = ?`
+    ).all(t);
+    const fks = await db.prepare(
+      `SELECT kcu.column_name, ccu.table_name AS ref_table, ccu.column_name AS ref_column
+       FROM information_schema.table_constraints tc
+       JOIN information_schema.key_column_usage kcu ON kcu.constraint_name = tc.constraint_name
+       JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name
+       WHERE tc.constraint_type='FOREIGN KEY' AND tc.table_schema='public' AND tc.table_name = ?`
+    ).all(t);
+    res.json({ table: t, columns: cols, indexes, foreign_keys: fks, ddl: null });
   });
 
   // ─── Browse rows của 1 bảng (paginated) ──────────────────────────────────
-  r.get('/api/admin/db/rows/:table', requireAdmin, (req, res) => {
+  r.get('/api/admin/db/rows/:table', requireAdmin, async (req, res) => {
     const t = String(req.params.table);
     if (!validIdent(t)) return res.status(400).json({ error: 'invalid_table' });
-    if (!tableExists(t)) return res.status(404).json({ error: 'not_found' });
+    if (!(await tableExists(t))) return res.status(404).json({ error: 'not_found' });
     const limit  = Math.min(Math.max(Number(req.query.limit)  || 100, 1), 1000);
     const offset = Math.max(Number(req.query.offset) || 0, 0);
     const orderBy = req.query.order_by && validIdent(req.query.order_by) ? req.query.order_by : null;
     const dir = req.query.dir === 'asc' ? 'ASC' : 'DESC';
     const orderClause = orderBy ? ` ORDER BY "${orderBy}" ${dir}` : '';
-    const total = db.prepare(`SELECT COUNT(*) c FROM "${t}"`).get().c;
-    const rows  = db.prepare(`SELECT * FROM "${t}"${orderClause} LIMIT ? OFFSET ?`).all(limit, offset);
+    const total = (await db.prepare(`SELECT COUNT(*) c FROM "${t}"`).get()).c;
+    const rows  = await db.prepare(`SELECT * FROM "${t}"${orderClause} LIMIT ? OFFSET ?`).all(limit, offset);
     res.json({ table: t, total, limit, offset, rows });
   });
 
-  // ─── Update 1 row theo PK (đơn giản, dùng cho table có cột id) ───────────
-  r.post('/api/admin/db/rows/:table/update', requireAdmin, (req, res) => {
+  // ─── Update 1 row theo PK ────────────────────────────────────────────────
+  r.post('/api/admin/db/rows/:table/update', requireAdmin, async (req, res) => {
     const t = String(req.params.table);
     if (!validIdent(t)) return res.status(400).json({ error: 'invalid_table' });
-    if (!tableExists(t)) return res.status(404).json({ error: 'not_found' });
+    if (!(await tableExists(t))) return res.status(404).json({ error: 'not_found' });
     if (FORBIDDEN_TABLES.has(t)) return res.status(403).json({ error: 'forbidden_table' });
     const { pk_col, pk_val, set } = req.body || {};
     if (!validIdent(pk_col)) return res.status(400).json({ error: 'invalid_pk_col' });
@@ -94,45 +103,45 @@ export function attachAdminDb(r) {
     const sql = `UPDATE "${t}" SET ${setClause} WHERE "${pk_col}"=?`;
     const params = [...cols.map(c => set[c]), pk_val];
     try {
-      const info = db.prepare(sql).run(...params);
-      _auditInsert.run({ user_id: req.user.id, username: req.user.username,
+      const info = await db.prepare(sql).run(...params);
+      await audit({ user_id: req.user.id, username: req.user.username,
         sql: `${sql}  -- params: ${JSON.stringify(params)}`,
-        changes: info.changes, last_id: info.lastInsertRowid, error: null, t: Date.now() });
+        changes: info.changes, last_id: info.lastInsertRowid ?? null, error: null, t: Date.now() });
       res.json({ ok: true, changes: info.changes });
     } catch (e) {
-      _auditInsert.run({ user_id: req.user.id, username: req.user.username,
+      await audit({ user_id: req.user.id, username: req.user.username,
         sql, changes: 0, last_id: null, error: String(e.message), t: Date.now() });
       res.status(400).json({ error: 'update_failed', message: String(e.message) });
     }
   });
 
   // ─── Delete 1 row theo PK ────────────────────────────────────────────────
-  r.post('/api/admin/db/rows/:table/delete', requireAdmin, (req, res) => {
+  r.post('/api/admin/db/rows/:table/delete', requireAdmin, async (req, res) => {
     const t = String(req.params.table);
     if (!validIdent(t)) return res.status(400).json({ error: 'invalid_table' });
-    if (!tableExists(t)) return res.status(404).json({ error: 'not_found' });
+    if (!(await tableExists(t))) return res.status(404).json({ error: 'not_found' });
     if (FORBIDDEN_TABLES.has(t)) return res.status(403).json({ error: 'forbidden_table' });
     const { pk_col, pk_val } = req.body || {};
     if (!validIdent(pk_col)) return res.status(400).json({ error: 'invalid_pk_col' });
     const sql = `DELETE FROM "${t}" WHERE "${pk_col}"=?`;
     try {
-      const info = db.prepare(sql).run(pk_val);
-      _auditInsert.run({ user_id: req.user.id, username: req.user.username,
+      const info = await db.prepare(sql).run(pk_val);
+      await audit({ user_id: req.user.id, username: req.user.username,
         sql: `${sql}  -- ${pk_col}=${JSON.stringify(pk_val)}`,
         changes: info.changes, last_id: null, error: null, t: Date.now() });
       res.json({ ok: true, changes: info.changes });
     } catch (e) {
-      _auditInsert.run({ user_id: req.user.id, username: req.user.username,
+      await audit({ user_id: req.user.id, username: req.user.username,
         sql, changes: 0, last_id: null, error: String(e.message), t: Date.now() });
       res.status(400).json({ error: 'delete_failed', message: String(e.message) });
     }
   });
 
   // ─── Insert 1 row ────────────────────────────────────────────────────────
-  r.post('/api/admin/db/rows/:table/insert', requireAdmin, (req, res) => {
+  r.post('/api/admin/db/rows/:table/insert', requireAdmin, async (req, res) => {
     const t = String(req.params.table);
     if (!validIdent(t)) return res.status(400).json({ error: 'invalid_table' });
-    if (!tableExists(t)) return res.status(404).json({ error: 'not_found' });
+    if (!(await tableExists(t))) return res.status(404).json({ error: 'not_found' });
     if (FORBIDDEN_TABLES.has(t)) return res.status(403).json({ error: 'forbidden_table' });
     const { values } = req.body || {};
     if (!values || typeof values !== 'object' || !Object.keys(values).length) {
@@ -145,23 +154,20 @@ export function attachAdminDb(r) {
     const sql = `INSERT INTO "${t}" (${colList}) VALUES (${placeholders})`;
     const params = cols.map(c => values[c]);
     try {
-      const info = db.prepare(sql).run(...params);
-      _auditInsert.run({ user_id: req.user.id, username: req.user.username,
+      const info = await db.prepare(sql).run(...params);
+      await audit({ user_id: req.user.id, username: req.user.username,
         sql: `${sql}  -- params: ${JSON.stringify(params)}`,
-        changes: info.changes, last_id: info.lastInsertRowid, error: null, t: Date.now() });
-      res.json({ ok: true, last_id: info.lastInsertRowid });
+        changes: info.changes, last_id: info.lastInsertRowid ?? null, error: null, t: Date.now() });
+      res.json({ ok: true, last_id: info.lastInsertRowid ?? null });
     } catch (e) {
-      _auditInsert.run({ user_id: req.user.id, username: req.user.username,
+      await audit({ user_id: req.user.id, username: req.user.username,
         sql, changes: 0, last_id: null, error: String(e.message), t: Date.now() });
       res.status(400).json({ error: 'insert_failed', message: String(e.message) });
     }
   });
 
-  // ─── SQL Console — chạy SQL tự do ────────────────────────────────────────
-  // Read-only (SELECT/WITH/EXPLAIN/PRAGMA) chạy thẳng → trả rows.
-  // Write phải set allow_write=true, audit + run + trả changes/lastInsertRowid.
-  // FE cần confirm 2 lần trước khi gửi allow_write.
-  r.post('/api/admin/db/query', requireAdmin, (req, res) => {
+  // ─── SQL Console — chạy SQL tự do (raw qua pool, không dịch placeholder) ──
+  r.post('/api/admin/db/query', requireAdmin, async (req, res) => {
     const sql = String(req.body?.sql || '').trim();
     if (!sql) return res.status(400).json({ error: 'empty_sql' });
     if (sql.length > 50_000) return res.status(413).json({ error: 'sql_too_large' });
@@ -170,21 +176,20 @@ export function attachAdminDb(r) {
       return res.status(403).json({ error: 'write_requires_confirm', message: 'Set allow_write=true để chạy non-SELECT' });
     }
     try {
+      // Dùng pool.query trực tiếp: SQL admin tự do KHÔNG đi qua bộ dịch ?/@name.
+      const result = await pool.query(sql);
       if (readOnly) {
-        const stmt = db.prepare(sql);
-        // better-sqlite3 .raw() unavailable on PRAGMA — fall back to .all()
-        const rows = stmt.all();
-        const cols = rows.length ? Object.keys(rows[0]) : [];
+        const rows = result.rows || [];
+        const cols = rows.length ? Object.keys(rows[0]) : (result.fields || []).map(f => f.name);
         return res.json({ ok: true, mode: 'read', columns: cols, rows, row_count: rows.length });
       }
-      const info = db.prepare(sql).run();
-      _auditInsert.run({ user_id: req.user.id, username: req.user.username,
-        sql, changes: info.changes, last_id: info.lastInsertRowid, error: null, t: Date.now() });
-      console.log(`[admin-db] WRITE by @${req.user.username} (uid=${req.user.id}): ${sql.slice(0, 200)}${sql.length > 200 ? '…' : ''} → ${info.changes} rows`);
-      return res.json({ ok: true, mode: 'write', changes: info.changes, last_id: info.lastInsertRowid });
+      await audit({ user_id: req.user.id, username: req.user.username,
+        sql, changes: result.rowCount, last_id: null, error: null, t: Date.now() });
+      console.log(`[admin-db] WRITE by @${req.user.username} (uid=${req.user.id}): ${sql.slice(0, 200)}${sql.length > 200 ? '…' : ''} → ${result.rowCount} rows`);
+      return res.json({ ok: true, mode: 'write', changes: result.rowCount, last_id: null });
     } catch (e) {
       if (!readOnly) {
-        _auditInsert.run({ user_id: req.user.id, username: req.user.username,
+        await audit({ user_id: req.user.id, username: req.user.username,
           sql, changes: 0, last_id: null, error: String(e.message), t: Date.now() });
       }
       return res.status(400).json({ error: 'query_failed', message: String(e.message) });
@@ -192,20 +197,20 @@ export function attachAdminDb(r) {
   });
 
   // ─── Audit log viewer ────────────────────────────────────────────────────
-  r.get('/api/admin/db/audit', requireAdmin, (_req, res) => {
-    const rows = db.prepare(
+  r.get('/api/admin/db/audit', requireAdmin, async (_req, res) => {
+    const rows = await db.prepare(
       `SELECT id, user_id, username, sql, changes, last_id, error, created_at
        FROM admin_db_audit ORDER BY id DESC LIMIT 200`
     ).all();
     res.json({ audit: rows });
   });
 
-  // ─── Backup operations ───────────────────────────────────────────────────
-  // List file *.bak / *.bak-* trong DATA_DIR (cùng folder với tizia.db)
+  // ─── Backup operations (pg_dump) ─────────────────────────────────────────
+  // List file backup *.dump trong DATA_DIR.
   r.get('/api/admin/db/backups', requireAdmin, (_req, res) => {
     try {
       const files = fs.readdirSync(DATA_DIR)
-        .filter(f => f.startsWith('tizia.db') && f !== 'tizia.db' && !f.endsWith('-wal') && !f.endsWith('-shm'))
+        .filter(f => f.startsWith('tizia-') && f.endsWith('.dump'))
         .map(f => {
           const st = fs.statSync(path.join(DATA_DIR, f));
           return { name: f, size: st.size, mtime: st.mtimeMs };
@@ -217,38 +222,44 @@ export function attachAdminDb(r) {
     }
   });
 
-  // Tạo backup snapshot mới (dùng better-sqlite3 db.backup() — an toàn với WAL)
+  // Tạo backup snapshot mới bằng pg_dump (custom format -Fc, an toàn + nén).
   r.post('/api/admin/db/backup', requireAdmin, async (req, res) => {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const fname = `tizia.db.bak-admin-${stamp}`;
+    const fname = `tizia-${stamp}.dump`;
     const target = path.join(DATA_DIR, fname);
     try {
-      await db.backup(target);
+      await pgDump(target);
       const st = fs.statSync(target);
-      console.log(`[admin-db] backup by @${req.user.username}: ${fname} (${st.size} bytes)`);
+      console.log(`[admin-db] pg_dump by @${req.user.username}: ${fname} (${st.size} bytes)`);
       res.json({ ok: true, name: fname, size: st.size });
     } catch (e) {
       res.status(500).json({ error: 'backup_failed', message: String(e.message) });
     }
   });
 
-  // Stream download 1 backup file (hoặc tizia.db hiện tại nếu name=current)
+  // Download 1 backup file.
   r.get('/api/admin/db/backup/download', requireAdmin, (req, res) => {
-    const name = String(req.query.name || 'current');
-    let filePath, fileName;
-    if (name === 'current') {
-      filePath = dbPath;
-      fileName = `tizia.db.live-${Date.now()}`;
-    } else {
-      if (!/^tizia\.db[a-zA-Z0-9._\-]*$/.test(name) || name.includes('/')) {
-        return res.status(400).json({ error: 'invalid_name' });
-      }
-      filePath = path.join(DATA_DIR, name);
-      fileName = name;
+    const name = String(req.query.name || '');
+    if (!/^tizia-[a-zA-Z0-9._\-]*\.dump$/.test(name) || name.includes('/')) {
+      return res.status(400).json({ error: 'invalid_name' });
     }
+    const filePath = path.join(DATA_DIR, name);
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'not_found' });
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
     fs.createReadStream(filePath).pipe(res);
+  });
+}
+
+// Chạy pg_dump ra file custom-format. Dùng DATABASE_URL.
+function pgDump(target) {
+  return new Promise((resolve, reject) => {
+    const url = process.env.DATABASE_URL;
+    if (!url) return reject(new Error('DATABASE_URL not set'));
+    const p = spawn(PG_DUMP_BIN, ['-Fc', '-f', target, url], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = '';
+    p.stderr.on('data', (d) => { err += d.toString(); });
+    p.on('error', reject);
+    p.on('close', (code) => code === 0 ? resolve() : reject(new Error(`pg_dump exit ${code}: ${err.slice(0, 500)}`)));
   });
 }

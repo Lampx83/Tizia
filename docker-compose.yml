@@ -1,10 +1,32 @@
 services:
+  tizia-postgres:
+    image: postgres:16-alpine
+    container_name: tizia-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tizia
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tizia_dev_pw}
+      POSTGRES_DB: tizia
+    volumes:
+      - tizia-pgdata:/var/lib/postgresql/data
+    # Cổng chỉ mở ra localhost (dev). Prod: bỏ ports, chỉ nối qua network nội bộ.
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tizia -d tizia"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   tizia:
     build:
       context: .
     image: tizia:latest
     container_name: tizia
     restart: unless-stopped
+    depends_on:
+      tizia-postgres:
+        condition: service_healthy
     ports:
       - "8041:8041"
     environment:
@@ -13,9 +35,13 @@ services:
       HOST: 0.0.0.0
       DATA_DIR: /data
       BASE_PATH: ${BASE_PATH:-}
+      # Postgres runtime (thay SQLite). host = tên service trong compose network.
+      DATABASE_URL: ${DATABASE_URL:-postgres://tizia:tizia_dev_pw@tizia-postgres:5432/tizia}
     volumes:
       - pharmacysim-data:/data
 
 volumes:
   pharmacysim-data:
+    driver: local
+  tizia-pgdata:
     driver: local

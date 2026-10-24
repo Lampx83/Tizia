@@ -165,6 +165,35 @@
   .wspin { display:inline-block; width:15px; height:15px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff;
     border-radius:50%; animation:spin .7s linear infinite; vertical-align:-2px; }
   @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* Hoạt ảnh pháo giấy chúc mừng (req #43) */
+  #confetti { position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:60; display:none; }
+  #confetti.show { display:block; }
+
+  /* Viết bài: đoạn văn / email / essay (req #38) */
+  #essay { display:none; flex-direction:column; align-items:center; gap:14px; width:100%; }
+  .etypes { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+  .etype { font-family:inherit; font-size:13.5px; padding:8px 15px; border-radius:20px; cursor:pointer;
+    background:rgba(0,0,0,.22); color:var(--text); border:1px solid var(--border); transition:.15s; }
+  .etype:hover { border-color:rgba(99,102,241,.5); }
+  .etype.sel { background:linear-gradient(135deg,var(--accent),#6366f1); color:#fff; border-color:transparent; font-weight:700; }
+  .eprompt-row { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .epill { font-size:11px; color:var(--muted); background:rgba(255,255,255,.06); border:1px solid var(--border); border-radius:20px; padding:2px 9px; margin-left:6px; }
+  .eprompt { font-size:15.5px; font-weight:600; line-height:1.5; margin:10px 0 4px; }
+  .eoutline { background:rgba(0,0,0,.18); border:1px solid var(--border); border-radius:12px; padding:10px 14px; margin-top:8px; }
+  .eoutline summary { cursor:pointer; font-size:13.5px; color:var(--accent); font-weight:700; }
+  .eoutline ul { margin:8px 0 4px; padding-left:20px; }
+  .eoutline li { font-size:13.5px; color:var(--muted); line-height:1.7; }
+  .ehint { font-size:12.5px; color:var(--muted); margin-top:6px; }
+  .ehint b { color:var(--accent); }
+  .erow { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; }
+  .ecount { font-size:12.5px; color:var(--muted); }
+  .wfeed .ecorr { background:rgba(0,0,0,.22); border:1px solid var(--border); border-radius:10px; padding:9px 11px; margin-top:8px; font-size:13.5px; }
+  .wfeed .ecorr .o { color:#fca5a5; text-decoration:line-through; }
+  .wfeed .ecorr .f { color:#6ee7b7; font-weight:600; }
+  .wfeed .ecorr .wy { color:var(--muted); font-size:12.5px; display:block; margin-top:3px; }
+  .wfeed .elevel { display:inline-block; font-size:12px; font-weight:700; color:var(--accent); background:rgba(34,211,238,.12);
+    border:1px solid rgba(34,211,238,.3); border-radius:20px; padding:2px 10px; margin-left:8px; vertical-align:2px; }
 </style>
 </head>
 <body>
@@ -177,6 +206,7 @@
   <button id="tabQuiz">📝 Kiểm tra</button>
   <button id="tabListen">🎧 Nghe</button>
   <button id="tabWrite">✍️ Viết</button>
+  <button id="tabEssay">✒️ Viết bài</button>
 </div>
 
 <div class="toolbar">
@@ -315,6 +345,29 @@
   <div class="wfeed" id="wFeed"></div>
 </div>
 
+<!-- ───── Viết bài: đoạn văn / email / essay (req #38) ───── -->
+<div id="essay">
+  <div class="etypes" id="eTypes"></div>
+  <div class="wcard" style="max-width:640px;width:100%">
+    <div class="eprompt-row">
+      <div class="wprompt" style="margin:0">📝 Đề bài <span id="eWords" class="epill"></span></div>
+      <button class="opt" id="eNewTopic" style="flex:0 0 auto;padding:6px 12px;font-size:12.5px">🔄 Đổi đề</button>
+    </div>
+    <div class="eprompt" id="ePrompt">—</div>
+    <details class="eoutline" id="eOutlineWrap" open>
+      <summary>🧭 Dàn ý gợi ý</summary>
+      <ul id="eOutline"></ul>
+      <div class="ehint" id="eVocabHint"></div>
+    </details>
+    <textarea class="wta" id="eInput" style="min-height:170px" placeholder="Viết bài của bạn ở đây bằng tiếng Anh…"></textarea>
+    <div class="erow">
+      <span class="ecount" id="eCount">0 từ</span>
+      <button class="opt primary" id="eSubmit" style="flex:0 0 auto;background:linear-gradient(135deg,var(--accent),#6366f1);color:#fff;border:0;font-weight:700">Chấm bài</button>
+    </div>
+  </div>
+  <div class="wfeed" id="eFeed" style="max-width:640px;width:100%"></div>
+</div>
+
 <!-- ───── Modal thêm từ (req #25) ───── -->
 <div class="overlay" id="addOverlay">
   <div class="modal" style="max-width:430px">
@@ -350,6 +403,9 @@
     </div>
   </div>
 </div>
+
+<!-- Hoạt ảnh pháo giấy chúc mừng (req #43) -->
+<canvas id="confetti"></canvas>
 
 <!-- ───── Congrats modal ───── -->
 <div class="overlay" id="overlay">
@@ -760,6 +816,7 @@
       ? 'Bạn trả lời đúng <b>' + pct + '%</b>. Chuỗi học: 🔥 <b>' + streakValid() + ' ngày</b>. Các từ trả lời đúng đã được dời lịch ôn xa hơn.'
       : 'Đúng <b>' + pct + '%</b> — ôn lại các từ sai rồi thử lại nhé. Những từ sai sẽ xuất hiện sớm trong phần Học thẻ.';
     el('overlay').classList.add('show');
+    if (pass) fireConfetti(pct === 100 ? 1.6 : 1);   // req #43: pháo giấy khi đạt
   }
 
   // ── Review (xem lại) ──
@@ -933,7 +990,125 @@
     el('mReview').style.display = 'none';
     el('mAgain').onclick = () => { el('overlay').classList.remove('show'); retry(); };
     el('overlay').classList.add('show');
+    if (pass) fireConfetti(pct === 100 ? 1.6 : 1);   // req #43: pháo giấy khi đạt
   }
+
+  // ─────────────── 🎉 Pháo giấy chúc mừng (req #43) ───────────────
+  let _confettiRaf = 0;
+  function fireConfetti(intensity = 1) {
+    const cv = el('confetti'); if (!cv) return;
+    const W = innerWidth || document.documentElement.clientWidth || 360;
+    const H = innerHeight || document.documentElement.clientHeight || 640;
+    const ctx = cv.getContext('2d');
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cv.classList.add('show');
+    const colors = ['#22d3ee', '#6366f1', '#f59e0b', '#10b981', '#ef4444', '#e879f9', '#fbbf24'];
+    const N = Math.round(150 * intensity), parts = [];
+    for (let i = 0; i < N; i++) parts.push({
+      x: W / 2 + (Math.random() - .5) * 140, y: H / 3,
+      vx: (Math.random() - .5) * 11, vy: Math.random() * -13 - 4, g: .28 + Math.random() * .14,
+      w: 6 + Math.random() * 6, h: 4 + Math.random() * 5, rot: Math.random() * Math.PI,
+      vr: (Math.random() - .5) * .32, c: colors[i % colors.length], life: 0, max: 130 + Math.random() * 70,
+    });
+    cancelAnimationFrame(_confettiRaf);
+    (function tick() {
+      ctx.clearRect(0, 0, W, H);
+      let alive = 0;
+      for (const p of parts) {
+        if (p.life > p.max) continue;
+        alive++; p.life++; p.vy += p.g; p.x += p.vx; p.y += p.vy; p.rot += p.vr; p.vx *= .99;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+        ctx.globalAlpha = Math.max(0, 1 - p.life / p.max); ctx.fillStyle = p.c;
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.restore();
+      }
+      if (alive > 0) _confettiRaf = requestAnimationFrame(tick);
+      else { cv.classList.remove('show'); ctx.clearRect(0, 0, W, H); }
+    })();
+  }
+
+  // ─────────────── ✒️ VIẾT BÀI (đoạn/email/essay) — req #38 ───────────────
+  const WRITE_TYPES = {
+    paragraph: { label:'📄 Đoạn văn', words:'60–100 từ',
+      outline:['Câu chủ đề: nêu ý chính của đoạn', '2–3 câu triển khai: lý do, ví dụ, chi tiết', 'Câu kết: chốt lại ý hoặc nêu cảm nghĩ'] },
+    email: { label:'✉️ Email', words:'80–120 từ',
+      outline:['Lời chào: Dear … / Hi …', 'Mở đầu: nêu lý do viết email', 'Nội dung chính: thông tin, đề nghị hoặc câu hỏi', 'Kết: lời cảm ơn + Best regards, [tên]'] },
+    essay: { label:'📝 Essay', words:'150–250 từ',
+      outline:['Introduction: giới thiệu chủ đề + nêu luận điểm (thesis)', 'Body 1: ý chính thứ nhất + ví dụ/lý lẽ', 'Body 2: ý chính thứ hai + ví dụ/lý lẽ', 'Conclusion: tóm tắt + khẳng định lại quan điểm'] },
+  };
+  const ESSAY_ANGLES = {
+    paragraph: ['Mô tả một khái niệm/công cụ trong lĩnh vực «{label}» mà bạn thấy thú vị.', 'Giới thiệu bản thân và lý do bạn quan tâm tới «{label}».', 'Nêu lợi ích và một thách thức của «{label}» trong đời sống.'],
+    email: ['Viết email hỏi thông tin về một khoá học/cơ hội liên quan tới «{label}».', 'Viết email báo cáo tiến độ một công việc thuộc «{label}» cho đồng nghiệp.', 'Viết email xin lời khuyên từ một chuyên gia trong lĩnh vực «{label}».'],
+    essay: ['Theo bạn, «{label}» ảnh hưởng thế nào tới xã hội? Nêu quan điểm và ví dụ.', 'Lợi ích và mặt trái của «{label}»: bạn nghiêng về phía nào? Vì sao?', 'Xu hướng phát triển của «{label}» trong 10 năm tới sẽ ra sao?'],
+  };
+  let essayState = { type:'paragraph', angle:0 };
+  function topicLabelNow() {
+    return (customStore.labels[topic] || TOPIC_LABELS[topic] || topic || 'chủ đề').replace(/^[^\p{L}]+/u, '').trim();
+  }
+  function renderEssayTypes() {
+    el('eTypes').innerHTML = Object.entries(WRITE_TYPES).map(([k, t]) =>
+      '<button class="etype' + (k === essayState.type ? ' sel' : '') + '" data-t="' + k + '">' + t.label + '</button>').join('');
+    el('eTypes').querySelectorAll('.etype').forEach(b => b.onclick = () => { essayState.type = b.dataset.t; essayState.angle = 0; renderEssay(); });
+  }
+  function renderEssay() {
+    const t = WRITE_TYPES[essayState.type], label = topicLabelNow(), angles = ESSAY_ANGLES[essayState.type];
+    el('eTypes').querySelectorAll('.etype').forEach(b => b.classList.toggle('sel', b.dataset.t === essayState.type));
+    el('ePrompt').textContent = angles[essayState.angle % angles.length].replace('{label}', label);
+    el('eWords').textContent = t.words;
+    el('eOutline').innerHTML = t.outline.map(o => '<li>' + escapeHtmlClient(o) + '</li>').join('');
+    const pool = (VOCAB[topic] || []).slice();
+    const pick = pool.sort(() => Math.random() - .5).slice(0, 5).map(x => x.w);
+    el('eVocabHint').innerHTML = pick.length ? '💡 Thử dùng các từ đã học: ' + pick.map(w => '<b>' + escapeHtmlClient(w) + '</b>').join(', ') : '';
+    el('eInput').value = ''; el('eCount').textContent = '0 từ';
+    el('eFeed').className = 'wfeed'; el('eFeed').innerHTML = '';
+    el('eSubmit').disabled = false; el('eSubmit').textContent = 'Chấm bài';
+  }
+  function startEssay() { setView('essay'); renderEssayTypes(); renderEssay(); }
+  el('eNewTopic').onclick = () => { essayState.angle++; renderEssay(); };
+  el('eInput').addEventListener('input', () => {
+    el('eCount').textContent = el('eInput').value.trim().split(/\s+/).filter(Boolean).length + ' từ';
+  });
+  el('eSubmit').onclick = async () => {
+    const t = WRITE_TYPES[essayState.type];
+    const text = el('eInput').value.trim();
+    if (text.split(/\s+/).filter(Boolean).length < 20) {
+      el('eFeed').className = 'wfeed show no';
+      el('eFeed').innerHTML = '✍️ Hãy viết dài hơn (ít nhất ~20 từ) theo dàn ý gợi ý để hệ thống chấm chính xác hơn.';
+      el('eInput').focus(); return;
+    }
+    el('eSubmit').disabled = true; el('eSubmit').innerHTML = '<span class="wspin"></span> Đang chấm…';
+    let r = null;
+    try {
+      const resp = await fetch('/api/ai/grade-writing', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: essayState.type, topicLabel: topicLabelNow(), prompt: el('ePrompt').textContent, text, targetWords: t.words }),
+      });
+      if (resp.status === 401) {
+        el('eFeed').className = 'wfeed show no';
+        el('eFeed').innerHTML = '🔒 Hãy <a href="/login.html" style="color:var(--accent)">đăng nhập</a> để dùng chức năng chấm bài viết.';
+        el('eSubmit').disabled = false; el('eSubmit').textContent = 'Chấm bài'; return;
+      }
+      if (resp.ok) r = await resp.json();
+    } catch (e) {}
+    el('eSubmit').disabled = false; el('eSubmit').textContent = 'Chấm lại';
+    if (!r) { el('eFeed').className = 'wfeed show no'; el('eFeed').innerHTML = '😅 Chấm bài tạm lỗi, thử lại sau ít phút nhé.'; return; }
+    const ok = (r.score || 0) >= 60;
+    let html = '<div class="wscore">' + (ok ? '✅' : '✍️') + ' ' + (r.score || 0) + '/100' + (r.level ? '<span class="elevel">' + escapeHtmlClient(r.level) + '</span>' : '') + '</div>';
+    if (r.feedback) html += '<div class="wline">' + escapeHtmlClient(r.feedback) + '</div>';
+    if (r.strengths) html += '<div class="wline"><span class="wlabel">Điểm mạnh</span><br>' + escapeHtmlClient(r.strengths) + '</div>';
+    if (r.corrections && r.corrections.length) {
+      html += '<div class="wline"><span class="wlabel">Lỗi &amp; cách sửa</span></div>';
+      r.corrections.forEach(c => {
+        html += '<div class="ecorr">' + (c.original ? '<span class="o">' + escapeHtmlClient(c.original) + '</span> → ' : '')
+          + '<span class="f">' + escapeHtmlClient(c.fixed) + '</span>' + (c.why ? '<span class="wy">' + escapeHtmlClient(c.why) + '</span>' : '') + '</div>';
+      });
+    }
+    if (r.improved) html += '<div class="wline"><span class="wlabel">Bản viết lại hay hơn</span><br>' + escapeHtmlClient(r.improved).replace(/\n/g, '<br>') + '</div>';
+    el('eFeed').className = 'wfeed show ' + (ok ? 'ok' : 'no');
+    el('eFeed').innerHTML = html;
+    if (r.source === 'ai' && ok) { bumpStreak(); renderStreak(); }
+  };
 
   // ─────────────── Điều hướng view/tab ───────────────
   function setView(v) {
@@ -942,8 +1117,9 @@
     el('review').style.display = v === 'review' ? 'flex' : 'none';   // review thuộc tab Kiểm tra
     el('listen').style.display = v === 'listen' ? 'flex' : 'none';
     el('write').style.display = v === 'write' ? 'flex' : 'none';
-    const map = { card:'tabCard', quiz:'tabQuiz', review:'tabQuiz', listen:'tabListen', write:'tabWrite' };
-    ['tabCard','tabQuiz','tabListen','tabWrite'].forEach(id => el(id).classList.toggle('active', map[v] === id));
+    el('essay').style.display = v === 'essay' ? 'flex' : 'none';
+    const map = { card:'tabCard', quiz:'tabQuiz', review:'tabQuiz', listen:'tabListen', write:'tabWrite', essay:'tabEssay' };
+    ['tabCard','tabQuiz','tabListen','tabWrite','tabEssay'].forEach(id => el(id).classList.toggle('active', map[v] === id));
   }
   function startQuiz() { buildQuiz(); setView('quiz'); renderQuiz(); }
   // Khi đổi chủ đề/chế độ, refresh đúng tab đang mở
@@ -952,11 +1128,13 @@
     else if (tab === 'quiz') startQuiz();
     else if (tab === 'listen') startListen();
     else if (tab === 'write') startWrite();
+    else if (tab === 'essay') startEssay();
   }
   el('tabCard').onclick = () => { tab = 'card'; setView('card'); flipped = false; renderCard(); };
   el('tabQuiz').onclick = () => { tab = 'quiz'; startQuiz(); };
   el('tabListen').onclick = () => { tab = 'listen'; startListen(); };
   el('tabWrite').onclick = () => { tab = 'write'; startWrite(); };
+  el('tabEssay').onclick = () => { tab = 'essay'; startEssay(); };
   el('topicSel').onchange = e => { topic = e.target.value; flipped = false; reviewAhead = false; refreshTab(); };
   el('modeSel').onchange = e => { mode = e.target.value; flipped = false; refreshTab(); };
   el('mAgain').onclick = () => { el('overlay').classList.remove('show'); startQuiz(); };

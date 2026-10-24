@@ -64,7 +64,7 @@ export function reloadSkillsMapping() {
 
 // ---- Prepared statements ----
 const lookupSkillIdsByCodes = db.prepare(`
-  SELECT id, code FROM skills WHERE code IN (SELECT value FROM json_each(?))
+  SELECT id, code FROM skills WHERE code IN (SELECT jsonb_array_elements_text(?::jsonb))
 `);
 
 const insertUserSkill = db.prepare(`
@@ -101,9 +101,9 @@ const getUserSkillsStmt = db.prepare(`
 `);
 // Lookup enrolled_domain cho fallback khi caller chưa thread domain.
 const _userEnrolledDomainStmt = db.prepare(`SELECT enrolled_domain FROM users WHERE id = ?`);
-function _resolveSkillDomain(user_id, domain) {
+async function _resolveSkillDomain(user_id, domain) {
   if (typeof domain === 'string') return domain;
-  return _userEnrolledDomainStmt.get(Number(user_id))?.enrolled_domain || '';
+  return (await _userEnrolledDomainStmt.get(Number(user_id)))?.enrolled_domain || '';
 }
 
 const listCompetenciesStmt = db.prepare(`
@@ -120,7 +120,7 @@ const countSkillsPerCompetencyStmt = db.prepare(`
  * Grant tất cả skill thuộc 1 space cho user. No-op nếu score < threshold.
  * Trả về { newly_granted: [{code,name,competency}], already_had: [...] }.
  */
-export function grantSkillsForSpace({ user_id, domain, space_id, score, source_type, source_id }) {
+export async function grantSkillsForSpace({ user_id, domain, space_id, score, source_type, source_id }) {
   if (!user_id) return { error: 'user_id required' };
   if (!VALID_DOMAINS.has(domain)) return { error: 'invalid domain' };
   if (!space_id) return { error: 'space_id required' };
@@ -137,7 +137,7 @@ export function grantSkillsForSpace({ user_id, domain, space_id, score, source_t
     return { granted_count: 0, skipped_reason: `no skills mapped for ${key}` };
   }
 
-  const rows = lookupSkillIdsByCodes.all(JSON.stringify(codes));
+  const rows = await lookupSkillIdsByCodes.all(JSON.stringify(codes));
   if (rows.length === 0) {
     return { granted_count: 0, skipped_reason: `skill codes not found in DB (catalog out of sync?)` };
   }
@@ -149,9 +149,9 @@ export function grantSkillsForSpace({ user_id, domain, space_id, score, source_t
   // luôn nhận `domain` (trường của space) và Phase 2 sẽ chặn cross-domain ở
   // middleware → bucket grant chắc chắn khớp với enrolled_domain.
   const skillDomain = String(domain);
-  const tx = db.transaction(() => {
+  const tx = db.transaction(async () => {
     for (const r of rows) {
-      const info = insertUserSkill.run({
+      const info = await insertUserSkill.run({
         user_id,
         skill_id: r.id,
         domain: skillDomain,
@@ -164,14 +164,14 @@ export function grantSkillsForSpace({ user_id, domain, space_id, score, source_t
       else already.push(r.code);
     }
   });
-  tx();
+  await tx();
 
   // Enrich newly với name + competency cho FE hiện toast đẹp.
   const enriched = newly.length
-    ? db.prepare(`
+    ? await db.prepare(`
         SELECT s.code, s.name, c.code AS comp_code, c.name AS comp_name
         FROM skills s JOIN competencies c ON c.id = s.competency_id
-        WHERE s.code IN (SELECT value FROM json_each(?))
+        WHERE s.code IN (SELECT jsonb_array_elements_text(?::jsonb))
       `).all(JSON.stringify(newly))
     : [];
 
@@ -186,14 +186,14 @@ export function grantSkillsForSpace({ user_id, domain, space_id, score, source_t
  * Trả cây năng lực + tiến độ của 1 user.
  * Shape: [{ competency: {...}, total_skills, earned_skills: [...] }, ...]
  */
-export function getUserSkillTree(user_id, domain) {
+export async function getUserSkillTree(user_id, domain) {
   if (!user_id) return [];
-  const d = _resolveSkillDomain(user_id, domain);
-  const allComps = listCompetenciesStmt.all();
+  const d = await _resolveSkillDomain(user_id, domain);
+  const allComps = await listCompetenciesStmt.all();
   const totals = Object.fromEntries(
-    countSkillsPerCompetencyStmt.all().map(r => [r.competency_id, r.n])
+    (await countSkillsPerCompetencyStmt.all()).map(r => [r.competency_id, r.n])
   );
-  const earnedRows = getUserSkillsStmt.all(user_id, d);
+  const earnedRows = await getUserSkillsStmt.all(user_id, d);
 
   // Group earned by competency_id
   const byComp = new Map();
@@ -249,7 +249,7 @@ export function getUserSkillTree(user_id, domain) {
  * Mapping familyId → skill_codes đọc từ skills-scenario-map.json. Idempotent qua
  * UNIQUE(user_id, skill_id). No-op nếu familyId chưa có mapping.
  */
-export function grantSkillsForScenario({ user_id, family_id, score, stars, domain }) {
+export async function grantSkillsForScenario({ user_id, family_id, score, stars, domain }) {
   if (!user_id || !family_id) return { granted_count: 0, skipped_reason: 'missing args' };
   const codes = SCENARIO_SKILLS[family_id] || [];
   if (codes.length === 0) return { granted_count: 0, skipped_reason: `no mapping for ${family_id}` };
@@ -260,18 +260,18 @@ export function grantSkillsForScenario({ user_id, family_id, score, stars, domai
     return { granted_count: 0, skipped_reason: `score=${score} stars=${stars} dưới ngưỡng` };
   }
 
-  const rows = lookupSkillIdsByCodes.all(JSON.stringify(codes));
+  const rows = await lookupSkillIdsByCodes.all(JSON.stringify(codes));
   if (rows.length === 0) return { granted_count: 0, skipped_reason: 'skill codes not found in DB' };
 
   // Bucket trường: caller có thể không truyền domain (scenario chung) → fallback
   // enrolled_domain của user. Middleware Phase 2 đã chặn cross-domain trước khi
   // tới đây nên bucket luôn khớp với trường HS đang theo học.
-  const skillDomain = _resolveSkillDomain(user_id, domain);
+  const skillDomain = await _resolveSkillDomain(user_id, domain);
   const now = Date.now();
   const newly = [];
-  const tx = db.transaction(() => {
+  const tx = db.transaction(async () => {
     for (const r of rows) {
-      const info = insertUserSkill.run({
+      const info = await insertUserSkill.run({
         user_id,
         skill_id: r.id,
         domain: skillDomain,
@@ -283,18 +283,18 @@ export function grantSkillsForScenario({ user_id, family_id, score, stars, domai
       if (info.changes > 0) newly.push(r.code);
     }
   });
-  tx();
+  await tx();
   return { granted_count: newly.length, newly_granted_codes: newly };
 }
 
 /**
  * Tổng đếm nhanh cho banner "Bạn đã đạt X/Y kỹ năng".
  */
-export function getUserSkillSummary(user_id, domain) {
+export async function getUserSkillSummary(user_id, domain) {
   if (!user_id) return { earned: 0, total: 0 };
-  const d = _resolveSkillDomain(user_id, domain);
-  const earned = db.prepare(`SELECT COUNT(*) AS n FROM user_skills WHERE user_id = ? AND domain = ?`).get(user_id, d).n;
-  const total = db.prepare(`SELECT COUNT(*) AS n FROM skills`).get().n;
+  const d = await _resolveSkillDomain(user_id, domain);
+  const earned = (await db.prepare(`SELECT COUNT(*) AS n FROM user_skills WHERE user_id = ? AND domain = ?`).get(user_id, d)).n;
+  const total = (await db.prepare(`SELECT COUNT(*) AS n FROM skills`).get()).n;
   return { earned, total };
 }
 
@@ -309,16 +309,16 @@ export function getSpaceSkillCodes(domain, space_id) {
 export function attachSkills(router, { requireAuth, requireEnrolled }) {
   // GET /api/skills/me — cây năng lực của user đang login, lọc theo trường
   // user đang theo học (enrolled_domain). Skill earn ở trường cũ KHÔNG hiện.
-  router.get('/api/skills/me', requireAuth, (req, res) => {
+  router.get('/api/skills/me', requireAuth, async (req, res) => {
     const d = req.user.enrolled_domain || '';
-    const tree = getUserSkillTree(req.user.id, d);
-    const summary = getUserSkillSummary(req.user.id, d);
+    const tree = await getUserSkillTree(req.user.id, d);
+    const summary = await getUserSkillSummary(req.user.id, d);
     res.json({ summary, tree, enrolled_domain: d || null });
   });
 
   // GET /api/skills/space?domain=...&space_id=... — list skill_codes của 1 space
   // + flag earned cho FE render chip ✔.
-  router.get('/api/skills/space', requireAuth, (req, res) => {
+  router.get('/api/skills/space', requireAuth, async (req, res) => {
     const domain = String(req.query.domain || '');
     const space_id = String(req.query.space_id || '');
     if (!VALID_DOMAINS.has(domain) || !space_id) {
@@ -327,12 +327,12 @@ export function attachSkills(router, { requireAuth, requireEnrolled }) {
     const codes = getSpaceSkillCodes(domain, space_id);
     if (codes.length === 0) return res.json({ skills: [] });
     const userDomain = req.user.enrolled_domain || '';
-    const rows = db.prepare(`
+    const rows = await db.prepare(`
       SELECT s.code, s.name, c.code AS comp_code, c.name AS comp_name,
         EXISTS(SELECT 1 FROM user_skills us
                WHERE us.user_id = ? AND us.skill_id = s.id AND us.domain = ?) AS earned
       FROM skills s JOIN competencies c ON c.id = s.competency_id
-      WHERE s.code IN (SELECT value FROM json_each(?))
+      WHERE s.code IN (SELECT jsonb_array_elements_text(?::jsonb))
       ORDER BY c.sort_order, s.name
     `).all(req.user.id, userDomain, JSON.stringify(codes));
     res.json({ skills: rows.map(r => ({ ...r, earned: !!r.earned })) });
@@ -341,9 +341,9 @@ export function attachSkills(router, { requireAuth, requireEnrolled }) {
   // POST /api/skills/grant — grant skills cho user khi đạt mốc 1 space.
   // Body: { domain, space_id, score, source_type, source_id? }.
   // score là 0..100. Server tự kiểm threshold + idempotent qua UNIQUE.
-  router.post('/api/skills/grant', requireAuth, requireEnrolled, (req, res) => {
+  router.post('/api/skills/grant', requireAuth, requireEnrolled, async (req, res) => {
     const b = req.body || {};
-    const result = grantSkillsForSpace({
+    const result = await grantSkillsForSpace({
       user_id: req.user.id,
       domain: String(b.domain || ''),
       space_id: String(b.space_id || ''),
@@ -357,29 +357,29 @@ export function attachSkills(router, { requireAuth, requireEnrolled }) {
 
   // GET /api/skills/catalog — toàn bộ catalog (public, không cần auth) để FE
   // render trang giới thiệu khung GDPT 2018.
-  router.get('/api/skills/catalog', (req, res) => {
-    const comps = listCompetenciesStmt.all();
-    const skills = db.prepare(`SELECT code, name, competency_id, domain, grade_min, grade_max FROM skills ORDER BY competency_id, name`).all();
+  router.get('/api/skills/catalog', async (req, res) => {
+    const comps = await listCompetenciesStmt.all();
+    const skills = await db.prepare(`SELECT code, name, competency_id, domain, grade_min, grade_max FROM skills ORDER BY competency_id, name`).all();
     res.json({ competencies: comps, skills });
   });
 
   // GET /api/skills/child/:child_id — PH xem cây năng lực của 1 con.
   // Quyền: req.user phải là parent qua family_links. Trả 403 nếu không link.
-  router.get('/api/skills/child/:child_id', requireAuth, (req, res) => {
+  router.get('/api/skills/child/:child_id', requireAuth, async (req, res) => {
     const child_id = Number(req.params.child_id);
     if (!Number.isFinite(child_id)) return res.status(400).json({ error: 'invalid child_id' });
-    const link = db.prepare(`
+    const link = await db.prepare(`
       SELECT 1 FROM family_links WHERE parent_user_id = ? AND child_user_id = ? LIMIT 1
     `).get(req.user.id, child_id);
     if (!link && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'not_parent_of_child' });
     }
-    const child = db.prepare(`SELECT id, display_name, role, grade FROM users WHERE id = ?`).get(child_id);
+    const child = await db.prepare(`SELECT id, display_name, role, grade FROM users WHERE id = ?`).get(child_id);
     if (!child) return res.status(404).json({ error: 'child_not_found' });
     res.json({
       child: { id: child.id, display_name: child.display_name, role: child.role, grade: child.grade },
-      summary: getUserSkillSummary(child_id),
-      tree: getUserSkillTree(child_id),
+      summary: await getUserSkillSummary(child_id),
+      tree: await getUserSkillTree(child_id),
     });
   });
 
@@ -387,13 +387,13 @@ export function attachSkills(router, { requireAuth, requireEnrolled }) {
   // Quyền: chỉ teacher (role=teacher) đã tạo class đó hoặc admin. Trả về:
   //   { class, members: [{ display_name, summary: {earned,total} }], aggregate: tree }
   // aggregate roll-up theo display_name → user_id (link qua users.display_name).
-  router.get('/api/skills/class/:class_code', requireAuth, (req, res) => {
+  router.get('/api/skills/class/:class_code', requireAuth, async (req, res) => {
     if (req.user.role !== 'teacher' && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'teacher_only' });
     }
     const class_code = String(req.params.class_code || '').trim().slice(0, 16);
     if (!class_code) return res.status(400).json({ error: 'class_code required' });
-    const cls = db.prepare(`SELECT id, code, name, teacher_name, created_at FROM classes WHERE code = ?`).get(class_code);
+    const cls = await db.prepare(`SELECT id, code, name, teacher_name, created_at FROM classes WHERE code = ?`).get(class_code);
     if (!cls) return res.status(404).json({ error: 'class_not_found' });
 
     // Đếm rough quyền: GV chỉ xem được class do mình tạo (teacher_name khớp
@@ -404,14 +404,14 @@ export function attachSkills(router, { requireAuth, requireEnrolled }) {
 
     // Tìm HS trong lớp: lấy distinct player_name từ attempts có class_code,
     // join với users để lấy user_id. Có player guest (không có user_id) → skip.
-    const members = db.prepare(`
+    const members = await db.prepare(`
       SELECT u.id AS user_id, u.display_name, u.grade,
         (SELECT COUNT(*) FROM user_skills WHERE user_id = u.id) AS earned
       FROM (SELECT DISTINCT player_name FROM attempts WHERE class_code = ?) p
       JOIN users u ON u.display_name = p.player_name
       ORDER BY earned DESC, u.display_name
     `).all(class_code);
-    const total = db.prepare(`SELECT COUNT(*) AS n FROM skills`).get().n;
+    const total = (await db.prepare(`SELECT COUNT(*) AS n FROM skills`).get()).n;
     res.json({
       class: cls,
       total_skills: total,

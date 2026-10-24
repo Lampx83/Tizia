@@ -325,8 +325,11 @@ class EngagementHUD {
     } else {
       leagueEl.hidden = true;
     }
-    // Streak
-    this.hud.querySelector('.tz-eng-streak .num').textContent = s.streak;
+    // Streak — ẩn HẲN nếu trường của user không áp streak (ĐH/nghề, xem
+    // isStreakEnabledForDomain ở server). Chỉ phổ thông + mầm non mới có 🔥.
+    const streakEl = this.hud.querySelector('.tz-eng-streak');
+    streakEl.hidden = !!s.streak_hidden;
+    if (!s.streak_hidden) streakEl.querySelector('.num').textContent = s.streak;
     // Hearts dot row
     const h = this.hud.querySelector('[data-h]');
     h.innerHTML = '';
@@ -353,8 +356,11 @@ class EngagementHUD {
     const badge = this.hud.querySelector('.tz-eng-quests .badge');
     badge.textContent = claimable > 0 ? `!${claimable}` : remaining;
 
-    // Drawer body
-    this.drawer.querySelector('[data-streak]').textContent = s.streak;
+    // Drawer body — cùng luật: ẩn dòng streak nếu trường không áp streak.
+    const dStreak = this.drawer.querySelector('[data-streak]');
+    dStreak.textContent = s.streak;
+    const dStreakRow = dStreak.closest('span') || dStreak.parentElement;
+    if (dStreakRow) dStreakRow.hidden = !!s.streak_hidden;
     this.drawer.querySelector('[data-longest]').textContent = s.longestStreak;
     this.drawer.querySelector('[data-hearts]').textContent = `${s.hearts}/${s.heartsMax}`;
     const wrap = this.drawer.querySelector('[data-quests]');

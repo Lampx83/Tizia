@@ -24,7 +24,7 @@
     background:rgba(255,255,255,.08); padding:7px 12px; border-radius:9px; }
   .top h1 { margin:0; font-size:17px; font-weight:800; }
   .top h1 .dim { opacity:.55; font-weight:600; font-size:13.5px; }
-  .wrap { max-width: 980px; margin: 0 auto; padding: 28px 20px 60px; }
+  .wrap { max-width:none; margin: 0 auto; padding: 28px 20px 60px; }
   .lead { color: var(--muted); line-height: 1.65; font-size: 14px; }
   .lead code { background: rgba(255,255,255,.08); padding: 1px 6px; border-radius: 4px; font-size: 12.5px; }
 
@@ -109,6 +109,7 @@
     <code>manifest.json</code> + <code>public/index.html</code> rồi kéo thả vào đây.
     App của bạn được serve dưới <code>/portal-apps/u/&lt;id&gt;/&lt;alias&gt;/</code>
     và xuất hiện trong trang <a href="apps.html">Ứng dụng</a>.
+    Lần đầu làm app? <a href="/dev"><b>Đọc hướng dẫn phát triển →</b></a>
   </p>
 
   <div class="card">
@@ -125,7 +126,9 @@
       <summary>📋 Quy chuẩn manifest.json</summary>
       <p style="margin-top:10px; font-size:13px; color:var(--muted);">
         Bắt buộc <code>alias</code> (lowercase kebab, ví dụ <code>my-app</code>) +
-        <code>name</code>. <code>hasBackend: true</code> KHÔNG được hỗ trợ — chỉ frontend-only.
+        <code>name</code>. App cần backend riêng thì khai thêm <code>hasBackend: true</code> +
+        <code>apiProxyTarget</code> (URL tuyệt đối tới dịch vụ của bạn) — xem
+        <a href="/dev#backend">mục 5 của hướng dẫn</a>. Code backend nằm trong zip thì KHÔNG được chạy.
       </p>
 <pre>{
   "id": "my-app",
@@ -239,8 +242,35 @@
     installZip(e.dataTransfer.files?.[0]);
   });
 
+  // Icon thẻ app — bản chạy tay của web-next/lib/app-icon.ts (2 bản UI phải khớp nhau).
+  // App chuẩn AI Portal đặt icon là TÊN icon Lucide ("FileText") → đổi sang emoji gần
+  // nghĩa; đã là emoji thì giữ; không nhận ra thì 🧩.
+  const ALIAS_ICON = { qrcode:'🔳', 'library-search':'📚', annota:'🗂️', quantis:'📊',
+    bibliomap:'🗺️', scorum:'🎓', convertum:'🧮' };
+  const LUCIDE_EMOJI = { filetext:'📄', filesearch:'🔍', file:'📄', files:'🗂️', folder:'📁',
+    book:'📕', bookopen:'📖', bookmarked:'🔖', library:'📚', newspaper:'📰',
+    sigma:'📊', barchart:'📊', barchart3:'📊', linechart:'📈', piechart:'🥧',
+    database:'🗄️', table:'📋', calculator:'🧮', activity:'📈',
+    map:'🗺️', mappin:'📍', globe:'🌐', network:'🕸️', share2:'🔗',
+    search:'🔎', microscope:'🔬', flask:'🧪', flaskconical:'🧪', atom:'⚛️',
+    graduationcap:'🎓', school:'🏫', pencil:'✏️', pentool:'🖊️', notebook:'📓',
+    clipboardlist:'📋', checksquare:'✅', target:'🎯', trophy:'🏆', brain:'🧠',
+    bot:'🤖', code:'💻', terminal:'⌨️', settings:'⚙️', wrench:'🔧',
+    qrcode:'🔳', image:'🖼️', camera:'📷', video:'🎬', music:'🎵',
+    palette:'🎨', timer:'⏱️', clock:'🕐', calendar:'📅', zap:'⚡',
+    mail:'✉️', messagesquare:'💬', users:'👥', user:'👤', bell:'🔔',
+    circledollarsign:'💰', wallet:'👛', shoppingcart:'🛒' };
+  function appIcon(raw, alias) {
+    const byAlias = alias && ALIAS_ICON[String(alias).trim().toLowerCase()];
+    if (byAlias) return byAlias;
+    const s = String(raw || '').trim();
+    if (!s) return '🧩';
+    if (!/[A-Za-z0-9]/.test(s)) return s;
+    return LUCIDE_EMOJI[s.toLowerCase().replace(/[^a-z0-9]/g, '')] || '🧩';
+  }
+
   function renderRow(a, { canDelete, isBuiltin }) {
-    const ico = a.icon || '🧩';
+    const ico = appIcon(a.icon);
     const v = a.version ? ` · v${a.version}` : '';
     const owner = a.ownerName ? ` · ${escapeHtml(a.ownerName)}` : '';
     const meta = isBuiltin

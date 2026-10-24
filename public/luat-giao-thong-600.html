@@ -26,16 +26,33 @@
   .empty { width:100%; max-width:760px; background:var(--card); border:1px solid var(--border);
     border-radius:14px; padding:34px 22px; text-align:center; color:var(--muted); font-size:14px; line-height:1.7; }
 
+  /* min-height (req #77): ngoài việc cân với cột trái, nó giữ thẻ cao cố định nên
+     nút "Câu trước/Câu sau" không nhảy lên xuống mỗi lần đổi câu dài/ngắn. */
   .qcard { width:100%; max-width:760px; background:var(--card); border:1px solid var(--border);
-    border-radius:14px; padding:22px; }
-  .qhead { display:flex; align-items:center; gap:10px; margin-bottom:12px; font-size:13px; color: var(--muted); }
+    border-radius:14px; padding:22px; min-height:430px; box-sizing:border-box; }
+  .qhead { position:relative; display:flex; align-items:center; gap:10px; min-height:26px; margin-bottom:12px; font-size:13px; color: var(--muted); }
+  /* Gợi ý phím tắt (req #72) — ẩn trên máy cảm ứng vì không có bàn phím. */
+  /* Căn GIỮA dòng nhắc phím (req #90): trước margin-left:auto đẩy sát phải, SV thấy
+     lệch. Đặt absolute phủ ngang cả thẻ + justify-content center → nằm chính giữa;
+     pointer-events none để không chắn click badge; badge vẫn nằm trái theo flow. */
+  .kbdHint { position:absolute; left:0; right:0; justify-content:center; margin:0; pointer-events:none;
+    font-size:12px; color:var(--muted); display:flex; align-items:center; gap:4px; }
+  .kbdHint kbd { font-family:inherit; font-size:11px; font-weight:700; background:rgba(255,255,255,.08);
+    border:1px solid var(--border); border-bottom-width:2px; border-radius:5px; padding:1px 6px; color:var(--text); }
+  @media (hover:none), (max-width:860px) { .kbdHint { display:none; } }
   .qhead .badge { background: rgba(220,38,38,.18); border:1px solid var(--red); color:#fca5a5;
     padding:3px 9px; border-radius:5px; font-size:11px; font-weight:700; letter-spacing:.4px; }
   .qhead .badge.normal { background: rgba(255,255,255,.06); border-color: var(--border); color: var(--muted); }
-  .qtext { font-size:17px; line-height:1.55; margin-bottom:18px; font-weight:600; }
+  /* Cỡ chữ do người học tự chỉnh trong ⚙️ Cài đặt (req #76), lưu ở localStorage.
+     Đặt trên :root để cả câu hỏi lẫn đáp án đổi ngay, không phải render lại. */
+  .qtext { font-size:var(--qsize,17px); line-height:1.55; margin-bottom:18px; font-weight:600; }
+  .qimg { margin:0 0 16px; }
+  .qimg img { max-width:min(320px,80%); border-radius:10px; background:#fff; padding:8px; display:block; }
+  .qimg .todo { font-size:12.5px; color:var(--yellow); background:rgba(251,191,36,.1);
+    border:1px dashed rgba(251,191,36,.4); border-radius:9px; padding:8px 12px; display:inline-block; }
   .opts { display:grid; gap:10px; }
   .opt { display:flex; gap:12px; padding:14px 16px; background:rgba(0,0,0,.2); border:1px solid var(--border);
-    border-radius:10px; cursor:pointer; transition:background .15s, border-color .15s; }
+    border-radius:10px; cursor:pointer; transition:background .15s, border-color .15s; font-size:var(--asize,16px); }
   .opt:hover { background:rgba(255,255,255,.04); border-color: rgba(255,255,255,.2); }
   .opt input { margin-top:3px; }
   .opt.correct { background: rgba(16,185,129,.12); border-color: rgba(16,185,129,.5); }
@@ -53,12 +70,36 @@
   .stats { display:flex; gap:18px; font-size:13px; color: var(--muted); max-width:760px; width:100%; justify-content:center; }
   .stats b { color: var(--text); font-size:15px; }
 
+  /* max-width 960 khớp #practiceWrap.exam (khung 2 cột lúc thi/xem lại) để khung
+     KẾT QUẢ THI nằm DƯỚI thẳng hàng, cân đối — không thò ra/thụt vào (req #100). */
   .summary { background:var(--card); border:1px solid var(--border); border-radius:14px;
-    padding:24px; max-width:760px; width:100%; text-align:center; display:none; }
+    max-width:960px; width:100%; text-align:center; display:none; overflow:hidden; }
   .summary.show { display:block; }
   .summary .big { font-size: 56px; font-weight: 800; margin: 8px 0; }
-  .summary .pass { color: var(--green); }
-  .summary .fail { color: var(--red); }
+  /* (req #99) Bỏ 2 quy tắc .summary .pass/.fail cũ: chúng dành cho #sumScore/#sumTitle
+     (nay ẩn) nhưng vô tình thắng .sumHeader{color:#fff} vì header cũng mang class
+     .fail/.pass và nằm trong .summary → chữ đỏ trên nền đỏ, mờ không đọc được. */
+  /* Khung KẾT QUẢ THI (req #91, theo ảnh mẫu SV gửi) — thanh tiêu đề nổi bật đầu khung */
+  /* color:#fff lặp cả ở .fail/.pass (specificity 0,2,0) để chắc thắng mọi quy tắc
+     .summary .* cùng cấp — chữ tiêu đề LUÔN trắng, rõ trên nền màu (req #97/#99). */
+  .sumHeader { font-size:18px; font-weight:800; color:#fff; padding:16px 18px; letter-spacing:.3px;
+    background:linear-gradient(90deg,#2563eb,#4f46e5); }
+  .sumHeader.fail { background:linear-gradient(90deg,#dc2626,#b91c1c); color:#fff; }
+  .sumHeader.pass { background:linear-gradient(90deg,#059669,#10b981); color:#fff; }
+  .sumBody { padding:20px 22px; }
+  .sumBtns { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-bottom:16px; }
+  .sumBtn { font-family:inherit; font-size:13.5px; font-weight:700; cursor:pointer; padding:10px 18px; border-radius:10px;
+    background:var(--card); color:var(--text); border:1px solid var(--border); }
+  .sumBtn:hover { border-color:var(--red); }
+  .sumBtn.primary { background:var(--red); color:#fff; border:0; }
+  .sumVerdict { font-size:15px; font-weight:800; margin:14px 0 4px; }
+  /* Chips kết quả + option xem lại xanh/đỏ (req #91, theo ảnh mẫu SV gửi) */
+  .sumChips { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+  .sumChip { font-size:12.5px; color:var(--text); background:rgba(0,0,0,.22); border:1px solid var(--border);
+    border-radius:999px; padding:6px 13px; }
+  .rvOpt { font-size:13.5px; padding:8px 11px; border-radius:8px; margin:4px 0; border:1px solid transparent; color:var(--muted); }
+  .rvRight { background:rgba(16,185,129,.16); border-color:rgba(16,185,129,.5); color:#6ee7b7; font-weight:700; }
+  .rvWrong { background:rgba(239,68,68,.15); border-color:rgba(239,68,68,.5); color:#fca5a5; font-weight:600; }
   /* Bộ chọn hạng bằng (req #21 Thì Dũng) */
   #classPicker { display:none; width:100%; max-width:900px; }
   #classPicker h2 { text-align:center; font-size:18px; margin:4px 0 14px; }
@@ -73,38 +114,176 @@
   .cls .pass { font-size:11px; color:#6ee7b7; background:rgba(16,185,129,.12); border:1px solid rgba(16,185,129,.3); border-radius:7px; padding:3px 7px; }
   .cls .crit { font-size:11px; color:#fca5a5; background:rgba(220,38,38,.12); border:1px solid rgba(220,38,38,.3); border-radius:7px; padding:3px 7px; }
   .cls .up { position:absolute; top:8px; right:8px; font-size:9px; letter-spacing:.5px; color:var(--muted); border:1px solid var(--border); border-radius:6px; padding:2px 6px; }
+  /* PHỔ BIẾN (req #78): hạng B/C1/C là hạng đa số người học thi. Trước chỉ có nhãn
+     NÂNG HẠNG nên nhìn vào lưới không biết nên bắt đầu từ đâu. Dùng vàng cho nổi,
+     khác hẳn NÂNG HẠNG (xám) — hai nhãn hai ý nghĩa, không được nhìn giống nhau. */
+  .cls .pop { position:absolute; top:8px; right:8px; font-size:9px; letter-spacing:.5px; font-weight:800;
+    color:var(--yellow); background:rgba(251,191,36,.12); border:1px solid rgba(251,191,36,.45); border-radius:6px; padding:2px 6px; }
+  /* ⚙️ Cài đặt: chỉnh cỡ chữ câu hỏi + đáp án (req #76, theo ảnh mẫu SV gửi) */
+  .mdBack { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:50; padding:18px; }
+  .mdBack.show { display:flex; }
+  /* Nền ĐỤC, KHÔNG dùng var(--card): --card là rgba(255,255,255,.06) — hợp cho thẻ nằm
+     trên nền trang, nhưng hộp thoại nổi mà trong suốt thì chữ câu hỏi phía dưới xuyên
+     lên, đọc không nổi. Lấy tông --bg sáng hơn một nấc cho tách khỏi lớp phủ. */
+  .mdBox { background:#242440; border:1px solid var(--border); border-radius:14px; width:100%; max-width:440px;
+    padding:18px 20px 20px; box-shadow:0 18px 50px rgba(0,0,0,.5); }
+  .mdHead { display:flex; align-items:center; margin-bottom:14px; }
+  .mdHead h3 { margin:0; font-size:17px; }
+  .mdX { margin-left:auto; background:none; border:0; color:var(--muted); font-size:22px; cursor:pointer; line-height:1; padding:0 4px; }
+  .mdX:hover { color:var(--text); }
+  .setRow { background:rgba(0,0,0,.2); border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:12px; }
+  .setTop { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+  .setName { font-size:13.5px; font-weight:700; }
+  .setDef { margin-left:auto; font-family:inherit; font-size:11px; color:var(--muted); background:none;
+    border:1px solid var(--border); border-radius:7px; padding:4px 9px; cursor:pointer; }
+  .setDef:hover { color:var(--text); border-color:var(--muted); }
+  .setCtl { display:flex; align-items:center; justify-content:center; gap:12px; }
+  .setBtn { font-family:inherit; width:34px; height:34px; font-size:18px; font-weight:800; cursor:pointer;
+    background:var(--red); color:#fff; border:0; border-radius:8px; line-height:1; }
+  .setBtn:disabled { opacity:.35; cursor:not-allowed; }
+  .setVal { min-width:74px; text-align:center; font-weight:700; font-size:15px; background:rgba(0,0,0,.3);
+    border:1px solid var(--border); border-radius:8px; padding:6px 0; }
+  .setVal small { color:var(--muted); font-weight:600; font-size:11px; margin-left:2px; }
+  .setPrev { font-size:12px; color:var(--muted); text-align:center; margin:-2px 0 12px; }
   /* Bộ chọn 15 đề ngẫu nhiên theo hạng (req #35 Thì Dũng) */
   #dePicker { display:none; width:100%; max-width:900px; }
   #dePicker h2 { text-align:center; font-size:18px; margin:4px 0 6px; }
+  /* Hàng đầu bộ chọn đề (req #79): nút quay lại bám trái, tiêu đề vẫn giữa lưới.
+     Tiêu đề dùng position:absolute để nút không đẩy nó lệch khỏi tâm. */
+  .deTop { position:relative; display:flex; align-items:center; min-height:34px; margin-bottom:2px; }
+  .deTop h2 { position:absolute; left:0; right:0; margin:0; pointer-events:none; }
+  .deTop .lnkbtn { position:relative; z-index:1; font-size:12.5px; padding:7px 13px; border-radius:9px; }
+  @media (max-width:640px) {
+    .deTop { flex-direction:column; align-items:stretch; gap:8px; }
+    .deTop h2 { position:static; }
+  }
   #deGrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(132px,1fr)); gap:11px; }
   .de { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 10px; cursor:pointer; text-align:center; transition:.15s; }
   .de:hover { border-color:var(--red); transform:translateY(-2px); background:rgba(220,38,38,.06); }
   .de .dn { font-weight:800; font-size:16px; } .de .dm { color:var(--muted); font-size:11.5px; margin-top:4px; }
+  /* Trạng thái từng đề: Chưa làm / Đạt / Rớt (req #74 Thì Dũng) */
+  .de .deSt { margin-top:8px; font-size:11.5px; font-weight:700; border-radius:99px; padding:3px 8px; display:inline-block; }
+  .de .deSt.none { color:var(--muted); background:rgba(148,163,184,.16); }
+  .de .deSt.pass { color:var(--green); background:rgba(16,185,129,.16); }
+  .de .deSt.fail { color:var(--red); background:rgba(239,68,68,.16); }
+  .de.dePass { border-color:rgba(16,185,129,.5); background:rgba(16,185,129,.06); }
+  .de.deFail { border-color:rgba(239,68,68,.5); background:rgba(239,68,68,.06); }
   .lnkbtn { font-family:inherit; background:var(--card); color:var(--text); border:1px solid var(--border); padding:8px 16px; border-radius:9px; font-size:13px; cursor:pointer; }
+
+  /* Bảng tiến độ theo chủ đề (req #75). Giữ tông tối của trang — ảnh mẫu SV gửi nền
+     xanh là của trang khác, bê nguyên vào đây sẽ chọi với phần còn lại. */
+  #progBox { width:100%; max-width:1120px; margin:22px auto 0; }
+  #progBox:empty { display:none; }
+  .progHead { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+  .progChip { background:var(--card); border:1px solid var(--border); border-radius:99px;
+    padding:6px 14px; font-size:12.5px; color:var(--muted); }
+  .progChip b { color:var(--text); font-size:13.5px; }
+  .progReset { margin-left:auto; font-family:inherit; font-size:12px; padding:6px 12px; cursor:pointer;
+    background:transparent; color:var(--muted); border:1px solid var(--border); border-radius:8px; }
+  .progReset:hover { color:var(--red); border-color:var(--red); }
+  .progTable { width:100%; border-collapse:separate; border-spacing:0; background:var(--card);
+    border:1px solid var(--border); border-radius:12px; overflow:hidden; font-size:13.5px; }
+  .progTable th { text-align:left; font-size:12px; color:var(--muted); font-weight:700;
+    padding:10px 14px; background:rgba(255,255,255,.03); border-bottom:1px solid var(--border); }
+  .progTable td { padding:10px 14px; border-bottom:1px solid var(--border); }
+  .progTable tr:last-child td { border-bottom:0; }
+  .progBar { position:relative; height:20px; background:rgba(255,255,255,.06); border-radius:99px; overflow:hidden; min-width:120px; }
+  .progFill { height:100%; background:linear-gradient(90deg, var(--red), #f59e0b); border-radius:99px; transition:width .3s; }
+  .progPct { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:700; color:var(--text); }
+  @media (max-width:860px) { .progTable { font-size:12.5px; } .progTable th:nth-child(2), .progTable td:nth-child(2) { min-width:90px; } }
+
+  /* Sidebar: tìm kiếm + danh sách câu hỏi (req #52/#53 Thì Dũng) */
+  #practiceWrap { display:flex; gap:18px; width:100%; max-width:1120px; justify-content:center; align-items:flex-start; }
+  #mainCol { flex:1 1 760px; max-width:760px; min-width:0; display:flex; flex-direction:column; align-items:center; gap:16px; }
+  #qsidebar { flex:0 0 250px; width:250px; background:var(--card); border:1px solid var(--border);
+    border-radius:14px; padding:16px; position:sticky; top:18px; align-self:flex-start; }
+  #qsidebar .sbTitle { font-size:13.5px; font-weight:700; color:var(--text); }
+  /* catBar nay nằm trong cột trái (req #71): xếp dọc, full width thay vì flex ngang căn giữa. */
+  #qsidebar #catBar { flex-direction:column; align-items:stretch; gap:6px; margin-bottom:4px; }
+  #qsidebar #catBar label { align-self:flex-start; }
+  #qsidebar #catBar select { width:100%; }
+  #qSearch { width:100%; margin-top:9px; font-family:inherit; background:rgba(0,0,0,.25);
+    border:1px solid var(--border); color:var(--text); border-radius:9px; padding:9px 11px; font-size:13px; }
+  #qSearch::placeholder { color:var(--muted); }
+  .sbHead { display:flex; justify-content:space-between; align-items:center; margin:16px 0 10px; }
+  .sbReset { font-family:inherit; font-size:11px; font-weight:700; color:#fca5a5; background:rgba(220,38,38,.14);
+    border:1px solid rgba(220,38,38,.3); border-radius:7px; padding:4px 9px; cursor:pointer; }
+  /* 260px (không phải 340): cột trái từng cao 600px trong khi cột phải chỉ 378px →
+     thừa ra 222px, nhìn lệch hẳn (req #77). Hạ lưới + đặt min-height cho .qcard thì
+     hai cột kết thúc cùng một đường (lệch còn ~2px). Lưới vẫn cuộn nên không mất câu. */
+  #qGrid { display:grid; grid-template-columns:repeat(5,1fr); gap:7px; max-height:260px; overflow-y:auto; padding-right:2px; }
+  .qn { font-family:inherit; aspect-ratio:1; border:1px solid var(--border); background:rgba(0,0,0,.2);
+    color:var(--text); border-radius:8px; cursor:pointer; font-size:12.5px; font-weight:600; padding:0; transition:.12s; }
+  .qn:hover { border-color:var(--red); }
+  .qn.cur { background:var(--yellow); color:#1a1a2e; border-color:var(--yellow); font-weight:800; }
+  /* Ô đã làm: xanh = đúng, đỏ = sai (req #63). */
+  .qn.right { background:#16a34a; color:#fff; border-color:#16a34a; font-weight:700; }
+  .qn.wrong { background:#dc2626; color:#fff; border-color:#dc2626; font-weight:700; }
+  /* Câu bỏ trống khi xem lại bài đã nộp (req #98): xám, phân biệt với chưa-làm lúc luyện. */
+  .qn.skip { background:rgba(148,163,184,.28); color:var(--text); border-color:var(--border); font-weight:700; }
+  .qn.cur.right, .qn.cur.wrong { box-shadow:0 0 0 2px var(--yellow) inset; }
+  /* Khi THI: chỉ đánh dấu "đã chọn" (xanh dương), KHÔNG lộ đúng/sai trước lúc nộp (req #73). */
+  .qn.picked { background:#2563eb; color:#fff; border-color:#2563eb; font-weight:700; }
+  .qn.cur.picked { box-shadow:0 0 0 2px var(--yellow) inset; }
+  .sbSubmit { width:100%; margin-top:10px; font-family:inherit; font-size:13.5px; font-weight:700;
+    padding:10px; border-radius:10px; border:0; background:var(--red); color:#fff; cursor:pointer; }
+  .sbSubmit:hover { filter:brightness(1.1); }
+  /* Thanh thời gian khi thi (req #73) */
+  /* Header màn thi (req #81) — khối riêng, full width, trên cả 2 cột. */
+  #examHead { width:100%; max-width:1120px; margin:0 auto; background:var(--card);
+    border:1px solid var(--border); border-radius:14px; padding:12px 14px; box-sizing:border-box; }
+  .ehChips { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom:10px; }
+  .ehChip { font-size:12.5px; color:var(--muted); background:rgba(0,0,0,.22); border:1px solid var(--border);
+    border-radius:8px; padding:6px 11px; white-space:nowrap; }
+  .ehChip b { color:var(--text); }
+  /* KHI THI: cột trái giãn cao BẰNG cột phải → hai khung cân nhau như ảnh mẫu SV gửi
+     (req #81). Bỏ sticky vì sticky + stretch đá nhau; đổi lại "Nộp bài" tụt xuống đáy
+     cột, nhìn có chủ ý thay vì lửng lơ giữa khoảng trống. Chỉ áp cho màn thi — màn
+     luyện tập giữ sticky (600 câu, cuộn dài, cần lưới số câu bám theo). */
+  /* Khi thi: cột trái GỌN (req #94) — nút "Nộp bài" nằm ngay dưới lưới câu, không
+     kéo giãn hết chiều cao cột phải (bản #81 giãn cho cân, nhưng SV thấy trống giữa
+     lưới và nút). position:static để cuộn cùng trang, KHÔNG stretch/margin-top:auto. */
+  #practiceWrap.exam #qsidebar { position:static; align-self:flex-start; }
+  #practiceWrap.exam #sbSubmit { margin-top:10px; }
+  /* Khung MÀN THI nhỏ lại cho cân màn hình desktop (req #87): 1120 → 960. Chỉ áp
+     khi thi (.exam); luyện tập giữ 1120. #examHead vốn chỉ hiện lúc thi nên hẹp thẳng. */
+  #practiceWrap.exam { max-width:960px; }
+  #practiceWrap.exam #mainCol { flex-basis:640px; max-width:640px; }
+  #examHead { max-width:960px; }
+  /* Hàng điều hướng trên đầu thẻ khi thi (req #81) */
+  .qnavTop { display:flex; align-items:center; gap:10px; margin:-4px 0 14px; }
+  .qnavTop .lnkbtn { font-size:12.5px; padding:6px 12px; border-radius:8px; }
+  .qnavIdx { margin:0 auto; font-size:13px; color:var(--muted); }
+  .qnavIdx b { color:var(--text); }
+  .examBarTrack { position:relative; height:26px; background:rgba(255,255,255,.06);
+    border:1px solid var(--border); border-radius:99px; overflow:hidden; }
+  .examBarFill { height:100%; width:100%; background:linear-gradient(90deg,#059669,#10b981); transition:width 1s linear; }
+  .examBarFill.warn { background:linear-gradient(90deg,#d97706,#f59e0b); }
+  .examBarFill.danger { background:linear-gradient(90deg,#b91c1c,#ef4444); }
+  .examBarText { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:12.5px; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.4); }
+  .sbEmpty { color:var(--muted); font-size:12.5px; text-align:center; padding:14px 4px; }
+  .sbExam { width:100%; margin-top:14px; font-family:inherit; background:var(--red); color:#fff; border:0;
+    border-radius:10px; padding:11px; font-weight:700; font-size:13px; cursor:pointer; }
+  @media (max-width:860px) {
+    #practiceWrap { flex-direction:column; align-items:center; }
+    #qsidebar { width:100%; max-width:760px; position:static; order:2; }
+    #qGrid { max-height:200px; grid-template-columns:repeat(8,1fr); }
+  }
 </style>
 </head>
 <body>
 <h1>🚦 Lý thuyết Lái xe ô tô — Luật giao thông đường bộ</h1>
 
-<div class="toolbar">
-  <button data-mode="learn" class="active">📖 Luyện tập</button>
-  <button data-mode="exam">📝 Thi sát hạch theo hạng</button>
-  <button data-mode="critical">⚠️ Chỉ câu liệt</button>
-</div>
+<!-- id để ẩn thanh này KHI ĐANG THI (req #80): lúc thi mà còn nút "Luyện tập" thì
+     bấm nhầm là mất bài. Vẫn hiện ở màn chọn hạng/chọn đề và màn tổng kết, nên
+     đường quay về Luyện tập không mất. -->
+<!-- Thanh chuyển chế độ "Luyện tập / Thi sát hạch" đã BỎ (req #84): mỗi thẻ trong
+     Trường Lái xe đã trỏ thẳng vào đúng chế độ qua ?mode= (learn mặc định, ?mode=exam),
+     nên nút toggle thừa. Từ luyện tập vẫn vào thi được qua nút "🕐 Thi thử theo hạng"
+     ở cột trái. ?mode=critical/exam qua URL vẫn chạy (xem cuối file). -->
 
-<div class="toolbar" id="catBar">
-  <label for="catSelect">📂 Chủ đề:</label>
-  <select id="catSelect">
-    <option value="all">📚 Tất cả các câu</option>
-    <option value="kn">📖 1. Khái niệm &amp; quy tắc lý thuyết</option>
-    <option value="vh">🤝 2. Văn hoá &amp; đạo đức</option>
-    <option value="kt">🛠️ 3. Kỹ thuật lái xe</option>
-    <option value="ct">⚙️ 4. Cấu tạo &amp; sửa chữa</option>
-    <option value="th">⚠️ 5. Tình huống giao thông</option>
-    <option value="nv">🚚 6. Nghiệp vụ vận tải</option>
-    <option value="critical">🔥 Câu điểm liệt</option>
-  </select>
-</div>
 
 <div id="classPicker">
   <h2>🚗 Chọn hạng bằng để bắt đầu thi sát hạch</h2>
@@ -113,32 +292,99 @@
     Mỗi hạng bốc <b>đề ngẫu nhiên</b> từ ngân hàng câu hỏi, có ít nhất 1 câu điểm liệt.
   </p>
   <div class="clsGrid" id="clsGrid"></div>
+  <!-- Lịch sử thi + nút xoá (req #62). -->
+  <div id="examHist" style="max-width:820px;margin:26px auto 0;"></div>
 </div>
 
 <div id="dePicker">
-  <h2>📑 Chọn đề thi — Hạng <span id="deClsName">B</span></h2>
+  <!-- Nút quay lại ở TRÊN đã bỏ (req #89): SV chỉ muốn giữ 1 nút ở dưới lưới đề.
+       (Từng thêm ở #79, nay SV thấy 2 nút thừa.) -->
+  <h2 style="text-align:center">📑 Chọn đề thi — Hạng <span id="deClsName">B</span></h2>
   <p style="text-align:center;color:var(--muted);font-size:12.5px;max-width:680px;margin:0 auto 14px;line-height:1.5">
-    <b>15 đề thi ngẫu nhiên</b> được tạo cố định cho hạng này — mỗi đề <span id="deMeta">30 câu · 20 phút</span>, có câu điểm liệt. Bấm vào một đề để vào thi.
+    <b>20 đề thi ngẫu nhiên</b> được tạo cố định cho hạng này — mỗi đề <span id="deMeta">30 câu · 20 phút</span>, có câu điểm liệt. Hoặc chọn <b>🔀 Câu hỏi ngẫu nhiên</b> để mỗi lần bốc một đề mới. Bấm để vào thi.
   </p>
   <div id="deGrid"></div>
+  <!-- Giữ nút dưới đáy: lưới 20 đề dài, cuộn xuống cuối rồi mà phải cuộn ngược lên
+       đầu để quay lại thì cũng bực. Trên + dưới, chung một handler. -->
   <div style="text-align:center;margin-top:16px">
-    <button class="lnkbtn" id="deBack">← Chọn hạng bằng khác</button>
+    <button class="lnkbtn" id="deBack">← Quay lại chọn hạng</button>
   </div>
 </div>
 
+<!-- Header màn thi (req #81, dựng theo ảnh mẫu SV gửi): gom hạng/đề + số câu +
+     đồng hồ + đã làm thành một khối chip, kèm thanh thời gian.
+     ĐẶT NGOÀI #mainCol — trước đây stats + thanh thời gian nằm TRONG cột phải nên
+     đội chiều cao cột phải lên, hai cột lệch nhau. Tách ra chạy hết chiều ngang thì
+     hai cột bắt đầu cùng một đường, đúng như ảnh SV gửi.
+     Tiện thể lộ luôn "đang thi đề nào" — trước khi thi xong mới biết. -->
+<div id="examHead" style="display:none">
+  <div class="ehChips">
+    <span class="ehChip">🪪 Hạng <b id="ehCls">B</b><span id="ehDe"></span></span>
+    <!-- ehQ (câu hiện tại) chuyển vào đây khi bỏ hàng nav trên (req #88): vẫn thấy
+         đang ở câu mấy / tổng bao nhiêu mà không cần hàng nút riêng phía trên thẻ. -->
+    <span class="ehChip">📄 Câu <b id="ehQ">1</b>/<b id="ehTotal">30</b></span>
+    <span class="ehChip">⏱ <b id="ehTimer">20:00</b></span>
+    <span class="ehChip">✅ <b id="ehDone">0</b> đã làm</span>
+  </div>
+  <div class="examBarTrack"><div class="examBarFill" id="examBar"></div><span id="examBarText" class="examBarText"></span></div>
+</div>
+
+<!-- Thanh stats (luyện tập) chuyển RA NGOÀI #mainCol, chạy full-width trên cả 2 cột
+     (req #85): trước nằm trong cột phải nên đẩy thẻ câu hỏi xuống thấp hơn đỉnh
+     sidebar → "2 bảng cái cao cái thấp". Nay sidebar + thẻ cùng bắt đầu một đường. -->
 <div class="stats" id="stats">
   <span>Câu <b id="curIdx">1</b>/<b id="totalQ">—</b></span>
-  <span>Đúng: <b id="rightCount">0</b></span>
-  <span>Sai: <b id="wrongCount">0</b></span>
+  <span><span id="statRight">Đúng:</span> <b id="rightCount">0</b></span>
+  <span id="statWrong">Sai: <b id="wrongCount">0</b></span>
   <span id="timerBox" style="display:none">⏱ <b id="timer">22:00</b></span>
 </div>
 
+<div id="practiceWrap">
+<aside id="qsidebar">
+  <!-- Chủ đề nằm ĐẦU cột trái (req #71): trước đây ở giữa trang, tách rời khỏi
+       tìm kiếm + danh sách câu tuy cùng là bộ lọc. Gom lại một chỗ cho dễ nhìn. -->
+  <div class="toolbar" id="catBar">
+    <label for="catSelect">📂 Chủ đề:</label>
+    <select id="catSelect">
+      <option value="all">📚 Tất cả các câu</option>
+      <option value="kn">📖 1. Khái niệm &amp; quy tắc lý thuyết</option>
+      <option value="vh">🤝 2. Văn hoá &amp; đạo đức</option>
+      <option value="kt">🛠️ 3. Kỹ thuật lái xe</option>
+      <option value="ct">⚙️ 4. Cấu tạo &amp; sửa chữa</option>
+      <option value="th">🚸 5. Biển Báo</option>
+      <option value="nv">⚠️ 6. Tình huống giao thông</option>
+      <option value="critical">🔥 Câu điểm liệt</option>
+    </select>
+  </div>
+  <div class="sbTitle">🔍 Tìm kiếm câu hỏi</div>
+  <input id="qSearch" placeholder="Nhập nội dung câu hỏi…" autocomplete="off" />
+  <div class="sbHead">
+    <span class="sbTitle">Danh sách câu hỏi</span>
+    <!-- "Xoá điểm" → "⚙️ Cài đặt" (req #76). Xoá tiến độ KHÔNG mất: nút "🗑 Xoá tiến độ"
+         ở bảng tiến độ ngay dưới vẫn làm đúng việc đó (hai nút này vốn trùng chức năng). -->
+    <!-- req #86: HOÁN nút này (trên) và nút "Xoá tiến độ" (dưới bảng tiến độ). Nút trên
+         nay là "Xóa điểm" (xoá tiến độ), nút dưới thành "Cài đặt" (mở cỡ chữ). -->
+    <button id="setBtn" class="sbReset">🗑 Xóa điểm</button>
+  </div>
+  <div id="qGrid"></div>
+  <div id="qGridEmpty" class="sbEmpty" style="display:none">Không thấy câu khớp.</div>
+  <button id="sbExam" class="sbExam">🕐 Thi thử theo hạng</button>
+  <!-- Nộp bài ngay trong cột trái khi đang thi (req #73) -->
+  <button id="sbSubmit" class="sbSubmit" style="display:none">🏁 Nộp bài</button>
+</aside>
+<div id="mainCol">
+
 <div class="qcard" id="qcard">
+  <!-- Hàng nav TRÊN đầu thẻ đã BỎ (req #88): SV thấy thừa, chỉ giữ nút Câu trước/
+       Câu sau ở dưới. Chỉ số "Câu x/y" nay nằm trong header thi (examHead) khi thi,
+       và trong thanh #stats khi luyện tập. -->
   <div class="qhead">
     <span class="badge normal" id="topicBadge">Khái niệm</span>
     <span id="critBadge"></span>
+    <span class="kbdHint">⌨️ Dùng phím <kbd>←</kbd> <kbd>→</kbd> để đổi câu, <kbd>1</kbd>–<kbd>4</kbd> để chọn đáp án</span>
   </div>
   <div class="qtext" id="qtext">…</div>
+  <div class="qimg" id="qimg"></div>
   <div class="opts" id="opts"></div>
   <div class="feedback" id="feedback"></div>
 </div>
@@ -148,15 +394,65 @@
 <div class="nav">
   <button id="prevBtn">← Câu trước</button>
   <button class="primary" id="nextBtn">Câu sau →</button>
-  <button id="endBtn" style="display:none">🏁 Nộp bài</button>
+  <!-- Nút "Nộp bài" ở hàng này đã BỎ (req #88): trùng với nút "🏁 Nộp bài" to màu đỏ
+       trong cột trái; giữ 1 cái cho gọn. endBtn cũ gỡ luôn phần JS. -->
 </div>
 
+</div><!-- /#mainCol -->
+</div><!-- /#practiceWrap -->
+
+<!-- Bảng theo dõi tiến độ theo chủ đề (req #75 Thì Dũng) -->
+<div id="progBox"></div>
+
+<!-- Màn kết quả dựng theo ảnh mẫu SV gửi (req #91): khung tiêu đề nổi bật + 4 nút
+     hành động + chips thống kê + dòng đạt/rớt + xem lại câu (xanh/đỏ). -->
 <div class="summary" id="summary">
-  <h2 style="margin:0 0 4px;" id="sumTitle">Kết quả</h2>
-  <div class="big" id="sumScore">—</div>
-  <div id="sumDetail" style="color:var(--muted); line-height:1.6;"></div>
-  <div id="sumBtns" style="margin-top:20px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
-    <button onclick="location.reload()" style="font-family:inherit; padding:10px 22px; border-radius:10px; border:0; background:var(--red); color:white; font-weight:700; cursor:pointer;">Làm lại</button>
+  <div class="sumHeader" id="sumHeader">📋 KẾT QUẢ THI</div>
+  <div class="sumBody">
+    <div id="sumBtns" class="sumBtns"></div>
+    <div id="sumDetail"></div>
+    <div class="sumVerdict" id="sumVerdict"></div>
+    <!-- Xem lại các câu sau khi nộp (req #62/#91) -->
+    <div id="sumReview" style="text-align:left;"></div>
+  </div>
+  <!-- ẩn: giữ id cũ để JS không lỗi, không hiển thị -->
+  <h2 id="sumTitle" style="display:none"></h2>
+  <div class="big" id="sumScore" style="display:none"></div>
+</div>
+
+<!-- ⚙️ Cài đặt — chỉnh cỡ chữ câu hỏi/đáp án (req #76, dựng theo ảnh mẫu SV gửi) -->
+<div class="mdBack" id="setModal">
+  <div class="mdBox" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+    <div class="mdHead">
+      <h3 id="setTitle">⚙️ Cài đặt</h3>
+      <button class="mdX" id="setX" aria-label="Đóng">×</button>
+    </div>
+    <div class="setRow">
+      <div class="setTop">
+        <span class="setName">❓ Cỡ chữ câu hỏi</span>
+        <button class="setDef" data-def="q">↺ Mặc định</button>
+      </div>
+      <div class="setCtl">
+        <button class="setBtn" data-step="-1" data-k="q" aria-label="Nhỏ hơn">−</button>
+        <div class="setVal"><b id="qsVal">17</b><small>px</small></div>
+        <button class="setBtn" data-step="1" data-k="q" aria-label="To hơn">+</button>
+      </div>
+    </div>
+    <div class="setRow">
+      <div class="setTop">
+        <span class="setName">☰ Cỡ chữ câu trả lời</span>
+        <button class="setDef" data-def="a">↺ Mặc định</button>
+      </div>
+      <div class="setCtl">
+        <button class="setBtn" data-step="-1" data-k="a" aria-label="Nhỏ hơn">−</button>
+        <div class="setVal"><b id="asVal">16</b><small>px</small></div>
+        <button class="setBtn" data-step="1" data-k="a" aria-label="To hơn">+</button>
+      </div>
+    </div>
+    <div class="setPrev">Cỡ chữ đổi ngay khi bấm, tự nhớ cho lần vào sau.</div>
+    <div style="text-align:right">
+      <button class="lnkbtn" id="setClose" style="background:var(--red);border:0;color:#fff;font-weight:700;padding:9px 20px;border-radius:10px">Đóng</button>
+    </div>
   </div>
 </div>
 
@@ -169,34 +465,59 @@
 
   const el = id => document.getElementById(id);
   const STATE_KEY = 'tizia:driving-600:state';
-  // Gộp 17 sub-category của bộ 244 câu → 6 nhóm chủ đề cho dropdown (yêu cầu SV #16).
+  // Map chủ đề (t) → nhóm dropdown. Taxonomy chuẩn bộ 600 câu (req #47/#56/#57 Thì Dũng):
+  // 1 Khái niệm & quy tắc (180) · 2 Văn hoá & đạo đức (25) · 3 Kỹ thuật lái xe (58)
+  // 4 Cấu tạo & sửa chữa (37) · 5 Biển báo (185, có ảnh) · 6 Tình huống giao thông (115, có ảnh).
   const GROUP = {
-    'Khái niệm':'kn', 'Quy tắc giao thông':'kn', 'Tốc độ - khoảng cách':'kn',
-    'Nồng độ cồn - chất cấm':'vh', 'Trách nhiệm khi tai nạn':'vh', 'Đạo đức nghề nghiệp':'vh', 'Văn hoá giao thông':'vh',
-    'Khởi hành - dừng xe':'kt', 'Số - côn - phanh':'kt', 'Lái xe đường đặc biệt':'kt',
-    'Động cơ - hệ thống':'ct', 'Hệ thống an toàn':'ct', 'Bảo dưỡng - kiểm tra':'ct',
-    'Xử lý tình huống':'th',
-    'Kinh doanh vận tải':'nv', 'Hàng hoá - hành khách':'nv', 'Quyền - nghĩa vụ':'nv',
+    'Khái niệm & quy tắc':'kn',
+    'Văn hoá giao thông':'vh',
+    'Kỹ thuật lái xe':'kt',
+    'Cấu tạo & sửa chữa':'ct',
+    'Biển báo':'th',                 // 5 Biển báo (#56) — mỗi câu 1 ảnh ghép các biển
+    'Tình huống giao thông':'nv',    // 6 Tình huống giao thông (#57) — mỗi câu 1 ảnh
+    // giữ tương thích key cũ nếu còn dữ liệu seed cũ
+    'Xử lý tình huống':'nv', 'Khái niệm':'kn', 'Lái xe đường đặc biệt':'kt', 'Động cơ - hệ thống':'ct',
   };
   const groupOf = t => GROUP[t] || 'kn';
   // Cấu hình thi theo hạng GPLX (req #21): n câu · min phút · pass đạt · crit câu liệt.
   const EXAM_CLASSES = [
-    {id:'B',  ic:'🚗', n:30, min:20, pass:27, crit:1, desc:'Ô tô đến 8 chỗ (không kể chỗ lái)'},
-    {id:'C1', ic:'🚙', n:35, min:22, pass:32, crit:1, desc:'Ô tô tải 3,5 – 7,5 tấn'},
-    {id:'C',  ic:'🚚', n:40, min:24, pass:36, crit:1, desc:'Ô tô tải trên 7,5 tấn'},
-    {id:'D1', ic:'🚐', n:45, min:26, pass:41, crit:1, desc:'Ô tô chở 8 – 16 chỗ'},
-    {id:'D2', ic:'🚌', n:45, min:26, pass:41, crit:1, desc:'Ô tô chở 16 – 29 chỗ'},
-    {id:'D',  ic:'🚍', n:45, min:26, pass:41, crit:1, desc:'Ô tô chở trên 29 chỗ'},
+    // pop = hạng đa số người học thi (req #78): B/C1/C thi trực tiếp, không cần bằng
+    // nền. Các hạng D và *E đều là NÂNG HẠNG — phải có bằng thấp hơn + đủ năm kinh nghiệm.
+    {id:'B',  ic:'🚗', n:30, min:20, pass:27, crit:1, desc:'Ô tô đến 8 chỗ (không kể chỗ lái)', pop:1},
+    {id:'C1', ic:'🚙', n:35, min:22, pass:32, crit:1, desc:'Ô tô tải 3,5 – 7,5 tấn', pop:1},
+    {id:'C',  ic:'🚚', n:40, min:24, pass:36, crit:1, desc:'Ô tô tải trên 7,5 tấn', pop:1},
+    {id:'D1', ic:'🚐', n:45, min:26, pass:41, crit:1, desc:'Ô tô chở 8 – 16 chỗ', up:1},
+    {id:'D2', ic:'🚌', n:45, min:26, pass:41, crit:1, desc:'Ô tô chở 16 – 29 chỗ', up:1},
+    {id:'D',  ic:'🚍', n:45, min:26, pass:41, crit:1, desc:'Ô tô chở trên 29 chỗ', up:1},
     {id:'BE', ic:'🚗', n:45, min:26, pass:41, crit:1, desc:'Hạng B + kéo rơ moóc trên 750kg', up:1},
     {id:'C1E',ic:'🚙', n:45, min:26, pass:41, crit:1, desc:'Hạng C1 + rơ moóc trên 750kg', up:1},
     {id:'CE', ic:'🚚', n:45, min:26, pass:41, crit:1, desc:'Hạng C + rơ moóc trên 750kg', up:1},
     {id:'D1E',ic:'🚐', n:45, min:26, pass:41, crit:1, desc:'Hạng D1 + rơ moóc trên 750kg', up:1},
     {id:'DE', ic:'🚍', n:45, min:26, pass:41, crit:1, desc:'Hạng D + rơ moóc trên 750kg', up:1},
   ];
-  let examClass = null, examDe = null;       // examDe = số đề 1..15 (null = bốc ngẫu nhiên tự do)
-  const NUM_DE = 15;                          // số đề ngẫu nhiên cố định cho mỗi hạng (req #35)
+  let examClass = null, examDe = null;       // examDe = số đề 1..20 (null = bốc ngẫu nhiên tự do)
+  const NUM_DE = 20;                          // số đề ngẫu nhiên cố định cho mỗi hạng (req #35, tăng 15→20 #59)
   let mode = 'learn', list = [...Q], idx = 0, category = 'all';
   let answered = {}, exam = null;
+  // reviewMode: ĐÃ NỘP bài thi, đang xem lại (req #98). Giữ giao diện 2 cột làm bài
+  // — lưới trái tô xanh/đỏ/xám, qcard phải lộ đáp án đúng/sai khi duyệt — và khung
+  // KẾT QUẢ THI nằm dưới. Khác mode='exam' (đang thi, chưa lộ đúng/sai).
+  let reviewMode = false;
+
+  // ===== Tiến độ theo chủ đề, bền qua các lần vào trang (req #75 Thì Dũng) =====
+  // Lưu theo ID CÂU (không theo chỉ số trong `list`): `list` đổi mỗi lần lọc chủ đề
+  // hay bốc đề, nên chỉ số không có ý nghĩa lâu dài.
+  // progress[qid] = ĐÁP ÁN ĐÃ CHỌN (số), không phải true/false: chỉ lưu đúng/sai thì khi
+  // dựng lại `answered` không biết người học đã chọn ý nào → mở lại câu cũ sẽ không ô nào
+  // được tick mà vẫn hiện feedback, tức bày đáp án cho người chưa từng thấy lựa chọn của mình.
+  const loadProg = () => { try { return JSON.parse(localStorage.getItem(STATE_KEY)) || {}; } catch { return {}; } };
+  let progress = loadProg();
+  const saveProg = () => { try { localStorage.setItem(STATE_KEY, JSON.stringify(progress)); } catch {} };
+  function markProgress(q, pickedIdx) {
+    if (!q || !q.id) return;
+    progress[q.id] = pickedIdx;
+    saveProg();
+  }
 
   // RNG có seed → mỗi "Đề số N" của một hạng luôn cho ra CÙNG bộ câu (như app thi thật).
   const hashSeed = s => { let h = 2166136261 >>> 0; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
@@ -230,20 +551,31 @@
 
   function setMode(m) {
     mode = m;
+    reviewMode = false;   // vào lượt thi/luyện mới → thoát chế độ xem lại bài đã nộp (req #98)
     el('classPicker').style.display = 'none';
     el('dePicker').style.display = 'none';
     list = pickQuestions(m);
-    idx = 0; answered = {};
+    idx = 0;
+    // Luyện tập: dựng lại `answered` từ tiến độ ĐÃ LƯU để sidebar tô đúng câu từng làm,
+    // khỏi cảnh tải lại trang thì bảng #75 báo "đã làm" mà ô số vẫn trắng. Thi thì KHÔNG
+    // khôi phục — mỗi lần thi phải làm lại từ đầu.
+    answered = {};
+    if (m !== 'exam') {
+      list.forEach((q, i) => {
+        if (q.id && progress[q.id] !== undefined) answered[i] = progress[q.id];
+      });
+    }
     document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
     el('catBar').style.display = m === 'exam' ? 'none' : '';
+    renderProgress();   // ẩn khi vào thi, hiện lại khi về luyện tập (req #75)
     el('summary').classList.remove('show');
-    el('endBtn').style.display = m === 'exam' ? '' : 'none';
     if (!list.length) {
       el('emptyMsg').style.display = '';
       el('emptyMsg').innerHTML = '📭 Mục «' + (el('catSelect').selectedOptions[0]?.textContent.trim() || category) + '» hiện chưa có câu hỏi.';
       el('qcard').style.display = 'none';
       document.querySelector('.nav').style.display = 'none';
       el('stats').style.display = 'none';
+      el('qsidebar').style.display = 'none';
       return;
     }
     el('emptyMsg').style.display = 'none';
@@ -252,11 +584,20 @@
     el('stats').style.display = '';
     if (m === 'exam') {
       exam = { start: Date.now(), duration: (examClass ? examClass.min : 22) * 60 * 1000 };
-      el('timerBox').style.display = '';
+      // Header thi thay cho thanh stats: gom hạng/đề + số câu + giờ + đã làm (req #81)
+      el('stats').style.display = 'none';
+      el('examHead').style.display = '';
+      el('ehCls').textContent = examClass ? examClass.id : 'B';
+      el('ehDe').textContent = examDe ? ' · Đề ' + String(examDe).padStart(2, '0') : ' · Câu hỏi ngẫu nhiên';
+      el('ehTotal').textContent = list.length;
+      el('practiceWrap').classList.add('exam');    // 2 cột cao bằng nhau (req #81)
       tickTimer();
     } else {
       exam = null;
+      el('examHead').style.display = 'none';
+      el('stats').style.display = '';
       el('timerBox').style.display = 'none';
+      el('practiceWrap').classList.remove('exam');
     }
     render();
   }
@@ -267,9 +608,23 @@
     const m = String(Math.floor(remain / 60000)).padStart(2, '0');
     const s = String(Math.floor((remain % 60000) / 1000)).padStart(2, '0');
     el('timer').textContent = `${m}:${s}`;
+    el('ehTimer').textContent = `${m}:${s}`;   // đồng hồ trong header thi (req #81)
+    // Thanh tiến trình thời gian (req #73): bám luôn `remain` ở trên, không tự đếm lại.
+    const bar = el('examBar');
+    if (bar) {
+      const pct = Math.max(0, Math.min(100, remain / exam.duration * 100));
+      bar.style.width = pct + '%';
+      // Sắp hết giờ thì đổi màu cảnh báo (dưới 20% và dưới 10%).
+      bar.className = 'examBarFill' + (pct <= 10 ? ' danger' : (pct <= 20 ? ' warn' : ''));
+      el('examBarText').textContent = `Thời gian còn lại: ${m}:${s}`;
+    }
     setTimeout(tickTimer, 1000);
   }
   function submitExam() {
+    // Thời gian đã làm (cho chip kết quả req #91) — chốt TRƯỚC khi exam=null bên dưới.
+    const elapsedMs = exam ? (Date.now() - exam.start) : 0;
+    const elapsedStr = String(Math.floor(elapsedMs / 60000)).padStart(2, '0') + ':' +
+                       String(Math.floor((elapsedMs % 60000) / 1000)).padStart(2, '0');
     let right = 0, critWrong = 0;
     for (const [i, ans] of Object.entries(answered)) {
       const q = list[i];
@@ -281,31 +636,145 @@
     const need = examClass ? examClass.pass : 21;
     const passByScore = right >= need;
     const pass = passByScore && critWrong === 0;
+    // req #98: SAU NỘP giữ nguyên giao diện 2 cột để xem lại — lưới câu bên trái tô
+    // xanh/đỏ/xám, qcard bên phải lộ đáp án đúng/sai khi bấm từng câu — và đưa khung
+    // KẾT QUẢ THI xuống DƯỚI (thay vì thay thế cả màn làm bài). reviewMode bật để
+    // render()/updateStats()/renderSidebar() chuyển sang chế độ lộ kết quả.
+    reviewMode = true;
     el('summary').classList.add('show');
-    el('qcard').style.display = 'none';
-    document.querySelector('.nav').style.display = 'none';
-    el('stats').style.display = 'none';
-    el('sumTitle').textContent = pass ? '🎉 ĐẠT' : '❌ TRƯỢT';
-    el('sumScore').textContent = `${right}/${total}`;
-    el('sumScore').className = 'big ' + (pass ? 'pass' : 'fail');
-    el('sumDetail').innerHTML = `
-      ${examClass ? 'Hạng <b>' + examClass.id + '</b>' + (examDe ? ' · Đề số <b>' + examDe + '</b>' : '') + ' · cần đạt <b>' + need + '/' + total + '</b><br>' : ''}
-      Đúng: <b>${right}</b> · Sai: <b>${total - right}</b><br>
-      Câu liệt sai: <b style="color:${critWrong ? 'var(--red)' : 'var(--green)'}">${critWrong}</b><br>
-      ${!passByScore ? '<span style="color:var(--red)">→ Chưa đủ ' + need + '/' + total + ' câu</span><br>' : ''}
-      ${critWrong > 0 ? '<span style="color:var(--red)">→ Sai câu LIỆT — tự động trượt</span>' : ''}
-    `;
-    // Nút sau khi nộp: thi sát hạch theo đề → cho thi lại đúng đề / đổi đề khác.
-    if (examDe) {
-      el('sumBtns').innerHTML =
-        '<button id="sumRetry" class="lnkbtn" style="background:var(--red);border:0;color:#fff;font-weight:700;padding:10px 22px;border-radius:10px">🔄 Thi lại Đề ' + examDe + '</button>' +
-        '<button id="sumOtherDe" class="lnkbtn" style="padding:10px 22px;border-radius:10px">📑 Đề khác</button>';
-      el('sumRetry').onclick = () => setMode('exam');
-      el('sumOtherDe').onclick = enterDePicker;
-    } else {
-      el('sumBtns').innerHTML = '<button class="lnkbtn" onclick="location.reload()" style="background:var(--red);border:0;color:#fff;font-weight:700;padding:10px 22px;border-radius:10px">Làm lại</button>';
-    }
+    // giữ qcard + nav + qsidebar hiển thị (KHÔNG ẩn như trước).
+    el('stats').style.display = 'none';           // thanh đếm khi luyện — thừa lúc review
+    el('examHead').style.display = 'none';         // dẹp header thi + đồng hồ đếm ngược
+    // GIỮ class 'exam' (KHÔNG remove): giữ khung 2 cột ở 960px như lúc làm bài. Trước
+    // đây remove làm khung phình về 1120px → SV thấy "frame kết quả to phải zoom nhỏ"
+    // (req #100). reviewMode đã lo ẩn nút Nộp bài, nên giữ .exam an toàn.
+    idx = 0;
+    render();                                      // vẽ lại: lưới tô kết quả + câu 1 lộ đáp án
     exam = null;
+    // Khung tiêu đề nổi bật (ảnh mẫu #91): "KẾT QUẢ THI — Hạng B · Đề 01".
+    el('sumHeader').textContent = '📋 KẾT QUẢ THI' +
+      (examClass ? ' — Hạng ' + examClass.id + (examDe ? ' · Đề ' + String(examDe).padStart(2, '0') : ' · Câu hỏi ngẫu nhiên') : '');
+    el('sumHeader').className = 'sumHeader ' + (pass ? 'pass' : 'fail');
+    // Dòng đạt/rớt (ảnh mẫu #91: "Bạn đã thi rớt").
+    el('sumVerdict').innerHTML = pass
+      ? '<span style="color:var(--green)">🎉 Chúc mừng! Bạn đã thi ĐẠT.</span>'
+      : '<span style="color:var(--red)">❌ Bạn đã thi rớt.</span>' +
+        (!passByScore ? ' <span style="color:var(--muted);font-weight:500">(chưa đủ ' + need + '/' + total + ' câu)</span>' : '') +
+        (critWrong > 0 ? ' <span style="color:var(--muted);font-weight:500">(sai câu điểm liệt)</span>' : '');
+    // Thống kê dạng CHIP (ảnh mẫu #91).
+    el('sumDetail').innerHTML =
+      '<div class="sumChips">' +
+        '<span class="sumChip">📊 Kết quả <b>' + right + '/' + total + '</b> · ' + (pass ? '<b style="color:var(--green)">Đạt</b>' : '<b style="color:var(--red)">Chưa đạt</b>') + '</span>' +
+        '<span class="sumChip">✅ Đúng <b style="color:var(--green)">' + right + '</b></span>' +
+        '<span class="sumChip">❌ Sai <b style="color:var(--red)">' + (total - right) + '</b></span>' +
+        '<span class="sumChip">⚠️ Câu liệt sai <b style="color:' + (critWrong ? 'var(--red)' : 'var(--green)') + '">' + critWrong + '</b></span>' +
+        '<span class="sumChip">⏱ Thời gian <b>' + elapsedStr + '</b></span>' +
+      '</div>';
+    // 4 nút hành động như ảnh mẫu #91.
+    el('sumBtns').innerHTML =
+      '<button id="sumRetry" class="sumBtn primary">🔄 Thi lại đề này</button>' +
+      '<button id="sumOtherDe" class="sumBtn">🔀 Thi đề khác</button>' +
+      '<button id="sumReClass" class="sumBtn">🎫 Chọn lại hạng</button>' +
+      '<button id="sumLearn" class="sumBtn">📖 Ôn tập lại 600 câu</button>';
+    el('sumRetry').onclick = () => setMode('exam');           // thi lại (cùng đề nếu có examDe, hoặc bốc đề mới)
+    el('sumOtherDe').onclick = enterDePicker;                  // chọn đề khác của hạng này
+    el('sumReClass').onclick = enterExamPicker;                // chọn lại hạng bằng
+    el('sumLearn').onclick = () => { el('catSelect').value = 'all'; category = 'all'; setMode('learn'); }; // về luyện tập 600 câu
+    // req #98: KHÔNG đổ danh sách câu sai dài trong khung kết quả nữa — người học xem
+    // lại từng câu (đáp án đúng/sai + giải thích) ngay ở qcard bên phải bằng cách bấm
+    // ô câu ở lưới trái. Gợi ý ngắn thay cho danh sách.
+    el('sumReview').innerHTML = (total - right) > 0
+      ? '<div style="text-align:center;color:var(--muted);font-size:13px">👈 Bấm vào ô <b style="color:#fca5a5">đỏ</b> (sai) hoặc <b style="color:#cbd5e1">xám</b> (bỏ trống) ở cột trái để xem lại câu và lời giải.</div>'
+      : '<div style="text-align:center;color:var(--green);font-weight:700">🎯 Tuyệt vời! Bạn không sai câu nào.</div>';
+    // Lưu lịch sử thi (req #62) — chỉ lưu khi thi theo hạng.
+    if (examClass) saveAttempt({
+      cls: examClass.id,
+      de: examDe ? ('Đề ' + examClass.id + '-' + String(examDe).padStart(2, '0')) : 'Câu hỏi ngẫu nhiên',
+      right, total, pass, at: Date.now(),
+    });
+    exam = null;
+  }
+
+  // ===== Lịch sử thi + xem câu sai (req #62 Thì Dũng) =====
+  const HIST_KEY = 'tizia:driving-600:examHist';
+  const loadHist = () => { try { return JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch { return []; } };
+  function saveAttempt(a) {
+    const h = loadHist();
+    h.unshift(a);
+    try { localStorage.setItem(HIST_KEY, JSON.stringify(h.slice(0, 50))); } catch {}
+  }
+  // (req #98) Bỏ hàm renderReview (lưới + danh sách câu sai dài trong khung kết quả,
+  // vốn thêm ở req #96): SV muốn xem lại từng câu ngay ở qcard bên phải bằng cách bấm
+  // ô câu ở lưới trái, nên khung kết quả nay chỉ còn header + nút + thống kê + gợi ý.
+  function esc(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+
+  // ===== Bảng tiến độ theo chủ đề (req #75 Thì Dũng) =====
+  // Đếm từ Q (toàn bộ ngân hàng) chứ không từ `list` (đang lọc), và số câu mỗi chủ đề
+  // lấy từ dữ liệu thật — không hardcode, để thêm/bớt câu là bảng tự đúng.
+  const PROG_ROWS = [
+    { g: 'kn', ic: '📖', name: 'Khái niệm & quy tắc' },
+    { g: 'vh', ic: '🤝', name: 'Văn hoá & đạo đức' },
+    { g: 'kt', ic: '🛠️', name: 'Kỹ thuật lái xe' },
+    { g: 'ct', ic: '⚙️', name: 'Cấu tạo & sửa chữa' },
+    { g: 'th', ic: '🚸', name: 'Biển báo' },
+    { g: 'nv', ic: '⚠️', name: 'Tình huống giao thông' },
+  ];
+  function renderProgress() {
+    const box = el('progBox');
+    if (!box || !Q.length) return;
+    // Chỉ hiện ở chế độ luyện tập — trong lúc thi mà bày tiến độ thì vừa rối vừa lộ đáp án.
+    if (mode === 'exam') { box.innerHTML = ''; return; }
+
+    const rows = PROG_ROWS.map(r => {
+      const qs = Q.filter(q => groupOf(q.t) === r.g);
+      const done = qs.filter(q => progress[q.id] !== undefined).length;
+      const right = qs.filter(q => progress[q.id] === q.a).length;
+      const pct = qs.length ? Math.round(done / qs.length * 100) : 0;
+      return { ...r, total: qs.length, done, right, pct };
+    }).filter(r => r.total > 0);
+
+    const allDone = rows.reduce((s, r) => s + r.done, 0);
+    const allRight = rows.reduce((s, r) => s + r.right, 0);
+
+    box.innerHTML = `
+      <div class="progHead">
+        <span class="progChip">📘 <b>${Q.length}</b> câu</span>
+        <span class="progChip">✅ <b>${allDone}</b> đã làm</span>
+        <span class="progChip">🏆 <b>${allRight}</b> đúng</span>
+        <button id="progReset" class="progReset">⚙️ Cài đặt</button>
+      </div>
+      <table class="progTable">
+        <thead><tr><th>Hạng mục</th><th>Tiến độ</th><th style="text-align:right">Số câu</th></tr></thead>
+        <tbody>${rows.map(r => `
+          <tr>
+            <td>${r.ic} ${esc(r.name)}</td>
+            <td><div class="progBar"><div class="progFill" style="width:${r.pct}%"></div><span class="progPct">${r.pct}%</span></div></td>
+            <td style="text-align:right;font-weight:700">${r.done}/${r.total}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+    // req #86: nút dưới nay MỞ CÀI ĐẶT (cỡ chữ), việc xoá điểm chuyển lên nút trên.
+    el('progReset').onclick = () => setOpen(true);
+  }
+  function renderHistory() {
+    const h = loadHist(), box = el('examHist');
+    if (!box) return;
+    if (!h.length) { box.innerHTML = ''; return; }
+    const fmt = t => { const d = new Date(t); const p = n => String(n).padStart(2, '0'); return `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+    box.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
+        '<h3 style="margin:0;font-size:16px">🕐 Lịch sử thi</h3>' +
+        '<button id="clearHist" class="sbReset" style="font-size:12px;padding:6px 12px">🗑 Xóa lịch sử</button>' +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:8px">' +
+      h.map(a => '<div style="display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px">' +
+        '<span style="font-weight:700;color:' + (a.pass ? 'var(--green)' : 'var(--red)') + '">' + (a.pass ? 'ĐẠT' : 'TRƯỢT') + '</span>' +
+        '<span style="flex:1;font-size:13.5px">Hạng ' + esc(a.cls) + ' · ' + esc(a.de) + '</span>' +
+        '<span style="font-weight:700">' + a.right + '/' + a.total + '</span>' +
+        '<span style="color:var(--muted);font-size:12px">' + fmt(a.at) + '</span>' +
+      '</div>').join('') +
+      '</div>';
+    el('clearHist').onclick = () => { if (confirm('Xóa toàn bộ lịch sử thi?')) { localStorage.removeItem(HIST_KEY); renderHistory(); } };
   }
 
   function render() {
@@ -317,26 +786,40 @@
     el('topicBadge').className = 'badge normal';
     el('critBadge').innerHTML = q.c ? '<span class="badge">⚠️ CÂU LIỆT</span>' : '';
     el('qtext').textContent = q.q;
+    el('qimg').innerHTML = q.img
+      ? `<img src="${q.img}" alt="Hình minh hoạ câu hỏi" loading="lazy" />`
+      : (q.imgTodo ? '<span class="todo">🖼️ Hình minh hoạ đang được bổ sung</span>' : '');
     el('opts').innerHTML = q.o.map((opt, i) => `
       <label class="opt" data-idx="${i}">
-        <input type="radio" name="ans" value="${i}" ${answered[idx] === i ? 'checked' : ''} />
+        <input type="radio" name="ans" value="${i}" ${answered[idx] === i ? 'checked' : ''} ${reviewMode ? 'disabled' : ''} />
         <span>${opt}</span>
       </label>`).join('');
-    if (answered[idx] !== undefined && mode !== 'exam') showFeedback();
+    // Lộ đúng/sai + giải thích khi: LUYỆN đã chọn, hoặc ĐÃ NỘP đang xem lại (req #98).
+    if ((answered[idx] !== undefined && mode !== 'exam') || reviewMode) showFeedback();
     else el('feedback').classList.remove('show');
     updateStats();
+    renderSidebar();
 
     document.querySelectorAll('.opt input').forEach(inp => {
       inp.addEventListener('change', () => {
         answered[idx] = +inp.value;
+        // Nhả focus khỏi radio (kể cả khi chọn bằng chuột): focus nằm trên radio thì
+        // trình duyệt nuốt ←/→ để đổi lựa chọn trong nhóm, làm phím đổi câu chết (req #72).
+        inp.blur();
+        // Chỉ ghi tiến độ khi LUYỆN TẬP: câu trong đề thi trùng câu đã luyện, ghi lúc thi
+        // sẽ đè kết quả luyện tập và làm bảng #75 nhảy số giữa lúc đang thi.
+        if (mode !== 'exam') markProgress(list[idx], +inp.value);
         if (mode !== 'exam') showFeedback();
         updateStats();
+        renderSidebar();
+        renderProgress();
       });
     });
   }
   function showFeedback() {
     const q = list[idx];
     const ans = answered[idx];
+    const skipped = ans === undefined;           // câu bỏ trống (chỉ gặp khi xem lại bài đã nộp)
     const isRight = ans === q.a;
     document.querySelectorAll('.opt').forEach((opt, i) => {
       opt.classList.remove('correct', 'wrong');
@@ -346,22 +829,75 @@
     const fb = el('feedback');
     fb.classList.add('show');
     fb.className = 'feedback show ' + (isRight ? 'right' : 'wrong');
-    fb.textContent = (isRight ? '✅ Đúng. ' : '❌ Sai. ') + q.ex;
+    fb.textContent = (skipped ? '⬜ Bạn chưa chọn. ' : isRight ? '✅ Đúng. ' : '❌ Sai. ') + q.ex;
   }
   function updateStats() {
     let r = 0, w = 0;
     for (const [i, ans] of Object.entries(answered)) {
       if (ans === list[i].a) r++; else w++;
     }
-    el('rightCount').textContent = r;
-    el('wrongCount').textContent = w;
+    // ĐANG THI thì KHÔNG khoe đúng/sai — thi thật chưa nộp là chưa biết kết quả. Đổi sang
+    // đếm "đã làm" như ảnh mẫu SV gửi (req #73). Lộ ở đây thì lưới ô câu giấu cũng vô nghĩa.
+    if (mode === 'exam') {
+      el('statRight').textContent = 'Đã làm:';
+      el('rightCount').textContent = r + w;
+      el('statWrong').style.display = 'none';
+      el('ehDone').textContent = r + w;        // chip "đã làm" ở header thi (req #81)
+      el('ehQ').textContent = (idx + 1);   // chip đã có "/<ehTotal>" nên ehQ chỉ là số câu hiện tại
+    } else {
+      el('statRight').textContent = 'Đúng:';
+      el('rightCount').textContent = r;
+      el('statWrong').style.display = '';
+      el('wrongCount').textContent = w;
+    }
   }
+
+  // Sidebar: ô tìm kiếm + lưới số câu để nhảy nhanh (req #52/#53 Thì Dũng)
+  // Hiện CẢ khi thi (req #73): đang thi mà không nhảy nhanh giữa các câu thì rất bí.
+  function renderSidebar() {
+    const isExam = mode === 'exam';
+    const show = list.length > 0 && (mode === 'learn' || mode === 'critical' || isExam);
+    el('qsidebar').style.display = show ? '' : 'none';
+    if (!show) return;
+    // Lúc thi: giấu tìm kiếm + xoá điểm (không hợp), hiện nút Nộp bài trong cột.
+    el('catBar').style.display = isExam ? 'none' : '';
+    el('qSearch').style.display = isExam ? 'none' : '';
+    document.querySelector('#qsidebar .sbTitle').style.display = isExam ? 'none' : '';
+    el('setBtn').style.display = isExam ? 'none' : '';
+    el('sbExam').style.display = isExam ? 'none' : '';
+    // nút Nộp bài: chỉ khi ĐANG thi (chưa nộp). Đã nộp (reviewMode) thì ẩn (req #98).
+    el('sbSubmit').style.display = (isExam && !reviewMode) ? '' : 'none';
+
+    const term = isExam ? '' : (el('qSearch').value || '').trim().toLowerCase();
+    let visible = 0;
+    el('qGrid').innerHTML = list.map((q, i) => {
+      const match = !term || q.q.toLowerCase().includes(term);
+      if (match) visible++;
+      // Khi ĐANG THI chỉ đánh dấu "đã chọn" (giấu đúng/sai). Sau NỘP (reviewMode) tô
+      // xanh=đúng, đỏ=sai, xám=bỏ trống — như ảnh mẫu SV gửi (req #98).
+      const state = answered[i] === undefined
+        ? (reviewMode ? 'skip' : '')
+        : ((isExam && !reviewMode) ? 'picked' : (answered[i] === q.a ? 'right' : 'wrong'));
+      const cls = ['qn', i === idx ? 'cur' : '', state].filter(Boolean).join(' ');
+      const crit = (isExam || reviewMode) && q.c ? '*' : '';
+      return `<button class="${cls}" data-i="${i}" ${match ? '' : 'style="display:none"'}>${i + 1}${crit}</button>`;
+    }).join('');
+    el('qGridEmpty').style.display = visible ? 'none' : '';
+    el('qGrid').querySelectorAll('.qn').forEach(b => b.onclick = () => { idx = +b.dataset.i; render(); });
+  }
+  el('qSearch').addEventListener('input', renderSidebar);
+  // Nút "Xoá điểm" ở cột trái nay là "⚙️ Cài đặt" (req #76). Việc xoá tiến độ do nút
+  // "🗑 Xoá tiến độ" ở bảng tiến độ lo — nó xoá cả `answered` nên sidebar cũng sạch theo.
+  el('sbExam').onclick = () => { el('catSelect').value = 'all'; category = 'all'; enterExamPicker(); };
 
   // Ẩn mọi màn thi/luyện để hiện 1 màn chọn (hạng bằng hoặc đề).
   function hideAllExamViews() {
     el('catBar').style.display = 'none'; el('qcard').style.display = 'none'; el('stats').style.display = 'none';
     el('emptyMsg').style.display = 'none'; el('summary').classList.remove('show');
-    el('timerBox').style.display = 'none'; exam = null;
+    el('timerBox').style.display = 'none'; el('examHead').style.display = 'none'; exam = null;
+    el('practiceWrap').classList.remove('exam');
+    el('qsidebar').style.display = 'none';
+    el('progBox').innerHTML = '';   // bảng tiến độ chỉ thuộc màn luyện tập (req #75)
     document.querySelector('.nav').style.display = 'none';
   }
 
@@ -374,7 +910,7 @@
     el('classPicker').style.display = 'block';   // CSS mặc định #classPicker{display:none} → phải set 'block' (set '' sẽ về none, ẩn mất màn chọn hạng)
     el('clsGrid').innerHTML = EXAM_CLASSES.map((c, i) => `
       <button class="cls" data-cls="${i}">
-        ${c.up ? '<span class="up">NÂNG HẠNG</span>' : ''}
+        ${c.pop ? '<span class="pop">PHỔ BIẾN</span>' : c.up ? '<span class="up">NÂNG HẠNG</span>' : ''}
         <div class="ic">${c.ic}</div>
         <div class="nm">Hạng ${c.id}</div>
         <div class="meta"><span>❓ ${c.n} câu</span><span>⏱ ${c.min} phút</span></div>
@@ -382,6 +918,7 @@
         <div class="badges"><span class="pass">🏆 Đậu: ${c.pass}/${c.n}</span><span class="crit">⚠️ ${c.crit} câu điểm liệt</span></div>
       </button>`).join('');
     el('clsGrid').querySelectorAll('.cls').forEach(b => b.onclick = () => { examClass = EXAM_CLASSES[+b.dataset.cls]; enterDePicker(); });
+    renderHistory();   // lịch sử thi dưới lưới chọn hạng (req #62)
   }
 
   // Đã chọn hạng → hiện 15 đề ngẫu nhiên cố định để chọn (req #35)
@@ -393,14 +930,82 @@
     el('dePicker').style.display = 'block';
     el('deClsName').textContent = examClass.id;
     el('deMeta').textContent = `${examClass.n} câu · ${examClass.min} phút · đậu ${examClass.pass}/${examClass.n}`;
-    el('deGrid').innerHTML = Array.from({ length: NUM_DE }, (_, i) => i + 1).map(n => `
-      <button class="de" data-de="${n}">
-        <div class="dn">Đề số ${n}</div>
+    // Trạng thái từng đề lấy từ chính lịch sử thi đã lưu (req #74) — lần thi GẦN
+    // NHẤT quyết định, vì thi lại đạt thì phải hết "Rớt".
+    const hist = loadHist();
+    const lastOf = (deLabel) => hist.find(a => a.cls === examClass.id && a.de === deLabel);
+    const badge = (a) => a
+      ? `<div class="deSt ${a.pass ? 'pass' : 'fail'}">${a.pass ? '✓ Đạt' : '✕ Rớt'} · ${a.right}/${a.total}</div>`
+      : '<div class="deSt none">● Chưa làm</div>';
+
+    // Thẻ đầu: bốc câu hỏi ngẫu nhiên (mỗi lần vào 1 đề khác) — req #59.
+    const randomCard = `
+      <button class="de" data-de="random" style="border-style:dashed">
+        <div class="dn">🔀 Câu hỏi ngẫu nhiên</div>
         <div class="dm">${examClass.n} câu · ${examClass.min}'</div>
-      </button>`).join('');
-    el('deGrid').querySelectorAll('.de').forEach(b => b.onclick = () => { examDe = +b.dataset.de; setMode('exam'); });
+      </button>`;
+    el('deGrid').innerHTML = randomCard + Array.from({ length: NUM_DE }, (_, i) => i + 1).map(n => {
+      const label = 'Đề ' + examClass.id + '-' + String(n).padStart(2, '0');
+      const a = lastOf(label);
+      return `
+      <button class="de ${a ? (a.pass ? 'dePass' : 'deFail') : ''}" data-de="${n}">
+        <div class="dn">Đề ${examClass.id}-${String(n).padStart(2, '0')}</div>
+        <div class="dm">${examClass.n} câu · ${examClass.min}'</div>
+        ${badge(a)}
+      </button>`;
+    }).join('');
+    el('deGrid').querySelectorAll('.de').forEach(b => b.onclick = () => {
+      examDe = b.dataset.de === 'random' ? null : +b.dataset.de;   // null = bốc ngẫu nhiên tự do
+      setMode('exam');
+    });
   }
-  el('deBack').onclick = enterExamPicker;
+  el('deBack').onclick = enterExamPicker;   // nút dưới lưới đề (req #89: chỉ còn 1 nút)
+
+  // ===== ⚙️ Cài đặt cỡ chữ (req #76) =====
+  // Ghi thẳng vào :root nên câu hỏi + đáp án đổi ngay, không cần render lại.
+  const FS_KEY = 'driving600:fontsize';
+  const FS_DEF = { q: 17, a: 16 };             // đúng cỡ mặc định trong CSS
+  const FS_MIN = { q: 13, a: 12 }, FS_MAX = { q: 34, a: 30 };
+  let fs = (() => {
+    try {
+      const s = JSON.parse(localStorage.getItem(FS_KEY)) || {};
+      // Kẹp về khoảng hợp lệ: localStorage có thể còn giá trị cũ/hỏng → chữ to đùng
+      // hoặc bé tí mà người học không hiểu vì sao.
+      const cl = (v, k) => Math.min(FS_MAX[k], Math.max(FS_MIN[k], Number(v) || FS_DEF[k]));
+      return { q: cl(s.q, 'q'), a: cl(s.a, 'a') };
+    } catch { return { ...FS_DEF }; }
+  })();
+  function applyFs() {
+    document.documentElement.style.setProperty('--qsize', fs.q + 'px');
+    document.documentElement.style.setProperty('--asize', fs.a + 'px');
+    el('qsVal').textContent = fs.q;
+    el('asVal').textContent = fs.a;
+    document.querySelectorAll('.setBtn').forEach(b => {
+      const k = b.dataset.k, step = +b.dataset.step;
+      b.disabled = step < 0 ? fs[k] <= FS_MIN[k] : fs[k] >= FS_MAX[k];
+    });
+    try { localStorage.setItem(FS_KEY, JSON.stringify(fs)); } catch {}
+  }
+  document.querySelectorAll('.setBtn').forEach(b => b.onclick = () => {
+    const k = b.dataset.k;
+    fs[k] = Math.min(FS_MAX[k], Math.max(FS_MIN[k], fs[k] + (+b.dataset.step)));
+    applyFs();
+  });
+  document.querySelectorAll('.setDef').forEach(b => b.onclick = () => {
+    fs[b.dataset.def] = FS_DEF[b.dataset.def]; applyFs();
+  });
+  const setOpen = v => el('setModal').classList.toggle('show', v);
+  // req #86: nút trên (setBtn) nay là "Xóa điểm" — xoá toàn bộ tiến độ đã làm.
+  el('setBtn').onclick = () => {
+    if (!confirm('Xoá toàn bộ điểm / tiến độ đã làm?')) return;
+    progress = {}; saveProg(); answered = {};
+    render(); renderProgress();
+  };
+  el('setX').onclick = () => setOpen(false);
+  el('setClose').onclick = () => setOpen(false);
+  // Bấm ra nền ngoài hộp thì đóng (bấm trong hộp thì không).
+  el('setModal').onclick = e => { if (e.target === el('setModal')) setOpen(false); };
+  applyFs();
 
   document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
     if (b.dataset.mode === 'exam') { el('catSelect').value = 'all'; category = 'all'; enterExamPicker(); return; }
@@ -412,9 +1017,46 @@
     document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === 'learn'));
     setMode('learn');
   };
-  el('nextBtn').onclick = () => { if (idx < list.length - 1) { idx++; render(); } };
-  el('prevBtn').onclick = () => { if (idx > 0) { idx--; render(); } };
-  el('endBtn').onclick = submitExam;
+  const goNext = () => { if (idx < list.length - 1) { idx++; render(); } };
+  const goPrev = () => { if (idx > 0) { idx--; render(); } };
+  el('nextBtn').onclick = goNext;
+  el('prevBtn').onclick = goPrev;
+  // (Hàng nav trên đầu thẻ đã bỏ theo req #88 — không còn topNext/topPrev.)
+
+  // ===== Phím tắt: ←/→ đổi câu, 1-4 chọn đáp án (req #72 Thì Dũng) =====
+  // Chọn đáp án bằng cách CLICK chính input đang render, không tự set answered[]:
+  // để nguyên listener 'change' lo chấm điểm + feedback + sidebar — một đường đi,
+  // không nhân bản logic (và không lệch khi logic kia đổi).
+  document.addEventListener('keydown', (e) => {
+    // Không cướp phím khi đang gõ tìm kiếm / chọn dropdown.
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' && t.type !== 'radio' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    // Hộp Cài đặt đang mở: Esc để đóng, và KHÔNG cho phím tắt xuyên qua nền
+    // (đang chỉnh cỡ chữ mà bấm 1–4 lại lỡ chọn đáp án sau lưng thì hỏng).
+    if (el('setModal').classList.contains('show')) {
+      if (e.key === 'Escape') { setOpen(false); e.preventDefault(); }
+      return;
+    }
+    // Chỉ khi đang thực sự làm bài (màn chọn hạng/đề, tổng kết thì bỏ qua).
+    if (el('practiceWrap').style.display === 'none' || !list.length) return;
+
+    if (e.key === 'ArrowRight') { if (idx < list.length - 1) { idx++; render(); } e.preventDefault(); return; }
+    if (e.key === 'ArrowLeft')  { if (idx > 0) { idx--; render(); } e.preventDefault(); return; }
+    if (/^[1-9]$/.test(e.key) && !reviewMode) {   // đã nộp: khoá chọn đáp án, vẫn cho ←/→ duyệt (req #98)
+      const inputs = document.querySelectorAll('.opt input');
+      const i = +e.key - 1;
+      if (i < inputs.length) {
+        inputs[i].click();
+        // Nhả focus khỏi radio: nếu để focus ở đó, trình duyệt nuốt ←/→ để chuyển
+        // lựa chọn TRONG nhóm radio → bấm 1 lần rồi mũi tên là chết, không đổi câu
+        // được nữa. Nhả ra thì cả hai phím cùng sống.
+        inputs[i].blur();
+        e.preventDefault();
+      }
+    }
+  });
+  el('sbSubmit').onclick = submitExam;   // nút Nộp bài trong cột trái (req #73) — nút duy nhất sau #88
 
   // Mở thẳng chế độ qua URL: ?mode=exam (chọn hạng) | ?mode=critical
   const _m = new URLSearchParams(location.search).get('mode');

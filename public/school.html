@@ -57,7 +57,7 @@
       radial-gradient(ellipse 60% 50% at 80% 30%, rgba(14,165,233,0.16), transparent),
       linear-gradient(180deg, var(--bg-1) 0%, var(--bg-2) 60%, var(--bg-3) 100%);
   }
-  .section { max-width: 1200px; margin: 0 auto 28px; padding: 0 20px; }
+  .section { max-width:none; margin: 0 auto 28px; padding: 0 20px; }
   #campus-hero { margin-top: 20px; }
   .section-title { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
   .section-title h1, .section-title h2 { margin: 0; font-size: 22px; font-weight: 700; }
@@ -65,6 +65,11 @@
 </style>
 </head>
 <body>
+
+<!-- Thanh header chung (logo trái · breadcrumb · HUD Streak/Hearts/Quest · thú cưng · chuông · tài khoản).
+     Engagement HUD + pet-widget tự dock vào #ev-eng-slot / #ev-pet-slot trong header này. -->
+<header id="auth-header"></header>
+<script type="module" src="./js/auth-header.js"></script>
 
 <script>
 // Banner nếu không phải secure context (LAN HTTP) — webcam modes won't work
@@ -85,8 +90,7 @@ if (!window.isSecureContext && location.hostname !== 'localhost' && location.hos
 <!-- ============ KHUÔN VIÊN TRƯỜNG — CAMPUS MAP ============ -->
 <div class="section" id="campus-hero">
   <div class="section-title">
-    <h1 id="campus-title">🏫 Khuôn viên trường</h1>
-    <span class="hint">Bấm vào từng toà nhà để vào phòng học · thực hành · trải nghiệm bên trong · di chuột xem tên</span>
+    <h1 id="campus-title">🏫 Trường</h1>
   </div>
   <div id="campus-frame-wrap" style="position:relative;width:100%;height:82vh;min-height:520px;border-radius:16px;overflow:hidden;border:1px solid var(--border);box-shadow:0 8px 26px rgba(0,0,0,.28)">
     <iframe id="campus-frame" style="width:100%;height:100%;border:0;display:block" title="Khuôn viên trường" loading="lazy"></iframe>
@@ -112,7 +116,7 @@ if (!window.isSecureContext && location.hostname !== 'localhost' && location.hos
   document.body.dataset.pageTitle = meta.name;
   // H1 trên trang
   const h1 = document.getElementById('campus-title');
-  if (h1) h1.textContent = meta.icon + ' Khuôn viên ' + meta.name;
+  if (h1) h1.textContent = meta.icon + ' ' + meta.name;
   // <title>
   document.title = meta.icon + ' ' + meta.name + ' · Tizia';
   document.getElementById('campus-frame').src = 'campus-proto/b-iso-canvas.html?embed=1&domain=' + encodeURIComponent(dom);
@@ -121,42 +125,24 @@ if (!window.isSecureContext && location.hostname !== 'localhost' && location.hos
   try { window.tiziaTrack?.('school_enter', { domain: dom }); } catch {}
   window.addEventListener('message', function(e){
     const d = e.data; if(!d || d.type !== 'campus-enter') return;
-    // Bấm vào toà nhà trong khuôn viên.
+    // Bấm vào toà nhà trong khuôn viên — chỉ log GA. Toà có trải nghiệm tự điều
+    // hướng trong iframe (b-iso-canvas.html: location.href=/space.html?b=…);
+    // toà chưa có nội dung → noop (không còn danh sách "Khám phá" để cuộn tới).
     try { window.tiziaTrack?.('campus_building_click', { domain: dom, building: String(d.building || d.id || '').slice(0,40) }); } catch {}
-    const path = document.getElementById('campus');   // cuộn tới khu lộ trình học
-    if(path) path.scrollIntoView({ block:'start' });
   });
 })();
 </script>
 
-<!-- ============ TIẾN ĐỘ CỦA BẠN ============ -->
-<div class="section" id="campus">
-  <div class="section-title">
-    <h2 id="path-title">📊 Tiến độ của bạn</h2>
-    <span class="hint">Mọi phòng học & thực hành đều nằm trong các toà nhà phía trên</span>
-  </div>
-  <div id="wallet-host"></div>
-  <div id="quests-host" style="margin:0 0 16px"></div>
-</div>
-
-<!-- ============ KHÁM PHÁ THÊM TRONG TRƯỜNG ============ -->
-<div id="school-explore-host"></div>
-<script type="module" src="./js/school-explore.js?v=2026-06-05"></script>
-
-<!-- Ban điều hành AI đã chuyển VÀO toà nhà "Hành chính – Hiệu bộ" (bấm toà nhà trên bản đồ) -->
-
-<footer style="max-width:1100px;margin:36px auto 0;opacity:0.6;font-size:12px;text-align:center;line-height:1.7">
-  <b>Tizia</b> — The Intelligent Zone for Interactive Academy<br>
-  Vũ trụ giáo dục · backend Node.js + Express + SQLite + WebSocket ·
-  <a href="index.html" style="color:var(--accent)">← Quay lại chọn trường</a>
-</footer>
+<!-- Khu "Khám phá thêm" đã bỏ (2026-07-09): mọi hoạt động trong trường vào qua
+     việc BẤM toà nhà trên campus map ở trên. Không còn danh sách song song bên dưới.
+     Ban điều hành AI, thư viện, lab… đều nằm trong các toà nhà tương ứng. -->
 
 <!-- Load domain + render path (curriculum + các cụm thực hành/kỹ năng/…) -->
 <script type="module">
   import { CATEGORIES } from './js/engine/learning-path.js';
   import { loadActiveDomain, getActiveDomainId, isDomainOpen, isGamifiedDomain, isGuestDomain, canEnterDomain, getRequiredPlan } from './js/engine/domain.js';
-  import { renderPath, renderWalletPills, renderDailyQuests, showAchievementToast } from './js/engine/path-renderer.js';
-  import { onLogin, getProgress, checkAchievements, getDailyQuests, streakAtRisk } from './js/engine/wallet.js';
+  import { renderPath, showAchievementToast } from './js/engine/path-renderer.js';
+  import { onLogin, getProgress, checkAchievements } from './js/engine/wallet.js';
   import { primeModulesCache, ALL_SCENARIOS } from './js/scenarios/index.js';
   import { fetchMe } from './js/auth.js';
   import { autoPromptEnrollIfNeeded, canInteract } from './js/enrollment.js';
@@ -183,14 +169,15 @@ if (!window.isSecureContext && location.hostname !== 'localhost' && location.hos
     }
   }
 
-  // Banner "Đang học" ở góc trên — chỉ hiện khi đang ở trường của mình.
-  // (Banner "Tham quan" đã bỏ theo yêu cầu — đỡ vướng campus map; nút disable
-  // ở Phase 4 đã tự ám chỉ trạng thái không tương tác được rồi.)
+  // Nhãn "Đang học" — chỉ hiện khi đang ở trường của mình.
+  // Đặt CẠNH tiêu đề trường (không floating top-right) để không đè avatar/tên
+  // tài khoản trong #auth-header. (Banner "Tham quan" đã bỏ theo yêu cầu.)
   if (me && me.role !== 'admin' && me.enrolled_domain && me.enrolled_domain === activeId) {
-    const banner = document.createElement('div');
-    banner.style.cssText = `position:fixed; top:12px; right:12px; z-index:9000; padding:7px 14px; border-radius:20px; font-size:12.5px; font-weight:800; box-shadow:0 6px 18px rgba(0,0,0,.35); background:#16a34a; color:#fff`;
-    banner.textContent = '🎓 Trường bạn đang học';
-    document.body.appendChild(banner);
+    const badge = document.createElement('span');
+    badge.style.cssText = `display:inline-flex; align-items:center; padding:4px 12px; border-radius:20px; font-size:12px; font-weight:800; background:#16a34a; color:#fff; box-shadow:0 4px 12px rgba(22,163,74,.35); white-space:nowrap`;
+    badge.textContent = '🎓 Trường bạn đang học';
+    const titleRow = document.querySelector('#campus-hero .section-title');
+    (titleRow || document.body).appendChild(badge);
   }
 
   // Admin → nút "✏️ Sửa campus" đặt góc trên-phải BÊN TRONG khung campus (không đè auth-header).
@@ -208,7 +195,6 @@ if (!window.isSecureContext && location.hostname !== 'localhost' && location.hos
   const { MODULES, SUBJECTS, ACHIEVEMENTS, DOMAIN } = dom;
 
   document.title = `${DOMAIN.icon} ${DOMAIN.name} · Tizia`;
-  document.getElementById('path-title').innerHTML = `📊 Tiến độ · ${DOMAIN.icon} ${DOMAIN.name}`;
 
   primeModulesCache(MODULES);
 
@@ -220,11 +206,9 @@ if (!window.isSecureContext && location.hostname !== 'localhost' && location.hos
   // Lộ trình học giờ nằm TRONG các toà nhà của campus (xem space.html),
   // nên trang trường không còn dựng subway map phẳng "bên ngoài" nữa.
 
+  // Ví XP/coin + nhiệm vụ ngày giờ hiển thị trong header (HUD) — trang trường
+  // không còn khối "Tiến độ" riêng nữa. Vẫn chạy onLogin() để tính streak/thành tựu.
   const loginEvent = onLogin();
-  renderWalletPills(document.getElementById('wallet-host'), {
-    wallet: loginEvent.wallet, progress, modules: MODULES, atRisk: streakAtRisk(), gamified: GAMIFIED,
-  });
-  if (GAMIFIED) renderDailyQuests(document.getElementById('quests-host'), getDailyQuests());
 
   const newly = checkAchievements(progress, loginEvent.wallet, ACHIEVEMENTS);
   let delay = 600;

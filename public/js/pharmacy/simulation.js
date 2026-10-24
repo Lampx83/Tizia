@@ -1,7 +1,8 @@
 // SimulationClient — port từ Pharmacy-AI/src/components/SimulationClient.tsx.
 // Wire chat panel + actions → /api/pharmacy/* + scoring panel.
-import { buildScene, makeDrugLabelTex, makeDrugBackLabelTex, makeDrugSideLabelTex, getBoxStyle, deviceModelFor } from './scene.js?v=ph0682';
-import { loadDrugs } from './catalog.js?v=ph0682';
+import { buildScene, makeDrugLabelTex, makeDrugBackLabelTex, makeDrugSideLabelTex, getBoxStyle, deviceModelFor } from './scene.js?v=ph0804';
+import { loadDrugs } from './catalog.js?v=ph0804';
+import { initMobileUI } from './mobile-ui.js?v=ph0804';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -29,9 +30,12 @@ function swapUnitToGlb(group, file, sizeRef) {
     group.add(m);
   }).catch(() => { /* giữ procedural làm fallback */ });
 }
-import { openPosTerminal } from './pos.js?v=ph0682';
-import { openHdsdEditor, openPackageEditor, PACKAGE_TYPES, RETAIL_FORMS } from './label-editor.js?v=ph0682';
+import { openPosTerminal } from './pos.js?v=ph0804';
+import { openHdsdEditor, openPackageEditor, PACKAGE_TYPES, RETAIL_FORMS } from './label-editor.js?v=ph0804';
 import { STAGE_LABEL } from './rubric.js';
+// #142 — lưu bền vững hội thoại + thao tác 3D vào DB (trước đây chỉ nằm trong
+// bộ nhớ máy chủ nên mất sạch mỗi lần khởi động lại).
+import { startPractice, logMessage, logAction, finishPractice, getPracticeId } from './practice-client.js?v=ph0924';
 
 const $ = (id) => document.getElementById(id);
 
@@ -71,12 +75,56 @@ function detectUnitKind(drug) {
   return 'vi';
 }
 
+// ── Overlay tải (#scene-loading trong markup trang) ─────────────────────────
+// Trước đây vào trang trên điện thoại là MẢNG TRẮNG vài giây không báo gì. Overlay
+// hiện sẵn từ HTML; ở đây chỉ cập nhật BƯỚC rồi ẩn khi khung 3D đầu tiên đã vẽ.
+function setLoadingStep(text) {
+  const el = document.getElementById('scene-loading-step');
+  if (el) el.textContent = text;
+}
+function hideSceneLoading() {
+  const el = document.getElementById('scene-loading');
+  if (!el) return;
+  (window.__sceneLoadingTimers || []).forEach(clearTimeout);   // tắt nhắc "mạng chậm"/lỗi
+  el.classList.add('is-hidden');
+  setTimeout(() => el.remove(), 400);                          // gỡ sau khi fade xong
+}
+// Ẩn overlay SAU khung hình 3D đầu tiên (2×rAF) để không loé mảng trắng. NHƯNG khi
+// tab đang ẩn (mở link ở tab nền) trình duyệt NGƯNG rAF → overlay treo tới mốc 45s
+// rồi báo "không tải được" SAI dù scene đã dựng xong. Nên chốt thêm timeout: cái
+// nào tới trước thì ẩn (tab ẩn thì chẳng có gì để loé).
+function scheduleHideSceneLoading() {
+  let done = false;
+  const go = () => { if (done) return; done = true; hideSceneLoading(); };
+  requestAnimationFrame(() => requestAnimationFrame(go));
+  setTimeout(go, 800);
+}
+
+// Renderer DÙNG CHUNG cho cửa sổ soi thuốc (inspector). Tạo WebGL context là thao
+// tác ĐẮT (100–500ms, máy yếu còn lâu hơn) và trình duyệt giới hạn ~16 context/tab —
+// tạo–huỷ mỗi lần mở khiến context của SCENE CHÍNH bị evict → "bấm thuốc load mãi",
+// càng mở nhiều càng ì. Tạo 1 lần, tái dùng cả canvas lẫn context cho mọi lần mở.
+let _insShared = null;
+function acquireInspectorRenderer() {
+  if (!_insShared) {
+    const canvas = document.createElement('canvas');
+    canvas.className = 'ins-canvas';
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    _insShared = { canvas, renderer };
+  }
+  return _insShared;
+}
+
 export async function startSimulation({ moduleId = 'gpp' } = {}) {
   // 0. Nạp danh mục thuốc từ DB (content_datasets) TRƯỚC khi buildScene — scene.js
   //    đọc ALL_DRUGS/CABINETS lúc dựng kệ. loadDrugs() fill ALL_DRUGS bằng push.
+  setLoadingStep('Đang tải danh mục thuốc…');
   await loadDrugs();
 
   // 1. Create session on server
+  setLoadingStep('Đang tạo phiên thực hành…');
   let session, scenario;
   try {
     const r = await fetch('/api/pharmacy/session', {
@@ -87,20 +135,33 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
     if (!r.ok) throw new Error(data.error || 'session create failed');
     session = data.session; scenario = data.scenario;
   } catch (e) {
+    hideSceneLoading();   // KHÔNG để overlay đứng mãi khi lỗi phiên
     alert('Không khởi tạo được phiên: ' + e.message + '\nKiểm tra đăng nhập?');
     return;
   }
 
-  // 2. Render NPC opening
-  appendBubble('npc', scenario.npcOpening);
+  // 1b. Phiên THỰC HÀNH lưu vào DB (#142) — độc lập với phiên chat in-memory ở
+  // trên. Lỗi ở đây KHÔNG chặn người học vào bài; chỉ mất phần ghi nhận.
+  try {
+    await startPractice({ moduleId, chatSessionId: session.id });
+    logAction('session_start', { moduleId });
+  } catch (e) {
+    console.warn('[pharmacomm] không tạo được phiên thực hành:', e.message);
+  }
+
+  // 2. Render NPC opening — nguyên tắc 22/07 #1: BỆNH NHÂN KHÔNG NÓI TRƯỚC, dược
+  // sĩ phải chào trước. Mô tả cảnh đã GỘP vào `setting` (ô "Đối thoại với" trên
+  // cùng) → npcOpening rỗng thì hội thoại bắt đầu TRỐNG, chờ sinh viên mở lời.
+  if (scenario.npcOpening) appendBubble('npc', scenario.npcOpening);
   $('npc-role').textContent = scenario.npcRole;
   $('scenario-title').textContent = scenario.title;
+  // Yêu cầu gửi từ trang này kèm document.title → để tên tình huống cho AI biết đúng chỗ.
+  document.title = `${scenario.title} — Pharmacomm · Tizia`;
   $('scenario-setting').textContent = scenario.setting;
 
-  // 3. Render hints per stage
-  $('hints').innerHTML = scenario.stageRules.map(r =>
-    `<li><b>${STAGE_LABEL[r.stage]}:</b> ${r.hint}</li>`
-  ).join('');
+  // 3. (req #143) Đã BỎ bảng "Gợi ý theo SEGUE" khỏi giao diện thực hành theo yêu
+  //    cầu của giảng viên: SV phải tự nhớ quy trình, không đọc gợi ý sẵn trên màn.
+  //    stageRules VẪN dùng để chấm điểm — chỉ thôi hiển thị cho người học.
 
   // 4. Build 3D scene
   // Avatar tuỳ biến: ưu tiên ?avatar=… → avatar đã tạo & nhớ trong localStorage →
@@ -114,9 +175,14 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
   const AVATAR_HAIR_KEY = 'tizia_pharmacy_avatar_hair';
   const SHIRT_COLORS = ['#2563eb', '#0d9488', '#16a34a', '#e11d48', '#f59e0b', '#6b7280', '#f5f5f5', '#7c3aed'];
   const CONDITIONS = [['none', 'Bình thường'], ['rash', 'Phát ban'], ['hives', 'Mề đay'], ['jaundice', 'Vàng da'], ['pallor', 'Xanh xao'], ['flush', 'Đỏ (sốt)'], ['bruise', 'Bầm tím'], ['cyanosis', 'Tím tái']];
-  const EXPRESSIONS = [['none', 'Bình thường'], ['pain', '😣 Đau bụng'], ['worried', '😟 Lo lắng']];
+  const EXPRESSIONS = [['none', 'Bình thường'], ['pain', '😣 Đau bụng'], ['worried', '😟 Lo lắng'], ['annoyed', '😖 Đau răng, sốt ruột']];
   const HAIR_SW = [['none', '#3a3330'], ['black', '#1c1816'], ['brown', '#5c3822'], ['gray', '#c8c5c1'], ['blonde', '#c9a460']];
+  // Avatar do KỊCH BẢN cast (scenario.avatarUrl — vd OTC-01 = Chị H, NỮ) được ưu
+  // tiên hơn lựa chọn đã lưu trong máy: bệnh nhân là NHÂN VẬT của tình huống, không
+  // phải avatar cá nhân. ?avatar= vẫn cao nhất (để test). Nút "Khách hàng" vẫn cho
+  // đổi tay sau khi vào scene nếu muốn.
   const _avatarUrl = new URLSearchParams(location.search).get('avatar')
+    || scenario.avatarUrl
     || (() => { try { return localStorage.getItem(AVATAR_KEY); } catch { return null; } })()
     || null;
   const _avatarHeight = (() => { try { return +localStorage.getItem(AVATAR_HEIGHT_KEY) || 1; } catch { return 1; } })();
@@ -125,6 +191,10 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
   const _avatarCond = (() => { try { return localStorage.getItem(AVATAR_COND_KEY) || 'none'; } catch { return 'none'; } })();
   const _avatarExpr = (() => { try { return localStorage.getItem(AVATAR_EXPR_KEY) || 'none'; } catch { return 'none'; } })();
   const _avatarHair = (() => { try { return localStorage.getItem(AVATAR_HAIR_KEY) || null; } catch { return null; } })();
+  setLoadingStep('Đang dựng nhà thuốc 3D…');
+  // Khai báo TRƯỚC buildScene vì opts.onNearbyDrugs (callback dưới) tham chiếu tới;
+  // callback chỉ chạy sau khi initMobileUI đã gán nên không TDZ.
+  let mobileUI = null;
   const sim = buildScene($('scene-canvas'), {
     avatarUrl: _avatarUrl,
     avatarHeight: _avatarHeight,
@@ -152,9 +222,46 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
       el.textContent = txt || '';
       el.hidden = !txt;
     },
-    onToast: (msg) => showToast(msg)
+    onToast: (msg) => showToast(msg),
+    // Ngón tay chạm vùng kệ → liệt kê thuốc quanh đó. CHỈ có ở vỏ mobile (≤820px);
+    // nơi khác trả false để scene xử lý chạm như thường.
+    onNearbyDrugs: (list) => mobileUI ? (mobileUI.showNear(list), true) : false,
+    // Vào/ra immersive VR (Meta Quest) → ẩn/hiện nút trên màn phẳng (headset không
+    // thấy DOM nên nút vô nghĩa lúc đang trong VR).
+    onXRChange: (inVR) => { const b = document.getElementById('pharm-xr-btn'); if (b) b.hidden = inVR; }
   });
   window.__sim = sim;
+  // Cảm xúc ban đầu theo kịch bản (vd OTC-01: mẹ đang lo lắng) — chờ nhân vật sẵn sàng.
+  if (scenario.initialExpression) {
+    const applyExpr = () => { sim.isCharacterReady?.() ? sim.setAvatarExpression(scenario.initialExpression) : setTimeout(applyExpr, 200); };
+    applyExpr();
+  }
+  // buildScene đã set animation loop → đợi khung hình đầu rồi mới ẩn overlay (ẩn
+  // ngay sẽ loé mảng trắng 1 nhịp). Không chờ avatar (.glb) vì model lỗi là treo mãi.
+  scheduleHideSceneLoading();
+  // Vỏ mobile (≤820px): ngăn kéo "Chọn thuốc" + panel hội thoại thành tab dưới.
+  // Trên màn hẹp hộp thuốc chỉ ~6.6px nên KHÔNG chạm trúng được — ngăn kéo là
+  // đường đi thay thế (chạm dòng 48px → focus camera + mở thẳng cửa sổ thuốc).
+  mobileUI = initMobileUI({ sim, openDrug: (id) => sim.pickDrug(id) });
+
+  // Nút "Vào VR (kính)" — CHỈ hiện trên thiết bị hỗ trợ WebXR immersive (Meta Quest…).
+  // Máy thường trả false → không thêm nút → 0 ảnh hưởng. Đeo kính: đứng giữa nhà
+  // thuốc, quay đầu 360°, tia tay cầm chọn thuốc → bảng 3D thông tin.
+  sim.isXRSupported?.().then(ok => {
+    if (!ok) return;
+    const b = document.createElement('button');
+    b.id = 'pharm-xr-btn'; b.type = 'button';
+    b.textContent = '🥽 Vào VR (kính)';
+    b.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:210;' +
+      'padding:12px 20px;min-height:46px;border-radius:999px;border:1px solid #22d3ee;' +
+      'background:linear-gradient(180deg,#0e7490,#155e75);color:#ecfeff;font:inherit;' +
+      'font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.4)';
+    b.addEventListener('click', async () => {
+      const started = await sim.startXR?.();
+      if (started === false) alert('Không vào được VR. Hãy mở trang bằng trình duyệt Meta Quest và cho phép truy cập VR.');
+    });
+    document.body.appendChild(b);
+  }).catch(() => {});
 
   // GIỎ RA LẺ — gom các ĐƠN VỊ ra lẻ (vỉ/gói/viên/ống) đã tách khỏi hộp, chờ cho
   // vào bao bì ra lẻ. KHÁC với KHAY BÁN HÀNG (hộp nguyên đem tính tiền).
@@ -183,12 +290,30 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
   }
 
   // 5. Helpers
+  // Session server lưu IN-MEMORY → server restart/rebuild là mất ("session not
+  // found"). Client giữ BẢN SAO transcript + hành động; gặp 404 thì tự tạo phiên
+  // mới kèm `restore` rồi làm tiếp — người học không nhận ra gián đoạn, AI vẫn
+  // nhớ hội thoại, chấm điểm vẫn đủ hành động.
+  const localMsgs = [];
+  const localActions = [];
+  async function recreateSession() {
+    const r = await fetch('/api/pharmacy/session', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ moduleId, restore: { messages: localMsgs, actions: localActions } })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'không tạo lại được phiên');
+    session = d.session;
+  }
   async function postAction(type, payload) {
+    localActions.push({ type, payload: payload || {}, ts: Date.now() });
+    logAction(type, payload);   // #142 mục 6: ghi nhật ký thao tác 3D vào DB
     try {
       const r = await fetch('/api/pharmacy/action', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.id, type, payload })
       });
+      if (r.status === 404) { await recreateSession(); return; }  // restore đã mang theo action này
       const d = await r.json();
       if (d.session) session = d.session;
     } catch {}
@@ -202,25 +327,116 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
     $('chat').scrollTop = $('chat').scrollHeight;
   }
 
+  // Bộ chọn mô hình AI (Qwen mặc định / GPT) — lưu lựa chọn trong localStorage,
+  // gửi kèm mỗi lượt chat (`provider`). Server tự rơi về Qwen nếu chưa cấu hình
+  // OPENAI_API_KEY hoặc chưa chọn GPT.
+  const PROVIDER_KEY = 'tizia_pharmacy_provider';
+  let provider = (() => { try { return localStorage.getItem(PROVIDER_KEY) === 'gpt' ? 'gpt' : 'qwen'; } catch { return 'qwen'; } })();
+  const modelSelect = $('model-select');
+  if (modelSelect) {
+    modelSelect.value = provider;
+    modelSelect.addEventListener('change', () => {
+      provider = modelSelect.value === 'gpt' ? 'gpt' : 'qwen';
+      try { localStorage.setItem(PROVIDER_KEY, provider); } catch {}
+    });
+  }
+  const MODEL_TAG_LABEL = { qwen: '🐫 Qwen', gpt: '✨ GPT' };
+  // Chèn nhãn model NGAY SAU bong bóng (không nằm trong bubble) → không bị đè khi
+  // stream cập nhật textContent liên tục. Bỏ qua khi provider rỗng (câu từ guard
+  // tất định, không phải từ model, vd chào/né/nhắc-bài — không gắn nhãn model).
+  function tagBubbleModel(bubbleEl, prov) {
+    const label = MODEL_TAG_LABEL[prov];
+    if (!label || !bubbleEl?.parentNode) return;
+    const tag = document.createElement('div');
+    tag.className = 'bubble-model-tag';
+    tag.textContent = label;
+    bubbleEl.insertAdjacentElement('afterend', tag);
+  }
+
   async function send() {
     const ta = $('ta');
     const text = ta.value.trim();
     if (!text) return;
     appendBubble('user', text);
+    // Bệnh nhân AI rule #11: mời ngồi / mời uống nước → nhân vật 3D ngồi xuống ("cảm ơn"
+    // do AI tự trả lời theo persona). Chỉ nhận diện phía dược sĩ (câu vừa gửi).
+    if (/(mời[^.?!]{0,14}(ngồi|ghế|uống nước|nước|trà)|\bngồi (ghế|đây|xuống|chờ|nghỉ)|xin mời[^.?!]{0,20}ngồi)/i.test(text)) {
+      sim.patientSit?.();
+    }
     ta.value = '';
     ta.disabled = true;
     $('send').disabled = true;
     appendBubble('npc', '…');
     const thinking = $('chat').lastChild;
+    const scrollBottom = () => { $('chat').scrollTop = $('chat').scrollHeight; };
+
+    // 1 lượt chat: ưu tiên STREAM (SSE — token sinh đến đâu hiện đến đó), lỗi giao
+    // thức → fallback endpoint thường. 404 (server restart mất session) → ném
+    // sessionLost để vòng ngoài tạo lại phiên (kèm restore) rồi GỬI LẠI câu này.
+    const sessionLostErr = () => Object.assign(new Error('session lost'), { sessionLost: true });
+    async function chatAttempt() {
+      try {
+        const r = await fetch('/api/pharmacy/chat-stream', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: session.id, message: text, provider })
+        });
+        if (r.status === 404) throw sessionLostErr();
+        if (!r.ok || !r.body || !(r.headers.get('content-type') || '').includes('text/event-stream')) {
+          throw new Error('no-stream');
+        }
+        const reader = r.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '', shown = '', finalReply = null, usedProvider = null;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let idx;
+          while ((idx = buf.indexOf('\n\n')) >= 0) {
+            const chunk = buf.slice(0, idx); buf = buf.slice(idx + 2);
+            const line = chunk.split('\n').find(l => l.startsWith('data: '));
+            if (!line) continue;
+            let j; try { j = JSON.parse(line.slice(6)); } catch { continue; }
+            if (j.delta) { shown += j.delta; if (shown.trim()) { thinking.textContent = shown.trimStart(); scrollBottom(); } }
+            if (j.done) { finalReply = j.reply || shown; usedProvider = j.provider || null; thinking.textContent = finalReply; scrollBottom(); }
+          }
+        }
+        if (finalReply === null && !shown.trim()) throw new Error('empty-stream');
+        return { text: finalReply != null ? finalReply : shown.trimStart(), provider: usedProvider };
+      } catch (e) {
+        if (e.sessionLost) throw e;
+        // Fallback: endpoint không-stream cũ (server cũ / proxy chặn SSE).
+        const r = await fetch('/api/pharmacy/chat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: session.id, message: text, provider })
+        });
+        if (r.status === 404) throw sessionLostErr();
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'chat failed');
+        session = d.session;
+        const lastMsg = d.session.messages[d.session.messages.length - 1];
+        thinking.textContent = lastMsg.content;
+        return { text: lastMsg.content, provider: lastMsg.provider || null };
+      }
+    }
+
     try {
-      const r = await fetch('/api/pharmacy/chat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: session.id, message: text })
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'chat failed');
-      session = d.session;
-      thinking.textContent = d.session.messages[d.session.messages.length - 1].content;
+      let result;
+      try {
+        result = await chatAttempt();
+      } catch (e) {
+        if (!e.sessionLost) throw e;
+        await recreateSession();       // phiên mới + khôi phục transcript/hành động
+        result = await chatAttempt();  // gửi lại đúng câu vừa rồi
+      }
+      tagBubbleModel(thinking, result.provider);
+      // Ghi bản sao SAU khi thành công: nếu phải khôi phục thì restore chưa chứa câu
+      // hiện tại → gửi lại không bị trùng tin nhắn trong phiên mới.
+      localMsgs.push({ role: 'user', content: text, ts: Date.now() });
+      localMsgs.push({ role: 'npc', content: result.text, ts: Date.now() });
+      // #142 mục 5: lưu NGAY sau mỗi lượt trao đổi, không đợi kết thúc tình huống.
+      logMessage('student', text);
+      logMessage('patient', result.text);
     } catch (e) {
       thinking.textContent = '[Lỗi: ' + e.message + ']';
     } finally {
@@ -229,12 +445,31 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
   }
 
   async function finish() {
-    if (!confirm('Kết thúc phiên & chấm điểm?')) return;
+    // #142 mục 9: hộp xác nhận → khoá lượt → chấm điểm → sang trang kết quả.
+    if (!confirm('Kết thúc và chấm điểm?\n\nSau khi xác nhận, lượt thực hành sẽ được khoá lại và không ghi thêm được nữa.')) return;
+    if (getPracticeId()) {
+      const btn = $('finish');
+      if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang chấm…'; }   // chặn bấm nhiều lần
+      try {
+        logAction('session_end', {});
+        const { sessionId } = await finishPractice();
+        location.href = `/pharmacomm-ket-qua.html?session=${encodeURIComponent(sessionId)}`;
+        return;
+      } catch (e) {
+        alert('Chấm điểm gặp lỗi: ' + e.message + '\nDữ liệu hội thoại và thao tác đã được giữ lại để chấm lại.');
+        if (btn) { btn.disabled = false; btn.textContent = '🏁 Kết thúc và chấm điểm'; }
+        return;
+      }
+    }
+    // Không có phiên thực hành (lỗi lúc khởi tạo) → giữ đường chấm điểm cũ.
     try {
-      const r = await fetch('/api/pharmacy/score', {
+      const postScore = () => fetch('/api/pharmacy/score', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.id })
       });
+      let r = await postScore();
+      // Server restart mất session → khôi phục từ bản sao rồi chấm lại.
+      if (r.status === 404) { await recreateSession(); r = await postScore(); }
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'score failed');
       renderScore(d.score);
@@ -267,6 +502,7 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
     const hasRx = !!$('rx-toggle').checked;
     openPosTerminal({
       pickedIds: sim.getPickedIds(),
+      pickedItems: sim.getPickedItems?.(),   // kèm dạng bán (hộp/vỉ/gói/ống…)
       hasValidPrescription: hasRx,
       onCheckout: (payload) => postAction('pos_checkout', payload),
       onClose: () => {}
@@ -333,41 +569,113 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
       sticker.getContext('2d').drawImage(stickerTex.image, 0, 0);
       stickerTex.dispose?.();
     }
-    const SK_W = Math.round(FACE_W * 0.42);   // nhãn NHỎ lại so với hộp (yêu cầu #10), khớp tỉ lệ dán thật
+    const SK_W = Math.round(FACE_W * 0.33);   // nhãn NHỎ lại so với hộp (yêu cầu 1), khớp tỉ lệ dán thật ở scene.js
     sticker.style.width = SK_W + 'px';
     sticker.style.height = Math.round(SK_W * skRatio) + 'px';
-    // Sticker vị trí ban đầu: góc dưới (chỗ thường trống)
-    let u = 0.5, v = 0.78;
-    function place() {
+    // ── Vùng bảo vệ mặt hộp (yêu cầu 2) ──────────────────────────────────────
+    // getDrugFace3D render nền TRONG SUỐT (alpha) → dùng alpha khoanh ĐÚNG khung
+    // hộp trong ảnh, rồi coi ~48% TRÊN của hộp (tên thuốc + hoạt chất + logo/Rx +
+    // số ĐK) là "vùng thông tin" KHÔNG được che. Nhãn HDSD chỉ hợp lệ khi mép trên
+    // nằm DƯỚI vạch bảo vệ và không tràn khỏi đáy hộp. (Nhãn HDSD tự IN LẠI tên +
+    // hàm lượng nên dán đè phần dưới bao bì là đúng thực tế nhà thuốc.)
+    const bounds = boxBoundsFromAlpha(cv);      // {x0,y0,x1,y1} theo tỉ lệ 0..1 của ảnh
+    const PROT = 0.48;                          // 48% trên của hộp = vùng bảo vệ
+    const protBottom = bounds.y0 + PROT * (bounds.y1 - bounds.y0);
+    const TOL = 0.02;
+    const rectAt = (x, y, bw, bh, sw, sh) => [x / bw, y / bh, (x + sw) / bw, (y + sh) / bh];
+    // Hợp lệ khi: nằm trong bề ngang hộp, MÉP TRÊN nhãn dưới vạch bảo vệ, đáy không tràn.
+    const isValidRect = (fx0, fy0, fx1, fy1) =>
+      fx0 >= bounds.x0 - TOL && fx1 <= bounds.x1 + TOL &&
+      fy0 >= protBottom - TOL && fy1 <= bounds.y1 + TOL;
+
+    let u = 0.5, v = 0.82;               // vị trí đầu: đáy hộp (chỗ hợp lệ)
+    let lastValid = true;
+    function markValidity(valid) {
+      lastValid = valid;
+      sticker.style.outlineColor = valid ? 'rgba(34,197,94,0.95)' : 'rgba(239,68,68,0.95)';
+      sticker.classList.toggle('sp-sticker-bad', !valid);
+      const apply = overlay.querySelector('.sp-apply');
+      if (apply) { apply.disabled = !valid; apply.style.opacity = valid ? '' : '0.5'; apply.style.cursor = valid ? '' : 'not-allowed'; }
+    }
+    // Đặt nhãn tại (x,y) px trong khung, clamp, cập nhật u/v + validity.
+    function setPos(x, y) {
       const bw = box.offsetWidth || FACE_W, bh = box.offsetHeight || FACE_H;
       const sw = sticker.offsetWidth, sh = sticker.offsetHeight;
-      let x = u * bw - sw / 2, y = v * bh - sh / 2;
       x = Math.max(0, Math.min(bw - sw, x));
       y = Math.max(0, Math.min(bh - sh, y));
       sticker.style.left = x + 'px'; sticker.style.top = y + 'px';
       u = (x + sw / 2) / bw; v = (y + sh / 2) / bh;
+      markValidity(isValidRect(...rectAt(x, y, bw, bh, sw, sh)));
+    }
+    function place() {
+      const bw = box.offsetWidth || FACE_W, bh = box.offsetHeight || FACE_H;
+      const sw = sticker.offsetWidth, sh = sticker.offsetHeight;
+      setPos(u * bw - sw / 2, v * bh - sh / 2);
+      snapToValid(true);                 // hút vào dải dưới hợp lệ ngay từ đầu
+    }
+    // Căn nhãn vào vùng hợp lệ gần nhất (giữ x trong bề ngang hộp, kẹp y vào dải
+    // dưới) → hiệu ứng "hút". Trả false nếu nhãn cao hơn dải trống (không đủ chỗ).
+    function snapToValid(silent) {
+      const bw = box.offsetWidth || FACE_W, bh = box.offsetHeight || FACE_H;
+      const sw = sticker.offsetWidth, sh = sticker.offsetHeight;
+      const curX = parseFloat(sticker.style.left) || 0;
+      const curY = parseFloat(sticker.style.top) || 0;
+      const tx = Math.max(bounds.x0 * bw, Math.min(bounds.x1 * bw - sw, curX));
+      const yMin = protBottom * bh, yMax = bounds.y1 * bh - sh;
+      let ty, ok;
+      if (yMax >= yMin) { ty = Math.max(yMin, Math.min(yMax, curY)); ok = true; }
+      else { ty = Math.max(0, yMax); ok = false; }
+      animateTo(tx, ty);
+      if (!ok && !silent) toastInvalid();
+      return ok;
+    }
+    // Animate trượt nhãn tới (tx,ty) trong ~180ms rồi cập nhật validity.
+    function animateTo(tx, ty) {
+      const sx = parseFloat(sticker.style.left) || 0;
+      const sy = parseFloat(sticker.style.top) || 0;
+      const t0 = performance.now(), dur = 180;
+      sticker.classList.add('sp-sticker-snap');
+      const step = (now) => {
+        const k = Math.min(1, (now - t0) / dur);
+        const e = 1 - Math.pow(1 - k, 3);   // easeOutCubic (cảm giác hút)
+        setPos(sx + (tx - sx) * e, sy + (ty - sy) * e);
+        if (k < 1) requestAnimationFrame(step);
+        else sticker.classList.remove('sp-sticker-snap');
+      };
+      requestAnimationFrame(step);
+    }
+    function toastInvalid() {
+      sticker.classList.remove('sp-sticker-flash-ok');
+      sticker.classList.add('sp-sticker-flash-bad');
+      setTimeout(() => sticker.classList.remove('sp-sticker-flash-bad'), 600);
+      showToast?.('Không thể dán nhãn tại vị trí này — nhãn phải nằm ở vùng trống, không che tên/hàm lượng/logo/số ĐK.');
+    }
+    function flashOk() {
+      sticker.classList.add('sp-sticker-flash-ok');
+      setTimeout(() => sticker.classList.remove('sp-sticker-flash-ok'), 520);
     }
     place();                       // đặt ngay (đọc offsetWidth ép reflow)
     setTimeout(place, 60);         // chạy lại sau layout cho chắc
+
     // Kéo-thả (pointer)
     let drag = false, offX = 0, offY = 0;
     sticker.addEventListener('pointerdown', (e) => {
       drag = true; sticker.setPointerCapture(e.pointerId);
-      const r = box.getBoundingClientRect(), sr = sticker.getBoundingClientRect();
+      const sr = sticker.getBoundingClientRect();
       offX = e.clientX - sr.left; offY = e.clientY - sr.top;
     });
     sticker.addEventListener('pointermove', (e) => {
       if (!drag) return;
       const r = box.getBoundingClientRect();
-      const bw = box.offsetWidth, bh = box.offsetHeight;
-      const sw = sticker.offsetWidth, sh = sticker.offsetHeight;
-      let x = e.clientX - r.left - offX, y = e.clientY - r.top - offY;
-      x = Math.max(0, Math.min(bw - sw, x));
-      y = Math.max(0, Math.min(bh - sh, y));
-      sticker.style.left = x + 'px'; sticker.style.top = y + 'px';
-      u = (x + sw / 2) / bw; v = (y + sh / 2) / bh;
+      setPos(e.clientX - r.left - offX, e.clientY - r.top - offY);
     });
-    sticker.addEventListener('pointerup', () => { drag = false; });
+    sticker.addEventListener('pointerup', () => {
+      if (!drag) return;
+      drag = false;
+      // Thả tay → hút vào vùng trống hợp lệ gần nhất; báo đỏ nếu không có chỗ.
+      const ok = snapToValid(false);
+      if (ok) flashOk();
+    });
     const close = () => { document.removeEventListener('keydown', esc); overlay.remove(); };
     const esc = (e) => { if (e.key === 'Escape') close(); };
     document.addEventListener('keydown', esc);
@@ -375,29 +683,52 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
     overlay.querySelector('.sp-cancel').addEventListener('click', close);
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
     overlay.querySelector('.sp-apply').addEventListener('click', () => {
-      sim.applyHdsdSticker?.(drugId, label, { u, v });
+      if (!lastValid) { toastInvalid(); return; }   // chặn dán vào vùng không hợp lệ
+      // u,v đang theo TOÀN ẢNH (gồm lề trong suốt) → quy về toạ độ MẶT HỘP để
+      // applyHdsdSticker (dùng hệ mặt hộp) dán đúng chỗ người dùng thả.
+      const c01 = (t) => Math.max(0, Math.min(1, t));
+      const ub = c01((u - bounds.x0) / Math.max(1e-3, bounds.x1 - bounds.x0));
+      const vb = c01((v - bounds.y0) / Math.max(1e-3, bounds.y1 - bounds.y0));
+      sim.applyHdsdSticker?.(drugId, label, { u: ub, v: vb });
       close();
     });
   }
 
+  // Khoanh KHUNG hộp trong ảnh mặt hộp bằng ALPHA (nền render trong suốt):
+  // trả về {x0,y0,x1,y1} theo tỉ lệ 0..1. Đọc pixel lỗi (taint) → khung mặc định.
+  function boxBoundsFromAlpha(faceCanvas) {
+    const w = faceCanvas.width, h = faceCanvas.height;
+    let data;
+    try { data = faceCanvas.getContext('2d').getImageData(0, 0, w, h).data; }
+    catch { return { x0: 0.06, y0: 0.05, x1: 0.94, y1: 0.95 }; }
+    let x0 = w, y0 = h, x1 = 0, y1 = 0, any = false;
+    for (let y = 0; y < h; y += 2) {
+      for (let x = 0; x < w; x += 2) {
+        if (data[(y * w + x) * 4 + 3] > 128) {
+          any = true;
+          if (x < x0) x0 = x; if (x > x1) x1 = x;
+          if (y < y0) y0 = y; if (y > y1) y1 = y;
+        }
+      }
+    }
+    if (!any) return { x0: 0.06, y0: 0.05, x1: 0.94, y1: 0.95 };
+    return { x0: x0 / w, y0: y0 / h, x1: x1 / w, y1: y1 / h };
+  }
+
   // Bao bì ra lẻ: chọn đơn vị từ GIỎ RA LẺ + dạng (vỉ/gói/viên/ống) → ghi nhãn phong bì.
   const UNIT_TO_FORM = { 'vỉ': 'vi', 'gói': 'goi', 'viên': 'vien', 'ống': 'ong' };
+  const RETAIL_FORM_VN = { vi: 'Vỉ', goi: 'Gói', vien: 'Viên', ong: 'Ống', lo: 'Lọ' };
   function openPackageFlow(packageType) {
     if (document.querySelector('.pkgflow-overlay')) return;
     const pkg = PACKAGE_TYPES[packageType] || PACKAGE_TYPES.white;
-    const catMap = {};
-    (sim.getCatalog?.() || []).forEach(it => { catMap[it.drug.id] = it.drug; });
-    // Nguồn: ưu tiên GIỎ RA LẺ (đơn vị đã tách). Giỏ trống → khay bán hàng / catalog.
-    const fromBasket = retailBasket.length > 0;
-    let choices; // [{ value, label, drug, unit }]
-    if (fromBasket) {
-      choices = retailBasket.map((it, i) => ({ value: String(i), label: `${it.brand}${it.strength ? ' · ' + it.strength : ''} (${it.unit})`, drug: it.drug, unit: it.unit }));
-    } else {
-      const picked = sim.getPickedIds();
-      const base = picked.length ? picked.map(id => catMap[id]).filter(Boolean)
-                                 : (sim.getCatalog?.() || []).slice(0, 40).map(it => it.drug);
-      choices = base.map(d => ({ value: d.id, label: `${d.brand || d.name} ${d.strength || ''}`, drug: d, unit: null }));
-    }
+    // Nguồn: các ĐƠN VỊ RỜI (vỉ/gói/ống/lọ/viên) đang nằm TRONG KHAY BÁN HÀNG —
+    // đóng gói ĐÚNG số lượng đã lấy vào bao bì ra lẻ (yêu cầu CBS 12/07 #2).
+    const units = sim.getRetailUnitsInTray?.() || [];
+    // [{ value=drugId, drug, unit=unitKind, qty, label }]
+    const choices = units.map(u => ({
+      value: u.drugId, drug: u.drug, unit: u.unitKind, qty: u.count,
+      label: `${u.drug.brand || u.drug.name}${u.drug.strength ? ' · ' + u.drug.strength : ''} (${u.count} ${RETAIL_FORM_VN[u.unitKind] || u.unitKind})`
+    }));
     const overlay = document.createElement('div');
     overlay.className = 'pkgflow-overlay';
     overlay.innerHTML = `
@@ -406,40 +737,25 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
           <span>✉️ Đóng gói ra lẻ — <b>${pkg.label}</b></span>
           <button class="pkgflow-close" type="button" aria-label="Đóng">✕</button>
         </div>
-        <div class="sp-hint">${pkg.airtight
-          ? 'Túi zip kín khí — chọn đơn vị từ giỏ ra lẻ để đựng (không in nhãn).'
-          : (fromBasket ? 'Chọn đơn vị từ <b>GIỎ RA LẺ</b> và dạng đóng gói, rồi ghi nhãn theo mẫu.'
-                        : 'Giỏ ra lẻ đang trống — chọn tạm từ catalog. (Nên ra lẻ thuốc vào giỏ trước.)')}</div>
+        <div class="sp-hint">${choices.length
+          ? (pkg.airtight
+              ? 'Túi zip kín khí — chọn đơn vị rời trong khay để đựng (không in nhãn).'
+              : 'Chọn đơn vị rời <b>trong khay bán hàng</b> để đóng vào bao bì. Số lượng đóng đúng bằng số đã lấy; đơn vị rời sẽ được thay bằng bao bì.')
+          : 'Chưa có đơn vị rời trong khay. Hãy mở 1 hộp → <b>“Cho … vào khay”</b> để tách vỉ/gói/ống trước.'}</div>
         <label class="le2-field">
-          <span class="le2-lbl">${fromBasket ? 'Đơn vị trong giỏ ra lẻ' : 'Chọn thuốc'}</span>
+          <span class="le2-lbl">Đơn vị rời trong khay bán hàng</span>
           <select class="pkgflow-drug">
             ${choices.length ? choices.map(c => `<option value="${c.value}">${c.label}</option>`).join('')
-                             : '<option value="">— Giỏ ra lẻ trống —</option>'}
+                             : '<option value="">— Khay chưa có đơn vị rời —</option>'}
           </select>
         </label>
-        <div class="le2-lbl" style="margin-top:8px">Dạng đóng gói</div>
-        <div class="le2-chips pkgflow-forms">
-          ${RETAIL_FORMS.map(f => `<button class="le2-chip pkgflow-form" data-v="${f.value}" type="button">${f.label}</button>`).join('')}
-        </div>
         <div class="sp-foot">
           <button class="pkgflow-cancel" type="button">Huỷ</button>
-          <button class="pkgflow-next" type="button">${pkg.airtight ? '📦 Cho vào túi zip' : '➡️ Cho vào bao bì & ghi nhãn'}</button>
+          <button class="pkgflow-next" type="button" ${choices.length ? '' : 'disabled'}>${pkg.airtight ? '📦 Cho vào túi zip' : '➡️ Ghi nhãn & đóng gói'}</button>
         </div>
       </div>`;
     document.body.appendChild(overlay);
     const sel = overlay.querySelector('.pkgflow-drug');
-    let formType = RETAIL_FORMS[0].value;
-    const setForm = (v) => {
-      formType = v;
-      overlay.querySelectorAll('.pkgflow-form').forEach(x => x.classList.toggle('le2-chip-active', x.dataset.v === v));
-    };
-    const syncFormToSelection = () => {
-      const c = choices.find(x => x.value === sel.value);
-      setForm((c && UNIT_TO_FORM[c.unit]) || formType);
-    };
-    overlay.querySelectorAll('.pkgflow-form').forEach(b => b.addEventListener('click', () => setForm(b.dataset.v)));
-    sel.addEventListener('change', syncFormToSelection);
-    setForm(RETAIL_FORMS[0].value); syncFormToSelection();
     const close = () => { document.removeEventListener('keydown', esc); overlay.remove(); };
     const esc = (e) => { if (e.key === 'Escape') close(); };
     document.addEventListener('keydown', esc);
@@ -448,22 +764,27 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
     overlay.querySelector('.pkgflow-next').addEventListener('click', () => {
       const chosen = choices.find(c => c.value === sel.value);
-      if (!chosen) { alert('Giỏ ra lẻ trống. Mở 1 hộp thuốc → "Mở hộp lấy vỉ/gói…" để gom đơn vị vào giỏ trước.'); return; }
+      if (!chosen) { alert('Khay chưa có đơn vị rời. Mở 1 hộp → “Cho vỉ/gói/ống… vào khay” trước.'); return; }
       const drug = chosen.drug;
-      postAction('pack_retail', { drugId: drug.id, packageType, formType });
-      if (fromBasket) retailBasket.splice(+chosen.value, 1); // đã đóng gói → bỏ khỏi giỏ
+      const formType = chosen.unit;
+      const qty = chosen.qty;
+      const formVN = RETAIL_FORM_VN[formType] || formType;
+      postAction('pack_retail', { drugId: drug.id, packageType, formType, qty });
       close();
       if (pkg.airtight) {
-        sim.pickToTray?.(drug.id);   // hiện trong KHAY BÁN HÀNG như các thuốc khác
-        alert(`Đã cho ${RETAIL_FORMS.find(f => f.value === formType)?.label || ''} "${drug?.brand || ''}" vào túi zip kín khí.\n→ Món hàng đã vào KHAY BÁN HÀNG, mở POS để tính tiền.`);
+        // Túi zip cũng là bao bì ra lẻ → thay đơn vị rời bằng phong bì trong khay.
+        const n = sim.packRetailUnitsInTray?.({ drugId: drug.id, packageType, formType, label: { packageType, drugText: `${drug?.brand || drug?.name || ''}${drug?.strength ? ' ' + drug.strength : ''}` } }) || 0;
+        alert(`Đã đóng ${n} ${formVN} "${drug?.brand || ''}" vào túi zip kín khí.\n→ Bao bì đã vào KHAY BÁN HÀNG, mở POS để tính tiền.`);
         return;
       }
       openPackageEditor({
         drug, formType, packageType,
         onCreate: (lbl) => {
-          postAction('pack_label', lbl);
-          sim.pickToTray?.(drug.id);   // đóng gói xong → hiện trong KHAY BÁN HÀNG
-          showToast?.(`Đã đóng gói "${drug.brand || ''}" vào ${pkg.label} → đã vào KHAY BÁN HÀNG.`);
+          postAction('pack_label', { ...lbl, qty });
+          // Đóng gói xong → thay N đơn vị rời trong khay bằng 1 BAO BÌ RA LẺ có nhãn
+          // (đúng số lượng); đơn vị rời biến mất — yêu cầu CBS 12/07 #2.
+          const n = sim.packRetailUnitsInTray?.({ drugId: drug.id, packageType, formType, label: lbl }) || 0;
+          showToast?.(`Đã đóng gói ${n} ${formVN} "${drug.brand || ''}" vào ${pkg.label} → bao bì đã vào KHAY BÁN HÀNG.`);
         }
       });
     });
@@ -790,7 +1111,26 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
 
   // P3: Inspector modal — hộp thuốc zoom giữa màn hình, tự xoay, drag xoay,
   // info panel + 2 nút (Đưa vào khay / Trả về kệ). Dùng mini-scene Three.js riêng.
+  // CSS cho 2 nút kiểm tra (#142) — TỰ CHÈN từ JS thay vì sửa CSS ở cả trang
+  // Express lẫn trang Next (bản Next phải build lại mới ăn CSS). Cùng cách làm
+  // với intro.js: 1 nguồn duy nhất, không lệch giữa 2 nơi.
+  function injectCheckBtnStyle() {
+    if (document.getElementById('pharmacomm-check-style')) return;
+    const st = document.createElement('style');
+    st.id = 'pharmacomm-check-style';
+    st.textContent = `
+      .ins-actions { flex-wrap: wrap; }
+      .ins-check { flex: 1 1 45%; padding: 10px; border-radius: 10px; cursor: pointer;
+        font-weight: 700; font-size: 12.5px; color: var(--text, #e2e8f0);
+        background: rgba(56,189,248,.14); border: 1px solid rgba(56,189,248,.5); }
+      .ins-check:hover:not(:disabled) { background: rgba(56,189,248,.24); }
+      .ins-check.done { background: rgba(16,185,129,.18); border-color: rgba(16,185,129,.55); cursor: default; }
+    `;
+    document.head.appendChild(st);
+  }
+
   function openInspector({ drug, meta, confirmToTray, returnToShelf, fromTray = false }) {
+    injectCheckBtnStyle();
     // Khi mở từ khay bán hàng (hoặc thuốc đã nằm trong khay) → ẩn nút "Đưa vào
     // khay" vì đã ở trên khay rồi.
     const alreadyInTray = fromTray || (sim.getPickedIds?.() || []).includes(drug.id);
@@ -808,7 +1148,7 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
     overlay.innerHTML = `
       <div class="inspector-modal">
         <button class="ins-close" type="button" aria-label="Đóng">✕</button>
-        <div class="inspector-3d"><canvas class="ins-canvas"></canvas></div>
+        <div class="inspector-3d"></div>
         <div class="inspector-info">
           <!-- Phần cuộn (thông tin + nhãn). 3 nút nằm NGOÀI vùng cuộn → ghim sát
                đáy dialog, không bị nội dung che/đẩy (thầy yêu cầu sát đáy). -->
@@ -831,6 +1171,11 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
                  ĐẦY ĐỦ lên hộp + bao bì trực tiếp. (Bỏ luôn dòng hướng dẫn xoay hộp.) -->
           </div>
           <div class="ins-actions">
+            <!-- #142: hai nút KIỂM TRA có thật trong mô phỏng. Đặc tả cấm tính điểm
+                 thao tác chỉ vì sinh viên NÓI đã làm, nên phải có hành động thật để
+                 ghi vào nhật ký thì tiêu chí C3/C4 mới được chấm. -->
+            <button class="ins-check" type="button" data-check="info">🔍 Kiểm tra tên – hàm lượng – dạng bào chế</button>
+            <button class="ins-check" type="button" data-check="expiry">📅 Kiểm tra hạn dùng</button>
             <button class="ins-return" type="button">↩ Trả về kệ</button>
             ${pkgKind === 'carton' ? `<button class="ins-retail" type="button">🔓 Tách lẻ (${drug.unit || 'đơn vị'})</button>` : ''}
             ${alreadyInTray ? '' : '<button class="ins-confirm" type="button">📥 Đưa vào khay (Quét barcode)</button>'}
@@ -839,11 +1184,10 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
       </div>`;
     document.body.appendChild(overlay);
 
-    const canvas = overlay.querySelector('.ins-canvas');
-    // Mini-scene Three.js
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // Canvas + WebGL context DÙNG CHUNG (acquireInspectorRenderer) — không tạo
+    // context mới mỗi lần mở (nguyên nhân "bấm thuốc load mãi" trên máy yếu).
+    const { canvas, renderer } = acquireInspectorRenderer();
+    overlay.querySelector('.inspector-3d').appendChild(canvas);
     const fit = () => {
       const w = canvas.clientWidth, h = canvas.clientHeight;
       renderer.setSize(w, h, false);
@@ -1026,7 +1370,10 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
       else deviceKind = 'generic';
     }
     const unitWordVN = { vi: 'vỉ', goi: 'gói', lo: 'lọ', ong: 'ống', device: 'thiết bị' }[unitKind];
-    const unit = (() => {
+    // Dựng mesh 3D 1 ĐƠN VỊ ra lẻ (vỉ/gói/lọ/ống/thiết bị) theo dạng đóng gói thật.
+    // Tách thành hàm (w,h,d) để DÙNG LẠI: vừa hiện trong inspector (dims scale),
+    // vừa đưa vào KHAY BÁN HÀNG (dims thật của hộp) — yêu cầu 2 (khay đa dạng).
+    function makeUnit(w, h, d) {
       const g = new THREE.Group();
       const foil = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.6, roughness: 0.35 });
       const acc = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.5 });
@@ -1161,30 +1508,29 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
         const neck = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.44, r * 0.44, h * 0.05, 20), glass); neck.position.y = bodyH + h * 0.07 + h * 0.025; g.add(neck);
         const cap = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.52, r * 0.52, h * 0.10, 24), acc); cap.position.y = bodyH + h * 0.095 + h * 0.05; g.add(cap);
       } else {
-        // Ống: TIÊM → thuỷ tinh trong, cổ thắt + chỏm nhọn + vạch bẻ màu. UỐNG →
-        // ống nhựa thân màu dịch (nâu) + vai tròn + nắp vặn/bẻ màu nhóm (mẫu ống uống).
+        // Ống: TIÊM → thuỷ tinh trong, cổ thắt + chỏm nhọn + vạch bẻ màu.
+        // UỐNG → ỐNG NHỰA TRONG (thành trắng trong mờ) có DUNG DỊCH màu bên trong,
+        // nắp vặn trắng. KHÔNG còn đế/vỉ nhựa cam phía sau (yêu cầu CBS 12/07 #3).
         const isInject = /tiêm/.test(formStr);
-        // Ống uống: thân dịch ĐẬM (gần đen) + nắp vặn VÀNG KIM bầu tròn + nằm
-        // trong vỉ nhựa CAM (mẫu Thủy Đình Thanh thầy gửi). Ống tiêm: thuỷ tinh trong.
-        const r = isInject ? w * 0.10 : Math.max(w, d) * 0.16, bodyH = h * (isInject ? 0.50 : 0.46);
-        const liqCol = isInject ? '#eaf2fb' : '#1c0f06';
-        const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(liqCol), roughness: isInject ? 0.15 : 0.4, metalness: 0, transparent: isInject, opacity: isInject ? 0.55 : 1 });
-        if (!isInject) {
-          // Vỉ nhựa cam (1 hốc) phía sau ống.
-          const bl = new THREE.Mesh(new THREE.BoxGeometry(r * 3.0, bodyH * 1.5, 0.005),
-            new THREE.MeshStandardMaterial({ color: 0xe8722c, roughness: 0.6, side: THREE.DoubleSide }));
-          bl.position.set(0, bodyH * 0.5, -r * 1.2); g.add(bl);
-        }
-        const body = new THREE.Mesh(new THREE.CylinderGeometry(r, r, bodyH, 22), mat); body.position.y = bodyH / 2; g.add(body);
+        const r = isInject ? w * 0.10 : Math.max(w, d) * 0.16, bodyH = h * (isInject ? 0.50 : 0.52);
         if (isInject) {
+          const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color('#eaf2fb'), roughness: 0.15, metalness: 0, transparent: true, opacity: 0.55 });
+          const body = new THREE.Mesh(new THREE.CylinderGeometry(r, r, bodyH, 22), mat); body.position.y = bodyH / 2; g.add(body);
           const neck = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.45, r, h * 0.06, 16), mat); neck.position.y = bodyH + h * 0.03; g.add(neck);
           const tip = new THREE.Mesh(new THREE.ConeGeometry(r * 0.45, h * 0.10, 16), mat); tip.position.y = bodyH + h * 0.06 + h * 0.05; g.add(tip);
           const ring = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.05, r * 1.05, h * 0.02, 16), acc); ring.position.y = bodyH * 0.66; g.add(ring);
         } else {
-          // Nắp vặn vàng kim: cổ thắt + bầu tròn vàng ánh kim.
-          const gold = new THREE.MeshStandardMaterial({ color: 0xcf9b2e, metalness: 0.75, roughness: 0.3 });
-          const collar = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.85, r, h * 0.045, 18), gold); collar.position.y = bodyH + h * 0.022; g.add(collar);
-          const bulb = new THREE.Mesh(new THREE.SphereGeometry(r * 0.92, 18, 14), gold); bulb.scale.set(1, 1.2, 1); bulb.position.y = bodyH + h * 0.045 + r * 0.85; g.add(bulb);
+          // Nhựa trong: thành ống trắng mờ (opacity thấp) để thấy dung dịch bên trong.
+          const wallMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1, metalness: 0, transparent: true, opacity: 0.26 });
+          // Dung dịch màu (nâu hổ phách nhạt) — trụ nhỏ hơn thành, chừa khoảng trống miệng ống.
+          const liqMat = new THREE.MeshStandardMaterial({ color: new THREE.Color('#c07f28'), roughness: 0.25, metalness: 0, transparent: true, opacity: 0.9 });
+          const fillH = bodyH * 0.8;
+          const liq = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.88, r * 0.88, fillH, 22), liqMat); liq.position.y = fillH / 2; g.add(liq);
+          const body = new THREE.Mesh(new THREE.CylinderGeometry(r, r, bodyH, 22), wallMat); body.position.y = bodyH / 2; g.add(body);
+          // Vai bo + nắp vặn TRẮNG (nhựa) thay cho nắp vàng kim cũ.
+          const shoulder = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.52, r, h * 0.05, 22), wallMat); shoulder.position.y = bodyH + h * 0.025; g.add(shoulder);
+          const capMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.4, metalness: 0.05 });
+          const cap = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.56, r * 0.56, h * 0.10, 20), capMat); cap.position.y = bodyH + h * 0.05 + h * 0.05; g.add(cap);
         }
       }
       // IN nhãn tiếp xúc trực tiếp LÊN đơn vị ra lẻ. VỈ đã in thẳng lên màng nhôm
@@ -1216,19 +1562,20 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
       const bb = new THREE.Box3().setFromObject(g);
       const ctr = bb.getCenter(new THREE.Vector3());
       g.children.forEach(ch => ch.position.sub(ctr));
+      // Ưu tiên MODEL .glb cho đơn vị có model thật (hạn chế vẽ tay). Vỉ/gói/ống
+      // chưa có glb phù hợp → giữ procedural.
+      const unitGlbFile =
+        (unitKind === 'device' && deviceKind === 'thermometer') ? 'thermometer.glb' :
+        (unitKind === 'device' && /bông/.test(hay)) ? 'cotton.glb' :
+        (unitKind === 'device' && deviceKind === 'gauze') ? 'gauze.glb' :
+        (unitKind === 'lo' && /kem|gel|mỡ|tuýp|tuyp|cao xoa|\bbôi\b/.test(formStr)) ? 'tube.glb' :
+        // Chỉ lọ ĐỰNG VIÊN dùng model nhựa pillbottle; lọ DỊCH (siro/hỗn dịch/dung
+        // dịch/nhỏ) giữ chai thuỷ tinh procedural (model pillbottle trông sai dạng).
+        (unitKind === 'lo' && !/siro|sirô|hỗn dịch|huyền dịch|dung dịch|dầu|nhỏ|xịt|nước/.test(formStr)) ? 'pillbottle.glb' : null;
+      if (unitGlbFile) swapUnitToGlb(g, unitGlbFile, Math.max(w, h) * 0.9);
       return g;
-    })();
-    // Ưu tiên MODEL .glb cho đơn vị có model thật (hạn chế vẽ tay). Vỉ/gói/ống
-    // chưa có glb phù hợp → giữ procedural.
-    const unitGlbFile =
-      (unitKind === 'device' && deviceKind === 'thermometer') ? 'thermometer.glb' :
-      (unitKind === 'device' && /bông/.test(hay)) ? 'cotton.glb' :
-      (unitKind === 'device' && deviceKind === 'gauze') ? 'gauze.glb' :
-      (unitKind === 'lo' && /kem|gel|mỡ|tuýp|tuyp|cao xoa|\bbôi\b/.test(formStr)) ? 'tube.glb' :
-      // Chỉ lọ ĐỰNG VIÊN dùng model nhựa pillbottle; lọ DỊCH (siro/hỗn dịch/dung
-      // dịch/nhỏ) giữ chai thuỷ tinh procedural (model pillbottle trông sai dạng).
-      (unitKind === 'lo' && !/siro|sirô|hỗn dịch|huyền dịch|dung dịch|dầu|nhỏ|xịt|nước/.test(formStr)) ? 'pillbottle.glb' : null;
-    if (unitGlbFile) swapUnitToGlb(unit, unitGlbFile, Math.max(w, h) * 0.9);
+    }
+    const unit = makeUnit(w, h, d);
     unit.visible = false;
     scene2.add(unit);
     // extractTarget: 0 = trong hộp, 1 = đã lấy ra. extractT lerp dần tới target →
@@ -1282,10 +1629,31 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
       stopped = true;
       window.removeEventListener('resize', onResize);
       document.removeEventListener('keydown', insEsc);
-      renderer.dispose();
+      // KHÔNG dispose renderer — context dùng chung, giữ cho lần mở sau (mở lại
+      // tức thì). Chỉ dọn tài nguyên của RIÊNG lần mở này: listener OrbitControls
+      // gắn trên canvas chung, geometry (VRAM) + 3 texture tự tạo.
+      ctrl.dispose();
+      scene2.traverse((o) => { o.geometry?.dispose?.(); });
+      renderer.renderLists?.dispose?.();
       tex.dispose(); tex2.dispose(); sideTex.dispose();
       overlay.remove();
     }
+    // #142 — hai nút kiểm tra: ghi nhật ký thao tác + xác nhận ngay trên màn hình
+    // để người học thấy mình vừa đối chiếu thông tin gì.
+    overlay.querySelectorAll('.ins-check').forEach((b) => {
+      b.addEventListener('click', () => {
+        const kind = b.dataset.check;
+        const base = { drugId: drug.id, drugName: drug.brand || drug.name };
+        if (kind === 'expiry') {
+          postAction('check_expiry', { ...base, expiry: meta?.expiry || drug.expiry || null });
+        } else {
+          postAction('check_drug_info', { ...base, strength: drug.strength || null, form: drug.form || null });
+        }
+        b.classList.add('done');
+        b.textContent = kind === 'expiry' ? '✅ Đã kiểm tra hạn dùng' : '✅ Đã kiểm tra tên – hàm lượng – dạng';
+        b.disabled = true;
+      });
+    });
     overlay.querySelector('.ins-return').addEventListener('click', () => {
       returnToShelf?.();
       close();
@@ -1343,11 +1711,18 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
     greenBtn?.addEventListener('click', () => {
       if (extractTarget === 1) {
         const word = curUnitWord();
-        addRetailUnit(drug, word, retailQty);
-        postAction('retail_split', { drugId: drug.id, unit: word, qty: retailQty });
+        // Đưa ĐƠN VỊ ra lẻ THẲNG vào KHAY BÁN HÀNG dưới dạng mesh 3D đúng hình
+        // (vỉ/gói/ống/lọ… — KHÔNG phải hộp) — mỗi đơn vị 1 vật trong khay, bán ở
+        // POS + trả kệ/xoá được như hộp. (yêu cầu 2 phần khay bán hàng)
+        const n = sim.pickUnitToTray?.({
+          drugId: drug.id, drug, unitKind, qty: retailQty,
+          build: () => makeUnit(style.w, style.h, style.d),
+        }) || 0;
+        postAction('retail_split', { drugId: drug.id, unit: word, qty: n });
         close();
-        // Yêu cầu thầy: cho vào khay LUÔN, không hiện dialog/alert — chỉ toast nhẹ.
-        showToast(`Đã cho ${retailQty} ${word} "${drug.brand}" vào khay bán hàng.`);
+        showToast(n
+          ? `Đã cho ${n} ${word} "${drug.brand}" vào khay bán hàng.`
+          : 'Khay bán hàng đã đầy (tối đa 8 món) — thanh toán bớt rồi thêm tiếp.');
       } else {
         confirmToTray?.();
         close();

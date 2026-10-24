@@ -28,3 +28,18 @@ export const PRIMARY_LOP5_SCENARIOS = {
 for (const [id, sc] of Object.entries(PRIMARY_LOP5_SCENARIOS)) {
   if (LOP5_LESSONS && LOP5_LESSONS[id]) sc.lesson = LOP5_LESSONS[id];
 }
+
+// <<EXAM-MERGE-START>>
+import { P5AN_EXAMS } from './am-nhac-exam.js';
+import { P5CN_EXAMS } from './cong-nghe-exam.js';
+import { P5DD_EXAMS } from './dao-duc-exam.js';
+import { P5GDTC_EXAMS } from './gdtc-exam.js';
+import { P5HDTN_EXAMS } from './hdtn-exam.js';
+import { P5KH_EXAMS } from './khoa-hoc-exam.js';
+import { P5LSDL_EXAMS } from './lich-su-dia-ly-exam.js';
+import { P5TA_EXAMS } from './tieng-anh-exam.js';
+import { P5TV_EXAMS } from './tieng-viet-exam.js';
+import { P5TIN_EXAMS } from './tin-hoc-exam.js';
+import { P5_EXAMS } from './toan-exam.js';
+for (const EX of [P5AN_EXAMS, P5CN_EXAMS, P5DD_EXAMS, P5GDTC_EXAMS, P5HDTN_EXAMS, P5KH_EXAMS, P5LSDL_EXAMS, P5TA_EXAMS, P5TV_EXAMS, P5TIN_EXAMS, P5_EXAMS]) Object.assign(PRIMARY_LOP5_SCENARIOS, EX);
+// <<EXAM-MERGE-END>>

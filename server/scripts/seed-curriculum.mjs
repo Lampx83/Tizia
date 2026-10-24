@@ -41,9 +41,11 @@ if (DRY) {
 
 const { seedMany, curriculumCount } = await import('../contexts/curriculum/index.js');
 
-const before = curriculumCount();
-const n = seedMany(all, 'seed');
-const after = curriculumCount();
+// ⚠️ Sau khi cut-over Postgres, curriculumCount/seedMany đều async — phải await,
+// nếu không process.exit(0) bên dưới sẽ cắt ngang transaction và seed hụt.
+const before = await curriculumCount();
+const n = await seedMany(all, 'seed');
+const after = await curriculumCount();
 
 console.log(`[seed-curriculum] đã upsert ${n} bản ghi (seed). active: ${before} → ${after}.`);
 console.log('[seed-curriculum] xong.');

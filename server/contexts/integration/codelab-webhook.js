@@ -69,15 +69,15 @@ function verifySignature(rawBody, headerVal) {
   } catch { return { ok: false, reason: 'verify_throw' }; }
 }
 
-function applyRewards(userId, problemSlug, currentSubmissionId) {
+async function applyRewards(userId, problemSlug, currentSubmissionId) {
   // Chỉ thưởng khi HS chưa từng accepted bài này — exclude row vừa insert
   // (recordCodelabSubmission ở caller insert trước, nếu không exclude thì check
   // sẽ thấy chính row mới và luôn return true → không bao giờ thưởng).
-  if (hasAcceptedCodelabProblem(userId, problemSlug, currentSubmissionId)) {
+  if (await hasAcceptedCodelabProblem(userId, problemSlug, currentSubmissionId)) {
     return { granted: false, reason: 'already_solved' };
   }
-  const cur = getUserWallet(userId) || {};
-  upsertUserWallet(userId, {
+  const cur = (await getUserWallet(userId)) || {};
+  await upsertUserWallet(userId, {
     xp:           (cur.xp || 0) + REWARD_XP_PER_PROBLEM,
     coins:        (cur.coins || 0) + REWARD_COIN_PER_PROBLEM,
     // quizzesPassed dùng chung counter "vượt qua" — Codelab pass cũng đáng kể.
@@ -98,7 +98,7 @@ export function attachCodelabWebhook(app) {
   app.post(
     '/api/webhooks/codelab',
     express.raw({ type: 'application/json', limit: '256kb' }),
-    (req, res) => {
+    async (req, res) => {
       const raw = req.body;
       const sig = req.get('X-Codelab-Signature');
       const verify = verifySignature(raw, sig);
@@ -126,7 +126,7 @@ export function attachCodelabWebhook(app) {
       const completedMs = completedAt ? Number(new Date(completedAt)) : Date.now();
 
       // Dedup + persist.
-      const { firstSeen, userId } = recordCodelabSubmission({
+      const { firstSeen, userId } = await recordCodelabSubmission({
         submissionId, status, problemSlug, externalUserRef,
         score, passedCases, totalCases, languageId, completedAt: completedMs,
       });
@@ -139,12 +139,12 @@ export function attachCodelabWebhook(app) {
       let reward = null;
       try {
         if (status === 'accepted' && userId && problemSlug) {
-          reward = applyRewards(userId, problemSlug, submissionId);
+          reward = await applyRewards(userId, problemSlug, submissionId);
           // Engagement: quest "code" tăng tiến độ khi accepted (kể cả không
           // first-solve — HS làm lại bài khó vẫn được công 1 lượt nộp ăn điểm).
-          try { trackEngagementProgress(userId, 'code', 1); } catch {}
+          try { await trackEngagementProgress(userId, 'code', 1); } catch {}
           // League: cộng XP tuần (= reward XP nếu first-solve, hoặc fixed 5 nếu re-submit).
-          try { addLeagueWeekXp(userId, reward?.granted ? reward.xp : 5); } catch {}
+          try { await addLeagueWeekXp(userId, reward?.granted ? reward.xp : 5); } catch {}
         }
         // Nếu cần invalidate cache list submission của user (sau này Tizia có
         // endpoint cache theo userId), gọi tại đây:

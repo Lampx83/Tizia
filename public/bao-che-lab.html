@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Phòng Bào chế — Thực hành theo giáo trình</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:rgba(15,23,42,0.82); --border:rgba(255,255,255,0.12);
+    --accent:#14b8a6; --accent2:#22c55e; --warn:#f59e0b; --bad:#ef4444; --ink:#e5e7eb;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;color:var(--ink);background:var(--bg)}
+  #c{position:fixed;inset:0;display:block}
+  .hidden{display:none!important}
+
+  /* Top bar */
+  #topbar{position:fixed;top:0;left:0;right:0;height:46px;display:flex;align-items:center;gap:12px;
+    padding:0 12px;background:linear-gradient(180deg,rgba(2,6,23,0.9),rgba(2,6,23,0.35));backdrop-filter:blur(8px);
+    z-index:20;font-size:13px}
+  #topbar a{color:var(--ink);opacity:.8;text-decoration:none}
+  #topbar a:hover{opacity:1}
+  #topbar .sep{opacity:.35}
+  #topbar b{color:#fff}
+  #lvl-pill{margin-left:auto;background:rgba(20,184,166,.18);border:1px solid rgba(20,184,166,.4);
+    padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700}
+
+  /* Recipe panel (left) */
+  #recipe{position:fixed;left:12px;top:56px;width:280px;max-height:calc(100vh - 72px);overflow:auto;
+    background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px;z-index:15;backdrop-filter:blur(10px)}
+  #recipe h3{margin:0 0 2px;font-size:15px}
+  #recipe .sub{font-size:11px;opacity:.7;margin-bottom:10px}
+  #recipe .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.6px;opacity:.6;font-weight:700;margin:12px 0 4px}
+  #recipe ul{list-style:none;margin:0;padding:0;font-size:12px}
+  #recipe .frow{display:flex;justify-content:space-between;gap:8px;padding:2px 0;border-bottom:1px dashed rgba(255,255,255,.08)}
+  #recipe .frow b{font-variant-numeric:tabular-nums}
+  #recipe .qitem{padding:3px 0 3px 16px;position:relative;font-size:12px;opacity:.9}
+  #recipe .qitem:before{content:'◦';position:absolute;left:2px;opacity:.6}
+  #recipe .method{display:inline-block;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.35);
+    padding:2px 8px;border-radius:6px;font-size:11px;margin-top:4px}
+
+  /* Step panel (bottom center) */
+  #step{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);width:min(680px,94vw);
+    background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:14px 18px;z-index:15;backdrop-filter:blur(10px)}
+  #step-rail{display:flex;gap:5px;margin-bottom:9px;overflow-x:auto;padding-bottom:2px}
+  #step-rail .sdot{flex:0 0 auto;min-width:22px;height:22px;border-radius:6px;border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--ink);opacity:.5;background:rgba(255,255,255,.04)}
+  #step-rail .sdot.done{opacity:1;background:rgba(34,197,94,.22);border-color:var(--accent2);color:#bbf7d0}
+  #step-rail .sdot.cur{opacity:1;background:rgba(20,184,166,.28);border-color:var(--accent);color:#fff;box-shadow:0 0 0 2px rgba(20,184,166,.25)}
+  #step .num{font-size:11px;letter-spacing:.6px;font-weight:800;color:var(--accent);text-transform:uppercase}
+  #step .title{font-size:16px;font-weight:700;margin:3px 0 2px}
+  #step .why{font-size:12px;opacity:.75}
+  #step .std{font-size:12px;margin-top:6px;padding:7px 10px;background:rgba(20,184,166,.10);
+    border-left:3px solid var(--accent);border-radius:6px}
+  #meter{height:9px;background:rgba(255,255,255,.10);border-radius:6px;margin-top:10px;overflow:hidden}
+  #meter-bar{height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .25s}
+  #step .hint{font-size:11px;opacity:.6;margin-top:7px;display:flex;justify-content:space-between}
+  #act-btn{margin-top:10px;width:100%;padding:11px;border:0;border-radius:10px;cursor:pointer;
+    background:linear-gradient(135deg,var(--accent),#0ea5e9);color:#03211d;font-weight:800;font-size:14px}
+  #act-btn:hover{filter:brightness(1.08)}
+  #act-btn.done{background:linear-gradient(135deg,var(--accent2),#16a34a)}
+  #submit-btn{margin-top:8px;width:100%;padding:11px;border:0;border-radius:10px;cursor:pointer;
+    background:#334155;color:#fff;font-weight:700;font-size:14px}
+  #submit-btn:disabled{opacity:.4;cursor:not-allowed}
+  #submit-btn:not(:disabled){background:linear-gradient(135deg,#22c55e,#15803d)}
+
+  /* Equipment tray label */
+  #equip-hint{position:fixed;right:12px;top:56px;width:200px;background:var(--panel);border:1px solid var(--border);
+    border-radius:12px;padding:10px 12px;z-index:15;font-size:11px;backdrop-filter:blur(10px)}
+  #equip-hint .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.6px;opacity:.6;font-weight:700;margin-bottom:6px}
+  #equip-hint .eq{display:flex;align-items:center;gap:7px;padding:3px 0;opacity:.55}
+  #equip-hint .eq.on{opacity:1;color:var(--accent)}
+  #equip-hint .eq .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+
+  /* Toast */
+  #toast{position:fixed;left:50%;top:64px;transform:translateX(-50%);background:#0b1220;border:1px solid var(--border);
+    padding:9px 16px;border-radius:10px;z-index:40;font-size:13px;display:none;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+  #toast.ok{border-color:var(--accent2);background:#0b1f14}
+  #toast.warn{border-color:var(--warn);background:#241a08}
+  #toast.bad{border-color:var(--bad);background:#2a1010}
+
+  /* Modal (picker + pedagogy + result) */
+  .modal{position:fixed;inset:0;background:rgba(2,6,23,.82);z-index:60;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)}
+  .card{background:#0b1220;border:1px solid var(--border);border-radius:18px;padding:22px;max-width:840px;width:100%;max-height:90vh;overflow:auto}
+  .card h2{margin:0 0 4px;font-size:22px}
+  .card .desc{opacity:.75;font-size:13px;margin-bottom:16px}
+  .lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+  .lcard{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:12px;cursor:pointer;transition:.15s}
+  .lcard:hover{border-color:var(--accent);background:rgba(20,184,166,.10);transform:translateY(-2px)}
+  .lcard .ic{font-size:30px}
+  .lcard .nm{font-size:13px;font-weight:700;margin-top:4px}
+  .lcard .mt{font-size:11px;opacity:.6;margin-top:3px}
+  .lcard .badge{display:inline-block;font-size:10px;background:rgba(20,184,166,.2);border:1px solid rgba(20,184,166,.4);border-radius:5px;padding:1px 6px;margin-top:6px}
+
+  /* Pedagogy: role matching */
+  .match-wrap{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  .match-col .mh{font-size:11px;text-transform:uppercase;letter-spacing:.6px;opacity:.6;font-weight:700;margin-bottom:8px}
+  .chip{background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:9px;padding:9px 11px;margin-bottom:7px;font-size:13px;cursor:pointer;transition:.12s}
+  .chip:hover{border-color:var(--accent)}
+  .chip.sel{border-color:var(--accent);background:rgba(20,184,166,.15)}
+  .chip.matched{opacity:.45;pointer-events:none;border-color:var(--accent2)}
+  .chip.role{cursor:pointer}
+  .chip small{display:block;opacity:.6;font-size:11px;margin-top:2px}
+  .btn{padding:11px 18px;border:0;border-radius:10px;cursor:pointer;font-weight:800;font-size:14px;
+    background:linear-gradient(135deg,var(--accent),#0ea5e9);color:#03211d}
+  .btn.ghost{background:transparent;border:1px solid var(--border);color:#fff}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .row-btns{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+  .qcheck{display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;cursor:pointer}
+  .qcheck.on{border-color:var(--accent2);background:rgba(34,197,94,.10)}
+  .qcheck .box{width:20px;height:20px;border-radius:5px;border:2px solid var(--border);flex:0 0 auto;margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:13px}
+  .qcheck.on .box{border-color:var(--accent2);color:var(--accent2)}
+  .score-big{font-size:52px;font-weight:800;text-align:center;background:linear-gradient(135deg,#fff,#14b8a6);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+  /* Panel toggle buttons (mobile) */
+  #panel-toggles{position:fixed;top:52px;right:12px;z-index:16;display:none;gap:6px}
+  #panel-toggles button{background:var(--panel);border:1px solid var(--border);color:var(--ink);
+    width:38px;height:38px;border-radius:10px;font-size:17px;cursor:pointer;backdrop-filter:blur(10px)}
+
+  @media (max-width:820px){
+    #panel-toggles{display:flex}
+    #recipe{width:min(88vw,340px);top:52px;left:8px;max-height:64vh;transform:translateX(-115%);
+      transition:transform .25s;z-index:18}
+    #recipe.show{transform:translateX(0)}
+    #equip-hint{width:min(70vw,220px);right:8px;top:96px;transform:translateX(130%);transition:transform .25s;z-index:18}
+    #equip-hint.show{transform:translateX(0)}
+    #step{width:96vw;bottom:8px;padding:11px 13px}
+    #step .title{font-size:14px}
+    #topbar{font-size:12px}
+    .match-wrap{grid-template-columns:1fr}
+    .card{padding:16px}
+    .card h2{font-size:18px}
+  }
+  @media (max-height:520px){ #recipe{max-height:56vh} }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="topbar">
+  <a href="bao-che-hub.html">← Hub Bào chế</a>
+  <span class="sep">·</span>
+  <span id="tb-lesson">Đang tải…</span>
+  <span id="lvl-pill" class="hidden"></span>
+</div>
+
+<div id="panel-toggles">
+  <button id="tg-recipe" title="Đơn/công thức">📋</button>
+  <button id="tg-equip" title="Thiết bị">🧫</button>
+</div>
+
+<div id="recipe" class="hidden"></div>
+<div id="equip-hint" class="hidden"></div>
+
+<div id="step" class="hidden">
+  <div id="step-rail"></div>
+  <div class="num" id="step-num"></div>
+  <div class="title" id="step-title"></div>
+  <div class="why" id="step-why"></div>
+  <div class="std" id="step-std"></div>
+  <div id="meter"><div id="meter-bar"></div></div>
+  <div class="hint"><span id="step-hint">—</span><span id="step-frac"></span></div>
+  <button id="act-btn"></button>
+  <button id="submit-btn" disabled>Hoàn thành &amp; Nộp</button>
+</div>
+
+<div id="toast"></div>
+<div id="modal-root"></div>
+
+<script type="module" src="./js/pharmacy/baoche/lab.js?v=7"></script>
+</body>
+</html>

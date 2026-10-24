@@ -30,3 +30,13 @@ export const SECONDARY_LOP9_SCENARIOS = {
 for (const [id, sc] of Object.entries(SECONDARY_LOP9_SCENARIOS)) {
   if (LOP9_LESSONS && LOP9_LESSONS[id]) sc.lesson = LOP9_LESSONS[id];
 }
+
+// <<EXAM-MERGE-START>>
+import { S9GDDP_EXAMS } from './gd-dia-phuong-exam.js';
+import { S9HDTN_EXAMS } from './hdtn-exam.js';
+import { S9NT_EXAMS } from './nghe-thuat-exam.js';
+import { S9NV_EXAMS } from './ngu-van-exam.js';
+import { S9TA_EXAMS } from './tieng-anh-exam.js';
+import { S9TOAN_EXAMS } from './toan-exam.js';
+for (const EX of [S9GDDP_EXAMS, S9HDTN_EXAMS, S9NT_EXAMS, S9NV_EXAMS, S9TA_EXAMS, S9TOAN_EXAMS]) Object.assign(SECONDARY_LOP9_SCENARIOS, EX);
+// <<EXAM-MERGE-END>>

@@ -254,6 +254,12 @@ export async function createCharacter(ctx) {
     // Lo lắng: hơi cúi + nghiêng đầu nhẹ
     worried: {
       spine: _qeuler(0.10, 0, 0), neck: _qeuler(0.22, 0, 0.10), head: _qeuler(0.14, 0, 0.12)
+    },
+    // Đau răng + sốt ruột (OTC-02, yêu cầu #117): tay phải đưa lên ôm má, đầu nghiêng
+    // về phía tay, thân hơi vặn. Nhịp "sống" bên dưới cho lắc nhanh → ra vẻ bồn chồn.
+    annoyed: {
+      spine: _qeuler(0.06, 0, -0.05), neck: _qeuler(0.12, 0, -0.14), head: _qeuler(0.04, 0, -0.18),
+      armR: _qeuler(0.35, -0.35, -2.15), foreR: _qeuler(0, 0, -2.35)   // tinh chỉnh trực quan 29/07
     }
   };
   function poseSlerp(bone, targetQuat, w) { if (bone) bone.quaternion.slerp(targetQuat, w); }
@@ -476,6 +482,7 @@ export async function createCharacter(ctx) {
     let amp = 0.013, freq = 1.25, hd = 0.012, swy = 0.012;        // bình thường: nhẹ, đều
     if (_expr === 'pain') { amp = 0.024; freq = 0.85; hd = 0.018; swy = 0.014; }      // thở chậm, nặng nhọc
     else if (_expr === 'worried') { amp = 0.012; freq = 1.9; hd = 0.030; swy = 0.024; } // bồn chồn, đầu động nhiều
+    else if (_expr === 'annoyed') { amp = 0.016; freq = 2.3; hd = 0.026; swy = 0.032; } // sốt ruột: lắc nhanh, đảo người
     const breathe = Math.sin(_t * freq), slow = Math.sin(_t * freq * 0.45 + 0.6);
     poseAdd(bones.spine1 || bones.spine, breathe * amp, 0, slow * swy * 0.4);
     poseAdd(bones.spine2, breathe * amp * 0.6, 0, 0);

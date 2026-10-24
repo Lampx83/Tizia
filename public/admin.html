@@ -39,6 +39,7 @@
          position:relative; overflow:hidden; transition:.2s; }
   .kpi:hover { border-color:var(--border-strong); transform:translateY(-1px); }
   .kpi[data-nav] { cursor:pointer; }
+  .kpi[data-tip]:not([data-nav]) { cursor:help; }
   .kpi[data-nav]:hover { box-shadow:0 6px 18px -8px rgba(0,0,0,.45); border-color:var(--accent); }
   .kpi[data-nav]:active { transform:translateY(0); }
   @keyframes kpiFlash {
@@ -82,6 +83,16 @@
   .chart-tooltip { position:absolute; background:#000; color:#fff; padding:6px 9px; font-size:11.5px;
                    border-radius:6px; pointer-events:none; opacity:0; transition:.1s; z-index:10;
                    border:1px solid var(--border-strong); white-space:nowrap; }
+  .chart-tooltip.rich { white-space:normal; max-width:250px; padding:11px 13px; line-height:1.5;
+                        box-shadow:0 12px 30px -10px rgba(0,0,0,.7); }
+  .chart-tooltip.rich .tip-h { font-weight:800; font-size:13px; margin-bottom:5px; }
+  .chart-tooltip.rich .tip-d { font-size:11px; opacity:.72; margin-bottom:8px; }
+  .chart-tooltip.rich .tip-rows { display:flex; flex-direction:column; gap:4px;
+                                  border-top:1px solid rgba(255,255,255,.14); padding-top:7px; }
+  .chart-tooltip.rich .tip-rows .tr { display:flex; justify-content:space-between; gap:16px; font-size:11.5px; }
+  .chart-tooltip.rich .tip-rows .tr span { opacity:.7; }
+  .chart-tooltip.rich .tip-rows .tr b { color:var(--accent); font-variant-numeric:tabular-nums; font-weight:700; }
+  .chart-tooltip.rich .tip-nav { margin-top:8px; font-size:10.5px; color:var(--accent); font-weight:600; }
 
   /* ============ LIST / TOP ============ */
   .list-rank { display:flex; flex-direction:column; gap:7px; }
@@ -203,6 +214,7 @@
       <select id="modal-status">
         <option value="done">✓ Hoàn thành</option>
         <option value="reviewing">🔧 Đang xử lý</option>
+        <option value="awaiting_user">⏳ Chờ HS bổ sung</option>
         <option value="rejected">✗ Từ chối</option>
       </select>
     </div>
@@ -260,17 +272,46 @@
   </div>
 
   <!-- Edit user -->
-  <div class="modal" id="modal-editUser" style="display:none">
-    <h3>✏️ Sửa thông tin người dùng</h3>
+  <div class="modal" id="modal-editUser" style="display:none;max-height:88vh;overflow:auto">
+    <h3>✏️ Chỉnh sửa người dùng</h3>
     <p class="sub" id="eu-sub"></p>
     <div class="grp"><label>Tên hiển thị</label><input id="eu-display"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div class="grp"><label>Email</label><input id="eu-email" type="email"></div>
       <div class="grp"><label>Tuổi</label><input id="eu-age" type="number" min="3" max="100"></div>
     </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="grp"><label>Vai trò</label><select id="eu-role">
+        <option value="pupil">🎒 Học sinh (pupil)</option>
+        <option value="student">🎓 Sinh viên (student)</option>
+        <option value="teacher">👨‍🏫 Giảng viên (teacher)</option>
+        <option value="admin">🛡️ Quản trị (admin)</option>
+      </select></div>
+      <div class="grp"><label>Gói cước</label><select id="eu-plan">
+        <option value="free">Free</option>
+        <option value="plus">Plus</option>
+        <option value="pro">Pro</option>
+      </select></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="grp"><label>Trường đang học</label><select id="eu-enrolled"></select></div>
+      <div class="grp"><label>Lớp (HS · 1–12)</label><input id="eu-grade" type="number" min="1" max="12" placeholder="—"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="grp"><label>Ngành (SV)</label><input id="eu-major" placeholder="vd: it, pharmacy…"></div>
+      <div class="grp"><label>Khoá (SV)</label><input id="eu-cohort" placeholder="vd: K65"></div>
+    </div>
+    <div class="grp"><label>Tên trường (HS/PH/ĐH đang theo)</label><input id="eu-school" placeholder="tên trường tự do"></div>
     <div class="actions">
       <button class="btn" id="eu-cancel">Huỷ</button>
-      <button class="btn primary" id="eu-submit">💾 Lưu</button>
+      <button class="btn primary" id="eu-submit">💾 Lưu tất cả</button>
+    </div>
+    <div style="border-top:1px solid var(--border);margin:16px 0 12px"></div>
+    <label style="font-size:12px;opacity:.6;display:block;margin-bottom:8px">Hành động khác</label>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      <button class="btn" id="eu-wallet" title="Xem/sửa ví XP/coin">🎮 Ví XP/Coin</button>
+      <button class="btn" id="eu-pwd" title="Đặt lại mật khẩu">🔑 Đổi mật khẩu</button>
+      <button class="btn danger" id="eu-del" title="Xoá user">🗑 Xoá user</button>
     </div>
   </div>
 
@@ -348,7 +389,7 @@
 <div class="toast" id="toast"></div>
 <div class="chart-tooltip" id="ctt"></div>
 
-<script type="module" src="/js/admin-dashboard.js?v=pageview1"></script>
+<script type="module" src="/js/admin-dashboard.js?v=updatedcol1"></script>
 <script type="module" src="./js/engagement-hud.js?v=2026-06-05-r2"></script>
 <script type="module" src="./js/onboarding-60s.js?v=2026-06-08-r8"></script>
 <script type="module" src="./js/pet-widget.js?v=2026-06-10-tl1"></script>

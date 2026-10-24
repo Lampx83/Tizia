@@ -1,4 +1,7 @@
-/* PORTAL APPS — cài app theo chuẩn AI Portal (embedded zip) vào EduVerse.
+/* PORTAL APPS — cài app theo chuẩn AI Portal vào EduVerse/Tizia.
+ *
+ * MỤC TIÊU: cùng một gói .zip cài được trên AI Portal thì cũng cài được trên Tizia
+ * (Convertum, Scorum, QRCode, …). Tizia tái tạo đúng "hợp đồng" host↔app của AI Portal.
  *
  * Mô hình:
  *   • Developer đã login upload .zip chứa manifest.json + public/index.html.
@@ -7,10 +10,21 @@
  *   • Static serve dưới /portal-apps/u/<owner_id>/<alias>/...
  *   • App hiện trong apps.html qua GET /api/portal-apps (own + public).
  *
- * KHÔNG hỗ trợ (giảm bề mặt attack & scope MVP):
- *   • hasBackend: bundled Node code KHÔNG được thực thi — chỉ frontend-only.
- *   • apiProxyTarget: KHÔNG reverse-proxy ra URL ngoài.
- *   • portal-embedded.sql: KHÔNG chạy SQL từ zip (app chỉ là SPA tĩnh).
+ * HỢP ĐỒNG TƯƠNG THÍCH AI PORTAL:
+ *   • [Tầng 0] Khi serve index.html, CHÈN các global mà app AI Portal mong đợi:
+ *       window.__PORTAL_USER__ / __WRITE_API_BASE__ / __DATA_API_BASE__
+ *       / __PORTAL_THEME__ / __AI_PORTAL_LOCALE__ / __PORTAL_BASE_PATH__
+ *     ⇒ app frontend-only (hasFrontendOnly) chạy y như trên AI Portal, không sửa code.
+ *   • [Tầng 1] App có backend riêng (manifest.apiProxyTarget/base_url): request
+ *       /api/apps/<alias>/*  được reverse-proxy tới target, kèm header danh tính
+ *       X-User-Id / X-User-Email / X-User-Name lấy từ session Tizia — đúng như proxy
+ *       của AI Portal (apps-proxy.ts). Có chặn SSRF (địa chỉ nội bộ) theo mặc định.
+ *
+ * KHÔNG hỗ trợ (giảm bề mặt attack):
+ *   • Bundled Node code (dist/embed.js) KHÔNG chạy in-process — app có backend phải
+ *     tự chạy như service riêng rồi khai báo apiProxyTarget (khác AI Portal dùng Postgres
+ *     schema-per-app + require() in-process). Đóng gói kiểu đó → dùng Tầng 1.
+ *   • KHÔNG chạy SQL từ zip.
  */
 
 import path from 'node:path';
@@ -27,15 +41,23 @@ import {
   upsertBuiltinApp,
   listBuiltinApps,
   getSystemOwnerId,
+  findInstalledPortalAppByAlias,
 } from '../../db.js';
 import { BUILTIN_APPS, CATALOG_VERSION } from './builtin-catalog.js';
+import {
+  ALIAS_RE,
+  INDEX_INJECT_RE,
+  validateManifest,
+  injectPortalConfig,
+  isSafeProxyTarget,
+} from './embed.js';
 
 // Seed builtin catalog vào DB (upsert theo alias). Chỉ chạy 1 lần / catalog version.
 // Lưu marker version trong file để tránh re-seed mỗi khi server restart.
 let _seeded = false;
-export function seedBuiltinAppsOnce() {
+export async function seedBuiltinAppsOnce() {
   if (_seeded) return;
-  const sysOwner = getSystemOwnerId();
+  const sysOwner = await getSystemOwnerId();
   if (!sysOwner) {
     // Chưa có admin → defer; sẽ thử lại lần sau khi 1 request đi qua attachUser.
     return;
@@ -43,7 +65,7 @@ export function seedBuiltinAppsOnce() {
   try {
     let inserted = 0, updated = 0;
     for (const app of BUILTIN_APPS) {
-      const r = upsertBuiltinApp(sysOwner, app);
+      const r = await upsertBuiltinApp(sysOwner, app);
       if (r.action === 'inserted') inserted++;
       else updated++;
     }
@@ -58,7 +80,6 @@ export function seedBuiltinAppsOnce() {
 const MAX_ZIP_BYTES        = 30 * 1024 * 1024;   // 30 MB zip
 const MAX_UNCOMPRESSED     = 100 * 1024 * 1024;  // 100 MB sau giải nén (chống zip-bomb)
 const MAX_FILES_PER_APP    = 2000;
-const ALIAS_RE             = /^[a-z][a-z0-9-]{1,40}$/; // lowercase, kebab, 2-41 ký tự
 const ALLOWED_TOP_DIRS     = new Set(['public', 'schema']); // schema chấp nhận để upload nhưng KHÔNG chạy
 const REQUIRED_INDEX       = 'public/index.html';
 
@@ -83,31 +104,42 @@ function safeEntryPath(rawName) {
   return p;
 }
 
-function validateManifest(json) {
-  if (!json || typeof json !== 'object') return { ok: false, error: 'manifest không phải JSON object' };
-  const alias = String(json.alias ?? json.id ?? '').trim().toLowerCase();
-  if (!ALIAS_RE.test(alias)) return { ok: false, error: 'alias không hợp lệ (cần [a-z0-9-], 2-41 ký tự, bắt đầu bằng chữ)' };
-  if (!json.name || typeof json.name !== 'string') return { ok: false, error: 'manifest.name (string) là bắt buộc' };
-  // Note: chấp nhận hasBackend=true nhưng CHỈ extract public/ — backend Node code KHÔNG chạy.
-  // App sẽ hoạt động một phần (UI hiển thị, API call → 404). Người cài tự chịu.
-  return {
-    ok: true,
-    alias,
-    name: String(json.name).slice(0, 120),
-    description: json.description ? String(json.description).slice(0, 500) : null,
-    icon: json.icon ? String(json.icon).slice(0, 60) : null,
-    version: json.version ? String(json.version).slice(0, 40) : null,
-    needsBackend: json.hasBackend === true,
-  };
-}
 
 /**
  * @param {import('express').Router} r
  * @param {{ requireAuth: import('express').RequestHandler,
- *           requireAdmin: import('express').RequestHandler }} mw
+ *           requireAdmin: import('express').RequestHandler,
+ *           basePath?: string }} mw
  */
-export function attachPortalApps(r, { requireAuth, requireAdmin }) {
+export function attachPortalApps(r, { requireAuth, requireAdmin, basePath = '' }) {
   const PORTAL_APPS_DIR = getPortalAppsDir();
+  const BASE_PATH = (basePath || process.env.BASE_PATH || '').replace(/\/$/, '');
+
+  // ── [Tầng 0] INJECT index.html: chèn window.__PORTAL_*__ theo hợp đồng AI Portal ──
+  // Bắt ĐÚNG request tới index (thư mục "…/<alias>/" hoặc "…/<alias>/index.html"), đọc file
+  // từ disk, chèn config rồi trả. Mọi asset khác rơi xuống express.static bên dưới.
+  // PHẢI đứng TRƯỚC static mount để chặn được request index trước khi static tự serve.
+  r.get(INDEX_INJECT_RE, (req, res, next) => {
+    const ownerId = req.params[0];
+    const alias = req.params[1];
+    const indexPath = path.join(PORTAL_APPS_DIR, ownerId, alias, 'index.html');
+    // Guard path-traversal (ownerId là số, alias đã qua regex — vẫn kiểm tra prefix cho chắc).
+    if (!indexPath.startsWith(PORTAL_APPS_DIR + path.sep)) return next();
+    fs.readFile(indexPath, 'utf-8', (err, html) => {
+      if (err) return next(); // không có index → để static trả 404 như cũ
+      const theme = (req.query.theme === 'dark' || req.query.theme === 'light') ? req.query.theme : null;
+      const out = injectPortalConfig(html, {
+        alias, ownerId, basePath: BASE_PATH,
+        user: req.user || null,
+        theme,
+        locale: 'vi',
+      });
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store'); // HTML đã cá nhân hoá (user) → không cache
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.send(out);
+    });
+  });
 
   // ── STATIC SERVE: /portal-apps/u/<owner_id>/<alias>/* ──
   // Mỗi user có namespace riêng để tránh đụng alias. extension html cho clean URL.
@@ -127,15 +159,80 @@ export function attachPortalApps(r, { requireAuth, requireAdmin }) {
     },
   }));
 
+  // ── [Tầng 1] PROXY BACKEND: /api/apps/<alias>/*  →  manifest.apiProxyTarget ──
+  // App có backend riêng (service ngoài) khai `apiProxyTarget` trong manifest. Request từ FE
+  // của app (window.__WRITE_API_BASE__ = /api/apps/<alias>) được forward tới target, KÈM header
+  // danh tính X-User-Id / X-User-Email / X-User-Name — đúng hợp đồng AI Portal (apps-proxy.ts).
+  // App tin tưởng header này (Tizia là identity provider). Có chặn SSRF trong isSafeProxyTarget.
+  r.all('/api/apps/:alias/*', requireAuth, async (req, res) => {
+    const alias = String(req.params.alias || '').trim().toLowerCase();
+    if (!ALIAS_RE.test(alias)) return res.status(400).json({ error: 'bad_alias' });
+
+    const row = await findInstalledPortalAppByAlias(req.user.id, alias);
+    if (!row) return res.status(404).json({ error: 'app_not_found', message: `Chưa cài app: ${alias}` });
+
+    let manifest = {};
+    try { manifest = JSON.parse(row.manifest_json || '{}'); } catch {}
+    const target = String(manifest.apiProxyTarget || manifest.base_url || '').replace(/\/+$/, '');
+    if (!target) {
+      return res.status(404).json({ error: 'no_backend', message: 'App này là frontend-only (không khai apiProxyTarget).' });
+    }
+    if (!isSafeProxyTarget(target)) {
+      return res.status(502).json({ error: 'unsafe_target', message: 'apiProxyTarget bị chặn (địa chỉ nội bộ/không phải http).' });
+    }
+
+    // Ghép URL đích: phần sau /api/apps/<alias>/ + query string gốc.
+    const rest = req.params[0] ? '/' + req.params[0].replace(/^\/+/, '') : '/';
+    const qIdx = req.originalUrl.indexOf('?');
+    const qs = qIdx >= 0 ? req.originalUrl.slice(qIdx) : '';
+    const targetUrl = target + rest + qs;
+
+    const headers = {
+      'X-User-Id': String(req.user.id),
+      'X-User-Email': req.user.email || '',
+      'X-User-Name': req.user.display_name || req.user.username || '',
+    };
+    if (req.headers['content-type']) headers['Content-Type'] = req.headers['content-type'];
+    if (req.headers['accept']) headers['Accept'] = req.headers['accept'];
+
+    // express.json() (app-level, 64kb) đã parse body TRƯỚC router này → tái tuần tự hoá.
+    let body;
+    if (req.method !== 'GET' && req.method !== 'HEAD' && req.body != null) {
+      if (Buffer.isBuffer(req.body)) body = req.body;
+      else if (typeof req.body === 'string') body = req.body;
+      else if (Object.keys(req.body).length > 0) body = JSON.stringify(req.body);
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60_000);
+    try {
+      const upstream = await fetch(targetUrl, { method: req.method, headers, body, signal: controller.signal });
+      res.status(upstream.status);
+      const ct = upstream.headers.get('content-type');
+      if (ct) res.setHeader('Content-Type', ct);
+      const cd = upstream.headers.get('content-disposition');
+      if (cd) res.setHeader('Content-Disposition', cd);
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      res.send(buf);
+    } catch (e) {
+      if (!res.headersSent) {
+        const aborted = e && e.name === 'AbortError';
+        res.status(aborted ? 504 : 502).json({ error: aborted ? 'upstream_timeout' : 'upstream_failed', message: String(e?.message || e) });
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+
   // ── LIST: own + public + builtin ──
   // builtin = trỏ target_url nội bộ (vd /bao-so-hoc.html); embedded = static folder.
   // Một lần cơ hội seed nếu chưa: gọi sau khi đã có session admin.
-  r.get('/api/portal-apps', requireAuth, (req, res) => {
-    seedBuiltinAppsOnce();
+  r.get('/api/portal-apps', requireAuth, async (req, res) => {
+    await seedBuiltinAppsOnce();
     const ownerId = req.user.id;
-    const own = listPortalAppsByOwner(ownerId).filter(a => !a.kind || a.kind === 'embedded');
-    const pub = listPortalAppsPublic().filter(a => a.owner_id !== ownerId && (!a.kind || a.kind === 'embedded'));
-    const builtins = listBuiltinApps();
+    const own = (await listPortalAppsByOwner(ownerId)).filter(a => !a.kind || a.kind === 'embedded');
+    const pub = (await listPortalAppsPublic()).filter(a => a.owner_id !== ownerId && (!a.kind || a.kind === 'embedded'));
+    const builtins = await listBuiltinApps();
     const decorate = (rows, kind = 'embedded') => rows.map(a => ({
       id: a.id,
       alias: a.alias,
@@ -163,9 +260,9 @@ export function attachPortalApps(r, { requireAuth, requireAdmin }) {
   });
 
   // Public list cho campus map / homepage — không cần login (guest mode).
-  r.get('/api/portal-apps/catalog', (req, res) => {
-    seedBuiltinAppsOnce();
-    const builtins = listBuiltinApps();
+  r.get('/api/portal-apps/catalog', async (req, res) => {
+    await seedBuiltinAppsOnce();
+    const builtins = await listBuiltinApps();
     res.json({
       builtin: builtins.map(a => ({
         id: a.id, alias: a.alias, name: a.name, description: a.description,
@@ -180,7 +277,7 @@ export function attachPortalApps(r, { requireAuth, requireAdmin }) {
   r.post('/api/portal-apps/install',
     requireAuth,
     express.raw({ type: () => true, limit: MAX_ZIP_BYTES }),
-    (req, res) => {
+    async (req, res) => {
       const ownerId = req.user.id;
       const buf = req.body;
       if (!Buffer.isBuffer(buf) || buf.length === 0) {
@@ -273,7 +370,7 @@ export function attachPortalApps(r, { requireAuth, requireAdmin }) {
       }
 
       // Ghi DB
-      const row = upsertPortalApp({
+      const row = await upsertPortalApp({
         ownerId,
         alias: v.alias,
         name: v.name,
@@ -298,9 +395,9 @@ export function attachPortalApps(r, { requireAuth, requireAdmin }) {
   );
 
   // ── UNINSTALL ──
-  r.delete('/api/portal-apps/:id', requireAuth, (req, res) => {
+  r.delete('/api/portal-apps/:id', requireAuth, async (req, res) => {
     const id = Number(req.params.id);
-    const row = getPortalAppById(id);
+    const row = await getPortalAppById(id);
     if (!row) return res.status(404).json({ error: 'not_found' });
     const isOwner = row.owner_id === req.user.id;
     const isAdmin = req.user.role === 'admin';
@@ -308,17 +405,45 @@ export function attachPortalApps(r, { requireAuth, requireAdmin }) {
     // Xoá thư mục trên disk
     const targetDir = path.join(PORTAL_APPS_DIR, String(row.owner_id), row.alias);
     try { fs.rmSync(targetDir, { recursive: true, force: true }); } catch {}
-    deletePortalApp(id);
+    await deletePortalApp(id);
     res.json({ ok: true });
   });
 
   // ── PUBLISH/UNPUBLISH (admin) ──
-  r.post('/api/portal-apps/:id/publish', requireAuth, requireAdmin, (req, res) => {
+  r.post('/api/portal-apps/:id/publish', requireAuth, requireAdmin, async (req, res) => {
     const id = Number(req.params.id);
-    const row = getPortalAppById(id);
+    const row = await getPortalAppById(id);
     if (!row) return res.status(404).json({ error: 'not_found' });
     const isPublic = req.body?.public !== false; // default true
-    setPortalAppPublic(id, isPublic);
+    await setPortalAppPublic(id, isPublic);
     res.json({ ok: true, isPublic });
+  });
+
+  // ── LIBRARY (admin): thêm app vào THƯ VIỆN dùng chung (kind='builtin') ──
+  // "DB-managed library": admin đăng ký 1 trang/URL thành app mà KHÔNG cần sửa
+  // builtin-catalog.js + restart. Trỏ target_url (nội bộ /x.html hoặc http ngoài),
+  // gắn domain = cấp học để trường lọc/dùng. Quy mọi tính năng thành app qua đây.
+  r.post('/api/portal-apps/library', requireAuth, requireAdmin, async (req, res) => {
+    const b = req.body || {};
+    const alias = String(b.alias || '').trim().toLowerCase();
+    const name = String(b.name || '').trim();
+    const targetUrl = String(b.targetUrl || b.target_url || '').trim();
+    if (!ALIAS_RE.test(alias)) return res.status(400).json({ error: 'bad_alias', message: 'alias cần [a-z0-9-], 2-41 ký tự.' });
+    if (!name) return res.status(400).json({ error: 'bad_name', message: 'Cần tên app.' });
+    if (!(targetUrl.startsWith('/') || /^https?:\/\//i.test(targetUrl))) {
+      return res.status(400).json({ error: 'bad_target', message: 'target_url phải là /trang.html nội bộ hoặc http(s)://…' });
+    }
+    const sysOwner = await getSystemOwnerId();
+    if (!sysOwner) return res.status(503).json({ error: 'no_system_owner', message: 'Chưa có admin để sở hữu app thư viện.' });
+    const r2 = await upsertBuiltinApp(sysOwner, {
+      alias, name,
+      description: b.description ? String(b.description).slice(0, 500) : null,
+      icon: b.icon ? String(b.icon).slice(0, 60) : '🧩',
+      version: '1.0.0',
+      target_url: targetUrl,
+      category: b.category ? String(b.category).slice(0, 40) : 'tool',
+      domain: b.domain ? String(b.domain).slice(0, 40) : null,
+    });
+    res.json({ ok: true, action: r2.action, alias });
   });
 }
