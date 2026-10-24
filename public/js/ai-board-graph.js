@@ -35,7 +35,7 @@ const PIN_LABEL = { candidate: 'change', plan: 'plan', base: 'base commit', harn
   tool: 'toolset', model: 'model', oracle: 'permission list' };
 // Drawn: the main path, the repair and verdict branches, and blocked edges into plan_stopped. Other blocked edges would clutter the graph.
 const drawnEdge = (edge) => ['passed', 'repair', 'done'].includes(edge.on) || edge.to === 'plan_stopped';
-// Edges that loop back in the drawing. They bow below the row so they do not cross nodes.
+// Edges that loop back in the drawing. They run under the row so they do not cross nodes.
 const BACKWARD = new Set(['repair>attempt_open']);
 
 const gateOf = (id) => (id.startsWith('gate_') ? Number(id.slice(5).replace('_', '.')) : null);
@@ -125,7 +125,6 @@ export function graphNodes(trace = {}) {
   const steps = new Map(projection.steps.map(s => [s.gate, s]));
   const execute = projection.steps.filter(s => s.stage === 'execute');
   const planBad = projection.steps.some(s => s.stage === 'plan' && s.state === 'bad');
-  const active = projection.steps.find(s => s.state === 'run');
   const out = {};
   for (const [id, def] of Object.entries(NODES)) {
     const gate = gateOf(id);
@@ -228,7 +227,8 @@ function kv(rows) {
   return `<dl class="kv g-kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join('')}</dl>`;
 }
 
-function nodePanel(node, root) {
+// Properties: what the node is doing now, its numbers and its error. Actions sit here too.
+function propsPanel(node, root) {
   if (!node) return '<p class="meta g-empty">Select a node to see what it does.</p>';
   const head = `<div class="g-panel-head"><h3>${esc(node.name)}</h3><span class="g-state st-${node.state}">${icon(node.state)}${esc(STATE_LABEL[node.state])}</span></div>`;
   const purpose = `<p class="g-purpose">${esc(node.purpose)}</p>`;
@@ -250,21 +250,31 @@ function nodePanel(node, root) {
   ];
   const error = node.state === 'failed' && node.error ? `<div class="g-error"><b>Error</b><p>${esc(node.error)}</p></div>` : '';
   const proof = node.proof ? `<p class="meta">${esc(node.proof)}</p>` : '';
+  const action = rerunAction(node, root);
+  return `${head}${purpose}${kv(rows)}${error}${proof}${action ? `<div class="g-slot">${action}</div>` : ''}`;
+}
+
+// Execution log: AI calls, tool calls, sandbox runs, skills, earlier attempts and the raw record, in mono.
+function logPanel(node) {
+  if (!node) return '<p class="meta g-empty">Chọn một bước để xem nhật ký.</p>';
+  if (!node.step) return `<p class="meta g-empty">${esc(node.name)} chưa có nhật ký.</p>`;
   const models = node.models.length ? `<h4>AI calls</h4><ol class="g-list">${node.models.map(m => `<li><b>${esc(m.title)}</b> · ${esc(m.result)} · ${esc(secs(m.ms))} · budget ${esc(num(m.budget))} · ${esc(m.model || 'model not recorded')}${m.error ? `<div class="meta">${esc(m.error)}</div>` : ''}</li>`).join('')}</ol>` : '';
   const tools = node.tools.length ? `<h4>Tool calls</h4><ol class="g-list">${node.tools.map(t => `<li><b>${esc(t.tool)}</b>${t.target ? ` <code>${esc(t.target)}</code>` : ''} · ${esc(CALL_LABEL[t.result] || 'No result yet')} · ${esc(secs(t.ms))}</li>`).join('')}</ol>` : '';
   const sandbox = node.sandbox.length ? `<h4>Sandbox runs</h4><ol class="g-list">${node.sandbox.map(r => `<li><code>${esc((r.argv || []).join(' '))}</code> · exit ${esc(r.rc ?? 'none')} · ${esc(secs(r.duration_ms))}${r.error ? ` · ${esc(r.error)}` : ''}</li>`).join('')}</ol>` : '';
   const skills = node.skills.length ? `<h4>Skills</h4><p>${node.skills.map(s => esc(s)).join(', ')}</p>` : '';
   const earlier = node.earlier.length ? `<h4>Earlier attempts</h4><ol class="g-list">${node.earlier.map(r => `<li>${esc(r)}</li>`).join('')}</ol>` : '';
-  const raw = `<details class="raw g-raw" data-k="graph-raw:${esc(node.id)}"><summary>Details</summary><pre>${esc(JSON.stringify({ result: node.step.result || null, calls: callsOf(node.step) }, null, 2))}</pre></details>`;
-  const action = rerunAction(node, root);
-  return `${head}${purpose}${kv(rows)}${error}${proof}${models}${tools}${sandbox}${skills}${earlier}${action ? `<div class="g-slot">${action}</div>` : ''}${raw}`;
+  const raw = `<details class="raw g-raw" data-k="graph-raw:${esc(node.id)}"><summary>Raw record</summary><pre class="mono">${esc(JSON.stringify({ result: node.step.result || null, calls: callsOf(node.step) }, null, 2))}</pre></details>`;
+  return `${models}${tools}${sandbox}${skills}${earlier}${raw}`;
 }
 
-// Edge: a straight line, or a bowed curve for a loop-back. Endpoints are node centres (nodes paint over them).
+// Orthogonal edge: straight when aligned, else one bend. Loop-back runs under the row. Endpoints are node centres.
 function edgePath(from, to, back) {
   const [x1, y1] = NODES[from].at, [x2, y2] = NODES[to].at;
-  if (!back) return `M${x1} ${y1}L${x2} ${y2}`;
-  return `M${x1} ${y1}Q${(x1 + x2) / 2} ${Math.max(y1, y2) + 150} ${x2} ${y2}`;
+  if (back) return `M${x1} ${y1}V${Math.max(y1, y2) + 60}H${x2}V${y2}`;
+  if (x1 === x2 || y1 === y2) return `M${x1} ${y1}L${x2} ${y2}`;
+  // Into plan_stopped drop first, so the run stays on the free row below the gate row.
+  if (to === 'plan_stopped') return `M${x1} ${y1}V${y2}H${x2}`;
+  return `M${x1} ${y1}H${x2}V${y2}`;
 }
 
 function edgeSvg(edge, nodes) {
@@ -277,20 +287,22 @@ function edgeSvg(edge, nodes) {
   return `<path class="${cls}" d="${edgePath(edge.from, edge.to, back)}" data-edge="${esc(edge.from)}>${esc(edge.to)}"/>`;
 }
 
-// Panel for the chosen node; `chosen` null → the running node, else the failed one.
+// Three stacked panels: properties, graph, execution log. Chosen node null → the running node, else the failed one.
 export function renderTicketGraph(trace = {}, chosen = null, now = Date.now()) {
   const nodes = graphNodes(trace);
   const selectedId = pick(nodes, chosen);
   const edges = (trace.graph?.edges || []).filter(drawnEdge).map(e => edgeSvg(e, nodes)).join('');
   const present = new Set((trace.graph?.nodes || []).map(n => n.id));
-  const drawn = Object.values(nodes).filter(n => present.size === 0 || present.has(n.id)).map(n => {
+  const shown = Object.values(nodes).filter(n => present.size === 0 || present.has(n.id));
+  const drawn = shown.map(n => {
     const sel = n.id === selectedId;
     const label = `${n.name}: ${STATE_LABEL[n.state]}`;
     return `<g class="g-node st-${n.state}${sel ? ' is-selected' : ''}" data-node="${esc(n.id)}" role="button" tabindex="0" aria-pressed="${sel}" aria-label="${esc(label)}" transform="translate(${n.at[0]} ${n.at[1]})">
-      ${sel ? '<circle class="g-halo" r="28"/>' : ''}
-      <circle class="g-ring" r="18"/>
-      <g transform="translate(-8 -8)"><g class="g-glyph">${ICON[n.state]}</g></g>
-      <text class="g-label" y="42" text-anchor="middle">${esc(n.name)}</text>
+      ${sel ? '<rect class="g-halo" x="-82" y="-35" width="164" height="70" rx="18"/>' : ''}
+      <rect class="g-box" x="-75" y="-28" width="150" height="56" rx="14"/>
+      <g transform="translate(-62 -8)"><g class="g-glyph">${ICON[n.state]}</g></g>
+      <text class="g-kicker" x="-40" y="-5">${esc(STATE_LABEL[n.state])}</text>
+      <text class="g-label" x="-40" y="13">${esc(n.name)}</text>
     </g>`;
   }).join('');
   const rollback = projectPipeline(trace).runs.at(-1)?.rollback;
@@ -301,15 +313,23 @@ export function renderTicketGraph(trace = {}, chosen = null, now = Date.now()) {
       ${c.sub ? `<div class="g-sub">${esc(c.sub)}</div>` : ''}
       ${c.bar ? `<div class="g-bar" aria-hidden="true"><i style="width:${Math.round(c.ratio * 100)}%"></i></div>` : ''}
     </div>`).join('');
+  const chosenNode = nodes[selectedId];
+  const steps = shown.map(n => `<li><button type="button" class="g-step st-${n.state}${n.id === selectedId ? ' is-selected' : ''}" data-node="${esc(n.id)}" aria-pressed="${n.id === selectedId}">${icon(n.state)}<span class="g-step-name">${esc(n.name)}</span><span class="g-step-state">${esc(STATE_LABEL[n.state])}</span></button></li>`).join('');
   return `<section class="ticket-graph" aria-labelledby="ticket-graph-title">
     <h2 id="ticket-graph-title">Ticket graph</h2>
-    <div class="g-strip" role="group" aria-label="Budget">${cells}</div>
-    <p class="g-legend meta">${Object.keys(ICON).map(s => `<span class="g-state st-${s}">${icon(s)}${esc(STATE_LABEL[s])}</span>`).join('')}</p>
-    <div class="g-frame"><svg class="g-svg" viewBox="0 0 1000 540" role="group" aria-label="Ticket processing graph">
-      <g class="g-edges">${edges}</g>
-      <g class="g-nodes">${drawn}</g>
-    </svg></div>
-    ${rollbackLine}
-    <div class="g-detail" role="region" aria-live="polite" aria-label="Node details">${nodePanel(nodes[selectedId], trace.root)}</div>
+    <div class="blk g-props" role="region" aria-live="polite" aria-label="Thuộc tính bước">${propsPanel(chosenNode, trace.root)}</div>
+    <div class="blk g-graph">
+      <div class="g-strip" role="group" aria-label="Budget">${cells}</div>
+      <p class="g-legend meta">${Object.keys(ICON).map(s => `<span class="g-state st-${s}">${icon(s)}${esc(STATE_LABEL[s])}</span>`).join('')}</p>
+      <div class="g-frame"><svg class="g-svg" viewBox="-20 0 1040 540" role="group" aria-label="Ticket processing graph">
+        <g class="g-edges">${edges}</g>
+        <g class="g-nodes">${drawn}</g>
+      </svg></div>
+      ${rollbackLine}
+    </div>
+    <div class="blk g-log" role="region" aria-label="Nhật ký thực thi">
+      <ul class="g-steps" aria-label="Các bước">${steps}</ul>
+      <div class="g-pane">${logPanel(chosenNode)}</div>
+    </div>
   </section>`;
 }

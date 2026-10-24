@@ -157,20 +157,31 @@
   .g-edge.stop { stroke:var(--bad); stroke-opacity:.6; stroke-dasharray:2 4; }
   .g-edge.flow { stroke:var(--accent2); stroke-opacity:1; stroke-dasharray:4 8; animation:g-flow 1.2s linear infinite; }
   @keyframes g-flow { to { stroke-dashoffset:-24; } }
-  .g-ring { fill:var(--bg); stroke:var(--muted); stroke-width:1.5; }
+  .g-box { fill:var(--bg); stroke:var(--muted); stroke-width:1.5; }
   .g-glyph { color:var(--muted); }
-  .g-node.st-succeeded .g-ring, .g-node.st-succeeded .g-glyph { stroke:var(--ok); color:var(--ok); }
-  .g-node.st-failed .g-ring, .g-node.st-failed .g-glyph { stroke:var(--bad); color:var(--bad); }
-  .g-node.st-running .g-ring, .g-node.st-running .g-glyph { stroke:var(--accent2); color:var(--accent2); }
+  .g-node.st-succeeded .g-box, .g-node.st-succeeded .g-glyph { stroke:var(--ok); color:var(--ok); }
+  .g-node.st-failed .g-box, .g-node.st-failed .g-glyph { stroke:var(--bad); color:var(--bad); }
+  .g-node.st-running .g-box, .g-node.st-running .g-glyph { stroke:var(--accent2); color:var(--accent2); }
   .g-node.st-running .g-glyph { animation:g-turn 1.4s linear infinite; transform-box:fill-box; transform-origin:center; }
   @keyframes g-turn { to { transform:rotate(360deg); } }
   .g-halo { fill:none; stroke:var(--accent); stroke-width:1.5; }
-  .g-label { font-size:13px; fill:var(--muted); text-anchor:middle; }
+  .g-label { font-size:12px; fill:var(--muted); }
+  .g-kicker { font-size:10px; fill:var(--muted); letter-spacing:.04em; }
   .g-node { cursor:pointer; outline:none; }
   .g-node:hover .g-label, .g-node.is-selected .g-label { fill:var(--txt); }
-  .g-node:focus-visible .g-ring { stroke:var(--accent); stroke-width:2.5; }
+  .g-node:focus-visible .g-box { stroke:var(--accent); stroke-width:2.5; }
   .g-loop { margin:28px 0 0; }
-  .g-detail { margin-top:64px; padding-top:28px; border-top:1px solid var(--border); max-width:72ch; min-height:80px; }
+  .g-props, .g-graph, .g-log { margin-top:16px; }
+  .g-graph { padding-bottom:8px; }
+  .g-log { display:grid; grid-template-columns:minmax(180px,240px) minmax(0,1fr); padding:0; overflow:hidden; }
+  .g-steps { list-style:none; margin:0; padding:6px; border-right:1px solid var(--border); }
+  .g-step { display:flex; align-items:center; gap:8px; width:100%; min-height:44px; padding:8px 10px; border:0; border-radius:8px; background:none; color:var(--muted); font:inherit; font-size:13px; text-align:left; cursor:pointer; }
+  .g-step-name { flex:1; min-width:0; overflow-wrap:anywhere; }
+  .g-step-state { font-size:11px; color:var(--muted); }
+  .g-step:hover, .g-step.is-selected { background:var(--bg3); color:var(--txt); }
+  .g-step.st-succeeded .g-icon { color:var(--ok); } .g-step.st-failed .g-icon { color:var(--bad); } .g-step.st-running .g-icon { color:var(--accent2); }
+  .g-pane { padding:20px 24px; min-width:0; min-height:80px; }
+  .g-icon { flex:none; }
   .g-empty { margin:0; }
   .g-panel-head { display:flex; flex-wrap:wrap; gap:6px 16px; align-items:baseline; justify-content:space-between; }
   .g-panel-head h3 { margin:0; font-size:18px; }
@@ -179,7 +190,7 @@
   .g-error { margin:0 0 20px; }
   .g-error b { color:var(--bad); font-weight:600; }
   .g-error p { margin:4px 0 0; }
-  .g-detail h4 { font-size:13px; color:var(--muted); margin:24px 0 8px; font-weight:600; }
+  .g-pane h4 { font-size:13px; color:var(--muted); margin:24px 0 8px; font-weight:600; }
   .g-list { margin:0; padding-left:20px; font-size:13px; }
   .g-list li { margin:6px 0; overflow-wrap:anywhere; }
   .g-slot { margin:24px 0 0; }
@@ -187,7 +198,9 @@
   @media (max-width:600px) {
     .g-strip { grid-template-columns:1fr 1fr; }
     .g-big { font-size:22px; }
-    .g-detail { margin-top:48px; }
+    .g-log { grid-template-columns:minmax(0,1fr); }
+    .g-steps { border-right:0; border-bottom:1px solid var(--border); }
+    .g-pane { padding:16px; }
   }
   @media (prefers-reduced-motion: reduce) {
     .g-edge.flow, .g-node.st-running .g-glyph { animation:none; }
@@ -196,12 +209,6 @@
 </style>
 </head>
 <body data-no-auth-header data-no-suggestion-fab data-no-notifications-bell data-no-gamify>
-<aside class="blk" aria-label="Giữ dữ liệu khi quay về code cũ" data-schema-compatibility-notice>
-  <details><summary>Quay về code cũ có làm mất dữ liệu không?</summary>
-    <p>Quay về phiên bản code trước giữ nguyên schema đã mở rộng và mọi dữ liệu đã ghi. Code cũ chỉ sửa các trường nó biết.</p>
-    <p>Hoàn tác dữ liệu là thao tác riêng theo revision. Xóa trường, đổi kiểu hoặc sửa schema dùng chung phải dừng để duyệt migration; Git revert không tự hoàn tác database.</p>
-  </details>
-</aside>
 <nav aria-label="Bài học AI Board"><a class="back" href="/ai-board-lessons.html">Review bài học AI Board</a> <a class="back" href="/admin-shots.html">Ảnh nháp đã lưu</a></nav>
 <main id="app"><p class="meta" role="status">Đang tải yêu cầu…</p></main>
 <script type="module" src="/js/admin-request.js"></script>
