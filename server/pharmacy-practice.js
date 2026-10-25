@@ -46,6 +46,7 @@ const insSession = db.prepare(`
   RETURNING session_id
 `);
 const getSessionRow = db.prepare(`SELECT * FROM pharmacy_practice_session WHERE session_id = ?`);
+const listScoringSessions = db.prepare(`SELECT session_id FROM pharmacy_practice_session WHERE status = 'scoring' ORDER BY updated_at`);
 const finishSession = db.prepare(`
   UPDATE pharmacy_practice_session
      SET completed_at = @completed_at, duration_ms = @duration_ms, status = @status,
@@ -297,6 +298,11 @@ const OTC_ACTION_TYPES = {
   C6: ['retail_split', 'pack_retail', 'pack_retail_tray', 'label_dose', 'pack_label'],
 };
 
+const OTC_NO_ACTION_TIP = {
+  C2: 'Cần thực hiện các thao tác trên phần mềm mô phỏng 3D: lấy đúng thuốc trên kệ, kiểm tra tên thuốc, hàm lượng, hạn dùng trước khi giao.',
+  C3: 'Cần thực hiện các thao tác trên phần mềm mô phỏng 3D: lập hoá đơn ở máy tính tiền, thông báo đúng tổng tiền và thu tiền.',
+  C6: 'Cần thực hiện các thao tác trên phần mềm mô phỏng 3D: chia lẻ/đóng gói thuốc và ghi nhãn hướng dẫn sử dụng.',
+};
 // req #230 mục 4 — 2 tiêu chí bị chấm quá tay, ghi rõ luật để AI bám đúng thay vì tự suy diễn.
 const OTC_CRITERION_NOTES = {
   C5: 'LƯU Ý CHẤM: nếu chỉ tư vấn tác dụng không mong muốn (ADR) mà KHÔNG đề cập tương tác thuốc/thức ăn, lối sống–sinh hoạt hay bảo quản thì tối đa 2 điểm dù ADR nói đúng.',
@@ -320,6 +326,16 @@ const OTC_CRITERION_NOTES = {
   E5: 'LƯU Ý CHẤM: "evidence" phải trích đúng đoạn dược sĩ ngập ngừng/nói lắp/ngắt quãng/lặp từ (nếu có). "improvement" khi điểm chưa tối đa nên ghi "cần giao tiếp liên tục, lưu loát, không ngắt quãng".',
 };
 
+// req #244 (25/10) — luật chấm RIÊNG cho OTC-02 (bán Alaxan) theo đáp án của giảng viên.
+const OTC02_NOTES = {
+  C1: 'LƯU Ý CHẤM OTC-02: Alaxan KHÔNG gây chóng mặt, buồn ngủ. Nếu dược sĩ không bán Alaxan mà thay bằng paracetamol và giải thích "Alaxan gây chóng mặt/buồn ngủ, ảnh hưởng công việc" thì cho ĐÚNG 2 điểm. Nếu thay bằng paracetamol VÀ có khuyên khách hàng đi khám vì thuốc chỉ điều trị triệu chứng thì cho 3 điểm. Khi đó "improvement" PHẢI giải thích: Alaxan không gây chóng mặt, buồn ngủ nên không bán Alaxan mà thay bằng paracetamol là chưa đúng, mặc dù paracetamol vẫn có thể dùng để giảm đau răng; trong trường hợp này Alaxan giảm đau răng nhanh và mạnh hơn paracetamol.',
+  C4: 'LƯU Ý CHẤM OTC-02: chấm theo đáp án Alaxan ở trên, KHÔNG tự đặt ra đáp án khác. Nếu dược sĩ chọn thuốc KHÁC đáp án thì dù hướng dẫn cách dùng đúng cũng tối đa 3 điểm. Với paracetamol: hướng dẫn "1 viên/lần khi đau, cách 4–6 giờ (hoặc 6–8 giờ)/lần" → 3 điểm; nếu liều mỗi lần sai (vd 2 viên/lần) dù khoảng cách giữa các lần đúng → 2 điểm. Không được coi "paracetamol uống sau ăn vì kích ứng dạ dày" là hướng dẫn đúng.',
+  C5: 'LƯU Ý CHẤM OTC-02: nếu dược sĩ chọn paracetamol thì tác dụng không mong muốn đúng là: uống quá liều ảnh hưởng đến gan — chỉ uống khi đau, cách 4–6 giờ mới uống tiếp, không quá 8 viên (4 g)/ngày. Tư vấn sai tác dụng không mong muốn hoặc sai tương tác (vd rượu bia) của thuốc đã chọn thì tối đa 2 điểm, dù có lời khuyên lối sống và hướng dẫn bảo quản.',
+  D2: 'LƯU Ý CHẤM OTC-02: xem lời dược sĩ ở bước A3 (giải thích trước khi hỏi) và ngay sau mỗi lần khách hàng phàn nàn/giục giã ("đang vội", "lấy nhanh", "hỏi xong chưa"…). Nếu ở A3 chỉ giải thích mục đích hỏi, và khi khách hàng phàn nàn/giục giã cũng KHÔNG có câu ghi nhận, đồng cảm nào thì cho 1 điểm.',
+  E1: 'LƯU Ý CHẤM OTC-02: tôn trọng, xưng hô lễ phép, bình tĩnh tiếp tục hợp tác khi khách hàng giục giã, nhưng KHÔNG khuyến khích khách hàng đặt câu hỏi và không kiểm tra sự hiểu biết của khách hàng → 3 điểm.',
+  E2: 'LƯU Ý CHẤM OTC-02: hỏi đúng logic theo thứ tự B1 → B2 → B3, câu hỏi không nhiều ý, có cả câu hỏi đóng và mở nhưng còn thiếu một số nội dung chưa hỏi → 4 điểm. Chỉ cho 5 khi hỏi ĐẦY ĐỦ các nội dung.',
+};
+
 function buildOtcPrompt(sc, messages, actions, crits) {
   const transcript = messages
     .map((m, i) => `L${i + 1} ${m.speaker === 'student' ? 'Dược sĩ (SV)' : 'Khách hàng'}: ${m.content}`)
@@ -333,7 +349,8 @@ function buildOtcPrompt(sc, messages, actions, crits) {
   const overrides = sc?.code === 'OTC-02' ? OTC02_LEVEL_OVERRIDES : null;
   const critText = crits.map((c) => {
     const ov = overrides?.[c.code];
-    const note = OTC_CRITERION_NOTES[c.code] ? `\n${OTC_CRITERION_NOTES[c.code]}` : '';
+    const note = (OTC_CRITERION_NOTES[c.code] ? `\n${OTC_CRITERION_NOTES[c.code]}` : '')
+      + (overrides && OTC02_NOTES[c.code] ? `\n${OTC02_NOTES[c.code]}` : '');
     return `### ${c.code}. ${c.name}
 Trọng tâm: ${c.focus}
 Nguồn dữ liệu: ${c.evidence || (c.source === 'combined' ? 'Hội thoại + nhật ký thao tác' : 'Hội thoại')}
@@ -365,6 +382,8 @@ Với TỪNG tiêu chí, chọn "status":
 - "N/O": có áp dụng nhưng thiếu dữ liệu để quan sát → "score": null.
 "evidence": trích ngắn kèm mã lượt/thao tác của DƯỢC SĨ, vd "L3: 'Bé mấy tháng tuổi ạ?'; A5 Lấy thuốc". "comment": nhận xét ngắn tiếng Việt. "improvement": góp ý sửa lỗi CỤ THỂ kèm câu ví dụ (xem quy tắc ở trên).
 
+ĐỘ DÀI: mỗi trường "evidence", "comment", "improvement" tối đa khoảng 2 câu (dưới 60 từ) để câu trả lời không bị cắt.
+
 CHỈ trả về JSON hợp lệ, đúng dạng:
 {"scores":[{"code":"A1","status":"scored","score":4,"evidence":"...","comment":"...","improvement":"..."}]}`;
 }
@@ -374,7 +393,8 @@ async function scoreOtcBatch(sc, messages, actions, crits, out) {
     prompt: buildOtcPrompt(sc, messages, actions, crits),
     system: 'Bạn là giảng viên dược chấm kỹ năng giao tiếp bán thuốc. Bám sát mô tả từng mức của rubric, chỉ dựa vào bằng chứng có trong bản ghi. Chỉ trả về JSON hợp lệ.',
     temperature: 0.2,
-    maxTokens: 1600,
+    // req #244: 1600 token không đủ cho 3 tiêu chí kèm câu ví dụ → JSON bị cắt ngang, mất cả lô (D2/E1/E2)
+    maxTokens: crits.length > 1 ? 3600 : 1500,
     json: true,
   });
   const m = String(raw || '').match(/\{[\s\S]*\}/);
@@ -423,6 +443,9 @@ async function detectOtcSafetyFlags(sc, messages, actions) {
 // req #231 mục 2.2 — chốt cứng D2 khi không có câu đồng cảm nào: nhắc trong prompt không đủ, LLM vẫn
 // thỉnh thoảng cho điểm cao hơn 2 dù không có câu đồng cảm thật. Kiểm tra bằng từ khoá làm trần chặn trên.
 const OTC_EMPATHY_RE = /(em hiểu|tôi hiểu|mình hiểu|em rất hiểu|em biết là|em thấu hiểu|thông cảm|chia sẻ|đồng cảm|đừng lo|yên tâm|em xin lỗi vì|em rất tiếc)/i;
+const OTC02_EMPATHY_RE = /((^|[\s,.])(e|em|mình|tôi)\s+(rất\s+|cũng\s+)?(hiểu|thông cảm|biết)\s+(là\s+)?[^.?!]{0,25}(vội|gấp|khó chịu|bực|lo lắng|sốt ruột|mệt|chờ|đợi|muộn|bận)|xin lỗi (vì|đã|anh|chị|a\b|c\b)|thông cảm cho)/i;
+const OTC_ASK_QUESTIONS_RE = /(thắc mắc gì (không|ko|nữa|thêm)|còn (thắc mắc|câu hỏi|chỗ nào chưa rõ|gì chưa rõ)|có (câu hỏi|thắc mắc) (gì|nào)|nhắc lại (giúp|cho|cách)|(đã|có) (rõ|hiểu) chưa|hiểu (rõ )?chưa|muốn hỏi (thêm )?gì)/i;
+const OTC_IMPATIENT_RE = /(vội|nhanh (lên|giúp|cho)|lấy nhanh|hỏi xong chưa|xong chưa|lâu (thế|quá|vậy)|muộn giờ|bị muộn|khó chịu|bực)/i;
 function otcEvidenceCitesStudent(messages, evidence) {
   const nums = [...String(evidence || '').matchAll(/L(\d+)/g)].map((m) => Number(m[1]));
   if (!nums.length) return true;   // không trích mã lượt nào — không đủ căn cứ để bắt lỗi, bỏ qua
@@ -476,8 +499,13 @@ async function scoreOtc(sessionRow, messages, actions) {
     const b = aiCrits.slice(i, i + 3);
     try { await scoreOtcBatch(sc, messages, actions, b, out); }
     catch (err) {
-      failed++;
       console.error(`[pharmacy-practice] OTC lô ${b.map((c) => c.code).join(',')} lỗi:`, err.message);
+      // req #244: lô hỏng (thường do JSON bị cắt) → chấm lại TỪNG tiêu chí một, không bỏ trống cả lô
+      for (const c1 of b) {
+        if (out.has(c1.code)) continue;
+        try { await scoreOtcBatch(sc, messages, actions, [c1], out); }
+        catch (e2) { failed++; console.error(`[pharmacy-practice] OTC ${c1.code} chấm lại lỗi:`, e2.message); }
+      }
     }
   }
   const aiOk = out.size > 0;
@@ -504,7 +532,9 @@ async function scoreOtc(sessionRow, messages, actions) {
         if (!hits.length) {
           // req #231 mục 1.1: thang OTC là 1–5 (không có mức 0) — không có thao tác thì cho mức thấp nhất = 1.
           r0 = { ...r0, score: 1, evidence: 'Không tìm thấy thao tác tương ứng trong nhật ký 3D.',
-            comment: 'Chưa thực hiện thao tác này trong môi trường mô phỏng — cho 1 điểm (mức thấp nhất) dù hội thoại có nhắc tới.' };
+            comment: 'Chưa thực hiện thao tác này trong môi trường mô phỏng — cho 1 điểm (mức thấp nhất) dù hội thoại có nhắc tới.',
+            // req #244 mục 2: không để "Lần sau nên" ghi "không cần cải thiện" khi chưa làm thao tác
+            improvement: OTC_NO_ACTION_TIP[c.code] };
         } else if (invalidHits.length && r0.score > 2) {
           r0 = { ...r0, score: 2, comment: (r0.comment ? r0.comment + ' ' : '')
             + `Nhật ký 3D ghi nhận ${invalidHits.length} thao tác KHÔNG hợp lệ (${invalidHits.map((a) => a.description_vi || a.action_type).slice(0, 2).join('; ')}) nên tối đa 2 điểm.` };
@@ -514,9 +544,46 @@ async function scoreOtc(sessionRow, messages, actions) {
       // req #232 — B2/B3 của OTC-02: bỏ điểm AI tự đếm, thay bằng đếm TẤT ĐỊNH theo danh mục cố định.
       if (isOtc02 && OTC02_CHECKLISTS[c.code]) r0 = scoreOtc02Checklist(c.code, messages);
       // req #231 mục 2.2 — D2 trần cứng 2 điểm khi không có câu đồng cảm nào trong lời dược sĩ.
-      if (c.code === 'D2' && r0.status === 'scored' && r0.score > 2
+      // req #244 mục 5 (OTC-02): khách hàng đã giục/phàn nàn mà dược sĩ KHÔNG có câu nào ghi nhận đúng cảm xúc đó
+      // (vội, khó chịu, lo lắng, chờ lâu…) — kể cả ở bước A3 — thì 1 điểm. Câu "em hiểu anh đang đau" hay "anh cứ yên tâm
+      // sử dụng thuốc" KHÔNG phải là ghi nhận việc khách đang vội/khó chịu.
+      if (c.code === 'D2' && r0.status === 'scored' && isOtc02
+          && messages.some((m) => m.speaker !== 'student' && OTC_IMPATIENT_RE.test(m.content))
+          && !messages.some((m) => m.speaker === 'student' && OTC02_EMPATHY_RE.test(m.content))) {
+        if (r0.score > 1) r0 = { ...r0, score: 1, comment: (r0.comment ? r0.comment + ' ' : '')
+          + 'Khách hàng nhiều lần phàn nàn/giục giã nhưng dược sĩ không có câu nào ghi nhận, đồng cảm với việc khách đang vội/khó chịu (kể cả ở bước A3) — 1 điểm.' };
+      } else if (c.code === 'D2' && r0.status === 'scored'
           && !messages.some((m) => m.speaker === 'student' && OTC_EMPATHY_RE.test(m.content))) {
-        r0 = { ...r0, score: 2, comment: (r0.comment ? r0.comment + ' ' : '') + 'Không tìm thấy câu nào của dược sĩ thể hiện đồng cảm — hạ về 2 điểm.' };
+        if (r0.score > 2) r0 = { ...r0, score: 2, comment: (r0.comment ? r0.comment + ' ' : '') + 'Không tìm thấy câu nào của dược sĩ thể hiện đồng cảm — hạ về 2 điểm.' };
+      }
+      // req #244 mục 4 (OTC-02): đã tư vấn paracetamol mà KHÔNG nhắc nguy cơ với gan khi quá liều / tối đa 4 g (8 viên) mỗi
+      // ngày → tư vấn sai/thiếu tác dụng không mong muốn thiết yếu → tối đa 2 điểm.
+      if (c.code === 'C5' && r0.status === 'scored' && isOtc02 && r0.score > 2) {
+        const said = messages.filter((m) => m.speaker === 'student').map((m) => m.content).join(' \n ');
+        if (/paracetamol|panadol|efferalgan|hapacol/i.test(said) && !/(\bgan\b|quá liều|4\s?g\b|4\s?gam|8 viên)/i.test(said)) {
+          r0 = { ...r0, score: 2, comment: (r0.comment ? r0.comment + ' ' : '') + 'Chưa nêu đúng tác dụng không mong muốn quan trọng của paracetamol (quá liều gây hại gan, không quá 8 viên = 4 g/ngày) — tối đa 2 điểm.',
+            improvement: r0.improvement || 'Cần dặn: "Paracetamol uống quá liều sẽ ảnh hưởng đến gan, anh chỉ uống khi đau, cách 4–6 tiếng mới uống tiếp và không quá 8 viên (4 g) một ngày."' };
+        }
+      }
+      // req #244 mục 6 (OTC-02): KHÔNG có câu nào hỏi lại để khuyến khích khách hàng đặt câu hỏi / kiểm tra sự hiểu biết
+      // (câu dặn "có gì thắc mắc thì liên hệ" không tính) → E1 tối đa 3 điểm.
+      if (c.code === 'E1' && r0.status === 'scored' && isOtc02 && r0.score > 3
+          && !messages.some((m) => m.speaker === 'student' && OTC_ASK_QUESTIONS_RE.test(m.content))) {
+        r0 = { ...r0, score: 3, comment: (r0.comment ? r0.comment + ' ' : '') + 'Chưa có câu hỏi khuyến khích khách hàng đặt câu hỏi hay kiểm tra sự hiểu biết của khách hàng — tối đa 3 điểm.',
+          improvement: r0.improvement || 'Nên hỏi lại: "Anh còn thắc mắc gì về cách dùng thuốc không ạ?" hoặc "Anh nhắc lại giúp em cách uống thuốc nhé."' };
+      }
+      // req #244 mục 1 (OTC-02): không bán Alaxan, thay bằng paracetamol vì cho rằng Alaxan gây chóng mặt/buồn ngủ → góp ý
+      // "Lần sau nên" dùng ĐÚNG lời giải thích của giảng viên (AI hay tự viết lại sai "Alaxan có thể gây buồn ngủ nhẹ").
+      if (c.code === 'C1' && isOtc02 && r0.status === 'scored') {
+        const said = messages.filter((m) => m.speaker === 'student').map((m) => m.content).join(' \n ');
+        if (/paracetamol/i.test(said) && /alaxan[^.?!]{0,80}(chóng mặt|buồn ngủ)/i.test(said)) {
+          r0 = { ...r0, improvement: 'Alaxan không gây chóng mặt, buồn ngủ nên việc không bán Alaxan mà thay bằng paracetamol là chưa đúng, mặc dù paracetamol vẫn có thể dùng để giảm đau răng cho khách hàng. Trong trường hợp này dùng Alaxan sẽ giảm đau răng nhanh và mạnh hơn paracetamol. Nên tư vấn: "Dựa trên thông tin anh cung cấp, Alaxan có thể dùng tạm thời để giảm đau răng. Tuy nhiên thuốc chỉ giúp giảm triệu chứng, anh nên đi khám nha khoa sớm để điều trị nguyên nhân."' };
+        }
+      }
+      // req #244 mục 3 (OTC-02): góp ý C4 không được khuyên "paracetamol uống sau ăn vì kích ứng dạ dày" (sai chuyên môn).
+      if (c.code === 'C4' && isOtc02 && /sau (khi )?ăn|kích ứng dạ dày/i.test(r0.improvement || '')
+          && /paracetamol/i.test(messages.filter((m) => m.speaker === 'student').map((m) => m.content).join(' '))) {
+        r0 = { ...r0, improvement: 'Với paracetamol cần hướng dẫn: "Anh uống 1 viên mỗi lần khi đau, cách 4–6 tiếng mới uống tiếp, không quá 8 viên (4 g) một ngày." Lưu ý thuốc đúng cho tình huống này là Alaxan — chọn thuốc khác thì phần cách dùng tối đa 3 điểm.' };
       }
       // req #230 mục 1 — evidence chỉ trích lời khách hàng (không có lượt của dược sĩ) → gắn cảnh báo.
       if (r0.status === 'scored' && c.source !== 'audio' && !otcEvidenceCitesStudent(messages, r0.evidence)) {
@@ -676,8 +743,43 @@ export function attachPharmacyPractice(r) {
       status: 'scoring', total_score: row0.total_score ?? null, ai_model_version: null, t: now(),
     });
     res.json({ ok: true, sessionId: row0.session_id, status: 'scoring' });
-    scoreSession(row0.session_id).catch((e) => console.error('[pharmacy-practice] chấm nền lỗi:', e.message));
+    enqueueScoring(row0.session_id);
   });
+
+  // req #238 — HÀNG ĐỢI CHẤM ĐIỂM. Cả lớp (≥120 SV) bấm "Kết thúc và chấm điểm" gần như cùng lúc, mỗi phiên cần ~8 lượt gọi
+  // AI; chấm tất cả cùng lúc sẽ làm AI quá tải (time-out → mất điểm) và làm chậm AI bệnh nhân của các SV còn đang thực hành.
+  // → chỉ chấm tối đa SCORING_CONCURRENCY phiên cùng lúc, các phiên khác xếp hàng. Hội thoại + thao tác đã lưu ở DB TRƯỚC khi
+  // xếp hàng; trạng thái 'scoring' cũng lưu ở DB nên máy chủ khởi động lại vẫn chấm tiếp. Lỗi AI → tự chấm lại tối đa 2 lần.
+  const SCORING_CONCURRENCY = Math.max(1, Number(process.env.PRACTICE_SCORING_CONCURRENCY) || 4);
+  const scoreQueue = [];
+  const queued = new Set();
+  let scoringActive = 0;
+  function enqueueScoring(id) {
+    if (!id || queued.has(id)) return;
+    queued.add(id); scoreQueue.push(id); pumpScoring();
+  }
+  function pumpScoring() {
+    while (scoringActive < SCORING_CONCURRENCY && scoreQueue.length) {
+      const id = scoreQueue.shift();
+      scoringActive++;
+      scoreWithRetry(id)
+        .catch((e) => console.error('[pharmacy-practice] chấm nền lỗi:', e.message))
+        .finally(() => { scoringActive--; queued.delete(id); pumpScoring(); });
+    }
+  }
+  async function scoreWithRetry(id) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, 20_000 * attempt));
+      const o = await scoreSession(id);
+      if (!o || (o.aiOk && !o.failed)) return;
+      console.warn(`[pharmacy-practice] phiên ${id}: ${o.aiOk ? o.failed + ' tiêu chí chưa chấm được' : 'AI lỗi'} — chấm lại lần ${attempt + 1}`);
+    }
+  }
+  // Khởi động lại máy chủ giữa chừng → các phiên còn 'scoring' được xếp hàng chấm tiếp.
+  setTimeout(async () => {
+    try { for (const r0 of await listScoringSessions.all()) enqueueScoring(r0.session_id); }
+    catch (e) { console.error('[pharmacy-practice] khôi phục hàng đợi chấm lỗi:', e.message); }
+  }, 15_000);
 
   // Chấm ở nền — tách hẳn khỏi vòng đời request để không bị proxy cắt giữa chừng.
   async function scoreSession(sessionId) {
@@ -721,7 +823,7 @@ export function attachPharmacyPractice(r) {
           total_score: sum.percent,
           ai_model_version: LLM_MODEL, t,
         });
-        return;
+        return { aiOk: o.aiOk, failed: o.failed };
       }
 
       // 1) Tiêu chí thao tác 3D → chấm tất định trước (không phụ thuộc AI).
@@ -786,6 +888,7 @@ export function attachPharmacyPractice(r) {
         ai_model_version: LLM_MODEL,
         t,
       });
+      return { aiOk, failed: 0 };
 
     } catch (err) {
       console.error('[pharmacy-practice] chấm điểm lỗi:', err.message);
@@ -799,7 +902,9 @@ export function attachPharmacyPractice(r) {
             status: 'scoring_failed', total_score: null, ai_model_version: null, t: now(),
           });
         } catch {}
+        return { aiOk: false, failed: 1 };   // để hàng đợi tự chấm lại
       }
+      return null;
     }
   }
 
