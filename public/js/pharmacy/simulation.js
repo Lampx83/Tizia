@@ -35,7 +35,7 @@ import { openHdsdEditor, openPackageEditor, PACKAGE_TYPES, RETAIL_FORMS } from '
 import { STAGE_LABEL } from './rubric.js';
 // #142 — lưu bền vững hội thoại + thao tác 3D vào DB (trước đây chỉ nằm trong
 // bộ nhớ máy chủ nên mất sạch mỗi lần khởi động lại).
-import { startPractice, logMessage, logAction, finishPractice, getPracticeId } from './practice-client.js?v=ph0924';
+import { startPractice, logMessage, logAction, finishPractice, getPracticeId, getPracticeState } from './practice-client.js?v=ph0924';
 
 const $ = (id) => document.getElementById(id);
 
@@ -117,6 +117,13 @@ function acquireInspectorRenderer() {
   return _insShared;
 }
 
+// req #238: bấm "Quay lại" từ trang kết quả, trình duyệt có thể khôi phục NGUYÊN trang cũ từ bộ nhớ đệm (bfcache) —
+// cảnh 3D, khay, hội thoại của lượt đã kết thúc vẫn còn và thao tác mới không được lưu. Tải lại để khởi tạo lượt mới.
+if (typeof window !== 'undefined' && !window.__pcPageshow) {
+  window.__pcPageshow = true;
+  window.addEventListener('pageshow', (e) => { if (e.persisted) location.reload(); });
+}
+
 export async function startSimulation({ moduleId = 'gpp' } = {}) {
   // 0. Nạp danh mục thuốc từ DB (content_datasets) TRƯỚC khi buildScene — scene.js
   //    đọc ALL_DRUGS/CABINETS lúc dựng kệ. loadDrugs() fill ALL_DRUGS bằng push.
@@ -126,10 +133,28 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
   // 1. Create session on server
   setLoadingStep('Đang tạo phiên thực hành…');
   let session, scenario;
+  // req #238: tải lại trang GIỮA lượt thực hành (chưa bấm "Kết thúc và chấm điểm") → lượt cũ vẫn tiếp tục
+  // (cùng session_id trong sessionStorage) nhưng trước đây AI bệnh nhân lại bắt đầu từ đầu, quên đoạn hội thoại
+  // đã có. Nay lấy lại hội thoại + thao tác của lượt đó từ DB, dựng lại phiên AI và hiện lại khung chat.
+  let resumed = null;
+  try {
+    const ps = getPracticeState();
+    if (ps && !ps.finished && ps.moduleId === moduleId && ps.practiceId) {
+      const rr = await fetch(`/api/pharmacy/practice/result/${encodeURIComponent(ps.practiceId)}`);
+      const dd = rr.ok ? await rr.json() : null;
+      if (dd && dd.session && dd.session.status === 'in_progress') {
+        resumed = {
+          messages: (dd.messages || []).map((m) => ({ role: m.speaker === 'student' ? 'user' : 'npc', content: m.content, ts: Number(m.created_at) || Date.now() })),
+          actions: (dd.actions || []).filter((a) => a.action_type !== 'session_start')
+            .map((a) => ({ type: a.action_type, payload: a.action_details || {}, ts: Number(a.created_at) || Date.now() })),
+        };
+      }
+    }
+  } catch {}
   try {
     const r = await fetch('/api/pharmacy/session', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ moduleId })
+      body: JSON.stringify(resumed ? { moduleId, restore: resumed } : { moduleId })
     });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'session create failed');
@@ -144,7 +169,7 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
   // trên. Lỗi ở đây KHÔNG chặn người học vào bài; chỉ mất phần ghi nhận.
   try {
     await startPractice({ moduleId, chatSessionId: session.id });
-    logAction('session_start', { moduleId });
+    if (!resumed) logAction('session_start', { moduleId });
   } catch (e) {
     console.warn('[pharmacomm] không tạo được phiên thực hành:', e.message);
   }
@@ -296,6 +321,10 @@ export async function startSimulation({ moduleId = 'gpp' } = {}) {
   // nhớ hội thoại, chấm điểm vẫn đủ hành động.
   const localMsgs = [];
   const localActions = [];
+  if (resumed) {
+    for (const m of resumed.messages) { localMsgs.push(m); appendBubble(m.role === 'user' ? 'user' : 'npc', m.content); }
+    localActions.push(...resumed.actions);
+  }
   async function recreateSession() {
     const r = await fetch('/api/pharmacy/session', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },

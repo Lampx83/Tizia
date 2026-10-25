@@ -174,12 +174,42 @@ export async function openaiGenerateStream({ prompt, system, temperature = 0.55,
  * @returns {Promise<string>}
  */
 export async function llmGenerate({ prompt, system, temperature = 0.3, json = false, maxTokens = 1500 }) {
-  return chatOnce(LLM_CFG, { messages: buildMessages(system, prompt), temperature, maxTokens, json });
+  return llmGuard(() => chatOnce(LLM_CFG, { messages: buildMessages(system, prompt), temperature, maxTokens, json }));
+}
+
+// req #238 — cả lớp (≥120 SV) dùng AI cùng lúc: (1) giới hạn số lượt gọi LLM nội bộ ĐANG CHẠY (phần dư xếp hàng
+// ngắn ở đây thay vì dội cả trăm yêu cầu một lúc vào máy AI dùng chung), (2) lỗi TẠM THỜI của máy AI (502/503/504/429,
+// rớt kết nối — vd máy AI đang khởi động lại) thì thử lại tối đa 2 lần trước khi báo lỗi cho nơi gọi.
+const LLM_MAX_INFLIGHT = Math.max(1, Number(process.env.LLM_MAX_INFLIGHT) || 24);
+let llmInflight = 0;
+const llmWaiters = [];
+function llmAcquire() {
+  if (llmInflight < LLM_MAX_INFLIGHT) { llmInflight++; return Promise.resolve(); }
+  return new Promise((resolve) => llmWaiters.push(resolve));
+}
+function llmRelease() {
+  const next = llmWaiters.shift();
+  if (next) next(); else llmInflight--;
+}
+const LLM_TRANSIENT_RE = /HTTP (502|503|504|429)\b|fetch failed|ECONNRESET|ECONNREFUSED|socket hang up|UND_ERR/i;
+async function llmGuard(fn, { retries = 2, canRetry = () => true } = {}) {
+  for (let attempt = 0; ; attempt++) {
+    await llmAcquire();
+    try { return await fn(); }
+    catch (e) {
+      if (attempt >= retries || !canRetry() || !LLM_TRANSIENT_RE.test(String(e?.message || e))) throw e;
+    } finally { llmRelease(); }
+    await new Promise((r) => setTimeout(r, attempt ? 4000 : 1500));
+  }
 }
 
 /** Như llmGenerate nhưng stream — onToken(token, fullSoFar), trả false → dừng sớm. */
 export async function llmGenerateStream({ prompt, system, temperature = 0.3, maxTokens = 1500, onToken }) {
-  return chatStream(LLM_CFG, { messages: buildMessages(system, prompt), temperature, maxTokens, onToken });
+  // Chỉ thử lại khi lỗi xảy ra TRƯỚC khi có token nào (chatStream ném lỗi HTTP trước lúc đọc luồng) — không phát lặp chữ.
+  let got = false;
+  const wrapped = onToken ? (t, full) => { got = true; return onToken(t, full); } : undefined;
+  return llmGuard(() => chatStream(LLM_CFG, { messages: buildMessages(system, prompt), temperature, maxTokens, onToken: wrapped }),
+    { canRetry: () => !got });
 }
 
 /**
@@ -187,7 +217,7 @@ export async function llmGenerateStream({ prompt, system, temperature = 0.3, max
  * @param {Array<{role:'system'|'user'|'assistant', content:string}>} opt.messages
  */
 async function llmChat({ messages, temperature = 0.7, json = false, maxTokens = 800 }) {
-  return chatOnce(LLM_CFG, { messages, temperature, maxTokens, json });
+  return llmGuard(() => chatOnce(LLM_CFG, { messages, temperature, maxTokens, json }));
 }
 
 /**

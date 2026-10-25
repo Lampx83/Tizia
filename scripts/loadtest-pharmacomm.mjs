@@ -30,6 +30,8 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((a, x, i, arr) => {
 const BASE = String(args.base || 'http://127.0.0.1:8041').replace(/\/+$/, '');
 const N = Number(args.n || 3), TURNS = Number(args.turns || 4), RAMP = Number(args.ramp || 10) * 1000;
 const MODULE = String(args.module || 'otc02'), FINISH = !!args.finish;
+// --module mix → chia đều 3 tình huống OTC (OTC-02 có nhiều câu trả lời soạn sẵn nên nhẹ AI hơn hai tình huống kia)
+const moduleOf = (n) => MODULE === 'mix' ? ['otc01', 'otc02', 'gpp'][n % 3] : MODULE;
 
 const LINES = [
   'Em chào anh, em là dược sĩ, em có thể giúp gì cho anh ạ?',
@@ -58,9 +60,10 @@ async function vu(n) {
   const tag = `KT${n}-${Math.random().toString(36).slice(2, 7)}`;
   const out = { n, tag, practiceId: null, ok: false, problems: [] };
   try {
-    const chat = await call('write', '/api/pharmacy/session', { moduleId: MODULE });
+    const mod = moduleOf(n);
+    const chat = await call('write', '/api/pharmacy/session', { moduleId: mod });
     const chatId = chat.session.id;
-    const ps = await call('write', '/api/pharmacy/practice/session', { guest: true, moduleId: MODULE, chatSessionId: chatId });
+    const ps = await call('write', '/api/pharmacy/practice/session', { guest: true, moduleId: mod, chatSessionId: chatId });
     out.practiceId = ps.sessionId;
     let order = 0;
     for (let t = 0; t < TURNS; t++) {
