@@ -251,6 +251,52 @@
   #m2ZoomOverlay .pkg-face{min-height:0;width:min(92vw,820px);padding:16px;}
   #m2ZoomOverlay .pkg-face img{max-height:78vh;}
   #m2ZoomOverlay .pkg-gen{font-size:1.25rem;} #m2ZoomOverlay .pkg-gen table{font-size:1.15rem;} #m2ZoomOverlay .pkg-gen h4{font-size:1.5rem;}
+  /* req #242: phần mềm bán hàng hiển thị như MÀN HÌNH MÁY TÍNH ở quầy thu ngân (viền màn hình + chân đế + thanh trạng thái) */
+  #posOverlay .modal.pos-modal{border:14px solid #1d222b;border-bottom-width:30px;border-radius:18px;max-height:84vh;margin-bottom:56px;
+    position:relative;overflow:visible;box-shadow:0 0 0 2px #3a4250,0 34px 60px rgba(0,0,0,.5);}
+  #posOverlay .modal.pos-modal::before{content:"TIZIA PHARMA";position:absolute;left:50%;bottom:-24px;transform:translateX(-50%);
+    font:800 .6rem 'Nunito',sans-serif;letter-spacing:.32em;color:#8a93a3;pointer-events:none;}
+  #posOverlay .modal.pos-modal::after{content:"";position:absolute;left:50%;bottom:-62px;transform:translateX(-50%);width:170px;height:32px;
+    background:linear-gradient(#2b313c,#141820);clip-path:polygon(34% 0,66% 0,100% 100%,0 100%);pointer-events:none;}
+  #posOverlay .modal-head{border-radius:4px 4px 0 0;}
+  .pos-dots{display:inline-flex;gap:6px;margin-right:10px;vertical-align:middle}
+  .pos-dots i{width:11px;height:11px;border-radius:50%;display:block;background:#ff5f57}
+  .pos-dots i:nth-child(2){background:#febc2e} .pos-dots i:nth-child(3){background:#28c840}
+  .pos-statusbar{display:flex;justify-content:space-between;gap:10px;padding:5px 12px;background:#e6ebf1;border-top:1px solid #cfd8e3;
+    font:700 .72rem 'Nunito',sans-serif;color:#4b5a6e;border-radius:0 0 4px 4px;}
+  /* req #243: "Xem lại hình" mở thành bảng ghim bên phải, KHÔNG che sổ kiểm nhập — vừa đối chiếu vừa điền */
+  #m2RefOverlay.ref-dock{inset:auto;top:8px;right:8px;bottom:8px;width:min(44vw,620px);background:transparent;padding:0;align-items:stretch;z-index:97;}
+  #m2RefOverlay.ref-dock .modal{max-width:none;max-height:none;height:100%;margin:0;border:3px solid #2e8256;}
+  body.ref-open #posOverlay{justify-content:flex-start;padding-left:8px;}
+  body.ref-open #posOverlay .modal.pos-modal{max-width:calc(100vw - min(44vw,620px) - 40px);}
+  @media (max-width:900px){ #m2RefOverlay.ref-dock{left:8px;width:auto;top:auto;height:55vh;} body.ref-open #posOverlay .modal.pos-modal{max-width:96vw;max-height:40vh;} }
+  .ledger-title{text-align:center;font:900 1.05rem 'Nunito',sans-serif;letter-spacing:.05em;color:#1f3b63;margin:2px 0 8px;}
+  /* req #241: bảng các bước của nhiệm vụ (thay cho bảng khu vực ở cột phải) */
+  .mc-head{font:800 .95rem 'Baloo 2',sans-serif;color:#1f3b63;margin:0 0 2px}
+  .mc-sub{font:600 .7rem 'Nunito',sans-serif;color:#6b7a90;margin:0 0 8px}
+  .mc-tabs{display:flex;gap:4px;margin:0 0 8px} .mc-tabs button{flex:1;border:1px solid #c9d6e4;background:#fff;border-radius:8px;padding:3px 0;font:800 .72rem 'Nunito',sans-serif;cursor:pointer;color:#26405f}
+  .mc-tabs button.on{background:#2e8256;border-color:#2e8256;color:#fff} .mc-tabs button:disabled{opacity:.45;cursor:not-allowed}
+  .mc-steps{list-style:none;margin:0;padding:0}
+  .mc-steps li{display:flex;gap:8px;align-items:flex-start;padding:6px 4px;border-bottom:1px solid #e3edf3;font:600 .76rem/1.35 'Nunito',sans-serif;color:#33465e}
+  .mc-steps li .mk{flex:none;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:.7rem;background:#e3eaf2;color:#6b7a90;font-weight:900}
+  .mc-steps li.done .mk{background:#2e8256;color:#fff} .mc-steps li.done{color:#6b7a90} .mc-steps li.done .tx{text-decoration:line-through;text-decoration-color:#9fb2a8}
+  .mc-steps li.cur{background:#fff4c8;border-radius:8px} .mc-steps li.cur .mk{background:#f59e0b;color:#fff} .mc-steps li.skip .mk{background:#cfd8e3}
+  .mc-steps li small{display:block;color:#8a97ab;font-weight:600}
+  .mc-bar{height:8px;background:#dfe6ee;border-radius:6px;overflow:hidden;margin:0 0 8px} .mc-bar i{display:block;height:100%;background:#2e8256}
+  .map-legend details{margin-top:8px} .map-legend summary{cursor:pointer;font:800 .8rem 'Baloo 2',sans-serif;color:#1f3b63}
+  /* req #239: hướng dẫn mở cửa ngay trên mặt tiền khi chưa có chìa khóa */
+  #fKeyGuide{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:20;width:min(620px,94vw);background:rgba(255,255,255,.96);
+    border:3px solid #f0b429;border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:10px 14px;font:600 .86rem/1.45 'Nunito',sans-serif;color:#3a2a00}
+  #fKeyGuide h4{margin:0 0 4px;font:900 1rem 'Baloo 2',sans-serif;color:#7a4a00}
+  #fKeyGuide ol{margin:4px 0 6px 18px;padding:0} #fKeyGuide .kg-btns{display:flex;gap:8px;flex-wrap:wrap}
+  #fKeyGuide .kg-btns a,#fKeyGuide .kg-btns button{border:0;border-radius:999px;padding:6px 14px;font:800 .8rem 'Nunito',sans-serif;cursor:pointer;text-decoration:none;color:#fff;background:#2e8256}
+  #fKeyGuide .kg-btns button{background:#7a4a00}
+  body.has-key #fKeyGuide{display:none}
+  .map-key.locked{cursor:pointer}
+  /* req #240: trợ lý AI ở góc màn hình — nhấc lên trên nút cài đặt/toàn màn hình */
+  #edututor-fab{bottom:66px !important;right:12px !important;}
+  #edututor-panel{bottom:130px !important;}
+  body.ref-open #edututor-fab,body.ref-open #edututor-panel{display:none !important;}
   .m2-inv{border:1px solid #cdbb8a;border-radius:8px;background:#fffdf6;padding:10px 12px;position:relative;overflow:hidden;font-size:.82rem;}
   .m2-inv .wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;transform:rotate(-14deg);font:800 1.3rem 'Nunito',sans-serif;color:rgba(180,60,60,.12);pointer-events:none;text-align:center}
   .m2-pk{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:8px 0;}
@@ -1331,6 +1377,7 @@
     <rect id="fDoorHit" x="240" y="250" width="1120" height="412" fill="transparent" style="cursor:pointer"/>
     </g><!-- /#fSceneScale -->
   </svg>
+  <div id="fKeyGuide"></div>
 </div>
 
 <div id="doorPwMask" hidden>
@@ -1408,8 +1455,8 @@
       <span class="map-key locked" id="mapKey">🔒 Chưa có Chìa khóa</span>
       <button type="button" class="mh-ico" id="mhTrophy" title="Danh hiệu">🏆</button>
     </div>
-    <h3>Các khu vực trong nhà thuốc</h3>
-    <ul id="mapLegendList"></ul>
+    <div id="mcPanel"></div>
+    <details id="mlZones"><summary>🗂️ Các khu vực trong nhà thuốc</summary><ul id="mapLegendList"></ul></details>
     <p class="ml-foot">Quản lý tốt hôm nay<br>Phục vụ sức khỏe ngày mai 💚</p>
   </aside>
   <div class="map-hud" id="mapHud">
@@ -1448,7 +1495,7 @@
   <div class="overlay" id="posOverlay">
     <div class="modal pos-modal">
       <div class="modal-head">
-        <div><h2>🖥️ Phần mềm bán hàng</h2><div class="sub">Nhiệm vụ 1 · Lập dự trù và mua thuốc</div></div>
+        <div><h2><span class="pos-dots" aria-hidden="true"><i></i><i></i><i></i></span>🖥️ Phần mềm bán hàng</h2><div class="sub">Nhiệm vụ 1 · Lập dự trù và mua thuốc</div></div>
         <button type="button" id="posClose">✕</button>
       </div>
       <div class="modal-body pos-body">
@@ -1461,6 +1508,7 @@
         </div>
         <div class="pos-panel" id="posPanel"></div>
       </div>
+      <div class="pos-statusbar"><span>💻 Máy tính quầy thu ngân · Phần mềm quản lý nhà thuốc GPP</span><span id="posClock"></span></div>
     </div>
   </div>
 </div>
@@ -3227,6 +3275,7 @@ function getM1State(){
 function saveM1State(s){
   localStorage.setItem(LS_M1, JSON.stringify(s));
   try{ applyM1Highlight(); }catch(e){}
+  try{ window.renderMissionChecklist?.(); }catch(e){}
 }
 /* req #174: làm sáng VÙNG cần tới ở bước tiếp theo trên sơ đồ (Quầy thu ngân
    hoặc tủ còn thuốc chưa kiểm) để người học biết phải làm gì tiếp. */
@@ -3387,6 +3436,7 @@ const posPanel = document.getElementById('posPanel');
 function openPOS(){
   const st = getM1State();
   posOverlay.style.display = 'flex';
+  try{ const c = document.getElementById('posClock'); if(c){ const d = new Date(); c.textContent = `🕒 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')} · ${d.toLocaleDateString('vi-VN')}`; } }catch(e){}
   const m2mail = getM2State().step === 'mail';
   if(m2mail){ st.nhaccSub = 'thu'; saveM1State(st); }
   const m2ledger = getM2State().step === 'ledger';
@@ -3394,7 +3444,7 @@ function openPOS(){
   document.querySelectorAll('#posTabs .pos-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === wantTab));
   if(wantTab === 'nhacc') renderNhaCCTab(); else if(wantTab === 'thucnhap') renderThucNhapTab(); else renderDuTruTab();
 }
-function closePOS(){ posOverlay.style.display = 'none'; }
+function closePOS(){ posOverlay.style.display = 'none'; try{ m2CloseRef(); }catch(e){} }
 document.getElementById('posClose').addEventListener('click', closePOS);
 posOverlay.addEventListener('click', e => { if(e.target === posOverlay) closePOS(); });
 document.getElementById('posTabs').addEventListener('click', e => {
@@ -3680,6 +3730,7 @@ function saveM2State(x){
   try{ applyM1Highlight(); }catch(e){}
   try{ m2Sync(); }catch(e){}
   try{ window.refreshMissionsList?.(); }catch(e){}
+  try{ window.renderMissionChecklist?.(); }catch(e){}
 }
 function m2Unlocked(){ return m1PracticeCount() >= 1; }
 function m2Active(){ const x = getM2State(); return x.step !== 'idle' && x.step !== 'done'; }
@@ -4155,11 +4206,10 @@ function m2RenderRef(idx){
   const x = getM2State(), pass = x.items.filter(it => !m2Reasons(it).length);
   let ov = document.getElementById('m2RefOverlay');
   if(!ov){
-    ov = document.createElement('div'); ov.className = 'overlay'; ov.id = 'm2RefOverlay'; ov.style.zIndex = 97;
+    ov = document.createElement('div'); ov.className = 'overlay ref-dock'; ov.id = 'm2RefOverlay';
     ov.innerHTML = '<div class="modal pos-modal"><div class="modal-head"><div><h2>🔎 Xem lại bao bì và hoá đơn để điền sổ</h2><div class="sub">Bấm Mặt trước / Mặt sau / Mặt bên để đọc thông tin trên bao bì</div></div><button type="button" id="m2RefClose">✕</button></div><div class="modal-body pos-body" id="m2RefBody"></div></div>';
     document.body.appendChild(ov);
-    ov.addEventListener('click', e => { if(e.target === ov) ov.style.display = 'none'; });
-    ov.querySelector('#m2RefClose').addEventListener('click', () => { ov.style.display = 'none'; });
+    ov.querySelector('#m2RefClose').addEventListener('click', m2CloseRef);
   }
   const it = pass[idx];
   const tabs = pass.map((p,i) => `<button type="button" class="pos-btn" data-r="${i}" style="${i === idx ? '' : 'background:#9aa89f'};margin:0 6px 6px 0">${esc(p.name)}</button>`).join('');
@@ -4172,20 +4222,22 @@ function m2RenderRef(idx){
         <p class="pos-note" style="margin-top:8px">Số lượng thực nhận (đã đếm ở bước kiểm tra số lượng): <b>${it.recv} ${it.unit}</b>. Đơn giá, số lượng đặt: xem <b>hoá đơn</b> bên cạnh.</p></div>
       <div style="flex:1 1 380px;min-width:0"><div style="font:800 .8rem Nunito,sans-serif;margin-bottom:4px">🧾 Hoá đơn</div>${m2InvoiceHtml(x)}</div></div>`;
   body.querySelectorAll('[data-r]').forEach(b => b.addEventListener('click', () => m2RenderRef(Number(b.dataset.r))));
-  ov.style.display = 'flex';
+  ov.style.display = 'flex'; document.body.classList.add('ref-open');
 }
+function m2CloseRef(){ const ov = document.getElementById('m2RefOverlay'); if(ov) ov.style.display = 'none'; document.body.classList.remove('ref-open'); }
 // Bước 8: sổ kiểm nhập (tab "Thực nhập" của phần mềm bán hàng) theo biểu mẫu cô gửi.
 function renderThucNhapTab(){
   const x = getM2State();
   if(x.step !== 'ledger'){ posPanel.innerHTML = '<div class="pos-soon">🔒 Tab này dùng ở Nhiệm vụ 2 (bước 8 — ghi sổ kiểm nhập) sau khi đã niêm yết giá.</div>'; return; }
   const pass = x.items.filter(it => !m2Reasons(it).length);
   const d = new Date(), dt = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-  const rec = it => allRecords.find(r => r['Tên hoạt chất'] === it.name) || {};
+  const rec = it => m1RecOf(it.key) || allRecords.find(r => r['Tên hoạt chất'] === it.name) || {};
   const specs = () => ['Hộp 3 vỉ × 10 viên','Hộp 10 vỉ × 10 viên','Hộp 10 ống','Hộp 1 lọ','Hộp 1 tuýp','Hộp 20 gói'];
   const sel = (nm, opts) => `<select data-f="${nm}" style="padding:3px;border:1px solid #caa25a;border-radius:6px;max-width:130px"><option value="">— chọn —</option>${opts.map(o => `<option>${esc(o)}</option>`).join('')}</select>`;
   const th = ['Ngày/tháng/năm','Tên thuốc, hàm lượng nồng độ','Số ĐK/GPNK','Số lô, hạn dùng','Nhà SX/nhập khẩu','Cơ sở cung cấp','Số hóa đơn/chứng từ','Điều kiện bảo quản','Quy cách đóng gói','Số lượng','Đơn vị tính','Đơn giá (đ, chưa VAT)'];
   posPanel.innerHTML = `
-    <p class="pos-note">📒 <b>Sổ kiểm nhập thuốc</b> (mẫu). Các cột thông tin đã điền từ hoá đơn và nhãn; điền nốt <b>điều kiện bảo quản, quy cách đóng gói, số lượng, đơn vị tính, đơn giá</b> cho các sản phẩm đạt. Không nhớ thông tin? Bấm <b>🔎 Xem lại hình</b> ở từng dòng để xem lại hộp thuốc, nhãn, hoá đơn và số lượng thực nhận.</p>
+    <div class="ledger-title">SỔ NHẬP VÀ KIỂM SOÁT CHẤT LƯỢNG THUỐC</div>
+    <p class="pos-note">📒 <b>Sổ kiểm nhập thuốc</b> (mẫu). Các cột thông tin đã điền từ hoá đơn và nhãn; điền nốt <b>điều kiện bảo quản, quy cách đóng gói, số lượng, đơn vị tính, đơn giá</b> cho các sản phẩm đạt. Không nhớ thông tin? Bấm <b>🔎 Xem lại hình</b> ở từng dòng: bao bì và hoá đơn mở ở bên phải, sổ vẫn hiện bên trái để vừa đối chiếu vừa điền.</p>
     <div style="overflow-x:auto"><table class="pos-table" style="font-size:.72rem;min-width:900px"><thead><tr>${th.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>
       ${pass.map((it,i) => { const r = rec(it), pk = pkgData(it); return `<tr data-i="${i}"><td>${dt}<br><button type="button" class="pos-btn m2-ref" data-r="${i}" style="padding:3px 8px;font-size:.7rem;margin-top:4px">🔎 Xem lại hình</button></td><td>${esc(it.name)}${r['Hoạt chất, hàm lượng/nồng độ'] ? '<br>' + esc(r['Hoạt chất, hàm lượng/nồng độ']) : ''}</td>
         <td>${esc(pk.reg)}${pk.realReg ? '' : ' <small>(số minh hoạ)</small>'}</td><td>${pk.lot} / ${pk.exp}</td>
@@ -4231,6 +4283,7 @@ function saveM3State(x){
   try{ m2Sync(); }catch(e){}
   try{ window.refreshMissionsList?.(); }catch(e){}
   try{ if(typeof renderM1Checklist === 'function') renderM1Checklist(); }catch(e){}
+  try{ window.renderMissionChecklist?.(); }catch(e){}
 }
 function m3Unlocked(){ return m2Count() >= 1; }
 function m3CrateStep(st){ return st === 'stored' || st === 'fridge' || st === 'classify' || st === 'special'; }
@@ -4455,6 +4508,83 @@ function m3Finish(msg){
   try{ window.refreshMissionsList?.(); }catch(e){}
   if(msg){ pmZoneLabel.textContent = msg; }
 }
+// ===================== req #241: bảng các bước của từng nhiệm vụ (cột phải) =====================
+// Bấm thẻ nhiệm vụ ở cột trái → cột phải hiện các việc cần làm của nhiệm vụ đó, chia bước nhỏ, đánh dấu tiến độ.
+let mcSel = null;
+function mcSteps(n){
+  const step = (list, cur) => list.map((t, i) => ({ t: t[0], hint: t[1], done: i < cur, cur: i === cur }));
+  if(n === 1){
+    const st = getM1State(), items = getM1Items();
+    const ord = { dutru:0, checking:1, return:2, supplier:3, order: st.orderSent ? 5 : 4, done:5 };
+    let cur = ord[st.step] != null ? ord[st.step] : 0;
+    if(st.step === 'supplier' && st.supplier) cur = 4;
+    const ok = items.filter(it => st.confirmed && st.confirmed[it.key]).length;
+    return step([
+      ['Mở phần mềm ở Quầy thu ngân, xem danh sách mặt hàng cần kiểm', 'Đi tới máy tính ở Quầy thu ngân → tab Dự trù'],
+      [`Đến tủ kiểm tra tồn kho thực tế từng mặt hàng (${ok}/${items.length})`, 'Đối chiếu số hộp trên tủ với số trong phần mềm'],
+      ['Quay lại máy tính, điền công thức và lập dự trù số lượng cần đặt', 'SL đặt = Bán/tuần ÷ 7 × số ngày dự trù − tồn thực tế'],
+      ['Chọn nhà cung ứng đủ giấy tờ hợp pháp, giá và thời gian giao tốt nhất', 'Tab Quản lý nhà cung ứng'],
+      ['Kiểm tra và gửi đơn đặt hàng cho nhà cung ứng', 'Tick xác nhận rồi bấm Gửi đơn'],
+    ], st.step === 'done' ? 5 : cur);
+  }
+  if(n === 2){
+    const x = getM2State();
+    if(!m2Unlocked()) return null;
+    const issue = x.step === 'toProcess' || x.step === 'mail' || !!x.mailKind || (x.items || []).some(it => it.recv !== it.qty || m2Reasons(it).length);
+    const ord = { idle:0, deliver:0, inbox: x.sub === 'qty' ? 2 : 1, packaging:3, quality:4, toProcess:5, mail:5, price:6, ledger:7, done:8 };
+    const cur = ord[x.step] != null ? ord[x.step] : 0;
+    const out = step([
+      ['Ra mặt tiền nhận thùng hàng từ xe giao hàng', 'Thùng hàng được đặt ở Khu vực chờ kiểm nhập'],
+      ['Kiểm tra hoá đơn VAT: đối chiếu đơn vị bán với nhà cung ứng đã đặt', 'Bấm thùng hàng ở Khu vực chờ kiểm nhập'],
+      ['Kiểm tra số lượng thực nhận so với hoá đơn', 'Tick Khớp / Không khớp từng mặt hàng'],
+      ['Kiểm tra cảm quan bao bì (móp méo, ẩm mốc, chữ mờ)', ''],
+      ['Kiểm tra chất lượng cảm quan (niêm phong, màu sắc, hình dạng)', ''],
+      ['Xử lý hàng không đạt: chuyển khu chờ xử lý, gửi thư nhà cung ứng', 'Chỉ làm khi có sai lệch'],
+      ['Niêm yết giá bán theo đơn vị nhỏ nhất', ''],
+      ['Ghi sổ nhập và kiểm soát chất lượng (tab Thực nhập)', 'Bấm 🔎 Xem lại hình để đối chiếu bao bì, hoá đơn'],
+    ], cur);
+    if(cur > 5 && !issue){ out[5].skip = true; out[5].t += ' — không có, bỏ qua'; }
+    return out;
+  }
+  if(n === 3){
+    if(!m3Unlocked()) return null;
+    const x = getM3State();
+    const hasCold = (x.items || []).some(it => it.cold), hasSp = (x.roomItems || x.items || []).some(it => it.cabinet === 'special');
+    const ord = { idle:0, stored:0, fridge:1, classify:2, special:3, sort:4, done:5 };
+    const cur = ord[x.step] != null ? ord[x.step] : 0;
+    const out = step([
+      ['Mở thùng "Đã kiểm nhập, chờ sắp xếp", đọc bao bì và phân loại theo điều kiện bảo quản', 'Khu vực chờ kiểm nhập'],
+      ['Xếp thuốc bảo quản lạnh vào tủ lạnh 2–8°C', 'Chỉ làm khi có thuốc bảo quản lạnh'],
+      ['Phân loại theo ngành hàng: thuốc kê đơn / không kê đơn / kiểm soát đặc biệt', ''],
+      ['Phân loại thuốc kiểm soát đặc biệt và xếp vào đúng ngăn tủ có khoá', 'Chỉ làm khi có thuốc kiểm soát đặc biệt'],
+      [`Sắp xếp vào tủ kê đơn / không kê đơn theo FEFO${x.step === 'sort' ? ` (đã xong: ${['rx','otc'].filter(m => x.done && x.done[m]).length} tủ)` : ''}`, 'Vào tủ, bấm thùng hàng, kéo hộp vào đúng vị trí'],
+    ], cur);
+    if(x.step && x.step !== 'idle' && x.step !== 'stored'){
+      if(!hasCold && cur > 1){ out[1].skip = true; out[1].t += ' — không có, bỏ qua'; }
+      if(!hasSp && cur > 3){ out[3].skip = true; out[3].t += ' — không có, bỏ qua'; }
+    }
+    return out;
+  }
+  return null;
+}
+function renderMissionChecklist(){
+  const el = document.getElementById('mcPanel'); if(!el) return;
+  const NAMES = ['Lập dự trù và mua thuốc','Kiểm nhập thuốc, niêm yết giá','Bảo quản thuốc và sắp xếp hàng hóa','Kiểm kê và kiểm soát chất lượng định kỳ','Xử lý thuốc bị thu hồi'];
+  let n = mcSel;
+  if(!n){ n = (typeof m3Active === 'function' && m3Active()) ? 3 : (typeof m2Active === 'function' && m2Active()) ? 2 : 1; }
+  const steps = mcSteps(n);
+  const tabs = NAMES.map((t,i) => `<button type="button" data-mc="${i+1}" class="${i+1 === n ? 'on' : ''}" title="${esc(t)}" ${i >= 3 ? 'disabled' : ''}>NV${i+1}</button>`).join('');
+  let body;
+  if(!steps) body = `<p class="mc-sub">${n >= 4 ? '🔒 Nhiệm vụ này đang được xây dựng theo giáo trình.' : `🔒 Hoàn thành tối thiểu 1 lần nhiệm vụ ${n-1} để mở khoá.`}</p>`;
+  else {
+    const done = steps.filter(x => x.done || x.skip).length, pct = Math.round(done / steps.length * 100);
+    body = `<div class="mc-bar"><i style="width:${pct}%"></i></div><p class="mc-sub">Tiến độ: ${done}/${steps.length} bước${done === steps.length ? ' · 🎉 đã hoàn thành' : ''}</p>
+      <ol class="mc-steps">${steps.map((x,i) => `<li class="${x.skip ? 'skip done' : x.done ? 'done' : x.cur ? 'cur' : ''}"><span class="mk">${x.done || x.skip ? '✓' : i+1}</span><span><span class="tx">${esc(x.t)}</span>${x.cur && x.hint ? `<small>👉 ${esc(x.hint)}</small>` : ''}</span></li>`).join('')}</ol>`;
+  }
+  el.innerHTML = `<div class="mc-tabs">${tabs}</div><h3 class="mc-head">📋 Nhiệm vụ ${n}: ${esc(NAMES[n-1])}</h3>${body}`;
+  el.querySelectorAll('[data-mc]').forEach(b => b.addEventListener('click', () => { mcSel = Number(b.dataset.mc); renderMissionChecklist(); }));
+}
+window.renderMissionChecklist = renderMissionChecklist;
 function m3Count(){ try{ return Number(localStorage.getItem('tu-thuoc-mo-phong:m3count')) || 0; }catch(e){ return 0; } }
 // Hoàn thành 1 LƯỢT (nhiệm vụ 1 → 3) = 1 lần chơi, tính cho cả hai tủ; đủ PLAYS_PER_TIER lượt thì lên mức.
 function m2CountPlay(){
@@ -4679,6 +4809,9 @@ function renderM1Checklist(){
     missionsEl.querySelector('[data-mission="1"]')?.addEventListener('click', () => { if(typeof m1Hint === 'function') m1Hint(); });
     missionsEl.querySelector('[data-mission="2"]')?.addEventListener('click', () => { if(typeof m2Click === 'function') m2Click(); });
     missionsEl.querySelector('[data-mission="3"]')?.addEventListener('click', () => { if(typeof m3Click === 'function') m3Click(); });
+    // req #241: bấm thẻ nhiệm vụ → cột phải hiện các bước của nhiệm vụ đó
+    missionsEl.querySelectorAll('[data-mission]').forEach(li => li.addEventListener('click', () => { mcSel = Number(li.dataset.mission); try{ renderMissionChecklist(); }catch(e){} }));
+    try{ renderMissionChecklist(); }catch(e){}
   }
   if(missionsEl){ renderMissions(); window.refreshMissionsList = renderMissions; }
   try{ applyM1Highlight(); }catch(e){}
@@ -5022,7 +5155,22 @@ function applyLocks(){
   mapKeyEl.className = 'map-key ' + (hasKey ? 'has' : 'locked');
   document.body.classList.toggle('has-key', hasKey);
   document.body.classList.toggle('key-fresh', hasKey && localStorage.getItem('tu-thuoc-mo-phong:keyseen') !== '1');
+  renderKeyGuide();
   renderMapAction();
+}
+// req #239: hướng dẫn mở cửa hiện NGAY trên mặt tiền (không phải bấm cửa mới thấy), kèm tiến độ của người học ở 2 trò chơi
+function renderKeyGuide(){
+  const el = document.getElementById('fKeyGuide'); if(!el) return;
+  if(hasKey){ el.innerHTML = ''; return; }
+  const passed = k => Math.max(0, Math.min(KEY_LEVEL, gameMax(k) - 1));
+  const c = passed('pharma_crush_progress_v1'), so = passed('pharma_sort_progress_v1');
+  el.innerHTML = `<h4>🔒 Cửa nhà thuốc đang khóa — cách nhận 🔑 chìa khóa</h4>
+    <ol><li>Chơi <b>Pharma Crush</b> hoặc <b>Pharma Sort</b> và qua hết <b>màn ${KEY_LEVEL}</b> ở <b>một</b> trong hai trò (chỉ cần một trò).<br>
+      <small>Tiến độ của bạn: Pharma Crush đã qua <b>${c}/${KEY_LEVEL}</b> màn · Pharma Sort đã qua <b>${so}/${KEY_LEVEL}</b> màn.</small></li>
+      <li>Quay lại trang này: cửa tự mở, bấm vào cánh cửa để vào nhà thuốc.</li>
+      <li>Nếu giảng viên đã cho <b>mật khẩu</b>: bấm "Nhập mật khẩu" để vào ngay.</li></ol>
+    <div class="kg-btns"><a href="/pharma-crush.html">💊 Chơi Pharma Crush</a><a href="/pharma-sort.html">🗂️ Chơi Pharma Sort</a><button type="button" id="kgPw">🔑 Nhập mật khẩu</button></div>`;
+  el.querySelector('#kgPw').addEventListener('click', () => openDoorPw());
 }
 
 /* ---- view switching: map <-> pharmacy ---- */
@@ -5135,6 +5283,7 @@ pMap.addEventListener('click', e=>{
 });
 
 function earnKey(){ hasKey = true; localStorage.setItem('tu-thuoc-mo-phong:key','1'); applyLocks(); }
+document.getElementById('mapKey')?.addEventListener('click', () => { if(!hasKey) openDoorPw(); });
 
 /* req #152 (ThS Hương Lý) — mở khóa cửa nhà thuốc bằng mật khẩu giảng viên.
    Bình thường sinh viên phải đạt danh hiệu "Dược sĩ thực tập" (25⭐) mới có chìa
@@ -5540,5 +5689,18 @@ applyLocks();
   else showFacade();
 }
 </script>
+<script>
+/* req #240: trợ lý AI ở góc màn hình — gửi kèm nhiệm vụ/bước người học đang làm để AI trả lời đúng ngữ cảnh */
+window.EduTutorContext = function(){
+  try{
+    const n = (typeof m3Active === 'function' && m3Active()) ? 3 : (typeof m2Active === 'function' && m2Active()) ? 2 : 1;
+    const hint = n === 3 ? m3Hint() : n === 2 ? m2Hint() : (document.getElementById('pmZone')?.textContent || '');
+    return `Trang "Nhà thuốc thực hành" (mô phỏng 2D nhà thuốc đạt chuẩn GPP cho sinh viên dược). Người học đang làm nhiệm vụ ${n} `
+      + `(1: Lập dự trù và mua thuốc; 2: Kiểm nhập thuốc, niêm yết giá; 3: Bảo quản thuốc và sắp xếp hàng hóa). Gợi ý bước hiện tại trên màn hình: ${hint}. `
+      + 'Hãy hướng dẫn cách làm, giải thích quy định GPP liên quan; KHÔNG làm hộ hay đưa thẳng đáp án của bài.';
+  }catch(e){ return 'Trang Nhà thuốc thực hành GPP'; }
+};
+</script>
+<script src="/js/tutor-floating.js" data-domain="pharmacy" data-context="tu-thuoc-mo-phong"></script>
 </body>
 </html>

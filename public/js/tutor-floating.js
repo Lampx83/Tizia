@@ -339,7 +339,8 @@
         body: JSON.stringify({
           domain: autoDomain,
           grade: autoGrade || undefined,
-          context: autoContext,
+          // Trang có thể cấp ngữ cảnh ĐỘNG (vd nhiệm vụ/bước đang làm) qua window.EduTutorContext()
+          context: (typeof window.EduTutorContext === 'function' && window.EduTutorContext()) || autoContext,
           history: history.slice(-MAX_HISTORY).slice(0, -1),
           message: text,
           styleNote: TUTOR_STYLE_DOC[autoDomain] || TUTOR_STYLE_DOC.general,

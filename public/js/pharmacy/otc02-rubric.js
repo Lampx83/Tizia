@@ -3,7 +3,7 @@
 // — req #229 (ThS Phạm Thị Hương Lý, 25/09/2026). Nguồn: file
 // "Hướng dẫn chấm riêng OTC2_BÁN ALAXAN_24.9.docx".
 //
-// Chỉ ghi đè mô tả 5 mức của 11 tiêu chí: A3, B1, B2, B3, C1, C4, C5, D1, D2, E2, E4.
+// Chỉ ghi đè mô tả 5 mức của 12 tiêu chí: A3, B1, B2, B3, C1, C4, C5, D1, D2, E1, E2, E4 (E1 thêm theo req #244).
 // Các tiêu chí còn lại (A1,A2,B4,B5,C2,C3,C6,C7,C8,D3,D4,D5,E1,E3,E5,E6,...) vẫn
 // dùng mô tả CHUNG trong otc-rubric.js — cô ghi rõ "các tiêu chí còn lại chấm theo
 // hướng dẫn chung cho tất cả các tình huống".
@@ -68,17 +68,26 @@ export const OTC02_LEVEL_OVERRIDES = {
   ],
   "D2": [
     "Chê trách, chế giễu, đổ lỗi hoặc phản hồi trái ngược với cảm xúc; làm khách hàng căng thẳng hơn.",
-    "Không phản hồi mà tiếp tục tư vấn / Vd: Em hiểu chị đang rất lo lắng/khó chịu",
-    "Có câu thể hiện đồng cảm hoặc động viên và quan tâm đến khách hàng nhưng còn chung chung, ít gắn với khó khăn cụ thể của khách hàng. / VD: Em hiểu chị đang rất lo lắng",
-    "Có sự đồng cảm, quan tâm đến khách hàng nhưng chỉ thực hiện sau khi khách hàng giục nhiều lần, không thực hiện ở bước A3",
-    "Có sự đồng cảm ngay ở bước A3, lập kế hoạch tư vấn và xuyên suốt quy trình khi khách hàng giục giã"
+    "Không phản hồi mà tiếp tục tư vấn.",
+    "Có 1 vài câu thể hiện đồng cảm hoặc động viên và quan tâm đến khách hàng nhưng còn chung chung, ít gắn với khó khăn cụ thể của khách hàng. / VD: “Em hiểu chị đang rất lo lắng”",
+    "Có sự đồng cảm, quan tâm đến khách hàng nhưng chỉ ngay sau mỗi lần khách hàng phàn nàn, giục giã. Không thực hiện ngay ở bước A3. / VD: “Em hiểu mình đang rất khó chịu vì đau nhức răng, em sẽ cố gắng hỗ trợ mình nhanh nhất nên rất mong anh hợp tác cung cấp thông tin giúp em” / “Em hiểu mình đang rất vội, em sẽ cố gắng hỗ trợ mình nhanh nhất nên rất mong anh hợp tác cung cấp thông tin giúp em”",
+    "Có sự đồng cảm ngay ở bước A3, và xuyên suốt quy trình ngay khi khách hàng thể hiện sự khó chịu, thúc giục. / Ví dụ ở bước A3: “Em rất hiểu là anh đang vội và bận rộn với công việc của mình. Tuy nhiên thuốc Alaxan sẽ cần có một số lưu ý khi dùng, vì vậy để đảm bảo việc dùng thuốc an toàn hiệu quả nhất cho mình, em xin phép một chút thời gian để hỏi anh một số thông tin ạ”"
   ],
+  // req #244 (25/10): E1 theo đáp án riêng OTC-02
+  "E1": [
+    "Thiếu tôn trọng, tranh cãi/đổ lỗi; bỏ qua thắc mắc hoặc tự xử lý vấn đề vượt thẩm quyền gây mất an toàn.",
+    "Lịch sự; thường xuyên ngắt lời/phòng thủ, không khuyến khích khách hàng đặt câu hỏi.",
+    "Giữ thái độ lịch sự, khuyến khích khách hàng đặt câu hỏi.",
+    "Tôn trọng, khuyến khích trao đổi; xử lý thắc mắc bình tĩnh và chủ động tìm hỗ trợ khi cần, chỉ còn thiếu sót nhỏ.",
+    "Tôn trọng, khuyến khích khách hàng đặt câu hỏi; xử lý thắc mắc bình tĩnh và chủ động tìm hỗ trợ khi cần kể cả khi khách hàng vội/nghi ngờ/không hợp tác."
+  ],
+  // req #244: E2 cập nhật mức 4/5 (hỏi đủ nội dung, đúng thứ tự B1→B2→B3)
   "E2": [
-    "Không đặt câu hỏi hoặc chỉ đặt 1-2 câu ban đầu để xác định nhu cầu",
+    "Không đặt câu hỏi hoặc chỉ đặt 1-2 câu ban đầu để xác định nhu cầu.",
     "Chủ yếu hỏi đóng và dồn dập; trình tự rời rạc, thường ghép nhiều ý trong một câu làm khách hàng khó trả lời.",
     "Có kết hợp câu hỏi mở và đóng nhưng chưa đều; trình tự chưa logic, còn lặp hoặc có một số câu nhiều ý.",
-    "Mở đầu bằng câu hỏi mở rồi dùng câu hỏi đóng để làm rõ; sắp xếp logic, ngắn gọn, vẫn còn câu hỏi nhiều ý",
-    "Mở đầu bằng câu hỏi mở rồi dùng câu hỏi đóng để làm rõ; sắp xếp logic, ngắn gọn, rõ ràng, câu hỏi chỉ có 1 hoặc 2 ý. Đặt cầu hỏi theo đúng thứ tự từ hỏi đặc điểm người bệnh, hỏi triệu chứng và hỏi tiền sử"
+    "Mở đầu bằng câu hỏi mở rồi dùng câu hỏi đóng để làm rõ; sắp xếp logic, ngắn gọn, vẫn còn câu hỏi nhiều ý hoặc hỏi chưa đầy đủ nội dung.",
+    "Mở đầu bằng câu hỏi mở rồi dùng câu hỏi đóng để làm rõ; sắp xếp logic, ngắn gọn, rõ ràng, câu hỏi chỉ có 1 hoặc 2 ý. Đặt câu hỏi theo đúng thứ tự từ B1, B2, B3: hỏi đặc điểm người bệnh, hỏi triệu chứng và hỏi tiền sử, và hỏi đầy đủ các nội dung."
   ],
   "E4": [
     "Dùng thuật ngữ, từ viết tắt hoặc diễn đạt mơ hồ làm khách hàng hiểu sai nội dung quan trọng.",
