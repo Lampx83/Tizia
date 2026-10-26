@@ -317,13 +317,6 @@ export function attachAiBoardRequestRoutes(router, {
     try { res.json(await aux.deleteEvalTask(store.db, req.params.id)); } catch (error) { folderError(res, error); }
   });
 
-  // ── Vòng tự cải thiện ban đêm: công tắc + bảng các đêm, chỉ admin ──
-  route.get('/api/admin/ai-board/self-improve', requireAuth, requireAdmin, async (_req, res) => {
-    res.json(await aux.listNights(store.db));
-  });
-  route.post('/api/admin/ai-board/self-improve/switch', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
-    try { res.json(await aux.setSelfImproveEnabled(store.db, req.body?.enabled, req.user.id)); } catch (error) { folderError(res, error); }
-  });
 
   // ── Phiên bản manifest tool của tool-loop: admin duyệt hoặc thu hồi theo băm ──
   const toolManifests = createToolManifestStore(store.db);
@@ -400,7 +393,6 @@ export function attachAiBoardWorkerRoutes(router, {
   uploadsDir = null, // thư mục /uploads/requests (ảnh bản nháp); thiếu → route ảnh trả 503
   shotBackend = undefined, // backend lưu ảnh (shot-storage.js); mặc định local trong uploadsDir
   onVerdict = null, // ({request_id, title, domain, student, kind}) sau mỗi verdict: chuông cho người gửi
-  onSelfWin = null, // ({night, request_id}) biến thể tự cải thiện thắng eval: chuông cho admin
   onClarify = null, // ({requestId, title, domain, student}) khi Gate 2.5 cần người gửi làm rõ
   aux = asyncAux, // PostgreSQL helpers, as in attachAiBoardRequestRoutes
   lessonOptions,
@@ -583,11 +575,7 @@ export function attachAiBoardWorkerRoutes(router, {
     });
     const notice = await aux.afterVerdict(store.db, req.params.id, verdict);
     if (verdict.outcome === 'blocked') await aux.recordMiss(store.db, req.body.run_id, 'verdict_blocked');
-    const won = await aux.recordSelfVerdict(store.db, req.params.id, verdict);
     res.json({ verdict });
-    if (won && onSelfWin) {
-      try { await onSelfWin(won); } catch (error) { console.warn('[ai-board] self win notification failed:', error.message); }
-    }
     if (notice && onVerdict) {
       try { await onVerdict(notice); } catch (error) { console.warn('[ai-board] verdict notification failed:', error.message); }
     }
@@ -610,32 +598,6 @@ export function attachAiBoardWorkerRoutes(router, {
     }
   }));
 
-  // Vòng đêm: worker hỏi được chạy không (tạo dòng đêm), rồi ghi từng bước vào dòng đó.
-  route.post('/api/ai-board/worker/self-improve/night', authenticate, handle(async (req, res) => {
-    res.json(await aux.startNight(store.db, req.body?.night));
-  }));
-  route.post('/api/ai-board/worker/self-improve/night/report', authenticate, handle(async (req, res) => {
-    res.json({ night: await aux.reportNight(store.db, req.body) });
-  }));
-
-  // Bộ đánh giá đóng băng: self PR đã merge còn cần đo, đo cùng bộ task đóng băng hiện
-  // có; ghi lại đúng 1 lần điểm đo được (idempotent theo pr_number).
-  route.post('/api/ai-board/worker/self-improve/frozen-benchmark/pending', authenticate, handle(async (_req, res) => {
-    res.json(await aux.pendingFrozenMeasurements(store.db));
-  }));
-  route.post('/api/ai-board/worker/self-improve/frozen-benchmark/report', authenticate, handle(async (req, res) => {
-    res.json({ score: await aux.recordFrozenMeasurement(store.db, req.body) });
-  }));
-
-  // Theo dõi production sau merge + tự revert: self PR đã merge, cửa sổ sau đã trôi
-  // qua, chưa kết luận → worker gọi check đúng PR đó; server tự đọc closed_at/sha, tính tỉ lệ, ghi kết luận,
-  // tự tạo đúng 1 yêu cầu self revert nếu tụt quá ngưỡng (không tự merge).
-  route.post('/api/ai-board/worker/self-improve/post-merge-watch/pending', authenticate, handle(async (_req, res) => {
-    res.json({ pending: await aux.pendingPostMergeWatch(store.db) });
-  }));
-  route.post('/api/ai-board/worker/self-improve/post-merge-watch/check', authenticate, handle(async (req, res) => {
-    res.json({ watch: await aux.checkPostMergeWatch(store.db, req.body?.pr_number, store.createSelfRequest) });
-  }));
 
   // Trạng thái PR: worker hỏi GitHub các PR này rồi báo PR đã đóng; không webhook.
   route.post('/api/ai-board/worker/pull-requests/open', authenticate, handle(async (_req, res) => {

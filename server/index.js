@@ -386,7 +386,6 @@ attachAiBoardRequestRoutes(r, {
 });
 attachAiBoardWorkerRoutes(r, {
   store: aiBoardStore, aux: aiBoard.aux, uploadsDir: REQUEST_UPLOADS_DIR, shotBackend: aiBoardShotBackend, onVerdict: draftNotifier(createNotification),
-  onSelfWin: aiBoard.aux.selfWinNotifier(aiBoard.db, createNotification),
   onClarify: clarifyNotifier(createNotification),
 });
 // Cờ phát hành: có page gate /<slug>.html → phải trước route HTML + static bên dưới.
