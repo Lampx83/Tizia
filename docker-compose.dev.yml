@@ -8,13 +8,13 @@ services:
     depends_on: !override  # the app needs PostgreSQL at boot
       tizia-postgres: { condition: service_healthy }
     ports: !override
-      - "${PORT:-8041}:8041"
-      - "127.0.0.1:8042:8042"  # private preview host remains loopback-only
+      - "${PORT:-8041}:8041"  # cửa duy nhất: web; AI board/preview không publish thêm cổng
     env_file:
       - .env
     environment:  # chỉ nối dây trong container; mọi cấu hình (khóa, model, retention) nằm trong file .env
       NODE_ENV: development
       AI_BOARD_PREVIEW_BIND_HOST: 0.0.0.0
+      AI_BOARD_PRIVATE_PREVIEW_ENABLED: "false"  # preview phải đi qua 8041; chưa mở cổng riêng
       BASE_PATH: !reset null
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@tizia-postgres:5432/${POSTGRES_DB}  # ghi đè DATABASE_URL trong .env (dành cho chạy ngoài container)
     volumes: !override
@@ -46,6 +46,23 @@ services:
     networks: [default, sandbox-api]
 
   # Worker thứ hai (profile multi-worker): mirror docker-compose.yml, kế thừa worker dev ở file này.
+  # UI SeaweedFS (master 9333/filer 8888) sau basic-auth; key sinh mỗi lần container khởi động nếu chưa đặt.
+  seaweedfs-ui-auth:
+    image: node:24-alpine
+    container_name: tizia-seaweedfs-ui
+    profiles: [storage]
+    restart: unless-stopped
+    depends_on: [seaweedfs]
+    command: sh -c 'export SEAWEED_UI_PASSWORD="${SEAWEED_UI_PASSWORD:-}"; node /app/scripts/seaweed-ui-auth.js'  # key in ra docker logs
+    environment:
+      SEAWEED_UI_USER: ${SEAWEED_UI_USER:-admin}
+      SEAWEED_UI_PASSWORD: ${SEAWEED_UI_PASSWORD:-}
+    ports:
+      - "127.0.0.1:9333:9333"  # loopback + basic auth mới vào được
+      - "127.0.0.1:8888:8888"
+    volumes:
+      - ./scripts/seaweed-ui-auth.js:/app/scripts/seaweed-ui-auth.js:ro
+
   ai-board-worker-2:
     extends: { service: ai-board-worker }
     container_name: tizia-ai-board-worker-2
@@ -66,10 +83,8 @@ services:
 
   seaweedfs:
     extends: { file: docker-compose.yml, service: seaweedfs }
-    ports: !override  # UI master/filer không có auth: chỉ loopback, chỉ dev
+    ports: !override  # S3 gateway loopback; UI đi qua seaweedfs-ui-auth
       - "127.0.0.1:8333:8333"
-      - "127.0.0.1:9333:9333"
-      - "127.0.0.1:8888:8888"
 
 networks:
   sandbox-api: {}
