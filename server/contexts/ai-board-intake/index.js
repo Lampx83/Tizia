@@ -16,7 +16,7 @@ import { RequestValidationError, WorkerContractError } from '../../ai-board/stor
 import { asyncRoutes } from '../../ai-board/async-routes.js';
 import { resolveAIModel } from '../../ai-model-router.js';
 import {
-  DAILY_TURNS, FEATURE_QUESTIONS, MAX_QUESTIONS, askQuestion, checkAnswer, conversationText, nextStep, ollamaStreamer, parseQuestionReply, plainSpec, questionPrompt, specPrompt, streamGuarded, withUserWords,
+  DAILY_TURNS, FEATURE_QUESTIONS, MAX_QUESTIONS, askQuestion, checkAnswer, cloudConfig, cloudStreamer, conversationText, nextStep, ollamaStreamer, parseQuestionReply, plainSpec, questionPrompt, specPrompt, streamGuarded, withUserWords,
 } from './clarify.js';
 
 export const ROLES = ['pupil', 'student', 'teacher', 'parent', 'other'];
@@ -81,6 +81,8 @@ export function attachAiBoardIntake(router, {
   quotaGate = (_req, _res, next) => next(), // aiQuotaGate('ai_board_grill') in the app
   recordUsage = () => {}, // recordAiCall(req, {...}) in the app
   generate = ollamaStreamer(),
+  generateCloud = null,
+  cloud = null,
   classifyClarity = defaultClarity,
   models = { question: chatModel('ai_board_grill'), spec: chatModel('ai_board_spec') },
 }) {
@@ -101,7 +103,7 @@ export function attachAiBoardIntake(router, {
     }
   });
   if (store) attachClarify(router, { store, profiles, requireAuth, requireStrictCsrf, quotaGate, recordUsage,
-    generate, classifyClarity, models });
+    generate, generateCloud, cloud, classifyClarity, models });
   return profiles;
 }
 
@@ -144,8 +146,15 @@ function sendError(res, error) {
 }
 
 function attachClarify(router, { store, profiles, requireAuth, requireStrictCsrf, quotaGate, recordUsage,
-  generate, classifyClarity, models }) {
+  generate, classifyClarity, models, generateCloud = null, cloud = null }) {
+  const cloudLlm = cloud ?? cloudConfig();
+  const cloudGenerate = generateCloud ?? cloudStreamer();
   const route = asyncRoutes(router);
+  // Chọn model cho câu trả lời làm rõ: local (vLLM của trường) hoặc cloud; UI đọc để khóa/bật checkbox.
+  route.get('/api/ai-board/clarify/options', requireAuth, async (req, res) => {
+    res.json({ cloud_configured: !!cloudGenerate, cloud_model: cloudLlm?.model ?? null,
+      local_label: 'model nội bộ (vLLM của trường)', default_source: 'cloud' });
+  });
   // Yêu cầu đang chờ người gửi làm rõ: FAB nhấp nháy + banner.
   route.get('/api/ai-board/clarifications', requireAuth, async (req, res) => {
     res.json({ items: await store.listPendingClarifications(req.user.id) });
@@ -168,6 +177,12 @@ function attachClarify(router, { store, profiles, requireAuth, requireStrictCsrf
     } catch (error) { return sendError(res, error); }
     const { request } = state;
     const hasAnswer = req.body?.answer !== undefined;
+    const modelSource = req.body?.model_source === 'cloud' ? 'cloud' : 'local';
+    if (modelSource === 'cloud' && !cloudGenerate) {
+      return res.status(409).json({ error: 'cloud_not_configured',
+        message: 'Chưa cấu hình model cloud cho phần làm rõ. Bỏ tích để dùng model nội bộ.' });
+    }
+    const generateFor = modelSource === 'cloud' ? cloudGenerate : generate;
     if (hasAnswer) {
       const problem = checkAnswer(req.body.answer);
       if (problem) return res.status(422).json({ error: 'answer_rejected', message: problem });
@@ -205,7 +220,7 @@ function attachClarify(router, { store, profiles, requireAuth, requireStrictCsrf
       if (step.kind === 'question') {
         const prompt = questionPrompt({ request, turns, techLevel: profile?.tech_level, mode, turn: asked + 1 });
         const deltas = [];
-        const answer = await askQuestion({ generate, model: models.question, prompt, mode,
+        const answer = await askQuestion({ generate: generateFor, model: models.question, prompt, mode,
           send: (text) => deltas.push({ t: 'delta', text }) });
         if (!answer.ok) {
           const handoff = await store.handoffClarification(request.id, req.user.id, `invalid_model_output:${answer.error}`);
@@ -228,7 +243,7 @@ function attachClarify(router, { store, profiles, requireAuth, requireStrictCsrf
             return res.end();
           }
           deltas.forEach(send);
-          recordUsage(req, { provider: 'ollama', model: models.question, status: answer.replaced ? 'error' : 'ok' });
+          recordUsage(req, { provider: modelSource === 'cloud' ? 'openai' : 'ollama', model: models.question, status: answer.replaced ? 'error' : 'ok' });
           send({ t: 'done', kind: 'question', text: answer.question, asked: asked + 1, max, complete: null });
           return res.end();
         }
@@ -238,7 +253,7 @@ function attachClarify(router, { store, profiles, requireAuth, requireStrictCsrf
       }
       const closing = !feature && step.closing === true;
       const prompt = specPrompt({ request, turns, mode, closing });
-      const out = await streamGuarded({ generate, model: models.spec, prompt, kind: 'summary', mode, send,
+      const out = await streamGuarded({ generate: generateFor, model: models.spec, prompt, kind: 'summary', mode, send,
         fallback: plainSpec(request, turns, { closing }) });
       let summary = out.text;
       if (closing && !/^\s*Giả định:/imu.test(summary)) {
@@ -253,7 +268,7 @@ function attachClarify(router, { store, profiles, requireAuth, requireStrictCsrf
         send({ t: 'done', kind: 'handoff', text: handoff.public_note, asked: MAX_QUESTIONS, max, complete: false });
         return res.end();
       }
-      recordUsage(req, { provider: 'ollama', model: models.spec, status: out.replaced ? 'error' : 'ok' });
+      recordUsage(req, { provider: modelSource === 'cloud' ? 'openai' : 'ollama', model: models.spec, status: out.replaced ? 'error' : 'ok' });
       send({ t: 'done', kind: 'summary', text: summary, asked, max, complete: true });
       res.end();
     } catch (error) {

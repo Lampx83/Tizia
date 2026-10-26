@@ -511,8 +511,10 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     const queue = await queueInfo(ownerUserId);
     const out = [];
     for (const row of rows) {
+      const workflow = await requestWorkflow(row.id);
       out.push({ ...row, attachments: parseAttachments(row.attachments),
-        status_label: (await requestWorkflow(row.id))?.status_label ?? null,
+        status_label: workflow?.status_label ?? null,
+        awaiting_user: workflow?.awaiting_user === true,
         queue: row.workflow_status === 'queued' ? queue.get(row.root_ticket_id) ?? null : null });
     }
     return out;
@@ -522,9 +524,13 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   async function requestWorkflow(requestId) {
     const root = await db.get('SELECT status, phase, public_note FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL', [Number(requestId)]);
     if (!root) return null;
-    return { workflow_status: root.status, phase: root.phase, public_note: root.public_note,
-      status_label: root.status === 'waiting_authorization' ? 'chờ quản trị viên cho phép'
-        : PHASES[root.phase]?.label ?? root.public_note ?? null };
+    const last = await db.get('SELECT author_name FROM request_messages WHERE request_id=? ORDER BY id DESC LIMIT 1', [Number(requestId)]);
+    // awaiting_user: Ban hỏi xong và đang chờ chính người gửi trả lời (không phải đang chờ người xác nhận tóm tắt).
+    const awaiting_user = root.phase === 'clarifying' && last?.author_name === CLARIFY_AUTHOR;
+    return { workflow_status: root.status, phase: root.phase, public_note: root.public_note, awaiting_user,
+      status_label: awaiting_user ? 'chờ bạn trả lời'
+        : root.status === 'waiting_authorization' ? 'chờ quản trị viên cho phép'
+          : PHASES[root.phase]?.label ?? root.public_note ?? null };
   }
 
   async function queueInfo(ownerUserId, now = Date.now()) {
@@ -858,8 +864,10 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     return await db.all(`
       SELECT r.id, r.title, r.domain FROM requests r
       JOIN ai_tickets t ON t.source_request_id=r.id AND t.parent_id IS NULL AND t.phase='clarifying'
-      WHERE r.owner_user_id=? ORDER BY r.updated_at DESC LIMIT 5
-    `, [Number(ownerUserId)]);
+      WHERE r.owner_user_id=?
+        AND (SELECT m.author_name FROM request_messages m WHERE m.request_id=r.id ORDER BY m.id DESC LIMIT 1)=?
+      ORDER BY r.updated_at DESC LIMIT 5
+    `, [Number(ownerUserId), CLARIFY_AUTHOR]);
   }
 
   /** Người gửi xác nhận spec → root vào hàng đợi worker. complete=false: chưa đủ rõ, gắn cờ cho cổng 2.5. */

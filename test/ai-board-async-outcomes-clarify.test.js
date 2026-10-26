@@ -45,7 +45,7 @@ test('clarification turns, limits, confirm (complete and incomplete), handoff', 
   assert.equal(kinds.filter((kind) => kind === 'question').length, LIMITS.clarify.questions);
   assert.equal(kinds.at(-1), 'summary');
   assert.equal(out.clarification.asked, LIMITS.clarify.questions);
-  assert.equal(out.pending.length, 1);
+  assert.equal(out.pending.length, 0, 'summary means no question is waiting for the requester');
   assert.equal(out.shortSpec.error, 'RequestValidationError');
   assert.deepEqual(out.confirm, { ok: true, status: 'queued', complete: false });
   assert.equal(out.confirmAgain.error, 'not_clarifying');

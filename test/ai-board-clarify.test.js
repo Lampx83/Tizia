@@ -42,7 +42,7 @@ function fakeModel(replies) {
   return { generate, calls };
 }
 
-async function serve(db, { userId = 1, model, clarity = [], notify = () => {} } = {}) {
+async function serve(db, { userId = 1, model, clarity = [], notify = () => {}, cloud = null } = {}) {
   const store = createAsyncAiBoardStore(db.d);
   const app = express();
   app.use(express.json());
@@ -53,7 +53,8 @@ async function serve(db, { userId = 1, model, clarity = [], notify = () => {} } 
   const pass = (_req, _res, next) => next();
   attachAiBoardIntake(app, {
     db: db.d, store, requireAuth: pass, requireStrictCsrf: pass, quotaGate: pass,
-    generate: model.generate, classifyClarity: async () => clarity.shift() ?? { needed: true, mode: 'ask' },
+    generate: model.generate, generateCloud: cloud?.generate ?? null, cloud: cloud?.config ?? null,
+    classifyClarity: async () => clarity.shift() ?? { needed: true, mode: 'ask' },
     models: { question: 'grill-model', spec: 'spec-model' },
   });
   attachAiBoardRequestRoutes(app, {
@@ -73,8 +74,9 @@ async function serve(db, { userId = 1, model, clarity = [], notify = () => {} } 
     body: JSON.stringify(body || {}),
   });
   // Clarify turn: returns the NDJSON events.
-  const turn = async (requestId, answer) => {
-    const res = await post(`/api/ai-board/requests/${requestId}/clarify`, answer === undefined ? {} : { answer });
+  const turn = async (requestId, answer, extra = {}) => {
+    const body = answer === undefined ? { ...extra } : { answer, ...extra };
+    const res = await post(`/api/ai-board/requests/${requestId}/clarify`, body);
     if (!res.headers.get('content-type')?.includes('ndjson')) return { status: res.status, json: await res.json() };
     const events = (await res.text()).trim().split('\n').map((line) => JSON.parse(line));
     return { status: res.status, events, done: events.at(-1) };
@@ -98,6 +100,7 @@ test('a vague request waits in clarifying: not claimable, requester notified', a
     assert.equal((await db.prepare('SELECT phase FROM ai_tickets WHERE id=?').get(created.root_ticket_id)).phase, 'clarifying');
     assert.equal(await app.store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' }), null);
     assert.equal(notified[0].requestId, created.request_id);
+    assert.equal(notified.length, 1, 'one notification per request');
   } finally {
     await app.close();
   }
@@ -122,11 +125,18 @@ test('questions stream token by token in the requester tone, then a confirmed su
     assert.match(model.calls[0].prompt, /ví dụ trên màn hình/); // tech_level none
     assert.match(model.calls[0].prompt, /<<<NGUOI_DUNG\n[\s\S]*làm cho đẹp hơn[\s\S]*NGUOI_DUNG>>>/);
     assert.match(model.calls[0].prompt, /"ready"/); // JSON contract in the prompt
+    const pending = await app.store.listPendingClarifications(1);
+    assert.deepEqual(pending.map((row) => row.id), [id], 'badge counts the question waiting for the requester');
+    const mine = (await app.store.listRequestsForOwner(1, 'primary'))[0];
+    assert.equal(mine.awaiting_user, true);
+    assert.equal(mine.status_label, 'chờ bạn trả lời');
 
     const second = await app.turn(id, 'Trang chủ Tiểu học, nút Bắt đầu nhỏ quá');
     assert.equal(second.done.kind, 'summary');
     assert.equal(second.done.complete, true);
     assert.equal(model.calls[1].model, 'spec-model');
+    assert.deepEqual(await app.store.listPendingClarifications(1), [], 'answering clears the badge');
+    assert.equal((await app.store.listRequestsForOwner(1, 'primary'))[0].awaiting_user, false);
 
     const confirm = await (await app.post(`/api/ai-board/requests/${id}/clarify/confirm`,
       { spec: second.done.text, complete: second.done.complete })).json();
@@ -392,6 +402,33 @@ test('question JSON is accepted only in the documented shape', () => {
   assert.equal(parseQuestionReply('{"ready":"yes","missing":"","question":""}').error, 'ready_not_boolean');
   assert.equal(parseQuestionReply('{"ready":false,"missing":"x","question":""}').error, 'empty_question');
   assert.equal(parseQuestionReply('{"ready":true,"missing":"","question":"Vẫn hỏi?"}').error, 'question_when_ready');
+});
+
+test('clarify model options: cloud answers need configuration, default is local', async () => {
+  const db = await fixtureDb();
+  const local = await serve(db, { model: fakeModel([]) });
+  try {
+    const options = await fetch(`${local.base}/api/ai-board/clarify/options`).then((r) => r.json());
+    assert.equal(options.cloud_configured, false);
+    assert.equal(options.default_source, 'cloud');
+    const { request_id: id } = await vagueRequest(local);
+    const refused = await local.turn(id, undefined, { model_source: 'cloud' });
+    assert.equal(refused.status, 409);
+    assert.equal(refused.json.error, 'cloud_not_configured');
+    const ok = await local.turn(id);
+    assert.equal(ok.done.kind, 'question');
+  } finally { await local.close(); }
+  const cloudModel = fakeModel([]);
+  const cloud = await serve(db, { model: fakeModel([]), cloud: { generate: cloudModel.generate, config: { model: 'cloud-grill' } } });
+  try {
+    const options = await fetch(`${cloud.base}/api/ai-board/clarify/options`).then((r) => r.json());
+    assert.equal(options.cloud_configured, true);
+    assert.equal(options.cloud_model, 'cloud-grill');
+    const { request_id: id } = await vagueRequest(cloud, 'clarify-cloud-001');
+    const turn = await cloud.turn(id, undefined, { model_source: 'cloud' });
+    assert.equal(turn.done.kind, 'question');
+    assert.equal(cloudModel.calls.length, 1, 'cloud generator handled the turn');
+  } finally { await cloud.close(); db.close(); }
 });
 
 test('ordinary questions, specs and numbers are not mistaken for claims or phone numbers', () => {

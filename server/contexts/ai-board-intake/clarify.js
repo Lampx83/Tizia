@@ -301,6 +301,45 @@ export async function askQuestion({ generate, model, prompt, mode, send }) {
   return { ok: false, error: lastError };
 }
 
+export function cloudConfig(env = process['env']) {
+  const url = String(env.CLARIFY_CLOUD_URL || '').trim().replace(/\/+$/, '');
+  const model = String(env.CLARIFY_CLOUD_MODEL || '').trim();
+  return url && model ? { url, model, secret: String(env.CLARIFY_CLOUD_KEY || '') } : null;
+}
+
+/** OpenAI-compatible cloud streamer for clarification answers; null when the operator has not configured one. */
+export function cloudStreamer({ env = process['env'], fetchImpl = fetch, timeoutMs = 60_000 } = {}) {
+  const llm = cloudConfig(env);
+  if (!llm) return null;
+  return async ({ prompt, kind, onToken }) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetchImpl(vllmChatUrl(llm.url), {
+        method: 'POST', headers: vllmHeaders(llm.secret), signal: controller.signal, redirect: 'error',
+        body: JSON.stringify(vllmBody({ model: llm.model, messages: [{ role: 'user', content: prompt }], temperature: 0.3,
+          maxTokens: kind === 'summary' ? 600 : 200, stream: true })),
+      });
+      if (!res.ok) throw new Error(`cloud HTTP ${res.status}`);
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let text = '';
+      for await (const chunk of res.body) {
+        const parsed = parseSse(buffer + decoder.decode(chunk, { stream: true }));
+        buffer = parsed.rest;
+        for (const token of parsed.tokens) {
+          text += token;
+          if (onToken(token) === false) { controller.abort(); return text; }
+        }
+        if (parsed.done) return text;
+      }
+      return text;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+}
+
 /** Next step after the requester's latest turn: another question, or the summary (complete = clear enough). */
 export function nextStep({ asked, clarity, rulesClear = false, mode = null }) {
   // Chức năng mới: đủ chủ đề rồi mới tóm tắt, không dừng sớm theo luật/model của yêu cầu lẻ.
