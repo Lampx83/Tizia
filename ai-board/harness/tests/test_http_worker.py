@@ -1621,19 +1621,6 @@ def test_a_self_variant_that_loses_the_eval_is_blocked_without_a_repair(tmp_path
     assert verdict['repairs'] == [] and verdict['candidate'] is None
 
 
-def test_diagnose_flag_runs_one_diagnosis_with_traced_deps_then_exits(monkeypatch, capsys):
-    monkeypatch.setenv('AI_BOARD_WORKER_MODE', 'off')
-    import diagnose
-    monkeypatch.setenv('AI_BOARD_WORKER_KEY', 'k' * 32)
-    monkeypatch.setattr('dotenv.load_dotenv', lambda *_a, **_k: False, raising=False)
-    seen = {}
-    monkeypatch.setattr(diagnose, 'diagnose_to_self_request',
-                        lambda client, deps, **kw: seen.update(client=client, deps=deps, **kw) or {'status': 'no_cluster'})
-    assert main(['--diagnose']) == 0
-    assert '"no_cluster"' in capsys.readouterr().out
-    assert isinstance(seen['client'], WorkerClient) and seen['deps'].trace is not None and seen['now_ms'] > 0
-
-
 def test_a_poll_that_cannot_reach_the_server_is_a_status_not_a_crash():
     import urllib.error
     from worker import poll

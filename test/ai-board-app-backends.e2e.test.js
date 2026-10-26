@@ -135,7 +135,7 @@ test(`[${mode}] the whole app runs the AI board (requester, worker, admin)`, { t
   assert.equal((await lan('GET', '/api/admin/overview')).json.requests, 1);
   assert.equal((await lan('GET', '/api/admin/requests')).json.requests.length, 1);
   assert.equal((await lan('GET', '/api/admin/ai-board/folders')).status, 200);
-  assert.equal((await lan('GET', '/api/admin/ai-board/self-improve')).status, 200);
+  assert.equal((await lan('GET', '/api/admin/ai-board/self-improve')).status, 404);
   assert.equal((await lan('POST', `/api/admin/requests/${requestId}/reply`, { message: 'Đã nhận, đang làm', status: 'reviewing' })).status, 200);
 
   // a new feature folder waits for the admin: approving it authorises the waiting plan and registers the release flag

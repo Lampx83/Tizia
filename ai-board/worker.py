@@ -678,88 +678,6 @@ def sync_pull_requests(client: WorkerClient, github) -> dict:
     return out
 
 
-def _local_night(now_ms: int, window: dict) -> tuple[str, bool]:
-    """Ngày (YYYY-MM-DD) và trong cửa sổ giờ (window: {start,end,tz} của contract.json) hay không, tại now_ms."""
-    from datetime import datetime
-    from zoneinfo import ZoneInfo
-
-    dt = datetime.fromtimestamp(now_ms / 1000, ZoneInfo(window["tz"]))
-    if os.getenv("AI_BOARD_NIGHT_WINDOW_OVERRIDE") == "always":  # chỉ dev: luôn trong cửa sổ, giới hạn khác giữ nguyên
-        return dt.strftime("%Y-%m-%d"), True
-    return dt.strftime("%Y-%m-%d"), window["start"] <= dt.strftime("%H:%M") < window["end"]
-
-
-def run_self_improve_night(client: WorkerClient, deps, *, clock: Callable[[], int], github=None) -> dict:
-    """MỘT BƯỚC của vòng tự cải thiện đêm: đồng bộ PR, hoặc 1 lần chẩn đoán. Gọi lại
-    mỗi lượt poll khi worker rảnh việc thật (idle/gpu_paused) — chính cách gọi này là cách nhường việc thật:
-    lượt poll sau luôn thử claim thật trước (yield_to_chat hiện có) rồi mới gọi lại đây, nên tối đa 1 bước
-    trôi qua trước khi có thể nhường; không cần seam nào khác để "dừng giữa chừng".
-    clock() → giờ hệ thống hiện tại (ms) — seam duy nhất được thêm, để test giả lập đêm/ngoài đêm.
-    Ngoài cửa sổ giờ hoặc server từ chối (công tắc/nhãn/PR mở/tự dừng) → không làm gì.
-    Trả {status: outside_window|not_run|progress|done, ...}.
-    ponytail: đêm dở dang đúng lúc hết cửa sổ giờ không tự đóng (status vẫn 'running') — không chặn đêm sau
-    (khác ngày), chỉ còn sai ở cột trạng thái trên tab admin; đóng hẳn khi cần xem đúng, chưa cấp thiết."""
-    import diagnose
-    import self_eval
-    from budget import Budget
-
-    limits = LIMITS["self_improve"]
-    night, inside = _local_night(clock(), limits["window"])
-    if not inside:
-        return {"status": "outside_window"}
-    started = client.post("/api/ai-board/worker/self-improve/night", {"night": night})
-    if not started.get("run"):
-        return {"status": "not_run", "reason": started.get("reason")}
-    report = lambda body: client.post("/api/ai-board/worker/self-improve/night/report", {"night": night, **body})
-    state = started["night"]
-    if state.get("pr_sync") is None:
-        report({"pr_sync": sync_pull_requests(client, github)})
-        return {"status": "progress", "step": "pr_sync"}
-    # Bộ đánh giá đóng băng: 1 self PR vừa merge (đã báo ở bước pr_sync, có thể của đêm trước) chưa
-    # đo → đo đúng 1 lần trong cùng ngân sách đêm, trước khi tiếp tục chẩn đoán. Không chọn biến thể, chỉ ghi lại.
-    pending = client.post("/api/ai-board/worker/self-improve/frozen-benchmark/pending", {})
-    if pending.get("pending"):
-        item = pending["pending"][0]
-        measured = self_eval.run_frozen(item["sha"], pending.get("tasks") or [], limits["night_gpu_s"]["eval"],
-                                        checkout_repo=REPO_ROOT)
-        client.post("/api/ai-board/worker/self-improve/frozen-benchmark/report", {"pr_number": item["pr_number"], **measured})
-        return {"status": "progress", "step": "frozen_measured", "pr_number": item["pr_number"]}
-    # Theo dõi production sau merge + tự revert: 1 self PR đã merge có cửa sổ "sau" vừa trôi qua
-    # chưa kết luận → server tự tính (không cần model/GPU), có thể tự tạo yêu cầu self revert. Trước chẩn đoán.
-    watch_pending = client.post("/api/ai-board/worker/self-improve/post-merge-watch/pending", {})
-    if watch_pending.get("pending"):
-        item = watch_pending["pending"][0]
-        client.post("/api/ai-board/worker/self-improve/post-merge-watch/check", {"pr_number": item["pr_number"]})
-        return {"status": "progress", "step": "post_merge_watched", "pr_number": item["pr_number"]}
-    rows = state.get("variants") or []
-    created = [v for v in rows if v.get("status") != "dropped"]  # "biến thể" = yêu cầu self đã tạo được
-    spent = state.get("gpu_s_propose") or 0
-    remaining = limits["night_gpu_s"]["propose"] - spent
-    if len(created) >= limits["max_variants_per_night"] or remaining <= 0:
-        report({"finished": "done"})
-        return {"status": "done", "variants": len(created)}
-    # Cụm đã thành 1 dòng đêm nay (kể cả bỏ cụm) tự loại khỏi lần chẩn đoán tiếp theo trong đêm.
-    skip = set(started.get("skip_clusters") or []) | {v["cluster"]["key"] for v in rows if v.get("cluster")}
-    budget = Budget(max_units=remaining)
-    result = diagnose.diagnose_to_self_request(client, deps, now_ms=clock(), budget=budget, skip=frozenset(skip))
-    spent += budget.units
-    if result["status"] == "dropped" and result.get("cluster"):
-        # Chẩn đoán sai khuôn / file ngoài vùng sau khi thử lại: bỏ cụm này (đếm vào 3 đêm liền thất bại),
-        # bước sau (poll tiếp) thử cụm khác — không tính vào 3 biến thể (chưa tạo yêu cầu self).
-        report({"variant": {"cluster": result["cluster"], "diagnosis": None, "request_id": None,
-                            "root_ticket_id": None, "status": "dropped", "reason": result.get("reason")},
-               "gpu_s_propose": spent})
-        return {"status": "progress", "step": "dropped", "variants": len(created)}
-    if result["status"] != "created":
-        report({"finished": "done", "gpu_s_propose": spent})
-        return {"status": "done", "variants": len(created)}  # không còn cụm: hết việc cho đêm nay
-    report({"variant": {"cluster": result["cluster"], "diagnosis": result["diagnosis"],
-                        "request_id": result["request"]["request_id"],
-                        "root_ticket_id": result["request"]["root_ticket_id"], "status": "waiting"},
-           "gpu_s_propose": spent})
-    return {"status": "progress", "step": "created", "variants": len(created) + 1}
-
-
 # Khớp server/ai-board/drafts.js: PNG, ≤ 16 ảnh, mỗi ảnh ≤ 2 MB.
 SHOTS_TYPE = "application/vnd.tizia.screenshots+json"
 MAX_SHOT_BYTES = 2 * 1024 * 1024
@@ -1433,8 +1351,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--poll-seconds", type=float, default=5.0)
     parser.add_argument("--sync-prs", action="store_true", help="report merged/closed ai-board PRs from GitHub, then exit")
     parser.add_argument("--observe-base", action="store_true", help="report the PR base branch tip of the worker repo, then exit")
-    parser.add_argument("--diagnose", action="store_true",
-                        help="turn the top learning-part failure cluster into at most one self request, then exit")
     args = parser.parse_args(argv)
     try:  # same repo env file as harness/main.py; process env still wins
         from dotenv import load_dotenv
@@ -1449,16 +1365,9 @@ def main(argv: list[str] | None = None) -> int:
     base_url = server_url()
     key = take_secret("AI_BOARD_WORKER_KEY")
     github_token = take_secret("AI_BOARD_GITHUB_TOKEN")
-    if (args.mode != "off" or args.sync_prs or args.diagnose or args.observe_base) and len(key) < 24:
+    if (args.mode != "off" or args.sync_prs or args.observe_base) and len(key) < 24:
         parser.error("AI_BOARD_WORKER_KEY must be at least 24 characters")
     _, Deps, _ = _load_harness()
-    if args.diagnose:  # chạy tay; vòng đêm gọi cùng hàm
-        import diagnose
-        import meter
-        deps = _real_deps(Deps, meter.Tracer(diagnose.TRACES_PATH), None)
-        print(json.dumps(diagnose.diagnose_to_self_request(WorkerClient(base_url, key), deps,
-                                                           now_ms=int(time.time() * 1000)), ensure_ascii=False))
-        return 0
     if args.observe_base:
         repo_dir = os.getenv("AI_BOARD_REPO_DIR")
         print(json.dumps(observe_base(WorkerClient(base_url, key), Path(repo_dir) if repo_dir else REPO_ROOT), ensure_ascii=False))
@@ -1517,38 +1426,9 @@ def main(argv: list[str] | None = None) -> int:
             from preview import PreviewPublisher
             worker.preview_publisher = PreviewPublisher(base_url, key)
         worker.open_prs = github is not None  # no token: verdicts stop at ready_for_pr, as before
-    # Vòng tự cải thiện đêm: chỉ worker có thể execute mới đề xuất được biến thể. Việc thật
-    # luôn đi trước — chỉ thử đêm khi lượt claim vừa rồi rảnh (idle/gpu_paused), never khi đang giữ ticket.
-    night_deps = None
-    if args.execute:
-        if os.getenv("AI_BOARD_NIGHT_WINDOW_OVERRIDE") == "always":
-            print("WARNING: AI_BOARD_NIGHT_WINDOW_OVERRIDE=always - self-improve night window bypassed (dev only)")
-        import diagnose as _diagnose
-        night_deps = _real_deps(Deps, meter.Tracer(_diagnose.TRACES_PATH), worker.gate_started)
     while True:
         result = poll(worker)
         print(json.dumps(result, ensure_ascii=False))
-        # 1 bước/tick, chỉ khi lượt claim vừa rồi rảnh việc thật: lượt poll tiếp theo tự ưu tiên claim thật
-        # trước (yield_to_chat hiện có), nên đêm không bao giờ giữ worker quá 1 bước trước khi nhường.
-        if night_deps is not None and result.get("status") == "idle":
-            from services import skill_retro, skill_rewrite
-            for name, step in (("skill_rewrite", skill_rewrite), ("skill_retro", skill_retro)):
-                admin_step = step.run_step(worker.client, night_deps, worker_id=worker.worker_id)
-                if admin_step["status"] != "none":
-                    print(json.dumps({name: admin_step}, ensure_ascii=False))
-                    break
-            else:
-                admin_step = None
-            if admin_step is not None:
-                if args.once or args.mode == "off":
-                    return 0
-                time.sleep(max(args.poll_seconds, 1.0))
-                continue
-        if night_deps is not None and result.get("status") in ("idle", "gpu_paused"):
-            night_result = run_self_improve_night(worker.client, night_deps, clock=lambda: int(time.time() * 1000),
-                                                   github=worker.candidates.github if worker.candidates else None)
-            if night_result["status"] not in ("outside_window", "not_run"):
-                print(json.dumps({"self_improve_night": night_result}, ensure_ascii=False))
         if args.once or args.mode == "off":
             return 0
         time.sleep(max(args.poll_seconds, 1.0))
