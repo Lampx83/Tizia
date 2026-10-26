@@ -6,6 +6,7 @@ import * as asyncAux from '../services/aux-service.js';
 import { asyncRoutes } from './async-routes.js';
 import { checkIntake, publicMessage, readOnlyVerificationText } from '../security/intake-guard.js';
 import { checkLanguage } from '../language-guard.js';
+import { checkGibberish } from '../gibberish.js';
 import { classifyRequest as classifyWithModel } from '../security/classifier.js';
 import { clarifyFromPhase, resolveClarify } from '../services/clarity-rules.js';
 import { activeChats } from '../services/chat-activity.js';
@@ -80,6 +81,8 @@ export function attachAiBoardRequestRoutes(router, {
       try { await aux.recordIntakeRejection(db, req.user.id, intake); } catch (error) { return next(error); }
       return res.status(422).json({ error: 'request_rejected', message: intake.message });
     }
+    const gibberish = checkGibberish(body.title) || checkGibberish(body.detail);
+    if (gibberish) return res.status(422).json({ error: 'request_unclear', message: gibberish });
     // Mỗi người tối đa N yêu cầu đang chờ (contract.json limits): 1 người không lấp hàng đợi cả trường.
     const pendingCap = LIMITS.pending_roots_per_user.value;
     if (req.user.role !== 'admin' && await store.countPendingRoots(req.user.id, req.get('Idempotency-Key')) >= pendingCap) {
@@ -104,9 +107,20 @@ export function attachAiBoardRequestRoutes(router, {
       title: body.title, detail: body.detail, classified, enabled: features.has('clarify'),
       isFeature: body.type === 'feature' && !body.folder_id, // chức năng mới: luôn hỏi 3 câu, không áp luật "quá rộng"
     });
-    let clarify = { needed: decision.needed, mode: decision.mode };
+    // Cloud (xếp hàng): luôn nhận và lưu để người xử lý đọc, không grilling.
+    let clarify = executionMode === 'queue' ? { needed: false, mode: null } : { needed: decision.needed, mode: decision.mode };
     const { rules } = decision;
     const trace = classified || rules.needed ? { ...classified, rules, clarify: { ...clarify, source: decision.source } } : null;
+    // Trần toàn cục mọi phương án: chặn spam trước khi ghi DB/đưa cho Claude.
+    const windowStart = Date.now() - 60_000;
+    let recentRequests = 0;
+    try {
+      recentRequests = Number((await store.queryGet('SELECT COUNT(*) AS n FROM requests WHERE created_at >= ?', [windowStart]))?.n || 0);
+    } catch { /* đếm lỗi: không chặn người dùng, để store báo lỗi thật khi ghi */ }
+    if (recentRequests >= LIMITS.global_rate.requests_per_minute) {
+      return res.status(429).json({ error: 'rate_limited',
+        message: 'Hệ thống đang nhận nhiều yêu cầu cùng lúc. Bạn thử lại sau khoảng một phút nhé.' });
+    }
     try {
       const result = await store.createRequestWithRoot({
         ownerUserId: req.user.id,

@@ -70,6 +70,10 @@ import { adaptersFromEnv, runnerFromEnv, backendScriptsEnabled } from './ai-boar
 import { draftNotifier } from './ai-board/drafts-async.js';
 import { appendVerdictMessage } from './ai-board/services/verdict-chat.js';
 import { checkLanguage } from './ai-board/language-guard.js';
+import { checkIntake } from './ai-board/intake-guard-async.js';
+import { checkContentSafety } from './contexts/safety/profanity-vi.js';
+import { checkGibberish } from './ai-board/gibberish.js';
+import { LIMITS } from './ai-board/store.js';
 import { shotBackendFromEnv, shotProxy, startShotRetention } from './ai-board/shot-storage.js';
 import { staticCacheControl } from './static-cache.js';
 import { attachAiBoardIntake, clarifyNotifier } from './contexts/ai-board-intake/index.js';
@@ -1286,8 +1290,25 @@ route.post('/api/requests/:id/messages', requireAuth, async (req, res) => {
   if (!body) return res.status(400).json({ error: 'empty' });
   const attachments = Array.isArray(req.body?.attachments) ? req.body.attachments : null;
   const role = isOwner ? 'student' : 'admin';
-  const language = role === 'student' ? checkLanguage(body) : { block: false };
-  if (language.block) return res.status(422).json({ error: 'unsupported_language', message: language.message });
+  if (role === 'student') {
+    const language = checkLanguage(body);
+    if (language.block) return res.status(422).json({ error: 'unsupported_language', message: language.message });
+    const intake = checkIntake('', body);
+    if (intake.block) return res.status(422).json({ error: 'request_rejected', message: intake.message });
+    if (checkContentSafety(body).safe === false) {
+      return res.status(422).json({ error: 'request_rejected',
+        message: 'Nội dung có phần chưa phù hợp hoặc chứa thông tin cá nhân — bạn viết lại giúp Ban nhé.' });
+    }
+    const gibberish = checkGibberish(body);
+    if (gibberish) return res.status(422).json({ error: 'request_unclear', message: gibberish });
+    const recent = Number((await aiBoard.db.get(
+      "SELECT COUNT(*) AS n FROM request_messages WHERE role='student' AND created_at >= ?",
+      [Date.now() - 60_000]))?.n || 0);
+    if (recent >= LIMITS.global_rate.messages_per_minute) {
+      return res.status(429).json({ error: 'rate_limited',
+        message: 'Bạn đang gửi khá nhanh. Chờ khoảng một phút rồi trao đổi tiếp nhé.' });
+    }
+  }
   const msg = await aiBoard.requests.addRequestMessage({ request_id: reqRow.id, role, author_name: me, body, attachments });
   if (role === 'student') await aiBoardStore.invalidatePlanForRequest(reqRow.id, 'requester clarification');
   // Board requests keep the status of their root ticket (a terminal root is never reopened by a reply — a new

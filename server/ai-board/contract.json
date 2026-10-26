@@ -85,6 +85,11 @@
       "allowed_argv": [["node", "--test", "<test>"], ["node", "--check", "<file>"]],
       "task_types": {"backend": [3], "frontend": [3], "database": [3], "test": [3], "all": [3], "review": []}
     },
+    "global_rate": {
+      "_why": "Trần toàn cục mọi phương án xử lý: request tạo mới và tin nhắn chat trong 60 giây, chặn spam trước khi ghi DB/đưa cho Claude. Đếm trên DB nên nhiều tiến trình vẫn đúng.",
+      "requests_per_minute": 30,
+      "messages_per_minute": 60
+    },
     "clarify": {
       "_why": "Requester clarification (contexts/ai-board-intake): the model decides when it is ready, so this is only the hard cap on questions. At the cap the summary must list assumptions so the requester confirms them. Daily model turns stay DAILY_TURNS=20 in the intake context.",
       "questions": 8

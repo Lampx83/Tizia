@@ -9,6 +9,13 @@ import { openBoard } from './support/ai-board-db.js';
 import { attachAiBoardRequestRoutes } from '../server/ai-board/routes.js';
 import { acknowledgementNote } from '../server/contexts/ai-agent/ack-text.js';
 import { verdictThreadMessage, appendVerdictMessage } from '../server/ai-board/services/verdict-chat.js';
+import { checkGibberish } from '../server/ai-board/gibberish.js';
+import { LIMITS } from '../server/ai-board/store.js';
+
+test('keyboard-mash text is refused, real short messages pass', () => {
+  for (const bad of ['dfafdsfa', 'asdfasdf', 'aaaaaaaa', 'sdfgsdfg']) assert.ok(checkGibberish(bad), bad);
+  for (const ok of ['thanks', 'frontend', 'to hơn', 'giúp em sửa nút', 'dfa fds fa', 'ok']) assert.equal(checkGibberish(ok), null, ok);
+});
 
 test('acknowledgement text follows the execution mode: local processes now, cloud queues', () => {
   assert.match(acknowledgementNote('now'), /model nội bộ/);
@@ -50,7 +57,7 @@ async function serve(db, created) {
     next();
   });
   const pass = (_req, _res, next) => next();
-  const clarities = [{ needed: false, mode: null }, { needed: true, mode: 'ask' }];
+  const clarities = [{ needed: true, mode: 'ask' }, { needed: true, mode: 'ask' }];
   attachAiBoardRequestRoutes(app, {
     store, db: db.d, requireAuth: pass, requireEnrolled: pass, requireAdmin: pass, requireStrictCsrf: pass,
     classifyRequest: async () => ({ model: 'c', clarity: clarities.shift() ?? { needed: true, mode: 'ask' }, danger: null }),
@@ -65,6 +72,26 @@ async function serve(db, created) {
   return { post, close: () => new Promise((resolve) => server.close(resolve)) };
 }
 
+test('global request rate limit stops bursts for every execution mode', async () => {
+  const db = await fixtureDb();
+  const created = [];
+  const app = await serve(db, created);
+  const cap = LIMITS.global_rate.requests_per_minute;
+  LIMITS.global_rate.requests_per_minute = 1;
+  try {
+    const first = await app.post('/api/requests', { title: 'Sửa trang chủ', detail: 'nút to hơn', execution_mode: 'now' },
+      { 'idempotency-key': 'thread-rate-001' });
+    assert.equal(first.status, 200);
+    const second = await app.post('/api/requests', { title: 'Sửa trang phụ', detail: 'chữ nhỏ hơn', execution_mode: 'queue' },
+      { 'idempotency-key': 'thread-rate-002' });
+    assert.equal(second.status, 429);
+    assert.match((await second.json()).message, /một phút/);
+  } finally {
+    LIMITS.global_rate.requests_per_minute = cap;
+    await app.close();
+  }
+});
+
 test('request routes forward execution mode and clarify need to the acknowledgement hook', async () => {
   const db = await fixtureDb();
   const created = [];
@@ -74,7 +101,7 @@ test('request routes forward execution mode and clarify need to the acknowledgem
       { 'idempotency-key': 'thread-ack-queue-001' });
     assert.equal(created.length, 1);
     assert.equal(created[0].executionMode, 'queue');
-    assert.equal(created[0].clarifyNeeded, false);
+    assert.equal(created[0].clarifyNeeded, false, 'cloud queue never grills');
 
     const vague = await app.post('/api/requests', { title: 'Sửa cái trang', detail: 'làm cho đẹp hơn' },
       { 'idempotency-key': 'thread-ack-clarify-001', 'x-ai-board-features': 'clarify' });

@@ -7,6 +7,7 @@ import { checkLanguage } from '../../ai-board/language-guard.js';
 import { checkContentSafety } from '../safety/profanity-vi.js';
 import { containsPromptDisclosure } from '../../ai-prompt-guardrails.js';
 import { CLASSIFIER } from '../../ai-board/classifier.js';
+import { checkGibberish } from '../../ai-board/gibberish.js';
 
 export const DAILY_TURNS = 20;
 const CONTRACT = JSON.parse(fs.readFileSync(new URL('../../ai-board/contract.json', import.meta.url), 'utf8'));
@@ -121,6 +122,8 @@ export function checkAnswer(answer) {
   const intake = checkIntake('', text);
   if (intake.block) return intake.message;
   if (checkContentSafety(text).safe === false) return 'Câu trả lời có nội dung không phù hợp hoặc thông tin cá nhân — bạn sửa lại giúp Ban.';
+  const gibberish = checkGibberish(text);
+  if (gibberish) return gibberish;
   return null;
 }
 
