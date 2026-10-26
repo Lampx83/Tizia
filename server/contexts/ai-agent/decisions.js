@@ -15,6 +15,7 @@
 
 import { db, createNotification } from '../../db.js';
 import { aiBoardServices } from '../../ai-board/runtime.js';
+import { acknowledgementNote } from './ack-text.js';
 
 // ── Schema (audit trail) — Routine ghi quyết định vào đây, dashboard đọc ra ──
 await db.exec(`
@@ -55,8 +56,10 @@ const recentDecisionsStmt = db.prepare(`
  *
  * @returns {{status:'pending', acknowledged:true}}
  */
-export async function acknowledgeNewRequest({ requestId, domain, title, student = null }) {
-  const note = 'Cảm ơn góp ý của bạn! Ban điều hành đã ghi nhận và sẽ xem xét sớm.';
+export async function acknowledgeNewRequest({ requestId, domain, title, student = null, executionMode = null, clarifyNeeded = false }) {
+  // Cần grilling: câu hỏi linh hoạt của clarify là phản hồi, không thêm câu ghi nhận cố định.
+  if (clarifyNeeded) return { status: 'clarifying', acknowledged: false };
+  const note = acknowledgementNote(executionMode);
   // Giữ 'pending' + lưu note tạm hiển thị cho HS (admin_note). listRequests sắp
   // theo votes/created_at nên updated_at đổi không ảnh hưởng thứ tự.
   await aiBoardServices(db).requests.setRequestStatus(requestId, 'pending', note);
@@ -65,7 +68,7 @@ export async function acknowledgeNewRequest({ requestId, domain, title, student 
       user_display_name: student,
       request_id: requestId,
       kind: 'reply',
-      title: 'Ban điều hành đã ghi nhận góp ý của bạn',
+      title: executionMode === 'queue' ? 'Đã xếp yêu cầu vào hàng đợi' : 'Ban điều hành đang xử lý yêu cầu',
       body: `「${String(title || '').slice(0, 80)}」 — ${note}`,
       url: `/space.html?domain=${encodeURIComponent(domain || '')}#requests`,
     });

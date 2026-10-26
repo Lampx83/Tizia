@@ -98,8 +98,8 @@ function autoMount() {
           </label>
           <label class="sgf-lab"><span>Cách xử lý</span>
             <div class="sgf-mode">
-              <label><input type="radio" name="sgf-exec" value="now" checked /> Làm ngay (AI worker)</label>
-              <label><input type="radio" name="sgf-exec" value="queue" /> Xếp hàng xử lý tay (Claude Code)</label>
+              <label><input type="radio" name="sgf-exec" value="now" /> Làm ngay (Local model)</label>
+              <label><input type="radio" name="sgf-exec" value="queue" checked /> Xếp hàng xử lý tay (Cloud model)</label>
             </div>
           </label>
           <label class="sgf-lab"><span>Tiêu đề <span class="sgf-req">*</span></span>
@@ -185,6 +185,22 @@ function bind(root) {
   const sendBtn = root.querySelector('#sgf-send');
   const ctxBox = root.querySelector('#sgf-ctx');
   const inbox = root.querySelector('#sgf-inbox');
+  const threadModal = document.createElement('div');
+  threadModal.id = 'sgf-thread-modal';
+  threadModal.className = 'sgf-thread-modal';
+  threadModal.hidden = true;
+  threadModal.innerHTML = `<div class="sgf-thread-sheet" role="dialog" aria-modal="true" aria-label="Trao đổi với Ban điều hành">
+    <div class="sgf-thread-head"><h3>Trao đổi với Ban điều hành</h3>
+      <button type="button" class="sgf-thread-x" aria-label="Đóng cửa sổ trao đổi">&#10005;</button></div>
+    <div id="sgf-thread-host" class="sgf-thread-host"></div></div>`;
+  root.appendChild(threadModal);
+  const threadHost = threadModal.querySelector('#sgf-thread-host');
+  const closeThread = () => { threadModal.hidden = true; threadHost.innerHTML = ''; };
+  threadModal.querySelector('.sgf-thread-x').addEventListener('click', closeThread);
+  threadModal.addEventListener('click', (event) => { if (event.target === threadModal) closeThread(); });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !threadModal.hidden) closeThread();
+  });
   const dialog = root.querySelector('.sgf-dialog');
   let returnFocus = null;
   let priorOverflow = '';
@@ -1029,16 +1045,11 @@ function bind(root) {
         inbox.querySelector(`[data-req-toggle="${openThreadId}"]`)?.click();
         openThreadId = null;
       }
-      // Mỗi item mở rộng thành phiên trao đổi (thread) ngay trong modal.
+      // Mỗi item mở phiên trao đổi trong popup riêng (không nhúng trong danh sách).
       inbox.querySelectorAll('[data-req-toggle]').forEach(btn => {
         btn.addEventListener('click', () => {
-          const id = btn.dataset.reqToggle;
-          const panel = inbox.querySelector(`#sgf-thread-${id}`);
-          if (!panel) return;
-          if (panel.hidden) {
-            panel.hidden = false;
-            renderRequestThread({ host: panel, requestId: id, me, onChange: loadInbox });
-          } else { panel.hidden = true; panel.innerHTML = ''; }
+          threadModal.hidden = false;
+          renderRequestThread({ host: threadHost, requestId: btn.dataset.reqToggle, me, onChange: loadInbox });
         });
       });
     } catch {
@@ -1095,7 +1106,6 @@ export function renderItem(it, me = '') {
       ${mine && it.retry === 'admin' ? '<div class="sgf-it-queue">Đã chuyển quản trị viên</div>' : ''}
       ${mine && ['pending', 'reviewing'].includes(it.status)
         ? `<button type="button" class="sgf-it-cancel" data-req-cancel="${it.id}">Hủy yêu cầu</button>` : ''}
-      <div class="sgf-it-thread" id="sgf-thread-${it.id}" hidden></div>
     </div>
   `;
 }
@@ -1211,6 +1221,17 @@ function injectStyles() {
     .sgf-clar-model label { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; color: #1e293b; cursor: pointer; }
     .sgf-clar-model-hint { margin: 0; color: #475569; line-height: 1.45; }
     .sgf-it.sgf-it-awaiting { background: #fffbeb; box-shadow: inset 2px 0 0 #f59e0b; }
+    .sgf-thread-modal { position: fixed; inset: 0; z-index: 2147483100; background: rgba(15,23,42,.55);
+      display: flex; align-items: flex-start; justify-content: center; padding: 4vh 16px; overflow-y: auto; }
+    .sgf-thread-modal[hidden] { display: none !important; }
+    .sgf-thread-sheet { width: min(720px, 100%); background: #fff; color: #0f172a; border-radius: 14px;
+      border: 1px solid #cbd5e1; box-shadow: 0 24px 60px rgba(15,23,42,.35); padding: 14px 16px 18px; }
+    .sgf-thread-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .sgf-thread-head h3 { margin: 0; font-size: 15px; flex: 1; color: #0f172a; }
+    .sgf-thread-x { min-width: 34px; min-height: 34px; border: 1px solid #cbd5e1; border-radius: 9px;
+      background: #f8fafc; color: #334155; font-size: 16px; line-height: 1; cursor: pointer; }
+    .sgf-thread-x:hover { background: #eef2ff; border-color: #a5b4fc; color: #312e81; }
+    .sgf-thread-host .rt-list { max-height: 58vh; }
     .sgf-it-thread-btn.sgf-it-ask {
       background: #fbbf24; color: #451a03; border-color: #f59e0b; font-weight: 700;
       animation: sgf-ring 1.6s ease-out infinite;

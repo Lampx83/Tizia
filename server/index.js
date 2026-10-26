@@ -68,6 +68,7 @@ import { createOnlineRegistry } from './ai-board/online/registry.js';
 import { createBackendRunner } from './ai-board/online/backend-run.js';
 import { adaptersFromEnv, runnerFromEnv, backendScriptsEnabled } from './ai-board/online/config.js';
 import { draftNotifier } from './ai-board/drafts-async.js';
+import { appendVerdictMessage } from './ai-board/services/verdict-chat.js';
 import { checkLanguage } from './ai-board/language-guard.js';
 import { shotBackendFromEnv, shotProxy, startShotRetention } from './ai-board/shot-storage.js';
 import { staticCacheControl } from './static-cache.js';
@@ -384,8 +385,17 @@ attachAiBoardRequestRoutes(r, {
   needsProfile: aiBoardProfiles.needed,
   onClarify: clarifyNotifier(createNotification),
 });
+// Kết quả xong: chuông + tin cố định trong lịch sử chat để người gửi thấy ngay trong "Của bạn".
+async function notifyVerdict(notice) {
+  await draftNotifier(createNotification)(notice);
+  try {
+    await appendVerdictMessage({ requestId: notice.request_id, kind: notice.kind, title: notice.title,
+      listMessages: (id) => aiBoard.requests.listRequestMessages(id),
+      addMessage: (input) => aiBoard.requests.addRequestMessage(input) });
+  } catch (error) { console.warn('[ai-board] verdict chat message failed:', error.message); }
+}
 attachAiBoardWorkerRoutes(r, {
-  store: aiBoardStore, aux: aiBoard.aux, uploadsDir: REQUEST_UPLOADS_DIR, shotBackend: aiBoardShotBackend, onVerdict: draftNotifier(createNotification),
+  store: aiBoardStore, aux: aiBoard.aux, uploadsDir: REQUEST_UPLOADS_DIR, shotBackend: aiBoardShotBackend, onVerdict: notifyVerdict,
   onClarify: clarifyNotifier(createNotification),
 });
 // Cờ phát hành: có page gate /<slug>.html → phải trước route HTML + static bên dưới.

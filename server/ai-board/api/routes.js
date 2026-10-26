@@ -150,6 +150,8 @@ export function attachAiBoardRequestRoutes(router, {
             domain: ownerDomain,
             title: String(body.title || '').trim(),
             student: req.user.display_name || req.user.username,
+            executionMode: result.execution_mode ?? executionMode ?? null,
+            clarifyNeeded: clarify.needed,
           });
         } catch (error) {
           console.warn('[ai-board] request acknowledgement failed:', error.message);
