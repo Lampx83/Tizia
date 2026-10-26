@@ -494,7 +494,7 @@ function renderRequests() {
           <td title="${esc(r.type)}">${esc(REQUEST_TYPE_LABEL[r.type] || r.type)}</td>
           <td>${esc(r.student)}</td>
           <td>${esc(ROLE_NAME[r.requester_role] || r.requester_role || '-')}</td>
-          <td><span class="pill st-${esc(r.status)}">${esc(REQUEST_STATUS_LABEL[r.status] || r.status)}</span></td>
+          <td><span class="pill st-${esc(r.status)}">${esc(REQUEST_STATUS_LABEL[r.status] || r.status)}</span>${r.execution_mode === 'queue' ? ' <span class="pill" title="Xếp hàng xử lý tay, không qua worker vLLM">Hàng đợi (Claude Code)</span>' : ''}</td>
           <td>${ticketSummary}</td>
           <td>${ownerCell(ticket)}</td>
           <td>${r.votes}</td>

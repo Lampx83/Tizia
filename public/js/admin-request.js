@@ -626,7 +626,7 @@ function render() {
       <a class="back" href="/admin.html#requests">Về trang quản trị</a>
       <h1>Yêu cầu #${esc(r.id)}: ${esc(r.title)}</h1>
       <div class="meta">${r.type === 'self' ? 'AI Board tự đề xuất' : `${esc(r.domain)} · ${esc(r.type)} · ${esc(r.student)}`}
-        · <span class="pill">${esc(r.status)}</span> · tạo ${fmt(r.created_at)}</div>
+        · <span class="pill">${esc(r.status)}</span>${r.execution_mode === 'queue' ? ' · <span class="pill" title="Xếp hàng xử lý tay, không qua worker vLLM">Hàng đợi (Claude Code)</span>' : ''} · tạo ${fmt(r.created_at)}</div>
       ${renderActions(r, trace)}
     </header>
     ${trace ? renderAiBoard(trace, thread.messages || []) : '<section class="blk meta">Yêu cầu này chưa có ticket AI Board.</section>'}

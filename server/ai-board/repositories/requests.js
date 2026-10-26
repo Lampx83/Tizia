@@ -23,7 +23,7 @@ export function createRequestsPort(d) {
   async function getRequestById(id) {
     const row = await d.get(`
       SELECT id, domain, type, title, detail, student, status, votes, admin_note, created_at, updated_at,
-             attachments, owner_user_id, owner_domain, owner_state
+             attachments, owner_user_id, owner_domain, owner_state, execution_mode
       FROM requests WHERE id = ?
     `, [Number(id)]);
     if (!row) return null;
@@ -72,7 +72,7 @@ export function createRequestsPort(d) {
     async listBoardInbox(limit = 200) {
       const cap = Math.min(Math.max(Number(limit) || 200, 1), 500);
       const rows = await d.all(`
-        SELECT id, domain, type, title, detail, student, status, votes, admin_note, created_at, updated_at, attachments
+        SELECT id, domain, type, title, detail, student, status, votes, admin_note, created_at, updated_at, attachments, execution_mode
         FROM requests WHERE status IN ('pending', 'reviewing') ORDER BY votes DESC, created_at DESC LIMIT ?
       `, [cap]);
       const out = [];
@@ -80,6 +80,8 @@ export function createRequestsPort(d) {
         out.push({
           id: `req-${r.id}`, db_id: r.id, from: r.student, domain: r.domain, type: r.type, subject: r.title, body: r.detail || '',
           status: r.status, votes: r.votes, admin_note: r.admin_note || null, attachments: safeParseAtts(r.attachments),
+          // LF/99: 'queue' = yêu cầu Claude Code xử lý (không qua worker vLLM); NULL/'now' như cũ.
+          execution_mode: r.execution_mode || null,
           thread: (await listRequestMessages(r.id)).map((m) => ({
             role: m.role, author: m.author_name || null, body: m.body, at: new Date(m.created_at).toISOString(),
           })),
@@ -92,7 +94,7 @@ export function createRequestsPort(d) {
     // ── admin context ──
     async adminListRequests(limit) {
       return d.all(`SELECT r.id, r.domain, r.type, r.title, r.detail, r.status, r.votes, r.student, r.admin_note,
-          r.created_at, r.updated_at, u.role AS requester_role
+          r.created_at, r.updated_at, r.execution_mode, u.role AS requester_role
         FROM requests r LEFT JOIN users u ON u.id = r.owner_user_id
         ORDER BY r.created_at DESC LIMIT ?`, [limit]);
     },

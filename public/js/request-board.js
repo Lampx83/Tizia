@@ -229,6 +229,7 @@ function renderList(host, items, reload) {
           ${it.admin_note ? `<div class="rb-item-note"><b>Ban điều hành:</b> ${escapeHtml(it.admin_note)}</div>` : ''}
           <div class="rb-item-meta">
             <span class="rb-status ${sm.cls}">${sm.label}</span>
+            ${it.execution_mode === 'queue' ? '<span class="rb-status rb-mode-queue">Hàng đợi Claude Code</span>' : ''}
             <span class="rb-by">${escapeHtml(it.student)}</span>
             <button type="button" class="rb-thread-toggle" data-thread="${it.id}" aria-expanded="false" aria-controls="rb-thread-${it.id}">
               ${boardIcon('chat')} ${mine ? 'Trao đổi với Ban điều hành' : 'Xem trao đổi'}
@@ -381,6 +382,7 @@ function injectStylesOnce() {
     .rb-progress { font-size: 12px; margin-top: 8px; color: #94a3b8; overflow-wrap: anywhere; }
     .rb-item-meta { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-top: 12px; font-size: 12px; }
     .rb-status { padding: 3px 8px; border-radius: 6px; font-weight: 600; white-space: nowrap; }
+.rb-mode-queue { background: rgba(59,130,246,.15); color: #1d4ed8; }
     .rb-status.pending   { background: rgba(148,163,184,0.25); }
     .rb-status.reviewing { background: rgba(251,191,36,0.25); }
     .rb-status.done      { background: rgba(16,185,129,0.25); }

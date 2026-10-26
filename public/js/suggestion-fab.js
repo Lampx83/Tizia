@@ -96,6 +96,12 @@ function autoMount() {
           <label class="sgf-lab" id="sgf-folder-row" hidden>Gắn vào chức năng
             <select id="sgf-folder" class="sgf-in"><option value="">Yêu cầu lẻ</option></select>
           </label>
+          <label class="sgf-lab"><span>Cách xử lý</span>
+            <div class="sgf-mode">
+              <label><input type="radio" name="sgf-exec" value="now" checked /> Làm ngay (AI worker)</label>
+              <label><input type="radio" name="sgf-exec" value="queue" /> Xếp hàng xử lý tay (Claude Code)</label>
+            </div>
+          </label>
           <label class="sgf-lab"><span>Tiêu đề <span class="sgf-req">*</span></span>
             <input id="sgf-title-in" class="sgf-in" maxlength="200" required minlength="4" aria-describedby="sgf-msg"
                    placeholder="VD: Thêm dạng bài Toán có nhiều cách giải" />
@@ -772,6 +778,7 @@ function bind(root) {
         body: JSON.stringify({
           domain: inferDomain(), type, title, detail, attachments,
           folder_id: type !== 'feature' && folderSel.value ? Number(folderSel.value) : undefined,
+          execution_mode: root.querySelector('input[name="sgf-exec"]:checked')?.value,
           student: (typeof getPlayerName === 'function' && getPlayerName()) || 'Ẩn danh',
         }),
       });
@@ -802,6 +809,7 @@ function bind(root) {
       }
       root.querySelector('#sgf-title-in').value = '';
       root.querySelector('#sgf-detail').value = '';
+      const nowRadio = root.querySelector('input[name="sgf-exec"][value="now"]'); if (nowRadio) nowRadio.checked = true;
       folderHint.hidden = true;
       if (detailCount) { detailCount.textContent = '0 / 10.000'; detailCount.dataset.level = 'normal'; }
       // Reset đính kèm để lần gửi sau bắt đầu sạch (revoke object URL tránh rò rỉ).
@@ -1051,6 +1059,7 @@ export function renderItem(it, me = '') {
     <div class="sgf-it" data-item="${it.id}">
       <div class="sgf-it-line">
         <span class="sgf-it-title">${escapeHtml(it.title)}</span>
+        ${it.execution_mode === 'queue' ? '<span class="sgf-it-mode">Hàng đợi Claude Code</span>' : ''}
         <span class="sgf-it-st ${sm.cls}">${escapeHtml(it.phase === 'clarifying' ? 'Chờ bạn trả lời' : it.status_label || sm.label)}</span>
       </div>
       ${queueLine(it.queue)}
@@ -1200,6 +1209,8 @@ function injectStyles() {
       .sgf-clar-banner, .sgf-clar-msg, .sgf-typing::after, #sgf-fab.sgf-fab-ask, .sgf-it-ask { animation: none; }
     }
     .sgf-lab { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: #334155; font-weight: 600; }
+    .sgf-mode { display: flex; gap: 14px; flex-wrap: wrap; }
+    .sgf-mode label { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; font-size: 13.5px; }
     .sgf-label-line { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
     #sgf-detail-count { color: #64748b; font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
     #sgf-detail-count[data-level="warning"] { color: #92400e; }
@@ -1274,6 +1285,7 @@ function injectStyles() {
     .sgf-folder-hint { font-size: 12.5px; color: #92400e; background: #fef3c7; border-radius: 8px; padding: 6px 10px; margin: -4px 0 8px; }
     .sgf-it-title { flex: 1 1 180px; min-width: 0; font-size: 15px; font-weight: 650; color: #1f2937; overflow-wrap: anywhere; }
     .sgf-it-st { font-size: 11px; padding: 2px 8px; border-radius: 7px; font-weight: 700; white-space: nowrap; }
+    .sgf-it-mode { font-size: 11px; padding: 2px 8px; border-radius: 7px; font-weight: 600; background: rgba(59,130,246,.15); color: #1d4ed8; white-space: nowrap; }
     .sgf-it-st.pending   { background: #e2e8f0; color: #475569; }
     .sgf-it-st.reviewing { background: #fde68a; color: #92400e; }
     .sgf-it-st.done      { background: #bbf7d0; color: #065f46; }
