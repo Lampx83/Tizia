@@ -7,13 +7,13 @@ import http from 'node:http';
 import { signInternalHeaders, verifyInternalHeaders, requireInternalUser } from '../server/ai-board/internal-auth.js';
 
 const SECRET = 'internal-secret-for-tests-32chars';
-const user = { id: 7, role: 'student', displayName: 'Lan' };
+const user = { id: 7, role: 'student', displayName: 'Lan', domain: 'primary' };
 
 test('a signed identity verifies and round-trips the user', () => {
   const now = 1_700_000_000_000;
   const headers = signInternalHeaders(user, SECRET, now);
   assert.deepEqual(verifyInternalHeaders(headers, SECRET, now + 5_000),
-    { ok: true, user: { id: 7, role: 'student', displayName: 'Lan' } });
+    { ok: true, user: { id: 7, role: 'student', displayName: 'Lan', enrolled_domain: 'primary' } });
 });
 
 test('tampering with role, user or signature is refused', () => {
@@ -48,7 +48,7 @@ test('middleware attaches req.user or answers 401 without reasons', async () => 
   try {
     const good = await fetch(`${base}/who`, { headers: signInternalHeaders(user, SECRET, 1_700_000_000_000) });
     assert.equal(good.status, 200);
-    assert.deepEqual(await good.json(), { id: 7, role: 'student', displayName: 'Lan' });
+    assert.deepEqual(await good.json(), { id: 7, role: 'student', displayName: 'Lan', enrolled_domain: 'primary' });
     const bad = await fetch(`${base}/who`);
     assert.equal(bad.status, 401);
     assert.deepEqual(await bad.json(), { error: 'unauthorized' });
