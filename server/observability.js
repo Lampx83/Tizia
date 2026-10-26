@@ -138,6 +138,10 @@ export function requestContext(req, res, next) {
   next();
 }
 
+// Endpoint worker poll định kì; 2xx chỉ nghĩa là "không có gì để làm" → bỏ qua
+// để docker logs không ngập idle-poll. Lỗi (≥400) vẫn log như thường.
+const WORKER_POLL = new RegExp('^/api/ai-board/worker/(skill-(rewrite|retro)/)?claim$');
+
 // Log request HTTP — opt-in qua LOG_REQUESTS=1 để tránh ồn. Chỉ log khi response
 // xong, kèm status + thời gian. Mặc định chỉ /api/* (bỏ asset tĩnh ồn ào).
 export function requestLogger({ onlyApi = true } = {}) {
@@ -145,6 +149,7 @@ export function requestLogger({ onlyApi = true } = {}) {
     if (onlyApi && !req.path.startsWith('/api/')) return next();
     const start = process.hrtime.bigint();
     res.on('finish', () => {
+      if (WORKER_POLL.test(req.path) && res.statusCode < 400) return;
       const ms = Number(process.hrtime.bigint() - start) / 1e6;
       const level = res.statusCode >= 500 ? 'warn' : 'info';
       emit(level, `${req.method} ${req.originalUrl} ${res.statusCode}`, {
