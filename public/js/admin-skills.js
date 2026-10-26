@@ -20,10 +20,12 @@ const evalHtml = version => !version.evaluation?.kinds ? '' : `<p>Smoke test nh�
   `${esc(TYPE[kind.kind] || kind.kind)} ${kind.ok ? 'qua' : `chưa qua (${esc(kind.reason || 'không rõ')})`}`).join('; ')}. Đây chỉ là kiểm tra dạng đầu ra, không đo chất lượng.</p>`;
 const sample = name => `---\nname: ${name}\ndescription: Hướng dẫn cho giao diện hiện có\ntask_type: frontend\nsource: admin\nversion: 1\nmax_tokens: 1500\n---\n1. Giữ nhãn nút rõ ràng.\n2. Kiểm tra thao tác bằng bàn phím.\n`;
 
-export async function mountSkillsTab(host, { api, toast }) {
+export async function mountSkillsTab(host, { api, toast, openId }) {
   const result = await api('/api/admin/ai-board/skills');
   if (!result.ok) throw new Error('Không tải được danh sách skill. Thử làm mới trang.');
-  const queue = (await api('/api/admin/ai-board/skills/proposals')).data?.proposals?.filter(item => item.outcome === 'pending') ?? [];
+  const proposals = await api('/api/admin/ai-board/skills/proposals');
+  const queueFailed = !proposals.ok;
+  const queue = (proposals.data?.proposals ?? []).filter(item => item.outcome === 'pending');
   host.innerHTML = `<section class="skills-panel">
     <div class="toolbar"><h2>Skills</h2><span class="spacer"></span><button type="button" class="btn" id="skill-add">Thêm skill</button></div>
     <p class="meta">Bản nháp chưa được nạp. Bản đã duyệt sẵn sàng cho lượt chạy được bật Skills; tính năng vẫn trong phạm vi thử nghiệm.</p>
@@ -38,7 +40,7 @@ export async function mountSkillsTab(host, { api, toast }) {
       <p id="skill-upload-status" role="status"></p>
     </form>
     <section class="skill-queue" aria-labelledby="skill-queue-title"><h3 id="skill-queue-title">Hàng chờ đề xuất${queue.length ? ` (${queue.length})` : ''}</h3>
-      ${queue.length ? `<p class="meta">Model và retro chỉ đề xuất. Chỉ quản trị viên duyệt mới tạo thay đổi, và phiên bản mới chưa được dùng cho đến khi duyệt.</p>` : '<p class="meta">Chưa có đề xuất đang chờ.</p>'}
+      ${queueFailed ? '<p class="meta" role="alert">Không tải được hàng chờ đề xuất. Làm mới trang để thử lại.</p>' : queue.length ? `<p class="meta">Model và retro chỉ đề xuất. Chỉ quản trị viên duyệt mới tạo thay đổi, và phiên bản mới chưa được dùng cho đến khi duyệt.</p>` : '<p class="meta">Chưa có đề xuất đang chờ.</p>'}
       ${queue.map(item => `<details class="skill-version" open><summary>${esc(item.skill_name)} · phiên bản ${esc(item.version)} · ${item.source === 'retro' ? 'Retro sau lượt chạy' : 'Model đề xuất'}</summary>
         <p>Lý do: ${esc(item.reason)}</p>
         ${item.request_ids.length ? `<p class="meta">Từ yêu cầu: ${item.request_ids.map(id => `<a href="/admin-request.html?id=${Number(id)}">#${Number(id)}</a>`).join(', ')}</p>` : ''}
@@ -153,7 +155,7 @@ export async function mountSkillsTab(host, { api, toast }) {
           const body = path.body ? path.body(node) : { confirmed:true };
           const done = await api(path.url(node), { method:'POST', body:JSON.stringify(body) });
           if (!done.ok) { toast(done.data.message || 'Thao tác chưa thực hiện được.', 'err'); return; }
-          toast(message); await mountSkillsTab(host, { api, toast });
+          toast(message); await mountSkillsTab(host, { api, toast, openId: item.id });
         } catch (error) { toast(error.message || 'Thao tác thất bại.', 'err'); }
         finally { node.disabled = false; }
       };
@@ -168,16 +170,17 @@ export async function mountSkillsTab(host, { api, toast }) {
       try {
         const done = await api(`/api/admin/ai-board/skills/${item.id}/versions/${formNode.dataset.editForm}/edit`, { method:'POST', body:JSON.stringify({ text:formNode.querySelector('textarea').value.replace(/\r\n/g, '\n') }) });
         if (!done.ok) { toast(done.data.message || 'Không lưu được bản sửa.', 'err'); return; }
-        toast('Đã lưu phiên bản mới. Chưa kích hoạt.'); await mountSkillsTab(host, { api, toast });
+        toast('Đã lưu phiên bản mới. Chưa kích hoạt.'); await mountSkillsTab(host, { api, toast, openId: item.id });
       } catch (error) { toast(error.message || 'Không lưu được bản sửa.', 'err'); }
     };
     for (const approve of details.querySelectorAll('[data-skill-approve]')) approve.onclick = async () => {
+      if (!window.confirm('Duyệt phiên bản này và dùng nó cho các lượt chạy sau?')) return;
       approve.disabled = true;
       try {
         const reviewed = await api(`/api/admin/ai-board/skills/${item.id}/approve`, { method:'POST', body:JSON.stringify({ version_id:Number(approve.dataset.skillApprove), confirmed:true }) });
         if (!reviewed.ok) { toast(reviewed.data.message || 'Chưa duyệt được skill.', 'err'); return; }
         toast('Đã duyệt và chọn phiên bản.');
-        await mountSkillsTab(host, { api, toast });
+        await mountSkillsTab(host, { api, toast, openId: item.id });
       } catch (error) { toast(error.message || 'Không duyệt được skill.', 'err'); }
       finally { approve.disabled = false; }
     };
@@ -187,7 +190,7 @@ export async function mountSkillsTab(host, { api, toast }) {
       try {
         const off = await api(`/api/admin/ai-board/skills/${item.id}/disable`, { method:'POST', body:JSON.stringify({ confirmed:true }) });
         if (!off.ok) { toast(off.data.message || 'Chưa tắt được skill.', 'err'); return; }
-        toast('Đã tắt skill.'); await mountSkillsTab(host, { api, toast });
+        toast('Đã tắt skill.'); await mountSkillsTab(host, { api, toast, openId: item.id });
       } catch (error) { toast(error.message || 'Không tắt được skill.', 'err'); }
       finally { disable.disabled = false; }
     };
@@ -195,4 +198,5 @@ export async function mountSkillsTab(host, { api, toast }) {
     } catch (error) { toast(error.message || 'Không đọc được skill.', 'err'); }
     finally { button.disabled = false; }
   };
+  if (openId) host.querySelector(`[data-skill-view="${openId}"]`)?.click();
 }
