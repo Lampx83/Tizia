@@ -141,6 +141,10 @@ export function attachAiBoardRequestRoutes(router, {
           await aux.recordIntakeFlags(db, result.root_ticket_id, [...intake.labels, ...modelLabels]);
           await aux.recordClassification(db, result.root_ticket_id, trace);
         }
+        if (body.type === 'feature' && !body.folder_id && !clarify.needed) {
+          try { await store.setRequestFeature(result.request_id, String(body.title || '')); }
+          catch (error) { console.warn('[ai-board] feature group failed:', error.message); }
+        }
         if (clarify.needed && onClarify) {
           try {
             await onClarify({ requestId: result.request_id, domain: ownerDomain, title: String(body.title || '').trim(),

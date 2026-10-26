@@ -164,7 +164,7 @@ function attachClarify(router, { store, profiles, requireAuth, requireStrictCsrf
   route.get('/api/ai-board/requests/:id/clarify', requireAuth, async (req, res) => {
     try {
       const { request, turns, asked } = await store.getClarification(req.params.id, req.user.id);
-      res.json({ request: { id: request.id, title: request.title }, turns, asked,
+      res.json({ request: { id: request.id, title: request.title, type: request.type }, turns, asked,
         max: Math.max(maxQuestions(await initialMode(store, request.root_id)), asked) });
     } catch (error) { sendError(res, error); }
   });
@@ -290,7 +290,13 @@ function attachClarify(router, { store, profiles, requireAuth, requireStrictCsrf
       // A summary exists only after a clarity decision; exhausting the cap hands off instead.
       const { request, turns, asked } = await store.getClarification(req.params.id, req.user.id);
       const full = spec.trim().length >= 10 ? withUserWords(spec, request, turns) : spec; // ngắn quá: store báo 400
-      res.json(await store.confirmClarification(req.params.id, req.user.id, { spec: full, complete: true }));
+      const result = await store.confirmClarification(req.params.id, req.user.id, { spec: full, complete: true });
+      const featureName = String(req.body?.feature_name || '').trim();
+      if (featureName && request.type === 'feature') {
+        try { await store.setRequestFeature(request.id, featureName); }
+        catch (error) { console.warn('[ai-board] feature group failed:', error.message); }
+      }
+      res.json(result);
     } catch (error) { sendError(res, error); }
   });
 }

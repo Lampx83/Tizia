@@ -154,6 +154,9 @@ function autoMount() {
           </div>
           <div class="sgf-clar-sum" id="sgf-clar-sum" hidden>
             <div class="sgf-ob-q">Ban hiểu yêu cầu của bạn như sau, đúng chưa?</div>
+            <label class="sgf-clar-feature" id="sgf-clar-feature-wrap" hidden>Tên chức năng
+              <input id="sgf-clar-feature" class="sgf-in" maxlength="80" placeholder="Ví dụ: Trang thư viện trò chơi">
+            </label>
             <textarea id="sgf-clar-spec" class="sgf-in" rows="7" maxlength="4000" readonly aria-label="Bản tóm tắt yêu cầu"></textarea>
             <div class="sgf-bar"><button type="button" class="sgf-chip" id="sgf-clar-edit">Sửa</button>
               <button type="button" class="sgf-send" id="sgf-clar-ok">Đúng, gửi</button></div>
@@ -648,7 +651,9 @@ function bind(root) {
       const r = await fetch(`api/ai-board/requests/${clarifyId}/clarify/confirm`, {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': await csrfToken() },
-        body: JSON.stringify({ spec: clarSpec.value, complete: lastSummary?.complete !== false }),
+        body: JSON.stringify({ spec: clarSpec.value, complete: lastSummary?.complete !== false,
+          ...(root.querySelector('#sgf-clar-feature-wrap')?.hidden ? {}
+            : { feature_name: root.querySelector('#sgf-clar-feature')?.value || '' }) }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.message || 'Chưa gửi được: thử lại sau.');
@@ -992,7 +997,13 @@ function bind(root) {
         inbox.innerHTML = '<div class="sgf-empty">Chưa có yêu cầu nào. Hãy là người đầu tiên đề xuất cải tiến trang này!</div>';
         return;
       }
-      inbox.innerHTML = shown.map(it => renderItem(it, me)).join('');
+      let lastGroup = null;
+      inbox.innerHTML = shown.map(it => {
+        const group = it.feature_name || null;
+        const head = group && group !== lastGroup ? `<div class="sgf-group">${escapeHtml(group)}</div>` : '';
+        lastGroup = group;
+        return head + renderItem(it, me);
+      }).join('');
       mountClarify();
       // Hủy 2 bước: bấm lần 1 để xác nhận, lần 2 mới gửi (viewer không có confirm()).
       inbox.querySelectorAll('[data-req-cancel]').forEach(btn => {
@@ -1220,6 +1231,9 @@ function injectStyles() {
       background: #f8fafc; border: 1px solid #e2e8f0; font-size: 12.5px; color: #334155; }
     .sgf-clar-model label { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; color: #1e293b; cursor: pointer; }
     .sgf-clar-model-hint { margin: 0; color: #475569; line-height: 1.45; }
+    .sgf-clar-feature { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: #334155; font-weight: 600; }
+    .sgf-clar-feature .sgf-in { font-weight: 400; }
+    .sgf-group { margin: 14px 2px 6px; font-size: 12px; font-weight: 800; letter-spacing: .3px; text-transform: uppercase; color: #64748b; }
     .sgf-it.sgf-it-awaiting { background: #fffbeb; box-shadow: inset 2px 0 0 #f59e0b; }
     .sgf-thread-modal { position: fixed; inset: 0; z-index: 2147483100; background: rgba(15,23,42,.55);
       display: flex; align-items: flex-start; justify-content: center; padding: 4vh 16px; overflow-y: auto; }

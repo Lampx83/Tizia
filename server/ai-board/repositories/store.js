@@ -499,12 +499,14 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     const rows = await db.all(`
       SELECT r.id, r.domain, r.type, r.title, r.detail, r.student, r.status, r.votes,
              r.admin_note, r.created_at, r.updated_at, r.attachments, r.execution_mode,
+             r.feature_id, f.name AS feature_name,
              t.id AS root_ticket_id, t.status AS workflow_status, t.phase,
              t.public_note,
              (SELECT ar.outcome FROM ai_runs ar WHERE ar.ticket_id=t.id AND ar.outcome IS NOT NULL ORDER BY ar.id DESC LIMIT 1) AS pre_pr_verdict,
              (SELECT ar.gate FROM ai_runs ar WHERE ar.ticket_id=t.id AND ar.outcome IS NOT NULL ORDER BY ar.id DESC LIMIT 1) AS pre_pr_gate
       FROM requests r
       LEFT JOIN ai_tickets t ON t.source_request_id = r.id AND t.parent_id IS NULL
+      LEFT JOIN ai_features f ON f.id = r.feature_id
       WHERE r.owner_user_id = ? AND r.domain = ?
       ORDER BY r.updated_at DESC LIMIT ?
     `, [Number(ownerUserId), String(domain || ''), Math.min(Math.max(Number(limit) || 50, 1), 200)]);
@@ -518,6 +520,18 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
         queue: row.workflow_status === 'queued' ? queue.get(row.root_ticket_id) ?? null : null });
     }
     return out;
+  }
+
+  /** Gắn request vào nhóm tên chức năng (tạo mới nếu chưa có); nhóm chỉ để hiển thị, không phải folder duyệt admin. */
+  async function setRequestFeature(requestId, rawName) {
+    const name = String(rawName || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+    if (name.length < 2) throw new RequestValidationError('feature name is too short');
+    return db.tx(async () => {
+      const existing = await db.get('SELECT id FROM ai_features WHERE name=?', [name]);
+      const id = existing?.id ?? await db.insert('INSERT INTO ai_features(name, created_at) VALUES(?, ?)', [name, Date.now()]);
+      await db.run('UPDATE requests SET feature_id=?, updated_at=? WHERE id=?', [Number(id), Date.now(), Number(requestId)]);
+      return { feature_id: Number(id), name };
+    });
   }
 
   /** Map rootId → {position, eta_s, deferred} cho root đang chờ của 1 người, theo đúng thứ tự FAIR_ORDER của claim. */
@@ -822,7 +836,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   // Yêu cầu của chính người gửi đang ở phase clarifying + các lượt hỏi đáp. Không phải của mình → 404 (không lộ tồn tại).
   async function getClarification(requestId, ownerUserId) {
     const request = await db.get(`
-      SELECT r.id, r.title, r.detail, r.student, r.domain, t.id AS root_id, t.phase
+      SELECT r.id, r.type, r.title, r.detail, r.student, r.domain, t.id AS root_id, t.phase
       FROM requests r JOIN ai_tickets t ON t.source_request_id=r.id AND t.parent_id IS NULL
       WHERE r.id=? AND r.owner_user_id=?
     `, [Number(requestId), Number(ownerUserId)]);
@@ -2059,6 +2073,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     createRequestWithRoot,
     createSelfRequest,
     listRequestsForOwner,
+    setRequestFeature,
     countPendingRoots,
     rejectRequest,
     noteRequest,
