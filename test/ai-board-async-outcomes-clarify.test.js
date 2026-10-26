@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runBoard, failure } from './support/ai-board-parity.js';
 import { claimAndRun, newRequest } from './support/ai-board-scenarios.js';
+import { LIMITS } from '../server/ai-board/store.js';
 
 test('clarification turns, limits, confirm (complete and incomplete), handoff', async () => {
   const { result: out } = await runBoard(async (store) => {
@@ -14,7 +15,12 @@ test('clarification turns, limits, confirm (complete and incomplete), handoff', 
     await store.addClarifyTurn(id, { kind: 'answer', text: 'Trang chủ tiểu học', author: 'Lan' });
     r.repeated = await failure(() => store.addClarifyTurn(id, { kind: 'question', text: 'Bạn muốn sửa trang nào?' }));
     await store.addClarifyTurn(id, { kind: 'question', text: 'Nút nào cần to hơn?' });
-    r.third = await failure(() => store.addClarifyTurn(id, { kind: 'question', text: 'Màu nền ra sao?' }));
+    const extras = ['Màu nền ra sao?', 'Khoảng cách bao nhiêu?', 'Chữ tiêu đề cỡ nào?', 'Thứ tự mục thế nào?',
+      'Biểu tượng chọn hình gì?', 'Âm thanh mức nào?', 'Tốc độ bao lâu?', 'Bố cục sắp xếp sao?'];
+    for (let i = 2; i < LIMITS.clarify.questions; i += 1) {
+      await store.addClarifyTurn(id, { kind: 'question', text: extras[i - 2] });
+    }
+    r.third = await failure(() => store.addClarifyTurn(id, { kind: 'question', text: 'Thêm một câu nữa?' }));
     r.noSummary = await failure(() => store.confirmClarification(id, 1, { spec: 'x'.repeat(20), complete: true }));
     await store.addClarifyTurn(id, { kind: 'summary', text: 'Tóm tắt: to nút Bắt đầu' });
     r.clarification = await store.getClarification(id, 1);
@@ -35,8 +41,10 @@ test('clarification turns, limits, confirm (complete and incomplete), handoff', 
   assert.equal(out.repeated.error, 'clarification_limit', 'repeated question is refused by the same check as the limit');
   assert.equal(out.third.error, 'clarification_limit');
   assert.equal(out.noSummary.error, 'no_summary');
-  assert.deepEqual(out.clarification.turns.map((t) => t.kind), ['question', 'answer', 'question', 'summary']);
-  assert.equal(out.clarification.asked, 2);
+  const kinds = out.clarification.turns.map((t) => t.kind);
+  assert.equal(kinds.filter((kind) => kind === 'question').length, LIMITS.clarify.questions);
+  assert.equal(kinds.at(-1), 'summary');
+  assert.equal(out.clarification.asked, LIMITS.clarify.questions);
   assert.equal(out.pending.length, 1);
   assert.equal(out.shortSpec.error, 'RequestValidationError');
   assert.deepEqual(out.confirm, { ok: true, status: 'queued', complete: false });

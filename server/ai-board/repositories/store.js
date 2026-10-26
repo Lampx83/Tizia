@@ -834,7 +834,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   async function addClarifyTurn(requestId, { kind, text, author, now = Date.now() }) {
     if (kind === 'question') {
       const previous = await db.all('SELECT body FROM request_messages WHERE request_id=? AND author_name=?', [Number(requestId), CLARIFY_AUTHOR]);
-      if (previous.length >= 2 || repeatedQuestion(text, previous.map((m) => m.body))) {
+      if (previous.length >= LIMITS.clarify.questions || repeatedQuestion(text, previous.map((m) => m.body))) {
         throw new WorkerContractError('clarification limit reached', 409, 'clarification_limit');
       }
     }
@@ -907,7 +907,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     const asked = (await db.get('SELECT COUNT(*) n FROM request_messages WHERE request_id=? AND author_name=?', [request.id, CLARIFY_AUTHOR])).n;
     const questions = (await db.all('SELECT body FROM request_messages WHERE request_id=? AND author_name=?', [request.id, CLARIFY_AUTHOR])).map((m) => m.body);
     const repeated = repeatedQuestion(input.question, questions);
-    const escalate = input.escalateReason || asked >= Math.min(2, input.maxQuestions) || repeated;
+    const escalate = input.escalateReason || asked >= Math.min(LIMITS.clarify.questions, input.maxQuestions) || repeated;
     const now = input.now;
     const status = escalate ? 'waiting_admin' : 'queued';
     const phase = escalate ? 'plan_blocked' : 'clarifying';

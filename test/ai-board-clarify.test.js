@@ -10,7 +10,7 @@ import { openBoard } from './support/ai-board-db.js';
 import { CLARIFY_AUTHOR } from '../server/ai-board/store.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
 import { attachAiBoardIntake, createAsyncProfileStore } from '../server/contexts/ai-board-intake/index.js';
-import { guardModelText, MAX_QUESTIONS } from '../server/contexts/ai-board-intake/clarify.js';
+import { guardModelText, MAX_QUESTIONS, parseQuestionReply } from '../server/contexts/ai-board-intake/clarify.js';
 import { repeatedQuestion } from '../server/ai-board/clarity-rules.js';
 
 const WORKER_KEY = 'clarification-test-worker-key-32chars';
@@ -30,7 +30,8 @@ function fakeModel(replies) {
   const calls = [];
   const generate = async ({ model, prompt, onToken }) => {
     calls.push({ model, prompt });
-    const reply = replies.length ? replies.shift() : 'Bạn muốn đổi ở trang nào?';
+    const reply = replies.length ? replies.shift()
+      : JSON.stringify({ ready: false, missing: 'trang nào', question: 'Bạn muốn đổi ở trang nào?' });
     let text = '';
     for (const token of reply.match(/\S+\s*/g) || []) {
       text += token;
@@ -104,18 +105,23 @@ test('a vague request waits in clarifying: not claimable, requester notified', a
 
 test('questions stream token by token in the requester tone, then a confirmed summary queues the request', async () => {
   const db = await fixtureDb();
-  const model = fakeModel(['Bạn đang ở trang nào, và bấm vào đâu thì thấy chưa đẹp?',
+  const question = 'Bạn đang ở trang nào, và bấm vào đâu thì thấy chưa đẹp?';
+  const model = fakeModel([JSON.stringify({ ready: false, missing: 'trang và phần tử', question }),
     'Trang / chức năng: trang chủ Tiểu học\nThay đổi mong muốn: nút to hơn\nKết quả mong đợi (cách kiểm): nút cao 48px\nNgoài phạm vi: màu']);
   const app = await serve(db, { model, clarity: [{ needed: false, mode: null }] });
   try {
     const { request_id: id } = await vagueRequest(app);
     const first = await app.turn(id);
+    const deltas = first.events.filter((e) => e.t === 'delta').map((e) => e.text).join('');
     assert.ok(first.events.filter((e) => e.t === 'delta').length > 3, 'streamed as several deltas');
     assert.equal(first.done.kind, 'question');
+    assert.equal(first.done.text, question);
+    assert.equal(deltas, question, 'only the question string streams, not the JSON envelope');
     assert.equal(first.done.asked, 1);
     assert.equal(model.calls[0].model, 'grill-model');
     assert.match(model.calls[0].prompt, /ví dụ trên màn hình/); // tech_level none
     assert.match(model.calls[0].prompt, /<<<NGUOI_DUNG\n[\s\S]*làm cho đẹp hơn[\s\S]*NGUOI_DUNG>>>/);
+    assert.match(model.calls[0].prompt, /"ready"/); // JSON contract in the prompt
 
     const second = await app.turn(id, 'Trang chủ Tiểu học, nút Bắt đầu nhỏ quá');
     assert.equal(second.done.kind, 'summary');
@@ -199,7 +205,7 @@ test('Gate 2.5 clarification reaches requester, answer is included on the next w
   }
 });
 
-test('Gate 2.5 escalates to admin instead of exceeding the two-question limit', async () => {
+test('Gate 2.5 escalates to admin instead of exceeding the question cap', async () => {
   const db = await fixtureDb();
   const app = await serve(db, { model: fakeModel([]) });
   try {
@@ -226,17 +232,27 @@ test('Gate 2.5 escalates to admin instead of exceeding the two-question limit', 
   }
 });
 
-test('after two automatic questions a still-vague request goes to admin without a third question', async () => {
+test('at the hard cap the summary records assumptions and stays confirmable', async () => {
   const db = await fixtureDb();
-  const app = await serve(db, { model: fakeModel(['Bạn muốn đổi ở trang nào?', 'Bạn muốn đổi phần màu hay bố cục?']) });
+  const replies = ['Màu nền ra sao?', 'Khoảng cách bao nhiêu?', 'Chữ tiêu đề cỡ nào?', 'Thứ tự mục thế nào?',
+    'Biểu tượng chọn hình gì?', 'Âm thanh mức nào?', 'Tốc độ bao lâu?', 'Bố cục sắp xếp sao?']
+    .map((question, i) => JSON.stringify({ ready: false, missing: `điểm ${i + 1}`, question }));
+  const summary = 'Trang / chức năng: trang chủ\nThay đổi mong muốn: nút to hơn\nKết quả mong đợi (cách kiểm): nút cao 48px\nNgoài phạm vi: không\nGiả định: giữ nguyên bố cục hiện tại';
+  const model = fakeModel([...replies, summary]);
+  const app = await serve(db, { model, clarity: () => ({ needed: true, mode: 'ask' }) });
   try {
     const { request_id: id } = await vagueRequest(app);
-    await app.turn(id);
-    await app.turn(id, 'vẫn chưa rõ thứ nhất');
-    const last = await app.turn(id, 'vẫn chưa rõ thứ hai');
-    assert.equal(last.done.kind, 'handoff');
-    assert.equal((await app.store.listRequestsForOwner(1, 'primary'))[0].workflow_status, 'waiting_admin');
-    assert.equal(await app.store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' }), null);
+    let last = await app.turn(id);
+    for (let i = 0; i < MAX_QUESTIONS; i += 1) last = await app.turn(id, `trả lời ${i + 1}`);
+    assert.equal(last.done.kind, 'summary', 'no handoff at the cap');
+    assert.equal(last.done.complete, true);
+    assert.match(last.done.text, /Giả định:/);
+    assert.match(model.calls.at(-1).prompt, /Giả định/); // closing instruction reached the spec prompt
+    const confirm = await app.post(`/api/ai-board/requests/${id}/clarify/confirm`,
+      { spec: last.done.text, complete: true });
+    assert.equal(confirm.status, 200);
+    assert.ok(await app.store.claimNext({ workerId: 'w1', mode: 'shadow', intent: 'precheck' }),
+      'confirmed cap summary enters the worker queue');
   } finally {
     await app.close();
   }
@@ -244,7 +260,9 @@ test('after two automatic questions a still-vague request goes to admin without 
 
 test('an answered question is not delivered again when the model repeats it', async () => {
   const db = await fixtureDb();
-  const app = await serve(db, { model: fakeModel(['Bạn muốn đổi ở trang nào?', 'Bạn muốn đổi trên màn hình nào?']) });
+  const app = await serve(db, { model: fakeModel([
+    JSON.stringify({ ready: false, missing: 'trang', question: 'Bạn muốn đổi ở trang nào?' }),
+    JSON.stringify({ ready: false, missing: 'màn hình', question: 'Bạn muốn đổi trên màn hình nào?' })]) });
   try {
     const { request_id: id } = await vagueRequest(app, 'repeat-question-001');
     await app.turn(id);
@@ -331,20 +349,49 @@ test('a legacy client never gets a stranded clarifying request; a retry reports 
   }
 });
 
-test('an exhausted clarification cannot be confirmed into the queue by a client', async () => {
+test('a malformed question reply is retried once, then handed off with a reason', async () => {
   const db = await fixtureDb();
-  const app = await serve(db, { model: fakeModel(['Bạn muốn đổi ở trang nào?', 'Bạn muốn đổi màu hay bố cục?']) });
+  const app = await serve(db, { model: fakeModel(['không phải json', '{"ready": "có lẽ"}']) });
   try {
     const { request_id: id } = await vagueRequest(app);
-    let last = await app.turn(id);
-    for (let i = 0; i < MAX_QUESTIONS; i += 1) last = await app.turn(id, `trả lời ${i + 1}`);
-    assert.equal(last.done.kind, 'handoff');
+    const first = await app.turn(id);
+    assert.equal(first.done.kind, 'handoff');
+    assert.equal((await app.store.listRequestsForOwner(1, 'primary'))[0].workflow_status, 'waiting_admin');
+    assert.equal(await app.store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' }), null);
     const response = await app.post(`/api/ai-board/requests/${id}/clarify/confirm`, { spec: 'Client claims it is clear', complete: true });
     assert.equal(response.status, 409);
-    assert.equal(await app.store.claimNext({ workerId: 'w1', mode: 'shadow', intent: 'precheck' }), null);
   } finally {
     await app.close();
   }
+});
+
+test('a model that reports ready sends the summary in the same turn without another question', async () => {
+  const db = await fixtureDb();
+  const model = fakeModel([
+    JSON.stringify({ ready: true, missing: '', question: '' }),
+    'Trang / chức năng: trang chủ\nThay đổi mong muốn: nút to hơn\nKết quả mong đợi (cách kiểm): nút cao 48px\nNgoài phạm vi: không']);
+  const app = await serve(db, { model });
+  try {
+    const { request_id: id } = await vagueRequest(app);
+    const first = await app.turn(id);
+    assert.equal(first.done.kind, 'summary');
+    assert.equal(first.done.complete, true);
+    assert.equal((await app.store.getClarification(id, 1)).asked, 0, 'no question stored');
+    assert.equal(model.calls[1].model, 'spec-model');
+  } finally {
+    await app.close();
+  }
+});
+
+test('question JSON is accepted only in the documented shape', () => {
+  assert.deepEqual(parseQuestionReply('{"ready": false, "missing": "trang", "question": "Trang nào?"}'),
+    { ok: true, ready: false, missing: 'trang', question: 'Trang nào?' });
+  assert.deepEqual(parseQuestionReply('```json\n{"ready": true, "missing": "", "question": ""}\n```'),
+    { ok: true, ready: true, missing: '', question: '' });
+  assert.equal(parseQuestionReply('Trang nào?').error, 'not_json');
+  assert.equal(parseQuestionReply('{"ready":"yes","missing":"","question":""}').error, 'ready_not_boolean');
+  assert.equal(parseQuestionReply('{"ready":false,"missing":"x","question":""}').error, 'empty_question');
+  assert.equal(parseQuestionReply('{"ready":true,"missing":"","question":"Vẫn hỏi?"}').error, 'question_when_ready');
 });
 
 test('ordinary questions, specs and numbers are not mistaken for claims or phone numbers', () => {

@@ -8,8 +8,9 @@ import { checkContentSafety } from '../safety/profanity-vi.js';
 import { containsPromptDisclosure } from '../../ai-prompt-guardrails.js';
 import { CLASSIFIER } from '../../ai-board/classifier.js';
 
-export const MAX_QUESTIONS = 2;
 export const DAILY_TURNS = 20;
+const CONTRACT = JSON.parse(fs.readFileSync(new URL('../../ai-board/contract.json', import.meta.url), 'utf8'));
+export const MAX_QUESTIONS = CONTRACT.limits.clarify.questions;
 const PROMPTS = new URL('../../../ai-board/harness/prompts/', import.meta.url);
 const GRILL = fs.readFileSync(new URL('grill.md', PROMPTS), 'utf8');
 const SPEC = fs.readFileSync(new URL('clarify_spec.md', PROMPTS), 'utf8');
@@ -63,17 +64,23 @@ export function questionPrompt({ request, turns, techLevel, mode, turn }) {
     .replace('{conversation}', () => conversationText(request, turns));
 }
 
-export function specPrompt({ request, turns, mode }) {
+export function specPrompt({ request, turns, mode, closing = false }) {
+  const closingBlock = closing
+    ? '\nĐây là lượt cuối (đã hỏi đủ trần câu hỏi): thêm mục thứ 5 "Giả định:" liệt kê 1–3 giả định an toàn cho điểm còn mơ hồ, mỗi dòng bắt đầu "Giả định: ".'
+    : '';
   return SPEC.replace('{mode_style}', MODE_STYLE[mode] || MODE_STYLE.ask)
+    .replace('{closing_block}', () => closingBlock)
     .replace('{conversation}', () => conversationText(request, turns));
 }
 
 /** Spec dựng tay khi model lỗi/vi phạm: nguyên văn lời người dùng, không bịa. */
-function plainSpec(request, turns) {
+function plainSpec(request, turns, { closing = false } = {}) {
   const answers = turns.filter((t) => t.kind === 'answer').map((t) => `- ${t.text}`);
   return [`Trang / chức năng: chưa rõ`, `Thay đổi mong muốn: ${request.title}`,
     request.detail ? `Mô tả gốc: ${request.detail}` : '', answers.length ? `Người dùng bổ sung:\n${answers.join('\n')}` : '',
-    'Kết quả mong đợi (cách kiểm): chưa rõ', 'Ngoài phạm vi: chưa rõ'].filter(Boolean).join('\n').slice(0, 4000);
+    'Kết quả mong đợi (cách kiểm): chưa rõ', 'Ngoài phạm vi: chưa rõ',
+    closing ? 'Giả định: điểm còn mơ hồ — lập trình viên chọn cách an toàn và hỏi lại khi cần.' : ''
+  ].filter(Boolean).join('\n').slice(0, 4000);
 }
 
 /** Spec gửi worker = bản đã xác nhận + nguyên văn lời người dùng: tóm tắt của model có thể gọi sai tên phần tử. */
@@ -218,12 +225,89 @@ function vllmStreamer({ llm, fetchImpl, timeoutMs }) {
   };
 }
 
+/**
+ * Stream the `question` string out of the model's JSON reply before the JSON is complete, so the
+ * requester sees the same live typing as before. Parsing is strict: an unescaped closing quote ends it.
+ */
+class JsonQuestionStream {
+  constructor(send) { this.send = send; this.buffer = ''; this.state = 'search'; this.escape = false; this.unicode = ''; }
+  push(token) { for (const ch of String(token ?? '')) this.char(ch); }
+  char(ch) {
+    if (this.state === 'search') {
+      this.buffer += ch;
+      if (this.buffer.length > 2000) this.buffer = this.buffer.slice(-200);
+      if (/"question"\s*:\s*"/.test(this.buffer)) { this.state = 'text'; this.buffer = ''; }
+      return;
+    }
+    if (this.state !== 'text') return;
+    if (this.unicode) {
+      this.unicode += ch;
+      if (this.unicode.length === 4) { this.send(String.fromCharCode(parseInt(this.unicode, 16) || 0)); this.unicode = ''; }
+      return;
+    }
+    if (this.escape) {
+      this.escape = false;
+      if (ch === 'u') { this.unicode = ''; return; }
+      this.send({ n: '\n', r: '\r', t: '\t', b: '\b', f: '\f' }[ch] ?? ch);
+      return;
+    }
+    if (ch === '\\') { this.escape = true; return; }
+    if (ch === '"') { this.state = 'done'; return; }
+    this.send(ch);
+  }
+}
+
+/** Strict shape of the grill reply; the JSON schema lives in ai-board/harness/prompts/grill_output.schema.json. */
+export function parseQuestionReply(raw) {
+  let text = String(raw ?? '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  text = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+  let data;
+  try { data = JSON.parse(text); } catch { return { ok: false, error: 'not_json' }; }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return { ok: false, error: 'not_object' };
+  if (typeof data.ready !== 'boolean') return { ok: false, error: 'ready_not_boolean' };
+  const missing = typeof data.missing === 'string' ? data.missing.trim() : null;
+  const question = typeof data.question === 'string' ? data.question.trim() : null;
+  if (missing == null || missing.length > 300) return { ok: false, error: 'missing_invalid' };
+  if (question == null || question.length > 500) return { ok: false, error: 'question_invalid' };
+  if (data.ready === false && !question) return { ok: false, error: 'empty_question' };
+  if (data.ready === true && question) return { ok: false, error: 'question_when_ready' };
+  return { ok: true, ready: data.ready, missing, question };
+}
+
+/**
+ * One question turn: ask the model for the JSON contract, retry once on a malformed reply, then give up
+ * with a reason. The reply's question text streams to `send` while the JSON is still arriving.
+ */
+export async function askQuestion({ generate, model, prompt, mode, send }) {
+  let lastError = 'model_failed';
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const stream = attempt === 0 && send ? new JsonQuestionStream(send) : null;
+    let text = '';
+    try {
+      text = await generate({ model,
+        prompt: attempt ? `${prompt}\nLần trước sai định dạng. Chỉ trả đúng một dòng JSON: {"ready": false, "missing": "...", "question": "..."}` : prompt,
+        kind: 'question', onToken: (token) => { text += token; stream?.push(token); return true; } });
+    } catch (error) {
+      console.warn('[ai-board] clarify question failed:', error.message);
+      lastError = 'model_failed';
+      continue;
+    }
+    const parsed = parseQuestionReply(text);
+    if (!parsed.ok) { lastError = parsed.error; continue; }
+    if (parsed.ready) return { ok: true, ready: true, missing: parsed.missing, question: '' };
+    const guard = guardModelText(parsed.question, 'question', mode);
+    return { ok: true, ready: false, missing: parsed.missing, question: guard.text, replaced: guard.replaced, reason: guard.reason };
+  }
+  return { ok: false, error: lastError };
+}
+
 /** Next step after the requester's latest turn: another question, or the summary (complete = clear enough). */
 export function nextStep({ asked, clarity, rulesClear = false, mode = null }) {
-  // Chức năng mới: đủ 3 chủ đề rồi mới tóm tắt, không dừng sớm theo luật/model của yêu cầu lẻ.
+  // Chức năng mới: đủ chủ đề rồi mới tóm tắt, không dừng sớm theo luật/model của yêu cầu lẻ.
   if (mode === 'feature') return asked >= FEATURE_QUESTIONS ? { kind: 'summary', complete: true } : { kind: 'question', mode };
   if (rulesClear || (clarity && !clarity.needed)) return { kind: 'summary', complete: true };
-  if (asked >= MAX_QUESTIONS) return { kind: 'handoff', complete: false };
+  // Chạm trần cứng: dừng hỏi, chốt giả định trong spec để người gửi xác nhận (LF/101).
+  if (asked >= MAX_QUESTIONS) return { kind: 'summary', complete: true, closing: true };
   return { kind: 'question', mode: clarity?.mode || 'ask' };
 }
 

@@ -26,9 +26,9 @@ def test_prompt_files_match_lock():
 
 def test_lock_covers_every_prompt_file():
     locked_names = set(json.loads(LOCK_FILE.read_text(encoding="utf-8")))
-    real_names = {p.name for p in PROMPTS_DIR.glob("*.md")}
+    real_names = {p.name for p in PROMPTS_DIR.glob("*.md")} | ({"grill_output.schema.json"} if (PROMPTS_DIR / "grill_output.schema.json").exists() else set())
     assert real_names == locked_names, (
-        f"prompts.lock.json lệch so với file .md thật trong thư mục — "
+        f"prompts.lock.json lệch so với file thật trong thư mục — "
         f"thiếu {real_names - locked_names!r}, thừa {locked_names - real_names!r}"
     )
 

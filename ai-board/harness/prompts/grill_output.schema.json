@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Clarify question reply (grill.md output)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ready", "missing", "question"],
+  "properties": {
+    "ready": { "type": "boolean" },
+    "missing": { "type": "string", "maxLength": 300 },
+    "question": { "type": "string", "maxLength": 500 }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "ready": { "const": true } }, "required": ["ready"] },
+      "then": { "properties": { "question": { "maxLength": 0 } } }
+    },
+    {
+      "if": { "properties": { "ready": { "const": false } }, "required": ["ready"] },
+      "then": { "properties": { "question": { "minLength": 1 } } }
+    }
+  ]
+}

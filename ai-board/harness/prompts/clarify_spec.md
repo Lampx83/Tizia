@@ -14,6 +14,7 @@ Trang / chức năng:
 Thay đổi mong muốn:
 Kết quả mong đợi (cách kiểm):
 Ngoài phạm vi:
+{closing_block}
 
 Bối cảnh cho bạn (không chép vào spec): {mode_style}
 

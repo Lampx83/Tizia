@@ -16,8 +16,7 @@ import { RequestValidationError, WorkerContractError } from '../../ai-board/stor
 import { asyncRoutes } from '../../ai-board/async-routes.js';
 import { resolveAIModel } from '../../ai-model-router.js';
 import {
-  DAILY_TURNS, FEATURE_QUESTIONS, MAX_QUESTIONS, checkAnswer, conversationText, nextStep, ollamaStreamer, plainSpec, questionPrompt, withUserWords,
-  specPrompt, streamGuarded,
+  DAILY_TURNS, FEATURE_QUESTIONS, MAX_QUESTIONS, askQuestion, checkAnswer, conversationText, nextStep, ollamaStreamer, parseQuestionReply, plainSpec, questionPrompt, specPrompt, streamGuarded, withUserWords,
 } from './clarify.js';
 
 export const ROLES = ['pupil', 'student', 'teacher', 'parent', 'other'];
@@ -201,40 +200,61 @@ function attachClarify(router, { store, profiles, requireAuth, requireStrictCsrf
       const clarity = hasAnswer && !rulesClear && !feature
         ? await classifyClarity(conversationText(request, turns)).catch(() => null) : null;
       const step = asked === 0 ? { kind: 'question', mode: startMode } : nextStep({ asked, clarity, rulesClear, mode: startMode });
-      const mode = step.mode || startMode;
-      if (step.kind === 'handoff') {
-        const handoff = await store.handoffClarification(request.id, req.user.id, 'clarification_round_limit');
-        send({ t: 'done', kind: 'handoff', text: handoff.public_note, asked, max, complete: false });
-        return res.end();
-      }
       const profile = await profiles.get(req.user.id);
-      const isQuestion = step.kind === 'question';
-      const prompt = isQuestion
-        ? questionPrompt({ request, turns, techLevel: profile?.tech_level, mode, turn: asked + 1 })
-        : specPrompt({ request, turns, mode });
-      const model = isQuestion ? models.question : models.spec;
-      const deltas = [];
-      const out = await streamGuarded({ generate, model, prompt, kind: step.kind, mode,
-        send: isQuestion ? (event) => deltas.push(event) : send,
-        fallback: isQuestion ? null : plainSpec(request, turns) });
-      if (isQuestion && repeatedQuestion(out.text, turns.filter((t) => t.kind === 'question').map((t) => t.text))) {
-        const handoff = await store.handoffClarification(request.id, req.user.id, 'repeated_answered_question');
-        send({ t: 'done', kind: 'handoff', text: handoff.public_note, asked, max, complete: false });
-        return res.end();
+      const mode = step.mode || startMode;
+      if (step.kind === 'question') {
+        const prompt = questionPrompt({ request, turns, techLevel: profile?.tech_level, mode, turn: asked + 1 });
+        const deltas = [];
+        const answer = await askQuestion({ generate, model: models.question, prompt, mode,
+          send: (text) => deltas.push({ t: 'delta', text }) });
+        if (!answer.ok) {
+          const handoff = await store.handoffClarification(request.id, req.user.id, `invalid_model_output:${answer.error}`);
+          send({ t: 'done', kind: 'handoff', text: handoff.public_note, asked, max, complete: false });
+          return res.end();
+        }
+        if (!answer.ready) {
+          if (repeatedQuestion(answer.question, turns.filter((t) => t.kind === 'question').map((t) => t.text))) {
+            const handoff = await store.handoffClarification(request.id, req.user.id, 'repeated_answered_question');
+            send({ t: 'done', kind: 'handoff', text: handoff.public_note, asked, max, complete: false });
+            return res.end();
+          }
+          if (answer.replaced) console.warn(`[ai-board] clarify question replaced (${answer.reason}) for request ${request.id}`);
+          try {
+            await store.addClarifyTurn(request.id, { kind: 'question', text: answer.question });
+          } catch (error) {
+            if (error.code !== 'clarification_limit') throw error;
+            const handoff = await store.handoffClarification(request.id, req.user.id, 'clarification_limit');
+            send({ t: 'done', kind: 'handoff', text: handoff.public_note, asked: MAX_QUESTIONS, max, complete: false });
+            return res.end();
+          }
+          deltas.forEach(send);
+          recordUsage(req, { provider: 'ollama', model: models.question, status: answer.replaced ? 'error' : 'ok' });
+          send({ t: 'done', kind: 'question', text: answer.question, asked: asked + 1, max, complete: null });
+          return res.end();
+        }
+        // Model tự nhận đã đủ rõ: tóm tắt luôn, không hỏi thêm.
+        step.kind = 'summary';
+        step.complete = true;
+      }
+      const closing = !feature && step.closing === true;
+      const prompt = specPrompt({ request, turns, mode, closing });
+      const out = await streamGuarded({ generate, model: models.spec, prompt, kind: 'summary', mode, send,
+        fallback: plainSpec(request, turns, { closing }) });
+      let summary = out.text;
+      if (closing && !/^\s*Giả định:/imu.test(summary)) {
+        summary = `${summary}\nGiả định: điểm còn mơ hồ — lập trình viên chọn cách an toàn và hỏi lại khi cần.`.slice(0, 4000);
       }
       if (out.replaced) console.warn(`[ai-board] clarify output replaced (${out.reason}) for request ${request.id}`);
       try {
-        await store.addClarifyTurn(request.id, { kind: step.kind, text: out.text });
+        await store.addClarifyTurn(request.id, { kind: 'summary', text: summary });
       } catch (error) {
         if (error.code !== 'clarification_limit') throw error;
         const handoff = await store.handoffClarification(request.id, req.user.id, 'clarification_limit');
         send({ t: 'done', kind: 'handoff', text: handoff.public_note, asked: MAX_QUESTIONS, max, complete: false });
         return res.end();
       }
-      if (isQuestion && !out.replaced) deltas.forEach(send);
-      recordUsage(req, { provider: 'ollama', model, status: out.replaced ? 'error' : 'ok' });
-      send({ t: 'done', kind: step.kind, text: out.text, asked: asked + (isQuestion ? 1 : 0), max,
-        complete: isQuestion ? null : step.complete });
+      recordUsage(req, { provider: 'ollama', model: models.spec, status: out.replaced ? 'error' : 'ok' });
+      send({ t: 'done', kind: 'summary', text: summary, asked, max, complete: true });
       res.end();
     } catch (error) {
       if (res.headersSent) { res.end(); return; }
