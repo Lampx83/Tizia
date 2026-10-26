@@ -150,14 +150,43 @@
   .pill { display:inline-block; font-size:11px; padding:2px 9px; border-radius:999px; background:rgba(255,255,255,0.07); font-weight:600; }
   .skills-panel h2 { margin:0; font-size:20px; }
   .skills-panel .meta { color:var(--muted); font-size:13px; line-height:1.6; }
-  .skills-panel table { min-width:680px; }
-  .skills-form { max-width:760px; margin:20px 0; padding:20px; border:1px solid var(--border); border-radius:10px; }
+  .skills-lead { margin:0; max-width:70ch; }
+  .st-head { margin-bottom:8px; }
+  .st-tabs { display:inline-flex; gap:4px; padding:3px; margin:0 0 18px; border:1px solid var(--border); border-radius:10px; background:rgba(0,0,0,0.18); }
+  .st-tab { padding:7px 18px; border:0; border-radius:7px; background:transparent; color:var(--muted); cursor:pointer; font-family:inherit; font-size:13.5px; font-weight:600; transition:.15s; }
+  .st-tab:hover { color:var(--txt); }
+  .st-tab[aria-selected="true"] { background:var(--bg2); color:var(--accent); box-shadow:0 1px 0 rgba(0,0,0,0.35) inset; }
+  .skill-grid { display:grid; grid-template-columns:minmax(260px, 360px) minmax(0,1fr); gap:18px; align-items:start; }
+  .skill-list { display:flex; flex-direction:column; border:1px solid var(--border); border-radius:12px; overflow:hidden; background:var(--bg2); }
+  .skill-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:3px 10px; width:100%; padding:10px 12px; border:0; border-bottom:1px solid var(--border); background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+  .skill-row:last-child { border-bottom:0; }
+  .skill-row:hover { background:rgba(255,255,255,0.03); }
+  .skill-row[aria-current="true"] { background:color-mix(in srgb, var(--accent) 10%, transparent); box-shadow:inset 2px 0 0 var(--accent); }
+  .skill-row .skill-name { font-weight:700; font-size:13.5px; overflow-wrap:anywhere; }
+  .skill-row .skill-sub { grid-column:1 / -1; color:var(--muted); font-size:12px; }
+  .skill-detail { min-width:0; }
+  .skill-detail-title { margin:0 0 4px; font-size:17px; }
+  .ver-list { list-style:none; margin:10px 0 0; padding:0; border:1px solid var(--border); border-radius:12px; overflow:hidden; background:var(--bg2); }
+  .ver-row { border-bottom:1px solid var(--border); }
+  .ver-row:last-child { border-bottom:0; }
+  .ver-row.active { box-shadow:inset 2px 0 0 var(--accent); }
+  .ver-sum { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; width:100%; padding:9px 12px; border:0; background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+  .ver-sum:hover { background:rgba(255,255,255,0.03); }
+  .ver-no { font-weight:700; font-variant-numeric:tabular-nums; }
+  .ver-state { font-size:13px; }
+  .ver-flags { margin-left:auto; color:var(--muted); font-size:12px; }
+  .ver-body { padding:2px 12px 14px; }
+  .ver-actions { flex-wrap:wrap; gap:8px; margin:12px 0 0; }
+  .skills-form { max-width:760px; margin:20px 0; padding:20px; border:1px solid var(--border); border-radius:10px; background:var(--bg2); }
+  .skills-form h3 { margin:0 0 4px; font-size:16px; }
   .skills-form > label { display:block; margin:14px 0 6px; }
   .skills-form > input, .skills-form textarea { width:100%; max-width:100%; padding:10px; background:var(--bg); color:var(--txt); border:1px solid var(--border-strong); border-radius:7px; font:inherit; }
   .skills-form textarea { font:13px/1.6 monospace; resize:vertical; }
   .skills-form fieldset { margin:16px 0; border:1px solid var(--border); }
   .skills-form .skill-type { display:inline-flex; align-items:center; gap:6px; margin:8px 14px 8px 0; }
   .skills-form[hidden] { display:none; }
+  .skill-form-actions { margin:16px 0 0; }
+  @media (max-width:920px) { .skill-grid { grid-template-columns:1fr; } }
   .skill-version { border-top:1px solid var(--border); margin:16px 0; padding:14px 0; }
   .skill-version summary { cursor:pointer; padding:8px 0; }
   .skill-source { max-width:100%; max-height:360px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; padding:14px; background:var(--bg2); border-radius:8px; line-height:1.6; }

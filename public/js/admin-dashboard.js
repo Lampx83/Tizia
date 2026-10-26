@@ -1882,17 +1882,28 @@ async function openFeatureLifecycle(folder) {
   dialog.showModal();
 }
 
-// ─────────── Skills & Tools (skills + duyệt tool-manifest của worker) ───────────
-async function loadSkillsTools() {
+// ─────────── Skills & Tools (submenu Skills/Tools; Tools = duyệt tool-manifest) ───────────
+let skillsSubtab = 'skills';
+async function loadSkillsTools(view = skillsSubtab) {
+  skillsSubtab = view;
   const host = $('#tabbody');
-  await mountSkillsTab(host, { api, toast });
+  host.innerHTML = `<section class="skills-panel">
+    <div class="toolbar st-head"><h2>Skills &amp; Tools</h2></div>
+    <div class="st-tabs" role="tablist" aria-label="Chọn mục">
+      <button type="button" role="tab" class="st-tab" data-st-view="skills" aria-selected="${view === 'skills'}">Skills</button>
+      <button type="button" role="tab" class="st-tab" data-st-view="tools" aria-selected="${view === 'tools'}">Tools</button>
+    </div>
+    <div id="st-view"></div>
+  </section>`;
+  for (const button of host.querySelectorAll('[data-st-view]'))
+    button.addEventListener('click', () => loadSkillsTools(button.dataset.stView));
+  const viewHost = host.querySelector('#st-view');
+  if (view === 'skills') return mountSkillsTab(viewHost, { api, toast });
   const tm = await api('/api/admin/ai-board/tool-manifests');
-  const panel = host.querySelector('.skills-panel');
-  if (!panel) return;
-  panel.insertAdjacentHTML('beforeend',
-    tm.ok ? toolManifestSection(tm.data.manifests)
-          : `<div id="tool-manifests" class="err" style="margin-top:22px">Lỗi manifest tool: ${esc(tm.data?.error || tm.status)}</div>`);
-  wireToolManifests(panel);
+  viewHost.innerHTML = tm.ok
+    ? toolManifestSection(tm.data.manifests)
+    : `<div id="tool-manifests" class="err">Lỗi manifest tool: ${esc(tm.data?.error || tm.status)}</div>`;
+  if (tm.ok) wireToolManifests(viewHost);
 }
 
 const MANIFEST_STATUS = { pending: 'Chờ duyệt', approved: 'Đã duyệt', revoked: 'Đã thu hồi' };
