@@ -1774,8 +1774,7 @@ const TABS = {
   curriculum: { label:'Curriculum', load: loadCurriculumTab },
   requests:   { label:'Góp ý', load: loadRequests, badge: () => reqCache.filter(r => r.status === 'pending').length },
   features:   { label:'Chức năng', load: loadFeatureFolders },
-  skills:     { label:'Skills', load: () => mountSkillsTab($('#tabbody'), { api, toast }) },
-  selfimprove: { label:'Tự cải thiện', load: loadSelfImprove },
+  skills:     { label:'Skills & Tools', load: loadSkillsTools },
   users:     { label:'Người dùng', load: loadUsers },
   db:         { label:'CSDL',     load: loadDbTab },
   config:     { label:'Cấu hình', load: loadConfig },
@@ -1883,65 +1882,17 @@ async function openFeatureLifecycle(folder) {
   dialog.showModal();
 }
 
-// ─────────── Tự cải thiện (task eval từ lần hỏng, gắn nhãn 1 click) ───────────
-const EVAL_STATUS_LABEL = { candidate: 'Chờ gắn nhãn', labelled: 'Đã gắn nhãn', retired: 'Đã loại' };
-const EVAL_TRIGGER_LABEL = { verdict_blocked: 'bị chặn', retry: 'Thử cách khác', undo: 'admin hoàn tác',
-  pr_closed: 'PR bị đóng', pr_merged: 'PR đã merge' };
-let evalStatus = 'candidate';
-const lines = (v) => String(v || '').split('\n').map(s => s.trim()).filter(Boolean);
-const evalBox = (field, id, list, rows, ph) => `<textarea data-eval-${field}="${id}" rows="${rows}" placeholder="${ph}"
-  style="width:100%;min-width:180px;box-sizing:border-box;background:var(--bg);color:var(--txt);border:1px solid var(--border);border-radius:6px;padding:5px 7px;font:12px/1.4 ui-monospace,monospace"
-  >${esc((list || []).join('\n'))}</textarea>`;
-
-function wireNightSection(host) {
-  host.querySelectorAll('[data-tr-switch]').forEach(btn => btn.addEventListener('click', async () => {
-    btn.disabled = true;
-    const res = await api('/api/admin/ai-board/transient-retry/switch', { method: 'POST',
-      body: JSON.stringify({ enabled: btn.dataset.trSwitch === '1' }) });
-    if (!res.ok) { toast('Lỗi: ' + (res.data?.message || res.data?.error || res.status), 'err'); btn.disabled = false; return; }
-    toast(res.data.enabled ? 'Đã bật tự chạy lại' : 'Đã tắt tự chạy lại');
-    loadSelfImprove();
-  }));
-  host.querySelectorAll('[data-tm-act]').forEach(btn => btn.addEventListener('click', async () => {
-    btn.disabled = true;
-    const res = await api(`/api/admin/ai-board/tool-manifests/${btn.dataset.tmHash}/${btn.dataset.tmAct}`, { method: 'POST' });
-    if (!res.ok) { toast('Lỗi: ' + (res.data?.message || res.data?.error || res.status), 'err'); btn.disabled = false; return; }
-    toast(btn.dataset.tmAct === 'approve' ? 'Đã duyệt manifest' : 'Đã thu hồi manifest');
-    loadSelfImprove();
-  }));
-  host.querySelectorAll('[data-tr-retry]').forEach(btn => btn.addEventListener('click', async () => {
-    btn.disabled = true;
-    const res = await api(`/api/admin/ai-board/tickets/${btn.dataset.trRetry}/retry-transient`, { method: 'POST' });
-    if (!res.ok) { toast('Lỗi: ' + (res.data?.message || res.data?.error || res.status), 'err'); btn.disabled = false; return; }
-    toast('Đã đưa yêu cầu về hàng đợi');
-    loadSelfImprove();
-  }));
-}
-
-// Tự chạy lại yêu cầu bị chặn do lỗi hạ tầng thoáng qua (mọi loại yêu cầu, không riêng self improve —
-// công tắc sống chung tab "Tự cải thiện" theo yêu cầu admin, dù áp dụng rộng hơn self).
-function transientRetrySection(tr) {
-  if (!tr) return '';
-  const { enabled, retry_after_ms, blocked = [] } = tr;
-  return `
-    <div id="tr-blocked" style="margin-bottom:22px">
-      <div class="toolbar" style="align-items:center;gap:10px">
-        <button class="btn${enabled ? ' primary' : ''}" data-tr-switch="${enabled ? '0' : '1'}">
-          ${enabled ? `Đang bật, tắt tự chạy lại sau ${Math.round(retry_after_ms / 60000)} phút` : 'Đang tắt, bật tự chạy lại'}</button>
-        <span class="trace-sub">Áp dụng mọi loại yêu cầu, không riêng tự cải thiện. Tắt = bạn tự bấm "Chạy lại ngay" khi thấy GPU rảnh trên Grafana.</span>
-      </div>
-      ${blocked.length ? `<table>
-        <thead><tr><th>#</th><th>Tiêu đề</th><th>Loại</th><th>Lý do</th><th></th></tr></thead>
-        <tbody>${blocked.map(b => `
-          <tr>
-            <td>${b.source_request_id}</td>
-            <td><a href="/admin-request.html?id=${b.source_request_id}" target="_blank" rel="noopener">${esc(b.title)}</a></td>
-            <td>${esc(b.type)}</td>
-            <td>${esc(b.public_note || '')}</td>
-            <td><button class="btn primary" data-tr-retry="${b.id}">Chạy lại ngay</button></td>
-          </tr>`).join('')}</tbody>
-      </table>` : '<div class="loading">Không có yêu cầu nào đang chờ.</div>'}
-    </div>`;
+// ─────────── Skills & Tools (skills + duyệt tool-manifest của worker) ───────────
+async function loadSkillsTools() {
+  const host = $('#tabbody');
+  await mountSkillsTab(host, { api, toast });
+  const tm = await api('/api/admin/ai-board/tool-manifests');
+  const panel = host.querySelector('.skills-panel');
+  if (!panel) return;
+  panel.insertAdjacentHTML('beforeend',
+    tm.ok ? toolManifestSection(tm.data.manifests)
+          : `<div id="tool-manifests" class="err" style="margin-top:22px">Lỗi manifest tool: ${esc(tm.data?.error || tm.status)}</div>`);
+  wireToolManifests(panel);
 }
 
 const MANIFEST_STATUS = { pending: 'Chờ duyệt', approved: 'Đã duyệt', revoked: 'Đã thu hồi' };
@@ -1965,64 +1916,14 @@ function toolManifestSection(list) {
     </div>`;
 }
 
-async function loadSelfImprove() {
-  const [tr, tm, r] = await Promise.all([api('/api/admin/ai-board/transient-retry'),
-    api('/api/admin/ai-board/tool-manifests'), api(`/api/admin/ai-board/eval-tasks?status=${evalStatus}`)]);
-  const host = $('#tabbody');
-  if (!r.ok) { host.innerHTML = `<div class="err">Lỗi: ${esc(r.data?.error || r.status)}</div>`; return; }
-  const { tasks = [], counts = {} } = r.data;
-  const editable = evalStatus !== 'retired';
-  host.innerHTML = `
-    ${tm.ok ? toolManifestSection(tm.data.manifests) : `<div class="err">Lỗi manifest tool: ${esc(tm.data?.error || tm.status)}</div>`}
-    ${tr.ok ? transientRetrySection(tr.data) : `<div class="err">Lỗi tự chạy lại: ${esc(tr.data?.error || tr.status)}</div>`}
-    <div class="toolbar">${Object.entries(EVAL_STATUS_LABEL).map(([k, l]) =>
-      `<button class="btn${k === evalStatus ? ' primary' : ''}" data-eval-status="${k}">${l} (${counts[k] || 0})</button>`).join(' ')}</div>
-    <p style="color:var(--muted);font-size:12.5px;margin:10px 0">Mỗi lần Ban hỏng ở production thành một task eval.
-      Gắn nhãn = tập file đúng (mỗi dòng 1 file), tuỳ chọn chuỗi phải có / không được có.</p>
-    ${tasks.length ? `<table>
-      <thead><tr><th>#</th><th>Yêu cầu</th><th>Lần hỏng</th><th>File mong đợi</th><th>Phải có</th><th>Không được có</th><th></th></tr></thead>
-      <tbody>${tasks.map(t => `
-        <tr>
-          <td>${t.id}<div class="trace-sub">yêu cầu #${t.request_id} · lượt ${t.run_id}</div></td>
-          <td style="max-width:320px;white-space:pre-wrap">${esc(String(t.request_text).slice(0, 400))}
-            ${t.clarified_spec ? `<div class="trace-sub">spec: ${esc(String(t.clarified_spec).slice(0, 300))}</div>` : ''}</td>
-          <td><span class="pill">${esc(EVAL_TRIGGER_LABEL[t.trigger] || t.trigger)}</span>
-            <div class="trace-sub">${[t.gate != null && `cổng ${t.gate}`, t.failure_class, t.skill,
-              t.base_sha && String(t.base_sha).slice(0, 7), fmt(t.created_at)].filter(Boolean).map(esc).join(' · ')}</div></td>
-          <td>${evalBox('files', t.id, t.expected_files, 3, 'public/trang.html')}</td>
-          <td>${evalBox('must', t.id, t.must_contain, 2, 'tuỳ chọn')}</td>
-          <td>${evalBox('mustnot', t.id, t.must_not_contain, 2, 'tuỳ chọn')}</td>
-          <td style="white-space:nowrap">${editable ? `<button class="btn primary" data-eval-label="${t.id}">Gắn nhãn</button> ` : ''}
-            <button class="btn danger" data-eval-delete="${t.id}">Xoá</button></td>
-        </tr>`).join('')}</tbody>
-    </table>` : '<div class="loading">Không có task nào.</div>'}`;
-  wireNightSection(host);
-  host.querySelectorAll('[data-eval-status]').forEach(b => b.addEventListener('click', () => {
-    evalStatus = b.dataset.evalStatus; loadSelfImprove();
-  }));
-  host.querySelectorAll('[data-eval-label]').forEach(btn => btn.addEventListener('click', async () => {
-    const id = btn.dataset.evalLabel;
-    const val = (f) => lines(host.querySelector(`[data-eval-${f}="${id}"]`).value);
+// Duyệt/thu hồi manifest tool; reload tab Skills & Tools sau thao tác.
+function wireToolManifests(host) {
+  host.querySelectorAll('[data-tm-act]').forEach(btn => btn.addEventListener('click', async () => {
     btn.disabled = true;
-    const res = await api(`/api/admin/ai-board/eval-tasks/${id}/label`, { method: 'POST',
-      body: JSON.stringify({ expected_files: val('files'), must_contain: val('must'), must_not_contain: val('mustnot') }) });
+    const res = await api(`/api/admin/ai-board/tool-manifests/${btn.dataset.tmHash}/${btn.dataset.tmAct}`, { method: 'POST' });
     if (!res.ok) { toast('Lỗi: ' + (res.data?.message || res.data?.error || res.status), 'err'); btn.disabled = false; return; }
-    toast(`Đã gắn nhãn task #${id}`);
-    loadSelfImprove();
-  }));
-  host.querySelectorAll('[data-eval-delete]').forEach(btn => btn.addEventListener('click', () => {
-    const id = btn.dataset.evalDelete;
-    openConfirm({
-      title: `Xoá task #${id}?`,
-      msg: 'Nội dung yêu cầu bị xoá hẳn.',
-      onConfirm: async () => {
-        const res = await api(`/api/admin/ai-board/eval-tasks/${id}`, { method: 'DELETE' });
-        if (!res.ok) return toast('Lỗi: ' + (res.data?.message || res.data?.error || res.status), 'err');
-        toast('Đã xoá');
-        closeModal();
-        loadSelfImprove();
-      },
-    });
+    toast(btn.dataset.tmAct === 'approve' ? 'Đã duyệt manifest' : 'Đã thu hồi manifest');
+    loadSkillsTools();
   }));
 }
 
