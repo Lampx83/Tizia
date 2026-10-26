@@ -9,7 +9,7 @@ export const PROD_OWNED = new Set(['users', 'requests', 'schema_migrations', 'ai
 // AI Board tables the app creates at boot (db.js), outside the migration set. Kept apart from the 30: apply/rollback must not drop them.
 export const AI_BOARD_BOOT_TABLES = ['skill_proposals', 'gate_trace'];
 export const REQUESTS_ALLOW = {
-  columns: ['owner_user_id', 'owner_domain', 'idempotency_key', 'owner_state', 'clarified_spec', 'folder_id'],
+  columns: ['owner_user_id', 'owner_domain', 'idempotency_key', 'owner_state', 'clarified_spec', 'folder_id', 'execution_mode'],
   indexes: ['ux_requests_owner_idempotency', 'idx_requests_owner'],
 };
 export const FUNCTION_ALLOW = { ai_root_request_status_fn: { writes: ['requests'] } };

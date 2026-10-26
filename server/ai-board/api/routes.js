@@ -64,6 +64,15 @@ export function attachAiBoardRequestRoutes(router, {
     const ownerDomain = req.user.role === 'admin'
       ? String(body.domain || '').trim()
       : req.user.enrolled_domain;
+    // LF/99: chế độ xử lý do người gửi chọn ('now' = worker vLLM, 'queue' = xếp hàng Claude Code).
+    // Giá trị khác (kể client hack) → 400; không gán im lặng.
+    let executionMode = null;
+    if (body.execution_mode != null) {
+      if (!['now', 'queue'].includes(body.execution_mode)) {
+        return res.status(400).json({ error: 'invalid_request', message: 'execution_mode chỉ nhận "now" hoặc "queue".' });
+      }
+      executionMode = body.execution_mode;
+    }
     const language = checkLanguage(body.title, body.detail);
     if (language.block) return res.status(422).json({ error: 'unsupported_language', message: language.message });
     const intake = checkIntake(body.title, body.detail);
@@ -110,10 +119,14 @@ export function attachAiBoardRequestRoutes(router, {
         attachments: body.attachments,
         folderId: body.folder_id ? Number(body.folder_id) : null,
         clarifying: clarify.needed,
+        executionMode,
       });
       if (result.created) {
-        await aux.recordIntakeFlags(db, result.root_ticket_id, [...intake.labels, ...modelLabels]);
-        await aux.recordClassification(db, result.root_ticket_id, trace);
+        // Intake flags / classification gắn với root ticket; request 'queue' (không root) bỏ qua.
+        if (result.root_ticket_id) {
+          await aux.recordIntakeFlags(db, result.root_ticket_id, [...intake.labels, ...modelLabels]);
+          await aux.recordClassification(db, result.root_ticket_id, trace);
+        }
         if (clarify.needed && onClarify) {
           try {
             await onClarify({ requestId: result.request_id, domain: ownerDomain, title: String(body.title || '').trim(),
@@ -124,8 +137,10 @@ export function attachAiBoardRequestRoutes(router, {
         }
       } else {
         // Gửi lại cùng Idempotency-Key: trả đúng trạng thái đã tạo lần đầu, không theo lần phân loại này.
-        const phase = (await store.queryGet('SELECT phase FROM ai_tickets WHERE id=?', [result.root_ticket_id]))?.phase;
-        clarify = clarifyFromPhase(phase);
+        // Request 'queue' không có root (LF/99) → không có phase để suy ra clarify.
+        clarify = result.root_ticket_id
+          ? clarifyFromPhase((await store.queryGet('SELECT phase FROM ai_tickets WHERE id=?', [result.root_ticket_id]))?.phase)
+          : { needed: false };
       }
       res.json({ ok: true, ...result, id: result.request_id, createdAt: Date.now(), clarify });
       if (result.created && onCreated) {

@@ -1254,6 +1254,7 @@ route.get('/api/requests/:id/thread', requireAuth, async (req, res) => {
     request: {
       id: reqRow.id, domain: reqRow.domain, type: reqRow.type, title: reqRow.title,
       status: reqRow.status, student: reqRow.student, votes: reqRow.votes,
+      execution_mode: reqRow.execution_mode || null,
       ...(await aiBoardStore.requestWorkflow(reqRow.id)),
       created_at: reqRow.created_at, updated_at: reqRow.updated_at,
     },

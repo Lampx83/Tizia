@@ -47,15 +47,16 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       AND fq.status NOT IN ('done','rejected','cancelled')
       AND (ft.id<t.id OR (ft.lease_owner IS NOT NULL AND ft.lease_expires_at>?)))`;
   const findRetry = `
-    SELECT r.id AS request_id, t.id AS root_ticket_id
-    FROM requests r JOIN ai_tickets t ON t.source_request_id = r.id AND t.parent_id IS NULL
+    SELECT r.id AS request_id,
+      (SELECT t.id FROM ai_tickets t WHERE t.source_request_id = r.id AND t.parent_id IS NULL LIMIT 1) AS root_ticket_id
+    FROM requests r
     WHERE r.owner_user_id = ? AND r.idempotency_key = ?
   `;
   const insertRequest = `
     INSERT INTO requests (
       domain, type, title, detail, student, status, votes, created_at, updated_at,
-      attachments, owner_user_id, owner_domain, idempotency_key, owner_state, folder_id
-    ) VALUES (?, ?, ?, ?, ?, 'pending', 1, ?, ?, ?, ?, ?, ?, 'verified', ?)
+      attachments, owner_user_id, owner_domain, idempotency_key, owner_state, folder_id, execution_mode
+    ) VALUES (?, ?, ?, ?, ?, 'pending', 1, ?, ?, ?, ?, ?, ?, 'verified', ?, ?)
   `;
   const insertRoot = `
     INSERT INTO ai_tickets (
@@ -127,8 +128,14 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       input.detail ? String(input.detail).slice(0, 10000) : null,
       String(input.ownerDisplayName || input.ownerUserId).slice(0, 60),
       now, now, cleanAttachments(input.attachments), input.ownerUserId, input.ownerDomain, input.idempotencyKey, folderId,
+      input.executionMode === 'queue' || input.executionMode === 'now' ? input.executionMode : null,
     ]);
     await hooks.afterRequestInserted?.({ requestId, input });
+    // execution_mode 'queue' (LF/99): KHÔNG tạo root ticket — không quota GPU, request này
+    // nằm trên inbox Claude Code (GET /api/ai-board/inbox) và chờ xử lý ngoài worker.
+    if (input.executionMode === 'queue') {
+      return { request_id: requestId, root_ticket_id: null, folder_id: folderId, created: true };
+    }
     // clarifying: chưa vào hàng đợi worker cho tới khi người gửi xác nhận spec.
     const rootTicketId = await db.insert(insertRoot, [
       requestId, input.title, input.detail || null, input.clarifying ? 'clarifying' : 'intake',
@@ -491,7 +498,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   async function listRequestsForOwner(ownerUserId, domain, limit = 50) {
     const rows = await db.all(`
       SELECT r.id, r.domain, r.type, r.title, r.detail, r.student, r.status, r.votes,
-             r.admin_note, r.created_at, r.updated_at, r.attachments,
+             r.admin_note, r.created_at, r.updated_at, r.attachments, r.execution_mode,
              t.id AS root_ticket_id, t.status AS workflow_status, t.phase,
              t.public_note,
              (SELECT ar.outcome FROM ai_runs ar WHERE ar.ticket_id=t.id AND ar.outcome IS NOT NULL ORDER BY ar.id DESC LIMIT 1) AS pre_pr_verdict,
@@ -572,10 +579,14 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       Gửi lại cùng Idempotency-Key → 0 (store sẽ trả yêu cầu cũ, không tạo mới). */
   async function countPendingRoots(ownerUserId, idempotencyKey = null) {
     if (idempotencyKey && await db.get(findRetry, [Number(ownerUserId), String(idempotencyKey).trim()])) return 0;
+    // Cap tính cả root đang chờ worker lẫn request 'queue' chưa xong (pending/reviewing):
+    // 1 người không lấp đầy hàng đợi ở cả hai chế độ.
     return (await db.get(`
-      SELECT COUNT(*) AS n FROM ai_tickets t JOIN requests r ON r.id = t.source_request_id
-      WHERE t.kind = 'root' AND r.owner_user_id = ? AND t.status IN ('queued', 'running')
-    `, [Number(ownerUserId)])).n;
+      SELECT (SELECT COUNT(*) FROM ai_tickets t JOIN requests r ON r.id = t.source_request_id
+        WHERE t.kind = 'root' AND r.owner_user_id = ? AND t.status IN ('queued', 'running'))
+        + (SELECT COUNT(*) FROM requests q WHERE q.owner_user_id = ? AND q.execution_mode = 'queue'
+        AND q.status IN ('pending', 'reviewing')) AS n
+    `, [Number(ownerUserId), Number(ownerUserId)])).n;
   }
 
   // Admin reject = cancel the whole root, like cancelRequestTransaction; every statement is a no-op on repeat.
