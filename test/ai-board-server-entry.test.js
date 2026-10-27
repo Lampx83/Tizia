@@ -48,6 +48,37 @@ test('a signed web identity creates and lists a request on the board database on
   } finally { await app.close(); app.db.close(); }
 });
 
+test('the board mirrors the signed user and serves the requester thread and votes', async () => {
+  const app = await serve();
+  try {
+    const headers = signInternalHeaders({ id: 7, role: 'pupil', displayName: 'Minh', domain: 'primary' }, SECRET);
+    const created = await fetch(`${app.base}/api/requests`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'idempotency-key': 'lf122-entry-001', ...headers },
+      body: JSON.stringify({ title: 'Thêm thẻ ghi nhớ', detail: 'Bộ thẻ thuật ngữ' }),
+    });
+    assert.equal(created.status, 200, await created.clone().text());
+    const { request_id: requestId } = await created.json();
+    // users(id) mirror: the request owner only exists on the board because the signed identity was mirrored
+    assert.deepEqual({ ...await app.db.d.get('SELECT id, display_name, role FROM users WHERE id=7') },
+      { id: 7, display_name: 'Minh', role: 'pupil' });
+    const thread = await fetch(`${app.base}/api/requests/${requestId}/thread`, { headers });
+    assert.equal(thread.status, 200);
+    const opened = await thread.json();
+    assert.equal(opened.messages.length, 1);
+    assert.equal(opened.request.id, requestId);
+    const posted = await fetch(`${app.base}/api/requests/${requestId}/messages`, {
+      method: 'POST', headers: { 'content-type': 'application/json', ...headers },
+      body: JSON.stringify({ body: 'Bổ sung: ưu tiên nhóm kháng sinh.' }),
+    });
+    assert.equal(posted.status, 200, await posted.clone().text());
+    assert.equal((await (await fetch(`${app.base}/api/requests/${requestId}/thread`, { headers })).json()).messages.length, 2);
+    const vote = await fetch(`${app.base}/api/requests/${requestId}/vote`, { method: 'POST' });
+    assert.equal(vote.status, 200);
+    assert.equal((await vote.json()).ok, true);
+  } finally { await app.close(); app.db.close(); }
+});
+
 test('board entry bootstraps an empty PostgreSQL itself: base tables then additive migrations', async () => {
   // fresh: schema rỗng, giống Postgres riêng của stack board khi container khởi động lần đầu
   const db = await openBoard({ migrate: false });

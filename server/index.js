@@ -61,6 +61,7 @@ import { setAiBoardServices } from './ai-board/runtime.js';
 import { asyncRoutes } from './ai-board/async-routes.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from './ai-board/routes.js';
 import { attachAiBoardProxy } from './ai-board/web-proxy.js';
+import { attachRequesterThread } from './ai-board/api/requester-thread.js';
 import { attachScopedCrudRoutes } from './ai-board/api/scoped-crud.js';
 import { attachOnlineRoutes } from './ai-board/online/routes.js';
 import { createBroker } from './ai-board/online/broker.js';
@@ -70,11 +71,6 @@ import { createBackendRunner } from './ai-board/online/backend-run.js';
 import { adaptersFromEnv, runnerFromEnv, backendScriptsEnabled } from './ai-board/online/config.js';
 import { draftNotifier } from './ai-board/drafts-async.js';
 import { appendVerdictMessage } from './ai-board/services/verdict-chat.js';
-import { checkLanguage } from './ai-board/language-guard.js';
-import { checkIntake } from './ai-board/intake-guard-async.js';
-import { checkContentSafety } from './contexts/safety/profanity-vi.js';
-import { checkGibberish } from './ai-board/gibberish.js';
-import { LIMITS } from './ai-board/store.js';
 import { shotBackendFromEnv, shotProxy, startShotRetention } from './ai-board/shot-storage.js';
 import { staticCacheControl } from './static-cache.js';
 import { attachAiBoardIntake, clarifyNotifier } from './contexts/ai-board-intake/index.js';
@@ -1229,98 +1225,14 @@ r.post('/api/requests/attachments',
     }
   });
 
-route.post('/api/requests/:id/vote', async (req, res) => {
-  const ok = await aiBoard.requests.voteRequest(req.params.id);
-  res.json({ ok });
-});
-
 // Audit trail quyết định của AI Agent cho 1 góp ý (minh bạch + cho phép xem lại).
 r.get('/api/requests/:id/decisions', async (req, res) => {
   res.json({ decisions: await getDecisionsForRequest(req.params.id) });
 });
 
-// ── Phiên trao đổi (thread) của 1 yêu cầu ──────────────────────────────────
-// Mở luồng hội thoại: HS gửi yêu cầu → Ban điều hành AI phản hồi → HS trao đổi
-// tiếp… tới khi hoàn thành. GET công khai (như board); POST chỉ chủ yêu cầu.
-//
-// GET trả { request, messages }. messages[0] = tin mở đầu dựng từ chính nội dung
-// yêu cầu (head, không lưu lặp ở request_messages). Yêu cầu cũ (trước tính năng
-// này) có admin_note nhưng chưa có message → bù 1 tin AI ảo để không mất phản hồi.
-route.get('/api/requests/:id/thread', requireAuth, async (req, res) => {
-  const reqRow = await aiBoard.requests.getRequestById(req.params.id);
-  if (!reqRow) return res.status(404).json({ error: 'not_found' });
-  if (req.user.role !== 'admin' && reqRow.owner_user_id !== req.user.id) {
-    return res.status(403).json({ error: 'forbidden' });
-  }
-  const msgs = await aiBoard.requests.listRequestMessages(reqRow.id);
-  const hasBoardMsg = msgs.some(m => m.role === 'ai' || m.role === 'admin');
-  const thread = [{
-    id: 0, request_id: reqRow.id, role: 'student', author_name: reqRow.student,
-    body: reqRow.detail || reqRow.title, attachments: reqRow.attachments,
-    created_at: reqRow.created_at,
-  }];
-  // admin_note giữ phản hồi/ghi nhận gần nhất của Ban điều hành. Nếu thread chưa
-  // có tin nào từ Ban điều hành (yêu cầu cũ trước tính năng thread, hoặc mới chỉ
-  // được ghi nhận) thì bù vào ngay sau tin mở đầu để không mất ngữ cảnh.
-  if (reqRow.admin_note && !hasBoardMsg) {
-    thread.push({
-      id: -1, request_id: reqRow.id, role: 'ai', author_name: 'Ban điều hành AI',
-      body: reqRow.admin_note, attachments: [], created_at: reqRow.created_at,
-    });
-  }
-  thread.push(...msgs);
-  res.json({
-    request: {
-      id: reqRow.id, domain: reqRow.domain, type: reqRow.type, title: reqRow.title,
-      status: reqRow.status, student: reqRow.student, votes: reqRow.votes,
-      execution_mode: reqRow.execution_mode || null,
-      ...(await aiBoardStore.requestWorkflow(reqRow.id)),
-      created_at: reqRow.created_at, updated_at: reqRow.updated_at,
-    },
-    messages: thread,
-  });
-});
+// LF/122: thread và bình chọn dùng chung module với board-only entry (cùng store, cùng dữ liệu).
+attachRequesterThread(r, { requests: aiBoard.requests, store: aiBoardStore, db: aiBoard.db, requireAuth });
 
-// HS (chủ yêu cầu) hoặc admin gửi tin nhắn tiếp theo vào thread. Yêu cầu đã đóng
-// (done/rejected) tự mở lại 'reviewing' để Ban điều hành xem tiếp. KHÔNG gọi LLM
-// — Ban điều hành AI (Routine Claude Opus) trả lời bất đồng bộ qua /admin/.../reply.
-route.post('/api/requests/:id/messages', requireAuth, async (req, res) => {
-  const reqRow = await aiBoard.requests.getRequestById(req.params.id);
-  if (!reqRow) return res.status(404).json({ error: 'not_found' });
-  const me = req.user.display_name;
-  const isAdmin = req.user.role === 'admin';
-  const isOwner = reqRow.owner_state === 'verified' && reqRow.owner_user_id === req.user.id;
-  if (!isOwner && !isAdmin) return res.status(403).json({ error: 'forbidden' });
-  const body = String(req.body?.body || '').trim();
-  if (!body) return res.status(400).json({ error: 'empty' });
-  const attachments = Array.isArray(req.body?.attachments) ? req.body.attachments : null;
-  const role = isOwner ? 'student' : 'admin';
-  if (role === 'student') {
-    const language = checkLanguage(body);
-    if (language.block) return res.status(422).json({ error: 'unsupported_language', message: language.message });
-    const intake = checkIntake('', body);
-    if (intake.block) return res.status(422).json({ error: 'request_rejected', message: intake.message });
-    if (checkContentSafety(body).safe === false) {
-      return res.status(422).json({ error: 'request_rejected',
-        message: 'Nội dung có phần chưa phù hợp hoặc chứa thông tin cá nhân — bạn viết lại giúp Ban nhé.' });
-    }
-    const gibberish = checkGibberish(body);
-    if (gibberish) return res.status(422).json({ error: 'request_unclear', message: gibberish });
-    const recent = Number((await aiBoard.db.get(
-      "SELECT COUNT(*) AS n FROM request_messages WHERE role='student' AND created_at >= ?",
-      [Date.now() - 60_000]))?.n || 0);
-    if (recent >= LIMITS.global_rate.messages_per_minute) {
-      return res.status(429).json({ error: 'rate_limited',
-        message: 'Bạn đang gửi khá nhanh. Chờ khoảng một phút rồi trao đổi tiếp nhé.' });
-    }
-  }
-  const msg = await aiBoard.requests.addRequestMessage({ request_id: reqRow.id, role, author_name: me, body, attachments });
-  if (role === 'student') await aiBoardStore.invalidatePlanForRequest(reqRow.id, 'requester clarification');
-  // Board requests keep the status of their root ticket (a terminal root is never reopened by a reply — a new
-  // request is needed), so only a legacy request without a root may be reopened here.
-  const reopened = role === 'student' && !(await aiBoardStore.hasRoot(reqRow.id)) ? await aiBoard.requests.reopenRequestIfClosed(reqRow.id) : false;
-  res.json({ ok: true, message_id: msg.id, reopened });
-});
 // Bảng quyết định AI gần đây của trường (cho dashboard "Ban điều hành AI").
 r.get('/api/ai-decisions', async (req, res) => {
   const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
