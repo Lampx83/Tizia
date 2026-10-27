@@ -60,6 +60,7 @@ import { createAiBoardServices } from './ai-board/services.js';
 import { setAiBoardServices } from './ai-board/runtime.js';
 import { asyncRoutes } from './ai-board/async-routes.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from './ai-board/routes.js';
+import { attachAiBoardProxy } from './ai-board/web-proxy.js';
 import { attachScopedCrudRoutes } from './ai-board/api/scoped-crud.js';
 import { attachOnlineRoutes } from './ai-board/online/routes.js';
 import { createBroker } from './ai-board/online/broker.js';
@@ -319,6 +320,10 @@ await mountAppPlugins(app, [appProxyPlugin, scoreUpWebhookPlugin, codelabWebhook
 
 // Online backend scripts (flag-gated, admin route only) may reach 100000 chars: widen just that path, before the global 64kb parser.
 if (backendScriptsEnabled()) app.use(/^\/api\/admin\/ai-board\/features\/\d+\/online$/, express.json({ limit: '256kb' }));
+// LF/109: khi tách stack, web KHÔNG tự xử lý AI board nữa — proxy sang aiboard-server kèm danh tính ký HMAC.
+if (process.env.AI_BOARD_SERVER_URL && process.env.AI_BOARD_INTERNAL_SECRET) {
+  attachAiBoardProxy(app, { target: process.env.AI_BOARD_SERVER_URL, secret: process.env.AI_BOARD_INTERNAL_SECRET });
+}
 app.use(express.json({ limit: '64kb' }));
 // CSRF double-submit — sau express.json (cần req.body cho fallback _csrf).
 // Log-only mặc định; CSRF_ENFORCE=1 để chặn (khi FE đã gửi header X-CSRF-Token).
