@@ -485,11 +485,15 @@ def _gate4_with_proof(run_gate, deps, budget, state, plan_hash):
 
 
 def _dependency_graph(plan: dict) -> list[dict]:
-    """Child i phụ thuộc depends_on của step (mặc định chuỗi cũ: bước trước). Song song/partial do ticket LF/107 lo."""
+    """Child i phụ thuộc depends_on của step + level (LF/107); thiếu depends_on thì giữ chuỗi cũ."""
+    from runtime import schedule
     steps = _execution_plan(plan).get("subtasks") or []
-    return [{"child": i, "file": st.get("file"),
-             "depends_on": st.get("depends_on") if st.get("depends_on") is not None else ([i - 1] if i else [])}
-            for i, st in enumerate(steps)]
+    prepared = []
+    for index, step in enumerate(steps, start=1):
+        deps = step.get("depends_on")
+        prepared.append({**step, "order": step.get("order", index),
+                         "depends_on": list(deps) if deps is not None else ([index - 1] if index > 1 else [])})
+    return schedule.dependency_graph(prepared) if prepared else []
 
 
 def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate,

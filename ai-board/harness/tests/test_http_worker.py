@@ -1735,7 +1735,7 @@ def test_a_worker_that_dies_in_a_repair_resumes_that_repair_not_the_failed_first
         execute_pre_pr(ONE_STEP_PLAN, ticket_id=7, checkout_source='unused', deps=object(), budget=TickBudget(),
                        run_gate=dying, cleanup=lambda state, keep_branch: None, checkpoint=checkpoint)
     assert checkpoint.cursor['repair_reason'] == 'cổng 5: generated tests failed'
-    assert checkpoint.cursor['graph'] == [{'child': 0, 'file': 'public/x.html', 'depends_on': []}]
+    assert checkpoint.cursor['graph'] == [{'child': 0, 'file': 'public/x.html', 'depends_on': [], 'level': 0}]
     first_calls = len(calls)
 
     verdict = execute_pre_pr(ONE_STEP_PLAN, ticket_id=7, checkout_source='unused', deps=object(), budget=TickBudget(),
