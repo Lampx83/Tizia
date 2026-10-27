@@ -340,10 +340,11 @@ def test_destroy_is_retried_until_the_runner_confirms_teardown(tmp_path, sleeps)
 def test_state_json_ships_only_the_keys_the_guest_gate_reads(tmp_path):
     root = checkout(tmp_path)
     st = {**state(root), "request_title": "t", "request_detail": "d", "full_diff": [{"diff": "+x"}], "base_sha": "a" * 40,
-          "plan": {"goal": "private planning"}, "memory": "x", "github_token": "never", "evidence": {"x": 1}}
+          "plan": {"goal": "private planning"}, "acceptance": ["npm test"], "memory": "x", "github_token": "never", "evidence": {"x": 1}}
     with tarfile.open(fileobj=io.BytesIO(sandbox_verify.package(root, st, {})), mode="r:gz") as tar:
         data = json.loads(tar.extractfile("state.json").read())
-    assert set(data) == {"skill_id", "diffs", "request_title", "request_detail", "full_diff", "base_sha"}
+    assert set(data) == {"skill_id", "diffs", "request_title", "request_detail", "full_diff", "base_sha", "acceptance"}
+    assert data["acceptance"] == ["npm test"]
 
 
 def test_every_state_key_the_guest_gate_reads_is_uploaded():

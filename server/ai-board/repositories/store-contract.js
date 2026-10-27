@@ -55,6 +55,9 @@ const PHASES = {
   critical_violation: { label: 'vi phạm an toàn' },
   budget_exhausted: { label: 'hết ngân sách' },
   plan_unfit: { label: 'kế hoạch không làm được' },
+  // Dừng giữa chừng nhưng đã xong một phần plan (LF/107): checkpoint còn nguyên, người gửi bấm "Tiếp tục"
+  // để worker chạy nốt phần còn thiếu — không tính là lượt hỏng, không mở plan mới.
+  partial: { label: 'hoàn thành một phần, chờ tiếp tục' },
   budget_ceiling: { label: 'vượt trần ngân sách, chuyển cho người', terminal: true },
   requester_cancelled: { label: 'người gửi đã hủy', terminal: true },
   admin_rejected: { label: 'admin đã từ chối', terminal: true },
@@ -297,6 +300,10 @@ function validatePrePrVerdict(value, selfRequest = false) {
   if (value.outcome === 'blocked' ? !FAILURE_CLASSES.has(failureClass) || (failureClass === 'eval' && !selfRequest)
     : failureClass !== null) {
     throw new WorkerContractError('invalid pre-PR failure class');
+  }
+  // `partial` chỉ có nghĩa khi cổng 3 dừng giữa plan: còn subtask đã xong và checkpoint để chạy nốt.
+  if (failureClass === 'partial' && last.gate !== 3) {
+    throw new WorkerContractError('partial failure requires a blocked gate 3');
   }
   const repairs = value.repairs ?? [];
   if (!Array.isArray(repairs) || repairs.length > MAX_REPAIRS

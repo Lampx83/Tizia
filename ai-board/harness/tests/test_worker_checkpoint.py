@@ -186,3 +186,14 @@ def test_attempts_and_base_shas_get_distinct_keys():
     keys = {root.attempt(0).store("a", 1).proposal_id, root.attempt(1).store("a", 1).proposal_id,
             root.attempt(0).store("b", 1).proposal_id}
     assert len(keys) == 3 and all(0 < k < 2 ** 63 for k in keys)
+
+
+def test_gate_3_progress_round_trips_and_a_repair_attempt_starts_empty(pg):
+    root = Checkpoint(pg, "ticket-7:progress")
+    assert root.attempt(0).load_progress("abc") == {}
+    root.attempt(0).save_progress("abc", {"1": {"code": "x"}})
+    assert root.attempt(0).load_progress("abc") == {"1": {"code": "x"}}
+    assert root.attempt(1).load_progress("abc") == {}  # lượt sửa phải sinh lại code
+    assert root.attempt(0).load_progress("other-base") == {}
+    root.purge()
+    assert count(pg, "tool_run") == 0

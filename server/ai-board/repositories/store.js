@@ -1592,6 +1592,12 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       status = 'waiting_admin';
       phase = 'plan_unfit';
       note = 'Yêu cầu đang chờ quản trị viên xem xét.';
+    } else if (verdict.failure_class === 'partial') {
+      // Đã xong một phần plan (LF/107): checkpoint giữ nguyên, người gửi bấm "Tiếp tục" để chạy nốt —
+      // không phải lượt hỏng nên không tính retry và không ghi quyết định cho folder.
+      status = 'waiting_admin';
+      phase = 'partial';
+      note = 'Đã hoàn thành một phần kế hoạch; bấm "Tiếp tục" để làm nốt phần còn lại.';
     } else if (verdict.failure_class === 'transient') {
       // Lỗi hạ tầng thoáng qua, backoff gọi model đã hết mà vẫn hỏng (main.py MODEL_RETRY_BACKOFF_S). Plan vẫn
       // hợp lệ (chỉ hạ tầng hỏng, không phải plan sai) nên dùng lại đúng đường "đã duyệt, chờ worker" của một
@@ -1640,7 +1646,8 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       VALUES (?, ?, 'pre_pr_verdict', 'worker', ?, ?, ?, ?, ?, ?)
     `, [root.id, run.id, input.workerId, `running->${phase}`, note, verdict.reason,
       input.idempotencyKey, input.now]);
-    if (verdict.outcome === 'blocked' && leaseExpiresAt == null && status !== 'waiting_admin') await recordFolderDecision(root, 'blocked', verdict.reason, input.now);
+    if (verdict.outcome === 'blocked' && leaseExpiresAt == null && status !== 'waiting_admin'
+      && verdict.failure_class !== 'partial') await recordFolderDecision(root, 'blocked', verdict.reason, input.now);
     return verdict;
   });
 

@@ -1051,6 +1051,19 @@ function bind(root) {
           btn.textContent = e2.message && e2.error === 'too_many_pending' ? e2.message : 'Chưa thử lại được, thử sau nhé.';
         });
       });
+      // "Tiếp tục": đã xong một phần plan → chạy nốt từ checkpoint (không lập plan mới).
+      inbox.querySelectorAll('[data-req-continue]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          btn.textContent = 'Đang gửi…';
+          const r = await fetch(`api/requests/${encodeURIComponent(btn.dataset.reqContinue)}/continue`, {
+            method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': await csrfToken().catch(() => '') },
+          }).catch(() => null);
+          if (r?.ok) { loadInbox(); return; }
+          const e2 = await r?.json().catch(() => ({})) || {};
+          btn.textContent = e2.message || 'Chưa tiếp tục được, thử sau nhé.';
+        });
+      });
       // Chuông "xem ảnh" trỏ #sgf-thread-<id>: mở sẵn thread của yêu cầu đó.
       if (openThreadId) {
         inbox.querySelector(`[data-req-toggle="${openThreadId}"]`)?.click();
@@ -1112,6 +1125,8 @@ export function renderItem(it, me = '') {
         : `<button type="button" class="sgf-it-thread-btn" data-req-toggle="${it.id}">
         ${mine ? 'Trao đổi với Ban điều hành' : 'Xem trao đổi'}
       </button>`}
+      ${mine && it.phase === 'partial'
+        ? `<button type="button" class="sgf-it-thread-btn" data-req-continue="${it.id}" title="Chạy nốt phần còn lại của kế hoạch đã duyệt">Tiếp tục</button>` : ''}
       ${mine && it.retry === 'retry'
         ? `<button type="button" class="sgf-it-thread-btn" data-req-retry="${it.id}" title="Ban lập kế hoạch mới cho yêu cầu này">Thử cách khác</button>` : ''}
       ${mine && it.retry === 'admin' ? '<div class="sgf-it-queue">Đã chuyển quản trị viên</div>' : ''}

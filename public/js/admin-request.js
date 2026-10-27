@@ -285,9 +285,12 @@ function renderActions(request, trace) {
   // Đã có thay đổi (candidate) → chỉ hoàn tác; chưa làm hoặc đang làm → chỉ hủy.
   const canCancel = !candidate && !['rejected', 'cancelled', 'done'].includes(request.status);
   const canRetryTransient = root?.phase === 'transient_blocked';
-  if (!canRollback && !canCancel && !canRetryTransient) return ui.flash ? `<div class="flash">${esc(ui.flash)}</div>` : '';
+  const canContinuePartial = root?.phase === 'partial';
+  if (!canRollback && !canCancel && !canRetryTransient && !canContinuePartial) return ui.flash ? `<div class="flash">${esc(ui.flash)}</div>` : '';
   const busy = root?.live;
   return `<div class="actions">
+      ${canContinuePartial ? `<button class="btn ok" data-action="continue-partial" data-request="${esc(request.id)}"
+        title="Đã xong một phần plan; chạy nốt phần còn lại từ checkpoint, không lập plan mới">Tiếp tục phần còn lại</button>` : ''}
       ${canRetryTransient ? `<button class="btn ok" data-action="retry-transient" data-root="${esc(root.id)}"
         title="Lỗi hạ tầng thoáng qua (GPU dùng chung); chạy lại khi bạn thấy GPU rảnh">Chạy lại ngay</button>` : ''}
       ${canRollback ? `<button class="btn danger-outline" data-action="rollback" ${busy ? 'disabled' : ''}
@@ -734,7 +737,14 @@ document.addEventListener('click', e => {
   else if (action === 'authorize-close') { ui.authorizeConfirm = null; }
   else if (action === 'authorize-go') return authorizePlan(btn);
   else if (action === 'retry-transient') return retryTransient(btn);
-  else if (action === 'rollout') return rolloutDo(btn);
+  else if (action === 'continue-partial') {
+    btn.disabled = true;
+    post(`/api/requests/${encodeURIComponent(btn.dataset.request)}/continue`, {})
+      .then(() => { ui.flash = 'Đã xếp hàng chạy nốt phần còn lại; worker sẽ nhận ở lượt tới.'; })
+      .catch(e => { ui.flash = `Không tiếp tục được: ${e.message}`; btn.disabled = false; })
+      .finally(async () => { await refresh(); schedule(); });
+    return;
+  } else if (action === 'rollout') return rolloutDo(btn);
   else if (action === 'reconcile-open') ui.reconcile = { identity: btn.dataset.identity, decision: 'applied', reason: '', evidence: '', resume: true, msg: '' };
   else if (action === 'reconcile-close') ui.reconcile = null;
   else if (action === 'reconcile-go') return submitReconcile(btn);

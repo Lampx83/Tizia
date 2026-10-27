@@ -229,6 +229,8 @@ function renderList(host, items, reload) {
           ${it.admin_note ? `<div class="rb-item-note"><b>Ban điều hành:</b> ${escapeHtml(it.admin_note)}</div>` : ''}
           <div class="rb-item-meta">
             <span class="rb-status ${sm.cls}">${sm.label}</span>
+            ${it.phase === 'partial' ? `<span class="rb-status rb-partial">Hoàn thành một phần</span>
+              <button type="button" class="rb-continue" data-continue="${it.id}" title="Chạy nốt phần còn lại của kế hoạch đã duyệt">Tiếp tục</button>` : ''}
             ${it.execution_mode === 'queue' ? '<span class="rb-status rb-mode-queue">Hàng đợi Claude Code</span>' : ''}
             <span class="rb-by">${escapeHtml(it.student)}</span>
             <button type="button" class="rb-thread-toggle" data-thread="${it.id}" aria-expanded="false" aria-controls="rb-thread-${it.id}">
@@ -262,6 +264,27 @@ function renderList(host, items, reload) {
 
   host.querySelectorAll('[data-thread]').forEach(btn => {
     btn.addEventListener('click', () => toggleThread(host, btn.dataset.thread, me, reload));
+  });
+
+  // "Tiếp tục": chỉ chủ yêu cầu thấy; chạy nốt plan đã duyệt từ checkpoint, không mở plan mới.
+  host.querySelectorAll('[data-continue]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      const msg = host.closest('.rb-card')?.querySelector('#rb-msg');
+      try {
+        const { token } = await fetch('api/csrf', { credentials: 'same-origin' }).then((r) => r.json());
+        const r = await fetch(`api/requests/${btn.dataset.continue}/continue`, {
+          method: 'POST', headers: { 'content-type': 'application/json', 'X-CSRF-Token': token }, body: '{}',
+        });
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(body.message || `http ${r.status}`);
+        if (msg) msg.textContent = 'Đã gửi yêu cầu chạy nốt phần còn lại.';
+        await reload();
+      } catch (error) {
+        btn.disabled = false;
+        if (msg) msg.textContent = `Không tiếp tục được: ${error.message}`;
+      }
+    });
   });
 
   // Tự mở thread khi điều hướng tới #req-<id> (vd từ chuông / FAB).
@@ -387,6 +410,13 @@ function injectStylesOnce() {
     .rb-status.reviewing { background: rgba(251,191,36,0.25); }
     .rb-status.done      { background: rgba(16,185,129,0.25); }
     .rb-status.rejected  { background: rgba(239,68,68,0.22); color: #fecaca; }
+    .rb-status.rb-partial { background: rgba(251,191,36,0.18); color: #fcd34d; }
+    .rb-continue {
+      min-height: 44px; padding: 8px 14px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 700;
+      cursor: pointer; border: 1px solid rgba(16,185,129,0.5); background: rgba(16,185,129,0.16); color: #6ee7b7;
+    }
+    .rb-continue:hover { background: rgba(16,185,129,0.28); }
+    .rb-continue:disabled { opacity: 0.6; cursor: progress; }
     .rb-by { color: var(--rb-muted); overflow-wrap: anywhere; }
     .rb-thread-toggle {
       display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px;

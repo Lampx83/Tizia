@@ -447,6 +447,41 @@ def test_evidence_names_the_runner_so_a_fake_run_is_never_presented_as_real(tmp_
     assert verify.run(state(checkout(tmp_path / "real")))["evidence"]["runner"] == "docker"
 
 
+def test_feature_acceptance_commands_run_in_the_disposable_container(tmp_path):
+    runner = FakeRunner()
+    s = {**state(checkout(tmp_path)),
+         "acceptance": ["node --test test/generated.test.js", "curl -fsS http://127.0.0.1:8041/"]}
+
+    out = verify.run(s, runner=runner)
+
+    assert out["blocked"] is False
+    ran = [args[-3:] for args, _ in runner.calls if "exec" in args and "sh" in args]
+    assert ran == [["sh", "-lc", "node --test test/generated.test.js"],
+                   ["sh", "-lc", "curl -fsS http://127.0.0.1:8041/"]]
+    assert "Feature acceptance passed: curl -fsS http://127.0.0.1:8041/" in out["evidence"]["text"]
+
+
+def test_a_failing_feature_acceptance_blocks_the_verdict(tmp_path):
+    class Failing(FakeRunner):
+        def __call__(self, args, **kwargs):
+            if "exec" in args and "sh" in args:
+                self.calls.append((args, kwargs))
+                return subprocess.CompletedProcess(args, 1, "", "acceptance failed")
+            return super().__call__(args, **kwargs)
+
+    out = verify.run({**state(checkout(tmp_path)), "acceptance": ["npm test"]}, runner=Failing())
+
+    assert out["blocked"] is True and out["failure_class"] == "ordinary"
+    assert "feature acceptance failed: npm test" in out["reason"]
+
+
+def test_a_described_acceptance_is_not_executed_as_a_shell_command(tmp_path):
+    runner = FakeRunner()
+    out = verify.run({**state(checkout(tmp_path)), "acceptance": ["Trang hiện bộ thẻ"]}, runner=runner)
+    assert out["blocked"] is False
+    assert not [args for args, _ in runner.calls if "sh" in args]
+
+
 class InternalRunner(FakeRunner):
     """Worker-in-Docker mode: no published port, container reached on its internal network IP."""
 

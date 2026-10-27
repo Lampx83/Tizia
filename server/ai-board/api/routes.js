@@ -234,6 +234,20 @@ export function attachAiBoardRequestRoutes(router, {
     }
   });
 
+  // "Tiếp tục" (LF/107): yêu cầu dừng giữa plan nhưng đã xong một phần — chạy nốt từ checkpoint,
+  // không mở plan mới và không tính là lượt hỏng. Người gửi (chủ yêu cầu) hoặc admin bấm.
+  route.post('/api/requests/:id/continue', requireAuth, requireStrictCsrf, async (req, res) => {
+    try {
+      // Admin được tiếp tục hộ (ownerUserId null = bỏ kiểm chủ sở hữu).
+      res.json(await aux.continuePartialRequest(store.db, req.params.id, req.user.role === 'admin' ? null : req.user.id));
+    } catch (error) {
+      if (error instanceof WorkerContractError) {
+        return res.status(error.status).json({ error: error.code, message: error.message });
+      }
+      throw error;
+    }
+  });
+
   route.post('/api/requests/:id/status', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
     const status = String(req.body?.status || '');
     // Hủy = đóng root, không mở lại được: bắt gõ đúng số yêu cầu như hoàn tác.

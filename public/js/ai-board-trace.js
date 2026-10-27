@@ -103,6 +103,7 @@ const EVENT_LABELS = {
   plan_resumed: 'Tiếp tục thực hiện kế hoạch', draft_screenshots: 'Đã chụp ảnh bản nháp',
   gate_proof_reused: 'Dùng lại kết quả kiểm tra đã có', gate_proof_invalidated: 'Kết quả kiểm tra cũ không còn hợp lệ',
   transient_retry: 'Đã xếp hàng thử lại sau lỗi hạ tầng',
+  requester_continue: 'Người gửi bấm tiếp tục phần còn lại',
 };
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 

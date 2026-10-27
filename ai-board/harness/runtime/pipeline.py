@@ -335,6 +335,8 @@ def _intake_and_plan(request, deps, budget, state, **trace) -> dict:
     # Worker clone at origin/<base> when set; else the repo holding the harness.
     out = brainstorm.run(request, deps, budget, source=state.get("checkout_source"), **trace)
     state["plan"] = out.get("plan")
+    # Lệnh acceptance cấp feature: cổng 5 chạy trước verdict (cùng khoá worker gửi sang sandbox).
+    state["acceptance"] = list((out.get("plan") or {}).get("acceptance") or [])
     state['planning_context'] = out.get('repo_context')
     state['source_targets'] = out.get('source_targets') or []
     state['best_match'] = out.get('best_match')

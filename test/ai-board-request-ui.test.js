@@ -11,3 +11,13 @@ test('request queue renders unavailable, busy and recovered worker states withou
   assert.match(online, /2 phút nữa/);
   assert.match(renderItem({ ...request, queue: { position: 1, worker_ready: false } }, 'Lan'), /chưa thể ước tính/);
 });
+
+test('a partial request shows "Tiếp tục" to its owner only', () => {
+  const request = { id: 7, title: 'Bộ thẻ', student: 'Lan', status: 'reviewing', phase: 'partial',
+    status_label: 'hoàn thành một phần, chờ tiếp tục' };
+  const mine = renderItem(request, 'Lan');
+  assert.match(mine, /data-req-continue="7"/);
+  assert.match(mine, /hoàn thành một phần/);
+  assert.doesNotMatch(mine, /data-req-retry/);  // không mời "Thử cách khác" khi chỉ còn phải chạy nốt
+  assert.doesNotMatch(renderItem(request, 'Minh'), /data-req-continue/);
+});

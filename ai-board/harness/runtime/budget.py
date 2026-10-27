@@ -3,6 +3,7 @@ outcome='budget_exhausted', không bao giờ im lặng báo xong."""
 from __future__ import annotations
 
 import os
+import threading
 import time
 from dataclasses import dataclass, field
 
@@ -49,6 +50,8 @@ class Budget:
     elapsed_before_s: float = 0.0
     quality_switches: int = 0
     started_at: float = field(default_factory=time.monotonic)
+    # Fan-out cổng 3 gọi model song song trong 1 process: mọi khoản chi phải cộng dồn dưới 1 khoá.
+    lock: object = field(default_factory=threading.RLock, repr=False, compare=False)
 
     @classmethod
     def from_env(cls, env: dict | None = None) -> "Budget":
@@ -108,32 +111,34 @@ class Budget:
         """Ghi nợ n đơn vị cap. False nếu ghi xong là chạm/vượt trần."""
         if cap not in CAPS:
             raise ValueError(f"cap lạ: {cap}")
-        if cap == 'tool_calls':
-            from runtime.root_allowance import current
-            root = current()
-            if root is not None:
-                if type(n) is not int or n < 0:
-                    raise ValueError('invalid tool charge')
-                for _ in range(n):
-                    root.reserve('tool')
-        setattr(self, cap, getattr(self, cap) + n)
-        return self.exhausted() is None
+        with self.lock:
+            if cap == 'tool_calls':
+                from runtime.root_allowance import current
+                root = current()
+                if root is not None:
+                    if type(n) is not int or n < 0:
+                        raise ValueError('invalid tool charge')
+                    for _ in range(n):
+                        root.reserve('tool')
+            setattr(self, cap, getattr(self, cap) + n)
+            return self.exhausted() is None
 
     def snapshot(self) -> dict:
-        out = {cap: getattr(self, cap) for cap in CAPS}
-        out.update(
-            max_model_calls=self.max_model_calls,
-            max_tool_calls=self.max_tool_calls,
-            max_tokens=self.max_tokens,
-            max_request_tokens=self.max_request_tokens,
-            max_retries=self.max_retries,
-            max_units=self.max_units,
-            max_wall_clock_s=self.max_wall_clock_s,
-            max_semantic_repairs=self.max_semantic_repairs,
-            elapsed_s=round(self.elapsed_s, 3),
-            exhausted=self.exhausted(),
-            quality_switches=self.quality_switches,
-        )
+        with self.lock:
+            out = {cap: getattr(self, cap) for cap in CAPS}
+            out.update(
+                max_model_calls=self.max_model_calls,
+                max_tool_calls=self.max_tool_calls,
+                max_tokens=self.max_tokens,
+                max_request_tokens=self.max_request_tokens,
+                max_retries=self.max_retries,
+                max_units=self.max_units,
+                max_wall_clock_s=self.max_wall_clock_s,
+                max_semantic_repairs=self.max_semantic_repairs,
+                elapsed_s=round(self.elapsed_s, 3),
+                exhausted=self.exhausted(),
+                quality_switches=self.quality_switches,
+            )
         return out
 
     def can_afford(self, reserve: dict = VERIFY_RESERVE) -> bool:
@@ -149,25 +154,27 @@ class Budget:
 
     def spend_repair(self) -> bool:
         """Ghi 1 lượt sửa nội dung vào ledger toàn run. False nếu đã hết 3 lượt (không ghi thêm)."""
-        if self.semantic_repairs >= self.max_semantic_repairs:
-            return False
-        from runtime.root_allowance import current
-        root = current()
-        if root is not None:
-            root.reserve('semantic_repair')
-        self.semantic_repairs += 1
-        return True
+        with self.lock:
+            if self.semantic_repairs >= self.max_semantic_repairs:
+                return False
+            from runtime.root_allowance import current
+            root = current()
+            if root is not None:
+                root.reserve('semantic_repair')
+            self.semantic_repairs += 1
+            return True
 
     def spend_quality_switch(self) -> bool:
-        if self.quality_switches:
-            return False
-        from runtime.root_allowance import current
-        root = current()
-        if root is not None:
-            if not root.reserve_quality_switch():
+        with self.lock:
+            if self.quality_switches:
                 return False
-        self.quality_switches = 1
-        return True
+            from runtime.root_allowance import current
+            root = current()
+            if root is not None:
+                if not root.reserve_quality_switch():
+                    return False
+            self.quality_switches = 1
+            return True
 
 
 class ChildBudget:

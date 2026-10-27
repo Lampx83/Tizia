@@ -34,7 +34,9 @@ test('requester progress hides admin-only fields and other users see 404', async
   await db.prepare("UPDATE ai_tickets SET public_note='Đang lập kế hoạch', internal_reason='model prompt text' WHERE id=?").run(rootId);
   await addRun(db, rootId);
   const progress = await requesterProgress(store, id, 1);
-  assert.deepEqual(Object.keys(progress).sort(), ['eta_ms', 'live', 'note', 'request_id', 'status', 'step', 'stop_reason']);
+  assert.deepEqual(Object.keys(progress).sort(),
+    ['can_continue', 'eta_ms', 'live', 'note', 'request_id', 'status', 'step', 'stop_reason']);
+  assert.equal(progress.can_continue, false);
   assert.equal(progress.note, 'Đang lập kế hoạch');
   assert.equal(progress.stop_reason, null);
   const text = JSON.stringify(progress);

@@ -28,7 +28,7 @@ CREATE_TIMEOUT_S = float(_CLIENT["create_timeout_s"])
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", ".pytest_cache", ".cache", ".scratch"}
 GUEST_STATE = "state.json"
 # What gates.verify.run / functional read from `state` inside the guest; nothing else of the worker's state is uploaded.
-GUEST_STATE_KEYS = ("skill_id", "diffs", "full_diff", "request_title", "request_detail", "base_sha")
+GUEST_STATE_KEYS = ("skill_id", "diffs", "full_diff", "request_title", "request_detail", "base_sha", "acceptance")
 GUEST_OUT = "out"
 MANIFEST = [{"name": "result", "path": f"{GUEST_OUT}/result.json"}, {"name": "shots", "path": f"{GUEST_OUT}/shots.tgz"}]
 GUEST_ENTRY = ("mkdir -p /workspace/out && chmod 777 /workspace/out && cd /opt/ai-board/ai-board/harness && "

@@ -86,7 +86,8 @@ def _execution_plan(plan: dict) -> dict:
         })
     if not subtasks:
         raise ValueError("plan requires at least one step")
-    return {"subtasks": subtasks, "capabilities": list(plan.get("capabilities") or [])}
+    return {"subtasks": subtasks, "capabilities": list(plan.get("capabilities") or []),
+            "acceptance": [str(item) for item in (plan.get("acceptance") or []) if str(item).strip()]}
 
 
 def _public_gate_result(result: dict) -> dict:
@@ -212,9 +213,12 @@ class _Execution:
         self.shots, self.gates, self.kind, self.candidate = [], [], None, None
         self.attempt_checkpoint = self.checkpoint.attempt(len(self.repairs)) if self.checkpoint is not None else None
         self.scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
+        execution_plan = _execution_plan(self.plan)
         state = self.state = {
-            "plan": _execution_plan(self.plan), "scratch_repo": str(self.scratch),
+            "plan": execution_plan, "scratch_repo": str(self.scratch),
             "checkout_source": str(self.checkout_source), "skill_id": f"ticket-{self.ticket_id}",
+            # Lệnh acceptance cấp feature: cổng 5 chạy trước verdict (và gửi sang guest nếu dùng sandbox).
+            "acceptance": list(execution_plan.get("acceptance") or []),
         }
         self.open = True
         if self.catalog is not None:
@@ -347,8 +351,8 @@ class _Execution:
     def verdict(self) -> str:
         gates, kind, last = self.gates, self.kind, self.gates[-1]
         passed = _passed(gates, kind)
-        if self.checkpoint is not None and kind not in ("transient", "critical", "busy"):
-            self.checkpoint.purge()  # lượt có kết luận cuối; transient/critical/busy giữ lại để resume hoặc đối chiếu
+        if self.checkpoint is not None and kind not in ("transient", "critical", "busy", "partial"):
+            self.checkpoint.purge()  # lượt có kết luận cuối; transient/critical/busy/partial giữ lại để resume hoặc đối chiếu
         needs_review = passed and last["risk_level"] in ("high", "critical")
         outcome = "needs_review" if needs_review else "ready_for_pr" if passed else "blocked"
         if self.memory_path:
@@ -390,9 +394,11 @@ class _Reverification(_Execution):
             self.gates, self.kind = [{"gate": 3, "blocked": True, "reason": str(error)[:500]}], "ordinary"
             return "blocked"
         self.scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
+        execution_plan = _execution_plan(self.plan)
         state = self.state = {
-            "plan": _execution_plan(self.plan), "scratch_repo": owned["full_checkout"], "checkout_source": str(self.checkout_source),
-            "skill_id": f"ticket-{self.ticket_id}", "diffs": reverify.diffs_of(owned["commits"]), "should_stop": self.should_stop, **owned,
+            "plan": execution_plan, "scratch_repo": owned["full_checkout"], "checkout_source": str(self.checkout_source),
+            "skill_id": f"ticket-{self.ticket_id}", "diffs": reverify.diffs_of(owned["commits"]), "should_stop": self.should_stop,
+            "acceptance": list(execution_plan.get("acceptance") or []), **owned,
         }
         if self.catalog is not None:
             state["catalog"] = self.catalog
@@ -488,12 +494,7 @@ def _dependency_graph(plan: dict) -> list[dict]:
     """Child i phụ thuộc depends_on của step + level (LF/107); thiếu depends_on thì giữ chuỗi cũ."""
     from runtime import schedule
     steps = _execution_plan(plan).get("subtasks") or []
-    prepared = []
-    for index, step in enumerate(steps, start=1):
-        deps = step.get("depends_on")
-        prepared.append({**step, "order": step.get("order", index),
-                         "depends_on": list(deps) if deps is not None else ([index - 1] if index > 1 else [])})
-    return schedule.dependency_graph(prepared) if prepared else []
+    return schedule.dependency_graph(schedule.prepare(steps)) if steps else []
 
 
 def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate,

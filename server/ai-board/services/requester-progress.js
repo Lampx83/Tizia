@@ -5,7 +5,7 @@ import { gateEta } from '../../../public/js/ai-board-gate-timing.js';
 /** Requester view of one own request. Null when not owner. Never prompts, spans, sandbox output or model names. */
 export async function requesterProgress(store, requestId, ownerUserId) {
   const row = await store.db.get(`
-    SELECT r.id, r.status, t.id AS root_id, t.phase, t.public_note,
+    SELECT r.id, r.status, t.id AS root_id, t.status AS ticket_status, t.phase, t.public_note,
            t.lease_owner, t.lease_expires_at
     FROM requests r LEFT JOIN ai_tickets t ON t.source_request_id = r.id AND t.parent_id IS NULL
     WHERE r.id = ? AND r.owner_user_id = ?
@@ -20,6 +20,8 @@ export async function requesterProgress(store, requestId, ownerUserId) {
     step: phase?.label ?? null,
     note: row.public_note ?? null,
     live,
+    // Dừng giữa plan nhưng đã xong một phần: người gửi tự bấm "Tiếp tục" để chạy nốt từ checkpoint.
+    can_continue: row.ticket_status === 'waiting_admin' && row.phase === 'partial',
     eta_ms: live ? await etaMs(store, row.root_id) : null,
     stop_reason: stopped ? row.public_note ?? null : null,
   };

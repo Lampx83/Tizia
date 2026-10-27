@@ -173,7 +173,10 @@ def test_run_blocks_on_malformed_model_response(tmp_path):
 
 def test_run_stops_mid_gate_when_budget_exhausted_between_subtasks(tmp_path):
     """max_model_calls=1: subtask đầu tiêu hết budget, subtask thứ hai (plan_with
-    có 2) không được gọi model — không được âm thầm báo blocked=False."""
+    có 2) không được gọi model — không được âm thầm báo blocked=False.
+
+    Còn subtask đã xong + subtask chưa chạy → `partial` (LF/107): người gửi bấm
+    "Tiếp tục" để chạy nốt từ checkpoint thay vì tính đây là lượt hỏng."""
     codegen = {"code": "x", "test_file": "test/t.test.js", "test": "import test from 'node:test';\ny"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
@@ -183,8 +186,9 @@ def test_run_stops_mid_gate_when_budget_exhausted_between_subtasks(tmp_path):
     out = implement.run({"plan": plan}, deps, budget, repo_dir=tmp_path)
 
     assert out["blocked"] is True
-    assert "budget" in out["reason"]
-    assert out["failure_class"] == "budget"
+    assert "budget" in out["reason"] and "hoàn thành một phần 1/2" in out["reason"]
+    assert out["failure_class"] == "partial"
+    assert out["partial"] == {"done": 1, "total": 2, "remaining": ["public/flashcards.html"]}
     assert len(models.calls) == 1
     assert len(out["diffs"]) == 1
 
@@ -337,7 +341,8 @@ def test_whole_file_rewrite_of_an_existing_file_is_refused(tmp_path):
                         deps_with(models), Budget(max_wall_clock_s=999), repo_dir=tmp_path / "scratch")
     assert out["blocked"] is True
     assert "edits" in out["reason"]
-    assert out.get("failure_class") in (None, "ordinary")  # model mistake: one repair pass may fix it
+    # Lỗi của model ở subtask thứ hai khi subtask đầu đã xong → partial (LF/107), không phải lượt sửa.
+    assert out["failure_class"] == "partial" and out["partial"]["done"] == 1
 
 
 def test_edit_whose_search_is_not_in_the_file_blocks_for_repair(tmp_path):
@@ -348,7 +353,20 @@ def test_edit_whose_search_is_not_in_the_file_blocks_for_repair(tmp_path):
                         Budget(max_wall_clock_s=999), repo_dir=tmp_path / "scratch")
     assert out["blocked"] is True
     assert "không khớp" in out["reason"]
-    assert out.get("failure_class") in (None, "ordinary")
+    assert out["failure_class"] == "partial" and out["partial"]["remaining"] == ["public/flashcards.html"]
+
+
+def test_a_first_subtask_failure_is_still_repairable_ordinary(tmp_path):
+    """Chưa xong subtask nào → không có gì để "tiếp tục": giữ ordinary để lượt sửa xử lý."""
+    source = _source_with(tmp_path, "public/flashcards.html", BIG_PAGE)
+    bad = {**EDITS, "edits": [{"search": "<footer>không có</footer>", "replace": "x"}]}
+    plan = {"summary_vi": "x", "capabilities": ["features"], "subtasks": [
+        {"title": "Trang", "file": "public/flashcards.html", "verify": "thấy chữ", "size": "small"}]}
+    out = implement.run({"plan": plan, "checkout_source": str(source)},
+                        deps_with(FakeModels(plan, codegen=bad)),
+                        Budget(max_wall_clock_s=999), repo_dir=tmp_path / "scratch")
+    assert out["blocked"] is True and out["failure_class"] == "ordinary"
+    assert "partial" not in out and out["diffs"] == []
 
 
 def test_lessons_from_past_verdicts_are_added_to_the_prompt(tmp_path):

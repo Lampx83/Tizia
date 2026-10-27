@@ -27,6 +27,13 @@ SMOKE_SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "smoke-user-sta
 CA_DIR = Path('/usr/local/share/ca-certificates')
 
 
+def acceptance_commands(state: dict) -> list[str]:
+    """Lệnh acceptance cấp feature của plan, chỉ những lệnh chạy được (cổng 1 đã bắt buộc với plan nhiều lớp)."""
+    from gates.brainstorm import RUNNABLE  # cùng định nghĩa "lệnh chạy được" với cổng 1
+    items = state.get("acceptance") or []
+    return [str(item).strip() for item in items if isinstance(item, str) and RUNNABLE.match(item.strip())]
+
+
 def _internal() -> bool:
     """AI_BOARD_VERIFY_NETWORK=internal: worker runs Docker-in-Docker, so the candidate gets a network
     with no egress and is reached on its container IP. Default publishes to 127.0.0.1 (local Docker Desktop)."""
@@ -545,6 +552,15 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             else:
                 if test_files:
                     logs.append(f"Generated tests passed: {', '.join(test_files)}")
+
+            # Feature acceptance (LF/107): lệnh e2e của plan chạy trong container disposable trước verdict.
+            acceptance = acceptance_commands(state)
+            for item in acceptance:
+                try:
+                    command([*compose, "exec", "-T", "tizia", "sh", "-lc", item], timeout=120)
+                except (subprocess.TimeoutExpired, RuntimeError) as exc:
+                    raise RuntimeError(f"feature acceptance failed: {item}") from exc
+                logs.append(f"Feature acceptance passed: {item}")
 
             env = os.environ.copy()
             env["BASE"] = base

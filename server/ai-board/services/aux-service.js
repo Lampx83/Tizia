@@ -2,6 +2,7 @@
 export * from './drafts.js';
 export * from './eval-tasks.js';
 export * from './transient-retry.js';
+export * from './partial-resume.js';
 export * from './write-reconcile.js';
 export * from '../security/intake-guard.js';
 export { recordClassification } from '../security/classifier.js';

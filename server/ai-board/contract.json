@@ -31,7 +31,7 @@
     "recursion_limit": 80
   },
   "verdict_outcomes": ["ready_for_pr", "needs_review", "blocked"],
-  "failure_classes": ["ordinary", "transient", "critical", "budget", "plan", "eval"],
+  "failure_classes": ["ordinary", "transient", "critical", "budget", "plan", "eval", "partial"],
   "run_triggers": ["shadow_precheck", "plan", "execute", "rollback", "reverify"],
   "rollback_outcomes": ["discarded", "revert_ready", "failed"],
   "max_repairs": 1,
