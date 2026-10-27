@@ -96,5 +96,8 @@ export function createPgDb({ url, max = 10 }) {
       client.release();
     }
   };
-  return joined(base);
+  // `d` = chính proxy: call site dùng handle.d làm giao diện SQL vẫn đi qua ambient transaction.
+  const out = joined(base);
+  out.d = out;
+  return out;
 }

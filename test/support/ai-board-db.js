@@ -9,7 +9,7 @@ import { applyMigrations } from '../../server/ai-board/db/index.js';
 
 export const PG_URL = process.env.TEST_PG_URL || '';
 
-const BASE_SQL = fs.readFileSync(new URL('./ai-board-base.sql', import.meta.url), 'utf8');
+const BASE_SQL = fs.readFileSync(new URL('../../server/ai-board/db/base-schema.sql', import.meta.url), 'utf8');
 const opened = [];
 
 /** New schema (search_path via connection options), base tables, board migrations. Returns the app db handle (`.d` = contract). */

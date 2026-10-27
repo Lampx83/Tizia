@@ -47,3 +47,17 @@ test('a signed web identity creates and lists a request on the board database on
     assert.equal(items[0].title, 'Sửa trang chủ');
   } finally { await app.close(); app.db.close(); }
 });
+
+test('board entry bootstraps an empty PostgreSQL itself: base tables then additive migrations', async () => {
+  // fresh: schema rỗng, giống Postgres riêng của stack board khi container khởi động lần đầu
+  const db = await openBoard({ migrate: false });
+  const app = await createAiBoardServer({ dbHandle: db, env: { AI_BOARD_INTERNAL_SECRET: SECRET },
+    classifyRequest: async () => null, logger: { warn() {} } });
+  try {
+    const tables = await db.d.all("SELECT table_name AS name FROM information_schema.tables WHERE table_schema=current_schema() AND table_type='BASE TABLE'");
+    const names = tables.map((t) => t.name);
+    for (const expected of ['users', 'requests', 'request_messages', 'ai_tickets', 'schema_migrations']) {
+      assert.ok(names.includes(expected), `${expected} missing after bootstrap`);
+    }
+  } finally { await app.close(); db.close(); }
+});

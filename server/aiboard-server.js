@@ -2,7 +2,7 @@
 import express from 'express';
 import { pathToFileURL } from 'node:url';
 
-import { applyMigrations, createPgDb } from './ai-board/db/index.js';
+import { applyMigrations, createPgDb, ensureBoardBaseSchema } from './ai-board/db/index.js';
 import { createAiBoardServices } from './ai-board/services/composition.js';
 import { HEADERS, requireInternalUser } from './ai-board/internal-auth.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from './ai-board/routes.js';
@@ -16,6 +16,7 @@ export async function createAiBoardServer({ env = process['env'], dbHandle = nul
   if (!secret) throw new Error('AI_BOARD_INTERNAL_SECRET is required');
   const handle = dbHandle ?? createPgDb({ url: String(env.AI_BOARD_DATABASE_URL || '') });
   if (!handle?.d || handle.dialect !== 'postgres') throw new Error('aiboard-server needs a PostgreSQL handle');
+  await ensureBoardBaseSchema(handle.d);
   await applyMigrations(handle.d);
   const services = createAiBoardServices({ d: handle.d });
 

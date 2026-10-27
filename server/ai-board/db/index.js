@@ -27,6 +27,11 @@ export function loadMigrationSql(version, { postgres = true, dir = MIGRATIONS_DI
   return fs.existsSync(override) ? fs.readFileSync(override, 'utf8') : toPgDdl(sql);
 }
 
+/** Base board tables (users/requests/request_messages) that the web boot creates; migrations only ALTER them. */
+export async function ensureBoardBaseSchema(d) {
+  await d.exec(fs.readFileSync(path.join(HERE, 'base-schema.sql'), 'utf8'));
+}
+
 /** Ordered, re-runnable: each file runs once in its own transaction with its schema_migrations row. */
 export async function applyMigrations(d, migrationsDir = MIGRATIONS_DIR) {
   const pgSql = d.dialect === 'postgres';

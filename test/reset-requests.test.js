@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 import { createBoardSchema } from './support/ai-board-db.js';
 const execute = promisify(execFile);
 const script = fileURLToPath(new URL('../scripts/reset-requests.cjs', import.meta.url));
-const baseSql = fs.readFileSync(new URL('./support/ai-board-base.sql', import.meta.url), 'utf8');
+const baseSql = fs.readFileSync(new URL('../server/ai-board/db/base-schema.sql', import.meta.url), 'utf8');
 async function snapshot(d) {
   const tables = await d.all(`SELECT table_name AS name FROM information_schema.tables WHERE table_schema=current_schema() AND table_type='BASE TABLE' ORDER BY table_name`);
   const out = {};
