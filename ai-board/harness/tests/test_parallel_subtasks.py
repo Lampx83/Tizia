@@ -129,6 +129,30 @@ class MemProgress:
         self.saved[(base_sha, self.n)] = dict(data)
 
 
+def test_a_root_allowance_block_inside_a_model_call_still_reports_partial(tmp_path):
+    """Root allowance hết NGAY TRONG lời gọi model (reserve bị server từ chối): các subtask đã xong phải được
+    ghi lại và verdict là `partial`, không phải một gate 3 văng lỗi `budget` mất tiến độ."""
+    from runtime.budget import BudgetExhausted
+
+    checkpoint = MemProgress()
+
+    def exhaust(file):
+        if file == "public/b.html":
+            error = BudgetExhausted("root_allowance_exhausted")
+            error.before_model = True
+            raise error
+
+    plan = plan_of(step("public/a.html", deps=[]), step("public/b.html", deps=[1]),
+                   step("public/c.html", deps=[2]))
+    models = FileModels(plan, on_call=exhaust)
+    out = run_gate_3(tmp_path, plan, models, state={"checkpoint": checkpoint})
+
+    assert out["blocked"] is True and out["failure_class"] == "partial"
+    assert out["partial"] == {"done": 1, "total": 3, "remaining": ["public/b.html", "public/c.html"]}
+    assert [d["file"] for d in out["diffs"]] == ["public/a.html"]
+    assert set(checkpoint.saved[next(iter(checkpoint.saved))]) == {"1"}
+
+
 def test_budget_running_out_mid_plan_blocks_as_partial_and_the_resume_only_does_the_rest(tmp_path):
     checkpoint = MemProgress()
     plan = plan_of(step("public/a.html", deps=[]), step("public/b.html", deps=[1]), step("public/c.html", deps=[2]))

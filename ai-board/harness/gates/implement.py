@@ -24,6 +24,7 @@ import path_policy
 from gates import gate3_guards
 from repositories.tool_steps import PgSteps
 from runtime import tool_loop
+from runtime.budget import BudgetExhausted
 from repositories import server_hsm
 import memory
 import repomap
@@ -534,6 +535,8 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
         if gate3_guards.enabled("schema"):
             try:
                 body = deps.call_model(model, prompt + feedback, format=gate3_guards.edit_schema(current is not None), **call)
+            except BudgetExhausted:
+                raise  # allowance/request-bound block, not a schema refusal: asking again would spend a call the root does not have
             except Exception:  # noqa: BLE001 - server refused the schema: ask once the old way, and count it
                 try:
                     server_hsm.authorize_action('model')
@@ -598,6 +601,13 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
                        "reason": f"subtask '{subtask.get('title')}': hết lượt thử"}
 
 
+def _budget_stop(subtask: dict, error: Exception) -> tuple:
+    """Allowance hết NGAY TRONG lời gọi model của 1 subtask → cùng dạng với chặn trước subtask,
+    để caller dừng và `_stop_result` báo các subtask đã xong là `partial`."""
+    return "blocked", {"gate": 3, "blocked": True, "failure_class": "budget",
+                       "reason": f"budget cạn trước subtask '{subtask.get('title')}': {error}"}
+
+
 def _fan_out(tasks: list[tuple], *, state: dict, deps, budget, texts: dict, repo: Path, known: set,
              db_path, proposal_id) -> dict:
     """Chạy các subtask độc lập của một lớp DAG; 1 subtask thì tuần tự, nhiều thì batch trên cùng model.
@@ -607,14 +617,20 @@ def _fan_out(tasks: list[tuple], *, state: dict, deps, budget, texts: dict, repo
         return _generate_one(child, subtask, state=state, deps=deps, budget=budget, current=texts.get(subtask["file"]),
                              repo=repo, known=known, db_path=db_path, proposal_id=proposal_id)
 
+    def guarded(child: int, subtask: dict) -> tuple:
+        try:
+            return one(child, subtask)
+        except BudgetExhausted as error:  # root allowance cạn giữa lượt: không để cả gate văng lỗi
+            return _budget_stop(subtask, error)
+
     if len(tasks) <= 1 or fanout_limit() == 1:
-        return {order: one(child, subtask) for order, child, subtask in tasks}
+        return {order: guarded(child, subtask) for order, child, subtask in tasks}
     results = {}
     with ThreadPoolExecutor(max_workers=min(fanout_limit(), len(tasks)), thread_name_prefix="gate3") as pool:
         futures = {}
         for order, child, subtask in tasks:
             context = copy_context()  # một context mỗi task: không context nào bị vào 2 thread
-            futures[pool.submit(context.run, one, child, subtask)] = order
+            futures[pool.submit(context.run, guarded, child, subtask)] = order
         for future, order in futures.items():
             results[order] = future.result()
     return results
