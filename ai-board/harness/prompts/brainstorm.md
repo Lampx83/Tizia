@@ -42,9 +42,10 @@ EXAMPLE 3 (feature: API + database + two independent pages). Request: Thêm API 
 {{"summary_vi": "Thêm API thuật ngữ CNTT và hai trang mới dùng chung API.", "capabilities": ["public.ui", "generated.context"], "acceptance": ["node --test test/so-tay.test.js", "node --test test/lich.test.js"], "subtasks": [
  {{"title": "Migration mới lưu thuật ngữ", "file": "server/contexts/_ai-generated/cntt/migrations/001-thuat-ngu.sql", "verify": "node --test test/thuat-ngu.test.js", "size": "large", "layer": "db", "depends_on": []}},
  {{"title": "API thuật ngữ trong context cntt", "file": "server/contexts/_ai-generated/cntt/glossary/index.js", "verify": "node --test test/glossary.test.js", "size": "large", "layer": "backend", "depends_on": [1]}},
- {{"title": "Trang sổ tay thuật ngữ", "file": "public/so-tay-thuat-ngu.html", "verify": "node --test test/so-tay.test.js", "size": "small", "layer": "frontend", "depends_on": [2]}},
- {{"title": "Trang lịch ôn tập", "file": "public/lich-on-tap.html", "verify": "node --test test/lich.test.js", "size": "small", "layer": "frontend", "depends_on": [2]}}]}}
-Two frontend pages depend only on the API step, so they are independent of each other (same layer, depends_on equal). db is always ONE new migration at server/contexts/_ai-generated/<feature>/migrations/<name>.sql; backend files live in the same context server/contexts/_ai-generated/<feature>/<file>.js. A feature plan's "verify" and "acceptance" are RUNNABLE commands, never sentences.
+ {{"title": "Module gọi API cho hai trang", "file": "public/js/features/thuat-ngu/glossary-client.js", "verify": "node --test test/glossary-client.test.js", "size": "small", "layer": "frontend", "depends_on": [2]}},
+ {{"title": "Trang sổ tay thuật ngữ", "file": "public/so-tay-thuat-ngu.html", "verify": "node --test test/so-tay.test.js", "size": "small", "layer": "frontend", "depends_on": [3]}},
+ {{"title": "Trang lịch ôn tập", "file": "public/lich-on-tap.html", "verify": "node --test test/lich.test.js", "size": "small", "layer": "frontend", "depends_on": [3]}}]}}
+Two frontend pages depend only on the client module, so they are independent of each other (same layer, depends_on equal). A page that calls the API loads exactly one module, from public/js/features/<slug>/<name>.js (never js/engine/, js/domains/ or an inline script), and that module is its own subtask. db is always ONE new migration at server/contexts/_ai-generated/<feature>/migrations/<name>.sql; backend files live in the same context server/contexts/_ai-generated/<feature>/<file>.js. A feature plan's "verify" and "acceptance" are RUNNABLE commands, never sentences.
 
 {context}
 

@@ -18,6 +18,7 @@ QUY TẮC
 5. "test" là ESM dùng node:test: `import test from 'node:test';` và `import assert from 'node:assert/strict';`. Cấm require(), cấm module.exports.
 6. Test đọc file bằng `readFileSync(new URL('../{file}', import.meta.url), 'utf8')` rồi assert chuỗi mới có trong file.
 7. Giữ nguyên thụt lề, dấu tiếng Việt và kiểu HTML đang có. Không thêm <script> inline, không thêm handler on*=.
+7a. Trang MỚI cần JS thì nạp đúng 1 dòng, không nội dung bên trong: `<script type="module" src="./js/features/<slug>/<tên>.js"></script>`. Module đó là 1 subtask riêng trong plan, nằm trong public/js/features/; không nạp js/engine/, js/domains/ hay URL ngoài.
 
 MẪU (file đã có, chèn 1 đoạn trước </body> ở dòng L41):
 {{"edits": [{{"after_line": 40, "insert": "  <p class=\"note\">Nội dung mới.</p>"}}], "test_file": "test/trang-note.test.js", "test": "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport {{ readFileSync }} from 'node:fs';\n\ntest('trang có đoạn mới', () => {{\n  const html = readFileSync(new URL('../public/trang.html', import.meta.url), 'utf8');\n  assert.ok(html.includes('Nội dung mới.'));\n}});\n"}}

@@ -17,7 +17,8 @@ LOCK_FILE = PROMPTS_DIR / "prompts.lock.json"
 def test_prompt_files_match_lock():
     locked = json.loads(LOCK_FILE.read_text(encoding="utf-8"))
     for name, expected_hash in locked.items():
-        actual = hashlib.sha256((PROMPTS_DIR / name).read_bytes()).hexdigest()
+        # The lock stores the bytes git keeps (LF); a Windows checkout may hold CRLF for the same content.
+        actual = hashlib.sha256((PROMPTS_DIR / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
         assert actual == expected_hash, (
             f"{name} đã đổi nội dung nhưng prompts.lock.json chưa cập nhật — "
             f"nếu đổi có chủ đích, tính lại sha256 và ghi hash mới vào lock file."
