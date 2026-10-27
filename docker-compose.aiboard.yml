@@ -1,0 +1,40 @@
+# Stack AI board (LF/110): storage/worker/sandbox/registry thuá»™c stack nÃ y, khÃ´ng publish ra ngoÃ i.
+# DÃ¹ng cÃ¹ng host vá»›i stack web, ná»‘i qua external network tizia-internal (DNS tÃªn service).
+services:
+  seaweedfs:
+    container_name: aiboard-seaweedfs
+    image: chrislusf/seaweedfs@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d  # 4.48
+    restart: unless-stopped
+    command: -logtostderr -log_json server -s3 -dir=/data
+    environment:
+      AWS_ACCESS_KEY_ID: ${AI_BOARD_SHOTS_S3_ACCESS_KEY:-}
+      AWS_SECRET_ACCESS_KEY: ${AI_BOARD_SHOTS_S3_SECRET_KEY:-}
+    volumes:
+      - seaweedfs-data:/data
+    networks: [tizia-internal]
+    # khÃ´ng publish: aiboard-server gá»i http://seaweedfs:8333 qua máº¡ng ná»™i bá»™
+
+  seaweedfs-ui-auth:
+    container_name: aiboard-seaweedfs-ui
+    image: node:24-alpine
+    restart: unless-stopped
+    depends_on: [seaweedfs]
+    command: sh -c 'export SEAWEED_UI_PASSWORD="${SEAWEED_UI_PASSWORD:-}"; node /app/scripts/seaweed-ui-auth.js'
+    environment:
+      SEAWEED_UI_USER: ${SEAWEED_UI_USER:-admin}
+      SEAWEED_UI_PASSWORD: ${SEAWEED_UI_PASSWORD:-}
+    volumes:
+      - ./scripts/seaweed-ui-auth.js:/app/scripts/seaweed-ui-auth.js:ro
+    ports:
+      - "127.0.0.1:9333:9333"  # loopback + basic auth; chá»‰ host xem UI
+      - "127.0.0.1:8888:8888"
+    networks: [tizia-internal]
+
+networks:
+  tizia-internal:
+    external: true
+
+volumes:
+  seaweedfs-data:
+    name: tizia_seaweedfs-data  # dùng chung dữ liệu với stack dev hiện tại
+
