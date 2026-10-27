@@ -20,11 +20,11 @@ def feature_plan():
         "acceptance": ["node --test test/gallery.test.js"],
         "subtasks": [
             {"title": "Tạo bảng gallery", "file": "server/contexts/_ai-generated/gallery/migrations/001-gallery.sql",
-             "verify": "migration chỉ có CREATE TABLE", "size": "small", "layer": "db", "depends_on": []},
+             "verify": "node --test test/gallery.test.js", "size": "small", "layer": "db", "depends_on": []},
             {"title": "API gallery", "file": "server/contexts/_ai-generated/gallery/index.js",
-             "verify": "GET /api/gallery trả 200", "size": "small", "layer": "backend", "depends_on": [1]},
+             "verify": "node --test test/gallery.test.js", "size": "small", "layer": "backend", "depends_on": [1]},
             {"title": "Trang gallery", "file": "public/gallery.html",
-             "verify": "trang có #gallery", "size": "small", "layer": "frontend", "depends_on": [2]},
+             "verify": "node --test test/gallery.test.js", "size": "small", "layer": "frontend", "depends_on": [2]},
         ],
     }
 
@@ -65,6 +65,17 @@ def test_depends_on_rejects_self_cycles_and_out_of_range():
     wrong_type["subtasks"][0]["depends_on"] = ["1"]
     with pytest.raises(ValueError, match="mảng số thứ tự"):
         brainstorm.parse_plan(json.dumps(wrong_type))
+
+
+def test_feature_plan_requires_runnable_verify_and_acceptance():
+    natural = feature_plan()
+    natural["subtasks"][2]["verify"] = "trang có #gallery"
+    with pytest.raises(ValueError, match="lệnh chạy được"):
+        brainstorm.parse_plan(json.dumps(natural))
+    natural_acceptance = feature_plan()
+    natural_acceptance["acceptance"] = ["gallery hiển thị đẹp"]
+    with pytest.raises(ValueError, match="acceptance phải là lệnh chạy được"):
+        brainstorm.parse_plan(json.dumps(natural_acceptance))
 
 
 def test_unknown_layer_and_bad_acceptance_are_rejected():

@@ -36,6 +36,8 @@ SUBTASK_KEYS = ("title", "file", "verify", "size")
 LAYERS = ("db", "backend", "frontend", "wiring")
 GEN_CONTEXT = "server/contexts/_ai-generated/"
 DB_MIGRATION = re.compile(r"^server/contexts/_ai-generated/[a-z0-9][a-z0-9-]*/migrations/[a-z0-9][a-z0-9._-]*\.sql$")
+# Plan nhiều lớp: verify/acceptance phải là lệnh chạy được, không phải câu mô tả.
+RUNNABLE = re.compile(r"^(node --test\b|node\s|npx\s|npm\s+(test|run)\b|curl\s|python[0-9.]*\s|pytest\b|bash\s|sh\s|docker compose\s|psql\s)")
 # File chưa có ở base chỉ được là trang mới, module JS mới, plugin _ai-generated mới, hoặc migration mới.
 _NEW_OK = re.compile(r"^(public/[a-z0-9][a-z0-9-]*\.html|public/js/[\w/-]+\.js"
                      r"|server/contexts/_ai-generated/[\w-]+/[\w-]+/index\.js"
@@ -143,6 +145,15 @@ def parse_plan(text: str) -> dict:
         if not isinstance(acceptance, list) or not acceptance or any(
                 not isinstance(item, str) or not item.strip() for item in acceptance):
             raise ValueError("acceptance phải là mảng chuỗi không rỗng")
+    feature_plan = ((acceptance is not None or any(st.get("layer") for st in subtasks))
+                    and (len(subtasks) > 1 or any(st.get("layer") in ("db", "backend") for st in subtasks)))
+    if feature_plan:
+        for i, st in enumerate(subtasks):
+            if not RUNNABLE.match(st["verify"].strip()):
+                raise ValueError(f"subtask[{i}].verify phải là lệnh chạy được (node --test/curl/pytest/...): {st['verify'][:80]}")
+        for item in acceptance or []:
+            if not RUNNABLE.match(item.strip()):
+                raise ValueError(f"acceptance phải là lệnh chạy được: {item[:80]}")
     caps = plan.get("capabilities") or []
     if not isinstance(caps, list):
         raise ValueError("capabilities phải là mảng")

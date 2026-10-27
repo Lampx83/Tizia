@@ -46,6 +46,8 @@ const RISKS = new Set(['low', 'medium', 'high']);
 const LAYERS = new Set(['db', 'backend', 'frontend', 'wiring']);
 const GEN_CONTEXT = 'server/contexts/_ai-generated/';
 const DB_MIGRATION = /^server\/contexts\/_ai-generated\/[a-z0-9][a-z0-9-]*\/migrations\/[a-z0-9][a-z0-9._-]*\.sql$/;
+// Feature plan: acceptance/tests phải chạy được ở cổng hiện có, không phải câu mô tả.
+const RUNNABLE = /^(node --test\b|node\s|npx\s|npm\s+(test|run)\b|curl\s|python[0-9.]*\s|pytest\b|bash\s|sh\s|docker compose\s|psql\s)/;
 
 /** Lớp của step: model khai rõ, thiếu thì suy từ đường dẫn đầu tiên (tương thích plan cũ). */
 function inferLayer(file) {
@@ -259,6 +261,22 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
     }
   }
   if (hasCycle(normalized.steps)) fail('malformed_plan', 'steps depends_on form a cycle (DAG must be acyclic)');
+
+  const explicitFeature = Array.isArray(plan.steps) && plan.steps.some((step) => step && typeof step === 'object'
+    && (step.layer != null || step.depends_on != null));
+  const featurePlan = explicitFeature && (normalized.steps.length > 1
+    || normalized.steps.some((step) => step.layer === 'db' || step.layer === 'backend'));
+  if (featurePlan) {
+    const runnable = (items, field) => {
+      for (const item of items) {
+        if (!RUNNABLE.test(item)) {
+          fail('malformed_plan', `${field} must be a runnable command (node --test, curl, pytest, ...): ${item}`);
+        }
+      }
+    };
+    runnable(normalized.acceptance, 'acceptance');
+    for (const step of normalized.steps) runnable(step.tests, `steps[${step.order}].tests`);
+  }
 
   if (normalized.grounding?.evidence.some((e, i) => !normalized.steps[i].allowed_scope.includes(e.target))) {
     fail('malformed_plan', 'source evidence does not match step scope');

@@ -277,6 +277,7 @@ function featurePlan() {
     allowed_scope: ['server/contexts/_ai-generated/gallery/migrations/001-gallery.sql',
       'server/contexts/_ai-generated/gallery/index.js', 'public/gallery.html'],
     capabilities: ['generated.context', 'public.ui'],
+    acceptance: ['node --test test/gallery.test.js'],
     steps: [
       {
         order: 1, title: 'Tạo bảng gallery', description: 'Migration mới cho gallery.',
@@ -345,6 +346,16 @@ test('db layer only accepts a new generated-context migration and backend stays 
   const badLayer = featurePlan();
   badLayer.steps[1].layer = 'mobile';
   assert.throws(() => validatePlan(badLayer, 'pharmacy'), /layer 'mobile'/);
+});
+
+test('a feature plan needs runnable acceptance and tests, a small plan does not', () => {
+  const naturalTests = featurePlan();
+  naturalTests.steps[2].tests = ['trang hiển thị gallery'];
+  assert.throws(() => validatePlan(naturalTests, 'pharmacy'), /runnable command/);
+  const naturalAcceptance = featurePlan();
+  naturalAcceptance.acceptance = ['gallery hiển thị đẹp'];
+  assert.throws(() => validatePlan(naturalAcceptance, 'pharmacy'), /runnable command/);
+  assert.doesNotThrow(() => validatePlan(plan(), 'pharmacy'));  // 1 file: verify mô tả như cũ
 });
 
 test('submitted children carry layer and depends_on', async () => {
