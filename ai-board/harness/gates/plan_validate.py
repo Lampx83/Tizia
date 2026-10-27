@@ -278,6 +278,16 @@ def literal_contradicts(request: dict, best: str | None, files: dict, source, sh
                for lit in file_context.literals(request.get('subject'), request.get('body')))
 
 
+def adds_files(plan: dict, files: dict) -> bool:
+    """Plan có subtask trỏ file chưa tồn tại ở base (feature thêm file) hay không."""
+    return any(task['file'] not in files for task in plan.get('subtasks') or [])
+
+
+def feature_request(request: dict) -> bool:
+    """Yêu cầu loại feature (hoặc server đã xác định là nhiều bước) — chỉ loại này mới thêm file mới."""
+    return request.get('type') == 'feature' or bool(request.get('complexity_by_server'))
+
+
 def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict) -> dict:
     """Dẫn chứng hành vi cho từng subtask. File mới (chưa có ở base) không có dòng nguồn nào để trích:
     chấp nhận `quote` rỗng khi before/after/verify đã nêu; nếu có trích từ file mẫu có thật thì vẫn kiểm khớp."""
@@ -577,9 +587,10 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                                                state.get('checkout_source') or Path(__file__).resolve().parents[3], sha)
             if anchored and not contradicted:
                 judge('best_match', True, 'targetpresent: anchors verified in plan files; advisory skipped')
-            elif any(task['file'] not in files for task in plan['subtasks']):
+            elif adds_files(plan, files) and feature_request(request):
                 # A feature adds files that do not exist yet: there is no "most quoted file" to edit, so the
-                # best-match is only recorded (the path/layer rules and grounding still apply).
+                # best-match is only recorded (the path/layer rules and grounding still apply). An edit request
+                # that points at a file which does not exist still has to name the best-matching file.
                 judge('best_match', True, f"{best_match.REASON_CODE}: plan adds new files; recommended "
                                           f"{state.get('best_match') or '(none)'}")
             else:

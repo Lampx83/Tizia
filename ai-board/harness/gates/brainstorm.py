@@ -289,9 +289,11 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             if required.intersection(ctx.get('targets') or []) and not required.intersection(task['file'] for task in plan['subtasks']):
                 raise ValueError('Use the existing feature renderer: ' + ', '.join(sorted(required)))
             added = new_files(plan, source, commit)
-            if added:
+            feature = request.get('type') == 'feature' or bool(request.get('complexity_by_server'))
+            if added and feature:
                 # A feature adds files that do not exist yet: no "most quoted file" to edit, so record the
-                # recommendation instead of blocking the plan (path/layer rules still apply).
+                # recommendation instead of blocking the plan (path/layer rules still apply). An edit request
+                # that names a file absent from the base still has to pick the best-matching file.
                 judge(stage, True, f"{best_match.REASON_CODE}: plan adds new files ({', '.join(sorted(added))}); "
                                    f"best-match {ctx.get('best_match') or '(none)'}")
             else:
