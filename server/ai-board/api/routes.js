@@ -125,7 +125,7 @@ export function attachAiBoardRequestRoutes(router, {
       const result = await store.createRequestWithRoot({
         ownerUserId: req.user.id,
         ownerDomain,
-        ownerDisplayName: req.user.display_name || req.user.username,
+        ownerDisplayName: req.user.displayName || req.user.display_name || req.user.username,
         idempotencyKey: req.get('Idempotency-Key'),
         type: body.type,
         title: body.title,
@@ -148,7 +148,7 @@ export function attachAiBoardRequestRoutes(router, {
         if (clarify.needed && onClarify) {
           try {
             await onClarify({ requestId: result.request_id, domain: ownerDomain, title: String(body.title || '').trim(),
-              student: req.user.display_name || req.user.username });
+              student: req.user.displayName || req.user.display_name || req.user.username });
           } catch (error) {
             console.warn('[ai-board] clarify notification failed:', error.message);
           }
@@ -167,7 +167,7 @@ export function attachAiBoardRequestRoutes(router, {
             requestId: result.request_id,
             domain: ownerDomain,
             title: String(body.title || '').trim(),
-            student: req.user.display_name || req.user.username,
+            student: req.user.displayName || req.user.display_name || req.user.username,
             executionMode: result.execution_mode ?? executionMode ?? null,
             clarifyNeeded: clarify.needed,
           });

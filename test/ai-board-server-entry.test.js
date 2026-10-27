@@ -62,6 +62,8 @@ test('the board mirrors the signed user and serves the requester thread and vote
     // users(id) mirror: the request owner only exists on the board because the signed identity was mirrored
     assert.deepEqual({ ...await app.db.d.get('SELECT id, display_name, role FROM users WHERE id=7') },
       { id: 7, display_name: 'Minh', role: 'pupil' });
+    // the signed name is what the requester list shows, not the numeric id
+    assert.equal((await app.db.d.get('SELECT student FROM requests WHERE id=?', [requestId])).student, 'Minh');
     const thread = await fetch(`${app.base}/api/requests/${requestId}/thread`, { headers });
     assert.equal(thread.status, 200);
     const opened = await thread.json();
