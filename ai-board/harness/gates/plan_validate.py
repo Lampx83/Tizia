@@ -279,6 +279,8 @@ def literal_contradicts(request: dict, best: str | None, files: dict, source, sh
 
 
 def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict) -> dict:
+    """Dẫn chứng hành vi cho từng subtask. File mới (chưa có ở base) không có dòng nguồn nào để trích:
+    chấp nhận `quote` rỗng khi before/after/verify đã nêu; nếu có trích từ file mẫu có thật thì vẫn kiểm khớp."""
     records = validation.get('grounding')
     if not sha or not validation['grounded'] or not isinstance(records, list) or len(records) != len(plan.get('subtasks') or []):
         raise ValueError(validation.get('reason') or 'thiếu dẫn chứng hành vi từ code nguồn')
@@ -297,6 +299,18 @@ def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict
                 and not _quoted_in(quote, files.get(file, ''))):  # the schema cut the quote mid-token; its last token is unreliable
             quote = quote.rsplit(' ', 1)[0]
             evidence = {**evidence, 'quote': quote}
+        new_target = task['file'] not in files
+        if new_target:
+            # A new file has no source line to quote. The plan still has to state the behaviour change and the
+            # check; a quote is only accepted when it comes from a pattern file that really exists at the base.
+            if isinstance(quote, str) and quote.strip():
+                if file not in files or not _quoted_in(quote, files[file]):
+                    raise ValueError(f'{task["file"]}: trích dẫn mẫu không có trong {file or "(file mới)"}')
+            if any(not isinstance(evidence.get(key), str) or not evidence[key].strip() for key in ('before', 'after', 'verify')):
+                raise ValueError('thiếu hành vi trước/sau hoặc tiêu chí kiểm chứng')
+            clean.append({**{key: str(evidence.get(key) or '')[:1200] for key in ('file', 'quote', 'before', 'after', 'verify')},
+                          'target': task['file']})
+            continue
         if task['file'] in files and file != task['file']:
             raise ValueError('trích dẫn phải thuộc file hiện có dự định sửa')
         if (not isinstance(quote, str) or _too_short(quote) or len(quote) > 1200
@@ -563,6 +577,11 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                                                state.get('checkout_source') or Path(__file__).resolve().parents[3], sha)
             if anchored and not contradicted:
                 judge('best_match', True, 'targetpresent: anchors verified in plan files; advisory skipped')
+            elif any(task['file'] not in files for task in plan['subtasks']):
+                # A feature adds files that do not exist yet: there is no "most quoted file" to edit, so the
+                # best-match is only recorded (the path/layer rules and grounding still apply).
+                judge('best_match', True, f"{best_match.REASON_CODE}: plan adds new files; recommended "
+                                          f"{state.get('best_match') or '(none)'}")
             else:
                 best_match.enforce(state.get('best_match'), targets,
                                    f"plan không sửa file khớp nhiều cụm người dùng viết nhất: {state.get('best_match')}", judge,

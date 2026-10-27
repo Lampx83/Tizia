@@ -224,6 +224,19 @@ def ask_search_terms(request: dict, deps, budget, *, db_path=None, proposal_id: 
     return [] if body.get("done_reason") == "length" else parse_search_terms(body.get("response", ""))
 
 
+def new_files(plan: dict, source, sha: str | None) -> set[str]:
+    """Plan files that do not exist at sha: a new file has no source line to match (feature adds files)."""
+    files = [st["file"] for st in plan["subtasks"]]
+    if sha is None or not files:
+        return set()
+    try:
+        found = set(code_index.git(source, "ls-tree", "--name-only", sha, "--", *files)
+                    .decode("utf-8", "replace").splitlines())
+    except OSError:
+        return set()
+    return {f for f in files if f not in found}
+
+
 def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = None,
         source=None, sha: str | None = None) -> dict:
     """1 lời gọi GATE1_MODEL (+1 lần hỏi lại nếu plan sai schema/file), tính phí budget.
@@ -275,8 +288,15 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             required = functional.expected_targets({'request_title': request.get('subject'), 'request_detail': request.get('body')})
             if required.intersection(ctx.get('targets') or []) and not required.intersection(task['file'] for task in plan['subtasks']):
                 raise ValueError('Use the existing feature renderer: ' + ', '.join(sorted(required)))
-            best_match.enforce(ctx.get('best_match'), {task['file'] for task in plan['subtasks']},
-                               f"Sửa file khớp nhiều cụm người dùng viết nhất: {ctx.get('best_match')}", judge)
+            added = new_files(plan, source, commit)
+            if added:
+                # A feature adds files that do not exist yet: no "most quoted file" to edit, so record the
+                # recommendation instead of blocking the plan (path/layer rules still apply).
+                judge(stage, True, f"{best_match.REASON_CODE}: plan adds new files ({', '.join(sorted(added))}); "
+                                   f"best-match {ctx.get('best_match') or '(none)'}")
+            else:
+                best_match.enforce(ctx.get('best_match'), {task['file'] for task in plan['subtasks']},
+                                   f"Sửa file khớp nhiều cụm người dùng viết nhất: {ctx.get('best_match')}", judge)
             judge(stage, True, f"best-match file: {ctx.get('best_match') or '(none)'}")
         except ValueError as e:
             judge(stage, False, str(e))

@@ -152,6 +152,42 @@ def test_validator_rejects_wrong_surface_without_asking_requester_about_code(tmp
     assert out.get('public_message') and out.get('outcome') != 'needs_clarification'
 
 
+def test_a_new_file_feature_is_grounded_without_a_source_quote(tmp_path):
+    """A feature adds files that do not exist at base: no source line to quote, so the record may leave the
+    quote empty (before/after/verify still required) and the best-match check is only recorded."""
+    subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
+    (tmp_path / 'public').mkdir(parents=True)
+    (tmp_path / 'public' / 'index.html').write_text('<h1>Tizia</h1>\n', encoding='utf8')
+    subprocess.run(['git', '-C', str(tmp_path), 'add', '.'], check=True)
+    subprocess.run(['git', '-C', str(tmp_path), '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+                    'commit', '-qm', 'base'], check=True)
+    plan = {'capabilities': ['public.ui'], 'subtasks': [
+        {'file': 'public/moi-a.html', 'title': 'Trang A', 'verify': 'node --test test/moi-a.test.js', 'size': 'small',
+         'layer': 'frontend', 'depends_on': []},
+        {'file': 'public/moi-b.html', 'title': 'Trang B', 'verify': 'node --test test/moi-b.test.js', 'size': 'small',
+         'layer': 'frontend', 'depends_on': []}]}
+    request = {'subject': 'Thêm hai trang ôn tập', 'body': 'Hai trang mới độc lập cho sinh viên.',
+               'grounding_required': True, 'complexity_by_server': True, 'type': 'feature'}
+    state = {'plan': plan, 'checkout_source': str(tmp_path), 'best_match': 'public/index.html'}
+
+    def record(task, quote=''):
+        return {'target': task['file'], 'file': task['file'], 'quote': quote,
+                'before': 'chưa có trang', 'after': task['title'], 'verify': task['verify']}
+
+    grounded = {'clear': True, 'question': None, 'grounded': True,
+                'grounding': [record(task) for task in plan['subtasks']]}
+    out = plan_validate.run(request, deps_with(FakeModels(plan, validation=grounded)), Budget(), state)
+    assert not out['blocked'], out
+    assert [e['quote'] for e in state['grounding']['evidence']] == ['', '']
+
+    invented = {'clear': True, 'question': None, 'grounded': True,
+                'grounding': [record(task, quote='<h1>không có thật</h1>') for task in plan['subtasks']]}
+    out = plan_validate.run(request, deps_with(FakeModels(plan, validation=invented)), Budget(),
+                            {'plan': plan, 'checkout_source': str(tmp_path)})
+    assert out['blocked'] and out['reason'] == 'plan_ungrounded'
+    assert 'trích dẫn mẫu không có' in out['signals'][0]
+
+
 def test_gate_2_5_trace_shows_the_evidence_it_read_and_why_the_plan_was_or_was_not_grounded(tmp_path):
     import dataclasses
     import meter

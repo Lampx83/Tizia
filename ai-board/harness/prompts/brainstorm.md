@@ -38,6 +38,14 @@ EXAMPLE 2 (colour, page links a stylesheet). Request: Đổi màu chữ tiêu đ
 {{"summary_vi": "Đổi màu chữ tiêu đề trang lab sang đỏ.", "capabilities": [], "subtasks": [{{"title": "Đổi color của .title thành #dc2626", "file": "public/css/lab.css", "verify": "rule .title trong public/css/lab.css có color: #dc2626", "size": "small"}}]}}
 (Had it said "css liên kết: (không có file .css …)", the file would be public/lab.html.)
 
+EXAMPLE 3 (feature: API + database + two independent pages). Request: Thêm API thuật ngữ trong context mới và hai trang mới dùng API đó (hai trang độc lập). REPO DATA: public/index.html (trang mẫu), server/contexts/_ai-generated/ (chưa có context nào)
+{{"summary_vi": "Thêm API thuật ngữ CNTT và hai trang mới dùng chung API.", "capabilities": ["public.ui", "generated.context"], "acceptance": ["node --test test/so-tay.test.js", "node --test test/lich.test.js"], "subtasks": [
+ {{"title": "Migration mới lưu thuật ngữ", "file": "server/contexts/_ai-generated/cntt/migrations/001-thuat-ngu.sql", "verify": "node --test test/thuat-ngu.test.js", "size": "large", "layer": "db", "depends_on": []}},
+ {{"title": "API thuật ngữ trong context cntt", "file": "server/contexts/_ai-generated/cntt/glossary/index.js", "verify": "node --test test/glossary.test.js", "size": "large", "layer": "backend", "depends_on": [1]}},
+ {{"title": "Trang sổ tay thuật ngữ", "file": "public/so-tay-thuat-ngu.html", "verify": "node --test test/so-tay.test.js", "size": "small", "layer": "frontend", "depends_on": [2]}},
+ {{"title": "Trang lịch ôn tập", "file": "public/lich-on-tap.html", "verify": "node --test test/lich.test.js", "size": "small", "layer": "frontend", "depends_on": [2]}}]}}
+Two frontend pages depend only on the API step, so they are independent of each other (same layer, depends_on equal). db is always ONE new migration at server/contexts/_ai-generated/<feature>/migrations/<name>.sql; backend files live in the same context server/contexts/_ai-generated/<feature>/<file>.js. A feature plan's "verify" and "acceptance" are RUNNABLE commands, never sentences.
+
 {context}
 
 REQUEST
