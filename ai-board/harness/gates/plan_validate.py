@@ -567,6 +567,13 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
         state["assumption"] = validation["question"] or validation.get("reason") or "yêu cầu chưa nêu rõ"
         judge("assumed plan", True, state["assumption"])
         validation = {**validation, "clear": True}
+    if not validation["clear"] and request.get("clarified_spec"):
+        # The requester already answered the open points; the clarified spec is the decision record. What the
+        # validator still wants (a title, a link, a layout) is carried by the spec into gate 3, so asking the
+        # student again would only loop: clear the plan and record the note for the admin.
+        state["assumption"] = validation["question"] or validation.get("reason") or "spec đã làm rõ"
+        judge("clarified spec", True, state["assumption"])
+        validation = {**validation, "clear": True}
     if not validation["clear"]:
         question = validation["question"] or "Plan chưa đủ rõ — bạn mô tả thêm chi tiết được không?"
         if db_path is not None:

@@ -110,6 +110,22 @@ def test_unclear_plan_blocks_before_gate_3_and_writes_clarification(db_file, req
     assert rows == [("admin", "File nào chứa danh sách hoạt chất?")]
 
 
+def test_a_clarified_spec_clears_the_plan_instead_of_asking_the_student_again(tmp_path):
+    """Người gửi đã trả lời trong spec làm rõ: điểm validator còn hỏi là việc của plan/code,
+    không được hỏi lại người gửi (vòng lặp clarify từng đốt hết ngân sách root)."""
+    plan = plan_with(["features"])
+    request = {"subject": "Thêm hai trang ôn tập", "body": "hai trang mới độc lập",
+               "clarified_spec": "1) title và h1 là 'Sổ tay thuật ngữ CNTT'; 2) một API duy nhất; 3) danh sách đơn giản.",
+               "grounding_required": False}
+    state = {"plan": plan, "checkout_source": str(tmp_path)}
+    models = FakeModels(plan, validation={"clear": False, "question": "Tiêu đề và h1 cụ thể là gì?"})
+
+    out = plan_validate.run(request, deps_with(models), Budget(), state)
+
+    assert out["blocked"] is False, out
+    assert state["assumption"] == "Tiêu đề và h1 cụ thể là gì?"
+
+
 # ── AC 2: plan phức tạp + user thường -> complexity_gated ───────────────────
 
 def test_complex_plan_from_ordinary_user_is_gated(db_file, request_item):
