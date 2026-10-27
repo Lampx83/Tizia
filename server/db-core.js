@@ -1,10 +1,10 @@
 // App-wide database handle with the shape the app has always used (`prepare().get/all/run`, `exec`, `transaction`),
-// backed by PostgreSQL (pool, ambient transactions, savepoints; see ai-board/db/index.js). Callers `await` every call.
+// backed by PostgreSQL (pool, ambient transactions, savepoints; see db-pg-core.js). Callers `await` every call.
 //
 // SQL is written once, SQLite-flavoured but portable: `?`, `@name` (named or mixed with `?`), ON CONFLICT, COALESCE.
 // PostgreSQL gets: placeholders -> $n, `ADD COLUMN IF NOT EXISTS`, INTEGER->BIGINT, REAL->DOUBLE PRECISION in DDL,
 // `lastInsertRowid` via RETURNING id for tables that have an id column.
-import { createPgDb, toPgDdl } from './ai-board/db/index.js';
+import { createPgDb, toPgDdl } from './db-pg-core.js';
 
 const TX_LOCK = 7_000_102; // legacy transactions run one at a time, like SQLite's single writer
 

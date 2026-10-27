@@ -17,7 +17,7 @@ export async function createAiBoardServer({ env = process['env'], dbHandle = nul
   const handle = dbHandle ?? createPgDb({ url: String(env.AI_BOARD_DATABASE_URL || '') });
   if (!handle?.d || handle.dialect !== 'postgres') throw new Error('aiboard-server needs a PostgreSQL handle');
   await applyMigrations(handle.d);
-  const services = createAiBoardServices({ appDb: handle });
+  const services = createAiBoardServices({ d: handle.d });
 
   const app = express();
   app.disable('x-powered-by');

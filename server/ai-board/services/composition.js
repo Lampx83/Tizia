@@ -5,16 +5,17 @@ import * as asyncAux from './aux-service.js';
 import * as asyncReleases from './releases.js';
 import { createRequestsPort } from '../repositories/requests.js';
 
-/** appDb: createAppDb handle (PostgreSQL); migrations already ran in db.js. */
-export function createAiBoardServices({ appDb, hooks = {} } = {}) {
-  if (appDb?.dialect !== 'postgres') throw new Error('createAiBoardServices: the app PostgreSQL handle (appDb) is required');
+/** appDb (web) or d (board-only handle); migrations already ran before this call. */
+export function createAiBoardServices({ appDb, d = null, hooks = {} } = {}) {
+  const handle = appDb ?? (d && d.dialect === 'postgres' ? { dialect: d.dialect, d } : null);
+  if (handle?.dialect !== 'postgres') throw new Error('createAiBoardServices: a PostgreSQL handle is required');
   return {
     backend: 'postgres',
-    store: createAsyncAiBoardStore(appDb.d, hooks),
+    store: createAsyncAiBoardStore(handle.d, hooks),
     aux: asyncAux,
     releases: asyncReleases,
-    requests: createRequestsPort(appDb.d),
-    db: appDb.d,
+    requests: createRequestsPort(handle.d),
+    db: handle.d,
     close: async () => {},
   };
 }
