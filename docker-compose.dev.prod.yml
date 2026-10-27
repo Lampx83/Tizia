@@ -1,0 +1,146 @@
+# Stack AI board (LF/110): web không nằm ở đây. Deploy riêng từ nhánh dev qua Portainer;
+# dùng cùng host với web cũng được nhưng KHÔNG chạy cùng lúc docker-compose.dev.local.yml (trùng tên container).
+# Hai stack gặp nhau qua external network `tizia-internal` (tạo một lần trên host: docker network create tizia-internal)
+# và gọi bằng tên DNS service; không publish IP/port chéo (loopback dev của registry/UI giữ nguyên theo LF/96).
+# Bí mật/chuỗi kết nối đưa bằng env của stack (Portainer env, không secret trong repo):
+#   AI_BOARD_INTERNAL_SECRET (HMAC web<->board, cùng giá trị với env của web), POSTGRES_USER/PASSWORD/DB,
+#   AI_BOARD_KEY, AI_BOARD_WORKER_KEY, VLLM_URL/OLLAMA_URL + Seckey..., AI_BOARD_SHOTS_S3_* (cùng cặp khóa với seedfs).
+services:
+  aiboard-server:
+    extends: { file: docker-compose.yml, service: tizia }
+    build:
+      context: .
+    image: aiboard-server:dev
+    container_name: aiboard-server
+    restart: unless-stopped
+    command: ["node", "server/aiboard-server.js"]  # entry board-only: migration + intake/request/worker routes trên DB riêng
+    depends_on: !override  # dụng aiboard-postgres, không kế thừa depends_on của service web gốc
+      aiboard-postgres: { condition: service_healthy }
+    environment:
+      NODE_ENV: development
+      PORT: 8081
+      AI_BOARD_DATABASE_URL: postgres://${POSTGRES_USER:-tizia}:${POSTGRES_PASSWORD:?đặt POSTGRES_PASSWORD}@aiboard-postgres:5432/${POSTGRES_DB:-tizia}
+      AI_BOARD_INTERNAL_SECRET: ${AI_BOARD_INTERNAL_SECRET:?đặt AI_BOARD_INTERNAL_SECRET}
+      AI_BOARD_KEY: ${AI_BOARD_KEY:-}              # tránh mount worker API khi thiếu khóa
+      AI_BOARD_WORKER_KEY: ${AI_BOARD_WORKER_KEY:-}
+      VLLM_URL: ${VLLM_URL:-}
+      OLLAMA_URL: ${OLLAMA_URL:-}
+      AI_BOARD_CLASSIFIER_MODEL: ${AI_BOARD_CLASSIFIER_MODEL:-}
+    ports: !override []  # khÃ´ng publish; web gá»i qua tizia-internal báº±ng DNS
+    networks: !override [default, tizia-internal]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8081/health').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  # Postgres riêng cho AI board (entry tự chạy migration khi boot; không dùng chung DB của web).
+  aiboard-postgres:
+    image: postgres:16-alpine@sha256:f4610795587492cd4fb887c2dc3de301b813278bb6f616992061141b5f15ac36
+    container_name: aiboard-postgres
+    restart: unless-stopped
+    logging: &logging
+      driver: json-file
+      options: { max-size: 10m, max-file: "3" }
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tizia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?đặt POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-tizia}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - aiboard-postgres-data:/var/lib/postgresql/data
+    networks: !override [default]
+
+  ai-board-worker:
+    extends: { file: docker-compose.yml, service: ai-board-worker }
+    build:
+      context: .
+      dockerfile: ai-board/worker.Dockerfile
+      args:
+        WORKER_CHROMIUM: "0"  # gate 5 chạy trong guest của sandbox-runner, không cần Chromium trong worker
+    image: tizia-ai-board-worker:dev
+    container_name: aiboard-worker
+    depends_on: !override
+      aiboard-server: { condition: service_healthy }
+      sandbox-runner: { condition: service_healthy }
+    environment:
+      AI_BOARD_SERVER_URL: http://aiboard-server:8081  # worker gọi entry board, không đi qua web
+
+  # Worker thứ hai (profile multi-worker): repo và memory riêng giữa các worker.
+  ai-board-worker-2:
+    extends: { service: ai-board-worker }
+    container_name: aiboard-worker-2
+    hostname: ai-board-worker-2
+    profiles: !override [multi-worker]
+    volumes: !override
+      - ai-board-repo-2:/repo
+      - ai-board-memory-2:/opt/ai-board/ai-board/memory
+      - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
+
+  image-registry:
+    extends: { file: docker-compose.yml, service: image-registry }
+    container_name: aiboard-registry
+
+  sandbox-runner:
+    extends: { file: docker-compose.yml, service: sandbox-runner }
+    image: tizia-sandbox-runner:dev
+    container_name: aiboard-sandbox-runner
+
+  seaweedfs:
+    extends: { file: docker-compose.yml, service: seaweedfs }
+    container_name: aiboard-seaweedfs
+    networks: !override [default, tizia-internal]  # web stores AI_BOARD_SHOTS_S3_ENDPOINT=http://seaweedfs:8333 qua DNS này
+    ports: !override []  # không publish; UI đi qua seaweedfs-ui-auth ở dưới
+    logging: &logging
+      driver: json-file
+      options: { max-size: 10m, max-file: "3" }
+
+  # UI SeaweedFS (master 9333/filer 8888) chỉ xem từ host, sau basic-auth; key sinh in docker logs (LF/96).
+  seaweedfs-ui-auth:
+    container_name: aiboard-seaweedfs-ui
+    image: node:24-alpine
+    profiles: [storage]  # cùng profile với seaweedfs; lên cùng `--profile storage`
+    restart: unless-stopped
+    depends_on: [seaweedfs]
+    command: sh -c 'export SEAWEED_UI_PASSWORD="${SEAWEED_UI_PASSWORD:-}"; node /app/scripts/seaweed-ui-auth.js'
+    environment:
+      SEAWEED_UI_USER: ${SEAWEED_UI_USER:-admin}
+      SEAWEED_UI_PASSWORD: ${SEAWEED_UI_PASSWORD:-}
+    ports:
+      - "127.0.0.1:9333:9333"
+      - "127.0.0.1:8888:8888"
+    networks: !override [default]
+    volumes:
+      - ./scripts/seaweed-ui-auth.js:/app/scripts/seaweed-ui-auth.js:ro
+
+networks:
+  default: {}      # cầu nội bộ project (board <-> worker/postgres/registry)
+  sandbox-api: {}   # worker <-> sandbox-runner
+  tizia-internal:
+    external: true  # dùng chung với stack web; tạo một lần trên host trước khi up
+
+volumes:
+  pharmacysim-data:
+    name: tizia_pharmacysim-data  # ke thua mount /data tu service goc tizia
+  aiboard-postgres-data:
+    name: tizia_aiboard-postgres-data
+  ai-board-repo:
+    name: tizia_ai-board-repo      # tái dùng data khi chuyển từ single-stack cũ
+  ai-board-memory:
+    name: tizia_ai-board-memory
+  ai-board-repo-2:
+    name: tizia_ai-board-repo-2
+  ai-board-memory-2:
+    name: tizia_ai-board-memory-2
+  sandbox-runner-state:
+    name: tizia_sandbox-runner-state
+  sandbox-registry:
+    name: tizia_sandbox-registry
+  seaweedfs-data:
+    name: tizia_seaweedfs-data

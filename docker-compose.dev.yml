@@ -1,5 +1,8 @@
-# Stack dev độc lập: docker compose -f docker-compose.dev.yml --profile ai-board up -d
-# Dùng chung cấu hình với docker-compose.yml (extends); chỉ khai báo khác biệt dev. Prod chỉ dùng docker-compose.yml.
+# Stack web (LF/110): chỉ web + Postgres web, cổng duy nhất 8041.
+# Mọi thứ AI board (server/Postgres/worker/sandbox/seaweed/registry) thuộc stack khác:
+#   - cùng host  : docker compose -f docker-compose.dev.local.yml --profile ai-board up -d
+#   - host riêng : docker compose -f docker-compose.dev.prod.yml --profile ai-board up -d (Portainer)
+# Hai stack gặp nhau qua external network `tizia-internal` (tạo một lần trên host: docker network create tizia-internal).
 services:
   tizia-dev:
     extends: { file: docker-compose.yml, service: tizia }
@@ -17,12 +20,18 @@ services:
       AI_BOARD_PRIVATE_PREVIEW_ENABLED: "false"  # preview phải đi qua 8041; chưa mở cổng riêng
       BASE_PATH: !reset null
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@tizia-postgres:5432/${POSTGRES_DB}  # ghi đè DATABASE_URL trong .env (dành cho chạy ngoài container)
+      # Board chạy ở stack khác khi có aiboard-server; trống hai biến này app chỉ chạy luồng nội bộ.
+      AI_BOARD_SERVER_URL: ${AI_BOARD_SERVER_URL:-http://aiboard-server:8081}
+      AI_BOARD_INTERNAL_SECRET: ${AI_BOARD_INTERNAL_SECRET:-}
+      # Ảnh bản nháp AI board: S3 gateway của SeaweedFS (DNS qua tizia-internal).
+      AI_BOARD_SHOTS_S3_ENDPOINT: http://seaweedfs:8333
     volumes: !override
       - tizia-dev-data:/data  # sao lưu pg_dump + file tải lên; dữ liệu chính nằm trong PostgreSQL
-      - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
-    networks: [default, sandbox-api]
+    networks: !override
+      - default   # cầu nội bộ project (PLC web có cổng publish)
+      - tizia-internal  # gọi aiboard-server/seaweedfs bằng DNS service của stack kia
 
-  # PostgreSQL cho cả ứng dụng (ticket 11). Chỉ trên mạng compose nội bộ: KHÔNG publish cổng ra host.
+  # PostgreSQL của web. Chỉ trên mạng compose nội bộ: KHÔNG publish cổng ra host.
   tizia-postgres:
     extends: { file: docker-compose.yml, service: postgres }
     container_name: tizia-postgres
@@ -33,70 +42,13 @@ services:
     volumes:
       - tizia-postgres-data:/var/lib/postgresql/data
 
-  ai-board-worker:
-    extends: { file: docker-compose.yml, service: ai-board-worker }
-    depends_on: !override
-      tizia-dev: { condition: service_healthy }
-      sandbox-runner: { condition: service_healthy }
-    build:
-      args:
-        WORKER_CHROMIUM: "0"
-    environment:
-      AI_BOARD_SERVER_URL: http://tizia-dev:8041
-    networks: [default, sandbox-api]
-
-  # Worker thứ hai (profile multi-worker): mirror docker-compose.yml, kế thừa worker dev ở file này.
-  # UI SeaweedFS (master 9333/filer 8888) sau basic-auth; key sinh mỗi lần container khởi động nếu chưa đặt.
-  seaweedfs-ui-auth:
-    image: node:24-alpine
-    container_name: tizia-seaweedfs-ui
-    profiles: [storage]
-    restart: unless-stopped
-    depends_on: [seaweedfs]
-    command: sh -c 'export SEAWEED_UI_PASSWORD="${SEAWEED_UI_PASSWORD:-}"; node /app/scripts/seaweed-ui-auth.js'  # key in ra docker logs
-    environment:
-      SEAWEED_UI_USER: ${SEAWEED_UI_USER:-admin}
-      SEAWEED_UI_PASSWORD: ${SEAWEED_UI_PASSWORD:-}
-    ports:
-      - "127.0.0.1:9333:9333"  # loopback + basic auth mới vào được
-      - "127.0.0.1:8888:8888"
-    volumes:
-      - ./scripts/seaweed-ui-auth.js:/app/scripts/seaweed-ui-auth.js:ro
-
-  ai-board-worker-2:
-    extends: { service: ai-board-worker }
-    container_name: tizia-ai-board-worker-2
-    hostname: ai-board-worker-2
-    profiles: !override [multi-worker]
-    volumes: !override
-      - ai-board-repo-2:/repo
-      - ai-board-memory-2:/opt/ai-board/ai-board/memory
-      - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
-
-  image-registry:
-    extends: { file: docker-compose.yml, service: image-registry }
-
-  sandbox-runner:
-    extends: { file: docker-compose.yml, service: sandbox-runner }
-    image: tizia-sandbox-runner:dev
-    networks: [default, sandbox-api]
-
-  seaweedfs:
-    extends: { file: docker-compose.yml, service: seaweedfs }
-    ports: !override  # S3 gateway loopback; UI đi qua seaweedfs-ui-auth
-      - "127.0.0.1:8333:8333"
-
 networks:
-  sandbox-api: {}
+  tizia-internal:
+    external: true  # tạo một lần trên host; dev.prod/dev.local dùng chung
 
 volumes:
   tizia-dev-data:
+    name: tizia_tizia-dev-data
     driver: local
   tizia-postgres-data:
-  ai-board-repo:
-  ai-board-memory:
-  ai-board-repo-2:
-  ai-board-memory-2:
-  sandbox-runner-state:
-  sandbox-registry:
-  seaweedfs-data:
+    name: tizia_tizia-postgres-data

@@ -125,7 +125,9 @@ Bộ data: 81 thuốc, 30 dược liệu, 10 ca lâm sàng, 85+ scenarios theo D
 
 Mở `http://<host>:8041`.
 
-> AI Board (`ai-board-worker`, `sandbox-runner`, `image-registry`) nằm trong `docker-compose.yml` dưới profile `ai-board`, **không chạy khi deploy mặc định**. Worker thứ hai: thêm `--profile multi-worker` (service `ai-board-worker-2`, repo và memory riêng; bật cùng `--profile ai-board`). Chỉ bật khi có chủ đích: `docker compose --profile ai-board up -d` (cần `sandbox-runner/secrets/runner-token` và biến env trong Portainer). Prod chỉ dùng `docker-compose.yml`. Dev dùng `docker-compose.dev.yml` đứng riêng: mỗi service dev `extends` service cùng tên trong `docker-compose.yml` và chỉ khai báo khác biệt dev (tên `tizia-dev`, cổng, `.env`, volume dev). Hai file không bao giờ gộp với nhau (`-f` chồng nhau).
+> AI Board (`aiboard-server`, `ai-board-worker`, `sandbox-runner`, `image-registry`) nằm trong `docker-compose.yml` dưới profile `ai-board`, **không chạy khi deploy mặc định**. Worker thứ hai: thêm `--profile multi-worker` (service `ai-board-worker-2`, repo và memory riêng; bật cùng `--profile ai-board`). Chỉ bật khi có chủ đích: `docker compose --profile ai-board up -d` (cần `sandbox-runner/secrets/runner-token` và biến env trong Portainer). Prod chỉ dùng `docker-compose.yml`. Dev dùng `docker-compose.dev.yml` đứng riêng: mỗi service dev `extends` service cùng tên trong `docker-compose.yml` và chỉ khai báo khác biệt dev (tên `tizia-dev`, cổng, `.env`, volume dev). Hai file không bao giờ gộp với nhau (`-f` chồng nhau).
+>
+> **Hai stack (LF/110):** `docker-compose.dev.yml` chỉ còn web + Postgres web; AI board tách sang `docker-compose.dev.prod.yml` (deploy từ nhánh `dev` qua Portainer) và `docker-compose.dev.local.yml` (chạy cả hai stack trên một host để thử). Hai bên gặp nhau qua network ngoài `tizia-internal` (`docker network create tizia-internal` một lần) bằng DNS service, không publish cổng chéo. Env, luồng request và cách kiểm tra: `docs/local/aiboard-stacks.md` (file vận hành local, không commit theo .gitignore).
 
 ### Dựng từ máy trắng (dev + AI Board)
 
@@ -137,8 +139,8 @@ Máy chưa có image nào. Chạy theo thứ tự (Linux, hoặc Git Bash + Dock
 scripts/ai-board-bootstrap.sh
 # 3. (một lần) Build guest Gate 5, push vào image-registry, ghim digest vào sandbox-policy.dev.yaml, khởi động runner
 scripts/ai-board-bootstrap.sh --build-guest
-# 4. Build image app + worker và chạy stack dev có AI Board (worker chờ runner healthy)
-docker compose -f docker-compose.dev.yml --env-file .env --env-file ai-board-host.env --profile ai-board up -d --build
+# 4. Build image app + worker và chạy dev hai stack (web + AI board, worker chờ runner healthy)
+docker compose -f docker-compose.dev.local.yml --env-file .env --env-file ai-board-host.env --profile ai-board --profile storage up -d --build
 ```
 
 Bước 3 phải chạy trước bước 4: runner chưa ghim digest thì không healthy, và `up` ở bước 4 sẽ báo worker không khởi động được vì phụ thuộc runner. Bước 3 tùy chọn `--warm-dir DIR` (thư mục có `docker-data.tar.gz`, tạo bằng `scripts/warm-guest.mjs` trong runner đang chạy); không có warm cache thì guest vẫn chạy nhưng chậm hơn. Sau bước 3 `git diff` sẽ thấy `sandbox-policy.dev.yaml` đổi digest: review rồi mới commit. Prod (Portainer) không cần bootstrap: chỉ cần `runner-token` và env của stack.
