@@ -313,13 +313,14 @@ def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict
         if new_target:
             # A new file has no source line to quote. The plan still has to state the behaviour change and the
             # check; a quote is only accepted when it comes from a pattern file that really exists at the base.
+            file = file or task['file']  # the record always names a file: the board's plan policy requires it
             if isinstance(quote, str) and quote.strip():
                 if file not in files or not _quoted_in(quote, files[file]):
                     raise ValueError(f'{task["file"]}: trích dẫn mẫu không có trong {file or "(file mới)"}')
             if any(not isinstance(evidence.get(key), str) or not evidence[key].strip() for key in ('before', 'after', 'verify')):
                 raise ValueError('thiếu hành vi trước/sau hoặc tiêu chí kiểm chứng')
-            clean.append({**{key: str(evidence.get(key) or '')[:1200] for key in ('file', 'quote', 'before', 'after', 'verify')},
-                          'target': task['file']})
+            clean.append({**{key: str(evidence.get(key) or '')[:1200] for key in ('quote', 'before', 'after', 'verify')},
+                          'file': file, 'target': task['file']})
             continue
         if task['file'] in files and file != task['file']:
             raise ValueError('trích dẫn phải thuộc file hiện có dự định sửa')

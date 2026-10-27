@@ -171,7 +171,8 @@ def test_a_new_file_feature_is_grounded_without_a_source_quote(tmp_path):
     state = {'plan': plan, 'checkout_source': str(tmp_path), 'best_match': 'public/index.html'}
 
     def record(task, quote=''):
-        return {'target': task['file'], 'file': task['file'], 'quote': quote,
+        # a new file has no file to quote: the validator leaves "file" empty and the harness fills it in
+        return {'target': task['file'], 'file': '', 'quote': quote,
                 'before': 'chưa có trang', 'after': task['title'], 'verify': task['verify']}
 
     grounded = {'clear': True, 'question': None, 'grounded': True,
@@ -179,6 +180,8 @@ def test_a_new_file_feature_is_grounded_without_a_source_quote(tmp_path):
     out = plan_validate.run(request, deps_with(FakeModels(plan, validation=grounded)), Budget(), state)
     assert not out['blocked'], out
     assert [e['quote'] for e in state['grounding']['evidence']] == ['', '']
+    # the record always names the file: the board's plan policy rejects an empty grounding.file
+    assert [e['file'] for e in state['grounding']['evidence']] == ['public/moi-a.html', 'public/moi-b.html']
 
     invented = {'clear': True, 'question': None, 'grounded': True,
                 'grounding': [record(task, quote='<h1>không có thật</h1>') for task in plan['subtasks']]}
