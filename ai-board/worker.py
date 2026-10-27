@@ -485,9 +485,11 @@ def _gate4_with_proof(run_gate, deps, budget, state, plan_hash):
 
 
 def _dependency_graph(plan: dict) -> list[dict]:
-    """Subtasks run in plan order and each sees the earlier ones' output, so child i depends on child i-1."""
+    """Child i phụ thuộc depends_on của step (mặc định chuỗi cũ: bước trước). Song song/partial do ticket LF/107 lo."""
     steps = _execution_plan(plan).get("subtasks") or []
-    return [{"child": i, "file": st.get("file"), "depends_on": [i - 1] if i else []} for i, st in enumerate(steps)]
+    return [{"child": i, "file": st.get("file"),
+             "depends_on": st.get("depends_on") if st.get("depends_on") is not None else ([i - 1] if i else [])}
+            for i, st in enumerate(steps)]
 
 
 def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate,
@@ -1207,6 +1209,12 @@ class HarnessPlanner:
                               old_caps[0] if old_caps else (
                 "public.ui" if file.startswith("public/") else "generated.context"
             ))
+            layer = subtask.get("layer") or ("backend" if file.startswith("server/contexts/_ai-generated/")
+                                             else "db" if "/migrations/" in file and file.endswith(".sql")
+                                             else "frontend" if file.startswith("public/") else "wiring")
+            depends_on = subtask.get("depends_on")
+            if depends_on is None:
+                depends_on = [index - 1] if index > 1 else []
             steps.append({
                 "order": index,
                 "title": subtask["title"],
@@ -1217,6 +1225,8 @@ class HarnessPlanner:
                 "capability": capability,
                 "risk": "medium" if subtask.get("size") == "large" else "low",
                 "non_goals": ["Không sửa file ngoài allowed_scope."],
+                "layer": layer,
+                "depends_on": list(depends_on),
                 **({'task_type': subtask['task_type']} if subtask.get('task_type') in
                    {'backend', 'frontend', 'database', 'review', 'test', 'all'} else {}),
             })
@@ -1225,7 +1235,7 @@ class HarnessPlanner:
             "domain": request["domain"],
             "goal": old["summary_vi"],
             "allowed_scope": [step["allowed_scope"][0] for step in steps],
-            "acceptance": [item for step in steps for item in step["acceptance"]],
+            "acceptance": list(old.get("acceptance") or [item for step in steps for item in step["acceptance"]]),
             "tests": [item for step in steps for item in step["tests"]],
             "capabilities": capabilities,
             "risk": "high" if signals else "medium" if any(step["risk"] == "medium" for step in steps) else "low",

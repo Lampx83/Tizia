@@ -269,3 +269,93 @@ test('clarification invalidates the old plan and automatic planning stops after 
   assert.equal((await db.prepare('SELECT status FROM ai_tickets WHERE id=?').get(ticket.id)).status, 'waiting_admin');
   db.close();
 });
+
+function featurePlan() {
+  const base = plan();
+  return {
+    ...base,
+    allowed_scope: ['server/contexts/_ai-generated/gallery/migrations/001-gallery.sql',
+      'server/contexts/_ai-generated/gallery/index.js', 'public/gallery.html'],
+    capabilities: ['generated.context', 'public.ui'],
+    steps: [
+      {
+        order: 1, title: 'Tạo bảng gallery', description: 'Migration mới cho gallery.',
+        allowed_scope: ['server/contexts/_ai-generated/gallery/migrations/001-gallery.sql'],
+        acceptance: ['file mới chỉ có CREATE TABLE'], tests: ['node --test test/gallery.test.js'],
+        capability: 'generated.context', risk: 'low', layer: 'db', depends_on: [],
+        non_goals: [],
+      },
+      {
+        order: 2, title: 'API gallery', description: 'Context mới đọc bảng gallery.',
+        allowed_scope: ['server/contexts/_ai-generated/gallery/index.js'],
+        acceptance: ['GET /api/gallery trả 200'], tests: ['node --test test/gallery.test.js'],
+        capability: 'generated.context', risk: 'low', layer: 'backend', depends_on: [1],
+        non_goals: [],
+      },
+      {
+        order: 3, title: 'Trang gallery', description: 'Trang hiển thị gallery.',
+        allowed_scope: ['public/gallery.html'],
+        acceptance: ['trang có #gallery'], tests: ['node --test test/gallery.test.js'],
+        capability: 'public.ui', risk: 'low', layer: 'frontend', depends_on: [2],
+        non_goals: [],
+      },
+    ],
+  };
+}
+
+test('layered feature plan keeps a DAG and a small plan keeps the old shape', () => {
+  const checked = validatePlan(featurePlan(), 'pharmacy');
+  assert.deepEqual(checked.plan.steps.map((step) => [step.order, step.layer, step.depends_on]),
+    [[1, 'db', []], [2, 'backend', [1]], [3, 'frontend', [2]]]);
+  // plan cũ không có layer/depends_on: suy ra lớp và chuỗi cũ, không đổi hành vi
+  const legacy = validatePlan(plan(), 'pharmacy');
+  assert.equal(legacy.plan.steps[0].layer, 'frontend');
+  assert.deepEqual(legacy.plan.steps[0].depends_on, []);
+});
+
+test('depends_on must be acyclic and point at real steps', () => {
+  const cyclic = featurePlan();
+  cyclic.steps[0].depends_on = [2];
+  assert.throws(() => validatePlan(cyclic, 'pharmacy'), /cycle/);
+  const self = featurePlan();
+  self.steps[1].depends_on = [2];
+  assert.throws(() => validatePlan(self, 'pharmacy'), /itself/);
+  const outside = featurePlan();
+  outside.steps[0].depends_on = [9];
+  assert.throws(() => validatePlan(outside, 'pharmacy'), /outside 1\.\.3/);
+  const duplicate = featurePlan();
+  duplicate.steps[2].depends_on = [1, 1];
+  assert.throws(() => validatePlan(duplicate, 'pharmacy'), /duplicates/);
+});
+
+test('db layer only accepts a new generated-context migration and backend stays in a generated context', () => {
+  const dbOutside = featurePlan();
+  dbOutside.steps[0].allowed_scope = ['public/gallery.html'];
+  dbOutside.steps[0].capability = 'public.ui';
+  assert.throws(() => validatePlan(dbOutside, 'pharmacy'), /db scope must be a new migration/);
+  const dbCore = featurePlan();
+  dbCore.steps[0].allowed_scope = ['server/db.js'];
+  assert.throws(() => validatePlan(dbCore, 'pharmacy'), /deny_paths|db scope/);
+  const backendCore = featurePlan();
+  backendCore.capabilities.push('core.server');
+  backendCore.allowed_scope.push('server/contexts/identity/auth.js');
+  backendCore.steps[1].allowed_scope = ['server/contexts/identity/auth.js'];
+  backendCore.steps[1].capability = 'core.server';
+  assert.throws(() => validatePlan(backendCore, 'pharmacy'), /backend scope/);
+  const badLayer = featurePlan();
+  badLayer.steps[1].layer = 'mobile';
+  assert.throws(() => validatePlan(badLayer, 'pharmacy'), /layer 'mobile'/);
+});
+
+test('submitted children carry layer and depends_on', async () => {
+  const { db, store, ticket, run } = await fixture();
+  const first = await submit(store, ticket, run, featurePlan());
+  assert.equal(first.children.length, 3);
+  const rows = await db.prepare('SELECT sequence, description, layer, depends_on FROM ai_tickets WHERE parent_id=? ORDER BY sequence').all(ticket.id);
+  const steps = rows.map((row) => JSON.parse(row.description));
+  assert.deepEqual(steps.map((step) => [step.layer, step.depends_on]), [['db', []], ['backend', [1]], ['frontend', [2]]]);
+  assert.deepEqual(rows.map((row) => [row.layer, JSON.parse(row.depends_on)]), [['db', []], ['backend', [1]], ['frontend', [2]]]);
+  assert.deepEqual(first.children.map((child) => child.layer), ['db', 'backend', 'frontend']);
+  db.close();
+});
+

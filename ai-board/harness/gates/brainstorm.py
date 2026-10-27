@@ -33,9 +33,13 @@ from gates.scope_check import load_capability_names
 ROOT = Path(__file__).resolve().parents[3]
 SIZES = ("small", "large")
 SUBTASK_KEYS = ("title", "file", "verify", "size")
-# File chưa có ở base chỉ được là trang mới, module JS mới, hoặc plugin _ai-generated mới.
+LAYERS = ("db", "backend", "frontend", "wiring")
+GEN_CONTEXT = "server/contexts/_ai-generated/"
+DB_MIGRATION = re.compile(r"^server/contexts/_ai-generated/[a-z0-9][a-z0-9-]*/migrations/[a-z0-9][a-z0-9._-]*\.sql$")
+# File chưa có ở base chỉ được là trang mới, module JS mới, plugin _ai-generated mới, hoặc migration mới.
 _NEW_OK = re.compile(r"^(public/[a-z0-9][a-z0-9-]*\.html|public/js/[\w/-]+\.js"
-                     r"|server/contexts/_ai-generated/[\w-]+/[\w-]+/index\.js)$")
+                     r"|server/contexts/_ai-generated/[\w-]+/[\w-]+/index\.js"
+                     r"|server/contexts/_ai-generated/[a-z0-9][a-z0-9-]*/migrations/[a-z0-9][a-z0-9._-]*\.sql)$")
 RETRY_SUFFIX = "\n\nYOUR PREVIOUS ANSWER WAS REJECTED: {reason}\nFix exactly that. Output ONLY the JSON object."
 
 # Prompt sống ở file riêng (ai-board/harness/prompts/), đọc 1 lần lúc import — phần trước
@@ -57,6 +61,47 @@ def build_prompt(request: dict, surface: frozenset[str], context_text: str = "")
         surface=", ".join(sorted(surface)),
         context=context_text or "REPO DATA: (không có)",
     )
+
+
+def infer_layer(file: str) -> str:
+    """Suy ra lớp từ đường dẫn khi model không khai layer."""
+    if DB_MIGRATION.match(file):
+        return "db"
+    if file.startswith(GEN_CONTEXT):
+        return "backend"
+    if file.startswith("public/"):
+        return "frontend"
+    return "wiring"
+
+
+def check_dag(subtasks: list[dict]) -> None:
+    """depends_on là số thứ tự 1-based của subtask khác; cấm tự trỏ và chu trình."""
+    size = len(subtasks)
+    for i, st in enumerate(subtasks):
+        deps = st["depends_on"]
+        for dep in deps:
+            if dep == i + 1:
+                raise ValueError(f"subtask[{i}] phụ thuộc chính nó")
+            if dep < 1 or dep > size:
+                raise ValueError(f"subtask[{i}].depends_on={dep} ngoài 1..{size}")
+        if len(set(deps)) != len(deps):
+            raise ValueError(f"subtask[{i}].depends_on bị trùng")
+    state: dict[int, int] = {}
+
+    def visit(node: int) -> bool:
+        if state.get(node) == 1:
+            return True
+        if state.get(node) == 2:
+            return False
+        state[node] = 1
+        for dep in subtasks[node - 1]["depends_on"]:
+            if visit(dep):
+                return True
+        state[node] = 2
+        return False
+
+    if any(visit(node) for node in range(1, size + 1)):
+        raise ValueError("depends_on tạo chu trình — DAG phải acyclic")
 
 
 def parse_plan(text: str) -> dict:
@@ -84,6 +129,20 @@ def parse_plan(text: str) -> dict:
             from services.default_skills import TASK_TYPES
             if not isinstance(st['task_type'], str) or st['task_type'] not in TASK_TYPES:
                 raise ValueError(f'subtask[{i}].task_type không hợp lệ')
+        if st.get("layer") is not None and st["layer"] not in LAYERS:
+            raise ValueError(f"subtask[{i}].layer='{st['layer']}' không thuộc {LAYERS}")
+        deps = st.get("depends_on")
+        if deps is None:
+            deps = [i] if i else []  # mặc định giữ chuỗi cũ: mỗi bước phụ thuộc bước trước
+        if not isinstance(deps, list) or any(not isinstance(dep, int) or isinstance(dep, bool) for dep in deps):
+            raise ValueError(f"subtask[{i}].depends_on phải là mảng số thứ tự")
+        st["depends_on"] = deps
+    check_dag(subtasks)
+    acceptance = plan.get("acceptance")
+    if acceptance is not None:
+        if not isinstance(acceptance, list) or not acceptance or any(
+                not isinstance(item, str) or not item.strip() for item in acceptance):
+            raise ValueError("acceptance phải là mảng chuỗi không rỗng")
     caps = plan.get("capabilities") or []
     if not isinstance(caps, list):
         raise ValueError("capabilities phải là mảng")
@@ -93,24 +152,41 @@ def parse_plan(text: str) -> dict:
 
 def check_files(plan: dict, source, sha: str | None) -> None:
     """Mỗi subtask.file phải có ở `sha` hoặc là đường mới được phép; không 2 subtask cùng file.
-    Ghi lại file đã chuẩn hoá (posix, bỏ ./). Raise ValueError nêu file sai. sha None → chỉ kiểm trùng."""
+    Ghi lại file đã chuẩn hoá (posix, bỏ ./) và layer (suy ra nếu thiếu). Raise ValueError nêu file sai.
+    sha None → chỉ kiểm trùng/đường dẫn, không kiểm tồn tại."""
+    import path_policy
     seen: list[str] = []
+    db_files: list[str] = []
     for st in plan["subtasks"]:
         file = st["file"] = posixpath.normpath(st["file"].strip().replace("\\", "/").lstrip("./"))
         if file in seen:
             raise ValueError(f"2 subtask cùng sửa {file} — gộp thành 1")
         seen.append(file)
+        st["layer"] = st.get("layer") or infer_layer(file)
+        denied = path_policy.check(file, "write")
+        if not denied["allow"]:
+            raise ValueError(f"file '{file}' nằm ngoài vùng được phép: {denied['reason']}")
+        if st["layer"] == "db":
+            if not DB_MIGRATION.match(file):
+                raise ValueError("subtask db phải là migration mới: server/contexts/_ai-generated/<name>/migrations/<file>.sql")
+            db_files.append(file)
+        elif st["layer"] == "backend" and not file.startswith(GEN_CONTEXT):
+            raise ValueError("subtask backend chỉ được trong server/contexts/_ai-generated/<name>/")
     must_exist = [f for f in seen if not _NEW_OK.match(f)]
-    if sha is None or not must_exist:
+    if sha is None:
         return
     try:  # 1 tiến trình git cho mọi file
         found = set(code_index.git(source, "ls-tree", "--name-only", sha, "--", *must_exist)
-                    .decode("utf-8", "replace").splitlines())
+                    .decode("utf-8", "replace").splitlines()) if must_exist else set()
+        existing_migrations = set(code_index.git(source, "ls-tree", "--name-only", sha, "--", *db_files)
+                                  .decode("utf-8", "replace").splitlines()) if db_files else set()
     except OSError:
-        found = set()
+        found, existing_migrations = set(), set()
     missing = [f for f in must_exist if f not in found]
     if missing:
         raise ValueError(f"file '{missing[0]}' không có trong repo — chọn file có trong REPO DATA")
+    if existing_migrations:
+        raise ValueError(f"migration '{sorted(existing_migrations)[0]}' đã tồn tại — migration phải additive (file mới)")
 
 
 SEARCH_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "search_terms.md").read_text(encoding="utf-8")

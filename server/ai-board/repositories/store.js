@@ -1290,7 +1290,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   async function planChildren(rootTicketId, revision) {
     return await db.all(`
       SELECT id, parent_id, source_request_id, sequence, kind, title, description,
-             status, phase, tier, plan_revision
+             status, phase, tier, plan_revision, layer, depends_on
       FROM ai_tickets WHERE parent_id=? AND plan_revision=? ORDER BY sequence
     `, [Number(rootTicketId), Number(revision)]);
   }
@@ -1447,17 +1447,18 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
 
     const insertChild = `
       INSERT INTO ai_tickets(parent_id, source_request_id, sequence, kind, title, description,
-        status, phase, priority, public_note, internal_reason, tier, plan_revision, created_at, updated_at)
-      VALUES (?, ?, ?, 'implementation', ?, ?, ?, 'ticketized', ?, ?, ?, ?, ?, ?, ?)
+        status, phase, priority, public_note, internal_reason, tier, plan_revision, layer, depends_on, created_at, updated_at)
+      VALUES (?, ?, ?, 'implementation', ?, ?, ?, 'ticketized', ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     for (const step of checked.plan.steps) {
       const info = await db.insert(insertChild, [Number(ticketId), root.source_request_id, step.order, step.title,
         JSON.stringify({
           description: step.description, allowed_scope: step.allowed_scope,
           acceptance: step.acceptance, tests: step.tests, risk: step.risk, non_goals: step.non_goals,
+          layer: step.layer, depends_on: step.depends_on,
         }),
         childStatus, checked.plan.steps.length - step.order, publicNote, internalReason,
-        checked.tier, revision, now, now,]);
+        checked.tier, revision, step.layer ?? null, JSON.stringify(step.depends_on ?? []), now, now,]);
       const childId = info;
       await db.run(insertTag, [childId, 'implementation']);
       await db.run(insertTag, [childId, `capability:${step.capability}`]);

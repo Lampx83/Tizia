@@ -43,6 +43,39 @@ export const CAPABILITY_POLICY = Object.freeze({
 
 const TIERS = Object.freeze({ surface: 0, protected: 1, core: 2 });
 const RISKS = new Set(['low', 'medium', 'high']);
+const LAYERS = new Set(['db', 'backend', 'frontend', 'wiring']);
+const GEN_CONTEXT = 'server/contexts/_ai-generated/';
+const DB_MIGRATION = /^server\/contexts\/_ai-generated\/[a-z0-9][a-z0-9-]*\/migrations\/[a-z0-9][a-z0-9._-]*\.sql$/;
+
+/** Lớp của step: model khai rõ, thiếu thì suy từ đường dẫn đầu tiên (tương thích plan cũ). */
+function inferLayer(file) {
+  if (DB_MIGRATION.test(file)) return 'db';
+  if (file.startsWith(GEN_CONTEXT)) return 'backend';
+  if (file.startsWith('public/')) return 'frontend';
+  return 'wiring';
+}
+
+function ordinalList(value, field) {
+  if (!Array.isArray(value) || value.some((item) => !Number.isInteger(item))) {
+    fail('malformed_plan', `${field} must be an array of step numbers`);
+  }
+  if (new Set(value).size !== value.length) fail('malformed_plan', `${field} has duplicates`);
+  return value;
+}
+
+/** DFS trên depends_on (1-based): true khi có chu trình. */
+function hasCycle(steps) {
+  const state = new Map();
+  const visit = (node) => {
+    if (state.get(node) === 1) return true;
+    if (state.get(node) === 2) return false;
+    state.set(node, 1);
+    for (const dep of steps[node - 1].depends_on) if (visit(dep)) return true;
+    state.set(node, 2);
+    return false;
+  };
+  return steps.some((step) => visit(step.order));
+}
 
 export class PlanGuardrailError extends Error {
   constructor(code, internalReason, publicMessage = 'Kế hoạch cần được làm rõ trước khi tiếp tục.') {
@@ -191,6 +224,17 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
     if (step.task_type != null && !['backend', 'frontend', 'database', 'review', 'test', 'all'].includes(step.task_type)) {
       fail('malformed_plan', `invalid steps[${index}].task_type`);
     }
+    const layer = step.layer == null ? inferLayer(allowedScope[0]) : nonEmptyString(step.layer, `steps[${index}].layer`);
+    if (!LAYERS.has(layer)) fail('malformed_plan', `unknown steps[${index}].layer '${layer}'`);
+    const dependsOn = step.depends_on == null ? (order > 1 ? [order - 1] : []) : ordinalList(step.depends_on, `steps[${index}].depends_on`);
+    if (layer === 'db' && allowedScope.some((item) => !DB_MIGRATION.test(item))) {
+      fail('scope_violation', `steps[${index}] db scope must be a new migration under ${GEN_CONTEXT}<name>/migrations/`,
+        'Kế hoạch vượt ngoài phạm vi an toàn và đang chờ xem lại.');
+    }
+    if (layer === 'backend' && allowedScope.some((item) => !item.startsWith(GEN_CONTEXT))) {
+      fail('scope_violation', `steps[${index}] backend scope must stay under ${GEN_CONTEXT}<name>/`,
+        'Kế hoạch vượt ngoài phạm vi an toàn và đang chờ xem lại.');
+    }
     return {
       order,
       title: nonEmptyString(step.title, `steps[${index}].title`),
@@ -200,10 +244,21 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
       tests: stringList(step.tests, `steps[${index}].tests`),
       capability,
       risk,
+      layer,
+      depends_on: dependsOn,
       non_goals: stringList(step.non_goals, `steps[${index}].non_goals`, { allowEmpty: true }),
       ...(step.task_type == null ? {} : { task_type: step.task_type }),
     };
   });
+
+  const size = normalized.steps.length;
+  for (const step of normalized.steps) {
+    for (const dep of step.depends_on) {
+      if (dep === step.order) fail('malformed_plan', `steps[${step.order}].depends_on points at itself`);
+      if (dep < 1 || dep > size) fail('malformed_plan', `steps[${step.order}].depends_on=${dep} is outside 1..${size}`);
+    }
+  }
+  if (hasCycle(normalized.steps)) fail('malformed_plan', 'steps depends_on form a cycle (DAG must be acyclic)');
 
   if (normalized.grounding?.evidence.some((e, i) => !normalized.steps[i].allowed_scope.includes(e.target))) {
     fail('malformed_plan', 'source evidence does not match step scope');
