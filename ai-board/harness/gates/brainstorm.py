@@ -29,6 +29,7 @@ import context
 import functional
 from gates import best_match, react_plan
 from gates.scope_check import load_capability_names
+from runtime.plan_merge import merge_same_file
 
 ROOT = Path(__file__).resolve().parents[3]
 SIZES = ("small", "large")
@@ -283,6 +284,10 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
         stage = "plan parse"
         try:
             plan = parse_plan(body.get("response", ""))
+            # Gộp subtask cùng file NGAY sau khi parse: validator cổng 1 từ chối plan trùng file
+            # trước khi tới _canonical, nên gộp muộn hơn là vô nghĩa.
+            if isinstance(plan, dict) and plan.get("subtasks"):
+                plan = {**plan, "subtasks": merge_same_file(plan["subtasks"])}
             judge(stage, True, plan.get("summary_vi", ""))
             stage = "files exist"
             check_files(plan, source, commit)
