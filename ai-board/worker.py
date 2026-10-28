@@ -1373,7 +1373,9 @@ class HarnessPlanner:
         # Model 35B chạy tuần tự: một lượt lập plan (gate 1 nhiều lần thử + 2.5) dễ vượt 900 s mặc định.
         budget.max_wall_clock_s = max(budget.max_wall_clock_s, 1800.0)
         ticket = snapshot.get("ticket") or {}
-        budget.max_units = int(ticket.get("budget_limit") or DEFAULT_BUDGET_LIMIT)  # trần mỗi lượt, không trừ các lượt trước
+        # Trần units mỗi lượt: plan của request mới chưa có steps nên budget_limit mặc định (200) quá thấp
+        # cho 10+ lời gọi model 35B; không thấp hơn trần units mặc định của contract.
+        budget.max_units = max(int(ticket.get("budget_limit") or DEFAULT_BUDGET_LIMIT), 600)
         source = source or self.source  # folder: đỉnh nhánh chu kỳ thay cho checkout chung
         state = {'catalog': (snapshot.get('capability_policy') or {}).get('capabilities', {})}
         if source:
