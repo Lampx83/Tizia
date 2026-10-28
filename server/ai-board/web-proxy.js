@@ -8,7 +8,7 @@ const PUBLIC_OR_WORKER = [/^\/api\/ai-board\/worker\//];
 // Requester paths the board owns once the stacks split: the request row, its workflow actions and its thread/votes.
 const BOARD_REQUESTER = [
   /^\/api\/requests\/?(\?.*)?$/,
-  /^\/api\/requests\/\d+\/(progress|continue|cancel|retry|status|thread|messages|vote)(\?.*)?$/,
+  /^\/api\/requests\/\d+\/(progress|continue|cancel|retry|status|edit|thread|messages|vote)(\?.*)?$/,
 ];
 // Attachments (files live on the web volume) and the AI-decision audit stay on the web.
 const WEB_ONLY_REQUESTER = /^\/api\/requests\/(attachments|\d+\/decisions)(\?.*)?$/;
