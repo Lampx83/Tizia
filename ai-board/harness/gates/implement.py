@@ -119,15 +119,101 @@ def file_prompt_context(subtask: dict, content: str, siblings: list[str], words:
 
 WHOLE_FILE_MAX_CHARS = 60_000
 
+_EXEMPLAR_MAX_CHARS = 6_000
+_DEP_MAX_CHARS = 6_000
+_HTML_PROLOG = re.compile(r"\s*(?:<!DOCTYPE|<!doctype|<html\b)")
+
+
+def _show_file(source, sha: str | None, path: str, limit: int = _EXEMPLAR_MAX_CHARS) -> str:
+    out = _git(["show", f"{sha}:{path}"], cwd=Path(source), text=True,
+               encoding="utf-8", errors="replace")
+    if out.returncode:
+        return None
+    lines, used = [], 0
+    for line in out.stdout.splitlines():
+        if used + len(line) > limit:
+            lines.append(f"(bớt: chỉ trích {len(lines)} dòng đầu của mẫu)")
+            break
+        lines.append(line)
+        used += len(line)
+    return "\n".join(lines)
+
+
+def _new_file_context(subtask: dict, state: dict, siblings: list[str]) -> str | None:
+    """File đích chưa tồn tại: một mẫu file THẬT cùng thể loại ở base + siblings
+    (LF/107 mở rộng 2026-10-28, tiêu chí 8a) — run 43 trả HTML cho file JS chỉ vì không có gì
+    chỉ ra hình dạng file đích. Chọn mẫu theo kiểu target (frontend khác API).
+    None khi không tìm được mẫu."""
+    source, sha = state.get("checkout_source"), state.get("base_sha")
+    if not source or not sha:
+        return None
+    target = subtask["file"]
+    if target.startswith(("public/",)):
+        groups = (("mẫu module frontend THẬT", ("public/js/features/", "public/js/")),)
+    elif target.startswith(("server/",)):
+        groups = (("mẫu context API THẬT", ("server/contexts/_ai-generated/", "server/contexts/")),)
+    else:
+        groups = (("mẫu module frontend THẬT", ("public/js/features/", "public/js/")),
+                  ("mẫu context API THẬT", ("server/contexts/_ai-generated/", "server/contexts/")))
+    folder = posixpath.dirname(target)
+    parts = [f"(file đích chưa tồn tại ở base — tạo file MỚI hoàn toàn; cùng thư mục {folder or '.'}/: "
+             f"{', '.join(siblings[:40]) or '—'})\n"
+             "(CHỈ mượn HÌNH DẠNG từ mẫu: cách export, cấu trúc object trả về, cách test; KHÔNG chép các "
+             "import của mẫu — chỉ import đúng những gì đề bài yêu cầu; đề bài yêu cầu dữ liệu tĩnh thì "
+             "nhúng trực tiếp trong code, không import db/auth/feed/user/vui)"]
+    js = [p for p in sorted(_base_tree(state)) if p.endswith((".js", ".mjs"))]
+    for label, prefixes in groups:
+        same = [p for p in js if any(p.startswith(pre) for pre in prefixes)]
+        if not same:
+            continue
+        sample = same[-1]  # gần nhất theo thứ tự cây
+        if (shown := _show_file(source, sha, sample)) is not None:
+            parts.append(f"\n({label}: {sample})\n{numbered(shown)}")
+    return "\n".join(parts) if len(parts) > 1 else None
+
+
+def _dep_file_context(subtask: dict, state: dict, repo: Path) -> str:
+    """File mà subtask này phụ thuộc (depends_on, 1-based) và subtask đó đã viết trong lượt
+    run này (file MỚI ở base, nằm sẵn trong repo scratch): đưa nội dung thật vào context
+    (LF/107 tiêu chí 8b) — model viết trang nạp module theo API thật, không bịa tên hàm."""
+    deps = [d for d in (subtask.get("depends_on") or []) if isinstance(d, int) and not isinstance(d, bool)]
+    subs = (state.get("plan") or {}).get("subtasks") or []
+    base_tree = _base_tree(state)
+    parts = []
+    for n in deps:
+        if not 1 <= n <= len(subs):
+            continue
+        dep_file = subs[n - 1].get("file")
+        if not dep_file or dep_file == subtask["file"] or dep_file in base_tree:
+            continue  # file có ở base → content đã nằm trong context của file cũ; criteria chỉ nêu file MỚI
+        try:
+            dep_path = _safe_join(repo, dep_file)
+        except ValueError:
+            continue
+        if not dep_path.is_file():
+            continue
+        content = dep_path.read_text(encoding="utf-8", errors="replace")
+        if not content:
+            continue
+        lines, used = [], 0
+        for line in content.splitlines():
+            if used + len(line) > _DEP_MAX_CHARS:
+                lines.append(f"(bớt: chỉ trích {len(lines)} dòng đầu của file phụ thuộc)")
+                break
+            lines.append(line)
+            used += len(line)
+        parts.append(f"\n(file phụ thuộc đã có sau subtask {n}: {dep_file})\n{numbered(chr(10).join(lines))}")
+    return "\n".join(parts)
+
 
 def numbered(content: str) -> str:
     return "\n".join(f"L{n}| {line}" for n, line in enumerate(content.splitlines(), 1))
 
 
 def whole_file_context(subtask: dict, state: dict, current: str | None, siblings: list[str], words: list[str]) -> tuple:
-    """(context, lessons, ctx) with the whole numbered file; None when the file is new."""
+    """(context, lessons, ctx) with the whole numbered file; file MỚI → mẫu file thật (như excerpt)."""
     if current is None:
-        return None, [], None
+        return _new_file_context(subtask, state, siblings), [], None
     return f"(file {len(current.splitlines())} dòng; toàn bộ file)\n{numbered(current)}", [], None
 
 
@@ -140,7 +226,12 @@ def gate3_context(subtask: dict, state: dict, current: str | None, siblings: lis
 
 def excerpt_context(subtask: dict, state: dict, current: str | None, siblings: list[str], words: list[str]) -> tuple:
     """(context, lessons, ctx): trích file model thấy ở cổng 3 + bài học + kết quả build_context. Bộ đo recall dùng chung."""
-    context = None if current is None else file_prompt_context(subtask, current, siblings, words)
+    if current is None:
+        # File MỚI: mẫu file thật cùng thể loại + siblings (LF/107 tiêu chí 8a); lessons vẫn giữ.
+        return (_new_file_context(subtask, state, siblings),
+                memory.recall(state["memory_path"], subtask["file"], words) if state.get("memory_path") else [],
+                None)
+    context = file_prompt_context(subtask, current, siblings, words)
     lessons = memory.recall(state["memory_path"], subtask["file"], words) if state.get("memory_path") else []
     ctx = None
     if current is not None:
@@ -265,6 +356,12 @@ def check_output(out: dict, current: str | None, done_reason: str | None, file: 
 
 
 def _check_rest(out: dict, current: str | None, file: str | None) -> None:
+    if current is None:
+        if file and file.endswith((".js", ".mjs")) and _HTML_PROLOG.match(out.get("code", "")):
+            # Sanity artifact (LF/107 tiêu chí 8c): file JS nhận HTML phải fail ngay lần gọi đầu
+            # thay vì trôi qua verify rồi đốt framework allowance của repair.
+            raise ValueError(f"'{file}' là file JavaScript nhưng output là HTML — viết JS module "
+                             "thật (ESM), đúng như mẫu trong context")
     if current is not None:
         if file and file.endswith((".js", ".mjs")):  # Gate 4 would catch this one round later; ask now, while it is cheap
             from gates import static_check
@@ -474,8 +571,10 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
     model = model_for(subtask, deps.models)
     role = 'gate3_heavy' if subtask.get('size') == 'large' else 'gate3_light'
     words = file_context.keywords(subtask["title"], subtask["verify"], state.get("request_detail"))
-    siblings = [] if current is None else _siblings(state["checkout_source"], state["base_sha"], subtask["file"])
+    siblings = _siblings(state.get("checkout_source"), state.get("base_sha") or "", subtask["file"])
     context, lessons, ctx = gate3_context(subtask, state, current, siblings, words)
+    if dep_lines := _dep_file_context(subtask, state, repo):
+        context = f"{context}\n{dep_lines}" if context else dep_lines.lstrip("\n")
     trace = getattr(deps, "trace", None)
     prompt = build_prompt(subtask, state.get("repair_reason"), context, lessons)
     feedback = ""
@@ -686,11 +785,12 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
     known = _base_tree(state) | {st["file"] for st in subtasks} if gate3_guards.enabled("refs") else set()
     saved = _load_progress(state, trace)
     diffs: list[dict] = []
+    diff_child: list[int] = []
     receipts: list = []
     stop = None
     child_of = {step["order"]: index for index, step in enumerate(prepared, start=1)}
 
-    def write(subtask: dict, out: dict, model: str) -> None:
+    def write(child: int, subtask: dict, out: dict, model: str) -> None:
         diff_text = _write_and_diff(repo, subtask["file"], out["code"], out["test_file"], out["test"])
         diffs.append({
             "title": subtask["title"], "file": subtask["file"], "test_file": out["test_file"],
@@ -698,6 +798,7 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
             **({'verification': out['verification']} if out.get('verification') else {}),
             "commit": _git(["rev-parse", "HEAD"], cwd=repo, text=True).stdout.strip(),
         })
+        diff_child.append(child)
 
     def remember(child: int, out: dict, model: str) -> None:
         saved[str(child)] = _progress_entry(out, model)
@@ -715,7 +816,7 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
             if not entry:
                 continue
             try:
-                write(subtask, entry, entry.get("model"))
+                write(child, subtask, entry, entry.get("model"))
             except ValueError as error:  # path tuyệt đối/thoát repo scratch
                 stop = stop or {"gate": 3, "blocked": True, "failure_class": "critical",
                                 "reason": f"subtask '{subtask.get('title')}': {error}"}
@@ -738,7 +839,7 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
             out, model, produced = payload, rest[0], rest[1]
             receipts.extend(produced or [])
             try:
-                write(subtask, out, model)
+                write(child, subtask, out, model)
             except ValueError as error:
                 stop = stop or {"gate": 3, "blocked": True, "failure_class": getattr(error, 'failure_class', 'critical'),
                                 "reason": f"subtask '{subtask.get('title')}': {error}"}
@@ -746,6 +847,11 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
             remember(child, out, model)
         if stop is not None:
             break
+    # Cổng 4 ghép diff với subtask theo THỨ TỰ PLAN (zip ở services/candidate.py), không phải
+    # thứ tự hoàn thành: các lớp DAG chạy [2,4] song song trước [3,5] làm diffs bị lệch → run 51
+    # bị chặn ScopeViolation oan ("child 3 ghi lich-client.js"). Sắp lại theo child.
+    if diff_child:
+        diffs[:] = [d for _, d in sorted(zip(diff_child, diffs), key=lambda pair: pair[0])]
 
     state["diffs"] = diffs
     state["scratch_repo"] = str(repo)

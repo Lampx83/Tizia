@@ -85,6 +85,23 @@ def test_a_dependent_subtask_waits_for_the_one_it_depends_on(tmp_path):
                             ("start", "public/b.html"), ("end", "public/b.html")]
 
 
+def test_diffs_come_back_in_plan_order_even_when_a_dag_level_finishes_out_of_order(tmp_path):
+    """Seam 3→4 (services/candidate.py) ghép zip(subtasks, diffs) theo thứ tự plan; lớp DAG
+    chạy [2,4] song song trước [3,5] (run 51) đã làm diffs [1,2,4,3,5] → ScopeViolation oan."""
+    models = FileModels(plan_of(step("public/a.html", deps=[]), step("public/b.html", deps=[1]),
+                                step("public/c.html", deps=[2]), step("public/d.html", deps=[1]),
+                                step("public/e.html", deps=[4])))
+    out = run_gate_3(tmp_path, models.plan, models)
+
+    assert out["blocked"] is False, out.get("reason")
+    assert [d["file"] for d in out["diffs"]] == ["public/a.html", "public/b.html", "public/c.html",
+                                                 "public/d.html", "public/e.html"]
+    # model vẫn chạy đúng lớp: d song song với b (cả hai phụ thuộc a), trước c và e
+    assert models.order[0] == ("start", "public/a.html")
+    starts = [f for kind, f in models.order if kind == "start"]
+    assert starts.index("public/d.html") < starts.index("public/c.html")
+
+
 def test_a_single_subtask_request_never_starts_a_thread_pool(tmp_path, monkeypatch):
     def forbidden(*_a, **_k):
         raise AssertionError("request một subtask phải chạy tuần tự như cũ")
