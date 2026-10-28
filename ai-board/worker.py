@@ -1386,10 +1386,10 @@ class HarnessPlanner:
                     "gate": 1, "reason": f"folder_brief: {', '.join(stop)}", "signals": stop, "plan": None,
                     "public_message": "Chức năng này cần quản trị viên xem lại trước khi làm tiếp."})
         budget = self.Budget.from_env()
-        # Một lượt lập kế hoạch: gate 1 (tối đa 2 lần), gate 2, gate 2.5. Khi bật `AI_BOARD_GATE25_ANSWERED`,
-        # câu hỏi được trả lời từ thread và validator chạy lại, cần thêm 1 lượt gọi model.
         answered = os.environ.get("AI_BOARD_GATE25_ANSWERED", "").strip().lower() in {"1", "true", "yes", "on"}
-        budget.max_model_calls = min(budget.max_model_calls, 6 if answered else 5)
+        # Một lượt lập kế hoạch: gate 1 (tối đa 2 lần, mỗi lần vài lời gọi), gate 2, gate 2.5 (chạy lại khi
+        # người gửi đã trả lời). Trần này chỉ chặn vòng lặp vô hạn; trần thật là root allowance của server.
+        budget.max_model_calls = min(budget.max_model_calls, 12 if answered else 10)
         ticket = snapshot.get("ticket") or {}
         budget.max_units = int(ticket.get("budget_limit") or DEFAULT_BUDGET_LIMIT)  # trần mỗi lượt, không trừ các lượt trước
         source = source or self.source  # folder: đỉnh nhánh chu kỳ thay cho checkout chung
