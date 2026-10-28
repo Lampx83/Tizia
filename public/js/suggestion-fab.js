@@ -168,7 +168,10 @@ function autoMount() {
         <div class="sgf-inbox">
           <div class="sgf-inbox-head">
             <span>Yêu cầu gần đây của bạn</span>
-            <button type="button" class="sgf-reload" id="sgf-reload" title="Tải lại" aria-label="Tải lại yêu cầu">${boardIcon('reload')}</button>
+            <span class="sgf-inbox-tools">
+              <button type="button" class="sgf-history-clear" id="sgf-history-clear" title="Ẩn các yêu cầu đã đóng khỏi danh sách này">Xóa lịch sử</button>
+              <button type="button" class="sgf-reload" id="sgf-reload" title="Tải lại" aria-label="Tải lại yêu cầu">${boardIcon('reload')}</button>
+            </span>
           </div>
           <div class="sgf-inbox-list" id="sgf-inbox">Đang tải…</div>
         </div>
@@ -195,10 +198,12 @@ function bind(root) {
   threadModal.innerHTML = `<div class="sgf-thread-sheet" role="dialog" aria-modal="true" aria-label="Trao đổi với Ban điều hành">
     <div class="sgf-thread-head"><h3>Trao đổi với Ban điều hành</h3>
       <button type="button" class="sgf-thread-x" aria-label="Đóng cửa sổ trao đổi">&#10005;</button></div>
-    <div id="sgf-thread-host" class="sgf-thread-host"></div></div>`;
+    <div id="sgf-thread-host" class="sgf-thread-host"></div>
+    <div id="sgf-thread-clarify" class="sgf-thread-clarify" hidden></div></div>`;
   root.appendChild(threadModal);
   const threadHost = threadModal.querySelector('#sgf-thread-host');
-  const closeThread = () => { threadModal.hidden = true; threadHost.innerHTML = ''; };
+  const threadClarify = threadModal.querySelector('#sgf-thread-clarify');
+  const closeThread = () => { threadModal.hidden = true; threadHost.innerHTML = ''; threadClarify.hidden = true; };
   threadModal.querySelector('.sgf-thread-x').addEventListener('click', closeThread);
   threadModal.addEventListener('click', (event) => { if (event.target === threadModal) closeThread(); });
   document.addEventListener('keydown', (event) => {
@@ -513,13 +518,21 @@ function bind(root) {
   });
 
   function mountClarify() {
-    const host = clarifyId && inbox.querySelector(`[data-item="${clarifyId}"]`);
-    const target = host || clarSlot;
-    // Chỉ di chuyển khi đổi chỗ: appendChild lại mỗi lần load làm panel nháy + chạy lại animation.
-    if (clarifyBox.parentElement !== target) target.appendChild(clarifyBox);
+    // Phần làm rõ (grilling) nằm trong cửa sổ trao đổi với Ban điều hành, không nhúng vào danh sách.
+    if (clarifyBox.parentElement !== threadClarify) threadClarify.appendChild(clarifyBox);
+    threadClarify.hidden = clarifyBox.hidden || threadModal.hidden;
   }
   function toggleClarify(id) {
-    if (clarifyId === Number(id)) { clarifyBox.hidden = !clarifyBox.hidden; return; } // thu gọn, giữ nguyên hội thoại
+    if (clarifyId === Number(id)) { // mở/đóng grilling đã mở: luôn hiện trong cửa sổ trao đổi
+      clarifyBox.hidden = !clarifyBox.hidden;
+      if (!clarifyBox.hidden && threadModal.hidden) {
+        threadModal.hidden = false;
+        const me = (typeof getPlayerName === 'function' && getPlayerName()) || '';
+        renderRequestThread({ host: threadHost, requestId: clarifyId, me, onChange: loadInbox });
+      }
+      mountClarify();
+      return;
+    }
     startClarify(id);
   }
 
@@ -559,6 +572,12 @@ function bind(root) {
 
   async function startClarify(id, title) {
     clarifyId = Number(id);
+    // Grilling mở trong cửa sổ trao đổi với Ban điều hành (không nhúng vào danh sách).
+    if (threadModal.hidden) {
+      threadModal.hidden = false;
+      const me = (typeof getPlayerName === 'function' && getPlayerName()) || '';
+      renderRequestThread({ host: threadHost, requestId: clarifyId, me, onChange: loadInbox });
+    }
     showTab('mine');
     pendingBox.hidden = true;
     clarifyBox.hidden = false;
@@ -755,6 +774,26 @@ function bind(root) {
     if (e.key === 'Escape' && !modal.hidden) close();
   });
   root.querySelector('#sgf-reload').addEventListener('click', loadInbox);
+  // "Xóa lịch sử": ẩn các yêu cầu đã đóng khỏi danh sách (chỉ phía người xem, không xoá dữ liệu của Ban).
+  const historyBtn = root.querySelector('#sgf-history-clear');
+  if (historyBtn) {
+    historyBtn.addEventListener('click', () => {
+      if (!historyBtn.dataset.armed) {
+        historyBtn.dataset.armed = '1';
+        historyBtn.textContent = 'Bấm lần nữa để xóa';
+        return;
+      }
+      delete historyBtn.dataset.armed;
+      historyBtn.textContent = 'Xóa lịch sử';
+      const hidden = hiddenRequests();
+      for (const item of lastShown) {
+        if (['done', 'rejected', 'cancelled'].includes(item.status)) hidden.add(Number(item.id));
+      }
+      try { localStorage.setItem(HIDDEN_KEY, JSON.stringify([...hidden])); } catch { /* private mode */ }
+      inboxSignature = null;
+      loadInbox();
+    });
+  }
   const inboxPoll = setInterval(() => {
     if (!root.isConnected) { clearInterval(inboxPoll); return; }
     // Đang trả lời Ban điều hành thì không tự tải lại: panel nháy và mất chỗ đang gõ.
@@ -982,6 +1021,11 @@ function bind(root) {
     folderHint.hidden = true;
   });
 
+  const HIDDEN_KEY = 'sgf.hiddenRequests';
+  const hiddenRequests = () => {
+    try { return new Set(JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]').map(Number)); } catch { return new Set(); }
+  };
+  let lastShown = [];
   let inboxSignature = null;
   async function loadInbox(quiet = false) {
     if (quiet !== true) loadFolders();
@@ -998,17 +1042,20 @@ function bind(root) {
       const mine = me ? items.filter(it => it.student === me) : [];
       const withReply = items.filter(it => it.admin_note && it.student !== me).slice(0, 3);
       const shown = (mine.length ? mine : withReply).slice(0, 8);
+      const hidden = hiddenRequests();
+      const visible = shown.filter(it => !hidden.has(Number(it.id)));
+      lastShown = visible;
       // Tải lại nền: dữ liệu y hệt thì giữ nguyên DOM (không nháy, không mất vị trí cuộn).
-      const signature = JSON.stringify(shown.map(it => [it.id, it.status, it.admin_note, it.feature_name,
+      const signature = JSON.stringify(visible.map(it => [it.id, it.status, it.admin_note, it.feature_name,
         it.awaiting_reply, it.can_continue, it.can_edit]));
       if (quiet === true && signature === inboxSignature) { mountClarify(); return; }
       inboxSignature = signature;
-      if (!shown.length) {
+      if (!visible.length) {
         inbox.innerHTML = '<div class="sgf-empty">Chưa có yêu cầu nào. Hãy là người đầu tiên đề xuất cải tiến trang này!</div>';
         return;
       }
       let lastGroup = null;
-      inbox.innerHTML = shown.map(it => {
+      inbox.innerHTML = visible.map(it => {
         const group = it.feature_name || null;
         const head = group && group !== lastGroup ? `<div class="sgf-group">${escapeHtml(group)}</div>` : '';
         lastGroup = group;
@@ -1141,6 +1188,7 @@ export function renderItem(it, me = '') {
   const sm = STATUS[it.status] || STATUS.pending;
   const mine = me && it.student === me;
   const awaiting = mine && it.awaiting_user === true;
+  const sent = it.created_at ? `Gửi ${fmtWhen(it.created_at)}` : '';
   const atts = Array.isArray(it.attachments) ? it.attachments : [];
   const attHtml = atts.length ? `
     <div class="sgf-it-att">
@@ -1161,27 +1209,39 @@ export function renderItem(it, me = '') {
         ${it.execution_mode === 'queue' ? '<span class="sgf-it-mode">Hàng đợi Claude Code</span>' : ''}
         <span class="sgf-it-st ${sm.cls}">${escapeHtml(awaiting ? 'Chờ bạn trả lời' : it.status_label || sm.label)}</span>
       </div>
+      ${sent ? `<div class="sgf-it-time">${sent}</div>` : ''}
       ${queueLine(it.queue)}
       ${attHtml}
       ${it.admin_note ? `<div class="sgf-it-note">${escapeHtml(it.admin_note)}</div>` : ''}
-      ${awaiting
-        // Ban đang chờ trả lời: mở thẳng phần làm rõ; nhãn khớp trạng thái awaiting_user.
-        ? `<button type="button" class="sgf-it-thread-btn sgf-it-ask" data-clarify="${it.id}">Trả lời ngay</button>`
-        : `<button type="button" class="sgf-it-thread-btn" data-req-toggle="${it.id}">
-        ${mine ? 'Trao đổi với Ban điều hành' : 'Xem trao đổi'}
-      </button>`}
-      ${mine && it.can_continue
-        ? `<button type="button" class="sgf-it-thread-btn" data-req-continue="${it.id}" title="Chạy nốt phần còn lại của kế hoạch đã duyệt">Tiếp tục</button>` : ''}
-      ${mine && it.can_edit
-        ? `<button type="button" class="sgf-it-thread-btn" data-req-edit="${it.id}" data-title="${escapeHtml(it.title)}" data-detail="${escapeHtml(it.detail || '')}" title="Dừng lại, sửa nội dung rồi gửi lại yêu cầu">Sửa yêu cầu</button>` : ''}
-      ${mine && it.retry === 'retry'
-        ? `<button type="button" class="sgf-it-thread-btn" data-req-retry="${it.id}" title="Ban lập kế hoạch mới cho yêu cầu này">Thử cách khác</button>` : ''}
       ${mine && it.retry === 'admin' ? '<div class="sgf-it-queue">Đã chuyển quản trị viên</div>' : ''}
-      ${mine && ['pending', 'reviewing'].includes(it.status)
-        ? `<button type="button" class="sgf-it-cancel" data-req-cancel="${it.id}">Hủy yêu cầu</button>` : ''}
+      <div class="sgf-it-actions">
+        ${awaiting
+          // Ban đang chờ trả lời: mở grilling trong cửa sổ trao đổi với Ban điều hành.
+          ? `<button type="button" class="sgf-it-thread-btn sgf-it-ask" data-clarify="${it.id}">Trả lời ngay</button>`
+          : `<button type="button" class="sgf-it-thread-btn" data-req-toggle="${it.id}">
+          ${mine ? 'Trao đổi với Ban điều hành' : 'Xem trao đổi'}
+        </button>`}
+        ${mine && it.can_continue
+          ? `<button type="button" class="sgf-it-thread-btn" data-req-continue="${it.id}" title="Chạy nốt phần còn lại của kế hoạch đã duyệt">Tiếp tục</button>` : ''}
+        ${mine && it.can_edit
+          ? `<button type="button" class="sgf-it-thread-btn" data-req-edit="${it.id}" data-title="${escapeHtml(it.title)}" data-detail="${escapeHtml(it.detail || '')}" title="Dừng lại, sửa nội dung rồi gửi lại yêu cầu">Sửa yêu cầu</button>` : ''}
+        ${mine && it.retry === 'retry'
+          ? `<button type="button" class="sgf-it-thread-btn" data-req-retry="${it.id}" title="Ban lập kế hoạch mới cho yêu cầu này">Thử cách khác</button>` : ''}
+        ${mine && ['pending', 'reviewing'].includes(it.status)
+          ? `<button type="button" class="sgf-it-cancel" data-req-cancel="${it.id}">Hủy yêu cầu</button>` : ''}
+      </div>
     </div>
   `;
 }
+
+const fmtWhen = (t) => {
+  try {
+    return new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+      .format(new Date(t));
+  } catch {
+    return '';
+  }
+};
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({
@@ -1308,6 +1368,9 @@ function injectStyles() {
       background: #f8fafc; color: #334155; font-size: 16px; line-height: 1; cursor: pointer; }
     .sgf-thread-x:hover { background: #eef2ff; border-color: #a5b4fc; color: #312e81; }
     .sgf-thread-host .rt-list { max-height: 58vh; }
+    .sgf-thread-clarify { border-top: 1px solid #e5e7eb; margin-top: 10px; }
+    .sgf-thread-clarify[hidden] { display: none !important; }
+    .sgf-thread-clarify .sgf-clarify { padding: 8px 0 0; }
     .sgf-it-thread-btn.sgf-it-ask {
       background: #fbbf24; color: #451a03; border-color: #f59e0b; font-weight: 700;
       animation: sgf-ring 1.6s ease-out infinite;
@@ -1393,11 +1456,20 @@ function injectStyles() {
 
     .sgf-inbox { border-top: 1px solid #e5e7eb; padding: 12px 20px 18px; background: #f8fafc; border-radius: 0 0 16px 16px; }
     .sgf-inbox-head { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: #475569; font-weight: 700; margin-bottom: 8px; }
+    .sgf-inbox-tools { display: inline-flex; align-items: center; gap: 4px; }
+    .sgf-history-clear {
+      border: 0; background: transparent; color: #64748b; font: inherit; font-weight: 600; font-size: 12px;
+      padding: 6px 8px; border-radius: 8px; cursor: pointer;
+    }
+    .sgf-history-clear:hover { background: rgba(100,116,139,.14); color: #334155; }
+    .sgf-history-clear[data-armed] { background: #fee2e2; color: #991b1b; }
     .sgf-reload { display: grid; place-items: center; min-width: 44px; min-height: 44px; border: 0; background: transparent; cursor: pointer; color: #4f46e5; }
     .sgf-inbox-list { display: flex; flex-direction: column; gap: 7px; }
     .sgf-empty { font-size: 12.5px; color: #6b7280; text-align: center; padding: 10px 0; font-style: italic; }
     .sgf-it { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 9px 11px; }
     .sgf-it-line { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px; }
+    .sgf-it-time { font-size: 11.5px; color: #64748b; margin: 4px 0 0; }
+    .sgf-it-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
     .sgf-it-queue { font-size: 12px; color: #6b7280; margin: 4px 0 2px; }
     .sgf-folders { padding: 0 20px 8px; }
     .sgf-folder { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(148,163,184,.25); font-size: 13px; }
@@ -1463,6 +1535,18 @@ function injectStyles() {
       .sgf-ctx { background: #312e81; color: #c7d2fe; }
       .sgf-inbox { background: #1a1740; border-top-color: #312e81; }
       .sgf-inbox-head { color: #cbd5e1; }
+      .sgf-it-time { color: #94a3b8; }
+      .sgf-history-clear { color: #94a3b8; }
+      .sgf-history-clear:hover { background: rgba(148,163,184,.18); color: #e2e8f0; }
+      .sgf-thread-clarify { border-top-color: #312e81; }
+      .sgf-thread-sheet { background: #1e1b4b; color: #e5e7eb; border-color: #312e81; }
+      .sgf-thread-head h3 { color: #fff; }
+      .sgf-thread-x { background: rgba(255,255,255,.08); color: #cbd5e1; border-color: #4338ca; }
+      .sgf-thread-x:hover { background: rgba(255,255,255,.16); color: #fff; }
+      .sgf-thread-host .rt-board .rt-bubble { background: #312e81; color: #e0e7ff; border-color: #4338ca; }
+      .sgf-thread-host .rt-input { background: #1a1740; color: #f1f5f9; border-color: #4338ca; }
+      .sgf-thread-host .rt-input::placeholder { color: #a5b4fc; }
+      .sgf-thread-host .rt-count, .sgf-thread-host .rt-time { color: #94a3b8; }
       .sgf-it { background: #312e81; border-color: #4338ca; }
       .sgf-it-title { color: #f1f5f9; }
       .sgf-it-note { background: #422006; color: #fde68a; }
