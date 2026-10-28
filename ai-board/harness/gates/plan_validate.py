@@ -288,6 +288,24 @@ def feature_request(request: dict) -> bool:
     return request.get('type') == 'feature' or bool(request.get('complexity_by_server'))
 
 
+def filled_grounding(validation: dict, plan: dict, files: dict) -> list:
+    """Grounding records for every subtask. A new file has no source line to quote, so the harness can state
+    its before/after/verify from the subtask itself; an existing file still needs the validator's own record."""
+    records = validation.get('grounding')
+    records = records if isinstance(records, list) and len(records) == len(plan.get('subtasks') or []) else []
+    filled = []
+    for index, task in enumerate(plan.get('subtasks') or []):
+        record = records[index] if index < len(records) and isinstance(records[index], dict) else {}
+        if task['file'] in files:
+            filled.append(record)
+            continue
+        filled.append({'target': task['file'], 'file': task['file'], 'quote': str(record.get('quote') or ''),
+                       'before': str(record.get('before') or 'chưa có file'),
+                       'after': str(record.get('after') or task.get('title') or ''),
+                       'verify': str(record.get('verify') or task.get('verify') or '')})
+    return filled
+
+
 def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict) -> dict:
     """Dẫn chứng hành vi cho từng subtask. File mới (chưa có ở base) không có dòng nguồn nào để trích:
     chấp nhận `quote` rỗng khi before/after/verify đã nêu; nếu có trích từ file mẫu có thật thì vẫn kiểm khớp."""
@@ -474,6 +492,29 @@ def _uncertain(validation: dict) -> bool:
     return not validation['clear'] or not validation.get('grounded')
 
 
+_CITED_PATH = re.compile(r"(?<![\w/.-])((?:public|server|test|scripts|ai-board)/[\w./-]+\.(?:html?|js|mjs|css|json|sql|md|py))")
+
+
+def invented_paths(validation: dict, plan: dict, files: dict, source=None, sha: str | None = None) -> list[str]:
+    """Paths the validator cites that exist neither in REPO DATA nor at the base commit.
+
+    A local validator sometimes rejects a plan with "a previous request already created public/x.html" for a
+    file that exists nowhere: that is not evidence about this plan, so the veto is dropped instead of blocking.
+    """
+    known = set(files) | {task['file'] for task in plan.get('subtasks') or []}
+    cited = {path for path in _CITED_PATH.findall(str(validation.get('reason') or '')) if path not in known}
+    if not cited:
+        return []
+    if source is not None and sha:
+        try:
+            present = set(code_index.git(source, 'ls-tree', '--name-only', sha, '--', *sorted(cited))
+                          .decode('utf-8', 'replace').splitlines())
+        except OSError:
+            present = set()
+        cited -= present
+    return sorted(cited)
+
+
 def _brief(validation: dict) -> dict:
     return {'clear': validation['clear'], 'grounded': bool(validation.get('grounded')), 'reason': str(validation.get('reason') or '')[:200],
             'question': str(validation.get('question') or '')[:200]}
@@ -582,7 +623,16 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
         return {"gate": 2.5, "blocked": True, "reason": "needs_clarification", "outcome": "needs_clarification",
                 "public_message": question}
 
+    invented = invented_paths(validation, plan, files, state.get('checkout_source'), sha)
+    if invented and not validation.get("grounded"):
+        # The objection cites a path that exists nowhere (neither REPO DATA nor the base commit): the local
+        # validator made it up, so the plan is not blocked on it. The admin still sees the note.
+        state['validator_note'] = f"bỏ qua grounded=false vì nêu file không tồn tại: {', '.join(invented)}"
+        judge('validator paths', False, state['validator_note'])
+        validation = {**validation, 'grounded': True}
+
     if request.get('grounding_required'):
+        validation = {**validation, 'grounding': filled_grounding(validation, plan, files)}
         try:
             import functional
             targets = {task['file'] for task in plan['subtasks']}

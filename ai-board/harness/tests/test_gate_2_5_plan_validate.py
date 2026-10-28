@@ -1,6 +1,7 @@
 """Cổng 2.5 (plan_validate.py) — soát plan (Q1) + phân quyền độ
 phức tạp (Q2) trước khi cổng 3 tiêu ngân sách."""
 import json
+import subprocess
 import time
 
 import pytest
@@ -124,6 +125,79 @@ def test_a_clarified_spec_clears_the_plan_instead_of_asking_the_student_again(tm
 
     assert out["blocked"] is False, out
     assert state["assumption"] == "Tiêu đề và h1 cụ thể là gì?"
+
+
+def test_a_grounding_veto_that_names_a_file_which_exists_nowhere_is_ignored(tmp_path):
+    """Validator tự bịa "yêu cầu trước đã tạo file X" (X không có ở base, không có trong plan) thì không được chặn."""
+    subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
+    (tmp_path / 'public').mkdir(parents=True)
+    (tmp_path / 'public' / 'index.html').write_text('<h1>Tizia</h1>\n', encoding='utf8')
+    subprocess.run(['git', '-C', str(tmp_path), 'add', '.'], check=True)
+    subprocess.run(['git', '-C', str(tmp_path), '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+                    'commit', '-qm', 'base'], check=True)
+    plan = plan_with(["features"])
+    plan["subtasks"] = [{"title": "Trang mới", "file": "public/trang-moi.html", "verify": "node --test test/trang-moi.test.js",
+                         "size": "small", "layer": "frontend", "depends_on": []}]
+    request = {"subject": "Thêm một trang mới", "body": "trang mới cho khoa CNTT", "grounding_required": True,
+               "type": "feature", "complexity_by_server": True}
+    validation = {"clear": True, "grounded": False, "reason":
+                  "REPO DATA chỉ ra một yêu cầu trước đó đã tạo file public/khong-co-that.html cho cùng mục đích.",
+                  "grounding": [{"target": "public/trang-moi.html", "file": "", "quote": "",
+                                 "before": "chưa có trang", "after": "trang mới", "verify": "node --test test/trang-moi.test.js"}]}
+    state = {"plan": plan, "checkout_source": str(tmp_path)}
+
+    out = plan_validate.run(request, deps_with(FakeModels(plan, validation=validation)), Budget(), state)
+
+    assert out["blocked"] is False, out
+    assert "public/khong-co-that.html" in state["validator_note"]
+
+
+def test_a_question_about_a_file_that_exists_nowhere_does_not_block_a_specified_feature(tmp_path):
+    """Đúng ca live: validator vừa hỏi lại vừa grounded=false vì một file không tồn tại; spec đã chốt thì plan đi tiếp."""
+    subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
+    (tmp_path / 'public').mkdir(parents=True)
+    (tmp_path / 'public' / 'index.html').write_text('<h1>Tizia</h1>\n', encoding='utf8')
+    subprocess.run(['git', '-C', str(tmp_path), 'add', '.'], check=True)
+    subprocess.run(['git', '-C', str(tmp_path), '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+                    'commit', '-qm', 'base'], check=True)
+    plan = plan_with(["features"])
+    plan["subtasks"] = [{"title": "Trang mới", "file": "public/trang-moi.html", "verify": "node --test test/trang-moi.test.js",
+                         "size": "small", "layer": "frontend", "depends_on": []}]
+    request = {"subject": "Thêm một trang mới", "body": "trang mới cho khoa CNTT", "grounding_required": True,
+               "type": "feature", "complexity_by_server": True,
+               "clarified_spec": "1) trang mới hoàn toàn; 2) danh sách đơn giản; 3) title 'Trang mới'."}
+    validation = {"clear": False, "question": "Trang mới có thay thế trang cũ không?",
+                  "grounded": False,
+                  "reason": "REPO DATA cho thấy một yêu cầu trước đã tạo public/khong-co-that.html cho cùng mục đích.",
+                  "grounding": [{"target": "public/trang-moi.html", "file": "", "quote": "",
+                                 "before": "chưa có trang", "after": "trang mới", "verify": "node --test test/trang-moi.test.js"}]}
+    state = {"plan": plan, "checkout_source": str(tmp_path)}
+
+    out = plan_validate.run(request, deps_with(FakeModels(plan, validation=validation)), Budget(), state)
+
+    assert out["blocked"] is False, out
+    assert "public/khong-co-that.html" in state["validator_note"]
+
+
+def test_a_grounding_veto_about_a_real_plan_file_still_blocks(tmp_path):
+    """Cùng lý do nhưng file được nêu CÓ trong plan: vẫn chặn (guard chỉ bỏ veto bịa đường dẫn)."""
+    subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
+    (tmp_path / 'public').mkdir(parents=True)
+    (tmp_path / 'public' / 'trang.html').write_text('<h1>Trang</h1>\n', encoding='utf8')
+    subprocess.run(['git', '-C', str(tmp_path), 'add', '.'], check=True)
+    subprocess.run(['git', '-C', str(tmp_path), '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+                    'commit', '-qm', 'base'], check=True)
+    plan = plan_with(["features"])
+    plan["subtasks"] = [{"title": "Sửa trang", "file": "public/trang.html", "verify": "trang có chữ mới",
+                         "size": "small", "layer": "frontend", "depends_on": []}]
+    request = {"subject": "Sửa trang", "body": "đổi chữ", "grounding_required": True}
+    validation = {"clear": True, "grounded": False,
+                  "reason": "Plan sửa public/trang.html nhưng không có dẫn chứng hành vi."}
+    state = {"plan": plan, "checkout_source": str(tmp_path)}
+
+    out = plan_validate.run(request, deps_with(FakeModels(plan, validation=validation)), Budget(), state)
+
+    assert out["blocked"] is True and out["reason"] == "plan_ungrounded"
 
 
 # ── AC 2: plan phức tạp + user thường -> complexity_gated ───────────────────
