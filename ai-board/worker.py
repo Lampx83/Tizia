@@ -1416,6 +1416,8 @@ class HarnessPlanner:
         # Một lượt lập kế hoạch: gate 1 (tối đa 2 lần, mỗi lần vài lời gọi), gate 2, gate 2.5 (chạy lại khi
         # người gửi đã trả lời). Trần này chỉ chặn vòng lặp vô hạn; trần thật là root allowance của server.
         budget.max_model_calls = min(budget.max_model_calls, 12 if answered else 10)
+        # Model 35B chạy tuần tự: một lượt lập plan (gate 1 nhiều lần thử + 2.5) dễ vượt 900 s mặc định.
+        budget.max_wall_clock_s = max(budget.max_wall_clock_s, 1800.0)
         ticket = snapshot.get("ticket") or {}
         budget.max_units = int(ticket.get("budget_limit") or DEFAULT_BUDGET_LIMIT)  # trần mỗi lượt, không trừ các lượt trước
         source = source or self.source  # folder: đỉnh nhánh chu kỳ thay cho checkout chung
