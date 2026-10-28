@@ -276,7 +276,10 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                                    db_path=db_path, proposal_id=proposal_id, skill_context=skill_context)
         body = react or deps.call_model(deps.models.gate1_model, ask, gate=1, budget=budget,
                                         db_path=db_path, proposal_id=proposal_id, prompt_name="brainstorm.md",
-                                        skill_context=skill_context)
+                                        skill_context=skill_context,
+                                        # Lượt sửa plan: phá vòng lặp của model nhỏ (LF/106).
+                                        options=({"temperature": 0.7, "top_p": 0.9, "presence_penalty": 0.4}
+                                                 if os.environ.get("AI_BOARD_PLAN_REPAIR") == "1" else None))
         stage = "plan parse"
         try:
             plan = parse_plan(body.get("response", ""))

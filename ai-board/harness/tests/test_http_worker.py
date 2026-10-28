@@ -10,8 +10,9 @@ if str(AI_BOARD_DIR) not in sys.path:
     sys.path.insert(0, str(AI_BOARD_DIR))
 
 from runtime.limits import config_sha256
-from worker import (HarnessPlanner, HttpWorker, PlanBlockedError, WorkerClient, _execution_plan, _plan_repairable,
-                    _plan_repair_note, _plan_rejection, _repaired_snapshot, execute_pre_pr, main)
+from worker import (HarnessPlanner, HttpWorker, PlanBlockedError, WorkerClient, _duplicate_files, _execution_plan,
+                    _merge_same_file, _plan_repairable, _plan_repair_note, _plan_rejection, _repaired_snapshot,
+                    execute_pre_pr, main)
 
 
 def test_planner_task_type_survives_canonical_and_execution_plan():
@@ -1883,4 +1884,29 @@ def test_plan_repairable_only_for_model_plan_errors():
 def test_plan_repair_note_names_the_reason_and_the_rules():
     note = _plan_repair_note("plan không hợp lệ: 2 subtask cùng sửa x")
     assert "2 subtask cùng sửa x" in note
-    assert "node --test" in note and "MỘT file" in note
+    assert "node --test" in note and "[CẤM TUYỆT ĐỐI]" in note
+
+
+def test_two_subtasks_on_one_file_merge_and_keep_depends_on_valid():
+    plan = [
+        {"title": "Thêm nút", "file": "public/js/x.js", "verify": "node --test a", "size": "small", "depends_on": []},
+        {"title": "Trang", "file": "public/x.html", "verify": "node --test b", "size": "small", "depends_on": [1]},
+        {"title": "Sửa handler", "file": "public/js/x.js", "verify": "node --test c", "size": "large", "depends_on": [2]},
+    ]
+    out = _merge_same_file(plan)
+    assert [task["file"] for task in out] == ["public/js/x.js", "public/x.html"]
+    assert out[0]["title"] == "Thêm nút + Sửa handler"
+    assert "node --test a" in out[0]["verify"] and "node --test c" in out[0]["verify"]
+    assert out[0]["size"] == "large"
+    # Gộp x.js (phụ thuộc x.html) vào x.js đầu làm chu trình x.js<->x.html: bỏ cạnh đóng chu trình.
+    assert out[0]["depends_on"] == [] and out[1]["depends_on"] == [1]
+    assert [task["file"] for task in plan] == ["public/js/x.js", "public/x.html", "public/js/x.js"]  # không sửa input
+
+
+def test_duplicate_files_and_repair_note_name_the_file():
+    reason = "plan không hợp lệ: 2 subtask cùng sửa public/js/school-explore.js — gộp thành 1"
+    assert _duplicate_files(reason) == ["public/js/school-explore.js"]
+    assert _duplicate_files("plan không hợp lệ: thiếu acceptance") == []
+    note = _plan_repair_note(reason, _duplicate_files(reason))
+    assert "[CẤM TUYỆT ĐỐI]" in note and "public/js/school-explore.js" in note
+    assert "node --test" in note

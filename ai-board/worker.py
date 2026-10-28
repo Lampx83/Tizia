@@ -665,11 +665,75 @@ def _plan_repairable(stopped: dict) -> bool:
     return int(stopped.get("gate") or 0) == 1 and str((stopped.get("result") or {}).get("reason") or "").startswith("plan không hợp lệ")
 
 
-def _plan_repair_note(reason: str) -> str:
-    """Lời nhắc cho lượt sửa plan: nêu đúng lỗi và hai luật hay bị vi phạm."""
-    return (f"Kế hoạch trước bị từ chối: {reason}. Lập lại kế hoạch: mỗi subtask chỉ MỘT file và không hai "
-            "subtask cùng file; acceptance/verify của plan nhiều bước phải là LỆNH CHẠY ĐƯỢC "
+def _plan_repair_note(reason: str, files: list[str] | None = None) -> str:
+    """Lời nhắc cho lượt sửa plan: nêu lỗi, danh sách file bị trùng và luật cứng."""
+    dupes = [f for f in (files or []) if f]
+    banned = "\n[CẤM TUYỆT ĐỐI]\n- KHÔNG được giao một file cho quá 1 subtask."
+    if dupes:
+        banned += "\n- File bị trùng: " + ", ".join(dupes)
+    banned += "\n- Plan trước đã sai vì vi phạm điều này; lặp lại thì hệ thống dừng ngay."
+    return (f"Kế hoạch trước bị từ chối: {reason}.{banned}\n"
+            "Lập lại kế hoạch: trước khi viết, liệt kê [subtask | file] và kiểm tra không file nào lặp; "
+            "acceptance/verify của plan nhiều bước phải là LỆNH CHẠY ĐƯỢC "
             "(node --test <file>, curl <url>, pytest, python <file>, bash <script>).")
+
+
+def _duplicate_files(reason: str) -> list[str]:
+    """Tên file nêu trong lỗi 'N subtask cùng sửa <file>' (rỗng nếu lỗi khác)."""
+    match = re.search(r"cùng sửa (\S+?)(?:\s+[—-]|$)", str(reason or ""))
+    return [match.group(1)] if match else []
+
+
+def _merge_same_file(subtasks: list[dict]) -> list[dict]:
+    """Gộp các subtask cùng file (luật một file/subtask) trước khi validate; giữ thứ tự, remap depends_on."""
+    order: list[int] = []
+    merged: dict[int, dict] = {}
+    for index, task in enumerate(subtasks, start=1):
+        file = str(task.get("file") or "").strip()
+        same = next((i for i in order if file and str(merged[i].get("file") or "").strip() == file), None)
+        if same is None:
+            order.append(index)
+            merged[index] = {**task, "_deps": list(task.get("depends_on") or [])}
+            continue
+        target = merged[same]
+        target["title"] = f"{target.get('title')} + {task.get('title')}"
+        target["verify"] = "; ".join(x for x in (str(target.get("verify") or ""), str(task.get("verify") or "")) if x)
+        if str(task.get("size") or "") == "large":
+            target["size"] = "large"
+        for field in ("layer", "task_type"):
+            if not target.get(field) and task.get(field):
+                target[field] = task[field]
+        target["_deps"] = [*target["_deps"], *(task.get("depends_on") or [])]
+    remap = {old: new for new, old in enumerate(order, start=1)}
+    edges: dict[int, list[int]] = {}
+    for old in order:
+        deps = sorted({remap[d] for d in merged[old]["_deps"] if d in remap and remap[d] != remap[old]})
+        edges[remap[old]] = deps
+    # Gộp có thể tạo chu trình (A phụ thuộc B, B phụ thuộc A sau khi gộp): bỏ cạnh đóng chu trình.
+    acyclic = _acyclic_edges(edges)
+    out = []
+    for old in order:
+        task = {k: v for k, v in merged[old].items() if k != "_deps"}
+        task["depends_on"] = acyclic[remap[old]]
+        out.append(task)
+    return out
+
+
+def _acyclic_edges(edges: dict[int, list[int]]) -> dict[int, list[int]]:
+    """Bỏ dần cạnh phụ thuộc tạo chu trình, giữ DAG (thứ tự node tăng dần, tất định)."""
+    kept: dict[int, list[int]] = {node: [] for node in edges}
+
+    def reaches(src: int, dst: int, seen: set[int]) -> bool:
+        if src == dst:
+            return True
+        return any(reaches(nxt, dst, seen | {nxt}) for nxt in kept.get(src, []) if nxt not in seen)
+
+    for node in sorted(edges, reverse=True):  # ưu tiên giữ cạnh theo thứ tự plan (dep < node)
+        for dep in edges[node]:
+            kept[node].append(dep)
+            if reaches(dep, node, {dep}):
+                kept[node].pop()
+    return kept
 
 
 def _repaired_snapshot(snapshot: dict, reason: str) -> dict:
@@ -1264,7 +1328,7 @@ class HarnessPlanner:
         old_caps = (["self.config"] if request.get("type") == "self"
                     else list(dict.fromkeys(old.get("capabilities") or [])))
         steps = []
-        for index, subtask in enumerate(old.get("subtasks") or [], start=1):
+        for index, subtask in enumerate(_merge_same_file(list(old.get("subtasks") or [])), start=1):
             file = posixpath.normpath(subtask["file"].replace("\\", "/"))
             capability = next((cap for cap in old_caps
                                if any(file.startswith(prefix) for prefix in (catalog or {}).get(cap, {}).get('allow', []))
@@ -1359,13 +1423,19 @@ class HarnessPlanner:
 
         stopped = run_plan(request)
         if stopped and _plan_repairable(stopped):
-            # Model sinh plan sai luật (LF/106): một lượt lập lại với lỗi nêu trong thread.
+            # Model sinh plan sai luật (LF/106): một lượt lập lại với lỗi nêu trong thread,
+            # sampling thoáng hơn để phá vòng lặp của model nhỏ.
+            reason = str(stopped["result"].get("reason") or "")
             budget.max_model_calls += 3
             request = {**request, "thread": [
                 *(request.get("thread") or []),
-                {"role": "ai", "body": _plan_repair_note(str(stopped["result"].get("reason") or ""))},
+                {"role": "ai", "body": _plan_repair_note(reason, _duplicate_files(reason))},
             ]}
-            stopped = run_plan(request)
+            os.environ["AI_BOARD_PLAN_REPAIR"] = "1"
+            try:
+                stopped = run_plan(request)
+            finally:
+                os.environ.pop("AI_BOARD_PLAN_REPAIR", None)
         if stopped:
             gate, result = stopped["gate"], stopped["result"]
             raise PlanBlockedError(f"gate {gate} blocked: {result.get('reason')}", {
