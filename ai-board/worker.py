@@ -660,18 +660,44 @@ def _plan_rejection(error) -> str | None:
     return body[:400] if "malformed_plan" in body else None
 
 
+_RUNNABLE_VERIFY = re.compile(
+    r"^(node --test\b|node\s|npx\s|npm\s+(test|run)\b|curl\s|python[0-9.]*\s|pytest\b|bash\s|sh\s|docker compose\s|psql\s)")
+
+
 def _plan_repairable(stopped: dict) -> bool:
     """Lỗi plan do model sinh sai (không phải nguồn/kỹ năng): đáng một lượt lập lại."""
-    return int(stopped.get("gate") or 0) == 1 and str((stopped.get("result") or {}).get("reason") or "").startswith("plan không hợp lệ")
+    gate = float(stopped.get("gate") or 0)
+    reason = str((stopped.get("result") or {}).get("reason") or "")
+    if gate == 1 and reason.startswith("plan không hợp lệ"):
+        return True
+    return gate == 2.5 and reason == "plan_ungrounded"
 
 
-def _plan_repair_note(reason: str, files: list[str] | None = None) -> str:
-    """Lời nhắc cho lượt sửa plan: nêu lỗi, danh sách file bị trùng và luật cứng."""
+def _non_runnable_layered(plan: dict) -> list[str]:
+    """verify của subtask có `layer` phải là lệnh chạy được (server chỉ ép plan nhiều bước)."""
+    bad = []
+    for task in plan.get("subtasks") or []:
+        if not isinstance(task, dict) or not task.get("layer"):
+            continue
+        verify = str(task.get("verify") or "").strip()
+        if not _RUNNABLE_VERIFY.match(verify):
+            bad.append(f"{task.get('file')}: {verify[:80]}")
+    return bad
+
+
+def _plan_repair_note(reason: str, files: list[str] | None = None,
+                      rejected_files: list[str] | None = None) -> str:
+    """Lời nhắc cho lượt sửa plan: nêu lỗi, file trùng/file cũ và các luật cứng."""
     dupes = [f for f in (files or []) if f]
+    old = [f for f in (rejected_files or []) if f and f not in dupes]
     banned = "\n[CẤM TUYỆT ĐỐI]\n- KHÔNG được giao một file cho quá 1 subtask."
     if dupes:
         banned += "\n- File bị trùng: " + ", ".join(dupes)
-    banned += "\n- Plan trước đã sai vì vi phạm điều này; lặp lại thì hệ thống dừng ngay."
+    if old:
+        banned += "\n- KHÔNG dùng lại file của plan bị từ chối: " + ", ".join(old)
+    banned += ("\n- Yêu cầu cần trang mới thì TẠO FILE MỚI, không sửa trang có sẵn."
+               "\n- Mọi plan có `layer` phải có verify là LỆNH CHẠY ĐƯỢC (node --test <file>, curl <url>, pytest, python <file>, bash <script>)."
+               "\n- Plan trước đã sai vì vi phạm các điều trên; lặp lại thì hệ thống dừng ngay.")
     return (f"Kế hoạch trước bị từ chối: {reason}.{banned}\n"
             "Lập lại kế hoạch: trước khi viết, liệt kê [subtask | file] và kiểm tra không file nào lặp; "
             "acceptance/verify của plan nhiều bước phải là LỆNH CHẠY ĐƯỢC "
@@ -1419,18 +1445,28 @@ class HarnessPlanner:
 
             handlers = {f"gate_{str(g).replace('.', '_')}": plan_gate(g) for g in PLAN_GATES}
             exec_graph.run(handlers, exec_graph.spec()["entries"]["plan"])
-            return dict(stopped)
+            result = dict(stopped)
+            if not result:
+                # Plan có `layer` phải có verify chạy được (server chỉ ép plan nhiều bước).
+                bad = _non_runnable_layered(state.get("plan") or {})
+                if bad:
+                    result = {"gate": 1, "result": {
+                        "gate": 1, "blocked": True, "plan": None, "signals": [],
+                        "reason": f"plan không hợp lệ: verify phải là lệnh chạy được: {bad[0]}"}}
+            return result
 
         stopped = run_plan(request)
         if stopped and _plan_repairable(stopped):
             # Model sinh plan sai luật (LF/106): một lượt lập lại với lỗi nêu trong thread,
             # sampling thoáng hơn để phá vòng lặp của model nhỏ.
             reason = str(stopped["result"].get("reason") or "")
+            rejected = [str(st.get("file") or "") for st in ((state.get("plan") or {}).get("subtasks") or [])
+                        if isinstance(st, dict)]
             # Lượt sửa cần thêm lời gọi cổng 1/2/2.5; trần lượt gọi của lượt lập plan đang rất sát.
             budget.max_model_calls = max(budget.max_model_calls, budget.model_calls + 5)
             request = {**request, "thread": [
                 *(request.get("thread") or []),
-                {"role": "ai", "body": _plan_repair_note(reason, _duplicate_files(reason))},
+                {"role": "ai", "body": _plan_repair_note(reason, _duplicate_files(reason), rejected)},
             ]}
             os.environ["AI_BOARD_PLAN_REPAIR"] = "1"
             try:

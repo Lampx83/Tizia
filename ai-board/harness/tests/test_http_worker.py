@@ -11,8 +11,8 @@ if str(AI_BOARD_DIR) not in sys.path:
 
 from runtime.limits import config_sha256
 from worker import (HarnessPlanner, HttpWorker, PlanBlockedError, WorkerClient, _duplicate_files, _execution_plan,
-                    _merge_same_file, _plan_repairable, _plan_repair_note, _plan_rejection, _repaired_snapshot,
-                    execute_pre_pr, main)
+                    _merge_same_file, _non_runnable_layered, _plan_repairable, _plan_repair_note, _plan_rejection,
+                    _repaired_snapshot, execute_pre_pr, main)
 
 
 def test_planner_task_type_survives_canonical_and_execution_plan():
@@ -1878,6 +1878,8 @@ def test_plan_repairable_only_for_model_plan_errors():
     assert _plan_repairable({"gate": 1, "result": {"reason": "plan không hợp lệ: 2 subtask cùng sửa x"}})
     assert not _plan_repairable({"gate": 1, "result": {"reason": "intake_human_review: tất định: privileged_area"}})
     assert not _plan_repairable({"gate": 2.5, "result": {"reason": "plan không hợp lệ: x"}})
+    assert _plan_repairable({"gate": 2.5, "result": {"reason": "plan_ungrounded"}})
+    assert not _plan_repairable({"gate": 2.5, "result": {"reason": "needs_clarification"}})
     assert not _plan_repairable({})
 
 
@@ -1910,3 +1912,19 @@ def test_duplicate_files_and_repair_note_name_the_file():
     note = _plan_repair_note(reason, _duplicate_files(reason))
     assert "[CẤM TUYỆT ĐỐI]" in note and "public/js/school-explore.js" in note
     assert "node --test" in note
+
+
+def test_layered_plan_verify_must_be_a_runnable_command():
+    plan = {"subtasks": [
+        {"file": "public/x.html", "layer": "frontend", "verify": "trang chứa tiêu đề"},
+        {"file": "public/js/x.js", "layer": "frontend", "verify": "node --test test/x.test.js"},
+        {"file": "public/y.html", "verify": "câu mô tả không sao vì không có layer"},
+    ]}
+    bad = _non_runnable_layered(plan)
+    assert bad == ["public/x.html: trang chứa tiêu đề"]
+
+
+def test_repair_note_forbids_reusing_the_rejected_plan_files():
+    note = _plan_repair_note("plan_ungrounded", [], ["public/js/school-explore.js"])
+    assert "KHÔNG dùng lại file của plan bị từ chối: public/js/school-explore.js" in note
+    assert "TẠO FILE MỚI" in note
