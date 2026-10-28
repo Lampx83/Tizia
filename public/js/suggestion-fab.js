@@ -140,12 +140,12 @@ function autoMount() {
         <section id="sgf-clarify" class="sgf-clarify" hidden>
           <div class="sgf-clar-banner sgf-clar-live" role="status"><span>Ban điều hành cần trao đổi thêm để làm rõ yêu cầu
             <b id="sgf-clar-title"></b></span></div>
-          <div class="sgf-clar-log" id="sgf-clar-log" aria-live="polite"></div>
           <div class="sgf-clar-model">
             <label for="sgf-clar-model">Model trả lời</label>
             <select id="sgf-clar-model" class="sgf-in" aria-describedby="sgf-clar-model-hint"></select>
             <p class="sgf-clar-model-hint" id="sgf-clar-model-hint">Đang tải lựa chọn model…</p>
           </div>
+          <div class="sgf-clar-log" id="sgf-clar-log" aria-live="polite"></div>
           <div class="sgf-clar-reply" id="sgf-clar-reply" hidden>
             <textarea id="sgf-clar-in" class="sgf-in" rows="2" maxlength="2000"
                       aria-label="Trả lời Ban điều hành"
@@ -1407,6 +1407,37 @@ function injectStyles() {
     .sgf-thread-sheet:has(.sgf-thread-clarify:not([hidden])) .rt-composer { display: none; }
     .sgf-clar-model select { width: 100%; }
     .sgf-clar-actions { display: flex; flex-direction: column; gap: 6px; }
+
+    /* Chatbot gọn: một cột, bong bóng sát nhau, bỏ nhãn/khung thừa. */
+    .sgf-thread-sheet { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px 14px; }
+    .sgf-thread-head { margin-bottom: 0; }
+    .sgf-thread-head h3 { font-size: 14px; font-weight: 600; }
+    .sgf-thread-host { min-height: 0; }
+    .sgf-thread-sheet .rt-root { gap: 6px; }
+    .sgf-thread-sheet .rt-head { display: none; }
+    .sgf-thread-sheet .rt-list { max-height: 52vh; gap: 4px; padding: 0; }
+    .sgf-thread-sheet .rt-bubble { max-width: 86%; padding: 7px 10px; border-radius: 14px; }
+    .sgf-thread-sheet .rt-who { display: none; }
+    .sgf-thread-sheet .rt-body { font-size: 13.5px; line-height: 1.5; }
+    .sgf-thread-sheet .rt-time { font-size: 10.5px; margin-top: 2px; opacity: .6; }
+    .sgf-thread-sheet .rt-board .rt-bubble { border: 0; }
+    .sgf-thread-sheet .rt-composer { gap: 4px; }
+    .sgf-thread-sheet .rt-input { min-height: 40px; padding: 8px 12px; border-radius: 18px; resize: none; }
+    .sgf-thread-sheet .rt-composer-bar { gap: 8px; }
+    .sgf-thread-sheet .rt-send { min-height: 36px; padding: 8px 16px; border-radius: 18px; }
+    .sgf-thread-sheet .private-preview:empty { display: none; }
+    /* Phần làm rõ: hội thoại đã nằm trong thread, chỉ giữ ô trả lời + hành động. */
+    .sgf-thread-clarify .sgf-clar-banner { display: none; }
+    .sgf-thread-clarify .sgf-clar-log > .sgf-clar-msg { display: none; }
+    .sgf-thread-clarify .sgf-clar-log { max-height: none; gap: 6px; }
+    .sgf-thread-clarify .sgf-clar-msg { padding: 7px 11px; border-radius: 14px; font-size: 13px; }
+    .sgf-thread-clarify .sgf-clar-model { display: grid; grid-template-columns: auto 1fr; gap: 6px 8px;
+      align-items: center; padding: 6px 8px; }
+    .sgf-thread-clarify .sgf-clar-model label { white-space: nowrap; font-size: 12px; }
+    .sgf-thread-clarify .sgf-clar-model select { min-height: 34px; }
+    .sgf-thread-clarify .sgf-clar-model-hint { grid-column: 1 / -1; margin: 0; font-size: 11.5px; }
+    .sgf-thread-clarify .sgf-clarify:has(.sgf-clar-actions) .sgf-clar-sum { display: none !important; }
+    .sgf-thread-clarify .sgf-clar-reply textarea { min-height: 44px; border-radius: 18px; }
     .sgf-it-thread-btn.sgf-it-ask {
       background: #fbbf24; color: #451a03; border-color: #f59e0b; font-weight: 700;
       animation: sgf-ring 1.6s ease-out infinite;
