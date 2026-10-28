@@ -94,7 +94,7 @@
       "_why": "Requester clarification (contexts/ai-board-intake): the model decides when it is ready, so this is only the hard cap on questions. At the cap the summary must list assumptions so the requester confirms them. Daily model turns stay DAILY_TURNS=20 in the intake context.",
       "questions": 8
     },
-    "pending_roots_per_user": { "value": 3, "_why": "one person cannot fill the school's queue" },
+    "pending_roots_per_user": { "value": 100, "_why": "owner 2026-10-28: miễn cap cho người dùng thường — đủ lớp chặn phía sau (global_rate, gpu_s_per_user_day, intake/language/gibberish guards), giá trị lớn chỉ để chặn tràn DB" },
     "open_folders_per_user": { "value": 3, "_why": "feature folders not yet archived; keeps branches and context bounded" },
     "folder_archive_days": { "value": 30, "_why": "a folder with no activity this long is archived: its cycle closes, history and brief stay" },
     "skills": {
