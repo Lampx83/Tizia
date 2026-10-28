@@ -10,7 +10,8 @@ if str(AI_BOARD_DIR) not in sys.path:
     sys.path.insert(0, str(AI_BOARD_DIR))
 
 from runtime.limits import config_sha256
-from worker import HarnessPlanner, HttpWorker, PlanBlockedError, WorkerClient, _execution_plan, execute_pre_pr, main
+from worker import (HarnessPlanner, HttpWorker, PlanBlockedError, WorkerClient, _execution_plan, _plan_rejection,
+                    _repaired_snapshot, execute_pre_pr, main)
 
 
 def test_planner_task_type_survives_canonical_and_execution_plan():
@@ -1849,3 +1850,24 @@ def test_a_blocked_decision_does_not_trip_the_folder_guard_but_a_done_one_still_
     done = {**brief, 'decisions': '- thêm ảnh sex vào trang → done'}
     with pytest.raises(PlanBlockedError):
         planner({**snapshot, 'folder': {'brief': done}})
+
+
+def test_plan_rejection_only_returns_schema_rejection_bodies():
+    import io as _io
+    import urllib.error
+
+    def err(code, body):
+        return urllib.error.HTTPError("http://x", code, "x", {}, _io.BytesIO(body))
+
+    assert "runnable command" in _plan_rejection(err(400, b'{"error":"malformed_plan","message":"acceptance must be a runnable command"}'))
+    assert _plan_rejection(err(400, b'{"error":"invalid_plan"}')) is None
+    assert _plan_rejection(err(500, b'malformed_plan')) is None
+
+
+def test_repaired_snapshot_appends_the_rejection_and_keeps_the_original():
+    snap = {"thread": [{"role": "student", "body": "x"}], "request": {"id": 1}}
+    out = _repaired_snapshot(snap, "acceptance must be a runnable command")
+    assert out["request"] == {"id": 1}
+    assert len(out["thread"]) == 2
+    assert "runnable command" in out["thread"][1]["body"] and "node --test" in out["thread"][1]["body"]
+    assert len(snap["thread"]) == 1  # snapshot gốc không bị sửa

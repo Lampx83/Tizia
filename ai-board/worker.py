@@ -649,6 +649,28 @@ class WorkerClient:
         return self.transport("POST", path, payload, headers)
 
 
+def _plan_rejection(error) -> str | None:
+    """Nội dung từ chối của server khi plan sai schema; None nếu không phải lỗi nội dung plan."""
+    if getattr(error, "code", None) not in (400, 409):
+        return None
+    try:
+        body = error.read().decode("utf-8", "replace")
+    except Exception:
+        return None
+    return body[:400] if "malformed_plan" in body else None
+
+
+def _repaired_snapshot(snapshot: dict, reason: str) -> dict:
+    """Snapshot cho lượt sửa plan: thêm lời từ chối vào thread để planner thấy đúng lỗi."""
+    return {**snapshot, "thread": [
+        *(snapshot.get("thread") or []),
+        {"role": "ai", "body": f"Hệ thống từ chối kế hoạch vừa lập: {reason}. Lập lại kế hoạch: mọi "
+                              "acceptance và verify của plan nhiều bước phải là LỆNH CHẠY ĐƯỢC "
+                              "(node --test <file>, curl <url>, pytest, python <file>, bash <script>), "
+                              "không được là câu mô tả."},
+    ]}
+
+
 def _forge(candidate, token):
     """GitHub client, or a local bare-repo forge when AI_BOARD_LOCAL_FORGE names one (demo: no remote PR ever leaves the machine)."""
     local = os.getenv("AI_BOARD_LOCAL_FORGE")
@@ -1047,10 +1069,24 @@ class HttpWorker:
         if self.planner and not executing:
             try:
                 plan, budget_used = self._with_heartbeat(lambda _lost: self.planner(snapshot, **plan_kwargs), ticket_id, lease)
-                planned = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/plan", {
-                    **lease, "run_id": run["id"], "plan": plan, "budget_used": budget_used,
-                    "idempotency_key": f"{prefix}:plan",
-                })
+                try:
+                    planned = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/plan", {
+                        **lease, "run_id": run["id"], "plan": plan, "budget_used": budget_used,
+                        "idempotency_key": f"{prefix}:plan",
+                    })
+                except urllib.error.HTTPError as rejected:
+                    # Plan schema rejected (LF/106): one bounded repair turn with the rejection text,
+                    # then the same submit. Any other 4xx/5xx keeps the old fail-fast path.
+                    reason = _plan_rejection(rejected)
+                    if not reason:
+                        raise
+                    repaired = _repaired_snapshot(snapshot, reason)
+                    plan, used_again = self._with_heartbeat(lambda _lost: self.planner(repaired, **plan_kwargs), ticket_id, lease)
+                    budget_used += used_again
+                    planned = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/plan", {
+                        **lease, "run_id": run["id"], "plan": plan, "budget_used": budget_used,
+                        "idempotency_key": f"{prefix}:plan-repair",
+                    })
             except Exception as error:
                 if isinstance(error, LeaseLostError):
                     raise
