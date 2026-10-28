@@ -660,6 +660,18 @@ def _plan_rejection(error) -> str | None:
     return body[:400] if "malformed_plan" in body else None
 
 
+def _plan_repairable(stopped: dict) -> bool:
+    """Lỗi plan do model sinh sai (không phải nguồn/kỹ năng): đáng một lượt lập lại."""
+    return int(stopped.get("gate") or 0) == 1 and str((stopped.get("result") or {}).get("reason") or "").startswith("plan không hợp lệ")
+
+
+def _plan_repair_note(reason: str) -> str:
+    """Lời nhắc cho lượt sửa plan: nêu đúng lỗi và hai luật hay bị vi phạm."""
+    return (f"Kế hoạch trước bị từ chối: {reason}. Lập lại kế hoạch: mỗi subtask chỉ MỘT file và không hai "
+            "subtask cùng file; acceptance/verify của plan nhiều bước phải là LỆNH CHẠY ĐƯỢC "
+            "(node --test <file>, curl <url>, pytest, python <file>, bash <script>).")
+
+
 def _repaired_snapshot(snapshot: dict, reason: str) -> dict:
     """Snapshot cho lượt sửa plan: thêm lời từ chối vào thread để planner thấy đúng lỗi."""
     return {**snapshot, "thread": [
@@ -1324,19 +1336,36 @@ class HarnessPlanner:
 
         stopped = {}
 
-        def plan_gate(gate):
-            def node():
-                result = self.run_gate(gate, request, self.deps, budget, state)
-                if gate == 1:
-                    self.last_skill = result.get("skill")
-                if result.get("blocked"):
-                    stopped.update(gate=gate, result=result)
-                    return "blocked"
-                return "passed"
-            return node
+        def run_plan(req):
+            """Một lượt cổng 1 → 2.5 trên `req`; trả {gate, result} của cổng chặn (rỗng nếu qua)."""
+            stopped.clear()
+            for key in ("plan", "complexity_signals", "intake", "grounding", "assumption", "skill"):
+                state.pop(key, None)
 
-        handlers = {f"gate_{str(g).replace('.', '_')}": plan_gate(g) for g in PLAN_GATES}
-        exec_graph.run(handlers, exec_graph.spec()["entries"]["plan"])
+            def plan_gate(gate):
+                def node():
+                    result = self.run_gate(gate, req, self.deps, budget, state)
+                    if gate == 1:
+                        self.last_skill = result.get("skill")
+                    if result.get("blocked"):
+                        stopped.update(gate=gate, result=result)
+                        return "blocked"
+                    return "passed"
+                return node
+
+            handlers = {f"gate_{str(g).replace('.', '_')}": plan_gate(g) for g in PLAN_GATES}
+            exec_graph.run(handlers, exec_graph.spec()["entries"]["plan"])
+            return dict(stopped)
+
+        stopped = run_plan(request)
+        if stopped and _plan_repairable(stopped):
+            # Model sinh plan sai luật (LF/106): một lượt lập lại với lỗi nêu trong thread.
+            budget.max_model_calls += 3
+            request = {**request, "thread": [
+                *(request.get("thread") or []),
+                {"role": "ai", "body": _plan_repair_note(str(stopped["result"].get("reason") or ""))},
+            ]}
+            stopped = run_plan(request)
         if stopped:
             gate, result = stopped["gate"], stopped["result"]
             raise PlanBlockedError(f"gate {gate} blocked: {result.get('reason')}", {

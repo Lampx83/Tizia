@@ -10,8 +10,8 @@ if str(AI_BOARD_DIR) not in sys.path:
     sys.path.insert(0, str(AI_BOARD_DIR))
 
 from runtime.limits import config_sha256
-from worker import (HarnessPlanner, HttpWorker, PlanBlockedError, WorkerClient, _execution_plan, _plan_rejection,
-                    _repaired_snapshot, execute_pre_pr, main)
+from worker import (HarnessPlanner, HttpWorker, PlanBlockedError, WorkerClient, _execution_plan, _plan_repairable,
+                    _plan_repair_note, _plan_rejection, _repaired_snapshot, execute_pre_pr, main)
 
 
 def test_planner_task_type_survives_canonical_and_execution_plan():
@@ -1871,3 +1871,16 @@ def test_repaired_snapshot_appends_the_rejection_and_keeps_the_original():
     assert len(out["thread"]) == 2
     assert "runnable command" in out["thread"][1]["body"] and "node --test" in out["thread"][1]["body"]
     assert len(snap["thread"]) == 1  # snapshot gốc không bị sửa
+
+
+def test_plan_repairable_only_for_model_plan_errors():
+    assert _plan_repairable({"gate": 1, "result": {"reason": "plan không hợp lệ: 2 subtask cùng sửa x"}})
+    assert not _plan_repairable({"gate": 1, "result": {"reason": "intake_human_review: tất định: privileged_area"}})
+    assert not _plan_repairable({"gate": 2.5, "result": {"reason": "plan không hợp lệ: x"}})
+    assert not _plan_repairable({})
+
+
+def test_plan_repair_note_names_the_reason_and_the_rules():
+    note = _plan_repair_note("plan không hợp lệ: 2 subtask cùng sửa x")
+    assert "2 subtask cùng sửa x" in note
+    assert "node --test" in note and "MỘT file" in note
