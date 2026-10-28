@@ -35,6 +35,11 @@
   "run_triggers": ["shadow_precheck", "plan", "execute", "rollback", "reverify"],
   "rollback_outcomes": ["discarded", "revert_ready", "failed"],
   "max_repairs": 1,
+  "repair_replan": {
+    "_why": "LF/74 (P07) failure-class repair/replan, default OFF. On: an ordinary failure may spend max_repairs repairs instead of 1, and a plan-class failure requeues one replan while the automatic round limit (2 plans) still allows it. Budget, lease, plan revision and ledger rules are unchanged; the same failure twice stops instead of looping.",
+    "enabled": false,
+    "max_repairs": 2
+  },
   "default_budget_limit": 200,
   "limits": {
     "root_work": { "model_calls": 40, "tool_calls": 200, "tokens": 200000, "semantic_repairs": 3, "quality_switches": 1 },

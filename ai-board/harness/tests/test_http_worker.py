@@ -615,6 +615,40 @@ def test_repair_is_bounded_to_one_child():
     assert verdict['candidate'] is None
 
 
+def test_repair_replan_flag_allows_a_second_repair_for_a_new_failure(monkeypatch):
+    """LF/74: cờ bật nâng trần sửa lên 2; lỗi mới (khác lý do) dùng được lượt thứ hai."""
+    import worker
+    monkeypatch.setattr(worker, 'REPAIR_REPLAN', {'enabled': True, 'max_repairs': 2})
+    first = {'blocked': True, 'reason': 'node --check lỗi', 'failure_class': 'ordinary'}
+    second = {'blocked': True, 'reason': 'css class lệch', 'failure_class': 'ordinary'}
+    verdict, calls = run({4: [first, second, {}]})
+    assert verdict['outcome'] == 'ready_for_pr'
+    assert [gate for gate, _ in calls] == [3, 4, 3, 4, 3, 4, 5, 5.5]
+    assert verdict['repairs'] == [{'gate': 4, 'reason': 'node --check lỗi'},
+                                  {'gate': 4, 'reason': 'css class lệch'}]
+
+
+def test_repair_replan_flag_still_stops_at_the_hard_bound(monkeypatch):
+    import worker
+    monkeypatch.setattr(worker, 'REPAIR_REPLAN', {'enabled': True, 'max_repairs': 2})
+    script = {4: [{'blocked': True, 'reason': f'lỗi {n}', 'failure_class': 'ordinary'} for n in ('a', 'b', 'c')]}
+    verdict, calls = run(script)
+    assert verdict['outcome'] == 'blocked' and verdict['failure_class'] == 'ordinary'
+    assert [gate for gate, _ in calls] == [3, 4, 3, 4, 3, 4]
+    assert len(verdict['repairs']) == 2
+
+
+def test_repair_replan_flag_stops_when_the_same_failure_repeats(monkeypatch):
+    """Thất bại mơ hồ (y hệt lần trước) thì dừng, không đốt lượt sửa thứ hai."""
+    import worker
+    monkeypatch.setattr(worker, 'REPAIR_REPLAN', {'enabled': True, 'max_repairs': 2})
+    same = {'blocked': True, 'reason': 'node --check lỗi', 'failure_class': 'ordinary'}
+    verdict, calls = run({4: [same]})
+    assert verdict['outcome'] == 'blocked'
+    assert [gate for gate, _ in calls] == [3, 4, 3, 4]
+    assert verdict['repairs'] == [{'gate': 4, 'reason': 'node --check lỗi'}]
+
+
 def test_critical_boundary_violation_stops_without_repair():
     critical = {'blocked': True, 'reason': "import cấm: '../../db.js'", 'failure_class': 'critical'}
     verdict, calls = run({4: [critical]})

@@ -7,7 +7,7 @@ import express from 'express';
 
 import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
 import { openBoard } from './support/ai-board-db.js';
-import { LIMITS, scaledLimit, WorkerContractError } from '../server/ai-board/store.js';
+import { CONTRACT, LIMITS, scaledLimit, WorkerContractError } from '../server/ai-board/store.js';
 import { attachAiBoardRequestRoutes } from '../server/ai-board/routes.js';
 
 const SHA_A = 'a'.repeat(40);
@@ -189,6 +189,53 @@ test('a plan-class failure waits for the admin as plan_unfit, with no repair chi
   assert.deepEqual({ ...root }, { status: 'waiting_admin', phase: 'plan_unfit', internal_reason: 'change touches no public file' });
   assert.equal((await db.prepare('SELECT COUNT(*) n FROM ai_alerts').get()).n, 0);
   assert.equal((await db.prepare(`SELECT COUNT(*) n FROM ai_tickets WHERE kind='review_fix'`).get()).n, 0);
+});
+
+test('the repair_replan flag requeues one bounded replan for a plan-class failure', async () => {
+  const { db, submit, ticket } = await plannedRoot();
+  CONTRACT.repair_replan.enabled = true;
+  try {
+    await submit(blocked(5, 'change touches no public file', 'plan'));
+  } finally {
+    CONTRACT.repair_replan.enabled = false;
+  }
+  const root = await db.prepare('SELECT status, phase, plan_hash, auto_rounds, lease_owner FROM ai_tickets WHERE id=?').get(ticket.id);
+  assert.deepEqual({ ...root }, { status: 'queued', phase: 'needs_replan', plan_hash: null, auto_rounds: 1, lease_owner: null });
+  assert.equal((await db.prepare('SELECT status FROM ai_plans WHERE root_ticket_id=?').get(ticket.id)).status, 'invalidated');
+  assert.equal((await db.prepare('SELECT status FROM ai_tickets WHERE parent_id=?').get(ticket.id)).status, 'invalidated');
+  assert.equal((await db.prepare(`SELECT COUNT(*) n FROM ai_tickets WHERE kind='review_fix'`).get()).n, 0);
+});
+
+test('the replan round is bounded by the existing automatic round limit', async () => {
+  const { db, submit, ticket } = await plannedRoot();
+  await db.prepare('UPDATE ai_tickets SET auto_rounds=2 WHERE id=?').run(ticket.id);
+  CONTRACT.repair_replan.enabled = true;
+  try {
+    await submit(blocked(5, 'change touches no public file', 'plan'));
+  } finally {
+    CONTRACT.repair_replan.enabled = false;
+  }
+  const root = await db.prepare('SELECT status, phase FROM ai_tickets WHERE id=?').get(ticket.id);
+  assert.deepEqual({ ...root }, { status: 'waiting_admin', phase: 'plan_unfit' });
+});
+
+test('the repair_replan flag raises the repair bound to two, never three', async () => {
+  const accepted = await plannedRoot();
+  CONTRACT.repair_replan.enabled = true;
+  try {
+    await assert.doesNotReject(async () => accepted.submit(blocked(5, 'x', 'ordinary',
+      { repairs: [{ gate: 5, reason: 'a' }, { gate: 4, reason: 'b' }] })));
+  } finally {
+    CONTRACT.repair_replan.enabled = false;
+  }
+  const rejected = await plannedRoot();
+  CONTRACT.repair_replan.enabled = true;
+  try {
+    await assert.rejects(async () => rejected.submit(blocked(5, 'x', 'ordinary',
+      { repairs: [{ gate: 5, reason: 'a' }, { gate: 4, reason: 'b' }, { gate: 3, reason: 'c' }] })), /repairs/);
+  } finally {
+    CONTRACT.repair_replan.enabled = false;
+  }
 });
 
 test('budget exhaustion waits for a reasoned admin extension', async () => {

@@ -96,7 +96,13 @@ const ORACLE_COVERAGE = {
   'search-activity-v1': ['filtering'],
 };
 const FAILURE_CLASSES = new Set(CONTRACT.failure_classes);
-const MAX_REPAIRS = CONTRACT.max_repairs;
+
+/** Trần lượt sửa của một verdict: contract, nâng theo cờ repair_replan khi bật (LF/74). */
+export function repairCap(contract = CONTRACT) {
+  const flag = contract.repair_replan;
+  return flag?.enabled ? Math.max(contract.max_repairs, Number(flag.max_repairs) || 0) : contract.max_repairs;
+}
+
 const MAX_BUDGET_EXTENSION = 200;
 // ponytail: fixed D0 ceilings from the hardening spec; make them admin config only if real tickets hit them.
 export const LIMITS = CONTRACT.limits;
@@ -306,7 +312,7 @@ function validatePrePrVerdict(value, selfRequest = false) {
     throw new WorkerContractError('partial failure requires a blocked gate 3');
   }
   const repairs = value.repairs ?? [];
-  if (!Array.isArray(repairs) || repairs.length > MAX_REPAIRS
+  if (!Array.isArray(repairs) || repairs.length > repairCap()
     || repairs.some((r) => !PRE_PR_GATES.has(Number(r?.gate)))) {
     throw new WorkerContractError('invalid pre-PR repairs');
   }

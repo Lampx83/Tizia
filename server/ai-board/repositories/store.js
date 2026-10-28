@@ -1575,6 +1575,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       : verdict.outcome === 'needs_review' ? 'Thay đổi cần con người xem xét trước PR.'
         : 'Thay đổi chưa qua kiểm tra trước PR.';
     let leaseExpiresAt = null; // non-null chỉ khi transient_retry bật: dời deadline lease để claimTransaction tự cứu
+    let replan = false;
     if (verdict.failure_class === 'critical') {
       status = 'waiting_admin';
       phase = 'critical_violation';
@@ -1589,9 +1590,18 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       note = 'Yêu cầu đang chờ quản trị viên xem xét.';
     } else if (verdict.failure_class === 'plan') {
       // The accepted plan cannot be carried out as written: admin clarifies, rejects or hands it to a human.
-      status = 'waiting_admin';
-      phase = 'plan_unfit';
-      note = 'Yêu cầu đang chờ quản trị viên xem xét.';
+      // LF/74 (cờ repair_replan, mặc định tắt): lập lại kế hoạch một vòng tự động, vẫn trong trần lượt tự động
+      // hiện có (auto_rounds; submitPlan chặn khi rounds > 2). Tắt cờ hoặc hết lượt → plan_unfit như cũ.
+      if (CONTRACT.repair_replan?.enabled && Number(root.auto_rounds) < 2) {
+        replan = true;
+        status = 'queued';
+        phase = 'needs_replan';
+        note = 'Kế hoạch chưa thực hiện được như đã viết; hệ thống sẽ lập lại kế hoạch một vòng.';
+      } else {
+        status = 'waiting_admin';
+        phase = 'plan_unfit';
+        note = 'Yêu cầu đang chờ quản trị viên xem xét.';
+      }
     } else if (verdict.failure_class === 'partial') {
       // Đã xong một phần plan (LF/107): checkpoint giữ nguyên, người gửi bấm "Tiếp tục" để chạy nốt —
       // không phải lượt hỏng nên không tính retry và không ghi quyết định cho folder.
@@ -1633,6 +1643,13 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
         input.now, input.now]);
       await db.run(insertTag, [child, 'repair']);
     }
+    if (replan) {
+      // Cùng đường với admin rerun planning: plan cũ invalidated, plan_hash/lease xoá để worker nhận lượt
+      // needs_replan rồi lập revision mới. Budget/auto_rounds/ledger giữ nguyên.
+      await invalidateCurrentPlan(root, input.now);
+      await db.run(`UPDATE ai_tickets SET plan_hash=NULL, lease_owner=NULL, lease_token=NULL,
+        lease_expires_at=NULL WHERE id=?`, [root.id]);
+    }
     if (leaseExpiresAt != null) {
       // Về hàng đợi (không ai giữ): xoá lease_owner/token cũ, lease_expires_at dùng làm "không nhận trước giờ này".
       await db.run(`UPDATE ai_tickets SET status=?, phase=?, public_note=?, internal_reason=?, cumulative_budget=?,
@@ -1647,7 +1664,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     `, [root.id, run.id, input.workerId, `running->${phase}`, note, verdict.reason,
       input.idempotencyKey, input.now]);
     if (verdict.outcome === 'blocked' && leaseExpiresAt == null && status !== 'waiting_admin'
-      && verdict.failure_class !== 'partial') await recordFolderDecision(root, 'blocked', verdict.reason, input.now);
+      && !replan && verdict.failure_class !== 'partial') await recordFolderDecision(root, 'blocked', verdict.reason, input.now);
     return verdict;
   });
 

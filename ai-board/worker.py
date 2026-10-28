@@ -122,6 +122,14 @@ def _public_gate_result(result: dict) -> dict:
 
 
 MAX_REPAIRS = CONTRACT["max_repairs"]  # server enforces the same bound
+REPAIR_REPLAN = CONTRACT.get("repair_replan") or {}
+
+
+def repair_cap() -> int:
+    """Trần lượt sửa của một lượt chạy: contract, nâng theo cờ repair_replan khi bật (LF/74)."""
+    if not REPAIR_REPLAN.get("enabled"):
+        return MAX_REPAIRS
+    return max(MAX_REPAIRS, int(REPAIR_REPLAN.get("max_repairs") or 0))
 
 
 def _scannable_decisions(text: str | None) -> str:
@@ -237,7 +245,7 @@ class _Execution:
             state["memory_path"] = str(self.memory_path)
         if self.repair_reason:
             state["repair_reason"] = self.repair_reason
-        state["repairs_left"] = MAX_REPAIRS - len(self.repairs)  # reviewer fix spends the same repair cap
+        state["repairs_left"] = repair_cap() - len(self.repairs)  # reviewer fix spends the same repair cap
         if self.plan.get("grounding"):
             import code_index
             if (code_index.git(self.checkout_source, "rev-parse", "HEAD").decode().strip() != self.plan["grounding"]["sha"]
@@ -330,8 +338,10 @@ class _Execution:
 
     def repair_check(self) -> str:
         last = self.gates[-1]
-        if self.kind != "ordinary" or len(self.repairs) >= MAX_REPAIRS:
+        if self.kind != "ordinary" or len(self.repairs) >= repair_cap():
             return "done"
+        if any(repair.get("reason") == last["reason"] for repair in self.repairs):
+            return "done"  # cùng một lỗi lặp lại: không có thông tin mới, dừng chứ không lặp (LF/74)
         if not self.budget.tick():
             self.kind = "budget"
             return "done"
@@ -503,7 +513,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
                    should_stop: Callable[[], bool] | None = None, candidate_opts: dict | None = None,
                    request_type: str | None = None, eval_tasks: list[dict] | None = None, preview_capture=None,
                    checkpoint=None, plan_hash: str | None = None, reverify: dict | None = None) -> dict:
-    """Run Gates 3→5.5, repairing an ordinary failure at most MAX_REPAIRS times. Return a redacted verdict.
+    """Run Gates 3→5.5, repairing an ordinary failure at most repair_cap() times. Return a redacted verdict.
 
     policy = snapshot catalog {hash, capabilities}; None only outside the HTTP worker (no catalog check).
     memory_path = lessons JSONL: Gate 3 recalls from it, repairs and final blocks are appended to it.
