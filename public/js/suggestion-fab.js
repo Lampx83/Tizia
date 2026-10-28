@@ -514,7 +514,9 @@ function bind(root) {
 
   function mountClarify() {
     const host = clarifyId && inbox.querySelector(`[data-item="${clarifyId}"]`);
-    (host || clarSlot).appendChild(clarifyBox);
+    const target = host || clarSlot;
+    // Chỉ di chuyển khi đổi chỗ: appendChild lại mỗi lần load làm panel nháy + chạy lại animation.
+    if (clarifyBox.parentElement !== target) target.appendChild(clarifyBox);
   }
   function toggleClarify(id) {
     if (clarifyId === Number(id)) { clarifyBox.hidden = !clarifyBox.hidden; return; } // thu gọn, giữ nguyên hội thoại
@@ -755,7 +757,8 @@ function bind(root) {
   root.querySelector('#sgf-reload').addEventListener('click', loadInbox);
   const inboxPoll = setInterval(() => {
     if (!root.isConnected) { clearInterval(inboxPoll); return; }
-    if (!modal.hidden && !paneMine.hidden && !document.hidden
+    // Đang trả lời Ban điều hành thì không tự tải lại: panel nháy và mất chỗ đang gõ.
+    if (!modal.hidden && !paneMine.hidden && !document.hidden && clarifyBox.hidden
       && !inbox.contains(document.activeElement) && !inbox.querySelector('[data-armed]')
       && ![...inbox.querySelectorAll('textarea')].some(input => input.value.trim())) loadInbox(true);
   }, 5000);
@@ -979,9 +982,11 @@ function bind(root) {
     folderHint.hidden = true;
   });
 
+  let inboxSignature = null;
   async function loadInbox(quiet = false) {
     if (quiet !== true) loadFolders();
-    clarSlot.appendChild(clarifyBox); // khỏi bị xoá theo innerHTML của danh sách
+    // Danh sách sắp bị innerHTML thay: giữ panel trao đổi khỏi bị xoá, nhưng không di chuyển nếu đang đứng yên.
+    if (clarifyBox.parentElement && inbox.contains(clarifyBox)) clarSlot.appendChild(clarifyBox);
     if (quiet !== true) inbox.textContent = 'Đang tải…';
     try {
       const dom = inferDomain();
@@ -993,6 +998,11 @@ function bind(root) {
       const mine = me ? items.filter(it => it.student === me) : [];
       const withReply = items.filter(it => it.admin_note && it.student !== me).slice(0, 3);
       const shown = (mine.length ? mine : withReply).slice(0, 8);
+      // Tải lại nền: dữ liệu y hệt thì giữ nguyên DOM (không nháy, không mất vị trí cuộn).
+      const signature = JSON.stringify(shown.map(it => [it.id, it.status, it.admin_note, it.feature_name,
+        it.awaiting_reply, it.can_continue, it.can_edit]));
+      if (quiet === true && signature === inboxSignature) { mountClarify(); return; }
+      inboxSignature = signature;
       if (!shown.length) {
         inbox.innerHTML = '<div class="sgf-empty">Chưa có yêu cầu nào. Hãy là người đầu tiên đề xuất cải tiến trang này!</div>';
         return;
@@ -1195,7 +1205,7 @@ function injectStyles() {
     #sgf-root input::placeholder, #sgf-root textarea::placeholder { color: #64748b; opacity: 1; }
     #sgf-fab {
       position: fixed; left: 18px; bottom: 18px; z-index: 2147483000;
-      width: 48px; height: 48px; border-radius: 50%;
+      width: 56px; height: 56px; border-radius: 50%;
       display: inline-flex; gap: 10px; align-items: center; justify-content: center;
       padding: 0; border: 0; cursor: pointer;
       background: #4f46e5; color: #fff;
@@ -1206,7 +1216,7 @@ function injectStyles() {
     #sgf-fab:hover { background: #4338ca; }
     #sgf-fab:active { transform: scale(1); }
     .sgf-fab-ico { display: flex; }
-    .sgf-fab-ico svg { width: 22px; height: 22px; }
+    .sgf-fab-ico svg { width: 26px; height: 26px; }
     @media (max-width: 540px) {
       #sgf-fab { left: 12px; bottom: max(12px, env(safe-area-inset-bottom)); }
     }
@@ -1286,7 +1296,7 @@ function injectStyles() {
     .sgf-clar-feature { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: #334155; font-weight: 600; }
     .sgf-clar-feature .sgf-in { font-weight: 400; }
     .sgf-group { margin: 14px 2px 6px; font-size: 12px; font-weight: 800; letter-spacing: .3px; text-transform: uppercase; color: #64748b; }
-    .sgf-it.sgf-it-awaiting { background: #fffbeb; box-shadow: inset 2px 0 0 #f59e0b; }
+    .sgf-it.sgf-it-awaiting { background: #eef2ff; box-shadow: inset 2px 0 0 #6366f1; }
     .sgf-thread-modal { position: fixed; inset: 0; z-index: 2147483100; background: rgba(15,23,42,.55);
       display: flex; align-items: flex-start; justify-content: center; padding: 4vh 16px; overflow-y: auto; }
     .sgf-thread-modal[hidden] { display: none !important; }
@@ -1444,6 +1454,10 @@ function injectStyles() {
       .sgf-ob-status { color: #c7d2fe; }
       .sgf-clar-ai { background: #312e81; color: #e0e7ff; }
       .sgf-clar-banner { background: #422006; color: #fde68a; border-color: #b45309; }
+      .sgf-it.sgf-it-awaiting { background: #312e81; box-shadow: inset 2px 0 0 #fbbf24; }
+      .sgf-clar-model { background: #1a1740; border-color: #4338ca; color: #cbd5e1; }
+      .sgf-clar-model label { color: #e0e7ff; }
+      .sgf-clar-model-hint { color: #a5b4fc; }
       .sgf-in { background: #312e81; color: #f1f5f9; border-color: #4338ca; }
       .sgf-in:focus { outline-color: #818cf8; border-color: #a5b4fc; }
       .sgf-ctx { background: #312e81; color: #c7d2fe; }

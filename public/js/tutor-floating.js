@@ -59,13 +59,14 @@
     const css = `
       #edututor-fab {
         position: fixed; right: 18px; bottom: 18px; z-index: 99998;
-        width: 60px; height: 60px; border-radius: 50%;
+        width: 56px; height: 56px; border-radius: 50%;
         background: linear-gradient(135deg, #fbbf24, #f97316);
-        color: #3e2723; font-size: 28px; line-height: 60px; text-align: center;
+        color: #3e2723; display: grid; place-items: center;
         cursor: pointer; border: none;
         box-shadow: 0 8px 24px rgba(251,191,36,0.4);
         transition: transform 0.15s; user-select: none;
       }
+      #edututor-fab svg { width: 26px; height: 26px; display: block; }
       #edututor-fab:hover { transform: scale(1.08); }
       #edututor-fab.pulse::after {
         content: ''; position: absolute; inset: -8px; border-radius: 50%;
@@ -182,7 +183,9 @@
     const fab = document.createElement('button');
     fab.id = 'edututor-fab';
     fab.title = 'AI Tutor: hỏi gì cũng được';
-    fab.textContent = '🦉';
+    // Cùng bộ icon với nút Ban điều hành AI: SVG nét mảnh, currentColor.
+    fab.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 9 6 3.5l3 1.7M19.5 9 18 3.5l-3 1.7"/><path d="M4.5 9.5a7.5 7.5 0 0 1 15 0v5a7.5 7.5 0 0 1-15 0Z"/><circle cx="9" cy="10.5" r="1.6"/><circle cx="15" cy="10.5" r="1.6"/><path d="m12 13.5-1.4 1.6h2.8L12 13.5Z"/></svg>';
+    fab.setAttribute('aria-label', 'Mở AI Tutor');
     fab.addEventListener('click', togglePanel);
     document.body.appendChild(fab);
 
