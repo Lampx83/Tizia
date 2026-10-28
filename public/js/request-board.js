@@ -229,8 +229,9 @@ function renderList(host, items, reload) {
           ${it.admin_note ? `<div class="rb-item-note"><b>Ban điều hành:</b> ${escapeHtml(it.admin_note)}</div>` : ''}
           <div class="rb-item-meta">
             <span class="rb-status ${sm.cls}">${sm.label}</span>
-            ${it.phase === 'partial' ? `<span class="rb-status rb-partial">Hoàn thành một phần</span>
-              <button type="button" class="rb-continue" data-continue="${it.id}" title="Chạy nốt phần còn lại của kế hoạch đã duyệt">Tiếp tục</button>` : ''}
+            ${it.phase === 'partial' ? `<span class="rb-status rb-partial">Hoàn thành một phần</span>` : ''}
+            ${it.can_continue ? `<button type="button" class="rb-continue" data-continue="${it.id}" title="Chạy nốt phần còn lại của kế hoạch đã duyệt">Tiếp tục</button>` : ''}
+            ${it.can_edit ? `<button type="button" class="rb-continue" data-edit="${it.id}" data-title="${escapeHtml(it.title)}" data-detail="${escapeHtml(it.detail || '')}" title="Dừng lại, sửa nội dung rồi gửi lại yêu cầu">Sửa yêu cầu</button>` : ''}
             ${it.execution_mode === 'queue' ? '<span class="rb-status rb-mode-queue">Hàng đợi Claude Code</span>' : ''}
             <span class="rb-by">${escapeHtml(it.student)}</span>
             <button type="button" class="rb-thread-toggle" data-thread="${it.id}" aria-expanded="false" aria-controls="rb-thread-${it.id}">
@@ -266,7 +267,7 @@ function renderList(host, items, reload) {
     btn.addEventListener('click', () => toggleThread(host, btn.dataset.thread, me, reload));
   });
 
-  // "Tiếp tục": chỉ chủ yêu cầu thấy; chạy nốt plan đã duyệt từ checkpoint, không mở plan mới.
+  // "Tiếp tục": chỉ admin thấy (server quyết định can_continue); chạy nốt plan đã duyệt từ checkpoint.
   host.querySelectorAll('[data-continue]').forEach(btn => {
     btn.addEventListener('click', async () => {
       btn.disabled = true;
@@ -283,6 +284,32 @@ function renderList(host, items, reload) {
       } catch (error) {
         btn.disabled = false;
         if (msg) msg.textContent = `Không tiếp tục được: ${error.message}`;
+      }
+    });
+  });
+
+  // "Sửa yêu cầu": người gửi dừng lại, sửa nội dung rồi gửi lại (không được resume).
+  host.querySelectorAll('[data-edit]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const msg = host.closest('.rb-card')?.querySelector('#rb-msg');
+      const title = window.prompt('Tiêu đề mới', btn.dataset.title || '');
+      if (title == null) return;
+      const detail = window.prompt('Nội dung mới', btn.dataset.detail || '');
+      if (detail == null) return;
+      btn.disabled = true;
+      try {
+        const { token } = await fetch('api/csrf', { credentials: 'same-origin' }).then((r) => r.json());
+        const r = await fetch(`api/requests/${btn.dataset.edit}/edit`, {
+          method: 'POST', headers: { 'content-type': 'application/json', 'X-CSRF-Token': token },
+          body: JSON.stringify({ title, detail }),
+        });
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(body.message || `http ${r.status}`);
+        if (msg) msg.textContent = 'Đã gửi lại yêu cầu với nội dung mới.';
+        await reload();
+      } catch (error) {
+        btn.disabled = false;
+        if (msg) msg.textContent = `Không sửa được: ${error.message}`;
       }
     });
   });

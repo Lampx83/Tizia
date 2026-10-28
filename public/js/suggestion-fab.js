@@ -1064,6 +1064,41 @@ function bind(root) {
           btn.textContent = e2.message || 'Chưa tiếp tục được, thử sau nhé.';
         });
       });
+      // "Sửa yêu cầu": người gửi dừng rồi sửa nội dung và gửi lại; "Tiếp tục" (resume) là của admin.
+      inbox.querySelectorAll('[data-req-edit]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const item = btn.closest('[data-item]');
+          if (!item || item.querySelector('[data-edit-send]')) return;
+          const box = document.createElement('div');
+          box.className = 'sgf-edit';
+          box.innerHTML = `
+            <input class="sgf-in" data-edit-title maxlength="200" value="${btn.dataset.title || ''}" aria-label="Tiêu đề mới" />
+            <textarea class="sgf-in" data-edit-detail rows="4" maxlength="10000" aria-label="Nội dung mới">${btn.dataset.detail || ''}</textarea>
+            <div class="sgf-edit-actions">
+              <button type="button" class="sgf-chip" data-edit-send>Gửi lại</button>
+              <button type="button" class="sgf-chip" data-edit-cancel>Thoát</button>
+            </div>`;
+          item.appendChild(box);
+          box.querySelector('[data-edit-cancel]').addEventListener('click', () => box.remove());
+          box.querySelector('[data-edit-send]').addEventListener('click', async () => {
+            const send = box.querySelector('[data-edit-send]');
+            send.disabled = true;
+            send.textContent = 'Đang gửi…';
+            const r = await fetch(`api/requests/${encodeURIComponent(btn.dataset.reqEdit)}/edit`, {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'content-type': 'application/json', 'X-CSRF-Token': await csrfToken().catch(() => '') },
+              body: JSON.stringify({
+                title: box.querySelector('[data-edit-title]').value,
+                detail: box.querySelector('[data-edit-detail]').value,
+              }),
+            }).catch(() => null);
+            if (r?.ok) { loadInbox(); return; }
+            const e2 = await r?.json().catch(() => ({})) || {};
+            send.disabled = false;
+            send.textContent = e2.message || 'Chưa gửi lại được, thử sau nhé.';
+          });
+        });
+      });
       // Chuông "xem ảnh" trỏ #sgf-thread-<id>: mở sẵn thread của yêu cầu đó.
       if (openThreadId) {
         inbox.querySelector(`[data-req-toggle="${openThreadId}"]`)?.click();
@@ -1125,8 +1160,10 @@ export function renderItem(it, me = '') {
         : `<button type="button" class="sgf-it-thread-btn" data-req-toggle="${it.id}">
         ${mine ? 'Trao đổi với Ban điều hành' : 'Xem trao đổi'}
       </button>`}
-      ${mine && it.phase === 'partial'
+      ${mine && it.can_continue
         ? `<button type="button" class="sgf-it-thread-btn" data-req-continue="${it.id}" title="Chạy nốt phần còn lại của kế hoạch đã duyệt">Tiếp tục</button>` : ''}
+      ${mine && it.can_edit
+        ? `<button type="button" class="sgf-it-thread-btn" data-req-edit="${it.id}" data-title="${escapeHtml(it.title)}" data-detail="${escapeHtml(it.detail || '')}" title="Dừng lại, sửa nội dung rồi gửi lại yêu cầu">Sửa yêu cầu</button>` : ''}
       ${mine && it.retry === 'retry'
         ? `<button type="button" class="sgf-it-thread-btn" data-req-retry="${it.id}" title="Ban lập kế hoạch mới cho yêu cầu này">Thử cách khác</button>` : ''}
       ${mine && it.retry === 'admin' ? '<div class="sgf-it-queue">Đã chuyển quản trị viên</div>' : ''}

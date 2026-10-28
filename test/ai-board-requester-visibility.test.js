@@ -35,7 +35,7 @@ test('requester progress hides admin-only fields and other users see 404', async
   await addRun(db, rootId);
   const progress = await requesterProgress(store, id, 1);
   assert.deepEqual(Object.keys(progress).sort(),
-    ['can_continue', 'eta_ms', 'live', 'note', 'request_id', 'status', 'step', 'stop_reason']);
+    ['can_continue', 'can_edit', 'eta_ms', 'live', 'note', 'request_id', 'status', 'step', 'stop_reason']);
   assert.equal(progress.can_continue, false);
   assert.equal(progress.note, 'Đang lập kế hoạch');
   assert.equal(progress.stop_reason, null);

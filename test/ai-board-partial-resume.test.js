@@ -86,21 +86,23 @@ test('the bell for a partial verdict invites the requester to continue instead o
   assert.equal(notice.kind, 'partial');
 });
 
-test('the requester sees "continue" and the button requeues the same plan for execution', async () => {
+test('the requester sees "edit", an admin sees "continue", and continue requeues the same plan', async () => {
   const { db, store, submit, ticket, request } = await plannedRoot();
   await submit(partialVerdict(), Date.now());
 
-  const view = await requesterProgress(store, request.request_id, 1);
-  assert.equal(view.can_continue, true);
-  assert.equal(view.step, 'hoàn thành một phần, chờ tiếp tục');
+  const ownerView = await requesterProgress(store, request.request_id, 1);
+  assert.equal(ownerView.can_continue, false);  // người gửi không được resume
+  assert.equal(ownerView.can_edit, true);
+  assert.equal(ownerView.step, 'hoàn thành một phần, chờ tiếp tục');
+  assert.equal((await requesterProgress(store, request.request_id, 1, true)).can_continue, true);  // admin
 
-  const result = await continuePartialRequest(db.d, request.request_id, 1);
+  const result = await continuePartialRequest(db.d, request.request_id, null);  // admin
   assert.equal(result.ok, true);
   assert.equal(result.id, request.request_id);
   assert.equal(result.root_ticket_id, ticket.id);
   assert.equal(result.status, 'queued');
   assert.equal(result.phase, 'authorized');
-  assert.equal((await requesterProgress(store, request.request_id, 1)).can_continue, false);
+  assert.equal((await requesterProgress(store, request.request_id, 1, true)).can_continue, false);
 
   const claimed = await store.claimNext({ workerId: 'w1', version: 'test', mode: 'active', intent: 'plan' });
   assert.equal(claimed.id, ticket.id);
@@ -159,7 +161,7 @@ async function httpFixture() {
   return { db, store, call, close: () => server.close() };
 }
 
-test('route: the owner continues their partial request; others get 403, a non-partial request 409', async () => {
+test('route: only an admin continues a partial request; the owner is refused and told to edit instead', async () => {
   const f = await httpFixture();
   try {
     const created = await f.store.createRequestWithRoot({
@@ -173,14 +175,18 @@ test('route: the owner continues their partial request; others get 403, a non-pa
       ...lease, runId: run.id, budgetUsed: 40, idempotencyKey: 'pr-http-plan', plan: planBody(),
     });
     const url = `/api/requests/${created.request_id}/continue`;
-    assert.equal((await f.call('POST', url, { user: 1, body: {} })).status, 409);  // chưa partial
+    assert.equal((await f.call('POST', url, { user: 2, body: {} })).status, 403);  // không phải admin
     await f.store.submitPrePrVerdict(ticket.id, {
       ...lease, runId: run.id, verdict: partialVerdict(), idempotencyKey: 'pr-http-verdict', now: Date.now(),
     });
 
-    assert.equal((await f.call('POST', url, { user: 2, body: {} })).status, 403);  // không phải chủ
-    assert.equal((await f.call('GET', `/api/requests/${created.request_id}/progress`, { user: 1 })).body.can_continue, true);
-    const done = await f.call('POST', url, { user: 1, body: {} });
+    // Người gửi không được resume: chỉ thấy nút sửa yêu cầu; gọi continue bị 403.
+    const owner = await f.call('GET', `/api/requests/${created.request_id}/progress`, { user: 1 });
+    assert.equal(owner.body.can_continue, false);
+    assert.equal(owner.body.can_edit, true);
+    assert.equal((await f.call('POST', url, { user: 1, body: {} })).status, 403);
+
+    const done = await f.call('POST', url, { user: 9, body: {} });  // admin (id 9)
     assert.equal(done.status, 200);
     assert.equal(done.body.status, 'queued');
     assert.equal(done.body.phase, 'authorized');

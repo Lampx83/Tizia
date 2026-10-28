@@ -1,9 +1,10 @@
 import { PHASES } from '../repositories/store-contract.js';
 import { createSpanService } from './spans.js';
+import { EDITABLE_PHASES } from './requester-edit.js';
 import { gateEta } from '../../../public/js/ai-board-gate-timing.js';
 
 /** Requester view of one own request. Null when not owner. Never prompts, spans, sandbox output or model names. */
-export async function requesterProgress(store, requestId, ownerUserId) {
+export async function requesterProgress(store, requestId, ownerUserId, isAdmin = false) {
   const row = await store.db.get(`
     SELECT r.id, r.status, t.id AS root_id, t.status AS ticket_status, t.phase, t.public_note,
            t.lease_owner, t.lease_expires_at
@@ -11,7 +12,7 @@ export async function requesterProgress(store, requestId, ownerUserId) {
     WHERE r.id = ? AND r.owner_user_id = ?
   `, [Number(requestId), Number(ownerUserId)]);
   if (!row) return null;
-  const live = !!row.lease_owner && row.lease_expires_at > Date.now();
+  const live = row.ticket_status === 'running' && !!row.lease_owner && Number(row.lease_expires_at) > Date.now();
   const phase = PHASES[row.phase];
   const stopped = !!phase?.terminal && row.phase !== 'done';
   return {
@@ -20,8 +21,10 @@ export async function requesterProgress(store, requestId, ownerUserId) {
     step: phase?.label ?? null,
     note: row.public_note ?? null,
     live,
-    // Dừng giữa plan nhưng đã xong một phần: người gửi tự bấm "Tiếp tục" để chạy nốt từ checkpoint.
-    can_continue: row.ticket_status === 'waiting_admin' && row.phase === 'partial',
+    // Dừng giữa plan nhưng đã xong một phần: CHỈ ADMIN bấm "Tiếp tục" (chạy nốt từ checkpoint).
+    can_continue: isAdmin && row.ticket_status === 'waiting_admin' && row.phase === 'partial',
+    // Người gửi không được resume; muốn thay đổi thì dừng rồi sửa yêu cầu và gửi lại.
+    can_edit: !isAdmin && !live && EDITABLE_PHASES.has(row.phase),
     eta_ms: live ? await etaMs(store, row.root_id) : null,
     stop_reason: stopped ? row.public_note ?? null : null,
   };

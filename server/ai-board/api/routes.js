@@ -14,6 +14,7 @@ import { guardModelText, MAX_QUESTIONS } from '../../contexts/ai-board-intake/cl
 import { attachAppealRoutes } from './appeals.js';
 import { attachRolloutRoutes } from './rollout.js';
 import { createSpanService } from '../services/spans.js';
+import { EDITABLE_PHASES, editRequestAndReplan } from '../services/requester-edit.js';
 import { attachWorkerLessonRoutes, attachLessonReviewRoutes } from './lessons.js';
 import { createHsmStore } from '../hsm/store.js';
 import { createToolCheckpointService } from '../services/tool-checkpoint.js';
@@ -186,9 +187,12 @@ export function attachAiBoardRequestRoutes(router, {
   route.get('/api/requests', requireAuth, async (req, res) => {
     const domain = String(req.query.domain || req.user.enrolled_domain || '').trim();
     if (!domain) return res.status(400).json({ error: 'domain required' });
+    const isAdmin = req.user.role === 'admin';
     const items = [];
     for (const item of await store.listRequestsForOwner(req.user.id, domain, req.query.limit)) {
-      items.push({ ...item, retry: await aux.retryState(store.db, item.root_ticket_id, item.phase) });
+      items.push({ ...item, retry: await aux.retryState(store.db, item.root_ticket_id, item.phase),
+        can_continue: isAdmin && item.phase === 'partial',
+        can_edit: !isAdmin && EDITABLE_PHASES.has(item.phase) });
     }
     const stats = {};
     for (const item of items) stats[item.status] = (stats[item.status] || 0) + 1;
@@ -196,7 +200,7 @@ export function attachAiBoardRequestRoutes(router, {
   });
 
   route.get('/api/requests/:id/progress', requireAuth, async (req, res) => {
-    const progress = await requesterProgress(store, req.params.id, req.user.id);
+    const progress = await requesterProgress(store, req.params.id, req.user.id, req.user.role === 'admin');
     if (!progress) return res.status(404).json({ error: 'request_not_found' });
     res.json(progress);
   });
@@ -235,11 +239,35 @@ export function attachAiBoardRequestRoutes(router, {
   });
 
   // "Tiếp tục" (LF/107): yêu cầu dừng giữa plan nhưng đã xong một phần — chạy nốt từ checkpoint,
-  // không mở plan mới và không tính là lượt hỏng. Người gửi (chủ yêu cầu) hoặc admin bấm.
-  route.post('/api/requests/:id/continue', requireAuth, requireStrictCsrf, async (req, res) => {
+  // không mở plan mới và không tính là lượt hỏng. CHỈ ADMIN: người gửi muốn thay đổi thì sửa yêu cầu.
+  route.post('/api/requests/:id/continue', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
     try {
-      // Admin được tiếp tục hộ (ownerUserId null = bỏ kiểm chủ sở hữu).
-      res.json(await aux.continuePartialRequest(store.db, req.params.id, req.user.role === 'admin' ? null : req.user.id));
+      res.json(await aux.continuePartialRequest(store.db, req.params.id, null));
+    } catch (error) {
+      if (error instanceof WorkerContractError) {
+        return res.status(error.status).json({ error: error.code, message: error.message });
+      }
+      throw error;
+    }
+  });
+
+  // Người gửi dừng rồi sửa lại yêu cầu và gửi tiếp: chỉ khi không ai đang chạy (không có lease sống).
+  route.post('/api/requests/:id/edit', requireAuth, requireStrictCsrf, async (req, res) => {
+    const title = String(req.body?.title || '').trim();
+    const detail = String(req.body?.detail || '').trim();
+    if (title.length < 4 || title.length > 200) {
+      return res.status(422).json({ error: 'invalid_title', message: 'Tiêu đề cần từ 4 đến 200 ký tự.' });
+    }
+    const language = checkLanguage(detail || title);
+    if (language.block) return res.status(422).json({ error: 'unsupported_language', message: language.message });
+    const intake = checkIntake(title, detail);
+    if (intake.block) return res.status(422).json({ error: 'request_rejected', message: intake.message });
+    const gibberish = checkGibberish(detail || title);
+    if (gibberish) return res.status(422).json({ error: 'request_unclear', message: gibberish });
+    try {
+      res.json(await editRequestAndReplan(store.db, req.params.id, {
+        ownerUserId: req.user.id, title, detail, authorName: req.user.display_name || req.user.displayName,
+      }));
     } catch (error) {
       if (error instanceof WorkerContractError) {
         return res.status(error.status).json({ error: error.code, message: error.message });
