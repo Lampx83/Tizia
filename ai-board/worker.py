@@ -1426,7 +1426,8 @@ class HarnessPlanner:
             # Model sinh plan sai luật (LF/106): một lượt lập lại với lỗi nêu trong thread,
             # sampling thoáng hơn để phá vòng lặp của model nhỏ.
             reason = str(stopped["result"].get("reason") or "")
-            budget.max_model_calls += 3
+            # Lượt sửa cần thêm lời gọi cổng 1/2/2.5; trần lượt gọi của lượt lập plan đang rất sát.
+            budget.max_model_calls = max(budget.max_model_calls, budget.model_calls + 5)
             request = {**request, "thread": [
                 *(request.get("thread") or []),
                 {"role": "ai", "body": _plan_repair_note(reason, _duplicate_files(reason))},
