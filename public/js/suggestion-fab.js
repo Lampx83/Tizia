@@ -12,7 +12,7 @@
 // ============================================================
 
 import { getPlayerName } from './api.js';
-import { renderRequestThread } from './request-thread.js?v=no-icons';
+import { renderRequestThread } from './request-thread.js?v=no-icons2';
 import { boardIcon } from './ai-board-icons.js';
 
 const TYPES = [
@@ -142,8 +142,9 @@ function autoMount() {
             <b id="sgf-clar-title"></b></span></div>
           <div class="sgf-clar-log" id="sgf-clar-log" aria-live="polite"></div>
           <div class="sgf-clar-model">
-            <label><input type="checkbox" id="sgf-clar-local"> Dùng model nội bộ</label>
-            <p class="sgf-clar-model-hint" id="sgf-clar-model-hint">Bỏ trống: trả lời bằng model cloud. Tích: dùng model nội bộ (vLLM của trường).</p>
+            <label for="sgf-clar-model">Model trả lời</label>
+            <select id="sgf-clar-model" class="sgf-in" aria-describedby="sgf-clar-model-hint"></select>
+            <p class="sgf-clar-model-hint" id="sgf-clar-model-hint">Đang tải lựa chọn model…</p>
           </div>
           <div class="sgf-clar-reply" id="sgf-clar-reply" hidden>
             <textarea id="sgf-clar-in" class="sgf-in" rows="2" maxlength="2000"
@@ -479,19 +480,34 @@ function bind(root) {
   const paneMine = root.querySelector('#sgf-pane-mine');
   const clarSlot = root.querySelector('#sgf-clar-slot');
   const tabBadge = root.querySelector('#sgf-tab-badge');
-  const clarLocal = root.querySelector('#sgf-clar-local');
+  const clarModel = root.querySelector('#sgf-clar-model');
   const clarModelHint = root.querySelector('#sgf-clar-model-hint');
-  let cloudConfigured = false;
+  let modelChoices = { local: true, cloud: false, cloudModel: null };
+
+  function renderModelChoices() {
+    const choices = [];
+    if (modelChoices.local) choices.push(['local', 'Model nội bộ (vLLM của trường)']);
+    if (modelChoices.cloud) choices.push(['cloud', modelChoices.cloudModel ? `Model cloud (${modelChoices.cloudModel})` : 'Model cloud']);
+    clarModel.innerHTML = choices.map(([value, label]) => `<option value="${value}">${escapeHtml(label)}</option>`).join('');
+    clarModel.value = modelChoices.cloud ? 'cloud' : 'local';
+    clarModel.disabled = choices.length < 2; // chỉ một model: khóa, đổi cũng không có tác dụng
+    clarModelHint.textContent = choices.length > 1
+      ? 'Đổi được giữa chừng: mỗi lượt trả lời dùng model đang chọn.'
+      : modelChoices.cloud
+        ? 'Chưa cấu hình model nội bộ — hệ thống dùng model cloud cho phần trả lời.'
+        : 'Chưa cấu hình model cloud — hệ thống dùng model nội bộ cho phần trả lời.';
+  }
+  renderModelChoices();
   fetch('api/ai-board/clarify/options', { credentials: 'same-origin' })
     .then(r => r.ok ? r.json() : null).then(options => {
       if (!options) return;
-      cloudConfigured = options.cloud_configured === true;
-      if (!cloudConfigured) {
-        clarLocal.checked = false;
-        clarLocal.disabled = true;
-        clarModelHint.textContent = 'Chưa cấu hình model cloud — hệ thống dùng model nội bộ cho phần trả lời.';
-      }
-    }).catch(() => { /* offline: coi như chưa cấu hình cloud */ });
+      modelChoices = {
+        local: options.local_configured !== false,
+        cloud: options.cloud_configured === true,
+        cloudModel: options.cloud_model || null,
+      };
+      renderModelChoices();
+    }).catch(() => { /* offline: giữ lựa chọn mặc định (model nội bộ) */ });
 
   function showTab(name) {
     root.querySelectorAll('[data-tab]').forEach(t => {
@@ -562,8 +578,23 @@ function bind(root) {
       lastSummary = done;
       clarSpec.value = done.text;
       clarSpec.readOnly = true;
-      // Nút "Đúng, gửi" nằm cuối panel: cuộn tới để người dùng thấy ngay trên màn hình thấp.
-      setTimeout(() => clarSum.scrollIntoView({ block: 'end', behavior: 'smooth' }), 30);
+      // Thông báo "đã rõ yêu cầu" + 2 nút ngay dưới tin của Ban điều hành.
+      clarLog.querySelectorAll('.sgf-clar-actions').forEach(el => el.remove());
+      const actions = document.createElement('div');
+      actions.className = 'sgf-clar-actions';
+      actions.innerHTML = `<div class="sgf-clar-msg sgf-clar-ai">Đã rõ yêu cầu. Gửi ngay, hoặc làm rõ thêm nếu còn điểm chưa chắc.</div>
+        <div class="sgf-bar">
+          <button type="button" class="sgf-send" data-clar-send-now>Gửi yêu cầu ngay</button>
+          <button type="button" class="sgf-chip" data-clar-more>Làm rõ tiếp</button>
+        </div>`;
+      clarLog.appendChild(actions);
+      actions.querySelector('[data-clar-send-now]').addEventListener('click', () => root.querySelector('#sgf-clar-ok').click());
+      actions.querySelector('[data-clar-more]').addEventListener('click', () => {
+        clarReply.hidden = false;
+        clarIn.focus();
+      });
+      clarLog.scrollTop = clarLog.scrollHeight;
+      setTimeout(() => actions.scrollIntoView({ block: 'end', behavior: 'smooth' }), 30);
     } else {
       clarCount.textContent = 'Chờ quản trị viên';
       loadInbox();
@@ -612,7 +643,7 @@ function bind(root) {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': await csrfToken() },
         body: JSON.stringify({ ...(answer === undefined ? {} : { answer }),
-          model_source: clarLocal.checked || !cloudConfigured ? 'local' : 'cloud' }),
+          model_source: clarModel.value === 'cloud' ? 'cloud' : 'local' }),
       });
       if (!(r.headers.get('content-type') || '').includes('ndjson')) {
         const e = await r.json().catch(() => ({}));
@@ -1187,7 +1218,8 @@ export function queueLine(q) {
 export function renderItem(it, me = '') {
   const sm = STATUS[it.status] || STATUS.pending;
   const mine = me && it.student === me;
-  const awaiting = mine && it.awaiting_user === true;
+  const awaiting = mine && (it.awaiting_user === true || it.awaiting_confirm === true);
+  const awaitingConfirm = mine && it.awaiting_user !== true && it.awaiting_confirm === true;
   const sent = it.created_at ? `Gửi ${fmtWhen(it.created_at)}` : '';
   const atts = Array.isArray(it.attachments) ? it.attachments : [];
   const attHtml = atts.length ? `
@@ -1207,7 +1239,7 @@ export function renderItem(it, me = '') {
       <div class="sgf-it-line">
         <span class="sgf-it-title">${escapeHtml(it.title)}</span>
         ${it.execution_mode === 'queue' ? '<span class="sgf-it-mode">Hàng đợi Claude Code</span>' : ''}
-        <span class="sgf-it-st ${sm.cls}">${escapeHtml(awaiting ? 'Chờ bạn trả lời' : it.status_label || sm.label)}</span>
+        <span class="sgf-it-st ${sm.cls}">${escapeHtml(awaiting ? (awaitingConfirm ? 'Chờ bạn xem lại' : 'Chờ bạn trả lời') : it.status_label || sm.label)}</span>
       </div>
       ${sent ? `<div class="sgf-it-time">${sent}</div>` : ''}
       ${queueLine(it.queue)}
@@ -1217,7 +1249,7 @@ export function renderItem(it, me = '') {
       <div class="sgf-it-actions">
         ${awaiting
           // Ban đang chờ trả lời: mở grilling trong cửa sổ trao đổi với Ban điều hành.
-          ? `<button type="button" class="sgf-it-thread-btn sgf-it-ask" data-clarify="${it.id}">Trả lời ngay</button>`
+          ? `<button type="button" class="sgf-it-thread-btn sgf-it-ask" data-clarify="${it.id}">${awaitingConfirm ? 'Xem lại & gửi' : 'Trả lời ngay'}</button>`
           : `<button type="button" class="sgf-it-thread-btn" data-req-toggle="${it.id}">
           ${mine ? 'Trao đổi với Ban điều hành' : 'Xem trao đổi'}
         </button>`}
@@ -1371,6 +1403,10 @@ function injectStyles() {
     .sgf-thread-clarify { border-top: 1px solid #e5e7eb; margin-top: 10px; }
     .sgf-thread-clarify[hidden] { display: none !important; }
     .sgf-thread-clarify .sgf-clarify { padding: 8px 0 0; }
+    /* Đang grilling: chỉ còn một ô trả lời (ô của phần làm rõ), ẩn ô trao đổi thường. */
+    .sgf-thread-sheet:has(.sgf-thread-clarify:not([hidden])) .rt-composer { display: none; }
+    .sgf-clar-model select { width: 100%; }
+    .sgf-clar-actions { display: flex; flex-direction: column; gap: 6px; }
     .sgf-it-thread-btn.sgf-it-ask {
       background: #fbbf24; color: #451a03; border-color: #f59e0b; font-weight: 700;
       animation: sgf-ring 1.6s ease-out infinite;

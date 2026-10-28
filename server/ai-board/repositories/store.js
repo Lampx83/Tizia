@@ -517,6 +517,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       out.push({ ...row, attachments: parseAttachments(row.attachments),
         status_label: workflow?.status_label ?? null,
         awaiting_user: workflow?.awaiting_user === true,
+        awaiting_confirm: workflow?.awaiting_confirm === true,
         queue: row.workflow_status === 'queued' ? queue.get(row.root_ticket_id) ?? null : null });
     }
     return out;
@@ -541,10 +542,13 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     const last = await db.get('SELECT author_name FROM request_messages WHERE request_id=? ORDER BY id DESC LIMIT 1', [Number(requestId)]);
     // awaiting_user: Ban hỏi xong và đang chờ chính người gửi trả lời (không phải đang chờ người xác nhận tóm tắt).
     const awaiting_user = root.phase === 'clarifying' && last?.author_name === CLARIFY_AUTHOR;
-    return { workflow_status: root.status, phase: root.phase, public_note: root.public_note, awaiting_user,
+    // awaiting_confirm: đã có bản tóm tắt, chờ người gửi xem lại và bấm gửi (hoặc làm rõ tiếp).
+    const awaiting_confirm = root.phase === 'clarifying' && last?.author_name === SPEC_AUTHOR;
+    return { workflow_status: root.status, phase: root.phase, public_note: root.public_note, awaiting_user, awaiting_confirm,
       status_label: awaiting_user ? 'chờ bạn trả lời'
-        : root.status === 'waiting_authorization' ? 'chờ quản trị viên cho phép'
-          : PHASES[root.phase]?.label ?? root.public_note ?? null };
+        : awaiting_confirm ? 'chờ bạn xem lại và gửi'
+          : root.status === 'waiting_authorization' ? 'chờ quản trị viên cho phép'
+            : PHASES[root.phase]?.label ?? root.public_note ?? null };
   }
 
   async function queueInfo(ownerUserId, now = Date.now()) {
