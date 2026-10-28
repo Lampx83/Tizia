@@ -49,14 +49,29 @@ SELF_EDIT = [re.compile(p) for p in LEXICON["self_edit_paths"]["patterns"]]
 
 # Term ASCII so trên bản bỏ dấu, term có dấu so trên bản NFC — xem _doc trong guard-lexicon.json.
 _TOPICS ={label: [(_term(t), t.isascii()) for t in spec["terms"]] for label, spec in LEXICON["labels"].items()}
+# "không cần đăng nhập riêng" / "chưa có mật khẩu" = mô tả phủ định, không phải yêu cầu quyền.
+_NEGATED = re.compile(r"(?:không|khong|chưa|chua|miễn|mien|khỏi|khoi|no|not|without)\b[^.;:!?\n]{0,32}$", re.I)
+
+
+def _negated(text: str, start: int) -> bool:
+    """Từ khoá đứng ngay sau một phủ định trong cùng mệnh đề."""
+    return bool(_NEGATED.search(text[max(0, start - 48):start]))
 
 
 def topic_hits(text: str | None) -> list[str]:
-    """Nhãn lexicon trúng trong text, theo thứ tự file JSON."""
+    """Nhãn lexicon trúng trong text, theo thứ tự file JSON; bỏ lượt trúng bị phủ định."""
     if not text:
         return []
     exact, folded = unicodedata.normalize("NFC", text).lower(), fold(text)
-    return [label for label, pats in _TOPICS.items() if any(p.search(folded if a else exact) for p, a in pats)]
+    hits = []
+    for label, pats in _TOPICS.items():
+        for pattern, ascii_only in pats:
+            haystack = folded if ascii_only else exact
+            match = pattern.search(haystack)
+            if match and not _negated(haystack, match.start()):
+                hits.append(label)
+                break
+    return hits
 
 
 def host_allowed(host: str, allowed=None) -> bool:
