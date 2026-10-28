@@ -25,6 +25,9 @@ services:
       AI_BOARD_WORKER_KEY: ${AI_BOARD_WORKER_KEY:-}
       VLLM_URL: ${VLLM_URL:-}
       OLLAMA_URL: ${OLLAMA_URL:-}
+      VLLM_SECKEY: ${VLLM_SECKEY:-}     # gateway vllm chỉ nhận Bearer/x-ollama-seckey; thiếu = classifier 401 call_failure
+      OLLAMA_SECKEY: ${OLLAMA_SECKEY:-}
+      AI_BOARD_MODEL_ROUTING: ${AI_BOARD_MODEL_ROUTING:-true}  # false/empty = rơi vào /ollama/api/generate fallback → gateway 404 model not found
       AI_BOARD_CLASSIFIER_MODEL: ${AI_BOARD_CLASSIFIER_MODEL:-}
     ports: !override []  # khÃ´ng publish; web gá»i qua tizia-internal báº±ng DNS
     networks: !override [default, tizia-internal]
