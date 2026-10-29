@@ -104,7 +104,7 @@ services:
       driver: json-file
       options: { max-size: 10m, max-file: "3" }
 
-  # UI SeaweedFS (master 9333/filer 8888) chỉ xem từ host, sau basic-auth; key sinh in docker logs (LF/96).
+  # UI SeaweedFS (master 9333/filer 8888) sau basic-auth; production KHÔNG publish cổng, chỉ dev.local publish trên 127.0.0.1.
   seaweedfs-ui-auth:
     container_name: aiboard-seaweedfs-ui
     image: node:24-alpine
@@ -115,9 +115,6 @@ services:
     environment:
       SEAWEED_UI_USER: ${SEAWEED_UI_USER:-admin}
       SEAWEED_UI_PASSWORD: ${SEAWEED_UI_PASSWORD:-}
-    ports:
-      - "127.0.0.1:9333:9333"
-      - "127.0.0.1:8888:8888"
     networks: !override [default]
     volumes:
       - ./scripts/seaweed-ui-auth.js:/app/scripts/seaweed-ui-auth.js:ro

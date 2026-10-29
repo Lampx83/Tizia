@@ -8,6 +8,7 @@ import { HEADERS, requireInternalUser } from './ai-board/internal-auth.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from './ai-board/routes.js';
 import { attachRequesterThread } from './ai-board/api/requester-thread.js';
 import { attachAiBoardIntake } from './contexts/ai-board-intake/index.js';
+import { attachAiBoardShots } from './contexts/ai-board-shots/index.js';
 
 export { HEADERS };
 
@@ -58,6 +59,7 @@ export async function createAiBoardServer({ env = process['env'], dbHandle = nul
   // Thread and votes of one request: the web proxies these to the board (LF/122) so both sides read one store.
   attachRequesterThread(app, { requests: services.requests, store: services.store, db: handle.d, requireAuth });
   attachAiBoardWorkerRoutes(app, { store: services.store, aux: services.aux, env });
+  attachAiBoardShots(app, { db: handle.d, requireAuth, requireAdmin });
 
   app.use((error, _req, res, _next) => {
     logger.warn?.(`[aiboard-server] ${error?.message || error}`);

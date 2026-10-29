@@ -33,6 +33,7 @@ services:
   seaweedfs-ui-auth:
     extends: { file: docker-compose.dev.prod.yml, service: seaweedfs-ui-auth }
     networks: !override [boardnet]   # UI bind loopback host; seaweedfs cũng phải với tới 9333/8888 qua cùng cầu
+    ports: !override ["127.0.0.1:9333:9333", "127.0.0.1:8888:8888"]
 
   image-registry:
     extends: { file: docker-compose.dev.prod.yml, service: image-registry }
