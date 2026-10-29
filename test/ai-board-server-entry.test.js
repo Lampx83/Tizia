@@ -125,3 +125,12 @@ test('skill upload on the board entry accepts a signed admin and refuses a signe
     assert.equal((await ok.json()).skill.name, 'signed-route-draft');
   } finally { await app.close(); app.db.close(); }
 });
+
+test('skill proposals list works on the board database (its tables exist after bootstrap)', async () => {
+  const app = await serve();
+  try {
+    const admin = signInternalHeaders({ id: 1, role: 'admin', displayName: 'Admin', domain: 'primary' }, SECRET);
+    const res = await fetch(`${app.base}/api/admin/ai-board/skills/proposals`, { headers: admin });
+    assert.equal(res.status, 200, await res.clone().text());
+  } finally { await app.close(); app.db.close(); }
+});

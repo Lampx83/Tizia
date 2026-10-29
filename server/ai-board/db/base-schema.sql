@@ -34,3 +34,31 @@ CREATE TABLE IF NOT EXISTS request_messages (
   created_at  BIGINT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_request_messages ON request_messages(request_id, created_at);
+CREATE TABLE IF NOT EXISTS skill_proposals (
+  id            BIGSERIAL PRIMARY KEY,
+  origin        TEXT   NOT NULL,
+  domain        TEXT,
+  gate_reached  DOUBLE PRECISION NOT NULL,
+  outcome       TEXT,
+  request_ids   TEXT,
+  template_key  TEXT,
+  budget_json   TEXT,
+  pr_url        TEXT,
+  created_at    BIGINT NOT NULL,
+  updated_at    BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_skill_proposals_template ON skill_proposals(template_key, created_at DESC);
+CREATE TABLE IF NOT EXISTS gate_trace (
+  id                   BIGSERIAL PRIMARY KEY,
+  skill_proposal_id    BIGINT NOT NULL,
+  gate                 DOUBLE PRECISION NOT NULL,
+  model                TEXT,
+  prompt               TEXT,
+  raw_response         TEXT,
+  prompt_eval_count    BIGINT,
+  eval_count           BIGINT,
+  prompt_eval_duration BIGINT,
+  eval_duration        BIGINT,
+  created_at           BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_gate_trace_proposal ON gate_trace(skill_proposal_id, created_at);
