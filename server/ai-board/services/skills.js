@@ -11,12 +11,16 @@ const FIELDS = ['name', 'description', 'task_type', 'source', 'version', 'max_to
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../ai-board/harness/skills');
 export const REWRITE_BOUND = { model_calls: 4, tokens: 40000 };
 const STALE_RUNNING_MS = 20 * 60 * 1000;
+// Hạn mức viết lại: một chỗ duy nhất; bộ đếm nằm ở ai_skill_rewrite_requests nên sống sót khi reset job.
+export const REWRITE_LIMITS = Object.freeze({ per_version_hour: 5, per_admin_day: 20, hour_ms: 3600 * 1000, day_ms: 24 * 3600 * 1000 });
 export const RETRO_BATCH = 5;
 const ORIGIN = 'skill-edit';
 const CLAIM_LOCK = 45046;
 const hash = text => createHash('sha256').update(text).digest('hex');
 const parse = (text, fallback = null) => { try { return JSON.parse(text); } catch { return fallback; } };
 const bad = (message, code = 'invalid_skill', status = 400) => new WorkerContractError(message, status, code);
+const rateLimited = (scope, waitMs) => Object.assign(bad('Rewrite rate limit reached', 'rate_limited', 429),
+  { scope, retry_after_s: Math.max(1, Math.ceil(waitMs / 1000)) });
 const validId = value => (typeof value === 'number' || typeof value === 'string' && /^[1-9]\d*$/.test(value)) && Number.isSafeInteger(Number(value)) && Number(value) > 0;
 const escape = text => text.replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#x27;' }[c]));
 const FORBIDDEN = /(?:ignore|override|bypass|grant|enable)\s+(?:all\s+)?(?:platform|permission|tools?|rules?|budget|sandbox)|(?:request|require|need)\w*\s+(?:permission|access|tools?)|tools?\s+required\s*:|(?:bỏ qua|ghi đè|cấp quyền|vô hiệu hóa|yêu cầu quyền|cần quyền)/i;
@@ -91,7 +95,8 @@ export function createSkillService(db) {
       const job = jobs.get(v.id);
       return { ...v, task_types: parse(v.task_types_json, []), lint: parse(v.lint_json, {}), evaluation: parse(v.eval_json),
         rewrite_lint: parse(v.rewrite_lint_json), rewrite: job ? { id: job.id, status: job.status, error: job.error, model: job.model,
-          confirmed_at: job.confirmed_at, finished_at: job.finished_at, usage: parse(job.usage_json), raw_response: job.raw_response } : null };
+          confirmed_at: job.confirmed_at, finished_at: job.finished_at, usage: parse(job.usage_json), raw_response: job.raw_response,
+          instructions: job.instructions ?? null, attempts: job.attempts ?? 0 } : null };
     }) };
   }
   async function appendVersion(actor, item, taskTypes, text, parentId = null, extra = {}) {
@@ -162,8 +167,20 @@ export function createSkillService(db) {
       await requireCurrentAdmin(actor);
       const { version } = await lockedVersion(id, versionId);
       if (version.rejected_at || version.approved_at || version.rewritten_text != null) throw bad('Version cannot be rewritten', 'rewrite_not_allowed', 409);
-      if (await db.get('SELECT id FROM ai_skill_rewrites WHERE version_id=?', [version.id])) throw bad('Rewrite already requested', 'rewrite_exists', 409);
-      await db.run('INSERT INTO ai_skill_rewrites(version_id,confirmed_by,confirmed_at,instructions) VALUES(?,?,?,?)', [version.id, actor.id, Date.now(), instructions]);
+      const now = Date.now();
+      const job = await db.get(`SELECT * FROM ai_skill_rewrites WHERE version_id=?${db.lockRow}`, [version.id]);
+      if (job && (job.status === 'queued' || job.status === 'running')) throw bad('Rewrite in progress', 'rewrite_in_progress', 409);
+      await checkRewriteLimits(actor, version.id, now);
+      await db.run('INSERT INTO ai_skill_rewrite_requests(version_id,admin_id,created_at) VALUES(?,?,?)', [version.id, actor.id, now]);
+      if (!job) {
+        await db.run('INSERT INTO ai_skill_rewrites(version_id,confirmed_by,confirmed_at,instructions,attempts) VALUES(?,?,?,?,0)', [version.id, actor.id, now, instructions]);
+      } else {
+        const previous = { status: job.status, error: job.error, model: job.model, confirmed_at: job.confirmed_at, finished_at: job.finished_at, usage: parse(job.usage_json) };
+        const history = [...(parse(job.history_json, []) || []), previous];
+        await db.run(`UPDATE ai_skill_rewrites SET status='queued',confirmed_by=?,confirmed_at=?,instructions=?,claim_token=NULL,claimed_at=NULL,
+          finished_at=NULL,model=NULL,raw_response=NULL,error=NULL,usage_json=NULL,attempts=COALESCE(attempts,0)+1,history_json=? WHERE id=?`,
+          [actor.id, now, instructions, JSON.stringify(history), job.id]);
+      }
       return read(id);
     });
   }
@@ -201,6 +218,18 @@ export function createSkillService(db) {
         [version.id, JSON.stringify(lint.task_types), actor.id, Date.now(), id]);
       return read(id);
     });
+  }
+  async function checkRewriteLimits(actor, versionId, now) {
+    const versionRows = await db.all('SELECT created_at FROM ai_skill_rewrite_requests WHERE version_id=? AND created_at>? ORDER BY created_at',
+      [versionId, now - REWRITE_LIMITS.hour_ms]);
+    if (versionRows.length >= REWRITE_LIMITS.per_version_hour) {
+      throw rateLimited('version', versionRows[0].created_at + REWRITE_LIMITS.hour_ms - now);
+    }
+    const adminRows = await db.all('SELECT created_at FROM ai_skill_rewrite_requests WHERE admin_id=? AND created_at>? ORDER BY created_at',
+      [actor.id, now - REWRITE_LIMITS.day_ms]);
+    if (adminRows.length >= REWRITE_LIMITS.per_admin_day) {
+      throw rateLimited('admin', adminRows[0].created_at + REWRITE_LIMITS.day_ms - now);
+    }
   }
   // Ghi chú của admin cho lượt viết lại: cùng lưới chặn với yêu cầu của học viên (checkIntake), không lưu nếu bị chặn.
   function cleanInstructions(value) {
