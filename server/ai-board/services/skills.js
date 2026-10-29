@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { createHash, randomBytes } from 'node:crypto';
 import { WorkerContractError } from '../repositories/store-contract.js';
 import { SKILL_TASK_TYPES } from '../skill-task-types.js';
+import { checkIntake, publicMessage } from '../security/intake-guard.js';
 
 export const TASK_TYPES = SKILL_TASK_TYPES;
 const FIELDS = ['name', 'description', 'task_type', 'source', 'version', 'max_tokens'];
@@ -156,12 +157,13 @@ export function createSkillService(db) {
   }
   async function requestRewrite(actor, id, versionId, input) {
     if (input.confirmed !== true) throw bad('Rewrite confirmation required', 'confirmation_required');
+    const instructions = cleanInstructions(input.instructions);
     return db.tx(async () => {
       await requireCurrentAdmin(actor);
       const { version } = await lockedVersion(id, versionId);
       if (version.rejected_at || version.approved_at || version.rewritten_text != null) throw bad('Version cannot be rewritten', 'rewrite_not_allowed', 409);
       if (await db.get('SELECT id FROM ai_skill_rewrites WHERE version_id=?', [version.id])) throw bad('Rewrite already requested', 'rewrite_exists', 409);
-      await db.run('INSERT INTO ai_skill_rewrites(version_id,confirmed_by,confirmed_at) VALUES(?,?,?)', [version.id, actor.id, Date.now()]);
+      await db.run('INSERT INTO ai_skill_rewrites(version_id,confirmed_by,confirmed_at,instructions) VALUES(?,?,?,?)', [version.id, actor.id, Date.now(), instructions]);
       return read(id);
     });
   }
@@ -200,6 +202,17 @@ export function createSkillService(db) {
       return read(id);
     });
   }
+  // Ghi chú của admin cho lượt viết lại: cùng lưới chặn với yêu cầu của học viên (checkIntake), không lưu nếu bị chặn.
+  function cleanInstructions(value) {
+    if (value == null || value === '') return null;
+    if (typeof value !== 'string') throw bad('Instructions must be text', 'invalid_instructions', 400);
+    const text = value.trim();
+    if (text.length > 600 || /[\u0000-\u001f\u007f]/.test(text)) throw bad('Instructions too long or contain control characters', 'invalid_instructions', 400);
+    if (!text) return null;
+    const verdict = checkIntake('', text);
+    if (verdict.block) throw bad(verdict.message || publicMessage('reject'), 'instructions_blocked', 400);
+    return text;
+  }
   async function claimRewrite(workerId) {
     if (typeof workerId !== 'string' || !workerId) throw bad('worker_id required');
     return db.tx(async () => {
@@ -214,7 +227,7 @@ export function createSkillService(db) {
       await db.run("UPDATE ai_skill_rewrites SET status='running',claim_token=?,claimed_at=? WHERE id=?", [token, now, job.id]);
       const v = await db.get('SELECT v.*,s.name FROM ai_skill_versions v JOIN ai_skills s ON s.id=v.skill_id WHERE v.id=?', [job.version_id]);
       return { job: { id: job.id, claim_token: token, name: v.name, version: v.version, task_types: parse(v.task_types_json, []),
-        original_text: v.original_text, max_tokens: 1500, bound: REWRITE_BOUND } };
+        original_text: v.original_text, instructions: job.instructions ?? null, max_tokens: 1500, bound: REWRITE_BOUND } };
     });
   }
   const cleanEval = input => {
