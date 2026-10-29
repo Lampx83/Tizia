@@ -66,6 +66,11 @@ function defaults() {
 
 export function createSkillService(db) {
   async function requireCurrentAdmin(actor) {
+    // Signed identity (aiboard-server): role comes from the verified header; this board has no sessions table.
+    if (actor.sessionToken == null) {
+      if (actor.role !== 'admin') throw bad('Current admin required', 'admin_required', 403);
+      return;
+    }
     const current = await db.get(`SELECT u.role FROM users u JOIN sessions s ON s.user_id=u.id
       WHERE u.id=? AND s.token=? AND s.expires_at>? FOR SHARE OF u,s`, [actor.id, String(actor.sessionToken || ''), Date.now()]);
     if (!current) throw bad('Current session required', 'authentication_required', 401);
