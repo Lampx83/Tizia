@@ -35,3 +35,17 @@ export const rowPill = job => job?.status && ['queued', 'running', 'failed'].inc
 
 // Poll only while the tab is visible and a rewrite is still in flight.
 export const shouldPoll = ({ visible, connected, versions }) => Boolean(visible && connected && hasActiveRewrite(versions));
+
+export const NOTE_MAX = 600;
+const encoder = new TextEncoder();
+/** UTF-8 byte length: same upper bound the server stores as token_count. */
+export const estimateTokens = text => encoder.encode(String(text ?? '')).length;
+export const parseMaxTokens = text => {
+  const head = /^---\n([\s\S]*?)\n---/.exec(String(text ?? '').replace(/\r\n/g, '\n'));
+  const cap = head && /^max_tokens:\s*(\d+)\s*$/m.exec(head[1]);
+  return cap ? Number(cap[1]) : null;
+};
+export const tokenLabel = text => {
+  const count = estimateTokens(text), cap = parseMaxTokens(text);
+  return { count, cap, over: cap != null && count > cap, text: `${count.toLocaleString('vi-VN')}${cap != null ? ` / ${cap.toLocaleString('vi-VN')}` : ''} token` };
+};
