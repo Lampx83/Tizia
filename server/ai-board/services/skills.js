@@ -70,6 +70,11 @@ function defaults() {
 }
 
 export function createSkillService(db) {
+  /** Same deterministic guardrail as request text; blocked skill text is never stored, approved or served. */
+  const guardSkillText = (text, status = 400) => {
+    const verdict = checkIntake('', text);
+    if (verdict.block) throw bad(verdict.message || publicMessage('reject'), 'skill_blocked', status);
+  };
   async function requireCurrentAdmin(actor) {
     // Signed identity (aiboard-server): role comes from the verified header; this board has no sessions table.
     if (actor.sessionToken == null) {
@@ -100,6 +105,7 @@ export function createSkillService(db) {
     }) };
   }
   async function appendVersion(actor, item, taskTypes, text, parentId = null, extra = {}) {
+    guardSkillText(text);
     const now = Date.now();
     const version = Number((await db.get('SELECT COALESCE(MAX(version),0)+1 AS n FROM ai_skill_versions WHERE skill_id=?', [item.id])).n);
     const lint = lintSkill(text, { name: item.name, version });
@@ -130,6 +136,7 @@ export function createSkillService(db) {
     if (version.rejected_at) throw bad('Version was rejected', 'version_rejected', 409);
     const rewritten = version.rewritten_text != null;
     const text = rewritten ? version.rewritten_text : version.original_text;
+    guardSkillText(text, 422);
     const lint = lintSkill(text, { name: item.name, version: version.version });
     const stored = parse(rewritten ? version.rewrite_lint_json : version.lint_json, {});
     if (!lint.ok || !stored.ok || lint.hash !== (rewritten ? version.rewritten_hash : version.hash)) throw bad('Version failed lint/hash', 'skill_lint_failed', 422);
@@ -274,6 +281,7 @@ export function createSkillService(db) {
         [status, error, now, typeof input.model === 'string' ? input.model.slice(0, 120) : null, raw, JSON.stringify(usage), job.id]);
       if (usage.model_calls > REWRITE_BOUND.model_calls || usage.tokens > REWRITE_BOUND.tokens) { await finish('failed', 'usage_exceeds_bound'); return { status: 'failed' }; }
       if (typeof input.rewritten_text !== 'string' || !input.rewritten_text) { await finish('failed', String(input.error || 'no_output').slice(0, 200)); return { status: 'failed' }; }
+      if (checkIntake('', input.rewritten_text).block) { await finish('failed', 'guardrail_blocked'); return { status: 'failed' }; }
       const version = await db.get('SELECT v.*,s.name FROM ai_skill_versions v JOIN ai_skills s ON s.id=v.skill_id WHERE v.id=?', [job.version_id]);
       const lint = lintSkill(input.rewritten_text, { name: version.name, version: version.version });
       if (lint.ok && JSON.stringify([...lint.task_types].sort()) !== JSON.stringify([...parse(version.task_types_json, [])].sort())) {
