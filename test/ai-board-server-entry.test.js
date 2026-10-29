@@ -48,6 +48,22 @@ test('a signed web identity creates and lists a request on the board database on
   } finally { await app.close(); app.db.close(); }
 });
 
+test('admin shots list is served by the board only to a signed admin', async () => {
+  const app = await serve();
+  try {
+    const shot = { url: '/uploads/requests/2026-10-29/1-abcdef012301.png', name: 'shot', mime: 'image/png', kind: 'screenshot' };
+    await app.db.d.run('INSERT INTO requests(id, domain, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', [1, 'primary', 'Có ảnh', 1000, 1000]);
+    await app.db.d.run('INSERT INTO request_messages(request_id, role, author_name, body, attachments, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [1, 'ai', 'Ban', 'shot', JSON.stringify([shot]), 1000]);
+    const admin = signInternalHeaders({ id: 1, role: 'admin', displayName: 'Admin', domain: 'primary' }, SECRET);
+    const ok = await fetch(`${app.base}/api/admin/ai-board/shots?page=1`, { headers: admin });
+    assert.equal(ok.status, 200);
+    assert.equal((await ok.json()).groups[0].title, 'Có ảnh');
+    assert.equal((await fetch(`${app.base}/api/admin/ai-board/shots`, { headers: signed() })).status, 403);
+    assert.equal((await fetch(`${app.base}/api/admin/ai-board/shots`)).status, 401);
+  } finally { await app.close(); app.db.close(); }
+});
+
 test('the board mirrors the signed user and serves the requester thread and votes', async () => {
   const app = await serve();
   try {
