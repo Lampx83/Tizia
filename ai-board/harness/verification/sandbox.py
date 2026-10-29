@@ -36,10 +36,26 @@ GUEST_ENTRY = ("mkdir -p /workspace/out && chmod 777 /workspace/out && cd /opt/a
                'exec runuser -u gate -- env "PATH=$PATH" "PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH" HOME=/home/gate '
                "python -m gates.gate5_guest /workspace/state.json /workspace/checkout /workspace/out")
 PEAK_FILE = f"/workspace/{GUEST_OUT}/peak.json"
-# RUSAGE_CHILDREN = largest waited-for descendant of this wrapper, i.e. the guest gate tree; the runner returns exit codes only.
-PEAK_PROBE = ("import json,resource,subprocess,sys;rc=subprocess.call(sys.argv[2:]);"
-              "json.dump({'peak_kib': resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss, 'rc': rc}, open(sys.argv[1], 'w'));"
-              "sys.exit(rc)")
+# RUSAGE_CHILDREN = largest waited-for descendant (guest gate tree). vm_peak_kib = max(MemTotal - MemAvailable) sampled
+# every 0.5 s across the whole guest kernel, so it covers the Docker daemon and compose too.
+PEAK_PROBE = "\n".join([
+    "import json,resource,subprocess,sys,threading",
+    "peak=[0]",
+    "stop=threading.Event()",
+    "def sample():",
+    "    while not stop.is_set():",
+    "        m={}",
+    "        for line in open('/proc/meminfo'):",
+    "            k,_,v=line.partition(':')",
+    "            if k in ('MemTotal','MemAvailable'): m[k]=int(v.split()[0])",
+    "        if len(m)==2: peak[0]=max(peak[0], m['MemTotal']-m['MemAvailable'])",
+    "        stop.wait(0.5)",
+    "t=threading.Thread(target=sample,daemon=True); t.start()",
+    "rc=subprocess.call(sys.argv[2:])",
+    "stop.set(); t.join(2)",
+    "json.dump({'peak_kib': resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss, 'vm_peak_kib': peak[0], 'rc': rc}, open(sys.argv[1], 'w'))",
+    "sys.exit(rc)",
+])
 RENEW_EVERY_S = float(_CLIENT["renew_every_s"])
 BACKOFF_S = _CLIENT["backoff_s"]
 LEASE_S = float(_CLIENT["lease_s"])
@@ -349,26 +365,26 @@ class SandboxSession:
             self.cleanup_pending = True
 
 
-def _guest_probe(client: RunnerClient, run_id: str, limits_kw: dict) -> tuple[int | None, int | None]:
-    """(guest peak RSS, VM memory in use at end of run); None where unreadable. Evidence only, never the verdict."""
+def _guest_probe(client: RunnerClient, run_id: str, limits_kw: dict) -> tuple[int | None, int | None, int | None]:
+    """(guest peak RSS, VM peak used, VM used at end); None where unreadable. Evidence only, never the verdict."""
     try:
         timeout = _remaining(limits_kw.get("deadline"), 30)
         out = client.exec(run_id, ["sh", "-c", f"cat {PEAK_FILE}; echo; grep -E '^Mem(Total|Available):' /proc/meminfo"],
                           timeout=timeout, **limits_kw).get("stdout") or ""
         head, _, meminfo = out.partition("\n")
-        peak = int(json.loads(head)["peak_kib"])
+        probe = json.loads(head)
+        peak, vm_peak = int(probe["peak_kib"]), probe.get("vm_peak_kib")
     except (SandboxError, ValueError, KeyError, TypeError):
-        return None, None
+        return None, None, None
     fields = {key: int(value) for key, value in re.findall(r"^(Mem\w+):\s+(\d+)", meminfo, re.M)}
-    if {"MemTotal", "MemAvailable"} <= fields.keys():
-        return peak, fields["MemTotal"] - fields["MemAvailable"]
-    return peak, None
+    vm_end = fields["MemTotal"] - fields["MemAvailable"] if {"MemTotal", "MemAvailable"} <= fields.keys() else None
+    return peak, vm_peak, vm_end
 
 
-def _record_run_cost(result: dict, started: float, peak_kib: int | None, vm_used_kib: int | None) -> None:
-    """Wall seconds (create to teardown), guest peak RSS, VM memory in use at end, outcome into evidence.sandbox."""
+def _record_run_cost(result: dict, started: float, peak_kib: int | None, vm_peak_kib: int | None, vm_end_kib: int | None) -> None:
+    """Wall seconds (create to teardown), guest peak RSS, VM memory peak and end-of-run use, outcome into evidence.sandbox."""
     result["evidence"].setdefault("sandbox", {}).update(
-        wall_s=round(time.monotonic() - started, 1), peak_kib=peak_kib, vm_used_end_kib=vm_used_kib,
+        wall_s=round(time.monotonic() - started, 1), peak_kib=peak_kib, vm_peak_kib=vm_peak_kib, vm_used_end_kib=vm_end_kib,
         outcome="blocked" if result.get("blocked") else "passed")
 
 
@@ -404,7 +420,7 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
 
     run_id = f"g5-{uuid.uuid4().hex[:24]}"  # one id per Gate 5 invocation; a retry is a new invocation
     result = None
-    peak_kib = vm_used_kib = None
+    peak_kib = vm_peak_kib = vm_end_kib = None
     created_run = busy = False
     try:
         # same run_id: the runner answers a repeated create for a live run with that run's view, so a lost reply is safe
@@ -431,7 +447,7 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
             live()
             if outcome.get("code") != 0 or outcome.get("timed_out") or outcome.get("truncated"):
                 return _blocked("sandbox gate 5 không hoàn tất (exit/timeout/output)")
-            peak_kib, vm_used_kib = _guest_probe(client, run_id, request_limits)
+            peak_kib, vm_peak_kib, vm_end_kib = _guest_probe(client, run_id, request_limits)
             result = json.loads(client.download(run_id, "result", **request_limits))
             live()
             shots_archive = client.download(run_id, "shots", **request_limits)
@@ -460,13 +476,13 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
                 raise SandboxError("cleanup_unconfirmed", "destroy")
             if isinstance(result, dict) and isinstance(result.get("evidence"), dict):
                 result["evidence"].setdefault("sandbox", {})["teardown_confirmed"] = True
-                _record_run_cost(result, started, peak_kib, vm_used_kib)
+                _record_run_cost(result, started, peak_kib, vm_peak_kib, vm_end_kib)
         except SandboxError:
             blocked = _blocked("sandbox destroy: cleanup_unconfirmed")
             if isinstance(result, dict) and isinstance(result.get("evidence"), dict):
                 blocked["evidence"] = result["evidence"]
                 blocked["evidence"].setdefault("sandbox", {})["teardown_confirmed"] = False
-                _record_run_cost(result, started, peak_kib, vm_used_kib)
+                _record_run_cost(result, started, peak_kib, vm_peak_kib, vm_end_kib)
                 blocked["evidence"]["sandbox"]["outcome"] = "blocked"
                 state["evidence"] = blocked["evidence"]
             return blocked
