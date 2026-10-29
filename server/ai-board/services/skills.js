@@ -166,7 +166,7 @@ export function createSkillService(db) {
     return db.tx(async () => {
       await requireCurrentAdmin(actor);
       const { version } = await lockedVersion(id, versionId);
-      if (version.rejected_at || version.approved_at || version.rewritten_text != null) throw bad('Version cannot be rewritten', 'rewrite_not_allowed', 409);
+      if (version.rejected_at || version.approved_at) throw bad('Version cannot be rewritten', 'rewrite_not_allowed', 409);
       const now = Date.now();
       const job = await db.get(`SELECT * FROM ai_skill_rewrites WHERE version_id=?${db.lockRow}`, [version.id]);
       if (job && (job.status === 'queued' || job.status === 'running')) throw bad('Rewrite in progress', 'rewrite_in_progress', 409);

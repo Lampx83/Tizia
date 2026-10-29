@@ -14,7 +14,10 @@ async function fixture(names = ['rw-cycle']) {
   for (const name of names) made.push(await skills.upload(ADMIN, draft(name)));
   return { db, skills, made };
 }
-const finish = (db, versionId, status) => db.d.run('UPDATE ai_skill_rewrites SET status=?,finished_at=? WHERE version_id=?', [status, Date.now(), versionId]);
+const finish = async (db, versionId, status) => {
+  await db.d.run('UPDATE ai_skill_rewrites SET status=?,finished_at=? WHERE version_id=?', [status, Date.now(), versionId]);
+  if (status === 'succeeded') await db.d.run("UPDATE ai_skill_versions SET rewritten_text=? WHERE id=?", ['rewritten body', versionId]);
+};
 const rewriteRow = (db, versionId) => db.d.get('SELECT * FROM ai_skill_rewrites WHERE version_id=?', [versionId]);
 
 test('a job still queued or running refuses a new rewrite with 409 rewrite_in_progress', async () => {
