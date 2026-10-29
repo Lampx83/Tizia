@@ -27,6 +27,7 @@
   const selfScript = document.currentScript;
   const autoDomain = selfScript?.dataset?.domain || autoDetectDomain();
   const autoGrade = selfScript?.dataset?.grade || '';
+  const autoLabel = selfScript?.dataset?.label || '';   // req #246: chữ hiện cạnh biểu tượng (vd "Trợ lý AI")
   const autoContext = selfScript?.dataset?.context || (location.pathname.split('/').pop() || '').replace('.html', '');
 
   function autoDetectDomain() {
@@ -182,7 +183,8 @@
     const fab = document.createElement('button');
     fab.id = 'edututor-fab';
     fab.title = 'AI Tutor — hỏi gì cũng được';
-    fab.textContent = '🦉';
+    if (autoLabel) { fab.classList.add('has-label'); fab.innerHTML = '<span style="font-size:28px;line-height:1">🦉</span><span class="lbl"></span>'; fab.querySelector('.lbl').textContent = autoLabel; }
+    else fab.textContent = '🦉';
     fab.addEventListener('click', togglePanel);
     document.body.appendChild(fab);
 
