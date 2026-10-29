@@ -718,15 +718,9 @@ def _merge_same_file(subtasks: list[dict]) -> list[dict]:
     return merge_same_file(subtasks)
 
 
-def _repaired_snapshot(snapshot: dict, reason: str) -> dict:
-    """Snapshot cho lượt sửa plan: thêm lời từ chối vào thread để planner thấy đúng lỗi."""
-    return {**snapshot, "thread": [
-        *(snapshot.get("thread") or []),
-        {"role": "ai", "body": f"Hệ thống từ chối kế hoạch vừa lập: {reason}. Lập lại kế hoạch: mọi "
-                              "acceptance và verify của plan nhiều bước phải là LỆNH CHẠY ĐƯỢC "
-                              "(node --test <file>, curl <url>, pytest, python <file>, bash <script>), "
-                              "không được là câu mô tả."},
-    ]}
+def _repaired_snapshot(snapshot: dict, reason: str, note: str | None = None) -> dict:
+    """Snapshot cho lượt sửa plan: hint riêng cho planner, KHÔNG nhét vào thread (validator cũng đọc thread)."""
+    return {**snapshot, "plan_repair": note or _plan_repair_note(reason)}
 
 
 def _forge(candidate, token):
@@ -1295,6 +1289,7 @@ class HarnessPlanner:
             "body": request.get("clarified_spec") or request.get("detail") or request.get("title"),
             "clarified_spec": request.get("clarified_spec"),
             "thread": snapshot.get("thread") or [], "votes": request.get("votes", 1),
+            "plan_repair": snapshot.get("plan_repair"),
             "complexity_by_server": True,
             "grounding_required": request.get('type') != 'self',
             # Folder: L1 brief, L3 yêu cầu gần nhất, L2 file sở hữu — server tính, có trần.
@@ -1417,20 +1412,19 @@ class HarnessPlanner:
 
         stopped = run_plan(request)
         if stopped and _plan_repairable(stopped):
-            # Model sinh plan sai luật (LF/106): một lượt lập lại với lỗi nêu trong thread,
+            # Model sinh plan sai luật (LF/106): một lượt lập lại với lỗi nêu riêng cho planner
+            # (không nhét vào thread: validator cổng 2.5 cũng đọc thread và sẽ coi file đó "đã bị từ chối"),
             # sampling thoáng hơn để phá vòng lặp của model nhỏ.
             reason = str(stopped["result"].get("reason") or "")
             rejected = [str(st.get("file") or "") for st in ((state.get("plan") or {}).get("subtasks") or [])
                         if isinstance(st, dict)]
+            note = _plan_repair_note(reason, _duplicate_files(reason), rejected)
             # Lượt sửa cần thêm lời gọi cổng 1/2/2.5; trần lượt gọi của lượt lập plan đang rất sát.
             budget.max_model_calls = max(budget.max_model_calls, budget.model_calls + 5)
-            request = {**request, "thread": [
-                *(request.get("thread") or []),
-                {"role": "ai", "body": _plan_repair_note(reason, _duplicate_files(reason), rejected)},
-            ]}
+            repaired = _repaired_snapshot(request, reason, note)
             os.environ["AI_BOARD_PLAN_REPAIR"] = "1"
             try:
-                stopped = run_plan(request)
+                stopped = run_plan(repaired)
             finally:
                 os.environ.pop("AI_BOARD_PLAN_REPAIR", None)
         if stopped:

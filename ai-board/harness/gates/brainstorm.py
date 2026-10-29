@@ -270,6 +270,9 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
         elif trace:
             trace.note("knows", "retry feedback", reason)
         ask = prompt if not attempt else prompt + RETRY_SUFFIX.format(reason=reason)
+        if request.get("plan_repair"):
+            # Lượt sửa plan: hint riêng, không nằm trong thread để validator không đọc nhầm.
+            ask = f"{ask}\n\n{request['plan_repair']}"
         skill_context = {'task_type': request.get('task_type'), 'file': (ctx.get('targets') or [''])[0]}
         react = None
         if not attempt and react_plan.enabled():

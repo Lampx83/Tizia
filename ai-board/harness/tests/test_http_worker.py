@@ -1865,13 +1865,34 @@ def test_plan_rejection_only_returns_schema_rejection_bodies():
     assert _plan_rejection(err(500, b'malformed_plan')) is None
 
 
-def test_repaired_snapshot_appends_the_rejection_and_keeps_the_original():
+def test_repaired_snapshot_keeps_the_hint_out_of_the_thread():
     snap = {"thread": [{"role": "student", "body": "x"}], "request": {"id": 1}}
     out = _repaired_snapshot(snap, "acceptance must be a runnable command")
     assert out["request"] == {"id": 1}
-    assert len(out["thread"]) == 2
-    assert "runnable command" in out["thread"][1]["body"] and "node --test" in out["thread"][1]["body"]
-    assert len(snap["thread"]) == 1  # snapshot gốc không bị sửa
+    assert out["thread"] == snap["thread"]  # validator đọc thread: hint không được nằm ở đây
+    assert "runnable command" in out["plan_repair"] and "node --test" in out["plan_repair"]
+    assert len(snap["thread"]) == 1
+
+
+def test_plan_rejection_only_returns_schema_rejection_bodies():
+    import io as _io
+    import urllib.error
+
+    def err(code, body):
+        return urllib.error.HTTPError("http://x", code, "x", {}, _io.BytesIO(body))
+
+    assert "runnable command" in _plan_rejection(err(400, b'{"error":"malformed_plan","message":"acceptance must be a runnable command"}'))
+    assert _plan_rejection(err(400, b'{"error":"invalid_plan"}')) is None
+    assert _plan_rejection(err(500, b'malformed_plan')) is None
+
+
+def test_repaired_snapshot_keeps_the_hint_out_of_the_thread():
+    snap = {"thread": [{"role": "student", "body": "x"}], "request": {"id": 1}}
+    out = _repaired_snapshot(snap, "acceptance must be a runnable command")
+    assert out["request"] == {"id": 1}
+    assert out["thread"] == snap["thread"]  # validator đọc thread: hint không được nằm ở đây
+    assert "runnable command" in out["plan_repair"] and "node --test" in out["plan_repair"]
+    assert len(snap["thread"]) == 1
 
 
 def test_plan_repairable_only_for_model_plan_errors():
