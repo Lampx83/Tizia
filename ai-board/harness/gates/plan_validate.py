@@ -515,6 +515,15 @@ def invented_paths(validation: dict, plan: dict, files: dict, source=None, sha: 
     return sorted(cited)
 
 
+def new_file_only_objection(validation: dict, plan: dict, files: dict, request: dict) -> bool:
+    """Plan chỉ tạo file mới mà validator kết luận không có căn cứ, không nêu file REPO DATA nào: kết luận rỗng."""
+    tasks = plan.get('subtasks') or []
+    if not feature_request(request) or not tasks or any(task['file'] in files for task in tasks):
+        return False
+    reason = str(validation.get('reason') or '')
+    return not any(path in reason for path in files)
+
+
 def _brief(validation: dict) -> dict:
     return {'clear': validation['clear'], 'grounded': bool(validation.get('grounded')), 'reason': str(validation.get('reason') or '')[:200],
             'question': str(validation.get('question') or '')[:200]}
@@ -624,10 +633,11 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                 "public_message": question}
 
     invented = invented_paths(validation, plan, files, state.get('checkout_source'), sha)
-    if invented and not validation.get("grounded"):
+    if (invented or new_file_only_objection(validation, plan, files, request)) and not validation.get("grounded"):
         # The objection cites a path that exists nowhere (neither REPO DATA nor the base commit): the local
         # validator made it up, so the plan is not blocked on it. The admin still sees the note.
-        state['validator_note'] = f"bỏ qua grounded=false vì nêu file không tồn tại: {', '.join(invented)}"
+        state['validator_note'] = (f"bỏ qua grounded=false vì nêu file không tồn tại: {', '.join(invented)}" if invented
+                                   else 'bỏ qua grounded=false: plan chỉ tạo file mới, lời phản đối không nêu file REPO DATA nào')
         judge('validator paths', False, state['validator_note'])
         validation = {**validation, 'grounded': True}
 
