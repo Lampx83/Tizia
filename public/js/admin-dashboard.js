@@ -5,7 +5,7 @@
 
 import { DOMAIN_META } from './engine/domain.js';
 import { morph } from './dom-morph.js';
-import { mountSkillsTab } from './admin-skills.js?v=skills-queue3';
+import { mountSkillsTab } from './admin-skills.js?v=skills-noqueue1';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));

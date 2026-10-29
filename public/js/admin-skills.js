@@ -38,11 +38,8 @@ let teardown = null;
 export async function mountSkillsTab(host, { api, toast, openId } = {}) {
   teardown?.();
   teardown = null;
-  const [result, proposals] = await Promise.all([
-    api('/api/admin/ai-board/skills'), api('/api/admin/ai-board/skills/proposals')]);
+  const result = await api('/api/admin/ai-board/skills');
   if (!result.ok) throw new Error('Không tải được danh sách skill. Thử làm mới trang.');
-  const queueFailed = !proposals.ok;
-  const queue = (proposals.data?.proposals ?? []).filter(item => item.outcome === 'pending');
   const skills = result.data.skills;
 
   host.innerHTML = `<section class="skills-panel">
@@ -73,17 +70,6 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
       </div>
       <section id="skill-details" class="skill-detail" aria-live="polite"></section>
     </div>
-    <section class="skill-queue" aria-labelledby="skill-queue-title"><h3 id="skill-queue-title">Hàng chờ đề xuất${queue.length ? ` (${queue.length})` : ''}</h3>
-      ${queueFailed ? '<p class="meta" role="alert">Không tải được hàng chờ đề xuất. Làm mới trang để thử lại.</p>' : queue.length ? `<p class="meta">Model và retro chỉ đề xuất. Chỉ quản trị viên duyệt mới tạo thay đổi, và phiên bản mới chưa được dùng cho đến khi duyệt.</p>` : '<p class="meta">Chưa có đề xuất đang chờ.</p>'}
-      ${queue.map(item => `<details class="skill-version"><summary>${esc(item.skill_name)} · phiên bản ${esc(item.version)} · ${item.source === 'retro' ? 'Retro sau lượt chạy' : 'Model đề xuất'}</summary>
-        <p>Lý do: ${esc(item.reason)}</p>
-        ${item.request_ids.length ? `<p class="meta">Từ yêu cầu: ${item.request_ids.map(id => `<a href="/admin-request.html?id=${Number(id)}">#${Number(id)}</a>`).join(', ')}</p>` : ''}
-        <p>${item.lint?.ok ? 'Lint đạt' : `Lint chưa đạt: ${esc((item.lint?.errors || []).join('; '))}`}</p>
-        ${evalHtml({ evaluation:item.evaluation })}
-        ${diffHtml(item.base_text, item.proposed_text)}
-        <div class="toolbar"><button class="btn" type="button" data-proposal-accept="${item.skill_id}:${item.version_id}"${item.lint?.ok ? '' : ' disabled'}>Duyệt và chọn phiên bản này</button>
-          <button class="btn" type="button" data-proposal-reject="${item.skill_id}:${item.version_id}">Từ chối</button></div></details>`).join('')}
-    </section>
     <p class="meta">Số liệu trong 2.000 bước đã ghi gần nhất, gộp các phiên bản. Kết quả thuộc lượt chạy có dùng skill, không chứng minh chất lượng riêng của skill. Qua kiểm tra gồm cả lượt đang chờ người duyệt.</p>
   </section>`;
 
@@ -360,20 +346,4 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
       addButton.focus();
     }
   };
-
-  const decide = (attr, action, body, done, ask) => {
-    for (const node of host.querySelectorAll(`[${attr}]`)) node.onclick = async () => {
-      const [skillId, versionId] = node.getAttribute(attr).split(':');
-      if (ask && !(await confirmDialog(ask))) return;
-      node.disabled = true;
-      try {
-        const result = await api(action(skillId, versionId), { method:'POST', body:JSON.stringify(body(versionId)) });
-        if (!result.ok) { toast(result.data.message || 'Thao tác chưa thực hiện được.', 'err'); return; }
-        toast(done); await refresh(skillId);
-      } catch (error) { toast(error.message || 'Thao tác thất bại.', 'err'); }
-      finally { node.disabled = false; }
-    };
-  };
-  decide('data-proposal-accept', skillId => `/api/admin/ai-board/skills/${skillId}/approve`, versionId => ({ version_id:Number(versionId), confirmed:true }), 'Đã duyệt đề xuất và chọn phiên bản.', 'Duyệt đề xuất này và dùng làm phiên bản đang chọn?');
-  decide('data-proposal-reject', (skillId, versionId) => `/api/admin/ai-board/skills/${skillId}/versions/${versionId}/reject`, () => ({ confirmed:true }), 'Đã từ chối đề xuất.', 'Từ chối đề xuất này?');
 }
