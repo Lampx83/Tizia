@@ -333,7 +333,8 @@ class SandboxSession:
 def _peak_kib(client: RunnerClient, run_id: str, limits_kw: dict) -> int | None:
     """Guest peak RSS from PEAK_PROBE; None when unreadable (evidence only, never the verdict)."""
     try:
-        return int(json.loads(client.exec(run_id, ["cat", PEAK_FILE], timeout=30, **limits_kw).get("stdout") or "{}")["peak_kib"])
+        timeout = _remaining(limits_kw.get("deadline"), 30)
+        return int(json.loads(client.exec(run_id, ["cat", PEAK_FILE], timeout=timeout, **limits_kw).get("stdout") or "{}")["peak_kib"])
     except (SandboxError, ValueError, KeyError, TypeError):
         return None
 
