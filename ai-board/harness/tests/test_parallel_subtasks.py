@@ -224,6 +224,22 @@ def test_a_partial_gate_3_is_a_verdict_that_keeps_the_checkpoint_and_spends_no_r
     assert purged == []  # còn resume được
 
 
+def test_fan_out_spends_the_same_budget_ledger_as_sequential_and_keeps_the_prompt_prefix(tmp_path):
+    plan = plan_of(step("public/a.html", deps=[]), step("public/b.html", deps=[]), step("public/c.html", deps=[1]))
+    models = FileModels(plan)
+    budget = Budget(max_wall_clock_s=999)
+    out = run_gate_3(tmp_path, plan, models, budget=budget)
+
+    assert out["blocked"] is False, out.get("reason")
+    assert budget.model_calls == len(plan["subtasks"])  # mỗi subtask đúng 1 lượt, song song không nhân thêm
+    assert len({c["prompt"].split("\nSUBTASK")[0] for c in models.calls}) == 1  # prefix ghim giống nhau mọi subtask
+
+    single = FileModels(plan_of(step("public/one.html")))
+    single_budget = Budget(max_wall_clock_s=999)
+    run_gate_3(tmp_path, single.plan, single, budget=single_budget, scratch=tmp_path / "single")
+    assert single_budget.model_calls == 1  # request 1 file: ledger như cũ
+
+
 def test_fanout_limit_reads_the_env_and_never_exceeds_one_workload(monkeypatch):
     assert implement.fanout_limit({}) == 2
     assert implement.fanout_limit({implement.FANOUT_ENV: "1"}) == 1
