@@ -696,6 +696,8 @@ def _plan_repair_note(reason: str, files: list[str] | None = None,
     if old:
         banned += "\n- KHÔNG dùng lại file của plan bị từ chối: " + ", ".join(old)
     banned += ("\n- Yêu cầu cần trang mới thì TẠO FILE MỚI, không sửa trang có sẵn."
+               "\n- Trang mới có danh sách dữ liệu + tương tác (tìm kiếm, mở/đóng): phải có 2 subtask — module "
+               "public/js/features/<slug>/<name>.js chứa dữ liệu và logic, rồi trang public/<slug>.html nạp module đó (depends_on)."
                "\n- Mọi plan có `layer` phải có verify là LỆNH CHẠY ĐƯỢC (node --test <file>, curl <url>, pytest, python <file>, bash <script>)."
                "\n- Plan trước đã sai vì vi phạm các điều trên; lặp lại thì hệ thống dừng ngay.")
     return (f"Kế hoạch trước bị từ chối: {reason}.{banned}\n"
