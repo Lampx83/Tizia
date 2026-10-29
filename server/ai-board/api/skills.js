@@ -7,7 +7,7 @@ export function attachSkillRoutes(router, { store, requireAuth, requireAdmin, re
   const actor = req => ({ id:req.user.id, role:req.user.role, sessionToken:req.user.token });
   const handle = fn => async (req,res,next) => {
     try { res.json(await fn(req)); }
-    catch (error) { if (error instanceof WorkerContractError) res.status(error.status).json({ error:error.code, message:error.message }); else next(error); }
+    catch (error) { if (error instanceof WorkerContractError) res.status(error.status).json({ error:error.code, message:error.message, ...(error.retry_after_s ? { retry_after_s:error.retry_after_s, scope:error.scope } : {}) }); else next(error); }
   };
   route.get('/api/admin/ai-board/skills', requireAuth, requireAdmin, handle(() => skills.list()));
   route.get('/api/admin/ai-board/skills/proposals', requireAuth, requireAdmin, handle(() => skills.proposals()));
