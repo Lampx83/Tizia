@@ -96,12 +96,13 @@ export function createSkillService(db) {
     const item = await skill(id);
     const versions = await db.all('SELECT * FROM ai_skill_versions WHERE skill_id=? ORDER BY version DESC LIMIT 200', [id]);
     const jobs = new Map((await db.all(`SELECT r.* FROM ai_skill_rewrites r JOIN ai_skill_versions v ON v.id=r.version_id WHERE v.skill_id=?`, [id])).map(j => [j.version_id, j]));
+    const results = new Map((await db.all("SELECT parent_version_id AS src, MAX(id) AS id FROM ai_skill_versions WHERE skill_id=? AND origin='rewrite' GROUP BY parent_version_id", [id])).map(r => [r.src, r.id]));
     return { skill: item, versions: versions.map(v => {
       const job = jobs.get(v.id);
       return { ...v, task_types: parse(v.task_types_json, []), lint: parse(v.lint_json, {}), evaluation: parse(v.eval_json),
         rewrite_lint: parse(v.rewrite_lint_json), rewrite: job ? { id: job.id, status: job.status, error: job.error, model: job.model,
           confirmed_at: job.confirmed_at, finished_at: job.finished_at, usage: parse(job.usage_json), raw_response: job.raw_response,
-          instructions: job.instructions ?? null, attempts: job.attempts ?? 0 } : null };
+          instructions: job.instructions ?? null, attempts: job.attempts ?? 0, result_version_id: results.get(v.id) ?? null } : null };
     }) };
   }
   async function appendVersion(actor, item, taskTypes, text, parentId = null, extra = {}) {
@@ -282,15 +283,16 @@ export function createSkillService(db) {
       if (usage.model_calls > REWRITE_BOUND.model_calls || usage.tokens > REWRITE_BOUND.tokens) { await finish('failed', 'usage_exceeds_bound'); return { status: 'failed' }; }
       if (typeof input.rewritten_text !== 'string' || !input.rewritten_text) { await finish('failed', String(input.error || 'no_output').slice(0, 200)); return { status: 'failed' }; }
       if (checkSkillText(input.rewritten_text).block) { await finish('failed', 'guardrail_blocked'); return { status: 'failed' }; }
-      const version = await db.get('SELECT v.*,s.name FROM ai_skill_versions v JOIN ai_skills s ON s.id=v.skill_id WHERE v.id=?', [job.version_id]);
-      const lint = lintSkill(input.rewritten_text, { name: version.name, version: version.version });
-      if (lint.ok && JSON.stringify([...lint.task_types].sort()) !== JSON.stringify([...parse(version.task_types_json, [])].sort())) {
-        lint.ok = false; lint.errors.push('Rewrite changed task types');
-      }
-      await db.run('UPDATE ai_skill_versions SET rewritten_text=?,rewritten_hash=?,rewrite_lint_json=?,eval_json=? WHERE id=?',
-        [input.rewritten_text, hash(input.rewritten_text), JSON.stringify(lint), JSON.stringify(cleanEval(input.evaluation)), version.id]);
+      const source = await db.get('SELECT v.*,s.name FROM ai_skill_versions v JOIN ai_skills s ON s.id=v.skill_id WHERE v.id=?', [job.version_id]);
+      const next = Number((await db.get('SELECT COALESCE(MAX(version),0)+1 AS n FROM ai_skill_versions WHERE skill_id=?', [source.skill_id])).n);
+      // Bản viết lại là phiên bản mới (con của nguồn), số version trong front matter được chỉnh để khớp trước khi lint.
+      const text = input.rewritten_text.replace(/^version:.*$/m, `version: ${next}`);
+      const actor = { id: job.confirmed_by };
+      const child = await appendVersion(actor, { id: source.skill_id, name: source.name}, parse(source.task_types_json, []), text, source.id,
+        { evaluation: input.evaluation });
+      await db.run("UPDATE ai_skill_versions SET origin='rewrite' WHERE id=?", [child.version.id]);
       await finish('succeeded', null);
-      return { status: 'succeeded', lint_ok: lint.ok };
+      return { status: 'succeeded', lint_ok: child.version.lint.ok, version_id: child.version.id };
     });
   }
   const proposalFields = input => {
