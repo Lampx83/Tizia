@@ -163,6 +163,14 @@
   .skill-row:hover { background:rgba(255,255,255,0.03); }
   .skill-row[aria-current="true"] { background:color-mix(in srgb, var(--accent) 10%, transparent); box-shadow:inset 2px 0 0 var(--accent); }
   .skill-row .skill-name { font-weight:700; font-size:13.5px; overflow-wrap:anywhere; }
+  .skill-tags { display:flex; gap:6px; align-items:center; justify-content:flex-end; flex-wrap:wrap; }
+  .skill-pill[data-tone="run"] { color:var(--accent); }
+  .skill-pill[data-tone="err"] { color:#e5484d; }
+  .rewrite-live { margin:6px 0 10px; padding:6px 10px; border-left:3px solid var(--accent); font-size:13px; }
+  .rewrite-live[data-tone="err"] { border-left-color:#e5484d; }
+  .rewrite-live[hidden] { display:none; }
+  .skill-confirm { max-width:420px; padding:16px; border:1px solid var(--border); border-radius:8px; background:var(--surface, #1b1b1b); color:inherit; }
+  .skill-confirm::backdrop { background:rgba(0,0,0,0.45); }
   .skill-row .skill-sub { grid-column:1 / -1; color:var(--muted); font-size:12px; }
   .skill-detail { min-width:0; }
   .skill-detail-title { margin:0 0 4px; font-size:17px; }

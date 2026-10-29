@@ -1,3 +1,5 @@
+import { POLL_MS, REWRITE, hasActiveRewrite, liveVersion, rewriteStatus, rowPill, shouldPoll } from './admin-skills-state.js';
+
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 // Native dialogs are suppressed in the in-app browser; an in-page <dialog> works everywhere.
 const confirmDialog = message => new Promise(resolve => {
@@ -25,14 +27,17 @@ const lineDiff = (a, b) => {
 };
 const diffHtml = (a, b) => `<pre class="skill-diff" aria-label="So sánh bản gốc và bản viết lại">${lineDiff(a, b).map(([kind, line]) =>
   `<span class="diff-${kind}">${kind === 'add' ? '+ ' : kind === 'del' ? '- ' : '  '}${esc(line)}</span>`).join('')}</pre>`;
-const REWRITE = { queued:'Đang xếp hàng, chờ worker rảnh', running:'Đang viết lại', succeeded:'Đã viết lại', failed:'Viết lại không thành công' };
 const versionState = (version, active) => version.rejected_at ? 'Đã từ chối' : version.id === active ? 'Đang được chọn' : version.approved_by ? 'Đã duyệt' : version.rewrite ? REWRITE[version.rewrite.status] : 'Bản nháp';
 const when = ms => Number.isFinite(Number(ms)) ? new Date(Number(ms)).toLocaleString('vi-VN', { dateStyle:'short', timeStyle:'short' }) : '';
 const evalHtml = version => !version.evaluation?.kinds ? '' : `<p class="meta">Smoke test nhỏ: ${version.evaluation.passed}/${version.evaluation.total} loại tác vụ qua. ${version.evaluation.kinds.map(kind =>
   `${esc(TYPE[kind.kind] || kind.kind)} ${kind.ok ? 'qua' : `chưa qua (${esc(kind.reason || 'không rõ')})`}`).join('; ')}. Đây chỉ là kiểm tra dạng đầu ra, không đo chất lượng.</p>`;
 const sample = name => `---\nname: ${name}\ndescription: Hướng dẫn cho giao diện hiện có\ntask_type: frontend\nsource: admin\nversion: 1\nmax_tokens: 1500\n---\n1. Giữ nhãn nút rõ ràng.\n2. Kiểm tra thao tác bằng bàn phím.\n`;
 
+let teardown = null;
+
 export async function mountSkillsTab(host, { api, toast, openId } = {}) {
+  teardown?.();
+  teardown = null;
   const [result, proposals] = await Promise.all([
     api('/api/admin/ai-board/skills'), api('/api/admin/ai-board/skills/proposals')]);
   if (!result.ok) throw new Error('Không tải được danh sách skill. Thử làm mới trang.');
@@ -62,7 +67,7 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
       <div class="skill-list" role="listbox" aria-label="Danh sách Skills">
         ${skills.map(skill => `<button type="button" class="skill-row" role="option" aria-current="false" data-skill-view="${esc(skill.id ?? skill.name)}">
           <span class="skill-name">${esc(skill.name)}</span>
-          <span class="pill">${esc(STATUS[skill.status] || skill.status)}</span>
+          <span class="skill-tags"><span class="pill">${esc(STATUS[skill.status] || skill.status)}</span><span class="skill-state" data-skill-state="${esc(skill.id ?? skill.name)}"></span></span>
           <span class="skill-sub">${skill.source === 'default' ? 'Mặc định' : 'Quản trị'} · ${skill.task_types.map(type => esc(TYPE[type] || type)).join(', ')} · v${esc(skill.version || 1)} · ${skill.usage?.calls ?? 0} lượt</span>
         </button>`).join('')}
       </div>
@@ -84,17 +89,31 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
 
   const refresh = nextId => mountSkillsTab(host, { api, toast, openId: nextId });
 
-  const renderDetail = async item => {
+  const loadDetail = async item => item.source === 'default'
+    ? { versions: [{ version: item.version, original_text: item.original_text, lint: item.lint }] }
+    : (await api(`/api/admin/ai-board/skills/${item.id}`)).data;
+  const paintLive = (node, versions) => {
+    const version = liveVersion(versions);
+    const status = version && rewriteStatus(version.rewrite, Date.now());
+    node.hidden = !status;
+    if (!status) return;
+    node.dataset.tone = status.tone;
+    node.textContent = status.hint ? `${status.text}. ${status.hint}` : status.text;
+  };
+  const paintRow = (key, versions) => {
+    const node = host.querySelector(`[data-skill-state="${CSS.escape(String(key))}"]`);
+    const pill = rowPill(versions?.[0]?.rewrite);
+    if (node) node.innerHTML = pill ? `<span class="pill skill-pill" data-tone="${pill.tone}">${esc(pill.label)}</span>` : '';
+  };
+  const renderDetail = (item, data) => {
     const details = host.querySelector('#skill-details');
     for (const row of host.querySelectorAll('[data-skill-view]'))
       row.setAttribute('aria-current', row.dataset.skillView === String(item.id ?? item.name) ? 'true' : 'false');
-    const data = item.source === 'default'
-      ? { versions: [{ version: item.version, original_text: item.original_text, lint: item.lint }] }
-      : (await api(`/api/admin/ai-board/skills/${item.id}`)).data;
     if (!data?.versions) { details.textContent = 'Không đọc được skill. Thử lại.'; return; }
     const activeId = item.status === 'approved' ? item.active_version_id : null;
     const admin = item.source === 'admin';
     details.innerHTML = `<h3 class="skill-detail-title">${esc(item.name)} <span class="pill">${esc(STATUS[item.status] || item.status)}</span></h3>
+      <p class="rewrite-live" data-live-status role="status" hidden></p>
       <p class="meta">${esc(item.task_types.map(type => TYPE[type] || type).join(', '))} · ${esc(String(item.usage?.calls ?? 0))} lượt gọi · ${item.usage?.judged ? `${item.usage.passed}/${item.usage.judged} qua kiểm tra` : 'chưa đủ dữ liệu kiểm tra'}</p>
       ${item.usage?.steps?.length ? `<p class="meta">Đã dùng tại: ${item.usage.steps.map(step => `<a href="/admin-request.html?id=${Number(step.request_id)}">Yêu cầu #${Number(step.request_id)}, lượt ${Number(step.run_id)}, v${esc(step.version ?? '?')}</a>`).join(' · ')}</p>` : ''}
       <div class="toolbar">${admin && item.status === 'approved' ? '<button class="btn" type="button" data-skill-disable>Tắt skill</button>' : ''}
@@ -127,6 +146,8 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
           </div>
         </li>`;
       }).join('')}</ol>`;
+    paintLive(details.querySelector('[data-live-status]'), data.versions);
+    paintRow(item.id ?? item.name, data.versions);
 
     const fail = error => toast(error?.message || 'Thao tác thất bại.', 'err');
     const act = (selector, path, message, ask) => {
@@ -187,12 +208,53 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
     };
   };
 
+  // Poll the open skill while a rewrite is queued/running. One timer, no overlap; stops when
+  // hidden, detached (tab changed) or no active job. Re-render only when versions changed.
+  let current = null, pollTimer = null, polling = false, seq = 0;
+  const onVisibility = () => { if (document.hidden) schedule(); else poll(); };
+  const armed = () => shouldPoll({ visible: !document.hidden, connected: host.isConnected, versions: current?.data?.versions });
+  const schedule = () => {
+    clearTimeout(pollTimer); pollTimer = null;
+    if (!polling && armed()) pollTimer = setTimeout(poll, POLL_MS);
+  };
+  const poll = async () => {
+    clearTimeout(pollTimer); pollTimer = null;
+    if (polling || !armed()) return;
+    polling = true;
+    const { item, data: before } = current, mark = seq;
+    try {
+      const fresh = await loadDetail(item);
+      if (mark === seq && fresh?.versions) {
+        if (JSON.stringify(fresh.versions) !== JSON.stringify(before.versions)) {
+          current.data = fresh;
+          renderDetail(item, fresh);
+        } else paintLive(host.querySelector('[data-live-status]'), before.versions);
+      }
+    } catch { /* transient; next tick retries */ }
+    finally { polling = false; }
+    schedule();
+  };
+  document.addEventListener('visibilitychange', onVisibility);
+  teardown = () => { clearTimeout(pollTimer); document.removeEventListener('visibilitychange', onVisibility); };
+
   const select = async id => {
     const item = skills.find(skill => String(skill.id ?? skill.name) === String(id));
     if (!item) return;
-    try { await renderDetail(item); } catch (error) { toast(error.message || 'Không đọc được skill.', 'err'); }
+    const mark = ++seq;
+    try {
+      const data = await loadDetail(item);
+      if (mark !== seq) return;
+      current = { item, data };
+      renderDetail(item, data);
+      schedule();
+    } catch (error) { toast(error.message || 'Không đọc được skill.', 'err'); }
   };
   for (const button of host.querySelectorAll('[data-skill-view]')) button.onclick = () => select(button.dataset.skillView);
+  for (const skill of skills.filter(item => item.source === 'admin')) {
+    api(`/api/admin/ai-board/skills/${skill.id}`).then(result => {
+      if (result.ok && result.data?.versions) paintRow(skill.id, result.data.versions);
+    }).catch(() => {});
+  }
 
   // Vào tab là thấy lịch sử: chọn sẵn skill quản trị mới nhất (hoặc openId/đầu danh sách).
   const adminSkills = skills.filter(skill => skill.source === 'admin').sort((a, b) => Number(b.updated_at ?? 0) - Number(a.updated_at ?? 0));
