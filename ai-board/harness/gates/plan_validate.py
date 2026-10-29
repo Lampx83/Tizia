@@ -492,7 +492,7 @@ def _uncertain(validation: dict) -> bool:
     return not validation['clear'] or not validation.get('grounded')
 
 
-_CITED_PATH = re.compile(r"(?<![\w/.-])((?:public|server|test|scripts|ai-board)/[\w./-]+\.(?:html?|js|mjs|css|json|sql|md|py))")
+_CITED_PATH = re.compile(r"(?<![\w/.-])((?:public|server|test|scripts|ai-board)/[\w./-]*[\w-])")
 
 
 def invented_paths(validation: dict, plan: dict, files: dict, source=None, sha: str | None = None) -> list[str]:
@@ -507,11 +507,11 @@ def invented_paths(validation: dict, plan: dict, files: dict, source=None, sha: 
         return []
     if source is not None and sha:
         try:
-            present = set(code_index.git(source, 'ls-tree', '--name-only', sha, '--', *sorted(cited))
-                          .decode('utf-8', 'replace').splitlines())
+            tree = code_index.git(source, 'ls-tree', '-r', '--name-only', sha).decode('utf-8', 'replace').splitlines()
         except OSError:
-            present = set()
-        cited -= present
+            tree = []
+        # Prefix match: the model often cites a stem ("…/index") of a file that exists as "…/index.js".
+        cited = {path for path in cited if not any(name.startswith(path) for name in tree)}
     return sorted(cited)
 
 
