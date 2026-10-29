@@ -3,8 +3,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomBytes } from 'node:crypto';
 import { WorkerContractError } from '../repositories/store-contract.js';
+import { SKILL_TASK_TYPES } from '../skill-task-types.js';
 
-export const TASK_TYPES = ['backend', 'frontend', 'database', 'review', 'test', 'all'];
+export const TASK_TYPES = SKILL_TASK_TYPES;
 const FIELDS = ['name', 'description', 'task_type', 'source', 'version', 'max_tokens'];
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../ai-board/harness/skills');
 export const REWRITE_BOUND = { model_calls: 4, tokens: 40000 };

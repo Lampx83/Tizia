@@ -1,5 +1,5 @@
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
-const TYPE = { backend:'Backend', frontend:'Giao diện', database:'Cơ sở dữ liệu', review:'Review', test:'Kiểm thử', all:'Chung' };
+const TYPE = { backend:'Backend', frontend:'Giao diện', database:'Cơ sở dữ liệu', review:'Review', test:'Kiểm thử', merge:'Hợp nhất', all:'Chung' };
 const STATUS = { draft:'Bản nháp', approved:'Đã duyệt', disabled:'Đã tắt' };
 const lineDiff = (a, b) => {
   const x = a.replace(/\n$/, '').split('\n'), y = b.replace(/\n$/, '').split('\n'), t = Array.from({ length:x.length + 1 }, () => new Array(y.length + 1).fill(0));

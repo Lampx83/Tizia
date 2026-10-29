@@ -1332,7 +1332,7 @@ class HarnessPlanner:
                 "layer": layer,
                 "depends_on": list(depends_on),
                 **({'task_type': subtask['task_type']} if subtask.get('task_type') in
-                   {'backend', 'frontend', 'database', 'review', 'test', 'all'} else {}),
+                   {'backend', 'frontend', 'database', 'review', 'test', 'merge', 'all'} else {}),
             })
         capabilities = list(dict.fromkeys([*old_caps, *(step["capability"] for step in steps)]))
         return {

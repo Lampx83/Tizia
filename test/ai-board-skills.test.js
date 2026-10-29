@@ -60,7 +60,7 @@ test('invalid draft cannot activate, new revisions preserve active guidance, and
     assert.equal((await approve(other.skill.id, first.version.id)).status, 400);
     assert.equal((await t.api(`/api/ai-board/worker/tickets/${t.ticket.id}/skills`, { ...t.lease, lease_token:'stale', task_type:'frontend', role:'gate3_heavy' }, { 'x-ai-worker-key':KEY })).status, 409);
     const list = await t.api('/api/admin/ai-board/skills');
-    assert.equal(list.body.skills.filter(s => s.source === 'default').length, 7);
+    assert.equal(list.body.skills.filter(s => s.source === 'default').length, 8);
     assert.equal(list.body.usage_window, 'latest_2000_spans');
   } finally { await t.close(); }
 });
