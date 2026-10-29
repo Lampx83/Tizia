@@ -110,3 +110,18 @@ test('board entry bootstraps an empty PostgreSQL itself: base tables then additi
     }
   } finally { await app.close(); db.close(); }
 });
+
+test('skill upload on the board entry accepts a signed admin and refuses a signed non-admin', async () => {
+  const app = await serve();
+  try {
+    const body = JSON.stringify({ name: 'signed-route-draft', task_types: ['test'],
+      original_text: '---\nname: signed-route-draft\ndescription: Kiểm thử\ntask_type: test\nsource: admin\nversion: 1\nmax_tokens: 1500\n---\n1. Chạy kiểm thử.\n' });
+    const send = (user) => fetch(`${app.base}/api/admin/ai-board/skills`, {
+      method: 'POST', headers: { 'content-type': 'application/json', ...signInternalHeaders(user, SECRET) }, body });
+    const refused = await send({ id: 1, role: 'pupil', displayName: 'Lan', domain: 'primary' });
+    assert.ok([401, 403].includes(refused.status), `pupil got ${refused.status}`);
+    const ok = await send({ id: 1, role: 'admin', displayName: 'Admin', domain: 'primary' });
+    assert.equal(ok.status, 200, await ok.clone().text());
+    assert.equal((await ok.json()).skill.name, 'signed-route-draft');
+  } finally { await app.close(); app.db.close(); }
+});

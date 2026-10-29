@@ -4,7 +4,7 @@ import { asyncRoutes } from './async-routes.js';
 
 export function attachSkillRoutes(router, { store, requireAuth, requireAdmin, requireStrictCsrf }) {
   const route = asyncRoutes(router), skills = createSkillService(store.db);
-  const actor = req => ({ id:req.user.id, sessionToken:req.user.token });
+  const actor = req => ({ id:req.user.id, role:req.user.role, sessionToken:req.user.token });
   const handle = fn => async (req,res,next) => {
     try { res.json(await fn(req)); }
     catch (error) { if (error instanceof WorkerContractError) res.status(error.status).json({ error:error.code, message:error.message }); else next(error); }
