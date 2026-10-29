@@ -7,6 +7,7 @@ import os
 import random
 import re
 import contextvars
+import fnmatch
 import shutil
 import tarfile
 import tempfile
@@ -177,6 +178,15 @@ def _normalise(file: Path):
     return apply
 
 
+def _lf_patterns(checkout: Path) -> list[str]:
+    """`eol=lf` globs from the checkout's .gitattributes."""
+    try:
+        lines = (checkout / ".gitattributes").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    return [parts[0] for parts in (line.split() for line in lines if not line.lstrip().startswith("#")) if len(parts) > 1 and "eol=lf" in parts[1:]]
+
+
 def package(checkout: Path, state: dict, base_pages: dict[str, bytes]) -> bytes:
     """tar.gz of filtered checkout + state + base pages. Credential env files, .git, caches never leave the worker."""
     buffer = io.BytesIO()
@@ -186,6 +196,7 @@ def package(checkout: Path, state: dict, base_pages: dict[str, bytes]) -> bytes:
             info.size, info.mode = len(data), 0o644
             archive.addfile(info, io.BytesIO(data))
 
+        lf = _lf_patterns(checkout)
         files = []
         for file in sorted(checkout.rglob("*")):
             parts = file.relative_to(checkout).parts
@@ -202,7 +213,15 @@ def package(checkout: Path, state: dict, base_pages: dict[str, bytes]) -> bytes:
             info.type, info.mode, info.mtime = tarfile.DIRTYPE, 0o755, 0
             archive.addfile(info)
         for file, parts in files:
-            archive.add(file, arcname="checkout/" + "/".join(parts), recursive=False, filter=_normalise(file))
+            name = "/".join(parts)
+            if any(fnmatch.fnmatch(name, pattern) for pattern in lf):
+                # CRLF working tree (Windows autocrlf) must reach the guest as git's LF: the Dockerfile's check-skills rejects CRLF
+                data = file.read_bytes().replace(b"\r\n", b"\n")
+                info = _normalise(file)(tarfile.TarInfo("checkout/" + name))
+                info.size = len(data)
+                archive.addfile(info, io.BytesIO(data))
+            else:
+                archive.add(file, arcname="checkout/" + name, recursive=False, filter=_normalise(file))
         guest_state = {key: state[key] for key in GUEST_STATE_KEYS if key in state}
         add_bytes(GUEST_STATE, json.dumps(guest_state, ensure_ascii=False, default=lambda _value: None).encode("utf-8"))
         for page, blob in base_pages.items():
