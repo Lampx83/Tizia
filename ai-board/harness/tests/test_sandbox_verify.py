@@ -392,3 +392,14 @@ def test_busy_runner_at_create_blocks_as_busy_and_never_destroys(tmp_path, monke
     assert result["blocked"] is True and result["failure_class"] == "busy"
     assert result["reason"] == "sandbox runner busy"
     assert "destroy" not in client.calls
+
+
+def test_package_ships_eol_lf_files_with_lf_even_from_crlf_tree(tmp_path):
+    root = checkout(tmp_path)
+    (root / ".gitattributes").write_text("skills/**/SKILL.md text eol=lf\n", encoding="utf-8")
+    (root / "skills" / "a").mkdir(parents=True)
+    (root / "skills" / "a" / "SKILL.md").write_bytes(b"---\r\nx: 1\r\n---\r\n")
+    (root / "other.txt").write_bytes(b"a\r\nb\r\n")
+    with tarfile.open(fileobj=io.BytesIO(sandbox_verify.package(root, state(root), {})), mode="r:gz") as tar:
+        assert tar.extractfile("checkout/skills/a/SKILL.md").read() == b"---\nx: 1\n---\n"
+        assert tar.extractfile("checkout/other.txt").read() == b"a\r\nb\r\n"
