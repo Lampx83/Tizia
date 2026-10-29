@@ -127,7 +127,7 @@ def test_pass_runs_boot_then_gate_in_a_fresh_vm_and_always_destroys(tmp_path):
     assert client.run_id.startswith("g5-") and client.manifest[0]["name"] == "result"
     sandbox = result["evidence"]["sandbox"]
     assert sandbox.pop("wall_s") >= 0
-    assert sandbox == {"run_id": client.run_id, "policy_hash": "h" * 64, "teardown_confirmed": True, "peak_kib": None, "vm_peak_kib": None, "vm_used_end_kib": None, "outcome": "passed"}
+    assert sandbox == {"run_id": client.run_id, "policy_hash": "h" * 64, "teardown_confirmed": True, "peak_kib": None, "vm_peak_kib": None, "vm_cpu_peak_cores": None, "vm_ncpu": None, "vm_used_end_kib": None, "outcome": "passed"}
     assert st["evidence"] is result["evidence"]
 
 
@@ -410,8 +410,8 @@ def test_guest_probe_reads_peak_and_vm_memory_in_use(tmp_path):
         def exec(self, run_id, argv, *, timeout, deadline=None):
             self._step("exec")
             if argv[0] == "sh":
-                return {"code": 0, "stdout": '{"peak_kib": 1234, "vm_peak_kib": 2222222, "rc": 0}\nMemTotal:  4000000 kB\nMemAvailable:  1000000 kB\n'}
+                return {"code": 0, "stdout": '{"peak_kib": 1234, "vm_peak_kib": 2222222, "vm_cpu_peak_cores": 0.7, "vm_ncpu": 1, "rc": 0}\nMemTotal:  4000000 kB\nMemAvailable:  1000000 kB\n'}
             return self.exec_outcome
 
     result = sandbox_verify.run(state(checkout(tmp_path)), client=Probe())
-    assert (result["evidence"]["sandbox"]["peak_kib"], result["evidence"]["sandbox"]["vm_peak_kib"], result["evidence"]["sandbox"]["vm_used_end_kib"]) == (1234, 2222222, 3000000)
+    assert (result["evidence"]["sandbox"]["peak_kib"], result["evidence"]["sandbox"]["vm_peak_kib"], result["evidence"]["sandbox"]["vm_cpu_peak_cores"], result["evidence"]["sandbox"]["vm_used_end_kib"]) == (1234, 2222222, 0.7, 3000000)
