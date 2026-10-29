@@ -627,7 +627,9 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
             targets = {task['file'] for task in plan['subtasks']}
             required = functional.expected_targets({'request_title': request.get('subject'), 'request_detail': request.get('body')})
             if required and not required.intersection(targets):
-                raise ValueError('plan cần sửa renderer hiện có: ' + ', '.join(sorted(required)))
+                # Oracle is advisory: a plan that names other files is reported, not forced to edit the oracle's file.
+                state['oracle_conflict'] = 'plan không sửa renderer oracle gợi ý: ' + ', '.join(sorted(required))
+                judge('oracle advisory', True, state['oracle_conflict'])
             if 'LƯU Ý: chữ người dùng nhắc KHÔNG nằm' in (state.get('planning_context') or '') and not targets.intersection(state.get('source_targets') or []):
                 raise ValueError('plan không sửa module đang render nội dung người dùng yêu cầu')
             contradicted = literal_contradicts(request, state.get('best_match'), files,
