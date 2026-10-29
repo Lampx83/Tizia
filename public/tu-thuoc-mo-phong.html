@@ -3401,7 +3401,91 @@ function m1GenerateKeys(){
   };
   return [...pick('rx', nRx), ...pick('otc', nOtc)];
 }
-function m1ResetItems(){ try{ localStorage.removeItem(m1ItemsKey()); }catch(e){} M1_ITEMS = null; }
+function m1ResetItems(){ try{ localStorage.removeItem(m1ItemsKey()); localStorage.removeItem('tu-thuoc-mo-phong:m1ksdb'); }catch(e){} M1_ITEMS = null; M1_KS = null; }
+/* req #250 (ThS Hương Lý): NHÁNH THUỐC KIỂM SOÁT ĐẶC BIỆT trong nhiệm vụ 1 (giáo trình KNTH tại CSBL thuốc, bài 1, bước 2.1 + 4):
+   thuốc gây nghiện / hướng thần / tiền chất dự trù 1 lần/năm, ≤150% so với năm trước, lập ĐƠN MUA + BÁO CÁO XUẤT–NHẬP–TỒN gửi SỞ Y TẾ,
+   chỉ được mua sau khi Sở Y tế phê duyệt. Số liệu và biểu mẫu chỉ là MẪU MINH HOẠ (không có giá trị pháp lý). */
+var M1_KS = null;
+function getM1Ksdb(){
+  if(M1_KS) return M1_KS;
+  let key = null; try{ key = JSON.parse(localStorage.getItem('tu-thuoc-mo-phong:m1ksdb') || 'null'); }catch(e){}
+  const okKind = r => ['narc','psy','pre','combo'].includes(ksdbKind(r));
+  let rec = key && allRecords.find(r => m1KeyOf(r) === key);
+  if(!rec || !okKind(rec)){
+    const pool = allRecords.filter(r => r['Tên hoạt chất'] && okKind(r));
+    rec = pool.length ? pool[Math.floor(Math.random()*pool.length)] : null;
+    try{ localStorage.setItem('tu-thuoc-mo-phong:m1ksdb', JSON.stringify(rec ? m1KeyOf(rec) : null)); }catch(e){}
+  }
+  M1_KS = rec ? [(() => { const k = m1KeyOf(rec);
+    const lastYear = 2 * m1HashNum(k+'ly', 8, 30);           // chẵn để 150% là số nguyên
+    const tonDau = m1HashNum(k+'td', 4, 14), nhap = m1HashNum(k+'nh', 14, 40), xuat = Math.min(tonDau + nhap - 1, m1HashNum(k+'xu', 10, 38));
+    return { key:k, name:rec['Tên hoạt chất'], kind:ksdbKind(rec), unit:m1UnitOf(rec['Tên hoạt chất']), spec: rec['Hoạt chất, hàm lượng/nồng độ'] || '', form: rec['Dạng bào chế'] || '',
+      lastYear, maxQty: lastYear * 1.5, tonDau, nhap, xuat, tonCuoi: tonDau + nhap - xuat };
+  })()] : [];
+  return M1_KS;
+}
+function m1KsNext(st){ return getM1Ksdb().length ? 'ksdb' : 'supplier'; }
+function renderKsdbBranch(st){
+  const ks = getM1Ksdb(); st.ks = st.ks || { qty:{}, xntOk:false, sent:false, approved:false };
+  const U = it => it.unit[0].toUpperCase() + it.unit.slice(1);
+  const banner = '<div style="background:#fff4d6;border:1px solid #e3c36b;border-radius:8px;padding:6px 10px;font-size:.74rem;margin:6px 0">⚠️ Biểu mẫu dưới đây là <b>MẪU MINH HOẠ – KHÔNG CÓ GIÁ TRỊ PHÁP LÝ</b>; số liệu là giả định để luyện tập.</div>';
+  const kindOf = it => M3_KIND[it.kind] || 'Thuốc kiểm soát đặc biệt';
+  const head = `<p class="pos-note">🔒 Trong danh sách có <b>thuốc kiểm soát đặc biệt</b>: <b>${ks.map(it => esc(it.name)).join(', ')}</b> (${esc(kindOf(ks[0]))}).
+    Loại này <b>không đặt thẳng nhà cung ứng</b>: phải <b>dự trù 1 lần/năm</b> bằng <b>Đơn hàng mua thuốc</b> kèm <b>Báo cáo xuất – nhập – tồn</b>, <b>gửi Sở Y tế</b> và <b>chỉ được mua sau khi được phê duyệt</b>.</p>${banner}`;
+  const done = st.ks.sent && st.ks.approved;
+  if(!ks.every(it => st.ks.qty[it.key] != null)){
+    posPanel.innerHTML = head + `<p class="pos-note"><b>Bước 1 — Tính số lượng dự trù.</b> Số lượng đề nghị mua <b>không quá 150% so với năm trước</b>. Điền <b>số lượng tối đa</b> được phép đề nghị cho từng thuốc:</p>
+      <table class="pos-table"><thead><tr><th>Thuốc</th><th>Hàm lượng / dạng</th><th>Đã nhập năm trước</th><th>SL tối đa được đề nghị</th></tr></thead><tbody>
+      ${ks.map(it => `<tr><td>${esc(it.name)}</td><td>${esc(it.spec)} ${esc(it.form)}</td><td>${it.lastYear} ${it.unit}</td><td><input type="number" min="0" class="ks-q" data-k="${esc(it.key)}" style="width:90px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px"> ${it.unit}</td></tr>`).join('')}</tbody></table>
+      <button type="button" class="pos-btn" id="ksQtyOk">✅ Kiểm tra</button><div class="pos-err" id="ksErr"></div>`;
+    document.getElementById('ksQtyOk').addEventListener('click', () => {
+      const bad = [];
+      posPanel.querySelectorAll('.ks-q').forEach(inp => { const it = ks.find(x => x.key === inp.dataset.k); if(Number(inp.value) !== it.maxQty) bad.push(it); else st.ks.qty[it.key] = it.maxQty; });
+      if(bad.length){ document.getElementById('ksErr').textContent = '⚠️ Chưa đúng — tối đa = 150% × số lượng nhập năm trước (không vượt 150%). Tính lại cho: ' + bad.map(b => b.name).join(', ') + '.'; return; }
+      saveM1State(st); renderKsdbBranch(st);
+    });
+    return;
+  }
+  if(!st.ks.xntOk){
+    posPanel.innerHTML = head + `<p class="pos-note"><b>Bước 2 — Báo cáo xuất – nhập – tồn</b> (kèm đơn hàng). Tồn cuối kỳ = tồn đầu kỳ + nhập trong kỳ − xuất trong kỳ. Điền <b>tồn cuối kỳ</b>:</p>
+      <table class="pos-table"><thead><tr><th>Thuốc</th><th>Tồn đầu kỳ</th><th>Nhập trong kỳ</th><th>Xuất trong kỳ</th><th>Tồn cuối kỳ</th></tr></thead><tbody>
+      ${ks.map(it => `<tr><td>${esc(it.name)}</td><td>${it.tonDau}</td><td>${it.nhap}</td><td>${it.xuat}</td><td><input type="number" min="0" class="ks-t" data-k="${esc(it.key)}" style="width:90px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px"> ${it.unit}</td></tr>`).join('')}</tbody></table>
+      <button type="button" class="pos-btn" id="ksXntOk">✅ Kiểm tra</button><div class="pos-err" id="ksErr"></div>`;
+    document.getElementById('ksXntOk').addEventListener('click', () => {
+      const bad = [];
+      posPanel.querySelectorAll('.ks-t').forEach(inp => { const it = ks.find(x => x.key === inp.dataset.k); if(Number(inp.value) !== it.tonCuoi) bad.push(it); });
+      if(bad.length){ document.getElementById('ksErr').textContent = '⚠️ Chưa đúng — tồn cuối = tồn đầu + nhập − xuất. Tính lại cho: ' + bad.map(b => b.name).join(', ') + '.'; return; }
+      st.ks.xntOk = true; saveM1State(st); renderKsdbBranch(st);
+    });
+    return;
+  }
+  const docTable = `<table class="pos-table"><thead><tr><th>Thuốc, hàm lượng, quy cách</th><th>ĐVT</th><th>SL đề nghị mua</th><th>Tồn cuối kỳ (báo cáo XNT)</th></tr></thead><tbody>
+    ${ks.map(it => `<tr><td>${esc(it.name)} ${esc(it.spec)}</td><td>${U(it)}</td><td>${st.ks.qty[it.key]}</td><td>${it.tonCuoi}</td></tr>`).join('')}</tbody></table>`;
+  if(!st.ks.sent){
+    posPanel.innerHTML = head + `<p class="pos-note"><b>Bước 3 — Gửi Sở Y tế.</b> Soát lại đơn hàng và báo cáo, <b>người đại diện theo pháp luật ký</b> rồi gửi:</p>
+      <p class="pos-note"><b>Đơn hàng mua thuốc kiểm soát đặc biệt</b> (kèm Báo cáo xuất – nhập – tồn) — Kính gửi: Sở Y tế</p>${docTable}
+      <label style="display:flex;gap:8px;align-items:center;font-size:.82rem;margin:8px 0"><input type="checkbox" id="ksSign"> Người đại diện theo pháp luật đã ký tên (mẫu) và thông tin đã được kiểm tra.</label>
+      <button type="button" class="pos-btn" id="ksSend" disabled>📨 Gửi đơn + báo cáo lên Sở Y tế</button>`;
+    document.getElementById('ksSign').addEventListener('change', e => { document.getElementById('ksSend').disabled = !e.target.checked; });
+    document.getElementById('ksSend').addEventListener('click', () => { st.ks.sent = true; saveM1State(st); renderKsdbBranch(st); });
+    return;
+  }
+  if(!st.ks.approved){
+    posPanel.innerHTML = head + `${docTable}<div class="pos-soon" style="color:#8a5a00">⏳ Đã gửi Sở Y tế — đang <b>chờ phê duyệt</b>. Chưa được mua thuốc kiểm soát đặc biệt khi chưa có phê duyệt.</div>
+      <button type="button" class="pos-btn" id="ksCheck">🔄 Kiểm tra phản hồi của Sở Y tế</button>`;
+    document.getElementById('ksCheck').addEventListener('click', e => {
+      e.target.disabled = true; e.target.textContent = 'Đang kiểm tra…';
+      setTimeout(() => { st.ks.approved = true; saveM1State(st); renderKsdbBranch(st); }, 1200);
+    });
+    return;
+  }
+  posPanel.innerHTML = head + `${docTable}<div class="pos-soon" style="color:#1f7a3d">✅ <b>Sở Y tế đã phê duyệt</b> đơn hàng (mẫu minh hoạ). Bây giờ mới được đặt mua thuốc kiểm soát đặc biệt cùng các thuốc khác.</div>
+    <button type="button" class="pos-btn" id="ksNext">➡️ Sang chọn nhà cung ứng</button>`;
+  document.getElementById('ksNext').addEventListener('click', () => {
+    st.step = 'supplier'; saveM1State(st); window.refreshMissionsList?.();
+    posPanel.innerHTML = '<div class="pos-soon" style="color:#1f7a3d">✅ Đã được duyệt dự trù thuốc kiểm soát đặc biệt.<br>Sang tab "Quản lý nhà cung ứng" để chọn nhà cung ứng và gửi đơn đặt hàng.</div>';
+  });
+}
 function getM1Items(){
   if(M1_ITEMS) return M1_ITEMS;
   let keys = null;
@@ -3504,6 +3588,8 @@ function m1Hint(){
       ? '🔍 Nhiệm vụ 1: đến tủ thuốc kê đơn hoặc không kê đơn để kiểm tra hàng — xem thẻ nổi góc màn hình.'
     : st.step === 'return'
       ? '🖥️ Nhiệm vụ 1: quay lại máy tính ở Quầy thu ngân để chốt số lượng cần đặt.'
+    : st.step === 'ksdb'
+      ? '🔒 Nhiệm vụ 1: thuốc kiểm soát đặc biệt — lập đơn mua + báo cáo xuất–nhập–tồn, gửi Sở Y tế chờ phê duyệt (máy tính ở Quầy thu ngân → tab Dự trù).'
     : st.step === 'supplier' || st.step === 'order'
       ? '🖥️ Nhiệm vụ 1: quay lại máy tính, sang tab "Quản lý nhà cung ứng" để chọn nhà cung ứng và gửi đơn đặt hàng.'
       : '✅ Nhiệm vụ 1 đã hoàn thành! Có thể bấm lại để luyện tập.';
@@ -3604,11 +3690,14 @@ function renderDuTruTab(){
         <button type="button" class="pos-btn" id="posSubmit">✅ Xác nhận đặt hàng</button>`;
       document.getElementById('posSubmit').addEventListener('click', () => {
         rows.forEach(({it,ton}) => { st.orders[it.key] = String(m1OrderQty(it, ton)); });
-        st.step = 'supplier'; saveM1State(st);
+        st.step = m1KsNext(st); saveM1State(st);
+        if(st.step === 'ksdb'){ renderKsdbBranch(st); window.refreshMissionsList?.(); return; }
         posPanel.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đã lập xong số lượng cần đặt cho ${items.length} mặt hàng!<br>Sang tab "Quản lý nhà cung ứng" để chọn nhà cung ứng và gửi đơn đặt hàng.</div>`;
         window.refreshMissionsList?.();
       });
     }
+  } else if(st.step === 'ksdb'){
+    renderKsdbBranch(st);
   } else if(st.step === 'supplier' || st.step === 'order'){
     posPanel.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đã lập xong số lượng cần đặt.<br>Sang tab "Quản lý nhà cung ứng" để chọn nhà cung ứng và gửi đơn đặt hàng.</div>`;
   } else {
@@ -3628,7 +3717,7 @@ function renderDuTruTab(){
 function renderNhaCCTab(){
   const st = getM1State();
   const m2mail = getM2State().step === 'mail';
-  if(!m2mail && (st.step === 'dutru' || st.step === 'checking' || st.step === 'return')){
+  if(!m2mail && (st.step === 'dutru' || st.step === 'checking' || st.step === 'return' || st.step === 'ksdb')){
     posPanel.innerHTML = '<div class="pos-soon">🔒 Chưa tới bước này — hoàn thành tab Dự trù (lập đủ số lượng cần đặt) trước.</div>';
     return;
   }
@@ -3736,6 +3825,7 @@ function renderDonHangSub(st){
     <p class="pos-note">Kính gửi: <b>${esc(supplier.name)}</b></p>
     <table class="pos-table"><thead><tr><th>Sản phẩm</th><th>Quy cách</th><th>SL</th><th>ĐVT</th></tr></thead><tbody>
       ${items.map(it => `<tr><td>${esc(it.name)}</td><td>${it.unit[0].toUpperCase()+it.unit.slice(1)}</td><td>${st.orders[it.key]}</td><td>${it.unit[0].toUpperCase()+it.unit.slice(1)}</td></tr>`).join('')}
+      ${(st.ks && st.ks.approved ? getM1Ksdb() : []).map(it => `<tr><td>${esc(it.name)} 🔒<br><span class="pos-hint">thuốc kiểm soát đặc biệt — đã được Sở Y tế phê duyệt</span></td><td>${it.unit[0].toUpperCase()+it.unit.slice(1)}</td><td>${st.ks.qty[it.key]}</td><td>${it.unit[0].toUpperCase()+it.unit.slice(1)}</td></tr>`).join('')}
     </tbody></table>
     <label style="display:flex;gap:8px;align-items:center;font-size:.82rem;margin:8px 0"><input type="checkbox" id="posOrderCheck"> Tôi đã kiểm tra kỹ thông tin đơn đặt hàng.</label>
     <button type="button" class="pos-btn" id="posOrderSend" disabled>📨 Gửi đơn đặt hàng cho nhà cung ứng</button>`;
@@ -4562,17 +4652,20 @@ function mcSteps(n){
   const step = (list, cur) => list.map((t, i) => ({ t: t[0], hint: t[1], done: i < cur, cur: i === cur }));
   if(n === 1){
     const st = getM1State(), items = getM1Items();
-    const ord = { dutru:0, checking:1, return:2, supplier:3, order: st.orderSent ? 5 : 4, done:5 };
+    const hasKs = getM1Ksdb().length > 0;   // req #250: có thuốc kiểm soát đặc biệt → thêm 1 bước gửi Sở Y tế
+    const ord = { dutru:0, checking:1, return:2, ksdb:3, supplier:3 + (hasKs?1:0), order: (st.orderSent ? 5 : 4) + (hasKs?1:0), done:5 + (hasKs?1:0) };
     let cur = ord[st.step] != null ? ord[st.step] : 0;
-    if(st.step === 'supplier' && st.supplier) cur = 4;
+    if(st.step === 'supplier' && st.supplier) cur = 4 + (hasKs?1:0);
     const ok = items.filter(it => st.confirmed && st.confirmed[it.key]).length;
+    const ksStep = hasKs ? [[`Thuốc kiểm soát đặc biệt (${getM1Ksdb().map(x => x.name).join(', ')}): lập đơn mua + báo cáo xuất–nhập–tồn, gửi Sở Y tế chờ phê duyệt`, 'Tab Dự trù — SL tối đa 150% năm trước; chỉ mua sau khi Sở Y tế duyệt']] : [];
     return step([
       ['Mở phần mềm ở Quầy thu ngân, xem danh sách mặt hàng cần kiểm', 'Đi tới máy tính ở Quầy thu ngân → tab Dự trù'],
       [`Đến tủ kiểm tra tồn kho thực tế từng mặt hàng (${ok}/${items.length})`, 'Đối chiếu số hộp trên tủ với số trong phần mềm'],
       ['Quay lại máy tính, điền công thức và lập dự trù số lượng cần đặt', 'SL đặt = Bán/tuần ÷ 7 × số ngày dự trù − tồn thực tế'],
+      ...ksStep,
       ['Chọn nhà cung ứng đủ giấy tờ hợp pháp, giá và thời gian giao tốt nhất', 'Tab Quản lý nhà cung ứng'],
       ['Kiểm tra và gửi đơn đặt hàng cho nhà cung ứng', 'Tick xác nhận rồi bấm Gửi đơn'],
-    ], st.step === 'done' ? 5 : cur);
+    ], st.step === 'done' ? 5 + (hasKs?1:0) : cur);
   }
   if(n === 2){
     const x = getM2State();
@@ -4814,7 +4907,7 @@ function renderM1Checklist(){
       if(m.m1){
         const st = (typeof getM1State === 'function') ? getM1State() : { step:'dutru' };
         const label = st.step === 'done' ? `🔁 Luyện tập · ${m1PracticeCount()} lần →`
-          : st.step === 'return' ? '🖥️ Chốt đơn →'
+          : st.step === 'return' || st.step === 'ksdb' ? '🖥️ Chốt đơn →'
           : st.step === 'checking' ? '🔍 Đang làm →'
           : '▶ Chơi →';
         return `<li class="mg-mission play${st.step==='done'?'':' current'}" data-mission="${n}">
