@@ -1,4 +1,15 @@
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+// Native dialogs are suppressed in the in-app browser; an in-page <dialog> works everywhere.
+const confirmDialog = message => new Promise(resolve => {
+  const dialog = document.createElement('dialog');
+  dialog.className = 'skill-confirm';
+  dialog.innerHTML = `<p>${esc(message)}</p><div class="toolbar"><button class="btn" type="button" value="cancel">Hủy</button><button class="btn" type="button" value="ok">Tiếp tục</button></div>`;
+  dialog.addEventListener('close', () => { resolve(dialog.returnValue === 'ok'); dialog.remove(); });
+  dialog.querySelector('[value=ok]').onclick = () => dialog.close('ok');
+  dialog.querySelector('[value=cancel]').onclick = () => dialog.close('cancel');
+  document.body.append(dialog);
+  dialog.showModal();
+});
 const TYPE = { backend:'Backend', frontend:'Giao diện', database:'Cơ sở dữ liệu', review:'Review', test:'Kiểm thử', merge:'Hợp nhất', all:'Chung' };
 const STATUS = { draft:'Bản nháp', approved:'Đã duyệt', disabled:'Đã tắt' };
 const lineDiff = (a, b) => {
@@ -120,7 +131,7 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
     const fail = error => toast(error?.message || 'Thao tác thất bại.', 'err');
     const act = (selector, path, message, ask) => {
       for (const node of details.querySelectorAll(selector)) node.onclick = async () => {
-        if (ask && !window.confirm(ask)) return;
+        if (ask && !(await confirmDialog(ask))) return;
         node.disabled = true;
         try {
           const body = path.body ? path.body(node) : { confirmed:true };
@@ -155,7 +166,7 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
       } catch (error) { fail(error); }
     };
     for (const approve of details.querySelectorAll('[data-skill-approve]')) approve.onclick = async () => {
-      if (!window.confirm('Duyệt phiên bản này và dùng nó cho các lượt chạy sau?')) return;
+      if (!(await confirmDialog('Duyệt phiên bản này và dùng nó cho các lượt chạy sau?'))) return;
       approve.disabled = true;
       try {
         const reviewed = await api(`/api/admin/ai-board/skills/${item.id}/approve`, { method:'POST', body:JSON.stringify({ version_id:Number(approve.dataset.skillApprove), confirmed:true }) });
@@ -259,7 +270,7 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
     } finally { button.disabled = false; }
   };
   form.querySelector('[data-skill-act="rewrite"]').onclick = async () => {
-    if (!window.confirm('Model nội bộ sẽ viết lại skill này khi worker rảnh. Tiếp tục?')) return;
+    if (!(await confirmDialog('Model nội bộ sẽ viết lại skill này khi worker rảnh. Tiếp tục?'))) return;
     const draft = await saveDraft();
     if (!draft) return;
     const result = await api(`/api/admin/ai-board/skills/${draft.skill.id}/versions/${draft.version.id}/rewrite`, { method:'POST', body: JSON.stringify({ confirmed:true }) });
@@ -268,7 +279,7 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
     form.hidden = true; await refresh(draft.skill.id);
   };
   form.querySelector('[data-skill-act="approve"]').onclick = async () => {
-    if (!window.confirm('Duyệt bản nháp này và dùng nó cho các lượt chạy sau?')) return;
+    if (!(await confirmDialog('Duyệt bản nháp này và dùng nó cho các lượt chạy sau?'))) return;
     const draft = await saveDraft();
     if (!draft) return;
     const result = await api(`/api/admin/ai-board/skills/${draft.skill.id}/approve`, { method:'POST', body: JSON.stringify({ version_id: Number(draft.version.id), confirmed:true }) });
@@ -291,7 +302,7 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
   const decide = (attr, action, body, done, ask) => {
     for (const node of host.querySelectorAll(`[${attr}]`)) node.onclick = async () => {
       const [skillId, versionId] = node.getAttribute(attr).split(':');
-      if (ask && !window.confirm(ask)) return;
+      if (ask && !(await confirmDialog(ask))) return;
       node.disabled = true;
       try {
         const result = await api(action(skillId, versionId), { method:'POST', body:JSON.stringify(body(versionId)) });
