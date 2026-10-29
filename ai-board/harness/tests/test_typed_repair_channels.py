@@ -21,3 +21,13 @@ def test_validator_prompt_builder_ignores_the_repair_channel():
     plan = plan_with(["features"])
     request = {"subject": "s", "body": "b", "plan_repair": HINT}
     assert HINT not in plan_validate.build_prompt(request, plan)
+
+
+def test_validator_declared_inputs_exclude_the_planner_channel():
+    assert "plan_repair" not in plan_validate.VALIDATOR_INPUTS
+
+
+def test_validator_prompt_is_unchanged_by_the_planner_only_key():
+    plan = plan_with(["features"])
+    base = {"subject": "s", "body": "b", "thread": [{"role": "requester", "body": "x"}]}
+    assert plan_validate.build_prompt({**base, "plan_repair": HINT}, plan) == plan_validate.build_prompt(base, plan)

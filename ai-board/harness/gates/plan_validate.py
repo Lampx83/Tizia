@@ -51,6 +51,8 @@ from dbconn import harness_db
 from gates import best_match, evidence
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_validate.md").read_text(encoding="utf-8")
+# Request keys this gate reads (LF/125). plan_repair is planner-only and must stay out of this list.
+VALIDATOR_INPUTS = ("subject", "body", "domain", "thread", "clarified_spec")
 ANSWERABLE_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_answerable.md").read_text(encoding="utf-8")
 
 # 2 vùng an toàn chuẩn model được phép nhắm (đúng giới hạn trong
