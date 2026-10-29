@@ -58,7 +58,8 @@ def behaviour_probe(text):
     """Oracle named by the request's own words (text = request_text); None when it names neither surface."""
     if re.search(r'copy|sao chep', text) and re.search(r'response|phan hoi', text):
         return COPY_PROBE
-    if re.search(r'search|tim kiem', text) and re.search(r'activity|activities|hoat dong', text):
+    # "ô tìm kiếm hoạt động" = the search box works (not search activity) — chỉ nhận cụm nói về lịch sử/hoạt động tìm kiếm.
+    if re.search(r'search\s+(activity|activities|history)|lich su tim kiem|hoat dong tim kiem|tim kiem (da|gan day)', text):
         return SEARCH_PROBE
     return None
 
