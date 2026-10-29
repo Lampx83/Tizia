@@ -15,10 +15,11 @@ const confirmDialog = message => new Promise(resolve => {
 const rewriteDialog = () => new Promise(resolve => {
   const dialog = document.createElement('dialog');
   dialog.className = 'skill-confirm';
-  dialog.innerHTML = `<p>Model nội bộ sẽ viết lại skill này khi worker rảnh.</p>
+  dialog.innerHTML = `<h4 class="skill-confirm-title">Viết lại cho model nội bộ</h4>
+    <p>Model chạy khi worker rảnh. Ghi chú bên dưới đi qua cùng bộ lọc an toàn như yêu cầu gửi vào hệ thống và không đổi được tên, loại tác vụ hay giới hạn token. Mỗi phiên bản viết lại tối đa 5 lần mỗi giờ.</p>
     <label for="rewrite-note">Ghi chú thêm cho model (không bắt buộc)</label>
     <textarea id="rewrite-note" rows="4" maxlength="${NOTE_MAX}" spellcheck="false" placeholder="Ví dụ: giữ đủ 6 bước, ngắn hơn 900 ký tự"></textarea>
-    <p class="meta"><span data-note-count>0</span>/${NOTE_MAX} ký tự. Ghi chú qua cùng bộ lọc an toàn như yêu cầu gửi vào hệ thống và không đổi được tên, loại tác vụ hay giới hạn token. Mỗi phiên bản viết lại tối đa 5 lần mỗi giờ.</p>
+    <p class="meta"><span data-note-count>0</span>/${NOTE_MAX} ký tự</p>
     <div class="toolbar"><button class="btn" type="button" value="cancel">Hủy</button><button class="btn" type="button" value="ok">Viết lại</button></div>`;
   const note = dialog.querySelector('textarea');
   note.addEventListener('input', () => { dialog.querySelector('[data-note-count]').textContent = String(note.value.length); });

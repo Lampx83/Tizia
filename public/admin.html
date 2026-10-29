@@ -170,7 +170,7 @@
   .rewrite-live[data-tone="err"] { border-left-color:#e5484d; }
   .rewrite-live[hidden] { display:none; }
   .skill-confirm { max-width:420px; padding:16px; border:1px solid var(--border); border-radius:8px; background:var(--surface, #1b1b1b); color:inherit; }
-  .skill-confirm::backdrop { background:rgba(0,0,0,0.45); }
+  .skill-confirm { max-height:calc(100vh - 32px); overflow:auto; } .skill-confirm-title { margin:0 0 8px; font-size:15px; } .skill-confirm::backdrop { background:rgba(0,0,0,0.45); }
   .skill-row .skill-sub { grid-column:1 / -1; color:var(--muted); font-size:12px; }
   .skill-detail { min-width:0; }
   .skill-detail-title { margin:0 0 4px; font-size:17px; }
@@ -416,6 +416,6 @@
 <div class="toast" id="toast"></div>
 <div class="chart-tooltip" id="ctt"></div>
 
-<script type="module" src="/js/admin-dashboard.js?v=skills-tok1"></script>
+<script type="module" src="/js/admin-dashboard.js?v=skills-tok2"></script>
 </body>
 </html>
