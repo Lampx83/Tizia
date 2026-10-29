@@ -32,7 +32,7 @@ class BudgetClient(FakeClient):
     def exec(self, run_id, argv, *, timeout, deadline):
         assert 0 < timeout <= deadline - time.monotonic() + 0.02
         out = super().exec(run_id, argv, timeout=timeout)
-        self.wait("exec" if argv[0] == "sh" else "boot", deadline)
+        self.wait("exec" if argv[0] == "python" else "boot", deadline)
         return out
 
     def download(self, run_id, name, *, deadline):
@@ -113,7 +113,7 @@ def test_real_http_exec_that_never_replies_is_destroyed_at_deadline(tmp_path):
 
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
-            if self.path.endswith("/exec") and body["argv"][0] == "sh":
+            if self.path.endswith("/exec") and body["argv"][0] == "python":
                 destroyed.wait(2)  # actual socket wait; only DELETE ends the simulated work
                 return
             self.reply({"state": "ready", "code": 0})

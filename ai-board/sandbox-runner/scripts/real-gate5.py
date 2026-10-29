@@ -13,10 +13,16 @@ sys.path.insert(0, "/opt/ai-board/ai-board/harness")
 import sandbox_verify  # noqa: E402
 
 base_sha = sys.argv[1]
+KINDS = {
+    "static-page": {"file": "public/js/suggestion-fab.js", "test_file": "test/e2e-probe.test.js", "diff": "+// gate5 probe: static page kind"},
+    "js-module": {"file": "public/js/request-thread.js", "test_file": "test/e2e-probe.test.js", "diff": "+// gate5 probe: js module kind"},
+    "backend-route": {"file": "server/contexts/admin/index.js", "test_file": "test/e2e-probe.test.js", "diff": "+// gate5 probe: backend route kind"},
+}
+kind = sys.argv[2] if len(sys.argv) > 2 else "static-page"
 state = {
     "skill_id": "ticket-e2e", "full_checkout": "/ck", "base_sha": base_sha,
     "request_detail": "[Trang: Trường IT] /school.html?domain=it\nThêm ước tính phút chờ worker (ETA) trên dòng hàng đợi.",
-    "diffs": [{"file": "public/js/suggestion-fab.js", "test_file": "test/e2e-probe.test.js", "diff": "+// e2e probe: harmless change"}],
+    "diffs": [KINDS[kind]],
 }
 client = sandbox_verify.RunnerClient(os.environ.get("AI_BOARD_SANDBOX_URL") or "http://sandbox-runner:8090", Path("/token").read_text().strip(), timeout=900)  # first create pulls the guest image
 started = time.time()
