@@ -1,6 +1,7 @@
 # Reviewed deployment policy for the dev runner. Strict schema (src/policy.js); change only via reviewed deploy + restart.
 version: 1
-vm: { cpus: 1, memory_mib: 2048, disk_mib: 10240, ttl_s: 1500, lease_s: 120 }
+# vm.memory_mib 1536: measured VM peak 613-625 MiB over 3 kinds (MemTotal-MemAvailable, 0.5 s samples), ~2.5x margin.
+vm: { cpus: 1, memory_mib: 1536, disk_mib: 10240, ttl_s: 1500, lease_s: 120 }
 concurrency: 1
 # guest-inputs: 6a8c5075f5731fc4dff44e0f20240ca003a713fba9ad3d3c38086b6ff6727d4a
 guest_image: image-registry:5000/gate5@sha256:cd5502aea0b597983a171dbfdcf8767b9627ab2ceb5921d47cf468b6f1442958
