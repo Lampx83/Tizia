@@ -328,6 +328,7 @@
     if (!text) return;
     ta.value = '';
     addMsg('user', text);
+    try { window.dispatchEvent(new CustomEvent('edututor:ask', { detail: { text } })); } catch {}   // req #247: trang chủ có thể ghi lại câu hỏi
     history.push({ role: 'user', content: text }); saveHistory();
 
     const thinking = addMsg('bot', '🤔 Đang nghĩ…', true);

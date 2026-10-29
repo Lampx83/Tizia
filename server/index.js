@@ -12,6 +12,7 @@ import { attachPharmacy } from './pharmacy.js';
 import { attachPharmacyPractice } from './pharmacy-practice.js';
 import { attachPharmacyTeacher, ensureTeacherAccount } from './pharmacy-teacher.js';
 import { attachGpp } from './gpp.js';
+import { attachTtAccess } from './tt-access.js';
 import { acknowledgeNewRequest, getDecisionsForRequest, getRecentDecisions } from './contexts/ai-agent/decisions.js';
 import { attachAiBoardInbox } from './contexts/ai-agent/inbox-api.js';
 import { attachAppProxies } from './app-proxy.js';
@@ -1041,6 +1042,8 @@ attachAi(r);
 // Độc lập với Nhà thuốc 3D — route /api/gpp/*, bảng gpp_*.
 // ============================================================
 attachGpp(r);
+// Nhà thuốc thực hành: đăng nhập theo danh sách lớp + nhật ký thao tác (req #245/#247/#248) — server/tt-access.js
+attachTtAccess(r);
 
 // ============================================================
 // TTS NEURAL — /api/tts qua FPT.AI (cache /data/tts-cache). Public cho guest
