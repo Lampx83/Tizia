@@ -86,3 +86,18 @@ def test_newest_message_alone_over_cap_is_clipped_not_dropped(monkeypatch):
     assert len(text) <= 500
     assert "(1 earlier messages cut)" in text
     assert text.splitlines()[-1].startswith("user: answer answer")
+
+
+def test_dev_eval_threads_fit_cap():
+    import json
+    import os
+    from pathlib import Path
+
+    corpus = os.environ.get("AI_BOARD_DEV_CORPUS")
+    if not corpus or not Path(corpus).exists():
+        import pytest
+        pytest.skip("AI_BOARD_DEV_CORPUS not set")
+    cases = json.loads(Path(corpus).read_text(encoding="utf-8"))
+    longest = max((len(context.thread_text(c.get("thread") or [], c.get("clarified_spec"))) for c in cases
+                   if c.get("split") == "dev"), default=0)
+    assert longest <= limits.thread_chars()
