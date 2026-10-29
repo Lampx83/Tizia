@@ -23,7 +23,7 @@ test('a complete policy loads, with a stable hash', () => {
   assert.equal(a.egress[0].host, 'registry.npmjs.org');
   assert.match(a.hash, /^[0-9a-f]{64}$/);
   assert.equal(loadPolicy(GOOD).hash, a.hash);
-  assert.notEqual(loadPolicy(GOOD.replace('ttl_s: 1200', 'ttl_s: 600')).hash, a.hash);
+  assert.notEqual(loadPolicy(GOOD.replace('ttl_s: 1200', 'ttl_s: 900')).hash, a.hash);
 });
 
 const rejects = {
@@ -31,6 +31,7 @@ const rejects = {
   'unknown nested key': (t) => t.replace('cpus: 1,', 'cpus: 1, gpus: 1,'),
   'wrong version': (t) => t.replace('version: 1', 'version: 2'),
   'value above the hard cap': (t) => t.replace('ttl_s: 1200', 'ttl_s: 99999'),
+  'ttl below exec timeout plus guest boot': (t) => t.replace('ttl_s: 1200', 'ttl_s: 779'),
   'non-integer': (t) => t.replace('cpus: 1,', 'cpus: 1.5,'),
   'unpinned guest image': (t) => t.replace(/guest_image: .*/, 'guest_image: alpine:3.20'),
   'wildcard egress host': (t) => t.replace('registry.npmjs.org', '*.npmjs.org'),
