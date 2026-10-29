@@ -153,5 +153,11 @@
   "branch_prefix": "ai-board/",
   "branch_slug_max": 60,
   "branch_pattern": "^ai-board/\\d{4}-\\d{2}-\\d{2}-[a-z0-9-]{1,60}$",
-  "idempotency_key_pattern": "^[A-Za-z0-9._:-]{8,128}$"
+  "idempotency_key_pattern": "^[A-Za-z0-9._:-]{8,128}$",
+  "evidence_gates": {
+    "_why": "Keys for LF/123-128 gates. Inert until the gate that reads them lands; defaults keep today's behaviour.",
+    "repeat_objection_threshold": 2,
+    "new_file_diff_warn_factor": 2,
+    "same_origin_script_src_allowed": true
+  }
 }

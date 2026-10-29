@@ -1,49 +1,57 @@
 from gates import plan_validate as pv
+from gates.evidence import verified
 
 FEATURE = {"type": "feature"}
 PLAN = {"subtasks": [{"file": "public/faq-co-so-du-lieu.html"}, {"file": "public/js/features/faq-co-so-du-lieu/index.js"}]}
+REQUEST_7_REASON = ("REPO DATA đã có chức năng tương tự: public/js/features/them-trang-faq-mon-co-so-du-lieu/index... "
+                    "nên không tạo trang mới")
 
 
-def cited(reason, files=None):
-    return pv.invented_paths({"reason": reason}, PLAN, files or {})
+def objection(file, snippet, claim="plan sai"):
+    return {"claim": claim, "evidence": [{"file": file, "snippet": snippet}]}
 
 
-def test_directory_style_citation_without_extension_is_invented():
-    reason = ("REPO DATA đã có chức năng tương tự: public/js/features/them-trang-faq-mon-co-so-du-lieu/index... "
-              "nên không tạo trang mới")
-    assert cited(reason) == ["public/js/features/them-trang-faq-mon-co-so-du-lieu/index"]
+def test_request_7_objection_citing_a_nonexistent_path_is_advisory():
+    validation = {"grounded": False, "reason": REQUEST_7_REASON, "objection": None}
+    note = pv.objection_advisory(validation, {"public/js/school-explore.js": "x"})
+    assert note and "không chặn" in note and "them-trang-faq" in note
 
 
-def test_citation_of_a_file_in_repo_data_is_not_invented():
-    reason = "public/js/school-explore.js đã xử lý việc này"
-    assert cited(reason, {"public/js/school-explore.js": "x"}) == []
+def test_objection_with_snippet_copied_from_repo_data_blocks():
+    validation = {"grounded": False, "reason": "đã có", "objection": objection("public/js/school-explore.js", "function  open()")}
+    assert pv.objection_advisory(validation, {"public/js/school-explore.js": "x\nfunction open()\n"}) is None
 
 
-def test_citation_of_the_planned_file_is_not_invented():
-    assert cited("public/js/features/faq-co-so-du-lieu/index.js đã đúng") == []
+def test_objection_with_snippet_not_in_repo_data_is_advisory():
+    validation = {"grounded": False, "reason": "đã có", "objection": objection("public/js/school-explore.js", "không có chữ này")}
+    assert pv.objection_advisory(validation, {"public/js/school-explore.js": "x"}) is not None
 
 
-def test_no_path_in_reason_is_not_invented():
-    assert cited("thiếu hành vi trước/sau") == []
+def test_objection_naming_a_file_outside_repo_data_is_advisory():
+    validation = {"grounded": False, "reason": "đã có", "objection": objection("public/khong-co.js", "x")}
+    assert pv.objection_advisory(validation, {"public/js/school-explore.js": "x"}) is not None
 
 
-def test_new_file_only_plan_objecting_without_repo_path_is_not_blocked():
-    validation = {"reason": "REPO DATA không có file nào tương ứng để trích dẫn, plan không tuân thủ quy ước Static page",
-                  "grounded": False}
-    assert pv.new_file_only_objection(validation, PLAN, {"public/js/school-explore.js": "x"}, FEATURE)
+def test_grounded_plan_has_no_advisory():
+    assert pv.objection_advisory({"grounded": True, "objection": None}, {}) is None
 
 
-def test_objection_naming_an_existing_repo_file_still_blocks():
-    validation = {"reason": "public/js/school-explore.js đã có chức năng này", "grounded": False}
-    assert not pv.new_file_only_objection(validation, PLAN, {"public/js/school-explore.js": "x"}, FEATURE)
+def test_claim_evidence_shape_is_checked():
+    assert verified("not a dict", {"a.js": "x"}) == []
+    assert verified({"claim": "c", "evidence": [{"file": "a.js"}]}, {"a.js": "x"}) == []
+    assert verified({"claim": "c", "evidence": [{"file": "a.js", "snippet": "  "}]}, {"a.js": "x"}) == []
 
 
-def test_plan_editing_an_existing_file_still_blocks_on_objection():
-    plan = {"subtasks": [{"file": "public/js/school-explore.js"}]}
-    validation = {"reason": "không có file tương ứng", "grounded": False}
-    assert not pv.new_file_only_objection(validation, plan, {"public/js/school-explore.js": "x"}, FEATURE)
+def test_request_7_replay_objection_is_advisory_and_plan_goes_on():
+    from budget import Budget
+    from conftest import FakeModels, deps_with, plan_with
 
+    plan = plan_with(["features"])
+    plan["subtasks"] = PLAN["subtasks"]
+    request = {"subject": "Thêm trang FAQ cơ sở dữ liệu", "body": "trang mới", "type": "feature"}
+    validation = {"clear": True, "question": None, "grounded": False, "reason": REQUEST_7_REASON, "grounding": []}
+    state = {"plan": plan}
 
-def test_edit_request_is_not_a_new_file_objection():
-    validation = {"reason": "không có file tương ứng", "grounded": False}
-    assert not pv.new_file_only_objection(validation, PLAN, {}, {"type": "bug"})
+    out = pv.run(request, deps_with(FakeModels(plan, validation=validation)), Budget(), state)
+
+    assert out["blocked"] is False and "không chặn" in state["validator_note"]

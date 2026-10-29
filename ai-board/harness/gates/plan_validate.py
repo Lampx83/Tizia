@@ -48,7 +48,7 @@ import context
 import code_index
 import file_context
 from dbconn import harness_db
-from gates import best_match
+from gates import best_match, evidence
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_validate.md").read_text(encoding="utf-8")
 ANSWERABLE_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_answerable.md").read_text(encoding="utf-8")
@@ -133,7 +133,7 @@ def parse_validation(text: str) -> dict:
     # clear=true thì câu hỏi (nếu model lỡ viết) bị bỏ; câu hỏi gửi thẳng học viên nên cắt 300 ký tự.
     return {"clear": out["clear"], "question": None if out["clear"] else ((question or "").strip()[:300] or None),
             "grounded": out.get("grounded") is True, "grounding": out.get("grounding"),
-            "reason": str(out.get("reason") or '')[:500]}
+            "objection": evidence.parse(out.get("objection")), "reason": str(out.get("reason") or '')[:500]}
 
 
 _PINNED_QUOTED = re.compile(r"""['"“‘]([^'"”’\n]{3,80})['"”’]""")
@@ -492,36 +492,11 @@ def _uncertain(validation: dict) -> bool:
     return not validation['clear'] or not validation.get('grounded')
 
 
-_CITED_PATH = re.compile(r"(?<![\w/.-])((?:public|server|test|scripts|ai-board)/[\w./-]*[\w-])")
-
-
-def invented_paths(validation: dict, plan: dict, files: dict, source=None, sha: str | None = None) -> list[str]:
-    """Paths the validator cites that exist neither in REPO DATA nor at the base commit.
-
-    A local validator sometimes rejects a plan with "a previous request already created public/x.html" for a
-    file that exists nowhere: that is not evidence about this plan, so the veto is dropped instead of blocking.
-    """
-    known = set(files) | {task['file'] for task in plan.get('subtasks') or []}
-    cited = {path for path in _CITED_PATH.findall(str(validation.get('reason') or '')) if path not in known}
-    if not cited:
-        return []
-    if source is not None and sha:
-        try:
-            tree = code_index.git(source, 'ls-tree', '-r', '--name-only', sha).decode('utf-8', 'replace').splitlines()
-        except OSError:
-            tree = []
-        # Prefix match: the model often cites a stem ("…/index") of a file that exists as "…/index.js".
-        cited = {path for path in cited if not any(name.startswith(path) for name in tree)}
-    return sorted(cited)
-
-
-def new_file_only_objection(validation: dict, plan: dict, files: dict, request: dict) -> bool:
-    """Plan chỉ tạo file mới mà validator kết luận không có căn cứ, không nêu file REPO DATA nào: kết luận rỗng."""
-    tasks = plan.get('subtasks') or []
-    if not feature_request(request) or not tasks or any(task['file'] in files for task in tasks):
-        return False
-    reason = str(validation.get('reason') or '')
-    return not any(path in reason for path in files)
+def objection_advisory(validation: dict, files: dict) -> str | None:
+    """Note when grounded=false has no verified citation (gate 2.5 does not block on it); None when it is verified."""
+    if validation.get('grounded') or evidence.verified(validation.get('objection'), files):
+        return None
+    return f"grounded=false không có trích dẫn kiểm chứng được, cổng 2.5 không chặn: {str(validation.get('reason') or '')[:200]}"
 
 
 def _brief(validation: dict) -> dict:
@@ -557,8 +532,14 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
     schema = {"type": "object", "additionalProperties": False,
               "properties": {"clear": {"type": "boolean"}, "question": {"type": ["string", "null"], "maxLength": 200},
                              "grounded": {"type": "boolean"}, "reason": short,
-                             "grounding": {"type": "array", "maxItems": len(plan['subtasks']), "items": record}},
-              "required": ["clear", "question", "grounded", "reason", "grounding"]}
+                             "grounding": {"type": "array", "maxItems": len(plan['subtasks']), "items": record},
+                             "objection": {"type": ["object", "null"], "properties": {
+                                 "claim": short, "evidence": {"type": "array", "maxItems": 3, "items": {
+                                     "type": "object", "additionalProperties": False,
+                                     "properties": {"file": short, "snippet": {"type": "string", "maxLength": _QUOTE_MAX}},
+                                     "required": ["file", "snippet"]}}},
+                                 "required": ["claim", "evidence"]}},
+              "required": ["clear", "question", "grounded", "reason", "grounding", "objection"]}
     def validate(req, think=False):
         ask = lambda options: deps.call_model(deps.models.gate1_model, prompt if req is request else build_prompt(req, plan, repo_context),
                                               gate=2.5, budget=budget, format=schema, db_path=db_path, proposal_id=proposal_id,
@@ -632,13 +613,11 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
         return {"gate": 2.5, "blocked": True, "reason": "needs_clarification", "outcome": "needs_clarification",
                 "public_message": question}
 
-    invented = invented_paths(validation, plan, files, state.get('checkout_source'), sha)
-    if (invented or new_file_only_objection(validation, plan, files, request)) and not validation.get("grounded"):
-        # The objection cites a path that exists nowhere (neither REPO DATA nor the base commit): the local
-        # validator made it up, so the plan is not blocked on it. The admin still sees the note.
-        state['validator_note'] = (f"bỏ qua grounded=false vì nêu file không tồn tại: {', '.join(invented)}" if invented
-                                   else 'bỏ qua grounded=false: plan chỉ tạo file mới, lời phản đối không nêu file REPO DATA nào')
-        judge('validator paths', False, state['validator_note'])
+    note = objection_advisory(validation, files)
+    if note:
+        # Unverifiable objection: the plan goes on, the admin sees the note in the trace.
+        state['validator_note'] = note
+        judge('validator objection', False, note)
         validation = {**validation, 'grounded': True}
 
     if request.get('grounding_required'):

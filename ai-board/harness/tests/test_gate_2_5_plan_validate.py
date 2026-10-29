@@ -192,12 +192,37 @@ def test_a_grounding_veto_about_a_real_plan_file_still_blocks(tmp_path):
                          "size": "small", "layer": "frontend", "depends_on": []}]
     request = {"subject": "Sửa trang", "body": "đổi chữ", "grounding_required": True}
     validation = {"clear": True, "grounded": False,
-                  "reason": "Plan sửa public/trang.html nhưng không có dẫn chứng hành vi."}
+                  "reason": "Plan sửa public/trang.html nhưng không có dẫn chứng hành vi.",
+                  "objection": {"claim": "trang đã có", "evidence": [{"file": "public/trang.html", "snippet": "<h1>Trang</h1>"}]}}
     state = {"plan": plan, "checkout_source": str(tmp_path)}
 
     out = plan_validate.run(request, deps_with(FakeModels(plan, validation=validation)), Budget(), state)
 
     assert out["blocked"] is True and out["reason"] == "plan_ungrounded"
+
+
+def test_a_grounding_veto_without_a_verifiable_snippet_is_advisory(tmp_path):
+    subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
+    (tmp_path / 'public').mkdir(parents=True)
+    (tmp_path / 'public' / 'trang.html').write_text('<h1>Trang</h1>\n', encoding='utf8')
+    subprocess.run(['git', '-C', str(tmp_path), 'add', '.'], check=True)
+    subprocess.run(['git', '-C', str(tmp_path), '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+                    'commit', '-qm', 'base'], check=True)
+    plan = plan_with(["features"])
+    plan["subtasks"] = [{"title": "Sửa trang", "file": "public/trang.html", "verify": "trang có chữ mới",
+                         "size": "small", "layer": "frontend", "depends_on": []}]
+    request = {"subject": "Sửa trang", "body": "đổi chữ", "grounding_required": True}
+    validation = {"clear": True, "grounded": False,
+                  "reason": "Plan sửa public/trang.html nhưng không có dẫn chứng hành vi.",
+                  "objection": {"claim": "trang đã có", "evidence": [{"file": "public/trang.html", "snippet": "chữ không có"}]},
+                  "grounding": [{"target": "public/trang.html", "file": "public/trang.html", "quote": "<h1>Trang</h1>",
+                                 "before": "h1 là Trang", "after": "h1 mới", "verify": "trang có chữ mới"}]}
+    state = {"plan": plan, "checkout_source": str(tmp_path)}
+
+    out = plan_validate.run(request, deps_with(FakeModels(plan, validation=validation)), Budget(), state)
+
+    assert "không chặn" in state["validator_note"]
+    assert out["reason"] != "plan_ungrounded"
 
 
 # ── AC 2: plan phức tạp + user thường -> complexity_gated ───────────────────
