@@ -40,7 +40,9 @@ def test_live_plan_needs_verified_source_quote_and_behavior(tmp_path):
     state['plan'] = {'subtasks': [{'file': 'public/domain.js', 'title': 'ETA', 'verify': 'Flag exists'}]}
     forged = {'clear': True, 'grounded': True, 'grounding': [{'target': 'public/domain.js', 'file': 'public/domain.js',
         'quote': 'workerReady = false;', 'before': 'ETA', 'after': 'No ETA', 'verify': 'Flag exists'}]}
-    assert plan_validate.run(request, deps_with(FakeModels(plan, validation=forged)), Budget(), state)['reason'] == 'plan_ungrounded'
+    # LF/127: oracle is advisory. The plan edits a different file than the oracle's surface, so the conflict is recorded, not blocked.
+    assert not plan_validate.run(request, deps_with(FakeModels(plan, validation=forged)), Budget(), state)['blocked']
+    assert 'public/js/suggestion-fab.js' in state['oracle_conflict']
 
 
 def test_quote_copied_with_the_context_line_prefix_still_counts_as_grounding(tmp_path):
