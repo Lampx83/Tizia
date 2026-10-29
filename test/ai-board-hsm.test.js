@@ -11,6 +11,7 @@ import path from 'node:path';
 import { renderHsm } from '../public/js/ai-board-hsm.js';
 import fs from 'node:fs';
 import { canonicalHash } from '../server/ai-board/repositories/tool-manifests.js';
+import { VENV_PYTHON } from './support/harness-python.js';
 
 const KEY='hsm-disposable-fixture-worker-key-32';
 test('Gate4 records a granted action receipt at the budget limit but refuses another action',async()=>{
@@ -231,7 +232,7 @@ test('actual Python HttpWorker completes deterministic Gate4 through real HTTP a
     await f.db.run("UPDATE ai_runs SET plan_hash='plan-a',plan_revision=1 WHERE id=?",[f.run]);
     for(const gate of [1,2,2.5]) await f.db.insert("INSERT INTO ai_gate_traces(run_id,gate,status,created_at) VALUES (?,?,'passed',?)",[f.run,gate,Date.now()]);
     await f.db.run("UPDATE ai_tickets SET status='queued',phase='authorized',plan_revision=1,lease_owner=NULL,lease_token=NULL,lease_expires_at=NULL WHERE id=?",[f.id]);
-    const python=process['env'].TEST_PYTHON || path.resolve('ai-board/harness/.venv/Scripts/python.exe');
+    const python=process['env'].TEST_PYTHON || VENV_PYTHON;
     const child=await promisify(execFile)(python,[path.resolve('test/support/hsm-worker-probe.py'),f.base,KEY],{cwd:process.cwd(),timeout:60000,maxBuffer:1000000});
     const out=JSON.parse(child.stdout.trim().split('\n').at(-1));
     assert.equal(out.gate4_calls,1);assert.equal(out.worker.pre_pr_verdict.gates.find(g=>g.gate===4).blocked,false);
@@ -244,7 +245,7 @@ test('actual Python HttpWorker completes deterministic Gate4 through real HTTP a
 });
 
 const probe=async(f,phase)=>{
-  const python=process['env'].TEST_PYTHON || path.resolve('ai-board/harness/.venv/Scripts/python.exe');
+  const python=process['env'].TEST_PYTHON || VENV_PYTHON;
   const child=await promisify(execFile)(python,[path.resolve('test/support/checkpoint-failover-probe.py'),f.base,KEY,String(f.id),phase],{cwd:process.cwd(),timeout:60000,maxBuffer:1000000});
   return JSON.parse(child.stdout.trim().split('\n').at(-1));
 };
@@ -373,7 +374,7 @@ const adminDecide=(f,hash,action,admin=true)=>fetch(`${f.base}/api/admin/ai-boar
 const adminList=async f=>(await fetch(`${f.base}/api/admin/ai-board/tool-manifests`,{headers:{'x-test-admin':'yes'}})).json();
 
 test('server hash of the real tool manifest equals the harness hash',async t=>{
-  const python=path.resolve('ai-board/harness/.venv/Scripts/python.exe');
+  const python=VENV_PYTHON;
   if (!fs.existsSync(python)) return t.skip('harness venv missing');
   const {stdout}=await promisify(execFile)(python,['-c','import sys;sys.path.insert(0,".");from runtime import tool_loop;print(tool_loop.MANIFEST.hash)'],{cwd:path.resolve('ai-board/harness')});
   assert.equal(stdout.trim(),MANIFEST_HASH);
@@ -503,7 +504,7 @@ test('two real Python HttpWorkers racing for one authorized ticket: exactly one 
   try {
     await seedPlanTraces(f);
     await f.db.run("UPDATE ai_tickets SET status='queued',phase='authorized',plan_revision=1,lease_owner=NULL,lease_token=NULL,lease_expires_at=NULL WHERE id=?",[f.id]);
-    const python=process['env'].TEST_PYTHON || path.resolve('ai-board/harness/.venv/Scripts/python.exe');
+    const python=process['env'].TEST_PYTHON || VENV_PYTHON;
     const run=(worker)=>promisify(execFile)(python,[path.resolve('test/support/hsm-worker-probe.py'),f.base,KEY,worker],{cwd:process.cwd(),timeout:60000,maxBuffer:1000000})
       .then(child=>JSON.parse(child.stdout.trim().split('\n').at(-1)));
     const outs=await Promise.all([run('worker-race-1'),run('worker-race-2')]);
