@@ -101,6 +101,16 @@ def catalog():
     return result
 
 
+STAGE_OF_ROLE = {'gate1': 'plan', 'gate3_light': 'execute', 'gate3_heavy': 'execute', 'gate4_review': 'verdict'}
+
+
+def stage_budget(role):
+    """{max_per_prompt, max_tokens_per_prompt} của node chạy role; node không khai báo dùng số toàn cục."""
+    skills = limits.contract()['limits']['skills']
+    own = skills.get('stages', {}).get(STAGE_OF_ROLE.get(role), {})
+    return {key: own.get(key, skills[key]) for key in ('max_per_prompt', 'max_tokens_per_prompt')}
+
+
 def select(role, context=None):
     return select_report(role, context)[0]
 
@@ -146,7 +156,7 @@ def select_report(role, context=None):
             skill = replace(skill, token_bound=bound)
             candidates.append(skill_selection.Candidate(skill.name, 1, 'approved admin skill', bound, topic=skill.topic,
                                                         payload=skill))
-    budget = limits.contract()['limits']['skills']
+    budget = stage_budget(role)
     chosen, report = skill_selection.choose(candidates, budget['max_per_prompt'], budget['max_tokens_per_prompt'])
     selected = [c.payload for c in chosen]
     defaults = [s for s in selected if s.source == 'default']
