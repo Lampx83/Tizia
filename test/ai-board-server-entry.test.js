@@ -134,3 +134,22 @@ test('skill proposals list works on the board database (its tables exist after b
     assert.equal(res.status, 200, await res.clone().text());
   } finally { await app.close(); app.db.close(); }
 });
+
+test('skill rewrite claim on the board entry rejects a missing or wrong worker key', async () => {
+  const db = await openBoard({ users: [[1, 'lan', 'Lan', 'pupil', 'primary']] });
+  const { app: expressApp } = await createAiBoardServer({ dbHandle: db, classifyRequest: async () => null, logger: { warn() {} },
+    env: { AI_BOARD_INTERNAL_SECRET: SECRET, AI_BOARD_WORKER_KEY: 'worker-key-for-tests-0000000000' } });
+  const server = http.createServer(expressApp);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const app = { base: `http://127.0.0.1:${server.address().port}`, close: () => new Promise((resolve) => server.close(resolve)) };
+  try {
+    const missing = await fetch(`${app.base}/api/ai-board/worker/skill-rewrite/claim`, { method: 'POST',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ worker_id: 'w1' }) });
+    assert.equal(missing.status, 401);
+    const wrong = await fetch(`${app.base}/api/ai-board/worker/skill-rewrite/claim`, { method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-ai-worker-key': 'x'.repeat(40) }, body: JSON.stringify({ worker_id: 'w1' }) });
+    assert.equal(wrong.status, 403);
+  } finally {
+    await app.close();
+  }
+});

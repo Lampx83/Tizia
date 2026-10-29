@@ -1483,6 +1483,16 @@ def harness_change_runner(checkout_source=None, tracer=None, progress=None) -> C
     return run
 
 
+def admin_rewrite_step(status, client, deps, worker_id, *, rewrite=None) -> dict | None:
+    """Một job viết lại skill do admin xác nhận, chỉ khi poll vừa rồi rảnh (idle). Không đề xuất, không retro."""
+    if status != "idle":
+        return None
+    if rewrite is None:
+        from services import skill_rewrite as rewrite
+    step = rewrite.run_step(client, deps, worker_id=worker_id)
+    return None if step["status"] == "none" else {"skill_rewrite": step}
+
+
 def poll(worker) -> dict:
     """One poll. Plan block = expected outcome. Server down/restarting (DNS, refused, reset, 5xx) = a status, retried next tick:
     crashing instead would burn the container's restart budget during a normal redeploy. 4xx (bad key) still raises."""
@@ -1580,9 +1590,13 @@ def main(argv: list[str] | None = None) -> int:
             from preview import PreviewPublisher
             worker.preview_publisher = PreviewPublisher(base_url, key)
         worker.open_prs = github is not None  # no token: verdicts stop at ready_for_pr, as before
+    rewrite_deps = _real_deps(Deps, tracer, worker.gate_started) if args.execute else None
     while True:
         result = poll(worker)
         print(json.dumps(result, ensure_ascii=False))
+        step = admin_rewrite_step(result.get("status"), worker.client, rewrite_deps, worker.worker_id) if rewrite_deps else None
+        if step is not None:
+            print(json.dumps(step, ensure_ascii=False))
         if args.once or args.mode == "off":
             return 0
         time.sleep(max(args.poll_seconds, 1.0))
