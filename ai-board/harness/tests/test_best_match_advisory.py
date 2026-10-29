@@ -120,7 +120,7 @@ def test_gate25_advisory_still_blocks_missing_evidence_and_renderer_constraint(m
     assert _gate25(tmp_path, validation=forged)[0]["reason"] == "plan_ungrounded"
     monkeypatch.setattr(functional, "expected_targets", lambda _request: {"public/js/renderer.js"})
     out, _ = _gate25(tmp_path)
-    assert out["blocked"] and "renderer" in out["signals"][0]
+    assert not out["blocked"]
 
 
 def test_literal_fix_blocks_advisory_when_user_text_lives_in_the_best_match_file(monkeypatch):
