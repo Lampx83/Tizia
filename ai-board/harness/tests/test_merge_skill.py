@@ -35,3 +35,8 @@ def test_marker_check_needs_marker_at_line_start():
 @pytest.mark.parametrize('line', ['<<<<<<<', '=======', '>>>>>>>'])
 def test_marker_check_exact_seven_chars(line):
     assert conflict_markers.find_markers(line + ' x\n') == [(1, line)]
+
+
+def test_rewrite_smoke_task_exists_for_merge_skill():
+    from services import skill_rewrite
+    assert 'merge' in skill_rewrite.SMOKE_TASKS

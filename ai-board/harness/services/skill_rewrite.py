@@ -16,6 +16,7 @@ SMOKE_TASKS = {
     'database': 'Add a nullable column to an existing PostgreSQL table.',
     'review': 'Review a function that concatenates user input into an SQL string.',
     'test': 'Start a fix for add(a, b) returning the wrong sum.',
+    'merge': 'Resolve a rebase conflict in a config file where both branches changed the same line.',
 }
 MAX_SMOKE_KINDS = 2
 REWRITE_INSTRUCTION = ('Rewrite the uploaded skill below for a small local model. Keep the frontmatter fields name, description, '
