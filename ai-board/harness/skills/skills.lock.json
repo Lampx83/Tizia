@@ -5,6 +5,7 @@
   "default-backend": "362a971db823eec2fe5d9a461c87a07987afbed50b5fbec233b3ae262f20d492",
   "default-database": "ddd2c06b5de9d6eab50ccd7a72687ab04718aca3ce20572ca8abfdcd36c6cf6e",
   "default-frontend": "de0b04434281b47fee189c6301ca32065bcfbb634eab0166c5a5fc80fec01d63",
+  "default-merge": "773a772ffc61639141ed83f792010f24607f5ac857b126b3c0a701115f879176",
   "default-review": "1f653abeb756498d6c32628281904c8b01b43988e71bc3dc66f95a16751315b6",
   "default-skill-authoring": "57874ce30fd22e40a1b8359ac475378e6c5119ed2b023d72d073046b63225bd4",
   "default-test": "4960186633c34b4502c9ca679dfb5cf230cd350be80bd0b7f062a5c8a0577bf6",

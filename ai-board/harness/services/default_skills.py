@@ -12,7 +12,7 @@ from services import skill_selection
 
 ROOT = Path(__file__).resolve().parents[1] / 'skills'
 REVIEW_AXES = ROOT / 'proposed' / 'review-two-axes' / 'SKILL.md'
-TASK_TYPES = {'backend', 'frontend', 'database', 'review', 'test', 'all'}
+TASK_TYPES = {'backend', 'frontend', 'database', 'review', 'test', 'merge', 'all'}
 FIELDS = {'name', 'description', 'task_type', 'source', 'version', 'max_tokens'}
 OPTIONAL_FIELDS = {'topic'}  # trùng topic thì chỉ 1 skill được chọn (skill_selection.choose)
 FORBIDDEN = re.compile(r'(?:ignore|override|bypass|grant|enable)\s+(?:all\s+)?(?:platform|permission|tools?|rules?|budget|sandbox)|(?:request|require|need)\w*\s+(?:permission|access|tools?)|tools?\s+required\s*:|(?:bỏ qua|ghi đè|cấp quyền|vô hiệu hóa|yêu cầu quyền|cần quyền)', re.I)
@@ -133,7 +133,7 @@ def select_report(role, context=None):
     task_skill = by_name[f'default-{task}']
     candidates = [skill_selection.Candidate(task_skill.name, 0, 'task-type default', task_skill.token_bound, topic=task_skill.topic,
                                             required=True, payload=task_skill)]
-    if task not in {'review', 'all'}:
+    if task not in {'review', 'all', 'merge'}:  # merge: skill tự đủ, base cộng vào vượt trần 1000 token hệ thống
         base = by_name['default-all']
         candidates.append(skill_selection.Candidate(base.name, 2, 'platform baseline', base.token_bound, topic=base.topic, payload=base))
     from runtime.root_allowance import current
