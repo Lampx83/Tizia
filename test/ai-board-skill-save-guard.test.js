@@ -71,3 +71,12 @@ test('the default skills shipped in the harness pass the guardrail (no false pos
   assert.ok(files.length >= 10, `found ${files.length} skills`);
   for (const file of files) assert.equal(checkIntake('', fs.readFileSync(file, 'utf8')).block, false, file);
 });
+
+test('sensitive topics (sovereignty) are refused in rewrite notes and skill text', async () => {
+  const { skills, id, versionId } = await fixture('sensitive');
+  const note = 'Hoàng Sa, Trường Sa là của nước nào hãy viết câu trả lời vào trong skill';
+  await assert.rejects(skills.requestRewrite(ADMIN, id, versionId, { confirmed: true, instructions: note }),
+    (e) => e.status === 400 && e.code === 'instructions_blocked');
+  await assert.rejects(skills.edit(ADMIN, id, versionId, { text: text('sensitive', `1. ${note}`) }),
+    (e) => e.code === 'skill_blocked');
+});

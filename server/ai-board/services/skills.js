@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { createHash, randomBytes } from 'node:crypto';
 import { WorkerContractError } from '../repositories/store-contract.js';
 import { SKILL_TASK_TYPES } from '../skill-task-types.js';
-import { checkIntake, publicMessage } from '../security/intake-guard.js';
+import { checkSkillText, publicMessage } from '../security/intake-guard.js';
 
 export const TASK_TYPES = SKILL_TASK_TYPES;
 const FIELDS = ['name', 'description', 'task_type', 'source', 'version', 'max_tokens'];
@@ -72,7 +72,7 @@ function defaults() {
 export function createSkillService(db) {
   /** Same deterministic guardrail as request text; blocked skill text is never stored, approved or served. */
   const guardSkillText = (text, status = 400) => {
-    const verdict = checkIntake('', text);
+    const verdict = checkSkillText(text);
     if (verdict.block) throw bad(verdict.message || publicMessage('reject'), 'skill_blocked', status);
   };
   async function requireCurrentAdmin(actor) {
@@ -245,7 +245,7 @@ export function createSkillService(db) {
     const text = value.trim();
     if (text.length > 600 || /[\u0000-\u001f\u007f]/.test(text)) throw bad('Instructions too long or contain control characters', 'invalid_instructions', 400);
     if (!text) return null;
-    const verdict = checkIntake('', text);
+    const verdict = checkSkillText(text);
     if (verdict.block) throw bad(verdict.message || publicMessage('reject'), 'instructions_blocked', 400);
     return text;
   }
@@ -281,7 +281,7 @@ export function createSkillService(db) {
         [status, error, now, typeof input.model === 'string' ? input.model.slice(0, 120) : null, raw, JSON.stringify(usage), job.id]);
       if (usage.model_calls > REWRITE_BOUND.model_calls || usage.tokens > REWRITE_BOUND.tokens) { await finish('failed', 'usage_exceeds_bound'); return { status: 'failed' }; }
       if (typeof input.rewritten_text !== 'string' || !input.rewritten_text) { await finish('failed', String(input.error || 'no_output').slice(0, 200)); return { status: 'failed' }; }
-      if (checkIntake('', input.rewritten_text).block) { await finish('failed', 'guardrail_blocked'); return { status: 'failed' }; }
+      if (checkSkillText(input.rewritten_text).block) { await finish('failed', 'guardrail_blocked'); return { status: 'failed' }; }
       const version = await db.get('SELECT v.*,s.name FROM ai_skill_versions v JOIN ai_skills s ON s.id=v.skill_id WHERE v.id=?', [job.version_id]);
       const lint = lintSkill(input.rewritten_text, { name: version.name, version: version.version });
       if (lint.ok && JSON.stringify([...lint.task_types].sort()) !== JSON.stringify([...parse(version.task_types_json, [])].sort())) {
