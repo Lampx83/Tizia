@@ -367,6 +367,16 @@
   .m1-checklist .m1-fix input{width:60px;padding:3px 5px;border:1px solid #caa25a;border-radius:6px;font-size:.76rem;}
   .m1-checklist .m1-done{font-size:.76rem;color:#1f7a3d;font-weight:800;text-align:center;padding:4px 0;}
   @media (max-width:860px){ .m1-checklist{left:8px;top:8px;width:240px;padding:8px 10px;} }
+  /* req #252: màn rộng còn nhiều chỗ trống hai bên tủ — thẻ "Kiểm tủ" chuyển sang bên PHẢI tủ (dưới thanh tiêu đề trang,
+     không đè lên thanh tiêu đề/cột trái), chữ và nút to hơn cho dễ đọc */
+  @media (min-width:1480px){
+    .m1-checklist{left:auto;right:28px;top:118px;width:370px;padding:16px 18px;border-radius:16px}
+    .m1-checklist h5{font-size:1.1rem;margin-bottom:8px}
+    .m1-checklist .m1-item{font-size:1rem;padding:10px 0;gap:12px}
+    .m1-checklist button{font-size:.92rem;padding:8px 14px;border-radius:10px}
+    .m1-checklist .m1-fix input{width:84px;font-size:.95rem;padding:5px 7px}
+    .m1-checklist .m1-done{font-size:.95rem}
+  }
   @media (max-width:820px){
     .hand-btn{right:8px;bottom:107px;font-size:.66rem;padding:7px 11px;}
     #handCamPreview{right:8px;bottom:8px;width:120px;height:90px;}
@@ -1190,14 +1200,19 @@
   /* req #246: 2 bảng bên chỉ còn ICON, rê chuột (hoặc bấm trên cảm ứng) mới bung ra đè lên sơ đồ */
   .side-ico{display:none}
   @media (min-width:981px){
-    .map-stage{position:relative;grid-template-columns:60px auto 60px}
+    .map-stage{position:relative;grid-template-columns:minmax(60px,1fr) auto minmax(60px,1fr)}
     .map-stage .map-guide,.map-stage .map-legend{position:absolute;top:0;z-index:30;width:54px;height:auto;max-height:none;overflow:hidden;padding:6px 4px;
       transition:box-shadow .15s;cursor:default}
-    .map-stage .map-guide{left:0;justify-self:auto}
-    .map-stage .map-legend{right:0;left:auto;justify-self:auto}
+    /* khung chứa = cả .map-stage (không phải ô lưới 60px) để left/right:0 là mép ngoài cùng, không đè lên sơ đồ */
+    .map-stage .map-guide{left:0;justify-self:auto;grid-column:1 / -1;grid-row:1}
+    .map-stage .map-legend{right:0;left:auto;justify-self:auto;grid-column:1 / -1;grid-row:1}
     .map-guide>*:not(.side-ico),.map-legend>*:not(.side-ico){display:none !important}
     .side-ico{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;cursor:pointer;color:#1f3b63;text-align:center}
     .side-ico b{font-size:24px;line-height:1} .side-ico small{font:800 .6rem 'Nunito',sans-serif;line-height:1.1}
+    .map-stage.gut-ok .map-guide:hover,.map-stage.gut-ok .map-guide:focus-within,.map-stage.gut-ok .map-guide.open{width:min(250px,var(--gl))}
+    .map-stage.gut-ok .map-legend:hover,.map-stage.gut-ok .map-legend:focus-within,.map-stage.gut-ok .map-legend.open{width:min(250px,var(--gr))}
+    /* chữ trong bảng bên nhỏ hơn cho gọn */
+    .map-guide:hover>*:not(.side-ico),.map-guide.open>*:not(.side-ico),.map-legend:hover>*:not(.side-ico),.map-legend.open>*:not(.side-ico){zoom:.9}
     .map-stage .map-guide:hover,.map-stage .map-guide:focus-within,.map-stage .map-guide.open,
     .map-stage .map-legend:hover,.map-stage .map-legend:focus-within,.map-stage .map-legend.open{width:250px;max-height:calc(100% + 40px);overflow:auto;padding:10px 12px;box-shadow:0 4px 0 #b9d3e6,0 14px 34px rgba(40,80,120,.45)}
     .map-guide:hover>*:not(.side-ico),.map-guide:focus-within>*:not(.side-ico),.map-guide.open>*:not(.side-ico){display:revert !important}
@@ -1861,7 +1876,12 @@ function parseCSV(text){
 const rows = parseCSV(CSV_DATA.trim());
 const header = rows[0].map(h=>h.trim());
 const allRecords = rows.slice(1).filter(r=>r[0]).map(r=>{
-  const o={}; header.forEach((h,i)=> o[h]=(r[i]||'').trim()); return o;
+  const o={}; header.forEach((h,i)=> o[h]=(r[i]||'').trim());
+  /* req #249 (phản hồi): tên hiển thị khắp trang = cột I "Tên thuốc chuẩn" (vd "Betaloc 50 H60v AstraZeneca"),
+     không phải "Mẫu thuốc TH" (vd "Metoprolol vỉ"). Tên mẫu cũ giữ ở _gen làm KHOÁ (tiến độ đã lưu, ảnh, phân loại kê đơn). */
+  o._gen = o['Tên hoạt chất'];
+  if(o['Tên biệt dược']) o['Tên hoạt chất'] = o['Tên biệt dược'];
+  return o;
 });
 
 /* req #161 (ThS Hương Lý) — tách hai tủ: THUỐC KÊ ĐƠN và THUỐC KHÔNG KÊ ĐƠN.
@@ -1873,7 +1893,7 @@ const allRecords = rows.slice(1).filter(r=>r[0]).map(r=>{
 const OTC_NAMES = new Set(["Buổi 2|Xylomethazolin nhỏ mắt", "Buổi 4|Paracetamol vỉ", "Buổi 4|Pallas ống", "Buổi 4|Hapacol gói", "Buổi 4|Decolgen vỉ", "Buổi 4|Efferalgan viên đặt", "Buổi 4|Voltaren tuyp", "Buổi 4|Mofen hoặc Ibudor vỉ", "Buổi 4|Nurofen siro", "Buổi 4|Aspirin vỉ", "Buổi 4|Alaxan vỉ", "Buổi 4|Pharmaton vỉ", "Buổi 4|Uniferon B9 vỉ", "Buổi 4|Folacid vỉ", "Buổi 4|Vitamin B6 vỉ", "Buổi 4|Vitamin PP vỉ", "Buổi 4|Vitamin B2 lọ", "Buổi 4|Vitamin E vỉ", "Buổi 4|Vitamin B1-B6-B12 vỉ", "Buổi 4|Vitamin C vỉ", "Buổi 4|Vitamin C lọ", "Buổi 4|Vitamin B1 vỉ", "Buổi 5|Loratadin vỉ", "Buổi 5|Cetirizine vỉ", "Buổi 5|Clorpheniramin vỉ", "Buổi 5|Theralene vỉ", "Buổi 5|Theralene lọ siro", "Buổi 5|Promethazin tuyp", "Buổi 5|Halodimenal vỉ", "Buổi 5|Erolin lọ siro", "Buổi 5|Xyral vỉ", "Buổi 5|Acyclovir tuyp", "Buổi 7|Newchoice vỉ", "Buổi 7|Postinor vỉ", "Buổi 10|Nước uống Hye lyte lọ", "Buổi 10|Berberin lọ", "Buổi 10|Oresol gói cam", "Buổi 10|Oresol gói 27,9g", "Buổi 10|Edoper vỉ", "Buổi 10|Maloox vỉ", "Buổi 10|Yumangel gói", "Buổi 10|Phosphaslugel gói", "Buổi 10|Noigel gói", "Buổi 10|Gastrolpulgit gói", "Buổi 10|Bisacodyl vỉ", "Buổi 10|Biosubtyl gói", "Buổi 10|Sorbitol gói", "Buổi 11|Mekocitrin viêm ngậm", "Buổi 11|Acemuc gói", "Buổi 11|Acetyl stein vỉ", "Buổi 11|Bromhexin vỉ", "Buổi 11|Terpin – codein vỉ", "Buổi 12|Calcrem tuyp", "Buổi 12|Nystatin tuyp"]);
 const TU_MODE = new URLSearchParams(location.search).get('tu') === 'otc' ? 'otc' : 'rx';
 const TU_NAME = TU_MODE === 'otc' ? 'Tủ thuốc không kê đơn' : 'Tủ thuốc kê đơn';
-const drugClass = rec => OTC_NAMES.has(rec['STT Buổi'] + '|' + rec['Tên hoạt chất']) ? 'otc' : 'rx';
+const drugClass = rec => OTC_NAMES.has(rec['STT Buổi'] + '|' + (rec._gen || rec['Tên hoạt chất'])) ? 'otc' : 'rx';
 const records = allRecords.filter(rec => drugClass(rec) === TU_MODE);
 
 /* group by "Nhóm dược lý" (pharmacology class, column D of the sheet)
@@ -2168,7 +2188,7 @@ cabinets.forEach((cab,cabIdx)=>{
     img.className = 'real-photo';
     img.alt = '';
     img.loading = 'lazy';
-    attachPhoto(img, slugify(it['Tên hoạt chất']));
+    attachPhoto(img, slugify(it._gen||it['Tên hoạt chất']));
     btn.querySelector('.icon').appendChild(img);
     { const q1 = m1CabQty(it['Tên hoạt chất']); applyStock(btn, q1 != null ? q1 : illustrativeQty()); }
     it._btn = btn;
@@ -2191,7 +2211,7 @@ cabinets.forEach((cab,cabIdx)=>{
    delivery", and asks the user to drag each one onto its own actual box
    on the shelf. correctness = dropped exactly on that same drug's
    existing .med-item (not just "somewhere in the right tủ"). */
-const photoItems = cabinets.flatMap(cab=>cab.items).filter(it=>PHOTO_SLUGS.has(slugify(it['Tên hoạt chất'])));
+const photoItems = cabinets.flatMap(cab=>cab.items).filter(it=>PHOTO_SLUGS.has(slugify(it._gen||it['Tên hoạt chất'])));
 const cartItemsEl = document.getElementById('cartItems');   // the carton's single-box slot
 const cartProgressEl = document.getElementById('cartProgress');
 const cartMsgEl = document.getElementById('cartMsg');
@@ -2267,7 +2287,7 @@ function m1CabNeed(){
     const m3n = m3SortItemsFor(TU_MODE); if(m3n) names = names.concat(m3n);   // req #225: tủ phải hiện ra để sắp xếp
     let mx = 0;
     names.forEach(nm => {
-      const i = cabinets.findIndex(c => c.items.some(r => r['Tên hoạt chất'] === nm));
+      const i = cabinets.findIndex(c => c.items.some(r => r['Tên hoạt chất'] === nm || r._gen === nm));
       if(i + 1 > mx) mx = i + 1;
     });
     return mx;
@@ -2275,7 +2295,7 @@ function m1CabNeed(){
 }
 function tierCabinets(){ return Math.min(Math.max(TIERS[game.tier].cabinets, m1CabNeed()), cabinets.length); }
 let cartWindow = tierCabinets();
-function drugSlugOf(it){ return slugify(it['Tên hoạt chất']); }
+function drugSlugOf(it){ return slugify(it._gen||it['Tên hoạt chất']); }
 function currentTitle(){ let t=TITLES[0]; for(const x of TITLES){ if(game.stars>=x.min) t=x; } return t; }
 
 const gpTier = document.getElementById('gpTier');
@@ -2450,7 +2470,7 @@ function pickDelivery(){
   applyCabinetVisibility();
   const m3names = (typeof m3SortItemsFor === 'function') ? m3SortItemsFor(TU_MODE) : null;   // req #225: chỉ sắp xếp đúng các thuốc của nhiệm vụ 3
   if(m3names){
-    deliveryQueue = photoItems.filter(it => m3names.includes(it['Tên hoạt chất']));
+    deliveryQueue = photoItems.filter(it => (m3names.includes(it['Tên hoạt chất']) || m3names.includes(it._gen)));
     if(!deliveryQueue.length) deliveryQueue = weightedPick(photoItems, Math.min(5, photoItems.length));
   } else {
     let poolItems = photoItems.filter(it=> it._cabIdx < cartWindow);
@@ -2810,7 +2830,7 @@ function showTooltip(e, it, s, btn){
     tooltip.innerHTML = `
       ${photoHTML}
       <div class="t-name">${esc(it['Tên hoạt chất']||'(Chưa rõ tên)')}</div>
-      ${it['Tên biệt dược'] ? `<div class="t-brand">${esc(it['Tên biệt dược'])}</div>` : ''}
+      ${it['Hoạt chất, hàm lượng/nồng độ'] ? `<div class="t-brand">${esc(it['Hoạt chất, hàm lượng/nồng độ'])}</div>` : ''}
       ${it['Dạng bào chế']||it['Đường dùng'] ? `<div class="t-row">${esc(it['Dạng bào chế'])}${it['Đường dùng']?(' · '+esc(it['Đường dùng'])):''}</div>` : ''}
       <div class="t-row">${s.buoi} · ${esc(s.topic)}</div>
       ${it['Hạn sử dụng'] ? `<div class="t-row">HSD: ${esc(it['Hạn sử dụng'])}</div>` : ''}
@@ -3057,7 +3077,7 @@ function openModal(it, s, btn){
     field('Số đăng ký', it['Số đăng ký']),
     field('Hạn sử dụng', it['Hạn sử dụng']),
     field('Điều kiện bảo quản', it['Điều kiện bảo quản']),
-    field('Tên file ảnh cần lưu', `${slugify(it['Tên hoạt chất'])}.jpg (trong thư mục hop-thuoc/)`),
+    field('Tên file ảnh cần lưu', `${slugify(it._gen||it['Tên hoạt chất'])}.jpg (trong thư mục hop-thuoc/)`),
   ].join('');
   mFoot.innerHTML = it['Link google drive']
     ? `<a href="${esc(it['Link google drive'])}" target="_blank" rel="noopener">🔗 Xem ảnh trên Google Drive</a>`
@@ -3354,7 +3374,8 @@ var M1_ITEMS = null;
 function m1UnitOf(name){ return /nhỏ mắt|nhỏ mũi|siro|xịt|lọ|dung dịch/i.test(name) ? 'lọ' : 'hộp'; }
 // req #224: quy cách đóng gói + đơn vị nhỏ nhất (dùng cho niêm yết giá & sổ kiểm nhập).
 function m1PackInfo(it){
-  const n = it.name.toLowerCase();
+  const rec0 = it.key ? m1RecOf(it.key) : null;   // quy cách suy từ tên MẪU (vd "… ống tiêm"), không từ tên thuốc chuẩn hiển thị
+  const n = ((rec0 && rec0._gen) || it.name).toLowerCase();
   if(/ống/.test(n)) return { unit:'ống', per:10, spec:'Hộp 10 ống' };
   if(/nhỏ mắt|nhỏ mũi|xịt|siro|dung dịch|lọ/.test(n)) return { unit:'lọ', per:1, spec:'Hộp 1 lọ' };
   if(/tuýp|tuyp|gel|kem|mỡ/.test(n)) return { unit:'tuýp', per:1, spec:'Hộp 1 tuýp' };
@@ -3386,10 +3407,10 @@ function m1ClassPool(cls, nCab){
   });
   const cabs = [];
   groups.forEach(g => { for(let i = 0; i < g.length; i += 20) cabs.push(g.slice(i, i + 20)); });
-  const pool = cabs.slice(0, nCab).flat().filter(r => PHOTO_SLUGS.has(slugify(r['Tên hoạt chất'])));
+  const pool = cabs.slice(0, nCab).flat().filter(r => PHOTO_SLUGS.has(slugify(r._gen||r['Tên hoạt chất'])));
   return pool;
 }
-function m1KeyOf(r){ return r['STT Buổi'] + '|' + r['Tên hoạt chất']; }
+function m1KeyOf(r){ return r['STT Buổi'] + '|' + (r._gen || r['Tên hoạt chất']); }
 function m1GenerateKeys(){
   const nCab = m1TierCabs()[m1SharedTier()];
   // req #236: mỗi lượt bốc ngẫu nhiên 2–4 thuốc (có cả thuốc kê đơn và không kê đơn)
@@ -3422,7 +3443,7 @@ function getM1Ksdb(){
   M1_KS = rec ? [(() => { const k = m1KeyOf(rec);
     const lastYear = 2 * m1HashNum(k+'ly', 8, 30);           // chẵn để 150% là số nguyên
     const tonDau = m1HashNum(k+'td', 4, 14), nhap = m1HashNum(k+'nh', 14, 40), xuat = Math.min(tonDau + nhap - 1, m1HashNum(k+'xu', 10, 38));
-    return { key:k, name:rec['Tên hoạt chất'], kind:ksdbKind(rec), unit:m1UnitOf(rec['Tên hoạt chất']), spec: rec['Hoạt chất, hàm lượng/nồng độ'] || '', form: rec['Dạng bào chế'] || '',
+    return { key:k, name:rec['Tên hoạt chất'], kind:ksdbKind(rec), unit:m1UnitOf(rec._gen || rec['Tên hoạt chất']), spec: rec['Hoạt chất, hàm lượng/nồng độ'] || '', form: rec['Dạng bào chế'] || '',
       lastYear, maxQty: lastYear * 1.5, tonDau, nhap, xuat, tonCuoi: tonDau + nhap - xuat };
   })()] : [];
   return M1_KS;
@@ -3505,7 +3526,7 @@ function getM1Items(){
   M1_ITEMS = keys.map(key => {
     const r = byKey[key];
     const ton = m1HashNum(key+'k',1,2);   // hộp; tủ chỉ chứa 1–2 hộp mỗi loại
-    const it = { key, name: r['Tên hoạt chất'], cabinet: drugClass(r), tonKho: ton, tonThuc: ton, unit: m1UnitOf(r['Tên hoạt chất']), banTuan: m1HashNum(key+'b',6,38),
+    const it = { key, name: r['Tên hoạt chất'], cabinet: drugClass(r), tonKho: ton, tonThuc: ton, unit: m1UnitOf(r._gen || r['Tên hoạt chất']), banTuan: m1HashNum(key+'b',6,38),
                  cold: m1IsCold(r) };
     it.pack = m1PackInfo(it);
     return it;
@@ -3601,13 +3622,39 @@ function m1Hint(){
 
 // req #174: tab "Quản lý thuốc" — tồn kho trong phần mềm, tính theo ĐƠN VỊ ĐÓNG GÓI
 // (hộp/lọ…) khớp với số hộp ở tủ (tối đa 1 mặt hàng lệch để người học phát hiện).
+/* req #253 (ThS Hương Lý): tab Quản lý thuốc = TOÀN BỘ danh mục thuốc (Mã thuốc, tên thuốc, dạng bào chế, quy cách đóng gói,
+   đơn vị tính, nơi sản xuất, tồn, phân nhóm), bấm tiêu đề cột để sắp xếp, có ô tìm một thuốc cụ thể. Các thuốc thuộc nhiệm vụ 1
+   được tô nổi và dùng đúng tồn kho trong phần mềm của nhiệm vụ; thuốc khác có tồn minh hoạ cố định theo từng thuốc. */
+var QL = { key:'code', dir:1, q:'' };
+function qlRows(){
+  const m1 = {}; try{ getM1Items().forEach(it => { m1[it.key] = it; }); }catch(e){}
+  return allRecords.filter(r => r['Tên hoạt chất']).map((r, i) => {
+    const key = m1KeyOf(r), it = m1[key];
+    const pack = (it && it.pack) || m1PackInfo({ name: r['Tên hoạt chất'], key });
+    return { code: 'T' + String(i + 1).padStart(3, '0'), name: r['Tên hoạt chất'], form: r['Dạng bào chế'] || '', spec: pack.spec,
+      unit: it ? it.unit : m1UnitOf(r._gen || r['Tên hoạt chất']), maker: r['Nơi sản xuất'] || '', ton: it ? it.tonKho : m1HashNum(key + 'qlt', 0, 12),
+      group: (r['Nhóm dược lý'] || '').replace(/-$/, ''), m1: !!it, gen: r._gen || '' };
+  });
+}
 function renderQuanLyTab(){
-  const items = getM1Items();
+  const COLS = [['code','Mã thuốc'],['name','Tên thuốc'],['form','Dạng bào chế'],['spec','Quy cách đóng gói'],['unit','ĐVT'],['maker','Nơi sản xuất'],['ton','Tồn (PM)'],['group','Phân nhóm']];
+  const fold = v => String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').toLowerCase();
+  const all = qlRows(), q = fold(QL.q).trim();
+  const rows = all.filter(r => !q || fold(Object.values(r).join(' ')).includes(q))
+    .sort((a, b) => (QL.key === 'ton' ? a.ton - b.ton : String(a[QL.key]).localeCompare(String(b[QL.key]), 'vi', { numeric:true })) * QL.dir);
+  const n1 = all.filter(r => r.m1).length;
   posPanel.innerHTML = `
-    <p class="pos-note">📋 Tồn kho ghi trong phần mềm — tính theo <b>đơn vị đóng gói</b> (hộp, lọ…), không tính đơn vị nhỏ nhất (viên, ống…).</p>
-    <table class="pos-table"><thead><tr><th>Tên thuốc</th><th>Tồn kho (PM)</th><th>ĐVT</th><th>Vị trí</th></tr></thead><tbody>
-      ${items.map(it => `<tr><td>${esc(it.name)}</td><td>${it.tonKho}</td><td>${it.unit}</td><td>${it.cabinet==='rx'?'Tủ thuốc kê đơn':'Tủ thuốc không kê đơn'}</td></tr>`).join('')}
-    </tbody></table>`;
+    <p class="pos-note">📋 Danh mục thuốc của nhà thuốc (${all.length} mặt hàng). Tồn tính theo <b>đơn vị đóng gói</b> (hộp, lọ…). ${n1 ? `Các thuốc <b>tô vàng</b> là mặt hàng cần kiểm ở nhiệm vụ 1.` : ''}</p>
+    <div style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="search" id="qlSearch" placeholder="🔎 Tìm thuốc (mã, tên, hoạt chất, nơi sản xuất, nhóm…)" value="${esc(QL.q)}" style="flex:1;padding:7px 10px;border:1px solid #caa25a;border-radius:8px;font:inherit"><span class="pos-hint">${rows.length}/${all.length}</span></div>
+    <div style="max-height:46vh;overflow:auto;border:1px solid #e3d6b5;border-radius:8px">
+    <table class="pos-table" style="margin:0"><thead><tr>${COLS.map(([k, t]) => `<th data-ql="${k}" style="cursor:pointer;position:sticky;top:0;background:#f3ead2;white-space:nowrap">${t}${QL.key === k ? (QL.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead><tbody>
+      ${rows.map(r => `<tr${r.m1 ? ' style="background:#fff3c4;font-weight:700"' : ''}><td>${r.code}</td><td>${esc(r.name)}</td><td>${esc(r.form)}</td><td>${esc(r.spec)}</td><td>${esc(r.unit)}</td><td>${esc(r.maker)}</td><td>${r.ton}</td><td>${esc(r.group)}</td></tr>`).join('') || '<tr><td colspan="8">Không có thuốc nào khớp.</td></tr>'}
+    </tbody></table></div>`;
+  posPanel.querySelectorAll('[data-ql]').forEach(th => th.addEventListener('click', () => {
+    QL.dir = QL.key === th.dataset.ql ? -QL.dir : 1; QL.key = th.dataset.ql; renderQuanLyTab();
+  }));
+  const inp = document.getElementById('qlSearch');
+  inp.addEventListener('input', () => { QL.q = inp.value; const pos = inp.selectionStart; renderQuanLyTab(); const n = document.getElementById('qlSearch'); n.focus(); n.setSelectionRange(pos, pos); });
 }
 // Các đáp số gợi ý cho 1 mặt hàng: 1 đúng + 3 sai do nhầm công thức, xáo theo hash để cố định.
 function m1QtyChoices(it, ton){
@@ -4292,7 +4339,7 @@ function ksdbKind(r){
   return null;
 }
 function pkgData(it){
-  const rec = (it.key && m1RecOf(it.key)) || allRecords.find(r => r['Tên hoạt chất'] === it.name) || {};
+  const rec = (it.key && m1RecOf(it.key)) || allRecords.find(r => r['Tên hoạt chất'] === it.name || r._gen === it.name) || {};
   const k = it.key || it.name, d = new Date();
   const base = (typeof getM1Items === 'function' ? getM1Items().find(a => a.key === it.key) : null) || it;
   const pack = it.pack || base.pack || m1PackInfo({ name: it.name, key: k });
@@ -4371,7 +4418,7 @@ function renderThucNhapTab(){
   if(x.step !== 'ledger'){ posPanel.innerHTML = '<div class="pos-soon">🔒 Tab này dùng ở Nhiệm vụ 2 (bước 8 — ghi sổ kiểm nhập) sau khi đã niêm yết giá.</div>'; return; }
   const pass = x.items.filter(it => !m2Reasons(it).length);
   const d = new Date(), dt = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-  const rec = it => m1RecOf(it.key) || allRecords.find(r => r['Tên hoạt chất'] === it.name) || {};
+  const rec = it => m1RecOf(it.key) || allRecords.find(r => r['Tên hoạt chất'] === it.name || r._gen === it.name) || {};
   const specs = () => ['Hộp 3 vỉ × 10 viên','Hộp 10 vỉ × 10 viên','Hộp 10 ống','Hộp 1 lọ','Hộp 1 tuýp','Hộp 20 gói'];
   const sel = (nm, opts) => `<select data-f="${nm}" style="padding:3px;border:1px solid #caa25a;border-radius:6px;max-width:130px"><option value="">— chọn —</option>${opts.map(o => `<option>${esc(o)}</option>`).join('')}</select>`;
   const th = ['Ngày/tháng/năm','Tên thuốc, hàm lượng nồng độ','Số ĐK/GPNK','Số lô, hạn dùng','Nhà SX/nhập khẩu','Cơ sở cung cấp','Số hóa đơn/chứng từ','Điều kiện bảo quản','Quy cách đóng gói','Số lượng','Đơn vị tính','Đơn giá (đ, chưa VAT)'];
@@ -4445,7 +4492,7 @@ function startM3(){
   // req #235: từ mức Dễ trở lên, thùng hàng có thêm hàng nhập: 1 thuốc phải kiểm soát đặc biệt và 1 thuốc bảo quản lạnh
   // (lấy THẬT từ danh mục — cột KSĐB và Điều kiện bảo quản), nếu bộ thuốc của lượt chưa có
   if(m1SharedTier() >= 1){
-    const pickRec = f => { const pool = allRecords.filter(r => r['Tên hoạt chất'] && f(r) && !list.some(x => x.key === m1KeyOf(r))); const withPhoto = pool.filter(r => PHOTO_SLUGS.has(slugify(r['Tên hoạt chất']))); const pl = withPhoto.length ? withPhoto : pool; return pl.length ? pl[Math.floor(Math.random() * pl.length)] : null; };
+    const pickRec = f => { const pool = allRecords.filter(r => r['Tên hoạt chất'] && f(r) && !list.some(x => x.key === m1KeyOf(r))); const withPhoto = pool.filter(r => PHOTO_SLUGS.has(slugify(r._gen||r['Tên hoạt chất']))); const pl = withPhoto.length ? withPhoto : pool; return pl.length ? pl[Math.floor(Math.random() * pl.length)] : null; };
     if(!list.some(x => x.cabinet === 'special')){ const r = pickRec(r => ksdbKind(r) && !m1IsCold(r)); if(r) list.push(toItem(m1KeyOf(r), r['Tên hoạt chất'], false, drugClass(r))); }
     if(!list.some(x => x.cold)){ const r = pickRec(r => m1IsCold(r) && !ksdbKind(r)); if(r) list.push(toItem(m1KeyOf(r), r['Tên hoạt chất'], true, drugClass(r))); }
   }
@@ -4812,7 +4859,7 @@ function renderM1Checklist(){
   // req #174: đảm bảo tủ chứa thuốc cần kiểm đang hiện, và nhảy tới tủ đó.
   if(m1CabNeed() > cartWindow){ cartWindow = tierCabinets(); applyCabinetVisibility(); }
   { const pendNow = items.filter(it => !st.confirmed[it.key]);
-    const idxOf = it => cabinets.findIndex(c => c.items.some(r => r['Tên hoạt chất'] === it.name));
+    const idxOf = it => cabinets.findIndex(c => c.items.some(r => r['Tên hoạt chất'] === it.name || r._gen === it.name));
     if(pendNow.length && !pendNow.some(it => idxOf(it) === activeCabIdx)){ const j = idxOf(pendNow[0]); if(j >= 0) showCabinet(j); } }
   const pending = items.filter(it => !st.confirmed[it.key]);
   panel.hidden = false;
@@ -4828,7 +4875,7 @@ function renderM1Checklist(){
     return;
   }
   panel.innerHTML = `<h5>📋 Kiểm tủ — còn ${pending.length} mặt hàng</h5><div style="font-size:.7rem;opacity:.8;margin-bottom:4px">So số hộp ghi trên tủ (x…) với tồn phần mềm (PM).</div>` + pending.map(it => {
-    const ci = cabinets.findIndex(c => c.items.some(r => r['Tên hoạt chất'] === it.name));
+    const ci = cabinets.findIndex(c => c.items.some(r => r['Tên hoạt chất'] === it.name || r._gen === it.name));
     return `
     <div class="m1-item" data-key="${esc(it.key)}">
       <span>${esc(it.name)} <i style="opacity:.6">(PM: ${it.tonKho} ${it.unit}${ci>=0?' · Tủ số '+(ci+1):''})</i></span>
@@ -5279,6 +5326,13 @@ function fitMap(){
     pMap.style.marginRight = (P_W * mapScale - P_W) + 'px';   // transform không đổi layout → bù bề ngang
     pMap.style.marginBottom = '0px';
     mapStage.style.height = (P_H * mapScale) + 'px';
+    // req #246 (phản hồi): bảng bên bung ra nằm TRONG phần trống hai bên sơ đồ (không chèn vào sơ đồ) khi màn đủ rộng
+    try{
+      const sr = mapStage.getBoundingClientRect(), mr = pMap.getBoundingClientRect();
+      const gl = mr.left - sr.left, gr = sr.right - mr.right;
+      mapStage.style.setProperty('--gl', Math.max(0, gl - 12) + 'px'); mapStage.style.setProperty('--gr', Math.max(0, gr - 12) + 'px');
+      mapStage.classList.toggle('gut-ok', gl >= 190 && gr >= 190);
+    }catch(e){}
   } else {
     pMap.style.marginRight = (P_W * mapScale - P_W) + 'px';   // vẫn cần bù ngang để canh giữa đúng
     // req (tối ưu mobile): transform không đổi layout, nên dù NHÌN sơ đồ bé
