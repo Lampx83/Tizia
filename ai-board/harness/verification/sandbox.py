@@ -34,6 +34,11 @@ MANIFEST = [{"name": "result", "path": f"{GUEST_OUT}/result.json"}, {"name": "sh
 GUEST_ENTRY = ("mkdir -p /workspace/out && chmod 777 /workspace/out && cd /opt/ai-board/ai-board/harness && "
                'exec runuser -u gate -- env "PATH=$PATH" "PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH" HOME=/home/gate '
                "python -m gates.gate5_guest /workspace/state.json /workspace/checkout /workspace/out")
+PEAK_FILE = f"/workspace/{GUEST_OUT}/peak.json"
+# RUSAGE_CHILDREN = largest waited-for descendant of this wrapper, i.e. the guest gate tree; the runner returns exit codes only.
+PEAK_PROBE = ("import json,resource,subprocess,sys;rc=subprocess.call(sys.argv[2:]);"
+              "json.dump({'peak_kib': resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss, 'rc': rc}, open(sys.argv[1], 'w'));"
+              "sys.exit(rc)")
 RENEW_EVERY_S = float(_CLIENT["renew_every_s"])
 BACKOFF_S = _CLIENT["backoff_s"]
 LEASE_S = float(_CLIENT["lease_s"])
@@ -325,6 +330,21 @@ class SandboxSession:
             self.cleanup_pending = True
 
 
+def _peak_kib(client: RunnerClient, run_id: str, limits_kw: dict) -> int | None:
+    """Guest peak RSS from PEAK_PROBE; None when unreadable (evidence only, never the verdict)."""
+    try:
+        return int(json.loads(client.exec(run_id, ["cat", PEAK_FILE], timeout=30, **limits_kw).get("stdout") or "{}")["peak_kib"])
+    except (SandboxError, ValueError, KeyError, TypeError):
+        return None
+
+
+def _record_run_cost(result: dict, started: float, peak_kib: int | None) -> None:
+    """Wall seconds (create to teardown), guest peak RSS, outcome into evidence.sandbox."""
+    result["evidence"].setdefault("sandbox", {}).update(
+        wall_s=round(time.monotonic() - started, 1), peak_kib=peak_kib,
+        outcome="blocked" if result.get("blocked") else "passed")
+
+
 def _blocked(reason: str, kind: str = "transient") -> dict:
     return {"gate": 5, "blocked": True, "reason": reason, "evidence": None, "failure_class": kind}
 
@@ -332,6 +352,7 @@ def _blocked(reason: str, kind: str = "transient") -> dict:
 def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = None, checkout_dir: str | Path | None = None,
         lease_ok: Callable[[], bool] | None = None, exec_timeout: float = 1200.0) -> dict:
     """gates.verify.run contract, executed in a fresh microVM."""
+    started = time.monotonic()
     client = client or RunnerClient.from_env()
     if client is None:
         return _blocked("sandbox runner chưa được cấu hình (AI_BOARD_SANDBOX_URL)")
@@ -356,6 +377,7 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
 
     run_id = f"g5-{uuid.uuid4().hex[:24]}"  # one id per Gate 5 invocation; a retry is a new invocation
     result = None
+    peak_kib = None
     created_run = busy = False
     try:
         # same run_id: the runner answers a repeated create for a live run with that run's view, so a lost reply is safe
@@ -377,10 +399,12 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
             live()
             client.exec(run_id, ["guest-boot.sh"], timeout=_remaining(deadline, 180), **request_limits)
             live()
-            outcome = client.exec(run_id, ["sh", "-c", GUEST_ENTRY], timeout=_remaining(deadline, exec_timeout + 30), **request_limits)
+            outcome = client.exec(run_id, ["python", "-c", PEAK_PROBE, PEAK_FILE, "sh", "-c", GUEST_ENTRY],
+                                  timeout=_remaining(deadline, exec_timeout + 30), **request_limits)
             live()
             if outcome.get("code") != 0 or outcome.get("timed_out") or outcome.get("truncated"):
                 return _blocked("sandbox gate 5 không hoàn tất (exit/timeout/output)")
+            peak_kib = _peak_kib(client, run_id, request_limits)
             result = json.loads(client.download(run_id, "result", **request_limits))
             live()
             shots_archive = client.download(run_id, "shots", **request_limits)
@@ -409,11 +433,14 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
                 raise SandboxError("cleanup_unconfirmed", "destroy")
             if isinstance(result, dict) and isinstance(result.get("evidence"), dict):
                 result["evidence"].setdefault("sandbox", {})["teardown_confirmed"] = True
+                _record_run_cost(result, started, peak_kib)
         except SandboxError:
             blocked = _blocked("sandbox destroy: cleanup_unconfirmed")
             if isinstance(result, dict) and isinstance(result.get("evidence"), dict):
                 blocked["evidence"] = result["evidence"]
                 blocked["evidence"].setdefault("sandbox", {})["teardown_confirmed"] = False
+                _record_run_cost(result, started, peak_kib)
+                blocked["evidence"]["sandbox"]["outcome"] = "blocked"
                 state["evidence"] = blocked["evidence"]
             return blocked
 

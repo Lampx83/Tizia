@@ -123,10 +123,31 @@ def test_pass_runs_boot_then_gate_in_a_fresh_vm_and_always_destroys(tmp_path):
     st = state(checkout(tmp_path))
     result = sandbox_verify.run(st, client=client)
     assert result["blocked"] is False and result["evidence"]["runner"] == "docker"
-    assert client.calls == ["create", "upload", "exec", "guest-boot.sh", "exec", "sh", "download", "download", "destroy"]
+    assert client.calls == ["create", "upload", "exec", "guest-boot.sh", "exec", "python", "exec", "cat", "download", "download", "destroy"]
     assert client.run_id.startswith("g5-") and client.manifest[0]["name"] == "result"
-    assert result["evidence"]["sandbox"] == {"run_id": client.run_id, "policy_hash": "h" * 64, "teardown_confirmed": True}
+    sandbox = result["evidence"]["sandbox"]
+    assert sandbox.pop("wall_s") >= 0
+    assert sandbox == {"run_id": client.run_id, "policy_hash": "h" * 64, "teardown_confirmed": True, "peak_kib": None, "outcome": "passed"}
     assert st["evidence"] is result["evidence"]
+
+
+def test_guest_peak_rss_and_outcome_are_recorded(tmp_path):
+    class Probe(FakeClient):
+        def exec(self, run_id, argv, *, timeout, deadline=None):
+            self._step("exec")
+            if argv[0] == "cat":
+                return {"code": 0, "stdout": json.dumps({"peak_kib": 91234, "rc": 0})}
+            return self.exec_outcome
+
+    result = sandbox_verify.run(state(checkout(tmp_path)), client=Probe())
+    assert (result["evidence"]["sandbox"]["peak_kib"], result["evidence"]["sandbox"]["outcome"]) == (91234, "passed")
+
+
+def test_blocked_guest_verdict_records_outcome_blocked(tmp_path):
+    guest = {"gate": 5, "blocked": True, "reason": "smoke failed", "evidence": {"runner": "docker", "screenshots": []}}
+    result = sandbox_verify.run(state(checkout(tmp_path)), client=FakeClient(result=guest))
+    assert result["evidence"]["sandbox"]["outcome"] == "blocked"
+    assert result["evidence"]["sandbox"]["wall_s"] >= 0
 
 
 def test_each_invocation_gets_a_new_run_id(tmp_path):
@@ -193,7 +214,7 @@ def test_a_revoked_lease_suppresses_the_verdict(tmp_path, monkeypatch):
     class Slow(FakeClient):
         def exec(self, run_id, argv, *, timeout):
             out = super().exec(run_id, argv, timeout=timeout)
-            if argv[0] == "sh":
+            if argv[0] == "python":
                 time.sleep(0.3)  # the lease thread revokes while the guest is still running
             return out
 
