@@ -43,7 +43,7 @@ def test_each_inconsistent_test_path_is_reported(repo):
 
 def test_message_names_bm25_nearest_file(repo):
     source, sha = repo
-    plan = {"subtasks": [task("public/index.html", "node --test test/faq-co-so-du-lieu.test.js")]}
+    plan = {"subtasks": [task("public/index.html", "mở trang", "Sửa public/faq-co-so-du-lieu-moi.html có sẵn")]}
     with pytest.raises(ValueError, match="faq-co-so-du-lieu.html"):
         gp.check_references(plan, source, sha)
 
@@ -67,3 +67,39 @@ def test_bm25_ranks_deterministically():
     paths = {"public/faq-co-so-du-lieu.html", "public/index.html", "public/js/school.js"}
     assert gp.bm25_top("faq co so du lieu", paths)[0][0] == "public/faq-co-so-du-lieu.html"
     assert gp.bm25_top("zzz", paths) == []
+
+
+SO_TAY_REQUEST = {"subject": "Thêm trang Sổ tay Git", "body": "Kiểm tra: node --test test/so-tay-git.test.js xác nhận trang"}
+
+
+def so_tay_plan(with_test):
+    subtasks = [task("public/so-tay-git.html", "node --test test/so-tay-git.test.js"),
+                task("public/js/school.js", "node --test test/so-tay-git.test.js")]
+    if with_test:
+        subtasks.append(task("test/so-tay-git.test.js", "node --test test/so-tay-git.test.js"))
+    return {"subtasks": subtasks}
+
+
+def test_request_named_test_that_no_step_creates_is_repairable_and_has_no_noise_hint(repo):
+    source, sha = repo
+    with pytest.raises(ValueError) as err:
+        gp.check_references(so_tay_plan(False), source, sha, SO_TAY_REQUEST)
+    message = str(err.value)
+    assert "test/so-tay-git.test.js" in message and "tạo" in message
+    assert "file gần nhất" not in message and "test_eval_git" not in message
+
+
+def test_request_named_test_created_by_a_step_passes(repo):
+    source, sha = repo
+    gp.check_references(so_tay_plan(True), source, sha, SO_TAY_REQUEST)
+
+
+def test_request_named_test_missing_alone_is_reported(repo):
+    source, sha = repo
+    plan = {"subtasks": [task("public/so-tay-git.html", "mở trang")]}
+    assert gp.named_tests_missing(SO_TAY_REQUEST, plan, gp.listing(source, sha)) == ["test/so-tay-git.test.js"]
+
+
+def test_nearest_files_ignore_harness_and_single_token_matches():
+    paths = {"ai-board/harness/tests/test_eval_git.py", "public/bao-so-hoc.html", "public/dem-ngon-tay.html"}
+    assert gp.bm25_top("public/so-tay-git.html", paths) == []

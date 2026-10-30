@@ -10,6 +10,9 @@ _EXT = r"(?:html?|m?js|css|json|sql|py|md)"
 _ROOTED = re.compile(rf"(?<![\w./-])((?:public|server|test|tests|scripts|ai-board)/[\w./-]+\.{_EXT})(?![\w-])")
 _TEST_ARG = re.compile(rf"(?:node --test|pytest|python[0-9.]*)\s+((?:[\w.-]+/)*[\w.-]+\.{_EXT})(?![\w-])")
 _TOKEN = re.compile(r"[a-z0-9]{2,}")
+_GENERIC = {"test", "tests", "js", "mjs", "html", "htm", "css", "json", "sql", "py", "md", "public", "server", "contexts"}
+_NEAR_ROOTS = ("public/", "server/contexts/", "test/")
+_TESTISH = re.compile(r"(?:^|/)tests?/|\.test\.m?js$|(?:^|/)test_[\w-]+\.py$")
 
 
 def listing(source, sha: str) -> set[str]:
@@ -23,12 +26,12 @@ def listing(source, sha: str) -> set[str]:
 
 def _tokens(text: str) -> list[str]:
     folded = "".join(c for c in unicodedata.normalize("NFD", text.lower()) if unicodedata.category(c) != "Mn")
-    return _TOKEN.findall(folded.replace("đ", "d"))
+    return [t for t in _TOKEN.findall(folded.replace("đ", "d")) if t not in _GENERIC]
 
 
 def bm25_top(query: str, paths, k: int = 3, k1: float = 1.5, b: float = 0.75) -> list[tuple[str, float]]:
     """Top-k (path, score) theo BM25 trên token của đường dẫn; điểm 0 bị loại."""
-    docs = {p: _tokens(p) for p in sorted(paths)}
+    docs = {p: _tokens(p) for p in sorted(paths) if p.startswith(_NEAR_ROOTS)}
     if not docs:
         return []
     avg = sum(map(len, docs.values())) / len(docs) or 1
@@ -39,7 +42,7 @@ def bm25_top(query: str, paths, k: int = 3, k1: float = 1.5, b: float = 0.75) ->
         tf = Counter(toks)
         score = sum(math.log(1 + (len(docs) - df[t] + .5) / (df[t] + .5)) * tf[t] * (k1 + 1)
                     / (tf[t] + k1 * (1 - b + b * len(toks) / avg)) for t in terms if t in tf)
-        if score > 0:
+        if score > 0 and len(terms & set(toks)) >= 2:
             scored.append((path, round(score, 3)))
     return sorted(scored, key=lambda item: (-item[1], item[0]))[:k]
 
@@ -59,13 +62,26 @@ def ungrounded(plan: dict, files: set[str]) -> list[str]:
     return [p for p in referenced_paths(plan) if p not in files and p not in own]
 
 
-def check_references(plan: dict, source, sha: str | None) -> None:
-    """Raise ValueError (plan sửa được) nếu plan nhắc đường dẫn không có thật; nêu file gần nhất theo BM25."""
+def named_tests_missing(request: dict, plan: dict, files: set[str]) -> list[str]:
+    """File test request nêu tên mà repo không có và không subtask nào tạo."""
+    text = " ".join(str(request.get(k) or "") for k in ("subject", "body", "clarified_spec"))
+    named = [p.lstrip("./") for p in _ROOTED.findall(text) + _TEST_ARG.findall(text)]
+    own = {t["file"] for t in plan.get("subtasks") or []}
+    return [p for p in dict.fromkeys(named) if _TESTISH.search(p) and p not in files and p not in own]
+
+
+def check_references(plan: dict, source, sha: str | None, request: dict | None = None) -> None:
+    """Raise ValueError (plan sửa được) nếu plan nhắc đường dẫn không có thật hoặc bỏ sót test request nêu."""
     files = listing(source, sha) if sha else set()
-    bad = ungrounded(plan, files) if files else []
-    if not bad:
+    if not files:
         return
-    near = bm25_top(bad[0], files)
-    hint = f"; file gần nhất: {', '.join(p for p, _ in near)}" if near else ""
-    raise ValueError(f"đường dẫn '{bad[0]}' không có trong repo và không phải file plan tạo (mỗi test/file nhắc tới "
-                     f"phải nằm trong subtask hoặc có thật){hint}")
+    bad = ungrounded(plan, files)
+    if bad:
+        near = [] if _TESTISH.search(bad[0]) else bm25_top(bad[0], files)
+        hint = (f"; file gần nhất: {', '.join(p for p, _ in near)}" if near
+                else "; nếu là test mới, thêm subtask tạo file đó")
+        raise ValueError(f"đường dẫn '{bad[0]}' không có trong repo và không phải file plan tạo (mỗi test/file nhắc tới "
+                         f"phải nằm trong subtask hoặc có thật){hint}")
+    missing = named_tests_missing(request or {}, plan, files)
+    if missing:
+        raise ValueError(f"request nêu file test '{missing[0]}' nhưng không subtask nào tạo nó — thêm subtask tạo file test này")
