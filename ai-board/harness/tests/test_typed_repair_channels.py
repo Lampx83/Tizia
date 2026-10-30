@@ -31,3 +31,9 @@ def test_validator_prompt_is_unchanged_by_the_planner_only_key():
     plan = plan_with(["features"])
     base = {"subject": "s", "body": "b", "thread": [{"role": "requester", "body": "x"}]}
     assert plan_validate.build_prompt({**base, "plan_repair": HINT}, plan) == plan_validate.build_prompt(base, plan)
+
+
+def test_only_the_planner_declares_the_plan_repair_input():
+    from gates import brainstorm
+    assert "plan_repair" in brainstorm.PLANNER_INPUTS
+    assert "plan_repair" not in plan_validate.VALIDATOR_INPUTS

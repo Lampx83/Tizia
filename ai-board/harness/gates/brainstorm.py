@@ -48,6 +48,8 @@ RETRY_SUFFIX = "\n\nYOUR PREVIOUS ANSWER WAS REJECTED: {reason}\nFix exactly tha
 # Prompt sống ở file riêng (ai-board/harness/prompts/), đọc 1 lần lúc import — phần trước
 # {context} cố định byte-để-byte mọi lần gọi (kỷ luật cache, khoá bằng prompts.lock.json).
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "brainstorm.md").read_text(encoding="utf-8")
+# Request keys the planner reads (LF/125). plan_repair is planner-only: the validator never gets it.
+PLANNER_INPUTS = ("id", "domain", "type", "votes", "subject", "body", "thread", "clarified_spec", "plan_repair", "task_type", "complexity_by_server")
 
 
 def build_prompt(request: dict, surface: frozenset[str], context_text: str = "") -> str:
