@@ -184,7 +184,7 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
   if (!RISKS.has(normalized.risk)) fail('malformed_plan', `unknown risk '${normalized.risk}'`);
   if (!Array.isArray(normalized.steps) || normalized.steps.length === 0) fail('malformed_plan', 'steps must be non-empty');
   const topCapabilities = new Set(normalized.capabilities);
-  let tier = normalized.risk === 'high' ? 'protected' : 'surface';
+  const stepTiers = [];
   const planScope = new Set(normalized.allowed_scope);
 
   for (const capability of normalized.capabilities) {
@@ -195,7 +195,6 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
       fail('unknown_capability', `capability '${capability}' ${selfTarget != null ? 'is not allowed for' : 'is only for'} self requests`,
         'Kế hoạch yêu cầu quyền chưa được hỗ trợ và đang chờ xem lại.');
     }
-    if (TIERS[policy.tier] > TIERS[tier]) tier = policy.tier;
     for (const requiredTest of policy.mandatoryTests) {
       if (!normalized.tests.includes(requiredTest)) fail('missing_mandatory_test', `capability '${capability}' requires test '${requiredTest}'`);
     }
@@ -223,10 +222,9 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
           'Kế hoạch vượt ngoài phạm vi an toàn và đang chờ xem lại.');
       }
     }
-    if (TIERS[policy.tier] > TIERS[tier]) tier = policy.tier;
+    stepTiers.push(policy.tier);
     const risk = nonEmptyString(step.risk, `steps[${index}].risk`);
     if (!RISKS.has(risk)) fail('malformed_plan', `unknown step risk '${risk}'`);
-    if (risk === 'high' && tier === 'surface') tier = 'protected';
     if (step.task_type != null && !isSkillTaskType(step.task_type)) {
       fail('malformed_plan', `invalid steps[${index}].task_type`);
     }
@@ -286,11 +284,14 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
     fail('malformed_plan', 'source evidence does not match step scope');
   }
   const planJson = stablePlanJson(normalized);
+  const tier = stepTiers.reduce((top, next) => (TIERS[next] > TIERS[top] ? next : top), 'surface');
   return {
     plan: normalized,
     planJson,
     policyHash: CAPABILITY_POLICY_HASH,
     planHash: createHash('sha256').update(`${CAPABILITY_POLICY_VERSION}\n${CAPABILITY_POLICY_HASH}\n${planJson}`).digest('hex'),
     tier,
+    stepTiers,
+    riskAdvisory: [normalized.risk, ...normalized.steps.map((step) => step.risk)].includes('high') ? 'high' : normalized.risk,
   };
 }

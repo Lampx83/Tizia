@@ -448,6 +448,8 @@ def _worker_checkpoint(ticket_id: int, plan: dict, plan_hash: str | None = None)
         return None
     digest = str(plan_hash) if plan_hash else hashlib.sha256(
         json.dumps(plan, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")).hexdigest()
+    if plan.get("held_back"):  # tập step chạy đổi sau khi gỡ chặn: checkpoint cũ không khớp chỉ số child
+        digest = hashlib.sha256(f"{digest}:{plan['held_back']}".encode()).hexdigest()
     scope = f"ticket-{ticket_id}:{digest[:16]}"
     from repositories import server_hsm
     backend = server_hsm._SERVER.get()
@@ -1234,9 +1236,10 @@ class HttpWorker:
                 hsm_api = server_hsm.RemoteGate4(self.client,ticket_id=ticket_id,run_id=run['id'],
                     worker_id=self.worker_id,lease_token=lease['lease_token'],contract=hsm_contract)
                 with memory.server_scope(memory_api), server_hsm.server_scope(hsm_api):
+                    from runtime.step_gate import runnable_plan
                     result = self._with_heartbeat(
                         lambda lost: self.change_runner(
-                            plan, ticket_id, max(limit - budget_used, 0),  # giây GPU còn lại của lượt (trừ phần lập plan)
+                            runnable_plan(plan, planned.get("runnable_orders")), ticket_id, max(limit - budget_used, 0),  # giây GPU còn lại của lượt (trừ phần lập plan)
                             # {} when missing: fails the hash check closed instead of skipping the catalog.
                             policy=snapshot.get("capability_policy") or {},
                             accepted_policy_hash=planned.get("capability_policy_hash"),
