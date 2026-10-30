@@ -65,8 +65,8 @@ test('folder creation, caps, votes, approval, cycle, archive/reopen, brief', asy
   assert.deepEqual([out.unvote.voted, out.unvote.votes], [false, 0]);
   assert.equal(out.unvoteMissing.error, 'folder_not_found');
   assert.equal(out.waiting.status, 'waiting_authorization', 'plan in unapproved folder waits for admin');
-  assert.deepEqual([out.approve.ok, out.approve.authorized], [true, 1]);
-  assert.deepEqual([out.approveAgain.ok, out.approveAgain.authorized], [true, 0], 'second approval authorizes nothing new');
+  assert.deepEqual([out.approve.ok, out.approve.released], [true, 1]);
+  assert.deepEqual([out.approveAgain.ok, out.approveAgain.released], [true, 0], 'second approval releases nothing new');
   assert.equal(out.approveMissing.error, 'folder_not_found');
   assert.deepEqual(out.rootAfter, { status: 'queued', phase: 'authorized' });
   assert.equal(out.release.status, 'owner_only', 'approval registers the release flag');

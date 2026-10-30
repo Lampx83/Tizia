@@ -104,6 +104,34 @@ def test_fix_disabled_without_repair_slot_or_after_one_fix(tmp_path):
     assert reviewer_fix.allowed({'full_checkout': 'unused'}) is False
 
 
+def test_fix_covers_a_multi_file_change_beyond_the_old_12k_cap(tmp_path):
+    """Run 52: listing 5 file ~17KB > MAX_CONTEXT_CHARS 12000 → reviewer fix skip 'change too large',
+    slot đã tiêu mà không gọi model nào. Trần nguyên file của executor là 60000."""
+    root, st = repo(tmp_path)
+    big = CANDIDATE + ('// fill\n' * 1700)  # ~13.7KB: vượt cap cũ 12000, dưới cap mới
+    (root / F).write_text(big, encoding='utf-8')
+    git(root, 'commit', '-qam', 'bigger')
+    st = {**st, 'full_diff': [{'file': '', 'diff': git(root, 'diff', '--no-ext-diff', st['base_sha'], 'HEAD')},
+                              {'file': F, 'diff': ''}]}
+    models = Models({'file': F, 'edits': [{'search': 'return charge(user, amount); // paid',
+                                           'replace': 'return charge(user, amount, idemKey);'}]})
+    out = fix(models, st)
+    assert out['applied'] is True, out
+    assert out['file'] == F and 'idemKey' in (root / F).read_text(encoding='utf-8')
+
+
+def test_fix_still_fails_closed_when_change_exceeds_the_cap(tmp_path):
+    root, st = repo(tmp_path)
+    huge = CANDIDATE + ('// fill\n' * 8000)  # ~64KB > 60000
+    (root / F).write_text(huge, encoding='utf-8')
+    git(root, 'commit', '-qam', 'huge')
+    st = {**st, 'full_diff': [{'file': '', 'diff': git(root, 'diff', '--no-ext-diff', st['base_sha'], 'HEAD')}]}
+    models = Models()
+    out = fix(models, st)
+    assert out['applied'] is False and 'too large' in out['reason']
+    assert len(models.calls) == 0  # thoát trước lời gọi model
+
+
 def test_gate_4_one_high_finding_fixed_then_reviewed_again(monkeypatch, fake_deps):
     monkeypatch.setattr(main.static_check, 'run', lambda s, **_: {'gate': 4, 'blocked': False, 'reason': None, 'issues': []})
     monkeypatch.setattr(main.static_check, 'content_review', lambda *a, **k: None)

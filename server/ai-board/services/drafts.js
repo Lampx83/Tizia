@@ -81,10 +81,12 @@ export async function saveDraftScreenshots(store, ticketId, { workerId, leaseTok
   });
 }
 
-/** Số lượt hỏng liên tiếp gần nhất của root (tính từ lượt đạt cuối). */
+/** Số lượt hỏng liên tiếp gần nhất của root (tính từ lượt đạt cuối). Dừng giữa plan (partial) không tính. */
 export async function failedRunStreak(db, rootId) {
+  const failureClass = db.jsonText('evidence_json', 'verdict.failure_class');
   return (await db.get(`
-    SELECT COUNT(*) AS n FROM ai_runs WHERE ticket_id=? AND outcome='blocked' AND id > COALESCE(
+    SELECT COUNT(*) AS n FROM ai_runs WHERE ticket_id=? AND outcome='blocked'
+      AND COALESCE(${failureClass}, 'ordinary') <> 'partial' AND id > COALESCE(
       (SELECT MAX(id) FROM ai_runs WHERE ticket_id=? AND outcome IN ('ready_for_pr', 'needs_review')), 0)
   `, [Number(rootId), Number(rootId)])).n;
 }
@@ -95,7 +97,7 @@ export async function retryState(db, rootId, phase) {
   return await failedRunStreak(db, rootId) >= MAX_FAILED_RUNS ? 'admin' : 'retry';
 }
 
-/** Sau verdict: hỏng lượt thứ MAX_FAILED_RUNS → root chờ admin. Trả dữ liệu chuông (kind draft|retry|handoff|admin). */
+/** Sau verdict: hỏng lượt thứ MAX_FAILED_RUNS → root chờ admin. Trả dữ liệu chuông (kind draft|retry|handoff|admin|partial). */
 export async function afterVerdict(db, ticketId, verdict, now = Date.now()) {
   const root = await db.get(`
     SELECT t.id, t.phase, r.id AS request_id, r.title, r.domain, r.student
@@ -103,6 +105,8 @@ export async function afterVerdict(db, ticketId, verdict, now = Date.now()) {
   `, [Number(ticketId)]);
   if (!root) return null;
   if (PASSING.has(verdict?.outcome)) return { ...root, kind: 'draft' };
+  // Dừng giữa plan nhưng đã xong một phần: không phải lượt hỏng, chuông mời người gửi bấm "Tiếp tục".
+  if (verdict?.failure_class === 'partial') return { ...root, kind: 'partial' };
   const state = await retryState(db, root.id, root.phase);
   if (state === 'admin') {
     await db.run(`UPDATE ai_tickets SET status='waiting_admin', public_note=?, updated_at=? WHERE id=?`, [HANDOFF_NOTE, now, root.id]);
@@ -138,6 +142,7 @@ const NOTICES = {
   retry: ['🏛️ Lượt này chưa làm được', (t) => `Ban chưa làm được ${t} ở lượt này. Bấm «Thử cách khác» để Ban lập kế hoạch mới.`],
   handoff: ['🏛️ Đã chuyển quản trị viên', (t) => `Ban đã thử 2 lượt chưa làm được ${t} — đã chuyển quản trị viên xem giúp.`],
   admin: ['🏛️ Lượt này chưa làm được', (t) => `Ban chưa làm được ${t}; quản trị viên sẽ xem giúp.`],
+  partial: ['🏛️ Đã xong một phần', (t) => `Ban đã làm xong một phần ${t}. Bấm «Tiếp tục» để làm nốt phần còn lại.`],
 };
 
 /** onVerdict cho worker routes: chuông cho người gửi, bấm vào mở thread yêu cầu trong FAB. */

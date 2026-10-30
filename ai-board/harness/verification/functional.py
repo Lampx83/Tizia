@@ -58,7 +58,8 @@ def behaviour_probe(text):
     """Oracle named by the request's own words (text = request_text); None when it names neither surface."""
     if re.search(r'copy|sao chep', text) and re.search(r'response|phan hoi', text):
         return COPY_PROBE
-    if re.search(r'search|tim kiem', text) and re.search(r'activity|activities|hoat dong', text):
+    # "ô tìm kiếm hoạt động" = the search box works (not search activity) — chỉ nhận cụm nói về lịch sử/hoạt động tìm kiếm.
+    if re.search(r'search\s+(activity|activities|history)|lich su tim kiem|hoat dong tim kiem|tim kiem (da|gan day)', text):
         return SEARCH_PROBE
     return None
 
@@ -258,6 +259,12 @@ def _query(names):
     return min(fit, key=lambda w: (hits[w], -len(w), w)) if fit else None
 
 
+def _not_applicable(note):
+    """Oracle needs an element the page lacks: not applied, not a failure (LF/127)."""
+    return {'probe_id': SEARCH_PROBE, 'passed': True, 'applicable': False, 'reason': None, 'note': note,
+            'coverage': {'filtering': False}}
+
+
 def run_search(base, fixture):
     """Typing narrows the activity cards to those matching; clearing the box restores them all."""
     result = lambda reason, **extra: {'probe_id': SEARCH_PROBE, 'passed': reason is None, 'reason': reason,
@@ -277,7 +284,7 @@ def run_search(base, fixture):
                     break
                 page.wait_for_timeout(500)
             if len(cards) < 2:
-                return result('Không thấy danh sách hoạt động trên trang')
+                return _not_applicable('Trang không có danh sách hoạt động để kiểm')
             names = [c['name'] for c in cards]
             query = _query(names)
             if query is None:

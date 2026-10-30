@@ -43,6 +43,7 @@ export async function recordMiss(db, runId, trigger, now = Date.now()) {
   if (!run || run.type === 'self') return; // lượt board tự sửa: cổng eval của self tự chấm, không phải lần hỏng production
   const verdict = parse(run.evidence_json, {}).verdict ?? {};
   if (verdict.failure_class === 'transient') return; // hạ tầng hỏng, không phải lỗi của board
+  if (verdict.failure_class === 'partial') return; // dừng giữa plan để chạy nốt: chưa phải lượt hỏng
   const undo = trigger === 'undo';
   const plan = run.plan_hash && parse((await db.get('SELECT plan_json FROM ai_plans WHERE root_ticket_id=? AND plan_hash=?', [run.ticket_id, run.plan_hash]))?.plan_json);
   // Gợi ý nhãn: hoàn tác → file của commit bị hoàn tác; bị chặn → phạm vi plan đã nhắm.

@@ -3,18 +3,26 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomBytes } from 'node:crypto';
 import { WorkerContractError } from '../repositories/store-contract.js';
+import { SKILL_TASK_TYPES } from '../skill-task-types.js';
+import { checkSkillText, publicMessage } from '../security/intake-guard.js';
+import { essenceMissing } from '../security/essence.js';
+import { tokenCounter } from './token-count.js';
 
-export const TASK_TYPES = ['backend', 'frontend', 'database', 'review', 'test', 'all'];
+export const TASK_TYPES = SKILL_TASK_TYPES;
 const FIELDS = ['name', 'description', 'task_type', 'source', 'version', 'max_tokens'];
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../ai-board/harness/skills');
 export const REWRITE_BOUND = { model_calls: 4, tokens: 40000 };
 const STALE_RUNNING_MS = 20 * 60 * 1000;
+// Hạn mức viết lại: một chỗ duy nhất; bộ đếm nằm ở ai_skill_rewrite_requests nên sống sót khi reset job.
+export const REWRITE_LIMITS = Object.freeze({ per_version_hour: 5, per_admin_day: 20, hour_ms: 3600 * 1000, day_ms: 24 * 3600 * 1000 });
 export const RETRO_BATCH = 5;
 const ORIGIN = 'skill-edit';
 const CLAIM_LOCK = 45046;
 const hash = text => createHash('sha256').update(text).digest('hex');
 const parse = (text, fallback = null) => { try { return JSON.parse(text); } catch { return fallback; } };
 const bad = (message, code = 'invalid_skill', status = 400) => new WorkerContractError(message, status, code);
+const rateLimited = (scope, waitMs) => Object.assign(bad('Rewrite rate limit reached', 'rate_limited', 429),
+  { scope, retry_after_s: Math.max(1, Math.ceil(waitMs / 1000)) });
 const validId = value => (typeof value === 'number' || typeof value === 'string' && /^[1-9]\d*$/.test(value)) && Number.isSafeInteger(Number(value)) && Number(value) > 0;
 const escape = text => text.replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#x27;' }[c]));
 const FORBIDDEN = /(?:ignore|override|bypass|grant|enable)\s+(?:all\s+)?(?:platform|permission|tools?|rules?|budget|sandbox)|(?:request|require|need)\w*\s+(?:permission|access|tools?)|tools?\s+required\s*:|(?:bỏ qua|ghi đè|cấp quyền|vô hiệu hóa|yêu cầu quyền|cần quyền)/i;
@@ -24,6 +32,7 @@ export function adminSkillBlock(skill) {
 }
 
 export function lintSkill(text, { source = 'admin', version = null, name = null } = {}) {
+  const counter = tokenCounter();
   try {
     if (typeof text !== 'string' || !text.startsWith('---\n') || text.includes('\r')) throw bad('Use LF frontmatter');
     const parts = text.split('---\n');
@@ -42,13 +51,13 @@ export function lintSkill(text, { source = 'admin', version = null, name = null 
     const body = parts.slice(2).join('---\n').trim();
     const rendered = source === 'admin' ? adminSkillBlock({ name: meta.name, version: version ?? Number(meta.version), body })
       : `DEFAULT SKILL ${meta.name} v${meta.version} (advisory):\n${body}`;
-    const tokens = Buffer.byteLength(rendered, 'utf8');
+    const tokens = counter.count(rendered);
     if (!body || tokens > Number(meta.max_tokens)) throw bad('Skill exceeds token cap');
     if ((body.match(/^\d+\. /gm) || []).length > 7 || FORBIDDEN.test(body)) throw bad('Skill requests authority or exceeds seven rules');
     return { ok: true, errors: [], name: meta.name, task_types: types, source, version: Number(meta.version),
-      max_tokens: Number(meta.max_tokens), body, token_count: tokens, token_method: 'utf8_upper_bound', hash: hash(text) };
+      max_tokens: Number(meta.max_tokens), body, token_count: tokens, token_method: counter.method, hash: hash(text) };
   } catch (error) {
-    return { ok: false, errors: [error.message], token_count: null, token_method: 'utf8_upper_bound', hash: typeof text === 'string' ? hash(text) : null };
+    return { ok: false, errors: [error.message], token_count: null, token_method: counter.method, hash: typeof text === 'string' ? hash(text) : null };
   }
 }
 
@@ -64,7 +73,17 @@ function defaults() {
 }
 
 export function createSkillService(db) {
+  /** Same deterministic guardrail as request text; blocked skill text is never stored, approved or served. */
+  const guardSkillText = (text, status = 400) => {
+    const verdict = checkSkillText(text);
+    if (verdict.block) throw bad(verdict.message || publicMessage('reject'), 'skill_blocked', status);
+  };
   async function requireCurrentAdmin(actor) {
+    // Signed identity (aiboard-server): role comes from the verified header; this board has no sessions table.
+    if (actor.sessionToken == null) {
+      if (actor.role !== 'admin') throw bad('Current admin required', 'admin_required', 403);
+      return;
+    }
     const current = await db.get(`SELECT u.role FROM users u JOIN sessions s ON s.user_id=u.id
       WHERE u.id=? AND s.token=? AND s.expires_at>? FOR SHARE OF u,s`, [actor.id, String(actor.sessionToken || ''), Date.now()]);
     if (!current) throw bad('Current session required', 'authentication_required', 401);
@@ -80,14 +99,17 @@ export function createSkillService(db) {
     const item = await skill(id);
     const versions = await db.all('SELECT * FROM ai_skill_versions WHERE skill_id=? ORDER BY version DESC LIMIT 200', [id]);
     const jobs = new Map((await db.all(`SELECT r.* FROM ai_skill_rewrites r JOIN ai_skill_versions v ON v.id=r.version_id WHERE v.skill_id=?`, [id])).map(j => [j.version_id, j]));
+    const results = new Map((await db.all("SELECT parent_version_id AS src, MAX(id) AS id FROM ai_skill_versions WHERE skill_id=? AND origin='rewrite' GROUP BY parent_version_id", [id])).map(r => [r.src, r.id]));
     return { skill: item, versions: versions.map(v => {
       const job = jobs.get(v.id);
       return { ...v, task_types: parse(v.task_types_json, []), lint: parse(v.lint_json, {}), evaluation: parse(v.eval_json),
         rewrite_lint: parse(v.rewrite_lint_json), rewrite: job ? { id: job.id, status: job.status, error: job.error, model: job.model,
-          confirmed_at: job.confirmed_at, finished_at: job.finished_at, usage: parse(job.usage_json), raw_response: job.raw_response } : null };
+          confirmed_at: job.confirmed_at, finished_at: job.finished_at, usage: parse(job.usage_json), raw_response: job.raw_response,
+          instructions: job.instructions ?? null, attempts: job.attempts ?? 0, result_version_id: results.get(v.id) ?? null } : null };
     }) };
   }
   async function appendVersion(actor, item, taskTypes, text, parentId = null, extra = {}) {
+    guardSkillText(text);
     const now = Date.now();
     const version = Number((await db.get('SELECT COALESCE(MAX(version),0)+1 AS n FROM ai_skill_versions WHERE skill_id=?', [item.id])).n);
     const lint = lintSkill(text, { name: item.name, version });
@@ -118,6 +140,7 @@ export function createSkillService(db) {
     if (version.rejected_at) throw bad('Version was rejected', 'version_rejected', 409);
     const rewritten = version.rewritten_text != null;
     const text = rewritten ? version.rewritten_text : version.original_text;
+    guardSkillText(text, 422);
     const lint = lintSkill(text, { name: item.name, version: version.version });
     const stored = parse(rewritten ? version.rewrite_lint_json : version.lint_json, {});
     if (!lint.ok || !stored.ok || lint.hash !== (rewritten ? version.rewritten_hash : version.hash)) throw bad('Version failed lint/hash', 'skill_lint_failed', 422);
@@ -148,14 +171,44 @@ export function createSkillService(db) {
       return read(id);
     });
   }
+  // Chuyển bản viết lại cũ (rewritten_text nằm trên version nguồn) thành version con; nguồn không còn bản viết lại.
+  // Bỏ qua version đã duyệt/đang dùng/đã từ chối: không đổi trạng thái của admin.
+  async function promoteLegacyRewrite(actor, versionId) {
+    return db.tx(async () => {
+      await requireCurrentAdmin(actor);
+      const source = await db.get('SELECT v.*,s.name,s.task_types_json AS skill_types,s.active_version_id FROM ai_skill_versions v JOIN ai_skills s ON s.id=v.skill_id WHERE v.id=?', [Number(versionId)]);
+      if (!source || source.rewritten_text == null) return { promoted: false, reason: 'no_legacy_rewrite' };
+      if (source.approved_at || source.active_version_id === source.id || source.rejected_at) return { promoted: false, reason: 'source_approved_or_rejected' };
+      const item = await skill(source.skill_id);
+      const next = Number((await db.get('SELECT COALESCE(MAX(version),0)+1 AS n FROM ai_skill_versions WHERE skill_id=?', [source.skill_id])).n);
+      const text = source.rewritten_text.replace(/^version:.*$/m, `version: ${next}`);
+      const child = await appendVersion(actor, item, parse(source.task_types_json, []), text, source.id, { evaluation: parse(source.eval_json) });
+      await db.run("UPDATE ai_skill_versions SET origin='rewrite' WHERE id=?", [child.version.id]);
+      await db.run('UPDATE ai_skill_versions SET rewritten_text=NULL,rewritten_hash=NULL,rewrite_lint_json=NULL WHERE id=?', [source.id]);
+      return { promoted: true, source_version_id: source.id, child_version_id: child.version.id, child_version: next, lint_ok: child.version.lint.ok };
+    });
+  }
   async function requestRewrite(actor, id, versionId, input) {
     if (input.confirmed !== true) throw bad('Rewrite confirmation required', 'confirmation_required');
+    const instructions = cleanInstructions(input.instructions);
     return db.tx(async () => {
       await requireCurrentAdmin(actor);
       const { version } = await lockedVersion(id, versionId);
-      if (version.rejected_at || version.approved_at || version.rewritten_text != null) throw bad('Version cannot be rewritten', 'rewrite_not_allowed', 409);
-      if (await db.get('SELECT id FROM ai_skill_rewrites WHERE version_id=?', [version.id])) throw bad('Rewrite already requested', 'rewrite_exists', 409);
-      await db.run('INSERT INTO ai_skill_rewrites(version_id,confirmed_by,confirmed_at) VALUES(?,?,?)', [version.id, actor.id, Date.now()]);
+      if (version.rejected_at || version.approved_at) throw bad('Version cannot be rewritten', 'rewrite_not_allowed', 409);
+      const now = Date.now();
+      const job = await db.get(`SELECT * FROM ai_skill_rewrites WHERE version_id=?${db.lockRow}`, [version.id]);
+      if (job && (job.status === 'queued' || job.status === 'running')) throw bad('Rewrite in progress', 'rewrite_in_progress', 409);
+      await checkRewriteLimits(actor, version.id, now);
+      await db.run('INSERT INTO ai_skill_rewrite_requests(version_id,admin_id,created_at) VALUES(?,?,?)', [version.id, actor.id, now]);
+      if (!job) {
+        await db.run('INSERT INTO ai_skill_rewrites(version_id,confirmed_by,confirmed_at,instructions,attempts) VALUES(?,?,?,?,0)', [version.id, actor.id, now, instructions]);
+      } else {
+        const previous = { status: job.status, error: job.error, model: job.model, confirmed_at: job.confirmed_at, finished_at: job.finished_at, usage: parse(job.usage_json) };
+        const history = [...(parse(job.history_json, []) || []), previous];
+        await db.run(`UPDATE ai_skill_rewrites SET status='queued',confirmed_by=?,confirmed_at=?,instructions=?,claim_token=NULL,claimed_at=NULL,
+          finished_at=NULL,model=NULL,raw_response=NULL,error=NULL,usage_json=NULL,attempts=COALESCE(attempts,0)+1,history_json=? WHERE id=?`,
+          [actor.id, now, instructions, JSON.stringify(history), job.id]);
+      }
       return read(id);
     });
   }
@@ -194,6 +247,29 @@ export function createSkillService(db) {
       return read(id);
     });
   }
+  async function checkRewriteLimits(actor, versionId, now) {
+    const versionRows = await db.all('SELECT created_at FROM ai_skill_rewrite_requests WHERE version_id=? AND created_at>? ORDER BY created_at',
+      [versionId, now - REWRITE_LIMITS.hour_ms]);
+    if (versionRows.length >= REWRITE_LIMITS.per_version_hour) {
+      throw rateLimited('version', versionRows[0].created_at + REWRITE_LIMITS.hour_ms - now);
+    }
+    const adminRows = await db.all('SELECT created_at FROM ai_skill_rewrite_requests WHERE admin_id=? AND created_at>? ORDER BY created_at',
+      [actor.id, now - REWRITE_LIMITS.day_ms]);
+    if (adminRows.length >= REWRITE_LIMITS.per_admin_day) {
+      throw rateLimited('admin', adminRows[0].created_at + REWRITE_LIMITS.day_ms - now);
+    }
+  }
+  // Ghi chú của admin cho lượt viết lại: cùng lưới chặn với yêu cầu của học viên (checkIntake), không lưu nếu bị chặn.
+  function cleanInstructions(value) {
+    if (value == null || value === '') return null;
+    if (typeof value !== 'string') throw bad('Instructions must be text', 'invalid_instructions', 400);
+    const text = value.trim();
+    if (text.length > 600 || /[\u0000-\u001f\u007f]/.test(text)) throw bad('Instructions too long or contain control characters', 'invalid_instructions', 400);
+    if (!text) return null;
+    const verdict = checkSkillText(text);
+    if (verdict.block) throw bad(verdict.message || publicMessage('reject'), 'instructions_blocked', 400);
+    return text;
+  }
   async function claimRewrite(workerId) {
     if (typeof workerId !== 'string' || !workerId) throw bad('worker_id required');
     return db.tx(async () => {
@@ -208,7 +284,7 @@ export function createSkillService(db) {
       await db.run("UPDATE ai_skill_rewrites SET status='running',claim_token=?,claimed_at=? WHERE id=?", [token, now, job.id]);
       const v = await db.get('SELECT v.*,s.name FROM ai_skill_versions v JOIN ai_skills s ON s.id=v.skill_id WHERE v.id=?', [job.version_id]);
       return { job: { id: job.id, claim_token: token, name: v.name, version: v.version, task_types: parse(v.task_types_json, []),
-        original_text: v.original_text, max_tokens: 1500, bound: REWRITE_BOUND } };
+        original_text: v.original_text, instructions: job.instructions ?? null, max_tokens: 1500, bound: REWRITE_BOUND } };
     });
   }
   const cleanEval = input => {
@@ -226,15 +302,19 @@ export function createSkillService(db) {
         [status, error, now, typeof input.model === 'string' ? input.model.slice(0, 120) : null, raw, JSON.stringify(usage), job.id]);
       if (usage.model_calls > REWRITE_BOUND.model_calls || usage.tokens > REWRITE_BOUND.tokens) { await finish('failed', 'usage_exceeds_bound'); return { status: 'failed' }; }
       if (typeof input.rewritten_text !== 'string' || !input.rewritten_text) { await finish('failed', String(input.error || 'no_output').slice(0, 200)); return { status: 'failed' }; }
-      const version = await db.get('SELECT v.*,s.name FROM ai_skill_versions v JOIN ai_skills s ON s.id=v.skill_id WHERE v.id=?', [job.version_id]);
-      const lint = lintSkill(input.rewritten_text, { name: version.name, version: version.version });
-      if (lint.ok && JSON.stringify([...lint.task_types].sort()) !== JSON.stringify([...parse(version.task_types_json, [])].sort())) {
-        lint.ok = false; lint.errors.push('Rewrite changed task types');
-      }
-      await db.run('UPDATE ai_skill_versions SET rewritten_text=?,rewritten_hash=?,rewrite_lint_json=?,eval_json=? WHERE id=?',
-        [input.rewritten_text, hash(input.rewritten_text), JSON.stringify(lint), JSON.stringify(cleanEval(input.evaluation)), version.id]);
+      if (checkSkillText(input.rewritten_text).block) { await finish('failed', 'guardrail_blocked'); return { status: 'failed' }; }
+      const source = await db.get('SELECT v.*,s.name FROM ai_skill_versions v JOIN ai_skills s ON s.id=v.skill_id WHERE v.id=?', [job.version_id]);
+      const lost = essenceMissing(source.original_text, input.rewritten_text);
+      if (lost.length) { await finish('failed', `essence_lost: ${lost.join(', ')}`.slice(0, 200)); return { status: 'failed', essence_lost: lost }; }
+      const next = Number((await db.get('SELECT COALESCE(MAX(version),0)+1 AS n FROM ai_skill_versions WHERE skill_id=?', [source.skill_id])).n);
+      // Bản viết lại là phiên bản mới (con của nguồn), số version trong front matter được chỉnh để khớp trước khi lint.
+      const text = input.rewritten_text.replace(/^version:.*$/m, `version: ${next}`);
+      const actor = { id: job.confirmed_by };
+      const child = await appendVersion(actor, { id: source.skill_id, name: source.name}, parse(source.task_types_json, []), text, source.id,
+        { evaluation: input.evaluation });
+      await db.run("UPDATE ai_skill_versions SET origin='rewrite' WHERE id=?", [child.version.id]);
       await finish('succeeded', null);
-      return { status: 'succeeded', lint_ok: lint.ok };
+      return { status: 'succeeded', lint_ok: child.version.lint.ok, version_id: child.version.id };
     });
   }
   const proposalFields = input => {
@@ -367,7 +447,7 @@ export function createSkillService(db) {
         requests: [...new Set(uses.map(s => s.source_request_id))], steps: uses.slice(0,20).map(s => ({ request_id: s.source_request_id, run_id: s.run_id, span_id: s.span_id,
           version: s.skill_events.find(e => e.attributes?.['tizia.skill.name'] === item.name)?.attributes?.['tizia.skill.version'] })) };
     }
-    return { skills: items, usage_window: 'latest_2000_spans', token_method: 'utf8_upper_bound' };
+    return { skills: items, usage_window: 'latest_2000_spans', token_method: tokenCounter().method };
   }
-  return { upload, read, approve, disable, active, list, requestRewrite, reject, edit, rollback, claimRewrite, reportRewrite, createProposal, proposals, claimRetro, reportRetro };
+  return { upload, read, approve, disable, active, list, requestRewrite, promoteLegacyRewrite, reject, edit, rollback, claimRewrite, reportRewrite, createProposal, proposals, claimRetro, reportRetro };
 }

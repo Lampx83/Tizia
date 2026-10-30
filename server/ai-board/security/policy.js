@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 
 import { check as checkPath } from './path-policy.js';
+import { isSkillTaskType } from '../skill-task-types.js';
 
 export const CAPABILITY_POLICY_VERSION = 'd0-v3'; // v3: money_paths luôn cần người
 const LEXICON = JSON.parse(fs.readFileSync(new URL('../guard-lexicon.json', import.meta.url), 'utf8'));
@@ -173,7 +174,10 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
     if (plan.grounding.evidence.some((e) => !e || typeof e !== 'object' || Array.isArray(e))) fail('malformed_plan', 'invalid source evidence');
     normalized.grounding = { sha: plan.grounding.sha, evidence: plan.grounding.evidence.map((e) => ({
       target: safePath(e.target, 'grounding.target'), file: safePath(e.file, 'grounding.file'),
-      ...Object.fromEntries(['quote', 'before', 'after', 'verify'].map((key) => [key, nonEmptyString(e[key], `grounding.${key}`).slice(0, 1200)])),
+      // A new file has no source line to quote: the worker verifies the quote for existing files and sends an
+      // empty one only for a file absent from the base (before/after/verify are still required).
+      quote: typeof e.quote === 'string' ? e.quote.slice(0, 1200) : fail('malformed_plan', 'grounding.quote must be a string'),
+      ...Object.fromEntries(['before', 'after', 'verify'].map((key) => [key, nonEmptyString(e[key], `grounding.${key}`).slice(0, 1200)])),
     })) };
   }
   if (plan.read_only_admin_verification === true) normalized.read_only_admin_verification = true;
@@ -223,7 +227,7 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
     const risk = nonEmptyString(step.risk, `steps[${index}].risk`);
     if (!RISKS.has(risk)) fail('malformed_plan', `unknown step risk '${risk}'`);
     if (risk === 'high' && tier === 'surface') tier = 'protected';
-    if (step.task_type != null && !['backend', 'frontend', 'database', 'review', 'test', 'all'].includes(step.task_type)) {
+    if (step.task_type != null && !isSkillTaskType(step.task_type)) {
       fail('malformed_plan', `invalid steps[${index}].task_type`);
     }
     const layer = step.layer == null ? inferLayer(allowedScope[0]) : nonEmptyString(step.layer, `steps[${index}].layer`);

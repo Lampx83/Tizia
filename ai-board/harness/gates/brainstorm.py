@@ -29,6 +29,7 @@ import context
 import functional
 from gates import best_match, react_plan
 from gates.scope_check import load_capability_names
+from runtime.plan_merge import merge_same_file
 
 ROOT = Path(__file__).resolve().parents[3]
 SIZES = ("small", "large")
@@ -47,6 +48,8 @@ RETRY_SUFFIX = "\n\nYOUR PREVIOUS ANSWER WAS REJECTED: {reason}\nFix exactly tha
 # Prompt sống ở file riêng (ai-board/harness/prompts/), đọc 1 lần lúc import — phần trước
 # {context} cố định byte-để-byte mọi lần gọi (kỷ luật cache, khoá bằng prompts.lock.json).
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "brainstorm.md").read_text(encoding="utf-8")
+# Request keys the planner reads (LF/125). plan_repair is planner-only: the validator never gets it.
+PLANNER_INPUTS = ("id", "domain", "type", "votes", "subject", "body", "thread", "clarified_spec", "plan_repair", "task_type", "complexity_by_server")
 
 
 def build_prompt(request: dict, surface: frozenset[str], context_text: str = "") -> str:
@@ -224,6 +227,19 @@ def ask_search_terms(request: dict, deps, budget, *, db_path=None, proposal_id: 
     return [] if body.get("done_reason") == "length" else parse_search_terms(body.get("response", ""))
 
 
+def new_files(plan: dict, source, sha: str | None) -> set[str]:
+    """Plan files that do not exist at sha: a new file has no source line to match (feature adds files)."""
+    files = [st["file"] for st in plan["subtasks"]]
+    if sha is None or not files:
+        return set()
+    try:
+        found = set(code_index.git(source, "ls-tree", "--name-only", sha, "--", *files)
+                    .decode("utf-8", "replace").splitlines())
+    except OSError:
+        return set()
+    return {f for f in files if f not in found}
+
+
 def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = None,
         source=None, sha: str | None = None) -> dict:
     """1 lời gọi GATE1_MODEL (+1 lần hỏi lại nếu plan sai schema/file), tính phí budget.
@@ -256,6 +272,9 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
         elif trace:
             trace.note("knows", "retry feedback", reason)
         ask = prompt if not attempt else prompt + RETRY_SUFFIX.format(reason=reason)
+        if request.get("plan_repair"):
+            # Lượt sửa plan: hint riêng, không nằm trong thread để validator không đọc nhầm.
+            ask = f"{ask}\n\n{request['plan_repair']}"
         skill_context = {'task_type': request.get('task_type'), 'file': (ctx.get('targets') or [''])[0]}
         react = None
         if not attempt and react_plan.enabled():
@@ -263,10 +282,17 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                                    db_path=db_path, proposal_id=proposal_id, skill_context=skill_context)
         body = react or deps.call_model(deps.models.gate1_model, ask, gate=1, budget=budget,
                                         db_path=db_path, proposal_id=proposal_id, prompt_name="brainstorm.md",
-                                        skill_context=skill_context)
+                                        skill_context=skill_context,
+                                        # Lượt sửa plan: phá vòng lặp của model nhỏ (LF/106).
+                                        options=({"temperature": 0.7, "top_p": 0.9, "presence_penalty": 0.4}
+                                                 if os.environ.get("AI_BOARD_PLAN_REPAIR") == "1" else None))
         stage = "plan parse"
         try:
             plan = parse_plan(body.get("response", ""))
+            # Gộp subtask cùng file NGAY sau khi parse: validator cổng 1 từ chối plan trùng file
+            # trước khi tới _canonical, nên gộp muộn hơn là vô nghĩa.
+            if isinstance(plan, dict) and plan.get("subtasks"):
+                plan = {**plan, "subtasks": merge_same_file(plan["subtasks"])}
             judge(stage, True, plan.get("summary_vi", ""))
             stage = "files exist"
             check_files(plan, source, commit)
@@ -274,9 +300,18 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             stage = "renderer match"
             required = functional.expected_targets({'request_title': request.get('subject'), 'request_detail': request.get('body')})
             if required.intersection(ctx.get('targets') or []) and not required.intersection(task['file'] for task in plan['subtasks']):
-                raise ValueError('Use the existing feature renderer: ' + ', '.join(sorted(required)))
-            best_match.enforce(ctx.get('best_match'), {task['file'] for task in plan['subtasks']},
-                               f"Sửa file khớp nhiều cụm người dùng viết nhất: {ctx.get('best_match')}", judge)
+                judge(stage, True, 'oracle advisory: plan does not edit ' + ', '.join(sorted(required)))
+            added = new_files(plan, source, commit)
+            feature = request.get('type') == 'feature' or bool(request.get('complexity_by_server'))
+            if added and feature:
+                # A feature adds files that do not exist yet: no "most quoted file" to edit, so record the
+                # recommendation instead of blocking the plan (path/layer rules still apply). An edit request
+                # that names a file absent from the base still has to pick the best-matching file.
+                judge(stage, True, f"{best_match.REASON_CODE}: plan adds new files ({', '.join(sorted(added))}); "
+                                   f"best-match {ctx.get('best_match') or '(none)'}")
+            else:
+                best_match.enforce(ctx.get('best_match'), {task['file'] for task in plan['subtasks']},
+                                   f"Sửa file khớp nhiều cụm người dùng viết nhất: {ctx.get('best_match')}", judge)
             judge(stage, True, f"best-match file: {ctx.get('best_match') or '(none)'}")
         except ValueError as e:
             judge(stage, False, str(e))

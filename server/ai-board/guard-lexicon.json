@@ -164,14 +164,14 @@
       "intake": "human_review", "diff": null,
       "terms": [
         "(xoa|delete|remove) (tai khoan|account|container|database)",
-        "mật khẩu", "đăng nhập", "xác thực", "phân quyền", "quyền admin", "quyền quản trị", "trang quản trị",
+        "mật khẩu", "xác thực", "phân quyền", "quyền admin", "quyền quản trị", "trang quản trị",
         "thanh toán", "nạp tiền", "chuyển khoản", "hoàn tiền",
         "sửa điểm", "đổi điểm", "tăng điểm", "cộng điểm cho", "chấm điểm lại", "bảng điểm", "điểm thi",
         "cộng sao", "cộng xu", "tặng xu", "hack điểm", "hack xu",
         "dữ liệu của (bạn|người) khác", "thông tin (của )?(học sinh|sinh viên|người dùng) khác",
         "danh sách (học sinh|sinh viên|người dùng)", "tắt (bảo mật|xác thực|captcha)", "biến môi trường", "bien moi truong", "khóa bí mật", "khoa bi mat", "khóa api", "khoa api", "quyền (giáo viên|giảng viên)", "quyen (giao vien|giang vien)", "kiểm tra quyền", "kiem tra quyen", "tôi là (admin|quản trị viên)", "toi la (admin|quan tri vien)",
         "mat khau", "phan quyen", "thanh toan", "nap tien", "chuyen khoan", "sua diem", "hack diem",
-        "password", "login", "oauth", "csrf", "session", "cookie", "admin", "payment", "hack",
+        "password", "oauth", "csrf", "session", "cookie", "admin", "payment", "hack",
         "rate limit", "captcha", "api key", "secret key", "\\.env"
       ]
     },

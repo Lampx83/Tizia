@@ -7,6 +7,7 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { openBoard } from './support/ai-board-db.js';
+import { VENV_PYTHON } from './support/harness-python.js';
 import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
 import { attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
 import { attachLessonReviewRoutes } from '../server/ai-board/api/lessons.js';
@@ -154,7 +155,7 @@ test('legacy import maps server authority, quarantines unknown provenance, retri
 test('actual Python RemoteLessons and WorkerClient record over HTTP and rebuild recall from PostgreSQL on a different worker',async()=>{
   const f=await fixture();
   try {
-    const python=process['env'].PYTHON || path.resolve('ai-board/harness/.venv/Scripts/python.exe');
+    const python=process['env'].PYTHON || VENV_PYTHON;
     const script=`import sys,json
 from pathlib import Path
 root=Path.cwd()

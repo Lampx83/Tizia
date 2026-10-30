@@ -176,7 +176,8 @@ class Deps:
         if skill_context:
             extra = {**(extra or {}), '_skill_context': skill_context}
         if not budget.tick() or not budget.can_request():
-            raise BudgetExhausted("budget exhausted before model call (request token bound)")
+            # Nêu đúng cap đã chạm để admin/worker biết đường nới (budget visibility).
+            raise BudgetExhausted(f"budget exhausted before model call (request token bound): {budget.exhausted() or 'can_request'}")
         if getattr(self.models, 'routing', None):
             return self._call_routed(model, prompt, gate=gate, budget=budget, db_path=db_path,
                                      proposal_id=proposal_id, format=format, prompt_name=prompt_name,
@@ -335,6 +336,8 @@ def _intake_and_plan(request, deps, budget, state, **trace) -> dict:
     # Worker clone at origin/<base> when set; else the repo holding the harness.
     out = brainstorm.run(request, deps, budget, source=state.get("checkout_source"), **trace)
     state["plan"] = out.get("plan")
+    # Lệnh acceptance cấp feature: cổng 5 chạy trước verdict (cùng khoá worker gửi sang sandbox).
+    state["acceptance"] = list((out.get("plan") or {}).get("acceptance") or [])
     state['planning_context'] = out.get('repo_context')
     state['source_targets'] = out.get('source_targets') or []
     state['best_match'] = out.get('best_match')

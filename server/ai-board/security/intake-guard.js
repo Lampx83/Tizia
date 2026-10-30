@@ -45,6 +45,17 @@ export function checkIntake(title, detail) {
     ? LEXICON.public_messages[hits.some((h) => h.label === 'prompt_injection') ? 'prompt_injection' : 'reject'] : null };
 }
 
+// Skill text and admin notes feed the model directly, so sensitive topics are refused outright, not just flagged.
+const SKILL_TOPICS = new Set(['politics_sovereignty', 'religion', 'violence_weapons', 'drugs_gambling', 'self_harm']);
+
+/** Intake check + hard refusal of sensitive topics for skill text and rewrite notes. */
+export function checkSkillText(text) {
+  const base = checkIntake('', text);
+  if (base.block) return base;
+  const hit = base.labels.some((label) => SKILL_TOPICS.has(label));
+  return hit ? { ...base, block: true, message: LEXICON.public_messages.reject } : base;
+}
+
 export async function recordIntakeRejection(db, userId, intake) {
   if (!db) return;
   const now = Date.now();

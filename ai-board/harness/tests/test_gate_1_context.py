@@ -12,8 +12,8 @@ def test_requester_eta_context_names_existing_renderer_without_user_file_hint():
     request = {"subject": "Bổ sung giải thích thời gian chờ khi worker chưa sẵn sàng",
                "body": "[Trang: Trường CNTT] /school.html?domain=it\nỞ tab Của bạn, thêm câu sau chưa thể ước tính. Worker busy/ready vẫn có ETA."}
     result = context.build_context(1, request, None, source, "HEAD")
-    assert "public/js/suggestion-fab.js" in result["targets"]
-    assert "chưa thể ước tính" in result["text"]
+    assert "ORACLE HINT" in result["text"] and "public/js/suggestion-fab.js" in result["text"]
+    assert "public/js/suggestion-fab.js" not in result["targets"]
 
 
 # ── cổng 1: context vào prompt, màu chữ → file CSS trang liên kết ───────────

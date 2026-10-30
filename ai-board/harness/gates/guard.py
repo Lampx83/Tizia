@@ -49,14 +49,29 @@ SELF_EDIT = [re.compile(p) for p in LEXICON["self_edit_paths"]["patterns"]]
 
 # Term ASCII so trên bản bỏ dấu, term có dấu so trên bản NFC — xem _doc trong guard-lexicon.json.
 _TOPICS ={label: [(_term(t), t.isascii()) for t in spec["terms"]] for label, spec in LEXICON["labels"].items()}
+# "không cần đăng nhập riêng" / "chưa có mật khẩu" = mô tả phủ định, không phải yêu cầu quyền.
+_NEGATED = re.compile(r"(?:không|khong|chưa|chua|miễn|mien|khỏi|khoi|no|not|without)\b[^.;:!?\n]{0,32}$", re.I)
+
+
+def _negated(text: str, start: int) -> bool:
+    """Từ khoá đứng ngay sau một phủ định trong cùng mệnh đề."""
+    return bool(_NEGATED.search(text[max(0, start - 48):start]))
 
 
 def topic_hits(text: str | None) -> list[str]:
-    """Nhãn lexicon trúng trong text, theo thứ tự file JSON."""
+    """Nhãn lexicon trúng trong text, theo thứ tự file JSON; bỏ lượt trúng bị phủ định."""
     if not text:
         return []
     exact, folded = unicodedata.normalize("NFC", text).lower(), fold(text)
-    return [label for label, pats in _TOPICS.items() if any(p.search(folded if a else exact) for p, a in pats)]
+    hits = []
+    for label, pats in _TOPICS.items():
+        for pattern, ascii_only in pats:
+            haystack = folded if ascii_only else exact
+            match = pattern.search(haystack)
+            if match and not _negated(haystack, match.start()):
+                hits.append(label)
+                break
+    return hits
 
 
 def host_allowed(host: str, allowed=None) -> bool:
@@ -251,6 +266,10 @@ _INJECTION = [re.compile(p, re.I) for p in (
 _FEATURE_MODULE = re.compile(
     r'^\s*<script\s+type="module"\s+src="(?:\./)?js/features/[a-z0-9]+(?:-[a-z0-9]+)*/[a-z0-9]+(?:-[a-z0-9]+)*\.js">'
     r'\s*</script>\s*$')
+# Script cùng gốc (không host, không handler, không nội dung inline) là module của chính site, không phải injection.
+_SAFE_SCRIPT = re.compile(r'^\s*<script\b(?![^>]*\son[a-z]+\s*=)[^>]*?\ssrc\s*=\s*"(?!(?:https?:)?//|javascript:)(?![^"]*\.\.)[^"\s]+"[^>]*>\s*</script>\s*$', re.I)
+# <script> inline không nội dung nguy hiểm: lỗi cấu trúc model sửa được (đưa code ra module), không phải injection.
+_INLINE_SCRIPT = re.compile(r'^\s*<script\b(?![^>]*\ssrc\s*=)[^>]*>\s*$', re.I)
 # ponytail: danh sách từ ngắn, đủ cho nội dung giáo dục D0; bộ lọc nội dung thật thay sau.
 _UNSAFE = re.compile(r"(?i)(?<!\w)(?:fuck|shit|bitch|đụ|địt|đĩ|lồn|cặc|đồ\s+ngu|óc\s+chó)(?!\w)")
 _TEST_PATH = re.compile(r"(?:^|/)(?:tests?|__tests__)/|(?:\.|_)(?:test|spec)\.[^/]+$|(?:^|/)test_[^/]+\.py$")
@@ -290,9 +309,9 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
     emails. request_text (yêu cầu gốc) chỉ để leo thang bảng màu cờ khi yêu cầu chạm chủ đề nhạy cảm."""
     findings, flags = [], []
 
-    def add(check, severity, detail):
+    def add(check, severity, detail, **where):
         findings.append({"check": check, "severity": severity, "failure_class": SEVERITY_CLASS[severity],
-                         "detail": detail[:300]})
+                         "detail": detail[:300], **where})
 
     def flag(check, severity, detail):
         flags.append({"check": check, "severity": severity, "detail": detail[:300]})
@@ -314,15 +333,22 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
             add("image", "high", f"{path}: ảnh/file nhị phân mới cần người duyệt")
         if not deleted and _SOVEREIGNTY_MAP.search(path):
             add("sovereignty_map", "high", f"{path}: bản đồ/lãnh thổ Việt Nam cần người duyệt")
-        for line in added:
+        for number, line in enumerate(added, 1):
             if any(p.search(line) for p in _SECRET):
                 add("secret", "critical", f"{path}: dòng thêm trông như secret")
             if is_test:
                 continue  # code test hợp lệ có eval/import; PII/nội dung chỉ xét file giao cho người dùng
             if _pii(line, allowed_contacts):
                 add("pii", "medium", f"{path}: dòng thêm có email/SĐT/CCCD")
-            if path.startswith("public/") and not _FEATURE_MODULE.match(line) and any(p.search(line) for p in _INJECTION):
-                add("injection", "critical", f"{path}: dòng thêm có script/handler/prompt injection")
+            if path.startswith("public/") and not _SAFE_SCRIPT.match(line) and not _FEATURE_MODULE.match(line):
+                pattern = next((p for p in _INJECTION if p.search(line)), None)
+                if pattern and pattern is _INJECTION[0] and _INLINE_SCRIPT.match(line) \
+                        and not any(p.search(line) for p in _INJECTION[1:]):
+                    add("inline_script", "medium", f"{path}:{number}: không dùng <script> inline; đưa code vào public/js/features/<slug>/index.js, HTML chỉ có 1 dòng nạp module",
+                        line=number, pattern=pattern.pattern)
+                elif pattern:
+                    add("injection", "critical", f"{path}:{number}: dòng thêm có script/handler/prompt injection",
+                        line=number, pattern=pattern.pattern)
             if _UNSAFE.search(line):
                 add("content", "medium", f"{path}: ngôn từ không phù hợp")
             if not path.endswith((".html", ".htm", ".js", ".mjs", ".svg")):

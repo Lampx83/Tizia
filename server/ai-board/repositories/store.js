@@ -240,7 +240,12 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     `, [Math.min(Math.max(Number(limit) || 200, 1), 500)]);
     const out = [];
     for (const f of folders) {
-      out.push({ ...folderRow(f), owner_name: f.owner_name,
+      const waiting_plans = f.approved_at ? [] : await db.all(`
+        SELECT q.id AS request_id, q.title FROM ai_tickets t JOIN requests q ON q.id = t.source_request_id
+        WHERE q.folder_id = ? AND t.parent_id IS NULL AND t.status = 'waiting_authorization'
+          AND t.internal_reason = 'folder_not_approved' ORDER BY q.id
+      `, [f.id]);
+      out.push({ ...folderRow(f), owner_name: f.owner_name, waiting_plans,
         incident_id: f.incident_id,
         gpu_s: Math.round(f.gpu_s),
         // Chu kỳ đang mở: nhánh/đỉnh/PR của folder; chưa có thì trace của root mới nhất.
@@ -258,13 +263,25 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     await db.run(`UPDATE ai_feature_folders SET approved_by=?, approved_at=?, updated_at=?,
       state=CASE WHEN state='draft' THEN 'active' ELSE state END WHERE id=?`, [Number(adminUserId), now, now, folder.id]);
     await registerRelease(db, folder, adminUserId, now); // cờ phát hành, mặc định chỉ người tạo
-    const waiting = await db.all(`
-      SELECT t.id, t.plan_hash FROM ai_tickets t JOIN requests q ON q.id = t.source_request_id
+    const held = await db.all(`
+      SELECT t.id, t.plan_hash, t.plan_revision, p.tier FROM ai_tickets t JOIN requests q ON q.id = t.source_request_id
+      JOIN ai_plans p ON p.root_ticket_id = t.id AND p.revision = t.plan_revision
       WHERE q.folder_id = ? AND t.parent_id IS NULL AND t.status = 'waiting_authorization'
         AND t.internal_reason = 'folder_not_approved'
     `, [folder.id]);
-    for (const root of waiting) await authorizePlanTransaction(root.id, root.plan_hash, adminUserId, now);
-    return { ok: true, authorized: waiting.length };
+    for (const root of held) {
+      const authorized = !!await db.get(`
+        SELECT 1 FROM ai_authorizations WHERE root_ticket_id=? AND plan_hash=? AND plan_revision=?
+      `, [root.id, root.plan_hash, root.plan_revision]);
+      const gate = planGate({ tier: root.tier, authorized, folderHeld: false });
+      const runnable = gate.status === 'planned';
+      await db.run(`UPDATE ai_tickets SET status=?, phase=?, public_note=?, internal_reason=?, updated_at=? WHERE id=?`,
+        [runnable ? 'queued' : gate.status, runnable ? 'authorized' : 'ticketized', gate.note, gate.reason, now, root.id]);
+      await db.run(`UPDATE ai_tickets SET status=?, public_note=?, internal_reason=?, updated_at=?
+        WHERE parent_id=? AND plan_revision=? AND status='waiting_authorization'`,
+      [gate.child, gate.note, gate.reason, now, root.id, root.plan_revision]);
+    }
+    return { ok: true, released: held.length };
   });
 
   async function approveFolder(folderId, adminUserId) {
@@ -453,7 +470,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     const live = await db.all(`
       SELECT t.* FROM ai_tickets t JOIN requests q ON q.id = t.source_request_id
       WHERE q.folder_id = ? AND t.parent_id IS NULL AND t.plan_hash IS NOT NULL
-        AND ((t.lease_owner IS NOT NULL AND t.lease_expires_at > ?) OR (t.status = 'queued' AND t.phase = 'authorized'))
+        AND ((t.lease_owner IS NOT NULL AND t.lease_expires_at > ?) OR (t.status = 'queued' AND t.phase = 'authorized') OR t.status = 'planned')
     `, [Number(folderId), now]);
     for (const root of live) {
       await closeRoot(root, {
@@ -517,6 +534,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       out.push({ ...row, attachments: parseAttachments(row.attachments),
         status_label: workflow?.status_label ?? null,
         awaiting_user: workflow?.awaiting_user === true,
+        awaiting_confirm: workflow?.awaiting_confirm === true,
         queue: row.workflow_status === 'queued' ? queue.get(row.root_ticket_id) ?? null : null });
     }
     return out;
@@ -541,10 +559,13 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     const last = await db.get('SELECT author_name FROM request_messages WHERE request_id=? ORDER BY id DESC LIMIT 1', [Number(requestId)]);
     // awaiting_user: Ban hỏi xong và đang chờ chính người gửi trả lời (không phải đang chờ người xác nhận tóm tắt).
     const awaiting_user = root.phase === 'clarifying' && last?.author_name === CLARIFY_AUTHOR;
-    return { workflow_status: root.status, phase: root.phase, public_note: root.public_note, awaiting_user,
+    // awaiting_confirm: đã có bản tóm tắt, chờ người gửi xem lại và bấm gửi (hoặc làm rõ tiếp).
+    const awaiting_confirm = root.phase === 'clarifying' && last?.author_name === SPEC_AUTHOR;
+    return { workflow_status: root.status, phase: root.phase, public_note: root.public_note, awaiting_user, awaiting_confirm,
       status_label: awaiting_user ? 'chờ bạn trả lời'
-        : root.status === 'waiting_authorization' ? 'chờ quản trị viên cho phép'
-          : PHASES[root.phase]?.label ?? root.public_note ?? null };
+        : awaiting_confirm ? 'chờ bạn xem lại và gửi'
+          : root.status === 'waiting_authorization' ? 'chờ quản trị viên cho phép'
+            : PHASES[root.phase]?.label ?? root.public_note ?? null };
   }
 
   async function queueInfo(ownerUserId, now = Date.now()) {
@@ -1321,6 +1342,19 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     return await recordPlanBlockTransaction(ticketId, input, error);
   }
 
+  // Trạng thái plan theo cổng: folder chưa duyệt giữ (tier không đổi), core người làm, protected chờ admin, còn lại chạy.
+  function planGate({ tier, authorized, folderHeld }) {
+    if (folderHeld) return { status: 'waiting_authorization', child: 'waiting_authorization', reason: 'folder_not_approved',
+      note: 'Chức năng chưa được quản trị viên duyệt; kế hoạch chờ duyệt chức năng.' };
+    if (tier === 'core') return { status: 'human_owned', child: 'human_owned', reason: 'core capability cannot be auto-implemented',
+      note: 'Yêu cầu chạm phần lõi và đã được chuyển cho con người xử lý.' };
+    if (tier === 'protected' && !authorized) return { status: 'waiting_authorization', child: 'waiting_authorization',
+      reason: 'protected capability requires explicit admin authorization', note: 'Kế hoạch đang chờ quản trị viên cho phép trước khi triển khai.' };
+    return { status: 'planned', child: 'queued', reason: null, note: 'Kế hoạch đã được kiểm tra và chia thành các việc theo thứ tự.' };
+  }
+  const folderNotApproved = async (requestId) => !!await db.get(
+    'SELECT 1 FROM requests q JOIN ai_feature_folders f ON f.id = q.folder_id WHERE q.id = ? AND f.approved_at IS NULL', [Number(requestId)]);
+
   const submitPlanTransaction = (ticketId, input, checked) => db.tx(async () => {
     const now = input.now;
     const root = await assertLease(ticketId, input.workerId, input.leaseToken, now);
@@ -1343,9 +1377,8 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       const authorized = !!await db.get(`
         SELECT 1 FROM ai_authorizations WHERE root_ticket_id=? AND plan_hash=? AND plan_revision=?
       `, [Number(ticketId), existing.plan_hash, existing.revision]);
-      const plannedStatus = existing.tier === 'surface' ? 'planned'
-        : existing.tier === 'protected' && authorized ? 'planned'
-          : existing.tier === 'protected' ? 'waiting_authorization' : 'human_owned';
+      const plannedGate = planGate({ tier: existing.tier, authorized, folderHeld: await folderNotApproved(root.source_request_id) });
+      const plannedStatus = plannedGate.status;
       if (!sameSubmission) {
         const rounds = root.auto_rounds; // resuming an identical valid plan (worker restart) is not a new automatic round
         const budget = root.cumulative_budget + input.budgetUsed;
@@ -1366,8 +1399,8 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
         }
         await db.run(`
           UPDATE ai_tickets SET status=?, phase='ticketized', auto_rounds=?,
-            cumulative_budget=?, updated_at=? WHERE id=?
-        `, [plannedStatus, rounds, budget, now, Number(ticketId)]);
+            cumulative_budget=?, internal_reason=?, updated_at=? WHERE id=?
+        `, [plannedStatus, rounds, budget, plannedGate.reason, now, Number(ticketId)]);
         await db.run(insertEvent, [Number(ticketId), 'plan_validated', 'worker', input.workerId, `running->${plannedStatus}`,
           root.public_note, 'resumed existing validated plan',
           `plan-valid:${input.idempotencyKey}`, now,]);
@@ -1407,28 +1440,15 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       return { plan_hash: checked.planHash, tier: checked.tier, status: 'waiting_admin', reason, children: [] };
     }
 
-    // Folder chức năng chưa được admin duyệt: plan mặt bằng cũng phải chờ. Đã duyệt → tier như thường.
-    const folder = await db.get(`SELECT f.approved_at FROM requests q JOIN ai_feature_folders f ON f.id = q.folder_id
-      WHERE q.id = ?`, [root.source_request_id]);
-    const folderGate = !!folder && !folder.approved_at && checked.tier === 'surface';
-    if (folderGate) checked = { ...checked, tier: 'protected' };
     const revision = root.plan_revision + 1;
     const authorized = !!await db.get(`
       SELECT 1 FROM ai_authorizations WHERE root_ticket_id=? AND plan_hash=? AND plan_revision=?
     `, [Number(ticketId), checked.planHash, revision]);
-    let rootStatus = 'planned';
-    let childStatus = 'queued';
-    let publicNote = 'Kế hoạch đã được kiểm tra và chia thành các việc theo thứ tự.';
-    let internalReason = null;
-    if (checked.tier === 'protected' && !authorized) {
-      rootStatus = childStatus = 'waiting_authorization';
-      publicNote = 'Kế hoạch đang chờ quản trị viên cho phép trước khi triển khai.';
-      internalReason = folderGate ? 'folder_not_approved' : 'protected capability requires explicit admin authorization';
-    } else if (checked.tier === 'core') {
-      rootStatus = childStatus = 'human_owned';
-      publicNote = 'Yêu cầu chạm phần lõi và đã được chuyển cho con người xử lý.';
-      internalReason = 'core capability cannot be auto-implemented';
-    }
+    const gate = planGate({ tier: checked.tier, authorized, folderHeld: await folderNotApproved(root.source_request_id) });
+    const rootStatus = gate.status;
+    const childStatus = gate.child;
+    const publicNote = gate.note;
+    const internalReason = gate.reason;
     await db.run(`
       INSERT INTO ai_plans(root_ticket_id, revision, plan_hash, plan_json, status, tier,
         capability_policy_hash, public_reason, internal_reason, created_at)
@@ -1575,6 +1595,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       : verdict.outcome === 'needs_review' ? 'Thay đổi cần con người xem xét trước PR.'
         : 'Thay đổi chưa qua kiểm tra trước PR.';
     let leaseExpiresAt = null; // non-null chỉ khi transient_retry bật: dời deadline lease để claimTransaction tự cứu
+    let replan = false;
     if (verdict.failure_class === 'critical') {
       status = 'waiting_admin';
       phase = 'critical_violation';
@@ -1589,9 +1610,24 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       note = 'Yêu cầu đang chờ quản trị viên xem xét.';
     } else if (verdict.failure_class === 'plan') {
       // The accepted plan cannot be carried out as written: admin clarifies, rejects or hands it to a human.
+      // LF/74 (cờ repair_replan, mặc định tắt): lập lại kế hoạch một vòng tự động, vẫn trong trần lượt tự động
+      // hiện có (auto_rounds; submitPlan chặn khi rounds > 2). Tắt cờ hoặc hết lượt → plan_unfit như cũ.
+      if (CONTRACT.repair_replan?.enabled && Number(root.auto_rounds) < 2) {
+        replan = true;
+        status = 'queued';
+        phase = 'needs_replan';
+        note = 'Kế hoạch chưa thực hiện được như đã viết; hệ thống sẽ lập lại kế hoạch một vòng.';
+      } else {
+        status = 'waiting_admin';
+        phase = 'plan_unfit';
+        note = 'Yêu cầu đang chờ quản trị viên xem xét.';
+      }
+    } else if (verdict.failure_class === 'partial') {
+      // Đã xong một phần plan (LF/107): checkpoint giữ nguyên, người gửi bấm "Tiếp tục" để chạy nốt —
+      // không phải lượt hỏng nên không tính retry và không ghi quyết định cho folder.
       status = 'waiting_admin';
-      phase = 'plan_unfit';
-      note = 'Yêu cầu đang chờ quản trị viên xem xét.';
+      phase = 'partial';
+      note = 'Đã hoàn thành một phần kế hoạch; bấm "Tiếp tục" để làm nốt phần còn lại.';
     } else if (verdict.failure_class === 'transient') {
       // Lỗi hạ tầng thoáng qua, backoff gọi model đã hết mà vẫn hỏng (main.py MODEL_RETRY_BACKOFF_S). Plan vẫn
       // hợp lệ (chỉ hạ tầng hỏng, không phải plan sai) nên dùng lại đúng đường "đã duyệt, chờ worker" của một
@@ -1627,6 +1663,13 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
         input.now, input.now]);
       await db.run(insertTag, [child, 'repair']);
     }
+    if (replan) {
+      // Cùng đường với admin rerun planning: plan cũ invalidated, plan_hash/lease xoá để worker nhận lượt
+      // needs_replan rồi lập revision mới. Budget/auto_rounds/ledger giữ nguyên.
+      await invalidateCurrentPlan(root, input.now);
+      await db.run(`UPDATE ai_tickets SET plan_hash=NULL, lease_owner=NULL, lease_token=NULL,
+        lease_expires_at=NULL WHERE id=?`, [root.id]);
+    }
     if (leaseExpiresAt != null) {
       // Về hàng đợi (không ai giữ): xoá lease_owner/token cũ, lease_expires_at dùng làm "không nhận trước giờ này".
       await db.run(`UPDATE ai_tickets SET status=?, phase=?, public_note=?, internal_reason=?, cumulative_budget=?,
@@ -1640,7 +1683,8 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       VALUES (?, ?, 'pre_pr_verdict', 'worker', ?, ?, ?, ?, ?, ?)
     `, [root.id, run.id, input.workerId, `running->${phase}`, note, verdict.reason,
       input.idempotencyKey, input.now]);
-    if (verdict.outcome === 'blocked' && leaseExpiresAt == null && status !== 'waiting_admin') await recordFolderDecision(root, 'blocked', verdict.reason, input.now);
+    if (verdict.outcome === 'blocked' && leaseExpiresAt == null && status !== 'waiting_admin'
+      && !replan && verdict.failure_class !== 'partial') await recordFolderDecision(root, 'blocked', verdict.reason, input.now);
     return verdict;
   });
 
@@ -1932,8 +1976,11 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     if (!root || ['cancelled', 'done'].includes(root.status) || PHASES[root.phase]?.terminal) {
       throw new WorkerContractError('request is already closed', 409, 'request_closed');
     }
-    const folder = await db.get(`SELECT f.state FROM ai_feature_folders f JOIN requests q ON q.folder_id=f.id WHERE q.id=?`, [root.source_request_id]);
+    const folder = await db.get(`SELECT f.state, f.approved_at FROM ai_feature_folders f JOIN requests q ON q.folder_id=f.id WHERE q.id=?`, [root.source_request_id]);
     if (folder?.state === 'archived') throw new WorkerContractError('folder is archived', 409, 'folder_archived');
+    if (folder && !folder.approved_at && root.internal_reason === 'folder_not_approved') {
+      throw new WorkerContractError('folder must be approved first', 409, 'folder_not_approved');
+    }
     const request = await db.get('SELECT folder_id FROM requests WHERE id=?', [root.source_request_id]);
     if (request?.folder_id) await assertFeatureNotIsolated(db, request.folder_id);
     const plan = await db.get('SELECT * FROM ai_plans WHERE root_ticket_id=? AND plan_hash=? AND status=?', [Number(rootTicketId), String(planHash), 'valid']);

@@ -68,3 +68,36 @@ test('worker and unrelated paths are not proxied; a guest is refused before the 
     assert.equal(up.seen.length, 0);
   } finally { await server.close(); await up.close(); }
 });
+
+test('requester paths go to the board; attachments and AI-decision audit stay on the web', async () => {
+  const up = await upstream();
+  const app = express();
+  app.use((req, _res, next) => { req.user = { id: 5, role: 'pupil', display_name: 'Lan', enrolled_domain: 'primary' }; next(); });
+  attachAiBoardProxy(app, { target: up.base, secret: SECRET });
+  app.use(express.json());
+  app.post('/api/requests', (req, res) => res.json({ local: true, body: req.body }));
+  app.get('/api/requests/:id/progress', (_req, res) => res.json({ local: true }));
+  app.post('/api/requests/:id/thread', (_req, res) => res.json({ local: true }));
+  app.post('/api/requests/attachments', (_req, res) => res.json({ local: true }));
+  app.get('/api/requests/:id/decisions', (_req, res) => res.json({ local: true }));
+  const server = await serve(app);
+  try {
+    for (const [method, url] of [['POST', '/api/requests'], ['GET', '/api/requests'],
+      ['GET', '/api/requests/7/progress'], ['POST', '/api/requests/7/continue'],
+      ['POST', '/api/requests/7/cancel'], ['POST', '/api/requests/7/retry'],
+      ['POST', '/api/requests/7/thread'], ['POST', '/api/requests/7/messages'], ['POST', '/api/requests/7/vote'],
+      ['POST', '/api/requests/7/edit']]) {
+      const reply = await fetch(`${server.base}${url}`, { method, headers: { 'content-type': 'application/json' }, body: method === 'GET' ? undefined : '{"body":"x"}' });
+      assert.equal(reply.status, 200, `${method} ${url}`);
+      assert.deepEqual(await reply.json(), { ok: true }, `${method} ${url} must come from the board`);
+    }
+    assert.equal(up.seen.length, 10);
+    assert.equal(verifyInternalHeaders(up.seen[0].headers, SECRET).user.id, 5);
+
+    for (const [method, url] of [['POST', '/api/requests/attachments'], ['GET', '/api/requests/7/decisions']]) {
+      const reply = await fetch(`${server.base}${url}`, { method, headers: { 'content-type': 'application/json' }, body: method === 'GET' ? undefined : '{}' });
+      assert.deepEqual(await reply.json(), { local: true }, `${method} ${url} must stay local`);
+    }
+    assert.equal(up.seen.length, 10);
+  } finally { await server.close(); await up.close(); }
+});

@@ -140,7 +140,9 @@ def test_queue_oracle_text_patterns_ignore_case_so_a_capitalised_sentence_counts
 def test_behaviour_oracles_are_selected_from_the_request_and_server_trusts_them():
     assert functional.select(ASK('Thêm nút sao chép phản hồi của Ban điều hành')) == functional.COPY_PROBE
     assert functional.select(ASK('Add a copy button to every AI response')) == functional.COPY_PROBE
-    assert functional.select(ASK('Thêm ô tìm kiếm hoạt động trong trang trường')) == functional.SEARCH_PROBE
+    assert functional.select(ASK('Xem lịch sử tìm kiếm trong trang trường')) == functional.SEARCH_PROBE
+    # 'ô tìm kiếm hoạt động' = hộp tìm kiếm chạy được, không phải tính năng lịch sử tìm kiếm.
+    assert functional.select(ASK('Thêm ô tìm kiếm hoạt động trong trang trường')) != functional.SEARCH_PROBE
     assert functional.select(ASK('Search activities by name')) == functional.SEARCH_PROBE
     assert functional.select(ASK("Thêm nút 'Sao chép' vào phản hồi")) == functional.COPY_PROBE  # behaviour beats the quoted label
     assert functional.select(ASK("Đổi chữ 'Sao chép phản hồi' thành 'Copy'")) == functional.TEXT_PROBE  # a rename is only text
@@ -231,7 +233,7 @@ def search_site(site_, mode):
 def search_probe(site_):
     pytest.importorskip('playwright.sync_api')
     _, base = site_
-    state = ASK('Thêm ô tìm kiếm hoạt động')
+    state = ASK('Xem lịch sử tìm kiếm các hoạt động')
     return functional.run(base, functional.select(state), lambda stage: {'token': 't', 'request_id': 1} if stage == 'seed' else None,
                           state=state, pages=['/school.html?domain=it'])
 

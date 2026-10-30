@@ -410,7 +410,7 @@ test('clarify model options: cloud answers need configuration, default is local'
   try {
     const options = await fetch(`${local.base}/api/ai-board/clarify/options`).then((r) => r.json());
     assert.equal(options.cloud_configured, false);
-    assert.equal(options.default_source, 'cloud');
+    assert.equal(options.default_source, 'local');
     const { request_id: id } = await vagueRequest(local);
     const refused = await local.turn(id, undefined, { model_source: 'cloud' });
     assert.equal(refused.status, 409);

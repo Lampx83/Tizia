@@ -238,12 +238,7 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
         known = [] if file else sorted(functional.expected_targets({'request_title': request.get('subject'), 'request_detail': request.get('body')}))
         known = [target for target in known if tools._show(source, commit, target) is not None]
         if known:
-            targets = known
-            parts.append('EXISTING FEATURE TARGET: ' + ', '.join(known) + '. Modify this renderer; do not add a different page.')
-            for target in known:
-                parts.append(f'FILE {target}\n' + file_context.excerpt(tools._show(source, commit, target),
-                    ['queueline', 'worker_ready', 'eta_s'] if functional.select({'request_title': request.get('subject'), 'request_detail': request.get('body')}) == functional.QUEUE_PROBE
-                    else keywords(request.get('body'), request.get('subject')), budget=1500, filename=target))
+            parts.append('ORACLE HINT (advisory, not a requirement): existing renderer ' + ', '.join(known) + '.')
         if not file and request.get("owned_files"):  # L2: file folder sở hữu lên đầu, lấy dàn ý
             targets = list(dict.fromkeys([*request["owned_files"], *targets]))
         # Chữ người dùng nhắc có thể không nằm ở trang trong dòng [Trang: …] mà ở module JS trang đó import:

@@ -26,6 +26,7 @@ Transport = Callable[[str, str, dict, dict], dict]
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "ai-board" / "harness"))
 # Worker <-> server contract, shared with server/ai-board/store.js; loader in harness runtime/limits.py.
+from runtime import coverage, objection_repeat  # noqa: E402
 from runtime.limits import config_sha256, contract, scaled_limit  # noqa: E402
 CONTRACT = contract()
 PLAN_GATES = tuple(CONTRACT["gates"]["plan"])
@@ -86,7 +87,8 @@ def _execution_plan(plan: dict) -> dict:
         })
     if not subtasks:
         raise ValueError("plan requires at least one step")
-    return {"subtasks": subtasks, "capabilities": list(plan.get("capabilities") or [])}
+    return {"subtasks": subtasks, "capabilities": list(plan.get("capabilities") or []),
+            "acceptance": [str(item) for item in (plan.get("acceptance") or []) if str(item).strip()]}
 
 
 def _public_gate_result(result: dict) -> dict:
@@ -121,6 +123,14 @@ def _public_gate_result(result: dict) -> dict:
 
 
 MAX_REPAIRS = CONTRACT["max_repairs"]  # server enforces the same bound
+REPAIR_REPLAN = CONTRACT.get("repair_replan") or {}
+
+
+def repair_cap() -> int:
+    """Trần lượt sửa của một lượt chạy: contract, nâng theo cờ repair_replan khi bật (LF/74)."""
+    if not REPAIR_REPLAN.get("enabled"):
+        return MAX_REPAIRS
+    return max(MAX_REPAIRS, int(REPAIR_REPLAN.get("max_repairs") or 0))
 
 
 def _scannable_decisions(text: str | None) -> str:
@@ -212,9 +222,12 @@ class _Execution:
         self.shots, self.gates, self.kind, self.candidate = [], [], None, None
         self.attempt_checkpoint = self.checkpoint.attempt(len(self.repairs)) if self.checkpoint is not None else None
         self.scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
+        execution_plan = _execution_plan(self.plan)
         state = self.state = {
-            "plan": _execution_plan(self.plan), "scratch_repo": str(self.scratch),
+            "plan": execution_plan, "scratch_repo": str(self.scratch),
             "checkout_source": str(self.checkout_source), "skill_id": f"ticket-{self.ticket_id}",
+            # Lệnh acceptance cấp feature: cổng 5 chạy trước verdict (và gửi sang guest nếu dùng sandbox).
+            "acceptance": list(execution_plan.get("acceptance") or []),
         }
         self.open = True
         if self.catalog is not None:
@@ -233,7 +246,7 @@ class _Execution:
             state["memory_path"] = str(self.memory_path)
         if self.repair_reason:
             state["repair_reason"] = self.repair_reason
-        state["repairs_left"] = MAX_REPAIRS - len(self.repairs)  # reviewer fix spends the same repair cap
+        state["repairs_left"] = repair_cap() - len(self.repairs)  # reviewer fix spends the same repair cap
         if self.plan.get("grounding"):
             import code_index
             if (code_index.git(self.checkout_source, "rev-parse", "HEAD").decode().strip() != self.plan["grounding"]["sha"]
@@ -326,8 +339,10 @@ class _Execution:
 
     def repair_check(self) -> str:
         last = self.gates[-1]
-        if self.kind != "ordinary" or len(self.repairs) >= MAX_REPAIRS:
+        if self.kind != "ordinary" or len(self.repairs) >= repair_cap():
             return "done"
+        if any(repair.get("reason") == last["reason"] for repair in self.repairs):
+            return "done"  # cùng một lỗi lặp lại: không có thông tin mới, dừng chứ không lặp (LF/74)
         if not self.budget.tick():
             self.kind = "budget"
             return "done"
@@ -347,8 +362,8 @@ class _Execution:
     def verdict(self) -> str:
         gates, kind, last = self.gates, self.kind, self.gates[-1]
         passed = _passed(gates, kind)
-        if self.checkpoint is not None and kind not in ("transient", "critical", "busy"):
-            self.checkpoint.purge()  # lượt có kết luận cuối; transient/critical/busy giữ lại để resume hoặc đối chiếu
+        if self.checkpoint is not None and kind not in ("transient", "critical", "busy", "partial"):
+            self.checkpoint.purge()  # lượt có kết luận cuối; transient/critical/busy/partial giữ lại để resume hoặc đối chiếu
         needs_review = passed and last["risk_level"] in ("high", "critical")
         outcome = "needs_review" if needs_review else "ready_for_pr" if passed else "blocked"
         if self.memory_path:
@@ -390,9 +405,11 @@ class _Reverification(_Execution):
             self.gates, self.kind = [{"gate": 3, "blocked": True, "reason": str(error)[:500]}], "ordinary"
             return "blocked"
         self.scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
+        execution_plan = _execution_plan(self.plan)
         state = self.state = {
-            "plan": _execution_plan(self.plan), "scratch_repo": owned["full_checkout"], "checkout_source": str(self.checkout_source),
-            "skill_id": f"ticket-{self.ticket_id}", "diffs": reverify.diffs_of(owned["commits"]), "should_stop": self.should_stop, **owned,
+            "plan": execution_plan, "scratch_repo": owned["full_checkout"], "checkout_source": str(self.checkout_source),
+            "skill_id": f"ticket-{self.ticket_id}", "diffs": reverify.diffs_of(owned["commits"]), "should_stop": self.should_stop,
+            "acceptance": list(execution_plan.get("acceptance") or []), **owned,
         }
         if self.catalog is not None:
             state["catalog"] = self.catalog
@@ -488,12 +505,7 @@ def _dependency_graph(plan: dict) -> list[dict]:
     """Child i phụ thuộc depends_on của step + level (LF/107); thiếu depends_on thì giữ chuỗi cũ."""
     from runtime import schedule
     steps = _execution_plan(plan).get("subtasks") or []
-    prepared = []
-    for index, step in enumerate(steps, start=1):
-        deps = step.get("depends_on")
-        prepared.append({**step, "order": step.get("order", index),
-                         "depends_on": list(deps) if deps is not None else ([index - 1] if index > 1 else [])})
-    return schedule.dependency_graph(prepared) if prepared else []
+    return schedule.dependency_graph(schedule.prepare(steps)) if steps else []
 
 
 def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate,
@@ -502,7 +514,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
                    should_stop: Callable[[], bool] | None = None, candidate_opts: dict | None = None,
                    request_type: str | None = None, eval_tasks: list[dict] | None = None, preview_capture=None,
                    checkpoint=None, plan_hash: str | None = None, reverify: dict | None = None) -> dict:
-    """Run Gates 3→5.5, repairing an ordinary failure at most MAX_REPAIRS times. Return a redacted verdict.
+    """Run Gates 3→5.5, repairing an ordinary failure at most repair_cap() times. Return a redacted verdict.
 
     policy = snapshot catalog {hash, capabilities}; None only outside the HTTP worker (no catalog check).
     memory_path = lessons JSONL: Gate 3 recalls from it, repairs and final blocks are appended to it.
@@ -636,6 +648,129 @@ class WorkerClient:
         """content_type riêng (vd SHOTS_TYPE) → bỏ qua express.json 64kb chung, route tự parse với trần riêng."""
         headers = {"x-ai-worker-key": self.key, **({"content-type": content_type} if content_type else {})}
         return self.transport("POST", path, payload, headers)
+
+
+def _plan_rejection(error) -> str | None:
+    """Nội dung từ chối của server khi plan sai schema; None nếu không phải lỗi nội dung plan."""
+    if getattr(error, "code", None) not in (400, 409):
+        return None
+    try:
+        body = error.read().decode("utf-8", "replace")
+    except Exception:
+        return None
+    return body[:400] if "malformed_plan" in body else None
+
+
+_RUNNABLE_VERIFY = re.compile(
+    r"^(node --test\b|node\s|npx\s|npm\s+(test|run)\b|curl\s|python[0-9.]*\s|pytest\b|bash\s|sh\s|docker compose\s|psql\s)")
+
+
+def _plan_repairable(stopped: dict) -> bool:
+    """Lỗi plan do model sinh sai (không phải nguồn/kỹ năng): đáng một lượt lập lại."""
+    gate = float(stopped.get("gate") or 0)
+    reason = str((stopped.get("result") or {}).get("reason") or "")
+    if gate == 1 and reason.startswith("plan không hợp lệ"):
+        return True
+    return gate == 2.5 and reason == "plan_ungrounded"
+
+
+def _objection_evidence(history: list[dict]) -> dict:
+    """Bằng chứng cả hai lượt phản đối cho admin; repeat_objection khi các lượt gần nhất cùng chữ ký."""
+    threshold = int((CONTRACT.get("evidence_gates") or {}).get("repeat_objection_threshold", 2))
+    return {"objection_history": [objection_repeat.describe(item) for item in history],
+            "repeat_objection": objection_repeat.repeated(history, threshold)}
+
+
+def _uncovered_conditions(request: dict, plan: dict, deps, budget) -> list[str]:
+    """Điều kiện của clarified_spec chưa có subtask verify chạy được; model chỉ khi không có mục tất định (LF/128)."""
+    def call_model(prompt: str) -> str:
+        if not hasattr(deps, "call_model"):  # deps không có model (test HTTP worker): không kiểm điều kiện
+            return ""
+        body = deps.call_model(deps.models.gate1_model, prompt, gate=1, budget=budget, format=coverage.SCHEMA,
+                               prompt_name="spec_conditions.md")
+        return str(body.get("response") or "")
+
+    items, _source = coverage.spec_conditions(str(request.get("clarified_spec") or ""), call_model)
+    return coverage.uncovered_items(items, plan)
+
+
+def _has_runnable_verify(plan: dict) -> bool:
+    return any(isinstance(task, dict) and _RUNNABLE_VERIFY.match(str(task.get("verify") or "").strip())
+               for task in plan.get("subtasks") or [])
+
+
+def _non_runnable_layered(plan: dict) -> list[str]:
+    """verify của subtask có `layer` phải là lệnh chạy được (server chỉ ép plan nhiều bước)."""
+    bad = []
+    for task in plan.get("subtasks") or []:
+        if not isinstance(task, dict) or not task.get("layer"):
+            continue
+        verify = str(task.get("verify") or "").strip()
+        if not _RUNNABLE_VERIFY.match(verify):
+            bad.append(f"{task.get('file')}: {verify[:80]}")
+    return bad
+
+
+def _plan_repair_note(reason: str, files: list[str] | None = None,
+                      rejected_files: list[str] | None = None) -> str:
+    """Lời nhắc cho lượt sửa plan: nêu lỗi, file trùng/file cũ và các luật cứng."""
+    dupes = [f for f in (files or []) if f]
+    old = [f for f in (rejected_files or []) if f and f not in dupes]
+    banned = "\n[CẤM TUYỆT ĐỐI]\n- KHÔNG được giao một file cho quá 1 subtask."
+    if dupes:
+        banned += "\n- File bị trùng: " + ", ".join(dupes)
+    if old:
+        banned += "\n- KHÔNG dùng lại file của plan bị từ chối: " + ", ".join(old)
+    banned += ("\n- Yêu cầu cần trang mới thì TẠO FILE MỚI, không sửa trang có sẵn."
+               "\n- Trang mới có danh sách dữ liệu + tương tác (tìm kiếm, mở/đóng): phải có 2 subtask — module "
+               "public/js/features/<slug>/<name>.js chứa dữ liệu và logic, rồi trang public/<slug>.html nạp module đó (depends_on)."
+               "\n- Mọi plan có `layer` phải có verify là LỆNH CHẠY ĐƯỢC (node --test <file>, curl <url>, pytest, python <file>, bash <script>)."
+               "\n- Plan trước đã sai vì vi phạm các điều trên; lặp lại thì hệ thống dừng ngay.")
+    return (f"Kế hoạch trước bị từ chối: {reason}.{banned}\n"
+            "Lập lại kế hoạch: trước khi viết, liệt kê [subtask | file] và kiểm tra không file nào lặp; "
+            "acceptance/verify của plan nhiều bước phải là LỆNH CHẠY ĐƯỢC "
+            "(node --test <file>, curl <url>, pytest, python <file>, bash <script>).")
+
+
+def _duplicate_files(reason: str) -> list[str]:
+    """Tên file nêu trong lỗi 'N subtask cùng sửa <file>' (rỗng nếu lỗi khác)."""
+    match = re.search(r"cùng sửa (\S+?)(?:\s+[—-]|$)", str(reason or ""))
+    return [match.group(1)] if match else []
+
+
+def _merge_same_file(subtasks: list[dict]) -> list[dict]:
+    """Gộp subtask cùng file (một file/subtask) trước khi validate; xem runtime/plan_merge.py."""
+    from runtime.plan_merge import merge_same_file
+    return merge_same_file(subtasks)
+
+
+def _plan_with_repair(run_plan: Callable[[dict], dict], request: dict, state: dict, budget, stopped: dict | None) -> tuple[dict | None, list[dict]]:
+    """Lượt lập lại plan sau lỗi sai luật (LF/106): trả (cổng chặn cuối, các lượt chặn theo thứ tự)."""
+    history = [dict(stopped)] if stopped else []
+    if not (stopped and _plan_repairable(stopped)):
+        return stopped, history
+    # Model sinh plan sai luật: một lượt lập lại với lỗi nêu riêng cho planner, không nhét vào thread
+    # (validator cổng 2.5 cũng đọc thread và sẽ coi file đó "đã bị từ chối"), sampling thoáng hơn.
+    reason = str(stopped["result"].get("reason") or "")
+    rejected = [str(st.get("file") or "") for st in ((state.get("plan") or {}).get("subtasks") or [])
+                if isinstance(st, dict)]
+    note = _plan_repair_note(reason, _duplicate_files(reason), rejected)
+    # Lượt sửa cần thêm lời gọi cổng 1/2/2.5; trần lượt gọi của lượt lập plan đang rất sát.
+    budget.max_model_calls = max(budget.max_model_calls, budget.model_calls + 5)
+    repaired = _repaired_snapshot(request, reason, note)
+    os.environ["AI_BOARD_PLAN_REPAIR"] = "1"
+    try:
+        stopped = run_plan(repaired)
+    finally:
+        os.environ.pop("AI_BOARD_PLAN_REPAIR", None)
+    if stopped:
+        history.append(dict(stopped))
+    return stopped, history
+
+
+def _repaired_snapshot(snapshot: dict, reason: str, note: str | None = None) -> dict:
+    """Snapshot cho lượt sửa plan: hint riêng cho planner, KHÔNG nhét vào thread (validator cũng đọc thread)."""
+    return {**snapshot, "plan_repair": note or _plan_repair_note(reason)}
 
 
 def _forge(candidate, token):
@@ -1036,10 +1171,24 @@ class HttpWorker:
         if self.planner and not executing:
             try:
                 plan, budget_used = self._with_heartbeat(lambda _lost: self.planner(snapshot, **plan_kwargs), ticket_id, lease)
-                planned = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/plan", {
-                    **lease, "run_id": run["id"], "plan": plan, "budget_used": budget_used,
-                    "idempotency_key": f"{prefix}:plan",
-                })
+                try:
+                    planned = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/plan", {
+                        **lease, "run_id": run["id"], "plan": plan, "budget_used": budget_used,
+                        "idempotency_key": f"{prefix}:plan",
+                    })
+                except urllib.error.HTTPError as rejected:
+                    # Plan schema rejected (LF/106): one bounded repair turn with the rejection text,
+                    # then the same submit. Any other 4xx/5xx keeps the old fail-fast path.
+                    reason = _plan_rejection(rejected)
+                    if not reason:
+                        raise
+                    repaired = _repaired_snapshot(snapshot, reason)
+                    plan, used_again = self._with_heartbeat(lambda _lost: self.planner(repaired, **plan_kwargs), ticket_id, lease)
+                    budget_used += used_again
+                    planned = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/plan", {
+                        **lease, "run_id": run["id"], "plan": plan, "budget_used": budget_used,
+                        "idempotency_key": f"{prefix}:plan-repair",
+                    })
             except Exception as error:
                 if isinstance(error, LeaseLostError):
                     raise
@@ -1190,6 +1339,7 @@ class HarnessPlanner:
             "body": request.get("clarified_spec") or request.get("detail") or request.get("title"),
             "clarified_spec": request.get("clarified_spec"),
             "thread": snapshot.get("thread") or [], "votes": request.get("votes", 1),
+            "plan_repair": snapshot.get("plan_repair"),
             "complexity_by_server": True,
             "grounding_required": request.get('type') != 'self',
             # Folder: L1 brief, L3 yêu cầu gần nhất, L2 file sở hữu — server tính, có trần.
@@ -1205,7 +1355,7 @@ class HarnessPlanner:
         old_caps = (["self.config"] if request.get("type") == "self"
                     else list(dict.fromkeys(old.get("capabilities") or [])))
         steps = []
-        for index, subtask in enumerate(old.get("subtasks") or [], start=1):
+        for index, subtask in enumerate(_merge_same_file(list(old.get("subtasks") or [])), start=1):
             file = posixpath.normpath(subtask["file"].replace("\\", "/"))
             capability = next((cap for cap in old_caps
                                if any(file.startswith(prefix) for prefix in (catalog or {}).get(cap, {}).get('allow', []))
@@ -1232,7 +1382,7 @@ class HarnessPlanner:
                 "layer": layer,
                 "depends_on": list(depends_on),
                 **({'task_type': subtask['task_type']} if subtask.get('task_type') in
-                   {'backend', 'frontend', 'database', 'review', 'test', 'all'} else {}),
+                   {'backend', 'frontend', 'database', 'review', 'test', 'merge', 'all'} else {}),
             })
         capabilities = list(dict.fromkeys([*old_caps, *(step["capability"] for step in steps)]))
         return {
@@ -1263,9 +1413,16 @@ class HarnessPlanner:
                     "gate": 1, "reason": f"folder_brief: {', '.join(stop)}", "signals": stop, "plan": None,
                     "public_message": "Chức năng này cần quản trị viên xem lại trước khi làm tiếp."})
         budget = self.Budget.from_env()
-        budget.max_model_calls = min(budget.max_model_calls, 5)
+        answered = os.environ.get("AI_BOARD_GATE25_ANSWERED", "").strip().lower() in {"1", "true", "yes", "on"}
+        # Một lượt lập kế hoạch: gate 1 (tối đa 2 lần, mỗi lần vài lời gọi), gate 2, gate 2.5 (chạy lại khi
+        # người gửi đã trả lời). Trần này chỉ chặn vòng lặp vô hạn; trần thật là root allowance của server.
+        budget.max_model_calls = min(budget.max_model_calls, 12 if answered else 10)
+        # Model 35B chạy tuần tự: một lượt lập plan (gate 1 nhiều lần thử + 2.5) dễ vượt 900 s mặc định.
+        budget.max_wall_clock_s = max(budget.max_wall_clock_s, 1800.0)
         ticket = snapshot.get("ticket") or {}
-        budget.max_units = int(ticket.get("budget_limit") or DEFAULT_BUDGET_LIMIT)  # trần mỗi lượt, không trừ các lượt trước
+        # Trần units mỗi lượt: plan của request mới chưa có steps nên budget_limit mặc định (200) quá thấp
+        # cho 10+ lời gọi model 35B; không thấp hơn trần units mặc định của contract.
+        budget.max_units = max(int(ticket.get("budget_limit") or DEFAULT_BUDGET_LIMIT), 600)
         source = source or self.source  # folder: đỉnh nhánh chu kỳ thay cho checkout chung
         state = {'catalog': (snapshot.get('capability_policy') or {}).get('capabilities', {})}
         if source:
@@ -1274,25 +1431,50 @@ class HarnessPlanner:
 
         stopped = {}
 
-        def plan_gate(gate):
-            def node():
-                result = self.run_gate(gate, request, self.deps, budget, state)
-                if gate == 1:
-                    self.last_skill = result.get("skill")
-                if result.get("blocked"):
-                    stopped.update(gate=gate, result=result)
-                    return "blocked"
-                return "passed"
-            return node
+        def run_plan(req):
+            """Một lượt cổng 1 → 2.5 trên `req`; trả {gate, result} của cổng chặn (rỗng nếu qua)."""
+            stopped.clear()
+            for key in ("plan", "complexity_signals", "intake", "grounding", "assumption", "skill"):
+                state.pop(key, None)
 
-        handlers = {f"gate_{str(g).replace('.', '_')}": plan_gate(g) for g in PLAN_GATES}
-        exec_graph.run(handlers, exec_graph.spec()["entries"]["plan"])
+            def plan_gate(gate):
+                def node():
+                    result = self.run_gate(gate, req, self.deps, budget, state)
+                    if gate == 1:
+                        self.last_skill = result.get("skill")
+                    if result.get("blocked"):
+                        stopped.update(gate=gate, result=result)
+                        return "blocked"
+                    return "passed"
+                return node
+
+            handlers = {f"gate_{str(g).replace('.', '_')}": plan_gate(g) for g in PLAN_GATES}
+            exec_graph.run(handlers, exec_graph.spec()["entries"]["plan"])
+            result = dict(stopped)
+            if not result:
+                # Plan có `layer` phải có verify chạy được (server chỉ ép plan nhiều bước).
+                bad = _non_runnable_layered(state.get("plan") or {})
+                if bad:
+                    result = {"gate": 1, "result": {
+                        "gate": 1, "blocked": True, "plan": None, "signals": [],
+                        "reason": f"plan không hợp lệ: verify phải là lệnh chạy được: {bad[0]}"}}
+                else:
+                    missing = _uncovered_conditions(request, state.get("plan") or {}, self.deps, budget)
+                    # Word overlap cannot prove a condition is uncovered; only a plan with no runnable verify at all is blocked.
+                    if missing and not _has_runnable_verify(state.get("plan") or {}):
+                        result = {"gate": 1, "result": {
+                            "gate": 1, "blocked": True, "plan": None, "signals": [],
+                            "reason": f"plan không hợp lệ: điều kiện chưa có subtask verify chạy được: {missing[0][:160]}"}}
+            return result
+
+        stopped, history = _plan_with_repair(run_plan, request, state, budget, run_plan(request))
         if stopped:
             gate, result = stopped["gate"], stopped["result"]
             raise PlanBlockedError(f"gate {gate} blocked: {result.get('reason')}", {
                 "gate": gate, "reason": result.get("reason"), "signals": list(result.get("signals") or []),
                 "public_message": result.get("public_message"),
                 "plan": json.dumps(state.get("plan"), ensure_ascii=False)[:2000],
+                **_objection_evidence(history),
             })
         signals = list(state.get("complexity_signals") or [])
         if snapshot.get("clarification_incomplete"):
@@ -1341,6 +1523,16 @@ def harness_change_runner(checkout_source=None, tracer=None, progress=None) -> C
         if artifact: result["_preview_artifact"] = artifact
         return result
     return run
+
+
+def admin_rewrite_step(status, client, deps, worker_id, *, rewrite=None) -> dict | None:
+    """Một job viết lại skill do admin xác nhận, chỉ khi poll vừa rồi rảnh (idle). Không đề xuất, không retro."""
+    if status != "idle":
+        return None
+    if rewrite is None:
+        from services import skill_rewrite as rewrite
+    step = rewrite.run_step(client, deps, worker_id=worker_id)
+    return None if step["status"] == "none" else {"skill_rewrite": step}
 
 
 def poll(worker) -> dict:
@@ -1440,9 +1632,13 @@ def main(argv: list[str] | None = None) -> int:
             from preview import PreviewPublisher
             worker.preview_publisher = PreviewPublisher(base_url, key)
         worker.open_prs = github is not None  # no token: verdicts stop at ready_for_pr, as before
+    rewrite_deps = _real_deps(Deps, tracer, worker.gate_started) if args.execute else None
     while True:
         result = poll(worker)
         print(json.dumps(result, ensure_ascii=False))
+        step = admin_rewrite_step(result.get("status"), worker.client, rewrite_deps, worker.worker_id) if rewrite_deps else None
+        if step is not None:
+            print(json.dumps(step, ensure_ascii=False))
         if args.once or args.mode == "off":
             return 0
         time.sleep(max(args.poll_seconds, 1.0))

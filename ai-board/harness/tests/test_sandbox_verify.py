@@ -123,10 +123,31 @@ def test_pass_runs_boot_then_gate_in_a_fresh_vm_and_always_destroys(tmp_path):
     st = state(checkout(tmp_path))
     result = sandbox_verify.run(st, client=client)
     assert result["blocked"] is False and result["evidence"]["runner"] == "docker"
-    assert client.calls == ["create", "upload", "exec", "guest-boot.sh", "exec", "sh", "download", "download", "destroy"]
+    assert client.calls == ["create", "upload", "exec", "guest-boot.sh", "exec", "python", "exec", "sh", "download", "download", "destroy"]
     assert client.run_id.startswith("g5-") and client.manifest[0]["name"] == "result"
-    assert result["evidence"]["sandbox"] == {"run_id": client.run_id, "policy_hash": "h" * 64, "teardown_confirmed": True}
+    sandbox = result["evidence"]["sandbox"]
+    assert sandbox.pop("wall_s") >= 0
+    assert sandbox == {"run_id": client.run_id, "policy_hash": "h" * 64, "teardown_confirmed": True, "peak_kib": None, "vm_peak_kib": None, "vm_cpu_peak_cores": None, "vm_ncpu": None, "vm_used_end_kib": None, "outcome": "passed"}
     assert st["evidence"] is result["evidence"]
+
+
+def test_guest_peak_rss_and_outcome_are_recorded(tmp_path):
+    class Probe(FakeClient):
+        def exec(self, run_id, argv, *, timeout, deadline=None):
+            self._step("exec")
+            if argv[0] == "sh":
+                return {"code": 0, "stdout": json.dumps({"peak_kib": 91234, "rc": 0})}
+            return self.exec_outcome
+
+    result = sandbox_verify.run(state(checkout(tmp_path)), client=Probe())
+    assert (result["evidence"]["sandbox"]["peak_kib"], result["evidence"]["sandbox"]["outcome"]) == (91234, "passed")
+
+
+def test_blocked_guest_verdict_records_outcome_blocked(tmp_path):
+    guest = {"gate": 5, "blocked": True, "reason": "smoke failed", "evidence": {"runner": "docker", "screenshots": []}}
+    result = sandbox_verify.run(state(checkout(tmp_path)), client=FakeClient(result=guest))
+    assert result["evidence"]["sandbox"]["outcome"] == "blocked"
+    assert result["evidence"]["sandbox"]["wall_s"] >= 0
 
 
 def test_each_invocation_gets_a_new_run_id(tmp_path):
@@ -193,7 +214,7 @@ def test_a_revoked_lease_suppresses_the_verdict(tmp_path, monkeypatch):
     class Slow(FakeClient):
         def exec(self, run_id, argv, *, timeout):
             out = super().exec(run_id, argv, timeout=timeout)
-            if argv[0] == "sh":
+            if argv[0] == "python":
                 time.sleep(0.3)  # the lease thread revokes while the guest is still running
             return out
 
@@ -340,10 +361,11 @@ def test_destroy_is_retried_until_the_runner_confirms_teardown(tmp_path, sleeps)
 def test_state_json_ships_only_the_keys_the_guest_gate_reads(tmp_path):
     root = checkout(tmp_path)
     st = {**state(root), "request_title": "t", "request_detail": "d", "full_diff": [{"diff": "+x"}], "base_sha": "a" * 40,
-          "plan": {"goal": "private planning"}, "memory": "x", "github_token": "never", "evidence": {"x": 1}}
+          "plan": {"goal": "private planning"}, "acceptance": ["npm test"], "memory": "x", "github_token": "never", "evidence": {"x": 1}}
     with tarfile.open(fileobj=io.BytesIO(sandbox_verify.package(root, st, {})), mode="r:gz") as tar:
         data = json.loads(tar.extractfile("state.json").read())
-    assert set(data) == {"skill_id", "diffs", "request_title", "request_detail", "full_diff", "base_sha"}
+    assert set(data) == {"skill_id", "diffs", "request_title", "request_detail", "full_diff", "base_sha", "acceptance"}
+    assert data["acceptance"] == ["npm test"]
 
 
 def test_every_state_key_the_guest_gate_reads_is_uploaded():
@@ -370,3 +392,26 @@ def test_busy_runner_at_create_blocks_as_busy_and_never_destroys(tmp_path, monke
     assert result["blocked"] is True and result["failure_class"] == "busy"
     assert result["reason"] == "sandbox runner busy"
     assert "destroy" not in client.calls
+
+
+def test_package_ships_eol_lf_files_with_lf_even_from_crlf_tree(tmp_path):
+    root = checkout(tmp_path)
+    (root / ".gitattributes").write_text("skills/**/SKILL.md text eol=lf\n", encoding="utf-8")
+    (root / "skills" / "a").mkdir(parents=True)
+    (root / "skills" / "a" / "SKILL.md").write_bytes(b"---\r\nx: 1\r\n---\r\n")
+    (root / "other.txt").write_bytes(b"a\r\nb\r\n")
+    with tarfile.open(fileobj=io.BytesIO(sandbox_verify.package(root, state(root), {})), mode="r:gz") as tar:
+        assert tar.extractfile("checkout/skills/a/SKILL.md").read() == b"---\nx: 1\n---\n"
+        assert tar.extractfile("checkout/other.txt").read() == b"a\r\nb\r\n"
+
+
+def test_guest_probe_reads_peak_and_vm_memory_in_use(tmp_path):
+    class Probe(FakeClient):
+        def exec(self, run_id, argv, *, timeout, deadline=None):
+            self._step("exec")
+            if argv[0] == "sh":
+                return {"code": 0, "stdout": '{"peak_kib": 1234, "vm_peak_kib": 2222222, "vm_cpu_peak_cores": 0.7, "vm_ncpu": 1, "rc": 0}\nMemTotal:  4000000 kB\nMemAvailable:  1000000 kB\n'}
+            return self.exec_outcome
+
+    result = sandbox_verify.run(state(checkout(tmp_path)), client=Probe())
+    assert (result["evidence"]["sandbox"]["peak_kib"], result["evidence"]["sandbox"]["vm_peak_kib"], result["evidence"]["sandbox"]["vm_cpu_peak_cores"], result["evidence"]["sandbox"]["vm_used_end_kib"]) == (1234, 2222222, 0.7, 3000000)

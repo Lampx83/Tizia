@@ -163,6 +163,14 @@
   .skill-row:hover { background:rgba(255,255,255,0.03); }
   .skill-row[aria-current="true"] { background:color-mix(in srgb, var(--accent) 10%, transparent); box-shadow:inset 2px 0 0 var(--accent); }
   .skill-row .skill-name { font-weight:700; font-size:13.5px; overflow-wrap:anywhere; }
+  .skill-tags { display:flex; gap:6px; align-items:center; justify-content:flex-end; flex-wrap:wrap; }
+  .skill-pill[data-tone="run"] { color:var(--accent); }
+  .skill-pill[data-tone="err"] { color:#e5484d; }
+  .rewrite-live { margin:6px 0 10px; padding:6px 10px; border-left:3px solid var(--accent); font-size:13px; }
+  .rewrite-live[data-tone="err"] { border-left-color:#e5484d; }
+  .rewrite-live[hidden] { display:none; }
+  .skill-confirm { max-width:420px; padding:16px; border:1px solid var(--border); border-radius:8px; background:var(--surface, #1b1b1b); color:inherit; }
+  .skill-confirm { max-height:calc(100vh - 32px); overflow:auto; } .skill-confirm-title { margin:0 0 8px; font-size:15px; } .skill-confirm::backdrop { background:rgba(0,0,0,0.45); }
   .skill-row .skill-sub { grid-column:1 / -1; color:var(--muted); font-size:12px; }
   .skill-detail { min-width:0; }
   .skill-detail-title { margin:0 0 4px; font-size:17px; }
@@ -193,7 +201,7 @@
   .skill-diff { max-width:100%; max-height:360px; overflow:auto; padding:14px; background:var(--bg2); border-radius:8px; line-height:1.6; white-space:pre-wrap; overflow-wrap:anywhere; }
   .skill-diff .diff-add { display:block; background:color-mix(in srgb, var(--ok) 18%, transparent); }
   .skill-diff .diff-del { display:block; background:color-mix(in srgb, var(--bad) 16%, transparent); text-decoration:line-through; }
-  .skill-edit { margin:12px 0; } .skill-edit textarea { display:block; width:100%; margin:6px 0 10px; padding:10px; background:var(--bg); color:var(--txt); border:1px solid var(--border-strong); border-radius:7px; font:13px/1.6 monospace; }
+  .skill-edit { margin:12px 0; } .tok-head { display:flex; justify-content:space-between; align-items:baseline; gap:12px; } .tok-count { font:12px/1.4 monospace; color:var(--muted, var(--txt)); white-space:nowrap; } .tok-count[data-over="true"] { color:var(--danger, #e5534b); font-weight:700; } .skills-form textarea, .skill-edit textarea, .skill-confirm textarea { resize:none; } .skill-confirm textarea { display:block; width:100%; margin:6px 0; padding:8px; background:var(--bg); color:var(--txt); border:1px solid var(--border-strong); border-radius:7px; font:13px/1.5 monospace; box-sizing:border-box; } .skill-edit textarea { display:block; width:100%; margin:6px 0 10px; padding:10px; background:var(--bg); color:var(--txt); border:1px solid var(--border-strong); border-radius:7px; font:13px/1.6 monospace; }
   .skill-queue { margin:20px 0; padding:4px 0; } .skill-queue h3 { margin:0 0 6px; font-size:16px; }
   .skill-version .toolbar { flex-wrap:wrap; gap:8px; margin:12px 0; }
   .skills-panel :focus-visible { outline:2px solid var(--accent2); outline-offset:3px; }
@@ -238,7 +246,12 @@
   .lifecycle-dialog::backdrop { background:rgba(0,0,0,.65); }
   .lifecycle-dialog p, .lifecycle-dialog li { overflow-wrap:anywhere; }
   .toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px); background:var(--ok); color:#04210f; font-weight:700; padding:11px 22px; border-radius:11px; opacity:0; transition:.25s; z-index:60; box-shadow:var(--shadow); }
-  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  .toast { pointer-events:none; max-width:min(560px, calc(100vw - 32px)); overflow-wrap:anywhere; }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
+  @media (prefers-reduced-motion: reduce) { .toast { transition:opacity .15s; transform:translateX(-50%); } .toast.show { transform:translateX(-50%); } }
+  .skill-confirm p { margin:0 0 10px; line-height:1.55; } .skill-confirm .toolbar { justify-content:flex-end; gap:8px; margin-top:14px; }
+  .ver-row.rejected .ver-state { color:var(--bad); }
+  @media (pointer:coarse) { .ver-actions .btn, .skill-confirm .btn, #tabbody .request-table-scroll .btn, #tabbody .request-table-scroll select { min-height:44px; padding-inline:14px; } }
   .toast.err { background:var(--bad); color:#fff; }
   /* Cửa sổ con xem chi tiết 1 yêu cầu (iframe admin-request.html), nằm trong trang admin */
   .req-dialog { width:min(1200px,94vw); height:88vh; padding:0; border:1px solid var(--border-strong);
@@ -405,9 +418,9 @@
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 <div class="chart-tooltip" id="ctt"></div>
 
-<script type="module" src="/js/admin-dashboard.js?v=skills-queue2"></script>
+<script type="module" src="/js/admin-dashboard.js?v=skills-ux3"></script>
 </body>
 </html>

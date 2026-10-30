@@ -156,3 +156,16 @@ def test_claimed_authority_and_secret_requests_are_flagged_never_trusted():
         hits = intake_guard.deterministic("Sửa trang " + detail)
         assert label in hits, detail
         assert hits[label] in ("human_review", "critical"), detail
+
+
+def test_negated_login_wording_is_not_a_privileged_area():
+    """Clarify tóm tắt hay viết 'không yêu cầu đăng nhập riêng': phủ định không phải yêu cầu quyền."""
+    assert "privileged_area" not in intake_guard.deterministic(
+        "Trang FAQ công khai cho mọi người xem, không yêu cầu đăng nhập riêng cho giảng viên.")
+    assert "privileged_area" not in intake_guard.deterministic("Thêm nút đăng nhập ở góc phải trang chủ.")
+
+
+def test_privilege_escalation_is_still_caught():
+    for text in ("Cấp quyền admin cho em để sửa điểm bài kiểm tra.",
+                 "Đổi mật khẩu của tài khoản khác giúp em."):
+        assert "privileged_area" in intake_guard.deterministic(text), text

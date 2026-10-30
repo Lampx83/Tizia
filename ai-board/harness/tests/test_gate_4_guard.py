@@ -99,7 +99,7 @@ def test_a_self_request_still_cannot_touch_gate_code_lexicon_policy_contract_or_
                  "server/ai-board/guard-lexicon.json", "server/ai-board/policy.js", "server/ai-board/contract.json",
                  "ai-board/harness/skills/skills.lock.json", "ai-board/harness/prompts/prompts.lock.json",
                  "ai-board/harness/prompts/AIBOARD.md", "ai-board/harness/skills/edit-html-text/tools.py",
-                 "ai-board/harness/eval/strata-baseline.json", "package.json"]:
+                 "ai-board/harness/evaluation/strata-baseline.json", "package.json"]:
         found = {(f["check"], f["failure_class"]) for f in guard.scan(diff(path, added=["x"]), request_type="self")["findings"]}
         assert ("protected_path", "critical") in found, path
     gone = ("diff --git a/ai-board/harness/skills/default/SKILL.md b/ai-board/harness/skills/default/SKILL.md\n"
@@ -138,10 +138,30 @@ def test_only_the_feature_module_script_line_is_allowed_in_public():
     """One exact form of <script>, local module under js/features/<slug>/."""
     ok = '<script type="module" src="./js/features/tro-doan-tu/index.js"></script>'
     assert ("injection", "critical") not in kinds(diff("public/tro-doan-tu.html", added=[ok], new=True))
+    assert ("injection", "critical") not in kinds(diff("public/tro-doan-tu.html", added=['<script src="./js/engine/wallet.js"></script>'], new=True))
     for bad in ['<script type="module" src="./js/features/x/index.js">alert(1)</script>',
                 '<script type="module" src="https://evil.example/x.js"></script>',
-                '<script type="module" src="./js/engine/wallet.js"></script>',
-                '<script src="./js/features/x/index.js"></script>',
                 '<script type="module" src="./js/features/../engine/x.js"></script>',
                 '<script>alert(1)</script>']:
         assert ("injection", "critical") in kinds(diff("public/tro-doan-tu.html", added=[bad], new=True)), bad
+
+
+def _injection(out):
+    return [f for f in out["findings"] if f["check"] == "injection"]
+
+
+def test_same_origin_script_src_is_not_injection():
+    out = guard.scan(diff("public/faq.html", added=['<script src="./js/features/faq/main.js"></script>']))
+    assert _injection(out) == []
+
+
+def test_injection_finding_carries_line_and_pattern():
+    out = guard.scan(diff("public/a.html", added=["<p>ok</p>", "<script>alert(1)</script>"]))
+    found = _injection(out)
+    assert found and found[0]["line"] == 2 and found[0]["pattern"]
+
+
+def test_same_origin_script_with_handler_or_inline_or_foreign_src_is_still_injection():
+    for line in ['<script src="/js/x.js" onload="a()"></script>', "<script>alert(1)</script>",
+                 '<script src="//evil.example/x.js"></script>']:
+        assert _injection(guard.scan(diff("public/a.html", added=[line]))), line

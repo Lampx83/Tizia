@@ -167,7 +167,7 @@ def test_the_tasks_job_plans_each_test_task_through_gates_1_to_2_5_with_the_mode
     subprocess.run(['git', '-C', str(tmp_path), '-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'fixture'], check=True)
     monkeypatch.setattr(self_eval, 'REPO', tmp_path)
     models = FakeModels({"summary_vi": "Sửa nút trang thẻ", "capabilities": ["features"], "subtasks": [
-        {"title": "Sửa nút", "file": "public/flashcards.html", "verify": "mở trang thấy nút", "size": "small"}]},
+        {"title": "Sửa nút", "file": "public/flashcards.html", "verify": "node --test test/flashcards.test.js", "size": "small"}]},
         validation={'clear': True, 'grounded': True, 'grounding': [{'target':'public/flashcards.html',
             'file':'public/flashcards.html','quote':'<button>Flip card</button>',
             'before':'Button obscured','after':'Visible button','verify':'Mobile can flip card'}]})

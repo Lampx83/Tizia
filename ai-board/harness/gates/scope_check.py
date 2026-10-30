@@ -36,6 +36,10 @@ def load_capability_names(path: Path = CAPABILITIES_JS) -> dict[str, frozenset[s
     return out
 
 
+# State keys this gate reads (LF/125); no request-level channel.
+INPUTS = ("plan", "catalog")
+
+
 def check(plan: dict, names: dict[str, frozenset[str]] | None = None, catalog: dict | None = None) -> dict:
     """{blocked, reason}. Allowlist: mọi thứ không nằm trong surface đều chặn —
     core, raw ws/sse, hay tên lạ model bịa ra, cùng một kết cục.

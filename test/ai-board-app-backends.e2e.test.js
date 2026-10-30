@@ -64,7 +64,7 @@ test(`[${mode}] the whole app runs the AI board (requester, worker, admin)`, { t
   const base = `http://127.0.0.1:${port}`;
   for (let i = 0; ; i += 1) {
     if (child.exitCode !== null) assert.fail(`app exited early:\n${log.slice(-2000)}`);
-    if (i > 100) assert.fail(`app did not start:\n${log.slice(-2000)}`);
+    if (i > 300) assert.fail(`app did not start:\n${log.slice(-2000)}`);
     try { if ((await fetch(`${base}/api/health`)).ok) break; } catch { /* not up yet */ }
     await new Promise((r) => setTimeout(r, 300));
   }

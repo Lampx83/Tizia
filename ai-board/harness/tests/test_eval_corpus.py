@@ -14,6 +14,11 @@ from main import Deps
 FILLER = {"test_file": "test/x.test.js", "test": "import test from 'node:test';\n"}
 
 
+def filler(case: dict) -> dict:
+    """Test giả phải nêu file đích: cổng 3 từ chối test không nhắc file trong phạm vi (path_policy.names_scope)."""
+    return {**FILLER, "test": f"import test from 'node:test';\n// {case['file']}\n"}
+
+
 @dataclasses.dataclass
 class GoldModels:
     """Model giả đọc [key] trong title của prompt, tra gold trong corpus đã ghi và trả đúng gold (dataclass: run_case dùng replace).
@@ -38,7 +43,7 @@ class GoldModels:
             body = {"code": case["gold"]["code"].replace(case["check"]["body"], "") if broken else case["gold"]["code"]}
         else:
             body = {"edits": case["gold"]["edits"] + ([{"search": "<html", "replace": '<html data-x="1"'}] if broken else [])}
-        return {"response": json.dumps({**body, **FILLER}, ensure_ascii=False), "prompt_eval_count": 120, "eval_count": 80}
+        return {"response": json.dumps({**body, **filler(case)}, ensure_ascii=False), "prompt_eval_count": 120, "eval_count": 80}
 
 
 @pytest.fixture(scope="module")

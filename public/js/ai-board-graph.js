@@ -161,6 +161,15 @@ const clockText = (ms) => {
 const toneOf = (ratio) => (ratio >= 1 ? 'bad' : ratio >= 0.8 ? 'warn' : 'ok');
 const fmt = (n) => Number(n).toLocaleString('en-US');
 
+// GPU time chỉ có khi model call xong; lúc đang chạy cộng thời gian kể từ call xong gần nhất (ước tính, không phải số đo).
+function gpuCell(trace, now) {
+  const done = trace.totals?.gpu_s ?? 0;
+  const calls = (trace.runs || []).flatMap(r => r.calls || []).map(c => Number(c.created_at)).filter(Number.isFinite);
+  const since = calls.length ? Math.max(...calls) : Number(trace.runs?.at(-1)?.created_at);
+  if (!trace.root?.live || !(since > 0) || now < since) return { label: 'GPU time', big: `${done.toFixed(1)} s`, sub: 'local model', tone: 'idle', bar: false };
+  return { label: 'GPU time', big: `${(done + (now - since) / 1000).toFixed(1)} s`, sub: 'running · estimate', tone: 'idle', bar: false };
+}
+
 // Budget cells: big number, optional thin bar. API budgets show tokens, local runtimes show GPU time.
 export function budgetCells(trace = {}, now = Date.now()) {
   const used = trace.root_work?.used || {};
@@ -172,7 +181,7 @@ export function budgetCells(trace = {}, now = Date.now()) {
   };
   const cells = [cell('Model calls', used.model_calls ?? 0, limits.model_calls ?? 0)];
   if (trace.totals?.budget_unit === 'k_tokens') cells.push(cell('Tokens', used.tokens ?? 0, limits.tokens ?? 0));
-  else cells.push({ label: 'GPU time', big: `${(trace.totals?.gpu_s ?? 0).toFixed(1)} s`, sub: 'local model', tone: 'idle', bar: false });
+  else cells.push(gpuCell(trace, now));
 
   const latest = projectPipeline(trace).latest;
   const elapsed = runElapsed(latest, trace.root?.live, now);

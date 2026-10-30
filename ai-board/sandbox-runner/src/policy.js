@@ -9,6 +9,8 @@ const int = (min, max) => (value, path) => {
   if (!Number.isInteger(value) || value < min || value > max) throw new PolicyError(`${path}: integer ${min}..${max} required`);
   return value;
 };
+const GUEST_BOOT_S = 180;
+const PROFILES = ['dev', 'large'];
 const HOST = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 const SECRETISH = /(TOKEN|SECRET|PASSWORD|PASSWD|KEY|CREDENTIAL)/i;
 
@@ -25,8 +27,8 @@ const object = (shape) => (value, path) => {
 const SCHEMA = object({
   version: (v, p) => { if (v !== 1) throw new PolicyError(`${p}: must be 1`); return v; },
   vm: object({
-    cpus: int(1, 4), memory_mib: int(256, 4096), disk_mib: int(1024, 20480),
-    ttl_s: int(60, 1200), lease_s: int(10, 120),
+    cpus: int(1, 16), memory_mib: int(256, 4096), disk_mib: int(1024, 20480),
+    ttl_s: int(60, 3600), lease_s: int(10, 120),
   }),
   concurrency: int(1, 1), // ponytail: one active sandbox is the agreed ceiling; raise with the spec, not by config
   guest_image: (v, p) => {
@@ -71,10 +73,26 @@ export function loadPolicy(text) {
     data = { ...data };
     delete data.network;
   }
+  // optional profile tag, excluded from the hash so tagging a pinned policy does not change its hash
+  const profile = data && typeof data === 'object' ? data.profile : undefined;
+  if (profile !== undefined) {
+    if (!PROFILES.includes(profile)) throw new PolicyError(`policy.profile: one of ${PROFILES.join(', ')} required`);
+    data = { ...data };
+    delete data.profile;
+  }
   const policy = SCHEMA(data, 'policy');
+  // TTL clock starts once the VM is up; the guest-boot step (verification/sandbox.py) runs inside it before the exec timeout.
+  if (policy.vm.ttl_s < policy.exec.timeout_s + GUEST_BOOT_S) throw new PolicyError(`vm.ttl_s: must be at least exec.timeout_s + ${GUEST_BOOT_S}`);
   if (network === 'none') {
     if (policy.egress.length) throw new PolicyError('policy.egress: must be empty when network is none');
     policy.network = 'none';
   }
-  return { ...policy, hash: createHash('sha256').update(JSON.stringify(policy)).digest('hex') };
+  const hash = createHash('sha256').update(JSON.stringify(policy)).digest('hex');
+  return { ...policy, ...(profile === undefined ? {} : { profile }), hash };
+}
+
+/** Refuse when runner RESOURCE_PROFILE and policy profile differ. Unset runner profile skips the check. */
+export function assertProfile(policy, runnerProfile) {
+  if (runnerProfile === undefined || runnerProfile === '') return;
+  if (policy.profile !== runnerProfile) throw new PolicyError(`profile: policy ${policy.profile ?? 'unset'} does not match runner ${runnerProfile}`);
 }

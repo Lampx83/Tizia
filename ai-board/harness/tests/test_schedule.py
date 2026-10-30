@@ -38,3 +38,11 @@ def test_two_steps_may_not_write_the_same_file():
 def test_checkpoint_graph_carries_depends_on_and_level():
     graph = schedule.dependency_graph([step(1, "a.js"), step(2, "b.js"), step(3, "c.js", [1, 2])])
     assert [(item["child"], item["level"], item["depends_on"]) for item in graph] == [(0, 0, []), (1, 0, []), (2, 1, [1, 2])]
+
+
+def test_prepare_defaults_to_the_old_chain_and_reads_the_subtask_file():
+    prepared = schedule.prepare([{"file": "a.js"}, {"file": "b.js"}])
+    assert [(item["order"], item["depends_on"]) for item in prepared] == [(1, []), (2, [1])]
+    assert schedule.levels(prepared) == [[1], [2]]
+    with pytest.raises(ValueError, match="cùng ghi b.js"):
+        schedule.check_conflicts([{"order": 1, "file": "b.js"}, {"order": 2, "file": "b.js"}])

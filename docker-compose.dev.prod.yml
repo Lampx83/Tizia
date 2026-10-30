@@ -25,6 +25,9 @@ services:
       AI_BOARD_WORKER_KEY: ${AI_BOARD_WORKER_KEY:-}
       VLLM_URL: ${VLLM_URL:-}
       OLLAMA_URL: ${OLLAMA_URL:-}
+      VLLM_SECKEY: ${VLLM_SECKEY:-}     # gateway vllm chỉ nhận Bearer/x-ollama-seckey; thiếu = classifier 401 call_failure
+      OLLAMA_SECKEY: ${OLLAMA_SECKEY:-}
+      AI_BOARD_MODEL_ROUTING: ${AI_BOARD_MODEL_ROUTING:-true}  # false/empty = rơi vào /ollama/api/generate fallback → gateway 404 model not found
       AI_BOARD_CLASSIFIER_MODEL: ${AI_BOARD_CLASSIFIER_MODEL:-}
     ports: !override []  # khÃ´ng publish; web gá»i qua tizia-internal báº±ng DNS
     networks: !override [default, tizia-internal]
@@ -101,7 +104,7 @@ services:
       driver: json-file
       options: { max-size: 10m, max-file: "3" }
 
-  # UI SeaweedFS (master 9333/filer 8888) chỉ xem từ host, sau basic-auth; key sinh in docker logs (LF/96).
+  # UI SeaweedFS (master 9333/filer 8888) sau basic-auth; production KHÔNG publish cổng, chỉ dev.local publish trên 127.0.0.1.
   seaweedfs-ui-auth:
     container_name: aiboard-seaweedfs-ui
     image: node:24-alpine
@@ -112,9 +115,6 @@ services:
     environment:
       SEAWEED_UI_USER: ${SEAWEED_UI_USER:-admin}
       SEAWEED_UI_PASSWORD: ${SEAWEED_UI_PASSWORD:-}
-    ports:
-      - "127.0.0.1:9333:9333"
-      - "127.0.0.1:8888:8888"
     networks: !override [default]
     volumes:
       - ./scripts/seaweed-ui-auth.js:/app/scripts/seaweed-ui-auth.js:ro

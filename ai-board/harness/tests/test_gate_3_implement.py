@@ -87,7 +87,9 @@ def test_run_passes_repair_reason_to_every_subtask_prompt(tmp_path):
 
 def test_run_second_subtask_prompt_excludes_first_subtasks_content(tmp_path):
     """'Fresh context per subtask' là cơ chế (build_prompt chỉ nhận 1 subtask),
-    không phải quy ước — test này khẳng định bằng cách soi prompt thật đã gửi."""
+    không phải quy ước — test này khẳng định bằng cách soi prompt thật đã gửi.
+    NGOẠI LỆ owner đã duyệt (LF/107 tiêu chí 8b): subtask sau nhận NỘI DUNG file
+    mới của subtask trước (chuỗi phụ thuộc mặc định), không nhận tiêu đề/lời sủa khác."""
     codegen = {"code": "// noop\n", "test_file": "test/noop.test.js", "test": "import test from 'node:test';\n// noop test\n"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
@@ -104,7 +106,9 @@ def test_run_second_subtask_prompt_excludes_first_subtasks_content(tmp_path):
     assert first_title in first_prompt and second_title not in first_prompt
     assert first_file in first_prompt and second_file not in first_prompt
     assert second_title in second_prompt and first_title not in second_prompt
-    assert second_file in second_prompt and first_file not in second_prompt
+    assert second_file in second_prompt
+    # file MỚI của subtask 1 nằm trong repo scratch → inject vào prompt của subtask 2 (tiêu chí 8b)
+    assert first_file in second_prompt and "// noop" in second_prompt
 
 
 def test_run_routes_each_subtask_to_correct_model_by_size():
@@ -173,7 +177,10 @@ def test_run_blocks_on_malformed_model_response(tmp_path):
 
 def test_run_stops_mid_gate_when_budget_exhausted_between_subtasks(tmp_path):
     """max_model_calls=1: subtask đầu tiêu hết budget, subtask thứ hai (plan_with
-    có 2) không được gọi model — không được âm thầm báo blocked=False."""
+    có 2) không được gọi model — không được âm thầm báo blocked=False.
+
+    Còn subtask đã xong + subtask chưa chạy → `partial` (LF/107): người gửi bấm
+    "Tiếp tục" để chạy nốt từ checkpoint thay vì tính đây là lượt hỏng."""
     codegen = {"code": "x", "test_file": "test/t.test.js", "test": "import test from 'node:test';\ny"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
@@ -183,8 +190,9 @@ def test_run_stops_mid_gate_when_budget_exhausted_between_subtasks(tmp_path):
     out = implement.run({"plan": plan}, deps, budget, repo_dir=tmp_path)
 
     assert out["blocked"] is True
-    assert "budget" in out["reason"]
-    assert out["failure_class"] == "budget"
+    assert "budget" in out["reason"] and "hoàn thành một phần 1/2" in out["reason"]
+    assert out["failure_class"] == "partial"
+    assert out["partial"] == {"done": 1, "total": 2, "remaining": ["public/flashcards.html"]}
     assert len(models.calls) == 1
     assert len(out["diffs"]) == 1
 
@@ -337,7 +345,8 @@ def test_whole_file_rewrite_of_an_existing_file_is_refused(tmp_path):
                         deps_with(models), Budget(max_wall_clock_s=999), repo_dir=tmp_path / "scratch")
     assert out["blocked"] is True
     assert "edits" in out["reason"]
-    assert out.get("failure_class") in (None, "ordinary")  # model mistake: one repair pass may fix it
+    # Lỗi của model ở subtask thứ hai khi subtask đầu đã xong → partial (LF/107), không phải lượt sửa.
+    assert out["failure_class"] == "partial" and out["partial"]["done"] == 1
 
 
 def test_edit_whose_search_is_not_in_the_file_blocks_for_repair(tmp_path):
@@ -348,7 +357,20 @@ def test_edit_whose_search_is_not_in_the_file_blocks_for_repair(tmp_path):
                         Budget(max_wall_clock_s=999), repo_dir=tmp_path / "scratch")
     assert out["blocked"] is True
     assert "không khớp" in out["reason"]
-    assert out.get("failure_class") in (None, "ordinary")
+    assert out["failure_class"] == "partial" and out["partial"]["remaining"] == ["public/flashcards.html"]
+
+
+def test_a_first_subtask_failure_is_still_repairable_ordinary(tmp_path):
+    """Chưa xong subtask nào → không có gì để "tiếp tục": giữ ordinary để lượt sửa xử lý."""
+    source = _source_with(tmp_path, "public/flashcards.html", BIG_PAGE)
+    bad = {**EDITS, "edits": [{"search": "<footer>không có</footer>", "replace": "x"}]}
+    plan = {"summary_vi": "x", "capabilities": ["features"], "subtasks": [
+        {"title": "Trang", "file": "public/flashcards.html", "verify": "thấy chữ", "size": "small"}]}
+    out = implement.run({"plan": plan, "checkout_source": str(source)},
+                        deps_with(FakeModels(plan, codegen=bad)),
+                        Budget(max_wall_clock_s=999), repo_dir=tmp_path / "scratch")
+    assert out["blocked"] is True and out["failure_class"] == "ordinary"
+    assert "partial" not in out and out["diffs"] == []
 
 
 def test_lessons_from_past_verdicts_are_added_to_the_prompt(tmp_path):
@@ -378,3 +400,101 @@ def test_test_file_outside_test_dir_is_a_repairable_model_mistake(tmp_path):
 def test_prompt_states_where_generated_tests_must_live():
     prompt = implement.build_prompt({"title": "t", "file": "public/x.html", "verify": "v", "size": "small"})
     assert "\"test_file\" nằm trong thư mục test/" in prompt and "node:test" in prompt
+
+
+# ── LF/107 tiêu chí 8 (2026-10-28): context cho file mới — mẫu thật + deps + sanity artifact ──
+
+
+def test_new_js_file_receiving_html_fails_fast_in_gate3():
+    """Tiêu chí 8c: model trả HTML cho file .js → hỏi lại ngay trong gate 3 thay vì
+    trôi qua verify rồi đốt allowance của repair (run 43: 3 lần dừng 2/5 vì đúng lỗi này)."""
+    html = "<!DOCTYPE html>\n<html>\n<body><h1>Sổ tay</h1></body>\n</html>\n"
+    out = {"code": html, "test_file": "test/glossary.test.js",
+           "test": "import test from 'node:test';\ntest('ok', () => {});\n// public/js/features/x/app.js\n"}
+    with pytest.raises(ValueError, match="HTML"):
+        implement._check_rest(out, None, "public/js/features/x/app.js")
+
+
+def test_new_html_file_and_normal_js_pass_the_sanity_check():
+    """8c không bắt oan: file .html MỚI đúng là HTML; file .js thật sự viết JS."""
+    implement._check_rest({"code": "<!DOCTYPE html>\n<html>\n<body></body>\n</html>\n",
+                           "test_file": "test/page.test.js",
+                           "test": "import test from 'node:test';\n// public/new-page.html\n"},
+                          None, "public/new-page.html")
+    implement._check_rest({"code": "export function hello() { return 'hi'; }\n",
+                           "test_file": "test/app.test.js",
+                           "test": "import test from 'node:test';\nimport { hello } from '../public/js/features/x/app.js';\n"},
+                          None, "public/js/features/x/app.js")
+
+
+def test_new_file_context_shows_real_exemplars_and_sibling_names(tmp_path):
+    """Tiêu chí 8a: file đích chưa có ở base → một mẫu file THẬT cùng thể loại từ base tree
+    + tên file cùng thư mục; chọn theo kiểu target (run 50: model chép import db.js của mẫu
+    context UGC → gate 4 critical; đây là lý do chọn mẫu theo kiểu + ghi chú chỉ mượn hình dạng)."""
+    source = _source_with(tmp_path, "public/js/features/pharmacy/glossary.js",
+                          "export function rows() { return [{ name: 'cu phap', define: '...' }]; }\n")
+    (source / "public/js/features/pharmacy").parent.mkdir(parents=True, exist_ok=True)
+    (source / "server/contexts/_ai-generated/pharmacy/glossary").mkdir(parents=True, exist_ok=True)
+    (source / "server/contexts/_ai-generated/pharmacy/glossary/index.js").write_text(
+        "export function handler() { return { terms: [] }; }\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=source, check=True, capture_output=True, stdin=subprocess.DEVNULL)
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--amend", "-m", "base"],
+                   cwd=source, check=True, capture_output=True, stdin=subprocess.DEVNULL)
+    sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=source, check=True, capture_output=True,
+                         text=True, stdin=subprocess.DEVNULL).stdout.strip()
+    state = {"checkout_source": str(source), "base_sha": sha}
+
+    js_target = {"title": "Sổ tay thuật ngữ", "file": "public/js/features/cntt-glossary/glossary.js",
+                 "size": "small", "verify": "node --test test/glossary.test.js"}
+    ctx = implement._new_file_context(js_target, state, ["glossary.js", "review.js"])
+
+    assert ctx is not None
+    assert "tạo file MỚI" in ctx and "glossary.js" in ctx and "review.js" in ctx
+    assert "KHÔNG chép các import của mẫu" in ctx
+    assert "(mẫu module frontend THẬT: public/js/features/pharmacy/glossary.js)" in ctx
+    assert "(mẫu context API THẬT" not in ctx  # target frontend chỉ lấy mẫu frontend
+    assert "L1| export function rows()" in ctx
+
+    api_target = {"title": "API glossary", "file": "server/contexts/_ai-generated/cntt/glossary/index.js",
+                  "size": "small", "verify": "node --test test/glossary.test.js"}
+    api_ctx = implement._new_file_context(api_target, state, [])
+    assert api_ctx is not None
+    assert "(mẫu context API THẬT: server/contexts/_ai-generated/pharmacy/glossary/index.js)" in api_ctx
+    assert "(mẫu module frontend THẬT" not in api_ctx  # target backend chỉ lấy mẫu context API
+    assert "L1| export function handler()" in api_ctx
+
+
+def test_new_file_context_is_none_when_base_has_no_js_exemplar(tmp_path):
+    source = _source_with(tmp_path, "public/flashcards.html", BIG_PAGE)
+    sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=source, check=True, capture_output=True,
+                         text=True, stdin=subprocess.DEVNULL).stdout.strip()
+    subtask = {"title": "Sổ tay", "file": "public/js/features/x/app.js", "size": "small", "verify": "v"}
+    assert implement._new_file_context(subtask, {"checkout_source": str(source), "base_sha": sha}, []) is None
+
+
+def test_dep_file_context_injects_the_file_a_prior_subtask_wrote(tmp_path):
+    """Tiêu chí 8b: subtask sau nhận NỘI DUNG file mới của subtask trước (depends_on 1-based)
+    — model viết trang nạp module theo API thật, không bịa tên hàm."""
+    repo = tmp_path
+    api_path = repo / "server/contexts/_ai-generated/cntt/glossary/index.js"
+    api_path.parent.mkdir(parents=True)
+    api_path.write_text("export function handler() { return { terms: [] }; }\n", encoding="utf-8")
+    api_file = "server/contexts/_ai-generated/cntt/glossary/index.js"
+    page = {"title": "Trang sổ tay", "file": "public/so-tay.html", "size": "small", "verify": "v", "depends_on": [1]}
+    state = {"plan": {"subtasks": [{"title": "API glossary", "file": api_file, "size": "small", "verify": "v"}, page]}}
+    # không checkout_source → base tree rỗng → file dep coi là file mới ở scratch repo
+
+    text = implement._dep_file_context(page, state, repo)
+
+    assert f"file phụ thuộc đã có sau subtask 1: {api_file}" in text
+    assert "L1| export function handler()" in text
+
+
+def test_dep_file_context_skips_dependency_already_at_base(tmp_path, monkeypatch):
+    """File dep có ở base → nội dung đã nằm trong context file cũ, criteria 8b chỉ nêu file MỚI."""
+    repo = tmp_path
+    page = {"title": "Trang", "file": "public/p.html", "size": "small", "verify": "v", "depends_on": [1]}
+    state = {"plan": {"subtasks": [{"title": "a", "file": "server/contexts/_existing/index.js",
+                                    "size": "small", "verify": "v"}, page]}}
+    monkeypatch.setattr(implement, "_base_tree", lambda s: {"server/contexts/_existing/index.js"})
+    assert implement._dep_file_context(page, state, repo) == ""

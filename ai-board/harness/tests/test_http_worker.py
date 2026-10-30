@@ -10,7 +10,9 @@ if str(AI_BOARD_DIR) not in sys.path:
     sys.path.insert(0, str(AI_BOARD_DIR))
 
 from runtime.limits import config_sha256
-from worker import HarnessPlanner, HttpWorker, PlanBlockedError, WorkerClient, _execution_plan, execute_pre_pr, main
+from worker import (HarnessPlanner, HttpWorker, PlanBlockedError, WorkerClient, _duplicate_files, _execution_plan,
+                    _merge_same_file, _non_runnable_layered, _plan_repairable, _plan_repair_note, _plan_rejection,
+                    _repaired_snapshot, execute_pre_pr, main)
 
 
 def test_planner_task_type_survives_canonical_and_execution_plan():
@@ -613,6 +615,40 @@ def test_repair_is_bounded_to_one_child():
     assert [gate for gate, _ in calls] == [3, 4, 3, 4]
     assert len(verdict['repairs']) == 1
     assert verdict['candidate'] is None
+
+
+def test_repair_replan_flag_allows_a_second_repair_for_a_new_failure(monkeypatch):
+    """LF/74: cờ bật nâng trần sửa lên 2; lỗi mới (khác lý do) dùng được lượt thứ hai."""
+    import worker
+    monkeypatch.setattr(worker, 'REPAIR_REPLAN', {'enabled': True, 'max_repairs': 2})
+    first = {'blocked': True, 'reason': 'node --check lỗi', 'failure_class': 'ordinary'}
+    second = {'blocked': True, 'reason': 'css class lệch', 'failure_class': 'ordinary'}
+    verdict, calls = run({4: [first, second, {}]})
+    assert verdict['outcome'] == 'ready_for_pr'
+    assert [gate for gate, _ in calls] == [3, 4, 3, 4, 3, 4, 5, 5.5]
+    assert verdict['repairs'] == [{'gate': 4, 'reason': 'node --check lỗi'},
+                                  {'gate': 4, 'reason': 'css class lệch'}]
+
+
+def test_repair_replan_flag_still_stops_at_the_hard_bound(monkeypatch):
+    import worker
+    monkeypatch.setattr(worker, 'REPAIR_REPLAN', {'enabled': True, 'max_repairs': 2})
+    script = {4: [{'blocked': True, 'reason': f'lỗi {n}', 'failure_class': 'ordinary'} for n in ('a', 'b', 'c')]}
+    verdict, calls = run(script)
+    assert verdict['outcome'] == 'blocked' and verdict['failure_class'] == 'ordinary'
+    assert [gate for gate, _ in calls] == [3, 4, 3, 4, 3, 4]
+    assert len(verdict['repairs']) == 2
+
+
+def test_repair_replan_flag_stops_when_the_same_failure_repeats(monkeypatch):
+    """Thất bại mơ hồ (y hệt lần trước) thì dừng, không đốt lượt sửa thứ hai."""
+    import worker
+    monkeypatch.setattr(worker, 'REPAIR_REPLAN', {'enabled': True, 'max_repairs': 2})
+    same = {'blocked': True, 'reason': 'node --check lỗi', 'failure_class': 'ordinary'}
+    verdict, calls = run({4: [same]})
+    assert verdict['outcome'] == 'blocked'
+    assert [gate for gate, _ in calls] == [3, 4, 3, 4]
+    assert verdict['repairs'] == [{'gate': 4, 'reason': 'node --check lỗi'}]
 
 
 def test_critical_boundary_violation_stops_without_repair():
@@ -1815,3 +1851,101 @@ def test_a_blocked_decision_does_not_trip_the_folder_guard_but_a_done_one_still_
     done = {**brief, 'decisions': '- thêm ảnh sex vào trang → done'}
     with pytest.raises(PlanBlockedError):
         planner({**snapshot, 'folder': {'brief': done}})
+
+
+def test_plan_rejection_only_returns_schema_rejection_bodies():
+    import io as _io
+    import urllib.error
+
+    def err(code, body):
+        return urllib.error.HTTPError("http://x", code, "x", {}, _io.BytesIO(body))
+
+    assert "runnable command" in _plan_rejection(err(400, b'{"error":"malformed_plan","message":"acceptance must be a runnable command"}'))
+    assert _plan_rejection(err(400, b'{"error":"invalid_plan"}')) is None
+    assert _plan_rejection(err(500, b'malformed_plan')) is None
+
+
+def test_repaired_snapshot_keeps_the_hint_out_of_the_thread():
+    snap = {"thread": [{"role": "student", "body": "x"}], "request": {"id": 1}}
+    out = _repaired_snapshot(snap, "acceptance must be a runnable command")
+    assert out["request"] == {"id": 1}
+    assert out["thread"] == snap["thread"]  # validator đọc thread: hint không được nằm ở đây
+    assert "runnable command" in out["plan_repair"] and "node --test" in out["plan_repair"]
+    assert len(snap["thread"]) == 1
+
+
+def test_plan_rejection_only_returns_schema_rejection_bodies():
+    import io as _io
+    import urllib.error
+
+    def err(code, body):
+        return urllib.error.HTTPError("http://x", code, "x", {}, _io.BytesIO(body))
+
+    assert "runnable command" in _plan_rejection(err(400, b'{"error":"malformed_plan","message":"acceptance must be a runnable command"}'))
+    assert _plan_rejection(err(400, b'{"error":"invalid_plan"}')) is None
+    assert _plan_rejection(err(500, b'malformed_plan')) is None
+
+
+def test_repaired_snapshot_keeps_the_hint_out_of_the_thread():
+    snap = {"thread": [{"role": "student", "body": "x"}], "request": {"id": 1}}
+    out = _repaired_snapshot(snap, "acceptance must be a runnable command")
+    assert out["request"] == {"id": 1}
+    assert out["thread"] == snap["thread"]  # validator đọc thread: hint không được nằm ở đây
+    assert "runnable command" in out["plan_repair"] and "node --test" in out["plan_repair"]
+    assert len(snap["thread"]) == 1
+
+
+def test_plan_repairable_only_for_model_plan_errors():
+    assert _plan_repairable({"gate": 1, "result": {"reason": "plan không hợp lệ: 2 subtask cùng sửa x"}})
+    assert not _plan_repairable({"gate": 1, "result": {"reason": "intake_human_review: tất định: privileged_area"}})
+    assert not _plan_repairable({"gate": 2.5, "result": {"reason": "plan không hợp lệ: x"}})
+    assert _plan_repairable({"gate": 2.5, "result": {"reason": "plan_ungrounded"}})
+    assert not _plan_repairable({"gate": 2.5, "result": {"reason": "needs_clarification"}})
+    assert not _plan_repairable({})
+
+
+def test_plan_repair_note_names_the_reason_and_the_rules():
+    note = _plan_repair_note("plan không hợp lệ: 2 subtask cùng sửa x")
+    assert "2 subtask cùng sửa x" in note
+    assert "node --test" in note and "[CẤM TUYỆT ĐỐI]" in note
+
+
+def test_two_subtasks_on_one_file_merge_and_keep_depends_on_valid():
+    plan = [
+        {"title": "Thêm nút", "file": "public/js/x.js", "verify": "node --test a", "size": "small", "depends_on": []},
+        {"title": "Trang", "file": "public/x.html", "verify": "node --test b", "size": "small", "depends_on": [1]},
+        {"title": "Sửa handler", "file": "public/js/x.js", "verify": "node --test c", "size": "large", "depends_on": [2]},
+    ]
+    out = _merge_same_file(plan)
+    assert [task["file"] for task in out] == ["public/js/x.js", "public/x.html"]
+    assert out[0]["title"] == "Thêm nút + Sửa handler"
+    assert "node --test a" in out[0]["verify"] and "node --test c" in out[0]["verify"]
+    assert out[0]["size"] == "large"
+    # Gộp x.js (phụ thuộc x.html) vào x.js đầu làm chu trình x.js<->x.html: bỏ cạnh đóng chu trình.
+    assert out[0]["depends_on"] == [] and out[1]["depends_on"] == [1]
+    assert [task["file"] for task in plan] == ["public/js/x.js", "public/x.html", "public/js/x.js"]  # không sửa input
+
+
+def test_duplicate_files_and_repair_note_name_the_file():
+    reason = "plan không hợp lệ: 2 subtask cùng sửa public/js/school-explore.js — gộp thành 1"
+    assert _duplicate_files(reason) == ["public/js/school-explore.js"]
+    assert _duplicate_files("plan không hợp lệ: thiếu acceptance") == []
+    note = _plan_repair_note(reason, _duplicate_files(reason))
+    assert "[CẤM TUYỆT ĐỐI]" in note and "public/js/school-explore.js" in note
+    assert "node --test" in note
+
+
+def test_layered_plan_verify_must_be_a_runnable_command():
+    plan = {"subtasks": [
+        {"file": "public/x.html", "layer": "frontend", "verify": "trang chứa tiêu đề"},
+        {"file": "public/js/x.js", "layer": "frontend", "verify": "node --test test/x.test.js"},
+        {"file": "public/y.html", "verify": "câu mô tả không sao vì không có layer"},
+    ]}
+    bad = _non_runnable_layered(plan)
+    assert bad == ["public/x.html: trang chứa tiêu đề"]
+
+
+def test_repair_note_forbids_reusing_the_rejected_plan_files():
+    note = _plan_repair_note("plan_ungrounded", [], ["public/js/school-explore.js"])
+    assert "KHÔNG dùng lại file của plan bị từ chối: public/js/school-explore.js" in note
+    assert "TẠO FILE MỚI" in note

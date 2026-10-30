@@ -24,7 +24,8 @@ export function createHsmStore(store) {
       || ['cancelled','rejected'].includes(request.status)) fail('scope_denied',403);
     if (request.folder_id) {
       const folder=await t.get('SELECT * FROM ai_feature_folders WHERE id=? FOR SHARE',[request.folder_id]);
-      if (!folder || folder.state==='archived' || !folder.approved_at || folder.owner_user_id!==request.owner_user_id || folder.domain!==request.owner_domain) fail('scope_denied',403);
+      if (folder && folder.state!=='archived' && !folder.approved_at) fail('folder_not_approved',403);
+      if (!folder || folder.state==='archived' || folder.owner_user_id!==request.owner_user_id || folder.domain!==request.owner_domain) fail('scope_denied',403);
     }
   }
   async function transition(ticketId,input) {

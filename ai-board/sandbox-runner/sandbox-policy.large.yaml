@@ -1,0 +1,15 @@
+# Server profile (1 node, 64 cores, 269.9 GB RAM). Strict schema (src/policy.js); change only via reviewed deploy + restart.
+# vm.cpus 8 is unmeasured: LF/95 measured only to 4 vCPU. Re-measure on the server (LF/133) before raising it.
+# vm.memory_mib 1536 is kept from the dev profile; VM peak does not scale with vCPU count.
+version: 1
+profile: large
+vm: { cpus: 8, memory_mib: 1536, disk_mib: 10240, ttl_s: 1800, lease_s: 120 }
+concurrency: 1
+# Same digest as dev until the server registry rebuilds the guest; re-pin there and record the new digest in evidence.
+guest_image: image-registry:5000/gate5@sha256:d99e448ddbc111a2eeb7d1f96b33fdebaacbb32a78ba06ca894e269debf7f90a
+network: none
+egress: []
+guest_env: { CI: "1", GATE5_CA_SHA256: "4b386847e6e3fbd65e91086e284957d53d96c17916afc0c12ea8c58f01ac313a" }
+archive: { max_bytes: 104857600, max_expanded_bytes: 536870912, max_files: 20000 }
+exec: { timeout_s: 1200, max_stdout_bytes: 1048576, max_stderr_bytes: 1048576, workdir: /workspace }
+artifacts: { max_file_bytes: 26214400, max_total_bytes: 52428800 }

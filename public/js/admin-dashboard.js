@@ -5,7 +5,9 @@
 
 import { DOMAIN_META } from './engine/domain.js';
 import { morph } from './dom-morph.js';
-import { mountSkillsTab } from './admin-skills.js?v=skills-queue2';
+import { askConfirm } from './confirm-dialog.js';
+import { mountSkillsTab } from './admin-skills.js?v=skills-ux1';
+import { toastMs } from './admin-skills-state.js?v=skills-ux1';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
@@ -29,12 +31,19 @@ async function api(path, opts = {}) {
   return { status: r.status, ok: r.ok, data };
 }
 
+// Stays while hovered or focused so a long message can be read; length sets the time.
 function toast(msg, kind='ok') {
   const t = $('#toast'); t.textContent = msg;
   t.classList.toggle('err', kind === 'err');
   t.classList.add('show');
+  toast._ms = toastMs(msg, kind);
   clearTimeout(toast._tm);
-  toast._tm = setTimeout(() => t.classList.remove('show'), 2400);
+  toast._tm = setTimeout(() => t.classList.remove('show'), toast._ms);
+  if (!toast._bound) {
+    toast._bound = true;
+    t.addEventListener('mouseenter', () => clearTimeout(toast._tm));
+    t.addEventListener('mouseleave', () => { toast._tm = setTimeout(() => t.classList.remove('show'), 2400); });
+  }
 }
 
 function fmtBytes(b) {
@@ -1817,7 +1826,8 @@ async function loadFeatureFolders() {
   host.querySelectorAll('[data-lifecycle]').forEach(btn => btn.addEventListener('click', () =>
     openFeatureLifecycle(folders.find(f => f.id === Number(btn.dataset.lifecycle)))));
   host.querySelectorAll('[data-release]').forEach(sel => sel.addEventListener('change', async () => {
-    if (sel.value === 'off' && !confirm('Tắt phát hành chức năng này? Dữ liệu hiện có được giữ lại.')) return loadFeatureFolders();
+    if (sel.value === 'off' && !await askConfirm({ title: 'Tắt phát hành chức năng này?', message: 'Người dùng không còn thấy chức năng; dữ liệu hiện có được giữ lại.',
+      ok: 'Tắt phát hành', danger: true })) { await loadFeatureFolders(); $(`[data-release="${CSS.escape(sel.dataset.release)}"]`)?.focus(); return; }
     sel.disabled = true;
     const res = await api(`/api/admin/ai-board/releases/${encodeURIComponent(sel.dataset.release)}`,
       { method: 'POST', body: JSON.stringify({ status: sel.value }) });
@@ -1826,6 +1836,15 @@ async function loadFeatureFolders() {
     toast(`Phát hành: ${RELEASE_LABEL[sel.value]}`);
   }));
   host.querySelectorAll('[data-folder-act]').forEach(btn => btn.addEventListener('click', async () => {
+    if (btn.dataset.folderAct === 'approve') {
+      const folder = folders.find(f => f.id === Number(btn.dataset.fid));
+      const plans = folder?.waiting_plans || [];
+      const yes = await askConfirm({ title: `Duyệt chức năng "${folder?.title || ''}"?`,
+        message: plans.length ? `${plans.length} kế hoạch đang chờ sẽ được cho phép chạy ngay:` : 'Chưa có kế hoạch nào đang chờ; các yêu cầu sau của chức năng này sẽ tự chạy.',
+        lines: plans.map(p => `#${p.request_id} ${p.title}`),
+        ok: plans.length ? `Duyệt và cho chạy ${plans.length} kế hoạch` : 'Duyệt chức năng' });
+      if (!yes) return;
+    }
     btn.disabled = true;
     const res = await api(`/api/admin/ai-board/folders/${btn.dataset.fid}/${btn.dataset.folderAct}`, { method: 'POST' });
     if (!res.ok) { toast('Lỗi: ' + (res.data?.message || res.data?.error || res.status), 'err'); btn.disabled = false; return; }

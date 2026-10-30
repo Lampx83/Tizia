@@ -185,6 +185,21 @@ class Checkpoint:
         self.keys.add(key)
         return PgSteps(self.dsn, key, 0, self.run_scope)
 
+    def _progress(self, base_sha: str) -> PgSteps:
+        """Tiến độ cổng 3 của đúng lần sửa hiện tại: lượt sửa phải sinh lại code, không được bỏ qua."""
+        key = scope_key(self.run_scope, "gate3_progress", self.n, base_sha)
+        self.keys.add(key)
+        return PgSteps(self.dsn, key, 0, self.run_scope)
+
+    def load_progress(self, base_sha: str) -> dict:
+        """{child: subtask đã xong} của cổng 3 ở cùng plan + base sha; {} khi chưa có."""
+        return self._progress(base_sha).load()["ledger"] or {}
+
+    def save_progress(self, base_sha: str, data: dict) -> None:
+        store = self._progress(base_sha)
+        store.save_pins({"kind": "gate3_progress"})
+        store.save_ledger(data)
+
     def load_cursor(self) -> dict | None:
         return self._cursor().load()["ledger"]
 

@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import path from 'node:path';
 import { applyMigrations } from '../server/ai-board/db/index.js';
 import { openBoard } from './support/ai-board-db.js';
+import { VENV_PYTHON } from './support/harness-python.js';
 import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
 import { attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
 import { planOf } from './support/ai-board-scenarios.js';
@@ -72,7 +73,7 @@ test('a crashed model attempt stays charged across takeover and a new planning r
   try {
     const a = await f.store.claimNext({ workerId: 'allowance-a', version: 'test', mode: 'shadow', intent: 'plan', leaseMs: 120000 });
     const leaseA = leaseOf(a, 'allowance-a');
-    await assert.rejects(promisify(execFile)(path.resolve('ai-board/harness/.venv/Scripts/python.exe'),
+    await assert.rejects(promisify(execFile)(VENV_PYTHON,
       ['test/support/root-allowance-worker-probe.py', f.origin, String(a.id), 'allowance-a', a.lease_token, '--crash-after-reserve'], { timeout: 15000 }),
     error => error.code === 73);
     const reserved = await f.post(a.id, 'read', leaseA);
@@ -128,7 +129,7 @@ test('Ollama token reservations cover its input context plus the explicit output
   const f = await fixture();
   try {
     const ticket = await f.store.claimNext({ workerId: 'ollama-trial', version: 'test', mode: 'shadow', intent: 'plan', leaseMs: 120000 });
-    const result = await promisify(execFile)(path.resolve('ai-board/harness/.venv/Scripts/python.exe'),
+    const result = await promisify(execFile)(VENV_PYTHON,
       ['test/support/root-allowance-worker-probe.py', f.origin, String(ticket.id), 'ollama-trial', ticket.lease_token, '--ollama'], { timeout: 30000 });
     assert.deepEqual(JSON.parse(result.stdout), { model_requests: 3, planner_calls: 2, editing_calls: 1 });
     const current = (await f.post(ticket.id, 'read', leaseOf(ticket, 'ollama-trial'))).body;
@@ -145,7 +146,7 @@ test('denied model admission is not recorded as a sent model call in the phase b
     const lease = leaseOf(ticket, 'no-model-admission');
     assert.equal((await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: 'earlier-unknown-attempt',
       kind: 'model', provider: 'vllm', token_bound: 199500 })).status, 200);
-    const result = await promisify(execFile)(path.resolve('ai-board/harness/.venv/Scripts/python.exe'),
+    const result = await promisify(execFile)(VENV_PYTHON,
       ['test/support/root-allowance-worker-probe.py', f.origin, String(ticket.id), 'no-model-admission', ticket.lease_token, '--expect-admission-denied'], { timeout: 30000 });
     assert.deepEqual(JSON.parse(result.stdout), { model_requests: 0, planner_calls: 0, error: 'root_allowance_exhausted' });
     const current = (await f.post(ticket.id, 'read', lease)).body;
@@ -181,7 +182,7 @@ test('admission cannot start a model request after its absolute deadline expires
   const f = await fixture({ delayReserveAckMs: 1100 });
   try {
     const ticket = await f.store.claimNext({ workerId: 'admission-deadline', version: 'test', mode: 'shadow', intent: 'plan', leaseMs: 120000 });
-    const result = await promisify(execFile)(path.resolve('ai-board/harness/.venv/Scripts/python.exe'),
+    const result = await promisify(execFile)(VENV_PYTHON,
       ['test/support/root-allowance-worker-probe.py', f.origin, String(ticket.id), 'admission-deadline', ticket.lease_token, '--expect-deadline-after-reserve'], { timeout: 30000 });
     assert.equal(JSON.parse(result.stdout).model_requests, 0);
     const current = (await f.post(ticket.id, 'read', leaseOf(ticket, 'admission-deadline'))).body;
@@ -194,7 +195,7 @@ test('real worker transport shares root spend across a failed HTTP attempt, plan
   const f = await fixture();
   try {
     const ticket = await f.store.claimNext({ workerId: 'whole-trial', version: 'test', mode: 'shadow', intent: 'plan', leaseMs: 120000 });
-    const result = await promisify(execFile)(path.resolve('ai-board/harness/.venv/Scripts/python.exe'),
+    const result = await promisify(execFile)(VENV_PYTHON,
       ['test/support/root-allowance-worker-probe.py', f.origin, String(ticket.id), 'whole-trial', ticket.lease_token], { timeout: 30000 });
     assert.deepEqual(JSON.parse(result.stdout), { model_requests: 3, planner_calls: 2, editing_calls: 1 });
     const current = (await f.post(ticket.id, 'read', leaseOf(ticket, 'whole-trial'))).body;
@@ -208,7 +209,7 @@ test('lost reservation acknowledgement stops the worker before model I/O without
   const f = await fixture({ dropReserveAck: true });
   try {
     const ticket = await f.store.claimNext({ workerId: 'lost-ack', version: 'test', mode: 'shadow', intent: 'plan', leaseMs: 120000 });
-    const result = await promisify(execFile)(path.resolve('ai-board/harness/.venv/Scripts/python.exe'),
+    const result = await promisify(execFile)(VENV_PYTHON,
       ['test/support/root-allowance-worker-probe.py', f.origin, String(ticket.id), 'lost-ack', ticket.lease_token, '--expect-reserve-ack-loss'], { timeout: 30000 });
     assert.deepEqual(JSON.parse(result.stdout), { model_requests: 0, error: 'root_allowance_unavailable' });
     const current = (await f.post(ticket.id, 'read', leaseOf(ticket, 'lost-ack'))).body;

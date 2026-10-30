@@ -1,0 +1,14 @@
+# DEV=1 (máy local ~8 core): giới hạn nhỏ thay cho profile large trong docker-compose.yml.
+# Bật: COMPOSE_FILE=docker-compose.yml:docker-compose.dev-profile.yml (xem .env.example).
+services:
+  ai-board-worker:
+    cpus: 2
+    mem_limit: 4g
+
+  sandbox-runner:
+    cpus: 6
+    mem_limit: 3g
+    environment:
+      RESOURCE_PROFILE: dev
+    volumes:
+      - ./ai-board/sandbox-runner/sandbox-policy.dev.yaml:/etc/sandbox/sandbox-policy.yaml:ro

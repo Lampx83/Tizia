@@ -18,6 +18,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@huggingface/tokenizers": "0.2.0",
     "@mediapipe/tasks-vision": "^0.10.21",
     "adm-zip": "^0.5.17",
     "compression": "^1.8.1",

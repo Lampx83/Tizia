@@ -40,7 +40,9 @@ def test_live_plan_needs_verified_source_quote_and_behavior(tmp_path):
     state['plan'] = {'subtasks': [{'file': 'public/domain.js', 'title': 'ETA', 'verify': 'Flag exists'}]}
     forged = {'clear': True, 'grounded': True, 'grounding': [{'target': 'public/domain.js', 'file': 'public/domain.js',
         'quote': 'workerReady = false;', 'before': 'ETA', 'after': 'No ETA', 'verify': 'Flag exists'}]}
-    assert plan_validate.run(request, deps_with(FakeModels(plan, validation=forged)), Budget(), state)['reason'] == 'plan_ungrounded'
+    # LF/127: oracle is advisory. The plan edits a different file than the oracle's surface, so the conflict is recorded, not blocked.
+    assert not plan_validate.run(request, deps_with(FakeModels(plan, validation=forged)), Budget(), state)['blocked']
+    assert 'public/js/suggestion-fab.js' in state['oracle_conflict']
 
 
 def test_quote_copied_with_the_context_line_prefix_still_counts_as_grounding(tmp_path):
@@ -133,7 +135,8 @@ def test_located_existing_behavior_cannot_be_replaced_with_a_standalone_page(tmp
         out = plan_validate.run({'subject': title, 'grounding_required': True},
             deps_with(FakeModels(state['plan'], validation={'clear': True, 'grounded': True})), Budget(), state)
         assert out['reason'] == 'plan_ungrounded'
-        assert renderer in out['signals'][0]
+        # LF/127: the renderer named by the oracle is advisory; the block still comes from grounding (no before/after evidence for a new page).
+        assert 'thiếu hành vi' in out['signals'][0]
         path = 'public/js/' + renderer
         state['plan'] = {'subtasks':[{'file':path,'title':title,'verify':'Observe requested behavior','size':'small'}]}
         validation = {'clear':True,'grounded':True,'grounding':[{'target':path,'file':path,
@@ -150,6 +153,45 @@ def test_validator_rejects_wrong_surface_without_asking_requester_about_code(tmp
     out = plan_validate.run(request, deps, Budget(), {'plan': plan, 'checkout_source': str(tmp_path)})
     assert out['blocked'] and out['reason'] == 'plan_ungrounded'
     assert out.get('public_message') and out.get('outcome') != 'needs_clarification'
+
+
+def test_a_new_file_feature_is_grounded_without_a_source_quote(tmp_path):
+    """A feature adds files that do not exist at base: no source line to quote, so the record may leave the
+    quote empty (before/after/verify still required) and the best-match check is only recorded."""
+    subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
+    (tmp_path / 'public').mkdir(parents=True)
+    (tmp_path / 'public' / 'index.html').write_text('<h1>Tizia</h1>\n', encoding='utf8')
+    subprocess.run(['git', '-C', str(tmp_path), 'add', '.'], check=True)
+    subprocess.run(['git', '-C', str(tmp_path), '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+                    'commit', '-qm', 'base'], check=True)
+    plan = {'capabilities': ['public.ui'], 'subtasks': [
+        {'file': 'public/moi-a.html', 'title': 'Trang A', 'verify': 'node --test test/moi-a.test.js', 'size': 'small',
+         'layer': 'frontend', 'depends_on': []},
+        {'file': 'public/moi-b.html', 'title': 'Trang B', 'verify': 'node --test test/moi-b.test.js', 'size': 'small',
+         'layer': 'frontend', 'depends_on': []}]}
+    request = {'subject': 'Thêm hai trang ôn tập', 'body': 'Hai trang mới độc lập cho sinh viên.',
+               'grounding_required': True, 'complexity_by_server': True, 'type': 'feature'}
+    state = {'plan': plan, 'checkout_source': str(tmp_path), 'best_match': 'public/index.html'}
+
+    def record(task, quote=''):
+        # a new file has no file to quote: the validator leaves "file" empty and the harness fills it in
+        return {'target': task['file'], 'file': '', 'quote': quote,
+                'before': 'chưa có trang', 'after': task['title'], 'verify': task['verify']}
+
+    grounded = {'clear': True, 'question': None, 'grounded': True,
+                'grounding': [record(task) for task in plan['subtasks']]}
+    out = plan_validate.run(request, deps_with(FakeModels(plan, validation=grounded)), Budget(), state)
+    assert not out['blocked'], out
+    assert [e['quote'] for e in state['grounding']['evidence']] == ['', '']
+    # the record always names the file: the board's plan policy rejects an empty grounding.file
+    assert [e['file'] for e in state['grounding']['evidence']] == ['public/moi-a.html', 'public/moi-b.html']
+
+    invented = {'clear': True, 'question': None, 'grounded': True,
+                'grounding': [record(task, quote='<h1>không có thật</h1>') for task in plan['subtasks']]}
+    out = plan_validate.run(request, deps_with(FakeModels(plan, validation=invented)), Budget(),
+                            {'plan': plan, 'checkout_source': str(tmp_path)})
+    assert out['blocked'] and out['reason'] == 'plan_ungrounded'
+    assert 'trích dẫn mẫu không có' in out['signals'][0]
 
 
 def test_gate_2_5_trace_shows_the_evidence_it_read_and_why_the_plan_was_or_was_not_grounded(tmp_path):

@@ -60,7 +60,7 @@ test('invalid draft cannot activate, new revisions preserve active guidance, and
     assert.equal((await approve(other.skill.id, first.version.id)).status, 400);
     assert.equal((await t.api(`/api/ai-board/worker/tickets/${t.ticket.id}/skills`, { ...t.lease, lease_token:'stale', task_type:'frontend', role:'gate3_heavy' }, { 'x-ai-worker-key':KEY })).status, 409);
     const list = await t.api('/api/admin/ai-board/skills');
-    assert.equal(list.body.skills.filter(s => s.source === 'default').length, 7);
+    assert.equal(list.body.skills.filter(s => s.source === 'default').length, 8);
     assert.equal(list.body.usage_window, 'latest_2000_spans');
   } finally { await t.close(); }
 });
@@ -115,8 +115,8 @@ test('migrations35-36 upgrade a34schema without changing old data and is repeata
   const t = await setup();
   try {
     assert.match((await t.db.d.get('SELECT current_schema() AS s')).s, /^t_[0-9a-f]+$/);
-    await t.db.d.exec('DROP TABLE ai_skill_rewrites; DROP TABLE ai_skill_versions; DROP TABLE ai_skills;');
-    await t.db.d.run("DELETE FROM schema_migrations WHERE scope='ai-board' AND version IN ('035-skill-registry.sql','036-skill-rewrite.sql')");
+    await t.db.d.exec('DROP TABLE ai_skill_rewrite_requests; DROP TABLE ai_skill_rewrites; DROP TABLE ai_skill_versions; DROP TABLE ai_skills;');
+    await t.db.d.run("DELETE FROM schema_migrations WHERE scope='ai-board' AND version IN ('035-skill-registry.sql','036-skill-rewrite.sql','043-skill-rewrite-instructions.sql','044-skill-rewrite-history.sql')");
     const before = await t.db.d.all('SELECT * FROM requests ORDER BY id');
     await applyMigrations(t.db.d);
     await applyMigrations(t.db.d);

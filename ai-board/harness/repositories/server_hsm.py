@@ -4,8 +4,8 @@ from contextvars import ContextVar
 
 _SERVER = ContextVar('gate4_hsm_server', default=None)
 
-# Cần admin duyệt manifest rồi chạy lại: không phải vi phạm ranh giới.
-TRANSIENT_REASONS=('tool_manifest_not_approved','tool_manifest_unknown')
+# Cần admin duyệt manifest/folder rồi chạy lại: không phải vi phạm ranh giới.
+TRANSIENT_REASONS=('tool_manifest_not_approved','tool_manifest_unknown','folder_not_approved')
 
 class AuthorityError(ValueError):
     def __init__(self,reason):

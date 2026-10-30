@@ -12,7 +12,7 @@
 // ============================================================
 
 import { getPlayerName } from './api.js';
-import { renderRequestThread } from './request-thread.js?v=no-icons';
+import { renderRequestThread } from './request-thread.js?v=no-icons2';
 import { boardIcon } from './ai-board-icons.js';
 
 const TYPES = [
@@ -140,11 +140,12 @@ function autoMount() {
         <section id="sgf-clarify" class="sgf-clarify" hidden>
           <div class="sgf-clar-banner sgf-clar-live" role="status"><span>Ban điều hành cần trao đổi thêm để làm rõ yêu cầu
             <b id="sgf-clar-title"></b></span></div>
-          <div class="sgf-clar-log" id="sgf-clar-log" aria-live="polite"></div>
           <div class="sgf-clar-model">
-            <label><input type="checkbox" id="sgf-clar-local"> Dùng model nội bộ</label>
-            <p class="sgf-clar-model-hint" id="sgf-clar-model-hint">Bỏ trống: trả lời bằng model cloud. Tích: dùng model nội bộ (vLLM của trường).</p>
+            <label for="sgf-clar-model">Model trả lời</label>
+            <select id="sgf-clar-model" class="sgf-in" aria-describedby="sgf-clar-model-hint"></select>
+            <p class="sgf-clar-model-hint" id="sgf-clar-model-hint">Đang tải lựa chọn model…</p>
           </div>
+          <div class="sgf-clar-log" id="sgf-clar-log" aria-live="polite"></div>
           <div class="sgf-clar-reply" id="sgf-clar-reply" hidden>
             <textarea id="sgf-clar-in" class="sgf-in" rows="2" maxlength="2000"
                       aria-label="Trả lời Ban điều hành"
@@ -168,7 +169,10 @@ function autoMount() {
         <div class="sgf-inbox">
           <div class="sgf-inbox-head">
             <span>Yêu cầu gần đây của bạn</span>
-            <button type="button" class="sgf-reload" id="sgf-reload" title="Tải lại" aria-label="Tải lại yêu cầu">${boardIcon('reload')}</button>
+            <span class="sgf-inbox-tools">
+              <button type="button" class="sgf-history-clear" id="sgf-history-clear" title="Ẩn các yêu cầu đã đóng khỏi danh sách này">Xóa lịch sử</button>
+              <button type="button" class="sgf-reload" id="sgf-reload" title="Tải lại" aria-label="Tải lại yêu cầu">${boardIcon('reload')}</button>
+            </span>
           </div>
           <div class="sgf-inbox-list" id="sgf-inbox">Đang tải…</div>
         </div>
@@ -195,10 +199,12 @@ function bind(root) {
   threadModal.innerHTML = `<div class="sgf-thread-sheet" role="dialog" aria-modal="true" aria-label="Trao đổi với Ban điều hành">
     <div class="sgf-thread-head"><h3>Trao đổi với Ban điều hành</h3>
       <button type="button" class="sgf-thread-x" aria-label="Đóng cửa sổ trao đổi">&#10005;</button></div>
-    <div id="sgf-thread-host" class="sgf-thread-host"></div></div>`;
+    <div id="sgf-thread-host" class="sgf-thread-host"></div>
+    <div id="sgf-thread-clarify" class="sgf-thread-clarify" hidden></div></div>`;
   root.appendChild(threadModal);
   const threadHost = threadModal.querySelector('#sgf-thread-host');
-  const closeThread = () => { threadModal.hidden = true; threadHost.innerHTML = ''; };
+  const threadClarify = threadModal.querySelector('#sgf-thread-clarify');
+  const closeThread = () => { threadModal.hidden = true; threadHost.innerHTML = ''; threadClarify.hidden = true; };
   threadModal.querySelector('.sgf-thread-x').addEventListener('click', closeThread);
   threadModal.addEventListener('click', (event) => { if (event.target === threadModal) closeThread(); });
   document.addEventListener('keydown', (event) => {
@@ -474,19 +480,34 @@ function bind(root) {
   const paneMine = root.querySelector('#sgf-pane-mine');
   const clarSlot = root.querySelector('#sgf-clar-slot');
   const tabBadge = root.querySelector('#sgf-tab-badge');
-  const clarLocal = root.querySelector('#sgf-clar-local');
+  const clarModel = root.querySelector('#sgf-clar-model');
   const clarModelHint = root.querySelector('#sgf-clar-model-hint');
-  let cloudConfigured = false;
+  let modelChoices = { local: true, cloud: false, cloudModel: null };
+
+  function renderModelChoices() {
+    const choices = [];
+    if (modelChoices.local) choices.push(['local', 'Model nội bộ (vLLM của trường)']);
+    if (modelChoices.cloud) choices.push(['cloud', modelChoices.cloudModel ? `Model cloud (${modelChoices.cloudModel})` : 'Model cloud']);
+    clarModel.innerHTML = choices.map(([value, label]) => `<option value="${value}">${escapeHtml(label)}</option>`).join('');
+    clarModel.value = modelChoices.cloud ? 'cloud' : 'local';
+    clarModel.disabled = choices.length < 2; // chỉ một model: khóa, đổi cũng không có tác dụng
+    clarModelHint.textContent = choices.length > 1
+      ? 'Đổi được giữa chừng: mỗi lượt trả lời dùng model đang chọn.'
+      : modelChoices.cloud
+        ? 'Chưa cấu hình model nội bộ — hệ thống dùng model cloud cho phần trả lời.'
+        : 'Chưa cấu hình model cloud — hệ thống dùng model nội bộ cho phần trả lời.';
+  }
+  renderModelChoices();
   fetch('api/ai-board/clarify/options', { credentials: 'same-origin' })
     .then(r => r.ok ? r.json() : null).then(options => {
       if (!options) return;
-      cloudConfigured = options.cloud_configured === true;
-      if (!cloudConfigured) {
-        clarLocal.checked = false;
-        clarLocal.disabled = true;
-        clarModelHint.textContent = 'Chưa cấu hình model cloud — hệ thống dùng model nội bộ cho phần trả lời.';
-      }
-    }).catch(() => { /* offline: coi như chưa cấu hình cloud */ });
+      modelChoices = {
+        local: options.local_configured !== false,
+        cloud: options.cloud_configured === true,
+        cloudModel: options.cloud_model || null,
+      };
+      renderModelChoices();
+    }).catch(() => { /* offline: giữ lựa chọn mặc định (model nội bộ) */ });
 
   function showTab(name) {
     root.querySelectorAll('[data-tab]').forEach(t => {
@@ -513,11 +534,21 @@ function bind(root) {
   });
 
   function mountClarify() {
-    const host = clarifyId && inbox.querySelector(`[data-item="${clarifyId}"]`);
-    (host || clarSlot).appendChild(clarifyBox);
+    // Phần làm rõ (grilling) nằm trong cửa sổ trao đổi với Ban điều hành, không nhúng vào danh sách.
+    if (clarifyBox.parentElement !== threadClarify) threadClarify.appendChild(clarifyBox);
+    threadClarify.hidden = clarifyBox.hidden || threadModal.hidden;
   }
   function toggleClarify(id) {
-    if (clarifyId === Number(id)) { clarifyBox.hidden = !clarifyBox.hidden; return; } // thu gọn, giữ nguyên hội thoại
+    if (clarifyId === Number(id)) { // mở/đóng grilling đã mở: luôn hiện trong cửa sổ trao đổi
+      clarifyBox.hidden = !clarifyBox.hidden;
+      if (!clarifyBox.hidden && threadModal.hidden) {
+        threadModal.hidden = false;
+        const me = (typeof getPlayerName === 'function' && getPlayerName()) || '';
+        renderRequestThread({ host: threadHost, requestId: clarifyId, me, onChange: loadInbox });
+      }
+      mountClarify();
+      return;
+    }
     startClarify(id);
   }
 
@@ -547,8 +578,23 @@ function bind(root) {
       lastSummary = done;
       clarSpec.value = done.text;
       clarSpec.readOnly = true;
-      // Nút "Đúng, gửi" nằm cuối panel: cuộn tới để người dùng thấy ngay trên màn hình thấp.
-      setTimeout(() => clarSum.scrollIntoView({ block: 'end', behavior: 'smooth' }), 30);
+      // Thông báo "đã rõ yêu cầu" + 2 nút ngay dưới tin của Ban điều hành.
+      clarLog.querySelectorAll('.sgf-clar-actions').forEach(el => el.remove());
+      const actions = document.createElement('div');
+      actions.className = 'sgf-clar-actions';
+      actions.innerHTML = `<div class="sgf-clar-msg sgf-clar-ai">Đã rõ yêu cầu. Gửi ngay, hoặc làm rõ thêm nếu còn điểm chưa chắc.</div>
+        <div class="sgf-bar">
+          <button type="button" class="sgf-send" data-clar-send-now>Gửi yêu cầu ngay</button>
+          <button type="button" class="sgf-chip" data-clar-more>Làm rõ tiếp</button>
+        </div>`;
+      clarLog.appendChild(actions);
+      actions.querySelector('[data-clar-send-now]').addEventListener('click', () => root.querySelector('#sgf-clar-ok').click());
+      actions.querySelector('[data-clar-more]').addEventListener('click', () => {
+        clarReply.hidden = false;
+        clarIn.focus();
+      });
+      clarLog.scrollTop = clarLog.scrollHeight;
+      setTimeout(() => actions.scrollIntoView({ block: 'end', behavior: 'smooth' }), 30);
     } else {
       clarCount.textContent = 'Chờ quản trị viên';
       loadInbox();
@@ -557,6 +603,12 @@ function bind(root) {
 
   async function startClarify(id, title) {
     clarifyId = Number(id);
+    // Grilling mở trong cửa sổ trao đổi với Ban điều hành (không nhúng vào danh sách).
+    if (threadModal.hidden) {
+      threadModal.hidden = false;
+      const me = (typeof getPlayerName === 'function' && getPlayerName()) || '';
+      renderRequestThread({ host: threadHost, requestId: clarifyId, me, onChange: loadInbox });
+    }
     showTab('mine');
     pendingBox.hidden = true;
     clarifyBox.hidden = false;
@@ -591,7 +643,7 @@ function bind(root) {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': await csrfToken() },
         body: JSON.stringify({ ...(answer === undefined ? {} : { answer }),
-          model_source: clarLocal.checked || !cloudConfigured ? 'local' : 'cloud' }),
+          model_source: clarModel.value === 'cloud' ? 'cloud' : 'local' }),
       });
       if (!(r.headers.get('content-type') || '').includes('ndjson')) {
         const e = await r.json().catch(() => ({}));
@@ -753,9 +805,30 @@ function bind(root) {
     if (e.key === 'Escape' && !modal.hidden) close();
   });
   root.querySelector('#sgf-reload').addEventListener('click', loadInbox);
+  // "Xóa lịch sử": ẩn các yêu cầu đã đóng khỏi danh sách (chỉ phía người xem, không xoá dữ liệu của Ban).
+  const historyBtn = root.querySelector('#sgf-history-clear');
+  if (historyBtn) {
+    historyBtn.addEventListener('click', () => {
+      if (!historyBtn.dataset.armed) {
+        historyBtn.dataset.armed = '1';
+        historyBtn.textContent = 'Bấm lần nữa để xóa';
+        return;
+      }
+      delete historyBtn.dataset.armed;
+      historyBtn.textContent = 'Xóa lịch sử';
+      const hidden = hiddenRequests();
+      for (const item of lastShown) {
+        if (['done', 'rejected', 'cancelled'].includes(item.status)) hidden.add(Number(item.id));
+      }
+      try { localStorage.setItem(HIDDEN_KEY, JSON.stringify([...hidden])); } catch { /* private mode */ }
+      inboxSignature = null;
+      loadInbox();
+    });
+  }
   const inboxPoll = setInterval(() => {
     if (!root.isConnected) { clearInterval(inboxPoll); return; }
-    if (!modal.hidden && !paneMine.hidden && !document.hidden
+    // Đang trả lời Ban điều hành thì không tự tải lại: panel nháy và mất chỗ đang gõ.
+    if (!modal.hidden && !paneMine.hidden && !document.hidden && clarifyBox.hidden
       && !inbox.contains(document.activeElement) && !inbox.querySelector('[data-armed]')
       && ![...inbox.querySelectorAll('textarea')].some(input => input.value.trim())) loadInbox(true);
   }, 5000);
@@ -979,9 +1052,16 @@ function bind(root) {
     folderHint.hidden = true;
   });
 
+  const HIDDEN_KEY = 'sgf.hiddenRequests';
+  const hiddenRequests = () => {
+    try { return new Set(JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]').map(Number)); } catch { return new Set(); }
+  };
+  let lastShown = [];
+  let inboxSignature = null;
   async function loadInbox(quiet = false) {
     if (quiet !== true) loadFolders();
-    clarSlot.appendChild(clarifyBox); // khỏi bị xoá theo innerHTML của danh sách
+    // Danh sách sắp bị innerHTML thay: giữ panel trao đổi khỏi bị xoá, nhưng không di chuyển nếu đang đứng yên.
+    if (clarifyBox.parentElement && inbox.contains(clarifyBox)) clarSlot.appendChild(clarifyBox);
     if (quiet !== true) inbox.textContent = 'Đang tải…';
     try {
       const dom = inferDomain();
@@ -993,12 +1073,20 @@ function bind(root) {
       const mine = me ? items.filter(it => it.student === me) : [];
       const withReply = items.filter(it => it.admin_note && it.student !== me).slice(0, 3);
       const shown = (mine.length ? mine : withReply).slice(0, 8);
-      if (!shown.length) {
+      const hidden = hiddenRequests();
+      const visible = shown.filter(it => !hidden.has(Number(it.id)));
+      lastShown = visible;
+      // Tải lại nền: dữ liệu y hệt thì giữ nguyên DOM (không nháy, không mất vị trí cuộn).
+      const signature = JSON.stringify(visible.map(it => [it.id, it.status, it.admin_note, it.feature_name,
+        it.awaiting_reply, it.can_continue, it.can_edit]));
+      if (quiet === true && signature === inboxSignature) { mountClarify(); return; }
+      inboxSignature = signature;
+      if (!visible.length) {
         inbox.innerHTML = '<div class="sgf-empty">Chưa có yêu cầu nào. Hãy là người đầu tiên đề xuất cải tiến trang này!</div>';
         return;
       }
       let lastGroup = null;
-      inbox.innerHTML = shown.map(it => {
+      inbox.innerHTML = visible.map(it => {
         const group = it.feature_name || null;
         const head = group && group !== lastGroup ? `<div class="sgf-group">${escapeHtml(group)}</div>` : '';
         lastGroup = group;
@@ -1051,6 +1139,54 @@ function bind(root) {
           btn.textContent = e2.message && e2.error === 'too_many_pending' ? e2.message : 'Chưa thử lại được, thử sau nhé.';
         });
       });
+      // "Tiếp tục": đã xong một phần plan → chạy nốt từ checkpoint (không lập plan mới).
+      inbox.querySelectorAll('[data-req-continue]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          btn.textContent = 'Đang gửi…';
+          const r = await fetch(`api/requests/${encodeURIComponent(btn.dataset.reqContinue)}/continue`, {
+            method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': await csrfToken().catch(() => '') },
+          }).catch(() => null);
+          if (r?.ok) { loadInbox(); return; }
+          const e2 = await r?.json().catch(() => ({})) || {};
+          btn.textContent = e2.message || 'Chưa tiếp tục được, thử sau nhé.';
+        });
+      });
+      // "Sửa yêu cầu": người gửi dừng rồi sửa nội dung và gửi lại; "Tiếp tục" (resume) là của admin.
+      inbox.querySelectorAll('[data-req-edit]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const item = btn.closest('[data-item]');
+          if (!item || item.querySelector('[data-edit-send]')) return;
+          const box = document.createElement('div');
+          box.className = 'sgf-edit';
+          box.innerHTML = `
+            <input class="sgf-in" data-edit-title maxlength="200" value="${btn.dataset.title || ''}" aria-label="Tiêu đề mới" />
+            <textarea class="sgf-in" data-edit-detail rows="4" maxlength="10000" aria-label="Nội dung mới">${btn.dataset.detail || ''}</textarea>
+            <div class="sgf-edit-actions">
+              <button type="button" class="sgf-chip" data-edit-send>Gửi lại</button>
+              <button type="button" class="sgf-chip" data-edit-cancel>Thoát</button>
+            </div>`;
+          item.appendChild(box);
+          box.querySelector('[data-edit-cancel]').addEventListener('click', () => box.remove());
+          box.querySelector('[data-edit-send]').addEventListener('click', async () => {
+            const send = box.querySelector('[data-edit-send]');
+            send.disabled = true;
+            send.textContent = 'Đang gửi…';
+            const r = await fetch(`api/requests/${encodeURIComponent(btn.dataset.reqEdit)}/edit`, {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'content-type': 'application/json', 'X-CSRF-Token': await csrfToken().catch(() => '') },
+              body: JSON.stringify({
+                title: box.querySelector('[data-edit-title]').value,
+                detail: box.querySelector('[data-edit-detail]').value,
+              }),
+            }).catch(() => null);
+            if (r?.ok) { loadInbox(); return; }
+            const e2 = await r?.json().catch(() => ({})) || {};
+            send.disabled = false;
+            send.textContent = e2.message || 'Chưa gửi lại được, thử sau nhé.';
+          });
+        });
+      });
       // Chuông "xem ảnh" trỏ #sgf-thread-<id>: mở sẵn thread của yêu cầu đó.
       if (openThreadId) {
         inbox.querySelector(`[data-req-toggle="${openThreadId}"]`)?.click();
@@ -1082,7 +1218,9 @@ export function queueLine(q) {
 export function renderItem(it, me = '') {
   const sm = STATUS[it.status] || STATUS.pending;
   const mine = me && it.student === me;
-  const awaiting = mine && it.awaiting_user === true;
+  const awaiting = mine && (it.awaiting_user === true || it.awaiting_confirm === true);
+  const awaitingConfirm = mine && it.awaiting_user !== true && it.awaiting_confirm === true;
+  const sent = it.created_at ? `Gửi ${fmtWhen(it.created_at)}` : '';
   const atts = Array.isArray(it.attachments) ? it.attachments : [];
   const attHtml = atts.length ? `
     <div class="sgf-it-att">
@@ -1101,25 +1239,41 @@ export function renderItem(it, me = '') {
       <div class="sgf-it-line">
         <span class="sgf-it-title">${escapeHtml(it.title)}</span>
         ${it.execution_mode === 'queue' ? '<span class="sgf-it-mode">Hàng đợi Claude Code</span>' : ''}
-        <span class="sgf-it-st ${sm.cls}">${escapeHtml(awaiting ? 'Chờ bạn trả lời' : it.status_label || sm.label)}</span>
+        <span class="sgf-it-st ${sm.cls}">${escapeHtml(awaiting ? (awaitingConfirm ? 'Chờ bạn xem lại' : 'Chờ bạn trả lời') : it.status_label || sm.label)}</span>
       </div>
+      ${sent ? `<div class="sgf-it-time">${sent}</div>` : ''}
       ${queueLine(it.queue)}
       ${attHtml}
       ${it.admin_note ? `<div class="sgf-it-note">${escapeHtml(it.admin_note)}</div>` : ''}
-      ${awaiting
-        // Ban đang chờ trả lời: mở thẳng phần làm rõ; nhãn khớp trạng thái awaiting_user.
-        ? `<button type="button" class="sgf-it-thread-btn sgf-it-ask" data-clarify="${it.id}">Trả lời ngay</button>`
-        : `<button type="button" class="sgf-it-thread-btn" data-req-toggle="${it.id}">
-        ${mine ? 'Trao đổi với Ban điều hành' : 'Xem trao đổi'}
-      </button>`}
-      ${mine && it.retry === 'retry'
-        ? `<button type="button" class="sgf-it-thread-btn" data-req-retry="${it.id}" title="Ban lập kế hoạch mới cho yêu cầu này">Thử cách khác</button>` : ''}
       ${mine && it.retry === 'admin' ? '<div class="sgf-it-queue">Đã chuyển quản trị viên</div>' : ''}
-      ${mine && ['pending', 'reviewing'].includes(it.status)
-        ? `<button type="button" class="sgf-it-cancel" data-req-cancel="${it.id}">Hủy yêu cầu</button>` : ''}
+      <div class="sgf-it-actions">
+        ${awaiting
+          // Ban đang chờ trả lời: mở grilling trong cửa sổ trao đổi với Ban điều hành.
+          ? `<button type="button" class="sgf-it-thread-btn sgf-it-ask" data-clarify="${it.id}">${awaitingConfirm ? 'Xem lại & gửi' : 'Trả lời ngay'}</button>`
+          : `<button type="button" class="sgf-it-thread-btn" data-req-toggle="${it.id}">
+          ${mine ? 'Trao đổi với Ban điều hành' : 'Xem trao đổi'}
+        </button>`}
+        ${mine && it.can_continue
+          ? `<button type="button" class="sgf-it-thread-btn" data-req-continue="${it.id}" title="Chạy nốt phần còn lại của kế hoạch đã duyệt">Tiếp tục</button>` : ''}
+        ${mine && it.can_edit
+          ? `<button type="button" class="sgf-it-thread-btn" data-req-edit="${it.id}" data-title="${escapeHtml(it.title)}" data-detail="${escapeHtml(it.detail || '')}" title="Dừng lại, sửa nội dung rồi gửi lại yêu cầu">Sửa yêu cầu</button>` : ''}
+        ${mine && it.retry === 'retry'
+          ? `<button type="button" class="sgf-it-thread-btn" data-req-retry="${it.id}" title="Ban lập kế hoạch mới cho yêu cầu này">Thử cách khác</button>` : ''}
+        ${mine && ['pending', 'reviewing'].includes(it.status)
+          ? `<button type="button" class="sgf-it-cancel" data-req-cancel="${it.id}">Hủy yêu cầu</button>` : ''}
+      </div>
     </div>
   `;
 }
+
+const fmtWhen = (t) => {
+  try {
+    return new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+      .format(new Date(t));
+  } catch {
+    return '';
+  }
+};
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({
@@ -1143,7 +1297,7 @@ function injectStyles() {
     #sgf-root input::placeholder, #sgf-root textarea::placeholder { color: #64748b; opacity: 1; }
     #sgf-fab {
       position: fixed; left: 18px; bottom: 18px; z-index: 2147483000;
-      width: 48px; height: 48px; border-radius: 50%;
+      width: 56px; height: 56px; border-radius: 50%;
       display: inline-flex; gap: 10px; align-items: center; justify-content: center;
       padding: 0; border: 0; cursor: pointer;
       background: #4f46e5; color: #fff;
@@ -1154,7 +1308,7 @@ function injectStyles() {
     #sgf-fab:hover { background: #4338ca; }
     #sgf-fab:active { transform: scale(1); }
     .sgf-fab-ico { display: flex; }
-    .sgf-fab-ico svg { width: 22px; height: 22px; }
+    .sgf-fab-ico svg { width: 26px; height: 26px; }
     @media (max-width: 540px) {
       #sgf-fab { left: 12px; bottom: max(12px, env(safe-area-inset-bottom)); }
     }
@@ -1234,7 +1388,7 @@ function injectStyles() {
     .sgf-clar-feature { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: #334155; font-weight: 600; }
     .sgf-clar-feature .sgf-in { font-weight: 400; }
     .sgf-group { margin: 14px 2px 6px; font-size: 12px; font-weight: 800; letter-spacing: .3px; text-transform: uppercase; color: #64748b; }
-    .sgf-it.sgf-it-awaiting { background: #fffbeb; box-shadow: inset 2px 0 0 #f59e0b; }
+    .sgf-it.sgf-it-awaiting { background: #eef2ff; box-shadow: inset 2px 0 0 #6366f1; }
     .sgf-thread-modal { position: fixed; inset: 0; z-index: 2147483100; background: rgba(15,23,42,.55);
       display: flex; align-items: flex-start; justify-content: center; padding: 4vh 16px; overflow-y: auto; }
     .sgf-thread-modal[hidden] { display: none !important; }
@@ -1246,6 +1400,44 @@ function injectStyles() {
       background: #f8fafc; color: #334155; font-size: 16px; line-height: 1; cursor: pointer; }
     .sgf-thread-x:hover { background: #eef2ff; border-color: #a5b4fc; color: #312e81; }
     .sgf-thread-host .rt-list { max-height: 58vh; }
+    .sgf-thread-clarify { border-top: 1px solid #e5e7eb; margin-top: 10px; }
+    .sgf-thread-clarify[hidden] { display: none !important; }
+    .sgf-thread-clarify .sgf-clarify { padding: 8px 0 0; }
+    /* Đang grilling: chỉ còn một ô trả lời (ô của phần làm rõ), ẩn ô trao đổi thường. */
+    .sgf-thread-sheet:has(.sgf-thread-clarify:not([hidden])) .rt-composer { display: none; }
+    .sgf-clar-model select { width: 100%; }
+    .sgf-clar-actions { display: flex; flex-direction: column; gap: 6px; }
+
+    /* Chatbot gọn: một cột, bong bóng sát nhau, bỏ nhãn/khung thừa. */
+    .sgf-thread-sheet { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px 14px; }
+    .sgf-thread-head { margin-bottom: 0; }
+    .sgf-thread-head h3 { font-size: 14px; font-weight: 600; }
+    .sgf-thread-host { min-height: 0; }
+    .sgf-thread-sheet .rt-root { gap: 6px; }
+    .sgf-thread-sheet .rt-head { display: none; }
+    .sgf-thread-sheet .rt-list { max-height: 52vh; gap: 4px; padding: 0; }
+    .sgf-thread-sheet .rt-bubble { max-width: 86%; padding: 7px 10px; border-radius: 14px; }
+    .sgf-thread-sheet .rt-who { display: none; }
+    .sgf-thread-sheet .rt-body { font-size: 13.5px; line-height: 1.5; }
+    .sgf-thread-sheet .rt-time { font-size: 10.5px; margin-top: 2px; opacity: .6; }
+    .sgf-thread-sheet .rt-board .rt-bubble { border: 0; }
+    .sgf-thread-sheet .rt-composer { gap: 4px; }
+    .sgf-thread-sheet .rt-input { min-height: 40px; padding: 8px 12px; border-radius: 18px; resize: none; }
+    .sgf-thread-sheet .rt-composer-bar { gap: 8px; }
+    .sgf-thread-sheet .rt-send { min-height: 36px; padding: 8px 16px; border-radius: 18px; }
+    .sgf-thread-sheet .private-preview:empty { display: none; }
+    /* Phần làm rõ: hội thoại đã nằm trong thread, chỉ giữ ô trả lời + hành động. */
+    .sgf-thread-clarify .sgf-clar-banner { display: none; }
+    .sgf-thread-clarify .sgf-clar-log > .sgf-clar-msg { display: none; }
+    .sgf-thread-clarify .sgf-clar-log { max-height: none; gap: 6px; }
+    .sgf-thread-clarify .sgf-clar-msg { padding: 7px 11px; border-radius: 14px; font-size: 13px; }
+    .sgf-thread-clarify .sgf-clar-model { display: grid; grid-template-columns: auto 1fr; gap: 6px 8px;
+      align-items: center; padding: 6px 8px; }
+    .sgf-thread-clarify .sgf-clar-model label { white-space: nowrap; font-size: 12px; }
+    .sgf-thread-clarify .sgf-clar-model select { min-height: 34px; }
+    .sgf-thread-clarify .sgf-clar-model-hint { grid-column: 1 / -1; margin: 0; font-size: 11.5px; }
+    .sgf-thread-clarify .sgf-clarify:has(.sgf-clar-actions) .sgf-clar-sum { display: none !important; }
+    .sgf-thread-clarify .sgf-clar-reply textarea { min-height: 44px; border-radius: 18px; }
     .sgf-it-thread-btn.sgf-it-ask {
       background: #fbbf24; color: #451a03; border-color: #f59e0b; font-weight: 700;
       animation: sgf-ring 1.6s ease-out infinite;
@@ -1331,11 +1523,20 @@ function injectStyles() {
 
     .sgf-inbox { border-top: 1px solid #e5e7eb; padding: 12px 20px 18px; background: #f8fafc; border-radius: 0 0 16px 16px; }
     .sgf-inbox-head { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: #475569; font-weight: 700; margin-bottom: 8px; }
+    .sgf-inbox-tools { display: inline-flex; align-items: center; gap: 4px; }
+    .sgf-history-clear {
+      border: 0; background: transparent; color: #64748b; font: inherit; font-weight: 600; font-size: 12px;
+      padding: 6px 8px; border-radius: 8px; cursor: pointer;
+    }
+    .sgf-history-clear:hover { background: rgba(100,116,139,.14); color: #334155; }
+    .sgf-history-clear[data-armed] { background: #fee2e2; color: #991b1b; }
     .sgf-reload { display: grid; place-items: center; min-width: 44px; min-height: 44px; border: 0; background: transparent; cursor: pointer; color: #4f46e5; }
     .sgf-inbox-list { display: flex; flex-direction: column; gap: 7px; }
     .sgf-empty { font-size: 12.5px; color: #6b7280; text-align: center; padding: 10px 0; font-style: italic; }
     .sgf-it { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 9px 11px; }
     .sgf-it-line { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px; }
+    .sgf-it-time { font-size: 11.5px; color: #64748b; margin: 4px 0 0; }
+    .sgf-it-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
     .sgf-it-queue { font-size: 12px; color: #6b7280; margin: 4px 0 2px; }
     .sgf-folders { padding: 0 20px 8px; }
     .sgf-folder { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(148,163,184,.25); font-size: 13px; }
@@ -1392,11 +1593,27 @@ function injectStyles() {
       .sgf-ob-status { color: #c7d2fe; }
       .sgf-clar-ai { background: #312e81; color: #e0e7ff; }
       .sgf-clar-banner { background: #422006; color: #fde68a; border-color: #b45309; }
+      .sgf-it.sgf-it-awaiting { background: #312e81; box-shadow: inset 2px 0 0 #fbbf24; }
+      .sgf-clar-model { background: #1a1740; border-color: #4338ca; color: #cbd5e1; }
+      .sgf-clar-model label { color: #e0e7ff; }
+      .sgf-clar-model-hint { color: #a5b4fc; }
       .sgf-in { background: #312e81; color: #f1f5f9; border-color: #4338ca; }
       .sgf-in:focus { outline-color: #818cf8; border-color: #a5b4fc; }
       .sgf-ctx { background: #312e81; color: #c7d2fe; }
       .sgf-inbox { background: #1a1740; border-top-color: #312e81; }
       .sgf-inbox-head { color: #cbd5e1; }
+      .sgf-it-time { color: #94a3b8; }
+      .sgf-history-clear { color: #94a3b8; }
+      .sgf-history-clear:hover { background: rgba(148,163,184,.18); color: #e2e8f0; }
+      .sgf-thread-clarify { border-top-color: #312e81; }
+      .sgf-thread-sheet { background: #1e1b4b; color: #e5e7eb; border-color: #312e81; }
+      .sgf-thread-head h3 { color: #fff; }
+      .sgf-thread-x { background: rgba(255,255,255,.08); color: #cbd5e1; border-color: #4338ca; }
+      .sgf-thread-x:hover { background: rgba(255,255,255,.16); color: #fff; }
+      .sgf-thread-host .rt-board .rt-bubble { background: #312e81; color: #e0e7ff; border-color: #4338ca; }
+      .sgf-thread-host .rt-input { background: #1a1740; color: #f1f5f9; border-color: #4338ca; }
+      .sgf-thread-host .rt-input::placeholder { color: #a5b4fc; }
+      .sgf-thread-host .rt-count, .sgf-thread-host .rt-time { color: #94a3b8; }
       .sgf-it { background: #312e81; border-color: #4338ca; }
       .sgf-it-title { color: #f1f5f9; }
       .sgf-it-note { background: #422006; color: #fde68a; }

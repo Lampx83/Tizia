@@ -14,6 +14,8 @@ import posixpath
 import re
 import subprocess
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import context as repo_context
@@ -22,6 +24,7 @@ import path_policy
 from gates import gate3_guards
 from repositories.tool_steps import PgSteps
 from runtime import tool_loop
+from runtime.budget import BudgetExhausted
 from repositories import server_hsm
 import memory
 import repomap
@@ -116,15 +119,101 @@ def file_prompt_context(subtask: dict, content: str, siblings: list[str], words:
 
 WHOLE_FILE_MAX_CHARS = 60_000
 
+_EXEMPLAR_MAX_CHARS = 6_000
+_DEP_MAX_CHARS = 6_000
+_HTML_PROLOG = re.compile(r"\s*(?:<!DOCTYPE|<!doctype|<html\b)")
+
+
+def _show_file(source, sha: str | None, path: str, limit: int = _EXEMPLAR_MAX_CHARS) -> str:
+    out = _git(["show", f"{sha}:{path}"], cwd=Path(source), text=True,
+               encoding="utf-8", errors="replace")
+    if out.returncode:
+        return None
+    lines, used = [], 0
+    for line in out.stdout.splitlines():
+        if used + len(line) > limit:
+            lines.append(f"(bớt: chỉ trích {len(lines)} dòng đầu của mẫu)")
+            break
+        lines.append(line)
+        used += len(line)
+    return "\n".join(lines)
+
+
+def _new_file_context(subtask: dict, state: dict, siblings: list[str]) -> str | None:
+    """File đích chưa tồn tại: một mẫu file THẬT cùng thể loại ở base + siblings
+    (LF/107 mở rộng 2026-10-28, tiêu chí 8a) — run 43 trả HTML cho file JS chỉ vì không có gì
+    chỉ ra hình dạng file đích. Chọn mẫu theo kiểu target (frontend khác API).
+    None khi không tìm được mẫu."""
+    source, sha = state.get("checkout_source"), state.get("base_sha")
+    if not source or not sha:
+        return None
+    target = subtask["file"]
+    if target.startswith(("public/",)):
+        groups = (("mẫu module frontend THẬT", ("public/js/features/", "public/js/")),)
+    elif target.startswith(("server/",)):
+        groups = (("mẫu context API THẬT", ("server/contexts/_ai-generated/", "server/contexts/")),)
+    else:
+        groups = (("mẫu module frontend THẬT", ("public/js/features/", "public/js/")),
+                  ("mẫu context API THẬT", ("server/contexts/_ai-generated/", "server/contexts/")))
+    folder = posixpath.dirname(target)
+    parts = [f"(file đích chưa tồn tại ở base — tạo file MỚI hoàn toàn; cùng thư mục {folder or '.'}/: "
+             f"{', '.join(siblings[:40]) or '—'})\n"
+             "(CHỈ mượn HÌNH DẠNG từ mẫu: cách export, cấu trúc object trả về, cách test; KHÔNG chép các "
+             "import của mẫu — chỉ import đúng những gì đề bài yêu cầu; đề bài yêu cầu dữ liệu tĩnh thì "
+             "nhúng trực tiếp trong code, không import db/auth/feed/user/vui)"]
+    js = [p for p in sorted(_base_tree(state)) if p.endswith((".js", ".mjs"))]
+    for label, prefixes in groups:
+        same = [p for p in js if any(p.startswith(pre) for pre in prefixes)]
+        if not same:
+            continue
+        sample = same[-1]  # gần nhất theo thứ tự cây
+        if (shown := _show_file(source, sha, sample)) is not None:
+            parts.append(f"\n({label}: {sample})\n{numbered(shown)}")
+    return "\n".join(parts) if len(parts) > 1 else None
+
+
+def _dep_file_context(subtask: dict, state: dict, repo: Path) -> str:
+    """File mà subtask này phụ thuộc (depends_on, 1-based) và subtask đó đã viết trong lượt
+    run này (file MỚI ở base, nằm sẵn trong repo scratch): đưa nội dung thật vào context
+    (LF/107 tiêu chí 8b) — model viết trang nạp module theo API thật, không bịa tên hàm."""
+    deps = [d for d in (subtask.get("depends_on") or []) if isinstance(d, int) and not isinstance(d, bool)]
+    subs = (state.get("plan") or {}).get("subtasks") or []
+    base_tree = _base_tree(state)
+    parts = []
+    for n in deps:
+        if not 1 <= n <= len(subs):
+            continue
+        dep_file = subs[n - 1].get("file")
+        if not dep_file or dep_file == subtask["file"] or dep_file in base_tree:
+            continue  # file có ở base → content đã nằm trong context của file cũ; criteria chỉ nêu file MỚI
+        try:
+            dep_path = _safe_join(repo, dep_file)
+        except ValueError:
+            continue
+        if not dep_path.is_file():
+            continue
+        content = dep_path.read_text(encoding="utf-8", errors="replace")
+        if not content:
+            continue
+        lines, used = [], 0
+        for line in content.splitlines():
+            if used + len(line) > _DEP_MAX_CHARS:
+                lines.append(f"(bớt: chỉ trích {len(lines)} dòng đầu của file phụ thuộc)")
+                break
+            lines.append(line)
+            used += len(line)
+        parts.append(f"\n(file phụ thuộc đã có sau subtask {n}: {dep_file})\n{numbered(chr(10).join(lines))}")
+    return "\n".join(parts)
+
 
 def numbered(content: str) -> str:
     return "\n".join(f"L{n}| {line}" for n, line in enumerate(content.splitlines(), 1))
 
 
 def whole_file_context(subtask: dict, state: dict, current: str | None, siblings: list[str], words: list[str]) -> tuple:
-    """(context, lessons, ctx) with the whole numbered file; None when the file is new."""
+    """(context, lessons, ctx) with the whole numbered file; file MỚI → mẫu file thật (như excerpt)."""
     if current is None:
-        return None, [], None
+        return _new_file_context(subtask, state, siblings), [], None
     return f"(file {len(current.splitlines())} dòng; toàn bộ file)\n{numbered(current)}", [], None
 
 
@@ -137,7 +226,12 @@ def gate3_context(subtask: dict, state: dict, current: str | None, siblings: lis
 
 def excerpt_context(subtask: dict, state: dict, current: str | None, siblings: list[str], words: list[str]) -> tuple:
     """(context, lessons, ctx): trích file model thấy ở cổng 3 + bài học + kết quả build_context. Bộ đo recall dùng chung."""
-    context = None if current is None else file_prompt_context(subtask, current, siblings, words)
+    if current is None:
+        # File MỚI: mẫu file thật cùng thể loại + siblings (LF/107 tiêu chí 8a); lessons vẫn giữ.
+        return (_new_file_context(subtask, state, siblings),
+                memory.recall(state["memory_path"], subtask["file"], words) if state.get("memory_path") else [],
+                None)
+    context = file_prompt_context(subtask, current, siblings, words)
     lessons = memory.recall(state["memory_path"], subtask["file"], words) if state.get("memory_path") else []
     ctx = None
     if current is not None:
@@ -262,6 +356,12 @@ def check_output(out: dict, current: str | None, done_reason: str | None, file: 
 
 
 def _check_rest(out: dict, current: str | None, file: str | None) -> None:
+    if current is None:
+        if file and file.endswith((".js", ".mjs")) and _HTML_PROLOG.match(out.get("code", "")):
+            # Sanity artifact (LF/107 tiêu chí 8c): file JS nhận HTML phải fail ngay lần gọi đầu
+            # thay vì trôi qua verify rồi đốt framework allowance của repair.
+            raise ValueError(f"'{file}' là file JavaScript nhưng output là HTML — viết JS module "
+                             "thật (ESM), đúng như mẫu trong context")
     if current is not None:
         if file and file.endswith((".js", ".mjs")):  # Gate 4 would catch this one round later; ask now, while it is cheap
             from gates import static_check
@@ -399,10 +499,260 @@ def _checkpoint_store(state: dict, db_path, proposal_id, child: int):
     return PgSteps(db_path, proposal_id, child) if db_path is not None and proposal_id is not None else None
 
 
+FANOUT_ENV = "AI_BOARD_FANOUT_MAX"
+DEFAULT_FANOUT = 2
+PROGRESS_CAP = 150_000  # ký tự JSON tiến độ cổng 3 giữ được trong checkpoint (server cắt ledger ở 200 KB)
+
+
+def fanout_limit(env=None) -> int:
+    """Số model call song song trong 1 lớp DAG: 1 = tuần tự, trần 4 (một workload vLLM, không mở workload thứ hai)."""
+    raw = (os.environ if env is None else env).get(FANOUT_ENV, DEFAULT_FANOUT)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_FANOUT
+    return min(max(value, 1), 4)
+
+
+def _progress_store(state: dict):
+    """Checkpoint tiến độ cổng 3 (subtask đã ghi xong) — None khi không có checkpoint hoặc base sha."""
+    store, base = state.get("checkpoint"), state.get("base_sha")
+    return store if store is not None and base and hasattr(store, "load_progress") else None
+
+
+def _load_progress(state: dict, trace=None) -> dict:
+    """{child: proposal đã ghi xong} của lượt trước cùng plan + base; {} khi chưa có hoặc checkpoint hỏng."""
+    store = _progress_store(state)
+    if store is None:
+        return {}
+    try:
+        return dict(store.load_progress(state["base_sha"]) or {})
+    except Exception as error:  # noqa: BLE001 — checkpoint hỏng chỉ tốn phần làm lại, không được chặn cổng 3
+        if trace:
+            trace.note("tool", "gate 3 progress", f"không đọc được tiến độ đã lưu ({str(error)[:200]}); làm lại từ đầu")
+        return {}
+
+
+def _save_progress(state: dict, saved: dict, *, trace) -> bool:
+    """Ghi tiến độ cổng 3; False khi checkpoint không nhận (quá lớn/lỗi) — lượt sau chỉ làm lại phần chưa lưu."""
+    store = _progress_store(state)
+    if store is None:
+        return False
+    try:
+        store.save_progress(state["base_sha"], saved)
+        return True
+    except Exception as error:  # noqa: BLE001 — thiếu checkpoint không được đổi kết quả cổng 3
+        if trace:
+            trace.note("tool", "gate 3 progress", f"không lưu được tiến độ ({str(error)[:200]})")
+        return False
+
+
+def _progress_entry(out: dict, model: str) -> dict:
+    """Phần tối thiểu để dựng lại 1 subtask đã xong mà không gọi model lần nữa."""
+    return {"model": model, "test_file": out["test_file"], "code": out["code"], "test": out["test"],
+            **({"verification": out["verification"]} if out.get("verification") else {})}
+
+
+def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, current: str | None, repo: Path,
+                  known: set, db_path, proposal_id) -> tuple:
+    """Một subtask: gọi model (loop/retry) tới khi ra code hợp lệ. → ("ok", out, model, receipts) | ("blocked", gate result).
+
+    Không ghi file: fan-out chạy nhiều subtask cùng lúc nên chỉ phần gọi model ở đây là song song được."""
+    # Budget kiểm TRƯỚC mỗi lần gọi model, không chỉ 1 lần trước cả gate —
+    # nhiều subtask nghĩa là nhiều lần gọi model bên trong CÙNG 1 lời gọi
+    # run_gate(3, ...), main.run_once() chỉ tick() giữa các cổng chứ không
+    # giữa các subtask. Không kiểm ở đây thì 1 plan nhiều subtask chọc thủng
+    # max_model_calls/max_wall_clock_s âm thầm (budget.py: "không bao giờ im
+    # lặng báo xong").
+    if not budget.tick():
+        return "blocked", {"gate": 3, "blocked": True, "failure_class": "budget",
+                           "reason": f"budget cạn trước subtask '{subtask.get('title')}'"}
+    check_file_path(subtask["file"])
+    model = model_for(subtask, deps.models)
+    role = 'gate3_heavy' if subtask.get('size') == 'large' else 'gate3_light'
+    words = file_context.keywords(subtask["title"], subtask["verify"], state.get("request_detail"))
+    siblings = _siblings(state.get("checkout_source"), state.get("base_sha") or "", subtask["file"])
+    context, lessons, ctx = gate3_context(subtask, state, current, siblings, words)
+    if dep_lines := _dep_file_context(subtask, state, repo):
+        context = f"{context}\n{dep_lines}" if context else dep_lines.lstrip("\n")
+    trace = getattr(deps, "trace", None)
+    prompt = build_prompt(subtask, state.get("repair_reason"), context, lessons)
+    feedback = ""
+    routing = getattr(deps.models, 'routing', None)
+    failed_candidates = set()
+    receipts: list = []
+    if trace:
+        _note_inputs(trace, subtask, model, state, current, context, siblings, words, lessons, ctx)
+    out = None
+
+    def run_loop():
+        """(proposal | None, blocked gate result | None)"""
+        looped = tool_loop.run_subtask(
+            subtask, current, deps=deps, budget=budget, model=model, source=state["checkout_source"], sha=state["base_sha"],
+            check=lambda o: (_check_rest(o, current, subtask["file"]), gate3_guards.check(o, current, subtask["file"], known)),
+            role=role, db_path=db_path, proposal_id=proposal_id, child=child,
+            store=_checkpoint_store(state, db_path, proposal_id, child),
+            pins={"role": role}, repair_reason=state.get("repair_reason"), context=context)
+        if looped.get("stale_reset") and trace:
+            trace.note("tool", "stale checkpoint", f"an upstream artifact changed ({', '.join(looped['stale_reset'])}); this subtask was checked again from scratch")
+        receipts.extend(looped.get("sandbox_receipts", []))
+        if looped["status"] != "proposed":
+            return None, {"gate": 3, "blocked": True, "failure_class": looped["failure_class"],
+                          "reason": f"subtask '{subtask.get('title')}': {looped['reason']}",
+                          **({"unknown_outcome": looped["unknown_outcome"]} if looped.get("unknown_outcome") else {}),
+                          "tool_manifest": tool_loop.MANIFEST.hash,
+                          **({"sandbox_receipts": receipts} if receipts else {})}
+        return looped["out"], None
+
+    # auto: one-shot first; the loop repairs a gate-4 rejection (repair_reason) or an exhausted one-shot attempt.
+    if tool_loop.enabled() or (tool_loop.mode() == "auto" and state.get("repair_reason")):
+        out, stop = run_loop()
+        if stop:
+            return "blocked", stop
+    for iteration in range(0 if out is not None else MAX_INNER_RETRIES + 1):
+        routing_options = {'role': role}
+        if routing:
+            # One quality switch uses the final existing repair attempt, never a fresh budget.
+            if (iteration == MAX_INNER_RETRIES and not getattr(budget, 'quality_switches', 0)
+                    and routing.candidates(role, exclude=failed_candidates)):
+                if budget.spend_quality_switch():
+                    routing_options.update(exclude_candidates=failed_candidates, route_reason='quality_switch')
+        from runtime.root_allowance import current as root_allowance
+        if iteration and root_allowance() is not None and not budget.spend_repair():
+            return "blocked", {'gate': 3, 'blocked': True, 'reason': 'root repair allowance exhausted', 'failure_class': 'budget'}
+        if trace and iteration:
+            trace.note("knows", "retry feedback", str(error), {"hint": retry_hint(str(error), iteration - 1),
+                                                                "ai_output": raw[:SNIPPET_CHARS]})
+        # Phản hồi nối SAU prompt cố định + ngữ cảnh: prefix giữ nguyên byte, Ollama tái dùng KV cache.
+        call = dict(gate=3, budget=budget, db_path=db_path, proposal_id=proposal_id, prompt_name="implement.md", child=child,
+                    iteration=iteration, options=_retry_sampling(iteration),
+                    skill_context={'file': subtask['file'], 'task_type': subtask.get('task_type')}, **routing_options)
+        try:
+            server_hsm.authorize_action('model')
+        except server_hsm.AuthorityError as error:
+            return "blocked", {'gate':3,'blocked':True,'reason':str(error),'failure_class':error.failure_class}
+        if gate3_guards.enabled("schema"):
+            try:
+                body = deps.call_model(model, prompt + feedback, format=gate3_guards.edit_schema(current is not None), **call)
+            except BudgetExhausted:
+                raise  # allowance/request-bound block, not a schema refusal: asking again would spend a call the root does not have
+            except Exception:  # noqa: BLE001 - server refused the schema: ask once the old way, and count it
+                try:
+                    server_hsm.authorize_action('model')
+                except server_hsm.AuthorityError as error:
+                    return "blocked", {'gate':3,'blocked':True,'reason':str(error),'failure_class':error.failure_class}
+                gate3_guards.note_fallback()
+                body = deps.call_model(model, prompt + feedback, **call)
+        else:
+            body = deps.call_model(model, prompt + feedback, **call)
+        raw = body.get("response", "")
+        if body.get('_route'):
+            failed_candidates.add(body['_route']['candidate'])
+            model = routing.catalog['candidates'][body['_route']['candidate']]['model']
+        try:
+            out = parse_codegen(raw, existing=current is not None)
+        except ValueError as e:
+            error = e
+            if trace:
+                trace.attach_last("edits", {"parsed": raw, "applied": False})
+                trace.attach_last("evaluation", {"check": "parse output", "ok": False, "detail": str(e)})
+        else:
+            if trace:
+                trace.attach_last("evaluation", {"check": "parse output", "ok": True, "detail": "valid edits + test schema"})
+            try:
+                _safe_join(repo, out["test_file"])
+            except ValueError as e:  # path tuyệt đối/thoát repo: chặn NGAY, không hỏi lại, không ghi gì
+                return "blocked", {"gate": 3, "blocked": True, "reason": f"subtask '{subtask.get('title')}': {e}",
+                                   "failure_class": "critical"}
+            report = (lambda check, ok, detail: trace.attach_last("evaluation", {"check": check, "ok": ok, "detail": detail})) if trace else None
+            parsed = json.dumps(out.get("edits") or {"code": "(file mới)"}, ensure_ascii=False)
+            try:
+                out = check_output(out, current, (body.get("_metrics") or {}).get("done_reason")
+                                   or body.get("done_reason"), subtask.get("file"), report)
+                gate3_guards.check(out, current, subtask["file"], known)
+                if trace:
+                    trace.attach_last("edits", {"parsed": parsed, "applied": True,
+                                                "diff": _unified(current or "", out["code"], subtask["file"])})
+                return "ok", out, model, receipts
+            except ValueError as e:
+                error = e
+                if trace:
+                    trace.attach_last("edits", {"parsed": parsed, "applied": False})
+        if trace:
+            trace.mark_last("retry" if iteration < MAX_INNER_RETRIES else "error", str(error))
+        spent = (body.get("_metrics") or {}).get("gpu_ms") or 0
+        room = getattr(budget, "max_units", None) is None or budget.units + spent / 1000 < budget.max_units
+        if iteration == MAX_INNER_RETRIES or not budget.tick() or not room:
+            if tool_loop.mode() == "auto" and budget.tick() and not state.get("repair_reason"):
+                out, stop = run_loop()
+                if stop:
+                    return "blocked", stop
+                return "ok", out, model, receipts
+            # Lý do kèm đoạn lỗi để lượt sửa sau Docker (REPAIR_SUFFIX) cũng dùng được.
+            return "blocked", {"gate": 3, "blocked": True, "failure_class": "ordinary",
+                               "reason": f"subtask '{subtask.get('title')}': {error} (sau {iteration + 1} lần thử); "
+                                         f"đoạn cuối: {raw[:300]}"}
+        feedback = RETRY_SUFFIX.format(n=iteration + 1, error=error, snippet=raw[:SNIPPET_CHARS],
+                                       hint=retry_hint(str(error), iteration))
+    if out is not None:  # loop đã ra proposal ở lượt đầu, không cần one-shot
+        return "ok", out, model, receipts
+    return "blocked", {"gate": 3, "blocked": True, "failure_class": "ordinary",
+                       "reason": f"subtask '{subtask.get('title')}': hết lượt thử"}
+
+
+def _budget_stop(subtask: dict, error: Exception) -> tuple:
+    """Allowance hết NGAY TRONG lời gọi model của 1 subtask → cùng dạng với chặn trước subtask,
+    để caller dừng và `_stop_result` báo các subtask đã xong là `partial`."""
+    return "blocked", {"gate": 3, "blocked": True, "failure_class": "budget",
+                       "reason": f"budget cạn trước subtask '{subtask.get('title')}': {error}"}
+
+
+def _fan_out(tasks: list[tuple], *, state: dict, deps, budget, texts: dict, repo: Path, known: set,
+             db_path, proposal_id) -> dict:
+    """Chạy các subtask độc lập của một lớp DAG; 1 subtask thì tuần tự, nhiều thì batch trên cùng model.
+
+    Mỗi task chạy trong context đã copy để ContextVar (authority, root allowance) không rơi mất."""
+    def one(child: int, subtask: dict) -> tuple:
+        return _generate_one(child, subtask, state=state, deps=deps, budget=budget, current=texts.get(subtask["file"]),
+                             repo=repo, known=known, db_path=db_path, proposal_id=proposal_id)
+
+    def guarded(child: int, subtask: dict) -> tuple:
+        try:
+            return one(child, subtask)
+        except BudgetExhausted as error:  # root allowance cạn giữa lượt: không để cả gate văng lỗi
+            return _budget_stop(subtask, error)
+
+    if len(tasks) <= 1 or fanout_limit() == 1:
+        return {order: guarded(child, subtask) for order, child, subtask in tasks}
+    results = {}
+    with ThreadPoolExecutor(max_workers=min(fanout_limit(), len(tasks)), thread_name_prefix="gate3") as pool:
+        futures = {}
+        for order, child, subtask in tasks:
+            context = copy_context()  # một context mỗi task: không context nào bị vào 2 thread
+            futures[pool.submit(context.run, guarded, child, subtask)] = order
+        for future, order in futures.items():
+            results[order] = future.result()
+    return results
+
+
+def _stop_result(stop: dict, *, diffs: list, total: int, remaining: list[str]) -> dict:
+    """Kết quả dừng giữa chừng. Còn subtask đã xong + subtask chưa chạy → `partial` để người gửi bấm tiếp tục."""
+    result = {**stop, "diffs": diffs}
+    if diffs and len(diffs) < total and result.get("failure_class") in ("ordinary", "budget", "transient"):
+        result["failure_class"] = "partial"
+        result["partial"] = {"done": len(diffs), "total": total, "remaining": remaining}
+        result["reason"] = (f"hoàn thành một phần {len(diffs)}/{total} subtask; còn {len(remaining)}; "
+                            f"{result.get('reason')}")
+    return result
+
+
 def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
         db_path=None, proposal_id: int | None = None) -> dict:
     """Điểm vào cho main.run_gate. Đọc state['plan'] do cổng 1 để lại, sinh code
-    cho từng subtask với model theo size, ghi diff thật vào repo scratch."""
+    cho từng subtask với model theo size, ghi diff thật vào repo scratch.
+
+    Subtask độc lập trong cùng lớp DAG chạy song song (batch trên cùng model); ghi file và commit
+    luôn tuần tự. Tiến độ từng subtask nằm trong checkpoint nên lượt resume chỉ làm phần còn thiếu."""
     plan = state.get("plan")
     subtasks = (plan or {}).get("subtasks")
     if not subtasks:
@@ -422,168 +772,94 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
     else:
         texts = {}
 
+    from runtime import schedule
+    prepared = schedule.prepare(subtasks)
+    try:
+        plan_levels = schedule.levels(prepared)
+        schedule.check_conflicts(prepared)
+    except ValueError as error:
+        return {"gate": 3, "blocked": True, "reason": str(error), "diffs": [], "failure_class": "plan"}
+
     repo = _ensure_scratch_repo(repo_dir if repo_dir is not None else state.get("scratch_repo"))
-    diffs = []
-    for child, subtask in enumerate(subtasks, start=1):
-        # Budget kiểm TRƯỚC mỗi lần gọi model, không chỉ 1 lần trước cả gate —
-        # nhiều subtask nghĩa là nhiều lần gọi model bên trong CÙNG 1 lời gọi
-        # run_gate(3, ...), main.run_once() chỉ tick() giữa các cổng chứ không
-        # giữa các subtask. Không kiểm ở đây thì 1 plan nhiều subtask chọc thủng
-        # max_model_calls/max_wall_clock_s âm thầm (budget.py: "không bao giờ im
-        # lặng báo xong").
-        if not budget.tick():
-            state["diffs"] = diffs
-            return {
-                "gate": 3, "blocked": True,
-                "reason": f"budget cạn giữa chừng (đã xong {len(diffs)}/{len(subtasks)} subtask)",
-                "diffs": diffs, "failure_class": "budget",
-            }
-        check_file_path(subtask["file"])
-        model = model_for(subtask, deps.models)
-        current = texts.get(subtask["file"])
-        words = file_context.keywords(subtask["title"], subtask["verify"], state.get("request_detail"))
-        siblings = [] if current is None else _siblings(state["checkout_source"], state["base_sha"], subtask["file"])
-        context, lessons, ctx = gate3_context(subtask, state, current, siblings, words)
-        trace = getattr(deps, "trace", None)
-        prompt = build_prompt(subtask, state.get("repair_reason"), context, lessons)
-        feedback = ""
-        known = _base_tree(state) | {st["file"] for st in subtasks} if gate3_guards.enabled("refs") else set()
-        routing = getattr(deps.models, 'routing', None)
-        role = 'gate3_heavy' if subtask.get('size') == 'large' else 'gate3_light'
-        failed_candidates = set()
-        if trace:
-            _note_inputs(trace, subtask, model, state, current, context, siblings, words, lessons, ctx)
-        out = None
+    trace = getattr(deps, "trace", None)
+    known = _base_tree(state) | {st["file"] for st in subtasks} if gate3_guards.enabled("refs") else set()
+    saved = _load_progress(state, trace)
+    diffs: list[dict] = []
+    diff_child: list[int] = []
+    receipts: list = []
+    stop = None
+    child_of = {step["order"]: index for index, step in enumerate(prepared, start=1)}
 
-        def run_loop():
-            """(proposal | None, blocked gate result | None)"""
-            looped = tool_loop.run_subtask(
-                subtask, current, deps=deps, budget=budget, model=model, source=state["checkout_source"], sha=state["base_sha"],
-                check=lambda o: (_check_rest(o, current, subtask["file"]), gate3_guards.check(o, current, subtask["file"], known)),
-                role=role, db_path=db_path, proposal_id=proposal_id, child=child,
-                store=_checkpoint_store(state, db_path, proposal_id, child),
-                pins={"role": role}, repair_reason=state.get("repair_reason"), context=context)
-            if looped.get("stale_reset") and trace:
-                trace.note("tool", "stale checkpoint", f"an upstream artifact changed ({', '.join(looped['stale_reset'])}); this subtask was checked again from scratch")
-            state.setdefault("sandbox_receipts", []).extend(looped.get("sandbox_receipts", []))
-            if looped["status"] != "proposed":
-                state["diffs"] = diffs
-                return None, {"gate": 3, "blocked": True, "diffs": diffs, "failure_class": looped["failure_class"],
-                              "reason": f"subtask '{subtask.get('title')}': {looped['reason']}",
-                              **({"unknown_outcome": looped["unknown_outcome"]} if looped.get("unknown_outcome") else {}),
-                              "tool_manifest": tool_loop.MANIFEST.hash,
-                              **({"sandbox_receipts": state["sandbox_receipts"]} if state.get("sandbox_receipts") else {})}
-            return looped["out"], None
-
-        # auto: one-shot first; the loop repairs a gate-4 rejection (repair_reason) or an exhausted one-shot attempt.
-        if tool_loop.enabled() or (tool_loop.mode() == "auto" and state.get("repair_reason")):
-            out, stop = run_loop()
-            if stop:
-                return stop
-        for iteration in range(0 if out is not None else MAX_INNER_RETRIES + 1):
-            routing_options = {'role': role}
-            if routing:
-                # One quality switch uses the final existing repair attempt, never a fresh budget.
-                if (iteration == MAX_INNER_RETRIES and not getattr(budget, 'quality_switches', 0)
-                        and routing.candidates(role, exclude=failed_candidates)):
-                    if budget.spend_quality_switch():
-                        routing_options.update(exclude_candidates=failed_candidates, route_reason='quality_switch')
-            from runtime.root_allowance import current as root_allowance
-            if iteration and root_allowance() is not None and not budget.spend_repair():
-                return {'gate': 3, 'blocked': True, 'diffs': diffs, 'reason': 'root repair allowance exhausted', 'failure_class': 'budget'}
-            if trace and iteration:
-                trace.note("knows", "retry feedback", str(error), {"hint": retry_hint(str(error), iteration - 1),
-                                                                    "ai_output": raw[:SNIPPET_CHARS]})
-            # Phản hồi nối SAU prompt cố định + ngữ cảnh: prefix giữ nguyên byte, Ollama tái dùng KV cache.
-            call = dict(gate=3, budget=budget, db_path=db_path, proposal_id=proposal_id, prompt_name="implement.md", child=child,
-                        iteration=iteration, options=_retry_sampling(iteration),
-                        skill_context={'file': subtask['file'], 'task_type': subtask.get('task_type')}, **routing_options)
-            try:
-                server_hsm.authorize_action('model')
-            except server_hsm.AuthorityError as error:
-                state['diffs'] = diffs
-                return {'gate':3,'blocked':True,'diffs':diffs,'reason':str(error),'failure_class':error.failure_class}
-            if gate3_guards.enabled("schema"):
-                try:
-                    body = deps.call_model(model, prompt + feedback, format=gate3_guards.edit_schema(current is not None), **call)
-                except Exception:  # noqa: BLE001 - server refused the schema: ask once the old way, and count it
-                    try:
-                        server_hsm.authorize_action('model')
-                    except server_hsm.AuthorityError as error:
-                        state['diffs'] = diffs
-                        return {'gate':3,'blocked':True,'diffs':diffs,'reason':str(error),'failure_class':error.failure_class}
-                    gate3_guards.note_fallback()
-                    body = deps.call_model(model, prompt + feedback, **call)
-            else:
-                body = deps.call_model(model, prompt + feedback, **call)
-            raw = body.get("response", "")
-            if body.get('_route'):
-                failed_candidates.add(body['_route']['candidate'])
-                model = routing.catalog['candidates'][body['_route']['candidate']]['model']
-            try:
-                out = parse_codegen(raw, existing=current is not None)
-            except ValueError as e:
-                error = e
-                if trace:
-                    trace.attach_last("edits", {"parsed": raw, "applied": False})
-                    trace.attach_last("evaluation", {"check": "parse output", "ok": False, "detail": str(e)})
-            else:
-                if trace:
-                    trace.attach_last("evaluation", {"check": "parse output", "ok": True, "detail": "valid edits + test schema"})
-                try:
-                    _safe_join(repo, out["test_file"])
-                except ValueError as e:  # path tuyệt đối/thoát repo: chặn NGAY, không hỏi lại, không ghi gì
-                    state["diffs"] = diffs
-                    return {"gate": 3, "blocked": True, "reason": f"subtask '{subtask.get('title')}': {e}",
-                            "diffs": diffs, "failure_class": "critical"}
-                report = (lambda check, ok, detail: trace.attach_last("evaluation", {"check": check, "ok": ok, "detail": detail})) if trace else None
-                parsed = json.dumps(out.get("edits") or {"code": "(file mới)"}, ensure_ascii=False)
-                try:
-                    out = check_output(out, current, (body.get("_metrics") or {}).get("done_reason")
-                                       or body.get("done_reason"), subtask.get("file"), report)
-                    gate3_guards.check(out, current, subtask["file"], known)
-                    if trace:
-                        trace.attach_last("edits", {"parsed": parsed, "applied": True,
-                                                    "diff": _unified(current or "", out["code"], subtask["file"])})
-                    break
-                except ValueError as e:
-                    error = e
-                    if trace:
-                        trace.attach_last("edits", {"parsed": parsed, "applied": False})
-            if trace:
-                trace.mark_last("retry" if iteration < MAX_INNER_RETRIES else "error", str(error))
-            spent = (body.get("_metrics") or {}).get("gpu_ms") or 0
-            room = getattr(budget, "max_units", None) is None or budget.units + spent / 1000 < budget.max_units
-            if iteration == MAX_INNER_RETRIES or not budget.tick() or not room:
-                if tool_loop.mode() == "auto" and budget.tick() and not state.get("repair_reason"):
-                    out, stop = run_loop()
-                    if stop:
-                        return stop
-                    break
-                state["diffs"] = diffs
-                # Lý do kèm đoạn lỗi để lượt sửa sau Docker (REPAIR_SUFFIX) cũng dùng được.
-                return {"gate": 3, "blocked": True, "diffs": diffs, "failure_class": "ordinary",
-                        "reason": f"subtask '{subtask.get('title')}': {error} (sau {iteration + 1} lần thử); "
-                                  f"đoạn cuối: {raw[:300]}"}
-            feedback = RETRY_SUFFIX.format(n=iteration + 1, error=error, snippet=raw[:SNIPPET_CHARS],
-                                           hint=retry_hint(str(error), iteration))
-        try:
-            diff_text = _write_and_diff(repo, subtask["file"], out["code"], out["test_file"], out["test"])
-        except ValueError as e:
-            # _safe_join: model trả path tuyệt đối/thoát repo scratch — chặn
-            # NGAY, không ghi 1 byte nào ra ngoài, không phải lỗi âm thầm bỏ qua.
-            reason = f"subtask '{subtask.get('title')}': {e}"
-            state["diffs"] = diffs
-            return {"gate": 3, "blocked": True, "reason": reason, "diffs": diffs, "failure_class": getattr(e,'failure_class','critical')}
+    def write(child: int, subtask: dict, out: dict, model: str) -> None:
+        diff_text = _write_and_diff(repo, subtask["file"], out["code"], out["test_file"], out["test"])
         diffs.append({
             "title": subtask["title"], "file": subtask["file"], "test_file": out["test_file"],
             "model": model, "diff": diff_text,
             **({'verification': out['verification']} if out.get('verification') else {}),
             "commit": _git(["rev-parse", "HEAD"], cwd=repo, text=True).stdout.strip(),
         })
+        diff_child.append(child)
+
+    def remember(child: int, out: dict, model: str) -> None:
+        saved[str(child)] = _progress_entry(out, model)
+        if len(json.dumps(saved, ensure_ascii=False)) > PROGRESS_CAP:
+            saved.pop(str(child), None)  # checkpoint quá lớn: subtask này sẽ được làm lại ở lượt resume
+            if trace:
+                trace.note("tool", "gate 3 progress", "tiến độ vượt trần checkpoint; subtask cuối không được lưu")
+            return
+        _save_progress(state, saved, trace=trace)
+
+    for level in plan_levels:
+        for order in level:  # subtask đã xong ở lượt trước: dựng lại file, không gọi model, không tính phí
+            child, subtask = child_of[order], prepared[child_of[order] - 1]
+            entry = saved.get(str(child))
+            if not entry:
+                continue
+            try:
+                write(child, subtask, entry, entry.get("model"))
+            except ValueError as error:  # path tuyệt đối/thoát repo scratch
+                stop = stop or {"gate": 3, "blocked": True, "failure_class": "critical",
+                                "reason": f"subtask '{subtask.get('title')}': {error}"}
+            if trace:
+                trace.note("tool", "gate 3 resume", f"'{subtask['title']}' đã xong ở lượt trước; dựng lại từ checkpoint")
+        if stop is not None:
+            break
+        tasks = [(order, child_of[order], prepared[child_of[order] - 1]) for order in level if str(child_of[order]) not in saved]
+        if not tasks:
+            continue
+        results = _fan_out(tasks, state=state, deps=deps, budget=budget, texts=texts, repo=repo, known=known,
+                           db_path=db_path, proposal_id=proposal_id)
+        for order in sorted(results):
+            child, subtask = child_of[order], prepared[child_of[order] - 1]
+            status, payload, *rest = results[order]
+            if status == "blocked":
+                receipts.extend(payload.get("sandbox_receipts") or [])
+                stop = stop or payload
+                continue
+            out, model, produced = payload, rest[0], rest[1]
+            receipts.extend(produced or [])
+            try:
+                write(child, subtask, out, model)
+            except ValueError as error:
+                stop = stop or {"gate": 3, "blocked": True, "failure_class": getattr(error, 'failure_class', 'critical'),
+                                "reason": f"subtask '{subtask.get('title')}': {error}"}
+                continue
+            remember(child, out, model)
+        if stop is not None:
+            break
+    # Cổng 4 ghép diff với subtask theo THỨ TỰ PLAN (zip ở services/candidate.py), không phải
+    # thứ tự hoàn thành: các lớp DAG chạy [2,4] song song trước [3,5] làm diffs bị lệch → run 51
+    # bị chặn ScopeViolation oan ("child 3 ghi lich-client.js"). Sắp lại theo child.
+    if diff_child:
+        diffs[:] = [d for _, d in sorted(zip(diff_child, diffs), key=lambda pair: pair[0])]
 
     state["diffs"] = diffs
     state["scratch_repo"] = str(repo)
+    if receipts:
+        state.setdefault("sandbox_receipts", []).extend(receipts)
+    if stop is not None:
+        remaining = [step["file"] for step in prepared if str(child_of[step["order"]]) not in saved]
+        return _stop_result(stop, diffs=diffs, total=len(prepared), remaining=remaining)
     return {"gate": 3, "blocked": False, "reason": None, "diffs": diffs,
             **({"tool_manifest": tool_loop.MANIFEST.hash} if tool_loop.mode() else {}),
             **({"sandbox_receipts": state["sandbox_receipts"]} if state.get("sandbox_receipts") else {})}

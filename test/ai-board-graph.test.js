@@ -273,3 +273,16 @@ test('reduced motion turns off edge flow and running spin', () => {
   assert.match(block, /\.g-edge\.flow, \.g-node\.st-running \.g-glyph \{ animation:none; \}/);
   assert.match(css, /\.g-edge\.flow \{[^}]*animation:g-flow/);
 });
+
+test('GPU time cell: running request adds time since last finished model call; idle shows finished total only', () => {
+  const lastCall = { ...planRun(EPOCH, []), calls: [call(1, 2, 'p', EPOCH + 1000)] };
+  const base = { totals: { budget_unit: 'gpu_s', gpu_s: 19.8 }, root_work: { used: {}, limits: {} }, runs: [lastCall], graph };
+  const live = budgetCells({ ...base, root: root({ live: true }) }, EPOCH + 4000)[1];
+  assert.equal(live.big, '22.8 s');
+  assert.equal(live.sub, 'running · estimate');
+  const idle = budgetCells({ ...base, root: root({ live: false }) }, EPOCH + 4000)[1];
+  assert.equal(idle.big, '19.8 s');
+  assert.equal(idle.sub, 'local model');
+  const none = budgetCells({ ...base, runs: [], root: root({ live: true }) }, EPOCH + 4000)[1];
+  assert.equal(none.big, '19.8 s');
+});

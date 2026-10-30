@@ -153,7 +153,8 @@ function attachClarify(router, { store, profiles, requireAuth, requireStrictCsrf
   // Chọn model cho câu trả lời làm rõ: local (vLLM của trường) hoặc cloud; UI đọc để khóa/bật checkbox.
   route.get('/api/ai-board/clarify/options', requireAuth, async (req, res) => {
     res.json({ cloud_configured: !!cloudGenerate, cloud_model: cloudLlm?.model ?? null,
-      local_label: 'model nội bộ (vLLM của trường)', default_source: 'cloud' });
+      local_configured: !!generate || !!(process['env'].OLLAMA_URL || process['env'].VLLM_URL),
+      local_label: 'model nội bộ (vLLM của trường)', default_source: cloudGenerate ? 'cloud' : 'local' });
   });
   // Yêu cầu đang chờ người gửi làm rõ: FAB nhấp nháy + banner.
   route.get('/api/ai-board/clarifications', requireAuth, async (req, res) => {

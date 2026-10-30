@@ -83,6 +83,17 @@ class HttpCheckpoint:
     def _cursor(self) -> HttpSteps:
         return self._steps(scope_key(self.run_scope, "cursor"), 0)
 
+    def _progress(self, base_sha: str) -> HttpSteps:
+        return self._steps(scope_key(self.run_scope, "gate3_progress", self.n, base_sha), 0)
+
+    def load_progress(self, base_sha: str) -> dict:
+        return self._progress(base_sha).load()["ledger"] or {}
+
+    def save_progress(self, base_sha: str, data: dict) -> None:
+        store = self._progress(base_sha)
+        store.save_pins({"kind": "gate3_progress"})
+        store.save_ledger(data)
+
     def load_cursor(self) -> dict | None:
         return self._cursor().load()["ledger"]
 

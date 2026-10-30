@@ -6,9 +6,24 @@ import { applyMigrations, createPgDb, ensureBoardBaseSchema } from './ai-board/d
 import { createAiBoardServices } from './ai-board/services/composition.js';
 import { HEADERS, requireInternalUser } from './ai-board/internal-auth.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from './ai-board/routes.js';
+import { attachRequesterThread } from './ai-board/api/requester-thread.js';
 import { attachAiBoardIntake } from './contexts/ai-board-intake/index.js';
+import { attachAiBoardShots } from './contexts/ai-board-shots/index.js';
 
 export { HEADERS };
+
+/** Mirror a signed user as a minimal row (no password) so users(id) foreign keys hold on the board database. */
+async function mirrorUser(d, user) {
+  const id = Number(user?.id);
+  if (!Number.isInteger(id) || id <= 0) return;
+  const role = String(user.role || 'student').slice(0, 20);
+  const name = String(user.displayName || user.display_name || `user-${id}`).slice(0, 60);
+  await d.run(`INSERT INTO users(id, username, display_name, password_hash, role, enrolled_domain, created_at)
+    VALUES (?, ?, ?, '', ?, ?, ?)
+    ON CONFLICT (id) DO UPDATE SET display_name=EXCLUDED.display_name, role=EXCLUDED.role,
+      enrolled_domain=EXCLUDED.enrolled_domain`,
+    [id, `board-${id}`, name, role, user.enrolled_domain || null, Date.now()]);
+}
 
 /** Build the board-only app. `dbHandle` lets tests pass an isolated PostgreSQL; production uses AI_BOARD_DATABASE_URL. */
 export async function createAiBoardServer({ env = process['env'], dbHandle = null, classifyRequest, generate, logger = console } = {}) {
@@ -26,7 +41,13 @@ export async function createAiBoardServer({ env = process['env'], dbHandle = nul
   app.get('/health', (_req, res) => res.json({ ok: true, service: 'aiboard-server' }));
 
   // Web signs user/role/domain/time; board trusts only that signature (or the worker key on worker routes).
-  const requireAuth = requireInternalUser(secret);
+  const verify = requireInternalUser(secret);
+  // LF/122: the board keeps its own PostgreSQL, so the signed user is mirrored as a minimal row (no password)
+  // before any write that references users(id): request owners, admin decisions, lessons, grants.
+  const requireAuth = (req, res, next) => verify(req, res, (error) => {
+    if (error) return next(error);
+    mirrorUser(handle.d, req.user).then(() => next()).catch(next);
+  });
   const requireAdmin = (req, res, next) => (req.user?.role === 'admin'
     ? next() : res.status(403).json({ error: 'forbidden' }));
   const pass = (_req, _res, next) => next();
@@ -35,7 +56,10 @@ export async function createAiBoardServer({ env = process['env'], dbHandle = nul
     quotaGate: pass, generate });
   attachAiBoardRequestRoutes(app, { store: services.store, aux: services.aux, db: handle.d,
     requireAuth, requireEnrolled: pass, requireAdmin, requireStrictCsrf: pass, classifyRequest });
+  // Thread and votes of one request: the web proxies these to the board (LF/122) so both sides read one store.
+  attachRequesterThread(app, { requests: services.requests, store: services.store, db: handle.d, requireAuth });
   attachAiBoardWorkerRoutes(app, { store: services.store, aux: services.aux, env });
+  attachAiBoardShots(app, { db: handle.d, requireAuth, requireAdmin });
 
   app.use((error, _req, res, _next) => {
     logger.warn?.(`[aiboard-server] ${error?.message || error}`);
