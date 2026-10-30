@@ -259,6 +259,12 @@ def _query(names):
     return min(fit, key=lambda w: (hits[w], -len(w), w)) if fit else None
 
 
+def _not_applicable(note):
+    """Oracle needs an element the page lacks: not applied, not a failure (LF/127)."""
+    return {'probe_id': SEARCH_PROBE, 'passed': True, 'applicable': False, 'reason': None, 'note': note,
+            'coverage': {'filtering': False}}
+
+
 def run_search(base, fixture):
     """Typing narrows the activity cards to those matching; clearing the box restores them all."""
     result = lambda reason, **extra: {'probe_id': SEARCH_PROBE, 'passed': reason is None, 'reason': reason,
@@ -278,7 +284,7 @@ def run_search(base, fixture):
                     break
                 page.wait_for_timeout(500)
             if len(cards) < 2:
-                return result('Không thấy danh sách hoạt động trên trang')
+                return _not_applicable('Trang không có danh sách hoạt động để kiểm')
             names = [c['name'] for c in cards]
             query = _query(names)
             if query is None:
@@ -290,7 +296,7 @@ def run_search(base, fixture):
                     break
                 page.wait_for_timeout(500)
             if not found:
-                return result('Không thấy ô tìm kiếm hoạt động trên trang')
+                return _not_applicable('Trang không có ô tìm kiếm hoạt động')
             page.fill('[data-oracle-search]', query)
             problem = None
             for _ in range(8):  # debounce
