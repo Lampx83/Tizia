@@ -169,6 +169,23 @@ export function createSkillService(db) {
       return read(id);
     });
   }
+  // Chuyển bản viết lại cũ (rewritten_text nằm trên version nguồn) thành version con; nguồn không còn bản viết lại.
+  // Bỏ qua version đã duyệt/đang dùng/đã từ chối: không đổi trạng thái của admin.
+  async function promoteLegacyRewrite(actor, versionId) {
+    return db.tx(async () => {
+      await requireCurrentAdmin(actor);
+      const source = await db.get('SELECT v.*,s.name,s.task_types_json AS skill_types,s.active_version_id FROM ai_skill_versions v JOIN ai_skills s ON s.id=v.skill_id WHERE v.id=?', [Number(versionId)]);
+      if (!source || source.rewritten_text == null) return { promoted: false, reason: 'no_legacy_rewrite' };
+      if (source.approved_at || source.active_version_id === source.id || source.rejected_at) return { promoted: false, reason: 'source_approved_or_rejected' };
+      const item = await skill(source.skill_id);
+      const next = Number((await db.get('SELECT COALESCE(MAX(version),0)+1 AS n FROM ai_skill_versions WHERE skill_id=?', [source.skill_id])).n);
+      const text = source.rewritten_text.replace(/^version:.*$/m, `version: ${next}`);
+      const child = await appendVersion(actor, item, parse(source.task_types_json, []), text, source.id, { evaluation: parse(source.eval_json) });
+      await db.run("UPDATE ai_skill_versions SET origin='rewrite' WHERE id=?", [child.version.id]);
+      await db.run('UPDATE ai_skill_versions SET rewritten_text=NULL,rewritten_hash=NULL,rewrite_lint_json=NULL WHERE id=?', [source.id]);
+      return { promoted: true, source_version_id: source.id, child_version_id: child.version.id, child_version: next, lint_ok: child.version.lint.ok };
+    });
+  }
   async function requestRewrite(actor, id, versionId, input) {
     if (input.confirmed !== true) throw bad('Rewrite confirmation required', 'confirmation_required');
     const instructions = cleanInstructions(input.instructions);
@@ -430,5 +447,5 @@ export function createSkillService(db) {
     }
     return { skills: items, usage_window: 'latest_2000_spans', token_method: 'utf8_upper_bound' };
   }
-  return { upload, read, approve, disable, active, list, requestRewrite, reject, edit, rollback, claimRewrite, reportRewrite, createProposal, proposals, claimRetro, reportRetro };
+  return { upload, read, approve, disable, active, list, requestRewrite, promoteLegacyRewrite, reject, edit, rollback, claimRewrite, reportRewrite, createProposal, proposals, claimRetro, reportRetro };
 }
