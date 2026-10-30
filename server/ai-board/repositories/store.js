@@ -1353,6 +1353,8 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       reason: 'protected capability requires explicit admin authorization', note: 'Kế hoạch đang chờ quản trị viên cho phép trước khi triển khai.' };
     return { status: 'planned', child: 'queued', reason: null, note: 'Kế hoạch đã được kiểm tra và chia thành các việc theo thứ tự.' };
   }
+  const DATA_GATE = { status: 'waiting_authorization', child: 'waiting_data', reason: 'data_step_pending',
+    note: 'Bước thay đổi dữ liệu đang chờ quản trị viên áp dụng và xác nhận.' };
   const folderNotApproved = async (requestId) => !!await db.get(
     'SELECT 1 FROM requests q JOIN ai_feature_folders f ON f.id = q.folder_id WHERE q.id = ? AND f.approved_at IS NULL', [Number(requestId)]);
 
@@ -1448,7 +1450,8 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       SELECT 1 FROM ai_authorizations WHERE root_ticket_id=? AND plan_hash=? AND plan_revision=?
     `, [Number(ticketId), checked.planHash, revision]);
     const folderHeld = await folderNotApproved(root.source_request_id);
-    const stepGates = checked.stepTiers.map((tier) => planGate({ tier, authorized, folderHeld }));
+    const stepGates = checked.stepTiers.map((tier, i) => (checked.plan.steps[i].layer === 'data' && !folderHeld
+      ? DATA_GATE : planGate({ tier, authorized, folderHeld })));
     const split = splitGates(stepGates);
     const gate = split ?? planGate({ tier: checked.tier, authorized, folderHeld });
     const effectiveTier = split ? 'surface' : checked.tier;
@@ -1482,7 +1485,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
         JSON.stringify({
           description: step.description, allowed_scope: step.allowed_scope,
           acceptance: step.acceptance, tests: step.tests, risk: step.risk, non_goals: step.non_goals,
-          layer: step.layer, depends_on: step.depends_on,
+          layer: step.layer, depends_on: step.depends_on, ...(step.payload ? { payload: step.payload } : {}),
         }),
         split ? stepGates[step.order - 1].child : childStatus, checked.plan.steps.length - step.order, publicNote, internalReason,
         checked.stepTiers[step.order - 1], revision, step.layer ?? null, JSON.stringify(step.depends_on ?? []), now, now,]);
@@ -1882,7 +1885,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     root.lost_worker = root.lease_owner && !root.live ? { worker_id: root.lease_owner, lease_expired_at: root.lease_expires_at } : null;
     root.phase_label = PHASES[root.phase]?.label ?? root.phase;
     const children = await db.all(`
-      SELECT id, title, status, sequence AS "order", plan_revision FROM ai_tickets
+      SELECT id, title, status, sequence AS "order", plan_revision, layer, tier, description FROM ai_tickets
       WHERE parent_id=? ORDER BY plan_revision, sequence, id
     `, [root.id]);
     const traces = await db.all(`
@@ -2005,7 +2008,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     await db.run(`INSERT INTO ai_authorizations(root_ticket_id, plan_hash, plan_revision, admin_user_id, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`, [Number(rootTicketId), String(planHash), Number(plan.revision), Number(adminUserId), now]);
     if (plan.tier === 'protected') {
       await db.run(`UPDATE ai_tickets SET status='queued', phase='authorized', public_note='Kế hoạch đã được cho phép; đang chờ thực hiện.', internal_reason=NULL, updated_at=? WHERE id=?`, [now, Number(rootTicketId)]);
-      await db.run(`UPDATE ai_tickets SET status='queued', public_note='Kế hoạch đã được cho phép.', internal_reason=NULL, updated_at=? WHERE parent_id=? AND plan_revision=?`, [now, Number(rootTicketId), plan.revision]);
+      await db.run(`UPDATE ai_tickets SET status='queued', public_note='Kế hoạch đã được cho phép.', internal_reason=NULL, updated_at=? WHERE parent_id=? AND plan_revision=? AND layer IS DISTINCT FROM 'data'`, [now, Number(rootTicketId), plan.revision]);
     }
     if (plan.tier === 'surface') {
       const woken = await db.get(`SELECT 1 FROM ai_tickets WHERE parent_id=? AND plan_revision=? AND tier='protected' AND status='waiting_authorization'`,
@@ -2057,6 +2060,33 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   async function authorizePlan(rootTicketId, planHash, adminUserId) {
     const result = await authorizePlanTransaction(rootTicketId, planHash, adminUserId, Date.now());
     await recordAdminAction({ ticketId: rootTicketId }, adminUserId, 'authorize_plan');
+    return result;
+  }
+
+  const acknowledgeDataStepTransaction = (rootTicketId, childId, adminUserId, now) => db.tx(async () => {
+    const root = await db.get(`SELECT * FROM ai_tickets WHERE id=? AND parent_id IS NULL${db.lockRow}`, [Number(rootTicketId)]);
+    if (!root || ['cancelled', 'done'].includes(root.status) || PHASES[root.phase]?.terminal) {
+      throw new WorkerContractError('request is already closed', 409, 'request_closed');
+    }
+    const child = await db.get(`SELECT id, status, layer, plan_revision FROM ai_tickets WHERE id=? AND parent_id=?${db.lockRow}`,
+      [Number(childId), root.id]);
+    if (!child || child.layer !== 'data' || Number(child.plan_revision) !== Number(root.plan_revision)) {
+      throw new WorkerContractError('data step not found in the current plan', 404, 'data_step_not_found');
+    }
+    if (child.status !== 'waiting_data') throw new WorkerContractError('data step is not waiting for the admin', 409, 'data_step_not_waiting');
+    await db.run(`UPDATE ai_tickets SET status='done', phase='acknowledged', public_note=?, internal_reason=NULL, updated_at=? WHERE id=?`,
+      ['Quản trị viên đã áp dụng và xác nhận bước dữ liệu.', now, child.id]);
+    await db.run(insertEvent, [root.id, 'data_step_acknowledged', 'admin', String(adminUserId), `waiting_data->done`,
+      'Quản trị viên đã áp dụng và xác nhận bước dữ liệu.', `child ${child.id}`, `data-ack:${child.id}`, now]);
+    if (root.status === 'planned') {
+      await db.run(`UPDATE ai_tickets SET status='queued', phase='authorized', updated_at=? WHERE id=?`, [now, root.id]);
+    }
+    return { ok: true };
+  });
+
+  async function acknowledgeDataStep(rootTicketId, childId, adminUserId) {
+    const result = await acknowledgeDataStepTransaction(rootTicketId, childId, adminUserId, Date.now());
+    await recordAdminAction({ ticketId: rootTicketId }, adminUserId, 'acknowledge_data_step');
     return result;
   }
 
@@ -2198,6 +2228,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     handoffClarification,
     requestWorkerClarification,
     authorizePlan,
+    acknowledgeDataStep,
     recordAdminAction,
     resumeAuthorizedPlan,
     extendBudget,

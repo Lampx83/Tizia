@@ -3,6 +3,7 @@ import fs from 'node:fs';
 
 import { check as checkPath } from './path-policy.js';
 import { isSkillTaskType } from '../skill-task-types.js';
+import { ALLOWED_DOMAINS, ALLOWED_KEYS } from '../../contexts/campus/layout-schema.js';
 
 export const CAPABILITY_POLICY_VERSION = 'd0-v3'; // v3: money_paths luôn cần người
 const LEXICON = JSON.parse(fs.readFileSync(new URL('../guard-lexicon.json', import.meta.url), 'utf8'));
@@ -44,7 +45,8 @@ export const CAPABILITY_POLICY = Object.freeze({
 
 const TIERS = Object.freeze({ surface: 0, protected: 1, core: 2 });
 const RISKS = new Set(['low', 'medium', 'high']);
-const LAYERS = new Set(['db', 'backend', 'frontend', 'wiring']);
+const LAYERS = new Set(['db', 'backend', 'frontend', 'wiring', 'data']);
+const MAX_PAYLOAD_BYTES = 200_000;
 const GEN_CONTEXT = 'server/contexts/_ai-generated/';
 const DB_MIGRATION = /^server\/contexts\/_ai-generated\/[a-z0-9][a-z0-9-]*\/migrations\/[a-z0-9][a-z0-9._-]*\.sql$/;
 // Feature plan: acceptance/tests phải chạy được ở cổng hiện có, không phải câu mô tả.
@@ -56,6 +58,20 @@ function inferLayer(file) {
   if (file.startsWith(GEN_CONTEXT)) return 'backend';
   if (file.startsWith('public/')) return 'frontend';
   return 'wiring';
+}
+
+/** Payload bước data (campus_layout): kiểm tất định theo whitelist của POST /api/admin/campus-layout/:domain. */
+function dataPayload(value, field) {
+  const bad = (why) => fail('malformed_plan', `${field}: ${why}`, 'Bước thay đổi dữ liệu không hợp lệ và đang chờ xem lại.');
+  if (!value || typeof value !== 'object' || Array.isArray(value)) bad('payload must be an object');
+  if (value.kind !== 'campus_layout') bad(`unknown payload kind '${value.kind}'`);
+  if (!ALLOWED_DOMAINS.has(value.domain)) bad(`unknown campus domain '${value.domain}'`);
+  const layout = value.layout;
+  if (!layout || typeof layout !== 'object' || Array.isArray(layout) || Object.keys(layout).length === 0) bad('layout must be a non-empty object');
+  const unknown = Object.keys(layout).filter((key) => !ALLOWED_KEYS.has(key));
+  if (unknown.length) bad(`layout keys not allowed: ${unknown.join(', ')}`);
+  if (Buffer.byteLength(JSON.stringify(layout)) > MAX_PAYLOAD_BYTES) bad('layout too large');
+  return { kind: value.kind, domain: value.domain, layout };
 }
 
 function ordinalList(value, field) {
@@ -208,7 +224,11 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
     const policy = CAPABILITY_POLICY[capability];
     if (!policy || !topCapabilities.has(capability)) fail('unknown_capability', `step capability '${capability}' is unknown or undeclared`,
       'Kế hoạch yêu cầu quyền chưa được hỗ trợ và đang chờ xem lại.');
-    const allowedScope = stringList(step.allowed_scope, `steps[${index}].allowed_scope`).map((item) => safePath(item, `steps[${index}].allowed_scope`));
+    const isData = step.layer === 'data';
+    const payload = isData && step.payload != null ? dataPayload(step.payload, `steps[${index}].payload`) : null;
+    if (!isData && step.payload != null) fail('malformed_plan', `steps[${index}].payload is only for layer data`);
+    if (isData && payload == null && !Array.isArray(step.allowed_scope)) fail('malformed_plan', `steps[${index}] data step needs payload or migration scope`);
+    const allowedScope = payload ? [] : stringList(step.allowed_scope, `steps[${index}].allowed_scope`).map((item) => safePath(item, `steps[${index}].allowed_scope`));
     for (const item of allowedScope) {
       // Tiền thật / ví xu (guard-lexicon.json money_paths): không capability nào tự sửa được.
       if (MONEY_PATHS.some((money) => item === money || money.startsWith(item.endsWith('/') ? item : `${item}/`))) {
@@ -222,7 +242,7 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
           'Kế hoạch vượt ngoài phạm vi an toàn và đang chờ xem lại.');
       }
     }
-    stepTiers.push(policy.tier);
+    stepTiers.push(isData && TIERS[policy.tier] < TIERS.protected ? 'protected' : policy.tier);
     const risk = nonEmptyString(step.risk, `steps[${index}].risk`);
     if (!RISKS.has(risk)) fail('malformed_plan', `unknown step risk '${risk}'`);
     if (step.task_type != null && !isSkillTaskType(step.task_type)) {
@@ -231,6 +251,10 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
     const layer = step.layer == null ? inferLayer(allowedScope[0]) : nonEmptyString(step.layer, `steps[${index}].layer`);
     if (!LAYERS.has(layer)) fail('malformed_plan', `unknown steps[${index}].layer '${layer}'`);
     const dependsOn = step.depends_on == null ? (order > 1 ? [order - 1] : []) : ordinalList(step.depends_on, `steps[${index}].depends_on`);
+    if (layer === 'data' && !payload && allowedScope.some((item) => !DB_MIGRATION.test(item))) {
+      fail('scope_violation', `steps[${index}] data scope must be a new migration under ${GEN_CONTEXT}<name>/migrations/`,
+        'Kế hoạch vượt ngoài phạm vi an toàn và đang chờ xem lại.');
+    }
     if (layer === 'db' && allowedScope.some((item) => !DB_MIGRATION.test(item))) {
       fail('scope_violation', `steps[${index}] db scope must be a new migration under ${GEN_CONTEXT}<name>/migrations/`,
         'Kế hoạch vượt ngoài phạm vi an toàn và đang chờ xem lại.');
@@ -252,6 +276,7 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
       depends_on: dependsOn,
       non_goals: stringList(step.non_goals, `steps[${index}].non_goals`, { allowEmpty: true }),
       ...(step.task_type == null ? {} : { task_type: step.task_type }),
+      ...(payload ? { payload } : {}),
     };
   });
 
