@@ -26,7 +26,7 @@ Transport = Callable[[str, str, dict, dict], dict]
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "ai-board" / "harness"))
 # Worker <-> server contract, shared with server/ai-board/store.js; loader in harness runtime/limits.py.
-from runtime import objection_repeat  # noqa: E402
+from runtime import coverage, objection_repeat  # noqa: E402
 from runtime.limits import config_sha256, contract, scaled_limit  # noqa: E402
 CONTRACT = contract()
 PLAN_GATES = tuple(CONTRACT["gates"]["plan"])
@@ -681,6 +681,19 @@ def _objection_evidence(history: list[dict]) -> dict:
             "repeat_objection": objection_repeat.repeated(history, threshold)}
 
 
+def _uncovered_conditions(request: dict, plan: dict, deps, budget) -> list[str]:
+    """Điều kiện của clarified_spec chưa có subtask verify chạy được; model chỉ khi không có mục tất định (LF/128)."""
+    def call_model(prompt: str) -> str:
+        if not hasattr(deps, "call_model"):  # deps không có model (test HTTP worker): không kiểm điều kiện
+            return ""
+        body = deps.call_model(deps.models.gate1_model, prompt, gate=1, budget=budget, format=coverage.SCHEMA,
+                               prompt_name="spec_conditions.md")
+        return str(body.get("response") or "")
+
+    items, _source = coverage.spec_conditions(str(request.get("clarified_spec") or ""), call_model)
+    return coverage.uncovered_items(items, plan)
+
+
 def _non_runnable_layered(plan: dict) -> list[str]:
     """verify của subtask có `layer` phải là lệnh chạy được (server chỉ ép plan nhiều bước)."""
     bad = []
@@ -724,6 +737,30 @@ def _merge_same_file(subtasks: list[dict]) -> list[dict]:
     """Gộp subtask cùng file (một file/subtask) trước khi validate; xem runtime/plan_merge.py."""
     from runtime.plan_merge import merge_same_file
     return merge_same_file(subtasks)
+
+
+def _plan_with_repair(run_plan: Callable[[dict], dict], request: dict, state: dict, budget, stopped: dict | None) -> tuple[dict | None, list[dict]]:
+    """Lượt lập lại plan sau lỗi sai luật (LF/106): trả (cổng chặn cuối, các lượt chặn theo thứ tự)."""
+    history = [dict(stopped)] if stopped else []
+    if not (stopped and _plan_repairable(stopped)):
+        return stopped, history
+    # Model sinh plan sai luật: một lượt lập lại với lỗi nêu riêng cho planner, không nhét vào thread
+    # (validator cổng 2.5 cũng đọc thread và sẽ coi file đó "đã bị từ chối"), sampling thoáng hơn.
+    reason = str(stopped["result"].get("reason") or "")
+    rejected = [str(st.get("file") or "") for st in ((state.get("plan") or {}).get("subtasks") or [])
+                if isinstance(st, dict)]
+    note = _plan_repair_note(reason, _duplicate_files(reason), rejected)
+    # Lượt sửa cần thêm lời gọi cổng 1/2/2.5; trần lượt gọi của lượt lập plan đang rất sát.
+    budget.max_model_calls = max(budget.max_model_calls, budget.model_calls + 5)
+    repaired = _repaired_snapshot(request, reason, note)
+    os.environ["AI_BOARD_PLAN_REPAIR"] = "1"
+    try:
+        stopped = run_plan(repaired)
+    finally:
+        os.environ.pop("AI_BOARD_PLAN_REPAIR", None)
+    if stopped:
+        history.append(dict(stopped))
+    return stopped, history
 
 
 def _repaired_snapshot(snapshot: dict, reason: str, note: str | None = None) -> dict:
@@ -1416,28 +1453,15 @@ class HarnessPlanner:
                     result = {"gate": 1, "result": {
                         "gate": 1, "blocked": True, "plan": None, "signals": [],
                         "reason": f"plan không hợp lệ: verify phải là lệnh chạy được: {bad[0]}"}}
+                else:
+                    missing = _uncovered_conditions(request, state.get("plan") or {}, self.deps, budget)
+                    if missing:
+                        result = {"gate": 1, "result": {
+                            "gate": 1, "blocked": True, "plan": None, "signals": [],
+                            "reason": f"plan không hợp lệ: điều kiện chưa có subtask verify chạy được: {missing[0][:160]}"}}
             return result
 
-        stopped = run_plan(request)
-        history = [dict(stopped)] if stopped else []
-        if stopped and _plan_repairable(stopped):
-            # Model sinh plan sai luật (LF/106): một lượt lập lại với lỗi nêu riêng cho planner
-            # (không nhét vào thread: validator cổng 2.5 cũng đọc thread và sẽ coi file đó "đã bị từ chối"),
-            # sampling thoáng hơn để phá vòng lặp của model nhỏ.
-            reason = str(stopped["result"].get("reason") or "")
-            rejected = [str(st.get("file") or "") for st in ((state.get("plan") or {}).get("subtasks") or [])
-                        if isinstance(st, dict)]
-            note = _plan_repair_note(reason, _duplicate_files(reason), rejected)
-            # Lượt sửa cần thêm lời gọi cổng 1/2/2.5; trần lượt gọi của lượt lập plan đang rất sát.
-            budget.max_model_calls = max(budget.max_model_calls, budget.model_calls + 5)
-            repaired = _repaired_snapshot(request, reason, note)
-            os.environ["AI_BOARD_PLAN_REPAIR"] = "1"
-            try:
-                stopped = run_plan(repaired)
-            finally:
-                os.environ.pop("AI_BOARD_PLAN_REPAIR", None)
-            if stopped:
-                history.append(dict(stopped))
+        stopped, history = _plan_with_repair(run_plan, request, state, budget, run_plan(request))
         if stopped:
             gate, result = stopped["gate"], stopped["result"]
             raise PlanBlockedError(f"gate {gate} blocked: {result.get('reason')}", {

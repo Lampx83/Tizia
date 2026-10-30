@@ -37,3 +37,12 @@ def test_only_the_planner_declares_the_plan_repair_input():
     from gates import brainstorm
     assert "plan_repair" in brainstorm.PLANNER_INPUTS
     assert "plan_repair" not in plan_validate.VALIDATOR_INPUTS
+
+
+def test_only_the_planner_reads_the_plan_repair_channel():
+    import re
+    from pathlib import Path
+
+    gates = Path(__file__).resolve().parents[1] / "gates"
+    readers = {path.name for path in gates.glob("*.py") if re.search(r"""\.get\(["']plan_repair["']\)|\[["']plan_repair["']\]""", path.read_text(encoding="utf8"))}
+    assert readers == {"brainstorm.py"}
