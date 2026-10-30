@@ -1,3 +1,4 @@
+import pytest
 from runtime import coverage
 
 SPEC = """Mục tiêu: trang FAQ.
@@ -86,3 +87,25 @@ def test_condition_overlap_alone_never_blocks_a_plan_with_runnable_verify():
     runnable = {"subtasks": [{"title": "Module", "verify": "node --test test/a.test.js"}]}
     descriptive = {"subtasks": [{"title": "Module", "verify": "mở trang thấy nút"}]}
     assert _has_runnable_verify(runnable) and not _has_runnable_verify(descriptive) and not _has_runnable_verify({})
+
+
+def test_plan_block_shared_check():
+    from runtime import coverage
+    ok = {"subtasks": [{"file": "a.js", "verify": "node --test test/a.test.js"}]}
+    desc = {"subtasks": [{"file": "a.js", "verify": "mở trang thấy 3 thẻ"}]}
+    layered_desc = {"subtasks": [{"file": "a.js", "layer": "backend", "verify": "xem log"}]}
+    layered_ok_other = {"subtasks": [{"file": "a.js", "layer": "frontend", "verify": "xem log"},
+                                     {"file": "b.js", "verify": "node --test t.js"}]}
+    never = lambda: pytest.fail("no model/overlap call when a runnable verify exists")
+    assert coverage.plan_block(ok, never) is None
+    assert "verify phải là lệnh chạy được" in coverage.plan_block(layered_desc, lambda: [])
+    assert "verify phải là lệnh chạy được" in coverage.plan_block(layered_ok_other, never)
+    assert coverage.plan_block(desc, lambda: ["Có nút tìm"]).startswith("điều kiện chưa có subtask")
+    assert coverage.plan_block(desc, lambda: []) is None
+
+
+def test_overlap_alone_never_blocks_plan_with_runnable_verify():
+    from runtime import coverage
+    plan = {"subtasks": [{"file": "a.js", "title": "x", "verify": "node --test t.js"}]}
+    assert coverage.uncovered_items(["điều kiện không trùng từ nào"], plan) != []
+    assert coverage.plan_block(plan, lambda: coverage.uncovered_items(["điều kiện không trùng từ nào"], plan)) is None

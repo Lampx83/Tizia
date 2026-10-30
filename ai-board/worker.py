@@ -661,10 +661,6 @@ def _plan_rejection(error) -> str | None:
     return body[:400] if "malformed_plan" in body else None
 
 
-_RUNNABLE_VERIFY = re.compile(
-    r"^(node --test\b|node\s|npx\s|npm\s+(test|run)\b|curl\s|python[0-9.]*\s|pytest\b|bash\s|sh\s|docker compose\s|psql\s)")
-
-
 def _plan_repairable(stopped: dict) -> bool:
     """Lỗi plan do model sinh sai (không phải nguồn/kỹ năng): đáng một lượt lập lại."""
     gate = float(stopped.get("gate") or 0)
@@ -695,20 +691,11 @@ def _uncovered_conditions(request: dict, plan: dict, deps, budget) -> list[str]:
 
 
 def _has_runnable_verify(plan: dict) -> bool:
-    return any(isinstance(task, dict) and _RUNNABLE_VERIFY.match(str(task.get("verify") or "").strip())
-               for task in plan.get("subtasks") or [])
+    return coverage.has_runnable(plan)
 
 
 def _non_runnable_layered(plan: dict) -> list[str]:
-    """verify của subtask có `layer` phải là lệnh chạy được (server chỉ ép plan nhiều bước)."""
-    bad = []
-    for task in plan.get("subtasks") or []:
-        if not isinstance(task, dict) or not task.get("layer"):
-            continue
-        verify = str(task.get("verify") or "").strip()
-        if not _RUNNABLE_VERIFY.match(verify):
-            bad.append(f"{task.get('file')}: {verify[:80]}")
-    return bad
+    return coverage.non_runnable_layered(plan)
 
 
 def _plan_repair_note(reason: str, files: list[str] | None = None,
@@ -1452,19 +1439,10 @@ class HarnessPlanner:
             exec_graph.run(handlers, exec_graph.spec()["entries"]["plan"])
             result = dict(stopped)
             if not result:
-                # Plan có `layer` phải có verify chạy được (server chỉ ép plan nhiều bước).
-                bad = _non_runnable_layered(state.get("plan") or {})
-                if bad:
-                    result = {"gate": 1, "result": {
-                        "gate": 1, "blocked": True, "plan": None, "signals": [],
-                        "reason": f"plan không hợp lệ: verify phải là lệnh chạy được: {bad[0]}"}}
-                else:
-                    missing = _uncovered_conditions(request, state.get("plan") or {}, self.deps, budget)
-                    # Word overlap cannot prove a condition is uncovered; only a plan with no runnable verify at all is blocked.
-                    if missing and not _has_runnable_verify(state.get("plan") or {}):
-                        result = {"gate": 1, "result": {
-                            "gate": 1, "blocked": True, "plan": None, "signals": [],
-                            "reason": f"plan không hợp lệ: điều kiện chưa có subtask verify chạy được: {missing[0][:160]}"}}
+                reason = coverage.plan_block(plan_now := state.get("plan") or {}, lambda: _uncovered_conditions(request, plan_now, self.deps, budget))
+                if reason:
+                    result = {"gate": 1, "result": {"gate": 1, "blocked": True, "plan": None, "signals": [],
+                                                    "reason": f"plan không hợp lệ: {reason}"}}
             return result
 
         stopped, history = _plan_with_repair(run_plan, request, state, budget, run_plan(request))

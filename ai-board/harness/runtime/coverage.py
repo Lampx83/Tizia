@@ -75,3 +75,24 @@ def spec_conditions(spec, call_model=None):
         return [], "none"
     prompt = PROMPT_PATH.read_text(encoding="utf-8").replace("{spec}", spec)
     return parse_model(call_model(prompt)), "model"
+
+
+def has_runnable(plan):
+    return any(isinstance(t, dict) and _RUNNABLE.match(str(t.get("verify") or "").strip()) for t in (plan or {}).get("subtasks") or [])
+
+
+def non_runnable_layered(plan):
+    """verify của subtask có `layer` phải là lệnh chạy được."""
+    return [f"{t.get('file')}: {str(t.get('verify') or '').strip()[:80]}" for t in (plan or {}).get("subtasks") or []
+            if isinstance(t, dict) and t.get("layer") and not _RUNNABLE.match(str(t.get("verify") or "").strip())]
+
+
+def plan_block(plan, missing_conditions):
+    """Lý do chặn plan hoặc None. Chỉ chặn bằng bằng chứng xác minh được: verify không chạy được (có layer), hoặc điều kiện chưa phủ mà plan không có verify chạy được nào; trùng từ chỉ là gợi ý."""
+    bad = non_runnable_layered(plan)
+    if bad:
+        return f"verify phải là lệnh chạy được: {bad[0]}"
+    if has_runnable(plan):
+        return None
+    missing = missing_conditions()
+    return f"điều kiện chưa có subtask verify chạy được: {missing[0][:160]}" if missing else None
