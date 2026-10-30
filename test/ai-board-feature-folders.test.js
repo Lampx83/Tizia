@@ -90,6 +90,8 @@ test('authorizing a plan that waits only for folder approval is refused', async 
   await assert.rejects(async () => store.authorizePlan(first.root_ticket_id, planned.plan_hash, 9),
     (e) => e.code === 'folder_not_approved' && e.status === 409);
   assert.equal((await rootState(first.root_ticket_id)).status, 'waiting_authorization');
+  const [row] = await store.listAdminFolders();
+  assert.equal(row.waiting_plans.length, 1);
   assert.equal((await store.approveFolder(first.folder_id, 9)).authorized, 1);
 });
 

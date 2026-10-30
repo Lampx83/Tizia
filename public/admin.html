@@ -251,7 +251,7 @@
   @media (prefers-reduced-motion: reduce) { .toast { transition:opacity .15s; transform:translateX(-50%); } .toast.show { transform:translateX(-50%); } }
   .skill-confirm p { margin:0 0 10px; line-height:1.55; } .skill-confirm .toolbar { justify-content:flex-end; gap:8px; margin-top:14px; }
   .ver-row.rejected .ver-state { color:var(--bad); }
-  @media (pointer:coarse) { .ver-actions .btn, .skill-confirm .btn { min-height:44px; padding-inline:14px; } }
+  @media (pointer:coarse) { .ver-actions .btn, .skill-confirm .btn, #tabbody .request-table-scroll .btn, #tabbody .request-table-scroll select { min-height:44px; padding-inline:14px; } }
   .toast.err { background:var(--bad); color:#fff; }
   /* Cửa sổ con xem chi tiết 1 yêu cầu (iframe admin-request.html), nằm trong trang admin */
   .req-dialog { width:min(1200px,94vw); height:88vh; padding:0; border:1px solid var(--border-strong);
@@ -421,6 +421,6 @@
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 <div class="chart-tooltip" id="ctt"></div>
 
-<script type="module" src="/js/admin-dashboard.js?v=skills-ux2"></script>
+<script type="module" src="/js/admin-dashboard.js?v=skills-ux3"></script>
 </body>
 </html>

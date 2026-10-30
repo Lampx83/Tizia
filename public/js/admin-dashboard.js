@@ -1836,6 +1836,15 @@ async function loadFeatureFolders() {
     toast(`Phát hành: ${RELEASE_LABEL[sel.value]}`);
   }));
   host.querySelectorAll('[data-folder-act]').forEach(btn => btn.addEventListener('click', async () => {
+    if (btn.dataset.folderAct === 'approve') {
+      const folder = folders.find(f => f.id === Number(btn.dataset.fid));
+      const plans = folder?.waiting_plans || [];
+      const yes = await askConfirm({ title: `Duyệt chức năng "${folder?.title || ''}"?`,
+        message: plans.length ? `${plans.length} kế hoạch đang chờ sẽ được cho phép chạy ngay:` : 'Chưa có kế hoạch nào đang chờ; các yêu cầu sau của chức năng này sẽ tự chạy.',
+        lines: plans.map(p => `#${p.request_id} ${p.title}`),
+        ok: plans.length ? `Duyệt và cho chạy ${plans.length} kế hoạch` : 'Duyệt chức năng' });
+      if (!yes) return;
+    }
     btn.disabled = true;
     const res = await api(`/api/admin/ai-board/folders/${btn.dataset.fid}/${btn.dataset.folderAct}`, { method: 'POST' });
     if (!res.ok) { toast('Lỗi: ' + (res.data?.message || res.data?.error || res.status), 'err'); btn.disabled = false; return; }

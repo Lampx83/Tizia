@@ -240,7 +240,12 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     `, [Math.min(Math.max(Number(limit) || 200, 1), 500)]);
     const out = [];
     for (const f of folders) {
-      out.push({ ...folderRow(f), owner_name: f.owner_name,
+      const waiting_plans = f.approved_at ? [] : await db.all(`
+        SELECT q.id AS request_id, q.title FROM ai_tickets t JOIN requests q ON q.id = t.source_request_id
+        WHERE q.folder_id = ? AND t.parent_id IS NULL AND t.status = 'waiting_authorization'
+          AND t.internal_reason = 'folder_not_approved' ORDER BY q.id
+      `, [f.id]);
+      out.push({ ...folderRow(f), owner_name: f.owner_name, waiting_plans,
         incident_id: f.incident_id,
         gpu_s: Math.round(f.gpu_s),
         // Chu kỳ đang mở: nhánh/đỉnh/PR của folder; chưa có thì trace của root mới nhất.
