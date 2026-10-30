@@ -355,10 +355,17 @@
     box-shadow:0 8px 24px rgba(0,0,0,.3);font-family:'Nunito',system-ui,sans-serif;
   }
   .m1-checklist[hidden]{display:none;}
+  .dn{font-weight:800} .dn-s{font-size:.78em;font-weight:600;opacity:.85}
   .m1-checklist h5{margin:0 0 6px;font:800 .82rem 'Baloo 2',cursive;color:#8a5a10;}
   .m1-checklist .m1-item{display:flex;align-items:center;justify-content:space-between;gap:8px;
     padding:5px 0;border-top:1px dashed #e7d7bf;font-size:.78rem;color:#4a3a1c;}
   .m1-checklist .m1-item:first-of-type{border-top:none;}
+  /* req #255: tên thuốc chiếm cả dòng, nút Đúng/Sai + ô "Tồn thực tế" + nút Lưu xuống dòng dưới (trước đây dồn chung 1 hàng nên ô nhập bị cắt, mất nút Lưu) */
+  .m1-checklist{max-height:calc(100vh - 28px);overflow-y:auto;}
+  .m1-checklist .m1-item{flex-wrap:wrap;}
+  .m1-checklist .m1-item > span:first-child{flex:1 1 100%;min-width:0;}
+  .m1-checklist .m1-item .m1-fix,.m1-checklist .m1-item .m1-warn{flex:1 1 100%;}
+  .m1-checklist .m1-fix{flex-wrap:wrap;}
   .m1-checklist .m1-btns{display:flex;gap:4px;flex:none;}
   .m1-checklist button{border:none;border-radius:8px;padding:4px 8px;font-size:.72rem;font-weight:800;cursor:pointer;}
   .m1-ok{background:#dcf5e3;color:#1f7a3d;} .m1-ok:hover{background:#c3edd0;}
@@ -370,7 +377,7 @@
   /* req #252: màn rộng còn nhiều chỗ trống hai bên tủ — thẻ "Kiểm tủ" chuyển sang bên PHẢI tủ (dưới thanh tiêu đề trang,
      không đè lên thanh tiêu đề/cột trái), chữ và nút to hơn cho dễ đọc */
   @media (min-width:1480px){
-    .m1-checklist{left:auto;right:28px;top:118px;width:370px;padding:16px 18px;border-radius:16px}
+    .m1-checklist{left:auto;right:28px;top:118px;width:420px;max-height:calc(100vh - 140px);padding:16px 18px;border-radius:16px}
     .m1-checklist h5{font-size:1.1rem;margin-bottom:8px}
     .m1-checklist .m1-item{font-size:1rem;padding:10px 0;gap:12px}
     .m1-checklist button{font-size:.92rem;padding:8px 14px;border-radius:10px}
@@ -662,7 +669,7 @@
   .shape-medbox .label{
     flex:1;display:flex;align-items:center;justify-content:center;padding:2px 4px;
     font-size:9.5px;line-height:1.15;font-weight:700;color:var(--ink);text-align:center;
-    overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;
+    overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;
     word-break:break-word;
   }
   .shape-medbox .barcode{
@@ -2179,7 +2186,7 @@ cabinets.forEach((cab,cabIdx)=>{
     btn.style.setProperty('--c2', `hsl(${cab.hue},55%,${dark}%)`);
     btn.innerHTML = `<span class="icon"><span class="shape-medbox">
         <span class="band"></span>
-        <span class="label">${esc(it['Tên hoạt chất']||'')}</span>
+        <span class="label">${dnRec(it)}</span>
         <span class="barcode"></span>
       </span></span>${it['Link google drive']?'<span class="photo-dot"></span>':''}`;
     btn.dataset.search = (it['Tên hoạt chất']+' '+it['Tên biệt dược']+' '+it['STT Buổi']+' '+it['Tên Bài']+' '+cab.label).toLowerCase();
@@ -2829,8 +2836,7 @@ function showTooltip(e, it, s, btn){
     const photoHTML = photo ? `<img class="t-photo" src="${photo.currentSrc||photo.src}" alt="">` : '';
     tooltip.innerHTML = `
       ${photoHTML}
-      <div class="t-name">${esc(it['Tên hoạt chất']||'(Chưa rõ tên)')}</div>
-      ${it['Hoạt chất, hàm lượng/nồng độ'] ? `<div class="t-brand">${esc(it['Hoạt chất, hàm lượng/nồng độ'])}</div>` : ''}
+      <div class="t-name">${it['Tên hoạt chất'] ? dnRec(it) : '(Chưa rõ tên)'}</div>
       ${it['Dạng bào chế']||it['Đường dùng'] ? `<div class="t-row">${esc(it['Dạng bào chế'])}${it['Đường dùng']?(' · '+esc(it['Đường dùng'])):''}</div>` : ''}
       <div class="t-row">${s.buoi} · ${esc(s.topic)}</div>
       ${it['Hạn sử dụng'] ? `<div class="t-row">HSD: ${esc(it['Hạn sử dụng'])}</div>` : ''}
@@ -3385,6 +3391,19 @@ function m1PackInfo(it){
 }
 // req #235: bảo quản lạnh theo ĐÚNG điều kiện bảo quản ghi trong danh mục (không bốc ngẫu nhiên nữa)
 function m1IsCold(r){ return /^(chưa dùng:\s*)?(bảo quản lạnh|tủ lạnh)/i.test(((r && r['Điều kiện bảo quản']) || '').trim()); }
+/* req #254 (ThS Hương Lý): MỌI NƠI ghi tên thuốc = tên cột I (in đậm) + "(Hoạt chất, hàm lượng/nồng độ — cột H)" chữ nhỏ hơn.
+   dn() nhận 1 mặt hàng (có key/name) hoặc 1 bản ghi danh mục; trả về HTML đã escape. */
+function dnRec(r){
+  const nm = r && r['Tên hoạt chất'], st = r && r['Hoạt chất, hàm lượng/nồng độ'];
+  return `<b class="dn">${esc(nm || '')}</b>` + (st ? ` <small class="dn-s">(${esc(st)})</small>` : '');
+}
+function dn(it){
+  if(!it) return '';
+  const rec = typeof it === 'string' ? allRecords.find(x => x['Tên hoạt chất'] === it || x._gen === it)
+    : ((it.key && m1RecOf(it.key)) || allRecords.find(x => x['Tên hoạt chất'] === it.name || x._gen === it.name));
+  if(rec) return dnRec(rec);
+  return `<b class="dn">${esc(typeof it === 'string' ? it : it.name)}</b>`;
+}
 function m1RecOf(key){ return allRecords.find(r => m1KeyOf(r) === key) || null; }
 function m1PkgPrice(it){ return 12000 + m1HashNum(it.key+'p', 0, 78) * 1000; }   // giá nhập / 1 đơn vị đóng gói (chưa VAT)
 // req #226: danh mục thuốc của các nhiệm vụ 1-2-3 MỞ RỘNG dần theo mức độ — mức 1 lấy thuốc trong 2 tủ
@@ -3454,13 +3473,13 @@ function renderKsdbBranch(st){
   const U = it => it.unit[0].toUpperCase() + it.unit.slice(1);
   const banner = '<div style="background:#fff4d6;border:1px solid #e3c36b;border-radius:8px;padding:6px 10px;font-size:.74rem;margin:6px 0">⚠️ Biểu mẫu dưới đây là <b>MẪU MINH HOẠ – KHÔNG CÓ GIÁ TRỊ PHÁP LÝ</b>; số liệu là giả định để luyện tập.</div>';
   const kindOf = it => M3_KIND[it.kind] || 'Thuốc kiểm soát đặc biệt';
-  const head = `<p class="pos-note">🔒 Trong danh sách có <b>thuốc kiểm soát đặc biệt</b>: <b>${ks.map(it => esc(it.name)).join(', ')}</b> (${esc(kindOf(ks[0]))}).
+  const head = `<p class="pos-note">🔒 Trong danh sách có <b>thuốc kiểm soát đặc biệt</b>: <b>${ks.map(it => dn(it)).join(', ')}</b> (${esc(kindOf(ks[0]))}).
     Loại này <b>không đặt thẳng nhà cung ứng</b>: phải <b>dự trù 1 lần/năm</b> bằng <b>Đơn hàng mua thuốc</b> kèm <b>Báo cáo xuất – nhập – tồn</b>, <b>gửi Sở Y tế</b> và <b>chỉ được mua sau khi được phê duyệt</b>.</p>${banner}`;
   const done = st.ks.sent && st.ks.approved;
   if(!ks.every(it => st.ks.qty[it.key] != null)){
     posPanel.innerHTML = head + `<p class="pos-note"><b>Bước 1 — Tính số lượng dự trù.</b> Số lượng đề nghị mua <b>không quá 150% so với năm trước</b>. Điền <b>số lượng tối đa</b> được phép đề nghị cho từng thuốc:</p>
       <table class="pos-table"><thead><tr><th>Thuốc</th><th>Hàm lượng / dạng</th><th>Đã nhập năm trước</th><th>SL tối đa được đề nghị</th></tr></thead><tbody>
-      ${ks.map(it => `<tr><td>${esc(it.name)}</td><td>${esc(it.spec)} ${esc(it.form)}</td><td>${it.lastYear} ${it.unit}</td><td><input type="number" min="0" class="ks-q" data-k="${esc(it.key)}" style="width:90px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px"> ${it.unit}</td></tr>`).join('')}</tbody></table>
+      ${ks.map(it => `<tr><td>${dn(it)}</td><td>${esc(it.spec)} ${esc(it.form)}</td><td>${it.lastYear} ${it.unit}</td><td><input type="number" min="0" class="ks-q" data-k="${esc(it.key)}" style="width:90px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px"> ${it.unit}</td></tr>`).join('')}</tbody></table>
       <button type="button" class="pos-btn" id="ksQtyOk">✅ Kiểm tra</button><div class="pos-err" id="ksErr"></div>`;
     document.getElementById('ksQtyOk').addEventListener('click', () => {
       const bad = [];
@@ -3473,7 +3492,7 @@ function renderKsdbBranch(st){
   if(!st.ks.xntOk){
     posPanel.innerHTML = head + `<p class="pos-note"><b>Bước 2 — Báo cáo xuất – nhập – tồn</b> (kèm đơn hàng). Tồn cuối kỳ = tồn đầu kỳ + nhập trong kỳ − xuất trong kỳ. Điền <b>tồn cuối kỳ</b>:</p>
       <table class="pos-table"><thead><tr><th>Thuốc</th><th>Tồn đầu kỳ</th><th>Nhập trong kỳ</th><th>Xuất trong kỳ</th><th>Tồn cuối kỳ</th></tr></thead><tbody>
-      ${ks.map(it => `<tr><td>${esc(it.name)}</td><td>${it.tonDau}</td><td>${it.nhap}</td><td>${it.xuat}</td><td><input type="number" min="0" class="ks-t" data-k="${esc(it.key)}" style="width:90px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px"> ${it.unit}</td></tr>`).join('')}</tbody></table>
+      ${ks.map(it => `<tr><td>${dn(it)}</td><td>${it.tonDau}</td><td>${it.nhap}</td><td>${it.xuat}</td><td><input type="number" min="0" class="ks-t" data-k="${esc(it.key)}" style="width:90px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px"> ${it.unit}</td></tr>`).join('')}</tbody></table>
       <button type="button" class="pos-btn" id="ksXntOk">✅ Kiểm tra</button><div class="pos-err" id="ksErr"></div>`;
     document.getElementById('ksXntOk').addEventListener('click', () => {
       const bad = [];
@@ -3484,7 +3503,7 @@ function renderKsdbBranch(st){
     return;
   }
   const docTable = `<table class="pos-table"><thead><tr><th>Thuốc, hàm lượng, quy cách</th><th>ĐVT</th><th>SL đề nghị mua</th><th>Tồn cuối kỳ (báo cáo XNT)</th></tr></thead><tbody>
-    ${ks.map(it => `<tr><td>${esc(it.name)} ${esc(it.spec)}</td><td>${U(it)}</td><td>${st.ks.qty[it.key]}</td><td>${it.tonCuoi}</td></tr>`).join('')}</tbody></table>`;
+    ${ks.map(it => `<tr><td>${dn(it)}</td><td>${U(it)}</td><td>${st.ks.qty[it.key]}</td><td>${it.tonCuoi}</td></tr>`).join('')}</tbody></table>`;
   if(!st.ks.sent){
     posPanel.innerHTML = head + `<p class="pos-note"><b>Bước 3 — Gửi Sở Y tế.</b> Soát lại đơn hàng và báo cáo, <b>người đại diện theo pháp luật ký</b> rồi gửi:</p>
       <p class="pos-note"><b>Đơn hàng mua thuốc kiểm soát đặc biệt</b> (kèm Báo cáo xuất – nhập – tồn) — Kính gửi: Sở Y tế</p>${docTable}
@@ -3631,7 +3650,7 @@ function qlRows(){
   return allRecords.filter(r => r['Tên hoạt chất']).map((r, i) => {
     const key = m1KeyOf(r), it = m1[key];
     const pack = (it && it.pack) || m1PackInfo({ name: r['Tên hoạt chất'], key });
-    return { code: 'T' + String(i + 1).padStart(3, '0'), name: r['Tên hoạt chất'], form: r['Dạng bào chế'] || '', spec: pack.spec,
+    return { code: 'T' + String(i + 1).padStart(3, '0'), rec: r, name: r['Tên hoạt chất'], form: r['Dạng bào chế'] || '', spec: pack.spec,
       unit: it ? it.unit : m1UnitOf(r._gen || r['Tên hoạt chất']), maker: r['Nơi sản xuất'] || '', ton: it ? it.tonKho : m1HashNum(key + 'qlt', 0, 12),
       group: (r['Nhóm dược lý'] || '').replace(/-$/, ''), m1: !!it, gen: r._gen || '' };
   });
@@ -3640,7 +3659,7 @@ function renderQuanLyTab(){
   const COLS = [['code','Mã thuốc'],['name','Tên thuốc'],['form','Dạng bào chế'],['spec','Quy cách đóng gói'],['unit','ĐVT'],['maker','Nơi sản xuất'],['ton','Tồn (PM)'],['group','Phân nhóm']];
   const fold = v => String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').toLowerCase();
   const all = qlRows(), q = fold(QL.q).trim();
-  const rows = all.filter(r => !q || fold(Object.values(r).join(' ')).includes(q))
+  const rows = all.filter(r => !q || fold(Object.keys(r).filter(k => k !== 'rec').map(k => r[k]).join(' ')).includes(q))
     .sort((a, b) => (QL.key === 'ton' ? a.ton - b.ton : String(a[QL.key]).localeCompare(String(b[QL.key]), 'vi', { numeric:true })) * QL.dir);
   const n1 = all.filter(r => r.m1).length;
   posPanel.innerHTML = `
@@ -3648,7 +3667,7 @@ function renderQuanLyTab(){
     <div style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="search" id="qlSearch" placeholder="🔎 Tìm thuốc (mã, tên, hoạt chất, nơi sản xuất, nhóm…)" value="${esc(QL.q)}" style="flex:1;padding:7px 10px;border:1px solid #caa25a;border-radius:8px;font:inherit"><span class="pos-hint">${rows.length}/${all.length}</span></div>
     <div style="max-height:46vh;overflow:auto;border:1px solid #e3d6b5;border-radius:8px">
     <table class="pos-table" style="margin:0"><thead><tr>${COLS.map(([k, t]) => `<th data-ql="${k}" style="cursor:pointer;position:sticky;top:0;background:#f3ead2;white-space:nowrap">${t}${QL.key === k ? (QL.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead><tbody>
-      ${rows.map(r => `<tr${r.m1 ? ' style="background:#fff3c4;font-weight:700"' : ''}><td>${r.code}</td><td>${esc(r.name)}</td><td>${esc(r.form)}</td><td>${esc(r.spec)}</td><td>${esc(r.unit)}</td><td>${esc(r.maker)}</td><td>${r.ton}</td><td>${esc(r.group)}</td></tr>`).join('') || '<tr><td colspan="8">Không có thuốc nào khớp.</td></tr>'}
+      ${rows.map(r => `<tr${r.m1 ? ' style="background:#fff3c4;font-weight:700"' : ''}><td>${r.code}</td><td>${dnRec(r.rec)}</td><td>${esc(r.form)}</td><td>${esc(r.spec)}</td><td>${esc(r.unit)}</td><td>${esc(r.maker)}</td><td>${r.ton}</td><td>${esc(r.group)}</td></tr>`).join('') || '<tr><td colspan="8">Không có thuốc nào khớp.</td></tr>'}
     </tbody></table></div>`;
   posPanel.querySelectorAll('[data-ql]').forEach(th => th.addEventListener('click', () => {
     QL.dir = QL.key === th.dataset.ql ? -QL.dir : 1; QL.key = th.dataset.ql; renderQuanLyTab();
@@ -3676,7 +3695,7 @@ function renderDuTruTab(){
     posPanel.innerHTML = `
       <p class="pos-note">📦 Phần mềm phát hiện <b>${items.length} mặt hàng</b> cần kiểm tra trước khi lập dự trù. Số ngày dự trù <b>tuỳ nhóm hàng</b>: hàng bán nhanh đặt thường xuyên (chu kỳ ngắn), hàng bán chậm đặt thưa hơn (chu kỳ dài).</p>
       <table class="pos-table"><thead><tr><th>Tên thuốc</th><th>Tồn kho (PM)</th><th>Số ngày cần dự trù</th><th>Vị trí</th></tr></thead><tbody>
-        ${items.map(it => `<tr><td>${esc(it.name)}</td><td>${it.tonKho} ${it.unit}</td><td>${m1Days(it)} ngày <span class="pos-hint">(${m1Group(it)})</span></td><td>${it.cabinet==='rx'?'Tủ thuốc kê đơn':'Tủ thuốc không kê đơn'}</td></tr>`).join('')}
+        ${items.map(it => `<tr><td>${dn(it)}</td><td>${it.tonKho} ${it.unit}</td><td>${m1Days(it)} ngày <span class="pos-hint">(${m1Group(it)})</span></td><td>${it.cabinet==='rx'?'Tủ thuốc kê đơn':'Tủ thuốc không kê đơn'}</td></tr>`).join('')}
       </tbody></table>
       <p class="pos-note">👉 Rời máy tính, đến đúng tủ kiểm tra thực tế từng mặt hàng trước khi lên đơn.</p>
       <button type="button" class="pos-btn" id="posGoCheck">🚶 Rời máy tính, đi kiểm tủ →</button>`;
@@ -3694,7 +3713,7 @@ function renderDuTruTab(){
     const rows = items.map(it => { const ton = st.actual[it.key] != null ? st.actual[it.key] : it.tonKho; return { it, ton }; });
     const table = withQty => `<table class="pos-table"><thead><tr><th>Tên thuốc</th><th>Tồn thực tế</th><th>Bán/tuần</th><th>Số ngày dự trù</th>${withQty?'<th>SL cần đặt</th>':''}</tr></thead><tbody>
         ${rows.map(({it,ton}) => `<tr>
-          <td>${esc(it.name)}</td>
+          <td>${dn(it)}</td>
           <td>${ton} ${it.unit}</td>
           <td>${it.banTuan}<span class="pos-hint">lịch sử bán</span></td>
           <td>${m1Days(it)} ngày</td>
@@ -3874,8 +3893,8 @@ function renderDonHangSub(st){
   body.innerHTML = `
     <p class="pos-note">Kính gửi: <b>${esc(supplier.name)}</b></p>
     <table class="pos-table"><thead><tr><th>Sản phẩm</th><th>Quy cách</th><th>SL</th><th>ĐVT</th></tr></thead><tbody>
-      ${items.map(it => `<tr><td>${esc(it.name)}</td><td>${it.unit[0].toUpperCase()+it.unit.slice(1)}</td><td>${st.orders[it.key]}</td><td>${it.unit[0].toUpperCase()+it.unit.slice(1)}</td></tr>`).join('')}
-      ${(st.ks && st.ks.approved ? getM1Ksdb() : []).map(it => `<tr><td>${esc(it.name)} 🔒<br><span class="pos-hint">thuốc kiểm soát đặc biệt — đã được Sở Y tế phê duyệt</span></td><td>${it.unit[0].toUpperCase()+it.unit.slice(1)}</td><td>${st.ks.qty[it.key]}</td><td>${it.unit[0].toUpperCase()+it.unit.slice(1)}</td></tr>`).join('')}
+      ${items.map(it => `<tr><td>${dn(it)}</td><td>${it.unit[0].toUpperCase()+it.unit.slice(1)}</td><td>${st.orders[it.key]}</td><td>${it.unit[0].toUpperCase()+it.unit.slice(1)}</td></tr>`).join('')}
+      ${(st.ks && st.ks.approved ? getM1Ksdb() : []).map(it => `<tr><td>${dn(it)} 🔒<br><span class="pos-hint">thuốc kiểm soát đặc biệt — đã được Sở Y tế phê duyệt</span></td><td>${it.unit[0].toUpperCase()+it.unit.slice(1)}</td><td>${st.ks.qty[it.key]}</td><td>${it.unit[0].toUpperCase()+it.unit.slice(1)}</td></tr>`).join('')}
     </tbody></table>
     <label style="display:flex;gap:8px;align-items:center;font-size:.82rem;margin:8px 0"><input type="checkbox" id="posOrderCheck"> Tôi đã kiểm tra kỹ thông tin đơn đặt hàng.</label>
     <button type="button" class="pos-btn" id="posOrderSend" disabled>📨 Gửi đơn đặt hàng cho nhà cung ứng</button>`;
@@ -4089,7 +4108,7 @@ function m2InvoiceHtml(x){
   const now = new Date(), dd = String(now.getDate()).padStart(2,'0'), mm = String(now.getMonth()+1).padStart(2,'0');
   const rows = x.items.map((it,i) => {
     const price = 12000 + m1HashNum(it.key+'p', 0, 78) * 1000, amt = price * it.qty;
-    return { i: i+1, name: it.name, unit: it.unit[0].toUpperCase()+it.unit.slice(1), qty: it.qty, price, amt };
+    return { i: i+1, name: it.name, nameHtml: dn(it), unit: it.unit[0].toUpperCase()+it.unit.slice(1), qty: it.qty, price, amt };
   });
   const sub = rows.reduce((a,r) => a + r.amt, 0), vat = Math.round(sub * 0.05), tot = sub + vat;
   const mst = 'MST giả ' + String(m1HashNum(x.supplierName, 100000, 999999));
@@ -4102,7 +4121,7 @@ function m2InvoiceHtml(x){
     <hr style="border:0;border-top:1px solid #cdbb8a;margin:6px 0">
     <div>Người mua (Buyer):<br>Đơn vị (Company name): <b>NHÀ THUỐC THỰC HÀNH</b><br>Mã số thuế (Tax Code): MST giả 000000<br>Hình thức thanh toán (Payment method): Chuyển khoản</div>
     <table class="pos-table" style="margin-top:8px;font-size:.72rem"><thead><tr><th>STT (No.)</th><th>Tên hàng hóa, dịch vụ (Description)</th><th>Đơn vị tính (Unit)</th><th>Số lượng (Quantity)</th><th>Đơn giá (Unit Price)</th><th>Thành tiền (Amount)</th><th>Thuế suất</th><th>Tiền thuế</th></tr></thead><tbody>
-      ${rows.map(r => `<tr><td>${r.i}</td><td>${esc(r.name)}</td><td>${r.unit}</td><td>${r.qty}</td><td>${fmt(r.price)}</td><td>${fmt(r.amt)}</td><td>5%</td><td>${fmt(Math.round(r.amt*0.05))}</td></tr>`).join('')}
+      ${rows.map(r => `<tr><td>${r.i}</td><td>${r.nameHtml}</td><td>${r.unit}</td><td>${r.qty}</td><td>${fmt(r.price)}</td><td>${fmt(r.amt)}</td><td>5%</td><td>${fmt(Math.round(r.amt*0.05))}</td></tr>`).join('')}
     </tbody></table>
     <div style="text-align:right">Cộng tiền hàng (Sub total): <b>${fmt(sub)}</b><br>Tiền thuế GTGT (VAT amount): <b>${fmt(vat)}</b><br>Tổng cộng tiền thanh toán (Total payment): <b>${fmt(tot)}</b></div>
     <div>Số tiền viết bằng chữ (Amount in words): <i>${viWords(tot)}</i></div>
@@ -4143,7 +4162,7 @@ function m2RenderQty(){
   };
   const showItem = () => {
     const it = x.items[cur];
-    wrap.innerHTML = `<div class="m2-tile"><div style="font:800 .9rem Nunito,sans-serif;color:#5c3a0a;margin-bottom:4px">Mặt hàng ${cur+1}/${x.items.length}: 💊 ${esc(it.name)}</div>
+    wrap.innerHTML = `<div class="m2-tile"><div style="font:800 .9rem Nunito,sans-serif;color:#5c3a0a;margin-bottom:4px">Mặt hàng ${cur+1}/${x.items.length}: 💊 ${dn(it)}</div>
       <div style="line-height:0">${Array.from({length: it.recv}, () => `<img class="m2-mb-img" alt="Hộp ${esc(it.name)}" src="${PHOTO_DIR}${slugify(it.name)}.jpg" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'m2-mb'}))">`).join('')}</div>
       <div style="margin:8px 0">Tổng số hộp trong thùng: <b>${it.recv} ${it.unit}</b> · Trên hoá đơn: <b>${it.qty} ${it.unit}</b></div>
       <label style="margin-right:18px;cursor:pointer;font-weight:800"><input type="checkbox" data-v="1"> Khớp</label>
@@ -4162,7 +4181,7 @@ function m2RenderQty(){
 }
 function m2RenderPack(){
   const x = getM2State();
-  const cards = x.items.map((it,i) => `<button type="button" data-i="${i}" class="${x.pack[i] != null ? (x.pack[i] === (it.defect ? 'bad' : 'ok') ? (x.pack[i]) : '') : ''}">${x.pack[i] != null ? (x.pack[i]==='ok'?'✅ ':'❌ ') : '🔍 '}${esc(it.name)}</button>`).join('');
+  const cards = x.items.map((it,i) => `<button type="button" data-i="${i}" class="${x.pack[i] != null ? (x.pack[i] === (it.defect ? 'bad' : 'ok') ? (x.pack[i]) : '') : ''}">${x.pack[i] != null ? (x.pack[i]==='ok'?'✅ ':'❌ ') : '🔍 '}${dn(it)}</button>`).join('');
   const body = m2Modal('🔍 Kiểm tra cảm quan bao bì', `
     <p class="pos-note">Bấm từng sản phẩm, quan sát bao bì: <b>còn nguyên vẹn, sạch sẽ</b>, không <b>móp méo</b>, <b>ẩm mốc</b>; thông tin trên bao bì <b>rõ nét</b>, không nhoè, không mờ.</p>
     <div class="m2-pk">${cards}</div><div id="m2Insp"></div><div class="pos-err" id="m2Err"></div>`);
@@ -4175,12 +4194,12 @@ function m2RenderPack(){
   body.querySelectorAll('.m2-pk button').forEach(b => b.addEventListener('click', () => {
     const i = Number(b.dataset.i), it = x.items[i];
     err.textContent = '';
-    insp.innerHTML = `<div style="text-align:center"><b>${esc(it.name)}</b>
+    insp.innerHTML = `<div style="text-align:center"><b>${dn(it)}</b>
       <div class="m2-pack ${it.defect || ''}" id="m2Pack"></div>
       <button type="button" class="pos-btn" data-v="ok">✅ Bao bì đạt</button>
       <button type="button" class="pos-btn" data-v="bad" style="background:#b03a2e">❌ Bao bì không đạt</button></div>`;
     const pk = insp.querySelector('#m2Pack'), slug = slugify(it.name.split(' ')[0]);
-    const label = `<div class="ph">📦 ${esc(it.name)}<br><small>Thông tin thuốc trên bao bì</small></div>`;
+    const label = `<div class="ph">📦 ${dn(it)}<br><small>Thông tin thuốc trên bao bì</small></div>`;
     const full = slugify(it.name);
     const slugOk = (typeof PHOTO_SLUGS !== 'undefined') ? (PHOTO_SLUGS.has(full) ? full : (PHOTO_SLUGS.has(slug) ? slug : null)) : null;
     if(slugOk){
@@ -4235,7 +4254,7 @@ function m2PillSvg(kind){
 function m2RenderQuality(){
   const x = getM2State();
   x.q5ok = x.q5ok || {};
-  const cards = () => x.items.map((it,i) => `<button type="button" data-i="${i}" class="${x.q5ok[i] ? (it.q5 ? 'bad' : 'ok') : ''}">${x.q5ok[i] ? (it.q5 ? '❌ ' : '✅ ') : '🔬 '}${esc(it.name)} <small>(${it.sealed ? 'có niêm phong' : 'không niêm phong'})</small></button>`).join('');
+  const cards = () => x.items.map((it,i) => `<button type="button" data-i="${i}" class="${x.q5ok[i] ? (it.q5 ? 'bad' : 'ok') : ''}">${x.q5ok[i] ? (it.q5 ? '❌ ' : '✅ ') : '🔬 '}${dn(it)} <small>(${it.sealed ? 'có niêm phong' : 'không niêm phong'})</small></button>`).join('');
   const body = m2Modal('🔬 Bước 5 — Kiểm tra chất lượng bằng cảm quan', `
     <p class="pos-note">Bấm từng sản phẩm. <b>Có niêm phong:</b> kiểm tra niêm phong còn nguyên vẹn. <b>Không có niêm phong:</b> kiểm tra bao bì trực tiếp và bao bì ngoài có thống nhất không, rồi quan sát sản phẩm (màu sắc, thể chất, hình dáng…).</p>
     <div class="m2-pk" id="m2Cards">${cards()}</div><div id="m2Insp"></div><div class="pos-err" id="m2Err"></div>`);
@@ -4255,13 +4274,13 @@ function m2RenderQuality(){
     const photo = m2PhotoUrl(it.name);
     const other = x.items.find(o => o !== it) || it;
     if(it.sealed){
-      insp.innerHTML = `<div style="text-align:center"><b>${esc(it.name)}</b> — bao bì có niêm phong<div>${m2SealSvg(it.q5 === 'seal')}</div>
+      insp.innerHTML = `<div style="text-align:center"><b>${dn(it)}</b> — bao bì có niêm phong<div>${m2SealSvg(it.q5 === 'seal')}</div>
         <label style="margin-right:14px"><input type="radio" name="q5s" value="ok"> Niêm phong còn nguyên vẹn</label>
         <label><input type="radio" name="q5s" value="bad"> Niêm phong bị rách, hở</label>
         <div style="margin-top:8px"><button type="button" class="pos-btn" id="q5Ok">Xác nhận sản phẩm này</button></div></div>`;
     } else {
       const grp = (nm, a, b) => `<div style="margin:4px 0"><label style="margin-right:14px"><input type="radio" name="${nm}" value="ok"> ${a}</label><label><input type="radio" name="${nm}" value="bad"> ${b}</label></div>`;
-      insp.innerHTML = `<div style="text-align:center"><b>${esc(it.name)}</b> — bao bì không có niêm phong
+      insp.innerHTML = `<div style="text-align:center"><b>${dn(it)}</b> — bao bì không có niêm phong
         <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:6px 0">
           <div><small>Bao bì ngoài</small><br>${photo ? `<img src="${photo}" alt="" style="width:150px;height:110px;object-fit:contain;background:#fff;border:1px solid #d8c9a3;border-radius:6px">` : `<div class="ph">${esc(it.name)}</div>`}</div>
           <div><small>Bao bì trực tiếp</small><br>${m2InnerSvg(it.q5 === 'inout' ? other.name : it.name)}</div>
@@ -4299,7 +4318,7 @@ function m2RenderPrice(){
   const body = m2Modal('🏷️ Bước 7 — Niêm yết giá bán', `
     <p class="pos-note">Ghi <b>giá bán</b> cho các sản phẩm <b>đạt</b>, tính theo <b>đơn vị đóng gói nhỏ nhất</b> (viên, ống, lọ, tuýp…).</p>
     <table class="pos-table"><thead><tr><th>Sản phẩm</th><th>Quy cách</th><th>Giá nhập (sau VAT) / đơn vị nhỏ nhất</th><th>Giá bán niêm yết / đơn vị nhỏ nhất (đ)</th></tr></thead><tbody>
-      ${pass.map((it,i) => `<tr><td>${esc(it.name)}</td><td>${it.pack.spec}</td>
+      ${pass.map((it,i) => `<tr><td>${dn(it)}</td><td>${it.pack.spec}</td>
         <td><b>${fmt(cost(it))} đ/${it.pack.unit}</b></td>
         <td><input type="number" min="0" data-s="${i}" style="width:90px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px"> đ/${it.pack.unit}</td></tr>`).join('')}
     </tbody></table><button type="button" class="pos-btn" id="m2PriceOk">✅ Niêm yết giá</button><div class="pos-err" id="m2Err"></div><div id="m2PriceAsk"></div>`);
@@ -4404,7 +4423,7 @@ function m2RenderRef(idx){
   body.innerHTML = `<div>${tabs}</div>
     <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">
       <div style="flex:1 1 360px;min-width:0">
-        <div style="font:800 .8rem Nunito,sans-serif;margin-bottom:4px">📦 Hộp thuốc: ${esc(it.name)}</div>
+        <div style="font:800 .8rem Nunito,sans-serif;margin-bottom:4px">📦 Hộp thuốc: ${dn(it)}</div>
         ${pkgViewer(it)}
         <p class="pos-note" style="margin-top:8px">Số lượng thực nhận (đã đếm ở bước kiểm tra số lượng): <b>${it.recv} ${it.unit}</b>. Đơn giá, số lượng đặt: xem <b>hoá đơn</b> bên cạnh.</p></div>
       <div style="flex:1 1 380px;min-width:0"><div style="font:800 .8rem Nunito,sans-serif;margin-bottom:4px">🧾 Hoá đơn</div>${m2InvoiceHtml(x)}</div></div>`;
@@ -4426,7 +4445,7 @@ function renderThucNhapTab(){
     <div class="ledger-title">SỔ NHẬP VÀ KIỂM SOÁT CHẤT LƯỢNG THUỐC</div>
     <p class="pos-note">📒 <b>Sổ kiểm nhập thuốc</b> (mẫu). Các cột thông tin đã điền từ hoá đơn và nhãn; điền nốt <b>điều kiện bảo quản, quy cách đóng gói, số lượng, đơn vị tính, đơn giá</b> cho các sản phẩm đạt. Không nhớ thông tin? Bấm <b>🔎 Xem lại hình</b> ở từng dòng: bao bì và hoá đơn mở ở bên phải, sổ vẫn hiện bên trái để vừa đối chiếu vừa điền.</p>
     <div style="overflow-x:auto"><table class="pos-table" style="font-size:.72rem;min-width:900px"><thead><tr>${th.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>
-      ${pass.map((it,i) => { const r = rec(it), pk = pkgData(it); return `<tr data-i="${i}"><td>${dt}<br><button type="button" class="pos-btn m2-ref" data-r="${i}" style="padding:3px 8px;font-size:.7rem;margin-top:4px">🔎 Xem lại hình</button></td><td>${esc(it.name)}${r['Hoạt chất, hàm lượng/nồng độ'] ? '<br>' + esc(r['Hoạt chất, hàm lượng/nồng độ']) : ''}</td>
+      ${pass.map((it,i) => { const r = rec(it), pk = pkgData(it); return `<tr data-i="${i}"><td>${dt}<br><button type="button" class="pos-btn m2-ref" data-r="${i}" style="padding:3px 8px;font-size:.7rem;margin-top:4px">🔎 Xem lại hình</button></td><td>${dn(it)}</td>
         <td>${esc(pk.reg)}${pk.realReg ? '' : ' <small>(số minh hoạ)</small>'}</td><td>${pk.lot} / ${pk.exp}</td>
         <td>${esc(pk.maker)}</td><td>${esc(x.supplierName)}</td><td>00000014</td>
         <td>${sel('cold', ['Nhiệt độ thường, dưới 30°C, tránh ánh sáng','Tủ lạnh 2–8°C'])}</td><td>${sel('spec', specs())}</td>
@@ -4542,7 +4561,7 @@ function m3RenderStorage(){
   const body = m3Modal('🌡️ Bước 2 — Phân loại theo điều kiện bảo quản', `
     <p class="pos-note">Bấm từng <b>mặt / ảnh</b> của bao bì, tự đọc <b>điều kiện bảo quản</b> của từng sản phẩm rồi chọn nơi bảo quản phù hợp. Bấm <b>🔍 Phóng to</b> nếu chữ nhỏ.</p>
     ${x.items.map((it,i) => `<div class="m2-tile" data-i="${i}" style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
-      <div style="flex:1 1 380px;min-width:0"><b>${esc(it.name)}</b>${pkgViewer(it)}</div>
+      <div style="flex:1 1 380px;min-width:0"><b>${dn(it)}</b>${pkgViewer(it)}</div>
       <div style="flex:1 1 220px"><div style="font-weight:800;margin-bottom:6px">Nơi bảo quản phù hợp:</div>
         <label style="display:block;margin-bottom:6px"><input type="radio" name="st${i}" value="room"> Nhiệt độ thường (dưới 30°C)</label>
         <label style="display:block"><input type="radio" name="st${i}" value="cold"> Tủ lạnh (2–8°C)</label></div></div>`).join('')}
@@ -4583,8 +4602,8 @@ function m3RenderFridge(){
     const placed = cold.filter(it => x.fridge[it.key]), left = cold.filter(it => !x.fridge[it.key]);
     body.innerHTML = `<p class="pos-note">Thuốc cần <b>bảo quản lạnh 2–8°C</b>: xếp vào <b>tủ lạnh</b>, không để sát thành tủ / ngăn đá để tránh đông băng, tránh ánh sáng, theo dõi nhiệt độ tủ hằng ngày.</p>
       <div style="display:flex;gap:14px;flex-wrap:wrap">
-        <div style="flex:1 1 280px"><div style="font-weight:800;margin-bottom:6px">📦 Chờ xếp</div>${left.map(it => `<button type="button" class="pos-btn" data-k="${esc(it.key)}" style="display:block;margin-bottom:6px">${esc(it.name)} → 🧊 Xếp vào tủ lạnh</button>`).join('') || '<i>Đã xếp hết.</i>'}</div>
-        <div style="flex:1 1 280px;border:3px solid #7fb6d9;border-radius:12px;background:#eaf6fd;padding:10px"><div style="font-weight:800;margin-bottom:6px">🧊 Tủ lạnh 2–8°C</div>${placed.map(it => `<div style="background:#fff;border:1px solid #bcd9ea;border-radius:8px;padding:6px 10px;margin-bottom:6px">✅ ${esc(it.name)}</div>`).join('') || '<i>Chưa có sản phẩm.</i>'}</div></div>`;
+        <div style="flex:1 1 280px"><div style="font-weight:800;margin-bottom:6px">📦 Chờ xếp</div>${left.map(it => `<button type="button" class="pos-btn" data-k="${esc(it.key)}" style="display:block;margin-bottom:6px">${dn(it)} → 🧊 Xếp vào tủ lạnh</button>`).join('') || '<i>Đã xếp hết.</i>'}</div>
+        <div style="flex:1 1 280px;border:3px solid #7fb6d9;border-radius:12px;background:#eaf6fd;padding:10px"><div style="font-weight:800;margin-bottom:6px">🧊 Tủ lạnh 2–8°C</div>${placed.map(it => `<div style="background:#fff;border:1px solid #bcd9ea;border-radius:8px;padding:6px 10px;margin-bottom:6px">✅ ${dn(it)}</div>`).join('') || '<i>Chưa có sản phẩm.</i>'}</div></div>`;
     body.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => { x.fridge[b.dataset.k] = true; saveM3State(x); draw(); if(!cold.some(it => !x.fridge[it.key])) setTimeout(finishFridge, 400); }));
   };
   const finishFridge = () => {
@@ -4602,7 +4621,7 @@ function m3RenderClassify(){
   const body = m3Modal('🗂️ Bước 3 — Phân loại theo ngành hàng', `
     <p class="pos-note">Xem bao bì (các mặt) để xác định mỗi sản phẩm là <b>thuốc</b> hay <b>sản phẩm không phải thuốc</b> (mỹ phẩm, dụng cụ, vật tư y tế, thực phẩm bảo vệ sức khỏe). Nếu là thuốc, chọn tiếp: <b>kê đơn</b>, <b>không kê đơn</b> hay <b>kiểm soát đặc biệt</b>. Tick đúng thì thùng hàng sẽ chuyển tới tủ tương ứng.</p>
     ${x.roomItems.map((it,i) => `<div class="m2-tile" data-i="${i}" style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
-      <div style="flex:1 1 380px;min-width:0"><b>${esc(it.name)}</b>${pkgViewer(it)}</div>
+      <div style="flex:1 1 380px;min-width:0"><b>${dn(it)}</b>${pkgViewer(it)}</div>
       <div style="flex:1 1 240px">
         <label style="margin-right:14px"><input type="radio" name="k${i}" value="drug"> Thuốc</label>
         <label><input type="radio" name="k${i}" value="non"> Sản phẩm không phải thuốc</label>
@@ -4645,7 +4664,7 @@ function m3RenderSpecial(){
   const body = m3Modal('🔒 Bước 4 — Thuốc kiểm soát đặc biệt', `
     <p class="pos-note">Theo <b>Thông tư 18/2026/TT-BYT</b>, thuốc phải kiểm soát đặc biệt cất trong <b>tủ riêng có khoá chắc chắn</b>, <b>không để lẫn với thuốc khác</b> và phải <b>ghi sổ theo dõi xuất – nhập – tồn</b>. Đọc <b>thành phần</b> trên bao bì, đối chiếu danh mục để <b>phân loại</b> rồi chọn <b>ngăn</b> phù hợp.</p>
     ${sp.map((it,i) => `<div class="m2-tile" data-i="${i}" style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
-      <div style="flex:1 1 380px;min-width:0"><b>${esc(it.name)}</b>${pkgViewer(it)}</div>
+      <div style="flex:1 1 380px;min-width:0"><b>${dn(it)}</b>${pkgViewer(it)}</div>
       <div style="flex:1 1 260px">
         <div style="font-weight:800;margin-bottom:4px">1. Phân loại:</div>
         ${kinds.map(k => `<label style="display:block;margin-bottom:3px"><input type="radio" name="sk${i}" value="${k}"> ${M3_KIND[k]}</label>`).join('')}
@@ -4796,9 +4815,9 @@ function renderThuSub(){
   // req #222/#224: thư soạn sẵn — người học chỉ tick vấn đề + đề nghị (không gõ chữ).
   const rows = kind === 'qty'
     ? `<table class="pos-table" style="font-size:.8rem"><thead><tr><th>Tên thuốc</th><th>Số lượng trên hoá đơn</th><th>Số lượng thực nhận</th></tr></thead><tbody>
-        ${x.items.map(it => { const bad = it.recv !== it.qty; return `<tr style="${bad ? 'background:#ffd9a8;font-weight:800;color:#a02510' : ''}"><td>${bad ? '⚠️ ' : ''}${esc(it.name)}</td><td>${it.qty} ${it.unit}</td><td>${it.recv} ${it.unit}${bad ? ' ← không khớp' : ''}</td></tr>`; }).join('')}</tbody></table>`
+        ${x.items.map(it => { const bad = it.recv !== it.qty; return `<tr style="${bad ? 'background:#ffd9a8;font-weight:800;color:#a02510' : ''}"><td>${bad ? '⚠️ ' : ''}${dn(it)}</td><td>${it.qty} ${it.unit}</td><td>${it.recv} ${it.unit}${bad ? ' ← không khớp' : ''}</td></tr>`; }).join('')}</tbody></table>`
     : `<table class="pos-table" style="font-size:.8rem"><thead><tr><th>Tên thuốc</th><th>Kết quả kiểm tra khi nhập hàng</th></tr></thead><tbody>
-        ${x.items.map(it => { const rs = m2Reasons(it); return `<tr style="${rs.length ? 'background:#ffd9a8;font-weight:800;color:#a02510' : ''}"><td>${rs.length ? '⚠️ ' : ''}${esc(it.name)}</td><td>${rs.length ? 'Không đạt: ' + rs.map(r => M2_REASON_TXT[r]).join('; ') : 'Đạt'}</td></tr>`; }).join('')}</tbody></table>`;
+        ${x.items.map(it => { const rs = m2Reasons(it); return `<tr style="${rs.length ? 'background:#ffd9a8;font-weight:800;color:#a02510' : ''}"><td>${rs.length ? '⚠️ ' : ''}${dn(it)}</td><td>${rs.length ? 'Không đạt: ' + rs.map(r => M2_REASON_TXT[r]).join('; ') : 'Đạt'}</td></tr>`; }).join('')}</tbody></table>`;
   const REQS = kind === 'qty'
     ? [['Bổ sung số hàng còn thiếu', short], ['Nhận lại phần hàng giao thừa', over], ['Điều chỉnh lại hoá đơn cho khớp thực nhận', true], ['Đổi lô hàng khác', false]]
     : [['Đổi sản phẩm không đạt sang lô khác', true], ['Trả lại sản phẩm không đạt', true], ['Bổ sung số hàng còn thiếu', false], ['Điều chỉnh lại hoá đơn cho khớp thực nhận', false]];
@@ -4878,7 +4897,7 @@ function renderM1Checklist(){
     const ci = cabinets.findIndex(c => c.items.some(r => r['Tên hoạt chất'] === it.name || r._gen === it.name));
     return `
     <div class="m1-item" data-key="${esc(it.key)}">
-      <span>${esc(it.name)} <i style="opacity:.6">(PM: ${it.tonKho} ${it.unit}${ci>=0?' · Tủ số '+(ci+1):''})</i></span>
+      <span>${dn(it)} <i style="opacity:.6">(PM: ${it.tonKho} ${it.unit}${ci>=0?' · Tủ số '+(ci+1):''})</i></span>
       <span class="m1-btns">
         <button type="button" class="m1-ok" data-act="ok">✅ Đúng</button>
         <button type="button" class="m1-bad" data-act="bad">❌ Sai</button>
