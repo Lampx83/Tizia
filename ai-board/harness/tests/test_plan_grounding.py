@@ -227,3 +227,48 @@ def test_gate_2_5_trace_shows_the_evidence_it_read_and_why_the_plan_was_or_was_n
     assert [(e['check'], e['ok']) for e in wrong['evaluation']] == [('validator', True), ('source grounding', False)]
     assert 'không tìm thấy trích dẫn' in wrong['evaluation'][1]['detail']
     assert [(e['check'], e['ok']) for e in right['evaluation']] == [('validator', True), ('source grounding', True)]
+
+
+def _repo_with(tmp_path, files):
+    subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
+    for rel, text in files.items():
+        path = tmp_path / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding='utf8')
+    subprocess.run(['git', '-C', str(tmp_path), 'add', '.'], check=True)
+    subprocess.run(['git', '-C', str(tmp_path), '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+                    'commit', '-qm', 'base'], check=True)
+
+
+def _so_tay_plan():
+    task = lambda file, title: {'file': file, 'title': title, 'verify': f'node --test test/so-tay-git.test.js', 'size': 'small'}
+    return {'capabilities': ['public.ui'], 'subtasks': [
+        task('public/so-tay-git.html', 'Tạo trang'), task('public/js/domains/it/modules.js', 'Đăng ký'),
+        task('test/so-tay-git.test.js', 'Test')]}
+
+
+def test_run89_shape_missing_validator_record_for_existing_file_is_advisory(tmp_path):
+    _repo_with(tmp_path, {'public/js/domains/it/modules.js': 'export const MODULES = [];'})
+    request = {'subject': 'Thêm trang Sổ tay Git', 'body': 'x', 'grounding_required': True, 'complexity_by_server': True,
+               'type': 'feature'}
+    state = {'plan': _so_tay_plan(), 'checkout_source': str(tmp_path)}
+    validation = {'clear': True, 'question': None, 'grounded': True, 'reason': 'ok', 'grounding': []}
+    out = plan_validate.run(request, deps_with(FakeModels(state['plan'], validation=validation)), Budget(), state)
+    assert not out['blocked']
+    assert 'modules.js' in state['validator_note'] and 'không chặn' in state['validator_note']
+    assert state['grounding']['evidence'][1]['quote'] == ''
+
+
+def test_wrong_quote_still_blocks_and_carries_evidence(tmp_path):
+    _repo_with(tmp_path, {'public/js/domains/it/modules.js': 'export const MODULES = [];'})
+    request = {'subject': 'Thêm trang Sổ tay Git', 'body': 'x', 'grounding_required': True, 'complexity_by_server': True,
+               'type': 'feature'}
+    state = {'plan': _so_tay_plan(), 'checkout_source': str(tmp_path)}
+    bad = {'target': 'public/js/domains/it/modules.js', 'file': 'public/js/domains/it/modules.js', 'quote': 'KHÔNG CÓ CHỮ NÀY TRONG FILE',
+           'before': 'a', 'after': 'b', 'verify': 'c'}
+    new = lambda f: {'target': f, 'file': f, 'quote': '', 'before': 'chưa có file', 'after': 'x', 'verify': 'y'}
+    validation = {'clear': True, 'question': None, 'grounded': True, 'reason': 'ok',
+                  'grounding': [new('public/so-tay-git.html'), bad, new('test/so-tay-git.test.js')]}
+    out = plan_validate.run(request, deps_with(FakeModels(state['plan'], validation=validation)), Budget(), state)
+    assert out['blocked'] and out['reason'] == 'plan_ungrounded'
+    assert out['evidence']['item'] == 'public/js/domains/it/modules.js' and out['evidence']['quote'].startswith('KHÔNG CÓ')
