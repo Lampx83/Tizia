@@ -23,14 +23,13 @@ for (const modern of [false,true]) test(`PostgreSQL reset (${modern ? 'board' : 
     await d.exec(`CREATE TABLE user_wallets(user_id BIGINT REFERENCES users(id), coins BIGINT);
       CREATE TABLE curriculum(id BIGINT PRIMARY KEY,title TEXT);
       CREATE TABLE notifications(id BIGINT PRIMARY KEY,request_id BIGINT,title TEXT);
-      CREATE TABLE skill_proposals(id BIGINT PRIMARY KEY,request_id BIGINT);
-      CREATE TABLE gate_trace(id BIGINT PRIMARY KEY,skill_proposal_id BIGINT);
       INSERT INTO users(id,username,display_name) VALUES(1,'reset-fixture','Fixture');
       INSERT INTO user_wallets VALUES(1,100); INSERT INTO curriculum VALUES(1,'Keep');
       INSERT INTO requests(id,domain,title,created_at,updated_at) VALUES(7,'it','Delete',1,1);
       INSERT INTO request_messages(request_id,role,body,created_at) VALUES(7,'student','Delete',1);
       INSERT INTO notifications VALUES(1,7,'Delete'),(2,NULL,'Keep');
-      INSERT INTO skill_proposals VALUES(1,7); INSERT INTO gate_trace VALUES(1,1);`);
+      INSERT INTO skill_proposals(id,origin,gate_reached,request_ids,created_at,updated_at) VALUES(1,'model',1,'7',1,1);
+      INSERT INTO gate_trace(id,skill_proposal_id,gate,created_at) VALUES(1,1,1,1);`);
     if (modern) await d.exec(`INSERT INTO ai_board_profile VALUES(1,'student','[]','beginner',1);
       INSERT INTO ai_feature_folders(id,slug,title,owner_user_id,domain,state,created_at,updated_at,last_activity_at)
         VALUES(1,'reset-feature','Reset feature',1,'it','active',1,1,1);
