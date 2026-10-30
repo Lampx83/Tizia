@@ -1,10 +1,13 @@
 // Core board flow on the async store: intake, claim/lease lifecycle, runs and events, plans (surface, protected, core, guardrail), verdict outcomes.
 import test from 'node:test';
+import { CONTRACT } from '../server/ai-board/store.js';
 import assert from 'node:assert/strict';
 import { runBoard, failure } from './support/ai-board-parity.js';
 import {
   blocked, claimAndRun, corePlan, newRequest, passing, planOf, protectedPlan, submit, verdict,
 } from './support/ai-board-scenarios.js';
+
+CONTRACT.repair_replan.enabled = false; // plan-class replan is covered in verdict-outcomes
 
 test('intake, validation, idempotent retry, listing, pending count', async () => {
   const { result: out } = await runBoard(async (store) => {

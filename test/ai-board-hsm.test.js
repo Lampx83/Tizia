@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { CONTRACT } from '../server/ai-board/store.js';
 import assert from 'node:assert/strict';
 import express from 'express';
 import { openBoard } from './support/ai-board-db.js';
@@ -14,6 +15,8 @@ import { canonicalHash } from '../server/ai-board/repositories/tool-manifests.js
 import { VENV_PYTHON } from './support/harness-python.js';
 
 const KEY='hsm-disposable-fixture-worker-key-32';
+CONTRACT.repair_replan.enabled = false; // plan-class replan is covered in verdict-outcomes
+
 test('Gate4 records a granted action receipt at the budget limit but refuses another action',async()=>{
   const f=await fixture();
   try {
