@@ -296,7 +296,7 @@ def run_search(base, fixture):
                     break
                 page.wait_for_timeout(500)
             if not found:
-                return _not_applicable('Trang không có ô tìm kiếm hoạt động')
+                return result('Không thấy ô tìm kiếm hoạt động trên trang')
             page.fill('[data-oracle-search]', query)
             problem = None
             for _ in range(8):  # debounce

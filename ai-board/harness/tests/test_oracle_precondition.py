@@ -35,10 +35,10 @@ def _run(monkeypatch, cards, search_box):
     return functional.run_search("http://x", lambda name: {"token": "t"})
 
 
-def test_missing_search_box_is_not_applicable_not_failure(monkeypatch):
+def test_missing_search_box_on_a_page_with_activities_still_fails(monkeypatch):
     cards = [{"name": "Đại số", "shown": True}, {"name": "Hình học", "shown": True}]
     out = _run(monkeypatch, cards, search_box=False)
-    assert out["passed"] is True and out["applicable"] is False
+    assert out["passed"] is False and "ô tìm kiếm" in out["reason"]
 
 
 def test_missing_activity_list_is_not_applicable(monkeypatch):

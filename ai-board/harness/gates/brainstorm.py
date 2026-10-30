@@ -300,7 +300,7 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             stage = "renderer match"
             required = functional.expected_targets({'request_title': request.get('subject'), 'request_detail': request.get('body')})
             if required.intersection(ctx.get('targets') or []) and not required.intersection(task['file'] for task in plan['subtasks']):
-                raise ValueError('Use the existing feature renderer: ' + ', '.join(sorted(required)))
+                judge(stage, True, 'oracle advisory: plan does not edit ' + ', '.join(sorted(required)))
             added = new_files(plan, source, commit)
             feature = request.get('type') == 'feature' or bool(request.get('complexity_by_server'))
             if added and feature:
