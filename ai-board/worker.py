@@ -26,7 +26,7 @@ Transport = Callable[[str, str, dict, dict], dict]
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "ai-board" / "harness"))
 # Worker <-> server contract, shared with server/ai-board/store.js; loader in harness runtime/limits.py.
-from runtime import objection_repeat  # noqa: E402
+from runtime import coverage, objection_repeat  # noqa: E402
 from runtime.limits import config_sha256, contract, scaled_limit  # noqa: E402
 CONTRACT = contract()
 PLAN_GATES = tuple(CONTRACT["gates"]["plan"])
@@ -679,6 +679,19 @@ def _objection_evidence(history: list[dict]) -> dict:
     threshold = int((CONTRACT.get("evidence_gates") or {}).get("repeat_objection_threshold", 2))
     return {"objection_history": [objection_repeat.describe(item) for item in history],
             "repeat_objection": objection_repeat.repeated(history, threshold)}
+
+
+def _uncovered_conditions(request: dict, plan: dict, deps, budget) -> list[str]:
+    """Điều kiện của clarified_spec chưa có subtask verify chạy được; model chỉ khi không có mục tất định (LF/128)."""
+    def call_model(prompt: str) -> str:
+        if not hasattr(deps, "call_model"):  # deps không có model (test HTTP worker): không kiểm điều kiện
+            return ""
+        body = deps.call_model(deps.models.gate1_model, prompt, gate=1, budget=budget, format=coverage.SCHEMA,
+                               prompt_name="spec_conditions.md")
+        return str(body.get("response") or "")
+
+    items, _source = coverage.spec_conditions(str(request.get("clarified_spec") or ""), call_model)
+    return coverage.uncovered_items(items, plan)
 
 
 def _non_runnable_layered(plan: dict) -> list[str]:
@@ -1440,6 +1453,12 @@ class HarnessPlanner:
                     result = {"gate": 1, "result": {
                         "gate": 1, "blocked": True, "plan": None, "signals": [],
                         "reason": f"plan không hợp lệ: verify phải là lệnh chạy được: {bad[0]}"}}
+                else:
+                    missing = _uncovered_conditions(request, state.get("plan") or {}, self.deps, budget)
+                    if missing:
+                        result = {"gate": 1, "result": {
+                            "gate": 1, "blocked": True, "plan": None, "signals": [],
+                            "reason": f"plan không hợp lệ: điều kiện chưa có subtask verify chạy được: {missing[0][:160]}"}}
             return result
 
         stopped, history = _plan_with_repair(run_plan, request, state, budget, run_plan(request))

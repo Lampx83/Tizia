@@ -1,6 +1,8 @@
 """Điều kiện nghiệm thu của clarified_spec và kiểm tra mỗi điều kiện có subtask verify chạy được."""
+import json
 import re
 import unicodedata
+from pathlib import Path
 
 _HEADING = "ket qua mong doi"
 _ITEM = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s*(.+?)\s*$")
@@ -32,10 +34,14 @@ def conditions(spec):
 
 def uncovered(spec, plan):
     """Điều kiện không khớp subtask nào có verify chạy được (đủ nửa số từ khoá của điều kiện có trong title+verify, tối thiểu 2)."""
+    return uncovered_items(conditions(spec), plan)
+
+
+def uncovered_items(items, plan):
     subtasks = [t for t in (plan or {}).get("subtasks") or [] if isinstance(t, dict)]
     runnable = [t for t in subtasks if _RUNNABLE.match(str(t.get("verify") or "").strip())]
     missing = []
-    for item in conditions(spec):
+    for item in items:
         words = set(_WORD.findall(_fold(item)))
         need = max(2, (len(words) + 1) // 2)
         covered = any(len(words & set(_WORD.findall(_fold(f"{t.get('title') or ''} {t.get('verify') or ''}")))) >= need
@@ -43,3 +49,29 @@ def uncovered(spec, plan):
         if not covered:
             missing.append(item)
     return missing
+
+
+PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "spec_conditions.md"
+SCHEMA = {"type": "object", "additionalProperties": False, "properties": {
+    "conditions": {"type": "array", "maxItems": 12, "items": {"type": "string", "maxLength": 300}}},
+    "required": ["conditions"]}
+
+
+def parse_model(text):
+    """Điều kiện từ JSON của model; [] nếu sai schema (không chặn plan)."""
+    try:
+        items = json.loads(text).get("conditions")
+    except (AttributeError, TypeError, ValueError):
+        return []
+    return [item.strip() for item in items if isinstance(item, str) and item.strip()][:12] if isinstance(items, list) else []
+
+
+def spec_conditions(spec, call_model=None):
+    """(điều kiện, nguồn): mục tất định trước; chỉ khi không có mục thì một lời gọi model (call_model(prompt) -> text)."""
+    found = conditions(spec)
+    if found or not (spec or "").strip():
+        return found, "section" if found else "none"
+    if call_model is None:
+        return [], "none"
+    prompt = PROMPT_PATH.read_text(encoding="utf-8").replace("{spec}", spec)
+    return parse_model(call_model(prompt)), "model"
