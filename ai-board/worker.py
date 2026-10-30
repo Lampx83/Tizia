@@ -1499,6 +1499,7 @@ class HarnessPlanner:
             gate, result = stopped["gate"], stopped["result"]
             raise PlanBlockedError(f"gate {gate} blocked: {result.get('reason')}", {
                 "gate": gate, "reason": result.get("reason"), "signals": list(result.get("signals") or []),
+                **({"evidence": result["evidence"]} if result.get("evidence") else {}),
                 "public_message": result.get("public_message"),
                 "plan": json.dumps(state.get("plan"), ensure_ascii=False)[:2000],
                 **_objection_evidence(history),

@@ -296,7 +296,7 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             judge(stage, True, plan.get("summary_vi", ""))
             stage = "files exist"
             check_files(plan, source, commit)
-            grounding_paths.check_references(plan, source, commit)
+            grounding_paths.check_references(plan, source, commit, request)
             judge(stage, True, ", ".join(task["file"] for task in plan["subtasks"]))
             stage = "renderer match"
             required = functional.expected_targets({'request_title': request.get('subject'), 'request_detail': request.get('body')})
