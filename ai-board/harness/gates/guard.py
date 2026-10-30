@@ -268,6 +268,8 @@ _FEATURE_MODULE = re.compile(
     r'\s*</script>\s*$')
 # Script cùng gốc (không host, không handler, không nội dung inline) là module của chính site, không phải injection.
 _SAFE_SCRIPT = re.compile(r'^\s*<script\b(?![^>]*\son[a-z]+\s*=)[^>]*?\ssrc\s*=\s*"(?!(?:https?:)?//|javascript:)(?![^"]*\.\.)[^"\s]+"[^>]*>\s*</script>\s*$', re.I)
+# <script> inline không nội dung nguy hiểm: lỗi cấu trúc model sửa được (đưa code ra module), không phải injection.
+_INLINE_SCRIPT = re.compile(r'^\s*<script\b(?![^>]*\ssrc\s*=)[^>]*>\s*$', re.I)
 # ponytail: danh sách từ ngắn, đủ cho nội dung giáo dục D0; bộ lọc nội dung thật thay sau.
 _UNSAFE = re.compile(r"(?i)(?<!\w)(?:fuck|shit|bitch|đụ|địt|đĩ|lồn|cặc|đồ\s+ngu|óc\s+chó)(?!\w)")
 _TEST_PATH = re.compile(r"(?:^|/)(?:tests?|__tests__)/|(?:\.|_)(?:test|spec)\.[^/]+$|(?:^|/)test_[^/]+\.py$")
@@ -340,7 +342,11 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
                 add("pii", "medium", f"{path}: dòng thêm có email/SĐT/CCCD")
             if path.startswith("public/") and not _SAFE_SCRIPT.match(line) and not _FEATURE_MODULE.match(line):
                 pattern = next((p for p in _INJECTION if p.search(line)), None)
-                if pattern:
+                if pattern and pattern is _INJECTION[0] and _INLINE_SCRIPT.match(line) \
+                        and not any(p.search(line) for p in _INJECTION[1:]):
+                    add("inline_script", "medium", f"{path}:{number}: không dùng <script> inline; đưa code vào public/js/features/<slug>/index.js, HTML chỉ có 1 dòng nạp module",
+                        line=number, pattern=pattern.pattern)
+                elif pattern:
                     add("injection", "critical", f"{path}:{number}: dòng thêm có script/handler/prompt injection",
                         line=number, pattern=pattern.pattern)
             if _UNSAFE.search(line):
