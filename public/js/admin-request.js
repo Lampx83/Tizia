@@ -187,6 +187,7 @@ const changeOf = (runs) => [...runs].reverse().map((r) => r.change_class).find(B
 const capText = (c) => `${esc(CAP_TEXT[c] || c)} ${code(c)}`;
 
 function planApproval(p, root) {
+  if (root.status === 'waiting_authorization' && root.internal_reason === 'folder_not_approved') return ['warn', 'chờ duyệt chức năng'];
   if (p.tier === 'surface') return ['ok', 'tự chạy, không cần duyệt'];
   if (p.tier === 'core') return ['idle', 'chỉ con người làm'];
   if (p.authorized) return ['ok', 'admin đã cho phép'];
@@ -206,8 +207,8 @@ function renderPlan(p, root, children, trace) {
   if (!p) return `<section id="current-plan"><h2>Kế hoạch hiện hành</h2><p class="meta">${root.status === 'queued' && root.phase === 'needs_replan' ? 'Đang chờ lập kế hoạch mới; kế hoạch trước đã hết hiệu lực.' : 'Chưa có kế hoạch hiện hành.'}</p></section>`;
   const plan = p.plan || {};
   const [approvalState, approval] = planApproval(p, root);
-  const waiting = root.status === 'waiting_authorization' && !p.authorized && p.tier === 'protected';
-  const folderWait = waiting && root.internal_reason === 'folder_not_approved';
+  const folderWait = root.status === 'waiting_authorization' && root.internal_reason === 'folder_not_approved';
+  const waiting = root.status === 'waiting_authorization' && !p.authorized && p.tier === 'protected' && !folderWait;
   const mine = children.filter(c => Number(c.plan_revision) === Number(p.revision));
   const steps = (plan.steps || []).slice().sort((a, b) => a.order - b.order);
   const extra = mine.filter(c => !steps.some(st => Number(st.order) === Number(c.order)));

@@ -263,13 +263,25 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     await db.run(`UPDATE ai_feature_folders SET approved_by=?, approved_at=?, updated_at=?,
       state=CASE WHEN state='draft' THEN 'active' ELSE state END WHERE id=?`, [Number(adminUserId), now, now, folder.id]);
     await registerRelease(db, folder, adminUserId, now); // cờ phát hành, mặc định chỉ người tạo
-    const waiting = await db.all(`
-      SELECT t.id, t.plan_hash FROM ai_tickets t JOIN requests q ON q.id = t.source_request_id
+    const held = await db.all(`
+      SELECT t.id, t.plan_hash, t.plan_revision, p.tier FROM ai_tickets t JOIN requests q ON q.id = t.source_request_id
+      JOIN ai_plans p ON p.root_ticket_id = t.id AND p.revision = t.plan_revision
       WHERE q.folder_id = ? AND t.parent_id IS NULL AND t.status = 'waiting_authorization'
         AND t.internal_reason = 'folder_not_approved'
     `, [folder.id]);
-    for (const root of waiting) await authorizePlanTransaction(root.id, root.plan_hash, adminUserId, now);
-    return { ok: true, authorized: waiting.length };
+    for (const root of held) {
+      const authorized = !!await db.get(`
+        SELECT 1 FROM ai_authorizations WHERE root_ticket_id=? AND plan_hash=? AND plan_revision=?
+      `, [root.id, root.plan_hash, root.plan_revision]);
+      const gate = planGate({ tier: root.tier, authorized, folderHeld: false });
+      const runnable = gate.status === 'planned';
+      await db.run(`UPDATE ai_tickets SET status=?, phase=?, public_note=?, internal_reason=?, updated_at=? WHERE id=?`,
+        [runnable ? 'queued' : gate.status, runnable ? 'authorized' : 'ticketized', gate.note, gate.reason, now, root.id]);
+      await db.run(`UPDATE ai_tickets SET status=?, public_note=?, internal_reason=?, updated_at=?
+        WHERE parent_id=? AND plan_revision=? AND status='waiting_authorization'`,
+      [gate.child, gate.note, gate.reason, now, root.id, root.plan_revision]);
+    }
+    return { ok: true, released: held.length };
   });
 
   async function approveFolder(folderId, adminUserId) {
@@ -458,7 +470,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     const live = await db.all(`
       SELECT t.* FROM ai_tickets t JOIN requests q ON q.id = t.source_request_id
       WHERE q.folder_id = ? AND t.parent_id IS NULL AND t.plan_hash IS NOT NULL
-        AND ((t.lease_owner IS NOT NULL AND t.lease_expires_at > ?) OR (t.status = 'queued' AND t.phase = 'authorized'))
+        AND ((t.lease_owner IS NOT NULL AND t.lease_expires_at > ?) OR (t.status = 'queued' AND t.phase = 'authorized') OR t.status = 'planned')
     `, [Number(folderId), now]);
     for (const root of live) {
       await closeRoot(root, {
@@ -1330,6 +1342,19 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     return await recordPlanBlockTransaction(ticketId, input, error);
   }
 
+  // Trạng thái plan theo cổng: folder chưa duyệt giữ (tier không đổi), core người làm, protected chờ admin, còn lại chạy.
+  function planGate({ tier, authorized, folderHeld }) {
+    if (folderHeld) return { status: 'waiting_authorization', child: 'waiting_authorization', reason: 'folder_not_approved',
+      note: 'Chức năng chưa được quản trị viên duyệt; kế hoạch chờ duyệt chức năng.' };
+    if (tier === 'core') return { status: 'human_owned', child: 'human_owned', reason: 'core capability cannot be auto-implemented',
+      note: 'Yêu cầu chạm phần lõi và đã được chuyển cho con người xử lý.' };
+    if (tier === 'protected' && !authorized) return { status: 'waiting_authorization', child: 'waiting_authorization',
+      reason: 'protected capability requires explicit admin authorization', note: 'Kế hoạch đang chờ quản trị viên cho phép trước khi triển khai.' };
+    return { status: 'planned', child: 'queued', reason: null, note: 'Kế hoạch đã được kiểm tra và chia thành các việc theo thứ tự.' };
+  }
+  const folderNotApproved = async (requestId) => !!await db.get(
+    'SELECT 1 FROM requests q JOIN ai_feature_folders f ON f.id = q.folder_id WHERE q.id = ? AND f.approved_at IS NULL', [Number(requestId)]);
+
   const submitPlanTransaction = (ticketId, input, checked) => db.tx(async () => {
     const now = input.now;
     const root = await assertLease(ticketId, input.workerId, input.leaseToken, now);
@@ -1352,9 +1377,8 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       const authorized = !!await db.get(`
         SELECT 1 FROM ai_authorizations WHERE root_ticket_id=? AND plan_hash=? AND plan_revision=?
       `, [Number(ticketId), existing.plan_hash, existing.revision]);
-      const plannedStatus = existing.tier === 'surface' ? 'planned'
-        : existing.tier === 'protected' && authorized ? 'planned'
-          : existing.tier === 'protected' ? 'waiting_authorization' : 'human_owned';
+      const plannedGate = planGate({ tier: existing.tier, authorized, folderHeld: await folderNotApproved(root.source_request_id) });
+      const plannedStatus = plannedGate.status;
       if (!sameSubmission) {
         const rounds = root.auto_rounds; // resuming an identical valid plan (worker restart) is not a new automatic round
         const budget = root.cumulative_budget + input.budgetUsed;
@@ -1375,8 +1399,8 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
         }
         await db.run(`
           UPDATE ai_tickets SET status=?, phase='ticketized', auto_rounds=?,
-            cumulative_budget=?, updated_at=? WHERE id=?
-        `, [plannedStatus, rounds, budget, now, Number(ticketId)]);
+            cumulative_budget=?, internal_reason=?, updated_at=? WHERE id=?
+        `, [plannedStatus, rounds, budget, plannedGate.reason, now, Number(ticketId)]);
         await db.run(insertEvent, [Number(ticketId), 'plan_validated', 'worker', input.workerId, `running->${plannedStatus}`,
           root.public_note, 'resumed existing validated plan',
           `plan-valid:${input.idempotencyKey}`, now,]);
@@ -1416,28 +1440,15 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       return { plan_hash: checked.planHash, tier: checked.tier, status: 'waiting_admin', reason, children: [] };
     }
 
-    // Folder chức năng chưa được admin duyệt: plan mặt bằng cũng phải chờ. Đã duyệt → tier như thường.
-    const folder = await db.get(`SELECT f.approved_at FROM requests q JOIN ai_feature_folders f ON f.id = q.folder_id
-      WHERE q.id = ?`, [root.source_request_id]);
-    const folderGate = !!folder && !folder.approved_at && checked.tier === 'surface';
-    if (folderGate) checked = { ...checked, tier: 'protected' };
     const revision = root.plan_revision + 1;
     const authorized = !!await db.get(`
       SELECT 1 FROM ai_authorizations WHERE root_ticket_id=? AND plan_hash=? AND plan_revision=?
     `, [Number(ticketId), checked.planHash, revision]);
-    let rootStatus = 'planned';
-    let childStatus = 'queued';
-    let publicNote = 'Kế hoạch đã được kiểm tra và chia thành các việc theo thứ tự.';
-    let internalReason = null;
-    if (checked.tier === 'protected' && !authorized) {
-      rootStatus = childStatus = 'waiting_authorization';
-      publicNote = 'Kế hoạch đang chờ quản trị viên cho phép trước khi triển khai.';
-      internalReason = folderGate ? 'folder_not_approved' : 'protected capability requires explicit admin authorization';
-    } else if (checked.tier === 'core') {
-      rootStatus = childStatus = 'human_owned';
-      publicNote = 'Yêu cầu chạm phần lõi và đã được chuyển cho con người xử lý.';
-      internalReason = 'core capability cannot be auto-implemented';
-    }
+    const gate = planGate({ tier: checked.tier, authorized, folderHeld: await folderNotApproved(root.source_request_id) });
+    const rootStatus = gate.status;
+    const childStatus = gate.child;
+    const publicNote = gate.note;
+    const internalReason = gate.reason;
     await db.run(`
       INSERT INTO ai_plans(root_ticket_id, revision, plan_hash, plan_json, status, tier,
         capability_policy_hash, public_reason, internal_reason, created_at)

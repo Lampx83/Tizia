@@ -22,16 +22,16 @@ async function fixture() {
     detail: 'fixture', ...extra,
   });
   // Plan 1 bước mặt bằng (public.ui) cho root vừa tạo, như worker gửi lên.
-  const plan = async (rootId) => {
+  const plan = async (rootId, capability = 'public.ui') => {
     const ticket = await store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' });
     assert.equal(ticket.id, rootId);
     const lease = { workerId: 'w1', leaseToken: ticket.lease_token };
     const run = await store.createRun(ticket.id, { ...lease, trigger: 'plan', idempotencyKey: `folder-run-${rootId}` });
     const step = { order: 1, title: 'Trang mới', description: 'x', allowed_scope: ['public/tro-doan-tu.html'],
-      acceptance: ['a'], tests: ['node --test'], capability: 'public.ui', risk: 'low', non_goals: ['x'] };
+      acceptance: ['a'], tests: ['node --test'], capability, risk: 'low', non_goals: ['x'] };
     const out = await store.submitPlan(ticket.id, { ...lease, runId: run.id, budgetUsed: 10, idempotencyKey: `folder-plan-${rootId}`,
       plan: { domain: 'it', goal: 'g', allowed_scope: step.allowed_scope, acceptance: step.acceptance, tests: step.tests,
-        capabilities: ['public.ui'], risk: 'low', non_goals: ['x'], steps: [step] } });
+        capabilities: [capability], risk: 'low', non_goals: ['x'], steps: [step] } });
     await store.releaseLease(ticket.id, { ...lease, outcome: 'planned', idempotencyKey: `folder-release-${rootId}` });
     return out;
   };
@@ -66,7 +66,7 @@ test('a folder plan waits for the admin once; after approval later plans run on 
   assert.equal((await plan(first.root_ticket_id)).status, 'waiting_authorization');
   assert.deepEqual(await rootState(first.root_ticket_id), { status: 'waiting_authorization', internal_reason: 'folder_not_approved' });
 
-  assert.equal((await store.approveFolder(first.folder_id, 9)).authorized, 1);
+  assert.equal((await store.approveFolder(first.folder_id, 9)).released, 1);
   assert.equal((await rootState(first.root_ticket_id)).status, 'queued');
   const [row] = await store.listAdminFolders();
   assert.equal(row.approved, true);
@@ -92,7 +92,55 @@ test('authorizing a plan that waits only for folder approval is refused', async 
   assert.equal((await rootState(first.root_ticket_id)).status, 'waiting_authorization');
   const [row] = await store.listAdminFolders();
   assert.equal(row.waiting_plans.length, 1);
-  assert.equal((await store.approveFolder(first.folder_id, 9)).authorized, 1);
+  assert.equal((await store.approveFolder(first.folder_id, 9)).released, 1);
+});
+
+test('an unapproved folder holds a surface plan without changing its tier', async () => {
+  const { db, store, submit, plan, rootState } = await fixture();
+  const first = await submit(1, { type: 'feature' });
+  assert.equal((await plan(first.root_ticket_id)).status, 'waiting_authorization');
+  assert.deepEqual(await db.prepare('SELECT tier FROM ai_tickets WHERE id=?').get(first.root_ticket_id), { tier: 'surface' });
+  assert.deepEqual(await db.prepare('SELECT tier FROM ai_plans WHERE root_ticket_id=?').get(first.root_ticket_id), { tier: 'surface' });
+  assert.deepEqual(await rootState(first.root_ticket_id), { status: 'waiting_authorization', internal_reason: 'folder_not_approved' });
+  await assert.rejects(async () => store.authorizePlan(first.root_ticket_id, (await db.prepare('SELECT plan_hash FROM ai_plans WHERE root_ticket_id=?').get(first.root_ticket_id)).plan_hash, 9),
+    (e) => e.code === 'folder_not_approved');
+});
+
+test('approving a folder releases its held surface plan to runnable with no authorization', async () => {
+  const { db, store, submit, plan, rootState } = await fixture();
+  const first = await submit(1, { type: 'feature' });
+  await plan(first.root_ticket_id);
+  await store.approveFolder(first.folder_id, 9);
+  assert.deepEqual(await rootState(first.root_ticket_id), { status: 'queued', internal_reason: null });
+  assert.deepEqual((await db.prepare('SELECT status FROM ai_tickets WHERE parent_id=?').all(first.root_ticket_id)).map((r) => r.status), ['queued']);
+  assert.equal(await db.prepare('SELECT COUNT(*) AS n FROM ai_authorizations WHERE root_ticket_id=?').get(first.root_ticket_id).then((r) => r.n), 0);
+});
+
+test('a protected plan in an unapproved folder needs folder approval and then admin authorization', async () => {
+  const { store, submit, plan, rootState, db } = await fixture();
+  const first = await submit(1, { type: 'feature' });
+  const planned = await plan(first.root_ticket_id, 'content.write');
+  assert.equal(planned.tier, 'protected');
+  assert.deepEqual(await rootState(first.root_ticket_id), { status: 'waiting_authorization', internal_reason: 'folder_not_approved' });
+  await store.approveFolder(first.folder_id, 9);
+  assert.deepEqual(await rootState(first.root_ticket_id), { status: 'waiting_authorization',
+    internal_reason: 'protected capability requires explicit admin authorization' });
+  await store.authorizePlan(first.root_ticket_id, planned.plan_hash, 9);
+  assert.equal((await rootState(first.root_ticket_id)).status, 'queued');
+  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM ai_authorizations WHERE root_ticket_id=?').get(first.root_ticket_id)).n, 1);
+});
+
+test('revoking folder approval holds a not-yet-started surface plan again', async () => {
+  const { db, store, submit, plan, rootState } = await fixture();
+  const first = await submit(1, { type: 'feature' });
+  await plan(first.root_ticket_id);
+  await store.approveFolder(first.folder_id, 9);
+  assert.equal((await rootState(first.root_ticket_id)).status, 'queued');
+  await store.revokeFolder(first.folder_id);
+  assert.deepEqual(await rootState(first.root_ticket_id), { status: 'waiting_authorization', internal_reason: 'folder_not_approved' });
+  assert.deepEqual(await db.prepare('SELECT tier FROM ai_tickets WHERE id=?').get(first.root_ticket_id), { tier: 'surface' });
+  await store.approveFolder(first.folder_id, 9);
+  assert.equal((await rootState(first.root_ticket_id)).status, 'queued');
 });
 
 test('a person can vote a classmate\'s folder once, not their own', async () => {
