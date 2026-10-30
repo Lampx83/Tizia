@@ -30,6 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import eval_corpus  # noqa: E402
 import eval_fast  # noqa: E402
+import eval_feature  # noqa: E402
 import eval_git  # noqa: E402
 import eval_recall  # noqa: E402
 import file_context  # noqa: E402
@@ -294,6 +295,7 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
     subs.add_parser("corpus", parents=[seeded], help="chỉ sinh corpus + manifest, in số case mỗi ô")
     eval_recall.register(subs)
     eval_git.register(subs)
+    eval_feature.register(subs)
     args = parser.parse_args(argv)
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
