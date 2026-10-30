@@ -106,3 +106,7 @@ test('plan of only blocked steps keeps the old whole-plan gate', async () => {
   assert.deepEqual(out.runnable_orders, []);
   db.close();
 });
+
+test('no child rows means nothing is held', () => {
+  assert.equal(runnableOrders([]), null);
+});

@@ -1,7 +1,8 @@
 const BLOCKED = new Set(['waiting_authorization', 'human_owned', 'waiting_data']);
 
-/** Orders of plan children that may run: queued, every dependency queued-runnable or done. */
+/** Orders of plan children that may run: queued, every dependency queued-runnable or done. null = no child rows, nothing to hold. */
 export function runnableOrders(children) {
+  if (!children.length) return null;
   const byOrder = new Map(children.map((child) => [Number(child.sequence), child]));
   const memo = new Map();
   const ok = (order) => {
