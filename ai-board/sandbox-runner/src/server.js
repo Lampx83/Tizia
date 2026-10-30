@@ -4,7 +4,7 @@ import { createApi } from './api.js';
 import { createMicrosandboxBackend } from './backend.js';
 import { bootProbe } from './boot.js';
 import { checkKvm } from './kvm.js';
-import { loadPolicy } from './policy.js';
+import { assertProfile, loadPolicy } from './policy.js';
 import { createReadiness } from './readiness.js';
 import { createRuns } from './runs.js';
 import { fileStore } from './store.js';
@@ -25,6 +25,7 @@ let policy;
 let token;
 try {
   policy = loadPolicy(readFileSync(process.env.SANDBOX_POLICY_FILE || '/etc/sandbox/sandbox-policy.yaml', 'utf8'));
+  assertProfile(policy, process.env.RESOURCE_PROFILE);
   token = readFileSync(process.env.SANDBOX_TOKEN_FILE || '/run/secrets/sandbox-runner-token', 'utf8').trim();
   if (token.length < 32) throw new Error('token too short');
 } catch (error) { fatal('startup_config_invalid', error); }

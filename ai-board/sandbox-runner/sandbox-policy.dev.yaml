@@ -1,5 +1,6 @@
 # Reviewed deployment policy for the dev runner. Strict schema (src/policy.js); change only via reviewed deploy + restart.
 version: 1
+profile: dev
 # vm.memory_mib 1536: measured VM peak 613-625 MiB over 3 kinds (MemTotal-MemAvailable, 0.5 s samples), ~2.5x margin.
 vm: { cpus: 4, memory_mib: 1536, disk_mib: 10240, ttl_s: 1800, lease_s: 120 }
 concurrency: 1
