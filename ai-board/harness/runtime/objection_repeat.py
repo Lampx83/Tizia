@@ -11,6 +11,12 @@ def signature(stopped: dict) -> tuple:
     return (float(stopped.get("gate") or 0), reason_class, frozenset(_PATH.findall(reason)))
 
 
+def describe(stopped: dict) -> dict:
+    """Chữ ký dạng JSON-safe để ghi vào bằng chứng cho admin."""
+    gate, reason_class, paths = signature(stopped)
+    return {"gate": gate, "reason_class": reason_class, "paths": sorted(paths)}
+
+
 def repeated(history: list[dict], threshold: int) -> bool:
     """True khi `threshold` lượt gần nhất có cùng chữ ký (mặc định 2: lượt sau trùng lượt trước → dừng)."""
     if threshold < 2 or len(history) < threshold:

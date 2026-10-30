@@ -26,3 +26,19 @@ def test_real_search_history_request_still_selects_search_oracle():
 
 def test_copy_request_still_selects_copy_oracle():
     assert f.select(COPY) == f.COPY_PROBE
+
+
+RUN69_SPEC = {
+    "request_title": "Thêm trang FAQ môn Cơ sở dữ liệu",
+    "request_detail": ("Thay đổi mong muốn: Thêm tiêu đề, ô tìm kiếm lọc theo tiêu đề/nội dung, 12 câu hỏi mẫu.\n"
+                       "Kết quả mong đợi (cách kiểm): Truy cập trang công khai thấy ô tìm kiếm hoạt động, kết quả hiển thị thẻ, "
+                       "bấm thẻ mở/đóng câu trả lời mà không chuyển trang."),
+}
+
+
+def test_run80_search_activity_choice_is_the_pre_fix_regex_on_the_same_text():
+    # Run 80 gate 5 ran search-activity-v1 on this text. Pre-5bd6b08f regex (below) selects it; the current one does not.
+    text = f.request_text(RUN69_SPEC)
+    assert OLD_SEARCH.search(text) and re.search(r"activity|activities|hoat dong", text)
+    assert f.behaviour_probe(text) is None
+    assert f.select(RUN69_SPEC) != f.SEARCH_PROBE

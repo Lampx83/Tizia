@@ -13,22 +13,20 @@ def _fold(text):
 
 
 def conditions(spec):
-    """Mỗi gạch đầu dòng/số trong mục 'Kết quả mong đợi' là một điều kiện. [] nếu spec không có mục đó."""
+    """Điều kiện của mục 'Kết quả mong đợi': phần sau ':' trên dòng tiêu đề, cộng các gạch đầu dòng ngay sau nó. [] nếu không có mục."""
     lines = (spec or "").splitlines()
-    start = next((i + 1 for i, line in enumerate(lines) if _HEADING in _fold(line)), None)
-    if start is None:
+    head = next((i for i, line in enumerate(lines) if _HEADING in _fold(line)), None)
+    if head is None:
         return []
     found = []
-    for line in lines[start:]:
-        if not line.strip():
-            if found:
-                break
-            continue
+    inline = lines[head].split(":", 1)[1].strip() if ":" in lines[head] else ""
+    if inline:
+        found.append(inline)
+    for line in lines[head + 1:]:
         match = _ITEM.match(line)
-        if match:
-            found.append(match.group(1))
-        elif found:
+        if not match:
             break
+        found.append(match.group(1))
     return found
 
 

@@ -26,6 +26,7 @@ Transport = Callable[[str, str, dict, dict], dict]
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "ai-board" / "harness"))
 # Worker <-> server contract, shared with server/ai-board/store.js; loader in harness runtime/limits.py.
+from runtime import objection_repeat  # noqa: E402
 from runtime.limits import config_sha256, contract, scaled_limit  # noqa: E402
 CONTRACT = contract()
 PLAN_GATES = tuple(CONTRACT["gates"]["plan"])
@@ -671,6 +672,13 @@ def _plan_repairable(stopped: dict) -> bool:
     if gate == 1 and reason.startswith("plan không hợp lệ"):
         return True
     return gate == 2.5 and reason == "plan_ungrounded"
+
+
+def _objection_evidence(history: list[dict]) -> dict:
+    """Bằng chứng cả hai lượt phản đối cho admin; repeat_objection khi các lượt gần nhất cùng chữ ký."""
+    threshold = int((CONTRACT.get("evidence_gates") or {}).get("repeat_objection_threshold", 2))
+    return {"objection_history": [objection_repeat.describe(item) for item in history],
+            "repeat_objection": objection_repeat.repeated(history, threshold)}
 
 
 def _non_runnable_layered(plan: dict) -> list[str]:
@@ -1411,6 +1419,7 @@ class HarnessPlanner:
             return result
 
         stopped = run_plan(request)
+        history = [dict(stopped)] if stopped else []
         if stopped and _plan_repairable(stopped):
             # Model sinh plan sai luật (LF/106): một lượt lập lại với lỗi nêu riêng cho planner
             # (không nhét vào thread: validator cổng 2.5 cũng đọc thread và sẽ coi file đó "đã bị từ chối"),
@@ -1427,12 +1436,15 @@ class HarnessPlanner:
                 stopped = run_plan(repaired)
             finally:
                 os.environ.pop("AI_BOARD_PLAN_REPAIR", None)
+            if stopped:
+                history.append(dict(stopped))
         if stopped:
             gate, result = stopped["gate"], stopped["result"]
             raise PlanBlockedError(f"gate {gate} blocked: {result.get('reason')}", {
                 "gate": gate, "reason": result.get("reason"), "signals": list(result.get("signals") or []),
                 "public_message": result.get("public_message"),
                 "plan": json.dumps(state.get("plan"), ensure_ascii=False)[:2000],
+                **_objection_evidence(history),
             })
         signals = list(state.get("complexity_signals") or [])
         if snapshot.get("clarification_incomplete"):

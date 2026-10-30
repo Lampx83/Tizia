@@ -63,7 +63,7 @@ def test_gate1_advisory_still_blocks_missing_file_and_renderer_constraint(monkey
     assert out["blocked"] and "nope.js" in out["reason"] and len(models.calls) == 2
     monkeypatch.setattr(functional, "expected_targets", lambda _request: {WIDGET})
     out, models, _ = _gate1([_plan_for(SCHOOL)] * 2, tmp_path, source=src)
-    assert out["blocked"] and "renderer" in out["reason"] and len(models.calls) == 2
+    assert "renderer" not in str(out.get("reason"))  # LF/127: oracle advisory, not a block
 
 
 def _repo_with_school(tmp_path):

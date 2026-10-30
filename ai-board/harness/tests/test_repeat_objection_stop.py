@@ -28,3 +28,18 @@ def test_wording_change_with_same_structure_still_stops():
 
 def test_single_round_never_stops():
     assert not repeated([stopped(SAME)], 2)
+
+
+def test_worker_evidence_lists_both_rounds_and_flags_a_repeat():
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from worker import _objection_evidence
+
+    same = _objection_evidence([stopped(SAME), stopped(SAME)])
+    assert same["repeat_objection"] is True and len(same["objection_history"]) == 2
+    assert same["objection_history"][0]["gate"] == 2.5
+
+    different = _objection_evidence([stopped(SAME), stopped("plan không hợp lệ: x", gate=1)])
+    assert different["repeat_objection"] is False and len(different["objection_history"]) == 2
