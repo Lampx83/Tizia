@@ -6,6 +6,7 @@ import { WorkerContractError } from '../repositories/store-contract.js';
 import { SKILL_TASK_TYPES } from '../skill-task-types.js';
 import { checkSkillText, publicMessage } from '../security/intake-guard.js';
 import { essenceMissing } from '../security/essence.js';
+import { tokenCounter } from './token-count.js';
 
 export const TASK_TYPES = SKILL_TASK_TYPES;
 const FIELDS = ['name', 'description', 'task_type', 'source', 'version', 'max_tokens'];
@@ -31,6 +32,7 @@ export function adminSkillBlock(skill) {
 }
 
 export function lintSkill(text, { source = 'admin', version = null, name = null } = {}) {
+  const counter = tokenCounter();
   try {
     if (typeof text !== 'string' || !text.startsWith('---\n') || text.includes('\r')) throw bad('Use LF frontmatter');
     const parts = text.split('---\n');
@@ -49,13 +51,13 @@ export function lintSkill(text, { source = 'admin', version = null, name = null 
     const body = parts.slice(2).join('---\n').trim();
     const rendered = source === 'admin' ? adminSkillBlock({ name: meta.name, version: version ?? Number(meta.version), body })
       : `DEFAULT SKILL ${meta.name} v${meta.version} (advisory):\n${body}`;
-    const tokens = Buffer.byteLength(rendered, 'utf8');
+    const tokens = counter.count(rendered);
     if (!body || tokens > Number(meta.max_tokens)) throw bad('Skill exceeds token cap');
     if ((body.match(/^\d+\. /gm) || []).length > 7 || FORBIDDEN.test(body)) throw bad('Skill requests authority or exceeds seven rules');
     return { ok: true, errors: [], name: meta.name, task_types: types, source, version: Number(meta.version),
-      max_tokens: Number(meta.max_tokens), body, token_count: tokens, token_method: 'utf8_upper_bound', hash: hash(text) };
+      max_tokens: Number(meta.max_tokens), body, token_count: tokens, token_method: counter.method, hash: hash(text) };
   } catch (error) {
-    return { ok: false, errors: [error.message], token_count: null, token_method: 'utf8_upper_bound', hash: typeof text === 'string' ? hash(text) : null };
+    return { ok: false, errors: [error.message], token_count: null, token_method: counter.method, hash: typeof text === 'string' ? hash(text) : null };
   }
 }
 
@@ -445,7 +447,7 @@ export function createSkillService(db) {
         requests: [...new Set(uses.map(s => s.source_request_id))], steps: uses.slice(0,20).map(s => ({ request_id: s.source_request_id, run_id: s.run_id, span_id: s.span_id,
           version: s.skill_events.find(e => e.attributes?.['tizia.skill.name'] === item.name)?.attributes?.['tizia.skill.version'] })) };
     }
-    return { skills: items, usage_window: 'latest_2000_spans', token_method: 'utf8_upper_bound' };
+    return { skills: items, usage_window: 'latest_2000_spans', token_method: tokenCounter().method };
   }
   return { upload, read, approve, disable, active, list, requestRewrite, promoteLegacyRewrite, reject, edit, rollback, claimRewrite, reportRewrite, createProposal, proposals, claimRetro, reportRetro };
 }
