@@ -5,6 +5,7 @@
 
 import { DOMAIN_META } from './engine/domain.js';
 import { morph } from './dom-morph.js';
+import { askConfirm } from './confirm-dialog.js';
 import { mountSkillsTab } from './admin-skills.js?v=skills-ux1';
 import { toastMs } from './admin-skills-state.js?v=skills-ux1';
 
@@ -1825,7 +1826,8 @@ async function loadFeatureFolders() {
   host.querySelectorAll('[data-lifecycle]').forEach(btn => btn.addEventListener('click', () =>
     openFeatureLifecycle(folders.find(f => f.id === Number(btn.dataset.lifecycle)))));
   host.querySelectorAll('[data-release]').forEach(sel => sel.addEventListener('change', async () => {
-    if (sel.value === 'off' && !confirm('Tắt phát hành chức năng này? Dữ liệu hiện có được giữ lại.')) return loadFeatureFolders();
+    if (sel.value === 'off' && !await askConfirm({ title: 'Tắt phát hành chức năng này?', message: 'Người dùng không còn thấy chức năng; dữ liệu hiện có được giữ lại.',
+      ok: 'Tắt phát hành', danger: true })) { await loadFeatureFolders(); $(`[data-release="${CSS.escape(sel.dataset.release)}"]`)?.focus(); return; }
     sel.disabled = true;
     const res = await api(`/api/admin/ai-board/releases/${encodeURIComponent(sel.dataset.release)}`,
       { method: 'POST', body: JSON.stringify({ status: sel.value }) });

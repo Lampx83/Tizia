@@ -8,6 +8,7 @@ import { projectPipeline, describeEvent, TECHNICAL_EVENTS, TRACE_STEPS, renderVe
 import { renderHsm } from './ai-board-hsm.js';
 import { renderTicketGraph, graphNodes } from './ai-board-graph.js?v=20261029a';
 import { fmt as clockFmt } from './ai-board-clock.js';
+import { askConfirm } from './confirm-dialog.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -255,7 +256,7 @@ function renderPlan(p, root, children, trace) {
              </div>
            </div>`
         : `<button class="btn ok" data-action="authorize-ask" data-hash="${esc(p.plan_hash)}">Cho phép thực hiện kế hoạch…</button>`) : ''}
-        <span class="meta">${esc(ui.authorizeMsg || '')}</span>
+        <span class="meta" id="authorize-result" role="status" tabindex="-1">${esc(ui.authorizeMsg || '')}</span>
     </div></section>`;
 }
 
@@ -288,6 +289,7 @@ async function authorizePlan(btn) {
     ui.authorizeMsg = `Không cho phép được: ${errText(e)}`;
   }
   await refresh();
+  ($('#authorize-result') || $('.request-head .flash'))?.focus();
 }
 
 // ─── Hoàn tác / hủy: 2 bước xác nhận (đọc hậu quả → gõ số yêu cầu) ───
@@ -304,7 +306,7 @@ function renderActions(request, trace) {
   const canCancel = !candidate && !['rejected', 'cancelled', 'done'].includes(request.status);
   const canRetryTransient = root?.phase === 'transient_blocked';
   const canContinuePartial = root?.phase === 'partial';
-  if (!canRollback && !canCancel && !canRetryTransient && !canContinuePartial) return ui.flash ? `<div class="flash">${esc(ui.flash)}</div>` : '';
+  if (!canRollback && !canCancel && !canRetryTransient && !canContinuePartial) return `<div class="flash" role="status" tabindex="-1">${ui.flash ? esc(ui.flash) : ''}</div>`;
   const busy = root?.live;
   return `<div class="actions">
       ${canContinuePartial ? `<button class="btn ok" data-action="continue-partial" data-request="${esc(request.id)}"
@@ -314,7 +316,7 @@ function renderActions(request, trace) {
       ${canRollback ? `<button class="btn danger-outline" data-action="rollback" ${busy ? 'disabled' : ''}
         title="${busy ? 'AI Board đang xử lý; chờ lượt này xong.' : 'Gỡ thay đổi AI Board đã làm cho yêu cầu này'}">Hoàn tác thay đổi</button>` : ''}
       ${canCancel ? '<button class="btn danger-outline" data-action="cancel">Hủy yêu cầu</button>' : ''}
-      ${ui.flash ? `<span class="flash">${esc(ui.flash)}</span>` : ''}
+      <span class="flash" role="status" tabindex="-1">${ui.flash ? esc(ui.flash) : ''}</span>
     </div>
     ${ui.confirm ? renderConfirm(request, candidate) : ''}`;
 }
@@ -747,12 +749,12 @@ document.addEventListener('click', e => {
   const btn = e.target.closest('[data-action]');
   if (!btn || btn.disabled) return;
   const action = btn.dataset.action;
-  if (action === 'rollback' || action === 'cancel') Object.assign(ui, { confirm: action, step: 1, msg: '', flash: '' });
+  if (action === 'rollback' || action === 'cancel') Object.assign(ui, { confirm: action, step: 1, msg: '', flash: '', focus: '[data-action="confirm-close"]', opener: action });
   else if (action === 'confirm-next') ui.step = 2;
-  else if (action === 'confirm-close') ui.confirm = null;
+  else if (action === 'confirm-close') { ui.confirm = null; ui.focus = `[data-action="${ui.opener}"]`; }
   else if (action === 'confirm-go') return submitConfirm(btn);
-  else if (action === 'authorize-ask') { ui.authorizeConfirm = btn.dataset.hash; ui.authorizeMsg = ''; }
-  else if (action === 'authorize-close') { ui.authorizeConfirm = null; }
+  else if (action === 'authorize-ask') { ui.authorizeConfirm = btn.dataset.hash; ui.authorizeMsg = ''; ui.focus = '[data-action="authorize-close"]'; }
+  else if (action === 'authorize-close') { ui.authorizeConfirm = null; ui.focus = '[data-action="authorize-ask"]'; }
   else if (action === 'authorize-go') return authorizePlan(btn);
   else if (action === 'retry-transient') return retryTransient(btn);
   else if (action === 'continue-partial') {
@@ -767,15 +769,18 @@ document.addEventListener('click', e => {
   else if (action === 'reconcile-close') ui.reconcile = null;
   else if (action === 'reconcile-go') return submitReconcile(btn);
   else if (action === 'rerun-node') {
-    if (!window.confirm('Run this step again? The earlier failed attempt stays in the history.')) return;
-    btn.disabled = true;
-    post(`/api/admin/ai-board/requests/${REQUEST_ID}/nodes/${encodeURIComponent(btn.dataset.node)}/rerun`, {})
-      .then((r) => { ui.flash = `Đã chạy lại bước này. ${r.note}`; })
-      .catch(e => { ui.flash = `Không chạy lại được: ${errText(e)}`; }).finally(async () => { await refresh(); schedule(); });
+    askConfirm({ title: 'Chạy lại bước này?', message: 'Lần chạy hỏng trước đó vẫn được giữ trong lịch sử.', ok: 'Chạy lại bước này' }).then((yes) => {
+      if (!yes) return;
+      btn.disabled = true;
+      post(`/api/admin/ai-board/requests/${REQUEST_ID}/nodes/${encodeURIComponent(btn.dataset.node)}/rerun`, {})
+        .then((r) => { ui.flash = `Đã chạy lại bước này. ${r.note}`; })
+        .catch(e => { ui.flash = `Không chạy lại được: ${errText(e)}`; }).finally(async () => { await refresh(); schedule(); });
+    });
     return;
   }
   render();
   if (action === 'confirm-next') $('#confirm-input')?.focus();
+  else if (ui.focus) { $(ui.focus)?.focus(); ui.focus = null; }
 });
 document.addEventListener('input', e => {
   const field = e.target.dataset?.rf;
@@ -789,7 +794,8 @@ document.addEventListener('keydown', e => {
 if (window.top !== window) {
   document.documentElement.classList.add('embedded');
   document.addEventListener('keydown', e => {
-    if (e.key !== 'Escape') return;
+    if (e.key !== 'Escape' || document.querySelector('dialog.cd-dlg[open]')) return;
+    if (ui.authorizeConfirm) { ui.authorizeConfirm = null; render(); $('[data-action="authorize-ask"]')?.focus(); return; }
     if (ui.confirm) { ui.confirm = null; render(); return; } // Esc đóng bảng xác nhận trước, rồi mới tới cửa sổ
     window.parent.document.getElementById('req-dialog')?.close();
   });
