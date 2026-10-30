@@ -44,6 +44,12 @@ async function post(path, body) {
   return data;
 }
 
+const API_ERROR = { folder_not_approved: 'chức năng chưa được duyệt; hãy duyệt ở tab "Chức năng" trước', folder_archived: 'chức năng đã được lưu trữ',
+  request_closed: 'yêu cầu đã đóng', budget_ceiling: 'đã vượt trần ngân sách, cần tạo yêu cầu mới', plan_not_found: 'không tìm thấy kế hoạch này (có thể đã đổi, hãy tải lại trang)',
+  core_human_owned: 'phần lõi chỉ con người làm', csrf_invalid: 'phiên đã hết hạn, hãy tải lại trang', 401: 'cần đăng nhập lại', 403: 'bạn không có quyền thực hiện', 404: 'không tìm thấy',
+  409: 'trạng thái đã thay đổi, hãy tải lại trang', 429: 'thao tác quá nhanh, thử lại sau ít giây', 500: 'máy chủ gặp lỗi, thử lại sau', 'Failed to fetch': 'mất kết nối máy chủ' };
+const errText = (e) => { const m = String(e?.message ?? e); return API_ERROR[m] || ROLLOUT_ERROR[m] || `lỗi không rõ (mã ${m})`; };
+
 function renderAtts(list) {
   const items = pairBeforeAfter((Array.isArray(list) ? list : []).filter(a => a && a.url));
   if (!items.length) return '';
@@ -205,6 +211,9 @@ function renderPlan(p, root, children, trace) {
   const steps = (plan.steps || []).slice().sort((a, b) => a.order - b.order);
   const extra = mine.filter(c => !steps.some(st => Number(st.order) === Number(c.order)));
   const execution = projectPipeline(trace).steps.find(s => s.gate === 3);
+  const fileList = plan.allowed_scope || p.allowed_scope || [];
+  const capList = plan.capabilities || p.capabilities || [];
+  const requestTitle = view?.thread?.request?.title || '';
   return `<section id="current-plan"><h2>Kế hoạch hiện hành</h2>
     <div class="blk plan">
       <div class="plan-head"><b>${esc(plan.goal || '')}</b>${tag(approvalState, approval)}</div>
@@ -233,14 +242,19 @@ function renderPlan(p, root, children, trace) {
         <div class="row"><a class="btn ok" href="/admin.html#features" target="_top">Mở tab Chức năng</a></div></div>` : ''}
       ${waiting && !folderWait ? (ui.authorizeConfirm === p.plan_hash
         ? `<div class="confirm" role="alertdialog" aria-label="Cho phép thực hiện kế hoạch">
-             <div class="confirm-title">Cho phép AI Board thực hiện kế hoạch này?</div>
-             <div class="meta">Worker sẽ chạy các cổng 3 → 5.5 trên kế hoạch đã duyệt.</div>
+             <div class="confirm-title">Cho phép AI Board sửa code cho yêu cầu #${esc(root.id)}${requestTitle ? ` “${esc(requestTitle)}”` : ''}?</div>
+             <ul>
+               <li>Được sửa <b>${fileList.length}</b> file${fileList.length ? `: ${fileList.slice(0, 5).map(code).join(', ')}${fileList.length > 5 ? ` và ${fileList.length - 5} file khác` : ''}` : ''}</li>
+               <li>Quyền: ${capList.map(capText).join(', ') || 'chưa có'}</li>
+               <li>Rủi ro: <b>${esc(RISK_TEXT[plan.risk || p.risk] || plan.risk || p.risk || 'chưa có')}</b> · mức duyệt: ${esc(TIER_TEXT[p.tier] || p.tier)}</li>
+             </ul>
+             <div class="meta">Worker sẽ chạy các cổng 3 → 5.5 trên kế hoạch này; chưa có gì được phát hành.</div>
              <div class="row" style="margin-top:8px">
-               <button class="btn ok" data-action="authorize-go" data-root="${esc(root.id)}" data-hash="${esc(p.plan_hash)}">Đồng ý, thực hiện</button>
-               <button class="btn" data-action="authorize-close">Thôi</button>
+               <button class="btn ok" data-action="authorize-go" data-root="${esc(root.id)}" data-hash="${esc(p.plan_hash)}">Cho phép, bắt đầu thực hiện</button>
+               <button class="btn" data-action="authorize-close">Thôi, chưa cho phép</button>
              </div>
            </div>`
-        : `<button class="btn ok" data-action="authorize-ask" data-hash="${esc(p.plan_hash)}">Cho phép thực hiện kế hoạch</button>`) : ''}
+        : `<button class="btn ok" data-action="authorize-ask" data-hash="${esc(p.plan_hash)}">Cho phép thực hiện kế hoạch…</button>`) : ''}
         <span class="meta">${esc(ui.authorizeMsg || '')}</span>
     </div></section>`;
 }
@@ -257,7 +271,7 @@ async function submitReconcile(btn) {
     ui.flash = r.resumed ? 'Đã chốt bước ghi; worker sẽ chạy tiếp ở lượt tới.'
       : r.remaining_open ? `Đã chốt; còn ${r.remaining_open} bước chờ đối chiếu.` : 'Đã chốt bước ghi. Yêu cầu vẫn dừng đến khi bạn cho chạy tiếp.';
   } catch (e) {
-    f.msg = `Không chốt được: ${e.message}`;
+    f.msg = `Không chốt được: ${errText(e)}`;
   }
   await refresh();
   schedule();
@@ -271,7 +285,7 @@ async function authorizePlan(btn) {
     ui.authorizeMsg = '';
     ui.flash = 'Đã cho phép; worker sẽ nhận ở lượt tới.';
   } catch (e) {
-    ui.authorizeMsg = `Không cho phép được: ${e.message}`;
+    ui.authorizeMsg = `Không cho phép được: ${errText(e)}`;
   }
   await refresh();
 }
@@ -311,7 +325,7 @@ async function retryTransient(btn) {
     await post(`/api/admin/ai-board/tickets/${encodeURIComponent(btn.dataset.root)}/retry-transient`, {});
     ui.flash = 'Đã đưa yêu cầu về hàng đợi; worker sẽ nhận ở lượt tới.';
   } catch (e) {
-    ui.flash = `Không chạy lại được: ${e.message}`;
+    ui.flash = `Không chạy lại được: ${errText(e)}`;
     btn.disabled = false;
   }
   await refresh();
@@ -330,7 +344,7 @@ function renderConfirm(request, candidate) {
     'AI Board chưa tạo thay đổi nào cho yêu cầu này nên không có gì phải gỡ.',
     'Không mở lại được; muốn làm tiếp thì học sinh phải gửi yêu cầu mới.',
   ];
-  const verb = rollback ? 'Hoàn tác' : 'Hủy yêu cầu';
+  const verb = rollback ? 'Hoàn tác thay đổi' : 'Hủy yêu cầu';
   return `<div class="confirm" role="alertdialog" aria-label="${verb} yêu cầu #${esc(request.id)}">
     <div class="confirm-title">${rollback ? 'Hoàn tác thay đổi' : 'Hủy'} của yêu cầu #${esc(request.id)} · bước ${ui.step}/2</div>
     ${ui.step === 1 ? `<ul>${consequences.map(c => `<li>${c}</li>`).join('')}</ul>
@@ -361,7 +375,7 @@ async function submitConfirm(btn) {
     ui.confirm = null;
     ui.msg = '';
   } catch (e) {
-    ui.msg = `Chưa thực hiện được: ${e.message}`;
+    ui.msg = `Chưa thực hiện được: ${errText(e)}`;
     btn.disabled = false;
   }
   await refresh();
@@ -485,7 +499,7 @@ async function rolloutDo(btn) {
     await post(`/api/admin/ai-board/tickets/${encodeURIComponent(btn.dataset.root)}/rollout/${btn.dataset.do}`, { head_sha: btn.dataset.head, audience: ui.audience });
     ui.rolloutMsg = `Đã ${{ approve: 'duyệt', serve: 'phát hành', reject: 'từ chối', withdraw: 'thu hồi', reverify: 'xếp hàng kiểm lại với base mới; worker sẽ nhận ở lượt tới' }[btn.dataset.do]}.`;
   } catch (e) {
-    ui.rolloutMsg = `Chưa thực hiện được: ${ROLLOUT_ERROR[e.message] || e.message}`;
+    ui.rolloutMsg = `Chưa thực hiện được: ${errText(e)}`;
   }
   await refresh();
 }
@@ -745,7 +759,7 @@ document.addEventListener('click', e => {
     btn.disabled = true;
     post(`/api/requests/${encodeURIComponent(btn.dataset.request)}/continue`, {})
       .then(() => { ui.flash = 'Đã xếp hàng chạy nốt phần còn lại; worker sẽ nhận ở lượt tới.'; })
-      .catch(e => { ui.flash = `Không tiếp tục được: ${e.message}`; btn.disabled = false; })
+      .catch(e => { ui.flash = `Không tiếp tục được: ${errText(e)}`; btn.disabled = false; })
       .finally(async () => { await refresh(); schedule(); });
     return;
   } else if (action === 'rollout') return rolloutDo(btn);
@@ -756,8 +770,8 @@ document.addEventListener('click', e => {
     if (!window.confirm('Run this step again? The earlier failed attempt stays in the history.')) return;
     btn.disabled = true;
     post(`/api/admin/ai-board/requests/${REQUEST_ID}/nodes/${encodeURIComponent(btn.dataset.node)}/rerun`, {})
-      .then((r) => { ui.flash = `Started again. ${r.note}`; })
-      .catch(e => { ui.flash = `Could not run again: ${e.message}`; }).finally(async () => { await refresh(); schedule(); });
+      .then((r) => { ui.flash = `Đã chạy lại bước này. ${r.note}`; })
+      .catch(e => { ui.flash = `Không chạy lại được: ${errText(e)}`; }).finally(async () => { await refresh(); schedule(); });
     return;
   }
   render();
