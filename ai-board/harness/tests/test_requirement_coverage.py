@@ -79,3 +79,10 @@ def test_worker_check_flags_a_plan_without_the_module_and_passes_the_full_plan()
         {"title": "Ô tìm kiếm lọc câu hỏi", "verify": "node --test test/faq-search.test.js"}]}
     assert _uncovered_conditions(request, descriptive, SimpleNamespace(), None) != []
     assert _uncovered_conditions(request, full, SimpleNamespace(), None) == []
+
+
+def test_condition_overlap_alone_never_blocks_a_plan_with_runnable_verify():
+    from worker import _has_runnable_verify
+    runnable = {"subtasks": [{"title": "Module", "verify": "node --test test/a.test.js"}]}
+    descriptive = {"subtasks": [{"title": "Module", "verify": "mở trang thấy nút"}]}
+    assert _has_runnable_verify(runnable) and not _has_runnable_verify(descriptive) and not _has_runnable_verify({})

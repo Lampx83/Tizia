@@ -694,6 +694,11 @@ def _uncovered_conditions(request: dict, plan: dict, deps, budget) -> list[str]:
     return coverage.uncovered_items(items, plan)
 
 
+def _has_runnable_verify(plan: dict) -> bool:
+    return any(isinstance(task, dict) and _RUNNABLE_VERIFY.match(str(task.get("verify") or "").strip())
+               for task in plan.get("subtasks") or [])
+
+
 def _non_runnable_layered(plan: dict) -> list[str]:
     """verify của subtask có `layer` phải là lệnh chạy được (server chỉ ép plan nhiều bước)."""
     bad = []
@@ -1455,7 +1460,8 @@ class HarnessPlanner:
                         "reason": f"plan không hợp lệ: verify phải là lệnh chạy được: {bad[0]}"}}
                 else:
                     missing = _uncovered_conditions(request, state.get("plan") or {}, self.deps, budget)
-                    if missing:
+                    # Word overlap cannot prove a condition is uncovered; only a plan with no runnable verify at all is blocked.
+                    if missing and not _has_runnable_verify(state.get("plan") or {}):
                         result = {"gate": 1, "result": {
                             "gate": 1, "blocked": True, "plan": None, "signals": [],
                             "reason": f"plan không hợp lệ: điều kiện chưa có subtask verify chạy được: {missing[0][:160]}"}}
