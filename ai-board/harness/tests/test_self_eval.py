@@ -162,6 +162,8 @@ def test_the_tasks_job_plans_each_test_task_through_gates_1_to_2_5_with_the_mode
 
     (tmp_path / 'public').mkdir()
     (tmp_path / 'public' / 'flashcards.html').write_text('<button>Flip card</button>', encoding='utf8')
+    (tmp_path / 'test').mkdir()
+    (tmp_path / 'test' / 'flashcards.test.js').write_text('// test', encoding='utf8')
     subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
     subprocess.run(['git', '-C', str(tmp_path), 'add', '.'], check=True)
     subprocess.run(['git', '-C', str(tmp_path), '-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'fixture'], check=True)
