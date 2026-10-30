@@ -219,12 +219,12 @@ test('the replan round is bounded by the existing automatic round limit', async 
   assert.deepEqual({ ...root }, { status: 'waiting_admin', phase: 'plan_unfit' });
 });
 
-test('the repair_replan flag raises the repair bound to two, never three', async () => {
+test('the repair_replan flag raises the repair bound to four, never five', async () => {
   const accepted = await plannedRoot();
   CONTRACT.repair_replan.enabled = true;
   try {
     await assert.doesNotReject(async () => accepted.submit(blocked(5, 'x', 'ordinary',
-      { repairs: [{ gate: 5, reason: 'a' }, { gate: 4, reason: 'b' }] })));
+      { repairs: [1, 2, 3, 4].map((n) => ({ gate: 5, reason: `r${n}` })) })));
   } finally {
     CONTRACT.repair_replan.enabled = false;
   }
@@ -232,7 +232,7 @@ test('the repair_replan flag raises the repair bound to two, never three', async
   CONTRACT.repair_replan.enabled = true;
   try {
     await assert.rejects(async () => rejected.submit(blocked(5, 'x', 'ordinary',
-      { repairs: [{ gate: 5, reason: 'a' }, { gate: 4, reason: 'b' }, { gate: 3, reason: 'c' }] })), /repairs/);
+      { repairs: [1, 2, 3, 4, 5].map((n) => ({ gate: 5, reason: `r${n}` })) })), /repairs/);
   } finally {
     CONTRACT.repair_replan.enabled = false;
   }

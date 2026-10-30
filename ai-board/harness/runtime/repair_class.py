@@ -1,6 +1,7 @@
 """Deterministic failure class, repair action, involved files and progress metrics for the repair loop."""
 from __future__ import annotations
 
+import hashlib
 import re
 
 REPAIR_CODE, REPLAN, STOP_ADMIN, RETRY = "repair_code", "replan", "stop_admin", "retry"
@@ -60,3 +61,24 @@ def classify(result: dict, produced: dict[str, dict], scope: set[str]) -> dict:
     else:
         out = ("unclassified", REPAIR_CODE)
     return {"class": out[0], "action": out[1], "files": involved_files(text, produced) if out[1] == REPAIR_CODE else []}
+
+
+def metrics(result: dict, diffs: list[dict]) -> dict:
+    """Round snapshot: gate reached, failing-test count (None if unreported), diff fingerprint."""
+    counts = [int(n) for n in _FAILS.findall(_text(result))]
+    digest = hashlib.sha256("\n".join(str(item.get("diff")) for item in diffs or []).encode()).hexdigest()
+    return {"gate": result.get("gate"), "fails": max(counts) if counts else None, "diff": digest}
+
+
+def progressed(before: dict, after: dict) -> bool:
+    """Later gate, fewer failing tests, or (same failures) different diff."""
+    if (after["gate"] or 0) > (before["gate"] or 0):
+        return True
+    if before["fails"] is not None and after["fails"] is not None and after["fails"] != before["fails"]:
+        return after["fails"] < before["fails"]
+    return after["diff"] != before["diff"]
+
+
+def soft_limit(spec: dict, progress_rounds: int, hard: int) -> int:
+    """Repairs allowed now: soft start grown per progress round, never above the hard cap."""
+    return min(hard, int(spec["soft_start"]) + int(spec["soft_step"]) * progress_rounds)

@@ -53,6 +53,20 @@ def test_classes_and_actions(result, expected):
     assert (out["class"], out["action"]) == expected
 
 
+def test_progress_signals():
+    base = {"gate": 5, "fails": 3, "diff": "a"}
+    assert repair_class.progressed(base, {"gate": 5, "fails": 2, "diff": "a"})
+    assert not repair_class.progressed(base, {"gate": 5, "fails": 4, "diff": "b"})
+    assert repair_class.progressed(base, {"gate": 5.5, "fails": None, "diff": "a"})
+    assert repair_class.progressed(base, {"gate": 5, "fails": 3, "diff": "b"})
+    assert not repair_class.progressed(base, {"gate": 5, "fails": 3, "diff": "a"})
+
+
+def test_soft_limit_grows_with_progress_but_never_past_the_hard_cap():
+    spec = {"soft_start": 2, "soft_step": 1}
+    assert [repair_class.soft_limit(spec, n, 4) for n in (0, 1, 2, 9)] == [2, 3, 4, 4]
+
+
 TWO_STEP_PLAN = {
     "capabilities": ["public.ui"],
     "steps": [{"order": 1, "title": "a", "allowed_scope": ["public/js/campus/building.js"], "tests": ["t"], "risk": "low"},
@@ -114,6 +128,21 @@ def test_multi_file_repair_reuses_the_passing_file(monkeypatch):
     assert verdict["outcome"] == "ready_for_pr"
     assert reuse_seen == [[], ["public/it-campus.html"]]
     assert verdict["repairs"] == [{"gate": 5, "reason": "generated tests failed"}]
+
+
+def test_progress_keeps_repairing_past_the_soft_start_up_to_the_hard_cap(monkeypatch):
+    rounds = [(fail(f"generated tests failed r{n}", f"# fail {5 - n}\nnot ok x"), f"d{n}") for n in range(5)]
+    verdict, _ = drive(monkeypatch, rounds)
+    assert verdict["outcome"] == "blocked" and len(verdict["repairs"]) == 4
+    assert "repair stop" not in verdict["reason"]
+
+
+def test_two_rounds_without_progress_stop_with_evidence(monkeypatch):
+    rounds = [(fail(f"generated tests failed r{n}", "# fail 3\nnot ok x"), "same") for n in range(5)]
+    verdict, _ = drive(monkeypatch, rounds)
+    assert verdict["outcome"] == "blocked" and len(verdict["repairs"]) == 2
+    assert "repair stop: stuck: 2 consecutive repair rounds without progress" in verdict["reason"]
+    assert "failing tests 3" in verdict["reason"]
 
 
 def test_scope_failure_stops_without_repair(monkeypatch):

@@ -379,6 +379,21 @@ class _Execution:
         if cls["action"] != repair_class.REPAIR_CODE:
             self.stop_note = f"{cls['class']}: {last['reason'][:200]}"
             return False
+        now = repair_class.metrics(self.last_result, (self.state or {}).get("diffs") or [])
+        if self.round_metrics:
+            if repair_class.progressed(self.round_metrics[-1], now):
+                self.progress_rounds, self.no_progress = self.progress_rounds + 1, 0
+            else:
+                self.no_progress += 1
+        self.round_metrics.append(now)
+        spec = REPAIR_REPLAN
+        if self.no_progress >= int(spec.get("no_progress_rounds") or 2):
+            self.stop_note = (f"stuck: {self.no_progress} consecutive repair rounds without progress "
+                              f"(gate {now['gate']}, failing tests {now['fails']}, diff {now['diff'][:12]})")
+            return False
+        if len(self.repairs) >= repair_class.soft_limit(spec.get("soft") or {"soft_start": 2, "soft_step": 1}, self.progress_rounds, repair_cap()):
+            self.stop_note = f"soft repair budget spent after {len(self.repairs)} rounds ({self.progress_rounds} with progress)"
+            return False
         self.repair_files = cls["files"]
         return True
 
