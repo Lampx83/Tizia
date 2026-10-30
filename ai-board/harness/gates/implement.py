@@ -784,6 +784,10 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
     trace = getattr(deps, "trace", None)
     known = _base_tree(state) | {st["file"] for st in subtasks} if gate3_guards.enabled("refs") else set()
     saved = _load_progress(state, trace)
+    child_by_file = {step["file"]: index for index, step in enumerate(prepared, start=1)}
+    for file, entry in (state.get("reuse") or {}).items():
+        if file in child_by_file:
+            saved.setdefault(str(child_by_file[file]), entry)
     diffs: list[dict] = []
     diff_child: list[int] = []
     receipts: list = []
@@ -799,6 +803,8 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
             "commit": _git(["rev-parse", "HEAD"], cwd=repo, text=True).stdout.strip(),
         })
         diff_child.append(child)
+        state.setdefault("produced", {})[subtask["file"]] = _progress_entry(
+            {"test_file": out["test_file"], "code": out["code"], "test": out["test"]}, model)
 
     def remember(child: int, out: dict, model: str) -> None:
         saved[str(child)] = _progress_entry(out, model)

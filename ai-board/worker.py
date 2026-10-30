@@ -178,6 +178,12 @@ class _Execution:
         self.grounded = (plan.get("grounding") or {}).get("sha")
         self.repairs: list[dict] = []
         self.repair_reason = None
+        self.last_result: dict = {}
+        self.produced: dict[str, dict] = {}
+        self.repair_files: list[str] = []
+        self.round_metrics: list[dict] = []
+        self.progress_rounds = self.no_progress = 0
+        self.stop_note: str | None = None
         self.shots: list[dict] = []
         self.gates: list[dict] = []
         self.kind = self.candidate = self.base_sha = self.state = self.scratch = None
@@ -246,6 +252,8 @@ class _Execution:
             state["memory_path"] = str(self.memory_path)
         if self.repair_reason:
             state["repair_reason"] = self.repair_reason
+        if self.repair_files and 0 < len(self.repair_files) < len(self.produced):
+            state["reuse"] = {file: entry for file, entry in self.produced.items() if file not in self.repair_files}
         state["repairs_left"] = repair_cap() - len(self.repairs)  # reviewer fix spends the same repair cap
         if self.plan.get("grounding"):
             import code_index
@@ -288,6 +296,7 @@ class _Execution:
                 budget.spend("retries")
                 continue
             break
+        self.last_result = result
         public = _public_gate_result(result)
         if gate == 5:
             public["retried"] = retried
@@ -327,6 +336,7 @@ class _Execution:
             lease_lost = True
         shutil.rmtree(self.scratch, ignore_errors=True)
         self.shots = list((state.get("evidence") or {}).get("screenshots") or [])
+        self.produced = dict(state.get("produced") or {})
         self.base_sha = state.get("base_sha")
         self.lease_lost = lease_lost
 
@@ -343,6 +353,8 @@ class _Execution:
             return "done"
         if any(repair.get("reason") == last["reason"] for repair in self.repairs):
             return "done"  # cùng một lỗi lặp lại: không có thông tin mới, dừng chứ không lặp (LF/74)
+        if REPAIR_REPLAN.get("enabled") and not self._repair_allowed(last):
+            return "done"
         if not self.budget.tick():
             self.kind = "budget"
             return "done"
@@ -350,8 +362,40 @@ class _Execution:
         if (os.getenv("AI_BOARD_TOOL_LOOP") == "1" or root_allowance() is not None) and not self.budget.spend_repair():
             return "done"
         self.repairs.append({"gate": last["gate"], "reason": last["reason"]})
-        self.repair_reason = f"cổng {last['gate']}: {last['reason']}"
+        tag = f" [{last['repair_class']}]" if last.get("repair_class") else ""
+        self.repair_reason = f"cổng {last['gate']}{tag}: {last['reason']}"
         return "repair"
+
+    def _repair_allowed(self, last: dict) -> bool:
+        """Classify the failure, then spend a repair only while rounds make progress inside the hard cap."""
+        from runtime import repair_class
+        scope = {file for step in self.plan.get("steps") or [] for file in step.get("allowed_scope") or []}
+        scope |= {entry.get("test_file") for entry in self.produced.values()} - {None}
+        cls = repair_class.classify(self.last_result, self.produced, scope)
+        last["repair_class"], last["repair_action"] = cls["class"], cls["action"]
+        if cls["action"] == repair_class.REPLAN:
+            self.kind, self.stop_note = "plan", f"plan_inconsistent: {last['reason'][:200]}"
+            return False
+        if cls["action"] != repair_class.REPAIR_CODE:
+            self.stop_note = f"{cls['class']}: {last['reason'][:200]}"
+            return False
+        now = repair_class.metrics(self.last_result, (self.state or {}).get("diffs") or [])
+        if self.round_metrics:
+            if repair_class.progressed(self.round_metrics[-1], now):
+                self.progress_rounds, self.no_progress = self.progress_rounds + 1, 0
+            else:
+                self.no_progress += 1
+        self.round_metrics.append(now)
+        spec = REPAIR_REPLAN
+        if self.no_progress >= int(spec.get("no_progress_rounds") or 2):
+            self.stop_note = (f"stuck: {self.no_progress} consecutive repair rounds without progress "
+                              f"(gate {now['gate']}, failing tests {now['fails']}, diff {now['diff'][:12]})")
+            return False
+        if len(self.repairs) >= repair_class.soft_limit(spec.get("soft") or {"soft_start": 2, "soft_step": 1}, self.progress_rounds, repair_cap()):
+            self.stop_note = f"soft repair budget spent after {len(self.repairs)} rounds ({self.progress_rounds} with progress)"
+            return False
+        self.repair_files = cls["files"]
+        return True
 
     def repair(self) -> str:
         if self.checkpoint is not None:
@@ -369,6 +413,8 @@ class _Execution:
         if self.memory_path:
             _remember(self.memory_path, self.plan, self.ticket_id, self.repairs, None if passed else kind, last, bool(passed))
         reason = "risk triage requires human review" if needs_review else last["reason"]
+        if self.stop_note and not passed:
+            reason = f"{reason} | repair stop: {self.stop_note}"
         self.result = {
             "outcome": outcome, "gate_reached": last["gate"], "reason": reason,
             "failure_class": None if passed else kind, "repairs": self.repairs,
@@ -448,6 +494,8 @@ def _worker_checkpoint(ticket_id: int, plan: dict, plan_hash: str | None = None)
         return None
     digest = str(plan_hash) if plan_hash else hashlib.sha256(
         json.dumps(plan, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")).hexdigest()
+    if plan.get("held_back"):  # tập step chạy đổi sau khi gỡ chặn: checkpoint cũ không khớp chỉ số child
+        digest = hashlib.sha256(f"{digest}:{plan['held_back']}".encode()).hexdigest()
     scope = f"ticket-{ticket_id}:{digest[:16]}"
     from repositories import server_hsm
     backend = server_hsm._SERVER.get()
@@ -661,10 +709,6 @@ def _plan_rejection(error) -> str | None:
     return body[:400] if "malformed_plan" in body else None
 
 
-_RUNNABLE_VERIFY = re.compile(
-    r"^(node --test\b|node\s|npx\s|npm\s+(test|run)\b|curl\s|python[0-9.]*\s|pytest\b|bash\s|sh\s|docker compose\s|psql\s)")
-
-
 def _plan_repairable(stopped: dict) -> bool:
     """Lỗi plan do model sinh sai (không phải nguồn/kỹ năng): đáng một lượt lập lại."""
     gate = float(stopped.get("gate") or 0)
@@ -695,20 +739,11 @@ def _uncovered_conditions(request: dict, plan: dict, deps, budget) -> list[str]:
 
 
 def _has_runnable_verify(plan: dict) -> bool:
-    return any(isinstance(task, dict) and _RUNNABLE_VERIFY.match(str(task.get("verify") or "").strip())
-               for task in plan.get("subtasks") or [])
+    return coverage.has_runnable(plan)
 
 
 def _non_runnable_layered(plan: dict) -> list[str]:
-    """verify của subtask có `layer` phải là lệnh chạy được (server chỉ ép plan nhiều bước)."""
-    bad = []
-    for task in plan.get("subtasks") or []:
-        if not isinstance(task, dict) or not task.get("layer"):
-            continue
-        verify = str(task.get("verify") or "").strip()
-        if not _RUNNABLE_VERIFY.match(verify):
-            bad.append(f"{task.get('file')}: {verify[:80]}")
-    return bad
+    return coverage.non_runnable_layered(plan)
 
 
 def _plan_repair_note(reason: str, files: list[str] | None = None,
@@ -1247,9 +1282,10 @@ class HttpWorker:
                 hsm_api = server_hsm.RemoteGate4(self.client,ticket_id=ticket_id,run_id=run['id'],
                     worker_id=self.worker_id,lease_token=lease['lease_token'],contract=hsm_contract)
                 with memory.server_scope(memory_api), server_hsm.server_scope(hsm_api):
+                    from runtime.step_gate import runnable_plan
                     result = self._with_heartbeat(
                         lambda lost: self.change_runner(
-                            plan, ticket_id, max(limit - budget_used, 0),  # giây GPU còn lại của lượt (trừ phần lập plan)
+                            runnable_plan(plan, planned.get("runnable_orders")), ticket_id, max(limit - budget_used, 0),  # giây GPU còn lại của lượt (trừ phần lập plan)
                             # {} when missing: fails the hash check closed instead of skipping the catalog.
                             policy=snapshot.get("capability_policy") or {},
                             accepted_policy_hash=planned.get("capability_policy_hash"),
@@ -1452,19 +1488,10 @@ class HarnessPlanner:
             exec_graph.run(handlers, exec_graph.spec()["entries"]["plan"])
             result = dict(stopped)
             if not result:
-                # Plan có `layer` phải có verify chạy được (server chỉ ép plan nhiều bước).
-                bad = _non_runnable_layered(state.get("plan") or {})
-                if bad:
-                    result = {"gate": 1, "result": {
-                        "gate": 1, "blocked": True, "plan": None, "signals": [],
-                        "reason": f"plan không hợp lệ: verify phải là lệnh chạy được: {bad[0]}"}}
-                else:
-                    missing = _uncovered_conditions(request, state.get("plan") or {}, self.deps, budget)
-                    # Word overlap cannot prove a condition is uncovered; only a plan with no runnable verify at all is blocked.
-                    if missing and not _has_runnable_verify(state.get("plan") or {}):
-                        result = {"gate": 1, "result": {
-                            "gate": 1, "blocked": True, "plan": None, "signals": [],
-                            "reason": f"plan không hợp lệ: điều kiện chưa có subtask verify chạy được: {missing[0][:160]}"}}
+                reason = coverage.plan_block(plan_now := state.get("plan") or {}, lambda: _uncovered_conditions(request, plan_now, self.deps, budget))
+                if reason:
+                    result = {"gate": 1, "result": {"gate": 1, "blocked": True, "plan": None, "signals": [],
+                                                    "reason": f"plan không hợp lệ: {reason}"}}
             return result
 
         stopped, history = _plan_with_repair(run_plan, request, state, budget, run_plan(request))
