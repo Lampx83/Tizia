@@ -35,3 +35,8 @@ def test_plan_with_descriptive_verify_leaves_condition_uncovered():
         {"title": "Ô tìm kiếm lọc câu hỏi", "verify": "node --test test/faq-search.test.js"},
     ]}
     assert coverage.uncovered(SPEC, plan) == ["Trang hiển thị danh sách câu hỏi về cơ sở dữ liệu"]
+
+
+def test_inline_expected_result_is_one_condition():
+    spec = "Kết quả mong đợi (cách kiểm): Truy cập trang thấy ô tìm kiếm, bấm thẻ mở/đóng.\n\nNguyên văn người dùng:\n- Tiêu đề: x\n"
+    assert coverage.conditions(spec) == ["Truy cập trang thấy ô tìm kiếm, bấm thẻ mở/đóng."]
