@@ -5,7 +5,8 @@
 
 import { DOMAIN_META } from './engine/domain.js';
 import { morph } from './dom-morph.js';
-import { mountSkillsTab } from './admin-skills.js?v=skills-tok2';
+import { mountSkillsTab } from './admin-skills.js?v=skills-ux1';
+import { toastMs } from './admin-skills-state.js?v=skills-ux1';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
@@ -29,12 +30,19 @@ async function api(path, opts = {}) {
   return { status: r.status, ok: r.ok, data };
 }
 
+// Stays while hovered or focused so a long message can be read; length sets the time.
 function toast(msg, kind='ok') {
   const t = $('#toast'); t.textContent = msg;
   t.classList.toggle('err', kind === 'err');
   t.classList.add('show');
+  toast._ms = toastMs(msg, kind);
   clearTimeout(toast._tm);
-  toast._tm = setTimeout(() => t.classList.remove('show'), 2400);
+  toast._tm = setTimeout(() => t.classList.remove('show'), toast._ms);
+  if (!toast._bound) {
+    toast._bound = true;
+    t.addEventListener('mouseenter', () => clearTimeout(toast._tm));
+    t.addEventListener('mouseleave', () => { toast._tm = setTimeout(() => t.classList.remove('show'), 2400); });
+  }
 }
 
 function fmtBytes(b) {

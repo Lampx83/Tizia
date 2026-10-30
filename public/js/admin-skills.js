@@ -1,21 +1,28 @@
-import { NOTE_MAX, POLL_MS, REWRITE, hasActiveRewrite, liveVersion, rewriteStatus, rowPill, shouldPoll, tokenLabel } from './admin-skills-state.js?v=skills-tok1';
+import { NOTE_MAX, POLL_MS, REWRITE, errorText, hasActiveRewrite, liveVersion, rewriteStatus, rowPill, shouldPoll, tokenLabel } from './admin-skills-state.js?v=skills-ux1';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 // Native dialogs are suppressed in the in-app browser; an in-page <dialog> works everywhere.
-const confirmDialog = message => new Promise(resolve => {
+let dialogSeq = 0;
+// Focus starts on the safe choice so Enter never confirms by accident; Esc cancels.
+const confirmDialog = ({ title, message, confirm = 'Tiếp tục', cancel = 'Hủy', danger = false }) => new Promise(resolve => {
+  const id = `skill-confirm-${++dialogSeq}`;
   const dialog = document.createElement('dialog');
   dialog.className = 'skill-confirm';
-  dialog.innerHTML = `<p>${esc(message)}</p><div class="toolbar"><button class="btn" type="button" value="cancel">Hủy</button><button class="btn" type="button" value="ok">Tiếp tục</button></div>`;
+  dialog.setAttribute('aria-labelledby', `${id}-title`);
+  dialog.setAttribute('aria-describedby', `${id}-text`);
+  dialog.innerHTML = `<h4 class="skill-confirm-title" id="${id}-title">${esc(title)}</h4><p id="${id}-text">${esc(message)}</p><div class="toolbar"><button class="btn" type="button" value="cancel">${esc(cancel)}</button><button class="btn${danger ? ' danger' : ' primary'}" type="button" value="ok">${esc(confirm)}</button></div>`;
   dialog.addEventListener('close', () => { resolve(dialog.returnValue === 'ok'); dialog.remove(); });
   dialog.querySelector('[value=ok]').onclick = () => dialog.close('ok');
   dialog.querySelector('[value=cancel]').onclick = () => dialog.close('cancel');
   document.body.append(dialog);
   dialog.showModal();
+  dialog.querySelector('[value=cancel]').focus();
 });
 const rewriteDialog = () => new Promise(resolve => {
   const dialog = document.createElement('dialog');
   dialog.className = 'skill-confirm';
-  dialog.innerHTML = `<h4 class="skill-confirm-title">Viết lại cho model nội bộ</h4>
+  dialog.setAttribute('aria-labelledby', 'rewrite-dialog-title');
+  dialog.innerHTML = `<h4 class="skill-confirm-title" id="rewrite-dialog-title">Viết lại cho model nội bộ</h4>
     <p>Model chạy khi worker rảnh. Ghi chú bên dưới đi qua cùng bộ lọc an toàn như yêu cầu gửi vào hệ thống và không đổi được tên, loại tác vụ hay giới hạn token. Mỗi phiên bản viết lại tối đa 5 lần mỗi giờ.</p>
     <label for="rewrite-note">Ghi chú thêm cho model (không bắt buộc)</label>
     <textarea id="rewrite-note" rows="4" maxlength="${NOTE_MAX}" spellcheck="false" placeholder="Ví dụ: giữ đủ 6 bước, ngắn hơn 900 ký tự"></textarea>
@@ -32,7 +39,7 @@ const rewriteDialog = () => new Promise(resolve => {
 const rewriteBody = picked => (picked.instructions ? { confirmed:true, instructions:picked.instructions } : { confirmed:true });
 const rewriteError = done => done.data?.error === 'rate_limited'
   ? `Đã quá giới hạn viết lại. Thử lại sau ${Math.max(1, Math.ceil(Number(done.data.retry_after_s || 60) / 60))} phút.`
-  : (done.data?.message || 'Chưa xếp hàng viết lại.');
+  : errorText(done, 'Chưa xếp hàng viết lại. Thử lại sau ít phút.');
 const bindTokenCount = (textarea, node) => {
   const paint = () => { const t = tokenLabel(textarea.value); node.textContent = t.text; node.dataset.over = String(t.over); node.title = t.over ? 'Vượt giới hạn token của skill: không lưu được' : 'Ước lượng theo độ dài UTF-8 (cận trên); bộ đếm Qwen thật chưa có'; };
   textarea.addEventListener('input', paint);
@@ -60,6 +67,7 @@ const evalHtml = version => !version.evaluation?.kinds ? '' : `<p class="meta">S
 const sample = name => `---\nname: ${name}\ndescription: Hướng dẫn cho giao diện hiện có\ntask_type: frontend\nsource: admin\nversion: 1\nmax_tokens: 1500\n---\n1. Giữ nhãn nút rõ ràng.\n2. Kiểm tra thao tác bằng bàn phím.\n`;
 
 let teardown = null;
+let restore = null;
 
 export async function mountSkillsTab(host, { api, toast, openId } = {}) {
   teardown?.();
@@ -136,7 +144,7 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
         const canApprove = admin && !version.rejected_at && lint?.ok && !['queued', 'running'].includes(version.rewrite?.status);
         const canRewrite = admin && !version.rejected_at && !version.approved_by && !['queued', 'running'].includes(version.rewrite?.status);
         const isActive = version.id === activeId;
-        return `<li class="ver-row${isActive ? ' active' : ''}">
+        return `<li class="ver-row${isActive ? ' active' : ''}${version.rejected_at ? ' rejected' : ''}" data-version-id="${version.id}">
           <button type="button" class="ver-sum" aria-expanded="${index === 0}" data-ver-toggle>
             <span class="ver-no">v${esc(version.version)}</span>
             <span class="ver-state">${esc(admin ? versionState(version, activeId) : 'Mặc định')}${version.parent_version_id ? ' · sửa từ bản trước' : ''}</span>
@@ -160,17 +168,29 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
       }).join('')}</ol>`;
     paintLive(details.querySelector('[data-live-status]'), data.versions);
     paintRow(item.id ?? item.name, data.versions);
+    if (restore) {
+      const row = restore === 'first' ? details.querySelector('.ver-row') : details.querySelector(`[data-version-id="${restore}"]`);
+      restore = null;
+      const toggle = row?.querySelector('[data-ver-toggle]');
+      if (toggle) {
+        row.querySelector('.ver-body').hidden = false;
+        toggle.setAttribute('aria-expanded', 'true');
+        toggle.focus();
+      }
+    }
 
-    const fail = error => toast(error?.message || 'Thao tác thất bại.', 'err');
+    const fail = error => toast(error?.message || 'Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.', 'err');
+    const rowOf = node => node.closest('.ver-row');
+    const label = node => rowOf(node)?.querySelector('.ver-no')?.textContent || 'phiên bản này';
     const act = (selector, path, message, ask) => {
       for (const node of details.querySelectorAll(selector)) node.onclick = async () => {
-        if (ask && !(await confirmDialog(ask))) return;
+        if (ask && !(await confirmDialog(ask(label(node), item.name)))) return;
         node.disabled = true;
         try {
           const body = path.body ? path.body(node) : { confirmed:true };
           const done = await api(path.url(node), { method:'POST', body:JSON.stringify(body) });
-          if (!done.ok) { toast(done.data.message || 'Thao tác chưa thực hiện được.', 'err'); return; }
-          toast(message); await refresh(item.id);
+          if (!done.ok) { toast(errorText(done, 'Thao tác chưa thực hiện được. Thử lại sau.'), 'err'); return; }
+          toast(message(label(node))); restore = Number(rowOf(node)?.dataset.versionId) || null; await refresh(item.id);
         } catch (error) { fail(error); }
         finally { node.disabled = false; }
       };
@@ -183,12 +203,18 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
       try {
         const done = await api(vurl('skillRewrite', 'rewrite')(node), { method:'POST', body:JSON.stringify(rewriteBody(picked)) });
         if (!done.ok) { toast(rewriteError(done), 'err'); return; }
-        toast('Đã xếp hàng. Model chỉ chạy khi worker rảnh.'); await refresh(item.id);
+        toast(`Đã xếp hàng viết lại ${label(node)}. Model chỉ chạy khi worker rảnh.`); restore = Number(rowOf(node)?.dataset.versionId) || null; await refresh(item.id);
       } catch (error) { fail(error); }
       finally { node.disabled = false; }
     };
-    act('[data-skill-reject]', { url:vurl('skillReject', 'reject') }, 'Đã từ chối phiên bản.', 'Từ chối phiên bản này?');
-    act('[data-skill-rollback]', { url:() => `/api/admin/ai-board/skills/${item.id}/rollback`, body:node => ({ confirmed:true, version_id:Number(node.dataset.skillRollback) }) }, 'Đã khôi phục phiên bản.', 'Chọn lại phiên bản đã duyệt trước đó?');
+    act('[data-skill-reject]', { url:vurl('skillReject', 'reject') }, v => `Đã từ chối ${v}.`, (v, name) => ({
+      title:`Từ chối ${v} của skill "${name}"?`,
+      message:'Phiên bản bị từ chối không thể duyệt hay viết lại nữa. Nếu model đang xếp hàng viết lại phiên bản này, lượt đó bị hủy. Các phiên bản khác không bị ảnh hưởng.',
+      confirm:'Từ chối phiên bản', cancel:'Giữ lại', danger:true }));
+    act('[data-skill-rollback]', { url:() => `/api/admin/ai-board/skills/${item.id}/rollback`, body:node => ({ confirmed:true, version_id:Number(node.dataset.skillRollback) }) }, v => `Đã khôi phục ${v}.`, (v, name) => ({
+      title:`Khôi phục ${v} của skill "${name}"?`,
+      message:'Các lượt chạy sau sẽ dùng lại phiên bản này thay cho phiên bản đang được chọn.',
+      confirm:'Khôi phục' }));
     for (const toggle of details.querySelectorAll('[data-ver-toggle]')) toggle.onclick = () => {
       const body = toggle.closest('.ver-row').querySelector('.ver-body');
       body.hidden = !body.hidden;
@@ -205,17 +231,18 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
       event.preventDefault();
       try {
         const done = await api(`/api/admin/ai-board/skills/${item.id}/versions/${formNode.dataset.editForm}/edit`, { method:'POST', body:JSON.stringify({ text:formNode.querySelector('textarea').value.replace(/\r\n/g, '\n') }) });
-        if (!done.ok) { toast(done.data.message || 'Không lưu được bản sửa.', 'err'); return; }
-        toast('Đã lưu phiên bản mới. Chưa kích hoạt.'); await refresh(item.id);
+        if (!done.ok) { toast(errorText(done, 'Không lưu được bản sửa. Giữ nguyên nội dung và thử lại.'), 'err'); return; }
+        toast('Đã lưu phiên bản mới. Chưa kích hoạt.'); restore = 'first'; await refresh(item.id);
       } catch (error) { fail(error); }
     };
     for (const approve of details.querySelectorAll('[data-skill-approve]')) approve.onclick = async () => {
-      if (!(await confirmDialog('Duyệt phiên bản này và dùng nó cho các lượt chạy sau?'))) return;
+      const v = label(approve);
+      if (!(await confirmDialog({ title:`Duyệt ${v} và dùng ngay?`, message:`Các lượt chạy sau sẽ dùng ${v} của skill "${item.name}" thay cho phiên bản đang được chọn.`, confirm:'Duyệt và dùng', cancel:'Chưa duyệt' }))) return;
       approve.disabled = true;
       try {
         const reviewed = await api(`/api/admin/ai-board/skills/${item.id}/approve`, { method:'POST', body:JSON.stringify({ version_id:Number(approve.dataset.skillApprove), confirmed:true }) });
-        if (!reviewed.ok) { toast(reviewed.data.message || 'Chưa duyệt được skill.', 'err'); return; }
-        toast('Đã duyệt và chọn phiên bản.'); await refresh(item.id);
+        if (!reviewed.ok) { toast(errorText(reviewed, 'Chưa duyệt được skill. Thử lại sau.'), 'err'); return; }
+        toast(`Đã duyệt ${v} và chọn dùng.`); restore = Number(rowOf(approve)?.dataset.versionId) || null; await refresh(item.id);
       } catch (error) { fail(error); }
       finally { approve.disabled = false; }
     };
@@ -224,7 +251,7 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
       disable.disabled = true;
       try {
         const off = await api(`/api/admin/ai-board/skills/${item.id}/disable`, { method:'POST', body:JSON.stringify({ confirmed:true }) });
-        if (!off.ok) { toast(off.data.message || 'Chưa tắt được skill.', 'err'); return; }
+        if (!off.ok) { toast(errorText(off, 'Chưa tắt được skill. Thử lại sau.'), 'err'); return; }
         toast('Đã tắt skill.'); await refresh(item.id);
       } catch (error) { fail(error); }
       finally { disable.disabled = false; }
@@ -331,7 +358,7 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
       const response = await api('/api/admin/ai-board/skills', { method:'POST', body: JSON.stringify({
         name: host.querySelector('#skill-name').value, task_types: taskTypes,
         original_text: host.querySelector('#skill-original').value.replace(/\r\n/g, '\n') }) });
-      if (!response.ok) { status.textContent = response.data.message || 'Không lưu được bản nháp.'; return null; }
+      if (!response.ok) { status.textContent = errorText(response, 'Không lưu được bản nháp. Kiểm tra nội dung rồi thử lại.'); return null; }
       saved = response.data; dirty = false;
       status.textContent = '';
       return saved;
@@ -366,12 +393,12 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
     form.hidden = true; await refresh(draft.skill.id);
   };
   form.querySelector('[data-skill-act="approve"]').onclick = async () => {
-    if (!(await confirmDialog('Duyệt bản nháp này và dùng nó cho các lượt chạy sau?'))) return;
+    if (!(await confirmDialog({ title:'Lưu bản nháp, duyệt và dùng ngay?', message:'Nội dung trong ô sẽ được lưu thành phiên bản mới rồi duyệt. Các lượt chạy sau sẽ dùng phiên bản này.', confirm:'Duyệt và dùng', cancel:'Chưa duyệt' }))) return;
     const draft = await saveDraft();
     if (!draft) return;
     const result = await api(`/api/admin/ai-board/skills/${draft.skill.id}/approve`, { method:'POST', body: JSON.stringify({ version_id: Number(draft.version.id), confirmed:true }) });
-    if (!result.ok) { toast(result.data.message || 'Chưa duyệt được skill.', 'err'); return; }
-    toast('Đã duyệt và chọn phiên bản.');
+    if (!result.ok) { toast(errorText(result, 'Chưa duyệt được skill. Thử lại sau.'), 'err'); return; }
+    toast('Đã duyệt và chọn dùng bản nháp mới.');
     form.hidden = true; await refresh(draft.skill.id);
   };
   form.querySelector('[data-skill-act="close"]').onclick = async () => {

@@ -49,3 +49,24 @@ export const tokenLabel = text => {
   const count = estimateTokens(text), cap = parseMaxTokens(text);
   return { count, cap, over: cap != null && count > cap, text: `${count.toLocaleString('vi-VN')}${cap != null ? ` / ${cap.toLocaleString('vi-VN')}` : ''} token` };
 };
+
+const SERVER_TEXT = {
+  version_busy: 'Không từ chối được: phiên bản đang được dùng hoặc đang được viết lại.',
+  rewrite_in_progress: 'Model đang viết lại phiên bản này. Chờ viết xong rồi thử lại.',
+  version_rejected: 'Phiên bản này đã bị từ chối.',
+  rewrite_not_allowed: 'Phiên bản đã duyệt hoặc đã từ chối thì không viết lại được. Dùng "Sửa tay thành phiên bản mới".',
+  skill_lint_failed: 'Phiên bản chưa qua kiểm tra định dạng (lint). Sửa lỗi lint rồi duyệt lại.',
+  version_not_approved: 'Chỉ khôi phục được phiên bản đã từng được duyệt.',
+  already_active: 'Phiên bản này đang được dùng.',
+  authentication_required: 'Phiên đăng nhập đã hết hạn. Đăng nhập lại rồi thử lại.',
+  admin_required: 'Cần quyền quản trị để thực hiện thao tác này.',
+  confirmation_required: 'Thao tác chưa được xác nhận.',
+};
+// Message from the server only when it is already Vietnamese (guardrail and rate-limit texts); otherwise a mapped or caller text.
+export const errorText = (done, fallback) => {
+  const mapped = SERVER_TEXT[done?.data?.error];
+  if (mapped) return mapped;
+  const message = done?.data?.message;
+  return typeof message === 'string' && /[^\x00-\x7f]/.test(message) ? message : fallback;
+};
+export const toastMs = (message, kind) => Math.min(10000, Math.max(kind === 'err' ? 6000 : 2400, 1500 + String(message ?? '').length * 55));

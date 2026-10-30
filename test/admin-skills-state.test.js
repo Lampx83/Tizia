@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { hasActiveRewrite, liveVersion, rewriteStatus, rowPill, shouldPoll, QUEUE_STALE_MS, STALE_HINT, estimateTokens, parseMaxTokens, tokenLabel } from '../public/js/admin-skills-state.js';
+import { hasActiveRewrite, liveVersion, rewriteStatus, rowPill, shouldPoll, QUEUE_STALE_MS, STALE_HINT, estimateTokens, parseMaxTokens, tokenLabel, errorText, toastMs } from '../public/js/admin-skills-state.js';
 
 const NOW = 10_000_000;
 const job = (status, extra = {}) => ({ status, confirmed_at: NOW - 2 * 60000, ...extra });
@@ -75,4 +75,18 @@ test('tokenLabel flags only a count above the cap and formats the label', () => 
   assert.match(within.text, /\/ 1\.200 token$/);
   assert.equal(tokenLabel('plain').cap, null);
   assert.doesNotMatch(tokenLabel('plain').text, /\//);
+});
+
+test('errorText maps known server codes to Vietnamese and never shows English server text', () => {
+  assert.match(errorText({ data: { error: 'version_busy', message: 'Version is active or being rewritten' } }, 'x'), /đang được dùng/);
+  assert.equal(errorText({ data: { message: 'Version was rejected' } }, 'Thử lại sau.'), 'Thử lại sau.');
+  assert.equal(errorText({ data: { message: 'Nội dung không phù hợp để lưu.' } }, 'x'), 'Nội dung không phù hợp để lưu.');
+  assert.equal(errorText(undefined, 'fb'), 'fb');
+});
+
+test('toastMs keeps errors and long messages on screen longer, capped at 10 s', () => {
+  assert.equal(toastMs('Đã lưu.', 'ok'), 2400);
+  assert.ok(toastMs('Đã lưu.', 'err') >= 6000);
+  assert.ok(toastMs('x'.repeat(100), 'ok') > 2400);
+  assert.equal(toastMs('x'.repeat(500), 'err'), 10000);
 });
