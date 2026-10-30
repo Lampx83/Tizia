@@ -725,7 +725,7 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('click', e => {
   const node = e.target.closest('#app [data-node]');
-  if (node && view?.trace && graphNodes(view.trace)[node.dataset.node]) { ui.node = node.dataset.node; render(); return; }
+  if (node && !e.target.closest('[data-action]') && view?.trace && graphNodes(view.trace)[node.dataset.node]) { ui.node = node.dataset.node; render(); return; }
   const btn = e.target.closest('[data-action]');
   if (!btn || btn.disabled) return;
   const action = btn.dataset.action;
