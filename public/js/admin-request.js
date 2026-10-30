@@ -200,6 +200,7 @@ function renderPlan(p, root, children, trace) {
   const plan = p.plan || {};
   const [approvalState, approval] = planApproval(p, root);
   const waiting = root.status === 'waiting_authorization' && !p.authorized && p.tier === 'protected';
+  const folderWait = waiting && root.internal_reason === 'folder_not_approved';
   const mine = children.filter(c => Number(c.plan_revision) === Number(p.revision));
   const steps = (plan.steps || []).slice().sort((a, b) => a.order - b.order);
   const extra = mine.filter(c => !steps.some(st => Number(st.order) === Number(c.order)));
@@ -227,7 +228,10 @@ function renderPlan(p, root, children, trace) {
         return `<li class="st-${state}"><div class="line1"><b>${esc(c.title)}</b>${tag(state, label)}</div>
           <div class="meta">AI tự sửa thêm sau khi kiểm tra chưa đạt</div></li>`;
       }).join('')}</ol>
-      ${waiting ? (ui.authorizeConfirm === p.plan_hash
+      ${folderWait ? `<div class="confirm folder-wait" role="status"><div class="confirm-title">Chức năng này chưa được duyệt</div>
+        <div class="meta">Duyệt chức năng một lần ở tab "Chức năng"; kế hoạch này sẽ tự được cho phép chạy.</div>
+        <div class="row"><a class="btn ok" href="/admin.html#features" target="_top">Mở tab Chức năng</a></div></div>` : ''}
+      ${waiting && !folderWait ? (ui.authorizeConfirm === p.plan_hash
         ? `<div class="confirm" role="alertdialog" aria-label="Cho phép thực hiện kế hoạch">
              <div class="confirm-title">Cho phép AI Board thực hiện kế hoạch này?</div>
              <div class="meta">Worker sẽ chạy các cổng 3 → 5.5 trên kế hoạch đã duyệt.</div>

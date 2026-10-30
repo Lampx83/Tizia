@@ -280,6 +280,16 @@ def test_unapproved_manifest_stops_the_loop_as_transient_not_critical():
     assert result['status'] == 'blocked' and result['failure_class'] == 'transient' and 'tool_manifest_not_approved' in result['reason']
 
 
+def test_unapproved_folder_stops_the_loop_as_transient_not_critical():
+    class Authority:
+        def authorize_action(self, action, **_extra):
+            raise server_hsm.AuthorityError('folder_not_approved')
+
+    with server_hsm.server_scope(Authority()):
+        result = tool_loop.run_subtask(SUBTASK, PAGE, deps=Deps([EDIT]), budget=Budget(), model='m', source='.', sha='abc', check=lambda _out: None)
+    assert result['failure_class'] == 'transient' and 'folder_not_approved' in result['reason']
+
+
 def test_manifest_registration_failure_blocks_before_any_model_call():
     calls = []
 

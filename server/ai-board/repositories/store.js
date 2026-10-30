@@ -1960,8 +1960,11 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     if (!root || ['cancelled', 'done'].includes(root.status) || PHASES[root.phase]?.terminal) {
       throw new WorkerContractError('request is already closed', 409, 'request_closed');
     }
-    const folder = await db.get(`SELECT f.state FROM ai_feature_folders f JOIN requests q ON q.folder_id=f.id WHERE q.id=?`, [root.source_request_id]);
+    const folder = await db.get(`SELECT f.state, f.approved_at FROM ai_feature_folders f JOIN requests q ON q.folder_id=f.id WHERE q.id=?`, [root.source_request_id]);
     if (folder?.state === 'archived') throw new WorkerContractError('folder is archived', 409, 'folder_archived');
+    if (folder && !folder.approved_at && root.internal_reason === 'folder_not_approved') {
+      throw new WorkerContractError('folder must be approved first', 409, 'folder_not_approved');
+    }
     const request = await db.get('SELECT folder_id FROM requests WHERE id=?', [root.source_request_id]);
     if (request?.folder_id) await assertFeatureNotIsolated(db, request.folder_id);
     const plan = await db.get('SELECT * FROM ai_plans WHERE root_ticket_id=? AND plan_hash=? AND status=?', [Number(rootTicketId), String(planHash), 'valid']);

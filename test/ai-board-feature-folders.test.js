@@ -82,6 +82,17 @@ test('a folder plan waits for the admin once; after approval later plans run on 
   assert.equal((await plan(third.root_ticket_id)).status, 'waiting_authorization');
 });
 
+test('authorizing a plan that waits only for folder approval is refused', async () => {
+  const { store, submit, plan, rootState } = await fixture();
+  const first = await submit(1, { type: 'feature' });
+  const planned = await plan(first.root_ticket_id);
+  assert.ok(planned.plan_hash);
+  await assert.rejects(async () => store.authorizePlan(first.root_ticket_id, planned.plan_hash, 9),
+    (e) => e.code === 'folder_not_approved' && e.status === 409);
+  assert.equal((await rootState(first.root_ticket_id)).status, 'waiting_authorization');
+  assert.equal((await store.approveFolder(first.folder_id, 9)).authorized, 1);
+});
+
 test('a person can vote a classmate\'s folder once, not their own', async () => {
   const { store, submit } = await fixture();
   const { folder_id: id } = await submit(1, { type: 'feature' });

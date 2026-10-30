@@ -110,6 +110,8 @@
   /* Nút + xác nhận 2 bước */
   .btn { min-height:44px; padding:10px 14px; border-radius:8px; border:1px solid var(--border); background:var(--bg3); color:var(--txt);
          font:inherit; font-size:13px; cursor:pointer; }
+  a.btn { display:inline-flex; align-items:center; text-decoration:none; }
+  .confirm.folder-wait { border-color:var(--warn,#f59e0b); background:rgba(245,158,11,.08); }
   .btn:disabled { opacity:.45; cursor:not-allowed; }
   .btn.ok { background:var(--ok); border-color:var(--ok); color:#04210f; font-weight:700; margin-top:10px; }
   .btn:hover:not(:disabled) { filter:brightness(1.15); }
@@ -225,6 +227,6 @@
 <body data-no-auth-header data-no-suggestion-fab data-no-notifications-bell data-no-gamify>
 <nav aria-label="Bài học AI Board"><a class="back" href="/ai-board-lessons.html">Review bài học AI Board</a> <a class="back" href="/admin-shots.html">Ảnh nháp đã lưu</a></nav>
 <main id="app"><p class="meta" role="status">Đang tải yêu cầu…</p></main>
-<script type="module" src="/js/admin-request.js?v=20261030a"></script>
+<script type="module" src="/js/admin-request.js?v=20261030b"></script>
 </body>
 </html>
