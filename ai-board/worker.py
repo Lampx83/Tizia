@@ -178,6 +178,12 @@ class _Execution:
         self.grounded = (plan.get("grounding") or {}).get("sha")
         self.repairs: list[dict] = []
         self.repair_reason = None
+        self.last_result: dict = {}
+        self.produced: dict[str, dict] = {}
+        self.repair_files: list[str] = []
+        self.round_metrics: list[dict] = []
+        self.progress_rounds = self.no_progress = 0
+        self.stop_note: str | None = None
         self.shots: list[dict] = []
         self.gates: list[dict] = []
         self.kind = self.candidate = self.base_sha = self.state = self.scratch = None
@@ -246,6 +252,8 @@ class _Execution:
             state["memory_path"] = str(self.memory_path)
         if self.repair_reason:
             state["repair_reason"] = self.repair_reason
+        if self.repair_files and 0 < len(self.repair_files) < len(self.produced):
+            state["reuse"] = {file: entry for file, entry in self.produced.items() if file not in self.repair_files}
         state["repairs_left"] = repair_cap() - len(self.repairs)  # reviewer fix spends the same repair cap
         if self.plan.get("grounding"):
             import code_index
@@ -288,6 +296,7 @@ class _Execution:
                 budget.spend("retries")
                 continue
             break
+        self.last_result = result
         public = _public_gate_result(result)
         if gate == 5:
             public["retried"] = retried
@@ -327,6 +336,7 @@ class _Execution:
             lease_lost = True
         shutil.rmtree(self.scratch, ignore_errors=True)
         self.shots = list((state.get("evidence") or {}).get("screenshots") or [])
+        self.produced = dict(state.get("produced") or {})
         self.base_sha = state.get("base_sha")
         self.lease_lost = lease_lost
 
@@ -343,6 +353,8 @@ class _Execution:
             return "done"
         if any(repair.get("reason") == last["reason"] for repair in self.repairs):
             return "done"  # cùng một lỗi lặp lại: không có thông tin mới, dừng chứ không lặp (LF/74)
+        if REPAIR_REPLAN.get("enabled") and not self._repair_allowed(last):
+            return "done"
         if not self.budget.tick():
             self.kind = "budget"
             return "done"
@@ -350,8 +362,25 @@ class _Execution:
         if (os.getenv("AI_BOARD_TOOL_LOOP") == "1" or root_allowance() is not None) and not self.budget.spend_repair():
             return "done"
         self.repairs.append({"gate": last["gate"], "reason": last["reason"]})
-        self.repair_reason = f"cổng {last['gate']}: {last['reason']}"
+        tag = f" [{last['repair_class']}]" if last.get("repair_class") else ""
+        self.repair_reason = f"cổng {last['gate']}{tag}: {last['reason']}"
         return "repair"
+
+    def _repair_allowed(self, last: dict) -> bool:
+        """Classify the failure, then spend a repair only while rounds make progress inside the hard cap."""
+        from runtime import repair_class
+        scope = {file for step in self.plan.get("steps") or [] for file in step.get("allowed_scope") or []}
+        scope |= {entry.get("test_file") for entry in self.produced.values()} - {None}
+        cls = repair_class.classify(self.last_result, self.produced, scope)
+        last["repair_class"], last["repair_action"] = cls["class"], cls["action"]
+        if cls["action"] == repair_class.REPLAN:
+            self.kind, self.stop_note = "plan", f"plan_inconsistent: {last['reason'][:200]}"
+            return False
+        if cls["action"] != repair_class.REPAIR_CODE:
+            self.stop_note = f"{cls['class']}: {last['reason'][:200]}"
+            return False
+        self.repair_files = cls["files"]
+        return True
 
     def repair(self) -> str:
         if self.checkpoint is not None:
@@ -369,6 +398,8 @@ class _Execution:
         if self.memory_path:
             _remember(self.memory_path, self.plan, self.ticket_id, self.repairs, None if passed else kind, last, bool(passed))
         reason = "risk triage requires human review" if needs_review else last["reason"]
+        if self.stop_note and not passed:
+            reason = f"{reason} | repair stop: {self.stop_note}"
         self.result = {
             "outcome": outcome, "gate_reached": last["gate"], "reason": reason,
             "failure_class": None if passed else kind, "repairs": self.repairs,
