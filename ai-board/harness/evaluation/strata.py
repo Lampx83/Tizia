@@ -3,7 +3,7 @@ cách mô tả (named: có tên riêng/ngoặc | plain: lời thường). Chỉ 
 đúng file không (targets, hoặc trang mẫu với loại feature); lượt sửa tiếp trong folder (type=followup) phải nhắm
 file folder sở hữu và không bị coi là chức năng mới; luật độ rõ (clarity-rules.json) không được bắt yêu cầu đã rõ
 phải hỏi lại (clarity_fp, thấp là tốt) và phải bắt yêu cầu mơ hồ (clarity_miss). Quy tắc nhận thay đổi: không nhóm
-nào tụt quá MAX_DROP điểm so với mốc eval/strata-baseline.json (tests/test_eval_strata.py); mốc ghi kèm mã cấu hình.
+nào tụt quá MAX_DROP điểm so với mốc evaluation/strata-baseline.json (tests/test_eval_strata.py); mốc ghi kèm mã cấu hình.
 
     python eval_strata.py                 # in bảng theo nhóm
     python eval_strata.py --write-baseline  # ghi mốc mới (chỉ khi thay đổi đã được chấp nhận)
@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from services import context  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[3]
-BASELINE = Path(__file__).resolve().parent.parent / "eval" / "strata-baseline.json"
+BASELINE = Path(__file__).resolve().parent / "strata-baseline.json"
 MAX_DROP = 10.0  # điểm %: 1 nhóm tụt hơn mức này so với mốc thì thay đổi không được nhận
 
 IT_PAGE = "[Trang: 💻 Trường Công nghệ thông tin] /school.html?domain=it"

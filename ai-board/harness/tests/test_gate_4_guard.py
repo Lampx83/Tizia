@@ -99,7 +99,7 @@ def test_a_self_request_still_cannot_touch_gate_code_lexicon_policy_contract_or_
                  "server/ai-board/guard-lexicon.json", "server/ai-board/policy.js", "server/ai-board/contract.json",
                  "ai-board/harness/skills/skills.lock.json", "ai-board/harness/prompts/prompts.lock.json",
                  "ai-board/harness/prompts/AIBOARD.md", "ai-board/harness/skills/edit-html-text/tools.py",
-                 "ai-board/harness/eval/strata-baseline.json", "package.json"]:
+                 "ai-board/harness/evaluation/strata-baseline.json", "package.json"]:
         found = {(f["check"], f["failure_class"]) for f in guard.scan(diff(path, added=["x"]), request_type="self")["findings"]}
         assert ("protected_path", "critical") in found, path
     gone = ("diff --git a/ai-board/harness/skills/default/SKILL.md b/ai-board/harness/skills/default/SKILL.md\n"
