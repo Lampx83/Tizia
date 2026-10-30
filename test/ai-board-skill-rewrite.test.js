@@ -4,7 +4,7 @@ import { setup, text, KEY } from './support/ai-board-skills-fixture.js';
 
 const W = { 'x-ai-worker-key': KEY };
 const base = '/api/admin/ai-board/skills';
-const rewritten = (body = '1. Name each label by its action.') => text('frontend-example', body);
+const rewritten = (body = '1. Keep labels clear; name each label by its action.') => text('frontend-example', body);
 const smoke = { method: 'toy_json_smoke', kinds: [{ kind: 'frontend', ok: true, tokens: 40 }], passed: 1, total: 1 };
 
 async function uploaded(t) {
@@ -73,6 +73,20 @@ test('good rewrite becomes a new child version; source keeps its text; approval 
   } finally { await t.close(); }
 });
 
+test('rewrite that drops source essence fails the job with essence_lost and creates no version', async () => {
+  const t = await setup();
+  try {
+    const item = await uploaded(t);
+    await confirm(t, item); await idle(t);
+    const job = (await claim(t)).body.job;
+    assert.equal((await report(t, job, { rewritten_text: text('frontend-example', '1. Keep it simple.') })).status, 200);
+    const row = await t.db.d.get('SELECT * FROM ai_skill_rewrites');
+    assert.equal(row.status, 'failed');
+    assert.match(row.error, /^essence_lost: .*labels/);
+    assert.equal((await t.api(`${base}/${item.skill.id}`)).body.versions.length, 1);
+  } finally { await t.close(); }
+});
+
 test('failed lint keeps raw response in a child version that blocks approval; reject is permanent; stale reports fail closed', async () => {
   const t = await setup();
   try {
@@ -80,7 +94,7 @@ test('failed lint keeps raw response in a child version that blocks approval; re
     await confirm(t, item); await idle(t);
     const job = (await claim(t)).body.job;
     assert.equal((await report(t, job, { claim_token: 'stale' })).status, 409);
-    const bad = text('frontend-example', '1. Keep it simple.').replace('task_type: frontend', 'task_type: backend');
+    const bad = text('frontend-example', '1. Keep labels clear; name each label by its action.').replace('task_type: frontend', 'task_type: backend');
     assert.equal((await report(t, job, { rewritten_text: bad, raw_response: 'RAW-KEPT' })).status, 200);
     const row = await t.db.d.get('SELECT * FROM ai_skill_rewrites');
     assert.equal(row.raw_response, 'RAW-KEPT');

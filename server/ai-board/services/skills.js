@@ -5,6 +5,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { WorkerContractError } from '../repositories/store-contract.js';
 import { SKILL_TASK_TYPES } from '../skill-task-types.js';
 import { checkSkillText, publicMessage } from '../security/intake-guard.js';
+import { essenceMissing } from '../security/essence.js';
 
 export const TASK_TYPES = SKILL_TASK_TYPES;
 const FIELDS = ['name', 'description', 'task_type', 'source', 'version', 'max_tokens'];
@@ -284,6 +285,8 @@ export function createSkillService(db) {
       if (typeof input.rewritten_text !== 'string' || !input.rewritten_text) { await finish('failed', String(input.error || 'no_output').slice(0, 200)); return { status: 'failed' }; }
       if (checkSkillText(input.rewritten_text).block) { await finish('failed', 'guardrail_blocked'); return { status: 'failed' }; }
       const source = await db.get('SELECT v.*,s.name FROM ai_skill_versions v JOIN ai_skills s ON s.id=v.skill_id WHERE v.id=?', [job.version_id]);
+      const lost = essenceMissing(source.original_text, input.rewritten_text);
+      if (lost.length) { await finish('failed', `essence_lost: ${lost.join(', ')}`.slice(0, 200)); return { status: 'failed', essence_lost: lost }; }
       const next = Number((await db.get('SELECT COALESCE(MAX(version),0)+1 AS n FROM ai_skill_versions WHERE skill_id=?', [source.skill_id])).n);
       // Bản viết lại là phiên bản mới (con của nguồn), số version trong front matter được chỉnh để khớp trước khi lint.
       const text = input.rewritten_text.replace(/^version:.*$/m, `version: ${next}`);
