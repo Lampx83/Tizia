@@ -27,7 +27,7 @@ from pathlib import Path
 import code_index
 import context
 import functional
-from gates import best_match, react_plan
+from gates import best_match, grounding_paths, react_plan
 from gates.scope_check import load_capability_names
 from runtime.plan_merge import merge_same_file
 
@@ -296,6 +296,7 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             judge(stage, True, plan.get("summary_vi", ""))
             stage = "files exist"
             check_files(plan, source, commit)
+            grounding_paths.check_references(plan, source, commit)
             judge(stage, True, ", ".join(task["file"] for task in plan["subtasks"]))
             stage = "renderer match"
             required = functional.expected_targets({'request_title': request.get('subject'), 'request_detail': request.get('body')})
