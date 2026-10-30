@@ -1,5 +1,7 @@
 import fs from 'node:fs';
-import { Tokenizer } from '@huggingface/tokenizers';
+// Optional: the worker image lints skills without npm dependencies and must fall back to UTF-8 counting.
+let Tokenizer = null;
+try { ({ Tokenizer } = await import('@huggingface/tokenizers')); } catch { Tokenizer = null; }
 
 const ENV = 'AI_BOARD_QWEN_TOKENIZER';
 const cache = new Map();
@@ -8,7 +10,7 @@ const utf8 = { method: 'utf8_upper_bound', count: text => Buffer.byteLength(text
 function load(file) {
   if (!cache.has(file)) {
     let tokenizer = null;
-    try { tokenizer = new Tokenizer(JSON.parse(fs.readFileSync(file, 'utf8')), {}); } catch { tokenizer = null; }
+    try { tokenizer = Tokenizer && new Tokenizer(JSON.parse(fs.readFileSync(file, 'utf8')), {}); } catch { tokenizer = null; }
     cache.set(file, tokenizer);
   }
   return cache.get(file);
