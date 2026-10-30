@@ -10,6 +10,8 @@ import { openBoard } from './support/ai-board-db.js';
 import { CONTRACT, LIMITS, scaledLimit, WorkerContractError } from '../server/ai-board/store.js';
 import { attachAiBoardRequestRoutes } from '../server/ai-board/routes.js';
 
+CONTRACT.repair_replan.enabled = false; // tests below opt in per case
+
 const SHA_A = 'a'.repeat(40);
 const SHA_B = 'b'.repeat(40);
 // Per-run cap after a 1-step plan (contract.json limits.per_run.units) and the extension ceiling.

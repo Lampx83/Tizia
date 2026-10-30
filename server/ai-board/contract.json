@@ -37,7 +37,7 @@
   "max_repairs": 1,
   "repair_replan": {
     "_why": "LF/74 (P07) + LF/82 failure-class repair/replan, default OFF. On: the soft repair budget starts at soft.soft_start and grows by soft_step per round that made progress (fewer failing tests, later gate, or changed diff), never above max_repairs (hard); no_progress_rounds rounds in a row without progress stop it; and a plan-class failure requeues one replan while the automatic round limit (2 plans) still allows it. Budget, lease, plan revision and ledger rules are unchanged; the same failure twice stops instead of looping.",
-    "enabled": false,
+    "enabled": true,
     "max_repairs": 4,
     "no_progress_rounds": 2,
     "soft": { "soft_start": 2, "soft_step": 1 }
