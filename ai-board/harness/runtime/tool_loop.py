@@ -520,7 +520,7 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
     if reason := MANIFEST.policy.write_reason(subtask["file"]):
         return _result("blocked", reason, "critical")
     sandbox = (sandbox_tool.Runner(source, sha, lease_ok=getattr(deps, 'lease_ok', None), trace=getattr(deps, 'trace', None),
-                                   receipts=sandbox_log)
+                                   receipts=sandbox_log, budget=budget)
                if _SANDBOX_OFFERED.get() else None)
     ws = Workspace(source, sha, subtask["file"], current, checks=checks, budget=budget, trace=getattr(deps, 'trace', None), sandbox=sandbox)
     prompt = PROMPT.format(tools=_tool_list(), title=subtask["title"], file=subtask["file"], verify=subtask["verify"]) + ORDER
