@@ -35,9 +35,21 @@ def worker_with(ollama, clock):
 def test_unloadable_model_blocks_the_claim():
     worker, transport = worker_with(FakeOllama(broken={'clf'}), lambda: 0.0)
     out = worker.run_once()
-    assert out['status'] == 'model_unavailable' and out['model'] == 'clf'
+    assert out['status'] == 'waiting_gpu' and out['model'] == 'clf'
     assert 'HTTP Error 500' in out['error'] and 'failed to load' in out['error']
     assert not any(call[1].endswith('/claim') for call in transport.calls)
+
+
+def test_busy_gpu_resumes_claiming_once_the_model_loads_again():
+    now = [0.0]
+    ollama = FakeOllama(broken={'g1'})
+    worker, transport = worker_with(ollama, lambda: now[0])
+    assert worker.run_once()['status'] == 'waiting_gpu'
+    assert not any(call[1].endswith('/claim') for call in transport.calls)
+    ollama.broken = set()
+    now[0] = 1.0
+    assert worker.run_once()['status'] != 'waiting_gpu'
+    assert any(call[1].endswith('/claim') for call in transport.calls)
 
 
 def test_checks_only_the_intake_models_once_each_with_a_tiny_generate():
@@ -63,8 +75,8 @@ def test_success_is_cached_for_60s_and_failure_is_retried_every_poll():
 
     ollama.broken = {'g1'}
     now[0] = 200.0
-    assert worker.run_once()['status'] == 'model_unavailable'
-    assert worker.run_once()['status'] == 'model_unavailable'  # lỗi không được cache
+    assert worker.run_once()['status'] == 'waiting_gpu'
+    assert worker.run_once()['status'] == 'waiting_gpu'  # lỗi không được cache
     assert [call[0] for call in ollama.calls[-2:]] == ['g1', 'g1']
 
 
@@ -75,7 +87,7 @@ def test_non_http_error_is_also_model_unavailable():
 
     worker, _ = worker_with(Down(), lambda: 0.0)
     out = worker.run_once()
-    assert out['status'] == 'model_unavailable' and 'timed out' in out['error']
+    assert out['status'] == 'waiting_gpu' and 'timed out' in out['error']
 
 
 def test_classifier_without_calibrated_candidate_does_not_block_intake(monkeypatch):
