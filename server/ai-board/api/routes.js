@@ -22,7 +22,7 @@ import { createGateProofService } from '../services/gate-proofs.js';
 import { createToolManifestStore } from '../repositories/tool-manifests.js';
 import { publicContract } from '../hsm/contract.js';
 import { createFeatureLifecycle } from '../services/feature-lifecycle.js';
-import { createRootAllowanceService } from '../services/root-allowance.js';
+import { createRootAllowanceService, extendRootAllowance } from '../services/root-allowance.js';
 import { attachSkillRoutes, attachWorkerSkillRoutes } from './skills.js';
 import { requesterProgress } from '../services/requester-progress.js';
 
@@ -366,6 +366,18 @@ export function attachAiBoardRequestRoutes(router, {
       if (error instanceof WorkerContractError) {
         return res.status(error.status).json({ error: error.code, message: error.message });
       }
+      throw error;
+    }
+  });
+
+  route.post('/api/admin/ai-board/tickets/:id/extend-root-allowance', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
+    try {
+      const result = await extendRootAllowance(store.db, req.params.id, {
+        group: req.body?.group, to: req.body?.to, reason: req.body?.reason, adminUserId: req.user.id });
+      await store.recordAdminAction({ ticketId: req.params.id }, req.user.id, 'extend_root_allowance');
+      res.json(result);
+    } catch (error) {
+      if (error instanceof WorkerContractError) return res.status(error.status).json({ error: error.code, message: error.message });
       throw error;
     }
   });

@@ -6,7 +6,7 @@ import { WorkerContractError } from '../repositories/store-contract.js';
 
 // Phases where nobody is working on the request: the requester may rewrite it and send it again.
 export const EDITABLE_PHASES = new Set([
-  'clarifying', 'partial', 'plan_blocked', 'precheck_blocked', 'budget_exhausted', 'plan_unfit',
+  'clarifying', 'partial', 'plan_blocked', 'precheck_blocked', 'budget_exhausted', 'root_allowance_exhausted', 'plan_unfit',
   'transient_blocked', 'critical_violation',
 ]);
 

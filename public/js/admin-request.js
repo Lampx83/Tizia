@@ -103,7 +103,7 @@ const ok = (state, text) => `<span class="s-${state}">${esc(text)}</span>`;
 function eventState(e) {
   const t = `${e.event_type} ${e.transition || ''}`;
   if (/transient/.test(t)) return 'warn';
-  if (/blocked|critical|rejected|cancel|budget_exhausted|waiting_admin|rollback_failed/.test(t)) return 'bad';
+  if (/blocked|critical|rejected|cancel|budget_exhausted|root_allowance_exhausted|waiting_admin|rollback_failed/.test(t)) return 'bad';
   if (/waiting|review|clarif|rollback/.test(t)) return 'warn';
   return 'ok';
 }
@@ -295,7 +295,7 @@ async function authorizePlan(btn) {
 
 // ─── Hoàn tác / hủy: 2 bước xác nhận (đọc hậu quả → gõ số yêu cầu) ───
 const ADMIN_ACTION = { note: 'ghi chú', reject: 'từ chối', authorize_plan: 'cho phép kế hoạch', rerun_gate: 'chạy lại bước',
-  rollback: 'hoàn tác', extend_budget: 'gia hạn ngân sách', retry_transient: 'chạy lại sau lỗi hạ tầng', acknowledge_data_step: 'xác nhận bước dữ liệu' };
+  rollback: 'hoàn tác', extend_budget: 'gia hạn ngân sách', retry_transient: 'chạy lại sau lỗi hạ tầng', extend_root_allowance: 'gia hạn hạn mức', acknowledge_data_step: 'xác nhận bước dữ liệu' };
 const managedLine = (m) => `<div class="meta" data-managed>${m
   ? `Phụ trách: <b>${esc(m.managed_by_name || '#' + m.managed_by)}</b> từ ${fmt(m.claimed_at)}${m.last_admin_id !== m.managed_by ? ` · gần nhất ${esc(m.last_admin_name || '#' + m.last_admin_id)}` : ''} · ${esc(ADMIN_ACTION[m.last_action] || m.last_action)} ${fmt(m.last_action_at)}`
   : 'Chưa có admin nào phụ trách; admin đầu tiên thao tác sẽ nhận yêu cầu.'}</div>`;
@@ -307,9 +307,13 @@ function renderActions(request, trace) {
   const canCancel = !candidate && !['rejected', 'cancelled', 'done'].includes(request.status);
   const canRetryTransient = root?.phase === 'transient_blocked';
   const canContinuePartial = root?.phase === 'partial';
-  if (!canRollback && !canCancel && !canRetryTransient && !canContinuePartial) return `<div class="flash" role="status" tabindex="-1">${ui.flash ? esc(ui.flash) : ''}</div>`;
+  const hit = root?.phase === 'root_allowance_exhausted' ? root.allowance?.hit : null;
+  if (!canRollback && !canCancel && !canRetryTransient && !canContinuePartial && !hit) return `<div class="flash" role="status" tabindex="-1">${ui.flash ? esc(ui.flash) : ''}</div>`;
   const busy = root?.live;
   return `<div class="actions">
+      ${hit ? `<p class="meta">Đã hết hạn mức ${esc(GROUP_LABEL[hit.group])} của yêu cầu: dùng ${fmtNum(hit.used)} / ${fmtNum(hit.limit)}. Đây không phải lỗi hạ tầng.</p>
+      <button class="btn ok" data-action="extend-root-allowance" data-root="${esc(root.id)}" data-group="${esc(hit.group)}"
+        data-used="${esc(hit.used)}" data-limit="${esc(hit.limit)}" data-max="${esc(root.allowance.extension_max[hit.group])}">Gia hạn hạn mức</button>` : ''}
       ${canContinuePartial ? `<button class="btn ok" data-action="continue-partial" data-request="${esc(request.id)}"
         title="Đã xong một phần plan; chạy nốt phần còn lại từ checkpoint, không lập plan mới">Tiếp tục phần còn lại</button>` : ''}
       ${canRetryTransient ? `<button class="btn ok" data-action="retry-transient" data-root="${esc(root.id)}"
@@ -320,6 +324,32 @@ function renderActions(request, trace) {
       <span class="flash" role="status" tabindex="-1">${ui.flash ? esc(ui.flash) : ''}</span>
     </div>
     ${ui.confirm ? renderConfirm(request, candidate) : ''}`;
+}
+
+const GROUP_LABEL = { model_calls: 'số lần gọi model', tool_calls: 'số lần gọi công cụ', tokens: 'token',
+  semantic_repairs: 'số lần tự sửa theo ngữ nghĩa', quality_switches: 'số lần đổi sang model chất lượng' };
+const EXTEND_ERROR = { above_ceiling: 'vượt mức tối đa cho phép', below_used: 'thấp hơn mức đã dùng', not_an_extension: 'không cao hơn hạn mức hiện tại',
+  not_root_allowance_exhausted: 'yêu cầu không còn chờ gia hạn hạn mức' };
+
+async function extendRootAllowance(btn) {
+  const { root, group } = btn.dataset;
+  const used = Number(btn.dataset.used), limit = Number(btn.dataset.limit), max = Number(btn.dataset.max);
+  const to = Math.min(max, limit + Math.ceil(limit / 2));
+  if (to <= limit) { ui.flash = 'Đã ở mức tối đa cho phép, không gia hạn thêm được.'; return refresh(); }
+  const ok = await askConfirm({ title: 'Gia hạn hạn mức của yêu cầu',
+    message: `${GROUP_LABEL[group]}: dùng ${fmtNum(used)} / ${fmtNum(limit)}. Nâng lên ${fmtNum(to)} (tối đa ${fmtNum(max)}). Việc này được ghi vào sổ cái kèm tên bạn.`,
+    ok: 'Gia hạn' });
+  if (!ok) return;
+  btn.disabled = true;
+  try {
+    await post(`/api/admin/ai-board/tickets/${encodeURIComponent(root)}/extend-root-allowance`,
+      { group, to, reason: `Admin gia hạn ${GROUP_LABEL[group]} từ ${limit} lên ${to} trên trang yêu cầu` });
+    ui.flash = 'Đã gia hạn hạn mức; yêu cầu về hàng đợi, worker sẽ nhận ở lượt tới.';
+  } catch (e) {
+    ui.flash = `Không gia hạn được: ${EXTEND_ERROR[e?.message] || errText(e)}`;
+    btn.disabled = false;
+  }
+  await refresh();
 }
 
 async function retryTransient(btn) {
@@ -794,6 +824,7 @@ document.addEventListener('click', e => {
   else if (action === 'authorize-go') return authorizePlan(btn);
   else if (action === 'ack-data') return ackDataStep(btn);
   else if (action === 'retry-transient') return retryTransient(btn);
+  else if (action === 'extend-root-allowance') return extendRootAllowance(btn);
   else if (action === 'continue-partial') {
     btn.disabled = true;
     post(`/api/requests/${encodeURIComponent(btn.dataset.request)}/continue`, {})

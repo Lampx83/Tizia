@@ -54,6 +54,7 @@ const PHASES = {
   pr_open: { label: 'đã mở PR vào dev, chờ người duyệt' },
   critical_violation: { label: 'vi phạm an toàn' },
   budget_exhausted: { label: 'hết ngân sách' },
+  root_allowance_exhausted: { label: 'hết hạn mức của yêu cầu, chờ gia hạn' },
   plan_unfit: { label: 'kế hoạch không làm được' },
   // Dừng giữa chừng nhưng đã xong một phần plan (LF/107): checkpoint còn nguyên, người gửi bấm "Tiếp tục"
   // để worker chạy nốt phần còn thiếu — không tính là lượt hỏng, không mở plan mới.
