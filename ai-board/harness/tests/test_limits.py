@@ -72,3 +72,22 @@ def test_every_flag_accepts_the_same_truthy_spellings():
         assert limits.sandbox_tool({"AI_BOARD_SANDBOX_TOOL": value})["enabled"]
     for value in ("0", "false", "no"):
         assert not limits.sandbox_tool({"AI_BOARD_SANDBOX_TOOL": value})["enabled"]
+
+
+def test_local_run_wall_clock_is_sum_of_node_caps():
+    node = limits.budget(env={})["node_wall_clock_s"]
+    assert limits.run_wall_clock_s(2, local=True) == 300 + 2 * node
+    assert limits.run_wall_clock_s(2, local=True) > 1073  # run 100: 2 steps ran 1073 s, api cap 1020 s
+    assert limits.run_wall_clock_s(2, local=False) == limits.scaled_limit("wall_clock_s", 2) == 1020
+    assert limits.run_wall_clock_s(99, local=True) == 12300 <= limits._parsed()["limits"]["local_wall_clock_s"]["max"]
+
+
+def test_exhausted_detail_names_the_cap():
+    b = Budget(max_wall_clock_s=10.0)
+    b.elapsed_before_s = 20.0
+    assert b.exhausted_detail().startswith("wall_clock_s 2")
+    assert "/10s" in b.exhausted_detail()
+    c = Budget()
+    c.units = c.max_units
+    assert c.exhausted_detail() == f"units {c.max_units}/{c.max_units}"
+    assert Budget().exhausted_detail() is None

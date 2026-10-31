@@ -482,6 +482,9 @@ class TickBudget:
     def spend(self, cap, n=1):
         setattr(self, cap, getattr(self, cap) + n)
 
+    def exhausted_detail(self):
+        return 'ticks 0/0'
+
 
 ONE_STEP_PLAN = {
     'capabilities': ['public.ui'],
@@ -666,6 +669,7 @@ def test_exhausted_budget_blocks_before_any_gate():
     assert verdict['failure_class'] == 'budget'
     assert verdict['gate_reached'] == 3
     assert calls == []
+    assert verdict['gates'][-1]['reason'] == 'budget exhausted: ticks 0/0'
 
 
 def test_ordinary_failure_without_budget_for_repair_is_a_budget_failure():
