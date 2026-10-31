@@ -43,16 +43,23 @@ const FALLBACK_QUESTION = {
 const CLAIMS_WORK = /(?<![\p{L}])(tôi|mình|chúng tôi|ban điều hành|ban)\s+(đã|vừa)\s+(được\s+)?(sửa|làm|thêm|cập nhật|thay đổi|triển khai|hoàn thành|thực hiện|xử lý|tạo|xoá|xóa)(?![\p{L}])|(?<![\p{L}])đã\s+(sửa|làm|xử lý)\s+xong/iu;
 // Email hoặc số di động Việt Nam (0/+84 + đầu 3,5,7,8,9 + 8 số), không phải mọi dãy số dài.
 const CONTACT = /[\w.+-]+@[\w-]+\.[a-z]{2,}|(?<![\d.])(?:\+?84|0)[35789](?:[\s.-]?\d){8}(?!\d)/iu;
+const CONVERSATION_CAP = 6000;
+const CONVERSATION_RECENT = 6;
 const fence = (text) => String(text ?? '').replace(/<{3,}|>{3,}/g, '');
 
-/** Hội thoại cho prompt: tiêu đề, mô tả, rồi các lượt hỏi/đáp. Toàn bộ là dữ liệu của người dùng. */
+/** Hội thoại cho prompt: tiêu đề, mô tả, câu đáp cũ, rồi vài lượt hỏi/đáp gần nhất. Toàn bộ là dữ liệu của người dùng. */
 export function conversationText(request, turns) {
-  const lines = [`Tiêu đề: ${fence(request.title)}`, `Mô tả: ${fence(request.detail) || '(trống)'}`];
-  for (const turn of turns) {
-    if (turn.kind === 'question') lines.push(`Ban hỏi: ${fence(turn.text)}`);
-    else if (turn.kind === 'answer') lines.push(`Người dùng đáp: ${fence(turn.text)}`);
-  }
-  return lines.join('\n').slice(-6000);
+  const head = [`Tiêu đề: ${fence(request.title)}`, `Mô tả: ${fence(request.detail).slice(0, 1500) || '(trống)'}`];
+  const dialog = turns.filter((t) => t.kind === 'question' || t.kind === 'answer');
+  const recent = dialog.slice(-CONVERSATION_RECENT);
+  // Lượt cũ chỉ giữ câu đáp: điều người dùng đã nói không rơi khỏi cửa sổ, câu hỏi cũ thì bỏ.
+  const known = dialog.slice(0, dialog.length - recent.length).filter((t) => t.kind === 'answer')
+    .map((t) => `- ${fence(t.text).slice(0, 300)}`);
+  const recentLines = recent.map((t) => (t.kind === 'question' ? `Ban hỏi: ${fence(t.text)}` : `Người dùng đáp: ${fence(t.text)}`));
+  const build = () => [...head, ...(known.length ? ['Người dùng đã trả lời trước đó:', ...known] : []), ...recentLines].join('\n');
+  let text = build();
+  while (text.length > CONVERSATION_CAP && known.length) { known.shift(); text = build(); }
+  return text.slice(-CONVERSATION_CAP);
 }
 
 export function questionPrompt({ request, turns, techLevel, mode, turn }) {
