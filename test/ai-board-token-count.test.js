@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { tokenCounter } from '../server/ai-board/services/token-count.js';
-import { adminSkillBlock, lintSkill } from '../server/ai-board/services/skills.js';
+import { adminSkillBlock, lintSkill, stageBudgets } from '../server/ai-board/services/skills.js';
+import { LIMITS } from '../server/ai-board/repositories/store-contract.js';
 
 const ENV = 'AI_BOARD_QWEN_TOKENIZER';
 const SKILL = '---\nname: frontend-guide\ndescription: Hướng dẫn giao diện\ntask_type: frontend\nsource: admin\nversion: 1\nmax_tokens: 1500\n---\n1. Giữ nhãn nút rõ ràng.\n';

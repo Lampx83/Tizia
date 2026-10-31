@@ -1,4 +1,5 @@
-import { NOTE_MAX, POLL_MS, REWRITE, errorText, hasActiveRewrite, liveVersion, rewriteStatus, rowPill, shouldPoll, tokenLabel } from './admin-skills-state.js?v=skills-ux1';
+import { NOTE_MAX, POLL_MS, REWRITE, errorText, hasActiveRewrite, liveVersion, rewriteStatus, rowPill, shouldPoll, tokenLabel } from './admin-skills-state.js?v=skills-ux2';
+import { fmt } from './ai-board-clock.js';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 // Native dialogs are suppressed in the in-app browser; an in-page <dialog> works everywhere.
@@ -40,13 +41,32 @@ const rewriteBody = picked => (picked.instructions ? { confirmed:true, instructi
 const rewriteError = done => done.data?.error === 'rate_limited'
   ? `Đã quá giới hạn viết lại. Thử lại sau ${Math.max(1, Math.ceil(Number(done.data.retry_after_s || 60) / 60))} phút.`
   : errorText(done, 'Chưa xếp hàng viết lại. Thử lại sau ít phút.');
-const bindTokenCount = (textarea, node) => {
-  const paint = () => { const t = tokenLabel(textarea.value); node.textContent = t.text; node.dataset.over = String(t.over); node.title = t.over ? 'Vượt giới hạn token của skill: không lưu được' : 'Ước lượng theo độ dài UTF-8 (cận trên); bộ đếm Qwen thật chưa có'; };
-  textarea.addEventListener('input', paint);
+const bindTokenCount = (textarea, node, api) => {
+  let counted = null, seq = 0, timer = 0;
+  const paint = () => {
+    const t = tokenLabel(textarea.value, counted?.text === textarea.value ? counted.count : null);
+    node.textContent = t.text;
+    node.dataset.over = String(t.over);
+    node.title = t.over ? 'Vượt giới hạn token của skill: không lưu được' : counted ? 'Đếm bằng bộ đếm Qwen của model' : 'Đang đếm bằng Qwen; tạm hiện ước lượng UTF-8 (cận trên)';
+  };
+  const count = async () => {
+    const text = textarea.value, mine = ++seq;
+    try {
+      const done = await api('/api/admin/ai-board/skills/count-tokens', { method:'POST', body:JSON.stringify({ text }) });
+      if (mine === seq && done.ok && textarea.value === text && done.data.token_method === 'qwen_tokenizer') counted = { text, count: done.data.token_count };
+      paint();
+    } catch { /* giữ ước lượng UTF-8 */ }
+  };
+  textarea.addEventListener('input', () => { counted = null; paint(); clearTimeout(timer); timer = setTimeout(count, 400); });
   paint();
+  count();
 };
+const budgetLine = (budgets, method) => Object.entries(budgets).map(([node, b]) =>
+  `${NODE[node]} ${b.max_per_prompt} skill, ${b.max_tokens_per_prompt.toLocaleString('vi-VN')} token`).join(' · ')
+  + (method === 'qwen_tokenizer' ? ' (đếm bằng Qwen)' : ' (ước lượng UTF-8, chưa có bộ đếm Qwen)');
 const TYPE = { backend:'Backend', frontend:'Giao diện', database:'Cơ sở dữ liệu', review:'Review', test:'Kiểm thử', merge:'Hợp nhất', all:'Chung' };
 const STATUS = { draft:'Bản nháp', approved:'Đã duyệt', disabled:'Đã tắt' };
+const NODE = { intake:'Nhận yêu cầu', plan:'Lập plan', execute:'Viết code', verdict:'Kết luận' };
 const lineDiff = (a, b) => {
   const x = a.replace(/\n$/, '').split('\n'), y = b.replace(/\n$/, '').split('\n'), t = Array.from({ length:x.length + 1 }, () => new Array(y.length + 1).fill(0));
   for (let i = x.length - 1; i >= 0; i--) for (let j = y.length - 1; j >= 0; j--) t[i][j] = x[i] === y[j] ? t[i+1][j+1] + 1 : Math.max(t[i+1][j], t[i][j+1]);
@@ -61,7 +81,7 @@ const lineDiff = (a, b) => {
 const diffHtml = (a, b) => `<pre class="skill-diff" aria-label="So sánh bản gốc và bản viết lại">${lineDiff(a, b).map(([kind, line]) =>
   `<span class="diff-${kind}">${kind === 'add' ? '+ ' : kind === 'del' ? '- ' : '  '}${esc(line)}</span>`).join('')}</pre>`;
 const versionState = (version, active) => version.rejected_at ? 'Đã từ chối' : version.id === active ? 'Đang được chọn' : version.approved_by ? 'Đã duyệt' : version.rewrite ? REWRITE[version.rewrite.status] : 'Bản nháp';
-const when = ms => Number.isFinite(Number(ms)) ? new Date(Number(ms)).toLocaleString('vi-VN', { dateStyle:'short', timeStyle:'short' }) : '';
+const when = ms => Number.isFinite(Number(ms)) ? fmt(Number(ms)) : '';
 const evalHtml = version => !version.evaluation?.kinds ? '' : `<p class="meta">Smoke test nhỏ: ${version.evaluation.passed}/${version.evaluation.total} loại tác vụ qua. ${version.evaluation.kinds.map(kind =>
   `${esc(TYPE[kind.kind] || kind.kind)} ${kind.ok ? 'qua' : `chưa qua (${esc(kind.reason || 'không rõ')})`}`).join('; ')}. Đây chỉ là kiểm tra dạng đầu ra, không đo chất lượng.</p>`;
 const sample = name => `---\nname: ${name}\ndescription: Hướng dẫn cho giao diện hiện có\ntask_type: frontend\nsource: admin\nversion: 1\nmax_tokens: 1500\n---\n1. Giữ nhãn nút rõ ràng.\n2. Kiểm tra thao tác bằng bàn phím.\n`;
@@ -78,6 +98,7 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
 
   host.innerHTML = `<section class="skills-panel">
     <div class="toolbar"><p class="meta skills-lead">Bản nháp chưa được nạp. Bản đã duyệt sẵn sàng cho lượt chạy được bật Skills; tính năng vẫn trong phạm vi thử nghiệm.</p><span class="spacer"></span><button type="button" class="btn" id="skill-add">Thêm skill</button></div>
+    <p class="meta" data-stage-budgets>Ngân sách mỗi node: ${esc(budgetLine(result.data.stage_budgets ?? {}, result.data.token_method))}</p>
     <form id="skill-upload" class="skills-form" hidden>
       <h3>Thêm skill</h3>
       <label for="skill-name">Tên skill</label><input id="skill-name" name="name" required maxlength="64" pattern="[a-z][a-z0-9-]*" value="frontend-guide">
@@ -226,7 +247,7 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
     for (const cancel of details.querySelectorAll('[data-edit-cancel]')) cancel.onclick = () => {
       cancel.closest('form').hidden = true;
     };
-    for (const formNode of details.querySelectorAll('[data-edit-form]')) bindTokenCount(formNode.querySelector('textarea'), formNode.querySelector('[data-token-count]'));
+    for (const formNode of details.querySelectorAll('[data-edit-form]')) bindTokenCount(formNode.querySelector('textarea'), formNode.querySelector('[data-token-count]'), api);
     for (const formNode of details.querySelectorAll('[data-edit-form]')) formNode.onsubmit = async event => {
       event.preventDefault();
       try {
@@ -372,7 +393,7 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
     return draft;
   };
 
-  bindTokenCount(form.querySelector('#skill-original'), form.querySelector('[data-token-count]'));
+  bindTokenCount(form.querySelector('#skill-original'), form.querySelector('[data-token-count]'), api);
   form.onsubmit = async event => {
     event.preventDefault();
     const button = form.querySelector('[type=submit]');
