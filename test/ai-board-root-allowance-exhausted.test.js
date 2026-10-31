@@ -4,12 +4,14 @@ import assert from 'node:assert/strict';
 import { plannedRoot } from './support/ai-board-planned-root.js';
 import { LIMITS } from '../server/ai-board/store.js';
 import { retryTransientTicket } from '../server/ai-board/transient-retry-async.js';
+import { scaledRootLimit as scaledFor } from '../server/ai-board/services/root-allowance.js';
 
 const KIND = { model_calls: 'model', semantic_repairs: 'semantic_repair', quality_switches: 'quality_switch', tokens: 'model' };
 
-/** Cạn nhóm `group` ở trần contract; trả về trần. */
+/** Cạn nhóm `group` ở trần execute của plan 1 bước; trả về trần. */
 async function exhaust(db, ticket, group) {
-  const limit = LIMITS.root_work[group];
+  const scaled = ['model_calls', 'semantic_repairs'].includes(group);
+  const limit = scaled ? scaledFor(group, 1) : LIMITS.root_work[group];
   await db.prepare('INSERT INTO ai_root_allowances(root_ticket_id, created_at) VALUES (?, ?)').run(ticket.id, Date.now());
   const rows = group === 'tokens' ? 1 : limit;
   for (let i = 0; i < rows; i++) {

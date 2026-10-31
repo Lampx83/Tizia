@@ -1976,7 +1976,12 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     root.rerun_stage = rerun.stage; // 'plan' | 'execute' | null: which failed stage the admin may rerun now
     root.rerun_allowed = !!rerun.stage;
     root.rerun_reason = rerun.reason;
-    const allowance = await readRootAllowance(db, root.id);
+    // Admin sees the budget that is actually at its cap: execute first, else the plan-phase one.
+    let allowance = await readRootAllowance(db, root.id);
+    if (allowance && !hitRootGroup(allowance)) {
+      const planView = await readRootAllowance(db, root.id, 'plan');
+      if (hitRootGroup(planView)) allowance = planView;
+    }
     root.allowance = allowance && { blocked_reason: allowance.blocked_reason, unknown_holds: allowance.unknown_holds,
       groups: allowance.groups, hit: hitRootGroup(allowance), daily_gpu: await dailyGpuStatus(Number(requestId)) };
     return {

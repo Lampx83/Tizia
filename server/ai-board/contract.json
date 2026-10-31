@@ -45,6 +45,11 @@
   "default_budget_limit": 200,
   "limits": {
     "root_work": { "model_calls": 40, "tool_calls": 200, "tokens": 200000, "semantic_repairs": 3, "quality_switches": 1 },
+    "root_work_scaling": {
+      "_why": "Execute-phase root allowance grows with the approved plan's step count: base (root_work value) + per_step * steps, clamped to max. Plan-phase work has its own budget at the root_work base; hard caps never grow with progress. Read live from this file on every read/reserve: a redeploy raises the limits of existing roots (a stored limits_json can only raise, never lower).",
+      "model_calls": { "per_step": 16, "max": 300 },
+      "semantic_repairs": { "per_step": 1, "max": 8 }
+    },
     "_why": "All AI Board caps in one place (feature-folders ticket 02). Per-run caps scale with the plan's subtask count n: base + per_subtask * n, clamped to max. Numbers are starting points; retune from the stratified eval (ticket 12).",
     "per_run": {
       "units": { "base": 120, "per_subtask": 150, "max": 2400, "_why": "GPU-s per run; a feature draft of 3-10 subtasks needs ~450-1600" },

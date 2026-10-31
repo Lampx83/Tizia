@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import express from 'express';
@@ -13,6 +13,11 @@ import { attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
 import { planOf } from './support/ai-board-scenarios.js';
 import { LIMITS } from '../server/ai-board/repositories/store-contract.js';
 
+const SAVED = JSON.stringify([LIMITS.root_work, LIMITS.root_work_scaling]);
+// Limits live in contract.json: tests narrow them in-process, scaling off so the cap is exactly the value set.
+const setContract = limits => { restoreContract(); Object.assign(LIMITS.root_work, limits); for (const c of Object.values(LIMITS.root_work_scaling)) if (typeof c === 'object') c.per_step = 0; };
+const restoreContract = () => { const [work, scaling] = JSON.parse(SAVED); Object.assign(LIMITS.root_work, work); for (const k in scaling) if (typeof scaling[k] === 'object') Object.assign(LIMITS.root_work_scaling[k], scaling[k]); };
+afterEach(restoreContract);
 const KEY = 'fixture-root-allowance-worker-key';
 async function fixture({ dropReserveAck = false, delayReserveAckMs = 0 } = {}) {
   const db = await openBoard({ users: [[1, 'lan', 'Lan', 'student', 'pharmacy'], [2, 'minh', 'Minh', 'student', 'pharmacy']] });
@@ -146,8 +151,7 @@ test('denied model admission is not recorded as a sent model call in the phase b
     const lease = leaseOf(ticket, 'no-model-admission');
     assert.equal((await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: 'earlier-unknown-attempt',
       kind: 'model', provider: 'vllm', token_bound: 199500 })).status, 200);
-    await f.db.d.run('UPDATE ai_root_allowances SET limits_json=? WHERE root_ticket_id=?',
-      [JSON.stringify({ ...LIMITS.root_work, model_calls: 1 }), ticket.id]); // local tokens are free: denial comes from the model-call cap
+    setContract({ model_calls: 1 }); // local tokens are free: denial comes from the model-call cap
     const result = await promisify(execFile)(VENV_PYTHON,
       ['test/support/root-allowance-worker-probe.py', f.origin, String(ticket.id), 'no-model-admission', ticket.lease_token, '--expect-admission-denied'], { timeout: 30000 });
     assert.deepEqual(JSON.parse(result.stdout), { model_requests: 0, planner_calls: 0, error: 'budget exhausted before model call (request token bound): root_model_calls' });
@@ -281,8 +285,7 @@ test('vllm and ollama reservations are not capped by root tokens, api reservatio
     const ticket = await f.store.claimNext({ workerId: 'local-free', version: 'test', mode: 'shadow', intent: 'plan', leaseMs: 120000 });
     const lease = leaseOf(ticket, 'local-free');
     await f.post(ticket.id, 'read', lease);
-    await f.db.d.run('UPDATE ai_root_allowances SET limits_json=? WHERE root_ticket_id=?',
-      [JSON.stringify({ ...LIMITS.root_work, tokens: 1000 }), ticket.id]);
+    setContract({ tokens: 1000 });
     for (const [i, provider] of ['vllm', 'ollama', 'vllm'].entries()) {
       const ok = await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: `local-free-${i}`, kind: 'model', provider, token_bound: 5000 });
       assert.equal(ok.status, 200, provider);
@@ -301,8 +304,7 @@ test('each root budget denial names the one limit it hit and keeps the legacy er
     const ticket = await f.store.claimNext({ workerId: 'reason-codes', version: 'test', mode: 'shadow', intent: 'plan', leaseMs: 120000 });
     const lease = leaseOf(ticket, 'reason-codes');
     await f.post(ticket.id, 'read', lease);
-    const setLimits = limits => f.db.d.run('UPDATE ai_root_allowances SET limits_json=? WHERE root_ticket_id=?',
-      [JSON.stringify({ ...LIMITS.root_work, ...limits }), ticket.id]);
+    const setLimits = limits => setContract(limits);
     const cases = [
       ['root_model_calls', { model_calls: 0 }, { kind: 'model', provider: 'vllm', token_bound: 1 }],
       ['root_tool_calls', { tool_calls: 0 }, { kind: 'tool' }],
@@ -333,8 +335,7 @@ test('admin request trace shows which root limit is at its cap and the unknown h
     const ticket = await f.store.claimNext({ workerId: 'admin-reasons', version: 'test', mode: 'shadow', intent: 'plan', leaseMs: 120000 });
     const lease = leaseOf(ticket, 'admin-reasons');
     await f.post(ticket.id, 'read', lease);
-    await f.db.d.run('UPDATE ai_root_allowances SET limits_json=? WHERE root_ticket_id=?',
-      [JSON.stringify({ ...LIMITS.root_work, model_calls: 1 }), ticket.id]);
+    setContract({ model_calls: 1 });
     assert.equal((await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: 'admin-trace-first', kind: 'model', provider: 'vllm', token_bound: 512 })).status, 200);
     const before = (await f.post(ticket.id, 'read', lease)).body;
     const trace = await f.store.getRequestTrace(f.request.request_id);
