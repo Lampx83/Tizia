@@ -70,6 +70,17 @@ def named_tests_missing(request: dict, plan: dict, files: set[str]) -> list[str]
     return [p for p in dict.fromkeys(named) if _TESTISH.search(p) and p not in files and p not in own]
 
 
+def with_named_tests(plan: dict, request: dict, files: set[str]) -> dict:
+    """Thêm subtask tạo mỗi file test request nêu tên mà repo và plan chưa có; verify = lệnh node --test của chính file đó."""
+    missing = named_tests_missing(request, plan, files)
+    if not missing:
+        return plan
+    count = len(plan["subtasks"])
+    extra = [{"title": f"Tạo file test {path}", "file": path, "verify": f"node --test {path}", "size": "small",
+              "layer": "wiring", "depends_on": list(range(1, count + 1))} for path in missing]
+    return {**plan, "subtasks": [*plan["subtasks"], *extra]}
+
+
 def check_references(plan: dict, source, sha: str | None, request: dict | None = None) -> None:
     """Raise ValueError (plan sửa được) nếu plan nhắc đường dẫn không có thật hoặc bỏ sót test request nêu."""
     files = listing(source, sha) if sha else set()
