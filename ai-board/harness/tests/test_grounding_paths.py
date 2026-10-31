@@ -3,6 +3,7 @@ import subprocess
 import pytest
 
 from gates import grounding_paths as gp
+from gates import grounding_paths
 
 
 @pytest.fixture
@@ -173,3 +174,34 @@ def test_server_422_body_is_kept_in_the_worker_error():
     error = urllib.error.HTTPError("http://x/plan", 422, "Unprocessable Entity", {}, io.BytesIO(body))
     assert "scope_not_granted" in str(_with_body(error)) and "not granted" in str(_with_body(
         urllib.error.HTTPError("http://x/plan", 422, "Unprocessable Entity", {}, io.BytesIO(body))))
+
+
+FILES = {
+    "public/js/features/faq/search.js": "export function filterQuestions(list, term) { return list.filter((q) => q.includes(term)); }\n" * 3,
+    "public/other.html": "<html><body>không liên quan gì</body></html>",
+}
+CLAIM = "đã có hàm filterQuestions lọc danh sách câu hỏi theo từ khoá"
+
+
+def test_bm25_parameters_come_from_the_contract():
+    assert grounding_paths.CONFIG["bm25"] == {"k": 3, "k1": 1.5, "b": 0.75, "min_shared_terms": 2, "top": 3}
+    assert grounding_paths.CONFIG["similar_exists"]["min_score"] > 0
+
+
+def test_similar_exists_has_basis_only_when_evidence_file_ranks_in_bm25_top():
+    assert grounding_paths.similar_basis(CLAIM, {"public/js/features/faq/search.js"}, FILES) is True
+    assert grounding_paths.similar_basis(CLAIM, {"public/other.html"}, FILES) is False
+    assert grounding_paths.similar_basis("hoàn toàn khác biệt xyz", {"public/js/features/faq/search.js"}, FILES) is False
+
+
+def test_exists_objection_without_bm25_basis_is_advisory_and_with_basis_still_blocks():
+    from gates import plan_validate
+    snippet = "export function filterQuestions(list, term)"
+    objection = lambda file: {"claim": CLAIM, "evidence": [{"file": file, "snippet": snippet}]}
+    files = FILES
+    grounded = {"grounded": False, "objection": objection("public/js/features/faq/search.js")}
+    assert plan_validate.objection_advisory(grounded, files) is None
+    weak = {"grounded": False, "objection": {"claim": CLAIM, "evidence": [{"file": "public/other.html", "snippet": "không liên quan gì"}]}}
+    assert "BM25" in plan_validate.objection_advisory(weak, files)
+    unverified = {"grounded": False, "objection": {"claim": CLAIM, "evidence": [{"file": "public/other.html", "snippet": "không có"}]}}
+    assert plan_validate.objection_advisory(unverified, files) is not None

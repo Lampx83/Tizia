@@ -442,3 +442,27 @@ def test_search_terms_parse_keeps_four_clean_strings_and_ignores_garbage():
     assert brainstorm.parse_search_terms('{"terms": ["Câu hỏi mới", "x", "btn-new", "Câu hỏi mới", "a\\nb", 5, "một hai ba", "bốn năm"]}') == [
         "Câu hỏi mới", "btn-new", "một hai ba", "bốn năm"]
     assert brainstorm.parse_search_terms("không phải JSON") == [] and brainstorm.parse_search_terms('{"terms": "x"}') == []
+
+
+def _clarify_request(rounds):
+    thread = [{"role": "admin", "body": f"Câu {i + 1}?"} for i in range(rounds)]
+    return {"subject": "Thêm trang", "body": "trang mới", "thread": thread, "grounding_required": False}
+
+
+def test_clarify_rounds_come_from_the_contract_and_count_admin_messages():
+    assert plan_validate.clarify_limit() == 2
+    assert plan_validate.rounds_asked(_clarify_request(2)) == 2
+    assert plan_validate.rounds_asked({"thread": [{"role": "requester", "body": "x"}]}) == 0
+
+
+def test_gate_asks_while_under_the_round_limit_then_assumes(tmp_path):
+    plan = plan_with(["features"])
+    question = {"clear": False, "question": "Bạn muốn trang có màu gì?"}
+    state = {"plan": plan, "checkout_source": str(tmp_path)}
+    out = plan_validate.run(_clarify_request(1), deps_with(FakeModels(plan, validation=question)), Budget(), state)
+    assert out["blocked"] and out["outcome"] == "needs_clarification"
+
+    state = {"plan": plan, "checkout_source": str(tmp_path)}
+    out = plan_validate.run(_clarify_request(2), deps_with(FakeModels(plan, validation=question)), Budget(), state)
+    assert out["blocked"] is False
+    assert state["assumption"] == "Bạn muốn trang có màu gì?"

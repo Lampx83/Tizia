@@ -1523,7 +1523,6 @@ class HarnessPlanner:
             plan['grounding'] = state['grounding']
         if state.get('assumption'):
             note = f"Giả định chưa xác nhận với người gửi: {state['assumption']}"[:300]
-            plan['goal'] = f"{plan['goal']} [{note}]"
             plan['non_goals'] = [*plan['non_goals'], note]
         if (state.get('intake') or {}).get('read_only_verification'):
             plan['read_only_admin_verification'] = True

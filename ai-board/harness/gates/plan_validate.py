@@ -48,7 +48,7 @@ import context
 import code_index
 import file_context
 from dbconn import harness_db
-from gates import best_match, evidence
+from gates import best_match, evidence, grounding_paths
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_validate.md").read_text(encoding="utf-8")
 # Request keys this gate reads (LF/125). plan_repair is planner-only and must stay out of this list.
@@ -516,6 +516,17 @@ def _assumable(plan: dict, validation: dict, request: dict) -> bool:
 _CODE_QUESTION = re.compile(r"[\w./-]+\.(?:html|js|mjs|css|json|py|md)\b|\b(?:repo|codebase|selector|endpoint|building id|gx|gy|tọa độ|mã nguồn)\b", re.I)
 
 
+def clarify_limit() -> int:
+    """Trần vòng hỏi: limits.clarify.questions của contract.json."""
+    path = Path(__file__).resolve().parents[3] / "server" / "ai-board" / "contract.json"
+    return int(json.loads(path.read_text(encoding="utf-8"))["limits"]["clarify"]["questions"])
+
+
+def rounds_asked(request: dict) -> int:
+    """Số câu hỏi làm rõ cổng 2.5 đã gửi (tin nhắn admin trong thread)."""
+    return sum(1 for item in request.get("thread") or [] if isinstance(item, dict) and item.get("role") == "admin")
+
+
 def asks_about_code(question: str | None) -> bool:
     """Question names a file path or code detail: the student cannot answer it, the plan decides."""
     return bool(question and _CODE_QUESTION.search(question))
@@ -526,9 +537,18 @@ def _uncertain(validation: dict) -> bool:
     return not validation['clear'] or not validation.get('grounded')
 
 
+_EXISTS_CLAIM = re.compile(r"đã (?:có|tồn tại)|tương tự|already exists?|similar", re.I)
+
+
 def objection_advisory(validation: dict, files: dict) -> str | None:
     """Note when grounded=false has no verified citation (gate 2.5 does not block on it); None when it is verified."""
-    if validation.get('grounded') or evidence.verified(validation.get('objection'), files):
+    if validation.get('grounded'):
+        return None
+    verified = evidence.verified(validation.get('objection'), files)
+    if verified:
+        claim = str((validation.get('objection') or {}).get('claim') or '')
+        if _EXISTS_CLAIM.search(claim) and not grounding_paths.similar_basis(claim, {item['file'] for item in verified}, files):
+            return f"khẳng định 'đã có tương tự' không đạt ngưỡng BM25 trên repo, cổng 2.5 không chặn: {claim[:200]}"
         return None
     return f"grounded=false không có trích dẫn kiểm chứng được, cổng 2.5 không chặn: {str(validation.get('reason') or '')[:200]}"
 
@@ -643,6 +663,10 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
         # student again would only loop: clear the plan and record the note for the admin.
         state["assumption"] = validation["question"] or validation.get("reason") or "spec đã làm rõ"
         judge("clarified spec", True, state["assumption"])
+        validation = {**validation, "clear": True}
+    if not validation["clear"] and rounds_asked(request) >= clarify_limit():
+        state["assumption"] = validation["question"] or validation.get("reason") or "yêu cầu chưa nêu rõ"
+        judge("clarify limit", True, state["assumption"])
         validation = {**validation, "clear": True}
     if not validation["clear"]:
         question = validation["question"] or "Plan chưa đủ rõ — bạn mô tả thêm chi tiết được không?"
