@@ -72,32 +72,15 @@ def test_bm25_ranks_deterministically():
 SO_TAY_REQUEST = {"subject": "Thêm trang Sổ tay Git", "body": "Kiểm tra: node --test test/so-tay-git.test.js xác nhận trang"}
 
 
-def so_tay_plan(with_test):
-    subtasks = [task("public/so-tay-git.html", "node --test test/so-tay-git.test.js"),
-                task("public/js/school.js", "node --test test/so-tay-git.test.js")]
-    if with_test:
-        subtasks.append(task("test/so-tay-git.test.js", "node --test test/so-tay-git.test.js"))
-    return {"subtasks": subtasks}
+def so_tay_plan(with_test=False):
+    return {"subtasks": [task("public/so-tay-git.html", "node --test test/so-tay-git.test.js"),
+                         task("public/js/school.js", "node --test test/so-tay-git.test.js")]}
 
 
-def test_request_named_test_that_no_step_creates_is_repairable_and_has_no_noise_hint(repo):
-    source, sha = repo
-    with pytest.raises(ValueError) as err:
-        gp.check_references(so_tay_plan(False), source, sha, SO_TAY_REQUEST)
-    message = str(err.value)
-    assert "test/so-tay-git.test.js" in message and "tạo" in message
-    assert "file gần nhất" not in message and "test_eval_git" not in message
 
 
-def test_request_named_test_created_by_a_step_passes(repo):
-    source, sha = repo
-    gp.check_references(so_tay_plan(True), source, sha, SO_TAY_REQUEST)
 
 
-def test_request_named_test_missing_alone_is_reported(repo):
-    source, sha = repo
-    plan = {"subtasks": [task("public/so-tay-git.html", "mở trang")]}
-    assert gp.named_tests_missing(SO_TAY_REQUEST, plan, gp.listing(source, sha)) == ["test/so-tay-git.test.js"]
 
 
 def test_nearest_files_ignore_harness_and_single_token_matches():
@@ -109,7 +92,7 @@ def test_error_message_has_no_placeholder_path_for_the_repeat_signature(repo):
     from runtime import objection_repeat
     source, sha = repo
     with pytest.raises(ValueError) as err:
-        gp.check_references(so_tay_plan(False), source, sha, SO_TAY_REQUEST)
+        gp.check_references(so_tay_plan(False), source, sha, {})
     stopped = {"gate": 1, "result": {"reason": f"plan không hợp lệ: {err.value}"}}
     assert objection_repeat.describe(stopped)["paths"] == ["test/so-tay-git.test.js"]
 
@@ -132,34 +115,38 @@ ROOT43_REQUEST = {"subject": "Thêm trang Sổ tay Git cho Trường CNTT", "typ
                   "body": "Tạo public/so-tay-git.html. Kiểm tra: node --test test/so-tay-git.test.js xác nhận trang tồn tại"}
 
 
-def test_root43_named_test_is_appended_deterministically(repo):
+def test_request_named_test_is_a_valid_new_target_without_a_subtask(repo):
     source, sha = repo
-    plan = root43_plan()
-    out = gp.with_named_tests(plan, ROOT43_REQUEST, gp.listing(source, sha))
-    last = out["subtasks"][-1]
-    assert len(out["subtasks"]) == 5 and last["file"] == "test/so-tay-git.test.js"
-    assert last["verify"] == "node --test test/so-tay-git.test.js" and last["depends_on"] == [1, 2, 3, 4]
-    gp.check_references(out, source, sha, ROOT43_REQUEST)
+    gp.check_references(so_tay_plan(), source, sha, SO_TAY_REQUEST)
 
 
-def test_named_test_already_in_plan_or_repo_is_left_alone(repo):
+def test_test_path_the_request_did_not_name_stays_closed_world(repo):
     source, sha = repo
-    files = gp.listing(source, sha)
-    assert gp.with_named_tests(so_tay_plan(True), SO_TAY_REQUEST, files)["subtasks"] == so_tay_plan(True)["subtasks"]
-    existing = {"subject": "x", "body": "node --test test/existing.test.js"}
-    assert gp.with_named_tests(so_tay_plan(False), existing, files) == so_tay_plan(False)
+    with pytest.raises(ValueError, match="test/so-tay-git.test.js"):
+        gp.check_references(so_tay_plan(), source, sha, {"subject": "s", "body": "không nêu test"})
+    assert "file gần nhất" not in _msg(so_tay_plan(), source, sha)
 
 
-def test_unnamed_paths_stay_closed_world(repo):
-    source, sha = repo
-    plan = {"subtasks": [task("public/index.html", "node --test test/invented.test.js")]}
-    out = gp.with_named_tests(plan, {"subject": "s", "body": "không nêu test"}, gp.listing(source, sha))
-    assert out == plan
-    with pytest.raises(ValueError):
-        gp.check_references(out, source, sha, {})
+def _msg(plan, source, sha):
+    try:
+        gp.check_references(plan, source, sha, {})
+    except ValueError as err:
+        return str(err)
 
 
-def test_gate1_run_accepts_root43_plan_with_appended_test(repo, monkeypatch):
+def root43_plan():
+    pages = ["public/so-tay-git.html", "public/js/domains/it/experiences.js", "public/js/domains/it/modules.js",
+             "public/campus-proto/b-iso-canvas.html"]
+    return {"summary_vi": "Thêm trang Sổ tay Git.", "capabilities": ["public.ui"], "acceptance": ["node --test test/so-tay-git.test.js"],
+            "subtasks": [{"title": f"Sửa {p}", "file": p, "size": "small", "layer": "frontend",
+                          "verify": "node --test test/so-tay-git.test.js"} for p in pages]}
+
+
+ROOT43_REQUEST = {"subject": "Thêm trang Sổ tay Git cho Trường CNTT", "type": "feature", "domain": "it", "complexity_by_server": True,
+                  "body": "Tạo public/so-tay-git.html. Kiểm tra: node --test test/so-tay-git.test.js xác nhận trang tồn tại"}
+
+
+def test_gate1_run_accepts_root43_plan_without_a_test_subtask(repo):
     import json
     from budget import Budget
     from conftest import FakeModels, deps_with
@@ -171,6 +158,18 @@ def test_gate1_run_accepts_root43_plan_with_appended_test(repo, monkeypatch):
         (source / rel).write_text("x")
     subprocess.run(["git", "-C", str(source), "add", "."], check=True)
     subprocess.run(["git", "-C", str(source), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "pages"], check=True)
-    out = brainstorm.run(ROOT43_REQUEST, deps_with(FakeModels(json.loads(json.dumps(root43_plan())))), Budget(), source=source)
+    out = brainstorm.run(ROOT43_REQUEST, deps_with(FakeModels(root43_plan())), Budget(), source=source)
     assert out["blocked"] is False, out["reason"]
-    assert out["plan"]["subtasks"][-1]["file"] == "test/so-tay-git.test.js"
+    assert [t["file"] for t in out["plan"]["subtasks"]][-1] == "public/campus-proto/b-iso-canvas.html"
+    assert not any(t["file"].startswith("test/") for t in out["plan"]["subtasks"])
+
+
+def test_server_422_body_is_kept_in_the_worker_error():
+    import io
+    import urllib.error
+    from worker import _with_body
+
+    body = b'{"code":"scope_not_granted","reason":"scope test/x.js is not granted to capability generated.context"}'
+    error = urllib.error.HTTPError("http://x/plan", 422, "Unprocessable Entity", {}, io.BytesIO(body))
+    assert "scope_not_granted" in str(_with_body(error)) and "not granted" in str(_with_body(
+        urllib.error.HTTPError("http://x/plan", 422, "Unprocessable Entity", {}, io.BytesIO(body))))

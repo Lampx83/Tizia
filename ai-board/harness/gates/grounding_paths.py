@@ -56,43 +56,27 @@ def referenced_paths(plan: dict) -> list[str]:
     return list(dict.fromkeys(p.lstrip("./") for p in found))
 
 
-def ungrounded(plan: dict, files: set[str]) -> list[str]:
-    """Đường dẫn plan nhắc nhưng không có trong repo và không do subtask nào tạo/sửa."""
-    own = {t["file"] for t in plan.get("subtasks") or []}
+def ungrounded(plan: dict, files: set[str], request: dict | None = None) -> list[str]:
+    """Đường dẫn plan nhắc nhưng không có trong repo, không do subtask nào tạo/sửa, và không phải test request nêu."""
+    own = {t["file"] for t in plan.get("subtasks") or []} | named_tests(request or {})
     return [p for p in referenced_paths(plan) if p not in files and p not in own]
 
 
-def named_tests_missing(request: dict, plan: dict, files: set[str]) -> list[str]:
-    """File test request nêu tên mà repo không có và không subtask nào tạo."""
+def named_tests(request: dict) -> set[str]:
+    """File test request nêu tên: đích test mới hợp lệ (gate 5 chạy/sinh), không phải scope của step."""
     text = " ".join(str(request.get(k) or "") for k in ("subject", "body", "clarified_spec"))
-    named = [p.lstrip("./") for p in _ROOTED.findall(text) + _TEST_ARG.findall(text)]
-    own = {t["file"] for t in plan.get("subtasks") or []}
-    return [p for p in dict.fromkeys(named) if _TESTISH.search(p) and p not in files and p not in own]
-
-
-def with_named_tests(plan: dict, request: dict, files: set[str]) -> dict:
-    """Thêm subtask tạo mỗi file test request nêu tên mà repo và plan chưa có; verify = lệnh node --test của chính file đó."""
-    missing = named_tests_missing(request, plan, files)
-    if not missing:
-        return plan
-    count = len(plan["subtasks"])
-    extra = [{"title": f"Tạo file test {path}", "file": path, "verify": f"node --test {path}", "size": "small",
-              "layer": "wiring", "depends_on": list(range(1, count + 1))} for path in missing]
-    return {**plan, "subtasks": [*plan["subtasks"], *extra]}
+    return {p.lstrip("./") for p in _ROOTED.findall(text) + _TEST_ARG.findall(text) if _TESTISH.search(p)}
 
 
 def check_references(plan: dict, source, sha: str | None, request: dict | None = None) -> None:
-    """Raise ValueError (plan sửa được) nếu plan nhắc đường dẫn không có thật hoặc bỏ sót test request nêu."""
+    """Raise ValueError (plan sửa được) nếu plan nhắc đường dẫn không có thật."""
     files = listing(source, sha) if sha else set()
     if not files:
         return
-    bad = ungrounded(plan, files)
+    bad = ungrounded(plan, files, request)
     if bad:
         near = [] if _TESTISH.search(bad[0]) else bm25_top(bad[0], files)
         hint = (f"; file gần nhất: {', '.join(p for p, _ in near)}" if near
-                else "; nếu là test mới, thêm subtask tạo file đó")
+                else "; chỉ dùng file có thật hoặc test request đã nêu")
         raise ValueError(f"đường dẫn '{bad[0]}' không có trong repo và không phải file plan tạo (mỗi đường dẫn nhắc tới "
                          f"phải có thật hoặc do một subtask tạo){hint}")
-    missing = named_tests_missing(request or {}, plan, files)
-    if missing:
-        raise ValueError(f"request nêu file test '{missing[0]}' nhưng không subtask nào tạo nó — thêm subtask tạo file test này")
