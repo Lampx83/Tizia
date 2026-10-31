@@ -1631,7 +1631,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       const hit = hitRootGroup(await readRootAllowance(db, root.id));
       if (hit) {
         phase = 'root_allowance_exhausted';
-        note = `Đã hết hạn mức ${ROOT_GROUP_LABEL[hit.group]} của yêu cầu (${hit.used}/${hit.limit}); chờ quản trị viên gia hạn.`;
+        note = `Đã hết hạn mức ${ROOT_GROUP_LABEL[hit.group]} của yêu cầu (${hit.used}/${hit.limit}); hạn mức cấu hình trong contract.json, đổi xong cần triển khai lại mới áp dụng.`;
         internalReason = `root_allowance_exhausted:${hit.group}:${hit.used}/${hit.limit}`;
       }
     } else if (verdict.failure_class === 'plan') {
@@ -1978,7 +1978,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     root.rerun_reason = rerun.reason;
     const allowance = await readRootAllowance(db, root.id);
     root.allowance = allowance && { blocked_reason: allowance.blocked_reason, unknown_holds: allowance.unknown_holds,
-      groups: allowance.groups, hit: hitRootGroup(allowance), extension_max: LIMITS.root_work_extension.max, daily_gpu: await dailyGpuStatus(Number(requestId)) };
+      groups: allowance.groups, hit: hitRootGroup(allowance), daily_gpu: await dailyGpuStatus(Number(requestId)) };
     return {
       root, plan, children, runs, events, candidate, pull_request: await latestPullRequest(root.id), trace_ref: await traceRef(root.id),
       gate_names: CONTRACT.gates.names, graph: EXECUTION_GRAPH,
@@ -2132,7 +2132,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   // gate 1; the pre-PR gates (3-5.5) are one unit on the approved plan and restart from gate 3.
   const PLAN_BLOCKED_PHASES = ['clarification_limit', 'plan_blocked', 'precheck_blocked'];
   // plan_unfit is not rerunnable: the plan cannot be carried out as written, repeating gates 3-5 fails the same way.
-  const EXEC_BLOCKED_PHASES = ['transient_blocked', 'pre_pr_blocked'];
+  const EXEC_BLOCKED_PHASES = ['transient_blocked', 'pre_pr_blocked', 'root_allowance_exhausted'];
   const gateStage = (gate) => ([1, 2, 2.5].includes(gate) ? 'plan' : [3, 4, 5, 5.5].includes(gate) ? 'execute' : null);
 
   /** Which stage an admin may rerun now, with a plain reason when none: {stage: 'plan' | 'execute' | null, reason}. */

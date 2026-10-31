@@ -69,41 +69,6 @@ export async function readRootAllowance(db, root) {
     unknown_model_attempts: unknown, unknown_holds: unknown, groups: rootAllowanceGroups({ limits, used }) };
 }
 
-/** Admin nâng một nhóm hạn mức root đã cạn: tối đa theo contract, không thấp hơn đã dùng; ghi ledger + sự kiện, đưa ticket về hàng đợi. */
-export async function extendRootAllowance(db, rootId, { group, to, reason, adminUserId }, now = Date.now()) {
-  const ceiling = LIMITS.root_work_extension.max[group];
-  if (ceiling == null) throw bad('unknown allowance group', 'invalid_group');
-  const target = Number(to);
-  if (!Number.isSafeInteger(target)) throw bad('limit must be an integer', 'invalid_limit');
-  const why = String(reason || '').trim();
-  if (why.length < 10) throw bad('a reason of at least 10 characters is required', 'reason_required');
-  return db.tx(async () => {
-    const root = await db.get(`SELECT * FROM ai_tickets WHERE id=? AND kind='root'${db.lockRow}`, [Number(rootId)]);
-    if (!root) throw bad('ticket not found', 'ticket_not_found', 404);
-    if (root.status !== 'waiting_admin' || root.phase !== 'root_allowance_exhausted') {
-      throw bad('ticket is not waiting on an exhausted root allowance', 'not_root_allowance_exhausted', 409);
-    }
-    const current = await readRootAllowance(db, root.id);
-    const used = group === 'tokens' ? current.used.metered_tokens : current.used[group];
-    const from = current.limits[group];
-    if (target < used) throw bad('limit cannot go below what is already used', 'below_used', 409);
-    if (target <= from) throw bad('limit must be raised', 'not_an_extension', 409);
-    if (target > ceiling) throw bad(`limit above the contract ceiling ${ceiling}`, 'above_ceiling', 409);
-    await db.run('UPDATE ai_root_allowances SET limits_json=? WHERE root_ticket_id=?',
-      [JSON.stringify({ ...current.limits, [group]: target }), root.id]);
-    await db.run(`INSERT INTO ai_root_allowance_extensions(root_ticket_id, group_name, from_limit, to_limit, admin_user_id, reason, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`, [root.id, group, from, target, Number(adminUserId), why.slice(0, 500), now]);
-    const note = 'Quản trị viên đã gia hạn hạn mức của yêu cầu; yêu cầu sẽ được xử lý tiếp.';
-    await db.run(`UPDATE ai_tickets SET status='queued', phase='authorized', public_note=?,
-        lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE id=?`, [note, now, root.id]);
-    await db.run(`INSERT INTO ai_events(ticket_id, event_type, actor_type, actor_id, transition, public_message, internal_detail, idempotency_key, created_at)
-      VALUES (?, 'root_allowance_extended', 'admin', ?, 'waiting_admin->queued', ?, ?, ?, ?)`,
-    [root.id, String(adminUserId), note, JSON.stringify({ group, from, to: target, reason: why.slice(0, 500) }),
-      `root-allowance-extended:${root.id}:${group}:${now}`, now]);
-    return { ok: true, status: 'queued', phase: 'authorized', group, from, to: target };
-  });
-}
-
 /** Root-owned work is reserved before I/O; unknown attempts keep their full token reservation. */
 export function createRootAllowanceService(store) {
   const db = store.db;
