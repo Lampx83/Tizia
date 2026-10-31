@@ -134,3 +134,28 @@ def test_parallel_owned_trees_keep_their_own_journal_and_cleanup():
         thread.join()
     assert results['slow'].stdout.strip() == 'slow-done'
     assert results['fast'].stdout.strip() == 'fast-done'
+
+
+def test_two_profiles_in_parallel_stay_on_their_own_run(lease):
+    runner = FakeRunner()
+    sessions = [_session(runner, 'loop-' + ('e' if i == 0 else 'f') * 24) for i in range(2)]
+    profiles = ['light', 'platform']
+    for session, profile in zip(sessions, profiles):
+        runner.receipts[session.run_id] = _receipt(profile, Workspace, session.sha)
+    errors = []
+
+    def work(session, profile):
+        try:
+            session.run(profile, Workspace)
+        except Exception as error:
+            errors.append(error)
+
+    threads = [threading.Thread(target=work, args=(s, p)) for s, p in zip(sessions, profiles)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert errors == []
+    for session in sessions:
+        assert {run_id for _, run_id in runner.calls if run_id == session.run_id} == {session.run_id}
+    assert {run_id for _, run_id in runner.calls} == {s.run_id for s in sessions}
