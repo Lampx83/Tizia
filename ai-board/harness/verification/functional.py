@@ -23,6 +23,20 @@ _INSTEAD = re.compile(r'\b(thay vì|thay vào đó|instead of|rather than)\b')
 _REPLACE = re.compile(r'\b(đổi|thay|rename|change|replace)\b[^\n]*?(thành|bằng|→|->|\bto\b)')
 
 
+_IDENTIFIER = re.compile(r'^\S*[-_/.:]\S*$')
+_FILE_CLAUSE = re.compile(r'(chuỗi|chứa|string|contains?|tệp|file|đăng ký|register)[^\n"“‘«\']{0,20}$')
+
+
+def _quoted(raw):
+    """[(text, is_label)]: a quote is a visible label unless it is one token shaped like a slug/path/code or sits in a clause about file content."""
+    out = []
+    for m in _QUOTED.finditer(raw):
+        text = next(g for g in m.groups() if g)
+        before = raw[max(0, m.start() - 40):m.start()].lower()
+        out.append((text, not (_IDENTIFIER.match(text) or _FILE_CLAUSE.search(before))))
+    return out
+
+
 def request_text(state):
     text = str(state.get('request_title') or '') + '\n' + str(state.get('request_detail') or '')
     text = unicodedata.normalize('NFD', text.lower())
@@ -36,21 +50,23 @@ def text_expectation(state):
     raw = str(state.get('request_title') or '') + '\n' + str(state.get('request_detail') or '')
     raw = _PAGE_LINE.sub('', raw)  # the requester's own page, not words they asked for
     quotes = [next(g for g in m.groups() if g) for m in _QUOTED.finditer(raw)]
+    ignored = [t for t, label in _quoted(raw) if not label]
     words = unicodedata.normalize('NFC', raw.lower())
     add, remove, replace = _ADD.search(words), _REMOVE.search(words), _REPLACE.search(words)
     none = {'present': [], 'absent': []}
     if not quotes or (remove and (add or replace)):
         return none
+    shown = lambda items: [t for t in items if t not in ignored]
     cut = _INSTEAD.search(raw.lower())  # "show 'X' instead of 'Y'": Y must go, not show
     if cut and not remove:
         head = [next(g for g in m.groups() if g) for m in _QUOTED.finditer(raw[:cut.start()])]
         tail = [next(g for g in m.groups() if g) for m in _QUOTED.finditer(raw[cut.end():])]
         if head and tail:
-            return {'present': head, 'absent': tail}
+            return {'present': shown(head), 'absent': tail}
     if replace and len(quotes) >= 2:
-        return {'present': [quotes[-1]], 'absent': [quotes[0]] if quotes[0] != quotes[-1] else []}
+        return {'present': shown([quotes[-1]]), 'absent': [quotes[0]] if quotes[0] != quotes[-1] else []}
     if add:
-        return {'present': quotes, 'absent': []}
+        return {'present': shown(quotes), 'absent': []}
     return {'present': [], 'absent': quotes} if remove else none
 
 
@@ -144,6 +160,7 @@ def run_text(base, state, fixture, pages):
         reason = 'Chữ cần bỏ vẫn còn trên trang: ' + ', '.join(repr(t) for t in lingering)
     return {'probe_id': TEXT_PROBE, 'passed': reason is None, 'reason': reason, 'coverage': {'rendered_text': True},
             'observations': {'expected': json.dumps(expected, ensure_ascii=False),
+                             **({'missing': json.dumps(missing, ensure_ascii=False)} if missing else {}),
                              **{f'page {path}': text[:1000] for path, text in shown.items()}}}
 
 
