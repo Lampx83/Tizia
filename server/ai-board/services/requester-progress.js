@@ -7,7 +7,7 @@ import { gateEta } from '../../../public/js/ai-board-gate-timing.js';
 export async function requesterProgress(store, requestId, ownerUserId, isAdmin = false) {
   const row = await store.db.get(`
     SELECT r.id, r.status, t.id AS root_id, t.status AS ticket_status, t.phase, t.public_note,
-           t.lease_owner, t.lease_expires_at
+           t.lease_owner, t.lease_expires_at, t.cumulative_budget, t.budget_limit
     FROM requests r LEFT JOIN ai_tickets t ON t.source_request_id = r.id AND t.parent_id IS NULL
     WHERE r.id = ? AND r.owner_user_id = ?
   `, [Number(requestId), Number(ownerUserId)]);
@@ -26,6 +26,7 @@ export async function requesterProgress(store, requestId, ownerUserId, isAdmin =
     // Người gửi không được resume; muốn thay đổi thì dừng rồi sửa yêu cầu và gửi lại.
     can_edit: !isAdmin && !live && EDITABLE_PHASES.has(row.phase),
     eta_ms: live ? await etaMs(store, row.root_id) : null,
+    budget: row.root_id ? { used: Number(row.cumulative_budget) || 0, limit: Number(row.budget_limit) || null } : null,
     stop_reason: stopped ? row.public_note ?? null : null,
   };
 }
