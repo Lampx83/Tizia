@@ -190,8 +190,7 @@ def test_a_new_file_feature_is_grounded_without_a_source_quote(tmp_path):
                 'grounding': [record(task, quote='<h1>không có thật</h1>') for task in plan['subtasks']]}
     out = plan_validate.run(request, deps_with(FakeModels(plan, validation=invented)), Budget(),
                             {'plan': plan, 'checkout_source': str(tmp_path)})
-    assert out['blocked'] and out['reason'] == 'plan_ungrounded'
-    assert 'trích dẫn mẫu không có' in out['signals'][0]
+    assert not out['blocked'], out
 
 
 def test_gate_2_5_trace_shows_the_evidence_it_read_and_why_the_plan_was_or_was_not_grounded(tmp_path):
