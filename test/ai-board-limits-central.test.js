@@ -19,7 +19,7 @@ test('contract carries the loop, budget and sandbox client defaults', () => {
   assert.deepEqual({ model_calls: loop.model_calls, tool_calls: loop.tool_calls, repeats: loop.repeats, error_chars: loop.error_chars },
     { model_calls: 10, tool_calls: 30, repeats: 3, error_chars: 2000 });
   assert.deepEqual(budget, { model_calls: 40, tool_calls: 200, tokens: 200000, retries: 3, units: 600,
-    wall_clock_s: 900, semantic_repairs: 3, child_wall_clock_s: 300 });
+    wall_clock_s: 900, semantic_repairs: 3, child_wall_clock_s: 300, node_wall_clock_s: 1200 });
   assert.deepEqual(CONTRACT.limits.sandbox_client.backoff_s, [1, 2, 4, 8]);
   assert.equal(CONTRACT.limits.sandbox_client.call_attempts, 3);
 });
