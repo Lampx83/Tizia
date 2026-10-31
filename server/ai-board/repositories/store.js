@@ -5,7 +5,7 @@ import { CAPABILITY_CATALOG, PlanGuardrailError, validatePlan } from '../securit
 import { check as checkPath } from '../security/path-policy.js';
 import { registerRelease, assertFeatureNotIsolated } from '../services/releases.js';
 import { repeatedQuestion } from '../services/clarity-rules.js';
-import { readRootAllowance } from '../services/root-allowance.js';
+import { ROOT_GROUP_LABEL, hitRootGroup, readRootAllowance } from '../services/root-allowance.js';
 import {
   ACTIVE_ONLY, AI_BRANCH, ANY_QUEUE, CLAIM_INTENTS, CLARIFYING_NOTE, CLARIFY_AUTHOR, CONTRACT, DAY_MS, EVENT_TYPES, EXECUTION_GRAPH,
   IDEMPOTENCY_KEY as KEY, LEASE_MS, LIMITS, MAX_BUDGET_EXTENSION, MAX_BUDGET_EXTENSIONS, MAX_BUDGET_LIMIT, MAX_TRACE_BATCH,
@@ -1613,6 +1613,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     let note = verdict.outcome === 'ready_for_pr' ? 'Thay đổi đã qua kiểm tra trước PR.'
       : verdict.outcome === 'needs_review' ? 'Thay đổi cần con người xem xét trước PR.'
         : 'Thay đổi chưa qua kiểm tra trước PR.';
+    let internalReason = verdict.reason;
     let leaseExpiresAt = null; // non-null chỉ khi transient_retry bật: dời deadline lease để claimTransaction tự cứu
     let replan = false;
     if (verdict.failure_class === 'critical') {
@@ -1627,6 +1628,12 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       status = 'waiting_admin';
       phase = 'budget_exhausted';
       note = 'Yêu cầu đang chờ quản trị viên xem xét.';
+      const hit = hitRootGroup(await readRootAllowance(db, root.id));
+      if (hit) {
+        phase = 'root_allowance_exhausted';
+        note = `Đã hết hạn mức ${ROOT_GROUP_LABEL[hit.group]} của yêu cầu (${hit.used}/${hit.limit}); hạn mức cấu hình trong contract.json, đổi xong cần triển khai lại mới áp dụng.`;
+        internalReason = `root_allowance_exhausted:${hit.group}:${hit.used}/${hit.limit}`;
+      }
     } else if (verdict.failure_class === 'plan') {
       // The accepted plan cannot be carried out as written: admin clarifies, rejects or hands it to a human.
       // LF/74 (cờ repair_replan, mặc định tắt): lập lại kế hoạch một vòng tự động, vẫn trong trần lượt tự động
@@ -1692,18 +1699,18 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     if (leaseExpiresAt != null) {
       // Về hàng đợi (không ai giữ): xoá lease_owner/token cũ, lease_expires_at dùng làm "không nhận trước giờ này".
       await db.run(`UPDATE ai_tickets SET status=?, phase=?, public_note=?, internal_reason=?, cumulative_budget=?,
-          lease_owner=NULL, lease_token=NULL, lease_expires_at=?, updated_at=? WHERE id=?`, [status, phase, note, verdict.reason, cumulativeBudget, leaseExpiresAt, input.now, root.id]);
+          lease_owner=NULL, lease_token=NULL, lease_expires_at=?, updated_at=? WHERE id=?`, [status, phase, note, internalReason, cumulativeBudget, leaseExpiresAt, input.now, root.id]);
     } else {
-      await db.run('UPDATE ai_tickets SET status=?, phase=?, public_note=?, internal_reason=?, cumulative_budget=?, updated_at=? WHERE id=?', [status, phase, note, verdict.reason, cumulativeBudget, input.now, root.id]);
+      await db.run('UPDATE ai_tickets SET status=?, phase=?, public_note=?, internal_reason=?, cumulative_budget=?, updated_at=? WHERE id=?', [status, phase, note, internalReason, cumulativeBudget, input.now, root.id]);
     }
     await db.run(`
       INSERT INTO ai_events(ticket_id, run_id, event_type, actor_type, actor_id, transition,
         public_message, internal_detail, idempotency_key, created_at)
       VALUES (?, ?, 'pre_pr_verdict', 'worker', ?, ?, ?, ?, ?, ?)
-    `, [root.id, run.id, input.workerId, `running->${phase}`, note, verdict.reason,
+    `, [root.id, run.id, input.workerId, `running->${phase}`, note, internalReason,
       input.idempotencyKey, input.now]);
     if (verdict.outcome === 'blocked' && leaseExpiresAt == null && status !== 'waiting_admin'
-      && !replan && verdict.failure_class !== 'partial') await recordFolderDecision(root, 'blocked', verdict.reason, input.now);
+      && !replan && verdict.failure_class !== 'partial') await recordFolderDecision(root, 'blocked', internalReason, input.now);
     return verdict;
   });
 
@@ -1969,9 +1976,14 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     root.rerun_stage = rerun.stage; // 'plan' | 'execute' | null: which failed stage the admin may rerun now
     root.rerun_allowed = !!rerun.stage;
     root.rerun_reason = rerun.reason;
-    const allowance = await readRootAllowance(db, root.id);
+    // Admin sees the budget that is actually at its cap: execute first, else the plan-phase one.
+    let allowance = await readRootAllowance(db, root.id);
+    if (allowance && !hitRootGroup(allowance)) {
+      const planView = await readRootAllowance(db, root.id, 'plan');
+      if (hitRootGroup(planView)) allowance = planView;
+    }
     root.allowance = allowance && { blocked_reason: allowance.blocked_reason, unknown_holds: allowance.unknown_holds,
-      groups: allowance.groups, daily_gpu: await dailyGpuStatus(Number(requestId)) };
+      groups: allowance.groups, hit: hitRootGroup(allowance), daily_gpu: await dailyGpuStatus(Number(requestId)) };
     return {
       root, plan, children, runs, events, candidate, pull_request: await latestPullRequest(root.id), trace_ref: await traceRef(root.id),
       gate_names: CONTRACT.gates.names, graph: EXECUTION_GRAPH,
@@ -2125,7 +2137,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   // gate 1; the pre-PR gates (3-5.5) are one unit on the approved plan and restart from gate 3.
   const PLAN_BLOCKED_PHASES = ['clarification_limit', 'plan_blocked', 'precheck_blocked'];
   // plan_unfit is not rerunnable: the plan cannot be carried out as written, repeating gates 3-5 fails the same way.
-  const EXEC_BLOCKED_PHASES = ['transient_blocked', 'pre_pr_blocked'];
+  const EXEC_BLOCKED_PHASES = ['transient_blocked', 'pre_pr_blocked', 'root_allowance_exhausted'];
   const gateStage = (gate) => ([1, 2, 2.5].includes(gate) ? 'plan' : [3, 4, 5, 5.5].includes(gate) ? 'execute' : null);
 
   /** Which stage an admin may rerun now, with a plain reason when none: {stage: 'plan' | 'execute' | null, reason}. */

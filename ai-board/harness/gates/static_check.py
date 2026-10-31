@@ -20,6 +20,7 @@ import classifier
 import functional
 from gates import adversarial_review, change_class, guard, intake_guard, reviewer_fix, risk_triage
 from repositories import server_hsm
+from runtime.budget import BudgetExhausted
 
 CONTENT_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "content_guard.md").read_text(encoding="utf-8")
 CONTENT_LABELS = tuple(x for x in intake_guard.LABELS
@@ -171,6 +172,8 @@ def content_review(state: dict, deps, budget, *, db_path=None, proposal_id: int 
                                    db_path=db_path, proposal_id=proposal_id, prompt_name="content_guard.md",
                                    format=intake_guard.labels_format(CONTENT_LABELS))
         except server_hsm.AuthorityError as error:
+            return {"blocked": True, "labels": labels, "reason": str(error), "failure_class": error.failure_class}
+        except BudgetExhausted as error:
             return {"blocked": True, "labels": labels, "reason": str(error), "failure_class": error.failure_class}
         except Exception as e:  # model sập/timeout — chuyển người soát (chạy lại được), không cho qua im lặng
             why, outage = f"bộ soát nội dung lỗi: {str(e)[:200]}", True

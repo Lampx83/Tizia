@@ -103,7 +103,7 @@ const ok = (state, text) => `<span class="s-${state}">${esc(text)}</span>`;
 function eventState(e) {
   const t = `${e.event_type} ${e.transition || ''}`;
   if (/transient/.test(t)) return 'warn';
-  if (/blocked|critical|rejected|cancel|budget_exhausted|waiting_admin|rollback_failed/.test(t)) return 'bad';
+  if (/blocked|critical|rejected|cancel|budget_exhausted|root_allowance_exhausted|waiting_admin|rollback_failed/.test(t)) return 'bad';
   if (/waiting|review|clarif|rollback/.test(t)) return 'warn';
   return 'ok';
 }
@@ -307,9 +307,11 @@ function renderActions(request, trace) {
   const canCancel = !candidate && !['rejected', 'cancelled', 'done'].includes(request.status);
   const canRetryTransient = root?.phase === 'transient_blocked';
   const canContinuePartial = root?.phase === 'partial';
-  if (!canRollback && !canCancel && !canRetryTransient && !canContinuePartial) return `<div class="flash" role="status" tabindex="-1">${ui.flash ? esc(ui.flash) : ''}</div>`;
+  const hit = root?.phase === 'root_allowance_exhausted' ? root.allowance?.hit : null;
+  if (!canRollback && !canCancel && !canRetryTransient && !canContinuePartial && !hit) return `<div class="flash" role="status" tabindex="-1">${ui.flash ? esc(ui.flash) : ''}</div>`;
   const busy = root?.live;
   return `<div class="actions">
+      ${hit ? `<p class="meta">Đã hết hạn mức ${esc(GROUP_LABEL[hit.group])} của yêu cầu: dùng ${fmtNum(hit.used)} / ${fmtNum(hit.limit)}. Đây không phải lỗi hạ tầng. Hạn mức cấu hình trong contract.json; đổi xong cần triển khai lại mới áp dụng, rồi bấm Chạy lại.</p>` : ''}
       ${canContinuePartial ? `<button class="btn ok" data-action="continue-partial" data-request="${esc(request.id)}"
         title="Đã xong một phần plan; chạy nốt phần còn lại từ checkpoint, không lập plan mới">Tiếp tục phần còn lại</button>` : ''}
       ${canRetryTransient ? `<button class="btn ok" data-action="retry-transient" data-root="${esc(root.id)}"
@@ -321,6 +323,9 @@ function renderActions(request, trace) {
     </div>
     ${ui.confirm ? renderConfirm(request, candidate) : ''}`;
 }
+
+const GROUP_LABEL = { model_calls: 'số lần gọi model', tool_calls: 'số lần gọi công cụ', tokens: 'token',
+  semantic_repairs: 'số lần tự sửa theo ngữ nghĩa', quality_switches: 'số lần đổi sang model chất lượng' };
 
 async function retryTransient(btn) {
   btn.disabled = true;
