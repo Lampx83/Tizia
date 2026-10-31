@@ -124,11 +124,64 @@ def test_sniff_ignores_client_mime(tmp_path):
     assert report['items'] == []
 
 
-def test_sandbox_configured_fails_closed(tmp_path, monkeypatch):
+class FakeRunner:
+    def __init__(self, outcome):
+        self.outcome, self.argv, self.created, self.destroyed = outcome, None, [], []
+
+    def create(self, run_id, manifest, **_):
+        self.created.append(run_id)
+
+    def upload(self, run_id, archive, **_):
+        pass
+
+    def renew(self, run_id, **_):
+        pass
+
+    def destroy(self, run_id, **_):
+        self.destroyed.append(run_id)
+        return {'state': 'destroyed'}
+
+    def exec(self, run_id, argv, *, timeout, deadline=None):
+        self.argv = list(argv)
+        return self.outcome
+
+
+def test_sandbox_configured_parses_in_vm_and_destroys_it(tmp_path, monkeypatch):
+    runner = FakeRunner({'code': 0, 'stdout': 'từ sandbox', 'stderr': ''})
     monkeypatch.setenv('AI_BOARD_SANDBOX_URL', 'http://sandbox.invalid')
+    real = attachments.parse_in_sandbox
+    monkeypatch.setattr(attachments, 'parse_in_sandbox', lambda kind, data: real(kind, data, client=runner))
+    request, uploads = request_with(tmp_path, ('a.pdf', 'application/pdf', make_pdf(INJECTION)))
+    out, report = attachments.enrich(request, models=FakeModels(), budget=FakeBudget(), env=ON, uploads_dir=uploads)
+    assert report['items'][0]['status'] == 'ok' and 'từ sandbox' in out['body']
+    assert runner.argv[:3] == [attachments.GUEST_PYTHON, '-I', '-c'] and runner.argv[4:] == ['pdf', '/workspace/checkout/attachment.pdf']
+    assert runner.created and set(runner.created) == set(runner.destroyed)
+
+
+@pytest.mark.parametrize('code, status', [(attachments.SCANNED_EXIT, 'not_readable'), (1, 'not_readable')])
+def test_sandbox_failure_is_not_readable_and_destroys_vm(tmp_path, monkeypatch, code, status):
+    runner = FakeRunner({'code': code, 'stdout': '', 'stderr': 'boom'})
+    monkeypatch.setenv('AI_BOARD_SANDBOX_URL', 'http://sandbox.invalid')
+    real = attachments.parse_in_sandbox
+    monkeypatch.setattr(attachments, 'parse_in_sandbox', lambda kind, data: real(kind, data, client=runner))
     request, uploads = request_with(tmp_path, ('a.pdf', 'application/pdf', make_pdf(INJECTION)))
     _, report = attachments.enrich(request, models=FakeModels(), budget=FakeBudget(), env=ON, uploads_dir=uploads)
-    assert report['items'][0]['status'] == 'not_readable'
+    assert report['items'][0]['status'] == status
+    assert set(runner.created) == set(runner.destroyed)
+
+
+def test_guest_script_runs_standalone_like_in_the_vm(tmp_path):
+    import subprocess
+    import sys
+    path = tmp_path / 'attachment.pdf'
+    path.write_bytes(make_pdf(INJECTION))
+    done = subprocess.run([sys.executable, '-I', '-c', attachments._guest_script(), 'pdf', str(path)],
+                          capture_output=True, text=True, timeout=60)
+    assert done.returncode == 0 and INJECTION in done.stdout
+    path.write_bytes(make_pdf(''))
+    done = subprocess.run([sys.executable, '-I', '-c', attachments._guest_script(), 'pdf', str(path)],
+                          capture_output=True, text=True, timeout=60)
+    assert done.returncode == attachments.SCANNED_EXIT
 
 
 def test_cut_at_limit_is_shown(tmp_path):

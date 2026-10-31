@@ -1479,7 +1479,7 @@ class HarnessPlanner:
         def run_plan(req):
             """Một lượt cổng 1 → 2.5 trên `req`; trả {gate, result} của cổng chặn (rỗng nếu qua)."""
             stopped.clear()
-            for key in ("plan", "complexity_signals", "intake", "grounding", "assumption", "skill"):
+            for key in ("plan", "complexity_signals", "intake", "grounding", "assumption", "skill", "attachments"):
                 state.pop(key, None)
 
             def plan_gate(gate):
