@@ -1,7 +1,7 @@
 """Chữ ký phản đối plan (gate, lớp lý do, tập đường dẫn được trích) và quyết định dừng khi lặp."""
 import re
 
-_PATH = re.compile(r"(?<![\w/.-])((?:public|server|test|scripts|ai-board)/[\w./-]*[\w-])")
+_PATH = re.compile(r"(?<![\w/.-])((?:public|server|test|scripts|ai-board)/[\w./-]*[\w-]\.\w+)")
 
 
 def signature(stopped: dict) -> tuple:
