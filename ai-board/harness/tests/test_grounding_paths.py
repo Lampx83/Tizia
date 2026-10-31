@@ -103,3 +103,18 @@ def test_request_named_test_missing_alone_is_reported(repo):
 def test_nearest_files_ignore_harness_and_single_token_matches():
     paths = {"ai-board/harness/tests/test_eval_git.py", "public/bao-so-hoc.html", "public/dem-ngon-tay.html"}
     assert gp.bm25_top("public/so-tay-git.html", paths) == []
+
+
+def test_error_message_has_no_placeholder_path_for_the_repeat_signature(repo):
+    from runtime import objection_repeat
+    source, sha = repo
+    with pytest.raises(ValueError) as err:
+        gp.check_references(so_tay_plan(False), source, sha, SO_TAY_REQUEST)
+    stopped = {"gate": 1, "result": {"reason": f"plan không hợp lệ: {err.value}"}}
+    assert objection_repeat.describe(stopped)["paths"] == ["test/so-tay-git.test.js"]
+
+
+def test_signature_ignores_extensionless_placeholders():
+    from runtime import objection_repeat
+    reason = "mỗi test/file nhắc tới; xem public/a.html và public/js/x"
+    assert objection_repeat.describe({"gate": 1, "result": {"reason": reason}})["paths"] == ["public/a.html"]

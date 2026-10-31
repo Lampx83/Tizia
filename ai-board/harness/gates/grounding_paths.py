@@ -80,8 +80,8 @@ def check_references(plan: dict, source, sha: str | None, request: dict | None =
         near = [] if _TESTISH.search(bad[0]) else bm25_top(bad[0], files)
         hint = (f"; file gần nhất: {', '.join(p for p, _ in near)}" if near
                 else "; nếu là test mới, thêm subtask tạo file đó")
-        raise ValueError(f"đường dẫn '{bad[0]}' không có trong repo và không phải file plan tạo (mỗi test/file nhắc tới "
-                         f"phải nằm trong subtask hoặc có thật){hint}")
+        raise ValueError(f"đường dẫn '{bad[0]}' không có trong repo và không phải file plan tạo (mỗi đường dẫn nhắc tới "
+                         f"phải có thật hoặc do một subtask tạo){hint}")
     missing = named_tests_missing(request or {}, plan, files)
     if missing:
         raise ValueError(f"request nêu file test '{missing[0]}' nhưng không subtask nào tạo nó — thêm subtask tạo file test này")
