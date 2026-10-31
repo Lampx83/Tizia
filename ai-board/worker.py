@@ -698,6 +698,15 @@ class WorkerClient:
         return self.transport("POST", path, payload, headers)
 
 
+def _with_body(error):
+    """HTTPError kèm thân phản hồi (code + lý do server) trong message để admin thấy vì sao plan bị từ chối."""
+    try:
+        body = error.read().decode("utf-8", "replace")[:400]
+    except Exception:
+        return error
+    return RuntimeError(f"{error} — {body}") if body else error
+
+
 def _plan_rejection(error) -> str | None:
     """Nội dung từ chối của server khi plan sai schema; None nếu không phải lỗi nội dung plan."""
     if getattr(error, "code", None) not in (400, 409):
@@ -1216,7 +1225,7 @@ class HttpWorker:
                     # then the same submit. Any other 4xx/5xx keeps the old fail-fast path.
                     reason = _plan_rejection(rejected)
                     if not reason:
-                        raise
+                        raise _with_body(rejected)
                     repaired = _repaired_snapshot(snapshot, reason)
                     plan, used_again = self._with_heartbeat(lambda _lost: self.planner(repaired, **plan_kwargs), ticket_id, lease)
                     budget_used += used_again
