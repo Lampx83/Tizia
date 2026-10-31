@@ -111,7 +111,7 @@ def test_infrastructure_failover_charges_every_attempt_and_separates_credentials
     deps = Deps(models=client(), notify=None, sleep=lambda _: None, trace=trace)
     budget = Budget()
     result = deps.call_model('a', 'prompt', gate=1, budget=budget)
-    assert budget.model_calls == 4 and budget.tokens == 5 and budget.units == 4
+    assert budget.model_calls == 4 and budget.tokens == 0 and budget.units == 4  # local providers spend no tokens
     assert [c[0] for c in calls] == ['http://primary/api/generate'] * 3 + ['http://secondary/v1/chat/completions']
     assert calls[0][1]['X-ollama-seckey'] == 'primary-key'
     assert calls[-1][1]['X-ollama-seckey'] == 'secondary-key'

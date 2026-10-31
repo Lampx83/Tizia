@@ -222,7 +222,8 @@ class Deps:
         metrics = meter.measure(provider, body, int((time.monotonic() - started) * 1000))
         n = meter.units(provider, metrics)
         budget.spend("model_calls")
-        budget.spend("tokens", int(body.get("prompt_eval_count") or 0) + int(body.get("eval_count") or 0))
+        if provider == 'api':
+            budget.spend("tokens", int(body.get("prompt_eval_count") or 0) + int(body.get("eval_count") or 0))
         budget.spend("units", n)
         if db_path is not None and proposal_id is not None:
             gate_trace.record(db_path, skill_proposal_id=proposal_id, gate=gate,
@@ -279,7 +280,8 @@ class Deps:
                 metrics = meter.measure(provider, body, int((time.monotonic() - started) * 1000))
                 n = meter.units(provider, metrics)
                 budget.spend('model_calls')
-                budget.spend('tokens', int(body.get('prompt_eval_count') or 0) + int(body.get('eval_count') or 0))
+                if provider == 'api':
+                    budget.spend('tokens', int(body.get('prompt_eval_count') or 0) + int(body.get('eval_count') or 0))
                 budget.spend('units', n)
                 self._trace(gate, candidate['model'], prompt, prompt_name, body.get('response', ''), metrics, n,
                             'http_error' if error else 'ok', str(error) if error else None, child, iteration,

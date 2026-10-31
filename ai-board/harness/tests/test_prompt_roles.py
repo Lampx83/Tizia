@@ -110,10 +110,10 @@ def test_split_reasoning_roles_have_bounded_output_and_shared_trial_spend(split_
     assert sent[0]['max_tokens'] == 16384
     assert sent[0]['temperature'] == 0.6 and sent[0]['top_p'] == 0.95
     assert sent[0]['response_format'] == {'type': 'json_object'}
-    assert budget.tokens == 300 and budget.model_calls == 1
+    assert budget.tokens == 0 and budget.model_calls == 1  # vllm spends time, not tokens
     restored = Budget.restore(budget.snapshot())
     deps.call_model('m', 'task again', gate=gate, role=role, budget=restored)
-    assert restored.tokens == 600 and restored.model_calls == 2
+    assert restored.tokens == 0 and restored.model_calls == 2
 
 
 def test_split_values_block_at_most_five_lines():

@@ -75,9 +75,10 @@
       }
     },
     "budget": {
-      "_why": "Defaults of runtime/budget.py Budget (one run) and ChildBudget (one loop). BUDGET_MAX_<KEY> overrides for a measured run only.",
+      "_why": "Defaults of runtime/budget.py Budget (one run) and ChildBudget (one loop). BUDGET_MAX_<KEY> overrides for a measured run only. tokens count only for provider api (paid); vllm/ollama are bounded by time: node_wall_clock_s per graph node, wall_clock_s and units per run.",
       "model_calls": 40, "tool_calls": 200, "tokens": 200000, "retries": 3, "units": 600,
-      "wall_clock_s": 900, "semantic_repairs": 3, "child_wall_clock_s": 300
+      "wall_clock_s": 900, "semantic_repairs": 3, "child_wall_clock_s": 300,
+      "node_wall_clock_s": 1200
     },
     "sandbox_client": {
       "_why": "Gate 5 runner client (verification/sandbox.py): per-call timeouts in seconds, retry attempts and backoff for transient errors.",

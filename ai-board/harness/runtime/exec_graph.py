@@ -54,7 +54,13 @@ def compile_graph(handlers: dict[str, Callable[[], str]], entry: str, *, graph_s
 
     def make(nid: str):
         def node(_state: GraphState) -> GraphState:
-            return {"outcome": handlers[nid](), "path": [nid]}
+            from runtime import budget
+
+            budget.start_node(limits.budget()["node_wall_clock_s"])
+            try:
+                return {"outcome": handlers[nid](), "path": [nid]}
+            finally:
+                budget.start_node(None)
         return node
 
     def router(nid: str):

@@ -8,7 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 
 CONTRACT_PATH = Path(__file__).resolve().parents[3] / "server" / "ai-board" / "contract.json"
-_FLOAT_KEYS = {"wall_clock_s", "child_wall_clock_s"}
+_FLOAT_KEYS = {"wall_clock_s", "child_wall_clock_s", "node_wall_clock_s"}
 
 
 def truthy(raw) -> bool:

@@ -10,14 +10,15 @@ const fields = ['tokens_in', 'tokens_out', 'wall_ms', 'gpu_ms'];
 const integer = value => Number.isSafeInteger(value) && value >= 0;
 
 /** Lý do đầu tiên chặn một reservation, null nếu được cấp. Thứ tự kiểm tra giữ nguyên quyết định cấp/từ chối. */
-export function rootDenial(state, kind, tokens) {
+export function rootDenial(state, kind, tokens, provider = 'api') {
   const { used, limits } = state;
   if (used.model_calls >= limits.model_calls) return 'root_model_calls';
   if (used.tool_calls >= limits.tool_calls) return 'root_tool_calls';
-  if (used.tokens >= limits.tokens) return 'root_tokens';
+  const metered = provider === 'api';
+  if (metered && used.metered_tokens >= limits.tokens) return 'root_tokens';
   const cap = kinds[kind];
   if (used[cap] + 1 > limits[cap]) return `root_${cap}`;
-  if (used.tokens + tokens > limits.tokens) return 'root_tokens_reserve';
+  if (metered && used.metered_tokens + tokens > limits.tokens) return 'root_tokens_reserve';
   return null;
 }
 
@@ -26,7 +27,7 @@ export function rootAllowanceGroups({ used, limits }) {
   return [
     ['root_model_calls', used.model_calls, limits.model_calls],
     ['root_tool_calls', used.tool_calls, limits.tool_calls],
-    ['root_tokens', used.tokens, limits.tokens],
+    ['root_tokens', used.metered_tokens ?? used.tokens, limits.tokens],
     ['root_semantic_repairs', used.semantic_repairs, limits.semantic_repairs],
     ['root_quality_switches', used.quality_switches, limits.quality_switches],
   ].map(([reason, value, limit]) => ({ reason, used: value, limit, hit: value >= limit }));
@@ -36,12 +37,14 @@ export async function readRootAllowance(db, root) {
   const row = await db.get('SELECT * FROM ai_root_allowances WHERE root_ticket_id=?', [root]);
   if (!row) return null;
   const limits = row.limits_json ? JSON.parse(row.limits_json) : LIMITS.root_work;
-  const used = { model_calls: 0, tool_calls: 0, tokens: 0, semantic_repairs: 0, quality_switches: 0 };
+  const used = { model_calls: 0, tool_calls: 0, tokens: 0, metered_tokens: 0, semantic_repairs: 0, quality_switches: 0 };
   const byProvider = Object.create(null);
   const reservations = await db.all('SELECT * FROM ai_work_reservations WHERE root_ticket_id=? ORDER BY created_at, attempt_key', [root]);
   for (const r of reservations) {
     used[kinds[r.kind]]++;
-    used.tokens += r.tokens_used ?? r.tokens_reserved;
+    const spent = r.tokens_used ?? r.tokens_reserved;
+    used.tokens += spent;
+    if (r.provider === 'api') used.metered_tokens += spent; // vllm/ollama are free: only paid api tokens are capped
     if (r.kind !== 'model') continue;
     const p = byProvider[r.provider] ??= { model_calls: 0, tokens_in: null, tokens_out: null, wall_ms: null, gpu_ms: null,
       missing: { tokens_in: 0, tokens_out: 0, wall_ms: 0, gpu_ms: 0 } };
@@ -86,7 +89,7 @@ export function createRootAllowanceService(store) {
         if (!integer(tokens) || (model && !tokens)) throw bad('positive model token bound required');
         if (model && !['vllm', 'ollama', 'api'].includes(body.provider)) throw bad('invalid provider');
         if (model) await store.assertModelResourceAdmission(root);
-        const reason = rootDenial(current, body.kind, tokens);
+        const reason = rootDenial(current, body.kind, tokens, model ? body.provider : 'api');
         if (reason) throw denial(reason, 'root work allowance exhausted');
         await db.run(`INSERT INTO ai_work_reservations(root_ticket_id, attempt_key, kind, provider, lease_hash, tokens_reserved, created_at)
           VALUES (?, ?, ?, ?, ?, ?, ?)`, [...params, body.kind, model ? body.provider : null, leaseHash(body.lease_token), tokens, Date.now()]);
@@ -106,7 +109,7 @@ export function createRootAllowanceService(store) {
         if (tokens != null && !integer(tokens)) throw bad('invalid token total');
         await db.run(`UPDATE ai_work_reservations SET tokens_used=?, metrics_json=?, settled_at=? WHERE root_ticket_id=? AND attempt_key=?`,
           [tokens, encoded, Date.now(), ...params]);
-        if (tokens > prior.tokens_reserved) {
+        if (prior.provider === 'api' && tokens > prior.tokens_reserved) {
           await db.run("UPDATE ai_root_allowances SET blocked_reason='model_token_bound_violation' WHERE root_ticket_id=?", [root.id]);
         }
       }
