@@ -188,3 +188,11 @@ def test_assume_does_not_apply_to_scripts_features_or_when_the_flag_is_off(monke
 def test_assume_needs_the_validator_to_have_found_grounding(monkeypatch):
     result, _ = _assume(monkeypatch, {"clear": False, "question": "Nút nào?", "grounded": False, "reason": "?", "grounding": []}, files="public/luat.html")
     assert result["outcome"] == "needs_clarification"
+
+
+def test_code_questions_are_not_asked_to_the_student():
+    ask = plan_validate.asks_about_code
+    assert ask("Yêu cầu thêm tòa nhà vào public/campus-proto/b-iso-canvas.html, bạn muốn tạo file mới không?")
+    assert ask("Tòa nhà đặt ở tọa độ (gx, gy) nào?")
+    assert not ask("Bạn muốn tòa nhà nằm gần cổng CNTT hay khu phòng học?")
+    assert not ask(None)

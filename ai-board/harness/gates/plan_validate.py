@@ -510,6 +510,14 @@ def _assumable(plan: dict, validation: dict, request: dict) -> bool:
             and bool(validation.get("grounded")) and request.get("type") != "feature" and not complexity_signals(plan))
 
 
+_CODE_QUESTION = re.compile(r"[\w./-]+\.(?:html|js|mjs|css|json|py|md)\b|\b(?:repo|codebase|selector|endpoint|building id|gx|gy|tọa độ|mã nguồn)\b", re.I)
+
+
+def asks_about_code(question: str | None) -> bool:
+    """Question names a file path or code detail: the student cannot answer it, the plan decides."""
+    return bool(question and _CODE_QUESTION.search(question))
+
+
 def _uncertain(validation: dict) -> bool:
     """The non-thinking validator did not clear the plan: unclear request or no verified grounding."""
     return not validation['clear'] or not validation.get('grounded')
@@ -585,6 +593,10 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
     validation, stop = validate(request)
     if stop:
         return stop
+    if not validation['clear'] and asks_about_code(validation.get('question')):
+        state['assumption'] = validation['question']
+        judge('code question dropped', True, validation['question'])
+        validation = {**validation, 'clear': True, 'question': None}
     anchored = bool(request.get('grounding_required')) and target_anchored(plan, files, request)
     if anchored and not validation['clear'] and validation.get('grounded'):
         judge('target anchored', True, 'anchors verified in plan files; clarification not raised')
