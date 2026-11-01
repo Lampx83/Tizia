@@ -1,4 +1,5 @@
 // Async AI board store on the db contract (db/index.js). Parity tests in test/ai-board-async-*.test.js compare final board state per feature.
+import { behaviorMetrics } from '../services/behavior.js';
 import { randomBytes } from 'node:crypto';
 import { runnableOrders, splitGates } from '../security/step-gate.js';
 import { CAPABILITY_CATALOG, PlanGuardrailError, validatePlan } from '../security/policy.js';
@@ -1987,6 +1988,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     return {
       root, plan, children, runs, events, candidate, pull_request: await latestPullRequest(root.id), trace_ref: await traceRef(root.id),
       gate_names: CONTRACT.gates.names, graph: EXECUTION_GRAPH,
+      behavior: behaviorMetrics(evidences),
       totals: {
         ...summarizeCalls(evidences),
         by_model: Object.fromEntries(Object.entries(byModel).map(([model, list]) => [model, summarizeCalls(list)])),

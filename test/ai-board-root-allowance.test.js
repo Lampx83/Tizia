@@ -245,7 +245,7 @@ test('concurrent requests cannot both consume the last root model slot', async (
   try {
     const ticket = await f.store.claimNext({ workerId: 'last-slot', version: 'test', mode: 'shadow', intent: 'plan', leaseMs: 120000 });
     const lease = leaseOf(ticket, 'last-slot');
-    for (let n = 0; n < 39; n++) {
+    for (let n = 0; n < LIMITS.root_work.model_calls - 1; n++) {
       const idempotency_key = `known-model-${n}`;
       assert.equal((await f.post(ticket.id, 'reserve', { ...lease, idempotency_key, kind: 'model', provider: 'vllm', token_bound: 1 })).status, 200);
       assert.equal((await f.post(ticket.id, 'settle', { ...lease, idempotency_key, metrics: { tokens_in: 0, tokens_out: 0 } })).status, 200);
@@ -254,7 +254,7 @@ test('concurrent requests cannot both consume the last root model slot', async (
       f.post(ticket.id, 'reserve', { ...lease, idempotency_key, kind: 'model', provider: 'api', token_bound: 1 })));
     assert.deepEqual(responses.map(r => r.status).sort(), [200, 409]);
     const current = (await f.post(ticket.id, 'read', lease)).body;
-    assert.equal(current.used.model_calls, 40);
+    assert.equal(current.used.model_calls, LIMITS.root_work.model_calls);
     assert.equal(current.used.tokens, 1);
     assert.equal(current.by_provider.api.gpu_ms, null);
     assert.equal(current.by_provider.api.missing.gpu_ms, 1);
