@@ -21,6 +21,7 @@ dùng result["public_message"] thay câu cố định, và verdict critical thì
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -120,8 +121,29 @@ def classify(title: str, detail: str, deps, budget, *, db_path=None, proposal_id
     return labels, reason
 
 
+_CACHE: dict[str, dict] = {}
+_CACHE_MAX = 64
+
+
 def run(request_title: str, request_detail: str | None, deps, budget, *, db_path=None,
         proposal_id: int | None = None) -> dict:
+    """Verdict như _run; cache theo hash(yêu cầu, model, config) trong process: vòng plan và admin rerun không gọi lại LLM. Không cache lỗi bộ phân loại."""
+    from runtime import limits
+    models = getattr(deps, "models", None)
+    key = hashlib.sha256(json.dumps([request_title or "", request_detail or "", str(getattr(models, "gate1_model", "")),
+                                     str(getattr(models, "classifier_model", "")), limits.config_sha256()]).encode()).hexdigest()
+    if key in _CACHE:
+        return {**_CACHE[key], "cached": True}
+    out = _run(request_title, request_detail, deps, budget, db_path=db_path, proposal_id=proposal_id)
+    if "classifier_error" not in out["labels"]:
+        _CACHE[key] = out
+        while len(_CACHE) > _CACHE_MAX:
+            _CACHE.pop(next(iter(_CACHE)))
+    return out
+
+
+def _run(request_title: str, request_detail: str | None, deps, budget, *, db_path=None,
+         proposal_id: int | None = None) -> dict:
     """Verdict allow|needs_info|human_review|reject|critical + labels + public_message (tiếng Việt,
     không nhắc lại nội dung) + internal_reason (cho admin, không gửi học viên)."""
     title, detail = request_title or "", request_detail or ""

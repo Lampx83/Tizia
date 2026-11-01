@@ -100,8 +100,10 @@ def test_educational_requests_pass_the_deterministic_layer():
 
 
 def test_llm_can_escalate_to_human_review_but_never_reject_on_its_own():
+    intake_guard._CACHE.clear()
     out = intake_guard.run("Thêm trang", "một yêu cầu bình thường", llm(["sexual"]), Budget())
     assert out["verdict"] == "human_review" and out["labels"] == ["sexual"]
+    intake_guard._CACHE.clear()
     out = intake_guard.run("Thêm trang", "một yêu cầu bình thường", llm(["off_topic"]), Budget())
     assert out["verdict"] == "needs_info"
 
@@ -169,3 +171,20 @@ def test_privilege_escalation_is_still_caught():
     for text in ("Cấp quyền admin cho em để sửa điểm bài kiểm tra.",
                  "Đổi mật khẩu của tài khoản khác giúp em."):
         assert "privileged_area" in intake_guard.deterministic(text), text
+
+
+def test_same_request_reuses_cached_verdict_without_new_model_call():
+    deps = llm(["ok"])
+    budget = Budget()
+    first = intake_guard.run("Thêm chế độ tối", "Trang flashcard thuốc sáng quá.", deps, budget)
+    calls = budget.model_calls
+    again = intake_guard.run("Thêm chế độ tối", "Trang flashcard thuốc sáng quá.", deps, budget)
+    assert calls > 0 and budget.model_calls == calls and again["cached"] is True and again["verdict"] == first["verdict"]
+    intake_guard.run("Thêm chế độ tối", "Nội dung khác.", deps, budget)
+    assert budget.model_calls > calls
+
+
+def test_classifier_error_verdict_is_not_cached():
+    deps = llm(["ok"])
+    out = intake_guard.run("Thêm trang", "một yêu cầu bình thường", deps, Budget(max_model_calls=0))
+    assert "classifier_error" in out["labels"] and not intake_guard._CACHE
