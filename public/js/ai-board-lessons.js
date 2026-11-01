@@ -1,9 +1,11 @@
+import { fmt } from './ai-board-clock.js';
+
 const base = '/api/ai-board/lessons';
 const status = document.querySelector('#status');
 let admin = false;
 const states = { proposed:'Đề xuất chưa xác minh', legacy:'Bản cũ chưa review', verified:'Đã xác minh', curated:'Giữ dài hạn', rejected:'Đã từ chối', expired:'Đã hết hạn', deleted:'Đã xóa' };
 const reasons = { ...states, revalidation_due:'Đến hạn kiểm lại', source_expired:'Nguồn hết hạn', evidence_changed:'Evidence nguồn thiếu hoặc đã thay đổi', dependency_changed:'Kế hoạch hoặc file nguồn đã thay đổi', dependency_unavailable:'Không kiểm tra được file nguồn', scope_changed:'Phạm vi nguồn đã thay đổi', scope_denied:'Quyền đối với nguồn đã bị thu hồi' };
-const date = value => value ? new Date(Number(value)).toLocaleString('vi-VN') : '-';
+const date = value => value ? fmt(Number(value)) : '-';
 function el(tag, text, className) {
   const node = document.createElement(tag);
   if (text !== undefined) node.textContent = text;
