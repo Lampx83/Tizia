@@ -523,7 +523,7 @@ def test_gate25_quote_fix_accepts_single_quoted_copy_only_when_enabled(monkeypat
     import pytest
     with pytest.raises(ValueError, match="trích dẫn"):
         run("<a class='back' href='/i.html'>Home</a>")
-    monkeypatch.delenv("AI_BOARD_GATE25_FIXES")
+    monkeypatch.setenv("AI_BOARD_GATE25_FIXES", "ellipsis")
     with pytest.raises(ValueError, match="trích dẫn"):  # off unless AI_BOARD_GATE25_FIXES lists quotes
         run("<a class='back' href='/i.html'>Home</a>")
     monkeypatch.setenv("AI_BOARD_GATE25_FIXES", "quotes")
@@ -644,7 +644,9 @@ def test_norepomap_arm_drops_the_repomap_tool_at_gate_1_only_and_default_restore
 
 def test_gate25_tokens_fix_raises_the_validator_output_budget_only_when_enabled(monkeypatch):
     from gates import plan_validate as pv
-    monkeypatch.delenv("AI_BOARD_GATE25_FIXES", raising=False)
+    monkeypatch.setenv("AI_BOARD_GATE25_FIXES", "quotes,ellipsis")
+    assert pv._validator_options() is None
+    monkeypatch.setenv("AI_BOARD_GATE25_FIXES", "")
     assert pv._validator_options() is None and pv.fixes() == set()
     monkeypatch.setenv("AI_BOARD_GATE25_FIXES", "quotes,tokens")
     assert pv._validator_options() == {"num_predict": 6144}

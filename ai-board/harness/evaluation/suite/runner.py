@@ -273,7 +273,7 @@ def cmd_run(args, deps=None) -> int:
             + (f"-think1-{args.reasoning_on.replace(',', '+')}" if args.reasoning_on else "")
             + (f"-ctx-{args.context_arm}" if args.context_arm != "default" else "")
             + (f"-g-{guards.replace(',', '+')}" if guards else "")
-            + (f"-f25-{fixes.replace(',', '+') or 'none'}" if fixes != plan_validate.DEFAULT_FIXES else "")
+            + (f"-f25-{fixes.replace(',', '+') or 'none'}" if fixes != ",".join(sorted(plan_validate.DEFAULT_FIXES.split(","))) else "")
             + ("-ans" if args.gate25_answered else "")
             + ("-simuser" if args.gate25_sim_user else "")
             + ("-react" if args.react_plan else "")
