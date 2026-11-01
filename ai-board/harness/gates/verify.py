@@ -19,6 +19,7 @@ from urllib.parse import urlsplit
 from gates import visual
 from verification import functional
 from meter import redact
+from settings import get_settings
 
 _SECRET_NAME = re.compile(r"(?:SECRET|TOKEN|PASSWORD|API_KEY|SECKEY|PRIVATE_KEY)", re.I)
 _REQUIRED_ABSENT = {"SCOREUP_API_KEY", "CODELAB_API_KEY", "GA_API_SECRET",
@@ -37,7 +38,7 @@ def acceptance_commands(state: dict) -> list[str]:
 def _internal() -> bool:
     """AI_BOARD_VERIFY_NETWORK=internal: worker runs Docker-in-Docker, so the candidate gets a network
     with no egress and is reached on its container IP. Default publishes to 127.0.0.1 (local Docker Desktop)."""
-    return os.getenv("AI_BOARD_VERIFY_NETWORK", "published") == "internal"
+    return get_settings().verify_network == "internal"
 
 
 def _guest_ca() -> Path | None:

@@ -29,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import functional  # noqa: E402
 from gates import guard, implement, static_check, verify  # noqa: E402
 from main import ROOT  # noqa: E402
+from settings import get_settings
 
 APP_PATHS = ("server", "public", "scripts", "package.json", "ai-board/harness/prompts")  # như COPY của Dockerfile; thiếu ở commit ghim thì bỏ
 KEEP_ENV = ("PATH", "SYSTEMROOT", "TEMP", "TMP", "HOME", "USERPROFILE")  # app không thấy key/secret nào của harness
@@ -64,7 +65,7 @@ def build_tree(checkout: Path, root: Path) -> Path:
         if git.wait():
             raise FastTierError(f"git archive {checkout} thất bại (mã {git.returncode})")
         (tree / ".ready").write_text("", encoding="utf-8")
-    link, source = tree / "node_modules", Path(os.environ.get("AI_BOARD_EVAL_NODE_MODULES") or ROOT / "node_modules")
+    link, source = tree / "node_modules", get_settings().eval_node_modules or ROOT / "node_modules"
     if not link.exists():
         if not source.is_dir():
             raise FastTierError(f"thiếu {source}: chạy npm install ở gốc repo (app native dùng chung node_modules)")

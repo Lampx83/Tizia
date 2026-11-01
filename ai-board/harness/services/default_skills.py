@@ -1,7 +1,6 @@
 """Reviewed advisory skills; tool/context policy remains outside these files."""
 import hashlib
 import json
-import os
 import re
 import html
 from dataclasses import dataclass, replace
@@ -9,6 +8,7 @@ from pathlib import Path
 
 from runtime import limits
 from services import skill_selection
+from settings import get_settings
 
 ROOT = Path(__file__).resolve().parents[1] / 'skills'
 REVIEW_AXES = ROOT / 'proposed' / 'review-two-axes' / 'SKILL.md'
@@ -175,7 +175,7 @@ def variant_candidates(role):
     """Biến thể thử nghiệm (AI_BOARD_SKILL_VARIANT) qua node chọn; không tính cap, không đè skill khác."""
     if role != 'gate4_review':
         return []
-    names = [n.strip() for n in os.environ.get('AI_BOARD_SKILL_VARIANT', '').split(',') if n.strip()]
+    names = list(get_settings().skill_variant)
     skills = [parse(VARIANTS[n].read_bytes().decode('utf-8')) for n in names if n in VARIANTS]
     return [skill_selection.Candidate(s.name, 3, 'experiment variant (AI_BOARD_SKILL_VARIANT)', s.token_bound,
                                       counted=False, payload=s) for s in skills]

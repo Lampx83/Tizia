@@ -21,6 +21,7 @@ from typing import Callable
 
 from gates import verify
 from runtime import limits
+from settings import get_settings
 
 PROTOCOL = "1"
 _CLIENT = limits.sandbox_client()
@@ -118,11 +119,10 @@ class RunnerClient:
 
     @classmethod
     def from_env(cls, env=None) -> "RunnerClient | None":
-        env = os.environ if env is None else env
-        url = env.get("AI_BOARD_SANDBOX_URL")
-        if not url:
+        conf = get_settings(env)
+        if not conf.sandbox_url:
             return None
-        return cls(url, Path(env.get("AI_BOARD_SANDBOX_TOKEN_FILE", "/run/secrets/sandbox-runner-token")).read_text().strip())
+        return cls(conf.sandbox_url, conf.sandbox_token_file.read_text().strip())
 
     def _call(self, method: str, path: str, phase: str, body: bytes | None = None, *, content_type: str = "application/json",
               timeout: float | None = None, deadline: float | None = None) -> tuple[bytes, dict]:
@@ -161,7 +161,7 @@ class RunnerClient:
         return json.loads(raw or b"{}")
 
     def create(self, run_id: str, manifest: list[dict], **kwargs) -> dict:
-        journal = os.getenv('AI_BOARD_OWNED_RUN_FILE')
+        journal = get_settings().owned_run_file
         if journal:
             if not re.fullmatch(r'(?:loop|g5)-[a-f0-9]{24}', run_id):
                 raise ValueError('invalid owned sandbox id')

@@ -39,7 +39,6 @@ guardrail nội dung).
 from __future__ import annotations
 
 import json
-import os
 import re
 import time
 from pathlib import Path
@@ -49,6 +48,7 @@ import code_index
 import file_context
 from dbconn import harness_db
 from gates import best_match, evidence, grounding_paths
+from settings import DEFAULT_GATE25_FIXES, get_settings
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_validate.md").read_text(encoding="utf-8")
 # Request keys this gate reads (LF/125). plan_repair is planner-only and must stay out of this list.
@@ -223,12 +223,12 @@ def _squash(text: str) -> str:
 
 
 _QUOTE_CHARS = re.compile('["`‘’“”]')
-DEFAULT_FIXES = "quotes,ellipsis"
+DEFAULT_FIXES = ",".join(sorted(DEFAULT_GATE25_FIXES))
 
 
 def fixes() -> set[str]:
     """Gate 2.5 patches on: AI_BOARD_GATE25_FIXES comma list; unset or empty = none."""
-    return {f.strip() for f in os.environ.get("AI_BOARD_GATE25_FIXES", DEFAULT_FIXES).split(",") if f.strip()}
+    return set(get_settings().gate25_fixes)
 
 
 def _fold(text: str) -> str:
@@ -457,7 +457,7 @@ def write_clarification(db_path, request: dict, question: str) -> None:
 
 def answered_on() -> bool:
     """AI_BOARD_GATE25_ANSWERED truthy: a clarification answerable by a verbatim request/source quote is answered, validator reruns."""
-    return os.environ.get("AI_BOARD_GATE25_ANSWERED", "").strip().lower() in {"1", "true", "yes", "on"}
+    return get_settings().gate25_answered
 
 
 _WORD = re.compile(r"\w{3,}")

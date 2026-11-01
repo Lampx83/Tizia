@@ -28,6 +28,7 @@ from runtime.budget import BudgetExhausted
 from repositories import server_hsm
 import memory
 import repomap
+from settings import get_settings
 
 ROOT = Path(__file__).resolve().parents[3]
 _EXCERPT_LINE = re.compile(r"^L\d+\| ", re.M)
@@ -219,7 +220,7 @@ def whole_file_context(subtask: dict, state: dict, current: str | None, siblings
 
 def gate3_context(subtask: dict, state: dict, current: str | None, siblings: list[str], words: list[str]) -> tuple:
     """Excerpt by default; AI_BOARD_GATE3_CONTEXT=hybrid sends the whole file when it is <= WHOLE_FILE_MAX_CHARS."""
-    if (current is None or len(current) <= WHOLE_FILE_MAX_CHARS) and os.environ.get("AI_BOARD_GATE3_CONTEXT", "excerpt") == "hybrid":
+    if (current is None or len(current) <= WHOLE_FILE_MAX_CHARS) and get_settings().gate3_context == "hybrid":
         return whole_file_context(subtask, state, current, siblings, words)
     return excerpt_context(subtask, state, current, siblings, words)
 

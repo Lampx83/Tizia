@@ -1,8 +1,7 @@
 """Đếm token skill: tokenizer Qwen (file tokenizer.json offline) hoặc UTF-8 bytes làm cận trên."""
-import os
 from pathlib import Path
+from settings import get_settings
 
-QWEN_ENV = 'AI_BOARD_QWEN_TOKENIZER'
 
 
 class ByteCounter:
@@ -27,8 +26,8 @@ class QwenCounter:
 
 def counter():
     """Qwen khi env trỏ tới file có thật và import được tokenizers; còn lại UTF-8 bytes."""
-    path = os.environ.get(QWEN_ENV)
-    if path and Path(path).is_file():
+    path = get_settings().qwen_tokenizer
+    if path and path.is_file():
         try:
             return QwenCounter(path)
         except ImportError:

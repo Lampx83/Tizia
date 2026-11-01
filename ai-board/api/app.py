@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import json
 import secrets
+import sys
 import subprocess
 import threading
 import time
@@ -14,6 +15,9 @@ from typing import Literal
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "harness"))
+from settings import get_settings  # noqa: E402
 
 
 class PlanningInput(BaseModel):
@@ -129,9 +133,9 @@ def plan_operation(snapshot, workspace, checkpoint):
 
 
 def create_app(*, key=None, workspace=None, project=None, operation=plan_operation, trusted_policy=None):
-    key = key if key is not None else os.getenv("AI_BOARD_INTERNAL_KEY", "")
-    workspace = Path(workspace or os.getenv("AI_BOARD_WORKSPACE") or Path(__file__).resolve().parents[2]).resolve()
-    project = project or os.getenv("AI_BOARD_PROJECT", "tizia")
+    key = key if key is not None else get_settings().internal_key.get_secret_value()
+    workspace = Path(workspace or get_settings().workspace or Path(__file__).resolve().parents[2]).resolve()
+    project = project or get_settings().project
     running = threading.Lock()
     app = FastAPI(title="AI Board internal API", docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(BodyLimit)

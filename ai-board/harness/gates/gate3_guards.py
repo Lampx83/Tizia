@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 import difflib
-import os
 import posixpath
 import re
 import threading
+from settings import get_settings
 
 FLAGS = ("noop", "refs", "schema")
 local = threading.local()
@@ -14,7 +14,7 @@ _EXTERNAL = re.compile(r"^(?:[a-z][a-z0-9+.-]*:|//)", re.I)
 
 
 def enabled(flag: str) -> bool:
-    return flag in {f.strip() for f in os.environ.get("AI_BOARD_GATE3_GUARDS", "").split(",")}
+    return flag in get_settings().gate3_guards
 
 
 def note_fallback() -> None:

@@ -20,6 +20,7 @@ HARNESS = Path(__file__).resolve().parent / "harness"
 sys.path.insert(0, str(HARNESS))
 
 import candidate as candidates  # noqa: E402
+from settings import get_settings  # noqa: E402
 
 EVIDENCE_DIR = Path(__file__).resolve().parent / "memory" / "reviews"
 
@@ -109,7 +110,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("number", type=int)
     parser.add_argument("--repo", default=str(Path(__file__).resolve().parents[1]))
     args = parser.parse_args(argv)
-    github = candidates.GitHub(os.getenv("AI_BOARD_GITHUB_REPO", "Lampx83/Tizia"),
+    github = candidates.GitHub(get_settings().github_repo,
                                os.environ.pop("AI_BOARD_GITHUB_TOKEN", ""))
     try:
         pr = github.pull(args.number)
